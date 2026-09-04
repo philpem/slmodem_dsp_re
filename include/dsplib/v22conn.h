@@ -220,10 +220,44 @@ struct v22fp;
  * with the samples received, and reads back the samples to send and the
  * symbols received.
  */
+/**
+ * @brief Shared V.22bis training subroutine: connect at 1200 bit/s (NODE_1200_12/13).
+ *
+ * Called from `v22_local_loop`, `v22_answer` and `v22_originate` (not a
+ * `V22_PROTOCOL` table entry itself). Dispatches on `hdx->r0c`'s two live
+ * values, then runs the shared carrier-loss tail: returns the moment
+ * `CarrierDetect` reports no carrier.
+ *
+ * @param fp       The V.22 datapump instance.
+ * @param txsym    Transmit symbols to scramble and modulate.
+ * @param txout    Output for the modulated transmit samples.
+ * @param rxin     Received samples to demodulate.
+ * @param rxsym    Output for the demodulated receive symbols.
+ * @param txcount  In/out: transmit symbol/sample count.
+ * @param rxcount  In/out: receive sample/symbol count.
+ */
 void connect_1200(struct v22fp *fp, unsigned short *txsym, short *txout,
 		  short *rxin, unsigned short *rxsym,
 		  unsigned short *txcount, unsigned short *rxcount);
 
+/**
+ * @brief Shared V.22bis training subroutine: connect at 2400 bit/s (NODE_2400A..D).
+ *
+ * Same calling contract as connect_1200(), for the four 2400 bit/s training
+ * sub-states (NODE_2400A -> B -> C -> D, changing the receive then the
+ * transmit rate as it goes). Its carrier-loss tail differs from
+ * connect_1200()'s: if carrier comes back inside the grace window
+ * (`hdx->carrier_loss_blocks != 0`), it initiates a retrain instead of
+ * just returning.
+ *
+ * @param fp       The V.22 datapump instance.
+ * @param txsym    Transmit symbols to scramble and modulate.
+ * @param txout    Output for the modulated transmit samples.
+ * @param rxin     Received samples to demodulate.
+ * @param rxsym    Output for the demodulated receive symbols.
+ * @param txcount  In/out: transmit symbol/sample count.
+ * @param rxcount  In/out: receive sample/symbol count.
+ */
 void connect_2400(struct v22fp *fp, unsigned short *txsym, short *txout,
 		  short *rxin, unsigned short *rxsym,
 		  unsigned short *txcount, unsigned short *rxcount);

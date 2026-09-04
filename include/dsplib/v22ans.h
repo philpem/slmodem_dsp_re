@@ -164,24 +164,45 @@ struct v22fp;
  */
 #define V22_RMLOOP2_BPS_1200	1200
 
-/*
- * Data state.  One block in, one block out: scramble and modulate the
- * transmit symbols, demodulate and descramble the receive samples, and watch
- * three things that can end the connection -- a retrain request in the
- * received symbol stream, the signal quality falling below the retrain level
- * for three seconds, and the carrier going away for longer than
+/**
+ * @brief V.22 protocol handler for the DATA state: one block of steady-state traffic.
+ *
+ * One block in, one block out: scramble and modulate the transmit symbols,
+ * demodulate and descramble the receive samples, and watch three things
+ * that can end the connection -- a retrain request in the received symbol
+ * stream, the signal quality falling below the retrain level for three
+ * seconds, and the carrier going away for longer than
  * `params.carrier_loss_ms` milliseconds.
+ *
+ * @param fp       The V.22 datapump instance.
+ * @param txsym    Transmit symbols to scramble and modulate.
+ * @param txout    Output for the modulated transmit samples.
+ * @param rxin     Received samples to demodulate.
+ * @param rxsym    Output for the demodulated (descrambled) receive symbols.
+ * @param txcount  In/out: transmit symbol/sample count (see the file banner).
+ * @param rxcount  In/out: receive sample/symbol count (see the file banner).
  */
 void v22_data(struct v22fp *fp, unsigned short *txsym, short *txout,
 	      short *rxin, unsigned short *rxsym, unsigned short *txcount,
 	      unsigned short *rxcount);
 
-/*
- * The answering station's remote-loopback state, a four-way machine on
- * `hdx->connect_substate`.  Sub-state 3 is the loop itself: the demodulated symbols are
- * scrambled and modulated straight back out, which is what the name says and
- * what the argument flow shows -- `rxsym` is handed to `ScrambleDataV22` and
- * then to `ModDataV22`, and `txsym` is not read at all on that arm.
+/**
+ * @brief V.22 protocol handler for the answering station's remote-loopback state.
+ *
+ * A four-way machine on `hdx->connect_substate`
+ * (V22_RMLOOP2_START/DETECT/ANSWER/LOOP). Sub-state LOOP is the loop
+ * itself: the demodulated symbols are scrambled and modulated straight
+ * back out, which is what the name says and what the argument flow shows
+ * -- `rxsym` is handed to `ScrambleDataV22` and then to `ModDataV22`, and
+ * `txsym` is not read at all on that arm.
+ *
+ * @param fp       The V.22 datapump instance.
+ * @param txsym    Transmit symbols; read only outside sub-state LOOP.
+ * @param txout    Output for the modulated transmit samples.
+ * @param rxin     Received samples to demodulate.
+ * @param rxsym    Output for the demodulated receive symbols; also the loopback source in sub-state LOOP.
+ * @param txcount  In/out: transmit symbol/sample count.
+ * @param rxcount  In/out: receive sample/symbol count.
  */
 void v22_ans_rmloop2(struct v22fp *fp, unsigned short *txsym, short *txout,
 		     short *rxin, unsigned short *rxsym,

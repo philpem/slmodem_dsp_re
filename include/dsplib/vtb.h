@@ -77,18 +77,30 @@ struct vtb {
 	short shift;			/* +0x34 = nsub                    */
 };
 
-/*
- * `out` is the only output: the decoded symbol, differentially resolved.
- * The return value is not used -- `FSE_decision_16Tpt` discards `%eax` and
- * reads its own local through `out`.
+/**
+ * @brief Run one Viterbi decoder step: region lookup, branch metrics,
+ * add-compare-select, 16-symbol traceback, differential decode.
+ *
+ * The symbol written through @p out is the decision made sixteen symbols
+ * ago (see the file comment), which is why the ring slot is read before it
+ * is overwritten.
+ *
+ * @param state The decoder state, already initialised by VTBv32_init().
+ * @param i     Received symbol, in-phase component.
+ * @param q     Received symbol, quadrature component.
+ * @param out   Out: the decoded, differentially-resolved symbol.
+ * @return Unused: `FSE_decision_16Tpt` discards it and reads @p out instead.
  */
 void VTB_decoder(struct vtb *state, short i, short q, short *out);
 
-/*
- * `mode` is the V.32bis rate code; `alloc` non-zero allocates the survivor
- * ring, which is why it is separate from the reset the rest of the function
- * does.  Modes 2, 3 and 4 are 9600, 7200 and 12000; anything else -- 14400
- * in practice -- takes the 128-point branch.
+/**
+ * @brief Reset the decoder state for a V.32bis rate, and optionally
+ * (re)allocate its survivor ring.
+ *
+ * @param state The decoder state to initialise.
+ * @param mode  The V.32bis rate code: 2, 3 or 4 select 9600, 7200 or 12000;
+ *              anything else (14400 in practice) takes the 128-point branch.
+ * @param alloc Non-zero allocates the survivor ring; zero only resets.
  */
 void VTBv32_init(struct vtb *state, short mode, int alloc);
 

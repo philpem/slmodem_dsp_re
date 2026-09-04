@@ -134,9 +134,11 @@ struct v22_status {
 #define V22_PARAMS_BIT9		(1u << 9)
 #define V22_PARAMS_BIT10	(1u << 10)
 
-/*
- * Fill `st` from `fp`.  Always returns 1 -- the value is a literal on every
- * path and is not a status.
+/**
+ * @brief Fill a V.22 connection status report from the datapump instance.
+ * @param fp  The V.22 datapump instance.
+ * @param st  Output: the status report.
+ * @return Always 1 -- a literal on every path, not a status.
  */
 int V22_status(struct v22fp *fp, struct v22_status *st);
 

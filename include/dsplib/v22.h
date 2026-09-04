@@ -145,12 +145,20 @@ struct v22_dp {
  */
 #define V22_MSG_CONNECT_1200	4
 
-/*
- * Register and deregister the three ids above.  The only two symbols this
- * module exports: `v22_create`, `v22_delete` and `v22_process` are all
- * file-static in the object and are reached through what these register.
+/**
+ * @brief Register V.22, V.22bis and Bell 212 (ids V22_DP_ID_V22/V22BIS/BELL212) with the datapump core.
+ *
+ * One of the only two symbols this module exports; `v22_create`,
+ * `v22_delete` and `v22_process` are all file-static in the object and are
+ * reached through what this registers.
+ *
+ * @return The object's own registration status.
  */
 int dp_v22_init(void);
+
+/**
+ * @brief Deregister the three V.22-family ids registered by dp_v22_init().
+ */
 void dp_v22_exit(void);
 
 #endif /* DSPLIB_V22_H */

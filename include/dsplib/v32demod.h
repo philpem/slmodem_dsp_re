@@ -168,16 +168,21 @@ extern "C" {
  */
 #define V32_MODE_6		6
 
-/*
- * Demodulate one block.
+/**
+ * @brief Demodulate one V.32 receive block: resample, cancel echo, gate on energy, AGC, recover clock, equalise.
  *
- * `in` is written as well as read: it carries the line samples in, and
+ * @p in is written as well as read: it carries the line samples in, and
  * `FPM_SRE_recover` puts the recovered symbols back into it for
- * `FPM_FSE_receive` to consume.  `out` takes the equaliser's decisions and is
- * `unsigned short *` because that is what `FPM_FSE_receive` declares.
+ * `FPM_FSE_receive` to consume. @p out takes the equaliser's decisions and
+ * is `unsigned short *` because that is what `FPM_FSE_receive` declares.
  *
- * Returns the number of symbols the equaliser produced, or zero on any of the
- * three paths that decline the block.
+ * @param modem  The V.32 datapump instance.
+ * @param in     Input samples; overwritten with recovered symbols mid-call (see above).
+ * @param out    Output for the equaliser's decoded bits.
+ * @param count  How many input samples.
+ * @return The number of symbols the equaliser produced, or zero on any of
+ *         the three paths that decline the block (see the file banner for
+ *         how to tell them apart).
  */
 unsigned short DemodDataV32(void *modem, short *in, unsigned short *out,
 			    unsigned short count);

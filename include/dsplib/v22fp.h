@@ -434,40 +434,56 @@ struct v22fp {
 	unsigned char r58[4];		/* +0x58 never written              */
 };
 
-/*
- * Build a V.22 datapump.
+/**
+ * @brief Build a V.22 datapump.
  *
- * A NULL `fp` allocates the whole tree; a non-NULL one is RE-INITIALISED --
- * its sub-object pointers are reused, not tested for NULL, so unlike
- * `B103FP_create` this cannot be handed a zeroed buffer.  `cfg` is never
- * tested for NULL either.  Both are the object's behaviour and not a
+ * A NULL @p fp allocates the whole tree; a non-NULL one is re-initialised
+ * -- its sub-object pointers are reused, not tested for NULL, so unlike
+ * `B103FP_create` this cannot be handed a zeroed buffer. @p cfg is never
+ * tested for NULL either. Both are the object's behaviour and not a
  * simplification: `v22_create` is the only caller and always passes
  * (NULL, &cfg).
+ *
+ * @param fp   NULL to allocate the whole tree, or an existing object to re-initialise in place.
+ * @param cfg  The caller's configuration.
+ * @return The object, allocated or not.
  */
 struct v22fp *V22FP_create(struct v22fp *fp, const struct v22fp_cfg *cfg);
 
-/*
- * Tear one down.  Frees the object itself unconditionally, exactly as
- * `B103FP_delete` does -- so this must not be called on anything
- * `V22FP_create(NULL, ...)` did not build.
+/**
+ * @brief Tear a V.22 datapump down.
+ *
+ * Frees the object itself unconditionally, exactly as `B103FP_delete`
+ * does -- so this must not be called on anything `V22FP_create(NULL, ...)`
+ * did not build.
+ *
+ * @param fp  The datapump to tear down.
  */
 void V22FP_delete(struct v22fp *fp);
 
-/*
- * One block of the modulation: stage the caller's words and samples into the
- * three file-static buffers, dispatch through `V22_PROTOCOL[hdx->protocol]`, take
- * the symbol count back, copy the symbols out, and scale V22_TX_BLOCK
+/**
+ * @brief Run one block of V.22 modulation and demodulation.
+ *
+ * Stages the caller's words and samples into the three file-static
+ * buffers, dispatches through `V22_PROTOCOL[hdx->protocol]`, takes the
+ * symbol count back, copies the symbols out, and scales V22_TX_BLOCK
  * transmit samples by `params.tx_gain` in Q15.
  *
- * `n_tx` and `n_rx` are the CALLER'S counts and are `int`; the handlers' pair
- * is `unsigned short` and lives on V22FP_modem's own stack (finding F8534).
- * Only `*n_rx` is written back, and it is forced to zero unless `fp->status`
- * is zero.
+ * @p n_tx and @p n_rx are the caller's counts and are `int`; the handlers'
+ * pair is `unsigned short` and lives on this function's own stack (finding
+ * F8534). Only `*n_rx` is written back, and it is forced to zero unless
+ * `fp->status` is zero.
  *
- * Returns the whole 32-bit word at fp+0x1c -- status in the low byte, flags
- * in the next -- exactly as `B103FP_modem` does.  `v22_process` reads only
- * the low byte of it, and that is the caller's business rather than this
- * function's (finding F8538).
+ * @param fp       The datapump instance.
+ * @param tx_bits  Bits to transmit.
+ * @param tx_out   Output for the modulated transmit samples.
+ * @param rx_in    Received samples to demodulate.
+ * @param rx_bits  Output for the demodulated bits.
+ * @param n_tx     Caller's transmit bit count.
+ * @param n_rx     In: unused by this function's read; out: the receive count, forced to zero unless `fp->status` is zero.
+ * @return The whole 32-bit word at `fp+0x1c` -- status in the low byte, flags
+ *         in the next -- exactly as `B103FP_modem` does. `v22_process` reads
+ *         only the low byte of it (finding F8538).
  */
 int V22FP_modem(struct v22fp *fp, const int *tx_bits, short *tx_out,
 		const short *rx_in, int *rx_bits, int *n_tx, int *n_rx);

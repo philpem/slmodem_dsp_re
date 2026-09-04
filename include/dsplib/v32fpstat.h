@@ -123,46 +123,88 @@ struct v32_status {
 
 /* ------------------------------------------------------------------------ */
 
-/*
- * Build or rebuild the datapump.
+/**
+ * @brief Build or rebuild a V.32 datapump instance.
  *
- * `modem` null means "allocate one"; a non-null one is reconfigured in place.
- * `params` null means "use `V32_CFG`".  Its first 48 bytes are copied over the
- * object's, which is why `V32FP_control` can and does pass the object as BOTH
- * arguments.  The third argument is forwarded from `V32FP_create`'s own second
- * and is 0 at every written call site.
+ * @p modem null means "allocate one"; a non-null one is reconfigured in
+ * place. @p params null means "use `V32_CFG`". Its first 48 bytes are
+ * copied over the object's, which is why `V32FP_control` can and does pass
+ * the object as both arguments. @p arg2 is forwarded from `V32FP_create`'s
+ * own second argument and is 0 at every written call site.
+ *
+ * @param modem   NULL to allocate, or an existing instance to reconfigure.
+ * @param params  The 48-byte parameter block to copy in, or NULL for `V32_CFG`.
+ * @param arg2    Forwarded from `V32FP_create`'s second argument (always 0 in practice).
+ * @return The instance, allocated or not.
  */
 void *V32FP_recreate(void *modem, const struct v32fp_params *params,
 		     void *arg2);
 
-/*
- * Build the datapump.  Copies `V32_CFG` to the stack, patches six fields from
- * `cfg`, and hands the result to `V32FP_recreate` with a null object, which
- * is what makes `V32FP_recreate` allocate one.  Returns the object.
+/**
+ * @brief Build a V.32 datapump instance from the caller's compact configuration.
+ *
+ * Copies `V32_CFG` to the stack, patches six fields from @p cfg, and hands
+ * the result to V32FP_recreate() with a null object, which is what makes
+ * V32FP_recreate() allocate one.
+ *
+ * @param cfg   The caller's configuration.
+ * @param arg1  Forwarded to V32FP_recreate()'s third argument.
+ * @return The new instance.
  */
 void *V32FP_create(const struct v32fp_cfg *cfg, void *arg1);
 
-/*
- * One block.  `nout` is in/out -- transmit bits in, output samples out -- and
- * `nin` is in/out the other way round, input samples in and receive bits out.
+/**
+ * @brief Run one block of V.32 modulation and demodulation.
+ *
+ * @p nout is in/out -- transmit bits in, output samples out -- and @p nin
+ * is in/out the other way round, input samples in and receive bits out.
  * Dispatches through `V32_PROTOCOL[hdx->mode]` and scales the output by
- * `params.tx_scale`.  Returns `V32_OBJ_STATUS`.
+ * `params.tx_scale`.
+ *
+ * @param modem   The V.32 datapump instance.
+ * @param txbits  Bits to transmit.
+ * @param out     Output for the modulated transmit samples.
+ * @param in      Received samples to demodulate.
+ * @param rxbits  Output for the demodulated bits.
+ * @param nout    In/out: transmit bit count, then output sample count.
+ * @param nin     In/out: input sample count, then received bit count.
+ * @return `V32_OBJ_STATUS`.
  */
 int V32FP_modem(void *modem, const int *txbits, short *out, const short *in,
 		int *rxbits, int *nout, int *nin);
 
-/* Apply a control request.  Always returns 1. */
+/**
+ * @brief Apply a V.32 control request.
+ * @param modem  The V.32 datapump instance.
+ * @param ctl    The control request.
+ * @return Always 1.
+ */
 int V32FP_control(void *modem, struct v32fp_ctl *ctl);
 
-/* Fill `st`, and post a control request of its own.  Always returns 1. */
+/**
+ * @brief Fill a V.32 status report, and post a control request of its own.
+ * @param modem  The V.32 datapump instance.
+ * @param st     Output: the status report.
+ * @return Always 1.
+ */
 int V32FP_status(void *modem, struct v32_status *st);
 
-/*
- * `V32_PROTOCOL`'s data-mode handler.  FILE-LOCAL in the object and global
- * here, the arrangement `v32_null_protocol` already uses: a `static` has no
- * symbol for the differential harness to compare against, and the blob's copy
- * is reached as `ref_v32_data` through `symmap.py --globals`.  Its argument
- * list is `v32_handshake`'s, because one table dispatches to both.
+/**
+ * @brief `V32_PROTOCOL`'s data-mode handler: one block of steady-state V.32 traffic.
+ *
+ * File-local in the object and global here, the arrangement
+ * `v32_null_protocol` already uses: a `static` has no symbol for the
+ * differential harness to compare against, and the blob's copy is reached
+ * as `ref_v32_data` through `symmap.py --globals`. Its argument list is
+ * `v32_handshake`'s, because one table dispatches to both.
+ *
+ * @param modem     The V.32 datapump instance.
+ * @param txdata    Transmit symbols.
+ * @param txout     Output for the modulated transmit samples.
+ * @param rxin      Received samples to demodulate.
+ * @param rxout     Output for the demodulated receive symbols.
+ * @param nsamples  Sample count.
+ * @param rxcount   Receive count.
  */
 void v32_data(void *modem, unsigned short *txdata, short *txout, short *rxin,
 	      unsigned short *rxout, short *nsamples, unsigned short *rxcount);

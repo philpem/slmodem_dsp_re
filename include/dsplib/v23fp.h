@@ -147,28 +147,44 @@ struct v23tx {
 	struct fpm_tone	*tone;		/* +0x1c the generator               */
 };
 
-/*
- * Build a transmitter.  NULL `state` allocates one.  `period` is not copied
- * -- the object keeps the caller's pointer, so it must outlive the object.
+/**
+ * @brief Build a V.23 FSK transmitter (serves either the 1200 bps forward or 75 bps backward channel).
+ *
+ * @param tx          NULL to allocate one, or an existing object to build in place.
+ * @param mark        Frequency in Hz for a 1 bit (1300 forward, 390 backward).
+ * @param space       Frequency in Hz for a 0 bit (2100 forward, 450 backward).
+ * @param period_len  Length of @p period.
+ * @param period      Samples-per-bit cycle; NOT copied -- the object keeps this pointer, so it must outlive the object.
+ * @param mute        One-shot: emit silence for the first block, then clear (see struct v23_cfg::answer_tone).
+ * @return The transmitter, allocated or not.
  */
 struct v23tx *v23FP_tx_create(struct v23tx *tx, short mark, short space,
 			      short period_len, const short *period, int mute);
 
-/* Tear one down, freeing the tone generator and then the object itself. */
+/**
+ * @brief Tear a V.23 transmitter down, freeing the tone generator and then the object itself.
+ * @param tx  The transmitter to tear down.
+ */
 void v23FP_tx_delete(struct v23tx *tx);
 
-/*
- * Generate `count` samples from `bits`, one int per bit, writing how many
- * bits that FINISHED through `consumed`.
+/**
+ * @brief Generate `count` V.23 transmit samples from a bit stream.
  *
- * `bits[0]` must be the next bit that has never been handed over.  A bit left
- * in flight at the end of a call has already been taken from the buffer and
- * is NOT counted in `consumed`, so refill from index zero with `consumed`
- * fresh bits -- do not advance a cursor into a longer array by it, or the
- * held bit goes out twice.  See the note in src/pump/v23/v23tx.c.
+ * `bits[0]` must be the next bit that has never been handed over. A bit
+ * left in flight at the end of a call has already been taken from the
+ * buffer and is NOT counted in @p consumed, so refill from index zero
+ * with `*consumed` fresh bits -- do not advance a cursor into a longer
+ * array by it, or the held bit goes out twice. See the note in
+ * src/pump/v23/v23tx.c.
  *
- * The original returns whatever happens to be in %eax and no caller uses it,
- * so this is declared void rather than inventing a return value.
+ * The original returns whatever happens to be in `%eax` and no caller
+ * uses it, so this is declared void rather than inventing a return value.
+ *
+ * @param tx        The transmitter.
+ * @param out       Output for the generated samples.
+ * @param count     How many samples to generate.
+ * @param bits      The bits to send, one int per bit.
+ * @param consumed  Output: how many bits from @p bits finished during this call.
  */
 void v23FP_tx_progress(struct v23tx *tx, short *out, int count,
 		       const int *bits, int *consumed);
@@ -226,21 +242,37 @@ struct v23rx {
 	short		status;		/* +0x23e the last return value      */
 };
 
-/* Build one.  NULL `state` allocates it; `cfg` supplies the silence timeout. */
+/**
+ * @brief Build the V.23 1200 bps forward-channel receiver.
+ * @param rx   NULL to allocate one, or an existing object to build in place.
+ * @param cfg  Configuration; supplies the silence timeout.
+ * @return The receiver, allocated or not.
+ */
 struct v23rx *v23FP_rx_create(struct v23rx *rx, const struct v23_cfg *cfg);
 
-/* Tear one down: the tone detector, both filters and the IIR state. */
+/**
+ * @brief Tear a V.23 forward-channel receiver down: the tone detector, both filters and the IIR state.
+ * @param rx  The receiver to tear down.
+ */
 void v23FP_rx_delete(struct v23rx *rx);
 
-/*
- * Demodulate one block IN PLACE -- `samples` is filtered, resampled and
- * gain-controlled where it lies, so on return it holds 3/4 as many samples as
- * it did.  Returns 0 once carrier is up, 1 while acquiring it, 2 after giving
- * up on it.
+/**
+ * @brief Demodulate one block of the V.23 1200 bps forward channel, in place.
  *
- * `bits` and `nbits` are written only on a 0 return, and not even then if the
- * line has gone quiet; see the note in v23rx.c.  A caller must therefore
- * initialise `*nbits` itself, which is the opposite of BwChDem_Progress.
+ * @p samples is filtered, resampled and gain-controlled where it lies, so
+ * on return it holds 3/4 as many samples as it did.
+ *
+ * @p bits and @p nbits are written only on a 0 return, and not even then
+ * if the line has gone quiet; see the note in v23rx.c. A caller must
+ * therefore initialise `*nbits` itself, which is the opposite of
+ * BwChDem_Progress().
+ *
+ * @param rx      The receiver.
+ * @param samples Input samples, filtered/resampled/gain-controlled in place.
+ * @param count   How many input samples.
+ * @param bits    Output for the demodulated bits (written only on a 0 return with signal present).
+ * @param nbits   In: caller must initialise to 0; out: how many bits were written.
+ * @return 0 once carrier is up, 1 while acquiring it, 2 after giving up on it.
  */
 short v23FP_rx_progress(struct v23rx *rx, short *samples, int count,
 			int *bits, int *nbits);
@@ -280,16 +312,31 @@ struct bwchdem {
 	short		status;		/* +0x66 the last return value       */
 };
 
-/* Build one.  NULL `state` allocates it; `cfg` supplies the silence timeout. */
+/**
+ * @brief Build the V.23 75 bps backward-channel demodulator.
+ * @param bw   NULL to allocate one, or an existing object to build in place.
+ * @param cfg  Configuration; supplies the silence timeout.
+ * @return The demodulator, allocated or not.
+ */
 struct bwchdem *BwChDem_Create(struct bwchdem *bw, const struct v23_cfg *cfg);
 
-/* Tear one down, including the tone detector and the filter state. */
+/**
+ * @brief Tear a V.23 backward-channel demodulator down, including the tone detector and the filter state.
+ * @param bw  The demodulator to tear down.
+ */
 void BwChDem_Delete(struct bwchdem *bw);
 
-/*
- * Demodulate one block IN PLACE -- `samples` is filtered and gain-controlled
- * where it lies.  Returns 0 once carrier is up, 1 while acquiring it, 2 after
- * giving up on it.
+/**
+ * @brief Demodulate one block of the V.23 75 bps backward channel, in place.
+ *
+ * @p samples is filtered and gain-controlled where it lies.
+ *
+ * @param bw      The demodulator.
+ * @param samples Input samples, filtered/gain-controlled in place.
+ * @param count   How many input samples.
+ * @param bits    Output for the demodulated bits.
+ * @param nbits   Output: how many bits were written.
+ * @return 0 once carrier is up, 1 while acquiring it, 2 after giving up on it.
  */
 short BwChDem_Progress(struct bwchdem *bw, short *samples, short count,
 		       int *bits, int *nbits);
@@ -334,27 +381,45 @@ struct v23modem {
 	void		*rx;		/* +0x24 */
 };
 
-/*
- * Build a V.23 modem.
+/**
+ * @brief Build a V.23 modem, choosing terminal (mode 0) or host (any other mode) behaviour.
  *
- * `state` MUST be NULL.  A non-null one is not an error and not a crash: the
- * original skips the whole of the construction and fills in only the timing
- * fields, leaving `mode`, `tx` and `rx` as it found them.  See D22.
+ * @p m MUST be NULL. A non-null one is not an error and not a crash: the
+ * original skips the whole of the construction and fills in only the
+ * timing fields, leaving `mode`, `tx` and `rx` as it found them. See D22.
+ *
+ * @param m     Must be NULL (see above).
+ * @param mode  0 for the terminal end (transmits 75 bps, receives 1200); anything else for the host end.
+ * @param cfg   Configuration for the answer tone and silence timeout.
+ * @return The modem.
  */
 struct v23modem *CreateV23Modem(struct v23modem *m, int mode,
 				const struct v23_cfg *cfg);
 
-/* Tear one down, and everything it built. */
+/**
+ * @brief Tear a V.23 modem down, and everything it built.
+ * @param m  The modem to tear down.
+ */
 void DeleteV23Modem(struct v23modem *m);
 
-/*
- * One block, both directions.
+/**
+ * @brief Run one block of a V.23 modem, both directions.
  *
- * `tx_nbits` is in/out -- in: bits available at `tx_bits`, out: bits the
- * transmitter finished -- exactly as Bell 103's B103FP_modem does it.
+ * @p tx_nbits is in/out -- in: bits available at @p tx_bits, out: bits
+ * the transmitter finished -- exactly as Bell 103's `B103FP_modem` does
+ * it.
  *
- * Returns 1 throughout the answer-tone sequence, and after that whatever the
- * receiver returns: 0 carrier up, 1 acquiring, 2 given up.
+ * @param m         The modem.
+ * @param tx_bits   Bits to transmit.
+ * @param tx_nbits  In/out: bits available, then bits the transmitter finished.
+ * @param tx_out    Output for the modulated transmit samples.
+ * @param tx_count  How many transmit samples to produce.
+ * @param rx_in     Received samples to demodulate.
+ * @param rx_count  How many receive samples.
+ * @param rx_bits   Output for the demodulated bits.
+ * @param rx_nbits  Output: how many bits were demodulated.
+ * @return 1 throughout the answer-tone sequence, and after that whatever
+ *         the receiver returns: 0 carrier up, 1 acquiring, 2 given up.
  */
 short V23ModemMain(struct v23modem *m, int *tx_bits, int *tx_nbits,
 		   short *tx_out, int tx_count, short *rx_in, int rx_count,

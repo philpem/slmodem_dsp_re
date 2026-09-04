@@ -121,44 +121,71 @@
 #define V22_TXDATA_S1_EVEN	0
 #define V22_TXDATA_S1_ODD	3
 
-/*
- * Fill `out` with `*count` symbols of the selected pattern.
+/**
+ * @brief Fill `out` with `*count` symbols of one of V.22's five fixed transmit patterns.
  *
  * `count` is read through a pointer with `movswl`, but only the low sixteen
- * bits of the result are ever used, so the extension is FREE in finding
+ * bits of the result are ever used, so the extension is free in finding
  * F614's sense and `short` is chosen because it is what the object encodes
  * rather than because anything forces it.
  *
- * THE LOOPS COUNT DOWN TO ZERO AND DO NOT TEST FOR POSITIVE.  A negative
- * count therefore runs until the sixteen-bit counter wraps through -32768 to
- * zero -- 65535 writes for -1 -- rather than none.
+ * The loops count down to zero and do not test for positive: a negative
+ * count runs until the sixteen-bit counter wraps through -32768 to zero
+ * (65535 writes for -1) rather than none. Pattern V22_TXDATA_S1 does not
+ * terminate on an odd count -- it writes two symbols per step and
+ * decrements by two, and the odd sixteen-bit values form a cycle under -2
+ * that never contains zero, so the loop runs forever. That is the object's
+ * behaviour and it is reproduced here.
  *
- * PATTERN 0 DOES NOT TERMINATE ON AN ODD COUNT.  It writes two symbols per
- * step and decrements by two, and the odd sixteen-bit values form a cycle
- * under -2 that never contains zero, so the loop runs for ever.  That is the
- * object's behaviour and it is reproduced; it is recorded here because it is
- * the one input a test cannot take.
+ * @param out      Destination for the generated symbols.
+ * @param count    How many symbols to write; see the wrap/non-termination notes above.
+ * @param pattern  One of the V22_TXDATA_* patterns; anything outside 0..4 writes nothing.
  */
 void MakeTxData(short *out, const short *count, short pattern);
 
-/*
- * Is the receiver seeing continuous ones?  `thresh` is Q15 and multiplies the
- * ideal energy; `bps` selects which symbol counts as a one.
+/**
+ * @brief Is the receiver seeing a continuous run of the "ones" symbol?
  *
- * The symbols are read UNSIGNED (`movzwl`), which matters only above 0x8000
- * and cannot arise from a four-bit constellation index; it is what the object
- * encodes and is kept.
+ * Correlates `*count` received symbols against the scrambled-ones pattern
+ * for the given bit rate. The symbols are read unsigned (`movzwl`), which
+ * matters only above 0x8000 and cannot arise from a four-bit constellation
+ * index; it is what the object encodes and is kept.
+ *
+ * @param sym    The received symbols.
+ * @param count  How many symbols.
+ * @param bps    The bit rate (V22_DET_BPS_2400 or anything else for 1200), which selects the ones symbol.
+ * @param thresh The match threshold, Q15, multiplying the ideal energy.
+ * @return Zero for no match, otherwise `*count` scaled to milliseconds (V22_DET_SYMBOL_MS_Q14).
  */
 int Detect_1s(const unsigned short *sym, const unsigned short *count,
 	      short bps, short thresh);
 
-/* The RMLOOP2 acknowledgement pattern.  Its threshold is built in. */
+/**
+ * @brief Is the receiver seeing the V.22bis RMLOOP2 acknowledgement pattern?
+ *
+ * Same correlator shape as Detect_1s(), with its own built-in threshold
+ * (V22_DET_THRESH_Q15) and its own reference symbol per bit rate
+ * (V22_DET_RMLOOP2_1200/V22_DET_RMLOOP2_2400).
+ *
+ * @param sym    The received symbols.
+ * @param count  How many symbols.
+ * @param bps    The bit rate, selecting which reference symbol to match against.
+ * @return Zero for no match, otherwise `*count` scaled to milliseconds (V22_DET_SYMBOL_MS_Q14).
+ */
 int Detect_Rmloop2_ACK(const unsigned short *sym, const unsigned short *count,
 		       short bps);
 
-/*
- * The retrain request: a constant quadrant AND a period-2 symbol stream.
- * Takes no rate -- it works on quadrants, which are the same at both rates.
+/**
+ * @brief Is the receiver seeing a retrain request?
+ *
+ * Requires both a constant quadrant (V22_DET_RETRAIN_QUAD) correlating
+ * above V22_DET_THRESH_Q15, and the symbol stream being period-2 for more
+ * than V22_DET_RETRAIN_RUN consecutive pairs. Takes no rate -- it works on
+ * quadrants, which are the same numbering at both bit rates.
+ *
+ * @param sym    The received symbols.
+ * @param count  How many symbols.
+ * @return Zero for no match, otherwise `*count` scaled to milliseconds (V22_DET_SYMBOL_MS_Q14).
  */
 int Detect_Retrain(const unsigned short *sym, const unsigned short *count);
 

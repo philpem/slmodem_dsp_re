@@ -109,25 +109,40 @@ struct v22fp_ctl {
 #define V22_PROTOCOL_RETRAIN		6
 #define V22_PROTOCOL_ORG_RMLOOP2	4
 
-/*
- * The equaliser's diagnostic word.
+/**
+ * @brief Return the V.22 equaliser's diagnostic word.
  *
- * The object TAIL-JUMPS to `V22_FSE_getdiag` after rewriting only the first
- * argument slot, so anything else its caller passed is still on the stack and
- * this function cannot say how many arguments it was given.  One is declared,
- * for the same reason v22_fse.h gives for declaring one on the callee: under
- * cdecl a caller passing more is harmless.
+ * Tail-jumps to `V22_FSE_getdiag` after rewriting only the first argument
+ * slot, so anything else the caller passed is still on the stack and this
+ * function cannot say how many arguments it was given -- one is declared,
+ * for the same reason v22_fse.h gives for declaring one on the callee:
+ * under cdecl a caller passing more is harmless.
+ *
+ * @param fp  The V.22 datapump instance.
+ * @return The equaliser's diagnostic word (`V22_FSE_getdiag`'s return value).
  */
 int V22FP_GetDiagnostics(struct v22fp *fp);
 
-/*
- * Reconfigure a live datapump from a control block.  Always returns 1 -- the
- * value is a literal on every path and is not a status.
+/**
+ * @brief Reconfigure a live V.22 datapump from a control block.
+ * @param fp   The V.22 datapump instance.
+ * @param ctl  The control block; see struct v22fp_ctl for which bytes are read.
+ * @return Always 1 -- a literal on every path, not a status.
  */
 int V22FP_control(struct v22fp *fp, const struct v22fp_ctl *ctl);
 
-/* Is the transmit scrambler enabled?  Is the receive descrambler? */
+/**
+ * @brief Is the V.22 transmit scrambler currently enabled?
+ * @param fp  The V.22 datapump instance.
+ * @return Non-zero if the scrambler is on.
+ */
 int ScramblerOn(struct v22fp *fp);
+
+/**
+ * @brief Is the V.22 receive descrambler currently enabled?
+ * @param fp  The V.22 datapump instance.
+ * @return Non-zero if the descrambler is on.
+ */
 int DescramblerOn(struct v22fp *fp);
 
 #endif /* DSPLIB_V22CTL_H */

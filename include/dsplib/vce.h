@@ -107,9 +107,47 @@ struct voice_info {
 #define STRM_VCE_FAR_ECHO_DELAY		51
 #define STRM_VCE_NEAR_ECHO_DELAY	369
 
+/**
+ * @brief Off-hook notification (diagnostic only).
+ *
+ * The whole body is a debug-level gate and a printf of @p p with `%p`; there
+ * is no other observable effect at any debug level.
+ *
+ * @param p Opaque pointer, printed and otherwise untouched.
+ */
 void vce_hook_on(void *p);
+
+/** @brief On-hook notification. Same shape as vce_hook_on(), diagnostic only. */
 void vce_hook_off(void *p);
+
+/**
+ * @brief The voice service's own S-register reader.
+ *
+ * Not a call into slmodemd's `modem_get_sreg`: it fetches `struct voice_info`
+ * via `MDMPRM_VOICEINFO` and answers seven register numbers out of that
+ * block and three built-in constants (S24, S72, S73). Any other register
+ * number returns 0, including ones the host itself has a value for. The
+ * block is fetched unconditionally before the switch, even for the three
+ * constant answers, so the `modem_get_param` call is always made.
+ *
+ * @param modem The host handle, passed through to `modem_get_param`.
+ * @param num   The S-register number (`SREG_*`).
+ * @return The register's value, or 0 for any register this function does
+ *         not know.
+ */
 int vce_get_sreg(void *modem, unsigned int num);
+
+/**
+ * @brief Report the two FDSP echo delays, in samples.
+ *
+ * Both are hard-coded constants (`STRM_VCE_FAR_ECHO_DELAY`,
+ * `STRM_VCE_NEAR_ECHO_DELAY`); the incoming values are only ever printed
+ * (the object's "old:"/"new:" debug lines), never read, so a caller cannot
+ * influence the answer.
+ *
+ * @param psFarEchoDelay  Out: the far-echo delay, samples.
+ * @param psNearEchoDelay Out: the near-echo delay, samples.
+ */
 void STRM_VCE_GetFDSPEnvironmentalParams(short *psFarEchoDelay,
 					 short *psNearEchoDelay);
 
@@ -135,9 +173,54 @@ struct rc;		/* fixedrc.h -- a fixed-ratio rate converter    */
  * enumerators are all non-negative IS unsigned -- the two spellings agree, and
  * this one does not need the enum defined in two trees.
  */
+/**
+ * @brief Build the VOICE service object.
+ *
+ * Allocates the 0x1484-byte `struct vce`, creates the line-rate converter
+ * pair the requested rate needs (none at 8000, since that is the pump's own
+ * rate), and builds the voice service core underneath it. An unsupported
+ * rate leaves both converters NULL and still succeeds; there is no failure
+ * return reachable from a test, since the only failure path is a
+ * `sysdep_malloc` that cannot be made to fail here.
+ *
+ * @param modem The host handle.
+ * @param rate  Line sample rate: `VCE_RATE_8000`, `VCE_RATE_9600` or
+ *              `VCE_RATE_48000`; anything else takes the pump's own rate.
+ * @return The new service object.
+ */
 void *VOICE_create(void *modem, unsigned int rate);
+
+/**
+ * @brief Tear the VOICE service down: the voice core, both rate converters
+ * (if created), and the object itself.
+ */
 void VOICE_delete(void *obj);
+
+/**
+ * @brief Translate a host `enum VOICE_CMD` opcode into the four
+ * `voice_command` opcodes underneath, fetching any tone parameters out of
+ * `struct voice_info` on the way.
+ *
+ * @param obj The VOICE service object.
+ * @param cmd One of the eight `VOICE_CMD_*` values.
+ * @return -1 for a NULL object or an opcode outside 0..`VOICE_CMD_MAX`;
+ *         otherwise whatever `voice_command` answered.
+ */
 int VOICE_command(void *obj, unsigned int cmd);
+
+/**
+ * @brief Run one buffer of line audio through the voice service.
+ *
+ * Resamples in, scales to float, exchanges host-side bytes, drives
+ * `voice_modem` and resamples back out, a block at a time.
+ *
+ * @param obj   The VOICE service object.
+ * @param in    Line-rate input samples.
+ * @param out   Line-rate output samples.
+ * @param count Samples in @p in and @p out.
+ * @return 0 in every case this tree has observed; the object never sets it
+ *         otherwise.
+ */
 int VOICE_process(void *obj, void *in, void *out, int count);
 
 /*

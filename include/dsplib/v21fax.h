@@ -565,74 +565,93 @@ typedef short (*v21tx_process_fn)(void *modem, unsigned short *in, short *out,
 /* ------------------------------------------------------------------------ */
 /* The functions                                                            */
 
-/*
- * Modulate `nbits` bits into `out` and return the number of samples written.
+/**
+ * @brief Modulate `nbits` V.21 transmit bits into `out`.
  *
  * Two stages, as Bell 103's `ModDataB103` is: the modulator fills the shared
  * scratch buffer at its own rate and the converter lifts that into `out`, so
- * the bit count and the sample count are different numbers and the return is
- * the second one.  Nothing here bounds `nbits` against the scratch buffer and
- * the object has no guard either.
+ * the bit count and the sample count are different numbers and the return
+ * is the second one. Nothing here bounds `nbits` against the scratch buffer
+ * and the object has no guard either.
  *
- * THE HANDLE IS RE-READ after the modulator returns -- `mov 0x24(%ebx),%eax`
- * at 0xa58ba, not a reload of a cached local -- which is the idiom
- * `v17data.h` records for `ModDataV17` and `v22data.c` for `ModDataV22`.  It
- * is not observable through any call this function can make.
+ * The handle is re-read after the modulator returns (`mov 0x24(%ebx),%eax`
+ * at 0xa58ba, not a reload of a cached local) -- the same idiom `v17data.h`
+ * records for `ModDataV17` and `v22data.c` for `ModDataV22`. It is not
+ * observable through any call this function can make.
  *
- * RETURNS `unsigned short`: the object zero-extends the converter's return
- * with `movzwl %ax,%eax` before the epilogue, and `FPM_MRF_filter` returns
- * `short`, so the narrowing is the author's and the extension is the ABI's.
+ * @param modem  The V.21 transmitter handle.
+ * @param bits   The bits to modulate.
+ * @param out    Destination for the modulated samples.
+ * @param nbits  How many bits.
+ * @return The number of samples written, zero-extended from `FPM_MRF_filter`'s `short` return.
  */
 unsigned short ModDataV21(void *modem, const unsigned short *bits, short *out,
 			  unsigned short nbits);
 
-/*
- * The same with the carrier off: identical timing, identical sample count,
- * silence.
+/**
+ * @brief Modulate `nbits` bits with the carrier held off: identical timing, identical sample count, silence.
  *
- * The modulator's output scale is forced to zero across the modulate call and
- * restored afterwards, so the phase accumulator, the symbol counter and the
- * converter history all advance exactly as they would have.  The converter
- * runs with whatever scale it was given, which by then is silence anyway.
+ * The modulator's output scale is forced to zero across the modulate call
+ * and restored afterwards, so the phase accumulator, the symbol counter and
+ * the converter history all advance exactly as they would have. The
+ * converter runs with whatever scale it was given, which by then is silence
+ * anyway.
  *
- * The second argument IS read, unlike `TxNoCarrierV17`'s: it is handed
- * straight to the modulator, which is still asked to modulate real bits.
+ * `bits` IS read here, unlike `TxNoCarrierV17`'s equivalent argument: it is
+ * handed straight to the modulator, which is still asked to modulate real
+ * bits.
+ *
+ * @param modem  The V.21 transmitter handle.
+ * @param bits   The bits to modulate (silently).
+ * @param out    Destination; filled with silence.
+ * @param nbits  How many bits.
+ * @return The number of samples written -- the same count ModDataV21() would produce.
  */
 unsigned short TxNoCarrierV21(void *modem, const unsigned short *bits,
 			      short *out, unsigned short nbits);
 
-/* Carrier present: the receive block's two words at once. */
+/**
+ * @brief Is a V.21 carrier present on the receive side?
+ * @param modem  The V.21 receiver handle.
+ * @return Non-zero if the receive block's two status words (dsp+0x04, dsp+0x08) indicate carrier.
+ */
 int CarrierDetectV21(void *modem);
 
-/*
- * Rectify the demodulator's trace into the block's own buffer, and return 0.
+/**
+ * @brief Rectify the V.21 demodulator's trace into the receiver's own magnitude buffer.
  *
  * `fsd.trace` is "the lowpass output, one word per input sample" (fpm_fsd.h)
- * and `fsd.last_count` is how many of them the last call wrote, so this walks
- * exactly the samples the demodulator just produced and stores their absolute
- * values into `mag`.
+ * and `fsd.last_count` is how many of them the last call wrote, so this
+ * walks exactly the samples the demodulator just produced and stores their
+ * absolute values into `mag`.
  *
- * IT RETURNS A LITERAL 0 AND COMPUTES NO RATIO.  The object then runs a
- * SECOND loop over the same bound with an empty body; the natural reading is
- * an accumulation whose result became dead, but the object does not say so
- * and nothing here claims it.  The loop is reproduced because it is in the
- * object; it has no observable effect.  See D1038.
+ * It returns a literal 0 and computes no ratio. The object then runs a
+ * second loop over the same bound with an empty body; the natural reading
+ * is an accumulation whose result became dead, but the object does not say
+ * so and nothing here claims it. The loop is reproduced because it is in
+ * the object; it has no observable effect. See D1038.
  *
- * The absolute value is the branchless `cltd; xor; sub` form, so an input of
- * -32768 comes back as -32768.  That is not a bug being introduced here --
- * it is what the object computes -- and the differential test drives it.
+ * The absolute value is the branchless `cltd; xor; sub` form, so an input
+ * of -32768 comes back as -32768. That is not a bug being introduced here
+ * -- it is what the object computes -- and the differential test drives it.
+ *
+ * @param modem  The V.21 receiver handle.
+ * @return Always 0.
  */
 int GetSNRV21(void *modem);
 
-/*
- * Fill `st` from the transmitter handle.  Returns 1, or 0 for a NULL `st`.
+/**
+ * @brief Fill a status report from the V.21 TRANSMITTER handle.
+ * @param modem  The V.21 transmitter handle.
+ * @param st     Output: the status report.
+ * @return 1, or 0 for a NULL @p st.
  */
 int V21TX_status(void *modem, struct v21_status *st);
 
-/*
- * Run the receiver over one block.
+/**
+ * @brief Run the V.21 receiver over one block.
  *
- * `count` is in-out and CHANGES UNITS: it goes in as the number of input
+ * `count` is in-out and changes units: it goes in as the number of input
  * samples available and comes back as the number of output units produced.
  * That is the same in-out convention `B103FP_modem` uses for `n_rx`, and it
  * is the shape finding F8607 / deviation D956 is about -- there is no clamp
@@ -640,112 +659,129 @@ int V21TX_status(void *modem, struct v21_status *st);
  * handlers can produce and not from the input count.
  *
  * The half-duplex handler at `hdx->handler` is called repeatedly with the
- * cursors advanced -- the input by however many samples the handler consumed
- * (which it reports by decrementing `*count`), the output by however many
- * units it returned -- until `*count` reaches zero.  IT IS A DO-WHILE: a
- * handler is dispatched even when `*count` is zero on entry.
+ * cursors advanced -- the input by however many samples the handler
+ * consumed (which it reports by decrementing `*count`), the output by
+ * however many units it returned -- until `*count` reaches zero. It is a
+ * do-while: a handler is dispatched even when `*count` is zero on entry.
  *
- * The running total is truncated to a `short` on every iteration, so a block
- * that produces more than 32,767 units wraps.
+ * The running total is truncated to a `short` on every iteration, so a
+ * block that produces more than 32,767 units wraps.
  *
- * Returns the 32-bit word at V21RX_OBJ_STATUS -- status in the low byte,
- * flags in the next.
+ * @param modem  The V.21 receiver handle.
+ * @param in     Input samples.
+ * @param out    Output units.
+ * @param count  In/out: input samples available, then output units produced (see above).
+ * @return The 32-bit word at V21RX_OBJ_STATUS -- status in the low byte, flags in the next.
  */
 int V21RX_modem(void *modem, short *in, short *out, short *count);
 
-/*
- * Tear the receiver down.
+/**
+ * @brief Build a V.21 receiver, or re-initialise one the caller already has.
  *
- * Frees the demodulator's and converter's buffers, the tone detector, the
- * magnitude buffer, the DSP block, the half-duplex context and the handle,
- * with NO NULL GUARD anywhere and no check that the caller supplied the
- * handle rather than the constructor.  See D1039.
+ * `modem` NULL allocates a `V21RX_OBJ_SIZE` handle and, with it, every
+ * buffer the DSP blocks need; a non-NULL one is re-initialised in place,
+ * keeping whatever `hdx` and `dsp` allocations it already carries. That
+ * distinction is the third argument to `FPM_MRF_init`, `FPM_AGC_init` and
+ * `FPM_FSD_init`, so passing a handle whose `dsp` pointer is uninitialised
+ * garbage is a crash rather than a fresh start -- the object has no guard.
  *
- * THE ORDER ABOVE IS READ FROM THE OBJECT'S CALL SEQUENCE (0x099284 through
- * the tail call at 0x0992e6) AND IS NOT VERIFIED BY ANY TEST.  It is stated
- * because the disassembly states it, and the distinction matters: `t_v21fax`
- * compares a LIVENESS VECTOR over the ten allocations, and a liveness vector
- * is a SET.  Both sides call the same `sysdep_free` and the harness records
- * no sequence, so two implementations that free the same blocks in different
- * orders are indistinguishable to it.  A parallel V.29 pass measured exactly
- * that -- a hand mutation swapping two frees was the one survivor of its
- * set -- so this is a bound on the technique, not a suspicion about it.
+ * `params` NULL takes `V21RX_CFG`, which selects channel 2. The table is
+ * copied over the handle's head, so the caller's may be a temporary.
  *
- * Nothing here depends on the order being right: every callee takes one
- * pointer, none reads another's block, and the handle is released last on
- * both readings.  A free LOG in the harness would close it for every delete
- * function in the tree at once, and is not this file's to add.
- */
-/*
- * Build a V.21 receiver, or re-initialise one the caller already has.
- *
- * `modem` NULL allocates a `V21RX_OBJ_SIZE` handle and, with it, every buffer
- * the DSP blocks need; a non-NULL one is re-initialised IN PLACE, keeping
- * whatever `hdx` and `dsp` allocations it already carries.  That distinction
- * is the third argument to `FPM_MRF_init`, `FPM_AGC_init` and `FPM_FSD_init`,
- * so passing a handle whose `dsp` pointer is uninitialised garbage is a crash
- * rather than a fresh start -- the object has no guard.
- *
- * `params` NULL takes `V21RX_CFG`, which selects channel 2.  The table is
- * COPIED over the handle's head, so the caller's may be a temporary.
- *
- * Returns the handle, allocated or not.  There is no failure return: the
- * object does not check `sysdep_malloc`.
+ * @param modem   NULL to allocate, or an existing handle to re-initialise in place.
+ * @param params  Configuration to copy in, or NULL for the built-in `V21RX_CFG`.
+ * @return The handle, allocated or not. There is no failure return: the object does not check `sysdep_malloc`.
  */
 void *V21RX_create(void *modem, const struct v21rx_cfg *params);
 
+/**
+ * @brief Tear a V.21 receiver down.
+ *
+ * Frees the demodulator's and converter's buffers, the tone detector, the
+ * magnitude buffer, the DSP block, the half-duplex context and the handle,
+ * with no NULL guard anywhere and no check that the caller supplied the
+ * handle rather than the constructor. See D1039.
+ *
+ * The order above is read from the object's call sequence (0x099284
+ * through the tail call at 0x0992e6) and is not verified by any test. It is
+ * stated because the disassembly states it, and the distinction matters:
+ * `t_v21fax` compares a liveness vector over the ten allocations, and a
+ * liveness vector is a set. Both sides call the same `sysdep_free` and the
+ * harness records no sequence, so two implementations that free the same
+ * blocks in different orders are indistinguishable to it. A parallel V.29
+ * pass measured exactly that -- a hand mutation swapping two frees was the
+ * one survivor of its set -- so this is a bound on the technique, not a
+ * suspicion about it.
+ *
+ * Nothing here depends on the order being right: every callee takes one
+ * pointer, none reads another's block, and the handle is released last on
+ * both readings. A free log in the harness would close it for every delete
+ * function in the tree at once, and is not this file's to add.
+ *
+ * @param modem  The V.21 receiver handle to tear down.
+ */
 void V21RX_delete(void *modem);
 
-/*
- * Tear the TRANSMITTER down.  Seven releases, in the object's order
- * (0x0995f8 through the sibling `jmp` at 0x099653): the modulator, the rate
- * converter, the shared scratch buffer and then the DSP block itself, then
- * the `fax_fifo` the parameter block owns and that block, and the handle last.
+/**
+ * @brief Tear a V.21 transmitter down.
  *
- * IT IS ALSO THE SECOND, INDEPENDENT STATEMENT OF `struct v21_tx_dsp`.
+ * Seven releases, in the object's order (0x0995f8 through the sibling
+ * `jmp` at 0x099653): the modulator, the rate converter, the shared
+ * scratch buffer and then the DSP block itself, then the `fax_fifo` the
+ * parameter block owns and that block, and the handle last.
+ *
+ * It is also the second, independent statement of `struct v21_tx_dsp`.
  * `ModDataV21` establishes +0x00, +0x10 and +0x2c by which module each is
  * handed to; this function establishes the same three by which module
- * RELEASES each -- `FPM_FSM_delete`, `FPM_MRF_free` and a plain `sysdep_free`
- * of the pointer at +0x2c.  Two readings of one block, neither derived from
- * the other, and they agree.  Finding F9252.
+ * releases each -- `FPM_FSM_delete`, `FPM_MRF_free` and a plain
+ * `sysdep_free` of the pointer at +0x2c. Two readings of one block, neither
+ * derived from the other, and they agree. Finding F9252.
  *
- * THE LITERAL 1 IN THE SECOND ARGUMENT SLOT IS NOT REPRODUCED.  The object
- * plants one at 0x099603 before `FPM_MRF_free`, which takes a single argument
- * and reads no frame slot past the first.  Finding F8876, and `V17TX_delete`
- * and `V21RX_delete` both carry the note.
+ * The literal 1 in the second argument slot is not reproduced. The object
+ * plants one at 0x099603 before `FPM_MRF_free`, which takes a single
+ * argument and reads no frame slot past the first. Finding F8876, and
+ * `V17TX_delete` and `V21RX_delete` both carry the note.
  *
  * There is no NULL guard on anything and the handle is released
  * unconditionally by a sibling `jmp`, so a caller that supplied the storage
- * does not get it back.  Both reproduced; see docs/deviations.md D1150, which
- * is this pair's entry and points back at D1039 for the receive side.
+ * does not get it back. Both reproduced; see docs/deviations.md D1150,
+ * which is this pair's entry and points back at D1039 for the receive side.
+ *
+ * @param modem  The V.21 transmitter handle to tear down.
  */
 void V21TX_delete(void *modem);
 
-/*
- * Drive the transmitter for one caller block, and report what the handle's
- * result word says.
+/**
+ * @brief Drive the V.21 transmitter for one caller block.
  *
- * TWO ARMS ON THE WAY IN, chosen by `V21TXP_INT_0004`.  Zero queues the
- * caller's `count` words through `FIFO_write` and remembers how many it took;
- * non-zero remembers `count` itself and touches the FIFO not at all.  What is
- * remembered is compared against `*count` AFTER the loop, and a mismatch is
- * what sets `V21TX_RESULT_B1_BIT1` and writes `V21TX_RESULT_BYTE_04` -- so on
- * the second arm the comparison is between a value and itself and neither is
- * ever written.
+ * Two arms on the way in, chosen by `V21TXP_INT_0004`. Zero queues the
+ * caller's `count` words through `FIFO_write` and remembers how many it
+ * took; non-zero remembers `count` itself and touches the FIFO not at all.
+ * What is remembered is compared against `*count` after the loop, and a
+ * mismatch is what sets `V21TX_RESULT_B1_BIT1` and writes
+ * `V21TX_RESULT_BYTE_04` -- so on the second arm the comparison is between
+ * a value and itself and neither is ever written.
  *
- * THE LOOP IS A `do`/`while` ON A LOCAL, NOT ON THE CALLER'S COUNT.  See
- * `v21tx_process_fn`: the budget starts at `V21TX_MODEM_BUDGET`, is set ONCE
- * before the loop, and the slot decrements it.
+ * The loop is a do/while on a LOCAL, not on the caller's count. See
+ * `v21tx_process_fn`: the budget starts at `V21TX_MODEM_BUDGET`, is set
+ * once before the loop, and the slot decrements it.
  *
- * `count` IS IN/OUT AND CHANGES UNITS across the call -- on entry the number
- * of input words, on return the total the slot produced -- and NOTHING CLAMPS
- * WHAT THE SLOT WRITES THROUGH `out`.  That is the shape deviation D956 is
- * about; a caller's output buffer must be sized from what the slot can
- * produce over `V21TX_MODEM_BUDGET` and not from the input count.
+ * `count` is in/out and changes units across the call -- on entry the
+ * number of input words, on return the total the slot produced -- and
+ * nothing clamps what the slot writes through `out`. That is the shape
+ * deviation D956 is about; a caller's output buffer must be sized from what
+ * the slot can produce over `V21TX_MODEM_BUDGET` and not from the input
+ * count.
  *
- * The running total is a `short` and the object re-narrows it with `cwtl` on
- * every iteration, so a block producing more than 32,767 units wraps.
+ * The running total is a `short` and the object re-narrows it with `cwtl`
+ * on every iteration, so a block producing more than 32,767 units wraps.
  * Reproduced, not corrected; docs/deviations.md D1148.
+ *
+ * @param modem  The V.21 transmitter handle.
+ * @param in     Input words to transmit.
+ * @param out    Output samples.
+ * @param count  In/out: input word count, then samples produced (see above).
+ * @return The 32-bit word at V21TX_OBJ_RESULT.
  */
 int V21TX_modem(void *modem, unsigned short *in, short *out,
 		unsigned short *count);
@@ -753,110 +789,170 @@ int V21TX_modem(void *modem, unsigned short *in, short *out,
 /* ------------------------------------------------------------------------ */
 /* The receive data path                                                    */
 
-/*
- * One block through the receive chain, and the only function in this file
- * that touches the demodulator.
+/**
+ * @brief One block through the V.21 receive chain: the only function in this file that touches the demodulator.
  *
- * Gain-control `count` samples of `in` in place, ask the tone detector about
- * the same block, resample what is left into the DSP block's own `mag`
- * buffer and demodulate that into `bits`.  Returns the number of bits the
- * demodulator wrote.
+ * Gain-controls `count` samples of `in` in place, asks the tone detector
+ * about the same block, resamples what is left into the DSP block's own
+ * `mag` buffer and demodulates that into `bits`.
  *
- * THE OBJECT PASSES `FPM_AGC_agc` A FOURTH ARGUMENT, the constant 1, and
- * USES THE VALUE LEFT IN %eax -- neither of which that function has.  This is
- * the third site in the tree with the same shape (`src/pump/v23/bwchdem.c`
- * and `src/pump/v22/v22data.c` are the others) and it is answered the same
- * way: the extra argument has no observable effect and is dropped, and the
- * returned value is `agc.signal`, which is read out of the state instead.
+ * The object passes `FPM_AGC_agc` a fourth argument, the constant 1, and
+ * uses the value left in `%eax` -- neither of which that function has. This
+ * is the third site in the tree with the same shape (`src/pump/v23/
+ * bwchdem.c` and `src/pump/v22/v22data.c` are the others) and it is
+ * answered the same way: the extra argument has no observable effect and
+ * is dropped, and the returned value is `agc.signal`, which is read out of
+ * the state instead.
  *
  * `bits` is spelled `short *` because that is what the half-duplex handler
  * signature carries; `FPM_FSD_demodulate` wants `unsigned short *` and the
  * cast is made here, once, rather than at each of the four call sites.
  *
- * THE INPUT BLOCK IS SILENCED IN PLACE when the tone detector returns
+ * The input block is silenced in place when the tone detector returns
  * anything other than `FPM_MTD_ABSENT` and the installed handler is not
- * `RxHdxDataV21`.  That comparison is a DATA reference to `RxHdxDataV21`
- * (`R_386_32` on the `cmpl` at 0x0a57a3), which is why these five symbols are
- * one indivisible unit -- findings F8492 and F8493.
+ * `RxHdxDataV21`. That comparison is a data reference to `RxHdxDataV21`
+ * (`R_386_32` on the `cmpl` at 0x0a57a3), which is why these five symbols
+ * are one indivisible unit -- findings F8492 and F8493.
+ *
+ * @param modem  The V.21 receiver handle.
+ * @param in     Input samples, gain-controlled in place.
+ * @param bits   Output for the demodulated bits.
+ * @param count  How many input samples.
+ * @return The number of bits the demodulator wrote.
  */
 unsigned short DemodDataV21(void *modem, short *in, short *bits,
 			    unsigned short count);
 
 /*
- * The four half-duplex receive states.  Each has the shape the handler slot
- * declares -- `(rx, in, out, count)` returning the number of output units --
- * and each consumes the WHOLE block, storing zero into `*count` before it
- * returns, so `V21RX_modem`'s loop runs a handler once per call.
- *
- * ERROR   demodulates the block, raises V21RX_FLAG_ERROR and returns 0.
- *         It does not advance the state, so the machine stays here.
- * IDLE    demodulates the block, reports V21RX_STATUS_IDLE and re-reads the
- *         carrier.  Also does not advance.
- * WAIT    demodulates the block; with no carrier it installs RxHdxErrorV21
- *         and reports V21RX_STATUS_ERROR, and with a carrier it counts
- *         `hdx->countdown` down and advances the state when it reaches zero.
- * DATA    demodulates the block only while the carrier is up and
- *         `hdx->int_0000` is clear, and reports the demodulator's SNR
- *         through V21RX_FLAG_LOW_SNR.  Otherwise it advances the state.
+ * The four half-duplex receive states below share one shape: each has the
+ * signature the handler slot declares -- `(rx, in, out, count)` returning
+ * the number of output units -- and each consumes the WHOLE block, storing
+ * zero into `*count` before it returns, so `V21RX_modem`'s loop runs a
+ * handler once per call. See each function's own @brief for what it does.
  */
-/*
- * Fill a status report from the RECEIVER, and say whether there was one to
- * fill: 0 for a null pointer, 1 otherwise.
+
+/**
+ * @brief V.21 receive state ERROR: demodulate the block, raise V21RX_FLAG_ERROR.
  *
- * It is not `V21TX_status` with the handle changed.  It reports the rate in
- * `rx_bps` rather than `tx_bps`, it calls `GetSNRV21` and puts the answer in
- * `snr` where the transmit side writes a literal 0, it derives `quality`
- * from V21RX_FLAG_LOW_SNR, it zeroes +0x0e rather than +0x0c, and its
- * `flags` byte is written as a literal 0 rather than merged.
+ * Does not advance the state, so the machine stays here.
  *
- * `short_12` IS COMPUTED, and it is the only arithmetic in the function:
+ * @param rx     The V.21 receiver handle.
+ * @param in     Input samples.
+ * @param out    Output units.
+ * @param count  In/out sample count; zeroed before return (see the family note above).
+ * @return Always 0.
+ */
+short RxHdxErrorV21(void *modem, short *in, short *out, short *count);
+
+/**
+ * @brief V.21 receive state IDLE: demodulate the block, report V21RX_STATUS_IDLE.
+ *
+ * Re-reads the carrier. Also does not advance the state.
+ *
+ * @param rx     The V.21 receiver handle.
+ * @param in     Input samples.
+ * @param out    Output units.
+ * @param count  In/out sample count; zeroed before return (see the family note above).
+ * @return The number of demodulated units.
+ */
+short RxHdxIdleV21(void *modem, short *in, short *out, short *count);
+
+/**
+ * @brief V.21 receive state WAIT: demodulate the block and watch for carrier.
+ *
+ * With no carrier it installs RxHdxErrorV21 and reports
+ * V21RX_STATUS_ERROR; with a carrier it counts `hdx->countdown` down and
+ * advances the state when it reaches zero.
+ *
+ * @param rx     The V.21 receiver handle.
+ * @param in     Input samples.
+ * @param out    Output units.
+ * @param count  In/out sample count; zeroed before return (see the family note above).
+ * @return The number of demodulated units.
+ */
+short RxHdxWaitV21(void *modem, short *in, short *out, short *count);
+
+/**
+ * @brief V.21 receive state DATA: demodulate the block while carrier holds.
+ *
+ * Demodulates only while the carrier is up and `hdx->int_0000` is clear,
+ * and reports the demodulator's SNR through V21RX_FLAG_LOW_SNR. Otherwise
+ * it advances the state.
+ *
+ * @param rx     The V.21 receiver handle.
+ * @param in     Input samples.
+ * @param out    Output units.
+ * @param count  In/out sample count; zeroed before return (see the family note above).
+ * @return The number of demodulated units.
+ */
+short RxHdxDataV21(void *modem, short *in, short *out, short *count);
+
+/**
+ * @brief Fill a status report from the V.21 RECEIVER handle.
+ *
+ * Not `V21TX_status` with the handle changed: it reports the rate in
+ * `rx_bps` rather than `tx_bps`, it calls `GetSNRV21` and puts the answer
+ * in `snr` where the transmit side writes a literal 0, it derives
+ * `quality` from V21RX_FLAG_LOW_SNR, it zeroes +0x0e rather than +0x0c, and
+ * its `flags` byte is written as a literal 0 rather than merged.
+ *
+ * `short_12` is computed, and it is the only arithmetic in the function:
  *
  *     (2 - 2 * fsd.f22 / fsd.cfg.bit_samples) * V21_STATUS_BPS
  *
  * `f22` is `bit_samples / 2`, set by `FPM_FSD_init` -- so for an even
  * `bit_samples` the quotient is 1 and the field comes out at 300, the same
- * number `rx_bps` gets from a literal.  See F9132 and D1098: the divide is
+ * number `rx_bps` gets from a literal. See F9132 and D1098: the divide is
  * unguarded.
+ *
+ * @param modem  The V.21 receiver handle.
+ * @param st     Output: the status report.
+ * @return 1, or 0 for a NULL @p st.
  */
 int V21RX_status(void *modem, struct v21_status *st);
 
-short RxHdxErrorV21(void *modem, short *in, short *out, short *count);
-short RxHdxIdleV21(void *modem, short *in, short *out, short *count);
-short RxHdxWaitV21(void *modem, short *in, short *out, short *count);
-short RxHdxDataV21(void *modem, short *in, short *out, short *count);
-
-/*
- * The fifth state, and the one `V21RX_create` installs: `movl
- * $RxHdxStartV21,0x4(%eax)` at 0x098ee1, with `state` and all three counters
- * zeroed around it.  So START is where every receiver begins.
+/**
+ * @brief V.21 receive state START: the fifth state, and the one V21RX_create() installs.
  *
- * WHAT IT COUNTS, STATED AS THE INSTRUCTIONS STATE IT.  After demodulating
- * the block it walks the demodulated units and maintains `hdx->ones_run` as
- * the length of the current run of non-zero ones; each time that run stands
- * at exactly 6 and the next unit is zero, `hdx->mark_seq` is incremented.
- * The state advances only once `mark_seq` exceeds 4 AND `CarrierDetectV21`
- * answers.
+ * `V21RX_create` installs this with `movl $RxHdxStartV21,0x4(%eax)` at
+ * 0x098ee1, with `state` and all three counters zeroed around it, so START
+ * is where every receiver begins.
  *
- * SIX ONES FOLLOWED BY A ZERO IS THE HDLC FLAG 0x7e, and five of them is a
- * preamble -- but that identification is USAGE INFERENCE and nothing in the
- * object says it.  There is no format string for either field and no other
- * referent to type them, so the names above describe the arithmetic and the
- * interpretation is left in this comment where a later reader can weigh it.
- * Finding F9090.
+ * What it counts, stated as the instructions state it: after demodulating
+ * the block it walks the demodulated units and maintains `hdx->ones_run`
+ * as the length of the current run of non-zero ones; each time that run
+ * stands at exactly 6 and the next unit is zero, `hdx->mark_seq` is
+ * incremented. The state advances only once `mark_seq` exceeds 4 AND
+ * `CarrierDetectV21` answers.
+ *
+ * Six ones followed by a zero is the HDLC flag 0x7e, and five of them is a
+ * preamble -- but that identification is usage inference and nothing in
+ * the object says it. There is no format string for either field and no
+ * other referent to type them, so the names above describe the arithmetic
+ * and the interpretation is left in this comment where a later reader can
+ * weigh it. Finding F9090.
+ *
+ * @param rx     The V.21 receiver handle.
+ * @param in     Input samples.
+ * @param out    Output units.
+ * @param count  In/out sample count; zeroed before return.
+ * @return The number of demodulated units.
  */
 short RxHdxStartV21(void *modem, short *in, short *out, short *count);
 
-/*
- * Advance the receive state machine one step.
+/**
+ * @brief Advance the V.21 receive state machine one step.
  *
- * The object carries this block four times: once out of line under this name
- * at 0x0a1d60, and three more times inlined into `RxHdxStartV21`,
- * `RxHdxWaitV21` and `RxHdxDataV21`, instruction for instruction.  That is
- * what GCC 3.4.2 at `-O3` does with an externally visible function whose body
- * it can see, so the author wrote one function and four copies came out.
- * Finding F8898 recorded it while the symbol was still `static` here for want
- * of its third caller; `RxHdxStartV21` is that caller and the symbol is now
- * claimed.
+ * The object carries this block four times: once out of line under this
+ * name at 0x0a1d60, and three more times inlined into `RxHdxStartV21`,
+ * `RxHdxWaitV21` and `RxHdxDataV21`, instruction for instruction. That is
+ * what GCC 3.4.2 at `-O3` does with an externally visible function whose
+ * body it can see, so the author wrote one function and four copies came
+ * out. Finding F8898 recorded it while the symbol was still `static` here
+ * for want of its third caller; `RxHdxStartV21` is that caller and the
+ * symbol is now claimed.
+ *
+ * @param modem  The V.21 receiver handle.
  */
 void RxNextStateV21(void *modem);
 

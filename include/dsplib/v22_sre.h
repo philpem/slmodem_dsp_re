@@ -135,29 +135,40 @@ struct v22_sre {
 	short pad3a;
 };
 
-/*
- * `fresh` non-zero allocates the three buffers without inspecting the
- * existing pointers -- so, exactly like FPM_MRF_init, calling it twice with
- * `fresh` set leaks.  Zero re-initialises in place and requires the three
- * pointers to be valid already.
+/**
+ * @brief Initialise (or re-arm) the V.22 symbol-timing recovery loop.
+ *
+ * @p fresh non-zero allocates the three buffers without inspecting the
+ * existing pointers -- so, exactly like `FPM_MRF_init`, calling it twice
+ * with @p fresh set leaks. Zero re-initialises in place and requires the
+ * three pointers to be valid already.
  *
  * Either way every scalar is reset, `coeff` is rebuilt from SREv22_COFFS,
  * and `clk` is cleared.
+ *
+ * @param sre    The SRE state to initialise.
+ * @param fresh  Non-zero to allocate the three buffers; zero to reuse existing ones.
  */
 void V22_SRE_init(struct v22_sre *sre, int fresh);
 
-/* Releases the three buffers.  Does not clear the pointers. */
+/** @brief Release the V.22 SRE's three buffers. Does not clear the pointers. @param sre The SRE state to tear down. */
 void V22_SRE_free(struct v22_sre *sre);
 
-/*
- * Consume `count` input samples and write one output per recovered symbol,
- * returning how many that was -- so, like FPM_MRF_filter, roughly
- * count * V22_SRE_BRANCHES / (10 + steer).
+/**
+ * @brief Recover symbol timing and resample `count` V.22 receive samples.
  *
- * `need` and `fill` persist across calls, so a stream may be fed in arbitrary
- * fragments, including fragments too short to produce anything.  DemodDataV22
- * widens the result with `movzwl`; the internal counter is signed, and the
- * two readings agree over every count a 160-sample block can produce.
+ * Consumes @p count input samples and writes one output per recovered
+ * symbol. `need` and `fill` persist across calls, so a stream may be fed
+ * in arbitrary fragments, including fragments too short to produce
+ * anything. `DemodDataV22` widens the result with `movzwl`; the internal
+ * counter is signed, and the two readings agree over every count a
+ * 160-sample block can produce.
+ *
+ * @param sre    The SRE state.
+ * @param in     Input samples at 3600 Hz.
+ * @param out    Output for the recovered symbols.
+ * @param count  How many input samples.
+ * @return The number of symbols produced, roughly `count * V22_SRE_BRANCHES / (10 + steer)`.
  */
 short V22_SRE_recover(struct v22_sre *sre, const short *in, short *out,
 		      short count);

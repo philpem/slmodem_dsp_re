@@ -36,16 +36,23 @@
 extern "C" {
 #endif
 
-/*
- * Read one named integer parameter out of `paramFile` into `*value`.
+/**
+ * @brief Read one named integer parameter out of a parameter file.
  *
- * In the shipped object this writes nothing and returns 0 -- see the file
- * comment.  It is declared with the arguments the call sites pass because
- * that is what the object encodes: three words, in this order.
+ * In the shipped object this is a three-byte stub (`xor %eax,%eax; ret`)
+ * that writes nothing and always returns 0 -- see the file comment for why
+ * the call sequence is reconstructed anyway. Declared with the arguments the
+ * call sites pass, since that is what the object encodes: three words, in
+ * this order.
+ *
+ * @param paramFile The parameter file handle/path.
+ * @param name      The parameter's name.
+ * @param value     Out: the parameter's value. Never written in this build.
+ * @return 0, always, in the shipped object.
  */
 int Vparser_read_int(char *paramFile, const char *name, int *value);
 
-/* The same, for a `float` parameter. */
+/** @brief The same, for a `float` parameter. See Vparser_read_int(). */
 int Vparser_read_float(char *paramFile, const char *name, float *value);
 
 #ifdef __cplusplus
