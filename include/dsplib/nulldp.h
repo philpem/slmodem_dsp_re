@@ -50,30 +50,53 @@
 
 struct faxvmi_link;
 
-/*
- * dp->int_0014 = 0; dp->pack_count = 0x32; dp->pack_width = 8;
- * dp->unpack_width = 8 -- in that order, the object's own (0x09f0b4..
- * 0x09f0cb).  `cfg` is never read.
+/**
+ * @brief Install the "no modulation active" pump into a fax VMI link.
+ *
+ * Sets `dp->int_0014 = 0`, `dp->pack_count = 0x32`, `dp->pack_width = 8`,
+ * `dp->unpack_width = 8`, in that order (the object's own).
+ *
+ * @param dp   Link slot to decorate in place.
+ * @param cfg  Never read.
  */
 void null_create(struct faxvmi_link *dp, const void *cfg);
 
-/* `ret`.  Neither argument is read. */
+/**
+ * @brief Tear down the null pump. Does nothing (`ret`); neither argument
+ *        is read.
+ * @param dp  Unused.
+ */
 void null_delete(struct faxvmi_link *dp);
 
-/*
- * Copy `*count` elements from `in` into `dp->ptr_0000` and return -1,
- * always -- there is no modem to report a real count from.  `result` is
- * never written.  `*count` gates the copy with a `<= 0` test before the
- * loop (0x09f0ec) as well as inside it, so a zero or negative count copies
- * nothing.
+/**
+ * @brief Copy `*count` elements from @p in into `dp->ptr_0000`.
+ *
+ * @param dp      Link slot; the copy destination is `dp->ptr_0000`.
+ * @param in      Elements to copy, `*count` of them.
+ * @param result  Never written.
+ * @param count   In: number of elements to copy (a zero or negative count
+ *                copies nothing). Not updated on return.
+ * @return Always -1 -- there is no modem to report a real count from.
  */
 int null_process(struct faxvmi_link *dp, short *in, unsigned short *result,
 		 unsigned short *count);
 
-/* `mov $0xffffffff,%eax; ret`.  Neither argument is read. */
+/**
+ * @brief Report status. Does nothing but return -1 (`mov $0xffffffff,%eax;
+ *        ret`); neither argument is read.
+ * @param dp      Unused.
+ * @param status  Unused.
+ * @return Always -1.
+ */
 int null_status(struct faxvmi_link *dp, void *status);
 
-/* `mov $0xffffffff,%eax; ret`.  Neither argument is read. */
+/**
+ * @brief Handle a control request. Does nothing but return -1, like
+ *        null_status(); neither argument is read.
+ * @param dp   Unused.
+ * @param arg  Unused.
+ * @return Always -1.
+ */
 int null_control(struct faxvmi_link *dp, void *arg);
 
 #endif /* DSPLIB_NULLDP_H */
