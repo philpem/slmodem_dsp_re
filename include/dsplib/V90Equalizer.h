@@ -1,55 +1,47 @@
-/*
- * V90Equalizer.h -- the V.90 receive equaliser, so far as three of its
- * twenty-seven members need it.
+/**
+ * @file V90Equalizer.h
+ * @brief `V90Equalizer`, the V.90 receive equaliser: a linear equaliser and
+ *        a decision-feedback filter, each running in float or converted
+ *        16-bit fixed-point form, that turns receive samples into sliced symbols.
  *
- * Reconstructed from dsplibs.o.  `V90Equalizer` is NOT polymorphic --
- * tools/cppstruct.py lists its destructor with the `D1` and `D2` variants and
- * not the deleting `D0`, and GCC emits a deleting destructor only for a
- * virtual class -- so offset 0 is a real member and there is no vptr to shift every
- * field by four (finding F228).
+ * `V90Equalizer` is not polymorphic -- `tools/cppstruct.py` lists its
+ * destructor with the `D1` and `D2` variants and not the deleting `D0`, and
+ * GCC emits a deleting destructor only for a virtual class -- so offset 0 is
+ * a real member and there is no vptr shifting every field by four
+ * (finding F228).
  *
- * THE OBJECT IS 336 BYTES, AND THE 328 THIS HEADER USED TO CLAIM WAS A
- * DISPLACEMENT SCAN THAT COULD NOT SEE ITS OWN BLIND SPOT.  The largest
- * `this`-relative displacement across all twenty-nine V90Equalizer symbols in
- * the blob is +0x146, in `reset`:
+ * The object is 336 bytes. The largest `this`-relative displacement across
+ * all twenty-nine `V90Equalizer` symbols in the blob is +0x146, a two-byte
+ * store in `reset`, which only bounds the object at 0x148 = 328 -- but
+ * `V90Demodulator::reset` writes four bytes at +0x148 of the equaliser it
+ * holds at its own +0x1d8, a member of a different class a scan restricted
+ * to `V90Equalizer` symbols cannot reach, and the allocation settles it
+ * outright: `movl $0x150,(%esp); call sysdep_malloc` immediately before the
+ * constructor call, so `sizeof` is 0x150 = 336. `test/harness/v90demfix.h`
+ * had already been allocating 0x150 for its slot. A displacement is not a
+ * size (finding F215, and the `V90Jd` 0x8c -> 144 worked example in
+ * `docs/v90cpp.md`); a displacement scan over one class is not a bound
+ * either (finding F1107).
  *
- *     3b58e:  66 89 bb 46 01 00 00    mov    %di,0x146(%ebx)
- *
- * a two-byte store, so those twenty-nine functions bound the object at
- * 0x148 = 328.  But `V90Demodulator::reset` writes FOUR BYTES at +0x148 of
- * the equaliser it holds at its own +0x1d8 -- a member of a different class,
- * which a scan restricted to `V90Equalizer` symbols cannot reach -- and the
- * allocation settles it outright:
- *
- *     1c584:  c7 04 24 50 01 00 00    movl   $0x150,(%esp)
- *     1c58b:  e8 ..                   call   sysdep_malloc
- *     1c590:  89 c6                   mov    %eax,%esi     <- the equaliser
- *
- * so sizeof is 0x150 = 336.  `test/harness/v90demfix.h` had already been
- * allocating 0x150 for its slot.  A displacement is not a size (finding F215,
- * and the V90Jd 0x8c -> 144 worked example in docs/v90cpp.md); a
- * displacement scan over one class is not a bound either.  Finding F1107.
- *
- * ONLY THE FIELDS THE WRITTEN METHODS TOUCH ARE NAMED.  Everything else is
+ * Only the fields the written methods touch are named. Everything else is
  * `pad_*`, because a field this batch cannot see written is a field this
- * batch cannot claim (findings F223, F224 -- the harness fill makes untouched
- * memory compare equal on both sides, so a passing test says nothing about
- * where an untouched field lives).
+ * batch cannot claim (findings F223, F224 -- the harness fill makes
+ * untouched memory compare equal on both sides, so a passing test says
+ * nothing about where an untouched field lives).
  *
- * THE CONSTRUCTOR NAMED TWENTY-ONE MORE OF THEM (finding F1230).  It is the
- * one member that touches every allocation the object owns, so six argument
- * pointers, three fixed-size blocks and the twelve words of the six
- * raw/aligned/skew triples came out of it -- `pad_48`, `pad_98`, `pad_b4`,
- * `pad_dc`, `pad_11c` and most of `pad_f0` and `pad_130` are gone.  Nothing
- * else moved; the offsets the earlier batches asserted are unchanged and the
- * .cpp still asserts every one of them.
+ * The constructor named twenty-one more of them (finding F1230): it is the
+ * one member that touches every allocation the object owns, so six
+ * argument pointers, three fixed-size blocks and the twelve words of the
+ * six raw/aligned/skew triples came out of it. Nothing else moved; the
+ * offsets earlier batches asserted are unchanged and the .cpp still
+ * asserts every one of them.
  *
- * THE MEMBER NAMES ARE THE AUTHOR'S; THE FIELD NAMES ARE NOT.  C++ mangling
+ * The member names are the author's; the field names are not. C++ mangling
  * preserves method names and signatures, so `setLinearEquBeta(float)` and
- * `enterPhase3()` are the original's own spelling.  Data members are not
- * mangled anywhere, so the names below are this reconstruction's, chosen from
- * what the instructions do with each slot; the derivation is given against
- * each one.
+ * `enterPhase3()` are the original's own spelling. Data members are not
+ * mangled anywhere, so the names below are this reconstruction's, chosen
+ * from what the instructions do with each slot; the derivation is given
+ * against each one.
  */
 
 #ifndef DSPLIB_V90EQUALIZER_H
@@ -142,135 +134,237 @@ typedef char v90equ_compmode_is_signed[
 
 class V90Equalizer {
 public:
-	/*
-	 * The three members this batch defines.  Their signatures are the
-	 * mangling's, which makes them a specification and not a guess:
-	 * _ZN12V90Equalizer16setLinearEquBetaEf,
-	 * _ZN12V90Equalizer10setDfeBetaEf and
-	 * _ZN12V90Equalizer11enterPhase3Ev.  A return type is not mangled;
-	 * all three fall off the end without setting %eax, so all three are
-	 * void.
+	/**
+	 * @brief Set the linear equaliser's LMS step size.
+	 *
+	 * If @p beta differs from the current value, logs it, then stores
+	 * it. If the equaliser is in fixed-point mode, also recomputes
+	 * `linearEquMmxShift`/`linearEquMmxBeta` from @p beta and
+	 * `maxLeCoefValue` (both zeroed when @p beta is 0).
+	 *
+	 * @param beta  The new step size.
 	 */
 	void setLinearEquBeta(float beta);
+	/**
+	 * @brief Set the decision-feedback filter's LMS step size.
+	 * Instruction for instruction setLinearEquBeta()'s twin, with the
+	 * DFE's own fields, scale (1e7 not 1e10) and message.
+	 * @param beta  The new step size.
+	 */
 	void setDfeBeta(float beta);
+	/**
+	 * @brief Move into phase 3. Idempotent.
+	 * Freezes both filters (beta to 0) and sets `state`/`stateCount`.
+	 */
 	void enterPhase3();
 
-	/*
-	 * Added by task #88, the lifecycle batch.  `reset(unsigned)` is
-	 * `_ZN12V90Equalizer5resetEj` and `enterChannelVerification()` is
-	 * `_ZN12V90Equalizer24enterChannelVerificationEv`; both fall off the
-	 * end without setting %eax, so both are void.  The argument to `reset`
-	 * is `unsigned` from the mangling's `j`, and the object treats it as
-	 * one: `cmp 0x14(%esp),%eax / jae` is the unsigned comparison.
+	/**
+	 * @brief Reset the equaliser to its constructed state.
+	 *
+	 * The only member that reads the parameter block. Seeds both betas
+	 * with a sentinel (1e-14f) before calling their setters with 0, so
+	 * the setters' early-out never fires; clamps @p cursor with unsigned
+	 * arithmetic (an empty equaliser wraps, and is not guarded against);
+	 * clears the linear and DFE coefficient/history arrays; clears the
+	 * fixed-point arrays when `mmxArraysPresent` is set; and rebuilds
+	 * both fade windows, scaled by `linearEquLength` for both filters.
+	 *
+	 * @param cursor  Index of the linear equaliser's initial 1.0f tap.
 	 */
 	void reset(unsigned int cursor);
+	/**
+	 * @brief Enter channel verification. Idempotent.
+	 * Freezes both filters, sets `state`/`stateCount`, and puts the
+	 * resampler into `V90_BLL_PRE_ANSPCM`.
+	 */
 	void enterChannelVerification();
 
-	/*
-	 * The coefficient batch.  Every signature below is the mangling's:
-	 * `_ZN12V90Equalizer17setLinearEquCoeffEPfj` is `(float *, unsigned)`,
-	 * `_ZN12V90Equalizer29setLinearEquEdgesFadingParamsEff` is
-	 * `(float, float)`, and `_ZNK12V90Equalizer16printCoefsToFileEv`
-	 * carries the `K` that makes it `const`.  Return types are not
-	 * mangled, so each one is read off the body: all of these fall off
-	 * the end without setting %eax and are void, EXCEPT `getDfeBeta`,
-	 * whose whole body is `flds 0x3c(%eax); ret` -- a float in st(0),
-	 * which is the return value.
-	 */
-	/*
-	 * The other two state entries.  These two return an `int` where every
-	 * other `enter*` in the class returns void: %edi is zeroed at entry,
-	 * set to 1 on the one path that takes the equaliser out of
-	 * fixed-point mode, and moved to %eax at both returns.  Finding F2134.
+	/**
+	 * @brief Move into rate renegotiation.
+	 *
+	 * Restores the equaliser to float mode (if it was in fixed-point
+	 * mode), on the German-PBX arm zeroes the DFE coefficients, and
+	 * summarises both filters.
+	 *
+	 * @return 1 if the equaliser is in fixed-point mode on return, else
+	 *         0. Both `enter*` here return `int` where the rest of the
+	 *         family returns `void` (finding F2134).
 	 */
 	int enterRRN();
+	/**
+	 * @brief Move into fast phase exchange.
+	 * enterRRN() with state ::V90EQU_STATE_FPE and its own log line;
+	 * otherwise instruction for instruction the same.
+	 * @return See enterRRN().
+	 */
 	int enterFPE();
 
-	/*
-	 * `_ZN12V90Equalizer14enterDataPhaseEv`, and an `int` for the same
-	 * reason those two are (finding F2134): %esi is zeroed at entry, set to
-	 * 1 on the one path where `convertEqualizerToMmx` leaves the equaliser
-	 * in fixed-point mode, and moved to %eax at the single return.
+	/**
+	 * @brief Move into the data phase.
+	 *
+	 * Resets the phase 4 demodulator's RRN detector; if the equaliser is
+	 * not already in fixed-point mode, summarises and logs both filters'
+	 * coefficients, then converts the equaliser to fixed-point via
+	 * convertEqualizerToMmx().
+	 *
+	 * @return 1 if the equaliser ends in fixed-point mode, else 0
+	 *         (finding F2134).
 	 */
 	int enterDataPhase();
 
-	/*
-	 * `_ZN12V90Equalizer11enterPhase4Ev`, and void: it falls off the end
-	 * without setting %eax, so it is the `enter*` family's usual shape and
-	 * not `enterRRN`'s.
+	/**
+	 * @brief Move into phase 4. Idempotent.
+	 *
+	 * Freezes the equaliser and the resampler's band-limited loop
+	 * (saving the resampler's BLL state into `savedBllState`), logs the
+	 * timing offset, on the German-PBX arm zeroes the DFE coefficients,
+	 * and resets the mean-error diagnostics and logs both filters.
 	 */
 	void enterPhase4();
 
-	/*
-	 * The mean-error diagnostic.  It returns a float -- `flds 0x20(%esp);
-	 * ret` off a stack slot `Std<float>` wrote -- and on its early exit
-	 * that slot has not been written at all; see the .cpp and D324.
+	/**
+	 * @brief Compute and log the mean-error buffer's statistics.
+	 *
+	 * Mean, standard deviation, variance, minimum and maximum of the
+	 * 300-float buffer at `meanErrorEnergy`. Returns early with an
+	 * **uninitialized** value (the object's own behavior, finding
+	 * D324) when neither `meanErrorCount` nor `meanErrorFull` is set.
+	 *
+	 * @return The standard deviation, or garbage on the early-exit path.
 	 */
 	float calcMeanErrorStatistics();
 
-	/*
-	 * The hub.  `_ZN12V90Equalizer7processEPfjPsS0_Rj` is
-	 * `(float *, unsigned int, short *, float *, unsigned int &)` --
-	 * every argument type is the mangling's, including the REFERENCE on
-	 * the last one, which `Rj` spells and which no other reading of the
-	 * object would have given.  Void: all three returns fall off the end
-	 * without setting %eax.  docs/v90equprocess.md.
+	/**
+	 * @brief The equaliser's hub: filter, slice and re-time one block of
+	 *        receive samples into symbols.
+	 *
+	 * The class's largest member (9,364 bytes in the object). Two input
+	 * samples make one T/2-spaced symbol (`nOut` is `n >> 1`; an odd
+	 * leftover sample carries to the next call via `word_68`/`word_6c`).
+	 * Per symbol: the linear equaliser filters the history at
+	 * `array_18`, the DFE filters `array_44`, a slicer decision is made
+	 * per `state`, and both filters adapt on their own error term. Runs
+	 * in float or, once converted, fixed-point form depending on
+	 * `mmxMode`, re-checked on every symbol since enterDataPhase(),
+	 * enterRRN() and enterFPE() can each flip it mid-call. See
+	 * `docs/v90equprocess.md` for the arm-by-arm decode and findings
+	 * F5700, F5701, F6200.
+	 *
+	 * @param in        Input receive samples.
+	 * @param n         How many samples of @p in are valid.
+	 * @param outSym    Receives the sliced symbol decisions.
+	 * @param outFloat  Receives the pre-slicing soft symbols.
+	 * @param nOut      Receives how many symbols were produced.
 	 */
 	void process(float *in, unsigned int n, short *outSym,
 		     float *outFloat, unsigned int &nOut);
 
+	/** @brief Read back the decision-feedback filter's LMS step size. @return `dfeBeta`. */
 	float getDfeBeta();
+	/**
+	 * @brief Overwrite the first @p n linear equaliser coefficients.
+	 * @param src  Source coefficients.
+	 * @param n    How many to copy (unsigned; not bounded against `linearEquLength`).
+	 */
 	void setLinearEquCoeff(float *src, unsigned int n);
+	/**
+	 * @brief Overwrite the first @p n decision-feedback filter coefficients.
+	 * @param src  Source coefficients.
+	 * @param n    How many to copy (unsigned; not bounded against `dfeLength`).
+	 */
 	void setDfeCoeff(float *src, unsigned int n);
+	/**
+	 * @brief Zero the linear equaliser's coefficients.
+	 * Zeroes the float array, and, if in fixed-point mode (`mmxMode`),
+	 * the two fixed-point arrays too (`linearEquLength + 8` entries,
+	 * matching their allocation slack).
+	 */
 	void zeroLinearEquCoefs();
+	/**
+	 * @brief Zero the decision-feedback filter's coefficients.
+	 * zeroLinearEquCoefs()'s twin for the DFE half.
+	 */
 	void zeroDfeCoefs();
+	/** @brief Clear the mean-error diagnostic accumulators (`meanErrorCount`, `meanErrorFull`). */
 	void resetMeanErrorEnergyDiagnostics();
+	/**
+	 * @brief Set both fade windows' widths and rebuild them.
+	 *
+	 * Clamps @p left and @p right to [0, 0.5], scales both by
+	 * `linearEquLength` to get `linearEquWindowHalf`/`dfeWindowHalf`,
+	 * and rebuilds `linearEquWindow`/`dfeWindow` as Hamming windows of
+	 * twice those lengths.
+	 *
+	 * @param left   Fade-in ratio.
+	 * @param right  Fade-out ratio.
+	 */
 	void setLinearEquEdgesFadingParams(float left, float right);
+	/** @brief Freeze adaptation: both filters' step sizes to 0. */
 	void freeze();
+	/**
+	 * @brief Convert the fixed-point coefficients back to float and leave fixed-point mode.
+	 * A no-op if not already in fixed-point mode (`mmxMode`), which is
+	 * what makes it safe to call unconditionally from enterRRN() and enterFPE().
+	 */
 	void restoreEqualizerToFloat();
+	/**
+	 * @brief Apply the fade windows to the linear equaliser's coefficients.
+	 *
+	 * If in fixed-point mode, first pulls the fixed-point coefficients
+	 * back into the float arrays; then multiplies the leading
+	 * `linearEquWindowHalf` taps by `linearEquWindow` and the trailing
+	 * `dfeWindowHalf` taps by `dfeWindow`; then, still in fixed-point
+	 * mode, re-quantizes the result back into the fixed-point arrays.
+	 */
 	void linearEquFadeEdges();
 
-	/*
-	 * `_ZN12V90Equalizer21convertEqualizerToMmxEv`, and void: both exits
-	 * fall off the end without setting %eax.  The other half of
-	 * `restoreEqualizerToFloat`, and the class's own name for the state
-	 * `mmxMode` selects.
+	/**
+	 * @brief Convert both filters' coefficients to fixed-point and enter fixed-point mode.
+	 * The counterpart to restoreEqualizerToFloat(); which state
+	 * `mmxMode` selects is this pair's own naming.
 	 */
 	void convertEqualizerToMmx();
 
-	/*
-	 * THREE MEMBERS THAT ARE ONE `ret` EACH.  Not stubs and not missing:
-	 * the object's copies are a single byte at 0x36b10, 0x36960 and
-	 * 0x388b0, so whatever they did was compiled out -- the names say
-	 * file I/O and a debug dump, which is what a shipping build drops.
-	 * They are written empty because an empty body is what the object
-	 * has, and they are still tested: a body that touched the object
-	 * would show.
+	/**
+	 * @brief Write the equaliser's coefficients to a file. Compiled out
+	 *        in the shipped object (a bare `ret`); reproduced empty.
 	 */
 	void printCoefsToFile() const;
+	/**
+	 * @brief Load the equaliser's coefficients from a file. Compiled out
+	 *        in the shipped object (a bare `ret`); reproduced empty.
+	 */
 	void loadCoefsFromFile();
+	/**
+	 * @brief Dump equaliser diagnostics. Compiled out in the shipped
+	 *        object (a bare `ret`); reproduced empty.
+	 */
 	void printEquStuff();
 
-	/*
-	 * The lifecycle pair.  The constructor's signature is the mangling's,
-	 * argument for argument:
+	/**
+	 * @brief Construct the equaliser: allocate both filters' coefficient
+	 *        and history arrays, both windows and the mean-error buffer,
+	 *        and store the other object arguments.
 	 *
-	 *   _ZN12V90EqualizerC1EjjP20V90Phase3DemodulatorP20V90Phase4Demodul\
-	 *   atorP11V90DemapperP22V90ConnectionEvaluatorP19V90SpectralVerifie\
-	 *   rP13V90ParametersP12V90ResamplerP12V90PreFilter20V90Computationa\
-	 *   lMode
+	 * All eleven constructor arguments are accounted for and seven of
+	 * them name a field directly (`V90Parameters *` at +0xa8 and
+	 * `V90Resampler *` at +0x00 independently corroborate the mapping
+	 * from `reset()` and `enterChannelVerification()`). Fixed-point
+	 * arrays and blocks are allocated only when @p mode selects the mode
+	 * this class distinguishes (mangling `V90ComputationalMode`, tested
+	 * as "is the mode 1?" and nothing else).
 	 *
-	 * and the two `j`s are unsigned because the mangling says so; the
-	 * object treats both the same way, masking each to a multiple of four
-	 * with `shr $2` followed by a scale, which is the LOGICAL shift.
-	 *
-	 * ALL ELEVEN ARGUMENTS ARE ACCOUNTED FOR AND SEVEN OF THEM NAME A
-	 * FIELD.  The eighth (`V90Parameters *`) lands at +0xa8 and the ninth
-	 * (`V90Resampler *`) at +0x00 -- two slots this header had already
-	 * typed from `reset` and `enterChannelVerification`, which are other
-	 * functions entirely.  That agreement is what makes the argument-to-
-	 * offset mapping evidence rather than an ordering guess, and it is
-	 * what licenses naming +0x48 .. +0x5c from the argument types.
+	 * @param linearEquLen  The linear equaliser's tap count.
+	 * @param dfeLen        The decision-feedback filter's tap count.
+	 * @param p3d           The phase 3 demodulator; stored, not owned or dereferenced.
+	 * @param p4d           The phase 4 demodulator; stored, not owned or dereferenced.
+	 * @param dem           The demapper; stored, not owned or dereferenced.
+	 * @param ce            The connection evaluator; stored, not owned or dereferenced.
+	 * @param sv            The spectral verifier; stored, not owned or dereferenced.
+	 * @param parms         The V.90 parameter block; not owned.
+	 * @param rs            The resampler this equaliser steers; not owned.
+	 * @param pf            The prefilter; stored, not owned or dereferenced.
+	 * @param mode          The computational mode.
 	 */
 	V90Equalizer(unsigned int linearEquLen, unsigned int dfeLen,
 		     V90Phase3Demodulator *p3d, V90Phase4Demodulator *p4d,
@@ -278,6 +372,11 @@ public:
 		     V90SpectralVerifier *sv, V90Parameters *parms,
 		     V90Resampler *rs, V90PreFilter *pf,
 		     V90ComputationalMode mode);
+	/**
+	 * @brief Destroy the equaliser: free both filters' coefficient/history
+	 *        arrays, both windows, the mean-error buffer, and, if
+	 *        allocated, the fixed-point arrays and blocks.
+	 */
 	~V90Equalizer();
 
 	/*

@@ -1,58 +1,57 @@
-/*
- * V90Modulator.h -- the V.90 downstream modulator, the top of the chain.
+/**
+ * @file V90Modulator.h
+ * @brief `V90Modulator`, the V.90 downstream modulator: the top of the
+ *        transmit chain, dispatching each block to whichever phase
+ *        sub-modulator is active and driving the eleven phase transitions
+ *        between them.
  *
- * Reconstructed from dsplibs.o.  Seventeen members and 3,354 bytes of code,
- * and the class is now COMPLETE: the constructor, the destructor,
- * `setSessionFlag`, `reset`, `progress`, `initiateRRN` and the eleven phase
- * transitions -- `enterPhase3`, `enterPhase4`, `enterDataPhase`, `exitJd`,
- * `exitJdPhase`, `exitDIL`, `exitRi`, `acknowledgeCPReception`,
- * `acknowledgeCPNotReception`, `acknowledgeEReception` and `initiateFPE`.
+ * Seventeen members and 3,354 bytes of code, and the class is complete: the
+ * constructor, the destructor, `setSessionFlag`, `reset`, `progress`,
+ * `initiateRRN` and the eleven phase transitions -- `enterPhase3`,
+ * `enterPhase4`, `enterDataPhase`, `exitJd`, `exitJdPhase`, `exitDIL`,
+ * `exitRi`, `acknowledgeCPReception`, `acknowledgeCPNotReception`,
+ * `acknowledgeEReception` and `initiateFPE`.
  *
- * WHERE THIS CLASS USED TO LIVE.  A partial map -- `pad_00[0x28]`,
- * `sessionFlag`, `pad_2c[0x0c]`, then the two modulator pointers -- was
- * declared in `V90SessionFlag.h`, derived from `mov 0x38(%esi),%edx` being a
- * LOAD where the two demodulators embed their phase blocks.  It has moved here
- * and been filled in, exactly as `V90Phase3Demodulator` and `V90Demodulator`
- * moved out of that file before it; `src/pump/v90/V90SessionFlag.cpp` asserts
- * the three offsets it named and they are unchanged.
+ * This class used to be a partial map -- `pad_00[0x28]`, `sessionFlag`,
+ * `pad_2c[0x0c]`, then the two modulator pointers -- declared in
+ * `V90SessionFlag.h`, derived from `mov 0x38(%esi),%edx` being a load where
+ * the two demodulators embed their phase blocks. It has moved here and been
+ * filled in, exactly as `V90Phase3Demodulator` and `V90Demodulator` moved
+ * out of that file before it; `src/pump/v90/V90SessionFlag.cpp` asserts the
+ * three offsets it named and they are unchanged.
  *
- * NOT POLYMORPHIC: `~V90Modulator` is listed with `D1` and `D2` and no `D0`,
- * so offset 0 is a real member and there is no vptr.
+ * Not polymorphic: `~V90Modulator` is listed with `D1` and `D2` and no
+ * `D0`, so offset 0 is a real member and there is no vptr.
  *
- * THE SIZE IS 0x70, AND IT IS THE ORIGINAL COMPILER'S OWN `sizeof`.
- * `V90Modem`'s constructor does
+ * The size is 0x70, the original compiler's own `sizeof`: `V90Modem`'s
+ * constructor does
  *
  *     movl $0x70,(%esp) ; call sysdep_malloc ; ... ; call V90Modulator::C1
  *
- * at .text+0x19604, which is finding F1246's oracle: the allocation is
- * `sizeof(V90Modulator)` written by the compiler that laid the class out.  The
- * highest field the constructor writes is the pointer at +0x6c, which ends at
- * 0x70 exactly, so nothing is unaccounted for.
+ * at .text+0x19604, which is finding F1246's oracle -- the allocation is
+ * `sizeof(V90Modulator)` written by the compiler that laid the class out.
+ * The highest field the constructor writes is the pointer at +0x6c, which
+ * ends at 0x70 exactly, so nothing is unaccounted for.
  *
- * TWELVE ARGUMENTS, AND THE ORDER THEY LAND IN IS NOT THE ORDER THEY ARRIVE
- * IN.  The constructor stores each straight through, but the offsets
- * interleave: arguments 2..5 go to +0x00..+0x0c in order, argument 6 to +0x10
- * and 7 to +0x14, and then 8, 9, 10, 11 go to +0x18, +0x1c, +0x20, +0x24 with
- * the V90CP (argument 9) landing ABOVE the V90MP (argument 10).  Argument 1
- * goes to +0x64, not +0x00, and argument 12 to +0x28, which is the session
- * flag.  Nothing about this is inferable from the signature.
+ * Twelve constructor arguments, and the order they land in is not the order
+ * they arrive in: arguments 2..5 go to +0x00..+0x0c in order, argument 6 to
+ * +0x10 and 7 to +0x14, and then 8, 9, 10, 11 go to +0x18, +0x1c, +0x20,
+ * +0x24 with the `V90CP` (argument 9) landing above the `V90MP` (argument
+ * 10). Argument 1 goes to +0x64, not +0x00, and argument 12 to +0x28,
+ * the session flag. Nothing about this is inferable from the signature.
  *
- * THE SCRAMBLER IS EMBEDDED, NOT POINTED AT: `lea 0x44(%ebx),%eax` before both
- * `Scrambler<int,unsigned char>::Scrambler` in the constructor and
- * `::~Scrambler` in the destructor.  Its taps are (0x12, 0x17, 0x63) -- V.90's
- * 18 and 23, the same three constants `V90Phase3Demodulator` builds its
- * descrambler with.
+ * The scrambler is embedded, not pointed at: `lea 0x44(%ebx),%eax` before
+ * both `Scrambler<int,unsigned char>::Scrambler` in the constructor and
+ * `::~Scrambler` in the destructor. Its taps are (0x12, 0x17, 0x63) --
+ * V.90's 18 and 23, the same three constants `V90Phase3Demodulator` builds
+ * its descrambler with.
  *
- * +0x2c..+0x37 ARE THREE WORDS AND `reset` IS WHAT ESTABLISHES IT.  They were
+ * +0x2c..+0x37 are three words, established by `reset`: they were
  * `pad_2c[0x0c]` while only the constructor was written; `reset` stores a
- * separate `movl $0x0` into each of +0x2c, +0x30 and +0x34 (0x1a532, 0x1a539,
- * 0x1a540), which fixes the width at four bytes and the count at three.
- *
- * THEY NOW HAVE NAMES, AND `progress` IS WHAT EARNED THEM.  This paragraph
- * used to say the names stayed offset-derived because "the roles below are
- * read out of `progress`, which is not written yet, and a role that has not
- * been reproduced is not a name".  `progress` and `initiateRRN` are written
- * (finding F7520), so the condition that clause set is discharged:
+ * separate `movl $0x0` into each of +0x2c, +0x30 and +0x34 (0x1a532,
+ * 0x1a539, 0x1a540), which fixes the width at four bytes and the count at
+ * three. `progress` and `initiateRRN` are what earned them names (finding
+ * F7520):
  *
  *   - +0x2c `state`.  The object's own word: the `default` arm of `progress`'s
  *     switch prints "V90Modulator progress: Illegal state".  1 is phase 3, 2
@@ -106,97 +105,165 @@ struct tagV90DILdescriptor;
 
 class V90Modulator {
 public:
-	/* Defined in src/pump/v90/V90Modulator.cpp. */
+	/**
+	 * @brief Construct the modulator and its three owned sub-objects.
+	 *
+	 * Stores all twelve arguments (see the file comment for the
+	 * offset-vs-argument-order mapping), allocates the symbol and frame
+	 * buffers, and builds `bitsToSymbol` (with capacity
+	 * `3 * nofSymbols + 0x1388`), `phase3Modulator` and `phase4Modulator`
+	 * in that order. `mappingParams` and `mappingParams2` are passed to
+	 * the phase 4 sub-modulator swapped relative to how they arrived
+	 * (finding, see .cpp).
+	 *
+	 * @param nofSymbols          Symbol-buffer capacity.
+	 * @param phase2Info          Shared phase 2 connection info.
+	 * @param jd                  The V.90 Jd message.
+	 * @param v92Jd               The V.92 Jd message.
+	 * @param dil                 The DIL descriptor.
+	 * @param mappingParams       Mapping block for TRN2d/MP (see exitRi()).
+	 * @param mappingParams2      Mapping block for everything else.
+	 * @param additionalCPinfo    The additional-CP-info record.
+	 * @param cp                  The V.90 CP message.
+	 * @param mp                  The V.90 MP message.
+	 * @param params              The V.90 parameter block.
+	 * @param sessionFlag         Nonzero for V.92, zero for V.90.
+	 */
 	V90Modulator(unsigned int nofSymbols, V90Phase2Info *phase2Info,
 		     V90Jd *jd, V92Jd *v92Jd, tagV90DILdescriptor *dil,
 		     V90MappingParams *mappingParams,
 		     V90MappingParams *mappingParams2,
 		     tagV90AdditionalCPinfo *additionalCPinfo, V90CP *cp,
 		     V90MP *mp, V90Parameters *params, unsigned int sessionFlag);
+	/** @brief Destroy the modulator and all five owned allocations, none null-checked. */
 	~V90Modulator();
 
-	/*
-	 * Per-connection reset: the embedded scrambler back to 0 and the
-	 * three words at +0x2c..+0x37 cleared.  Does NOT rebuild anything --
-	 * the scrambler keeps the taps its constructor set.
+	/**
+	 * @brief Per-connection reset.
+	 *
+	 * Resets the embedded scrambler to its constructor taps (does not
+	 * rebuild it) and clears `state`, `symbolCount` and `eventCode`.
 	 */
 	void reset();
 
-	/*
-	 * `progress` -- .text+0x1a820, 780 bytes.  The transmit chain's whole
-	 * per-block entry point and the only thing `V90Modem::progress` calls
-	 * on the digital side.  `void` because no path arranges %eax and the
-	 * caller tail-JUMPS to it, so its return type is this one; the twin
-	 * `V90Demodulator::progress` reads the same way.
+	/**
+	 * @brief Produce one block of transmit symbols.
 	 *
-	 * One switch over `state` and a shared tail that widens the finished
-	 * `symbolBuf` into the caller's `float *`.  `bits` is only touched in
-	 * the data phase, where it goes straight to the scrambler.
+	 * The transmit chain's per-block entry point and the only thing
+	 * `V90Modem::progress` calls on the digital side. One switch over
+	 * `state` (silence, phase 3, phase 4, data phase, or "Illegal
+	 * state") and a shared tail that widens the finished `symbolBuf`
+	 * into @p out. @p bits is only touched in the data phase, where it
+	 * goes straight to the scrambler. The phase 3 arm re-tests `state`
+	 * on every symbol, since a phase-3-to-4 boundary can fall mid-block;
+	 * the data phase arm can trigger an automatic `initiateRRN()` once
+	 * `symbolCount` passes `params->DEBUG_DIGITAL_MODEM_INITIATE_RRN_TIME`.
+	 *
+	 * @param bits        Scrambler input, used only in the data phase.
+	 * @param nofBits     Receives the bit demand for the next call.
+	 * @param out         Receives `nofSymbols` output samples.
+	 * @param nofSymbols  How many symbols to produce this call.
 	 */
 	void progress(int *bits, unsigned int &nofBits, float *out,
 		      unsigned int nofSymbols);
 
-	/*
-	 * THE ELEVEN PHASE EDGES -- .text+0x19d70..+0x1a2b5 and +0x1a400,
-	 * 1,548 bytes.  Every one of them is called from OUTSIDE this class:
-	 * no member of `V90Modulator` relocates against any of them -- checked
-	 * over all seventeen, `setSessionFlag` in its other file included --
-	 * and `progress` open-codes the phase-3-to-4 move rather than calling
-	 * `enterPhase4`.  So they are the digital modem's control surface,
-	 * driven by whatever reads the far end's messages.
-	 *
-	 * They fall into three shapes:
-	 *
-	 *   - `enter*` -- idempotent.  Each opens `if (state == <its own>)
-	 *     return;`, so entering a phase twice does nothing the second time.
-	 *   - `exit*` and `acknowledge*` -- guarded on the SUB-MODULATOR's
-	 *     state, not on ours, and every one of them that acts clears
-	 *     `eventCode`.  Nothing else in the class is written by five of
-	 *     the six.
-	 *   - `initiateFPE` -- the only one that answers, and `initiateRRN`'s
-	 *     twin; see its own comment.
-	 *
-	 * `exitRi` IS THE ONE THAT READS `mappingParams` (+0x10).  Every other
-	 * member of the class that reaches a mapping block reads
-	 * `mappingParams2` (+0x14) -- `progress`, `initiateRRN`,
-	 * `enterDataPhase` and `initiateFPE` all do.  The two blocks are
-	 * separate storage in `V90Modem` (+0x18 and +0x668) and a body that
-	 * takes the wrong one is invisible to any fixture whose two blocks
-	 * agree, which is why t_v90modprog.cpp drives their first words apart
-	 * before this edge is called.
+	/**
+	 * @brief Move from phase 2 into phase 3. Idempotent.
+	 * Rebuilds `phase3Modulator` from `phase2Info` and the message
+	 * objects, with a zero warm-up count and starting state `P3M_STATE_SD`.
 	 */
 	void enterPhase3();
+	/**
+	 * @brief Move into phase 4. Idempotent.
+	 * Resets `phase4Modulator` to `P4M_STATE_RI`, the first thing the
+	 * digital modem sends in phase 4.
+	 */
 	void enterPhase4();
+	/**
+	 * @brief Move into the data phase. Idempotent.
+	 * Sets `symbolsBlockSize` to `nofSymbols` and logs the negotiated
+	 * bit rate, computed from `bitsToSymbol->mapper->bitsPerFrame`.
+	 */
 	void enterDataPhase();
+	/** @brief Leave the Jd phase 3 sub-state, guarded on `phase3Modulator->state`. */
 	void exitJd();
+	/** @brief Leave the JdPhase phase 3 sub-state, guarded on `phase3Modulator->state`. */
 	void exitJdPhase();
+	/**
+	 * @brief Leave the DIL phase 3 sub-state, and enter phase 4 if that
+	 *        completed the DIL sequence.
+	 * Guarded on `phase3Modulator->state`; the follow-on move into phase
+	 * 4 is guarded separately on the sub-modulator's own `eventCode`
+	 * reading 6 (DIL sequence really ended) and on `state != 2`.
+	 */
 	void exitDIL();
+	/**
+	 * @brief Leave the Ri phase 4 sub-state.
+	 *
+	 * The one member of the class that reads `mappingParams` (+0x10)
+	 * rather than `mappingParams2` (+0x14) -- every other member that
+	 * reaches a mapping block (progress(), initiateRRN(),
+	 * enterDataPhase(), initiateFPE()) takes the other one. Installs the
+	 * mapping block into `phase4Modulator`, logs its spectral parameters
+	 * and bit count, and stores that bit count into the V.92 CP's or
+	 * V.90 MP's own copy, per `sessionFlag`.
+	 */
 	void exitRi();
+	/**
+	 * @brief Handle a received CP: re-encode the MP, then leave the MP
+	 *        phase 4 sub-state if it was active.
+	 * The MP re-encode and the "MP not yet sent" flag are updated
+	 * unconditionally, before the phase 4 state is even looked at.
+	 */
 	void acknowledgeCPReception();
+	/**
+	 * @brief Handle a received CPnot.
+	 * Three phase 4 states, each handled differently: leaves MPnot if
+	 * that was active; re-encodes the MP and leaves MP if that was
+	 * active; or, in the mid-repetition state, only records the request
+	 * (`byte_0014 = 1`) for whoever crosses the next boundary.
+	 */
 	void acknowledgeCPNotReception();
+	/**
+	 * @brief Handle a received E.
+	 * Two of acknowledgeCPNotReception()'s three phase 4 states (no MP
+	 * re-encode arm): leaves MPnot if active, or records a delayed
+	 * MPnot exit in the mid-repetition state.
+	 */
 	void acknowledgeEReception();
 
-	/*
-	 * `initiateFPE` -- .text+0x1a400, 260 bytes.  Fast phase exchange, and
-	 * `initiateRRN` with four differences: the two phase 4 states are
-	 * 0x1d/0x1c rather than 0x15/0x14, there is no `resetBeforRRN`, the
-	 * mapping block goes to `setRfSymbols` rather than `setRdRtSymbols`,
-	 * and the CP is re-encoded UNCONDITIONALLY -- no `sessionFlag` fork,
-	 * so a V.90 session's `V90MP` is never touched by this edge.
-	 * `int` for the same reason `initiateRRN` is.
+	/**
+	 * @brief Start fast phase exchange from the data phase.
+	 *
+	 * initiateRRN()'s near-twin: same guard and same two returns, same
+	 * block-size-to-one probe of `nofBitsForNextTime()`, but enters
+	 * `P4M_STATE_RF`/`P4M_STATE_UNNAMED_1C` (not RRN's RD/0x14), calls
+	 * `setRfSymbols` (not `setRdRtSymbols`), has no `resetBeforRRN`
+	 * step, and re-encodes the V.90 CP unconditionally rather than
+	 * forking on `sessionFlag` -- a V.90 session's `V90MP` is never
+	 * touched by this edge.
+	 *
+	 * @return 0 if it acted, -1 if `state` was not the data phase.
 	 */
 	int initiateFPE();
 
-	/*
-	 * `initiateRRN` -- .text+0x1a2c0, 308 bytes.  Rate renegotiation:
-	 * leave the data phase for phase 4 and rebuild the phase 4 modulator
-	 * around a one-symbol block.  Returns 0 when it acted and -1 when
-	 * `state` was not 3 -- both are `mov $imm,%eax` before the shared
-	 * epilogue, so the return type is real and not a leftover.
+	/**
+	 * @brief Start rate renegotiation from the data phase.
+	 *
+	 * Only acts from the data phase; otherwise logs "requested but NOT
+	 * approved" and returns -1. Otherwise: moves to phase 4, sizes the
+	 * converter's block to one symbol, and chooses
+	 * `P4M_STATE_RD`/`P4M_STATE_UNNAMED_14` by whether bits are still
+	 * owed for that block; resets `phase4Modulator` into that state,
+	 * calls `resetBeforRRN()` and `setRdRtSymbols()`; then forks on
+	 * `sessionFlag` to re-encode either the V.92 CP or the V.90 MP.
+	 * Also called from progress() on the data phase's own timer.
+	 *
+	 * @return 0 if it acted, -1 if `state` was not the data phase.
 	 */
 	int initiateRRN();
 
-	/* Defined in src/pump/v90/V90SessionFlag.cpp. */
+	/** @brief Propagate a new session flag; defined in src/pump/v90/V90SessionFlag.cpp. */
 	void setSessionFlag(unsigned int flag);
 
 	/* Public for offsetof; see V90ConstellationDesigner.h. */

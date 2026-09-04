@@ -1,67 +1,28 @@
-/*
- * V90ConstellationDesigner.h -- the V.90 downstream constellation designer.
+/**
+ * @file V90ConstellationDesigner.h
+ * @brief `V90ConstellationDesigner`: chooses V.90 downstream constellations.
  *
- * Reconstructed from dsplibs.o.  Twenty-two members and 22,672 bytes of code.
- * `setMinMaxRates` -- the only member of the class `v34handshak` reaches
- * (docs/v90cpp.md's table of the fifty) -- was the first one written here;
- * the eleven leaves, `determineDminForRrn`, `setConstellationToNoise` and
- * `setConstellationToNoise_forceRate` followed -- the fourteen-member batch
- * finding F2140 measured, and TWENTY of the class's twenty-four defined
- * symbols.
+ * The class is closed: `process()` is the one entry point, running
+ * `constellationDesign()`'s three steps (choose constellations for the
+ * noise floor, then two optional refinements) in a loop of at most three
+ * passes, forcing the rate to `minRate`/`maxRate` whenever the design lands
+ * outside them. `adjustConstellationsPower()`, `adjustConstellationsToNewK()`,
+ * `constellationDesign()` and `process()` all reach `V90ConstellationPower`
+ * and are the only members with a caller inside the class; the rest
+ * (`maxK`, `realK`, `findMinValueIndex`, `findConstelMaxValueIndex`,
+ * `reconstructInitialConditions` and the small leaves below) are either
+ * inlined into those four or have no caller anywhere in the object at all.
  *
- * AND THE CLASS IS NOW CLOSED.  The last four -- `adjustConstellationsPower`,
- * `adjustConstellationsToNewK`, `constellationDesign` and `process`, 8,869
- * bytes -- all reach `V90ConstellationPower`, which is why they waited for it,
- * and they are what turns the class from a set of leaves nothing calls into
- * one entry point (`process`) with a call graph under it.  Four of the eleven
- * "nothing in the object calls any of them" leaves now HAVE a caller, inlined:
- * `maxK`, `realK`, `findMinValueIndex`, `findConstelMaxValueIndex` and
- * `reconstructInitialConditions` are all expanded inside the new four.
+ * Not polymorphic (no deleting destructor variant, so no vptr and offset 0
+ * is a real member). The object is 84 bytes (`sizeof == 0x54`), asserted by
+ * the .cpp. `minRate`/`maxRate` default to 28000/56000 -- the V.90
+ * downstream rate ladder's ends -- set by the constructor and changeable via
+ * setMinMaxRates(), whose own diagnostics print them in the opposite order
+ * from their offsets: the first argument ("set min rate") lands at the
+ * higher offset (+0x50), the second ("set max rate") at the lower (+0x4c).
  *
- * NOT POLYMORPHIC.  `tools/cppstruct.py` lists the destructor with the `D1`
- * and `D2` variants and no `D0`, and GCC emits a deleting destructor only for
- * a virtual one, so offset 0 is a real member and there is no vptr.  Finding
- * F228 is the four classes where that is not true, and
- * `ResamplerTimingOffset` -- also in this batch -- is one of them.
- *
- * THE OBJECT IS 84 BYTES.  The largest `this`-relative displacement any of
- * the twenty-four defined members uses is +0x50 and the access there is four
- * bytes wide, so the object ends at 0x54.  A displacement is not a size
- * (finding F215); the width of what sits at the bound is what turns one into
- * the other.  The .cpp asserts both the size and the two offsets below.
- *
- * WHAT +0x4c AND +0x50 HOLD, measured and not inferred from the method name
- * alone.  The constructor ends with
- *
- *     movl $0x6d60,0x50(%eax)      28000
- *     movl $0xdac0,0x4c(%eax)      56000
- *
- * -- neither immediate carries a relocation, so both are integers and not
- * addresses -- and 28000 and 56000 are exactly the bottom and top of the V.90
- * downstream rate ladder.  `setMinMaxRates`' own two diagnostics then name
- * them the other way round from the argument order a reader would guess:
- * the FIRST argument is printed as "set min rate" and stored at +0x50, the
- * SECOND is printed as "set max rate" and stored at +0x4c.  So the offsets
- * descend as the arguments ascend, and the defaults confirm which is which.
- *
- * Everything the written members do not touch is `pad_`.  The other members
- * write into that region and none of them is reconstructed here, so naming
- * any of it would be a guess rather than a measurement.
- *
- * THE CONSTRUCTOR NAMED FOUR MORE SLOTS, and they were `pad_` until it was
- * read (task: the ctor/dtor batch).  `+0x30` and `+0x44` are its third and
- * second arguments -- a `V90ConstellationPower *` and a `V90PreFilter *`, and
- * the mangling is what types them.  `+0x08` and `+0x38` are bytes by their
- * store encodings (`c6 40 08 00` and `c6 40 38 16`, neither with an
- * operand-size prefix), seeded 0 and 22.  The constructor also writes the
- * two rate defaults documented above and zeroes `word_48`, so `reset()` is
- * not the only thing that clears it.
- *
- * `reset()` (task #88, the lifecycle batch) added the seven fields it writes.
- * It is 47 bytes of straight-line stores with no branch and no call, and the
- * only thing it reads is the parameter block at +0x00 -- which is what makes
- * +0x00 a `V90Parameters *` rather than merely the first four bytes of the
- * padding: `mov (%eax),%ecx` and then `mov 0x39c(%ecx),%edx`.
+ * Everything the reconstructed members do not touch is `pad_`; the class's
+ * other four defined-but-unwritten-here members write into that region.
  */
 
 #ifndef DSPLIB_V90CONSTELLATIONDESIGNER_H
@@ -117,173 +78,217 @@ class V90AutoDigitalImpDetector;
 
 class V90ConstellationDesigner {
 public:
-	/*
-	 * THE CONSTRUCTOR IS 54 BYTES OF STORES -- no call, no branch, and it
-	 * reads nothing it is handed.  It keeps the three collaborators and
-	 * seeds four constants: the rate ladder's two ends, a zero byte at
-	 * +0x08 and 22 at +0x38.
+	/**
+	 * @brief Construct a designer over its three collaborators.
 	 *
-	 * THE DESTRUCTOR IS ONE BYTE, a bare `ret` at 0x47900.  It is declared
-	 * because the blob HAS the symbol: GCC emits an out-of-line destructor
-	 * only for a user-declared one, so a class whose destructor were
-	 * implicit would contribute no `D1`/`D2` at all.  The blob has both,
-	 * one byte each, so the original declared it and left the body empty.
-	 * `test/unit/t_v90designers.cpp` drives it and asserts that it writes
-	 * nothing, rather than assuming it.
+	 * Straight-line stores only: keeps `params`, `preFilter` and `power`,
+	 * and seeds the rate ladder's two ends (minRate/maxRate), `byte_08`
+	 * (0) and `byte_38` (22, the default power-ladder index).
+	 *
+	 * @param params      The V.90 parameter block (not owned).
+	 * @param preFilter   The pre-filter collaborator (not owned).
+	 * @param power       The constellation-power collaborator (not owned).
 	 */
 	V90ConstellationDesigner(V90Parameters *params, V90PreFilter *preFilter,
 				 V90ConstellationPower *power);
+	/** @brief Destroy a designer. Empty body -- declared because the blob has the symbol, but writes nothing. */
 	~V90ConstellationDesigner();
 
-	/* Defined in src/pump/v90/V90ConstellationDesigner.cpp. */
-	void setMinMaxRates(unsigned int, unsigned int);
+	/**
+	 * @brief Set the downstream rate ladder's floor and ceiling.
+	 * @param minRate  New minimum rate, stored at +0x50 (default 28000).
+	 * @param maxRate  New maximum rate, stored at +0x4c (default 56000).
+	 */
+	void setMinMaxRates(unsigned int minRate, unsigned int maxRate);
+	/** @brief Reset the seven fields reset() owns to their initial values, reading only `params`. */
 	void reset();
 
-	/*
-	 * THE ELEVEN SMALL MEMBERS, and NOTHING IN THE OBJECT CALLS ANY OF
-	 * THEM.  A sweep of every `R_386_PC32` in `.text` finds no caller for
-	 * any of the eleven -- nor for `constelBuild` or `pow6` in particular
-	 * -- so they survive only because a non-static member function has
-	 * external linkage.  That is why the differential test drives each one
-	 * directly rather than through a caller, and why nothing here can be
-	 * cross-checked against a call site's argument types.
+	/**
+	 * @brief Raise 6.0 to an integer power.
+	 * @param exponent  The exponent.
+	 * @return `6^exponent`.
+	 */
+	float pow6(short exponent);
+	/**
+	 * @brief Compute the constellation-shaping factor K for a candidate table.
+	 * @param n      Element count.
+	 * @param table  The candidate values.
+	 * @return The computed K.
+	 */
+	float calcK(unsigned int n, float *table);
+	/**
+	 * @brief Compute the real (non-integer) K a mapping's constellations actually achieve.
+	 * @param mappingParams  The mapping parameters to evaluate.
+	 * @return The achieved K.
+	 */
+	float realK(V90MappingParams *mappingParams);
+	/**
+	 * @brief Find the largest integer K a mapping's constellations can support.
+	 * @param mappingParams  The mapping parameters to evaluate.
+	 * @return The maximum K.
+	 */
+	int maxK(V90MappingParams *mappingParams);
+	/**
+	 * @brief Find the point count M whose K is closest to a target K.
+	 * @param targetK  The K value to match.
+	 * @param k        A working K value.
+	 * @return The matching point count M.
+	 */
+	int calcMtoMatchKtarget(float targetK, float k);
+	/**
+	 * @brief Find the index of the smallest value in a mapping's per-constellation table.
+	 * @param mappingParams  The mapping parameters to search.
+	 * @return The index of the minimum.
+	 */
+	int findMinValueIndex(V90MappingParams *mappingParams);
+	/**
+	 * @brief Find the constellation with the largest value in its table.
+	 * @param mappingParams  The mapping parameters to search.
+	 * @return The index of the maximum.
+	 */
+	int findConstelMaxValueIndex(V90MappingParams *mappingParams);
+	/**
+	 * @brief Look up a constellation's ucode for a given point.
+	 * @param k  Constellation index.
+	 * @param i  Point index within the constellation.
+	 * @return The ucode at `(k << 7) + i` in `constelTable`.
+	 */
+	unsigned char constelBuild(short k, short i);
+	/**
+	 * @brief Design the transmit spectral-shaping filter for a given rate.
+	 * @param rate        The data rate to shape for.
+	 * @param conditions  The spectral conditions to design under.
+	 */
+	void spectralDesign(unsigned int rate, V90SpecialSpectralConditions conditions);
+	/**
+	 * @brief Rebuild a mapping's initial per-constellation ucode assignment.
+	 * @param mappingParams  The mapping parameters to rebuild.
+	 * @param ucodes         Per-constellation ucode buffer to fill.
+	 */
+	void reconstructInitialConditions(V90MappingParams *mappingParams, unsigned char *ucodes);
+	/**
+	 * @brief Choose the next ucode to add to a constellation.
+	 * @param ucode           Per-constellation top ucode index (in/out is via the caller's own table).
+	 * @param flags           Per-phase flags.
+	 * @param table1          A flat `(k<<7)+i`-indexed value table.
+	 * @param table2          A second flat `(k<<7)+i`-indexed value table.
+	 * @param scratch         Per-constellation scratch values.
+	 * @param flagTable       Flat `(k<<7)+i`-indexed flag table.
+	 * @return The chosen ucode.
+	 */
+	int findNextUcodeToAdd(unsigned char *ucode, unsigned char flags,
+			      short (*table1)[128], short (*table2)[128], short *scratch,
+			      unsigned char (*flagTable)[128]);
+
+	/**
+	 * @brief Compute the minimum distance for a given RRN and log its up/down deltas.
+	 * @param rrn  The RRN (robbed-bit-signalling ratio) to evaluate.
+	 */
+	void determineDminForRrn(unsigned int rrn);
+
+	/**
+	 * @brief Set each constellation's shape to match a target noise level.
+	 * @param noiseEnergy  The noise energy to design against.
+	 * @param table1       Flat `(k<<7)+i`-indexed value table.
+	 * @param table2       Flat `(k<<7)+i`-indexed value table.
+	 * @param scratch      Per-constellation scratch values, indexed 0..5.
+	 * @param ucode        Per-constellation ucode, indexed 0..5.
+	 * @param flagTable    Flat `(k<<7)+i`-indexed flag table.
+	 */
+	void setConstellationToNoise(float noiseEnergy, short (*table1)[128], short (*table2)[128],
+				     short *scratch, unsigned char *ucode,
+				     unsigned char (*flagTable)[128]);
+
+	/**
+	 * @brief setConstellationToNoise(), with the data rate forced rather than derived.
 	 *
-	 * RETURN TYPES ARE NOT MANGLED and therefore not measured.  What the
-	 * object fixes is the register the value comes back in -- `%eax` for
-	 * the six below that return an integer, `%st(0)` for `pow6`, `calcK`
-	 * and `realK` -- and the widths chosen here are the narrowest that
-	 * carries every value the body can produce.
-	 */
-	float pow6(short);
-	float calcK(unsigned int, float *);
-	float realK(V90MappingParams *);
-	int maxK(V90MappingParams *);
-	int calcMtoMatchKtarget(float, float);
-	int findMinValueIndex(V90MappingParams *);
-	int findConstelMaxValueIndex(V90MappingParams *);
-	unsigned char constelBuild(short, short);
-	void spectralDesign(unsigned int, V90SpecialSpectralConditions);
-	void reconstructInitialConditions(V90MappingParams *, unsigned char *);
-	int findNextUcodeToAdd(unsigned char *, unsigned char,
-			      short (*)[128], short (*)[128], short *,
-			      unsigned char (*)[128]);
-
-	/*
-	 * THE RETURN TYPE HERE IS READ FROM THE TWO `ret` PATHS, not guessed.
-	 * 0x484fa arrives with the coprocessor status word `fnstsw` left in
-	 * %eax at 0x484c0, and 0x4881f arrives with `dsplibs_debug_printf`'s
-	 * return in it.  Two unrelated values on two paths that a caller would
-	 * have to read as one, so nothing is returned: `void`.
-	 */
-	void determineDminForRrn(unsigned int);
-
-	/*
-	 * AND `void` HERE FOR THE SAME REASON, read from the two `ret` paths.
-	 * 0x49331 arrives with `dsplibs_debug_level` in %eax -- the gate the
-	 * trailing banner was tested with, `mov 0x0,%eax; cmp $0x1,%eax; jbe`
-	 * -- and 0x4978c arrives with `dsplibs_debug_printf`'s return, because
-	 * that path ends by printing the banner and falling into the epilogue.
-	 * A debug level and a printf's return are not one quantity, and no
-	 * int-returning source converges on them, so nothing is returned.
+	 * Same design as setConstellationToNoise(), plus a per-phase top ucode
+	 * index (`topUcode`) that this function writes through as it runs,
+	 * and a per-phase one-bit flag (`phaseFlags`).
 	 *
-	 * The six arguments are the mangling's and nothing here weakens them:
-	 * the two `short (*)[128]` are indexed FLAT as (k << 7) + i like
-	 * `constelBuild`'s table, the `short *` and the `unsigned char *` are
-	 * both indexed by the constellation number 0..5, and the
-	 * `unsigned char (*)[128]` is a flag table read at the same flat
-	 * index as the first two.
+	 * @param noiseEnergy  The noise energy to design against.
+	 * @param table1       Flat `(k<<7)+i`-indexed value table.
+	 * @param table2       Flat `(k<<7)+i`-indexed value table.
+	 * @param scratch      Per-constellation scratch values, indexed 0..5.
+	 * @param ucode        Per-constellation ucode, indexed 0..5.
+	 * @param topUcode     Per-phase top ucode index; incremented in place as phases are visited.
+	 * @param flagTable    Flat `(k<<7)+i`-indexed flag table.
 	 */
-	void setConstellationToNoise(float, short (*)[128], short (*)[128],
-				     short *, unsigned char *,
-				     unsigned char (*)[128]);
+	void setConstellationToNoise_forceRate(float noiseEnergy, short (*table1)[128],
+					       short (*table2)[128], short *scratch,
+					       unsigned char *ucode,
+					       unsigned char *topUcode,
+					       unsigned char (*flagTable)[128]);
 
-	/*
-	 * AND `void` A THIRD TIME, from the same two-`ret` argument: 0x4a7b1
-	 * arrives with `dsplibs_debug_level` in %eax, left there by the
-	 * trailing banner's own gate, and 0x4aafa with
-	 * `dsplibs_debug_printf`'s return.  Nothing an int-returning source
-	 * could converge on.  It closes the fourteen-member batch.
+	/**
+	 * @brief Shrink the constellations until the frame's average power fits the current power-ladder entry.
 	 *
-	 * SEVEN ARGUMENTS, AND THE SIXTH IS AN IN/OUT ONE.  `Ph` then `S3_` is
-	 * the same `unsigned char *` twice, and the second of them is the
-	 * per-phase top ucode index: 0x4a905 is `incb (%esi,%edx,1)` with %edx
-	 * the phase number, so the object WRITES through it -- the only
-	 * argument any member of this class writes.  The fifth is a per-phase
-	 * flag worth one bit where the `short *` before it is worth two, and
-	 * the seventh is the same flag table `setConstellationToNoise` takes,
-	 * read at exactly one site in the whole function.
-	 */
-	void setConstellationToNoise_forceRate(float, short (*)[128],
-					       short (*)[128], short *,
-					       unsigned char *,
-					       unsigned char *,
-					       unsigned char (*)[128]);
-
-	/*
-	 * THE FOUR THAT CLOSE THE CLASS.  Their argument lists are the
-	 * mangling's; the two return types are read from the object.
-	 */
-
-	/*
-	 * Shrink the constellations until the frame's average power is at or
-	 * under the ladder entry `byte_08` selects, then put one point back if
-	 * that took `mappingParams->word_0` below 21.  `void`: the single
-	 * epilogue is reached with `dsplibs_debug_printf`'s return in %eax on
-	 * one path and `edprintf`'s on another, which is finding F2140's
-	 * two-`ret` argument at one `ret`.
+	 * Steps `byte_38` down the `V90ConstellationPower::averagePowerLimits`
+	 * ladder until the frame's average power is at or under the selected
+	 * limit, then restores one point if that took `mappingParams->word_0`
+	 * (K) below 21.
 	 */
 	void adjustConstellationsPower();
 
-	/*
-	 * Add or remove constellation points until K reaches the target the
-	 * parameter block's `UP_ROUND_K` selects.  `void` for the same reason.
-	 *
-	 * THE FOURTH ARGUMENT IS NEVER READ.  `0xe0(%esp)` is not referenced
-	 * anywhere in the 4,887 bytes, and that is a claim the test drives:
-	 * it is pointed at its own buffer and asserted unchanged.  The other
-	 * three are the two `short (*)[128]` tables and the per-constellation
-	 * `short *`, all three indexed FLAT as `(k << 7) + u` exactly as
-	 * `constelBuild`'s are.
+	/**
+	 * @brief Add or remove constellation points until K reaches the parameter block's `UP_ROUND_K` target.
+	 * @param table1     Flat `(k<<7)+u`-indexed value table.
+	 * @param table2     Flat `(k<<7)+u`-indexed value table.
+	 * @param scratch    Per-constellation scratch values.
+	 * @param flagTable  Flat `(k<<7)+u`-indexed flag table; unused (never read by the object).
 	 */
-	void adjustConstellationsToNewK(short (*)[128], short (*)[128], short *,
-					unsigned char (*)[128]);
+	void adjustConstellationsToNewK(short (*table1)[128], short (*table2)[128], short *scratch,
+					unsigned char (*flagTable)[128]);
 
-	/*
-	 * One design pass: choose the constellations for the noise, then the
-	 * two optional refinements the parameter block gates.
+	/**
+	 * @brief Run one design pass: choose constellations for the noise, then apply the two optional refinements the parameter block gates.
 	 *
-	 * THE FIFTH ARGUMENT IS DROPPED ON ONE ARM.  With `FORCE_RATE_ENABLE`
-	 * clear the object calls `setConstellationToNoise` with the SIXTH
-	 * argument in the fifth outgoing slot and never stores the fifth --
-	 * both are `unsigned char *`, so a fixture that fills them alike
-	 * cannot tell that reading from passing the fifth.  The test counts the
-	 * trials that take the arm and the mutation set encodes the swap.
+	 * With `FORCE_RATE_ENABLE` clear, calls setConstellationToNoise()
+	 * (dropping the fifth argument, `phaseFlags`, and passing `flagTable`
+	 * in its place); with it set, calls setConstellationToNoise_forceRate()
+	 * with all seven.
+	 *
+	 * @param noiseEnergy  The noise energy to design against.
+	 * @param table1       Flat `(k<<7)+i`-indexed value table.
+	 * @param table2       Flat `(k<<7)+i`-indexed value table.
+	 * @param scratch      Per-constellation scratch values.
+	 * @param ucode        Per-constellation ucode.
+	 * @param phaseFlags   Per-phase one-bit flag; only used when `FORCE_RATE_ENABLE` is set.
+	 * @param flagTable    Flat `(k<<7)+i`-indexed flag table.
 	 */
-	void constellationDesign(float, short (*)[128], short (*)[128],
-				 short *, unsigned char *, unsigned char *,
-				 unsigned char (*)[128]);
+	void constellationDesign(float noiseEnergy, short (*table1)[128], short (*table2)[128],
+				 short *scratch, unsigned char *ucode, unsigned char *phaseFlags,
+				 unsigned char (*flagTable)[128]);
 
-	/*
-	 * THE ENTRY POINT, and the only member of the class with a caller
-	 * inside it: it runs `constellationDesign`'s three steps in a loop of
-	 * at most three passes, forcing the rate to `minRate` or `maxRate`
-	 * whenever the design lands outside them.
+	/**
+	 * @brief The entry point: run constellationDesign() up to three times, forcing the rate to the ladder's ends as needed.
 	 *
-	 * IT RETURNS A VALUE, and that is read from the object rather than
-	 * assumed: the single epilogue at 0x4d0a5 is `mov 0x34(%esp),%eax`
-	 * ahead of the pops, and that slot is seeded 0 on entry and set to 1
-	 * on exactly one path -- the one whose diagnostic is "D choosen is
-	 * smaller than minimum".  So this is not another `void` like the three
-	 * whose two `ret` paths disagree; the value is deliberately loaded.
+	 * The only member of the class with a caller inside it. Loops
+	 * constellationDesign() at most three times, forcing `rate` to
+	 * `minRate` or `maxRate` whenever the design lands outside them.
 	 *
-	 * The ninth argument is dropped on the same arm `constellationDesign`
-	 * drops its fifth on, and for the same reason.
+	 * @param rate          The initial data rate to design for.
+	 * @param detector      The digital-impairment detector supplying constelTable's backing tables.
+	 * @param noiseEnergy   The noise energy to design against.
+	 * @param forceRate     Non-zero to force the rate rather than deriving it (selects constellationDesign()'s `FORCE_RATE_ENABLE` arm).
+	 * @param mappingParams  The mapping parameters to fill.
+	 * @param table1        Flat `(k<<7)+i`-indexed value table.
+	 * @param table2        Flat `(k<<7)+i`-indexed value table.
+	 * @param scratch       Per-constellation scratch values.
+	 * @param ucode         Per-constellation ucode.
+	 * @param phaseFlags    Per-phase one-bit flag; dropped on the same arm constellationDesign() drops it on.
+	 * @param powerLadderIndex  Initial `byte_38` power-ladder index.
+	 * @param codecType     The hardware codec type in use.
+	 * @param word_40       Additional design parameter (unresolved role beyond storage).
+	 * @param spectralConditions  Spectral conditions to design the shaping filter under.
+	 * @return 1 if the chosen rate had to be forced up to the minimum ("D choosen is smaller than minimum"), 0 otherwise.
 	 */
-	int process(unsigned int, V90AutoDigitalImpDetector *, float, int,
-		    V90MappingParams *, short (*)[128], short (*)[128],
-		    short *, unsigned char *, unsigned char *, unsigned char,
-		    __tHardwareCodecTypes__, unsigned int,
-		    V90SpecialSpectralConditions);
+	int process(unsigned int rate, V90AutoDigitalImpDetector *detector, float noiseEnergy,
+		    int forceRate, V90MappingParams *mappingParams, short (*table1)[128],
+		    short (*table2)[128], short *scratch, unsigned char *ucode,
+		    unsigned char *phaseFlags, unsigned char powerLadderIndex,
+		    __tHardwareCodecTypes__ codecType, unsigned int word_40,
+		    V90SpecialSpectralConditions spectralConditions);
 
 	/*
 	 * Data members are public because the original's access specifiers are
@@ -296,28 +301,14 @@ public:
 	/* +0x00  The parameter block.  Not owned; `reset` reads +0x39c. */
 	V90Parameters *params;
 
-	/*
-	 * +0x04  The constellation table.  THREE INDEPENDENT MEMBERS FORCE THE
-	 * TYPE, and each recovers the shape `V90MappingParams.h` documents
-	 * from its own displacements:
-	 *
-	 *   spectralDesign            writes six dwords at +0x620..+0x634
-	 *   constelBuild              reads `movzbl 0x4(%edx,%esi,1)` with
-	 *                             %edx = k << 7 -- the +0x004 + 0x80*k
-	 *                             constellation byte
-	 *   findNextUcodeToAdd        the same read, same scaling
-	 *
-	 * It used to be `pad_04`.  Nothing reconstructed here WRITES it, so
-	 * where it comes from is still unknown.
-	 */
+	/* +0x04  The constellation table; type forced by three independent readers (spectralDesign, constelBuild, findNextUcodeToAdd), written by process() as its fifth argument. See F3406. */
 	V90MappingParams *mappingParams;	/* +0x04                    */
 
 	/*
-	 * +0x08  `movb $0x0,0x8(%eax)` in the constructor, and a BYTE: the
-	 * encoding is `c6 40 08 00`, which has no operand-size prefix and no
-	 * 32-bit immediate.  Nothing reconstructed here reads it, so it is
-	 * offset-named; what the constructor proves is the width and the
-	 * initial value, not the meaning.  It used to be inside `pad_04`.
+	 * +0x08  `movb $0x0,0x8(%eax)` in the constructor, a byte (encoding
+	 * `c6 40 08 00`, no operand-size prefix, no 32-bit immediate). Nothing
+	 * reconstructed here reads it, so it is offset-named; the constructor
+	 * proves only the width and the initial value, not the meaning.
 	 */
 	unsigned char byte_08;		/* +0x08                            */
 
@@ -325,20 +316,19 @@ public:
 
 	/*
 	 * +0x0a .. +0x10  Four consecutive 16-bit slots `reset` zeroes with
-	 * four `movw $0x0`.  They are offset-named; what makes them two bytes
-	 * rather than four is the store width and nothing else.
+	 * four `movw $0x0`; offset-named, with the store width alone fixing
+	 * them at two bytes rather than four.
 	 *
-	 * TWO OF THE FOUR NOW HAVE A READER and both readings are `movswl`,
-	 * so they stay SIGNED: `findNextUcodeToAdd` loads +0x0a and +0x10 and
+	 * Two of the four have a reader and both readings are `movswl`, so
+	 * they stay signed: `findNextUcodeToAdd` loads +0x0a and +0x10 and
 	 * adds each to a sign-extended `short` from a caller's table before a
-	 * signed comparison.  That is the "forced" kind of extension --
-	 * the 32-bit result is what the comparison uses -- and not the free
-	 * kind of finding F614.
+	 * signed comparison -- the forced kind of extension (finding F614),
+	 * not the free kind.
 	 *
-	 * AND THREE OF THE FOUR NOW HAVE THE AUTHOR'S OWN WORD FOR WHAT THEY
-	 * HOLD, out of `determineDminForRrn`'s seventeen format strings --
-	 * which is the first reader OR writer of +0x0c and +0x0e anywhere in
-	 * the reconstruction, `reset`'s zeroing aside:
+	 * Three of the four have the author's own word for what they hold, out
+	 * of `determineDminForRrn`'s format strings (the first reader or
+	 * writer of +0x0c and +0x0e anywhere in the reconstruction, `reset`'s
+	 * zeroing aside):
 	 *
 	 *     +0x0a  dMin         read as `filds 0xa(%edx)`, and copied into
 	 *                         both of the others; still written by
@@ -347,10 +337,10 @@ public:
 	 *                         %d" prints `movswl 0xc(%edx)`
 	 *     +0x0e  rrnUpDmin    the same message and load, at +0x0e
 	 *
-	 * They keep their offset names.  A name out of a diagnostic is the
-	 * author's word for the QUANTITY, and these names are for the SLOTS
-	 * the offset assertions pin; the mapping is recorded here, which is
-	 * where a later batch can act on it.
+	 * They keep their offset names: a name out of a diagnostic is the
+	 * author's word for the quantity, not yet a claim about the slot the
+	 * offset assertions pin, so the mapping is recorded here for a later
+	 * batch to act on.
 	 */
 	short short_0a;			/* +0x0a  the author's `dMin`        */
 	short short_0c;			/* +0x0c  the author's `rrnDownDmin` */
@@ -360,72 +350,33 @@ public:
 	unsigned char pad_12[2];	/* +0x12                            */
 
 	/*
-	 * +0x14  `constelBuild`'s table, and its ONLY reader anywhere in the
-	 * object.  `mov 0x14(%ebx),%edi` loads it once and the body then
-	 * addresses BOTH a 16-bit table at `(%edi,%eax,2)` with %eax =
-	 * (k << 7) + i and an 8-bit one at `0xd00(%eax,%ecx,1)` off the same
-	 * register.  One base register with a fixed 0xd00 displacement is the
-	 * measurement: two pointer members would have been two loads.  So the
-	 * pointer is to the first table and the second lives 0xd00 bytes on,
-	 * which is how the .cpp reaches it.
-	 *
-	 * A SECOND, INDEPENDENT DISPLACEMENT off the same pointer is now
-	 * measured: `determineDminForRrn` tests
-	 * `cmpb $0x0,0x280c(%ecx,%ebp,1)` with %ebp the same `mov 0x14(%eax)`
-	 * and %ecx a constellation index 0..5.  So one pointer reaches a
-	 * 16-bit table at +0, a byte table at +0xd00 and six more bytes at
-	 * +0x280c, from two members that share nothing else.
-	 *
-	 * AND NOW THE POINTED-AT OBJECT IS KNOWN, from the one member that
-	 * WRITES this field.  `process` stores its second argument here --
-	 * `mov 0x68(%esp),%edi` then `mov %edi,0x14(%ebp)` -- and the mangling
-	 * types that argument `V90AutoDigitalImpDetector *`.  Every one of the
-	 * three displacements above then lands on a named member of that class
-	 * (see include/dsplib/V90AutoDigitalImpDetector.h):
-	 *
-	 *     +0        linMapp[6][128]     short   the 16-bit table
-	 *     +0xd00    byte_0d00[6][128]   uchar   the byte table
-	 *     +0x280c   byte_280c[6]        uchar   the per-phase flags
-	 *
-	 * -- so the "13 rows of 128 shorts" and "0x2812 bytes short of nothing
-	 * in particular" reading that used to stand here is RETRACTED, and so
-	 * is the claim that nothing in the object writes this field.
-	 *
-	 * THE DECLARED TYPE STAYS `short (*)[128]` AND THAT IS NOT A
-	 * COMPROMISE: `linMapp` is at detector offset 0 and is exactly
-	 * `short[6][128]`, so `&detector->linMapp[0]` IS this pointer, with the
-	 * same value and the same type.  `process` assigns it that way and the
-	 * three readers are unchanged.
+	 * +0x14  `constelBuild`'s table, its only reader. Two more independent
+	 * displacements off the same pointer (a byte table at +0xd00, a
+	 * per-phase flag array at +0x280c) are read by `determineDminForRrn`,
+	 * and `process` writes the field from its second argument, a
+	 * `V90AutoDigitalImpDetector *`. The three displacements land exactly
+	 * on that class's `linMapp[6][128]`, `byte_0d00[6][128]` and
+	 * `byte_280c[6]`, so the declared type stays `short (*)[128]` --
+	 * `&detector->linMapp[0]` is this pointer, value and type alike. See
+	 * finding F3406 (this retracts an earlier standalone-array reading of
+	 * this field).
 	 */
 	short (*constelTable)[128];	/* +0x14 = &detector->linMapp[0]    */
 
 	/*
-	 * +0x18 .. +0x20  Three floats, and `setConstellationToNoise` is the
-	 * first reader OR writer of any of them.  It writes all three in each
-	 * of three of its four `word_48` arms --
+	 * +0x18 .. +0x20  Three floats; `setConstellationToNoise` is the first
+	 * reader or writer of any of them, writing all three (as `noiseEnergy
+	 * * 0.45f`, `* 1.4125f`, and `* 2.0f or 4.0f` respectively) in three of
+	 * its four `word_48` arms, and none in the KeepRate arm ("keep dMin
+	 * and pdsnr thresh").
 	 *
-	 *     +0x18 = noiseEnergy * 0.45f
-	 *     +0x1c = noiseEnergy * 1.4125f
-	 *     +0x20 = (2.0f or 4.0f, by USE_RESTRICED_DMIN) * noiseEnergy
-	 *
-	 * -- with `fstps`, so they are four bytes each and not eight, and
-	 * that is what turns three of `pad_18`'s twelve dwords into fields.
-	 * The KeepRate arm writes none of them, which is what its own
-	 * diagnostic says it does: "keep dMin and pdsnr thresh".
-	 *
-	 * AND THE AUTHOR'S OWN WORDS FOR THEM are in the three unconditional
-	 * `edprintf` sites that follow, which print `flds 0x18(%ebx)`,
-	 * `flds 0x1c(%ebx)` and `flds 0x20(%ebx)` in that order:
-	 *
-	 *     +0x18  pdSnrThreshForRateUp
-	 *     +0x1c  pdSnrThreshForRateDown
-	 *     +0x20  pdSnrThreshForRetrain
-	 *
-	 * They keep their offset names for the reason `short_0c` and
-	 * `short_0e` do: a name out of a diagnostic is the author's word for
-	 * the QUANTITY and these names are for the SLOTS the offset
-	 * assertions pin.  The mapping is recorded here, which is where a
-	 * later batch can act on it.
+	 * The author's own words for them are in three unconditional
+	 * `edprintf` sites that follow, in offset order: `pdSnrThreshForRateUp`,
+	 * `pdSnrThreshForRateDown`, `pdSnrThreshForRetrain`. They keep their
+	 * offset names for the reason `short_0c`/`short_0e` do: a name out of a
+	 * diagnostic is the author's word for the quantity, not yet a claim
+	 * about the slot itself, so the mapping is recorded here for a later
+	 * batch to act on.
 	 */
 	float float_18;			/* +0x18  pdSnrThreshForRateUp      */
 	float float_1c;			/* +0x1c  pdSnrThreshForRateDown    */
@@ -440,24 +391,23 @@ public:
 	unsigned int word_24;		/* +0x24 = params->w[0x39c / 4]     */
 
 	/*
-	 * +0x28  FOUR BYTES BECAUSE IT IS COMPARED AGAINST `word_2c`, and
-	 * that is the only thing about it the object fixes:
-	 * `setConstellationToNoise` loads `mov 0x2c(%ecx),%edx` and then
-	 * `cmp 0x28(%ecx),%edx`, a 32-bit compare with no operand-size
-	 * prefix, so the two slots are the same width.  It used to be
-	 * `pad_28[4]`.
+	 * +0x28  Four bytes because it is compared against `word_2c`, which is
+	 * the only thing about it the object fixes: `setConstellationToNoise`
+	 * loads `mov 0x2c(%ecx),%edx` and then `cmp 0x28(%ecx),%edx`, a 32-bit
+	 * compare with no operand-size prefix, so the two slots are the same
+	 * width. It used to be `pad_28[4]`.
 	 *
-	 * AND BOTH SLOTS NOW HAVE THEIR WRITER, which is `process`, and it
-	 * copies them out of the detector it is handed:
+	 * Both slots now have their writer, `process`, which copies them out
+	 * of the detector it is handed:
 	 *
 	 *     mov 0xa95c(%edi),%eax ; mov %eax,0x28(%ebp)   pcmType
 	 *     mov 0xa960(%edi),%esi ; mov %esi,0x2c(%ebp)   int_a960
 	 *
 	 * So the "nothing anywhere in the object writes it" sentence that used
-	 * to stand here is retracted for both, `word_28` is the session's
+	 * to stand here is retracted for both; `word_28` is the session's
 	 * companding law as `V90AutoDigitalImpDetector::reset` stored it, and
 	 * the equality test between the two asks whether the detector's second
-	 * flag agrees with it.  The types stay as the widths measure them: what
+	 * flag agrees with it. The types stay as the widths measure them: what
 	 * the object forces is four bytes and a 32-bit compare, and naming
 	 * `PcmType` here would make this header depend on the one that defines
 	 * the enum for no measured gain.
@@ -465,34 +415,30 @@ public:
 	int word_28;			/* +0x28 = detector->pcmType        */
 
 	/*
-	 * +0x2c  The companding law, and a four-byte load: `mov 0x2c(%edx),%esi
-	 * ; test %esi,%esi` in `findNextUcodeToAdd`, whose zero arm calls
+	 * +0x2c  The companding law, a four-byte load: `mov 0x2c(%edx),%esi ;
+	 * test %esi,%esi` in `findNextUcodeToAdd`, whose zero arm calls
 	 * `linear2ulaw` and complements the result and whose non-zero arm
-	 * calls `linear2alaw` and XORs it with 0xd5.  So non-zero is A-law,
-	 * which is the same convention `PcmType` records for
-	 * `V90Phase3Modulator` (that header's finding).  It is typed `int`
-	 * rather than `PcmType` because the only thing the object forces is
-	 * the width and the `!= 0`, and naming the type would make this header
-	 * depend on the one that defines the enum for no measured gain.  It
-	 * used to be inside `pad_28`.
+	 * calls `linear2alaw` and XORs it with 0xd5. So non-zero is A-law,
+	 * the same convention `PcmType` records for `V90Phase3Modulator`
+	 * (that header's finding). It is typed `int` rather than `PcmType`
+	 * because the only thing the object forces is the width and the
+	 * `!= 0`, and naming the type would make this header depend on the
+	 * one that defines the enum for no measured gain. It used to be
+	 * inside `pad_28`.
 	 *
-	 * IT IS ALSO WHAT THE THREE NEW MEMBERS HAND TO `getPower` as its
-	 * `PcmType` argument, which is the same reading from a second
-	 * direction: `mov 0x2c(%ebp),%edx ; mov %edx,0xc(%esp)` ahead of every
-	 * one of the five `V90ConstellationPower::getPower` calls.  See
-	 * `word_28` above for where `process` gets it from.
+	 * It is also what the three new members hand to `getPower` as its
+	 * `PcmType` argument, the same reading from a second direction:
+	 * `mov 0x2c(%ebp),%edx ; mov %edx,0xc(%esp)` ahead of every one of the
+	 * five `V90ConstellationPower::getPower` calls. See `word_28` above
+	 * for where `process` gets it from.
 	 */
 	int word_2c;			/* +0x2c = detector->int_a960       */
 
 	/*
-	 * +0x30 and +0x44  The constructor's third and second arguments,
-	 * stored and never read by anything reconstructed here.  What makes
-	 * them pointers rather than four-byte integers is that they are copies
-	 * of arguments the MANGLING types: the constructor is
-	 * `_ZN24V90ConstellationDesignerC1EP13V90ParametersP12V90PreFilterP21V90ConstellationPower`,
-	 * so argument 2 is a `V90PreFilter *` and argument 3 a
-	 * `V90ConstellationPower *`, and the object puts argument 3 at +0x30
-	 * and argument 2 at +0x44.  Both used to be inside `pad_28`.
+	 * +0x30 and +0x44  The constructor's third and second arguments
+	 * respectively, stored and never read by anything reconstructed here;
+	 * typed from the constructor's own mangling rather than the store
+	 * width. Both used to be inside `pad_28`.
 	 */
 	V90ConstellationPower *power;	/* +0x30 = constructor argument 3   */
 
@@ -500,16 +446,16 @@ public:
 
 	/*
 	 * +0x38  `movb $0x16,0x38(%eax)`, again a byte by its encoding
-	 * (`c6 40 38 16`).  22 is not one of the rate-ladder constants and
+	 * (`c6 40 38 16`). 22 is not one of the rate-ladder constants and
 	 * nothing here reads it, so it is offset-named too.
 	 *
-	 * IT NOW HAS A WRITER AND A READER.  `process` stores its eleventh
-	 * argument into it (`mov %dl,0x38(%ebp)`, and the mangling makes that
-	 * argument an `unsigned char`), and `adjustConstellationsPower` reads
-	 * it as the index into `V90ConstellationPower::averagePowerLimits` --
-	 * clamped by `cmp $0x15,%al; ja` to the constructor's own 22, which is
-	 * why the seed is that value.  So the field is a power-ladder index and
-	 * the default is the ladder entry the design starts from; it keeps its
+	 * It now has a writer and a reader: `process` stores its eleventh
+	 * argument into it (`mov %dl,0x38(%ebp)`, an `unsigned char` by the
+	 * mangling), and `adjustConstellationsPower` reads it as the index
+	 * into `V90ConstellationPower::averagePowerLimits`, clamped by
+	 * `cmp $0x15,%al; ja` to the constructor's own 22, which is why the
+	 * seed is that value. So the field is a power-ladder index and the
+	 * default is the ladder entry the design starts from; it keeps its
 	 * offset name because nothing in the object names the quantity.
 	 */
 	unsigned char byte_38;		/* +0x38 a power-ladder index, 22   */
