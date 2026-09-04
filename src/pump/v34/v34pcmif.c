@@ -545,7 +545,7 @@ VPcmV34GetCurrentTxCarrier(void *objp)
  * ended it -- `mov %ecx,%esi` at 0x717b saves the pre-multiply value each
  * time round -- so the two loops do not double-count the step between them.
  *
- * WHAT IS DIVIDED BY WHAT.  `f248` over `equerr`: the equaliser error energy
+ * WHAT IS DIVIDED BY WHAT.  `sig_energy` over `equerr`: the equaliser error energy
  * republished every 1024 symbols (v34recv.h names it from receiver's own
  * "V34EQU, equerr = %d, preerr = %d") divides into the int at +0x248.  A
  * ratio reported in dB with the error underneath is a signal-to-noise ratio,
@@ -587,7 +587,7 @@ VPcmV34GetSNR(void *objp)
 	int last = 0;
 
 	if (rx->equerr > 0) {
-		int v = rx->f248 / rx->equerr;
+		int v = rx->sig_energy / rx->equerr;
 
 		if (v > 0) {
 			for (;;) {

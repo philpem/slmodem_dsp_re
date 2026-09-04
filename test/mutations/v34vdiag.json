@@ -61,13 +61,13 @@
  },
  {
   "label": "selector 3: the resampler phase honours maxCount",
-  "find": "\t\tif (obj->status != V34DIAG_STATUS_V90 &&\n\t\t    obj->status != V34DIAG_STATUS_V92) {\n\t\t\tif (obj->status == V34DIAG_STATUS_K56FLEX &&\n\t\t\t    obj->role == VDIAG_ROLE_CALL)\n\t\t\t\t(void)k56->getResamplerPhase(points, maxCount);\n\t\t\telse\n\t\t\t\tpoints[0].re = rx->f1d8;\n\t\t}\n\t\tpoints[0].im = 0;\n\t\tn = 1;",
-  "replace": "\t\tif (maxCount == 0)\n\t\t\tbreak;\n\t\tif (obj->status != V34DIAG_STATUS_V90 &&\n\t\t    obj->status != V34DIAG_STATUS_V92) {\n\t\t\tif (obj->status == V34DIAG_STATUS_K56FLEX &&\n\t\t\t    obj->role == VDIAG_ROLE_CALL)\n\t\t\t\t(void)k56->getResamplerPhase(points, maxCount);\n\t\t\telse\n\t\t\t\tpoints[0].re = rx->f1d8;\n\t\t}\n\t\tpoints[0].im = 0;\n\t\tn = 1;"
+  "find": "\t\tif (obj->status != V34DIAG_STATUS_V90 &&\n\t\t    obj->status != V34DIAG_STATUS_V92) {\n\t\t\tif (obj->status == V34DIAG_STATUS_K56FLEX &&\n\t\t\t    obj->role == VDIAG_ROLE_CALL)\n\t\t\t\t(void)k56->getResamplerPhase(points, maxCount);\n\t\t\telse\n\t\t\t\tpoints[0].re = rx->timing_frac;\n\t\t}\n\t\tpoints[0].im = 0;\n\t\tn = 1;",
+  "replace": "\t\tif (maxCount == 0)\n\t\t\tbreak;\n\t\tif (obj->status != V34DIAG_STATUS_V90 &&\n\t\t    obj->status != V34DIAG_STATUS_V92) {\n\t\t\tif (obj->status == V34DIAG_STATUS_K56FLEX &&\n\t\t\t    obj->role == VDIAG_ROLE_CALL)\n\t\t\t\t(void)k56->getResamplerPhase(points, maxCount);\n\t\t\telse\n\t\t\t\tpoints[0].re = rx->timing_frac;\n\t\t}\n\t\tpoints[0].im = 0;\n\t\tn = 1;"
  },
  {
   "label": "selector 3: the phase goes in the imaginary half",
-  "find": "\t\t\t\tpoints[0].re = rx->f1d8;\n\t\t}\n\t\tpoints[0].im = 0;",
-  "replace": "\t\t\t\tpoints[0].im = rx->f1d8;\n\t\t}\n\t\tpoints[0].re = 0;"
+  "find": "\t\t\t\tpoints[0].re = rx->timing_frac;\n\t\t}\n\t\tpoints[0].im = 0;",
+  "replace": "\t\t\t\tpoints[0].im = rx->timing_frac;\n\t\t}\n\t\tpoints[0].re = 0;"
  },
  {
   "label": "selector 3: the PCM arms fill the real half too",
@@ -77,7 +77,7 @@
  {
   "label": "selector 4: the offset comes from the phase's field",
   "find": "\t\t\t\tpoints[0].re = rx->timing_offset;",
-  "replace": "\t\t\t\tpoints[0].re = rx->f1d8;"
+  "replace": "\t\t\t\tpoints[0].re = rx->timing_frac;"
  },
  {
   "label": "selector 4: the offset is widened unsigned",
@@ -86,8 +86,8 @@
  },
  {
   "label": "selectors 3 and 4 return no points",
-  "find": "\t\t\t\tpoints[0].re = rx->f1d8;\n\t\t}\n\t\tpoints[0].im = 0;\n\t\tn = 1;",
-  "replace": "\t\t\t\tpoints[0].re = rx->f1d8;\n\t\t}\n\t\tpoints[0].im = 0;\n\t\tn = 0;"
+  "find": "\t\t\t\tpoints[0].re = rx->timing_frac;\n\t\t}\n\t\tpoints[0].im = 0;\n\t\tn = 1;",
+  "replace": "\t\t\t\tpoints[0].re = rx->timing_frac;\n\t\t}\n\t\tpoints[0].im = 0;\n\t\tn = 0;"
  },
  {
   "label": "selector 5: the V.92 canceller is used on every session",

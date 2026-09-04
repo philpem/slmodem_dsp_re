@@ -1823,7 +1823,7 @@ main(void)
 			ra->ppm_count = rb->ppm_count = 0;
 			ra->timing_offset = rb->timing_offset = 0;
 			ra->report_interval = rb->report_interval = 40;
-			ra->f1d8 = rb->f1d8 = 0;
+			ra->timing_frac = rb->timing_frac = 0;
 			ra->timing_integrator = rb->timing_integrator = 0;
 			ra->dwell_count = rb->dwell_count = 0;
 			ra->dwell_limit = rb->dwell_limit = 0;
@@ -1863,8 +1863,8 @@ main(void)
 
 				diff_eq_int("tv state", ra->pllcnt, rb->pllcnt, tag);
 				diff_eq_int("tv step",  ra->phase_inc, rb->phase_inc, tag);
-				diff_eq_int("tv acc",  (long)ra->f1d8,
-					    (long)rb->f1d8, tag);
+				diff_eq_int("tv acc",  (long)ra->timing_frac,
+					    (long)rb->timing_frac, tag);
 				diff_eq_int("tv int",  (long)ra->timing_integrator,
 					    (long)rb->timing_integrator, tag);
 				diff_eq_int("tv ppm",   ra->timing_offset, rb->timing_offset, tag);
@@ -2669,7 +2669,7 @@ main(void)
 			ra->ppm_count = rb->ppm_count = 0;
 			ra->timing_offset = rb->timing_offset = 0;
 			ra->report_interval = rb->report_interval = 40;
-			ra->f1d8 = rb->f1d8 = 0;
+			ra->timing_frac = rb->timing_frac = 0;
 			ra->timing_integrator = rb->timing_integrator = 0;
 			ra->dwell_count = rb->dwell_count = 0;
 			oa2.role = ob2.role = 0x65;

@@ -38,7 +38,7 @@
  *                                      `V92MOD_PHASE_DATA`; the arm below
  *                                      uses 7, which is no phase at all, to
  *                                      say "definitely not the data phase".
- *   equerr, f248      a table            the two dB loops.  `equerr <= 0` skips
+ *   equerr, sig_energy a table            the two dB loops.  `equerr <= 0` skips
  *                                      both; the pairs below make the -6 dB
  *                                      loop run 0, 1 and many times and the
  *                                      -1 dB loop likewise, which is the only
@@ -271,7 +271,7 @@ static const float lvl_v[] = {
 #define NLVL		((int)(sizeof lvl_v / sizeof lvl_v[0]))
 
 /*
- * THE dB LADDER.  `f248 / equerr` is the ratio and the two loops step it down
+ * THE dB LADDER.  `sig_energy / equerr` is the ratio and the two loops step it down
  * by 0.2511597 (a -6 dB step, `+= 6`) and then by 0.79418945 (a -1 dB step,
  * `+= 1`), both as `(x * k) >> 14`, until it reaches zero.
  *
@@ -281,7 +281,7 @@ static const float lvl_v[] = {
  * survives on every row where the other loop dominates the answer.
  */
 static const struct {
-	int	num;	/* v34_receiver::f248 */
+	int	num;	/* v34_receiver::sig_energy */
 	short	den;	/* v34_receiver::equerr */
 } snr_v[] = {
 	{	   0,	  1 },	/* ratio 0: neither loop runs           */
@@ -361,7 +361,7 @@ setup(int n, const struct trial *t)
 		o->tx_pwr_reduction = pr_v[t->pi];
 		o->v90_timing_offset = fac_v[t->fi];
 
-		RX(side)->f248 = snr_v[t->si].num;
+		RX(side)->sig_energy = snr_v[t->si].num;
 		RX(side)->equerr = snr_v[t->si].den;
 
 		x->info0Layout = t->analog;

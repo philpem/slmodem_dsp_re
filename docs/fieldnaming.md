@@ -116,4 +116,21 @@ using two additional evidence-gathering methods the user asked for:
 | V.90 CP/Demod/ConnEval, second pass | Same three classes as wave 1's first agent, focused on what wave 1 left unnamed |
 | V.34 receive, second pass | `v34recv.h`/`v34rx.c`, focused on what wave 1 left bare/padded |
 
-Results pending.
+### Results, V.34 receive second pass
+
+Landed (F10132): `sig_energy` (f248, a field F10131 had mis-filed as
+"deliberately bare" alongside the genuinely dual-role `f208`/`f20a` -- it was
+just never claimed by either wave-1 branch) and `timing_frac` (f1d8, a
+withheld derivation F10123 already had, just not yet threaded through its
+one outside reference and mutation fixture). One new field named from
+code-reading plus this tree's own RRN vocabulary rather than a prior
+withheld derivation: `rrn_local_dir` (short_25e), with the read-only caveat
+spelled out in its comment since nothing in this tree sets it nonzero. Five
+fields re-verified zero-evidence and left bare (`f1d4`/`f1e4`/`f1e8`/`f1f0`/
+`f22e`), the dual-role `f208`/`f20a` re-confirmed and left bare, one stale
+comment fixed. `make one` across the touched suites, `onedef.py`,
+`refcheck.py`, `bannercheck.py` and `anchorcheck.py` all clean; `make period`/
+`byteident.py --ratchet` need docker, unavailable in this sandbox, left for
+the parent's gate.
+
+Other three agents: results pending.

@@ -1377,7 +1377,7 @@ static const int rate_in[][3] = {
 #define OB_SAMPLE_CNT	0x0238
 #define OB_SAMPLES_VLD	0x0262
 #define OB_RX_EQUERR	(0x0264 + 0x21a)	/* short, SIGNED, `jle`     */
-#define OB_RX_F248	(0x0264 + 0x248)	/* int, the numerator       */
+#define OB_RX_SIG_ENERGY	(0x0264 + 0x248)	/* int, the numerator       */
 #define OB_TXSTATE	0x3596
 #define OB_F35A4	0x35a4
 #define OB_FAA74	0xaa74
@@ -1557,13 +1557,13 @@ run_quickconnect(int status, short is_short, long tag)
 static int saw_snr_zero, saw_snr_coarse, saw_snr_fine;
 
 static int
-snr_by_hand(short equerr, int f248)
+snr_by_hand(short equerr, int sig_energy)
 {
 	int db = 0;
 	int last = 0;
 
 	if (equerr > 0) {
-		int v = f248 / equerr;
+		int v = sig_energy / equerr;
 
 		if (v > 0) {
 			for (;;) {
@@ -1589,19 +1589,19 @@ snr_by_hand(short equerr, int f248)
 }
 
 static void
-run_snr(short equerr, int f248, long tag)
+run_snr(short equerr, int sig_energy, long tag)
 {
 	int a, b;
 
 	setup();
 	poke_short(OB_RX_EQUERR, equerr);
-	poke_int(OB_RX_F248, f248);
+	poke_int(OB_RX_SIG_ENERGY, sig_energy);
 
 	a = VPcmV34GetSNR(&oa);
 	b = ref_VPcmV34GetSNR(ob);
 
 	diff_eq_int("GetSNR", a, b, tag);
-	diff_eq_int("GetSNR, by hand", b, snr_by_hand(equerr, f248), tag);
+	diff_eq_int("GetSNR, by hand", b, snr_by_hand(equerr, sig_energy), tag);
 	compare("GetSNR stores nothing", tag);
 
 	if (b == 0)
@@ -3259,7 +3259,7 @@ main(void)
 	rc |= diff_end();
 
 	/*
-	 * GetSNR: `equerr` over the whole of its guard and `f248` over
+	 * GetSNR: `equerr` over the whole of its guard and `sig_energy` over
 	 * quotients that land either side of the hand-off between the two
 	 * loops.  The 6 dB loop runs the ratio down to below 4 and the 1 dB
 	 * loop finishes it, and the value it hands over is the LAST one that
@@ -3288,7 +3288,7 @@ main(void)
 
 		/*
 		 * AND THE EXACT QUOTIENTS, which the raw numerators above only
-		 * reach for `equerr` of 1.  `f248 = q * equerr` puts the
+		 * reach for `equerr` of 1.  `sig_energy = q * equerr` puts the
 		 * division's answer exactly on each of them.
 		 */
 		for (e = 0; e < sizeof(eq_v) / sizeof(eq_v[0]); e++) {

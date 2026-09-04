@@ -487,7 +487,7 @@ v34modeminit(void *objp)
 	*(short *)(m + 0xa254) = 9;
 	*(int *)(m + 0xa8a0) = 0;
 
-	rx->short_25e = 0;
+	rx->rrn_local_dir = 0;
 	rx->baud_copy = 0;
 	obj->is_short = 0;
 	obj->tx_flags = 4;

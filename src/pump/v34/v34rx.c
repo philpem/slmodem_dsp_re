@@ -498,7 +498,7 @@ rxtiminginit(void *objp)
 	/* The slowest V.34 rate: what the receiver assumes until told. */
 	rx->report_interval = 2400;
 	rx->f1d4 = 0;
-	rx->f1d8 = 0;
+	rx->timing_frac = 0;
 	rx->timing_integrator = 0;
 	rx->f1e4 = 0;
 	rx->f1e8 = 0;
@@ -569,7 +569,7 @@ rxinit(void *objp)
 	rx->demod_i_prev = 0;   rx->mix_carrier_phase = 0;  rx->energy.sum = 0;
 	rx->vectpp_idx = 0;   rx->agc_pair_count = 0;  obj->hist1_idx = 0;
 	rx->rx_samples = (short *)((char *)rx + 0x10c);
-	rx->f248 = 0;   rx->sig_energy_acc = 0;
+	rx->sig_energy = 0;   rx->sig_energy_acc = 0;
 }
 
 /* The bulk ring's wrap: reset to zero, not subtract.  See finding F116. */
@@ -1865,7 +1865,7 @@ setTimingStateParameters(void *objp)
  *
  *   THE INTEGRATOR.  error * timing_i_gain in Q15 accumulates into the 32-bit timing_integrator;
  *   error * timing_p_gain in Q11 is added on top per symbol.  The sum is carried in
- *   f1d8 and its whole part, in units of 1/32768 of a symbol, is added to
+ *   timing_frac and its whole part, in units of 1/32768 of a symbol, is added to
  *   the interpolator's step phase_inc.  Every 0x1d2 symbols the accumulated
  *   offset is converted to parts per million -- the `* 10000 / n` then
  *   `* 100 / symbol_period` -- and stored in timing_offset for setTimingStateParameters to
@@ -1970,9 +1970,9 @@ TimingV34(void *objp)
 	}
 
 	/* Carry the fraction, hand the whole part to the interpolator. */
-	acc += rx->f1d8;
+	acc += rx->timing_frac;
 	whole = (short)((acc + 0x4000) >> 15);
-	rx->f1d8 = acc - (whole << 15);
+	rx->timing_frac = acc - (whole << 15);
 	rx->phase_inc = (short)(whole + (unsigned short)rx->symbol_period);
 
 	n = (unsigned short)(rx->ppm_count + 1);
@@ -2572,7 +2572,7 @@ carrier_loop:
 	}
 
 	/*
-	 * The carrier loop.  f210/f212 STOP being the received point here and
+	 * The carrier loop.  target_re/target_im STOP being the received point here and
 	 * become the DECISION rotated back up by the same carrier, which is
 	 * the reference the equaliser's error is measured against below.
 	 *
@@ -2658,7 +2658,7 @@ carrier_loop:
 							: rx->preerr_acc >> 16);
 			rx->equerr_accum = 0;
 			rx->preerr_acc = 0;
-			rx->f248 = rx->sig_energy_acc >> 8;
+			rx->sig_energy = rx->sig_energy_acc >> 8;
 			rx->sig_energy_acc = 0;
 
 			if (rx->rx_blocks <= 0x7530 && DSPLIB_DEBUG_ON()) {

@@ -104,7 +104,7 @@ struct TAG_DiagnosticResults {
 	 *
 	 * V.34: the integer dB count `VPcmV34GetSNR` returns, converted to
 	 * float.  `VPcmV34GetDiagnostics` inlines that function's body
-	 * verbatim -- the same `f248 / equerr` ratio, the same 0x1013 and
+	 * verbatim -- the same `sig_energy / equerr` ratio, the same 0x1013 and
 	 * 0x32d6 reciprocal steps -- and the object's own name for the
 	 * function computing it is `GetSNR`, so larger means a BETTER line.
 	 *

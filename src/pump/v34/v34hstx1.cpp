@@ -2641,10 +2641,10 @@ tx1_ts_rates(struct v34_object *o, struct v34_receiver *rx,
 	}
 
 	/* 0x630e9 */
-	if (rx->short_25e > 1) {
+	if (rx->rrn_local_dir > 1) {
 		int d = rx->baud_copy;
 
-		if (rx->short_25e == 2 && rate > d - 1) {
+		if (rx->rrn_local_dir == 2 && rate > d - 1) {
 			rate = (short)(d - 1);		/* 0x68308 */
 			if (dsplibs_debug_level > 1)	/* 0x68334 */
 				dsplibs_debug_printf(

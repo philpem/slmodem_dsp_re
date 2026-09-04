@@ -45,7 +45,7 @@
  * ===========================================================================
  *
  * .text+0x76a8..0x76f0 is `VPcmV34GetSNR`'s body verbatim -- the same
- * `f248 / equerr` ratio off the receiver, the same two reciprocal loops with
+ * `sig_energy / equerr` ratio off the receiver, the same two reciprocal loops with
  * 0x1013 (a -6 dB step, counted six at a time) and 0x32d6 (a -1 dB step,
  * counted one at a time), and the same `>> 14`.  The two functions are in one
  * translation unit in the original and `-O3` inlined the callee.
@@ -477,7 +477,7 @@ VPcmV34GetVisualDiagnostics(void *objp, int what, struct int_complex *points,
 			    obj->role == VDIAG_ROLE_CALL)
 				(void)k56->getResamplerPhase(points, maxCount);
 			else
-				points[0].re = rx->f1d8;
+				points[0].re = rx->timing_frac;
 		}
 		points[0].im = 0;
 		n = 1;

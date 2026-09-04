@@ -215,11 +215,11 @@ struct v34_receiver {
 	 * symbol's correction goes to the interpolator step, the remainder
 	 * stays here for the next symbol.
 	 *
-	 * -- derived: timing_frac, withheld (F10123): one reference in
-	 * `v34diag.cpp` and a mutation fixture (`v34vdiag.json`) that mutates
-	 * it seven times.
+	 * Renamed here (F10132): the one `v34diag.cpp` reference and the
+	 * mutation fixture (`v34vdiag.json`, seven mutations) that withheld
+	 * it in F10123 are both fixed.
 	 */
-	int             f1d8;            /* +0x1d8 */
+	int             timing_frac;    /* +0x1d8 (was f1d8) */
 	unsigned char pad_1dc[0x1e0 - 0x1dc];
 	int             timing_integrator; /* +0x1e0 TimingV34: the phase
 					    detector's own integrator, fed
@@ -357,10 +357,26 @@ struct v34_receiver {
 					  the interpolator's other endpoint
 					  (was f244) */
 	short           demod_q_prev;    /* +0x246   and Q (was f246) */
-	int             f248;            /* +0x248 */
+	/*
+	 * +0x248.  `sig_energy` -- republished from `sig_energy_acc` every
+	 * 1024 symbols, in step with `equerr`/`preerr` (same counter,
+	 * `err_symcount`, same `>> 8` scaling as the accumulator below).
+	 * `VPcmV34GetSNR` (`v34pcmif.c`) and `VPcmV34GetDiagnostics`'s inlined
+	 * copy (`v34diag.cpp`/`TAG_DiagnosticResults.h`) divide it by `equerr`
+	 * to get the ratio their dB ladder walks -- a received-signal energy
+	 * over an equaliser-error energy is a signal-to-noise ratio, and the
+	 * received-point energy accumulator fills it, so `sig_energy` (not
+	 * "the SNR" itself, which is `equerr`'s reciprocal role) is the
+	 * signal side of that ratio.  Left bare by F10123 only for its
+	 * blast radius outside `v34recv.h`/`v34rx.c`; renamed here after
+	 * verifying that radius is four files and zero mutation fixtures
+	 * (F10132) -- `v34pcmif.c`, `v34diag.cpp`, `TAG_DiagnosticResults.h`
+	 * (comment only) and `t_v34diag.cpp`/`t_v34pcmif.c`, all fixed.
+	 */
+	int             sig_energy;      /* +0x248 (was f248) */
 	int             sig_energy_acc;  /* +0x24c the received-point energy
-					  accumulator paired with f248 (was
-					  f24c) */
+					  accumulator paired with sig_energy
+					  (was f24c) */
 	unsigned char pad_250[0x252 - 0x250];
 	short           bad_thresh;            /* +0x252 */
 	short           bad_long_thresh;            /* +0x254 */
@@ -368,7 +384,24 @@ struct v34_receiver {
 	short           bad_run;            /* +0x258 */
 	short           bad_long_run;            /* +0x25a */
 	short           good_run;            /* +0x25c */
-	short           short_25e;            /* +0x25e */
+	/*
+	 * +0x25e.  Read only by `v34hstx1.cpp`'s TRNSEG4A rate step, gated on
+	 * `> 1`: value 2 forces the new rate DOWN to `baud_copy - 1` when the
+	 * computed rate would go above it, and the else arm (anything else
+	 * `> 1`) forces it UP to `baud_copy + 1` when the computed rate would
+	 * fall below it -- and the two arms' own debug strings name them
+	 * "returning from local rrn down" / "... up", using this tree's own
+	 * RRN (Rate ReNegotiation) vocabulary (`rrn_local`/`rrn_remote` in
+	 * `v34fsk.h`, `V34_RX_FLAG_RENEG` in this header). So: a pending
+	 * local-RRN direction latch, checked once TRNSEG4A recomputes the
+	 * rate and (by everything written so far) never itself SET to a
+	 * nonzero value anywhere in this tree -- `v34hshak.c` only clears it.
+	 * Named from the read side alone; the producer is unwritten, so which
+	 * exact nonzero values besides 2 occur is not established, only that
+	 * "not 2" means "up" per the else arm (usage inference, strongly
+	 * supported by the two branches' own debug text, F10132).
+	 */
+	short           rrn_local_dir;       /* +0x25e (was short_25e) */
 	short           baud_copy;            /* +0x260 */
 	/*
 	 * +0x262.  The AGC's STARTING GAIN, copied into `agc_gain` by both

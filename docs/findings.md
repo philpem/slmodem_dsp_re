@@ -113087,3 +113087,119 @@ for every retired bare name (`f124`, `f1a0`, `f1b8`, `f1bc`, `f1c0`, `f1c8`,
 were already, deliberately, left bare for -- no stray reference to a retired
 name survived the merge. `make period` was left for the parent session's
 gate, per this wave's own standing instruction. (2026-09-04)
+
+## F10132. V.34 receive cluster, second pass: three more fields close, one of them not actually where F10131 said it was
+
+Wave 2's second pass over `include/dsplib/v34recv.h`/`src/pump/v34/v34rx.c`,
+using the two methods wave 1 did not have -- reading the whole enclosing
+algorithm (`rxtiminginit`, `rxtiming`, `TimingV34`, `setTimingStateParameters`,
+`setInitialPhase`, `receiver`) as one step rather than field-by-field, and
+cross-referencing ITU-T V.34 itself. A fresh grep (not a re-read of F10123's
+own counts, per that finding's own instruction) found the struct down to ten
+bare/`type_NNNN` fields: `f1d4`, `f1d8`, `f1e4`, `f1e8`, `f1f0`, `f208`,
+`f20a`, `f22e`, `f248`, `short_25e`.
+
+**`f248` was mis-filed by F10131, not just left bare.** That finding's closing
+line groups it with `f208`/`f20a` as fields "deliberately, left bare" on
+dual-role grounds -- but `f248` has no dual role and no ambiguity; it is
+`sig_energy`, exactly the field F10123's own withheld-derivation list named
+("sig_energy (f248)") when it catalogued what a future pass with the
+handshake files in scope should apply. Neither F9341 nor F10131 actually
+touched it, because it appears in none of the four files F9341's scope
+covered (`v34fsk.h`/`v34hshak.c`/`v34hstx1.cpp`/`v34shell.c`) -- its readers
+are `v34pcmif.c` and `v34diag.cpp`, two files outside every prior pass's
+scope, so the derived name sat unrecorded in neither header comment nor
+finding, and it fell through both branches' blast-radius bookkeeping rather
+than being deliberately declined. Verified with a tree-wide grep before
+touching anything: **zero mutation-fixture text references `f248` anywhere**,
+so its full blast radius is `v34rx.c` (sets it), `v34pcmif.c`/`v34diag.cpp`
+(read it as `VPcmV34GetSNR`'s numerator, dividing it by `equerr`),
+`TAG_DiagnosticResults.h` (a comment), and `t_v34diag.cpp`/`t_v34pcmif.c`
+(comments plus a local parameter and a test macro, `OB_RX_F248`, renamed for
+consistency though nothing but readability required it). Renamed to
+`sig_energy` and threaded through all six (code-reading evidence: it is
+republished from `sig_energy_acc` on the same 1024-symbol counter as
+`equerr`/`preerr`, the same accumulate-then-`>> 8`-then-`>> 8`-again shape,
+and the SNR ratio it feeds is signal-energy-over-error-energy by construction
+once `equerr` is known to be the error side).
+
+**`f1d8`/`timing_frac` closes the same way** -- F10123 had already derived the
+name (`TimingV34`'s own comment: "The sum is carried in f1d8") and withheld it
+for one `v34diag.cpp` reference and a seven-mutation fixture
+(`v34vdiag.json`). Re-grepped, fixed both, renamed. `TimingV34` was read in
+full for this pass (the timing loop's phase detector, its integrator, and the
+whole-part/fractional-part split `timing_frac` carries) and confirms the
+comment's own claim exactly -- no correction needed, just the rename F10123
+priced but did not spend.
+
+**`short_25e` (in `struct v34_receiver`, not the `v34_object` field F9341
+independently named the same by coincidence of spelling) is new evidence,
+from `v34hstx1.cpp`'s TRNSEG4A rate step, not from `v34rx.c` at all** --
+outside the receive DSP algorithm proper, in the handshake's transmit-rate
+negotiation, but reached from `v34recv.h`'s own struct so it is this pass's
+to name or leave. Read alongside its two guard branches: value 2 forces the
+computed rate down to `baud_copy - 1`, the else arm (any other value `> 1`)
+forces it up to `baud_copy + 1`, and the two branches' own debug strings call
+this "returning from local rrn down" / "... up" -- this tree's own RRN (Rate
+ReNegotiation) vocabulary, already established by `rrn_local`/`rrn_remote`
+(`v34fsk.h`) and `V34_RX_FLAG_RENEG` (this header). Named `rrn_local_dir`.
+**Caveat stated in the header comment, not smoothed over**: nothing written
+in this tree ever sets it to a nonzero value -- `v34hshak.c` only clears it --
+so the name is derived entirely from the read side, and which values besides
+2 actually occur is not established, only that "not 2" reads as "up" per the
+else arm. Blast radius verified by grep before touching anything: `v34hshak.c`
+(one clear), `v34hstx1.cpp` (two reads) and `test/mutations/v34hstx1.json`
+(four `find`/`replace` strings containing `rx->short_25e`, all literal-text
+substituted and the JSON re-validated with `json.load`).
+
+**`f1d4`, `f1e4`, `f1e8`, `f1f0`, `f22e` re-verified, still zero evidence.**
+Grepped tree-wide (not just `v34rx.c`) rather than trusting F10123's count:
+each is written exactly once, by `rxtiminginit`, to zero, and read by
+nothing anywhere in `src/`, `include/` or `test/`. `TimingV34` and `rxtiming`
+were both read in full for this pass looking for an indirect reader (an
+array stride crossing into one of them, a second overlay like the
+`f208`/`0x20c` union) and neither touches any of the five. Left bare.
+`f208`/`f20a` re-read in `receiver`'s own body and confirmed to still be the
+genuine dual-role pair F10123 described -- `receiver`'s resample loop writes
+the current equaliser output there every symbol (`rx->f208 = (eq_re + 0x2000)
+>> 14`) and reads it back three times (retrain distance, precoder, carrier
+derotation) before the next symbol, which is not the same fact as
+`rxtiming`'s separate IIR-history use of the same bytes; left bare, matching
+F10123's own call.
+
+**One stale comment fixed, not a field name.** `v34rx.c`'s carrier-loop
+comment inside `receiver` still read "f210/f212 STOP being the received
+point" from before those fields became `target_re`/`target_im`; corrected in
+place (comment only, no rename).
+
+**Cross-referencing V.34 itself found no additional field this pass could
+name that code-reading had not already reached** -- every remaining bare
+field either has no reader (so no algorithm, standard or otherwise, applies)
+or is the dual-role pair, whose ambiguity is a fact about the OBJECT's own
+reuse of one storage location for two purposes and not something a
+Recommendation's vocabulary resolves. The standard was still useful
+corroboration for `rrn_local_dir`: V.34's rate-renegotiation procedure
+(10.8.4) is exactly a request/response exchange that can move the data rate
+either up or down, matching the two branches' own shape, though the
+Recommendation's own term (`RRN` is the modem's control-channel message
+name) was already in the tree's vocabulary from `v34pcmif.c`/`v34fsk.h`
+rather than freshly imported here.
+
+**Verification.** `make one T=t_v34rx` (37 named suites, all PASS, including
+`receiver` at 120,452,400 checks and its debug-transcript sibling), `T=t_v34demod`,
+`T=t_v34pcmif` (`GetSNR, both loops and the hand-off`, 681 checks, exercises
+`sig_energy` directly), `T=t_v34diag`, `T=t_v34hshak` and `T=t_v34hstx1` (force
+-rebuilt to confirm the object picked up the source change, not served stale)
+all green, no FAIL line, no altered check counts versus a re-run of the same
+binaries pre-change. `python3 tools/onedef.py` (301 types, 1 known duplicate,
+unchanged), `tools/refcheck.py` (13,179 references, 0 dangling), `tools/
+bannercheck.py src/pump/v34` (0 banners, matching F9341's own finding that
+V.34 was reconstructed under the fast pass) and `tools/anchorcheck.py` (228
+suites, 9,767 mutations, 0 anchors matching other than exactly once) all
+clean. `make period` and `tools/toolchain/byteident.py --ratchet` need
+`docker`, unavailable in this sandbox (`docker info` refuses the daemon
+socket, the same failure mode F9341 hit); left for the parent session's gate,
+per that finding's own precedent -- every change here is an identifier
+substitution or a comment, which cannot move generated code, and the
+host-`gcc` differential tier above already exercises the renamed fields
+against the linked blob. (2026-09-04)
