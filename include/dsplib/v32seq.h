@@ -209,70 +209,149 @@ extern short V32_ESEQ[V32_RATE_COUNT];
 
 /* ------------------------------------------------------------------------ */
 
-/*
- * The rate signal for `rate`, straight out of the table.  `modem` IS NOT READ
- * -- the object never touches 0x4(%esp) -- but it is the first parameter of
- * every other function here and is kept for that reason.  There is no bound
- * check: the object indexes the table with whatever it is given.
+/**
+ * @brief Look up the V.32 rate signal for a line rate index.
+ *
+ * @p modem is not read -- the object never touches `0x4(%esp)` -- but it
+ * is the first parameter of every other function here and is kept for
+ * that reason. There is no bound check: the object indexes the table with
+ * whatever it is given.
+ *
+ * @param modem  Unused.
+ * @param rate   A V32_RATE_* index (or any value; unchecked).
+ * @return `V32_RATE_SEQ[rate]`.
  */
 unsigned short RateToSeq(void *modem, short rate);
 
-/*
- * The best rate index this station and `seq` have in common, or
- * V32_RATE_NONE.  `SeqToRate` and `DecodeRateSeq` compute exactly the same
- * thing and differ only in the width they return it in; see the note in
- * v32seq.c.
+/**
+ * @brief Decode a received V.32 rate signal to the best rate both ends support, as an `int`.
+ * @param modem  The V.32 datapump instance.
+ * @param seq    The received rate signal.
+ * @return A V32_RATE_* index, or V32_RATE_NONE if there is nothing in common.
  */
 int SeqToRate(void *modem, unsigned short seq);
+
+/**
+ * @brief Decode a received V.32 rate signal to the best rate both ends support, as a `short`.
+ *
+ * Computes exactly the same thing as SeqToRate(), differing only in the
+ * width it returns it in; see the note in v32seq.c.
+ *
+ * @param modem  The V.32 datapump instance.
+ * @param seq    The received rate signal.
+ * @return A V32_RATE_* index, or V32_RATE_NONE if there is nothing in common.
+ */
 short DecodeRateSeq(void *modem, unsigned short seq);
 
-/* The same decision, re-encoded as the word to send back. */
+/**
+ * @brief Encode the negotiated rate decision as the rate-sequence word to send back.
+ * @param modem  The V.32 datapump instance.
+ * @param seq    The received rate signal.
+ * @return The rate-sequence word to transmit (V32_RATE_SEQ_NONE if there is nothing in common).
+ */
 unsigned short CodeRateSeq(void *modem, unsigned short seq);
+
+/**
+ * @brief Encode the negotiated rate decision as the final rate-sequence word to send back.
+ * @param modem  The V.32 datapump instance.
+ * @param seq    The received rate signal.
+ * @return The final rate-sequence word to transmit.
+ */
 unsigned short CodeFinalRateSeq(void *modem, unsigned short seq);
+
+/**
+ * @brief Encode the negotiated rate decision as the E-sequence word to send back.
+ * @param modem  The V.32 datapump instance.
+ * @param seq    The received rate signal.
+ * @return The E-sequence word to transmit (V32_ESEQ_NONE if there is nothing in common).
+ */
 unsigned short CodeESeq(void *modem, unsigned short seq);
 
-/*
- * Set the generator up to emit `total / width` fields of `width` bits each
- * out of `pattern`, most significant field first.
+/**
+ * @brief Arm the V.32 sequence generator.
  *
- * `total / width` is an UNSIGNED divide (`div`, with `%edx` zeroed) and there
- * is no guard on `width` being zero, so asking for zero-bit fields divides by
- * zero in the object exactly as it does here.
+ * Sets the generator up to emit `total / width` fields of @p width bits
+ * each out of @p pattern, most significant field first.
+ *
+ * `total / width` is an unsigned divide (`div`, with `%edx` zeroed) and
+ * there is no guard on @p width being zero, so asking for zero-bit fields
+ * divides by zero in the object exactly as it does here.
+ *
+ * @param modem    The V.32 datapump instance.
+ * @param pattern  The word to emit fields from.
+ * @param total    Total bits in @p pattern.
+ * @param width    Bits per emitted field.
  */
 void InitGenSequence(void *modem, unsigned short pattern,
 		     unsigned short total, unsigned short width);
 
-/* Emit `count` fields into `out`, one short each, wrapping round the word. */
+/**
+ * @brief Emit fields from the armed V.32 sequence generator.
+ *
+ * Emits @p count fields into @p out, one short each, wrapping round the
+ * word.
+ *
+ * @param modem  The V.32 datapump instance.
+ * @param out    Output for the emitted fields.
+ * @param count  How many fields to emit.
+ */
 void GenSequence(void *modem, short *out, unsigned short count);
 
-/*
- * Arm the detector.  `target` is what `reg & mask` must equal; `out_mask` is
- * applied to `reg` and left at V32HDX_DET_MATCH when it does; `width` is how
- * many bits of each input word are shifted in, most significant first.
+/**
+ * @brief Arm the V.32 sequence detector.
+ *
+ * @param modem     The V.32 datapump instance.
+ * @param target    What `reg & mask` must equal for a match.
+ * @param mask      Which bits of `reg` are compared.
+ * @param out_mask  Applied to `reg` and left at V32HDX_DET_MATCH on a match.
+ * @param width     How many bits of each input word are shifted in, most significant first.
  */
 void InitDetSequence(void *modem, int target, int mask, int out_mask,
 		     unsigned short width);
 
-/*
- * Shift `count` words of `width` bits through the register and return the
- * 1-based index of the word the match completed in, or -1 if none did.
+/**
+ * @brief Shift words through the armed V.32 sequence detector, looking for a match.
  *
- * The register is written back on BOTH paths, so a run that finds nothing
- * still leaves the detector where it got to and the next call continues.
+ * The register is written back on both paths, so a run that finds
+ * nothing still leaves the detector where it got to and the next call
+ * continues.
+ *
+ * @param modem  The V.32 datapump instance.
+ * @param data   The words to shift in.
+ * @param count  How many words, each contributing `width` bits (see InitDetSequence()).
+ * @return The 1-based index of the word the match completed in, or -1 if none did.
  */
 short DetSequence(void *modem, const short *data, unsigned short count);
 
-/* The value the last successful DetSequence left at V32HDX_DET_MATCH. */
+/**
+ * @brief Read the V.32 sequence detector's last match.
+ * @param modem  The V.32 datapump instance.
+ * @return The value the last successful DetSequence() left at V32HDX_DET_MATCH.
+ */
 int GetSequence(void *modem);
 
-/*
- * The five scratch registers.  Out of range is a no-op on the way in and zero
- * on the way out -- the object's own behaviour, not a guard added here.
+/**
+ * @brief Read one of the V.32 handshake's five scratch registers.
  *
- * NOTE THE ARGUMENT ORDER, which is the object's: `LoadReg` takes the index
- * second and `StoreReg` takes it THIRD, with the value second.
+ * Out of range is a no-op on the way in and zero on the way out -- the
+ * object's own behaviour, not a guard added here.
+ *
+ * @param modem  The V.32 datapump instance.
+ * @param reg    The register index, 0..V32HDX_NREGS-1.
+ * @return The register's value, or 0 if @p reg is out of range.
  */
 short LoadReg(void *modem, short reg);
+
+/**
+ * @brief Write one of the V.32 handshake's five scratch registers.
+ *
+ * Note the argument order, which is the object's: unlike LoadReg(), the
+ * register index is the THIRD argument, with the value second.
+ *
+ * @param modem  The V.32 datapump instance.
+ * @param value  The value to store.
+ * @param reg    The register index, 0..V32HDX_NREGS-1; out of range is a no-op.
+ */
 void StoreReg(void *modem, short value, short reg);
 
 #ifdef __cplusplus

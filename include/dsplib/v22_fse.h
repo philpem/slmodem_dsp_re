@@ -299,58 +299,78 @@ extern const short FSEv22_COFFS[V22_FSE_TAPS];
 /* The template: both pointers zero, for a caller to copy and patch. */
 extern const struct v22_fse_cfg FSEv22_CFG;
 
-/*
- * `fresh` NON-ZERO allocates the seven buffers; zero reuses whatever the
- * struct already holds.  THAT IS THE OPPOSITE SENSE TO `FPM_FSE_init`, where
- * zero means "re-init" and frees the old buffers before allocating again --
- * this one never frees and never reallocates when told not to.  Both are
- * spelled `fresh` here because the flag is in the same argument position and
- * the same word describes what it selects; the difference is in what happens
- * on the other branch, which is why it is written down.
+/**
+ * @brief Initialise (or re-arm) the V.22 equaliser.
  *
- * Everything below the allocation happens on both paths: the coefficients are
- * rebuilt from the configuration and the history is zeroed whether or not the
- * buffers are new.
+ * @p fresh non-zero allocates the seven buffers; zero reuses whatever the
+ * struct already holds. That is the OPPOSITE sense to `FPM_FSE_init`, where
+ * zero means "re-init" and frees the old buffers before allocating again --
+ * this one never frees and never reallocates when told not to. Both are
+ * spelled `fresh` here because the flag is in the same argument position
+ * and the same word describes what it selects; the difference is in what
+ * happens on the other branch, which is why it is written down.
+ *
+ * Everything below the allocation happens on both paths: the coefficients
+ * are rebuilt from the configuration and the history is zeroed whether or
+ * not the buffers are new.
+ *
+ * @param state  The equaliser state to initialise.
+ * @param cfg    The initial coefficient tables.
+ * @param fresh  Non-zero to allocate the seven buffers; zero to reuse existing ones.
  */
 void V22_FSE_init(struct v22_fse *state, const struct v22_fse_cfg *cfg,
 		  int fresh);
 
-/* Releases all seven, in the reverse of the order init allocated them. */
+/**
+ * @brief Release the V.22 equaliser's seven buffers, in the reverse of the order V22_FSE_init() allocated them.
+ * @param state  The equaliser state to tear down.
+ */
 void V22_FSE_free(struct v22_fse *state);
 
-/*
- * Returns zero, always, and reads nothing.
+/**
+ * @brief The V.22 equaliser's diagnostic hook. Always returns zero and reads nothing.
  *
- * The object's is three bytes -- `xor %eax,%eax; ret` -- against 0xe5 for the
- * general-purpose `FSE_getdiag`, so it is a STUB and not a smaller version of
- * that function.  ITS ARITY IS NOT SETTLED BY THE OBJECT: `V22FP_GetDiagnostics`
- * tail-jumps to it after rewriting only the first argument, so any further
- * arguments its caller passed are still in place, and a function that reads
- * none of them cannot say how many there were.  One parameter is declared
- * because one is what the object is seen to pass; under cdecl a caller passing
- * more is harmless.
+ * The object's is three bytes -- `xor %eax,%eax; ret` -- against 0xe5 for
+ * the general-purpose `FSE_getdiag`, so it is a stub and not a smaller
+ * version of that function. Its arity is not settled by the object:
+ * `V22FP_GetDiagnostics` tail-jumps to it after rewriting only the first
+ * argument, so any further arguments its caller passed are still in
+ * place, and a function that reads none of them cannot say how many there
+ * were. One parameter is declared because one is what the object is seen
+ * to pass; under cdecl a caller passing more is harmless.
+ *
+ * @param state  The equaliser state (unused).
+ * @return Always 0.
  */
 int V22_FSE_getdiag(struct v22_fse *state);
 
-/*
- * One block of input samples in, one symbol per `V22_FSE_INTERP` of them out.
- * The return value is `state->n_out`, the number of symbols this call
- * produced, and the same count applies to `out`, to `state->out_i` and to
+/**
+ * @brief Run the V.22 equaliser over one block of input samples.
+ *
+ * One block of input samples in, one symbol per `V22_FSE_INTERP` of them
+ * out. The return value is `state->n_out`, the number of symbols this call
+ * produced, and the same count applies to @p out, to `state->out_i` and to
  * `state->out_q`.
  *
- * `count` IS SIGNED and a negative one is not the same as zero: zero returns
- * without entering the loop, and a negative count enters it, takes the
- * short-block path and leaves without stashing anything -- so neither
- * produces a symbol, but only the negative one can decrement `need`.  It
- * cannot: the stash is guarded by `count > 0`.  Reproduced from the object's
- * `test`/`cmpw $0x0` pair rather than tidied into one test.
+ * @p count IS SIGNED and a negative one is not the same as zero: zero
+ * returns without entering the loop, and a negative count enters it, takes
+ * the short-block path and leaves without stashing anything -- so neither
+ * produces a symbol, but only the negative one can decrement `need`. It
+ * cannot: the stash is guarded by `count > 0`. Reproduced from the
+ * object's `test`/`cmpw $0x0` pair rather than tidied into one test.
  *
- * THE CALLER MUST NOT ASK FOR MORE THAN `V22_FSE_OUT` SYMBOLS.  `out_i` and
+ * The caller must not ask for more than `V22_FSE_OUT` symbols. `out_i` and
  * `out_q` are 14 entries, the function writes one of each per symbol, and
- * there is no bound anywhere in it -- 84 samples in one call (79 on the first)
- * overruns both heap buffers.  The datapump's own block size is not
- * reconstructed, so this is stated rather than enforced: adding a check here
- * would be a fix, and this file is a reconstruction.
+ * there is no bound anywhere in it -- 84 samples in one call (79 on the
+ * first) overruns both heap buffers. The datapump's own block size is not
+ * reconstructed, so this is stated rather than enforced: adding a check
+ * here would be a fix, and this file is a reconstruction.
+ *
+ * @param state  The equaliser state.
+ * @param in     Input samples.
+ * @param out    Output for the decoded symbols.
+ * @param count  How many input samples; signed, see above.
+ * @return The number of symbols produced (`state->n_out`).
  */
 unsigned short V22_FSE_receive(struct v22_fse *state, const short *in,
 			       unsigned short *out, short count);

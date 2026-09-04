@@ -98,48 +98,80 @@
 /* The sub-block is zeroed while the first counter is at most this. */
 #define V22_DETECT_CLEAR_HOLD	1
 
-/*
- * Scramble / descramble `count` data words in place.
+/**
+ * @brief Scramble `count` V.22 data words in place, using the datapump's transmit scrambler.
  *
- * DECLARED void, AND THE OBJECT DOES NOT SETTLE THAT -- both are tail jumps
- * into a `void` callee, so nothing is left in %eax deliberately and nothing
- * extends it either way.  Same situation as `TxClockSync` in v22prc.h, and
- * recorded for the same reason.
+ * Reaches into the datapump instance for the `struct fpm_sdm` at
+ * `V22FP_SDM_TX` and hands it to `FPM_SDM_scrambler`.
  *
- * `count` is sixteen bits and unsigned: the object reloads the incoming word
- * with `movzwl` and stores the widened value back into its own outgoing
- * argument slot before jumping, which a 32-bit parameter would never need.
+ * Declared `void`, and the object does not settle that -- this is a tail
+ * jump into a `void` callee, so nothing is left in `%eax` deliberately and
+ * nothing extends it either way (same situation as `TxClockSync` in
+ * v22prc.h). `count` is sixteen bits and unsigned: the object reloads the
+ * incoming word with `movzwl` and stores the widened value back into its
+ * own outgoing argument slot before jumping, which a 32-bit parameter would
+ * never need.
+ *
+ * @param modem  The V.22 datapump instance (unmodelled; see the file banner).
+ * @param data   The data words to scramble, in place.
+ * @param count  How many words.
  */
 void ScrambleDataV22(void *modem, unsigned short *data, unsigned short count);
+
+/**
+ * @brief Descramble `count` V.22 data words in place, using the datapump's receive descrambler.
+ *
+ * Reaches into the datapump instance for the `struct fpm_sdm` at
+ * `V22FP_SDM_RX` and hands it to `FPM_SDM_descrambler`. Same `void`/
+ * unsigned-count situation as ScrambleDataV22() above.
+ *
+ * @param modem  The V.22 datapump instance.
+ * @param data   The data words to descramble, in place.
+ * @param count  How many words.
+ */
 void DescrambleDataV22(void *modem, unsigned short *data, unsigned short count);
 
-/*
- * Modulate `count` data words into `out`, returning the number of samples
- * written.
+/**
+ * @brief Modulate `count` V.22 data words into `out`.
  *
- * RETURNS `unsigned short`, WHICH IS NOT `V22_PPS_filter`'s RETURN TYPE.  The
- * filter returns `short` (see v22_pps.h) and the object zero-extends it --
- * `movzwl %ax,%eax` at 0x8e369, the last thing before the epilogue -- so a
+ * Encodes through `FPM_SMC_encoder` and then pulse-shapes through
+ * `V22_PPS_filter`.
+ *
+ * Returns `unsigned short`, which is NOT `V22_PPS_filter`'s return type: the
+ * filter returns `short` (v22_pps.h) and the object zero-extends it
+ * (`movzwl %ax,%eax` at 0x8e369, the last thing before the epilogue), so a
  * count high enough to write more than 32,767 samples comes back as a large
- * positive number here and as a negative one from the filter.  v22_pps.h is
- * left alone: the truncation is this function's, and it is the extension on a
- * result whose 32-bit value IS used, which CLAUDE.md's rule says to act on.
+ * positive number here and as a negative one from the filter. v22_pps.h is
+ * left alone: the truncation is this function's, and it is the extension on
+ * a result whose 32-bit value IS used, which CLAUDE.md's rule says to act on.
+ *
+ * @param modem  The V.22 datapump instance.
+ * @param data   The data words to modulate.
+ * @param out    Destination for the modulated samples.
+ * @param count  How many data words.
+ * @return The number of samples written, zero-extended from `V22_PPS_filter`'s `short`.
  */
 unsigned short ModDataV22(void *modem, const unsigned short *data, short *out,
 			  unsigned short count);
 
-/*
- * Gain-control one 160-sample block in place, run both tone detectors over
- * its four 40-sample sub-blocks, and report whether either detector has been
- * quiet for more than V22_DETECT_THRESHOLD consecutive sub-blocks.
+/**
+ * @brief Gain-control one 160-sample block and run both V.22 tone detectors over it.
  *
- * `data` is IN AND OUT: the AGC scales it, and each sub-block is zeroed
- * unless the first detector has already been quiet twice running.
+ * Runs the AGC over the whole `V22_DETECT_BLOCK`-sample block in place, then
+ * runs both tone detectors (`V22SHR_MTD_A`/`V22SHR_MTD_B`) over its four
+ * `V22_DETECT_SUBBLOCK`-sample sub-blocks in turn. Each sub-block is zeroed
+ * unless the first detector has already been quiet for `V22_DETECT_CLEAR_HOLD`
+ * or fewer consecutive sub-blocks.
  *
- * TWO ARGUMENTS, and that is what the object reads -- nothing above
- * 0x34(%esp) is touched.  The Detect_* family is reached through a table
- * elsewhere in the object, so a wider uniform signature is possible and would
- * be invisible here; cdecl makes the difference harmless either way.
+ * Two arguments, and that is what the object reads -- nothing above
+ * `0x34(%esp)` is touched. The Detect_* family is reached through a table
+ * elsewhere in the object, so a wider uniform signature is possible and
+ * would be invisible here; cdecl makes the difference harmless either way.
+ *
+ * @param modem  The V.22 datapump instance.
+ * @param data   The 160-sample block, gain-controlled and partly zeroed in place.
+ * @return Non-zero if either detector has been quiet for more than
+ *         V22_DETECT_THRESHOLD consecutive sub-blocks.
  */
 int Detect_v22(void *modem, short *data);
 

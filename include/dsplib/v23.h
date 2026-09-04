@@ -64,15 +64,47 @@ struct v23_dp {
  */
 
 /*
- * The dp_operations entry points.  Declared here so a test can call them
- * directly rather than only through the ops table.
+ * The dp_operations entry points below are declared here so a test can call
+ * them directly rather than only through the ops table.
+ */
+
+/**
+ * @brief Create a V.23 datapump instance.
+ * @param modem     Opaque modem core handle.
+ * @param id        Datapump id (DP_V23).
+ * @param caller    Non-zero if this end originated the call.
+ * @param srate     Sample rate (V23_DP_SRATE).
+ * @param max_frag  Maximum fragment size (V23_DP_FRAG).
+ * @param op        The dp_operations table to fill in.
+ * @return The new `struct dp *` (a `struct v23_dp *` in disguise).
  */
 struct dp *v23_create(void *modem, int id, int caller, int srate, int max_frag,
 		      struct dp_operations *op);
+
+/**
+ * @brief Tear a V.23 datapump instance down.
+ * @param dp  The datapump instance.
+ * @return The object's own deletion status.
+ */
 int v23_delete(struct dp *dp);
+
+/**
+ * @brief Run one block of V.23 modulation and demodulation.
+ * @param dp_arg  The datapump instance (`struct v23_dp *`).
+ * @param in      Input samples from the line.
+ * @param out     Output for the modulated transmit samples.
+ * @param count   Block size in samples.
+ * @return The object's own processing status.
+ */
 int v23_process(void *dp_arg, void *in, void *out, int count);
 
+/**
+ * @brief Register V.23 (DP_V23) with the datapump core.
+ * @return The object's own registration status.
+ */
 int dp_v23_init(void);
+
+/** @brief Deregister V.23 (DP_V23) from the datapump core. */
 void dp_v23_exit(void);
 
 #endif /* DSPLIB_V23_H */

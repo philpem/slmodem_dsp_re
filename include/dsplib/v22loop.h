@@ -194,10 +194,20 @@ struct v22fp;
  */
 #define V22_LOOP_BPS_1200	1200
 
-/*
- * The local-loopback state.  See the header comment: ten live sub-states, of
+/**
+ * @brief V.22 protocol handler for the LOCAL-LOOP state.
+ *
+ * See the file banner for the whole state machine: ten live sub-states, of
  * which six are `connect_1200` and `connect_2400` under another name, and a
  * silent default that still performs the two stores at the top.
+ *
+ * @param fp       The V.22 datapump instance.
+ * @param txsym    Transmit symbols to scramble and modulate.
+ * @param txout    Output for the modulated transmit samples.
+ * @param rxin     Received samples to demodulate.
+ * @param rxsym    Output for the demodulated receive symbols.
+ * @param txcount  In/out: transmit symbol/sample count.
+ * @param rxcount  In/out: receive sample/symbol count.
  */
 void v22_local_loop(struct v22fp *fp, unsigned short *txsym, short *txout,
 		    short *rxin, unsigned short *rxsym,

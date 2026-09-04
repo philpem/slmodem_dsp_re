@@ -50,23 +50,26 @@ extern "C" {
 #define V32ANS_PHASE_SILENCE	1
 #define V32ANS_PHASE_DONE	2
 
-/*
- * Emit `count` samples of whatever the current phase calls for and advance the
- * cadence.  Returns 1 -- always, on every path, including the one that emits
- * nothing.
+/**
+ * @brief Emit one block of the V.32 answer-tone cadence (tone, then silence, then nothing) and advance it.
  *
- * `out` IS NOT WRITTEN in the done phase, and is not written at all when
- * `count` is zero or negative in the silence phase; the tone phase hands
- * `count` to `FPM_TONE_generate` whatever its sign, and that function's own
- * loop decides.
+ * @p out is not written in the done phase, and is not written at all when
+ * @p count is zero or negative in the silence phase; the tone phase hands
+ * @p count to `FPM_TONE_generate` whatever its sign, and that function's
+ * own loop decides.
  *
- * THE TWO PHASE ENDS USE DIFFERENT COMPARISONS and the object is explicit
- * about it: tone ends when elapsed + count is at or past `TONE_LEN`
- * (`cmp; jl` to continue), silence ends when it is strictly past
- * `SILENCE_LEN` (`cmp; jle` to continue).  So a silence of exactly
- * `SILENCE_LEN` samples is one block short of ending and a tone of exactly
- * `TONE_LEN` is not.  Reproduced, and recorded at D405 because a reader will
- * assume the two match.
+ * The two phase ends use different comparisons and the object is explicit
+ * about it: tone ends when elapsed + count is at or past V32ANS_TONE_LEN
+ * (continues while strictly less), silence ends when it is strictly past
+ * V32ANS_SILENCE_LEN (continues while at or below). So a silence of
+ * exactly V32ANS_SILENCE_LEN samples is one block short of ending and a
+ * tone of exactly V32ANS_TONE_LEN is not. Reproduced, and recorded at D405
+ * because a reader will assume the two match.
+ *
+ * @param ctx    The cadence context (unmodelled; see the offsets above).
+ * @param out    Output for the generated samples.
+ * @param count  How many samples to emit.
+ * @return Always 1, on every path, including the one that emits nothing.
  */
 int GenerateAnsTone(void *ctx, short *out, int count);
 

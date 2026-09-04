@@ -99,20 +99,36 @@ struct v22_mrf {
 	short *history;		/* +0x10 V22_MRF_HISTORY entries         */
 };
 
-/*
- * `fresh` non-zero allocates the history buffer; zero reuses whatever
- * `state->history` already points at, with no size check and no free.  Either
- * way the first `history_len` entries are zeroed and `cfg.coeff` is permuted.
+/**
+ * @brief Initialise (or re-arm) the V.22 receive rate converter, permuting its coefficients in place.
+ *
+ * @p fresh non-zero allocates the history buffer; zero reuses whatever
+ * `state->history` already points at, with no size check and no free.
+ * Either way the first `history_len` entries are zeroed and `cfg.coeff` is
+ * permuted (see the file banner) -- so @p cfg must not be initialised twice
+ * from the same source array.
+ *
+ * @param state  The converter state to initialise.
+ * @param cfg    The configuration; its `coeff` array is permuted in place.
+ * @param fresh  Non-zero to allocate the history buffer; zero to reuse an existing one.
  */
 void V22_MRF_init(struct v22_mrf *state, const struct v22_mrf_cfg *cfg,
 		  int fresh);
+
+/** @brief Release the V.22 receive rate converter's history buffer. @param state The converter state to tear down. */
 void V22_MRF_free(struct v22_mrf *state);
 
-/*
- * Resample `count` input samples, returning the number of outputs written --
- * roughly count * 9 / 20.  `need`, `phase` and `widx` persist, so a stream
- * may be fed in arbitrary fragments, including ones too short to complete an
- * output.
+/**
+ * @brief Resample `count` input samples through the V.22 9:20 polyphase converter.
+ *
+ * `need`, `phase` and `widx` persist, so a stream may be fed in arbitrary
+ * fragments, including ones too short to complete an output.
+ *
+ * @param state  The converter state.
+ * @param in     Input samples at the datapump's 8000 samples/s.
+ * @param out    Output for the resampled (3600 samples/s) output.
+ * @param count  How many input samples.
+ * @return The number of outputs written, roughly `count * 9 / 20`.
  */
 short V22_MRF_filter(struct v22_mrf *state, const short *in, short *out,
 		     short count);
