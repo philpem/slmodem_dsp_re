@@ -1,26 +1,28 @@
-/*
- * V90MappingParams.h -- the constellation table the V.90 CP packer reads.
+/**
+ * @file V90MappingParams.h
+ * @brief `V90MappingParams`, the constellation table the V.90 CP packer and
+ *        unpacker read and write.
  *
- * THE CLASS NAME IS THE ORIGINAL'S, from the mangling of the one caller:
+ * The class name is the original's, from the mangling of the one caller:
  * `_Z11V90CPPackerP16V90MappingParamsP22tagV90AdditionalCPinfoPsi` names its
- * first argument `V90MappingParams *`.  `V90Demodulator.h` already carries
+ * first argument `V90MappingParams *`. `V90Demodulator.h` already carries
  * `class V90MappingParams;` as a forward declaration and nothing in the tree
  * defines it; this header is the first definition, and it is deliberately a
- * NEW header so that V90Demodulator.h -- which several batches are merging
- * against -- does not have to change.  That is the same reasoning
+ * new header so that V90Demodulator.h -- which several batches are merging
+ * against -- does not have to change. That is the same reasoning
  * DILdescriptorPacker.h gives for living apart from V90Phase3Modulator.h.
  *
- * NOTHING ELSE HERE IS THE ORIGINAL'S.  Every member name is invented and
+ * Nothing else here is the original's: every member name is invented and
  * describes what `getConstellationsIndex`, `getConstellationMask` and
- * `getCodecConstellationMask` do with the bytes; those three functions are
- * unmangled symbols and carry no type information at all.  The layout is
+ * `getCodecConstellationMask` do with the bytes, since those three functions
+ * are unmangled symbols and carry no type information at all. The layout is
  * measured from their displacements and from nothing else:
  *
  *   +0x004 + 0x80*k   getConstellationMask       `lea 0x4(%ebx,%ecx,1)`
  *                     with %ebx = k << 7, read one unsigned byte at a time
  *   +0x304 + 0x80*k   getCodecConstellationMask  `lea 0x304(%ebx,%ecx,1)`,
  *                     the same shape -- and getConstellationsIndex compares
- *                     BOTH arrays, at `-0x300(%ecx)` and `(%ecx)` off one
+ *                     both arrays, at `-0x300(%ecx)` and `(%ecx)` off one
  *                     cursor 0x300 apart
  *   +0x604 + 4*k      a dword length, `mov 0x604(%ecx,%edx,4)`, used as the
  *                     bound of the byte loops
@@ -29,45 +31,45 @@
  *                     getConstellationsIndex and read by both mask functions
  *
  * The largest index any of the three reaches is 5 (`cmpl $0x5,i; jbe`), so
- * every array is six entries.  0x80 * 6 = 0x300 exactly, which is why the two
+ * every array is six entries. 0x80 * 6 = 0x300 exactly, which is why the two
  * byte tables abut.
  *
- * TWENTY-FOUR OF THE 28 BYTES AT +0x61C ARE NOW EXPLAINED, and the sentence
+ * Twenty-four of the 28 bytes at +0x61c are now explained, and the sentence
  * that used to stand here -- that no other reconstructed function reaches
- * this struct -- is RETRACTED.  `V90ConstellationDesigner::spectralDesign`
+ * this struct -- is retracted. `V90ConstellationDesigner::spectralDesign`
  * writes six consecutive dwords at +0x620..+0x634, and `tools/vparse.py`
  * names every one of the six `V90Parameters` fields it copies them from, so
  * the six are the spectral shaper's description and are named for their
- * sources rather than for their offsets.  See the members below and
- * `include/dsplib/V90SpectralConditions.h`.  THE FOUR BYTES AT +0x61C ARE
- * NOW EXPLAINED TOO -- `V90ConstellationDesigner::process` stores the
- * constant 1 into them and nothing reads them -- so all 28 are, and the
- * "still untouched" sentence that used to end this paragraph is retracted.
+ * sources rather than for their offsets. See the members below and
+ * `include/dsplib/V90SpectralConditions.h`. The four bytes at +0x61c are now
+ * explained too -- `V90ConstellationDesigner::process` stores the constant 1
+ * into them and nothing reads them -- so all 28 are, and the "still
+ * untouched" sentence that used to end this paragraph is retracted.
  *
  * The total size is still not known: 0x650 is where the last member this
  * tree can see ends, not a measured `sizeof`.
  *
- * THE FOUR BYTES AT +0 USED TO BE IN THE SAME POSITION AND NOW HAVE ONE
- * READER, `V90Demodulator::getBitRate`:
+ * The four bytes at +0 used to be in the same position and now have one
+ * reader, `V90Demodulator::getBitRate`:
  *
  *     1b8e8  8b 42 18              mov    0x18(%edx),%eax
  *     1b8ed  69 08 40 1f 00 00     imul   $0x1f40,(%eax),%ecx
  *     1b8f3  52 51 df 2c 24        push;push;fildll (%esp)
  *
- * with `%edx` the demodulator and +0x18 its `mappingParamsAlt`.  The `fildll`
- * off a pushed pair whose high word was zeroed BEFORE the multiply is the
+ * with `%edx` the demodulator and +0x18 its `mappingParamsAlt`. The `fildll`
+ * off a pushed pair whose high word was zeroed before the multiply is the
  * unsigned-to-float idiom -- a signed `int` converts with a 32-bit `fildl`
- * and no push at all -- so the value entering the arithmetic is UNSIGNED, and
- * that is the whole of what is forced.  It is typed here and still named for
- * its offset: 8000/6 is the V.90 downstream rate granularity, which makes
- * this a bit count per six-sample frame, but that is an interpretation of the
- * arithmetic rather than something the object states, and it belongs in
- * finding F1160 and not in a member name in another batch's header.
+ * and no push at all -- so the value entering the arithmetic is unsigned,
+ * and that is the whole of what is forced. It is typed here and still named
+ * for its offset: 8000/6 is the V.90 downstream rate granularity, which
+ * makes this a bit count per six-sample frame, but that is an interpretation
+ * of the arithmetic rather than something the object states, and it belongs
+ * in finding F1160 and not in a member name in another batch's header.
  *
- * THE LENGTH'S SIGNEDNESS IS MEASURED, the index's is not.  Every use of the
+ * The length's signedness is measured, the index's is not. Every use of the
  * length is an unsigned comparison -- `cmp %ebp,%esi; jb` in both mask
  * functions, `cmp %esi,%ebx; ja` and `cmp $0x0,%ebx; jbe` in
- * getConstellationsIndex -- so it is an unsigned type.  The index is only
+ * getConstellationsIndex -- so it is an unsigned type. The index is only
  * ever loaded and used to scale, which says nothing, and `int` is the choice.
  */
 
@@ -105,43 +107,21 @@ public:
 
 	/*
 	 * +0x620..+0x634  The spectral shaper, six dwords written together by
-	 * `V90ConstellationDesigner::spectralDesign`.  Each is a straight `mov`
-	 * from a `V90Parameters` field `vparse.py` names, so the names below
-	 * are the AUTHOR'S for the sources and ours only for the destinations;
-	 * the two arms copy `SPECTRAL_SHAPER_*` or
-	 * `GERMAN_PBX_SPECTRAL_SHAPER_*` into the same six slots.
+	 * `V90ConstellationDesigner::spectralDesign` -- straight copies from a
+	 * `V90Parameters` field `vparse.py` names in each case (either the
+	 * `SPECTRAL_SHAPER_*` or `GERMAN_PBX_SPECTRAL_SHAPER_*` arm), so the
+	 * names below are the author's for the sources and ours only for the
+	 * destinations. Also read by `V90Demapper::reset` (four ways, off
+	 * +0x620) and by `spectralDesign`'s own caller -- a claim that nothing
+	 * reads a field is a claim about every function in the object
+	 * (findings F4342/F5004).
 	 *
-	 * "READ BY NOTHING THIS TREE HAS WRITTEN" USED TO END THAT SENTENCE AND
-	 * IS RETRACTED.  `V90Demapper::reset` reads +0x620 four times over --
-	 * into `signBitGroups` unchanged, as `6 - it`, as `6 / it`, and as
-	 * `V90SignBitsExtractor::reset`'s spacing -- and `spectralDesign`'s own
-	 * caller forms `6 - shaperSR` too (`mov $0x6,%cl; sub 0x620(%ebx),%cl`,
-	 * quoted in V90ConstellationDesigner.cpp).  Finding F4342's rule is why
-	 * this matters: a claim that nothing reads a field is a claim about
-	 * every function in the object.  Finding F5004.
-	 *
-	 * The widths are the store encodings -- six `movl` -- and the types
-	 * below are the SOURCES' types, which is what a four-byte copy carries
-	 * and not something the copy itself forces.  `shaperId` is the one
-	 * exception and it is measured: it is not a copy but
-	 * `min(SPECTRAL_SHAPER_ID, rate)` computed with an UNSIGNED compare
-	 * (`ja` in one arm, `jbe` in the other), which the `unsigned int` rate
-	 * argument forces whatever the parameter's own `int` says.
-	 *
-	 * AND THERE IS NOW A SECOND MEASUREMENT, ON `shaperSR`, WHICH IS
-	 * DELIBERATELY NOT ACTED ON HERE.  `V90Demapper::reset` divides six by
-	 * it with `divl` and not `idiv` (0x308b6), which is unsigned
-	 * arithmetic; but what that forces is the NUMERATOR's type, and
-	 * `V90DEMAPPER_FRAME` is already `6u`, so the reading is satisfied with
-	 * the field left `int`.  The two spellings agree over every spacing a
-	 * caller can produce -- `6 - x` has the same bits either way and the
-	 * quotient differs only for a negative divisor -- so retyping would be
-	 * choosing between two readings the object does not separate.  The name
-	 * is not touched either: `shaperSR` is the author's for the PARAMETER
-	 * `spectralDesign` copies, and the demapper's use of the same word as a
-	 * sign-bit spacing is usage inference, which is the weakest of
-	 * CLAUDE.md's three ranks and does not outrank a name from the
-	 * parameter block.
+	 * `shaperId` is the one field that is not a plain copy: it is
+	 * `min(SPECTRAL_SHAPER_ID, rate)` under an unsigned compare, forced by
+	 * the `unsigned int` rate argument. `shaperSR` is also read by an
+	 * unsigned divide elsewhere, but that only constrains the read side
+	 * (`V90DEMAPPER_FRAME` is already `6u`) and does not outrank the `int`
+	 * the parameter block itself uses, so it stays `int` (finding F5004).
 	 */
 	int shaperSR;						/* +0x620 */
 	unsigned int shaperId;					/* +0x624 */
@@ -155,47 +135,52 @@ public:
 
 extern "C" {
 
-/*
- * Collapse the six constellations to their distinct values.
+/**
+ * @brief Collapse the six constellations to their distinct values.
  *
- * Two constellations are the same when their lengths are equal and their two
- * byte tables agree over that length; ZERO-LENGTH CONSTELLATIONS ARE
- * THEREFORE ALL EQUAL TO EACH OTHER, which is what the object does and is
+ * Two constellations are the same when their lengths are equal and their
+ * two byte tables agree over that length; zero-length constellations are
+ * therefore all equal to each other, which is what the object does and is
  * reproduced deliberately -- see the .cpp.
  *
- * Writes through `group` the group number of each of the six, leaves in
- * `distinctIndex[g]` the first constellation of group `g`, and returns how
- * many groups there are, which is between 1 and 6.  `group` needs six
- * entries.
+ * @param params  The mapping-parameters block to read.
+ * @param group   Receives the group number of each of the six constellations
+ *                (six entries). `params->distinctIndex[g]` is left holding
+ *                the first constellation of group `g`.
+ * @return How many distinct groups there are, between 1 and 6.
  */
 unsigned int getConstellationsIndex(V90MappingParams *params, int *group);
 
-/*
- * The occupancy bitmap of constellation `which`'s first table: with `n` the
- * byte's low nibble and `h` its high one, bit `n` of `mask[h]` is set.  The
- * function zeroes `mask[0..7]` and then sets bits, so a byte of 0x80 or more
- * sets a bit in an entry it never cleared -- the object masks nothing.
+/**
+ * @brief Read the occupancy bitmap of one constellation's ordinary table.
  *
- * `which` selects through `distinctIndex`, and `6` or above selects entry 0.
- * The bound is a SIGNED test (`cmp $0x6,%esi; setl`), so a negative `which`
- * is passed straight through and indexes before the array; nothing in the
- * object guards it.
+ * With `n` a table byte's low nibble and `h` its high one, sets bit `n` of
+ * `mask[h]`. The function zeroes `mask[0..7]` first and only ever sets
+ * bits, so a byte of 0x80 or more sets a bit in an entry it never cleared
+ * -- the object masks nothing.
+ *
+ * @param params  The mapping-parameters block to read.
+ * @param which   Selects a constellation through `distinctIndex`; 6 or
+ *                above selects entry 0, and the bound is a signed test, so
+ *                a negative value indexes before the array unguarded.
+ * @param mask    Eight-entry output bitmap.
  */
 void getConstellationMask(V90MappingParams *params, int which, short *mask);
 
-/* The same over the second table.  See getConstellationMask. */
+/** @brief The same as getConstellationMask(), over the codec constellation table. */
 void getCodecConstellationMask(V90MappingParams *params, int which,
 			       short *mask);
 
-/*
- * `params->word_0` less 0x14 when `islong` is non-zero and less 8 when it is
- * not -- the same two constants `setV92CPpckFromParamsInfo` ends with, out of
- * line.  `V90CPPacker` sends the low five bits of the result.
+/**
+ * @brief Recover the data bit rate `V90CPPacker` sends.
  *
- * BOTH PARAMETER TYPES ARE INFERENCE FROM ONE CALL SITE and the object forces
- * neither: the body reads four bytes at offset 0 and tests the second
- * argument against zero, and there is exactly one relocation naming the
- * symbol in the whole object.  See the .cpp.
+ * Computes `params->word_0` less 0x14 when `islong` is non-zero and less 8
+ * when it is not -- the same two constants `setV92CPpckFromParamsInfo` ends
+ * with, out of line.
+ *
+ * @param params  The mapping-parameters block to read.
+ * @param islong  Non-zero selects the long-form offset (0x14); zero the short one (8).
+ * @return The data bit rate; `V90CPPacker` sends its low five bits.
  */
 int getDataBitRate(V90MappingParams *params, int islong);
 
@@ -205,53 +190,73 @@ int getDataBitRate(V90MappingParams *params, int islong);
  * wrapper over the file-static body `setParamsInfoFromCPUnPck` inlines.
  * All three are unmangled in the blob, hence this C block.
  */
+
+/** @brief The inverse of getConstellationMask(): write a bitmap into the ordinary constellation table. @param params The block to modify. @param which The constellation index. @param mask Eight-entry input bitmap. */
 void setConstellationMask(V90MappingParams *params, int which,
 			  const short *mask);
+/** @brief The inverse of getCodecConstellationMask(): write a bitmap into the codec constellation table. @param params The block to modify. @param which The constellation index. @param mask Eight-entry input bitmap. */
 void setCodecConstellationMask(V90MappingParams *params, int which,
 			       const short *mask);
+/** @brief The inverse of getDataBitRate(): store a data bit rate back as `word_0`. @param params The block to modify. @param islong Selects the long- or short-form offset, as in getDataBitRate(). @param rate The data bit rate to store. */
 void setDataBitRate(V90MappingParams *params, int islong, int rate);
 
-/*
- * Fill this block from an unpacked V.90 CP message.  It writes `word_0`, both
- * byte tables, `constellationSize`, `word_61c`, the six shaper words and
- * `distinctIndex` -- essentially the whole block.
+/**
+ * @brief Fill this block in from an unpacked V.90 CP message.
  *
- * **IT HAS NO CALLER IN THE OBJECT AND MUST NOT BE GIVEN ONE HERE.**  Zero
+ * Writes `word_0`, both byte tables, `constellationSize`, `word_61c`, the
+ * six shaper words and `distinctIndex` -- essentially the whole block.
+ *
+ * It has no caller in the object and must not be given one here: zero
  * relocations of any kind name the symbol in the whole of dsplibs.o, so a
  * call added by this reconstruction would be new behaviour with nothing to
- * compare it against.  It is declared so that its differential test can reach
- * it and for no other reason.  See the .cpp and finding F7570.
+ * compare it against. It is declared so that its differential test can
+ * reach it and for no other reason. See finding F7570.
+ *
+ * @param params  The block to fill in.
+ * @param cp      The unpacked V.90 CP message to read from.
  */
 void setParamsInfoFromCPUnPck(V90MappingParams *params, V90CPUnPck *cp);
 
-/*
- * Fill this block from a `V92CP`, the received V.92 CP message.  It is the
- * exact inverse of `setV92CPpckFromParamsInfo` below and writes the same
- * members `setParamsInfoFromCPUnPck` does, from the other source.
+/**
+ * @brief Fill this block in from a `V92CP`, the received V.92 CP message.
  *
- * **IT HAS NO CALLER IN THE OBJECT AND MUST NOT BE GIVEN ONE HERE**, for the
- * reason `setParamsInfoFromCPUnPck` gives above: zero relocations of any kind
- * name the symbol in the whole of dsplibs.o.  The two relocations that DO name
- * something spelled like it belong to `V92setParamsInfoFromCPUnPck`, a
- * different symbol at .text+0x12f00 with two call sites in `runPcmModem`
- * (finding F7571).  Declared so that its differential test can reach it and for
- * no other reason.  See the .cpp.
+ * The exact inverse of setV92CPpckFromParamsInfo() below, and writes the
+ * same members setParamsInfoFromCPUnPck() does, from the other source.
+ *
+ * It has no caller in the object and must not be given one here, for the
+ * reason setParamsInfoFromCPUnPck() gives above: zero relocations of any
+ * kind name the symbol in the whole of dsplibs.o. The two relocations that
+ * do name something spelled like it belong to
+ * `V92setParamsInfoFromCPUnPck`, a different symbol at .text+0x12f00 with
+ * two call sites in `runPcmModem` (finding F7571). Declared so that its
+ * differential test can reach it and for no other reason.
+ *
+ * @param params  The block to fill in.
+ * @param cp      The received V.92 CP message to read from.
  */
 void setParamsInfoFromV92CPUnPck(V90MappingParams *params, V92CP *cp);
 
-/*
- * Fill a `V92CP` from this block and the record beside it.  The two source
- * types are the object's, out of the mangling of the V.90 twin
- * `V90CPPacker(V90MappingParams *, tagV90AdditionalCPinfo *, short *, int)`
- * and out of the call site's three offsets into `VPcmFloModem`; see the .cpp.
+/**
+ * @brief Fill a `V92CP` in from this block and the record beside it.
+ *
+ * The two source types are the object's, out of the mangling of the V.90
+ * twin `V90CPPacker(V90MappingParams *, tagV90AdditionalCPinfo *, short *, int)`
+ * and out of the call site's three offsets into `VPcmFloModem`.
+ *
+ * @param params  The mapping-parameters block to read.
+ * @param info    The additional-CP-info record beside the message.
+ * @param cp      The V.92 CP message to fill in.
  */
 void setV92CPpckFromParamsInfo(V90MappingParams *params,
 			       tagV90AdditionalCPinfo *info, V92CP *cp);
 
-/*
- * Print the six spectral-shaper fields, six `edprintf` lines and nothing
- * else.  NOT GATED: the level test is inside `edprintf`, so at level 0 the
- * calls still happen and print nothing.
+/**
+ * @brief Print the six spectral-shaper fields, six `edprintf` lines.
+ *
+ * Not gated: the level test is inside `edprintf`, so at level 0 the calls
+ * still happen and print nothing.
+ *
+ * @param params  The mapping-parameters block to print from.
  */
 void displaySpectralParams(V90MappingParams *params);
 

@@ -1,50 +1,40 @@
-/*
- * V90DilDescriptorSettings.h -- the free functions over a V.90 DIL
- * descriptor.
+/**
+ * @file V90DilDescriptorSettings.h
+ * @brief The free functions over a V.90 DIL (Digital Impairment Learning)
+ *        descriptor: filling one from the built-in ADI/ADI_QC tables and
+ *        computing how long its sequence runs.
  *
- * THIS FILE WAS `V90Dil.h` AND THE CLASS-LESS NAME WAS A GUESS.  It said so:
- * "`calculateDilLength` is a free function, not a member -- its mangling has
- * no class component -- so it needs a home of its own", and a home of its own
- * had to be invented because nothing then said what the original's was.
- * Something does now.  The blob carries an `STT_FILE` entry
- * `V90DilDescriptorSettings.cpp` (#244 of 283), and `setDilDescriptor`'s two
- * `edprintf` messages both begin `"V90DilDescriptorSettings: "` -- the
- * author's own words, which is CLAUDE.md's first tier of evidence.  Where
- * every other diagnostic in this area names a class and a member
- * ("V90Modem Reset: ..."), these name the FILE, because there is no class to
- * name.  Finding F7600.
+ * The blob's own name for this translation unit is
+ * `V90DilDescriptorSettings.cpp` (`STT_FILE` #244 of 283), corroborated by
+ * `setDilDescriptor`'s two `edprintf` messages, both of which begin
+ * `"V90DilDescriptorSettings: "` where every other diagnostic in this area
+ * names a class and a member instead ("V90Modem Reset: ...") -- these name
+ * the file because there is no class to name (finding F7600).
  *
- * ===========================================================================
- * THE TRANSLATION UNIT IS FOUR FREE FUNCTIONS AND EIGHT TABLES
- * ===========================================================================
+ * The translation unit is four free functions and eight tables, contiguous
+ * in `.text`:
  *
  *     0x31c60  setDilDescriptor(tagV90DILdescriptor *, DilType)   0x131
  *     0x31da0  getSegmentPointer(PcmType, int)                    0x073
  *     0x31e20  calculateDilLength(DilType, PcmType)               0x0f1
  *     0x31f20  calculateDilLength(tagV90DILdescriptor *, PcmType) 0x0c4
  *
- * contiguous in `.text`, bounded below by `V90SignBitsExtractor::process`
- * (ends 0x31c51) and above by `ModulusDecoder::ModulusDecoder` (0x31ff0), and
- * every one of them a mangled free function with no class component.  The
- * membership is PROVED and not inferred for two of the four: the eight tables
- * are LOCAL `.data` symbols, and a local symbol can only be referenced from
- * its own translation unit, so `setDilDescriptor` (which reads all eight) and
+ * Membership is proved, not inferred, for two of the four: the eight tables
+ * are LOCAL `.data` symbols, referenceable only from their own translation
+ * unit, so `setDilDescriptor` (which reads all eight) and
  * `calculateDilLength(DilType, PcmType)` (which reads `N`, `TO` and `H`) are
- * necessarily in one file together.  The other two are adjacency and the
- * overload relationship.
+ * necessarily in one file together. The other two join by adjacency and the
+ * overload relationship. `getSegmentPointer` and the `DilType` overload of
+ * `calculateDilLength` are still unwritten; both are unreachable from any
+ * entry point (`tools/service.py --list none`), so neither blocks a link.
  *
- * TWO OF THE FOUR ARE STILL UNWRITTEN and both are unreachable from any entry
- * point -- `tools/service.py --list none` -- so neither blocks a link.
- *
- * ===========================================================================
- * THE DESCRIPTOR ARGUMENT IS NOT `const`, AND THAT IS THE AUTHOR'S
- * ===========================================================================
- *
- * `calculateDilLength`'s mangling is `P19tagV90DILdescriptor`, where
- * `V90Phase3Modulator::resetDILGenerator` says `PK19tagV90DILdescriptor`.
- * The function reads and never writes, so the missing `const` is the
- * author's and reproducing it is not optional -- a `const` here emits a
- * different symbol that links against nothing (docs/v90cpp.md).
+ * `calculateDilLength`'s descriptor argument is deliberately not `const`:
+ * its mangling is `P19tagV90DILdescriptor`, where
+ * `V90Phase3Modulator::resetDILGenerator` takes the same struct as
+ * `PK19tagV90DILdescriptor`. The function only reads it, so the missing
+ * `const` is the author's, and reproducing it is not optional -- adding one
+ * here emits a different mangled symbol that links against nothing
+ * (docs/v90cpp.md).
  */
 
 #ifndef DSPLIB_V90DILDESCRIPTORSETTINGS_H
@@ -54,23 +44,16 @@
 #include "dsplib/V90Phase3Modulator.h"
 
 /*
- * `DilType`, spelled `7DilType` in both manglings that carry it, so it is a
- * plain enum at namespace scope with that exact tag.  The object names no
- * enumerator -- a mangling never does (finding F226) -- but the two
- * `edprintf` messages at the end of `setDilDescriptor` do:
- *
- *     0 -> "DIL descriptor set to option ADI."
- *     1 -> "DIL descriptor set to option ADI_QC."
- *
- * so the VALUES are the object's and the words are the author's; only the
- * `DIL_TYPE_` prefix is ours, following `PcmType`/`PCM_TYPE_*` in
- * V90Phase3Modulator.h.  An enumerator is a compile-time substitution and
- * cannot move code generation, so this costs nothing at the codegen tier.
+ * Named `DilType` from its mangling (`7DilType`, a plain enum at namespace
+ * scope); the enumerator values are the object's own, read off the two
+ * `edprintf` messages at the end of `setDilDescriptor` ("... option ADI." /
+ * "... option ADI_QC."), with only the `DIL_TYPE_` prefix ours, following
+ * `PcmType`/`PCM_TYPE_*` in V90Phase3Modulator.h (finding F226).
  *
  * ADI is the Automatic Digital Impairment learning descriptor and ADI_QC the
  * quick-connect one; `V90Modem::reset` chooses between them on its `qcFlag`
  * argument and nothing else in the object constructs a `DilType`.  The two
- * differ in the LENGTHS only -- see the table comment in
+ * differ in the lengths only -- see the table comment in
  * src/pump/v90/V90DilDescriptorSettings.cpp.
  */
 enum DilType {
@@ -78,24 +61,28 @@ enum DilType {
 	DIL_TYPE_ADI_QC	= 1
 };
 
-/*
- * .text+0x31c60, 0x131 = 305 bytes.  Fills `d` from the row of eight
- * file-scope tables selected by `type`: the three counts, then `seq1`,
- * `seq2`, `segmentSize`, `segmentCode` and `dilCode`.
+/**
+ * @brief Fill a DIL descriptor from the built-in ADI / ADI_QC tables.
  *
- * IT WRITES ONLY AS FAR AS EACH COUNT SAYS.  `seq1` past `seq1Length`,
- * `seq2` past `seq2Length` and `dilCode` past `dilCount` are LEFT ALONE, so
- * a descriptor handed to this function twice with different `DilType`s keeps
- * the longer one's tail.  That is the object's behaviour and a fixture that
- * zeroes the descriptor first cannot see it (finding F7602).
+ * Fills `d` from the row of eight file-scope tables selected by `type`: the
+ * three counts, then `seq1`, `seq2`, `segmentSize`, `segmentCode` and
+ * `dilCode`.
  *
- * `void`, because the two exits do not agree on `%eax`: the `DIL_TYPE_ADI`
- * arm tail-JUMPS to `edprintf` and the `DIL_TYPE_ADI_QC` arm CALLS it and
- * then returns whatever the epilogue leaves.  The same argument that made
- * `V90Phase4Modulator::setMappingParams` `void` (finding F7431).
+ * It writes only as far as each count says: `seq1` past `seq1Length`, `seq2`
+ * past `seq2Length` and `dilCode` past `dilCount` are left alone, so a
+ * descriptor handed to this function twice with different `DilType`s keeps
+ * the longer one's tail (finding F7602). `segmentSize` and `segmentCode` are
+ * the only two filled unconditionally, all eight entries every time.
  *
- * The descriptor pointer is `P19tagV90DILdescriptor`, non-`const`, and here
- * that is not a curiosity: the function writes through it.
+ * The function is `void` because the two exits do not agree on `%eax`: the
+ * `DIL_TYPE_ADI` arm tail-jumps to `edprintf` and the `DIL_TYPE_ADI_QC` arm
+ * calls it and then returns whatever the epilogue leaves -- the same
+ * argument that made `V90Phase4Modulator::setMappingParams` `void` (finding
+ * F7431).
+ *
+ * @param d     The descriptor to fill. Not `const`, because the function
+ *              writes through it -- the caller's declaration must match.
+ * @param type  Which built-in table row to copy in.
  */
 void setDilDescriptor(tagV90DILdescriptor *d, DilType type);
 
@@ -107,25 +94,53 @@ void setDilDescriptor(tagV90DILdescriptor *d, DilType type);
  * V90Phase3Modulator.h, which this header already relies on for the
  * descriptor overload below.
  */
+
+/**
+ * @brief Find which G.711 segment a PCM level falls in.
+ *
+ * @param pcmType  mu-law or A-law, selecting the boundary table and its
+ *                 length (eight boundaries under mu-law, seven under A-law).
+ * @param level    The PCM code point to place.
+ * @return The index of the first boundary `>= level`, or the row length if
+ *         `level` is above every boundary.
+ */
 unsigned int getSegmentPointer(PcmType pcmType, int level);
+
+/**
+ * @brief Length, in phase 3 symbols, of the built-in ADI/ADI_QC DIL sequence.
+ *
+ * Runs the descriptor overload's own algorithm over this file's built-in
+ * tables instead of a caller-supplied descriptor.
+ *
+ * @param type     Which built-in table row to sum.
+ * @param pcmType  mu-law or A-law, selecting the segment-boundary table used
+ *                 to classify each ucode.
+ * @return The DIL sequence length in phase 3 symbols.
+ */
 unsigned int calculateDilLength(DilType type, PcmType pcmType);
 
-/*
- * The number of phase 3 symbols the DIL sequence in `dil` will occupy, as the
- * sum over its `dilCount` entries of `6 * segmentSize[segment] + 6`, where
- * `segment` is the G.711 segment the entry's code falls in.  Zero for a null
- * descriptor and for an empty one.
+/**
+ * @brief Length, in phase 3 symbols, of the DIL sequence in a descriptor.
  *
- * THAT SUM IS RECOMMENDATION V.90's OWN `Lc = (Hc + 1) * 6`, §8.4.1, over the
- * `N` DIL-segments of §8.3.1 -- `segmentSize` IS the spec's `Hc` and
- * `dilCount` its `N`.  Finding F7601 has the whole correspondence.
+ * The number of phase 3 symbols the DIL sequence in `dil` will occupy, as
+ * the sum over its `dilCount` entries of `6 * segmentSize[segment] + 6`,
+ * where `segment` is the G.711 segment the entry's code falls in. Zero for
+ * a null descriptor and for an empty one.
  *
- * THE RETURN TYPE IS NOT MANGLED.  The object leaves the sum in %eax and
- * nothing in the function distinguishes signed from unsigned -- the
- * accumulation is `lea 0x6(%esi,%edx,2),%ecx` either way.  `unsigned int` is
- * chosen because every term is a non-negative product of an `unsigned char`,
- * so the sum cannot be negative and cannot overflow 32 bits: the worst case
- * is 255 entries of 6 * 255 + 6, which is 391,680.
+ * That sum is Recommendation V.90's own `Lc = (Hc + 1) * 6`, §8.4.1, over
+ * the `N` DIL-segments of §8.3.1 -- `segmentSize` is the spec's `Hc` and
+ * `dilCount` its `N` (finding F7601 has the whole correspondence).
+ *
+ * The return type is not mangled: the object leaves the sum in `%eax` and
+ * nothing in the function distinguishes signed from unsigned. `unsigned int`
+ * is chosen because every term is a non-negative product of an
+ * `unsigned char`, so the sum cannot be negative and cannot overflow 32
+ * bits -- the worst case is 255 entries of `6 * 255 + 6`, 391,680.
+ *
+ * @param dil      The descriptor to measure.
+ * @param pcmType  mu-law or A-law, selecting the segment-boundary table used
+ *                 to classify each ucode.
+ * @return The DIL sequence length in phase 3 symbols.
  */
 unsigned int calculateDilLength(tagV90DILdescriptor *dil, PcmType pcmType);
 

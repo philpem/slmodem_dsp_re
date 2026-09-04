@@ -1,38 +1,41 @@
-/*
- * V90Demodulator.h -- the V.90 receive session, and the object that owns
- * nearly everything else in the receiver.
+/**
+ * @file V90Demodulator.h
+ * @brief `V90Demodulator`, the V.90 receive session and the object that owns
+ *        nearly everything else in the receiver: phase 3/4 sub-demodulators,
+ *        the equaliser, demapper, connection evaluator and every shared
+ *        message/parameter object.
  *
- * Reconstructed from dsplibs.o.  V90SessionFlag.h declared the class as three
- * fields and 0x1a8 bytes of `pad_`, because the only member that batch wrote
- * was `setSessionFlag`; this is the split its own comment asked the first
- * batch with real weight to make, and the two facts it recorded -- the flag at
- * +0x30, the two phase pointers at +0x1dc and +0x1e0 -- are unchanged below.
+ * `V90SessionFlag.h` declared this class as three fields and 0x1a8 bytes of
+ * `pad_`, because the only member that batch wrote was `setSessionFlag`;
+ * this is the split its own comment asked for, and the two facts it
+ * recorded -- the flag at +0x30, the two phase pointers at +0x1dc and
+ * +0x1e0 -- are unchanged below.
  *
- * THE SIZE IS SETTLED AT 0x298, AND NOT BY A DISPLACEMENT SCAN.  Finding F268
- * measured the scan's answer for this class as 0x28230 and showed it was a
- * scaled index into a table rather than an offset off `this`.  The oracle is
- * the allocation: `V90Modem`'s constructor reads
+ * The size is settled at 0x298, and not by a displacement scan: finding
+ * F268 measured the scan's answer for this class as 0x28230 and showed it
+ * was a scaled index into a table rather than an offset off `this`. The
+ * oracle is the allocation: `V90Modem`'s constructor reads
  *
  *     movl $0x298,(%esp); call sysdep_malloc; ... ; call V90DemodulatorC1
  *     mov  %ebx,0x4(%esi)
  *
  * -- 0x298 bytes, handed to the constructor, and stored at V90Modem+0x04,
- * which is the `demodulator` V90SessionFlag.h already had.  `enterPhase3`'s
- * largest displacement is the four-byte read at +0x294, ending at 0x298, and
- * that was not used to derive it.  Finding F291.
+ * which is the `demodulator` `V90SessionFlag.h` already had. `enterPhase3`'s
+ * largest displacement is the four-byte read at +0x294, ending at 0x298,
+ * and that was not used to derive it (finding F291).
  *
- * THE FIELD MAP BELOW IS THE CONSTRUCTOR'S, NOT `enterPhase3`'s.  A 448-byte
- * method touches a dozen offsets; the 1002-byte constructor builds or stores
- * every subobject in the class and hands each to a callee whose mangled name
- * says what type it is.  So the pointer types here are read off manglings --
- * `V90Phase4Demodulator(V90MappingParams *, V90MappingParams *,
+ * The field map below is the constructor's, not `enterPhase3`'s: a 448-byte
+ * method touches a dozen offsets, while the 1002-byte constructor builds or
+ * stores every sub-object in the class and hands each to a callee whose
+ * mangled name says what type it is. So the pointer types here are read off
+ * manglings -- `V90Phase4Demodulator(V90MappingParams *, V90MappingParams *,
  * V90Demapper *, V90CP *, V90MP *, Descrambler<unsigned char, int> *,
  * V90ConnectionEvaluator *, V90Parameters *, V90Phase3Demodulator *,
  * V90AutoDigitalImpDetector *, unsigned int)` alone fixes eight of them --
  * and not off what a field is used for.
  *
- * FOUR INTERIOR BOUNDARIES FALL OUT EXACTLY, which is the check that the
- * embedded subobjects are subobjects rather than coincidence.  None of the
+ * Four interior boundaries fall out exactly, which is the check that the
+ * embedded sub-objects are sub-objects rather than coincidence. None of the
  * four sizes was derived here:
  *
  *     +0x06c V90PreFilter                    0x28  ends 0x094, a field
@@ -40,9 +43,9 @@
  *     +0x1e8 Descrambler<unsigned char,int>  0x20  ends 0x208, a field
  *     +0x210 V90SpectralVerifier             0x2c  ends 0x23c, a field
  *
- * Data member names are invented (finding F226) except where a diagnostic or a
- * mangling supplies one.  Offsets nothing in wave 2 explains keep `word_`,
- * `byte_` and `pad_` names rather than being guessed into meaning.
+ * Data member names are invented (finding F226) except where a diagnostic
+ * or a mangling supplies one. Offsets nothing in wave 2 explains keep
+ * `word_`, `byte_` and `pad_` names rather than being guessed into meaning.
  */
 
 #ifndef DSPLIB_V90DEMODULATOR_H
@@ -158,48 +161,60 @@ struct TAG_DiagnosticResults;
 
 class V90Demodulator {
 public:
-	/* Written -- wave 2. */
+	/** @brief Propagate a new session flag to `phase3Demodulator`. */
 	void setSessionFlag(unsigned int flag);
+	/**
+	 * @brief Move from phase 2 into phase 3.
+	 * Prints the phase 2 info, resets `phase3Demodulator` from it and
+	 * from `jd`/`jdV92`/`dil`, and sets the session's phase state.
+	 */
 	void enterPhase3();
 
-	/*
-	 * THE RETURN TYPE IS THE ONE THING THE MANGLING CANNOT GIVE, and it
-	 * came from the code generation instead.  The blob's tail is
+	/**
+	 * @brief Compute the negotiated bit rate.
 	 *
-	 *     1b919  df 3c 24        fistpll (%esp)
-	 *     1b920  8b 04 24        mov     (%esp),%eax
-	 *
-	 * -- a SIXTY-FOUR bit store with the low half taken, which is what
-	 * GCC emits for a float converted to `unsigned int`; a conversion to
-	 * `int` is a 32-bit `fistpl` and nothing else.  Both spellings were
-	 * put through the same flags to check that (see the .cpp).  This is
-	 * CLAUDE.md's forced/free rule: the store WIDTH was not the
-	 * compiler's to choose.
+	 * @return The bit rate, truncated (not rounded) to `unsigned int`.
+	 *         The truncation is forced: the object's tail is a 64-bit
+	 *         `fistpll` with the low half taken, which is what GCC
+	 *         emits for a float-to-`unsigned int` conversion; a
+	 *         conversion to plain `int` would be a 32-bit `fistpl`.
 	 */
 	unsigned int getBitRate() const;
 
-	/*
-	 * NOT `void`, AND NOT DECIDABLE FURTHER.  The single exit clears
-	 * `%eax` -- `add $0x34,%esp; xor %eax,%eax; pop; pop; ret` -- which a
-	 * `void` member compiled through the same flags does not do, while
-	 * `int` and `unsigned int` both do and are byte-identical.  So the
-	 * constant zero is forced and its signedness is want of evidence; the
-	 * .cpp records the experiment.  No caller in this tree.
+	/**
+	 * @brief Declared for the record; not defined here (finding F7520 --
+	 *        the return type is a real `int`/`unsigned int` per the
+	 *        object's epilogue, but which one is not decidable further,
+	 *        and there is no caller in this tree).
 	 */
 	int sessionTermination();
 
-	/*
-	 * THE LIFECYCLE PAIR, C1/C2 at 0x1c2b0 and 0x1c6a0 (1002 B each) and
-	 * D1/D2 at 0x1ad70 and 0x1b010 (669 B each).  The whole of both is in
-	 * src/pump/v90/V90Demodulator.cpp; the argument names here are the
-	 * mangling's types with invented spellings, since a parameter's name is
-	 * no more recoverable than a data member's (finding F226).
+	/**
+	 * @brief Construct the receive session and everything it owns.
 	 *
-	 * THE BLOCK THIS COMMENT USED TO CARRY IS GONE AND WAS RIGHT WHEN IT
-	 * WAS WRITTEN.  It said the pair was blocked on `V90Phase4Modulator`
-	 * and `ANSamToneDetector`, both then unwritten and both reached from
-	 * the transmit side as well.  Both are written now, so the block
-	 * expired rather than being argued away.
+	 * Builds every embedded sub-object (AGC, prefilter, resampler,
+	 * constellation power, descrambler, spectral verifier) and every
+	 * owned pointer (phase 2 info fan-out, TRN2 designer, equalizer,
+	 * phase 3/4 demodulators, demapper, constellation designer,
+	 * connection evaluator, auto digital impairment detector, and five
+	 * heap arrays sized from @p levels), and stores the remaining
+	 * constructor arguments straight through -- see the file comment for
+	 * the full offset-to-argument map.
+	 *
+	 * @param levels          Element count driving the five heap array sizes.
+	 * @param phase2          Shared phase 2 connection info.
+	 * @param jd              The V.90 Jd message.
+	 * @param jdV92           The V.92 Jd message.
+	 * @param dil             The DIL descriptor.
+	 * @param mappingParams1  Phase 4 demodulator's first mapping block.
+	 * @param mappingParams2  Phase 4 demodulator's second mapping block.
+	 * @param cpInfo          The additional-CP-info record.
+	 * @param cp              The V.90 CP message.
+	 * @param mp              The V.90 MP message.
+	 * @param codec           The hardware codec type, forwarded to `V90PreFilter`.
+	 * @param params          The V.90 parameter block.
+	 * @param compMode        The computational mode.
+	 * @param flag            Session flag: nonzero is V.92.
 	 */
 	V90Demodulator(unsigned int levels, V90Phase2Info *phase2,
 		       V90Jd *jd, V92Jd *jdV92, tagV90DILdescriptor *dil,
@@ -208,58 +223,66 @@ public:
 		       tagV90AdditionalCPinfo *cpInfo, V90CP *cp, V90MP *mp,
 		       __tHardwareCodecTypes__ codec, V90Parameters *params,
 		       V90ComputationalMode compMode, unsigned int flag);
+	/** @brief Destroy the receive session and every owned sub-object and allocation. */
 	~V90Demodulator();
 
-	/*
-	 * THE PHASE-4 AND DATA-PHASE ENTRY POINTS.  All five end in a `ret`
-	 * with nothing loaded into %eax on any path -- or, where the last
-	 * statement is a diagnostic, in a TAIL CALL to a `void` function --
-	 * so `void` is forced here rather than being want of evidence, which
-	 * is what it was while they were only declared.  Compare
-	 * `sessionTermination` above, which had to keep its `int` because its
-	 * single exit clears %eax and a `void` member does not.
-	 */
+	/** @brief Move into the data steady state. */
 	void enterDataSteadyState();
+	/** @brief Move into the data phase. */
 	void enterDataPhase();
+	/** @brief Move into rate renegotiation. */
 	void enterRRN();
+	/** @brief Move into fast phase exchange. */
 	void enterFPE();
+	/** @brief Move into phase 4. */
 	void enterPhase4();
 
-	/*
-	 * `exitPhase3` -- .text+0x1bb50, 768 bytes, and `void` for the same
-	 * reason the five above are: the two exits are a bare `ret` with
-	 * nothing loaded into `%eax` on either path.  It is the phase 3 to
-	 * phase 4 hand-over: it reports the TRN1d RMS ratio, fills three
-	 * fields of the additional-CP record, ends the DIL, enters phase 4
-	 * where phase 3 terminated, designs the TRN2 constellations and
-	 * resets the phase 4 demodulator.
+	/**
+	 * @brief Hand over from phase 3 to phase 4.
+	 *
+	 * Reports the TRN1d RMS ratio, fills three fields of the additional-CP
+	 * record, ends the DIL sequence, enters phase 4 at the state where
+	 * phase 3 terminated, designs the TRN2 constellations, and resets
+	 * the phase 4 demodulator.
 	 */
 	void exitPhase3();
 
-	/*
-	 * Fills the caller's six-element array with
-	 * `V90AutoDigitalImpDetector::byte_280c`, one word per frame phase.
-	 * `unsigned int *` is the mangling's (`Pj`); the count is the loop's
-	 * `cmp $0x5 / jbe`, and it is `V90ADID_PHASES`.
+	/**
+	 * @brief Read back the received-bit-sequence pattern.
+	 * @param rbs  Receives `V90AutoDigitalImpDetector::byte_280c`, one
+	 *             word per frame phase, `V90ADID_PHASES` entries.
 	 */
 	void getRbsPattern(unsigned int *rbs) const;
 
-	/*
-	 * The AT-command diagnostics accessor.  `const` is the mangling's
-	 * (`_ZNK`), and the argument type is the only place in the object
-	 * where `TAG_DiagnosticResults` is named.
+	/**
+	 * @brief Fill in the AT-command diagnostics record.
+	 * @param results  The diagnostics record to fill.
 	 */
 	void getAT_UD(TAG_DiagnosticResults *results) const;
 
+	/** @brief Signal a remote rate renegotiation to whoever reads the session. */
 	void indicateRemoteRateReneg() const;
 
-	/*
-	 * Declared for the record and not defined; return types are not
-	 * mangled, so `void` here is want of evidence.
+	/**
+	 * @brief Produce one block of receive-side demodulated bits.
+	 * Declared for the record; not defined here. `void` is want of
+	 * evidence -- return types are not mangled.
 	 */
 	void progress(int *, unsigned int &, float *, unsigned int);
+	/**
+	 * @brief Per-connection reset.
+	 * Declared for the record; not defined here. Stores its argument
+	 * into `quickConnect` and into `equalizer->quickConnect` (see
+	 * `quickConnect`'s own comment).
+	 */
 	void reset(unsigned int);
+	/**
+	 * @brief Enter channel verification.
+	 * Declared for the record; not defined here. Sets `inPhase3` to 5
+	 * (see that field's comment).
+	 */
 	void enterChannelVerification(short, short);
+	/** @brief Re-initialize the session. Declared for the record; not defined here. */
 	void reInit();
 
 	/* --- data members; see the file comment on the naming --- */
