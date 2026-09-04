@@ -115,6 +115,7 @@ VPCM_OFF(bitPointer,		0x1738, bitptr);
 VPCM_OFF(flags_173a,		0x173a, flags173a);
 VPCM_OFF(droppedToV34,		0x173d, flag173d);
 VPCM_OFF(clr,		0x173e, flag173e);
+VPCM_OFF(sweepCounter,		0x1740, sweep);
 VPCM_OFF(modem,			0x1758, modem);
 VPCM_OFF(pcmSessionType,	0x611c, sesstype);
 VPCM_OFF(progressState,		0x6118, byte6118);
@@ -139,6 +140,7 @@ VPCM_OFF(array_7dd8,		0x7dd8, a7dd8);
 VPCM_OFF(array_7e2c,		0x7e2c, a7e2c);
 VPCM_OFF(L2,			0x7e80, l2);
 VPCM_OFF(array_7ed4,		0x7ed4, a7ed4);
+VPCM_OFF(ecMode,		0x7f60, ecmode);
 
 /* The three the map depends on being where V90SessionFlag.h puts them. */
 VPCM_OFF(modem.demodulator,	0x175c, mdmdem);

@@ -64,7 +64,6 @@ V92P4M_OFF(word_0c,		0x00c, word0c);
 V92P4M_OFF(pad_10,		0x010, pad10);
 V92P4M_OFF(word_18,		0x018, word18);
 V92P4M_OFF(byte_1c,		0x01c, byte1c);
-V92P4M_OFF(pad_1d,		0x01d, pad1d);
 V92P4M_OFF(flag_20,		0x020, flag20);
 V92P4M_OFF(word_24,		0x024, word24);
 V92P4M_OFF(word_28,		0x028, word28);

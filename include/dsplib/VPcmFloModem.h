@@ -410,7 +410,14 @@ public:
 	 */
 	unsigned char v34BaudAllow[6];
 
-	unsigned char pad_021d[1];		/* +0x021d not modelled */
+	/*
+	 * +0x021d was `pad_021d[1]`: `v34BaudAllow[6]` ends at the odd offset
+	 * +0x21d and `bitVector` below is `short[]`, so the compiler's own
+	 * 2-byte alignment inserts exactly this one byte with the member
+	 * deleted -- VPCM_OFF's existing `bitVector` assertion at +0x21e
+	 * (VPcmFloModem.cpp) is what proves it; confirmed zero readers/writers
+	 * anywhere in the object under finding F10142, removed under F10145.
+	 */
 
 	/*
 	 * +0x021e  The bit vector currently being transmitted, indexed by
@@ -503,7 +510,13 @@ public:
 	 */
 	unsigned char clr;
 
-	unsigned char pad_173f[1];			/* +0x173f         */
+	/*
+	 * +0x173f was `pad_173f[1]`: `clr` ends at +0x173f and `sweepCounter`
+	 * below is a 4-byte-aligned `int` at +0x1740, so natural alignment
+	 * inserts exactly this one byte with the member deleted -- proved by
+	 * adding `VPCM_OFF(sweepCounter, 0x1740, sweep)` to VPcmFloModem.cpp.
+	 * Zero readers/writers anywhere in the object (F10142); removed F10145.
+	 */
 
 	/*
 	 * +0x1740  THE VISUAL DIAGNOSTICS SWEEP COUNTER, and it is `int`
@@ -622,7 +635,15 @@ public:
 	 */
 	unsigned char progressState;
 	unsigned char retrainLatch;
-	unsigned char pad_611a[2];
+
+	/*
+	 * +0x611a..+0x611b was `pad_611a[2]`: `retrainLatch` ends at +0x611a
+	 * and `pcmSessionType` below is a 4-byte-aligned `int` at +0x611c, so
+	 * natural alignment inserts exactly these two bytes with the member
+	 * deleted -- the existing `VPCM_OFF(pcmSessionType, 0x611c, sesstype)`
+	 * (VPcmFloModem.cpp) is what proves it. Zero readers/writers anywhere
+	 * in the object (F10142); removed F10145.
+	 */
 
 	/*
 	 * +0x611c  V.90 or V.92, as a 0/1 int: `setPcmSessionType` stores
@@ -818,7 +839,14 @@ public:
 	 */
 	unsigned char nofBitsPerSymbol;
 
-	unsigned char pad_7dd3[1];		/* +0x7dd3 not modelled */
+	/*
+	 * +0x7dd3 was `pad_7dd3[1]`: `nofBitsPerSymbol` ends at +0x7dd3 and
+	 * `nofTransmitSequences` below is a 2-byte-aligned `unsigned short` at
+	 * +0x7dd4, so natural alignment inserts exactly this one byte with the
+	 * member deleted -- the existing `VPCM_OFF(nofTransmitSequences,
+	 * 0x7dd4, nseq)` (VPcmFloModem.cpp) is what proves it. Zero
+	 * readers/writers anywhere in the object (F10142); removed F10145.
+	 */
 
 	/*
 	 * +0x7dd4, +0x7dd6  The completed-sequence counter and the minimum it
@@ -882,7 +910,15 @@ public:
 	 * prints either field's name.
 	 */
 	unsigned char byte_7f5c;			/* +0x7f5c         */
-	unsigned char pad_7f5d[3];			/* +0x7f5d         */
+
+	/*
+	 * +0x7f5d..+0x7f5f was `pad_7f5d[3]`: `byte_7f5c` ends at +0x7f5d and
+	 * `ecMode` below is a 4-byte-aligned `unsigned int` at +0x7f60, so
+	 * natural alignment inserts exactly these three bytes with the member
+	 * deleted -- proved by adding `VPCM_OFF(ecMode, 0x7f60, ecmode)` to
+	 * VPcmFloModem.cpp. Zero readers/writers anywhere in the object
+	 * (F10142); removed F10145.
+	 */
 	unsigned int ecMode;				/* +0x7f60         */
 	unsigned int ecRampCounter;			/* +0x7f64         */
 };

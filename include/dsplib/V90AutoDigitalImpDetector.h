@@ -362,7 +362,16 @@ public:
 	 */
 	short short_2800[V90ADID_PHASES];			/* +0x2800 */
 	unsigned char byte_280c[V90ADID_PHASES];		/* +0x280c */
-	unsigned char pad_2812[2];				/* +0x2812 */
+
+	/*
+	 * +0x2812..+0x2813 was `pad_2812[2]`: `byte_280c` ends at +0x2812 and
+	 * `params` below is a 4-byte-aligned pointer, so natural alignment
+	 * inserts exactly these two bytes with the member deleted -- the
+	 * existing `ADID_OFF(params, 0x2814, params)` (V90AutoDigitalImpDetector.cpp)
+	 * is what proves it. Zero readers/writers anywhere in the object
+	 * (`tools/dis.py` over every `V90AutoDigitalImpDetector::` member
+	 * function, `0x40200..0x449f0`); removed F10145.
+	 */
 
 	/* The constructor's only argument.  `reset` reads its +0x0c. */
 	V90Parameters *params;					/* +0x2814 */
@@ -420,7 +429,16 @@ public:
 
 	/* Cleared by `reset`; `studyUrefHandler` is the only other writer. */
 	short short_a948;					/* +0xa948 */
-	unsigned char pad_a94a[2];				/* +0xa94a */
+
+	/*
+	 * +0xa94a..+0xa94b was `pad_a94a[2]`: `short_a948` ends at +0xa94a and
+	 * `padGain` below is a 4-byte-aligned `float`, so natural alignment
+	 * inserts exactly these two bytes with the member deleted -- the
+	 * existing `ADID_OFF(padGain, 0xa94c, padgain)`
+	 * (V90AutoDigitalImpDetector.cpp) is what proves it. Zero
+	 * readers/writers anywhere in the object (same sweep as above);
+	 * removed F10145.
+	 */
 
 	/*
 	 * Set to 1.0f by `reset`.  `findPadGain` stores to it and
@@ -460,6 +478,14 @@ public:
 	 * +0xa955 stays `pad_`: no member of the class names it in any
 	 * displacement, so it is memory this batch did not model rather than
 	 * memory known to be unused.
+	 *
+	 * NOT REMOVABLE under the pad-removal workstream (F10145): `maxUcode`
+	 * below is `unsigned char[]`, needing only 1-byte alignment, and
+	 * +0xa955 is already 1-byte "aligned" by definition -- a field-to-field
+	 * gap here would be 0 bytes, not 1, if the member vanished.  The
+	 * compiler's own implicit padding does not reproduce this span, same
+	 * shape as `VPcmFloModem::pad_6fb8` and `V92CP::pad_40` -- stays
+	 * explicit.
 	 */
 	unsigned char byte_a954;				/* +0xa954 */
 	unsigned char pad_a955[1];				/* +0xa955 */

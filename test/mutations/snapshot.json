@@ -9987,7 +9987,7 @@
    }
   },
   "v92p4reset": {
-   "key": "9f0a7c1957e7c9783b9528803f6fc0a3bbc5eeb28c65c26e1d2b042f0239343d",
+   "key": "fc95c976061f0afd98caa9959d6892c1182e43ba1e25117fef8641e09eaa4fa0",
    "summary": "46 mutations: 44 caught (44 by test, 0 by strings), 0 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
    "verdicts": {
     "amplitude is not written": "caught",

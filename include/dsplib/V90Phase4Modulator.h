@@ -520,7 +520,17 @@ public:
 	 * the read/write shape alone.
 	 */
 	unsigned char delayedMpNotExit;
-	unsigned char pad_0015[3];
+
+	/*
+	 * +0x0015..+0x0017 was `pad_0015[3]`: `delayedMpNotExit` ends at
+	 * +0x0015 and `word_0018` below is a 4-byte-aligned `unsigned int`, so
+	 * natural alignment inserts exactly these three bytes with the member
+	 * deleted -- proved by adding `V90P4_OFF(word_0018, 0x0018, w0018)`
+	 * (already present, V90Phase4Modulator.cpp). Zero readers/writers
+	 * anywhere in the object (`tools/dis.py` over every
+	 * `V90Phase4Modulator::` member function, `0x2c5a0..0x2f730`); removed
+	 * F10145.
+	 */
 
 	/*
 	 * +0x0018 and +0x001c  Written together and only ever to zero, by
@@ -532,7 +542,15 @@ public:
 	 */
 	unsigned int word_0018;
 	unsigned char byte_001c;
-	unsigned char pad_001d[3];
+
+	/*
+	 * +0x001d..+0x001f was `pad_001d[3]`: `byte_001c` ends at +0x001d and
+	 * `word_0020` below is a 4-byte-aligned `unsigned int`, so natural
+	 * alignment inserts exactly these three bytes with the member deleted
+	 * -- proved by the existing `V90P4_OFF(word_0020, 0x0020, w0020)`.
+	 * Zero readers/writers anywhere in the object (same sweep as above);
+	 * removed F10145.
+	 */
 
 	/*
 	 * +0x0020  Set to 1 on every path of `recivedCPtag`, `recivedE2u`,
@@ -577,7 +595,15 @@ public:
 	 * filled the same way by that class's own `reset`.
 	 */
 	short codeLevel;
-	unsigned char pad_003e[2];
+
+	/*
+	 * +0x003e..+0x003f was `pad_003e[2]`: `codeLevel` ends at +0x003e and
+	 * `word_0040` below is a 4-byte-aligned `unsigned int`, so natural
+	 * alignment inserts exactly these two bytes with the member deleted --
+	 * proved by the existing `V90P4_OFF(word_0040, 0x0040, w0040)`. Zero
+	 * readers/writers anywhere in the object (same sweep as above);
+	 * removed F10145.
+	 */
 
 	/*
 	 * +0x0040  `reset`'s FIFTH argument, stored and not otherwise touched

@@ -217,7 +217,14 @@ public:
 	 */
 	unsigned char byte_04;
 
-	unsigned char pad_05[3];	/* +0x005 alignment               */
+	/*
+	 * +0x005..+0x007 was `pad_05[3]`: `byte_04` ends at +0x005 and
+	 * `word_08` below is a 4-byte-aligned `unsigned int`, so natural
+	 * alignment inserts exactly these three bytes with the member deleted
+	 * -- the existing `V92CP_OFF(word_08, 0x008, word08)` (V92CP.cpp) is
+	 * what proves it. Zero readers/writers anywhere in the object
+	 * (F10142); removed F10145.
+	 */
 
 	/* +0x008  UNSIGNED: `shr $1` on the 32-bit value.  Two bits, and they
 	 * go out at `bits[31]` and `bits[32]` -- over the top of two of the
@@ -252,7 +259,14 @@ public:
 	 */
 	unsigned char byte_24;
 
-	unsigned char pad_25[3];	/* +0x025 alignment               */
+	/*
+	 * +0x025..+0x027 was `pad_25[3]`: `byte_24` ends at +0x025 and
+	 * `word_28` below is a 4-byte-aligned `int[]`, so natural alignment
+	 * inserts exactly these three bytes with the member deleted -- the
+	 * existing `V92CP_OFF(word_28, 0x028, word28)` (V92CP.cpp) is what
+	 * proves it. Zero readers/writers anywhere in the object (F10142);
+	 * removed F10145.
+	 */
 
 	/*
 	 * +0x028 .. +0x03f  Six four-byte entries.  FOUR BYTES is forced by
@@ -267,6 +281,16 @@ public:
 	 */
 	int word_28[V92CP_GROUPS];
 
+	/*
+	 * +0x040  NOT REMOVABLE under the pad-removal workstream (F10145):
+	 * `short_42` below needs only 2-byte alignment and +0x040 is already
+	 * 4-byte (and so 2-byte) aligned, so a field-to-field gap here would
+	 * be 0 bytes, not 2, if the member vanished -- the compiler's own
+	 * implicit padding does NOT reproduce this span.  Confirmed dead (zero
+	 * readers/writers anywhere in the object, F10142) but not
+	 * alignment-driven, same shape as `VPcmFloModem::pad_6fb8` -- stays
+	 * explicit.
+	 */
 	unsigned char pad_40[2];	/* +0x040 alignment               */
 
 	/*
@@ -283,7 +307,14 @@ public:
 	short short_42[V92CP_GROUPS][V92CP_MASKS];
 	short short_a2[V92CP_GROUPS][V92CP_MASKS];
 
-	unsigned char pad_102[2];	/* +0x102 alignment               */
+	/*
+	 * +0x102..+0x103 was `pad_102[2]`: `short_a2` ends at +0x102 and
+	 * `word_104` below is a 4-byte-aligned `unsigned int`, so natural
+	 * alignment inserts exactly these two bytes with the member deleted
+	 * -- the existing `V92CP_OFF(word_104, 0x104, word104)` (V92CP.cpp) is
+	 * what proves it. Zero readers/writers anywhere in the object
+	 * (F10142); removed F10145.
+	 */
 
 	/* +0x104  `setSUV` stores 16 here before storing its argument, as a
 	 * four-byte store; `infoToBits` reads the low half of it, sign
@@ -304,7 +335,14 @@ public:
 	 */
 	unsigned short word_10c;
 
-	unsigned char pad_10e[2];	/* +0x10e alignment               */
+	/*
+	 * +0x10e..+0x10f was `pad_10e[2]`: `word_10c` ends at +0x10e and
+	 * `word_110` below is a 4-byte-aligned `unsigned int`, so natural
+	 * alignment inserts exactly these two bytes with the member deleted
+	 * -- the existing `V92CP_OFF(word_110, 0x110, word110)` (V92CP.cpp) is
+	 * what proves it. Zero readers/writers anywhere in the object
+	 * (F10142); removed F10145.
+	 */
 
 	/*
 	 * +0x110  `infoToBits` raises it to 1 when `byte_04` is non-zero, and
@@ -369,7 +407,14 @@ public:
 	 */
 	unsigned char byte_11a;
 
-	unsigned char pad_11b[1];	/* +0x11b alignment               */
+	/*
+	 * +0x11b was `pad_11b[1]`: `byte_11a` ends at +0x11b and `word_11c`
+	 * below is a 4-byte-aligned `int`, so natural alignment inserts
+	 * exactly this one byte with the member deleted -- the existing
+	 * `V92CP_OFF(word_11c, 0x11c, word11c)` (V92CP.cpp) is what proves it.
+	 * Zero readers/writers anywhere in the object (F10142); removed
+	 * F10145.
+	 */
 
 	/*
 	 * +0x11c  Set to 18 by `resetDetector`.  In `infoToBits` it is the
@@ -452,7 +497,14 @@ public:
 	/* +0x8f9  The CRC register, one byte per bit; `resetCRC` sets all. */
 	unsigned char crc[V92CP_CRC];
 
-	unsigned char pad_909[3];	/* +0x909 alignment               */
+	/*
+	 * +0x909..+0x90b was `pad_909[3]`: `crc` ends at +0x909 and
+	 * `vectorLen` below is a 4-byte-aligned `unsigned int`, so natural
+	 * alignment inserts exactly these three bytes with the member deleted
+	 * -- the existing `V92CP_OFF(vectorLen, 0x90c, vectorlen)` (V92CP.cpp)
+	 * is what proves it. Zero readers/writers anywhere in the object
+	 * (F10142); removed F10145.
+	 */
 
 	/*
 	 * +0x90c  THE PADDED LENGTH, and what `getBitVector` reports.

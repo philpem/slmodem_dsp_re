@@ -308,6 +308,16 @@ public:
 
 	short codeLevel;		/* +0x00c linear level of the code */
 	short codeLevelAlt;		/* +0x00e ... and of code + 0x10   */
+	/*
+	 * +0x010..+0x011  NOT REMOVABLE under the pad-removal workstream
+	 * (F10145): `codeLevelAlt` ends at +0x010, already 2-byte (and
+	 * 4-byte) aligned, and `idleLevel` below needs only 2-byte alignment
+	 * -- a field-to-field gap here would be 0 bytes, not 2, if the member
+	 * vanished.  The compiler's own implicit padding does not reproduce
+	 * this span (confirmed: deleting it and recompiling makes the
+	 * existing `P3M_OFF(idleLevel, 0x012, idlelevel)` assertion fail),
+	 * same shape as `VPcmFloModem::pad_6fb8` -- stays explicit.
+	 */
 	unsigned char pad_10[2];	/* +0x010                          */
 	short idleLevel;		/* +0x012 linear level of silence  */
 	Phase3ModulatorState state;	/* +0x014                          */
@@ -357,7 +367,17 @@ public:
 	unsigned char seq2Length;	/* +0x056                          */
 	unsigned char seq1[128];	/* +0x057                          */
 	unsigned char seq2[128];	/* +0x0d7                          */
-	unsigned char pad_157[1];	/* +0x157 alignment                */
+
+	/*
+	 * +0x157 was `pad_157[1]`: `seq2` ends at +0x157 and `segmentLength`
+	 * below is a 4-byte-aligned `unsigned int[]`, so natural alignment
+	 * inserts exactly this one byte with the member deleted -- the
+	 * existing `P3M_OFF(segmentLength, 0x158, segmentlength)`
+	 * (V90Phase3Modulator.cpp) is what proves it. Zero readers/writers
+	 * anywhere in the object (`tools/dis.py` over every
+	 * `V90Phase3Modulator::` member function, `0x2ac10..0x2c5a0`); removed
+	 * F10145.
+	 */
 	unsigned int segmentLength[8];	/* +0x158 6 * size + 6             */
 	short segmentLevel[8];		/* +0x178                          */
 	short dilLevel[256];		/* +0x188                          */
@@ -376,11 +396,27 @@ public:
 	unsigned char seq1Index;	/* +0x388                          */
 	unsigned char seq2Index;	/* +0x389                          */
 	unsigned char dilIndex;		/* +0x38a                          */
-	unsigned char pad_38b[1];	/* +0x38b alignment                */
+
+	/*
+	 * +0x38b was `pad_38b[1]`: `dilIndex` ends at +0x38b and `segmentPos`
+	 * below is a 4-byte-aligned `unsigned int`, so natural alignment
+	 * inserts exactly this one byte with the member deleted -- the
+	 * existing `P3M_OFF(segmentPos, 0x38c, segmentpos)` is what proves it.
+	 * Zero readers/writers anywhere in the object (same sweep as above);
+	 * removed F10145.
+	 */
 	unsigned int segmentPos;	/* +0x38c                          */
 
 	unsigned char segmentIndex;	/* +0x390 row index into the table */
-	unsigned char pad_391[1];	/* +0x391 alignment                */
+
+	/*
+	 * +0x391 was `pad_391[1]`: `segmentIndex` ends at +0x391 and
+	 * `usingSegmentLevel` below is a 2-byte-aligned `short`, so natural
+	 * alignment inserts exactly this one byte with the member deleted --
+	 * the existing `P3M_OFF(usingSegmentLevel, 0x392, usingsegmentlevel)`
+	 * is what proves it. Zero readers/writers anywhere in the object (same
+	 * sweep as above); removed F10145.
+	 */
 
 	/*
 	 * Whether this DIL symbol took its level from `segmentLevel` rather
@@ -398,7 +434,16 @@ public:
 	 */
 	unsigned char dilPcmCode;	/* +0x394                          */
 
-	unsigned char pad_395[3];	/* +0x395 tail padding to 0x398    */
+	/*
+	 * +0x395..+0x397 was `pad_395[3]`: this is the class's own TAIL
+	 * padding, forced by the struct's alignment (its most-aligned member
+	 * is a 4-byte `unsigned int`) rounding `sizeof` up from 0x395 to the
+	 * next multiple of 4, 0x398 -- with the member deleted, the compiler
+	 * inserts this same tail implicitly, proved by the existing
+	 * `typedef char v90p3m_size[(sizeof(V90Phase3Modulator) == 0x398) ?
+	 * 1 : -1]` (V90Phase3Modulator.cpp). Zero readers/writers anywhere in
+	 * the object (same sweep as above); removed F10145.
+	 */
 };
 
 #endif /* DSPLIB_V90PHASE3MODULATOR_H */

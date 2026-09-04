@@ -439,7 +439,16 @@ public:
 	 */
 	unsigned char byte_caa;
 
-	unsigned char pad_cab[1];	/* +0x0cab alignment              */
+	/*
+	 * +0x0cab was `pad_cab[1]`: `byte_caa` ends at +0x0cab and `word_cac`
+	 * below is a 4-byte-aligned `unsigned int`, so natural alignment
+	 * inserts exactly this one byte with the member deleted -- the
+	 * existing `V90CP_OFF(word_cac, 0x0cac, wordcac)` (V90CP.cpp) is what
+	 * proves it.  Zero readers/writers anywhere in the object (confirmed
+	 * via `tools/dis.py` over every `V90CP::` member function,
+	 * `0x51150..0x53830`, and a whole-object grep for `0xcab(`); removed
+	 * F10145.
+	 */
 
 	/*
 	 * +0x0cac  Set to 18 by `resetDetector`; the most-read field here.
