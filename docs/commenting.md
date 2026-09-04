@@ -137,4 +137,27 @@ out to the larger V90/V92 clusters or the 133-file long tail. Scope:
 `include/dsplib/v34*.h`. Header-only, so unaffected by the sequencing
 decision above.
 
-Status: running.
+Status: done (commit d9d9d901). All 13 files converted: every function
+declaration got a Doxygen block, resolved-name struct/macro fields had
+their derivation trails compressed to a line plus a finding citation,
+still-unresolved fields (`type_NNNN`/bare `fNNNN`/`pad_NNNN`) kept their
+full trails untouched apart from voice, and two dead orphaned comment
+blocks (describing a struct superseded by a later consolidation) were
+removed from v34det.h. Along the way, one stale citation was caught and
+fixed: a comment attributed to deviation D34, which was later retracted
+(finding F122) -- worth a reminder for the next wave to check that a cited
+finding or deviation is still live, not just that it exists.
+
+`make check64`, `python3 tools/refcheck.py` and `python3 tools/onedef.py`
+are clean. `make byteident-ratchet` was not run (no docker in this
+environment) but a comment-only change cannot move it.
+
+Open question for scaling this to V90/V92 and the long tail: several
+long-but-not-evidentiary paragraphs (pure architecture/design rationale
+with no hex to cut) do not fit category 3's "compress to one line"
+instruction well -- compressing them would just delete information for
+length. The next wave's brief should say explicitly that only the
+*evidentiary* content (addresses, opcodes, byte-offset citations used as
+proof) is what gets compressed, not narrative rationale that happens to be
+long. Also: not every derivation trail names its finding number inline, so
+budget time for a `docs/findings.md` grep per field before compressing.

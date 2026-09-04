@@ -14,95 +14,130 @@
 extern "C" {
 #endif
 
-/*
- * The INFO message buffer every function here takes.
+/**
+ * The size of the INFO message buffer every function here takes, in shorts.
  *
- * THIRTEEN SHORTS IS THE MINIMUM A CALLER MUST SUPPLY.  Nothing in the
- * object states a length; this is the highest index any of these functions
- * touches (`V34SetINFO0dBits` writes index 12) and there is no bounds check
- * anywhere.  A buffer sized from the ten values the debug prints show would
- * be written past.
+ * Nothing in the object states a length explicitly; 13 is the highest index
+ * any of these functions touches (`V34SetINFO0dBits` writes index 12), and
+ * there is no bounds check anywhere, so a caller must supply at least this
+ * many shorts.
  */
 #define V34_INFO_MSG_SHORTS	13
 
-/*
- * The layout of the record `V34GiveProbeResults` copies from: 25 of them,
- * 44 bytes apart, each holding a double 32 bytes in.  All three numbers are
- * the object's own loop constants.
- */
+/** Byte offset of the first entry in the probe-results record `V34GiveProbeResults` copies from. */
 #define V34_PROBE_OFFSET	0x20
+/** Byte stride between entries in that record; each entry holds one double. */
 #define V34_PROBE_STRIDE	0x2c
 
-/*
- * Copy the probe results the C++ side measured into the V.34 object, if
- * either PCM receiver is running.  Always returns 0.
+/**
+ * @brief Copy the probe results the C++ side measured into the V.34 object.
+ *
+ * A no-op unless either PCM receiver is running.
+ *
+ * @param obj  The V.34 modem object.
+ * @param src  The probe-results record (see #V34_PROBE_OFFSET, #V34_PROBE_STRIDE).
+ * @return Always 0.
  */
 int V34GiveProbeResults(void *obj, const void *src);
 
-/*
- * Assemble an outbound INFO0.  `bits` is the message being built and must be
- * at least V34_INFO_MSG_SHORTS long.
+/**
+ * @brief Assemble an outbound INFO0-a message.
+ * @param obj   The V.34 modem object.
+ * @param bits  The message being built; must be at least
+ *              #V34_INFO_MSG_SHORTS long.
  */
 void V34SetINFO0aBits(void *obj, short *bits);
+
+/**
+ * @brief Assemble an outbound INFO0-d message.
+ * @param obj   The V.34 modem object.
+ * @param bits  The message being built; must be at least
+ *              #V34_INFO_MSG_SHORTS long.
+ */
 void V34SetINFO0dBits(void *obj, short *bits);
 
-/*
- * Take apart a received INFO0.  Unpacks it into the object's 41-entry bit
- * vector and settles whether a short phase 2 is on; does nothing at all
- * without a V.90 receiver running.
+/**
+ * @brief Take apart a received INFO0-d message.
+ *
+ * Unpacks it into the object's 41-entry bit vector and settles whether a
+ * short Phase 2 is in use. Does nothing without a V.90 receiver running.
+ *
+ * @param obj   The V.34 modem object.
+ * @param bits  The received message, at least #V34_INFO_MSG_SHORTS long.
  */
 void V34GiveINFO0dBits(void *obj, const short *bits);
 
-/*
- * Take apart a received INFO1a.  Returns 1 if the Uinfo code was 6 and 0
- * otherwise -- including on the paths that decode nothing.
+/**
+ * @brief Take apart a received INFO1a message.
+ * @param obj   The V.34 modem object.
+ * @param bits  The received message, at least #V34_INFO_MSG_SHORTS long.
+ * @return 1 if the Uinfo code was 6, 0 otherwise -- including on the paths
+ *         that decode nothing.
  */
 int V34GiveINFO1aBits(void *obj, const short *bits);
 
-/*
- * Take apart a received INFO1d.  Settles whether a PCM upstream is in play --
- * the same session flag `V34GiveINFO1aBits` writes -- and, if one is and the
- * configuration bars it, RETRAINS the modem back to V.90.
+/**
+ * @brief Take apart a received INFO1d message.
  *
- * Returns 1 only when it retrained and 0 otherwise, which is NOT the session
- * flag read back the way `V34GiveINFO1aBits`'s return value is: the retraining
- * path clears the flag on its way out, so the two disagree on both of the
- * cases that separate them.
+ * Settles whether a PCM upstream is in play -- the same session flag
+ * V34GiveINFO1aBits() writes -- and, if one is and the configuration bars
+ * it, retrains the modem back to V.90.
  *
- * Defined in `src/pump/v34/v34pcmmain.cpp`, not beside its three siblings.  It
- * names no mangled symbol, so C would have compiled it -- but it calls
- * `VPcmV34InitiateRetrain`, which lives there, and the 64-bit interop tier
- * links `$(SRC)` -- every `.c` under `src/` -- with no C++ in it.  See the
- * comment above the definition.  `V34SetINFO1aBits` is declared here and
- * defined elsewhere for a related reason.
+ * Note the return value is not that session flag read back: the retraining
+ * path clears the flag on its way out, so the two disagree on exactly the
+ * cases that would otherwise make this redundant with V34GiveINFO1aBits()'s
+ * return value.
+ *
+ * Defined in `src/pump/v34/v34pcmmain.cpp` rather than beside its three
+ * siblings: although the function itself is a plain, unmangled `extern "C"`
+ * name, it calls `VPcmV34InitiateRetrain`, a C++ member that only lives in
+ * that translation unit.
+ *
+ * @param obj   The V.34 modem object.
+ * @param bits  The received message, at least #V34_INFO_MSG_SHORTS long.
+ * @return 1 only if it retrained, 0 otherwise.
  */
 int V34GiveINFO1dBits(void *obj, const short *bits);
 
-/*
- * Assemble an outbound INFO1a, INFO1c or INFO1d -- which one depends on the
- * two receiver flags, the role flag and the session's layout selector.  Also
- * moves `v90_receiver` on to 2, or back to 0 if the modem has no Uinfo to
- * report.
+/**
+ * @brief Assemble an outbound INFO1a, INFO1c or INFO1d message.
  *
- * ALWAYS RETURNS 0, and no caller in the object looks at it; the type is
- * `int` because both epilogues clear `%eax` explicitly.  Defined in
- * `src/pump/v34/v34info1a.cpp` rather than beside the rest of this header's
- * functions, because it calls a C++ member and a C translation unit cannot
- * name one.
+ * Which of the three gets built depends on the two receiver flags, the
+ * role flag and the session's layout selector. Also advances `v90_receiver`
+ * to 2, or back to 0 if the modem has no Uinfo to report.
+ *
+ * Defined in `src/pump/v34/v34info1a.cpp` rather than beside the rest of
+ * this header's functions, because it calls a C++ member and a C
+ * translation unit cannot name one.
+ *
+ * @param obj   The V.34 modem object.
+ * @param bits  The message being built; must be at least
+ *              #V34_INFO_MSG_SHORTS long.
+ * @return Always 0; no caller in the object examines it.
  */
 int V34SetINFO1aBits(void *obj, short *bits);
 
-/*
- * Build the first short of one of V.92's six Modem-on-Hold messages, chosen
- * by the object's `moh_message`.  A selector above 5 writes nothing at all.
+/**
+ * @brief Build the first short of an outbound V.92 Modem-on-Hold message.
+ *
+ * Which of the six MOH messages gets built is chosen by the object's
+ * `moh_message`; a selector above 5 writes nothing.
+ *
+ * @param obj   The V.34 modem object.
+ * @param bits  The message being built.
  */
 void VPcmV34SetMohMessageBits(void *obj, short *bits);
 
-/*
- * The other direction: decode the first short of an arriving MOH message
- * into `moh_recvd`, and its payload nibble into whichever field that message
- * carries one in.  Only index 0 is read.  A message matching nothing is
- * forced to MHnack, with three lines of diagnostic saying so.
+/**
+ * @brief Decode the first short of an arriving V.92 Modem-on-Hold message.
+ *
+ * Only index 0 of @p bits is read. Records the message kind in
+ * `moh_recvd` and its payload nibble in whichever field that message
+ * carries one in. A message matching nothing is treated as MHnack, with
+ * a diagnostic saying so.
+ *
+ * @param obj   The V.34 modem object.
+ * @param bits  The received message.
  */
 void VPcmV34InterpretMohMessageBits(void *obj, const short *bits);
 

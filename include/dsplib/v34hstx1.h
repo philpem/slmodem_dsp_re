@@ -1,61 +1,40 @@
 /*
- * v34hstx1.h -- seventeen arms of `v34handshak`'s per-sample transmit
- * dispatch.
+ * v34hstx1.h -- v34handshak's per-sample transmit dispatch, one function per
+ * arm.
  *
- * `v34handshak` is 61,541 bytes and is not one unit.  Table 1, the jump table
- * at `.rodata+0x2da0`, is read INSIDE the per-sample loop at 0x62950 and
- * indexed by `txstate - 5`; nineteen of its eighty-two entries have a target
- * of their own and fifty-seven are the loop bottom (finding F287).  Each arm
- * is one dispatch case, and each is reconstructed and tested on its own --
- * see docs/v34handshak.md for why the function is taken this way and
- * test/unit/t_v34hstx1.c for how one arm is compared against the blob.
+ * `v34handshak` is 61,541 bytes and is not one unit; it is reconstructed and
+ * tested piece by piece (see docs/v34handshak.md). Table 1, the transmit
+ * jump table at `.rodata+0x2da0`, is read inside the per-sample loop and
+ * indexed by `txstate - 5`. Of its 82 entries, only 19 have a target of
+ * their own -- the rest just fall through to the loop bottom (finding
+ * F287). Those 19 targets cover 23 distinct `txstate` values (a handful of
+ * states share one function body) and are the 17 functions declared below.
  *
- * Six of them -- 65, 71, 78, 81, 85 and 86 -- are the ones that write nothing
- * below +0x234 (finding F323).  Then 60, 70, 18 and 51, the smallest of what
- * was left, at 34, 137, 152 and 285 bytes of level-0 body; those four DO write
- * below +0x234 -- 70 writes `rate_now` and `rate_want` at +0x228 -- so finding
- * F323's "six" is a statement about the first six and not about this file.  And
- * then 19, 20 and the entry 5, 54 and 74 share, at 568, 602 and 719 bytes.
- * And then 69 `EXMIT` and the entry 64 `JTXMIT` and 68 `J1TXMIT` share, at
- * 823 and 892 bytes.  And then 67 `XMITMP` at 2,024, which is the largest
- * arm of the table taken so far and the only one that clocks a MESSAGE out
- * rather than a fixed pattern -- and then 24 `TX_DPSK` at 2,220, which
- * clocks a different message out one bit at a time and carries the whole of
- * Modem-on-Hold's clear-down behind it.
+ * Each one is an "arm": a function that runs one pass of the per-sample
+ * transmit loop for its state(s) and returns to let the loop test run
+ * again. Two entries once looked like they left the loop through code this
+ * tree had not reconstructed; both targets turned out to already be inside
+ * arms written here, so every arm in fact rejoins the loop on every path
+ * (finding F340), and `enum v34tx1_exit` below has a single value as a
+ * result.
  *
- * SEVENTEEN FUNCTIONS FOR TWENTY-THREE txstates, and the SHAPES ARE WORTH
- * TELLING APART because "one table entry" does not mean "one behaviour" here:
+ * Several arms serve more than one `txstate`, in three different shapes:
+ *   - v34tx1_jatxmit() and v34tx1_k56jatxmit() are two separate functions
+ *     built over one shared static helper.
+ *   - v34tx1_silence() covers three states (SILENCE, SILENCEINFO,
+ *     SILENCERETRAIN) as one function that re-reads `txstate` itself and
+ *     branches, because the object does the same.
+ *   - v34tx1_jtxmit() covers two states (JTXMIT, J1TXMIT) as one function
+ *     with a shared body and a single internal branch that separates the
+ *     two tails.
+ *   - v34tx1_moh_silence() covers four states (81-84) as one function with
+ *     one behaviour.
  *
- *     78 / 85          TWO entries, one body, two tail calls
- *     81 82 83 84      ONE entry, one behaviour
- *     5 / 54 / 74      ONE entry, THREE behaviours -- the shared prologue
- *                      re-reads `txstate` at 0x640f4 and branches
- *     64 / 68          ONE entry, ONE body and TWO tails -- the body is
- *                      common and the re-read at 0x636ff is reached only on
- *                      the pass where `vect_idx` wraps to zero
- *
- * so 78/85 are two functions over one static helper, and 5/54/74 and 64/68
- * are each ONE function with the state read inside it, because the read is
- * the object's.
- *
- * WHAT AN ARM IS.  The loop is
- *
- *     while (txq.count < short_2aa0)
- *             switch (txstate) { ... }
- *
- * and every one of these ends by rejoining that test, so an arm is a
- * function returning void-equivalent and the caller loops.  Two of them can
- * instead leave the loop through a block that is NOT reconstructed, and they
- * say so in their return value rather than doing something plausible: the
- * eventual `v34handshak` must dispatch on it.
- *
- * WHAT IS NOT HERE, and it is a real gap rather than an omission.  Every arm
- * below that changes `txstate`, and both counter arms, guard a diagnostic on
- * `dsplibs_debug_level > 1` and print through the far blocks at 0x655f0,
- * 0x6821d, 0x68271, 0x68282, 0x6824f, 0x68260 and 0x684c6.  None of those
- * prints is reconstructed, so these functions are faithful at debug level 0
- * -- which is what the library ships (`dsplibs_debug_level` is zero) and what
- * `t_v34hstx1.c` tests at.  Finding F341.
+ * WHAT IS NOT HERE, and it is a real gap rather than an omission: every arm
+ * that changes `txstate`, plus both counter arms, has a diagnostic behind
+ * `dsplibs_debug_level > 1` that this tree has not reconstructed. These
+ * functions are faithful at debug level 0, which is what the library ships
+ * and what t_v34hstx1.c tests against (finding F341).
  */
 
 #ifndef DSPLIB_V34HSTX1_H
@@ -65,159 +44,207 @@
 extern "C" {
 #endif
 
-/*
- * Where an arm left the dispatch.
+/**
+ * @brief Where a transmit-dispatch arm leaves control.
  *
- * `V34TX1_LOOP` is "rejoined the loop bottom at 0x629e0" -- 0x629c8, 0x62d70
- * and 0x6430c all reach it, and the difference between them is a write the
- * arm that uses it performs for itself.
- *
- * IT IS NOW THE ONLY VALUE, and that is the result rather than a tidying.
- * The enumeration used to carry two more -- `V34TX1_MOH_WRAP` for 81's
- * transfer to 0x66d85 and `V34TX1_TXMD_DONE` for 86's to 0x66fe9 -- returned
- * rather than followed because following them meant writing code no
- * differential test here could reach.  Both blocks are written now, in the
- * arms they belong to, and neither is a transfer out of its arm:
- *
- *   - 0x66d85 ends at 0x63941 or 0x63948, which are both the loop test; and
- *   - 0x66fe9 ends at 0x63e7f, which is the fall-through of the block that
- *     jumped to it, so it is not even an exit from the arm's own body.
- *
- * So every one of the nineteen arms rejoins the loop, on every path, and the
- * caller's dispatch on the return value has gone with the two enumerators.
- * The type is kept -- one value and an `int` return -- because it is what
- * every arm's signature says and the reduction changes no behaviour.
+ * The only value: every arm rejoins the per-sample loop's own test on
+ * every path (finding F340). The type is kept as a return value, rather
+ * than reduced to `void`, because that is what every arm's signature is in
+ * the object.
  */
 enum v34tx1_exit {
 	V34TX1_LOOP = 0		/* back to the per-sample loop test  */
 };
 
-/*
- * AND 66's SEGMENT END IS NOT 86's, which is worth stating because for one
- * commit it was.  0x66eff's block, the last of 66's exclusive set, ends in an
- * unconditional `jmp 66f3d` at 0x66fe4 -- it does NOT fall through into
- * 0x66fe9, which is 86's echo-adaptation block, so landing 66 reconstructed
- * nothing of 86's and retired none of finding F343's cost.  66's own
- * completion at 0x62f22 rejoins the loop like every other arm here.
- */
-
-/*
- * NO ARM ADDED SINCE NEEDS A NEW EXIT, and that is a result rather than the
- * absence of one.  60 rejoins at 0x62d70, 18 at 0x6409a on both of its paths,
- * 70 at 0x6431f and 0x64326, 51 at 0x63941, 0x6409a and 0x62d70; 19 at 0x629c8
- * and 0x63948, 20 at 0x6431f and 0x63da2, and 5/54/74 at 0x6409a, 0x629cf,
- * 0x640a1, 0x63da2 and 0x63941; 69 at 0x63941 and 0x6409a, and 64/68 at
- * 0x629c8, 0x62d32, 0x63941, 0x63da2, 0x6409a, 0x640a1, 0x6431f and 0x64326;
- * 67 at 0x62d70 and 0x640a1, and 24 at 0x629c8, 0x629cf, 0x63948, 0x6431f,
- * 0x64326 and 0x640a1 -- every one of them a block that reloads the object
- * and re-tests the loop condition.  So the oracle past them is the blob's own
- * tail and nothing is given up; the two values above remain the only places
- * this file stops short.
+/**
+ * @brief SILENCE / SILENCEINFO / SILENCERETRAIN transmit-dispatch arm
+ * (txstates 5, 54, 74).
  *
- * 0x62d32 IS PART OF 64/68 AND NOT OF ITS REJOIN, for the reason 0x6430c is
- * part of 20: it clears `vect_idx` before falling into 0x62d70, and only one
- * of 64/68's five exits passes through it.  51 reaches the same block.
+ * One function for three states: the shared prologue re-reads `txstate`
+ * and gives each of the three a different tail, matching the object.
  *
- * 0x6430c IS PART OF 20 AND NOT OF ITS REJOIN.  20's two counting paths pass
- * through it and bump seg_symcount; the path that ends the segment leaves through
- * 0x63da2, which does not.  86 rejoins through 0x6430c as well (finding F340).
- */
-
-/*
- * 5 SILENCE, 54 SILENCEINFO, 74 SILENCERETRAIN  0x640b4.
- *
- * ONE TABLE ENTRY FOR THREE txstates, and unlike 81/82/83/84 it is not one
- * behaviour: the shared prologue re-reads +0x3596 at 0x640f4 and gives each
- * of the three a different tail.  One function, with the read inside it,
- * because the read is the object's.
+ * @param obj  The V.34 modem object.
+ * @return #V34TX1_LOOP.
  */
 int v34tx1_silence(void *obj);
-/*
- * 64 JTXMIT and 68 J1TXMIT  0x635cc.
+
+/**
+ * @brief JTXMIT / J1TXMIT transmit-dispatch arm (txstates 64, 68).
  *
- * ONE TABLE ENTRY FOR TWO txstates, ONE BODY AND TWO TAILS.  The body -- the
- * countdown at +0xaa78, two bits out of +0x25d6, the differential quadrant
- * and one `vect4` point -- is the same for both, and only the pass on which
- * `vect_idx` wraps to zero re-reads +0x3596 (0x636ff) and separates them: 68
- * ends the segment at 0x65653 and 64 counts +0x25d8 up to 0x80 first and
- * then becomes 68.  One function, with the read inside it.
+ * One function, one shared body, two tails. The body -- a countdown, two
+ * status bits, the differential quadrant and one `vect4` point -- is the
+ * same for both states; only on the pass where `vect_idx` wraps to zero
+ * does it re-read `txstate` and separate them (JTXMIT counts up to a limit
+ * and then becomes J1TXMIT; J1TXMIT ends the segment).
+ *
+ * @param obj  The V.34 modem object.
+ * @return #V34TX1_LOOP.
  */
 int v34tx1_jtxmit(void *obj);
-/*
- * 24 TX_DPSK      0x62b96, with the second reader at 0x67c4e, the message
- * dispatch at 0x64e91 and the hold tail at 0x64fec.
+
+/**
+ * @brief TX_DPSK transmit-dispatch arm (txstate 24).
  *
- * One bit of the Modem-on-Hold message per pass, XORed into +0x358c and sent
- * as `vect4[0]` or `vect4[2]` -- 60 `TONE_AB`'s two points and 60's scaling,
- * which is why the two AGREE COLD and are still not one arm.  When the
- * message runs out the arm either hands the transmit machine to 60 or, on
- * hold, re-arms the reader and works through the clear-down.
+ * Sends one bit of the Modem-on-Hold message per pass, XORed into the
+ * message state and sent as one of two constellation points -- the same
+ * two points and scaling as TONE_AB, which is why the two agree numerically
+ * and are still separate arms. When the message runs out, hands the
+ * transmit machine to TONE_AB, or, on hold, re-arms the message reader and
+ * works through the hold clear-down.
+ *
+ * @param obj  The V.34 modem object.
+ * @return #V34TX1_LOOP.
  */
 int v34tx1_tx_dpsk(void *obj);
-/* 18 SSEG         0x64048, continuing at 0x66d11 */
+
+/**
+ * @brief SSEG transmit-dispatch arm (txstate 18).
+ * @param obj  The V.34 modem object.
+ * @return #V34TX1_LOOP.
+ */
 int v34tx1_sseg(void *obj);
-/* 19 SBARSEG      0x6296d, with the segment's end at 0x671f0 */
+
+/**
+ * @brief SBARSEG transmit-dispatch arm (txstate 19).
+ * @param obj  The V.34 modem object.
+ * @return #V34TX1_LOOP.
+ */
 int v34tx1_sbarseg(void *obj);
-/* 20 PPSEG        0x642bf, continuing at 0x66d57 and 0x680ac */
+
+/**
+ * @brief PPSEG transmit-dispatch arm (txstate 20): sends the PP training
+ * sequence (see vectpp in v34rx.h).
+ * @param obj  The V.34 modem object.
+ * @return #V34TX1_LOOP.
+ */
 int v34tx1_ppseg(void *obj);
-/* 51 TX_L1        0x62c69, with the second copy of its loop at 0x65290 */
+
+/**
+ * @brief TX_L1 transmit-dispatch arm (txstate 51).
+ * @param obj  The V.34 modem object.
+ * @return #V34TX1_LOOP.
+ */
 int v34tx1_tx_l1(void *obj);
-/* 60 TONE_AB      0x62d3d */
+
+/**
+ * @brief TONE_AB transmit-dispatch arm (txstate 60).
+ * @param obj  The V.34 modem object.
+ * @return #V34TX1_LOOP.
+ */
 int v34tx1_tone_ab(void *obj);
-/* 65 XMIT0        0x62d83 */
+
+/**
+ * @brief XMIT0 transmit-dispatch arm (txstate 65).
+ * @param obj  The V.34 modem object.
+ * @return #V34TX1_LOOP.
+ */
 int v34tx1_xmit0(void *obj);
-/*
- * 69 EXMIT        0x63858, with the sixteen-point half at 0x67031 and the
- * segment's end at 0x66e01.  One halfword of the receiver -- +0x11e against
- * 0x89b0 -- chooses between two symbols per pass out of `vect4` and four out
- * of `vect16`, and the two halves advance `vect_idx` by two and by four.
+
+/**
+ * @brief EXMIT transmit-dispatch arm (txstate 69).
+ *
+ * A receiver status bit chooses, per pass, between two symbols out of
+ * `vect4` or four out of `vect16`; `vect_idx` advances by two or four to
+ * match.
+ *
+ * @param obj  The V.34 modem object.
+ * @return #V34TX1_LOOP.
  */
 int v34tx1_exmit(void *obj);
-/* 70 DATAXMIT     0x63ca8 */
+
+/**
+ * @brief DATAXMIT transmit-dispatch arm (txstate 70).
+ * @param obj  The V.34 modem object.
+ * @return #V34TX1_LOOP.
+ */
 int v34tx1_dataxmit(void *obj);
-/*
- * 21 TRNSEG4      0x64339, with the compare chain at 0x64ad9, the echo-adapt
- *                 clear-down at 0x67613 and the completion at 0x64b24.
+
+/**
+ * @brief TRNSEG4 transmit-dispatch arm (txstate 21).
  *
- * One scrambled `vect4` point per pass -- 71 and 86's head -- and then
- * `seg_symcount` against FOUR different fields, of which the first is not an exit
- * and the other three are.  The segment's end is `setupreceiver` INLINED, a
- * twelve-field blank of the +0xaa0c record, and one of three tails chosen by
- * the two PCM receivers.
+ * Sends one scrambled `vect4` point per pass, sharing its head with
+ * v34tx1_txlevel() (TXLEVEL) and v34tx1_txmd() (TXMD). Counts the segment
+ * against one of four limit fields, chosen by which of the two PCM
+ * receivers is active; three of the four give the usual loop exit and the
+ * fourth is the segment's completion, which inlines `setupreceiver` and
+ * clears a twelve-field record ahead of the next phase.
+ *
+ * @param obj  The V.34 modem object.
+ * @return #V34TX1_LOOP.
  */
 int v34tx1_trnseg4(void *obj);
-/*
- * 67 XMITMP       0x6399b, with the sixteen-point mapper at 0x63b62, the
- * four-point one at 0x64929 and the sequence's end at 0x645d0.
+
+/**
+ * @brief XMITMP transmit-dispatch arm (txstate 67).
  *
- * Two bits per symbol or four, out of the message reader at +0xaa6c -- the
- * whole of 0x639db..0x63aae is `getbit` INLINED and one arm of it, the
- * restart, is a real call at 0x6484c.  The bits are collected into `cur_quadrant`
- * lowest first and then mapped through `vect4` or `vect16`, chosen by the
- * same receiver halfword against the same constant that 69 uses.
+ * Reads two or four bits per symbol from the message reader (an inlined
+ * `getbit`, with a real call only on the restart path) and maps them
+ * through `vect4` or `vect16`, chosen the same way v34tx1_exmit() (EXMIT)
+ * chooses.
+ *
+ * @param obj  The V.34 modem object.
+ * @return #V34TX1_LOOP.
  */
 int v34tx1_xmitmp(void *obj);
-/* 71 TXLEVEL      0x641d1 */
+
+/**
+ * @brief TXLEVEL transmit-dispatch arm (txstate 71).
+ * @param obj  The V.34 modem object.
+ * @return #V34TX1_LOOP.
+ */
 int v34tx1_txlevel(void *obj);
-/* 78 JaTXMIT      0x64139 */
-int v34tx1_jatxmit(void *obj);
-/* 81 MOH_SILENCE  0x63d58, shared by txstates 81, 82, 83 and 84 */
-int v34tx1_moh_silence(void *obj);
-/* 85 K56JaTXMIT   0x63fb0 */
-int v34tx1_k56jatxmit(void *obj);
-/* 86 TXMD         0x63dae */
-int v34tx1_txmd(void *obj);
-/*
- * 66 TRNSEG4A     0x62e28, with the sixteen-point half at 0x66e59 and the
- * segment's completion at 0x62f22.
+
+/**
+ * @brief JaTXMIT transmit-dispatch arm (txstate 78).
  *
- * The largest single run of straight-line code in the table -- 1,956 bytes
- * from 0x62e28 to 0x635cc without a gap.  One symbol out of `vect4` or
- * `vect16`, chosen by the receiver's +0x11e as 69 chooses it, with the
- * generator chosen on `role` as 71 and 86 choose it; then `seg_symcount` is
- * counted UP and tested against `baud + baud/2 + period` out of the rate
- * configuration.  Three of the four exits are the loop; the fourth is the
- * completion, which rebuilds the receive half of that configuration.
+ * A separate function from v34tx1_k56jatxmit() (K56JaTXMIT), but built over
+ * a static helper the two share.
+ *
+ * @param obj  The V.34 modem object.
+ * @return #V34TX1_LOOP.
+ */
+int v34tx1_jatxmit(void *obj);
+
+/**
+ * @brief MOH_SILENCE transmit-dispatch arm (txstates 81-84).
+ *
+ * One function, one behaviour, for all four states.
+ *
+ * @param obj  The V.34 modem object.
+ * @return #V34TX1_LOOP.
+ */
+int v34tx1_moh_silence(void *obj);
+
+/**
+ * @brief K56JaTXMIT transmit-dispatch arm (txstate 85).
+ *
+ * See v34tx1_jatxmit() (JaTXMIT) for the helper the two share.
+ *
+ * @param obj  The V.34 modem object.
+ * @return #V34TX1_LOOP.
+ */
+int v34tx1_k56jatxmit(void *obj);
+
+/**
+ * @brief TXMD transmit-dispatch arm (txstate 86).
+ * @param obj  The V.34 modem object.
+ * @return #V34TX1_LOOP.
+ */
+int v34tx1_txmd(void *obj);
+
+/**
+ * @brief TRNSEG4A transmit-dispatch arm (txstate 66).
+ *
+ * The largest single run of straight-line code in the table. Sends one
+ * symbol out of `vect4` or `vect16`, chosen the way v34tx1_exmit() (EXMIT)
+ * chooses, with the scrambler's generator chosen by role as in
+ * v34tx1_txlevel() (TXLEVEL) and v34tx1_txmd() (TXMD); counts the segment
+ * up against a length derived from the rate configuration. Its fourth exit,
+ * distinct from the usual loop rejoin, is the segment's completion, which
+ * rebuilds the receive half of that configuration.
+ *
+ * @param obj  The V.34 modem object.
+ * @return #V34TX1_LOOP.
  */
 int v34tx1_trnseg4a(void *obj);
 

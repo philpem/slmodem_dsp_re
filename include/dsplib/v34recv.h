@@ -1,38 +1,29 @@
-/*
- * v34recv.h -- ITU-T V.34: the receiver sub-object at V34object+0x264.
+/**
+ * @file v34recv.h
+ * @brief ITU-T V.34 receiver state: `struct v34_receiver`, the receiver
+ *        sub-object embedded at `V34object+0x264`.
  *
- * ONE MAP, NOT FOUR.  This object was reconstructed piecemeal -- the detector
- * needed its flags word, `decision` its target and result, `agcadapt` its
- * gain state, `V34descrambler` its shift register -- and each got its own
- * partial struct.  Four maps of one object is exactly what finding F100 said
- * not to do, and doing it hid the fact below.
- *
- * THE AGC FREEZE AND THE DETECTOR-PENDING FLAG ARE THE SAME BIT.  `agcadapt`
- * tests `byte 0x123 & 2`; `tone_detect` clears `short 0x122 & 0x200`.  Byte
- * 0x123 is the high half of the short at 0x122, and its bit 1 is the short's
- * bit 9 -- 0x200.  So the AGC is frozen exactly while a detector is armed
+ * This struct consolidates state that was originally reconstructed as four
+ * separate partial views of the same memory -- the detector's flags word,
+ * `decision`'s target and result, `agcadapt`'s gain state, and
+ * `V34descrambler`'s shift register -- before anyone noticed they
+ * overlapped (F100). Merging them surfaced a real aliasing: the AGC's
+ * freeze bit and the detector-pending flag are the same bit (byte 0x123's
+ * bit 1 is the high half of the `flags` short at 0x122, i.e. bit 9 of that
+ * short), so the AGC is frozen for exactly as long as a detector is armed
  * and has not yet seen signal, and starts adapting the moment one does.
- * Two functions reconstructed weeks apart, sharing a flag neither knew about.
  *
- * Offsets are from +0x264, which is what every caller passes.  Fields with
- * no name yet are `fNNN` after their offset; the pads are not a claim about
- * their contents.
+ * Offsets in field comments are from `+0x264` -- what every caller passes
+ * this struct's address as. A field without an established name is still
+ * spelled `fNNN` after its own offset; a `pad_NNNN` region is not a claim
+ * that its bytes are unread, only that they are not yet modelled as fields.
  *
- * NAMING PASS (F10123).  This header and `src/pump/v34/v34rx.c` carry the
- * heaviest concentration of bare `fNNN` fields in the tree, and most now
- * have well-evidenced meanings -- but a real rename changes the SYMBOL, and
- * this struct is shared with `v34hshak.c`, `v34hstx1.cpp`, `v34pcmif.c`,
- * `v34diag.cpp` and a dozen fixtures under `test/mutations` that match
- * against those files' source TEXT byte for byte.  A field renamed here
- * without also fixing every one of those breaks the build; fixing them
- * risks a silent, uncounted loss of mutation coverage exactly like findings
- * F2157/F3002.  So this pass renamed only the fields whose every reference
- * lives in `v34recv.h`, `v34rx.c`, `t_v34rx.c`, `t_v34demod.c` and
- * `test/mutations/v34rx.json` -- verified by grepping the whole tree for
- * each field, not assumed.  A field with a solid derivation but a reference
- * outside that set keeps its bare name here, with the derived name recorded
- * in its comment as `-- derived: NAME, withheld (F10123)` for whoever next
- * takes the handshake file itself.
+ * A naming pass (F10123) gave most `fNNN` fields solid names, but a field
+ * shared with `v34hshak.c`, `v34hstx1.cpp`, `v34pcmif.c`, `v34diag.cpp` or
+ * a mutation fixture keeps its old bare name here where renaming it would
+ * reach outside this file's own blast radius (F2157/F3002); such fields
+ * carry their derived name in a `-- derived: NAME, withheld (F10123)` note
+ * for whoever next takes on that file.
  */
 
 #ifndef DSPLIB_V34RECV_H
@@ -48,11 +39,11 @@ struct v34_receiver {
 					  `vectpp[]` during phase 3 (was f120) */
 	unsigned short  flags;           /* +0x122 */
 	/*
-	 * +0x124.  `rxsymcnt` -- receiver's own debug string names it, in
-	 * "S-S1 is detected,rxsymcnt= %d,pllcnt= %d,gain= 0x%x".  It counts
-	 * received symbols, and receiver reads it as an acquisition clock:
-	 * thresholds at 0x11, 0x40, 0x68, 0x132, 0x143, 0x153, 0x212, 0x332
-	 * and 0x7530 each move the receiver to a different behaviour.
+	 * +0x124.  Counts received symbols; `receiver` reads it as an
+	 * acquisition clock, with thresholds at 0x11, 0x40, 0x68, 0x132,
+	 * 0x143, 0x153, 0x212, 0x332 and 0x7530 each moving the receiver to
+	 * a different behaviour. The object's own debug string calls it
+	 * `rxsymcnt` ("S-S1 is detected,rxsymcnt= %d,pllcnt= %d,gain= 0x%x").
 	 *
 	 * -- derived: rxsymcnt, withheld (F10123): eleven references in
 	 * `v34hshak.c` and two mutation fixtures (`v34hsrx4.json`,
@@ -61,28 +52,24 @@ struct v34_receiver {
 	short           rx_blocks;            /* +0x124 */
 	short           best_index;      /* +0x126 */
 	/*
-	 * +0x128.  `rxtiming`'s and `receiver`'s own output count -- always 4,
+	 * +0x128.  `rxtiming`'s and `receiver`'s output count -- always 4,
 	 * set uniformly by `V34SetupDemodulator` whatever the baud rate.
-	 * Named `out_count` and threaded through `v34hshak.c` (including its
-	 * own `V34HS_OFF` offset assertion) by the handshake-cluster naming
-	 * pass; kept here rather than this file's own `pulls_per_call`
-	 * candidate since that work is complete and verified (F9480/F10123).
+	 * See findings F9480/F10123.
 	 */
 	short           out_count;            /* +0x128 */
 	short           agc_pair_count;  /* +0x12a V34demodulate: how many of
 					  the four samples-per-AGC-tick have
 					  landed (was f12a) */
 	/*
-	 * +0x12c.  ONE LOCATION, TWO WIDTHS.  V34demodulate and V34agc
-	 * accumulate a 32-bit sum of squared gained samples here; agcadapt
-	 * reads `movzwl 0x12e` -- the high half of that same int -- as its
-	 * measurement.  So the AGC's input is the energy sum divided by
-	 * 65536, and the two were only ever separate fields because they
-	 * were reconstructed by different functions weeks apart.
+	 * +0x12c.  One location, two widths: `V34demodulate` and `V34agc`
+	 * accumulate a 32-bit sum of squared gained samples here, and
+	 * `agcadapt` reads the high half of that same int as its
+	 * measurement -- so the AGC's input is the energy sum divided by
+	 * 65536.
 	 *
-	 * The union spells the aliasing out rather than casting a pointer,
-	 * which -O2 is entitled to reorder.  It assumes a little-endian
-	 * layout, as the whole port does.
+	 * The union spells the aliasing out explicitly rather than casting
+	 * a pointer, which -O2 is entitled to reorder.  It assumes a
+	 * little-endian layout, as the whole port does.
 	 */
 	union {
 		int             sum;        /* +0x12c the accumulator      */
@@ -99,23 +86,15 @@ struct v34_receiver {
 	short           rms_buf[36];     /* +0x13c V34demodulate: 36 samples for the RMS */
 	unsigned char pad_184[0x19c - 0x184];
 	short           rms_idx;         /* +0x19c the cursor into `rms_buf[]`,
-					  wrapping at 36 (was f19c).  Renamed
-					  despite four references in
-					  `v34hshak.c`, none of them in a
-					  mutation fixture (F10123). */
+					  wrapping at 36 (F10123) */
 	/*
-	 * +0x19e.  NOT "the RMS window's second scalar and nothing reads it
-	 * back" -- that was the handshake-cluster pass's own first reading
-	 * (applied here as `short_19e`) and it is wrong, corrected on merge:
-	 * `dpskinit`/its re-arm clear it alongside rms_idx, but `v34hshak.c`'s
-	 * own RX_PHASE2_CALL step (already reconstructed on that branch) reads
-	 * it as a one-shot latch: the first time the phase-2 symbol counter
-	 * passes 0x125f it is still zero, so the retrain tone-detector is
-	 * SKIPPED and the field is set to 1; every call after that it runs the
-	 * detector for real.  So it is a "have we already passed this gate
-	 * once" flag, not an RMS scalar -- renamed `retrain_gate` and threaded
-	 * through every one of `short_19e`'s own sites in `v34hshak.c`
-	 * (F10123/F9480).
+	 * +0x19e.  A one-shot latch, not an RMS scalar: `dpskinit` and its
+	 * re-arm clear it alongside `rms_idx`, but `v34hshak.c`'s
+	 * `RX_PHASE2_CALL` step reads it as "have we already passed this gate
+	 * once" -- the first time the phase-2 symbol counter passes 0x125f it
+	 * is still zero, so the retrain tone-detector is skipped and the
+	 * field is set to 1; every call after that it runs the detector for
+	 * real.  See findings F10123/F9480.
 	 */
 	short           retrain_gate;    /* +0x19e */
 	int             trn_ref_sr;      /* +0x1a0 the TRN reference
@@ -129,11 +108,7 @@ struct v34_receiver {
 					  * differential decode (was f1aa) */
 	/*
 	 * +0x1ac..0x1b0.  The shared interpolator's phase, step and wrap,
-	 * read by both `rxtiming` and `receiver`.  Named `phase_frac`/
-	 * `phase_inc`/`phase_wrap` and threaded through `v34hshak.c`'s
-	 * handshake steps and four mutation fixtures (`v34hsmst44.json`,
-	 * `v34hst3mid.json`, plus the handshake source itself) by the
-	 * handshake-cluster naming pass (F10123/F9480).
+	 * read by both `rxtiming` and `receiver`.  See findings F10123/F9480.
 	 */
 	short           phase_frac;      /* +0x1ac rxtiming: fractional phase */
 	short           phase_inc;       /* +0x1ae   its increment */
@@ -147,31 +122,24 @@ struct v34_receiver {
 	/*
 	 * +0x1ba.  Half the down-mix carrier table's length -- a quarter
 	 * cycle, since `carrier[i]` and `carrier[i + half_len]` are cosine and
-	 * sine of the same running phase (see `carrier` above).  Named
-	 * `half_len` and threaded through `v34hshak.c` (twenty-one references)
-	 * and `v34hstx1.cpp` by the handshake-cluster naming pass
-	 * (F10123/F9480).
+	 * sine of the same running phase (see `carrier` above).  See findings
+	 * F10123/F9480.
 	 */
 	short           half_len;        /* +0x1ba */
 	short           mix_carrier_phase;   /* +0x1bc the down-mix carrier's
 					      running phase (was f1bc) */
 	/*
 	 * +0x1be.  `V34SetupDemodulator`'s unmodified symbol period, kept
-	 * beside `phase_inc` which the timing loop then slews.  Named
-	 * `symbol_period` and threaded through `v34hshak.c` by the
-	 * handshake-cluster naming pass (F10123/F9480).
+	 * beside `phase_inc` which the timing loop then slews.  See findings
+	 * F10123/F9480.
 	 */
-	short           symbol_period;   /* +0x1be
-					 * unmodified symbol period, kept
-					 * beside phase_inc which the timing loop
-					 * then slews */
+	short           symbol_period;   /* +0x1be */
 	/*
-	 * +0x1c0.  `pllcnt`, from the same debug string as `rx_blocks`, AND
-	 * the timing-recovery state machine's own state (`TimingV34`,
-	 * `setTimingStateParameters`): -1 done, 1 start, 2..8 the ramp.  One
-	 * field serving both roles, the same overlay pattern as the AGC
-	 * freeze bit above -- kept as `pllcnt` (rank-1, its own debug string)
-	 * rather than the timing-state role's weaker inferred name.
+	 * +0x1c0.  `pllcnt`, named from the same debug string as `rx_blocks`.
+	 * It doubles as the timing-recovery state machine's own state
+	 * (`TimingV34`, `setTimingStateParameters`): -1 done, 1 start, 2..8
+	 * the ramp -- the same one-field-two-roles pattern as the AGC freeze
+	 * bit above.
 	 */
 	short           pllcnt;            /* +0x1c0 */
 	unsigned char pad_1c2[0x1c8 - 0x1c2];
@@ -190,21 +158,18 @@ struct v34_receiver {
 	short           ppm_count;       /* +0x1ce   symbols seen in that
 					  window so far (was f1ce) */
 	/*
-	 * +0x1d0.  `setTimingStateParameters` reports this onward via
-	 * `VPcmV34LogTimingOffset` as `timing_offset * 10`; `TimingV34`
-	 * computes it every `report_interval` symbols by converting the
-	 * accumulated timing slip to parts per million.  Named
-	 * `timing_offset` and threaded through `v34hshak.c`/`v34diag.cpp` by
-	 * the handshake-cluster naming pass (F10123/F9480).
+	 * +0x1d0.  Reported onward via `VPcmV34LogTimingOffset` as
+	 * `timing_offset * 10`; `TimingV34` computes it every
+	 * `report_interval` symbols by converting the accumulated timing
+	 * slip to parts per million.  See findings F10123/F9480.
 	 */
 	short           timing_offset;   /* +0x1d0 */
 	/*
-	 * +0x1d2.  Named `baud` when rxtiminginit was the only thing seen
-	 * writing it (2400, the slowest V.34 rate).  It is not:
-	 * setTimingStateParameters loads it from the frame length over 8, and
-	 * TimingV34 uses it as the interval between timing-offset reports.
-	 * So it is a symbol count, and 2400 was a plausible-looking
-	 * coincidence.
+	 * +0x1d2.  A symbol count, not a baud rate: `setTimingStateParameters`
+	 * loads it from the frame length over 8, and `TimingV34` uses it as
+	 * the interval between timing-offset reports.  (An earlier reading
+	 * named it `baud` from `rxtiminginit`'s 2400 -- V.34's slowest rate --
+	 * which turned out to be a plausible-looking coincidence.)
 	 *
 	 * -- derived: ppm_period, withheld (F10123): two references in
 	 * `v34hshak.c` and three mutation fixtures.
@@ -214,11 +179,7 @@ struct v34_receiver {
 	/*
 	 * +0x1d8.  `TimingV34`'s fractional carry: the whole part of each
 	 * symbol's correction goes to the interpolator step, the remainder
-	 * stays here for the next symbol.
-	 *
-	 * Renamed here (F10132): the one `v34diag.cpp` reference and the
-	 * mutation fixture (`v34vdiag.json`, seven mutations) that withheld
-	 * it in F10123 are both fixed.
+	 * stays here for the next symbol.  See finding F10132.
 	 *
 	 * pad_1d6[2] removed here -- pure alignment gap ahead of this `int`
 	 * (finding F10146).
@@ -263,7 +224,7 @@ struct v34_receiver {
 	short           cloop_phase_hi;  /* +0x206   wrapped high word, masked
 					  to 0x1fff (was f206) */
 	short           f208;            /* +0x208 rxtiming IIR state, I(-1) --
-					  * AND, in `receiver`'s own separate
+					  * and, in `receiver`'s own separate
 					  * resample loop, this call's raw
 					  * equaliser output.  Two functions,
 					  * two meanings, never live at once
@@ -288,11 +249,12 @@ struct v34_receiver {
 		} iir2;
 	} dp;
 	/*
-	 * +0x210.  TWO QUANTITIES, ONE PAIR OF FIELDS, WITHIN ONE CALL.
-	 * receiver first writes the DEROTATED RECEIVED point here, and then,
-	 * after the decoder has run, overwrites it with the DECISION rotated
-	 * back up by the same carrier.  Everything between the two reads the
-	 * first; the error term at the end reads the second.
+	 * +0x210.  Two quantities share this one pair of fields within a
+	 * single call: `receiver` first writes the derotated received point
+	 * here, then, after the decoder has run, overwrites it with the
+	 * decision rotated back up by the same carrier.  Everything between
+	 * the two reads the first; the error term at the end reads the
+	 * second.
 	 */
 	short           target_re;       /* +0x210 */
 	short           target_im;       /* +0x212 */
@@ -301,25 +263,21 @@ struct v34_receiver {
 	short           pred_err_re;     /* +0x214 (was f214) */
 	short           pred_err_im;     /* +0x216 (was f216) */
 	/*
-	 * +0x218.  `receiver`'s own comment already names it: the
-	 * equaliser's step, Q15, selected by `decoderv34` (0x2000 or
-	 * 0x4000) from how far into the frame the symbol count is.  Named
-	 * `equ_step` and threaded through `v34hshak.c`/`v34fsk.h` by the
-	 * handshake-cluster naming pass (F10123/F9480).
+	 * +0x218.  The equaliser's step, Q15, selected by `decoderv34`
+	 * (0x2000 or 0x4000) from how far into the frame the symbol count
+	 * is.  See findings F10123/F9480.
 	 */
 	short           equ_step;        /* +0x218 */
 	/*
-	 * +0x21a.  `equerr` -- receiver's own debug string, "V34EQU, equerr
-	 * = %d, preerr = %d".  Republished from `equerr_accum` every 1024
-	 * symbols.  `v34hstx1.cpp` inlines the SNR computation over this
-	 * field eleven times; both naming passes agreed on `equerr`.
+	 * +0x21a.  Republished from `equerr_accum` every 1024 symbols.
+	 * `v34hstx1.cpp` inlines an SNR computation over this field eleven
+	 * times.  Named from the object's own debug string, "V34EQU, equerr
+	 * = %d, preerr = %d".
 	 */
 	short           equerr;          /* +0x21a */
 	/*
 	 * +0x21c.  The 1024-symbol counter that publishes equerr/preerr and
-	 * resets their accumulators.  Named `err_symcount` and threaded
-	 * through `v34hstx1.cpp` by the handshake-cluster naming pass
-	 * (F10123/F9480).
+	 * resets their accumulators.  See findings F10123/F9480.
 	 */
 	short           err_symcount;    /* +0x21c the 1024-symbol counter
 					  * that publishes them */
@@ -328,13 +286,10 @@ struct v34_receiver {
 	 * below (finding F10146).
 	 *
 	 * Two error energies accumulated over 1024 symbols and republished as
-	 * shorts when the counter wraps.  receiver's own names, from
-	 * "V34EQU, equerr = %d, preerr = %d": `equerr_accum` -> equerr is the
-	 * EQUALISER error and `preerr_acc` -> preerr the PREDICTOR error, so
-	 * the pair says which of the two stages is failing to converge.
-	 * `equerr_accum`/`preerr` named and threaded through `v34hstx1.cpp`
-	 * (same blast radius as `err_symcount` above) by the handshake-cluster
-	 * naming pass (F10123/F9480).
+	 * shorts when the counter wraps: `equerr_accum` is the equaliser's
+	 * error and `preerr_acc` the predictor's, so the pair says which of
+	 * the two stages is failing to converge.  Named from the object's
+	 * own debug string, "V34EQU, equerr = %d, preerr = %d" (F10123/F9480).
 	 */
 	int             equerr_accum;    /* +0x220 */
 	short           preerr;          /* +0x224 */
@@ -368,20 +323,12 @@ struct v34_receiver {
 					  (was f244) */
 	short           demod_q_prev;    /* +0x246   and Q (was f246) */
 	/*
-	 * +0x248.  `sig_energy` -- republished from `sig_energy_acc` every
-	 * 1024 symbols, in step with `equerr`/`preerr` (same counter,
-	 * `err_symcount`, same `>> 8` scaling as the accumulator below).
-	 * `VPcmV34GetSNR` (`v34pcmif.c`) and `VPcmV34GetDiagnostics`'s inlined
-	 * copy (`v34diag.cpp`/`TAG_DiagnosticResults.h`) divide it by `equerr`
-	 * to get the ratio their dB ladder walks -- a received-signal energy
-	 * over an equaliser-error energy is a signal-to-noise ratio, and the
-	 * received-point energy accumulator fills it, so `sig_energy` (not
-	 * "the SNR" itself, which is `equerr`'s reciprocal role) is the
-	 * signal side of that ratio.  Left bare by F10123 only for its
-	 * blast radius outside `v34recv.h`/`v34rx.c`; renamed here after
-	 * verifying that radius is four files and zero mutation fixtures
-	 * (F10132) -- `v34pcmif.c`, `v34diag.cpp`, `TAG_DiagnosticResults.h`
-	 * (comment only) and `t_v34diag.cpp`/`t_v34pcmif.c`, all fixed.
+	 * +0x248.  Republished from `sig_energy_acc` every 1024 symbols, in
+	 * step with `equerr`/`preerr`.  `VPcmV34GetSNR` (`v34pcmif.c`) and
+	 * `VPcmV34GetDiagnostics`'s inlined copy divide it by `equerr` to get
+	 * the ratio their dB ladder walks: a received-signal energy over an
+	 * equaliser-error energy is a signal-to-noise ratio, and this is the
+	 * signal side of it.  See finding F10132.
 	 */
 	int             sig_energy;      /* +0x248 (was f248) */
 	int             sig_energy_acc;  /* +0x24c the received-point energy
@@ -395,30 +342,29 @@ struct v34_receiver {
 	short           bad_long_run;            /* +0x25a */
 	short           good_run;            /* +0x25c */
 	/*
-	 * +0x25e.  Read only by `v34hstx1.cpp`'s TRNSEG4A rate step, gated on
-	 * `> 1`: value 2 forces the new rate DOWN to `baud_copy - 1` when the
-	 * computed rate would go above it, and the else arm (anything else
-	 * `> 1`) forces it UP to `baud_copy + 1` when the computed rate would
-	 * fall below it -- and the two arms' own debug strings name them
-	 * "returning from local rrn down" / "... up", using this tree's own
-	 * RRN (Rate ReNegotiation) vocabulary (`rrn_local`/`rrn_remote` in
-	 * `v34fsk.h`, `V34_RX_FLAG_RENEG` in this header). So: a pending
-	 * local-RRN direction latch, checked once TRNSEG4A recomputes the
-	 * rate and (by everything written so far) never itself SET to a
-	 * nonzero value anywhere in this tree -- `v34hshak.c` only clears it.
-	 * Named from the read side alone; the producer is unwritten, so which
-	 * exact nonzero values besides 2 occur is not established, only that
-	 * "not 2" means "up" per the else arm (usage inference, strongly
-	 * supported by the two branches' own debug text, F10132).
+	 * +0x25e.  A pending local-RRN (Rate ReNegotiation) direction latch,
+	 * read only by `v34hstx1.cpp`'s TRNSEG4A rate step, gated on `> 1`:
+	 * value 2 forces the new rate down to `baud_copy - 1` when the
+	 * computed rate would go above it, and any other value `> 1` forces
+	 * it up to `baud_copy + 1` when the computed rate would fall below
+	 * it -- matching the two arms' own debug strings, "returning from
+	 * local rrn down" / "... up".
+	 *
+	 * Named from the read side alone: nothing written so far in this
+	 * tree ever sets it to a nonzero value (`v34hshak.c` only clears it),
+	 * so which exact nonzero values besides 2 occur is not established --
+	 * only that "not 2" means "up", per the else arm.  Usage inference,
+	 * strongly supported by the two branches' own debug text (F10132).
 	 */
 	short           rrn_local_dir;       /* +0x25e (was short_25e) */
 	short           baud_copy;            /* +0x260 */
 	/*
-	 * +0x262.  The AGC's STARTING GAIN, copied into `agc_gain` by both
+	 * +0x262.  The AGC's starting gain, copied into `agc_gain` by both
 	 * `dpskinit` and `setupreceiver` -- the two functions that bring a
 	 * receiver up -- each of which then installs its own `agc_step`.
-	 * Whoever writes it has not been reconstructed; `rxinit` does not,
-	 * and puts a literal 0x200 in `agc_gain` instead.
+	 * Whoever writes this field has not been reconstructed; `rxinit`
+	 * takes a different path and puts a literal 0x200 into `agc_gain`
+	 * instead of copying it from here.
 	 *
 	 * -- derived: agc_gain_init, withheld (F10123): nineteen references in
 	 * `v34hshak.c`, two more each in `v34hstx1.cpp`/`v34pcmcreate.cpp`,
@@ -427,13 +373,10 @@ struct v34_receiver {
 	short           agc_start_gain;            /* +0x262 */
 	unsigned char pad_264[0x266 - 0x264];
 	/*
-	 * +0x266.  demapFrame's sub-frame counter, stepped by decoderv34.
-	 * Named `subframe_idx` and threaded through `v34hshak.c` (and its
-	 * mutation fixture) by the handshake-cluster naming pass
-	 * (F10123/F9480).
+	 * +0x266.  `demapFrame`'s sub-frame counter, stepped by `decoderv34`.
+	 * See findings F10123/F9480.
 	 */
-	short           subframe_idx;    /* +0x266 demapFrame's sub-frame
-					  * counter, stepped by decoderv34 */
+	short           subframe_idx;    /* +0x266 */
 	/*
 	 * +0x268.  The equaliser output one and two symbols ago, which
 	 * receiver's retrain detector differences against the current one.
@@ -446,16 +389,14 @@ struct v34_receiver {
 	short           eq_out_q2;       /* +0x26e (was f26e) */
 	unsigned char pad_270[0x27a - 0x270];
 	/*
-	 * +0x27a.  SEVEN, not twenty-one.  The earlier figure came from the
-	 * pointer at +0x2a4 and assumed everything between belonged to this
-	 * array; `receiver` shows it does not -- the predictor's coefficients
-	 * start at +0x288, which is entry seven.
-	 *
-	 * Two unrelated constraints land on the same number.  Finding F123
-	 * measured fourteen shorts of headroom in the receive burst before
-	 * it eats rxtiming's own loop bound, and seven outputs at up to two
-	 * pulls each is exactly fourteen.  So out_count <= 7 is both what fits
-	 * here and what the burst survives, and the fixtures assert both.
+	 * +0x27a.  Seven entries: `receiver` shows the array ends here and
+	 * the predictor's coefficients begin at +0x288, entry seven.  Seven
+	 * is also independently the most `rxtiming` can produce -- finding
+	 * F123 measured fourteen shorts of headroom in the receive burst
+	 * before it eats `rxtiming`'s own loop bound, and seven outputs at
+	 * up to two pulls each is exactly fourteen -- so `out_count <= 7` is
+	 * both what fits here and what the burst survives, and the fixtures
+	 * assert both.
 	 */
 	short           timing_out[7];   /* +0x27a rxtiming's metric */
 	/*
@@ -465,7 +406,7 @@ struct v34_receiver {
 	 * the sense that the prediction is the complex product
 	 * (b + ja) . (hist_i + j hist_q).  receiver runs the same engine
 	 * twice per symbol -- once on the equaliser output and once on the
-	 * decision error -- over ONE shared set of coefficients and ONE
+	 * decision error -- over one shared set of coefficients and one
 	 * shared history, and only the second run adapts them.
 	 *
 	 * The histories are four long and only three are read: the shift
@@ -477,19 +418,16 @@ struct v34_receiver {
 	short           pred_i[4];       /* +0x294 */
 	short           pred_q[4];       /* +0x29c */
 	/*
-	 * +0x2a4.  modem_serrint's 60-tap receive filter's coefficients.
-	 * Named `fir_coeff` and threaded through `v34hshak.c` (including its
-	 * own offset assertion) by the handshake-cluster naming pass
-	 * (F10123/F9480).
+	 * +0x2a4.  `modem_serrint`'s 60-tap receive filter coefficients.  See
+	 * findings F10123/F9480.
 	 */
-	const short *   fir_coeff;       /* +0x2a4 modem_serrint: the 60-tap
-					  * receive filter's coefficients */
+	const short *   fir_coeff;       /* +0x2a4 */
 	unsigned char pad_2a8[0x798 - 0x2a8];
 	/*
 	 * +0x798.  A saturating up/down counter over how far the equaliser
 	 * output moves between symbols, from receiver's two retrain strings.
-	 * It counts UP while the signal is standing still, and passing 0x8c
-	 * that way raises V34_RX_FLAG_RETRAIN.  It counts DOWN on the
+	 * It counts up while the signal is standing still, and passing 0x8c
+	 * that way raises V34_RX_FLAG_RETRAIN.  It counts down on the
 	 * middling case, and being between -0x84 and -0x78 when the signal
 	 * moves again raises V34_RX_FLAG_RENEG instead.
 	 */
