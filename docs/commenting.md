@@ -161,3 +161,35 @@ length. The next wave's brief should say explicitly that only the
 proof) is what gets compressed, not narrative rationale that happens to be
 long. Also: not every derivation trail names its finding number inline, so
 budget time for a `docs/findings.md` grep per field before compressing.
+
+## Confirmed three-step order (2026-09-04)
+
+Keep scaling the header pass to completion first. Then run the
+byte-identity improvement pass, working WITH the existing in-function
+R/E comments left in place (their address/derivation content is exactly
+the working material that pass needs). Only after that settles do the
+`.c`-file phase of this commenting pass replace those in-function
+comments — so the code is restructured once and documented once, per the
+sequencing section above.
+
+## Wave 2 — the remaining 209 headers, seven parallel clusters
+
+Launched 2026-09-04, same methodology as the pilot, with the pilot's own
+correction folded in: compress only EVIDENTIARY content (addresses,
+opcodes, byte-offset citations used as proof) when a field has a real
+name, never long-but-non-evidentiary architecture/design rationale --
+that stays in full regardless of the field's naming state. Also budget a
+`docs/findings.md` grep per field before compressing, since not every
+derivation trail names its finding number inline.
+
+| cluster | scope | files |
+|---|---|--:|
+| V90 A | `V90{AutoDigitalImpDetector,BitsToSymbol,CodecType,ConnectionEvaluator,ConstellationDesigner,ConstellationPower,CP,CPpck,CPUnPck,Demapper,Demodulator,DilDescriptorSettings,Equalizer,Jd,Mapper,MappingParams,Modem,Modulator,MP,Parameters}.h` | 20 |
+| V90 B | `V90{Phase2Info,Phase3Demodulator,Phase3Modulator,Phase4Demodulator,Phase4Modulator,PreFilter,RDetector,Resampler,SdDetector,SessionFlag,SignBitsExtractor,SpectralConditions,SpectralShaper,SpectralShapingFilter,SpectralVerifier,TRN2Designer}.h` | 16 |
+| V92/VPcm | `V92*.h`, `VPcmFloModem.h` | 21 |
+| fax/v8/class1 | `class1*.h`, `fax*.h`, `v17*.h`, `v27*.h`, `v29*.h`, `v8*.h` | 19 |
+| long-tail A | `Agc.h` through `fpm.h`/`fpm_iir.h` (alphabetical first third) | 45 |
+| long-tail B | `fpm_mrf.h` through `toneiir.h` (alphabetical second third) | 39 |
+| long-tail C | `v21cfg.h` through `x87copy.h` (alphabetical last third, mostly V.22/V.23/V.32) | 49 |
+
+Status: running.
