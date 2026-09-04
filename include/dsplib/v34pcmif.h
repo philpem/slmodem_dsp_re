@@ -20,170 +20,271 @@ struct int_complex;
 extern "C" {
 #endif
 
-/*
- * Fill in the diagnostics record for whichever datapump is running -- V.34,
- * V.90 or V.92, chosen by `v34_object::status`.  An external API entry point:
- * the caller is the application and it owns the record.  See
- * src/pump/v34/v34diag.cpp, which is a .cpp because the two PCM arms call a
- * C++ member.
+/**
+ * @brief Fill in the diagnostics record for the running datapump.
+ *
+ * Reports on whichever of V.34, V.90 or V.92 is running, chosen by
+ * `v34_object::status`. An external API entry point: the caller is the
+ * application, and it owns @p results. Defined in `src/pump/v34/v34diag.cpp`
+ * because the two PCM arms it reports on are reached through a C++ member.
+ *
+ * @param obj      The V.34 modem object.
+ * @param results  Output: the diagnostics record, owned by the caller.
  */
 void VPcmV34GetDiagnostics(void *obj, struct TAG_DiagnosticResults *results);
 
-/*
- * Fill an array of points with one of nine per-selector diagnostics -- the
- * constellation, the linear equaliser, the DFE, the resampler's phase and
- * offset, either echo canceller, or the decision errors -- and return how
- * many points were written.  Another external API entry point; the caller
- * owns the array and says how long it is.
+/**
+ * @brief Fill an array of points with one of nine visual diagnostics.
  *
- * `maxCount` IS NOT HONOURED BY SELECTORS 3 AND 4.  Deviation D710: both
- * write `points[0]` and return 1 whatever it says, including zero.
+ * The available diagnostics are the constellation, the linear equaliser,
+ * the DFE, the resampler's phase and offset, either echo canceller, and the
+ * decision errors. An external API entry point; the caller owns @p points
+ * and says how long it is via @p maxCount.
  *
- * Selector 7 answers nothing, and so does anything above 8.
+ * Selectors 3 and 4 do not honour @p maxCount (deviation D710): both always
+ * write `points[0]` and return 1, even if @p maxCount is zero. Selector 7,
+ * and anything above 8, writes nothing.
+ *
+ * @param obj       The V.34 modem object.
+ * @param what      Which diagnostic to report.
+ * @param points    Output array of points, owned by the caller.
+ * @param maxCount  Capacity of @p points; see the selector 3/4 exception above.
+ * @return How many points were written.
  */
 unsigned long VPcmV34GetVisualDiagnostics(void *obj, int what,
 					  struct int_complex *points,
 					  unsigned long maxCount);
 
-/* Record the timing offset the V.34 receiver has settled on. */
+/**
+ * @brief Record the timing offset the V.34 receiver has settled on.
+ * @param obj     The V.34 modem object.
+ * @param offset  The timing offset to record.
+ */
 void VPcmV34LogTimingOffset(void *obj, short offset);
 
-/*
- * Set the transmit scale to the one constant the object ever uses, and say
- * so through `edprintf`.  No parameter: the value is built in.
+/**
+ * @brief Set the transmit scale to the object's one built-in constant.
+ *
+ * Reports the value through `edprintf`.
+ *
+ * @param obj  The V.34 modem object.
  */
 void VPcmV34SetTxScale(void *obj);
 
-/*
- * Where the V.34 object keeps the two arrays the PCM side fills in and reads
- * back.  Both return interior pointers and neither copies anything.
+/**
+ * @brief Get the V.34 object's probe-results array.
+ * @param obj  The V.34 modem object.
+ * @return An interior pointer to the array the PCM side fills in and reads
+ *         back; nothing is copied.
  */
 double *V34XF_GetProbeResultsPtr(void *obj);
+
+/**
+ * @brief Get the V.34 object's INFO0 bits array.
+ * @param obj  The V.34 modem object.
+ * @return An interior pointer to the array the PCM side fills in and reads
+ *         back; nothing is copied.
+ */
 int *V34XF_GetInfo0BitsPtr(void *obj);
 
-/*
- * The measured round-trip delay plus 480 samples.  Truncated to 16 bits, so
- * a large stored delay comes back negative -- see the note in v34pcmif.c.
+/**
+ * @brief Get the measured round-trip delay, plus 480 samples.
+ * @param obj  The V.34 modem object.
+ * @return The delay, truncated to 16 bits -- a large stored delay comes
+ *         back negative; see the note in v34pcmif.c.
  */
 short V34XF_GetRTD(void *obj);
 
-/*
- * Phase-3 arrivals.  Each advances the object's `v90_receiver` counter;
- * TRN2d ratchets it rather than setting it.  `constel` and `silence_scr` are
- * carried bits of the message, not sizes.
+/**
+ * @brief Record a Phase-3 Jd arrival.
+ *
+ * Advances the object's `v90_receiver` counter.
+ *
+ * @param obj           The V.34 modem object.
+ * @param constel       Constellation size, carried in the message.
+ * @param silence_scr   Silence/scrambling bits, carried in the message.
  */
 void V34XF_IndicateJdReceived(void *obj, unsigned char constel,
 			      unsigned char silence_scr);
+
+/**
+ * @brief Record a Phase-3 Dil arrival.
+ *
+ * Advances the object's `v90_receiver` counter.
+ *
+ * @param obj      The V.34 modem object.
+ * @param constel  Constellation size, carried in the message.
+ */
 void V34XF_IndicateDilReceived(void *obj, unsigned char constel);
+
+/**
+ * @brief Record a Phase-3 TRN2d arrival.
+ *
+ * Ratchets the object's `v90_receiver` counter forward, rather than setting it.
+ *
+ * @param obj  The V.34 modem object.
+ */
 void V34XF_IndicateTrn2dReceived(void *obj);
+
+/**
+ * @brief Record that the K56Flex rate has been determined.
+ *
+ * Advances the object's `v90_receiver` counter.
+ *
+ * @param obj  The V.34 modem object.
+ */
 void V34XF_IndicateK56FlexRateDetermined(void *obj);
 
 /*
- * The three requests the shell makes of a running connection.  Each forks on
- * `status`: 1 and 2 mean a PCM receiver has the line and the request goes to
- * the C++ side down a chain of three pointers instead.
+ * The three requests the shell makes of a running connection (the next
+ * three functions). Each forks on `status`: values 1 and 2 mean a PCM
+ * receiver has the line, and the request is forwarded to the C++ side
+ * down a chain of three pointers instead.
  */
 
-/* Tear the connection down.  Clears the rate request and both bounds. */
+/**
+ * @brief Tear the connection down.
+ *
+ * Clears the pending rate request and both rate bounds.
+ *
+ * @param obj  The V.34 modem object.
+ */
 void VPcmV34InitiateHangUp(void *obj);
 
-/*
- * Ask for a different rate.  `req` is 0, 2 or 5 for one index down, 3 for one
- * up and anything else for "no particular rate"; a step that would leave
- * [rate_min, rate_max] leaves the request unchanged rather than clamping.
- * On the PCM arm the code is forwarded verbatim and means something else.
+/**
+ * @brief Ask for a different connection rate.
+ *
+ * A step that would leave `[rate_min, rate_max]` leaves the pending
+ * request unchanged rather than clamping it. When a PCM receiver has the
+ * line, @p req is instead forwarded verbatim to the C++ side, where it
+ * means something else.
+ *
+ * @param obj  The V.34 modem object.
+ * @param req  0, 2 or 5 for one rate index down; 3 for one up; anything
+ *             else for "no particular rate".
  */
 void VPcmV34InitiateRateRenegotiation(void *obj, int req);
 
-/*
- * Count a rate renegotiation, by which end asked for it.  Each is a wrapping
- * 16-bit increment of one short and nothing else; `datapumpv34` is the only
- * caller of either in the object.  `VPcmV34GetDiagnostics` reads the local
- * one back signed.
+/**
+ * @brief Count a rate renegotiation requested by the local end.
+ *
+ * A wrapping 16-bit increment and nothing else. `datapumpv34` is the only
+ * caller in the object; `VPcmV34GetDiagnostics` reads the count back signed.
+ *
+ * @param obj  The V.34 modem object.
  */
 void VPcmV34IndicateLocalRRN(void *obj);
+
+/**
+ * @brief Count a rate renegotiation requested by the remote end.
+ *
+ * A wrapping 16-bit increment and nothing else. `datapumpv34` is the only
+ * caller in the object.
+ *
+ * @param obj  The V.34 modem object.
+ */
 void VPcmV34IndicateRemoteRRN(void *obj);
 
-/*
- * Rebuild the transmitter for a V.90 rate renegotiation -- the only one of
- * the three that does not go through the handshake.  Both parameters are
- * tested against zero only: `rrn_type` selects 15 or 11 for `v90_receiver`
- * and `constel_size` selects 0x89b0 or 0x8990 for `f382`.  The names are the
- * object's own, from the diagnostic this prints.
+/**
+ * @brief Rebuild the transmitter for a V.90 rate renegotiation.
+ *
+ * The only one of the three renegotiation paths that does not go through
+ * the handshake. Both parameters are tested only against zero. The
+ * parameter names are the object's own, taken from the diagnostic this
+ * function prints.
+ *
+ * @param obj           The V.34 modem object.
+ * @param rrn_type      Zero or non-zero: selects `v90_receiver` state 15 or 11.
+ * @param constel_size  Zero or non-zero: selects constellation size 0x89b0 or 0x8990.
  */
 void VPcmV34SetV90RateReneg(void *obj, short rrn_type,
 			    unsigned char constel_size);
 
-/*
- * Tear the connection down and start the V.34 handshake again, having first
- * re-read the configuration and -- if asked -- switched modulation.
+/**
+ * @brief Tear the connection down and restart the V.34 handshake.
  *
- * `requestedDp` is a datapump code and it is a BYTE: the object loads the
- * argument slot with `movzbl`, keeps it in one and prints it as "%d".  The
- * five values it acts on are the modulation numbers themselves --
+ * Re-reads the configuration first and, if asked, switches modulation.
+ * Unlike the three requests above, this is not gated on `status`: it acts
+ * on the V.34 object whichever modem currently has the line, and always
+ * ends in `v34handshakinit` mode 1.
  *
- *      0      keep whatever is running
- *     34      V.34
- *     56      K56Flex
- *     90      V.90
- *     92      V.92
+ * A request the configuration forbids is demoted to 0 rather than refused,
+ * and 0 does not mean "leave everything alone" either -- it winds a
+ * running V.90 receiver back to 1. See the two switches in v34pcmmain.cpp.
  *
- * -- and anything else leaves neither PCM receiver running, which is the same
- * state 34 ends in.  A request the configuration forbids is DEMOTED TO 0
- * rather than refused, and 0 is not "leave everything alone" either: it winds
- * a running V.90 receiver back to 1.  See the two switches in v34pcmmain.cpp.
+ * Defined in `v34pcmmain.cpp` rather than `v34pcmif.c` because four of its
+ * calls are to C++ members; it is `extern "C"` on both sides, which is why
+ * it is declared here with the rest of this translation unit's exports.
  *
- * NOT gated on `status` the way the three requests above are: this one acts on
- * the V.34 object whichever modem has the line, and it always ends in
- * `v34handshakinit` mode 1.
- *
- * It lives in v34pcmmain.cpp rather than v34pcmif.c because four of its calls
- * are C++ members; it is `extern "C"` on both sides, which is why it is
- * declared here with the rest of the translation unit's exports.
+ * @param obj          The V.34 modem object.
+ * @param requestedDp  The modulation to switch to, passed as a byte: 0
+ *                      keeps whatever is running, 34/56/90/92 select
+ *                      V.34/K56Flex/V.90/V.92, and anything else leaves
+ *                      neither PCM receiver running (the same state a
+ *                      request of 34 ends in).
  */
 void VPcmV34InitiateRetrain(void *obj, unsigned char requestedDp);
 
-/*
- * Two progress reports the handshake makes, and nothing acts on.
+/**
+ * @brief Report that the handshake has started echo-canceller adaptation.
  *
- * Each is a debug gate and one string; neither touches the object or reads
- * its argument.  The argument exists all the same: the object overwrites its
- * own first argument slot with the format pointer and tail-jumps into
- * `dsplibs_debug_printf`, which a function with no parameters would have no
- * slot to do.  So the transcript is the whole observable behaviour, and a
- * test that compared only state would pass on an empty body.
+ * A debug-log call: gated on the debug level and prints one fixed string,
+ * touching neither the object nor its own argument otherwise. The argument
+ * still exists in the object's code (it is loaded into the printf call's
+ * slot), so it is kept here for byte-identical calling convention, even
+ * though nothing reads it. `v34handshak` is the only caller.
  *
- * `v34handshak` calls one of each and nothing else calls either.
+ * @param obj  The V.34 modem object (unused; see above).
  */
 void VPcmV34ReportStartOfEchoAdapt(void *obj);
+
+/**
+ * @brief Report that the handshake has reached the middle of echo-canceller
+ * adaptation.
+ *
+ * Same shape as VPcmV34ReportStartOfEchoAdapt(): a debug-log call that
+ * otherwise does nothing. `v34handshak` is the only caller.
+ *
+ * @param obj  The V.34 modem object (unused; see above).
+ */
 void VPcmV34ReportMiddleOfEchoAdapt(void *obj);
 
-/*
- * ---------------------------------------------------------------------------
- * `VPcmV34Progress`, 0xb3c0 and 7,278 bytes: one block of samples through
- * whichever of V.34, V.90, V.92 and K56flex owns the line.  It is the whole
- * of `vpcm_run`'s work between the two sample conversions, and finding F1454
- * measured that a real 33,600 V.34 connect executes no other unwritten
- * symbol.  Defined in `src/pump/v34/v34pcmmain.cpp` because seven of its
- * callees are C++ members; the head of that block is the map.
+/**
+ * @brief Run one block of samples through whichever datapump owns the line.
  *
- * Declared in `include/dsplib/vpcm.h` as well, WEAK, because `vpcm_run` is a
- * C file that must link whether or not this one is present.  The two
- * declarations describe one ABI and never meet in a translation unit -- and
- * this one is the definition's, so it is not weak.
+ * Dispatches to V.34, V.90, V.92 or K56Flex as appropriate. This is the
+ * whole of `vpcm_run`'s work between the two sample-format conversions; a
+ * real 33,600 V.34 connection executes no other unwritten symbol (finding
+ * F1454). Defined in `src/pump/v34/v34pcmmain.cpp` because seven of its
+ * callees are C++ members.
+ *
+ * Also declared, `weak`, in `include/dsplib/vpcm.h`, so that `vpcm_run` (a
+ * plain C file) links whether or not this translation unit is present; the
+ * two declarations describe one ABI and never both appear in one
+ * translation unit. This declaration is the definition's, so it is not weak.
+ *
+ * @param obj      The V.34 modem object.
+ * @param in       Input samples for this block.
+ * @param out      Output samples for this block.
+ * @param nin      Number of input samples.
+ * @param rxbits   Output: received bits.
+ * @param nrx      Output: number of received bits.
+ * @param txbits   Output: transmitted bits.
+ * @param nbits    Output: number of transmitted bits.
+ * @return Status code (see the object's calling convention).
  */
 int VPcmV34Progress(void *obj, float *in, float *out, int nin, int *rxbits,
 		    int *nrx, int *txbits, int *nbits);
 
 /*
- * ---------------------------------------------------------------------------
- * The unwritten-path record for `VPcmV34Progress`'s seven unreconstructed
- * callees.  `vpcm.h`'s block of the same shape says why it exists and why the
- * default is to abort; the codes below are that file's, one level down.
+ * The unwritten-path record for VPcmV34Progress()'s seven unreconstructed
+ * callees. `vpcm.h`'s record of the same shape explains why this exists and
+ * why the default behaviour is to abort; the codes below are one level
+ * down from that file's.
  *
- * Everything named here belongs to the V.90 and V.92 arms.  A V.34 call
- * reaches none of them, which is what makes `t_vpcmrun`'s four-way comparison
- * meaningful with them absent.
+ * Everything named here belongs to the V.90 and V.92 arms -- a V.34 call
+ * reaches none of them, which is what makes `t_vpcmrun`'s four-way
+ * comparison meaningful with these still unwritten.
  */
 #define V34PCM_WRITTEN			0
 #define V34PCM_UNWRITTEN_RUNPCM		1	/* runPcmModem          */
@@ -194,108 +295,190 @@ int VPcmV34Progress(void *obj, float *in, float *out, int nin, int *rxbits,
 #define V34PCM_UNWRITTEN_RRN		6	/* v90RateReneg         */
 #define V34PCM_UNWRITTEN_RRNSILENCE	7	/* v90RateRenegSilence  */
 
-/* Which unwritten callee was reached, or V34PCM_WRITTEN for none. */
+/**
+ * @brief Report which unwritten VPcmV34Progress() callee, if any, was reached.
+ * @return One of the `V34PCM_UNWRITTEN_*` codes, or #V34PCM_WRITTEN if none was.
+ */
 int v34pcm_unwritten(void);
 
-/*
- * "I am going to read the code afterwards."  Clears the record AND turns the
- * abort off; without this call an unwritten path stops the process, because
- * an arm that returns quietly is indistinguishable from an arm that correctly
- * did nothing.
+/**
+ * @brief Acknowledge an unwritten-callee abort and allow the process to continue.
+ *
+ * Clears the unwritten-path record and turns off the abort-on-unwritten-path
+ * behaviour. Without this call, reaching an unwritten path stops the
+ * process -- an arm that silently returns is otherwise indistinguishable
+ * from one that correctly did nothing.
  */
 void v34pcm_unwritten_reset(void);
 
-/*
- * Cap the V.34 symbol rate the line probe is allowed to choose, by writing
- * `shift` on the bins that stand for the rates the configuration bars.
+/**
+ * @brief Cap the V.34 symbol rates the line probe is allowed to choose.
  *
- * `bins` is always `obj->probe_bins` at both of `probeselect`'s call sites,
- * but it is a parameter in the object and is kept one here.  Nothing is
- * returned and the V.34 object is not written: the effect is entirely in the
- * bank, and only `probeselect` looks at it afterwards.
+ * Writes `shift` onto the probe bins that stand for the rates the
+ * configuration bars, so the caller (`probeselect`) skips them. Nothing is
+ * returned and the V.34 object itself is not written -- the effect lives
+ * entirely in the bin bank.
+ *
+ * @param obj   The V.34 modem object.
+ * @param bins  The probe bin bank to constrain (always `obj->probe_bins`
+ *              at both call sites, but kept as a parameter here).
  */
 void chkForceBaudRate(void *obj, struct v34_dftbin *bins);
 
-/*
- * The transmit power back-off in dB, clamped to [-10, +7].
+/**
+ * @brief Get the transmit power back-off, in dB.
  *
- * SHORT, and the caller says so: `settxlevel` does `movswl %ax` on the
- * result.  It has the side effect of setting the echo canceller's three
- * adaptation constants -- see v34pcmif.c.
+ * Has the side effect of setting the echo canceller's three adaptation
+ * constants -- see v34pcmif.c.
+ *
+ * @param obj  The V.34 modem object.
+ * @return The back-off, clamped to [-10, +7].
  */
 short GetVPcmMinimalTxPowerReduction(void *obj);
 
-/*
- * The smaller of the configured upstream rate and the PCM receiver's own
- * cap, in bits per second despite the name.  One caller, `v34handshak` at
- * 0x63457, and it is the only thing that fixes the return type as an int.
+/**
+ * @brief Get the effective maximum upstream rate.
+ * @param obj  The V.34 modem object.
+ * @return The smaller of the configured upstream rate and the PCM
+ *         receiver's own cap, in bits per second (despite the name).
  */
 int VPcmV34GetMaxUpstreamRateIndex(void *obj);
 
 /*
- * ---------------------------------------------------------------------------
- * The public accessor surface: what the layer above the datapump calls.
- *
- * All of them are `extern "C"` exports of `VPcmV34Main.cpp` and all of them
- * are defined in `v34pcmif.c`.  The four "current" getters are declared as a
- * block because they read as four copies of one function and are not; see the
- * comment on them in the `.c`.
+ * The public accessor surface below: what the layer above the datapump
+ * calls. All of these are `extern "C"` exports of `VPcmV34Main.cpp`,
+ * defined in `v34pcmif.c`. The four "current" getters are declared as a
+ * block because they read as four copies of one function and are not --
+ * see the comment on them in the .c file.
  */
 
-/* The same body as `VPcmV34GetMaxUpstreamRateIndex` under the other prefix. */
+/**
+ * @brief Get the effective maximum upstream rate.
+ *
+ * The same implementation as VPcmV34GetMaxUpstreamRateIndex(), under this
+ * header's other naming prefix.
+ *
+ * @param obj  The V.34 modem object.
+ * @return The maximum upstream rate, in bits per second.
+ */
 int V34XF_GetMaxUpstreamRateIndex(void *obj);
 
-/*
- * Tear the datapump down.  Always zero, and the argument is a convention:
- * three instructions that read nothing cannot fix an arity.
+/**
+ * @brief Tear the datapump down.
+ * @param obj  The V.34 modem object; unused.
+ * @return Always 0.
  */
 int VPcmV34Delete(void *obj);
 
-/* Set the datapump's block length; the field is `ptc`.  See D380. */
+/**
+ * @brief Set the datapump's block length.
+ * @param obj  The V.34 modem object; the field is `ptc`. See deviation D380.
+ * @param len  The new block length.
+ */
 void VPcmV34SetMaxBlockLength(void *obj, int len);
 
-/* Non-zero if this connection came up on a short phase 2. */
+/**
+ * @brief Report whether this connection came up on a short Phase 2.
+ * @param obj  The V.34 modem object.
+ * @return Non-zero if a short Phase 2 was used.
+ */
 int VPcmV34GetQuickConnectIndication(void *obj);
 
-/* Symbol rate in baud, or 8000 with a PCM receiver running. */
+/**
+ * @brief Get the current receive symbol rate.
+ * @param obj  The V.34 modem object.
+ * @return Symbol rate in baud, or 8000 while a PCM receiver is running.
+ */
 int VPcmV34GetCurrentRxBaudRate(void *obj);
+
+/**
+ * @brief Get the current transmit symbol rate.
+ * @param obj  The V.34 modem object.
+ * @return Symbol rate in baud, or 8000 while a PCM receiver is running.
+ */
 int VPcmV34GetCurrentTxBaudRate(void *obj);
 
-/* Carrier in Hz, or 0 with a PCM receiver running. */
+/**
+ * @brief Get the current receive carrier frequency.
+ * @param obj  The V.34 modem object.
+ * @return Carrier in Hz, or 0 while a PCM receiver is running.
+ */
 int VPcmV34GetCurrentRxCarrier(void *obj);
+
+/**
+ * @brief Get the current transmit carrier frequency.
+ * @param obj  The V.34 modem object.
+ * @return Carrier in Hz, or 0 while a PCM receiver is running.
+ */
 int VPcmV34GetCurrentTxCarrier(void *obj);
 
-/* The equaliser's signal-to-noise ratio in whole dB, 0 when unavailable. */
+/**
+ * @brief Get the equaliser's signal-to-noise ratio.
+ * @param obj  The V.34 modem object.
+ * @return SNR in whole dB, or 0 when unavailable.
+ */
 int VPcmV34GetSNR(void *obj);
 
-/*
- * One load each, +0x49c and +0x4a0, and no caller anywhere in the object;
- * v34fsk.h's field comments carry the naming derivation.
+/**
+ * @brief Get the receiver's timing offset.
+ *
+ * Reached by no caller anywhere in the object; see v34fsk.h's field
+ * comments for the naming derivation of the field this reads.
+ *
+ * @param obj  The V.34 modem object.
+ * @return The timing offset.
  */
 int getTimingOffset(void *obj);
+
+/**
+ * @brief Get the receiver's timing phase.
+ *
+ * Reached by no caller anywhere in the object; see v34fsk.h's field
+ * comments for the naming derivation of the field this reads.
+ *
+ * @param obj  The V.34 modem object.
+ * @return The timing phase.
+ */
 int getTimingPhase(void *obj);
 
-/* Tell the datapump something happened: 0/1 samples, 2 CAS, 3 three-way. */
+/**
+ * @brief Notify the datapump of an event.
+ * @param obj   The V.34 modem object.
+ * @param what  0 or 1 for samples, 2 for CAS, 3 for three-way calling.
+ */
 void VPcmV34NotifyDP(void *obj, int what);
 
-/*
- * Collect the pending output-sample-clear request.  Returns 1 and fills all
- * three when there is one, 0 and writes nothing when there is not.
+/**
+ * @brief Collect the pending output-sample-clear request, if any.
+ *
+ * @param obj    The V.34 modem object.
+ * @param flag   Output: the request's flag, if there is one.
+ * @param count  Output: the request's count, if there is one.
+ * @param done   Output: the request's done indicator, if there is one.
+ * @return 1 and fills all three outputs if a request is pending, 0 and
+ *         writes nothing otherwise.
  */
 int VPcmV34RequestDPNotification(void *obj, int *flag, int *count, int *done);
 
-/* A K56flex Jd has arrived: rebuild the transmitter.  `constel` is a size. */
+/**
+ * @brief Record a K56Flex Jd arrival and rebuild the transmitter.
+ * @param obj      The V.34 modem object.
+ * @param constel  Constellation size.
+ */
 void V34XF_IndicateK56FlexJdReceived(void *obj, unsigned char constel);
 
-/* The remote end has asked for a retrain. */
+/**
+ * @brief Record that the remote end has asked for a retrain.
+ * @param obj  The V.34 modem object.
+ */
 void VPcmV34SetIndicationOfRemoteRetrain(void *obj);
 
 /*
- * Reset the sample clock and set a deadline `secs * 9600` samples out.
- *
- * MANGLED, so it is C++ and lives in `v34pcmmain.cpp` --
- * `_Z17VPcmV34SetTimeOutP12tagV34Objecti`.  Declared with the rest of the
- * surface all the same, below the `extern "C"` block.
+ * VPcmV34SetTimeOut() -- reset the sample clock and set a deadline
+ * `secs * 9600` samples out -- is declared further down, alongside the
+ * other C++-mangled entry points: its symbol is mangled
+ * (`_Z17VPcmV34SetTimeOutP12tagV34Objecti`), so it has to live outside the
+ * `extern "C"` block below and is defined in `v34pcmmain.cpp`.
  */
 
 #ifdef __cplusplus
@@ -303,75 +486,84 @@ void VPcmV34SetIndicationOfRemoteRetrain(void *obj);
 #endif
 
 /*
- * ---------------------------------------------------------------------------
- * The one entry point of VPcmV34Main.cpp reconstructed so far that is NOT one
- * of its `extern "C"` exports, and so is C++ on both sides of the
- * declaration.
+ * The remaining entry points of VPcmV34Main.cpp are C++ on both sides of
+ * their declaration, unlike everything above: the object exports each of
+ * them under its mangled C++ name rather than an unmangled one, so an
+ * `extern "C"` declaration -- which would name the unmangled symbol --
+ * would not match the object's own definition of it.
  *
- * OUTSIDE the block above, deliberately.  Everything above is reachable from
- * C because the object exports it unmangled; this is not, and putting it in
- * an `extern "C"` block would emit `getMPrecvdBits` where the object has
- * `_Z14getMPrecvdBitsP12tagV34Object`.  The mangling is the only thing that
- * makes our definition a replacement for the blob's, so the declaration has
- * to be C++ and the translation unit that defines it has to be a `.cpp`.
+ * All of them take `struct tagV34Object *`, which is the object's own name
+ * for what v34fsk.h calls `struct v34_object` (and the only place that
+ * name survives). It is kept incomplete and distinct from `v34_object`
+ * here deliberately: a `typedef` between the two would still mangle
+ * differently, so the definitions cast between the two named types instead.
  *
- * `tagV34Object` IS THE OBJECT'S OWN NAME for what v34fsk.h calls
- * `struct v34_object`; it survives only inside this symbol, which is where
- * that header's note about the name comes from.  It stays INCOMPLETE here: a
- * `typedef` to `v34_object` would mangle as `P11v34_object` and produce a
- * different symbol, so the two names have to remain distinct types and the
- * definition casts between them.
+ * Declared here, rather than in a private header, because `VPcmV34Main.cpp`
+ * is split across a `.c` and a `.cpp` in this tree and this is the header
+ * both halves already include.
  */
 #ifdef __cplusplus
 struct tagV34Object;
 
-/*
- * Copy the V.90 MP sequence the session has received into the V.34 object's
- * INFO fields, then rebuild the capability word at +0xaa3c around the maximum
- * upstream rate the configuration allows.
+/**
+ * @brief Copy a received V.90 MP sequence into the V.34 object's INFO fields.
  *
- * Reads the session at `p3548 + 0x1744` -- six flag bytes and seven shorts --
- * and the configuration at `pac3c + 0x3c`; announces the rate it chose
- * through `edprintf`, in one of two messages according to whether the PCM
- * receiver's "sensitive ISP" word gets a say.
+ * Rebuilds the capability word around the maximum upstream rate the
+ * configuration allows, and announces the rate it chose through `edprintf`
+ * (one of two messages, depending on whether the PCM receiver's
+ * "sensitive ISP" setting has a say).
+ *
+ * @param obj  The V.34 modem object.
  */
 void getMPrecvdBits(struct tagV34Object *obj);
 
-/*
- * ---------------------------------------------------------------------------
- * AND THE SIX ACCESSORS THAT ARE MANGLED TOO, so C++ on both sides for the
- * same reason `getMPrecvdBits` is.  All six take `tagV34Object *`, which is
- * the whole of why they are mangled: an `extern "C"` export of the same file
- * takes `void *` and these take the object's own type.
+/**
+ * @brief Push upstream modulation information to the running modem.
  *
- * They are declared here rather than in a private header because there is no
- * private header -- `VPcmV34Main.cpp` is split across a `.c` and a `.cpp` in
- * this tree, and this is the header both halves already include.
+ * Currently a no-op in the object (its body is just `ret`); every
+ * parameter is unread.
+ *
+ * @param obj  The V.34 modem object; unused.
  */
-
-/* Two instructions: `ret`.  Every parameter is unread. */
 void SetUpstreamModulationInfo(struct tagV34Object *obj);
 
-/*
- * Push the configured rate bounds down to whichever modem is running: the
- * V.90 constellation designer, the K56flex modem, or the V.34 rate group at
- * +0x220/+0x224 by dividing both by 2400 and capping at 14.
+/**
+ * @brief Push the configured rate bounds to whichever modem is running.
+ *
+ * Reaches the V.90 constellation designer, the K56Flex modem, or the V.34
+ * rate group, depending on which is active; the V.34 case divides both
+ * bounds by 2400 and caps the result at 14.
+ *
+ * @param obj  The V.34 modem object.
  */
 void VPcmV34SetMinMaxBitRates(struct tagV34Object *obj);
 
-/*
- * Set `rx_energy_floor` from `V34DisconnectThreshTable`, indexed by the
- * configuration's +0x60 biased by 48 and defaulting to entry 3.
+/**
+ * @brief Set the receive energy floor from the configured signal level.
+ *
+ * Looks up `V34DisconnectThreshTable` (v34pcm_tables.h) by the
+ * configuration's signal-level setting and writes the result to
+ * `rx_energy_floor`.
+ *
+ * @param obj  The V.34 modem object.
  */
 void VPcmV34SetMinimumSigLevel(struct tagV34Object *obj);
 
-/*
- * Compute `filtdelay` and `dmadelay` from the configuration's +0x64 and
- * +0x68, and hand the echo canceller its delay.
+/**
+ * @brief Compute the echo canceller's filter and DMA delays from the
+ * configuration.
+ *
+ * Sets `filtdelay` and `dmadelay`, and hands the echo canceller its delay.
+ *
+ * @param obj  The V.34 modem object.
  */
 void VPcmV34SetDelays(struct tagV34Object *obj);
 
-/* Restart the sample clock and set a deadline `secs * 9600` samples out. */
+/**
+ * @brief Restart the sample clock and set a deadline.
+ * @param obj   The V.34 modem object.
+ * @param secs  Seconds until the deadline; converted to samples at 9600 Hz.
+ */
 void VPcmV34SetTimeOut(struct tagV34Object *obj, int secs);
 #endif
 

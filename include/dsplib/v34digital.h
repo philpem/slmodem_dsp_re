@@ -10,10 +10,15 @@
 extern "C" {
 #endif
 
-/*
- * Clear both shell contexts and both halves of the scrambler pair, and
- * install the polynomial each direction gets.  Which way round that goes is
- * `role == 0x65`, the originate/answer flag.
+/**
+ * @brief Bring the V.34/V.90 digital pump's shell and scrambler state up.
+ *
+ * Clears both shell contexts (transmit and receive) and both halves of the
+ * scrambler pair, then installs the polynomial each direction gets --
+ * originate and answer scramble with opposite polynomials, selected by
+ * `role == 0x65`.
+ *
+ * @param obj  The V.34 modem object (`struct v34_object *`).
  */
 void preinitdigital(void *obj);
 

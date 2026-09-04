@@ -18,7 +18,7 @@
  * rests on the function names and on link order, not on evidence.  See
  * docs/findings.md.
  *
- * WHAT NO TEST HERE CAN TELL YOU *YET*.  SpanDSP has no V.34, so at the time
+ * What no test here can tell you yet: SpanDSP has no V.34, so at the time
  * of writing every V.34 claim rests on tier-1 differential testing alone --
  * which proves the reconstruction matches `dsplibs.o` and says nothing about
  * whether `dsplibs.o` is right.  Where that distinction has bitten before it
@@ -26,7 +26,7 @@
  * "confirmed" in this subtree as "confirmed identical to the original", never
  * as "confirmed correct", until docs/interop.md says otherwise.
  *
- * That is a CURRENT GAP WITH A PLANNED CLOSURE, not a permanent condition: a
+ * That is a current gap with a planned closure, not a permanent condition: a
  * real multi-standard modem is to be brought in as a hardware peer, reached
  * over a SIP ATA for audio and a serial port for control.  Design tests in
  * this subtree so that peer can drive them -- bit stream in, bit stream out,
@@ -46,69 +46,41 @@ extern "C" {
  * detector.c -- tone presence and tone absence
  */
 
-/*
- * The caller's receiver object, mapped only as far as this module needs.
+/**
+ * The level a presence detector must reach before it starts counting.
  *
- * `tone_detect` touches exactly one field of the object it is handed: a flags
- * word it clears a bit in when the detector first sees signal.  The rest of
- * that object belongs to V34hshak.c and V34RX.c and is not reconstructed
- * yet, so it is a pad here rather than a guess.  The pad is NOT the object's
- * real size -- `datapumpv34` reaches +0x260 and the detector itself lives at
- * +0x3564 of the enclosing V.34 object -- and nothing should allocate one of
- * these expecting to have allocated a receiver.
- *
- * The offset is pinned by an assertion at the bottom of detector.c, so when
- * the real struct arrives it cannot silently move.
- *
- * THE OTHER PARTIAL MAP.  v34fsk.h declares `struct v34_object`, which is the
- * same object from a DIFFERENT BASE: this one is the sub-object at
- * V34object+0x264, so `flags` here is V34object+0x386.  Two partial maps of
- * one object is already one more than anybody wants; a third would be a mess.
- * When the next V.34 file needs a field, extend one of these two and say
- * which -- do not start a third.
- */
-
-
-/*
- * Bit 9 of that word.  Set by the handshake state that arms a detector (for
- * example at 0x6f0e9, an `or $0x200`), cleared by `tone_detect` the first
- * time the integrated level crosses V34_DET_ARM_LEVEL.  So it reads as "a
- * detector has been armed and has not yet seen anything".
- */
-
-
-/*
- * The level a presence detector must reach before it will start counting.
- * A literal in the original, and the only threshold in this module that does
- * not come from the caller.
+ * A literal in the original, and the only threshold in this module that
+ * does not come from the caller.
  */
 #define V34_DET_ARM_LEVEL		0x100
 
-/* `state` values.  1 is what detectorinit writes; 2 is "warm-up over". */
+/** `state` value written by detectorinit(). */
 #define V34_DET_STATE_WARMUP		1
+/** `state` value once warm-up is over. */
 #define V34_DET_STATE_RUNNING		2
 
-/*
- * The leaky integrator's decay, 15565/16384 = 0.94998...  Applied once per
+/**
+ * The leaky integrator's decay, 15565/16384 = 0.94998... Applied once per
  * input sample, so at V.34's 9600 Hz host rate the level falls to 1/e in
  * about 2.1 ms.
  */
 #define V34_DET_DECAY			0x3ccd
 
-/*
- * The detector object, 0x24 bytes.
+/**
+ * @brief One tone presence/absence detector: a two-section IIR band-pass,
+ * a level integrator, and a warm-up counter.
  *
- * `coeff` addresses eight shorts making two second-order sections, grouped by
- * role rather than by section:
+ * `coeff` addresses eight shorts making two second-order sections, grouped
+ * by role rather than by section:
  *
  *     coeff[0..1]   section 1 feed-forward     (b)
  *     coeff[2..3]   section 2 feed-forward
  *     coeff[4..5]   section 1 feedback         (a, subtracted)
  *     coeff[6..7]   section 2 feedback
  *
- * There is no b0: the input enters each section already scaled by 1/16, which
- * is the only headroom management in here and the reason the histories are
- * comfortable in 16 bits.
+ * There is no b0: the input enters each section already scaled by 1/16,
+ * which is the only headroom management here and the reason the histories
+ * are comfortable in 16 bits.
  */
 struct v34_detector {
 	const short *coeff;	/* +0x00  eight shorts, see above        */
@@ -133,24 +105,35 @@ struct v34_detector {
 	short y[2][2];		/* +0x1c                                 */
 };
 
-/*
- * Configure one detector.  `warmup` is in CALLS of tone_detect, not samples:
- * `count` is seeded to -warmup and stepped once per call until it reaches
- * zero, so a detector cannot assert for the first `warmup` blocks however
- * long each block is.
+/**
+ * @brief Configure one tone detector.
  *
- * `thresh_hi` is read only when `polarity` is non-zero.  Every call site in
- * the object that passes polarity 0 also passes 0 here, which is consistent
- * with it being unused rather than accidentally zero.
+ * `warmup` is in calls of tone_detect(), not samples: `count` is seeded to
+ * `-warmup` and stepped once per call until it reaches zero, so a detector
+ * cannot assert for the first `warmup` blocks however long each block is.
+ * `thresh_hi` is used only when `polarity` is non-zero (absence mode).
+ *
+ * @param d          The detector to configure.
+ * @param coeff      Eight-short filter coefficient block (see struct v34_detector).
+ * @param polarity   0 to detect tone presence, non-zero for absence.
+ * @param limit      Consecutive-hit count that makes the detector assert.
+ * @param warmup     Calls to tone_detect() to ignore before it can assert.
+ * @param thresh_lo  Lower level threshold (absence mode).
+ * @param thresh_hi  Upper level threshold; used only in absence mode.
  */
 void detectorinit(struct v34_detector *d, const short *coeff, short polarity,
 		  short limit, short warmup, short thresh_lo, short thresh_hi);
 
-/*
- * Run the filter over [start, end) and return 1 if the detector is asserting.
+/**
+ * @brief Run the detector's filter over one block of samples.
  *
- * `rx` is only ever used to clear V34_RX_FLAG_DET_PENDING, and only on the
- * one call that arms a presence detector.
+ * @param rx     The enclosing V.34 receiver. Only used to clear
+ *               `V34_RX_FLAG_DET_PENDING`, and only on the call that
+ *               first arms a presence detector.
+ * @param d      The detector to run.
+ * @param start  First sample of the block.
+ * @param end    One past the last sample of the block.
+ * @return 1 if the detector is asserting, 0 otherwise.
  */
 int tone_detect(struct v34_receiver *rx, struct v34_detector *d, const short *start,
 		const short *end);
@@ -159,36 +142,25 @@ int tone_detect(struct v34_receiver *rx, struct v34_detector *d, const short *st
  * DFTC.c -- a bank of single-bin sliding DFTs
  */
 
-/*
- * One frequency bin, 0x2c bytes.
+/**
+ * @brief One sliding-DFT frequency bin, 0x2c bytes.
  *
  * Each bin carries the same correlation twice, in two different number
- * systems, and nothing in this module reconciles them:
+ * systems, and nothing in this module reconciles them: `acc_re`/`acc_im`
+ * are 32-bit integers accumulating `(cos * x) >> 6`, from which `energy`
+ * is derived with a caller-chosen shift, while `sum_re`/`sum_im` are
+ * doubles accumulating the same products unshifted, from which `denergy`
+ * is derived. The integer path is what the handshake reads; the double
+ * path is reproduced faithfully (it costs real x87 time per bin per
+ * sample) even though this reconstruction has found no reader for
+ * `denergy` yet, since dropping it would risk hiding something that
+ * matters once `V34hshak.c` is translated.
  *
- *   - `acc_re` / `acc_im` are 32-bit integers accumulating (cos * x) >> 6,
- *     and `energy` is derived from them with a shift the caller chooses.
- *   - `sum_re` / `sum_im` are doubles accumulating the same products with no
- *     shift at all, and `denergy` is derived from those.
- *
- * The integer path is what the handshake reads.  The double path costs an
- * x87 load, add and store per bin per sample and its result is written to a
- * field this reconstruction has found no reader for -- see docs/findings.md.
- * It is reproduced because dropping it would change nothing observable and
- * hide something that might matter once V34hshak.c is translated.
- *
- * THE FOUR BYTES AT +0x28 ARE TWO THRESHOLDS, and until V34hshak.c's
- * `dftRetrainDetInit` and `detectRetrainReq` were read they were one `int
- * reserved` with no writer and no reader.  Neither function here touches
- * them, which is the point: they belong to whoever owns the bank, and the
- * only owner reconstructed so far is the retrain detector, which writes 80
- * into one and 3000 into the other and then compares `energy` against them
- * on two different arms.  Finding F212.
- *
- * They are read back the way the object reads them, which is not the same
- * way on both sides of the comparison: `energy` is widened UNSIGNED and the
- * threshold SIGNED.  Both are observable and both are tested -- the energy
- * one only from a seeded accumulator, since no sample sequence puts both
- * halves of the correlation at full scale at once.  See `detectRetrainReq`.
+ * `thresh_lo`/`thresh_hi` are not set by anything in this module -- they
+ * belong to whoever owns the bank. The only owner reconstructed so far is
+ * V34hshak.c's retrain detector, which sets them to 80 and 3000 and
+ * compares `energy` (widened unsigned) against them (read signed) on two
+ * different arms (finding F212).
  */
 struct v34_dftbin {
 	short phase;		/* +0x00  14-bit phase accumulator       */
@@ -209,35 +181,46 @@ struct v34_dftbin {
 #define V34_DFT_PHASE_SHIFT	6
 #define V34_DFT_QUARTER		0x40	/* costbl index step for 90 degrees */
 
-/*
+/**
  * The shared quarter-wave-symmetric cosine table, 256 entries in Q14.
  *
- * Global in the object and shared with V34RX.c, which is the only reason it
- * is declared in a header rather than kept static.  It is emitted as literal
- * data because it is NOT reproducible from its own generator: see
- * docs/coefficients.md for the one entry that disagrees.
+ * Global (rather than file-static) because it is shared with V34RX.c.
+ * Emitted as literal data rather than generated, because it is not exactly
+ * reproducible from its own generator: see docs/coefficients.md for the
+ * one entry that disagrees.
  */
 extern const short costbl[256];
 
-/* costbl[idx], with idx taken modulo the table length.  See dftc.c. */
+/**
+ * @brief Read the shared cosine table, wrapping the index.
+ * @param idx  Table index, taken modulo the table length.
+ * @return `costbl[idx % 256]`.
+ */
 short cosread(unsigned char idx);
 
-/*
- * Correlate `nsamples` samples against every one of `nbins` bins.
+/**
+ * @brief Correlate a block of samples against every bin in a bank.
  *
- * The loops are nested sample-outer, bin-inner, so one pass touches every
+ * The loops are nested sample-outer, bin-inner: one pass touches every
  * bin's accumulator for every sample.
+ *
+ * @param bins      The bin bank to update.
+ * @param nbins     Number of bins in @p bins.
+ * @param samples   The input samples.
+ * @param nsamples  Number of samples in @p samples.
  */
 void dftupdate(struct v34_dftbin *bins, short nbins, const short *samples,
 	       short nsamples);
 
-/*
- * Reduce each bin's accumulators to `energy`, `shift` and `denergy`.
+/**
+ * @brief Reduce each bin's accumulators to `energy`, `shift` and `denergy`.
  *
- * `scale` is a left shift applied to both accumulators before squaring, so
- * the caller sets the point at which the integer path saturates.  It is used
- * as a byte -- the original loads it with movzbl -- so a scale of 256 shifts
- * by zero rather than by an absurd amount.
+ * @param bins   The bin bank to reduce.
+ * @param nbins  Number of bins in @p bins.
+ * @param scale  Left shift applied to both accumulators before squaring,
+ *               letting the caller set where the integer path saturates.
+ *               Used as a byte (the object loads it with `movzbl`), so a
+ *               scale of 256 shifts by zero rather than by an absurd amount.
  */
 void dftenergy(struct v34_dftbin *bins, short nbins, short scale);
 

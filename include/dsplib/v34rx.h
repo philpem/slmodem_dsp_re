@@ -33,21 +33,9 @@ extern "C" {
 
 struct v34_queue {
 	short count;		/* +0x00  entries held, in samples       */
-	int *rd;		/* +0x04  read cursor.
-				 * pad_02[2] removed here -- pure alignment
-				 * gap ahead of this pointer; `count` ends
-				 * on a 2-mod-4 offset.  Confirmed by the
-				 * assertion below, by `rxreadqueue`/
-				 * `txwritequeue` (the only functions typed
-				 * to this struct) never touching +0x02, and
-				 * by a whole-object disassembly search: the
-				 * only hits on displacement 0x266 are
-				 * `struct v34_receiver`'s own `subframe_idx`
-				 * (a coincidence of numbering -- `rxq` and
-				 * `v34_receiver` share a base address, so
-				 * 0x266 means two different things depending
-				 * on which pointer it is added to) and one in
-				 * unrelated Caller ID code (finding F10149).
+	int *rd;		/* +0x04  read cursor.  (+0x02..+0x04 is a
+				 * pure alignment gap, not an unmodelled
+				 * field -- see finding F10149.)
 				 */
 	int *wr;		/* +0x08  write cursor                   */
 	/*
@@ -65,97 +53,136 @@ typedef char v34q_off_ring[
 	((int)__builtin_offsetof(struct v34_queue, ring) == 0x0c) ? 1 : -1];
 #endif
 
-/*
- * Take four entries off the receive queue into the four shorts that sit
- * immediately after its ring, and drop the count by four.
+/**
+ * @brief Dequeue four samples from the receive queue.
+ *
+ * Takes four entries off the queue into the four shorts that sit
+ * immediately after its ring, and drops the count by four.
+ *
+ * @param q  The receive queue.
  */
 void rxreadqueue(struct v34_queue *q);
 
-/* Put four shorts onto the transmit queue, zeroing each entry's high half. */
+/**
+ * @brief Enqueue four samples onto the transmit queue.
+ *
+ * Each entry's high half is zeroed.
+ *
+ * @param q    The transmit queue.
+ * @param src  Four shorts to enqueue.
+ */
 void txwritequeue(struct v34_queue *q, const short *src);
 
-/*
- * The decoder's state, mapped where `decision` touches it.  A sub-object of
- * the V.34 receiver; the pads are not a claim about their contents.
- */
-
-
-/*
- * Slice: find the nearest of `npts` constellation points to the target, and
- * record both the point and its index.
+/**
+ * @brief Slice a demodulated point to the nearest constellation point.
  *
- * Each point is one int, real in the low half and imaginary in the high.
+ * Finds the nearest of `npts` constellation points to the target and
+ * records both the point and its index. Each point is one `int`, real in
+ * the low half and imaginary in the high.
+ *
+ * @param d     The V.34 receiver; the decoder's state is a sub-object of it.
+ * @param pts   The constellation, packed as described above.
+ * @param npts  Number of points in @p pts.
  */
 void decision(struct v34_receiver *d, const int *pts, short npts);
 
-/*
- * The non-linear encoder: scale a complex point by a gain derived from its
- * own magnitude, which is V.34's warping of the outer constellation shells.
+/**
+ * @brief V.34's non-linear encoder for the outer constellation shells.
+ *
+ * Scales a complex point by a gain derived from its own magnitude, which is
+ * how V.34 warps the outer shells of the constellation.
+ *
+ * @param in   The input complex point.
+ * @param out  The scaled output complex point.
  */
 void V34nlencoder(const short *in, short *out);
 
-/*
- * Recompute an adaptation step from an energy estimate.
+/**
+ * @brief Recompute an adaptation step from an energy estimate.
  *
- * `*alpha` is replaced by -(reciprocal(energy) * gain), and then optionally
- * scaled again by `decay`.  Both stages are skipped independently: a zero
- * `energy` leaves the first alone and a zero `apply_decay` the second.
+ * Replaces `*alpha` with `-(reciprocal(energy) * gain)`, then optionally
+ * scales the result again by `decay`. Each stage is skipped independently:
+ * a zero `energy` leaves the first alone, a zero `apply_decay` the second.
+ *
+ * @param alpha        The adaptation step to update.
+ * @param energy       The energy estimate driving the reciprocal.
+ * @param apply_decay  Non-zero to also apply the @p decay scaling.
+ * @param gain         Gain applied to the reciprocal.
+ * @param decay        Decay factor applied when @p apply_decay is set.
+ * @param tag          Diagnostic label for this call site.
  */
 void updateAlpha(short *alpha, int energy, int apply_decay, int gain,
 		 int decay, const char *tag);
 
-/*
- * The descrambler's state, mapped where V34descrambler touches it.
- */
-
-
-/* Bit 2 of `flags`: set selects the answerer's polynomial. */
+/** Bit 2 of `flags`: set selects the answerer's polynomial. */
 #define V34_SCR_ANSWERER	0x0004
 
-/*
- * Descramble `nbits` bits, LSB first, returning them in the same order.
+/**
+ * @brief Descramble `nbits` bits, LSB first, returning them in the same order.
  *
- * V.34 gives the two ends different generators and this is both of them:
- * 1 + x^-5 + x^-23 for the caller, 1 + x^-18 + x^-23 for the answerer.
+ * V.34 gives the two ends different generators: 1 + x^-5 + x^-23 for the
+ * caller, 1 + x^-18 + x^-23 for the answerer. The descrambler's state is a
+ * sub-object of @p s.
+ *
+ * @param s      The V.34 receiver.
+ * @param bits   The bits to descramble.
+ * @param nbits  How many bits of @p bits are valid.
+ * @return The descrambled bits.
  */
 int V34descrambler(struct v34_receiver *s, short bits, short nbits);
 
-/*
- * Reset the transmit side: both echo cancellers, both sample queues, the
- * echo pre-filter's history, and a handful of scalars.
+/**
+ * @brief Reset the V.34 transmit side.
  *
- * Declared `void *` for the same reason the other whole-object functions
- * are -- v34rx.h must not depend on v34fsk.h, since the dependency runs the
- * other way.
+ * Resets both echo cancellers, both sample queues, the echo pre-filter's
+ * history, and a handful of scalars.
+ *
+ * @param obj  The V.34 modem object. Declared `void *` because this header
+ *             must not depend on v34fsk.h, which is where `struct
+ *             v34_object` is declared.
  */
 void txinit(void *obj);
 
-/* Reset the receive timing chain and the receiver's scalars. */
+/**
+ * @brief Reset the receive timing chain and the receiver's scalars.
+ * @param obj  The V.34 modem object.
+ */
 void rxtiminginit(void *obj);
 
-/* Reset the receive side: equaliser, Hilbert state, AGC and scalars. */
+/**
+ * @brief Reset the V.34 receive side.
+ *
+ * Resets the equaliser, Hilbert state, AGC and scalars.
+ *
+ * @param obj  The V.34 modem object.
+ */
 void rxinit(void *obj);
 
-/* The timing IIR's poles, Q14: 1.4001 and -0.9801, just inside the circle. */
+/** The receive timing IIR's pole coefficients, Q14: 1.4001 and -0.9801, just inside the unit circle. */
 #define V34_RXTIMING_IIR_A1	0x599b
 #define V34_RXTIMING_IIR_A2	(-0x3eba)
 
-/*
- * Resample onto the recovered clock, producing out_count timing estimates.
- * Takes the whole object: it reaches both the receiver and the timing
- * filters at +0x50c.
+/**
+ * @brief Resample the receive signal onto the recovered clock.
+ *
+ * Produces `out_count` timing estimates. Takes the whole modem object
+ * because it reaches both the receiver and the timing filters (at +0x50c).
+ *
+ * @param obj  The V.34 modem object.
  */
 void rxtiming(void *obj);
 
-/* Modulate one symbol, enqueue it, pre-filter it, feed the echo cancellers. */
+/**
+ * @brief Transmit one symbol.
+ *
+ * Modulates the symbol, enqueues it, pre-filters it, and feeds it to the
+ * echo cancellers.
+ *
+ * @param obj  The V.34 modem object.
+ */
 void txmit(void *obj);
 
-/*
- * The receive AGC's state, mapped where `agcadapt` touches it.
- */
-
-
-/* The freeze bit lives in v34recv.h: it is the detector-pending flag. */
+/* The AGC's freeze bit lives in v34recv.h: it is the detector-pending flag. */
 #define V34_AGC_TARGET		0xfa0	/* 4000: the level it aims for   */
 #define V34_AGC_DEADBAND	0x4b0	/* 1200: error ignored below this*/
 #define V34_AGC_ACCUM_LIMIT	0x1f4	/*  500: integrator trip point   */
@@ -167,114 +194,177 @@ void txmit(void *obj);
 #define V34_AGC_RMS_SCALE	0x38e	/* 910/32768 == 1/36.008         */
 #define V34_AGC_RMS_FLOOR	0x1f	/* below this the AGC will not adapt */
 
-/*
- * One AGC step.  Always returns zero; the state is the output.
+/**
+ * @brief One receive AGC adaptation step.
+ * @param a  The V.34 receiver; the AGC's state is a sub-object of it.
+ * @return Always 0; the effect is the updated AGC state.
  */
 int agcadapt(struct v34_receiver *a);
 
-/*
- * Pull one burst from the receive queue, gain it in place, and run the AGC.
+/**
+ * @brief Run the AGC over one four-sample burst from the receive queue.
  *
- * The handshake's entry point: the same measurement chain V34demodulate runs
- * per sample-pair, but over a whole four-sample burst and with no timing
- * recovery or down-mixing.  It leaves the gained samples at +0x10c and points
+ * The handshake's entry point onto the AGC: runs the same measurement
+ * chain as V34demodulate(), but over a whole burst and with no timing
+ * recovery or down-mixing. Leaves the gained samples at +0x10c and points
  * `rx_samples` just past them.
+ *
+ * @param rx  The V.34 receiver.
  */
 void V34agc(struct v34_receiver *rx);
 
-/*
- * One half-baud: gain a sample pair, adapt, mix it down to baseband.
+/**
+ * @brief One half-baud receive step: gain a sample pair, adapt, and mix it
+ * down to baseband.
  *
- * File-static in the object and called only by `rxtiming`, and static here
- * too until finding F221 gave the object's copy a `ref_` alias.  Declared so
- * both sides can be driven directly rather than through the interpolator,
- * which is what made an AGC defect here present as a loop-shape failure.
+ * Called only by rxtiming(); declared here (rather than kept file-static,
+ * as it is in the object) so both sides of it can be driven directly in
+ * tests, rather than only through the interpolator.
  *
- * The object's copy takes its argument in %eax -- see t_v34demod.c, which has
- * the prologue and the rule from finding F51 that says to check.
+ * @param rx  The V.34 receiver.
  */
 void V34demodulate(struct v34_receiver *rx);
 
-/*
- * Build the twelve-short complex-multiply coefficient block: three pairs
- * from `src + 4`, emitted as conjugates then as swapped pairs.
+/**
+ * @brief Build a twelve-short complex-multiply coefficient block.
+ *
+ * Takes three complex pairs from `src + 4` and emits them as conjugates,
+ * then as swapped pairs.
+ *
+ * @param dst  Output: twelve shorts.
+ * @param src  Input coefficients.
  */
 void txrxdmainit(short *dst, const short *src);
 
-/* Bit 2 of tx_flags: both echo cancellers have stopped adapting. */
+/** Bit 2 of `tx_flags`: both echo cancellers have stopped adapting. */
 #define V34_EC_FROZEN	0x0004
-/* Bit 9: feed the transmit sample through the cancellers at all. */
+/** Bit 9 of `tx_flags`: feed the transmit sample through the cancellers at all. */
 #define V34_EC_FEED	0x0200
 
-/* Freeze both cancellers, and report their coefficients if debugging. */
+/**
+ * @brief Freeze both echo cancellers.
+ *
+ * Stops further adaptation and, if debugging is enabled, reports their
+ * coefficients.
+ *
+ * @param obj  The V.34 modem object.
+ */
 void v34FreezeEcho(void *obj);
 
-/*
- * Scramble `nbits` bits, LSB first.  `mode` non-zero selects the answerer's
- * generator.  The inverse of V34descrambler, and the same two polynomials.
+/**
+ * @brief Scramble `nbits` bits, LSB first. The inverse of V34descrambler().
+ * @param sr     The scrambler's shift register state.
+ * @param mode   Non-zero selects the answerer's generator polynomial.
+ * @param bits   The bits to scramble.
+ * @param nbits  How many bits of @p bits are valid.
+ * @return The scrambled bits.
  */
 int V34scrambler(unsigned *sr, short mode, short bits, short nbits);
 
-/*
- * Install the timing constants for one of the six V.34 symbol rates and the
- * carrier table for one of the eight carriers.  Unrecognised values for
- * either are ignored rather than rejected.
+/**
+ * @brief Install the demodulator's timing and carrier constants.
+ *
+ * Selects the timing constants for one of the six V.34 symbol rates and
+ * the carrier table for one of the eight carriers. Unrecognised values for
+ * either argument are silently ignored rather than rejected.
+ *
+ * @param obj      The V.34 modem object.
+ * @param baud     Symbol rate selector.
+ * @param carrier  Carrier frequency selector.
  */
 void V34SetupDemodulator(void *obj, short baud, short carrier);
 
-/*
- * One echo-canceller step: dequeue a transmit sample, filter, subtract, and
- * adapt on a schedule.  Always returns zero.
+/**
+ * @brief One echo-canceller step.
+ *
+ * Dequeues a transmit sample, filters it, subtracts it from the receive
+ * path, and adapts the canceller on a schedule.
+ *
+ * @param obj  The V.34 modem object.
+ * @return Always 0.
  */
 int adaptecho(void *obj);
 
-/*
- * The per-symbol tick: dequeue, cancel, make a complex sample, push it onto
- * the receive queue, and adapt both cancellers.  Always returns zero.
+/**
+ * @brief The per-symbol receive tick.
+ *
+ * Dequeues a transmit sample, cancels echo, forms a complex receive
+ * sample, pushes it onto the receive queue, and adapts both echo
+ * cancellers.
+ *
+ * @param obj  The V.34 modem object.
+ * @return Always 0.
  */
 int modem_serrint(void *obj);
 
-/*
- * Decode one demodulated point.  Uses the 8D trellis when all three of the
- * 0x98 flag bits are set, and a differentially-coded four-point slice
- * otherwise -- the handshake's decoder.
+/**
+ * @brief Decode one demodulated point.
+ *
+ * Uses the 8D trellis decoder when all three of the 0x98 flag bits are
+ * set, and a differentially-coded four-point slicer otherwise. This is
+ * the handshake's decoder.
+ *
+ * @param obj  The V.34 modem object.
  */
 void decoderv34(void *obj);
 
-/* P(k) = -21k^2 + 837k - 354, truncated to a short. */
+/**
+ * @brief Evaluate `P(k) = -21k^2 + 837k - 354`, truncated to a short.
+ * @param k  The input value.
+ * @return The polynomial's value.
+ */
 int polyValue(short k);
 
-/*
- * Centre the interpolator's phase on the symbol, from the timing metric's
- * zero crossing.
+/**
+ * @brief Centre the interpolator's phase on the symbol.
+ *
+ * Derives the starting phase from the timing metric's zero crossing.
+ *
+ * @param obj  The V.34 modem object.
  */
 void setInitialPhase(void *obj);
 
-/* Install the timing loop's gains for the current state in pllcnt. */
+/**
+ * @brief Install the timing loop's gains for the current state.
+ * @param obj  The V.34 modem object; the state is `pllcnt`.
+ */
 void setTimingStateParameters(void *obj);
 
-/* One step of the timing recovery loop: state machine, detector, integrator. */
+/**
+ * @brief One step of the timing recovery loop: state machine, detector,
+ * integrator.
+ * @param obj  The V.34 modem object.
+ */
 void TimingV34(void *obj);
 
-/* Reverse the low `nbits` bits of `v`. */
+/**
+ * @brief Reverse the low `nbits` bits of a value.
+ * @param v      The value to reverse.
+ * @param nbits  How many low bits to reverse.
+ * @return The bit-reversed value.
+ */
 int bitreverse(unsigned short v, short nbits);
 
-/*
- * The per-symbol receive chain, end to end: resample onto the recovered
- * clock, equalise, predict, derotate, decide, and close the carrier and
- * equaliser loops.  V34RX.c's last function, and its largest.
+/**
+ * @brief The per-symbol receive chain, end to end.
+ *
+ * Resamples onto the recovered clock, equalises, predicts, derotates,
+ * decides, and closes the carrier and equaliser loops. The last, and
+ * largest, function in `V34RX.c`.
+ *
+ * @param obj  The V.34 modem object.
  */
 void receiver(void *obj);
 
-/*
- * The PP sequence, `.rodata + 0x2c80`: forty-eight complex points packed
- * (re, im), every one of magnitude 6476 at a multiple of 60 degrees.
+/**
+ * @brief V.34's PP training sequence.
  *
- * GLOBAL in the object because it has TWO readers with two different element
- * widths -- `receiver` slices against it as ninety-six shorts, and table 1's
- * 20 `PPSEG` (v34hstx1.cpp) transmits it as forty-eight four-byte points.
- * Declared here, defined in v34rx.c, and proved against `ref_vectpp` in
- * t_v34hstx1.c.
+ * Forty-eight complex points, packed as (re, im), every one of magnitude
+ * 6476 at a multiple of 60 degrees. Lives at `.rodata + 0x2c80` in the
+ * blob, and is `extern` (rather than file-local) because it has two
+ * readers with two different element widths: receiver() slices it as
+ * ninety-six shorts, while `v34hstx1.cpp`'s table 1 `PPSEG` transmits it
+ * as forty-eight four-byte points. Defined in v34rx.c.
  */
 #define V34_VECTPP_POINTS	48
 extern const short vectpp[2 * V34_VECTPP_POINTS];
