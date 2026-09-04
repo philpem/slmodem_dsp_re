@@ -33,8 +33,22 @@ extern "C" {
 
 struct v34_queue {
 	short count;		/* +0x00  entries held, in samples       */
-	short pad_02;
-	int *rd;		/* +0x04  read cursor                    */
+	int *rd;		/* +0x04  read cursor.
+				 * pad_02[2] removed here -- pure alignment
+				 * gap ahead of this pointer; `count` ends
+				 * on a 2-mod-4 offset.  Confirmed by the
+				 * assertion below, by `rxreadqueue`/
+				 * `txwritequeue` (the only functions typed
+				 * to this struct) never touching +0x02, and
+				 * by a whole-object disassembly search: the
+				 * only hits on displacement 0x266 are
+				 * `struct v34_receiver`'s own `subframe_idx`
+				 * (a coincidence of numbering -- `rxq` and
+				 * `v34_receiver` share a base address, so
+				 * 0x266 means two different things depending
+				 * on which pointer it is added to) and one in
+				 * unrelated Caller ID code (finding F10149).
+				 */
 	int *wr;		/* +0x08  write cursor                   */
 	/*
 	 * +0x0c.  Declared as one entry because the two instances differ:
@@ -43,6 +57,13 @@ struct v34_queue {
 	 */
 	int ring[1];
 };
+
+#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+typedef char v34q_off_rd[
+	((int)__builtin_offsetof(struct v34_queue, rd) == 0x04) ? 1 : -1];
+typedef char v34q_off_ring[
+	((int)__builtin_offsetof(struct v34_queue, ring) == 0x0c) ? 1 : -1];
+#endif
 
 /*
  * Take four entries off the receive queue into the four shorts that sit

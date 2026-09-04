@@ -114630,3 +114630,288 @@ construction (the new/pre-existing `offsetof`/`sizeof` assertions fail to
 compile otherwise), so a byteident regression here would mean the
 alignment math itself was wrong, not a tolerance issue -- and none of the
 340 tests it touches moved. (2026-09-04)
+
+## F10146. `struct v34_receiver`: five of its sixteen `pad_NNNN` regions removed as pure compiler-alignment artefacts, eleven left explicit, each checked both ways
+
+The pad-region-removal workstream (`docs/fieldnaming.md`, "New workstream:
+safe pad-region removal") applied to `include/dsplib/v34recv.h`, per its
+decision rule: delete a `pad_NNNN` member only where deleting it and relying
+on the compiler's own default alignment reproduces the object's exact layout
+-- proved with an `offsetof`/`sizeof` assertion AND a disassembly search
+showing nothing in the 1.2MB object reads or writes the bytes in question.
+Both checks required; neither alone was trusted, per the workstream's
+explicit instruction. This struct carries no `#pragma pack` or packed
+attribute, so ordinary C alignment applies.
+
+A fresh grep (`grep -oE '\bpad_[0-9a-fA-F]+\b' include/dsplib/v34recv.h |
+sort -u | wc -l`) confirmed 16 before starting, matching the count already on
+record. Each was computed by hand from the struct text: the field
+immediately before and after, their sizes, and whether the gap the pad
+spells out is exactly what the FOLLOWING field's own alignment requirement
+would insert once the pad is deleted -- not merely "close" or "plausible",
+exact.
+
+**Five matched exactly and were removed:**
+
+| pad | between | gap needed by next field's alignment | matches |
+|---|---|---|---|
+| `pad_1b2[2]` | `phase_wrap` (short, ends 0x1b2) -> `carrier` (pointer, needs align 4) | 2 | yes |
+| `pad_1d6[2]` | `f1d4` (short, ends 0x1d6) -> `timing_frac` (int) | 2 | yes |
+| `pad_1f6[2]` | `cloop_sin` (short, ends 0x1f6) -> `cloop_integrator` (int) | 2 | yes |
+| `pad_21e[2]` | `err_symcount` (short, ends 0x21e) -> `equerr_accum` (int) | 2 | yes |
+| `pad_226[2]` | `preerr` (short, ends 0x226) -> `preerr_acc` (int) | 2 | yes |
+
+Each preceding field ends on a 2-mod-4 byte offset and each following field
+is a 4-byte-aligned type (a pointer or an `int`), so GCC's default alignment
+inserts precisely the two bytes the pad used to spell out, once the pad
+member is gone. Verified positively with a `__SIZEOF_POINTER__`-guarded
+`V34RECV_ASSERT_OFF` block added immediately after the struct (this tree's
+`CTL_ASSERT_OFF`/`V34DET_ASSERT_OFF` idiom, `include/dsplib/faxvmi.h` and
+`src/pump/v34/detector.c`), asserting `carrier`, `timing_frac`,
+`cloop_integrator` and `equerr_accum`/`preerr_acc` all still land at their
+original offsets (0x1b4, 0x1d8, 0x1f8, 0x220, 0x228) and
+`sizeof(struct v34_receiver)` is still 0x79c -- compiled clean under the
+host's `gcc -m32` and confirmed at runtime with a standalone `offsetof`/
+`sizeof` probe, all five offsets and the total size unchanged from before the
+edit. Verified negatively by disassembling every function that touches this
+struct (`agcadapt`, `decoderv34`, `demapFrame`, `dpskinit`, `_init_receiver`,
+`modem_serrint`, `receiver`, `rxinit`, `rxtiming`, `rxtiminginit`,
+`setInitialPhase`, `setTimingStateParameters`, `setupreceiver`, `TimingV34`,
+`V34agc`, `V34demodulate`, `V34SetupDemodulator`) via `tools/dis.py`, plus a
+`objdump -d` grep of the WHOLE 1.2MB object for the exact byte displacements
+(`0x1b2`/`0x1b3`, `0x1d6`/`0x1d7`, `0x1f6`/`0x1f7`, `0x21e`/`0x21f`,
+`0x226`/`0x227`) as memory operands: zero genuine hits. One coincidental hit
+on `0x1f6` was a branch-target label inside `TimingV34`'s own code, not a
+memory access -- not a struct field.
+
+**The `0x21e` search caught a real trap and is recorded as the worked
+example.** `objdump -d` on the whole object turned up `0x21e(%edi)` inside
+`probeselect` (`v34hshak.c`) and two more hits far outside V.34 territory
+entirely (near 0xd268, an unrelated struct). Tracing `probeselect`'s own
+prologue (`mov 0x90(%esp),%edi; add $0xa320,%edi`) showed `%edi` there is a
+completely different base pointer, +0xa320 from something that is not a
+`v34_receiver`, and the surrounding offsets it reads (0x66, 0x92, 0xbe,
+0x116, 0x24a, 0x276, 0x2ce) do not correspond to this struct's own field
+layout at all -- a coincidental numeric match on the offset value, exactly
+the trap CLAUDE.md's "DO NOT READ A SPAN NAME AS A MODULE NAME" paragraph
+warns about, caught by checking the base register's own provenance rather
+than trusting the raw offset. Neither hit is a real `pad_21e` access.
+
+**Eleven pads were checked the same way and LEFT ALONE, because the gap does
+not match what alignment alone would produce (not because their bytes are
+proven read -- absence of alignment-justification is the only claim):**
+
+- `pad_000[0x120]` -- the struct's opening 288 bytes, with no preceding field
+  to derive an alignment requirement from, and independently PROVEN to hold
+  real data, not filler: `src/pump/v34/v34hshak.c` (`T3C_RX` macro's own long
+  comment, around line 3207) establishes that `v34_receiver` is embedded at
+  `v34_object+0x264` and that its `pad_000` is the SAME BYTES as
+  `v34_object`'s own `rxq`, `rxq_ring_tail[63]`, `unmapped_0370` and
+  `short_382` fields -- a double-modelled region the tree already knows
+  about and has not yet merged (finding F3303 is the worked example of that
+  merge going wrong once already). `src/pump/v34/v34hstx1.cpp` independently
+  confirms a live reader at receiver-relative +0x11e (`TX1_F382`'s comment:
+  "the RECEIVER's +0x11e ... lands in that structure's `pad_000`").
+- `pad_184[0x18]` -- between `rms_buf[36]` (already 2-aligned at 0x184) and
+  `rms_idx` (short, needs only 2-byte alignment): zero bytes of alignment
+  would be inserted naturally; the actual gap is 24.
+- `pad_1a8[2]` -- between `scrambler_sr` (unsigned, already 4-aligned at
+  0x1a8) and `prev_quadrant` (short): zero bytes needed, gap is 2.
+- `pad_1c2[6]` -- between `pllcnt` (short, ends 0x1c2) and `slow_ramp` (int,
+  needs align 4): alignment would insert 2 bytes (0x1c2 -> 0x1c4); the
+  actual gap is 6.
+- `pad_1dc[4]` -- between `timing_frac` (int, already 4-aligned at 0x1dc) and
+  `timing_integrator` (int): zero bytes needed, gap is 4.
+- `pad_22c[2]` -- between `preerr_acc` (int, already 4-aligned at 0x22c) and
+  `f22e` (short): zero bytes needed, gap is 2.
+- `pad_238[8]` -- between `timing_i_gain` (short, already 4-aligned at
+  0x238) and `demod_i` (short): zero bytes needed, gap is 8.
+- `pad_250[2]` -- between `sig_energy_acc` (int, already 4-aligned at 0x250)
+  and `bad_thresh` (short): zero bytes needed, gap is 2. **Independently
+  confirmed to hold real, actively read/written data**, not just failing the
+  alignment test: `src/pump/v34/v34hstx1.cpp`'s `TX1_RX250` (`+0x4b4`, "the
+  RECEIVER's +0x250 ... lands in that structure's `pad_250`") documents it as
+  written from `preerr`/`equerr` and read as a rate-ladder threshold. Had
+  this pad been removed on a weaker check than the one this workstream
+  requires, it would have been a real defect, not a cosmetic miss -- the
+  clearest demonstration in this pass of why the negative disassembly check
+  is mandatory and not a formality.
+- `pad_264[2]` -- between `agc_start_gain` (short, already 4-aligned at
+  0x264) and `subframe_idx` (short): zero bytes needed, gap is 2.
+- `pad_270[0xa]` -- between `eq_out_q2` (short, already 4-aligned at 0x270)
+  and `timing_out[7]` (short array, needs only 2-byte alignment): zero bytes
+  needed, gap is 10.
+- `pad_2a8[0x4f0]` -- 1264 bytes between `fir_coeff` and `rtncount`,
+  obviously not an alignment gap.
+
+**Verification.** Standalone `gcc -m32 -Iinclude -c` on the header compiles
+clean with the new assertions live (host is GCC 14, `__SIZEOF_POINTER__` is
+defined, so the guarded block is exercised on this host even though it reads
+`#if 0` under the period compiler per the tree's known
+`__SIZEOF_POINTER__`-guard caveat -- `docs/method/compilers.md` -- which does
+not weaken the proof here since the runtime differential suite, run under the
+period compiler, would fail loudly on any real layout shift regardless of
+whether the compile-time assertion itself fires there). A standalone
+`offsetof`/`sizeof` probe program printed all five offsets and the total size
+unchanged. `make period` and `tools/toolchain/byteident.py --ratchet` need
+docker, unavailable in this sandbox; left for the parent session's gate,
+consistent with every prior wave. (2026-09-04)
+
+## F10147. `struct v34_shell`: `pad_e4e[2]` removed as a pure alignment gap, three other pads left alone, one addressing-convention subtlety worked through
+
+Same workstream, `include/dsplib/v34shell.h`. Fresh grep confirmed 4
+`pad_NNNN` regions (`pad_000`, `pad_a0c`, `pad_e4e`, `pad_e86`) -- two
+zero-length arrays in the source (`pad_a24_[0]`, `pad_a48_[0]`) do not match
+the counting regex and hold no bytes, so are not candidates either way.
+
+**`pad_e4e[2]` removed.** Between `latched` (short, ends 0xe4e, a 2-mod-4
+offset) and the union `{ short frame[18]; int frame_wide; }` at +0xe50,
+whose `int` member forces 4-byte alignment on the whole union -- exactly a
+2-byte gap needed, exactly what the pad spells out. Positive check: a
+`__SIZEOF_POINTER__`-guarded assertion added after the struct holds `frame`
+at 0xe50 and `sizeof(struct v34_shell)` at 0x1450 (computed by compiling a
+standalone probe, not guessed -- an initial guess of 0x144e, the naive
+"last field's end offset" without the struct's own tail-padding to 4-byte
+alignment, failed to compile and was corrected before being trusted).
+
+**The negative check needed two addressing conventions, not one, because
+this struct's own callers use both.** `struct v34_shell` is reached two
+ways in the object: directly, at its own absolute offset from `V34_SHELL_TX`
+(`include/dsplib/v34shell.h`'s `V34_SHELL_TX = 0x1be0`), by functions like
+`demapFrame` that take the whole context; and via a pointer already advanced
+by `V34_SHELL_FIELDS` (`= 0xa00`, exactly `pad_000`'s size) that
+`preinitV34`/`initV34`/etc. receive, per `shell_of()`'s own backward
+adjustment in `v34shell.c`. Confirmed both conventions are real and in use
+by grepping the whole object for the already-named `latched` field both ways
+-- absolute `0xe4c(reg)` (hits in `decoderv34`... no, in code near
+`demapFrame`/handshake sites) and fields-relative `0x44c(reg)` (`0xe4c -
+0xa00`) -- both present with real hits. So `pad_e4e`'s own candidate bytes
+were searched both ways too: absolute `0xe4e`/`0xe4f` and fields-relative
+`0x44e`/`0x44f`, all four zero hits anywhere in the 1.2MB object.
+
+**Three left alone**, gap not matching what alignment would insert:
+`pad_000[0xa00]` (struct's opening 2560 bytes, no preceding field);
+`pad_a0c[2]` (between `short_a0a` and `wide_bits`, both already 2-aligned at
+0xa0c -- zero bytes needed, not 2); `pad_e86[0x16]` (22 bytes between
+`bitpos` and `sub[]`, both needing only 2-byte alignment already met).
+
+**Verification.** `gcc -m32 -Iinclude -c` clean with the new assertions
+live; standalone probe confirmed `frame` at 0xe50 and `sizeof` at 0x1450.
+`make period`/`byteident.py --ratchet` left for the parent's gate, same
+caveat as F10146. (2026-09-04)
+
+## F10148. `struct v34_ratecfg`: `pad_26[2]` removed, `pad_16` left alone, and a stale comment's `pad_24` reference is not a live field any more
+
+Same workstream, `include/dsplib/v34fsk.h`. Fresh grep matched 3
+(`pad_16`, `pad_24`, `pad_26`) -- but `pad_24` is a COMMENT reference only
+(around line 1358, in the paragraph documenting `rx_carrier`'s own naming),
+not a declared struct member: the field it used to describe was retired to
+`rx_carrier` in an earlier pass, and the comment's historical text still
+names the pad it used to sit inside. Nothing to remove there; the regex
+counts text, not declarations, which is why the file's own live-pad count is
+2, not 3.
+
+**`pad_26[2]` removed.** Between `rx_carrier` (short, ends 0x26, a 2-mod-4
+offset) and `rx_divtab` (pointer, needs align 4) -- exactly a 2-byte gap
+needed. `struct v34_ratecfg` is embedded in `struct v34_object` at absolute
+offset 0xaa84 (derived from `VPcmV34GetCurrentRxCarrier`'s own documented
+`movswl 0xaaa8` load of `rx_carrier` at struct-relative +0x24: 0xaaa8 -
+0x24 = 0xaa84), confirmed independently by finding a real write to
+`rx_divtab`'s own absolute address (0xaaac) in the object. Positive check:
+assertion added after the struct holds `rx_divtab` at 0x28 and
+`sizeof(struct v34_ratecfg)` at 0x2c, compiled and probed clean. Negative
+check: `objdump -d` grep of the whole object for absolute 0xaaaa/0xaaab --
+zero hits, against five real hits on the neighbouring 0xaaac confirming the
+base offset is right and the search would have found a genuine access had
+one existed.
+
+**`pad_16[0xc]` left alone.** Between `rxbits` (short, already 2-aligned at
+0x16) and `rx_use_max` (short, needs only 2-byte alignment): zero bytes
+needed by alignment: the actual gap is 12. Not a claim the bytes are unread
+-- the struct's own history (this exact file's `rx_carrier`, formerly
+believed to be inside a pad and later found to have a real reader,
+`VPcmV34GetCurrentRxCarrier`) is a standing reason to expect more of this
+12-byte span holds real, not-yet-identified fields, mirroring `rx_carrier`'s
+own story one field over.
+
+**Verification.** `gcc -m32 -Iinclude -c` clean with the new assertions
+live; standalone probe confirmed `rx_divtab` at 0x28 and `sizeof` at 0x2c.
+`make period`/`byteident.py --ratchet` left for the parent's gate, same
+caveat as F10146. (2026-09-04)
+
+## F10149. `struct v34_echo`/`struct v34_echo_prefilter` (`v34filt.h`) and `struct v34_queue` (`v34rx.h`): three more pads removed, and a second coincidental-offset trap caught and resolved on `struct v34_queue`
+
+Same workstream, closing out the rest of the V.34 cluster's file list.
+`src/pump/v34/v34pcmmain.cpp` (2 matches) and `src/pump/v34/v34hstx1.cpp` (2
+matches, one of them the `pad_250` cross-reference cited under F10146) and
+`src/pump/v34/v34hshak.c` (1 match, the `pad_000` cross-reference cited
+under F10146) were all re-checked and confirmed to declare no structs and no
+pad members of their own -- every hit in those three files is a COMMENT
+referencing a pad declared elsewhere (`v34recv.h`, already covered by
+F10146, or `include/dsplib/VPcmFloModem.h`'s `pad_6130`/`pad_6124`, which is
+shared cross-mode infrastructure outside this cluster's scope and untouched).
+Zero removable pads in those three files; nothing edited in them.
+
+**`include/dsplib/v34filt.h`, `pad_16[2]` in `struct v34_echo` removed.**
+Between `adapt_count` (short, ends 0x16, a 2-mod-4 offset) and `dlen`
+(unsigned, needs align 4): exactly a 2-byte gap. This struct is embedded at
+`v34_object+0x80b8` (`echo0`, confirmed by `src/pump/v34/dpsk.c`'s own
+combined offsetof assertion on `echo0.coeff_frac` == 0x80c4). Positive
+check: `dlen` still at 0x18 and `sizeof(struct v34_echo)` still 0x20 --
+which the file's OWN pre-existing assertion in `src/pump/v34/v34filters.c`
+(`V34F_ASSERT(dlen, ..., 0x18)`, `v34f_echo_size == 0x20`) already
+re-verifies unchanged, plus a fresh one added directly after the struct in
+`v34filt.h` itself. Negative check: whole-object grep for absolute
+0x80ce/0x80cf, confirmed against a real hit on the neighbouring 0x80d0
+(`dlen`) to validate the base -- zero hits on the pad's own bytes.
+
+**`pad_5a` (a bare `short`, not a `char[]`) in `struct v34_echo_prefilter`
+removed.** Between `hist_pos` (short, ends 0x5a, a 2-mod-4 offset) and
+`hist_len` (int, needs align 4): exactly a 2-byte gap, whether the pad is
+spelled as `unsigned char[2]` or as a `short` -- the size is what alignment
+cares about, not the pad's own declared type. This struct is embedded at
+`v34_object+0x2078` (`v34fsk.h`'s `prefilter` field). The two functions
+actually typed to this struct, `V34EchoPreFilter` and
+`V34EchoHistoryBackwardClean`, were disassembled in full: the former touches
+only +0x54 (`coeff`) and +0x64 (`shift`) plus the `state[]` array at +0;
+the latter only +0x58 (`hist_pos`), +0x5c (`hist_len`) and +0x60 (`span`).
+Neither ever forms a `0x5a(reg)`/`0x5b(reg)` operand off this struct's base
+register. Positive check: `hist_len` still at 0x5c and
+`sizeof(struct v34_echo_prefilter)` still 0x68.
+
+**`include/dsplib/v34rx.h`, `pad_02` in `struct v34_queue` removed, and this
+is where the SECOND coincidental-offset trap this workstream hit turned up.**
+Between `count` (short, ends 0x02, a 2-mod-4 offset) and `rd` (pointer,
+needs align 4): exactly a 2-byte gap. `struct v34_queue` backs two live
+objects in `struct v34_object`: `rxq` at absolute 0x264 and `txq` at
+absolute 0x221c (`v34fsk.h`), so `pad_02`'s candidate absolute addresses are
+0x266 (`rxq`) and 0x221e (`txq`). A first whole-object grep for `0x266(`
+found THREE hits and looked like a live reader -- but tracing each one's
+base register showed all three are false positives, the same shape as
+F10146's `probeselect` trap: two are inside `decoderv34` and `v34handshak`,
+both using a register already established (by its OTHER field accesses in
+the same instruction window -- `0x218`/`equ_step`, `0x122`/`flags`,
+`0x1d0`/`timing_offset`, all `struct v34_receiver`'s own named fields) to
+hold `rx` (a `struct v34_receiver *`), so `0x266(reg)` there means
+`v34_receiver`'s own `+0x266` field, `subframe_idx` -- a real, already-named
+field, just not this one, and only numerically coincident because `rxq` and
+`v34_receiver` are embedded at the SAME `v34_object` base address (0x264),
+so an `rxq`-relative pad offset and a `v34_receiver`-relative field offset
+can print the identical hex displacement while meaning two different
+things depending on which pointer it is added to. The third hit was inside
+`cid_progress`, a Caller ID function with no relationship to V.34 at all.
+Confirmed genuinely clean by disassembling `rxreadqueue` and `txwritequeue`
+in full -- the only two functions in the object actually typed to
+`struct v34_queue *` -- which access exactly `+0x00` (`count`), `+0x04`
+(`rd`), `+0x08` (`wr`) and `+0x0c` (`ring`) and never `+0x02`, and by
+confirming `0x221e`/`0x221f` (the `txq` instance) have zero hits at all,
+clean on the first pass.
+
+**Verification.** `gcc -m32 -Iinclude -c` clean on both headers with the new
+assertions live; standalone `offsetof`/`sizeof` probes confirmed all offsets
+and both structs' sizes unchanged (`v34_echo` 0x20, `v34_echo_prefilter`
+0x68, `v34_queue`'s `rd`/`ring` at 0x04/0x0c). `make period`/
+`byteident.py --ratchet` need docker, unavailable in this sandbox; left for
+the parent session's gate, same caveat as F10146-F10148: nothing here
+changes emitted code where the assertions hold, only removes a member and
+lets the compiler re-derive the identical padding. (2026-09-04)

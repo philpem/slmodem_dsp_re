@@ -198,8 +198,13 @@ struct v34_shell {
 						 * spellings reach it directly
 						 * and no caller has to change */
 	short           latched;		/* +0xe4c */
-	unsigned char pad_e4e[0xe50 - 0xe4e];
 	/*
+	 * pad_e4e[2] removed here -- pure alignment gap ahead of the union
+	 * below, which needs 4-byte alignment for its `int` member (finding
+	 * F10147). Verified: `latched` ends at a 2-mod-4 offset, and neither
+	 * absolute-struct-offset (0xe4e) nor V34_SHELL_FIELDS-relative (0x44e)
+	 * addressing of these two bytes appears anywhere in the object.
+	 *
 	 * The frame putFrame emits: one wide value, then four groups of
 	 * (1 bit, a small width, and two of `idx_width`).
 	 *
@@ -292,6 +297,34 @@ struct v34_shell {
 	}               state[32];		/* +0x12cc */
 	short           state_idx;		/* +0x144c */
 };
+
+/*
+ * PAD-REGION AUDIT (finding F10147).  `pad_e4e[2]` was removed above as a
+ * pure compiler-alignment artefact: `latched` ends on a 2-mod-4 byte
+ * boundary and the union that follows needs 4-byte alignment for its `int`
+ * member, so GCC's own default alignment inserts exactly this gap once the
+ * pad member is gone -- no `#pragma pack` applies to this struct. Proven the
+ * same two ways as every other removal this workstream made: the assertion
+ * below holds the union at its original offset, and a disassembly search of
+ * the whole object under both addressing conventions this struct's callers
+ * use (the absolute struct offset, and the `V34_SHELL_FIELDS`-relative one
+ * `preinitV34`/`initV34`/etc. receive) found no instruction anywhere that
+ * reads or writes those two bytes.
+ *
+ * `pad_000` (the struct's opening 0xa00 bytes -- no preceding field to
+ * derive alignment from), `pad_a0c` (`short_a0a` and `wide_bits` are both
+ * already 2-aligned at +0xa0c; a 2-byte gap there is not what alignment
+ * would add) and `pad_e86` (22 bytes where `bitpos`/`sub` need none) were
+ * checked the same way and LEFT ALONE: their gaps do not match what natural
+ * alignment would insert, so deleting them would not reproduce the object's
+ * layout.  Not a claim their bytes are unread -- only that they stay
+ * explicit per this workstream's decision rule.
+ */
+#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+typedef char v34shell_off_frame[
+	((int)__builtin_offsetof(struct v34_shell, frame) == 0xe50) ? 1 : -1];
+typedef char v34shell_size[(sizeof(struct v34_shell) == 0x1450) ? 1 : -1];
+#endif
 
 /*
  * Point a context's bit callback somewhere.  Nothing in the object calls
