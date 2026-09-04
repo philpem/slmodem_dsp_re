@@ -122,8 +122,16 @@ public:
 	 */
 	unsigned char maxTxPower;
 
-	/* +0x0a  Alignment before the word at +0x0c.  Nothing reaches it. */
-	unsigned char pad_0a[2];
+	/*
+	 * +0x0a was `pad_0a[2]` -- REMOVED (finding F10145).  Already
+	 * correctly described as alignment; proved mechanically by the
+	 * existing `V92P2I_OFF(maxTxPower, 0x09, ...)`/`V92P2I_OFF
+	 * (txPowerMeasurementPoint, 0x0c, ...)` and by `dis.py` over every
+	 * `V92Phase2Info` method plus `V92Modulator`'s two constructors,
+	 * which take a `V92Phase2Info *` -- the only hit near this offset is
+	 * an unrelated `add $0xa,%eax` immediate in an allocation-size
+	 * computation, not a memory access.
+	 */
 
 	/*
 	 * +0x0c  Whole-word copy out of V90Phase2Info +0x0c, which

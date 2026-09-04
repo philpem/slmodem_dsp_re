@@ -229,7 +229,13 @@ public:
 	 * ZERO (0x3305d..0x3306a), so 1 is positive.
 	 */
 	unsigned char	 signBits[V90SS_FRAME_BITS];
-	unsigned char	 pad_1e[2];	/* +0x1e alignment of the word below */
+	/*
+	 * +0x1e was `pad_1e[2]` -- REMOVED (finding F10145).  Already
+	 * correctly described as alignment of the word below; proved
+	 * mechanically by the existing `V90SS_OFF(signBits, 0x18, ...)`/
+	 * `V90SS_OFF(state, 0x20, ...)` and by `dis.py` over every
+	 * `V90SpectralShaper` method finding no access to 0x1e/0x1f.
+	 */
 
 	/*
 	 * +0x20  THE TRELLIS STATE, one bit wide although it is a full word
@@ -286,7 +292,14 @@ public:
 	 * One byte, so the three that follow are padding.
 	 */
 	SerialDifferentialEncoder<unsigned char> oddEncoder;
-	unsigned char	 pad_39[3];
+	/*
+	 * +0x39 was `pad_39[3]` -- REMOVED (finding F10145): a 1-byte
+	 * `oddEncoder` ending at +0x39 leaves exactly 3 bytes of alignment
+	 * ahead of `pde`, a `ParallelDifferentialEncoder<unsigned char>`
+	 * needing 4-byte alignment.  Both ends already asserted
+	 * (`V90SS_OFF(oddEncoder, 0x38, ...)`, `V90SS_OFF(pde, 0x3c, ...)`),
+	 * and `dis.py` finds no access to 0x39/0x3a/0x3b.
+	 */
 
 	/* +0x3c, built with 6 -- one memory per position in the frame. */
 	ParallelDifferentialEncoder<unsigned char> pde;

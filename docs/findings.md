@@ -114633,3 +114633,54 @@ declared x87-excess-precision divergence and the `t_v90p4dnan` declared NaN
 check, both unrelated to this sweep and both already declared in
 `tools/gccdiverge.json`. Every other suite green. `tools/onedef.py`/
 `tools/refcheck.py` clean. (2026-09-04)
+
+### `V90CPUnPck.h`/`V92Transmitter.h`: checked, none removed; `V92Phase2Info.h`/`V92CPUnPck.h`/`V90SpectralShaper.h`/`V90MP.h`: 5 more removed
+
+`V90CPUnPck::pad_00[0x14]` (leading, no preceding field to align against),
+`pad_37[3]` (3 actual bytes where a `short` array's 2-byte alignment need
+would insert only 1) and `pad_9a[2]` (2 actual bytes where an already
+4-aligned offset needs 0) all fail the arithmetic test and stay explicit --
+the file's own comments already call the latter two unexplained gaps, not
+alignment. `V92Transmitter::pad_00[4]` (leading) and `pad_5c[4]` (trailing,
+but the class's own 4-byte alignment would insert 0 bytes after an already
+4-aligned `byte_58`; the actual 4-byte gap is explained only by an EXTERNAL
+allocation size the comment already flags, `sizeof` 0x5c vs the caller's
+0x60) both fail too and stay explicit.
+
+`V92Phase2Info::pad_0a[2]` (same shape as the already-removed
+`V90Phase2Info::pad_0a`) removed; both ends already asserted by
+`V92P2I_OFF`. Negative check swept `V92Modulator`'s two constructors (which
+hold a `V92Phase2Info *`) in addition to the class's own four methods -- the
+only hit near the offset is an unrelated `add $0xa,%eax` allocation-size
+immediate in `V92ModulatorC1/C2`, not a memory access, confirmed by reading
+the surrounding instructions.
+
+`V92CPUnPck::pad_13[1]` removed -- this struct is a plain C aggregate, not
+in `tools/offcheck.py`'s `SKIP_HEADERS`, so its neighbours' own `/* +0xNN */`
+annotations are ALREADY the compile-time proof (offcheck.py checks every one
+against the compiler's `offsetof` on every build/test run) rather than
+needing a hand-added assertion macro; `dis.py` over
+`V92setParamsInfoFromCPUnPck`, the only reconstructed function that touches
+this struct, finds no access to 0x13.
+
+`V90SpectralShaper::pad_1e[2]` (before `state`) and `pad_39[3]` (before
+`pde`, a `ParallelDifferentialEncoder<unsigned char>` needing 4-byte
+alignment) both removed; both already commented "alignment", both ends
+already asserted by `V90SS_OFF`, `dis.py` over all ten class methods finds
+no access to either offset.
+
+`V90MP::pad_112[2]` (before `word_114`) and `pad_11a[2]` (before
+`nofRecievedMp`) both removed; both already commented "alignment", both
+ends already asserted by `V90MP_OFF`, `dis.py` over all thirteen class
+methods finds no access to either offset (the six enclosing-class
+constructors that hold a `V90MP *` were not separately swept since they take
+it by pointer and the class's OWN compiled methods are what any embedding
+site calls -- the same reasoning already used for `V90SpectralShaper`
+embedded in `V90Mapper`).
+
+`make one T="t_v92unpck t_v92p2info t_v92mpunpck t_v92mod t_v92modem
+t_vpcmflomodem t_v90spectral t_v90shapeact t_v90shapereset t_v90spectrellis
+t_v90mp t_v90cp t_jdmpleaves t_v90conneval t_v90modemctor t_v90rundemod
+t_v90p4mgen"` all green, no FAIL line across either run.
+`tools/onedef.py`/`tools/refcheck.py`/`tools/offcheck.py` all clean (2127
+annotations unchanged in count, all still matching `offsetof`). (2026-09-04)

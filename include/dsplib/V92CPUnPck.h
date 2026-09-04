@@ -94,8 +94,15 @@ struct V92CPUnPck {
 	/* +0x12  "CPObj->extendEu = %d", str1.1:0x936. */
 	signed char extendEu;
 
-	/* +0x13  Alignment before the word at +0x14; touched by nothing. */
-	unsigned char pad_13[1];
+	/*
+	 * +0x13 was `pad_13[1]` -- REMOVED (finding F10145).  Already
+	 * correctly described as alignment; proved mechanically now by the
+	 * next field's own `+0x14` annotation, which `tools/offcheck.py`
+	 * checks against the compiler's own `offsetof` on every build, and
+	 * by `dis.py` over `V92setParamsInfoFromCPUnPck` (the only
+	 * reconstructed function that touches this struct) finding no
+	 * access to offset 0x13.
+	 */
 
 	/*
 	 * +0x14  "CPObj->prefilterGain = %d", str1.1:0x91a.  Scaled by 2^-18
