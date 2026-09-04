@@ -46,31 +46,31 @@ v8handshakinit(struct v8 *v)
 	int mode;
 
 	/* The preamble, common to every shape. */
-	v->fa3e = 0x10;
-	v->fd94 = 0;
-	v->fd96 = 0x1a;
-	v->fd9c = 0;
-	v->fda0 = 0;
-	v->fd98 = 0;
+	v->tx_fill_target = 0x10;
+	v->dft.phase = 0;
+	v->dft.step = 0x1a;
+	v->dft.im = 0;
+	v->dft.energy = 0;
+	v->dft.re = 0;
 	v->fa40 = 0x200;
 
 	v8_rxinit(v);
 	v8_txinit(v);
 
-	v->fdc4 = 0;
-	v->fdd0 = 0;
-	v->fec2 = 0;
+	v->quick_connect = 0;
+	v->qca1a_done = 0;
+	v->ext2_word = 0;
 	mode = v->side;
-	v->fdc8 = 0;
-	v->fdcc = 0;
-	v->febc = 0;
-	v->febe = 0;
-	v->fec0 = 0;
+	v->lapm_indication = 0;
+	v->anspcm_level = 0;
+	v->fn_matched = 0;
+	v->ext2_matched = 0;
+	v->fn_word = 0;
 
 	if (mode == 0) {
-		v->f9d4 = 5;
-		v->f9d8 = 0x19;
-		v->f9d6 = 0x19;
+		v->tx_state = 5;
+		v->rx_substate = 0x19;
+		v->rx_state = 0x19;
 		/*
 		 * Assigned, not or-ed: this drops whatever v8_rxinit left in
 		 * the flag word, and the two detectors below then set their
@@ -80,7 +80,7 @@ v8handshakinit(struct v8 *v)
 
 		v->deadline_a = deadline(v->timeout_a);
 		v->deadline_b = deadline(v->timeout_b);
-		v->fe64 = 0;
+		v->elapsed = 0;
 
 		v8_detectorinit(v, &v->detector, detector_table, 0, 100, 50,
 				1500, 0);
@@ -107,7 +107,7 @@ v8handshakinit(struct v8 *v)
 		v->seq[1].shifter0 = 0;
 		v->seq[1].nleft0 = 0;
 
-		v->fdbe = (short)(v->op_mode == 0);
+		v->cm_ready = (short)(v->op_mode == 0);
 		cm = v->cm;
 
 		if (cm->b2 & 0x10) {
@@ -131,7 +131,7 @@ v8handshakinit(struct v8 *v)
 			v->seq[3].word[3] = 0x3ff;
 			v->seq[3].word[4] = 0x155;
 
-			v->fdc0 = 0;
+			v->cm_bit_count = 0;
 			v->toneq_pending = 0;
 			v->toneq_period = 0x688;
 
@@ -149,7 +149,7 @@ v8handshakinit(struct v8 *v)
 			v->seq[3].repeat = 1;
 		}
 
-		v->fdb6 = 0;
+		v->block_count = 0;
 		v->fdb4 = 0;
 		return;
 	}
@@ -157,19 +157,19 @@ v8handshakinit(struct v8 *v)
 	if (mode != 1)
 		return;
 
-	v->f9d6 = 0x20;
-	v->f9d4 = 6;
+	v->rx_state = 0x20;
+	v->tx_state = 6;
 	v->deadline_a = deadline(v->timeout_a);
 	v->deadline_b = deadline(v->timeout_b);
 
-	v->tone.f02 = 0;
-	v->tone.f04 = 0x1a;
-	v->tone.f06 = 0xe00;
-	v->tone.f0a = 0;
-	v->fe64 = 0;
-	v->tone.f00 = 0;
-	v->tone.f08 = v8_mpyint(0x3e80, v->fa42);
-	v->tone.f0e = 1;
+	v->tone.mod_phase = 0;
+	v->tone.carrier_step = 0x1a;
+	v->tone.mod_step = 0xe00;
+	v->tone.reversal_count = 0;
+	v->elapsed = 0;
+	v->tone.carrier_phase = 0;
+	v->tone.amplitude = v8_mpyint(0x3e80, v->tx_gain);
+	v->tone.reversal_enable = 1;
 
 	v8_V21_Init(v, 1, 0);
 
@@ -179,8 +179,8 @@ v8handshakinit(struct v8 *v)
 	v->rx.flags = 0x8004;
 	initTxSequence(v);
 
-	v->fdb8 = 0;
-	v->fdb6 = 0;
+	v->cj_zero_run = 0;
+	v->block_count = 0;
 	v->fdb4 = 0;
 }
 
@@ -224,7 +224,7 @@ V8Create(const struct v8_cfg *cfg)
 		v->op_mode = cfg->op_mode;
 		v->timeout_a = cfg->timeout_a;
 		v->timeout_b = cfg->timeout_b;
-		v->fa54 = cfg->f10;
+		v->rate = cfg->rate;
 		v->cm = cfg->cm;
 
 		/*
@@ -320,11 +320,11 @@ V8Create(const struct v8_cfg *cfg)
 			dsplibs_debug_printf("#################################"
 					     "###########################\r\n");
 
-		v->fa42 = 0x4000;
+		v->tx_gain = 0x4000;
 		v8handshakinit(v);
 
-		v->fdba = 0;
-		v->feb8 = 0;
+		v->pole_state = 0;
+		v->prev_status = 0;
 	}
 	return v;
 }

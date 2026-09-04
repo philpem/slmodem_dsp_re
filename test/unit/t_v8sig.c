@@ -141,10 +141,10 @@ t_sig_trace(void)
 				fill(&obj_a, sizeof(obj_a), 3100u + k);
 				memcpy(&obj_b, &obj_a, sizeof(obj_a));
 				obj_a.side = obj_b.side = k & 1;
-				obj_a.f9d6 = obj_b.f9d6 =
+				obj_a.rx_state = obj_b.rx_state =
 					(short)(k & 2 ? 0x19 : 0x18);
-				obj_a.fdbe = obj_b.fdbe = 0;
-				obj_a.f9d8 = obj_b.f9d8 =
+				obj_a.cm_ready = obj_b.cm_ready = 0;
+				obj_a.rx_substate = obj_b.rx_substate =
 					(short)(k & 1 ? V8_HS_TAKEN_RX
 						      : V8_HS_TAKEN_TX);
 				diff_eq_int("control returns (%ld)",
@@ -167,10 +167,10 @@ t_sig_trace(void)
 			ref_v8_rxinit(&obj_a);
 			ref_v8_rxinit(&obj_b);
 			obj_a.side = obj_b.side = 0;
-			obj_a.rx.f1c = obj_b.rx.f1c = 0x7000;
-			obj_a.rx.fac = obj_b.rx.fac = 0;
+			obj_a.rx.gain = obj_b.rx.gain = 0x7000;
+			obj_a.rx.clip_count = obj_b.rx.clip_count = 0;
 			obj_a.rx.flags = obj_b.rx.flags = 0;
-			obj_a.f9d8 = obj_b.f9d8 = (short)(k == 0 ? 0x24
+			obj_a.rx_substate = obj_b.rx_substate = (short)(k == 0 ? 0x24
 								 : 0x19);
 
 			for (blk = 0; blk < 4; blk++) {
@@ -184,11 +184,11 @@ t_sig_trace(void)
 				diff_eq_int("agc returns (%ld)", V8agc(&obj_b),
 					    ref_V8agc(&obj_a),
 					    (long)(lvl * 16 + k * 4 + blk));
-				diff_eq_int("clip count (%ld)", obj_b.rx.fac,
-					    obj_a.rx.fac,
+				diff_eq_int("clip count (%ld)", obj_b.rx.clip_count,
+					    obj_a.rx.clip_count,
 					    (long)(lvl * 16 + k * 4 + blk));
-				diff_eq_int("sub-state (%ld)", obj_b.f9d8,
-					    obj_a.f9d8,
+				diff_eq_int("sub-state (%ld)", obj_b.rx_substate,
+					    obj_a.rx_substate,
 					    (long)(lvl * 16 + k * 4 + blk));
 			}
 		}
@@ -197,9 +197,9 @@ t_sig_trace(void)
 		fill(&obj_a, sizeof(obj_a), 5000u);
 		ref_v8_txinit(&obj_a);
 		ref_v8_ansaminit(&obj_a);
-		obj_a.tone.f08 = 6000;
-		obj_a.tone.f0e = 1;
-		obj_a.tone.f0a = 0x430;
+		obj_a.tone.amplitude = 6000;
+		obj_a.tone.reversal_enable = 1;
+		obj_a.tone.reversal_count = 0x430;
 		for (blk = 0; blk < 1024; blk++)
 			ref_v8_ansamgenerate(&obj_a, air + blk * 4);
 
@@ -277,12 +277,12 @@ main(void)
 	for (k = 0; k < 8; k++) {
 		fill(&obj_a, sizeof(obj_a), 11u + k);
 		memcpy(&obj_b, &obj_a, sizeof(obj_a));
-		obj_a.fa42 = obj_b.fa42 = (short)(k * 4001 - 16000);
+		obj_a.tx_gain = obj_b.tx_gain = (short)(k * 4001 - 16000);
 		ref_v8_ansaminit(&obj_a);
 		v8_ansaminit(&obj_b);
 		whole(k);
 	}
-	diff_eq_int("the scaled field was set", obj_b.tone.f0e, 1, 0);
+	diff_eq_int("the scaled field was set", obj_b.tone.reversal_enable, 1, 0);
 	rc |= diff_end();
 
 	diff_begin("v8_TONEq_generate");
@@ -408,7 +408,7 @@ main(void)
 			(short)(300 + k * 11);
 		obj_a.v21_params.carrier_b = obj_b.v21_params.carrier_b =
 			(short)(700 + k * 13);
-		obj_a.v21_params.f0a = obj_b.v21_params.f0a =
+		obj_a.v21_params.tx_level = obj_b.v21_params.tx_level =
 			(short)(4000 + k * 100);
 		for (w = 0; w <= 1; w++) {
 			diff_eq_int("returns (%ld)",
@@ -428,11 +428,11 @@ main(void)
 		fill(&obj_a, sizeof(obj_a), 2100u + k);
 		memcpy(&obj_b, &obj_a, sizeof(obj_a));
 		/* Sweep the two dead bands and the armed flag. */
-		obj_a.rx.f1a = obj_b.rx.f1a = (short)(k * 163 - 32000);
-		obj_a.rx.f16 = obj_b.rx.f16 = (short)(k * 71);
-		obj_a.rx.f1e = obj_b.rx.f1e = (short)(k * 37 - 1200);
-		obj_a.rx.f20 = obj_b.rx.f20 = (short)(k * 29 - 4000);
-		obj_a.rx.f1c = obj_b.rx.f1c = (short)(k * 211);
+		obj_a.rx.level = obj_b.rx.level = (short)(k * 163 - 32000);
+		obj_a.rx.energy_hi = obj_b.rx.energy_hi = (short)(k * 71);
+		obj_a.rx.accum = obj_b.rx.accum = (short)(k * 37 - 1200);
+		obj_a.rx.adapt_rate = obj_b.rx.adapt_rate = (short)(k * 29 - 4000);
+		obj_a.rx.gain = obj_b.rx.gain = (short)(k * 211);
 		obj_a.rx.flags = obj_b.rx.flags =
 			(unsigned short)(k & 1 ? V8_RX_DETECTOR_ARMED : 0);
 		diff_eq_int("returns (%ld)", v8_agcadapt(&obj_b),
@@ -453,7 +453,7 @@ main(void)
 			ref_v8_txinit(&obj_b);
 			ref_v8_ansaminit(&obj_a);
 			ref_v8_ansaminit(&obj_b);
-			obj_a.tone.f08 = obj_b.tone.f08 = (short)(8000 - k * 5);
+			obj_a.tone.amplitude = obj_b.tone.amplitude = (short)(8000 - k * 5);
 			/*
 			 * Land on the reversal boundary in some runs, and
 			 * make sure the enable is set in exactly those --
@@ -461,13 +461,13 @@ main(void)
 			 * the boundary on even, so no reversal could ever
 			 * happen and the guard caught it.
 			 */
-			obj_a.tone.f0e = obj_b.tone.f0e =
+			obj_a.tone.reversal_enable = obj_b.tone.reversal_enable =
 				(short)(k % 4 == 0 ? 1 : (k & 1));
-			obj_a.tone.f0a = obj_b.tone.f0a =
+			obj_a.tone.reversal_count = obj_b.tone.reversal_count =
 				(short)(k % 4 == 0 ? 0x437 : k * 13);
 
 			for (i = 0; i < 6; i++) {
-				short before = obj_a.tone.f08;
+				short before = obj_a.tone.amplitude;
 
 				memset(out_a, 0x5a, sizeof(out_a));
 				memset(out_b, 0x5a, sizeof(out_b));
@@ -479,7 +479,7 @@ main(void)
 					if (out_a[n] != 0)
 						nonzero++;
 				}
-				if (obj_a.tone.f08 != before)
+				if (obj_a.tone.amplitude != before)
 					reversals++;
 			}
 			normalise(offsetof(struct v8, tx_ring_half));
@@ -506,10 +506,10 @@ main(void)
 				memcpy(&obj_b, &obj_a, sizeof(obj_a));
 				/* Sweep the states each request needs. */
 				obj_a.side = obj_b.side = k & 1;
-				obj_a.f9d6 = obj_b.f9d6 =
+				obj_a.rx_state = obj_b.rx_state =
 					(short)(k & 2 ? 0x19 : 0x18);
-				obj_a.fdbe = obj_b.fdbe = (short)(k & 4);
-				obj_a.f9d8 = obj_b.f9d8 =
+				obj_a.cm_ready = obj_b.cm_ready = (short)(k & 4);
+				obj_a.rx_substate = obj_b.rx_substate =
 					(short)(k & 8 ? 0x32
 						      : k & 16 ? 0x33 : 0x30);
 				n = V8Control(&obj_b, what);
@@ -602,10 +602,10 @@ main(void)
 			fill(&obj_a, sizeof(obj_a), 5000u + k);
 			ref_v8_txinit(&obj_a);
 			ref_v8_ansaminit(&obj_a);
-			obj_a.tone.f08 = (short)(6000 + k * 400);
-			obj_a.tone.f0e = 1;
+			obj_a.tone.amplitude = (short)(6000 + k * 400);
+			obj_a.tone.reversal_enable = 1;
 			/* Start near a reversal so several happen. */
-			obj_a.tone.f0a = (short)(0x430 - k);
+			obj_a.tone.reversal_count = (short)(0x430 - k);
 			for (blk = 0; blk < 1024; blk++)
 				ref_v8_ansamgenerate(&obj_a, air + blk * 4);
 
@@ -658,8 +658,8 @@ main(void)
 			fill(&obj_a, sizeof(obj_a), 6100u + k);
 			ref_v8_txinit(&obj_a);
 			ref_v8_ansaminit(&obj_a);
-			obj_a.tone.f08 = (short)(9000 - k * 300);
-			obj_a.tone.f0e = 0;
+			obj_a.tone.amplitude = (short)(9000 - k * 300);
+			obj_a.tone.reversal_enable = 0;
 			for (blk = 0; blk < 128; blk++)
 				ref_v8_ansamgenerate(&obj_a, air_a + blk * 4);
 			memcpy(air_b, air_a, sizeof(air_a));
@@ -671,9 +671,9 @@ main(void)
 			ref_v8_detectorinit(&obj_b, &obj_b.detector, tab, 0,
 					    100, 50, 1500, 0);
 			/* Sweep the three rules the verdict can follow. */
-			obj_a.detector.f04 = obj_b.detector.f04 =
+			obj_a.detector.lo_rule = obj_b.detector.lo_rule =
 				(short)(k % 3 == 0);
-			obj_a.detector.f06 = obj_b.detector.f06 =
+			obj_a.detector.armed = obj_b.detector.armed =
 				(short)(k % 3 == 1);
 			/*
 			 * Thresholds that let each rule actually fire.  The
@@ -684,15 +684,15 @@ main(void)
 			 * it.
 			 */
 			if (k % 3 == 0) {
-				obj_a.detector.f0e = obj_b.detector.f0e =
+				obj_a.detector.lo_thresh = obj_b.detector.lo_thresh =
 					30000;
-				obj_a.detector.f10 = obj_b.detector.f10 =
+				obj_a.detector.hi_thresh = obj_b.detector.hi_thresh =
 					30000;
 			} else {
-				obj_a.detector.f0e = obj_b.detector.f0e = 400;
-				obj_a.detector.f10 = obj_b.detector.f10 = 5;
+				obj_a.detector.lo_thresh = obj_b.detector.lo_thresh = 400;
+				obj_a.detector.hi_thresh = obj_b.detector.hi_thresh = 5;
 			}
-			obj_a.detector.f0a = obj_b.detector.f0a = 3;
+			obj_a.detector.count_limit = obj_b.detector.count_limit = 3;
 			/*
 			 * v8_detectorinit seeds the counter with the negated
 			 * argument -- here -50 -- which is a deliberate
@@ -700,7 +700,7 @@ main(void)
 			 * blocks however loud the tone.  Cleared so the
 			 * verdict is reachable in a test of this length.
 			 */
-			obj_a.detector.f08 = obj_b.detector.f08 = 0;
+			obj_a.detector.counter = obj_b.detector.counter = 0;
 
 			for (blk = 0; blk + 64 <= 512; blk += 64) {
 				int ra, rb;
@@ -714,15 +714,15 @@ main(void)
 						    air_b + blk);
 				diff_eq_int("verdict (%ld)", rb, ra, k);
 				diff_eq_int("integrator (%ld)",
-					    obj_b.detector.f12,
-					    obj_a.detector.f12, k);
+					    obj_b.detector.integrator,
+					    obj_a.detector.integrator, k);
 				for (i = 0; i < 64; i++)
 					diff_eq_int("filtered %ld",
 						    air_b[blk + i],
 						    air_a[blk + i], i);
 				if (ra)
 					asserted++;
-				if (obj_a.detector.f12 != 0)
+				if (obj_a.detector.integrator != 0)
 					moved3++;
 			}
 			diff_eq_int("detector state (%ld)",
@@ -802,7 +802,7 @@ main(void)
 					(short)((k >> 1) & 1));
 			ref_v8_V21_Init(&obj_b, (short)(k & 1),
 					(short)((k >> 1) & 1));
-			obj_a.v21_params.f16 = obj_b.v21_params.f16 = 0;
+			obj_a.v21_params.inbuf_pos = obj_b.v21_params.inbuf_pos = 0;
 			obj_a.v21.pos = obj_b.v21.pos = 0;
 			obj_a.v21.mark_run = obj_b.v21.mark_run = 0;
 			obj_a.v21.space_run = obj_b.v21.space_run = 0;
@@ -825,10 +825,10 @@ main(void)
 				v8_fskdemodulate(&obj_b);
 
 				diff_eq_int("bitcount (%ld)",
-					    obj_b.v21_params.f18,
-					    obj_a.v21_params.f18, k);
-				diff_eq_int("bits (%ld)", obj_b.v21_params.f1a,
-					    obj_a.v21_params.f1a, k);
+					    obj_b.v21_params.bitcount,
+					    obj_a.v21_params.bitcount, k);
+				diff_eq_int("bits (%ld)", obj_b.v21_params.bits,
+					    obj_a.v21_params.bits, k);
 				diff_eq_int("mark run (%ld)", obj_b.v21.mark_run,
 					    obj_a.v21.mark_run, k);
 				diff_eq_int("space run (%ld)",
@@ -839,7 +839,7 @@ main(void)
 						    obj_b.v21.delay[i],
 						    obj_a.v21.delay[i], i);
 			}
-			bits += obj_a.v21_params.f18;
+			bits += obj_a.v21_params.bitcount;
 			normalise(offsetof(struct v8, tx_ring_half));
 			normalise(offsetof(struct v8, tx_ring_base));
 			normalise(offsetof(struct v8, tx_sym_a));
@@ -866,14 +866,14 @@ main(void)
 			ref_v8_rxinit(&obj_b);
 			obj_a.side = obj_b.side = k & 1;
 			/* Sweep the gain across the saturating range. */
-			obj_a.rx.f1c = obj_b.rx.f1c = (short)(200 + k * 1300);
-			obj_a.rx.f1a = obj_b.rx.f1a = (short)(k * 900 - 8000);
-			obj_a.rx.f1e = obj_b.rx.f1e = (short)(k * 41);
-			obj_a.rx.f20 = obj_b.rx.f20 = (short)(k * 133 - 1000);
+			obj_a.rx.gain = obj_b.rx.gain = (short)(200 + k * 1300);
+			obj_a.rx.level = obj_b.rx.level = (short)(k * 900 - 8000);
+			obj_a.rx.accum = obj_b.rx.accum = (short)(k * 41);
+			obj_a.rx.adapt_rate = obj_b.rx.adapt_rate = (short)(k * 133 - 1000);
 			obj_a.rx.flags = obj_b.rx.flags =
 				(unsigned short)(k & 2 ? V8_RX_DETECTOR_ARMED
 						       : 0);
-			obj_a.f9d8 = obj_b.f9d8 = (short)(k & 4 ? 0x24 : 0x19);
+			obj_a.rx_substate = obj_b.rx_substate = (short)(k & 4 ? 0x24 : 0x19);
 
 			for (blk = 0; blk < 40; blk++) {
 				int m;
@@ -892,13 +892,13 @@ main(void)
 					diff_eq_int("sample %ld",
 						    obj_b.rx_stage[m],
 						    obj_a.rx_stage[m], m);
-				diff_eq_int("gain (%ld)", obj_b.rx.f1c,
-					    obj_a.rx.f1c, k);
-				diff_eq_int("clip count (%ld)", obj_b.rx.fac,
-					    obj_a.rx.fac, k);
-				if (obj_a.rx.fac != 0)
+				diff_eq_int("gain (%ld)", obj_b.rx.gain,
+					    obj_a.rx.gain, k);
+				diff_eq_int("clip count (%ld)", obj_b.rx.clip_count,
+					    obj_a.rx.clip_count, k);
+				if (obj_a.rx.clip_count != 0)
 					clipped++;
-				if (obj_a.rx.f1c != (short)(200 + k * 1300))
+				if (obj_a.rx.gain != (short)(200 + k * 1300))
 					adapted++;
 			}
 			normalise(offsetof(struct v8, tx_sym_a));
@@ -924,11 +924,11 @@ main(void)
 
 			fill(&obj_a, sizeof(obj_a), 9600u + k);
 			memcpy(&obj_b, &obj_a, sizeof(obj_a));
-			obj_a.rx.f84 = obj_b.rx.f84 = (short)(k * 25);
-			obj_a.rx.f86 = obj_b.rx.f86 = (short)(400 + k * 90);
-			obj_a.rx.f88 = obj_b.rx.f88 = (short)(k * 24);
-			obj_a.rx.f8a = obj_b.rx.f8a = 0;
-			obj_a.rx.f1c = obj_b.rx.f1c = (short)(400 + k * 90);
+			obj_a.rx.refresh_timer = obj_b.rx.refresh_timer = (short)(k * 25);
+			obj_a.rx.gain_ref = obj_b.rx.gain_ref = (short)(400 + k * 90);
+			obj_a.rx.stable_timer = obj_b.rx.stable_timer = (short)(k * 24);
+			obj_a.rx.stable = obj_b.rx.stable = 0;
+			obj_a.rx.gain = obj_b.rx.gain = (short)(400 + k * 90);
 
 			/*
 			 * Hold the gain steady for a while, then move it
@@ -937,22 +937,22 @@ main(void)
 			 */
 			for (step = 0; step < 400; step++) {
 				if (step == 300) {
-					obj_a.rx.f1c = (short)(obj_a.rx.f1c * 2);
-					obj_b.rx.f1c = obj_a.rx.f1c;
+					obj_a.rx.gain = (short)(obj_a.rx.gain * 2);
+					obj_b.rx.gain = obj_a.rx.gain;
 				}
 				ref_checkSignalStability(&obj_a);
 				checkSignalStability(&obj_b);
-				diff_eq_int("f84 (%ld)", obj_b.rx.f84,
-					    obj_a.rx.f84, k);
-				diff_eq_int("f86 (%ld)", obj_b.rx.f86,
-					    obj_a.rx.f86, k);
-				diff_eq_int("f88 (%ld)", obj_b.rx.f88,
-					    obj_a.rx.f88, k);
-				diff_eq_int("stable (%ld)", obj_b.rx.f8a,
-					    obj_a.rx.f8a, k);
-				if (obj_a.rx.f8a)
+				diff_eq_int("f84 (%ld)", obj_b.rx.refresh_timer,
+					    obj_a.rx.refresh_timer, k);
+				diff_eq_int("f86 (%ld)", obj_b.rx.gain_ref,
+					    obj_a.rx.gain_ref, k);
+				diff_eq_int("f88 (%ld)", obj_b.rx.stable_timer,
+					    obj_a.rx.stable_timer, k);
+				diff_eq_int("stable (%ld)", obj_b.rx.stable,
+					    obj_a.rx.stable, k);
+				if (obj_a.rx.stable)
 					stable++;
-				if (obj_a.rx.f88 == 0)
+				if (obj_a.rx.stable_timer == 0)
 					reset++;
 			}
 			whole(k);

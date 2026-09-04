@@ -83,7 +83,7 @@ v8_create(void *modem, int id, int caller, int srate, int max_frag,
 	cfg.op_mode = 0;
 	cfg.timeout_a = 0x0c;
 	cfg.timeout_b = 0x07;
-	cfg.f10 = V8_DP_RATE;
+	cfg.rate = V8_DP_RATE;
 	cfg.cm = cm;
 
 	st->v8 = V8Create(&cfg);

@@ -446,7 +446,7 @@ t_inits(void)
 	diff_eq_int("detector flag set in the receiver",
 		    obj_b.rx.flags & V8_RX_DETECTOR_ARMED,
 		    V8_RX_DETECTOR_ARMED, 0);
-	diff_eq_int("the negated argument", obj_b.detector.f08, -4, 0);
+	diff_eq_int("the negated argument", obj_b.detector.counter, -4, 0);
 	diff_eq_int("accumulators cleared", obj_b.detector.acc_d[2], 0, 0);
 
 	/* The channel and role choices really do pick different things. */
@@ -704,7 +704,7 @@ t_handshakinit(void)
 				obj_a.timeout_a = obj_b.timeout_a = t - 1;
 				obj_a.timeout_b = obj_b.timeout_b = t * 5;
 				obj_a.op_mode = obj_b.op_mode = (t == 1);
-				obj_a.fa42 = obj_b.fa42 = (short)(1000 * t);
+				obj_a.tx_gain = obj_b.tx_gain = (short)(1000 * t);
 				obj_a.cm = &cm_a;
 				obj_b.cm = &cm_b;
 
@@ -789,7 +789,7 @@ t_v8create(void)
 		cfg.op_mode = 7;
 		cfg.timeout_a = 12;
 		cfg.timeout_b = 3;
-		cfg.f10 = 9600;
+		cfg.rate = 9600;
 
 		cfg.cm = &cm_a;
 		b = ref_V8Create(&cfg);
@@ -806,15 +806,15 @@ t_v8create(void)
 			    mode);
 		diff_eq_int("timeout_b (%ld)", a->timeout_b, b->timeout_b,
 			    mode);
-		diff_eq_int("f10 (%ld)", a->fa54, b->fa54, mode);
-		diff_eq_int("fa42 (%ld)", a->fa42, b->fa42, mode);
-		diff_eq_int("fdba cleared (%ld)", a->fdba, b->fdba, mode);
-		diff_eq_int("feb8 cleared (%ld)", a->feb8, b->feb8, mode);
+		diff_eq_int("f10 (%ld)", a->rate, b->rate, mode);
+		diff_eq_int("fa42 (%ld)", a->tx_gain, b->tx_gain, mode);
+		diff_eq_int("fdba cleared (%ld)", a->pole_state, b->pole_state, mode);
+		diff_eq_int("feb8 cleared (%ld)", a->prev_status, b->prev_status, mode);
 
 		/* The handshake ran through it: a sample of what it writes. */
-		diff_eq_int("fa3e (%ld)", a->fa3e, b->fa3e, mode);
+		diff_eq_int("fa3e (%ld)", a->tx_fill_target, b->tx_fill_target, mode);
 		diff_eq_int("fa40 (%ld)", a->fa40, b->fa40, mode);
-		diff_eq_int("f9d4 (%ld)", a->f9d4, b->f9d4, mode);
+		diff_eq_int("f9d4 (%ld)", a->tx_state, b->tx_state, mode);
 		diff_eq_int("deadline_a (%ld)", a->deadline_a, b->deadline_a,
 			    mode);
 		diff_eq_int("rx.flags (%ld)", a->rx.flags, b->rx.flags, mode);
@@ -822,7 +822,7 @@ t_v8create(void)
 			    memcmp(&cm_a, &cm_b, sizeof(cm_a)) == 0, 1, mode);
 
 		/* The constant really is planted, not agreed by accident. */
-		diff_eq_int("fa42 is 0x4000 (%ld)", a->fa42, 0x4000, mode);
+		diff_eq_int("fa42 is 0x4000 (%ld)", a->tx_gain, 0x4000, mode);
 
 		V8Delete(a);
 		ref_V8Delete(b);
@@ -882,7 +882,7 @@ t_v8create(void)
 				cfg.op_mode = (int)k;
 				cfg.timeout_a = 12;
 				cfg.timeout_b = 3;
-				cfg.f10 = 9600;
+				cfg.rate = 9600;
 
 				cfg.cm = &cm_a;
 				b = ref_V8Create(&cfg);

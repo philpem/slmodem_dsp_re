@@ -33,28 +33,28 @@ v8_handshak_agc(struct v8 *v)
 
 	V8agc(v);
 
-	if (v->f9d8 == 0x19) {
+	if (v->rx_substate == 0x19) {
 		/*
 		 * Listening for the answer tone.  The deadline is checked
 		 * first, and -1 means there is not one.
 		 */
-		if (v->deadline_a != -1 && v->fe64 >= v->deadline_a) {
+		if (v->deadline_a != -1 && v->elapsed >= v->deadline_a) {
 			/* Announced once, on the block that reaches it. */
-			if (v->fe64 == v->deadline_a) {
+			if (v->elapsed == v->deadline_a) {
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
 					    "V8: Time Out Waiting For "
 					    "ANSam...\r\n");
-				v->fe64++;
+				v->elapsed++;
 			}
-			v->f9d6 = 0xb;
+			v->rx_state = 0xb;
 			return 1;
 		}
-		v->fe64++;
+		v->elapsed++;
 		if (v8_tone_detect(v, &v->detector, v->rx_stage) != 0) {
-			v->f9d8 = 0x24;
-			v->fdb6 = 0;
-			v->fe64 = 0;
+			v->rx_substate = 0x24;
+			v->block_count = 0;
+			v->elapsed = 0;
 			r->flags &= (unsigned short)~V8_RX_DETECTOR_ARMED;
 		}
 		return 0;
@@ -69,30 +69,29 @@ v8_handshak_agc(struct v8 *v)
 		scratch[i] = v8_absfn(v->rx_stage[i]);
 
 	checkSignalStability(v);
-	if (r->f8a != 0)
-		v8_dftupdate((struct v8_dft_bin *)&v->fd94, 1, scratch,
-			     V8_QUEUE_BLOCK);
+	if (r->stable != 0)
+		v8_dftupdate(&v->dft, 1, scratch, V8_QUEUE_BLOCK);
 
 	v8_phase_rev_detect(&v->phase_rev, v->rx_stage, V8_QUEUE_BLOCK);
 
-	v->fdb6 = (short)(v->fdb6 + 1);
-	if ((short)v->fdb6 <= V8_AGC_BLOCKS)
+	v->block_count = (short)(v->block_count + 1);
+	if ((short)v->block_count <= V8_AGC_BLOCKS)
 		return 0;
 
 	r->flags |= V8_RX_DETECTOR_ARMED;
-	if (r->f8a != 0)
-		v8_dftenergy((struct v8_dft_bin *)&v->fd94, 1, 1);
+	if (r->stable != 0)
+		v8_dftenergy(&v->dft, 1, 1);
 
 	/*
 	 * Time is up.  What happens next depends on whether the far end
 	 * asked for something this end can offer.
 	 */
-	if ((unsigned short)v->fda0 > 0x18f || v->phase_rev.detected != 0) {
-		if (((v->cm->b2 >> 4) & 1 & (short)v->fdd0) != 0) {
-			v->f9d4 = 0x2d;
+	if ((unsigned short)v->dft.energy > 0x18f || v->phase_rev.detected != 0) {
+		if (((v->cm->b2 >> 4) & 1 & (short)v->qca1a_done) != 0) {
+			v->tx_state = 0x2d;
 			return 0;
 		}
-		if (v->fdbe == 0)
+		if (v->cm_ready == 0)
 			return 0;
 
 		/*
@@ -105,24 +104,24 @@ v8_handshak_agc(struct v8 *v)
 			dsplibs_debug_printf("V8 ANSAM Detected (CM ready)\n");
 
 		v8_V21_Init(v, 0, 1);
-		r->f20 = 0x800;
-		v->fa3c = 1;
-		v->fdb6 = 0;
+		r->adapt_rate = 0x800;
+		v->tx_bit = 1;
+		v->block_count = 0;
 		v->fdb4 = 0;
-		v->f9d6 = 0x28;
-		v->f9d8 = V8_HS_HUNT;
-		v->f9d4 = (v->cm->b2 & 0x10) ? 0x2b : 0x17;
+		v->rx_state = 0x28;
+		v->rx_substate = V8_HS_HUNT;
+		v->tx_state = (v->cm->b2 & 0x10) ? 0x2b : 0x17;
 		return 0;
 	}
 
-	if (((v->cm->b2 >> 4) & 1 & (short)v->fdd0) == 0)
+	if (((v->cm->b2 >> 4) & 1 & (short)v->qca1a_done) == 0)
 		return 1;
-	if (v->f9d4 == 0x2d) {
-		v->f9d4 = 5;
-		v->f9d6 = 0x63;
+	if (v->tx_state == 0x2d) {
+		v->tx_state = 5;
+		v->rx_state = 0x63;
 		return 2;
 	}
-	v->f9d4 = 5;
+	v->tx_state = 5;
 	return 1;
 }
 
@@ -174,18 +173,18 @@ v8_handshak_agc(struct v8 *v)
 static int
 v8_hs_drain(struct v8 *v)
 {
-	if (v->fdb6 != 0) {
-		v->fdb6 = (short)(v->fdb6 + 1);
-		if (v->fdb6 != V8_HS_DRAIN_BLOCKS)
+	if (v->block_count != 0) {
+		v->block_count = (short)(v->block_count + 1);
+		if (v->block_count != V8_HS_DRAIN_BLOCKS)
 			return 0;
-		v->f9d4 = 5;
-		v->f9d6 = 0x63;
+		v->tx_state = 5;
+		v->rx_state = 0x63;
 		return 2;
 	}
 	if (v->tx_seq->nleft != 0)
 		return 0;
 	v->tx_seq = &v->seq[1];
-	v->fdb6 = 1;
+	v->block_count = 1;
 	return 0;
 }
 
@@ -200,7 +199,7 @@ v8_hs_hunt(struct v8 *v)
 {
 	struct v8_v21_params *p = &v->v21_params;
 	struct v8_tx_sequence *s;
-	int bits = (unsigned short)p->f1a & 0xfff;
+	int bits = (unsigned short)p->bits & 0xfff;
 	int n;
 	int i;
 
@@ -208,7 +207,7 @@ v8_hs_hunt(struct v8 *v)
 		s = v->seq_alt;
 		s->word[0] = V8_HS_MARK_MSG;
 		n = V8_HS_MSG_WORDS;
-		v->f9d8 = V8_HS_COLLECT;
+		v->rx_substate = V8_HS_COLLECT;
 	} else if (bits != V8_HS_PREAMBLE_QCA1) {
 		return 0;
 	} else if (!(v->cm->b2 & 0x10)) {
@@ -218,16 +217,16 @@ v8_hs_hunt(struct v8 *v)
 		s = v->seq_spare;
 		s->word[0] = V8_HS_MARK_QCA1;
 		n = V8_HS_QCA1_WORDS;
-		v->f9d8 = V8_HS_QCA1;
+		v->rx_substate = V8_HS_QCA1;
 	}
 
 	for (i = 1; i <= n; i++)
 		s->word[i] = V8_HS_WORD_ANY;
-	v->fdb6 = 1;
-	v->fdbc = 1;
+	v->block_count = 1;
+	v->word_count = 1;
 	s->wordidx = -1;
-	p->f18 = 0;
-	p->f1a = 0;
+	p->bitcount = 0;
+	p->bits = 0;
 	return 0;
 }
 
@@ -244,28 +243,28 @@ v8_hs_message_done(struct v8 *v)
 
 	if (v->side != 1) {
 		evaluateRxJMSequence(v);
-		v->f9d8 = v->op_mode == 1 ? V8_HS_TAKEN_RX : V8_HS_DRAIN;
+		v->rx_substate = v->op_mode == 1 ? V8_HS_TAKEN_RX : V8_HS_DRAIN;
 		rebuild = 0;
 	} else if (v->op_mode == 1) {
-		v->f9d8 = V8_HS_TAKEN_TX;
+		v->rx_substate = V8_HS_TAKEN_TX;
 	} else {
-		v->f9d8 = V8_HS_CJ;
-		v->f9d4 = 0x17;
-		v->fe64 = 0;
+		v->rx_substate = V8_HS_CJ;
+		v->tx_state = 0x17;
+		v->elapsed = 0;
 	}
 
 	if (rebuild) {
 		rebuildJMSequence(v);
 		v->fdb4 = 0;
-		v->fdbc = 0;
-		v->fa3c = 1;
+		v->word_count = 0;
+		v->tx_bit = 1;
 		v->tx_seq->shifter = 0;
 		v->tx_seq->nleft = 0;
 	}
 
 	r->flags |= V8_RX_DETECTOR_ARMED;
-	v->fa40 = r->f1c;
-	v->fdb6 = 0;
+	v->fa40 = r->gain;
+	v->block_count = 0;
 	return 0;
 }
 
@@ -292,27 +291,27 @@ v8_hs_collect(struct v8 *v, int ch)
 	int idx;
 
 	if (ch == V8_HS_MARK_MSG) {
-		if (s->wordidx == v->fdb6)
+		if (s->wordidx == v->block_count)
 			return v8_hs_message_done(v);
 		s->word[0] = V8_HS_MARK_MSG;
-		s->wordidx = v->fdbc;
-		v->fdb6 = 1;
-		v->fdbc = 1;
+		s->wordidx = v->word_count;
+		v->block_count = 1;
+		v->word_count = 1;
 		return 0;
 	}
 
-	idx = (short)v->fdbc;
+	idx = (short)v->word_count;
 	if ((unsigned short)w[idx] == (unsigned)ch) {
-		v->fdbc = (short)(idx + 1);
-		v->fdb6 = (short)(v->fdb6 + 1);
+		v->word_count = (short)(idx + 1);
+		v->block_count = (short)(v->block_count + 1);
 		return 0;
 	}
 
-	if ((short)v->fdbc <= V8_HS_MSG_WORDS) {
+	if ((short)v->word_count <= V8_HS_MSG_WORDS) {
 		s->word[idx] = (short)ch;
-		v->fdbc = (short)(v->fdbc + 1);
+		v->word_count = (short)(v->word_count + 1);
 	}
-	v->fdb6 = 0;
+	v->block_count = 0;
 	return 0;
 }
 
@@ -327,15 +326,15 @@ static int
 v8_hs_qca1(struct v8 *v, int ch)
 {
 	struct v8_tx_sequence *s = v->seq_spare;
-	int idx = (short)v->fdbc;
+	int idx = (short)v->word_count;
 	int w1;
 	int w4;
 	int is_d;
 	int ok;
 
-	v->fdbc = (short)(idx + 1);
+	v->word_count = (short)(idx + 1);
 	s->word[idx] = (short)ch;
-	if (v->fdbc != V8_HS_QCA1_WORDS + 1)
+	if (v->word_count != V8_HS_QCA1_WORDS + 1)
 		return 0;
 
 	w1 = (unsigned short)s->word[1];
@@ -357,12 +356,12 @@ v8_hs_qca1(struct v8 *v, int ch)
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf(
 			    "V8: reseting QCA1 detector...\r\n");
-		v->f9d8 = V8_HS_HUNT;
+		v->rx_substate = V8_HS_HUNT;
 		return 0;
 	}
 
-	v->fdc4 = 1;
-	v->fdc8 = (w1 >> 6) & 1;
+	v->quick_connect = 1;
+	v->lapm_indication = (w1 >> 6) & 1;
 
 	if (!is_d) {
 		/*
@@ -390,10 +389,10 @@ v8_hs_qca1(struct v8 *v, int ch)
 			    (w1 >> 1) & 1, (w4 >> 5) & 1, (w4 >> 3) & 1,
 			    (w4 >> 2) & 1, (w4 >> 1) & 1);
 
-		v->f9d4 = 5;
-		v->f9d8 = 0x19;
-		v->f9d6 = 0x19;
-		v->fdd0 = 1;
+		v->tx_state = 5;
+		v->rx_substate = 0x19;
+		v->rx_state = 0x19;
+		v->qca1a_done = 1;
 
 		/*
 		 * Labelled QCA1d, but it is in the QCA1a arm -- the QCA1d arm
@@ -410,13 +409,13 @@ v8_hs_qca1(struct v8 *v, int ch)
 	/* QCA1d, and that is the whole negotiation. */
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("V8:  QCA1d: Got Good QCA1d !!!!\r\n");
-	v->fdcc = (w1 >> 1) & 3;
+	v->anspcm_level = (w1 >> 1) & 3;
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf(
 		    "V8:  QCA1d: ANSpcm level index: bits27-28 = %d, "
 		    "bits57-58 = %d\r\n", (w1 >> 1) & 3, (w4 >> 1) & 3);
-	v->f9d4 = 5;
-	v->f9d6 = 0x63;
+	v->tx_state = 5;
+	v->rx_state = 0x63;
 	return 2;
 }
 
@@ -433,17 +432,17 @@ v8_hs_cj(struct v8 *v, int ch)
 
 	for (i = 0; i < V8_HS_CHAR_BITS; i++) {
 		if ((ch & mask) != 0) {
-			if (v->fdb8 == V8_HS_CJ_ZEROS) {
-				v->fdb6 = (short)(v->fdb6 + 1);
-				if (v->fdb6 == V8_HS_CJ_COUNT) {
-					v->f9d4 = 5;
-					v->f9d6 = 0x63;
+			if (v->cj_zero_run == V8_HS_CJ_ZEROS) {
+				v->block_count = (short)(v->block_count + 1);
+				if (v->block_count == V8_HS_CJ_COUNT) {
+					v->tx_state = 5;
+					v->rx_state = 0x63;
 					return 2;
 				}
 			}
-			v->fdb8 = 0;
+			v->cj_zero_run = 0;
 		} else {
-			v->fdb8 = (short)(v->fdb8 + 1);
+			v->cj_zero_run = (short)(v->cj_zero_run + 1);
 		}
 		mask >>= 1;
 	}
@@ -461,9 +460,9 @@ v8_handshak_demod(struct v8 *v)
 	int ch;
 
 	V8agc(v);
-	before = (short)p->f18;
+	before = (short)p->bitcount;
 	v8_fskdemodulate(v);
-	got = (short)p->f18 - before;
+	got = (short)p->bitcount - before;
 
 	/*
 	 * Walk the bits that just arrived, most recent last.  A one extends
@@ -473,22 +472,22 @@ v8_handshak_demod(struct v8 *v)
 	for (k = 0; k < got; k++) {
 		int shift = got - k - 1;
 
-		if (((unsigned short)p->f1a >> shift) & 1) {
-			p->f1e = 0;
-			p->f20 = (short)(p->f20 + 1);
-			p->f22 = p->f20;
+		if (((unsigned short)p->bits >> shift) & 1) {
+			p->zero_run = 0;
+			p->ones_run = (short)(p->ones_run + 1);
+			p->ones_run_len = p->ones_run;
 			continue;
 		}
-		p->f1e = (short)(p->f1e + 1);
-		if (p->f1e == V8_HS_ZERO_RUN
-		    && (short)p->f22 > V8_HS_MIN_ONES) {
-			p->f26 = p->f24;
-			p->f24 = (short)(p->f24 + 1);
+		p->zero_run = (short)(p->zero_run + 1);
+		if (p->zero_run == V8_HS_ZERO_RUN
+		    && (short)p->ones_run_len > V8_HS_MIN_ONES) {
+			p->gap_seen = p->gap_count;
+			p->gap_count = (short)(p->gap_count + 1);
 		}
-		p->f20 = 0;
+		p->ones_run = 0;
 	}
 
-	sub = (unsigned short)v->f9d8;
+	sub = (unsigned short)v->rx_substate;
 
 	/*
 	 * A character of ones went by since the last look, and it was not the
@@ -496,11 +495,11 @@ v8_handshak_demod(struct v8 *v)
 	 * assembled and start the next character six bits in.  Not done while
 	 * hunting for CJ, which is all zeros and would never survive it.
 	 */
-	if ((unsigned short)p->f26 != (unsigned short)p->f24
-	    && (short)(p->f24 - 1) > 0 && sub != V8_HS_CJ) {
-		p->f18 = V8_HS_ZERO_RUN;
-		p->f1a = 0;
-		p->f26 = (short)(p->f26 + 1);
+	if ((unsigned short)p->gap_seen != (unsigned short)p->gap_count
+	    && (short)(p->gap_count - 1) > 0 && sub != V8_HS_CJ) {
+		p->bitcount = V8_HS_ZERO_RUN;
+		p->bits = 0;
+		p->gap_seen = (short)(p->gap_seen + 1);
 	}
 
 	/* Two sub-states read the raw stream and so run every block. */
@@ -510,10 +509,10 @@ v8_handshak_demod(struct v8 *v)
 		return v8_hs_drain(v);
 
 	/* The rest wait for a whole character. */
-	if ((short)p->f18 != V8_HS_CHAR_BITS)
+	if ((short)p->bitcount != V8_HS_CHAR_BITS)
 		return 0;
-	ch = (short)p->f1a & V8_HS_CHAR_MASK;
-	p->f18 = 0;
+	ch = (short)p->bits & V8_HS_CHAR_MASK;
+	p->bitcount = 0;
 
 	if (sub == V8_HS_COLLECT)
 		return v8_hs_collect(v, ch);

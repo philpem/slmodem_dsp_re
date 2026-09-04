@@ -23,13 +23,13 @@
 void
 v8_ansaminit(struct v8 *v)
 {
-	v->tone.f02 = 0;
-	v->tone.f04 = 0x1a;
-	v->tone.f06 = 0xe00;
-	v->tone.f0a = 0;
-	v->tone.f00 = 0;
-	v->tone.f08 = v8_mpyint(0x3e80, v->fa42);
-	v->tone.f0e = 1;
+	v->tone.mod_phase = 0;
+	v->tone.carrier_step = 0x1a;
+	v->tone.mod_step = 0xe00;
+	v->tone.reversal_count = 0;
+	v->tone.carrier_phase = 0;
+	v->tone.amplitude = v8_mpyint(0x3e80, v->tx_gain);
+	v->tone.reversal_enable = 1;
 }
 
 /*
@@ -64,7 +64,7 @@ v8_rxreadqueue(struct v8 *v)
 	short *dst = v->rx_stage;
 	int i;
 
-	v->f110 = (short)(v->f110 - V8_QUEUE_BLOCK);
+	v->sym_avail = (short)(v->sym_avail - V8_QUEUE_BLOCK);
 
 	for (i = 0; i < V8_QUEUE_BLOCK; i++) {
 		*dst++ = *src;
@@ -84,7 +84,7 @@ v8_txwritequeue(struct v8 *v)
 	short *dst = v->tx_ring_half;
 	int i;
 
-	v->f21c = (short)(v->f21c + V8_QUEUE_BLOCK);
+	v->tx_avail = (short)(v->tx_avail + V8_QUEUE_BLOCK);
 
 	for (i = 0; i < V8_QUEUE_BLOCK; i++) {
 		*dst++ = *src++;
@@ -167,12 +167,12 @@ v8_fskmodulate(struct v8 *v, short which)
 		unsigned phase;
 		short c;
 
-		phase = ((unsigned)(unsigned short)p->f00
+		phase = ((unsigned)(unsigned short)p->carrier_phase
 			 + (unsigned short)step) & 0x1fff;
-		p->f00 = (short)phase;
+		p->carrier_phase = (short)phase;
 
 		c = v8_cosread((unsigned char)(phase >> 5));
-		v->tx_stage[i] = v8_fsktxfilter(v, v8_mpyint(c, p->f0a));
+		v->tx_stage[i] = v8_fsktxfilter(v, v8_mpyint(c, p->tx_level));
 	}
 
 	return v8_txwritequeue(v);
@@ -219,7 +219,7 @@ v8_agcadapt(struct v8 *v)
 	short acc;
 	short mag;
 
-	level = ((r->f1a * 0x6ccd) >> 15) + (unsigned short)r->f16;
+	level = ((r->level * 0x6ccd) >> 15) + (unsigned short)r->energy_hi;
 
 	/*
 	 * Accept the new estimate only when it has not run away: the top
@@ -227,32 +227,32 @@ v8_agcadapt(struct v8 *v)
 	 * asking whether it still fits in a short.
 	 */
 	if (((unsigned)level >> 15) == 0 || ((unsigned)level >> 15) == 0x1ffff)
-		r->f1a = (short)level;
+		r->level = (short)level;
 	else
-		r->f1a = 0x7f00;
+		r->level = 0x7f00;
 
 	if (r->flags & V8_RX_DETECTOR_ARMED)
 		return 0;
 
-	delta = (short)((unsigned short)r->f1a - 0xfa0);
+	delta = (short)((unsigned short)r->level - 0xfa0);
 	mag = (short)((delta < 0 ? -delta : delta) - 0x7d0);
 	if (mag <= 0)
 		return 0;
 
-	sum = ((r->f20 * delta) >> 16) + (unsigned short)r->f1e;
+	sum = ((r->adapt_rate * delta) >> 16) + (unsigned short)r->accum;
 	acc = (short)sum;
 
 	mag = (short)((acc < 0 ? -acc : acc) - 0x3e8);
 	if (mag <= 0) {
-		r->f1e = (short)sum;
+		r->accum = (short)sum;
 		return 0;
 	}
-	r->f1e = 0;
+	r->accum = 0;
 
 	if (acc > 0) {
-		r->f1c = (short)((r->f1c * 0x390a) >> 14);
-	} else if ((short)(unsigned short)r->f1c <= 0x6a00) {
-		r->f1c = (short)((r->f1c * 0x47cf) >> 14);
+		r->gain = (short)((r->gain * 0x390a) >> 14);
+	} else if ((short)(unsigned short)r->gain <= 0x6a00) {
+		r->gain = (short)((r->gain * 0x47cf) >> 14);
 	}
 	return 0;
 }
@@ -280,32 +280,32 @@ v8_ansamgenerate(struct v8 *v, short *out)
 		short depth;
 		short level;
 
-		carrier = ((unsigned)(unsigned short)t->f00
-			   + (unsigned short)t->f04) & 0x3fff;
-		t->f00 = (short)carrier;
+		carrier = ((unsigned)(unsigned short)t->carrier_phase
+			   + (unsigned short)t->carrier_step) & 0x3fff;
+		t->carrier_phase = (short)carrier;
 
-		modulator = ((unsigned)(unsigned short)t->f02
-			     + (unsigned short)t->f06) & 0x3fff;
-		t->f02 = (short)modulator;
+		modulator = ((unsigned)(unsigned short)t->mod_phase
+			     + (unsigned short)t->mod_step) & 0x3fff;
+		t->mod_phase = (short)modulator;
 
 		depth = v8_mpyint(V8_ANSAM_DEPTH,
 				  v8_cosread((unsigned char)((carrier + 0x20)
 							     >> 6)));
-		level = v8_mpyint((short)(depth + V8_ANSAM_UNITY), t->f08);
+		level = v8_mpyint((short)(depth + V8_ANSAM_UNITY), t->amplitude);
 
 		out[i] = v8_fsktxfilter(v,
-			v8_mpyint(v8_cosread((unsigned char)((t->f02 + 0x20)
+			v8_mpyint(v8_cosread((unsigned char)((t->mod_phase + 0x20)
 							     >> 6)), level));
 	}
 
-	if (t->f0e == 0)
+	if (t->reversal_enable == 0)
 		return;
 
-	if ((unsigned short)(t->f0a + 1) == V8_ANSAM_REVERSAL) {
-		t->f0a = 0;
-		t->f08 = (short)-t->f08;
+	if ((unsigned short)(t->reversal_count + 1) == V8_ANSAM_REVERSAL) {
+		t->reversal_count = 0;
+		t->amplitude = (short)-t->amplitude;
 	} else {
-		t->f0a = (short)(t->f0a + 1);
+		t->reversal_count = (short)(t->reversal_count + 1);
 	}
 }
 
@@ -323,30 +323,30 @@ V8Control(struct v8 *v, int what)
 
 	switch (what) {
 	case V8CTRL_START_CM:
-		if (v->side != 0 || v->f9d6 != 0x19 || v->fdbe != 0) {
+		if (v->side != 0 || v->rx_state != 0x19 || v->cm_ready != 0) {
 			rc = -1;
 		} else {
-			v->fdbe = 1;
+			v->cm_ready = 1;
 			rc = 0;
 		}
 		break;
 
 	case V8CTRL_START_CJ:
-		if (v->f9d8 != V8_HS_TAKEN_RX) {
+		if (v->rx_substate != V8_HS_TAKEN_RX) {
 			rc = -1;
 		} else {
-			v->f9d8 = V8_HS_DRAIN;
+			v->rx_substate = V8_HS_DRAIN;
 			rc = 0;
 		}
 		break;
 
 	case V8CTRL_START_JM:
-		if (v->f9d8 != V8_HS_TAKEN_TX) {
+		if (v->rx_substate != V8_HS_TAKEN_TX) {
 			rc = -1;
 		} else {
-			v->f9d8 = V8_HS_CJ;
-			v->fe64 = 0;
-			v->f9d4 = 0x17;
+			v->rx_substate = V8_HS_CJ;
+			v->elapsed = 0;
+			v->tx_state = 0x17;
 			rc = 0;
 		}
 		break;
@@ -616,24 +616,24 @@ v8_tone_detect(struct v8 *v, struct v8_detector *d, short *in)
 		stage2 = biquad(&d->acc_a[2], &d->acc_b[2], &d->table[2],
 				&d->table[6], (short)stage1 >> 4);
 
-		d->f12 = (short)(v8_absfn((short)((short)stage2 >> 4))
-				 + v8_mpyint(d->f12, 0x3ccd));
+		d->integrator = (short)(v8_absfn((short)((short)stage2 >> 4))
+				 + v8_mpyint(d->integrator, 0x3ccd));
 	}
 
-	if (d->f04 != 0) {
-		if ((short)d->f12 < d->f0e)
-			d->f08 = (short)(d->f08 + 1);
-		if ((short)d->f12 > d->f10)
-			d->f08 = 0;
-		return d->f08 > d->f0a;
+	if (d->lo_rule != 0) {
+		if ((short)d->integrator < d->lo_thresh)
+			d->counter = (short)(d->counter + 1);
+		if ((short)d->integrator > d->hi_thresh)
+			d->counter = 0;
+		return d->counter > d->count_limit;
 	}
 
-	if (d->f06 != 0) {
-		if ((short)d->f12 > d->f10)
-			d->f08 = (short)(d->f08 + 1);
+	if (d->armed != 0) {
+		if ((short)d->integrator > d->hi_thresh)
+			d->counter = (short)(d->counter + 1);
 		else
-			d->f08 = 0;
-		return d->f08 > d->f0a;
+			d->counter = 0;
+		return d->counter > d->count_limit;
 	}
 
 	/*
@@ -641,15 +641,15 @@ v8_tone_detect(struct v8 *v, struct v8_detector *d, short *in)
 	 * switch to the second rule and take the detector out of the
 	 * receiver's flag word.
 	 */
-	if ((short)d->f12 <= 0x30) {
-		d->f30 = 0;
+	if ((short)d->integrator <= 0x30) {
+		d->warmup = 0;
 		return 0;
 	}
-	d->f30 = (short)(d->f30 + 1);
-	if (d->f30 == 0x33) {
-		d->f06 = 1;
+	d->warmup = (short)(d->warmup + 1);
+	if (d->warmup == 0x33) {
+		d->armed = 1;
 		v->rx.flags &= (unsigned short)~V8_RX_DETECTOR_ARMED;
-		d->f08 = 0;
+		d->counter = 0;
 	}
 	return 0;
 }
@@ -669,9 +669,9 @@ static void
 push_bits(struct v8_v21_params *p, int n, short bit)
 {
 	while (n-- > 0) {
-		p->f1a = (short)(((unsigned short)p->f1a << 1)
+		p->bits = (short)(((unsigned short)p->bits << 1)
 				 | (unsigned short)bit);
-		p->f18 = (short)(p->f18 + 1);
+		p->bitcount = (short)(p->bitcount + 1);
 	}
 }
 
@@ -719,14 +719,14 @@ v8_fskdemodulate(struct v8 *v)
 
 	/* Take this block's four samples into the twelve-sample input. */
 	for (i = 0; i < V8_QUEUE_BLOCK; i++) {
-		short idx = p->f16;
+		short idx = p->inbuf_pos;
 
-		p->f16 = (short)(idx + 1);
+		p->inbuf_pos = (short)(idx + 1);
 		v->v21.inbuf[idx] = v->rx_stage[i];
 	}
-	if (p->f16 != V8_V21_INBUF)
+	if (p->inbuf_pos != V8_V21_INBUF)
 		return;
-	p->f16 = 0;
+	p->inbuf_pos = 0;
 
 	limit = v->v21.pos;
 
@@ -779,13 +779,13 @@ v8_fskdemodulate(struct v8 *v)
 		if (e_mark > e_space) {
 			if (v->v21.mark_run != 0)
 				v->v21.mark_run =
-					drain_run(p, v->v21.mark_run, p->f10);
+					drain_run(p, v->v21.mark_run, p->mark_bit);
 			v->v21.space_run++;
 			v->v21.mark_run = 0;
 		} else {
 			if (v->v21.space_run != 0)
 				v->v21.space_run =
-					drain_run(p, v->v21.space_run, p->f12);
+					drain_run(p, v->v21.space_run, p->space_bit);
 			v->v21.mark_run++;
 			v->v21.space_run = 0;
 		}
@@ -793,9 +793,9 @@ v8_fskdemodulate(struct v8 *v)
 
 	/* Flush whatever is left of either run. */
 	if (v->v21.mark_run > V8_FSK_RUN)
-		v->v21.mark_run = flush_run(p, v->v21.mark_run, p->f10);
+		v->v21.mark_run = flush_run(p, v->v21.mark_run, p->mark_bit);
 	if (v->v21.space_run > V8_FSK_RUN)
-		v->v21.space_run = flush_run(p, v->v21.space_run, p->f12);
+		v->v21.space_run = flush_run(p, v->v21.space_run, p->space_bit);
 
 	v->v21.pos = limit - V8_V21_INBUF;
 

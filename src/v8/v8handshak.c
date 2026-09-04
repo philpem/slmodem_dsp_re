@@ -59,7 +59,7 @@ transmit(struct v8 *v, int *done)
 
 	*done = 0;
 
-	switch ((short)v->f9d4) {
+	switch ((short)v->tx_state) {
 	case V8_TX_SILENCE:
 		for (i = 0; i < V8_QUEUE_BLOCK; i++)
 			v->tx_stage[i] = 0;
@@ -72,7 +72,7 @@ transmit(struct v8 *v, int *done)
 		return 0;
 
 	case V8_TX_ANSAM:
-		if (v->deadline_a != -1 && v->fe64 >= v->deadline_a) {
+		if (v->deadline_a != -1 && v->elapsed >= v->deadline_a) {
 			/*
 			 * The equal case counts this block, the past-it case
 			 * does not -- and the announcement sits inside it, so
@@ -81,66 +81,66 @@ transmit(struct v8 *v, int *done)
 			 * count-once idiom is FOR; without the call site it
 			 * reads as a pointless conditional increment.
 			 */
-			if (v->fe64 == v->deadline_a) {
+			if (v->elapsed == v->deadline_a) {
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
 					    "V8: Time Out Waiting For "
 					    "CM...\r\n");
-				v->fe64++;
+				v->elapsed++;
 			}
-			v->f9d6 = 4;
+			v->rx_state = 4;
 			*done = 1;
 			return 1;
 		}
 		v8_ansamgenerate(v, v->tx_stage);
 		v8_txwritequeue(v);
-		v->fe64++;
+		v->elapsed++;
 		return 0;
 
 	case V8_TX_FSK_TIMED:
-		if (v->deadline_b != -1 && v->fe64 >= v->deadline_b) {
-			v->f9d6 = v->side == 1 ? 5 : 0xc;
+		if (v->deadline_b != -1 && v->elapsed >= v->deadline_b) {
+			v->rx_state = v->side == 1 ? 5 : 0xc;
 			/*
 			 * Announced once, as above.  Which message was being
 			 * waited for follows the side: the answerer is waiting
 			 * for the caller's CJ, the caller for the answerer's
 			 * JM.
 			 */
-			if (v->fe64 == v->deadline_b) {
+			if (v->elapsed == v->deadline_b) {
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
 					    "V8: Timeout waiting for %s "
 					    "message...\r\n",
 					    v->side == 1 ? "CJ" : "JM");
-				v->fe64++;
+				v->elapsed++;
 			}
 			*done = 1;
 			return 1;
 		}
-		v8_fskmodulate(v, v->fa3c);
-		p->f08 = (short)(p->f08 + 4);
-		if (p->f06 == p->f08) {
-			v->fa3c = (short)v8_getbit(v->tx_seq);
-			p->f08 = 0;
+		v8_fskmodulate(v, v->tx_bit);
+		p->sample_count = (short)(p->sample_count + 4);
+		if (p->samples_per_bit == p->sample_count) {
+			v->tx_bit = (short)v8_getbit(v->tx_seq);
+			p->sample_count = 0;
 		}
-		v->fe64++;
+		v->elapsed++;
 		return 0;
 
 	case V8_TX_FSK:
-		v8_fskmodulate(v, v->fa3c);
-		p->f08 = (short)(p->f08 + 4);
-		if (p->f06 == p->f08) {
-			v->fa3c = (short)v8_getbit(v->tx_seq);
-			v->fdc0 = (short)(v->fdc0 + 1);
-			if (v->fdc0 == V8_HS_CM_BITS) {
+		v8_fskmodulate(v, v->tx_bit);
+		p->sample_count = (short)(p->sample_count + 4);
+		if (p->samples_per_bit == p->sample_count) {
+			v->tx_bit = (short)v8_getbit(v->tx_seq);
+			v->cm_bit_count = (short)(v->cm_bit_count + 1);
+			if (v->cm_bit_count == V8_HS_CM_BITS) {
 				/*
 				 * A whole CM has gone out; switch to the
 				 * timed state and to the other buffer.
 				 */
-				v->f9d4 = V8_TX_FSK_TIMED;
+				v->tx_state = V8_TX_FSK_TIMED;
 				v->tx_seq = &v->seq[0];
 			}
-			p->f08 = 0;
+			p->sample_count = 0;
 		}
 		return 0;
 
@@ -163,8 +163,8 @@ v8handshak(struct v8 *v)
 	 * whatever the queue is doing -- so this keeps transmitting where an
 	 * unsigned one would stop.
 	 */
-	while ((short)v->f21c < (short)v->fa3e) {
-		int st = (short)v->f9d4 - 5;
+	while ((short)v->tx_avail < (short)v->tx_fill_target) {
+		int st = (short)v->tx_state - 5;
 
 		if ((unsigned)st > 0x28)
 			continue;
@@ -174,10 +174,10 @@ v8handshak(struct v8 *v)
 	}
 
 	/* Then the receiver, once, and only with something to look at. */
-	if ((short)v->f110 <= 5)
+	if ((short)v->sym_avail <= 5)
 		return 0;
 
-	switch ((short)v->f9d6) {
+	switch ((short)v->rx_state) {
 	case V8_RX_DRAIN:
 		v8_rxreadqueue(v);
 		return 0;
@@ -187,13 +187,13 @@ v8handshak(struct v8 *v)
 
 	case V8_RX_SETTLE:
 		V8agc(v);
-		v->fdb6 = (short)(v->fdb6 + 1);
-		if ((short)v->fdb6 <= V8_RX_SETTLE_BLOCKS)
+		v->block_count = (short)(v->block_count + 1);
+		if ((short)v->block_count <= V8_RX_SETTLE_BLOCKS)
 			return 0;
-		v->f9d6 = V8_RX_DEMOD;
-		v->f9d8 = V8_HS_HUNT;
-		r->f20 = 0x800;
-		v->fdb6 = 0;
+		v->rx_state = V8_RX_DEMOD;
+		v->rx_substate = V8_HS_HUNT;
+		r->adapt_rate = 0x800;
+		v->block_count = 0;
 		return 0;
 
 	case V8_RX_AGC:

@@ -36,7 +36,7 @@ V8Process(struct v8 *v, const short *in, short *out, int count)
 		int c;
 
 		/* One sample out of the transmit ring. */
-		v->f21c = (short)(v->f21c - 1);
+		v->tx_avail = (short)(v->tx_avail - 1);
 		*out++ = *v->tx_ring_base++;
 		if (v->tx_ring_base >= v->tx_ring + V8_TX_RING_END)
 			v->tx_ring_base = v->tx_ring;
@@ -47,17 +47,17 @@ V8Process(struct v8 *v, const short *in, short *out, int count)
 		 * real, and the demodulator expects pairs.
 		 */
 		x = *in++;
-		c = (short)(x + (unsigned short)v->fdba);
-		v->fdba = (short)((c * V8_RX_POLE - (x << 12)) >> 12);
+		c = (short)(x + (unsigned short)v->pole_state);
+		v->pole_state = (short)((c * V8_RX_POLE - (x << 12)) >> 12);
 		v->tx_sym_b[0] = (short)c;
 		v->tx_sym_b[1] = 0;
 		v->tx_sym_b += 2;
 		if (v->tx_sym_b >= v->tx_symbols + V8_TX_SYMBOLS)
 			v->tx_sym_b = v->tx_symbols;
-		v->f110 = (short)(v->f110 + 1);
+		v->sym_avail = (short)(v->sym_avail + 1);
 
 		/* Run the machine when there is room to send or work to do. */
-		if ((short)v->f21c <= 4 || (short)v->f110 > 4) {
+		if ((short)v->tx_avail <= 4 || (short)v->sym_avail > 4) {
 			if ((short)v8handshak(v) == 2)
 				changed = 1;
 		}
@@ -69,30 +69,30 @@ V8Process(struct v8 *v, const short *in, short *out, int count)
 	 * overwrite what the transmit state chose.
 	 */
 	if (v->side == 0) {
-		if (v->f9d4 == 5 && v->f9d6 == 0x19 && v->f9d8 == 0x19)
+		if (v->tx_state == 5 && v->rx_state == 0x19 && v->rx_substate == 0x19)
 			status = V8_ORG_WAITING_FOR_ANSAM;
-		else if ((unsigned short)v->f9d8 == 0x24)
+		else if ((unsigned short)v->rx_substate == 0x24)
 			status = V8_ORG_ANSAM_DETECTED_WAITING_TE;
-		else if ((unsigned short)v->f9d4 == 0x17)
+		else if ((unsigned short)v->tx_state == 0x17)
 			status = v->tx_seq == &v->seq[1]
 				 ? V8_ORG_SEND_CJ
-				 : V8_ORG_SEND_CM + (v->f9d8 == V8_HS_TAKEN_RX);
-		else if ((unsigned short)v->f9d4 == 0x2b)
+				 : V8_ORG_SEND_CM + (v->rx_substate == V8_HS_TAKEN_RX);
+		else if ((unsigned short)v->tx_state == 0x2b)
 			status = V8_ORG_SEND_QC;
-		else if ((unsigned short)v->f9d6 == 0xb)
+		else if ((unsigned short)v->rx_state == 0xb)
 			status = V8_ORG_TIME_OUT_WAITING_FOR_ANSAM;
-		else if ((unsigned short)v->f9d6 == 0xc)
+		else if ((unsigned short)v->rx_state == 0xc)
 			status = V8_ORG_TIME_OUT_WAITING_FOR_JM;
 	} else {
-		if ((unsigned short)v->f9d4 == 6)
+		if ((unsigned short)v->tx_state == 6)
 			status = V8_ANS_SEND_ANSAM
-				 + (v->f9d8 == V8_HS_TAKEN_TX);
-		else if ((unsigned short)v->f9d4 == 0x17)
+				 + (v->rx_substate == V8_HS_TAKEN_TX);
+		else if ((unsigned short)v->tx_state == 0x17)
 			status = V8_ANS_SEND_JM;
 
-		if ((unsigned short)v->f9d6 == 4)
+		if ((unsigned short)v->rx_state == 4)
 			status = V8_ANS_TIME_OUT_WAITING_FOR_CM;
-		else if ((unsigned short)v->f9d6 == 5)
+		else if ((unsigned short)v->rx_state == 5)
 			status = V8_ANS_TIME_OUT_WAITING_FOR_CJ;
 	}
 
@@ -104,12 +104,12 @@ V8Process(struct v8 *v, const short *in, short *out, int count)
 	 * the whole negotiation is narrated, and `feb8` exists to hold the
 	 * previous status so that it can be.
 	 */
-	if (v->feb8 != status) {
+	if (v->prev_status != status) {
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf(
 			    "V8: State changed from %s to %s\r\n",
-			    v8StatusName[v->feb8], v8StatusName[status]);
-		v->feb8 = status;
+			    v8StatusName[v->prev_status], v8StatusName[status]);
+		v->prev_status = status;
 	}
 	return status;
 }

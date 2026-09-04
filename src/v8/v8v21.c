@@ -120,7 +120,7 @@ v8_V21_Init(struct v8 *v, short channel, short answerer)
 		v->v21_params.carrier_b = 0x344;
 	}
 
-	v->v21_params.f0a = v8_mpyint(0x3224, v->fa42);
+	v->v21_params.tx_level = v8_mpyint(0x3224, v->tx_gain);
 
 	if (answerer != 0) {
 		v->v21_params.f0c = 4;
@@ -138,14 +138,14 @@ v8_V21_Init(struct v8 *v, short channel, short answerer)
 		b = v21_call_b;
 	}
 
-	v->v21_params.f00 = 0;
-	v->v21_params.f06 = 0x20;
-	v->v21_params.f08 = 0;
-	v->v21_params.f16 = 0;
-	v->v21_params.f1a = 0;
-	v->v21_params.f18 = 0;
-	v->v21_params.f10 = 0;
-	v->v21_params.f12 = 1;
+	v->v21_params.carrier_phase = 0;
+	v->v21_params.samples_per_bit = 0x20;
+	v->v21_params.sample_count = 0;
+	v->v21_params.inbuf_pos = 0;
+	v->v21_params.bits = 0;
+	v->v21_params.bitcount = 0;
+	v->v21_params.mark_bit = 0;
+	v->v21_params.space_bit = 1;
 	v->v21_params.f14 = 0x18;
 
 	v->rx.flags |= V8_RX_V21_ARMED;
@@ -153,9 +153,9 @@ v8_V21_Init(struct v8 *v, short channel, short answerer)
 	V8_setFilters(v, a, b, c, d);
 	V8_V21_reset(v);
 
-	v->v21_params.f1e = 0;
-	v->v21_params.f20 = 0;
-	v->v21_params.f22 = 0;
-	v->v21_params.f24 = 0;
-	v->v21_params.f26 = 0;
+	v->v21_params.zero_run = 0;
+	v->v21_params.ones_run = 0;
+	v->v21_params.ones_run_len = 0;
+	v->v21_params.gap_count = 0;
+	v->v21_params.gap_seen = 0;
 }

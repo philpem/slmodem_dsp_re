@@ -40,15 +40,15 @@
 #endif
 
 V8_ASSERT_OFFSET(v8, rx, 0x01c);
-V8_ASSERT_OFFSET(v8, f110, 0x110);
+V8_ASSERT_OFFSET(v8, sym_avail, 0x110);
 V8_ASSERT_OFFSET(v8, tx_symbols, 0x11c);
-V8_ASSERT_OFFSET(v8, f21c, 0x21c);
+V8_ASSERT_OFFSET(v8, tx_avail, 0x21c);
 V8_ASSERT_OFFSET(v8, tx_ring, 0x228);
 V8_ASSERT_OFFSET(v8, rx_stage, 0x5c8);
 V8_ASSERT_OFFSET(v8, tx_stage, 0x5c0);
 V8_ASSERT_OFFSET(v8, tx_shape, 0x77c);
 V8_ASSERT_OFFSET(v8, rx_scratch, 0x894);
-V8_ASSERT_OFFSET(v8, fa42, 0xa42);
+V8_ASSERT_OFFSET(v8, tx_gain, 0xa42);
 V8_ASSERT_OFFSET(v8, cm, 0xa58);
 V8_ASSERT_OFFSET(v8, v21_taps, 0xa5c);
 V8_ASSERT_OFFSET(v8, detector, 0xad8);
@@ -56,11 +56,11 @@ V8_ASSERT_OFFSET(v8, v21_params, 0xc20);
 V8_ASSERT_OFFSET(v8, tx_seq, 0xc48);
 V8_ASSERT_OFFSET(v8, seq, 0xc54);
 V8_ASSERT_OFFSET(v8, tone, 0xda4);
-V8_ASSERT_OFFSET(v8, fdbc, 0xdbc);
-V8_ASSERT_OFFSET(v8, fdc4, 0xdc4);
+V8_ASSERT_OFFSET(v8, word_count, 0xdbc);
+V8_ASSERT_OFFSET(v8, quick_connect, 0xdc4);
 V8_ASSERT_OFFSET(v8, deadline_a, 0xe5c);
 V8_ASSERT_OFFSET(v8, agc_line, 0xe68);
-V8_ASSERT_OFFSET(v8, febc, 0xebc);
+V8_ASSERT_OFFSET(v8, fn_matched, 0xebc);
 V8_ASSERT_OFFSET(v8, side, 0xa44);
 V8_ASSERT_OFFSET(v8, phase_rev, 0xb40);
 typedef char v8_pr_det[V8_OFFSET_OK == 0
@@ -294,12 +294,12 @@ v8_txinit(struct v8 *v)
 	for (i = 0; i < V8_TX_RING; i++)
 		v->tx_ring[i] = 0;
 
-	v->f21c = 0x20;
+	v->tx_avail = 0x20;
 	v->tx_ring_half = v->tx_ring + V8_TX_RING_HALF;
 
 	v->tx_sym_a = v->tx_symbols;
 	v->tx_sym_b = v->tx_symbols;
-	v->f110 = 0;
+	v->sym_avail = 0;
 	for (i = 0; i < V8_TX_SYMBOLS; i++)
 		v->tx_symbols[i] = 0;
 
@@ -321,18 +321,18 @@ v8_rxinit(struct v8 *v)
 		v->rx_scratch[i] = 0;
 	v->rx_scratch[V8_RX_SCRATCH_SEED_INDEX] = V8_RX_SCRATCH_SEED;
 
-	v->rx.f86 = 0x200;
-	v->rx.f82 = 0;
-	v->rx.f1c = 0x200;
-	v->rx.f20 = 0x3333;
+	v->rx.gain_ref = 0x200;
+	v->rx.hist_idx = 0;
+	v->rx.gain = 0x200;
+	v->rx.adapt_rate = 0x3333;
 
 	for (i = 0; i < V8_RX_HIST; i++)
 		v->rx.hist[i] = 0;
 
-	v->rx.f1e = 0;
-	v->rx.f84 = 0;
-	v->rx.f88 = 0;
-	v->rx.f8a = 0;
+	v->rx.accum = 0;
+	v->rx.refresh_timer = 0;
+	v->rx.stable_timer = 0;
+	v->rx.stable = 0;
 	v->rx.fc2 = 0x50;
 	v->rx.fc8 = 0;
 	v->rx.fc6 = 0;
@@ -340,14 +340,14 @@ v8_rxinit(struct v8 *v)
 	v->rx.fd8 = 0;
 
 	v->rx.buf = v->rx_stage;
-	v->rx.f1a = 0;
+	v->rx.level = 0;
 	/*
 	 * One 32-bit store in the original, covering both halves.  They are
 	 * two shorts here because v8_agcadapt reads the upper one on its own.
 	 */
-	v->rx.f14 = 0;
-	v->rx.f16 = 0;
-	v->rx.fac = 0;
+	v->rx.energy_lo = 0;
+	v->rx.energy_hi = 0;
+	v->rx.clip_count = 0;
 
 	return 0;
 }
@@ -374,16 +374,16 @@ v8_detectorinit(struct v8 *v, struct v8_detector *d, const short *table,
 		d->acc_d[i] = 0;
 	}
 
-	d->f04 = a3;
-	d->f08 = (short)-a5;
+	d->lo_rule = a3;
+	d->counter = (short)-a5;
 	d->f0c = 1;
 	d->table = table;
-	d->f06 = 0;
-	d->f0a = a4;
-	d->f10 = a6;
-	d->f0e = a7;
-	d->f12 = 0;
-	d->f30 = 0;
+	d->armed = 0;
+	d->count_limit = a4;
+	d->hi_thresh = a6;
+	d->lo_thresh = a7;
+	d->integrator = 0;
+	d->warmup = 0;
 
 	v->rx.flags |= V8_RX_DETECTOR_ARMED;
 }

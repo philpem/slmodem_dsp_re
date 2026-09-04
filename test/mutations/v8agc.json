@@ -21,7 +21,7 @@
  },
  {
   "label": "look for ANSam again whatever the handshake was doing",
-  "find": "\t\tif (v->f9d8 != 0x24)\n\t\t\tcontinue;",
+  "find": "\t\tif (v->rx_substate != 0x24)\n\t\t\tcontinue;",
   "replace": "\t\tif (0)\n\t\t\tcontinue;"
  }
 ]

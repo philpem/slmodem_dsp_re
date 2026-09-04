@@ -76,20 +76,41 @@ struct v8_detector {
 	 * bytes and the value copies through either way.
 	 */
 	const short	*table;			/* +0x00 */
-	short	f04;				/* +0x04 */
-	short	f06;				/* +0x06 */
-	short	f08;		/* the negated argument  +0x08 */
-	short	f0a;				/* +0x0a */
+	/*
+	 * Two mutually-exclusive rules choose what `counter` is counting.
+	 * `lo_rule`, set only at construction (`v8_detectorinit`'s `a3`), asks
+	 * for time spent BELOW `lo_thresh`; `armed`, set by this file's own
+	 * warm-up (below), asks for time spent ABOVE `hi_thresh` instead --
+	 * which is the ordinary "is a tone here" rule and the only one this
+	 * object's single instance ever reaches (`a3` is always 0 at the one
+	 * call site), but `t_v8sig.c` exercises `lo_rule` directly and calls
+	 * it one of "the three rules the verdict can follow", so it is not
+	 * dead in the reconstruction even though it is unused by the blob's
+	 * own configuration.
+	 */
+	short	lo_rule;			/* +0x04 */
+	short	armed;				/* +0x06 */
+	/*
+	 * The hysteresis run count, seeded NEGATIVE (the constructor's `a5`,
+	 * negated) so the verdict cannot assert until it has run that many
+	 * blocks past zero -- named "the counter" by t_v8sig.c's own comment.
+	 */
+	short	counter;			/* the negated argument  +0x08 */
+	short	count_limit;			/* +0x0a */
 	short	f0c;		/* 1                     +0x0c */
 	/* Below: acc_a and acc_b are the two biquads' x and y histories. */
-	short	f0e;				/* +0x0e */
-	short	f10;				/* +0x10 */
-	short	f12;				/* +0x12 */
+	short	lo_thresh;			/* +0x0e */
+	short	hi_thresh;			/* +0x10 */
+	/* The leaky-integrator envelope of the rectified signal -- "the
+	 * integrator" in t_v8sig.c's own comment. */
+	short	integrator;			/* +0x12 */
 	short	acc_a[4];			/* +0x14 */
 	short	acc_b[4];			/* +0x1c */
 	short	acc_c[3];			/* +0x24 */
 	short	acc_d[3];			/* +0x2a */
-	short	f30;				/* +0x30 */
+	/* Blocks the integrator has stayed above the warm-up floor, before
+	 * `armed` gets set. */
+	short	warmup;				/* +0x30 */
 	unsigned char pad32[0x68 - 0x32];
 };
 
@@ -122,26 +143,52 @@ struct v8_phase_rev {
  * the call (which picks the four filter designs and two more constants).
  */
 struct v8_v21_params {
-	short	f00;				/* +0xc20 */
+	/* The FSK carrier's own phase accumulator, stepped by `carrier_a` or
+	 * `carrier_b` in v8_fskmodulate. */
+	short	carrier_phase;			/* +0xc20 */
 	short	carrier_a;	/* 0x62b or 0x3ef  +0xc22 */
 	short	carrier_b;	/* 0x580 or 0x344  +0xc24 */
-	short	f06;		/* 0x20            +0xc26 */
-	short	f08;				/* +0xc28 */
-	short	f0a;		/* scaled by v8_mpyint  +0xc2a */
+	/*
+	 * The bit clock: `sample_count` is advanced by V8_QUEUE_BLOCK (4) per
+	 * call and compared against `samples_per_bit` (0x20 -- 32 samples per
+	 * V.21 bit, i.e. 300 bit/s at a 9600 Hz sample rate); when they meet,
+	 * the next transmit bit is fetched and the count restarts.
+	 */
+	short	samples_per_bit;		/* 0x20            +0xc26 */
+	short	sample_count;			/* +0xc28 */
+	/* Q14 transmit amplitude scale, derived from `v8.tx_gain`. */
+	short	tx_level;	/* scaled by v8_mpyint  +0xc2a */
 	short	f0c;		/* 4 or 7          +0xc2c */
 	short	f0e;		/* -100 or 0       +0xc2e */
-	short	f10;				/* +0xc30 */
-	short	f12;		/* 1               +0xc32 */
+	/*
+	 * The bit value pushed for a run of decisions: `mark_bit` for
+	 * `v21.mark_run`, `space_bit` for `v21.space_run` (v8_fskdemodulate).
+	 */
+	short	mark_bit;			/* +0xc30 */
+	short	space_bit;	/* 1               +0xc32 */
 	short	f14;		/* 0x18            +0xc34 */
-	short	f16;				/* +0xc36 */
-	short	f18;				/* +0xc38 */
-	short	f1a;				/* +0xc3a */
+	/* Index into `v21.inbuf` while it fills, one block at a time. */
+	short	inbuf_pos;			/* +0xc36 */
+	/* The receive character framing: `bits` is the raw shift register
+	 * ("oldest first in the bottom of `bits`"), `bitcount` counts how
+	 * many are in it -- both named from v8hsrx.c's own doc comment. */
+	short	bitcount;			/* +0xc38 */
+	short	bits;				/* +0xc3a */
 	short	f1c;				/* +0xc3c */
-	short	f1e;				/* +0xc3e */
-	short	f20;				/* +0xc40 */
-	short	f22;				/* +0xc42 */
-	short	f24;				/* +0xc44 */
-	short	f26;				/* +0xc46 */
+	/* Consecutive zero bits since the last one bit, for character
+	 * framing (V8_HS_ZERO_RUN ends a character). */
+	short	zero_run;			/* +0xc3e */
+	/*
+	 * The "character of ones" idle detector: `ones_run` counts the
+	 * current run of one-bits, `ones_run_len` freezes its length once a
+	 * zero run starts.  When a zero run six long follows a one-run over
+	 * V8_HS_MIN_ONES, `gap_count` is bumped and `gap_seen` (its previous
+	 * value) is what v8_handshak_demod compares it against to notice.
+	 */
+	short	ones_run;			/* +0xc40 */
+	short	ones_run_len;			/* +0xc42 */
+	short	gap_count;			/* +0xc44 */
+	short	gap_seen;			/* +0xc46 */
 };
 
 /*
@@ -149,14 +196,24 @@ struct v8_v21_params {
  * appears at +0xda4 with its own constants.
  */
 struct v8_tone {
-	short	f00;				/* +0x00 */
-	short	f02;				/* +0x02 */
-	short	f04;		/* 0x1a          +0x04 */
-	short	f06;		/* 0xe00         +0x06 */
-	short	f08;		/* scaled        +0x08 */
-	short	f0a;				/* +0x0a */
+	/*
+	 * ANSam: a 2100 Hz carrier (`carrier_phase`/`carrier_step`) whose
+	 * amplitude (`amplitude`) is modulated by a slower oscillator
+	 * (`mod_phase`/`mod_step`) and negated every `reversal_count` reaches
+	 * V8_ANSAM_REVERSAL blocks -- the periodic phase reversal that is
+	 * ITU-T V.8's whole reason for ANSam over a plain answer tone, and
+	 * confirmed by V8_ANSAM_REVERSAL*4 samples at 9600 Hz landing on the
+	 * standard's 450 ms.  `reversal_enable` gates the counter so a caller
+	 * can have the tone without the reversals.
+	 */
+	short	carrier_phase;			/* +0x00 */
+	short	mod_phase;			/* +0x02 */
+	short	carrier_step;	/* 0x1a          +0x04 */
+	short	mod_step;	/* 0xe00         +0x06 */
+	short	amplitude;	/* scaled        +0x08 */
+	short	reversal_count;			/* +0x0a */
 	short	f0c;				/* +0x0c */
-	short	f0e;		/* 1             +0x0e */
+	short	reversal_enable;	/* 1             +0x0e */
 };
 
 /*
@@ -322,21 +379,40 @@ struct v8_rx {
 	unsigned short	flags;			/* +0x0a */
 	unsigned char	pad0c[4];
 	short		*buf;			/* +0x10  -> v8.rx_stage  */
-	short		f14;			/* +0x14 */
-	short		f16;			/* +0x16 */
+	/*
+	 * The band-filtered energy of the four samples just scaled, as one
+	 * 32-bit int split across two shorts because v8_agcadapt reads only
+	 * the upper half on its own -- V8agc's own comment: "They are the two
+	 * halves of one int, which is why that field is a short of its own".
+	 */
+	short		energy_lo;		/* +0x14 */
+	short		energy_hi;		/* +0x16 */
 	unsigned char	pad18[2];
-	short		f1a;			/* +0x1a */
-	short		f1c;		/* 0x200     +0x1c */
-	short		f1e;			/* +0x1e */
-	short		f20;		/* 0x3333    +0x20 */
+	/* The smoothed level estimate v8_agcadapt feeds back into itself. */
+	short		level;			/* +0x1a */
+	/* The AGC gain -- "gain" in t_v8sig.c's own diff labels. */
+	short		gain;		/* 0x200     +0x1c */
+	/* The carried adaptation accumulator between v8_agcadapt calls. */
+	short		accum;			/* +0x1e */
+	/* Q14 weight applied to `delta` when accumulating `accum`; 0x3333 at
+	 * reset, 0x800 once a tone has been accepted. */
+	short		adapt_rate;	/* 0x3333    +0x20 */
 	short		hist[48];		/* +0x22 */
-	short		f82;			/* +0x82 */
-	short		f84;			/* +0x84 */
-	short		f86;		/* 0x200     +0x86 */
-	short		f88;			/* +0x88 */
-	short		f8a;			/* +0x8a */
+	/* Write cursor into `hist`, wrapping at V8_AGC_HIST. */
+	short		hist_idx;		/* +0x82 */
+	/* checkSignalStability's own pair: `refresh_timer` counts up to
+	 * V8_STABLE_PERIOD before `gain_ref` is refreshed from `gain`, and
+	 * `stable_timer` counts blocks since the gain last moved more than
+	 * V8_STABLE_TOLERANCE away from it. */
+	short		refresh_timer;		/* +0x84 */
+	short		gain_ref;	/* 0x200     +0x86 */
+	short		stable_timer;		/* +0x88 */
+	/* The verdict itself -- "stable" in t_v8sig.c's own diff labels. */
+	short		stable;			/* +0x8a */
 	unsigned char	pad8c[0xac - 0x8c];
-	short		fac;			/* +0xac */
+	/* Consecutive saturating blocks -- "clip count" in t_v8sig.c's own
+	 * diff labels -- forcing the gain back down at V8_AGC_CLIP_LIMIT. */
+	short		clip_count;		/* +0xac */
 	unsigned char	padae[0xc2 - 0xae];
 	short		fc2;		/* 0x50      +0xc2 */
 	unsigned char	padc4[2];
@@ -378,12 +454,18 @@ struct v8 {
 	struct v8_rx		rx;		/* +0x01c */
 
 	unsigned char		pad0f8[0x110 - 0xf8];
-	short			f110;		/* +0x110 */
+	/* Samples currently buffered in `tx_symbols`, awaiting the receiver:
+	 * V8Process advances it per sample, v8_rxreadqueue drains it by
+	 * V8_QUEUE_BLOCK, and v8handshak will not run the receiver below 6. */
+	short			sym_avail;	/* +0x110 */
 	unsigned char		pad112[2];
 	short			*tx_sym_a;	/* +0x114 -> tx_symbols */
 	short			*tx_sym_b;	/* +0x118 -> tx_symbols */
 	short			tx_symbols[V8_TX_SYMBOLS];	/* +0x11c */
-	short			f21c;		/* 0x20     +0x21c */
+	/* Samples currently queued in `tx_ring`, awaiting output; goes
+	 * negative (V8Process decrements it once a sample regardless), which
+	 * is why every comparison against it is signed. */
+	short			tx_avail;	/* 0x20     +0x21c */
 	unsigned char		pad21e[2];
 	short			*tx_ring_base;	/* +0x220 -> tx_ring[0]  */
 	short			*tx_ring_half;	/* +0x224 -> tx_ring[64] */
@@ -400,16 +482,29 @@ struct v8 {
 	short			rx_scratch[V8_RX_SCRATCH];	/* +0x894 */
 
 	unsigned char		pad9d4[0x9d4 - 0x9d4];
-	short			f9d4;		/* +0x9d4 */
-	short			f9d6;		/* +0x9d6 */
-	short			f9d8;		/* +0x9d8 */
+	/*
+	 * The two state variables, one per direction -- v8handshak.c's own
+	 * header comment: "`tx_state` drives the transmitter and is
+	 * dispatched inside a loop that runs until the transmit queue is
+	 * full... `rx_state` drives the receiver and is dispatched once".
+	 * `rx_substate` is "a sub-state below the receive state" (v8hsrx.c's
+	 * own header comment) that only matters while `rx_state` is
+	 * V8_RX_DEMOD, picking what the character stream is matched against.
+	 */
+	short			tx_state;	/* +0x9d4 */
+	short			rx_state;	/* +0x9d6 */
+	short			rx_substate;	/* +0x9d8 */
 	unsigned char		pad9da[0xa3c - 0x9da];
 	/* The bit currently going out, as v8_fskmodulate wants it. */
-	short			fa3c;		/* +0xa3c */
+	short			tx_bit;		/* +0xa3c */
 
-	short			fa3e;		/* 0x10     +0xa3e */
+	/* The transmit ring's low-water mark: v8handshak's loop tops it up
+	 * to this before running the receiver. */
+	short			tx_fill_target;	/* 0x10     +0xa3e */
 	short			fa40;		/* 0x200    +0xa40 */
-	short			fa42;		/* +0xa42 */
+	/* Q14 master transmit-level scale (unity, 0x4000, by default),
+	 * multiplied into both the V.21 and ANSam amplitude derivations. */
+	short			tx_gain;	/* +0xa42 */
 
 	/*
 	 * The configuration V8Create plants, which v8handshakinit reads back.
@@ -421,14 +516,16 @@ struct v8 {
 	 * `side` ("Caller"/"Answer" -- 0 originates) and `op_mode` (the
 	 * "Operation Mode") were `mode` and `fa48` before it named them, and
 	 * the two timeouts are the signal-detect and message-detect timeouts,
-	 * in SECONDS.  `fa54` the trace does not mention.
+	 * in SECONDS.  The trace does not mention `rate`, but v8dp.c's own
+	 * caller sets `v8_cfg.rate` to `V8_DP_RATE` -- it is the datapump's
+	 * sample rate, carried through and otherwise unread by this file.
 	 */
 	int			side;		/* +0xa44  0 caller, 1 answerer */
 	int			op_mode;	/* +0xa48  the author's Operation
 						 *         Mode              */
 	int			timeout_a;	/* +0xa4c  signal detect, s  */
 	int			timeout_b;	/* +0xa50  message detect, s */
-	int			fa54;		/* +0xa54 */
+	int			rate;		/* +0xa54 */
 
 	struct v8_cm		*cm;		/* +0xa58 */
 	short			v21_taps[V8_V21_TAPS];	/* +0xa5c */
@@ -451,12 +548,18 @@ struct v8 {
 	 */
 	struct v8_tx_sequence	seq[5];		/* +0xc54 */
 
-	short			fd94;		/* +0xd94 */
-	short			fd96;		/* 0x1a     +0xd96 */
-	int			fd98;		/* +0xd98 */
-	int			fd9c;		/* +0xd9c */
-	short			fda0;		/* +0xda0 */
-	unsigned char		padda2[2];
+	/*
+	 * One sliding-DFT bin, used by v8_handshak_agc to watch the settled
+	 * line's energy: `v8_dftupdate`/`v8_dftenergy` are called through a
+	 * `(struct v8_dft_bin *)&v->dft` cast at this exact offset, and the
+	 * five loose fields this replaces (`fd94`,`fd96`,`fd98`,`fd9c`,`fda0`)
+	 * lined up on `phase`,`step`,`re`,`im`,`energy` byte for byte -- the
+	 * cast is the evidence, not a guess, so this is the struct rather
+	 * than five names.  `energy` (the DFT's, at +0xda0) is what
+	 * v8_handshak_agc compares against 0x18f to help decide whether the
+	 * far end asked for something worth turning round for.
+	 */
+	struct v8_dft_bin	dft;		/* +0xd94 */
 
 	/*
 	 * A tone generator, laid out like the V.21 parameters but with its own
@@ -465,28 +568,45 @@ struct v8 {
 	struct v8_tone		tone;		/* +0xda4 */
 
 	short			fdb4;		/* +0xdb4 */
-	short			fdb6;		/* +0xdb6 */
+	/*
+	 * A scratch counter reused by whichever receive sub-state is active:
+	 * elapsed blocks while waiting for the AGC or the line to settle, the
+	 * count of repeated words while a CM/JM/QCA1 message is being
+	 * collected, and the CJ detector's "twice" count.  One field, several
+	 * unrelated lifetimes -- named for its shape, not a single meaning.
+	 */
+	short			block_count;	/* +0xdb6 */
 	/* Consecutive zero bits, for the CJ detector.  +0xdb8 */
-	short			fdb8;
-	short			fdba;		/* +0xdba */
+	short			cj_zero_run;
+	/* The receive front end's single-pole filter state (V8_RX_POLE). */
+	short			pole_state;	/* +0xdba */
 	/* Which word of a received message comes next.  +0xdbc */
-	short			fdbc;
-	short			fdbe;		/* +0xdbe */
-	short			fdc0;		/* +0xdc0 */
+	short			word_count;
+	/*
+	 * Permission to send CM: true by default when `op_mode` is the plain
+	 * V.8 mode, or set explicitly by a V8CTRL_START_CM request.  Gates the
+	 * calling side's turn-round once ANSam is detected.
+	 */
+	short			cm_ready;	/* +0xdbe */
+	/* Bits of CM sent so far, counted up to V8_HS_CM_BITS. */
+	short			cm_bit_count;	/* +0xdc0 */
 	unsigned char		paddc2[2];
 
 	/*
-	 * What the QCA1 exchange decided.  `fdc4` is the flag the JM builder
-	 * reads to say a QCA1 message was accepted at all -- it is also what
-	 * makes `V8GetMessage` hand back `seq_spare` rather than `tx_seq` --
-	 * and the other two are fields lifted out of that message.  The
-	 * original's own debug output names them: "LAPM Indication" for the
-	 * one bit and "ANSpcm level index" for the two.
+	 * What the QCA1 exchange decided.  `quick_connect` is the flag the JM
+	 * builder reads to say a QCA1 message was accepted at all -- it is
+	 * also what makes `V8GetMessage` hand back `seq_spare` rather than
+	 * `tx_seq` -- and the other two are fields lifted out of that
+	 * message.  The original's own debug output names them:
+	 * "LAPM Indication" for the one bit and "ANSpcm level index" for the
+	 * two; its "Finished with Quick Connect" line names the first.
 	 */
-	int			fdc4;		/* +0xdc4 */
-	int			fdc8;		/* +0xdc8 */
-	int			fdcc;		/* +0xdcc */
-	short			fdd0;		/* +0xdd0 */
+	int			quick_connect;	/* +0xdc4 */
+	int			lapm_indication;	/* +0xdc8 */
+	int			anspcm_level;	/* +0xdcc */
+	/* QCA1a already accepted once, so the ANSam wait that follows knows
+	 * not to expect a fresh CM/JM exchange behind it. */
+	short			qca1a_done;	/* +0xdd0 */
 
 	short			toneq_pending;	/* +0xdd2 */
 	short			toneq_period;	/* +0xdd4 */
@@ -496,14 +616,24 @@ struct v8 {
 	/* The two timeouts, in samples, and a counter. */
 	int			deadline_a;	/* +0xe5c */
 	int			deadline_b;	/* +0xe60 */
-	int			fe64;		/* +0xe64 */
+	/* Elapsed blocks against `deadline_a`/`deadline_b`, in the same
+	 * quarter-sample-rate units `deadline()` converts seconds into. */
+	int			elapsed;	/* +0xe64 */
 	/* The receive front end's own filter line, oldest last. */
 	short			agc_line[V8_AGC_TAPS];	/* +0xe68 */
-	int			feb8;		/* +0xeb8 */
-	short			febc;		/* +0xebc */
-	short			febe;		/* +0xebe */
-	short			fec0;		/* +0xec0 */
-	short			fec2;		/* +0xec2 */
+	/* The previous status V8Process returned -- "this is the one place
+	 * the whole negotiation is narrated, and `prev_status` exists to hold
+	 * the previous status so that it can be" (v8proc.c's own comment). */
+	int			prev_status;	/* +0xeb8 */
+	/* The call-function and second-extension match verdicts, set by
+	 * evaluateRxJMSequence/rebuildJMSequence -- named for the identical
+	 * local variables both functions use for the same concept. */
+	short			fn_matched;	/* +0xebc */
+	short			ext2_matched;	/* +0xebe */
+	/* The word that satisfied each match, remembered for
+	 * V8UpdateModemParameters/rebuildJMSequence to read back. */
+	short			fn_word;	/* +0xec0 */
+	short			ext2_word;	/* +0xec2 */
 	unsigned char		padec4[V8_STATE_BYTES - 0xec4];
 };
 
@@ -594,7 +724,9 @@ struct v8_cfg {
 	int		op_mode;		/* +0x04 -> v8.op_mode  */
 	int		timeout_a;		/* +0x08 */
 	int		timeout_b;		/* +0x0c */
-	int		f10;			/* +0x10 */
+	/* The datapump's sample rate; v8dp.c sets it to V8_DP_RATE and
+	 * V8Create just carries it into v8.rate, unread by this file. */
+	int		rate;			/* +0x10 */
 	struct v8_cm	*cm;			/* +0x14 */
 };
 
@@ -770,7 +902,7 @@ int v8handshak(struct v8 *v);
  * `v8StatusName` is a global at .rodata+0x53c0, nineteen pointers, indexed
  * directly by the status -- so these are the author's names, not ours.  Read
  * together with the handshake's diagnostics they settle several fields at
- * once: `f9d6` of 4 is the state whose timeout prints "Time Out Waiting For
+ * once: `rx_state` of 4 is the state whose timeout prints "Time Out Waiting For
  * CM" and whose status is named ..._WAITING_FOR_CM, and the same holds for
  * CJ, ANSam and JM.  ORG is the calling side (mode 0), ANS the answering one.
  *
@@ -816,7 +948,7 @@ int v8_handshak_agc(struct v8 *v);
 int v8_handshak_demod(struct v8 *v);
 
 /*
- * Sub-states of the demodulate path, as `f9d8` holds them.  They pick what
+ * Sub-states of the demodulate path, as `rx_substate` holds them.  They pick what
  * the character stream is being matched against; the receive state stays at
  * 0x28 throughout.  Values below 0x28 belong to the other receive states and
  * are not listed here.

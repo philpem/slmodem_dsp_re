@@ -99,7 +99,7 @@ setup(unsigned seed, unsigned char b0, unsigned char b1, unsigned char b2)
 	ref_v8_txinit(&obj_b);
 	ref_v8_rxinit(&obj_a);
 	ref_v8_rxinit(&obj_b);
-	obj_a.fa42 = obj_b.fa42 = 16384;
+	obj_a.tx_gain = obj_b.tx_gain = 16384;
 	ref_v8_V21_Init(&obj_a, 1, 0);
 	ref_v8_V21_Init(&obj_b, 1, 0);
 	ref_v8_ansaminit(&obj_a);
@@ -206,32 +206,32 @@ trace_setup(const struct trace_case *c, unsigned seed)
 {
 	setup(seed, 0x11, 0x40, 0x04);
 
-	obj_a.f9d4 = obj_b.f9d4 = c->f9d4;
-	obj_a.f9d6 = obj_b.f9d6 = c->f9d6;
-	obj_a.f9d8 = obj_b.f9d8 = c->f9d8;
+	obj_a.tx_state = obj_b.tx_state = c->f9d4;
+	obj_a.rx_state = obj_b.rx_state = c->f9d6;
+	obj_a.rx_substate = obj_b.rx_substate = c->f9d8;
 	obj_a.deadline_a = obj_b.deadline_a = c->deadline_a;
 	obj_a.deadline_b = obj_b.deadline_b = c->deadline_b;
-	obj_a.fe64 = obj_b.fe64 = c->fe64;
+	obj_a.elapsed = obj_b.elapsed = c->fe64;
 	obj_a.side = obj_b.side = c->mode;
-	obj_a.f110 = obj_b.f110 = 40;
-	obj_a.fdc4 = obj_b.fdc4 = 0;
-	obj_a.fdd0 = obj_b.fdd0 = 0;
-	obj_a.fdb6 = obj_b.fdb6 = 0;
-	obj_a.v21_params.f06 = obj_b.v21_params.f06 = 0x20;
-	obj_a.v21_params.f16 = obj_b.v21_params.f16 = 0;
-	obj_a.v21_params.f24 = obj_b.v21_params.f24 = 5;
-	obj_a.v21_params.f26 = obj_b.v21_params.f26 = 5;
+	obj_a.sym_avail = obj_b.sym_avail = 40;
+	obj_a.quick_connect = obj_b.quick_connect = 0;
+	obj_a.qca1a_done = obj_b.qca1a_done = 0;
+	obj_a.block_count = obj_b.block_count = 0;
+	obj_a.v21_params.samples_per_bit = obj_b.v21_params.samples_per_bit = 0x20;
+	obj_a.v21_params.inbuf_pos = obj_b.v21_params.inbuf_pos = 0;
+	obj_a.v21_params.gap_count = obj_b.v21_params.gap_count = 5;
+	obj_a.v21_params.gap_seen = obj_b.v21_params.gap_seen = 5;
 
 	/*
 	 * The transmit loop runs only while the queue has room, so the cases
 	 * that want the receiver dispatched have to fill it first.
 	 */
 	if (c->f9d4 == 5) {
-		obj_a.f21c = obj_b.f21c = 0x60;
-		obj_a.fa3e = obj_b.fa3e = 0x60;
+		obj_a.tx_avail = obj_b.tx_avail = 0x60;
+		obj_a.tx_fill_target = obj_b.tx_fill_target = 0x60;
 	} else {
-		obj_a.f21c = obj_b.f21c = 0;
-		obj_a.fa3e = obj_b.fa3e = 0x60;
+		obj_a.tx_avail = obj_b.tx_avail = 0;
+		obj_a.tx_fill_target = obj_b.tx_fill_target = 0x60;
 	}
 
 	if (c->ansam) {
@@ -240,17 +240,17 @@ trace_setup(const struct trace_case *c, unsigned seed)
 		 * something and a JM to answer with.  The DFT is left switched
 		 * off so that the energy reading is the one set here.
 		 */
-		obj_a.fdb6 = obj_b.fdb6 = 0x960;
-		obj_a.fda0 = obj_b.fda0 = 0x200;
-		obj_a.fdbe = obj_b.fdbe = 1;
-		obj_a.rx.f8a = obj_b.rx.f8a = 0;
+		obj_a.block_count = obj_b.block_count = 0x960;
+		obj_a.dft.energy = obj_b.dft.energy = 0x200;
+		obj_a.cm_ready = obj_b.cm_ready = 1;
+		obj_a.rx.stable = obj_b.rx.stable = 0;
 	}
 
 	if (c->qca1) {
 		short w = c->qca1_w;
 
-		obj_a.f9d8 = obj_b.f9d8 = V8_HS_QCA1;
-		obj_a.fdbc = obj_b.fdbc = 5;
+		obj_a.rx_substate = obj_b.rx_substate = V8_HS_QCA1;
+		obj_a.word_count = obj_b.word_count = 5;
 		obj_a.seq_spare->word[1] = w;
 		obj_a.seq_spare->word[2] = 0x3ff;
 		obj_a.seq_spare->word[3] = 0x155;
@@ -315,10 +315,10 @@ t_hs_trace(void)
 			for (step = 0; step < 2; step++) {
 				int ra, rb;
 
-				obj_a.v21_params.f18 =
-					obj_b.v21_params.f18 = 10;
-				obj_a.v21_params.f1a =
-					obj_b.v21_params.f1a = 0x3ff;
+				obj_a.v21_params.bitcount =
+					obj_b.v21_params.bitcount = 10;
+				obj_a.v21_params.bits =
+					obj_b.v21_params.bits = 0x3ff;
 
 				ra = ref_v8handshak(&obj_a);
 				rb = v8handshak(&obj_b);
@@ -429,16 +429,16 @@ main(void)
 			      (unsigned char)(0x22 * (r + 1)),
 			      (unsigned char)(t & 1 ? 0x14 : 0x04));
 
-			obj_a.f9d4 = obj_b.f9d4 = tx_states[t];
-			obj_a.f9d6 = obj_b.f9d6 = rx_states[r];
-			obj_a.f9d8 = obj_b.f9d8 = (short)(r & 1 ? 0x19 : 0x24);
-			obj_a.fa3e = obj_b.fa3e = 0x60;
+			obj_a.tx_state = obj_b.tx_state = tx_states[t];
+			obj_a.rx_state = obj_b.rx_state = rx_states[r];
+			obj_a.rx_substate = obj_b.rx_substate = (short)(r & 1 ? 0x19 : 0x24);
+			obj_a.tx_fill_target = obj_b.tx_fill_target = 0x60;
 			obj_a.deadline_a = obj_b.deadline_a = 40;
 			obj_a.deadline_b = obj_b.deadline_b = 60;
-			obj_a.fe64 = obj_b.fe64 = 0;
-			obj_a.f110 = obj_b.f110 = 8;
-			obj_a.tone.f08 = obj_b.tone.f08 = 6000;
-			obj_a.v21_params.f06 = obj_b.v21_params.f06 = 0x20;
+			obj_a.elapsed = obj_b.elapsed = 0;
+			obj_a.sym_avail = obj_b.sym_avail = 8;
+			obj_a.tone.amplitude = obj_b.tone.amplitude = 6000;
+			obj_a.v21_params.samples_per_bit = obj_b.v21_params.samples_per_bit = 0x20;
 
 			for (step = 0; step < 30; step++) {
 				int ra = ref_v8handshak(&obj_a);
@@ -534,37 +534,37 @@ main(void)
 					obj_b.seq_alt->wordidx = fdb6;
 				}
 
-				obj_a.f9d4 = obj_b.f9d4 = 5;
-				obj_a.f9d6 = obj_b.f9d6 = 0x28;
-				obj_a.f9d8 = obj_b.f9d8 = sub;
+				obj_a.tx_state = obj_b.tx_state = 5;
+				obj_a.rx_state = obj_b.rx_state = 0x28;
+				obj_a.rx_substate = obj_b.rx_substate = sub;
 				/* Queue already full: skip the transmit loop. */
-				obj_a.f21c = obj_b.f21c = 0x60;
-				obj_a.fa3e = obj_b.fa3e = 0x60;
+				obj_a.tx_avail = obj_b.tx_avail = 0x60;
+				obj_a.tx_fill_target = obj_b.tx_fill_target = 0x60;
 				/*
 				 * Enough symbols for all three passes: the
 				 * AGC takes a block of four off the count
 				 * every time it runs, and below six the
 				 * receiver is not dispatched at all.
 				 */
-				obj_a.f110 = obj_b.f110 = 40;
+				obj_a.sym_avail = obj_b.sym_avail = 40;
 				obj_a.side = obj_b.side = (int)((c >> 2) & 1);
 				obj_a.op_mode = obj_b.op_mode = (int)((c >> 3) & 1);
-				obj_a.fdc4 = obj_b.fdc4 = 0;
-				obj_a.fdd0 = obj_b.fdd0 = 0;
-				obj_a.fdb6 = obj_b.fdb6 = fdb6;
-				obj_a.fdb8 = obj_b.fdb8 = fdb8;
-				obj_a.fdbc = obj_b.fdbc = fdbc;
+				obj_a.quick_connect = obj_b.quick_connect = 0;
+				obj_a.qca1a_done = obj_b.qca1a_done = 0;
+				obj_a.block_count = obj_b.block_count = fdb6;
+				obj_a.cj_zero_run = obj_b.cj_zero_run = fdb8;
+				obj_a.word_count = obj_b.word_count = fdbc;
 				obj_a.deadline_a = obj_b.deadline_a = 40;
 				obj_a.deadline_b = obj_b.deadline_b = 60;
-				obj_a.fe64 = obj_b.fe64 = 0;
-				obj_a.v21_params.f06 =
-					obj_b.v21_params.f06 = 0x20;
-				obj_a.v21_params.f16 =
-					obj_b.v21_params.f16 = f16;
-				obj_a.v21_params.f24 =
-					obj_b.v21_params.f24 = f24;
-				obj_a.v21_params.f26 =
-					obj_b.v21_params.f26 = f26;
+				obj_a.elapsed = obj_b.elapsed = 0;
+				obj_a.v21_params.samples_per_bit =
+					obj_b.v21_params.samples_per_bit = 0x20;
+				obj_a.v21_params.inbuf_pos =
+					obj_b.v21_params.inbuf_pos = f16;
+				obj_a.v21_params.gap_count =
+					obj_b.v21_params.gap_count = f24;
+				obj_a.v21_params.gap_seen =
+					obj_b.v21_params.gap_seen = f26;
 
 				for (step = 0; step < 3; step++) {
 					int ra, rb;
@@ -574,12 +574,12 @@ main(void)
 					 * a match consumes it, and CJ needs
 					 * two octets before it fires.
 					 */
-					obj_a.v21_params.f18 =
-						obj_b.v21_params.f18 = f18;
-					obj_a.v21_params.f1a =
-						obj_b.v21_params.f1a = f1a;
+					obj_a.v21_params.bitcount =
+						obj_b.v21_params.bitcount = f18;
+					obj_a.v21_params.bits =
+						obj_b.v21_params.bits = f1a;
 
-					before8 = obj_a.f9d8;
+					before8 = obj_a.rx_substate;
 					ra = ref_v8handshak(&obj_a);
 					rb = v8handshak(&obj_b);
 					diff_eq_int("return (%ld)", rb, ra,
@@ -588,16 +588,16 @@ main(void)
 					if (ra == 2)
 						saw_finished = 1;
 					if (before8 == V8_HS_HUNT
-					    && obj_a.f9d8 != V8_HS_HUNT)
+					    && obj_a.rx_substate != V8_HS_HUNT)
 						saw_armed = 1;
 					if (before8 == V8_HS_QCA1
-					    && obj_a.fdc4 != 0)
+					    && obj_a.quick_connect != 0)
 						saw_qca1_ok = 1;
 					if (before8 == V8_HS_QCA1
-					    && obj_a.f9d8 == V8_HS_HUNT)
+					    && obj_a.rx_substate == V8_HS_HUNT)
 						saw_qca1_bad = 1;
 					if (before8 == V8_HS_COLLECT
-					    && obj_a.f9d8 != V8_HS_COLLECT)
+					    && obj_a.rx_substate != V8_HS_COLLECT)
 						saw_msg_done = 1;
 					if (before8 == V8_HS_DRAIN
 					    && obj_a.tx_seq == &obj_a.seq[1])
@@ -633,17 +633,17 @@ main(void)
 			for (r = 0; r < sizeof(rx_states) / sizeof(rx_states[0]);
 			     r++) {
 				setup(7700u + t * 8 + r, 0, 0x40, 0x04);
-				obj_a.f9d4 = obj_b.f9d4 = tx_states[t];
-				obj_a.f9d6 = obj_b.f9d6 = rx_states[r];
-				obj_a.f9d8 = obj_b.f9d8 =
+				obj_a.tx_state = obj_b.tx_state = tx_states[t];
+				obj_a.rx_state = obj_b.rx_state = rx_states[r];
+				obj_a.rx_substate = obj_b.rx_substate =
 					(short)(r & 1 ? 0x19 : 0x24);
-				obj_a.fa3e = obj_b.fa3e = 0x60;
+				obj_a.tx_fill_target = obj_b.tx_fill_target = 0x60;
 				obj_a.side = obj_b.side = (int)(t & 1);
 				obj_a.deadline_a = obj_b.deadline_a = 40;
 				obj_a.deadline_b = obj_b.deadline_b = 60;
-				obj_a.fe64 = obj_b.fe64 = 0;
-				obj_a.tone.f08 = obj_b.tone.f08 = 6000;
-				obj_a.v21_params.f06 = obj_b.v21_params.f06 =
+				obj_a.elapsed = obj_b.elapsed = 0;
+				obj_a.tone.amplitude = obj_b.tone.amplitude = 6000;
+				obj_a.v21_params.samples_per_bit = obj_b.v21_params.samples_per_bit =
 					0x20;
 
 				for (i = 0; i < 160; i++)
