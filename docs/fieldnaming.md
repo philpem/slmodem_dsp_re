@@ -738,8 +738,25 @@ phase has always used for a quick per-file count is now unreliable as a
 before/after signal on its own -- multiple removal comments now quote the
 old pad name for provenance (`pad-region removal audit, F10152` etc.),
 which the naive regex counts as if it were still a live field. The number
-that means something is a live declaration count:
-`grep -rhoE '^\s*(unsigned char|char|unsigned short|short|unsigned int|int)\s+pad_[0-9a-fA-F]+(\[[0-9a-fA-Fx]*\])?\s*;'`
-finds **42 live `pad_NNNN` struct members remaining** tree-wide, each one
-already checked once this wave and left explicit for a stated, specific
-reason (not yet re-checked, not silently skipped).
+that means something is a live declaration count, and the FIRST version of
+that count posted here was itself wrong -- its bracket pattern
+(`\[[0-9a-fA-Fx]*\]`) missed every array size written as a subtraction
+expression (`pad_184[0x19c - 0x184]`, common in `v34recv.h`/`v34shell.h`/
+`voice.h`/`dtmf.h`/`v29data.h`/`v34fsk.h`), undercounting by more than a
+third. The corrected pattern,
+`grep -rhoE '^\s*(unsigned char|char|unsigned short|short|unsigned int|int)\s+pad_[0-9a-fA-F]+(\[[^]]*\])?\s*;'`,
+finds **64 live `pad_NNNN` struct members remaining** tree-wide. Every one
+of the 64 is accounted for in a finding (F10143's earlier pass over
+`TAG_DiagnosticResults.h`, or this wave's F10145-F10152), not a silent
+leftover: each falls into one of four checked-and-declined shapes --
+(1) FAILS the alignment-gap arithmetic outright, a real unexplained gap;
+(2) independently proven to hold live data, referenced by name in real
+code; (3) a genuinely open-ended floor whose size is a documented LOWER
+BOUND from the highest known writer, not a fixed struct with a next field
+to align against (`TAG_DiagnosticResults.h`, `V90SessionFlag.h`,
+`fax.h`'s two 128-byte floors, `class1.h`'s 4091-byte floor,
+`fdspkrnl.h`'s 2000-byte floor); or (4) the struct's own FIRST member, with
+no preceding field for alignment to react to (`v34recv.h`/`v34shell.h`'s
+`pad_000`, `v29data.h`'s `pad_00`). The pad-region-removal workstream is
+therefore exhausted as scoped: every candidate has been checked, and
+nothing provably-safe remains unremoved.
