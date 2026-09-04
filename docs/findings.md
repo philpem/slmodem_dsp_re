@@ -112642,3 +112642,94 @@ remaining `pad_281[3]` is a three-byte alignment gap with no access anywhere in
 the object to bound it further). `make period`'s test count is unchanged by
 this pass -- a rename cannot add or remove a check -- and `tools/onedef.py`,
 `tools/refcheck.py` and `tools/bannercheck.py` are clean.  (2026-09-03)
+
+## F10123. Naming the V.34 receive cluster: 37 fields promoted in `struct v34_receiver`, and the mutation-test blast radius that stopped the rest
+
+*2026-09-03.* A naming-only pass over `include/dsplib/v34recv.h` and
+`src/pump/v34/v34rx.c` -- the heaviest concentration of bare `fNNN` fields in
+the tree, all already fully reconstructed and differentially green. The
+struct's own comments already carried most of the derivations (format
+strings, callers, direct usage); what was missing was the rename itself.
+
+**The rename is not local.** `struct v34_receiver` is shared with
+`v34hshak.c`, `v34hstx1.cpp`, `v34pcmif.c`, `v34diag.cpp`, `v34pcmcreate.cpp`
+and eleven `test/mutations/*.json` fixtures whose `"find"`/`"replace"` strings
+match those files' source TEXT byte for byte. Renaming a field used by any of
+them requires updating every one of those references too, and getting a
+mutation fixture's text even slightly wrong does not fail loudly -- it just
+stops that mutation from ever being injected, which is the exact silent-loss
+failure mode findings F2157 and F3002 already measured for this project's
+mutation suites. So before touching a single field, every one of them was
+grepped across the whole tree (excluding `re/`) for real code references
+outside `{v34recv.h, v34rx.c, t_v34rx.c, t_v34demod.c,
+test/mutations/v34rx.json}` -- the set this pass could safely fix by hand.
+
+**37 fields renamed**, all verified zero-blast-radius outside that set (one,
+`rms_idx`/f19c, needed three lines fixed in `v34hshak.c` -- direct code, no
+mutation fixture depends on its text, so still safe):
+`vectpp_idx`, `agc_pair_count`, `rms_idx`, `trn_ref_sr`, `prev_quadrant`,
+`mix_carrier_step`, `mix_carrier_phase`, `slow_ramp`, `ppm_acc`, `ppm_count`,
+`timing_integrator`, `timing_idx_a`, `timing_idx_b`, `cloop_cos`, `cloop_sin`,
+`cloop_integrator`, `cloop_phase_err`, `cloop_p_shift`, `cloop_i_shift`,
+`cloop_phase_lo`, `cloop_phase_hi`, `pred_err_re`, `pred_err_im`,
+`preerr_acc`, `dwell_count`, `dwell_limit`, `timing_p_gain`, `timing_i_gain`,
+`demod_i`, `demod_q`, `demod_i_prev`, `demod_q_prev`, `sig_energy_acc`,
+`eq_out_i1`, `eq_out_q1`, `eq_out_i2`, `eq_out_q2`, `rtncount`. All were pure
+identifier substitutions over the struct declaration, its offset comments,
+the `V34RX_ASSERT` table, and every `rx->`/`d->`/`s->`/`a->` site in
+`v34rx.c` plus the matching test/fixture sites -- no type, no offset and no
+byte of generated code moves, confirmed by `make one T=t_v34rx` (`offsets:
+1980 annotations, all match __builtin_offsetof`, and the period differential
+unchanged) after fixing one transcription slip: `f1c8`/`slow_ramp` is `int`
+in the object (four bytes, +0x1c8..+0x1cc) and an initial draft wrote it as
+`short`, which the offset checker caught immediately by flagging every field
+after it as mismatched -- exactly the class of self-inflicted regression the
+"pure rename must not move a byte" rule exists to catch.
+
+**~20 fields have an equally solid derivation and were left bare**, because
+every one of them has at least one real-code reference in `v34hshak.c`,
+`v34hstx1.cpp`, `v34pcmif.c`, `v34diag.cpp`, `v34pcmcreate.cpp` or a mutation
+fixture for one of those files: `rxsymcnt` (f124), `pulls_per_call` (f128),
+`interp_phase`/`interp_step`/`interp_wrap`/`interp_step_base`
+(f1ac/f1ae/f1b0/f1be), `mix_carrier_half_len` (f1ba), `timing_state` (f1c0),
+`ppm_offset`/`ppm_period` (f1d0/f1d2), `timing_frac` (f1d8), `eq_step`
+(f218), `equerr`/`equerr_acc` (f21a/f220), `eq_err_counter` (f21c), `preerr`
+(f224), `sig_energy` (f248), `agc_gain_init` (f262), `subframe_count`
+(f266), `fir_coeffs` (f2a4), and `retrain_gate` (f19e, see below). Their
+derived names are recorded in `v34recv.h`'s comments as `-- derived: NAME,
+withheld (F10123)` so a future pass that also touches `v34hshak.c` (and its
+mutation fixtures) does not have to re-derive them -- only apply them.
+
+**One correction, not just a rename-in-waiting.** `f19e`'s comment claimed
+"cleared alongside f19c by `dpskinit`, which is the only thing in the object
+that touches it -- so it is the RMS window's second scalar and nothing yet
+reads it back." That was wrong: `v34hshak.c`'s `RX_PHASE2_CALL` step reads it
+as a one-shot latch gating the retrain tone-detector after the phase-2
+symbol counter passes 0x125f (six references, plus a mutation fixture that
+mutates two of them). Left bare for the same blast-radius reason as the
+others, but the comment is corrected in place rather than left to mislead the
+next reader -- the same shelf-life problem CLAUDE.md's own naming section and
+finding F9479 both flag for a stale claim with no gate behind it.
+
+**Two fields kept bare by choice, not by blast radius.** `f208`/`f20a` carry
+genuinely different data depending on which of two functions last touched
+them -- `rxtiming`'s two-pole IIR history (I(-1)/Q(-1)) when called from one
+handshake state, or `receiver`'s own separate resample loop's raw equaliser
+output when called from another -- and the two never run concurrently, but
+naming one role would mislead about the other exactly as CLAUDE.md's own
+"naming wrongly is worse than leaving it padded" rule anticipates. Left bare
+with both roles spelled out in the comment instead of a single guessed name.
+
+**Zero evidence, left bare:** `f1d4`, `f1e4`, `f1e8`, `f1f0`, `f22e` (each
+written once, by `rxtiminginit`, and never read anywhere in the tree) and the
+eight-short run `f252`..`f260` (never referenced by `v34rx.c` at all; the
+only other touches are unconditional zeroing on hang-up/renegotiation in
+`v34pcmif.c`, with no reader found anywhere). `pad_*` regions are unchanged.
+
+**Net count:** 37 of roughly 55 evidenced fields renamed outright; ~20 more
+promoted from bare `fNNN` to a bare-but-derived-and-commented state (name
+recorded, symbol withheld); one wrong comment corrected without a rename;
+two left deliberately bare on dual-role grounds; thirteen left with no
+evidence at all. `make one T=t_v34rx`, `t_v34demod`, `tools/onedef.py`,
+`tools/refcheck.py` and `tools/bannercheck.py src/pump/v34` all clean after
+the pass. (2026-09-03)

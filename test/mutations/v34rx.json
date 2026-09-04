@@ -104,7 +104,7 @@
  },
  {
   "label": "the retrain report prints the count before it is cleared",
-  "find": "\t\t\t\trx->f798 = 0;\n\t\t\t\trx->flags = (unsigned short)flags;",
+  "find": "\t\t\t\trx->rtncount = 0;\n\t\t\t\trx->flags = (unsigned short)flags;",
   "replace": "\t\t\t\trx->flags = (unsigned short)flags;"
  },
  {
