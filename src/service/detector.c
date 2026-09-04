@@ -130,7 +130,7 @@ static const char lookup_table[16] = {
  *
  * `s` is deliberately NOT zeroed: the object writes exactly five of
  * `cadence_setup`'s seven words (0xad55a, 0xad577, 0xad58e, 0xad582,
- * 0xad57e) and `cadence_create` reads `w3` -- so `cadence->f27c` takes
+ * 0xad57e) and `cadence_create` reads `w3` -- so `cadence->int_27c` takes
  * whatever was on the stack.  Reproduced as written; see deviation D1000.
  */
 struct detector *

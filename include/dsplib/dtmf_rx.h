@@ -38,10 +38,10 @@
  * carried-over half lives between calls.
  */
 struct dtmf_rx {
-	short f000;		/* +0x000 cleared by reset_dtmf           */
+	short short_000;	/* +0x000 cleared by reset_dtmf, unread    */
 	short pad_002[1];	/* +0x002                                 */
-	int f004;		/* +0x004 cleared by reset_dtmf           */
-	short f008;		/* +0x008 cleared by reset_dtmf           */
+	int int_004;		/* +0x004 cleared by reset_dtmf, unread    */
+	short short_008;	/* +0x008 cleared by reset_dtmf, unread    */
 	short samples[300];	/* +0x00a the realigned analysis window    */
 	short hold[100];	/* +0x262 the carried-over half block      */
 	short last_digit;	/* +0x32a what the tone bank said last     */
@@ -57,9 +57,9 @@ struct dtmf_rx {
 	short rate;		/* +0x33c 8000 or 9600                     */
 	short sens;		/* +0x33e threshold trim, 2..4 lower it    */
 	char digits[20];	/* +0x340 the collected string, ASCII      */
-	short f354[2];		/* +0x354 cleared by reset_dtmf, unused    */
+	short short_354[2];	/* +0x354 cleared by reset_dtmf, unused    */
 	short bp_state[2];	/* +0x358 band_pass's biquad               */
-	short f35c[2];		/* +0x35c cleared by reset_dtmf, unused    */
+	short short_35c[2];	/* +0x35c cleared by reset_dtmf, unused    */
 	short pre_high[2];	/* +0x360 the high group's pre-notch       */
 	short pre_low[2];	/* +0x364 the low group's pre-notch --
 				 *        NOT cleared by reset_dtmf, D251  */

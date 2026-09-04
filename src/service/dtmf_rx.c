@@ -66,9 +66,9 @@ reset_dtmf(struct dtmf_rx *rx)
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("DTMF CID Reset !\n");
 
-	rx->f000 = 0;
-	rx->f004 = 0;
-	rx->f008 = 0;
+	rx->short_000 = 0;
+	rx->int_004 = 0;
+	rx->short_008 = 0;
 	rx->nsamples = 0;
 
 	/*
@@ -96,12 +96,12 @@ reset_dtmf(struct dtmf_rx *rx)
 	 * The high-then-low shape repeats in the loop below and in the scalars
 	 * above, which is the same fact three times.
 	 */
-	rx->f354[1] = 0;
-	rx->f354[0] = 0;
+	rx->short_354[1] = 0;
+	rx->short_354[0] = 0;
 	rx->bp_state[1] = 0;
 	rx->bp_state[0] = 0;
-	rx->f35c[1] = 0;
-	rx->f35c[0] = 0;
+	rx->short_35c[1] = 0;
+	rx->short_35c[0] = 0;
 	rx->pre_high[1] = 0;
 	rx->pre_high[0] = 0;
 

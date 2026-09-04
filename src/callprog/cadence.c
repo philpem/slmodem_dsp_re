@@ -671,7 +671,7 @@ cadence_create(struct cadence *c, struct cadence_setup *s, int extra,
 	if (extra > 0)
 		c->continuous = 0;
 
-	c->f2a4 = s->w6;
+	c->int_2a4 = s->w6;
 
 	/*
 	 * The clamp is for the NAME only, and it is written back into the
@@ -767,12 +767,12 @@ cadence_create(struct cadence *c, struct cadence_setup *s, int extra,
 	 * zero coming out.  Reproduced because they are part of the object.
 	 */
 	fp = GetFP_Value(1, (short)c->buflen);
-	c->f278 = to_intervals(fp, c->f278);
+	c->int_278 = to_intervals(fp, c->int_278);
 	fp = GetFP_Value(1, (short)c->buflen);
-	c->f274 = to_intervals(fp, c->f274);
+	c->int_274 = to_intervals(fp, c->int_274);
 
 	c->fixed_pattern = 0;
-	c->f27c = s->w3;
+	c->int_27c = s->w3;
 
 	return c;
 }

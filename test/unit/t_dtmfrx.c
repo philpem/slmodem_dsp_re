@@ -419,17 +419,17 @@ check_reset_sets(const char *what, struct dtmf_rx *rx, short want_rate,
 	CK(what, rx, quiet, 0, tag);
 	CK(what, rx, level, 1, tag);
 	CK(what, rx, nsamples, 0, tag);
-	CK(what, rx, f000, 0, tag);
-	CK(what, rx, f004, 0, tag);
-	CK(what, rx, f008, 0, tag);
+	CK(what, rx, short_000, 0, tag);
+	CK(what, rx, int_004, 0, tag);
+	CK(what, rx, short_008, 0, tag);
 	CK(what, rx, bp_state[0], 0, tag);
 	CK(what, rx, bp_state[1], 0, tag);
 	CK(what, rx, pre_high[0], 0, tag);
 	CK(what, rx, pre_high[1], 0, tag);
-	CK(what, rx, f354[0], 0, tag);
-	CK(what, rx, f354[1], 0, tag);
-	CK(what, rx, f35c[0], 0, tag);
-	CK(what, rx, f35c[1], 0, tag);
+	CK(what, rx, short_354[0], 0, tag);
+	CK(what, rx, short_354[1], 0, tag);
+	CK(what, rx, short_35c[0], 0, tag);
+	CK(what, rx, short_35c[1], 0, tag);
 	CK(what, rx, rate, want_rate, tag);
 	CK(what, rx, sens, want_sens, tag);
 

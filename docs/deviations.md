@@ -10093,7 +10093,7 @@ entry.
 has it and the test asserts that it does not fire, which is the honest form of
 a coverage claim about unreachable code.
 
-## D1000 ⚠ `detector_create` hands `cadence_create` an UNINITIALISED word, and `cadence->f27c` takes whatever was on the stack
+## D1000 ⚠ `detector_create` hands `cadence_create` an UNINITIALISED word, and `cadence->int_27c` takes whatever was on the stack
 
 *2026-08-31.* `detector_create` (0xad480) builds a `struct cadence_setup` on
 its own stack and writes exactly FIVE of its seven words before passing its
@@ -10106,7 +10106,7 @@ address twice:
     ad57e:  89 5c 24 28    mov %ebx,0x28(%esp)   ; w6  = 0
 
 `+0x1c` (`w3`) and `+0x24` (`w5`) are never written, at either call. `w5` is
-read by nothing, but `cadence_create` does `c->f27c = s->w3`
+read by nothing, but `cadence_create` does `c->int_27c = s->w3`
 (`src/callprog/cadence.c`), so **both cadence objects take an uninitialised
 stack word into `+0x27c`** -- and the two calls share the block, so the second
 inherits whatever the first left there.
@@ -10118,7 +10118,7 @@ So the value cannot reach any output.
 
 **WHAT IT COSTS THE TEST.** Our stack frame is not the blob's, so the two
 sides disagree on that one word and on nothing else. `t_detector`'s
-`cmp_cadence` skips `offsetof(struct cadence, f27c)` explicitly and compares
+`cmp_cadence` skips `offsetof(struct cadence, int_27c)` explicitly and compares
 every other word of the 732-byte object -- which is the "a loop is still right
 where some region must be skipped" case, with the difference recorded here
 rather than papered over. It is NOT skipped for being awkward: it is skipped

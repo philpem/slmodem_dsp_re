@@ -120,7 +120,17 @@ struct cadence {
 	/* Longest silence tolerated before the recorded cycles are dropped. */
 	int	max_silence;				/* +0x270 */
 
-	int	f274, f278, f27c;			/* +0x274 */
+	/*
+	 * `int_27c` is `cadence_setup.w3`, copied straight through and never
+	 * read again -- `detector_create` even leaves ITS OWN copy of `w3`
+	 * uninitialised (deviation D1000, src/service/detector.c), which only
+	 * a truly dead destination can get away with.  `int_274`/`int_278`
+	 * get the same interval conversion as the timing windows below but
+	 * nothing ever assigns them a nonzero input, so on every real object
+	 * they convert zero to zero.  Shape (a plain `int`, in intervals like
+	 * its neighbours) is known; role is not -- left typed, not named.
+	 */
+	int	int_274, int_278, int_27c;		/* +0x274 */
 
 	/*
 	 * The filter design cadence_create selected, staged here before being
@@ -153,7 +163,13 @@ struct cadence {
 	 */
 	int	buflen;					/* +0x29c */
 	const char *name;	/* for debug output               +0x2a0 */
-	int	f2a4;					/* +0x2a4 */
+	/*
+	 * `cadence_setup.w6`, copied straight through.  Never read back by
+	 * anything reconstructed: the only two callers pass 0 (detector.c,
+	 * busy/dial) or 1 (callprog.c, both), so the value the field ends up
+	 * holding differs by caller, but nothing downstream branches on it.
+	 */
+	int	int_2a4;				/* +0x2a4 */
 
 	/*
 	 * Always zero.  cadence_create clears it at entry and never sets it,
@@ -177,7 +193,17 @@ struct cadence {
 	 */
 	int	pattern[4];				/* +0x2b0 */
 
-	int	f2c0, f2c4, f2c8, f2cc;			/* +0x2c0 */
+	/*
+	 * Sixteen bytes between `pattern` and `fixed_pattern` that neither
+	 * cadence_create nor cadence_progress ever reads OR writes -- unlike
+	 * `int_274`/`int_278`/`int_27c`/`int_2a4` above, which are at least
+	 * written once.  A prior pass declared this four separate `int`s with
+	 * no comment backing the split, which is a shape claim this session
+	 * found no evidence for either way; reclassified as unmodelled space
+	 * per CLAUDE.md's `pad_NNNN` definition rather than repeating an
+	 * unsupported four-way split.
+	 */
+	unsigned char pad_2c0[16];			/* +0x2c0 */
 
 	/* When set, match `pattern` exactly instead of the timing windows. */
 	int	fixed_pattern;				/* +0x2d0 */
@@ -207,7 +233,7 @@ struct cadence_setup {
 	int	w0;		/* +0x00  read into nothing            */
 	int	w1;		/* +0x04                               */
 	int	w2;		/* +0x08                               */
-	int	w3;		/* +0x0c  -> c->f27c                   */
+	int	w3;		/* +0x0c  -> c->int_27c                */
 
 	/*
 	 * The tone.  cadence_create clamps this to CADENCE_TONE_INVALID and
@@ -222,7 +248,7 @@ struct cadence_setup {
 	int	tone;		/* +0x10 */
 
 	int	w5;		/* +0x14                               */
-	int	w6;		/* +0x18  -> c->f2a4                   */
+	int	w6;		/* +0x18  -> c->int_2a4                */
 };
 
 /*

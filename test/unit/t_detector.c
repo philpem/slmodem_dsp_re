@@ -279,12 +279,14 @@ set_params(void)
 }
 
 /*
- * Two cadence objects, word by word, skipping the five pointers and `f27c`.
+ * Two cadence objects, word by word, skipping the five pointers and
+ * `int_27c`.
  *
- * `f27c` is `cadence_setup.w3`, and detector_create leaves that word of its
- * setup UNWRITTEN (deviation D1000) -- so each side hands `cadence_create`
- * whatever was on its own stack.  Nothing in the object reads `f27c` back,
- * so the difference is inert; it is skipped here and asserted nowhere.
+ * `int_27c` is `cadence_setup.w3`, and detector_create leaves that word of
+ * its setup UNWRITTEN (deviation D1000) -- so each side hands
+ * `cadence_create` whatever was on its own stack.  Nothing in the object
+ * reads `int_27c` back, so the difference is inert; it is skipped here and
+ * asserted nowhere.
  */
 static void
 cmp_cadence(const char *what, const struct cadence *b, const struct cadence *a,
@@ -303,7 +305,7 @@ cmp_cadence(const char *what, const struct cadence *b, const struct cadence *a,
 		    || off == offsetof(struct cadence, sel_scales)
 		    || off == offsetof(struct cadence, name)
 		    || off == offsetof(struct cadence, modem)
-		    || off == offsetof(struct cadence, f27c))
+		    || off == offsetof(struct cadence, int_27c))
 			continue;
 		diff_eq_int("cadence word at +0x%lx", pb[i], pa[i], (long)off);
 	}

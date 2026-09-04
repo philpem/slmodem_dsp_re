@@ -203,3 +203,37 @@ phase started, from 676 unique unnamed identifiers at the outset.
 `V90Equalizer`/`V90ConstellationDesigner`/`V90Phase3/4Modulator/Demodulator`
 (the `pad_NNNN` list) and `dtmf_rx`/`cadence` (new to the bare-`f` list,
 not yet worked this phase) are the clearest wave-3 candidates.
+
+## Wave 3 -- DTMF-CID/cadence cluster (F10137)
+
+Launched 2026-09-04, small and self-contained: `dtmf_rx.c`/`.h` (5 bare
+`fNNNN`) and `cadence.h`/`cadence.c` (8 bare `fNNNN`), separate from the
+V.90/V.34/fax/V.8 territory every other wave-3 agent covers.
+
+**Result: every field in both files is write-only or completely untouched --
+none named, all promoted or reclassified for what they actually are.** Both
+translation units are short and this object's closure over them is complete,
+so "grep the whole tree, then check `dis.py` against the object directly for
+the handful of functions involved" was exhaustive rather than a sample: no
+field in this cluster is ever read by anything, in our source or (checked
+independently) in the object's own instructions. The applicable-standard
+method (Q.24/Bellcore DTMF timing, ring/busy/dial-tone cadence patterns) was
+tried and yielded nothing, because a standard's term only attaches to a field
+that does something.
+
+`dtmf_rx`: 5 fields promoted bare `fNNNN` -> `type_NNNN` (`short_000`,
+`int_004`, `short_008`, `short_354[2]`, `short_35c[2]`), following the
+identical precedent already set in `cid.h` for its own `reset_cid`-only
+fields. `cadence`: 4 fields promoted the same way (`int_274`, `int_278`,
+`int_27c`, `int_2a4` -- one of which, `int_27c`, already carried its own
+deviation, D1000, from an earlier session's measurement that NOTHING in the
+1.2 MB blob reads it) and 4 more (`f2c0`/`f2c4`/`f2c8`/`f2cc`, zero readers
+AND zero writers, unlike the rest) reclassified from an unsupported four-way
+`int` split to a single `pad_2c0[16]`, since nothing ever measured that split
+and CLAUDE.md's own `pad_NNNN` definition is exactly this situation. No bit
+flags found -- nothing in this batch is tested as one. `make one` across
+`t_dtmfrx`/`t_cadence`/`t_detector`/`t_voicesvc`, `onedef.py`, `refcheck.py`
+and `anchorcheck.py` all clean, check counts unchanged; `tools/mutate.py`
+re-run in full on both affected suites confirms no mutation outcome moved.
+`make period`/`byteident.py --ratchet` need docker, left for the parent's
+gate. See F10137 for the full per-field evidence.

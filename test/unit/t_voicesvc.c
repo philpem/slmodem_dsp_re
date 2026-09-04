@@ -256,9 +256,9 @@ normalise_detector(struct detector *d)
 
 /*
  * One cadence, word by word, skipping the pointers (each side's own) and
- * `f27c`, which takes an uninitialised stack word at construction and is read
- * by nothing -- deviation D1000.  The same skip list t_detector uses, and for
- * the same reason.
+ * `int_27c`, which takes an uninitialised stack word at construction and is
+ * read by nothing -- deviation D1000.  The same skip list t_detector uses,
+ * and for the same reason.
  */
 static void
 cmp_cadence(const struct cadence *ours, const struct cadence *ref, long tag)
@@ -275,7 +275,7 @@ cmp_cadence(const struct cadence *ours, const struct cadence *ref, long tag)
 		    || off == offsetof(struct cadence, sel_scales)
 		    || off == offsetof(struct cadence, name)
 		    || off == offsetof(struct cadence, modem)
-		    || off == offsetof(struct cadence, f27c))
+		    || off == offsetof(struct cadence, int_27c))
 			continue;
 		diff_eq_int("cadence word at +0x%lx", pb[i], pa[i],
 			    tag * 4096 + (long)off);

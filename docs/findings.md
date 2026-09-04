@@ -113590,3 +113590,117 @@ and `t_v8hs`/`t_v8util` are green with their check counts unchanged. This is a
 promotion from bare fields to a properly modelled sub-object, licensed by the
 existing cast (evidence rank 2, typed callee) rather than by the field names'
 shape.  (2026-09-04)
+
+### F10137. Wave 3 field naming, DTMF-CID/cadence cluster: every remaining bare field in this cluster is write-only or untouched -- promoted to `type_NNNN`/`pad_NNNN`, none to a real name
+
+Scope: `include/dsplib/dtmf_rx.h`/`src/service/dtmf_rx.c` (5 bare `fNNNN`) and
+`include/dsplib/cadence.h`/`src/callprog/cadence.c` (8 bare `fNNNN`) --
+`docs/fieldnaming.md`'s wave 3, the DTMF/cadence cluster (distinct from every
+other wave-3 cluster, which is all V.90/V.34/fax/V.8). Counts re-verified by
+fresh grep before starting, matching `docs/fieldnaming.md`'s tally exactly.
+
+**Method, and why it ended in reclassification rather than names.** For each
+field: read the whole enclosing algorithm (both TUs are short and this
+object's closure over them is complete -- `dtmf_rx.c`, `dtmf_detector.c`,
+`cadence.c` are the WHOLE of `Dtmf_Rx.c`/`Dtmf_Detector.c`/`Cadence.c`), then
+grep-verified whole-tree for every reader, and cross-checked with `dis.py`
+against the object directly (not just our own already-passing reconstruction)
+for `band_pass`, `dtmf_modem`, `DTMF_MTD_detect` and `create_cid_dtmf`, since a
+factoring difference between our source and the object could in principle
+hide a read our C doesn't need. It does not: no instruction in any of those
+four functions touches offsets 0x0/0x4/0x8/0x354/0x35c of `struct dtmf_rx`
+through the object pointer register, matching what the reconstructed C
+already shows. Applicable-standard cross-reference (ITU-T Q.24/Bellcore DTMF
+timing, ring/busy/dial-tone cadence patterns) was considered for both
+clusters and yielded nothing usable, because a standard's term can only be
+attached to a field that DOES something, and every field in this batch does
+not.
+
+**dtmf_rx: 5 fields, all promoted bare `fNNNN` -> `type_NNNN`, no field
+renamed to a real name.** `f000`/`f004`/`f008` (`struct dtmf_rx`, +0x000/
++0x004/+0x008) and `f354`/`f35c` (+0x354/+0x35c) are written ONLY by
+`reset_dtmf` -- confirmed by grepping every `.c`/`.h` under `src`/`include`/
+`test` for each name and finding no site but the declaration, the one
+`reset_dtmf` store, and (for `f354`) the copy of that store inlined into
+`create_cid_dtmf` -- and read by nothing in `band_pass`, `dtmf_modem` or
+`DTMF_MTD_detect`, the only three functions that ever touch a live `struct
+dtmf_rx`. `cid.h` already carries the identical situation for its own
+`reset_cid`-only fields (`short_004`, `short_008`, `short_074`, ...,
+"cleared by reset_cid only"), so this promotion follows an established
+convention rather than inventing one: renamed to `short_000`, `int_004`,
+`short_008`, `short_354[2]`, `short_35c[2]`. This is real progress in the
+sense `docs/fieldnaming.md` already uses it (shape now stated by the name,
+per CLAUDE.md's `type_NNNN` bucket) but not a semantic name -- there is no
+way to learn what these fields were FOR when the object itself never asks.
+
+**cadence: 8 fields, 4 promoted to `type_NNNN`, 4 reclassified `pad_NNNN`.**
+`int_274`/`int_278`/`int_27c`/`int_2a4` (were `f274`/`f278`/`f27c`/`f2a4`) are
+each written once by `cadence_create` and read by nothing in
+`cadence_progress`, `cadence_reset` or `cadence_delete`:
+
+  - `int_27c` is `cadence_setup.w3`, copied straight through. This one is
+    independently and thoroughly documented already -- deviation D1000
+    (`docs/deviations.md`) measured a REVERSE scan for readers of this exact
+    offset across the whole 1.2 MB blob and found one writer and no reader
+    anywhere, and separately established that `detector_create`'s own copy of
+    `cadence_setup.w3` is left UNINITIALISED on the stack (an uninitialised
+    source is only survivable because nothing downstream reads the
+    destination). Comment and test cross-references to the old `f27c` spelling
+    updated in `src/service/detector.c`, `test/unit/t_detector.c`,
+    `test/unit/t_voicesvc.c` and `docs/deviations.md` itself.
+  - `int_2a4` is `cadence_setup.w6`. The two real callers (`detector.c`,
+    `callprog.c`) disagree on what they pass it (0 vs 1), which would be
+    suspicious for a field that mattered -- but confirms rather than
+    contradicts dead-ness, since nothing branches on the difference.
+  - `int_274`/`int_278` get the SAME toneiir-interval conversion as the real
+    timing windows (`max_on`/`min_on`/`max_off`/`min_off`) just above them in
+    the struct, so their shape (an `int`, in toneiir intervals like their
+    neighbours) is known, but nothing ever assigns them a nonzero input --
+    `cadence.c`'s own comment already said so before this pass ("nothing ever
+    assigns them ... zero going in and zero coming out").
+
+  `f2c0`/`f2c4`/`f2c8`/`f2cc`, sixteen bytes between `pattern[4]` and
+  `fixed_pattern`, are different in kind: grepping the whole tree found NOT
+  ONE reference outside the declaration itself -- no write and no read,
+  unlike the four above. A prior session (commit c8dc76d4) had declared this
+  span four separate `int`s with no comment backing the four-way split, which
+  is a shape claim this pass found no evidence for either way -- CLAUDE.md's
+  own `pad_NNNN` definition ("we do not know how many fields are in it") is
+  exactly this situation, so the four were collapsed into
+  `unsigned char pad_2c0[16]` rather than repeating an unsupported split.
+  Byte-size- and offset-preserving (16 bytes either way, both start 4-byte
+  aligned); nothing referenced the four old names so nothing else needed
+  updating.
+
+**No field in either cluster was named**, because none of them is read by
+anything -- the strongest evidence available (a value's effect on later
+behaviour) is categorically absent, and a format-string or typed-callee match
+would still be a name for a value nothing downstream cares about. Per
+CLAUDE.md, naming wrongly is worse than leaving padded; here there is not
+even a usage inference to hang a name on, only "this is a dead write of this
+shape."
+
+**No bit flags found.** No field in this batch is boolean-tested or
+mask-tested anywhere; all are either dead loads-and-stores of a whole word or
+genuinely unmodelled space.
+
+**Verification.** `make one T=t_dtmfrx` (PASS, all suites, check counts
+unchanged from before this pass: 81+3600+240+1220+228+20+4007+16050+1041+
+61744+1002+604+10072+1800+320+27), `make one T=t_cadence` (PASS, unchanged),
+`make one T=t_detector` (PASS, unchanged, including its per-arm coverage
+check), `make one T=t_voicesvc` (PASS, unchanged). `python3 tools/onedef.py`
+(301 types, 1 known duplicate -- `V90Phase4Demodulator`, unrelated to this
+pass, unchanged) and `python3 tools/refcheck.py` (13202 references, 0
+unresolved) both clean. `tools/anchorcheck.py cadence dtmfrx dtmf dtmfmtd`:
+117 mutations across the four suites, 0 anchors ambiguous, 0 landing outside
+their named arm. `tools/mutate.py --suite dtmfrx` and `--suite cadence` both
+re-run in full to confirm the rename moved nothing: cadence 6/6 caught
+unchanged; dtmfrx 48/49 caught unchanged, with the one pre-existing gap
+("the realignment keeps the first half of the block rather than the second")
+confirmed unrelated to any field this pass touched -- it is a control-flow
+mutation in `dtmf_modem`'s hold-buffer logic, nowhere near `f000`/`f004`/
+`f008`/`f354`/`f35c`. `make period`/`byteident.py --ratchet` need docker,
+unavailable in this sandbox -- a rename cannot move generated code, and this
+pass changed no code shape other than the `pad_2c0[16]` collapse, which
+preserves size and offset -- left for the parent's gate per
+`docs/fieldnaming.md`'s own practice for every prior wave.  (2026-09-04)
