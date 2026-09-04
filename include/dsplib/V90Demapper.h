@@ -31,12 +31,14 @@
 #include "dsplib/V90SignBitsExtractor.h"
 
 /*
- * POINTERS ONLY, so forward declarations are what belong here.  Two
- * incompatible definitions of `V90Parameters` exist in this tree and no
- * translation unit may include both -- finding F1112 -- so the header declares
- * and `V90Demapper.cpp` picks the NAMED 0x558 map, because
- * `DEBUG_DEMAPPER_ERROR_HISTOGRAM` is the author's own name for the field the
- * destructor branches on.
+ * Pointers only, so a forward declaration is all this header needs.
+ * `V90Demapper.cpp` includes the real `V90Parameters.h` and reads named
+ * fields such as `DEBUG_DEMAPPER_ERROR_HISTOGRAM` (the author's own name
+ * for the field the destructor branches on). Finding F1112 recorded a
+ * second, incompatible `V90Parameters` definition that once forced this
+ * choice; that duplication was retired at task #116 (finding F6402), so
+ * this is now an ordinary include-cost forward declaration rather than a
+ * one-definition-only workaround.
  */
 class V90Parameters;
 class V90AutoDigitalImpDetector;

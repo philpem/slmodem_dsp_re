@@ -48,11 +48,14 @@
 #define DSPLIB_V90EQUALIZER_H
 
 /*
- * BOTH ARE POINTERS HERE, so both are forward-declared and neither header is
- * included.  `V90Parameters` has two incompatible definitions in this tree
- * and no translation unit may include both (finding F1112); `V90Resampler.h`
- * pulls one of them in, and this header is included by `V90Demodulator.h`,
- * which pulls in the other.  The .cpp picks.
+ * Both are pointers here, so both are forward-declared and neither header
+ * is included; the .cpp includes `V90Parameters.h` directly alongside both
+ * `V90Resampler.h` and `V90PreFilter.h`. This split used to be load-bearing:
+ * `V90Parameters` had two incompatible definitions in this tree, one pulled
+ * in by `V90Resampler.h` and the other reachable through `V90Demodulator.h`
+ * (which includes this header), so no translation unit could include both
+ * (finding F1112). That duplication was retired at task #116 (finding
+ * F6402), and the .cpp's own include list now proves it.
  */
 class V90Parameters;
 class V90Resampler;

@@ -80,13 +80,16 @@
 #include "dsplib/V90MP.h"
 
 /*
- * POINTERS ONLY, SO FORWARD DECLARATIONS ONLY, and that is load-bearing
- * rather than tidy.  `V90Demodulator.h` drags in `V90PreFilter.h` and with it
- * the OTHER definition of `V90Parameters` (finding F1112), which cannot sit
- * in a translation unit beside the named one in `V90Parameters.h`.  This
- * header is included by `VPcmFloModem.h`, so pulling either in here would
- * decide that question for every one of its users.  A translation unit that
- * needs to DEREFERENCE one of these includes it itself (finding F1325).
+ * Pointers only, so forward declarations only. This used to be load-bearing
+ * rather than tidy: `V90Demodulator.h` drags in `V90PreFilter.h`, which once
+ * carried a second, incompatible definition of `V90Parameters` that could
+ * not sit in a translation unit beside the named one in `V90Parameters.h`
+ * (finding F1112) -- retired at task #116 (finding F6402), and
+ * `V90ModemCtor.cpp` includes both today without conflict. The forward
+ * declarations are kept regardless: this header is included by
+ * `VPcmFloModem.h`, so pulling either full definition in here would decide
+ * that question for every one of its users, and a translation unit that
+ * needs to dereference one of these includes it itself (finding F1325).
  */
 class V90Demodulator;
 class V90Jd;

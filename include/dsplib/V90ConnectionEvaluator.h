@@ -39,12 +39,14 @@
 #define DSPLIB_V90CONNECTIONEVALUATOR_H
 
 /*
- * A pointer only, so a forward declaration is what belongs here. Two
- * incompatible definitions of `V90Parameters` exist in this tree -- the 0x504
- * word block in `V90PreFilter.h` and the 0x558 named map in
- * `V90Parameters.h` -- and no translation unit may include both. This header
- * is included by `V90Demodulator.h`, which pulls in the first; the .cpp picks
- * the second, because the names are the point. Finding F1112.
+ * A pointer only, so a forward declaration is what belongs here; the .cpp
+ * includes `V90Parameters.h` directly, because the names are the point.
+ * This used to be load-bearing rather than tidy -- `V90PreFilter.h` (which
+ * `V90Demodulator.h` pulls in, and this header is included by that same
+ * translation unit) once carried a second, incompatible `V90Parameters`
+ * definition, so no translation unit could include both (finding F1112).
+ * That duplication was retired at task #116 (finding F6402); the forward
+ * declaration is kept because this header only ever needs a pointer.
  */
 class V90Parameters;
 

@@ -43,12 +43,14 @@
 #include "dsplib/V90CodecType.h"
 
 /*
- * A POINTER ONLY, so a forward declaration is what belongs here.  Two
- * different definitions of `V90Parameters` exist in this tree -- the 0x504
- * word block in `V90PreFilter.h` and the 0x558 named map in
- * `V90Parameters.h` -- and no translation unit may include both.  Declaring
- * the class here keeps this header compatible with either; the .cpp picks
- * one.  Finding F1112.
+ * A pointer only, so a forward declaration is what belongs here; the .cpp
+ * includes `V90Parameters.h` directly. This used to keep the header
+ * compatible with either of two incompatible `V90Parameters` definitions
+ * that could not both reach one translation unit -- the 0x504 word block
+ * in `V90PreFilter.h` and the 0x558 named map in `V90Parameters.h`
+ * (finding F1112) -- but that duplication was retired at task #116
+ * (finding F6402); the forward declaration is kept because this header
+ * only ever needs a pointer.
  */
 class V90Parameters;
 
