@@ -162,3 +162,44 @@ branch's own F10132 at merge -- collided with the V.34 receive pass's own
 F10132, same finding-number-collision pattern as every prior wave).
 
 V.8 cluster and V.90 second pass: results pending merge.
+
+### Wave 2 complete — merged, period-green, byte-identity ratchet OK
+
+All four branches merged (two finding-number collisions resolved by
+renumbering, same procedure as wave 1 — F9341 and F10132 each collided
+twice across this session's waves). Fully merged tree: **374 passed, 0
+failed**, all structural gates clean.
+
+**`byteident.py --ratchet` confirms zero regression**: 736/1852 EXACT
+(39.7%), 796/1852 grade 0-or-1 (43.0%) — bit-for-bit unchanged from the
+floor set before this wave, across ~90 more field renames (V.8), 23 (fax),
+6 (V.90 second pass), 3 (V.34 second pass) plus the associated struct
+refinements (loose fields folded into `struct v8_dft_bin`, `V21RX_CTL`/
+`V21TX_CTL` templates). This is the first real empirical confirmation that
+"a pure rename cannot move codegen" holds across this project's own actual
+renames, not just the general argument for why it should.
+
+Post-wave-2 counts: `pad_NNNN` 165 (unchanged), `type_NNNN` 298→292 (net
+−6, promotions outpacing new bare→typed promotions), bare `fNNNN` 149→110
+(−39). Combined wave 1 + wave 2: ~245 fields given real names since this
+phase started, from 676 unique unnamed identifiers at the outset.
+
+**Remaining concentrations**, by file (top 10, from a fresh count):
+
+    pad_NNNN:   v34recv.h (16), V90Equalizer.h (13), VPcmFloModem.h (11),
+                V92CP.h (9), V90Demodulator.h (9), V90ConstellationDesigner.h (7),
+                faxvmi.h (7), class1.h (7), V90Phase3Modulator.h (6),
+                V90Phase3Demodulator.h (6)
+    type_NNNN:  V90Demodulator.cpp (48), V90CP.h (27), V90CP.cpp (24),
+                v17.c (23), V92CP.h (23), V90AutoDigitalImpDetector.cpp (22),
+                V90Equalizer.cpp (21), V90AutoDigitalImpDetector.h (21),
+                V92CP.cpp (20), V90Phase3Demodulator.cpp (20)
+    bare f:     v34recv.h (47 -- still the heaviest single file despite two
+                passes; largely fields with genuinely no reader/writer to
+                bound a meaning, not fields nobody looked at), v8.h (12),
+                v34rx.c (8), cadence.h (8), v34hstx1.cpp (6), v8hsrx.c (5),
+                dtmf_rx.c (5), dtmf_rx.h (5), class1.h (5), v8util.c (4)
+
+`V90Equalizer`/`V90ConstellationDesigner`/`V90Phase3/4Modulator/Demodulator`
+(the `pad_NNNN` list) and `dtmf_rx`/`cadence` (new to the bare-`f` list,
+not yet worked this phase) are the clearest wave-3 candidates.
