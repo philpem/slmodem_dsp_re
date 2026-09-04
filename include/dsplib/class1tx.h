@@ -67,8 +67,8 @@ int _init_tx_nulls_state(struct fax_class1 *ctx);
 int _handle_hdlc_input_open(struct fax_class1 *ctx);
 
 /*
- * Note the count of what was received into +0x000 (f1250 - 1) and, when
- * flags004 bit 4 is set, latch f1224.  Returns 0.
+ * Note the count of what was received into +0x000 (hdlc_write_cursor - 1) and, when
+ * flags004 bit 4 is set, latch frame_end_latch.  Returns 0.
  */
 int _handle_hdlc_input_close(struct fax_class1 *ctx);
 
@@ -114,11 +114,11 @@ int _rx_look_carrier_init(struct fax_class1 *ctx, int rate_code);
 /*
  * `_tx_scrambled_ones_init`, 0x9cf70, 193 bytes.  Reinit the data-mode
  * transmitter through `_init_transmitter` (class1tx.c), (re)build the
- * transmit FIFO (`ctx->f1288`) at a fixed 0x800-element capacity, and derive
- * `ctx->f1290` as `ctx->tx_rate / 400` (signed division; the object's own
+ * transmit FIFO (`ctx->tx_fifo`) at a fixed 0x800-element capacity, and derive
+ * `ctx->tx_bytes_per_block` as `ctx->tx_rate / 400` (signed division; the object's own
  * `imul $0x51eb851f` / `sar $7` / sign-correct reciprocal, confirmed against
- * every rate class1.c's `_sym_size` recognises).  Clears `f1270`, `f1294`,
- * `transmit_enabled`, `f1298`, `data_input_closed` and the file-static
+ * every rate class1.c's `_sym_size` recognises).  Clears `tx_connect_countdown`, `tx_connect_latch`,
+ * `transmit_enabled`, `tx_fifo_ready`, `data_input_closed` and the file-static
  * `DATAtx_counter` (`_tx_scrambled_ones_state`'s own counter, class1tx.c).
  * Returns 0.
  */
@@ -132,7 +132,7 @@ int _tx_scrambled_ones_init(struct fax_class1 *ctx, int rate_code);
  * nonzero.  Opens an HDLC frame (`_handle_hdlc_input_open`, return discarded)
  * and resets `countdown`, `state` (to
  * `CLASS1_T30_SILENCE_BEFORE_PREAMBLE_STATE`), `hdlc_frame_done`,
- * `buffers_sent` and `f1224`.  Returns 0.
+ * `buffers_sent` and `frame_end_latch`.  Returns 0.
  */
 int cHDLCtx_preamble_state_init(struct fax_class1 *ctx);
 
@@ -186,7 +186,7 @@ int _handle_data_input(struct fax_class1 *ctx, const unsigned char *src,
 
 /*
  * The same for an HDLC frame, with the write cursor kept in the SESSION
- * (`f1250`) so a frame accumulates across calls -- `dst` is the whole frame's
+ * (`hdlc_write_cursor`) so a frame accumulates across calls -- `dst` is the whole frame's
  * buffer, not one block's.  Returns 1 on the call that completes a frame and
  * 0 otherwise; `*count` comes back as the frame length or as zero.
  */
@@ -277,7 +277,7 @@ int init_vmi_v29tx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
 
 /*
  * Tear the transmit-side data modem down: the config, the VMI block, the
- * FAXVMI handle -- and, when `ctx->f1288` (a FIFO) is non-null, that too.
+ * FAXVMI handle -- and, when `ctx->tx_fifo` (a FIFO) is non-null, that too.
  * Unlike the RX twin, no modulation ever needs a sub-allocation freed first.
  */
 void _delete_data_tx_modem(struct fax_class1 *ctx);
@@ -323,7 +323,7 @@ int _t30_silence_before_tx_state(struct fax_class1 *ctx, const short *rx,
  * by wave 8's agent once `_put_silence` and `cTOOLS_handle_hdlc_output`
  * landed, and left for time; both are in now, and this batch closes it.
  *
- * Replays whatever length-prefixed records sit in `ctx->f1000` (see
+ * Replays whatever length-prefixed records sit in `ctx->superframe` (see
  * class1.h) OUT to the host, one per call, gated by a two-tick countdown --
  * so it looks like the modem RECEIVED an HDLC frame without a real
  * demodulator running, which is the function's own name.  `word3` is the
@@ -370,14 +370,14 @@ int cHDLCtx_off(struct fax_class1 *ctx, const short *rx, short *tx,
  * `vmi_a`'s own carrier bit is clear).  `_hdlc_receive_state` and
  * `_hdlc_receive_between_buffers_state` both unpack a length-prefixed HDLC
  * frame into `ctx` itself (the same scratch-buffer idiom `_hdlc_emulate_
- * receive_state` uses on `ctx->f1000`, here applied to `ctx`'s own leading
+ * receive_state` uses on `ctx->superframe`, here applied to `ctx`'s own leading
  * bytes) and either hand it straight to the host (`_hdlc_receive_state`) or
- * bank it into `ctx->f1000` for later replay (`_hdlc_receive_between_
+ * bank it into `ctx->superframe` for later replay (`_hdlc_receive_between_
  * buffers_state` -- the WRITER `_hdlc_emulate_receive_state`'s own reader
  * side lacked until now).  See class1tx.c for the full derivation of each,
  * including the S7 (carrier-wait) timeout math shared by the look-carrier
  * state and `_rx_look_carrier_state`, and the tone-cadence machine
- * (`f125c`/`f1260`/`cng_enabled`, class1.h) unique to the look-carrier state.
+ * (`tone_cadence_phase`/`tone_cadence_timer`/`cng_enabled`, class1.h) unique to the look-carrier state.
  */
 int _hdlc_receive_look_carrier_state(struct fax_class1 *ctx, const short *rx,
 				     short *tx, int word3, int word4,
@@ -408,12 +408,12 @@ int _t30_preabmle_state(struct fax_class1 *ctx, const short *rx, short *tx,
  * THE DATA-MODE STATE HANDLERS -- RX_LOOK_CARRIER (12), RX_DATA_STATE (13),
  * TX_NULLS_STATE (11), TX_SCRAMBLED_ONES_STATE (9) and TX_DATA_STATE (10).
  * All five drive `ctx->vmi_b`, the CURRENT data modem's handle (shared with
- * `modem_vmi`/`f1244` per class1.h, half-duplex), except `_rx_look_carrier_
+ * `modem_vmi`/`modem_direction` per class1.h, half-duplex), except `_rx_look_carrier_
  * state`'s own second poll of `ctx->vmi_a` when `vmi_b`'s carrier bit is
  * clear.  `_rx_look_carrier_state` and `_rx_data_state` share the low-24-bit
  * FAXVMI_process status convention `cHDLCtx_off` already established
- * (`FAXVMI_RESULT_BIT_2000`, class1tx.c); the TX trio drive `ctx->f1288`
- * (the tx FIFO) and `ctx->f1290` directly around the FAXVMI_process call.
+ * (`FAXVMI_RESULT_BIT_2000`, class1tx.c); the TX trio drive `ctx->tx_fifo`
+ * (the tx FIFO) and `ctx->tx_bytes_per_block` directly around the FAXVMI_process call.
  * See class1tx.c for each function's own derivation.
  */
 int _rx_look_carrier_state(struct fax_class1 *ctx, const short *rx,

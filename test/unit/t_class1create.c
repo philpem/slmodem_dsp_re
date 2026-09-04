@@ -48,23 +48,23 @@ cmp_ctx(const char *what, struct fax_class1 *a, struct fax_class1 *b,
 	FLD(dle_seen);
 	FLD(f127c);
 	FLD(delayed_status_countdown);
-	FLD(f12d8);
+	FLD(gain_attenuation_db);
 	FLD(s7_timeout);
 	FLD(f12d4);
-	FLD(f12f0);
-	FLD(f125c);
-	FLD(f1260);
+	FLD(iir_enabled);
+	FLD(tone_cadence_phase);
+	FLD(tone_cadence_timer);
 	FLD(clock_sec);
 	FLD(clock_frac);
-	FLD(f12cc);
-	FLD(f12d0);
+	FLD(superframe_read_idx);
+	FLD(superframe_len);
 #undef FLD
 	(void)snprintf(buf, sizeof(buf), "%s vmi_c NULL-ness (%%ld)", what);
 	diff_eq_int(buf, b->vmi_c != NULL, a->vmi_c != NULL, tag);
 	(void)snprintf(buf, sizeof(buf), "%s vmi_a NULL-ness (%%ld)", what);
 	diff_eq_int(buf, b->vmi_a != NULL, a->vmi_a != NULL, tag);
-	(void)snprintf(buf, sizeof(buf), "%s f1258 NULL-ness (%%ld)", what);
-	diff_eq_int(buf, b->f1258 != NULL, a->f1258 != NULL, tag);
+	(void)snprintf(buf, sizeof(buf), "%s tone NULL-ness (%%ld)", what);
+	diff_eq_int(buf, b->tone != NULL, a->tone != NULL, tag);
 }
 
 /*

@@ -246,7 +246,7 @@ const struct v29rx_control_req V29RX_CTL = {
 };
 
 /*
- * The three FRESH-CREATE finishers.  Each copies `ctx->f12c0`/`ctx->f12c4`
+ * The three FRESH-CREATE finishers.  Each copies `ctx->rx_agc_mult`/`ctx->rx_agc_shift`
  * (16 bits each) into a per-modulation offset of the WRAPPED modem object
  * reached via `vmi_b->link->int_0014` cast to a pointer (the same
  * `(void *)(long)` idiom `faxadapt.c`'s `FIELD_PTR` macro already uses on
@@ -270,8 +270,8 @@ finish_v27rx(struct fax_class1 *ctx, int fresh)
 	if (fresh) {
 		void *sub = *(void **)((char *)wrapped + 0x54);
 
-		*(short *)((char *)sub + 0x8c) = (short)ctx->f12c0;
-		*(short *)((char *)sub + 0x8e) = (short)ctx->f12c4;
+		*(short *)((char *)sub + 0x8c) = (short)ctx->rx_agc_mult;
+		*(short *)((char *)sub + 0x8e) = (short)ctx->rx_agc_shift;
 		wrapped = (void *)(long)ctx->vmi_b->link->int_0014;
 	}
 
@@ -294,8 +294,8 @@ finish_v29rx(struct fax_class1 *ctx, int fresh)
 	if (fresh) {
 		void *sub = *(void **)((char *)wrapped + 0x50);
 
-		*(short *)((char *)sub + 0x88) = (short)ctx->f12c0;
-		*(short *)((char *)sub + 0x8a) = (short)ctx->f12c4;
+		*(short *)((char *)sub + 0x88) = (short)ctx->rx_agc_mult;
+		*(short *)((char *)sub + 0x8a) = (short)ctx->rx_agc_shift;
 		wrapped = (void *)(long)ctx->vmi_b->link->int_0014;
 	}
 
@@ -318,8 +318,8 @@ finish_v17rx(struct fax_class1 *ctx, int fresh)
 	if (fresh) {
 		void *sub = *(void **)((char *)wrapped + 0x60);
 
-		*(short *)((char *)sub + 0xd8) = (short)ctx->f12c0;
-		*(short *)((char *)sub + 0xda) = (short)ctx->f12c4;
+		*(short *)((char *)sub + 0xd8) = (short)ctx->rx_agc_mult;
+		*(short *)((char *)sub + 0xda) = (short)ctx->rx_agc_shift;
 		wrapped = (void *)(long)ctx->vmi_b->link->int_0014;
 	}
 

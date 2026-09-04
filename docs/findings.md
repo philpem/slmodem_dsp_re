@@ -113203,3 +113203,143 @@ per that finding's own precedent -- every change here is an identifier
 substitution or a comment, which cannot move generated code, and the
 host-`gcc` differential tier above already exercises the renamed fields
 against the linked blob. (2026-09-04)
+
+## F10133. Wave 2 field naming, fax cluster: 23 bare `fNNNN` fields in `struct fax_class1` promoted to real names, one AGC-gain misreading corrected, `modem_direction` named as a discriminant
+
+Scope: `include/dsplib/class1.h`, `include/dsplib/class1tx.h`,
+`src/fax/class1.c`, `src/fax/class1tx.c` -- `docs/fieldnaming.md`'s wave 2
+fax cluster. `include/dsplib/faxvmi.h`, `fax.h` and `v17fax.h`/`src/fax/v17.c`
+were read in full and left untouched: every `pad_NNNN`/`type_NNNN` in those
+four already carries, from the same-session fax closure, an explicit
+derivation for why it stays neutral (a dead store, a field with no
+established second end, or -- `v17fax.h`'s `V17TXP_INT_000C` -- an ITU-T
+cross-reference ("V.17 fax's own short-training option") already tried and
+explicitly declined for want of a typed site). Nothing this pass read
+overturned any of those; re-litigating a documented decline without new
+evidence is not progress.
+
+**23 fields renamed in `struct fax_class1`, by evidence class:**
+
+- **Rank 1 (a format string names the field), three fields, all NEW this
+  wave:**
+  - `superframe` (was `f1000`): `_hdlc_receive_between_buffers_state`'s own
+    bounds-check arm (class1tx.c) prints "SuperFrame full, skipping HDLC
+    frame!\n" when a record will not fit -- the author's own word for this
+    length-prefixed record buffer. `superframe_countdown`/`superframe_
+    read_idx`/`superframe_len` (`f12c8`/`f12cc`/`f12d0`) are named to match,
+    on the SAME evidence, since all three exist only to serve this buffer
+    and carry no format string of their own.
+  - `gain_attenuation_db` (was `f12d8`): `_hdlc_receive_look_carrier_state`'s
+    gain-request scan stores `12 - 3*i` here on a match against
+    `HDLC_LOOK_CARRIER_LEVELS[i]` and prints the object's own "Gain
+    Attenuation Reuqest: +%d[dB], avg_rms = %d" (the author's own typo, kept)
+    with this field as the first `%d`.
+  - `frame_end_latch` (was `f1224`): CONFIRMED rather than newly found --
+    `class1.h` already named the SITE from `flags004`'s own bit comment;
+    this wave found the object's own words for the field itself in
+    `_send_hdlc_between_buffer_state`'s comment ("the frame-end latch"),
+    already written by an earlier pass reading that function, and promoted
+    the field to match rather than leaving the two out of sync.
+
+- **Rank 2 (a typed caller/callee, or a modelled struct reached by tiling),
+  three fields:**
+  - `vmi_c_cfg`/`vmi_a_cfg` (were `f120c`/`f1210`), retyped from `void *` to
+    `struct faxvmi_cfg *`: `fax_class1_create` (landed after these fields
+    were first modelled as pad, hence the earlier `void *`) builds exactly a
+    `struct faxvmi_cfg` in each and hands it straight to `FAXVMI_create`'s
+    own `const struct faxvmi_cfg *cfg` parameter; `fax_class1_delete`'s own
+    `*(p+0x10)` free target is exactly `struct faxvmi_cfg::modem_cfg`
+    (`faxcfg.h`, +0x10), confirming the sub-allocation it owns is the V.21
+    TX/RX modem config underneath.
+  - `rx_agc_mult`/`rx_agc_shift` (were `f12c0`/`f12c4`) -- **this WITHDRAWS a
+    same-session guess.** The field comment read "plausibly a measured baud
+    rate or frequency pair given the HDLC/V.21 context, but that is not
+    asserted"; tiling contradicts it. `_hdlc_receive_state` walks
+    `vmi_a->link->int_0014` to the V.21 receiver instance and reads its own
+    `V21RX_OBJ_DSP` (`rx + 0x50`, v21fax.h) at +0x30/+0x32. `V21RX_create`/
+    `DemodDataV21` build a `struct fpm_agc` at `dsp + 0x0c` (v21fax.h's own
+    reading), and `fpm_agc.h` independently places `mult`/`shift` (gain
+    mantissa Q15, gain exponent as a left shift) at +0x24/+0x26 of that
+    struct -- `0x0c + 0x24 = 0x30`, `0x0c + 0x26 = 0x32`, the exact two
+    offsets read. So these fields are a snapshot of the V.21 receiver's own
+    AGC gain, taken whenever an HDLC frame closes; what the snapshot is FOR
+    is not established (nothing reconstructed reads it back), so only the
+    WHAT is claimed, not the WHY.
+
+- **Usage inference (the function's own control flow makes the role
+  unambiguous even with no format string or typed callee), the remaining
+  seventeen:** `scratch_frame_len` (`f000`, the length prefix of whichever
+  HDLC record currently sits at `ctx`'s own leading bytes -- shared by the
+  host-link path and the FAXVMI receive path, both of which stage a record
+  there before consuming it), `hdlc_write_cursor` (`f1250`), `tone`
+  (`f1258`, the session's `struct fpm_tone *`, torn down by `FPM_TONE_
+  delete`), `tone_cadence_phase`/`tone_cadence_timer` (`f125c`/`f1260`, the
+  silence/tone alternation `_hdlc_receive_look_carrier_state` and
+  `_answer_tone_state` drive), `tx_connect_countdown`/`tx_connect_latch`
+  (`f1270`/`f1294`, the one-shot "ENABLE_TRANSMIT" arming pair
+  `_tx_scrambled_ones_state` owns), `tx_fifo` (`f1288`, `struct fax_fifo *`,
+  typed by its own `FIFO_delete`/`FIFO_create`/`FIFO_read`/`FIFO_write`
+  calls), `tx_bytes_per_block` (`f1290` -- `ctx->tx_rate / 400` where
+  `tx_rate` is bits/sec, and 1/400 s is 20 ms at 8 bits/byte, so this is
+  bytes per `CLASS1_BLOCK_SAMPLES` block; the arithmetic was checked against
+  every rate `_sym_size` recognises rather than asserted from the divisor
+  alone), `tx_fifo_ready` (`f1298`, the per-call "FIFO already holds a
+  block's worth" gate), `iir_coeff`/`iir_enabled` (`f12dc`/`f12f0`, already
+  typed as `const short *`/gate by `fax_class1_progress`'s own IIR tick, just
+  not yet named), and `modem_direction` (`f1244`).
+
+**`modem_direction` is a DISCRIMINANT, not a flag, and is named as one.**
+`fax_class1_command`'s RM (receive-modem) command writes 1, its TM
+(transmit-modem) command writes 2; `fax_class1_delete` and
+`fax_class1_progress` both test the RX value alone to decide which
+direction's modem is currently live. Two named constants,
+`CLASS1_MODEM_DIR_RX` (1) and `CLASS1_MODEM_DIR_TX` (2), replace the bare
+`== 1`/`== 2`/`= 1`/`= 2` at every site in `class1.c` -- CLAUDE.md's "if we
+know what something indicates, name it" applied to a two-valued discriminant
+rather than a single bit, the same way `CLASS1_ANS_ORG_NORMAL`/`_ANSWER`
+already name `struct fax_class1_cfg::mode`. Whether a third value is ever
+live is not established, so the comment says only what is observed.
+
+**Left bare, on purpose:** `f1230`/`f1234` (`_init_transmitter`'s own
+per-rate-group constants, 0x30/0x18/0xc/0x6 and 0x8000/0x75a2/0x4000 --
+written once per modem (re)init and read back by nothing reconstructed; no
+format string, no typed reader, and the value groupings do not map onto any
+ITU-T quantity this pass could name without guessing) and `f127c` (the
+sample-scan accumulator `fax_class1_progress` maintains and never reads
+back outside itself -- class1.h's own comment already says what it is FOR is
+not established, and this pass found nothing to add to that).
+
+**No ITU-T standard cross-reference was used to NAME a field this wave** --
+every promotion above rests on a format string, a typed caller/callee, or
+unambiguous usage inference. The standard was consulted (T.30's own state
+names were already rank-1-sourced by an earlier pass; V.17's short-training
+option was checked against `V17TXP_INT_000C` and found already declined) but
+contributed no NEW name.
+
+**Cross-file propagation, since a field rename is not local to its own
+header.** `struct fax_class1` is also used by `src/fax/class1rx.c` (two of
+the renamed fields, `f12c0`/`f12c4`, written into three FRESH-CREATE
+finishers) and by nineteen `test/unit/t_class1*.c`/`t_faxcreate.c` files, all
+outside this wave's nominal file list; every one was updated to the same
+names in the same pass, since a partial rename does not compile. Confirmed
+with `grep -rln "struct fax_class1\b"` before touching anything, so the file
+list is measured rather than guessed; a second grep for every retired bare
+name across `include/`, `src/` and `test/` after the rename returned only
+`dtmf_rx.h`/`dtmf_rx.c`/`t_dtmfrx.c`'s own, UNRELATED `struct dtmf_rx::f000`
+-- same bare spelling, different struct, correctly left alone.
+
+**Verification**: `python3 tools/onedef.py` (301 types, 1 known duplicate,
+unchanged), `tools/refcheck.py` (13179 references, 0 dangling) and
+`tools/bannercheck.py src/fax` (233/233 banners agree) all clean;
+`make one T="t_class1cmd t_class1create t_class1delete t_class1delmodem
+t_class1handlers t_class1hdlcctl t_class1hdlcemu t_class1initrx
+t_class1inittx t_class1leaves t_class1names t_class1progress
+t_class1rxstates t_class1silence t_class1states t_class1status
+t_class1txcplinit t_class1txstates t_class1txvmi t_faxadapt t_faxcreate
+t_faxdelete t_faxprocess t_faxsgd t_faxvmicp t_faxvmids t_v17cfg t_v17data
+t_v17dec t_v17fax t_v17ppstab t_v17rxcreate t_v17rxstate t_v17slicer
+t_v17smc t_v17txcreate"` -- 35 binaries, all green, no check count regressed.
+`make period` (the GCC 3.4.2/docker tier) was not run here for want of
+docker in this environment; a pure rename cannot move codegen, so it is left
+for the parent session's own gate, per this wave's standing instruction.
+(2026-09-04)

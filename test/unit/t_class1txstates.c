@@ -29,11 +29,11 @@
  * slot -- see that test's own comment.
  *
  * FIFO SETUP.  `_tx_nulls_state`, `_tx_scrambled_ones_state` and
- * `_tx_data_state` all drive `ctx->f1288` (a `struct fax_fifo *`) and read
- * `ctx->f1290` (the per-call block size `FIFO_read`/`FIFO_write` are asked
+ * `_tx_data_state` all drive `ctx->tx_fifo` (a `struct fax_fifo *`) and read
+ * `ctx->tx_bytes_per_block` (the per-call block size `FIFO_read`/`FIFO_write` are asked
  * for).  A real `FIFO_create(NULL, NULL)` (the object's own default,
  * `FIFO_CFG` = {0, 100, 0}) gives a 100-element ring, comfortably above the
- * small `f1290` values these tests use, on BOTH sides independently (`ours`
+ * small `tx_bytes_per_block` values these tests use, on BOTH sides independently (`ours`
  * and the blob's own `ref_FIFO_create`) -- `t_class1delmodem.c` already
  * establishes this pattern.
  */
@@ -120,7 +120,7 @@ static unsigned char src_a[SRC_MAX], src_b[SRC_MAX];
 static int rxc_a, rxc_b, txc_a, txc_b, w7_a, w7_b, w8_a, w8_b;
 
 /*
- * `vmi_c`/`vmi_a`/`vmi_b` (+0x1200..+0x120b) AND `f1288` (+0x1288, a
+ * `vmi_c`/`vmi_a`/`vmi_b` (+0x1200..+0x120b) AND `tx_fifo` (+0x1288, a
  * `struct fax_fifo *`) are the only heap pointers a `plant()`-built pair
  * ever disagrees on -- both sides allocate their OWN, separately.
  */
@@ -129,7 +129,7 @@ patch_heap_ptrs(void)
 {
 	memcpy(&ctx_b.vmi_c, &ctx_a.vmi_c,
 	       sizeof(ctx_a.vmi_c) + sizeof(ctx_a.vmi_a) + sizeof(ctx_a.vmi_b));
-	ctx_b.f1288 = ctx_a.f1288;
+	ctx_b.tx_fifo = ctx_a.tx_fifo;
 }
 
 /*
@@ -158,25 +158,25 @@ plant(int state, int prev_state, int with_fifo)
 	ctx_b.vmi_c = ctx_b.vmi_a = ctx_b.vmi_b =
 	    FAXVMI_create(NULL, &NULL_CFG);
 
-	ctx_a.f1288 = with_fifo ? ref_FIFO_create(NULL, NULL) : NULL;
-	ctx_b.f1288 = with_fifo ? FIFO_create(NULL, NULL) : NULL;
+	ctx_a.tx_fifo = with_fifo ? ref_FIFO_create(NULL, NULL) : NULL;
+	ctx_b.tx_fifo = with_fifo ? FIFO_create(NULL, NULL) : NULL;
 
 	ctx_a.state = ctx_b.state = state;
 	ctx_a.prev_state = ctx_b.prev_state = prev_state;
 	ctx_a.status = ctx_b.status = FAX_CLASS1_NO_MESSAGE;
 	ctx_a.countdown = ctx_b.countdown = 0;
-	ctx_a.f1224 = ctx_b.f1224 = 0;
-	ctx_a.f1250 = ctx_b.f1250 = 1;
-	ctx_a.f12d0 = ctx_b.f12d0 = 0;
+	ctx_a.frame_end_latch = ctx_b.frame_end_latch = 0;
+	ctx_a.hdlc_write_cursor = ctx_b.hdlc_write_cursor = 1;
+	ctx_a.superframe_len = ctx_b.superframe_len = 0;
 	ctx_a.s7_timeout = ctx_b.s7_timeout = 60;
 	ctx_a.cng_enabled = ctx_b.cng_enabled = 0;
-	ctx_a.f125c = ctx_b.f125c = 0;
-	ctx_a.f1260 = ctx_b.f1260 = 0;
+	ctx_a.tone_cadence_phase = ctx_b.tone_cadence_phase = 0;
+	ctx_a.tone_cadence_timer = ctx_b.tone_cadence_timer = 0;
 	ctx_a.transmit_enabled = ctx_b.transmit_enabled = 0;
-	ctx_a.f1270 = ctx_b.f1270 = 0;
-	ctx_a.f1290 = ctx_b.f1290 = 10;
-	ctx_a.f1294 = ctx_b.f1294 = 0;
-	ctx_a.f1298 = ctx_b.f1298 = 0;
+	ctx_a.tx_connect_countdown = ctx_b.tx_connect_countdown = 0;
+	ctx_a.tx_bytes_per_block = ctx_b.tx_bytes_per_block = 10;
+	ctx_a.tx_connect_latch = ctx_b.tx_connect_latch = 0;
+	ctx_a.tx_fifo_ready = ctx_b.tx_fifo_ready = 0;
 	ctx_a.hdlc_frame_done = ctx_b.hdlc_frame_done = 0;
 	ctx_a.buffers_sent = ctx_b.buffers_sent = 0;
 	ctx_a.last_in_byte = ctx_b.last_in_byte = 0;
@@ -342,7 +342,7 @@ run_tx_nulls(void)
 static int
 run_tx_scrambled_ones(void)
 {
-	static const struct { int f1270, word8; } cases[] = {
+	static const struct { int tx_connect_countdown, word8; } cases[] = {
 		{ 0, 0 }, { 1, 0 }, { 0, 4 }, { 1, 4 },
 	};
 	unsigned i;
@@ -353,7 +353,7 @@ run_tx_scrambled_ones(void)
 		long tag = (long)i;
 
 		plant(CLASS1_TX_SCRAMBLED_ONES_STATE, 0, 1);
-		ctx_a.f1270 = ctx_b.f1270 = cases[i].f1270;
+		ctx_a.tx_connect_countdown = ctx_b.tx_connect_countdown = cases[i].tx_connect_countdown;
 		w8_a = w8_b = cases[i].word8;
 		txc_a = txc_b = 88; /* see run_tx_nulls's own note */
 
@@ -431,7 +431,7 @@ run_hdlc_receive_pair(void)
 			/*
 			 * `word7` is a pointer here too (`*(int *)(long)
 			 * word7`, written on the no-carrier AND the
-			 * count/f000-nonzero arms) -- needs real backing
+			 * count/scratch_frame_len-nonzero arms) -- needs real backing
 			 * storage, the same fix `run_rx_pair`'s own
 			 * `_rx_data_state` loop needed.
 			 */

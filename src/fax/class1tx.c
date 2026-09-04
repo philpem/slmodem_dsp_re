@@ -334,11 +334,11 @@ static int DATAtx_counter;
  * capacity -- `local = FIFO_CFG; local.size = 0x800; local.fill = 0;` is the
  * object's own field-by-field shape (a 32-bit copy of `FIFO_CFG`'s leading
  * `word0`/`size` pair, THEN both overridden, matching `faxfifo.h`'s own note
- * on that struct's aligned pair) -- and derive `ctx->f1290` from the just-set
+ * on that struct's aligned pair) -- and derive `ctx->tx_bytes_per_block` from the just-set
  * `ctx->tx_rate` as a plain signed divide by 400 (the object's own
  * `imul $0x51eb851f` / `sar $7` / sign-correct reciprocal for exactly that
- * divisor, independently re-derived rather than guessed).  Clears `f1270`
- * (one-shot connect countdown), `f1294`, `transmit_enabled`, `f1298`,
+ * divisor, independently re-derived rather than guessed).  Clears `tx_connect_countdown`
+ * (one-shot connect countdown), `tx_connect_latch`, `transmit_enabled`, `tx_fifo_ready`,
  * `data_input_closed` and the file-static `DATAtx_counter`
  * (`_tx_scrambled_ones_state`'s own counter, above).
  */
@@ -354,13 +354,13 @@ _tx_scrambled_ones_init(struct fax_class1 *ctx, int rate_code)
 
 	local.size = 0x800;
 	local.fill = 0;
-	ctx->f1270 = 0;
-	ctx->f1288 = FIFO_create(ctx->f1288, &local);
+	ctx->tx_connect_countdown = 0;
+	ctx->tx_fifo = FIFO_create(ctx->tx_fifo, &local);
 
-	ctx->f1294 = 0;
+	ctx->tx_connect_latch = 0;
 	ctx->transmit_enabled = 0;
-	ctx->f1298 = 0;
-	ctx->f1290 = ctx->tx_rate / 400;
+	ctx->tx_fifo_ready = 0;
+	ctx->tx_bytes_per_block = ctx->tx_rate / 400;
 	ctx->data_input_closed = 0;
 	DATAtx_counter = 0;
 	return 0;
@@ -391,7 +391,7 @@ cHDLCtx_preamble_state_init(struct fax_class1 *ctx)
 	ctx->state = CLASS1_T30_SILENCE_BEFORE_PREAMBLE_STATE;
 	ctx->hdlc_frame_done = 0;
 	ctx->buffers_sent = 0;
-	ctx->f1224 = 0;
+	ctx->frame_end_latch = 0;
 	return 0;
 }
 
@@ -558,7 +558,7 @@ _handle_data_input(struct fax_class1 *ctx, const unsigned char *src,
 /*
  * Arm the frame cursor at ONE, not zero.  `_handle_hdlc_input` writes the
  * first octet at `dst[1]` and both it and `_handle_hdlc_input_close` report
- * `f1250 - 1` as the length, so element zero is the length slot the frame is
+ * `hdlc_write_cursor - 1` as the length, so element zero is the length slot the frame is
  * eventually length-prefixed with -- the same layout `faxvmi_frame_reverse`
  * and `faxvmi_write_frame` walk.  Five instructions, and it touches nothing
  * else.
@@ -566,16 +566,16 @@ _handle_data_input(struct fax_class1 *ctx, const unsigned char *src,
 int
 _handle_hdlc_input_open(struct fax_class1 *ctx)
 {
-	ctx->f1250 = 1;
+	ctx->hdlc_write_cursor = 1;
 	return 0;
 }
 
 int
 _handle_hdlc_input_close(struct fax_class1 *ctx)
 {
-	ctx->f000 = (short)(ctx->f1250 - 1);
+	ctx->scratch_frame_len = (short)(ctx->hdlc_write_cursor - 1);
 	if (ctx->flags004 & CLASS1_FLAG_FRAME_END_LATCH)
-		ctx->f1224 = 1;
+		ctx->frame_end_latch = 1;
 	return 0;
 }
 
@@ -583,12 +583,12 @@ _handle_hdlc_input_close(struct fax_class1 *ctx)
  * The same unstuffing for an HDLC frame, and three things make it a different
  * function rather than a mode of the one above.
  *
- *   - The write cursor is the SESSION's (`f1250`), not a local, so a frame
+ *   - The write cursor is the SESSION's (`hdlc_write_cursor`), not a local, so a frame
  *     accumulates across calls and the caller's `dst` is indexed from
  *     wherever the last call left off.  `dst` must therefore be sized for the
  *     whole frame, not for one block.
  *   - DLE ETX ends the FRAME: it does the same two stores
- *     `_handle_hdlc_input_close` does -- the length into `f000`, and `f1224`
+ *     `_handle_hdlc_input_close` does -- the length into `scratch_frame_len`, and `frame_end_latch`
  *     when the flag is on -- and reports 1.
  *   - `*count` comes back as the frame length on that call and as ZERO
  *     otherwise, which is what tells the caller a frame is not finished yet.
@@ -601,7 +601,7 @@ _handle_hdlc_input(struct fax_class1 *ctx, const unsigned char *src,
 		   unsigned short *dst, int *count)
 {
 	int done = 0;
-	int out = ctx->f1250;
+	int out = ctx->hdlc_write_cursor;
 	int i;
 
 	for (i = 0; i < *count; i++) {
@@ -613,10 +613,10 @@ _handle_hdlc_input(struct fax_class1 *ctx, const unsigned char *src,
 				continue;
 			}
 			if (src[i] == CLASS1_ETX) {
-				ctx->f1250 = out;
-				ctx->f000 = (short)(out - 1);
+				ctx->hdlc_write_cursor = out;
+				ctx->scratch_frame_len = (short)(out - 1);
 				if (ctx->flags004 & CLASS1_FLAG_FRAME_END_LATCH)
-					ctx->f1224 = 1;
+					ctx->frame_end_latch = 1;
 				*count = out;
 				done = 1;
 				break;
@@ -631,7 +631,7 @@ _handle_hdlc_input(struct fax_class1 *ctx, const unsigned char *src,
 		out++;
 	}
 
-	ctx->f1250 = out;
+	ctx->hdlc_write_cursor = out;
 	if (done)
 		return 1;
 	*count = 0;
@@ -967,7 +967,7 @@ init_vmi_v27tx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
  * Tear the transmit-side data modem down.  The object's own order: free the
  * config, free the VMI block, clear `ctx->modem_vmi`, `FAXVMI_delete` the
  * handle at `ctx->vmi_b`, clear `ctx->vmi_b`, and only THEN look at
- * `ctx->f1288` (a FIFO) -- `FIFO_delete` it and clear the field when it is
+ * `ctx->tx_fifo` (a FIFO) -- `FIFO_delete` it and clear the field when it is
  * non-null, or just clear it when it is already null.  No modulation's
  * config here needs a sub-allocation freed first, unlike the RX side's
  * V.17.
@@ -987,9 +987,9 @@ _delete_data_tx_modem(struct fax_class1 *ctx)
 	FAXVMI_delete(handle);
 	ctx->vmi_b = NULL;
 
-	if (ctx->f1288 != NULL)
-		FIFO_delete(ctx->f1288);
-	ctx->f1288 = NULL;
+	if (ctx->tx_fifo != NULL)
+		FIFO_delete(ctx->tx_fifo);
+	ctx->tx_fifo = NULL;
 }
 
 /*
@@ -1159,9 +1159,9 @@ _init_transmitter(struct fax_class1 *ctx, int rate_code)
 		FAXVMI_delete(ctx->vmi_b);
 		ctx->vmi_b = NULL;
 
-		if (ctx->f1288 != NULL)
-			FIFO_delete(ctx->f1288);
-		ctx->f1288 = NULL;
+		if (ctx->tx_fifo != NULL)
+			FIFO_delete(ctx->tx_fifo);
+		ctx->tx_fifo = NULL;
 	}
 
 	if (ctx->vmi_b == NULL) {
@@ -1298,10 +1298,10 @@ _t30_silence_before_tx_state(struct fax_class1 *ctx, const short *rx,
 
 /*
  * HDLC_EMULATE_RECEIVE_STATE.  `.text` 0x09e1b0, 452 bytes.  See class1tx.h
- * for the shape and class1.h for `f1000`/`f12c8`/`f12cc`/`f12d0`.
+ * for the shape and class1.h for `superframe`/`superframe_countdown`/`superframe_read_idx`/`superframe_len`.
  *
- * FIRST, PARSE.  Walk `ctx->f1000` from the start, `count` records of
- * `ctx->f12d0` bytes total -- entry `i` is a length, the data follows, the
+ * FIRST, PARSE.  Walk `ctx->superframe` from the start, `count` records of
+ * `ctx->superframe_len` bytes total -- entry `i` is a length, the data follows, the
  * next record starts right after.  Each length is banked into `lens[]` (see
  * `CLASS1_EMU_MAX_FRAMES`'s own comment for why it is exactly twelve long
  * and unguarded) so the SECOND walk below, to find where record `next`
@@ -1311,19 +1311,19 @@ _t30_silence_before_tx_state(struct fax_class1 *ctx, const short *rx,
  * first tick since some other state entered this one" -- on that tick only,
  * a still-unsent record (`next < count`) reports FAX_CLASS1_CONNECT once.
  *
- * THE COUNTDOWN, next.  `old` is `f12c8` BEFORE this call's decrement; a
+ * THE COUNTDOWN, next.  `old` is `superframe_countdown` BEFORE this call's decrement; a
  * value that was already <= 0 is what fires the next record (or, with
  * nothing left to send, the transition to IDLE_STATE with
  * FAX_CLASS1_NO_CARRIER_NO_MESSAGE -- both spelled `8` in the object, one
  * a state and the other a status, and that coincidence is why a single
  * `mov $0x8` in the disassembly feeds two different stores).  Emitting a
  * record calls `cTOOLS_handle_hdlc_output` on it, writes the byte count
- * through `word7`, arms a two-tick delayed status, advances `f12cc`, and
+ * through `word7`, arms a two-tick delayed status, advances `superframe_read_idx`, and
  * also moves to IDLE_STATE.
  *
  * FINALLY, the object's own tail runs whether or not anything fired above:
- * once `next` has caught up to `count`, the whole buffer resets (`f12d0` to
- * 0, `f12c8` to 2, `f12cc` to 0) -- note this is an EQUALITY test in the
+ * once `next` has caught up to `count`, the whole buffer resets (`superframe_len` to
+ * 0, `superframe_countdown` to 2, `superframe_read_idx` to 0) -- note this is an EQUALITY test in the
  * object (`je`), not `next >= count`, so it is written that way here too --
  * and every path ends the same: a block of silence out, `*tx_count` set to
  * it, return 0.
@@ -1333,7 +1333,7 @@ _hdlc_emulate_receive_state(struct fax_class1 *ctx, const short *rx,
 			    short *tx, int word3, int word4, int *rx_count,
 			    int *tx_count, int word7, int *word8)
 {
-	int total = ctx->f12d0;
+	int total = ctx->superframe_len;
 	int idx = 0;
 	int count = 0;
 	int lens[CLASS1_EMU_MAX_FRAMES];
@@ -1346,21 +1346,21 @@ _hdlc_emulate_receive_state(struct fax_class1 *ctx, const short *rx,
 	(void)word8;
 
 	while (idx < total) {
-		int len = ctx->f1000[idx];
+		int len = ctx->superframe[idx];
 
 		lens[count] = len;
 		count++;
 		idx += len + 1;
 	}
 
-	next = ctx->f12cc;
+	next = ctx->superframe_read_idx;
 	if (ctx->prev_state != CLASS1_HDLC_EMULATE_RECEIVE_STATE) {
 		if (next < count)
 			ctx->status = FAX_CLASS1_CONNECT;
 	}
 
-	old = ctx->f12c8;
-	ctx->f12c8 = old - 1;
+	old = ctx->superframe_countdown;
+	ctx->superframe_countdown = old - 1;
 
 	if (old <= 0) {
 		if (next >= count) {
@@ -1374,22 +1374,22 @@ _hdlc_emulate_receive_state(struct fax_class1 *ctx, const short *rx,
 				start += lens[i] + 1;
 
 			n = cTOOLS_handle_hdlc_output(ctx,
-			    &ctx->f1000[start + 1],
+			    &ctx->superframe[start + 1],
 			    (unsigned char *)(long)word3,
-			    ctx->f1000[start], 1);
+			    ctx->superframe[start], 1);
 			*(int *)(long)word7 = n;
 			ctx->delayed_status = 1;
 			ctx->delayed_status_countdown = 2;
 			next++;
-			ctx->f12cc = next;
+			ctx->superframe_read_idx = next;
 			ctx->state = CLASS1_IDLE_STATE;
 		}
 	}
 
 	if (next == count) {
-		ctx->f12d0 = 0;
-		ctx->f12c8 = 2;
-		ctx->f12cc = 0;
+		ctx->superframe_len = 0;
+		ctx->superframe_countdown = 2;
+		ctx->superframe_read_idx = 0;
 	}
 
 	_put_silence(tx, CLASS1_BLOCK_SAMPLES);
@@ -1664,10 +1664,10 @@ _rx_data_state(struct fax_class1 *ctx, const short *rx, short *tx,
  * `ctx->state = CLASS1_TX_DATA_STATE`, unstuff `word4` through
  * `_handle_data_input` into `ctx` itself (the scratch-buffer idiom, `dst`
  * cast from `ctx`) with `count = word8`, then `FIFO_write` the just-decoded
- * run into `ctx->f1288`, logging a shortfall ("Fifo is full in
+ * run into `ctx->tx_fifo`, logging a shortfall ("Fifo is full in
  * _tx_nulls_state\n"), THEN -- still inside this same block, not a shared
- * step -- `FIFO_read(ctx->f1288, ctx, ctx->f1290)` back into `ctx`, `*word8`
- * set to the return, a shortfall against `ctx->f1290` logged ("class1
+ * step -- `FIFO_read(ctx->tx_fifo, ctx, ctx->tx_bytes_per_block)` back into `ctx`, `*word8`
+ * set to the return, a shortfall against `ctx->tx_bytes_per_block` logged ("class1
  * object fifo under run in _tx_nulls_state !!!\n").  On the `*word8 <= 0`
  * path NONE of this runs -- the object's own `jle` jumps straight past the
  * whole block (confirmed by address: `9d088`'s `jle` target is `9d120`, the
@@ -1678,7 +1678,7 @@ _rx_data_state(struct fax_class1 *ctx, const short *rx, short *tx,
  * `cnt` seeded from the CURRENT `*word8` (freshly read, or the caller's
  * original value) and `result` from `*tx_count`.
  *
- * Tail: `*word8 = ctx->f1288->size - ctx->f1288->count - 1` (the free-room-
+ * Tail: `*word8 = ctx->tx_fifo->size - ctx->tx_fifo->count - 1` (the free-room-
  * minus-one formula `_tx_data_state`/`_tx_scrambled_ones_state` also end
  * with).  `*tx_count` is READ, never written, on any path.
  *
@@ -1724,7 +1724,7 @@ _tx_nulls_state(struct fax_class1 *ctx, const short *rx, short *tx,
 		_handle_data_input(ctx, (const unsigned char *)(long)word4,
 		    (unsigned short *)(void *)ctx, word8);
 
-		n = FIFO_write(ctx->f1288, (unsigned short *)(void *)ctx,
+		n = FIFO_write(ctx->tx_fifo, (unsigned short *)(void *)ctx,
 		    (unsigned short)*word8);
 		if (*word8 > n) {
 			if (dsplibs_debug_level > 1)
@@ -1746,9 +1746,9 @@ _tx_nulls_state(struct fax_class1 *ctx, const short *rx, short *tx,
 		 * untouched), not assumed correct from a first disassembly
 		 * pass.
 		 */
-		*word8 = FIFO_read(ctx->f1288, (unsigned short *)(void *)ctx,
-		    ctx->f1290);
-		if (*word8 < ctx->f1290) {
+		*word8 = FIFO_read(ctx->tx_fifo, (unsigned short *)(void *)ctx,
+		    ctx->tx_bytes_per_block);
+		if (*word8 < ctx->tx_bytes_per_block) {
 			if (dsplibs_debug_level > 1)
 				dsplibs_debug_printf(
 				    "class1 object fifo under run in "
@@ -1761,7 +1761,7 @@ _tx_nulls_state(struct fax_class1 *ctx, const short *rx, short *tx,
 	FAXVMI_process(ctx->vmi_b, (unsigned short *)(void *)ctx, tx, &cnt,
 	    &result);
 
-	*word8 = ctx->f1288->size - ctx->f1288->count - 1;
+	*word8 = ctx->tx_fifo->size - ctx->tx_fifo->count - 1;
 	return 0;
 }
 
@@ -1769,10 +1769,10 @@ _tx_nulls_state(struct fax_class1 *ctx, const short *rx, short *tx,
  * TX_DATA_STATE (10).  `.text` 0x0009d4b0, 618 bytes.
  *
  * `*word8 > 0` unstuffs `word4` through `_handle_data_input` into `ctx`,
- * `count = word8`, then `FIFO_write`s it into `ctx->f1288`; a shortfall
+ * `count = word8`, then `FIFO_write`s it into `ctx->tx_fifo`; a shortfall
  * ("Fifo is full in _tx_data_state(%d=>%d>%d)\n") is logged but does NOT
  * skip the read below (falls straight through).  Either way, `FIFO_read`s
- * `ctx->f1290` elements from `ctx->f1288` into `ctx`, logs a shortfall
+ * `ctx->tx_bytes_per_block` elements from `ctx->tx_fifo` into `ctx`, logs a shortfall
  * ("fifo underrun in _tx_data_state, count %d < %d\n") but keeps going, and
  * drives `FAXVMI_process(ctx->vmi_b, ctx, tx, &count, &result)` with
  * `count` seeded from the read and `result` seeded from `*tx_count` (NOT
@@ -1790,8 +1790,8 @@ _tx_nulls_state(struct fax_class1 *ctx, const short *rx, short *tx,
  * Both then fall through to the (possibly-logged) FULL check before the
  * common tail.
  *
- * Tail: the SAME free-room-minus-one formula, `*word8 = ctx->f1288->size -
- * ctx->f1288->count - 1`.  `*tx_count` is never written past its `result`
+ * Tail: the SAME free-room-minus-one formula, `*word8 = ctx->tx_fifo->size -
+ * ctx->tx_fifo->count - 1`.  `*tx_count` is never written past its `result`
  * seed being read back into it -- i.e. never explicitly re-stored, matching
  * the object, which only ever writes `*word8`.
  *
@@ -1841,7 +1841,7 @@ _tx_data_state(struct fax_class1 *ctx, const short *rx, short *tx,
 		_handle_data_input(ctx, (const unsigned char *)(long)word4,
 		    (unsigned short *)(void *)ctx, word8);
 
-		n = (short)FIFO_write(ctx->f1288, (unsigned short *)(void *)ctx,
+		n = (short)FIFO_write(ctx->tx_fifo, (unsigned short *)(void *)ctx,
 		    (unsigned short)*word8);
 		if (n < *word8) {
 			if (dsplibs_debug_level > 1)
@@ -1854,16 +1854,16 @@ _tx_data_state(struct fax_class1 *ctx, const short *rx, short *tx,
 	}
 
 	{
-		int rd = (short)FIFO_read(ctx->f1288,
-		    (unsigned short *)(void *)ctx, ctx->f1290);
+		int rd = (short)FIFO_read(ctx->tx_fifo,
+		    (unsigned short *)(void *)ctx, ctx->tx_bytes_per_block);
 
-		if (rd < ctx->f1290) {
+		if (rd < ctx->tx_bytes_per_block) {
 			if (dsplibs_debug_level > 1)
 				dsplibs_debug_printf(
 				    "At %2d.%02d[sec] fifo underrun in "
 				    "_tx_data_state, count %d < %d\n",
 				    ctx->clock_sec, ctx->clock_frac, rd,
-				    ctx->f1290);
+				    ctx->tx_bytes_per_block);
 		}
 		cnt = (short)rd;
 	}
@@ -1900,7 +1900,7 @@ _tx_data_state(struct fax_class1 *ctx, const short *rx, short *tx,
 			    ctx->clock_sec, ctx->clock_frac);
 	}
 
-	*word8 = ctx->f1288->size - ctx->f1288->count - 1;
+	*word8 = ctx->tx_fifo->size - ctx->tx_fifo->count - 1;
 	return 0;
 }
 
@@ -1916,11 +1916,11 @@ _tx_data_state(struct fax_class1 *ctx, const short *rx, short *tx,
  * since simplifying it would be editing the object's logic rather than its
  * expression.
  *
- * `ctx->f000` is cleared to 0, then `FAXVMI_process(ctx->vmi_a, ctx, rx,
+ * `ctx->scratch_frame_len` is cleared to 0, then `FAXVMI_process(ctx->vmi_a, ctx, rx,
  * &count, &result)` is driven with `result` seeded from `*rx_count` and
  * `count` seeded 0 -- so a nonzero `count` on return means the unpack step
  * really did write a length-prefixed record into `ctx` (element 0 is the
- * length, matching the SAME convention `ctx->f1000` uses for
+ * length, matching the SAME convention `ctx->superframe` uses for
  * `_hdlc_emulate_receive_state`).
  *
  * `FAXVMI_RESULT_BIT_2000` CLEAR: log ("No carrier in HDLC receive
@@ -1930,19 +1930,19 @@ _tx_data_state(struct fax_class1 *ctx, const short *rx, short *tx,
  * object's own `jmp` back into that test).
  *
  * BIT SET, `count == 0`: nothing more to do this call.
- * BIT SET, `count != 0`, `ctx->f000 == 0` (the length prefix, now the
+ * BIT SET, `count != 0`, `ctx->scratch_frame_len == 0` (the length prefix, now the
  * FIRST unpacked element): a framing/CRC ERROR -- log ("Receive buffer with
  * error in _hdlc_receive_state\n"), a delayed FAX_CLASS1_ERROR two calls
  * out, then join the OK arm's tail (state = HDLC_RECEIVE_BETWEEN_BUFFERS_
- * STATE) WITHOUT the `f12c0`/`f12c4` pointer chase below.
- * BIT SET, `count != 0`, `ctx->f000 != 0`: OK -- log ("Receive buffer OK in
+ * STATE) WITHOUT the `rx_agc_mult`/`rx_agc_shift` pointer chase below.
+ * BIT SET, `count != 0`, `ctx->scratch_frame_len != 0`: OK -- log ("Receive buffer OK in
  * _hdlc_receive_state\n"), `cTOOLS_handle_hdlc_output(ctx, ctx+2, word3,
- * ctx->f000, 1)` (the frame's own bytes, length-prefixed the same way
+ * ctx->scratch_frame_len, 1)` (the frame's own bytes, length-prefixed the same way
  * `_hdlc_emulate_receive_state`'s records are) whose count goes through
  * `word7`, a delayed FAX_CLASS1_OK two calls out, THEN the pointer chase:
  * `ctx->vmi_a->link->int_0014` (an untyped "active modem" handle per
  * `faxvmi.h`'s own note) to its own +0x50, and the sign-extended shorts at
- * +0x30/+0x32 of THAT into `ctx->f12c0`/`f12c4` -- V.21RX's internal layout
+ * +0x30/+0x32 of THAT into `ctx->rx_agc_mult`/`rx_agc_shift` -- V.21RX's internal layout
  * at those two offsets is out of this batch's scope, so this is raw offset
  * arithmetic, not a named struct access; evidence class 3.  Either way,
  * `ctx->state = CLASS1_HDLC_RECEIVE_BETWEEN_BUFFERS_STATE`.
@@ -1976,7 +1976,7 @@ _hdlc_receive_state(struct fax_class1 *ctx, const short *rx, short *tx,
 		ctx->status = FAX_CLASS1_CONNECT;
 
 	if (++ctx->countdown != 0) {
-		ctx->f000 = 0;
+		ctx->scratch_frame_len = 0;
 
 		status = FAXVMI_process(ctx->vmi_a,
 		    (unsigned short *)(void *)ctx, (short *)rx, &cnt, &result);
@@ -2025,8 +2025,8 @@ _hdlc_receive_state(struct fax_class1 *ctx, const short *rx, short *tx,
 
 				modem = (void *)(long)ctx->vmi_a->link->int_0014;
 				p = *(char **)((char *)modem + 0x50);
-				ctx->f12c0 = *(short *)(p + 0x30);
-				ctx->f12c4 = *(short *)(p + 0x32);
+				ctx->rx_agc_mult = *(short *)(p + 0x30);
+				ctx->rx_agc_shift = *(short *)(p + 0x32);
 			}
 			ctx->state = CLASS1_HDLC_RECEIVE_BETWEEN_BUFFERS_STATE;
 		}
@@ -2055,19 +2055,19 @@ _hdlc_receive_state(struct fax_class1 *ctx, const short *rx, short *tx,
 /*
  * HDLC_RECEIVE_BETWEEN_BUFFERS_STATE (6).  `.text` 0x0009dbc0, 566 bytes.
  *
- * `ctx->f000 = 0` unconditionally, BEFORE the call -- the SAME pre-clear
+ * `ctx->scratch_frame_len = 0` unconditionally, BEFORE the call -- the SAME pre-clear
  * `_hdlc_receive_state` does (a first integration pass read this as "NOT
  * pre-cleared here", which a fresh `dis.py` re-check does not support: see
  * this function's own code comment for the address).  Then
  * `FAXVMI_process(ctx->vmi_a, ctx, rx, &count, &result)`, `result` seeded
  * from `*rx_count`, `count` seeded 0.
  *
- * `count != 0`: this is the WRITER side of `ctx->f1000`'s length-prefixed
+ * `count != 0`: this is the WRITER side of `ctx->superframe`'s length-prefixed
  * record convention `_hdlc_emulate_receive_state` already reads --
- * append the just-unpacked record (length `ctx->f000`, elements from
- * `ctx+2`) to `ctx->f1000` at cursor `ctx->f12d0`, bounds-checked against
+ * append the just-unpacked record (length `ctx->scratch_frame_len`, elements from
+ * `ctx+2`) to `ctx->superframe` at cursor `ctx->superframe_len`, bounds-checked against
  * 0xff total bytes (the object's own limit; over it, log "SuperFrame full,
- * skipping HDLC frame!\n" -- the author's own name for `ctx->f1000`,
+ * skipping HDLC frame!\n" -- the author's own name for `ctx->superframe`,
  * `.rodata` evidence -- and drop the record without advancing the cursor).
  *
  * `FAXVMI_RESULT_BIT_2000` CLEAR: FAX_CLASS1_NO_CARRIER_NO_MESSAGE (8),
@@ -2076,7 +2076,7 @@ _hdlc_receive_state(struct fax_class1 *ctx, const short *rx, short *tx,
  *
  * `*word8 != 0`: log ("Missing HDLC frame of %d during command mode(%d
  * already in)!\n" -- printed EARLIER, gated on `count != 0` and debug > 1,
- * with `ctx->f000` and the PRE-append `ctx->f12d0` as its two `%d`s; kept
+ * with `ctx->scratch_frame_len` and the PRE-append `ctx->superframe_len` as its two `%d`s; kept
  * here as a plain debug line since it does not gate any behaviour), then
  * IDLE_STATE, `_idle_state_init`, a zero-length `cTOOLS_handle_hdlc_output`,
  * FAX_CLASS1_OK.
@@ -2107,7 +2107,7 @@ _hdlc_receive_between_buffers_state(struct fax_class1 *ctx, const short *rx,
 	(void)rx_count;
 
 	/*
-	 * `ctx->f000 = 0` unconditionally, BEFORE the call -- confirmed by a
+	 * `ctx->scratch_frame_len = 0` unconditionally, BEFORE the call -- confirmed by a
 	 * fresh `dis.py` re-check (`9dbea: movw $0x0,(%edi)`, %edi = ctx,
 	 * ahead of the `FAXVMI_process` setup).  A first integration pass
 	 * read this as "not pre-cleared here, unlike `_hdlc_receive_state`",
@@ -2116,14 +2116,14 @@ _hdlc_receive_between_buffers_state(struct fax_class1 *ctx, const short *rx,
 	 * ctx+0 where the object leaves zero), not assumed correct from a
 	 * first disassembly pass.
 	 */
-	ctx->f000 = 0;
+	ctx->scratch_frame_len = 0;
 
 	status = FAXVMI_process(ctx->vmi_a, (unsigned short *)(void *)ctx, (short *)rx,
 				&cnt, &result);
 
 	if (cnt != 0) {
 		unsigned short len = *(unsigned short *)(void *)ctx;
-		int new_len = ctx->f12d0 + len + 1;
+		int new_len = ctx->superframe_len + len + 1;
 
 		/*
 		 * Printed whenever `cnt != 0`, BEFORE the bounds check below
@@ -2139,7 +2139,7 @@ _hdlc_receive_between_buffers_state(struct fax_class1 *ctx, const short *rx,
 			    "%2d.%02d[sec] Missing HDLC frame of "
 			    "%d during command mode(%d already in)!\n",
 			    ctx->clock_sec, ctx->clock_frac, len,
-			    ctx->f12d0);
+			    ctx->superframe_len);
 
 		if (new_len > 0xff) {
 			if (dsplibs_debug_level > 1)
@@ -2147,7 +2147,7 @@ _hdlc_receive_between_buffers_state(struct fax_class1 *ctx, const short *rx,
 				    "SuperFrame full, skipping HDLC "
 				    "frame!\n");
 		} else {
-			unsigned short *sf = ctx->f1000 + ctx->f12d0;
+			unsigned short *sf = ctx->superframe + ctx->superframe_len;
 			unsigned short *src = (unsigned short *)(void *)ctx
 					     + 1;
 			int i;
@@ -2155,7 +2155,7 @@ _hdlc_receive_between_buffers_state(struct fax_class1 *ctx, const short *rx,
 			*sf = len;
 			for (i = 0; i < len; i++)
 				sf[1 + i] = src[i];
-			ctx->f12d0 += len + 1;
+			ctx->superframe_len += len + 1;
 		}
 	}
 
@@ -2216,14 +2216,14 @@ static const unsigned short HDLC_LOOK_CARRIER_LEVELS[4] = {
  * carrier\n"), FAX_CLASS1_NO_CARRIER, IDLE_STATE, `ctx->cng_enabled = 0`
  * (redundant, already 0); either way fall to the tone-cadence tail.
  *
- * THE TONE-CADENCE TAIL (see class1.h for `f125c`/`f1260`/`cng_enabled`).
+ * THE TONE-CADENCE TAIL (see class1.h for `tone_cadence_phase`/`tone_cadence_timer`/`cng_enabled`).
  *   `cng_enabled == 0`: plain `_put_silence(tx, CLASS1_BLOCK_SAMPLES)`.
- *   `cng_enabled != 0`, `f125c == 0` (silence phase): `_put_silence`, then
- *     accumulate `f1260 += CLASS1_BLOCK_SAMPLES`; once it exceeds 0x5dc0
- *     (24000), reset `f1260 = 0` and flip `f125c = 1`.
- *   `cng_enabled != 0`, `f125c != 0` (tone phase): `FPM_TONE_generate(ctx->f1258,
+ *   `cng_enabled != 0`, `tone_cadence_phase == 0` (silence phase): `_put_silence`, then
+ *     accumulate `tone_cadence_timer += CLASS1_BLOCK_SAMPLES`; once it exceeds 0x5dc0
+ *     (24000), reset `tone_cadence_timer = 0` and flip `tone_cadence_phase = 1`.
+ *   `cng_enabled != 0`, `tone_cadence_phase != 0` (tone phase): `FPM_TONE_generate(ctx->tone,
  *     tx, CLASS1_BLOCK_SAMPLES)` instead of silence, then accumulate
- *     `f1260` the same way against 0xfa0 (4000), flipping `f125c` back to 0
+ *     `tone_cadence_timer` the same way against 0xfa0 (4000), flipping `tone_cadence_phase` back to 0
  *     on overflow.  Either phase sets `*tx_count = CLASS1_BLOCK_SAMPLES`.
  *
  * `FAXVMI_RESULT_BIT_2000` SET (checked separately, right after the
@@ -2236,7 +2236,7 @@ static const unsigned short HDLC_LOOK_CARRIER_LEVELS[4] = {
  * against `HDLC_LOOK_CARRIER_LEVELS[i]` -- the FIRST index `i` (0..3) where
  * the chased value is LESS than the table entry stops the scan; ELSE (no
  * match in 4 tries) the scan is abandoned silently and this whole "CONNECT"
- * arm is skipped.  On a match: `ctx->f12d8 = 12 - 3*i` (the object's own
+ * arm is skipped.  On a match: `ctx->gain_attenuation_db = 12 - 3*i` (the object's own
  * countdown, ecx, of 12/9/6/3/0) is stored (an ALREADY-established field,
  * `fax_class1_info(0)`'s own; this is a SECOND writer, evidence class 3 --
  * see class1.h's existing note on it), logged ("Gain Attenuation Reuqest:
@@ -2320,7 +2320,7 @@ _hdlc_receive_look_carrier_state(struct fax_class1 *ctx, const short *rx,
 		/*
 		 * THE SCAN.  Re-chased every iteration (the object re-reads
 		 * the whole pointer chain each pass rather than hoisting
-		 * it).  A match stores `f12d8` and logs; running out of
+		 * it).  A match stores `gain_attenuation_db` and logs; running out of
 		 * table entries (4 tries) abandons the scan silently -- either
 		 * way execution falls through to the tone-cadence tail below.
 		 */
@@ -2332,12 +2332,12 @@ _hdlc_receive_look_carrier_state(struct fax_class1 *ctx, const short *rx,
 			v = *(short *)(p + 0x2c);
 
 			if (v < (short)HDLC_LOOK_CARRIER_LEVELS[i]) {
-				ctx->f12d8 = 12 - 3 * i;
+				ctx->gain_attenuation_db = 12 - 3 * i;
 				if (dsplibs_debug_level > 1)
 					dsplibs_debug_printf(
 					    "Gain Attenuation Reuqest: "
 					    "+%d[dB], avg_rms = %d",
-					    ctx->f12d8, (int)(signed char)v);
+					    ctx->gain_attenuation_db, (int)(signed char)v);
 				break;
 			}
 		}
@@ -2357,19 +2357,19 @@ _hdlc_receive_look_carrier_state(struct fax_class1 *ctx, const short *rx,
 
 	if (ctx->cng_enabled == 0) {
 		_put_silence(tx, CLASS1_BLOCK_SAMPLES);
-	} else if (ctx->f125c == 0) {
+	} else if (ctx->tone_cadence_phase == 0) {
 		_put_silence(tx, CLASS1_BLOCK_SAMPLES);
-		ctx->f1260 += CLASS1_BLOCK_SAMPLES;
-		if (ctx->f1260 > 0x5dc0) {
-			ctx->f1260 = 0;
-			ctx->f125c = 1;
+		ctx->tone_cadence_timer += CLASS1_BLOCK_SAMPLES;
+		if (ctx->tone_cadence_timer > 0x5dc0) {
+			ctx->tone_cadence_timer = 0;
+			ctx->tone_cadence_phase = 1;
 		}
 	} else {
-		FPM_TONE_generate(ctx->f1258, tx, CLASS1_BLOCK_SAMPLES);
-		ctx->f1260 += CLASS1_BLOCK_SAMPLES;
-		if (ctx->f1260 > 0xfa0) {
-			ctx->f1260 = 0;
-			ctx->f125c = 0;
+		FPM_TONE_generate(ctx->tone, tx, CLASS1_BLOCK_SAMPLES);
+		ctx->tone_cadence_timer += CLASS1_BLOCK_SAMPLES;
+		if (ctx->tone_cadence_timer > 0xfa0) {
+			ctx->tone_cadence_timer = 0;
+			ctx->tone_cadence_phase = 0;
 		}
 	}
 	*tx_count = CLASS1_BLOCK_SAMPLES;
@@ -2396,13 +2396,13 @@ _hdlc_receive_look_carrier_state(struct fax_class1 *ctx, const short *rx,
 /*
  * TX_SCRAMBLED_ONES_STATE (9).  `.text` 0x0009d200, 681 bytes.
  *
- * THE CRASH THAT BLOCKED THIS FUNCTION WAS `ctx->f1290`'S WIDTH, NOT
+ * THE CRASH THAT BLOCKED THIS FUNCTION WAS `ctx->tx_bytes_per_block`'S WIDTH, NOT
  * ANYTHING HERE (finding in this batch's own entry).  `ref__tx_scrambled_
- * ones_state`'s own fill loop reads `ctx->f1290` with a plain 32-bit `mov`
+ * ones_state`'s own fill loop reads `ctx->tx_bytes_per_block` with a plain 32-bit `mov`
  * (0x9d200+0xa0) and uses the whole register as a loop bound; modelled as
  * `unsigned short` plus two bytes of `pad_1292`, a test's random fill of
  * those two "pad" bytes turned the bound into a value near 2^29 and walked
- * the write loop off the end of the struct.  `class1.h`'s `f1290` is now a
+ * the write loop off the end of the struct.  `class1.h`'s `tx_bytes_per_block` is now a
  * full `int` (matching a second, independent access in `_tx_nulls_state` at
  * the same offset -- see that field's own comment) and the crash is gone;
  * this function itself was correctly decoded from the start.
@@ -2411,23 +2411,23 @@ _hdlc_receive_look_carrier_state(struct fax_class1 *ctx, const short *rx,
  * `ctx->status = FAX_CLASS1_CONNECT` on the session's very first call into
  * this pair.
  *
- * `ctx->f1270` is a one-shot countdown, decremented once per call while
+ * `ctx->tx_connect_countdown` is a one-shot countdown, decremented once per call while
  * positive; reaching exactly 0 fires "At %2d.%02d[sec] ENABLE_TRANSMIT in
  * _tx_scrambled_ones_state\n" and sets `ctx->transmit_enabled = 1`.
  *
  * `*word8 > 0` unstuffs `word4` through `_handle_data_input` into `ctx`
  * (the shared scratch-buffer idiom), then `FIFO_write`s the result into
- * `ctx->f1288`, logging a shortfall ("Fifo is full in
- * _tx_scrambled_ones_state").  `ctx->f1298` is then recomputed: 1 when
- * `ctx->f1288->count >= ctx->f1290` (the FIFO already holds a whole read's
+ * `ctx->tx_fifo`, logging a shortfall ("Fifo is full in
+ * _tx_scrambled_ones_state").  `ctx->tx_fifo_ready` is then recomputed: 1 when
+ * `ctx->tx_fifo->count >= ctx->tx_bytes_per_block` (the FIFO already holds a whole read's
  * worth), else 0 -- but ONLY inside this `*word8 > 0` block; on a call
- * where it does not run, `f1298` is left at whatever the last call set.
+ * where it does not run, `tx_fifo_ready` is left at whatever the last call set.
  *
- * `ctx->f1290` elements of `ctx` are then filled with the literal `0xff`
+ * `ctx->tx_bytes_per_block` elements of `ctx` are then filled with the literal `0xff`
  * (the "scrambled ones" this state's name promises) UNCONDITIONALLY, and
  * `*word8` is set to that same count.
  *
- * If `ctx->transmit_enabled != 0 && ctx->f1298 != 0`: `ctx->state` becomes
+ * If `ctx->transmit_enabled != 0 && ctx->tx_fifo_ready != 0`: `ctx->state` becomes
  * `CLASS1_TX_DATA_STATE`, and the 0xFF filler is immediately overwritten by
  * a REAL `FIFO_read` into the same buffer -- `*word8` becomes that read's
  * return, logging an underrun ("class1 object fifo under run in
@@ -2437,7 +2437,7 @@ _hdlc_receive_look_carrier_state(struct fax_class1 *ctx, const short *rx,
  * THAT POINT -- the fill count or the FIFO_read's return, whichever path
  * ran -- read directly off the object's own `mov %ax,0x22(%esp)` at
  * 0x9d2e7, which is fed by whatever is still in `%eax` from the join above
- * it (NOT a fresh reload of `ctx->f1290`, which an earlier draft of this
+ * it (NOT a fresh reload of `ctx->tx_bytes_per_block`, which an earlier draft of this
  * function assumed).  `result` is seeded from `*tx_count` (`mov
  * 0x48(%esp),%ecx; mov (%ecx),%edx; mov %dx,0x20(%esp)`, 0x9d2ec-0x9d2fe),
  * the same convention `_tx_data_state` already uses -- NOT a literal 0, an
@@ -2445,11 +2445,11 @@ _hdlc_receive_look_carrier_state(struct fax_class1 *ctx, const short *rx,
  *
  * A NEW RAW BIT: `test $0x1,%ah` on `FAXVMI_process`'s raw return, i.e. bit
  * 0x100 -- DIFFERENT from `FAXVMI_RESULT_BIT_2000` this wave's HDLC-side
- * functions use.  SET (and `ctx->f1294 == 0`) fires "At %2d.%02d[sec] Tx
- * connect\n", arms `ctx->f1270 = 2`, and latches `ctx->f1294 = 1` so the
+ * functions use.  SET (and `ctx->tx_connect_latch == 0`) fires "At %2d.%02d[sec] Tx
+ * connect\n", arms `ctx->tx_connect_countdown = 2`, and latches `ctx->tx_connect_latch = 1` so the
  * bit is never re-tested once caught.
  *
- * Tail, unconditional: `*word8 = ctx->f1288->size - ctx->f1288->count - 1`
+ * Tail, unconditional: `*word8 = ctx->tx_fifo->size - ctx->tx_fifo->count - 1`
  * -- the same free-room-minus-one formula `_tx_nulls_state`/`_tx_data_state`
  * end with.
  *
@@ -2483,9 +2483,9 @@ _tx_scrambled_ones_state(struct fax_class1 *ctx, const short *rx, short *tx,
 	if (DATAtx_counter == 1)
 		ctx->status = FAX_CLASS1_CONNECT;
 
-	if (ctx->f1270 > 0) {
-		ctx->f1270--;
-		if (ctx->f1270 == 0) {
+	if (ctx->tx_connect_countdown > 0) {
+		ctx->tx_connect_countdown--;
+		if (ctx->tx_connect_countdown == 0) {
 			if (dsplibs_debug_level > 1)
 				dsplibs_debug_printf(
 				    "At %2d.%02d[sec] ENABLE_TRANSMIT in "
@@ -2501,7 +2501,7 @@ _tx_scrambled_ones_state(struct fax_class1 *ctx, const short *rx, short *tx,
 		_handle_data_input(ctx, (const unsigned char *)(long)word4,
 		    (unsigned short *)(void *)ctx, word8);
 
-		n = (unsigned short)FIFO_write(ctx->f1288,
+		n = (unsigned short)FIFO_write(ctx->tx_fifo,
 		    (unsigned short *)(void *)ctx, (unsigned short)*word8);
 		if (*word8 > n) {
 			if (dsplibs_debug_level > 1)
@@ -2511,22 +2511,22 @@ _tx_scrambled_ones_state(struct fax_class1 *ctx, const short *rx, short *tx,
 				    ctx->clock_sec, ctx->clock_frac);
 		}
 
-		ctx->f1298 = (ctx->f1288->count >= (unsigned)ctx->f1290) ? 1
+		ctx->tx_fifo_ready = (ctx->tx_fifo->count >= (unsigned)ctx->tx_bytes_per_block) ? 1
 									  : 0;
 	}
 
-	for (i = 0; i < ctx->f1290; i++)
+	for (i = 0; i < ctx->tx_bytes_per_block; i++)
 		((unsigned short *)(void *)ctx)[i] = 0xff;
-	*word8 = ctx->f1290;
+	*word8 = ctx->tx_bytes_per_block;
 
-	if (ctx->transmit_enabled != 0 && ctx->f1298 != 0) {
+	if (ctx->transmit_enabled != 0 && ctx->tx_fifo_ready != 0) {
 		int rd;
 
 		ctx->state = CLASS1_TX_DATA_STATE;
-		rd = FIFO_read(ctx->f1288, (unsigned short *)(void *)ctx,
-		    (unsigned short)ctx->f1290);
+		rd = FIFO_read(ctx->tx_fifo, (unsigned short *)(void *)ctx,
+		    (unsigned short)ctx->tx_bytes_per_block);
 		*word8 = rd;
-		if (rd < ctx->f1290) {
+		if (rd < ctx->tx_bytes_per_block) {
 			if (dsplibs_debug_level > 1)
 				dsplibs_debug_printf(
 				    "class1 object fifo under run in "
@@ -2538,17 +2538,17 @@ _tx_scrambled_ones_state(struct fax_class1 *ctx, const short *rx, short *tx,
 	status = FAXVMI_process(ctx->vmi_b, (unsigned short *)(void *)ctx, tx,
 	    &cnt, &result);
 
-	if (ctx->f1294 == 0 && (status & FAXVMI_PROCESS_BIT_0100) != 0) {
+	if (ctx->tx_connect_latch == 0 && (status & FAXVMI_PROCESS_BIT_0100) != 0) {
 		if (dsplibs_debug_level > 1)
 			dsplibs_debug_printf(
 			    "At %2d.%02d[sec] Tx connect\n",
 			    ctx->clock_sec, ctx->clock_frac);
-		ctx->f1270 = 2;
-		ctx->f1294 = 1;
+		ctx->tx_connect_countdown = 2;
+		ctx->tx_connect_latch = 1;
 	}
 
-	*word8 = (int)(unsigned short)ctx->f1288->size
-	       - (int)(unsigned short)ctx->f1288->count - 1;
+	*word8 = (int)(unsigned short)ctx->tx_fifo->size
+	       - (int)(unsigned short)ctx->tx_fifo->count - 1;
 	return 0;
 }
 
@@ -2714,7 +2714,7 @@ _t30_preabmle_state(struct fax_class1 *ctx, const short *rx, short *tx,
  * `ctx->countdown == 2` is a ONE-TIME LATCH (only true on the third call
  * after `_send_hdlc_between_buffer_state_init` zeroes it, since this
  * function increments it by exactly one per call and nothing else here
- * writes it): `ctx->f1224 == 1` (the frame-end latch) -> log ("Idle
+ * writes it): `ctx->frame_end_latch == 1` -> log ("Idle
  * state\n"), OK_NO_CARRIER, IDLE_STATE, `_idle_state_init`; otherwise ->
  * `ctx->status = FAX_CLASS1_CONNECT`.  Either way, falls through into the
  * body below on the SAME call.
@@ -2757,7 +2757,7 @@ _send_hdlc_between_buffer_state(struct fax_class1 *ctx, const short *rx,
 	*tx_count = CLASS1_BLOCK_SAMPLES;
 
 	if (ctx->countdown == 2) {
-		if (ctx->f1224 == 1) {
+		if (ctx->frame_end_latch == 1) {
 			if (dsplibs_debug_level > 1)
 				dsplibs_debug_printf(
 				    "%2d.%02d[sec] Idle state\n",

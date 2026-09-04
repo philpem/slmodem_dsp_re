@@ -2,12 +2,12 @@
  * t_class1hdlcemu.c -- differential test of `_hdlc_emulate_receive_state`.
  *
  * `.text` 0x09e1b0, 452 bytes -- HDLC_EMULATE_RECEIVE_STATE, state 7.  It
- * replays length-prefixed records out of `ctx->f1000` (class1.h) one per
- * call, gated by the between-record countdown `f12c8`.  The fixture builds a
- * VALID run of records in `f1000` -- never more than `CLASS1_EMU_MAX_FRAMES`
+ * replays length-prefixed records out of `ctx->superframe` (class1.h) one per
+ * call, gated by the between-record countdown `superframe_countdown`.  The fixture builds a
+ * VALID run of records in `superframe` -- never more than `CLASS1_EMU_MAX_FRAMES`
  * of them, matching the object's own unguarded stack table (class1.h's own
- * comment on that constant) -- and sweeps `f12cc` (which record is next),
- * `f12c8` (whether the countdown has expired) and `prev_state` (first tick
+ * comment on that constant) -- and sweeps `superframe_read_idx` (which record is next),
+ * `superframe_countdown` (whether the countdown has expired) and `prev_state` (first tick
  * into this state or a continuation) across every combination the function's
  * control flow distinguishes.
  *
@@ -61,9 +61,9 @@ static short rx_dummy[8];
 static int rxc_a, rxc_b, txc_a, txc_b, w7_a, w7_b, w8_a, w8_b;
 
 /*
- * Build `nrec` valid records into `ctx->f1000`: a random length of 0..5
+ * Build `nrec` valid records into `ctx->superframe`: a random length of 0..5
  * bytes, then that many random content bytes.  Returns the total byte count
- * used -- the value `f12d0` must be set to for the parse loop to find
+ * used -- the value `superframe_len` must be set to for the parse loop to find
  * exactly `nrec` records.
  */
 static int
@@ -76,9 +76,9 @@ build_records(struct fax_class1 *ctx, int nrec)
 		int len = (int)(rnd() % 6);
 		int k;
 
-		ctx->f1000[idx] = (unsigned short)len;
+		ctx->superframe[idx] = (unsigned short)len;
 		for (k = 0; k < len; k++)
-			ctx->f1000[idx + 1 + k] =
+			ctx->superframe[idx + 1 + k] =
 			    (unsigned short)(rnd() & 0xff);
 		idx += len + 1;
 	}
@@ -94,9 +94,9 @@ plant(int nrec, int next, int old_f12c8, int prev_state)
 	total = build_records(&ctx_a, nrec);
 	memcpy(&ctx_b, &ctx_a, sizeof(ctx_a));
 
-	ctx_a.f12d0 = ctx_b.f12d0 = total;
-	ctx_a.f12cc = ctx_b.f12cc = next;
-	ctx_a.f12c8 = ctx_b.f12c8 = old_f12c8;
+	ctx_a.superframe_len = ctx_b.superframe_len = total;
+	ctx_a.superframe_read_idx = ctx_b.superframe_read_idx = next;
+	ctx_a.superframe_countdown = ctx_b.superframe_countdown = old_f12c8;
 	ctx_a.prev_state = ctx_b.prev_state = prev_state;
 	ctx_a.state = ctx_b.state = CLASS1_HDLC_EMULATE_RECEIVE_STATE;
 	ctx_a.status = ctx_b.status = FAX_CLASS1_NO_MESSAGE;
@@ -191,7 +191,7 @@ run(void)
 			saw_idle_no_carrier++;
 		if (w7_a != (int)0x12344321)
 			saw_emit++;
-		if (ctx_a.f12d0 == 0 && ctx_a.f12c8 == 2 && ctx_a.f12cc == 0)
+		if (ctx_a.superframe_len == 0 && ctx_a.superframe_countdown == 2 && ctx_a.superframe_read_idx == 0)
 			saw_reset++;
 		else
 			saw_no_reset++;

@@ -109,12 +109,13 @@ using two additional evidence-gathering methods the user asked for:
   which fields were resolved via the standard vs. pure code-reading, so this
   evidence class stays traceable the same way the other three already are.
 
-| agent | scope |
-|---|---|
-| Fax cluster | `class1.h`/`class1tx.{c,h}`/`class1.c`/`faxvmi.h`/`fax.h`/`v17fax.h`/`v17.c` |
-| V.8 cluster | `v8.h`/`v8hs.c`/`v8hsrx.c`/`v8util.c`/`v8handshak.c`/`v8sig.c`/`v8proc.c`/`v8jm.c` |
-| V.90 CP/Demod/ConnEval, second pass | Same three classes as wave 1's first agent, focused on what wave 1 left unnamed |
-| V.34 receive, second pass | `v34recv.h`/`v34rx.c`, focused on what wave 1 left bare/padded |
+| agent | scope | status |
+|---|---|---|
+| Fax cluster | `class1.h`/`class1tx.{c,h}`/`class1.c`/`faxvmi.h`/`fax.h`/`v17fax.h`/`v17.c` | done |
+| V.8 cluster | `v8.h`/`v8hs.c`/`v8hsrx.c`/`v8util.c`/`v8handshak.c`/`v8sig.c`/`v8proc.c`/`v8jm.c` | done, merging |
+| V.90 CP/Demod/ConnEval, second pass | Same three classes as wave 1's first agent, focused on what wave 1 left unnamed | done, merging |
+| V.34 receive, second pass | `v34recv.h`/`v34rx.c`, focused on what wave 1 left bare/padded | merged |
+| Fax cluster | `class1.h`/`class1tx.{c,h}`/`class1.c`, `faxvmi.h`/`fax.h`/`v17fax.h`/`v17.c` reviewed | merged |
 
 ### Results, V.34 receive second pass
 
@@ -133,4 +134,31 @@ comment fixed. `make one` across the touched suites, `onedef.py`,
 `byteident.py --ratchet` need docker, unavailable in this sandbox, left for
 the parent's gate.
 
-Other three agents: results pending.
+### Fax cluster results (F10133)
+
+23 bare `fNNNN` fields in `struct fax_class1` promoted to real names -- 3 on
+a format string, 3 on a typed caller/callee (including one struct-tiling
+correction that WITHDRAWS a same-session "baud rate or frequency" guess at
+`f12c0`/`f12c4`, actually the V.21 receiver's own AGC `mult`/`shift` gain
+state), 17 on unambiguous usage inference. One two-valued discriminant
+(`f1244` -> `modem_direction`) got named constants
+(`CLASS1_MODEM_DIR_RX`/`_TX`) rather than a bit-flag treatment, since it is
+not a bit. Two fields (`f1230`/`f1234`, `f127c`) were read closely and left
+bare for want of any evidence past "written once, read by nothing
+reconstructed". `faxvmi.h`, `fax.h` and `v17fax.h`/`v17.c` were read in full
+and left untouched -- every remaining `pad_NNNN`/`type_NNNN` there already
+carries an explicit same-session derivation for staying neutral, including
+one ITU-T cross-reference (V.17's short-training option, `V17TXP_INT_000C`)
+already tried and declined. The rename propagated to `src/fax/class1rx.c`
+and nineteen `test/unit/t_class1*.c`/`t_faxcreate.c` files outside the
+nominal scope, since `struct fax_class1` is shared and a partial rename does
+not compile -- found by `grep -rln "struct fax_class1\b"` rather than
+guessed, and checked afterward for the reverse mistake (an unrelated
+`struct dtmf_rx::f000` sharing the bare spelling, correctly left alone).
+`onedef.py`/`refcheck.py`/`bannercheck.py` clean; 35 `make one` test
+binaries covering class1/faxvmi/v17 green, no check count regressed. See
+finding F10133 for the full per-field evidence (renumbered from its
+branch's own F10132 at merge -- collided with the V.34 receive pass's own
+F10132, same finding-number-collision pattern as every prior wave).
+
+V.8 cluster and V.90 second pass: results pending merge.

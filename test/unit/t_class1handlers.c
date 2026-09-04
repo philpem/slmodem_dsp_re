@@ -13,7 +13,7 @@
  * than a silent memory corruption.
  *
  * EVERY FIELD USED AS A SUBSCRIPT IS PLANTED (F8587/D955).  The only one is
- * `f1250`, `_handle_hdlc_input`'s write cursor, which the object takes
+ * `hdlc_write_cursor`, `_handle_hdlc_input`'s write cursor, which the object takes
  * straight out of the session and indexes `dst` with -- a random fill would
  * make both sides write to the same address megabytes away and agree.
  *
@@ -224,7 +224,7 @@ run_hdlc_input(void)
 
 		ctx_plant();
 		ctx_a.dle_seen = ctx_b.dle_seen = (int)(p & 1);
-		ctx_a.f1250 = ctx_b.f1250 = cursor;
+		ctx_a.hdlc_write_cursor = ctx_b.hdlc_write_cursor = cursor;
 		ctx_a.flags004 = ctx_b.flags004 = (unsigned char)
 		    ((p & 4) ? CLASS1_FLAG_FRAME_END_LATCH : 0);
 		memset(dst_a, 0x5a, sizeof(dst_a));

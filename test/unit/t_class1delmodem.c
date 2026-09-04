@@ -167,7 +167,7 @@ run_tx_case(const char *name, init_tx_fn init, init_tx_fn ref_init,
 	ctx_a.modem_vmi = sysdep_malloc(sizeof(struct faxvmi_cfg));
 	init(ctx_a.modem_vmi, bit_rate, 0x1234, &marker);
 	ctx_a.vmi_b = make_handle();
-	ctx_a.f1288 = with_fifo ? FIFO_create(NULL, NULL) : NULL;
+	ctx_a.tx_fifo = with_fifo ? FIFO_create(NULL, NULL) : NULL;
 	_delete_data_tx_modem(&ctx_a);
 	diff_eq_int("frees, ours (%ld)", harness_alloc.frees, expect_frees,
 		    tag);
@@ -176,13 +176,13 @@ run_tx_case(const char *name, init_tx_fn init, init_tx_fn ref_init,
 	diff_eq_int("modem_vmi cleared, ours (%ld)",
 		    ctx_a.modem_vmi == NULL, 1, tag);
 	diff_eq_int("vmi_b cleared, ours (%ld)", ctx_a.vmi_b == NULL, 1, tag);
-	diff_eq_int("f1288 cleared, ours (%ld)", ctx_a.f1288 == NULL, 1, tag);
+	diff_eq_int("tx_fifo cleared, ours (%ld)", ctx_a.tx_fifo == NULL, 1, tag);
 
 	harness_alloc_reset();
 	ctx_b.modem_vmi = sysdep_malloc(sizeof(struct faxvmi_cfg));
 	ref_init(ctx_b.modem_vmi, bit_rate, 0x1234, &marker);
 	ctx_b.vmi_b = make_handle();
-	ctx_b.f1288 = with_fifo ? ref_FIFO_create(NULL, NULL) : NULL;
+	ctx_b.tx_fifo = with_fifo ? ref_FIFO_create(NULL, NULL) : NULL;
 	ref__delete_data_tx_modem(&ctx_b);
 	diff_eq_int("frees, blob (%ld)", harness_alloc.frees, expect_frees,
 		    tag);
@@ -191,7 +191,7 @@ run_tx_case(const char *name, init_tx_fn init, init_tx_fn ref_init,
 	diff_eq_int("modem_vmi cleared, blob (%ld)",
 		    ctx_b.modem_vmi == NULL, 1, tag);
 	diff_eq_int("vmi_b cleared, blob (%ld)", ctx_b.vmi_b == NULL, 1, tag);
-	diff_eq_int("f1288 cleared, blob (%ld)", ctx_b.f1288 == NULL, 1, tag);
+	diff_eq_int("tx_fifo cleared, blob (%ld)", ctx_b.tx_fifo == NULL, 1, tag);
 
 	(void)name;
 }
