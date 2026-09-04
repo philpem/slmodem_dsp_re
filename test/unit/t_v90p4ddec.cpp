@@ -1649,7 +1649,7 @@ run_p4d_reset(void)
  *   - `inPhase3`, swept over 0, 1, 2, 5 and 0xffffffff.  ONE of those five
  *     does the work.  Testing it as `!= 0` instead of `== 1` is a live
  *     mutation because `enterChannelVerification` leaves the object at 5.
- *   - `phase3Demodulator->word_30`, 0x14 or not, which is the phase 4 entry.
+ *   - `phase3Demodulator->eventCode`, 0x14 or not, which is the phase 4 entry.
  *     `exitDIL` is what sets it to 0x14 in the field, so the sweep drives the
  *     modulator's state into and away from the terminating arm as well as
  *     planting the word directly.
@@ -1715,7 +1715,7 @@ static unsigned char x3_cmp[2][X3_DEM_SLOT];
  * with the trial, so a memcmp across trials differs whatever the function did.
  * Five stores always land on the late path and none on the early one, so the
  * before/after of THIS object is the discriminator and the demodulator's own
- * bytes are not (with `word_30 != 0x14` and the design failing, `exitPhase3`
+ * bytes are not (with `eventCode != 0x14` and the design failing, `exitPhase3`
  * can leave every field of `V90Demodulator` exactly as it found it).
  */
 static unsigned char x3_acp_pre[X3_ACP_SLOT];
@@ -1972,12 +1972,12 @@ run_exit_phase3(void)
 
 			X3_P3D(s)->autoDigitalImpDetector = ADI;
 			X3_P3D(s)->params = PARAMS;
-			X3_P3D(s)->word_30 = w30 ? 0x14u
+			X3_P3D(s)->eventCode = w30 ? 0x14u
 						 : (0x30u + (unsigned)trial);
 			/*
 			 * `exitDIL` runs the modulator's own exit only from
 			 * seven states, and the terminating arm is what puts
-			 * 0x14 into `word_30` in the field.  Both are driven:
+			 * 0x14 into `eventCode` in the field.  Both are driven:
 			 * the state moves with the trial and the word is
 			 * planted on top of whatever `exitDIL` leaves.
 			 */

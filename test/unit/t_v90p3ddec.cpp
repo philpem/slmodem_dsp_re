@@ -35,7 +35,7 @@
  * them is a sweep too long to run.  Setting them to 3, 5, 7 ... and sweeping
  * `word_2c` across 0..30 reaches every one of them, and the four hard-coded
  * timeouts -- 0x30, 0x180, 0x300, 0x7cf, 0x7f8, 0x9c40, and the two that are
- * `word_14` plus a float constant -- are reached by naming them directly.
+ * `timeoutBase` plus a float constant -- are reached by naming them directly.
  */
 
 #include <string.h>
@@ -590,24 +590,24 @@ dirty(int side, int trial, int st, unsigned int word2c)
 
 	o->state = (Phase3DemodulatorState)st;
 	o->word_2c = word2c;
-	o->word_04 = (unsigned int)(trial % 6);
+	o->framePosition = (unsigned int)(trial % 6);
 	o->byte_3f9 = (unsigned char)(trial & 1);
 	o->short_400 = (short)((trial >> 1) & 1);
-	o->word_410 = (unsigned int)((trial >> 2) & 1);
+	o->quickConnect = (unsigned int)((trial >> 2) & 1);
 	o->word_3fc = 14;
 	/*
 	 * 0, 3, 6, 9, 12, 15, 18, 21 over the eight trials, which straddles
-	 * the `word_404 > 0xb` test in state 9 and lands exactly on 12 so that
+	 * the `jdNotRunLength > 0xb` test in state 9 and lands exactly on 12 so that
 	 * a bound of 0xc rather than 0xb is a different answer.
 	 */
-	o->word_404 = w404_v[trial & 7];
+	o->jdNotRunLength = w404_v[trial & 7];
 	o->word_408 = (unsigned int)(trial % 3);
 	/*
 	 * NON-ZERO, so that a state which forgets to clear the event code is a
 	 * different object afterwards.  The default block's only statement is
 	 * that clear.
 	 */
-	o->word_30 = (unsigned int)(0x5a + trial);
+	o->eventCode = (unsigned int)(0x5a + trial);
 	/*
 	 * 0, 5, 10, 2, 7, 12, 4, 9 -- reaches both the 10 the recovery flag
 	 * arms on and the 0 it disarms on, and `reset` has just zeroed this.
@@ -795,7 +795,7 @@ run_free(void)
 
 /*
  * State 9's JdNot arm, driven on purpose.  Reaching it needs three things at
- * once -- a descrambled symbol of zero, `word_404` past its bound, and
+ * once -- a descrambled symbol of zero, `jdNotRunLength` past its bound, and
  * `word_2c` at 12 modulo 72 -- and the first of those is whatever the
  * descrambler happens to produce, so the sweep above reaches it only by luck.
  * This walks the grid instead, and it is what tests the two states the arm
@@ -824,8 +824,8 @@ run_jdnot(void)
 				dsplib_debug_capture_reset();
 				dirty(0, trial, 9, w2c_v[w]);
 				dirty(1, trial, 9, w2c_v[w]);
-				slot[0].o.word_404 = cnt_v[c];
-				slot[1].o.word_404 = cnt_v[c];
+				slot[0].o.jdNotRunLength = cnt_v[c];
+				slot[1].o.jdNotRunLength = cnt_v[c];
 
 				for (k = 0; k < NSAMP; k++) {
 					float x = samples[(w + k) % NSAMP];
@@ -898,9 +898,9 @@ run_p3d_leaves(void)
 
 				/* The frame position under test, both sides. */
 				for (side = 0; side < 2; side++) {
-					slot[side].o.word_04 =
+					slot[side].o.framePosition =
 					    (unsigned int)st;
-					slot[side].o.word_404 = 7u + (unsigned)w;
+					slot[side].o.jdNotRunLength = 7u + (unsigned)w;
 					parm[side].unnamed_440 =
 					    3.5f + (float)trial;
 					parm[side].
@@ -913,7 +913,7 @@ run_p3d_leaves(void)
 				slot[0].o.resetJdNotDetector();
 				ref_p3d_resetJdNotDetector(&slot[1].o);
 				compare_all("after resetJdNotDetector", tag);
-				if (slot[1].o.word_404 == 0)
+				if (slot[1].o.jdNotRunLength == 0)
 					sawcleared++;
 
 				slot[0].o.setAltRbsParams();
@@ -943,9 +943,9 @@ run_p3d_leaves(void)
 				ref_p3d_incrementFramePosition(&slot[1].o);
 				compare_all("after incrementFramePosition", tag);
 				if (st == 5) {
-					if (slot[1].o.word_04 == 0)
+					if (slot[1].o.framePosition == 0)
 						sawwrap++;
-				} else if (slot[1].o.word_04 ==
+				} else if (slot[1].o.framePosition ==
 					   (unsigned int)st + 1u) {
 					sawstep++;
 				}
@@ -1166,7 +1166,7 @@ run_p3d_jdnotdetector(void)
 				dirty(1, trial, 9, w2c_v[w]);
 
 				for (side = 0; side < 2; side++) {
-					slot[side].o.word_404 = w404_v[c];
+					slot[side].o.jdNotRunLength = w404_v[c];
 					slot[side].o.word_2c = w2c_v[w];
 				}
 				before = w404_v[c];
@@ -1184,9 +1184,9 @@ run_p3d_jdnotdetector(void)
 				else
 					sawno++;
 				if (sym_v[k] == 0
-				    && slot[1].o.word_404 == before + 1u)
+				    && slot[1].o.jdNotRunLength == before + 1u)
 					sawinc++;
-				if (sym_v[k] != 0 && slot[1].o.word_404 == 0)
+				if (sym_v[k] != 0 && slot[1].o.jdNotRunLength == 0)
 					sawclr++;
 
 				teardown();
@@ -1413,7 +1413,7 @@ run_p3d_twolevel(void)
 					unsigned int ph =
 					    (unsigned int)(trial % 6);
 
-					slot[side].o.word_04 = ph;
+					slot[side].o.framePosition = ph;
 					/*
 					 * The two tables differ at the entry
 					 * the method reads, so which of them

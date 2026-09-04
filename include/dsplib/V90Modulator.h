@@ -73,7 +73,7 @@
  *   - +0x34 `eventCode`.  Every value in it is COPIED OUT OF a field already
  *     named that: `V90Phase3Modulator::eventCode` (+0x01c), whose header says
  *     "the caller's per-symbol notification and nothing reads it here", and
- *     `V90Phase4Modulator::word_000c` (+0x000c), whose header says "what reads
+ *     `V90Phase4Modulator::eventCode` (+0x000c), whose header says "what reads
  *     it is outside this class".  `progress` is that caller and that reader.
  *     It acts on 6 (phase 3 terminated -> enter phase 4) and 7 (phase 4
  *     terminated -> enter the data phase) and sets 8 and 9 of its own.

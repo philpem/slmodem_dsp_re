@@ -237,3 +237,130 @@ and `anchorcheck.py` all clean, check counts unchanged; `tools/mutate.py`
 re-run in full on both affected suites confirms no mutation outcome moved.
 `make period`/`byteident.py --ratchet` need docker, left for the parent's
 gate. See F10137 for the full per-field evidence.
+
+## Wave 3 -- the V.90/V.92 phase 3/4 modulator/demodulator cluster
+
+Launched 2026-09-04, over `V90Phase3Modulator`, `V90Phase3Demodulator`,
+`V90Phase4Modulator` and `V90Phase4Demodulator` -- the four paired classes
+that carry the phase 3/4 startup and data-mode state machines, read together
+per the user's own instruction rather than one at a time, on the ground
+that a field's role in the demodulator may only make sense next to its
+modulator counterpart. That ground paid off directly: three of the seven
+renames below were found or strengthened specifically by reading a sibling
+class's already-named field at the same conceptual position.
+
+**`V90Phase3Modulator` needed no changes.** A fresh grep found 6 `pad_NNNN`
+and 9 `type_NNNN`-shaped hits in its header, and every one of them turned
+out to be either a genuine small alignment gap (already correctly `pad_`)
+or a historical "was `word_XX`" mention sitting inside a comment for a field
+that is already fully named in the struct itself -- confirmed by checking
+which grep hits land on an actual member declaration versus inside a `/*
+... */` block. The `.cpp`'s one apparent hit was `feed`, a dictionary word
+matching the hex-digit character class by coincidence.
+
+**`V90Phase3Demodulator`: five fields (F10139).** `word_04` ->
+`framePosition` (rank 1, a quoted format string the header already had but
+had explicitly declined to apply, citing two now-stale blockers), `word_30`
+-> `eventCode` (rank 3, the same "caller's per-symbol notification" role
+`V90Phase3Modulator::eventCode` already names one class over), `word_410` ->
+`quickConnect` (rank 2, already named on the field it is copied FROM,
+`V90Demodulator::quickConnect`, one hop away and never carried across the
+assignment), `word_14` -> `timeoutBase` (rank 3, the demodulator's own
+analogue of `V90Phase3Modulator::timeoutBase`, with a stale "not otherwise
+used" comment corrected as a side effect once the decision functions'
+timeout comparisons were read), and `word_404` -> `jdNotRunLength` (rank 2,
+the object's own `JdNotDetector`/`resetJdNotDetector` method names already
+say what the field counts). `word_408` was investigated on the same lead as
+`eventCode` and DECLINED: one arm's role matches a typed callee's return
+value, but roughly twenty other arms reuse the same field for unrelated
+0/1 flags, which is overloaded scratch storage rather than one role
+throughout, and a single name would have been right for one arm and
+wrong-but-plausible for the rest.
+
+**`V90Phase4Modulator`: two fields (F10140).** `word_000c` -> `eventCode`
+(rank 3, the third sighting of the same channel `V90Phase3Modulator` and
+`V90Phase3Demodulator` already had, and `V90Modulator::progress`'s own code
+treats all three identically one line apart -- overturning a PRIOR wave's
+explicit decline to name it, which had been reasonable on the evidence that
+pass had but is superseded now that the pattern is established twice over),
+and `byte_0014` -> `delayedMpNotExit` (rank 1, a quoted format string,
+"setting delayed MPNot exit", that the header already had transcribed on
+both the write and the read side without ever applying it as the name).
+Nine other bare fields were checked against a whole-tree grep for an
+external reader with an established name -- the same check that surfaced
+`eventCode` and `quickConnect` -- and none has one, so they stay bare.
+
+**`V90Phase4Demodulator` needed no changes.** Its header is the most
+heavily pre-derived of the four: `quickConnect` and `trn2dDDLength` are
+already named from the author's own format strings, `ucode` already
+borrows its name from `V90Phase3Demodulator::ucode` on a typed-callee
+argument, and the ten fields still bare (`int_0028`, `uchar_0030`,
+`int_0038`/`int_003c`/`int_0040`/`int_0044`/`int_0048`, `uint_004c`,
+`uint_34fc`, `int_3510`) each already carry an explicit derivation ending
+in "role bounded, not established" or "3120's ruling" -- checked here
+against a fresh whole-tree grep for an external reader (the same check that
+worked three times over in the other two classes) and found either no
+reader (`int_0038`/`int_003c`/`int_0028`/`int_0040`/`uint_34fc`/`uint_004c`)
+or one reader that only confirms the bound the header already states and
+adds nothing (`int_3510`, read once by `V90Demodulator`'s own silence-RRN
+keep-rate arm, exactly the condition the header's derivation already
+names).
+
+**The recurring failure mode this wave exists to name: evidence gathered in
+one file's comment does not automatically reach the field it is about**,
+whenever that field is read or written from OUTSIDE the file holding the
+comment. Four of the seven renames above were sitting fully derived
+somewhere in the tree already; the work was a whole-tree grep for every
+external reference (never trusting one file's own mutation-suite list,
+which is built for a different purpose and is not exhaustive over readers)
+and applying the rename everywhere it needed to move together -- which
+reached `V90Demodulator.cpp`/`.h`, `V90Equalizer.cpp`, `V90Modulator.cpp`,
+several `test/unit/` fixtures outside the nominal four files, and their
+mutation suites.
+
+**A tooling trap found and fixed three times in this wave, and now on
+record for the next one to skip.** `test/mutations/*.json` stores `\t`/`\n`
+as their own literal two-character escape sequences, not the control byte,
+so `sed -e 's/\bword_NN\b/.../g'` silently under-matches: the `t` or `n` of
+the escape merges into one continuous run of word characters with the
+identifier that follows, so `\b` never finds the boundary it is looking
+for immediately after `\t`. The fix is to drop the `\b` and match the bare
+identifier text against these files specifically, verified afterward by
+recomputing `src.count(m["find"]) == 1` for every mutation against the
+renamed source rather than trusting the substitution's own reported
+success. This is already on record at F9480/F10134 for the same
+underlying JSON-escaping fact; recorded again here because it was
+rediscovered independently rather than looked up first, which is itself
+worth a sentence for whoever hits it a third time.
+
+**Numbers, honestly reported.** A fresh whole-tree count shows `pad_NNNN`
+165, `type_NNNN` 292 and bare `fNNNN` 110 -- ALL THREE UNCHANGED from the
+post-wave-2 figures, despite seven real renames landing. This is not a
+measurement error: the counting method tallies UNIQUE NAME STRINGS across
+the whole tree, and three of the seven renamed names (`word_04`, `word_30`,
+`word_14`) are common offset-derived spellings that unrelated classes
+elsewhere in the tree (`V90CP`, `tagV90AdditionalCPinfo`, `V92Phase4Modulator`,
+`V92Modulator`, `V90MP`, `V90ConnectionEvaluator`, among others) coincidentally
+also use for their OWN, unrelated fields at the same offset -- so the string
+survives in the corpus even after every reference to THIS wave's fields was
+renamed away from it. Checked directly: `word_410`, `word_404` and
+`byte_0014` each dropped to zero occurrences tree-wide (no coincidental
+collision existed for those three), while `word_04`/`word_30`/`word_14`/
+`word_000c` still appear -- the last of those four only as a historical
+"was" mention, the rest as other classes' own genuinely different fields.
+The per-class effect is real and is not visible in this particular
+aggregate; a per-class before/after (which the two `make one` gates above
+already give, via unchanged check counts on renamed fixtures) is the more
+honest measure for a wave like this one.
+
+`make one` across every touched test binary (`t_v90p3ddec`, `t_v90p3dreset`,
+`t_v90p3mod`, `t_v92dec`, `t_v90p34`, `t_v90p4ddec`, `t_v90demod`,
+`t_v90demprog`, `t_v90rundemod`, `t_trn2dknown`, `t_v90modchain`,
+`t_v90modprog`, `t_v90p4mgen`, `t_v90p4mtab`) is green with unchanged check
+counts (the one exception, `t_v90equproc`'s pre-existing declared
+GCC13-vs-3.4.2 divergence at F6203, is unrelated to this wave and
+unchanged by it). `tools/onedef.py`, `tools/refcheck.py` and
+`tools/anchorcheck.py` (over every mutation suite this wave touched) are
+all clean. `make period`/`byteident.py --ratchet` need docker, unavailable
+in this sandbox; left for the parent's gate per this session's standing
+instruction, same as every prior wave-3 session in this tree.

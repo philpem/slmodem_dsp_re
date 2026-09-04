@@ -85,9 +85,9 @@ void v90p4_bts_ctor(void *self, unsigned int nofSymbols, V90Parameters *params)
 V90P4_OFF(sessionFlag,		0x0000, sessionflag);
 V90P4_OFF(state,		0x0004, state);
 V90P4_OFF(symbolCount,		0x0008, symbolcount);
-V90P4_OFF(word_000c,		0x000c, w000c);
+V90P4_OFF(eventCode,		0x000c, eventcode);
 V90P4_OFF(nextStateAfterTRN2d,	0x0010, nextafter);
-V90P4_OFF(byte_0014,		0x0014, b0014);
+V90P4_OFF(delayedMpNotExit,		0x0014, delayedmpnotexit);
 V90P4_OFF(word_0018,		0x0018, w0018);
 V90P4_OFF(byte_001c,		0x001c, b001c);
 V90P4_OFF(word_0020,		0x0020, w0020);
@@ -252,7 +252,7 @@ V90Phase4Modulator::setSessionFlag(unsigned int flag)
  *
  * SIXTEEN STORES, ONE G.711 EXPANSION, ONE CALL INTO THE SCRAMBLER AND A
  * PUMP LOOP.  Everything the state machine's edges maintain is put back:
- * `symbolCount` and `word_000c` to zero, the five flags at +0x14..+0x20, the
+ * `symbolCount` and `eventCode` to zero, the five flags at +0x14..+0x20, the
  * four at +0x24..+0x30 -- but NOT +0x34, which only `resetBeforRRN` writes --
  * and the two latches at +0x2f9c and +0x2fa0.  What it does NOT touch is
  * every field that describes a MESSAGE: `mpBits`, `cpBits`, both counts, both
@@ -302,7 +302,7 @@ V90Phase4Modulator::reset(PcmType law, unsigned char code,
 	word_0040 = arg5;
 	symbolCount = 0;
 	state = st;
-	word_000c = 0;
+	eventCode = 0;
 
 	codeLevel = (law != PCM_TYPE_MU_LAW)
 	    ? (short)alaw2linear((code & 0x7f) ^ 0xd5)
@@ -310,7 +310,7 @@ V90Phase4Modulator::reset(PcmType law, unsigned char code,
 
 	scrambler.reset(0);
 
-	byte_0014 = 0;
+	delayedMpNotExit = 0;
 	word_0024 = 0;
 	word_0028 = 0;
 	word_002c = 0;
@@ -1325,7 +1325,7 @@ V90Phase4Modulator::generateV90Symbol()
 	short symbol;
 
 	symbolCount++;
-	word_000c = 0;
+	eventCode = 0;
 
 	switch (state) {
 	case P4M_STATE_RI:
@@ -1435,8 +1435,8 @@ V90Phase4Modulator::generateV90Symbol()
 		bitsToSymbol->process(nofBits, &sym);
 		symbol = sym;
 
-		if (byte_0014 != 0) {
-			byte_0014 = 0;
+		if (delayedMpNotExit != 0) {
+			delayedMpNotExit = 0;
 			exitMPNot();
 		}
 		break;
@@ -1514,7 +1514,7 @@ V90Phase4Modulator::generateV90Symbol()
 				 "%d\r\n", symbolCount);
 			state = P4M_STATE_TERMINATED;
 			symbolCount = 0;
-			word_000c = 7;
+			eventCode = 7;
 		}
 		break;
 	}
@@ -1641,7 +1641,7 @@ V90Phase4Modulator::generateSUVd()
  *
  *  2. TRN2d hands on to SUVd and not to `nextStateAfterTRN2d`.  The null guard
  *     is on `cp` rather than `mp` (+0x2f003), the message names CP, the state
- *     is 5 unconditionally, and BOTH exits set `word_000c` to 4 -- the only
+ *     is 5 unconditionally, and BOTH exits set `eventCode` to 4 -- the only
  *     site in the class that stores that value.  Where V.90 rebuilds the MP
  *     sequence, V.92 sets `cp->word_00 = 1`, copies `word_0028` into
  *     `cp->word_ca0` and rebuilds the CP sequence.
@@ -1678,7 +1678,7 @@ V90Phase4Modulator::generateV92Symbol()
 	short symbol;
 
 	symbolCount++;
-	word_000c = 0;
+	eventCode = 0;
 
 	switch (state) {
 	case P4M_STATE_RI:
@@ -1736,7 +1736,7 @@ V90Phase4Modulator::generateV92Symbol()
 				cpSequenceSymbols =
 				    6 * cpBitCount / cp->word_3ba8;
 			}
-			word_000c = 4;
+			eventCode = 4;
 		}
 		break;
 	}
@@ -1989,7 +1989,7 @@ V90Phase4Modulator::generateV92Symbol()
 				 "%d\r\n", symbolCount);
 			state = P4M_STATE_TERMINATED;
 			symbolCount = 0;
-			word_000c = 7;
+			eventCode = 7;
 		}
 		break;
 	}

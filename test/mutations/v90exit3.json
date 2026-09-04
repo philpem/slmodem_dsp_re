@@ -131,17 +131,17 @@
  },
  {
   "label": "phase 4 is entered whenever phase 3 has NOT terminated",
-  "find": "\tif (phase3Demodulator->word_30 == 0x14) {",
-  "replace": "\tif (phase3Demodulator->word_30 != 0x14) {"
+  "find": "\tif (phase3Demodulator->eventCode == 0x14) {",
+  "replace": "\tif (phase3Demodulator->eventCode != 0x14) {"
  },
  {
   "label": "the terminating value is 0x13 and not 0x14",
-  "find": "\tif (phase3Demodulator->word_30 == 0x14) {",
-  "replace": "\tif (phase3Demodulator->word_30 == 0x13) {"
+  "find": "\tif (phase3Demodulator->eventCode == 0x14) {",
+  "replace": "\tif (phase3Demodulator->eventCode == 0x13) {"
  },
  {
   "label": "the test is on the phase 3 state rather than on +0x30",
-  "find": "\tif (phase3Demodulator->word_30 == 0x14) {",
+  "find": "\tif (phase3Demodulator->eventCode == 0x14) {",
   "replace": "\tif (phase3Demodulator->state == 0x14) {"
  },
  {
@@ -161,7 +161,7 @@
  },
  {
   "label": "the two entries are unconditional",
-  "find": "\tif (phase3Demodulator->word_30 == 0x14) {\n\t\tenterPhase4();\n\t\tequalizer->enterPhase4();\n\t}",
+  "find": "\tif (phase3Demodulator->eventCode == 0x14) {\n\t\tenterPhase4();\n\t\tequalizer->enterPhase4();\n\t}",
   "replace": "\tenterPhase4();\n\tequalizer->enterPhase4();"
  },
  {

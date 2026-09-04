@@ -474,20 +474,27 @@ public:
 	 * "Phase4 Terminated" arm -- and `generateV92Symbol` alone sets it to
 	 * 4 on both exits from TRN2d.  Four `movl` sites over the class's
 	 * whole extent and not one `0xc(%` load anywhere in
-	 * .text+0x2c5a0..+0x2f730, so what reads it is outside this class and
-	 * the meaning is not established here.  `unsigned int` is the stores'
-	 * width; the name stays the offset's.  It was `pad_000c[4]` until the
-	 * pumps were written.
+	 * .text+0x2c5a0..+0x2f730, so what reads it is outside this class.
+	 * `unsigned int` is the stores' width.  It was `pad_000c[4]` until the
+	 * pumps were written, then `word_000c`.
 	 *
-	 * THE READER IS NOW KNOWN AND IS STILL OUTSIDE THIS CLASS:
-	 * `V90Modulator::progress` copies it into `V90Modulator::eventCode`
-	 * after every `generateSymbol`, ignoring zero, and acts on the 7 --
-	 * phase 4 terminated, so enter the data phase.  The name stays here
-	 * because `V90Modulator` is where the value is INTERPRETED, and one
-	 * caller reading one value does not establish what the other three
-	 * stores mean.  Finding F7520.
+	 * NAMED (wave 3, F10140) BY THE SAME SIBLING-CLASS SYMMETRY THAT
+	 * ALREADY NAMED `V90Phase3Modulator::eventCode` and
+	 * `V90Phase3Demodulator::eventCode`: cleared on (almost) every state
+	 * entry, set to a small constant only by the arms that have news, read
+	 * by nothing inside the class, and copied into the CALLER's own
+	 * `eventCode` field. `V90Modulator::progress` does that copy
+	 * literally -- `if (phase4Modulator->eventCode != 0) eventCode =
+	 * phase4Modulator->eventCode;` -- in the SAME shape and the SAME
+	 * function it uses one line earlier for `phase3Modulator->eventCode`,
+	 * so this is not a fresh inference but the third sighting of one
+	 * mechanism this tree already named twice. What the individual values
+	 * (4, 7) mean beyond "TRN2d exited" and "Phase4 Terminated" is still
+	 * not established here, same as it never was for the other two --
+	 * naming the CHANNEL does not require naming every value on it.
+	 * Finding F7520 for the reader; F10140 for the name.
 	 */
-	unsigned int word_000c;
+	unsigned int eventCode;
 
 	/*
 	 * +0x0010  `setNextStateAfterTRN2d`'s whole body is `mov %edx,0x10
@@ -500,16 +507,19 @@ public:
 	Phase4ModulatorState nextStateAfterTRN2d;
 
 	/*
-	 * +0x0014  `reset` clears it and nothing in THIS class writes it
-	 * again.  What sets it is outside: `V90Modulator::acknowledgeCPNot
-	 * Reception` and `::acknowledgeEReception` both store 1 here on their
-	 * 0x0d arm -- "setting delayed MPNot exit", by their own messages --
-	 * so it is a request recorded while the state machine is off a
-	 * repetition boundary.  This paragraph used to say "nothing else";
-	 * that was true of the members then written and is not true of the
-	 * object.
+	 * +0x0014  `reset` clears it; `generateV90Symbol`/`generateV92Symbol`'s
+	 * own `P4M_STATE_MP_NOT` arm consumes it (clears it and calls
+	 * `exitMPNot()`), and it is otherwise set from OUTSIDE this class:
+	 * `V90Modulator::acknowledgeCPNotReception` and
+	 * `::acknowledgeEReception` both store 1 here on their 0x0d arm --
+	 * "setting delayed MPNot exit", by their own messages -- so it is a
+	 * request recorded while the state machine is off a repetition
+	 * boundary, honoured the next time this class's own symbol pump
+	 * revisits MPNot.  NAMED (wave 3, F10140) DIRECTLY FROM THAT MESSAGE
+	 * -- CLAUDE.md's strongest evidence class -- rather than inferred from
+	 * the read/write shape alone.
 	 */
-	unsigned char byte_0014;
+	unsigned char delayedMpNotExit;
 	unsigned char pad_0015[3];
 
 	/*
