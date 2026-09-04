@@ -299,7 +299,15 @@ public:
 	 */
 	unsigned char ucode;
 
-	unsigned char pad_19[1];	/* +0x019 alignment              */
+	/*
+	 * +0x019 WAS `pad_19[1]`, REMOVED (2026-09-04, pad-audit).  An
+	 * `unsigned char` ending at +0x019 followed by the 2-byte-aligned
+	 * `ucodeLevel` at +0x01a below needs exactly this 1-byte gap for
+	 * natural alignment, no dis.py reader/writer touches +0x019 anywhere
+	 * in the object, and `P3D_OFF(ucodeLevel, 0x01a, ...)` in the .cpp
+	 * already asserts the next field's offset -- so the compiler's own
+	 * padding reproduces the member being deleted.
+	 */
 
 	/*
 	 * +0x01a  The linear level of `ucode`.  `reset` computes it as
@@ -523,11 +531,28 @@ public:
 	/* +0x3f9  Zeroed by `reset`. */
 	unsigned char byte_3f9;
 
-	unsigned char pad_3fa[2];	/* +0x3fa alignment              */
+	/*
+	 * +0x3fa WAS `pad_3fa[2]`, REMOVED (2026-09-04, pad-audit).  An
+	 * `unsigned char` ending at +0x3fa followed by the 4-byte-aligned
+	 * `word_3fc` below needs exactly this 2-byte gap for natural
+	 * alignment, no dis.py reader/writer touches +0x3fa/+0x3fb anywhere in
+	 * the object, and `P3D_OFF(word_3fc, 0x3fc, ...)` in the .cpp already
+	 * asserts the next field's offset -- so the compiler's own padding
+	 * reproduces the member being deleted.
+	 */
 
 	unsigned int word_3fc;		/* +0x3fc zeroed by `reset`      */
 	short short_400;		/* +0x400 zeroed by `reset`      */
-	unsigned char pad_402[2];	/* +0x402 alignment              */
+
+	/*
+	 * +0x402 WAS `pad_402[2]`, REMOVED (2026-09-04, pad-audit).  A `short`
+	 * ending at +0x402 followed by the 4-byte-aligned `jdNotRunLength` at
+	 * +0x404 below needs exactly this 2-byte gap for natural alignment, no
+	 * dis.py reader/writer touches +0x402/+0x403 anywhere in the object,
+	 * and `P3D_OFF(jdNotRunLength, 0x404, ...)` in the .cpp already
+	 * asserts the next field's offset -- so the compiler's own padding
+	 * reproduces the member being deleted.
+	 */
 
 	/*
 	 * +0x404  NAMED (wave 3, F10139) BY A TYPED CALLEE AND BY THE
@@ -591,7 +616,15 @@ public:
 	/* +0x414  `reset`'s ninth argument, stored as a 16-bit quantity. */
 	short short_414;
 
-	unsigned char pad_416[2];	/* +0x416 alignment              */
+	/*
+	 * +0x416 WAS `pad_416[2]`, REMOVED (2026-09-04, pad-audit).  A `short`
+	 * ending at +0x416 followed by the 4-byte-aligned `float_418` below
+	 * needs exactly this 2-byte gap for natural alignment, no dis.py
+	 * reader/writer touches +0x416/+0x417 anywhere in the object, and
+	 * `P3D_OFF(float_418, 0x418, ...)` in the .cpp already asserts the
+	 * next field's offset -- so the compiler's own padding reproduces the
+	 * member being deleted.
+	 */
 
 	/*
 	 * +0x418  `reset`'s tenth argument.  Copied as a 32-bit word and
@@ -626,7 +659,16 @@ public:
 	/* +0x424  Zeroed by `reset`, before anything else it does. */
 	unsigned char byte_424;
 
-	unsigned char pad_425[3];	/* +0x425 alignment              */
+	/*
+	 * +0x425 WAS `pad_425[3]`, REMOVED (2026-09-04, pad-audit).  An
+	 * `unsigned char` ending at +0x425 followed by the 4-byte-aligned
+	 * pointer at +0x428 below needs exactly this 3-byte gap for natural
+	 * alignment, no dis.py reader/writer touches
+	 * +0x425/+0x426/+0x427 anywhere in the object, and
+	 * `P3D_OFF(ansamToneDetector, 0x428, ...)` in the .cpp already asserts
+	 * the next field's offset -- so the compiler's own padding reproduces
+	 * the member being deleted.
+	 */
 
 	/*
 	 * +0x428  Allocated by the constructor with `sysdep_malloc(0x3c)` --

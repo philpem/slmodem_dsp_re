@@ -348,7 +348,17 @@ public:
 	 * `V90Phase3Demodulator::ucode`.
 	 */
 	unsigned char ucode;
-	unsigned char pad_0009[3];	/* +0x009  alignment before +0x0c  */
+
+	/*
+	 * +0x009 WAS `pad_0009[3]`, REMOVED (2026-09-04, pad-audit).  An
+	 * `unsigned char` ending at +0x009 followed by the 4-byte-aligned
+	 * `mappingParams1` pointer at +0x000c below needs exactly this 3-byte
+	 * gap for natural alignment, no dis.py reader/writer touches
+	 * +0x009/+0x00a/+0x00b anywhere in the object, and
+	 * `P4D_OFF(mappingParams1, 0x000c, ...)` in the .cpp already asserts
+	 * the next field's offset -- so the compiler's own padding reproduces
+	 * the member being deleted.
+	 */
 
 	/* +0x000c  The constructor's FIRST argument. */
 	V90MappingParams *mappingParams1;
@@ -452,7 +462,17 @@ public:
 	 * `reset`, and nothing here reads it.
 	 */
 	unsigned char uchar_0030;
-	unsigned char pad_0031[3];	/* +0x31  alignment before +0x34   */
+
+	/*
+	 * +0x031 WAS `pad_0031[3]`, REMOVED (2026-09-04, pad-audit).  An
+	 * `unsigned char` ending at +0x031 followed by the 4-byte-aligned
+	 * `quickConnect` at +0x034 below needs exactly this 3-byte gap for
+	 * natural alignment, no dis.py reader/writer touches
+	 * +0x031/+0x032/+0x033 anywhere in the object, and
+	 * `P4D_OFF(quickConnect, 0x0034, ...)` in the .cpp already asserts the
+	 * next field's offset -- so the compiler's own padding reproduces the
+	 * member being deleted.
+	 */
 
 	/*
 	 * +0x0034  `quickConnect`, AND THE NAME IS THE AUTHOR'S OWN.  It is

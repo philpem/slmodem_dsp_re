@@ -661,3 +661,43 @@ a large multi-field unmodelled floor rather than a single alignment gap
 the same bytes by raw offset instead. Full per-region derivation, the
 `-m32`/`__SIZEOF_POINTER__` verification trap this pass hit, and every test
 run: finding F10150.
+
+### Wave 5, first slice: V.90 receive/design cluster, twelve of fourteen removed
+
+`V90Equalizer`, `V90ConstellationDesigner`, `V90Demodulator`,
+`V90Phase3Demodulator`, `V90Phase4Demodulator`, `V90ConnectionEvaluator` --
+the six classes the brief named. As with F10142's VPcmFloModem/V92CP wave,
+the briefed per-file pad COUNTS (13/7/9+1/6/4/3+2) were the naive
+`grep -oE 'pad_[0-9a-f]+'` figure, counting historical `/* was pad_X */`
+prose; a grep restricted to live `unsigned char pad_NNNN[...]` member
+declarations found **14** total, none in either `.cpp`. Full derivation and
+per-pad evidence in finding F10152.
+
+**Twelve removed** (all confirmed to have an exact-width, exact-offset
+natural-alignment gap AND zero readers/writers anywhere in the object, both
+checks required by the user's decision above): `V90Equalizer::pad_0a[2]`;
+`V90ConstellationDesigner::pad_12[2]` and `pad_39[3]`;
+`V90Demodulator::pad_281[3]`; `V90Phase3Demodulator::pad_19[1]`,
+`pad_3fa[2]`, `pad_402[2]`, `pad_416[2]`, `pad_425[3]`;
+`V90Phase4Demodulator::pad_0009[3]` and `pad_0031[3]`;
+`V90ConnectionEvaluator::pad_b6[2]`. Each is proved by the pre-existing
+per-class `_OFF` offset-assertion macro for the FIELD IMMEDIATELY AFTER the
+deleted pad (`V90EQU_OFF`/`V90CD_OFF`/`DEM_OFF`/`P3D_OFF`/`P4D_OFF`/`CE_OFF`
+-- all six `.cpp` files already carried a full-coverage assertion list
+before this wave, so no new macro was added; the removal is what the
+existing assertion now proves).
+
+**Two left explicit**, both the `VPcmFloModem::pad_6fb8[4]` shape named
+above -- a predecessor that is ALREADY 4-byte-aligned followed by a field
+needing no gap at all, so natural alignment implies zero bytes where the
+object has four: `V90Equalizer::pad_138[4]` and
+`V90ConstellationDesigner::pad_34[4]`.
+
+Post-wave pad count for these six files: 14 -> 2 (12 removed). `make one`
+across all fourteen affected test binaries green with UNCHANGED check
+counts against a `git stash`/`git stash pop` A/B baseline (the six
+pre-existing `t_v90equ` FAILs reproduce byte-for-byte with or without the
+removal, matching F10141's documented baseline); `tools/onedef.py` and
+`tools/refcheck.py` clean. `make period`/`byteident.py --ratchet` need
+docker, unavailable in this sandbox; left for the parent's gate. Finding
+F10152.

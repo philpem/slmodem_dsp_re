@@ -327,7 +327,14 @@ public:
 	 */
 	short dfeProtectionOnDil;	/* +0x08 */
 
-	unsigned char pad_0a[2];	/* +0x0a alignment                */
+	/*
+	 * +0x0a WAS `pad_0a[2]`, REMOVED (2026-09-04, pad-audit).  A `short`
+	 * ending at +0x0a followed by the `int` below needs exactly this
+	 * 2-byte gap for natural alignment, no dis.py reader/writer touches
+	 * +0x0a/+0x0b anywhere in the object, and `V90EQU_OFF(linearEquLength,
+	 * 0x00c, ...)` below already asserts the next field's offset -- so the
+	 * compiler's own padding reproduces the member being deleted.
+	 */
 
 	/*
 	 * +0x0c  The linear equaliser's tap count.  `reset` clears

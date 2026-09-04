@@ -619,7 +619,15 @@ public:
 	short altRbsDetectedOnQc;
 	short echoRrnState;
 
-	unsigned char pad_b6[2];	/* +0xb6 .. +0xb7                    */
+	/*
+	 * +0xb6 WAS `pad_b6[2]`, REMOVED (2026-09-04, pad-audit).  A `short`
+	 * ending at +0xb6 followed by the 4-byte-aligned `word_b8` float below
+	 * needs exactly this 2-byte gap for natural alignment, no dis.py
+	 * reader/writer touches +0xb6/+0xb7 anywhere in the object, and
+	 * `CE_OFF(word_b8, 0xb8, ...)` in the .cpp already asserts the next
+	 * field's offset -- so the compiler's own padding reproduces the
+	 * member being deleted.
+	 */
 
 	/*
 	 * +0xb8  WAS INSIDE `pad_b6[6]`, AND IT IS A FLOAT.
