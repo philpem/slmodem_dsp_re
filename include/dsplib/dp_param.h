@@ -11,19 +11,39 @@
  */
 #include "dsplib/modem_params.h"
 
-/* Fetch the modem's dp_runtime pointer. */
+/**
+ * @brief Fetch the modem's per-connection `dp_runtime` block.
+ *
+ * The single accessor any datapump uses instead of hard-coding a parameter
+ * number: `return modem_get_param(modem, MDMPRM_DPRUNTIME)`.
+ *
+ * @param modem  The host's modem object.
+ * @return The `struct _tagModemParameters *` set up by dp_runtime_create(),
+ *         opaque to callers of this accessor.
+ */
 void *dp_param_get(void *modem);
 
-/*
- * ...and the other end of it.  THE HOST CALLS THESE TWO, NOT THE LIBRARY:
- * `slmodemd/modem.c:1136` does `m->dp_runtime = dp_runtime_create(m)` when it
- * starts a call and `:1197` frees it when it stops, so neither appears in the
- * closure of any datapump `create`.  What they are is the DEFINITION of what
- * MDMPRM_DPRUNTIME answers with, which is the block every V.PCM constructor
- * is configured from -- so a test that constructs V.PCM builds one of these
- * rather than inventing a buffer.
+/**
+ * @brief Build the `dp_runtime` block that dp_param_get() answers with.
+ *
+ * Host-owned, not library-owned: `slmodemd/modem.c` calls this once per call
+ * (storing the result as `m->dp_runtime`) and dp_runtime_delete() once the
+ * call ends, so neither appears in the closure of any datapump `create` --
+ * this is the definition of what `MDMPRM_DPRUNTIME` answers with, the block
+ * every V.PCM constructor is configured from. A test that constructs V.PCM
+ * builds one of these rather than inventing a buffer.
+ *
+ * @param modem  The host's modem object, queried for `MDMPRM_DSPINFO`,
+ *               `MDMPRM_CODECTYPE` and the fields copied from `dsp_info`.
+ * @return A freshly allocated, zeroed and populated
+ *         `struct _tagModemParameters *`, or NULL on allocation failure.
  */
 void *dp_runtime_create(void *modem);
+
+/**
+ * @brief Free a block built by dp_runtime_create().
+ * @param runtime  The block to free.
+ */
 void dp_runtime_delete(void *runtime);
 
 #endif /* DSPLIB_DP_PARAM_H */

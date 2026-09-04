@@ -71,12 +71,53 @@ struct b103_dp {
  * The dp_operations entry points.  Declared here so a test can call them
  * directly rather than only through the ops table.
  */
+
+/**
+ * @brief Construct a Bell 103 / V.21 datapump.
+ * @param modem     The host's modem object.
+ * @param id        #DP_V21 or #DP_B103, selecting the tone frequencies.
+ * @param caller    Nonzero if this side originated the call.
+ * @param srate     Host sample rate.
+ * @param max_frag  Host fragment size.
+ * @param op        The `dp_operations` table this pump was registered
+ *                  under (stored in the result's `dp.op`).
+ * @return A new `struct dp *` (the `struct b103_dp` it heads), or NULL if
+ *         allocation, dp_wrapper_create() or B103FP_create() failed.
+ */
 struct dp *b103_create(void *modem, int id, int caller, int srate,
 		       int max_frag, struct dp_operations *op);
+
+/**
+ * @brief Tear down a Bell 103 / V.21 datapump.
+ * @param dp  The datapump to free.
+ * @return 0.
+ */
 int b103_delete(struct dp *dp);
+
+/**
+ * @brief Run one fragment of Bell 103 / V.21 through the datapump.
+ *
+ * Handed to dp_wrapper_create() as the datapump's `process` callback, so
+ * it runs at #B103_DP_SRATE / #B103_DP_FRAG, not the host's rate -- the
+ * wrapper is what the modem core actually calls.
+ *
+ * @param dp     The datapump, as `void *` (dp_wrapper's callback signature);
+ *               really a `struct dp *`.
+ * @param in     One fragment of B103-rate input samples.
+ * @param out    One fragment of B103-rate output samples.
+ * @param count  Unused; the fragment size is fixed at #B103_DP_FRAG.
+ * @return A `DPSTAT_*` status code.
+ */
 int b103_process(void *dp, void *in, void *out, int count);
 
+/**
+ * @brief Register the Bell 103 / V.21 datapump's `dp_operations` table with
+ * the modem core.
+ * @return 0.
+ */
 int dp_b103_init(void);
+
+/** @brief The other half of dp_b103_init(). */
 void dp_b103_exit(void);
 
 #endif /* DSPLIB_B103_H */

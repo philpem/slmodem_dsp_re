@@ -70,28 +70,43 @@ struct fpm_agc {
 	int freeze;		/* +0x28 non-zero: hold mult/shift            */
 };
 
-/*
- * `reset` non-zero clears the gain as well as the level, so the next block
- * faces `acquire_level` rather than `squelch_level`.  Either way init clears
- * the level estimate and releases the freeze.
+/**
+ * @brief Initialise a block AGC.
+ *
+ * Either way, clears the level estimate and releases the freeze.
+ *
+ * @param agc    The AGC to initialise.
+ * @param cfg    Configuration, copied wholesale.
+ * @param reset  Nonzero also clears the gain, so the next block faces
+ *               `acquire_level` rather than `squelch_level`.
  */
 void FPM_AGC_init(struct fpm_agc *agc, const struct fpm_agc_cfg *cfg,
 		  int reset);
 
-/* Hold the current gain: blocks are still measured and still gated. */
+/**
+ * @brief Hold the current gain. Blocks are still measured and still gated.
+ * @param agc  The AGC to freeze.
+ */
 void FPM_AGC_Freeze(struct fpm_agc *agc);
 
-/*
- * Resume adapting.  Note this clears the level estimate but NOT the gain, so
- * the squelch stays at `squelch_level` -- Release is not a reset.
+/**
+ * @brief Resume adapting after FPM_AGC_Freeze().
+ *
+ * Clears the level estimate but NOT the gain, so the squelch stays at
+ * `squelch_level` -- this is not a reset.
+ *
+ * @param agc  The AGC to release.
  */
 void FPM_AGC_Release(struct fpm_agc *agc);
 
-/*
- * Gain-control `count` samples in place.
+/**
+ * @brief Gain-control samples in place, in fixed-length measurement blocks.
  *
- * Counts shorter than half a block are left completely untouched; see the
- * partitioning note in src/dsp/fpm_agc.c.
+ * @param agc      The AGC, updated in place.
+ * @param samples  Samples to process in place.
+ * @param count    Number of samples. Counts shorter than half a block are
+ *                 left completely untouched; see the partitioning note in
+ *                 src/dsp/fpm_agc.c.
  */
 void FPM_AGC_agc(struct fpm_agc *agc, short *samples, unsigned short count);
 

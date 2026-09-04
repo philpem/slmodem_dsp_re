@@ -101,39 +101,55 @@ struct dialer {
 	void	*modem;				/* +0xd4 */
 };
 
-/*
- * Grade a dial string.
+/**
+ * @brief Grade a dial string.
  *
- * NOT the C calling convention: the original takes `d` in `eax` and `s` in
- * `edx`, with `store` on the stack -- GCC's regparm(2), used for calls that
- * never leave Dialer.c.  Anything declaring this for the differential test
- * must say `__attribute__((regparm(2)))` or it will pass arguments the callee
- * never reads.  See finding F51.
+ * NOT the C calling convention: the original takes @p d in `eax` and
+ * @p s in `edx`, with @p store on the stack -- GCC's `regparm(2)`, used
+ * for calls that never leave Dialer.c. Anything declaring this for the
+ * differential test must say `__attribute__((regparm(2)))` or it will
+ * pass arguments the callee never reads. See finding F51.
  *
- * `store` asks for `d->last_digit` to be updated; the grade is returned
- * either way.
+ * @param d      The dialler, whose `cfg` governs what is legal.
+ * @param s      The string to grade.
+ * @param store  Nonzero asks for `d->last_digit` to be updated.
+ * @return One of the `DIALER_*` grade constants, returned either way.
  */
 int AnalyseDialString(struct dialer *d, const char *s, int store);
 
-/* True when the string is too poor to dial: `AnalyseDialString(...) <= 1`. */
+/**
+ * @brief True when a string is too poor to dial.
+ * @param d  The dialler.
+ * @param s  The string to check.
+ * @return Nonzero if `AnalyseDialString(d, s, 0) <= DIALER_INVALID`.
+ */
 int IsDialStringInvalid(struct dialer *d, const char *s);
 
 /*
  * Prepare a dialler.  Does NOT allocate -- the object belongs to the
  * call-progress supervisor, which is why this takes one rather than returning
  * one.
- *
- * Returns 0 when the string was accepted and DIALER_CREATE_REJECTED when it
- * was not.  A null string is accepted, and leaves an empty one behind.
  */
 #define DIALER_CREATE_REJECTED	7
 
+/**
+ * @brief Prepare a dialler with a string to dial.
+ * @param d      Caller-owned dialler object to initialise.
+ * @param s      The dial string; NULL is accepted and leaves an empty
+ *               string behind.
+ * @param modem  The host's modem object.
+ * @return 0 when the string was accepted, or #DIALER_CREATE_REJECTED
+ *         when it was not.
+ */
 int DialerCreate(struct dialer *d, const char *s, void *modem);
 
-/*
- * Give up on the current digit, telling the host the pulse dialler has
- * finished with the line -- but only once, and only if a digit was actually
- * being pulsed.
+/**
+ * @brief Give up on the current digit.
+ *
+ * Tells the host the pulse dialler has finished with the line -- but only
+ * once, and only if a digit was actually being pulsed.
+ *
+ * @param d  The dialler to abort.
  */
 void DialerAbort(struct dialer *d);
 
@@ -174,12 +190,18 @@ void DialerAbort(struct dialer *d);
 #define DIALER_END_PARTIALLY_STATE	9	/* -> DIALER_COMMAND       */
 #define DIALER_END_STATE		10	/* -> DIALER_DONE          */
 
-/*
- * Produce the next stretch of dialling audio.
+/**
+ * @brief Produce the next stretch of dialling audio.
  *
- * Fills `buf` from `*pos` up to and including `limit`, advancing `*pos`, and
- * returns one of the codes above.  It is a generator, not a poll: pauses and
- * inter-digit gaps are silence it writes itself, not silence it asks for.
+ * A generator, not a poll: pauses and inter-digit gaps are silence it
+ * writes itself, not silence it asks for.
+ *
+ * @param d      The dialler, advanced in place.
+ * @param buf    Output buffer.
+ * @param pos    In/out: fills `buf[*pos .. limit]`, then advances `*pos`
+ *               past what was written.
+ * @param limit  Last valid index in @p buf (inclusive).
+ * @return One of the `DIALER_*` progress codes.
  */
 int DialerProgress(struct dialer *d, short *buf, int *pos, int limit);
 

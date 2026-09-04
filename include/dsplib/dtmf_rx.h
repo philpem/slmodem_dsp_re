@@ -86,55 +86,76 @@ struct dtmf_rx {
  */
 #define DTMF_RX_RATE_8000	8000
 
-/*
- * Clear everything the state machine accumulates and arm it: `state` comes
- * out as 1 (hunting), `ndigits` as -1 ("not started", distinct from 0),
- * `last_digit` as -1, `level` as 1 and `bufp` as `rx->samples`.
+/**
+ * @brief Clear everything the state machine accumulates and arm it.
  *
- * It does NOT touch `rate`, `sens`, `aligned`, `pre_low`, the two buffers, or
- * `digits[16..19]` -- the digit-clearing loop stops at 15 where the array is
- * 20 (D307), and `pre_low` is D251.  So it is a reset of the RECEIVER, not of
- * the object: the configuration a caller put in survives it, which is what
- * `cid_reset` relies on.
+ * `state` comes out as 1 (hunting), `ndigits` as -1 ("not started",
+ * distinct from 0), `last_digit` as -1, `level` as 1 and `bufp` as
+ * `rx->samples`. Does NOT touch `rate`, `sens`, `aligned`, `pre_low`, the
+ * two buffers, or `digits[16..19]` (the digit-clearing loop stops at 15
+ * where the array is 20, D307; `pre_low` is D251) -- this resets the
+ * RECEIVER, not the whole object, so configuration a caller put in
+ * survives it, which is what `cid_reset` relies on.
+ *
+ * @param rx  The receiver to reset.
  */
 void reset_dtmf(struct dtmf_rx *rx);
 
-/*
- * Build a Caller ID DTMF receiver.  `rx` NULL allocates one, otherwise the
- * caller's storage is used; either way the object is returned, which is what
- * `cid_create` stores back over the pointer it passed in.
+/**
+ * @brief Build a Caller ID DTMF receiver.
  *
- * Sets `rate` to 8000 and `sens` to 0 and then resets.  There is no rate or
- * sensitivity argument -- a caller wanting 9600 or a trimmed threshold writes
- * the field itself afterwards.
+ * Sets `rate` to 8000 and `sens` to 0, then calls reset_dtmf(). There is
+ * no rate or sensitivity argument -- a caller wanting 9600 or a trimmed
+ * threshold writes the field itself afterwards.
+ *
+ * @param rx  NULL allocates one; otherwise the caller's storage is used.
+ * @return The receiver -- @p rx, or the newly allocated one -- which is
+ *         what `cid_create` stores back over the pointer it passed in.
  */
 struct dtmf_rx *create_cid_dtmf(struct dtmf_rx *rx);
 
-/*
- * The tone bank.  `count` samples in, one of the sixteen keypad codes out --
- * 0..9, 10 'A', 11 'B', 12 'C', 13 'D', 14 '*', 15 '#' -- or -9 for "no
- * agreement".  The eight resonator states and the two pre-notches live in
- * `rx` and persist across calls; the energies do not.
+/**
+ * @brief The tone bank: decide which (if any) keypad digit a block of
+ * samples carries.
+ *
+ * The eight resonator states and the two pre-notches live in @p rx and
+ * persist across calls; the energies do not.
+ *
+ * @param samples  Input samples.
+ * @param count    Number of samples.
+ * @param rx       The receiver, updated in place.
+ * @return One of the sixteen keypad codes (0..9, 10 'A', 11 'B', 12 'C',
+ *         13 'D', 14 '*', 15 '#'), or -9 for "no agreement".
  */
 int DTMF_MTD_detect(const short *samples, short count, struct dtmf_rx *rx);
 
-/*
- * Filter `count` samples IN PLACE and say whether they carry signal.
+/**
+ * @brief Filter samples in place and say whether they carry signal.
  *
- * It is three things at once, which is why it is 1,187 bytes: a limiter
- * that divides down a block that is clipping, a DC blocker, a coarse gain
- * that multiplies a quiet block up by 6, 3 or 2, and only then the bandpass
- * the name refers to.  Returns 1 for signal, 0 for silence.
+ * Three things at once, which is why it is 1,187 bytes: a limiter that
+ * divides down a block that is clipping, a DC blocker, a coarse gain that
+ * multiplies a quiet block up by 6, 3 or 2, and only then the bandpass
+ * the name refers to.
+ *
+ * @param samples  Samples to filter in place.
+ * @param count    Number of samples.
+ * @param rx       The receiver, whose `level`/`bp_state` etc. are updated.
+ * @return 1 for signal, 0 for silence.
  */
 int band_pass(short *samples, short count, struct dtmf_rx *rx);
 
-/*
- * One block of line samples.  Returns 1 while nothing has happened, 2 once
- * digits are arriving, 3 when a complete string has been terminated by 'C',
- * and -1 on any of the several give-up conditions.
+/**
+ * @brief Run one block of line samples through the whole CID DTMF state
+ * machine.
  *
- * `count` MUST be 198 or less: the block is copied into a stack array of
- * that size with no bound check, exactly as the object does it (D252).
+ * @param samples  Input samples.
+ * @param count    Number of samples. MUST be 198 or less: the block is
+ *                 copied into a stack array of that size with no bound
+ *                 check, exactly as the object does it (D252).
+ * @param rx       The receiver, updated in place.
+ * @return 1 while nothing has happened, 2 once digits are arriving, 3
+ *         when a complete string has been terminated by 'C', and -1 on
+ *         any of the several give-up conditions.
  */
 int dtmf_modem(const short *samples, unsigned short count,
 	       struct dtmf_rx *rx);

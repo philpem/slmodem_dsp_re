@@ -95,7 +95,17 @@ struct dialer_cfg {
 	int	pulse_pattern;		/* +0x38  author: digitPattern      */
 };
 
-/* Fill `cfg` from the host.  Reads fifteen parameters and returns nothing. */
+/**
+ * @brief Fill a dialler configuration from the host's per-country parameters.
+ *
+ * Fourteen fields are copied straight from `modem_get_param`; the two DTMF
+ * levels are looked up in decibel tables instead. Fifteen distinct
+ * parameters are read (`GetDTMFDialSpeed` is fetched twice, once for
+ * `dtmf_duration` and once for `dtmf_gap`, matching the object).
+ *
+ * @param cfg    Filled in; no field is left unset.
+ * @param modem  The host's modem object, queried once per dial attempt.
+ */
 void GetDialerConfig(struct dialer_cfg *cfg, void *modem);
 
 #endif /* DSPLIB_DIALERCFG_H */

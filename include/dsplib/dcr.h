@@ -153,39 +153,53 @@ struct dcr {
 	int track_samples;		/* +0x1c 19200: ends each phase-2 pass*/
 };
 
-/*
- * Zeroed, then `flags = 7`, `state = 0`, and the four constants above.
- * Reads no argument -- `slmodemd` declares it `void *dcr_create()`, which in
- * C is "unspecified", and the object's prologue touches no incoming slot.
- * Returns NULL if the allocation fails.
+/**
+ * @brief Allocate and initialise a DC remover.
+ *
+ * Zeroed, then `flags = 7`, `state = 0`, and the four sample-count
+ * constants (see "THE FOUR PHASES" above). Reads no argument --
+ * `slmodemd` declares it `void *dcr_create()`, which in C is
+ * "unspecified", and the object's prologue touches no incoming slot.
+ *
+ * @return A new `struct dcr *`, or NULL if the allocation fails.
  */
 struct dcr *dcr_create(void);
 
-/* `if (dcr) sysdep_free(dcr);` -- a tail call in the object. */
+/**
+ * @brief Free a DC remover. `if (dcr) sysdep_free(dcr);` -- a tail call
+ * in the object.
+ * @param dcr  The DC remover to free.
+ */
 void dcr_delete(struct dcr *dcr);
 
-/*
- * Clears `dc_level`, `sum` and `count`, and NOTHING ELSE -- in particular not
- * `state`, so a reset does not send the estimator back through SETTLE and
- * EVALUATE; it drops the estimate and carries on in whatever phase it was in.
- * Exported by the object and declared by no caller anywhere, in dsplibs.o or
- * in slmodemd.
+/**
+ * @brief Drop the current DC estimate, without changing phase.
+ *
+ * Clears `dc_level`, `sum` and `count`, and NOTHING ELSE -- in particular
+ * not `state`, so this does not send the estimator back through SETTLE
+ * and EVALUATE; it drops the estimate and carries on in whatever phase it
+ * was in. Exported by the object and declared by no caller anywhere, in
+ * dsplibs.o or in slmodemd.
+ *
+ * @param dcr  The DC remover to reset.
  */
 void dcr_reset(struct dcr *dcr);
 
-/*
- * One block, corrected in place.  `len` is a SAMPLE count, not bytes.
+/**
+ * @brief Remove DC offset from one block of samples, in place.
  *
- * Returns 1 when `|dc_level| >= threshold` and 0 otherwise -- a "this line
- * has more DC on it than we are happy about" verdict, evaluated on every
- * call including the ones that change nothing.  Nothing in `slmodemd` reads
- * it: `modem.c:79` declares the function `void`, so the value is computed
- * and discarded on the only host there is.
+ * Evaluated on every call including the ones that change nothing.
+ * Nothing in `slmodemd` reads the return value: `modem.c:79` declares
+ * the function `void`, so the value is computed and discarded on the
+ * only host there is.
  *
- * `buf` is `short *` and that is forced, not chosen: the two accumulate loops
- * sign-extend each element into a 32-bit sum (`movswl 0x0(%ebp,%ecx,2)`).
- * `slmodemd` declares the parameter `void *` and passes `in` from
- * `modem_process`.
+ * @param dcr  The DC remover, updated in place.
+ * @param buf  Samples to correct in place. `short *` is forced, not
+ *             chosen: the two accumulate loops sign-extend each element
+ *             into a 32-bit sum. `slmodemd` declares the parameter
+ *             `void *` and passes `in` from `modem_process`.
+ * @param len  Number of samples (not bytes).
+ * @return 1 when `|dc_level| >= threshold`, 0 otherwise.
  */
 int dcr_process(struct dcr *dcr, short *buf, int len);
 

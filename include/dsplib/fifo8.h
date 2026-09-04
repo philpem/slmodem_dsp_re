@@ -45,30 +45,49 @@ struct fifo8 {
 	unsigned short	wr;		/* +0x10 write cursor                */
 };
 
-/*
- * Initialise `f` -- allocating both it and its buffer when `f` is NULL --
- * from `cfg`, or from the blob's built-in defaults when `cfg` is NULL.  The
- * ring is zeroed; the cursors and the count are reset.  Returns `f`.
+/**
+ * @brief Initialise a byte ring.
  *
- * Note that the buffer is allocated ONLY on the allocating path: handed a
- * caller-owned struct, FIFO8_create expects `buf` to be set already and
- * clears cfg.size bytes through it.
+ * Allocates both the object and its buffer when @p f is NULL. Handed a
+ * caller-owned struct instead, expects `f->buf` already set and only
+ * clears `cfg.size` bytes through it -- the buffer is allocated ONLY on
+ * the allocating path. The ring is zeroed and the cursors and count reset
+ * either way.
+ *
+ * @param f    NULL to allocate a new ring, or a caller-owned struct with
+ *             `buf` already set.
+ * @param cfg  Creation parameters, or NULL for the blob's built-in defaults.
+ * @return @p f (or the newly allocated ring).
  */
 struct fifo8 *FIFO8_create(struct fifo8 *f, const struct fifo8_cfg *cfg);
 
-/* Free the ring buffer, then the object. */
+/**
+ * @brief Free a ring's buffer, then the ring object itself.
+ * @param f  The ring to free.
+ */
 void FIFO8_delete(struct fifo8 *f);
 
-/*
- * Copy up to `n` bytes in, stopping at the free room (cfg.size - count).
- * Returns how many were taken.
+/**
+ * @brief Copy bytes into the ring.
+ * @param f    The ring.
+ * @param src  Bytes to copy in.
+ * @param n    How many bytes to attempt.
+ * @return How many bytes were actually taken, stopping at the free room
+ *         (`cfg.size - count`).
  */
 short FIFO8_write(struct fifo8 *f, const unsigned char *src, unsigned short n);
 
-/*
- * Copy up to `n` bytes out.  Fewer than `n` bytes held is not short-changed:
- * the remainder of the caller's `n` is padded with cfg.fill.  Returns how
- * many bytes came out of the RING, not how many were written.
+/**
+ * @brief Copy bytes out of the ring.
+ *
+ * Always writes @p n bytes to @p dst: if fewer than @p n are held, the
+ * remainder is padded with `cfg.fill`.
+ *
+ * @param f    The ring.
+ * @param dst  Destination buffer, @p n entries.
+ * @param n    How many bytes to write to @p dst.
+ * @return How many bytes came out of the ring itself, not how many were
+ *         written to @p dst.
  */
 short FIFO8_read(struct fifo8 *f, unsigned char *dst, unsigned short n);
 

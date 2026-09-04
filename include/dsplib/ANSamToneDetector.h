@@ -82,33 +82,35 @@
 
 class ANSamToneDetector : public GenericToneDetector {
 public:
-	/*
-	 * EIGHT ARGUMENTS, seven of which are the base's.  The mangling is
-	 * `_ZN17ANSamToneDetectorC1Ejjfjfjjj`, so the shape is a
-	 * specification; the names below are the base's names for the
-	 * arguments it receives them as, which is all that is recoverable
-	 * (finding F226).
+	/**
+	 * @brief Construct an answer-tone detector: a GenericToneDetector
+	 * base, plus a filter chosen by @p sampleRate.
 	 *
-	 *   samples1, samples2   the base divides these by `blockLen`
-	 *   threshold, ratio     the two floats, copied
-	 *   flag                 the base's +0x34
-	 *   sampleRate           THE SELECTOR.  8000 picks the 13-tap pair.
-	 *                        Not stored anywhere.
-	 *   blockLen, blockSize  the base's divisor and the filter's slack
+	 * Eight arguments, seven of which are the base's -- the names are the
+	 * base's own names for the arguments it receives (finding F226); this
+	 * class adds no member and no method of its own.
+	 *
+	 * @param samples1    Divided by @p blockLen; forwarded to the base.
+	 * @param samples2    Divided by @p blockLen; forwarded to the base.
+	 * @param threshold   Forwarded to the base unchanged.
+	 * @param flag        Forwarded to the base's +0x34.
+	 * @param ratio       Forwarded to the base unchanged.
+	 * @param sampleRate  THE SELECTOR, not stored anywhere: 8000 picks
+	 *                    the 13-tap filter pair (V.90 phase 3's case),
+	 *                    anything else picks the 11-tap pair (V.PCM's
+	 *                    9600 Hz case).
+	 * @param blockLen    The base's divisor.
+	 * @param blockSize   The filter's history slack.
 	 */
 	ANSamToneDetector(unsigned int samples1, unsigned int samples2,
 			  float threshold, unsigned int flag, float ratio,
 			  unsigned int sampleRate, unsigned int blockLen,
 			  unsigned int blockSize);
 
-	/*
-	 * NINETEEN BYTES AND AN EMPTY BODY.  `sub $0xc,%esp`, the argument,
-	 * `call GenericToneDetector::~GenericToneDetector`, `add`, `ret`:
-	 * that is the whole function, which is what a destructor with no
-	 * statements and one base compiles to.  It is DECLARED rather than
-	 * left implicit because the object's `D1` and `D2` are ordinary
-	 * global `T` symbols; an implicit destructor is emitted weak, in a
-	 * comdat group, or not at all.
+	/**
+	 * @brief Destroy the base GenericToneDetector. Declared explicitly
+	 * (rather than left implicit) because the object's D1/D2 are ordinary
+	 * global symbols, which an implicit destructor never emits that way.
 	 */
 	~ANSamToneDetector();
 };

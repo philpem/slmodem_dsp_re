@@ -154,81 +154,103 @@ struct cid {
 /* What create_cid puts there.  8000 is the rate by being the other one. */
 #define CID_RATE_8000	8000
 
-/*
- * Demodulate `count` line samples into `bits`, one short per bit, and return
- * how many bits that was.  A delay-line discriminator followed by a 17-tap
- * low pass, then a slicer with its own adaptive threshold; every piece of
- * state it needs is in `cid` and persists across calls.
+/**
+ * @brief Demodulate FSK Caller ID line samples into bits.
  *
- * There is no bound on `bits`: the caller sizes it from `count`.
+ * A delay-line discriminator followed by a 17-tap low pass, then a
+ * slicer with its own adaptive threshold; every piece of state it needs
+ * is in @p cid and persists across calls.
+ *
+ * @param samples  Input line samples.
+ * @param bits     Output, one short per bit. There is no bound on it:
+ *                 the caller sizes it from @p count.
+ * @param count    Number of input samples.
+ * @param cid      The receiver, updated in place.
+ * @return The number of bits written to @p bits.
  */
 short CID_FSD_demodulate(const short *samples, short *bits, short count,
 			 struct cid *cid);
 
-/*
- * The mark-tone detector, and it answers backwards: **0 means the tone is
- * there**, 1 means it is not.  `cid_modem` reads it that way -- a zero adds
- * cid->f02c to its confidence counter and anything else clears it.
+/**
+ * @brief The mark-tone (1200 Hz) detector.
  *
- * Two cascaded notches take out 1200 Hz and 1300 Hz; what is left is compared
- * with the input's own energy.  See src/service/cid_mtd.c.
+ * Two cascaded notches take out 1200 Hz and 1300 Hz; what is left is
+ * compared with the input's own energy. See src/service/cid_mtd.c.
+ *
+ * @param samples  Input samples.
+ * @param count    Number of samples.
+ * @param cid      The receiver, for its coefficient state.
+ * @return 0 if the tone IS there (backwards from the usual sense), 1 if
+ *         it is not. `cid_modem` reads it that way: a zero adds
+ *         `cid->f02c` to its confidence counter and anything else
+ *         clears it.
  */
 short CID_MTD_detect(const short *samples, short count, struct cid *cid);
 
-/*
- * Feed the framer one demodulated bit.  Argument order is the object's:
- * the BIT first, the object second.
+/**
+ * @brief Feed the async framer one demodulated bit.
  *
- * State 0 hunts carrier on a mark/space balance counter; more than 15 net
- * marks arms state 3, which waits for threshold + 1 consecutive spaces...
- * except that the object then backdates the run to threshold and enters state 2
- * directly, so the byte collector starts at bit position threshold rather than
- * 0.  State 1 waits for a start bit (a 0); state 2 shifts eight bits
- * LSB-first into pack_acc and appends the byte to `data`.  Nothing bounds
- * pack_len against sizeof(data) -- that is the object's own shape, and
- * cid_modem is what must keep the message short.
+ * State 0 hunts carrier on a mark/space balance counter; more than 15
+ * net marks arms state 3, which waits for `threshold + 1` consecutive
+ * spaces... except that the object then backdates the run to
+ * `threshold` and enters state 2 directly, so the byte collector starts
+ * at bit position `threshold` rather than 0. State 1 waits for a start
+ * bit (a 0); state 2 shifts eight bits LSB-first into `pack_acc` and
+ * appends the byte to `data`. Nothing bounds `pack_len` against
+ * `sizeof(data)` -- that is the object's own shape, and cid_modem() is
+ * what must keep the message short.
  *
- * `threshold` doubles as the framer's channel-seizure run length here and as
- * the slicer threshold `cid_threshold` stores; create_cid seeds it with 2.
- * The name is the author's -- see the field's comment above.
+ * @param bit  The new bit. Argument order is the object's: the bit
+ *             first, the object second.
+ * @param cid  The receiver, updated in place.
  */
 void pack_next_bit(short bit, struct cid *cid);
 
-/*
- * Put the receiver back to the state a new one is in, and configure the 9:10
- * resampler from Rxcid.c's own static filter.  `rate`, `threshold` and `f02c` are
- * the caller's and survive; everything else is cleared.
+/**
+ * @brief Put the receiver back to the state a new one is in.
  *
- * FPM_MRF_init is asked to allocate only when `mrf.history` is still NULL, so
- * calling this repeatedly reuses the buffer rather than leaking it.
+ * Configures the 9:10 resampler from Rxcid.c's own static filter.
+ * `rate`, `threshold` and `f02c` are the caller's and survive; everything
+ * else is cleared. `FPM_MRF_init` is asked to allocate only when
+ * `mrf.history` is still NULL, so calling this repeatedly reuses the
+ * buffer rather than leaking it.
+ *
+ * @param cid  The receiver to reset.
  */
 void reset_cid(struct cid *cid);
 
-/*
- * Construct one.  NULL allocates 0x160 bytes; anything else is the caller's
- * storage.  Returns the object either way.  Seeds `rate` with 8000, `threshold`
- * with 2 and `f02c` with 9, all AFTER the reset.
+/**
+ * @brief Construct an FSK Caller ID receiver.
+ *
+ * Seeds `rate` with 8000, `threshold` with 2 and `f02c` with 9, all
+ * AFTER calling reset_cid().
+ *
+ * @param cid  NULL allocates 0x160 bytes; anything else is the caller's
+ *             storage.
+ * @return The receiver, either way.
  */
 struct cid *create_cid(struct cid *cid);
 
-/*
- * One block of line samples through the FSK receiver, and the top of this
- * file's stack.  Four stages, each gated on how much mark tone has been seen:
+/**
+ * @brief Run one block of line samples through the whole FSK receiver.
  *
- *   1. copy to a local buffer and subtract the tracked DC.
- *   2. below ~40 ms of confidence, ask CID_MTD_detect whether 1200 Hz is
- *      there; a yes adds `f02c` to `mark_conf`, a no clears it.
- *   3. above ~26.7 ms, resample 8000 -> 7200 (9600 is already right) and,
- *      while the confidence is still between the two thresholds, re-adapt
- *      `gain` from the block's mean absolute value; then apply `gain`.
- *   4. above ~40 ms, demodulate into `bits` and push each bit through
- *      pack_next_bit.  Once `data[1] + 3` bytes have arrived, checksum them.
+ * The top of this file's stack. Four stages, each gated on how much
+ * mark tone has been seen: (1) copy to a local buffer and subtract the
+ * tracked DC; (2) below ~40 ms of confidence, ask CID_MTD_detect()
+ * whether 1200 Hz is there, adjusting `mark_conf`; (3) above ~26.7 ms,
+ * resample 8000 -> 7200 (9600 is already right) and, while the
+ * confidence is still between the two thresholds, re-adapt `gain` from
+ * the block's mean absolute value, then apply `gain`; (4) above ~40 ms,
+ * demodulate into `bits` and push each bit through pack_next_bit().
+ * Once `data[1] + 3` bytes have arrived, checksum them.
  *
- * Returns 1 while still hunting, 2 while collecting, 3 for a message whose
- * checksum agrees, and -1 for one that does not.
- *
- * `count` MUST NOT exceed 206: the local sample buffer is that long in the
- * object and nothing checks.  Deviation D973.
+ * @param samples  Input line samples.
+ * @param count    Number of samples. MUST NOT exceed 206: the local
+ *                 sample buffer is that long in the object and nothing
+ *                 checks (deviation D973).
+ * @param cid      The receiver, updated in place.
+ * @return 1 while still hunting, 2 while collecting, 3 for a message
+ *         whose checksum agrees, -1 for one that does not.
  */
 int cid_modem(const short *samples, unsigned short count, struct cid *cid);
 
@@ -241,11 +263,15 @@ extern const short fix_LPF[17];
 extern const short AUTOCOR_COEF_7200[5];
 extern const short AUTOCOR_COEF_9600[5];
 
-/*
- * CID_MTD_detect's four are file-static in the object, so they cannot be
- * named from a test.  This is the same accessor arrangement `fpm_div.c` uses
- * for FPM_div_table: `which` is 1 or 2, `rate` is 8000 or 9600, and anything
- * else returns NULL.
+/**
+ * @brief Test accessor for CID_MTD_detect()'s four file-static coefficient
+ * tables.
+ *
+ * The same accessor arrangement `fpm_div.c` uses for `FPM_div_table`.
+ *
+ * @param which  1 or 2, selecting which of the two coefficient pairs.
+ * @param rate   8000 or 9600.
+ * @return The matching table, or NULL for any other @p which/@p rate.
  */
 const short *CID_MTD_coeff(int which, int rate);
 
@@ -253,12 +279,33 @@ const short *CID_MTD_coeff(int which, int rate);
  * The TOP of the stack: slmodemd's own three entry points, defined in
  * src/service/cid.c and declared by the host verbatim
  * (ref/slmodemd/modem.c:87-89) -- the signatures are quoted from there.
- * `in` is `void *` in the host's extern and is a buffer of line samples
- * (shorts); `CID_process` returns 0 while a message is still arriving, 1
- * once one has been delivered to the TTY, -1 when the receiver gives up.
+ */
+
+/**
+ * @brief Construct the Caller ID service (host entry point).
+ * @param m        The host's modem object.
+ * @param rate     Line rate, 8000 or 9600.
+ * @param cid_val  Host-supplied configuration value.
+ * @return The service object, as `void *`, or NULL on failure.
  */
 void *CID_create(void *m, unsigned rate, unsigned cid_val);
+
+/**
+ * @brief Tear down the Caller ID service (host entry point).
+ * @param cid  The service object to free.
+ */
 void CID_delete(void *cid);
+
+/**
+ * @brief Run one block of line samples through the Caller ID service
+ * (host entry point).
+ * @param cid    The service object.
+ * @param in     A buffer of line samples (shorts), as `void *` in the
+ *               host's extern.
+ * @param count  Number of samples.
+ * @return 0 while a message is still arriving, 1 once one has been
+ *         delivered to the TTY, -1 when the receiver gives up.
+ */
 int CID_process(void *cid, void *in, int count);
 
 #endif /* DSPLIB_CID_H */

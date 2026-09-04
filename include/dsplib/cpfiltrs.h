@@ -35,20 +35,32 @@
 
 #include "dsplib/toneiir.h"
 
+/** @brief 0-596 Hz bandpass (peak 452 Hz), for tones below the standard band. Interstage shifts; see #CP_100_550_a/#CP_100_550_b. */
 extern const short CP_100_550_scales[IIR_FILTER_SCALES];
+/** @brief Denominator coefficients for #CP_100_550_scales. */
 extern const short CP_100_550_a[IIR_FILTER_COEFF];
+/** @brief Numerator coefficients for #CP_100_550_scales. */
 extern const short CP_100_550_b[IIR_FILTER_COEFF];
 
+/** @brief 230-546 Hz bandpass (peak 416 Hz), dial tone (350 + 440 Hz). Interstage shifts; see #CP_276_504_a/#CP_276_504_b. */
 extern const short CP_276_504_scales[IIR_FILTER_SCALES];
+/** @brief Denominator coefficients for #CP_276_504_scales. */
 extern const short CP_276_504_a[IIR_FILTER_COEFF];
+/** @brief Numerator coefficients for #CP_276_504_scales. */
 extern const short CP_276_504_b[IIR_FILTER_COEFF];
 
+/** @brief 263-898 Hz bandpass (peak 285 Hz), ringback (440 + 480 Hz). Interstage shifts; see #CP_350_600_a/#CP_350_600_b. */
 extern const short CP_350_600_scales[IIR_FILTER_SCALES];
+/** @brief Denominator coefficients for #CP_350_600_scales. */
 extern const short CP_350_600_a[IIR_FILTER_COEFF];
+/** @brief Numerator coefficients for #CP_350_600_scales. */
 extern const short CP_350_600_b[IIR_FILTER_COEFF];
 
+/** @brief 396-670 Hz bandpass (peak 640 Hz), busy/congestion (480 + 620 Hz). Interstage shifts; see #CP_450_630_a/#CP_450_630_b. */
 extern const short CP_450_630_scales[IIR_FILTER_SCALES];
+/** @brief Denominator coefficients for #CP_450_630_scales. */
 extern const short CP_450_630_a[IIR_FILTER_COEFF];
+/** @brief Numerator coefficients for #CP_450_630_scales. */
 extern const short CP_450_630_b[IIR_FILTER_COEFF];
 
 #endif /* DSPLIB_CPFILTRS_H */
