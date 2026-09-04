@@ -87,7 +87,6 @@ struct call_dp {
 	int			pad[3];
 };
 
-/* Register the datapump.  Called from prop_dp_init. */
 /*
  * The three dp_operations entry points, and the S-register adaptor.
  *
@@ -98,13 +97,57 @@ struct call_dp {
  * `call_run` is `.process`, with no dp_wrapper in between: this datapump does
  * its own rate conversion.
  */
+
+/**
+ * @brief Construct the call-setup datapump.
+ *
+ * Builds `rc_in`/`rc_out` only when @p srate is not 8 kHz -- this
+ * datapump does its own rate conversion rather than using dp_wrapper.
+ *
+ * @param modem     The host's modem object.
+ * @param id        Should be #DP_CALL.
+ * @param caller    Nonzero if this side originated the call.
+ * @param srate     Host sample rate.
+ * @param max_frag  Host fragment size.
+ * @param op        The registered `dp_operations` table.
+ * @return A new `struct dp *` (the `struct call_dp` it heads).
+ */
 struct dp *call_create(void *modem, int id, int caller, int srate,
 		       int max_frag, struct dp_operations *op);
+
+/**
+ * @brief Tear down the call-setup datapump.
+ * @param dp  The datapump to free.
+ * @return 0.
+ */
 int call_delete(struct dp *dp);
+
+/**
+ * @brief Run one block through the call-setup datapump: drive
+ * `CALLPROG_Progress` and report what it decided.
+ * @param dp     The datapump.
+ * @param in     Host-rate input samples.
+ * @param out    Host-rate output samples.
+ * @param count  Number of samples.
+ * @return A `DPSTAT_*` status code.
+ */
 int call_run(struct dp *dp, void *in, void *out, int count);
+
+/**
+ * @brief Read a modem S-register during call setup.
+ * @param modem  The host's modem object.
+ * @param num    The S-register number.
+ * @return The register's value.
+ */
 long call_GetSRegister(void *modem, unsigned short num);
 
+/**
+ * @brief Register the call-setup datapump's `dp_operations` table with
+ * the modem core. Called from prop_dp_init().
+ */
 void dp_call_init(void);
+
+/** @brief The other half of dp_call_init(). */
 void dp_call_exit(void);
 
 #endif /* DSPLIB_CALL_H */

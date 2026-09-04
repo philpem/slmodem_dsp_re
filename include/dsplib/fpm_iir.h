@@ -27,29 +27,45 @@
 #define FPM_IIR_II_COEFF_PER_SECTION 5
 #define FPM_IIR_II_STATE_PER_SECTION 4
 
-/*
- * Filter one sample through `sections` cascaded biquads.  `state` is updated
- * in place and must hold 2 * sections words.
+/**
+ * @brief Filter one sample through cascaded biquads, direct form II, saturating.
+ * @param x         The input sample.
+ * @param coeff     #FPM_IIR_COEFF_PER_SECTION coefficients per section.
+ * @param state     Updated in place; must hold `2 * sections` words.
+ * @param sections  Number of cascaded biquad sections.
+ * @return The filtered, saturated output sample.
  */
 short FPM_iir_filt(short x, const short *coeff, short *state, short sections);
 
-/*
- * FPM_iir_filt over `count` samples, in place.  Same engine, same state
- * layout (2 * sections words), same saturation -- see src/dsp/fpm_iir.c.
+/**
+ * @brief FPM_iir_filt() over a block of samples, in place.
  *
- * `sections == 0` is NOT a defined input: the object writes back a register it
- * never assigned on that path.  Deviation D393.
+ * Same engine, same state layout (`2 * sections` words), same saturation --
+ * see src/dsp/fpm_iir.c.
+ *
+ * @param samples   @p count samples, filtered in place.
+ * @param coeff     #FPM_IIR_COEFF_PER_SECTION coefficients per section.
+ * @param state     Updated in place; must hold `2 * sections` words.
+ * @param sections  Number of cascaded biquad sections. 0 is NOT a defined
+ *                  input: the object writes back a register it never
+ *                  assigned on that path (deviation D393).
+ * @param count     Number of samples to filter.
  */
 void FPM_iir_filt_block(short *samples, const short *coeff, short *state,
 			short sections, short count);
 
-/*
- * Filter `count` samples in place through `sections` cascaded biquads,
- * direct form I.  `state` must hold 4 * sections words.
+/**
+ * @brief Filter a block of samples through cascaded biquads, direct form I,
+ * no saturation.
  *
- * COEFFICIENT ORDER IS { b0, b2, b1, a2, a1 } -- oldest-first within each
- * half, to match the history layout.  Not the usual { b0, b1, b2, a1, a2 }.
- * See src/dsp/fpm_iir.c.
+ * @param samples   @p count samples, filtered in place.
+ * @param coeff     #FPM_IIR_II_COEFF_PER_SECTION coefficients per section,
+ *                  in the order `{ b0, b2, b1, a2, a1 }` -- oldest-first
+ *                  within each half, to match the history layout, NOT the
+ *                  usual `{ b0, b1, b2, a1, a2 }`. See src/dsp/fpm_iir.c.
+ * @param state     Updated in place; must hold `4 * sections` words.
+ * @param sections  Number of cascaded biquad sections.
+ * @param count     Number of samples to filter.
  */
 void FPM_iir_filt_II(short *samples, const short *coeff, short *state,
 		     short sections, short count);

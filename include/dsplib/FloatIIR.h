@@ -32,28 +32,42 @@
 
 class FloatIIR {
 public:
-	/*
-	 * `ncoeff` is rounded down to a multiple of four.  `blockSize` is the
-	 * slack above the tap count, and decides how often the history is
-	 * compacted rather than anything about the response.  The history is
-	 * allocated here and zeroed; a failed allocation is not reported, and
-	 * `process` would fault on it -- see docs/deviations.md.
+	/**
+	 * @brief Construct an all-pole IIR filter.
+	 * @param ncoeff     Tap count, rounded down to a multiple of four
+	 *                   (the dot product is unrolled four ways).
+	 * @param coeff      Feedback coefficients, @p ncoeff entries; not
+	 *                   copied, not owned.
+	 * @param blockSize  Slack above @p ncoeff in the history buffer,
+	 *                   deciding how often it is compacted -- not part
+	 *                   of the response. The history is allocated here
+	 *                   and zeroed; a failed allocation is not reported
+	 *                   and process() would fault on it (docs/deviations.md).
 	 */
 	FloatIIR(unsigned ncoeff, float *coeff, unsigned blockSize);
 	~FloatIIR();
 
-	/* Zero the history and rewind the write position. */
+	/** @brief Zero the history buffer and rewind the write position. */
 	void reset();
 
-	/*
-	 * Point at a new coefficient array, and optionally change the tap
-	 * count.  Returns 0, or -1 if the rounded tap count would not leave
-	 * room in the buffer -- in which case NOTHING is changed, not even
-	 * the pointer.
+	/**
+	 * @brief Point at a new coefficient array, and optionally change the
+	 * tap count.
+	 * @param coeff   New feedback coefficients; not copied, not owned.
+	 * @param ncoeff  New tap count, rounded down to a multiple of four.
+	 * @return 0 on success, or -1 if the rounded tap count would not
+	 *         leave room in the existing buffer -- in which case nothing
+	 *         is changed, not even the pointer.
 	 */
 	int setCoefficients(float *coeff, unsigned ncoeff);
 
-	/* `count` samples, in place-safe only if `in` and `out` do not alias. */
+	/**
+	 * @brief Filter a block of samples: y[n] = x[n] + sum(coeff[k] * y[n-1-k]).
+	 * @param in     Input samples, @p count entries.
+	 * @param out    Output samples, @p count entries. In-place safe only
+	 *               if @p in and @p out do not alias.
+	 * @param count  Number of samples to process.
+	 */
 	void process(const float *in, float *out, unsigned count);
 
 private:

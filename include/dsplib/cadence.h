@@ -251,26 +251,42 @@ struct cadence_setup {
 	int	w6;		/* +0x18  -> c->int_2a4                */
 };
 
-/*
- * Build a detector.  Pass NULL for `c` to allocate one; returns NULL if the
- * allocation fails, or if the tone's timing windows are unusable (only the
- * ringback case can decide that, and it frees what it built first).
+/**
+ * @brief Build a cadence detector.
  *
- * `extra` does two things: any positive value clears `continuous`, and
- * `extra + 1` scales the tone duration handed to the underlying toneiir.
+ * @param c      NULL allocates one.
+ * @param s      Setup, including which tone this detector is for.
+ * @param extra  Any positive value clears `continuous`, and `extra + 1`
+ *               scales the tone duration handed to the underlying toneiir.
+ * @param modem  The host's modem object, for `modem_get_param`.
+ * @return The detector, or NULL if the allocation fails, or if the
+ *         tone's timing windows are unusable (only the ringback case can
+ *         decide that, and it frees what it built first).
  */
 struct cadence *cadence_create(struct cadence *c, struct cadence_setup *s,
 			       int extra, void *modem);
 
+/**
+ * @brief Free a detector built by cadence_create().
+ * @param c  The detector to free.
+ */
 void cadence_delete(struct cadence *c);
 
-/* Start over: reset the filter, drop every recorded period. */
+/**
+ * @brief Start over: reset the underlying filter and drop every
+ * recorded period.
+ * @param c  The detector to reset.
+ */
 void cadence_reset(struct cadence *c);
 
-/*
- * Feed one sample.  Returns CADENCE_NOTHING almost always -- a verdict is
- * possible only on the samples where the underlying toneiir reaches the end
- * of an interval.
+/**
+ * @brief Feed one sample to the detector.
+ * @param c       The detector, updated in place.
+ * @param sample  The new sample.
+ * @return #CADENCE_NOTHING almost always -- a verdict is possible only
+ *         on the samples where the underlying toneiir reaches the end
+ *         of an interval, in which case #CADENCE_DETECTED or
+ *         #CADENCE_RESTART.
  */
 int cadence_progress(struct cadence *c, short sample);
 

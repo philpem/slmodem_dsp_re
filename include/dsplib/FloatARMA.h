@@ -66,14 +66,42 @@ public:
 	 * failed allocation is not reported and the fill loops that follow
 	 * would fault on it, exactly as FloatFIR's constructor does.
 	 */
+	/**
+	 * @brief Construct a direct-form-I recursive (pole-zero) filter.
+	 * @param nDen       Denominator (feedback) tap count, rounded up to a
+	 *                   multiple of four.
+	 * @param nNum       Numerator (feed-forward) tap count, rounded up to
+	 *                   a multiple of four.
+	 * @param den        Denominator coefficients, @p nDen entries. Both
+	 *                   @p den and @p num are divided by `den[0]` unless
+	 *                   it is exactly 1.0f, and `den[0]` is then forced
+	 *                   to 0 so the feedback sum's k=0 term is inert.
+	 * @param num        Numerator coefficients, @p nNum entries.
+	 * @param blockSize  Slack above each tap count, deciding how often
+	 *                   each history buffer is compacted -- not part of
+	 *                   the response.
+	 */
 	FloatARMA(unsigned int nDen, unsigned int nNum, float *den, float *num,
 		  unsigned int blockSize);
 	~FloatARMA();
 
-	/* Zero both histories and rewind both write positions. */
+	/** @brief Zero both history buffers and rewind both write positions. */
 	void reset();
 
+	/**
+	 * @brief Filter one sample:
+	 * `y[n] = sum(b[k]*x[n-k]) - sum(a[k]*y[n-k], k=1..)`.
+	 * @param in  The new input sample.
+	 * @return The filtered output.
+	 */
 	float process(float in);
+
+	/**
+	 * @brief Filter a block of samples.
+	 * @param in     Input samples, @p count entries.
+	 * @param out    Output samples, @p count entries.
+	 * @param count  Number of samples to process.
+	 */
 	void process(const float *in, float *out, unsigned int count);
 
 	/*

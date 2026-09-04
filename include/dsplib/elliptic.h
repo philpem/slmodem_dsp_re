@@ -20,13 +20,28 @@
 
 #include "dsplib/toneiir.h"
 
+/**
+ * @brief Elliptic1.c bank: seven progressively wider bandpasses, -6 dB
+ * 284..568 Hz through 162..729 Hz, one-based subindex 1..7 in
+ * GetDialToneFilterSubindex() order.
+ */
 extern const short Filter_350_500_scales[7 * IIR_FILTER_SCALES];
+/** @brief Numerator coefficients for #Filter_350_500_scales. */
 extern const short Filter_350_500_b[7 * IIR_FILTER_COEFF];
+/** @brief Denominator coefficients for #Filter_350_500_scales. */
 extern const short Filter_350_500_a[7 * IIR_FILTER_COEFF];
+
+/** @brief Elliptic2.c bank: seven progressively wider bandpasses (see #Filter_350_500_scales). */
 extern const short Filter_100_550_scales[7 * IIR_FILTER_SCALES];
+/** @brief Numerator coefficients for #Filter_100_550_scales. */
 extern const short Filter_100_550_b[7 * IIR_FILTER_COEFF];
+/** @brief Denominator coefficients for #Filter_100_550_scales. */
 extern const short Filter_100_550_a[7 * IIR_FILTER_COEFF];
+
+/** @brief Elliptic3.c bank: seven progressively wider bandpasses (see #Filter_350_500_scales). */
 extern const short Filter_276_504_scales[7 * IIR_FILTER_SCALES];
+/** @brief Numerator coefficients for #Filter_276_504_scales. */
 extern const short Filter_276_504_b[7 * IIR_FILTER_COEFF];
+/** @brief Denominator coefficients for #Filter_276_504_scales. */
 extern const short Filter_276_504_a[7 * IIR_FILTER_COEFF];
 #endif /* DSPLIB_ELLIPTIC_H */

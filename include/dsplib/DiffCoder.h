@@ -39,6 +39,11 @@
 template <class T>
 class SerialDifferentialEncoder {
 public:
+	/**
+	 * @brief XOR-encode one symbol against the last one coded.
+	 * @param in  The new symbol.
+	 * @return `prev_ ^ in`, which also becomes the new `prev_`.
+	 */
 	T process(T in);
 
 	T	prev_;		/* +0x00, and the whole object */
@@ -47,6 +52,11 @@ public:
 template <class T>
 class SerialDifferentialDecoder {
 public:
+	/**
+	 * @brief Undo SerialDifferentialEncoder::process().
+	 * @param in  The coded symbol.
+	 * @return `prev_ ^ in`; @p in itself becomes the new `prev_`.
+	 */
 	T process(T in);
 
 	T	prev_;
@@ -60,15 +70,43 @@ public:
 template <class T>
 class ParallelDifferentialEncoder {
 public:
+	/**
+	 * @brief Allocate a @p size-element state buffer, zeroed.
+	 *
+	 * Does NOT call reset() and leaves `size_` at 0 -- a freshly
+	 * constructed encoder processes nothing at all until reset() is
+	 * called (the seemingly-equivalent `{ reset(size, 0); }` is wrong:
+	 * it diverges from the object at 43,755 comparison points). The
+	 * allocation is not checked before the zero-fill, matching the
+	 * object; a NULL return faults on the first store for nonzero @p size.
+	 *
+	 * @param size  Capacity, fixed for the object's lifetime.
+	 */
 	ParallelDifferentialEncoder(unsigned size);
 	~ParallelDifferentialEncoder();
 
-	/*
-	 * 0 on success, 1 if `size` exceeds the capacity fixed at construction.
-	 * On failure NOTHING is written -- not the state, not `size_`.
+	/**
+	 * @brief Activate a width and fill it with an initial value.
+	 *
+	 * Fills only the new width: elements at and above @p size keep
+	 * whatever they held before (observable when resetting narrower then
+	 * wider again -- reproduced as the object's, costs 12,520 comparison
+	 * points to "fix").
+	 *
+	 * @param size  New active width; must not exceed `capacity_`.
+	 * @param init  Fill value for the newly active elements.
+	 * @return 0 on success, or 1 if @p size exceeds `capacity_` -- on
+	 *         failure NOTHING is written, not the state, not `size_`.
 	 */
 	int reset(unsigned size, T init);
 
+	/**
+	 * @brief XOR-encode `size_` symbols, one independent history per
+	 * position.
+	 * @param in   `size_` input symbols.
+	 * @param out  `size_` output symbols: `out[i] = state_[i] ^ in[i]`,
+	 *             which also becomes the new `state_[i]`.
+	 */
 	void process(T *in, T *out);
 
 	T		*state_;	/* +0x00 owned, `capacity_` elements */
@@ -80,10 +118,38 @@ public:
 template <class T>
 class ParallelDifferentialDecoder {
 public:
+	/**
+	 * @brief Allocate a @p size-element state buffer, zeroed.
+	 *
+	 * Same shape as ParallelDifferentialEncoder's constructor, and the
+	 * same "does not call reset()" caveat applies. One real asymmetry
+	 * from the encoder is reproduced rather than tidied away: the
+	 * object's encoder constructor stores 0 into `state_` before the
+	 * `sysdep_malloc` call (dead -- overwritten immediately -- but
+	 * present) and the decoder's does not.
+	 *
+	 * @param size  Capacity, fixed for the object's lifetime.
+	 */
 	ParallelDifferentialDecoder(unsigned size);
 	~ParallelDifferentialDecoder();
 
+	/**
+	 * @brief Activate a width and fill it with an initial value.
+	 * @param size  New active width; must not exceed `capacity_`.
+	 * @param init  Fill value for the newly active elements.
+	 * @return 0 on success, or 1 if @p size exceeds `capacity_` (see
+	 *         ParallelDifferentialEncoder::reset() for the failure/partial
+	 *         behavior, which matches).
+	 */
 	int reset(unsigned size, T init);
+
+	/**
+	 * @brief Undo ParallelDifferentialEncoder::process(), one independent
+	 * history per position.
+	 * @param in   `size_` coded symbols.
+	 * @param out  `size_` output symbols: `out[i] = state_[i] ^ in[i]`;
+	 *             `in[i]` becomes the new `state_[i]`.
+	 */
 	void process(T *in, T *out);
 
 	T		*state_;

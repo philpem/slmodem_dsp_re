@@ -52,9 +52,21 @@ struct fpm_fsd {
 	short pad36;
 };
 
-/* `fresh` non-zero allocates the three buffers; zero re-inits in place. */
+/**
+ * @brief Initialise an FSK demodulator.
+ * @param state  The demodulator to initialise.
+ * @param cfg    Filter and slicer configuration, copied wholesale.
+ * @param fresh  Nonzero allocates the trace/FIR-history/IIR-history
+ *               buffers; zero re-initialises in place, reusing whatever
+ *               @p state already points at.
+ */
 void FPM_FSD_init(struct fpm_fsd *state, const struct fpm_fsd_cfg *cfg,
 		  int fresh);
+
+/**
+ * @brief Free the buffers allocated by FPM_FSD_init() with `fresh != 0`.
+ * @param state  The demodulator to tear down.
+ */
 void FPM_FSD_free(struct fpm_fsd *state);
 
 /*
@@ -71,15 +83,20 @@ void FPM_FSD_free(struct fpm_fsd *state);
 extern const struct fpm_fsd_cfg FPM_FSD_CFG_data;
 extern struct fpm_fsd_cfg FPM_FSD_CFG;
 
-/*
- * Demodulate `count` samples, appending bits to `bits_out` as they complete.
- * Returns the number of bits written -- usually far fewer than `count`, since
- * a bit takes `bit_samples` samples.
+/**
+ * @brief Demodulate a run of samples through FIR, discriminator, IIR
+ * lowpass and Schmitt slicer, appending completed bits to @p bits_out.
  *
- * At most `max_bits + 2` bits are written in one call, and the remaining
- * input is DISCARDED rather than held over, so a caller feeding it more than
- * that many bits' worth of samples silently loses data.  See
- * src/dsp/fpm_fsd.c.
+ * @param state     The demodulator, updated in place.
+ * @param samples   Input samples.
+ * @param bits_out  Completed bits are appended here, `cfg.high_bit`-coded.
+ * @param count     Number of input samples. At most `cfg.max_bits + 2`
+ *                  bits are written in one call, and any remaining input
+ *                  beyond that is DISCARDED rather than held over -- a
+ *                  caller feeding more than that many bits' worth of
+ *                  samples silently loses data. See src/dsp/fpm_fsd.c.
+ * @return The number of bits written -- usually far fewer than @p count,
+ *         since one bit takes `cfg.bit_samples` samples.
  */
 short FPM_FSD_demodulate(struct fpm_fsd *state, const short *samples,
 			 unsigned short *bits_out, unsigned short count);

@@ -20,25 +20,36 @@
  */
 #define RCFIXED_NMODES 20
 
-/*
- * Look up the conversion mode for a given rate pair.
+/**
+ * @brief Look up the conversion mode for a given rate pair.
  *
- * Reduces in_rate:out_rate by their GCD and searches the factor tables for a
- * matching down:up pair.  Returns an index in [2, RCFIXED_NMODES), or
- * RCFIXED_NMODES if the ratio is not supported.
+ * Reduces @p in_rate : @p out_rate by their GCD and searches the factor
+ * tables for a matching down:up pair. The search deliberately starts at
+ * index 2: entries 0 and 1 are the plain x4 and /4 cases, reachable only
+ * by asking for them explicitly. Equal rates reduce to 1:1, which is
+ * *not* in the tables, so 8000 -> 8000 returns #RCFIXED_NMODES and yields
+ * an identity converter -- the mechanism by which moving the host to
+ * 8 kHz turns this whole module into a pass-through.
  *
- * The search deliberately starts at index 2: entries 0 and 1 are the plain
- * x4 and /4 cases, reachable only by asking for them explicitly.
- *
- * Note that equal rates reduce to 1:1, which is *not* in the tables, so
- * 8000 -> 8000 returns RCFIXED_NMODES and yields an identity converter.  That
- * is the mechanism by which moving the host to 8 kHz turns this whole module
- * into a pass-through.
+ * @param in_rate   Input sample rate.
+ * @param out_rate  Output sample rate.
+ * @return An index in `[2, RCFIXED_NMODES)`, or #RCFIXED_NMODES if the
+ *         ratio is not supported.
  */
 int RcFixed_Check_Combination(int in_rate, int out_rate);
 
-/* Up and down factors per mode; exposed for tests and for rate planning. */
+/**
+ * @brief The upsampling factor for a mode, for tests and rate planning.
+ * @param mode  A mode from RcFixed_Check_Combination().
+ * @return The up factor.
+ */
 int RcFixed_UpFactor(int mode);
+
+/**
+ * @brief The downsampling factor for a mode, for tests and rate planning.
+ * @param mode  A mode from RcFixed_Check_Combination().
+ * @return The down factor.
+ */
 int RcFixed_DownFactor(int mode);
 
 /*
@@ -98,27 +109,48 @@ struct rc_state {
 /* Opaque handle. */
 struct rc;
 
-/*
- * Create a converter for a mode from RcFixed_Check_Combination().
- *
- * Returns NULL for modes 0 and 1 (which use a different state layout in the
- * original and are not implemented here) and for modes at or above
- * RCFIXED_NMODES, i.e. unsupported ratios.
+/**
+ * @brief Create a converter for a mode from RcFixed_Check_Combination().
+ * @param mode  A mode index.
+ * @return A new converter, or NULL for modes 0 and 1 (which use a
+ *         different state layout in the original and are not implemented
+ *         here) and for modes at or above #RCFIXED_NMODES, i.e.
+ *         unsupported ratios.
  */
 struct rc *RcFixed_Create(int mode);
+
+/**
+ * @brief Free a converter built by RcFixed_Create().
+ * @param h  The converter to free.
+ */
 void RcFixed_Delete(struct rc *h);
+
+/** @brief Reset a converter's history and phase to their initial state. */
 void RcFixed_Reset(struct rc *h);
 
-/*
- * Convert `in_count` samples.  Writes at most as many outputs as the ratio
- * allows and stores the count through `out_count`.  Consumes all of `in`
- * unless it runs out mid-way through the samples needed for one more output,
- * in which case the remainder is held in the history for the next call.
+/**
+ * @brief Convert a run of samples.
+ *
+ * Consumes all of @p in unless it runs out mid-way through the samples
+ * needed for one more output, in which case the remainder is held in the
+ * history for the next call.
+ *
+ * @param h          The converter.
+ * @param in         Input samples.
+ * @param in_count   Number of input samples.
+ * @param out        Output buffer.
+ * @param out_count  Set to the number of output samples written -- at
+ *                    most as many as the ratio allows.
  */
 void RcFixed_Resample(struct rc *h, const short *in, int in_count,
 		      short *out, int *out_count);
 
-/* Test accessor: the live state, for field-by-field comparison. */
+/**
+ * @brief Test accessor: the converter's live state, for field-by-field
+ * comparison.
+ * @param h  The converter.
+ * @return Pointer to its internal `struct rc_state`.
+ */
 struct rc_state *RcFixed_State(struct rc *h);
 
 #endif /* DSPLIB_FIXEDRC_H */

@@ -270,33 +270,54 @@ struct b103fp {
 #define B103_STATE_WAIT2    3
 #define B103_STATE_DATA     4
 
-/*
- * Modulate `nbits` bits into `out` and return the number of 8 kHz samples
- * produced.
+/**
+ * @brief Modulate bits into Bell 103 / V.21 audio.
  *
- * Two stages: FPM_FSM_modulate writes 24 samples per bit into the scratch
- * buffer at 7200 Hz, then FPM_MRF_filter lifts that to 8000.  The bit count
- * and the sample count are therefore different numbers, and the return is the
- * second one.
+ * Two stages: FPM_FSM_modulate() writes 24 samples per bit into the
+ * scratch buffer at 7200 Hz, then FPM_MRF_filter() lifts that to 8000 --
+ * so the bit count and the sample count are different numbers.
+ *
+ * @param fp     The datapump.
+ * @param bits   @p nbits bits, one per word.
+ * @param out    Output samples at 8 kHz.
+ * @param nbits  Number of bits to modulate.
+ * @return The number of 8 kHz samples produced.
  */
 short ModDataB103(struct b103fp *fp, const unsigned short *bits, short *out,
 		  unsigned short nbits);
 
-/*
- * The same, with the carrier off: identical timing and identical sample
- * count, but silence.  Used to keep the transmitter running through a gap
- * without a discontinuity.
+/**
+ * @brief Same timing as ModDataB103(), with the carrier off.
+ *
+ * Identical sample count, but silence. Used to keep the transmitter
+ * running through a gap without a discontinuity.
+ *
+ * @param fp     The datapump.
+ * @param bits   Ignored (kept for signature symmetry with ModDataB103()).
+ * @param out    Output samples, silence.
+ * @param nbits  Number of (silent) bit periods.
+ * @return The number of 8 kHz samples produced.
  */
 short TxNoCarrierB103(struct b103fp *fp, const unsigned short *bits,
 		      short *out, unsigned short nbits);
 
-/* Carrier present: both receiver flags at once. */
+/**
+ * @brief Test whether carrier is currently present.
+ * @param fp  The datapump.
+ * @return Both receiver flags at once (carrier present).
+ */
 int CarrierDetectB103(struct b103fp *fp);
 
-/*
- * The receive chain.  `in` is modified IN PLACE -- it is mixed with the local
- * oscillator before anything else touches it -- and `count` samples at 8 kHz
- * become at most a handful of bits, which is the return value.
+/**
+ * @brief The receive chain: mix, filter and demodulate.
+ *
+ * @param fp        The datapump.
+ * @param in        Modified IN PLACE -- mixed with the local oscillator
+ *                  before anything else touches it.
+ * @param bits_out  Demodulated bits.
+ * @param count     Samples at 8 kHz.
+ * @return The number of bits written to @p bits_out -- at most a
+ *         handful per call.
  */
 short DemodDataB103(struct b103fp *fp, short *in, unsigned short *bits_out,
 		    unsigned short count);
@@ -304,42 +325,98 @@ short DemodDataB103(struct b103fp *fp, short *in, unsigned short *bits_out,
 /*
  * The half-duplex state machines.  Each ends by dispatching through
  * B103NextState[hdx->mode] when its condition is met, which is what advances
- * `hdx->state` to the next one.
+ * `hdx->state`; none of them chooses its own successor, which is why the same
+ * seven states serve originate, answer and local loopback.  `count` is in/out
+ * and every state zeroes it after use, so the caller knows the input was
+ * consumed even when the state produced nothing.
  */
+
+/** @brief Transmit: nothing to send yet, just advance. */
 short TxHdxStartB103(struct b103fp *fp, short *in, short *out, short *count);
+/** @brief Transmit: one block of data, via ModDataB103(). */
 short TxHdxDataB103(struct b103fp *fp, short *in, short *out, short *count);
+/**
+ * @brief Transmit: a block of continuous mark.
+ *
+ * The bit buffer is FILLED with ones here rather than supplied, so the
+ * caller hands over an empty buffer and a length. The exit condition
+ * differs by tone plan, not direction: V.21 ends the mark hold on the
+ * block count alone, Bell 103 also requires this station's own receiver
+ * to have acquired.
+ */
 short TxHdxMarksB103(struct b103fp *fp, short *in, short *out, short *count);
+/** @brief Transmit: a block of silence, with the modulator still running (TxNoCarrierB103()). */
 short TxHdxSilenceB103(struct b103fp *fp, short *in, short *out, short *count);
+/**
+ * @brief Receive: wait for the answer tone.
+ *
+ * Runs the acquisition AGC and the tone detector directly rather than
+ * going through DemodDataB103() -- there is no point mixing and
+ * demodulating while still waiting. Two exits: the tone arrives (advance,
+ * if the substate says to), or `tone_timeout` blocks pass without it
+ * (advance anyway, and report status 5).
+ */
 short RxDetMarkB103(struct b103fp *fp, short *in, short *out, short *count);
+/**
+ * @brief Receive: demodulate while waiting for carrier.
+ *
+ * Counts DOWN, unlike RxDetMarkB103(): `rx_count` blocks are allowed
+ * before giving up. Carrier appearing advances immediately; running out
+ * advances too, but reports status 5.
+ */
 short RxHdxStartB103(struct b103fp *fp, short *in, short *out, short *count);
+/**
+ * @brief Receive: carry data, and watch for the carrier going away.
+ *
+ * `rx_count` is reset to zero on every block with carrier and
+ * incremented on every block without, so it counts CONSECUTIVE losses.
+ * Eight in a row ends the call with status 6; a single dropout does not.
+ */
 short RxHdxDataB103(struct b103fp *fp, short *in, short *out, short *count);
 
-/* Indexed by hdx->mode; entries are the three B103*NextState functions. */
+/** @brief Indexed by `hdx->mode`; entries are the three `B103*NextState` functions. */
 extern void (*const B103NextState[3])(struct b103fp *fp);
 
-/*
- * One call of the datapump, both directions.  `n_tx` and `n_rx` are in/out and
- * change units: n_tx takes bits and returns samples, n_rx takes samples and
- * returns bits.  `rx_in` is filtered IN PLACE.  Returns the 32-bit word at
- * fp+0x1c -- status in the low byte, flags in the next.
+/**
+ * @brief One call of the datapump, both directions.
+ *
+ * @param fp       The datapump, updated in place.
+ * @param tx_bits  Bits to transmit.
+ * @param tx_out   Modulated output samples.
+ * @param rx_in    Input samples, filtered IN PLACE.
+ * @param rx_bits  Demodulated bits.
+ * @param n_tx     In/out, changes units: in, bits available in @p tx_bits;
+ *                 out, samples produced in @p tx_out.
+ * @param n_rx     In/out, changes units: in, samples available in
+ *                 @p rx_in; out, bits produced in @p rx_bits.
+ * @return The 32-bit word at `fp+0x1c` -- status in the low byte, flags
+ *         in the next.
  */
 int B103FP_modem(struct b103fp *fp, const int *tx_bits, short *tx_out,
 		 short *rx_in, int *rx_bits, short *n_tx, short *n_rx);
 
-/*
- * Build a datapump.  NULL `state` allocates one; NULL `cfg` uses
- * B103_CFG_data, which is loopback and will not complete a call.
+/**
+ * @brief Build a Bell 103 / V.21 modulation object.
  *
- * A caller supplying its own `state` must ZERO it first: the sub-object
+ * A caller supplying its own @p state must ZERO it first: the sub-object
  * pointers at +0x50 and +0x54 are tested for NULL to decide whether to
  * allocate, so uninitialised memory is read as a tree that already exists.
+ *
+ * @param state  NULL allocates one.
+ * @param cfg    NULL uses #B103_CFG_data, which is loopback and will not
+ *               complete a call.
+ * @return The object, or NULL on allocation failure.
  */
 struct b103fp *B103FP_create(struct b103fp *state, const struct b103_cfg *cfg);
 
-/*
- * Tear one down.  Frees the object itself unconditionally, even when the
- * caller supplied it -- see D8 in docs/deviations.md before passing anything
- * this function did not allocate.
+/**
+ * @brief Tear a modulation object down.
+ *
+ * Frees the object itself unconditionally, even when the caller supplied
+ * it -- see D8 in docs/deviations.md before passing anything this
+ * function did not allocate.
+ *
+ * @param fp  The object to free.
  */
 void B103FP_delete(struct b103fp *fp);
 
@@ -358,8 +435,42 @@ extern const short MTDb103_COEF[10];		/* 2 biquads: the detector  */
 /* Bell 103's gain-control configuration, in b103_agc_cfg.c. */
 extern const struct fpm_agc_cfg AGCb103_CFG_data;
 
+/**
+ * @brief Advance the local-loopback half-duplex machine.
+ *
+ * A switch on `hdx->substate` that installs the next pair of half-duplex
+ * states and sets the status the layer above reads (see `B103_STATE_*`
+ * for what each substate means). Transmits mark to itself and
+ * demodulates it back with no tone detection at all -- the receive
+ * state is never set to RxDetMarkB103(), it goes straight to
+ * RxHdxDataB103().
+ *
+ * @param fp  The datapump, whose `hdx->substate` selects the transition.
+ */
 void B103LocLoopNextState(struct b103fp *fp);
+
+/**
+ * @brief Advance the originate half-duplex machine.
+ *
+ * The four-step Bell 103 calling sequence: START transmits silence and
+ * listens for the answer tone (giving up after `tone_timeout` blocks),
+ * CARRDET holds for eight more blocks once the tone arrives, WAIT1
+ * transmits 40 blocks of mark so the answerer can train, WAIT2 is data
+ * both ways.
+ *
+ * @param fp  The datapump, whose `hdx->substate` selects the transition.
+ */
 void B103OriginateNextState(struct b103fp *fp);
+
+/**
+ * @brief Advance the answer half-duplex machine.
+ *
+ * Three steps rather than four: the answerer transmits mark from the
+ * start (that IS the answer tone the caller is listening for) and jumps
+ * from WAIT1 straight to data without an equivalent of WAIT2.
+ *
+ * @param fp  The datapump, whose `hdx->substate` selects the transition.
+ */
 void B103AnswerNextState(struct b103fp *fp);
 
 #endif /* DSPLIB_B103FP_H */

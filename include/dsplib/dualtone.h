@@ -103,36 +103,52 @@ struct dual_tone {
 	short	hold_b;			/* +0x42                          */
 };
 
-/*
- * Allocate and initialise a detector.  Takes no arguments -- there is nothing
- * to configure -- and returns NULL if the allocation fails.
+/**
+ * @brief Allocate and initialise a dual-tone detector.
+ *
+ * Takes no arguments -- there is nothing to configure.
+ *
+ * @return A new detector, or NULL if the allocation fails.
  */
 struct dual_tone *Dual_TONE_create(void);
 
-/* Frees unconditionally; sysdep_free tolerates NULL. */
+/**
+ * @brief Free a detector. Unconditional; `sysdep_free` tolerates NULL.
+ * @param st  The detector to free.
+ */
 void Dual_TONE_delete(struct dual_tone *st);
 
-/*
- * Examine `count` samples and return one of the DUAL_TONE_* verdicts.  The
- * samples are not modified.  A call with count <= 0 still returns a verdict,
- * from the energies retained since the last call.
+/**
+ * @brief Examine a block of samples for an answer tone.
+ *
+ * @param st       The detector, updated in place.
+ * @param samples  Input samples, not modified.
+ * @param count    Number of samples. A call with @p count <= 0 still
+ *                 returns a verdict, from the energies retained since the
+ *                 last call.
+ * @return One of the `DUAL_TONE_*` verdicts.
  */
 int Dual_TONE_detect(struct dual_tone *st, const short *samples, int count);
 
-/*
- * Q14 cosine, 2048 points per cycle, from a 513-entry quarter-wave table.
- * The phase is masked to 11 bits, so any input is valid.
+/**
+ * @brief Q14 cosine, 2048 points per cycle, from a 513-entry quarter-wave
+ * table.
  *
- * It lives in this file because that is where the original put it, not
+ * Lives in this file because that is where the original put it, not
  * because the detector uses it -- the callers are the dialler and the
  * calling-tone generator.
+ *
+ * @param phase  Phase, masked to 11 bits -- any input is valid.
+ * @return Q14 cosine of the phase.
  */
 short TONE_read(short phase);
 
-/*
- * Amplitude threshold for a detection level, from a 16-entry table indexed as
- * `45 - level`.  Only levels 30 to 45 are in range; anything else reads past
- * the table.  cadence_create is the only caller.
+/**
+ * @brief Amplitude threshold for a call-progress detection level.
+ * @param level  Detection level, #DETECTION_THRESHOLD_MIN_LEVEL to
+ *               #DETECTION_THRESHOLD_MAX_LEVEL; anything else reads past
+ *               the 16-entry table. `cadence_create` is the only caller.
+ * @return The threshold for @p level, from a table indexed as `45 - level`.
  */
 short Get_Detection_Threshold_Table(short level);
 
