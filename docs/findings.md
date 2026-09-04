@@ -114483,3 +114483,103 @@ tools/bannercheck.py src/fax` all clean. `make period` and
 sandbox; left for the parent session's gate, per every prior wave's own
 precedent -- every change here is an identifier substitution or a comment,
 which cannot move generated code. (2026-09-04)
+
+## F10145. Safe pad-region removal, long-tail sweep: every `pad_NNNN` outside the four active naming clusters, checked two ways and four removed so far
+
+New workstream, distinct from field naming: per the user's explicit decision
+(`docs/fieldnaming.md`'s "New workstream: safe pad-region removal"), a
+`pad_NNNN[N]` struct member is REMOVED, not just named, where it can be
+PROVEN per-instance that (1) its offset and width exactly match what the C
+compiler's own implicit alignment would insert between the declared types on
+either side if the member were simply deleted, and (2) nothing in the whole
+1.2 MB object reads or writes those bytes -- verified with `dis.py` over
+every function of the owning class/struct, not just the ones already
+reconstructed. Both must hold; either failing keeps the pad explicit. An
+`offsetof`-based compile-time assertion is added at the point of removal,
+following this tree's own existing idiom (`TONE_ASSERT_OFF` in
+`src/service/fdspkrnl.c`, the same shape as `onedef.py`'s own macros
+elsewhere) rather than inventing a new one.
+
+**Scope: the long tail.** Four sibling agents this session are covering the
+V.90 phase-3/4 and equalizer cluster, the VPcmFloModem/V92CP/V90CP/
+AutoDigitalImp/SessionFlag/Phase3-4Modulator cluster, the V.34 cluster
+(`v34recv.h` etc.), and the fax cluster (`faxvmi.h`/`class1.h`/`fax.h`/
+`v29fax.h`/`v17fax.h`/`v29data.h`/`faxfifo.h`) in their own worktrees. This
+finding covers every OTHER file in the tree carrying a live `pad_NNNN`
+struct member -- confirmed by `grep -rlE '\bpad_[0-9a-fA-F]+\b' include/
+src/`, filtered to files not in those four clusters. A first naive pass over
+that grep counted 44 files; **15 of the 44 have no actual live `pad_NNNN`
+struct member at all** -- the grep hit is a `V9*_OFF`/`V92TX_OFF`-style
+offset-assertion macro invocation whose first argument reuses an
+already-renamed field's old `pad_` label (`V92Transmitter.cpp`,
+`V92Phase3Modulator.cpp`, `V92Mapper.cpp`, `V92BitsToSymbol.cpp`), or a
+comment mentioning a `pad_` name for a field that has since been named
+elsewhere (`V92Precoder.cpp`, `V90Modulator.h`, `V90Modem.h`,
+`V90MappingParams.h`, `V92EchoCanceller.h`, `V92Phase2Info.cpp`,
+`V92ModulusEncoder.cpp`, `V90MappingParamsInt.cpp`, `detector.c`,
+`cid_mtd.c`, `beepgen.c`) -- the same over-count `docs/fieldnaming.md`'s own
+header already warns about and F10142 already hit once for `VPcmFloModem.h`/
+`V92CP.h`. Confirmed by grep for the exact declaration pattern
+(`^\s*(unsigned char|...) pad_[0-9a-f]+`), not assumed.
+
+### `fdspkrnl.h` / `src/service/fdspkrnl.c`: 4 of 7 removed
+
+`struct fdsp_buffers::pad_1f40[0x7d0]` and `struct fdsp_tone::pad_10[4]`/
+`pad_22[0xe]` fail the arithmetic test outright -- their width is far larger
+than what natural alignment between their neighbours would insert (a 2000-
+short array ending 4-aligned needs 0 bytes before a 4-aligned `int`, not
+0x7d0; a 4-byte-aligned `float` ending at +0x010 needs 0 bytes before another
+4-aligned `float` at +0x014, not 4; a `short` ending at +0x022 needs 2 bytes
+before a 4-aligned `float` at +0x030, not 0xe). These are real unmodelled
+space, not alignment slop, and CLAUDE.md's own header comment on this file
+already says so ("gaps stay pads and no field here is known to be the whole
+story"). Left untouched.
+
+Four pass both tests and were removed:
+
+- `struct fdsp_tone::pad_46[2]` (+0x046, between `short fir_idx` at +0x044
+  and `float det_coef[3]` at +0x048): exact 2-byte short-to-float alignment
+  gap. `dis.py` over `TONE_create` (the only writer -- it zeroes `fir_idx`
+  with a standalone `movw $0x0,0x44(%ebp)` and touches nothing at +0x046)
+  and over `TONE_delete`/`TONE_detect`/`TONE_filter`/`TONE_kill`/
+  `TONE_generate` finds zero references to offset 0x046 in any of them.
+  New assertion `TONE_ASSERT_OFF(det_coef, 0x048)`.
+- `struct fdsp_tone::pad_66[2]` (+0x066, between `short short_0064` and
+  `int int_0068`): same shape, same verification method, zero hits for
+  0x066 anywhere. The existing `TONE_ASSERT_OFF(int_0068, 0x068)` already
+  proved the target offset; no new assertion needed for the far side.
+- `struct fdsp_tone::pad_1b2[2]` (+0x1b2, between `short short_01b0` and
+  `float *ptr_01b4`): same shape. `ptr_01b4`/`ptr_01b8` are each set by
+  their own `sysdep_malloc` call in `TONE_create` (`mov %eax,0x1b4(%ebp)`
+  / `0x1b8(%ebp)`, two separate instructions, not a bulk store that could
+  have reached into the gap), and zero hits for 0x1b2 across all five
+  TONE_* functions. Existing `TONE_ASSERT_OFF(ptr_01b4, 0x1b4)` covers the
+  target offset.
+- `struct fdsp_tone_cfg::pad_22[2]` (+0x022, between `short fir_len` and
+  `int int_0024`): same 2-byte short-to-int shape. This one needed a
+  different kind of check, because `fdsp_tone_cfg`/`TONE_CFG` is static
+  `.data`, never touched field-by-field -- `TONE_create` moves the whole
+  0x30-byte struct over `fdsp_tone`'s head with one `rep movsl $0xc`
+  (48 bytes), so there is no per-field store or load to grep for. Checked
+  the static initialiser's own bytes instead (`objdump -s -j .data
+  --start-address=0x83c0 --stop-address=0x83f0`): the two bytes at +0x022
+  are `00 00`, consistent with pad. New assertion added:
+  `TONE_ASSERT_OFF_CFG(int_0024, 0x024)`, a new macro alongside the
+  existing `TONE_ASSERT_OFF`/`TONE_ASSERT_CFG` since `int_0024` has no
+  same-named counterpart in `fdsp_tone` to cross-check against -- it lands
+  inside the 14 bytes `fdsp_tone::pad_22[0xe]` (above) still leaves as one
+  undifferentiated span. That asymmetry (one struct sees three named ints
+  where its sibling sees one unresolved gap) is flagged in a comment as a
+  field-naming question for `int_0024`/`int_0028`/`int_002c`'s own types,
+  not a reason to keep THIS alignment gap explicit -- the removal's
+  arithmetic depends only on `int_0024` needing 4-byte alignment, which
+  holds whatever its final type turns out to be.
+
+`make one T="t_fdspkrnl t_tonecreate t_fdspdp t_fdspkfifo t_fdspksil
+t_mtkphasor"` green after the four removals (see below for the run that
+caught this finding's own forward reference and the run after it was
+added). `tools/onedef.py`/`tools/refcheck.py` clean.
+
+(more files below as this sweep continues; the sweep is not yet complete
+when this paragraph is first appended -- see the closing paragraph for the
+final file list and totals.) (2026-09-04)

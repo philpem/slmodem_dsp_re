@@ -508,8 +508,10 @@ struct fdsp_tone_cfg TONE_CFG = {
 	0.9375f,		/* +0x18 pole radius                     */
 	ToneLPF,		/* +0x1c                                 */
 	53,			/* +0x20 fir_len, and ToneLPF's length    */
-	{ 0, 0 },		/* +0x22                                 */
-	0,			/* +0x24                                 */
+	/* +0x22 was the `pad_22[2]` initializer; the two bytes are
+	 * compiler-inserted alignment now (finding F10145) and no longer
+	 * have a positional slot of their own. */
+	0,			/* +0x24 */
 	0x3f000000,		/* +0x28 0.5f as a word; nothing
 				 *       reconstructed reads it, so the
 				 *       TYPE is not established         */
@@ -838,10 +840,23 @@ TONE_kill(struct fdsp_tone *t, float *buf, short n)
 		((int)__builtin_offsetof(struct fdsp_tone_cfg, field) \
 		 == (int)__builtin_offsetof(struct fdsp_tone, field)) ? 1 : -1]
 
+/*
+ * Same idea as TONE_ASSERT_OFF, but for a `struct fdsp_tone_cfg` field with
+ * no same-named counterpart in `struct fdsp_tone` to cross-check against --
+ * `int_0024` lands inside the span `fdsp_tone::pad_22[0xe]` still leaves
+ * unmodelled, so it can only be asserted against its own struct's offset.
+ * Finding F10145.
+ */
+#define TONE_ASSERT_OFF_CFG(field, off) \
+	typedef char fdsp_tone_cfg_offx_##field[ \
+		((int)__builtin_offsetof(struct fdsp_tone_cfg, field) \
+			== (off)) ? 1 : -1]
+
 TONE_ASSERT_OFF(freq, 0x000);
 TONE_ASSERT_OFF(pole_radius, 0x018);
 TONE_ASSERT_OFF(fir_proto, 0x01c);
 TONE_ASSERT_OFF(fir_len, 0x020);
+TONE_ASSERT_OFF(det_coef, 0x048);
 TONE_ASSERT_OFF(short_0064, 0x064);
 TONE_ASSERT_OFF(int_0068, 0x068);
 TONE_ASSERT_OFF(int_006c, 0x06c);
@@ -859,6 +874,7 @@ TONE_ASSERT_CFG(float_0014);
 TONE_ASSERT_CFG(pole_radius);
 TONE_ASSERT_CFG(fir_proto);
 TONE_ASSERT_CFG(fir_len);
+TONE_ASSERT_OFF_CFG(int_0024, 0x024);
 
 /* the object's own sizes: 0x1c8 from the malloc, 0x30 from `rep movsl` */
 typedef char fdsp_tone_size[(sizeof(struct fdsp_tone) == 0x1c8) ? 1 : -1];

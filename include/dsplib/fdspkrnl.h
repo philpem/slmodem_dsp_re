@@ -149,8 +149,13 @@ struct fdsp_tone {
 	float	*fir_coef;		/* +0x03c */
 	float	*fir_dly;		/* +0x040 ring of fir_len floats     */
 	short	fir_idx;		/* +0x044 */
-	unsigned char pad_46[2];	/* +0x046 */
 	/*
+	 * +0x046 was `pad_46[2]` -- REMOVED (finding F10145).  It is exactly
+	 * the 2-byte compiler alignment gap a `short` at +0x044 leaves ahead
+	 * of the 4-byte-aligned `float det_coef` below; `TONE_ASSERT_OFF
+	 * (det_coef, 0x048)` in the .c proves the layout, and `dis.py` over
+	 * every TONE_* function finds no access to offset 0x046 anywhere.
+	 *
 	 * TONE_detect's own two-pole section.  Its three coefficients sit
 	 * INLINE here rather than behind a pointer, and its arithmetic is
 	 * TONE_kill's instruction for instruction -- same c[0..2] roles, same
@@ -171,12 +176,24 @@ struct fdsp_tone {
 	 * there, counted in a `short` to 79.
 	 */
 	short	short_0064;		/* +0x064 */
-	unsigned char pad_66[2];	/* +0x066 */
+	/*
+	 * +0x066 was `pad_66[2]` -- REMOVED (finding F10145), the same
+	 * short-to-int alignment gap as +0x046 above; `TONE_ASSERT_OFF
+	 * (int_0068, 0x068)` already proved the target offset and `dis.py`
+	 * finds no access to 0x066.
+	 */
 	int	int_0068;		/* +0x068 */
 	int	int_006c;		/* +0x06c */
 	int	int_0070[80];		/* +0x070 */
 	short	short_01b0;		/* +0x1b0 */
-	unsigned char pad_1b2[2];	/* +0x1b2 */
+	/*
+	 * +0x1b2 was `pad_1b2[2]` -- REMOVED (finding F10145), the same
+	 * short-to-pointer alignment gap; `TONE_ASSERT_OFF(ptr_01b4, 0x1b4)`
+	 * already proved the target offset and `dis.py` finds no access to
+	 * 0x1b2.  `ptr_01b4`/`ptr_01b8` are set by two separate
+	 * `sysdep_malloc` calls in `TONE_create`, never by a bulk store that
+	 * could have touched the gap.
+	 */
 	float	*ptr_01b4;		/* +0x1b4 freed by TONE_delete       */
 	float	*ptr_01b8;		/* +0x1b8 freed by TONE_delete       */
 	float	*iir_coef;		/* +0x1bc three floats c0 c1 c2      */
@@ -264,7 +281,24 @@ struct fdsp_tone_cfg {
 	float	pole_radius;		/* +0x018 */
 	const float *fir_proto;		/* +0x01c */
 	short	fir_len;		/* +0x020 */
-	unsigned char pad_22[2];	/* +0x022 */
+	/*
+	 * +0x022 was `pad_22[2]` -- REMOVED (finding F10145): the same
+	 * short-to-int alignment gap as `fdsp_tone::pad_46`/`pad_66` above,
+	 * proved by `TONE_ASSERT_OFF_CFG(int_0024, 0x024)` in the .c.  This
+	 * region is never accessed field-by-field -- `TONE_CFG` is static
+	 * `.data` and `TONE_create` moves the whole 0x30-byte struct over
+	 * `fdsp_tone`'s head with one `rep movsl`, never a per-field access
+	 * -- so there is no code to check for a stray read of just these two
+	 * bytes; the static initialiser itself holds `00 00` there, which is
+	 * consistent with (not proof of) pure padding.  Left NOTEWORTHY: the
+	 * three fields past it (`int_0024`/`int_0028`/`int_002c`) land inside
+	 * the SAME 14 bytes `fdsp_tone::pad_22[0xe]` (above) still treats as
+	 * one undifferentiated unmodelled span -- that asymmetry is a
+	 * field-naming question for those three fields' own types, not a
+	 * reason to keep this alignment gap explicit; the pad-removal
+	 * arithmetic depends only on `int_0024` needing 4-byte alignment,
+	 * true whatever its final type turns out to be.
+	 */
 	int	int_0024;		/* +0x024 */
 	int	int_0028;		/* +0x028 */
 	int	int_002c;		/* +0x02c */
