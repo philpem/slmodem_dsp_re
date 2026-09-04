@@ -48,24 +48,50 @@
 
 class ModulusEncoder {
 public:
-	/*
-	 * Written.  Zeroes all seven words and nothing else -- 53 bytes of
-	 * `movl $0x0` and a `ret`, with no call and no allocation.
+	/**
+	 * @brief Default-construct with all seven members zeroed.
+	 *
+	 * Zeroes all seven words and nothing else -- 53 bytes of `movl $0x0`
+	 * and a `ret`, with no call and no allocation.
 	 */
 	ModulusEncoder();
 
-	/*
-	 * Both signatures are the mangling's; the seven-argument form is now
-	 * defined too (seven stores in argument order, ModulusCoder.cpp).
-	 * `progress` reads +0x18 as an index into its first
-	 * argument (`mov 0x18(%eax),%ebp` then `movzbl (%edx,%ebp,1),%ebx`),
-	 * so that word is a byte position in the caller's buffer and the run
-	 * is resumable; the other six it uses as a group and this file does
-	 * not claim what they are.
+	/**
+	 * @brief Construct with all seven members set explicitly.
+	 *
+	 * A member-initialiser list and nothing else: each argument is
+	 * stored to its field in order, with no arithmetic. `progress()`
+	 * reads @p g as a bit count (an index into its `bytes` argument),
+	 * and @p a..@p e as the five conversion moduli; @p f is stored but
+	 * read by neither `progress()` member.
+	 *
+	 * @param a  Modulus for output digit 0 (`field_00`).
+	 * @param b  Modulus for output digit 1 (`field_04`).
+	 * @param c  Modulus for output digit 2 (`field_08`).
+	 * @param d  Modulus for output digit 3 (`field_0c`).
+	 * @param e  Modulus for output digit 4 (`field_10`).
+	 * @param f  Stored but unused by progress() (`field_14`).
+	 * @param g  Bit count / byte position (`field_18`).
 	 */
 	ModulusEncoder(unsigned int a, unsigned int b, unsigned int c,
 		       unsigned int d, unsigned int e, unsigned int f,
 		       unsigned int g);
+
+	/**
+	 * @brief Convert a bit string into six mixed-radix digits.
+	 *
+	 * Packs `field_18` bits from @p bytes (one bit per byte, MSB-first
+	 * from the top of the array) into a signed 64-bit accumulator, then
+	 * divides out five digits by the moduli `field_00`.. `field_10` in
+	 * order; the sixth output word is whatever remains. The accumulator
+	 * is genuinely signed (the object uses the signed `__divdi3`/
+	 * `__moddi3` helpers), so a bit count of 64 or more lets the top bit
+	 * become the sign -- reproduced rather than tidied.
+	 *
+	 * @param bytes  Input bit string, `field_18` bytes, one bit (bit 0)
+	 *               used per byte.
+	 * @param out    Output: six mixed-radix digits.
+	 */
 	void progress(unsigned char *bytes, unsigned int *out);
 
 	/*
@@ -91,12 +117,37 @@ public:
  */
 class ModulusDecoder {
 public:
-	/* Written. */
+	/** @brief Default-construct with all seven members zeroed. */
 	ModulusDecoder();
 
+	/**
+	 * @brief Construct with all seven members set explicitly.
+	 *
+	 * Byte for byte ModulusEncoder's seven-argument constructor, module
+	 * for member. See ModulusEncoder::ModulusEncoder(unsigned int,
+	 * unsigned int, unsigned int, unsigned int, unsigned int, unsigned
+	 * int, unsigned int) for what each argument feeds into progress().
+	 */
 	ModulusDecoder(unsigned int a, unsigned int b, unsigned int c,
 		       unsigned int d, unsigned int e, unsigned int f,
 		       unsigned int g);
+
+	/**
+	 * @brief Convert six mixed-radix digits back into a bit string.
+	 *
+	 * The encoder run backwards: Horner's method from the top digit down
+	 * through moduli `field_10`.. `field_00` builds a signed 64-bit
+	 * accumulator, then `field_18` bits come back out from the bottom.
+	 * The loop bound (`field_18`) is re-read from the object every
+	 * iteration and the shift is arithmetic; both are the object's own
+	 * behaviour. Nothing checks that a digit is below its modulus -- an
+	 * out-of-range digit simply carries into the next.
+	 *
+	 * @param bytes  Output bit string, `field_18` bytes, one bit per byte.
+	 * @param out    Input: six mixed-radix digits (named @p out to match
+	 *               progress()'s counterpart, though this direction reads
+	 *               it).
+	 */
 	void progress(unsigned char *bytes, unsigned int *out);
 
 	unsigned int field_00;

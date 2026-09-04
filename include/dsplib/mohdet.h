@@ -85,14 +85,46 @@ typedef int mohdet_size_is_32[sizeof(struct tag_retrainReqDet) == 32
  * C++ linkage on purpose: the object's names are mangled, so these three
  * are only declarable (and only testable) from C++.
  */
+
+/**
+ * @brief Run the retrain-request notch detector over @p nSamples samples.
+ *
+ * Filters the samples through @p det's notch biquad, accumulates input and
+ * output energy over 64-sample blocks (see the file comment above for the
+ * exact recurrence and thresholds), and reports whether a modem-on-hold
+ * retrain request tone has now been seen for more than 5 consecutive
+ * blocks. Every completed block clears the energy accumulators regardless
+ * of the verdict.
+ *
+ * @param det       Detector state (notch history plus energy accumulators).
+ * @param in        Input samples.
+ * @param nSamples  Number of samples in @p in.
+ * @return Non-zero once the tone has been detected for more than 5
+ *         consecutive blocks, zero otherwise.
+ */
 int retrainDetector(tag_retrainReqDet *det, short *in, int nSamples);
+
+/**
+ * @brief Reset the detector and select its notch coefficients.
+ *
+ * Clears the notch history and energy accumulators and loads one of two
+ * known coefficient sets. What the two selector values mean is not
+ * established (no caller exists to name them from), so they stay numeric.
+ *
+ * @param det    Detector state to reset.
+ * @param which  0x65 selects a notch at Fs/4; 0x66 selects Fs/8. Both use
+ *               the same pole radius (a2 = 0x39c3, Q14, near 0.95).
+ */
 void resetRetrainDetector(tag_retrainReqDet *det, short which);
 
-/*
- * The V.92 MOH timeout code, 0..13, to its value in seconds: 0 stays 0
- * (hold disallowed), 13 is -1 (no limit), everything else the T.MOH ladder
- * 10..960.  Out of range -- including any negative, the compare is on the
- * full unsigned 16-bit value -- answers 0.
+/**
+ * @brief Translate a V.92 MOH timeout code into seconds.
+ *
+ * @param code  T.MOH timeout code, 0..13.
+ * @return 0 for code 0 (hold disallowed) or any out-of-range code
+ *         (including negative -- the comparison is on the full unsigned
+ *         16-bit value); -1 for code 13 (no limit); otherwise the T.MOH
+ *         ladder value in seconds, 10..960.
  */
 int interpretMohTimeout(short code);
 #endif
