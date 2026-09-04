@@ -21,7 +21,7 @@
  * the same trade `t_fdspksil` makes for silence_create's out-of-memory arm.
  *
  * WHAT IS DRIVEN INSTEAD is both entry paths -- allocate and re-initialise
- * -- both arms of the `int_00` decision, and a delay sweep that reaches the
+ * -- both arms of the `status` decision, and a delay sweep that reaches the
  * ends of a `short` in both directions, because the two arguments are
  * `movswl` and a test that only used small positive numbers would not
  * notice if they were `unsigned short`.
@@ -208,8 +208,8 @@ main(void)
 					    kb->chan_a->offset, rx, tag);
 				diff_eq_int("tx delay on chan_b %ld",
 					    kb->chan_b->offset, tx, tag);
-				diff_eq_int("int_00 %ld", kb->int_00,
-					    ka->int_00, tag);
+				diff_eq_int("status %ld", kb->status,
+					    ka->status, tag);
 				seen_int00[rx >= 0 ? 1 : 0] = 1;
 				seen_path[0] = 1;
 

@@ -440,4 +440,47 @@ one ITU-T cross-reference already tried) without a genuinely new method to
 offer — re-running the same evidence search a third time on already-declined
 ground is not "no further progress can be made," it is repeating a result.
 
-Results pending.
+### Diagnostic/session-flag cluster results (F10142)
+
+Three real names landed, all rank 2 (typed caller/callee): `fdsp_kernel::
+status` (was `int_00`), reached through a cross-file chain --
+`beepgen.h`/`beepgen.c`'s `FDSP_DP_Run` already declared this same pointer
+`int *status` off a sibling signature, and `voice.h`'s own comment already
+said the pointer `voicedp.c` passes it is `struct fdsp_kernel *` -- and
+`mtk_phasor::cosine`/`sine` (were `out_04`/`out_08`), from `MTK_phasor`'s own
+use of the object's own `MTK_cos_table`/`MTK_sin_table` (finding F8772),
+corroborated by `fdspkrnl.c`'s own resonator-coefficient and oscillator-output
+call sites and by this tree's existing `cosine`/`sine` naming convention
+(`fpm_smc.h`, `v34filt.h`).
+
+**Two of three files needed no structural change, confirmed rather than
+assumed.** `TAG_DiagnosticResults.h`'s six `pad_NNNN` regions are the settled
+result of an earlier pass (F5500-F5502) and a fresh read found no writer past
+the declared 0x22c floor and no reader inside any pad; six of its already-named
+cross-references were spot-checked against their current homes and all still
+resolve. `V90SessionFlag.h`'s apparent five `pad_NNNN` are actually two live
+ones (three of the five grep hits are inside prose describing layouts already
+migrated to other headers in prior waves) -- `V90Phase4Demodulator::pad_04`/
+`pad_40`, in the one class this file still defines (CLAUDE.md's tolerated
+`onedef.py` duplicate). Splitting them to match the fuller
+`V90Phase4Demodulator.h`, which already names or bounds every field they
+cover, was considered and DECLINED: one of those fields is typed
+`Phase4DemodulatorState`, an enum this project's C++98 discipline forbids
+forward-declaring, and including the fuller header for it would define the
+class twice in one translation unit. The remaining sixteen `type_NNNN`
+fields in `fdspkrnl.h` (a whole-tree grep, not a sample) have no reader or
+writer anywhere beyond what the header already documents, so they stay as
+they were.
+
+`make one` across `t_mtkphasor`/`t_fdspdp`/`t_fdspkrnl`/`t_tonecreate`/
+`t_detector`/`t_voiceapi`/`t_voicesvc`/`t_voicedpdel` is green, `onedef.py`/
+`refcheck.py`/`bannercheck.py`/`anchorcheck.py` all clean. `tools/mutate.py`
+re-run in full on the four affected suites (`fdspdp`, `fdspkrnl`, `mtkphasor`,
+`tonecreate`) confirms no mutation outcome moved (22/22, 50/50, 19/19, 33/33
+caught, matching the pre-rename baseline exactly), and `mutsnap.py --update`
+refreshed those four suites' recorded keys. `make period`/
+`byteident.py --ratchet` need docker, unavailable in this sandbox; left for
+the parent's gate. See F10142 for the full per-field evidence.
+
+VPcmFloModem/V92CP pad regions and V.17 fax modulation fields: results
+pending (other agents' scope).

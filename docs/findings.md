@@ -114051,3 +114051,134 @@ cluster (`t_v90cdesign`/`t_v90cdnoise`/`t_v90cdadjust`/`t_v90designers`) are
 external field-access fix above. `make period`/`byteident.py --ratchet` need
 docker at the tree level and were not re-run standalone; left for the
 parent's gate per this phase's standing note.  (2026-09-04)
+
+## F10142. Wave 4 field naming, the diagnostic/session-flag cluster: `fdsp_kernel::status`, `mtk_phasor::cosine`/`sine`; `TAG_DiagnosticResults.h` and `V90SessionFlag.h` re-verified exhausted
+
+Wave 4 of the field-naming phase (`docs/fieldnaming.md`), scoped to
+`TAG_DiagnosticResults.h` (6 `pad_NNNN`), `fdspkrnl.h`/`src/service/fdspkrnl.c`
+(6 `pad_NNNN`, 19 `type_NNNN`) and `V90SessionFlag.h` (5 `pad_NNNN` by a naive
+grep). Read all three fully before touching anything, per the brief's own
+question of whether the three are related: they are not. `TAG_DiagnosticResults`
+is a diagnostics record several services write into; `fdspkrnl` is the
+full-duplex speakerphone/tone-generator kernel; `V90SessionFlag` is what
+remains, after two prior waves' splits, of a header that used to declare five
+mutually-recursive V.90 session classes and now declares one partial model of
+`V90Phase4Demodulator` (CLAUDE.md's one tolerated `onedef.py` duplicate).
+
+**`fdsp_kernel::status` (was `int_00`), rank 2 -- a typed callee, reached via
+a cross-file chain rather than a direct one.** `voice.h`'s own comment on
+`voice::dp` (+0x034) already stated the field's TRUE type is
+`struct fdsp_kernel *`, and that `FDSP_DP_Run` (`beepgen.h`/`beepgen.c`,
+finding F8786) declares the SAME pointer `int *status` off a sibling
+signature and does nothing with it but `*status = 2;` -- which is exactly
+`fdsp_kernel`'s own first member, set to 2 by both `FDSP_Kernel_InitObj` and
+(conditionally) `FDSP_DP_Create`. `voicedp.c`'s `FDSP_DP_Run(v->dp, ...)` is
+the call that makes the identification concrete: `v->dp` is the
+`fdsp_kernel *`, so `FDSP_DP_Run`'s first parameter IS `&k->status`. The name
+was sitting in a comment one file away from the field it was about -- the
+same "evidence gathered in one file's comment does not automatically reach
+the field it is about" trap F10139 named for `V90Phase3Demodulator`.
+
+**`mtk_phasor::cosine`/`sine` (were `out_04`/`out_08`), rank 2 -- a typed
+callee, and the object's own table names.** `src/service/mtk.c`'s
+`MTK_phasor` builds +0x04 from `MTK_cos_table`/`MTK_cos_sign` and +0x08 from
+`MTK_sin_table`/`MTK_sin_sign` (`mtk.h`, `mtk_tables.c`); both table names are
+the object's own per finding F8772, not invented here. Corroborated from the
+other direction by `fdspkrnl.c`'s own use of +0x04: `TONE_create` builds a
+resonator's coefficients from it with `-2.0f * osc.cosine` in exactly the
+`1 - 2*r*cos(w) z^-1 + r^2 z^-2` shape its own comment already named, and the
+60 Hz notch section a few lines later does the same with `hum.cosine`. `sine`
+is corroborated by `TONE_generate`, whose header comment already called
+`out_08` "the generated sample" -- `*buf++ = ph.sine * t->amp;` is literally
+amplitude-scaled sin(phase), which is what an oscillator's audio output is.
+`cosine`/`sine` also match this tree's own established naming for the same
+role elsewhere (`fpm_smc.h`, `v34filt.h` both have `const short *cosine`/
+`*sine` members).
+
+**Everything else in `fdspkrnl.h` stays exactly as it was, reconfirmed rather
+than assumed.** A full read of `src/service/fdspkrnl.c` (868 lines, all
+fourteen functions of the span) plus a whole-tree grep for every remaining
+`type_NNNN`/`pad_NNNN` identifier in the header found no new reader or writer
+anywhere: `fdsp_channel::short_168a`/`short_1692` (InitObj zeroes
+`short_1690` beside them and touches neither), `fdsp_buffers::short_0000`/
+`short_0fa0`/`int_2710`/`int_2714`/`int_2718` (cleared by `InitObj` alone,
+read by nothing in or out of this TU -- confirmed by grepping every OTHER
+`short_0000` hit in the tree, which all belong to unrelated fax structs), and
+`fdsp_tone`'s `short_0064`/`int_0068`/`int_006c`/`int_0070[80]`/`short_01b0`/
+`ptr_01b4`/`ptr_01b8` (built by `TONE_create`, freed by `TONE_delete` where
+applicable, read by nothing reconstructed -- the header already said so and
+the grep found no exception). `pad_1f40` (`fdsp_buffers`, 0x7d0 bytes),
+`pad_10`/`pad_22`/`pad_46`/`pad_1b2` (`fdsp_tone`, all alignment or genuinely
+unmodelled space between the four clusters `TONE_create` does not initialise
+individually) are true unmodelled space, unchanged.
+
+**`TAG_DiagnosticResults.h`: no changes, and the six `pad_NNNN` regions are
+correctly padded.** This header is the product of an earlier, already
+thorough pass (findings F5500-F5502) that named nine fields, left thirteen
+offset-named for a stated and specific reason (two of them a MEASURED
+disagreement in polarity or unit between the V.90 and V.34 writers, not a
+gap), and declared the size a lower bound from the highest writer offset
+(0x22c). Nothing in this wave's reading found a writer past 0x22c or a reader
+inside any of the six pads. Per the standing spot-check instruction, six of
+the header's already-named cross-references were re-verified against their
+current homes rather than trusted: `V90AutoDigitalImpDetector::byte_280c`,
+`V90Demodulator::word_264`/`word_268`/`word_26c`,
+`V90Equalizer::meanErrorEnergyCurrent`, `V90CP::word_ca0`, `v34_object::
+tx_pwr_reduction`, and `v34_object::rrn_local`/`rrn_remote` all still exist
+under exactly the names the header cites -- no drift found, nothing to fix.
+
+**`V90SessionFlag.h`: no structural change, and the reason is written down
+rather than left implicit.** A naive grep counts 5 `pad_NNNN`-shaped strings,
+but three of them (`pad_00`, `pad_0c`, `pad_2c`) are inside prose describing
+LAYOUTS THAT HAVE ALREADY MOVED to `V90Phase3Demodulator.h`/`V90Modulator.h`/
+`V90Modem.h` in prior waves, not live struct members -- the same "comment
+text versus an actual member declaration" distinction F10130's
+`V90Phase3Modulator` pass already had to make. The two LIVE pads
+(`V90Phase4Demodulator::pad_04[0x34]`, `pad_40[0x10]`) sit in the one class
+this file still defines: the CLAUDE.md-tolerated `onedef.py` duplicate,
+described in its own file comment as modelling "only the prefix these five
+methods touch" with everything else deliberately padded, a floor at 0x2ffc
+rather than a size. The fuller `V90Phase4Demodulator.h` already names or
+bounds every field these two pads cover (`params`, `ucode`, `mappingParams1`/
+`2`, `cp`, `mp`, `phase3Demodulator`, `state`, `countInState`, `int_0028`,
+`trn2dDDLength`, `uchar_0030`, `quickConnect` inside `pad_04`; `int_0040`,
+`int_0044`, `int_0048`, `uint_004c` inside `pad_40`), so splitting these two
+pads to match was considered and DECLINED here rather than attempted blind:
+`state` is typed `Phase4DemodulatorState`, an enum this project's own
+C++98 discipline (`docs/method/compilers.md`, V2) forbids forward-declaring,
+and the only alternative -- including `V90Phase4Demodulator.h` for the enum
+-- would define the class TWICE in the one translation unit that includes
+both headers and break the build outright, not just duplicate a definition
+`onedef.py` already tolerates once. Recorded here so the next pass does not
+re-derive the same dead end: the fuller header IS the one to read for these
+offsets' names; this one stays a floor on purpose.
+
+**No bitfield conversions; no reclassification either.** Every field touched
+was already correctly typed as `type_NNNN` (shape known) before this wave;
+the work was promoting three of them to real names and confirming the rest
+have no fresh evidence, not correcting a mismodelled shape.
+
+**Verification.** `status` reached `include/dsplib/fdspkrnl.h`,
+`src/service/fdspkrnl.c`, `test/unit/t_fdspdp.c`, `test/unit/t_fdspkrnl.c`,
+`test/mutations/fdspkrnl.json` and `test/mutations/fdspdp.json`, plus one
+cross-reference comment in `include/dsplib/voice.h` (unchanged code, comment
+only). `cosine`/`sine` reached `include/dsplib/fdspkrnl.h`,
+`src/service/fdspkrnl.c`, `src/service/mtk.c`, `test/unit/t_mtkphasor.c`,
+`test/mutations/mtkphasor.json` and `test/mutations/tonecreate.json` --
+found by `grep -rln` for the old spellings tree-wide, not assumed confined to
+the nominally in-scope files, the same discipline F10133/F10139 record. Four
+mutation suites (`fdspdp`, `fdspkrnl`, `mtkphasor`, `tonecreate`) were run in
+full with `tools/mutate.py` after the rename: 22/22, 50/50, 19/19 and 33/33
+caught, identical counts to the pre-rename baseline in
+`test/mutations/snapshot.json`, confirming the rename moved no mutation
+outcome; `tools/mutsnap.py --update` then refreshed those four suites' keys
+and label text (`--check` first showed all 228 suites stale purely from the
+mastermerge that preceded this wave, not from anything in it -- the key
+covers the whole shared closure, so any tree-wide change invalidates every
+snapshot; only the four suites this wave actually touched were re-run and
+recorded). `tools/anchorcheck.py`: 228 suites, 9767 mutations, 0 anchor
+mismatches. `tools/onedef.py` and `tools/refcheck.py` clean (301 types, 1
+known duplicate as before; 13214+ references, 0 dangling once this finding's
+own number resolved). `make period`/`byteident.py --ratchet` need docker,
+unavailable in this sandbox; left for the parent's gate, same as every prior
+wave.  (2026-09-04)

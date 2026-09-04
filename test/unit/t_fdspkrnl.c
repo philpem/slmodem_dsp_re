@@ -100,7 +100,7 @@ build_side(struct kernel_side *s)
 	unsigned int i;
 
 	memset(s, 0, sizeof(*s));
-	s->k.int_00 = 2;
+	s->k.status = 2;
 	s->k.saturation = 0;
 	s->k.ntaps_a = 80;
 	s->k.ntaps_b = 40;
@@ -162,7 +162,7 @@ compare_sides(struct kernel_side *got, struct kernel_side *want, long tag)
 {
 	unsigned int i;
 
-	diff_eq_int("k.int_00 %ld", got->k.int_00, want->k.int_00, tag);
+	diff_eq_int("k.status %ld", got->k.status, want->k.status, tag);
 	diff_eq_int("k.saturation %ld", got->k.saturation,
 		    want->k.saturation, tag);
 	diff_eq_int("k.ntaps_a %ld", got->k.ntaps_a, want->k.ntaps_a, tag);
@@ -576,7 +576,7 @@ main(void)
 		ka.b.mu = 6.5f;
 		ka.a.short_1690 = 0x1234;
 		ka.b.short_1690 = 0x5678;
-		ka.k.int_00 = 99;
+		ka.k.status = 99;
 		ka.k.saturation = 77;
 		ka.k.ntaps_a = 11;
 		ka.k.ntaps_b = 22;

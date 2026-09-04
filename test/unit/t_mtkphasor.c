@@ -153,10 +153,10 @@ run_pair(long tag, float phase, float step)
 
 	diff_eq_int("phase bits %ld", (long)fbits(b.phase),
 		    (long)fbits(a.phase), tag);
-	diff_eq_int("out_04 bits %ld", (long)fbits(b.out_04),
-		    (long)fbits(a.out_04), tag);
-	diff_eq_int("out_08 bits %ld", (long)fbits(b.out_08),
-		    (long)fbits(a.out_08), tag);
+	diff_eq_int("cosine bits %ld", (long)fbits(b.cosine),
+		    (long)fbits(a.cosine), tag);
+	diff_eq_int("sine bits %ld", (long)fbits(b.sine),
+		    (long)fbits(a.sine), tag);
 	diff_eq_int("step untouched %ld", (long)fbits(b.step),
 		    (long)fbits(a.step), tag);
 	diff_eq_int("step is the input %ld", (long)fbits(b.step),
@@ -314,13 +314,13 @@ main(void)
 					    (long)fbits(b.phase),
 					    (long)fbits(a.phase),
 					    (long)(si * 10000 + i));
-				diff_eq_int("run out_04 %ld",
-					    (long)fbits(b.out_04),
-					    (long)fbits(a.out_04),
+				diff_eq_int("run cosine %ld",
+					    (long)fbits(b.cosine),
+					    (long)fbits(a.cosine),
 					    (long)(si * 10000 + i));
-				diff_eq_int("run out_08 %ld",
-					    (long)fbits(b.out_08),
-					    (long)fbits(a.out_08),
+				diff_eq_int("run sine %ld",
+					    (long)fbits(b.sine),
+					    (long)fbits(a.sine),
 					    (long)(si * 10000 + i));
 			}
 			/*

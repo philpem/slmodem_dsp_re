@@ -65,7 +65,17 @@ struct fdsp_buffers {
 };
 
 struct fdsp_kernel {
-	int	int_00;			/* +0x00 InitObj sets 2              */
+	/*
+	 * +0x00  `status`, AND THE NAME IS A TYPED CALLEE'S.  `voicedp.c`'s
+	 * `voice_tx` passes `v->dp` -- `voice.h`'s own comment on that field
+	 * says its TRUE type is `struct fdsp_kernel *` -- straight into
+	 * `FDSP_DP_Run`'s FIRST argument, which `beepgen.h`/`beepgen.c`
+	 * (finding F8786) already name `int *status` off a sibling
+	 * signature; `FDSP_DP_Run` does nothing with it but
+	 * `*status = 2;`, which is this field's own InitObj/Create value.
+	 * CLAUDE.md's evidence tier 2.
+	 */
+	int	status;			/* +0x00 InitObj sets 2              */
 	int	saturation;		/* +0x04 blocks left before the
 					 *       delayed re-init; the object's
 					 *       own debug line calls the
@@ -80,13 +90,25 @@ struct fdsp_kernel {
 
 /*
  * The MTK oscillator's state, as TONE_generate builds it on the stack: only
- * `phase` and `step` go in, `out_08` comes back as the sample.  MTK_phasor
+ * `phase` and `step` go in, `sine` comes back as the sample.  MTK_phasor
  * (still the blob's) writes +0x04 and +0x08 and reads +0x00 and +0x0c.
+ *
+ * +0x04 and +0x08 ARE THE OBJECT'S OWN COSINE AND SINE, and the evidence is
+ * a typed callee: `src/service/mtk.c`'s `MTK_phasor` builds +0x04 from
+ * `MTK_cos_table`/`MTK_cos_sign` and +0x08 from `MTK_sin_table`/
+ * `MTK_sin_sign` (see mtk.h), and both table names are the object's own
+ * (`mtk_tables.c`, finding F8772) rather than an invention here.
+ * `fdspkrnl.c`'s own use of +0x04 corroborates it: `TONE_create` builds a
+ * resonator's denominator coefficients out of it with `-2.0f * osc.cosine`
+ * and the standard `1 - 2*r*cos(w) z^-1 + ...` shape, and the 60 Hz notch
+ * a section later does the same with `hum.cosine`.
  */
 struct mtk_phasor {
 	float	phase;			/* +0x00 radians, in/out       */
-	float	out_04;			/* +0x04 written by MTK_phasor */
-	float	out_08;			/* +0x08 the generated sample  */
+	float	cosine;			/* +0x04 MTK_cos_table, written
+					 *       by MTK_phasor         */
+	float	sine;			/* +0x08 MTK_sin_table, the
+					 *       generated sample      */
 	float	step;			/* +0x0c phase increment       */
 };
 
@@ -183,7 +205,7 @@ extern unsigned int uCorrelationReportsNo;
  *
  * The two delays are the object's own names, from the debug line it prints
  * on entry: the RX one becomes chan_a's window offset and the TX one
- * chan_b's.  A negative RX delay leaves `int_00` at 0 instead of 2.
+ * chan_b's.  A negative RX delay leaves `status` at 0 instead of 2.
  * Returns the kernel, or NULL if any of the six allocations failed.
  */
 struct fdsp_kernel *FDSP_DP_Create(struct fdsp_kernel *k,
@@ -208,7 +230,7 @@ void FDSP_Kernel_SetInternalBeepInProgress(int on);
  * Zero everything: both buffer arrays, both channels' delay lines, taps,
  * energy rings and ring indices; then the fixed defaults -- 80 taps on
  * chan_a and 40 on chan_b, the LMS step on chan_a and 0.0 on chan_b (the
- * step is one ULP below 0.032f -- finding F8750), `int_00`
+ * step is one ULP below 0.032f -- finding F8750), `status`
  * 2 and the saturation countdown cleared.
  *
  * The channel POINTERS and the tap POINTERS have to be set before this is
@@ -218,7 +240,7 @@ void FDSP_Kernel_InitObj(struct fdsp_kernel *k);
 
 /*
  * One step of the quarter-wave table oscillator: `phase` and `step` go in,
- * `out_04` comes back as the cosine and `out_08` as the sine, and `phase`
+ * `cosine` comes back as the cosine and `sine` as the sine, and `phase`
  * is advanced and wrapped at pi.  `src/service/mtk.c`, finding F8780.
  */
 void MTK_phasor(struct mtk_phasor *p);
