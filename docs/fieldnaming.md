@@ -364,3 +364,39 @@ unchanged by it). `tools/onedef.py`, `tools/refcheck.py` and
 all clean. `make period`/`byteident.py --ratchet` need docker, unavailable
 in this sandbox; left for the parent's gate per this session's standing
 instruction, same as every prior wave-3 session in this tree.
+
+## Wave 3 — `V90Equalizer` and `V90ConstellationDesigner`
+
+Launched 2026-09-04, the two adjacent V.90/V.92 phase-4 receive classes
+(constellation design feeds the equalizer) left most concentrated after wave
+2. Both headers already carried extensive per-field derivation from earlier
+reconstruction work; several of this wave's names were withheld derivations
+a prior pass had already written down but declined to promote ("the mapping
+is recorded here, which is where a later batch can act on it") rather than
+new discoveries.
+
+Real names landed: 4 on a format string (class 1) plus one four-valued
+discriminant given named constants the same way F10133's
+`CLASS1_MODEM_DIR_RX`/`_TX` was; 3 more on a typed caller/callee read
+together with the whole enclosing algorithm (class 2/3); 8 on usage
+inference over the whole of `process` or `setConstellationToNoise` (class
+4, weakest, used only where the role was unambiguous). Four fields were read
+closely and left bare for want of a name past a bounded role (`byte_08`,
+`word_24`, `word_40`, `short_10`); six `pad_NNNN` regions (2 in
+`V90Equalizer`, 4 in `V90ConstellationDesigner`) are true unmodelled space or
+alignment and untouched. No bitfield conversions -- see finding F10141 for
+the full per-field evidence and the propagation to `V90Demodulator.cpp` and
+seven of its test files, none of which were in the nominal scope but all of
+which reach one or both classes' fields directly.
+
+`tools/onedef.py`/`refcheck.py`/`anchorcheck.py`/`bannercheck.py` clean.
+`make one` run in four batches rather than the full suite (docker plus a
+concurrent sibling-worktree `make period` made one combined invocation
+impractically slow): the equalizer's own two heaviest tests
+(`t_v90equ`/`t_v90equproc`) reproduce `master`'s own pre-existing failure
+counts exactly, verified by a `git stash`/`git stash pop` A/B rather than
+assumed; every other touched suite (`t_v90eqdata`, the four-member
+`V90ConstellationDesigner` cluster, and the seven Demodulator-family files
+carrying the external field accesses) is 100% green. `make period`/
+`byteident.py --ratchet` need docker, left for the parent's gate as in every
+prior wave.

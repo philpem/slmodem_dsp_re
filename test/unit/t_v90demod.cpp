@@ -445,7 +445,7 @@ wire_life(int side, unsigned int lelen, unsigned int m, unsigned int dfelen,
 	e->array_118 = la.a118;
 	e->array_12c = la.a12c;
 	e->linearEquLength = lelen;
-	e->word_1c = m;
+	e->linearEquHistoryLength = m;
 	e->dfeLength = dfelen;
 	e->mmxArraysPresent = mmx;
 	e->params = (V90Parameters *)parm[0];	/* shared: read only */
@@ -702,7 +702,7 @@ run_reset(void)
 					diff_eq_int("the designer's +0x48 "
 						    "(%ld)",
 						    (long)((V90ConstellationDesigner *)
-							   la.cd)->word_48, 0,
+							   la.cd)->rateAction, 0,
 						    tag);
 					/* And the resampler did. */
 					diff_eq_int("the resampler's period "

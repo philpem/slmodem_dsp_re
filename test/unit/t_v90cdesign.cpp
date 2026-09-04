@@ -926,13 +926,13 @@ run_findnext(void)
 		}
 		fill_mp(0xc0deu + 23u * (unsigned)trial);
 
-		cdA->short_0a = (short)(nextrand() % 4096u) - 2048;
-		cdB->short_0a = cdA->short_0a;
+		cdA->dMin = (short)(nextrand() % 4096u) - 2048;
+		cdB->dMin = cdA->dMin;
 		cdA->short_10 = (short)(nextrand() % 4096u) - 2048;
 		cdB->short_10 = cdA->short_10;
 		/* Both companding arms, alternating with the trial. */
-		cdA->word_2c = (trial & 1);
-		cdB->word_2c = cdA->word_2c;
+		cdA->compandingLaw = (trial & 1);
+		cdB->compandingLaw = cdA->compandingLaw;
 		/*
 		 * After the fields this trial sets, not before: the claim is
 		 * that the MEMBER leaves `this` alone, not that the test does.
@@ -987,7 +987,7 @@ run_findnext(void)
 					seenFound++;
 				else
 					seenRanOff++;
-				if (cdA->word_2c != 0)
+				if (cdA->compandingLaw != 0)
 					seenAlaw++;
 				else
 					seenUlaw++;
@@ -1229,12 +1229,12 @@ dmin_fixture(int trial)
 	dmin = (short)(pattern >= 8 ? nextrand() % 140u + 60u
 		     : pattern >= 4 ? nextrand() % 12u + 1u
 				    : nextrand() % 160u + 1u);
-	cdA->short_0a = dmin;
-	cdB->short_0a = dmin;
-	cdA->short_0c = 0x1234;
-	cdB->short_0c = 0x1234;
-	cdA->short_0e = 0x5678;
-	cdB->short_0e = 0x5678;
+	cdA->dMin = dmin;
+	cdB->dMin = dmin;
+	cdA->rrnDownDmin = 0x1234;
+	cdB->rrnDownDmin = 0x1234;
+	cdA->rrnUpDmin = 0x5678;
+	cdB->rrnUpDmin = 0x5678;
 	return dmin;
 }
 
@@ -1255,10 +1255,10 @@ run_dmin_quiet(void)
 		our_dmin(cdA, rrn);
 		ref_dmin(cdB, rrn);
 
-		diff_eq_int("rrnDownDmin (trial %ld)", cdA->short_0c,
-			    cdB->short_0c, trial);
-		diff_eq_int("rrnUpDmin (trial %ld)", cdA->short_0e,
-			    cdB->short_0e, trial);
+		diff_eq_int("rrnDownDmin (trial %ld)", cdA->rrnDownDmin,
+			    cdB->rrnDownDmin, trial);
+		diff_eq_int("rrnUpDmin (trial %ld)", cdA->rrnUpDmin,
+			    cdB->rrnUpDmin, trial);
 		diff_eq_obj("determineDminForRrn leaves the mapping alone",
 			    V90MappingParams, &mpA, &mpB, trial);
 		diff_eq_obj("determineDminForRrn leaves the table alone",
@@ -1269,10 +1269,10 @@ run_dmin_quiet(void)
 		 * claim, so it is asserted: put them back and the object must
 		 * be what it was.
 		 */
-		cdA->short_0c = 0x1234;
-		cdB->short_0c = 0x1234;
-		cdA->short_0e = 0x5678;
-		cdB->short_0e = 0x5678;
+		cdA->rrnDownDmin = 0x1234;
+		cdB->rrnDownDmin = 0x1234;
+		cdA->rrnUpDmin = 0x5678;
+		cdB->rrnUpDmin = 0x5678;
 		check_this(trial);
 	}
 
@@ -1324,10 +1324,10 @@ run_dmin_loud(void)
 			    strcmp(dsplib_debug_capture_text(0),
 				   dsplib_debug_capture_text(1)) == 0 ? 1 : 0,
 			    1, trial);
-		diff_eq_int("rrnDownDmin, loud (trial %ld)", cdA->short_0c,
-			    cdB->short_0c, trial);
-		diff_eq_int("rrnUpDmin, loud (trial %ld)", cdA->short_0e,
-			    cdB->short_0e, trial);
+		diff_eq_int("rrnDownDmin, loud (trial %ld)", cdA->rrnDownDmin,
+			    cdB->rrnDownDmin, trial);
+		diff_eq_int("rrnUpDmin, loud (trial %ld)", cdA->rrnUpDmin,
+			    cdB->rrnUpDmin, trial);
 
 		if (dsplib_debug_capture_lines(1) > 0)
 			dmin_printed = 1;
@@ -1373,10 +1373,10 @@ run_dmin_loud(void)
 		if (trial % 24 == 0)
 			dmin_capped++;
 
-		cdA->short_0c = 0x1234;
-		cdB->short_0c = 0x1234;
-		cdA->short_0e = 0x5678;
-		cdB->short_0e = 0x5678;
+		cdA->rrnDownDmin = 0x1234;
+		cdB->rrnDownDmin = 0x1234;
+		cdA->rrnUpDmin = 0x5678;
+		cdB->rrnUpDmin = 0x5678;
 		check_this(trial);
 
 		(void)dmin;

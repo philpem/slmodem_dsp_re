@@ -1855,14 +1855,14 @@ run_cd_reset(void)
 			 * never-reset objects compare equal (finding F1105),
 			 * so the values are asserted and not only compared.
 			 */
-			diff_eq_int("blob's word_48 (%ld)",
-				    (long)cd_b_o.word_48, 0, tag);
-			diff_eq_int("blob's short_0a (%ld)",
-				    (long)cd_b_o.short_0a, 0, tag);
-			diff_eq_int("blob's short_0c (%ld)",
-				    (long)cd_b_o.short_0c, 0, tag);
-			diff_eq_int("blob's short_0e (%ld)",
-				    (long)cd_b_o.short_0e, 0, tag);
+			diff_eq_int("blob's rateAction (%ld)",
+				    (long)cd_b_o.rateAction, 0, tag);
+			diff_eq_int("blob's dMin (%ld)",
+				    (long)cd_b_o.dMin, 0, tag);
+			diff_eq_int("blob's rrnDownDmin (%ld)",
+				    (long)cd_b_o.rrnDownDmin, 0, tag);
+			diff_eq_int("blob's rrnUpDmin (%ld)",
+				    (long)cd_b_o.rrnUpDmin, 0, tag);
 			diff_eq_int("blob's short_10 (%ld)",
 				    (long)cd_b_o.short_10, 0, tag);
 			diff_eq_int("blob's word_24 is params->unnamed_39c "

@@ -139,18 +139,18 @@
  },
  {
   "label": "evaluateConnection's rate-up arm sets the designer's flag to 2",
-  "find": "\t\tcase 1:\n\t\t\tword_3c = 0x22;\n\t\t\tconstellationDesigner->word_48 = 2;",
-  "replace": "\t\tcase 1:\n\t\t\tword_3c = 0x22;\n\t\t\tconstellationDesigner->word_48 = 3;"
+  "find": "\t\tcase 1:\n\t\t\tword_3c = 0x22;\n\t\t\tconstellationDesigner->rateAction = 2;",
+  "replace": "\t\tcase 1:\n\t\t\tword_3c = 0x22;\n\t\t\tconstellationDesigner->rateAction = 3;"
  },
  {
   "label": "evaluateConnection's rate-up arm restores the equaliser to float",
-  "find": "\t\t\tconstellationDesigner->word_48 = 2;\n\t\t\tequalizer->restoreEqualizerToFloat();\n",
-  "replace": "\t\t\tconstellationDesigner->word_48 = 2;\n"
+  "find": "\t\t\tconstellationDesigner->rateAction = 2;\n\t\t\tequalizer->restoreEqualizerToFloat();\n",
+  "replace": "\t\t\tconstellationDesigner->rateAction = 2;\n"
  },
  {
   "label": "the rate-down arm reads DEBUG_CONNECTION_EVALUATOR_RATE_DOWN and not 2",
-  "find": "\t\t\tif (params->DEBUG_CONNECTION_EVALUATOR_RATE_DOWN == 2)\n\t\t\t\tconstellationDesigner->word_48 = 1;\n\t\t\telse\n\t\t\t\tconstellationDesigner->word_48 = 3;",
-  "replace": "\t\t\tif (params->DEBUG_CONNECTION_EVALUATOR_RATE_DOWN == 3)\n\t\t\t\tconstellationDesigner->word_48 = 1;\n\t\t\telse\n\t\t\t\tconstellationDesigner->word_48 = 3;"
+  "find": "\t\t\tif (params->DEBUG_CONNECTION_EVALUATOR_RATE_DOWN == 2)\n\t\t\t\tconstellationDesigner->rateAction = 1;\n\t\t\telse\n\t\t\t\tconstellationDesigner->rateAction = 3;",
+  "replace": "\t\t\tif (params->DEBUG_CONNECTION_EVALUATOR_RATE_DOWN == 3)\n\t\t\t\tconstellationDesigner->rateAction = 1;\n\t\t\telse\n\t\t\t\tconstellationDesigner->rateAction = 3;"
  },
  {
   "label": "the retrain arm is verdict 4 and the fallback verdict 5",

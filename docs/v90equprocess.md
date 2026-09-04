@@ -108,9 +108,9 @@ function reaches.
     if (mmxMode) {
         const float *s = in;  unsigned i = n;
         while (i != 0) { *cur++ = (short)*s++; i--; }  /* RC=11, truncating */
-        if (word_68) {
-            ((short *)block_b4)[0] = (short)word_6c;
-            word_68 = 0;
+        if (holdoverPending) {
+            ((short *)block_b4)[0] = (short)holdoverSample;
+            holdoverPending = 0;
             cur = (short *)block_b4;
             n++;
         } else {
@@ -118,7 +118,7 @@ function reaches.
             cur = (short *)block_b4 + 1;
         }
     } else {
-        if (word_68) n++;          /* cmp $1 / sbbl $-1 -- the borrow idiom */
+        if (holdoverPending) n++;          /* cmp $1 / sbbl $-1 -- the borrow idiom */
     }
     updateCoefs = 1;               /* planted at 0x38d81, before everything */
     j = 0;
@@ -128,7 +128,7 @@ The fixed-point arm's conversion loop keeps its input pointer in a register
 and never writes it back to `0xe4(%esp)`, so `in` is untouched by it; the
 float arm consumes `in` inside the symbol loop instead.
 
-**`word_68`/`word_6c` are the held-over odd sample and its value.** Named from
+**`holdoverPending`/`holdoverSample` are the held-over odd sample and its value.** Named from
 use, and the finding says so: the flag is set in the epilogue exactly when
 `n` is odd, and the value is the sample the loop could not pair.
 
@@ -151,9 +151,9 @@ field reference in the source and not a cached local.
     s1 = (unsigned short)cur[1];
     cur += 2;
     ec = array_ecAligned;                       /* +0xf0 */
-    k  = word_20Saved;                          /* +0xf8 */
+    k  = historyIndexSaved;                          /* +0xf8 */
     ec[k] = (short)s0;
-    k--;  word_20Saved = k;
+    k--;  historyIndexSaved = k;
     ec[k] = (short)s1;
 
     dfeSum = mmxDot(dfeMmxCoefsAligned, array_12cAligned, dfeLength);
@@ -174,16 +174,16 @@ and none of them is here — finding F1044).
 
 ### F3.2 The float arm, `0x390d0`
 
-    if (word_68) {                                       /* 0x394b0 */
-        array_18[word_20] = word_6c;  word_68 = 0;
-        word_20--;  array_18[word_20] = *in++;
+    if (holdoverPending) {                                       /* 0x394b0 */
+        array_18[historyIndex] = holdoverSample;  holdoverPending = 0;
+        historyIndex--;  array_18[historyIndex] = *in++;
     } else {
-        array_18[word_20] = in[0];
-        word_20--;
-        array_18[word_20] = in[1];  in += 2;
+        array_18[historyIndex] = in[0];
+        historyIndex--;
+        array_18[historyIndex] = in[1];  in += 2;
     }
     d = fdot(array_44,  dfeCoefs,       dfeLength);
-    y = fdot(&array_18[word_20], linearEquCoefs, linearEquLength);
+    y = fdot(&array_18[historyIndex], linearEquCoefs, linearEquLength);
     soft = y - d;                    /* fsubrs 0xb0(%esp): mem - st0 */
     softInt = (short)soft;           /* fists -- TRUNCATING, NOT popped */
 
@@ -228,15 +228,15 @@ comparisons against 10..16 are live.
 
     e = (short)(softInt - decision);
     if (abs(e) > 300 && state > 1) {
-        if (word_94 <= 1)
+        if (highErrorCount <= 1)
             edprintf("V90Equalizer: High momentary error, symbol#%d, "
                      "error %d, soft Decision %d\r\n", j, e, softInt);
-        word_94++;  updateCoefs = 0;
+        highErrorCount++;  updateCoefs = 0;
     } else if (state != 10 && state != 11 && state != 12 && state != 16 &&
-               state != 13 && state != 14 && state != 15 && word_94 > 2) {
+               state != 13 && state != 14 && state != 15 && highErrorCount > 2) {
         if (++updateCoefs == 4) {
-            edprintf("V90Equalizer: nof consecutive errors = %d\r\n", word_94);
-            word_94 = 0;
+            edprintf("V90Equalizer: nof consecutive errors = %d\r\n", highErrorCount);
+            highErrorCount = 0;
         }
     }
 
@@ -254,8 +254,8 @@ Then, at `0x392d0`:
            `shl $16 ; or`, updated by `(coef * beta) >> shift`, and split
            back with `mov %ax` and `sar $0x10 ; mov %ax`. */
     }
-    /* the array_12c shift, the word_20Saved decrement and its wrap: 0x39421 */
-    word_78 += (unsigned)(e * e);
+    /* the array_12c shift, the historyIndexSaved decrement and its wrap: 0x39421 */
+    blockErrorEnergySum += (unsigned)(e * e);
     block_b8[j] = (short)softInt;
 
 ### F3.5 The float error tail, `0x394e1`
@@ -270,12 +270,12 @@ Then, at `0x392d0`:
     long double aerr = __builtin_fabsl((long double)err);
     if (aerr > 300.0) {
         if (state > 1) {
-            if (word_94 <= 1)
+            if (highErrorCount <= 1)
                 edprintf("V90Equalizer: High momentary error, symbol#%d, "
                          "error = %c%d.%03d,   soft Decision = %c%d.%03d\r\n",
                          j, sign(err), iabs(err), frac3(err),
                             sign(soft), iabs(soft), frac3(soft));
-            word_94++;  updateCoefs = 0;
+            highErrorCount++;  updateCoefs = 0;
         } else goto notHigh;
     } else { notHigh: ...the consecutive-clean counter, as §3.4... }
 
@@ -284,17 +284,17 @@ Then, at `0x392d0`:
             dfeCoefs[i] += (dfeBeta * err) * array_44[i];
         for (i = 0; i < linearEquLength; i++)
             linearEquCoefs[i] += (-linearEquBeta * (y - decision))
-                                 * array_18[word_20 + i];
+                                 * array_18[historyIndex + i];
     }
     /* 0x39830, reached whether or not the update ran, and rejoined at
        0x39840 from the update path: */
     memmove up array_44 by one; array_44[0] = y - decision;
-    word_20--;  if ((int)word_20 < 0) <wrap: 0x3a2d4>;   /* OPEN: see below */
+    historyIndex--;  if ((int)historyIndex < 0) <wrap: 0x3a2d4>;   /* OPEN: see below */
     /* `fmul %st(0),%st ; fistpll 0xa0(%esp)`, and then the LOW 32 BITS of that
        64-bit result are added.  A C `(unsigned)(err*err)` reproduces it only
        while the product is in range and is UNDEFINED outside it -- D561's
        shape with our side as the undefined one.  Convert through 64 bits. */
-    word_78 += (unsigned)(long long)(err * err);
+    blockErrorEnergySum += (unsigned)(long long)(err * err);
     outFloat[j] = soft;
 
 **The two updates use different errors.** `0x396e0` is `fmul %st(2),%st`,
@@ -307,23 +307,23 @@ The `%c%d.%03d` triple is the tree's existing `edprint_stat` shape
 `1000.0f` loaded once with `flds` and reused for both values, not a
 `long double`.
 
-**OPEN: `word_20` and `word_20Saved` are `unsigned int` in the header and the
+**OPEN: `historyIndex` and `historyIndexSaved` are `unsigned int` in the header and the
 object tests their SIGN.** `0x3985f` is `dec %eax; js 3a2d4` and `0x39457` is
 `dec %eax; js 398f5`. Written literally against an unsigned field the test
 folds to false and the wrap never runs, so either both fields are `int` -- and
-`reset`'s `word_1c - linearEquLength - 1` can go negative, which supports that
+`reset`'s `linearEquHistoryLength - linearEquLength - 1` can go negative, which supports that
 -- or there is an `int` local the object is decrementing. The `js` is the
 forced encoding; the declared type is this batch's to settle, and it is not
 settled here.
 
 The wrap at `0x3a2d4`:
 
-    word_20 = word_1c - linearEquLength - 1;
+    historyIndex = linearEquHistoryLength - linearEquLength - 1;
     for (i = linearEquLength; i-- > 0; )
-        array_18[word_1c - linearEquLength + i] = array_18[i];
+        array_18[linearEquHistoryLength - linearEquLength + i] = array_18[i];
 
 which is the same expression `reset` plants at construction. The fixed-point
-twin is `0x398f5` over `array_ecAligned`/`word_20Saved`.
+twin is `0x398f5` over `array_ecAligned`/`historyIndexSaved`.
 
 ## F4. The arms
 
@@ -400,9 +400,9 @@ twin is `0x398f5` over `array_ecAligned`/`word_20Saved`.
 
     if (phase4Demod->state == 3 &&
         phase4Demod->linearMappStudyStart == phase4Demod->countInState) {
-        word_a4 = 1;  meanErrorCount = 0;  meanErrorFull = 0;
+        meanErrorRecordEnable = 1;  meanErrorCount = 0;  meanErrorFull = 0;
     }
-    if (phase4Demod->state == 5 || phase4Demod->state == 4) word_a4 = 0;
+    if (phase4Demod->state == 5 || phase4Demod->state == 4) meanErrorRecordEnable = 0;
 
 ### state 3 — `DATA`, `0x39d55`
 
@@ -478,7 +478,7 @@ converting `block_b8[0..j-1]` back into `outFloat[0..j-1]`.
     }
     if (phase4Demod->state == 3) {
         if (phase4Demod->linearMappStudyStart == phase4Demod->countInState)
-            word_a4 = 1;
+            meanErrorRecordEnable = 1;
         if (phase4Demod->demapper->short_1ea4 && flag_144) {
             flag_144 = 0;
             calcMeanErrorStatistics();          /* return value discarded */
@@ -496,7 +496,7 @@ converting `block_b8[0..j-1]` back into `outFloat[0..j-1]`.
                     "BeforeToAfterUpdateRatio = %c%d.%03d\r\n", ...word_140);
         }
     }
-    if (phase4Demod->state == 5 || phase4Demod->state == 4) word_a4 = 0;
+    if (phase4Demod->state == 5 || phase4Demod->state == 4) meanErrorRecordEnable = 0;
 
 ### state 1 — `PHASE3`, `0x3a07b`
 
@@ -529,9 +529,9 @@ converting `block_b8[0..j-1]` back into `outFloat[0..j-1]`.
             setLinearEquBeta(params->GERMAN_PBX_LINEAR_EQU_DIL_HIGH_UCODE_BETA);
             if (dsplibs_debug_level > 1)
                 dsplibs_debug_printf("V90Equalizer: DfeProtectionOnDil "
-                                     "= %d \r\n", (int)short_08);
-            setDfeBeta(short_08 ? params->DFE_DIL_HIGH_UCODE_BETA
-                                    / (float)short_08
+                                     "= %d \r\n", (int)dfeProtectionOnDil);
+            setDfeBeta(dfeProtectionOnDil ? params->DFE_DIL_HIGH_UCODE_BETA
+                                    / (float)dfeProtectionOnDil
                                 : params->DFE_DIL_HIGH_UCODE_BETA);
             if (resampler->bllState) {
                 savedBllState = resampler->bllState;
@@ -607,11 +607,11 @@ beside them.
 
     if (phase3Demod->state == 0 && phase3Demod->byte_424) {
         if (mmxMode) {
-            resampler->SdHalfBaudDft((float)array_ecAligned[word_20Saved + 1]);
-            resampler->SdHalfBaudDft((float)array_ecAligned[word_20Saved]);
+            resampler->SdHalfBaudDft((float)array_ecAligned[historyIndexSaved + 1]);
+            resampler->SdHalfBaudDft((float)array_ecAligned[historyIndexSaved]);
         } else {
-            resampler->SdHalfBaudDft(array_18[word_20 + 1]);
-            resampler->SdHalfBaudDft(array_18[word_20]);
+            resampler->SdHalfBaudDft(array_18[historyIndex + 1]);
+            resampler->SdHalfBaudDft(array_18[historyIndex]);
         }
     }
     if (phase3Demod->state == 3 &&
@@ -639,8 +639,8 @@ beside them.
     else if (phase3Demod->state == 4 &&
              params->NOF_DD_SYMBOLS_BEFORE_MEAN_ERROR_DIAG_PHASE3
                  == phase3Demod->word_2c)
-        word_a4 = 1;
-    if (phase3Demod->state == 10 || phase3Demod->state == 13) word_a4 = 0;
+        meanErrorRecordEnable = 1;
+    if (phase3Demod->state == 10 || phase3Demod->state == 13) meanErrorRecordEnable = 0;
 
 ### An observation about the two state fields
 
@@ -681,37 +681,37 @@ as one helper would be wrong at exactly one of the three.
 
     if (mmxMode)
         for (i = 0; i < nOut; i++) outFloat[i] = (float)block_b8[i];
-    word_70 += nOut;
-    if (word_70 >= (unsigned)errorEnergyMeanBlockLen) {
-        word_7c = sqrtf((float)(unsigned)word_78 / (float)(unsigned)word_70);
+    blockSampleCount += nOut;
+    if (blockSampleCount >= (unsigned)errorEnergyMeanBlockLen) {
+        blockErrorEnergyRms = sqrtf((float)(unsigned)blockErrorEnergySum / (float)(unsigned)blockSampleCount);
         meanErrorEnergyCurrent = errorEnergyMeanK * meanErrorEnergyCurrent
-                                 + (1.0f - errorEnergyMeanK) * word_7c;
-        connEval->updateAvePdsnr(meanErrorEnergyCurrent, word_70);
-        word_70 = 0;  word_78 = 0;
-        if (word_a4) {
-            meanErrorEnergy[meanErrorCount] = word_7c;
+                                 + (1.0f - errorEnergyMeanK) * blockErrorEnergyRms;
+        connEval->updateAvePdsnr(meanErrorEnergyCurrent, blockSampleCount);
+        blockSampleCount = 0;  blockErrorEnergySum = 0;
+        if (meanErrorRecordEnable) {
+            meanErrorEnergy[meanErrorCount] = blockErrorEnergyRms;
             if (++meanErrorCount == V90EQU_MEAN_ERROR_LEN) {
                 meanErrorCount = 0;  meanErrorFull = 1;
             }
         }
     }
     if (n & 1) {
-        word_68 = 1;
-        word_6c = mmxMode ? (float)*cur : *in;
+        holdoverPending = 1;
+        holdoverSample = mmxMode ? (float)*cur : *in;
     }
-    if (++word_34 == params->LINEAR_EQU_FADE_EDGES_CYCLE) {
-        word_34 = 0;
+    if (++fadeEdgesCounter == params->LINEAR_EQU_FADE_EDGES_CYCLE) {
+        fadeEdgesCounter = 0;
         linearEquFadeEdges();
     }
 
-Both `fildll`s push a zero high word first, so `word_70` and `word_78` are
+Both `fildll`s push a zero high word first, so `blockSampleCount` and `blockErrorEnergySum` are
 read **unsigned**. `1.0f - errorEnergyMeanK` is `dc eb`, which objdump prints
 as `fsubr` and which the architecture calls `FSUB` — `ST(3) = ST(3) - ST(0)`
 — and the divide is `de f1`, `FDIVRP`, `ST(1) = ST(0)/ST(1)`. Read the
 `<== Intel:` annotation `tools/dis.py` appends, never the AT&T mnemonic
 (findings F245, F2156).
 
-**`n == 0` with `word_68` set reads `in[0]`** at `0x39a79`. That is the
+**`n == 0` with `holdoverPending` set reads `in[0]`** at `0x39a79`. That is the
 object's behaviour and any harness must pass a buffer with at least one
 element so the reconstruction does not reach undefined behaviour on a trial
 the blob survives (D561).

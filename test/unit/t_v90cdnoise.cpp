@@ -188,18 +188,18 @@ restore_and_check_this(long input)
 	const V90ConstellationDesigner *sb =
 	    (const V90ConstellationDesigner *)snapB;
 
-	cdA->short_0a = sa->short_0a;
+	cdA->dMin = sa->dMin;
 	cdA->short_10 = sa->short_10;
-	cdA->word_48 = sa->word_48;
-	cdA->float_18 = sa->float_18;
-	cdA->float_1c = sa->float_1c;
-	cdA->float_20 = sa->float_20;
-	cdB->short_0a = sb->short_0a;
+	cdA->rateAction = sa->rateAction;
+	cdA->pdSnrThreshForRateUp = sa->pdSnrThreshForRateUp;
+	cdA->pdSnrThreshForRateDown = sa->pdSnrThreshForRateDown;
+	cdA->pdSnrThreshForRetrain = sa->pdSnrThreshForRetrain;
+	cdB->dMin = sb->dMin;
 	cdB->short_10 = sb->short_10;
-	cdB->word_48 = sb->word_48;
-	cdB->float_18 = sb->float_18;
-	cdB->float_1c = sb->float_1c;
-	cdB->float_20 = sb->float_20;
+	cdB->rateAction = sb->rateAction;
+	cdB->pdSnrThreshForRateUp = sb->pdSnrThreshForRateUp;
+	cdB->pdSnrThreshForRateDown = sb->pdSnrThreshForRateDown;
+	cdB->pdSnrThreshForRetrain = sb->pdSnrThreshForRetrain;
 
 	diff_eq_obj("ours writes only the six", V90ConstellationDesigner,
 		    cdAbuf, snapA, input);
@@ -234,7 +234,7 @@ fill_mp(unsigned s)
  * `seed + value` after every hit, so over uniformly random 16-bit values the
  * count is a RECORD count -- about ln(span), and essentially independent of
  * the seed.  A count that does not move with the seed leaves every claim
- * about `short_10` and `short_0a` untested.  Against a ramp of slope `ramp`
+ * about `short_10` and `dMin` untested.  Against a ramp of slope `ramp`
  * the count is about `span * ramp / (seed + ramp)`, which is smooth,
  * monotone and tunable, so the sweep can put it anywhere between zero and the
  * whole span.
@@ -346,13 +346,13 @@ ctn_fixture(int trial)
 	cur.dmin0e = (short)((trial % 7 == 0) ? 0
 			     : (int)(nextrand() % 200u) - 60);
 
-	cdA->word_48 = (unsigned int)cur.w48;
+	cdA->rateAction = (unsigned int)cur.w48;
 	cdA->word_24 = (unsigned int)cur.w24;
-	cdA->word_2c = cur.w2c;
-	cdA->word_28 = cur.w28;
-	cdA->short_0a = cur.dmin0a;
-	cdA->short_0c = cur.dmin0c;
-	cdA->short_0e = cur.dmin0e;
+	cdA->compandingLaw = cur.w2c;
+	cdA->pcmType = cur.w28;
+	cdA->dMin = cur.dmin0a;
+	cdA->rrnDownDmin = cur.dmin0c;
+	cdA->rrnUpDmin = cur.dmin0e;
 	cdA->short_10 = 0x0bad;
 	/*
 	 * THE THREE THRESHOLDS CARRY AN UNORDERED SEED ON THE ARMS THAT DO
@@ -377,26 +377,26 @@ ctn_fixture(int trial)
 	if (trial % 8 == 1 || trial % 8 >= 5) {
 		static const unsigned int qnan = 0x7fc00000u;
 
-		memcpy(&cdA->float_18, &qnan, sizeof qnan);
-		memcpy(&cdA->float_1c, &qnan, sizeof qnan);
-		memcpy(&cdA->float_20, &qnan, sizeof qnan);
+		memcpy(&cdA->pdSnrThreshForRateUp, &qnan, sizeof qnan);
+		memcpy(&cdA->pdSnrThreshForRateDown, &qnan, sizeof qnan);
+		memcpy(&cdA->pdSnrThreshForRetrain, &qnan, sizeof qnan);
 	} else {
-		cdA->float_18 = (trial & 1) ? 1.5f : -1.5f;
-		cdA->float_1c = (trial & 2) ? 2.25f : -2.25f;
-		cdA->float_20 = (trial & 4) ? 3.75f : -3.75f;
+		cdA->pdSnrThreshForRateUp = (trial & 1) ? 1.5f : -1.5f;
+		cdA->pdSnrThreshForRateDown = (trial & 2) ? 2.25f : -2.25f;
+		cdA->pdSnrThreshForRetrain = (trial & 4) ? 3.75f : -3.75f;
 	}
 
-	cdB->word_48 = cdA->word_48;
+	cdB->rateAction = cdA->rateAction;
 	cdB->word_24 = cdA->word_24;
-	cdB->word_2c = cdA->word_2c;
-	cdB->word_28 = cdA->word_28;
-	cdB->short_0a = cdA->short_0a;
-	cdB->short_0c = cdA->short_0c;
-	cdB->short_0e = cdA->short_0e;
+	cdB->compandingLaw = cdA->compandingLaw;
+	cdB->pcmType = cdA->pcmType;
+	cdB->dMin = cdA->dMin;
+	cdB->rrnDownDmin = cdA->rrnDownDmin;
+	cdB->rrnUpDmin = cdA->rrnUpDmin;
 	cdB->short_10 = cdA->short_10;
-	cdB->float_18 = cdA->float_18;
-	cdB->float_1c = cdA->float_1c;
-	cdB->float_20 = cdA->float_20;
+	cdB->pdSnrThreshForRateUp = cdA->pdSnrThreshForRateUp;
+	cdB->pdSnrThreshForRateDown = cdA->pdSnrThreshForRateDown;
+	cdB->pdSnrThreshForRetrain = cdA->pdSnrThreshForRetrain;
 }
 
 /* Every outcome the sweep has to reach. */
@@ -425,8 +425,8 @@ enum {
 };
 
 /*
- * The codec byte the object would compute for one entry, so the `word_2c ==
- * word_28` arm's `min` can be classified exactly rather than by the proxy
+ * The codec byte the object would compute for one entry, so the `compandingLaw ==
+ * pcmType` arm's `min` can be classified exactly rather than by the proxy
  * "the two bytes came out equal".  It is deliberately spelled the way the
  * reconstruction spells it; what it classifies is the BLOB's output, so a
  * shared mistake here shows up as a count that never moves, which the
@@ -467,7 +467,7 @@ ctn_classify(int trial)
 	if (cur.w48 == 2) {
 		if (cur.dmin0e == 0)
 			seenUpArm[0]++;
-		else if (cur.dmin0e > cdB->short_0a)
+		else if (cur.dmin0e > cdB->dMin)
 			seenUpArm[1]++;
 		else
 			seenUpArm[2]++;
@@ -475,7 +475,7 @@ ctn_classify(int trial)
 	if (cur.w48 == 3) {
 		if (cur.dmin0c == 0)
 			seenDownArm[0]++;
-		else if (cur.dmin0c < cdB->short_0a)
+		else if (cur.dmin0c < cdB->dMin)
 			seenDownArm[1]++;
 		else
 			seenDownArm[2]++;
@@ -526,14 +526,14 @@ run_ctn_quiet(void)
 
 		diff_eq_obj("the mapping parameters", V90MappingParams,
 			    &mpA, &mpB, trial);
-		diff_eq_int("dMin (trial %ld)", cdA->short_0a, cdB->short_0a,
+		diff_eq_int("dMin (trial %ld)", cdA->dMin, cdB->dMin,
 			    trial);
 		diff_eq_int("short_10 (trial %ld)", cdA->short_10,
 			    cdB->short_10, trial);
-		diff_eq_int("word_48 (trial %ld)", (long)cdA->word_48,
-			    (long)cdB->word_48, trial);
+		diff_eq_int("rateAction (trial %ld)", (long)cdA->rateAction,
+			    (long)cdB->rateAction, trial);
 		diff_eq_obj("the three pdsnr thresholds", float[3],
-			    &cdA->float_18, &cdB->float_18, trial);
+			    &cdA->pdSnrThreshForRateUp, &cdB->pdSnrThreshForRateUp, trial);
 
 		diff_eq_obj("the ucode table is read only", short[7][128],
 			    ucA, ucB, trial);
@@ -559,7 +559,7 @@ run_ctn_quiet(void)
 		 */
 		if (cur.forced > -1)
 			diff_eq_int("a forced dMin arrives truncated (%ld)",
-				    cdB->short_0a, (short)cur.forced,
+				    cdB->dMin, (short)cur.forced,
 				    cur.forced);
 
 		restore_and_check_this(trial);
@@ -656,10 +656,10 @@ run_ctn_loud(void)
 			    1, trial);
 		diff_eq_obj("the mapping parameters, loud", V90MappingParams,
 			    &mpA, &mpB, trial);
-		diff_eq_int("dMin, loud (trial %ld)", cdA->short_0a,
-			    cdB->short_0a, trial);
+		diff_eq_int("dMin, loud (trial %ld)", cdA->dMin,
+			    cdB->dMin, trial);
 		diff_eq_obj("the three pdsnr thresholds, loud", float[3],
-			    &cdA->float_18, &cdB->float_18, trial);
+			    &cdA->pdSnrThreshForRateUp, &cdB->pdSnrThreshForRateUp, trial);
 
 		if (dsplib_debug_capture_lines(1) > 0)
 			seenPrinted = 1;
@@ -667,11 +667,11 @@ run_ctn_loud(void)
 		 * Claimed off the BLOB's own field rather than off the
 		 * transcript: the three threshold reports go through
 		 * `edprintf`, whose output is encoded, so `strstr` cannot
-		 * find them.  The method's last read of `float_18` is the
+		 * find them.  The method's last read of `pdSnrThreshForRateUp` is the
 		 * report itself, so a field still unordered here is a field
 		 * that was printed unordered.
 		 */
-		if (diff_isnan_f(cdB->float_18))
+		if (diff_isnan_f(cdB->pdSnrThreshForRateUp))
 			seenNanThresh = 1;
 
 		/* Everything below reads the BLOB's transcript, never ours. */
@@ -746,8 +746,8 @@ run_ctn_clamp(void)
 		parB->unnamed_360 = parA->unnamed_360;
 		parB->USE_RESTRICED_DMIN = 0;
 		parB->FORCED_DMIN = -1;
-		cdA->word_48 = 0;
-		cdB->word_48 = 0;
+		cdA->rateAction = 0;
+		cdB->rateAction = 0;
 		cdA->word_24 = (unsigned int)cur.w24;
 		cdB->word_24 = (unsigned int)cur.w24;
 		snap_this();
@@ -768,15 +768,15 @@ run_ctn_clamp(void)
 			    strcmp(dsplib_debug_capture_text(0),
 				   dsplib_debug_capture_text(1)) == 0 ? 1 : 0,
 			    1, trial);
-		diff_eq_int("clamped dMin (trial %ld)", cdA->short_0a,
-			    cdB->short_0a, trial);
+		diff_eq_int("clamped dMin (trial %ld)", cdA->dMin,
+			    cdB->dMin, trial);
 		diff_eq_obj("the mapping parameters at the clamp",
 			    V90MappingParams, &mpA, &mpB, trial);
 
 		/*
 		 * THE ORIGINAL dMin COMES OUT OF THE BLOB'S OWN TRANSCRIPT,
 		 * not out of our arithmetic: "current dMin = %d" prints
-		 * `short_0a` before the switch runs, so it is what the
+		 * `dMin` before the switch runs, so it is what the
 		 * boundary has to be classified against.  Reading the field
 		 * afterwards would classify the CLAMPED value, and 0x43 would
 		 * then never be seen at all -- which is exactly what this
@@ -804,13 +804,13 @@ run_ctn_clamp(void)
 				    strstr(t, "adjusting dMin for rate>=53k")
 				    != NULL, 1, got);
 			diff_eq_int("the clamp answers 0x3e (%ld)",
-				    (long)cdB->short_0a, 0x3e, got);
+				    (long)cdB->dMin, 0x3e, got);
 		} else {
 			diff_eq_int("the clamp stayed quiet (%ld)",
 				    strstr(t, "adjusting dMin for rate>=53k")
 				    == NULL, 1, got);
 			diff_eq_int("dMin is what the switch left (%ld)",
-				    (long)cdB->short_0a, got, trial);
+				    (long)cdB->dMin, got, trial);
 			seenQuiet++;
 		}
 
@@ -846,7 +846,7 @@ run_ctn_clamp(void)
  * `short_10`, which the function itself sets to `(short)(dMin * 1.25f)`, and
  * dMin is positive over most of the noise range.
  *
- * The KeepRate arm is the way in.  With `word_48 == 1` the function restores
+ * The KeepRate arm is the way in.  With `rateAction == 1` the function restores
  * the dMin it was handed, so the seed is whatever this fixture puts at +0x0a
  * -- and `(short)(-3 * 1.25f)` truncates toward zero to -3, which is negative
  * and odd in both loops at once.  The tables are then filled with small
@@ -874,10 +874,10 @@ run_ctn_negodd(void)
 		parB->FORCED_DMIN = -1;
 		parA->unnamed_360 = 0;
 		parB->unnamed_360 = 0;
-		cdA->word_48 = 1;
-		cdB->word_48 = 1;
-		cdA->short_0a = seed;
-		cdB->short_0a = seed;
+		cdA->rateAction = 1;
+		cdB->rateAction = 1;
+		cdA->dMin = seed;
+		cdB->dMin = seed;
 
 		/*
 		 * Small values around the two readings of the seed, so an
@@ -1063,7 +1063,7 @@ run_ctn_outcomes(void)
 {
 	static const char *const armname[6] = {
 		"KeepRate", "OneRateUp", "OneRateDown", "NoRestriction",
-		"a word_48 of 4 or more", "a negative word_48"
+		"a rateAction of 4 or more", "a negative rateAction"
 	};
 	int i;
 
@@ -1106,9 +1106,9 @@ run_ctn_outcomes(void)
 		    seenLaw[0]);
 	diff_eq_int("the A-law arm ran %ld times", seenLaw[1] > 0, 1,
 		    seenLaw[1]);
-	diff_eq_int("word_2c differed from word_28 %ld times", seenEq[0] > 0, 1,
+	diff_eq_int("compandingLaw differed from pcmType %ld times", seenEq[0] > 0, 1,
 		    seenEq[0]);
-	diff_eq_int("word_2c equalled word_28 %ld times", seenEq[1] > 0, 1,
+	diff_eq_int("compandingLaw equalled pcmType %ld times", seenEq[1] > 0, 1,
 		    seenEq[1]);
 	diff_eq_int("the min took the constellation byte %ld times",
 		    seenMinTakes[0] > 0, 1, seenMinTakes[0]);
@@ -1287,14 +1287,14 @@ fr_fixture(int trial, int wantN, int a, int b, int ramp, int top, int start)
 	mpA.shaperSR = wantN + 6 - fr_bits(rate);
 	mpB.shaperSR = mpA.shaperSR;
 
-	cdA->word_2c = (trial & 1);
-	cdB->word_2c = cdA->word_2c;
-	cdA->float_18 = 1.5f;
-	cdA->float_1c = -2.25f;
-	cdA->float_20 = 3.75f;
-	cdB->float_18 = cdA->float_18;
-	cdB->float_1c = cdA->float_1c;
-	cdB->float_20 = cdA->float_20;
+	cdA->compandingLaw = (trial & 1);
+	cdB->compandingLaw = cdA->compandingLaw;
+	cdA->pdSnrThreshForRateUp = 1.5f;
+	cdA->pdSnrThreshForRateDown = -2.25f;
+	cdA->pdSnrThreshForRetrain = 3.75f;
+	cdB->pdSnrThreshForRateUp = cdA->pdSnrThreshForRateUp;
+	cdB->pdSnrThreshForRateDown = cdA->pdSnrThreshForRateDown;
+	cdB->pdSnrThreshForRetrain = cdA->pdSnrThreshForRetrain;
 }
 
 static void
@@ -1305,12 +1305,12 @@ fr_restore_and_check(long input)
 	const V90ConstellationDesigner *sb =
 	    (const V90ConstellationDesigner *)snapB;
 
-	cdA->float_18 = sa->float_18;
-	cdA->float_1c = sa->float_1c;
-	cdA->float_20 = sa->float_20;
-	cdB->float_18 = sb->float_18;
-	cdB->float_1c = sb->float_1c;
-	cdB->float_20 = sb->float_20;
+	cdA->pdSnrThreshForRateUp = sa->pdSnrThreshForRateUp;
+	cdA->pdSnrThreshForRateDown = sa->pdSnrThreshForRateDown;
+	cdA->pdSnrThreshForRetrain = sa->pdSnrThreshForRetrain;
+	cdB->pdSnrThreshForRateUp = sb->pdSnrThreshForRateUp;
+	cdB->pdSnrThreshForRateDown = sb->pdSnrThreshForRateDown;
+	cdB->pdSnrThreshForRetrain = sb->pdSnrThreshForRetrain;
 
 	diff_eq_obj("ours writes only the three thresholds",
 		    V90ConstellationDesigner, cdAbuf, snapA, input);
@@ -1326,8 +1326,8 @@ fr_compare(int trial, const unsigned char *topBefore)
 
 	diff_eq_obj("the mapping parameters", V90MappingParams, &mpA, &mpB,
 		    trial);
-	diff_eq_obj("the three thresholds", float[3], &cdA->float_18,
-		    &cdB->float_18, trial);
+	diff_eq_obj("the three thresholds", float[3], &cdA->pdSnrThreshForRateUp,
+		    &cdB->pdSnrThreshForRateUp, trial);
 	/*
 	 * SIDE AGAINST SIDE AND NOT AGAINST A SNAPSHOT: this one is written.
 	 */
@@ -1371,7 +1371,7 @@ fr_compare(int trial, const unsigned char *topBefore)
 			fr_notInserted++;
 		}
 	}
-	fr_law[cdB->word_2c != 0 ? 1 : 0]++;
+	fr_law[cdB->compandingLaw != 0 ? 1 : 0]++;
 }
 
 static int

@@ -269,7 +269,7 @@ run_cd(void)
 				moved = 1;
 			if (trial == 0 && variant == 0)
 				first = ((V90ConstellationDesigner *)ours)
-					->byte_38;
+					->powerLadderIndex;
 			/*
 			 * The two rate defaults are constants, so the value
 			 * that has to VARY across trials is the collaborator

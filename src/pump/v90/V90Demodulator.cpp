@@ -1026,16 +1026,17 @@ V90Demodulator::getRbsPattern(unsigned int *rbs) const
  * what supplies it, and the two objects are not confusable even though the
  * fields are adjacent.
  *
- * `V90ConstellationDesigner`'s +0x48 is `word_48`, "zeroed by reset", and
- * this is the only place in the object that ever stores a 1 into it.  It
- * keeps its offset name: one writer storing a literal 1 says the field is a
- * flag and says nothing about what of.
+ * `V90ConstellationDesigner`'s +0x48 is `rateAction` (wave 3 field naming,
+ * see that class's header): this store of a literal 1 is
+ * `V90CD_RATE_KEEP`, which matches the class's own reading of the site --
+ * a remote rate renegotiation leaves the next `setConstellationToNoise`
+ * call in its "KeepRate" arm.
  */
 void
 V90Demodulator::indicateRemoteRateReneg() const
 {
 	connectionEvaluator->indicateRemoteRateReneg();
-	constellationDesigner->word_48 = 1;
+	constellationDesigner->rateAction = 1;
 }
 
 /*
@@ -1556,7 +1557,7 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 				    agc.gain) {
 					phase3Demodulator->short_400 = 1;
 				} else {
-					equalizer->short_08 = (short)
+					equalizer->dfeProtectionOnDil = (short)
 					    ((short)((1.0f - agc.gain /
 					      V90PF(params)[PARAMS_UNNAMED_06C])
 						     * 250.0f) + 1);
@@ -1698,10 +1699,10 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 					phase4Demodulator->enterWaitForMP();
 				connectionEvaluator->
 				    updateCurrentConstellationData(
-					constellationDesigner->short_0a,
-					constellationDesigner->float_18,
-					constellationDesigner->float_1c,
-					constellationDesigner->float_20);
+					constellationDesigner->dMin,
+					constellationDesigner->pdSnrThreshForRateUp,
+					constellationDesigner->pdSnrThreshForRateDown,
+					constellationDesigner->pdSnrThreshForRetrain);
 			} else {
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf("V90Demodulator: "
@@ -1805,23 +1806,23 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 				 "prevRate = %d\r\n", prevRate);
 
 			if (connectionEvaluator->word_98 != 0) {
-				constellationDesigner->word_48 = 3;
+				constellationDesigner->rateAction = 3;
 				edprintf("V90Demodulator: FORCED rate down on "
 					 "silence rrn\r\n");
 			} else if (phase4Demodulator->int_3510 != 0 &&
 				   (unsigned int)
 				   params->MIN_RATE_FOR_SILENCE_RRN_KEEP_RATE >=
 				   prevRate) {
-				constellationDesigner->word_48 = 1;
+				constellationDesigner->rateAction = 1;
 				edprintf("V90Demodulator: keeping rate on "
 					 "silence rrn\r\n");
 			} else if (params->
 			    DEBUG_CONNECTION_EVALUATOR_RATE_DOWN == 2) {
-				constellationDesigner->word_48 = 1;
+				constellationDesigner->rateAction = 1;
 				edprintf("V90Demodulator: FORCED keep rate on "
 					 "silence rrn\r\n");
 			} else {
-				constellationDesigner->word_48 = 3;
+				constellationDesigner->rateAction = 3;
 				edprintf("V90Demodulator: one rate down on "
 					 "silence rrn\r\n");
 			}
@@ -1879,10 +1880,10 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 					word_3c = 0x26;
 			}
 			connectionEvaluator->updateCurrentConstellationData(
-			    constellationDesigner->short_0a,
-			    constellationDesigner->float_18,
-			    constellationDesigner->float_1c,
-			    constellationDesigner->float_20);
+			    constellationDesigner->dMin,
+			    constellationDesigner->pdSnrThreshForRateUp,
+			    constellationDesigner->pdSnrThreshForRateDown,
+			    constellationDesigner->pdSnrThreshForRetrain);
 			break;
 
 		case 0x31:
@@ -1929,19 +1930,19 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 		switch (connectionEvaluator->evaluateConnection()) {
 		case 1:
 			word_3c = 0x22;
-			constellationDesigner->word_48 = 2;
+			constellationDesigner->rateAction = 2;
 			equalizer->restoreEqualizerToFloat();
 			break;
 		case 2:
 			if (params->DEBUG_CONNECTION_EVALUATOR_RATE_DOWN == 2)
-				constellationDesigner->word_48 = 1;
+				constellationDesigner->rateAction = 1;
 			else
-				constellationDesigner->word_48 = 3;
+				constellationDesigner->rateAction = 3;
 			word_3c = 0x22;
 			equalizer->restoreEqualizerToFloat();
 			break;
 		case 3:
-			constellationDesigner->word_48 = 0;
+			constellationDesigner->rateAction = 0;
 			word_3c = 0x22;
 			equalizer->restoreEqualizerToFloat();
 			break;
