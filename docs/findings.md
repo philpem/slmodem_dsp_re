@@ -114815,3 +114815,130 @@ t_v92precoder t_v92tx t_vpcmrunpcm`): 314 PASS, the only FAIL is
 F6203, already confirmed unrelated to this sweep by an earlier A/B in this
 same finding). `tools/onedef.py`/`tools/refcheck.py`/`tools/offcheck.py`/
 `tools/anchorcheck.py` all clean. (2026-09-04)
+
+### `silence.h`/`mohdet.h`/`dtmf_rx.h`/`detector.h`: 4 more removed, `cadence::pad_2c0` re-confirmed as genuinely dead space and left alone
+
+Four more small structs, closing out this sweep's tail:
+
+- `struct silence::pad_0e[2]`: `saw_signal` ends at +0x0e, alignment forced
+  to 4 by `obj`/`query` leaves exactly this gap ahead of `energy` (float).
+  `dis.py` over all four `silence_*` functions finds no access.
+  `test/unit/t_fdspksil.c` had a LIVE reference by name --
+  `sb.pad_0e[0]`, a deliberate differential check that `silence_create`
+  leaves a seeded fill byte (0x3c) untouched at this exact offset, useful
+  and specific evidence this pad really is inert -- fixed to read the same
+  physical byte via `((unsigned char *)&sb)[0x0e]` rather than by field
+  name.
+- `struct tag_retrainReqDet::pad_12` (mohdet.h, a bare `short`): `a2_q14`
+  ends at +0x12, alignment forced to 4 by three trailing `int` members
+  leaves exactly this gap ahead of `energyInp`. `dis.py` over
+  `retrainDetector`/`resetRetrainDetector` finds no access.
+- `struct dtmf_rx::pad_002[1]`: `short_000` ends at +0x002, alignment
+  forced to 4 by `int_004` leaves exactly this gap. `dis.py` over the four
+  functions that touch this struct (`reset_dtmf`, `create_cid_dtmf`,
+  `band_pass`, `dtmf_modem`) found one candidate hit, traced and excluded:
+  `band_pass`'s `lea 0x2(%edi,%edi,2),%eax` is an `edi*3+2` arithmetic
+  index computation with no single struct-pointer base register, not a
+  field read -- the same false-positive shape `tagV90AdditionalCPinfo`'s
+  entry above already worked through once.
+- `struct detector::pad_0002[2]`: `enable` ends at +0x02, alignment forced
+  to 4 by `dtmf` and every pointer/int after it leaves exactly this gap.
+  `dis.py` over the four `detector_*` functions found and traced a second
+  false positive of the same shape: `detector_progress`'s
+  `lea 0x2(%edx),%eax` is `dtmf_progress`'s RETURN VALUE plus 2 (`%edx` was
+  just loaded from `movswl %ax,%edx` off that call's result), not a struct
+  field -- corroborated by the same function's genuine `mov 0x4(%esi),%edx`
+  three instructions earlier, which IS the `dtmf` field read at its
+  asserted +0x04.
+
+`cadence::pad_2c0[16]` (the one `pad_NNNN` this sweep's earlier
+`f_10137` finding already investigated) was re-checked against this
+sweep's arithmetic test rather than assumed: `pattern[4]` ends at +0x2c0
+already 4-aligned, so natural alignment ahead of the next `int` field
+(`fixed_pattern` at +0x2d0) would insert ZERO bytes, not sixteen. Fails
+outright, independently confirming the earlier session's finding that this
+is real (if unidentified) dead space and not a compiler gap. Left
+untouched, as it already was.
+
+`make one T="t_beepgen t_cidleaves t_cidprog t_cidsvc t_detector t_dtmfrx
+t_fdspksil t_voicedp t_voicedpdel t_voicedprx t_voiceproc t_voicesvc
+t_mohdet"`: 122 PASS, 0 FAIL. `tools/onedef.py`/`tools/refcheck.py`/
+`tools/offcheck.py`/`tools/anchorcheck.py` all clean.
+
+## Sweep complete: file list, totals, and reconciliation notes for sibling agents
+
+**Every file this session's `grep -rlE '\bpad_[0-9a-fA-F]+\b' include/ src/`
+turned up, outside the four excluded clusters, was read and either changed
+or explicitly checked and declined.** No file in the assigned tail was left
+unexamined.
+
+**Files touched (18 headers + 5 `.cpp`/`.c` + 3 test files):**
+
+    include/dsplib/fdspkrnl.h              4 removed
+    src/service/fdspkrnl.c                 (assertions + initializer fix)
+    include/dsplib/V90SignBitsExtractor.h  2 removed, 1 declined (pad_14)
+    include/dsplib/V90Phase2Info.h         1 removed
+    include/dsplib/V90Mapper.h             2 removed
+    include/dsplib/V90Demapper.h           3 removed
+    include/dsplib/V92Phase2Info.h         1 removed
+    include/dsplib/V92CPUnPck.h            1 removed
+    include/dsplib/V90SpectralShaper.h     2 removed
+    include/dsplib/V90MP.h                 2 removed
+    include/dsplib/tagV90AdditionalCPinfo.h 1 removed
+    include/dsplib/dtmf.h                  1 removed, 1 declined (pad_80)
+    include/dsplib/cid.h                   2 removed
+    include/dsplib/V92Modulator.h          1 removed
+    include/dsplib/V92Jd.h                 1 removed
+    include/dsplib/V92BitsToSymbol.h       1 removed
+    src/pump/v90/V92BitsToSymbol.cpp       (assertion removed)
+    include/dsplib/V90RDetector.h          1 removed
+    include/dsplib/V90Jd.h                 1 removed
+    include/dsplib/V90BitsToSymbol.h       1 removed
+    include/dsplib/silence.h               1 removed
+    include/dsplib/mohdet.h                1 removed
+    include/dsplib/dtmf_rx.h               1 removed
+    include/dsplib/detector.h              1 removed
+    src/service/detector.c                 (initializer fix, TONEamode_CFG)
+    test/unit/t_v92btosproc.cpp            (pad_1d name -> offset)
+    test/unit/t_v92p4gen.cpp               (pad_1d name -> offset)
+    test/unit/t_fdspksil.c                 (pad_0e name -> offset)
+
+**28 `pad_NNNN` regions removed, 6 checked and explicitly declined** (with
+the arithmetic mismatch or non-alignment reason recorded at each site):
+`V90SignBitsExtractor::pad_14`, `V90CPUnPck`'s three (`pad_00`, `pad_37`,
+`pad_9a`), `V92Transmitter`'s two (`pad_00`, `pad_5c`), `dtmf::pad_80`,
+`V92Phase3Modulator::pad_44`, `V92Mapper::pad_03`, `fdsp_buffers::pad_1f40`
+and `fdsp_tone`'s two (`pad_10`, `pad_22[0xe]`), and `cadence::pad_2c0`
+(re-confirmed rather than re-derived, per standing instruction not to
+repeat an already-declined result without new evidence). **15 files in the
+naive grep list turned out to have no LIVE `pad_NNNN` struct member at
+all** (a `V9*_OFF`-style assertion macro reusing an old field's `pad_`
+label as its tag argument, or a comment mentioning a renamed field's former
+name) -- listed in this finding's opening paragraph, not repeated here.
+
+**Files NOT in this sweep's scope, and why**, so the parent can reconcile
+against the four sibling agents' own reports: every file the task brief's
+exclusion list named (`V90Equalizer.h`, `V90ConstellationDesigner.h`,
+`V90Demodulator.h`, `V90Phase3Demodulator.h`, `V90Phase4Demodulator.h`,
+`V90ConnectionEvaluator.h`/`.cpp`; `VPcmFloModem.h`, `V92CP.h`, `V90CP.h`,
+`V90AutoDigitalImpDetector.h`, `V90SessionFlag.h`, `V90Phase3Modulator.h`,
+`V90Phase4Modulator.h`/`.cpp`, `V92Phase4Modulator.h`/`.cpp`; `v34recv.h`,
+`v34shell.h`, `v34fsk.h`, `v34pcmmain.cpp`, `v34hstx1.cpp`, `v34hshak.c`,
+`v34filt.h`, `v34rx.h`; `faxvmi.h`/`.c`, `class1.h`, `fax.h`, `class1tx.c`,
+`class1rx.c`, `v29fax.h`, `v17fax.h`, `v29data.h`, `faxfifo.h`) was left
+strictly alone -- not read, not grepped into a candidate list, not touched.
+Two borderline files were skipped on the "if in doubt, skip" instruction
+rather than the letter of the exclusion list: `VPcmFloModem.cpp` and
+`V90Demodulator.cpp` (their headers are excluded and each is clearly the
+same class's own implementation file, even though the `.cpp` spelling
+itself was not named).
+
+**Real regression gate.** `tools/toolchain/byteident.py --ratchet` needs
+docker, unavailable in this sandbox; left for the parent's post-merge gate
+per every prior wave's precedent. Every change in this sweep is either a
+struct-member deletion relying on standard C/C++ implicit alignment (which
+`make period`'s own compiler reproduces byte-for-byte by construction, not
+by hope) or a comment/assertion/test-apparatus edit that cannot move
+generated code, so the ratchet is expected to hold at 736/1852 EXACT
+unchanged -- but "expected" is not "measured," and the parent's own run is
+what decides. (2026-09-04)

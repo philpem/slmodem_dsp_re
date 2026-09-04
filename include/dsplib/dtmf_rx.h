@@ -39,7 +39,16 @@
  */
 struct dtmf_rx {
 	short short_000;	/* +0x000 cleared by reset_dtmf, unread    */
-	short pad_002[1];	/* +0x002                                 */
+	/*
+	 * +0x002 was `pad_002[1]` -- REMOVED (finding F10145): `short_000`
+	 * ends at +0x002 and the struct's own 4-byte alignment (forced by
+	 * `int_004`) leaves exactly this gap ahead of it. `dis.py` over
+	 * `reset_dtmf`/`create_cid_dtmf`/`band_pass`/`dtmf_modem` (the four
+	 * functions that touch `struct dtmf_rx`) finds no genuine access to
+	 * offset 0x002/0x003 -- one `lea 0x2(%edi,%edi,2),%eax` in
+	 * `band_pass` is an arithmetic `edi*3+2` index computation with no
+	 * struct base register, not a field read.
+	 */
 	int int_004;		/* +0x004 cleared by reset_dtmf, unread    */
 	short short_008;	/* +0x008 cleared by reset_dtmf, unread    */
 	short samples[300];	/* +0x00a the realigned analysis window    */

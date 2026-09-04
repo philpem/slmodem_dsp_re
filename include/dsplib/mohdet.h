@@ -59,7 +59,14 @@ struct tag_retrainReqDet {
 	short b1_q14;			/* +0x0c numerator z^-1, negated    */
 	short a1_q14;			/* +0x0e denominator z^-1           */
 	short a2_q14;			/* +0x10 denominator z^-2, negated  */
-	short pad_12;			/* +0x12 alignment, never touched   */
+	/*
+	 * +0x12 was `pad_12` (a bare `short`) -- REMOVED (finding F10145).
+	 * Already correctly described as alignment; `a2_q14` ends at +0x12
+	 * and the struct's own 4-byte alignment (forced by the three `int`
+	 * members below) leaves exactly this gap ahead of `energyInp`.
+	 * `dis.py` over `retrainDetector`/`resetRetrainDetector` finds no
+	 * access to offset 0x12/0x13.
+	 */
 	int energyInp;			/* +0x14 sum (x*x + 32) >> 6        */
 	int energyOut;			/* +0x18 sum (y*y + 32) >> 6        */
 	int nsamples;			/* +0x1c samples in this block,

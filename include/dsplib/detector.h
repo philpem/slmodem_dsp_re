@@ -99,7 +99,18 @@ struct detector {
 	 * than a copy, and a callee that changed it would be obeyed.
 	 */
 	unsigned short enable;		/* +0x00 DETECTOR_ENABLE_*           */
-	unsigned char pad_0002[0x04 - 0x02];
+	/*
+	 * +0x0002 was `pad_0002[2]` -- REMOVED (finding F10145): `enable`
+	 * ends at +0x02 and the struct's own 4-byte alignment (forced by
+	 * `dtmf` and every pointer/int after it) leaves exactly this gap
+	 * ahead of `dtmf`. `dis.py` over `detector_create`/`detector_delete`/
+	 * `detector_progress`/`detector_set_enable` finds no genuine access
+	 * to offset 0x02/0x03 -- one `lea 0x2(%edx),%eax` in
+	 * `detector_progress` is `dtmf_progress`'s return value plus 2, an
+	 * unrelated arithmetic computation, not a field read (the same
+	 * function's `mov 0x4(%esi),%edx` three instructions earlier is the
+	 * genuine `dtmf` field access, corroborating +0x04's own offset).
+	 */
 
 	/*
 	 * The DTMF receiver.  Typed by its two users: `create_dtmf` returns
