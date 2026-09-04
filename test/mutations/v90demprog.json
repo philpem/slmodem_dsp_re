@@ -21,7 +21,7 @@
    "WHY THE ARMS CANNOT BE PRESENTED, and it is the equaliser rather than the",
    "source.  `V90Equalizer::process` runs between any poke and `progress`'s",
    "read: it sets `stateCount = 0` on entry and refills it from",
-   "`phase3Demod->word_30` or `phase4Demod->int_0028`, both of which its own",
+   "`phase3Demod->eventCode` or `phase4Demod->int_0028`, both of which its own",
    "`getDecision` call has already rewritten.  The sweep therefore takes",
    "whichever arm the receive chain produced -- three distinct ones of the",
    "thirty-one the two tables dispatch -- identically on both sides.  Driving",

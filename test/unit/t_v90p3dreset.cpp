@@ -537,7 +537,7 @@ run_arguments(void)
 		diff_eq_int("short_414 stored (%ld)",
 			    (long)slot[1].o.short_414,
 			    (long)short_v[(trial + 3) % NSHORT], tag);
-		diff_eq_int("word_14 stored (%ld)", (long)slot[1].o.word_14,
+		diff_eq_int("timeoutBase stored (%ld)", (long)slot[1].o.timeoutBase,
 			    (long)word_v[(trial + 5) % NWORD], tag);
 		diff_eq_int("float_418 stored (%ld)",
 		    memcmp(&slot[1].o.float_418, &float_v[trial % NFLOAT],

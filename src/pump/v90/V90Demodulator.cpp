@@ -312,7 +312,7 @@ V90Demodulator::enterPhase3()
 	 * AFTER the reset, which has just zeroed this very field.  The order
 	 * is the whole content of the store.
 	 */
-	phase3Demodulator->word_410 = quickConnect;
+	phase3Demodulator->quickConnect = quickConnect;
 
 	equalizer->enterPhase3();
 
@@ -722,7 +722,7 @@ V90Demodulator::enterPhase4()
  * `je 1be1e` at 0x1bdd4 -- the idempotence test's TAKEN edge -- lands on
  * `mov 0x1d8(%edi),%edx ; call V90Equalizer::enterPhase4` and not on the join
  * with the common tail, so both arms of `inPhase3 == 2` converge on that call
- * and it is the second statement of the `word_30 == 0x14` block rather than
+ * and it is the second statement of the `eventCode == 0x14` block rather than
  * part of the member that was inlined.  The first draft of this function
  * missed it and read as complete: the branch structure, every store and every
  * other call agreed, and what said otherwise was the instruction COUNT, 174
@@ -793,7 +793,7 @@ V90Demodulator::exitPhase3()
 
 	phase3Demodulator->exitDIL();
 
-	if (phase3Demodulator->word_30 == 0x14) {
+	if (phase3Demodulator->eventCode == 0x14) {
 		enterPhase4();
 		equalizer->enterPhase4();
 	}

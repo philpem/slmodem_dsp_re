@@ -82,8 +82,8 @@
  },
  {
   "label": "+0x294 is copied before the reset that clears +0x410",
-  "find": "\tphase3Demodulator->reset((PcmType)phase2Info->pcmType,\n\t\t\t\t phase2Info->Uinfo,\n\t\t\t\t (Phase3DemodulatorState)0, 0,\n\t\t\t\t jd, jdV92, dil,\n\t\t\t\t (short)preFilter.isV90WithEia6(), 1, 0.0f,\n\t\t\t\t (unsigned int)phase2Info->rtd);\n\n\t/*\n\t * AFTER the reset, which has just zeroed this very field.  The order\n\t * is the whole content of the store.\n\t */\n\tphase3Demodulator->word_410 = quickConnect;\n",
-  "replace": "\tphase3Demodulator->word_410 = quickConnect;\n\tphase3Demodulator->reset((PcmType)phase2Info->pcmType,\n\t\t\t\t phase2Info->Uinfo,\n\t\t\t\t (Phase3DemodulatorState)0, 0,\n\t\t\t\t jd, jdV92, dil,\n\t\t\t\t (short)preFilter.isV90WithEia6(), 1, 0.0f,\n\t\t\t\t (unsigned int)phase2Info->rtd);\n"
+  "find": "\tphase3Demodulator->reset((PcmType)phase2Info->pcmType,\n\t\t\t\t phase2Info->Uinfo,\n\t\t\t\t (Phase3DemodulatorState)0, 0,\n\t\t\t\t jd, jdV92, dil,\n\t\t\t\t (short)preFilter.isV90WithEia6(), 1, 0.0f,\n\t\t\t\t (unsigned int)phase2Info->rtd);\n\n\t/*\n\t * AFTER the reset, which has just zeroed this very field.  The order\n\t * is the whole content of the store.\n\t */\n\tphase3Demodulator->quickConnect = quickConnect;\n",
+  "replace": "\tphase3Demodulator->quickConnect = quickConnect;\n\tphase3Demodulator->reset((PcmType)phase2Info->pcmType,\n\t\t\t\t phase2Info->Uinfo,\n\t\t\t\t (Phase3DemodulatorState)0, 0,\n\t\t\t\t jd, jdV92, dil,\n\t\t\t\t (short)preFilter.isV90WithEia6(), 1, 0.0f,\n\t\t\t\t (unsigned int)phase2Info->rtd);\n"
  },
  {
   "label": "the equaliser is not told about phase 3",

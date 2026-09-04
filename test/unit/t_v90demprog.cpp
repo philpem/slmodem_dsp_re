@@ -337,7 +337,7 @@ prog_wire(int side, int trial)
 	 * THE EQUALISER'S SIX PEERS ARE LEFT AS v90demfix.h SEEDED THEM, AND
 	 * THAT IS MEASURED RATHER THAN LAZY.  Wiring them real -- and forcing
 	 * `state` to PHASE3 so `process` would take the arm that reads
-	 * `phase3Demod->word_30` -- was tried, and it makes the equaliser call
+	 * `phase3Demod->eventCode` -- was tried, and it makes the equaliser call
 	 * `V90Phase3Demodulator::getDecision` once per symbol over inputs that
 	 * member's own binary never presents.  `make phase` then failed on the
 	 * PERIOD compiler, 155 of 1,868, on the equalised symbols: a real
@@ -575,7 +575,7 @@ run_progress(void)
 		 * THE ARM IS PLANTED THROUGH THE EQUALISER'S OWN INPUT, and
 		 * that is forced rather than chosen.  `V90Equalizer::process`
 		 * opens with `stateCount = 0` and then sets it from
-		 * `phase3Demod->word_30` in its PHASE3 arm and from
+		 * `phase3Demod->eventCode` in its PHASE3 arm and from
 		 * `phase4Demod->int_0028` in its RRN one, so a value planted
 		 * in `stateCount` -- or in `word_3c` -- is gone before
 		 * `progress` reads it.  Planting the SOURCE is also the only
@@ -592,7 +592,7 @@ run_progress(void)
 			 * dereferences a peer this fixture seeds rather than
 			 * builds.  See prog_wire.
 			 */
-			P3(side)->word_30 = (unsigned int)state;
+			P3(side)->eventCode = (unsigned int)state;
 			P4D(side)->int_0028 = state;
 			e->stateCount = 0x7f;
 		}

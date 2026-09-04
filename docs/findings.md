@@ -113590,3 +113590,130 @@ and `t_v8hs`/`t_v8util` are green with their check counts unchanged. This is a
 promotion from bare fields to a properly modelled sub-object, licensed by the
 existing cast (evidence rank 2, typed callee) rather than by the field names'
 shape.  (2026-09-04)
+
+### F10137. `V90Phase3Demodulator`: five fields named, all from evidence a prior pass had already gathered but not applied or not connected
+
+Wave 3, V.90/V.92 phase 3/4 modulator/demodulator naming pass. Scope was the
+four paired classes (`V90Phase3Modulator`, `V90Phase3Demodulator`,
+`V90Phase4Modulator`, `V90Phase4Demodulator`); `V90Phase3Modulator` needed
+nothing -- a fresh count showed every one of its `pad_NNNN`/`type_NNNN`-looking
+grep hits was either a genuine alignment gap or a historical "was `word_XX`"
+mention inside an already-complete field's own comment, not a live unnamed
+field. `V90Phase3Demodulator` is where the work was:
+
+- **`word_04` -> `framePosition`** (rank 1, format string). The header already
+  quoted the author's own diagnostic, `"...waitForJd framePosition = %d\n"`,
+  and had recorded the name -- it said so explicitly, "IT IS STILL NOT
+  RENAMED" -- but never applied it, citing two now-stale blockers (a
+  concurrently-written sibling function, and the size of the rename). Both
+  were gone. Applied through the header, the .cpp (including the `P3D_PHASE`/
+  `P3D_LINMAPP`/`P3D_LINMAPPALT` macros), `t_v90p3ddec.cpp`,
+  `test/mutations/v90p3ddec.json`, and one site outside the nominal scope --
+  `d->word_04` in `t_v92dec.cpp`, found only by grepping for the bare offset
+  across the whole tree rather than trusting the file list a first pass
+  touches.
+- **`word_30` -> `eventCode`** (rank 3, usage inference, strengthened by the
+  paired class). `getV92Decision`'s own comment already said "`word_30` is an
+  event code the caller reads, cleared on entry and set by whichever arm has
+  news" -- the same role `V90Phase3Modulator::eventCode` plays at its own
+  +0x01c, in the sibling class this demodulator drives. Threading it through
+  found FOUR external readers outside `V90Phase3Demodulator.cpp` that a
+  file-scoped grep would have missed: `V90Demodulator::exitPhase3`
+  (`phase3Demodulator->word_30 == 0x14`), `V90Equalizer::process` (two sites,
+  `phase3Demod->word_30`), `t_v90demprog.cpp`'s `P3(side)->word_30`, and the
+  prose (not an anchor) in `v90demprog.json` describing the same line. All
+  four were found by a plain-text `grep -rn` over the whole tree excluding
+  `re/`, not by trusting the mutation suite list for the nominal file.
+- **`word_410` -> `quickConnect`** (rank 2, typed/named caller). Read next to
+  `V90Phase3Demodulator.h`'s own +0x3f4 and +0x420 comments, both of which
+  already say this field selects between QC-suffixed and plain
+  `V90Parameters` fields, and next to `V90Demodulator.h`'s +0x294 comment,
+  which already names ITS OWN copy of the same flag `quickConnect` from two
+  independent derivations (that class's own `reset` parameter name, and the
+  format string naming `V90Phase4Demodulator::quickConnect`) and already
+  states in prose that it "is also copied into `phase3Demodulator->word_410`
+  after `V90Phase3Demodulator::reset` has zeroed that field." The naming had
+  already been done one hop away and never carried across the assignment.
+  Propagated through `V90Demodulator.cpp`/`.h`, `V90Equalizer.cpp` (two more
+  external readers, `phase3Demod->word_30`'s neighbours at the same call
+  sites), `t_v90demod.cpp`, `t_v90demprog.cpp`, and the mutation suites for
+  all of those (`v90demod.json`, `v90demprog.json`, `v90p3dreset.json`).
+- **`word_14` -> `timeoutBase`** (rank 3, usage inference via the paired
+  class, with a stale comment corrected as a side effect). The header said
+  "Stored and not otherwise used" -- true when written, wrong once
+  `getV90Decision`/`getV92Decision` landed: both compare `word_2c` against
+  this field plus a float constant (`+ 12000.0f`, `+ 38760.0f`) to fire a
+  long timeout, exactly the role `V90Phase3Modulator::timeoutBase` plays for
+  its own two long timeouts (`+ 24804`, `+ 40000`) one class over. Renamed
+  through the header, .cpp, `t_v90p3dreset.cpp`, `t_v90p3ddec.cpp`,
+  `t_v92dec.cpp` and `v90p3dreset.json`; the stale comment is corrected in
+  place rather than just silently overwritten, since a wrong claim about a
+  field being unused is exactly the kind of thing this project's naming
+  section warns never survives a later reader unchallenged.
+- **`word_404` -> `jdNotRunLength`** (rank 2, typed callee and the object's
+  own method name). `JdNotDetector(int symbol)` -- a member whose entire body
+  is this field -- and `resetJdNotDetector`, a name this tree already gave
+  the method that zeroes it, both point at one role: count consecutive zero
+  symbols, answer yes once the count exceeds 11 on frame position 12 modulo
+  72. `getV90Decision` and `getV92Decision` inline the identical three-line
+  shape at their own JdNot arms rather than calling the member -- three
+  copies of one counter, verified by reading all three sites before renaming
+  any of them, not assumed from the method's existence alone.
+
+**`word_408` was investigated and deliberately left bare** -- worth recording
+because it looked, at first, like the same shape as `word_30`. State 5 stores
+`V90AutoDigitalImpDetector::studyUrefHandler`'s return value here and later
+tests it `== 2` for "the reference study is done," which is real
+callee-typed evidence. But roughly twenty OTHER sites across the DIL and
+probing states store a bare 0 or 1 into the same field for unrelated
+purposes, which is the overloaded-scratch-storage pattern rather than the
+one-role-throughout pattern `eventCode` and `jdNotRunLength` both showed on
+inspection. A single name would have been right for one arm and
+wrong-but-plausible for the rest; left as `word_408` with the finding
+recorded in its own header comment so the next pass does not re-derive the
+same near-miss.
+
+**The recurring failure mode this pass exists to name: evidence gathered in
+one file's comment does not automatically reach the field it is about**, when
+the field is read or written from OUTSIDE that file. Four of five renames
+above were sitting fully derived in a comment somewhere in the tree already;
+the work was finding every external reference across the whole tree (never
+trusting a mutation suite's own file list, which is built for a different
+purpose and is not exhaustive over readers) and applying the rename
+everywhere it needed to move together.
+
+**A sharp-edged tooling note for whoever repeats this.** The JSON mutation
+fixtures store `\t`/`\n` as their own two literal characters (an escaped
+tab/newline in JSON source text), not the actual control byte. A
+`sed -e 's/\bword_NN\b/.../g'` run against one of these files silently
+under-matches: `\t` immediately before an identifier merges the escape's
+letter (`t`, `n`, ...) into one continuous run of word characters with the
+identifier that follows, so `\bword_30\b` cannot see a boundary in front of
+`word_30` wherever the anchor text is `"...\n\t\tword_30 = ...`. This bit
+three separate renames in this pass before the pattern was recognised, and
+each time the fix was the same: drop the `\b` and match the bare identifier
+text, verified afterward by grepping the JSON file for the OLD name and
+finding zero hits, and by recomputing every mutation's `find` string against
+the renamed source (`src.count(m["find"]) == 1` for every entry) rather than
+trusting the sed's own reported success. It is a plain substring match, not a
+word-boundary one, that has to be used against this file format --
+`->`-prefixed patterns were already safe for the unrelated reason that `->`
+cannot occur inside a longer identifier. This trap and its fix are already on
+record at F9480/F10134 ("`\t`/`\n`-aware left boundary" for exactly this JSON
+escaping), found independently here rather than looked up first -- worth
+flagging so a THIRD independent rediscovery does not happen: a tool that
+strips the leading `\b` automatically when patching one of these JSON files
+would be worth having.
+
+`make one` across `t_v90p3ddec`, `t_v90p3dreset`, `t_v90p3mod`, `t_v92dec`,
+`t_v90p34`, `t_v90p4ddec`, `t_v90demod`, `t_v90demprog` and `t_v90rundemod`
+is green at every step (the one failure seen along the way,
+`t_v90equproc`'s 731/120974 in the RESET arm, is the pre-existing, declared
+GCC-13-vs-GCC-3.4.2 excess-precision divergence at finding F6203/
+`tools/gccdiverge.json`, unrelated to this pass and unchanged by it).
+`tools/onedef.py`, `tools/refcheck.py` and `tools/anchorcheck.py` (run over
+every mutation suite this pass touched: `v90p3ddec`, `v90p3dreset`,
+`v90exit3`, `v90demprog`, `v90demod`, `vpcmrunpcm`) are all clean.
+`make period`/`byteident.py --ratchet` need docker, unavailable in this
+sandbox, left for the parent's gate -- consistent with every prior wave-3
+session in this same tree.  (2026-09-04)

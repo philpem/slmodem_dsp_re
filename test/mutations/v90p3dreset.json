@@ -47,8 +47,8 @@
  },
  {
   "label": "the Sd detector is reached through +0x3f4",
-  "find": "\tword_404 = 0;\n\tsdDetector->reset();",
-  "replace": "\tword_404 = 0;\n\t(*(V90SdDetector **)((char *)this + 0x3f4))->reset();"
+  "find": "\tjdNotRunLength = 0;\n\tsdDetector->reset();",
+  "replace": "\tjdNotRunLength = 0;\n\t(*(V90SdDetector **)((char *)this + 0x3f4))->reset();"
  },
  {
   "label": "the detector is handed the level rather than the code",
@@ -102,13 +102,13 @@
  },
  {
   "label": "the DIL length is computed before the modulator runs",
-  "find": "\tword_408 = 0;\n\tdilLength = calculateDilLength(dil, pcmType);\n\tword_410 = 0;",
-  "replace": "\tword_408 = 0;\n\tdilLength = 0;\n\tword_410 = 0;"
+  "find": "\tword_408 = 0;\n\tdilLength = calculateDilLength(dil, pcmType);\n\tquickConnect = 0;",
+  "replace": "\tword_408 = 0;\n\tdilLength = 0;\n\tquickConnect = 0;"
  },
  {
   "label": "the DIL length and the word after it are swapped",
-  "find": "\tdilLength = calculateDilLength(dil, pcmType);\n\tword_410 = 0;",
-  "replace": "\tword_410 = calculateDilLength(dil, pcmType);\n\tdilLength = 0;"
+  "find": "\tdilLength = calculateDilLength(dil, pcmType);\n\tquickConnect = 0;",
+  "replace": "\tquickConnect = calculateDilLength(dil, pcmType);\n\tdilLength = 0;"
  },
  {
   "label": "the ninth argument lands where the eighth's neighbour is",
@@ -117,8 +117,8 @@
  },
  {
   "label": "the last argument and the fourth are swapped",
-  "find": "\tword_14 = word14Arg;",
-  "replace": "\tword_14 = word2cArg;"
+  "find": "\ttimeoutBase = word14Arg;",
+  "replace": "\ttimeoutBase = word2cArg;"
  },
  {
   "label": "the float is converted rather than copied",

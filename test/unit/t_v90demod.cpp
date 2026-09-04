@@ -310,8 +310,8 @@ run_observable(void)
 	ref_enterPhase3(D(1));
 	teardown();
 	diff_eq_int("+0x294 reached the phase 3 demodulator's +0x410 (%ld)",
-		    (long)P3(0)->word_410, (long)0x1234abcdu, 0);
-	diff_eq_int("...on the blob's side too (%ld)", (long)P3(1)->word_410,
+		    (long)P3(0)->quickConnect, (long)0x1234abcdu, 0);
+	diff_eq_int("...on the blob's side too (%ld)", (long)P3(1)->quickConnect,
 		    (long)0x1234abcdu, 0);
 
 	return diff_end();

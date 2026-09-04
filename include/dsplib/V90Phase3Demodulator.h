@@ -137,7 +137,7 @@ public:
 		   Phase3DemodulatorState state, unsigned int word2c,
 		   V90Jd *jd, V92Jd *jdV92, tagV90DILdescriptor *dil,
 		   short altRbs, short short414, float float418,
-		   unsigned int word14);
+		   unsigned int timeoutBase);
 
 	/*
 	 * Declared for the record and deliberately not defined; their callees
@@ -237,15 +237,14 @@ public:
 	 *
 	 * with this field as the argument -- so the author's name for it is
 	 * `framePosition`, on the same footing as `sessionFlag` below.  IT IS
-	 * STILL NOT RENAMED, but the reason has changed and is now a weaker one.
-	 * The original reason was that `getV90Decision` was being written
-	 * concurrently against `word_04` and a rename would move the ground
-	 * under it; both functions have landed, so that blocker is gone.  What
-	 * remains is only that the rename now touches two 8 KB functions, the
-	 * `P3D_OFF(word_04, 0x004, word04)` assertion tag and the mutation
-	 * anchors keyed on it, none of which this compose was testing.  The
-	 * name is recorded rather than applied, and applying it is a clean
-	 * separate step nothing is waiting on.
+	 * NOW RENAMED (wave 3, F10137): the two blockers a prior pass recorded
+	 * -- `getV90Decision` being written concurrently against `word_04`,
+	 * and the rename touching two 8 KB functions plus the `P3D_OFF`
+	 * assertion tag and its mutation anchors -- are both gone. Both
+	 * functions have landed, and the rename has been threaded through
+	 * every reference: this header, the .cpp (including the `P3D_PHASE`/
+	 * `P3D_LINMAPP`/`P3D_LINMAPPALT` macros that read it), t_v90p3ddec.cpp
+	 * and the v90p3ddec.json mutation anchors that key text on the name.
 	 *
 	 * IT IS READ AT THREE WIDTHS and all three are in the object, which is
 	 * why the reconstruction spells a cast at every site rather than
@@ -259,7 +258,7 @@ public:
 	 *   `movzwl 0x4(%ebx),%eax`  the row index into `linMapp`/`linMappAlt`,
 	 *                            always followed by `shl $0x7`
 	 */
-	unsigned int word_04;
+	unsigned int framePosition;
 
 	/*
 	 * +0x008  The constructor's third argument and what `setSessionFlag`
@@ -278,8 +277,20 @@ public:
 	 */
 	PcmType pcmType;
 
-	/* +0x014  `reset`'s last argument.  Stored and not otherwise used. */
-	unsigned int word_14;
+	/*
+	 * +0x014  `reset`'s last argument.  THIS COMMENT USED TO SAY "stored
+	 * and not otherwise used", and that was true only until the decision
+	 * functions landed: both `getV90Decision` and `getV92Decision`
+	 * compare `word_2c` against this field plus a float constant to fire
+	 * a long timeout -- `+ 12000.0f` for "WaitForSd TimeOut" and
+	 * `+ 38760.0f` for "JdDemod TimeOut"/"V92JdDemod TimeOut" -- which is
+	 * exactly the role `V90Phase3Modulator::timeoutBase` plays for ITS
+	 * two long timeouts (`+ 24804` and `+ 40000`) in the paired class.
+	 * Named by that structural symmetry (usage inference, strengthened by
+	 * the sibling class already using this exact name for this exact
+	 * role) rather than by any format string or typed callee of its own.
+	 */
+	unsigned int timeoutBase;
 
 	/*
 	 * +0x018  `reset`'s second argument, the u-law or A-law code the
@@ -322,8 +333,31 @@ public:
 	 */
 	unsigned int word_2c;
 
-	/* +0x030  Zeroed by `reset`. */
-	unsigned int word_30;
+	/*
+	 * +0x030  Zeroed by `reset`, and on every entry to both decision
+	 * functions -- `word_2c++; eventCode = 0; switch (state) { ... }` is
+	 * the whole of each function's own opening, per
+	 * `V90Phase3Demodulator.cpp`'s own comment on `getV92Decision`.  Every
+	 * arm that has news for the caller sets it to a small constant before
+	 * returning (the state numbers the comment there catalogues,
+	 * 1..0x3a), and nothing in this class or `V90Demodulator` reads it
+	 * except as an equality test against one such constant --
+	 * `V90Demodulator::exitPhase3` checks `phase3Demodulator->eventCode ==
+	 * 0x14` for "Phase3 Terminated" before entering phase 4.
+	 *
+	 * NAMED BY USAGE INFERENCE, STRENGTHENED BY THE PAIRED CLASS: this is
+	 * the demodulator's own analogue of `V90Phase3Modulator::eventCode`
+	 * at +0x01c, which CLAUDE.md's own evidence order ranks below a
+	 * format string or a typed callee -- nothing in the object spells
+	 * this field's name -- but the two fields play an identical role in
+	 * the two halves of one state machine: cleared on entry, set by
+	 * whichever transition has something to report, read by the caller
+	 * and by nothing internal.  `V90Phase3Demodulator.cpp`'s own
+	 * `getV92Decision` comment already called it "an event code the
+	 * caller reads" before this rename; the name here just carries that
+	 * description into the field itself.
+	 */
+	unsigned int eventCode;
 
 	/*
 	 * +0x034  EMBEDDED, not pointed at: `setSessionFlag` reaches it with
@@ -460,11 +494,11 @@ public:
 	 * reaches it -- it was the head of `pad_3f4[5]`.  BOTH decision
 	 * functions write it, independently reconstructed and agreeing to the
 	 * parameter: as each enters its TRN1d data-directed state it stores
-	 * `params->unnamed_4a4` when `word_410` is set (0x24094, 0x2410b in
-	 * `getV90Decision`) and `params->unnamed_344` when it is not (0x25749),
-	 * always in the same breath as +0x420 below.  Nothing in either
-	 * function -- 17 KB between them -- READS it, so its width and its
-	 * source are settled and what it is FOR is not.  Finding F2118.
+	 * `params->unnamed_4a4` when `quickConnect` is set (0x24094, 0x2410b
+	 * in `getV90Decision`) and `params->unnamed_344` when it is not
+	 * (0x25749), always in the same breath as +0x420 below.  Nothing in
+	 * either function -- 17 KB between them -- READS it, so its width and
+	 * its source are settled and what it is FOR is not.  Finding F2118.
 	 */
 	unsigned int word_3f4;		/* +0x3f4                        */
 
@@ -494,7 +528,36 @@ public:
 	unsigned int word_3fc;		/* +0x3fc zeroed by `reset`      */
 	short short_400;		/* +0x400 zeroed by `reset`      */
 	unsigned char pad_402[2];	/* +0x402 alignment              */
-	unsigned int word_404;		/* +0x404 zeroed by `reset`      */
+
+	/*
+	 * +0x404  NAMED (wave 3, F10137) BY A TYPED CALLEE AND BY THE
+	 * OBJECT'S OWN METHOD NAME.  `JdNotDetector(int symbol)` -- the one
+	 * member of this class whose whole body is this field -- increments
+	 * it on a zero symbol and clears it otherwise, then answers yes once
+	 * it exceeds 11 on the one frame position in 72 that is 12; both
+	 * `getV90Decision` and `getV92Decision` inline the identical shape at
+	 * their own JdNot arm rather than calling it (three copies of one
+	 * counter, not three different fields). `resetJdNotDetector` -- a
+	 * name this tree already gave the method that zeroes it -- is the
+	 * fourth site naming the same role.  Unlike +0x408 just below, every
+	 * site that touches this field does so for the SAME purpose, which is
+	 * what makes the rename safe here and not there.
+	 */
+	unsigned int jdNotRunLength;	/* +0x404                        */
+
+	/*
+	 * +0x408  Zeroed by `reset`, and NOT renamed despite one strong-
+	 * looking lead: state 5 (study reference Ucode) stores
+	 * `V90AutoDigitalImpDetector::studyUrefHandler`'s return value here
+	 * and later tests it `== 2` for "the reference study is done" -- a
+	 * real, typed-callee-backed role. But roughly twenty OTHER sites
+	 * across the DIL and probing states store a bare 0 or 1 into this
+	 * same field with no relation to that call, which is the overloaded-
+	 * scratch pattern CLAUDE.md's naming section warns about: a single
+	 * name here would be right for one arm and wrong-but-plausible for
+	 * the rest, and the rule is that a wrong name is worse than a padded
+	 * one. Left as `word_408`.
+	 */
 	unsigned int word_408;		/* +0x408 zeroed by `reset`      */
 
 	/*
@@ -507,8 +570,23 @@ public:
 	 * +0x410  Zeroed by `reset`, and then immediately overwritten by
 	 * `V90Demodulator::enterPhase3` with its own +0x294 -- which is the
 	 * one place in wave 2 where the caller's write ordering is observable.
+	 *
+	 * NAMED (wave 3, F10137) BY THE CALLER'S OWN, ALREADY-ESTABLISHED
+	 * FIELD, which is CLAUDE.md's rule-2 tier: `V90Demodulator`'s own
+	 * +0x294 is `quickConnect`, named in that header from two independent
+	 * derivations (`V90Demodulator::reset`'s own parameter name, and the
+	 * format string that names `V90Phase4Demodulator::quickConnect`), and
+	 * `V90Demodulator::enterPhase3` copies it here with
+	 * `phase3Demodulator->quickConnect = quickConnect;` straight after
+	 * `V90Phase3Demodulator::reset` has zeroed this field -- see that
+	 * header's own +0x294 comment, which already named this copy before
+	 * the rename landed. It is also the flag `resetStudyUrefHandler`
+	 * receives as its `qc` argument and the one this class's own +0x3f4
+	 * and +0x420 switch their parameter source on (both above and
+	 * below), so every QC-suffixed-vs-plain parameter choice in this
+	 * class traces back to the same caller-named field.
 	 */
-	unsigned int word_410;
+	unsigned int quickConnect;
 
 	/* +0x414  `reset`'s ninth argument, stored as a 16-bit quantity. */
 	short short_414;
@@ -533,8 +611,8 @@ public:
 	/*
 	 * +0x420  The length of the TRN1d data-directed stage, and likewise no
 	 * longer padding.  BOTH decision functions load it from
-	 * `params->TRN1_QC_DD_LENGTH` (+0x4a0) when `word_410` is set and from
-	 * `params->TRN1D_DD_LENGTH` (+0x2fc) when it is not, and then COMPARE
+	 * `params->TRN1_QC_DD_LENGTH` (+0x4a0) when `quickConnect` is set and
+	 * from `params->TRN1D_DD_LENGTH` (+0x2fc) when it is not, and then COMPARE
 	 * the counter `word_2c` against it to decide when to leave -- state 4
 	 * in `getV90Decision`, state 5 in `getV92Decision`.  So unlike +0x3f4
 	 * this one is both written and read, and it holds a length.  The two

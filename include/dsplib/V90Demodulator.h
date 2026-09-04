@@ -597,7 +597,7 @@ public:
 	 * Neither reading knew about the other, which is what took this off
 	 * usage inference and onto CLAUDE.md's rule 2.
 	 *
-	 * It is also copied into `phase3Demodulator->word_410` AFTER
+	 * It is also copied into `phase3Demodulator->quickConnect` AFTER
 	 * `V90Phase3Demodulator::reset` has zeroed that field, which is the
 	 * one place the two members of wave 2 interact observably, and
 	 * `enterDataPhase` picks the shorter linear-mapping study when it is

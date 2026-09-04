@@ -1963,7 +1963,7 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 			int st;
 
 			decision = phase3Demod->getDecision(soft);
-			st = (int)phase3Demod->word_30;
+			st = (int)phase3Demod->eventCode;
 			if (st) {
 				stateCount = st;
 				if (st == 0x39)
@@ -2275,14 +2275,14 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 			int st;
 
 			decision = phase3Demod->getDecision(soft);
-			st = (int)phase3Demod->word_30;
+			st = (int)phase3Demod->eventCode;
 			if (st) {
 				stateCount = st;
 				/*
 				 * The table at .rodata+0xc84 is EIGHTEEN
 				 * entries biased by three, so index 0 is
-				 * `word_30 == 3` and index 17 is
-				 * `word_30 == 20`; 4..7 and 17..19 fall
+				 * `eventCode == 3` and index 17 is
+				 * `eventCode == 20`; 4..7 and 17..19 fall
 				 * straight to <TAIL-P3>.
 				 *
 				 * The case labels belong to

@@ -45,7 +45,7 @@
  * anything compares it, so a trial that wants the comparison `word_2c == X`
  * to fire sets `word_2c = X - 1`.  `cand[]` below is every X the thirty-four
  * arms test against -- the eleven parameter slots, the five literals, the two
- * float constants, the two `word_14`-relative constants and the two modular
+ * float constants, the two `timeoutBase`-relative constants and the two modular
  * conditions -- and the sweep runs all of them against all thirty-four states.
  * That is what makes this a test of the arms rather than of the dispatch.
  *
@@ -200,8 +200,8 @@ struct trial_args {
 	int		state;		/* +0x28, the arm under test    */
 	unsigned int	word_2c;	/* the counter BEFORE the entry ++ */
 	unsigned int	word_04;	/* the frame position, 0..5     */
-	unsigned int	word_410;	/* selects the short-TRN1 arms  */
-	unsigned int	word_14;	/* the two relative timeouts    */
+	unsigned int	quickConnect;	/* selects the short-TRN1 arms  */
+	unsigned int	timeoutBase;	/* the two relative timeouts    */
 	int		pcmType;	/* 0 mu-law, 1 A-law            */
 	unsigned char	ucode;
 	short		ucodeLevel;
@@ -393,10 +393,10 @@ setup(int trial, const struct trial_args *t)
 	slot[0].o.reset((PcmType)t->pcmType, t->ucode,
 			P3D_STATE_WAIT_FOR_SD, 0, &jdo[0],
 			t->withJd92 ? &jd92o[0] : (V92Jd *)0, &dilo[0],
-			0, 0, 0.0f, t->word_14);
+			0, 0, 0.0f, t->timeoutBase);
 	ref_p3d_reset(&slot[1].o, t->pcmType, t->ucode, 0, 0, &jdo[1],
 		      t->withJd92 ? (void *)&jd92o[1] : (void *)0, &dilo[1],
-		      0, 0, 0.0f, t->word_14);
+		      0, 0, 0.0f, t->timeoutBase);
 
 	for (side = 0; side < 2; side++) {
 		V90Phase3Demodulator *d = &slot[side].o;
@@ -410,17 +410,17 @@ setup(int trial, const struct trial_args *t)
 
 		d->state = (Phase3DemodulatorState)t->state;
 		d->word_2c = t->word_2c;
-		d->word_30 = 0xdead;
-		d->word_04 = t->word_04;
-		d->word_410 = t->word_410;
-		d->word_14 = t->word_14;
+		d->eventCode = 0xdead;
+		d->framePosition = t->word_04;
+		d->quickConnect = t->quickConnect;
+		d->timeoutBase = t->timeoutBase;
 		d->ucode = t->ucode;
 		d->ucodeLevel = t->ucodeLevel;
 		d->pcmType = (PcmType)t->pcmType;
 		d->byte_3f9 = t->byte_3f9;
 		d->word_3fc = t->word_3fc;
 		d->short_400 = t->short_400;
-		d->word_404 = t->word_404;
+		d->jdNotRunLength = t->word_404;
 		d->word_408 = t->word_408;
 		d->word_420 = t->word_420;
 		d->word_3f4 = 0x5a5a5a5au;
@@ -704,20 +704,20 @@ returns_a_value(int st)
 struct tally {
 	int firstStudy;		/* case 10  -> state 0x0b            */
 	int qcFirstStudy;	/* case 13  -> state 0x0e            */
-	int secondStudy;	/* 11/12/15 -> state 0x10, word_30 17 */
-	int thirdStage;		/* case 11  -> state 0x0c, word_30 16 */
-	int qcSecond;		/* case 14  -> state 0x0f, word_30 16 */
-	int relaxation;		/* case 16  -> word_30 0x12          */
-	int relaxCount;		/* case 16  -> word_30 0x0f          */
-	int dilEnded;		/* case 17  -> word_30 0x13          */
-	int jdNot;		/* cases 5 and 9 -> word_30 8 or 5   */
-	int v92Jd;		/* case 7   -> word_30 6             */
-	int v92JdPhase;		/* case 8   -> word_30 7             */
+	int secondStudy;	/* 11/12/15 -> state 0x10, eventCode 17 */
+	int thirdStage;		/* case 11  -> state 0x0c, eventCode 16 */
+	int qcSecond;		/* case 14  -> state 0x0f, eventCode 16 */
+	int relaxation;		/* case 16  -> eventCode 0x12          */
+	int relaxCount;		/* case 16  -> eventCode 0x0f          */
+	int dilEnded;		/* case 17  -> eventCode 0x13          */
+	int jdNot;		/* cases 5 and 9 -> eventCode 8 or 5   */
+	int v92Jd;		/* case 7   -> eventCode 6             */
+	int v92JdPhase;		/* case 8   -> eventCode 7             */
 	int studyUref;		/* case 4   -> state 5               */
 	int trn1dDd;		/* cases 2 and 3 -> state 4          */
 	int nullJd92;		/* case 3   -> state 0x19            */
 	int dilTimeout;		/* 10..16   -> state 0x18            */
-	int terminated;		/* the shared tail -> word_30 0x14   */
+	int terminated;		/* the shared tail -> eventCode 0x14   */
 	int sdSeen;		/* case 0   -> state 1               */
 	int sdNotSeen;		/* case 1   -> state 2               */
 	int qtsSeen;		/* case 26  -> state 0x1b            */
@@ -725,7 +725,7 @@ struct tally {
 	int ansamEnter;		/* case 28  -> state 0x1d            */
 	int ansamDrop;		/* case 30  -> state 0x1f            */
 	int notSameLine;	/* cases 26/27 -> state 0x20 or 0x21 */
-	int midEvent;		/* 11/14    -> word_30 0x0c or 0x0a  */
+	int midEvent;		/* 11/14    -> eventCode 0x0c or 0x0a  */
 	int ucodeForced;	/* the symbol was made to match      */
 };
 
@@ -736,7 +736,7 @@ count_branches(void)
 {
 	const V90Phase3Demodulator *d = &slot[1].o;
 	int st = (int)d->state;
-	unsigned int ev = d->word_30;
+	unsigned int ev = d->eventCode;
 
 	if (st == 0x0b)
 		tal.firstStudy++;
@@ -858,7 +858,7 @@ run_trial(int trial, const struct trial_args *t, int calls, long tag)
 /*
  * Every value the thirty-four arms compare `word_2c` against, expressed as the
  * value to PUT there -- one less than the target, because the method's first
- * act is `word_2c++`.  `cand_of` needs the trial's own `word_14` for the two
+ * act is `word_2c++`.  `cand_of` needs the trial's own `timeoutBase` for the two
  * relative timeouts and the parameter block for the eleven slot ones.
  */
 #define NCAND	26
@@ -893,8 +893,8 @@ cand_of(int k, const struct trial_args *t, int trial)
 	case 9:  return 0x9c40u - 1u;
 	case 10: return 36000u - 1u;
 	case 11: return 24804u - 1u;
-	case 12: return t->word_14 + 12000u - 1u;
-	case 13: return t->word_14 + 38760u - 1u;
+	case 12: return t->timeoutBase + 12000u - 1u;
+	case 13: return t->timeoutBase + 38760u - 1u;
 	case 14: return t->word_420 - 1u;
 	case 15: return t->dilLength - 1u;
 	case 16: return 11u;			/* %6 == 0 on entry     */
@@ -947,8 +947,8 @@ run_states(void)
 			memset(&t, 0, sizeof(t));
 			t.state = st;
 			t.word_04 = (unsigned int)(v % 6);
-			t.word_14 = (unsigned int)((v % 5) * 100u);
-			t.word_410 = (v / 2) & 1;
+			t.timeoutBase = (unsigned int)((v % 5) * 100u);
+			t.quickConnect = (v / 2) & 1;
 			t.pcmType = (v / 3) & 1;
 			t.ucode = (unsigned char)(v * 17u + 3u);
 			t.a948 = (v / 5) & 1;
@@ -1006,7 +1006,7 @@ run_states(void)
 				sawA = 1;
 			else
 				sawMu = 1;
-			if (t.word_410)
+			if (t.quickConnect)
 				sawShortTrn = 1;
 			else
 				sawLongTrn = 1;
@@ -1123,8 +1123,8 @@ run_transcripts(void)
 				memset(&t, 0, sizeof(t));
 				t.state = st;
 				t.word_04 = (unsigned int)((st + k) % 6);
-				t.word_14 = 100u;
-				t.word_410 = (k & 1);
+				t.timeoutBase = 100u;
+				t.quickConnect = (k & 1);
 				t.pcmType = (k / 2) & 1;
 				t.ucode = (unsigned char)(k * 13u + 7u);
 				t.ucodeLevel = 4095;
@@ -1167,7 +1167,7 @@ run_transcripts(void)
 					t.word_2c = 11u;
 				if (st == 9) {
 					t.word_2c = 11u + 72u;
-					t.word_410 = 1;
+					t.quickConnect = 1;
 					t.word_404 = 0x40u;
 				}
 				/*
@@ -1182,7 +1182,7 @@ run_transcripts(void)
 				if (st == 3) {
 					t.word_2c = 0x7f8u - 1u;
 					t.withJd92 = (k & 1) == 0;
-					t.word_410 = 1;
+					t.quickConnect = 1;
 				}
 
 				dsplib_debug_capture_reset();

@@ -22,10 +22,10 @@
  },
  {
   "label": "the phase index is not truncated to sixteen bits",
-  "find": "#define P3D_PHASE\t((unsigned short)word_04)",
-  "replace": "#define P3D_PHASE\t(word_04)",
+  "find": "#define P3D_PHASE\t((unsigned short)framePosition)",
+  "replace": "#define P3D_PHASE\t(framePosition)",
   "equivalent": true,
-  "why": "EXPECTED UNCAUGHT.  `word_04` is a 0..5 phase counter that `if (++p == 6) p = 0` keeps in range, so truncating it to sixteen bits before the table index cannot change a subscript.  The cast is in the reconstruction because the object has `movzwl 0x4(%ebx)` at every one of those sites and not because any test can see it -- which is the whole reason the mutation is here: it says out loud that this one line rests on the instruction and not on the suite."
+  "why": "EXPECTED UNCAUGHT.  `framePosition` is a 0..5 phase counter that `if (++p == 6) p = 0` keeps in range, so truncating it to sixteen bits before the table index cannot change a subscript.  The cast is in the reconstruction because the object has `movzwl 0x4(%ebx)` at every one of those sites and not because any test can see it -- which is the whole reason the mutation is here: it says out loud that this one line rests on the instruction and not on the suite."
  },
  {
   "label": "the Sd run-length the recovery flag arms on is 11",
@@ -34,8 +34,8 @@
  },
  {
   "label": "the SdDemod timeout is one sample late",
-  "find": "\t\t\tstate = (Phase3DemodulatorState)0x02;\n\t\t\tword_2c = 0;\n\t\t\tword_30 = 2;\n\t\t} else if (word_2c == 0x180) {",
-  "replace": "\t\t\tstate = (Phase3DemodulatorState)0x02;\n\t\t\tword_2c = 0;\n\t\t\tword_30 = 2;\n\t\t} else if (word_2c == 0x181) {",
+  "find": "\t\t\tstate = (Phase3DemodulatorState)0x02;\n\t\t\tword_2c = 0;\n\t\t\teventCode = 2;\n\t\t} else if (word_2c == 0x180) {",
+  "replace": "\t\t\tstate = (Phase3DemodulatorState)0x02;\n\t\t\tword_2c = 0;\n\t\t\teventCode = 2;\n\t\t} else if (word_2c == 0x181) {",
   "note": "Anchor carries 3 line(s) above it: another arm of this function spells the same statements, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
@@ -45,19 +45,19 @@
  },
  {
   "label": "the faked energy drop fires one sample early",
-  "find": "\t\tif (ansamToneDetector->process(sample)) {\n\t\t\tedprintf(\"V90Phase3Demodulator: ANSpcm detected on \"\n\t\t\t\t \"recovery, move to wait for drop...\\r\\n\");\n\t\t\tword_30 = 0x3a;\n\t\t}\n\t\tif (word_2c > 0x7cf) {",
-  "replace": "\t\tif (ansamToneDetector->process(sample)) {\n\t\t\tedprintf(\"V90Phase3Demodulator: ANSpcm detected on \"\n\t\t\t\t \"recovery, move to wait for drop...\\r\\n\");\n\t\t\tword_30 = 0x3a;\n\t\t}\n\t\tif (word_2c >= 0x7cf) {"
+  "find": "\t\tif (ansamToneDetector->process(sample)) {\n\t\t\tedprintf(\"V90Phase3Demodulator: ANSpcm detected on \"\n\t\t\t\t \"recovery, move to wait for drop...\\r\\n\");\n\t\t\teventCode = 0x3a;\n\t\t}\n\t\tif (word_2c > 0x7cf) {",
+  "replace": "\t\tif (ansamToneDetector->process(sample)) {\n\t\t\tedprintf(\"V90Phase3Demodulator: ANSpcm detected on \"\n\t\t\t\t \"recovery, move to wait for drop...\\r\\n\");\n\t\t\teventCode = 0x3a;\n\t\t}\n\t\tif (word_2c >= 0x7cf) {"
  },
  {
   "label": "the JdNot frame position is 13 rather than 12",
-  "find": "\t\t\tword_04 = 0;\n\t\tif (bit != 0)\n\t\t\tword_404 = 0;\n\t\telse\n\t\t\tword_404++;\n\t\tif (word_404 > 0xb && word_2c % 72 == 12) {",
-  "replace": "\t\t\tword_04 = 0;\n\t\tif (bit != 0)\n\t\t\tword_404 = 0;\n\t\telse\n\t\t\tword_404++;\n\t\tif (word_404 > 0xb && word_2c % 72 == 13) {",
+  "find": "\t\t\tframePosition = 0;\n\t\tif (bit != 0)\n\t\t\tjdNotRunLength = 0;\n\t\telse\n\t\t\tjdNotRunLength++;\n\t\tif (jdNotRunLength > 0xb && word_2c % 72 == 12) {",
+  "replace": "\t\t\tframePosition = 0;\n\t\tif (bit != 0)\n\t\t\tjdNotRunLength = 0;\n\t\telse\n\t\t\tjdNotRunLength++;\n\t\tif (jdNotRunLength > 0xb && word_2c % 72 == 13) {",
   "note": "Anchor carries 5 line(s) above it: another arm of this function spells the same statements, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
   "label": "the JdNot run length is 12 rather than 11",
-  "find": "\t\t\tword_04 = 0;\n\t\tif (bit != 0)\n\t\t\tword_404 = 0;\n\t\telse\n\t\t\tword_404++;\n\t\tif (word_404 > 0xb && word_2c % 72 == 12) {\n",
-  "replace": "\t\t\tword_04 = 0;\n\t\tif (bit != 0)\n\t\t\tword_404 = 0;\n\t\telse\n\t\t\tword_404++;\n\t\tif (word_404 > 0xc && word_2c % 72 == 12) {\n",
+  "find": "\t\t\tframePosition = 0;\n\t\tif (bit != 0)\n\t\t\tjdNotRunLength = 0;\n\t\telse\n\t\t\tjdNotRunLength++;\n\t\tif (jdNotRunLength > 0xb && word_2c % 72 == 12) {\n",
+  "replace": "\t\t\tframePosition = 0;\n\t\tif (bit != 0)\n\t\t\tjdNotRunLength = 0;\n\t\telse\n\t\t\tjdNotRunLength++;\n\t\tif (jdNotRunLength > 0xc && word_2c % 72 == 12) {\n",
   "note": "Anchor carries 5 line(s) above it: another arm of this function spells the same statements, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
@@ -73,19 +73,19 @@
  },
  {
   "label": "the error-relaxation counter runs on the wrong flag",
-  "find": "\t\t\tword_04 = 0;\n\t\tif (byte_3f9 != 0) {",
-  "replace": "\t\t\tword_04 = 0;\n\t\tif (byte_3f9 == 0) {",
+  "find": "\t\t\tframePosition = 0;\n\t\tif (byte_3f9 != 0) {",
+  "replace": "\t\t\tframePosition = 0;\n\t\tif (byte_3f9 == 0) {",
   "note": "Anchor carries 1 line(s) above it: another arm of this function spells the same statements, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
   "label": "the ANSpcm demod state does not raise the verification status",
-  "find": "\t\t\t\tparams->ANSPCM_DEMODULATION_LENGTH = 0x320;\n\t\t\tword_30 = 0x39;\n\t\t\tverificationStatus = 1;",
-  "replace": "\t\t\t\tparams->ANSPCM_DEMODULATION_LENGTH = 0x320;\n\t\t\tword_30 = 0x39;\n\t\t\tverificationStatus = 0;"
+  "find": "\t\t\t\tparams->ANSPCM_DEMODULATION_LENGTH = 0x320;\n\t\t\teventCode = 0x39;\n\t\t\tverificationStatus = 1;",
+  "replace": "\t\t\t\tparams->ANSPCM_DEMODULATION_LENGTH = 0x320;\n\t\t\teventCode = 0x39;\n\t\t\tverificationStatus = 0;"
  },
  {
   "label": "the QTS-detected event code is the QTSNot one",
-  "find": "\t\t\t\t word_2c);\n\t\t\tstate = (Phase3DemodulatorState)0x1b;\n\t\t\tword_2c = 0;\n\t\t\tword_30 = 0x37;",
-  "replace": "\t\t\t\t word_2c);\n\t\t\tstate = (Phase3DemodulatorState)0x1b;\n\t\t\tword_2c = 0;\n\t\t\tword_30 = 0x38;",
+  "find": "\t\t\t\t word_2c);\n\t\t\tstate = (Phase3DemodulatorState)0x1b;\n\t\t\tword_2c = 0;\n\t\t\teventCode = 0x37;",
+  "replace": "\t\t\t\t word_2c);\n\t\t\tstate = (Phase3DemodulatorState)0x1b;\n\t\t\tword_2c = 0;\n\t\t\teventCode = 0x38;",
   "note": "Anchor carries 3 line(s) above it: another arm of this function spells the same statements, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
@@ -95,12 +95,12 @@
  },
  {
   "label": "the terminal states return the sample rather than zero",
-  "find": "\tcase 0x19:\n\t\tword_30 = 0;\n\t\tdecision = 0;",
-  "replace": "\tcase 0x19:\n\t\tword_30 = 0;\n\t\tdecision = s;"
+  "find": "\tcase 0x19:\n\t\teventCode = 0;\n\t\tdecision = 0;",
+  "replace": "\tcase 0x19:\n\t\teventCode = 0;\n\t\tdecision = s;"
  },
  {
   "label": "the default state clears the event code it must not",
-  "find": "\tdefault:\n\t\tword_30 = 0;\n\t\tbreak;",
+  "find": "\tdefault:\n\t\teventCode = 0;\n\t\tbreak;",
   "replace": "\tdefault:\n\t\tbreak;"
  },
  {
@@ -114,8 +114,8 @@
  },
  {
   "label": "the JdNot counter is set rather than cleared",
-  "find": "V90Phase3Demodulator::resetJdNotDetector()\n{\n\tword_404 = 0;",
-  "replace": "V90Phase3Demodulator::resetJdNotDetector()\n{\n\tword_404 = 1;"
+  "find": "V90Phase3Demodulator::resetJdNotDetector()\n{\n\tjdNotRunLength = 0;",
+  "replace": "V90Phase3Demodulator::resetJdNotDetector()\n{\n\tjdNotRunLength = 1;"
  },
  {
   "label": "getMaxUcode returns the linear mapping instead",
@@ -134,8 +134,8 @@
  },
  {
   "label": "the frame position wraps at seven",
-  "find": "\t\tunsigned int next_ = word_04 + 1; \\\n\t\tif (next_ == 6) \\",
-  "replace": "\t\tunsigned int next_ = word_04 + 1; \\\n\t\tif (next_ == 7) \\"
+  "find": "\t\tunsigned int next_ = framePosition + 1; \\\n\t\tif (next_ == 6) \\",
+  "replace": "\t\tunsigned int next_ = framePosition + 1; \\\n\t\tif (next_ == 7) \\"
  },
  {
   "label": "entering the ANSpcm drop state does not restart the counter",
@@ -180,23 +180,23 @@
  },
  {
   "label": "JdNotDetector counts non-zero symbols",
-  "find": "\tif (symbol == 0)\n\t\tword_404++;\n\telse\n\t\tword_404 = 0;",
-  "replace": "\tif (symbol != 0)\n\t\tword_404++;\n\telse\n\t\tword_404 = 0;"
+  "find": "\tif (symbol == 0)\n\t\tjdNotRunLength++;\n\telse\n\t\tjdNotRunLength = 0;",
+  "replace": "\tif (symbol != 0)\n\t\tjdNotRunLength++;\n\telse\n\t\tjdNotRunLength = 0;"
  },
  {
   "label": "the JdNot run length is twelve, not eleven",
-  "find": "\tif (word_404 > 11 && word_2c % 72 == 12)",
-  "replace": "\tif (word_404 > 12 && word_2c % 72 == 12)"
+  "find": "\tif (jdNotRunLength > 11 && word_2c % 72 == 12)",
+  "replace": "\tif (jdNotRunLength > 12 && word_2c % 72 == 12)"
  },
  {
   "label": "the JdNot frame modulus is thirty-six",
-  "find": "\tif (word_404 > 11 && word_2c % 72 == 12)",
-  "replace": "\tif (word_404 > 11 && word_2c % 36 == 12)"
+  "find": "\tif (jdNotRunLength > 11 && word_2c % 72 == 12)",
+  "replace": "\tif (jdNotRunLength > 11 && word_2c % 36 == 12)"
  },
  {
   "label": "the JdNot frame position is eleven",
-  "find": "\tif (word_404 > 11 && word_2c % 72 == 12)",
-  "replace": "\tif (word_404 > 11 && word_2c % 72 == 11)"
+  "find": "\tif (jdNotRunLength > 11 && word_2c % 72 == 12)",
+  "replace": "\tif (jdNotRunLength > 11 && word_2c % 72 == 11)"
  },
  {
   "label": "exitDIL acts on state 17 as well",
@@ -225,13 +225,13 @@
  },
  {
   "label": "twoLevelDemod reads the alternate table whenever the flag is set",
-  "find": "\tif (ad->short_a948 != 0 &&\n\t    (short)ad->isAltRbs((short)word_04, ucode, sample) != 0)",
+  "find": "\tif (ad->short_a948 != 0 &&\n\t    (short)ad->isAltRbs((short)framePosition, ucode, sample) != 0)",
   "replace": "\tif (ad->short_a948 != 0)"
  },
  {
   "label": "twoLevelDemod tests isAltRbs at its full width",
-  "find": "\t    (short)ad->isAltRbs((short)word_04, ucode, sample) != 0)",
-  "replace": "\t    ad->isAltRbs((short)word_04, ucode, sample) != 0)",
+  "find": "\t    (short)ad->isAltRbs((short)framePosition, ucode, sample) != 0)",
+  "replace": "\t    ad->isAltRbs((short)framePosition, ucode, sample) != 0)",
   "note": "EXPECTED UNCAUGHT.  `V90AutoDigitalImpDetector::isAltRbs` is written as `return d > short_a9a6 ? 1 : 0;`, so its answer is 0 or 1 and the top sixteen bits are always zero -- no input can make the narrowed test and the full-width one disagree.  The `(short)` is in the reconstruction because the object has `test %ax,%ax` at this site and NOT because any test can see it; that is the same footing as the phase-index truncation above, and saying so is the point of leaving the mutation here."
  },
  {
