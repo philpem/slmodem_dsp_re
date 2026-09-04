@@ -1,60 +1,32 @@
-/*
- * V92CP.h -- the V.92 CP message, one byte per bit.
+/**
+ * @file V92CP.h
+ * @brief ITU-T V.92 CP (Call Progress/parameter-exchange) message:
+ *        `V92CP`, which packs a set of negotiated parameters into a bit
+ *        vector for transmission (`infoToBits`) and decodes a received one
+ *        back into fields (`bitsToInfo`/`evaluateInfo`).
  *
- * Reconstructed from dsplibs.o V92CP.cpp.  `V92CP` is not polymorphic --
- * tools/cppstruct.py lists its destructor with the two ordinary variants and
- * not the deleting one, and GCC emits a deleting destructor only for a
- * virtual one -- so offset 0 is a real member and there is no vptr.
+ * Not polymorphic (no vptr at offset 0: `tools/cppstruct.py` shows only the
+ * two ordinary destructor variants, and GCC emits a deleting destructor only
+ * for a virtual one). `sizeof == 0x918` is the allocation `V92Modem::V92Modem`
+ * makes before calling the constructor, matching the last field's end.
  *
- * THE SIZE IS THE ALLOCATION, not an inference from the highest offset.
- * `V92Modem::V92Modem` allocates the object and hands the block straight to
- * the constructor:
+ * The layout below +0x104 comes from `infoToBits`, which packs the whole
+ * struct into `bits`, and `setV92CPpckFromParamsInfo`, which fills it; the
+ * rest came from the other members, each proving the few fields it touches
+ * (finding F6600 has the per-member map). `bitsToInfo` and `evaluateInfo` are
+ * the receive half and were the last two written: `bitsToInfo` takes one bit
+ * at a time, lays it into `bits`, and runs an eleven-state detector, and
+ * `evaluateInfo` is the per-state decoder that turns a completed block of
+ * `bits` back into the message fields -- `infoToBits` run backwards, field
+ * for field. Reading the two against each other settled `word_124` and the
+ * state numbering. Findings F6600-F6607.
  *
- *     13dd3:  movl $0x918,(%esp)
- *     13dda:  call sysdep_malloc
- *     13de4:  call _ZN5V92CPC1Ev
- *
- * 0x918 = 2328, and the last field the class touches is the four-byte
- * +0x914, which ends exactly there.
- *
- * WHICH MEMBER PROVED WHICH OFFSET.  The constructor, the destructor and the
- * seven small members are in src/pump/v90/V92CP.cpp; `infoToBits` is there
- * too and is what proved everything below +0x104.  The rest of the map was
- * read out of members that are declared and deliberately left undefined:
- *
- *     +0x000..+0x103          `infoToBits` (0x4ec80), which packs the whole
- *                             block into `bits`, and `setV92CPpckFromParams-
- *                             Info` (0x33920), which fills it
- *     +0x104,+0x108           `setSUV` (0x4e920), whose whole body is
- *                             "+0x104 = 16; +0x108 = the argument"
- *     +0x114,+0x119,+0x11a,   `resetDetector` (0x4e830), whose whole body is
- *     +0x11c,+0x120           these five stores
- *     +0x118,+0x128           `infoToBits`
- *     +0x124                  `evaluateInfo` (0x4f400), the READ cursor
- *     +0x129                  `getBitVector` (0x4ebe0) returns `this+0x129`
- *     +0x8f9                  `resetCRC` (0x4e5d0) writes 1 to sixteen bytes
- *                             from here
- *     +0x90c,+0x910           `infoToBits` writes both and fixes the relation
- *                             between them; see `msgLen` and `vectorLen`
- *     +0x914                  `reset` (0x4e860) and the constructor set -1
- *
- * ALL TWELVE ARE NOW WRITTEN.  `evaluateInfo` and `bitsToInfo` were the last
- * two and they landed together, because `bitsToInfo` calls `evaluateInfo` at
- * four sites and nothing else in the object calls either.  They are the
- * RECEIVE half: `bitsToInfo` takes one bit at a time, lays it into `bits` and
- * runs the eleven-state detector, and `evaluateInfo` is the per-state decoder
- * that turns a completed block of `bits` back into the message fields.  It is
- * `infoToBits` run backwards, field for field, and reading the two against
- * each other is what settled +0x124 and the state numbering.  Findings
- * F6600-6607.
- *
- * The destructor is one byte -- a bare `ret`.  That is not an assumption
- * about an empty class: nothing here is allocated, and the V.90 sibling with
- * the same shape (V90CP) is 173 bytes of frees for exactly the six buffers
- * its constructor allocates.
+ * The destructor is a bare `ret`, not an assumption about an empty class:
+ * nothing here is allocated, unlike the V.90 sibling with the same shape
+ * (`V90CP`), which frees the six buffers its constructor allocates.
  *
  * `V92CP::bitsToInfo(unsigned char)::gamma` and `::delta` are function-local
- * statics in .bss, so `bitsToInfo` carries state across calls.  Nothing here
+ * statics in .bss, so `bitsToInfo` carries state across calls. Nothing here
  * depends on that.
  */
 
@@ -62,16 +34,12 @@
 #define DSPLIB_V92CP_H
 
 /*
- * The bit vector's extent.  START proven -- `getBitVector` hands back
- * `this+0x129` -- and END is where the CRC register begins.  That the whole
- * span is ONE array is a modelling choice: no method establishes the array's
- * own length.  Note the odd start, which is the object's own and not a
- * miscount: +0x129 is what the accessor adds.
- *
- * What IS measured is that nothing else lives in the span at an offset of its
- * own: over all twelve of the class's symbols, every `this`-relative
- * displacement between +0x129 and +0x8f9 lies below +0x1aa, and there is not
- * one at any higher offset until the CRC.
+ * The bit vector's extent.  The start is proven -- `getBitVector` hands back
+ * `this+0x129` -- and the end is where the CRC register begins; that the
+ * whole span is one array is a modelling choice, since no method establishes
+ * the array's own length. Confirmed: over all twelve of the class's symbols,
+ * every `this`-relative displacement between +0x129 and +0x8f9 lies below
+ * +0x1aa, so nothing else lives in the span at an offset of its own.
  */
 #define V92CP_BITS	0x7d0		/* 0x129 .. 0x8f8, 2000 bytes */
 
@@ -79,76 +47,137 @@
 #define V92CP_CRC	16
 
 /*
- * THE MESSAGE IS SEVENTEEN-ENTRY GROUPS: one zero followed by sixteen
- * payload entries.  `infoToBits` writes the zero at every index that is a
- * multiple of seventeen -- 17, 34, 51, 68, 85, 102, 119 are all spelled out
- * as constant displacements -- and `calcCRC` skips exactly those indices,
- * `if (i % 17 == 0) i++`.  The first group, indices 0..16, is seventeen ONES
- * and carries no marker.
+ * The message is seventeen-entry groups: one framing zero followed by
+ * sixteen payload entries. `infoToBits` writes the zero at every index that
+ * is a multiple of seventeen, and `calcCRC` skips exactly those indices
+ * (`if (i % 17 == 0) i++`). The first group, indices 0..16, is seventeen
+ * ones and carries no marker.
  */
 #define V92CP_GROUP	17
 
 /*
- * The two mask blocks at +0x042 and +0x0a2 hold six groups of eight 16-bit
- * words each, and both numbers are forced rather than modelled.  EIGHT: the
- * outer loop of `setV92CPpckFromParamsInfo` advances the block pointer by
- * `add $0x10,%edi` -- sixteen bytes -- and zeroes eight words with
- * `cmp $0x7,%eax; jbe` before filling them.  SIX: the two blocks abut, and
- * 0x0a2 - 0x042 = 0x60 = six times sixteen; 0x0a2 + 0x60 = 0x102, which is
- * where the next field's alignment padding begins.
+ * The two mask blocks at +0x042 and +0x0a2 hold `V92CP_GROUPS` groups of
+ * `V92CP_MASKS` 16-bit words each. Eight: `setV92CPpckFromParamsInfo`'s outer
+ * loop advances the block pointer by sixteen bytes and zero-fills eight
+ * words before filling them. Six: the two blocks abut (0x0a2 - 0x042 is six
+ * times sixteen) and the next field's alignment padding begins right after
+ * the second block.
  */
 #define V92CP_GROUPS	6
 #define V92CP_MASKS	8
 
-/*
- * float2Bits(float, unsigned char *, int) -- 0x4ec00, the free function that
- * shares this class's translation unit: the greedy `fltTable_2`/`fltTable_1`
- * expansion standalone, one byte per bit.  The `Psi` sibling in V90CPpck.h
- * packs shorts against the other table pair; the two overload cleanly.
- * Nothing in the object calls this one.
+/**
+ * @brief Free function sharing `V92CP`'s translation unit: expand a
+ *        magnitude/sign pair to one byte per bit, greedily, against the
+ *        `fltTable_2`/`fltTable_1` weight tables. Mode 0 is the 16-entry
+ *        unsigned Q3.13 form, mode 1 the 7-entry signed Q1.6 form (bit 7 is
+ *        the sign). Not called anywhere in the object; the `Psi` sibling in
+ *        V90CPpck.h packs the equivalent expansion into `short`s against a
+ *        different table pair.
+ * @param f     Value to expand.
+ * @param bits  Destination, one byte per bit.
+ * @param mode  0 for the unsigned 16-bit form, 1 for the signed 7-bit form;
+ *              any other value writes nothing.
  */
 void float2Bits(float f, unsigned char *bits, int mode);
 
 class V92CP {
 public:
-	/*
-	 * Clear the detector.  The only two members defined in
-	 * src/pump/v90/V92CP.cpp.
+	/**
+	 * @brief Construct an idle CP message: clears `byte_04`, resets the
+	 *        receive detector's state (`rxState`, both run counters and
+	 *        the cursor `word_11c`), and idles the hold-off counter
+	 *        (`word_914 = -1`). Does not clear the message fields.
 	 */
 	V92CP();
+
+	/**
+	 * @brief Destroy the CP message. Frees nothing -- the class owns no
+	 *        allocated storage (contrast `V90CP`, whose destructor frees
+	 *        six buffers).
+	 */
 	~V92CP();
 
-	/*
-	 * Declared, not defined -- see V90CP.h.  Argument types are the
-	 * mangling's and exact; return types are not mangled, so `void` means
-	 * "not established" for all but `getBitVector`, which leaves
-	 * `this+0x129` in %eax.
+	/**
+	 * @brief Get the packed bit vector produced by infoToBits(), one byte
+	 *        per bit.
+	 * @param length  Set to the vector's length (`vectorLen`), including
+	 *                its zero padding.
+	 * @return Pointer to `bits`.
 	 */
 	unsigned char *getBitVector(unsigned int &length);
+
+	/**
+	 * @brief Reset the message to its just-constructed state: resetDetector()
+	 *        plus idling the hold-off counter. Does not clear `byte_04`,
+	 *        which only the constructor touches.
+	 */
 	void reset();
+
+	/**
+	 * @brief Reset the receive detector's state machine (`rxState`, both
+	 *        run counters `byte_119`/`byte_11a`, the write cursor
+	 *        `word_11c`, and `stateBitCount`) without touching the hold-off
+	 *        counter or the message fields already decoded.
+	 */
 	void resetDetector();
+
+	/**
+	 * @brief Set all sixteen bits of the CRC shift register to one (the
+	 *        CCITT convention), not to zero.
+	 */
 	void resetCRC();
+
+	/**
+	 * @brief Clock the CRC shift register (taps at stages 3, 10 and 15)
+	 *        over `bits[18 .. msgLen - 17)`, skipping the framing zero at
+	 *        every seventeenth position.
+	 */
 	void calcCRC();
 
-	/*
-	 * `int`, and deliberately so: the object ends `xor %eax,%eax;
-	 * cmpb $0x0,..; sete %al` at .text+0x4ebca, which is a value
-	 * constructed for the caller and not a leftover.  Non-zero means the
-	 * sixteen computed CRC bits matched the sixteen received ones.
+	/**
+	 * @brief Check a received message's CRC: reset the register, clock it
+	 *        over the message, and sum the absolute per-bit differences
+	 *        against the sixteen received CRC bits at the message's end.
+	 * @return Non-zero if the computed and received CRC agree.
 	 */
 	int evaluateCRC();
+
+	/**
+	 * @brief Decode one completed block of `bits` into the message fields,
+	 *        for the block `rxState` says has just arrived. The exact
+	 *        inverse of infoToBits(), field for field; `word_124` is the
+	 *        read cursor and this is its only user.
+	 */
 	void evaluateInfo();
+
+	/**
+	 * @brief Pack the message fields at +0x000..+0x10c into `bits`, one
+	 *        byte per bit, followed by a CRC and zero padding out to a
+	 *        whole number of `12 * bitsPerSymbol`-bit frames. Sets
+	 *        `msgLen` and `vectorLen`.
+	 */
 	void infoToBits();
 
-	/*
-	 * `int`, and for the same reason `evaluateCRC` is: every path through
-	 * the object arranges %eax before returning -- `mov %edi,%eax` at all
-	 * three `ret`s, with %edi zeroed on entry and set to 1..5 on five
-	 * paths -- which is a value constructed for the caller and not a
-	 * leftover.  See the source for what the five mean, and for why they
-	 * are not named.
+	/**
+	 * @brief Feed one received bit through the detector/state machine that
+	 *        drives evaluateInfo(). Advances `rxState` and the run
+	 *        counters, decodes each completed block as it arrives, and
+	 *        checks the CRC at the end of the message.
+	 * @param bit  The received bit (0 or 1).
+	 * @return 0 while no message boundary has been reached; on a boundary,
+	 *         1-4 encode the two bits (`byte_00`, `byte_04`) that survive
+	 *         the whole message, and 5 means a run of `12 * bitsPerSymbol`
+	 *         zeros arrived with nothing yet collected -- what exactly
+	 *         each value means downstream is not established.
 	 */
 	int bitsToInfo(unsigned char);
+
+	/**
+	 * @brief Set `suv` (and unconditionally reset `word_104` to 16, whose
+	 *        role is not established).
+	 * @param v  New value of `suv`.
+	 */
 	void setSUV(unsigned int);
 
 	/* Public for the same reason as V90Jd's and V90CP's: it keeps the
@@ -185,20 +214,20 @@ public:
 	unsigned char byte_00;
 
 	/*
-	 * +0x001  SIGNED, and forced: `cmp $0x1,%bl; jle` and `dec %bl; jle`
+	 * +0x001  Signed, and forced: `cmp $0x1,%bl; jle` and `dec %bl; jle`
 	 * are signed byte branches where an `unsigned char` would have given
-	 * `jbe`, and `sar $1,%al` is an arithmetic shift of the byte.  Two of
+	 * `jbe`, and `sar $1,%al` is an arithmetic shift of the byte. Two of
 	 * its bits go out at `bits[19]` and `bits[20]`, its whole value is
 	 * copied to +0x118, and `<= 1` selects the long form of the message.
 	 */
 	signed char char_01;
 
 	/*
-	 * +0x002  SIGNED, and forced the strong way: `movsbl 0x2(%edi),%ecx`
-	 * with the 32-bit result shifted arithmetically EIGHTEEN times.
+	 * +0x002  Signed, and forced the strong way: `movsbl 0x2(%edi),%ecx`
+	 * with the 32-bit result shifted arithmetically eighteen times.
 	 * `infoToBits` takes five bits of it into `bits[21..25]` and then --
 	 * out of the same register, with no reload -- thirteen more into
-	 * `bits[36..48]`.  Those thirteen are the sign extension of a byte;
+	 * `bits[36..48]`. Those thirteen are the sign extension of a byte;
 	 * that is what the object does and it is reproduced.
 	 */
 	signed char char_02;
@@ -361,20 +390,16 @@ public:
 	unsigned int word_110;
 
 	/*
-	 * +0x114  THE STATE, and both members that use it agree on it.
-	 * `bitsToInfo` dispatches on it with `cmp $0xa; ja` over an
-	 * eleven-entry table, so the receive states are 0..10 and every other
-	 * value does nothing; `evaluateInfo` dispatches with `sub $0x3;
-	 * cmp $0x5; ja` over a six-entry table whose second slot is the bare
-	 * `ret`, so it decodes 3, 5, 6, 7 and 8 and 4 is a HOLE in the case
-	 * list rather than an arm that does nothing.  That is the same shape
-	 * V90CP's `word_ca4` has, read the same way, and the two machines line
-	 * up: `bitsToInfo`'s state N fills a block of `bits` and then calls
-	 * `evaluateInfo`, which is still in state N when it decodes it.
-	 *
-	 * UNSIGNED is forced by both dispatches: the range checks are `ja`.
-	 * Zeroed by `resetDetector`, and so by `reset` and the constructor,
-	 * which is state 0 -- waiting for the seventeen-one preamble.
+	 * +0x114  The receive detector's own state, shared by both members
+	 * that dispatch on it: `bitsToInfo` runs states 0..10, and
+	 * `evaluateInfo` decodes 3, 5, 6, 7 and 8, with 4 a hole in its case
+	 * list rather than an arm that does nothing (the same shape V90CP's
+	 * `word_ca4` has). The two machines line up: `bitsToInfo`'s state N
+	 * fills a block of `bits` and then calls `evaluateInfo`, which is
+	 * still in state N when it decodes it. Unsigned is forced by both
+	 * dispatches' range checks (`ja`). Zeroed by `resetDetector` (and so
+	 * by `reset` and the constructor) to state 0, waiting for the
+	 * seventeen-one preamble. Renamed from `word_114`; finding F10130.
 	 */
 	unsigned int rxState;
 
@@ -436,11 +461,12 @@ public:
 	int word_11c;
 
 	/*
-	 * +0x120  THE BITS TAKEN SO FAR IN THIS STATE, and it is a different
+	 * +0x120  Bits taken so far in the current state -- a different
 	 * quantity from `word_11c`: `bitsToInfo` clears it at every state
 	 * change and compares it against the length of the block the state is
-	 * collecting -- 17 for the CRC, `gamma` and `delta` for the two
-	 * variable-length mask blocks.  Zeroed by `resetDetector`.
+	 * collecting (17 for the CRC, `gamma` and `delta` for the two
+	 * variable-length mask blocks). Zeroed by `resetDetector`. Renamed
+	 * from `word_120`; finding F10130.
 	 */
 	int stateBitCount;
 
@@ -468,24 +494,16 @@ public:
 	int word_124;
 
 	/*
-	 * +0x128  HOW MANY BITS GO INTO ONE SYMBOL, and the name is the
-	 * CALLER'S rather than an inference from arithmetic:
-	 * `V92Phase4Modulator::recivedRt` assigns it from that class's own
-	 * `bitsPerSymbol` at its +0x43 -- `movzbl 0x43(%ebx),%eax; mov
-	 * %al,0x128(%edx)` at .text+0x177e6 -- and +0x43 was named from the
-	 * loop bound of `generateCPu`/`generateSUVu` and the count handed to
-	 * `Scrambler<h,h>::processAllOnes`.  That is CLAUDE.md's second
-	 * evidence tier, a callee or caller that types the field.
+	 * +0x128  How many bits go into one symbol. Named from the caller,
+	 * not from arithmetic: `V92Phase4Modulator::recivedRt` assigns it
+	 * from that class's own `bitsPerSymbol` field (finding F4755).
 	 *
-	 * It is consistent with what `infoToBits` does with it: the padded
-	 * length is rounded up to a multiple of `12 * bitsPerSymbol` --
-	 * `lea (%ebx,%ebx,2),%edx; lea 0x0(,%edx,4)` -- which is a whole
-	 * number of twelve-symbol frames, and five members of
+	 * `infoToBits` rounds the padded length up to a whole number of
+	 * `12 * bitsPerSymbol`-bit frames, and five members of
 	 * V92Phase4Modulator then divide `vectorLen` by it to get a count in
-	 * SYMBOLS.  What the twelve counts is still not established.
-	 *
-	 * It is also the divisor of an unsigned `div`, so a zero here divides
-	 * by zero in the object as well as in ours; `infoToBits` stores 1
+	 * symbols; what the twelve counts is still not established. It is
+	 * also the divisor of an unsigned `div`, so a zero here divides by
+	 * zero in the object as well as in ours -- `infoToBits` stores 1
 	 * when `char_01` is zero, and V92Phase4Modulator writes it at five
 	 * sites.
 	 */
@@ -507,18 +525,16 @@ public:
 	 */
 
 	/*
-	 * +0x90c  THE PADDED LENGTH, and what `getBitVector` reports.
+	 * +0x90c  The padded length, and what `getBitVector` reports.
 	 * `infoToBits` computes it as the next multiple of `12 * bitsPerSymbol`
-	 * STRICTLY GREATER than the message -- `n / q + 1` times `q`, so an
-	 * exact multiple still gains a whole quantum -- and zero-fills
-	 * `bits[msgLen + 1 .. vectorLen)` up to it.  Named with `msgLen`; see
-	 * there for why the pair could not be named before.
+	 * strictly greater than the message, and zero-fills
+	 * `bits[msgLen + 1 .. vectorLen)` up to it.
 	 */
 	unsigned int vectorLen;
 
 	/*
-	 * +0x910  THE MESSAGE LENGTH, its sixteen CRC entries included and its
-	 * padding excluded.  `infoToBits` sets it to one past the last CRC
+	 * +0x910  The message length, its sixteen CRC entries included and its
+	 * padding excluded. `infoToBits` sets it to one past the last CRC
 	 * entry, and every other user agrees with that reading:
 	 *
 	 *   - `calcCRC` clocks over `bits[18 .. msgLen - 17)`, which stops
@@ -528,16 +544,10 @@ public:
 	 *   - `infoToBits` writes the marker at `msgLen`, the padding from
 	 *     `msgLen + 1`, and `vectorLen` above that.
 	 *
-	 * WHY IT COULD NOT BE NAMED BEFORE, and what settled it.  This was
-	 * `word_910` for as long as the class held two lengths and only
-	 * READERS of them: `calcCRC` and `evaluateCRC` forced the shape --
-	 * an unsigned index bound into `bits` -- without saying which of the
-	 * two lengths was the message and which the buffer, and naming one of
-	 * two indistinguishable lengths is the guess CLAUDE.md calls worse
-	 * than a pad.  `infoToBits` is the WRITER of both, in the same eight
-	 * instructions, and the arithmetic between them is one-directional:
-	 * +0x910 is the message and +0x90c is +0x910 rounded up and
-	 * zero-filled.  Finding F4750.
+	 * Settled by `infoToBits`, the only writer of both lengths in the same
+	 * eight instructions -- the readers alone (`calcCRC`, `evaluateCRC`)
+	 * could not tell which of the two indistinguishable lengths was the
+	 * message and which was the padded buffer. Finding F4750.
 	 */
 	unsigned int msgLen;
 

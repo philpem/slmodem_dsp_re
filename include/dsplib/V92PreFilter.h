@@ -1,35 +1,33 @@
-/*
- * V92PreFilter.h -- the V.92 transmit pre-filter: a FloatFIR and a FloatIIR
- * it owns, either of which may be switched off by a zero tap count.
+/**
+ * @file V92PreFilter.h
+ * @brief The V.92 transmit pre-filter: a `FloatFIR` and a `FloatIIR` it
+ *        owns, either of which may be switched off by a zero tap count.
  *
- * Reconstructed from dsplibs.o.  Five members in the blob, 550 bytes; this
- * tree defines the constructor and the destructor and declares the rest.
+ * Five members in the blob, 550 bytes; this tree defines the constructor
+ * and destructor and declares the rest.
  *
- * IT IS V92Precoder'S TWIN.  The two constructors are 127 bytes each and the
+ * It is `V92Precoder`'s twin: the two constructors are 127 bytes each, the
  * two destructors 108, and the instruction sequences are the same one with
- * the offsets and the second class name changed: allocate 0x14, construct,
- * store; allocate 0x14, construct, store; then `if (p) { p->~T(); free(p); }`
- * twice.  They are almost certainly one piece of source written twice
- * (finding F1246).  NOT POLYMORPHIC, and +0x00 unreferenced, for the reasons
- * V92Precoder.h gives.
+ * the offsets and second class name changed -- allocate 0x14, construct,
+ * store, twice, then `if (p) { p->~T(); free(p); }` twice. Almost certainly
+ * one piece of source written twice (finding F1246). Not polymorphic, and
+ * +0x00 is unreferenced, for the reasons `V92Precoder.h` gives.
  *
- * THE OBJECT IS 0x14 BYTES -- the same size as one of the filters it holds,
- * which is a coincidence worth not tripping over.  `V92Transmitter` builds
- * one with `movl $0x14,(%esp); call sysdep_malloc; mov $0x140,%ecx; call
- * V92PreFilter::V92PreFilter(unsigned)`, so the size is the original's
- * `sizeof` and not a bound; the largest displacement any member uses is
- * +0x10, which agrees.
+ * The object is 0x14 bytes -- the same size as one of the filters it
+ * holds, a coincidence worth not tripping over -- measured the same way as
+ * `V92Precoder`'s: `V92Transmitter` allocates exactly `sizeof` bytes before
+ * calling this constructor, agreeing with the furthest member access, +0x10.
  *
- * THE SECOND FILTER IS A FloatIIR AND NOT A SECOND FloatFIR, and no
- * behavioural test can show it.  The two classes have the same five fields in
- * the same order, round their tap counts down to a multiple of four the same
- * way, allocate and zero the same buffer and leave the same write index -- so
- * a reconstruction that built two FIRs would produce byte-identical objects
- * and identical `harness_alloc` counters.  What settles it is the relocation:
- * the constructor's second call is `R_386_PC32 _ZN8FloatIIRC1EjPfj` and the
- * destructor's second is `_ZN8FloatIIRD1Ev`.  That is direct evidence about
- * the source, and `make similarity` is the tier that keeps it honest, because
- * a wrong callee is a wrong call target there.
+ * The second filter is a `FloatIIR` and not a second `FloatFIR`, and no
+ * behavioral test can show it: the two classes have the same five fields in
+ * the same order, round tap counts down to a multiple of four the same way,
+ * allocate and zero the same buffer and leave the same write index -- a
+ * reconstruction using two FIRs would produce byte-identical objects and
+ * identical allocation counts. What settles it is the relocation: the
+ * constructor's second call targets `_ZN8FloatIIRC1EjPfj` and the
+ * destructor's second targets `_ZN8FloatIIRD1Ev`, direct evidence about the
+ * source that `make similarity` keeps honest (a wrong callee is a wrong
+ * call target there).
  */
 
 #ifndef DSPLIB_V92PREFILTER_H
@@ -52,49 +50,49 @@
 
 class V92PreFilter {
 public:
-	/* Written. */
+	/**
+	 * @brief Construct, allocating both owned filters.
+	 * @param nTaps  Tap count passed through to both.
+	 */
 	V92PreFilter(unsigned int nTaps);
+	/** @brief Destroy, freeing both owned filters. */
 	~V92PreFilter();
 
-	/*
-	 * Written.  The argument types are the mangling's; a return type is
-	 * never mangled and none of the three leaves anything meaningful in
-	 * %eax, so all three are `void`.
-	 *
-	 * `reset` forwards to both filters' `reset`.  `setCoefficients` gives
-	 * the FIR the first pair and the IIR the second, and then stores the
-	 * two counts at +0x0c and +0x10 -- which is what `process` gates on.
-	 * `process` runs the FIR if +0x0c is non-zero and the IIR if +0x10 is,
-	 * chaining them through a stack buffer when both are on and copying
-	 * the input straight through when neither is.
-	 */
+	/** @brief Reset both owned filters. Forwards to `fir`/`iir`'s own
+	 *  reset(). */
 	void reset();
+	/**
+	 * @brief Store new coefficients and tap counts for both stages, and
+	 *        gate which stages process() runs.
+	 * @param coefFir   FIR coefficients.
+	 * @param coefIir   IIR coefficients.
+	 * @param tapsFir   FIR tap count; zero disables the FIR stage.
+	 * @param tapsIir   IIR tap count; zero disables the IIR stage.
+	 */
 	void setCoefficients(float *coefFir, float *coefIir,
 			     unsigned int tapsFir, unsigned int tapsIir);
+	/**
+	 * @brief Filter one block of samples through whichever of the FIR
+	 *        and IIR stages setCoefficients() left enabled -- both,
+	 *        chained through a stack buffer; either alone; or neither,
+	 *        a straight copy.
+	 * @param in   Input samples.
+	 * @param out  Output samples.
+	 */
 	void process(float *in, float *out);
 
-	/*
-	 * Public for the reason V92Precoder.h gives: the original's access
-	 * specifiers are not recoverable, and one access section keeps the
-	 * class standard-layout for `__builtin_offsetof`.
-	 */
-
-	/*
-	 * +0x00  Not referenced by any of the five members and not written by
-	 * the constructor.  A real member, not a vptr -- the constructor of a
-	 * polymorphic class would store one here and this one does not.
-	 */
+	/* +0x00  Not referenced by any of the five members and not written
+	 * by the constructor -- a real member, not a vptr (see file
+	 * comment). */
 	unsigned int word_00;
 
 	/* +0x04, +0x08  The two owned filters, in that order. */
 	FloatFIR *fir;
 	FloatIIR *iir;
 
-	/*
-	 * +0x0c, +0x10  `setCoefficients`' third and fourth arguments, stored
-	 * unchanged; the mangling gives them as `unsigned int`.  Zero means
-	 * "skip that filter" to `process`, which tests them and nothing else.
-	 */
+	/* +0x0c, +0x10  setCoefficients()'s third and fourth arguments,
+	 * stored unchanged. Zero means "skip that filter" to process(),
+	 * which tests them and nothing else. */
 	unsigned int tapsFir;
 	unsigned int tapsIir;
 };
