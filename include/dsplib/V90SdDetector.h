@@ -1,56 +1,30 @@
-/*
- * V90SdDetector.h -- the V.90 SD (signalling-drop?) detector's state.
+/**
+ * @file V90SdDetector.h
+ * @brief `V90SdDetector` -- a signal-drop-style detector that scores a
+ *        rolling autocorrelation of the recent signal against two thresholds
+ *        and reports one of three verdicts per sample.
  *
- * Reconstructed from dsplibs.o.  Four members, 353 bytes; `reset()` is the
- * one written here and the one `v34handshak` reaches.
+ * Not polymorphic (`tools/cppstruct.py` lists the destructor with `D1`/`D2`
+ * and no `D0`, so there is no vptr and offset 0 is a real member); the
+ * object is 28 bytes (0x1c), and every field is named.
  *
- * NOT POLYMORPHIC: `tools/cppstruct.py` lists `~V90SdDetector` with `D1` and
- * `D2` and no `D0`, so there is no vptr and offset 0 is a real member.
+ * The constructor's four arguments are stored to four words with no
+ * conversion (see V90SdDetector.cpp) and, unusually, out of declaration
+ * order: argument 4 (the limit) lands at +0x04 and argument 3 at +0x10.
+ * `process()` reads a run-length counter (+0x00) against a limit (+0x04),
+ * two float thresholds (+0x08, +0x0c) against an energy accumulator and a
+ * correlation/energy ratio, and a third threshold (+0x10) against that same
+ * ratio on the branch where +0x0c did not clear it -- so +0x10 is the lower
+ * of two thresholds on one quotient, and the band between them is the only
+ * path that leaves the counter untouched.
  *
- * THE OBJECT IS 28 BYTES.  The largest `this`-relative displacement across
- * all six defined members (the four in cppstruct's list plus the C1/C2 and
- * D1/D2 pairs) is +0x18, four bytes wide, so the object ends at 0x1c.
- *
- * EVERY WORD IS NAMED, and the constructor is what named the middle four.
- * `reset()` alone reached +0x00, +0x14 and +0x18 and left +0x04..+0x10 as a
- * `pad_`; the constructor stores all four, from its own arguments, so the
- * region is now fields.  What the OTHER members do with them was measured
- * while bounding the object and is recorded rather than declared:
- *
- *     +0x00  `process(float)` loads it, increments it, compares it against
- *            +0x04 with `jb` -- an UNSIGNED compare -- and stores it back;
- *            on the failing path it stores 0.  A run-length counter, and the
- *            one field `reset()` clears by name.
- *     +0x04  the limit +0x00 is compared against.  CONSTRUCTOR ARGUMENT 4,
- *            which the mangling types `unsigned int`.
- *     +0x08  CONSTRUCTOR ARGUMENT 1.  `flds`, compared against an energy
- *            accumulator; the comparison failing is what zeroes +0x00.
- *     +0x0c  CONSTRUCTOR ARGUMENT 2.  `flds`, compared against a quotient
- *            formed from that accumulator.
- *     +0x10  CONSTRUCTOR ARGUMENT 3.  This line used to read "and read by
- *            none of the six", which was true of the six members bounded here
- *            and false of the class: `process(float)` loads it on the branch
- *            where the correlation ratio did NOT exceed +0x0c, and compares
- *            it against that same ratio.  It is the lower of two thresholds
- *            on one quotient, and the band between them is the only path that
- *            leaves +0x00 alone.
- *
- * ARGUMENTS 3 AND 4 ARE STORED OUT OF ORDER -- argument 4 into +0x04 and
- * argument 3 into +0x10 -- which is why the test sweeps three DISTINCT float
- * values every trial: a pair of equal arguments makes a swap invisible.
- *
- * THE HISTORY IS TWELVE FLOATS WHATEVER THE ARGUMENTS SAY.  The constructor
- * stores the constant 12 into `historyLength` and asks for `0x30` bytes; no
- * argument reaches either.  `reset()` clears `historyLength` of them, so the
- * length is a field and not a constant, but the constructor never varies it.
- *
- * THE HISTORY IS A HEAP BUFFER OF FLOATS.  `process` shifts it up by one
- * element with a 4-byte stride, writes the incoming sample at [0], and then
- * correlates `history[i]` against `history[i + 6]` for i in 0..5 with `flds`
- * and `fmuls` -- so the element type is `float` and the constructor's
- * `movl $0xc,0x18(%ebx)` (twelve) is exactly the two lags that correlation
- * needs.  `reset()` clears `historyLength` of them, not twelve, which is why
- * the length is a field and not a constant.
+ * The history buffer is always twelve floats: the constructor stores the
+ * constant 12 into `historyLength` and allocates `0x30` bytes regardless of
+ * what the caller passes, because `process()`'s correlation loop always
+ * looks six lags ahead (`history[i]` against `history[i + 6]` for
+ * i = 0..5) and twelve is exactly enough room for that. `historyLength`
+ * is still a real field, read back by both the constructor's and
+ * `reset()`'s clearing loops, not inlined as a constant.
  */
 
 #ifndef DSPLIB_V90SDDETECTOR_H
@@ -58,17 +32,40 @@
 
 class V90SdDetector {
 public:
-	/* Defined in src/pump/v90/V90SdDetector.cpp. */
+	/**
+	 * @brief Construct the detector: stores the three thresholds and the
+	 *        limit verbatim, and allocates a fixed twelve-element float
+	 *        history buffer (independent of any argument), zeroed.
+	 * @param thresh08  Energy floor below which `process()` resets the
+	 *                  run-length counter (stored at +0x08).
+	 * @param thresh0c  Correlation/energy ratio above which `process()`
+	 *                  advances the run-length counter (stored at +0x0c).
+	 * @param value10   The lower of the two ratio thresholds; the band
+	 *                  between it and `thresh0c` leaves the counter
+	 *                  untouched (stored at +0x10).
+	 * @param limit     Run length at which `process()` starts reporting a
+	 *                  positive result (stored at +0x04).
+	 */
 	V90SdDetector(float thresh08, float thresh0c, float value10,
 		      unsigned int limit);
+
+	/** @brief Frees the history buffer. */
 	~V90SdDetector();
 
+	/** @brief Zero the run-length counter and the history buffer. */
 	void reset();
 
-	/*
-	 * Returns 1 when the counter has reached `limit`, -1 for the band
-	 * between the two ratio thresholds, and 0 otherwise.  Three results
-	 * over five exits; the source says which is which.
+	/**
+	 * @brief Shift one new sample into the history, recompute the
+	 *        rolling energy and lag-6 autocorrelation over the twelve-
+	 *        sample window, and score the result against the three
+	 *        thresholds.
+	 * @param sample  The newest signal sample.
+	 * @return 1 once the run-length counter reaches `limit` (energy above
+	 *         `thresh08` and ratio above `thresh0c`); -1 while the ratio
+	 *         falls in the band between `value10` and `thresh0c`
+	 *         (counter left unchanged); 0 otherwise (counter reset to 0,
+	 *         or still counting up towards `limit`).
 	 */
 	int process(float sample);
 
@@ -77,7 +74,8 @@ public:
 	unsigned int limit;		/* +0x04 what +0x00 is compared to  */
 	float thresh_08;		/* +0x08 argument 1                 */
 	float thresh_0c;		/* +0x0c argument 2                 */
-	float value_10;			/* +0x10 argument 3, read by nothing */
+	float value_10;			/* +0x10 argument 3; the lower of two
+					   ratio thresholds `process()` reads */
 	float *history;			/* +0x14 the correlator's history   */
 	unsigned int historyLength;	/* +0x18 elements in it; ctor sets 12 */
 };

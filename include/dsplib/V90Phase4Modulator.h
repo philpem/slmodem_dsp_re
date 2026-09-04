@@ -1,170 +1,48 @@
-/*
- * V90Phase4Modulator.h -- the V.90 / V.92 phase 4 downstream symbol source.
+/**
+ * @file V90Phase4Modulator.h
+ * @brief `V90Phase4Modulator` -- the V.90/V.92 phase 4 downstream symbol
+ *        source: a state machine that drains scrambled bits through a
+ *        `V90BitsToSymbol` converter to produce the trained data-mode
+ *        symbol stream, plus the training and message sequences (Ri, TRN2d,
+ *        B1d, Ed, MP, CPd, SUVd, Rd/Rt/Rf and their `*Not` counterparts)
+ *        that lead up to it.
  *
- * Reconstructed from dsplibs.o.  Forty-three members and 12,078 bytes of
- * code, ALL of which are now written in
- * src/pump/v90/V90Phase4Modulator.cpp -- `grep -c '^V90Phase4Modulator::'`
- * is where that number comes from, so it can be re-measured rather than
- * believed.  Both symbol pumps, `reset`, `generateSymbol` (finding F7520),
- * the three callerless message sources `generateMP`, `generateCPd` and
- * `generateSUVd`, and -- the last four, from the VPcmV34Main leaf pass --
- * `generateB1d`, `generateTRN2d`, `generateEd` and
- * `recivedPartTwoSilenceRrnSUVtag`.
+ * Not polymorphic (the destructor is `D1`/`D2` with no `D0`, so there is no
+ * vptr and offset 0 is a real member). The object is 12,204 bytes (0x2fac)
+ * -- a displacement bound (finding F215) independently confirmed to the
+ * byte by `V90Modulator`'s own `sysdep_malloc(0x2fac)` before it constructs
+ * this class (finding F1293). The 12,204 bytes are two dense runs of small
+ * fields, +0x0000..+0x0043 and +0x2f64..+0x2fab, with a 12,000-byte
+ * scratch buffer between them (findings F4930-F4932, F3120).
  *
- * This paragraph used to end "everything except `generateSymbol` and the six
- * `generate*` sequence sources", and that clause was ALREADY STALE before
- * 7520 -- `generateRdRt`, `generateRdRtNot`, `generateRf`, `generateRi` and
- * both `generateDataSymbolBefore*` are defined in the .cpp today.  It is
- * removed rather than re-derived: 7520 owns `generateSymbol` and not the
- * exception list, and a count with a command beside it is worth more than a
- * list with nothing behind it (findings F6100, F6103).
+ * The constructor stores its eight arguments (five borrowed pointers, two
+ * flags, one `V90Parameters *`) into the object's small fields, embeds a
+ * `Scrambler<unsigned char, unsigned char>` at +0x0058 built with V.90's
+ * taps 18 and 23, and either takes ownership of a supplied
+ * `V90BitsToSymbol` or allocates and constructs its own -- `externalBits
+ * ToSymbol` (+0x2fa4) records which, and the destructor checks it first and
+ * skips releasing a supplied converter entirely.
  *
- * NOT POLYMORPHIC: `~V90Phase4Modulator` is listed with `D1` and `D2` and no
- * `D0`, so offset 0 is a real member and there is no vptr.
+ * The 12,000-byte buffer at +0x0078 (`scrambledBits`, `#V90P4M_BITS` long)
+ * is the scrambler's output and the bits-to-symbol converter's input, one
+ * byte per bit: every `generate*` member that transmits a message or a
+ * training sequence scrambles into it first (`Scrambler::process` for a
+ * real bit vector, `processAllOnes`/`processAllZeros` for training) and
+ * then hands it to `V90BitsToSymbol::process`. Its length matches
+ * `V90CP_BITS` exactly, because the longest thing it ever holds is a
+ * scrambled copy of `V90CP`'s own bit vector.
  *
- * THE OBJECT IS 12,204 BYTES, and the shape of the evidence matters because
- * the number is so much larger than its siblings'.  The largest
- * `this`-relative displacement across all forty-five defined members is
- * +0x2fa8, four bytes wide, so the object ends at 0x2fac.  The displacements
- * are not scattered: they fall in two dense runs, +0x00..+0x58 in fours and
- * +0x2f64..+0x2fa8 in twos and then fours, with nothing between.  A run of
- * consecutive two-byte fields at +0x2f68..+0x2f8c, written by the constructor
- * and read by `recivedCPtag`, `recivedSUV`, `resetBeforRRN`, `reset` and the
- * destructor, is a field block and not an artefact of losing track of which
- * register held `this`.  The ~12 KB between the two runs is the constellation
- * the modulator maps into.
+ * The tail past the buffer holds two parallel (bit vector, bit count,
+ * sequence-length-in-symbols) triples, one for the MP message
+ * (`mpBits`/`mpBitCount`/`mpSequenceSymbols`) and one shared by CP, SUVd and
+ * FinalSUVd (`cpBits`/`cpBitCount`/`cpSequenceSymbols`), each rebuilt by
+ * `6 * bitCount / groupSize` whenever its source message changes, plus the
+ * remaining constructor arguments and a handful of fields whose role is
+ * bounded but not established (kept under neutral `wordNNNN` names).
  *
- * That was a BOUND on the object, arrived at the same way as every other size
- * in that task (finding F215): the maximum displacement plus the width of what
- * sits at it.  It was not a claim that +0x5c..+0x2f63 contains no larger
- * member -- nothing reaches past +0x2fab, which is all a displacement scan
- * can say.
- *
- * THE BOUND IS NOW THE SIZE.  `V90Modulator`'s constructor does `movl
- * $0x2fac,(%esp) ; call sysdep_malloc` and then calls this class's `C1` on
- * what came back: finding F1246's oracle, which is the original compiler's own
- * `sizeof` and not a scan of anything.  It agrees with the displacement bound
- * to the byte, which is the first independent confirmation the number has had.
- *
- * THE CONSTRUCTOR'S THIRTEEN STORES fill in most of the first run and all of
- * the last.  Five of the eight arguments are borrowed pointers stored straight
- * through at +0x44..+0x54; the `Scrambler<unsigned char,unsigned char>` at
- * +0x58 is EMBEDDED (`lea 0x58(%esi),%edx` before the call, never a load) and
- * is built with (0x12, 0x17, 0x63), V.90's taps 18 and 23; the eighth argument
- * lands at +0x2f98 and the second at +0x00; +0x2f9c and +0x2fa0 are cleared;
- * and +0x2fa8 takes the V90Parameters.
- *
- * THE BITS-TO-SYMBOL CONVERTER IS EITHER SUPPLIED OR OWNED, AND +0x2fa4
- * RECORDS WHICH.  A non-null third argument is stored at +0x44 and +0x2fa4 is
- * set to 1; a null one makes the constructor allocate 0x24, build a
- * `V90BitsToSymbol(0x140, params)` in it, and set +0x2fa4 to 0.  The
- * destructor reads +0x2fa4 FIRST and skips the release entirely when it is
- * nonzero, so the flag is an ownership bit and 1 means "not ours".  Its two
- * arms are otherwise identical: both end in the scrambler's destructor, which
- * is why the blob has two copies of that call.
- *
- * The allocating arm passes the INCOMING PARAMETER as the converter's
- * V90Parameters and not the `params` member it has just stored -- `%edi` is
- * still live and is not reloaded from +0x2fa8, which it would have to be if
- * the original had named the member.  Nothing can tell the two apart by
- * behaviour; it is written the blob's way because the blob is the
- * specification.
- *
- * `sessionFlag` at +0x00 is named for the method that writes it, exactly as
- * `V90Phase3Modulator::setSessionFlag` and `V90Modulator::setSessionFlag`
- * write their own classes' +0x000; in `V90Phase3Modulator` the field's
- * meaning is settled -- nonzero selects V.92 -- and this class's setter has
- * the same signature and the same one-line body.
- *
- * ---------------------------------------------------------------------------
- * THE 12 KB IS ONE BIT BUFFER AND A TAIL OF TEN FIELDS
- *
- * The paragraph that used to close this comment said everything after
- * `sessionFlag` was `pad_`, "because forty-two unwritten members' state is not
- * something a scan of displacements can name".  A scan of displacements is not
- * what named it: the forty-two undefined members are all still undefined, but
- * they are all still in the object, and every one of their accesses is in the
- * blob.  +0x0078..+0x2f97 is now fields.  +0x0004..+0x0043 is not, and is left
- * alone.
- *
- * THE ARGUMENT THAT +0x0078 IS ONE ARRAY.  Over the class's whole extent --
- * .text+0x2c5a0..+0x2f72f, all forty-five symbols, `reset` at +0x2f630+0xff
- * being the last and `generateSymbol` at +0x2f600 the second last -- there are
- * exactly eleven distinct memory displacements in
- * [+0x78, +0x2f58) on ANY base register, and this holds without tracking which
- * register carries `this`, so no register-tracking bug can weaken it:
- *
- *     0x78(%esi)                   26 times, and every one of them a `lea`
- *     0x84/0x104/0x184/           only in `setRdRtSymbols` and `setRfSymbols`,
- *       0x204/0x284(%esi)         where `%esi` is ARGUMENT 2 (`mov 0x14(%esp),
- *                                 %esi` at +0x2d189 and +0x2d389) and the
- *                                 object is a `V90MappingParams`
- *     0x114(%ecx), 0x114(%edi)    reached through `mov 0x48(%..),%..` -- the
- *                                 `mp` member; `V90MP.h` names +0x114
- *     0xca0(%ecx)                 reached through `mov 0x54(%..),%ecx` -- the
- *                                 `cp` member; `V90CP.h` has +0xca0
- *     0x78/0x80(%esp)             stack frame
- *
- * So nothing in the span has an offset of its own.  Whatever is in there is
- * reached through the +0x78 base and no other, which is the same argument
- * `V90CP.h` makes for its own bit vector, in the same words: that the whole
- * span is ONE array is the MODELLING CHOICE, not a measurement.  What is
- * measured is the start and the fact that nothing else is in it.  `reset` was
- * read for a `memset`/`rep stos` that would have pinned the length instead;
- * it has none, and neither has the constructor.
- *
- * WHAT THE BUFFER IS.  Six `generate*` members and both symbol pumps do
- *
- *     lea 0x58(%esi),%eax                 the scrambler
- *     lea 0x78(%esi),%ebx                 this buffer
- *     call Scrambler<unsigned char,unsigned char>::process(const unsigned
- *                                         char *src, unsigned char *dst,
- *                                         unsigned int n)
- *     call V90BitsToSymbol::process(unsigned char *bits, unsigned int n)
- *
- * -- so it is the scrambler's OUTPUT and the bits-to-symbol converter's input,
- * one byte per bit, and `unsigned char` is the mangling's and not a guess
- * (`_ZN9ScramblerIhhE7processEPKhPhj`, `_ZN15V90BitsToSymbol7processEPhj`).
- * `generateB1d`, `generateTRN2d`, `generateEd`, `generateMP`, `generateCPd`
- * and `generateSUVd` reach it through `processAllOnes` instead, which fills it
- * with the scrambling of an all-ones input.
- *
- * AND ITS LENGTH IS THE SAME 12,000 AS `V90CP::bits`.  +0x2f58 - +0x78 is
- * 0x2ee0, which is `V90CP_BITS` to the byte.  That is not a coincidence to
- * shrug at: the bits this buffer receives are a scrambled COPY of exactly the
- * vector `V90CP::getBitVector` hands over, so a buffer that can hold the
- * longest CP sequence is what the class needs and 12,000 is what it has.  Two
- * independent readings agreeing is the strongest this can be short of a
- * `memset` -- and there is no `memset`.
- *
- * THE TAIL IS TWO PARALLEL TRIPLES AND TWO SYMBOL TABLES.  The MP triple and
- * the CP triple are the same three lines of code against two different
- * message objects:
- *
- *     +0x2f58/+0x2f5c/+0x2f60      `V90MP::getBitVector(&this->mpBitCount)`
- *                                  into `mpBits`, then
- *                                  `mpSequenceSymbols = 6 * mpBitCount /
- *                                  mp->groupSize` (`0x114`)
- *     +0x2f8c/+0x2f90/+0x2f94      `V90CP::getBitVector(&this->cpBitCount)`
- *                                  into `cpBits`, then
- *                                  `cpSequenceSymbols = 6 * cpBitCount /
- *                                  cp->word_3ba8` (the same "group size")
- *
- * `exitMP` at +0x2d0db..+0x2d113 is the MP one and `enterRepeatedCPd` at
- * +0x2c7b4..+0x2ec is the CP one; `recivedSUV`, `recivedCPtag` and
- * `generateV92Symbol` repeat the CP one verbatim.  Both divisors are named
- * "the group size" by their own headers, both from `calcSequenceLength`, so
- * `6 * bits / groupSize` is a count of SYMBOLS: six symbols carry one group.
- * `V90BitsToSymbol.h` already names a field of that exact shape --
- * `extraSymbols`, `(6 * mp[+0x624]) / mp[+0x620]` -- and calls it symbols.
- * Both fields are then used only as a modulus on the symbol counter at +0x08
- * (`divl`, then `test %edx,%edx`), which is a state machine asking whether a
- * whole repetition of the sequence has been sent.
- *
- * Everything else in the tail is left with a neutral name.  +0x2f64 is
- * `bitsToSymbol->extraSymbols + 12` and is compared for equality against the
- * symbol counter, but nothing establishes what the twelve is, and a name for
- * it would be a guess a future reader would believe.
+ * `sessionFlag` at +0x0000 is named for the method that writes it and reads
+ * exactly as `V90Phase3Modulator`'s and `V90Modulator`'s own +0x0000:
+ * nonzero selects V.92.
  */
 
 #ifndef DSPLIB_V90PHASE4MODULATOR_H
@@ -179,67 +57,56 @@ class V90MP;
 class V90MappingParams;
 class V90Parameters;
 
-/*
- * ---------------------------------------------------------------------------
- * THE PHASE 4 STATE.  `Phase4ModulatorState` is the object's own type name:
- * it is in the mangling of two members, `setNextStateAfterTRN2d`
- * (`_ZN18V90Phase4Modulator22setNextStateAfterTRN2dE20Phase4ModulatorState`)
- * and `reset` (`...5resetE7PcmTypeh20Phase4ModulatorStatejj`).  The
- * ENUMERATOR names are not; they are derived one at a time and the derivation
- * is beside each.
+/**
+ * @brief The phase 4 modulator's own state enumeration.
  *
- * WHERE A NAME COMES FROM A STRING it is the strongest kind this tree
- * recognises (CLAUDE.md's evidence order, rule 1): the assignment `movl
- * $N,0x4(%reg)` and the `edprintf` that names the state are in the SAME
- * straight-line run, with no branch target and no jump between them, so the
- * message and the store cannot be paired wrongly.  That was checked
- * mechanically over all forty-five members of the class, not by eye.
+ * `Phase4ModulatorState` is the object's own type name: it appears in the
+ * mangling of `setNextStateAfterTRN2d` and `reset`. The enumerator names are
+ * not the object's and are derived one at a time; the derivation is beside
+ * each, and the method used depends on what evidence exists for it:
  *
- * WHERE A NAME COMES FROM A METHOD NAME -- 0x00, 0x04, 0x08 -- the argument is
- * that `exitX()` acts only when the field holds one particular value, and it
- * is corroborated rather than assumed: `exitMPNot()` acts only on 0x0e, and
- * 0x0e is independently named "enter MPNot" by a string.  The same shape then
- * reads `exitMP()` on 0x04 as MP and `exitRi()` on 0x00 as Ri.
- * `enterRepeatedCPd()` assigns 0x08 and nothing else does under V.90.
+ * - Where a name comes from a string, that is the strongest evidence class
+ *   this tree recognises (CLAUDE.md's evidence order, rule 1): the
+ *   assignment (`movl $N,0x4(%reg)`) and the `edprintf` that names the
+ *   state are in the same straight-line run with no branch between them, so
+ *   the message and the store cannot be paired wrongly. Checked
+ *   mechanically over all forty-five members of the class, not by eye.
+ * - Where a name comes from a method name (0x00, 0x04, 0x08), the argument
+ *   is that `exitX()` acts only when the field holds one particular value,
+ *   corroborated rather than assumed: `exitMPNot()` acts only on 0x0e, and
+ *   0x0e is independently named "enter MPNot" by a string. The same shape
+ *   then reads `exitMP()` on 0x04 as MP and `exitRi()` on 0x00 as Ri;
+ *   `enterRepeatedCPd()` assigns 0x08 and nothing else does under V.90.
+ * - Where there is neither, the value keeps an offset name. Nine do. Eight
+ *   are the same shape -- a state entered when the symbol counter is not
+ *   yet on a sequence boundary, which goes on emitting what it was emitting
+ *   and then hands on, the same role `V90Phase3Modulator`'s `_END` states
+ *   play -- but naming them `_END` here would be usage inference dressed as
+ *   a derivation, and finding F3120's rule says a wrong name is worse than
+ *   an offset (`P4D_STATE_UNNAMED_11` is the precedent for the spelling).
  *
- * WHERE THERE IS NEITHER, THE VALUE KEEPS AN OFFSET NAME.  Nine of them do.
- * Eight are the same shape -- a state entered when the symbol counter is NOT
- * yet on a sequence boundary, which goes on emitting what it was emitting and
- * then hands on -- and `V90Phase3Modulator`'s `_END` states are exactly that,
- * but calling them `_END` here would be usage inference dressed as a
- * derivation, and 3120's rule says a wrong name is worse than an offset.
- * `P4D_STATE_UNNAMED_11` is the precedent for the spelling.
+ * 0x05 is the one to be careful about: three different messages precede an
+ * assignment of 5, and one of them ("CPd Terminated") names the state being
+ * left rather than the one being entered. Two independent sites naming it
+ * SUVd is what carries it, corroborated by `recivedSUV()` acting only when
+ * the field is 5.
  *
- * 0x05 IS NAMED AND 0x05 IS THE ONE TO BE CAREFUL ABOUT.  Three different
- * messages precede an assignment of 5; two of them are "enter SUVd" and
- * "enter SUVd at RRN" and the third, "CPd Terminated", names the state being
- * LEFT rather than the one being entered.  Two independent sites naming it
- * SUVd is what carries it, and `recivedSUV()` acting only when the field is 5
- * agrees.
- *
- * 0x14 AND 0x1c ARE HERE NOW, AND 0x1f IS STILL ABSENT.  This paragraph used
- * to say all three were absent because "no member of the class stores or
- * compares them", and the two symbol pumps disprove it for two of the three:
- * `generateV90Symbol`'s jump table at `.rodata+0xa94` runs 0x00..0x1b and
- * `generateV92Symbol`'s at +0xb04 runs 0x00..0x1e, and the entry at 0x14 in
- * both -- and at 0x1c in the second -- is a distinct arm rather than the
- * default edge.  A jump-table slot that is not the default IS a `case` label,
- * so the enumeration has those two.  0x1f is past the end of the larger table
- * and nothing else in the class mentions it, so it stays out.
- *
- * A C++ enumeration does not have to be contiguous and inventing an
+ * 0x14 and 0x1c are real states even though no member stores or compares
+ * them directly: `generateV90Symbol`'s jump table (`.rodata+0xa94`) runs
+ * 0x00..0x1b and `generateV92Symbol`'s (`+0xb04`) runs 0x00..0x1e, and the
+ * entry at 0x14 in both -- and at 0x1c in the second -- is a distinct arm
+ * rather than the default edge, which makes it a real `case` label. 0x1f is
+ * past the end of the larger table and mentioned nowhere else, so it stays
+ * out; a C++ enumeration does not have to be contiguous, and inventing an
  * enumerator to make it look tidy would be inventing a name.
  *
- * THE BASE IS PINNED SIGNED, AND THAT IS MEASURED.  `recivedCPtag`,
- * `recivedSUVtag` and `recivedE2u` all dispatch with `cmp $0x5,%eax ; je ;
- * jl` -- a SIGNED `jl`.  An enumeration whose enumerators are all
- * non-negative gets an unsigned base and GCC emits `jb` there instead, which
- * would be a codegen difference at three sites.  One negative enumerator
- * makes the base signed and every `int` representable.  The pin is ours and
- * the object names no such value; `__tHardwareCodecTypes___BASE_PIN` in
- * V90CodecType.h and `P4D_STATE_BASE_PIN` in V90Phase4Demodulator.h are the
- * precedents, and the reason is written out in full in the first of those.
- * ---------------------------------------------------------------------------
+ * The base is pinned signed, and that is measured, not stylistic:
+ * `recivedCPtag`, `recivedSUVtag` and `recivedE2u` all dispatch with a
+ * signed `jl`, which an all-non-negative enumeration would compile as the
+ * unsigned `jb` instead -- a codegen difference at three sites. One
+ * negative enumerator (`_BASE_PIN`, ours; the object names no such value)
+ * makes the base signed and every `int` representable, the same fix as
+ * `__tHardwareCodecTypes__`'s and `V90Phase4Demodulator`'s own state enum.
  */
 enum Phase4ModulatorState {
 	P4M_STATE_RI = 0x00,		/* `exitRi` acts only on 0         */
@@ -293,231 +160,307 @@ typedef char v90p4m_state_is_signed[
 
 /*
  * The scrambled-bit buffer's extent: +0x0078 up to the first field of the
- * tail.  Numerically identical to `V90CP_BITS`, and spelled here rather than
- * shared because this header must not include `V90CP.h` -- V90CP is a forward
- * declaration above and stays one.  If the two ever disagree, this one is
- * wrong: this buffer receives a scrambled copy of `V90CP::bits`.
+ * tail. Numerically identical to `V90CP_BITS`, and spelled here rather than
+ * shared because this header must not include `V90CP.h` (V90CP stays a
+ * forward declaration). If the two ever disagree, this one is wrong: the
+ * buffer receives a scrambled copy of `V90CP::bits`.
  */
 #define V90P4M_BITS		0x2ee0	/* +0x0078 .. +0x2f57, 12,000 bytes */
 
 /*
- * The two symbol tables' lengths, and they are MEASURED, not counted off the
- * stores.  `generateRdRt` and `generateRdRtNot` index +0x2f68 with
- * `(symbolCounter - 1) % 6` -- `mov $0xaaaaaaab`, `mul`, `shr $0x2`, then
- * `lea (%edx,%edx,2)` and `add %edx,%edx` for the multiply-back by six.
- * `generateRf` and `generateRfNot` index +0x2f74 the same way with `shr $0x3`
- * and `shl $0x2`, which is twelve.  `setRdRtSymbols` writes exactly six
- * shorts and `setRfSymbols` exactly twelve, and 6 * 2 lands the second array
- * on +0x2f74 exactly.
+ * The two symbol tables' lengths, measured from their indexing rather than
+ * counted off the stores: `generateRdRt`/`generateRdRtNot` index +0x2f68
+ * with an unsigned-division-by-6 idiom on `(symbolCounter - 1)`, and
+ * `generateRf`/`generateRfNot` index +0x2f74 the same way for 12.
+ * `setRdRtSymbols` writes exactly six shorts and `setRfSymbols` exactly
+ * twelve, and 6 * 2 lands the second array on +0x2f74 exactly.
  */
 #define V90P4M_RDRT_SYMBOLS	6
 #define V90P4M_RF_SYMBOLS	12
 
 class V90Phase4Modulator {
 public:
-	/* Defined in src/pump/v90/V90Phase4Modulator.cpp. */
+	/**
+	 * @brief Construct the modulator: store the borrowed pointers and
+	 *        flags, embed a `Scrambler` built for V.90's taps (18, 23),
+	 *        and either adopt the supplied bits-to-symbol converter or
+	 *        allocate and construct a private one of block size 0x140.
+	 * @param params          The session's parameters (kept as `params`).
+	 * @param sessionFlag     Nonzero selects V.92.
+	 * @param bitsToSymbol    A converter to use, or null to have one
+	 *                        allocated and owned by this object.
+	 * @param mp              The MP message source.
+	 * @param mappingParams   The primary constellation mapping.
+	 * @param mappingParams2  The secondary constellation mapping (used by
+	 *                        V.92's RdNot arm; see V90Phase4Modulator.cpp).
+	 * @param cp              The CP message source.
+	 * @param ctorArg8        Stored verbatim at +0x2f98; role not
+	 *                        established by anything this class does with
+	 *                        it.
+	 */
 	V90Phase4Modulator(V90Parameters *params, unsigned int sessionFlag,
 			   V90BitsToSymbol *bitsToSymbol, V90MP *mp,
 			   V90MappingParams *mappingParams,
 			   V90MappingParams *mappingParams2, V90CP *cp,
 			   unsigned int ctorArg8);
+
+	/**
+	 * @brief Release the bits-to-symbol converter, but only if this
+	 *        object allocated it itself (`externalBitsToSymbol == 0`); a
+	 *        supplied converter is left untouched.
+	 */
 	~V90Phase4Modulator();
+
+	/** @brief Set `sessionFlag` (nonzero selects V.92). */
 	void setSessionFlag(unsigned int);
 
-	/*
-	 * `reset` -- .text+0x2f630, 255 bytes.  FOUR OF THE FIVE ARGUMENT
-	 * TYPES ARE THE MANGLING'S
-	 * (`...5resetE7PcmTypeh20Phase4ModulatorStatejj`), and `void` is the
-	 * return because neither exit sets `%eax`.
-	 *
-	 * THE FOURTH ARGUMENT IS A TRIP COUNT AND REACHES NO FIELD.  It is
-	 * the bound of a loop that calls `generateV92Symbol` or
-	 * `generateV90Symbol` -- chosen by `sessionFlag`, RELOADED from the
-	 * object on every iteration, because either callee may move it.  The
-	 * fifth lands in `word_0040` and is not otherwise touched.
+	/**
+	 * @brief Reinitialise the modulator for a new session: store the
+	 *        companding law and expand `code` through it into
+	 *        `codeLevel`, reset the state machine to `st` with the
+	 *        symbol counter and per-repetition flags cleared, reset the
+	 *        scrambler, and then run the phase 4 symbol pump (V.90's or
+	 *        V.92's, per `sessionFlag`) for `nofSymbols` iterations to
+	 *        warm it up.
+	 * @param law         The companding law (A-law or mu-law).
+	 * @param code        A G.711 code, expanded into `codeLevel`.
+	 * @param st           The state to reset into.
+	 * @param nofSymbols  How many warm-up symbols to pump.
+	 * @param arg5        Stored verbatim into `word_0040`; not otherwise
+	 *                    read by this class.
 	 */
 	void reset(PcmType law, unsigned char code, Phase4ModulatorState st,
 		   unsigned int nofSymbols, unsigned int arg5);
 
 	/*
-	 * The twenty-eight members of src/pump/v90/V90Phase4Modulator.cpp's
-	 * second half.  Six read a symbol out of a table, two fill those
-	 * tables, and the rest are the state machine's edges: an `exitX`
-	 * leaves a state when the symbol counter reaches the end of a
-	 * repetition, and a `recivedX` is the demodulator's news arriving.
+	 * The rest of the class (V90Phase4Modulator.cpp's second half): six
+	 * members read a symbol out of a table, two fill those tables, and
+	 * the rest are the state machine's edges -- an `exitX` leaves a state
+	 * once the symbol counter reaches the end of a repetition, and a
+	 * `recivedX` is the demodulator's news arriving.
 	 */
+	/** @brief Return the next Rd/Rt table symbol (`(symbolCount-1) % 6`). */
 	short generateRdRt();
+	/** @brief `generateRdRt()`, negated. */
 	short generateRdRtNot();
+	/** @brief Return the next Rf table symbol (`(symbolCount-1) % 12`). */
 	short generateRf();
+	/** @brief `generateRf()`, negated. */
 	short generateRfNot();
 
-	/*
-	 * The three training sources, 149 bytes each (0x2d9f0, 0x2da90,
-	 * 0x2db30): scramble a converter-sized run of constant ones (B1d,
-	 * TRN2d) or zeros (Ed) and drain one symbol.  `short` by the same
-	 * class convention as the message sources; the .cpp's block comment
-	 * carries the derivation.  And the five-byte sibling call at 0x2cc60,
-	 * whose whole body is `recivedSUVtag()`.
+	/** @brief Return the Ri amplitude (`codeLevel`, sign pattern
+	 *  +,+,+,-,-,- over a period of six symbols). */
+	short generateRi();
+	/** @brief `generateRi()`, negated. */
+	short generateRiNot();
+
+	/**
+	 * @brief Ask the converter how many bits it needs; if it wants a
+	 *        constant-ones run, scramble one and feed it, then drain and
+	 *        return one symbol. Used for the B1d/TRN2d training states.
 	 */
 	short generateB1d();
+	/** @copydoc generateB1d */
 	short generateTRN2d();
+	/**
+	 * @brief Same as generateB1d(), but scrambles a constant-zeros run
+	 *        (the Ed training state).
+	 */
 	short generateEd();
-	void recivedPartTwoSilenceRrnSUVtag();
-	short generateRi();
-	short generateRiNot();
+
+	/**
+	 * @brief Drain one converter symbol for a data-mode state whose
+	 *        boundary is not yet reached (FPE side); moves to Rf on the
+	 *        converter's block-complete signal.
+	 */
 	short generateDataSymbolBeforeFPE();
+	/**
+	 * @brief Same as generateDataSymbolBeforeFPE(), moving to Rd instead
+	 *        of Rf (RRN side).
+	 */
 	short generateDataSymbolBeforeRRN();
 
-	/*
-	 * The three message sources, 167 bytes each, and THE ONLY MEMBERS OF
-	 * THIS CLASS WITH NO CALLER ANYWHERE IN THE OBJECT -- `readelf -r`
-	 * finds zero relocations naming any of them, against 43 naming
-	 * `V90BitsToSymbol::nofBitsForNextTime`.  Reconstructed and left
-	 * callerless; the derivation, the byte comparison that makes
-	 * `generateCPd` and `generateSUVd` one body, and the argument for
-	 * `short` rather than `int` are in
-	 * src/pump/v90/V90Phase4Modulator.cpp above `generateMP`.
+	/**
+	 * @brief The five-byte sibling call whose whole body is
+	 *        `recivedSUVtag()`; kept as a distinct member because the
+	 *        object emits it as one (`generateB1d`'s cluster in the
+	 *        blob's layout, not `recivedSUVtag`'s).
+	 */
+	void recivedPartTwoSilenceRrnSUVtag();
+
+	/**
+	 * @brief Ask the converter how many bits it needs; if nonzero,
+	 *        scramble the MP message's bit vector and feed it, then
+	 *        drain and return one symbol. Callerless in the object
+	 *        (no relocation anywhere names it); reconstructed and left
+	 *        that way rather than wired to a caller with no blob
+	 *        behaviour to compare against.
 	 */
 	short generateMP();
+	/**
+	 * @brief Same as generateMP(), transmitting the CP message's bit
+	 *        vector. Byte-identical to generateSUVd() in the object;
+	 *        kept as two members because CPd and SUVd are two states.
+	 *        Also callerless.
+	 */
 	short generateCPd();
+	/** @copydoc generateCPd */
 	short generateSUVd();
 
-	/*
-	 * The two symbol pumps.  One `switch` over `state` each, and the
-	 * source is in src/pump/v90/V90Phase4Modulator.cpp with the jump
-	 * tables' addresses and what they prove about the case labels.
+	/**
+	 * @brief The V.90 phase 4 symbol pump: one `switch` over `state`
+	 *        covering the MP ladder (no SUVd/CPd/silence/Rt/Rf states).
+	 *        Increments `symbolCount`, dispatches on `state`, and
+	 *        returns the symbol the active state produces.
 	 */
 	short generateV90Symbol();
+	/**
+	 * @brief The V.92 phase 4 symbol pump: the same shape as
+	 *        generateV90Symbol() with the SUVd/CPd rate-renegotiation
+	 *        ladder and the silence/Rt/Rf ladder in place of the MP
+	 *        states (V90Phase4Modulator.cpp documents the seven
+	 *        differences in full).
+	 */
 	short generateV92Symbol();
 
-	/*
-	 * `generateSymbol` -- .text+0x2f600, 45 bytes.  The dispatcher over
-	 * the two above, and `sessionFlag` at +0x0000 is the whole body:
-	 * nonzero takes V.92, zero takes V.90.  It is the same fork `reset`
-	 * makes for its warm-up loop, so the two agree on which pump this
-	 * object drives.
-	 *
-	 * `int` AND NOT `short`, from the `cwtl` at 0x2f615 and 0x2f628: the
-	 * callees are declared `short` above, so the widening is the RETURN
-	 * conversion and not a leftover.  `V90Phase3Modulator::generateSymbol`
-	 * is the same shape and reads the same way -- and unlike that one,
-	 * this pair is instruction-exact, because that header declares its own
-	 * two pumps `int` and so emits the extension twice.
+	/**
+	 * @brief Dispatch to generateV92Symbol() or generateV90Symbol() by
+	 *        `sessionFlag`, the same fork reset() makes for its warm-up
+	 *        loop.
+	 * @return The pumped symbol, widened from the callee's `short`.
 	 */
 	int generateSymbol();
 
+	/**
+	 * @brief Fill the six Rd/Rt symbols from a constellation's six
+	 *        levels (last three negated), companded by `pcmType`.
+	 */
 	void setRdRtSymbols(V90MappingParams *);
+	/**
+	 * @brief Fill the twelve Rf symbols by cycling the same six sources
+	 *        twice with a different negation pattern, companded by
+	 *        `pcmType`.
+	 */
 	void setRfSymbols(V90MappingParams *);
+	/** @brief Set `nextStateAfterTRN2d`. */
 	void setNextStateAfterTRN2d(Phase4ModulatorState);
 
-	/*
-	 * `setMappingParams` -- 96 bytes at .text+0x2d120, and `void`
-	 * BECAUSE THE OBJECT TAIL-JUMPS OUT OF IT.  Its last act on the live
-	 * path is `jmp V90BitsToSymbol::setSymbolsBlockSize`, whose answer it
-	 * therefore returns by accident, and its null path `ret`s with %eax
-	 * holding whatever was in it.  A function returning a value would
-	 * have to agree with itself across the two and this one does not --
-	 * the same reading `V90Mapper::process` records for its own epilogue.
-	 *
-	 * IT DOES NOT STORE THE ARGUMENT ANYWHERE.  `mappingParams` at +0x4c
-	 * and `mappingParams2` at +0x50 are the constructor's and are left
-	 * alone; the block is passed through to the converter and forgotten.
+	/**
+	 * @brief Hand a constellation block to the bits-to-symbol converter
+	 *        (`reset` then `setSymbolsBlockSize(1)`); a null block only
+	 *        logs an error. Does not store the pointer anywhere in this
+	 *        object.
+	 * @return Unspecified: the object tail-jumps into
+	 *         `setSymbolsBlockSize` on the live path and falls through
+	 *         to a bare `ret` on the null path, so whatever is left in
+	 *         the return register is incidental, not a designed value.
 	 */
 	void setMappingParams(V90MappingParams *);
 
+	/** @brief Clear the RRN-related latches ahead of an RRN sequence. */
 	void resetBeforRRN();
+	/** @brief The same clear one field along, plus the CP tag byte. */
 	void resetRRNSecondSection();
+	/** @brief Enter the repeated-CPd state, rebuilding the CP sequence. */
 	void enterRepeatedCPd();
 
+	/** @brief Leave MP for MPNot once the MP sequence completes. */
 	void exitMP();
+	/** @brief Leave MPNot for Ed once the MP sequence completes again. */
 	void exitMPNot();
+	/** @brief Leave Ri for RiNot once its six-symbol period completes. */
 	void exitRi();
+	/** @brief Leave the silence pair for Rt once its period completes. */
 	void exitSilence();
 
+	/** @brief Record that a CP tag has arrived (sets the CP latch). */
 	void recivedCP();
+	/**
+	 * @brief The largest of the fifteen state-machine edges: acts only
+	 *        while `word_0020` is set, and is the only member that sets
+	 *        `cp->word_00` to select the short form of the CP message.
+	 */
 	void recivedCPtag();
+	/** @brief Boundary-gated transition into Ed from an E2u arrival. */
 	void recivedE2u();
+	/** @brief `recivedE2u()` with its own "enter Ed first at RRN" message. */
 	void recivedFirstRrnE2u();
+	/**
+	 * @brief The silence-pair exit and the SUVd-to-CPd transition, as
+	 *        the two arms of one test on `state`.
+	 */
 	void recivedFirstSUVuPartTwoRrn();
+	/** @brief Raise the CP tag byte ahead of a silence/RRN/SUV sequence. */
 	void recivedPartOneSilenceRrnSUV();
+	/** @brief `recivedFirstRrnE2u()`'s shape, with the CP tag raised first. */
 	void recivedPartOneSilenceRrnSUVtag();
+	/** @brief `recivedSUV()`'s body behind two extra (redundant) range
+	 *  guards implied by the final state test; see V90Phase4Modulator.cpp. */
 	void recivedPartTwoSilenceRrnSUV();
+	/**
+	 * @brief Boundary-gated transition from SUVd into CPd: rebuilds the
+	 *        CP sequence and sets `word_2fa0` once.
+	 */
 	void recivedSUV();
+	/** @brief Boundary-gated transition into Ed from SUVd or (Repeated)CPd. */
 	void recivedSUVtag();
 
 	/* Public for offsetof; see V90ConstellationDesigner.h. */
 	unsigned int sessionFlag;		/* +0x0000 argument 2      */
 
 	/*
-	 * +0x0004  The phase 4 state.  `reset`'s THIRD ARGUMENT lands here --
-	 * `mov 0x2c(%esp),%edx ; mov %edx,0x4(%esi)` at .text+0x2f647 and
-	 * +0x2f65e -- and the mangling types that argument
-	 * `Phase4ModulatorState`, so the field's type is the object's own and
-	 * not an inference from the constants stored into it.
+	 * +0x0004  The phase 4 state. Typed `Phase4ModulatorState` by
+	 * `reset`'s third-argument mangling, not inferred from the constants
+	 * stored into it (finding F4931).
 	 */
 	Phase4ModulatorState state;
 
 	/*
-	 * +0x0008  Symbols emitted since the current state was entered.  It
-	 * is what every one of the class's "@ %d" messages prints, it is set
-	 * to 0 beside almost every assignment to `state`, and it is the
-	 * dividend of the fifteen `divl` sites that ask
-	 * `symbolCount % cpSequenceSymbols`.  `divl` and not `idivl` is what
-	 * makes it unsigned.
+	 * +0x0008  Symbols emitted since the current state was entered: what
+	 * every one of the class's "@ %d" messages prints, cleared beside
+	 * almost every assignment to `state`, and the dividend of the fifteen
+	 * `divl` sites asking `symbolCount % cpSequenceSymbols` (`divl`, not
+	 * `idivl`, is what makes it unsigned).
 	 */
 	unsigned int symbolCount;
 
 	/*
-	 * +0x000c  WRITTEN BY THREE MEMBERS AND READ BY NONE OF THE
-	 * FORTY-FIVE.  `reset` zeroes it; both symbol pumps zero it on entry,
-	 * before the state is dispatched, and then set it to 7 on the
-	 * "Phase4 Terminated" arm -- and `generateV92Symbol` alone sets it to
-	 * 4 on both exits from TRN2d.  Four `movl` sites over the class's
-	 * whole extent and not one `0xc(%` load anywhere in
-	 * .text+0x2c5a0..+0x2f730, so what reads it is outside this class.
-	 * `unsigned int` is the stores' width.  It was `pad_000c[4]` until the
-	 * pumps were written, then `word_000c`.
+	 * +0x000c  Written by three members (`reset` and both symbol pumps
+	 * clear it on entry; `generateV92Symbol` also sets it to 4 on both
+	 * TRN2d exits, and either pump sets it to 7 on "Phase4 Terminated")
+	 * and read by none of the forty-five -- so whatever consumes it is
+	 * outside this class.
 	 *
-	 * NAMED (wave 3, F10140) BY THE SAME SIBLING-CLASS SYMMETRY THAT
-	 * ALREADY NAMED `V90Phase3Modulator::eventCode` and
-	 * `V90Phase3Demodulator::eventCode`: cleared on (almost) every state
-	 * entry, set to a small constant only by the arms that have news, read
-	 * by nothing inside the class, and copied into the CALLER's own
-	 * `eventCode` field. `V90Modulator::progress` does that copy
-	 * literally -- `if (phase4Modulator->eventCode != 0) eventCode =
-	 * phase4Modulator->eventCode;` -- in the SAME shape and the SAME
-	 * function it uses one line earlier for `phase3Modulator->eventCode`,
-	 * so this is not a fresh inference but the third sighting of one
-	 * mechanism this tree already named twice. What the individual values
-	 * (4, 7) mean beyond "TRN2d exited" and "Phase4 Terminated" is still
-	 * not established here, same as it never was for the other two --
-	 * naming the CHANNEL does not require naming every value on it.
-	 * Finding F7520 for the reader; F10140 for the name.
+	 * Named by the same sibling-class symmetry that already named
+	 * `V90Phase3Modulator::eventCode` and `V90Phase3Demodulator::
+	 * eventCode`: cleared on (almost) every state entry, set to a small
+	 * constant only by the arms that have news, read by nothing inside
+	 * the class, and copied into the caller's own `eventCode` field --
+	 * `V90Modulator::progress` copies all three phase objects'
+	 * `eventCode` the same way, in the same function. Naming the channel
+	 * does not require naming every value on it: what 4 and 7 mean beyond
+	 * "TRN2d exited" and "Phase4 Terminated" is still not established.
+	 * Findings F7520 and F10140.
 	 */
 	unsigned int eventCode;
 
 	/*
-	 * +0x0010  `setNextStateAfterTRN2d`'s whole body is `mov %edx,0x10
-	 * (%eax)`, so the field is named for the method that sets it and the
-	 * type is that method's argument type.  `reset` seeds it from
-	 * `sessionFlag`: `cmp $0x1,%edx ; sbb %eax,%eax ; add $0x5,%eax`,
-	 * which is 4 when the flag is zero and 5 when it is not -- MP under
-	 * V.90 and SUVd under V.92, the two states TRN2d hands on to.
+	 * +0x0010  Named for `setNextStateAfterTRN2d`, whose whole body is
+	 * storing its argument here. `reset` seeds it branchlessly from
+	 * `sessionFlag`: MP under V.90, SUVd under V.92 -- the two states
+	 * TRN2d hands on to.
 	 */
 	Phase4ModulatorState nextStateAfterTRN2d;
 
 	/*
-	 * +0x0014  `reset` clears it; `generateV90Symbol`/`generateV92Symbol`'s
-	 * own `P4M_STATE_MP_NOT` arm consumes it (clears it and calls
-	 * `exitMPNot()`), and it is otherwise set from OUTSIDE this class:
-	 * `V90Modulator::acknowledgeCPNotReception` and
-	 * `::acknowledgeEReception` both store 1 here on their 0x0d arm --
-	 * "setting delayed MPNot exit", by their own messages -- so it is a
-	 * request recorded while the state machine is off a repetition
-	 * boundary, honoured the next time this class's own symbol pump
-	 * revisits MPNot.  NAMED (wave 3, F10140) DIRECTLY FROM THAT MESSAGE
-	 * -- CLAUDE.md's strongest evidence class -- rather than inferred from
-	 * the read/write shape alone.
+	 * +0x0014  Cleared by `reset`; consumed (cleared, and `exitMPNot()`
+	 * called) by both symbol pumps' `P4M_STATE_MP_NOT` arm; and set from
+	 * OUTSIDE this class by `V90Modulator::acknowledgeCPNotReception` and
+	 * `::acknowledgeEReception`, both printing "setting delayed MPNot
+	 * exit" as they do it. So it is a request recorded while the state
+	 * machine is off a repetition boundary, honoured the next time this
+	 * class's own symbol pump revisits MPNot. Named directly from that
+	 * message -- CLAUDE.md's strongest evidence class. Finding F10140.
 	 */
 	unsigned char delayedMpNotExit;
 
@@ -536,9 +479,8 @@ public:
 	 * +0x0018 and +0x001c  Written together and only ever to zero, by
 	 * `reset`, `resetRRNSecondSection`, `enterRepeatedCPd`,
 	 * `recivedCPtag` and `recivedSUVtag`; read by neither those nor
-	 * anything else in this file.  The widths are the stores' -- `movl`
-	 * and `movb`.  Nothing establishes a meaning, so they keep offset
-	 * names.
+	 * anything else in this file. The widths are the stores' (`movl` and
+	 * `movb`). Nothing establishes a meaning, so they keep offset names.
 	 */
 	unsigned int word_0018;
 	unsigned char byte_001c;
@@ -556,9 +498,9 @@ public:
 	 * +0x0020  Set to 1 on every path of `recivedCPtag`, `recivedE2u`,
 	 * `recivedFirstRrnE2u`, `recivedPartOneSilenceRrnSUVtag` and
 	 * `recivedSUVtag` that moves `state`, and tested at the top of the
-	 * first four as a reason to do nothing.  So it latches "this has
+	 * first four as a reason to do nothing. So it latches "this has
 	 * already been acted on"; `reset`, `resetBeforRRN` and
-	 * `resetRRNSecondSection` clear it.  That bounds the role without
+	 * `resetRRNSecondSection` clear it. That bounds the role without
 	 * establishing it -- nothing in the object says what "this" is -- so
 	 * the name stays the offset's.
 	 */
@@ -567,7 +509,7 @@ public:
 	/*
 	 * +0x0024 .. +0x0034  `resetBeforRRN` writes all six (1 into +0x24,
 	 * zero into the rest) and `reset` writes four of them; the reads are
-	 * in members this batch has not written.  Offset names, `movl` widths.
+	 * in members this batch has not written. Offset names, `movl` widths.
 	 */
 	unsigned int word_0024;
 	unsigned int word_0028;
@@ -576,23 +518,20 @@ public:
 	unsigned int word_0034;
 
 	/*
-	 * +0x0038  The companding law.  `reset`'s FIRST argument lands here
-	 * (`mov 0x24(%esp),%eax ; mov %eax,0x38(%esi)`) and the mangling
-	 * types it `PcmType`, the enumeration V90Phase3Modulator.h defines.
-	 * Every read in this class is the same `!= 0` choosing A-law, which
-	 * is the sense that header already measured.
+	 * +0x0038  The companding law. Typed `PcmType` (V90Phase3Modulator.h's
+	 * enum) by `reset`'s first-argument mangling. Every read in this
+	 * class is the same `!= 0` choosing A-law that header already
+	 * measured.
 	 */
 	PcmType pcmType;
 
 	/*
-	 * +0x003c  The linear level of `reset`'s second argument, an
-	 * `unsigned char` G.711 code: `reset` runs it through
-	 * `alaw2linear((code & 0x7f) ^ 0xd5)` or
-	 * `ulaw2linear((code & 0x7f) ^ 0xff)` and stores 16 bits of the
-	 * result.  `generateRi` returns it and `generateRiNot` returns its
-	 * negation, both through `movswl`, which is what makes it signed.
-	 * The name is `V90Phase3Modulator::codeLevel`'s, for the same field
-	 * filled the same way by that class's own `reset`.
+	 * +0x003c  The linear level of `reset`'s second argument, a G.711
+	 * code: `reset` expands it through `alaw2linear`/`ulaw2linear` per
+	 * `pcmType` and stores 16 bits of the result. `generateRi` returns it
+	 * and `generateRiNot` returns its negation, both sign-extended, which
+	 * is what makes it signed. Named for `V90Phase3Modulator::codeLevel`,
+	 * the same field filled the same way by that class's own `reset`.
 	 */
 	short codeLevel;
 
@@ -606,9 +545,9 @@ public:
 	 */
 
 	/*
-	 * +0x0040  `reset`'s FIFTH argument, stored and not otherwise touched
-	 * by anything this batch wrote.  `unsigned int` is the mangling's
-	 * (`...20Phase4ModulatorStatejj`); the meaning is not established.
+	 * +0x0040  `reset`'s fifth argument, stored and not otherwise touched
+	 * by anything this batch wrote. `unsigned int` is the mangling's; the
+	 * meaning is not established.
 	 */
 	unsigned int word_0040;
 
@@ -633,10 +572,9 @@ public:
 	unsigned char *mpBits;
 
 	/*
-	 * +0x2f5c  The length `V90MP::getBitVector` reported.  `unsigned int`
-	 * is the mangling's -- `_ZN5V90MP12getBitVectorERj` takes `unsigned
-	 * int &` -- and this field is what the reference is bound to
-	 * (`lea 0x2f5c(%ebx),%ecx` at +0x2d0db).
+	 * +0x2f5c  The length `V90MP::getBitVector` reported. `unsigned int`
+	 * is the mangling's (`getBitVector` takes `unsigned int &`), and this
+	 * field is what the reference is bound to.
 	 */
 	unsigned int mpBitCount;
 
