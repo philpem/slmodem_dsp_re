@@ -592,3 +592,52 @@ above). `tools/onedef.py`, `tools/refcheck.py` and `tools/anchorcheck.py`
 all clean; `tools/bannercheck.py src/fax` clean. `make period`/
 `byteident.py --ratchet` need docker, unavailable in this sandbox; left for
 the parent's gate per every prior wave's precedent.
+
+### Wave 4 complete — merged, period-green, byte-identity ratchet still OK
+
+All three branches merged (three more finding-number collisions resolved by
+renumbering: F10142 collided three ways across the wave's three agents,
+each independently reaching for the same next-available number — resolved
+in merge order, F10142/F10143/F10144). Fully merged tree: **374 passed, 0
+failed**, structural gates clean. `byteident.py --ratchet`: still
+**736/1852 EXACT (39.7%)** — four full waves in, zero codegen drift.
+
+Real names landed: 3 (VPcmFloModem/V92CP pad regions — none split, all 13
+confirmed either alignment-forced or, in one case, genuinely dead space
+with zero readers/writers anywhere in the 1.2MB object), 3 (diagnostic/
+session-flag cluster — `fdsp_kernel::status`, `mtk_phasor::cosine`/`sine`),
+3 (V.17 fax fields — `snr_ok`, `fifo_size_factor`, `scale_mul`). Several
+clusters this wave were honest, thoroughly-verified NEGATIVE results
+(`TAG_DiagnosticResults.h`, most of `fdspkrnl.h`, most of `v17.c`/
+`v17fax.h`) — confirmed-exhausted rather than unexamined, which is itself
+the useful outcome CLAUDE.md's rules aim for.
+
+Post-wave-4 counts: `pad_NNNN` 165→166, `type_NNNN` 293→292, bare `fNNNN`
+110→98 — largely unchanged in aggregate for the reason wave 3 already
+established (renamed strings surviving in the corpus via unrelated
+classes' coincidentally-identical spellings); the per-class effect is real,
+shown by unchanged check counts on every renamed fixture.
+
+## New workstream: safe pad-region removal
+
+The user asked, separately from naming, whether genuinely-unused
+`pad_NNNN` regions that are pure compiler-alignment gaps can be REMOVED
+from their struct (not just named) — relying on the compiler's own
+implicit padding to recreate the same layout, verified per-instance with
+an `offsetof`/`sizeof` assertion (this project's own existing verification
+idiom, not a new one).
+
+**Explicit decision, asked and answered**: remove where PROVABLY safe,
+verified per-instance — not a blanket policy, and not "keep everything
+explicit" either. Each candidate needs its own `offsetof` proof that
+deleting the member doesn't move anything after it, the same discipline
+`onedef.py`'s existing offset-assertion macros already apply. A pad region
+that is NOT explained by simple next-field alignment (like this wave's
+`VPcmFloModem::pad_6fb8[4]`, confirmed dead but not alignment-driven)
+stays explicit — nothing licenses deleting THAT shape, since nothing about
+the surrounding fields would make the compiler reproduce the gap on its
+own if the member vanished.
+
+This is a full audit across all 166 current `pad_NNNN` regions, tree-wide,
+not limited to the clusters already touched. Wave 5 launching to combine
+this with any remaining fresh field-naming territory.
