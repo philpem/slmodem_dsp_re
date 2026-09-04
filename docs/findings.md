@@ -114484,7 +114484,7 @@ sandbox; left for the parent session's gate, per every prior wave's own
 precedent -- every change here is an identifier substitution or a comment,
 which cannot move generated code. (2026-09-04)
 
-## F10145. First live pad-region removal wave: twelve of fourteen `pad_NNNN` in the V.90 receive/design cluster deleted as pure alignment gaps, two left explicit as confirmed non-alignment-shaped dead space
+## F10152. First live pad-region removal wave: twelve of fourteen `pad_NNNN` in the V.90 receive/design cluster deleted as pure alignment gaps, two left explicit as confirmed non-alignment-shaped dead space
 
 Scope was the six classes `docs/fieldnaming.md`'s new "safe pad-region
 removal" workstream named: `V90Equalizer`, `V90ConstellationDesigner`,

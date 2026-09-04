@@ -651,7 +651,7 @@ the briefed per-file pad COUNTS (13/7/9+1/6/4/3+2) were the naive
 `grep -oE 'pad_[0-9a-f]+'` figure, counting historical `/* was pad_X */`
 prose; a grep restricted to live `unsigned char pad_NNNN[...]` member
 declarations found **14** total, none in either `.cpp`. Full derivation and
-per-pad evidence in finding F10145.
+per-pad evidence in finding F10152.
 
 **Twelve removed** (all confirmed to have an exact-width, exact-offset
 natural-alignment gap AND zero readers/writers anywhere in the object, both
@@ -680,4 +680,4 @@ pre-existing `t_v90equ` FAILs reproduce byte-for-byte with or without the
 removal, matching F10141's documented baseline); `tools/onedef.py` and
 `tools/refcheck.py` clean. `make period`/`byteident.py --ratchet` need
 docker, unavailable in this sandbox; left for the parent's gate. Finding
-F10145.
+F10152.
