@@ -47,7 +47,7 @@ struct v34_queue {
 				 * `v34_receiver` share a base address, so
 				 * 0x266 means two different things depending
 				 * on which pointer it is added to) and one in
-				 * unrelated Caller ID code (finding F10148).
+				 * unrelated Caller ID code (finding F10149).
 				 */
 	int *wr;		/* +0x08  write cursor                   */
 	/*

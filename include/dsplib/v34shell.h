@@ -201,7 +201,7 @@ struct v34_shell {
 	/*
 	 * pad_e4e[2] removed here -- pure alignment gap ahead of the union
 	 * below, which needs 4-byte alignment for its `int` member (finding
-	 * F10146). Verified: `latched` ends at a 2-mod-4 offset, and neither
+	 * F10147). Verified: `latched` ends at a 2-mod-4 offset, and neither
 	 * absolute-struct-offset (0xe4e) nor V34_SHELL_FIELDS-relative (0x44e)
 	 * addressing of these two bytes appears anywhere in the object.
 	 *
@@ -299,7 +299,7 @@ struct v34_shell {
 };
 
 /*
- * PAD-REGION AUDIT (finding F10146).  `pad_e4e[2]` was removed above as a
+ * PAD-REGION AUDIT (finding F10147).  `pad_e4e[2]` was removed above as a
  * pure compiler-alignment artefact: `latched` ends on a 2-mod-4 byte
  * boundary and the union that follows needs 4-byte alignment for its `int`
  * member, so GCC's own default alignment inserts exactly this gap once the

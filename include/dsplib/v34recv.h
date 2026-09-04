@@ -141,7 +141,7 @@ struct v34_receiver {
 	const short *   carrier;         /* +0x1b4 V34demodulate: sin then cos.
 					  * pad_1b2[2] removed here -- pure
 					  * alignment gap ahead of this pointer
-					  * (finding F10145). */
+					  * (finding F10146). */
 	short           mix_carrier_step;    /* +0x1b8 the down-mix carrier's
 					      phase increment (was f1b8) */
 	/*
@@ -221,7 +221,7 @@ struct v34_receiver {
 	 * it in F10123 are both fixed.
 	 *
 	 * pad_1d6[2] removed here -- pure alignment gap ahead of this `int`
-	 * (finding F10145).
+	 * (finding F10146).
 	 */
 	int             timing_frac;    /* +0x1d8 (was f1d8) */
 	unsigned char pad_1dc[0x1e0 - 0x1dc];
@@ -246,7 +246,7 @@ struct v34_receiver {
 					   integrator (was f1f8).
 					   pad_1f6[2] removed here -- pure
 					   alignment gap ahead of this `int`
-					   (finding F10145). */
+					   (finding F10146). */
 	/*
 	 * +0x1fc.  The phase error: the imaginary part of
 	 * decision* x target, shifted up two.  receiver computes it three
@@ -325,7 +325,7 @@ struct v34_receiver {
 					  * that publishes them */
 	/*
 	 * pad_21e[2] removed here -- pure alignment gap ahead of the `int`
-	 * below (finding F10145).
+	 * below (finding F10146).
 	 *
 	 * Two error energies accumulated over 1024 symbols and republished as
 	 * shorts when the counter wraps.  receiver's own names, from
@@ -343,7 +343,7 @@ struct v34_receiver {
 					  (was f228).
 					  pad_226[2] removed here -- pure
 					  alignment gap ahead of this `int`
-					  (finding F10145). */
+					  (finding F10146). */
 	unsigned char pad_22c[0x22e - 0x22c];
 	short           f22e;            /* +0x22e */
 	short           dwell_count;     /* +0x230 TimingV34: symbols spent in
@@ -497,7 +497,7 @@ struct v34_receiver {
 };
 
 /*
- * PAD-REGION AUDIT (finding F10145).  Five of this struct's `pad_NNNN` gaps
+ * PAD-REGION AUDIT (finding F10146).  Five of this struct's `pad_NNNN` gaps
  * were removed as pure compiler-alignment artefacts: in each case the field
  * immediately before the pad ends on a 2-mod-4 byte boundary and the field
  * immediately after needs 4-byte alignment (a pointer or an `int`), so the

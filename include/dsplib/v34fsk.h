@@ -1415,7 +1415,7 @@ struct v34_ratecfg {
 					 * below and a whole-object disassembly
 					 * search: nothing reads or writes
 					 * absolute offset 0xaaaa/0xaaab
-					 * (finding F10147). */
+					 * (finding F10148). */
 };
 
 #if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4

@@ -114484,7 +114484,7 @@ sandbox; left for the parent session's gate, per every prior wave's own
 precedent -- every change here is an identifier substitution or a comment,
 which cannot move generated code. (2026-09-04)
 
-## F10145. `struct v34_receiver`: five of its sixteen `pad_NNNN` regions removed as pure compiler-alignment artefacts, eleven left explicit, each checked both ways
+## F10146. `struct v34_receiver`: five of its sixteen `pad_NNNN` regions removed as pure compiler-alignment artefacts, eleven left explicit, each checked both ways
 
 The pad-region-removal workstream (`docs/fieldnaming.md`, "New workstream:
 safe pad-region removal") applied to `include/dsplib/v34recv.h`, per its
@@ -114610,7 +114610,7 @@ unchanged. `make period` and `tools/toolchain/byteident.py --ratchet` need
 docker, unavailable in this sandbox; left for the parent session's gate,
 consistent with every prior wave. (2026-09-04)
 
-## F10146. `struct v34_shell`: `pad_e4e[2]` removed as a pure alignment gap, three other pads left alone, one addressing-convention subtlety worked through
+## F10147. `struct v34_shell`: `pad_e4e[2]` removed as a pure alignment gap, three other pads left alone, one addressing-convention subtlety worked through
 
 Same workstream, `include/dsplib/v34shell.h`. Fresh grep confirmed 4
 `pad_NNNN` regions (`pad_000`, `pad_a0c`, `pad_e4e`, `pad_e86`) -- two
@@ -114651,9 +114651,9 @@ were searched both ways too: absolute `0xe4e`/`0xe4f` and fields-relative
 **Verification.** `gcc -m32 -Iinclude -c` clean with the new assertions
 live; standalone probe confirmed `frame` at 0xe50 and `sizeof` at 0x1450.
 `make period`/`byteident.py --ratchet` left for the parent's gate, same
-caveat as F10145. (2026-09-04)
+caveat as F10146. (2026-09-04)
 
-## F10147. `struct v34_ratecfg`: `pad_26[2]` removed, `pad_16` left alone, and a stale comment's `pad_24` reference is not a live field any more
+## F10148. `struct v34_ratecfg`: `pad_26[2]` removed, `pad_16` left alone, and a stale comment's `pad_24` reference is not a live field any more
 
 Same workstream, `include/dsplib/v34fsk.h`. Fresh grep matched 3
 (`pad_16`, `pad_24`, `pad_26`) -- but `pad_24` is a COMMENT reference only
@@ -114690,18 +114690,18 @@ own story one field over.
 **Verification.** `gcc -m32 -Iinclude -c` clean with the new assertions
 live; standalone probe confirmed `rx_divtab` at 0x28 and `sizeof` at 0x2c.
 `make period`/`byteident.py --ratchet` left for the parent's gate, same
-caveat as F10145. (2026-09-04)
+caveat as F10146. (2026-09-04)
 
-## F10148. `struct v34_echo`/`struct v34_echo_prefilter` (`v34filt.h`) and `struct v34_queue` (`v34rx.h`): three more pads removed, and a second coincidental-offset trap caught and resolved on `struct v34_queue`
+## F10149. `struct v34_echo`/`struct v34_echo_prefilter` (`v34filt.h`) and `struct v34_queue` (`v34rx.h`): three more pads removed, and a second coincidental-offset trap caught and resolved on `struct v34_queue`
 
 Same workstream, closing out the rest of the V.34 cluster's file list.
 `src/pump/v34/v34pcmmain.cpp` (2 matches) and `src/pump/v34/v34hstx1.cpp` (2
-matches, one of them the `pad_250` cross-reference cited under F10145) and
+matches, one of them the `pad_250` cross-reference cited under F10146) and
 `src/pump/v34/v34hshak.c` (1 match, the `pad_000` cross-reference cited
-under F10145) were all re-checked and confirmed to declare no structs and no
+under F10146) were all re-checked and confirmed to declare no structs and no
 pad members of their own -- every hit in those three files is a COMMENT
 referencing a pad declared elsewhere (`v34recv.h`, already covered by
-F10145, or `include/dsplib/VPcmFloModem.h`'s `pad_6130`/`pad_6124`, which is
+F10146, or `include/dsplib/VPcmFloModem.h`'s `pad_6130`/`pad_6124`, which is
 shared cross-mode infrastructure outside this cluster's scope and untouched).
 Zero removable pads in those three files; nothing edited in them.
 
@@ -114741,7 +114741,7 @@ absolute 0x221c (`v34fsk.h`), so `pad_02`'s candidate absolute addresses are
 0x266 (`rxq`) and 0x221e (`txq`). A first whole-object grep for `0x266(`
 found THREE hits and looked like a live reader -- but tracing each one's
 base register showed all three are false positives, the same shape as
-F10145's `probeselect` trap: two are inside `decoderv34` and `v34handshak`,
+F10146's `probeselect` trap: two are inside `decoderv34` and `v34handshak`,
 both using a register already established (by its OTHER field accesses in
 the same instruction window -- `0x218`/`equ_step`, `0x122`/`flags`,
 `0x1d0`/`timing_offset`, all `struct v34_receiver`'s own named fields) to
@@ -114765,6 +114765,6 @@ assertions live; standalone `offsetof`/`sizeof` probes confirmed all offsets
 and both structs' sizes unchanged (`v34_echo` 0x20, `v34_echo_prefilter`
 0x68, `v34_queue`'s `rd`/`ring` at 0x04/0x0c). `make period`/
 `byteident.py --ratchet` need docker, unavailable in this sandbox; left for
-the parent session's gate, same caveat as F10145-F10147: nothing here
+the parent session's gate, same caveat as F10146-F10148: nothing here
 changes emitted code where the assertions hold, only removes a member and
 lets the compiler re-derive the identical padding. (2026-09-04)

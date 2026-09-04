@@ -83,7 +83,7 @@ struct v34_echo {
 				 * every function touching this struct (base
 				 * at v34_object+0x80b8): nothing reads or
 				 * writes absolute offset 0x80ce/0x80cf
-				 * (finding F10148). */
+				 * (finding F10149). */
 	unsigned taps;		/* +0x1c                                 */
 };
 
@@ -436,7 +436,7 @@ struct v34_echo_prefilter {
 						 * nothing reads or writes
 						 * absolute offset
 						 * 0x20d2/0x20d3 (finding
-						 * F10148). */
+						 * F10149). */
 	int span;				/* +0x60  halved, see below  */
 	int shift;				/* +0x64 */
 };
