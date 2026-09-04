@@ -27,7 +27,7 @@
  *   - the short argument, which is NEVER READ -- varied anyway, so a
  *     reconstruction that started reading it would fail.
  *
- * The modulator's own step (`symbolCount++`, `word_000c = 0`) lands in the
+ * The modulator's own step (`symbolCount++`, `eventCode = 0`) lands in the
  * object comparison, which is how the generateSymbol excursion is checked
  * without being separately instrumented.
  */

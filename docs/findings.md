@@ -113717,3 +113717,62 @@ every mutation suite this pass touched: `v90p3ddec`, `v90p3dreset`,
 `make period`/`byteident.py --ratchet` need docker, unavailable in this
 sandbox, left for the parent's gate -- consistent with every prior wave-3
 session in this same tree.  (2026-09-04)
+
+### F10138. `V90Phase4Modulator`: two fields named, same evidence class as F10137, one collision found and fixed
+
+Continuing the wave 3 naming pass into the modulator side of phase 4.
+
+- **`word_000c` -> `eventCode`** (rank 3, sibling-class symmetry --
+  strengthened here past a prior pass's own explicit decline). The header
+  already knew everything needed: `reset` and both symbol pumps clear it,
+  three arms set it to 4 or 7, nothing inside the class reads it, and
+  `V90Modulator::progress` copies it into `V90Modulator::eventCode`. The
+  header's own prior conclusion was "the name stays here because
+  `V90Modulator` is where the value is INTERPRETED, and one caller reading
+  one value does not establish what the other three stores mean" -- a
+  reasonable read in isolation, but `V90Phase3Modulator::eventCode` (+0x01c)
+  and `V90Phase3Demodulator::eventCode` (this pass's own F10137, formerly
+  `word_30`) already established the identical shape as a named channel, and
+  `V90Modulator::progress`'s actual code settles it outright: `if
+  (phase4Modulator->eventCode != 0) eventCode =
+  phase4Modulator->eventCode;` is the SAME statement shape, in the SAME
+  function, one line after the identical statement for
+  `phase3Modulator->eventCode`. This is not "one caller reading one field" --
+  it is the third of three fields playing one already-named role in one
+  already-read function. Naming the CHANNEL does not require naming every
+  value that travels on it, which is the same distinction CLAUDE.md's naming
+  section draws between a flag's bit position and its meaning.
+- **`byte_0014` -> `delayedMpNotExit`** (rank 1, format string). The
+  header already quoted the exact message -- `V90Modulator::
+  acknowledgeCPNotReception`/`::acknowledgeEReception` both print "setting
+  delayed MPNot exit" in the same breath as storing 1 here -- and had
+  already worked out the read side too (`generateV90Symbol`/
+  `generateV92Symbol`'s `P4M_STATE_MP_NOT` arm consumes it and calls
+  `exitMPNot()`), but had not applied the name despite having both halves of
+  the evidence already written down.
+
+**`V90Phase4Modulator`'s remaining bare fields were checked and left alone.**
++0x0018, +0x0020, +0x0024..+0x0034, +0x0040, +0x2f64, +0x2f9c and +0x2fa0
+each already carry an explicit "meaning not established" conclusion in the
+header, and a whole-tree grep for `phase4Modulator->word_0018` and its
+siblings (the same check that found `eventCode`'s and `quickConnect`'s
+external readers in the sibling classes) found none -- these fields have no
+external reader to borrow a name from, unlike the two above.
+
+**One thing this pass caught that is worth recording on its own: `word_0c`
+is not a safe grep pattern.** `V92Modulator.cpp`'s `phase4Modulator->word_0c`
+looked, at a glance, like the same field under an abbreviated spelling --
+it is not; that `phase4Modulator` is a `V92Phase4Modulator *`, a distinct
+sibling class outside this pass's scope entirely, and `V90Phase4Modulator`'s
+own field is always spelled with the full four-digit offset,
+`word_000c`. Scoping every search on the exact spelling used at the
+declaration (checked with one targeted grep before touching anything) is
+what kept this pass from renaming a field in a class it was never looking
+at.
+
+`make one` across `t_trn2dknown`, `t_v90modchain`, `t_v90modprog`,
+`t_v90p4mgen` and `t_v90p4mtab` is green, 52 passed / 0 failed, unchanged
+check counts. `tools/onedef.py`, `tools/refcheck.py` and
+`tools/anchorcheck.py` (over `v90p4mreset`, `v90p4msym`, `v90modprog`) are
+clean. `make period`/`byteident.py --ratchet` need docker, unavailable in
+this sandbox, left for the parent's gate.  (2026-09-04)

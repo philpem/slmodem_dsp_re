@@ -727,7 +727,7 @@ probe_run(const struct probe_in *in, struct probe_out *o)
 	o->v[27] = (long)mod->eventCode;
 	o->v[28] = (long)mod->symbolCount;
 	o->v[29] = (long)mod->phase3Modulator->eventCode;
-	o->v[30] = (long)mod->phase4Modulator->word_000c;
+	o->v[30] = (long)mod->phase4Modulator->eventCode;
 	o->f[0] = lo;
 	o->f[1] = hi;
 

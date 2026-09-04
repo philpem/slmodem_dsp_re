@@ -96,8 +96,8 @@
  },
  {
   "label": "the phase 4 arm copies the event code even when it is zero",
-  "find": "\t\t\tif (phase4Modulator->word_000c != 0)\n\t\t\t\teventCode = phase4Modulator->word_000c;\n",
-  "replace": "\t\t\teventCode = phase4Modulator->word_000c;\n"
+  "find": "\t\t\tif (phase4Modulator->eventCode != 0)\n\t\t\t\teventCode = phase4Modulator->eventCode;\n",
+  "replace": "\t\t\teventCode = phase4Modulator->eventCode;\n"
  },
  {
   "label": "the phase 4 arm ends on the wrong event code",
@@ -490,18 +490,18 @@
  },
  {
   "label": "the CPnot delayed arm is on the wrong state",
-  "find": "\t} else if (phase4Modulator->state == P4M_STATE_UNNAMED_0D) {\n\t\tphase4Modulator->byte_0014 = 1;\n\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90Modulator: setting delayed \"\n\t\t\t\t\t     \"MPNot exit due to CPNot \"",
-  "replace": "\t} else if (phase4Modulator->state == P4M_STATE_UNNAMED_0F) {\n\t\tphase4Modulator->byte_0014 = 1;\n\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90Modulator: setting delayed \"\n\t\t\t\t\t     \"MPNot exit due to CPNot \""
+  "find": "\t} else if (phase4Modulator->state == P4M_STATE_UNNAMED_0D) {\n\t\tphase4Modulator->delayedMpNotExit = 1;\n\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90Modulator: setting delayed \"\n\t\t\t\t\t     \"MPNot exit due to CPNot \"",
+  "replace": "\t} else if (phase4Modulator->state == P4M_STATE_UNNAMED_0F) {\n\t\tphase4Modulator->delayedMpNotExit = 1;\n\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90Modulator: setting delayed \"\n\t\t\t\t\t     \"MPNot exit due to CPNot \""
  },
  {
   "label": "the CPnot delayed arm records nothing",
-  "find": "\t\tphase4Modulator->byte_0014 = 1;\n\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90Modulator: setting delayed \"\n\t\t\t\t\t     \"MPNot exit due to CPNot \"",
+  "find": "\t\tphase4Modulator->delayedMpNotExit = 1;\n\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90Modulator: setting delayed \"\n\t\t\t\t\t     \"MPNot exit due to CPNot \"",
   "replace": "\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90Modulator: setting delayed \"\n\t\t\t\t\t     \"MPNot exit due to CPNot \""
  },
  {
   "label": "the CPnot delayed arm clears the flag instead",
-  "find": "\t\tphase4Modulator->byte_0014 = 1;\n\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90Modulator: setting delayed \"\n\t\t\t\t\t     \"MPNot exit due to CPNot \"",
-  "replace": "\t\tphase4Modulator->byte_0014 = 0;\n\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90Modulator: setting delayed \"\n\t\t\t\t\t     \"MPNot exit due to CPNot \""
+  "find": "\t\tphase4Modulator->delayedMpNotExit = 1;\n\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90Modulator: setting delayed \"\n\t\t\t\t\t     \"MPNot exit due to CPNot \"",
+  "replace": "\t\tphase4Modulator->delayedMpNotExit = 0;\n\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90Modulator: setting delayed \"\n\t\t\t\t\t     \"MPNot exit due to CPNot \""
  },
  {
   "label": "the E acknowledge opens on MP rather than MPNot",
@@ -510,13 +510,13 @@
  },
  {
   "label": "the E acknowledge's delayed arm records nothing",
-  "find": "\t\tphase4Modulator->byte_0014 = 1;\n\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90Modulator: setting delayed \"\n\t\t\t\t\t     \"MPNot exit due to E \"",
+  "find": "\t\tphase4Modulator->delayedMpNotExit = 1;\n\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90Modulator: setting delayed \"\n\t\t\t\t\t     \"MPNot exit due to E \"",
   "replace": "\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90Modulator: setting delayed \"\n\t\t\t\t\t     \"MPNot exit due to E \""
  },
  {
   "label": "the E acknowledge's delayed arm is on the wrong state",
-  "find": "\t} else if (phase4Modulator->state == P4M_STATE_UNNAMED_0D) {\n\t\tphase4Modulator->byte_0014 = 1;\n\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90Modulator: setting delayed \"\n\t\t\t\t\t     \"MPNot exit due to E \"",
-  "replace": "\t} else if (phase4Modulator->state == P4M_STATE_MP) {\n\t\tphase4Modulator->byte_0014 = 1;\n\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90Modulator: setting delayed \"\n\t\t\t\t\t     \"MPNot exit due to E \""
+  "find": "\t} else if (phase4Modulator->state == P4M_STATE_UNNAMED_0D) {\n\t\tphase4Modulator->delayedMpNotExit = 1;\n\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90Modulator: setting delayed \"\n\t\t\t\t\t     \"MPNot exit due to E \"",
+  "replace": "\t} else if (phase4Modulator->state == P4M_STATE_MP) {\n\t\tphase4Modulator->delayedMpNotExit = 1;\n\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90Modulator: setting delayed \"\n\t\t\t\t\t     \"MPNot exit due to E \""
  },
  {
   "label": "the data phase entry is not idempotent",

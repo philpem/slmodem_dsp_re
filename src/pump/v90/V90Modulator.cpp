@@ -434,7 +434,7 @@ V90Modulator::acknowledgeCPReception()
  * switch's decision tree; they are `else if` chains written the way they are
  * read here.
  *
- * THE 0x0d ARM IS A DELAY, NOT AN EXIT.  `byte_0014 = 1` and a message; the
+ * THE 0x0d ARM IS A DELAY, NOT AN EXIT.  `delayedMpNotExit = 1` and a message; the
  * state is left alone and `eventCode` is NOT cleared.  0x0d is
  * `V90Phase4Modulator.h`'s "`exitMP`'s non-boundary arm" -- MP has been left
  * but the symbol count has not reached a repetition boundary yet -- so the
@@ -468,7 +468,7 @@ V90Modulator::acknowledgeCPNotReception()
 		phase4Modulator->exitMP();
 		eventCode = 0;
 	} else if (phase4Modulator->state == P4M_STATE_UNNAMED_0D) {
-		phase4Modulator->byte_0014 = 1;
+		phase4Modulator->delayedMpNotExit = 1;
 
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V90Modulator: setting delayed "
@@ -488,7 +488,7 @@ V90Modulator::acknowledgeEReception()
 		phase4Modulator->exitMPNot();
 		eventCode = 0;
 	} else if (phase4Modulator->state == P4M_STATE_UNNAMED_0D) {
-		phase4Modulator->byte_0014 = 1;
+		phase4Modulator->delayedMpNotExit = 1;
 
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V90Modulator: setting delayed "
@@ -896,8 +896,8 @@ V90Modulator::progress(int *bits, unsigned int &nofBits, float *out,
 				symbolBuf[i] =
 				    (short)phase4Modulator->generateSymbol();
 
-				if (phase4Modulator->word_000c != 0)
-					eventCode = phase4Modulator->word_000c;
+				if (phase4Modulator->eventCode != 0)
+					eventCode = phase4Modulator->eventCode;
 			}
 		}
 		nofBits = 0;
@@ -908,8 +908,8 @@ V90Modulator::progress(int *bits, unsigned int &nofBits, float *out,
 			symbolBuf[i] =
 			    (short)phase4Modulator->generateSymbol();
 
-			if (phase4Modulator->word_000c != 0)
-				eventCode = phase4Modulator->word_000c;
+			if (phase4Modulator->eventCode != 0)
+				eventCode = phase4Modulator->eventCode;
 		}
 
 		if (eventCode != 7) {

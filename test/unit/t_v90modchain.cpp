@@ -3428,7 +3428,7 @@ run_p4m_setmp(void)
  * takes 15,996 symbols to leave TRN2d cannot be walked into its later states
  * by a unit test.  So `state` is poked, and with it every field the arms read
  * that no constructor writes: `symbolCount`, `mpBits`/`mpBitCount`,
- * `cpBits`/`cpBitCount`, the two sequence lengths, `word_2f64`, `byte_0014`,
+ * `cpBits`/`cpBitCount`, the two sequence lengths, `word_2f64`, `delayedMpNotExit`,
  * `word_0018`, `byte_001c`, `word_0024`..`word_0034`, `word_0040`, `codeLevel`
  * and the two symbol tables.  Findings F7422, F7423 and F7430 are the same shape
  * with two statements; this is the same shape with a whole function.
@@ -3708,10 +3708,10 @@ setup_pump(int trial, int ci, int st, int cnt_i, int variant)
 
 		m->state = (Phase4ModulatorState)st;
 		m->symbolCount = cnt;
-		m->word_000c = 0x3333u;
+		m->eventCode = 0x3333u;
 		m->nextStateAfterTRN2d = (variant & 1) ? P4M_STATE_MP
 						       : P4M_STATE_MP_NOT;
-		m->byte_0014 = (unsigned char)((variant & 2) ? 1 : 0);
+		m->delayedMpNotExit = (unsigned char)((variant & 2) ? 1 : 0);
 
 		/*
 		 * THE V.92 Ed ARM'S SILENCE GUARD IS THREE INDEPENDENT FLAGS
@@ -4315,8 +4315,8 @@ run_p4m_reset(const char *name, p4m_reset ours, p4m_reset theirs, long base)
 				    (long)mb->state, (long)st, trial);
 			diff_eq_int("symbolCount was cleared (%ld)",
 				    (long)mb->symbolCount, 0L, trial);
-			diff_eq_int("word_000c was cleared (%ld)",
-				    (long)mb->word_000c, 0L, trial);
+			diff_eq_int("eventCode was cleared (%ld)",
+				    (long)mb->eventCode, 0L, trial);
 			diff_eq_int("the message block was untouched (%ld)",
 				    p4m_kept(pre_b, p4m_b), 1, trial);
 			diff_eq_int("the mapper was untouched (%ld)",

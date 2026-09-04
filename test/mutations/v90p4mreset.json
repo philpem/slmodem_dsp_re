@@ -54,7 +54,7 @@
  },
  {
   "label": "reset: +0x0c is cleared",
-  "find": "\tstate = st;\n\tword_000c = 0;",
+  "find": "\tstate = st;\n\teventCode = 0;",
   "replace": "\tstate = st;"
  },
  {
@@ -89,23 +89,23 @@
  },
  {
   "label": "reset: the scrambler is reseeded at all",
-  "find": "\tscrambler.reset(0);\n\n\tbyte_0014 = 0;",
-  "replace": "\tbyte_0014 = 0;"
+  "find": "\tscrambler.reset(0);\n\n\tdelayedMpNotExit = 0;",
+  "replace": "\tdelayedMpNotExit = 0;"
  },
  {
   "label": "reset: the scrambler is reseeded with ZERO",
-  "find": "\tscrambler.reset(0);\n\n\tbyte_0014 = 0;\n\tword_0024 = 0;\n\tword_0028 = 0;",
-  "replace": "\tscrambler.reset(1);\n\n\tbyte_0014 = 0;\n\tword_0024 = 0;\n\tword_0028 = 0;"
+  "find": "\tscrambler.reset(0);\n\n\tdelayedMpNotExit = 0;\n\tword_0024 = 0;\n\tword_0028 = 0;",
+  "replace": "\tscrambler.reset(1);\n\n\tdelayedMpNotExit = 0;\n\tword_0024 = 0;\n\tword_0028 = 0;"
  },
  {
   "label": "reset: +0x14 is cleared",
-  "find": "\tscrambler.reset(0);\n\n\tbyte_0014 = 0;\n\tword_0024 = 0;",
+  "find": "\tscrambler.reset(0);\n\n\tdelayedMpNotExit = 0;\n\tword_0024 = 0;",
   "replace": "\tscrambler.reset(0);\n\n\tword_0024 = 0;"
  },
  {
   "label": "reset: +0x24 is cleared, not set to one as resetBeforRRN does",
-  "find": "\tbyte_0014 = 0;\n\tword_0024 = 0;",
-  "replace": "\tbyte_0014 = 0;\n\tword_0024 = 1;"
+  "find": "\tdelayedMpNotExit = 0;\n\tword_0024 = 0;",
+  "replace": "\tdelayedMpNotExit = 0;\n\tword_0024 = 1;"
  },
  {
   "label": "reset: +0x28 is cleared",

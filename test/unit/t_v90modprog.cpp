@@ -1759,7 +1759,7 @@ run_bts_process(void)
  * BOTH `sessionFlag` ARMS ON STATES WHERE THE TWO PUMPS DIFFER.
  * `generateV90Symbol`'s jump table runs 0x00..0x1b and `generateV92Symbol`'s
  * 0x00..0x1e, so 0x1c dispatches under V.92 and takes the "Illegal state"
- * default under V.90; and only the V.92 pump sets `word_000c` to 4 on TRN2d's
+ * default under V.90; and only the V.92 pump sets `eventCode` to 4 on TRN2d's
  * exits.  A fork that always chose one pump therefore fails on the object,
  * not merely on the transcript.
  */
@@ -2528,7 +2528,7 @@ run_edges(void)
 			if (t->p4state == 0x0d) {
 				delayed = 1;
 				diff_eq_int("the delayed exit is recorded "
-					    "(%ld)", (long)P4M(1)->byte_0014, 1,
+					    "(%ld)", (long)P4M(1)->delayedMpNotExit, 1,
 					    tag);
 				diff_eq_int("and nothing else moved (%ld)",
 					    (long)MOD(1)->eventCode,
@@ -2538,7 +2538,7 @@ run_edges(void)
 				diff_eq_int("the exit cleared the event (%ld)",
 					    (long)MOD(1)->eventCode, 0, tag);
 				diff_eq_int("and no delay was recorded (%ld)",
-					    (long)P4M(1)->byte_0014, 0, tag);
+					    (long)P4M(1)->delayedMpNotExit, 0, tag);
 			} else {
 				diff_eq_int("an unmatched state does nothing "
 					    "(%ld)", (long)MOD(1)->eventCode,
