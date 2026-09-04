@@ -37,9 +37,20 @@
 #ifndef DSPLIB_NOTCH_H
 #define DSPLIB_NOTCH_H
 
-/*
- * One sample through one section.  `state` is two floats, `coef` is four;
- * neither is bounds-checked and the caller strides them itself.
+/**
+ * @brief Run one sample through one transposed direct-form-II notch section.
+ *
+ * Computes the recursive node first, then updates both state words, and
+ * returns the node itself (not a re-read of state) -- the object's own
+ * statement order. All arithmetic is `float`, at the x87's natural 80-bit
+ * intermediate precision.
+ *
+ * @param x      Input sample.
+ * @param state  Section state, two floats; updated in place.
+ * @param coef   Section coefficients, four floats (see the file comment
+ *               above for what each one means). Neither array is
+ *               bounds-checked; the caller strides them itself.
+ * @return The filtered output sample.
  */
 float notch(float x, float *state, const float *coef);
 

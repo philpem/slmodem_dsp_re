@@ -30,20 +30,42 @@
 extern "C" {
 #endif
 
+/**
+ * @brief Allocate @p size bytes. Implemented by the host (slmodemd), a
+ *        thin wrapper over `malloc`.
+ * @param size  Bytes to allocate.
+ * @return The new block, or NULL on failure.
+ */
 void *sysdep_malloc(unsigned int size);
+
+/**
+ * @brief Free a block allocated by sysdep_malloc(). Host-implemented,
+ *        a thin wrapper over `free`.
+ * @param mem  The block to free.
+ */
 void sysdep_free(void *mem);
 
+/** @brief Host-implemented wrapper over `memset`. */
 void *sysdep_memset(void *d, int c, size_t l);
+/** @brief Host-implemented wrapper over `memcpy`. */
 void *sysdep_memcpy(void *d, const void *s, size_t l);
+/** @brief Host-implemented wrapper over `memchr`. */
 void *sysdep_memchr(const void *s, int c, size_t l);
 
+/** @brief Host-implemented wrapper over `strlen`. */
 size_t sysdep_strlen(const char *s);
+/** @brief Host-implemented wrapper over `strcpy`. */
 char *sysdep_strcpy(char *d, const char *s);
+/** @brief Host-implemented wrapper over `strcat`. */
 char *sysdep_strcat(char *d, const char *s);
+/** @brief Host-implemented wrapper over `strcmp`. */
 int sysdep_strcmp(const char *s1, const char *s2);
+/** @brief Host-implemented wrapper over `strstr`. */
 char *sysdep_strstr(const char *s1, const char *s2);
 
+/** @brief Host-implemented wrapper over `vsnprintf`. */
 int sysdep_vsnprintf(char *str, unsigned size, const char *format, va_list ap);
+/** @brief Host-implemented wrapper over `sprintf`. */
 int sysdep_sprintf(char *buf, const char *fmt, ...);
 
 #ifdef __cplusplus

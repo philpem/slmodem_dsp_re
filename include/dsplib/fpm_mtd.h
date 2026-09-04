@@ -29,12 +29,32 @@ struct fpm_mtd {
 	short wideband;		/* +0x16 total energy                    */
 };
 
-/*
- * NULL `state` allocates 24 bytes and the accumulator array; supplying your
- * own state means supplying your own array.  NULL `cfg` uses FPM_MTD_CFG.
+/**
+ * @brief Create or initialise a Multi-Tone Detector.
+ *
+ * Copies the first three words of @p cfg (or, if @p cfg is NULL,
+ * `FPM_MTD_CFG_data`) into the state, allocates the two-per-tone
+ * accumulator array when @p state was itself allocated here, and clears
+ * every accumulator and the DC filter state.
+ *
+ * @param state  Existing state to initialise in place, or NULL to allocate
+ *               a new 24-byte state (and its accumulator array) on the heap.
+ * @param cfg    Configuration to copy in, or NULL for the built-in default.
+ * @return @p state, or the newly allocated state; NULL if allocation failed.
  */
 struct fpm_mtd *FPM_MTD_create(struct fpm_mtd *state,
 			       const struct fpm_mtd_cfg *cfg);
+
+/**
+ * @brief Free a Multi-Tone Detector's accumulator array and the state itself.
+ *
+ * Unconditional, like FPM_TONE_delete (see D5): frees @p state as well as
+ * its accumulator array, so it must not be called on a state that was not
+ * itself heap-allocated (Bell 103's embedded state, via B103FP_create,
+ * never calls it).
+ *
+ * @param state The detector to tear down.
+ */
 void FPM_MTD_delete(struct fpm_mtd *state);
 
 /*
@@ -51,10 +71,16 @@ void FPM_MTD_delete(struct fpm_mtd *state);
 #define FPM_MTD_PRESENT  1	/* tone detected                         */
 #define FPM_MTD_NOSIGNAL 2	/* level below cfg.min_level             */
 
-/*
- * Run `count` samples through the detector and report the verdict.  Energy
- * estimates persist in the state, so the result reflects a running average
- * rather than this block alone.
+/**
+ * @brief Run @p count samples through the detector and report its verdict.
+ *
+ * Energy estimates persist in @p state across calls, so the result reflects
+ * a running average rather than this block alone.
+ *
+ * @param state    Detector state (bank of resonators plus DC/energy filters).
+ * @param samples  Input samples.
+ * @param count    Number of samples in @p samples.
+ * @return One of #FPM_MTD_ABSENT, #FPM_MTD_PRESENT or #FPM_MTD_NOSIGNAL.
  */
 short FPM_MTD_detect(struct fpm_mtd *state, const short *samples, short count);
 

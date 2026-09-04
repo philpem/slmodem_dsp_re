@@ -82,24 +82,48 @@ struct fpm_sdm {
 	short shift2;		/* +0x16 tap2 - nbits                       */
 };
 
-/*
- * Load a config and clear the register.  There is no separate reset entry
- * point: re-running init over a live object is how the register is cleared,
- * which is what a rate change does (see SetTxRate, finding F1522).
+/**
+ * @brief Load a scrambler/descrambler config and clear the shift register.
+ *
+ * There is no separate reset entry point: re-running init over a live
+ * object is how the register is cleared, which is what a rate change does
+ * (see `SetTxRate`, finding F1522).
+ *
+ * @param sdm  State to initialise.
+ * @param cfg  Configuration (`nbits`, and the two taps biased by it).
  */
 void FPM_SDM_init(struct fpm_sdm *sdm, const struct fpm_sdm_cfg *cfg);
 
-/*
- * Scramble / descramble `count` words in place.  Each word carries `nbits`
- * bits in its low end; the scrambler masks its output down to those bits, and
- * the descrambler masks the word it wrote in a second pass over it.
+/**
+ * @brief Scramble @p count words in place with the self-synchronising
+ *        scrambler.
  *
- * The descrambler feeds the RECEIVED word into the register unmasked, so a
- * word with bits set above `nbits` corrupts the register for `tap2 / nbits`
- * symbols afterwards.  That is the object's behaviour and is reproduced.
+ * Each word carries `nbits` bits in its low end; the output is masked down
+ * to those bits before it both replaces the input word and feeds the shift
+ * register.
+ *
+ * @param sdm    Scrambler state (persists the shift register across calls).
+ * @param data   Words to scramble in place, `count` of them.
+ * @param count  Number of words in @p data. Counted in 16 bits: a value of
+ *               0x10000 (reachable only via a cast past the declared
+ *               `unsigned short`) processes nothing.
  */
 void FPM_SDM_scrambler(struct fpm_sdm *sdm, unsigned short *data,
 		       unsigned short count);
+
+/**
+ * @brief Descramble @p count words in place with the feed-forward inverse.
+ *
+ * The RECEIVED word is fed into the shift register unmasked, so a word with
+ * bits set above `nbits` corrupts the register for `tap2 / nbits` symbols
+ * afterwards -- the object's own behaviour, reproduced here.
+ *
+ * @param sdm    Descrambler state (persists the shift register across
+ *               calls).
+ * @param data   Words to descramble in place, `count` of them.
+ * @param count  Number of words in @p data; see FPM_SDM_scrambler() for the
+ *               16-bit counting note.
+ */
 void FPM_SDM_descrambler(struct fpm_sdm *sdm, unsigned short *data,
 			 unsigned short count);
 

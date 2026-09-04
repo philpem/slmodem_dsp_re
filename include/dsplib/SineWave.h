@@ -57,19 +57,47 @@
 template <class Tout, class Tparam>
 class SineWave {
 public:
+	/**
+	 * @brief Construct an oscillator, storing all four parameters as-is.
+	 *
+	 * Nine plain `mov`s in the object and nothing else -- a signalling
+	 * NaN handed to any parameter lands in the member intact.
+	 *
+	 * @param a   Output amplitude (`amplitude`).
+	 * @param f   Frequency in Hz (`frequency`), numerator of `2*pi*f/sr`.
+	 * @param p   Initial phase in radians (`phase`), carried between
+	 *            generate() calls.
+	 * @param sr  Sample rate in Hz (`sampleRate`), divisor of the step.
+	 */
 	SineWave(Tparam a, Tparam f, Tparam p, Tparam sr);
+
+	/**
+	 * @brief Destroy the oscillator. Empty body, but declared rather than
+	 *        left implicit -- the object's own destructor is a bare `ret`
+	 *        that exists only because the original source declared one.
+	 */
 	~SineWave();
 
-	/*
-	 * `n` is `unsigned long`, not `size_t`.  On i386 those are the same
-	 * type to the compiler but NOT to the mangler: `size_t` mangles as `j`
-	 * and the object says `m`, so `..._EPfm` only comes out of the spelling
-	 * used here.
+	/**
+	 * @brief Generate @p n samples of the sine wave into @p out.
 	 *
-	 * Returns nothing.  A function template would have encoded the return
-	 * type, but this is an ordinary member so the mangling is silent; the
-	 * call site at 0xf889 discards `%eax`, and what `%eax` holds at the
-	 * `ret` is leftover from the wrap's `fildl`.
+	 * Advances the phase accumulator by `frequency * 2*pi / sampleRate`
+	 * per sample, at extended (`long double`) precision, and writes
+	 * `amplitude * sin(phase)` for each. Wraps `phase` to `(-2*pi, 2*pi)`
+	 * exactly once, at the end of the call -- never inside the loop -- so
+	 * quantisation error random-walks within a call and accuracy over a
+	 * long run depends on the caller's block size (see the file comment
+	 * above for measured error at several block sizes). Even for
+	 * `n == 0`, the wrap still runs and rewrites `phase`, and the step is
+	 * still computed, so a zero `sampleRate` still raises the masked
+	 * divide-by-zero.
+	 *
+	 * `n` is spelled `unsigned long` and not `size_t` because the two
+	 * mangle differently even though they are the same type on this
+	 * target; the object's mangled name says `m`, not `j`.
+	 *
+	 * @param out  Output buffer, @p n samples.
+	 * @param n    Number of samples to generate.
 	 */
 	void generate(Tout *out, unsigned long n);
 

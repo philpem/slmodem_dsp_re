@@ -70,14 +70,59 @@
 
 class ResamplerTiming : public ResamplerTimingOffset {
 public:
+	/**
+	 * @brief Construct with a self-designed filter and timing-recovery
+	 *        state reset.
+	 *
+	 * Forwards the first five arguments to ResamplerTimingOffset's
+	 * designing constructor, then calls `reset(0)` (the argument is
+	 * unobservable -- reset(unsigned int) never reads it) and
+	 * setTimingOffset(@p ppm) again, mirroring the base's own
+	 * construction sequence one level down.
+	 *
+	 * @param phases      See Resampler's constructor.
+	 * @param ppmScale    See Resampler's constructor.
+	 * @param taps        See Resampler's constructor.
+	 * @param cutoff      See Resampler's constructor.
+	 * @param ppm         Fixed timing offset, in parts per million.
+	 * @param minHistory  See Resampler's constructor.
+	 */
 	ResamplerTiming(unsigned int phases, float ppmScale, unsigned int taps,
 			float cutoff, float ppm, unsigned int minHistory);
+
+	/**
+	 * @brief Construct over caller-supplied coefficients with
+	 *        timing-recovery state reset.
+	 *
+	 * See the other overload; forwards to ResamplerTimingOffset's
+	 * adopting constructor instead.
+	 *
+	 * @param phases      See Resampler's constructor.
+	 * @param ppmScale    See Resampler's constructor.
+	 * @param taps        See Resampler's constructor.
+	 * @param coeffs      See Resampler's constructor.
+	 * @param ppm         Fixed timing offset, in parts per million.
+	 * @param minHistory  See Resampler's constructor.
+	 */
 	ResamplerTiming(unsigned int phases, float ppmScale, unsigned int taps,
 			float *coeffs, float ppm, unsigned int minHistory);
 
+	/** @brief Destroy the instance. Nothing of this class's own to release. */
 	virtual ~ResamplerTiming();
 
-	virtual void timingCorrection(float);
+	/**
+	 * @brief Run the half-baud band-pass resonator and close the timing
+	 *        loop.
+	 *
+	 * Filters @p v through the two-pole resonator at Fs/4 (baud/2),
+	 * second-differences its squared output into a phase error, and --
+	 * every other call, per `halfBaudStep` -- closes a PI loop over that
+	 * error onto `phase` using `bllK1`/`bllK2`.
+	 *
+	 * @param v  The output sample to filter (the resampler's per-output
+	 *           value).
+	 */
+	virtual void timingCorrection(float v);
 
 	/*
 	 * The NEW virtual at vtable slot +0x18.  The argument is unused.
@@ -100,26 +145,78 @@ public:
 	 */
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Woverloaded-virtual"
+	/**
+	 * @brief Reset the base and this class's own timing-recovery state.
+	 *
+	 * Calls `ResamplerTimingOffset::reset()`, then zeroes
+	 * `halfBaudStep`, `bllK1`/`bllK2`, `lastHalfBaudErr`, `unnamed_58`,
+	 * `lastPhaseAdj`, `bpfSq1`/`bpfSq2`, `bpfZ1`/`bpfZ2` and `errZ1`,
+	 * calls resetSdHalfBaudDft(), clears `dftDone`, and sets
+	 * `normBPFhBaudB0coef` to its nominal 0.03981f. The argument is
+	 * unobservable -- nothing in the object reads it.
+	 */
 	virtual void reset(unsigned int);
 #pragma GCC diagnostic pop
 
+	/**
+	 * @brief Restart the half-baud DFT accumulation.
+	 *
+	 * Clears `dftCount`, `dftMag`, `dftRe` and `dftIm`. Does NOT clear
+	 * `dftDone` -- restarting the accumulation does not un-complete an
+	 * already-completed DFT.
+	 */
 	void resetSdHalfBaudDft();
 
-	/*
-	 * VOID, not float.  The mangling does not carry a return type, and
-	 * this one was declared `float` here on nothing but the name.  Every
-	 * one of the three paths to `ret` leaves the x87 stack EMPTY, and the
-	 * arm at .text+0x35902 is a bare `fstp %st(0)` whose only job is to
-	 * discard the argument; `V90Equalizer::process` calls it three times
-	 * (0x3a20b, 0x3a223, 0x3a863) and never pops a result.  For the
-	 * contrast that makes the test meaningful,
-	 * `V90Resampler::getTimingHistoryStd` really does return a float and
-	 * ends `fsqrt; ret` with ST(0) live.
+	/**
+	 * @brief Accumulate one sample into the 256-point half-baud DFT bin.
+	 *
+	 * No-op once `dftDone` is set. Otherwise adds @p v into `dftRe` or
+	 * `dftIm` per a four-phase quadrature pattern (cos = +1,0,-1,0; sin =
+	 * 0,-1,0,+1) selected by `dftCount % 4`, and on the 256th sample sets
+	 * `dftDone` and computes `dftMag = sqrt(dftRe^2 + dftIm^2)`.
+	 *
+	 * @param v  The next sample to accumulate.
 	 */
 	void SdHalfBaudDft(float);
 
+	/**
+	 * @brief Renormalise the resonator's gain from the measured baud/2
+	 *        energy.
+	 *
+	 * Does nothing unless `dftDone` is set (256 prior SdHalfBaudDft()
+	 * calls). Otherwise scales `dftMag` by @p v, derives a normalising
+	 * factor clamped to [1, 2] (a factor above 4 is treated as an
+	 * implausibly small bin and reset to nominal), and sets
+	 * `normBPFhBaudB0coef` accordingly. Prints three debug lines when
+	 * debug output is enabled.
+	 *
+	 * @param v  Scale applied to `dftMag` before deriving the
+	 *           normalising factor.
+	 */
 	void adjustHalfBaudBpfGain(float);
+
+	/**
+	 * @brief Nudge `phase` by a fraction of one nominal step.
+	 *
+	 * No-op for @p v <= 0, NaN, or an unordered comparison. Otherwise
+	 * advances `phase` by `v * ppmScale * (1/180)` and banks whole
+	 * `phases`-sized steps into `inputCredit`. Has no caller anywhere in
+	 * dsplibs.o.
+	 *
+	 * @param v  Nudge amount; plausibly degrees against a half cycle
+	 *           (the constant matches `1.0f / 180.0f`), though only the
+	 *           constant itself is established.
+	 */
 	void addPhase(float);
+
+	/**
+	 * @brief Advance `phase` by one nominal step and bank whole outputs.
+	 *
+	 * Adds `ppmScale` to `phase` and increments `inputCredit` once per
+	 * whole `phases` the result wraps past. Has no caller anywhere in
+	 * dsplibs.o; the name is unexplained -- it advances the phase and
+	 * inverts nothing.
+	 */
 	void invertPhase();
 
 	/* Public for offsetof; see V90ConstellationDesigner.h. */

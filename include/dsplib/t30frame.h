@@ -38,15 +38,31 @@
  * name says: the object reads `cmpb` on the first and `movzbl` on the other
  * two, three separate argument slots.
  */
+/**
+ * @brief Name a T.30 frame from its first three octets.
+ *
+ * @param address  The frame's address octet; anything other than 0xFF
+ *                 answers 0xFF and looks at nothing else.
+ * @param control  The frame's control octet; 0x03 or 0x13 bit-reverses
+ *                 @p fcf, anything else uses it as-is OR'd with 0x8000.
+ * @param fcf      The facsimile control field.
+ * @return The frame identifier: 0xFF for a non-standard address; otherwise
+ *         @p fcf (bit-reversed or not, per @p control), masked to seven
+ *         bits if above 0x84 (dropping T.30's final-frame bit), OR'd with
+ *         0x8000 if @p control was not 0x03 or 0x13.
+ */
 int GetT30FrameIDFromBuffer(unsigned char address, unsigned char control,
 			    unsigned char fcf);
 
-/*
- * The author's name for an identifier -- "DIS - Digital Identification
- * Signal" and so on, 36 of them, byte for byte as the object has them.  An
- * identifier not in the table is formatted into a 64-byte static as
- * "Unknown frame (ID=0x%02x)", so the answer is never NULL and the buffer is
- * overwritten by the next unknown.
+/**
+ * @brief Look up a T.30 frame identifier's name.
+ *
+ * @param id  Frame identifier, as returned by GetT30FrameIDFromBuffer().
+ * @return The author's name for the identifier (e.g. "DIS - Digital
+ *         Identification Signal") if it is one of the 36 known ones;
+ *         otherwise "Unknown frame (ID=0x%02x)" formatted into a shared
+ *         64-byte static buffer, which the next unknown-ID call
+ *         overwrites. Never NULL.
  */
 char *GetT30FrameNameByID(int id);
 

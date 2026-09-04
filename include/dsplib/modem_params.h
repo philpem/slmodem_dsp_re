@@ -95,7 +95,30 @@
  * anywhere `long` is wider than one.  `modem` is slmodemd's `struct modem *`,
  * opaque here.
  */
+
+/**
+ * @brief Read one host configuration/state value by parameter index.
+ *
+ * Implemented by the host (slmodemd), not by this library -- declared here
+ * only so this tree's callers can link and be tested against a fake.
+ *
+ * @param modem  Host's opaque `struct modem *`.
+ * @param param  One of the `MDMPRM_*` / `Get*` indices above.
+ * @return The parameter's value. `long`-width because MDMPRM_DP_ADDR
+ *         returns a pointer through this otherwise int-shaped API.
+ */
 extern long modem_get_param(void *modem, unsigned param);
+
+/**
+ * @brief Set one host configuration value by parameter index.
+ *
+ * Implemented by the host (slmodemd), not by this library.
+ *
+ * @param modem  Host's opaque `struct modem *`.
+ * @param param  One of the `MDMPRM_*` / `Get*` indices above.
+ * @param value  New value.
+ * @return Host-defined status.
+ */
 extern long modem_set_param(void *modem, unsigned param, int value);
 
 /*
