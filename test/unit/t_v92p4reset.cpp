@@ -130,7 +130,7 @@
  * WHAT reset DOES NOT WRITE, AND WHY EVERY SEED IS NON-ZERO
  *
  * `word_24`, `word_38`, `word_1b0`, `word_1b8`, `pad_10`, `+0x1d..+0x1f`
- * (`pad_1d` until finding F10145 folded it into the compiler's own tail
+ * (`pad_1d` until finding F10150 folded it into the compiler's own tail
  * alignment after `byte_1c`), `patternIndex`, `mappingParams`,
  * `bitsToSymbol`, `mapper`, `cp` and `params` are untouched.  A field seeded to ZERO cannot tell "reset left it alone"
  * apart from "reset cleared it", so in RUN A every one of them is non-zero on
@@ -759,7 +759,7 @@ setup(long trial, const struct args *a, int runb)
 			o->pad_10[j] = (unsigned char)(0x80u | (j + mix));
 		/*
 		 * +0x1d..+0x1f was `pad_1d[3]`, removed under the pad-removal
-		 * workstream (F10145): `byte_1c` ends at +0x1d and `flag_20`
+		 * workstream (F10150): `byte_1c` ends at +0x1d and `flag_20`
 		 * is a 4-byte-aligned `unsigned int` at +0x20, so the compiler
 		 * now inserts these three bytes itself.  They are still real
 		 * memory inside the object -- an implicit tail is not an

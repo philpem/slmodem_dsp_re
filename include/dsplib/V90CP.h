@@ -447,7 +447,7 @@ public:
 	 * proves it.  Zero readers/writers anywhere in the object (confirmed
 	 * via `tools/dis.py` over every `V90CP::` member function,
 	 * `0x51150..0x53830`, and a whole-object grep for `0xcab(`); removed
-	 * F10145.
+	 * F10150.
 	 */
 
 	/*

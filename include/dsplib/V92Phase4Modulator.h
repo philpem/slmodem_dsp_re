@@ -361,7 +361,7 @@ public:
 	/*
 	 * +0x10 .. +0x17  Not touched by anything written here.
 	 *
-	 * NOT REMOVABLE under the pad-removal workstream (F10145): `word_0c`
+	 * NOT REMOVABLE under the pad-removal workstream (F10150): `word_0c`
 	 * ends at +0x10, already 4-byte aligned, and `word_18` below needs
 	 * only that same 4-byte alignment -- a field-to-field gap here would
 	 * be 0 bytes, not 8, if the member vanished.  The compiler's own
@@ -399,7 +399,7 @@ public:
 	 * by the existing `V92P4M_OFF(flag_20, 0x020, flag20)`
 	 * (V92Phase4Modulator.cpp). Zero readers/writers anywhere in the
 	 * object (`tools/dis.py` over every `V92Phase4Modulator::` member
-	 * function, `0x16de0..0x19160`); removed F10145.
+	 * function, `0x16de0..0x19160`); removed F10150.
 	 */
 
 	/*
@@ -618,7 +618,7 @@ public:
 	/*
 	 * +0x1b4 .. +0x1b7  Not touched.
 	 *
-	 * NOT REMOVABLE under the pad-removal workstream (F10145): `word_1b0`
+	 * NOT REMOVABLE under the pad-removal workstream (F10150): `word_1b0`
 	 * ends at +0x1b4, already 4-byte aligned, and the field at +0x1b8
 	 * needs only that same 4-byte alignment -- a field-to-field gap here
 	 * would be 0 bytes, not 4, if the member vanished.  The compiler's own

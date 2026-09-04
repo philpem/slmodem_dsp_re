@@ -223,7 +223,7 @@ public:
 	 * alignment inserts exactly these three bytes with the member deleted
 	 * -- the existing `V92CP_OFF(word_08, 0x008, word08)` (V92CP.cpp) is
 	 * what proves it. Zero readers/writers anywhere in the object
-	 * (F10142); removed F10145.
+	 * (F10142); removed F10150.
 	 */
 
 	/* +0x008  UNSIGNED: `shr $1` on the 32-bit value.  Two bits, and they
@@ -265,7 +265,7 @@ public:
 	 * inserts exactly these three bytes with the member deleted -- the
 	 * existing `V92CP_OFF(word_28, 0x028, word28)` (V92CP.cpp) is what
 	 * proves it. Zero readers/writers anywhere in the object (F10142);
-	 * removed F10145.
+	 * removed F10150.
 	 */
 
 	/*
@@ -282,7 +282,7 @@ public:
 	int word_28[V92CP_GROUPS];
 
 	/*
-	 * +0x040  NOT REMOVABLE under the pad-removal workstream (F10145):
+	 * +0x040  NOT REMOVABLE under the pad-removal workstream (F10150):
 	 * `short_42` below needs only 2-byte alignment and +0x040 is already
 	 * 4-byte (and so 2-byte) aligned, so a field-to-field gap here would
 	 * be 0 bytes, not 2, if the member vanished -- the compiler's own
@@ -313,7 +313,7 @@ public:
 	 * alignment inserts exactly these two bytes with the member deleted
 	 * -- the existing `V92CP_OFF(word_104, 0x104, word104)` (V92CP.cpp) is
 	 * what proves it. Zero readers/writers anywhere in the object
-	 * (F10142); removed F10145.
+	 * (F10142); removed F10150.
 	 */
 
 	/* +0x104  `setSUV` stores 16 here before storing its argument, as a
@@ -341,7 +341,7 @@ public:
 	 * alignment inserts exactly these two bytes with the member deleted
 	 * -- the existing `V92CP_OFF(word_110, 0x110, word110)` (V92CP.cpp) is
 	 * what proves it. Zero readers/writers anywhere in the object
-	 * (F10142); removed F10145.
+	 * (F10142); removed F10150.
 	 */
 
 	/*
@@ -413,7 +413,7 @@ public:
 	 * exactly this one byte with the member deleted -- the existing
 	 * `V92CP_OFF(word_11c, 0x11c, word11c)` (V92CP.cpp) is what proves it.
 	 * Zero readers/writers anywhere in the object (F10142); removed
-	 * F10145.
+	 * F10150.
 	 */
 
 	/*
@@ -503,7 +503,7 @@ public:
 	 * alignment inserts exactly these three bytes with the member deleted
 	 * -- the existing `V92CP_OFF(vectorLen, 0x90c, vectorlen)` (V92CP.cpp)
 	 * is what proves it. Zero readers/writers anywhere in the object
-	 * (F10142); removed F10145.
+	 * (F10142); removed F10150.
 	 */
 
 	/*

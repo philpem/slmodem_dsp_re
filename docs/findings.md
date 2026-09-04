@@ -114484,7 +114484,7 @@ sandbox; left for the parent session's gate, per every prior wave's own
 precedent -- every change here is an identifier substitution or a comment,
 which cannot move generated code. (2026-09-04)
 
-## F10145. Pad-removal workstream, the V.90 control/session cluster: 22 of 30 `pad_NNNN` regions removed with a compile-time `offsetof`/`sizeof` proof each, 8 left explicit and now say why
+## F10150. Pad-removal workstream, the V.90 control/session cluster: 22 of 30 `pad_NNNN` regions removed with a compile-time `offsetof`/`sizeof` proof each, 8 left explicit and now say why
 
 The new workstream `docs/fieldnaming.md` records (its "New workstream: safe
 pad-region removal" section): a `pad_NNNN[N]` member may be DELETED, relying

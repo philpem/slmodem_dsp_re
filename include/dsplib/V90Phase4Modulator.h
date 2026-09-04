@@ -529,7 +529,7 @@ public:
 	 * (already present, V90Phase4Modulator.cpp). Zero readers/writers
 	 * anywhere in the object (`tools/dis.py` over every
 	 * `V90Phase4Modulator::` member function, `0x2c5a0..0x2f730`); removed
-	 * F10145.
+	 * F10150.
 	 */
 
 	/*
@@ -549,7 +549,7 @@ public:
 	 * alignment inserts exactly these three bytes with the member deleted
 	 * -- proved by the existing `V90P4_OFF(word_0020, 0x0020, w0020)`.
 	 * Zero readers/writers anywhere in the object (same sweep as above);
-	 * removed F10145.
+	 * removed F10150.
 	 */
 
 	/*
@@ -602,7 +602,7 @@ public:
 	 * alignment inserts exactly these two bytes with the member deleted --
 	 * proved by the existing `V90P4_OFF(word_0040, 0x0040, w0040)`. Zero
 	 * readers/writers anywhere in the object (same sweep as above);
-	 * removed F10145.
+	 * removed F10150.
 	 */
 
 	/*

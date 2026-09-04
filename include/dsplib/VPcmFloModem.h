@@ -416,7 +416,7 @@ public:
 	 * 2-byte alignment inserts exactly this one byte with the member
 	 * deleted -- VPCM_OFF's existing `bitVector` assertion at +0x21e
 	 * (VPcmFloModem.cpp) is what proves it; confirmed zero readers/writers
-	 * anywhere in the object under finding F10142, removed under F10145.
+	 * anywhere in the object under finding F10142, removed under F10150.
 	 */
 
 	/*
@@ -515,7 +515,7 @@ public:
 	 * below is a 4-byte-aligned `int` at +0x1740, so natural alignment
 	 * inserts exactly this one byte with the member deleted -- proved by
 	 * adding `VPCM_OFF(sweepCounter, 0x1740, sweep)` to VPcmFloModem.cpp.
-	 * Zero readers/writers anywhere in the object (F10142); removed F10145.
+	 * Zero readers/writers anywhere in the object (F10142); removed F10150.
 	 */
 
 	/*
@@ -642,7 +642,7 @@ public:
 	 * natural alignment inserts exactly these two bytes with the member
 	 * deleted -- the existing `VPCM_OFF(pcmSessionType, 0x611c, sesstype)`
 	 * (VPcmFloModem.cpp) is what proves it. Zero readers/writers anywhere
-	 * in the object (F10142); removed F10145.
+	 * in the object (F10142); removed F10150.
 	 */
 
 	/*
@@ -845,7 +845,7 @@ public:
 	 * +0x7dd4, so natural alignment inserts exactly this one byte with the
 	 * member deleted -- the existing `VPCM_OFF(nofTransmitSequences,
 	 * 0x7dd4, nseq)` (VPcmFloModem.cpp) is what proves it. Zero
-	 * readers/writers anywhere in the object (F10142); removed F10145.
+	 * readers/writers anywhere in the object (F10142); removed F10150.
 	 */
 
 	/*
@@ -917,7 +917,7 @@ public:
 	 * natural alignment inserts exactly these three bytes with the member
 	 * deleted -- proved by adding `VPCM_OFF(ecMode, 0x7f60, ecmode)` to
 	 * VPcmFloModem.cpp. Zero readers/writers anywhere in the object
-	 * (F10142); removed F10145.
+	 * (F10142); removed F10150.
 	 */
 	unsigned int ecMode;				/* +0x7f60         */
 	unsigned int ecRampCounter;			/* +0x7f64         */

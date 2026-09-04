@@ -370,7 +370,7 @@ public:
 	 * existing `ADID_OFF(params, 0x2814, params)` (V90AutoDigitalImpDetector.cpp)
 	 * is what proves it. Zero readers/writers anywhere in the object
 	 * (`tools/dis.py` over every `V90AutoDigitalImpDetector::` member
-	 * function, `0x40200..0x449f0`); removed F10145.
+	 * function, `0x40200..0x449f0`); removed F10150.
 	 */
 
 	/* The constructor's only argument.  `reset` reads its +0x0c. */
@@ -437,7 +437,7 @@ public:
 	 * existing `ADID_OFF(padGain, 0xa94c, padgain)`
 	 * (V90AutoDigitalImpDetector.cpp) is what proves it. Zero
 	 * readers/writers anywhere in the object (same sweep as above);
-	 * removed F10145.
+	 * removed F10150.
 	 */
 
 	/*
@@ -479,7 +479,7 @@ public:
 	 * displacement, so it is memory this batch did not model rather than
 	 * memory known to be unused.
 	 *
-	 * NOT REMOVABLE under the pad-removal workstream (F10145): `maxUcode`
+	 * NOT REMOVABLE under the pad-removal workstream (F10150): `maxUcode`
 	 * below is `unsigned char[]`, needing only 1-byte alignment, and
 	 * +0xa955 is already 1-byte "aligned" by definition -- a field-to-field
 	 * gap here would be 0 bytes, not 1, if the member vanished.  The

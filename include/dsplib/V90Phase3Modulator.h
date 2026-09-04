@@ -310,7 +310,7 @@ public:
 	short codeLevelAlt;		/* +0x00e ... and of code + 0x10   */
 	/*
 	 * +0x010..+0x011  NOT REMOVABLE under the pad-removal workstream
-	 * (F10145): `codeLevelAlt` ends at +0x010, already 2-byte (and
+	 * (F10150): `codeLevelAlt` ends at +0x010, already 2-byte (and
 	 * 4-byte) aligned, and `idleLevel` below needs only 2-byte alignment
 	 * -- a field-to-field gap here would be 0 bytes, not 2, if the member
 	 * vanished.  The compiler's own implicit padding does not reproduce
@@ -376,7 +376,7 @@ public:
 	 * (V90Phase3Modulator.cpp) is what proves it. Zero readers/writers
 	 * anywhere in the object (`tools/dis.py` over every
 	 * `V90Phase3Modulator::` member function, `0x2ac10..0x2c5a0`); removed
-	 * F10145.
+	 * F10150.
 	 */
 	unsigned int segmentLength[8];	/* +0x158 6 * size + 6             */
 	short segmentLevel[8];		/* +0x178                          */
@@ -403,7 +403,7 @@ public:
 	 * inserts exactly this one byte with the member deleted -- the
 	 * existing `P3M_OFF(segmentPos, 0x38c, segmentpos)` is what proves it.
 	 * Zero readers/writers anywhere in the object (same sweep as above);
-	 * removed F10145.
+	 * removed F10150.
 	 */
 	unsigned int segmentPos;	/* +0x38c                          */
 
@@ -415,7 +415,7 @@ public:
 	 * alignment inserts exactly this one byte with the member deleted --
 	 * the existing `P3M_OFF(usingSegmentLevel, 0x392, usingsegmentlevel)`
 	 * is what proves it. Zero readers/writers anywhere in the object (same
-	 * sweep as above); removed F10145.
+	 * sweep as above); removed F10150.
 	 */
 
 	/*
@@ -442,7 +442,7 @@ public:
 	 * inserts this same tail implicitly, proved by the existing
 	 * `typedef char v90p3m_size[(sizeof(V90Phase3Modulator) == 0x398) ?
 	 * 1 : -1]` (V90Phase3Modulator.cpp). Zero readers/writers anywhere in
-	 * the object (same sweep as above); removed F10145.
+	 * the object (same sweep as above); removed F10150.
 	 */
 };
 
