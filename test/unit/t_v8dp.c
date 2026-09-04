@@ -288,9 +288,9 @@ main(void)
 				da = (struct v8_dp *)b;
 				db = (struct v8_dp *)a;
 
-				da->v8->f9d4 = db->v8->f9d4 = states[si].f9d4;
-				da->v8->f9d6 = db->v8->f9d6 = states[si].f9d6;
-				da->v8->f9d8 = db->v8->f9d8 = states[si].f9d8;
+				da->v8->tx_state = db->v8->tx_state = states[si].f9d4;
+				da->v8->rx_state = db->v8->rx_state = states[si].f9d6;
+				da->v8->rx_substate = db->v8->rx_substate = states[si].f9d8;
 				da->v8->side = db->v8->side = states[si].mode;
 				/*
 				 * The state machine itself is not what is
@@ -301,16 +301,16 @@ main(void)
 				 * one state that has to reach the machine to
 				 * report that it has finished.
 				 */
-				da->v8->f21c = db->v8->f21c = 0x60;
-				da->v8->fa3e = db->v8->fa3e = 0;
-				da->v8->f110 = db->v8->f110 =
+				da->v8->tx_avail = db->v8->tx_avail = 0x60;
+				da->v8->tx_fill_target = db->v8->tx_fill_target = 0;
+				da->v8->sym_avail = db->v8->sym_avail =
 					states[si].f9d6 == 0x63 ? 40 : -40;
-				da->v8->feb8 = db->v8->feb8 = V8_INIT;
+				da->v8->prev_status = db->v8->prev_status = V8_INIT;
 				da->f2c = db->f2c = V8_INIT;
 				da->f20 = db->f20 = 0;
-				da->v8->fdc4 = db->v8->fdc4 = states[si].fdc4;
-				da->v8->fdcc = db->v8->fdcc = 0;
-				da->v8->fdc8 = db->v8->fdc8 = 1;
+				da->v8->quick_connect = db->v8->quick_connect = states[si].fdc4;
+				da->v8->anspcm_level = db->v8->anspcm_level = 0;
+				da->v8->lapm_indication = db->v8->lapm_indication = 1;
 				da->v8->seq[2].wordidx =
 					db->v8->seq[2].wordidx = 0;
 				if (states[si].b0 >= 0) {

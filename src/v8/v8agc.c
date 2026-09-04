@@ -95,12 +95,12 @@ V8agc(struct v8 *v)
 
 	/* Into the running history, which wraps at 36. */
 	for (i = 0; i < V8_QUEUE_BLOCK; i++) {
-		short at = r->f82;
+		short at = r->hist_idx;
 
-		r->f82 = (short)(at + 1);
+		r->hist_idx = (short)(at + 1);
 		r->hist[at] = v->rx_stage[i];
 		if (at + 1 > V8_AGC_HIST)
-			r->f82 = 0;
+			r->hist_idx = 0;
 	}
 
 	/* Its energy, each term pre-scaled so the sum cannot overflow. */
@@ -140,7 +140,7 @@ V8agc(struct v8 *v)
 	 * clip means whatever it thought it heard was an artefact.
 	 */
 	for (i = 0; i < V8_QUEUE_BLOCK; i++) {
-		int scaled = r->f1c * v->rx_stage[i];
+		int scaled = r->gain * v->rx_stage[i];
 		unsigned top = (unsigned)scaled >> 25;
 
 		if (top == 0 || top == 0x7f) {
@@ -152,19 +152,19 @@ V8agc(struct v8 *v)
 			dsplibs_debug_printf("V8AGC, overflow = 0x%x,\n",
 					     scaled >> 16);
 
-		r->fac = (short)(r->fac + 1);
-		if (r->fac != V8_AGC_CLIP_LIMIT)
+		r->clip_count = (short)(r->clip_count + 1);
+		if (r->clip_count != V8_AGC_CLIP_LIMIT)
 			continue;
-		r->f1c = 0x400;
-		if (v->f9d8 != 0x24)
+		r->gain = 0x400;
+		if (v->rx_substate != 0x24)
 			continue;
-		v->f9d8 = 0x19;
+		v->rx_substate = 0x19;
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V8: Due to overflow, looking "
 					     "for ANSam again...\n");
-		v->detector.f08 = 0;
-		v->detector.f30 = 0;
-		r->fac = 0;
+		v->detector.counter = 0;
+		v->detector.warmup = 0;
+		r->clip_count = 0;
 	}
 
 	if ((short)gain <= V8_AGC_FLOOR)
@@ -174,8 +174,8 @@ V8agc(struct v8 *v)
 	energy = 0;
 	for (i = 0; i < V8_QUEUE_BLOCK; i++)
 		energy += v->rx_stage[i] * v->rx_stage[i];
-	r->f14 = (short)energy;
-	r->f16 = (short)(energy >> 16);
+	r->energy_lo = (short)energy;
+	r->energy_hi = (short)(energy >> 16);
 
 	return v8_agcadapt(v);
 }
@@ -184,7 +184,7 @@ void
 checkSignalStability(struct v8 *v)
 {
 	struct v8_rx *r = &v->rx;
-	int elapsed = (unsigned short)r->f84 + 4;
+	int elapsed = (unsigned short)r->refresh_timer + 4;
 	int settled;
 	int delta;
 
@@ -195,10 +195,10 @@ checkSignalStability(struct v8 *v)
 		 * from it, so it is always zero on this pass -- the original
 		 * does the store first and the arithmetic afterwards.
 		 */
-		r->f84 = 0;
-		r->f86 = r->f1c;
+		r->refresh_timer = 0;
+		r->gain_ref = r->gain;
 	} else {
-		r->f84 = (short)elapsed;
+		r->refresh_timer = (short)elapsed;
 	}
 
 	/*
@@ -206,22 +206,22 @@ checkSignalStability(struct v8 *v)
 	 * in the original; nothing reaches it, because the gain is only ever
 	 * this function's reference after having been non-zero.
 	 */
-	if (r->f86 == 0)
+	if (r->gain_ref == 0)
 		delta = 0;
 	else
-		delta = (short)((((int)r->f1c - r->f86) << 14) / r->f86);
+		delta = (short)((((int)r->gain - r->gain_ref) << 14) / r->gain_ref);
 
 	if (delta < 0)
 		delta = -(short)delta;
 
 	if ((short)delta > V8_STABLE_TOLERANCE) {
-		r->f88 = 0;
-		r->f8a = 0;
+		r->stable_timer = 0;
+		r->stable = 0;
 		return;
 	}
 
-	settled = (unsigned short)r->f88 + 4;
-	r->f88 = (short)settled;
+	settled = (unsigned short)r->stable_timer + 4;
+	r->stable_timer = (short)settled;
 	if ((short)settled > V8_STABLE_PERIOD)
-		r->f8a = 1;
+		r->stable = 1;
 }

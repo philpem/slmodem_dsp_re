@@ -104,16 +104,16 @@ run_call(const char *title, int our_mode, unsigned char our_b0,
 		n_to_us = got > 0 ? got : V8NEG_FRAME;
 
 		if (verbose
-		    && (us.v8->f9d4 != last_tx || us.v8->f9d6 != last_rx
-			|| us.v8->f9d8 != last_sub || sp_status != last_sp)) {
+		    && (us.v8->tx_state != last_tx || us.v8->rx_state != last_rx
+			|| us.v8->rx_substate != last_sub || sp_status != last_sp)) {
 			printf("  %4d  ours tx=%-3d rx=0x%-3x sub=0x%-3x"
 			       " status=%-3d   spandsp=%d (%s)\n",
-			       frame, us.v8->f9d4, us.v8->f9d6, us.v8->f9d8,
+			       frame, us.v8->tx_state, us.v8->rx_state, us.v8->rx_substate,
 			       us.status, sp_status,
 			       v8neg_status_name(sp_status));
-			last_tx = us.v8->f9d4;
-			last_rx = us.v8->f9d6;
-			last_sub = us.v8->f9d8;
+			last_tx = us.v8->tx_state;
+			last_rx = us.v8->rx_state;
+			last_sub = us.v8->rx_substate;
 			last_sp = sp_status;
 		}
 

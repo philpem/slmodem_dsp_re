@@ -21,8 +21,8 @@
  },
  {
   "label": "give V.80 an indication of its own on the calling side",
-  "find": "\t\t\t} else if (w == 0x109 && (cm->b2 & 0x02)) {\n\t\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t    \"V8: call function DATA \"\n\t\t\t\t\t    \"indication...\\r\\n\");\n\t\t\t\tv->febc = 1;",
-  "replace": "\t\t\t} else if (w == 0x109 && (cm->b2 & 0x02)) {\n\t\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t    \"V8: call function V.80 \"\n\t\t\t\t\t    \"indication...\\r\\n\");\n\t\t\t\tv->febc = 1;"
+  "find": "\t\t\t} else if (w == 0x109 && (cm->b2 & 0x02)) {\n\t\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t    \"V8: call function DATA \"\n\t\t\t\t\t    \"indication...\\r\\n\");\n\t\t\t\tv->fn_matched = 1;",
+  "replace": "\t\t\t} else if (w == 0x109 && (cm->b2 & 0x02)) {\n\t\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t    \"V8: call function V.80 \"\n\t\t\t\t\t    \"indication...\\r\\n\");\n\t\t\t\tv->fn_matched = 1;"
  },
  {
   "label": "swap the two fax directions on the answering side",
@@ -81,8 +81,8 @@
  },
  {
   "label": "abandon the marker word when the local extension fails to match",
-  "find": "\t\t\t\tv->fec2 = 0;\n\t\t\t\t/*\n\t\t\t\t * Not a `continue`: a local field that failed\n\t\t\t\t * to match still gets the acceptance list\n\t\t\t\t * tried against the same word below.\n\t\t\t\t */",
-  "replace": "\t\t\t\tv->fec2 = 0;\n\t\t\t\tcontinue;"
+  "find": "\t\t\t\tv->ext2_word = 0;\n\t\t\t\t/*\n\t\t\t\t * Not a `continue`: a local field that failed\n\t\t\t\t * to match still gets the acceptance list\n\t\t\t\t * tried against the same word below.\n\t\t\t\t */",
+  "replace": "\t\t\t\tv->ext2_word = 0;\n\t\t\t\tcontinue;"
  },
  {
   "label": "accept the filler even when an acceptance list is configured",
@@ -92,27 +92,27 @@
  {
   "label": "let the V.90 extension scan remember what it matched",
   "find": "\t\t\t\t\t\t   ext_expected(cm->ext2[k])) {\n\t\t\t\t\t\tjm->word[n++] = (short)got;\n\t\t\t\t\t\text2_matched = 1;\n\t\t\t\t\t\ti++;",
-  "replace": "\t\t\t\t\t\t   ext_expected(cm->ext2[k])) {\n\t\t\t\t\t\tjm->word[n++] = (short)got;\n\t\t\t\t\t\tv->fec2 = (short)got;\n\t\t\t\t\t\text2_matched = 1;\n\t\t\t\t\t\ti++;"
+  "replace": "\t\t\t\t\t\t   ext_expected(cm->ext2[k])) {\n\t\t\t\t\t\tjm->word[n++] = (short)got;\n\t\t\t\t\t\tv->ext2_word = (short)got;\n\t\t\t\t\t\text2_matched = 1;\n\t\t\t\t\t\ti++;"
  },
  {
   "label": "leave febc alone when the extension matches in full",
-  "find": "\t\t\tif ((cm->ext1[k] == 0 || k == V8_CM_EXT_MAX)\n\t\t\t    && fn_matched) {\n\t\t\t\tv->febc = 1;\n\t\t\t\tbreak;\n\t\t\t}",
+  "find": "\t\t\tif ((cm->ext1[k] == 0 || k == V8_CM_EXT_MAX)\n\t\t\t    && fn_matched) {\n\t\t\t\tv->fn_matched = 1;\n\t\t\t\tbreak;\n\t\t\t}",
   "replace": "\t\t\tif ((cm->ext1[k] == 0 || k == V8_CM_EXT_MAX)\n\t\t\t    && fn_matched)\n\t\t\t\tbreak;"
  },
  {
   "label": "return once the second field matches, skipping the verdict",
-  "find": "\t\tif (match_extension(v, cm->ext2, &i, &v->fec2, &matched)) {\n\t\t\tv->febe = 1;\n\t\t\tbreak;\n\t\t}",
-  "replace": "\t\tif (match_extension(v, cm->ext2, &i, &v->fec2, &matched)) {\n\t\t\tv->febe = 1;\n\t\t\treturn;\n\t\t}"
+  "find": "\t\tif (match_extension(v, cm->ext2, &i, &v->ext2_word, &matched)) {\n\t\t\tv->ext2_matched = 1;\n\t\t\tbreak;\n\t\t}",
+  "replace": "\t\tif (match_extension(v, cm->ext2, &i, &v->ext2_word, &matched)) {\n\t\t\tv->ext2_matched = 1;\n\t\t\treturn;\n\t\t}"
  },
  {
   "label": "give the verdict on the second field instead of the first",
-  "find": "\t\tdsplibs_debug_printf(\"V8: %s Call Function Match%s!\\n\",\n\t\t\t\t     v->febc != 0 ? \"Got\" : \"Didn't get\",\n\t\t\t\t     v->febc != 0 ? \"\"",
-  "replace": "\t\tdsplibs_debug_printf(\"V8: %s Call Function Match%s!\\n\",\n\t\t\t\t     v->febe != 0 ? \"Got\" : \"Didn't get\",\n\t\t\t\t     v->febe != 0 ? \"\""
+  "find": "\t\tdsplibs_debug_printf(\"V8: %s Call Function Match%s!\\n\",\n\t\t\t\t     v->fn_matched != 0 ? \"Got\" : \"Didn't get\",\n\t\t\t\t     v->fn_matched != 0 ? \"\"",
+  "replace": "\t\tdsplibs_debug_printf(\"V8: %s Call Function Match%s!\\n\",\n\t\t\t\t     v->ext2_matched != 0 ? \"Got\" : \"Didn't get\",\n\t\t\t\t     v->ext2_matched != 0 ? \"\""
  },
  {
   "label": "drop the gloss from the failed verdict",
-  "find": "\t\t\t\t     v->febc != 0 ? \"\"\n\t\t\t\t      : \" (not indicating modulation \"\n\t\t\t\t\t\"capabilities)!!\");",
-  "replace": "\t\t\t\t     v->febc != 0 ? \"\" : \"\");"
+  "find": "\t\t\t\t     v->fn_matched != 0 ? \"\"\n\t\t\t\t      : \" (not indicating modulation \"\n\t\t\t\t\t\"capabilities)!!\");",
+  "replace": "\t\t\t\t     v->fn_matched != 0 ? \"\" : \"\");"
  },
  {
   "label": "drop the quick connect announcement",

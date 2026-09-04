@@ -1,13 +1,13 @@
 [
  {
   "label": "announce the ANSam timeout on every block past the deadline",
-  "find": "\t\t\tif (v->fe64 == v->deadline_a) {\n\t\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t    \"V8: Time Out Waiting For \"\n\t\t\t\t\t    \"ANSam...\\r\\n\");\n\t\t\t\tv->fe64++;\n\t\t\t}",
-  "replace": "\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t    \"V8: Time Out Waiting For ANSam...\\r\\n\");\n\t\t\tif (v->fe64 == v->deadline_a)\n\t\t\t\tv->fe64++;"
+  "find": "\t\t\tif (v->elapsed == v->deadline_a) {\n\t\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t    \"V8: Time Out Waiting For \"\n\t\t\t\t\t    \"ANSam...\\r\\n\");\n\t\t\t\tv->elapsed++;\n\t\t\t}",
+  "replace": "\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t    \"V8: Time Out Waiting For ANSam...\\r\\n\");\n\t\t\tif (v->elapsed == v->deadline_a)\n\t\t\t\tv->elapsed++;"
  },
  {
   "label": "drop the ANSam timeout announcement",
-  "find": "\t\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t    \"V8: Time Out Waiting For \"\n\t\t\t\t\t    \"ANSam...\\r\\n\");\n\t\t\t\tv->fe64++;",
-  "replace": "\t\t\t\tv->fe64++;"
+  "find": "\t\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t    \"V8: Time Out Waiting For \"\n\t\t\t\t\t    \"ANSam...\\r\\n\");\n\t\t\t\tv->elapsed++;",
+  "replace": "\t\t\t\tv->elapsed++;"
  },
  {
   "label": "give the ANSam detection the house style",
@@ -16,13 +16,13 @@
  },
  {
   "label": "announce the ANSam detection before the JM is checked for",
-  "find": "\t\tif (v->fdbe == 0)\n\t\t\treturn 0;",
-  "replace": "\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V8 ANSAM Detected (CM ready)\\n\");\n\t\tif (v->fdbe == 0)\n\t\t\treturn 0;"
+  "find": "\t\tif (v->cm_ready == 0)\n\t\t\treturn 0;",
+  "replace": "\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V8 ANSAM Detected (CM ready)\\n\");\n\t\tif (v->cm_ready == 0)\n\t\t\treturn 0;"
  },
  {
   "label": "drop the QCA1 reset announcement",
-  "find": "\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\n\t\t\t    \"V8: reseting QCA1 detector...\\r\\n\");\n\t\tv->f9d8 = V8_HS_HUNT;",
-  "replace": "\t\tv->f9d8 = V8_HS_HUNT;"
+  "find": "\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\n\t\t\t    \"V8: reseting QCA1 detector...\\r\\n\");\n\t\tv->rx_substate = V8_HS_HUNT;",
+  "replace": "\t\tv->rx_substate = V8_HS_HUNT;"
  },
  {
   "label": "swap the two good-message verdicts",
@@ -46,8 +46,8 @@
  },
  {
   "label": "announce the LAPM indication from the QCA1d arm as well",
-  "find": "\tv->fdcc = (w1 >> 1) & 3;\n\tif (DSPLIB_DEBUG_ON())",
-  "replace": "\tv->fdcc = (w1 >> 1) & 3;\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\n\t\t    \"V8:  QCA1d: LAPM Indication: bit23 = %d, \"\n\t\t    \"bit53 = %d\\r\\n\", (w1 >> 6) & 1, (w4 >> 6) & 1);\n\tif (DSPLIB_DEBUG_ON())"
+  "find": "\tv->anspcm_level = (w1 >> 1) & 3;\n\tif (DSPLIB_DEBUG_ON())",
+  "replace": "\tv->anspcm_level = (w1 >> 1) & 3;\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\n\t\t    \"V8:  QCA1d: LAPM Indication: bit23 = %d, \"\n\t\t    \"bit53 = %d\\r\\n\", (w1 >> 6) & 1, (w4 >> 6) & 1);\n\tif (DSPLIB_DEBUG_ON())"
  },
  {
   "label": "announce the QCA1a verdict before the message is accepted",

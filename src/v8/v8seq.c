@@ -179,7 +179,7 @@ initTxSequence(struct v8 *v)
 static const struct v8_tx_sequence *
 rx_sequence(const struct v8 *v)
 {
-	if (v->fdc4 != 0)
+	if (v->quick_connect != 0)
 		return v->seq_spare;
 	if (v->side != 0)
 		return &v->seq[0];

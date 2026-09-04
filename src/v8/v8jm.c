@@ -67,7 +67,7 @@ evaluateRxJMSequence(struct v8 *v)
 	int matched;
 	int i;
 
-	v->febc = 0;
+	v->fn_matched = 0;
 
 	/* The call function, and the first extension if one was declared. */
 	for (i = 0; i < (short)seq->wordidx; i++) {
@@ -82,13 +82,13 @@ evaluateRxJMSequence(struct v8 *v)
 
 		if (cm->b2 & V8_CM_EXT1_PRESENT) {
 			matched = 0;
-			if (match_extension(v, cm->ext1, &i, &v->fec0,
+			if (match_extension(v, cm->ext1, &i, &v->fn_word,
 					    &matched)) {
-				v->febc = 1;
+				v->fn_matched = 1;
 				break;
 			}
-			v->fec0 = 0;
-			v->febc = 0;
+			v->fn_word = 0;
+			v->fn_matched = 0;
 		} else {
 			/*
 			 * No extension: the function word itself has to be
@@ -101,29 +101,29 @@ evaluateRxJMSequence(struct v8 *v)
 					dsplibs_debug_printf(
 					    "V8: call function DATA "
 					    "indication...\r\n");
-				v->febc = 1;
+				v->fn_matched = 1;
 			} else if (w == 0x103 && (cm->b2 & 0x01)) {
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
 					    "V8: call function FAX TX from "
 					    "caller indication...\r\n");
-				v->febc = 1;
+				v->fn_matched = 1;
 			} else if (w == 0x10b && (cm->b1 & 0x80)) {
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
 					    "V8: call function FAX RX to "
 					    "caller indication...\r\n");
-				v->febc = 1;
+				v->fn_matched = 1;
 			} else if (w == 0x109 && (cm->b2 & 0x02)) {
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
 					    "V8: call function DATA "
 					    "indication...\r\n");
-				v->febc = 1;
+				v->fn_matched = 1;
 			}
 
-			if (v->febc != 0)
-				v->fec0 = (short)w;
+			if (v->fn_matched != 0)
+				v->fn_word = (short)w;
 		}
 	}
 
@@ -140,15 +140,15 @@ evaluateRxJMSequence(struct v8 *v)
 			continue;
 
 		if ((cm->b2 & V8_CM_EXT2_PRESENT) == 0) {
-			v->fec2 = (short)w;
-			v->febe = 1;
+			v->ext2_word = (short)w;
+			v->ext2_matched = 1;
 			continue;
 		}
-		if (match_extension(v, cm->ext2, &i, &v->fec2, &matched)) {
-			v->febe = 1;
+		if (match_extension(v, cm->ext2, &i, &v->ext2_word, &matched)) {
+			v->ext2_matched = 1;
 			break;
 		}
-		v->fec2 = 0;
+		v->ext2_word = 0;
 	}
 
 	/*
@@ -164,8 +164,8 @@ evaluateRxJMSequence(struct v8 *v)
 	 */
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("V8: %s Call Function Match%s!\n",
-				     v->febc != 0 ? "Got" : "Didn't get",
-				     v->febc != 0 ? ""
+				     v->fn_matched != 0 ? "Got" : "Didn't get",
+				     v->fn_matched != 0 ? ""
 				      : " (not indicating modulation "
 					"capabilities)!!");
 }
@@ -187,12 +187,12 @@ V8UpdateModemParameters(struct v8 *v, struct v8_cm *out)
 	int i;
 
 	out->b2 = (unsigned char)((out->b2 & 0xef)
-				  | (((unsigned char)v->fdc4 & 1) << 4));
-	out->offered = v->fdcc;
+				  | (((unsigned char)v->quick_connect & 1) << 4));
+	out->offered = v->anspcm_level;
 	out->b2 = (unsigned char)((out->b2 & 0xbf)
-				  | ((v->fdc8 != 0 && (out->b2 & 0x40)) << 6));
+				  | ((v->lapm_indication != 0 && (out->b2 & 0x40)) << 6));
 
-	if (v->fdc4 != 0) {
+	if (v->quick_connect != 0) {
 		/*
 		 * `fdc4` set means the quick-connect sequence was used, and
 		 * this is where the author says so -- which is how the field
@@ -212,8 +212,8 @@ V8UpdateModemParameters(struct v8 *v, struct v8_cm *out)
 	out->ext1[0] = 0;
 	out->b1 &= 0x3f;
 
-	if (v->febc != 0) {
-		short fn = v->fec0;
+	if (v->fn_matched != 0) {
+		short fn = v->fn_word;
 
 		if (fn == 0x107) {
 			out->b1 |= 0x40;
@@ -312,9 +312,9 @@ V8UpdateModemParameters(struct v8 *v, struct v8_cm *out)
 	}
 
 	/* The second extension, if one came back that is not the filler. */
-	if (v->fec2 != 0 && v->fec2 != 0xa9) {
+	if (v->ext2_word != 0 && v->ext2_word != 0xa9) {
 		out->b2 |= 8;
-		out->ext2[0] = charFlip((unsigned char)(v->fec2 >> 1));
+		out->ext2[0] = charFlip((unsigned char)(v->ext2_word >> 1));
 	}
 
 	out->b0 |= 1;
@@ -417,7 +417,7 @@ rebuildJMSequence(struct v8 *v)
 				if (got == (unsigned short)
 					   ext_expected(cm->ext1[k])) {
 					jm->word[n++] = (short)got;
-					v->fec0 = (short)got;
+					v->fn_word = (short)got;
 					fn_matched = 1;
 					i++;
 					k++;
@@ -437,7 +437,7 @@ rebuildJMSequence(struct v8 *v)
 			 */
 			if ((cm->ext1[k] == 0 || k == V8_CM_EXT_MAX)
 			    && fn_matched) {
-				v->febc = 1;
+				v->fn_matched = 1;
 				break;
 			}
 			w = (unsigned short)rx->word[i];
@@ -479,15 +479,15 @@ rebuildJMSequence(struct v8 *v)
 		if (accept)
 			fn_matched = 1;
 
-		if (v->febc == 0 && fn_matched) {
+		if (v->fn_matched == 0 && fn_matched) {
 			jm->word[n++] = (short)w;
-			v->fec0 = (short)w;
-			v->febc = 1;
+			v->fn_word = (short)w;
+			v->fn_matched = 1;
 		}
 		break;
 	}
 
-	if (v->febc == 0) {
+	if (v->fn_matched == 0) {
 		/*
 		 * Nothing accepted: send our own field instead, or the call
 		 * function the menu asks for.
@@ -514,7 +514,7 @@ rebuildJMSequence(struct v8 *v)
 
 	base = n;
 
-	if (v->febc != 0) {
+	if (v->fn_matched != 0) {
 		/*
 		 * Intersect: walk what arrived and AND its menu words into
 		 * the three already in the buffer, gathering the three flags
@@ -625,7 +625,7 @@ rebuildJMSequence(struct v8 *v)
 				}
 				if ((cm->ext2[k] == 0 || k == V8_CM_EXT_MAX)
 				    && ext2_matched) {
-					v->febe = 1;
+					v->ext2_matched = 1;
 					break;
 				}
 			}
@@ -647,7 +647,7 @@ rebuildJMSequence(struct v8 *v)
 					if (got == (unsigned short)
 						   ext_expected(cm->ext2[k])) {
 						jm->word[n++] = (short)got;
-						v->fec2 = (short)got;
+						v->ext2_word = (short)got;
 						ext2_matched = 1;
 						i++;
 					} else if (ext2_matched) {
@@ -657,10 +657,10 @@ rebuildJMSequence(struct v8 *v)
 				}
 				if ((cm->ext2[k] == 0 || k == V8_CM_EXT_MAX)
 				    && ext2_matched) {
-					v->febe = 1;
+					v->ext2_matched = 1;
 					break;
 				}
-				v->fec2 = 0;
+				v->ext2_word = 0;
 				/*
 				 * Not a `continue`: a local field that failed
 				 * to match still gets the acceptance list
@@ -693,15 +693,15 @@ rebuildJMSequence(struct v8 *v)
 				ext2_matched = 1;
 			}
 
-			if (v->febe == 0 && ext2_matched) {
+			if (v->ext2_matched == 0 && ext2_matched) {
 				jm->word[n++] = (short)w;
-				v->fec2 = (short)w;
-				v->febe = 1;
+				v->ext2_word = (short)w;
+				v->ext2_matched = 1;
 			}
 			break;
 		}
 
-		if (v->febe != 0) {
+		if (v->ext2_matched != 0) {
 			/* Already settled by the scan above. */
 		} else if (cm->b2 & V8_CM_EXT2_PRESENT) {
 			/*
@@ -712,14 +712,14 @@ rebuildJMSequence(struct v8 *v)
 
 			while (cm->ext2[k] != 0 && k <= V8_CM_EXT_MAX - 1) {
 				jm->word[n] = ext_expected(cm->ext2[k]);
-				v->fec2 = jm->word[n];
+				v->ext2_word = jm->word[n];
 				n++;
 				k++;
 			}
 		} else {
 			/* Nothing to send either: the filler. */
 			jm->word[n++] = V8_SEQ_TAIL_A;
-			v->fec2 = V8_SEQ_TAIL_A;
+			v->ext2_word = V8_SEQ_TAIL_A;
 		}
 	}
 

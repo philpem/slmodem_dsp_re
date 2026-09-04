@@ -6,13 +6,13 @@
  },
  {
   "label": "announce the CM timeout on every block past the deadline",
-  "find": "\t\t\tif (v->fe64 == v->deadline_a) {\n\t\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t    \"V8: Time Out Waiting For \"\n\t\t\t\t\t    \"CM...\\r\\n\");\n\t\t\t\tv->fe64++;\n\t\t\t}",
-  "replace": "\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t    \"V8: Time Out Waiting For CM...\\r\\n\");\n\t\t\tif (v->fe64 == v->deadline_a)\n\t\t\t\tv->fe64++;"
+  "find": "\t\t\tif (v->elapsed == v->deadline_a) {\n\t\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t    \"V8: Time Out Waiting For \"\n\t\t\t\t\t    \"CM...\\r\\n\");\n\t\t\t\tv->elapsed++;\n\t\t\t}",
+  "replace": "\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t    \"V8: Time Out Waiting For CM...\\r\\n\");\n\t\t\tif (v->elapsed == v->deadline_a)\n\t\t\t\tv->elapsed++;"
  },
  {
   "label": "drop the CM timeout announcement",
-  "find": "\t\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t    \"V8: Time Out Waiting For \"\n\t\t\t\t\t    \"CM...\\r\\n\");\n\t\t\t\tv->fe64++;",
-  "replace": "\t\t\t\tv->fe64++;"
+  "find": "\t\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t    \"V8: Time Out Waiting For \"\n\t\t\t\t\t    \"CM...\\r\\n\");\n\t\t\t\tv->elapsed++;",
+  "replace": "\t\t\t\tv->elapsed++;"
  },
  {
   "label": "call the CM timeout an ANSam one",
@@ -21,7 +21,7 @@
  },
  {
   "label": "announce the message timeout on every block past the deadline",
-  "find": "\t\t\tif (v->fe64 == v->deadline_b) {\n\t\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t    \"V8: Timeout waiting for %s \"\n\t\t\t\t\t    \"message...\\r\\n\",\n\t\t\t\t\t    v->side == 1 ? \"CJ\" : \"JM\");\n\t\t\t\tv->fe64++;\n\t\t\t}",
-  "replace": "\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t    \"V8: Timeout waiting for %s message...\\r\\n\",\n\t\t\t\t    v->side == 1 ? \"CJ\" : \"JM\");\n\t\t\tif (v->fe64 == v->deadline_b)\n\t\t\t\tv->fe64++;"
+  "find": "\t\t\tif (v->elapsed == v->deadline_b) {\n\t\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t    \"V8: Timeout waiting for %s \"\n\t\t\t\t\t    \"message...\\r\\n\",\n\t\t\t\t\t    v->side == 1 ? \"CJ\" : \"JM\");\n\t\t\t\tv->elapsed++;\n\t\t\t}",
+  "replace": "\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t    \"V8: Timeout waiting for %s message...\\r\\n\",\n\t\t\t\t    v->side == 1 ? \"CJ\" : \"JM\");\n\t\t\tif (v->elapsed == v->deadline_b)\n\t\t\t\tv->elapsed++;"
  }
 ]

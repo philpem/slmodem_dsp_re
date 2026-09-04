@@ -113470,3 +113470,123 @@ wave's standing instruction, and this pass is a pure identifier substitution
 (a `#define`/name change is compile-time-only) so it cannot move the ratchet's
 floor if `make one`'s offset assertions and mutation-anchor counts hold, which
 they do. (2026-09-04)
+
+### F10135. The V.8 handshake cluster's ~90 bare fields, named from the algorithm and from ITU-T V.8/V.8bis, not guessed
+
+Naming pass over `include/dsplib/v8.h` and `src/v8/{v8hs,v8hsrx,v8util,
+v8handshak,v8sig,v8proc,v8jm}.c` (plus the mechanical follow-through into
+`v8v21.c`, `v8agc.c`, `v8dp.c`, `v8seq.c` and every `test/unit/t_v8*.c` /
+`test/interop/t_spandsp_v8*.c` / `test/mutations/v8*.json` site that shares a
+struct with them -- a renamed field is not renamed until every reference to it
+is). No behaviour changed: `make one` reruns of `t_v8hs`, `t_v8util`, `t_v8jm`,
+`t_v8sig`, `t_v8dp` and `t_v8direct` are green with their check counts
+unchanged, `make refs` (mutation-anchor consistency) is clean, `make check64`
+is clean, and `python3 tools/onedef.py` / `refcheck.py` show no new duplicates
+or dangling references.
+
+**Evidence used, per CLAUDE.md's ranking, and which fields got which:**
+
+1. *Format string / existing debug trace* (strongest). `struct v8`'s
+   `quick_connect` (`fdc4`), `lapm_indication` (`fdc8`) and `anspcm_level`
+   (`fdcc`) were already glossed in a comment quoting the object's own debug
+   output ("Finished with Quick Connect", "LAPM Indication", "ANSpcm level
+   index") -- promoted from that quote directly, not re-derived.
+2. *Typed caller/callee*. Five loose fields (`fd94`,`fd96`,`fd98`,`fd9c`,
+   `fda0`) are replaced by one `struct v8_dft_bin dft` member: `v8hsrx.c`
+   already cast `&v->fd94` to `(struct v8_dft_bin *)`, and that struct's own
+   five members (`phase`,`step`,`re`,`im`,`energy`) land on exactly those five
+   offsets. The cast is the evidence; nothing was guessed about the shape.
+   `v8_cfg.f10` / `v8.fa54` -> `rate`: `v8dp.c`'s own call site assigns
+   `cfg.rate = V8_DP_RATE`, typing the field as the datapump's sample rate.
+3. *ITU-T standard cross-reference* (new this wave, ranked above usage
+   inference per the brief). `struct v8_tone`'s ANSam fields
+   (`carrier_phase`/`carrier_step`, `mod_phase`/`mod_step`, `amplitude`,
+   `reversal_count`/`reversal_enable`) were named from `v8_ansamgenerate`'s own
+   arithmetic, and confirmed rather than merely inferred by V8_ANSAM_REVERSAL
+   (0x438) blocks of 4 samples at 9600 Hz landing on exactly 450 ms -- ITU-T
+   V.8's own figure for ANSam's phase-reversal period. This is what licenses
+   calling the amplitude negation a "reversal" rather than a generic sign
+   flip.
+4. *Usage inference*, the majority of the wave, always cross-checked against
+   the enclosing function or state machine as a whole rather than the field in
+   isolation (the brief's other new method): the two state-machine registers
+   `tx_state`/`rx_state` and the sub-state `rx_substate` (`f9d4`/`f9d6`/`f9d8`)
+   were promoted from v8handshak.c's and v8hsrx.c's own header comments, which
+   already named their roles in prose ("`f9d4` drives the transmitter...",
+   "sub-states of the demodulate path, as `f9d8` holds them"); `v8_v21_params`'
+   `mark_bit`/`space_bit` (`f10`/`f12`) from being passed as the `bit` argument
+   to `drain_run`/`flush_run` on the mark/space run respectively; `v8_rx`'s
+   `gain`/`clip_count`/`stable` (`f1c`/`fac`/`f8a`) and `v8_v21_params.bits`
+   (`f1a`) from `t_v8sig.c`'s own diff-test labels ("gain", "clip count") and
+   framing comments in v8hsrx.c ("oldest first in the bottom of `f1a`");
+   `evaluateRxJMSequence`/`rebuildJMSequence`'s `fn_matched`/`ext2_matched`
+   (`febc`/`febe`) and `fn_word`/`ext2_word` (`fec0`/`fec2`) from the identical
+   local-variable names both functions already use for the same concept.
+
+**Bitfields/flags**: none of this cluster's bare fields turned out to be a
+multi-value flag word worth a `#define` -- the CM/JM menu bits already have
+names (`V8_CM_EXT1_PRESENT` etc., from an earlier pass) and the newly-named
+fields here are all scalars (counters, phases, single booleans), not bitmaps.
+No bit constants were added.
+
+**Left bare, and why -- naming wrongly is worse than not naming:**
+
+- `v8_detector.f0c` and `v8_v21_params.f0c`/`f0e`/`f14`/`f1c`: write-only in
+  the whole reconstructed subsystem (`grep` over every `src/v8/*.c` finds an
+  assignment and no read), so there is no behaviour to derive a name from --
+  the same status as `struct v8`'s `f004`/`f00c`/`f014`/`f018`, `fa40` and
+  `fdb4`. `struct v8`'s `fa40` is written from `v8_rx.gain` at the one point a
+  QCA1-collected message completes, which is suggestive, but nothing in this
+  subsystem reads it back, so the name would be asserting a downstream
+  consumer that cannot be checked here.
+- `v8_detector.lo_rule` (`f04`) and its paired `lo_thresh` (`f0e`) are named
+  (not left bare) despite being dead in the object's own configuration --
+  `v8handshakinit`'s one call site always passes `a3=0` -- because
+  `t_v8sig.c` exercises the `lo_rule` branch directly and calls it one of
+  "the three rules the verdict can follow"; a bare `f04` next to a named
+  `armed` would have been the wrong split given the test evidence.
+- `v8_tx_sequence.f2e`/`f36`/`f3e` and `v8_dft_bin.f0e`: never set by any
+  initialiser and never read, confirmed by grep and (for `v8_dft_bin.f0e`)
+  by `t_v8util.c`'s own "untouched" check in `t_dftenergy`.
+- `struct v8`'s `block_count` (`fdb6`) is named rather than left bare, but
+  deliberately with a generic name and a comment saying so: it is reused by
+  four different receive sub-states for unrelated lifetimes (elapsed blocks
+  while settling, a repeated-word counter while collecting a message, the CJ
+  detector's "seen twice" count), and no single specific name would be true
+  in all four.
+
+**The mechanical hazard this wave actually hit**: the `test/mutations/v8*.json`
+anchor files escape a source tab as the two characters `\` and `t`, not a real
+tab byte. A rename script keyed on `\bv->` (word-boundary, then the pointer
+dereference) silently failed to match `\tv->feb8` in those files, because the
+literal `t` immediately before `v` defeats a word-boundary check -- the same
+species of silent-tool-failure this tree has hit before (F2400, F3055), just
+in a new file format. `make refs` caught it (anchors reporting "matches 0
+times") where a differential test could not, because the JSON files are
+apparatus, not `src/`. Fixed by dropping the leading `\b` for the `->`-prefixed
+patterns when processing JSON text -- `->` cannot appear inside a longer
+identifier, so the leading boundary was redundant everywhere it worked and
+wrong everywhere it didn't.  (2026-09-04)
+
+### F10136. Five loose `struct v8` fields were one `struct v8_dft_bin` in a trenchcoat
+
+`fd94`/`fd96`/`fd98`/`fd9c`/`fda0` in `struct v8` (plus the two-byte pad
+after) sat at +0xd94..+0xda3, immediately before the `tone` field at +0xda4.
+`v8hsrx.c`'s `v8_handshak_agc` already reached them through
+`(struct v8_dft_bin *)&v->fd94` when calling `v8_dftupdate`/`v8_dftenergy`,
+and `struct v8_dft_bin` is `{ short phase, step; int re, im; short energy,
+f0e; }` -- 16 bytes, with `phase`/`step`/`re`/`im`/`energy` landing on offsets
+0/2/4/8/0xc, which are exactly `fd94`/`fd96`/`fd98`/`fd9c`/`fda0`'s offsets
+from +0xd94. The two-byte pad after `fda0` is the bin's own trailing `f0e`,
+already known to be unused (see F10135).
+
+Replaced the five fields and the trailing `unsigned char[2]` with a single
+`struct v8_dft_bin dft` member at +0xd94, updated `v8hs.c`'s five-field
+initialiser and `v8hsrx.c`'s cast and its one read of the energy (`v->fda0` ->
+`v->dft.energy`) to match, and updated `t_v8hs.c`'s one direct write of
+`fda0`. Byte layout is unchanged (verified by leaving `V8_ASSERT_OFFSET`'s
+coverage of the surrounding fields -- `tone` at +0xda4 -- untouched and green),
+and `t_v8hs`/`t_v8util` are green with their check counts unchanged. This is a
+promotion from bare fields to a properly modelled sub-object, licensed by the
+existing cast (evidence rank 2, typed callee) rather than by the field names'
+shape.  (2026-09-04)

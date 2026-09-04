@@ -49,7 +49,7 @@ struct rebuild_case {
 	unsigned char	b0, b1, b2;
 	unsigned char	ext1_0, ext2_0, ext2_1;
 	unsigned char	fn_list_0, ext_list_0;
-	short		febc, febe;
+	short		fn_matched, ext2_matched;
 	short		rx[12];
 };
 
@@ -167,8 +167,8 @@ rebuild_setup(const struct rebuild_case *c)
 	obj_b.cm = &cm_b;
 	obj_a.tx_seq = &obj_a.seq[2];
 	obj_b.tx_seq = &obj_b.seq[2];
-	obj_a.febc = obj_b.febc = c->febc;
-	obj_a.febe = obj_b.febe = c->febe;
+	obj_a.fn_matched = obj_b.fn_matched = c->fn_matched;
+	obj_a.ext2_matched = obj_b.ext2_matched = c->ext2_matched;
 
 	for (k = 0; k < 12 && c->rx[k] != 0; k++) {
 		obj_a.seq[0].word[k] = c->rx[k];
@@ -200,10 +200,10 @@ t_rebuild_cases(void)
 				   sizeof(obj_a.seq[2].word)) == 0, 1, (long)i);
 		diff_eq_int("nbits (case %ld)", obj_b.seq[2].nbits,
 			    obj_a.seq[2].nbits, (long)i);
-		diff_eq_int("febc (case %ld)", obj_b.febc, obj_a.febc, (long)i);
-		diff_eq_int("febe (case %ld)", obj_b.febe, obj_a.febe, (long)i);
-		diff_eq_int("fec0 (case %ld)", obj_b.fec0, obj_a.fec0, (long)i);
-		diff_eq_int("fec2 (case %ld)", obj_b.fec2, obj_a.fec2, (long)i);
+		diff_eq_int("febc (case %ld)", obj_b.fn_matched, obj_a.fn_matched, (long)i);
+		diff_eq_int("febe (case %ld)", obj_b.ext2_matched, obj_a.ext2_matched, (long)i);
+		diff_eq_int("fec0 (case %ld)", obj_b.fn_word, obj_a.fn_word, (long)i);
+		diff_eq_int("fec2 (case %ld)", obj_b.ext2_word, obj_a.ext2_word, (long)i);
 		diff_eq_int("menu (case %ld)",
 			    memcmp(&cm_a, &cm_b, sizeof(cm_a)) == 0, 1, (long)i);
 	}
@@ -297,14 +297,14 @@ t_evaluate_cases(void)
 		ref_evaluateRxJMSequence(&obj_a);
 		evaluateRxJMSequence(&obj_b);
 
-		diff_eq_int("febc (case %ld)", obj_b.febc, obj_a.febc, (long)i);
-		diff_eq_int("febe (case %ld)", obj_b.febe, obj_a.febe, (long)i);
-		diff_eq_int("fec0 (case %ld)", obj_b.fec0, obj_a.fec0, (long)i);
-		diff_eq_int("fec2 (case %ld)", obj_b.fec2, obj_a.fec2, (long)i);
+		diff_eq_int("febc (case %ld)", obj_b.fn_matched, obj_a.fn_matched, (long)i);
+		diff_eq_int("febe (case %ld)", obj_b.ext2_matched, obj_a.ext2_matched, (long)i);
+		diff_eq_int("fec0 (case %ld)", obj_b.fn_word, obj_a.fn_word, (long)i);
+		diff_eq_int("fec2 (case %ld)", obj_b.ext2_word, obj_a.ext2_word, (long)i);
 		diff_eq_int("words untouched (case %ld)",
 			    memcmp(obj_a.seq[2].word, obj_b.seq[2].word,
 				   sizeof(obj_a.seq[2].word)) == 0, 1, (long)i);
-		if (obj_a.febc)
+		if (obj_a.fn_matched)
 			got++;
 		else
 			missed++;
@@ -373,7 +373,7 @@ static int
 t_update_trace(void)
 {
 	static const struct {
-		short	fdc4, febc, fec0, fec2;
+		short	quick_connect, fn_matched, fn_word, ext2_word;
 		short	words[8];
 	} vars[] = {
 		{ 1, 0, 0, 0, { W_PRE0, W_PRE1, 0x107, 0x149, 0x011, 0 } },
@@ -419,11 +419,12 @@ t_update_trace(void)
 			}
 			obj_a.seq[2].wordidx = obj_b.seq[2].wordidx = (short)k;
 
-			obj_a.fdc4 = obj_b.fdc4 = vars[i].fdc4;
-			obj_a.febc = obj_b.febc = vars[i].febc;
-			obj_a.fec0 = obj_b.fec0 = vars[i].fec0;
-			obj_a.fec2 = obj_b.fec2 = vars[i].fec2;
-			obj_a.fdcc = obj_b.fdcc = 7;
+			obj_a.quick_connect = obj_b.quick_connect =
+				vars[i].quick_connect;
+			obj_a.fn_matched = obj_b.fn_matched = vars[i].fn_matched;
+			obj_a.fn_word = obj_b.fn_word = vars[i].fn_word;
+			obj_a.ext2_word = obj_b.ext2_word = vars[i].ext2_word;
+			obj_a.anspcm_level = obj_b.anspcm_level = 7;
 
 			memset(&out_a, 0x11, sizeof(out_a));
 			memcpy(&out_b, &out_a, sizeof(out_a));
@@ -531,14 +532,14 @@ main(void)
 				ref_evaluateRxJMSequence(&obj_a);
 				evaluateRxJMSequence(&obj_b);
 
-				diff_eq_int("febc (%ld)", obj_b.febc,
-					    obj_a.febc, (long)b1);
-				diff_eq_int("febe (%ld)", obj_b.febe,
-					    obj_a.febe, (long)b1);
-				diff_eq_int("fec0 (%ld)", obj_b.fec0,
-					    obj_a.fec0, (long)b1);
-				diff_eq_int("fec2 (%ld)", obj_b.fec2,
-					    obj_a.fec2, (long)b1);
+				diff_eq_int("febc (%ld)", obj_b.fn_matched,
+					    obj_a.fn_matched, (long)b1);
+				diff_eq_int("febe (%ld)", obj_b.ext2_matched,
+					    obj_a.ext2_matched, (long)b1);
+				diff_eq_int("fec0 (%ld)", obj_b.fn_word,
+					    obj_a.fn_word, (long)b1);
+				diff_eq_int("fec2 (%ld)", obj_b.ext2_word,
+					    obj_a.ext2_word, (long)b1);
 				diff_eq_int("menu untouched (%ld)",
 					    memcmp(&cm_a, &cm_b,
 						   sizeof(cm_a)) == 0, 1,
@@ -548,11 +549,11 @@ main(void)
 						    obj_b.seq[2].word[k],
 						    obj_a.seq[2].word[k], k);
 
-				if (obj_a.febc)
+				if (obj_a.fn_matched)
 					matched++;
 				else
 					rejected++;
-				if (obj_a.febe)
+				if (obj_a.ext2_matched)
 					second++;
 			}
 		}
@@ -603,15 +604,15 @@ main(void)
 					       sizeof(obj_a.seq[2].word));
 
 					obj_a.side = obj_b.side = ext & 1;
-					obj_a.fdc4 = obj_b.fdc4 =
+					obj_a.quick_connect = obj_b.quick_connect =
 						(ext == 3 ? 1 : 0);
-					obj_a.fdc8 = obj_b.fdc8 = b2 & 1;
-					obj_a.fdcc = obj_b.fdcc = (int)b1;
-					obj_a.febc = obj_b.febc =
+					obj_a.lapm_indication = obj_b.lapm_indication = b2 & 1;
+					obj_a.anspcm_level = obj_b.anspcm_level = (int)b1;
+					obj_a.fn_matched = obj_b.fn_matched =
 						(short)(b2 & 2 ? 1 : 0);
-					obj_a.fec0 = obj_b.fec0 =
+					obj_a.fn_word = obj_b.fn_word =
 						(short)(b1 & 1 ? 0x107 : 0x103);
-					obj_a.fec2 = obj_b.fec2 =
+					obj_a.ext2_word = obj_b.ext2_word =
 						(short)(b2 & 4 ? 0xa9 : 0x155);
 
 					memset(&out_a, 0x11, sizeof(out_a));
@@ -679,9 +680,9 @@ main(void)
 					/* Build the JM into another buffer. */
 					obj_a.tx_seq = &obj_a.seq[2];
 					obj_b.tx_seq = &obj_b.seq[2];
-					obj_a.febc = obj_b.febc =
+					obj_a.fn_matched = obj_b.fn_matched =
 						(short)(b2 & 1);
-					obj_a.febe = obj_b.febe =
+					obj_a.ext2_matched = obj_b.ext2_matched =
 						(short)((b2 >> 1) & 1);
 
 					ref_rebuildJMSequence(&obj_a);
@@ -696,12 +697,12 @@ main(void)
 						    memcmp(&cm_a, &cm_b,
 							   sizeof(cm_a)) == 0,
 						    1, (long)b1);
-					diff_eq_int("fec0 (%ld)", obj_b.fec0,
-						    obj_a.fec0, (long)b1);
-					diff_eq_int("fec2 (%ld)", obj_b.fec2,
-						    obj_a.fec2, (long)b1);
-					diff_eq_int("febc (%ld)", obj_b.febc,
-						    obj_a.febc, (long)b1);
+					diff_eq_int("fec0 (%ld)", obj_b.fn_word,
+						    obj_a.fn_word, (long)b1);
+					diff_eq_int("fec2 (%ld)", obj_b.ext2_word,
+						    obj_a.ext2_word, (long)b1);
+					diff_eq_int("febc (%ld)", obj_b.fn_matched,
+						    obj_a.fn_matched, (long)b1);
 					if (obj_a.seq[2].nbits != 0)
 						built++;
 				}

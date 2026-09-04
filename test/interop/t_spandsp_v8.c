@@ -90,13 +90,13 @@ make_ansam(short *out, int out_max, int blocks)
 	 * goes through a filter of zeros and the tone is silence -- which is
 	 * exactly what the first version of this produced.
 	 */
-	v.fa42 = 16384;
+	v.tx_gain = 16384;
 	v8_V21_Init(&v, 1, 0);
 	v8_ansaminit(&v);
 	/* A level a real line would carry, and reversals enabled. */
-	v.fa42 = 16384;
-	v.tone.f08 = 8000;
-	v.tone.f0e = 1;
+	v.tx_gain = 16384;
+	v.tone.amplitude = 8000;
+	v.tone.reversal_enable = 1;
 
 	down = RcFixed_Create(RC_DOWN);
 	if (down == 0)
