@@ -58,7 +58,7 @@ struct dtmf {
 	short easy;		/* +0x94 relaxed validity rule            */
 	/*
 	 * +0x96 was `pad_96[2]`, the struct's LAST member -- REMOVED
-	 * (finding F10145).  Trailing padding: `easy` ends at +0x96 and the
+	 * (finding F10151).  Trailing padding: `easy` ends at +0x96 and the
 	 * struct's own alignment (forced to 4 by the leading `float`
 	 * members) rounds `sizeof` up to +0x98 on its own.  Stronger proof
 	 * than usual here -- `src/service/dtmf.c`'s existing

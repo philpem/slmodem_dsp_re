@@ -230,7 +230,7 @@ public:
 	 */
 	unsigned char	 signBits[V90SS_FRAME_BITS];
 	/*
-	 * +0x1e was `pad_1e[2]` -- REMOVED (finding F10145).  Already
+	 * +0x1e was `pad_1e[2]` -- REMOVED (finding F10151).  Already
 	 * correctly described as alignment of the word below; proved
 	 * mechanically by the existing `V90SS_OFF(signBits, 0x18, ...)`/
 	 * `V90SS_OFF(state, 0x20, ...)` and by `dis.py` over every
@@ -293,7 +293,7 @@ public:
 	 */
 	SerialDifferentialEncoder<unsigned char> oddEncoder;
 	/*
-	 * +0x39 was `pad_39[3]` -- REMOVED (finding F10145): a 1-byte
+	 * +0x39 was `pad_39[3]` -- REMOVED (finding F10151): a 1-byte
 	 * `oddEncoder` ending at +0x39 leaves exactly 3 bytes of alignment
 	 * ahead of `pde`, a `ParallelDifferentialEncoder<unsigned char>`
 	 * needing 4-byte alignment.  Both ends already asserted

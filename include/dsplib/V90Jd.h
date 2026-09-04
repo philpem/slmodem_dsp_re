@@ -163,7 +163,7 @@ public:
 	unsigned char bits[V90JD_BITS];	/* +0x02 the vector, one byte per bit */
 
 	/*
-	 * +0x4a was `pad_4a[2]` -- REMOVED (finding F10145).  Already
+	 * +0x4a was `pad_4a[2]` -- REMOVED (finding F10151).  Already
 	 * correctly described as alignment ahead of `crc`; proved
 	 * mechanically by the existing `V90JD_OFF(bits, 0x02, ...)`/
 	 * `V90JD_OFF(crc, 0x4c, ...)` and by `dis.py` over all fourteen

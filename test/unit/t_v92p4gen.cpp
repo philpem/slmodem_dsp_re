@@ -425,7 +425,7 @@ setup(int trial)
 		/*
 		 * `pad_1d` (the trailing three bytes) was removed from
 		 * V92BitsToSymbol as compiler-inserted alignment (finding
-		 * F10145); clear the same physical bytes by offset instead.
+		 * F10151); clear the same physical bytes by offset instead.
 		 */
 		memset((char *)bts + 0x1d, 0, sizeof(*bts) - 0x1d);
 

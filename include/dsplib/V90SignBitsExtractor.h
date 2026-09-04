@@ -150,7 +150,7 @@ public:
 	 */
 	unsigned char bits[V90SBE_DECODER_SIZE];
 	/*
-	 * +0x0e was `pad_0e[2]` -- REMOVED (finding F10145).  The old comment
+	 * +0x0e was `pad_0e[2]` -- REMOVED (finding F10151).  The old comment
 	 * already called it correctly: "the two trailing bytes are the
 	 * alignment of the word at +0x10" -- exactly the compiler-inserted
 	 * gap a 6-byte array ending at +0x0e leaves ahead of the 4-byte-
@@ -200,7 +200,7 @@ public:
 	 */
 	SerialDifferentialDecoder<unsigned char> oddDecoder;
 	/*
-	 * +0x19 was `pad_19[3]` -- REMOVED (finding F10145): a 1-byte
+	 * +0x19 was `pad_19[3]` -- REMOVED (finding F10151): a 1-byte
 	 * `oddDecoder` ending at +0x19 leaves exactly 3 bytes of compiler
 	 * alignment ahead of `decoder`, a `ParallelDifferentialDecoder
 	 * <unsigned char>` whose first member is a pointer and needs 4-byte

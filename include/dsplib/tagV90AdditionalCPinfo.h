@@ -122,7 +122,7 @@ struct tagV90AdditionalCPinfo {
 	short short_14;				/* +0x14                  */
 	/*
 	 * +0x16 was `pad_16[2]`, the struct's LAST member -- REMOVED
-	 * (finding F10145).  This is trailing padding rather than a gap
+	 * (finding F10151).  This is trailing padding rather than a gap
 	 * before a named field: the struct's own alignment (forced to 4 by
 	 * its four `unsigned int`/`float` members) rounds `sizeof` up from
 	 * `short_14`'s end at +0x16 to +0x18 with no member needed to name

@@ -302,7 +302,7 @@ public:
 	unsigned char byte_0d;
 
 	/*
-	 * +0x0e was `pad_0e[2]` -- REMOVED (finding F10145).  Already
+	 * +0x0e was `pad_0e[2]` -- REMOVED (finding F10151).  Already
 	 * correctly described as alignment; proved mechanically by the
 	 * existing `V92MOD_OFF(byte_0d, 0x0d, ...)`/`V92MOD_OFF(phase2Info,
 	 * 0x10, ...)` and by `dis.py` over all eighteen `V92Modulator`

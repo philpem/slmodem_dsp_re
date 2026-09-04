@@ -40,7 +40,7 @@
 struct dtmf_rx {
 	short short_000;	/* +0x000 cleared by reset_dtmf, unread    */
 	/*
-	 * +0x002 was `pad_002[1]` -- REMOVED (finding F10145): `short_000`
+	 * +0x002 was `pad_002[1]` -- REMOVED (finding F10151): `short_000`
 	 * ends at +0x002 and the struct's own 4-byte alignment (forced by
 	 * `int_004`) leaves exactly this gap ahead of it. `dis.py` over
 	 * `reset_dtmf`/`create_cid_dtmf`/`band_pass`/`dtmf_modem` (the four

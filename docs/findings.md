@@ -114484,7 +114484,7 @@ sandbox; left for the parent session's gate, per every prior wave's own
 precedent -- every change here is an identifier substitution or a comment,
 which cannot move generated code. (2026-09-04)
 
-## F10145. Safe pad-region removal, long-tail sweep: every `pad_NNNN` outside the four active naming clusters, checked two ways and four removed so far
+## F10151. Safe pad-region removal, long-tail sweep: every `pad_NNNN` outside the four active naming clusters, checked two ways and four removed so far
 
 New workstream, distinct from field naming: per the user's explicit decision
 (`docs/fieldnaming.md`'s "New workstream: safe pad-region removal"), a
@@ -114770,7 +114770,7 @@ adjacency claim: `V92BitsToSymbol::pad_1d[3]` (`v92btos_size[(sizeof
 nine, fourteen and eleven methods respectively) finds no access to any
 removed offset.
 
-**A second instance of the exact positional-initializer bug F10145's first
+**A second instance of the exact positional-initializer bug F10151's first
 entry (fdspkrnl.h) already found and fixed, caught before it could reach a
 test.** `src/service/detector.c` has its OWN static `struct fdsp_tone_cfg
 TONEamode_CFG` initializer, separate from `fdspkrnl.c`'s `TONE_CFG`, and it

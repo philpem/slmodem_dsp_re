@@ -245,7 +245,7 @@ pure_setup(int c, unsigned int seed)
 		 * `pad_1d`, zeroed for determinism even though nothing in
 		 * this file compares it; `pad_1d` was removed from
 		 * V92BitsToSymbol as compiler-inserted alignment (finding
-		 * F10145), so this clears the same physical bytes by offset
+		 * F10151), so this clears the same physical bytes by offset
 		 * instead -- +0x1d is where it started and `sizeof(*P(s))`
 		 * is unchanged at 0x20.
 		 */

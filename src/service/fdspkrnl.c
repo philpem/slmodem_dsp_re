@@ -509,7 +509,7 @@ struct fdsp_tone_cfg TONE_CFG = {
 	ToneLPF,		/* +0x1c                                 */
 	53,			/* +0x20 fir_len, and ToneLPF's length    */
 	/* +0x22 was the `pad_22[2]` initializer; the two bytes are
-	 * compiler-inserted alignment now (finding F10145) and no longer
+	 * compiler-inserted alignment now (finding F10151) and no longer
 	 * have a positional slot of their own. */
 	0,			/* +0x24 */
 	0x3f000000,		/* +0x28 0.5f as a word; nothing
@@ -845,7 +845,7 @@ TONE_kill(struct fdsp_tone *t, float *buf, short n)
  * no same-named counterpart in `struct fdsp_tone` to cross-check against --
  * `int_0024` lands inside the span `fdsp_tone::pad_22[0xe]` still leaves
  * unmodelled, so it can only be asserted against its own struct's offset.
- * Finding F10145.
+ * Finding F10151.
  */
 #define TONE_ASSERT_OFF_CFG(field, off) \
 	typedef char fdsp_tone_cfg_offx_##field[ \

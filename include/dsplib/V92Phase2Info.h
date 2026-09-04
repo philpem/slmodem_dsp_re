@@ -123,7 +123,7 @@ public:
 	unsigned char maxTxPower;
 
 	/*
-	 * +0x0a was `pad_0a[2]` -- REMOVED (finding F10145).  Already
+	 * +0x0a was `pad_0a[2]` -- REMOVED (finding F10151).  Already
 	 * correctly described as alignment; proved mechanically by the
 	 * existing `V92P2I_OFF(maxTxPower, 0x09, ...)`/`V92P2I_OFF
 	 * (txPowerMeasurementPoint, 0x0c, ...)` and by `dis.py` over every

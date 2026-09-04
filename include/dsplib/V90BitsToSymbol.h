@@ -145,7 +145,7 @@ public:
 	unsigned char extraSymbolsPending; /* +0x20 set to 1 by both         */
 	/*
 	 * +0x21 was `pad_21[3]`, the struct's LAST member -- REMOVED
-	 * (finding F10145).  Already correctly described as tail padding;
+	 * (finding F10151).  Already correctly described as tail padding;
 	 * `extraSymbolsPending` ends at +0x21 and the class's own 4-byte
 	 * alignment rounds `sizeof` up to +0x24 on its own, already proved
 	 * by the existing `v90bts_size[(sizeof(V90BitsToSymbol) == 0x24) ?

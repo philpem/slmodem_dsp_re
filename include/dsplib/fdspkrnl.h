@@ -150,7 +150,7 @@ struct fdsp_tone {
 	float	*fir_dly;		/* +0x040 ring of fir_len floats     */
 	short	fir_idx;		/* +0x044 */
 	/*
-	 * +0x046 was `pad_46[2]` -- REMOVED (finding F10145).  It is exactly
+	 * +0x046 was `pad_46[2]` -- REMOVED (finding F10151).  It is exactly
 	 * the 2-byte compiler alignment gap a `short` at +0x044 leaves ahead
 	 * of the 4-byte-aligned `float det_coef` below; `TONE_ASSERT_OFF
 	 * (det_coef, 0x048)` in the .c proves the layout, and `dis.py` over
@@ -177,7 +177,7 @@ struct fdsp_tone {
 	 */
 	short	short_0064;		/* +0x064 */
 	/*
-	 * +0x066 was `pad_66[2]` -- REMOVED (finding F10145), the same
+	 * +0x066 was `pad_66[2]` -- REMOVED (finding F10151), the same
 	 * short-to-int alignment gap as +0x046 above; `TONE_ASSERT_OFF
 	 * (int_0068, 0x068)` already proved the target offset and `dis.py`
 	 * finds no access to 0x066.
@@ -187,7 +187,7 @@ struct fdsp_tone {
 	int	int_0070[80];		/* +0x070 */
 	short	short_01b0;		/* +0x1b0 */
 	/*
-	 * +0x1b2 was `pad_1b2[2]` -- REMOVED (finding F10145), the same
+	 * +0x1b2 was `pad_1b2[2]` -- REMOVED (finding F10151), the same
 	 * short-to-pointer alignment gap; `TONE_ASSERT_OFF(ptr_01b4, 0x1b4)`
 	 * already proved the target offset and `dis.py` finds no access to
 	 * 0x1b2.  `ptr_01b4`/`ptr_01b8` are set by two separate
@@ -282,7 +282,7 @@ struct fdsp_tone_cfg {
 	const float *fir_proto;		/* +0x01c */
 	short	fir_len;		/* +0x020 */
 	/*
-	 * +0x022 was `pad_22[2]` -- REMOVED (finding F10145): the same
+	 * +0x022 was `pad_22[2]` -- REMOVED (finding F10151): the same
 	 * short-to-int alignment gap as `fdsp_tone::pad_46`/`pad_66` above,
 	 * proved by `TONE_ASSERT_OFF_CFG(int_0024, 0x024)` in the .c.  This
 	 * region is never accessed field-by-field -- `TONE_CFG` is static

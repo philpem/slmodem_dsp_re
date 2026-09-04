@@ -251,7 +251,7 @@ public:
 	unsigned char crc[V90MP_CRC];
 
 	/*
-	 * +0x112 was `pad_112[2]` -- REMOVED (finding F10145).  Already
+	 * +0x112 was `pad_112[2]` -- REMOVED (finding F10151).  Already
 	 * correctly described as alignment; proved mechanically by the
 	 * existing `V90MP_OFF(crc, 0x102, ...)`/`V90MP_OFF(word_114, 0x114,
 	 * ...)` and by `dis.py` over every `V90MP` method finding no access
@@ -275,7 +275,7 @@ public:
 	unsigned char byte_119;
 
 	/*
-	 * +0x11a was `pad_11a[2]` -- REMOVED (finding F10145).  Already
+	 * +0x11a was `pad_11a[2]` -- REMOVED (finding F10151).  Already
 	 * correctly described as alignment; proved mechanically by the
 	 * existing `V90MP_OFF(byte_119, 0x119, ...)`/`V90MP_OFF
 	 * (nofRecievedMp, 0x11c, ...)` and by `dis.py` finding no access to

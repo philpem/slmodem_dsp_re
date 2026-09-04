@@ -96,7 +96,7 @@ static struct fdsp_tone_cfg TONEamode_CFG = {
 	0,			/* fir_proto -- see above                 */
 	53,			/* fir_len                                */
 	/* +0x22 was the `pad_22[2]` initializer slot; the two bytes are
-	 * compiler-inserted alignment now (finding F10145). */
+	 * compiler-inserted alignment now (finding F10151). */
 	0, 0, 0			/* int_0024, int_0028, int_002c           */
 };
 

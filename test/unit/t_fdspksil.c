@@ -260,7 +260,7 @@ main(void)
 			/*
 			 * the hole at +0x0e keeps the fill on both sides.
 			 * `pad_0e` was removed from struct silence as
-			 * compiler-inserted alignment (finding F10145), so
+			 * compiler-inserted alignment (finding F10151), so
 			 * this reads the same physical byte by offset.
 			 */
 			diff_eq_int("create pad kept %ld",

@@ -217,7 +217,7 @@ public:
 
 	/*
 	 * +0x1d was `pad_1d[3]`, the struct's LAST member -- REMOVED
-	 * (finding F10145).  Already correctly described as alignment
+	 * (finding F10151).  Already correctly described as alignment
 	 * inside the 0x20 the allocation gives; `flag_1c` ends at +0x1d and
 	 * the class's own 4-byte alignment (forced by its leading pointers/
 	 * ints) rounds `sizeof` up to +0x20 on its own, already proved by

@@ -126,7 +126,7 @@ public:
 	unsigned char bits[V90JD_BITS];		/* +0x02 the data message     */
 	unsigned char phaseBits[V90JD_BITS];	/* +0x4a the phase message    */
 	/*
-	 * +0x92 was `pad_92[2]` -- REMOVED (finding F10145).  Already
+	 * +0x92 was `pad_92[2]` -- REMOVED (finding F10151).  Already
 	 * correctly described as alignment ahead of `crc`; proved
 	 * mechanically by the existing `V92JD_OFF(phaseBits, 0x4a, ...)`/
 	 * `V92JD_OFF(crc, 0x94, ...)` and by `dis.py` over all twenty-one

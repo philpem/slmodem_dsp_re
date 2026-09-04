@@ -58,7 +58,7 @@ struct silence {
 					 *       the threshold, never cleared;
 					 *       picks `q` over `s`          */
 	/*
-	 * +0x0e was `pad_0e[2]` -- REMOVED (finding F10145): `saw_signal`
+	 * +0x0e was `pad_0e[2]` -- REMOVED (finding F10151): `saw_signal`
 	 * ends at +0x0e and the struct's own 4-byte alignment (forced by
 	 * `obj`/`query`) leaves exactly this gap ahead of `energy`, a
 	 * `float`. `dis.py` over `silence_create`/`silence_delete`/

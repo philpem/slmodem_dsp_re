@@ -398,7 +398,7 @@ public:
 	 */
 	SerialDifferentialDecoder<unsigned char> signDecoder;
 	/*
-	 * +0x665 was `pad_665[3]` -- REMOVED (finding F10145): a 1-byte
+	 * +0x665 was `pad_665[3]` -- REMOVED (finding F10151): a 1-byte
 	 * `signDecoder` ending at +0x665 leaves exactly 3 bytes of compiler
 	 * alignment ahead of `signBits`, a `V90SignBitsExtractor` whose
 	 * first member is a 4-byte `unsigned int` and needs 4-byte
@@ -477,7 +477,7 @@ public:
 	 */
 	short short_1e9c;
 	/*
-	 * +0x1e9e was `pad_1e9e[2]` -- REMOVED (finding F10145): the same
+	 * +0x1e9e was `pad_1e9e[2]` -- REMOVED (finding F10151): the same
 	 * short-to-pointer-sized-field alignment gap as +0x665 above, ahead
 	 * of `adiDetector` at +0x1ea0.  Both ends already asserted
 	 * (`DEM_OFF(short_1e9c, 0x1e9c, short1e9c)`, `DEM_OFF(adiDetector,
@@ -646,7 +646,7 @@ public:
 	short linearMappStudyEnabled;
 	/*
 	 * +0x1eb6 was `pad_1eb6[2]`, the struct's LAST member -- REMOVED
-	 * (finding F10145).  This one is trailing padding rather than a gap
+	 * (finding F10151).  This one is trailing padding rather than a gap
 	 * before a named field: `linearMappStudyEnabled` (0x1eb4, 2 bytes)
 	 * ends at 0x1eb6, and the class's own alignment (forced to 4 by its
 	 * many `int`/pointer members elsewhere) means the compiler rounds

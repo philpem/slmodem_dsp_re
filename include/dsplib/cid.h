@@ -51,7 +51,7 @@ struct cid {
 	short short_008;		/* +0x008 cleared by reset_cid only */
 	/*
 	 * +0x00a was `pad_00a` (a bare `short`) -- REMOVED (finding
-	 * F10145): already correctly described as alignment, `short_008`
+	 * F10151): already correctly described as alignment, `short_008`
 	 * ending at +0x00a leaves exactly 2 bytes ahead of `mrf`, whose
 	 * first member `struct fpm_mrf_cfg cfg` holds a pointer and needs
 	 * 4-byte alignment.  `dis.py` over `cid_modem`/`create_cid`/
@@ -137,7 +137,7 @@ struct cid {
 	short pack_len;			/* +0x15c bytes stored into `data`  */
 	/*
 	 * +0x15e was `pad_15e[2]`, the struct's LAST member -- REMOVED
-	 * (finding F10145).  Trailing padding: `pack_len` ends at +0x15e
+	 * (finding F10151).  Trailing padding: `pack_len` ends at +0x15e
 	 * and the struct's own alignment (forced to 4 by its several `int`
 	 * members and `mrf`'s pointer) rounds `sizeof` up to +0x160 on its
 	 * own.  `src/service/cid_mtd.c`'s existing `cid_size_check[sizeof

@@ -60,7 +60,7 @@ struct tag_retrainReqDet {
 	short a1_q14;			/* +0x0e denominator z^-1           */
 	short a2_q14;			/* +0x10 denominator z^-2, negated  */
 	/*
-	 * +0x12 was `pad_12` (a bare `short`) -- REMOVED (finding F10145).
+	 * +0x12 was `pad_12` (a bare `short`) -- REMOVED (finding F10151).
 	 * Already correctly described as alignment; `a2_q14` ends at +0x12
 	 * and the struct's own 4-byte alignment (forced by the three `int`
 	 * members below) leaves exactly this gap ahead of `energyInp`.

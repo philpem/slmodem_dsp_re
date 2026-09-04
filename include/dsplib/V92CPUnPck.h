@@ -95,7 +95,7 @@ struct V92CPUnPck {
 	signed char extendEu;
 
 	/*
-	 * +0x13 was `pad_13[1]` -- REMOVED (finding F10145).  Already
+	 * +0x13 was `pad_13[1]` -- REMOVED (finding F10151).  Already
 	 * correctly described as alignment; proved mechanically now by the
 	 * next field's own `+0x14` annotation, which `tools/offcheck.py`
 	 * checks against the compiler's own `offsetof` on every build, and

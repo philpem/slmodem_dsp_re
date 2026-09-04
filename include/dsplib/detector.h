@@ -100,7 +100,7 @@ struct detector {
 	 */
 	unsigned short enable;		/* +0x00 DETECTOR_ENABLE_*           */
 	/*
-	 * +0x0002 was `pad_0002[2]` -- REMOVED (finding F10145): `enable`
+	 * +0x0002 was `pad_0002[2]` -- REMOVED (finding F10151): `enable`
 	 * ends at +0x02 and the struct's own 4-byte alignment (forced by
 	 * `dtmf` and every pointer/int after it) leaves exactly this gap
 	 * ahead of `dtmf`. `dis.py` over `detector_create`/`detector_delete`/

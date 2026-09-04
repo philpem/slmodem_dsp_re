@@ -130,7 +130,7 @@ public:
 	int int_1c;			/* +0x1c */
 	unsigned short ushort_20;	/* +0x20 */
 	/*
-	 * +0x22 was `pad_22[2]` -- REMOVED (finding F10145).  Already
+	 * +0x22 was `pad_22[2]` -- REMOVED (finding F10151).  Already
 	 * correctly described as alignment before +0x24; proved mechanically
 	 * by the existing `RD_OFF(ushort_20, 0x20, ...)`/`RD_OFF(int_24,
 	 * 0x24, ...)` and by `dis.py` over all nine `V90RDetector` methods

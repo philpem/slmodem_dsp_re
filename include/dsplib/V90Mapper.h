@@ -279,7 +279,7 @@ public:
 	 */
 	short constellation[V90MAPPER_CONSTELLATIONS][V90MAPPER_LEVELS];
 	/*
-	 * +0x656 was `pad_656[2]` -- REMOVED (finding F10145).  It was
+	 * +0x656 was `pad_656[2]` -- REMOVED (finding F10151).  It was
 	 * already correctly described as alignment; now proved mechanically,
 	 * both ends already asserted in the .cpp (`V90MAPPER_OFF(constellation,
 	 * 0x056, cons)` and `V90MAPPER_OFF(constellationSize, 0x658, c658)`),
@@ -326,7 +326,7 @@ public:
 	 */
 	SerialDifferentialEncoder<unsigned char> signEncoder;
 	/*
-	 * +0x6fd was `pad_6fd[3]` -- REMOVED (finding F10145).  It was
+	 * +0x6fd was `pad_6fd[3]` -- REMOVED (finding F10151).  It was
 	 * already correctly described as alignment; now proved mechanically,
 	 * both ends already asserted in the .cpp (`V90MAPPER_OFF(signEncoder,
 	 * 0x6fc, c6fc)` and `V90MAPPER_OFF(word_700, 0x700, c700)`), and
