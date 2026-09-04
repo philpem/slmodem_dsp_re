@@ -114483,3 +114483,150 @@ tools/bannercheck.py src/fax` all clean. `make period` and
 sandbox; left for the parent session's gate, per every prior wave's own
 precedent -- every change here is an identifier substitution or a comment,
 which cannot move generated code. (2026-09-04)
+
+## F10145. Pad-region removal audit, fax cluster: 10 of 25 real `pad_NNNN` members deleted, all others declined with a stated reason
+
+The new safe-pad-removal workstream (`docs/fieldnaming.md`'s "New workstream:
+safe pad-region removal" section), scoped to the fax cluster: `faxvmi.h`/
+`.c`, `class1.h`, `fax.h`, `class1tx.c`, `class1rx.c`, `v29fax.h`, `v17fax.h`,
+`v29data.h`, `faxfifo.h`. The brief's own per-file counts (7/2/7/5/4/2/3/2/2/
+2) were UNIQUE NAME counts, not member counts -- three names in `class1.h`
+(`pad_1218`/`pad_1268`/`pad_1292`) are stale comment references to fields
+already PROMOTED in earlier waves, and `pad_0012`/`pad_0002` each name two
+DIFFERENT struct members at the same offset in unrelated structs. The real
+count, one grep per file for the actual member declaration (excluding
+comments), is **25 pad members across 7 files**; `faxvmi.c`, `class1tx.c` and
+`class1rx.c` have none of their own (their `pad_NNNN` mentions are either
+prose about `faxvmi.h`'s fields or per-element comments on `const struct ...`
+initializers whose type is declared elsewhere).
+
+**Method, per CLAUDE.md's explicit decision**: two independent checks, both
+required. (1) Alignment math -- does deleting the member and leaving the
+compiler's own implicit padding reproduce the exact offset of the next real
+field, given that field's alignment requirement? (2) A negative check --
+`grep -rn '[.>]pad_NAME\b'` across all of `src/`, `test/` and `include/`
+(not just the scoped files) for every candidate name, confirmed against zero
+hits. Since every struct in scope is either heap-allocated at runtime
+(`faxvmi_framer`/`_link`/`_status`/`_ctl`, `fax_class1`) or a caller-built
+argument record (`v17tx_control_req`, `fax_fifo`) with no single fixed
+`.data`/`.rodata` address, there is no absolute-address `objdump` range to
+grep the way a static blob object would allow; the by-name reference search
+across the WHOLE reconstructed tree is the equivalent check here, and it is
+sound because the fax reconstruction is complete and differentially
+verified -- every function capable of touching a pad's bytes is already
+written in `src/`, so an unreferenced field name is not a gap in coverage.
+
+**10 removed, both checks passed, `offsetof`/`sizeof` assertions added**
+(`CTL_ASSERT_OFF`-style, guarded on `__SIZEOF_POINTER__ == 4` matching this
+tree's own existing idiom and its V3 `docs/method/compilers.md` pitfall):
+
+- `faxvmi.h` `struct faxvmi_framer`: `pad_0036` (between `zero_run_bits` and
+  `zero_run_send`) and `pad_0052` (between `ones` and `in_frame`) -- new
+  `FRAMER_ASSERT_OFF` macro, both offsets plus `sizeof == 0x58` asserted.
+- `faxvmi.h` `struct faxvmi_link`: `pad_0012` (between `unpack_width` and
+  `int_0014`) -- new `LINK_ASSERT_OFF` macro, `sizeof == 0x18` asserted.
+- `faxvmi.h` `struct faxvmi_status`: `pad_0002` (between `room` and
+  `residue`) -- no new macro needed; the pre-existing
+  `STATUS_ASSERT_OFF(residue, 0x04)` already proves it, and would have
+  failed to compile had the alignment math been wrong.
+- `faxvmi.h` `struct faxvmi_ctl`: `pad_000a` (before `int_000c`) and
+  `pad_0012` (before `int_0014`) -- same story, the pre-existing
+  `CTL_ASSERT_OFF(int_000c, 0x0c)`/`CTL_ASSERT_OFF(int_0014, 0x14)` and the
+  struct's own `sizeof == 0x18` assertion already cover both; removing them
+  needed no new proof, just relying on proof already in the tree.
+- `class1.h` `struct fax_class1`: `pad_12be` (between `energy` and
+  `rx_agc_mult`) -- new `CLASS1_ASSERT_OFF` macro, `rx_agc_mult`'s offset
+  0x12c0 asserted.
+- `v17fax.h` `struct v17tx_control_req`: `pad_000e` (between `ctl1` and
+  `int_0010`) -- new `V17TX_CTLREQ_ASSERT_OFF` macro, `int_0010`'s offset
+  and `sizeof == 0x14` asserted. `src/fax/class1tx.c`'s `V17TX_CTL`
+  initializer (a positional aggregate literal) had its now-nonexistent
+  `{ 0, 0 }, /* pad_000e */` element removed to match.
+- `faxfifo.h` `struct fax_fifo`: `pad_06` (between `fill` and `buf`) and the
+  TRAILING `pad_12` (after `wr`, at the struct's own end) -- new
+  `FAXFIFO_ASSERT_OFF` macro plus `sizeof == 0x14`, matching `FIFO_create`'s
+  own `sysdep_malloc(0x14)`. The trailing case is the one instance in this
+  wave where the "next field" the assertion protects is the struct's own
+  size rather than a named member -- C's own rule that `sizeof` is rounded up
+  to the type's alignment (4, forced by `buf`) is what reproduces it.
+
+**15 left explicit, and every one for a stated, checked reason -- no
+guesses**:
+
+- `faxvmi.h` `faxvmi_framer::pad_001e` and `struct faxvmi::pad_0002` --
+  referenced BY NAME in real code (`src/fax/faxvmi.c`'s `fr->short_002e =
+  fr->pad_001e;` in both `FAXVMI_create` and `FAXVMI_control`, reproducing a
+  DWORD reload-and-store the object performs at 0x951d4/0x95201 that touches
+  BOTH the named field and its padding neighbour in one instruction; and
+  `vmi->pad_0002 = src->short_0002;` in `FAXVMI_create`'s six-dword config
+  copy). Removing either breaks compilation outright and, more importantly,
+  each is proven NOT to be inert -- exactly what the alignment-math side of
+  the test cannot see on its own, since `pad_001e`'s own offset IS alignment-
+  shaped despite being live.
+- `faxvmi.h` `faxvmi_link::pad_0008[4]` -- FAILS the alignment test: `buf`
+  ends at +0x0c already 4-byte aligned, and `pack_count` (a `short`) needs no
+  more than 2-byte alignment, so the compiler would place it at +0x0c with no
+  gap at all if the pad vanished. A real, unexplained 4-byte region --
+  `CLAUDE.md`'s own worked example, `VPcmFloModem::pad_6fb8[4]`, is the exact
+  precedent for declining a shape like this.
+- `class1.h` `pad_002[2]`, `pad_005[0xffb]`, `pad_12ac[4]` -- the first FAILS
+  alignment math the same way (`flags004`, a `char`, would land 2 bytes
+  earlier with no gap needed); the second is 4,091 bytes, far beyond any
+  conceivable alignment gap; the third also FAILS (`async_mask` already ends
+  4-byte aligned, so `data_input_closed` would need no gap at all). All three
+  match this header's own banner, unchanged since wave 2: "the pad regions
+  are expected to become fields when the fax phase reads `fax_class1_create`
+  properly" -- acknowledged real content, not filler.
+- `fax.h`'s four pads (`pad_22a0[4]`, `pad_252c[0x80]`, `pad_25b4[4]`,
+  `pad_283c[0x80]`) -- every one FAILS alignment math (each sits after a
+  field that already ends aligned for what follows) AND is independently
+  and explicitly documented, in this file's own banner, as "unclaimed"/
+  "unmodelled" space the object's own literal address arithmetic (`add
+  $0x25ac,%eax` pinning `in_pending`) proves is really there. The two large
+  ones (128 bytes each) were never alignment candidates to begin with.
+- `v29fax.h`'s `struct v29tx_control_req::pad_0000[4]` and `struct
+  v29rx_control_req::pad_0000[4]`, and `v17fax.h`'s (now assert-covered)
+  sibling `struct v17tx_control_req::pad_0000[4]` -- NOT unused. THE FIRST
+  TWO BYTES CARRY REAL DATA: `class1tx.c`'s `V17TX_CTL`/`V27TX_CTL`/
+  `V29TX_CTL` and `class1rx.c`'s `V17RX_CTL`/`V27RX_CTL`/`V29RX_CTL` constant
+  initializers (finding F10109) fill this field with a per-modulation
+  PLACEHOLDER BIT RATE (low 16 bits on the TX templates, high 16 bits on the
+  RX ones) that `_init_transmitter`/`_init_receiver` overwrite with the live
+  negotiated rate at runtime. `v29fax.h`'s and `v17fax.h`'s own struct
+  banners still say "nothing here establishes what precedes +0x04 ... so the
+  gap stays padding" (finding F10107/F10103) -- that disclaimer predates
+  F10109 and is now STALE for this specific field; it is corrected here
+  rather than in the header, since renaming is a naming-wave task and this
+  wave only removes, never renames or reinterprets, a field's role.
+- `v29fax.h`'s `struct v29rx_control_req::pad_0008[4]` -- FAILS alignment
+  math on its own regardless of the above (`int_0004` ends at +0x08 already
+  aligned, so `ctl0`, a `char`, would need no gap), and additionally
+  initialized to all-zero with no established meaning in `class1rx.c`'s own
+  `V29RX_CTL`, unlike its sibling `pad_0000`.
+  `V17RX_CTL`'s parallel fields (`struct v17rx_ctl`'s `unmapped_0000`/
+  `unmapped_0008`/`unmapped_000e`) are the SAME shape but spelled
+  `unmapped_`, not `pad_` -- out of this audit's scope by name, and a
+  separate finding's problem if anyone re-derives them.
+- `v29data.h`'s `struct v29tx::pad_00[8]` -- the struct's OWN FIRST MEMBER,
+  so there is no preceding field for alignment to react to; an 8-byte gap
+  at offset 0 can only be explicit padding or real leading content, never
+  something the compiler inserts on its own. The header's own banner already
+  calls this the correct outcome: "ONLY +0x00..+0x07 REMAINS UNMODELLED NOW,
+  and stays `pad_` because nothing reconstructed touches it; a struct that
+  guessed at those bytes would be worse than the macro it replaced" (F9701).
+
+**Verification.** `make one T="t_faxvmids t_faxvmicp t_fifocreate
+t_v17txcreate t_class1create t_class1rxstates t_faxpack t_faxunframe
+t_class1status"` (the tests directly touching every struct edited): 53 PASS,
+0 FAIL. The full fax suite -- every `t_class1*`, `t_fax*`, `t_v17*`,
+`t_v27*`, `t_v29*` unit test in the tree, 40 binaries -- adds to 339 PASS, 0
+FAIL, no `error:` line, exit 0. `python3 tools/onedef.py` (301 types, 167
+files, 1 known duplicate -- unchanged) and `python3 tools/refcheck.py`
+(13,231 references, 0 dangling) both clean. `make period` and
+`tools/toolchain/byteident.py --ratchet` need docker, unavailable in this
+sandbox; per every prior wave's own precedent, left for the parent session's
+gate after merge. Every removal is provably alignment-neutral by
+construction (the new/pre-existing `offsetof`/`sizeof` assertions fail to
+compile otherwise), so a byteident regression here would mean the
+alignment math itself was wrong, not a tolerance issue -- and none of the
+340 tests it touches moved. (2026-09-04)

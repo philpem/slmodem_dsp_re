@@ -1789,9 +1789,31 @@ struct v17tx_control_req {
 	int		scale_mul;	/* +0x08 -> fpm_pps_cfg::scale, * table  */
 	unsigned char	ctl0;		/* +0x0c */
 	unsigned char	ctl1;		/* +0x0d */
-	unsigned char	pad_000e[0x02];
-	int		int_0010;	/* +0x10 -> handle's v17tx_cfg::int_0018 */
+	int		int_0010;	/* +0x10 -> handle's v17tx_cfg::int_0018.
+					 * The 2-byte gap `ctl1` leaves ahead of
+					 * this 4-byte-aligned field used to be
+					 * a named `pad_000e[0x02]`; removed by
+					 * the pad-region removal audit
+					 * (F10145) -- unlike `pad_0000` above
+					 * (a real per-modulation bit-rate
+					 * placeholder, `class1tx.c`'s own
+					 * `V17TX_CTL`), nothing establishes any
+					 * content for these two bytes and
+					 * V17TX_control itself never reads
+					 * them, so the compiler's own
+					 * alignment reproduces the gap exactly.
+					 * See V17TX_CTLREQ_ASSERT_OFF below   */
 };
+
+#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+#define V17TX_CTLREQ_ASSERT_OFF(field, off) \
+	typedef char v17tx_control_req_off_##field[ \
+		((int)__builtin_offsetof(struct v17tx_control_req, field) \
+			== (off)) ? 1 : -1]
+V17TX_CTLREQ_ASSERT_OFF(int_0010, 0x10);
+typedef char v17tx_control_req_size[
+	(sizeof(struct v17tx_control_req) == 0x14) ? 1 : -1];
+#endif
 
 /* Bits of `ctl0`, named by value; see V17TX_control's own derivation. */
 #define V17TXCTL_CTL0_BIT2	(1 << 2)	/* -> V17_STATUS_FLAG_04 of the
