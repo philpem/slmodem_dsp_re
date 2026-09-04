@@ -1407,9 +1407,24 @@ struct v34_ratecfg {
 	 * struct has.
 	 */
 	short rx_carrier;		/* +0x24                         */
-	unsigned char pad_26[0x28 - 0x26];
-	const short *rx_divtab;		/* +0x28                         */
+	const short *rx_divtab;		/* +0x28
+					 * pad_26[2] removed here -- pure
+					 * alignment gap ahead of this pointer;
+					 * `rx_carrier` ends on a 2-mod-4
+					 * offset.  Confirmed by the assertion
+					 * below and a whole-object disassembly
+					 * search: nothing reads or writes
+					 * absolute offset 0xaaaa/0xaaab
+					 * (finding F10147). */
 };
+
+#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+typedef char v34ratecfg_off_rxdivtab[
+	((int)__builtin_offsetof(struct v34_ratecfg, rx_divtab) == 0x28)
+		? 1 : -1];
+typedef char v34ratecfg_size[
+	(sizeof(struct v34_ratecfg) == 0x2c) ? 1 : -1];
+#endif
 
 #define V34_RATECFG	0xaa84
 

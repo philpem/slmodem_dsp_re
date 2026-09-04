@@ -138,8 +138,10 @@ struct v34_receiver {
 	short           phase_frac;      /* +0x1ac rxtiming: fractional phase */
 	short           phase_inc;       /* +0x1ae   its increment */
 	short           phase_wrap;      /* +0x1b0   its wrap */
-	unsigned char pad_1b2[0x1b4 - 0x1b2];
-	const short *   carrier;         /* +0x1b4 V34demodulate: sin then cos */
+	const short *   carrier;         /* +0x1b4 V34demodulate: sin then cos.
+					  * pad_1b2[2] removed here -- pure
+					  * alignment gap ahead of this pointer
+					  * (finding F10145). */
 	short           mix_carrier_step;    /* +0x1b8 the down-mix carrier's
 					      phase increment (was f1b8) */
 	/*
@@ -209,7 +211,6 @@ struct v34_receiver {
 	 */
 	short           report_interval;            /* +0x1d2 */
 	short           f1d4;            /* +0x1d4 */
-	unsigned char pad_1d6[0x1d8 - 0x1d6];
 	/*
 	 * +0x1d8.  `TimingV34`'s fractional carry: the whole part of each
 	 * symbol's correction goes to the interpolator step, the remainder
@@ -218,6 +219,9 @@ struct v34_receiver {
 	 * Renamed here (F10132): the one `v34diag.cpp` reference and the
 	 * mutation fixture (`v34vdiag.json`, seven mutations) that withheld
 	 * it in F10123 are both fixed.
+	 *
+	 * pad_1d6[2] removed here -- pure alignment gap ahead of this `int`
+	 * (finding F10145).
 	 */
 	int             timing_frac;    /* +0x1d8 (was f1d8) */
 	unsigned char pad_1dc[0x1e0 - 0x1dc];
@@ -238,9 +242,11 @@ struct v34_receiver {
 	short           cloop_cos;       /* +0x1f2 the carrier-recovery loop's
 					  rotator, real part (was f1f2) */
 	short           cloop_sin;       /* +0x1f4   imaginary part (was f1f4) */
-	unsigned char pad_1f6[0x1f8 - 0x1f6];
 	int             cloop_integrator; /* +0x1f8 the carrier loop's
-					   integrator (was f1f8) */
+					   integrator (was f1f8).
+					   pad_1f6[2] removed here -- pure
+					   alignment gap ahead of this `int`
+					   (finding F10145). */
 	/*
 	 * +0x1fc.  The phase error: the imaginary part of
 	 * decision* x target, shifted up two.  receiver computes it three
@@ -317,8 +323,10 @@ struct v34_receiver {
 	 */
 	short           err_symcount;    /* +0x21c the 1024-symbol counter
 					  * that publishes them */
-	unsigned char pad_21e[0x220 - 0x21e];
 	/*
+	 * pad_21e[2] removed here -- pure alignment gap ahead of the `int`
+	 * below (finding F10145).
+	 *
 	 * Two error energies accumulated over 1024 symbols and republished as
 	 * shorts when the counter wraps.  receiver's own names, from
 	 * "V34EQU, equerr = %d, preerr = %d": `equerr_accum` -> equerr is the
@@ -330,10 +338,12 @@ struct v34_receiver {
 	 */
 	int             equerr_accum;    /* +0x220 */
 	short           preerr;          /* +0x224 */
-	unsigned char pad_226[0x228 - 0x226];
 	int             preerr_acc;      /* +0x228 the predictor-error
 					  accumulator paired with preerr
-					  (was f228) */
+					  (was f228).
+					  pad_226[2] removed here -- pure
+					  alignment gap ahead of this `int`
+					  (finding F10145). */
 	unsigned char pad_22c[0x22e - 0x22c];
 	short           f22e;            /* +0x22e */
 	short           dwell_count;     /* +0x230 TimingV34: symbols spent in
@@ -485,6 +495,53 @@ struct v34_receiver {
 	 */
 	short           rtncount;        /* +0x798 (was f798) */
 };
+
+/*
+ * PAD-REGION AUDIT (finding F10145).  Five of this struct's `pad_NNNN` gaps
+ * were removed as pure compiler-alignment artefacts: in each case the field
+ * immediately before the pad ends on a 2-mod-4 byte boundary and the field
+ * immediately after needs 4-byte alignment (a pointer or an `int`), so the
+ * gap the pad used to spell out explicitly is exactly what GCC's own default
+ * alignment inserts once the pad member is deleted -- no `#pragma pack` or
+ * packed attribute applies to this struct, so ordinary C alignment rules
+ * govern it.  Proven two ways, matching CLAUDE.md's rule for this workstream:
+ * the `offsetof` assertions below hold the following field at its ORIGINAL
+ * offset with the pad gone, and a whole-object disassembly search (every
+ * V.34 receive/handshake/AGC/timing function that touches this struct, plus
+ * a `objdump -d` grep of the full 1.2MB blob for the exact byte displacements
+ * the removed pads used to cover) found no instruction anywhere that reads or
+ * writes those bytes.
+ *
+ * Removed: pad_1b2[2] (between phase_wrap and carrier), pad_1d6[2] (between
+ * f1d4 and timing_frac), pad_1f6[2] (between cloop_sin and
+ * cloop_integrator), pad_21e[2] (between err_symcount and equerr_accum),
+ * pad_226[2] (between preerr and preerr_acc).
+ *
+ * Eleven other pad_NNNN regions in this struct were checked the same way and
+ * LEFT ALONE: either the gap does not match what natural alignment would
+ * insert for the following field (pad_184, pad_1a8, pad_1c2, pad_1dc,
+ * pad_22c, pad_238, pad_250, pad_264, pad_270), or the pad sits at the very
+ * start of the struct with no preceding field to derive alignment from
+ * (pad_000) or is a multi-hundred-byte span that is obviously not an
+ * alignment gap (pad_2a8).  None of those is a claim their bytes are
+ * unread -- only that, unlike the five above, deleting them would not
+ * reproduce the object's layout by natural alignment alone, so they stay
+ * explicit per this workstream's decision rule.
+ */
+#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+#define V34RECV_ASSERT_OFF(field, off) \
+	typedef char v34recv_off_##field[ \
+		((int)__builtin_offsetof(struct v34_receiver, field) == (off)) \
+			? 1 : -1]
+
+V34RECV_ASSERT_OFF(carrier,          0x1b4);
+V34RECV_ASSERT_OFF(timing_frac,      0x1d8);
+V34RECV_ASSERT_OFF(cloop_integrator, 0x1f8);
+V34RECV_ASSERT_OFF(equerr_accum,     0x220);
+V34RECV_ASSERT_OFF(preerr_acc,       0x228);
+
+typedef char v34recv_size[(sizeof(struct v34_receiver) == 0x79c) ? 1 : -1];
+#endif
 
 /*
  * The adaptive equaliser sits at +0x3cc, which is `struct v34_equalizer` --

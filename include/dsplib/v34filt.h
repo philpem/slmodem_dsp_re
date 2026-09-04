@@ -75,10 +75,23 @@ struct v34_echo {
 	 * counter wraps every 65536 symbols with no reader to care.
 	 */
 	short adapt_count;	/* +0x14                                 */
-	unsigned char pad_16[2];/* +0x16                                 */
-	unsigned dlen;		/* +0x18  delay line length, in shorts   */
+	unsigned dlen;		/* +0x18  delay line length, in shorts.
+				 * pad_16[2] removed here -- pure alignment
+				 * gap ahead of this `unsigned`; `adapt_count`
+				 * ends on a 2-mod-4 offset.  Confirmed by the
+				 * assertion below and a disassembly search of
+				 * every function touching this struct (base
+				 * at v34_object+0x80b8): nothing reads or
+				 * writes absolute offset 0x80ce/0x80cf
+				 * (finding F10148). */
 	unsigned taps;		/* +0x1c                                 */
 };
+
+#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+typedef char v34echo_off_dlen[
+	((int)__builtin_offsetof(struct v34_echo, dlen) == 0x18) ? 1 : -1];
+typedef char v34echo_size2[(sizeof(struct v34_echo) == 0x20) ? 1 : -1];
+#endif
 
 /*
  * Reset.
@@ -410,11 +423,31 @@ struct v34_echo_prefilter {
 	short state[V34_ECHO_PREFILTER_TAPS];	/* +0x00 */
 	const short *coeff;			/* +0x54 */
 	short hist_pos;				/* +0x58  index into `state` */
-	short pad_5a;
-	int hist_len;				/* +0x5c  entries in `state` */
+	int hist_len;				/* +0x5c  entries in `state`.
+						 * pad_5a[2] removed here --
+						 * pure alignment gap ahead of
+						 * this `int`; `hist_pos` ends
+						 * on a 2-mod-4 offset.
+						 * Confirmed by the assertion
+						 * below and a disassembly
+						 * search of every function
+						 * touching this struct (base
+						 * at v34_object+0x2078):
+						 * nothing reads or writes
+						 * absolute offset
+						 * 0x20d2/0x20d3 (finding
+						 * F10148). */
 	int span;				/* +0x60  halved, see below  */
 	int shift;				/* +0x64 */
 };
+
+#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+typedef char v34echopf_off_histlen[
+	((int)__builtin_offsetof(struct v34_echo_prefilter, hist_len)
+		== 0x5c) ? 1 : -1];
+typedef char v34echopf_size[
+	(sizeof(struct v34_echo_prefilter) == 0x68) ? 1 : -1];
+#endif
 
 /*
  * Filter `count` samples in place through a 42-tap FIR, rounding with 0x4000
