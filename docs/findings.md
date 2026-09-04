@@ -115692,3 +115692,61 @@ or writer anywhere in the object touches the deleted bytes), behavioral
 equivalence follows from the differential run above without needing the
 period-compiler tier to re-derive it -- the same reasoning this wave's own
 brief laid out. (2026-09-04)
+
+## F10153. `make period`, the tier that decides, caught a duplicate-assertion defect none of the five wave-5 branches' host-side compiles could see
+
+**The gate did its job.** After all five wave-5 pad-region-removal branches
+merged clean (F10145-F10152), `make period` -- run for the first time against
+the merged tree, since every branch's own verification was necessarily
+host-side (`gcc -m32`/`g++ -std=c++98 -m32`, no docker in any worktree
+sandbox) -- failed to compile with GCC 3.4.2:
+
+```
+src/fax/faxvmi.c:128: error: redefinition of typedef 'faxvmi_framer_off_zero_run_send'
+include/dsplib/faxvmi.h:286: error: previous declaration of 'faxvmi_framer_off_zero_run_send' was here
+src/fax/faxvmi.c:137: error: redefinition of typedef 'faxvmi_framer_off_in_frame'
+include/dsplib/faxvmi.h:287: error: previous declaration of 'faxvmi_framer_off_in_frame' was here
+```
+
+**Root cause.** The fax-cluster pad-audit agent (F10145) added a NEW
+`FRAMER_ASSERT_OFF` macro and two new invocations to `faxvmi.h`, proving
+`pad_0036`'s and `pad_0052`'s removal for `struct faxvmi_framer`. But
+`src/fax/faxvmi.c` already carried its OWN complete `FRAMER_ASSERT_OFF`
+macro and a full-coverage assertion list for the same struct -- predating
+this wave entirely -- including the exact same two fields at the exact same
+offsets, plus an identical `faxvmi_framer_size` `sizeof` assertion. Since
+`faxvmi.c` `#include`s `faxvmi.h`, both definitions land in the same
+translation unit: the same macro name defined twice (silently tolerated by
+cpp) expanding to the same typedef name declared twice, which C89 -- GCC
+3.4.2's default dialect, no `-std=` override in `period.mk` -- treats as a
+hard error. The agent correctly recognized and reused the pre-existing proof
+for `faxvmi_status`/`faxvmi_ctl` in the SAME finding (see F10145's own text:
+"no new macro needed... the pre-existing STATUS_ASSERT_OFF/CTL_ASSERT_OFF
+already proves it"), but missed that `faxvmi.c` held the equivalent proof
+for `faxvmi_framer` too, because that proof lives in the `.c` file rather
+than the header where the other two structs' assertions live.
+
+**Why no branch's own verification caught it.** Every wave-5 worktree ran in
+a sandbox without docker, so every agent verified with the HOST compiler
+(GCC 14, `gcc -m32`/`g++ -std=c++98 -m32`) -- which defaults to a GNU
+dialect permissive enough to accept an identical redundant typedef silently.
+The redefinition is real but invisible until the exact compiler the object
+was built with -- GCC 3.4.2, C89, no leniency -- sees it. Textbook case of
+CLAUDE.md's own "gate on `make period` alone" rule: a red modern-tier build
+would have been the wrong signal to trust here (there wasn't one), and a
+green host-side compile was not evidence of anything beyond "the host
+compiler tolerates it."
+
+**Fix.** Removed the header's redundant `FRAMER_ASSERT_OFF` macro
+definition, its two invocations, and its duplicate `faxvmi_framer_size`
+assertion; replaced with a comment (matching the `faxvmi_status`/
+`faxvmi_ctl` style already in this same header) pointing at the existing
+proof in `faxvmi.c`. No behavioral change and no new claim -- the removal
+was already proved by the same offsets, just via a different copy of the
+same assertion.
+
+**Verification.** `make period J=$(nproc)` under `dsplibs-tc342` (GCC
+3.4.2), full rebuild of all 277 objects: compiles clean. Differential suite
+result recorded once the run completes; this finding is written ahead of
+that result closing so the root-cause record survives even if a further
+gate issue turns up in the same run. (2026-09-04)

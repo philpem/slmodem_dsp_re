@@ -701,3 +701,45 @@ removal, matching F10141's documented baseline); `tools/onedef.py` and
 `tools/refcheck.py` clean. `make period`/`byteident.py --ratchet` need
 docker, unavailable in this sandbox; left for the parent's gate. Finding
 F10152.
+
+### Wave 5 complete — merged, period-green (after two fixes), byte-identity ratchet still OK
+
+All five clusters (fax F10145, V.34 F10146-F10149, V.90 control/session
+F10150, long-tail F10151, V.90 receive/design F10152) merged clean into
+master, with only `docs/findings.md`/`docs/fieldnaming.md` insertion
+conflicts -- every renumbering was mechanical (six collisions this wave,
+same `F10145` reused independently by all five branches since none of them
+could see master's own tip while working in an isolated worktree).
+
+**`make period` caught a real defect none of the branches' own host-side
+verification could see (F10153).** The fax-cluster branch had added new
+offset-assertion macros to `faxvmi.h` for two of `struct faxvmi_framer`'s
+and `struct faxvmi_link`'s already-covered fields, duplicating macros and
+typedefs `src/fax/faxvmi.c` already declared for the exact same offsets.
+GCC 14 (every branch's own sandbox, no docker) tolerates the redundant
+redeclaration silently; GCC 3.4.2 -- the actual period compiler -- does
+not, and `make period` failed to compile until both duplicate blocks were
+removed in favour of the pre-existing proof already in `faxvmi.c`. A
+tree-wide sweep for the same shape (a macro name defined in a header
+that is also defined in the `.c`/`.cpp` that includes it) found no other
+instances. This is the "gate on `make period` alone" rule paying for
+itself exactly as CLAUDE.md describes it: no branch's own compile was red,
+so there was nothing to have caught it earlier.
+
+**Post-fix verification, against the fully merged tree:**
+`make period J=$(nproc)` under `dsplibs-tc342` (GCC 3.4.2): 374 passed, 0
+failed, exit 0. `make byteident-ratchet`: grade-0 EXACT still 736/1852
+(39.7%), grade-0-or-1 still 796/1852 (43.0%) -- both exactly the pre-wave
+floor, `ratchet OK`, exit 0. Every one of wave 5's ~72 pad-region removals
+is confirmed compile-time-only: zero generated-code drift.
+
+**Net pad-region count.** The raw `grep -oE 'pad_[0-9a-f]+'` figure this
+phase has always used for a quick per-file count is now unreliable as a
+before/after signal on its own -- multiple removal comments now quote the
+old pad name for provenance (`pad-region removal audit, F10152` etc.),
+which the naive regex counts as if it were still a live field. The number
+that means something is a live declaration count:
+`grep -rhoE '^\s*(unsigned char|char|unsigned short|short|unsigned int|int)\s+pad_[0-9a-fA-F]+(\[[0-9a-fA-Fx]*\])?\s*;'`
+finds **42 live `pad_NNNN` struct members remaining** tree-wide, each one
+already checked once this wave and left explicit for a stated, specific
+reason (not yet re-checked, not silently skipped).

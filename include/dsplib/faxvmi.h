@@ -274,20 +274,14 @@ struct faxvmi_framer {
  * the following 4-byte-aligned `int` (`zero_run_send` at +0x38,
  * `in_frame` at +0x54), never read or written anywhere in this tree, and
  * unlike `pad_001e` above there is no dword-reload trick that names either
- * one.  These assertions are what proves it -- `__builtin_offsetof` against
- * the struct as it stands NOW, so a future edit that reintroduces a real
- * gap fails to compile rather than silently shifting these two fields.
+ * one.  No new assertion is added here -- `src/fax/faxvmi.c` already
+ * carries a complete `FRAMER_ASSERT_OFF` list covering every field of this
+ * struct including these two exact offsets, and a second copy of the same
+ * macro in this header would redefine it and re-declare the same typedefs
+ * in the same translation unit once faxvmi.c includes this file, which
+ * GCC 3.4.2 rejects outright (finding F10153) even though the host's
+ * default 64-bit build stays silent about it.
  */
-#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
-#define FRAMER_ASSERT_OFF(field, off) \
-	typedef char faxvmi_framer_off_##field[ \
-		((int)__builtin_offsetof(struct faxvmi_framer, field) \
-			== (off)) ? 1 : -1]
-FRAMER_ASSERT_OFF(zero_run_send, 0x38);
-FRAMER_ASSERT_OFF(in_frame, 0x54);
-typedef char faxvmi_framer_size[
-	(sizeof(struct faxvmi_framer) == 0x58) ? 1 : -1];
-#endif
 
 /*
  * THE LINK BLOCK, `vmi->link` (+0x28).  `sysdep_malloc(0x18)` at 0x953d4, so
@@ -345,15 +339,14 @@ struct faxvmi_link {
  * alignment filler; CLAUDE.md's `VPcmFloModem::pad_6fb8[4]` is the exact
  * precedent for leaving a shape like this alone.
  */
-#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
-#define LINK_ASSERT_OFF(field, off) \
-	typedef char faxvmi_link_off_##field[ \
-		((int)__builtin_offsetof(struct faxvmi_link, field) \
-			== (off)) ? 1 : -1]
-LINK_ASSERT_OFF(int_0014, 0x14);
-typedef char faxvmi_link_size[
-	(sizeof(struct faxvmi_link) == 0x18) ? 1 : -1];
-#endif
+/*
+ * No new assertion here -- `src/fax/faxvmi.c` already carries a complete
+ * `LINK_ASSERT_OFF` list covering every field of this struct including
+ * `int_0014` at this exact offset, plus the matching `faxvmi_link_size`
+ * assertion; a second copy in this header would redefine the same macro
+ * and re-declare the same typedefs once faxvmi.c includes this file, the
+ * same defect as `struct faxvmi_framer`'s (finding F10153).
+ */
 
 /*
  * `struct faxvmi` itself: `sysdep_malloc(0x2c)` at 0x953ab, so 44 bytes.
