@@ -1,6 +1,6 @@
 [
  {
-  "note": "src/service/fdspkrnl.c against build/test/t_fdspdp.  The claims: the six allocation sizes and that all six happen, which delay lands on which channel and that both only land on the allocating path, the int_00 decision and which argument it reads, the two globals, that InitObj runs, which blocks FDSP_DP_Delete frees, and that a NULL kernel leaves the global alone."
+  "note": "src/service/fdspkrnl.c against build/test/t_fdspdp.  The claims: the six allocation sizes and that all six happen, which delay lands on which channel and that both only land on the allocating path, the status decision and which argument it reads, the two globals, that InitObj runs, which blocks FDSP_DP_Delete frees, and that a NULL kernel leaves the global alone."
  },
  {
   "label": "FDSP_DP_Delete leaves the buffer block",
@@ -63,29 +63,29 @@
   "replace": "\t\tif (!ok) {"
  },
  {
-  "label": "int_00 is decided by the TX delay",
-  "find": "\t\tk->int_00 = (sRxSamplesDelay >= 0) ? 2 : 0;",
-  "replace": "\t\tk->int_00 = (sTxSamplesDelay >= 0) ? 2 : 0;"
+  "label": "status is decided by the TX delay",
+  "find": "\t\tk->status = (sRxSamplesDelay >= 0) ? 2 : 0;",
+  "replace": "\t\tk->status = (sTxSamplesDelay >= 0) ? 2 : 0;"
  },
  {
-  "label": "int_00 treats zero as negative",
-  "find": "\t\tk->int_00 = (sRxSamplesDelay >= 0) ? 2 : 0;",
-  "replace": "\t\tk->int_00 = (sRxSamplesDelay > 0) ? 2 : 0;"
+  "label": "status treats zero as negative",
+  "find": "\t\tk->status = (sRxSamplesDelay >= 0) ? 2 : 0;",
+  "replace": "\t\tk->status = (sRxSamplesDelay > 0) ? 2 : 0;"
  },
  {
-  "label": "int_00's two answers are the other way round",
-  "find": "\t\tk->int_00 = (sRxSamplesDelay >= 0) ? 2 : 0;",
-  "replace": "\t\tk->int_00 = (sRxSamplesDelay >= 0) ? 0 : 2;"
+  "label": "status's two answers are the other way round",
+  "find": "\t\tk->status = (sRxSamplesDelay >= 0) ? 2 : 0;",
+  "replace": "\t\tk->status = (sRxSamplesDelay >= 0) ? 0 : 2;"
  },
  {
-  "label": "int_00 is left as InitObj set it",
-  "find": "\t\tFDSP_Kernel_InitObj(k);\n\t\tk->int_00 = (sRxSamplesDelay >= 0) ? 2 : 0;",
+  "label": "status is left as InitObj set it",
+  "find": "\t\tFDSP_Kernel_InitObj(k);\n\t\tk->status = (sRxSamplesDelay >= 0) ? 2 : 0;",
   "replace": "\t\tFDSP_Kernel_InitObj(k);"
  },
  {
   "label": "the kernel is not initialised",
-  "find": "\t\tFDSP_Kernel_InitObj(k);\n\t\tk->int_00",
-  "replace": "\t\tk->int_00"
+  "find": "\t\tFDSP_Kernel_InitObj(k);\n\t\tk->status",
+  "replace": "\t\tk->status"
  },
  {
   "label": "the global is not published",

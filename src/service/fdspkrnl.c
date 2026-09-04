@@ -112,7 +112,7 @@ FDSP_DP_Delete(struct fdsp_kernel *k)
  * chan_b's, and that is also what fixes which channel is which direction.
  * Both are `short` (`movswl` at 0xae5de and 0xae5e3).
  *
- * `int_00` is 2 unless the RX delay is NEGATIVE, in which case it is 0:
+ * `status` is 2 unless the RX delay is NEGATIVE, in which case it is 0:
  * `sar $0x1f; not; and $0x2` is a branchless `(rx >= 0) ? 2 : 0`, and it
  * lands on the field InitObj has just set to 2.
  *
@@ -180,7 +180,7 @@ FDSP_DP_Create(struct fdsp_kernel *k, short sRxSamplesDelay,
 
 	if (k != 0) {
 		FDSP_Kernel_InitObj(k);
-		k->int_00 = (sRxSamplesDelay >= 0) ? 2 : 0;
+		k->status = (sRxSamplesDelay >= 0) ? 2 : 0;
 	}
 	pGlobalFDSPObj = k;
 	uCorrelationReportsNo = 0;
@@ -330,7 +330,7 @@ FDSP_Kernel_InitObj(struct fdsp_kernel *k)
 	p->int_2714 = 0;
 	p->int_2718 = 0;
 
-	k->int_00 = 2;
+	k->status = 2;
 	k->ntaps_a = 80;
 	k->ntaps_b = 40;
 	a->mu = FDSP_CHAN_A_MU;
@@ -576,7 +576,7 @@ TONE_create(struct fdsp_tone *t, const struct fdsp_tone_cfg *cfg)
 	 * radius: the denominator is 1 - 2*r*cos(w) z^-1 + r^2 z^-2 and
 	 * these are its coefficients with the signs the filters here use.
 	 */
-	t->det_coef[0] = -2.0f * osc.out_04;
+	t->det_coef[0] = -2.0f * osc.cosine;
 	t->det_coef[1] = -t->det_coef[0] * t->pole_radius;
 	t->det_coef[2] = t->pole_radius * -t->pole_radius;
 	t->det_z1 = 0.0f;
@@ -595,7 +595,7 @@ TONE_create(struct fdsp_tone *t, const struct fdsp_tone_cfg *cfg)
 	for (i = 0; i < t->fir_len; i++) {
 		MTK_phasor(&osc);
 		t->fir_dly[i] = 0.0f;
-		t->fir_coef[i] = osc.out_04 * t->fir_proto[i] * 2.0f;
+		t->fir_coef[i] = osc.cosine * t->fir_proto[i] * 2.0f;
 	}
 
 	t->short_0064 = 0;
@@ -619,9 +619,9 @@ TONE_create(struct fdsp_tone *t, const struct fdsp_tone_cfg *cfg)
 	biquad = t->ptr_01b4;
 	biquad[1] = 1.0f;
 	biquad[0] = -0.9215999841690063f;
-	biquad[2] = 1.92 * hum.out_04;
+	biquad[2] = 1.92 * hum.cosine;
 	biquad[4] = 1.0f;
-	biquad[3] = -2.0f * hum.out_04;
+	biquad[3] = -2.0f * hum.cosine;
 	t->ptr_01b8[0] = 0.0f;
 	t->ptr_01b8[1] = 0.0f;
 	return t;
@@ -665,7 +665,7 @@ TONE_generate(struct fdsp_tone *t, float *buf, short n)
 	i = n;
 	while (i--) {
 		MTK_phasor(&ph);
-		*buf++ = ph.out_08 * t->amp;
+		*buf++ = ph.sine * t->amp;
 	}
 	tm = (float)n * 0.125f + t->elapsed;
 	if (t->duration > tm || 0.0f >= t->duration) {

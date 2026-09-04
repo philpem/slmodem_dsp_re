@@ -147,8 +147,8 @@
  },
  {
   "label": "InitObj leaves the kernel's leading int at 1",
-  "find": "\tk->int_00 = 2;",
-  "replace": "\tk->int_00 = 1;"
+  "find": "\tk->status = 2;",
+  "replace": "\tk->status = 1;"
  },
  {
   "label": "InitObj clears only the first buffer array",

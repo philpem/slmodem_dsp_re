@@ -98,12 +98,12 @@ MTK_phasor(struct mtk_phasor *p)
 	}
 	i = n & 0xff;
 
-	p->out_04 = MTK_cos_table[i]
+	p->cosine = MTK_cos_table[i]
 		    + (MTK_cos_table[i + 1] - MTK_cos_table[i]) * frac;
-	p->out_04 = p->out_04 * MTK_cos_sign[quadrant];
-	p->out_08 = MTK_sin_table[i]
+	p->cosine = p->cosine * MTK_cos_sign[quadrant];
+	p->sine = MTK_sin_table[i]
 		    + (MTK_sin_table[i + 1] - MTK_sin_table[i]) * frac;
-	p->out_08 = p->out_08 * MTK_sin_sign[quadrant];
+	p->sine = p->sine * MTK_sin_sign[quadrant];
 
 	/*
 	 * The advance wraps at PI and not at 2*pi, so the phase this leaves

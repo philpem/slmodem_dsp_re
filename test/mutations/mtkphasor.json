@@ -70,18 +70,18 @@
  },
  {
   "label": "the cosine output takes the sine sign vector",
-  "find": "\tp->out_04 = p->out_04 * MTK_cos_sign[quadrant];",
-  "replace": "\tp->out_04 = p->out_04 * MTK_sin_sign[quadrant];"
+  "find": "\tp->cosine = p->cosine * MTK_cos_sign[quadrant];",
+  "replace": "\tp->cosine = p->cosine * MTK_sin_sign[quadrant];"
  },
  {
   "label": "the sine output reads the cosine table",
-  "find": "\tp->out_08 = MTK_sin_table[i]\n\t\t    + (MTK_sin_table[i + 1] - MTK_sin_table[i]) * frac;",
-  "replace": "\tp->out_08 = MTK_cos_table[i]\n\t\t    + (MTK_cos_table[i + 1] - MTK_cos_table[i]) * frac;"
+  "find": "\tp->sine = MTK_sin_table[i]\n\t\t    + (MTK_sin_table[i + 1] - MTK_sin_table[i]) * frac;",
+  "replace": "\tp->sine = MTK_cos_table[i]\n\t\t    + (MTK_cos_table[i + 1] - MTK_cos_table[i]) * frac;"
  },
  {
   "label": "the two outputs are written to each other's field",
-  "find": "\tp->out_08 = p->out_08 * MTK_sin_sign[quadrant];",
-  "replace": "\tp->out_04 = p->out_08 * MTK_sin_sign[quadrant];"
+  "find": "\tp->sine = p->sine * MTK_sin_sign[quadrant];",
+  "replace": "\tp->cosine = p->sine * MTK_sin_sign[quadrant];"
  },
  {
   "label": "the advance is taken from the unreduced phase",

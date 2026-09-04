@@ -58,12 +58,12 @@
  {
   "label": "the step is taken from the cosine rather than the angle",
   "find": "\tt->step = osc.phase;",
-  "replace": "\tt->step = osc.out_04;"
+  "replace": "\tt->step = osc.cosine;"
  },
  {
   "label": "the resonator's first coefficient loses its sign",
-  "find": "\tt->det_coef[0] = -2.0f * osc.out_04;",
-  "replace": "\tt->det_coef[0] = 2.0f * osc.out_04;"
+  "find": "\tt->det_coef[0] = -2.0f * osc.cosine;",
+  "replace": "\tt->det_coef[0] = 2.0f * osc.cosine;"
  },
  {
   "label": "the resonator's second coefficient loses its sign",
@@ -87,13 +87,13 @@
  },
  {
   "label": "the FIR taps are not doubled",
-  "find": "\t\tt->fir_coef[i] = osc.out_04 * t->fir_proto[i] * 2.0f;",
-  "replace": "\t\tt->fir_coef[i] = osc.out_04 * t->fir_proto[i];"
+  "find": "\t\tt->fir_coef[i] = osc.cosine * t->fir_proto[i] * 2.0f;",
+  "replace": "\t\tt->fir_coef[i] = osc.cosine * t->fir_proto[i];"
  },
  {
   "label": "the FIR taps are modulated by the sine rather than the cosine",
-  "find": "\t\tt->fir_coef[i] = osc.out_04 * t->fir_proto[i] * 2.0f;",
-  "replace": "\t\tt->fir_coef[i] = osc.out_08 * t->fir_proto[i] * 2.0f;"
+  "find": "\t\tt->fir_coef[i] = osc.cosine * t->fir_proto[i] * 2.0f;",
+  "replace": "\t\tt->fir_coef[i] = osc.sine * t->fir_proto[i] * 2.0f;"
  },
  {
   "label": "the delay line is not cleared with the taps",
@@ -102,8 +102,8 @@
  },
  {
   "label": "the oscillator is stepped after the tap rather than before it",
-  "find": "\t\tMTK_phasor(&osc);\n\t\tt->fir_dly[i] = 0.0f;\n\t\tt->fir_coef[i] = osc.out_04 * t->fir_proto[i] * 2.0f;",
-  "replace": "\t\tt->fir_dly[i] = 0.0f;\n\t\tt->fir_coef[i] = osc.out_04 * t->fir_proto[i] * 2.0f;\n\t\tMTK_phasor(&osc);"
+  "find": "\t\tMTK_phasor(&osc);\n\t\tt->fir_dly[i] = 0.0f;\n\t\tt->fir_coef[i] = osc.cosine * t->fir_proto[i] * 2.0f;",
+  "replace": "\t\tt->fir_dly[i] = 0.0f;\n\t\tt->fir_coef[i] = osc.cosine * t->fir_proto[i] * 2.0f;\n\t\tMTK_phasor(&osc);"
  },
  {
   "label": "the cleared block is one word short",
@@ -127,13 +127,13 @@
  },
  {
   "label": "the notch's feedback gain is 2 rather than 2*0.96",
-  "find": "\tbiquad[2] = 1.92 * hum.out_04;",
-  "replace": "\tbiquad[2] = 2.0 * hum.out_04;"
+  "find": "\tbiquad[2] = 1.92 * hum.cosine;",
+  "replace": "\tbiquad[2] = 2.0 * hum.cosine;"
  },
  {
   "label": "the notch's zero term loses its sign",
-  "find": "\tbiquad[3] = -2.0f * hum.out_04;",
-  "replace": "\tbiquad[3] = 2.0f * hum.out_04;"
+  "find": "\tbiquad[3] = -2.0f * hum.cosine;",
+  "replace": "\tbiquad[3] = 2.0f * hum.cosine;"
  },
  {
   "label": "the notch's last coefficient is left at zero",

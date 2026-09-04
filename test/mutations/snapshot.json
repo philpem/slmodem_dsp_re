@@ -377,7 +377,7 @@
    }
   },
   "fdspdp": {
-   "key": "94cb53c9c4e949f045580da0ca02633baa5bb003d70444b276502c2eed0cf6cd",
+   "key": "bd115f48a35c234d3f4ccd3eb835325154bc2e0aefdf1b769a6ef98799ce4ecb",
    "summary": "22 mutations: 22 caught (22 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "FDSP_DP_Delete clears the global for a NULL kernel too": "caught",
@@ -388,10 +388,10 @@
     "FDSP_DP_Delete leaves the kernel itself": "caught",
     "chan_a gets 120 taps rather than 240": "caught",
     "chan_b is allocated as a kernel": "caught",
-    "int_00 is decided by the TX delay": "caught",
-    "int_00 is left as InitObj set it": "caught",
-    "int_00 treats zero as negative": "caught",
-    "int_00's two answers are the other way round": "caught",
+    "status is decided by the TX delay": "caught",
+    "status is left as InitObj set it": "caught",
+    "status treats zero as negative": "caught",
+    "status's two answers are the other way round": "caught",
     "the buffer block is allocated as a channel": "caught",
     "the correlation counter is not cleared": "caught",
     "the correlation counter is set to one": "caught",
@@ -427,7 +427,7 @@
    }
   },
   "fdspkrnl": {
-   "key": "6d220f379e5afa12f271b9c47034ddf9ffbbb09b85870873fb121969801f580a",
+   "key": "02c389f774a0ff941cf84822e24e4b16fbd3787a816e2cfd8ed61c0aa9634fd6",
    "summary": "50 mutations: 50 caught (50 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "InitObj clears chan_a's delay line one block short": "caught",
@@ -1030,7 +1030,7 @@
    }
   },
   "mtkphasor": {
-   "key": "5ff5ca4f5af59a8b1e99713a977ec6a6a0f06cc204151469bbbdb8772cd75dcb",
+   "key": "5be39051410af87ceb58f537098eca6a8358f0f7f5f64bba2da54196b969f322",
    "summary": "19 mutations: 19 caught (19 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "the advance is taken from the unreduced phase": "caught",
@@ -1317,7 +1317,7 @@
    }
   },
   "tonecreate": {
-   "key": "76e18481478c83e797fff09b31c2fa189f7b09b5b2e0c466fb41f307dbbab34e",
+   "key": "a8cd8b6a6a0816ef500129530db6861e8fc117d53a811ff07ea7a3d3a8258057",
    "summary": "33 mutations: 33 caught (33 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "TONE_CFG claims 52 taps": "caught",
@@ -5790,12 +5790,12 @@
    "verdicts": {
     "+0x08 is cleared four bytes wide rather than one": "caught",
     "+0x38 defaults to 0x15 rather than 0x16": "caught",
+    "rateAction is left as the constructor found it": "caught",
     "the destructor clears the rate limits": "caught",
     "the destructor clears the rate limits, volatile so it survives": "caught",
     "the pre-filter and the power model are swapped": "caught",
     "the pre-filter is not stored": "caught",
-    "the two rate defaults are swapped": "caught",
-    "rateAction is left as the constructor found it": "caught"
+    "the two rate defaults are swapped": "caught"
    }
   },
   "v90conneval": {
@@ -10843,6 +10843,8 @@
    "key": "95ab0f4d6dd17d8b1c886d90a2c6a9fae53eabd5f26af8ff0a0e9a63efedd738",
    "summary": "60 mutations: 60 caught (60 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
+    "ecMode is not cleared": "caught",
+    "ecRampCounter is not cleared": "caught",
     "the ANSpcm-demod-over code is 0x39": "caught",
     "the ANSpcm-demod-over report is made at level 1 as well": "caught",
     "the ANSpcm-drop code is 0x3c": "caught",
@@ -10900,9 +10902,7 @@
     "the tone runs one sample short": "caught",
     "the transmit bit count is left alone": "caught",
     "the two output counts are zeroed through the same pointer": "caught",
-    "the whole flag byte is cleared rather than one bit of it": "caught",
-    "ecMode is not cleared": "caught",
-    "ecRampCounter is not cleared": "caught"
+    "the whole flag byte is cleared rather than one bit of it": "caught"
    }
   },
   "vpcmrun": {
@@ -10945,13 +10945,13 @@
     "TRN1u does not leave the second": "uncaught",
     "TRN1u packs the CP message from the ALTERNATE mapping block": "caught",
     "TRN2u packs the CP message from the FIRST mapping block": "caught",
-    "progressState 0 and 1 do not share an arm": "caught",
-    "progressState == 2 seeds 2 rather than 1": "caught",
-    "progressState == 4 seeds 2 rather than 3": "caught",
     "every status above 3 latches progressState": "caught",
     "extendEu sets the flag to 0 rather than 1": "caught",
     "getConstelationSize is given its two outputs the other way round": "caught",
     "local rate reneg indicates a REMOTE one": "caught",
+    "progressState 0 and 1 do not share an arm": "caught",
+    "progressState == 2 seeds 2 rather than 1": "caught",
+    "progressState == 4 seeds 2 rather than 3": "caught",
     "remote rate reneg indicates a LOCAL one": "caught",
     "status 10 is 9": "caught",
     "status 10 latches 2 rather than 3": "caught",
