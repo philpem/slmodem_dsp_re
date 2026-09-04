@@ -38,13 +38,13 @@
 
  {"label": "the average PDSNR is the reciprocal of the object's",
   "why": "THE ONE THAT MATTERS MOST in this set.  objdump prints the object's `de f9` as `fdivrp` and it IS `FDIVP` (finding F245), so a reconstruction that believed the mnemonic would divide the other way round -- and a side-against-side comparison would not care, because both sides would be wrong together.  It is catchable only because t_v90conneval.cpp asserts what the FIRST call leaves behind and drives two hundred accumulating calls after it.",
-  "find": "\tword_70 = (nofOldSymbols * word_70 + pdsnr * nofSymbols)\n\t\t  / (nofOldSymbols + nofSymbols);",
-  "replace": "\tword_70 = (nofOldSymbols + nofSymbols)\n\t\t  / (nofOldSymbols * word_70 + pdsnr * nofSymbols);"},
+  "find": "\tavePdsnr = (nofOldSymbols * avePdsnr + pdsnr * nofSymbols)\n\t\t  / (nofOldSymbols + nofSymbols);",
+  "replace": "\tavePdsnr = (nofOldSymbols + nofSymbols)\n\t\t  / (nofOldSymbols * avePdsnr + pdsnr * nofSymbols);"},
 
  {"label": "the weight is a signed count",
   "why": "`push $0; push %eax; fildll` is the zero-extending conversion GCC uses for `unsigned int`; a signed count would have been a bare `fildl`.  The two agree on every total below 2^31, which is why the fixture starts three of its runs near the boundary and asserts it crossed.",
-  "find": "\tunsigned int nofOldSymbols = word_74;",
-  "replace": "\tint nofOldSymbols = (int)word_74;"},
+  "find": "\tunsigned int nofOldSymbols = avePdsnrNofSymbols;",
+  "replace": "\tint nofOldSymbols = (int)avePdsnrNofSymbols;"},
 
  {"label": "the new sample carries a weight of one",
   "find": "pdsnr * nofSymbols)\n\t\t  / (nofOldSymbols + nofSymbols);",
@@ -52,17 +52,17 @@
 
  {"label": "the first-call test is on the average, not on the count",
   "find": "\tif (nofOldSymbols == 0) {",
-  "replace": "\tif (word_70 == 0.0f) {"},
+  "replace": "\tif (avePdsnr == 0.0f) {"},
 
  {"label": "the first call averages rather than assigns",
-  "find": "\tif (nofOldSymbols == 0) {\n\t\tword_70 = pdsnr;",
-  "replace": "\tif (nofOldSymbols == 0) {\n\t\tword_70 = (word_70 + pdsnr) / 2;"},
+  "find": "\tif (nofOldSymbols == 0) {\n\t\tavePdsnr = pdsnr;",
+  "replace": "\tif (nofOldSymbols == 0) {\n\t\tavePdsnr = (avePdsnr + pdsnr) / 2;"},
 
  {"label": "the running average rounds at every step",
   "equivalent": true,
   "why": "PROVEN, not assumed.  The two forms were compiled with this tree's own CXXFLAGS and `objdump -d` diffed over `_ZN22V90ConnectionEvaluator14updateAvePdsnrEfj`: the instruction text is IDENTICAL, operands included.  The reason is the one CLAUDE.md gives for not using -ffloat-store -- a `float` LOCAL is not a rounding point, because GCC keeps it in an x87 register at 80-bit extended and rounds only where a value reaches memory.  Both forms round exactly once, at the `fstps` into +0x70.  So this is a mutation that cannot fail, and the interesting part is that the obvious reading of it -- 'three roundings instead of one' -- is wrong: naming a temporary does not create a rounding point on this target.  Assign it to a MEMBER instead of a local and it becomes a real defect.",
-  "find": "\tword_70 = (nofOldSymbols * word_70 + pdsnr * nofSymbols)\n\t\t  / (nofOldSymbols + nofSymbols);\n",
-  "replace": "\t{\n\t\tfloat a = nofOldSymbols * word_70;\n\t\tfloat b = pdsnr * nofSymbols;\n\n\t\tword_70 = (a + b) / (nofOldSymbols + nofSymbols);\n\t}\n"},
+  "find": "\tavePdsnr = (nofOldSymbols * avePdsnr + pdsnr * nofSymbols)\n\t\t  / (nofOldSymbols + nofSymbols);\n",
+  "replace": "\t{\n\t\tfloat a = nofOldSymbols * avePdsnr;\n\t\tfloat b = pdsnr * nofSymbols;\n\n\t\tavePdsnr = (a + b) / (nofOldSymbols + nofSymbols);\n\t}\n"},
 
  {"label": "the two thresholds are stored in each other's slots",
   "find": "\tthreshUp = up;\n\tthreshDown = down;",
@@ -186,11 +186,11 @@
 
  {"label": "phase3's entry test is on the average, not the count",
   "find": "\tif (nofSymbols == 0)\n\t\treturn V90CE_VERDICT_NONE;\n\n\tif (altRbsDetectedOnQc != 0) {",
-  "replace": "\tif (word_70 == 0.0f)\n\t\treturn V90CE_VERDICT_NONE;\n\n\tif (altRbsDetectedOnQc != 0) {"},
+  "replace": "\tif (avePdsnr == 0.0f)\n\t\treturn V90CE_VERDICT_NONE;\n\n\tif (altRbsDetectedOnQc != 0) {"},
 
  {"label": "phase3's early return consumes the average too",
   "find": "\t\treturn V90CE_VERDICT_NONE;\n\n\tif (altRbsDetectedOnQc != 0) {",
-  "replace": "\t{\n\t\tword_74 = 0;\n\t\tword_70 = 0;\n\t\treturn V90CE_VERDICT_NONE;\n\t}\n\n\tif (altRbsDetectedOnQc != 0) {"},
+  "replace": "\t{\n\t\tavePdsnrNofSymbols = 0;\n\t\tavePdsnr = 0;\n\t\treturn V90CE_VERDICT_NONE;\n\t}\n\n\tif (altRbsDetectedOnQc != 0) {"},
 
  {"label": "phase3's arms are three ifs rather than a chain",
   "why": "0x3f612 jumps over the +0xb2 arm straight to the +0x88 test, so the three are exclusive.  Caught because the altRbsDetectedOnQc trials set +0x88 and +0x84 as well and give +0x64 and the retrain duration values that would trip on the first call.",
@@ -199,7 +199,7 @@
 
  {"label": "phase3's first arm is armed by +0xb0",
   "find": "\tif (altRbsDetectedOnQc != 0) {\n\t\taltRbsDetectedOnQc = 0;",
-  "replace": "\tif (short_b0 != 0) {\n\t\taltRbsDetectedOnQc = 0;"},
+  "replace": "\tif (meanErrorCheckArmed != 0) {\n\t\taltRbsDetectedOnQc = 0;"},
 
  {"label": "phase3's first arm leaves altRbsDetectedOnQc set",
   "find": "\tif (altRbsDetectedOnQc != 0) {\n\t\taltRbsDetectedOnQc = 0;\n\t\tnofV90Retrains++;",
@@ -228,12 +228,12 @@
 
  {"label": "the end-of-TRN1d arm uses the EIA6 threshold",
   "why": "The task's brief predicted the EIA6 thresholds would appear in these two functions and they do NOT.  The fixture plants +FLT_MAX in all three of them, so a comparison that picked one up would never fire.",
-  "find": "\t\tif (word_70 > params->TRN1D_ERROR_FOR_V34_FALLBACK) {",
-  "replace": "\t\tif (word_70 > params->EIA6_TRN1D_ERROR_FOR_V34_FALLBACK) {"},
+  "find": "\t\tif (avePdsnr > params->TRN1D_ERROR_FOR_V34_FALLBACK) {",
+  "replace": "\t\tif (avePdsnr > params->EIA6_TRN1D_ERROR_FOR_V34_FALLBACK) {"},
 
  {"label": "the end-of-TRN1d duration is assigned rather than accumulated",
-  "find": "\t\tif (word_70 > params->TRN1D_ERROR_FOR_V34_FALLBACK) {\n\t\t\tword_10 += nofSymbols;",
-  "replace": "\t\tif (word_70 > params->TRN1D_ERROR_FOR_V34_FALLBACK) {\n\t\t\tword_10 = nofSymbols;"},
+  "find": "\t\tif (avePdsnr > params->TRN1D_ERROR_FOR_V34_FALLBACK) {\n\t\t\tword_10 += nofSymbols;",
+  "replace": "\t\tif (avePdsnr > params->TRN1D_ERROR_FOR_V34_FALLBACK) {\n\t\t\tword_10 = nofSymbols;"},
 
  {"label": "the end-of-TRN1d arm measures against phase 4's +0x68",
   "why": "`reset` plants 1600 in both slots, so only a fixture that gives them different values can tell the two apart at all.",
@@ -245,69 +245,69 @@
   "replace": "\t\t\t}\n\t\t}\n\t} else if (word_84 != 0) {"},
 
  {"label": "the end-of-TRN1d fall-back does not restart the counter",
-  "find": "\t\t\t\t\t \"%c%d.%03d\\r\\n\",\n\t\t\t\t\t !(0.0f >= word_70) ? '+' : '-',\n\t\t\t\t\t (int)__builtin_fabsf(word_70),\n\t\t\t\t\t ce_frac3(word_70));\n\t\t\t\tnofV90Retrains = 0;",
-  "replace": "\t\t\t\t\t \"%c%d.%03d\\r\\n\",\n\t\t\t\t\t !(0.0f >= word_70) ? '+' : '-',\n\t\t\t\t\t (int)__builtin_fabsf(word_70),\n\t\t\t\t\t ce_frac3(word_70));"},
+  "find": "\t\t\t\t\t \"%c%d.%03d\\r\\n\",\n\t\t\t\t\t !(0.0f >= avePdsnr) ? '+' : '-',\n\t\t\t\t\t (int)__builtin_fabsf(avePdsnr),\n\t\t\t\t\t ce_frac3(avePdsnr));\n\t\t\t\tnofV90Retrains = 0;",
+  "replace": "\t\t\t\t\t \"%c%d.%03d\\r\\n\",\n\t\t\t\t\t !(0.0f >= avePdsnr) ? '+' : '-',\n\t\t\t\t\t (int)__builtin_fabsf(avePdsnr),\n\t\t\t\t\t ce_frac3(avePdsnr));"},
 
  {"label": "the printed sign is '+' at zero",
   "why": "`sbb %edx,%edx; and $0xfffffffe,%edx; add $0x2d,%edx` after `fldz; fcompp` is '+' on carry and carry means 0.0 < v STRICTLY, so both zeros print '-'.  Caught only because the print sweep puts the threshold at -FLT_MAX, which is the only way a zero average can reach a diagnostic at all.",
-  "find": "\t\t\t\t\t \"%c%d.%03d\\r\\n\",\n\t\t\t\t\t !(0.0f >= word_70) ? '+' : '-',",
-  "replace": "\t\t\t\t\t \"%c%d.%03d\\r\\n\",\n\t\t\t\t\t (0.0f <= word_70) ? '+' : '-',"},
+  "find": "\t\t\t\t\t \"%c%d.%03d\\r\\n\",\n\t\t\t\t\t !(0.0f >= avePdsnr) ? '+' : '-',",
+  "replace": "\t\t\t\t\t \"%c%d.%03d\\r\\n\",\n\t\t\t\t\t (0.0f <= avePdsnr) ? '+' : '-',"},
 
  {"label": "the printed magnitude keeps its sign",
-  "find": "\t\t\t\t\t (int)__builtin_fabsf(word_70),\n\t\t\t\t\t ce_frac3(word_70));\n\t\t\t\tnofV90Retrains = 0;\n\t\t\t\tword_1c = 0;\n\t\t\t\tword_90 = 0;\n\t\t\t}\n\t\t} else {\n\t\t\tword_10 = 0;\n\t\t}\n\t} else if (word_84 != 0) {",
-  "replace": "\t\t\t\t\t (int)word_70,\n\t\t\t\t\t ce_frac3(word_70));\n\t\t\t\tnofV90Retrains = 0;\n\t\t\t\tword_1c = 0;\n\t\t\t\tword_90 = 0;\n\t\t\t}\n\t\t} else {\n\t\t\tword_10 = 0;\n\t\t}\n\t} else if (word_84 != 0) {"},
+  "find": "\t\t\t\t\t (int)__builtin_fabsf(avePdsnr),\n\t\t\t\t\t ce_frac3(avePdsnr));\n\t\t\t\tnofV90Retrains = 0;\n\t\t\t\tword_1c = 0;\n\t\t\t\tword_90 = 0;\n\t\t\t}\n\t\t} else {\n\t\t\tword_10 = 0;\n\t\t}\n\t} else if (word_84 != 0) {",
+  "replace": "\t\t\t\t\t (int)avePdsnr,\n\t\t\t\t\t ce_frac3(avePdsnr));\n\t\t\t\tnofV90Retrains = 0;\n\t\t\t\tword_1c = 0;\n\t\t\t\tword_90 = 0;\n\t\t\t}\n\t\t} else {\n\t\t\tword_10 = 0;\n\t\t}\n\t} else if (word_84 != 0) {"},
 
  {"label": "the ordinary phase-3 arm uses the EIA6 threshold",
-  "find": "\t\tif (word_70 > params->PHASE3_ERROR_FOR_V34_FALLBACK) {",
-  "replace": "\t\tif (word_70 > params->EIA6_PDSNR_THRESHOLD_IN_PHASE3) {"},
+  "find": "\t\tif (avePdsnr > params->PHASE3_ERROR_FOR_V34_FALLBACK) {",
+  "replace": "\t\tif (avePdsnr > params->EIA6_PDSNR_THRESHOLD_IN_PHASE3) {"},
 
  {"label": "the phase-3 retrain test runs only when the fall-back did not",
   "why": "0x3f926 -- the tail of the fall-back diagnostic -- jumps to 0x3f77a, the retrain test, so one call can print the fall-back with %esi = 5 and then overwrite it with 4.  Caught by the coverage flag that requires a call which printed two lines and answered 4.",
-  "find": "\t\t}\n\n\t\tif (word_70 > params->PDSNR_THRESHOLD_IN_PHASE3) {",
-  "replace": "\t\t}\n\n\t\tif (verdict == V90CE_VERDICT_NONE\n\t\t    && word_70 > params->PDSNR_THRESHOLD_IN_PHASE3) {"},
+  "find": "\t\t}\n\n\t\tif (avePdsnr > params->PDSNR_THRESHOLD_IN_PHASE3) {",
+  "replace": "\t\t}\n\n\t\tif (verdict == V90CE_VERDICT_NONE\n\t\t    && avePdsnr > params->PDSNR_THRESHOLD_IN_PHASE3) {"},
 
  {"label": "the phase-3 retrain uses phase 4's threshold",
   "why": "Caught only because the average table carries 12.5f, which is above PDSNR_THRESHOLD_IN_PHASE3 (12.0f in the fixture) and below PDSNR_THRESHOLD_IN_PHASE4 (13.0f).  Every other value in the table answers the two identically.",
-  "find": "\t\tif (word_70 > params->PDSNR_THRESHOLD_IN_PHASE3) {",
-  "replace": "\t\tif (word_70 > params->PDSNR_THRESHOLD_IN_PHASE4) {"},
+  "find": "\t\tif (avePdsnr > params->PDSNR_THRESHOLD_IN_PHASE3) {",
+  "replace": "\t\tif (avePdsnr > params->PDSNR_THRESHOLD_IN_PHASE4) {"},
 
  {"label": "the phase-3 retrain duration is the parameter, not the copy",
   "why": "`cmp 0x60(%ebx),%eax` is the object's own +0x60 copy.  The fixture puts 1 in the parameter and something much larger in the copy, so a reconstruction reading the parameter trips on the first call of every run.",
-  "find": "\t\tif (word_70 > params->PDSNR_THRESHOLD_IN_PHASE3) {\n\t\t\tword_18 += nofSymbols;\n\t\t\tif (word_18 >= (unsigned int)retrainDetectDuration) {",
-  "replace": "\t\tif (word_70 > params->PDSNR_THRESHOLD_IN_PHASE3) {\n\t\t\tword_18 += nofSymbols;\n\t\t\tif (word_18 >= (unsigned int)params->RETRAIN_DETECT_DURATION) {"},
+  "find": "\t\tif (avePdsnr > params->PDSNR_THRESHOLD_IN_PHASE3) {\n\t\t\tword_18 += nofSymbols;\n\t\t\tif (word_18 >= (unsigned int)retrainDetectDuration) {",
+  "replace": "\t\tif (avePdsnr > params->PDSNR_THRESHOLD_IN_PHASE3) {\n\t\t\tword_18 += nofSymbols;\n\t\t\tif (word_18 >= (unsigned int)params->RETRAIN_DETECT_DURATION) {"},
 
  {"label": "the phase-3 retrain duration counts calls, not symbols",
-  "find": "\t\tif (word_70 > params->PDSNR_THRESHOLD_IN_PHASE3) {\n\t\t\tword_18 += nofSymbols;\n\t\t\tif (word_18 >=",
-  "replace": "\t\tif (word_70 > params->PDSNR_THRESHOLD_IN_PHASE3) {\n\t\t\tword_18 += 1;\n\t\t\tif (word_18 >="},
+  "find": "\t\tif (avePdsnr > params->PDSNR_THRESHOLD_IN_PHASE3) {\n\t\t\tword_18 += nofSymbols;\n\t\t\tif (word_18 >=",
+  "replace": "\t\tif (avePdsnr > params->PDSNR_THRESHOLD_IN_PHASE3) {\n\t\t\tword_18 += 1;\n\t\t\tif (word_18 >="},
 
  {"label": "the phase-3 retrain does not clear its duration",
-  "find": "\t\t\t\tword_1c = 0;\n\t\t\t\tword_90 = 0;\n\t\t\t\tword_18 = 0;\n\t\t\t}\n\t\t} else {\n\t\t\tword_18 = 0;\n\t\t}\n\t}\n\n\tword_74 = 0;",
-  "replace": "\t\t\t\tword_1c = 0;\n\t\t\t\tword_90 = 0;\n\t\t\t}\n\t\t} else {\n\t\t\tword_18 = 0;\n\t\t}\n\t}\n\n\tword_74 = 0;"},
+  "find": "\t\t\t\tword_1c = 0;\n\t\t\t\tword_90 = 0;\n\t\t\t\tword_18 = 0;\n\t\t\t}\n\t\t} else {\n\t\t\tword_18 = 0;\n\t\t}\n\t}\n\n\tavePdsnrNofSymbols = 0;",
+  "replace": "\t\t\t\tword_1c = 0;\n\t\t\t\tword_90 = 0;\n\t\t\t}\n\t\t} else {\n\t\t\tword_18 = 0;\n\t\t}\n\t}\n\n\tavePdsnrNofSymbols = 0;"},
 
  {"label": "phase3 clears +0x18 on the accumulating path too",
   "why": "THE ONE A SINGLE-CALL TEST CANNOT SEE.  0x3f797 jumps PAST the store that zeroes +0x18, so the duration survives a call that did not reach its threshold.  A version that cleared it every call agrees with the blob on every first call and never accumulates; the sixty-block runs are the only thing that catches it.",
-  "find": "\t\t} else {\n\t\t\tword_18 = 0;\n\t\t}\n\t}\n\n\tword_74 = 0;",
-  "replace": "\t\t}\n\t\tword_18 = 0;\n\t}\n\n\tword_74 = 0;"},
+  "find": "\t\t} else {\n\t\t\tword_18 = 0;\n\t\t}\n\t}\n\n\tavePdsnrNofSymbols = 0;",
+  "replace": "\t\t}\n\t\tword_18 = 0;\n\t}\n\n\tavePdsnrNofSymbols = 0;"},
 
  {"label": "phase3 does not consume the average",
-  "find": "\t\t\tword_18 = 0;\n\t\t}\n\t}\n\n\tword_74 = 0;\n\tword_70 = 0;\n\treturn verdict;\n}",
-  "replace": "\t\t\tword_18 = 0;\n\t\t}\n\t}\n\n\tword_74 = 0;\n\treturn verdict;\n}"},
+  "find": "\t\t\tword_18 = 0;\n\t\t}\n\t}\n\n\tavePdsnrNofSymbols = 0;\n\tavePdsnr = 0;\n\treturn verdict;\n}",
+  "replace": "\t\t\tword_18 = 0;\n\t\t}\n\t}\n\n\tavePdsnrNofSymbols = 0;\n\treturn verdict;\n}"},
 
  {"label": "phase4's entry test is on the average, not the count",
-  "find": "\tif (nofSymbols == 0)\n\t\treturn V90CE_VERDICT_NONE;\n\n\tif (short_b0 != 0",
-  "replace": "\tif (word_70 == 0.0f)\n\t\treturn V90CE_VERDICT_NONE;\n\n\tif (short_b0 != 0"},
+  "find": "\tif (nofSymbols == 0)\n\t\treturn V90CE_VERDICT_NONE;\n\n\tif (meanErrorCheckArmed != 0",
+  "replace": "\tif (avePdsnr == 0.0f)\n\t\treturn V90CE_VERDICT_NONE;\n\n\tif (meanErrorCheckArmed != 0"},
 
  {"label": "phase4's early return consumes the average too",
-  "find": "\t\treturn V90CE_VERDICT_NONE;\n\n\tif (short_b0 != 0",
-  "replace": "\t{\n\t\tword_74 = 0;\n\t\tword_70 = 0;\n\t\treturn V90CE_VERDICT_NONE;\n\t}\n\n\tif (short_b0 != 0"},
+  "find": "\t\treturn V90CE_VERDICT_NONE;\n\n\tif (meanErrorCheckArmed != 0",
+  "replace": "\t{\n\t\tavePdsnrNofSymbols = 0;\n\t\tavePdsnr = 0;\n\t\treturn V90CE_VERDICT_NONE;\n\t}\n\n\tif (meanErrorCheckArmed != 0"},
 
  {"label": "the mean-error arm is armed by +0xb2",
-  "find": "\tif (short_b0 != 0\n\t    && params->PHASE4_MEAN",
+  "find": "\tif (meanErrorCheckArmed != 0\n\t    && params->PHASE4_MEAN",
   "replace": "\tif (altRbsDetectedOnQc != 0\n\t    && params->PHASE4_MEAN"},
 
  {"label": "the mean-error arm has no ratio guard",
-  "find": "\tif (short_b0 != 0\n\t    && params->PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH\n\t       < meanErrBefToAftUpdateRatio\n\t    && nofV90Retrains",
-  "replace": "\tif (short_b0 != 0\n\t    && nofV90Retrains"},
+  "find": "\tif (meanErrorCheckArmed != 0\n\t    && params->PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH\n\t       < meanErrBefToAftUpdateRatio\n\t    && nofV90Retrains",
+  "replace": "\tif (meanErrorCheckArmed != 0\n\t    && nofV90Retrains"},
 
  {"label": "the mean-error arm uses the QC threshold",
   "find": "\t    && params->PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH\n\t       < meanErrBefToAftUpdateRatio",
@@ -328,18 +328,18 @@
   "replace": "nofV90Retrains <= (unsigned int)params->unnamed_45c) {"},
 
  {"label": "the mean-error arm leaves +0xb0 set",
-  "find": "\t\tnofV90Retrains++;\n\t\tshort_b0 = 0;",
+  "find": "\t\tnofV90Retrains++;\n\t\tmeanErrorCheckArmed = 0;",
   "replace": "\t\tnofV90Retrains++;"},
 
  {"label": "the mean-error arm falls through to the rest of the function",
   "why": "0x3fcb6 jumps past both +0x70 tests and the delayed-retrain test to the tail.  The sweep sets the average above +0xac and +0x10 one symbol short of +0x68, so a fall-through turns the arm's verdict of 4 into a fall-back of 5.",
-  "find": "\t\tword_1c = 0;\n\t\tword_90 = 0;\n\t\tword_18 = 0;\n\t} else {\n\t\tif (word_70 > phase4ErrorForV34Fallback) {",
-  "replace": "\t\tword_1c = 0;\n\t\tword_90 = 0;\n\t\tword_18 = 0;\n\t}\n\t{\n\t\tif (word_70 > phase4ErrorForV34Fallback) {"},
+  "find": "\t\tword_1c = 0;\n\t\tword_90 = 0;\n\t\tword_18 = 0;\n\t} else {\n\t\tif (avePdsnr > phase4ErrorForV34Fallback) {",
+  "replace": "\t\tword_1c = 0;\n\t\tword_90 = 0;\n\t\tword_18 = 0;\n\t}\n\t{\n\t\tif (avePdsnr > phase4ErrorForV34Fallback) {"},
 
  {"label": "phase4's fall-back threshold is the parameter, not the field",
   "why": "`fcoms 0xac(%ebx)` reads the OBJECT.  `reset` copies the parameter into +0xac, so the two agree until `evaluatePhase4` replaces +0xac with `unnamed_434` -- which is why the fixture writes +0xac directly and leaves +FLT_MAX in the parameter.",
-  "find": "\t\tif (word_70 > phase4ErrorForV34Fallback) {",
-  "replace": "\t\tif (word_70 > params->PHASE4_ERROR_FOR_V34_FALLBACK) {"},
+  "find": "\t\tif (avePdsnr > phase4ErrorForV34Fallback) {",
+  "replace": "\t\tif (avePdsnr > params->PHASE4_ERROR_FOR_V34_FALLBACK) {"},
 
  {"label": "phase4 measures its duration against phase 3's +0x64",
   "find": "\t\t\tif (word_10 >= word_68) {",
@@ -347,24 +347,24 @@
 
  {"label": "phase4's fall-back leaves by the ordinary tail",
   "why": "0x3fbaa is `mov $0x5,%eax` into its own epilogue at 0x3fbcf, with %esi never consulted -- the only path in either function shaped that way.  Falling through instead would reach the +0x18 half, which the fixture watches with a sentinel.",
-  "find": "\t\t\t\tword_74 = 0;\n\t\t\t\tword_70 = 0;\n\t\t\t\treturn V90CE_VERDICT_FALLBACK_V34;",
+  "find": "\t\t\t\tavePdsnrNofSymbols = 0;\n\t\t\t\tavePdsnr = 0;\n\t\t\t\treturn V90CE_VERDICT_FALLBACK_V34;",
   "replace": "\t\t\t\tverdict = V90CE_VERDICT_FALLBACK_V34;"},
 
  {"label": "phase4's fall-back does not restart the counter",
-  "find": "\t\t\t\t\t ce_frac3(word_70));\n\t\t\t\tnofV90Retrains = 0;\n\t\t\t\tword_1c = 0;\n\t\t\t\tword_90 = 0;\n\t\t\t\tword_74 = 0;",
-  "replace": "\t\t\t\t\t ce_frac3(word_70));\n\t\t\t\tword_1c = 0;\n\t\t\t\tword_90 = 0;\n\t\t\t\tword_74 = 0;"},
+  "find": "\t\t\t\t\t ce_frac3(avePdsnr));\n\t\t\t\tnofV90Retrains = 0;\n\t\t\t\tword_1c = 0;\n\t\t\t\tword_90 = 0;\n\t\t\t\tavePdsnrNofSymbols = 0;",
+  "replace": "\t\t\t\t\t ce_frac3(avePdsnr));\n\t\t\t\tword_1c = 0;\n\t\t\t\tword_90 = 0;\n\t\t\t\tavePdsnrNofSymbols = 0;"},
 
  {"label": "phase4 does not clear +0x10 below its threshold",
-  "find": "\t\t\t}\n\t\t} else {\n\t\t\tword_10 = 0;\n\t\t}\n\n\t\tif (word_70 > params->PDSNR_THRESHOLD_IN_PHASE4) {",
-  "replace": "\t\t\t}\n\t\t}\n\n\t\tif (word_70 > params->PDSNR_THRESHOLD_IN_PHASE4) {"},
+  "find": "\t\t\t}\n\t\t} else {\n\t\t\tword_10 = 0;\n\t\t}\n\n\t\tif (avePdsnr > params->PDSNR_THRESHOLD_IN_PHASE4) {",
+  "replace": "\t\t\t}\n\t\t}\n\n\t\tif (avePdsnr > params->PDSNR_THRESHOLD_IN_PHASE4) {"},
 
  {"label": "phase4's retrain uses the EIA6 threshold",
-  "find": "\t\tif (word_70 > params->PDSNR_THRESHOLD_IN_PHASE4) {",
-  "replace": "\t\tif (word_70 > params->EIA6_PDSNR_THRESHOLD_IN_PHASE4) {"},
+  "find": "\t\tif (avePdsnr > params->PDSNR_THRESHOLD_IN_PHASE4) {",
+  "replace": "\t\tif (avePdsnr > params->EIA6_PDSNR_THRESHOLD_IN_PHASE4) {"},
 
  {"label": "phase4's retrain duration is the parameter, not the copy",
-  "find": "\t\tif (word_70 > params->PDSNR_THRESHOLD_IN_PHASE4) {\n\t\t\tword_18 += nofSymbols;\n\t\t\tif (word_18 >= (unsigned int)retrainDetectDuration) {",
-  "replace": "\t\tif (word_70 > params->PDSNR_THRESHOLD_IN_PHASE4) {\n\t\t\tword_18 += nofSymbols;\n\t\t\tif (word_18 >= (unsigned int)params->RETRAIN_DETECT_DURATION) {"},
+  "find": "\t\tif (avePdsnr > params->PDSNR_THRESHOLD_IN_PHASE4) {\n\t\t\tword_18 += nofSymbols;\n\t\t\tif (word_18 >= (unsigned int)retrainDetectDuration) {",
+  "replace": "\t\tif (avePdsnr > params->PDSNR_THRESHOLD_IN_PHASE4) {\n\t\t\tword_18 += nofSymbols;\n\t\t\tif (word_18 >= (unsigned int)params->RETRAIN_DETECT_DURATION) {"},
 
  {"label": "phase4 clears +0x18 on the accumulating path too",
   "find": "\t\t} else {\n\t\t\tword_18 = 0;\n\t\t}\n\n\t\tif (delayedRetrainRequest != 0 && delayedRetrainArmed != 0) {",
@@ -396,21 +396,21 @@
   "replace": "\t\t\t\t\t \"due to delayed retrain request\\r\\n\",\n\t\t\t\t\t nofV90Retrains);\n\t\t\t\tnofV90Retrains = 0;\n\t\t\t}"},
 
  {"label": "phase4 does not consume the average",
-  "find": "\t\t\tword_1c = 0;\n\t\t\tword_90 = 0;\n\t\t}\n\t}\n\n\tword_74 = 0;\n\tword_70 = 0;\n\treturn verdict;\n}",
-  "replace": "\t\t\tword_1c = 0;\n\t\t\tword_90 = 0;\n\t\t}\n\t}\n\n\tword_74 = 0;\n\treturn verdict;\n}"},
+  "find": "\t\t\tword_1c = 0;\n\t\t\tword_90 = 0;\n\t\t}\n\t}\n\n\tavePdsnrNofSymbols = 0;\n\tavePdsnr = 0;\n\treturn verdict;\n}",
+  "replace": "\t\t\tword_1c = 0;\n\t\t\tword_90 = 0;\n\t\t}\n\t}\n\n\tavePdsnrNofSymbols = 0;\n\treturn verdict;\n}"},
 
  {"label": "NOTE: the missing `%d` argument at 0x3ffcf has NO mutation, and could not be given one",
   "why": "The object calls `edprintf` with the string at 0xab34 -- \"initiating fall back to V34 due to %d V90 retrains (last one delayed)\" -- and stores NOTHING to 0x4(%esp), while its sibling at 0x3fffb stores `nofV90Retrains` there for a string with the same conversion.  So `vsnprintf` formats the outgoing-argument slot as an int and the printed number is whatever the frame held.  The reconstruction reproduces the call faithfully, but a mutation that ADDED the argument cannot be caught: the two sides' frames hold different rubbish, so the transcript already differs on that line for both the correct and the mutated source, and the test compares state, verdict and line count there instead of text.  IT WAS TRIED: the fixture arranges a call in which the phase-4 retrain fires first and leaves `nofV90Retrains` in exactly that slot, which would have made the value deterministic; measured, the transcripts still differ and differ ONLY in that line, because GCC 13 does not leave our frame's slot holding what GCC 3.4 leaves in the object's.  Recorded rather than silently dropped -- finding F1388."},
 
  {"label": "phase3's retrain duration is compared SIGNED",
   "why": "`ja`/`jb` and `jg`/`jl` agree on every ordinary pair of numbers, so this is invisible until a limit goes negative: unsigned it becomes a value no counter reaches, signed one every counter is already past.  The fixture drives exactly that, in its own small trial rather than inside an accumulating run.  `cmp 0x60(%ebx),%eax; jb` at 0x3f797.",
-  "find": "\t\tif (word_70 > params->PDSNR_THRESHOLD_IN_PHASE3) {\n\t\t\tword_18 += nofSymbols;\n\t\t\tif (word_18 >= (unsigned int)retrainDetectDuration) {",
-  "replace": "\t\tif (word_70 > params->PDSNR_THRESHOLD_IN_PHASE3) {\n\t\t\tword_18 += nofSymbols;\n\t\t\tif ((int)word_18 >= retrainDetectDuration) {"},
+  "find": "\t\tif (avePdsnr > params->PDSNR_THRESHOLD_IN_PHASE3) {\n\t\t\tword_18 += nofSymbols;\n\t\t\tif (word_18 >= (unsigned int)retrainDetectDuration) {",
+  "replace": "\t\tif (avePdsnr > params->PDSNR_THRESHOLD_IN_PHASE3) {\n\t\t\tword_18 += nofSymbols;\n\t\t\tif ((int)word_18 >= retrainDetectDuration) {"},
 
  {"label": "phase4's retrain duration is compared SIGNED",
   "why": "`ja`/`jb` and `jg`/`jl` agree on every ordinary pair of numbers, so this is invisible until a limit goes negative: unsigned it becomes a value no counter reaches, signed one every counter is already past.  The fixture drives exactly that, in its own small trial rather than inside an accumulating run.  `cmp 0x60(%ebx),%eax; jb` at 0x3fd0c.",
-  "find": "\t\tif (word_70 > params->PDSNR_THRESHOLD_IN_PHASE4) {\n\t\t\tword_18 += nofSymbols;\n\t\t\tif (word_18 >= (unsigned int)retrainDetectDuration) {",
-  "replace": "\t\tif (word_70 > params->PDSNR_THRESHOLD_IN_PHASE4) {\n\t\t\tword_18 += nofSymbols;\n\t\t\tif ((int)word_18 >= retrainDetectDuration) {"},
+  "find": "\t\tif (avePdsnr > params->PDSNR_THRESHOLD_IN_PHASE4) {\n\t\t\tword_18 += nofSymbols;\n\t\t\tif (word_18 >= (unsigned int)retrainDetectDuration) {",
+  "replace": "\t\tif (avePdsnr > params->PDSNR_THRESHOLD_IN_PHASE4) {\n\t\t\tword_18 += nofSymbols;\n\t\t\tif ((int)word_18 >= retrainDetectDuration) {"},
 
  {"label": "the mean-error arm's second ceiling is compared SIGNED",
   "why": "`ja`/`jb` and `jg`/`jl` agree on every ordinary pair of numbers, so this is invisible until a limit goes negative: unsigned it becomes a value no counter reaches, signed one every counter is already past.  The fixture drives exactly that, in its own small trial rather than inside an accumulating run.  `cmp 0x45c(%ecx),%eax; jae` at 0x3fbee, and this one gates an arm rather than ending it: signed, a negative ceiling BLOCKS the arm the object runs.",
@@ -424,8 +424,8 @@
 
  {"label": "phase4's mean-error retrain limit is compared SIGNED",
   "why": "`ja`/`jb` and `jg`/`jl` agree on every ordinary pair of numbers, so this is invisible until a limit goes negative: unsigned it becomes a value no counter reaches, signed one every counter is already past.  The fixture drives exactly that, in its own small trial rather than inside an accumulating run.",
-  "find": "\t\tshort_b0 = 0;\n\t\tif (nofV90Retrains\n\t\t    > (unsigned int)params->MAX_NOF_V90_RETRAINS) {",
-  "replace": "\t\tshort_b0 = 0;\n\t\tif ((int)nofV90Retrains\n\t\t    > params->MAX_NOF_V90_RETRAINS) {"},
+  "find": "\t\tmeanErrorCheckArmed = 0;\n\t\tif (nofV90Retrains\n\t\t    > (unsigned int)params->MAX_NOF_V90_RETRAINS) {",
+  "replace": "\t\tmeanErrorCheckArmed = 0;\n\t\tif ((int)nofV90Retrains\n\t\t    > params->MAX_NOF_V90_RETRAINS) {"},
 
  {"label": "phase4's ordinary retrain limit is compared SIGNED",
   "why": "`ja`/`jb` and `jg`/`jl` agree on every ordinary pair of numbers, so this is invisible until a limit goes negative: unsigned it becomes a value no counter reaches, signed one every counter is already past.  The fixture drives exactly that, in its own small trial rather than inside an accumulating run.",
@@ -451,12 +451,12 @@
   "replace": "\tinitDmin = curDmin;"},
 
  {"label": "the latch copies zero rather than curDmin",
-  "find": "\t\tinitDmin = curDmin;\n\n\tnofSymbols = word_74;",
-  "replace": "\t\tinitDmin = 0;\n\n\tnofSymbols = word_74;"},
+  "find": "\t\tinitDmin = curDmin;\n\n\tnofSymbols = avePdsnrNofSymbols;",
+  "replace": "\t\tinitDmin = 0;\n\n\tnofSymbols = avePdsnrNofSymbols;"},
 
  {"label": "the empty test is inverted",
-  "find": "\tnofSymbols = word_74;\n\tif (nofSymbols == 0)",
-  "replace": "\tnofSymbols = word_74;\n\tif (nofSymbols != 0)"},
+  "find": "\tnofSymbols = avePdsnrNofSymbols;\n\tif (nofSymbols == 0)",
+  "replace": "\tnofSymbols = avePdsnrNofSymbols;\n\tif (nofSymbols != 0)"},
 
  {"label": "+0x1c is assigned rather than accumulated",
   "why": "`add %ebx,0x1c(%edi)` at 0x3e6f8.  Caught only by a run: one call cannot tell an assignment from an accumulation that starts at zero.",
@@ -497,23 +497,23 @@
 
  {"label": "the external-demand stage is skipped only at -1",
   "why": "0x3e760 is `cmp $0xffffffff,%ecx; jle`, so every value below zero skips the stage and not just -1.  Caught by the trial that plants -2 and asserts +0x8c is still -2 afterwards.",
-  "find": "\tif (word_8c > -1) {",
-  "replace": "\tif (word_8c != -1) {"},
+  "find": "\tif (externalDemandCode > -1) {",
+  "replace": "\tif (externalDemandCode != -1) {"},
 
  {"label": "codes 1 and 2 are the no-restriction pair",
   "why": "0x3ee0e is `cmp $0x1,%ecx; sete %bl; cmp $0x4,%ecx; sete %cl; or %cl,%bl`.  Caught by the sweep over every code from -2 to 7.",
-  "find": "\t\t\tif (word_8c == 1 || word_8c == 4) {",
-  "replace": "\t\t\tif (word_8c == 1 || word_8c == 2) {"},
+  "find": "\t\t\tif (externalDemandCode == 1 || externalDemandCode == 4) {",
+  "replace": "\t\t\tif (externalDemandCode == 1 || externalDemandCode == 2) {"},
 
- {"label": "+0x90 is (word_8c > 4)",
+ {"label": "+0x90 is (externalDemandCode > 4)",
   "why": "0x3ee3b is `cmp $0x3,%edx; setg %cl`.  Caught by the code 4 trial, where the two readings give 1 and 0.",
-  "find": "\t\t\tword_90 = (word_8c > 3);",
-  "replace": "\t\t\tword_90 = (word_8c > 4);"},
+  "find": "\t\t\tword_90 = (externalDemandCode > 3);",
+  "replace": "\t\t\tword_90 = (externalDemandCode > 4);"},
 
- {"label": "+0x98 is (word_8c == 4)",
+ {"label": "+0x98 is (externalDemandCode == 4)",
   "why": "0x3ee43 is `cmp $0x5,%edx; sete %al`.  Caught by the code 4 and code 5 trials together.",
-  "find": "\t\t\tword_98 = (word_8c == 5);",
-  "replace": "\t\t\tword_98 = (word_8c == 4);"},
+  "find": "\t\t\tword_98 = (externalDemandCode == 5);",
+  "replace": "\t\t\tword_98 = (externalDemandCode == 4);"},
 
  {"label": "code 3 is a rate down",
   "find": "\t\tcase 3:\n\t\t\tverdict = V90CE_VERDICT_RRN_UP;",
@@ -567,20 +567,20 @@
 
  {"label": "the external-demand arm falls through instead of returning",
   "why": "0x3e8b7 is a second `ret` and the only paths to it are the empty call and this arm.  Caught by the trial that arms `debugFallBack` with a period of one before entering the arm: falling through would answer 5.",
-  "find": "\t\t\tword_74 = 0;\n\t\t\tword_70 = 0;\n\t\t\tword_8c = -1;\n\t\t\treturn verdict;",
-  "replace": "\t\t\tword_8c = -1;\n\t\t\tbreak;"},
+  "find": "\t\t\tavePdsnrNofSymbols = 0;\n\t\t\tavePdsnr = 0;\n\t\t\texternalDemandCode = -1;\n\t\t\treturn verdict;",
+  "replace": "\t\t\texternalDemandCode = -1;\n\t\t\tbreak;"},
 
  {"label": "+0x8c is not acknowledged",
-  "find": "\t\tword_8c = -1;\n\t}",
+  "find": "\t\texternalDemandCode = -1;\n\t}",
   "replace": "\t}"},
 
  {"label": "the rate up ignores its enable",
-  "find": "\tif (enableRrnUp != 0 && word_70 < threshUp) {",
-  "replace": "\tif (word_70 < threshUp) {"},
+  "find": "\tif (enableRrnUp != 0 && avePdsnr < threshUp) {",
+  "replace": "\tif (avePdsnr < threshUp) {"},
 
  {"label": "the rate up wants an average OVER threshUp",
-  "find": "\tif (enableRrnUp != 0 && word_70 < threshUp) {",
-  "replace": "\tif (enableRrnUp != 0 && word_70 > threshUp) {"},
+  "find": "\tif (enableRrnUp != 0 && avePdsnr < threshUp) {",
+  "replace": "\tif (enableRrnUp != 0 && avePdsnr > threshUp) {"},
 
  {"label": "the rate-up duration is >, not >=",
   "why": "0x3e940 is `jb`, so the arm fires when the two are equal; the run reaches exactly 300 against a limit of 300.",
@@ -672,8 +672,8 @@
   "replace": "\t} else {\n\t}"},
 
  {"label": "the unscaled rate down wants an average UNDER threshDown",
-  "find": "\tif (ce->word_70 > ce->threshDown) {",
-  "replace": "\tif (ce->word_70 < ce->threshDown) {"},
+  "find": "\tif (ce->avePdsnr > ce->threshDown) {",
+  "replace": "\tif (ce->avePdsnr < ce->threshDown) {"},
 
  {"label": "the unscaled rate down assigns +0x14",
   "find": "\t\tce->word_14 += nofSymbols;\n\t\tif (ce->word_14 >= (unsigned int)ce->rateDownDetectDuration",
@@ -698,8 +698,8 @@
 
  {"label": "the scaled rate down compares the unscaled average",
   "why": "0x3e9ee is `fmul %st(1),%st` before `fcomps 0xa4(%edi)`.  Caught by the trial with an average of 12.0f, which is under `threshDown` and over it once multiplied by 1.52.",
-  "find": "\tif (ce->word_70 * scale > ce->threshDown) {",
-  "replace": "\tif (ce->word_70 > ce->threshDown) {"},
+  "find": "\tif (ce->avePdsnr * scale > ce->threshDown) {",
+  "replace": "\tif (ce->avePdsnr > ce->threshDown) {"},
 
  {"label": "+0xb8 does not take the multiplier",
   "why": "0x3e9e8 is `fsts 0xb8(%edi)` on the constant that was just loaded.",
@@ -765,16 +765,16 @@
  {"label": "the threshold diagnostic prints the average",
   "why": "0x3f0e3 is `flds 0xa4(%edi)`, the raw threshold, against the SCALED average the line before it prints.",
   "find": "\t\t    (int)__builtin_fabsf(ce->threshDown),",
-  "replace": "\t\t    (int)__builtin_fabsf(ce->word_70),"},
+  "replace": "\t\t    (int)__builtin_fabsf(ce->avePdsnr),"},
 
  {"label": "the product's sign is inverted",
-  "find": "\t\t    !(0.0f >= ce->word_70 * ce->word_b8) ? '+' : '-',",
-  "replace": "\t\t    !(0.0f >= ce->word_70 * ce->word_b8) ? '-' : '+',"},
+  "find": "\t\t    !(0.0f >= ce->avePdsnr * ce->word_b8) ? '+' : '-',",
+  "replace": "\t\t    !(0.0f >= ce->avePdsnr * ce->word_b8) ? '-' : '+',"},
 
  {"label": "the printed decimals leave out the multiplier",
   "why": "0x3f03e is `flds 0x70(%edi); fmuls 0xb8(%edi)` and the decimals come off that product, not off the average.  Caught by the trial that plants 2.3f in +0xb8 and 10.0f in +0x70, where the product's decimals are 999 and the average's are 0.  A SECOND ENTRY HERE USED TO CLAIM the product must not be rounded to `float` and was NOT caught; the measurement is in the source comment and in finding F1389 -- FLT_EVAL_METHOD is 2, so neither the cast nor the parameter narrows it.",
-  "find": "\t\t    ce_frac3_of(ce->word_70, ce->word_b8));",
-  "replace": "\t\t    ce_frac3_of(ce->word_70, 1.0f));"},
+  "find": "\t\t    ce_frac3_of(ce->avePdsnr, ce->word_b8));",
+  "replace": "\t\t    ce_frac3_of(ce->avePdsnr, 1.0f));"},
 
  {"label": "the product's decimals skip the round trip",
   "find": "\tint thousandths = (int)((a * b - (float)(int)(a * b)) * 1000.0);",
@@ -800,12 +800,12 @@
   "replace": "\treturn hundredths;"},
 
  {"label": "the retrain accumulator assigns +0x18",
-  "find": "\tif (word_70 > threshRetrain) {\n\t\tword_18 += nofSymbols;",
-  "replace": "\tif (word_70 > threshRetrain) {\n\t\tword_18 = nofSymbols;"},
+  "find": "\tif (avePdsnr > threshRetrain) {\n\t\tword_18 += nofSymbols;",
+  "replace": "\tif (avePdsnr > threshRetrain) {\n\t\tword_18 = nofSymbols;"},
 
  {"label": "the retrain reads threshDown",
-  "find": "\tif (word_70 > threshRetrain) {",
-  "replace": "\tif (word_70 > threshDown) {"},
+  "find": "\tif (avePdsnr > threshRetrain) {",
+  "replace": "\tif (avePdsnr > threshDown) {"},
 
  {"label": "the retrain duration is compared SIGNED",
   "why": "0x3eb0d is `jb` against the +0x60 copy of a slot the map calls `int`.  The anchor carries the accumulation above it because both phase evaluators have the same test one tab deeper.",
@@ -827,8 +827,8 @@
   "replace": "\t\t\tif (nofV90Retrains\n\t\t\t    >= (unsigned int)\n\t\t\t      params->MAX_NOF_V90_RETRAINS) {\n\t\t\t\tverdict = V90CE_VERDICT_FALLBACK_V34;"},
 
  {"label": "the retrain fall-back does not restart the count",
-  "find": "\t\t\t\t\t ce_frac2(word_70));\n\t\t\t\tnofV90Retrains = 0;",
-  "replace": "\t\t\t\t\t ce_frac2(word_70));"},
+  "find": "\t\t\t\t\t ce_frac2(avePdsnr));\n\t\t\t\tnofV90Retrains = 0;",
+  "replace": "\t\t\t\t\t ce_frac2(avePdsnr));"},
 
  {"label": "the retrain does not restart +0x18",
   "find": "\t\t\tword_1c = 0;\n\t\t\tword_18 = 0;\n\t\t}\n\t} else {\n\t\tword_18 = 0;\n\t}",
@@ -857,8 +857,8 @@
   "replace": "\t\t\t nofV90Retrains, nofRemoteRateReneg);"},
 
  {"label": "the rate up does not clear +0x90 on its way out",
-  "find": "\t\t\t (int)__builtin_fabsf(word_70), ce_frac2(word_70));\n\t\tword_90 = 0;",
-  "replace": "\t\t\t (int)__builtin_fabsf(word_70), ce_frac2(word_70));"},
+  "find": "\t\t\t (int)__builtin_fabsf(avePdsnr), ce_frac2(avePdsnr));\n\t\tword_90 = 0;",
+  "replace": "\t\t\t (int)__builtin_fabsf(avePdsnr), ce_frac2(avePdsnr));"},
 
  {"label": "the rate-down arm compares against initDmin, not twice it",
   "why": "0x3f1ca is `add %esi,%esi`.  The anchor carries the diagnostic above it because the V42 arm has the same test three tabs deeper and `find` is a substring search.",
@@ -948,11 +948,11 @@
 
  {"label": "the tail does not clear the symbol count",
   "why": "0x3ed00 is `movl $0x0,0x74(%edi)` and 0x3ed0e stores a zero word to +0x70, on both epilogues.  Caught at once: the next call in any run would see a count that never resets.",
-  "find": "\t\t\tword_90 = params->RRN_SILENCE_REQUESTED;\n\t\t}\n\t}\n\n\tword_74 = 0;\n\tword_70 = 0;\n\treturn verdict;\n}",
-  "replace": "\t\t\tword_90 = params->RRN_SILENCE_REQUESTED;\n\t\t}\n\t}\n\n\tword_70 = 0;\n\treturn verdict;\n}"},
+  "find": "\t\t\tword_90 = params->RRN_SILENCE_REQUESTED;\n\t\t}\n\t}\n\n\tavePdsnrNofSymbols = 0;\n\tavePdsnr = 0;\n\treturn verdict;\n}",
+  "replace": "\t\t\tword_90 = params->RRN_SILENCE_REQUESTED;\n\t\t}\n\t}\n\n\tavePdsnr = 0;\n\treturn verdict;\n}"},
 
  {"label": "phase4: the replacement threshold's sign is the ordered test",
-  "why": "0x3fdb7 is `sbb %esi,%esi; and $0xfffffffe,%esi; add $0x2d,%esi` after `fldz`/`fcom`, so the character is 0x2d - 2*CF with the ZERO in %st(0) and an UNORDERED compare sets CF -- the object prints '+' for a NaN threshold.  Eighteen of this file's nineteen sign selects are not driven -- nine of them provably, being inside `if (word_70 > thresh)` whose `ja` is false for an unordered compare, and nine untraced.  This is the one a NaN demonstrably reaches, through `params->unnamed_434`, and the block at tag 7500 is what drives it.  Finding F2410.",
+  "why": "0x3fdb7 is `sbb %esi,%esi; and $0xfffffffe,%esi; add $0x2d,%esi` after `fldz`/`fcom`, so the character is 0x2d - 2*CF with the ZERO in %st(0) and an UNORDERED compare sets CF -- the object prints '+' for a NaN threshold.  Eighteen of this file's nineteen sign selects are not driven -- nine of them provably, being inside `if (avePdsnr > thresh)` whose `ja` is false for an unordered compare, and nine untraced.  This is the one a NaN demonstrably reaches, through `params->unnamed_434`, and the block at tag 7500 is what drives it.  Finding F2410.",
   "find": "\t\t\t\t\t\t    !(0.0f >= t) ? '+' : '-',",
   "replace": "\t\t\t\t\t\t    (0.0f < t) ? '+' : '-',"}
 ]

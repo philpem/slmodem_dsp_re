@@ -5,14 +5,14 @@
  {
   "label": "enterRRN: the deadline base moves",
   "fn": "enterRRN",
-  "find": "\tword_44 = 0;\n\tinPhase3 = 2;\n\tword_48 = 0x10680 + 2 * (unsigned int)phase2Info->rtd;\n\n\tword_288 = V90PW(params)[PARAMS_WORD_268];\n\tword_290 = V90PW(params)[PARAMS_WORD_27C];\n\n\tadditionalCPinfo->word_10 =",
-  "replace": "\tword_44 = 0;\n\tinPhase3 = 2;\n\tword_48 = 0x10681 + 2 * (unsigned int)phase2Info->rtd;\n\n\tword_288 = V90PW(params)[PARAMS_WORD_268];\n\tword_290 = V90PW(params)[PARAMS_WORD_27C];\n\n\tadditionalCPinfo->word_10 ="
+  "find": "\tword_44 = 0;\n\tinPhase3 = 2;\n\tword_48 = 0x10680 + 2 * (unsigned int)phase2Info->rtd;\n\n\terrorEnergyPrintPeriod = V90PW(params)[PARAMS_WORD_268];\n\ttimingOffsetPrintPeriod = V90PW(params)[PARAMS_WORD_27C];\n\n\tadditionalCPinfo->word_10 =",
+  "replace": "\tword_44 = 0;\n\tinPhase3 = 2;\n\tword_48 = 0x10681 + 2 * (unsigned int)phase2Info->rtd;\n\n\terrorEnergyPrintPeriod = V90PW(params)[PARAMS_WORD_268];\n\ttimingOffsetPrintPeriod = V90PW(params)[PARAMS_WORD_27C];\n\n\tadditionalCPinfo->word_10 ="
  },
  {
   "label": "enterRRN: the delay is not doubled",
   "fn": "enterRRN",
-  "find": "\tword_48 = 0x10680 + 2 * (unsigned int)phase2Info->rtd;\n\n\tword_288 = V90PW(params)[PARAMS_WORD_268];\n\tword_290 = V90PW(params)[PARAMS_WORD_27C];\n\n\tadditionalCPinfo->word_10 =",
-  "replace": "\tword_48 = 0x10680 + 1 * (unsigned int)phase2Info->rtd;\n\n\tword_288 = V90PW(params)[PARAMS_WORD_268];\n\tword_290 = V90PW(params)[PARAMS_WORD_27C];\n\n\tadditionalCPinfo->word_10 ="
+  "find": "\tword_48 = 0x10680 + 2 * (unsigned int)phase2Info->rtd;\n\n\terrorEnergyPrintPeriod = V90PW(params)[PARAMS_WORD_268];\n\ttimingOffsetPrintPeriod = V90PW(params)[PARAMS_WORD_27C];\n\n\tadditionalCPinfo->word_10 =",
+  "replace": "\tword_48 = 0x10680 + 1 * (unsigned int)phase2Info->rtd;\n\n\terrorEnergyPrintPeriod = V90PW(params)[PARAMS_WORD_268];\n\ttimingOffsetPrintPeriod = V90PW(params)[PARAMS_WORD_27C];\n\n\tadditionalCPinfo->word_10 ="
  },
  {
   "label": "enterRRN: the conjunction loses its second term",
@@ -53,20 +53,20 @@
  {
   "label": "enterFPE: the deadline base moves",
   "fn": "enterFPE",
-  "find": "\tword_48 = 0x10680 + 2 * (unsigned int)phase2Info->rtd;\n\n\tword_288 = V90PW(params)[PARAMS_WORD_268];\n\tword_290 = V90PW(params)[PARAMS_WORD_27C];\n}",
-  "replace": "\tword_48 = 0x10600 + 2 * (unsigned int)phase2Info->rtd;\n\n\tword_288 = V90PW(params)[PARAMS_WORD_268];\n\tword_290 = V90PW(params)[PARAMS_WORD_27C];\n}"
+  "find": "\tword_48 = 0x10680 + 2 * (unsigned int)phase2Info->rtd;\n\n\terrorEnergyPrintPeriod = V90PW(params)[PARAMS_WORD_268];\n\ttimingOffsetPrintPeriod = V90PW(params)[PARAMS_WORD_27C];\n}",
+  "replace": "\tword_48 = 0x10600 + 2 * (unsigned int)phase2Info->rtd;\n\n\terrorEnergyPrintPeriod = V90PW(params)[PARAMS_WORD_268];\n\ttimingOffsetPrintPeriod = V90PW(params)[PARAMS_WORD_27C];\n}"
  },
  {
   "label": "enterFPE: the counter is not cleared",
   "fn": "enterFPE",
-  "find": "\tword_38 = 0;\n\tword_44 = 0;\n\tinPhase3 = 2;\n\tword_48 = 0x10680 + 2 * (unsigned int)phase2Info->rtd;\n\n\tword_288 = V90PW(params)[PARAMS_WORD_268];\n\tword_290 = V90PW(params)[PARAMS_WORD_27C];\n}",
-  "replace": "\tword_44 = 0;\n\tinPhase3 = 2;\n\tword_48 = 0x10680 + 2 * (unsigned int)phase2Info->rtd;\n\n\tword_288 = V90PW(params)[PARAMS_WORD_268];\n\tword_290 = V90PW(params)[PARAMS_WORD_27C];\n}"
+  "find": "\tword_38 = 0;\n\tword_44 = 0;\n\tinPhase3 = 2;\n\tword_48 = 0x10680 + 2 * (unsigned int)phase2Info->rtd;\n\n\terrorEnergyPrintPeriod = V90PW(params)[PARAMS_WORD_268];\n\ttimingOffsetPrintPeriod = V90PW(params)[PARAMS_WORD_27C];\n}",
+  "replace": "\tword_44 = 0;\n\tinPhase3 = 2;\n\tword_48 = 0x10680 + 2 * (unsigned int)phase2Info->rtd;\n\n\terrorEnergyPrintPeriod = V90PW(params)[PARAMS_WORD_268];\n\ttimingOffsetPrintPeriod = V90PW(params)[PARAMS_WORD_27C];\n}"
  },
  {
   "label": "enterFPE: the two parameter copies are swapped",
   "fn": "enterFPE",
-  "find": "\tword_48 = 0x10680 + 2 * (unsigned int)phase2Info->rtd;\n\n\tword_288 = V90PW(params)[PARAMS_WORD_268];\n\tword_290 = V90PW(params)[PARAMS_WORD_27C];\n}",
-  "replace": "\tword_48 = 0x10680 + 2 * (unsigned int)phase2Info->rtd;\n\n\tword_288 = V90PW(params)[PARAMS_WORD_27C];\n\tword_290 = V90PW(params)[PARAMS_WORD_268];\n}"
+  "find": "\tword_48 = 0x10680 + 2 * (unsigned int)phase2Info->rtd;\n\n\terrorEnergyPrintPeriod = V90PW(params)[PARAMS_WORD_268];\n\ttimingOffsetPrintPeriod = V90PW(params)[PARAMS_WORD_27C];\n}",
+  "replace": "\tword_48 = 0x10680 + 2 * (unsigned int)phase2Info->rtd;\n\n\terrorEnergyPrintPeriod = V90PW(params)[PARAMS_WORD_27C];\n\ttimingOffsetPrintPeriod = V90PW(params)[PARAMS_WORD_268];\n}"
  },
  {
   "label": "enterPhase4: the deadline base moves",

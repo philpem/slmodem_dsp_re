@@ -126,12 +126,12 @@ DEM_OFF(array_25c,		0x25c, array25c);
 DEM_OFF(word_260,		0x260, word260);
 DEM_OFF(word_264,		0x264, word264);
 DEM_OFF(word_270,		0x270, word270);
-DEM_OFF(word_284,		0x284, word284);
+DEM_OFF(errorEnergyPrintCounter,		0x284, word284);
 DEM_OFF(word_278,		0x278, word278);
 DEM_OFF(byte_280,		0x280, byte280);
-DEM_OFF(word_288,		0x288, word288);
-DEM_OFF(word_28c,		0x28c, word28c);
-DEM_OFF(word_290,		0x290, word290);
+DEM_OFF(errorEnergyPrintPeriod,		0x288, word288);
+DEM_OFF(timingOffsetPrintCounter,		0x28c, word28c);
+DEM_OFF(timingOffsetPrintPeriod,		0x290, word290);
 DEM_OFF(quickConnect,		0x294, quickconnect);
 
 /*
@@ -316,8 +316,8 @@ V90Demodulator::enterPhase3()
 
 	equalizer->enterPhase3();
 
-	word_288 = V90PW(params)[PARAMS_WORD_264];
-	word_290 = V90PW(params)[PARAMS_WORD_278];
+	errorEnergyPrintPeriod = V90PW(params)[PARAMS_WORD_264];
+	timingOffsetPrintPeriod = V90PW(params)[PARAMS_WORD_278];
 
 	/*
 	 * Four words of the evaluator, all zero.  The blob writes them
@@ -325,8 +325,8 @@ V90Demodulator::enterPhase3()
 	 * four stores of the same constant to four distinct members cannot be
 	 * told apart by their order.
 	 */
-	connectionEvaluator->word_70 = 0;
-	connectionEvaluator->word_74 = 0;
+	connectionEvaluator->avePdsnr = 0;
+	connectionEvaluator->avePdsnrNofSymbols = 0;
 	connectionEvaluator->word_84 = 0;
 	connectionEvaluator->word_88 = 0;
 
@@ -586,8 +586,8 @@ V90Demodulator::enterRRN()
 	inPhase3 = 2;
 	word_48 = 0x10680 + 2 * (unsigned int)phase2Info->rtd;
 
-	word_288 = V90PW(params)[PARAMS_WORD_268];
-	word_290 = V90PW(params)[PARAMS_WORD_27C];
+	errorEnergyPrintPeriod = V90PW(params)[PARAMS_WORD_268];
+	timingOffsetPrintPeriod = V90PW(params)[PARAMS_WORD_27C];
 
 	additionalCPinfo->word_10 =
 	    (connectionEvaluator->word_90 != 0 &&
@@ -623,8 +623,8 @@ V90Demodulator::enterFPE()
 	inPhase3 = 2;
 	word_48 = 0x10680 + 2 * (unsigned int)phase2Info->rtd;
 
-	word_288 = V90PW(params)[PARAMS_WORD_268];
-	word_290 = V90PW(params)[PARAMS_WORD_27C];
+	errorEnergyPrintPeriod = V90PW(params)[PARAMS_WORD_268];
+	timingOffsetPrintPeriod = V90PW(params)[PARAMS_WORD_27C];
 }
 
 /*
@@ -686,8 +686,8 @@ V90Demodulator::enterPhase4()
 	word_48 = 0x28230 + 5 * (unsigned int)phase2Info->rtd;
 	word_38 = 0;
 
-	word_288 = V90PW(params)[PARAMS_WORD_268];
-	word_290 = V90PW(params)[PARAMS_WORD_27C];
+	errorEnergyPrintPeriod = V90PW(params)[PARAMS_WORD_268];
+	timingOffsetPrintPeriod = V90PW(params)[PARAMS_WORD_27C];
 }
 
 /*
@@ -862,8 +862,8 @@ V90Demodulator::enterDataPhase()
 	inPhase3 = 3;
 	word_3c = 0x1e;
 
-	word_288 = V90PW(params)[PARAMS_WORD_26C];
-	word_290 = V90PW(params)[PARAMS_WORD_280];
+	errorEnergyPrintPeriod = V90PW(params)[PARAMS_WORD_26C];
+	timingOffsetPrintPeriod = V90PW(params)[PARAMS_WORD_280];
 
 	resampler.setBllState(V90_BLL_STEADY_STATE, 1);
 
@@ -1190,9 +1190,10 @@ V90Demodulator::getAT_UD(TAG_DiagnosticResults *results) const
  * one side and not the other moves it without moving any behaviour.
  *
  * WHAT THE COMMON TAIL DOES, and it runs whatever the phase.  Two independent
- * print-period counters (`word_284`/`word_288` for the error energy and
- * `word_28c`/`word_290` for the timing offset) and, when `word_40` is set,
- * the energy-drop detector: `agc.level` under
+ * print-period counter/period pairs (`errorEnergyPrintCounter`/
+ * `errorEnergyPrintPeriod` for the error energy, `timingOffsetPrintCounter`/
+ * `timingOffsetPrintPeriod` for the timing offset -- named in finding F10134)
+ * and, when `word_40` is set, the energy-drop detector: `agc.level` under
  * `ENERGY_DROP_DETECTOR_THRESHOLD` for `NO_ENERGY_DURATION_FOR_REMOTE_RETRAIN`
  * samples raises a remote retrain.  The exit is then one of three counters --
  * `word_264` for 0x23, `word_268` for 0x1f..0x21 and `word_26c` for 0x26 --
@@ -1395,8 +1396,8 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 						 "connect...\r\n");
 				} else {
 					connectionEvaluator->word_88 = 1;
-					connectionEvaluator->word_74 = 0;
-					connectionEvaluator->word_70 = 0.0f;
+					connectionEvaluator->avePdsnrNofSymbols = 0;
+					connectionEvaluator->avePdsnr = 0.0f;
 					edprintf("V90Demodulator: enabling "
 						 "connectionEvaluator of "
 						 "TRN1d\r\n");
@@ -1408,8 +1409,8 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 			if (params->PROBING_MODE == 0) {
 				connectionEvaluator->word_84 = 0;
 				connectionEvaluator->word_88 = 0;
-				connectionEvaluator->word_74 = 0;
-				connectionEvaluator->word_70 = 0.0f;
+				connectionEvaluator->avePdsnrNofSymbols = 0;
+				connectionEvaluator->avePdsnr = 0.0f;
 				edprintf("V90Demodulator: disabling "
 					 "connectionEvaluator of Phase3\r\n");
 			}
@@ -1442,8 +1443,8 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 			phase3Demodulator->byte_3f9 = 1;
 			connectionEvaluator->word_84 = 0;
 			connectionEvaluator->word_88 = 0;
-			connectionEvaluator->word_74 = 0;
-			connectionEvaluator->word_70 = 0.0f;
+			connectionEvaluator->avePdsnrNofSymbols = 0;
+			connectionEvaluator->avePdsnr = 0.0f;
 			break;
 
 		case 0x12:
@@ -2001,10 +2002,10 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 		}
 	}
 
-	if (word_284 + nofIn < word_288) {
-		word_284 += nofIn;
+	if (errorEnergyPrintCounter + nofIn < errorEnergyPrintPeriod) {
+		errorEnergyPrintCounter += nofIn;
 	} else {
-		word_284 = 0;
+		errorEnergyPrintCounter = 0;
 		if (DSPLIB_DEBUG_ON()) {
 			cur = equalizer->meanErrorEnergyCurrent;
 			whole = (int)cur;
@@ -2017,10 +2018,10 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 		}
 	}
 
-	if (word_28c + nofIn < word_290) {
-		word_28c += nofIn;
+	if (timingOffsetPrintCounter + nofIn < timingOffsetPrintPeriod) {
+		timingOffsetPrintCounter += nofIn;
 	} else {
-		word_28c = 0;
+		timingOffsetPrintCounter = 0;
 		if (DSPLIB_DEBUG_ON()) {
 			frac = (int)((resampler.getTimingOffsetPPM() -
 				      (float)(int)resampler.getTimingOffsetPPM())
@@ -2131,11 +2132,11 @@ V90Demodulator::reset(unsigned int quickConnectArg)
 
 	constellationDesigner->reset();
 
-	word_290 = 19200;
-	word_284 = 0;
+	timingOffsetPrintPeriod = 19200;
+	errorEnergyPrintCounter = 0;
 	word_24c = 0;
-	word_288 = 19200;
-	word_28c = 0;
+	errorEnergyPrintPeriod = 19200;
+	timingOffsetPrintCounter = 0;
 	word_258 = 0;
 	word_260 = 0;
 	word_278 = 0;

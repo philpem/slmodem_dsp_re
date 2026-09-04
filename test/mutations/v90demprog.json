@@ -229,7 +229,7 @@
  },
  {
   "label": "enabling the TRN1d evaluator clears its average as well as its count",
-  "find": "\t\t\t\t\tconnectionEvaluator->word_70 = 0.0f;\n\t\t\t\t\tedprintf(\"V90Demodulator: enabling \"",
+  "find": "\t\t\t\t\tconnectionEvaluator->avePdsnr = 0.0f;\n\t\t\t\t\tedprintf(\"V90Demodulator: enabling \"",
   "replace": "\t\t\t\t\tedprintf(\"V90Demodulator: enabling \""
  },
  {
@@ -504,18 +504,18 @@
  },
  {
   "label": "the error-energy period counter is compared against +0x288",
-  "find": "\tif (word_284 + nofIn < word_288) {",
-  "replace": "\tif (word_284 + nofIn < word_290) {"
+  "find": "\tif (errorEnergyPrintCounter + nofIn < errorEnergyPrintPeriod) {",
+  "replace": "\tif (errorEnergyPrintCounter + nofIn < timingOffsetPrintPeriod) {"
  },
  {
   "label": "the error-energy counter is cleared when the period closes",
-  "find": "\t\tword_284 = 0;\n\t\tif (DSPLIB_DEBUG_ON()) {\n\t\t\tcur =",
+  "find": "\t\terrorEnergyPrintCounter = 0;\n\t\tif (DSPLIB_DEBUG_ON()) {\n\t\t\tcur =",
   "replace": "\t\tif (DSPLIB_DEBUG_ON()) {\n\t\t\tcur ="
  },
  {
   "label": "the timing-offset period counter is its own pair",
-  "find": "\tif (word_28c + nofIn < word_290) {",
-  "replace": "\tif (word_28c + nofIn < word_288) {"
+  "find": "\tif (timingOffsetPrintCounter + nofIn < timingOffsetPrintPeriod) {",
+  "replace": "\tif (timingOffsetPrintCounter + nofIn < errorEnergyPrintPeriod) {"
  },
  {
   "label": "the frame phase advances by the equaliser's output count",

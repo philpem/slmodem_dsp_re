@@ -92,18 +92,18 @@
  },
  {
   "label": "the two words copied out of the parameter block are swapped",
-  "find": "\tword_288 = V90PW(params)[PARAMS_WORD_264];\n\tword_290 = V90PW(params)[PARAMS_WORD_278];",
-  "replace": "\tword_288 = V90PW(params)[PARAMS_WORD_278];\n\tword_290 = V90PW(params)[PARAMS_WORD_264];"
+  "find": "\terrorEnergyPrintPeriod = V90PW(params)[PARAMS_WORD_264];\n\ttimingOffsetPrintPeriod = V90PW(params)[PARAMS_WORD_278];",
+  "replace": "\terrorEnergyPrintPeriod = V90PW(params)[PARAMS_WORD_278];\n\ttimingOffsetPrintPeriod = V90PW(params)[PARAMS_WORD_264];"
  },
  {
   "label": "the evaluator's +0x84 is left alone",
-  "find": "\tconnectionEvaluator->word_74 = 0;\n\tconnectionEvaluator->word_84 = 0;\n",
-  "replace": "\tconnectionEvaluator->word_74 = 0;\n"
+  "find": "\tconnectionEvaluator->avePdsnrNofSymbols = 0;\n\tconnectionEvaluator->word_84 = 0;\n",
+  "replace": "\tconnectionEvaluator->avePdsnrNofSymbols = 0;\n"
  },
  {
   "label": "the evaluator is reached through +0x208",
-  "find": "\tconnectionEvaluator->word_70 = 0;",
-  "replace": "\t(*(V90ConnectionEvaluator **)((char *)this + 0x208))->word_70 = 0;"
+  "find": "\tconnectionEvaluator->avePdsnr = 0;",
+  "replace": "\t(*(V90ConnectionEvaluator **)((char *)this + 0x208))->avePdsnr = 0;"
  },
  {
   "label": "+0x280 is cleared as a word",

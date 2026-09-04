@@ -667,11 +667,11 @@ run_reset(void)
 					diff_eq_int("inPhase3 (%ld)",
 						    (long)D(1)->inPhase3, 0,
 						    tag);
-					diff_eq_int("word_288 (%ld)",
-						    (long)D(1)->word_288,
+					diff_eq_int("errorEnergyPrintPeriod (%ld)",
+						    (long)D(1)->errorEnergyPrintPeriod,
 						    19200, tag);
-					diff_eq_int("word_290 (%ld)",
-						    (long)D(1)->word_290,
+					diff_eq_int("timingOffsetPrintPeriod (%ld)",
+						    (long)D(1)->timingOffsetPrintPeriod,
 						    19200, tag);
 					diff_eq_int("byte_280 (%ld)",
 						    (long)D(1)->byte_280, 0,

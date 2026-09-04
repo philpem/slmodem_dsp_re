@@ -113343,3 +113343,130 @@ t_v17smc t_v17txcreate"` -- 35 binaries, all green, no check count regressed.
 docker in this environment; a pure rename cannot move codegen, so it is left
 for the parent session's own gate, per this wave's standing instruction.
 (2026-09-04)
+
+### F10134. Second naming pass over `V90Demodulator`/`V90CP`/`V90ConnectionEvaluator`: six more fields, four of them rule 1, none of them the reused-role trap F9480 hit but didn't have to solve
+
+Wave 2's second pass over the same three classes F9480 (`V90ConnectionEvaluator`),
+the wave-1 `V90Demodulator`/`V90CP` batch and this session's own re-survey had
+already worked. The brief added two methods neither prior pass had: reading
+`progress()`/`evaluateConnection()` etc. as one whole procedure rather than
+field by field, and cross-referencing the applicable ITU-T Recommendations
+(V.90, V.92) for terminology. **Both of the fields this pass found and named
+were sitting in plain sight in the object's own diagnostics; what was missing
+was reading the CALLER of the pass's own class, not a deeper method.** The
+standard cross-reference turned up nothing beyond what the parameter names
+(RRN, TRN1D, TRN2, quick connect) already carry into this tree via rule 1 --
+V.90/V.92's own vocabulary is already threaded through `V90Parameters.h`'s
+field names, so a second independent derivation from the Recommendation text
+would at best restate rule-1 evidence already in the tree, and this pass found
+no field where the standard supplied a name rule 1/2/usage-inference did not.
+
+**`V90ConnectionEvaluator::word_70`/`word_74` -> `avePdsnr` / `avePdsnrNofSymbols`
+(code-reading; rule 1 for the first, usage inference for the second).**
+F9480 had already found the rule-1 evidence -- eighteen `edprintf`/
+`dsplibs_debug_printf` sites across `evaluatePhase3`, `evaluatePhase4` and
+`evaluateConnection` print the field beside the literal word "avePdsnr", e.g.
+"due to large error, avePdsnr = %c%d.%03d" -- and even used the name
+informally in its own prose comments, but declined to rename because
+`V90Demodulator.cpp` (four sites, all in `enterPhase3`, `connectionEvaluator->
+word_70`/`->word_74`) "belonged to other work". It is this pass's own file,
+so the rename was carried through it (plus `t_v90conneval.cpp` and the
+`v90conneval.json`/`v90demod.json`/`v90demprog.json` mutation fixtures).
+**One stale claim caught in passing**: the old comment also named
+`VPcmFloModem.cpp` as a referrer of this pair; a tree-wide grep (excluding
+`re/`) finds no `word_70`/`word_74` there at all -- that file's real reference
+is to the DIFFERENT +0x78/+0x7c pair (`delayedRetrainRequest`/
+`delayedRetrainArmed`), and the two pairs' write-ups had been conflated.
+`word_74`'s own name is usage inference: no string names the weight itself,
+but the class's own local-variable spelling (`nofOldSymbols`, `nofSymbols` in
+`updateAvePdsnr`) already reads it that way, and the mechanism -- the running
+weight `updateAvePdsnr` folds each call's `nofSymbols` into -- is unambiguous.
+
+**`V90Demodulator::word_284`/`word_288`/`word_28c`/`word_290` ->
+`errorEnergyPrintCounter`/`errorEnergyPrintPeriod`/`timingOffsetPrintCounter`/
+`timingOffsetPrintPeriod` (code-reading; rule 1 and rule 2 together for the
+two periods, usage inference for their counters).** This is the pass's one
+genuinely new find, and it came from reading `progress`'s common tail as one
+step rather than trusting the wave-1 header's per-field notes. +0x288 and
++0x290 are copied from a DIFFERENT `V90Parameters` slot depending which
+phase-entry member last ran -- `enterPhase3` from +0x264/+0x278
+(`ERROR_ENERGY_PRINT_PERIOD_PHASE3`/`TIMING_OFFSET_PRINT_PERIOD_PHASE3`),
+`enterRRN`/`enterFPE`/`enterPhase4` from +0x268/+0x27c (the `_PHASE4` pair)
+and the data-phase entry from +0x26c/+0x280 (the `_DATA` pair) -- which reads,
+field by field, as three unrelated stores and is why the wave-1 pass left all
+four bare. Read as ONE mechanism instead: every one of those six copies feeds
+the same two comparisons in `progress`'s tail, `if (counter + nofIn < period)
+counter += nofIn; else { counter = 0; <print>; }`, run unconditionally every
+call regardless of phase, and the diagnostics on the roll-over side are
+"V90Demodulator: Error Energy = %c%d.%03d" (off `equalizer->
+meanErrorEnergyCurrent`) and "V90Demodulator: Timing Offset [ppm]  = %c%d.%03d"
+(off `resampler.getTimingOffsetPPM()`). So the ROLE is one pair of named
+quantities reloaded per phase, not three, which is rule 1 (the diagnostics)
+and rule 2 (the parameter names) agreeing on the periods; the two counters
+have no string of their own and are named on the same usage-inference
+footing as `avePdsnrNofSymbols` above -- the companion of a named period.
+Renamed through `V90Demodulator.cpp`, `t_v90demctor.cpp` (the offset-assert
+table), `t_v90demprog.cpp`, `t_v90demod.cpp` and the
+`v90dataph.json`/`v90demprog.json`/`v90demod.json` mutation fixtures.
+
+**Two more, both usage inference only, both left with a neutral name's worth
+of caution recorded rather than a confident one.**
+`V90ConnectionEvaluator::word_8c` -> `externalDemandCode`: nothing
+reconstructed so far WRITES it except `reset` (to -1), so some unwritten
+caller plants a code between calls; `evaluateConnection`'s own leading
+comment already called this "the external demand" and its dispatch maps six
+live values onto exactly the verdicts the class otherwise reaches by
+measurement (RRN up/down/no-restriction, retrain, V34 fallback) plus a sixth,
+"fast parameter exchange", reached from nowhere else. No string prints the
+field itself, which is why this is usage inference and not rule 1, but the
+mechanism is not in doubt. `word_b0` -> `meanErrorCheckArmed`: a one-shot
+latch `reset` sets to 1, that `evaluatePhase4` tests first of three guards on
+its mean-error arm and clears once all three pass -- the identical shape
+`delayedRetrainArmed` was already named on. Renamed through
+`V90ConnectionEvaluator.cpp`, `t_v90leaves.cpp`, `t_v90conneval.cpp` and
+`v90conneval.json`.
+
+**What this pass declined to touch, and why, matching F9480's own standard:**
+`V90ConnectionEvaluator::word_10`/`word_14`/`word_18`/`word_1c`/`word_20` are
+NAMED BY `printStatus`'s own diagnostics ("rateUpCounter", "rateDownCounter",
+"retrainCounter", "evaluatorCounter", "fadeCounter" respectively) and were
+already commented as such before this pass -- but the comment beside them
+explains why the rename was withheld and this pass agrees rather than
+overriding it: `word_10`, at least, is REUSED for an unrelated role.
+`evaluatePhase3`/`evaluatePhase4` accumulate it as "how long the average has
+stayed over the V34-fallback threshold" (compared against the two 1600s at
+`word_64`/`word_68`), while `evaluateConnection`'s stage 3 accumulates the
+SAME field as "how long the average has stayed under `threshUp`" (compared
+against `rateUpDetectDuration`) -- two different quantities sharing one slot
+across mutually exclusive phases. Calling it `rateUpCounter` unconditionally
+would be wrong in the phase-3/phase-4 reading, which is exactly CLAUDE.md's
+"naming wrongly is worse than leaving padded" rule; the object's own
+diagnostic label is only accurate in ONE of the roles the field plays. Left
+alone. `V90ConnectionEvaluator::word_64`/`word_68` (the two literal 1600s)
+and `V90Demodulator::word_264`/`word_268`/`word_26c` (three write-only exit
+tallies with no reader anywhere in the object) were checked and are stores
+with no reader or names with no string -- the same category F9480 and the
+wave-1 `V90Demodulator` batch already closed out -- and stay bare.
+`V90CP.h`'s remaining offset names (`word_ca4`, `word_cac`, `word_cb0`,
+`byte_ca9`, `byte_caa`) are the DELIBERATE `V90MP`-sibling precedent F9480
+recorded and this pass found no new evidence against; none of `V90CP`'s
+fields were touched.
+
+**Mechanics, following F9480's own playbook exactly.** Renamed with a
+boundary-aware substitution scoped file-by-file to member-access sites on the
+right class (`V90Equalizer` has its own, unrelated `word_70`/`word_74` at the
+same offsets; `V90Mapper::word_700` is a substring false-positive on a naive
+`word_70` search and was excluded by construction, not caught after the
+fact), using F9480's `\t`/`\n`-aware left boundary so a mutation fixture's
+JSON-escaped tab before an identifier does not defeat a `\b`-style match.
+`tools/onedef.py` and `tools/refcheck.py` clean after this finding was
+written (refcheck flags a forward reference to an unwritten finding number as
+DANGLING, which is itself evidence the tool is live). `make one
+T=t_v90conneval`, `T=t_v90demod`, `T=t_v90demctor`, `T=t_v90demprog` and
+`T=t_v90leaves` pass with unchanged check counts. `make period`/`make phase`
+were not run from this sandbox (no docker daemon reachable); the parent
+session runs `tools/toolchain/byteident.py --ratchet` after merge per this
+wave's standing instruction, and this pass is a pure identifier substitution
+(a `#define`/name change is compile-time-only) so it cannot move the ratchet's
+floor if `make one`'s offset assertions and mutation-anchor counts hold, which
+they do. (2026-09-04)

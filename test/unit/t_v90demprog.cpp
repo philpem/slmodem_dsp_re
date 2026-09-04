@@ -273,10 +273,10 @@ prog_wire(int side, int trial)
 
 	d->word_40 = (unsigned int)(trial & 1);
 	d->word_27c = (unsigned int)(trial * 13u) % 90u;
-	d->word_284 = (unsigned int)(trial * 7u) % 40u;
-	d->word_288 = 48u;
-	d->word_28c = (unsigned int)(trial * 11u) % 40u;
-	d->word_290 = 64u;
+	d->errorEnergyPrintCounter = (unsigned int)(trial * 7u) % 40u;
+	d->errorEnergyPrintPeriod = 48u;
+	d->timingOffsetPrintCounter = (unsigned int)(trial * 11u) % 40u;
+	d->timingOffsetPrintPeriod = 64u;
 
 	/* The prefilter's FIR: a real bank, so `process` has coefficients. */
 	d->preFilter.coefficients = fir_bank;

@@ -551,15 +551,40 @@ public:
 
 	unsigned char pad_281[3];	/* +0x281 alignment                  */
 
-	unsigned int word_284;		/* +0x284 zeroed by reset            */
-
-	/* +0x288  `enterPhase3` copies `params`+0x264 into it. */
-	unsigned int word_288;
-
-	unsigned int word_28c;		/* +0x28c zeroed by reset            */
-
-	/* +0x290  `enterPhase3` copies `params`+0x278 into it. */
-	unsigned int word_290;
+	/*
+	 * +0x284/+0x288 and +0x28c/+0x290  TWO PRINT-PERIOD COUNTERS, named on
+	 * the strength of BOTH the parameter names `progress` copies into
+	 * +0x288/+0x290 and the diagnostics beside the counters at +0x284/
+	 * +0x28c -- CLAUDE.md's rule 1 (a format string) and rule 2 (a typed
+	 * source), agreeing.
+	 *
+	 * +0x288 and +0x290 ARE NOT ONE PARAMETER EACH; they are reloaded from
+	 * a DIFFERENT `V90Parameters` slot depending which phase-entry member
+	 * last ran -- `enterPhase3` copies +0x264/+0x278
+	 * (`ERROR_ENERGY_PRINT_PERIOD_PHASE3`/`TIMING_OFFSET_PRINT_PERIOD_
+	 * PHASE3`), `enterRRN`/`enterFPE`/`enterPhase4` copy +0x268/+0x27c
+	 * (the `_PHASE4` pair) and the data-phase entry copies +0x26c/+0x280
+	 * (the `_DATA` pair) -- but the ROLE is the same constant across every
+	 * site: "how many samples to wait before the next print", which is
+	 * what makes this a single pair of names and not three.  `progress`'s
+	 * common tail (see the .cpp) then runs `if (counter + nofIn < period)
+	 * counter += nofIn; else { counter = 0; <print>; }` for each pair
+	 * unconditionally, whichever phase is active.
+	 *
+	 * +0x284 and +0x28c ARE THE COUNTERS the same tail advances and resets,
+	 * and the diagnostic each one gates names the QUANTITY rather than the
+	 * counter itself -- "V90Demodulator: Error Energy = %c%d.%03d" off
+	 * `equalizer->meanErrorEnergyCurrent` when +0x284 rolls over, and
+	 * "V90Demodulator: Timing Offset [ppm]  = %c%d.%03d" off
+	 * `resampler.getTimingOffsetPPM()` when +0x28c does -- so the counter
+	 * names are usage inference (the companion of a named period, the same
+	 * shape `avePdsnrNofSymbols` is named on in `V90ConnectionEvaluator.h`)
+	 * and the period names are rule 1/2 together.  Finding F10134.
+	 */
+	unsigned int errorEnergyPrintCounter;		/* +0x284 */
+	unsigned int errorEnergyPrintPeriod;		/* +0x288 */
+	unsigned int timingOffsetPrintCounter;		/* +0x28c */
+	unsigned int timingOffsetPrintPeriod;		/* +0x290 */
 
 	/*
 	 * +0x294  WAS `word_294`, and TWO INDEPENDENT DERIVATIONS name it.
