@@ -114051,3 +114051,181 @@ cluster (`t_v90cdesign`/`t_v90cdnoise`/`t_v90cdadjust`/`t_v90designers`) are
 external field-access fix above. `make period`/`byteident.py --ratchet` need
 docker at the tree level and were not re-run standalone; left for the
 parent's gate per this phase's standing note.  (2026-09-04)
+
+## F10142. Wave 4 field naming, V.17 fax modulation: three fields promoted in `src/fax/v17.c`/`include/dsplib/v17fax.h`, one stale comment corrected, and the rest of the 23/20 `type_NNNN` count re-confirmed as already-declined ground
+
+Scope: `src/fax/v17.c` (23 `type_NNNN`) and `include/dsplib/v17fax.h` (20
+`type_NNNN`), `docs/fieldnaming.md`'s wave 4 V.17 assignment. Both counts were
+re-verified with a fresh grep before starting (matching the file's own
+figures exactly) and both files were read in full alongside `v17dec.h` and
+`faxcfg.h`, which are NOT this batch's files but define two structs
+(`struct v17_dec`, `struct v17rx_cfg`) whose fields are accessed by name from
+inside `v17.c` and so contribute to its own `type_NNNN` grep count without
+being this batch's to rename.
+
+**Three real names landed, all in fields belonging to structs this batch DOES
+own (`struct v17_status`, `struct v17tx_cfg`, `struct v17tx_control_req`, all
+in `v17fax.h`):**
+
+- **`snr_ok`** (was `struct v17_status::short_06`, +0x06). Rank 2 (a typed,
+  already-named source): `V17RX_status` stores
+  `(rx[V17RX_OBJ_RESULT_B1] & V17RX_FLAG_LOW_SNR) == 0` here, and
+  `V17RX_FLAG_LOW_SNR`'s OWN derivation in this same header already said "a
+  SET bit makes the reported +0x06 zero" and called it "measured at both
+  ends" -- that derivation simply never reached the struct field itself,
+  the exact "evidence gathered in one file's comment does not automatically
+  reach the field it is about" failure mode F10139/F10140 named for a
+  different cluster, found here re-occurring WITHIN one file rather than
+  across files. `V17TX_status` writes a constant zero to the same offset and
+  does not contradict the name (it has no SNR estimate of its own to
+  report). `test/unit/t_v17fax.c`'s `drive_rxstatus` reproduces the object's
+  exact defect-injectable sequence and its own reference to the field was
+  renamed alongside the struct.
+- **`fifo_size_factor`** (was `struct v17tx_cfg::int_0014`, +0x14). Strong
+  usage inference, corroborated by a sibling: `V17TX_create` reads this field
+  back and computes the transmit FIFO's capacity as
+  `fifo_size_factor * 3 * 16` (`movzwl 0x14(%ebp),%eax` /
+  `lea (%eax,%eax,2),%esi` / `shl $0x4,%esi` at 0x098a93/0x098aa6/0x098aab,
+  confirmed against `dis.py` directly rather than trusting the header's prior
+  prose), 48 elements at the default value of 1. `V29TX_CFG` carries an
+  identical field at the same offset with an identical role and default,
+  still spelled `int_0014` -- corroboration, not the derivation, and V.29's
+  own copy is untouched (out of scope; a candidate for whoever visits V.29).
+- **`scale_mul`** (was `struct v17tx_control_req::int_0008`, +0x08). Rank 2,
+  and named to MATCH AN EXISTING SIBLING rather than invent a fresh word:
+  `v27fax.h`'s `struct v27tx_ctl::scale_mul` is the identical field of the
+  identical five-effect request shape -- `class1tx.c`'s own comment on
+  `V17TX_CTL`/`V27TX_CTL`/`V29TX_CTL` already says the three request types
+  are matched field-by-field against one another -- so V.27's own name for
+  this role is the established one and V.17's copy is brought into line with
+  it rather than renamed independently. The role itself: `V17TX_control`
+  multiplies this field by `V17TX_PPS_SCALE[mode]` and the product becomes
+  `fpm_pps_cfg::scale` verbatim (`fpm_pps.h`: "Q15 gain on the output"), so
+  `scale_mul` is the caller's own pre-table-lookup multiplier. `V29TX_control`'s
+  own `struct v29tx_control_req::int_0008` carries the identical "scales the
+  PPS shaper's gain" comment and is NOT renamed here -- V.29 has not had a
+  dedicated field-naming pass in this project phase, so its being unpromoted
+  is not itself evidence against the name, just unvisited ground.
+
+**One stale comment corrected, found by re-checking a live claim rather than
+repeating it (CLAUDE.md's own "a rules file has the same shelf-life problem
+as a comment" applied one level down, to a header comment about its own
+struct).** `struct v17_status`'s block comment said fields +0x06, +0x08,
++0x0c, +0x10 and +0x12 all "DISAGREE" with `v22_status`/`v32_status` and
+therefore stay neutral "because V.17 writes a constant zero to every one of
+them" -- but +0x08 had ALREADY been promoted to `snr` by an earlier
+derivation two paragraphs below (finding F9100, predating this wave), which
+is neither neutral nor a constant zero from `V17RX_status`'s own side. The
+list was carrying a field it no longer described. Corrected to name the
+current disagreeing set (+0x0c, +0x10, +0x12 only) and to say explicitly that
++0x06 and +0x08 used to be on it and are not any more, rather than silently
+dropping them and leaving no trace that the claim had changed.
+
+**Everything else in the 23/20 count is left exactly where wave 2's own
+`v17fax.h`/`v17.c` review (F10133) left it, re-confirmed rather than
+re-derived.** The two files are unusually densely pre-derived among the
+files this phase has touched: nearly every remaining `type_NNNN` already
+carries a paragraph-length "NEUTRAL" or "no evidence past a bounded role"
+derivation from earlier reconstruction work, not merely wave 2's read. Traced
+per field:
+
+- `struct v17rx_ctl`'s `flags_0c`/`flags_0d`/`int_0004`/`int_0010` -- each
+  copies into a field of `struct v17rx_cfg` (`faxcfg.h`, out of scope, see
+  below) that itself carries no established meaning, so the source side can
+  carry none either; `flags_0c`/`flags_0d` hold two independently-named,
+  unrelated bits apiece (already named at bit level via `V17RXCTL_*`), which
+  is the same "byte has bits, not a unified meaning" shape this header
+  already applies to itself and to `v22ctl.h`'s equivalent.
+- `struct v17tx_cfg`'s `short_0004`/`short_0006`/`int_000c`/`int_0018`/
+  `int_001c` -- each already carries a specific, checked reason to stay
+  neutral: the first three are copied in and read by nothing in this
+  closure; `int_0018` feeds `V17TXP_INT_000C`, whose own short-vs-long
+  V.17 training-mode reading is F10133's own explicitly DECLINED ITU-T
+  cross-reference (re-confirmed here, not re-attempted, per this wave's own
+  standing instruction not to re-litigate it a third time); `int_001c`
+  becomes `fpm_pps_cfg::aux`, itself independently documented in `fpm_pps.h`
+  as "copied wholesale by init and read by nothing" -- a genuinely opaque
+  caller pass-through, not an oversight.
+- `struct v17tx_cfg`'s `int_0008`/`int_0010` -- both have a second writer
+  (`V17TX_control`) but still no reader anywhere in the closure; promoting
+  either would be naming the ABSENCE of a role.
+- `struct v17_status`'s `int_18`/`short_0a`/`short_0c`/`short_0e`/`short_10`/
+  `short_12`/`short_16` -- traced against BOTH writers (`V17TX_status` and
+  `V17RX_status`) this wave, not just one: `short_0a` and `short_16` are
+  constant zero (or unwritten) from both; `short_0c` and `short_0e` are
+  written by exactly one of the two and left alone by the other; `short_10`
+  and `short_12` are the mirror-image case to the corrected paragraph above
+  -- TX writes a real value (a second copy of its own `tx_bps`/nothing) where
+  RX writes constant zero, or vice versa, so the two writers give the SAME
+  offset two different roles and naming either would be right for one writer
+  and wrong for the other, exactly the trap CLAUDE.md's "naming wrongly is
+  worse than padded" rule exists for; `int_18` is TX-only and copied from the
+  caller with nothing established past that.
+- `struct v17tx_control_req`'s `int_0004`/`int_0010` -- `int_0004` feeds
+  `struct v17tx_cfg::int_0008` (itself neutral, above); `int_0010` feeds
+  `struct v17tx_cfg::int_0018` -> `V17TXP_INT_000C`, the same declined
+  short-vs-long-training ground as above.
+- `struct v17_dec`'s `int_0050`/`short_0066` (`v17dec.h`, NOT this batch's
+  file -- the identifiers surface in `v17.c`'s grep only because `v17.c`
+  accesses them by name through `RXS_DEC()`) -- both already carry a
+  specific derivation in `v17dec.h` concluding "written, read by nothing" (or,
+  for `short_0066`, "set to 3 by `V17RX_create`, no reader"); read again here
+  and not disturbed, since renaming a struct's fields from outside the file
+  that defines it is not this project's convention and the header's own
+  reasoning still holds.
+- `struct v17rx_cfg`'s `ptr_0018`/`ptr_001c`/`ptr_0024`/`int_0014` and
+  `struct faxvmi_cfg`-adjacent fields (`faxcfg.h`, NOT this batch's file,
+  shared by V.17/V.27ter/V.29's receive configs) -- `faxcfg.h`'s own header
+  comment already states, explicitly, "naming those from their values would
+  be a guess, and a wrong name is worse than a padded one," which this pass
+  re-checked against the object (zero relocations inside the four config
+  tables, confirmed by the header's own relocation sweep) rather than taking
+  on faith, and found no new evidence to overturn.
+
+**Spot-check of nearby already-named fields, per standing instruction.**
+`V17RX_FLAG_ERROR`/`_CARRIER`/`_LOW_SNR`/`_DATA` and the `V17RX_STATUS_*`
+ladder were re-read against `dis.py` output for `V17RX_status`,
+`RxNextStateV17` and the four training handlers while tracing `snr_ok`'s
+derivation, and all matched their comments exactly (in particular the
+LOW_SNR set/clear sites at 0x0a00b1/0x0a00c7/0x0a0566, which is what
+`snr_ok`'s own derivation depends on). `struct v22_status`/`struct
+v32_status` were read in full to verify the "DISAGREE" claim this wave
+corrected -- confirmed +0x06/+0x0a/+0x0c/+0x10/+0x12 are genuinely
+inconsistent in role across the three modules' own writes (v22: `quality`,
+a real field, at +0x06; v32: unnamed `rN` fields sourced from its own
+datapump state at all five; V.17: constant zero from TX at four of the five
+and a real boolean at the fifth), which is what makes the "no evidence to
+break the tie" reasoning correct for the three that remain on the list. No
+other inaccuracy found in nearby already-named fields.
+
+**No bit flags found needing a name.** Every remaining flag byte in this
+cluster (`struct v17rx_ctl`'s `flags_0c`/`flags_0d`, `V17RX_OBJ_RESULT_B1`/
+`_B2`, `V17TX_OBJ_RESULT_B1`/`_B2`) already has its live bits named by value
+via a `#define`, from earlier reconstruction work; none is a genuine
+multi-field bitfield candidate (`dis.py` shows `andb`/`orb`/`testb` against
+byte immediates throughout, matching the object's own dominant `and`/`test`
+idiom CLAUDE.md records, not a shift-and-mask sequence anywhere in this
+cluster).
+
+**Verification.** All three renames propagate to every reference found by
+`grep -rn` across `src/`, `include/` and `test/`, not just the two nominal
+files: `test/unit/t_v17fax.c`'s `drive_rxstatus` (its own reproduction of
+`V17RX_status`'s exact store sequence), `test/unit/t_v17txcreate.c` (the
+`V17TX_control` round-trip fixture), `test/unit/t_faxadapt.c` (the
+`v17tx_control` adapter fixture) and `src/fax/class1tx.c` (`V17TX_CTL`'s own
+initializer comment). `test/mutations/*.json` grepped tree-wide for the three
+retired names and for `int_0014`/`int_0008`/`short_06` combined with any
+V.17-specific context: the only mutation suite touching this file,
+`v17data.json`, has no anchor on any of the three (it mutates
+`v17data.c`'s encoder-table dispatch, unrelated). `make one
+T="t_v17fax t_v17txcreate t_faxadapt t_class1txvmi t_class1txstates
+t_v17rxcreate"` all green, no FAIL line, no check-count regression.
+`python3 tools/onedef.py` (unchanged duplicate count), `python3
+tools/refcheck.py` (0 dangling after this finding was added -- the tool
+caught its own forward reference before this entry existed, exactly the
+"gate does its job" case F700's sibling findings record) and `python3
+tools/bannercheck.py src/fax` all clean. `make period` and
+`tools/toolchain/byteident.py --ratchet` need docker, unavailable in this
+sandbox; left for the parent session's gate, per every prior wave's own
+precedent -- every change here is an identifier substitution or a comment,
+which cannot move generated code. (2026-09-04)

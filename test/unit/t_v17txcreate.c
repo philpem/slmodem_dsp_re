@@ -894,7 +894,7 @@ run_v17tx_control(void)
 
 				memset(&reqa, 0, sizeof(reqa));
 				reqa.int_0004 = 0x1000 + (int)where;
-				reqa.int_0008 = 3 + (int)(where % 7);
+				reqa.scale_mul = 3 + (int)(where % 7);
 				reqa.int_0010 = 0x2000 + (int)where;
 				reqa.ctl0 = (unsigned char)
 					((bit2 ? V17TXCTL_CTL0_BIT2 : 0)

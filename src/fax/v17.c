@@ -790,8 +790,8 @@ struct v17tx_cfg V17TX_CFG = {
 	60000,		/* int_0008                                          */
 	1,		/* int_000c                                          */
 	0,		/* int_0010                                          */
-	1,		/* int_0014 -- V17TX_create's own transmit FIFO size is
-			   int_0014 * 3 * 16                                */
+	1,		/* fifo_size_factor -- V17TX_create's own transmit FIFO
+			   size is fifo_size_factor * 3 * 16                */
 	0,		/* int_0018 -- V17TX_create's own V17TXP_INT_000C     */
 	0,		/* int_001c -- V17TX_create's own FPM_PPS_CFG.aux     */
 };
@@ -822,14 +822,14 @@ struct v17tx_cfg V17TX_CFG = {
  * argument, over 700 bytes later.  `V29TX_create`'s own comment describes the
  * same carrier.
  *
- * THE TRANSMIT FIFO'S SIZE IS COMPUTED, `int_0014 * 3 * 16` (`lea
+ * THE TRANSMIT FIFO'S SIZE IS COMPUTED, `fifo_size_factor * 3 * 16` (`lea
  * (%eax,%eax,2),%esi; shl $0x4,%esi` at 0x98aa6/0x98aab), 48 for the default
- * config's `int_0014` of 1.  `word0` carries over from `FIFO_CFG` unchanged,
- * but `fill` IS FORCED TO A LITERAL ZERO (`mov %di,0xa4(%esp)` at 0x98a9e,
- * overwriting the `FIFO_CFG.fill` value the two preceding instructions had
- * just loaded into the same slot) -- NOT `V29TX_create`'s own shape, which
- * keeps `FIFO_CFG.fill` unchanged.  Measured from the two writes' addresses,
- * not assumed from the sibling.
+ * config's `fifo_size_factor` of 1.  `word0` carries over from `FIFO_CFG`
+ * unchanged, but `fill` IS FORCED TO A LITERAL ZERO (`mov %di,0xa4(%esp)` at
+ * 0x98a9e, overwriting the `FIFO_CFG.fill` value the two preceding
+ * instructions had just loaded into the same slot) -- NOT `V29TX_create`'s
+ * own shape, which keeps `FIFO_CFG.fill` unchanged.  Measured from the two
+ * writes' addresses, not assumed from the sibling.
  *
  * THE SGD GENERATOR TAKES `SGD_CFG` WITH ONLY `sym_bits` PATCHED, to 2
  * (V.29's own copy patches it to 4) -- the whole 13-dword template is copied
@@ -914,7 +914,7 @@ V17TX_create(void *modem, const struct v17tx_cfg *params)
 	{
 		struct fifo_cfg fc;
 		unsigned short n = (unsigned short)
-			((struct v17tx_cfg *)modem)->int_0014;
+			((struct v17tx_cfg *)modem)->fifo_size_factor;
 
 		fc.word0 = FIFO_CFG.word0;
 		fc.size = (short)(n * 3 * 16);
@@ -1939,7 +1939,7 @@ V17RX_status(void *modem, struct v17_status *status)
 	status->protocol = (short)AT_US(rx, V17RX_OBJ_PROTOCOL);
 	status->tx_bps = 0;
 	status->rx_bps = (short)AT_US(rx, V17RX_OBJ_RX_BPS);
-	status->short_06 = (short)
+	status->snr_ok = (short)
 		((rx[V17RX_OBJ_RESULT_B1] & V17RX_FLAG_LOW_SNR) == 0);
 	status->snr = GetSNRV17(modem);
 	status->short_0a = 0;
@@ -2862,8 +2862,8 @@ V17TX_control(void *fp, const struct v17tx_control_req *req)
 	mode = AT_S(priv, V17TXP_MODE);
 
 	pps = (struct fpm_pps *)(void *)FIELD(block, V17FP_PPS);
-	pps->cfg.scale = req->int_0008;
-	pps->cfg.scale = V17TX_PPS_SCALE[mode] * req->int_0008;
+	pps->cfg.scale = req->scale_mul;
+	pps->cfg.scale = V17TX_PPS_SCALE[mode] * req->scale_mul;
 
 	((struct v17tx_cfg *)fp)->int_0018 = req->int_0010;
 	((struct v17tx_cfg *)fp)->int_0008 = req->int_0004;
@@ -2904,7 +2904,7 @@ V17TX_status(void *params, struct v17_status *status)
 	status->protocol = (short)AT_US(p, 0x00);
 	status->tx_bps = (short)AT_US(p, 0x02);
 	status->rx_bps = 0;
-	status->short_06 = 0;
+	status->snr_ok = 0;
 	status->snr = 0;
 	status->short_0a = 0;
 	status->short_0c = 0;

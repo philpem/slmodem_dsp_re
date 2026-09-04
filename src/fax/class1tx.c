@@ -857,17 +857,22 @@ cTOOLS_handle_hdlc_output(struct fax_class1 *ctx, const unsigned short *src,
  *
  * A SECOND HARDCODED FIELD, missed on the first read of the disassembly and
  * caught by `t_class1txvmi.c` disagreeing with the blob rather than assumed
- * absent: after the six/seven-dword table copy, all three OVERRIDE
- * `cfg->int_0014`'s low 16 bits with a literal 16-bit store (`movw`) --
- * `0x1` for V.17, `0x2` for V.27ter and V.29.  V.17's table default is
- * already 1, so that one is invisible to any test that only checks the
- * FINAL value; V.27ter's and V.29's tables are also 1 (`tabdump.py` over
- * the blob's own `.data` confirms it, independent of either reconstructed
- * table), so their override to 2 is a real, visible change from the
- * default. `cfg->int_0014 = <value>;` after the table copy reproduces this
- * -- a plain `int` assignment stores the same final 32 bits as the
- * object's narrower `movw`, since the upper 16 bits are already zero from
- * the dword copy, so no encoding trick is needed for behavioural fidelity.
+ * absent: after the six/seven-dword table copy, all three OVERRIDE the
+ * FIFO size factor's low 16 bits with a literal 16-bit store (`movw`) --
+ * `struct v17tx_cfg::fifo_size_factor` here, still `int_0014` at the same
+ * offset in `struct v27tx_cfg`/`struct v29tx_cfg` (neither renamed by this
+ * pass; see `v17fax.h`'s own note on why V.17's copy was and V.29's was
+ * not, finding F10142) -- `0x1` for V.17, `0x2` for V.27ter and V.29.
+ * V.17's table default is already 1, so that one is invisible to any test
+ * that only checks the FINAL value; V.27ter's and V.29's tables are also 1
+ * (`tabdump.py` over the blob's own `.data` confirms it, independent of
+ * either reconstructed table), so their override to 2 is a real, visible
+ * change from the default. `cfg->fifo_size_factor = <value>;` (or
+ * `cfg->int_0014 = <value>;` for the other two) after the table copy
+ * reproduces this -- a plain `int` assignment stores the same final 32 bits
+ * as the object's narrower `movw`, since the upper 16 bits are already zero
+ * from the dword copy, so no encoding trick is needed for behavioural
+ * fidelity.
  */
 int
 init_vmi_v17tx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
@@ -884,7 +889,7 @@ init_vmi_v17tx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
 
 	*cfg = V17TX_CFG;
 	cfg->bitrate = bit_rate;
-	cfg->int_0014 = 1;
+	cfg->fifo_size_factor = 1;
 	cfg->int_0018 = 0;
 	cfg->int_001c = (int)(long)arg_3;
 
@@ -1028,13 +1033,13 @@ static int (*const init_vmi_data_tx_modem[3])(struct faxvmi_cfg *,
  * constant.
  */
 const struct v17tx_control_req V17TX_CTL = {
-	{ 0x40, 0x38, 0x00, 0x00 },	/* pad_0000 */
-	60000,				/* int_0004 */
-	1,				/* int_0008 */
-	0x00,				/* ctl0     */
-	0x00,				/* ctl1     */
-	{ 0, 0 },			/* pad_000e */
-	0,				/* int_0010 */
+	{ 0x40, 0x38, 0x00, 0x00 },	/* pad_0000  */
+	60000,				/* int_0004  */
+	1,				/* scale_mul */
+	0x00,				/* ctl0      */
+	0x00,				/* ctl1      */
+	{ 0, 0 },			/* pad_000e  */
+	0,				/* int_0010  */
 };
 
 const struct v27tx_ctl V27TX_CTL = {
