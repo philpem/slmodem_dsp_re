@@ -247,34 +247,48 @@ struct fpm_sre {
 	short ppm_first;	/* +0x8e init 1; discards the first interval */
 };
 
-/*
- * `fresh` non-zero means the four buffers do not exist yet: allocate without
- * inspecting them.
+/**
+ * @brief Initialise (or re-initialise) a symbol-timing recovery state.
  *
- * Zero means re-initialise, and UNLIKE `FPM_FSE_init` THERE IS A REUSE PATH:
- * the four buffers are freed and reallocated only if the existing `taps` is
- * smaller than the configuration now asks for.  Every scalar is reset either
- * way, and `coeff` is rebuilt from `cfg.proto` either way.
+ * Copies @p cfg into @p sre, resets the PLL/gear-shift/level-gate state,
+ * and rebuilds `coeff` from `cfg.proto`.
+ *
+ * @param sre    State to initialise.
+ * @param cfg    Configuration (polyphase prototype, discriminant table,
+ *               clock tables, PLL gains, thresholds).
+ * @param fresh  Non-zero if the four buffers do not exist yet: allocate
+ *               without inspecting them. Zero re-initialises in place;
+ *               unlike FPM_FSE_init(), there IS a reuse path here -- the
+ *               four buffers are freed and reallocated only if the
+ *               existing `taps` is smaller than the new configuration
+ *               asks for. Every scalar is reset either way.
  */
 void FPM_SRE_init(struct fpm_sre *sre, const struct fpm_sre_cfg *cfg,
 		  int fresh);
 
-/* Releases the four buffers.  Does not clear the pointers. */
+/**
+ * @brief Free a symbol-timing recovery state's four buffers.
+ * @param sre The state to tear down. Its pointers are not cleared.
+ */
 void FPM_SRE_free(struct fpm_sre *sre);
 
-/*
- * Consume `count` input samples, write one output per recovered symbol, and
- * return how many that was.
+/**
+ * @brief Interpolate and time-recover @p count input samples.
  *
- * `need` and `fill` persist across calls, so a stream may be fed in arbitrary
- * fragments -- including fragments too short to produce anything, which take
- * the early path and skip the timing meter entirely.
+ * Consumes input, tracks the discriminant through the PLL/gear-shift and
+ * level-gate logic described above, and writes one output sample per
+ * recovered symbol. `need` and `fill` persist in @p sre across calls, so a
+ * stream may be fed in arbitrary fragments -- including fragments too
+ * short to produce anything, which take an early path and skip the timing
+ * meter entirely.
  *
- * THE RETURN IS ZERO-EXTENDED.  The counter is a `short` -- it is incremented
- * with `cwtl` -- and the return converts it with `movzwl`, so the declared
- * return type is `unsigned short` and not `short`.  The two readings agree
- * over every count a real block can produce; the object was not free to
- * choose the instruction, so this follows the object.
+ * @param sre    Recovery state.
+ * @param in     Input samples.
+ * @param out    Output buffer for the recovered samples.
+ * @param count  Number of input samples to consume.
+ * @return Number of output samples produced, zero-extended from the
+ *         object's own `short` counter (so declared `unsigned short`
+ *         rather than `short`, per the object's `movzwl` on return).
  */
 unsigned short FPM_SRE_recover(struct fpm_sre *sre, const short *in,
 			       short *out, short count);
