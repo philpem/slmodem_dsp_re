@@ -301,8 +301,13 @@ public:
 	/* +0x0d  Cleared by `reset`.  One byte. */
 	unsigned char byte_0d;
 
-	/* +0x0e  Two bytes of alignment; nothing writes them. */
-	unsigned char pad_0e[2];
+	/*
+	 * +0x0e was `pad_0e[2]` -- REMOVED (finding F10145).  Already
+	 * correctly described as alignment; proved mechanically by the
+	 * existing `V92MOD_OFF(byte_0d, 0x0d, ...)`/`V92MOD_OFF(phase2Info,
+	 * 0x10, ...)` and by `dis.py` over all eighteen `V92Modulator`
+	 * methods finding no access to offset 0x0e/0x0f.
+	 */
 
 	/* +0x10  The constructor's SECOND argument, stored and not owned. */
 	V92Phase2Info *phase2Info;

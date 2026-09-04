@@ -422,7 +422,12 @@ setup(int trial)
 		bts->bitsPerFrame = (unsigned)(trial % 7);
 		bts->symbolsBlockSize = 1u;
 		bts->flag_1c = (unsigned char)(trial & 1);
-		memset(bts->pad_1d, 0, sizeof(bts->pad_1d));
+		/*
+		 * `pad_1d` (the trailing three bytes) was removed from
+		 * V92BitsToSymbol as compiler-inserted alignment (finding
+		 * F10145); clear the same physical bytes by offset instead.
+		 */
+		memset((char *)bts + 0x1d, 0, sizeof(*bts) - 0x1d);
 
 		tx->modulusEncoder = (V92ModulusEncoder *)mebuf[s];
 	}

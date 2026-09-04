@@ -114743,3 +114743,75 @@ t_v90p4ddec t_v90rundemod t_beepgen t_detector t_dtmf t_cid_fsd
 t_cidleaves t_cidsvc t_cid_mtd t_datafmt t_rxcid t_cidprog"` all green (179
 PASS, 0 FAIL). `tools/onedef.py`/`tools/refcheck.py`/`tools/offcheck.py`
 all clean. (2026-09-04)
+
+### V92Modulator/V92Jd/V92BitsToSymbol/V90RDetector/V90Jd/V90BitsToSymbol/V92Mapper/V92Phase3Modulator: 6 more removed, 2 checked and declined, plus a SECOND positional-initializer bug caught and a test-apparatus ripple fixed
+
+`V92Phase3Modulator::pad_44[8]` and `V92Mapper::pad_03[0x23]` both checked
+and DECLINED -- the first is real unmodelled space the class's own comment
+already attributes to a DIFFERENT class's writer (`V92Modulator`, "what
+wrote them, if anything, is V92Modulator's business"), not alignment (8
+actual bytes where an already-4-aligned offset needs 0); the second is 35
+actual bytes where a 2-byte-aligned `short` after an odd offset would need
+only 1, and the header already says so ("NOT REFERENCED... nothing here
+names it").
+
+Six removed, all the same exact-width alignment-gap shape as the rest of
+this sweep, all already commented as alignment, all with both boundaries
+already asserted by an existing `_OFF` macro pair: `V92Modulator::pad_0e[2]`
+(before `phase2Info`), `V92Jd::pad_92[2]` (before `crc`),
+`V90RDetector::pad_22[2]` (before `int_24`), `V90Jd::pad_4a[2]` (before
+`crc`). Two are trailing (LAST member, struct's own alignment rounding
+`sizeof` up rather than a gap before a named field), each backed by a
+PRE-EXISTING hard `sizeof(...) == N` compile assertion rather than an
+adjacency claim: `V92BitsToSymbol::pad_1d[3]` (`v92btos_size[(sizeof
+(V92BitsToSymbol) == 0x20)...]`) and `V90BitsToSymbol::pad_21[3]`
+(`v90bts_size[(sizeof(V90BitsToSymbol) == 0x24)...]`). Negative check via
+`dis.py` over every method of each owning class (nine, twenty-one, ten,
+nine, fourteen and eleven methods respectively) finds no access to any
+removed offset.
+
+**A second instance of the exact positional-initializer bug F10145's first
+entry (fdspkrnl.h) already found and fixed, caught before it could reach a
+test.** `src/service/detector.c` has its OWN static `struct fdsp_tone_cfg
+TONEamode_CFG` initializer, separate from `fdspkrnl.c`'s `TONE_CFG`, and it
+still had the same `{ 0, 0 }, /* pad_22 */` positional slot for the member
+this sweep's very first removal deleted from the struct declaration --
+found by grepping every removed pad name across the whole tree for live
+(non-comment) references before treating any removal as done, which is now
+this sweep's standing method rather than a one-off catch. Fixed the same
+way: the slot removed, the three following values now land on
+`int_0024`/`int_0028`/`int_002c` as intended. Caught by inspection, not by
+a test failure, because `TONEamode_CFG` has no differential test exercising
+it in the suites run so far -- worth flagging for whoever next touches
+`detector.c`'s tone paths.
+
+**Removing `V92BitsToSymbol::pad_1d` broke two test files that referenced
+the field BY NAME, both fixed the same way.** `t_v92btosproc.cpp` and
+`t_v92p4gen.cpp` each zeroed `bts->pad_1d` for determinism (poisoning
+hygiene between two compared instances, not read by any actual check in
+either file, confirmed by grepping both for `memcmp`/`diff_eq_obj` over the
+whole object) before every trial; both now zero the same physical three
+bytes by pointer offset (`memset((char *)bts + 0x1d, 0, sizeof(*bts) -
+0x1d)`) instead of by field name. A THIRD hit on the same grep,
+`V92Phase4Modulator.h`/`.cpp` and `t_v92p4reset.cpp`/
+`test/mutations/v92p4reset.json`, is a completely different, unrelated
+`pad_1d` belonging to `V92Phase4Modulator` (cluster 2, a sibling agent's
+scope) and was correctly left untouched -- traced by reading each hit's
+surrounding code rather than trusting the name match, which is exactly the
+discipline this cluster's short, offset-derived pad names demand: `pad_0e`,
+`pad_0a`, `pad_22`, `pad_1d`, `pad_16`, `pad_39` each independently occur in
+more than one unrelated struct across this tree, so EVERY removal in this
+sweep now gets a whole-tree grep for its exact name checked line by line for
+struct identity before being called done, not just a spot check of the
+owning class's own files.
+
+`make one` over the full batch (`t_jdmpleaves t_v34diag t_v90btsproc t_v90cp
+t_v90designers t_v90equproc t_v90jd t_v90modchain t_v90modemctor
+t_v90modprog t_v90p3ddec t_v90p3dreset t_v90p3mod t_v90p4ddec t_v90p4dleaf
+t_v90p4mgen t_v90p4seq t_v90packdata t_v90rundemod t_v92btosproc t_v92dec
+t_v92jd t_v92mod t_v92modem t_v92modstate t_v92p4gen t_v92p4reset t_v92p4sym
+t_v92precoder t_v92tx t_vpcmrunpcm`): 314 PASS, the only FAIL is
+`t_v90equproc`'s pre-existing declared RESET-arm divergence (731/120974,
+F6203, already confirmed unrelated to this sweep by an earlier A/B in this
+same finding). `tools/onedef.py`/`tools/refcheck.py`/`tools/offcheck.py`/
+`tools/anchorcheck.py` all clean. (2026-09-04)

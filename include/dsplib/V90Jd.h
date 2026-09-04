@@ -162,7 +162,13 @@ public:
 
 	unsigned char bits[V90JD_BITS];	/* +0x02 the vector, one byte per bit */
 
-	unsigned char pad_4a[2];	/* +0x4a alignment ahead of crc         */
+	/*
+	 * +0x4a was `pad_4a[2]` -- REMOVED (finding F10145).  Already
+	 * correctly described as alignment ahead of `crc`; proved
+	 * mechanically by the existing `V90JD_OFF(bits, 0x02, ...)`/
+	 * `V90JD_OFF(crc, 0x4c, ...)` and by `dis.py` over all fourteen
+	 * `V90Jd` methods finding no access to offset 0x4a/0x4b.
+	 */
 
 	/*
 	 * The CRC register, one int per bit, low bit first.  `resetCrc()` is
