@@ -277,10 +277,10 @@ ce_check_values(V90ConnectionEvaluator *o, V90Parameters *p, long tag)
 
 	diff_eq_int("word_64 (%ld)", (long)o->word_64, 1600, tag);
 	diff_eq_int("word_68 (%ld)", (long)o->word_68, 1600, tag);
-	diff_eq_int("word_8c (%ld)", (long)o->word_8c, -1, tag);
+	diff_eq_int("externalDemandCode (%ld)", (long)o->externalDemandCode, -1, tag);
 	diff_eq_int("initDmin (%ld)", (long)o->initDmin, -1, tag);
 	diff_eq_int("curDmin (%ld)", (long)o->curDmin, 0, tag);
-	diff_eq_int("short_b0 (%ld)", (long)o->short_b0, 1, tag);
+	diff_eq_int("meanErrorCheckArmed (%ld)", (long)o->meanErrorCheckArmed, 1, tag);
 	diff_eq_int("altRbsDetectedOnQc (%ld)", (long)o->altRbsDetectedOnQc, 0, tag);
 	diff_eq_int("echoRrnState (%ld)", (long)o->echoRrnState, 0, tag);
 	diff_eq_int("nofV90Retrains (%ld)", (long)o->nofV90Retrains, 0, tag);
@@ -297,7 +297,7 @@ ce_check_values(V90ConnectionEvaluator *o, V90Parameters *p, long tag)
 		    1, tag);
 	diff_eq_int("threshRetrain (%ld)",
 		    memcmp(&o->threshRetrain, &zero, 4) == 0, 1, tag);
-	diff_eq_int("word_70 (%ld)", memcmp(&o->word_70, &zero, 4) == 0, 1,
+	diff_eq_int("avePdsnr (%ld)", memcmp(&o->avePdsnr, &zero, 4) == 0, 1,
 		    tag);
 }
 
@@ -517,8 +517,8 @@ run_ce_avepdsnr(void)
 		 * whatever the seed left in it -- NOT zero, so a first call
 		 * that failed to overwrite it would show.
 		 */
-		CEA->word_74 = starts[s];
-		CEB->word_74 = starts[s];
+		CEA->avePdsnrNofSymbols = starts[s];
+		CEB->avePdsnrNofSymbols = starts[s];
 		if (starts[s] == 0)
 			firstarm = 1;
 		else
@@ -535,7 +535,7 @@ run_ce_avepdsnr(void)
 			    ((unsigned)block + s) % NPDSNR]);
 			unsigned int n = 1u + ((unsigned)block * 7919u
 					       % 100000u);
-			unsigned int before74 = CEB->word_74;
+			unsigned int before74 = CEB->avePdsnrNofSymbols;
 
 			CEA->updateAvePdsnr(p, n);
 			ref_ce_updateAvePdsnr(ce_b, p, n);
@@ -545,15 +545,15 @@ run_ce_avepdsnr(void)
 			guard_intact(tag);
 
 			diff_eq_int("the count advanced by n (%ld)",
-				    (long)(unsigned int)(CEB->word_74
+				    (long)(unsigned int)(CEB->avePdsnrNofSymbols
 							 - before74),
 				    (long)n, tag);
-			if (CEB->word_74 >= 0x80000000u)
+			if (CEB->avePdsnrNofSymbols >= 0x80000000u)
 				huge_total = 1;
 
 			if (s == 0 && block == 0)
-				memcpy(&firstavg, &CEB->word_70, 4);
-			else if (memcmp(&firstavg, &CEB->word_70, 4) != 0)
+				memcpy(&firstavg, &CEB->avePdsnr, 4);
+			else if (memcmp(&firstavg, &CEB->avePdsnr, 4) != 0)
 				varied = 1;
 		}
 
@@ -568,19 +568,19 @@ run_ce_avepdsnr(void)
 			long tag = (long)s * 1000 + 900;
 			unsigned int got, want;
 
-			CEA->word_74 = 0;
-			CEB->word_74 = 0;
+			CEA->avePdsnrNofSymbols = 0;
+			CEB->avePdsnrNofSymbols = 0;
 			CEA->updateAvePdsnr(p, 4242u);
 			ref_ce_updateAvePdsnr(ce_b, p, 4242u);
 
 			diff_eq_obj("after the first call",
 				    V90ConnectionEvaluator, CEA, CEB, tag);
-			memcpy(&got, &CEB->word_70, 4);
+			memcpy(&got, &CEB->avePdsnr, 4);
 			memcpy(&want, &p, 4);
 			diff_eq_int("the average is the sample (%ld)",
 				    got == want, 1, tag);
 			diff_eq_int("the count is n (%ld)",
-				    (long)CEB->word_74, 4242, tag);
+				    (long)CEB->avePdsnrNofSymbols, 4242, tag);
 			firstarm = 1;
 		}
 	}
@@ -997,7 +997,7 @@ run_ce_meanerr4(void)
  * WHAT THESE TWO NEED THAT THE SMALL MEMBERS DID NOT
  *
  *   THEY ACCUMULATE.  +0x10 and +0x18 are durations in symbols that grow by
- *   `word_74` per call, and both evaluators CONSUME the average on the way out
+ *   `avePdsnrNofSymbols` per call, and both evaluators CONSUME the average on the way out
  *   -- +0x74 and +0x70 are zeroed on every path that got past the entry test.
  *   So a block below is "one measurement": set the count and the average, call,
  *   compare.  Sixty of them in a run, compared after EVERY one, because a
@@ -1182,9 +1182,9 @@ p4_call(long tag, float arg, int cmp_text)
 static void
 consumed(long tag)
 {
-	diff_eq_int("the count was consumed (%ld)", (long)CEB->word_74, 0, tag);
+	diff_eq_int("the count was consumed (%ld)", (long)CEB->avePdsnrNofSymbols, 0, tag);
 	diff_eq_int("the average was cleared (%ld)",
-		    memcmp(&CEB->word_70, &fzero, 4) == 0, 1, tag);
+		    memcmp(&CEB->avePdsnr, &fzero, 4) == 0, 1, tag);
 }
 
 /*
@@ -1235,7 +1235,7 @@ run_ce_phase3(void)
 			fill_pair(parm_a, parm_b, PARM_SLOT, trial + 2001,
 				  trial & 3);
 			p34_params();
-			SET_CE(word_74, 0u);
+			SET_CE(avePdsnrNofSymbols, 0u);
 			SET_CE(altRbsDetectedOnQc, (short)1);
 			SET_CE(word_88, 1u);
 			SET_CE(word_84, 1u);
@@ -1264,8 +1264,8 @@ run_ce_phase3(void)
 			fill_pair(parm_a, parm_b, PARM_SLOT, trial + 2101,
 				  trial & 3);
 			p34_params();
-			SET_CE(word_74, 37u);
-			SET_CEF(word_70, avg_bits[(unsigned)trial % NAVG]);
+			SET_CE(avePdsnrNofSymbols, 37u);
+			SET_CEF(avePdsnr, avg_bits[(unsigned)trial % NAVG]);
 			SET_CE(altRbsDetectedOnQc, (short)0);
 			SET_CE(word_88, 0u);
 			SET_CE(word_84, 0u);
@@ -1311,8 +1311,8 @@ run_ce_phase3(void)
 				unsigned int b18 = CEB->word_18;
 				int vb;
 
-				SET_CE(word_74, 11u + (unsigned)call);
-				SET_CEF(word_70,
+				SET_CE(avePdsnrNofSymbols, 11u + (unsigned)call);
+				SET_CEF(avePdsnr,
 					avg_bits[(unsigned)call % NAVG]);
 				SET_CE(altRbsDetectedOnQc, (short)(1 + call));
 
@@ -1379,8 +1379,8 @@ run_ce_phase3(void)
 				int above = (block % 20) != 19;
 				int vb;
 
-				SET_CE(word_74, n);
-				SET_CEF(word_70, above ? 0x41a00000u
+				SET_CE(avePdsnrNofSymbols, n);
+				SET_CEF(avePdsnr, above ? 0x41a00000u
 						       : 0x40000000u);
 				vb = p3_call(tag, 1);
 
@@ -1448,8 +1448,8 @@ run_ce_phase3(void)
 				int lines;
 				int vb;
 
-				SET_CE(word_74, n);
-				SET_CEF(word_70, 0x41a00000u);	/* 20.0f */
+				SET_CE(avePdsnrNofSymbols, n);
+				SET_CEF(avePdsnr, 0x41a00000u);	/* 20.0f */
 				vb = p3_call(tag, 1);
 				lines = (int)dsplib_debug_capture_lines(1);
 
@@ -1502,8 +1502,8 @@ run_ce_phase3(void)
 			SET_CE(word_18, 4444u);
 			SET_CE(word_64, 100000u);
 			SET_CE(retrainDetectDuration, 3);
-			SET_CE(word_74, 17u);
-			SET_CEF(word_70, avg_bits[(unsigned)trial % NAVG]);
+			SET_CE(avePdsnrNofSymbols, 17u);
+			SET_CEF(avePdsnr, avg_bits[(unsigned)trial % NAVG]);
 
 			vb = p3_call(tag, 1);
 			if (avg_bits[(unsigned)trial % NAVG] == 0x41a00000u
@@ -1549,8 +1549,8 @@ run_ce_phase3(void)
 			SET_CE(word_18, 0u);
 			SET_CE(word_64, 1u);
 			SET_CE(word_68, 100000u);
-			SET_CE(word_74, 1u);
-			SET_CEF(word_70, avg_bits[(unsigned)trial % NAVG]);
+			SET_CE(avePdsnrNofSymbols, 1u);
+			SET_CEF(avePdsnr, avg_bits[(unsigned)trial % NAVG]);
 
 			vb = p3_call(tag, 1);
 			if (avg_bits[(unsigned)trial % NAVG] == 0x7fc00000u) {
@@ -1605,8 +1605,8 @@ run_ce_phase3(void)
 			for (call = 0; call < 6; call++) {
 				int vb;
 
-				SET_CE(word_74, 100u);
-				SET_CEF(word_70, 0x41a00000u);	/* 20.0f */
+				SET_CE(avePdsnrNofSymbols, 100u);
+				SET_CEF(avePdsnr, 0x41a00000u);	/* 20.0f */
 				vb = p3_call(tag + call, 1);
 				diff_eq_int("a negative duration is never "
 					    "reached (%ld)", vb, 0, tag + call);
@@ -1638,8 +1638,8 @@ run_ce_phase3(void)
 			SET_CE(word_18, 0u);
 			SET_CE(word_64, 100000u);
 			SET_CE(retrainDetectDuration, 10);
-			SET_CE(word_74, 20u);
-			SET_CEF(word_70, 0x41a00000u);		/* 20.0f */
+			SET_CE(avePdsnrNofSymbols, 20u);
+			SET_CEF(avePdsnr, 0x41a00000u);		/* 20.0f */
 
 			vb = p3_call(tag, 1);
 			diff_eq_int("a negative retrain limit is never "
@@ -1695,8 +1695,8 @@ run_ce_phase4(void)
 			fill_pair(parm_a, parm_b, PARM_SLOT, trial + 3001,
 				  trial & 3);
 			p34_params();
-			SET_CE(word_74, 0u);
-			SET_CE(short_b0, (short)1);
+			SET_CE(avePdsnrNofSymbols, 0u);
+			SET_CE(meanErrorCheckArmed, (short)1);
 			SET_CE(delayedRetrainRequest, 1u);
 			SET_CE(delayedRetrainArmed, 1u);
 			memcpy(before, ce_b, CE_SLOT);
@@ -1738,7 +1738,7 @@ run_ce_phase4(void)
 			SET_P(MAX_NOF_REMOTE_RETRAINS, -101);
 			SET_P(unnamed_45c, 100);
 			SET_CE(nofV90Retrains, 5u);
-			SET_CE(short_b0, (short)1);
+			SET_CE(meanErrorCheckArmed, (short)1);
 			SET_CE(delayedRetrainRequest, 0u);
 			SET_CE(delayedRetrainArmed, 0u);
 			SET_CE(word_10, 990u);
@@ -1746,8 +1746,8 @@ run_ce_phase4(void)
 			SET_CE(word_64, 12345u);
 			SET_CE(word_68, 1000u);
 			SET_CE(retrainDetectDuration, 100000);
-			SET_CE(word_74, 20u);
-			SET_CEF(word_70, 0x42c80000u);		/* 100.0f */
+			SET_CE(avePdsnrNofSymbols, 20u);
+			SET_CEF(avePdsnr, 0x42c80000u);		/* 100.0f */
 			SET_CEF(phase4ErrorForV34Fallback, 0x41a00000u);
 
 			vb = p4_call(tag, as_float(bits), 1);
@@ -1762,7 +1762,7 @@ run_ce_phase4(void)
 			if (fires) {
 				diff_eq_int("the arm fired (%ld)", vb, 4, tag);
 				diff_eq_int("and cleared +0xb0 (%ld)",
-					    (long)CEB->short_b0, 0, tag);
+					    (long)CEB->meanErrorCheckArmed, 0, tag);
 				diff_eq_int("and skipped the rest: +0x10 stood "
 					    "still (%ld)",
 					    (long)CEB->word_10, 990, tag);
@@ -1779,7 +1779,7 @@ run_ce_phase4(void)
 				diff_eq_int("the arm did not fire (%ld)", vb, 5,
 					    tag);
 				diff_eq_int("and +0xb0 still stands (%ld)",
-					    (long)CEB->short_b0, 1, tag);
+					    (long)CEB->meanErrorCheckArmed, 1, tag);
 				diff_eq_int("and +0x10 accumulated (%ld)",
 					    (long)CEB->word_10, 1010, tag);
 				diff_eq_int("and +0x18 was never reached (%ld)",
@@ -1808,7 +1808,7 @@ run_ce_phase4(void)
 			SET_P(MAX_NOF_V90_RETRAINS, 100);
 			SET_P(unnamed_45c, room ? 100 : 5);
 			SET_CE(nofV90Retrains, 5u);
-			SET_CE(short_b0, (short)(b0 ? 1 : 0));
+			SET_CE(meanErrorCheckArmed, (short)(b0 ? 1 : 0));
 			SET_CE(delayedRetrainRequest, 0u);
 			SET_CE(delayedRetrainArmed, 0u);
 			SET_CE(word_10, 0u);
@@ -1816,8 +1816,8 @@ run_ce_phase4(void)
 			SET_CE(word_64, 100000u);
 			SET_CE(word_68, 100000u);
 			SET_CE(retrainDetectDuration, 100000);
-			SET_CE(word_74, 20u);
-			SET_CEF(word_70, 0x40000000u);		/* 2.0f */
+			SET_CE(avePdsnrNofSymbols, 20u);
+			SET_CEF(avePdsnr, 0x40000000u);		/* 2.0f */
 			SET_CEF(phase4ErrorForV34Fallback, 0x42c80000u);
 
 			vb = p4_call(tag, as_float(0x42c80000u), 1);
@@ -1828,7 +1828,7 @@ run_ce_phase4(void)
 				diff_eq_int("a guard blocked it (%ld)", vb, 0,
 					    tag);
 				diff_eq_int("+0xb0 was left alone (%ld)",
-					    (long)CEB->short_b0, b0 ? 1 : 0,
+					    (long)CEB->meanErrorCheckArmed, b0 ? 1 : 0,
 					    tag);
 				if (!b0)
 					p4_guard_b0 = 1;
@@ -1854,7 +1854,7 @@ run_ce_phase4(void)
 			p34_params();
 			SET_P(MAX_NOF_V90_RETRAINS, 100000);
 			SET_CE(nofV90Retrains, 9u);
-			SET_CE(short_b0, (short)0);
+			SET_CE(meanErrorCheckArmed, (short)0);
 			SET_CE(delayedRetrainRequest, 0u);
 			SET_CE(delayedRetrainArmed, 0u);
 			SET_CE(word_10, 0u);
@@ -1870,8 +1870,8 @@ run_ce_phase4(void)
 				int above = (block % 20) != 19;
 				int vb;
 
-				SET_CE(word_74, n);
-				SET_CEF(word_70, above ? 0x41a00000u
+				SET_CE(avePdsnrNofSymbols, n);
+				SET_CEF(avePdsnr, above ? 0x41a00000u
 						       : 0x3f800000u);
 				vb = p4_call(tag, as_float(0x00000000u), 1);
 
@@ -1934,7 +1934,7 @@ run_ce_phase4(void)
 			SET_P(MAX_NOF_REMOTE_RETRAINS, -5);
 			SET_P(unnamed_45c, -5);
 			SET_CE(nofV90Retrains, 0u);
-			SET_CE(short_b0, (short)0);
+			SET_CE(meanErrorCheckArmed, (short)0);
 			SET_CE(delayedRetrainRequest, 0u);
 			SET_CE(delayedRetrainArmed, 0u);
 			SET_CE(word_10, 0u);
@@ -1950,8 +1950,8 @@ run_ce_phase4(void)
 				unsigned int got;
 				int vb;
 
-				SET_CE(word_74, n);
-				SET_CEF(word_70, 0x42c80000u);	/* 100.0f */
+				SET_CE(avePdsnrNofSymbols, n);
+				SET_CEF(avePdsnr, 0x42c80000u);	/* 100.0f */
 				vb = p4_call(tag, as_float(0x00000000u), 1);
 
 				want18 += n;
@@ -2018,12 +2018,12 @@ run_ce_phase4(void)
 		 * THE ONLY WAY A NaN REACHES A SIGN PRINTER IN THIS FILE.
 		 *
 		 * Nineteen of this object's branchless sign selects are in
-		 * these three methods, and eighteen of them print `word_70`
-		 * from inside `if (word_70 > threshold)` -- the object's
+		 * these three methods, and eighteen of them print `avePdsnr`
+		 * from inside `if (avePdsnr > threshold)` -- the object's
 		 * `flds; fcoms; ja`, which is FALSE for an unordered compare,
 		 * so a NaN average provably cannot reach any of them.  The
 		 * nineteenth prints `t`, the replacement threshold read out of
-		 * `params->unnamed_434`, and its gate is on `word_70` and the
+		 * `params->unnamed_434`, and its gate is on `avePdsnr` and the
 		 * counters and not on `t` -- so an unordered parameter gets
 		 * there with the average left ordered at 100.0f.
 		 *
@@ -2050,7 +2050,7 @@ run_ce_phase4(void)
 			SET_P(MAX_NOF_REMOTE_RETRAINS, -5);
 			SET_P(unnamed_45c, -5);
 			SET_CE(nofV90Retrains, 0u);
-			SET_CE(short_b0, (short)0);
+			SET_CE(meanErrorCheckArmed, (short)0);
 			SET_CE(delayedRetrainRequest, 0u);
 			SET_CE(delayedRetrainArmed, 0u);
 			SET_CE(word_10, 0u);
@@ -2059,8 +2059,8 @@ run_ce_phase4(void)
 			SET_CE(word_68, 100000u);
 			SET_CE(retrainDetectDuration, 90);
 			SET_CEF(phase4ErrorForV34Fallback, 0x7f7fffffu);
-			SET_CE(word_74, 100u);
-			SET_CEF(word_70, 0x42c80000u);		/* 100.0f */
+			SET_CE(avePdsnrNofSymbols, 100u);
+			SET_CEF(avePdsnr, 0x42c80000u);		/* 100.0f */
 
 			vb = p4_call(tag, as_float(0x00000000u), 1);
 
@@ -2090,7 +2090,7 @@ run_ce_phase4(void)
 			p34_params();
 			SET_P(MAX_NOF_V90_RETRAINS, 100);
 			SET_CE(nofV90Retrains, 2u);
-			SET_CE(short_b0, (short)0);
+			SET_CE(meanErrorCheckArmed, (short)0);
 			SET_CE(delayedRetrainRequest, w78);
 			SET_CE(delayedRetrainArmed, w7c);
 			SET_CE(word_10, 0u);
@@ -2098,8 +2098,8 @@ run_ce_phase4(void)
 			SET_CE(word_64, 100000u);
 			SET_CE(word_68, 100000u);
 			SET_CE(retrainDetectDuration, 100000);
-			SET_CE(word_74, 5u);
-			SET_CEF(word_70, 0x3f800000u);
+			SET_CE(avePdsnrNofSymbols, 5u);
+			SET_CEF(avePdsnr, 0x3f800000u);
 			SET_CEF(phase4ErrorForV34Fallback, 0x7f7fffffu);
 
 			vb = p4_call(tag, as_float(0x00000000u), 1);
@@ -2143,7 +2143,7 @@ run_ce_phase4(void)
 			SET_P(MAX_NOF_V90_RETRAINS, trial);
 			SET_P(MAX_NOF_REMOTE_RETRAINS, ~trial);
 			SET_CE(nofV90Retrains, (unsigned int)trial);
-			SET_CE(short_b0, (short)0);
+			SET_CE(meanErrorCheckArmed, (short)0);
 			SET_CE(delayedRetrainRequest, 1u);
 			SET_CE(delayedRetrainArmed, 1u);
 			SET_CE(word_10, 0u);
@@ -2151,8 +2151,8 @@ run_ce_phase4(void)
 			SET_CE(word_64, 100000u);
 			SET_CE(word_68, 100000u);
 			SET_CE(retrainDetectDuration, 100000);
-			SET_CE(word_74, 5u);
-			SET_CEF(word_70, 0x3f800000u);
+			SET_CE(avePdsnrNofSymbols, 5u);
+			SET_CEF(avePdsnr, 0x3f800000u);
 			SET_CEF(phase4ErrorForV34Fallback, 0x7f7fffffu);
 
 			vb = p4_call(tag, as_float(0x00000000u), 0);
@@ -2200,7 +2200,7 @@ run_ce_phase4(void)
 			SET_P(MAX_NOF_REMOTE_RETRAINS, -4);
 			SET_P(unnamed_45c, -4);
 			SET_CE(nofV90Retrains, 2u);
-			SET_CE(short_b0, (short)0);
+			SET_CE(meanErrorCheckArmed, (short)0);
 			SET_CE(delayedRetrainRequest, 1u);
 			SET_CE(delayedRetrainArmed, 1u);
 			SET_CE(word_10, 0u);
@@ -2208,8 +2208,8 @@ run_ce_phase4(void)
 			SET_CE(word_64, 100000u);
 			SET_CE(word_68, 100000u);
 			SET_CE(retrainDetectDuration, 10);
-			SET_CE(word_74, 50u);
-			SET_CEF(word_70, 0x42c80000u);		/* 100.0f */
+			SET_CE(avePdsnrNofSymbols, 50u);
+			SET_CEF(avePdsnr, 0x42c80000u);		/* 100.0f */
 			SET_CEF(phase4ErrorForV34Fallback, 0x7f7fffffu);
 
 			vb = p4_call(tag, as_float(0x00000000u), 0);
@@ -2234,7 +2234,7 @@ run_ce_phase4(void)
 			fill_pair(parm_a, parm_b, PARM_SLOT, trial + 3701,
 				  trial & 3);
 			p34_params();
-			SET_CE(short_b0, (short)0);
+			SET_CE(meanErrorCheckArmed, (short)0);
 			SET_CE(delayedRetrainRequest, 0u);
 			SET_CE(delayedRetrainArmed, 0u);
 			SET_CE(word_10, 0u);
@@ -2242,8 +2242,8 @@ run_ce_phase4(void)
 			SET_CE(word_64, 100000u);
 			SET_CE(word_68, 100000u);
 			SET_CE(retrainDetectDuration, 100000);
-			SET_CE(word_74, 13u);
-			SET_CEF(word_70, avg_bits[(unsigned)trial % NAVG]);
+			SET_CE(avePdsnrNofSymbols, 13u);
+			SET_CEF(avePdsnr, avg_bits[(unsigned)trial % NAVG]);
 			SET_CEF(phase4ErrorForV34Fallback, 0x7f7fffffu);
 
 			vb = p4_call(tag, as_float(0xbf800000u), 1);
@@ -2269,7 +2269,7 @@ run_ce_phase4(void)
 			p34_params();
 			SET_P(MAX_NOF_V90_RETRAINS, 100000);
 			SET_CE(nofV90Retrains, 0u);
-			SET_CE(short_b0, (short)0);
+			SET_CE(meanErrorCheckArmed, (short)0);
 			SET_CE(delayedRetrainRequest, 0u);
 			SET_CE(delayedRetrainArmed, 0u);
 			SET_CE(word_10, 0u);
@@ -2282,8 +2282,8 @@ run_ce_phase4(void)
 			for (call = 0; call < 6; call++) {
 				int vb;
 
-				SET_CE(word_74, 100u);
-				SET_CEF(word_70, 0x42c80000u);	/* 100.0f */
+				SET_CE(avePdsnrNofSymbols, 100u);
+				SET_CEF(avePdsnr, 0x42c80000u);	/* 100.0f */
 				vb = p4_call(tag + call, as_float(0u), 1);
 				diff_eq_int("a negative duration is never "
 					    "reached (%ld)", vb, 0, tag + call);
@@ -2306,7 +2306,7 @@ run_ce_phase4(void)
 			p34_params();
 			SET_P(MAX_NOF_V90_RETRAINS, 100000);
 			SET_CE(nofV90Retrains, 0u);
-			SET_CE(short_b0, (short)0);
+			SET_CE(meanErrorCheckArmed, (short)0);
 			SET_CE(delayedRetrainRequest, 0u);
 			SET_CE(delayedRetrainArmed, 0u);
 			SET_CE(word_10, 0u);
@@ -2315,8 +2315,8 @@ run_ce_phase4(void)
 			SET_CE(word_68, 100000u);
 			SET_CE(retrainDetectDuration, 10);
 			SET_CEF(phase4ErrorForV34Fallback, 0x7f7fffffu);
-			SET_CE(word_74, 20u);
-			SET_CEF(word_70, 0x42c80000u);		/* 100.0f */
+			SET_CE(avePdsnrNofSymbols, 20u);
+			SET_CEF(avePdsnr, 0x42c80000u);		/* 100.0f */
 			SET_P(MAX_NOF_V90_RETRAINS, -1);
 			SET_P(MAX_NOF_REMOTE_RETRAINS, 0);
 
@@ -2347,7 +2347,7 @@ run_ce_phase4(void)
 			SET_P(MAX_NOF_REMOTE_RETRAINS, 0);
 			SET_P(unnamed_45c, -1);
 			SET_CE(nofV90Retrains, 7u);
-			SET_CE(short_b0, (short)1);
+			SET_CE(meanErrorCheckArmed, (short)1);
 			SET_CE(delayedRetrainRequest, 0u);
 			SET_CE(delayedRetrainArmed, 0u);
 			SET_CE(word_10, 0u);
@@ -2355,15 +2355,15 @@ run_ce_phase4(void)
 			SET_CE(word_64, 100000u);
 			SET_CE(word_68, 100000u);
 			SET_CE(retrainDetectDuration, 100000);
-			SET_CE(word_74, 20u);
-			SET_CEF(word_70, 0x40000000u);		/* 2.0f */
+			SET_CE(avePdsnrNofSymbols, 20u);
+			SET_CEF(avePdsnr, 0x40000000u);		/* 2.0f */
 			SET_CEF(phase4ErrorForV34Fallback, 0x7f7fffffu);
 
 			vb = p4_call(tag, as_float(0x42c80000u), 1);
 			diff_eq_int("a negative second ceiling admits every "
 				    "count (%ld)", vb, 4, tag);
 			diff_eq_int("so the arm fired and cleared +0xb0 (%ld)",
-				    (long)CEB->short_b0, 0, tag);
+				    (long)CEB->meanErrorCheckArmed, 0, tag);
 			consumed(tag);
 			p4_unsigned_45c = 1;
 		}
@@ -2379,7 +2379,7 @@ run_ce_phase4(void)
 			SET_P(MAX_NOF_V90_RETRAINS, -1);
 			SET_P(MAX_NOF_REMOTE_RETRAINS, 0);
 			SET_CE(nofV90Retrains, 0u);
-			SET_CE(short_b0, (short)0);
+			SET_CE(meanErrorCheckArmed, (short)0);
 			SET_CE(delayedRetrainRequest, 3u);
 			SET_CE(delayedRetrainArmed, 4u);
 			SET_CE(word_10, 0u);
@@ -2387,8 +2387,8 @@ run_ce_phase4(void)
 			SET_CE(word_64, 100000u);
 			SET_CE(word_68, 100000u);
 			SET_CE(retrainDetectDuration, 100000);
-			SET_CE(word_74, 5u);
-			SET_CEF(word_70, 0x3f800000u);		/* 1.0f */
+			SET_CE(avePdsnrNofSymbols, 5u);
+			SET_CEF(avePdsnr, 0x3f800000u);		/* 1.0f */
 			SET_CEF(phase4ErrorForV34Fallback, 0x7f7fffffu);
 
 			vb = p4_call(tag, as_float(0u), 1);
@@ -2588,7 +2588,7 @@ ec_base(int trial)
 	SET_P(RETRAIN_DETECT_DURATION, 1);
 	SET_P(DEBUG_CONNECTION_EVALUATOR_PERIOD, 1);
 
-	SET_CE(word_8c, -1);
+	SET_CE(externalDemandCode, -1);
 	SET_CE(initDmin, -1);
 	SET_CE(curDmin, 0);
 	SET_CE(nofV90Retrains, 0);
@@ -2627,8 +2627,8 @@ ec_base(int trial)
 	SET_CEF(threshDown, 0x41700000u);	/* 15.0f */
 	SET_CEF(threshRetrain, 0x41a00000u);	/* 20.0f */
 	SET_CEF(word_b8, 0x3f800000u);		/*  1.0f */
-	SET_CEF(word_70, 0);
-	SET_CE(word_74, 0);
+	SET_CEF(avePdsnr, 0);
+	SET_CE(avePdsnrNofSymbols, 0);
 }
 
 #define EC_5	0x40a00000u	/*  5.0f, below every threshold      */
@@ -2642,8 +2642,8 @@ ec_base(int trial)
 static int
 ec_step(long tag, unsigned int n, unsigned int avg)
 {
-	SET_CE(word_74, n);
-	SET_CEF(word_70, avg);
+	SET_CE(avePdsnrNofSymbols, n);
+	SET_CEF(avePdsnr, avg);
 	return ec_call(tag);
 }
 
@@ -2688,8 +2688,8 @@ ec_scenarios(int lvl)
 	ec_base(3);
 	v = ec_step(b + 3, 100, EC_5);
 	ec_is("a quiet call answers 0 (%ld)", v, 0, b + 3);
-	ec_is("the average was consumed (%ld)", (long)CEB->word_74, 0, b + 3);
-	ec_bits("the average was cleared (%ld)", &CEB->word_70, 0u, b + 3);
+	ec_is("the average was consumed (%ld)", (long)CEB->avePdsnrNofSymbols, 0, b + 3);
+	ec_bits("the average was cleared (%ld)", &CEB->avePdsnr, 0u, b + 3);
 	ec_is("+0x1c counted the symbols (%ld)", (long)CEB->word_1c, 100,
 	      b + 3);
 	ec_is("+0x20 advanced (%ld)", (long)CEB->word_20, 100, b + 3);
@@ -2747,14 +2747,14 @@ ec_scenarios(int lvl)
 			long t = b + 70 + i;
 
 			ec_base(6 + i);
-			SET_CE(word_8c, code[i]);
+			SET_CE(externalDemandCode, code[i]);
 			SET_CE(initDmin, 10);
 			SET_CE(curDmin, 5);
 			v = ec_step(t, 100, EC_5);
 			ec_is("the external demand decided (%ld)", v, want[i],
 			      t);
 			ec_is("+0x8c was acknowledged (%ld)",
-			      (long)CEB->word_8c, code[i] > -1 ? -1 : code[i],
+			      (long)CEB->externalDemandCode, code[i] > -1 ? -1 : code[i],
 			      t);
 			if (code[i] >= 0 && code[i] <= 7)
 				ec_ext_code[code[i] > 7 ? 7 : code[i]] = 1;
@@ -2770,23 +2770,23 @@ ec_scenarios(int lvl)
 		 * and `curDmin >= 2 * initDmin` is 0 >= 0, which is that path.
 		 */
 		ec_base(20);
-		SET_CE(word_8c, 5);
+		SET_CE(externalDemandCode, 5);
 		SET_CE(initDmin, 10);
 		SET_CE(curDmin, 5);
 		ec_step(b + 80, 100, EC_5);
-		ec_is("+0x90 is (word_8c > 3) (%ld)", (long)CEB->word_90, 1,
+		ec_is("+0x90 is (externalDemandCode > 3) (%ld)", (long)CEB->word_90, 1,
 		      b + 80);
-		ec_is("+0x98 is (word_8c == 5) (%ld)", (long)CEB->word_98, 1,
+		ec_is("+0x98 is (externalDemandCode == 5) (%ld)", (long)CEB->word_98, 1,
 		      b + 80);
 		ec_base(21);
-		SET_CE(word_8c, 4);
+		SET_CE(externalDemandCode, 4);
 		ec_step(b + 81, 100, EC_5);
 		ec_is("+0x90 is 1 for code 4 (%ld)", (long)CEB->word_90, 1,
 		      b + 81);
 		ec_is("+0x98 is 0 for code 4 (%ld)", (long)CEB->word_98, 0,
 		      b + 81);
 		ec_base(22);
-		SET_CE(word_8c, 1);
+		SET_CE(externalDemandCode, 1);
 		ec_step(b + 82, 100, EC_5);
 		ec_is("+0x90 is 0 for code 1 (%ld)", (long)CEB->word_90, 0,
 		      b + 82);
@@ -2796,7 +2796,7 @@ ec_scenarios(int lvl)
 
 	/* blocked, because the object is already at its lowest rate */
 	ec_base(23);
-	SET_CE(word_8c, 0);
+	SET_CE(externalDemandCode, 0);
 	SET_CE(enableRrnDown, 0);
 	v = ec_step(b + 90, 100, EC_5);
 	ec_is("the blocked arm answers 0 (%ld)", v, 0, b + 90);
@@ -2807,7 +2807,7 @@ ec_scenarios(int lvl)
 	 * arm RETURNS, so stage 5 never runs and the answer stays 2.
 	 */
 	ec_base(24);
-	SET_CE(word_8c, 7);
+	SET_CE(externalDemandCode, 7);
 	SET_CE(enableRrnDown, 1);
 	SET_CE(initDmin, 10);
 	SET_CE(curDmin, 5);
@@ -2818,7 +2818,7 @@ ec_scenarios(int lvl)
 	ec_is("and stage 5 did not run (%ld)", (long)CEB->word_24, 0, b + 91);
 	ec_is("+0x90 took RRN_SILENCE_REQUESTED (%ld)", (long)CEB->word_90,
 	      0x00abcdef, b + 91);
-	ec_is("+0x8c was acknowledged (%ld)", (long)CEB->word_8c, -1, b + 91);
+	ec_is("+0x8c was acknowledged (%ld)", (long)CEB->externalDemandCode, -1, b + 91);
 	ec_ext_down = 1;
 	ec_ext_returned_early = 1;
 	ec_epilogue_ecx = 1;
@@ -2830,7 +2830,7 @@ ec_scenarios(int lvl)
 	 * rate-down cases write it too -- but 5 has no case at all.
 	 */
 	ec_base(71);
-	SET_CE(word_8c, 3);
+	SET_CE(externalDemandCode, 3);
 	SET_CE(retrainDetectDuration, 100);
 	SET_CE(nofV90Retrains, 4);
 	v = ec_step(b + 96, 300, EC_25);
@@ -2841,7 +2841,7 @@ ec_scenarios(int lvl)
 
 	/* the V42 override needs verdict 2, not merely +0x94 */
 	ec_base(72);
-	SET_CE(word_8c, 0);
+	SET_CE(externalDemandCode, 0);
 	SET_CE(enableRrnDown, 1);
 	SET_CE(initDmin, 10);
 	SET_CE(curDmin, 25);
@@ -2852,7 +2852,7 @@ ec_scenarios(int lvl)
 
 	/* the same, overridden by +0x94 */
 	ec_base(25);
-	SET_CE(word_8c, 0);
+	SET_CE(externalDemandCode, 0);
 	SET_CE(enableRrnDown, 1);
 	SET_CE(initDmin, 10);
 	SET_CE(curDmin, 5);
@@ -2864,7 +2864,7 @@ ec_scenarios(int lvl)
 
 	/* the distance doubled: a retrain instead */
 	ec_base(26);
-	SET_CE(word_8c, 0);
+	SET_CE(externalDemandCode, 0);
 	SET_CE(enableRrnDown, 1);
 	SET_CE(initDmin, 10);
 	SET_CE(curDmin, 25);
@@ -2876,7 +2876,7 @@ ec_scenarios(int lvl)
 
 	/* and once too often, a fall-back */
 	ec_base(27);
-	SET_CE(word_8c, 0);
+	SET_CE(externalDemandCode, 0);
 	SET_CE(enableRrnDown, 1);
 	SET_CE(initDmin, 10);
 	SET_CE(curDmin, 25);
@@ -2889,7 +2889,7 @@ ec_scenarios(int lvl)
 
 	/* the limit is UNSIGNED: a negative one is never exceeded */
 	ec_base(28);
-	SET_CE(word_8c, 0);
+	SET_CE(externalDemandCode, 0);
 	SET_CE(enableRrnDown, 1);
 	SET_CE(initDmin, 10);
 	SET_CE(curDmin, 25);
@@ -3482,7 +3482,7 @@ ec_sweep(int lvl)
 				a = avg[(cfg * 3 + i) % 10];
 			}
 			if (i == 4)
-				SET_CE(word_8c, (cfg % 9) - 1);
+				SET_CE(externalDemandCode, (cfg % 9) - 1);
 			ec_step(t, 70u + 23u * (unsigned)i, a);
 		}
 	}

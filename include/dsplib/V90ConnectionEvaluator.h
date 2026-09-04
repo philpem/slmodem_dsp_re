@@ -10,11 +10,13 @@
  * has its own header now.  **No field moved when it did** -- `word_70`,
  * `word_74`, `word_78`, `word_7c`, `word_84` and `word_88` were the names
  * those two earlier batches gave them, and the offset assertions moved from
- * `V90Demodulator.cpp` to `V90ConnectionEvaluator.cpp` unchanged.  Two of the
+ * `V90Demodulator.cpp` to `V90ConnectionEvaluator.cpp` unchanged.  Four of the
  * six are renamed now: `word_78` and `word_7c` are `delayedRetrainRequest`
  * and `delayedRetrainArmed` below, in the naming pass that also settled
- * `initDmin`, `altRbsDetectedOnQc` and `echoRrnState` -- see each field's own
- * comment for the evidence, and finding F9480 for the batch.
+ * `initDmin`, `altRbsDetectedOnQc` and `echoRrnState` (finding F9480); `word_70`
+ * and `word_74` are `avePdsnr` and `avePdsnrNofSymbols` below, carried through
+ * in the second-pass batch that also settled `externalDemandCode` and
+ * `meanErrorCheckArmed` (finding F10132).
  *
  * NOT POLYMORPHIC.  `nm` gives `D1` at 0x3e390 and `D2` at 0x3e380 and no
  * `D0`; GCC emits a deleting destructor only for a virtual class, so offset 0
@@ -233,7 +235,7 @@ public:
 
 	/*
 	 * +0x10  A DURATION IN SYMBOLS, and `evaluatePhase3` and
-	 * `evaluatePhase4` are what say so: each adds `word_74` -- the count
+	 * `evaluatePhase4` are what say so: each adds `avePdsnrNofSymbols` -- the count
 	 * of symbols the running average covers -- to it whenever the average
 	 * is over its fall-back threshold, clears it outright whenever the
 	 * average is not, and gives up on V.90 when it reaches the 1600 at
@@ -253,7 +255,7 @@ public:
 	 * else the lifecycle batch read.
 	 *
 	 * +0x18 IS THE SECOND DURATION, and it is +0x10's twin: both
-	 * evaluators add `word_74` to it while the average is over
+	 * evaluators add `avePdsnrNofSymbols` to it while the average is over
 	 * `PDSNR_THRESHOLD_IN_PHASE3` or `..._IN_PHASE4`, clear it when the
 	 * average is not, and ask for a retrain when it reaches the +0x60 copy
 	 * of `RETRAIN_DETECT_DURATION`.  `cmp 0x60(%ebx),%eax; jb` at 0x3f797
@@ -286,7 +288,7 @@ public:
 	 *
 	 * +0x24 IS `int` AND NOT `unsigned`, which is the one place in these
 	 * eight where the two readings part.  All five debug arms of
-	 * `evaluateConnection` do `word_24 += word_74; cmp 0x6c(%edi),%eax;
+	 * `evaluateConnection` do `word_24 += avePdsnrNofSymbols; cmp 0x6c(%edi),%eax;
 	 * jl` (0x3ec92, 0x3ed39, 0x3ef02, 0x3efda, 0x3f3ba) -- a SIGNED branch
 	 * against `debugPeriod`, which the map calls `int`.  An `unsigned int`
 	 * +0x24 would have made the sum unsigned and the branch `jb`; the
@@ -348,16 +350,29 @@ public:
 	 * `push $0; push %reg; fildll`, the zero-extending 64-bit form GCC
 	 * uses for `unsigned int` and never for `int`.
 	 *
-	 * THE NAMES ARE NOT CHANGED, deliberately.  `V90Demodulator.cpp` and
-	 * `VPcmFloModem.cpp` refer to these four by their offset names and
-	 * belong to other work; renaming them here would edit files this
-	 * batch does not own.  The derivation is recorded instead -- and the
-	 * TYPE of +0x70 is corrected, which those files do not notice: both
-	 * assign it a literal 0, and `0` into a float is the same four zero
-	 * bytes `0` into an `unsigned int` was.
+	 * THE NAMES ARE NOW CHANGED.  This pair used to keep its offset names
+	 * solely because `V90Demodulator.cpp` refers to +0x70/+0x74 through
+	 * `connectionEvaluator->` (four sites, all in `enterPhase3`) and
+	 * belonged to other work at the time; the second naming pass carried
+	 * the rename through that file, which this batch does own.  (The
+	 * earlier claim that `VPcmFloModem.cpp` also names these two was
+	 * stale -- that file's own reference is to +0x78/+0x7c, the
+	 * DIFFERENT pair below, and grep over the whole tree outside `re/`
+	 * finds no `word_70`/`word_74` there at all.)  `avePdsnr` is rule 1:
+	 * eighteen `edprintf`/`dsplibs_debug_printf` sites across
+	 * `evaluatePhase3`, `evaluatePhase4` and `evaluateConnection` print
+	 * its value beside the literal word "avePdsnr" -- e.g. "due to large
+	 * error, avePdsnr = %c%d.%03d".  `avePdsnrNofSymbols` has no string of
+	 * its own; it is named on usage inference, being the running weight
+	 * `updateAvePdsnr` folds every new measurement's `nofSymbols` into and
+	 * the class's own local variable naming (`nofOldSymbols`,
+	 * `nofSymbols`) already calls it that.  Finding F10132.  The TYPE of
+	 * +0x70 is corrected as before, which `V90Demodulator.cpp` does not
+	 * notice: it assigns a literal 0, and `0` into a float is the same
+	 * four zero bytes `0` into an `unsigned int` was.
 	 */
-	float word_70;			/* +0x70 the average PDSNR           */
-	unsigned int word_74;		/* +0x74 the symbols it averages     */
+	float avePdsnr;			/* +0x70 the average PDSNR           */
+	unsigned int avePdsnrNofSymbols;	/* +0x74 the symbols it averages    */
 	/*
 	 * +0x78 and +0x7c were `pad_78` until the VPcmFloModem batch read a
 	 * second function that touches this object: `getV90CpBits` copies
@@ -412,8 +427,23 @@ public:
 	/*
 	 * +0x8c  Set to -1 by `reset`, not to 0 -- `mov $0xffffffff,%eax`, a
 	 * full 32-bit store -- which is why it is `int` and not `unsigned`.
+	 *
+	 * NAMED ON USAGE INFERENCE.  `evaluateConnection`'s own leading comment
+	 * (see the .cpp) calls this "the external demand" and says so from the
+	 * dispatch itself: nothing in the class ever writes it except `reset`,
+	 * so some UNWRITTEN caller plants a code here between calls, and stage
+	 * 2 of `evaluateConnection` is one `if (externalDemandCode > -1)` guard
+	 * followed by a `switch` whose six live values (1, 2, 3, 4, 5, 6) are
+	 * exactly the caller-demanded forms of the same verdicts the class
+	 * otherwise reaches by measurement -- RRN up, RRN down, no-restriction
+	 * RRN, retrain, fall back to V34, and a sixth ("fast parameter
+	 * exchange") no other path reaches at all.  No format string prints
+	 * the field itself, so this is CLAUDE.md's weakest tier, but the
+	 * mechanism it names is not in doubt: `externalDemandCode == -1` is
+	 * idle and every other value in range is a demand the switch services
+	 * and then re-arms to -1.  Finding F10132.
 	 */
-	int word_8c;
+	int externalDemandCode;
 
 	/*
 	 * +0x90  Zeroed by `reset` AND by all four of the members that tell
@@ -429,7 +459,7 @@ public:
 	/*
 	 * +0x98  WAS `pad_98[4]` AND `evaluateConnection` IS ITS ONLY WRITER.
 	 * Five 32-bit stores, four of them a plain zero (0x3e869, 0x3eac0,
-	 * 0x3ec02, 0x3ece1) and one at 0x3ee4f the value of `word_8c == 5`:
+	 * 0x3ec02, 0x3ece1) and one at 0x3ee4f the value of `externalDemandCode == 5`:
 	 *
 	 *     3ee43:  83 fa 05        cmp    $0x5,%edx
 	 *     3ee4c:  0f 94 c0        sete   %al
@@ -538,11 +568,15 @@ public:
 	 * highest byte anything written here touches; the object runs to
 	 * 0xbc.
 	 *
-	 * +0xb0 IS THE ONE-SHOT THAT ARMS `evaluatePhase4`'s MEAN-ERROR ARM.
-	 * `reset` sets it to 1 and nothing else in the class sets it again;
-	 * `evaluatePhase4` tests it first of three guards and clears it when
-	 * all three pass, so the arm fires at most once per reset.  Sixteen
-	 * bits: `cmpw $0x0,0xb0(%ebx)` and `mov %dx,0xb0(%ebx)`.
+	 * +0xb0, `meanErrorCheckArmed`, IS THE ONE-SHOT THAT ARMS
+	 * `evaluatePhase4`'s MEAN-ERROR ARM.  `reset` sets it to 1 and nothing
+	 * else in the class sets it again; `evaluatePhase4` tests it first of
+	 * three guards and clears it when all three pass, so the arm fires at
+	 * most once per reset.  Sixteen bits: `cmpw $0x0,0xb0(%ebx)` and
+	 * `mov %dx,0xb0(%ebx)`.  NAMED ON USAGE INFERENCE -- no string of its
+	 * own, but the mechanism is exactly what `delayedRetrainArmed` above
+	 * was named for: a one-shot latch that permits a check to fire once.
+	 * Finding F10132.
 	 *
 	 * +0xb2 IS `altRbsDetectedOnQc`, and that is the object's own word for
 	 * it: `evaluatePhase3`'s first arm runs when +0xb2 is non-zero, clears
@@ -581,7 +615,7 @@ public:
 	 * THE FIELD IS NOW NAMED, for the third time in this batch:
 	 * `t_v90leaves.cpp` and `t_v90conneval.cpp` carried through to match.
 	 */
-	short short_b0;
+	short meanErrorCheckArmed;
 	short altRbsDetectedOnQc;
 	short echoRrnState;
 

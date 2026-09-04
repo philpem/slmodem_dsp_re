@@ -892,10 +892,10 @@ static const struct hole hole_v[] = {
 	{ 0x270, 4, "word_270" },
 	{ 0x274, 4, "pad_274" },
 	{ 0x281, 3, "pad_281" },
-	{ 0x284, 4, "word_284" },
-	{ 0x288, 4, "word_288" },
-	{ 0x28c, 4, "word_28c" },
-	{ 0x290, 4, "word_290" },
+	{ 0x284, 4, "errorEnergyPrintCounter" },
+	{ 0x288, 4, "errorEnergyPrintPeriod" },
+	{ 0x28c, 4, "timingOffsetPrintCounter" },
+	{ 0x290, 4, "timingOffsetPrintPeriod" },
 	{ 0x294, 4, "quickConnect" }
 };
 
