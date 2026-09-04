@@ -96,16 +96,16 @@ cmp_ctx_common(const char *what, struct fax_class1 *a, struct fax_class1 *b,
 	FLD(delayed_status_countdown);
 	FLD(current_mod);
 	FLD(tx_rate);
-	FLD(f1270);
-	FLD(f1290);
-	FLD(f1294);
+	FLD(tx_connect_countdown);
+	FLD(tx_bytes_per_block);
+	FLD(tx_connect_latch);
 	FLD(transmit_enabled);
-	FLD(f1298);
+	FLD(tx_fifo_ready);
 	FLD(data_input_closed);
 	FLD(hdlc_frame_done);
 	FLD(buffers_sent);
-	FLD(f1224);
-	FLD(f1250);
+	FLD(frame_end_latch);
+	FLD(hdlc_write_cursor);
 #undef FLD
 }
 
@@ -145,7 +145,7 @@ run_tx_scrambled_ones(int rate_code, long tag)
 
 	memset(&ctx_a, 0, sizeof(ctx_a));
 	memset(&ctx_b, 0, sizeof(ctx_b));
-	ctx_a.f1270 = ctx_b.f1270 = 999;
+	ctx_a.tx_connect_countdown = ctx_b.tx_connect_countdown = 999;
 	ctx_a.transmit_enabled = ctx_b.transmit_enabled = 1;
 
 	diff_begin("_tx_scrambled_ones_init");
@@ -191,8 +191,8 @@ run_preamble_init(long tag)
 	ctx_a.vmi_c = make_vmi_c();
 	ctx_b.vmi_c = make_vmi_c();
 	ctx_a.state = ctx_b.state = CLASS1_ANSWER_TONE_STATE;
-	ctx_a.f1224 = ctx_b.f1224 = 1;
-	ctx_a.f1250 = ctx_b.f1250 = 9;
+	ctx_a.frame_end_latch = ctx_b.frame_end_latch = 1;
+	ctx_a.hdlc_write_cursor = ctx_b.hdlc_write_cursor = 9;
 	ctx_a.hdlc_frame_done = ctx_b.hdlc_frame_done = 1;
 	ctx_a.buffers_sent = ctx_b.buffers_sent = 3;
 

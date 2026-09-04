@@ -136,7 +136,7 @@ struct fixture {
 static void
 fixture_init(struct fixture *f, int state, int rx_count_val,
 	    int f127c_start, int delayed_countdown, int delayed_status,
-	    int use_iir, int code, int f1244, short latch)
+	    int use_iir, int code, int modem_direction, short latch)
 {
 	int i;
 	static const short coeff[10] = { 100, 0, 0, 0, 0, 100, 0, 0, 0, 0 };
@@ -154,10 +154,10 @@ fixture_init(struct fixture *f, int state, int rx_count_val,
 	f->ctx.silence_blocks = 100;
 	f->ctx.energy = 0;
 	f->ctx.modem_rate_code = code;
-	f->ctx.f1244 = f1244;
-	f->ctx.f12f0 = use_iir;
+	f->ctx.modem_direction = modem_direction;
+	f->ctx.iir_enabled = use_iir;
 	if (use_iir)
-		f->ctx.f12dc = coeff;
+		f->ctx.iir_coeff = coeff;
 
 	for (i = 0; i < RXBUF; i++)
 		f->rx[i] = (short)((i * 37 + 5) % 61 - 30);
@@ -190,16 +190,16 @@ fixture_init(struct fixture *f, int state, int rx_count_val,
 
 static void
 run_case(int state, int rx_count_val, int f127c_start, int delayed_countdown,
-	 int delayed_status, int use_iir, int code, int f1244, short latch,
+	 int delayed_status, int use_iir, int code, int modem_direction, short latch,
 	 unsigned level, long input)
 {
 	struct fixture fa, fb;
 	int ra, rb;
 
 	fixture_init(&fa, state, rx_count_val, f127c_start, delayed_countdown,
-		    delayed_status, use_iir, code, f1244, latch);
+		    delayed_status, use_iir, code, modem_direction, latch);
 	fixture_init(&fb, state, rx_count_val, f127c_start, delayed_countdown,
-		    delayed_status, use_iir, code, f1244, latch);
+		    delayed_status, use_iir, code, modem_direction, latch);
 
 	dsplibs_debug_level = ref_dsplibs_debug_level = level;
 
@@ -297,13 +297,13 @@ test_progress(void)
 		run_case(CLASS1_IDLE_STATE, 16, 0, 0, 0, 1, 0, 0, 0, level,
 			tag++);
 
-		/* Quality latch: V17, f1244==1, latch SET -> ACCEPT_RATE. */
+		/* Quality latch: V17, modem_direction==1, latch SET -> ACCEPT_RATE. */
 		run_case(CLASS1_IDLE_STATE, 16, 0, 0, 0, 0, 0x91, 1, 1, level,
 			tag++);
-		/* V17, f1244==1, latch CLEAR -> no change. */
+		/* V17, modem_direction==1, latch CLEAR -> no change. */
 		run_case(CLASS1_IDLE_STATE, 16, 0, 0, 0, 0, 0x91, 1, 0, level,
 			tag++);
-		/* V17 code but f1244!=1 -> quality check skipped entirely. */
+		/* V17 code but modem_direction!=1 -> quality check skipped entirely. */
 		run_case(CLASS1_IDLE_STATE, 16, 0, 0, 0, 0, 0x91, 0, 1, level,
 			tag++);
 		/* V17 SHORT-training code (0x92): recognised by

@@ -59,9 +59,9 @@ cmp_ctx(const char *what, struct fax_class1 *a, struct fax_class1 *b,
 	} while (0)
 	FLD(state);
 	FLD(modem_rate_code);
-	FLD(f12d0);
-	FLD(f12c8);
-	FLD(f1244);
+	FLD(superframe_len);
+	FLD(superframe_countdown);
+	FLD(modem_direction);
 	FLD(silence_blocks);
 	FLD(countdown);
 	FLD(energy);
@@ -119,7 +119,7 @@ run_rh_restart(long tag)
 	return diff_end();
 }
 
-/* RH while between-buffers with buffered data (f12d0 != 0): emulate. */
+/* RH while between-buffers with buffered data (superframe_len != 0): emulate. */
 static int
 run_rh_emulate(long tag)
 {
@@ -129,7 +129,7 @@ run_rh_emulate(long tag)
 	b = make_pair(&a);
 	a->state = b->state = CLASS1_HDLC_RECEIVE_BETWEEN_BUFFERS_STATE;
 	a->modem_rate_code = b->modem_rate_code = 5;	/* != arg3, forces else */
-	a->f12d0 = b->f12d0 = 42;
+	a->superframe_len = b->superframe_len = 42;
 
 	diff_begin("fax_class1_command: RH, emulate");
 	ra = ref_fax_class1_command(a, FAX_CLASS1_RH_COMMAND, 3, 0);
@@ -171,7 +171,7 @@ run_rm(int rate_code, long tag)
 	return diff_end();
 }
 
-/* TM then RM: tears down the just-built TX modem (f1244 == 2 check). */
+/* TM then RM: tears down the just-built TX modem (modem_direction == 2 check). */
 static int
 run_tm_then_rm(long tag)
 {
@@ -191,7 +191,7 @@ run_tm_then_rm(long tag)
 	return diff_end();
 }
 
-/* RM then TM: tears down the just-built RX modem (f1244 == 1 check). */
+/* RM then TM: tears down the just-built RX modem (modem_direction == 1 check). */
 static int
 run_rm_then_tm(long tag)
 {
@@ -245,7 +245,7 @@ run_rs(int ms, long tag)
 	return diff_end();
 }
 
-/* cmd out of range: no dispatch, still returns 1, f12d0 still cleared. */
+/* cmd out of range: no dispatch, still returns 1, superframe_len still cleared. */
 static int
 run_bad_cmd(int cmd, long tag)
 {
@@ -253,7 +253,7 @@ run_bad_cmd(int cmd, long tag)
 	int ra, rb;
 
 	b = make_pair(&a);
-	a->f12d0 = b->f12d0 = 77;
+	a->superframe_len = b->superframe_len = 77;
 
 	diff_begin("fax_class1_command: cmd out of range");
 	ra = ref_fax_class1_command(a, cmd, 0, 0);

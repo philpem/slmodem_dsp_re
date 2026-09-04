@@ -227,11 +227,11 @@ int
 fax_class1_info(struct fax_class1 *ctx, int sel, int *out)
 {
 	if (sel == 0) {
-		*out = ctx->f12d8;
+		*out = ctx->gain_attenuation_db;
 		return 0;
 	}
 	if (sel == 1) {
-		void *p = ctx->f1288;
+		void *p = ctx->tx_fifo;
 
 		*out = p ? *(unsigned short *)((char *)p + 0xc) : 0;
 	}
@@ -378,7 +378,7 @@ _idle_state(struct fax_class1 *ctx, const short *rx, short *tx,
  * derivation), hand off to `cHDLCtx_preamble_state_init` (class1tx.c) --
  * its return discarded, this function's own is always 0 -- instead of
  * generating another block.  Otherwise generate one block of the session's
- * own tone (`ctx->f1258`) and report a full block transmitted.
+ * own tone (`ctx->tone`) and report a full block transmitted.
  */
 int
 _answer_tone_state(struct fax_class1 *ctx, const short *rx, short *tx,
@@ -399,7 +399,7 @@ _answer_tone_state(struct fax_class1 *ctx, const short *rx, short *tx,
 		cHDLCtx_preamble_state_init(ctx);
 		return 0;
 	}
-	FPM_TONE_generate(ctx->f1258, tx, CLASS1_BLOCK_SAMPLES);
+	FPM_TONE_generate(ctx->tone, tx, CLASS1_BLOCK_SAMPLES);
 	return 0;
 }
 
@@ -486,7 +486,7 @@ _recieve_silence_state(struct fax_class1 *ctx, const short *rx, short *tx,
  * `FPM_IIR_II_COEFF_PER_SECTION` (5) times the two sections
  * `fax_class1_progress` passes as a literal to `FPM_iir_filt_II`.
  * `fax_class1_create` is the only writer of the pointer that names it
- * (`ctx->f12dc`); nothing establishes what the filter is FOR beyond "high
+ * (`ctx->iir_coeff`); nothing establishes what the filter is FOR beyond "high
  * pass", the object's own initials.
  */
 const short FAX_HP_COEFF[10] = {
@@ -512,7 +512,7 @@ const short FAX_HP_COEFF[10] = {
  * eight fields on (`short_0000`, `int_0004`, `short_0008`, `short_000a`,
  * `short_000c`, `slot`; `modem_cfg` gets the real pointer; `ptr_0014` alone
  * survives from `FAXVMI_CFG`'s own template, untouched).  Neither malloc's
- * result is NULL-checked before use except `f120c`/`f1210` themselves,
+ * result is NULL-checked before use except `vmi_c_cfg`/`vmi_a_cfg` themselves,
  * immediately before their own `FAXVMI_create` call -- the object's own
  * asymmetry, reproduced rather than hardened.
  *
@@ -552,16 +552,16 @@ fax_class1_create(struct fax_class1 *existing, const struct fax_class1_cfg *cfg)
 
 		ctx = sysdep_malloc(CLASS1_MODELLED_BYTES);
 		ctx->vmi_c = NULL;
-		ctx->f120c = NULL;
-		ctx->f1210 = NULL;
+		ctx->vmi_c_cfg = NULL;
+		ctx->vmi_a_cfg = NULL;
 		ctx->modem_vmi = NULL;
 		ctx->vmi_b = NULL;
 		ctx->vmi_a = NULL;
-		ctx->f1258 = NULL;
-		ctx->f1288 = NULL;
+		ctx->tone = NULL;
+		ctx->tx_fifo = NULL;
 
 		vc = sysdep_malloc(sizeof(struct faxvmi_cfg));
-		ctx->f120c = vc;
+		ctx->vmi_c_cfg = vc;
 		tx_cfg = sysdep_malloc(sizeof(struct v21tx_cfg));
 		*tx_cfg = V21TX_CFG;
 		*vc = FAXVMI_CFG;
@@ -572,11 +572,11 @@ fax_class1_create(struct fax_class1 *existing, const struct fax_class1_cfg *cfg)
 		vc->short_000c = 0;
 		vc->slot = VMI_SLOT_V21TX;
 		vc->modem_cfg = tx_cfg;
-		if (ctx->f120c != NULL)
-			ctx->vmi_c = FAXVMI_create(NULL, ctx->f120c);
+		if (ctx->vmi_c_cfg != NULL)
+			ctx->vmi_c = FAXVMI_create(NULL, ctx->vmi_c_cfg);
 
 		vc = sysdep_malloc(sizeof(struct faxvmi_cfg));
-		ctx->f1210 = vc;
+		ctx->vmi_a_cfg = vc;
 		rx_cfg = sysdep_malloc(sizeof(struct v21rx_cfg));
 		*rx_cfg = V21RX_CFG;
 		*vc = FAXVMI_CFG;
@@ -587,19 +587,19 @@ fax_class1_create(struct fax_class1 *existing, const struct fax_class1_cfg *cfg)
 		vc->short_000c = 0x60;
 		vc->slot = VMI_SLOT_V21RX;
 		vc->modem_cfg = rx_cfg;
-		if (ctx->f1210 != NULL)
-			ctx->vmi_a = FAXVMI_create(NULL, ctx->f1210);
+		if (ctx->vmi_a_cfg != NULL)
+			ctx->vmi_a = FAXVMI_create(NULL, ctx->vmi_a_cfg);
 
-		ctx->f12cc = 0;
-		ctx->f12d0 = 0;
+		ctx->superframe_read_idx = 0;
+		ctx->superframe_len = 0;
 	}
 
 	ctx->s7_timeout = cfg->s7_timeout;
 	ctx->f12d4 = cfg->f08;
-	ctx->f12d8 = 0;
-	ctx->f12dc = FAX_HP_COEFF;
+	ctx->gain_attenuation_db = 0;
+	ctx->iir_coeff = FAX_HP_COEFF;
 	sysdep_memset(ctx->iir_state, 0, sizeof(ctx->iir_state));
-	ctx->f12f0 = (cfg->iir_enable != 0);
+	ctx->iir_enabled = (cfg->iir_enable != 0);
 	ctx->answer_tone_blocks = 150;
 	if (cfg->answer_tone_ms != 0) {
 		if (dsplibs_debug_level > 1)
@@ -654,7 +654,7 @@ fax_class1_create(struct fax_class1 *existing, const struct fax_class1_cfg *cfg)
 		tone.freq = 2100;
 		tone.scale = 6400;
 		tone.rev_period = 0;
-		ctx->f1258 = FPM_TONE_create(NULL, &tone);
+		ctx->tone = FPM_TONE_create(NULL, &tone);
 
 		ctx->countdown = 0;
 		ctx->ans_org = CLASS1_ANS_ORG_ANSWER;
@@ -675,12 +675,12 @@ fax_class1_create(struct fax_class1 *existing, const struct fax_class1_cfg *cfg)
 		tone.freq = 1100;
 		tone.scale = 6400;
 		tone.rev_period = 0;
-		ctx->f1258 = FPM_TONE_create(NULL, &tone);
+		ctx->tone = FPM_TONE_create(NULL, &tone);
 	}
 
 	ctx->countdown = 0;
-	ctx->f125c = 1;
-	ctx->f1260 = 0;
+	ctx->tone_cadence_phase = 1;
+	ctx->tone_cadence_timer = 0;
 	(void)_cHDLCrx_init_from_idle(ctx, 3);
 	ctx->ans_org = CLASS1_ANS_ORG_NORMAL;
 
@@ -703,15 +703,15 @@ fax_class1_create(struct fax_class1 *existing, const struct fax_class1_cfg *cfg)
  * whatever this function's OWN caller happened to leave in that register,
  * when `cmd` matches nothing in 0..5 -- a genuinely uninitialised read the
  * object itself makes, reproduced as one here rather than defended against).
- * Then, UNLESS `cmd == FAX_CLASS1_RH_COMMAND`, clear `f12d0`.  A `cmd`
+ * Then, UNLESS `cmd == FAX_CLASS1_RH_COMMAND`, clear `superframe_len`.  A `cmd`
  * outside 0..5 returns 1 at this point without dispatching anything.
  *
  * FAX_CLASS1_RH_COMMAND's OWN BRANCH is the one with real control flow:
  * already mid-`HDLC_RECEIVE_BETWEEN_BUFFERS_STATE` (6) AND the rate is
  * unchanged -> restart `HDLC_RECEIVE_STATE` (`_hdlc_receive_state_init`);
- * otherwise, if `f12d0` (bytes buffered from a prior between-buffers pass)
+ * otherwise, if `superframe_len` (bytes buffered from a prior between-buffers pass)
  * is empty -> `_cHDLCrx_init_from_idle`; otherwise -> jump straight to
- * `HDLC_EMULATE_RECEIVE_STATE` and arm its two-tick countdown (`f12c8 = 2`).
+ * `HDLC_EMULATE_RECEIVE_STATE` and arm its two-tick countdown (`superframe_countdown = 2`).
  * `modem_rate_code` is written on every one of those three sub-paths.
  *
  * ALWAYS RETURNS 1 -- even for an out-of-range `cmd`; nothing reconstructed
@@ -737,7 +737,7 @@ fax_class1_command(struct fax_class1 *ctx, int cmd, int arg3, int arg4)
 	}
 
 	if (cmd != FAX_CLASS1_RH_COMMAND)
-		ctx->f12d0 = 0;
+		ctx->superframe_len = 0;
 
 	if ((unsigned)cmd > 5)
 		return 1;
@@ -750,22 +750,22 @@ fax_class1_command(struct fax_class1 *ctx, int cmd, int arg3, int arg4)
 
 	case FAX_CLASS1_TM_COMMAND:
 		if (ctx->modem_vmi != NULL && ctx->vmi_b != NULL &&
-		    ctx->f1244 == 1)
+		    ctx->modem_direction == CLASS1_MODEM_DIR_RX)
 			_delete_data_rx_modem(ctx);
 		ctx->modem_rate_code = arg3;
 		ctx->silence_blocks = arg4;
 		_tx_scrambled_ones_init(ctx, arg3);
-		ctx->f1244 = 2;
+		ctx->modem_direction = CLASS1_MODEM_DIR_TX;
 		break;
 
 	case FAX_CLASS1_RM_COMMAND:
 		if (ctx->modem_vmi != NULL && ctx->vmi_b != NULL &&
-		    ctx->f1244 == 2)
+		    ctx->modem_direction == CLASS1_MODEM_DIR_TX)
 			_delete_data_tx_modem(ctx);
 		ctx->modem_rate_code = arg3;
 		_rx_look_carrier_init(ctx, arg3);
 		_cHDLCrx_init_from_idle(ctx, arg3);
-		ctx->f1244 = 1;
+		ctx->modem_direction = CLASS1_MODEM_DIR_RX;
 		break;
 
 	case FAX_CLASS1_RH_COMMAND:
@@ -773,11 +773,11 @@ fax_class1_command(struct fax_class1 *ctx, int cmd, int arg3, int arg4)
 		    ctx->modem_rate_code == arg3) {
 			_hdlc_receive_state_init(ctx);
 			ctx->state = CLASS1_HDLC_RECEIVE_STATE;
-		} else if (ctx->f12d0 == 0) {
+		} else if (ctx->superframe_len == 0) {
 			_cHDLCrx_init_from_idle(ctx, arg3);
 		} else {
 			ctx->state = CLASS1_HDLC_EMULATE_RECEIVE_STATE;
-			ctx->f12c8 = 2;
+			ctx->superframe_countdown = 2;
 		}
 		ctx->modem_rate_code = arg3;
 		break;
@@ -810,22 +810,22 @@ fax_class1_command(struct fax_class1 *ctx, int cmd, int arg3, int arg4)
 
 /*
  * `.text` 0x0093bf0, 347 bytes.  Tear the session down, checking (and
- * freeing) eight fields in the object's own order -- `f120c`, `vmi_c`,
- * `f1210`, `vmi_a`, the current data modem, `f1288`, `f1258` -- and finally
+ * freeing) eight fields in the object's own order -- `vmi_c_cfg`, `vmi_c`,
+ * `vmi_a_cfg`, `vmi_a`, the current data modem, `tx_fifo`, `tone` -- and finally
  * the session object itself.  Every reload of a just-freed field between
  * calls is the object's own conservative re-read across an opaque
  * `sysdep_free`/`FAXVMI_delete`/etc. call, not cached here.
  *
- * `f120c` and `f1210` share one shape: a pointer that owns exactly one
+ * `vmi_c_cfg` and `vmi_a_cfg` share one shape: a pointer that owns exactly one
  * sub-allocation, at +0x10 of what it points to, freed first.  Neither
  * object's type is established beyond that.
  *
  * THE CURRENT DATA MODEM IS TORN DOWN ONLY WHEN BOTH `modem_vmi` AND
  * `vmi_b` ARE NON-NULL -- a single guard on the pair, not two separate
- * ones -- and `f1244` is what selects which of `_delete_data_rx_modem` /
- * `_delete_data_tx_modem` applies (1 for the RX shape).  This is the first
- * function to explain HOW the caller knows which direction `modem_vmi`
- * currently holds.
+ * ones -- and `modem_direction` is what selects which of `_delete_data_rx_modem` /
+ * `_delete_data_tx_modem` applies (`CLASS1_MODEM_DIR_RX` for the RX shape).
+ * This is the first function to explain HOW the caller knows which direction
+ * `modem_vmi` currently holds.
  *
  * Returns 1 on every path -- `mov $0x1,%eax` before both `ret`s -- and
  * nothing reconstructed reads it back.
@@ -833,34 +833,34 @@ fax_class1_command(struct fax_class1 *ctx, int cmd, int arg3, int arg4)
 int
 fax_class1_delete(struct fax_class1 *ctx)
 {
-	if (ctx->f120c != NULL) {
-		void *p = ctx->f120c;
+	if (ctx->vmi_c_cfg != NULL) {
+		void *p = ctx->vmi_c_cfg;
 
 		sysdep_free(*(void **)((char *)p + 0x10));
-		sysdep_free(ctx->f120c);
+		sysdep_free(ctx->vmi_c_cfg);
 	}
 	if (ctx->vmi_c != NULL)
 		FAXVMI_delete(ctx->vmi_c);
-	if (ctx->f1210 != NULL) {
-		void *p = ctx->f1210;
+	if (ctx->vmi_a_cfg != NULL) {
+		void *p = ctx->vmi_a_cfg;
 
 		sysdep_free(*(void **)((char *)p + 0x10));
-		sysdep_free(ctx->f1210);
+		sysdep_free(ctx->vmi_a_cfg);
 	}
 	if (ctx->vmi_a != NULL)
 		FAXVMI_delete(ctx->vmi_a);
 
 	if (ctx->modem_vmi != NULL && ctx->vmi_b != NULL) {
-		if (ctx->f1244 == 1)
+		if (ctx->modem_direction == CLASS1_MODEM_DIR_RX)
 			_delete_data_rx_modem(ctx);
 		else
 			_delete_data_tx_modem(ctx);
 	}
 
-	if (ctx->f1288 != NULL)
-		FIFO_delete(ctx->f1288);
-	if (ctx->f1258 != NULL)
-		FPM_TONE_delete(ctx->f1258);
+	if (ctx->tx_fifo != NULL)
+		FIFO_delete(ctx->tx_fifo);
+	if (ctx->tone != NULL)
+		FPM_TONE_delete(ctx->tone);
 
 	sysdep_free(ctx);
 	return 1;
@@ -915,7 +915,7 @@ class1_status_name(int id)
  * THE IIR TICK'S ARGUMENTS (step 2) are typed by `FPM_iir_filt_II`'s own
  * signature (`fpm_iir.h`): `rx` is `samples` (filtered in place, which is
  * WHY this function's own `rx` parameter is `short *` and not `const`),
- * `f12dc` is `coeff`, `iir_state` is `state` (sized `4 * sections` =
+ * `iir_coeff` is `coeff`, `iir_state` is `state` (sized `4 * sections` =
  * 8 shorts for the literal `sections = 2` here), and the `count` argument
  * is `(short)n` -- `n`'s LOW 16 BITS specifically (`cwtl` sign-extends
  * `%ax`), not `n` itself.
@@ -976,8 +976,8 @@ fax_class1_progress(struct fax_class1 *ctx, short *rx, short *tx,
 	}
 	*word7 = 0;
 	ctx->status = FAX_CLASS1_NO_MESSAGE;
-	if (ctx->f12f0 != 0)
-		FPM_iir_filt_II(rx, ctx->f12dc, ctx->iir_state, 2,
+	if (ctx->iir_enabled != 0)
+		FPM_iir_filt_II(rx, ctx->iir_coeff, ctx->iir_state, 2,
 				(short)n);
 
 	/*
@@ -1022,7 +1022,7 @@ fax_class1_progress(struct fax_class1 *ctx, short *rx, short *tx,
 	if (ctx->status == FAX_CLASS1_NO_MESSAGE) {
 		if (code == 0x91 || code == 0x79 || code == 0x61 ||
 		    code == 0x49) {
-			if (ctx->f1244 == 1) {
+			if (ctx->modem_direction == CLASS1_MODEM_DIR_RX) {
 				struct faxvmi_link *link = ctx->vmi_b->link;
 				void *modem = (void *)(long)link->int_0014;
 				void *obj = *(void **)((char *)modem +
@@ -1036,7 +1036,7 @@ fax_class1_progress(struct fax_class1 *ctx, short *rx, short *tx,
 				}
 			}
 		} else if (code == 0x60 || code == 0x48) {
-			if (ctx->f1244 == 1) {
+			if (ctx->modem_direction == CLASS1_MODEM_DIR_RX) {
 				struct faxvmi_link *link = ctx->vmi_b->link;
 				void *modem = (void *)(long)link->int_0014;
 				void *obj = *(void **)((char *)modem +
@@ -1050,7 +1050,7 @@ fax_class1_progress(struct fax_class1 *ctx, short *rx, short *tx,
 				}
 			}
 		} else if (code == 0x30 || code == 0x18) {
-			if (ctx->f1244 == 1) {
+			if (ctx->modem_direction == CLASS1_MODEM_DIR_RX) {
 				struct faxvmi_link *link = ctx->vmi_b->link;
 				void *modem = (void *)(long)link->int_0014;
 				void *obj = *(void **)((char *)modem +

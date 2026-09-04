@@ -10,7 +10,7 @@
  * `vxx_create` table entries, so this is not a fresh dependency, just a
  * fuller one than t_faxvmicp.c chose to take on.
  *
- * THE WRAPPED-OBJECT POKES (`ctx->f12c0`/`f12c4`/`f12d4` propagated into an
+ * THE WRAPPED-OBJECT POKES (`ctx->rx_agc_mult`/`rx_agc_shift`/`f12d4` propagated into an
  * unmodelled per-modulation sub-object reached via `vmi_b->link->int_0014`)
  * are verified the same way: both sides call the IDENTICAL already-written
  * constructor, so the sub-object's shape and size are identical on both
@@ -18,7 +18,7 @@
  * is a safe, meaningful comparison even with no struct named for it.
  *
  * The f12d4-propagation offset (`off1_d4`) is always four less than the
- * f12c0/f12c4 one (`off1_c0c4`) -- 0x54/0x50 (V.27ter), 0x50/0x4c (V.29),
+ * rx_agc_mult/rx_agc_shift one (`off1_c0c4`) -- 0x54/0x50 (V.27ter), 0x50/0x4c (V.29),
  * 0x60/0x5c (V.17) -- read straight off `dis.py`, not a guessed pattern.
  */
 
@@ -144,7 +144,7 @@ cmp_ctx(const char *what, struct fax_class1 *a, struct fax_class1 *b,
 }
 
 /*
- * One fresh-create case: zeroed ctx, `ctx->f12c0`/`f12c4`/`f12d4` seeded to
+ * One fresh-create case: zeroed ctx, `ctx->rx_agc_mult`/`rx_agc_shift`/`f12d4` seeded to
  * a distinct nonzero pattern (so a propagation bug shows as a real
  * mismatch, not two sides agreeing on zero), `_init_receiver` called once.
  */
@@ -156,8 +156,8 @@ run_fresh(int rate_code, int off1_c0c4, int off2_c0c4, int off2_d4, long tag)
 
 	memset(&ctx_a, 0, sizeof(ctx_a));
 	memset(&ctx_b, 0, sizeof(ctx_b));
-	ctx_a.f12c0 = ctx_b.f12c0 = (int)(0x1100 + tag);
-	ctx_a.f12c4 = ctx_b.f12c4 = (int)(0x2200 + tag);
+	ctx_a.rx_agc_mult = ctx_b.rx_agc_mult = (int)(0x1100 + tag);
+	ctx_a.rx_agc_shift = ctx_b.rx_agc_shift = (int)(0x2200 + tag);
 	ctx_a.f12d4 = ctx_b.f12d4 = (int)(0x3300 + tag);
 	ctx_a.clock_sec = ctx_b.clock_sec = 12;
 	ctx_a.clock_frac = ctx_b.clock_frac = 34;
@@ -169,10 +169,10 @@ run_fresh(int rate_code, int off1_c0c4, int off2_c0c4, int off2_d4, long tag)
 
 	cmp_ctx("fresh", &ctx_a, &ctx_b, tag);
 
-	diff_eq_int("fresh f12c0 propagated (%ld)",
+	diff_eq_int("fresh rx_agc_mult propagated (%ld)",
 		    wrapped_short(ctx_b.vmi_b, off1_c0c4, off2_c0c4),
 		    wrapped_short(ctx_a.vmi_b, off1_c0c4, off2_c0c4), tag);
-	diff_eq_int("fresh f12c4 propagated (%ld)",
+	diff_eq_int("fresh rx_agc_shift propagated (%ld)",
 		    wrapped_short(ctx_b.vmi_b, off1_c0c4, off2_c0c4 + 2),
 		    wrapped_short(ctx_a.vmi_b, off1_c0c4, off2_c0c4 + 2), tag);
 	diff_eq_int("fresh f12d4 propagated (%ld)",
@@ -195,8 +195,8 @@ run_reinit(int rate_code, int off1_c0c4, int off2_d4, long tag)
 
 	memset(&ctx_a, 0, sizeof(ctx_a));
 	memset(&ctx_b, 0, sizeof(ctx_b));
-	ctx_a.f12c0 = ctx_b.f12c0 = (int)(0x1400 + tag);
-	ctx_a.f12c4 = ctx_b.f12c4 = (int)(0x2500 + tag);
+	ctx_a.rx_agc_mult = ctx_b.rx_agc_mult = (int)(0x1400 + tag);
+	ctx_a.rx_agc_shift = ctx_b.rx_agc_shift = (int)(0x2500 + tag);
 	ctx_a.clock_sec = ctx_b.clock_sec = 5;
 	ctx_a.clock_frac = ctx_b.clock_frac = 6;
 
@@ -296,17 +296,17 @@ main(void)
 {
 	int rc = 0;
 
-	/* V.27ter: fresh f12c0/f12c4 at wrapped+0x54 -> +0x8c/+0x8e,
+	/* V.27ter: fresh rx_agc_mult/rx_agc_shift at wrapped+0x54 -> +0x8c/+0x8e,
 	 * f12d4 at wrapped+0x50 -> +0x14                                 */
 	rc |= run_fresh(0x18, 0x54, 0x8c, 0x14, 10);	/* 2400 */
 	rc |= run_fresh(0x30, 0x54, 0x8c, 0x14, 11);	/* 4800 */
 
-	/* V.29: fresh f12c0/f12c4 at wrapped+0x50 -> +0x88/+0x8a,
+	/* V.29: fresh rx_agc_mult/rx_agc_shift at wrapped+0x50 -> +0x88/+0x8a,
 	 * f12d4 at wrapped+0x4c -> +0x1c                                 */
 	rc |= run_fresh(0x48, 0x50, 0x88, 0x1c, 20);	/* 7200 */
 	rc |= run_fresh(0x60, 0x50, 0x88, 0x1c, 21);	/* 9600 */
 
-	/* V.17: fresh f12c0/f12c4 at wrapped+0x60 -> +0xd8/+0xda,
+	/* V.17: fresh rx_agc_mult/rx_agc_shift at wrapped+0x60 -> +0xd8/+0xda,
 	 * f12d4 at wrapped+0x5c -> +0x20                                 */
 	rc |= run_fresh(0x91, 0x60, 0xd8, 0x20, 30);	/* 14400 long */
 	rc |= run_fresh(0x92, 0x60, 0xd8, 0x20, 31);	/* 14400 short */

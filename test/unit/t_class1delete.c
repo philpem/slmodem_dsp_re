@@ -71,7 +71,7 @@ make_handle(void)
 	return vmi;
 }
 
-/* `f120c`/`f1210`'s shape: a pointer owning one sub-allocation at +0x10. */
+/* `vmi_c_cfg`/`vmi_a_cfg`'s shape: a pointer owning one sub-allocation at +0x10. */
 static void *
 make_sub14(void)
 {
@@ -81,29 +81,29 @@ make_sub14(void)
 	return p;
 }
 
-/* rx_side: 1 builds an RX data modem (f1244 = 1), 0 a TX one. */
+/* rx_side: 1 builds an RX data modem (modem_direction = 1), 0 a TX one. */
 static void
 build_session(struct fax_class1 *ctx, int rx_side, int use_fpm)
 {
 	memset(ctx, 0, sizeof(*ctx));
 
-	ctx->f120c = make_sub14();
+	ctx->vmi_c_cfg = make_sub14();
 	ctx->vmi_c = make_handle();
-	ctx->f1210 = make_sub14();
+	ctx->vmi_a_cfg = make_sub14();
 	ctx->vmi_a = make_handle();
 	ctx->vmi_b = make_handle();
 
 	ctx->modem_vmi = sysdep_malloc(sizeof(struct faxvmi_cfg));
 	if (rx_side) {
 		init_vmi_v27rx(ctx->modem_vmi, 4800, 0, &marker);
-		ctx->f1244 = 1;
+		ctx->modem_direction = 1;
 	} else {
 		init_vmi_v27tx(ctx->modem_vmi, 4800, 0, &marker);
-		ctx->f1244 = 0;
+		ctx->modem_direction = 0;
 	}
 
-	ctx->f1288 = FIFO_create(NULL, NULL);
-	ctx->f1258 = use_fpm ? FPM_TONE_create(NULL, NULL) : NULL;
+	ctx->tx_fifo = FIFO_create(NULL, NULL);
+	ctx->tone = use_fpm ? FPM_TONE_create(NULL, NULL) : NULL;
 }
 
 static void
@@ -111,23 +111,23 @@ build_session_ref(struct fax_class1 *ctx, int rx_side, int use_fpm)
 {
 	memset(ctx, 0, sizeof(*ctx));
 
-	ctx->f120c = make_sub14();
+	ctx->vmi_c_cfg = make_sub14();
 	ctx->vmi_c = make_handle();
-	ctx->f1210 = make_sub14();
+	ctx->vmi_a_cfg = make_sub14();
 	ctx->vmi_a = make_handle();
 	ctx->vmi_b = make_handle();
 
 	ctx->modem_vmi = sysdep_malloc(sizeof(struct faxvmi_cfg));
 	if (rx_side) {
 		ref_init_vmi_v27rx(ctx->modem_vmi, 4800, 0, &marker);
-		ctx->f1244 = 1;
+		ctx->modem_direction = 1;
 	} else {
 		ref_init_vmi_v27tx(ctx->modem_vmi, 4800, 0, &marker);
-		ctx->f1244 = 0;
+		ctx->modem_direction = 0;
 	}
 
-	ctx->f1288 = ref_FIFO_create(NULL, NULL);
-	ctx->f1258 = use_fpm ? ref_FPM_TONE_create(NULL, NULL) : NULL;
+	ctx->tx_fifo = ref_FIFO_create(NULL, NULL);
+	ctx->tone = use_fpm ? ref_FPM_TONE_create(NULL, NULL) : NULL;
 }
 
 static void

@@ -114,7 +114,7 @@ ccompare(const char *what, long tag)
 	diff_eq_int(buf,
 		    first_diff_skip(&ctx_a, &ctx_b, (unsigned)sizeof(ctx_a),
 				    (unsigned)offsetof(struct fax_class1,
-						       f1288), 4), -1, tag);
+						       tx_fifo), 4), -1, tag);
 }
 
 static int
@@ -171,8 +171,8 @@ run_class1(void)
 		 * frame cursor really is left at one, which is what leaves
 		 * element zero of the caller's buffer for the length.
 		 */
-		diff_eq_int("hdlc_open: the object armed f1250 to one (%ld)",
-			    (long)ctx_a.f1250, 1, (long)i);
+		diff_eq_int("hdlc_open: the object armed hdlc_write_cursor to one (%ld)",
+			    (long)ctx_a.hdlc_write_cursor, 1, (long)i);
 
 		cfresh();
 		ra = ref__send_hdlc_between_buffer_state_init(&ctx_a);
@@ -201,7 +201,7 @@ run_class1(void)
 			    ref_fax_class1_GetConstalation(&ctx_a), (long)i);
 	}
 
-	/* fax_class1_info: selector 1 follows f1288, so each side gets its
+	/* fax_class1_info: selector 1 follows tx_fifo, so each side gets its
 	 * OWN target block with identical contents. */
 	for (i = 0; i < 24; i++) {
 		static unsigned char blk_a[0x20], blk_b[0x20];
@@ -212,11 +212,11 @@ run_class1(void)
 		fill(blk_a, (unsigned)sizeof(blk_a));
 		memcpy(blk_b, blk_a, sizeof(blk_a));
 		if (i & 1) {
-			ctx_a.f1288 = (struct fax_fifo *)blk_a;
-			ctx_b.f1288 = (struct fax_fifo *)blk_b;
+			ctx_a.tx_fifo = (struct fax_fifo *)blk_a;
+			ctx_b.tx_fifo = (struct fax_fifo *)blk_b;
 		} else {
-			ctx_a.f1288 = NULL;
-			ctx_b.f1288 = NULL;
+			ctx_a.tx_fifo = NULL;
+			ctx_b.tx_fifo = NULL;
 		}
 		out_a = out_b = (int)0x5a5a5a5a;
 		ra = ref_fax_class1_info(&ctx_a, sel, &out_a);

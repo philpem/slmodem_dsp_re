@@ -106,7 +106,7 @@ patch_vmi_ptrs(void)
  * allocations each `plant()` call -- fine for a handful of unit-test cases.
  */
 static void
-plant(int countdown, int f1224, int state, int prev_state, int status)
+plant(int countdown, int frame_end_latch, int state, int prev_state, int status)
 {
 	struct faxvmi *vmi_ref, *vmi_ours;
 
@@ -119,11 +119,11 @@ plant(int countdown, int f1224, int state, int prev_state, int status)
 	ctx_b.vmi_c = ctx_b.vmi_a = vmi_ours;
 
 	ctx_a.countdown = ctx_b.countdown = countdown;
-	ctx_a.f1224 = ctx_b.f1224 = f1224;
+	ctx_a.frame_end_latch = ctx_b.frame_end_latch = frame_end_latch;
 	ctx_a.state = ctx_b.state = state;
 	ctx_a.prev_state = ctx_b.prev_state = prev_state;
 	ctx_a.status = ctx_b.status = status;
-	ctx_a.f1250 = ctx_b.f1250 = 1;
+	ctx_a.hdlc_write_cursor = ctx_b.hdlc_write_cursor = 1;
 
 	memset(tx_a, (int)(unsigned char)POISON_SH, sizeof(tx_a));
 	memcpy(tx_b, tx_a, sizeof(tx_a));
@@ -266,7 +266,7 @@ static int
 run_send_hdlc_between_buffer(void)
 {
 	static const struct {
-		int countdown, f1224, word8_in;
+		int countdown, frame_end_latch, word8_in;
 		unsigned int debug;
 	} cases[] = {
 		/* countdown != 2: latch untouched either way */
@@ -293,7 +293,7 @@ run_send_hdlc_between_buffer(void)
 		int ra, rb;
 		long tag = (long)i;
 
-		plant(cases[i].countdown, cases[i].f1224,
+		plant(cases[i].countdown, cases[i].frame_end_latch,
 		      CLASS1_SEND_HDLC_BETWEEN_BUFFER_STATE, 0,
 		      FAX_CLASS1_NO_MESSAGE);
 		dsplibs_debug_level = cases[i].debug;

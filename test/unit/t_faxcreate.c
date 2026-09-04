@@ -229,8 +229,8 @@ run_command_debug_on(void)
 	(void)ref_FAX_class1_command(a, FAXC1_FTM, (void *)0x18);
 	(void)FAX_class1_command(b, FAXC1_FTM, (void *)0x18);
 	if (a != NULL && b != NULL)
-		diff_eq_int("class1 f1244 (%ld)", b->class1->f1244,
-			    a->class1->f1244, 900);
+		diff_eq_int("class1 modem_direction (%ld)", b->class1->modem_direction,
+			    a->class1->modem_direction, 900);
 	rc = diff_end();
 
 	if (a != NULL)
