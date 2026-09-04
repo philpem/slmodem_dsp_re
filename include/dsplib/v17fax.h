@@ -139,9 +139,12 @@ struct v17rx_ctl {
  * touches two headers this batch does not own and a third module's tests. The
  * names below are deliberately the ones `v22_status` and `v32_status` already
  * use wherever the two agree, so that a later unification is a rename and not
- * a re-derivation. Where they DISAGREE (+0x06, +0x08, +0x0c, +0x10, +0x12) the
- * neutral offset name is kept, because V.17 writes a constant zero to every
- * one of them and so has no evidence of its own to break the tie.
+ * a re-derivation. Where they DISAGREE (+0x0c, +0x10, +0x12) the neutral
+ * offset name is kept, because V.17 writes a constant zero to every one of
+ * them and so has no evidence of its own to break the tie.  +0x06 and +0x08
+ * used to be on this list too; both have since been given V.17's OWN name
+ * from `V17RX_status`'s own write, below, and this paragraph is corrected to
+ * stop calling them still-neutral (wave 4 field naming, finding F10144).
  *
  * The field widths are the object's: +0x14 and +0x15 are BYTES, written with
  * `movzbl`/`andb`/`mov %al`, and +0x18 is an `int` copied 32 bits at a time.
@@ -150,7 +153,17 @@ struct v17_status {
 	short protocol;		/* +0x00 <- params + 0x00                    */
 	short tx_bps;		/* +0x02 <- params + 0x02; see above         */
 	short rx_bps;		/* +0x04 always 0 here                       */
-	short short_06;		/* +0x06 0 from V17TX_status; see below      */
+	/*
+	 * +0x06 IS "SNR OK", AND `V17RX_status` IS WHAT ESTABLISHES IT.  It
+	 * stores `(rx[V17RX_OBJ_RESULT_B1] & V17RX_FLAG_LOW_SNR) == 0` here --
+	 * the INVERSE of the already-named `V17RX_FLAG_LOW_SNR` bit, whose own
+	 * derivation (above) already says "a SET bit makes the reported +0x06
+	 * zero" and calls it measured at both ends; that derivation never
+	 * reached this field itself until now.  `V17TX_status`, which writes a
+	 * constant zero here, has no SNR of its own to report and does not
+	 * contradict it.  Finding F10144.
+	 */
+	short snr_ok;		/* +0x06 <- !V17RX_FLAG_LOW_SNR; 0 from TX   */
 	/*
 	 * +0x08 IS THE SNR, AND `V17RX_status` IS WHAT ESTABLISHES IT.  It
 	 * stores `GetSNRV17`'s return here and nothing else, and `GetSNRV17`
@@ -478,11 +491,13 @@ struct v17_status {
  * `::tx_bps` above already established `+0x00`/`+0x02` from `V17TX_status`'s
  * own reads; the rest are `V17TX_create`'s alone.
  *
- * `int_0014` IS THE TRANSMIT FIFO'S SIZE FACTOR, READ BACK BY `V17TX_create`
- * ITSELF (`movzwl 0x14(%ebp),%eax` at 0x098a93) to compute the FIFO's
- * capacity as `int_0014 * 3 * 16` -- 48 elements at the default value of 1,
- * the identical role and the identical default `V29TX_CFG`'s own `int_0014`
- * carries at the same offset.
+ * `fifo_size_factor` IS THE TRANSMIT FIFO'S SIZE FACTOR, READ BACK BY
+ * `V17TX_create` ITSELF (`movzwl 0x14(%ebp),%eax` at 0x098a93) to compute the
+ * FIFO's capacity as `fifo_size_factor * 3 * 16` -- 48 elements at the
+ * default value of 1.  `V29TX_CFG` carries an identical field at the same
+ * offset with an identical role and an identical default, still spelled
+ * `int_0014` there -- V.29's own copy is not this batch's file to rename, and
+ * is left as a candidate for whoever visits it.  Finding F10144.
  *
  * `int_0018` IS COPIED, UNCHANGED, TO `V17TXP_INT_000C` (`mov 0x18(%ebp),%edi`
  * / `mov %edi,0xc(%edx)` at 0x098b14/0x098b23) -- see that constant's own
@@ -527,7 +542,7 @@ struct v17tx_cfg {
 					 * V17TX_status's own read and
 					 * V17TX_control's own ctl0 bit 2 --
 					 * the dword V.29's own cfg lacks    */
-	int		int_0014;	/* +0x14 the FIFO's size factor      */
+	int		fifo_size_factor; /* +0x14 -> capacity, * 3 * 16     */
 	int		int_0018;	/* +0x18 -> V17TXP_INT_000C          */
 	int		int_001c;	/* +0x1c -> FPM_PPS_CFG.aux          */
 };
@@ -1751,11 +1766,27 @@ int V17TX_status(void *params, struct v17_status *status);
  * each a 32-bit load; the two control bytes at `+0x0c`/`+0x0d` are each
  * `movzbl`.  Nothing here establishes what precedes `+0x04` or separates the
  * fields from each other, so the gaps stay padding.  Finding F10107.
+ *
+ * `scale_mul` (+0x08) TAKES ITS NAME FROM THE SIBLING THAT ALREADY HAS ONE.
+ * `v27fax.h`'s `struct v27tx_ctl::scale_mul` is the SAME FIELD of the SAME
+ * five-effect request shape -- `class1tx.c`'s own comment on `V17TX_CTL`/
+ * `V27TX_CTL`/`V29TX_CTL` says the three types are matched field-by-field --
+ * so this is the established name for the role, not a fresh one.  The role
+ * itself is rank 2, a typed destination and not usage inference: multiplied
+ * by `V17TX_PPS_SCALE[mode]`, this field becomes `fpm_pps_cfg::scale`
+ * verbatim (see above and `fpm_pps.h`'s own "Q15 gain on the output"), so it
+ * is the caller's own pre-table-lookup scale multiplier -- 1 reproduces the
+ * constructor's default, since nothing else in this closure ever passes
+ * anything else.  `v29fax.h`'s own copy of this same shape,
+ * `struct v29tx_control_req::int_0008`, carries the identical comment and is
+ * NOT yet renamed to match -- V.29 has not had a dedicated field-naming pass
+ * in this project phase, which is not a ruling against the name, and its own
+ * copy is a candidate for whoever visits it next.  Finding F10144.
  */
 struct v17tx_control_req {
 	unsigned char	pad_0000[0x04];
 	int		int_0004;	/* +0x04 -> handle's v17tx_cfg::int_0008 */
-	int		int_0008;	/* +0x08 scales the PPS shaper's gain    */
+	int		scale_mul;	/* +0x08 -> fpm_pps_cfg::scale, * table  */
 	unsigned char	ctl0;		/* +0x0c */
 	unsigned char	ctl1;		/* +0x0d */
 	unsigned char	pad_000e[0x02];

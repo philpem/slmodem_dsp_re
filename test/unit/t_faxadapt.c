@@ -1712,7 +1712,7 @@ run_control(void)
 
 		memset(&arg, 0, sizeof arg);
 		arg.int_0004 = 4321;
-		arg.int_0008 = 5;
+		arg.scale_mul = 5;
 		arg.int_0010 = 999;
 		arg.ctl0 = V17TXCTL_CTL0_BIT2;
 		arg.ctl1 = V17TXCTL_CTL1_BIT4;

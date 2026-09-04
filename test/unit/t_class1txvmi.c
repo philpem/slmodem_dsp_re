@@ -131,8 +131,8 @@ test_init_v17(void)
 			    cb->int_000c, i);
 		diff_eq_int("cfg.int_0010, input %ld", ca->int_0010,
 			    cb->int_0010, i);
-		diff_eq_int("cfg.int_0014, input %ld", ca->int_0014,
-			    cb->int_0014, i);
+		diff_eq_int("cfg.fifo_size_factor, input %ld",
+			    ca->fifo_size_factor, cb->fifo_size_factor, i);
 		diff_eq_int("cfg.int_0018 is 0, input %ld", ca->int_0018, 0,
 			    i);
 		diff_eq_int("cfg.int_0018, input %ld", ca->int_0018,

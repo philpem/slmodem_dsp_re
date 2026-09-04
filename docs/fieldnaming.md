@@ -527,3 +527,68 @@ caught, matching the pre-rename baseline exactly), and `mutsnap.py --update`
 refreshed those four suites' recorded keys. `make period`/
 `byteident.py --ratchet` need docker, unavailable in this sandbox; left for
 the parent's gate. See F10143 for the full per-field evidence.
+
+### V.17 fax modulation fields: results (F10144)
+
+Both counts re-verified with a fresh grep before starting (23/20 exactly).
+Both files read in full, alongside `v17dec.h` and `faxcfg.h` (NOT this
+batch's files, but two structs they define, `struct v17_dec` and
+`struct v17rx_cfg`, are accessed by field name from inside `v17.c` and so
+surface in ITS OWN `type_NNNN` grep count without being renamable from
+here).
+
+**Three real names landed**, all rank 2 or strong corroborated usage
+inference: `snr_ok` (`struct v17_status::short_06` — the derivation was
+already sitting in this same header, on `V17RX_FLAG_LOW_SNR`'s own comment,
+and had just never reached the struct field it was about — the "evidence in
+one file's comment not reaching the field" failure mode F10139/F10140 named
+for a cross-file case, found here recurring WITHIN one file);
+`fifo_size_factor` (`struct v17tx_cfg::int_0014` — the constructor reads it
+back and computes the transmit FIFO's capacity as `* 3 * 16`, confirmed
+against `dis.py` directly); `scale_mul` (`struct v17tx_control_req::int_0008`
+— named to MATCH an already-named sibling, `v27fax.h`'s
+`struct v27tx_ctl::scale_mul`, the identical field of the identical
+five-effect request shape, rather than inventing an independent word for the
+same role).
+
+**One stale comment corrected**: `struct v17_status`'s own block comment
+claimed offsets +0x06/+0x08/+0x0c/+0x10/+0x12 all "DISAGREE" with
+`v22_status`/`v32_status` and stay neutral because "V.17 writes a constant
+zero to every one of them" — but +0x08 had already been promoted to `snr`
+by an earlier, pre-this-phase derivation (F9100) two paragraphs below, and
+the list was never updated to drop it. Corrected to name the current set
+(+0x0c/+0x10/+0x12) and say explicitly what changed, rather than silently
+dropping the two now-named fields from the list.
+
+**Everything else re-confirmed, not re-derived.** These two files are the
+most densely pre-derived of any this phase has touched — nearly every
+remaining `type_NNNN` already carries paragraph-length "NEUTRAL" reasoning
+from earlier reconstruction work, not merely wave 2's read. Each was traced
+to its actual reason to stay neutral (a destination field that is itself
+unnamed and unread; a declined ITU-T cross-reference, re-confirmed rather
+than re-attempted per this wave's own standing instruction; a field with two
+DIFFERENT writers giving the same offset two different roles, where naming
+either would be wrong for the other; a struct this batch does not own).
+Full per-field breakdown in finding F10144.
+
+**Spot-check of nearby already-named fields**: `V17RX_FLAG_*` and
+`V17RX_STATUS_*` re-verified against `dis.py` while tracing `snr_ok`'s
+derivation, all correct; `v22_status`/`v32_status` read in full to verify
+the "DISAGREE" claim the stale-comment fix above depends on — confirmed
+genuinely inconsistent across the three modules' own writes at the three
+offsets that remain on the list. No other inaccuracy found.
+
+No bitfield conversions; every flag byte in this cluster already has its
+live bits named by value, and `dis.py` shows `and`/`test`/`orb`/`andb`
+throughout, not shift-and-mask.
+
+`make one T="t_v17fax t_v17txcreate t_faxadapt t_class1txvmi
+t_class1txstates t_v17rxcreate"` all green (63 PASS groups, 0 FAIL, no check
+count regressed — one build break on the first pass, `class1tx.c`'s
+`init_vmi_v17tx`/`V17TX_CTL` and `t_class1txvmi.c`'s own field-name check
+both reaching `struct v17tx_cfg`/`struct v17tx_control_req` outside the
+nominal two files, caught by the compiler and fixed before the green run
+above). `tools/onedef.py`, `tools/refcheck.py` and `tools/anchorcheck.py`
+all clean; `tools/bannercheck.py src/fax` clean. `make period`/
+`byteident.py --ratchet` need docker, unavailable in this sandbox; left for
+the parent's gate per every prior wave's precedent.

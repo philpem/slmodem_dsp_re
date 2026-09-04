@@ -2319,7 +2319,7 @@ drive_rxstatus(struct fix *f, enum rxs_defect d)
 	status->rx_bps = (short)get_us(rx, (d == S_RXBPS_02)
 					   ? 0x02 : V17RX_OBJ_RX_BPS);
 	bit = (d == S_06_BIT0) ? 0x01 : V17RX_FLAG_LOW_SNR;
-	status->short_06 = (short)((d == S_06_NOT_INV)
+	status->snr_ok = (short)((d == S_06_NOT_INV)
 				   ? ((rx[V17RX_OBJ_RESULT_B1] & bit) != 0)
 				   : ((rx[V17RX_OBJ_RESULT_B1] & bit) == 0));
 	status->snr = (d == S_SNR_ZERO) ? 0 : ref_GetSNRV17(f->robj);
