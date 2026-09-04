@@ -400,3 +400,44 @@ assumed; every other touched suite (`t_v90eqdata`, the four-member
 carrying the external field accesses) is 100% green. `make period`/
 `byteident.py --ratchet` need docker, left for the parent's gate as in every
 prior wave.
+
+### Wave 3 complete — merged, period-green, byte-identity ratchet still OK
+
+All three branches merged (two more finding-number collisions resolved by
+renumbering: F10137 collided twice, F10138 once — same procedure as every
+prior wave). Fully merged tree: **374 passed, 0 failed**, structural gates
+clean. `byteident.py --ratchet`: still **736/1852 EXACT (39.7%)** — three
+full waves and ~260 renames in, zero codegen drift.
+
+One process note: a leftover, unresolved `<<<<<<<` marker from an earlier
+merge round in this same wave survived one `git commit` cycle undetected by
+eye and was caught by `refcheck.py`'s own conflict-marker check on the very
+next run — exactly the tool doing its job. Read every merge's `refcheck.py`
+output, not just its reference count.
+
+Post-wave-3 counts: `pad_NNNN` 165→166, `type_NNNN` 292→293, bare `fNNNN`
+110→98 (−12). Combined all three waves: from 676 unique unnamed identifiers
+to 557 today.
+
+## Wave 4 — fresh territory: VPcmFloModem/V92CP pad regions, the
+## diagnostic/session-flag cluster, V.17 fax modulation fields
+
+Per standing instruction: continue until genuinely exhausted, and where an
+agent is already reading a struct, have it spot-check nearby ALREADY-NAMED
+fields for accuracy too, not just find new names — cheap when the context
+is already loaded.
+
+| agent | scope |
+|---|---|
+| VPcmFloModem/V92CP pad regions | `VPcmFloModem.h` (11 pad), `V92CP.h` (9 pad) — wave 1 named `type_` fields here but did not attempt these `pad_` regions specifically |
+| Diagnostic/session-flag cluster | `TAG_DiagnosticResults.h` (6 pad), `fdspkrnl.h` (6 pad + 19 type), `V90SessionFlag.h` (5 pad) — untouched this whole phase |
+| V.17 fax modulation fields | `src/fax/v17.c` (23 type), `include/dsplib/v17fax.h` (20 type) — wave 2's fax-cluster pass read these but did not attempt them field-by-field |
+
+Deliberately NOT re-targeting `v34recv.h` (two dedicated passes already,
+declining returns each time) or `class1.h`/`faxvmi.h`/`fax.h`'s remaining
+`pad_NNNN` (wave 2 explicitly investigated and declined these, including
+one ITU-T cross-reference already tried) without a genuinely new method to
+offer — re-running the same evidence search a third time on already-declined
+ground is not "no further progress can be made," it is repeating a result.
+
+Results pending.
