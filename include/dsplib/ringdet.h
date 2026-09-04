@@ -190,16 +190,99 @@ struct rd {
 	struct ring_detector	*det;	/* +0x04 */
 };
 
+/**
+ * @brief (Re-)program a ring detector from a configuration block.
+ *
+ * Clamps @p c's fields to their minimums (min_freq >= 14, max_freq <= 100,
+ * min_on_dur >= 40 ms, min_off_dur >= 120 ms), derives `idle_debounce` and
+ * `guard_limit`, and resets every running counter and the state machine to
+ * #RD_STATE_SEARCH. A negative `c->threshold` selects the second debounce
+ * mode (lock_debounce/lock_level 0/200 instead of 2/100); its absolute
+ * value is used everywhere else. `c->fs` below 80 divides by zero in
+ * `idle_debounce` -- reproduced, not guarded; callers evidently never pass
+ * one.
+ *
+ * @param s  Detector state to (re-)initialise.
+ * @param c  Configuration to program from.
+ */
 void RingDetector_Reset(struct ring_detector *s, struct ring_detector_cfg *c);
+
+/**
+ * @brief Allocate and program a ring detector.
+ *
+ * Allocates @p s and initialises it via RingDetector_Reset(). The
+ * allocation is not checked before use -- a failed allocation faults here,
+ * reproducing the object.
+ *
+ * @param c  Configuration to program from.
+ * @return The new detector.
+ */
 struct ring_detector *RingDetector_Create(struct ring_detector_cfg *c);
+
+/** @brief Free a ring detector. @param s The detector to free (if non-NULL). */
 void RingDetector_Delete(struct ring_detector *s);
+
+/**
+ * @brief Report the frequency and duration of the last ring edge.
+ * @param s     Detector state.
+ * @param freq  Output: last measured ring frequency, Hz.
+ * @param dur   Output: last ring duration, ms.
+ */
 void RingDetector_GetLastRing(struct ring_detector *s, int *freq, int *dur);
+
+/**
+ * @brief Run @p count samples through the hysteretic comparator and update
+ *        the ring verdict.
+ *
+ * Tracks the signal through the three-state (SEARCH/HIGH/LOW) comparator,
+ * measures the frequency once per completed half-cycle pair, averages it,
+ * and declares a ring once the measured tone has held for `min_on_dur`.
+ *
+ * @param s      Detector state.
+ * @param in     Input samples.
+ * @param count  Number of samples in @p in.
+ * @return 1 on the sample where the ring verdict CHANGES (see
+ *         `ring_active`/`ring_reported`); 0 otherwise.
+ */
 int RingDetector_Process(struct ring_detector *s, short *in,
 			 unsigned int count);
 
+/**
+ * @brief Allocate and configure the slmodemd-facing ring detector wrapper.
+ *
+ * Picks a threshold from the line's codec type (via `modem_get_param`) and
+ * builds a #ring_detector_cfg for RingDetector_Create().
+ *
+ * @param modem  Host's opaque `struct modem *`, stored for later
+ *               `modem_get_param` calls.
+ * @param rate   Sample rate; must be #RD_RATE_8000 or #RD_RATE_9600.
+ * @return The new wrapper, or NULL if @p rate is unsupported or an
+ *         allocation failed.
+ */
 void *RD_create(void *modem, unsigned int rate);
+
+/** @brief Free a wrapper allocated by RD_create(). @param obj The wrapper. */
 void RD_delete(void *obj);
+
+/**
+ * @brief Run @p count samples through the detector and report whether the
+ *        verdict changed.
+ * @param obj    Wrapper from RD_create().
+ * @param in     Input samples (`short *`).
+ * @param count  Number of samples in @p in.
+ * @return 1 if the ring verdict changed on this call, 0 otherwise.
+ */
 int RD_process(void *obj, void *in, int count);
+
+/**
+ * @brief Report the frequency and duration of the last ring edge.
+ *
+ * @param obj       Wrapper from RD_create().
+ * @param freq      Output: ring frequency in Hz; 0 means a ring is
+ *                  starting, non-zero means one is finishing (per
+ *                  slmodemd's `modem_ring_detector_process`).
+ * @param duration  Output: ring duration in ms.
+ */
 void RD_ring_details(void *obj, int *freq, int *duration);
 
 #ifdef __cplusplus
