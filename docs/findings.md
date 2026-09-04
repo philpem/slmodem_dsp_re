@@ -114051,3 +114051,126 @@ cluster (`t_v90cdesign`/`t_v90cdnoise`/`t_v90cdadjust`/`t_v90designers`) are
 external field-access fix above. `make period`/`byteident.py --ratchet` need
 docker at the tree level and were not re-run standalone; left for the
 parent's gate per this phase's standing note.  (2026-09-04)
+
+## F10142. Wave 4, `VPcmFloModem`/`V92CP` `pad_NNNN` regions: every live span checked, none split -- twelve are exact next-field alignment, one is confirmed dead space with zero readers or writers anywhere in the object
+
+Scope was every `pad_NNNN` in `include/dsplib/VPcmFloModem.h` and
+`include/dsplib/V92CP.h` -- the two headers F10130 had already given a
+naming-only pass over their `type_NNNN` fields without specifically
+attempting a `pad_` split. Both classes are complete and differentially
+green already (F10130's own test list); this pass is naming-only too.
+
+**THE WAVE-4 PLANNING COUNT WAS WRONG, AND FIELDNAMING.MD SAYS TO TRUST THE
+GREP OVER IT.** `docs/fieldnaming.md`'s wave 4 table quotes "11 pad" for
+`VPcmFloModem.h` and "9 pad" for `V92CP.h`, from a naive
+`grep -oE 'pad_[0-9a-f]+'` that does not distinguish a live struct member
+from a historical `/* was pad_X */`-style mention in prose. `VPcmFloModem.h`
+carries five such mentions (`pad_0004`, `pad_08`, `pad_1744`, `pad_6124`,
+`pad_6130` -- each a comment noting what a NOW-NAMED field used to be
+called) and `V92CP.h` two (`pad_10c`, `pad_124`, same shape -- F1282 and
+F6601's own "was `pad_10c`"/"was `pad_124`" notes). Grepping only actual
+`unsigned char pad_NNNN[...]` member declarations gives **6** live regions
+in `VPcmFloModem.h` and **7** in `V92CP.h`, 13 total -- confirmed against
+`docs/fieldnaming.md`'s own rule, "where a count here disagrees with a
+fresh grep, the grep is right."
+
+**METHOD.** For each of the 13, two checks: (1) arithmetic -- is the pad's
+width exactly what the NEXT field's own type requires for natural
+alignment, no more and no less; (2) `tools/dis.py` over every member
+function of the owning class (`0xd030..0x1016b` for `VPcmFloModem`,
+`0x4e5b0..0x50015` for `V92CP`, both ranges confirmed by `nm -S` to cover
+every `_ZN12VPcmFloModem*`/`_ZN5V92CP*` symbol) grepped for a
+`this`-relative displacement landing inside the pad's byte range, plus a
+whole-object `objdump -d` grep for the same displacement literal as a
+cross-check for a reader/writer reached through some OTHER class's own
+pointer to this one.
+
+**RESULT: twelve of thirteen are forced, exact-width alignment gaps, and
+none of the thirteen has ANY instruction touching it, anywhere.**
+
+  - `VPcmFloModem`: `pad_021d[1]` (`v34BaudAllow` ends odd at +0x21d,
+    `bitVector` needs 2-byte alignment at +0x21e), `pad_173f[1]` (`clr` ends
+    at +0x173f, `sweepCounter` is a 4-byte-aligned `int` at +0x1740),
+    `pad_611a[2]` (`retrainLatch` ends at +0x611a, `pcmSessionType` is a
+    4-byte-aligned `int` at +0x611c), `pad_7dd3[1]` (`nofBitsPerSymbol` ends
+    at +0x7dd3, `nofTransmitSequences` needs 2-byte alignment at +0x7dd4),
+    `pad_7f5d[3]` (`byte_7f5c` ends at +0x7f5d, `ecMode` is a 4-byte-aligned
+    `int` at +0x7f60) -- five gaps, each exactly the byte count the next
+    field's own type demands and no wider.
+  - `V92CP`: `pad_05[3]` (`byte_04` -> `word_08`, int align), `pad_25[3]`
+    (`byte_24` -> `word_28[]`, int align), `pad_40[2]` (`word_28[]` ends at
+    +0x40, `short_42[][]` is `short`-aligned -- SEE BELOW), `pad_102[2]`
+    (`short_a2[][]` ends at +0x102, `word_104` needs int align at +0x104),
+    `pad_10e[2]` (`word_10c` ends at +0x10e, `word_110` needs int align at
+    +0x110), `pad_11b[1]` (`byte_11a` ends at +0x11b, `word_11c` needs int
+    align at +0x11c), `pad_909[3]` (`crc[]` ends at +0x909, `vectorLen`
+    needs int align at +0x90c) -- seven gaps, same shape.
+
+  `pad_40` is the one V92CP case worth a second look: `short_42` needs only
+  2-byte alignment and +0x40 is already 2-byte (and 4-byte) aligned, so a
+  plain field-to-field gap would be 0 bytes here rather than 2. Checked the
+  same way as the rest -- `dis.py` over `infoToBits`/`setV92CPpckFromParams-
+  Info` (the two functions that between them account for the whole
+  `+0x000..+0x103` span per the file's own header) and the class-wide sweep
+  both find zero touches at +0x40/+0x41 -- so it stays `pad_40[2]`, same
+  verdict as the rest, just without the tidy "exactly the next field's own
+  alignment" explanation available for the other eleven.
+
+**THE ONE EXCEPTION: `VPcmFloModem::pad_6fb8[4]`, between `verificationStatus`
+(+0x6fb4, ends +0x6fb8) and `cpBitVector` (a `short` array starting at
++0x6fbc).** `cpBitVector` needs only 2-byte alignment and +0x6fb8 is already
+4-byte aligned, so 4 bytes of gap is NOT explained by any field-to-field
+alignment requirement -- the only one of the 13 where the arithmetic gives no
+account of the width. Checked the same two ways: a `this`-relative sweep of
+every `VPcmFloModem` member function finds nothing at +0x6fb8..+0x6fbb (the
+nearest hits are `0x40(%esp)`, a stack slot, and the +0x6fbc of
+`cpBitVector` itself, five sites), and a whole-object `objdump -d | grep
+6fb8\(` returns **zero** hits anywhere in the 1.2 MB blob -- not just within
+this class. Since the reconstruction is complete (every function in the
+object is already written and differentially verified), "zero readers and
+zero writers anywhere in the object" is a fact about the blob, not a gap in
+this tree's closure: nothing IN THE ORIGINAL BINARY ever touches these four
+bytes either. Same shape as `cadence::pad_2c0` (F10137) -- confirmed dead
+space, correctly staying one `pad_` span rather than being guessed into
+fields of any width. A comment recording this check was added at
+`pad_6fb8`'s declaration in `VPcmFloModem.h` so the next pass does not have
+to re-derive it; no other pad comment was touched, since the other twelve
+already carry (or, being one-line "alignment" notes on an unambiguous gap,
+do not need) equivalent justification.
+
+**NO SPLIT WAS MADE ANYWHERE.** All 13 regions stay exactly as declared.
+This is the correct outcome under CLAUDE.md's own rule -- "naming something
+wrongly is worse than leaving it padded," restated for a split rather than a
+name -- and it is not a failure to find something: twelve gaps are provably
+nothing but compiler-inserted alignment, and the thirteenth is provably dead
+weight in the object itself. There is no field-boundary evidence to split
+any of them on, so none was invented.
+
+**SPOT-CHECK OF NEARBY ALREADY-NAMED FIELDS (per standing instruction), no
+issues found.** Cross-checked every cross-file claim the two headers make
+against the file each claim is about, rather than trusting the prose: (1)
+`VPcmFloModem.h`'s `mpType`..`mpH3Imag` (+0x1744..+0x1757) against
+`V90MP.h`'s `Type`/`Rate`/`Trellis`/`NonLin`/`Shaping`/`CPack`/`rateMask`/
+`h1Real`/`h1Imag`/`h2Real`/`h2Imag`/`h3Real`/`h3Imag` -- names and relative
+order agree field for field. (2) The file header's claim that `V90Modem`
+carries `phase2Info` at +0x08 and `ptr_49b4` at +0x49b4 against
+`V90Modem.h`'s actual declarations -- both confirmed at those exact offsets.
+(3) The claim that `V92Modem` carries `parameters` at +0x004 and
+`phase2Info` at +0x008 with `sizeof(V92Modem) == 0xaac` against
+`V92Modem.h`/`V92Modem.cpp` -- all three confirmed (the `sizeof` via the
+`v92modem_size` typedef assertion in `V92Modem.cpp`). (4) Every offset the
+two headers declare against their own `.cpp`'s `VPCM_OFF`/`V92CP_OFF`
+`offsetof` assertion table -- all consistent, and the assertion tables are
+themselves what the arithmetic check above was cross-checked against. No
+stale comment, wrong offset or mismatched cross-reference found; nothing
+else was changed.
+
+**Verification.** One comment added (`VPcmFloModem.h`, `pad_6fb8`'s
+declaration) and this finding; no struct member, type, offset or identifier
+changed anywhere, so no differential test could move and none was run
+beyond confirming the tree still builds -- a comment-only change cannot
+move `make period`/`byteident.py --ratchet`, both of which need docker and
+are left for the parent's gate per this phase's standing note, same as every
+prior wave in this session. `tools/onedef.py` and `tools/refcheck.py` clean.
+`tools/anchorcheck.py` not re-run: no identifier changed, so no mutation
+anchor could have gone stale. (2026-09-04)

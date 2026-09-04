@@ -440,4 +440,56 @@ one ITU-T cross-reference already tried) without a genuinely new method to
 offer — re-running the same evidence search a third time on already-declined
 ground is not "no further progress can be made," it is repeating a result.
 
-Results pending.
+### VPcmFloModem/V92CP pad regions -- results (F10142)
+
+**The "11 pad"/"9 pad" counts in the table above were the naive-grep
+over-count `docs/fieldnaming.md`'s own header warns about.** A fresh
+`grep -oE 'pad_[0-9a-f]+'` catches historical `/* was pad_X */`-style
+mentions inside comments about fields that are already named, not just live
+struct members; filtering to actual `unsigned char pad_NNNN[...]`
+declarations gives **6** live regions in `VPcmFloModem.h` and **7** in
+`V92CP.h`, 13 total. That is the true scope this pass worked.
+
+**No split was made anywhere -- all 13 stay `pad_NNNN`, and this is the
+correct outcome, not a stall.** Every region was checked two ways: the
+arithmetic (is its width exactly what the next field's own type needs for
+alignment) and `tools/dis.py` over every member function of the owning
+class, cross-checked against a whole-object `objdump -d` grep for the same
+displacement. Twelve of the thirteen are exact-width alignment gaps forced
+by the next field's type (five in `VPcmFloModem`, seven in `V92CP`, one of
+the seven -- `pad_40[2]` -- not explained by `short_42`'s own 2-byte
+alignment need but still zero-touched everywhere checked). The thirteenth,
+`VPcmFloModem::pad_6fb8[4]`, is not explained by any neighbour's alignment
+at all and was checked hardest: zero touches anywhere in the class's own
+functions AND zero in the entire 1.2 MB object (`objdump -d | grep 6fb8\(`
+returns nothing), which -- since the reconstruction is complete -- means
+zero readers or writers in the ORIGINAL BLOB, not just in what this tree
+has read. Same shape as `cadence::pad_2c0` (F10137). A verification comment
+was added at its declaration; no other pad comment needed one.
+
+**Spot-check of nearby already-named fields (standing instruction): no
+accuracy issues found.** Checked `VPcmFloModem.h`'s `mpType`..`mpH3Imag`
+against `V90MP.h`'s `Type`..`h3Imag` (all agree), the file header's claims
+about `V90Modem::phase2Info`/`ptr_49b4` against `V90Modem.h` (both correct),
+its claims about `V92Modem::parameters`/`phase2Info`/`sizeof` against
+`V92Modem.h`/`.cpp` (all correct), and every declared offset in both headers
+against their own `.cpp`'s `offsetof` assertion table (all consistent).
+
+`make one` over `t_vpcmflomodem`/`t_vpcmctor`/`t_vpcmep3`/`t_vpcmqcline`/
+`t_vpcmrunpcm`/`t_v90rundemod`/`t_v92cpb2i`/`t_v92cpcrc`/`t_v92cpeval`: all
+green, exit 0, check counts unchanged from F10130's own figures (155541,
+95714, 22934+8000, 696+1200, etc.). `tools/onedef.py` (301 types, 1 known
+duplicate) and `tools/refcheck.py` (13214 references, 0 dangling) both
+clean. No identifier changed, so `tools/anchorcheck.py` was not re-run --
+nothing in `test/mutations/*.json` could have gone stale. `make period`/
+`byteident.py --ratchet` need docker, unavailable in this sandbox; left for
+the parent's gate, same as every prior wave. See F10142 for the full
+per-region evidence.
+
+### Diagnostic/session-flag cluster and V.17 fax modulation fields -- not
+### run this session
+
+Only the `VPcmFloModem`/`V92CP` pad-region agent above ran. The other two
+rows in wave 4's table (`TAG_DiagnosticResults.h`/`fdspkrnl.h`/
+`V90SessionFlag.h`, and `src/fax/v17.c`/`v17fax.h`) are still open for a
+future pass.

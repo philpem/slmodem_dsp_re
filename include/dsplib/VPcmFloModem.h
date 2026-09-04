@@ -760,6 +760,28 @@ public:
 	int qcSampleCount;				/* +0x6fac         */
 	unsigned int qcTerminateRequested;		/* +0x6fb0         */
 	unsigned int verificationStatus;		/* +0x6fb4         */
+
+	/*
+	 * +0x6fb8  FOUR BYTES, AND NOT EXPLAINED BY ALIGNMENT.  `cpBitVector`
+	 * below is a `short` array and needs only 2-byte alignment, and
+	 * +0x6fb8 is already 4-byte aligned, so a plain field-to-field gap
+	 * would be 0 bytes here, not 4 -- unlike every other `pad_NNNN` in
+	 * this class, which is each exactly as wide as the next field's own
+	 * alignment demands (verified the same way below).
+	 *
+	 * CHECKED AND STILL PAD.  A `this`-relative-displacement search of
+	 * every VPcmFloModem member function (`dis.py` over 0xd030..0x1016b,
+	 * which covers all of them) finds no instruction touching
+	 * +0x6fb8..+0x6fbb, and neither does a search of the whole 1.2 MB
+	 * object (`objdump -d` grepped for the literal displacement).  Same
+	 * shape as `cadence`'s `pad_2c0` (F10137): zero readers AND zero
+	 * writers anywhere in the blob, which is the strongest evidence this
+	 * phase can have that space is genuinely unmodelled rather than
+	 * merely unread by what we happen to have reconstructed -- the
+	 * reconstruction is complete, so "nothing touches it" is a fact about
+	 * the object, not a gap in our closure.  Left as one span rather than
+	 * guessed into fields.  Finding F10142.
+	 */
 	unsigned char pad_6fb8[0x6fbc - 0x6fb8];	/* +0x6fb8         */
 
 	/*
