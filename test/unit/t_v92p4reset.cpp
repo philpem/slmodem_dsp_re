@@ -129,9 +129,10 @@
  * ---------------------------------------------------------------------------
  * WHAT reset DOES NOT WRITE, AND WHY EVERY SEED IS NON-ZERO
  *
- * `word_24`, `word_38`, `word_1b0`, `word_1b8`, `pad_10`, `pad_1d`,
- * `patternIndex`, `mappingParams`, `bitsToSymbol`, `mapper`, `cp` and `params`
- * are untouched.  A field seeded to ZERO cannot tell "reset left it alone"
+ * `word_24`, `word_38`, `word_1b0`, `word_1b8`, `pad_10`, `+0x1d..+0x1f`
+ * (`pad_1d` until finding F10150 folded it into the compiler's own tail
+ * alignment after `byte_1c`), `patternIndex`, `mappingParams`,
+ * `bitsToSymbol`, `mapper`, `cp` and `params` are untouched.  A field seeded to ZERO cannot tell "reset left it alone"
  * apart from "reset cleared it", so in RUN A every one of them is non-zero on
  * every trial and a reconstruction that helpfully cleared one fails.  RUN B
  * varies the two that the state machine READS as booleans (`word_38`, and
@@ -756,8 +757,22 @@ setup(long trial, const struct args *a, int runb)
 		o->word_1b8 = 99u + (unsigned int)(trial % 4) * 111u;
 		for (j = 0; j < sizeof(o->pad_10); j++)
 			o->pad_10[j] = (unsigned char)(0x80u | (j + mix));
-		for (j = 0; j < sizeof(o->pad_1d); j++)
-			o->pad_1d[j] = (unsigned char)(0x80u | (j + mix));
+		/*
+		 * +0x1d..+0x1f was `pad_1d[3]`, removed under the pad-removal
+		 * workstream (F10150): `byte_1c` ends at +0x1d and `flag_20`
+		 * is a 4-byte-aligned `unsigned int` at +0x20, so the compiler
+		 * now inserts these three bytes itself.  They are still real
+		 * memory inside the object -- an implicit tail is not an
+		 * absent one -- so the same canary still has to land there for
+		 * the raw byte-for-byte compare below to mean anything; reached
+		 * by offset now that there is no named member to reach it
+		 * through.
+		 */
+		{
+			unsigned char *raw = (unsigned char *)o;
+			for (j = 0; j < 3; j++)
+				raw[0x1d + j] = (unsigned char)(0x80u | (j + mix));
+		}
 
 		o->pattern = shared_pattern;
 		o->patternLength = PATLEN_SENTINEL;

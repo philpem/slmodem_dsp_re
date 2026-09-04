@@ -641,3 +641,23 @@ own if the member vanished.
 This is a full audit across all 166 current `pad_NNNN` regions, tree-wide,
 not limited to the clusters already touched. Wave 5 launching to combine
 this with any remaining fresh field-naming territory.
+
+### V.90 control/session cluster done: 22 of 30 removed, 8 left explicit
+
+`VPcmFloModem.h`, `V92CP.h`, `V90CP.h`, `V90AutoDigitalImpDetector.h`,
+`V90SessionFlag.h`, `V90Phase3Modulator.h`, `V90Phase4Modulator.h`/`.cpp`,
+`V92Phase4Modulator.h`/`.cpp` — a fresh grep found 30 live `pad_NNNN` members
+across the eight files (not the snapshot counts this section's earlier table
+carried, which mixed in stale prose mentions the same way F10142 already
+found for this cluster's first two files). 22 removed with a compile-time
+`offsetof`/`sizeof` proof each (an existing assertion in the owning `.cpp` in
+most cases, four new ones added); 8 left explicit, each because the next
+field's own alignment was already satisfied without the pad (four cases,
+same shape as this section's `pad_6fb8` example above) or because the pad is
+a large multi-field unmodelled floor rather than a single alignment gap
+(`V90SessionFlag`'s two, re-confirmed against F10143). One test,
+`t_v92p4reset.cpp`, seeded a removed field (`pad_1d`) by name for the
+"poison the untouched bytes" differential technique and was fixed to reach
+the same bytes by raw offset instead. Full per-region derivation, the
+`-m32`/`__SIZEOF_POINTER__` verification trap this pass hit, and every test
+run: finding F10150.

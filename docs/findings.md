@@ -114915,3 +114915,181 @@ and both structs' sizes unchanged (`v34_echo` 0x20, `v34_echo_prefilter`
 the parent session's gate, same caveat as F10146-F10148: nothing here
 changes emitted code where the assertions hold, only removes a member and
 lets the compiler re-derive the identical padding. (2026-09-04)
+
+## F10150. Pad-removal workstream, the V.90 control/session cluster: 22 of 30 `pad_NNNN` regions removed with a compile-time `offsetof`/`sizeof` proof each, 8 left explicit and now say why
+
+The new workstream `docs/fieldnaming.md` records (its "New workstream: safe
+pad-region removal" section): a `pad_NNNN[N]` member may be DELETED, relying
+on the C++ compiler's own implicit alignment padding to reproduce the exact
+same layout, only where that is provable per-instance with an
+`offsetof`/`sizeof` compile-time assertion -- this tree's own existing idiom
+(`VPCM_OFF`, `V92CP_OFF`, `V90CP_OFF`, `ADID_OFF`, `P3M_OFF`, `V90P4_OFF`,
+`V92P4M_OFF`, all the same `typedef char foo[cond ? 1 : -1]` shape). Scope was
+the V.90 control/session cluster: `VPcmFloModem.h`, `V92CP.h`, `V90CP.h`,
+`V90AutoDigitalImpDetector.h`, `V90SessionFlag.h`, `V90Phase3Modulator.h`,
+`V90Phase4Modulator.h`/`.cpp`, `V92Phase4Modulator.h`/`.cpp`.
+
+**A fresh grep, not the brief's counts, decided the scope**, per
+`docs/fieldnaming.md`'s own rule. `VPcmFloModem.h` and `V92CP.h` had already
+been fully audited for this exact question in F10142 (12 of 13 alignment-
+exact, one -- `pad_6fb8` -- confirmed dead but not alignment-shaped) under the
+prior, naming-only phase of this same wave; this finding is what actually
+REMOVES the twelve once removal became the licensed action, plus the eleven
+more this pass found in the five files F10142 did not cover.
+
+**METHOD, per candidate.** (1) Arithmetic: is the pad's offset and width
+exactly what the compiler's own alignment for the NEXT declared field would
+insert if the member vanished -- no more, no less. (2) `tools/dis.py` over
+every member function of the owning class (address ranges below), grepped for
+a `this`-relative displacement landing in the pad's byte range, `%esp`-relative
+hits excluded since those are unrelated stack slots that happen to share the
+small offset. (3) Where (1) and (2) both hold: delete the member, and either
+point at an EXISTING `*_OFF` assertion for the field immediately after it (most
+cases -- these classes already assert nearly every offset) or add one. (4)
+Compile the owning `.cpp` under `g++ -std=c++98 -m32` and confirm it is clean.
+
+**STEP (4) HAS A TRAP, AND IT COST A FALSE "clean" ONCE HERE.** Every one of
+these assertion blocks is guarded `#if defined(__SIZEOF_POINTER__) &&
+__SIZEOF_POINTER__ == 4` (or, in `V92CP.cpp`, the bare `#if __SIZEOF_POINTER__
+== 4`), because the classes hold pointer members whose own offsets would
+otherwise differ between 32- and 64-bit layout. The HOST compiler here
+defaults to 64-bit, where that guard is FALSE and the ENTIRE assertion block
+is silently `#if 0`d out -- so a plain `g++ -c -fsyntax-only` reports a clean
+compile whatever the offsets say, including a deliberately-corrupted one
+(verified: hand-breaking `V90Phase3Modulator.cpp`'s `idleLevel` assertion to
+`0x999` and to `0x2999` both still compiled clean without `-m32`). This is the
+same shape as the `__SIZEOF_POINTER__`-guard trap `docs/method/compilers.md`
+already records for the OLD compiler reading `#if 0` -- here it is the host's
+DEFAULT WIDTH doing the identical thing. `-m32` (`gcc-multilib`/
+`libc6-dev-i386`, both present in this sandbox) makes the guard true and the
+assertions real; every verdict below is from an `-m32` compile, and each
+detector was fired once on a deliberately wrong offset first (CLAUDE.md's "any
+tool here must be shown to fire") before being trusted on the real one.
+`g++-multilib`'s 32-bit C++ standard headers are NOT installed here, so
+`V92CP.cpp` (which pulls in `<math.h>` -> `<cmath>` -> `bits/c++config.h`)
+could not be compiled directly at `-m32`; verified instead with a standalone
+harness of just `<stddef.h>` + `V92CP.h` + the assertion block extracted
+verbatim from the `.cpp`, which needs nothing math.h would have pulled in and
+fired correctly on both the real (clean) and a hand-broken (rejected) offset.
+
+**REMOVED, 22 regions, all confirmed alignment-exact and zero readers/writers:**
+
+  - `VPcmFloModem.h` (5 of 6): `pad_021d[1]` (`v34BaudAllow` -> `bitVector`,
+    `short` align), `pad_173f[1]` (`clr` -> `sweepCounter`, `int` align, new
+    assertion added), `pad_611a[2]` (`retrainLatch` -> `pcmSessionType`, `int`
+    align), `pad_7dd3[1]` (`nofBitsPerSymbol` -> `nofTransmitSequences`,
+    `short` align), `pad_7f5d[3]` (`byte_7f5c` -> `ecMode`, `int` align, new
+    assertion added). `pad_6fb8[4]` stays, per F10142 (dead but not
+    alignment-shaped).
+  - `V92CP.h` (6 of 7): `pad_05[3]`, `pad_25[3]`, `pad_102[2]`, `pad_10e[2]`,
+    `pad_11b[1]`, `pad_909[3]` -- all `int`-align gaps ahead of already-
+    asserted fields. `pad_40[2]` stays: F10142 already flagged it as the one
+    V92CP case where the tidy alignment story does not hold (`short_42` needs
+    only 2-byte alignment and +0x040 is already 4-byte aligned, so a real
+    field-to-field gap would be 0 bytes, not 2) -- its comment now says so in
+    the removability terms this workstream added, not just the naming ones.
+  - `V90CP.h` (1 of 1): `pad_cab[1]` (`byte_caa` -> `word_cac`, `int` align).
+    Zero touches confirmed by `dis.py` over the full class,
+    `0x51150..0x53830`, and a whole-object `objdump -d | grep 'cab('` (the
+    offset is large/unique enough for that second check to mean something,
+    same reasoning F10142 used for `pad_6fb8`).
+  - `V90AutoDigitalImpDetector.h` (2 of 3): `pad_2812[2]` (`byte_280c[]` ->
+    `params`, pointer align), `pad_a94a[2]` (`short_a948` -> `padGain`, `float`
+    align). `pad_a955[1]` stays: `maxUcode` after it is `unsigned char[]`,
+    needing only 1-byte alignment that +0xa955 already has, so (same shape as
+    `V92CP::pad_40`) a real gap would be 0 bytes, not 1 -- its existing
+    "stays `pad_`" comment now carries the removability verdict too.
+  - `V90Phase3Modulator.h` (4 of 5): `pad_157[1]` (`seq2[128]` ->
+    `segmentLength`, `int` align), `pad_38b[1]` (`dilIndex` -> `segmentPos`,
+    `int` align), `pad_391[1]` (`segmentIndex` -> `usingSegmentLevel`, `short`
+    align), `pad_395[3]` -- the class's own TAIL padding, proved by the
+    ALREADY-PRESENT `typedef char v90p3m_size[(sizeof(V90Phase3Modulator) ==
+    0x398) ? 1 : -1]` rather than a field-to-field assertion, and the first
+    tail-padding case this pass hit (verified the sizeof assertion actually
+    fires: hand-corrupting it to `0x399` was rejected under `-m32`).
+    `pad_10[2]` stays and is the pass's other genuine negative: `codeLevelAlt`
+    ends at +0x010, already 2-byte (and 4-byte) aligned, and `idleLevel` needs
+    only 2-byte alignment, so deleting the member should give a 0-byte gap --
+    confirmed BY THE COMPILER ITSELF, not just arithmetic: removing it and
+    recompiling under `-m32` makes the pre-existing `P3M_OFF(idleLevel,
+    0x012, idlelevel)` assertion fail exactly as predicted (offsetof lands
+    somewhere other than 0x012), which was tried and reverted before this
+    file's comment was written.
+  - `V90Phase4Modulator.h` (3 of 3): `pad_0015[3]` (`delayedMpNotExit` ->
+    `word_0018`, `int` align), `pad_001d[3]` (`byte_001c` -> `word_0020`,
+    `int` align), `pad_003e[2]` (`codeLevel` -> `word_0040`, `int` align) --
+    all three already had their post-pad field asserted by the existing
+    `V90P4_OFF` table, so no new assertion lines were needed here, only the
+    deletions.
+  - `V92Phase4Modulator.h` (1 of 3): `pad_1d[3]` (`byte_1c` -> `flag_20`,
+    `int` align). Its OWN assertion, `V92P4M_OFF(pad_1d, 0x01d, pad1d)`
+    (an unusual pattern in this cluster -- asserting the PAD's own offset
+    rather than the field after it, present because nothing was asserted
+    AFTER it either until now), was removed from `V92Phase4Modulator.cpp`
+    since the member it names no longer exists; `flag_20`'s own offset is
+    still asserted. `pad_10[8]` and `pad_1b4[4]` both stay, both the same
+    negative shape as `V92CP::pad_40`: `word_0c` ends at +0x10 (already
+    4-aligned) with `word_18` needing only 4-byte alignment, and `word_1b0`
+    ends at +0x1b4 (already 4-aligned) with the next field needing the same
+    -- a real gap would be 0 bytes at both, not 8 or 4, so the compiler's
+    implicit padding does not reproduce either span. Both comments now say so.
+
+**LEFT EXPLICIT, 8 regions, and each for a stated, checked reason:**
+`VPcmFloModem::pad_6fb8[4]` and `V92CP::pad_40[2]` (re-confirmed from F10142,
+not re-derived); `V90AutoDigitalImpDetector::pad_a955[1]`,
+`V90Phase3Modulator::pad_10[2]`, `V92Phase4Modulator::pad_10[8]` and
+`::pad_1b4[4]` (this pass's own negative results, all four the same "next
+field's own alignment is already satisfied" shape); `V90SessionFlag::pad_04
+[0x34]` and `::pad_40[0x10]` -- re-confirmed against F10143 rather than
+re-derived: these are large multi-field UNMODELLED FLOORS (the fuller
+`V90Phase4Demodulator.h` already names real fields carved out of both spans --
+`int_0038`/`int_003c` inside `pad_04` alone), not single-gap gaps a next-field
+alignment argument could ever apply to, so the arithmetic check in this
+workstream's own method does not reach them at all.
+
+**A TEST DIRECTLY NAMED A REMOVED FIELD, AND THAT IS THE ONE PLACE THIS
+CHANGE TOUCHED BEHAVIOUR RATHER THAN LAYOUT.** `test/unit/t_v92p4reset.cpp`
+seeds `V92Phase4Modulator::pad_1d` with a per-trial canary before calling
+`reset`, then relies on the whole-object differential compare to prove
+`reset` does not touch it -- exactly this tree's standard "poison the
+untouched bytes" technique, and the one place in the whole cluster where a
+`pad_` name was reached from `test/` rather than only from the header and its
+own `.cpp`. Deleting the member broke the build (`'class V92Phase4Modulator'
+has no member named 'pad_1d'`), caught immediately by `make one`. Fixed by
+seeding the same three bytes at the same absolute offset through a raw
+`(unsigned char *)o` cast instead of the named member -- the memory is still
+really there (an implicit tail is not an absent one) and the differential
+compare still needs it poisoned identically on both sides for the check to
+mean anything. The file's own header comment listing untouched fields was
+updated to match. `grep -rln` for every one of the other 21 removed names
+across `test/` and `src/` found no other hit; the three unrelated `pad_1d`
+hits in `V92BitsToSymbol.cpp`/`t_v92p4gen.cpp`/`t_v92btosproc.cpp` are a
+DIFFERENT class's field at the same coincidental offset-derived name, out of
+this scope, untouched.
+
+**Verification.** `g++ -std=c++98 -m32` clean on all seven touched `.cpp`
+files (the eighth, `V92CP.cpp`, via the standalone harness above), each
+fired once on a hand-broken offset first. `make one T="..."` run in batches
+covering every test file this cluster's `grep -rl` found (VPcmFloModem,
+V92CP/V90CP, V90AutoDigitalImpDetector, V90Phase3Modulator, V90Phase4Modulator,
+V92Phase4Modulator, plus the V90/V92 session-chain and leaf tests that compose
+them): every batch green except two PRE-EXISTING, DECLARED failures unrelated
+to this change -- `t_v90equproc` (731/120974) and `t_v90adidnan` (6/25), both
+already named in `tools/gccdiverge.json` as x87-excess-precision and ordered-
+NaN-compare divergences between the modern host compiler and GCC 3.4.2, which
+`make period` (unavailable in this sandbox) is what actually decides; neither
+touches a class or field this finding changed. `tools/mutate.py --suite
+v92p4reset` after the fix: 46 mutations, 44 caught, 2 equivalent (both
+pre-existing and documented in the suite's own JSON), 0 not caught -- same
+shape as before the edit. `tools/mutsnap.py --update v92p4reset` recorded the
+new key (`--check` first showed all 228 suites stale purely from the
+pre-session master merge, the same F10143 precedent -- 227 of them still are,
+untouched by this finding, and updating them is out of scope here).
+`tools/onedef.py` (301 types, 1 known duplicate), `tools/refcheck.py` (13232+
+references, 0 dangling once this finding's own number resolved) and
+`tools/anchorcheck.py` (228 suites, 9767 mutations, 0 anchor mismatches) all
+clean. `make period`/`byteident.py --ratchet` need docker, unavailable in
+this sandbox; left for the parent's gate, same as every prior wave -- a
+compile-time-only layout change that leaves every assertion green should also
+leave the ratchet's 736/1852 floor unchanged, and the differential suites
+above are the closest local proxy for that claim. (2026-09-04)

@@ -358,7 +358,16 @@ public:
 	 */
 	unsigned int word_0c;
 
-	/* +0x10 .. +0x17  Not touched by anything written here. */
+	/*
+	 * +0x10 .. +0x17  Not touched by anything written here.
+	 *
+	 * NOT REMOVABLE under the pad-removal workstream (F10150): `word_0c`
+	 * ends at +0x10, already 4-byte aligned, and `word_18` below needs
+	 * only that same 4-byte alignment -- a field-to-field gap here would
+	 * be 0 bytes, not 8, if the member vanished.  The compiler's own
+	 * implicit padding does not reproduce this eight-byte span, same shape
+	 * as `VPcmFloModem::pad_6fb8` -- stays explicit.
+	 */
 	unsigned char pad_10[8];
 
 	/*
@@ -383,8 +392,15 @@ public:
 	 */
 	unsigned char byte_1c;
 
-	/* +0x1d .. +0x1f  Not touched. */
-	unsigned char pad_1d[3];
+	/*
+	 * +0x1d..+0x1f was `pad_1d[3]`: `byte_1c` ends at +0x1d and `flag_20`
+	 * below is a 4-byte-aligned `unsigned int`, so natural alignment
+	 * inserts exactly these three bytes with the member deleted -- proved
+	 * by the existing `V92P4M_OFF(flag_20, 0x020, flag20)`
+	 * (V92Phase4Modulator.cpp). Zero readers/writers anywhere in the
+	 * object (`tools/dis.py` over every `V92Phase4Modulator::` member
+	 * function, `0x16de0..0x19160`); removed F10150.
+	 */
 
 	/*
 	 * +0x20  Set to 1 by every member that takes a state transition on a
@@ -599,7 +615,16 @@ public:
 	 */
 	unsigned int word_1b0;
 
-	/* +0x1b4 .. +0x1b7  Not touched. */
+	/*
+	 * +0x1b4 .. +0x1b7  Not touched.
+	 *
+	 * NOT REMOVABLE under the pad-removal workstream (F10150): `word_1b0`
+	 * ends at +0x1b4, already 4-byte aligned, and the field at +0x1b8
+	 * needs only that same 4-byte alignment -- a field-to-field gap here
+	 * would be 0 bytes, not 4, if the member vanished.  The compiler's own
+	 * implicit padding does not reproduce this four-byte span, same shape
+	 * as `VPcmFloModem::pad_6fb8` -- stays explicit.
+	 */
 	unsigned char pad_1b4[4];
 
 	/*
