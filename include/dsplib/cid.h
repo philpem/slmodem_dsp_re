@@ -49,7 +49,14 @@ struct cid {
 	short short_004;		/* +0x004 cleared by reset_cid only */
 	short dc;			/* +0x006 running DC estimate       */
 	short short_008;		/* +0x008 cleared by reset_cid only */
-	short pad_00a;			/* +0x00a alignment; never written  */
+	/*
+	 * +0x00a was `pad_00a` (a bare `short`) -- REMOVED (finding
+	 * F10145): already correctly described as alignment, `short_008`
+	 * ending at +0x00a leaves exactly 2 bytes ahead of `mrf`, whose
+	 * first member `struct fpm_mrf_cfg cfg` holds a pointer and needs
+	 * 4-byte alignment.  `dis.py` over `cid_modem`/`create_cid`/
+	 * `reset_cid`/`pack_next_bit` finds no access to offset 0x00a/0x00b.
+	 */
 	/*
 	 * The 9:10 resampler that makes the 8000 Hz line into the 7200 Hz the
 	 * demodulator wants; reset_cid configures it from V23_MRF_FILT, which
@@ -128,7 +135,17 @@ struct cid {
 	short pack_acc;			/* +0x158 the byte being assembled  */
 	short pack_pos;			/* +0x15a bit position / zero-run   */
 	short pack_len;			/* +0x15c bytes stored into `data`  */
-	unsigned char pad_15e[2];	/* +0x15e to 0x160, the allocation  */
+	/*
+	 * +0x15e was `pad_15e[2]`, the struct's LAST member -- REMOVED
+	 * (finding F10145).  Trailing padding: `pack_len` ends at +0x15e
+	 * and the struct's own alignment (forced to 4 by its several `int`
+	 * members and `mrf`'s pointer) rounds `sizeof` up to +0x160 on its
+	 * own.  `src/service/cid_mtd.c`'s existing `cid_size_check[sizeof
+	 * (struct cid) == 0x160 ? 1 : -1]` is a hard compile-time proof,
+	 * and 0x160 is also `create_cid`'s literal allocation size, not
+	 * adjacency alone.  `dis.py` over `cid_modem`/`create_cid`/
+	 * `reset_cid`/`pack_next_bit` finds no access to 0x15e/0x15f.
+	 */
 };
 
 /* The line rate, and the only value either leaf tests for. */

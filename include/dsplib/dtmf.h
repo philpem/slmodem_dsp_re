@@ -56,7 +56,21 @@ struct dtmf {
 	short held;		/* +0x90 a digit is being reported        */
 	short digit;		/* +0x92 which one                        */
 	short easy;		/* +0x94 relaxed validity rule            */
-	unsigned char pad_96[0x98 - 0x96];
+	/*
+	 * +0x96 was `pad_96[2]`, the struct's LAST member -- REMOVED
+	 * (finding F10145).  Trailing padding: `easy` ends at +0x96 and the
+	 * struct's own alignment (forced to 4 by the leading `float`
+	 * members) rounds `sizeof` up to +0x98 on its own.  Stronger proof
+	 * than usual here -- `src/service/dtmf.c`'s existing
+	 * `dtmf_size_check[sizeof(struct dtmf) == 0x98 ? 1 : -1]` is a hard
+	 * compile-time assertion, and 0x98 is also the literal
+	 * `sysdep_malloc(sizeof(struct dtmf))` allocation size in
+	 * `create_dtmf`, not adjacency alone.  `dis.py` over every `dtmf`-
+	 * touching function (`create_dtmf`, `reset_dtmf`, `dtmf_detect`,
+	 * `dtmf_progress`, `dtmf_set_easy`, `dtmf_test`, `dtmf_modem`,
+	 * `create_cid_dtmf`, `beepgen_start_dtmf`) finds no access to
+	 * offset 0x96/0x97.
+	 */
 };
 
 /*

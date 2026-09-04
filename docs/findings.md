@@ -114684,3 +114684,62 @@ t_v90mp t_v90cp t_jdmpleaves t_v90conneval t_v90modemctor t_v90rundemod
 t_v90p4mgen"` all green, no FAIL line across either run.
 `tools/onedef.py`/`tools/refcheck.py`/`tools/offcheck.py` all clean (2127
 annotations unchanged in count, all still matching `offsetof`). (2026-09-04)
+
+### `tagV90AdditionalCPinfo.h`/`dtmf.h`/`cid.h`: 3 more removed, all TRAILING padding with a stronger-than-usual proof
+
+Three more, all the struct's LAST member rather than a gap before a named
+field -- the same shape as `V90Demapper::pad_1eb6` above, and each one
+found a pre-existing, independent compile-time size proof stronger than
+anything this sweep would need to add:
+
+- `tagV90AdditionalCPinfo::pad_16[2]`: `short_14` ends at +0x16, and the
+  class's own 4-byte alignment (forced by its `unsigned int`/`float`
+  members) rounds `sizeof` to +0x18. The file's own header comment
+  explicitly flags "THE SIZE IS ADJACENCY AND IS NOT ASSERTED" -- this
+  removal does not resolve that pre-existing external uncertainty (whether
+  0x18 is the ORIGINAL author's true size) either way, but `V90Modem.h`
+  embeds this struct BY VALUE immediately before `V90MP mp` with no pad
+  between them, and `V90ModemCtor.cpp`'s existing `V90M_OFF
+  (additionalCPinfo, 0x0cb8, cpinfo)`/`V90M_OFF(mp, 0x0cd0, mp)` pair is a
+  hard INTERNAL-CONSISTENCY proof: if natural compiler padding did not land
+  `sizeof(tagV90AdditionalCPinfo)` at exactly 0x18, `mp`'s own offset
+  assertion would fail to compile. The negative check found one
+  false-positive worth recording in the header's own comment: `dis.py`
+  over `V90CPPacker` shows a `movswl 0x16(%ebx)`, but tracing `%ebx` (set
+  three instructions earlier as `arg3 + 0x22`, the caller's output buffer)
+  shows it is unrelated to this struct's own pointer, which the function
+  loads separately from `0x184(%esp)` into other registers throughout. No
+  genuine access to 0x16/0x17 of a `tagV90AdditionalCPinfo *` exists in
+  `V90CPPacker`, `setV92CPpckFromParamsInfo`, `V90Demodulator::enterRRN`,
+  or either `V90Modulator`/`V90Demodulator` constructor.
+- `dtmf::pad_96[2]`: `easy` ends at +0x96, alignment forced to 4 by the
+  leading `float` arrays rounds `sizeof` to +0x98. Here the proof is
+  stronger still -- `src/service/dtmf.c` already has `dtmf_size_check
+  [sizeof(struct dtmf) == 0x98 ? 1 : -1]`, and 0x98 is also the literal
+  `sysdep_malloc(sizeof(struct dtmf))` allocation size in `create_dtmf`,
+  not adjacency. `dis.py` over all nine `dtmf`-touching functions finds no
+  access to 0x96/0x97. `dtmf::pad_80[0x10]` (before `held`) fails the
+  arithmetic test outright (16 actual bytes where 0 bytes of natural
+  alignment would be inserted after an already 4-aligned `bias_state`) and
+  stays explicit, matching its own comment ("create_dtmf does not touch
+  these").
+- `cid::pad_00a`/`cid::pad_15e[2]`: `struct cid` had one of each shape.
+  `pad_00a` (a bare `short`, not an array) sits between `short_008` (ends
+  +0x00a) and `mrf`, a `struct fpm_mrf` whose first member holds a pointer
+  and needs 4-byte alignment -- exact 2-byte match, already commented
+  "alignment; never written". `pad_15e[2]` is the struct's LAST member,
+  trailing padding after `pack_len` (ends +0x15e) to the struct's own
+  4-byte alignment; `src/service/cid_mtd.c` already has `cid_size_check
+  [sizeof(struct cid) == 0x160 ? 1 : -1]`, and 0x160 is `create_cid`'s
+  literal allocation size. `dis.py` over `cid_modem`/`create_cid`/
+  `reset_cid`/`pack_next_bit` (the only four reconstructed functions
+  that take a `struct cid *` directly -- `CID_FSD_demodulate`/
+  `CID_MTD_detect` take a bare buffer pointer per the file's own comment)
+  finds no access to either offset pair.
+
+`make one T="t_v90cmask t_v90dataph t_v90demctor t_v90modchain
+t_v90demprog t_v90modemctor t_v90shapereset t_v90unpck t_vpcmrunpcm
+t_v90p4ddec t_v90rundemod t_beepgen t_detector t_dtmf t_cid_fsd
+t_cidleaves t_cidsvc t_cid_mtd t_datafmt t_rxcid t_cidprog"` all green (179
+PASS, 0 FAIL). `tools/onedef.py`/`tools/refcheck.py`/`tools/offcheck.py`
+all clean. (2026-09-04)
