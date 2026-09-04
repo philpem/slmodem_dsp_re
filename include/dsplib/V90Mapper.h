@@ -278,7 +278,14 @@ public:
 	 * for its own array: there is a `shl $0x7` and an `add` and no test.
 	 */
 	short constellation[V90MAPPER_CONSTELLATIONS][V90MAPPER_LEVELS];
-	unsigned char pad_656[2];		/* +0x656 alignment      */
+	/*
+	 * +0x656 was `pad_656[2]` -- REMOVED (finding F10145).  It was
+	 * already correctly described as alignment; now proved mechanically,
+	 * both ends already asserted in the .cpp (`V90MAPPER_OFF(constellation,
+	 * 0x056, cons)` and `V90MAPPER_OFF(constellationSize, 0x658, c658)`),
+	 * and `dis.py` over every `V90Mapper` method finds no access to
+	 * offset 0x656/0x657.
+	 */
 
 	/*
 	 * +0x658  The six constellation sizes, copied word for word out of
@@ -318,7 +325,14 @@ public:
 	 * path taken when `signBitGroups` is zero.  It was `cleared_6fc`.
 	 */
 	SerialDifferentialEncoder<unsigned char> signEncoder;
-	unsigned char pad_6fd[3];		/* +0x6fd alignment      */
+	/*
+	 * +0x6fd was `pad_6fd[3]` -- REMOVED (finding F10145).  It was
+	 * already correctly described as alignment; now proved mechanically,
+	 * both ends already asserted in the .cpp (`V90MAPPER_OFF(signEncoder,
+	 * 0x6fc, c6fc)` and `V90MAPPER_OFF(word_700, 0x700, c700)`), and
+	 * `dis.py` over every `V90Mapper` method finds no access to offset
+	 * 0x6fd/0x6fe/0x6ff.
+	 */
 
 	/*
 	 * +0x700  FOUR BYTES, WRITTEN BY BOTH RESETS AND READ BY NOTHING.

@@ -114583,3 +114583,53 @@ added). `tools/onedef.py`/`tools/refcheck.py` clean.
 (more files below as this sweep continues; the sweep is not yet complete
 when this paragraph is first appended -- see the closing paragraph for the
 final file list and totals.) (2026-09-04)
+
+### `V90SignBitsExtractor.h`/`V90Phase2Info.h`/`V90Mapper.h`/`V90Demapper.h`: 6 more removed, `pad_14[4]` stays
+
+`V90SignBitsExtractor::pad_0e[2]` (before `state`, exact short-to-int gap,
+already described by its own comment as alignment) and `pad_19[3]` (before
+`decoder`, a `ParallelDifferentialDecoder<unsigned char>` whose first member
+is a pointer, exact 1-byte-to-4-byte gap) both removed; existing `SBE_OFF`
+assertions already prove both target offsets (`state` at 0x10, `decoder` at
+0x1c). `pad_14[4]` stays -- the gap between `state` (ends +0x14) and
+`oddDecoder` (a 1-byte class needing no alignment at all) is 4 bytes where
+natural insertion would be 0, so it fails the arithmetic test outright and
+the header's own comment already says "NOT MODELLED. Nothing... touches it."
+
+`V90Phase2Info::pad_0a[2]` removed (between `maxTxPower` and
+`txPowerMeasurementPoint`, exact byte-to-int gap, comment already said
+"Alignment before the word at +0x0c"); existing `V90P2I_OFF` assertions
+prove both ends.
+
+`V90Mapper::pad_656[2]` (before `constellationSize`) and `pad_6fd[3]`
+(before `word_700`) both removed, both already commented "alignment" by an
+earlier pass, both ends already asserted by `V90MAPPER_OFF`.
+
+`V90Demapper::pad_665[3]` (before `signBits`), `pad_1e9e[2]` (before
+`adiDetector`) and `pad_1eb6[2]` (the struct's LAST member, trailing padding
+to the class's own 4-byte alignment rather than a gap before a named field --
+the existing `sizeof(V90Demapper) == 0x1eb8` assertion is a hard compile-time
+proof of this case rather than a spot check) all removed; every boundary
+already asserted by `DEM_OFF`.
+
+Negative check for all six: `dis.py` over every method of the owning class
+PLUS, for `V90Demapper`, the `V90Equalizer`/`V90Phase4Demodulator`
+constructors that receive a `V90Demapper *` (both classes are in a sibling
+agent's excluded cluster, so their headers are not touched, but their
+disassembly still has to be checked since they hold a pointer to the struct
+being edited) -- zero hits for any removed offset in any function. No
+aggregate initializer of any of these four types exists anywhere in the tree
+(`grep -rn "ClassName\s*=\s*{"` over `src/`/`include/`/`test/`), so none of
+this batch could repeat the `TONE_CFG` positional-initializer bug the first
+file in this sweep hit.
+
+`make one T="t_v90demap t_v90demapctor t_v90leaves t_v90sbereset
+t_v90modchain t_v90p4ddec t_v90btsproc t_v90modprog t_v90p4seq t_v90dataph
+t_v90demctor t_v90demprog t_v90equproc t_v90p4dnan"` run; the only two FAILs
+(`t_v90equproc`'s RESET arm, 731/120974, and `t_v90p4dnan`'s keep-rate flag,
+2/9) are pre-existing on the unmodified tree, confirmed by a `git stash`/
+`git stash pop` A/B producing byte-identical failure counts -- F6203's
+declared x87-excess-precision divergence and the `t_v90p4dnan` declared NaN
+check, both unrelated to this sweep and both already declared in
+`tools/gccdiverge.json`. Every other suite green. `tools/onedef.py`/
+`tools/refcheck.py` clean. (2026-09-04)

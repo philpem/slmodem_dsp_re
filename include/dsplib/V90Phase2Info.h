@@ -175,8 +175,15 @@ public:
 	 */
 	unsigned char maxTxPower;
 
-	/* +0x0a  Alignment before the word at +0x0c.  Nothing reaches it. */
-	unsigned char pad_0a[2];
+	/*
+	 * +0x0a was `pad_0a[2]` -- REMOVED (finding F10145).  It was already
+	 * correctly described as alignment; now proved mechanically rather
+	 * than by description alone, both ends already asserted in the .cpp
+	 * (`V90P2I_OFF(maxTxPower, 0x09, ...)`, `V90P2I_OFF
+	 * (txPowerMeasurementPoint, 0x0c, ...)`), and `dis.py` over every
+	 * `V90Phase2Info` method plus `VPcmFloModem::getUinfoValue` finds no
+	 * access to offset 0x0a.
+	 */
 
 	/*
 	 * +0x0c  1 prints "CodecOutput" and anything else
