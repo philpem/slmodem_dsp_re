@@ -40,6 +40,7 @@ Denominator: the symbols the blob and `TC_OUT` both define, which is
 
 import argparse
 import glob
+import json
 import os
 import re
 import subprocess
@@ -47,6 +48,24 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
+
+#
+# THE RATCHET, mirroring `compare.py`'s -- same reasoning, a different metric.
+#
+# `compare.py --ratchet` catches the reconstruction moving away from the
+# original's CODE GENERATION (mnemonic sequence) with no differential test
+# able to see it.  This one catches the same failure mode one grade stricter:
+# a symbol that was byte-for-byte EXACT losing that status -- to a size
+# change, a relocation change, or merely a different register allocation --
+# while `make period` stays green throughout, because a differential test
+# proves behavioural equivalence, not code-generation equivalence, and this
+# tree's own history (findings F2155, F612, F616, 7796, 7800, 7770) is a
+# record of exactly that gap.  Only EXACT ratchets, for the reason
+# `compare.py`'s own comment gives for its `identical`: REGALLOC (grade 1)
+# falls when a function GRADUATES to EXACT, so gating on it fails on
+# progress.  REGALLOC is reported with its direction and is informational.
+#
+RATCHET = os.path.join(HERE, "byteident_ratchet.json")
 
 
 def _default_blob():
@@ -601,6 +620,10 @@ def main():
     ap.add_argument("--self-test", action="store_true",
                     help="prove alpha_equal both accepts and REJECTS")
     ap.add_argument("--limit", type=int, default=25)
+    ap.add_argument("--ratchet", action="store_true",
+                    help="fail if fewer symbols are grade-0 EXACT than last time")
+    ap.add_argument("--update", action="store_true",
+                    help="record the current EXACT count as the new floor")
     a = ap.parse_args()
 
     if a.self_test:
@@ -783,6 +806,42 @@ def main():
     print("  SIZE    -- different size                : %4d" % len(buckets["SIZE"]))
     if buckets["NODATA"]:
         print("  NODATA  -- could not be disassembled     : %4d" % len(buckets["NODATA"]))
+
+    now = {"exact": ex, "regalloc": ra, "compared": n}
+    if a.update:
+        with open(RATCHET, "w") as f:
+            json.dump(now, f, indent=2, sort_keys=True)
+            f.write("\n")
+        print("\nratchet updated: %s" % now)
+        return 0
+    if a.ratchet:
+        try:
+            was = json.load(open(RATCHET))
+        except (OSError, ValueError):
+            sys.exit("no %s -- run with --update to set the floor" % RATCHET)
+        if now["exact"] < was["exact"]:
+            print("\nRATCHET FAILED -- fewer symbols are grade-0 EXACT than last"
+                  "\ntime, and no differential test can see that: `make period`"
+                  "\nproves BEHAVIOUR, not CODE GENERATION.")
+            print("    exact  was %d, now %d" % (was["exact"], now["exact"]))
+            print("\n  If the change was deliberate (e.g. a genuine behavioural"
+                  "\n  fix that necessarily changes codegen), re-bless with"
+                  "\n  --update and say in the commit message why fewer symbols"
+                  "\n  match.  If it was a pure rename or comment change, it"
+                  "\n  should not have moved this number at all -- find out what"
+                  "\n  else changed before re-blessing.")
+            return 1
+        if now["regalloc"] < was["regalloc"]:
+            print("\n  note: regalloc %d -> %d.  A FALL IS AMBIGUOUS -- a symbol"
+                  "\n  leaves that bucket both by GRADUATING to exact and by"
+                  "\n  ceasing to match at all.  exact went %d -> %d over the"
+                  "\n  same period; a fall in regalloc alongside a rise in exact"
+                  "\n  is progress, not regression."
+                  % (was["regalloc"], now["regalloc"], was["exact"], now["exact"]))
+        gained = now["exact"] > was["exact"] or now["regalloc"] > was["regalloc"]
+        print("\nratchet OK%s" % ("" if not gained else
+              " (exact %d -> %d, regalloc %d -> %d)"
+              % (was["exact"], now["exact"], was["regalloc"], now["regalloc"])))
 
     if a.list_exact:
         print("\nEXACT:")

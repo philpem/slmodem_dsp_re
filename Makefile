@@ -951,12 +951,15 @@ period: $(REF)
 # was standing in for.  The guard STAYS: it still catches the directory being
 # read by something that did not come through make.
 #
-.PHONY: tc byteident similarity
+.PHONY: tc byteident byteident-ratchet similarity
 tc:
 	@$(MAKE) -f tools/toolchain/period.mk -j$(J)
 
 byteident: tc
 	@$(PYTHON) tools/toolchain/byteident.py
+
+byteident-ratchet: tc
+	@$(PYTHON) tools/toolchain/byteident.py --ratchet
 
 similarity: tc
 	@$(PYTHON) tools/toolchain/compare.py --ratchet
