@@ -396,7 +396,15 @@ public:
 	 */
 	short short_10;			/* +0x10 = dMin * 1.25             */
 
-	unsigned char pad_12[2];	/* +0x12                            */
+	/*
+	 * +0x12 WAS `pad_12[2]`, REMOVED (2026-09-04, pad-audit).  A `short`
+	 * ending at +0x12 followed by the pointer at +0x14 below needs exactly
+	 * this 2-byte gap for natural alignment, no dis.py reader/writer
+	 * touches +0x12/+0x13 anywhere in the object, and
+	 * `V90CD_OFF(constelTable, 0x14, ...)` below already asserts the next
+	 * field's offset -- so the compiler's own padding reproduces the
+	 * member being deleted.
+	 */
 
 	/*
 	 * +0x14  `constelBuild`'s table, and its ONLY reader anywhere in the
@@ -563,7 +571,15 @@ public:
 	 */
 	unsigned char powerLadderIndex;	/* +0x38 a power-ladder index, 22 */
 
-	unsigned char pad_39[3];	/* +0x39                            */
+	/*
+	 * +0x39 WAS `pad_39[3]`, REMOVED (2026-09-04, pad-audit).  An
+	 * `unsigned char` ending at +0x39 followed by the 4-byte-aligned
+	 * `codecType` at +0x3c below needs exactly this 3-byte gap for natural
+	 * alignment, no dis.py reader/writer touches +0x39/+0x3a/+0x3b
+	 * anywhere in the object, and `V90CD_OFF(codecType, 0x3c, ...)` below
+	 * already asserts the next field's offset -- so the compiler's own
+	 * padding reproduces the member being deleted.
+	 */
 
 	/*
 	 * +0x3c and +0x40  `process`' twelfth and thirteenth arguments, stored

@@ -114483,3 +114483,143 @@ tools/bannercheck.py src/fax` all clean. `make period` and
 sandbox; left for the parent session's gate, per every prior wave's own
 precedent -- every change here is an identifier substitution or a comment,
 which cannot move generated code. (2026-09-04)
+
+## F10145. First live pad-region removal wave: twelve of fourteen `pad_NNNN` in the V.90 receive/design cluster deleted as pure alignment gaps, two left explicit as confirmed non-alignment-shaped dead space
+
+Scope was the six classes `docs/fieldnaming.md`'s new "safe pad-region
+removal" workstream named: `V90Equalizer`, `V90ConstellationDesigner`,
+`V90Demodulator`, `V90Phase3Demodulator`, `V90Phase4Demodulator`,
+`V90ConnectionEvaluator`. This is the first wave that actually DELETES a
+`pad_NNNN` member rather than naming or splitting one, per the user's
+explicit decision recorded in `docs/fieldnaming.md`: remove only where an
+`offsetof`-based compile-time assertion proves the compiler's own implicit
+alignment padding reproduces the deleted member's byte range exactly.
+
+**THE BRIEFED COUNTS WERE WRONG, AND A FRESH GREP WAS RIGHT -- SAME SHAPE AS
+F10142.** The brief's per-file counts (13/7/9+1/6/4/3+2 = 45 combined) come
+from a naive `grep -oE 'pad_[0-9a-f]+'`, which counts historical `/* was
+pad_X */`-style prose alongside live struct members. Grepping only actual
+`unsigned char pad_NNNN[...]` member DECLARATIONS gives **14** live regions,
+none of them in either `.cpp`: `V90Equalizer.h` 2, `V90ConstellationDesigner
+.h` 3, `V90Demodulator.h` 1, `V90Phase3Demodulator.h` 5,
+`V90Phase4Demodulator.h` 2, `V90ConnectionEvaluator.h` 1.
+
+**METHOD, per CLAUDE.md's decision.** For each of the 14: (1) arithmetic --
+read the field immediately before and after; is the pad's width and offset
+EXACTLY what the next field's own type requires for natural alignment, no
+more and no less. (2) `objdump -d --start-address=... --stop-address=...`
+over every member function of the OWNING class (address ranges confirmed
+against `nm -CS` against the blob) grepped for a `this`-relative displacement
+literal landing in the pad's byte range, with every hit traced by hand --
+two apparent hits (`V90Equalizer`'s `-0xa(%ecx)`, a `lea` computing `ecx-10`,
+and `V90ConstellationDesigner`'s `0x12(%esp)`, an `fldcw`/`fnstcw` control-word
+save) were false positives from naive substring matching, not `this`-relative
+loads. (3) A whole-object `objdump -d` grep for the same displacement
+literal(s) as the cross-class check CLAUDE.md's decision requires -- the
+3-digit offsets (`0x281`, `0x3fa`, `0x402`, `0x416`, `0x425`, `0xb6`) came
+back with either zero hits or hits verified to be `%esp`-relative locals or
+unrelated structs at addresses well outside all six classes' own ranges; the
+small offsets (`0x9`/`0xa`/`0xb`, `0x12`/`0x13`, `0x19`, `0x31`/`0x32`/`0x33`,
+`0x39`/`0x3a`/`0x3b`) collide constantly with other structs' own fields at
+the same small offset (traced examples: `V90ConstellationDesigner`'s OWN
+`dMin` sits at +0x0a, coincidentally the same number as `V90Equalizer`'s
+`pad_0a`; `V90Demodulator`'s `0x9(%edx)` is byte 9 of its `V90Phase2Info *`
+at +0x004, not `V90Phase4Demodulator`'s ucode at +0x008) -- every non-`%esp`
+hit was traced to a register loaded from a DIFFERENT class's own field or a
+different struct entirely, none from a pointer into one of these six.
+
+**RESULT: twelve of fourteen removed, two left explicit.**
+
+Removed, each with the pre-existing per-class `_OFF` assertion macro
+(`V90EQU_OFF`, `V90CD_OFF`, `DEM_OFF`, `P3D_OFF`, `P4D_OFF`, `CE_OFF` --
+already present in every one of these six `.cpp` files before this wave,
+asserting EVERY real field's offset, so no new assertion macro was needed;
+the existing assertion for the field immediately after each deleted pad
+already proves the removal, since a wrong compiler-inferred gap would make
+that assertion's `typedef char x[-1]` fail to compile):
+
+  - `V90Equalizer::pad_0a[2]` -- `short dfeProtectionOnDil` (+0x08, ends
+    0x0a) to `unsigned int linearEquLength` (+0x0c); proved by
+    `V90EQU_OFF(linearEquLength, 0x00c, ...)`.
+  - `V90ConstellationDesigner::pad_12[2]` -- `short short_10` (+0x10, ends
+    0x12) to the `V90AutoDigitalImpDetector *` at +0x14; proved by
+    `V90CD_OFF(constelTable, 0x14, ...)`.
+  - `V90ConstellationDesigner::pad_39[3]` -- `unsigned char powerLadderIndex`
+    (+0x38, ends 0x39) to `int codecType` (+0x3c); proved by
+    `V90CD_OFF(codecType, 0x3c, ...)`.
+  - `V90Demodulator::pad_281[3]` -- `unsigned char byte_280` (+0x280, ends
+    0x281) to `unsigned int errorEnergyPrintCounter` (+0x284); proved by
+    `DEM_OFF(errorEnergyPrintCounter, 0x284, ...)`.
+  - `V90Phase3Demodulator::pad_19[1]` -- `unsigned char ucode` (+0x018, ends
+    0x019) to `short ucodeLevel` (+0x01a); proved by
+    `P3D_OFF(ucodeLevel, 0x01a, ...)`.
+  - `V90Phase3Demodulator::pad_3fa[2]` -- `unsigned char byte_3f9` (+0x3f9,
+    ends 0x3fa) to `unsigned int word_3fc` (+0x3fc); proved by
+    `P3D_OFF(word_3fc, 0x3fc, ...)`.
+  - `V90Phase3Demodulator::pad_402[2]` -- `short short_400` (+0x400, ends
+    0x402) to `unsigned int jdNotRunLength` (+0x404); proved by
+    `P3D_OFF(jdNotRunLength, 0x404, ...)`.
+  - `V90Phase3Demodulator::pad_416[2]` -- `short short_414` (+0x414, ends
+    0x416) to `float float_418` (+0x418); proved by
+    `P3D_OFF(float_418, 0x418, ...)`.
+  - `V90Phase3Demodulator::pad_425[3]` -- `unsigned char byte_424` (+0x424,
+    ends 0x425) to the `ANSamToneDetector *` at +0x428; proved by
+    `P3D_OFF(ansamToneDetector, 0x428, ...)`.
+  - `V90Phase4Demodulator::pad_0009[3]` -- `unsigned char ucode` (+0x0008,
+    ends 0x009) to `V90MappingParams *mappingParams1` (+0x000c); proved by
+    `P4D_OFF(mappingParams1, 0x000c, ...)`.
+  - `V90Phase4Demodulator::pad_0031[3]` -- `unsigned char uchar_0030`
+    (+0x0030, ends 0x031) to `unsigned int quickConnect` (+0x034); proved by
+    `P4D_OFF(quickConnect, 0x0034, ...)`.
+  - `V90ConnectionEvaluator::pad_b6[2]` -- `short echoRrnState` (+0xb4, ends
+    0xb6) to `float word_b8` (+0xb8); proved by `CE_OFF(word_b8, 0xb8, ...)`.
+
+**Left explicit, both confirmed NOT alignment-shaped (CLAUDE.md's
+`VPcmFloModem::pad_6fb8[4]` shape exactly):**
+
+  - `V90Equalizer::pad_138[4]` -- `unsigned int array_12cSkew` ends at
+    +0x138, already 4-byte aligned; the next field, `float
+    ph4MeanErrorEnergyBeforeUpdate` at +0x13c, is itself 4-byte-aligned and
+    needs a 0-byte gap after a 4-byte-aligned predecessor, not 4. Natural
+    alignment alone would put `ph4MeanErrorEnergyBeforeUpdate` at +0x138,
+    not +0x13c -- deleting the pad would MOVE the next field, so this is
+    unmodelled space genuinely spanning four bytes, not an alignment
+    artefact. Stays explicit.
+  - `V90ConstellationDesigner::pad_34[4]` -- `V90ConstellationPower *power`
+    ends at +0x34, and the next field, `unsigned char powerLadderIndex` at
+    +0x38, needs only 1-byte alignment (none at all after a 4-byte-aligned
+    predecessor). Same shape: natural alignment implies a 0-byte gap, the
+    object has 4. Stays explicit.
+
+**VERIFICATION.** All twelve removals compile clean under the modern
+toolchain (`g++ -m32 ... -O2`, the sandbox's only available compiler --
+`make -s print-CC` confirms `gcc`, so `make period`'s GCC 3.4.2 tier is
+unavailable here and left for the parent's gate per every prior wave's
+practice); every `_OFF` assertion in all six `.cpp` files still compiles,
+which is itself the offset proof for the deleted regions. `make one` run
+across all fourteen relevant test binaries (`t_v90equ`, `t_v90eqdata`,
+`t_v90cdesign`, `t_v90cdnoise`, `t_v90cdadjust`, `t_v90designers`,
+`t_v90demctor`, `t_v90demod`, `t_v90demprog`, `t_v90p3ddec`, `t_v90p3dreset`,
+`t_v90p4ddec`, `t_v90p4dleaf`, `t_v90conneval`, `t_v90leaves`,
+`t_v90modemctor`): every check count is UNCHANGED from a `git stash`/`git
+stash pop` A/B baseline run on this exact tree. `t_v90equ` alone shows six
+FAILs (784/86026, 2/2396, 2/480, 1/1244, 1/1092, 36/4778) -- traced by A/B
+stash to be PRE-EXISTING and identical with `pad_0a` still in the header,
+matching F10141's own documented baseline for this same test
+(`docs/v90equprocess.md`'s "MOSTLY DRIVEN, NOT CLOSED" x87-precision status,
+unrelated to struct layout). Every other binary is 100% green, including
+`t_v90cdesign`'s documented 46,656-shape exhaustive sweep (F formerly noted
+at line ~55209) which takes on the order of 40 minutes single-threaded on
+this sandbox's hardware and is unrelated to this wave's change beyond
+confirming it. `tools/onedef.py` (301 types, 167 files, 1 known duplicate --
+unchanged), `tools/refcheck.py` (13231 references, 0 dangling, 0 stale) and
+`tools/offcheck.py` (2127 annotations, all match -- these six classes are
+C++ so none of their assertions are counted by this C-struct-only tool, but
+a clean run confirms nothing else in the tree regressed) all clean.
+`make period`/`tools/toolchain/byteident.py --ratchet` need docker,
+unavailable in this sandbox; left for the parent session's gate. Since every
+removal is proved compile-time-only (offset unchanged, confirmed no reader
+or writer anywhere in the object touches the deleted bytes), behavioral
+equivalence follows from the differential run above without needing the
+period-compiler tier to re-derive it -- the same reasoning this wave's own
+brief laid out. (2026-09-04)

@@ -549,7 +549,16 @@ public:
 	/* +0x280  Zeroed by the constructor, by `enterPhase3` and by `reset`. */
 	unsigned char byte_280;
 
-	unsigned char pad_281[3];	/* +0x281 alignment                  */
+	/*
+	 * +0x281 WAS `pad_281[3]`, REMOVED (2026-09-04, pad-audit).  An
+	 * `unsigned char` ending at +0x281 followed by the 4-byte-aligned
+	 * `errorEnergyPrintCounter` at +0x284 below needs exactly this 3-byte
+	 * gap for natural alignment, no dis.py reader/writer touches
+	 * +0x281/+0x282/+0x283 anywhere in the object, and
+	 * `DEM_OFF(errorEnergyPrintCounter, 0x284, ...)` in the .cpp already
+	 * asserts the next field's offset -- so the compiler's own padding
+	 * reproduces the member being deleted.
+	 */
 
 	/*
 	 * +0x284/+0x288 and +0x28c/+0x290  TWO PRINT-PERIOD COUNTERS, named on
