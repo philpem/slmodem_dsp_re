@@ -70,41 +70,72 @@ struct silence {
 					 *       debug line calls it energy  */
 };
 
-/*
- * Initialise `s`, allocating it when NULL -- and, unlike FIFO8_create,
- * checking that allocation: a failure returns NULL rather than faulting.
+/**
+ * @brief Construct a silence detector.
+ *
+ * Allocates @p s when it is NULL and, unlike FIFO8_create(), checks that
+ * allocation: a failure returns NULL rather than faulting.
+ *
+ * @param s      Existing state to initialise, or NULL to allocate one.
+ * @param obj    Opaque pointer passed back to @p query.
+ * @param query  Callback the detector asks for #SILENCE_PARAM_LEVEL and
+ *               #SILENCE_PARAM_TIME.
+ * @return @p s, the newly allocated state, or NULL on allocation failure.
  */
 struct silence *silence_create(struct silence *s, void *obj,
 			       unsigned int (*query)(void *obj, int what));
 
-/* Free the object. */
+/** @brief Free a silence detector. @param s The detector to free. */
 void silence_delete(struct silence *s);
 
-/*
- * Has the silent run passed `t`?
+/**
+ * @brief Has the current silent run passed @p t seconds?
  *
- * The object multiplies `t` by 10.0f and truncates toward zero before the
- * comparison, and `count` advances once per 100 ms block -- so `t` is in
- * SECONDS.  (silence_progress is what settles that; the name is the blob's.)
+ * The object multiplies @p t by 10.0f and truncates toward zero before
+ * comparing against `count`, which advances once per 100 ms block -- so
+ * @p t is in seconds (silence_progress() is what settles that; the name
+ * is the blob's own).
+ *
+ * @param s  Detector state.
+ * @param t  Threshold, in seconds.
+ * @return Non-zero if the current silent run has passed @p t.
  */
 int silence_is_more_then(struct silence *s, float t);
 
-/*
- * One block of `n` samples.  Appends `DLE q` or `DLE s` at `*out` and adds 2
- * to `*len` for each silence decision the block completes; `out` is NOT
- * advanced between decisions -- see docs/deviations.md D983.
+/**
+ * @brief Process one block of @p n samples and emit any silence escapes.
+ *
+ * Accumulates the sum of squares of 800 samples (100 ms at 8 kHz), and at
+ * each completed block compares the mean against a threshold (picked via
+ * #SILENCE_PARAM_LEVEL); blocks under it advance a counter, and once the
+ * counter passes #SILENCE_PARAM_TIME blocks it appends a DLE escape
+ * (`DLE q` if any prior block was over the threshold, `DLE s` otherwise)
+ * and restarts.
+ *
+ * @param s    Detector state.
+ * @param buf  Input samples, @p n of them.
+ * @param n    Number of samples in @p buf.
+ * @param out  Output buffer; each silence decision appends 2 bytes at
+ *             `*out`. `out` itself is NOT advanced between decisions
+ *             within one call (deviation D983).
+ * @param len  Input/output: bumped by 2 for each decision this block
+ *             completes.
  */
 void silence_progress(struct silence *s, float *buf, short n,
 		      unsigned char *out, unsigned short *len);
 
-/*
- * Append a two-byte DLE escape -- 0x10 then `code` -- at `*out`, and add 2
- * to `*len`.  It is `_status` in the blob and it is not part of the silence
- * detector, but silence_progress is the only reconstructed caller, and the
- * object inlines it into both of that function's arms.
+/**
+ * @brief Append a two-byte DLE escape (0x10, @p code) at `*out`.
  *
- * The debug line the object prints for it is "DLE %d", with `code` promoted
- * from a signed char -- which is what types the third parameter.
+ * Not part of the silence detector proper -- it is `_status` in the blob,
+ * a neighbour that silence_progress() is the only reconstructed caller of
+ * (inlined into both of that function's arms in the object). The debug
+ * line the object prints for it is "DLE %d", with @p code promoted from
+ * a signed char.
+ *
+ * @param out   Output buffer; the escape is appended at `*out`.
+ * @param len   Input/output: bumped by 2.
+ * @param code  The DLE escape code (e.g. 'q' or 's').
  */
 void _status(unsigned char *out, unsigned short *len, char code);
 
