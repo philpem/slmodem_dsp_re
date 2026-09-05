@@ -5,33 +5,33 @@
  },
  {
   "label": "the first filter gets one more sample of slack",
-  "find": "\tv92precoder_floatfir_ctor(p, nTaps, 0, V92PRECODER_BLOCK);\n\tfir1 = p;",
-  "replace": "\tv92precoder_floatfir_ctor(p, nTaps, 0, V92PRECODER_BLOCK + 1);\n\tfir1 = p;"
+  "find": "\tnew (p) FloatFIR(nTaps, 0, V92PRECODER_BLOCK);\n\tfir1 = p;",
+  "replace": "\tnew (p) FloatFIR(nTaps, 0, V92PRECODER_BLOCK + 1);\n\tfir1 = p;"
  },
  {
   "label": "the second filter gets one fewer sample of slack",
-  "find": "\tv92precoder_floatfir_ctor(p, nTaps, 0, V92PRECODER_BLOCK);\n\tfir2 = p;",
-  "replace": "\tv92precoder_floatfir_ctor(p, nTaps, 0, V92PRECODER_BLOCK - 1);\n\tfir2 = p;"
+  "find": "\tnew (p) FloatFIR(nTaps, 0, V92PRECODER_BLOCK);\n\tfir2 = p;",
+  "replace": "\tnew (p) FloatFIR(nTaps, 0, V92PRECODER_BLOCK - 1);\n\tfir2 = p;"
  },
  {
   "label": "the second filter is built with no taps",
-  "find": "\tv92precoder_floatfir_ctor(p, nTaps, 0, V92PRECODER_BLOCK);\n\tfir2 = p;\n}",
-  "replace": "\tv92precoder_floatfir_ctor(p, 0, 0, V92PRECODER_BLOCK);\n\tfir2 = p;\n}"
+  "find": "\tnew (p) FloatFIR(nTaps, 0, V92PRECODER_BLOCK);\n\tfir2 = p;\n}",
+  "replace": "\tnew (p) FloatFIR(0, 0, V92PRECODER_BLOCK);\n\tfir2 = p;\n}"
  },
  {
   "label": "the two stores are swapped",
-  "find": "\tv92precoder_floatfir_ctor(p, nTaps, 0, V92PRECODER_BLOCK);\n\tfir1 = p;\n\n\tp = (FloatFIR *)sysdep_malloc(sizeof(FloatFIR));\n\tv92precoder_floatfir_ctor(p, nTaps, 0, V92PRECODER_BLOCK);\n\tfir2 = p;",
-  "replace": "\tv92precoder_floatfir_ctor(p, nTaps, 0, V92PRECODER_BLOCK);\n\tfir2 = p;\n\n\tp = (FloatFIR *)sysdep_malloc(sizeof(FloatFIR));\n\tv92precoder_floatfir_ctor(p, nTaps, 0, V92PRECODER_BLOCK);\n\tfir1 = p;"
+  "find": "\tnew (p) FloatFIR(nTaps, 0, V92PRECODER_BLOCK);\n\tfir1 = p;\n\n\tp = (FloatFIR *)sysdep_malloc(sizeof(FloatFIR));\n\tnew (p) FloatFIR(nTaps, 0, V92PRECODER_BLOCK);\n\tfir2 = p;",
+  "replace": "\tnew (p) FloatFIR(nTaps, 0, V92PRECODER_BLOCK);\n\tfir2 = p;\n\n\tp = (FloatFIR *)sysdep_malloc(sizeof(FloatFIR));\n\tnew (p) FloatFIR(nTaps, 0, V92PRECODER_BLOCK);\n\tfir1 = p;"
  },
  {
   "label": "the filter allocation is four bytes larger than the object",
-  "find": "\tp = (FloatFIR *)sysdep_malloc(sizeof(FloatFIR));\n\tv92precoder_floatfir_ctor(p, nTaps, 0, V92PRECODER_BLOCK);\n\tfir1 = p;",
-  "replace": "\tp = (FloatFIR *)sysdep_malloc(sizeof(FloatFIR) + 4);\n\tv92precoder_floatfir_ctor(p, nTaps, 0, V92PRECODER_BLOCK);\n\tfir1 = p;"
+  "find": "\tp = (FloatFIR *)sysdep_malloc(sizeof(FloatFIR));\n\tnew (p) FloatFIR(nTaps, 0, V92PRECODER_BLOCK);\n\tfir1 = p;",
+  "replace": "\tp = (FloatFIR *)sysdep_malloc(sizeof(FloatFIR) + 4);\n\tnew (p) FloatFIR(nTaps, 0, V92PRECODER_BLOCK);\n\tfir1 = p;"
  },
  {
   "label": "the constructor also clears the word at +0x00",
-  "find": "\tv92precoder_floatfir_ctor(p, nTaps, 0, V92PRECODER_BLOCK);\n\tfir2 = p;\n}\n",
-  "replace": "\tv92precoder_floatfir_ctor(p, nTaps, 0, V92PRECODER_BLOCK);\n\tfir2 = p;\n\tword_00 = 0;\n}\n"
+  "find": "\tnew (p) FloatFIR(nTaps, 0, V92PRECODER_BLOCK);\n\tfir2 = p;\n}\n",
+  "replace": "\tnew (p) FloatFIR(nTaps, 0, V92PRECODER_BLOCK);\n\tfir2 = p;\n\tword_00 = 0;\n}\n"
  },
  {
   "label": "the first free's null test is dropped",
