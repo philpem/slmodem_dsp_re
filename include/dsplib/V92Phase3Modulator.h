@@ -1,55 +1,36 @@
-/*
- * V92Phase3Modulator.h -- the V.92 phase 3 UPSTREAM symbol source.
+/**
+ * @file V92Phase3Modulator.h
+ * @brief ITU-T V.92 phase 3 upstream symbol source: `V92Phase3Modulator`,
+ *        the state machine that generates the V.92 phase 3 training
+ *        sequence (Ru, Ja, Su and TRN1u segments) as a stream of linear
+ *        samples.
  *
- * Reconstructed from dsplibs.o `V92Phase3Modulator.cpp`.  This is the V.92
- * upstream sibling of `V90Phase3Modulator` and it is NOT that class with
- * different constants: different size, different field order, a different
- * state alphabet and a different scrambler offset.  Every offset below is
- * derived from THIS class's own bytes; the V.90 header was read first as a
- * hypothesis and is cited nowhere as evidence.
+ * This is the V.92 upstream sibling of `V90Phase3Modulator` and not that
+ * class with different constants -- different size, field order, state
+ * alphabet and scrambler offset; every offset here comes from this class's
+ * own bytes, not by reading across from the V.90 header.
  *
- * NOT POLYMORPHIC.  `readelf -sW` lists `D1` and `D2` and no `D0`, and GCC
- * emits a deleting destructor only for a virtual one, so offset 0 is a real
- * member and there is no vptr.  The destructor's whole body is a tail call to
- * `Scrambler<unsigned char, int>::~Scrambler` on `this + 0x18` (.text+0x16290,
- * 22 bytes), which is the second, independent statement that the scrambler is
- * a SUBOBJECT and not a pointer.
+ * Not polymorphic (no vptr: `readelf -sW` lists no `D0` destructor variant).
+ * The destructor's whole body is a tail call to the scrambler subobject's
+ * destructor, confirming the scrambler is embedded rather than pointed to.
  *
- * THE OBJECT IS 80 BYTES (0x50), AND THAT IS AN ALLOCATION, NOT A SCAN.
- * Finding F1107's rule: take the `sysdep_malloc` immediately before the
- * constructor's call site, never the largest displacement.  In
- * `V92Modulator::V92Modulator` at .text+0x15299:
+ * `sizeof == 0x50` is the allocation `V92Modulator::V92Modulator` makes
+ * before calling the constructor (finding F1107's rule: the `sysdep_malloc`
+ * immediately before the call site, not the largest offset any member
+ * touches -- the largest here happens to agree, at +0x4c, but +0x44 and
+ * +0x48 are untouched by anything in this class and are `pad_44` for that
+ * reason, not because nothing else uses them; `V92Modulator`, which holds
+ * the only pointer to the object, was not read for this batch).
  *
- *     15299:  c7 04 24 50 00 00 00   movl   $0x50,(%esp)
- *     152a0:  e8 ..                  call   sysdep_malloc
- *     152a5:  89 c3                  mov    %eax,%ebx      <- the modulator
- *     152aa:  89 1c 24               mov    %ebx,(%esp)
- *     152b1:  e8 ..                  call   V92Phase3Modulator::V92Phase3Modulator
- *     152b6:  89 5e 44               mov    %ebx,0x44(%esi)
+ * Four of the thirteen symbols are defined here -- the constructor, the
+ * destructor, `reset` and `generateSymbol`. The other nine are declared for
+ * the record and deliberately left undefined, one class one owner applying
+ * to methods just as it does to types (docs/v90cpp.md); nothing defined here
+ * calls an undefined one.
  *
- * and identically at +0x15579 in the `C2` copy.  The largest displacement any
- * of the thirteen symbols uses is +0x4c, so the two readings agree here --
- * but they agree by luck, and +0x44 and +0x48 are the reason to say so: no
- * symbol of this class touches either.  They are `pad_44` below because this
- * class does not write them, NOT because nothing does; `V92Modulator` holds
- * the only pointer to the object and was not read for this batch.
- *
- * THE CONSTRUCTOR SETTLES THE FIRST TWO OFFSETS (.text+0x16d00, 105 bytes):
- * `lea 0x18(%ebx),%edx` then `Scrambler<unsigned char,int>::Scrambler(5, 23,
- * 99)` places the scrambler at +0x18; `mov 0x34(%esp),%eax; mov %eax,0x4c(%ebx)`
- * puts its `V92Parameters *` argument at +0x4c; and the body ends in
- * `reset(4000, (V92Phase3ModulatorState)0, 0, NULL, NULL, 0)`.
- *
- * FOUR OF THE THIRTEEN SYMBOLS ARE DEFINED -- `reset`, `generateSymbol` and
- * now the constructor and the destructor.  The other nine are declared for
- * the record and deliberately left undefined: one class, one owner applies to
- * methods, and defining a method whose callers are not written re-opens the
- * link closure for the whole test suite (docs/v90cpp.md).  Nothing defined
- * here calls an undefined one.
- *
- * Data member names are invented and descriptive -- the mangling preserves
- * method and type names and never a data member's (finding F226).  Fields whose
- * purpose this batch did not establish carry an offset-derived name.
+ * Data member names are invented and descriptive: the mangling preserves
+ * method and type names but never a data member's (finding F226). A field
+ * whose purpose this batch did not establish carries an offset-derived name.
  */
 
 #ifndef DSPLIB_V92PHASE3MODULATOR_H
@@ -61,38 +42,29 @@
 class V92Parameters;
 
 /*
- * `reset`'s fifth parameter.  It is NEVER DEREFERENCED -- the whole use is
- * `mov 0x34(%esp),%ebx; test %ebx,%ebx` at .text+0x16ccd -- so an incomplete
- * type is all this header needs, and declaring it here rather than including
- * V90Phase3Modulator.h keeps the two classes independent.  The name is the
- * mangling's: `PK19tagV90DILdescriptor`, so it is the same nineteen-character
- * type V90Phase3Modulator.h defines and the two declarations agree.
+ * `reset`'s fifth parameter. Never dereferenced (the whole use is a null
+ * check), so an incomplete type is all this header needs; declaring it here
+ * rather than including V90Phase3Modulator.h keeps the two classes
+ * independent. The name is the mangling's (`PK19tagV90DILdescriptor`), the
+ * same type V90Phase3Modulator.h defines.
  */
 struct tagV90DILdescriptor;
 
 /*
- * The modulator's phase 3 state.  Sixteen values: `generateSymbol` bounds the
- * field with `cmp $0xf,%eax; ja` -- UNSIGNED -- and dispatches through a
- * sixteen-entry jump table at .rodata:0x5e4.
+ * The modulator's phase 3 state. Sixteen values, unsigned-bounded and
+ * dispatched through a sixteen-entry jump table in `generateSymbol`.
  *
- * THE NAMES COME FROM THE OBJECT'S OWN METHOD NAMES, not from a guess.  Each
- * generating arm is one of the small `generate*` methods inlined verbatim, and
- * matching the two is a byte comparison: arm 0 is `generateRu`'s body
- * (.text+0x163a0), arm 1 `generateRuNot`'s (+0x16400), arms 7/9/10
- * `genereteSu`'s (+0x16460, the misspelling is the original's), arms 8/11
- * `genereteSuNot`'s (+0x164e0), arms 4/5 `generateJa`'s (+0x16570) and arms
- * 3/12/13 `generateTRN1u`'s (+0x165c0).
- *
- * The four `exit*` methods name the rest, and each one is a guard on exactly
- * one state value:
- *
- *   `exitJa`        (+0x162b0) acts on 4 and moves it to 6 on the 12-symbol
- *                   boundary, otherwise to 5 -- so 4 is Ja and 5 is Ja run on
- *                   to that boundary, and 6 is what follows.
- *   `exitSilence`   (+0x16300) acts on 6 and moves it to 7 -- 6 is Silence,
- *                   which is also what its arm emits: zero.
- *   `exitSuSecond`  (+0x16330) acts on 9, to 11 on the boundary else 10.
- *   `exitTRN1u`     (+0x16380) acts on 12 and moves it to 13.
+ * The names come from the object's own method names, not a guess: each
+ * generating arm is one of the small `generate*` methods inlined verbatim
+ * (arm 0 is `generateRu`'s body, arm 1 `generateRuNot`'s, arms 7/9/10
+ * `genereteSu`'s -- the misspelling is the original's -- arms 8/11
+ * `genereteSuNot`'s, arms 4/5 `generateJa`'s, arms 3/12/13
+ * `generateTRN1u`'s), matched to their state by a byte-for-byte comparison.
+ * The four `exit*` methods name the rest, each a guard on exactly one state
+ * value: `exitJa` acts on 4 and moves it to 6 on a 12-symbol boundary,
+ * otherwise to 5; `exitSilence` acts on 6 and moves it to 7; `exitSuSecond`
+ * acts on 9, to 11 on the boundary else 10; `exitTRN1u` acts on 12 and moves
+ * it to 13.
  *
  * The sequence the arms themselves wire up is
  *
@@ -102,11 +74,10 @@ struct tagV90DILdescriptor;
  *        ...[exitSuSecond]--> SuSecondEnd --12--> SuSecondNot --24-->
  *      TRN1uSecond ...[exitTRN1u]--> TRN1uSecondEnd --2040--> End
  *
- * STATE 2 IS NOT A CASE.  Its jump-table entry at .rodata:0x5ec holds the
- * DEFAULT label (.text+0x16625, the one that prints "Illegal state"), while
- * 6, 14 and 15 share a different, silent block at +0x1666e.  The enumerator is
- * named for what the table says it does, not for a role nobody can show it
- * has.
+ * State 2 is not a case: its jump-table entry holds the default label (the
+ * one that prints "Illegal state"), while 6, 14 and 15 share a different,
+ * silent block. The enumerator is named for what the table says it does,
+ * not for a role nobody can show it has.
  */
 enum V92Phase3ModulatorState {
 	V92P3M_STATE_RU = 0,		/* Ru, 384 symbols                 */
@@ -129,87 +100,127 @@ enum V92Phase3ModulatorState {
 
 class V92Phase3Modulator {
 public:
-	/*
-	 * .text+0x16d00, 105 bytes.  The scrambler subobject at +0x18 is built
-	 * `(5, 23, 99)` -- NOT the V.90 downstream sibling's `(18, 23, 99)`,
-	 * which is one more place the two classes are not the same class with
-	 * different constants -- then `params` is stored at +0x4c, then
-	 * `reset(4000, (V92Phase3ModulatorState)0, 0, NULL, NULL, 0)`.
-	 *
-	 * THE `params` STORE MUST PRECEDE THE `reset` CALL, and that is
-	 * behaviour rather than store order: `reset` computes `trn1uLength`
-	 * out of two `V92Parameters` fields, so a constructor that stored the
-	 * pointer afterwards would read through whatever +0x4c happened to
-	 * hold.  Both orderings are mutations in
-	 * test/mutations/v92p3mod.json.
-	 *
-	 * `nSymbols` is 0 and `ja` is NULL, so no symbol is generated and
-	 * `jaBits`/`jaBitCount` come out NULL and 0.  The 4000 is the dead
-	 * first parameter -- see `reset` below; the amplitude is `reset`'s own
-	 * literal and the argument cannot change it.
+	/**
+	 * @brief Construct the modulator: build the (5, 23, 99) scrambler
+	 *        subobject, store `params`, and reset() into state
+	 *        #V92P3M_STATE_RU with no symbols pre-generated. The `params`
+	 *        store must precede the reset() call -- reset() computes
+	 *        `trn1uLength` from two `V92Parameters` fields, so the other
+	 *        order would read an uninitialized pointer (both orderings
+	 *        are mutation-tested in test/mutations/v92p3mod.json).
+	 * @param p  Negotiated V.92 parameters; stored, not owned.
 	 */
 	V92Phase3Modulator(V92Parameters *);
 
-	/*
-	 * .text+0x16290, 22 bytes, AND IT IS NOT EMPTY: the body is
-	 * `Scrambler<unsigned char, int>::~Scrambler` on `this + 0x18` and
-	 * nothing else, which is what an empty destructor over one
-	 * non-trivially-destructible member compiles to.  It frees the
-	 * scrambler's history buffer.
+	/**
+	 * @brief Destroy the modulator. Frees the scrambler's history buffer;
+	 *        nothing else here is allocated.
 	 */
 	~V92Phase3Modulator();
 
-	/*
-	 * THE FIRST PARAMETER IS DEAD.  `reset`'s `short` arrives at
-	 * `0x24(%esp)` and that slot is never read; the amplitude is the
-	 * literal `movw $0xfa0,0x4(%esi)` in both of the tail-duplicated
-	 * blocks at .text+0x16c35 and +0x16cc1.  Its only two callers pass
-	 * 4000 (`enterPhase3` at .text+0x144ab and the constructor at
-	 * +0x16d4b), so the object cannot tell the difference either.  It is
-	 * kept, unnamed, because it is in the mangled name.
+	/**
+	 * @brief Reinitialize the modulator: reset the scrambler, symbol
+	 *        count and event code, recompute `trn1uLength` from
+	 *        `params`, set the amplitudes, and generate `nSymbols`
+	 *        symbols before returning (discarding them).
+	 * @param levelArg  Dead -- never read; the amplitude is `reset`'s
+	 *                  own literal 4000. Kept because it is part of the
+	 *                  mangled signature.
+	 * @param stateArg  The state to enter.
+	 * @param nSymbols  Number of symbols to generate() and discard before
+	 *                  returning (0 from the constructor).
+	 * @param jaArg     Source of the Ja bit vector, or NULL to leave
+	 *                  `jaBits`/`jaBitCount` at NULL/0 (state Ja must not
+	 *                  be reached in that case: generateJa() divides by
+	 *                  `jaBitCount` unchecked).
+	 * @param dilArg    Unused except to trigger a debug complaint if
+	 *                  non-NULL while `jaArg` is NULL; never dereferenced.
+	 * @param lastArg   Stored verbatim into `word_00`.
 	 */
 	void reset(short, V92Phase3ModulatorState, unsigned int, V92Ja *,
 		   const tagV90DILdescriptor *, unsigned int);
 
-	/*
-	 * RETURNS the symbol as a linear level.  A return type is not mangled,
-	 * so it is measured: every path ends `mov %ebx,%eax` on a value that
-	 * has just been through `movswl %bx,%ebx`, which is what a `short`
-	 * local widened at an `int` return looks like.  The value itself is a
-	 * `short` throughout -- each negation is taken modulo 2**16 before the
-	 * widening.
+	/**
+	 * @brief Advance the state machine by one symbol: increment
+	 *        `symbolCount`, dispatch on `state` to produce one linear
+	 *        sample, and let each state's exit test (inlined here, not
+	 *        via the `exit*` methods) move to the next state at its own
+	 *        boundary.
+	 * @return The generated symbol, sign-extended from the underlying
+	 *         `short`.
 	 */
 	int generateSymbol();
 
-	/*
-	 * Declared, not defined -- see the file comment.  A return type is not
-	 * mangled, so none of these has a known one.
-	 *
-	 * This block used to say the constructor and destructor were left
-	 * undeclared on purpose, because declaring either makes the class
-	 * non-trivial and a union holding one loses its own default members.
-	 * The union half was true and finding F871 already paid for it:
-	 * `Scrambler` gained a constructor and a destructor first, so this
-	 * class was non-trivial before this batch touched it and every fixture
-	 * union already carries the two empty special members that restore
-	 * theirs.  The `__builtin_offsetof` half was stale -- `offsetof` wants
-	 * standard layout, which a user-provided constructor does not affect.
-	 */
-	/*
-	 * `int`, measured off the standalone bodies since the VPcmV34Main
-	 * leaf pass (each widens a short into %eax itself); all six defined
-	 * in V92Phase3Modulator.cpp as calls to the file-static bodies
-	 * `generateSymbol` inlines.
+	/**
+	 * @brief Ru: a six-symbol cycle, three symbols at +codeLevel then
+	 *        three at -codeLevel.
+	 * @return The next Ru symbol.
 	 */
 	int generateRu();
+
+	/**
+	 * @brief RuNot: generateRu()'s inversion, the same six-symbol cycle
+	 *        with the two amplitudes exchanged.
+	 * @return The next RuNot symbol.
+	 */
 	int generateRuNot();
+
+	/**
+	 * @brief Su: a six-symbol cycle at `suLevel`, +0 -0 - with the two
+	 *        zeros one position apart rather than adjacent.
+	 * @return The next Su symbol.
+	 */
 	int genereteSu();		/* the object's own spelling */
+
+	/**
+	 * @brief SuNot: genereteSu()'s inversion; the zeros stay in place,
+	 *        the two non-zero amplitudes are exchanged.
+	 * @return The next SuNot symbol.
+	 */
 	int genereteSuNot();		/* likewise */
+
+	/**
+	 * @brief Ja: twenty-five symbols of a constant 1 bit, then the
+	 *        `V92Ja` bit vector read cyclically, each bit fed through the
+	 *        scrambler and XORed into `polarity` to choose the sign of
+	 *        `codeLevel`.
+	 * @return The next Ja symbol.
+	 */
 	int generateJa();
+
+	/**
+	 * @brief TRN1u: the scrambler driven with a constant 1 bit, whose
+	 *        output chooses the sign of `codeLevel`.
+	 * @return The next TRN1u symbol.
+	 */
 	int generateTRN1u();
+
+	/**
+	 * @brief From state Ja, move on once at least one symbol has run:
+	 *        to Silence on a 12-symbol boundary, otherwise to JaEnd (run
+	 *        Ja on to the next boundary). No-op in any other state.
+	 */
 	void exitJa();
+
+	/**
+	 * @brief From state Silence, move to Su once at least one symbol has
+	 *        run. No-op in any other state.
+	 */
 	void exitSilence();
+
+	/**
+	 * @brief From state SuSecond, move on once at least one symbol has
+	 *        run: to SuSecondNot on a 12-symbol boundary, otherwise to
+	 *        SuSecondEnd. No-op in any other state.
+	 */
 	void exitSuSecond();
+
+	/**
+	 * @brief From state TRN1uSecond, move to TRN1uSecondEnd once at least
+	 *        one symbol has run, leaving `symbolCount` running (state
+	 *        13's own exit test in generateSymbol() needs the count
+	 *        state 12 started). No-op in any other state.
+	 */
 	void exitTRN1u();
 
 	/* --- data members; see the file comment on the naming --- */
@@ -254,11 +265,10 @@ public:
 	unsigned int symbolCount;	/* +0x00c                          */
 
 	/*
-	 * How long the TRN1u state runs, in symbols.  THE NAME IS THE
-	 * ORIGINAL AUTHOR'S: `reset` prints it as "V92Phase3Modulator: TRN1u
-	 * state length set to %d" (.rodata.str1.4+0x3b5c).  Computed from two
-	 * V92Parameters fields, rounded up to a multiple of twelve and floored
-	 * at 8160.
+	 * How long the TRN1u state runs, in symbols. The name is the original
+	 * author's own: `reset` prints it as "V92Phase3Modulator: TRN1u state
+	 * length set to %d". Computed from two `V92Parameters` fields, rounded
+	 * up to a multiple of twelve and floored at 8160.
 	 */
 	unsigned int trn1uLength;	/* +0x010                          */
 
@@ -275,11 +285,10 @@ public:
 	Scrambler<unsigned char, int> scrambler;	/* +0x018          */
 
 	/*
-	 * The differential encoder's running sign, used by the Ja arms only:
-	 * `polarity ^= scrambler.process(bit)` and then `polarity ? -codeLevel
-	 * : codeLevel`.  TRN1u seeds it from the sign of the symbol it ends
-	 * on, through `test %bx,%bx; setle` -- so the seed is 1 for a symbol
-	 * less than OR EQUAL TO zero.
+	 * The differential encoder's running sign, used by the Ja arm only:
+	 * `polarity ^= scrambler.process(bit)`, then `polarity ? -codeLevel :
+	 * codeLevel`. TRN1u seeds it from the sign of the symbol it ends on
+	 * (1 for a symbol less than or equal to zero).
 	 */
 	unsigned int polarity;		/* +0x038                          */
 
@@ -287,10 +296,10 @@ public:
 	unsigned int jaBitCount;	/* +0x040 `*(unsigned int *)ja`      */
 
 	/*
-	 * NOT TOUCHED BY ANY OF THIS CLASS'S THIRTEEN SYMBOLS.  See the file
+	 * Not touched by any of this class's thirteen symbols -- see the file
 	 * comment: the allocation says the object is 80 bytes, so these eight
-	 * exist; what wrote them, if anything, is `V92Modulator`'s business
-	 * and finding F1107 is the reason not to call them absent.
+	 * exist, but what writes them (if anything) is `V92Modulator`'s
+	 * business (finding F1107).
 	 */
 	unsigned char pad_44[8];	/* +0x044                          */
 

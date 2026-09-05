@@ -353,22 +353,22 @@
  },
  {
   "label": "the start report is ungated",
-  "find": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"VPcmV34Main: Echo adapt start \"\n\t\t\t\t     \"reported...\\r\\n\");",
+  "find": "\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"VPcmV34Main: Echo adapt start \" \"reported...\\r\\n\");",
   "replace": "\tif (1)\n\t\tdsplibs_debug_printf(\"VPcmV34Main: Echo adapt start \"\n\t\t\t\t     \"reported...\\r\\n\");"
  },
  {
   "label": "the start report's gate is >= 1",
-  "find": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"VPcmV34Main: Echo adapt start \"\n\t\t\t\t     \"reported...\\r\\n\");",
+  "find": "\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"VPcmV34Main: Echo adapt start \" \"reported...\\r\\n\");",
   "replace": "\tif (dsplibs_debug_level >= 1)\n\t\tdsplibs_debug_printf(\"VPcmV34Main: Echo adapt start \"\n\t\t\t\t     \"reported...\\r\\n\");"
  },
  {
   "label": "the middle report is ungated",
-  "find": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"VPcmV34Main: Echo adapt middle \"\n\t\t\t\t     \"reported...\\r\\n\");",
+  "find": "\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"VPcmV34Main: Echo adapt middle \" \"reported...\\r\\n\");",
   "replace": "\tif (1)\n\t\tdsplibs_debug_printf(\"VPcmV34Main: Echo adapt middle \"\n\t\t\t\t     \"reported...\\r\\n\");"
  },
  {
   "label": "the middle report's gate is >= 1",
-  "find": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"VPcmV34Main: Echo adapt middle \"\n\t\t\t\t     \"reported...\\r\\n\");",
+  "find": "\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"VPcmV34Main: Echo adapt middle \" \"reported...\\r\\n\");",
   "replace": "\tif (dsplibs_debug_level >= 1)\n\t\tdsplibs_debug_printf(\"VPcmV34Main: Echo adapt middle \"\n\t\t\t\t     \"reported...\\r\\n\");"
  },
  {

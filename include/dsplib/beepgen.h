@@ -117,141 +117,237 @@ struct beepgen_config {
  */
 #define BEEPGEN_PHASE_STEP	0.000785
 
-/*
- * `cfg` is copied, not retained.  A NULL `bg` allocates; the result is NULL
- * only when that allocation fails.
+/**
+ * @brief Build a beep generator.
+ * @param bg   NULL allocates; otherwise caller-owned storage.
+ * @param cfg  Configuration, copied, not retained.
+ * @return @p bg, or the newly allocated generator, or NULL if allocation
+ *         failed.
  */
 struct beepgen *beepgen_create(struct beepgen *bg,
 			       const struct beepgen_config *cfg);
 
-/* Frees whatever it is given, NULL included -- it is a bare sysdep_free. */
+/**
+ * @brief Free a generator. A bare `sysdep_free`; NULL is accepted.
+ * @param bg  The generator to free.
+ */
 void beepgen_delete(struct beepgen *bg);
 
-/*
- * Append one tone.  When the queue was EMPTY this also makes the tone
- * current, which is where the gains, the -1 marker and the sample count are
- * settled; when it was not, only the queue entry is written.  `duration` is
- * in 1/10 s for an ordinary tone (see dur_units_per_sec).
+/**
+ * @brief Append one tone to the queue.
+ *
+ * When the queue was EMPTY this also makes the tone current, which is
+ * where the gains, the -1 marker and the sample count are settled; when
+ * it was not, only the queue entry is written.
+ *
+ * @param bg        The generator.
+ * @param freq1     Column/high tone, Hz (or a special value, see the
+ *                  struct comment).
+ * @param freq2     Row/low tone, Hz.
+ * @param duration  In 1/10 s for an ordinary tone (see `dur_units_per_sec`).
  */
 void beepgen_start_beep(struct beepgen *bg, int freq1, int freq2,
 			int duration);
 
-/*
- * One dial-string character.  '!' takes its duration from the config's
- * third callback instead of the argument, ',' is a pause -- silence at
- * three times the duration -- and everything else is the DTMF pair
- * `beepgen_get_freqs` gives, appended through `beepgen_start_beep`.
+/**
+ * @brief Queue one dial-string character as DTMF.
+ *
+ * '!' takes its duration from the config's third callback instead of
+ * @p duration, ',' is a pause (silence at three times @p duration), and
+ * everything else is the DTMF pair beepgen_get_freqs() gives, appended
+ * through beepgen_start_beep().
+ *
+ * @param bg        The generator.
+ * @param code      The dial-string character.
+ * @param duration  Tone duration; see beepgen_start_beep().
  */
 void beepgen_start_dtmf(struct beepgen *bg, int code, int duration);
 
-/*
- * One 8 kHz sample into *out.  Returns 1 on the sample that retires the
- * LAST queued tone (and leaves the queue empty), 0 otherwise.
+/**
+ * @brief Generate one 8 kHz sample.
+ * @param bg   The generator, advanced by one sample.
+ * @param out  Set to the generated sample.
+ * @return 1 on the sample that retires the LAST queued tone (and leaves
+ *         the queue empty), 0 otherwise.
  */
 int beepgen_sample(struct beepgen *bg, float *out);
 
-/*
- * DTMF frequencies for one dial character.  `*colp` gets the column tone
- * (1209/1336/1477/1633 Hz), `*rowp` the row tone (697/770/852/941 Hz).
- * Unknown characters in '!'..'D' other than the DTMF set fall back to '1'
- * (1209/697), as does anything outside that range; '!' is a "start" marker
- * and yields -1/-1.
+/**
+ * @brief Look up the DTMF frequency pair for one dial character.
+ *
+ * Unknown characters in '!'..'D' other than the DTMF set fall back to
+ * '1' (1209/697), as does anything outside that range; '!' is a "start"
+ * marker and yields -1/-1.
+ *
+ * @param code  The dial character.
+ * @param colp  Set to the column tone (1209/1336/1477/1633 Hz).
+ * @param rowp  Set to the row tone (697/770/852/941 Hz).
  */
 void beepgen_get_freqs(unsigned char code, int *colp, int *rowp);
 
-/*
- * Two gains from three modem parameters:
+/**
+ * @brief Compute the two DTMF tone gains from the modem's level parameters.
  *
- *   *gain2 = pow(10, (6 - GetDTMFHighToneLevel) * 0.05
- *                    - GetAdditAttenToBeepgenVoice * 0.05) * 0.276
- *   *gain1 = pow(10, -GetDTMFHighAndLowToneLevelDifference * 0.05) * *gain2
- *
- * gain1/gain2 are the object's own words: its debug lines print
- * "BeepGen: GAIN1*1000" for the pointer passed second and "GAIN2*1000" for
- * the pointer passed third.
- *
- * LOCAL in the blob, so GCC 3.4 gave it regparm(2) there; our copy has
+ * `gain1`/`gain2` are the object's own words: its debug lines print
+ * "BeepGen: GAIN1*1000" for @p gain1 and "GAIN2*1000" for @p gain2.
+ * LOCAL in the blob, so GCC 3.4 gave it `regparm(2)` there; our copy has
  * external linkage and the ordinary convention, the same trade
  * t_dialstring.c documents for AnalyseDialString.
+ *
+ * @param bg     The generator, for its `modem` handle.
+ * @param gain1  Set to `pow(10, -GetDTMFHighAndLowToneLevelDifference * 0.05) * *gain2`.
+ * @param gain2  Set to `pow(10, (6 - GetDTMFHighToneLevel) * 0.05 - GetAdditAttenToBeepgenVoice * 0.05) * 0.276`.
  */
 void GetGain(struct beepgen *bg, float *gain1, float *gain2);
 
-/*
- * Majority checks over a window of shorts, used against detector history.
- * check_for_valid: w[0] must equal w[1] and w[2], and differ from each of
- * w[3]..w[6].  check_for_valid_easy: w[0] must equal w[1] and differ from
- * w[2] and w[3].  1 when the shape holds, 0 otherwise.
+/**
+ * @brief Majority check over a window of shorts, against detector history.
+ * @param w  Window; `w[0]` must equal `w[1]` and `w[2]`, and differ from
+ *           each of `w[3]..w[6]`.
+ * @return 1 when the shape holds, 0 otherwise.
  */
 int check_for_valid(unsigned short *w);
+
+/**
+ * @brief Relaxed form of check_for_valid().
+ * @param w  Window; `w[0]` must equal `w[1]` and differ from `w[2]` and
+ *           `w[3]`.
+ * @return 1 when the shape holds, 0 otherwise.
+ */
 int check_for_valid_easy(unsigned short *w);
 
-/*
- * Linear (16-bit) <-> float conversion with a gain.  Both are no-ops when
- * the gain is exactly 0.0f -- the object tests equality, not magnitude.
- * Float2Linear truncates toward zero (the object sets the x87 round-to-zero
- * bits around its fistp), which is the C cast.
+/**
+ * @brief Convert float samples to 16-bit linear, with a gain.
+ *
+ * A no-op when @p gain is exactly 0.0f -- the object tests equality, not
+ * magnitude. Truncates toward zero (the object sets the x87
+ * round-to-zero bits around its `fistp`), which is the C cast.
+ *
+ * @param src   Input float samples.
+ * @param dst   Output linear samples.
+ * @param n     Number of samples.
+ * @param gain  Applied before conversion.
  */
 void zFLTUTL_Float2Linear(float *src, short *dst, int n, float gain);
+
+/**
+ * @brief Convert 16-bit linear samples to float, with a gain.
+ *
+ * A no-op when @p gain is exactly 0.0f.
+ *
+ * @param src   Input linear samples.
+ * @param dst   Output float samples.
+ * @param n     Number of samples.
+ * @param gain  Applied after conversion.
+ */
 void zFLTUTL_Linear2Float(short *src, float *dst, int n, float gain);
 
-/*
- * Mean-removed average power (the "RMS" of the name is the object's; no
- * square root is taken).  The mean is an INTEGER for the short flavour --
- * sum/n in unsigned integer division -- and a float for the float flavour,
- * which also multiplies by a reciprocal at the end where the short flavour
- * divides.  Both details are the object's.
+/**
+ * @brief Mean-removed average power of a float buffer (called "RMS" by
+ * the object; no square root is taken).
+ * @param n    Number of samples.
+ * @param buf  Samples.
+ * @return The mean-removed average power.
  */
 float fComputeRMSValueFloatBuf(unsigned int n, float *buf);
+
+/**
+ * @brief Mean-removed average power of a short buffer.
+ *
+ * The mean is an INTEGER here (`sum/n` in unsigned integer division),
+ * unlike the float flavour -- both details are the object's.
+ *
+ * @param n    Number of samples.
+ * @param buf  Samples.
+ * @return The mean-removed average power.
+ */
 float fComputeRMSValueShortBuf(unsigned int n, short *buf);
 
-/*
- * Both conversions at once, at the fixed +/-32000 full scale:
- * fout[i] = sin[i] / 32000, sout[i] = (short)(fin[i] * 32000) truncated.
+/**
+ * @brief Convert a linear/float pair each way at once, at fixed
+ * +/-32000 full scale.
+ * @param lin_in   Linear input, converted to float.
+ * @param flt_out  `flt_out[i] = lin_in[i] / 32000`.
+ * @param flt_in   Float input, converted to linear.
+ * @param lin_out  `lin_out[i] = (short)(flt_in[i] * 32000)`, truncated.
+ * @param n        Number of samples in each direction.
  */
 void CrossDataLinks(short *lin_in, float *flt_out, float *flt_in,
 		    short *lin_out, int n);
 
-/*
- * Slide two parallel short windows left by `fresh` of `total` samples,
- * append the two fresh blocks, and test the energy (mean-removed, /1000) of
- * buf1[1000..1999] against 40000.0f.  Returns 1 only when buf2[1] != 0 and
- * the energy exceeds the threshold.
+/**
+ * @brief Slide two parallel windows and test their trailing energy against
+ * a fixed threshold.
+ *
+ * Slides both windows left by @p fresh of @p total samples, appends the
+ * two fresh blocks, and tests the mean-removed energy (/1000) of
+ * `buf1[1000..1999]` against 40000.0f.
+ *
+ * @param new1   Fresh block to append to @p buf1.
+ * @param new2   Fresh block to append to @p buf2.
+ * @param buf1   Sliding window, updated in place.
+ * @param buf2   Sliding window, updated in place.
+ * @param fresh  Number of fresh samples.
+ * @param total  Total window length.
+ * @return 1 only when `buf2[1] != 0` and the energy exceeds the
+ *         threshold, 0 otherwise.
  */
 int bSearchEnergy(short *new1, short *new2, short *buf1, short *buf2,
 		  unsigned int fresh, unsigned int total);
 
-/*
- * Cross-correlate sig[pos..] against a 1000-sample pattern for up to 20
- * lags, stopping 1000 samples short of `len`.  Each correlation (scaled by
- * 1e-4) is written to out[] as a truncated short; the running peak
- * |correlation| and its lag are maintained through *peakp / *peakposp.
- * *posp advances to the last lag examined.  Returns 1 when there was
- * nothing left to scan, 0 otherwise.
+/**
+ * @brief Cross-correlate a signal against a pattern over a range of lags.
+ *
+ * Cross-correlates `sig[*posp..]` against a 1000-sample @p pattern for
+ * up to 20 lags, stopping 1000 samples short of @p len.
+ *
+ * @param pattern  1000-sample reference pattern.
+ * @param sig      Signal to search.
+ * @param posp     In/out: starting position, advanced to the last lag examined.
+ * @param len      Length of @p sig.
+ * @param peakp    In/out: running peak `|correlation|`.
+ * @param peakposp In/out: lag of the running peak.
+ * @param out      Each correlation (scaled by 1e-4), written as a
+ *                 truncated short.
+ * @return 1 when there was nothing left to scan, 0 otherwise.
  */
 int FindCorrelation(short *pattern, short *sig, unsigned int *posp,
 		    unsigned int len, unsigned int *peakp,
 		    unsigned int *peakposp, short *out);
 
-/* max |buf[i]| over n entries; buf[0] unconditionally seeds the maximum. */
+/**
+ * @brief Maximum absolute value over a float buffer.
+ * @param buf  Samples; `buf[0]` unconditionally seeds the maximum.
+ * @param n    Number of samples.
+ * @return max(|buf[i]|).
+ */
 float zfFLTUTL_GetMaxAbsValue(float *buf, unsigned int n);
 
-/*
- * FDSP_DP_Run -- the datapump wrapper's per-block conversion, 0xae490, which
- * sits between FindCorrelation and zfFLTUTL_GetMaxAbsValue and so is inside
- * this file's address range even though its name belongs with fdspkrnl.c.
- * Declared here for that reason; move it when FDSP_DP_Create lands.
+/**
+ * @brief The datapump wrapper's per-block linear/float conversion.
  *
- * It converts `*countp` samples each way and does nothing else: the receive
- * side is 16-bit linear scaled by 1/32000, the transmit side float scaled by
- * 32000 and truncated toward zero.  `*status` is set to 2 and 1 is returned
- * unconditionally.
+ * Sits between FindCorrelation() and zfFLTUTL_GetMaxAbsValue() in the
+ * object (0xae490) and so is inside this file's address range even
+ * though its name belongs with fdspkrnl.c; declared here for that
+ * reason, to move when FDSP_DP_Create lands.
  *
- * `hostcount` IS READ BY NOTHING HERE -- this function never loads that stack
- * slot -- and it used to be typed `void *unused` for that reason.  A SIBLING
- * types it: `voice_online` (voice.h) has this signature slot for slot, and it
- * WRITES that argument as an `unsigned short *`, twice.  `voice_duplex` then
- * forwards its own such argument straight into this call.  Finding F8786 and
- * deviation D986.
+ * Converts `*countp` samples each way and does nothing else: the
+ * receive side is 16-bit linear scaled by 1/32000, the transmit side
+ * float scaled by 32000 and truncated toward zero.
+ *
+ * @param status     Set to 2.
+ * @param rx_lin     Receive side, linear input.
+ * @param rx_flt     Receive side, float output.
+ * @param tx_flt     Transmit side, float input.
+ * @param tx_lin     Transmit side, linear output.
+ * @param hostcount  READ BY NOTHING HERE -- this function never loads
+ *                   that stack slot. A sibling types it: `voice_online`
+ *                   (voice.h) has this signature slot for slot and
+ *                   WRITES it as `unsigned short *`, twice; `voice_duplex`
+ *                   forwards its own such argument straight into this
+ *                   call. Finding F8786, deviation D986.
+ * @param countp     Number of samples to convert each way.
+ * @return 1, unconditionally.
  */
 int FDSP_DP_Run(int *status, short *rx_lin, float *rx_flt, float *tx_flt,
 		short *tx_lin, unsigned short *hostcount,

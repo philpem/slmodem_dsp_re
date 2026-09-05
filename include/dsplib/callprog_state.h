@@ -171,38 +171,66 @@ struct callprog {
 	struct dialer	dialer;				/* +0x98 */
 };
 
-/*
- * Build the supervisor.  Takes an object rather than returning one; also
- * builds the two cadence detectors, the answer-tone detector, optionally the
- * band filter, and the whole state machine.
+/**
+ * @brief Build the call-progress supervisor.
+ *
+ * Takes an object rather than returning one, since the supervisor is
+ * embedded in the call datapump, not allocated. Also builds the two
+ * cadence detectors, the answer-tone detector, optionally the band
+ * filter, and the whole state machine.
+ *
+ * @param cp   Caller-owned supervisor object to initialise.
+ * @param cfg  Configuration (S-register accessor, modem pointer, two
+ *             country-derived flags).
  */
 void CALLPROG_Create(struct callprog *cp, struct callprog_cfg *cfg);
 
-/*
- * Tear down what Create built.  Does NOT free the supervisor itself, and
- * clears only two of the five pointers it releases -- see finding F55.
+/**
+ * @brief Tear down what CALLPROG_Create() built.
+ *
+ * Does NOT free the supervisor itself, and clears only two of the five
+ * pointers it releases -- see finding F55.
+ *
+ * @param cp  The supervisor to tear down.
  */
 void CALLPROG_Delete(struct callprog *cp);
 
-/*
- * Start a call: refresh everything that could have changed since Create,
- * arm the calling tone, hand the string to the dialler, and decide whether to
- * wait for dial tone.  Does nothing at all if no S-register accessor was
- * configured.
+/**
+ * @brief Start a call.
+ *
+ * Refreshes everything that could have changed since CALLPROG_Create(),
+ * arms the calling tone, hands the string to the dialler, and decides
+ * whether to wait for dial tone. Does nothing at all if no S-register
+ * accessor was configured.
+ *
+ * @param cp  The supervisor.
+ * @param s   The dial string.
  */
 void CALLPROG_Dial(struct callprog *cp, const char *s);
 
-/*
- * One buffer.  Reads `count` samples from `in`, writes `count` to `out`, and
- * returns the `CALLPROG_*` message for this buffer -- at most one transition
- * happens per call, at the very end.
- */
-/*
- * Grade a dial string, asked of the dialler the supervisor owns.  The object
- * defines this as a two-instruction thunk onto `IsDialStringInvalid`.
+/**
+ * @brief Grade a dial string, asked of the dialler the supervisor owns.
+ *
+ * The object defines this as a two-instruction thunk onto
+ * IsDialStringInvalid().
+ *
+ * @param cp  The supervisor, whose dialler is queried.
+ * @param s   The string to grade.
+ * @return Nonzero if the string is too poor to dial.
  */
 int Dialer_IsDialStringInvalid(struct callprog *cp, const char *s);
 
+/**
+ * @brief Run one buffer through the call-progress supervisor.
+ *
+ * At most one state transition happens per call, at the very end.
+ *
+ * @param cp     The supervisor, updated in place.
+ * @param in     @p count input samples.
+ * @param out    @p count output samples.
+ * @param count  Number of samples.
+ * @return The `CALLPROG_*` message for this buffer.
+ */
 int CALLPROG_Progress(struct callprog *cp, const short *in, short *out,
 		      int count);
 

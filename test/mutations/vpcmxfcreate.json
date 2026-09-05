@@ -74,8 +74,8 @@
  },
  {
   "label": "the sample count is the duration, unconverted",
-  "find": "\tvpcmxf_modem_ctor(self, v34Object, side, dpRuntime,\n\t\t\t  (unsigned int)maxDataBuffer, v90Mode, v92Mode);",
-  "replace": "\tvpcmxf_modem_ctor(self, v34Object, side, dpRuntime, durationMs,\n\t\t\t  v90Mode, v92Mode);"
+  "find": "\tnew (self) VPcmFloModem(v34Object, side, dpRuntime,\n\t\t\t\t (unsigned int)maxDataBuffer, v90Mode, v92Mode);",
+  "replace": "\tnew (self) VPcmFloModem(v34Object, side, dpRuntime, durationMs,\n\t\t\t\t v90Mode, v92Mode);"
  },
 
  {

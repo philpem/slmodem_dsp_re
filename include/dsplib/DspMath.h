@@ -50,17 +50,39 @@ enum WindowType {
 	WINDOW_BLACKMAN = 3
 };
 
+/** @brief Sum of @p n elements: Sx. */
 template <typename T> T sum(T *x, unsigned n);
+/** @brief Arithmetic mean of @p n elements: Sx / n. */
 template <typename T> T mean(T *x, unsigned n);
+/** @brief Mean of squares of @p n elements: Sx^2 / n. Misnamed by the original -- not a sum. */
 template <typename T> T sqrSum(T *x, unsigned n);
+/** @brief Population variance, built on sqrSum() and mean(): sqrSum(x) - mean(x)^2. */
 template <typename T> T Var(T *x, unsigned n);
+/** @brief Standard deviation, built on Var(): sqrt(Var(x)). */
 template <typename T> T Std(T *x, unsigned n);
+/** @brief sinc(x) = sin(x)/x, with the x == 0 case handled as 1. */
 template <typename T> T sinc(T x);
 
+/** @brief Rectangular window: fills @p w (@p n entries) with 1. */
 template <typename T> void boxcar(T *w, unsigned n);
+/** @brief Hamming window, @p n entries into @p w. */
 template <typename T> void hamming(T *w, unsigned n);
+/** @brief Hann (raised-cosine) window, @p n entries into @p w. */
 template <typename T> void hanning(T *w, unsigned n);
+/** @brief Blackman window, @p n entries into @p w. */
 template <typename T> void blackman(T *w, unsigned n);
+
+/**
+ * @brief Dispatch to one of the four window functions above by enum value.
+ *
+ * Case order is read from the object's own switch, not assumed: 1 tail-calls
+ * hanning(), 2 tail-calls hamming() -- the opposite way round from the
+ * alphabetical guess. 0 and any other value go to boxcar().
+ *
+ * @param t  Which window shape to design.
+ * @param w  Output buffer, @p n entries.
+ * @param n  Window length.
+ */
 template <typename T> void designWindow(WindowType t, T *w, unsigned n);
 
 #endif /* DSPLIB_DSPMATH_H */

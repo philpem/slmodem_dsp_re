@@ -133,52 +133,346 @@ extern const short V32_S_DATA_COEF[15];
 
 /* ---------------------------------------------------------------- transmit */
 
+/**
+ * @brief V.32 transmit state: emit the half-duplex tone.
+ *
+ * Fills the block with the tone at `hdx + V32_HDX_TONE0` and spends the
+ * whole of `*left`. @p data is unused: the tone generator writes @p out
+ * directly and no data path runs.
+ *
+ * @param modem  The V.32 datapump instance.
+ * @param data   Unused.
+ * @param out    Output for the tone samples.
+ * @param left   In/out: symbol budget; zeroed unconditionally.
+ * @return The block's sample count (re-read after any transition; see the file banner).
+ */
 short TxHdxTone(void *modem, short *data, short *out, unsigned short *left);
+
+/**
+ * @brief V.32 transmit state: emit the handshake's carrier-bearing sequence, unscrambled.
+ *
+ * `GenSequence` fills @p data from the pattern `InitGenSequence` armed and
+ * `ModDataV32` shapes it.
+ *
+ * @param modem  The V.32 datapump instance.
+ * @param data   Scratch buffer, filled by `GenSequence`.
+ * @param out    Output for the modulated samples.
+ * @param left   In/out: block symbol budget, clamped against the handshake countdown.
+ * @return The number of samples written.
+ */
 short TxHdxCarrierState(void *modem, short *data, short *out,
 			unsigned short *left);
+
+/**
+ * @brief V.32 transmit state: the same as TxHdxCarrierState(), with the scrambler in the path.
+ * @param modem  The V.32 datapump instance.
+ * @param data   Scratch buffer, filled by `GenSequence` and scrambled in place.
+ * @param out    Output for the modulated samples.
+ * @param left   In/out: block symbol budget, clamped against the handshake countdown.
+ * @return The number of samples written.
+ */
 short TxHdxScrSequence(void *modem, short *data, short *out,
 		       unsigned short *left);
+
+/**
+ * @brief V.32 transmit state: the equaliser training segment (TRN).
+ *
+ * Generates, scrambles, then folds each word onto the two-point TRN
+ * alphabet {0, 3} before modulating it.
+ *
+ * @param modem  The V.32 datapump instance.
+ * @param data   Scratch buffer: generated, scrambled, then folded onto the TRN alphabet.
+ * @param out    Output for the modulated samples.
+ * @param left   In/out: block symbol budget, clamped against the handshake countdown.
+ * @return The number of samples written.
+ */
 short TxHdxTRN(void *modem, short *data, short *out, unsigned short *left);
+
+/**
+ * @brief V.32 transmit state: the connected data segment.
+ *
+ * Scrambles and modulates whatever the caller left in @p data. No
+ * generator runs.
+ *
+ * @param modem  The V.32 datapump instance.
+ * @param data   The caller's data, scrambled in place.
+ * @param out    Output for the modulated samples.
+ * @param left   In/out: block symbol budget, clamped against the handshake countdown.
+ * @return The number of samples written.
+ */
 short TxHdxData(void *modem, short *data, short *out, unsigned short *left);
+
+/**
+ * @brief V.32 transmit state: drop the carrier.
+ *
+ * Runs the scrambler over @p data as usual, then shapes the no-carrier
+ * constellation point instead of the data. `*left`'s own guard forces the
+ * count to zero once the handshake countdown has expired, rather than
+ * letting the truncation produce 0xffff (see the file banner).
+ *
+ * @param modem  The V.32 datapump instance.
+ * @param data   The caller's data, scrambled in place (with a count of zero once expired).
+ * @param out    Output for the shaped (no-carrier) samples.
+ * @param left   In/out: block symbol budget, clamped against the handshake countdown.
+ * @return The number of samples written.
+ */
 short TxHdxNoCarrier(void *modem, short *data, short *out,
 		     unsigned short *left);
+
+/**
+ * @brief V.32 transmit state: finish the block with no carrier, then end the driver's loop.
+ *
+ * No clamp and no countdown guard: `*left` itself is the count, charged
+ * in full against the countdown, and is zeroed at the end rather than
+ * reduced -- so this is the only one of the eight transmit states that
+ * always ends V32TxHdxModem()'s loop.
+ *
+ * @param modem  The V.32 datapump instance.
+ * @param data   The caller's data, scrambled in place.
+ * @param out    Output for the shaped (no-carrier) samples.
+ * @param left   In/out: the whole remaining budget, charged in full and zeroed.
+ * @return The number of samples written.
+ */
 short TxHdxFinishFrame(void *modem, short *data, short *out,
 		       unsigned short *left);
+
+/**
+ * @brief V.32 transmit state: silence.
+ *
+ * Writes `hdx + V32HDX_SAMPLE_LEN` zero samples and spends the whole
+ * block. @p data is unused.
+ *
+ * @param modem  The V.32 datapump instance.
+ * @param data   Unused.
+ * @param out    Output; filled with zero samples.
+ * @param left   In/out: symbol budget; zeroed unconditionally.
+ * @return The block's sample count (re-read after any transition; see the file banner).
+ */
 short TxHdxNull(void *modem, short *data, short *out, unsigned short *left);
 
 /* ----------------------------------------------------------------- receive */
 
+/*
+ * Eleven of the twelve receive states below share one shape (see
+ * v32rxhdx.c's file banner): charge one block's worth of symbols against
+ * `hdx->timer`, do the state's own work (which may install a successor via
+ * `V32NextState[hdx->mode]`), and post a fault reason at `V32_OBJ_STATUS`
+ * if the timer has reached `hdx->limit`. `RxHdxError` alone does neither.
+ */
+
+/**
+ * @brief V.32 receive state: run the answer/originate tone detector.
+ *
+ * Runs the AGC and, subject to a three-term gate (protocol, an options
+ * bit, and a countdown), the tone detector; a lost tone transitions to
+ * the next handshake step.
+ *
+ * @param modem  The V.32 datapump instance.
+ * @param in     Input samples, gain-controlled in place.
+ * @param out    Output; not filled with demodulated data by this state.
+ * @param count  In/out sample count, clamped by `RxClampV32` on exit.
+ */
 void RxHdxTone(void *modem, short *in, unsigned short *out,
 	       unsigned short *count);
+
+/**
+ * @brief V.32 receive state: wait for a detected tone with no signal yet decoded.
+ *
+ * Runs the AGC and the tone detector; once the tone has been seen for
+ * more than 60 timer units it transitions to the next handshake step.
+ *
+ * @param modem  The V.32 datapump instance.
+ * @param in     Input samples, gain-controlled in place.
+ * @param out    Output; not filled with demodulated data by this state.
+ * @param count  In/out sample count, clamped by `RxClampV32` on exit.
+ */
 void RxHdxNoSignal(void *modem, short *in, unsigned short *out,
 		   unsigned short *count);
+
+/**
+ * @brief V.32 receive state: search for the handshake's phase reversal and measure round-trip delay.
+ *
+ * Runs the AGC and kills two tones; while armed (`V32HDX_INT_90`), searches
+ * for the phase reversal and, on finding it, computes and stores the
+ * round-trip delay (`V32HDX_RTD`) before transitioning. Otherwise runs the
+ * tone detector and arms the reversal search after several consecutive
+ * present-tone blocks. See the file banner for the reversal-scale
+ * constants and the not-quite-`else` control flow.
+ *
+ * @param modem  The V.32 datapump instance.
+ * @param in     Input samples, gain-controlled and tone-killed in place.
+ * @param out    Output; not filled with demodulated data by this state.
+ * @param count  In/out sample count, clamped by `RxClampV32` on exit.
+ */
 void RxHdxPhsReversal(void *modem, short *in, unsigned short *out,
 		      unsigned short *count);
+
+/**
+ * @brief V.32 receive state: demodulate and look for the rate sequence, requiring two matching detections.
+ *
+ * Demodulates and descrambles the block, then requires `DetSequence` to
+ * find a match AND the detector's high and low halves to agree before
+ * transitioning -- i.e. the same rate signal must have arrived twice.
+ *
+ * @param modem  The V.32 datapump instance.
+ * @param in     Input samples to demodulate.
+ * @param out    Output for the demodulated (descrambled) symbols.
+ * @param count  In/out sample count, clamped by `RxClampV32` on exit.
+ */
 void RxHdxRateSequence(void *modem, short *in, unsigned short *out,
 		       unsigned short *count);
+
+/**
+ * @brief V.32 receive state: demodulate and look for the handshake sequence.
+ *
+ * Demodulates and descrambles the block; a single `DetSequence` match
+ * transitions to the next handshake step.
+ *
+ * @param modem  The V.32 datapump instance.
+ * @param in     Input samples to demodulate.
+ * @param out    Output for the demodulated (descrambled) symbols.
+ * @param count  In/out sample count, clamped by `RxClampV32` on exit.
+ */
 void RxHdxSequence(void *modem, short *in, unsigned short *out,
 		   unsigned short *count);
+
+/**
+ * @brief V.32 receive state: demodulate, decode the negotiated rate sequence, and switch the receiver to it.
+ *
+ * Demodulates and descrambles the block. Once armed (`V32HDX_SHORT_48`
+ * non-zero), just counts blocks and raises V32_FLAG_04 past a threshold.
+ * Otherwise, on a `DetSequence` match, decodes the rate register via
+ * `DecodeRateSeq`, switches the receiver to `RxHdxData` and to the decoded
+ * `SetRxModeV32`, and arms the block counter.
+ *
+ * @param modem  The V.32 datapump instance.
+ * @param in     Input samples to demodulate.
+ * @param out    Output for the demodulated (descrambled) symbols.
+ * @param count  In/out sample count, clamped by `RxClampV32` on exit.
+ */
 void RxHdxSequenceE(void *modem, short *in, unsigned short *out,
 		    unsigned short *count);
+
+/**
+ * @brief V.32 receive state: the connected data segment.
+ *
+ * Demodulates and descrambles the block. No detector, no transition logic.
+ *
+ * @param modem  The V.32 datapump instance.
+ * @param in     Input samples to demodulate.
+ * @param out    Output for the demodulated (descrambled) data.
+ * @param count  In/out sample count, clamped by `RxClampV32` on exit.
+ */
 void RxHdxData(void *modem, short *in, unsigned short *out,
 	       unsigned short *count);
+
+/**
+ * @brief V.32 receive state: watch for the tone to end, then demodulate anyway.
+ *
+ * A lost tone transitions to the next handshake step (checked before the
+ * timeout post, per the source's own note); the demodulation and
+ * descrambling happen after the timeout check either way.
+ *
+ * @param modem  The V.32 datapump instance.
+ * @param in     Input samples to demodulate.
+ * @param out    Output for the demodulated (descrambled) data.
+ * @param count  In/out sample count, clamped by `RxClampV32` on exit.
+ */
 void RxHdxToneData(void *modem, short *in, unsigned short *out,
 		   unsigned short *count);
+
+/**
+ * @brief V.32 receive state: run the S-tone multi-tone detector, over whichever buffer its configured bank calls for.
+ *
+ * Configured with the DATA-mode S-tone coefficients (V32_S_DATA_COEF), it
+ * demodulates the block first and detects over the datapump's own working
+ * buffer; configured with the other bank, it detects over the caller's
+ * raw input and does not demodulate at all. A detection transitions to
+ * the next handshake step.
+ *
+ * @param modem  The V.32 datapump instance.
+ * @param in     Input samples.
+ * @param out    Output for demodulated data, when the DATA-mode bank is active.
+ * @param count  In/out sample count, clamped by `RxClampV32` on exit.
+ */
 void RxHdxSTone(void *modem, short *in, unsigned short *out,
 		unsigned short *count);
+
+/**
+ * @brief V.32 receive state: demodulate and watch for a decoder rate-change epoch.
+ *
+ * A positive EpochDetectV32() result transitions to the next handshake
+ * step.
+ *
+ * @param modem  The V.32 datapump instance.
+ * @param in     Input samples to demodulate.
+ * @param out    Output for the demodulated data.
+ * @param count  In/out sample count, clamped by `RxClampV32` on exit.
+ */
 void RxHdxEpoch(void *modem, short *in, unsigned short *out,
 		unsigned short *count);
+
+/**
+ * @brief V.32 receive state: the terminal error state.
+ *
+ * The only one of the twelve that touches neither the context nor the
+ * block counter. Raises the fault bit unconditionally -- without a
+ * reason code, because whoever installed it has already posted one --
+ * demodulates the block anyway, and reports no symbols.
+ *
+ * @param modem  The V.32 datapump instance.
+ * @param in     Input samples, demodulated but discarded.
+ * @param out    Scratch destination for the discarded demodulation.
+ * @param count  Output: forced to 0.
+ */
 void RxHdxError(void *modem, short *in, unsigned short *out,
 		unsigned short *count);
+
+/**
+ * @brief V.32 receive state: do nothing but watch the block counter.
+ * @param modem  The V.32 datapump instance.
+ * @param in     Input samples.
+ * @param out    Output; not filled with demodulated data.
+ * @param count  In/out sample count, clamped by `RxClampV32` on exit.
+ */
 void RxHdxNull(void *modem, short *in, unsigned short *out,
 	       unsigned short *count);
 
 /* --------------------------------------------------------- the dispatchers */
 
+/*
+ * The five dispatchers below are `V32NextState`'s slots (see the mode table
+ * above): each advances the half-duplex handshake by one step when a spent
+ * `TxHdx*`/`RxHdx*` state calls it, in some subset of: writing the next
+ * handshake state to `hdx + V32HDX_STATE`, installing the next `TxHdx*`/
+ * `RxHdx*` pair, reloading the step's duration, and reconfiguring the
+ * datapump for what the new step needs. Each is a `switch` on the 0..33
+ * handshake state (`v32state.h`) through a jump table, with an unsigned
+ * out-of-range test that also catches negative states.
+ */
+
+/** @brief V.32 handshake step for the ORIGINATING side (`V32NextState[V32_MODE_ORIGINATE]`). @param modem The V.32 datapump instance. */
 void V32OrgNextState(void *modem);
+
+/** @brief V.32 handshake step for the ANSWERING side (`V32NextState[V32_MODE_ANSWER]`). @param modem The V.32 datapump instance. */
 void V32AnsNextState(void *modem);
+
+/** @brief V.32 handshake step for entering the ring/retrain sequence (`V32NextState[V32_MODE_RING_INIT]`). @param modem The V.32 datapump instance. */
 void V32RngInitNextState(void *modem);
+
+/** @brief V.32 handshake step for responding to a ring/retrain request (`V32NextState[V32_MODE_RING_RESP]`). @param modem The V.32 datapump instance. */
 void V32RngRespNextState(void *modem);
+
+/**
+ * @brief V.32 handshake step for local loopback, occupying both `V32NextState[V32_MODE_LOCLOOP_2]` and `[V32_MODE_LOCLOOP_3]`.
+ *
+ * Occupies two slots of `V32NextState` (finding F8560) but never reads
+ * `hdx + V32HDX_MODE` itself and cannot tell which slot invoked it; which
+ * mode is in force is settled only by the six sites across the object
+ * that write that field.
+ *
+ * @param modem  The V.32 datapump instance.
+ */
 void V32LocLoopNextState(void *modem);
 
 #ifdef __cplusplus

@@ -1,66 +1,40 @@
-/*
- * v29cfg.h -- ITU-T V.29 (fax): the receiver's coefficient and gain tables.
+/**
+ * @file v29cfg.h
+ * @brief ITU-T V.29 (fax): the receiver's coefficient and gain tables.
  *
  * Declarations only.  Every object here is either a plain `short` array or an
  * instance of a struct defined elsewhere (`struct fpm_agc_cfg` in `fpm_agc.h`),
  * so this header defines no type.
  *
- * WHAT TYPES THESE, AND IT IS NOT THE BYTE COUNT ALONE.  `V29RX_create` builds
- * four DSP configurations on its stack -- an `fpm_mrf_cfg`, an `fpm_sre_cfg`,
- * an `fpm_fse_cfg` and two `fpm_mtd_cfg` -- by copying the library's built-in
- * instance and patching the tables and lengths in.  Every table below is the
- * value of one of those pointer fields, and the length field patched beside it
- * gives the element COUNT independently of `st_size`:
+ * `V29RX_create` builds four DSP configurations on its stack -- an
+ * `fpm_mrf_cfg`, an `fpm_sre_cfg`, an `fpm_fse_cfg` and two `fpm_mtd_cfg` --
+ * by copying the library's built-in instance and patching the tables and
+ * lengths in, so every table's element count here is confirmed twice: once
+ * as the symbol's `st_size` and once as the length field patched in beside
+ * the pointer.  A byte count alone would not separate e.g. `short[49]` from
+ * `int[24]` plus two bytes; the two readings agree throughout.  Finding
+ * F9140.
  *
- *   table                 st_size   count the consumer writes    stride
- *   V29RX_FSE_IFILT           98    fse.taps      = 0x31 =  49   2  short
- *   V29RX_FSE_QFILT           98    fse.taps      = 0x31 =  49   2  short
- *   V29RX_CRR_TABLE          144    fse.clk_mod   = 0x48 =  72   2  short
- *   V29RX_MRF_FILT           540    mrf.taps      = 0x10e = 270  2  short
- *   V29RX_SRE_FILT           362    sre.coeffs    = 0xb4 = 180   2  short
- *                                     ... proto holds coeffs + 1
- *   V29RX_XCLOCK               6    sre.clock_len = 3            2  short
- *   V29RX_YCLOCK               6    sre.clock_len = 3            2  short
- *   V29RX_XB_COFFS            22    FPM_SRE_DISC  = 11           2  short
- *   V29RX_SRE_PLLK1/PLLK2      6    FPM_SRE_MODES = 3            2  short
- *   V29RX_FSE_PLLK1/PLLK2      6    fpm_fse_cfg's three gains    2  short
- *   V29_MTD_COEFF             20    mtd.tones = 2, 5 shorts each 2  short
+ * `V29RX_CRR_TABLE`'s 72 entries are a Q16 phase ramp and not just a copied
+ * table: `V29RX_CRR_TABLE[i] == round(i * 32768 / 72)`, and at three samples
+ * per symbol and 2400 baud the receiver runs at 7200 Hz, so
+ * `7200 * 17 / 72 == 1700 Hz` -- V.29's carrier to the digit.  The resampler
+ * agrees the same way: `fpm_mrf_cfg` is configured for 9 branches,
+ * decimation 10 and 270 taps, the 8000 -> 7200 Hz converter, and
+ * `V29RX_MRF_FILT` is symmetric about its centre pair as a linear-phase
+ * prototype must be.  Finding F9141.
  *
- * Two independent readings agree for every one of them, which is what the
- * stride rests on -- a byte count alone would not separate `short[49]` from
- * `int[24]` plus two bytes, and wave 1's SGD failure was a layout error rather
- * than an arithmetic one.
+ * Storage classes are the object's: `nm -S` gives `D` (global, writable,
+ * `.data`) for ten of these symbols and `R` for the four in `.rodata`
+ * (`AGCv29_CFG`, `V29RX_MRF_FILT`, `V29RX_SRE_FILT`, `V29RX_XB_COFFS`);
+ * `t_v29cfg.c` asserts the split.
  *
- * THE 72-ENTRY CARRIER TABLE IS DERIVED, NOT JUST COPIED.  `V29RX_CRR_TABLE[i]`
- * is `round(i * 32768 / 72)` for every one of its 72 entries -- a full turn of
- * phase in Q16 -- and `V29RX_create` sets `clk_mod = 72` and `clk_inc = 17`
- * beside it.  At three samples per symbol and 2400 baud the receiver runs at
- * 7200 Hz, and 7200 * 17 / 72 is 1700 Hz, which is V.29's carrier.  The
- * arithmetic closes on the recommendation's own number, so reading this table
- * as a phase ramp is measured and not inferred from its shape.
- *
- * THE RESAMPLER AGREES THE SAME WAY.  `V29RX_create` gives the `fpm_mrf_cfg`
- * 9 branches, decimation 10 and 270 taps, so it is the 8000 -> 7200 Hz
- * converter, 30 taps per branch, and `V29RX_MRF_FILT` is symmetric about its
- * centre pair (24841, 24841) as a linear-phase prototype must be.
- *
- * STORAGE CLASSES ARE THE OBJECT'S.  `nm -S` gives `D` -- global, writable,
- * `.data` -- for ten of these and `R` for the four in `.rodata`.  That split is
- * not ours to tidy: it is what a differential test compares, and `t_v29cfg.c`
- * asserts the sections.
- *
- *   D  V29_MTD_COEFF V29RX_CRR_TABLE V29RX_FSE_IFILT V29RX_FSE_QFILT
- *      V29RX_FSE_PLLK1 V29RX_FSE_PLLK2 V29RX_SRE_PLLK1 V29RX_SRE_PLLK2
- *      V29RX_XCLOCK V29RX_YCLOCK
- *   R  AGCv29_CFG V29RX_MRF_FILT V29RX_SRE_FILT V29RX_XB_COFFS
- *
- * `AGC_DEF_ALPHA` AND `AGC_DEF_BETA` ARE NOT DECLARED HERE, ON PURPOSE.  The
- * object defines each of those two names SIX times -- `nm` shows five local
- * (`d`/`r`) copies and one global -- so V.29's pair at .rodata 0xb298 and
- * 0xb294 is file-static, has no `ref_` alias, and cannot be compared against
- * the blob by name.  They are `static` in `v29cfg.c` and are proved instead
- * through `AGCv29_CFG.alpha` / `.beta`, which is what the pointers actually
- * reach.  This is the F9058 case: the consumer is the comparison.
+ * `AGC_DEF_ALPHA` and `AGC_DEF_BETA` are not declared here, on purpose: the
+ * object defines each of those two names six times, so V.29's pair
+ * (`.rodata` 0xb298/0xb294) is file-static with no `ref_` alias and cannot
+ * be compared against the blob by name.  They are `static` in `v29cfg.c`
+ * and proved instead through `AGCv29_CFG.alpha`/`.beta`, the fields that
+ * actually reach them -- the consumer is the comparison (finding F9058).
  */
 
 #ifndef DSPLIB_V29CFG_H

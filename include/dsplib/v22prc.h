@@ -135,61 +135,108 @@
 #define V22_TRAINED_2400_SYMBOL	15
 #define V22_TRAINED_2400_RUN	7	/* strictly more than this */
 
-/*
- * Advance the shared timer by one block and return its new value.  The step
- * is 20, which is 160 samples at 8 kHz in milliseconds.
+/**
+ * @brief Advance the V.22 datapump's shared millisecond clock by one block.
+ * @param modem  The V.22 datapump instance.
+ * @return The clock's new value; the step is 20 ms (160 samples at 8 kHz).
  */
 int ReadGTimer(void *modem);
 
-/*
- * Emit a block of silence: V22_TX_BLOCK zero samples, and the count.  The
- * first two arguments are never read.  Their types are undetermined -- `void *`
- * is chosen for the stack slot, not from evidence -- and the shape is that of
- * a transmit-state handler, which is what the seven-entry V22_PROTOCOL table
- * holds.
+/**
+ * @brief Emit one block of silence, in the shape of a V22_PROTOCOL transmit-state handler.
+ *
+ * Writes V22_TX_BLOCK zero samples and the count. The first two arguments
+ * are never read; their types are undetermined (`void *` is chosen for the
+ * stack slot, not from evidence), and the shape is that of a transmit-state
+ * handler, which is what the seven-entry V22_PROTOCOL table holds.
+ *
+ * @param modem  Unread.
+ * @param arg1   Unread.
+ * @param out    Output for V22_TX_BLOCK zero samples.
+ * @param count  Output: set to V22_TX_BLOCK.
  */
 void TxNOP(void *modem, void *arg1, short *out, short *count);
 
-/* The same shape, but V22_CLAMP_BLOCK entries of V22_CLAMP_VALUE. */
+/**
+ * @brief Emit V22_CLAMP_BLOCK samples of V22_CLAMP_VALUE, in the same shape as TxNOP().
+ * @param modem  Unread.
+ * @param arg1   Unread.
+ * @param out    Output for V22_CLAMP_BLOCK copies of V22_CLAMP_VALUE.
+ * @param count  Output: set to V22_CLAMP_BLOCK.
+ */
 void RxClampV22(void *modem, void *arg1, short *out, short *count);
 
-/*
- * Training predicates.  `count` is read through a pointer, not passed by
- * value, and is unsigned.
+/**
+ * @brief Has the V.22 1200 bit/s trainer converged? Every symbol must equal V22_TRAINED_1200_SYMBOL.
+ * @param symbols  The received symbols.
+ * @param count    How many symbols, read through a pointer.
+ * @return Non-zero if trained.
  */
 int RxTrained1200(const short *symbols, const unsigned short *count);
+
+/**
+ * @brief Has the V.22bis 2400 bit/s trainer converged? Requires a run of more than V22_TRAINED_2400_RUN trailing V22_TRAINED_2400_SYMBOL entries.
+ * @param symbols  The received symbols.
+ * @param count    How many symbols, read through a pointer.
+ * @return Non-zero if trained.
+ */
 int RxTrained2400(const short *symbols, const unsigned short *count);
 
-/* Status accessors. */
+/**
+ * @brief Is a V.22 carrier currently detected?
+ * @param modem  The V.22 datapump instance.
+ * @return Non-zero if carrier is present (V22FP_CARRIER).
+ */
 int CarrierDetect(void *modem);
+
+/**
+ * @brief Is a V.22 signal currently detected?
+ * @param modem  The V.22 datapump instance.
+ * @return Non-zero if signal is present (V22FP_SIGNAL).
+ */
 int SignalDetect(void *modem);
+
+/**
+ * @brief Read the V.22 equaliser's current signal-quality number.
+ * @param modem  The V.22 datapump instance.
+ * @return The quality value at V22FP_QUALITY (see v22status.h for its scale).
+ */
 unsigned short GetSignalQuality(void *modem);
 
-/*
- * Derive the transmit clock from the baud field: three times it, stored back
- * as a short.
+/**
+ * @brief Derive the V.22 transmit pulse-shaper clock from the baud field.
  *
- * DECLARED void, AND THE OBJECT DOES NOT SETTLE THAT.  It leaves the product
- * in `eax`, which is what a `short`-returning function would also do, and
- * there is no extension either way to tell them apart.  The store is the same
- * under both readings, so nothing observable turns on it; recorded here so
- * that a caller found later to use the value is recognised as evidence rather
- * than as a contradiction.
+ * Stores three times the baud field (V22FP_BAUD) back as a short at
+ * V22FP_TX_CLOCK.
+ *
+ * Declared void, and the object does not settle that: it leaves the
+ * product in `eax`, which is what a `short`-returning function would also
+ * do, and there is no extension either way to tell them apart. The store
+ * is the same under both readings, so nothing observable turns on it;
+ * recorded here so that a caller found later to use the value is
+ * recognised as evidence rather than as a contradiction.
+ *
+ * @param modem  The V.22 datapump instance.
  */
 void TxClockSync(void *modem);
 
-/*
- * Equaliser adaptation control.  Three live modes and a silent default:
+/**
+ * @brief Control V.22 equaliser adaptation.
+ *
+ * Three live modes and a silent default:
  *
  *   1  stop adapting              EQ_ADAPT = 0
  *   2  adapt                      EQ_ADAPT = 1, EQ_MODE = 0
  *   3  adapt, second mode         EQ_ADAPT = 1, EQ_MODE = 1, EQ_EXTRA = 1
  *   anything else                 nothing at all, silently
  *
- * `mode` is loaded with `movzwl`, so it is sixteen bits wide and unsigned;
- * a caller passing 0x10002 selects nothing, not mode 2.  Note also that mode
- * 3 sets EQ_EXTRA and mode 2 does not CLEAR it, so the two are not
- * symmetrical and the order the caller uses them in matters.
+ * @p mode is loaded with `movzwl`, so it is sixteen bits wide and
+ * unsigned; a caller passing 0x10002 selects nothing, not mode 2. Note
+ * also that mode 3 sets EQ_EXTRA and mode 2 does not clear it, so the two
+ * are not symmetrical and the order the caller uses them in matters.
+ *
+ * @param modem  The V.22 datapump instance.
+ * @param mode   One of the three modes above; anything else is a no-op.
  */
 void SetAdaptEqV22(void *modem, unsigned short mode);
 

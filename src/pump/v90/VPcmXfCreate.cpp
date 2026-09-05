@@ -63,6 +63,21 @@
  * done some good, because moving it would be a different function and the
  * blob is the specification.  Recorded as D236.
  *
+ * Written as ordinary placement `new`, not a hand-mangled `asm()`-label free
+ * function: finding F1340 originally believed a user-declared placement
+ * `operator new` -- needed here since this build is `-nostdinc++` with no
+ * `<new>` -- would make GCC emit a null test IN FRONT of the constructor
+ * call, which would have made this the one site in the whole V.92 chain
+ * where the difference was control flow rather than instruction count. That
+ * belief was never tested against the real compiler and flags, and finding
+ * F10155 retracts it: the null check GCC 3.4 inserts is tied to the
+ * placement `operator new` being declared `throw()`, not to placement `new`
+ * generally, and `-fcheck-new` (the flag that would force it regardless)
+ * was never in `TC_FLAGS` to begin with. `include/dsplib/sysdep.h` declares
+ * a non-throw placement `operator new`/`operator delete` for exactly this
+ * reason, verified under the real period compiler to reproduce this exact
+ * construct-then-check-after shape with no flag changes at all.
+ *
  * ===========================================================================
  * TWENTY-ONE STORES THE CALLER MAKES INTO THE OBJECT IT JUST BUILT
  * ===========================================================================
@@ -104,25 +119,6 @@ extern "C" VPcmFloModem *VPCMXF_Create(int digitalSide, void *v34Object,
 				       _tagModemParameters *dpRuntime,
 				       unsigned int durationMs, int mode);
 extern "C" void VPCMXF_Delete(VPcmFloModem *self);
-
-/*
- * The complete-object constructor, by the name the relocation at 0xfdcd
- * carries.  NOT placement `new`: the blob allocates and then constructs with
- * NOTHING between the two instructions, and a user-declared placement
- * `operator new` -- which is what this build would need, being `-nostdinc++`
- * with no <new> -- makes GCC emit a null test in front of the constructor
- * call.  The object's null test is AFTER it, which is a different function.
- * src/pump/v90/V92Modem.cpp and V92Modulator.cpp give the same reason at
- * length; this is the one site in the chain where the difference would have
- * been visible in the control flow rather than only in the instruction count.
- */
-void vpcmxf_modem_ctor(void *self, void *v34Object,
-				    V90ModemSide side, void *dpRuntime,
-				    unsigned int nSamples,
-				    V90ComputationalMode v90Mode,
-				    V92ComputationalMode v92Mode)
-	asm("_ZN12VPcmFloModemC1EPv12V90ModemSideP19_tagModemParametersj"
-	    "20V90ComputationalMode20V92ComputationalMode");
 
 extern "C" VPcmFloModem *
 VPCMXF_Create(int digitalSide, void *v34Object,
@@ -175,8 +171,8 @@ VPCMXF_Create(int digitalSide, void *v34Object,
 		    digitalSide != 0 ? "Digital" : "Analog", maxDataBuffer);
 
 	self = (VPcmFloModem *)sysdep_malloc(sizeof(VPcmFloModem));
-	vpcmxf_modem_ctor(self, v34Object, side, dpRuntime,
-			  (unsigned int)maxDataBuffer, v90Mode, v92Mode);
+	new (self) VPcmFloModem(v34Object, side, dpRuntime,
+				 (unsigned int)maxDataBuffer, v90Mode, v92Mode);
 
 	/* See the file comment: the object tests AFTER it constructs. */
 	if (self == 0) {

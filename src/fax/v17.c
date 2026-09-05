@@ -3037,8 +3037,7 @@ CarrierDetectV17(void *modem)
 		if (AT_S(rx, V17RXS_DEC_ERROR) > V17RXS_DEC_ERROR_MAX) {
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
-					"V17 Decoder error too big..."
-					" no carrier\n");
+					"V17 Decoder error too big..." " no carrier\n");
 		}
 	}
 
@@ -3076,8 +3075,7 @@ DataCarrierDetectV17(void *modem, const short *in, unsigned short count)
 			if (AT_S(rx, V17RXS_DEC_ERROR) > V17RXS_DEC_ERROR_MAX) {
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
-						"V17 Decoder error too big..."
-						" no carrier\n");
+						"V17 Decoder error too big..." " no carrier\n");
 			}
 		}
 	} else {
@@ -3138,8 +3136,7 @@ DataCarrierDetectV17(void *modem, const short *in, unsigned short count)
 			r = 0;
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
-					"sudden energy drop > 8[dB],"
-					" no carrier");
+					"sudden energy drop > 8[dB]," " no carrier");
 		}
 
 		phase = (unsigned short)(AT_US(rx, V17RXS_RMS_PHASE) + 1);
@@ -3178,8 +3175,7 @@ QualityDetectV17(void *modem)
 	if (r == 0) {
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf(
-				"V17 Dec error too big..."
-				" unreliable data\n");
+				"V17 Dec error too big..." " unreliable data\n");
 		r = V17_QUALITY_UNRELIABLE;
 	}
 

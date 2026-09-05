@@ -104,22 +104,41 @@ struct iir_filter {
 	int	n_a_minus_1;		/* +0xd8  as passed, less one    */
 };
 
-/*
- * Build a filter.  Pass NULL for `f` to allocate one -- the same ownership
- * idiom the datapumps use, except that here nothing records who allocated it
- * and `_iir_filter_delete` frees unconditionally.
+/**
+ * @brief Build a four-section IIR filter.
  *
- * `a` and `b` are read as n_a and n_b coefficients respectively; `shift` is
- * always read as IIR_FILTER_SCALES words.  Nothing is range checked: the
- * original will happily overrun both coefficient arrays past 25.
+ * Copies @p n_a denominator and @p n_b numerator coefficients from @p a
+ * and @p b (Q13) and @p IIR_FILTER_SCALES interstage shifts from @p shift,
+ * and clears the history. Nothing is range-checked: coefficient counts
+ * above 25 overrun both arrays.
+ *
+ * @param f      Existing filter to build into, or NULL to allocate one --
+ *               the same ownership idiom the datapumps use, except that
+ *               nothing here records who allocated it, so
+ *               _iir_filter_delete() frees unconditionally.
+ * @param n_a    Number of denominator coefficients in @p a.
+ * @param n_b    Number of numerator coefficients in @p b.
+ * @param a      Denominator coefficients, Q13.
+ * @param b      Numerator coefficients, Q13.
+ * @param shift  Interstage right shifts, `IIR_FILTER_SCALES` of them.
+ * @return @p f, or the newly allocated filter.
  */
 struct iir_filter *_iir_filter_create(struct iir_filter *f, int n_a, int n_b,
 				      const short *a, const short *b,
 				      const short *shift);
 
+/**
+ * @brief Free a filter, unconditionally.
+ * @param f The filter to free.
+ */
 void _iir_filter_delete(struct iir_filter *f);
 
-/* Filter `count` samples in place. */
+/**
+ * @brief Filter @p count samples in place through the four-section cascade.
+ * @param f        Filter (coefficients and history).
+ * @param count    Number of samples in @p samples.
+ * @param samples  Samples to filter in place.
+ */
 void _iir_filter_progress(struct iir_filter *f, int count, short *samples);
 
 /*
@@ -231,24 +250,55 @@ struct toneiir {
  */
 extern const struct toneiir_cfg toneiir_configuration_allpass;
 
-/*
- * Copy the built-in configuration into `dst`, which must have room for one.
- * Every coefficient pointer in it is to an array of zeros, so the template is
- * useful only for the numeric fields; a caller is expected to fill in the
- * filter.  cadence_create does exactly that.
+/**
+ * @brief Copy the built-in configuration template into @p dst.
+ *
+ * Every coefficient pointer in the template is to an array of zeros, so
+ * it is useful only for the numeric fields; a caller is expected to fill
+ * in the filter afterwards. cadence_create() does exactly that.
+ *
+ * @param dst  Destination; must have room for one `struct toneiir_cfg`.
  */
 void toneiir_get_default_configuration(struct toneiir_cfg *dst);
 
-/* Pass NULL for `st` to allocate, or NULL for `cfg` to take the default. */
+/**
+ * @brief Build a tone-detecting IIR filter.
+ *
+ * @param st   Existing state to build into, or NULL to allocate one.
+ * @param cfg  Configuration, or NULL for the built-in default (which
+ *             still needs its filter filled in -- see
+ *             toneiir_get_default_configuration()).
+ * @return @p st, or the newly allocated state.
+ */
 struct toneiir *toneiir_create(struct toneiir *st,
 			       const struct toneiir_cfg *cfg);
 
+/** @brief Free a toneiir state. @param st The state to free. */
 void toneiir_delete(struct toneiir *st);
 
-/* Start a fresh interval, keeping the coefficients and the derived count. */
+/**
+ * @brief Start a fresh detection interval.
+ *
+ * Clears the running counters and envelopes, keeping the coefficients and
+ * the derived interval/duration counts.
+ *
+ * @param st  State to reset.
+ */
 void toneiir_reset(struct toneiir *st);
 
-/* Feed one sample; returns one of the TONEIIR_* verdicts. */
+/**
+ * @brief Feed one sample and report the detector's verdict.
+ *
+ * Runs @p sample through the four-section cascade and updates the input
+ * and band envelopes; once every `cfg.interval` samples, judges whether
+ * the band held a tone (see the file comment above for the four-part
+ * test) and reports the result.
+ *
+ * @param st      Detector state.
+ * @param sample  The next input sample.
+ * @return #TONEIIR_UNDECIDED mid-interval, or #TONEIIR_ABSENT /
+ *         #TONEIIR_PRESENT when an interval completes.
+ */
 int toneiir_progress(struct toneiir *st, short sample);
 
 #endif /* DSPLIB_TONEIIR_H */

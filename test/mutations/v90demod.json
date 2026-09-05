@@ -195,8 +195,8 @@
  },
  {
   "label": "sessionTermination: the mean and the deviation are swapped",
-  "find": "\t\t\tfloat mean = v90resampler_timingHistoryMean(&resampler);\n\t\t\tfloat std = v90resampler_timingHistoryStd(&resampler);",
-  "replace": "\t\t\tfloat std = v90resampler_timingHistoryMean(&resampler);\n\t\t\tfloat mean = v90resampler_timingHistoryStd(&resampler);"
+  "find": "\t\t\tfloat mean = resampler.getTimingHistoryMean();\n\t\t\tfloat std = resampler.getTimingHistoryStd();",
+  "replace": "\t\t\tfloat std = resampler.getTimingHistoryMean();\n\t\t\tfloat mean = resampler.getTimingHistoryStd();"
  },
  {
   "label": "sessionTermination: the fraction is scaled by 1000, not 10000",
@@ -280,7 +280,7 @@
  },
  {
   "label": "sessionTermination: the disabled notice ends CRLF like the others",
-  "find": "\t\t\t\t \"EVALUATION DISABLED !\\n\");",
+  "find": " \"EVALUATION DISABLED !\\n\");",
   "replace": "\t\t\t\t \"EVALUATION DISABLED !\\r\\n\");"
  },
  {

@@ -1,22 +1,17 @@
-/*
- * V92Mapper.h -- the V.92 symbol mapper: bits in, one scaled constellation
- * point out.
+/**
+ * @file V92Mapper.h
+ * @brief The V.92 symbol mapper: bits in, one scaled constellation point out.
  *
- * Reconstructed from dsplibs.o.  Four members and one static table, 229
- * bytes; this tree defines the constructor and the destructor -- one `ret`
- * each -- and declares `reset` and `process`.
+ * Four members and one static table, 229 bytes. GCC only emits an
+ * out-of-line constructor/destructor for a user-declared one, so the
+ * blob's C1/C2/D1/D2 symbols say the original declared both and left the
+ * bodies empty -- the object is actually initialised by
+ * `reset(short, unsigned char)` instead.
  *
- * WHY AN EMPTY CONSTRUCTOR IS WORTH A SYMBOL.  GCC emits an out-of-line
- * constructor or destructor only for a user-declared one, so the blob's C1,
- * C2, D1 and D2 say the original declared both and left the bodies empty.
- * The object is initialised by `reset(short, unsigned char)` instead, which is
- * why the constructor has nothing to do.
- *
- * THE OBJECT IS 0x2c BYTES, measured rather than bounded:
- * `V92Phase4Modulator::V92Phase4Modulator` runs `movl $0x2c,(%esp); call
- * sysdep_malloc; call V92Mapper::V92Mapper()` and keeps the pointer at its own
- * +0x70, where its destructor finds it again.  The furthest displacement any
- * member uses is +0x28 and it is four bytes wide, so the two agree.
+ * The object is 0x2c bytes, measured rather than bounded:
+ * `V92Phase4Modulator::V92Phase4Modulator` allocates exactly that many bytes
+ * before calling this constructor (finding F1249), agreeing with the
+ * furthest member displacement, +0x28, four bytes wide.
  */
 
 #ifndef DSPLIB_V92MAPPER_H
@@ -24,61 +19,60 @@
 
 class V92Mapper {
 public:
-	/* Written.  Both bodies are empty; both symbols exist. */
+	/** @brief Construct with no initialization; the object is set up by
+	 *         reset() instead. Empty body, as the blob's own out-of-line
+	 *         symbol is. */
 	V92Mapper();
+	/** @brief Destroy. Empty body. */
 	~V92Mapper();
 
-	/*
-	 * Written.  The argument types are the mangling's, `Esh` being
-	 * (short, unsigned char); the return types are not mangled, so
-	 * `reset` leaves nothing meaningful in %eax and is `void`, while
-	 * `process` ends `fistps` into a 16-bit slot and `cwtl`, which is a
-	 * short's worth of value widened to an int.
-	 *
-	 * `reset` stores its two arguments at +0x00 and +0x02 and then picks
-	 * a pair from the second: zero gives +0x26 = 2 and +0x28 = 5.0f,
-	 * anything else gives 3 and 21.0f.  `process` divides the table entry
-	 * at `constelAmplitudeTable[bits + 8 * (+0x02)]` by the square root of
-	 * +0x28, multiplies by +0x00 and rounds toward zero.
+	/**
+	 * @brief Configure the constellation scale and select which table
+	 *        row (and bit count) process() draws from.
+	 * @param scale  Multiplier applied to every output point.
+	 * @param mode   0 selects a 2-bit constellation (`bits`=2, mean
+	 *               power 5.0f); anything else selects 3-bit
+	 *               (`bits`=3, mean power 21.0f).
 	 */
 	void reset(short scale, unsigned char mode);
+
+	/**
+	 * @brief Map one symbol's worth of bits to a scaled constellation
+	 *        point. Keeps its running accumulator at 16 bits internally,
+	 *        matching the object -- invisible at the 2-3 bit widths
+	 *        `reset` ever installs (finding F1370).
+	 * @param bits  Pointer to `this->bits` input bits (one per byte).
+	 * @return `constelAmplitudeTable[bits + 8 * mode]`, divided by
+	 *         `sqrt(power)`, multiplied by `scale`, rounded toward zero.
+	 */
 	int process(unsigned char *bits);
 
-	/*
-	 * `D` in the blob, so not const, and 0x40 bytes.  `process` reads it
-	 * with `fildl (,%ebx,4)` -- a 32-bit INTEGER load, not a float one --
-	 * so it is sixteen ints; the values are in the .cpp and the test
-	 * compares them with the blob's own copy word for word.
-	 */
+	/** @brief The two constellations' raw amplitude levels, 8 entries
+	 *  per row selected by `mode`: row 0 is `{1, 3, -1, -3, 0, 0, 0, 0}`,
+	 *  row 1 is `{1, 3, 5, 7, -1, -3, -5, -7}`, agreeing with `reset`
+	 *  pairing row 0 with 2 bits and row 1 with 3 (finding F1370). */
 	static int constelAmplitudeTable[16];
 
-	/*
-	 * Public for the usual reason.  The widths are the instructions':
-	 * `mov %dx,(%ebx)` and `filds (%esi)` for the short at +0x00,
-	 * `mov %al,0x2(%ebx)` and `movzbl` for the byte at +0x02, `movw` for
-	 * the short at +0x26, and `flds`/a 32-bit store of 0x40a00000 for the
-	 * float at +0x28.
-	 */
-
-	/* +0x00  `reset`'s first argument; `process` multiplies by it. */
+	/* +0x00  reset()'s scale argument; process() multiplies by it. */
 	short scale;
 
-	/* +0x02  `reset`'s second argument, and the table's row selector. */
+	/* +0x02  reset()'s mode argument, and the table's row selector. */
 	unsigned char mode;
 
 	/*
-	 * +0x03 .. +0x25  NOT REFERENCED by either of the two members that
-	 * touch the object.  Thirty-five bytes whose contents are settled by
-	 * neither the constructor nor `reset`, and which nothing here names.
+	 * +0x03 .. +0x25  Not referenced by either member that touches the
+	 * object.  Thirty-five bytes whose contents are settled by neither
+	 * the constructor nor `reset`, and which nothing here names. Checked
+	 * and declined for removal as alignment padding -- it is real
+	 * unmodelled space, not a gap before an aligned field.
 	 */
 	unsigned char pad_03[0x23];
 
-	/* +0x26  2 when `mode` is zero, 3 otherwise: a bit count. */
+	/* +0x26  Bit count: 2 when `mode` is zero, 3 otherwise. */
 	short bits;
 
-	/* +0x28  5.0f when `mode` is zero, 21.0f otherwise.  `process` takes
-	 * its square root, so it is a mean power and the divisor normalises
-	 * the constellation. */
+	/* +0x28  Mean power (5.0f / 21.0f by `mode`); process() takes its
+	 * square root as the normalising divisor. */
 	float power;
 };
 

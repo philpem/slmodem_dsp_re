@@ -1009,8 +1009,7 @@ void V92Phase4Modulator::recivedFirstRrnEd()
 		symbolCount = 0;
 		word_1b8 = 12;
 		if (e2uExtended != 0)
-			edprintf("V92Phase4Modulator: ERROR: E2u is extended"
-				 " in RRN !!!\r\n");
+			edprintf("V92Phase4Modulator: ERROR: E2u is extended" " in RRN !!!\r\n");
 	}
 	flag_20 = 1;
 }
@@ -1076,8 +1075,7 @@ void V92Phase4Modulator::setMappingParams(V92MappingParams *mp)
 {
 	if (mp == 0) {
 		if (dsplibs_debug_level > 1)
-			dsplibs_debug_printf("V92Phase4Modulator: ERROR: Null"
-					     " mappingParams @"
+			dsplibs_debug_printf("V92Phase4Modulator: ERROR: Null" " mappingParams @"
 					     " setMappingParams\r\n");
 		return;
 	}
@@ -1249,11 +1247,9 @@ int V92Phase4Modulator::generateSymbol()
 				symbolCount = 0;
 				if (dsplibs_debug_level > 1)
 					dsplibs_debug_printf(
-					    "V92Phase4Modulator: ERROR: Null CP"
-					    " @ end of TRN2d\r\n");
+					    "V92Phase4Modulator: ERROR: Null CP" " @ end of TRN2d\r\n");
 			} else {
-				edprintf("V92Phase4Modulator: on"
-					 " TRN2uModulationExit enter SUV"
+				edprintf("V92Phase4Modulator: on" " TRN2uModulationExit enter SUV"
 					 " @ %d\r\n", symbolCount);
 				state = V92P4M_STATE_SUV;
 				symbolCount = 0;
@@ -1306,8 +1302,7 @@ int V92Phase4Modulator::generateSymbol()
 	case 8:
 		sym = generateSUVu();
 		if (symbolCount % word_1b0 == 0) {
-			edprintf("V92Phase4Modulator: enter FinalSUVu"
-				 " @ %d\r\n", symbolCount);
+			edprintf("V92Phase4Modulator: enter FinalSUVu" " @ %d\r\n", symbolCount);
 			state = V92P4M_STATE_FINAL_SUVU;
 			symbolCount = 0;
 			cp->byte_00 = 1;
@@ -1356,8 +1351,7 @@ int V92Phase4Modulator::generateSymbol()
 	case V92P4M_STATE_CPU:
 		sym = generateCPu();
 		if (symbolCount == word_1b0) {
-			edprintf("V92Phase4Modulator: CPu Terminated"
-				 " @ %d\r\n", symbolCount);
+			edprintf("V92Phase4Modulator: CPu Terminated" " @ %d\r\n", symbolCount);
 			word_18 = 0;
 			byte_1c = 1;
 			state = V92P4M_STATE_SUV;
@@ -1387,8 +1381,7 @@ int V92Phase4Modulator::generateSymbol()
 		sym = generateE2u();
 		if (symbolCount == word_1b8) {
 			if (word_28 != 0 && word_30 != 0 && word_34 == 0) {
-				edprintf("V92Phase4Modulator: enter TRN2u"
-					 " Second at RRN @ %d\r\n",
+				edprintf("V92Phase4Modulator: enter TRN2u" " Second at RRN @ %d\r\n",
 					 symbolCount);
 				symbolCount = 0;
 				state = V92P4M_STATE_TRN2U_SECOND;
@@ -1398,19 +1391,16 @@ int V92Phase4Modulator::generateSymbol()
 				symbolCount = 0;
 				if (dsplibs_debug_level > 1)
 					dsplibs_debug_printf(
-					    "V92Phase4Modulator: ERROR: Null"
-					    " dataPhaseMappingParams @ end of"
+					    "V92Phase4Modulator: ERROR: Null" " dataPhaseMappingParams @ end of"
 					    " Ed\r\n");
 			} else if (flag_3c == 0) {
-				edprintf("V92Phase4Modulator: enter B1u"
-					 " @ %d\r\n", symbolCount);
+				edprintf("V92Phase4Modulator: enter B1u" " @ %d\r\n", symbolCount);
 				state = V92P4M_STATE_B1U;
 				setMappingParams(mappingParams);
 				symbolCount = 0;
 				scrambler.reset(0);
 			} else {
-				edprintf("V92Phase4Modulator: enter FB1u"
-					 " @ %d\r\n", symbolCount);
+				edprintf("V92Phase4Modulator: enter FB1u" " @ %d\r\n", symbolCount);
 				state = V92P4M_STATE_FB1U;
 				symbolCount = 0;
 				scrambler.reset(0);
@@ -1421,8 +1411,7 @@ int V92Phase4Modulator::generateSymbol()
 	case V92P4M_STATE_B1U:
 		sym = generateB1u();
 		if (symbolCount == 576) {
-			edprintf("V92Phase4Modulator: Phase4 Terminated"
-				 " @ %d\r\n", symbolCount);
+			edprintf("V92Phase4Modulator: Phase4 Terminated" " @ %d\r\n", symbolCount);
 			state = V92P4M_STATE_TERMINATED;
 			symbolCount = 0;
 			word_0c = 9;
@@ -1479,8 +1468,7 @@ int V92Phase4Modulator::generateSymbol()
 				symbolCount = 0;
 				if (dsplibs_debug_level > 1)
 					dsplibs_debug_printf(
-					    "V92Phase4Modulator: ERROR: Null CP"
-					    " @ RRN @ end of TRN2u\r\n");
+					    "V92Phase4Modulator: ERROR: Null CP" " @ RRN @ end of TRN2u\r\n");
 			} else {
 				edprintf("V92Phase4Modulator: RRN: Terminate"
 					 " TRN2uSecond @ %d\r\n", symbolCount);
@@ -1505,11 +1493,9 @@ int V92Phase4Modulator::generateSymbol()
 				symbolCount = 0;
 				if (dsplibs_debug_level > 1)
 					dsplibs_debug_printf(
-					    "V92Phase4Modulator: ERROR: Null CP"
-					    " @ RRN @ end of TRN2u\r\n");
+					    "V92Phase4Modulator: ERROR: Null CP" " @ RRN @ end of TRN2u\r\n");
 			} else {
-				edprintf("V92Phase4Modulator: on"
-					 " TRN2uRrnSecondExit enter SUV"
+				edprintf("V92Phase4Modulator: on" " TRN2uRrnSecondExit enter SUV"
 					 " @ %d\r\n", symbolCount);
 				resetRRNSecondSection();
 				state = V92P4M_STATE_SUV;
@@ -1543,8 +1529,7 @@ int V92Phase4Modulator::generateSymbol()
 		if (symbolCount == 24) {
 			if (dsplibs_debug_level > 1)
 				dsplibs_debug_printf(
-				    "V92Phase4Modulator: FPE: enter SUVu"
-				    " @ %d\r\n", symbolCount);
+				    "V92Phase4Modulator: FPE: enter SUVu" " @ %d\r\n", symbolCount);
 			state = V92P4M_STATE_SUV;
 			symbolCount = 0;
 			cp->bitsPerSymbol = bitsPerSymbol;
@@ -1569,8 +1554,7 @@ int V92Phase4Modulator::generateSymbol()
 	default:
 		sym = 0;
 		if (dsplibs_debug_level > 1)
-			dsplibs_debug_printf("V92Phase4Modulator: Illegal"
-					     " state\r\n");
+			dsplibs_debug_printf("V92Phase4Modulator: Illegal" " state\r\n");
 		break;
 	}
 

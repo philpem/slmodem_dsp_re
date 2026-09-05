@@ -99,26 +99,22 @@ evaluateRxJMSequence(struct v8 *v)
 			if (w == 0x107 && (cm->b1 & 0x40)) {
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
-					    "V8: call function DATA "
-					    "indication...\r\n");
+					    "V8: call function DATA " "indication...\r\n");
 				v->fn_matched = 1;
 			} else if (w == 0x103 && (cm->b2 & 0x01)) {
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
-					    "V8: call function FAX TX from "
-					    "caller indication...\r\n");
+					    "V8: call function FAX TX from " "caller indication...\r\n");
 				v->fn_matched = 1;
 			} else if (w == 0x10b && (cm->b1 & 0x80)) {
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
-					    "V8: call function FAX RX to "
-					    "caller indication...\r\n");
+					    "V8: call function FAX RX to " "caller indication...\r\n");
 				v->fn_matched = 1;
 			} else if (w == 0x109 && (cm->b2 & 0x02)) {
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
-					    "V8: call function DATA "
-					    "indication...\r\n");
+					    "V8: call function DATA " "indication...\r\n");
 				v->fn_matched = 1;
 			}
 
@@ -166,8 +162,7 @@ evaluateRxJMSequence(struct v8 *v)
 		dsplibs_debug_printf("V8: %s Call Function Match%s!\n",
 				     v->fn_matched != 0 ? "Got" : "Didn't get",
 				     v->fn_matched != 0 ? ""
-				      : " (not indicating modulation "
-					"capabilities)!!");
+				      : " (not indicating modulation " "capabilities)!!");
 }
 
 /*
@@ -231,8 +226,7 @@ V8UpdateModemParameters(struct v8 *v, struct v8_cm *out)
 			 * still intersected.
 			 */
 			if (DSPLIB_DEBUG_ON())
-				dsplibs_debug_printf("V8Report: Didn't get "
-						     "matching call "
+				dsplibs_debug_printf("V8Report: Didn't get " "matching call "
 						     "function\r\n");
 		} else {
 			/* Something else: keep it as an extension octet. */
@@ -307,8 +301,7 @@ V8UpdateModemParameters(struct v8 *v, struct v8_cm *out)
 			      && pcm_indication == 1) << 3));
 	} else if (DSPLIB_DEBUG_ON()) {
 		dsplibs_debug_printf("V8Report: since no call function match, "
-				     "not indicating any modulation "
-				     "capability...\r\n");
+				     "not indicating any modulation " "capability...\r\n");
 	}
 
 	/* The second extension, if one came back that is not the filler. */
@@ -443,25 +436,21 @@ rebuildJMSequence(struct v8 *v)
 			w = (unsigned short)rx->word[i];
 		} else if (w == 0x107 && (cm->b1 & 0x40)) {
 			if (DSPLIB_DEBUG_ON())
-				dsplibs_debug_printf("V8: call function DATA "
-						     "indication...\r\n");
+				dsplibs_debug_printf("V8: call function DATA " "indication...\r\n");
 			accept = 1;
 		} else if (w == 0x103 && (cm->b2 & 0x01)) {
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
-				    "V8: call function FAX TX from caller "
-				    "indication...\r\n");
+				    "V8: call function FAX TX from caller " "indication...\r\n");
 			accept = 1;
 		} else if (w == 0x10b && (cm->b1 & 0x80)) {
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
-				    "V8: call function FAX RX to caller "
-				    "indication...\r\n");
+				    "V8: call function FAX RX to caller " "indication...\r\n");
 			accept = 1;
 		} else if (w == 0x109 && (cm->b2 & 0x02)) {
 			if (DSPLIB_DEBUG_ON())
-				dsplibs_debug_printf("V8: call function DATA "
-						     "indication...\r\n");
+				dsplibs_debug_printf("V8: call function DATA " "indication...\r\n");
 			accept = 1;
 		}
 
@@ -471,8 +460,7 @@ rebuildJMSequence(struct v8 *v)
 			       charFlip((unsigned char)(w >> 1)))) {
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
-				    "V8: Got Call Function Match (in call "
-				    "function range) !!!\r\n");
+				    "V8: Got Call Function Match (in call " "function range) !!!\r\n");
 			accept = 1;
 		}
 
@@ -677,8 +665,7 @@ rebuildJMSequence(struct v8 *v)
 				if (w == V8_SEQ_TAIL_A) {
 					if (DSPLIB_DEBUG_ON())
 						dsplibs_debug_printf(
-						    "V8: Got Default Protocol "
-						    "Match (LAPM) !!!\r\n");
+						    "V8: Got Default Protocol " "Match (LAPM) !!!\r\n");
 					ext2_matched = 1;
 				}
 			}
@@ -688,8 +675,7 @@ rebuildJMSequence(struct v8 *v)
 				       charFlip((unsigned char)(w >> 1)))) {
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
-					    "V8: Got Protocol Match (in "
-					    "protocol range) !!!\r\n");
+					    "V8: Got Protocol Match (in " "protocol range) !!!\r\n");
 				ext2_matched = 1;
 			}
 

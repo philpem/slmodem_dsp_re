@@ -676,14 +676,12 @@ V90ConstellationDesigner::determineDminForRrn(unsigned int rrn)
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf(
 			    "V90ConstellationDesigner:: rrn down maxM too low"
-			    " - probably will cause more then one rate down"
-			    "\r\n");
+			    " - probably will cause more then one rate down" "\r\n");
 		if (calcK(rrnDownMaxM + 1, mm) < rrn - 0.3f) {
 			rrnDownMaxM++;
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
-				    "V90ConstellationDesigner:: increment maxM"
-				    " for one rate down\r\n");
+				    "V90ConstellationDesigner:: increment maxM" " for one rate down\r\n");
 		}
 	}
 	if (DSPLIB_DEBUG_ON())
@@ -775,16 +773,14 @@ V90ConstellationDesigner::determineDminForRrn(unsigned int rrn)
 			rrnUpMaxM++;
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
-				    "V90ConstellationDesigner:: increment maxM"
-				    " for one rate up\r\n");
+				    "V90ConstellationDesigner:: increment maxM" " for one rate up\r\n");
 		} else {
 			failed = 1;
 		}
 	}
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf(
-		    "V90ConstellationDesigner:: current maxM = %d "
-		    " rrn up maxM = %d\r\n",
+		    "V90ConstellationDesigner:: current maxM = %d " " rrn up maxM = %d\r\n",
 		    mappingParams->constellationSize[phase], rrnUpMaxM);
 
 	if (failed) {
@@ -810,12 +806,10 @@ V90ConstellationDesigner::determineDminForRrn(unsigned int rrn)
 
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf(
-			    "V90ConstellationDesigner:: rrn up nofUcodes ="
-			    " %d \r\n", nofUcodes);
+			    "V90ConstellationDesigner:: rrn up nofUcodes =" " %d \r\n", nofUcodes);
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf(
-			    "V90ConstellationDesigner:: rrn up tempDmin  ="
-			    " %d \r\n", tempDmin);
+			    "V90ConstellationDesigner:: rrn up tempDmin  =" " %d \r\n", tempDmin);
 
 		/*
 		 * THE FIRST STORE IS NOT DEAD, and that is what proves it is
@@ -830,8 +824,7 @@ V90ConstellationDesigner::determineDminForRrn(unsigned int rrn)
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
 				    "V90ConstellationDesigner:: tempDmin might"
-				    " cause 2 rates up => rrnUpDmin = dMin"
-				    "\r\n");
+				    " cause 2 rates up => rrnUpDmin = dMin" "\r\n");
 			rrnUpDmin = dMin;
 		}
 	} else {
@@ -955,8 +948,7 @@ V90ConstellationDesigner::setConstellationToNoise(float noiseEnergy,
 					 - (float)(int)noiseEnergy) * 100.0f)));
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf(
-		    "V90ConstellationDesigner: dMinHighRates = %d "
-		    " dMinLowRates = %d\r\n",
+		    "V90ConstellationDesigner: dMinHighRates = %d " " dMinLowRates = %d\r\n",
 		    (short)dMinHighRates, (short)dMinLowRates);
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf(
@@ -1028,8 +1020,7 @@ V90ConstellationDesigner::setConstellationToNoise(float noiseEnergy,
 		dMin = d;
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf(
-			    "V90ConstellationDesigner: dMin calc"
-			    " OneRateDown\r\n");
+			    "V90ConstellationDesigner: dMin calc" " OneRateDown\r\n");
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf(
 			    "V90ConstellationDesigner: rrnDownDmin = %d\r\n",
@@ -1043,8 +1034,7 @@ V90ConstellationDesigner::setConstellationToNoise(float noiseEnergy,
 	case V90CD_RATE_NONE:
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf(
-			    "V90ConstellationDesigner: dMin calc"
-			    " NoRestriction\r\n");
+			    "V90ConstellationDesigner: dMin calc" " NoRestriction\r\n");
 		pdSnrThreshForRateUp = noiseEnergy * 0.45f;
 		pdSnrThreshForRateDown = noiseEnergy * 1.4125f;
 		pdSnrThreshForRetrain = retrainFactor * noiseEnergy;
@@ -1058,8 +1048,7 @@ V90ConstellationDesigner::setConstellationToNoise(float noiseEnergy,
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
 				    "V90ConstellationDesigner: adjusting dMin"
-				    " for rate>=53k. Orig dMin=%d Modified"
-				    " dMin=%d\r\n", dMin, 0x3e);
+				    " for rate>=53k. Orig dMin=%d Modified" " dMin=%d\r\n", dMin, 0x3e);
 			dMin = 0x3e;
 		}
 		break;
@@ -1087,8 +1076,7 @@ V90ConstellationDesigner::setConstellationToNoise(float noiseEnergy,
 	edprintf("V90ConstellationDesigner: final dMin = %d\r\n", dMin);
 	edprintf("V90ConstellationDesigner: USE_RESTRICED_DMIN = %d\r\n",
 		 params->USE_RESTRICED_DMIN);
-	edprintf("V90ConstellationDesigner: pdSnrThreshForRateUp ="
-		 " %c%d.%02d\r\n",
+	edprintf("V90ConstellationDesigner: pdSnrThreshForRateUp =" " %c%d.%02d\r\n",
 		 !(0.0f >= pdSnrThreshForRateUp) ? '+' : '-',
 		 (int)__builtin_fabsf(pdSnrThreshForRateUp),
 		 __builtin_abs((int)((pdSnrThreshForRateUp - (float)(int)pdSnrThreshForRateUp)
@@ -1099,8 +1087,7 @@ V90ConstellationDesigner::setConstellationToNoise(float noiseEnergy,
 		 (int)__builtin_fabsf(pdSnrThreshForRateDown),
 		 __builtin_abs((int)((pdSnrThreshForRateDown - (float)(int)pdSnrThreshForRateDown)
 				     * 100.0)));
-	edprintf("V90ConstellationDesigner: pdSnrThreshForRetrain ="
-		 " %c%d.%02d\r\n",
+	edprintf("V90ConstellationDesigner: pdSnrThreshForRetrain =" " %c%d.%02d\r\n",
 		 !(0.0f >= pdSnrThreshForRetrain) ? '+' : '-',
 		 (int)__builtin_fabsf(pdSnrThreshForRetrain),
 		 __builtin_abs((int)((pdSnrThreshForRetrain - (float)(int)pdSnrThreshForRetrain)
@@ -1261,8 +1248,7 @@ V90ConstellationDesigner::setConstellationToNoise(float noiseEnergy,
 		dsplibs_debug_printf("V90 Constellation Designer report:\r\n");
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf(
-		    "constelation size phase[0..5]  :  %d  %d  %d  %d  %d"
-		    "  %d\r\n",
+		    "constelation size phase[0..5]  :  %d  %d  %d  %d  %d" "  %d\r\n",
 		    mappingParams->constellationSize[0],
 		    mappingParams->constellationSize[1],
 		    mappingParams->constellationSize[2],
@@ -1607,8 +1593,7 @@ V90ConstellationDesigner::setConstellationToNoise_forceRate(float noiseEnergy,
 
 			if (mappingParams->constellation[k][0] > 0x73) {
 				edprintf("V90ConstellationDesigner: reached max"
-					 " posible ucode -> Not able to reach"
-					 " requested rate !!!");
+					 " posible ucode -> Not able to reach" " requested rate !!!");
 				break;
 			}
 			for (j = mappingParams->constellation[k][0] + 1u;
@@ -1696,8 +1681,7 @@ V90ConstellationDesigner::setConstellationToNoise_forceRate(float noiseEnergy,
 			    "V90 Constellation Designer report:\r\n");
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf(
-			    "constelation size phase[0..5]  :  %d  %d  %d  %d"
-			    "  %d  %d\r\n",
+			    "constelation size phase[0..5]  :  %d  %d  %d  %d" "  %d  %d\r\n",
 			    mappingParams->constellationSize[0],
 			    mappingParams->constellationSize[1],
 			    mappingParams->constellationSize[2],
@@ -1714,8 +1698,7 @@ V90ConstellationDesigner::setConstellationToNoise_forceRate(float noiseEnergy,
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
 				    "ucode[%d]  :  %d  %d  %d  %d  %d  %d  :"
-				    "  %d  %d  %d  %d  %d  %d  :  %d  %d  %d"
-				    "  %d  %d  %d\r\n",
+				    "  %d  %d  %d  %d  %d  %d  :  %d  %d  %d" "  %d  %d  %d\r\n",
 				    i,
 				    mappingParams->constellation[0][i],
 				    mappingParams->constellation[1][i],
@@ -1931,10 +1914,8 @@ V90ConstellationDesigner::adjustConstellationsPower()
 			if (--mappingParams->constellationSize[maxIndex] == 0) {
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
-					    "V90ConnectionDesigner: adjust"
-					    "ConstellationPower - BUG !!! "
-					    "reached constellation length "
-					    "0!!!\n");
+					    "V90ConnectionDesigner: adjust" "ConstellationPower - BUG !!! "
+					    "reached constellation length " "0!!!\n");
 				more = 0;
 				mappingParams->constellationSize[maxIndex]++;
 				break;
@@ -1969,8 +1950,7 @@ V90ConstellationDesigner::adjustConstellationsPower()
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
 				    "V90ConstellationDesigner::adjust"
-				    "ConstellationsPower (pParams->d=%d)"
-				    "<V90_MIN_D_IN_DATA\n",
+				    "ConstellationsPower (pParams->d=%d)" "<V90_MIN_D_IN_DATA\n",
 				    mappingParams->word_0);
 
 			if (removed != 0) {
@@ -1978,8 +1958,7 @@ V90ConstellationDesigner::adjustConstellationsPower()
 
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
-					    "V90ConstellationDesigner::adjust"
-					    "ConstellationsPower restoring "
+					    "V90ConstellationDesigner::adjust" "ConstellationsPower restoring "
 					    "last removed point\n");
 
 				n = ++mappingParams
@@ -2433,8 +2412,7 @@ V90ConstellationDesigner::adjustConstellationsToNewK(short (*ucode)[128],
 			       > V90_CONSTELLATION_MAX) {
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
-					    "V90ConnectionDesigner::adjust"
-					    "ConstellationsToNewK !!! reached "
+					    "V90ConnectionDesigner::adjust" "ConstellationsToNewK !!! reached "
 					    "Max constellation length!!!\r\n");
 				again = 1;
 				mappingParams
@@ -2482,11 +2460,8 @@ reduce:
 					->constellationSize[maxIndex] == 0) {
 					if (DSPLIB_DEBUG_ON())
 						dsplibs_debug_printf(
-						    "V90ConnectionDesigner::"
-						    "adjustConstellationsToNewK"
-						    " - BUG !!! reached "
-						    "constellation length "
-						    "0!!!\r\n");
+						    "V90ConnectionDesigner::" "adjustConstellationsToNewK"
+						    " - BUG !!! reached " "constellation length " "0!!!\r\n");
 					mappingParams
 					    ->constellationSize[maxIndex]++;
 					break;
@@ -2801,8 +2776,7 @@ V90ConstellationDesigner::process(unsigned int rate,
 			edprintf(RATE_MASK_BANNER_RULE);
 			edprintf(RATE_MASK_BANNER_RULE);
 			edprintf("!!!!!!!!!!!!!!!!!!    V90ConstellationDesigner"
-				 ": Rate Used Masked By Provider    "
-				 "!!!!!!!!!!!!!!!!!!\r\n");
+				 ": Rate Used Masked By Provider    " "!!!!!!!!!!!!!!!!!!\r\n");
 			edprintf(RATE_MASK_BANNER_RULE);
 			edprintf(RATE_MASK_BANNER_RULE);
 			edprintf(RATE_MASK_BANNER_RULE);
@@ -2818,8 +2792,7 @@ V90ConstellationDesigner::process(unsigned int rate,
 
 		if (mappingParams->word_0 <= 20) {
 			edprintf("V90ConstellationDesigner: Connection design "
-				 "ERROR, D choosen is smaller than "
-				 "minimum.\r\n");
+				 "ERROR, D choosen is smaller than " "minimum.\r\n");
 			failed = 1;
 		} else {
 			edprintf("V90ConstellationDesigner: S = %d\r\n",
@@ -2832,8 +2805,7 @@ V90ConstellationDesigner::process(unsigned int rate,
 
 		if (maxRate < currentRate) {
 			edprintf("V90ConstellationDesigner: currentRate = %d "
-				 "is larger then maxRate = %d => seting "
-				 "currentRate = %d\r\n",
+				 "is larger then maxRate = %d => seting " "currentRate = %d\r\n",
 				 currentRate, maxRate, maxRate);
 			params->FORCE_RATE_ENABLE = 1;
 			params->ENABLE_DIGITAL_POWER_REDUCTION = 0;
@@ -2841,8 +2813,7 @@ V90ConstellationDesigner::process(unsigned int rate,
 			params->RATE_FORCE = maxRate;
 		} else if (minRate > currentRate) {
 			edprintf("V90ConstellationDesigner: currentRate = %d "
-				 "is smaller then minRate = %d => seting "
-				 "currentRate = %d\r\n",
+				 "is smaller then minRate = %d => seting " "currentRate = %d\r\n",
 				 currentRate, minRate, minRate);
 			params->FORCE_RATE_ENABLE = 1;
 			params->ENABLE_DIGITAL_POWER_REDUCTION = 0;

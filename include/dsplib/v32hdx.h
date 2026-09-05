@@ -160,31 +160,61 @@ typedef short (*v32_txhdx_fn)(void *modem, short *data, short *out,
 typedef void (*v32_rxhdx_fn)(void *modem, short *in, unsigned short *out,
 			     unsigned short *count);
 
-/*
- * Run transmit states until the block's symbol budget is spent, writing the
- * total sample count through `nsamples`.
+/**
+ * @brief Drive the V.32 half-duplex TRANSMIT machine for one block.
  *
- * `void` and not `short`: nothing in the object sets %eax before the `ret`,
- * and the result is delivered through the fourth argument instead.  The one
- * caller, `v32_handshake` (82bbb), reaches it by a sibling `jmp` and so
- * cannot discriminate.
+ * Runs transmit states until the block's symbol budget (hdx + 0x9e) is
+ * spent, writing the total sample count through @p nsamples. See the file
+ * banner for the full loop contract: `hdx` and the current state are
+ * re-read on every iteration, so a state may install its successor and
+ * even replace the whole context mid-block.
+ *
+ * Declared `void` and not `short`: nothing in the object sets `%eax`
+ * before the `ret`, and the result is delivered through the fourth
+ * argument instead. The one caller, `v32_handshake` (82bbb), reaches it by
+ * a sibling `jmp` and so cannot discriminate.
+ *
+ * @param modem     The V.32 datapump instance.
+ * @param data      Scratch data buffer the current transmit state reads/writes.
+ * @param out       Output for the modulated transmit samples.
+ * @param nsamples  Output: the total sample count produced this block.
  */
 void V32TxHdxModem(void *modem, short *data, short *out, short *nsamples);
 
-/* Run the current receive state, once.  A tail call and nothing else. */
+/**
+ * @brief Drive the V.32 half-duplex RECEIVE machine for one block.
+ *
+ * Tail-calls the current receive state once; the receive driver does not
+ * loop, unlike V32TxHdxModem().
+ *
+ * @param modem  The V.32 datapump instance.
+ * @param in     Received samples to demodulate.
+ * @param out    Output for the demodulated bits/symbols.
+ * @param count  In/out: input sample count, then output count (the current state's own contract).
+ */
 void V32RxHdxModem(void *modem, short *in, unsigned short *out,
 		   unsigned short *count);
 
-/*
- * One block of the half-duplex handshake, and the two drivers' ONLY caller:
- * clear an event bit, copy `txdata` into the context's own buffer, run the
- * receive state once, then tail-call the transmit driver on the buffer.
+/**
+ * @brief One block of the V.32 half-duplex handshake: the two drivers' only caller.
  *
- * The seven arguments ALTERNATE between the two callees rather than grouping,
- * which is what the object's six spills at 82b17..82b2a encode; the order
- * here is read off those and off the two calls, which is grade-2 evidence
- * (a callee that types it) because nothing calling this function is written.
- * See `src/pump/v32/v32hshake.c`.
+ * Clears an event bit, copies @p txdata into the context's own buffer,
+ * runs the receive state once, then tail-calls V32TxHdxModem() on the
+ * buffer.
+ *
+ * The seven arguments alternate between the two callees rather than
+ * grouping, which is what the object's six spills at 82b17..82b2a encode;
+ * the order here is read off those and off the two calls, which is
+ * grade-2 evidence (a callee that types it) because nothing calling this
+ * function is written. See `src/pump/v32/v32hshake.c`.
+ *
+ * @param modem     The V.32 datapump instance.
+ * @param txdata    Transmit symbols/data.
+ * @param txout     Output for the modulated transmit samples.
+ * @param rxin      Received samples to demodulate.
+ * @param rxout     Output for the demodulated receive data.
+ * @param nsamples  Output: transmit sample count (from V32TxHdxModem()).
+ * @param rxcount   In/out: receive sample/symbol count (the current receive state's contract).
  */
 void v32_handshake(void *modem, unsigned short *txdata, short *txout,
 		   short *rxin, unsigned short *rxout, short *nsamples,

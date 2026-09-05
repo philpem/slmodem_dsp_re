@@ -539,23 +539,13 @@ struct v8 {
 	struct v8_tx_sequence	*seq_alt;	/* +0xc4c */
 	struct v8_tx_sequence	*seq_spare;	/* +0xc50 */
 
-	/*
-	 * Five sequence buffers in a row.  That they are exactly five, and
-	 * exactly 0x40 bytes each, is confirmed by the object rather than
-	 * assumed: the hand-built one at +0xd14 puts its terminator at +0xd32
-	 * and its length at +0xd36, which is where struct v8_tx_sequence puts
-	 * them, and 60 bits is exactly the six words written above it.
-	 */
+	/* Five sequence buffers in a row, exactly 0x40 bytes each -- confirmed
+	 * by the object, not assumed (finding F68). */
 	struct v8_tx_sequence	seq[5];		/* +0xc54 */
 
 	/*
 	 * One sliding-DFT bin, used by v8_handshak_agc to watch the settled
-	 * line's energy: `v8_dftupdate`/`v8_dftenergy` are called through a
-	 * `(struct v8_dft_bin *)&v->dft` cast at this exact offset, and the
-	 * five loose fields this replaces (`fd94`,`fd96`,`fd98`,`fd9c`,`fda0`)
-	 * lined up on `phase`,`step`,`re`,`im`,`energy` byte for byte -- the
-	 * cast is the evidence, not a guess, so this is the struct rather
-	 * than five names.  `energy` (the DFT's, at +0xda0) is what
+	 * line's energy (finding F10136). `energy` (at +0xda0) is what
 	 * v8_handshak_agc compares against 0x18f to help decide whether the
 	 * far end asked for something worth turning round for.
 	 */
@@ -637,81 +627,121 @@ struct v8 {
 	unsigned char		padec4[V8_STATE_BYTES - 0xec4];
 };
 
-/*
- * Point the V.21 modem at a set of filter designs.  Called from
- * `v8_V21_Init`, and again whenever the handshake changes direction.
+/**
+ * @brief Point the V.21 modem at a set of filter designs.
+ *
+ * Called from v8_V21_Init(), and again whenever the handshake changes
+ * direction.
+ *
+ * @param v  The handshake object.
+ * @param a  Filter design A.
+ * @param b  Filter design B.
+ * @param c  Filter design C.
+ * @param d  Filter design D.
  */
 void V8_setFilters(struct v8 *v, const short *a, const short *b,
 		   const short *c, const short *d);
 
-/* Clear the V.21 delay line and its three accumulators. */
+/** @brief Clear the V.21 delay line and its three accumulators. */
 void V8_V21_reset(struct v8 *v);
 
-/* Arm the tone queue. */
+/** @brief Arm the tone queue. */
 void v8_TONEq_init(struct v8 *v);
 
-/* Arm the ANSam phase-reversal detector. */
+/** @brief Arm the ANSam phase-reversal detector. */
 void v8_phase_rev_init(struct v8_phase_rev *pr);
 
-/*
- * Look for ANSam's phase reversals.
- *
- * The window holds the last 64 samples.  Each new sample is correlated
- * against the one half a window back: while the phase is steady that product
- * stays positive, and when the carrier inverts it goes sharply negative.  The
- * comparison is against a smoothed energy rather than a fixed threshold, so
- * it works at any level the AGC leaves.
- *
- * Two reversals the right distance apart set `detected`.
- */
 #define V8_PHASE_REV_MIN	0x1af	/* the spacing that counts */
 #define V8_PHASE_REV_SPAN	0x26
 
+/**
+ * @brief Look for ANSam's phase reversals.
+ *
+ * The window holds the last 64 samples. Each new sample is correlated
+ * against the one half a window back: while the phase is steady that
+ * product stays positive, and when the carrier inverts it goes sharply
+ * negative. The comparison is against a smoothed energy rather than a
+ * fixed threshold, so it works at any level the AGC leaves.
+ *
+ * Two reversals the right distance apart set `detected`.
+ *
+ * @param pr     The phase-reversal detector.
+ * @param in     Input samples.
+ * @param count  Sample count.
+ */
 void v8_phase_rev_detect(struct v8_phase_rev *pr, const short *in,
 			 short count);
 
-/*
- * Reverse the eight bits of a byte.
+/**
+ * @brief Reverse the eight bits of a byte.
  *
  * V.8 transmits its octets least significant bit first, so every byte of a
- * CM or JM sequence passes through here on its way out.  The original does it
- * as two table lookups on the nibbles, with the halves swapped -- reversing
- * each nibble and exchanging them is the same as reversing all eight bits.
+ * CM or JM sequence passes through here on its way out. The original does
+ * it as two table lookups on the nibbles, with the halves swapped --
+ * reversing each nibble and exchanging them is the same as reversing all
+ * eight bits.
+ *
+ * @param b  The byte to reverse.
+ * @return The bit-reversed byte.
  */
 unsigned char charFlip(unsigned char b);
 
+/** @brief Multiply two Q15 values, returning the Q15 product. */
 short v8_mpyint(short a, short b);
+/** @brief Absolute value. */
 short v8_absfn(short x);
+/** @brief Read the cosine table at a given phase. */
 short v8_cosread(unsigned char phase);
+/** @brief Fold one bit into a handshake sequence's running CRC. */
 void v8_crc(struct v8_handshake *hs, int bit);
+/** @brief Copy `n` filter coefficients from `src` to `dst`. */
 void v8_copycoeff(short *dst, const short *src, short n);
+/** @brief Compute a DFT bin's magnitude squared from its real/imaginary sums. */
 void v8_dftenergy(struct v8_dft_bin *bin, short n, short shift);
 
-/*
- * Arm the tone detector.  Eight arguments: the object (whose receiver gets a
- * flag set), the detector itself, and six configuration values.  `a5` is
- * stored negated, which is the only one that is not a straight copy.
+/**
+ * @brief Arm the tone detector.
+ *
+ * @param v      The handshake object; its receiver gets a flag set.
+ * @param d      The detector to configure.
+ * @param table  Filter coefficient table.
+ * @param a3     Non-zero to count time below `lo_thresh` instead of above
+ *               `hi_thresh` (see struct v8_detector's `lo_rule`).
+ * @param a4     Configuration value, stored as given.
+ * @param a5     Hysteresis run count; stored negated.
+ * @param a6     Configuration value, stored as given.
+ * @param a7     Configuration value, stored as given.
  */
 void v8_detectorinit(struct v8 *v, struct v8_detector *d, const short *table,
 		     short a3, short a4, short a5, short a6, short a7);
 
-/*
- * Bring up the V.21 modem V.8 signals over.  `channel` picks which of the two
- * V.21 channels this modem transmits on, and `answerer` whether it answered
- * the call; the two choices are independent and pick different things.
+/**
+ * @brief Bring up the V.21 modem V.8 signals over.
+ *
+ * @param v         The handshake object.
+ * @param channel   Which of the two V.21 channels this modem transmits on.
+ * @param answerer  Non-zero if this modem answered the call. Independent
+ *                  of `channel` -- the two choices pick different things.
  */
 void v8_V21_Init(struct v8 *v, short channel, short answerer);
 
-/*
- * Build the CM or JM sequence about to be transmitted, from the call menu at
- * `v->cm` into the buffer at `v->tx_seq`.  Both are set by the caller, which
- * is how one function serves both messages.
+/**
+ * @brief Build the CM or JM sequence about to be transmitted.
+ *
+ * Reads the call menu at `v->cm` and writes into the buffer at
+ * `v->tx_seq`. Both are set by the caller, which is how one function
+ * serves both messages.
+ *
+ * @param v  The handshake object.
  */
 void initTxSequence(struct v8 *v);
 
-/*
- * Lay out the handshake from the configuration V8Create planted.  Reads
- * `v->side` and builds one of three shapes.
+/**
+ * @brief Lay out the handshake from the configuration V8Create() planted.
+ *
+ * Reads `v->side` and builds one of three shapes.
+ *
+ * @param v  The handshake object.
  */
 void v8handshakinit(struct v8 *v);
 
@@ -730,42 +760,42 @@ struct v8_cfg {
 	struct v8_cm	*cm;			/* +0x14 */
 };
 
-/*
- * Build a handshake.  Allocates 3780 bytes and does NOT zero them: only the
- * fields below and whatever v8handshakinit writes are defined afterwards.
+/**
+ * @brief Build a handshake.
+ *
+ * Allocates 3780 bytes and does not zero them: only the fields the
+ * initialisers below set, and whatever v8handshakinit() writes, are
+ * defined afterwards.
+ *
+ * @param cfg  Configuration to plant into the new object.
+ * @return The new handshake object.
  */
 struct v8 *V8Create(const struct v8_cfg *cfg);
 
-/* Free it.  Tolerates NULL. */
+/** @brief Free a handshake object. Tolerates NULL. */
 void V8Delete(struct v8 *v);
 
-/*
- * Read back the message that was received, as octets.
- *
- * This is the inverse of what `initTxSequence` builds: each 10-bit character
- * has its framing shifted off and its bits put back in order, so a CM or JM
- * captured off the line becomes the bytes the standard describes.  It is the
- * decode half of V.8 and the one thing needed to watch a negotiation.
- *
- * `count` is in/out: the caller's capacity going in, the number of octets
- * written coming out.  Returns 0 normally, the full length when the message
- * did not fit (so the caller can tell truncation from a short message), and
- * -1 when there is nothing to read.
- */
 #define V8_GET_EMPTY	(-1)
 
+/**
+ * @brief Read back the message that was received, as octets.
+ *
+ * This is the inverse of what initTxSequence() builds: each 10-bit
+ * character has its framing shifted off and its bits put back in order, so
+ * a CM or JM captured off the line becomes the bytes the standard
+ * describes. It is the decode half of V.8 and the one thing needed to
+ * watch a negotiation.
+ *
+ * @param v      The handshake object.
+ * @param out    Output buffer for the decoded octets.
+ * @param count  In/out: the caller's buffer capacity going in, the number
+ *               of octets written coming out.
+ * @return 0 normally, the full message length when it did not fit `count`
+ *         (so the caller can tell truncation from a short message), or
+ *         #V8_GET_EMPTY when there is nothing to read.
+ */
 int V8GetMessage(struct v8 *v, unsigned char *out, int *count);
 
-/*
- * Put a message of your own into one of the five buffers, as octets.  The
- * counterpart to V8GetMessage and the same framing: each octet is reversed,
- * shifted up one and given a low bit.
- *
- * `which` selects the buffer, and the mapping is not the order they sit in
- * memory -- 1 and 2 are swapped.  Returns 0 normally, V8_SET_TRUNCATED when
- * the message was longer than a buffer holds and only the first fifteen
- * octets went in, and -1 for an unknown selector or an empty message.
- */
 /*
  * The names are the author's: V8SetMessage announces each through the
  * exported v8SequenceName table, and the fourth selector is the V.92
@@ -776,123 +806,175 @@ int V8GetMessage(struct v8 *v, unsigned char *out, int *count);
 #define V8_SET_CJ	2
 #define V8_SET_QC1A	3
 
-/* .rodata+0x53ac, a GLOBAL symbol in the object, so exported here too. */
+/** .rodata+0x53ac, a GLOBAL symbol in the object, so exported here too. */
 extern const char *const v8SequenceName[4];
 
 #define V8_SET_TRUNCATED	15
 #define V8_SET_REJECTED		(-1)
 
+/**
+ * @brief Put a message of your own into one of the five sequence buffers.
+ *
+ * The counterpart to V8GetMessage() and the same framing: each octet is
+ * reversed, shifted up one and given a low bit.
+ *
+ * @param v       The handshake object.
+ * @param which   Which buffer (#V8_SET_CM, #V8_SET_JM, #V8_SET_CJ or
+ *                #V8_SET_QC1A); the mapping is not the order the buffers
+ *                sit in memory -- CM and JM are swapped.
+ * @param octets  The message.
+ * @param n       Its length in octets.
+ * @return 0 normally, #V8_SET_TRUNCATED when the message was longer than
+ *         a buffer holds and only the first fifteen octets went in, or
+ *         #V8_SET_REJECTED for an unknown selector or an empty message.
+ */
 int V8SetMessage(struct v8 *v, int which, const unsigned char *octets, int n);
 
-/*
- * Hand out the next bit of a sequence, least significant first, folding each
- * into the CRC on the way.  Returns 0 or 1, or -1 when the sequence is
- * finished and not set to repeat.
- */
 #define V8_GETBIT_END	(-1)
 
+/**
+ * @brief Hand out the next bit of a sequence, least significant first.
+ *
+ * Folds each bit into the sequence's CRC on the way out.
+ *
+ * @param s  The sequence.
+ * @return 0 or 1, or #V8_GETBIT_END when the sequence is finished and not
+ *         set to repeat.
+ */
 int v8_getbit(struct v8_tx_sequence *s);
 
-/* Arm the transmitter and the receiver.  Both always return 0. */
+/** @brief Arm the transmitter. Always returns 0. */
 int v8_txinit(struct v8 *v);
+/** @brief Arm the receiver. Always returns 0. */
 int v8_rxinit(struct v8 *v);
 
-/* Arm the ANSam tone generator.  The same fields v8handshakinit sets inline. */
+/** @brief Arm the ANSam tone generator (the same fields v8handshakinit() sets inline). */
 void v8_ansaminit(struct v8 *v);
 
-/* Four samples of the queued tone, from the phase accumulator. */
+/** @brief Generate four samples of the queued tone, from the phase accumulator. */
 void v8_TONEq_generate(struct v8 *v, short *out);
 
-/* Move four samples between the rings and their staging buffers. */
+/** @brief Move four samples from the receive ring into its staging buffer. */
 int v8_rxreadqueue(struct v8 *v);
+/** @brief Move four samples from the transmit staging buffer into its ring. */
 int v8_txwritequeue(struct v8 *v);
 
-/* One sample through the 61-tap transmit shaping filter. */
+/** @brief Run one sample through the 61-tap transmit shaping filter. */
 short v8_fsktxfilter(struct v8 *v, short sample);
 
-/*
- * Advance a sliding DFT.  Each bin has its own phase accumulator and step,
- * and takes `nsamples` samples into its running real and imaginary sums.
+/**
+ * @brief Advance a sliding DFT.
+ *
+ * Each bin has its own phase accumulator and step, and takes `nsamples`
+ * samples into its running real and imaginary sums.
+ *
+ * @param bins      The DFT bins to update.
+ * @param nbins     How many bins.
+ * @param samples   Input samples.
+ * @param nsamples  How many samples.
  */
 void v8_dftupdate(struct v8_dft_bin *bins, short nbins, const short *samples,
 		  short nsamples);
 
-/*
- * Four samples of FSK.  `which` picks the mark or the space carrier; the
- * result goes through the shaping filter and straight into the transmit ring.
+/**
+ * @brief Generate four samples of FSK.
+ *
+ * The result goes through the shaping filter and straight into the
+ * transmit ring.
+ *
+ * @param v      The handshake object.
+ * @param which  Picks the mark or the space carrier.
  */
 int v8_fskmodulate(struct v8 *v, short which);
 
-/* One step of the receive AGC. */
+/** @brief One step of the receive AGC. */
 int v8_agcadapt(struct v8 *v);
 
-/*
- * The receive front end.  Takes a block out of the symbol buffer, filters it
- * with the design that matches which end of the call this is, applies the
- * current gain with saturation, and adapts that gain from what it measured.
+/**
+ * @brief The receive front end.
+ *
+ * Takes a block out of the symbol buffer, filters it with the design that
+ * matches which end of the call this is, applies the current gain with
+ * saturation, and adapts that gain from what it measured.
+ *
+ * @param v  The handshake object.
  */
 int V8agc(struct v8 *v);
 
-/*
- * Watch the AGC's gain and decide when it has settled.
- *
- * Every call advances two counters by four.  The first sets how often the
- * reference is refreshed; between refreshes the gain is compared against it,
- * and a relative change of more than about five percent resets the second
- * counter.  When the second counter survives long enough the line is called
- * stable, which is what the handshake waits for before believing anything it
- * hears.
- */
 #define V8_STABLE_PERIOD	0x3bf	/* counter limit, stepped by four */
 #define V8_STABLE_TOLERANCE	0x333	/* Q14: about five percent     */
 
+/**
+ * @brief Watch the AGC's gain and decide when it has settled.
+ *
+ * Every call advances two counters by four. The first sets how often the
+ * reference is refreshed; between refreshes the gain is compared against
+ * it, and a relative change of more than about five percent resets the
+ * second counter. When the second counter survives long enough the line
+ * is called stable, which is what the handshake waits for before
+ * believing anything it hears.
+ *
+ * @param v  The handshake object.
+ */
 void checkSignalStability(struct v8 *v);
 
-/*
- * Check that a received JM answers the CM that was sent.
- *
- * Two passes over the received sequence.  The first looks for the call
- * function and, when the menu declared one, matches the extension characters
- * that follow it; the second does the same for the second extension against
- * its own marker.  Each pass records what it matched and sets a flag.
- *
- * A mismatch inside an extension slides the expected character along rather
- * than the received word, so a JM that repeats a character still matches --
- * which is what makes this tolerant of the framing jitter a real line gives.
- */
 #define V8_JM_FN_MASK	0xfff1	/* what identifies a call-function word */
 #define V8_JM_FN_MARK	0x101
 #define V8_JM_EXT2_MARK	0x0a1
 
+/**
+ * @brief Check that a received JM answers the CM that was sent.
+ *
+ * Two passes over the received sequence. The first looks for the call
+ * function and, when the menu declared one, matches the extension
+ * characters that follow it; the second does the same for the second
+ * extension against its own marker. Each pass records what it matched and
+ * sets a flag.
+ *
+ * A mismatch inside an extension slides the expected character along
+ * rather than the received word, so a JM that repeats a character still
+ * matches -- which is what makes this tolerant of the framing jitter a
+ * real line gives.
+ *
+ * @param v  The handshake object.
+ */
 void evaluateRxJMSequence(struct v8 *v);
 
-/*
- * Turn what was received into a call menu.
+/**
+ * @brief Turn what was received into a call menu.
  *
- * This is the other half of the monitoring story: `V8GetMessage` hands back
- * the octets, and this reads the fields out of them -- which call function
- * was asked for, which modulations were offered, and what the two extension
- * bytes carried.
+ * This is the other half of the monitoring story: V8GetMessage() hands
+ * back the octets, and this reads the fields out of them -- which call
+ * function was asked for, which modulations were offered, and what the
+ * two extension bytes carried.
  *
- * Returns 0 when it filled the menu and -1 when there was nothing to read.
+ * @param v    The handshake object.
+ * @param out  Output: the decoded call menu.
+ * @return 0 when it filled the menu, -1 when there was nothing to read.
  */
 int V8UpdateModemParameters(struct v8 *v, struct v8_cm *out);
 
-/*
- * Build the JM that answers a received CM.
+/**
+ * @brief Build the JM that answers a received CM.
  *
- * Unlike `initTxSequence`, which builds a message from the local menu alone,
- * this one is driven by what arrived: the call function is echoed when it is
- * one this end accepts, the extensions are echoed character for character,
- * and the three menu words are ANDed with the ones received -- so what goes
- * back is the intersection of what was offered and what is wanted.
+ * Unlike initTxSequence(), which builds a message from the local menu
+ * alone, this one is driven by what arrived: the call function is echoed
+ * when it is one this end accepts, the extensions are echoed character for
+ * character, and the three menu words are ANDed with the ones received --
+ * so what goes back is the intersection of what was offered and what is
+ * wanted.
+ *
+ * @param v  The handshake object.
  */
 void rebuildJMSequence(struct v8 *v);
 
-/*
- * One pass of the handshake: transmit until the queue is full, then run the
- * receiver once.  Returns 0 normally, 1 when a deadline expired, 2 when the
- * handshake finished.
+/**
+ * @brief One pass of the handshake: transmit until the queue is full,
+ * then run the receiver once.
+ *
+ * @param v  The handshake object.
+ * @return 0 normally, 1 when a deadline expired, 2 when the handshake
+ *         finished.
  */
 int v8handshak(struct v8 *v);
 
@@ -933,18 +1015,37 @@ enum v8_status {
 
 extern const char *const v8StatusName[V8_LAST_ENUM + 1];
 
-/* One buffer of samples through the handshake; returns a status. */
+/**
+ * @brief Run one buffer of samples through the handshake.
+ *
+ * @param v      The handshake object.
+ * @param in     Input samples.
+ * @param out    Output samples.
+ * @param count  Sample count.
+ * @return A #v8_status value.
+ */
 int V8Process(struct v8 *v, const short *in, short *out, int count);
 
-/*
- * The tone detector's two filter sections as standalone functions.  The
- * object defines both and calls neither: `v8_tone_detect` has them inlined.
+/**
+ * @brief The tone detector's notch filter section, as a standalone
+ * function.
+ *
+ * The object defines this and calls it from nowhere: v8_tone_detect()
+ * has it inlined.
  */
 short notch_filter(const short *in, struct v8_detector *d);
+/**
+ * @brief The tone detector's biquad filter section, as a standalone
+ * function.
+ *
+ * The object defines this and calls it from nowhere: v8_tone_detect()
+ * has it inlined.
+ */
 short biquad_filter(short in, struct v8_detector *d, const short *coeff);
 
-/* The two long receive paths, in v8hsrx.c. */
+/** @brief Wait for the line to settle and then for a tone. One of the handshake's two long receive paths; see v8hsrx.c. */
 int v8_handshak_agc(struct v8 *v);
+/** @brief Turn the demodulator's bits into characters and match them against `rx_substate`. The other long receive path; see v8hsrx.c. */
 int v8_handshak_demod(struct v8 *v);
 
 /*
@@ -966,23 +1067,23 @@ int v8_handshak_demod(struct v8 *v);
 #define V8_HS_TAKEN_RX	0x32	/* side != 1, op_mode == 1 */
 #define V8_HS_TAKEN_TX	0x33	/* side == 1, op_mode == 1 */
 
-/*
- * Four samples of ANSam: a carrier amplitude-modulated by a second, slower
- * oscillator, with the amplitude negated every V8_ANSAM_REVERSAL blocks --
- * which is the periodic phase reversal that distinguishes ANSam from a plain
- * answer tone.
- */
 #define V8_ANSAM_REVERSAL	0x438
 #define V8_ANSAM_DEPTH		0xccd	/* Q14: 0.05 */
 #define V8_ANSAM_UNITY		0x4000	/* Q14: 1.0  */
 
+/**
+ * @brief Generate four samples of ANSam.
+ *
+ * A carrier amplitude-modulated by a second, slower oscillator, with the
+ * amplitude negated every #V8_ANSAM_REVERSAL blocks -- the periodic phase
+ * reversal that distinguishes ANSam from a plain answer tone.
+ *
+ * @param v    The handshake object.
+ * @param out  Output: four samples.
+ */
 void v8_ansamgenerate(struct v8 *v, short *out);
 
 /*
- * Nudge the handshake from outside.  Three requests, each valid only from one
- * state; returns 0 when it was accepted and -1 when it was not, including for
- * an unknown request.
- *
  * The names are the author's, from the table V8Control prints through
  * (.rodata+0x5380, eleven entries).  Each says which message the request
  * starts, and each matches what the arm does: START_JM puts the answerer into
@@ -997,33 +1098,53 @@ void v8_ansamgenerate(struct v8 *v, short *out);
 
 extern const char *const v8ControlName[V8CTRL_LAST + 1];
 
+/**
+ * @brief Nudge the handshake from outside.
+ *
+ * Three requests are implemented, each valid only from one state; the
+ * other eight (#V8CTRL_LAST's worth) are placeholders in the original too
+ * and no arm accepts them.
+ *
+ * @param v     The handshake object.
+ * @param what  One of #V8CTRL_START_CM, #V8CTRL_START_CJ, #V8CTRL_START_JM,
+ *              or an unimplemented request.
+ * @return 0 when the request was accepted, -1 when it was not (including
+ *         for an unknown request).
+ */
 int V8Control(struct v8 *v, int what);
 
-/*
- * Run the tone detector over the samples between `in` and `v->rx.buf`,
- * filtering in place.
+/**
+ * @brief Run the tone detector over the samples between `in` and
+ * `v->rx.buf`, filtering in place.
  *
- * A fixed input biquad, then two more from the table the detector was built
- * with, then a rectifier and a leaky integrator.  The verdict comes from
- * counting how long the integrator stays the right side of two thresholds,
- * which is the hysteresis that stops a passing noise burst counting as a
- * tone.
+ * A fixed input biquad, then two more from the table the detector was
+ * built with, then a rectifier and a leaky integrator. The verdict comes
+ * from counting how long the integrator stays the right side of two
+ * thresholds, which is the hysteresis that stops a passing noise burst
+ * counting as a tone.
  *
- * Returns 1 while the tone is considered present.
+ * @param v   The handshake object.
+ * @param d   The detector.
+ * @param in  Input samples, up to `v->rx.buf`.
+ * @return 1 while the tone is considered present.
  */
 int v8_tone_detect(struct v8 *v, struct v8_detector *d, short *in);
 
-/*
- * Demodulate V.21.
+/**
+ * @brief Demodulate V.21.
  *
  * Four correlations per symbol -- the mark pair and the space pair, each a
- * real and an imaginary arm -- and the larger energy wins.  If neither
- * reaches the threshold the line is called silent and both run counters are
- * dropped, which is what stops noise between characters producing bits.
+ * real and an imaginary arm -- and the larger energy wins. If neither
+ * reaches the threshold the line is called silent and both run counters
+ * are dropped, which is what stops noise between characters producing
+ * bits.
  *
- * Bits come out of run lengths rather than one per symbol: four consecutive
- * decisions the same way is one bit, and the remainder is carried.  That is
- * how a 300 baud signal sampled at 1200 symbols a second is decoded.
+ * Bits come out of run lengths rather than one per symbol: four
+ * consecutive decisions the same way is one bit, and the remainder is
+ * carried. That is how a 300 baud signal sampled at 1200 symbols a second
+ * is decoded.
+ *
+ * @param v  The handshake object.
  */
 void v8_fskdemodulate(struct v8 *v);
 

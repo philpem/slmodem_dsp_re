@@ -46,64 +46,116 @@ struct _tagModemParameters;
 
 class K56FlexFloModem {
 public:
-	/* Defined in src/pump/v90/K56FlexFloModem.cpp.  All are stubs. */
+	/**
+	 * @brief Construct a K56flex modem object. Initialises nothing.
+	 *
+	 * Defined in src/pump/v90/K56FlexFloModem.cpp; body is empty. The
+	 * three parameters are the mangling's and never read.
+	 */
 	K56FlexFloModem(void *, int, _tagModemParameters *);
+
+	/** @brief Destroy a K56flex modem object. Releases nothing (empty body). */
 	~K56FlexFloModem();
 
-	int getK56FlexMpBits(short *);
-	int getK56FlexJaBits(short *);
+	/**
+	 * @brief Stub. Reads nothing, writes nothing through @p out.
+	 * @param out Unused.
+	 * @return Always 0.
+	 */
+	int getK56FlexMpBits(short *out);
+
+	/**
+	 * @brief Stub. Reads nothing, writes nothing through @p out.
+	 * @param out Unused.
+	 * @return Always 0.
+	 */
+	int getK56FlexJaBits(short *out);
+
+	/** @brief Stub. Empty body; does not use either argument. */
 	void setMinMaxRates(int, int);
+
+	/** @brief Stub. Empty body. */
 	void enterPhase3FullDuplex();
+
+	/**
+	 * @brief Stub for the K56flex side of the modem's external reset.
+	 *
+	 * Empty body -- contrast VPcmFloModem::externalReset(), which
+	 * reinitialises three parameter blocks, twenty-odd flags and a
+	 * demodulator for the V.90 side (finding F1090). `VPcmV34Create`
+	 * calls this.
+	 */
 	void externalReset();
+
+	/** @brief Stub. Empty body. */
 	void internalReset();
+
+	/** @brief Stub. Empty body. */
 	void k56FlexEnterPhase3();
 
-	/*
-	 * The demodulator, and the one member of the class that returns
-	 * something other than zero: `mov $0x5,%eax; ret`.  `int` is measured
-	 * the same way the two bit getters' return type is and goes no further.
+	/**
+	 * @brief Stub K56flex demodulator entry point.
+	 *
+	 * Reads none of its four arguments and does not write through either
+	 * `int *` output. Always reports a fixed status of 5 -- not zero and
+	 * not derived from anything -- which `k56FlexPhase34`'s completion
+	 * arms elsewhere test as load-bearing even though nothing in this
+	 * class computes it (deviation D155).
+	 *
+	 * @return Always 5.
 	 */
 	int k56FlexRunDemodulator(float *, unsigned int, int *, int *);
 
 	/*
-	 * --- THE SIX VISUAL DIAGNOSTICS -------------------------------------
-	 *
-	 * Three bytes each, `31 c0 c3`, at .text+0x10210 through +0x10260 on a
-	 * 0x10 stride, and there is nothing else in any of them:
-	 *
-	 *     xor %eax,%eax
-	 *     ret
-	 *
-	 * So each one returns zero and touches neither `this` nor the array it
-	 * is handed.  Written as `return 0;` because that is the whole of what
-	 * the object does, and NOT as a filter, a clamp or an empty loop: the
-	 * bytes bound the body at two instructions and there is no room for
-	 * structure to have been optimised away.
-	 *
-	 * `int` RATHER THAN `void`, and it is measured the same way the two
-	 * `getK56Flex*Bits` above are: a function returning nothing leaves
-	 * %eax alone and these set it.  `VPcmV34GetVisualDiagnostics` reads
-	 * the result of five of the six back and returns it, which is the
-	 * caller-side half of the same statement.  The WIDTH and the
-	 * SIGNEDNESS are not recoverable -- `short`, `unsigned` or a null
-	 * pointer return would compile to the same two bytes -- and `int` is
-	 * this file's existing convention for exactly that.
-	 *
+	 * THE SIX VISUAL DIAGNOSTICS.  Each is `xor %eax,%eax; ret` and
+	 * nothing else -- returns zero and touches neither `this` nor the
+	 * array it is handed, reporting "nothing to show" for a K56flex
+	 * session's constellation, equaliser, DFE or decision errors.
+	 * `VPcmV34GetVisualDiagnostics` reads back and returns the result of
+	 * four of these; the two resampler ones below are called but their
+	 * answer is discarded by the dispatcher (see src/pump/v34/v34diag.cpp).
 	 * Argument types are the mangling's and exact.
 	 */
+
+	/**
+	 * @brief Stub. Reports no constellation points.
+	 * @return Always 0.
+	 */
 	int getConstellation(int_complex *, unsigned long);
+
+	/**
+	 * @brief Stub. Reports no DFE taps.
+	 * @return Always 0.
+	 */
 	int getDFE(int_complex *, unsigned long);
+
+	/**
+	 * @brief Stub. Reports no decision-error points.
+	 * @return Always 0.
+	 */
 	int getDecisionErrors(int_complex *, unsigned long);
+
+	/**
+	 * @brief Stub. Reports no linear-equalizer taps.
+	 * @return Always 0.
+	 */
 	int getLinearEqualizer(int_complex *, unsigned long);
+
+	/**
+	 * @brief Stub. Called by the dispatcher, but its answer is discarded
+	 *        there in favour of a fixed reply.
+	 * @return Always 0.
+	 */
 	int getResamplerOffset(int_complex *, unsigned long);
+
+	/**
+	 * @brief Stub. Called by the dispatcher, but its answer is discarded
+	 *        there in favour of a fixed reply.
+	 * @return Always 0.
+	 */
 	int getResamplerPhase(int_complex *, unsigned long);
 
-	/*
-	 * The signature is the mangling's.  `31 c0 c3` like the bit getters,
-	 * so it returns zero and `int` is the file's convention for exactly
-	 * that shape; the old `void` here was a placeholder, not a
-	 * measurement, and the `xor %eax,%eax` overrules it.
-	 */
+	/** @brief Stub. @return Always 0. */
 	int getK56MPsReceiver();
 };
 
@@ -122,8 +174,22 @@ public:
 #define K56FLEX_OBJECT_SIZE	0x14
 
 extern "C" {
+/**
+ * @brief Allocate the K56flex side's opaque object.
+ * @return A newly allocated, `K56FLEX_OBJECT_SIZE`-byte block.
+ */
 void *K56FLEX_Create(void *, void *, void *, int);
+
+/**
+ * @brief Free a K56flex object allocated by K56FLEX_Create(), if non-NULL.
+ * @param obj The object to free, or NULL (a no-op).
+ */
 void K56FLEX_Delete(void *obj);
+
+/**
+ * @brief K56flex session-termination hook. Reads nothing and does nothing.
+ * @return Always 0.
+ */
 int K56FLEX_SessionTermination(void);
 }
 

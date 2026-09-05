@@ -1,74 +1,28 @@
-/*
- * V92BitsToSymbol.h -- the V.92 upstream bit-to-symbol stage.
+/**
+ * @file V92BitsToSymbol.h
+ * @brief V.92 upstream bit-to-symbol stage: decouples "here are some bits"
+ *        from "give me exactly `symbolsBlockSize` symbols".
  *
- * Reconstructed from dsplibs.o.  ALL EIGHT of the class's symbols are written
- * in src/pump/v90/V92BitsToSymbol.cpp -- the constructor (C2 at .text+0x4ded0
- * and C1 at +0x4df40, 105 bytes each), the destructor (D2 at +0x4dfb0 and
- * D1 at +0x4e010, 84 bytes each), `reset`, `nofBitsForNextTime`,
- * `setSymbolsBlockSize` and the three `process` overloads.
+ * The class owns a V92Transmitter and a `short` staging buffer. Bits go in
+ * through the two overloads that take a `bits` argument; the transmitter
+ * turns each `K` of them into twelve symbols appended at `symbolsDone`. The
+ * two overloads that take an `out` argument hand `symbolsBlockSize` of the
+ * staged symbols back and shift whatever is left down to the front.
+ * `nofBitsForNextTime` is the class telling its caller how many bits it
+ * wants next.
  *
- * WHAT THE CLASS IS.  It owns a V92Transmitter and a `short` staging buffer,
- * and it exists to decouple "here are some bits" from "give me exactly
- * `symbolsBlockSize` symbols".  Bits go in through the two overloads that
- * take a `bits` argument, the transmitter turns each `K` of them into twelve
- * symbols appended at `symbolsDone`, and the two overloads that take an
- * `out` argument hand `symbolsBlockSize` of them back and shift whatever is
- * left down to the front.  `nofBitsForNextTime` is the class telling its
- * caller how many bits it wants next.
- *
- * THE OBJECT IS 0x20 BYTES, AND IT IS THE ALLOCATION.  `V92Modulator::
- * V92Modulator` builds it:
- *
- *     15226:  c7 04 24 20 00 00 00   movl $0x20,(%esp)
- *     1522d:  e8 ..                  call sysdep_malloc
- *     15247:  e8 ..                  call V92BitsToSymbol::V92BitsToSymbol
- *
- * so 0x20 is the original compiler's own `sizeof` (finding F1249's oracle).
- * The furthest field anything here touches is the byte at +0x1c, and three
+ * `sizeof(V92BitsToSymbol)` is 0x20 -- the exact allocation
+ * `V92Modulator::V92Modulator` requests before constructing it (finding
+ * F1249). The furthest field anything touches is the byte at +0x1c; three
  * bytes of alignment carry the object to 0x20.
  *
- * ---------------------------------------------------------------------------
- * FOUR OF THE FIVE SCALARS ARE NAMED BY THE THREE SMALL MEMBERS:
- *
- *   `reset(V92MappingParams *)`  (.text+0x4e070, 68 B)
- *        transmitter->reset(params); +0x10 = 0; +0x18 = 0;
- *        +0x14 = *(unsigned *)params; +0x1c = 1
- *
- *   `setSymbolsBlockSize(unsigned n)`  (+0x4e130, 108 B)
- *        +0x18 = n, then returns what `nofBitsForNextTime` returns --
- *        inlined, so the two bodies are the same code twice
- *
- *   `nofBitsForNextTime()`  (+0x4e0c0, 100 B)
- *        d = +0x18 - +0x10; zero if +0x18 <= +0x10, and otherwise the
- *        TWO EXPRESSIONS BELOW, which are not the same expression
- *
- * So +0x18 is a block size in SYMBOLS, +0x10 is how many of them are already
- * accounted for, +0x14 is a bit count per twelve symbols, and the divisor
- * twelve is the V.90/V.92 data frame.  Every comparison in those two members
- * is `jbe`/`ja` and the division is the 0xaaaaaaab reciprocal with a logical
- * shift, so all three are UNSIGNED and that is forced rather than chosen.
- *
- * **THE ROUNDING-UP IS NOT ONE EXPRESSION AND THE DIFFERENCE IS REAL.**  The
- * obvious reading -- `ceil(d / 12) * bitsPerFrame` -- is what the object
- * computes only when twelve does NOT divide `d`.  When it does, the object
- * multiplies FIRST and divides after:
- *
- *     d % 12 != 0   ->   (d / 12 + 1) * bitsPerFrame     .text+0x4e0f2
- *     d % 12 == 0   ->   d * bitsPerFrame / 12           .text+0x4e108
- *
- * and there is no doubt about which is which: the `je` at +0x4e0f0 is taken
- * on `d == (d / 12) * 12`, and the block it lands in reloads +0x14 into the
- * register that held the quotient, so the quotient is dead there and cannot
- * be what the multiply uses.  Over 32-bit arithmetic the two agree on every
- * input where `d * bitsPerFrame` fits, and separate the moment it wraps --
- * finding F3052's shape exactly, and the reason this is spelt out here rather
- * than tidied into the shorter form that "obviously" means the same thing.
- *
- * **+0x14 IS THE ONE THE CONSTRUCTOR LEAVES ALONE**, and the hole is the
- * claim: the constructor writes +0x10, +0x18 and +0x1c and not +0x14, so a
- * freshly constructed object's bit count is whatever the allocation held
- * until `reset` copies it out of the mapping parameters.  Finding F1248's
- * shape, in a second class.
+ * `nofBitsForNextTime` (and `setSymbolsBlockSize`, which inlines it) rounds
+ * `(symbolsBlockSize - symbolsDone)` symbols up to a bit count in two
+ * genuinely different ways depending on whether twelve divides the
+ * remainder evenly -- multiply-then-divide when it does, divide-then-round
+ * when it doesn't -- and the two forms only disagree once the intermediate
+ * multiply overflows 32 bits. Do not simplify this to one expression;
+ * finding F3052 has the object-level proof that the object itself does not.
  *
  * Data member names are invented and descriptive (finding F226).
  */
@@ -116,27 +70,74 @@ class V92Transmitter;
 
 class V92BitsToSymbol {
 public:
+	/**
+	 * @brief Construct the stage: build the owned V92Transmitter and
+	 *        allocate the `short` staging buffer.
+	 * @param nSymbols  Capacity of the staging buffer, in symbols.
+	 * @param params    Stored verbatim, not owned; not read by the
+	 *                  constructor itself.
+	 */
 	V92BitsToSymbol(unsigned int nSymbols, V92Parameters *params);
+	/**
+	 * @brief Destroy the owned transmitter and free the staging buffer.
+	 *        Neither pointer nor `params` is cleared afterwards, so a
+	 *        second destruction double-frees (docs/deviations.md,
+	 *        reproduced from the object).
+	 */
 	~V92BitsToSymbol();
 
-	/*
-	 * Argument types are the mangling's and exact.  Return types are not
-	 * mangled: `nofBitsForNextTime` and `setSymbolsBlockSize` leave an
-	 * unsigned count in %eax, the three `process` overloads leave one of
-	 * the four V92BTOS_* constants above, and `reset` sets %eax on no
-	 * path of its own.
-	 *
-	 * `nbits` IS IN-OUT IN ONE OVERLOAD AND OUT IN THE OTHER, which the
-	 * object states rather than the signature: the three-argument form
-	 * reads it (`mov (%ecx),%eax` at .text+0x4e22f) before handing it to
-	 * the transmitter and overwrites it on the way out, and the
-	 * two-argument form only ever stores.
+	/**
+	 * @brief Reset the transmitter and this stage's own counters for a
+	 *        new connection.
+	 * @param params  A V92ParamsInfo block; only its first word (`K`,
+	 *                bits per twelve-symbol frame) is read.
 	 */
 	void reset(V92MappingParams *params);
+	/**
+	 * @brief How many more bits the caller must supply before the
+	 *        currently configured block of `symbolsBlockSize` symbols can
+	 *        be filled from what is already staged.
+	 * @return 0 if enough symbols are already staged, else the bit count
+	 *         (see the file header for the two-formula rounding rule).
+	 */
 	unsigned int nofBitsForNextTime();
+	/**
+	 * @brief Set the number of symbols a subsequent `process(nbits, out)`
+	 *        call should deliver.
+	 * @param nSymbols  The new block size, in symbols.
+	 * @return The same value `nofBitsForNextTime()` would return.
+	 */
 	unsigned int setSymbolsBlockSize(unsigned int nSymbols);
+	/**
+	 * @brief Feed bits in without collecting any symbols out.
+	 * @param bits   Input bits for the transmitter.
+	 * @param nbits  Number of bits in @p bits (input only, on this
+	 *               overload).
+	 * @return A #V92BTOS_OK / #V92BTOS_SIZE_NOT_SET / #V92BTOS_BUFFER_OVERFLOW
+	 *         status.
+	 */
 	int process(unsigned char *bits, unsigned int nbits);
+	/**
+	 * @brief Feed bits in and collect one block of symbols out in the
+	 *        same call.
+	 * @param bits   Input bits for the transmitter.
+	 * @param nbits  In: number of bits in @p bits. Out: bits wanted for
+	 *               the next call (`nofBitsForNextTime()`).
+	 * @param out    Receives `symbolsBlockSize` symbols.
+	 * @return A #V92BTOS_OK / #V92BTOS_SIZE_NOT_SET /
+	 *         #V92BTOS_BUFFER_UNDERFLOW / #V92BTOS_BUFFER_OVERFLOW status.
+	 */
 	int process(unsigned char *bits, unsigned int &nbits, short *out);
+	/**
+	 * @brief Collect one block of already-staged symbols, feeding no new
+	 *        bits in.
+	 * @param nbits  Out: bits wanted for the next call
+	 *               (`nofBitsForNextTime()`).
+	 * @param out    Receives `symbolsBlockSize` symbols, or fewer (with
+	 *               #V92BTOS_BUFFER_UNDERFLOW) if not enough are staged.
+	 * @return A #V92BTOS_OK / #V92BTOS_SIZE_NOT_SET /
+	 *         #V92BTOS_BUFFER_UNDERFLOW status.
+	 */
 	int process(unsigned int &nbits, short *out);
 
 	/* Public for `offsetof`; one access section keeps the class standard
@@ -156,13 +157,9 @@ public:
 	 */
 	V92Parameters *params;
 
-	/*
-	 * +0x08  `sysdep_malloc(2 * nSymbols)` -- `lea (%edi,%edi,1)`, so the
-	 * element is two bytes and the count is the constructor's first
-	 * argument.  The class's `process` overloads take `short *`, which is
-	 * what fixes the element type at `short` rather than at "two bytes".
-	 * Owned; the destructor frees it with no destructor call.
-	 */
+	/* +0x08  The staging buffer, sized `2 * nSymbols` bytes; element type
+	 * `short` is fixed by the `process` overloads' own signatures. Owned;
+	 * the destructor frees it with no destructor call. */
 	short *symbols;
 
 	/* +0x0c  The constructor's first argument, kept verbatim: the number
@@ -174,19 +171,11 @@ public:
 	unsigned int symbolsDone;
 
 	/*
-	 * +0x14  Bits per twelve symbols, and it is now MEASURED rather than
-	 * inferred from the arithmetic that reads it.  `reset` copies it out
-	 * of the mapping parameters' first word, which is the same word
-	 * `V92Transmitter::reset` copies into its own +0x04 and prints as
-	 * "K = %d" -- so this field and that one hold one quantity, and
-	 * `V92Transmitter::process` is what says what the quantity counts: it
-	 * consumes exactly `K` input bits per twelve output samples.  The
-	 * author's word for it is "K"; the name here is kept descriptive
-	 * because "K" alone says nothing, and the identity is recorded rather
-	 * than the letter copied.  See include/dsplib/V92ParamsInfo.h.
-	 *
-	 * NOT WRITTEN BY THE CONSTRUCTOR -- until `reset` runs it holds
-	 * whatever the allocation did.
+	 * +0x14  Bits per twelve-symbol frame -- the author's own "K", copied
+	 * by `reset` from the mapping parameters' first word (finding F4503;
+	 * see V92ParamsInfo.h). Not written by the constructor, so a freshly
+	 * constructed object's value here is whatever the allocation held
+	 * until `reset` runs.
 	 */
 	unsigned int bitsPerFrame;
 
@@ -195,23 +184,20 @@ public:
 	unsigned int symbolsBlockSize;
 
 	/*
-	 * +0x1c  One byte, set to 1 by the constructor and by `reset`.
-	 *
-	 * ALL THREE `process` OVERLOADS NOW READ IT AND THE ROLE IS STILL NOT
-	 * ESTABLISHED, so the neutral name stays.  What each of them does
-	 * with it, on every path including the two error ones, is
+	 * +0x1c  One byte, set to 1 by the constructor and by `reset`. All
+	 * three `process` overloads read it, on every path including the two
+	 * error ones, as
 	 *
 	 *     if (flag_1c != 0)
 	 *             flag_1c = 0;
 	 *
-	 * -- `cmpb $0x0,0x1c(%ebx); je; movb $0x0,0x1c(%ebx)`, and the test
-	 * is the object's rather than the compiler's, because a bare store
-	 * would have been one instruction and GCC does not add a branch to
-	 * avoid one.  So it is a one-shot: set at construction and at every
-	 * reset, cleared by the first `process` after either.  NOTHING
-	 * WRITTEN HERE EVER BRANCHES ON IT, which is why naming it "first
-	 * call" or anything else would be a guess about a reader that has not
-	 * been found.  Finding F3120's ruling, in a second class.
+	 * -- a real branch in the object (`cmpb $0x0,0x1c(%ebx); je; movb
+	 * $0x0,0x1c(%ebx)`), not something the compiler would add over a bare
+	 * store. So it is a one-shot latch: set at construction and at every
+	 * reset, cleared by the first `process` call after either. Nothing
+	 * written here ever branches on its value, so there is no evidence
+	 * for what it is a one-shot flag *of* -- the role is not established
+	 * and the neutral name stays (finding F4505/F3120).
 	 */
 	unsigned char flag_1c;
 

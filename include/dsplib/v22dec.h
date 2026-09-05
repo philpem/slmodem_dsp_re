@@ -91,8 +91,37 @@ extern const short DECv22_MAG24[3];
  */
 #define V22_DEC_LEVEL_SHIFT	12
 
+/**
+ * @brief Slice one received V.22 four-point (1200 bit/s) symbol.
+ *
+ * Called once per symbol by the equaliser through `struct v22_fse`'s +0x60
+ * slot (installed by SetRxRate()). Finds the nearest of the four ideal
+ * points, subtracts the previously received quadrant (`state->prev_quad`,
+ * owned by the datapump, not this file) modulo sixteen, and looks that up
+ * in `SMCv22_PMAP` -- the differential-quadrant decode, run backwards from
+ * `FPM_SMC_encoder`'s forward mapping.
+ *
+ * @param state  The V.22 equaliser's decision state.
+ * @param angle  Output: the ideal carrier phase for the PLL to run its error against (`DECv22_ANGL12`).
+ * @param mag    Output: unused by the 1200 bit/s slicer.
+ * @return The differential quadrant shifted down two bits -- the two dibits of the 1200 bit/s symbol.
+ */
 unsigned short FSEv22_decision12(struct v22_fse *state, short *angle,
 				 short *mag);
+
+/**
+ * @brief Slice one received V.22 sixteen-point (2400 bit/s) symbol.
+ *
+ * Same role as FSEv22_decision12() for the sixteen-point constellation.
+ * Returns the differential quadrant unshifted, ORed with the decided
+ * point's amplitude pair (bits 1:0 of the constellation index, which are
+ * NOT differential -- they pass through untouched).
+ *
+ * @param state  The V.22 equaliser's decision state.
+ * @param angle  Output: the ideal carrier phase (`DECv22_ANGL24`).
+ * @param mag    Output: the ring magnitude of the decided point (`DECv22_MAG24`).
+ * @return The differential quadrant in bits 3:2, ORed with the amplitude pair in bits 1:0.
+ */
 unsigned short FSEv22_decision24(struct v22_fse *state, short *angle,
 				 short *mag);
 

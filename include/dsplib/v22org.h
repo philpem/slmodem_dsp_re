@@ -286,19 +286,59 @@ struct v22fp;
 
 /*
  * ---------------------------------------------------------------------------
- * The handlers.  Seven arguments, the same seven `connect_1200` and
+ * The handlers below take the same seven arguments `connect_1200` and
  * `connect_2400` take and in the same order -- v22conn.h carries the
- * derivation, and these two are read off the same stack slots.  Both counts
+ * derivation, and these two are read off the same stack slots. Both counts
  * are in/out and both symbol buffers are scratch the caller owns.
  *
- * BOTH ARE DECLARED void AND THE OBJECT DOES NOT SETTLE THAT: every exit is a
- * plain `ret` with a dead `%eax`.  Same situation as `connect_1200` and
+ * Both are declared void and the object does not settle that: every exit is
+ * a plain `ret` with a dead `%eax`. Same situation as `connect_1200` and
  * `TxClockSync`, and recorded for the same reason.
+ */
+
+/**
+ * @brief V.22 protocol handler for the ANSWER station's connection sequence (index 2 of V22_PROTOCOL).
+ *
+ * A jump table of fifteen sub-states (`hdx->r0c`, `.rodata`+0x85b8): NODE_0
+ * resets, NODE_1 sends the 2225 Hz answer tone for V22_ANS_NODE_1_MS then
+ * moves to NODE_SILENCE_AFTER_2100, that node waits V22_ANS_SILENCE_BLOCKS
+ * calls then moves to NODE_3, NODE_3 hunts for carrier over two detectors
+ * and NODE_4 is a short S1 burst before handing over to `connect_2400`
+ * (nodes 8..11) or `connect_1200` (12..13). See the file banner for the
+ * full derivation, including the two carrier-hunt counters `hdx->r08`/`r0a`.
+ *
+ * @param fp       The V.22 datapump instance.
+ * @param txsym    Transmit symbols to scramble and modulate.
+ * @param txout    Output for the modulated transmit samples.
+ * @param rxin     Received samples to demodulate.
+ * @param rxsym    Output for the demodulated receive symbols.
+ * @param txcount  In/out: transmit symbol/sample count.
+ * @param rxcount  In/out: receive sample/symbol count.
  */
 void v22_answer(struct v22fp *fp, unsigned short *txsym, short *txout,
 		short *rxin, unsigned short *rxsym,
 		unsigned short *txcount, unsigned short *rxcount);
 
+/**
+ * @brief V.22 protocol handler for the ORIGINATE station's connection sequence (index 1 of V22_PROTOCOL).
+ *
+ * A jump table of fourteen sub-states (`hdx->r0c`, `.rodata`+0x85f4):
+ * NODE_0 resets and retunes the tone generator to 1200 Hz, NODE_1 waits for
+ * the far end, NODE_3 measures the received RMS mean against a threshold,
+ * NODE_4 is a descrambled receive phase leading to NODE_5, and NODE_5/NODE_6
+ * run the same two carrier-hunt counters `v22_answer`'s NODE_3 does before
+ * handing over to `connect_2400`/`connect_1200`. See the file banner for the
+ * full derivation, including the asymmetry between this and `v22_answer`'s
+ * counter resets.
+ *
+ * @param fp       The V.22 datapump instance.
+ * @param txsym    Transmit symbols to scramble and modulate.
+ * @param txout    Output for the modulated transmit samples.
+ * @param rxin     Received samples to demodulate.
+ * @param rxsym    Output for the demodulated receive symbols.
+ * @param txcount  In/out: transmit symbol/sample count.
+ * @param rxcount  In/out: receive sample/symbol count.
+ */
 void v22_originate(struct v22fp *fp, unsigned short *txsym, short *txout,
 		   short *rxin, unsigned short *rxsym,
 		   unsigned short *txcount, unsigned short *rxcount);

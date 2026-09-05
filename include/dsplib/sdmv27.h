@@ -130,27 +130,50 @@ struct sdmv27 {
  * SDMv27_init itself when the caller hands it a null config. */
 extern struct sdmv27_cfg SDMv27_CFG;
 
-/*
- * Load a config and reset.  There is no separate reset: SetScramblerV27
- * re-runs init on a live object and puts `reg` back by hand afterwards.
+/**
+ * @brief Load a config and reset a V.27ter scrambler/descrambler state.
  *
- * **A NULL `cfg` FAULTS.** The object means it to default to SDMv27_CFG and
- * only guards the first of its two reads; the second, `cmpw $0x2,(%ecx)` at
- * 0x9a85a, goes through the caller's null. Reproduced, unreachable in
- * service, D1043.
+ * There is no separate reset entry point: `SetScramblerV27` re-runs this
+ * on a live object and puts `reg` back by hand afterwards.
+ *
+ * @param sdm  State to initialise.
+ * @param cfg  Configuration (`nbits`), or NULL for ::SDMv27_CFG -- but a
+ *             NULL @p cfg actually FAULTS: the object guards only the
+ *             first of its two reads from @p cfg, and the second goes
+ *             through the caller's null unguarded. Reproduced;
+ *             unreachable in service (deviation D1043).
  */
 void SDMv27_init(struct sdmv27 *sdm, const struct sdmv27_cfg *cfg);
 
-/*
- * Scramble / descramble `count` words in place, each carrying `nbits` bits in
- * its low end.  `count` is SIGNED here -- ScrambleDataV27 and
- * DescrambleDataV27 both widen it with `movswl` (0xa5e70, 0xa5aa0), where the
- * V.17 and V.29 wrappers around the generic module use `movzwl`.  The loop is
- * `while (count--)` over that short, so a negative count is not an early
- * exit: it counts down, wraps, and comes back to zero tens of thousands of
- * words later.
+/**
+ * @brief Scramble @p count words in place with the V.27ter scrambler.
+ *
+ * Each word carries `nbits` bits in its low end. Runs the self-
+ * synchronising scrambler plus the repeating-pattern guard (see the file
+ * comment above) over all @p count words.
+ *
+ * @param sdm    Scrambler state.
+ * @param data   Words to scramble in place, @p count of them.
+ * @param count  Number of words in @p data. SIGNED here (unlike the
+ *               generic fpm_sdm module) -- `ScrambleDataV27` widens it
+ *               with `movswl`, so a negative count is not an early exit:
+ *               the `while (count--)` loop counts down, wraps, and comes
+ *               back to zero tens of thousands of words later.
  */
 void SDMv27_scrambler(struct sdmv27 *sdm, unsigned short *data, short count);
+
+/**
+ * @brief Descramble @p count words in place with the V.27ter descrambler.
+ *
+ * The feed-forward inverse of SDMv27_scrambler(), with its own copy of
+ * the repeating-pattern guard.
+ *
+ * @param sdm    Descrambler state.
+ * @param data   Words to descramble in place, @p count of them.
+ * @param count  Number of words in @p data; see SDMv27_scrambler() for
+ *               the signed-count note (`DescrambleDataV27` widens with
+ *               `movswl` too).
+ */
 void SDMv27_descrambler(struct sdmv27 *sdm, unsigned short *data, short count);
 
 #endif /* DSPLIB_SDMV27_H */

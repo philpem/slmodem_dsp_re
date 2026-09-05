@@ -55,17 +55,25 @@ struct calling_tone {
 	short	amplitude;	/* +0x0c  Q14, from ResetCallingTone    */
 };
 
-/*
- * Start the cadence at the beginning of a tone burst and set the amplitude
- * from `level`.  `level` is a signed char -- see the header comment for why
- * it barely matters what you pass.
+/**
+ * @brief Start the calling-tone cadence at the beginning of a tone burst.
+ * @param ct     The generator to reset.
+ * @param level  Amplitude control; barely matters what is passed here (the
+ *               original's scaling is broken, see the file comment) --
+ *               amplitude only moves between 0.93 and 1.08 of full scale
+ *               across the whole range.
  */
 void ResetCallingTone(struct calling_tone *ct, char level);
 
-/*
- * Fill `count` samples with the tone or with silence, according to where the
- * cadence has got to, advancing it.  Writes every sample; there is no
- * mix-in.
+/**
+ * @brief Fill a buffer with the calling tone cadence, advancing it.
+ *
+ * Writes every sample -- tone or silence, according to where the cadence
+ * has got to -- with no mix-in of any other signal.
+ *
+ * @param ct     The generator, advanced by @p count samples.
+ * @param buf    Output buffer, @p count entries.
+ * @param count  Number of samples to generate.
  */
 void GenerateCallingTone(struct calling_tone *ct, short *buf, int count);
 

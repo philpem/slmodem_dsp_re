@@ -1,43 +1,47 @@
-/*
- * V90Phase3Demodulator.h -- the receiver half of V.90 phase 3.
+/**
+ * @file V90Phase3Demodulator.h
+ * @brief The receiver half of V.90 phase 3: two large state machines
+ *        (V.90 and V.92 flavours) driving Sd detection, TRN1 training,
+ *        data-directed tracking, DIL and impairment probing, and the exit
+ *        to phase 4.
  *
- * Reconstructed from dsplibs.o.  The class was declared in V90SessionFlag.h
+ * Reconstructed from dsplibs.o. The class was declared in V90SessionFlag.h
  * as a four-field sketch, because the only member that batch wrote was the
  * eleven-byte `setSessionFlag`; that header's own comment said the first
- * batch to give the class real weight should split it out.  This is that
+ * batch to give the class real weight should split it out. This is that
  * split, and everything the sketch said is preserved below -- including that
- * the phase 3 MODULATOR is embedded at +0x34 rather than pointed at.
+ * the phase 3 modulator is embedded at +0x34 rather than pointed at.
  *
- * THE SIZE IS SETTLED, WHICH THE SKETCH SAID IT WAS NOT.
+ * The size is settled, which the sketch said it was not.
  *
  * Finding F268 is right that a `this`-relative displacement scan lies about
  * this class: its largest hits, 0xa948 and 0xa95c, are off a
- * V90AutoDigitalImpDetector* and not off `this`.  But the object is
+ * V90AutoDigitalImpDetector* and not off `this`. But the object is
  * heap-allocated, and the allocation is the oracle -- `V90Demodulator`'s
  * constructor reads
  *
  *     movl $0x42c,(%esp); call sysdep_malloc; ... ; call V90Phase3DemodulatorC1
  *     mov  %esi,0x1dc(%ebx)
  *
- * so the object is 0x42c bytes.  Two independent facts agree with that and
+ * so the object is 0x42c bytes. Two independent facts agree with that and
  * neither was used to derive it: the last field the constructor writes is the
  * pointer at +0x428, which ends at 0x42c, and the largest displacement
- * `reset` uses is the byte at +0x424.  Finding F291.
+ * `reset` uses is the byte at +0x424. Finding F291.
  *
- * THREE INTERIOR BOUNDARIES FALL OUT EXACTLY, which is the check that the
+ * Three interior boundaries fall out exactly, which is the check that the
  * subobjects below are subobjects and not coincidence:
  *
  *     +0x034 V90Phase3Modulator   0x398   ends 0x3cc, and +0x3cc is a field
  *     +0x3d0 Descrambler<int,int> 0x020   ends 0x3f0, and +0x3f0 is a field
  *
  * Data member names are invented; the mangling never carries one (finding
- * F226).  `sessionFlag` is the exception and is the author's own: `reset`
+ * F226). `sessionFlag` is the exception and is the author's own: `reset`
  * prints +0x08 as "V90Phase3Demodulator: Reset called, sessionFlag = %d".
  * Where nothing names a field it is `word_`/`short_`/`byte_` plus its offset,
  * as in V90SpectralVerifier.h and V90AutoDigitalImpDetector.h -- a guessed
  * name in the record is worse than no name.
  *
- * THE POINTER TYPES ARE NOT GUESSES.  They come from the constructor's
+ * The pointer types are not guesses: they come from the constructor's
  * mangling, `V90Phase3Demodulator(V90Parameters *, V90SpectralVerifier *,
  * unsigned int, V90AutoDigitalImpDetector *)`, whose four arguments the
  * constructor stores at +0x0c, (used, not stored), +0x08 and +0x00; and from
@@ -58,7 +62,7 @@
 class V90Parameters;
 
 /*
- * DECLARED, NOT INCLUDED.  `V90SpectralVerifier` is a constructor argument
+ * Declared, not included.  `V90SpectralVerifier` is a constructor argument
  * this class accepts and never stores, so nothing here needs its layout;
  * `ANSamToneDetector` is a pointer member, so nothing here needs its layout
  * either, and including it would pull `GenericToneDetector.h` into every
@@ -85,7 +89,7 @@ class ANSamToneDetector;
  * the differential test may sweep the irregular range without reaching for
  * undefined behaviour.  It does not affect the mangling, which is by name.
  *
- * SPELLED AS A PIN RATHER THAN A BASE, because `: int` on an enum is C++11
+ * Spelled as a pin rather than a base, because `: int` on an enum is C++11
  * and the author's compiler was C++98.  Dropping it alone would not be
  * harmless here: the three values below give C++98 a range of 0..31, and the
  * sweep this comment relies on would then be undefined for every state above
@@ -99,7 +103,7 @@ enum Phase3DemodulatorState {
 	P3D_STATE_WAIT_FOR_QTS = 26,		/* V.92: wait for QTS        */
 
 	/*
-	 * ADDED BY THE PHASE 3 RECEIVE BATCH, on the same footing as the three
+	 * Added by the phase 3 receive batch, on the same footing as the three
 	 * above.  `enterWaitForANSpcmDrop` prints "V90Phase3Demodulator: enter
 	 * WaitForANSpcmDrop" -- the author's own words, .rodata.str1.4+0x5ae4
 	 * -- and then stores 0x1e here, and the MEMBER's name is the same words
@@ -114,25 +118,61 @@ enum Phase3DemodulatorState {
 
 class V90Phase3Demodulator {
 public:
-	/*
-	 * Written -- wave 2.  The parameter list is the mangling's and not a
-	 * choice: an `int` where the original had `unsigned`, or a dropped
-	 * `const`, emits a different symbol that links against nothing.
+	/**
+	 * @brief Store the session flag (0 = V.90, non-zero = V.92) that
+	 * getDecision() dispatches on.
+	 * @param flag  The new session flag value.
 	 */
 	void setSessionFlag(unsigned int flag);
 
-	/*
-	 * C1 at 0x212c0 and C2 at 0x21430, 365 bytes each; D1 at 0x20cb0 and
-	 * D2 at 0x20c00, 165 bytes each.  The parameter list is the
-	 * mangling's:
-	 * `_ZN20V90Phase3DemodulatorC1EP13V90ParametersP19V90SpectralVerifier`
-	 * `jP25V90AutoDigitalImpDetector`.
+	/**
+	 * @brief Construct the demodulator, wiring up its subobjects and the
+	 * two heap-allocated detectors, then reset() to the all-zero/WaitForSd
+	 * starting state.
+	 *
+	 * @p unused is accepted (the caller passes the address of its own
+	 * embedded `V90SpectralVerifier`) but never read -- nothing here
+	 * stores it.
+	 * @param params      The V.90 parameter block.
+	 * @param unused      Accepted and dropped; see above.
+	 * @param sessionFlag Initial session flag (0 = V.90, non-zero = V.92).
+	 * @param adid        The impairment detector this class drives during
+	 *                    the DIL/probing states.
 	 */
 	V90Phase3Demodulator(V90Parameters *params, V90SpectralVerifier *unused,
 			     unsigned int sessionFlag,
 			     V90AutoDigitalImpDetector *adid);
+
+	/**
+	 * @brief Destructor. Releases the heap-allocated SD and ANSam
+	 * detectors; the embedded modulator and descrambler subobjects are
+	 * destroyed by the compiler-generated tail.
+	 */
 	~V90Phase3Demodulator();
 
+	/**
+	 * @brief Put phase 3 receive back to a known state ahead of one of
+	 * four starting points (WaitForSd, TRN1dKnownData, WaitForQTS, or an
+	 * "irregular" state), resetting every subobject and storing the
+	 * caller's session parameters.
+	 * @param pcmType      Companding law in use.
+	 * @param ucode        The u-law/A-law code the impairment detector is
+	 *                     to study.
+	 * @param state        The state to start in; selects which of the
+	 *                     four openings runs.
+	 * @param word2c       Forwarded to the embedded modulator's reset only
+	 *                     from the TRN1dKnownData opening (every other
+	 *                     opening passes it 0).
+	 * @param jd           V.90 Jd helper, or null.
+	 * @param jdV92        V.92 Jd helper, or null.
+	 * @param dil          DIL descriptor used for `dilLength`.
+	 * @param altRbs       Forwarded to the impairment detector's reset and
+	 *                     not stored.
+	 * @param short414     Stored as `short_414`.
+	 * @param float418     Stored as `float_418`.
+	 * @param timeoutBase  Long-timeout baseline the two decision functions
+	 *                     compare against.
+	 */
 	void reset(PcmType pcmType, unsigned char ucode,
 		   Phase3DemodulatorState state, unsigned int word2c,
 		   V90Jd *jd, V92Jd *jdV92, tagV90DILdescriptor *dil,
@@ -143,13 +183,13 @@ public:
 	 * Declared for the record and deliberately not defined; their callees
 	 * are not written, and defining one re-opens the link closure.
 	 *
-	 * THE CONSTRUCTOR AND DESTRUCTOR ARE NOW WRITTEN, and what unblocked
+	 * The constructor and destructor are now written, and what unblocked
 	 * them was `ANSamToneDetector` landing.  Declaring them makes the
 	 * class non-trivial, which deletes the special members of a union
 	 * holding one -- `t_v90p3dreset.cpp`'s `p3d_slot` already provides its
 	 * own pair for exactly that reason, so nothing had to move.
 	 *
-	 * ARGUMENT 2 -- THE `V90SpectralVerifier *` -- IS NEVER LOADED.  The
+	 * Argument 2 -- the `V90SpectralVerifier *` -- is never loaded.  The
 	 * constructor reads 0x40 (`this`), 0x44, 0x4c and 0x50 off its frame
 	 * and `0x48(%esp)` appears nowhere in the 365 bytes.  So it is
 	 * accepted and dropped, no field holds it, and no test of this
@@ -160,64 +200,119 @@ public:
 	 *
 	 * A return type is not mangled, so every one below is spelled `void`
 	 * for want of evidence rather than because the blob returns nothing.
+	 * getV90Decision()/getV92Decision() and the four functions below them
+	 * are the exceptions: their return types are typed from a caller's
+	 * `cwtl`/`test` on the result, not guessed (see each function's own
+	 * comment, and docs/v90p3ddecision.md for the two decision functions,
+	 * reconstructed independently and landed in agreement).
 	 */
-	/*
-	 * THE TWO BELOW ARE THE EXCEPTION, AND THEY ARE THE ONLY RETURN TYPES
-	 * IN THIS CLASS THAT ARE NOT A GUESS.  `getDecision` at 0x258f0 is 52
-	 * bytes and is nothing but a two-way dispatch on `sessionFlag`:
+	/**
+	 * @brief The V.90 phase 3 receive state machine: consume one sample
+	 * and drive the appropriate one of its ~34 states (Sd detection, TRN1
+	 * training and data-directed tracking, DIL, impairment probing, and
+	 * exit to phase 4).
 	 *
-	 *     call getV92Decision ; cwtl ; add $0xc,%esp ; ret
-	 *     call getV90Decision ; cwtl ; add $0xc,%esp ; ret
-	 *
-	 * `cwtl` sign-extends `%ax` into `%eax`, so each callee's answer is
-	 * sixteen bits wide and SIGNED, and `getDecision` itself returns the
-	 * widened `int`.  A return type is not mangled, so `void` linked and
-	 * would have gone on linking; nothing but this caller settles it.
-	 *
-	 * The two functions were reconstructed in separate sessions and each
-	 * read the same two lines the same way.  While they were in flight each
-	 * left the OTHER's declaration alone -- `getV92Decision`'s side wrote
-	 * "left as it stands because it is another session's function", and it
-	 * was right to.  Both have landed now, so both say `short`.
-	 * See docs/v90p3ddecision.md.
+	 * This and getV92Decision() are two large, independently
+	 * reconstructed state machines over the same object; see
+	 * `V90Phase3Demodulator.cpp`'s file comment for the idioms they share.
+	 * @param sample  The next demodulated sample.
+	 * @return An event/decision code for this sample (widened from a
+	 *         16-bit result the object computes).
 	 */
 	short getV90Decision(float);
+
+	/**
+	 * @brief The V.92 phase 3 receive state machine -- getV90Decision()'s
+	 * counterpart when `sessionFlag` selects a V.92 session (adds the
+	 * QTS/quick-connect states V.90 does not have).
+	 * @param sample  The next demodulated sample.
+	 * @return An event/decision code for this sample (widened from a
+	 *         16-bit result the object computes).
+	 */
 	short getV92Decision(float);
 
-	/*
-	 * WRITTEN -- the phase 3 receive batch.  Four of these return
-	 * something, and none of the four is a guess:
-	 *
-	 *   getDecision     `int`.  It `cwtl`s each callee's `%ax` and returns
-	 *                   the widened value, which is the same two lines the
-	 *                   comment above uses to type `getV90Decision` and
-	 *                   `getV92Decision` as `short`.
-	 *   twoLevelDemod   `int`.  The level is a 16-bit table entry and the
-	 *                   negate is TRUNCATED to sixteen bits (`neg %edx ;
-	 *                   movswl %dx,%esi`), so the value is a `short`; the
-	 *                   sign extension that follows it feeds a register
-	 *                   returned unmodified, which a `short` return would
-	 *                   not need.
-	 *   JdNotDetector   `int`.  0 or 1 in %eax, from `sete`-class code.
-	 *   getMaxUcode     `unsigned char *`.  `mov (%eax),%eax ; add
-	 *                   $0xa956,%eax` is `&adid->maxUcode[0]`, and
-	 *                   V90TRN2Designer's `topUcode` parameter -- which
-	 *                   this is the one caller's source for -- is spelled
-	 *                   `unsigned char *` there.
-	 *
-	 * The rest set no return register deliberately and stay `void` for want
-	 * of evidence, which is this file's default.
+	/**
+	 * @brief Dispatch to getV92Decision() or getV90Decision() by
+	 * `sessionFlag`.
+	 * @param sample  The next demodulated sample.
+	 * @return The chosen decision function's result, widened to `int`.
 	 */
 	int getDecision(float);
+
+	/**
+	 * @brief Slice one sample against the (possibly alternate) linear
+	 * mapping table, differentially decode and descramble the resulting
+	 * bit.
+	 *
+	 * Picks between the normal and alternate linear-mapping table
+	 * (`isAltRbs`), negates the level for a negative sample (truncated to
+	 * 16 bits to match the object), then runs the bit through the
+	 * embedded differential decoder and descrambler.
+	 * @param sample  The next demodulated sample.
+	 * @param bit     Set to the decoded/descrambled bit (1 for a positive
+	 *                sample, 0 otherwise, before the transforms).
+	 * @return The signed mapping-table level for @p sample.
+	 */
 	int twoLevelDemod(float, int &);
+
+	/**
+	 * @brief Leave the DIL states, if currently in one, and check whether
+	 * the embedded modulator has since terminated phase 3.
+	 */
 	void exitDIL();
+
+	/**
+	 * @brief Run-length detector for consecutive zero symbols: once more
+	 * than 11 zero symbols have been seen, report a hit on the one frame
+	 * position in 72 that is 12.
+	 * @param symbol  The next symbol (0 extends the run, non-zero resets
+	 *                it).
+	 * @return 1 on a hit, else 0.
+	 */
 	int JdNotDetector(int);
+
+	/**
+	 * @brief Clear `verificationStatus` (with a diagnostic). Called by
+	 * `V90Demodulator::reInit` and `::enterChannelVerification`.
+	 */
 	void clearVerificationStatus();
+
+	/**
+	 * @brief Run the impairment detector's max-ucode / pad-gain pipeline:
+	 * determineMaxUcode(), then findPadGain(), then
+	 * applyPadGainToLinMapp(), in that order (later steps depend on the
+	 * earlier ones' output).
+	 */
 	void setDigitalImairmentsInfo();
+
+	/**
+	 * @brief Idempotently enter the ANSam-energy-drop wait state, if not
+	 * already in it (resets `word_2c` and prints the state-entry
+	 * diagnostic only on the actual transition).
+	 */
 	void enterWaitForANSpcmDrop();
+
+	/**
+	 * @brief Advance `framePosition` through its 0..5 cycle, wrapping
+	 * back to 0.
+	 */
 	void incrementFramePosition();
+
+	/**
+	 * @brief Copy the alternate mean-error-ratio threshold parameter into
+	 * the live one used by the phase-4 mean-error update.
+	 */
 	void setAltRbsParams();
+
+	/**
+	 * @brief Zero the JdNot run-length counter (`jdNotRunLength`).
+	 */
 	void resetJdNotDetector();
+
+	/**
+	 * @brief Return the impairment detector's per-phase max-ucode table.
+	 * @return Pointer to `autoDigitalImpDetector->maxUcode[0]`.
+	 */
 	unsigned char *getMaxUcode();
 
 	/* --- data members; see the file comment on the naming --- */
@@ -229,34 +324,14 @@ public:
 	V90AutoDigitalImpDetector *autoDigitalImpDetector;
 
 	/*
-	 * +0x004  Zeroed by `reset`.  `getV92Decision` runs it 0,1,2,3,4,5,0
-	 * and uses it to index the impairment detector's six per-phase rows,
-	 * and the author's own diagnostic there is
-	 *
-	 *     "V90Phase3Demodulator: waitForJd framePosition = %d\n"
-	 *
-	 * with this field as the argument -- so the author's name for it is
-	 * `framePosition`, on the same footing as `sessionFlag` below.  IT IS
-	 * NOW RENAMED (wave 3, F10139): the two blockers a prior pass recorded
-	 * -- `getV90Decision` being written concurrently against `word_04`,
-	 * and the rename touching two 8 KB functions plus the `P3D_OFF`
-	 * assertion tag and its mutation anchors -- are both gone. Both
-	 * functions have landed, and the rename has been threaded through
-	 * every reference: this header, the .cpp (including the `P3D_PHASE`/
-	 * `P3D_LINMAPP`/`P3D_LINMAPPALT` macros that read it), t_v90p3ddec.cpp
-	 * and the v90p3ddec.json mutation anchors that key text on the name.
-	 *
-	 * IT IS READ AT THREE WIDTHS and all three are in the object, which is
-	 * why the reconstruction spells a cast at every site rather than
-	 * letting the compiler choose:
-	 *
-	 *   `mov 0x4(%ebx),%eax`     32 bits -- the increment, the
-	 *                            `short_2800[]` index, and the third
-	 *                            argument of `calculateLinearMeanAndVar`
-	 *   `movswl 0x4(%ebx),%esi`  the `short` first argument of `isAltRbs`
-	 *                            and `addReceivedSampleToStorage`
-	 *   `movzwl 0x4(%ebx),%eax`  the row index into `linMapp`/`linMappAlt`,
-	 *                            always followed by `shl $0x7`
+	 * +0x004  The frame position within the current 6-position TRN1d
+	 * cycle (0..5, wrapping), zeroed by `reset`. Named from the author's
+	 * own diagnostic in `getV92Decision` ("waitForJd framePosition = %d")
+	 * (finding F10139). Read at three different widths across the object
+	 * (32-bit index/argument, sign-extended `short`, zero-extended row
+	 * index into `linMapp`/`linMappAlt`), each forced by its use site, so
+	 * the reconstruction casts explicitly at every one rather than letting
+	 * the compiler choose.
 	 */
 	unsigned int framePosition;
 
@@ -345,7 +420,7 @@ public:
 	 * +0x030  Zeroed by `reset`, and on every entry to both decision
 	 * functions -- `word_2c++; eventCode = 0; switch (state) { ... }` is
 	 * the whole of each function's own opening, per
-	 * `V90Phase3Demodulator.cpp`'s own comment on `getV92Decision`.  Every
+	 * `V90Phase3Demodulator.cpp`'s own comment on `getV92Decision`. Every
 	 * arm that has news for the caller sets it to a small constant before
 	 * returning (the state numbers the comment there catalogues,
 	 * 1..0x3a), and nothing in this class or `V90Demodulator` reads it
@@ -353,51 +428,48 @@ public:
 	 * `V90Demodulator::exitPhase3` checks `phase3Demodulator->eventCode ==
 	 * 0x14` for "Phase3 Terminated" before entering phase 4.
 	 *
-	 * NAMED BY USAGE INFERENCE, STRENGTHENED BY THE PAIRED CLASS: this is
+	 * Named by usage inference, strengthened by the paired class: this is
 	 * the demodulator's own analogue of `V90Phase3Modulator::eventCode`
 	 * at +0x01c, which CLAUDE.md's own evidence order ranks below a
 	 * format string or a typed callee -- nothing in the object spells
 	 * this field's name -- but the two fields play an identical role in
 	 * the two halves of one state machine: cleared on entry, set by
 	 * whichever transition has something to report, read by the caller
-	 * and by nothing internal.  `V90Phase3Demodulator.cpp`'s own
-	 * `getV92Decision` comment already called it "an event code the
-	 * caller reads" before this rename; the name here just carries that
-	 * description into the field itself.
+	 * and by nothing internal.
 	 */
 	unsigned int eventCode;
 
 	/*
-	 * +0x034  EMBEDDED, not pointed at: `setSessionFlag` reaches it with
+	 * +0x034  Embedded, not pointed at: `setSessionFlag` reaches it with
 	 * `add $0x34,%eax` before a tail call and `reset` with
-	 * `lea 0x34(%ebx),%ebp`, and both are address arithmetic rather than a
-	 * load.  0x398 bytes, ending exactly at the field below.
+	 * `lea 0x34(%ebx),%ebp`, both address arithmetic rather than a load.
+	 * 0x398 bytes, ending exactly at the field below.
 	 */
 	V90Phase3Modulator phase3Modulator;
 
 	/*
 	 * +0x3cc  Zeroed by the constructor AND by `reset`.
 	 *
-	 * THIS COMMENT USED TO SAY "`reset` does not touch it", AND THAT WAS
-	 * WRONG.  `reset` has `movl $0x0,0x3cc(%ebx)` of its own, and since
+	 * This comment used to say "`reset` does not touch it", and that was
+	 * wrong. `reset` has `movl $0x0,0x3cc(%ebx)` of its own, and since
 	 * the constructor's last act is to call `reset`, the constructor's
 	 * store is overwritten by an identical one microseconds later.  A
 	 * mutation that deletes the constructor's store is therefore
-	 * BEHAVIOURALLY INVISIBLE -- it was written, it read NOT CAUGHT, and
+	 * behaviourally invisible -- it was written, it read NOT CAUGHT, and
 	 * that is how the error was found.  See test/mutations/v90p3dctor.json
 	 * for why it is not in the suite.
 	 *
 	 * IT IS A MEM-INITIALIZER, by finding F1302's argument and this is the
 	 * second instance of it.  `mov %ecx,0x3cc(%ebx)` with `%ecx` zero sits
-	 * BETWEEN the call to `V90Phase3Modulator`'s constructor and the call
+	 * between the call to `V90Phase3Modulator`'s constructor and the call
 	 * to `Descrambler<int,int>`'s, and a store to `this + 0x3cc` can be
 	 * moved across neither.  Body statements run after every member
 	 * construction, so it is not one; members are constructed in
 	 * declaration order, so this field is declared between the two
 	 * subobjects, which is where it sits.
 	 *
-	 * THE PERIOD BUILD CORROBORATES IT, AND THE CORROBORATION
-	 * DISCRIMINATES.  This paragraph used to say `make similarity` could
+	 * The period build corroborates it, and the corroboration
+	 * discriminates. This paragraph used to say `make similarity` could
 	 * not reach the argument because this translation unit "is one of the
 	 * fifteen the period toolchain cannot compile at all".  That reason
 	 * was already untrue when it was written (finding F2119), and the
@@ -423,7 +495,7 @@ public:
 	 * reproduces the object.  An ordering argument is evidence only if the
 	 * other spelling orders differently, and here it does.
 	 *
-	 * ONE DIFFERENCE THAT IS NOT A SOURCE DIFFERENCE: the object CALLS
+	 * One difference that is not a source difference: the object calls
 	 * `Descrambler<int,int>`'s constructor and the period build of this
 	 * source INLINES it.  What the argument uses is where the store sits
 	 * relative to the START of the descrambler's construction, and that is
@@ -436,7 +508,7 @@ public:
 	 * full-text identity test that 617 sets.
 	 *
 	 * IT IS A `SerialDifferentialDecoder<int>`, WHICH THE SKETCH ABOVE
-	 * COULD NOT SEE, AND TWO INDEPENDENT RECONSTRUCTIONS SAY SO.  Neither
+	 * could not see, and two independent reconstructions say so.  Neither
 	 * could see the other's work; findings F2102 and F2110 are the same
 	 * conclusion reached twice from opposite ends of the class.
 	 *
@@ -459,14 +531,14 @@ public:
 	 * immediately below it.  The NAME is left as it was, because nothing
 	 * names it and a guess is worse than no name.
 	 *
-	 * WHILE THE TWO WERE IN FLIGHT the declaration stayed `unsigned int`
+	 * While the two were in flight the declaration stayed `unsigned int`
 	 * and `getV92Decision` cast at its call sites, so as not to move the
 	 * ground under a function being written in another session; that side's
 	 * comment said correcting the type "belongs to whoever lands second".
 	 * Both have landed.  The member has its real type, the casts are gone,
 	 * and both functions now call `word_3cc.process(...)` directly.
 	 *
-	 * AND THE SPELLING WAS MEASURED, not assumed.  `word_3cc(0)` on an
+	 * And the spelling was measured, not assumed.  `word_3cc(0)` on an
 	 * `unsigned int` obviously emits the store; `word_3cc()` on a class
 	 * type is C++98 DEFAULT-initialization, which TC1 changed to
 	 * value-initialization, so whether GCC 3.4.2 still zeroes it is a
@@ -518,7 +590,7 @@ public:
 	 * method's only argument -- so it is ONE BYTE, unsigned, and widened
 	 * rather than sign-extended.
 	 *
-	 * THE NAME IS DELIBERATELY NOT `maxCode`.  That is the name this tree
+	 * The name is deliberately not `maxCode`.  That is the name this tree
 	 * gave `determineMaxUcode`'s parameter when it reconstructed it; the
 	 * mangling carries `s` and no name, so calling the field after it would
 	 * be promoting our own invention into a second place.  Nothing writes
@@ -555,8 +627,8 @@ public:
 	 */
 
 	/*
-	 * +0x404  NAMED (wave 3, F10139) BY A TYPED CALLEE AND BY THE
-	 * OBJECT'S OWN METHOD NAME.  `JdNotDetector(int symbol)` -- the one
+	 * +0x404  Named (wave 3, F10139) by a typed callee and by the
+	 * object's own method name. `JdNotDetector(int symbol)` -- the one
 	 * member of this class whose whole body is this field -- increments
 	 * it on a zero symbol and clears it otherwise, then answers yes once
 	 * it exceeds 11 on the one frame position in 72 that is 12; both
@@ -596,8 +668,8 @@ public:
 	 * `V90Demodulator::enterPhase3` with its own +0x294 -- which is the
 	 * one place in wave 2 where the caller's write ordering is observable.
 	 *
-	 * NAMED (wave 3, F10139) BY THE CALLER'S OWN, ALREADY-ESTABLISHED
-	 * FIELD, which is CLAUDE.md's rule-2 tier: `V90Demodulator`'s own
+	 * Named (wave 3, F10139) by the caller's own, already-established
+	 * field, which is CLAUDE.md's rule-2 tier: `V90Demodulator`'s own
 	 * +0x294 is `quickConnect`, named in that header from two independent
 	 * derivations (`V90Demodulator::reset`'s own parameter name, and the
 	 * format string that names `V90Phase4Demodulator::quickConnect`), and

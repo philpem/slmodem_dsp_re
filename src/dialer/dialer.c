@@ -312,8 +312,7 @@ DialerAbort(struct dialer *d)
 
 		/* After the call, and before the flag is set (0x7be3c). */
 		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf(" **** Dialer.C: "
-					     "LastPulseDigitDialed was "
+			dsplibs_debug_printf(" **** Dialer.C: " "LastPulseDigitDialed was "
 					     "called\n");
 
 		d->pulse_released = 1;
@@ -486,8 +485,7 @@ GetNextDigitAndReturnNextState(struct dialer *d)
 				d->cfg.tone_or_pulse = DIALER_TONE_DIALING;
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
-					    "Dialer.c: GetNextDigit... "
-					    "TONE_OR_PULSE_FLAG became "
+					    "Dialer.c: GetNextDigit... " "TONE_OR_PULSE_FLAG became "
 					    "TONE_DIALING\n");
 				continue;
 			}
@@ -496,15 +494,12 @@ GetNextDigitAndReturnNextState(struct dialer *d)
 			if (d->cfg.mixed_permitted != 0) {
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
-					    "Dialer.c: GetNextDigit... "
-					    "Not permitted to switch to "
-					    "Tone\n");
+					    "Dialer.c: GetNextDigit... " "Not permitted to switch to " "Tone\n");
 				continue;
 			}
 			d->cfg.tone_or_pulse = DIALER_TONE_DIALING;
 			if (DSPLIB_DEBUG_ON())
-				dsplibs_debug_printf("Dialer.c: GetNextDigit..."
-						     " Switching to Tone\n");
+				dsplibs_debug_printf("Dialer.c: GetNextDigit..." " Switching to Tone\n");
 			continue;
 
 		case 'P': case 'p':
@@ -512,8 +507,7 @@ GetNextDigitAndReturnNextState(struct dialer *d)
 				d->cfg.tone_or_pulse = DIALER_PULSE_DIALING;
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
-					    "Dialer.c: GetNextDigit... "
-					    "TONE_OR_PULSE_FLAG became "
+					    "Dialer.c: GetNextDigit... " "TONE_OR_PULSE_FLAG became "
 					    "PULSE_DIALING\n");
 				continue;
 			}
@@ -522,15 +516,12 @@ GetNextDigitAndReturnNextState(struct dialer *d)
 			if (d->cfg.mixed_permitted != 0) {
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
-					    "Dialer.c: GetNextDigit... "
-					    "Not permitted to switch to "
-					    "Pulse\n");
+					    "Dialer.c: GetNextDigit... " "Not permitted to switch to " "Pulse\n");
 				continue;
 			}
 			d->cfg.tone_or_pulse = DIALER_PULSE_DIALING;
 			if (DSPLIB_DEBUG_ON())
-				dsplibs_debug_printf("Dialer.c: GetNextDigit..."
-						     " Switching to Pulse\n");
+				dsplibs_debug_printf("Dialer.c: GetNextDigit..." " Switching to Pulse\n");
 			continue;
 
 		default:
@@ -749,8 +740,7 @@ tone_burst(struct dialer *d, short *buf, int *pos, int limit)
 	if (d->pulse_released == 0 && d->pulse_active != 0) {
 		LastPulseDigitDialed(d->modem);
 		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf(" **** Dialer.C: "
-					     "LastPulseDigitDialed was "
+			dsplibs_debug_printf(" **** Dialer.C: " "LastPulseDigitDialed was "
 					     "called\n");
 		d->pulse_active = 0;
 		d->pulse_released = 1;
@@ -800,15 +790,13 @@ pulse_digit(struct dialer *d, short *buf, int *pos, int limit)
 		if (!IsPulseDialerReady(d->modem)) {
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
-				    "=========> Waiting to "
-				    "PULSE_IS_DIALER_READY_PROC "
+				    "=========> Waiting to " "PULSE_IS_DIALER_READY_PROC "
 				    "to become true.\n");
 			emit_silence(buf, pos, limit);
 			return 0;
 		}
 		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("=========> Calling "
-					     "PULSE_DIAL_DIGIT_PROC "
+			dsplibs_debug_printf("=========> Calling " "PULSE_DIAL_DIGIT_PROC "
 					     "with %d.\n", count);
 		PulseDialDigit(d->modem, count);
 		d->pulse_started = 1;
@@ -820,8 +808,7 @@ pulse_digit(struct dialer *d, short *buf, int *pos, int limit)
 		return 0;
 	}
 	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("=========>END OF DIAL DIGIT "
-				     "DETECTED.\n");
+		dsplibs_debug_printf("=========>END OF DIAL DIGIT " "DETECTED.\n");
 	return 1;
 }
 
@@ -866,8 +853,7 @@ DialerProgress(struct dialer *d, short *buf, int *pos, int limit)
 			if (emit_gap(d, buf, pos, limit)) {
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
-					    "Done Generating silence "
-					    "between digits\n");
+					    "Done Generating silence " "between digits\n");
 				begin_next(d);
 			}
 			continue;
@@ -896,16 +882,14 @@ DialerProgress(struct dialer *d, short *buf, int *pos, int limit)
 				if (!IsPulseDialerReady(d->modem)) {
 					if (DSPLIB_DEBUG_ON())
 						dsplibs_debug_printf(
-						    "=========> Waiting to "
-						    "PULSE_IS_DIALER_READY_"
+						    "=========> Waiting to " "PULSE_IS_DIALER_READY_"
 						    "PROC to become true.\n");
 					emit_silence(buf, pos, limit);
 					continue;
 				}
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
-					    "=========> Begin Dialing "
-					    "FLASH.\n");
+					    "=========> Begin Dialing " "FLASH.\n");
 				PulseDialDigit(d->modem, 1);
 				d->pulse_started = 1;
 			}
@@ -975,9 +959,7 @@ DialerProgress(struct dialer *d, short *buf, int *pos, int limit)
 				LastPulseDigitDialed(d->modem);
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
-					    " **** Dialer.C: "
-					    "LastPulseDigitDialed was "
-					    "called\n");
+					    " **** Dialer.C: " "LastPulseDigitDialed was " "called\n");
 				d->pulse_released = 1;
 			}
 			if (DSPLIB_DEBUG_ON())
@@ -990,9 +972,7 @@ DialerProgress(struct dialer *d, short *buf, int *pos, int limit)
 				LastPulseDigitDialed(d->modem);
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
-					    " **** Dialer.C: "
-					    "LastPulseDigitDialed was "
-					    "called\n");
+					    " **** Dialer.C: " "LastPulseDigitDialed was " "called\n");
 				d->pulse_released = 1;
 			}
 			if (DSPLIB_DEBUG_ON())

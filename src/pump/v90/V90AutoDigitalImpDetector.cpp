@@ -1590,8 +1590,7 @@ V90AutoDigitalImpDetector::updateAltRbsPhaseInDil()
 
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("\n----  AltPhase %d : "
-					     "linearMapping  linearMappingAlt"
-					     "  ----\n", phase);
+					     "linearMapping  linearMappingAlt" "  ----\n", phase);
 
 		{
 			unsigned short ci;
@@ -1754,8 +1753,7 @@ V90AutoDigitalImpDetector::porcessSecondStudy()
 
 		for (ci = 0; ci < V90ADID_CODES; ci++)
 			if (DSPLIB_DEBUG_ON())
-				dsplibs_debug_printf("linearMapping[%d]  :  "
-						     "%d  %d  %d  %d  %d  "
+				dsplibs_debug_printf("linearMapping[%d]  :  " "%d  %d  %d  %d  %d  "
 						     "%d\r\n", ci,
 						     linMapp[0][ci],
 						     linMapp[1][ci],
@@ -1857,10 +1855,8 @@ adid_recheckAltRbs(V90AutoDigitalImpDetector *o)
 
 		if (o->short_2800[phase] == 0)
 			if (DSPLIB_DEBUG_ON())
-				dsplibs_debug_printf("V90AutoDigitalImpDetector"
-						     ": alternate rbs false "
-						     "detection on phase %d "
-						     "!!!\n", phase);
+				dsplibs_debug_printf("V90AutoDigitalImpDetector" ": alternate rbs false "
+						     "detection on phase %d " "!!!\n", phase);
 	}
 }
 
@@ -1936,8 +1932,7 @@ V90AutoDigitalImpDetector::studyUrefHandler(float v, unsigned int phase)
 
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V90AutoDigitalImpDetector:  "
-					     "initail var (Trn1):  %d  %d  %d  "
-					     "%d  %d  %d\n", (int)var[0],
+					     "initail var (Trn1):  %d  %d  %d  " "%d  %d  %d\n", (int)var[0],
 					     (int)var[1], (int)var[2],
 					     (int)var[3], (int)var[4],
 					     (int)var[5]);
@@ -1946,8 +1941,7 @@ V90AutoDigitalImpDetector::studyUrefHandler(float v, unsigned int phase)
 
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V90AutoDigitalImpDetector:  "
-					     "initail AltRbsVarThresh (Trn1) = "
-					     "%d\n", (int)thresh);
+					     "initail AltRbsVarThresh (Trn1) = " "%d\n", (int)thresh);
 
 		/*
 		 * An ORDERED `>`: the object's `fcomps`/`jbe` skips on an
@@ -2044,8 +2038,7 @@ V90AutoDigitalImpDetector::studyUrefHandler(float v, unsigned int phase)
 
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V90AutoDigitalImpDetector trn1 "
-					     "second update  :  %d  %d  %d  %d "
-					     " %d  %d\n", linMapp[0][ucode],
+					     "second update  :  %d  %d  %d  %d " " %d  %d\n", linMapp[0][ucode],
 					     linMapp[1][ucode],
 					     linMapp[2][ucode],
 					     linMapp[3][ucode],
@@ -2090,8 +2083,7 @@ V90AutoDigitalImpDetector::studyUrefHandler(float v, unsigned int phase)
 
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V90AutoDigitalImpDetector trn1 "
-					     "third update  :  %d  %d  %d  %d  "
-					     "%d  %d\n", linMapp[0][ucode],
+					     "third update  :  %d  %d  %d  %d  " "%d  %d\n", linMapp[0][ucode],
 					     linMapp[1][ucode],
 					     linMapp[2][ucode],
 					     linMapp[3][ucode],
@@ -2155,8 +2147,7 @@ V90AutoDigitalImpDetector::studyUrefHandler(float v, unsigned int phase)
 
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V90AutoDigitalImpDetector trn1 "
-					     "final update  :  %d  %d  %d  %d  "
-					     "%d  %d\n", linMapp[0][ucode],
+					     "final update  :  %d  %d  %d  %d  " "%d  %d\n", linMapp[0][ucode],
 					     linMapp[1][ucode],
 					     linMapp[2][ucode],
 					     linMapp[3][ucode],
@@ -2254,15 +2245,13 @@ V90AutoDigitalImpDetector::findPadGain()
 
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("------------------------------------"
-				     "------------------------------------"
-				     "-\r\n");
+				     "------------------------------------" "-\r\n");
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("V90AutoDigitalImpDetector::findPadGain()"
 				     " Report :\r\n");
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("------------------------------------"
-				     "------------------------------------"
-				     "-\r\n");
+				     "------------------------------------" "-\r\n");
 
 	{
 		/*
@@ -2344,8 +2333,7 @@ V90AutoDigitalImpDetector::findPadGain()
 			dsplibs_debug_printf("Codec type %d\r\n", codec);
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("projectionBaseUcode = %d "
-					     "minUcodeForCodecProjection = "
-					     "%d\r\n", base, minU);
+					     "minUcodeForCodecProjection = " "%d\r\n", base, minU);
 
 		for (cur = minU; cur <= base; cur++) {
 			/*
@@ -2411,8 +2399,7 @@ V90AutoDigitalImpDetector::findPadGain()
 			err = gain * gain * errSum;
 
 			if (DSPLIB_DEBUG_ON())
-				dsplibs_debug_printf("error = %d, gain = "
-						     "%c%d.%02d\r\n", (int)err,
+				dsplibs_debug_printf("error = %d, gain = " "%c%d.%02d\r\n", (int)err,
 						     ADID_PRINT_SIGN(gain),
 						     ADID_PRINT_WHOLE(gain),
 						     ADID_PRINT_FRAC(gain,
@@ -2522,8 +2509,7 @@ V90AutoDigitalImpDetector::findPadGain()
 
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("------------------------------------"
-				     "------------------------------------"
-				     "-\r\n");
+				     "------------------------------------" "-\r\n");
 }
 
 /*

@@ -322,8 +322,7 @@ CALLPROG_Delete(struct callprog *cp)
 	}
 	if (cp->busy != 0) {
 		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("cadence_delete with "
-					     "CADENCE_OBJ is invoked\n");
+			dsplibs_debug_printf("cadence_delete with " "CADENCE_OBJ is invoked\n");
 
 		cadence_delete(cp->busy);
 	}
@@ -783,8 +782,7 @@ CALLPROG_Progress(struct callprog *cp, const short *in, short *out, int count)
 		else if (++cp->quiet_count == CALLPROG_ANSWER_SAMPLES / count) {
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
-					"CALLPROG: 5 sec. silence was "
-					"detected.\n");
+					"CALLPROG: 5 sec. silence was " "detected.\n");
 
 			request_state(cp, CPSTATE_DIALING);
 		}
@@ -843,8 +841,7 @@ CALLPROG_Progress(struct callprog *cp, const short *in, short *out, int count)
 				cp->calling_tone_armed = 0;
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
-						"CALLPROG: ^ encountered. "
-						"Disabling Calling-Tone.\n");
+						"CALLPROG: ^ encountered. " "Disabling Calling-Tone.\n");
 				break;
 			case 2:
 				cp->calling_tone_armed = 1;
@@ -855,8 +852,7 @@ CALLPROG_Progress(struct callprog *cp, const short *in, short *out, int count)
 			case 3:
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
-						"CALLPROG: ^ encountered. "
-						"Enabling Calling-Tone.\n");
+						"CALLPROG: ^ encountered. " "Enabling Calling-Tone.\n");
 				cp->calling_tone_armed = 1;
 				break;
 			default:
@@ -878,8 +874,7 @@ CALLPROG_Progress(struct callprog *cp, const short *in, short *out, int count)
 		case DIALER_WAIT_DIALTONE:
 			request_state(cp, CPSTATE_WAIT_DIAL);
 			if (DSPLIB_DEBUG_ON())
-				dsplibs_debug_printf("CALLPROG: Wait dial "
-						     "tone, reset the "
+				dsplibs_debug_printf("CALLPROG: Wait dial " "tone, reset the "
 						     "cadence\n");
 			cadence_reset(cp->dial);
 			break;
@@ -898,9 +893,7 @@ CALLPROG_Progress(struct callprog *cp, const short *in, short *out, int count)
 		case DIALER_COMMAND:
 			request_state(cp, CPSTATE_END_PARTIALLY_STATE);
 			if (DSPLIB_DEBUG_ON())
-				dsplibs_debug_printf("CALLPROG: Dialing "
-						     "string partially "
-						     "ended.\n");
+				dsplibs_debug_printf("CALLPROG: Dialing " "string partially " "ended.\n");
 			code = CALLPROG_END_DIALING_PARTIALLY;
 			break;
 		case DIALER_DONE:

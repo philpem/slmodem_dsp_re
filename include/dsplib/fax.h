@@ -1,175 +1,33 @@
-/*
- * fax.h -- the FAX service's own context object, `struct fax_ctx`, and the
- * four `voice.c#3 +3`-span entry points that share it: `FAX_create`,
- * `FAX_delete`, `FAX_class1_command` and `FAX_process`.
+/**
+ * @file fax.h
+ * @brief The FAX service's own context object, `struct fax_ctx`, and the
+ *        four entry points that share it: #FAX_create, #FAX_delete,
+ *        #FAX_class1_command and #FAX_process.
  *
- * THE SPAN LABEL IS NOT THE FILE.  All four sit in the object right after
- * the `VOICE_*` group and before the ring detector -- `nm -S --size-sort`
- * over `.text 0x1450..0x2121` shows FAX_delete, FAX_create,
- * FAX_class1_command, FAX_process, then RD_create -- in `src/service/voice.c`
- * itself, per this tree's own note there that "nothing in the `voice.c#1..#3`
- * spans is unwritten" no longer holds now that these four exist in the same
- * bracket.  This header holds the FAX SIDE's own type, separate from
- * `struct voice_ctx` (`voice.h`), because the two are unrelated objects
- * reached by unrelated entry points that merely happen to sit in the same
- * translation unit.
+ * All four sit in the object right after the `VOICE_*` group and before the
+ * ring detector -- `nm -S --size-sort` over `.text 0x1450..0x2121` shows
+ * FAX_delete, FAX_create, FAX_class1_command, FAX_process, then RD_create --
+ * and are reconstructed in `src/service/voice.c` itself, alongside the
+ * unrelated ring-detector and voice entry points that merely happen to
+ * share the translation unit. This header holds the FAX side's own type,
+ * separate from `struct voice_ctx` (`voice.h`).
  *
- * `struct fax_ctx` IS NOT `struct fax_class1` (`class1.h`).  It is the
- * OUTER session object `FAX_create` allocates and `FAX_delete` frees, which
- * itself OWNS one `struct fax_class1 *` (at +0x4) -- the T.30/Class-1 state
- * machine class1.c/class1rx.c/class1tx.c model -- plus two resampler handles
+ * `struct fax_ctx` is not `struct fax_class1` (`class1.h`). It is the outer
+ * session object #FAX_create allocates and #FAX_delete frees, which itself
+ * owns one `struct fax_class1 *` (at +0x4) -- the T.30/Class-1 state machine
+ * `class1.c`/`class1rx.c`/`class1tx.c` model -- plus two resampler handles
  * (`struct rc *`, `fixedrc.h`) that bridge the host's rate to the pump's own.
  *
- * WHAT IS ESTABLISHED SO FAR, all from `FAX_delete` (0x001450, 172 bytes,
- * the only one of the four with every callee already written):
+ * All four entry points and the struct's fields established from them are
+ * now written; see `src/service/voice.c`'s own banner on each function for
+ * the full derivation (findings F10105, F10106, F10121) and the struct/
+ * prototype comments below for what each field is.
  *
- *   +0x004  class1   `struct fax_class1 *`, torn down by `fax_class1_delete`
- *                    -- evidence class 2, that callee's own signature
- *   +0x2010 rc_a     `struct rc *`, torn down by `RcFixed_Delete` -- same
- *                    evidence class.  Checked BEFORE `rc_b` in
- *                    `FAX_delete`'s own order
- *   +0x2014 rc_b     `struct rc *`, the second `RcFixed_Delete` call
- *
- * `FAX_create` (0x001500, 564 bytes) and `FAX_class1_command` (0x001740,
- * 708 bytes) are NOW WRITTEN (F10121) -- for the struct evidence
- * `FAX_create` carries as `rc_a`/`rc_b`'s own constructor: it branches on a
- * sample-rate argument (0x1f40 = 8000, 0x2580 = 9600, 0xbb80 = 48000) before
- * calling `RcFixed_Create` twice, matching `fixedrc.h`'s own "the pumps run
- * at 8 kHz, the host at 9600" note.
- *
- * `FAX_create` TAKES THREE ARGUMENTS, NOT TWO -- an earlier reading of this
- * banner said its first two stack slots matched `VOICE_create(void *modem,
- * unsigned int rate)`'s, and that was wrong: `mov 0x40(%esp),%edi` (modem)
- * is followed not by `0x44(%esp)` (as `VOICE_create`'s own `mov
- * 0x44(%esp),%ebx` reads its second argument) but by `mov 0x48(%esp),%esi`
- * (rate) -- a 4-byte gap at `+0x44` that only a genuine THIRD formal
- * parameter explains.  It IS read, just far down the function
- * (`cmpl $0x1,0x44(%esp)` at 0x15e1, well after the resamplers are built),
- * as a boolean the object's own debug line names: "fax: fax_class1 will
- * created (ans_org=%d, s7=%d)\n" -- `ans_org` is exactly this argument's own
- * derived value, `struct fax_class1_cfg::mode` (class1.h). `FAX_create`'s
- * own prototype below carries the corrected three-argument shape.
- *
- * `FAX_process` (0x001a10, 1,809 bytes) is now WRITTEN, and the fields
- * below are its own derivation:
- *
- *   +0x000  modem          `void *`, dereferenced and passed as
- *                          `modem_recv_from_tty`/`modem_send_to_tty`'s own
- *                          first argument -- evidence class 2, matching
- *                          `modem_recv_from_tty(void *m, void *buf, int n)`'s
- *                          declared shape and `FAX_create`'s own predicted
- *                          `(void *modem, unsigned int rate)` first argument
- *                          (this file's banner above).  Was `pad_000`
- *   +0x008  host_rx_enable `int`, 0/1.  Gates whether `FAX_process` polls
- *                          `modem_recv_from_tty` at all this cycle; set to 1
- *                          only by the `FAX_CLASS1_CONNECT` dispatch case,
- *                          cleared to 0 by every OTHER case that touches it
- *                          (`NO_MESSAGE` and `ACCEPT_RATE` leave it alone).
- *                          Usage inference only -- FAX_process.c's own
- *                          derivation, see `src/service/voice.c`
- *   +0x00c  host_rx_want   `int`, the byte count to request from
- *                          `modem_recv_from_tty` next cycle (clamped to
- *                          0x1000 before the call), OVERWRITTEN after every
- *                          `fax_class1_progress` call with whatever value
- *                          comes back through that call's own `word8`
- *                          out-pointer -- so its steady-state meaning is
- *                          "what `fax_class1_progress` wants read next", not
- *                          simply "the previous cycle's byte count".  Usage
- *                          inference
- *   +0x010  host_tx_buf    `unsigned char[0x1000]`, passed whole (its
- *                          address) as `fax_class1_progress`'s own `word3`
- *                          argument, and is exactly the buffer
- *                          `modem_send_to_tty` sends from afterwards with a
- *                          length taken from that same call's `word7`
- *                          out-pointer -- so this is the host-bound byte
- *                          stream `fax_class1_progress` fills for
- *                          `FAX_process` to forward.  Sized by the exact gap
- *                          to `host_rx_buf` (both regions are exactly
- *                          0x1000 bytes)
- *   +0x1010 host_rx_buf    `unsigned char[0x1000]`, `modem_recv_from_tty`'s
- *                          own destination buffer AND `fax_class1_progress`'s
- *                          `word4` argument.  Sized by the `0x1000` clamp on
- *                          the read request, confirmed by the exact 0x1000
- *                          gap to `rc_a` at +0x2010
- *   +0x2018 rx_resampled   `short[0xa0]`, `RcFixed_Resample`'s own `out`
- *                          target when `rc_a != NULL` -- the pump-rate `rx`
- *                          buffer handed to `fax_class1_progress`.  Sized by
- *                          the exact 0x140 (160 shorts) gap to `tx_pump_rate`
- *   +0x2158 tx_pump_rate   `short[0xa0]`, `fax_class1_progress`'s own `tx`
- *                          target when `rc_a != NULL` (skipped, writing
- *                          straight into `out_ring` instead, when
- *                          `rc_a == NULL`) -- then `RcFixed_Resample`'s own
- *                          `in` source for the `rc_b` call.  Sized by the
- *                          exact 0x140 gap to `host_frame_samples`
- *   +0x2298 host_frame_samples  `int`, the SAMPLE count `FAX_process`
- *                          batches per host-rate chunk, and `RcFixed_
- *                          Resample`'s own `in_count`/`out_count` for both
- *                          calls.  Rank-1 evidence: FAX_process's own debug
- *                          string is "fax: process: samples count %d != %d"
- *                          (`.rodata.str1.4` 0x350), printed with this field
- *                          and the literal `0xa0` (`CLASS1_BLOCK_SAMPLES`,
- *                          `class1.h`) as its two arguments -- the object's
- *                          own word for the field's unit
- *   +0x229c out_produced   `int`, a running total incremented by
- *                          `host_frame_samples` once per flush cycle;
- *                          nothing `FAX_process` itself reads back.  Usage
- *                          inference
- *   +0x22a4 out_read_cursor `int`, the extraction cursor into `out_ring`
- *                          (samples, wraps mod `2*host_frame_samples`),
- *                          advanced every INNER iteration regardless of
- *                          whether that iteration flushed.  Usage inference
- *   +0x22a8 out_write_half `int`, a two-value (0 / `host_frame_samples`)
- *                          ping-pong selector toggled once per flush cycle,
- *                          picking which half of `out_ring` the NEXT
- *                          flush's tx-direction data lands in.  Usage
- *                          inference
- *   +0x22ac out_ring       `short[2*0xa0]`, the double-buffered ring
- *                          `fax_class1_progress` (identity path) or
- *                          `RcFixed_Resample`'s `rc_b` call (resampled path)
- *                          writes host-rate tx samples into, and the
- *                          function's own `a3` output is drained from.
- *                          `2 * host_frame_samples` shorts (0x280 bytes),
- *                          matching `in_ring`'s own size below; ends at
- *                          +0x252c, 0x80 bytes short of `in_pending` at
- *                          +0x25ac (`pad_252c`, unclaimed)
- *   +0x25ac in_pending     `int`, samples buffered in `in_ring` awaiting a
- *                          flush; incremented per inner-loop copy-in,
- *                          decremented by `host_frame_samples` once per
- *                          flush.  Usage inference
- *   +0x25b0 in_write_cursor `int`, the fill cursor into `in_ring` (samples,
- *                          wraps mod `2*host_frame_samples`).  Usage
- *                          inference
- *   +0x25b8 in_read_half   `int`, `out_write_half`'s counterpart for the
- *                          input side: a 0 / `host_frame_samples` ping-pong
- *                          toggle picking which half of `in_ring` the NEXT
- *                          flush reads its pump-rate input from.  Usage
- *                          inference
- *   +0x25bc in_ring        `short[2*0xa0]`, the double-buffered ring
- *                          `FAX_process`'s own `a2` input is copied into,
- *                          and `RcFixed_Resample`'s `rc_a` call (or the
- *                          identity path directly) reads from.  Sized by
- *                          the exact 0x280 gap to the struct's own 0x28bc
- *                          allocation size (FAX_create's `sysdep_malloc`
- *                          argument, this file's banner above), with 0x80
- *                          bytes left over past it -- unclaimed, `pad_283c`
- *
- * Every one of the "usage inference" fields above is FAX_process's own
- * derivation and none is contradicted by a stronger source; see that
- * function's own banner in `src/service/voice.c` for the full control-flow
- * account.  `a2`/`a3` (the function's own second and third parameters) are
- * declared `void *` rather than `short *`: FAX_process itself never
- * dereferences either as a sample array, only hands each to `sysdep_memcpy`
- * with an explicit byte length, and the top-level per-outer-iteration
- * pointer advance is UNSCALED against the sample-granular `count` argument
- * (`add %eax,0x94(%esp)`, no `*2`) -- a real, faithfully-reproduced property
- * of the object, not resolved further here.
- *
- * `FAX_create` AND `FAX_class1_command` ARE NOW BOTH WRITTEN (F10121), the
- * chain F10111 traced -- `FAXVMI_control`, the four `class1tx.c` leaf inits,
- * `fax_class1_create`/`fax_class1_command` -- having landed in the same
- * wave (F10115, F10119, F10120).  See `src/service/voice.c`'s own banner on
- * each function for the full derivation; this file's own struct/prototype
- * comments carry only what changed here.
+ * `sizeof` is not settled: #FAX_create allocates `0x28bc` bytes
+ * (`movl $0x28bc,(%esp)` at 0x151b, ahead of `sysdep_malloc`), larger than
+ * every offset this batch reaches, so the struct extends past what is
+ * modelled here. #FAX_MODELLED_BYTES is a modelling bound, not a size
+ * claim, the same convention `class1.h`'s `CLASS1_MODELLED_BYTES` uses.
  */
 
 #ifndef DSPLIB_FAX_H
@@ -178,108 +36,212 @@
 struct fax_class1;
 struct rc;
 
-/*
- * `sizeof` is NOT settled: `FAX_create` allocates `0x28bc` bytes
- * (`movl $0x28bc,(%esp)` at 0x151b, ahead of `sysdep_malloc`), which is
- * larger than every offset this batch reaches, so the struct extends past
- * what is modelled here.  `FAX_MODELLED_BYTES` is a modelling bound, not a
- * size claim, the same convention `class1.h`'s `CLASS1_MODELLED_BYTES`
- * uses.
- */
 struct fax_ctx {
 	void *modem;			/* +0x000 handed to modem_recv_from_tty/
 					 * modem_send_to_tty as their own first
-					 * argument -- see this file's banner */
+					 * argument (evidence class 2, matching
+					 * their declared shapes and
+					 * FAX_create's own first argument;
+					 * F10106)                            */
 	struct fax_class1 *class1;	/* +0x004 the Class 1 session,
-					 * created by `FAX_create`'s own
-					 * `fax_class1_create(NULL, &local)`
+					 * created by FAX_create's own
+					 * fax_class1_create(NULL, &local)
 					 * call, torn down by FAX_delete's own
-					 * `fax_class1_delete` call          */
-	int host_rx_enable;		/* +0x008 see this file's banner      */
-	int host_rx_want;		/* +0x00c likewise                    */
-	unsigned char host_tx_buf[0x1000]; /* +0x010 likewise             */
-	unsigned char host_rx_buf[0x1000]; /* +0x1010 likewise            */
+					 * fax_class1_delete call             */
+	int host_rx_enable;		/* +0x008 gates whether FAX_process
+					 * polls modem_recv_from_tty at all
+					 * this cycle: set to 1 only by the
+					 * FAX_CLASS1_CONNECT dispatch case,
+					 * cleared by every other case that
+					 * touches it (usage inference, F10106) */
+	int host_rx_want;		/* +0x00c byte count to request from
+					 * modem_recv_from_tty next cycle
+					 * (clamped to 0x1000), overwritten
+					 * after every fax_class1_progress call
+					 * from that call's own out-pointer --
+					 * so its steady-state meaning is "what
+					 * fax_class1_progress wants read
+					 * next" (usage inference, F10106)    */
+	unsigned char host_tx_buf[0x1000]; /* +0x010 the host-bound byte
+					 * stream fax_class1_progress fills for
+					 * FAX_process to forward via
+					 * modem_send_to_tty; sized by the exact
+					 * 0x1000 gap to host_rx_buf (F10106)  */
+	unsigned char host_rx_buf[0x1000]; /* +0x1010 modem_recv_from_tty's
+					 * destination buffer and
+					 * fax_class1_progress's input; sized
+					 * by the 0x1000 read clamp and the
+					 * exact gap to rc_a (F10106)          */
 	struct rc *rc_a;		/* +0x2010 resampler handle, checked
 					 * and deleted before rc_b in
 					 * FAX_delete's own order            */
 	struct rc *rc_b;		/* +0x2014 resampler handle          */
-	short rx_resampled[0xa0];	/* +0x2018 see this file's banner     */
-	short tx_pump_rate[0xa0];	/* +0x2158 likewise                   */
-	int host_frame_samples;	/* +0x2298 likewise                   */
-	int out_produced;		/* +0x229c likewise                   */
+	short rx_resampled[0xa0];	/* +0x2018 RcFixed_Resample's `out`
+					 * target for rc_a: the pump-rate rx
+					 * buffer handed to
+					 * fax_class1_progress (F10106)        */
+	short tx_pump_rate[0xa0];	/* +0x2158 fax_class1_progress's `tx`
+					 * target when rc_a != NULL (else
+					 * written straight into out_ring),
+					 * then RcFixed_Resample's `in` for
+					 * rc_b (F10106)                       */
+	int host_frame_samples;	/* +0x2298 the sample count FAX_process
+					 * batches per host-rate chunk, and
+					 * RcFixed_Resample's in_count/out_count
+					 * for both calls.  Rank-1 evidence:
+					 * FAX_process's own debug string is
+					 * "fax: process: samples count %d !=
+					 * %d" (.rodata.str1.4 0x350), printed
+					 * with this field and the literal
+					 * 0xa0 (CLASS1_BLOCK_SAMPLES,
+					 * class1.h) (F10106)                  */
+	int out_produced;		/* +0x229c running total incremented by
+					 * host_frame_samples once per flush
+					 * cycle; nothing reads it back (usage
+					 * inference, F10106)                  */
 	unsigned char pad_22a0[4];	/* +0x22a0 unmodelled                 */
-	int out_read_cursor;		/* +0x22a4 see this file's banner     */
-	int out_write_half;		/* +0x22a8 likewise                   */
-	short out_ring[2 * 0xa0];	/* +0x22ac likewise, ends +0x252c     */
+	int out_read_cursor;		/* +0x22a4 extraction cursor into
+					 * out_ring (samples, wraps mod
+					 * 2*host_frame_samples), advanced
+					 * every inner iteration regardless of
+					 * whether it flushed (usage inference,
+					 * F10106)                             */
+	int out_write_half;		/* +0x22a8 a 0/host_frame_samples
+					 * ping-pong selector toggled once per
+					 * flush cycle, picking which half of
+					 * out_ring the next flush's tx-
+					 * direction data lands in (usage
+					 * inference, F10106)                  */
+	short out_ring[2 * 0xa0];	/* +0x22ac the double-buffered ring
+					 * fax_class1_progress (identity path)
+					 * or the rc_b RcFixed_Resample call
+					 * (resampled path) writes host-rate tx
+					 * samples into, and FAX_process's own
+					 * output is drained from.  2 *
+					 * host_frame_samples shorts, matching
+					 * in_ring's size; ends +0x252c, 0x80
+					 * bytes short of in_pending (F10106)  */
 	unsigned char pad_252c[0x25ac - 0x252c]; /* +0x252c unmodelled --
 					 * `in_pending` is pinned to +0x25ac by
 					 * the object's own `add $0x25ac,%eax`,
 					 * leaving this gap unclaimed         */
-	int in_pending;			/* +0x25ac likewise                   */
-	int in_write_cursor;		/* +0x25b0 likewise                   */
+	int in_pending;			/* +0x25ac samples buffered in in_ring
+					 * awaiting a flush; incremented per
+					 * inner-loop copy-in, decremented by
+					 * host_frame_samples once per flush
+					 * (usage inference, F10106)           */
+	int in_write_cursor;		/* +0x25b0 fill cursor into in_ring
+					 * (samples, wraps mod
+					 * 2*host_frame_samples) (usage
+					 * inference, F10106)                  */
 	unsigned char pad_25b4[4];	/* +0x25b4 unmodelled                 */
-	int in_read_half;		/* +0x25b8 see this file's banner     */
-	short in_ring[2 * 0xa0];	/* +0x25bc likewise                   */
+	int in_read_half;		/* +0x25b8 out_write_half's
+					 * counterpart for the input side: a
+					 * 0/host_frame_samples ping-pong
+					 * toggle picking which half of
+					 * in_ring the next flush reads its
+					 * pump-rate input from (usage
+					 * inference, F10106)                  */
+	short in_ring[2 * 0xa0];	/* +0x25bc the double-buffered ring
+					 * FAX_process's own input is copied
+					 * into, and the rc_a RcFixed_Resample
+					 * call (or the identity path directly)
+					 * reads from.  Sized by the exact
+					 * 0x280 gap to the struct's own
+					 * 0x28bc allocation size, with 0x80
+					 * bytes left over (pad_283c) (F10106) */
 	unsigned char pad_283c[0x28bc - 0x283c]; /* +0x283c to the object's
 					 * own 0x28bc allocation size, unread
 					 * by anything written so far        */
 };
 
+/*
+ * The "usage inference" fields above are each FAX_process's own derivation
+ * and none is contradicted by a stronger source; see that function's own
+ * banner in `src/service/voice.c` for the full control-flow account
+ * (F10106). `in`/`out` (FAX_process's own second and third parameters) are
+ * declared `void *` rather than `short *`: the function never dereferences
+ * either as a sample array, only hands each to `sysdep_memcpy` with an
+ * explicit byte length, and the top-level per-outer-iteration pointer
+ * advance is unscaled against the sample-granular `count` argument
+ * (`add %eax,0x94(%esp)`, no `*2`) -- a real, faithfully-reproduced property
+ * of the object, not resolved further here.
+ */
+
 #define FAX_MODELLED_BYTES	0x283c
 
-/*
- * `.text` 0x001500, 564 bytes.  `originate` is FAX_create's own third
- * argument (this file's banner above has the derivation): nonzero builds a
- * SESSION-INITIATED (originating) Class 1 session, zero builds an
- * ANSWER-INITIATED one whose FIRST state generates the T.30 CED tone
- * (`struct fax_class1_cfg::mode`, class1.h, values `CLASS1_ANS_ORG_NORMAL`/
- * `CLASS1_ANS_ORG_ANSWER`).  `rate` selects the resampler pair (8000: none,
- * identity; 9600 or 48000: `RcFixed_Create`, four distinct converter IDs
- * across the two -- 3/2 for 9600, 5/4 for 48000, `rc_a` then `rc_b`); any
- * other value builds neither resampler and fails allocation-style (see
- * below). `s7` (the config's `s7_timeout`) comes from `modem_get_sreg(modem,
- * 7)` -- slmodemd's own S-register accessor, declared `extern` in
- * `voice.c` the same way `modem_recv_from_tty`/`modem_send_to_tty` already
- * are, since no dsplib header owns it.
+/**
+ * @brief Create a FAX session: a Class 1 state machine plus, where the
+ * host rate needs it, a pair of resamplers to the pump's 8 kHz.
  *
- * ON FAILURE (an unrecognised `rate`, either resampler returning NULL, or
+ * `originate` nonzero builds a session-initiated (originating) Class 1
+ * session; zero builds an answer-initiated one whose first state generates
+ * the T.30 CED tone (`struct fax_class1_cfg::mode`, class1.h, values
+ * `CLASS1_ANS_ORG_NORMAL`/`CLASS1_ANS_ORG_ANSWER`). `rate` selects the
+ * resampler pair: 8000 needs none (identity), 9600 or 48000 build one via
+ * `RcFixed_Create` (four distinct converter IDs across the two -- 3/2 for
+ * 9600, 5/4 for 48000, `rc_a` then `rc_b`); any other value fails. `s7`
+ * (the config's `s7_timeout`) comes from `modem_get_sreg(modem, 7)` --
+ * slmodemd's own S-register accessor, declared `extern` in `voice.c` the
+ * same way `modem_recv_from_tty`/`modem_send_to_tty` already are, since no
+ * dsplib header owns it.
+ *
+ * On failure (an unrecognised `rate`, either resampler returning NULL, or
  * `fax_class1_create` returning NULL) the object tears down whatever it
- * already built -- `rc_a`, `rc_b`, `class1` -- in that order, INLINE rather
- * than by calling `FAX_delete` (no relocation to it in this range), even
- * reusing `FAX_delete`'s own debug string ("fax: delete...\n") at the same
- * site, and returns NULL.
+ * already built -- `rc_a`, `rc_b`, `class1` -- in that order, inline rather
+ * than by calling #FAX_delete, even reusing #FAX_delete's own debug string
+ * ("fax: delete...\n") at the same site.
+ *
+ * @param modem      The host modem object, forwarded to
+ *                    modem_recv_from_tty/modem_send_to_tty.
+ * @param originate  Nonzero for a session-initiated call, zero for
+ *                    answer-initiated.
+ * @param rate       Host sample rate: 8000, 9600 or 48000.
+ * @return The new session, or NULL on failure.
  */
 struct fax_ctx *FAX_create(void *modem, int originate, unsigned int rate);
 
-/*
- * `.text` 0x001450, 172 bytes.  In the object's own order: print a debug
- * line ("fax: delete...\n", `.rodata.str1.1` 0x1be) when
- * `dsplibs_debug_level > 1`, delete `rc_a` and `rc_b` if set, delete
- * `class1` if set (and clear the field), then free `ctx` itself.  Every
- * check is unconditional and independent -- there is no early return.
+/**
+ * @brief Tear down a FAX session.
+ *
+ * In the object's own order: print a debug line ("fax: delete...\n",
+ * `.rodata.str1.1` 0x1be) when `dsplibs_debug_level > 1`, delete `rc_a` and
+ * `rc_b` if set, delete `class1` if set (and clear the field), then free
+ * `ctx` itself. Every check is unconditional and independent -- there is
+ * no early return.
+ *
+ * @param ctx  The session to free.
  */
 void FAX_delete(struct fax_ctx *ctx);
 
-/*
- * `.text` 0x001740, 708 bytes.  `cmd` is one of the six `FAXC1_*` codes
- * below -- the OUTER numbering, a DIFFERENT space from `fax_class1_command`'s
- * own `FAX_CLASS1_*_COMMAND` (class1.h), which this function remaps into
- * after validating `arg` (cast through `(int)(long)`, never dereferenced --
- * a rate code for FTM/FRM against the twelve `_set_modem_rate` recognises,
- * or exactly 3 for FTH/FRH, the V.21 control-channel sentinel
+/**
+ * @brief Send a Class 1 command to a FAX session.
+ *
+ * `cmd` is one of the six #FAXC1_FTS-and-siblings codes below -- the outer
+ * numbering, a different space from `fax_class1_command`'s own
+ * `FAX_CLASS1_*_COMMAND` (class1.h), which this function remaps into after
+ * validating `arg` (cast through `(int)(long)`, never dereferenced -- a
+ * rate code for FTM/FRM against the twelve `_set_modem_rate` recognises, or
+ * exactly 3 for FTH/FRH, the V.21 control-channel sentinel
  * `_cHDLCrx_init_from_idle` itself tests for). `ctx == NULL` or
  * `ctx->class1 == NULL` returns -1 immediately; an invalid `cmd` or a
  * rejected `arg` also returns -1, each logged at debug level > 1 with the
  * object's own per-command string ("fax:  FAXC1_FTH, %x\n" and five
  * siblings). A validated call always returns 1 -- `fax_class1_command`'s
  * own return is discarded.
+ *
+ * @param ctx  The session.
+ * @param cmd  One of #FAXC1_FTS .. #FAXC1_FRH.
+ * @param arg  Command argument (a rate code, or the FTH/FRH sentinel 3);
+ *             cast to an integer, never dereferenced.
+ * @return 1 on success, -1 on any rejection.
  */
 int FAX_class1_command(struct fax_ctx *ctx, int cmd, void *arg);
 
 /*
- * `FAX_class1_command`'s OWN `cmd` numbering -- the object's own debug
+ * FAX_class1_command's own `cmd` numbering -- the object's own debug
  * strings ("fax:  FAXC1_FTS, %x\n" etc, rank-1 evidence), in the jump
- * table's own order (`.rodata` 0x60, six entries).  NOT
+ * table's own order (`.rodata` 0x60, six entries). NOT
  * `FAX_CLASS1_*_COMMAND` (class1.h): FTS=0 there is TS=4 here, and the
  * remap is total, not merely offset.
  */
@@ -290,18 +252,26 @@ int FAX_class1_command(struct fax_ctx *ctx, int cmd, void *arg);
 #define FAXC1_FTH	4
 #define FAXC1_FRH	5
 
-/*
- * `.text` 0x001a10, 1,809 bytes.  The largest of the four: a read/resample/
- * dispatch/write pump that consumes `count` samples' worth of `in`, in
- * chunks of `ctx->host_frame_samples` samples, and produces the same count
- * of `out`.  Full derivation (the two ring buffers, the eleven-way dispatch
- * on `fax_class1_progress`'s own `FAX_CLASS1_*` return, the ping-pong
- * halves) is in `src/service/voice.c`'s own banner on the function; this
- * file's struct banner above carries only the field-by-field evidence.
+/**
+ * @brief Pump samples through a FAX session: read/resample/dispatch/write.
  *
- * `in`/`out` are `void *`, not `short *` -- see this file's struct banner
- * for why.  `count` is in the same units `host_frame_samples` is (matched
+ * Consumes `count` samples' worth of `in`, in chunks of
+ * `ctx->host_frame_samples` samples, and produces the same count of `out`.
+ * Full derivation (the two ring buffers, the eleven-way dispatch on
+ * `fax_class1_progress`'s own `FAX_CLASS1_*` return, the ping-pong halves)
+ * is in `src/service/voice.c`'s own banner on the function (F10106); this
+ * file's struct comments above carry only the field-by-field evidence.
+ *
+ * `in`/`out` are `void *`, not `short *` -- see the struct's own note above
+ * for why. `count` is in the same units `host_frame_samples` is (matched
  * directly against it, unscaled, every outer iteration).
+ *
+ * @param ctx    The session.
+ * @param in     Host-rate input samples, `count` of them.
+ * @param out    Host-rate output samples, `count` of them.
+ * @param count  Samples to process.
+ * @return The composed status word (see `src/service/voice.c`'s own banner
+ *         for its bits).
  */
 int FAX_process(struct fax_ctx *ctx, const void *in, void *out, int count);
 

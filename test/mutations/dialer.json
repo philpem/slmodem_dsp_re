@@ -1,7 +1,7 @@
 [
  {
   "label": "swap 'Switching to Tone' onto the pulse branch",
-  "find": "dsplibs_debug_printf(\"Dialer.c: GetNextDigit...\"\n\t\t\t\t\t\t     \" Switching to Pulse\\n\");",
+  "find": "dsplibs_debug_printf(\"Dialer.c: GetNextDigit...\" \" Switching to Pulse\\n\");",
   "replace": "dsplibs_debug_printf(\"Dialer.c: GetNextDigit...\"\n\t\t\t\t\t\t     \" Switching to Tone\\n\");"
  },
  {
@@ -21,12 +21,12 @@
  },
  {
   "label": "announce 'became TONE_DIALING' for a mid-string switch too",
-  "find": "d->cfg.tone_or_pulse = DIALER_TONE_DIALING;\n\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\"Dialer.c: GetNextDigit...\"\n\t\t\t\t\t\t     \" Switching to Tone\\n\");",
+  "find": "d->cfg.tone_or_pulse = DIALER_TONE_DIALING;\n\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\"Dialer.c: GetNextDigit...\" \" Switching to Tone\\n\");",
   "replace": "d->cfg.tone_or_pulse = DIALER_TONE_DIALING;\n\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\"Dialer.c: GetNextDigit... \"\n\t\t\t\t\t\t     \"TONE_OR_PULSE_FLAG became \"\n\t\t\t\t\t\t     \"TONE_DIALING\\n\");"
  },
  {
   "label": "drop the 'Not permitted to switch to Pulse' site",
-  "find": "if (DSPLIB_DEBUG_ON())\n\t\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t    \"Dialer.c: GetNextDigit... \"\n\t\t\t\t\t    \"Not permitted to switch to \"\n\t\t\t\t\t    \"Pulse\\n\");",
+  "find": "if (DSPLIB_DEBUG_ON())\n\t\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t    \"Dialer.c: GetNextDigit... \" \"Not permitted to switch to \" \"Pulse\\n\");",
   "replace": "/* deliberately removed */"
  },
  {
@@ -56,7 +56,7 @@
  },
  {
   "label": "announce END OF DIAL DIGIT before the dialler agrees",
-  "find": "\t/* Still making and breaking the line: silence, and no message. */\n\tif (!IsPulseDialerReady(d->modem)) {\n\t\temit_silence(buf, pos, limit);\n\t\treturn 0;\n\t}\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"=========>END OF DIAL DIGIT \"\n\t\t\t\t     \"DETECTED.\\n\");\n\treturn 1;",
+  "find": "\n\n\t/* Still making and breaking the line: silence, and no message. */\n\tif (!IsPulseDialerReady(d->modem)) {\n\t\temit_silence(buf, pos, limit);\n\t\treturn 0;\n\t}\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"=========>END OF DIAL DIGIT \" \"DETECTED.\\n\");\n\treturn 1;",
   "replace": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"=========>END OF DIAL DIGIT \"\n\t\t\t\t     \"DETECTED.\\n\");\n\tif (!IsPulseDialerReady(d->modem)) {\n\t\temit_silence(buf, pos, limit);\n\t\treturn 0;\n\t}\n\treturn 1;"
  },
  {
@@ -91,7 +91,7 @@
  },
  {
   "label": "drop the flash 'Begin Dialing FLASH' banner",
-  "find": "if (DSPLIB_DEBUG_ON())\n\t\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t    \"=========> Begin Dialing \"\n\t\t\t\t\t    \"FLASH.\\n\");",
+  "find": "if (DSPLIB_DEBUG_ON())\n\t\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t    \"=========> Begin Dialing \" \"FLASH.\\n\");",
   "replace": "/* deliberately removed */"
  },
  {

@@ -186,47 +186,85 @@ extern const struct fpm_tone_cfg FPM_TONE_CFG_data;
 extern const short *const FPM_TONE_CFG;
 extern const short ToneLPF[53];
 
-/*
- * Build a tone object.  Passing NULL for `state` allocates one (and its
- * buffers); supplying your own means you supply its buffers too.  Passing
- * NULL for `cfg` uses the built-in V.25 answer-tone configuration.
+/**
+ * @brief Build a tone object.
+ *
+ * @param state  Existing state to build into, or NULL to allocate one
+ *               (and its buffers) fresh.
+ * @param cfg    Configuration, or NULL for the built-in V.25 answer-tone
+ *               (2100 Hz, 180-degree reversal every 450 ms) configuration.
+ *               Supplying your own @p state means supplying its buffers
+ *               too.
+ * @return @p state, or the newly allocated state.
  */
 struct fpm_tone *FPM_TONE_create(struct fpm_tone *state,
 				 const struct fpm_tone_cfg *cfg);
 
-/*
- * Free a tone object and its buffers.  Frees unconditionally, including the
- * object itself -- see the note in src/dsp/fpm_tone.c before calling it on
- * anything not built by FPM_TONE_create(NULL, ...).
+/**
+ * @brief Free a tone object and its buffers.
+ *
+ * Frees unconditionally, including @p state itself -- see the note in
+ * src/dsp/fpm_tone.c before calling this on anything not built by
+ * `FPM_TONE_create(NULL, ...)`.
+ *
+ * @param state The object to free.
  */
 void FPM_TONE_delete(struct fpm_tone *state);
 
-/* Set the tone frequency in Hz.  Assumes an 8 kHz sample rate -- see R-9. */
+/**
+ * @brief Set the tone frequency.
+ * @param state  Tone object.
+ * @param hz     Frequency in Hz. Assumes an 8 kHz sample rate (see R-9 in
+ *               docs/rate_assumptions.md).
+ */
 void FPM_TONE_set_freq(struct fpm_tone *state, short hz);
 
-/* Set the output gain, applied as (sample * scale) >> 14. */
+/**
+ * @brief Set the generator's output gain.
+ * @param state  Tone object.
+ * @param scale  Gain, applied as `(sample * scale) >> 14`.
+ */
 void FPM_TONE_set_scale(struct fpm_tone *state, short scale);
 
-/*
- * Generate `count` samples.  Every `rev_period` units of 8 samples the phase
- * jumps 180 degrees, which is what makes this an ANSam generator rather than
- * a plain oscillator.  A zero or negative period disables reversals.
+/**
+ * @brief Generate @p count samples of the configured tone.
+ *
+ * Every `cfg.rev_period` units of 8 samples, the phase jumps 180 degrees --
+ * what makes this an ANSam-style generator rather than a plain oscillator.
+ * A zero or negative period disables reversals.
+ *
+ * @param state  Tone object.
+ * @param out    Output buffer, @p count samples.
+ * @param count  Number of samples to generate.
  */
 void FPM_TONE_generate(struct fpm_tone *state, short *out, short count);
 
-/*
- * The reference oscillator for the demodulator: the same tone as
- * FPM_TONE_generate but taken from the cosine, and with no phase reversals.
- * Returns `count`.
+/**
+ * @brief Generate @p count samples of the demodulator's reference oscillator.
+ *
+ * The same tone as FPM_TONE_generate(), taken from the cosine, with no
+ * phase reversals.
+ *
+ * @param state  Tone object.
+ * @param out    Output buffer, @p count samples.
+ * @param count  Number of samples to generate.
+ * @return @p count.
  */
 short FPM_TONE_generate_demod(struct fpm_tone *state, short *out,
 			      short count);
 
-/*
- * The QUADRATURE pair from one oscillator: `cos_out` and `sin_out` get the
- * cosine and the sine of the same phase, sample for sample.  Two outputs, not
- * two tones -- the object still holds a single frequency.  No phase
- * reversals, and it returns `count`.
+/**
+ * @brief Generate the quadrature pair of one oscillator.
+ *
+ * @p cos_out and @p sin_out get the cosine and sine of the same phase,
+ * sample for sample -- two outputs, not two tones; the object still holds
+ * a single frequency. No phase reversals.
+ *
+ * @param state    Tone object.
+ * @param cos_out  Output buffer for the cosine, @p count samples.
+ * @param sin_out  Output buffer for the sine, @p count samples.
+ * @param count    Number of samples to generate.
+ * @return @p count.
  */
 short FPM_TONE_generate2(struct fpm_tone *state, short *cos_out,
 			 short *sin_out, short count);
@@ -251,61 +289,80 @@ short FPM_TONE_generate2(struct fpm_tone *state, short *cos_out,
 #define FPM_TONE_OTHER    1	/* signal present, but not this tone */
 #define FPM_TONE_NOSIGNAL 2	/* below the minimum level           */
 
-/*
- * Run `count` samples through the correlator and resonator and report whether
- * the configured tone is present.  Energy estimates persist in the state, so
- * the answer reflects a running average rather than this block alone.
+/**
+ * @brief Run @p count samples through the correlator and resonator, and
+ *        report whether the configured tone is present.
+ *
+ * Energy estimates persist in @p state across calls, so the answer
+ * reflects a running average rather than this block alone.
+ *
+ * @param state    Tone object.
+ * @param samples  Input samples.
+ * @param count    Number of samples in @p samples.
+ * @return One of #FPM_TONE_PRESENT (0 -- note the polarity), #FPM_TONE_OTHER
+ *         or #FPM_TONE_NOSIGNAL.
  */
 short FPM_TONE_detect(struct fpm_tone *state, const short *samples,
 		      short count);
 
-/*
- * Time the sign changes of `samples`' autocorrelation at a lag of `cfg.rev_lag`
- * samples.  `samples` is filtered IN PLACE on the way in, through the one
- * biquad at `rev_block`.
+/**
+ * @brief Time the sign changes of @p samples' autocorrelation at a lag of
+ *        `cfg.rev_lag` samples.
  *
- * A sign change there is a 180 degree phase reversal only where the carrier's
- * period divides `cfg.rev_lag`, which the built-in 2100 Hz config's does NOT --
- * read the derivation above FPM_TONE_find_rev in src/dsp/fpm_tone.c before
- * treating this as an answer-tone reversal detector for a given tone.
+ * @p samples is filtered in place on the way in, through the one biquad at
+ * `rev_block`. A sign change there is a genuine 180-degree phase reversal
+ * only where the carrier's period divides `cfg.rev_lag`, which the
+ * built-in 2100 Hz config's does NOT -- read the derivation above
+ * `FPM_TONE_find_rev` in src/dsp/fpm_tone.c before treating this as an
+ * answer-tone reversal detector for a given tone. A report is suppressed
+ * unless more than 160 samples have passed since the last one, so the
+ * shortest interval this can ever return is 20.
  *
- * Returns 0 when nothing was found, and otherwise the interval since the last
- * one it reported, in units of eight samples -- the same units
- * `cfg.rev_period` is expressed in, so the two are directly comparable.  A
- * report is suppressed unless more than 160 samples have passed since the last
- * one, so the shortest interval this can ever return is 20.
+ * Unlike the rest of this module (FPM_TONE_detect(), FPM_TONE_generate2(),
+ * FPM_TONE_generate_demod() and FPM_TONE_filter() all count down through a
+ * 16-bit value and run about 65536 times for a negative count), a negative
+ * @p count here does nothing.
  *
- * A NEGATIVE `count` does nothing here, which is not what the rest of the
- * module does: FPM_TONE_detect, _generate2, _generate_demod and _filter all
- * count down through a 16-bit value and run about 65536 times.  This one
- * compares against `count` instead.
+ * @param state    Tone object.
+ * @param samples  Samples to filter in place and search.
+ * @param count    Number of samples in @p samples.
+ * @return 0 if nothing was found; otherwise the interval since the last
+ *         reversal reported, in units of eight samples -- the same units
+ *         `cfg.rev_period` is expressed in.
  */
 short FPM_TONE_find_rev(struct fpm_tone *state, short *samples, short count);
 
-/*
- * Run `samples` through the detector's correlator, in place.
+/**
+ * @brief Run @p samples through the detector's correlator, in place.
  *
- * It is the first half of FPM_TONE_detect and nothing else: the same circular
- * `history` of `cfg.len` words, the same `kernel`, the same two-loop wrap and
- * the same `>> 15`.  What it does not do is square, smooth or decide, and it
- * shares `hist_idx` with the detector -- so a filter pass and a detect pass on
- * one object walk the same write position and interleave.
+ * The first half of FPM_TONE_detect() and nothing else: the same circular
+ * `history` of `cfg.len` words, the same `kernel`, the same two-loop wrap
+ * and the same `>> 15`. Does not square, smooth or decide, and shares
+ * `hist_idx` with the detector -- so a filter pass and a detect pass on one
+ * object walk the same write position and interleave.
  *
- * Nothing in dsplibs.o calls it: it is the only FPM_TONE entry point with no
- * relocation naming it anywhere in the object.
+ * Nothing in dsplibs.o calls it: it is the only FPM_TONE entry point with
+ * no relocation naming it anywhere in the object.
+ *
+ * @param state    Tone object.
+ * @param samples  Samples to correlate, filtered in place.
+ * @param count    Number of samples in @p samples.
  */
 void FPM_TONE_filter(struct fpm_tone *state, short *samples, short count);
 
-/*
- * Remove the configured tone from `samples`, in place, `count` at a time.
+/**
+ * @brief Remove the configured tone from @p samples, in place.
  *
- * It is FPM_TONE_detect's notch run over the caller's own buffer: the same
- * one biquad, through the stored self-pointer at +0xfc rather than
- * `iir_coeff` directly, with its own persistent state so the two passes do
- * not interfere.  The filter is `FPM_iir_filt_II`, which does not saturate.
+ * FPM_TONE_detect()'s notch run over the caller's own buffer: the same one
+ * biquad, through the stored self-pointer at `+0xfc` rather than
+ * `iir_coeff` directly, with its own persistent state (`kill_state`) so
+ * the two passes do not interfere. The filter is `FPM_iir_filt_II`, which
+ * does not saturate.
  *
- * `count` is read as a signed 16-bit value and widened, so it is the
- * declared type here and not an int.
+ * @param state    Tone object.
+ * @param samples  Samples to filter in place.
+ * @param count    Number of samples in @p samples, read as signed 16-bit
+ *                 and widened (the declared type here, not `int`).
  */
 void FPM_TONE_kill(struct fpm_tone *state, short *samples, short count);
 

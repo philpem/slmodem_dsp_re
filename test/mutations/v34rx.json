@@ -134,7 +134,7 @@
  },
  {
   "label": "the S-S1 report has the symbol count and the PLL count swapped",
-  "find": "\t\t\t\t\t    \"pllcnt= %d,gain= 0x%x\\n\",\n\t\t\t\t\t    (int)n, (int)rx->pllcnt,\n\t\t\t\t\t    (int)rx->agc_gain);",
+  "find": " \"pllcnt= %d,gain= 0x%x\\n\",\n\t\t\t\t\t    (int)n, (int)rx->pllcnt,\n\t\t\t\t\t    (int)rx->agc_gain);",
   "replace": "\t\t\t\t\t    \"pllcnt= %d,gain= 0x%x\\n\",\n\t\t\t\t\t    (int)rx->pllcnt, (int)n,\n\t\t\t\t\t    (int)rx->agc_gain);"
  },
  {

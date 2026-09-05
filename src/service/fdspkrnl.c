@@ -130,8 +130,7 @@ FDSP_DP_Create(struct fdsp_kernel *k, short sRxSamplesDelay,
 	       short sTxSamplesDelay)
 {
 	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("ver 120 sRxSamplesDelay %d ,"
-				     "sTxSamplesDelay %d \n",
+		dsplibs_debug_printf("ver 120 sRxSamplesDelay %d ," "sTxSamplesDelay %d \n",
 				     sRxSamplesDelay, sTxSamplesDelay);
 	if (k == 0) {
 		int ok;

@@ -67,6 +67,18 @@ extern "C" {
  */
 #include "dsplib/voice.h"
 
+/**
+ * @brief Handle a voice connection's DLE-shielded control code.
+ *
+ * `<DLE><ETX>` (0x03) marks end of the voice data stream and sets
+ * `dle_etx`; `<DLE><CAN>` (0x18) is an abort and sets `dle_can`. Anything
+ * else is ignored (logged at debug level > 1 only).
+ *
+ * @param v   The voice context.
+ * @param cmd The command byte following the DLE, sign-extended.
+ * @return 0 for `<DLE><ETX>` and for an unrecognised command;
+ *         `VOICE_DLE_CAN_STATUS` (9) for `<DLE><CAN>`.
+ */
 int voice_dle_command(struct voice_ctx *v, signed char cmd);
 
 #ifdef __cplusplus

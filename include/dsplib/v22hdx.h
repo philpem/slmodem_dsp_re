@@ -118,24 +118,44 @@
  */
 #define V22_HDX_R38(hdx)	(*(const short *)(const void *)&(hdx)->r36[2])
 
-/*
- * Retrain.  Eight substates in `hdx->connect_substate`, dispatched through a jump table, and
- * a value outside 0..7 -- including a negative one, because the range test is
- * unsigned -- does nothing at all beyond stamping `fp->status`.
+/**
+ * @brief V.22 protocol handler for the RETRAIN state.
  *
- * The substates run in order and each hands on to the next: 0 waits for the
- * far end to stop, 1 resets the receiver and drops both directions to 1200, 2
- * sends unscrambled S1 and branches on +0x38, 3 waits again, 4, 5 and 6 walk
- * the rate back up, and 7 waits for `RxTrained2400`.
+ * Eight substates in `hdx->connect_substate`, dispatched through a jump
+ * table; a value outside 0..7 -- including a negative one, because the
+ * range test is unsigned -- does nothing at all beyond stamping
+ * `fp->status`.
+ *
+ * The substates run in order and each hands on to the next: 0 waits for
+ * the far end to stop, 1 resets the receiver and drops both directions to
+ * 1200, 2 sends unscrambled S1 and branches on V22_HDX_R38, 3 waits again,
+ * 4, 5 and 6 walk the rate back up, and 7 waits for `RxTrained2400`.
+ *
+ * @param fp       The V.22 datapump instance.
+ * @param txdata   Transmit symbols.
+ * @param txout    Output for the modulated transmit samples.
+ * @param rxin     Received samples to demodulate.
+ * @param rxsym    Output for the demodulated receive symbols.
+ * @param txcount  In/out: transmit symbol/sample count.
+ * @param rxcount  In/out: receive sample/symbol count.
  */
 void v22_retrain(struct v22fp *fp, unsigned short *txdata, short *txout,
 		 short *rxin, unsigned short *rxsym, unsigned short *txcount,
 		 unsigned short *rxcount);
 
-/*
- * The originating end of the remote-loopback-2 exchange.  Three substates in
- * the same `hdx->connect_substate`, and any other value returns after stamping `fp->status`
- * and setting bit 1 of `fp->r1e[0]`.
+/**
+ * @brief V.22 protocol handler for the originating end of the remote-loopback-2 exchange.
+ *
+ * Three substates in `hdx->connect_substate`; any other value returns
+ * after stamping `fp->status` and setting bit 1 of `fp->r1e[0]`.
+ *
+ * @param fp       The V.22 datapump instance.
+ * @param txdata   Transmit symbols.
+ * @param txout    Output for the modulated transmit samples.
+ * @param rxin     Received samples to demodulate.
+ * @param rxsym    Output for the demodulated receive symbols.
+ * @param txcount  In/out: transmit symbol/sample count.
+ * @param rxcount  In/out: receive sample/symbol count.
  */
 void v22_org_rmloop2(struct v22fp *fp, unsigned short *txdata, short *txout,
 		     short *rxin, unsigned short *rxsym,

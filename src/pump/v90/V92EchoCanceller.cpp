@@ -564,8 +564,7 @@ V92EchoCanceller::setState(V92EchoCancellerState newState)
 
 		if (state == V92_ECHO_FAST_TRAINING
 		    || state == V92_ECHO_SLOW_TRAINING) {
-			edprintf("**************** NEAR ECHO FILTER "
-				 "*************** \n");
+			edprintf("**************** NEAR ECHO FILTER " "*************** \n");
 			for (i = 0; i < filterLength; i++)
 				edprintf("   = %c%d.%06d\r\n",
 					 sign_of(echoCoeff[i]),
@@ -591,8 +590,7 @@ V92EchoCanceller::setState(V92EchoCancellerState newState)
 		break;
 
 	case V92_ECHO_FAST_TRAINING:
-		edprintf("V92EchoCanceller: echo state set to fast echo "
-			 "training\r\n");
+		edprintf("V92EchoCanceller: echo state set to fast echo " "training\r\n");
 		state = V92_ECHO_FAST_TRAINING;
 		setEchoBeta(params->V92_ECHO_FAST_BETA_FACTOR);
 		setDecayFactor(params->V92_ECHO_FAST_DECAY_FACTOR);
@@ -601,8 +599,7 @@ V92EchoCanceller::setState(V92EchoCancellerState newState)
 		break;
 
 	case V92_ECHO_SLOW_TRAINING:
-		edprintf("V92EchoCanceller: echo state set to slow echo "
-			 "training\r\n");
+		edprintf("V92EchoCanceller: echo state set to slow echo " "training\r\n");
 		state = V92_ECHO_SLOW_TRAINING;
 		setEchoBeta(params->V92_ECHO_SLOW_BETA_FACTOR);
 		setDecayFactor(params->V92_ECHO_SLOW_DECAY_FACTOR);

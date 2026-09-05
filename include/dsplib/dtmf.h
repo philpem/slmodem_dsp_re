@@ -80,33 +80,59 @@ struct dtmf {
  */
 #define DTMF_MODE_EUR	1
 
-/*
- * One 8 kHz sample.  Returns DTMF_NOT_YET on the samples that do not close a
- * block, DTMF_NO_DIGIT while a digit is being held, and the digit index once
- * -- on the block in which the tone STOPS, not the one in which it starts.
+/**
+ * @brief Feed one 8 kHz sample to the notch-bank DTMF detector.
+ * @param x     The new sample.
+ * @param d     The receiver, updated in place.
+ * @param mode  #DTMF_MODE_EUR or any other value (see the struct comment).
+ * @return #DTMF_NOT_YET on samples that do not close a block,
+ *         #DTMF_NO_DIGIT while a digit is being held, or the digit index
+ *         once -- on the block in which the tone STOPS, not the one in
+ *         which it starts.
  */
 int dtmf_detect(float x, struct dtmf *d, short mode);
 
-/* `count` samples, returning the last digit that was neither -1 nor -2. */
+/**
+ * @brief Run a block of samples through dtmf_detect().
+ * @param d        The receiver, updated in place.
+ * @param samples  Input samples.
+ * @param count    Number of samples.
+ * @param mode     Passed through to dtmf_detect().
+ * @return The last digit reported that was neither #DTMF_NO_DIGIT nor
+ *         #DTMF_NOT_YET.
+ */
 short dtmf_progress(struct dtmf *d, const float *samples, short count,
 		    short mode);
 
-/*
- * The block decision.  `e` is eight energies, `total` the block's unfiltered
- * energy, and the result is a digit index or -1.  Exported separately from
- * dtmf_detect because it is the whole of the detector's judgement and has no
- * state of its own.
+/**
+ * @brief The block decision: which notch (if any) took out the most energy.
+ *
+ * Exported separately from dtmf_detect() because it is the whole of the
+ * detector's judgement and has no state of its own.
+ *
+ * @param e      Eight notch energies.
+ * @param total  The block's unfiltered energy.
+ * @param mode   Passed through from dtmf_detect().
+ * @return A digit index, or -1.
  */
 int dtmf_test(const float *e, float total, short mode);
 
-/* Switch to the shorter validity rule.  There is no way back. */
+/**
+ * @brief Switch to the shorter validity rule. There is no way back.
+ * @param d  The receiver to relax.
+ */
 void dtmf_set_easy(struct dtmf *d);
 
-/*
- * Allocate (when `d` is NULL) and initialise one receiver: every state word
- * zero, `hist` all -1, `digit` -1.  Reconstructed in src/service/beepgen.c,
- * which is the file this tree gives the `Beepgen.c` span's leftovers and
- * where 0xadef0 falls in address order; the prototype belongs here.
+/**
+ * @brief Allocate (when @p d is NULL) and initialise one notch-bank receiver.
+ *
+ * Every state word zero, `hist` all -1, `digit` -1. Reconstructed in
+ * src/service/beepgen.c, which is the file this tree gives the
+ * `Beepgen.c` span's leftovers and where 0xadef0 falls in address order;
+ * the prototype belongs here.
+ *
+ * @param d  NULL to allocate a new receiver, or caller-owned storage.
+ * @return @p d, or the newly allocated receiver.
  */
 struct dtmf *create_dtmf(struct dtmf *d);
 

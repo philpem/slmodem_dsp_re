@@ -1239,8 +1239,7 @@ V90CP::bitsToInfo(unsigned char bit)
 				resetDetector();
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
-					    "V90CP: recieved CP with bad CRC"
-					    "\r\n");
+					    "V90CP: recieved CP with bad CRC" "\r\n");
 			}
 		}
 		break;

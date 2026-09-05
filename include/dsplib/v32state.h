@@ -64,14 +64,17 @@ extern "C" {
 
 #define V32_STATE_COUNT		35
 
-/*
- * statenames[state] for state <= 34, else "INVALID!".
+/**
+ * @brief Look up the V.32 handshake state's name, in the Recommendation's own lettering.
  *
- * The fallback string used to read "STATE_UNKNOWN" here.  That was a guess
+ * The fallback string used to read "STATE_UNKNOWN" here. That was a guess
  * made before the function was disassembled; the string at
- * .rodata.str1.1+0x3952, which is the one the function actually loads, is
- * "INVALID!".  See src/pump/v32/v32state.c.  The bound is unsigned, so a
+ * `.rodata.str1.1+0x3952`, which is the one the function actually loads,
+ * is "INVALID!". See src/pump/v32/v32state.c. The bound is unsigned, so a
  * negative index takes the fallback too.
+ *
+ * @param state  One of V32_STATE_A..V32_STATE_DONT_CARE.
+ * @return `statenames[state]` for `state <= V32_STATE_DONT_CARE`, else "INVALID!".
  */
 const char *V32StateName(int state);
 

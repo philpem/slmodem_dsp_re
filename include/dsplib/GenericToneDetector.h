@@ -94,35 +94,39 @@
 
 class GenericToneDetector {
 public:
-	/*
-	 * ELEVEN ARGUMENTS, and the constructor spends them in three places.
-	 * Five go straight to the filter it allocates, four are copied into
-	 * the object as they stand, and two are divided by a fifth before
-	 * being stored.  Argument names are descriptive of what the object
-	 * DOES with each, which for a store-only slot is all that is
+	/**
+	 * @brief Construct a tone detector over a newly built IIR filter.
+	 *
+	 * Eleven arguments, spent in three places: five go straight to the
+	 * `GenericIIR<float, double>` filter this allocates, four are copied
+	 * into the object as they stand, and two are divided by a fifth
+	 * (rounded up) before being stored. Argument names describe what the
+	 * object does with each, which for a store-only slot is all that is
 	 * recoverable (finding F226: the mangling preserves method and type
 	 * names, never a data member's or a parameter's).
 	 *
-	 *   nden, nnum, den, num   the filter's denominator and numerator
-	 *                          orders and coefficient arrays, passed
-	 *                          through untouched to
-	 *                          GenericIIR<float, double>.
-	 *   samples1, samples2     divided by `blockLen`, rounded UP, and
-	 *                          stored at +0x1c and +0x20.  So the caller
-	 *                          states two durations in samples and the
-	 *                          object keeps them in whole blocks.
-	 *   threshold              float, copied to +0x04.
-	 *   flag                   copied to +0x34; both `process`es test it
-	 *                          with `test %eax,%eax; je` and take a
-	 *                          shorter path when it is zero.
-	 *   ratio                  float, copied to +0x08; used by `process`
-	 *                          only on the path `flag` enables.
-	 *   blockLen               copied to +0x28 AND used as the divisor
-	 *                          for `samples1` and `samples2`.  Not
-	 *                          guarded against zero -- see the file
-	 *                          comment.
-	 *   blockSize              passed to the filter as its block size and
-	 *                          never stored in this object.
+	 * @param nden       Filter denominator order, passed through to
+	 *                   GenericIIR.
+	 * @param nnum       Filter numerator order, passed through.
+	 * @param den        Filter denominator coefficients, passed through.
+	 * @param num        Filter numerator coefficients, passed through.
+	 * @param samples1   Hit-streak duration in samples; divided by
+	 *                   @p blockLen (rounded up) and stored as `blocks1`.
+	 * @param samples2   Miss-streak duration in samples; divided by
+	 *                   @p blockLen (rounded up) and stored as `blocks2`.
+	 * @param threshold  Output-energy threshold a block's mean must reach
+	 *                   to score as a hit; stored as `threshold`.
+	 * @param flag       Enables the ratio-based scoring arm; stored as
+	 *                   `flag` and tested against zero by process().
+	 * @param ratio      Input/output energy ratio used only on the path
+	 *                   @p flag enables; stored as `ratio`.
+	 * @param blockLen   Samples per scoring block; stored as `blockLen`
+	 *                   and also used as the divisor for @p samples1 and
+	 *                   @p samples2 -- not guarded against zero (a zero
+	 *                   value traps in the divide, reproducing the
+	 *                   object; see docs/deviations.md).
+	 * @param blockSize  Passed to the filter as its block size; never
+	 *                   stored in this object.
 	 */
 	GenericToneDetector(unsigned int nden, unsigned int nnum,
 			    double *den, double *num,
@@ -130,43 +134,57 @@ public:
 			    float threshold, unsigned int flag, float ratio,
 			    unsigned int blockLen, unsigned int blockSize);
 
-	/*
-	 * FORTY BYTES, AND IT IS ONE `delete`.  Test `filter` for null, call
-	 * `_ZN10GenericIIRIfdED1Ev`, call `sysdep_free` -- which is exactly
-	 * what a delete-expression compiles to when `operator delete` is the
-	 * member `GenericIIR.h` derives.  It writes nothing: `filter` is left
-	 * dangling rather than nulled, and the test asserts that too.
+	/**
+	 * @brief Destroy the detector and its owned filter.
+	 *
+	 * Tests `filter` for null, destroys it, and frees it -- exactly what
+	 * a delete-expression compiles to for GenericIIR's member `operator
+	 * delete`. Does not null `filter` afterwards.
 	 */
 	~GenericToneDetector();
 
-	/*
-	 * `_ZN19GenericToneDetector5resetEv`, 68 bytes.  `GenericIIR::reset()`
-	 * on the filter, then the four accumulators, the two block counters,
-	 * the sample counter and the answer back to zero -- eight fields, and
-	 * NOT `blocks1`, `blocks2`, `blockLen`, `threshold`, `ratio` or
-	 * `flag`, which are configuration and survive a reset.
+	/**
+	 * @brief Reset the filter and the detector's running state.
+	 *
+	 * Resets the owned filter (GenericIIR::reset()), then clears the
+	 * four accumulators, the two block counters, the sample counter and
+	 * the answer -- eight fields. Does NOT touch `blocks1`, `blocks2`,
+	 * `blockLen`, `threshold`, `ratio` or `flag`, which are configuration
+	 * and survive a reset.
 	 */
 	void reset();
 
-	/*
-	 * `_ZN19GenericToneDetector7processEf`, 318 bytes.  One sample in, the
-	 * answer at +0x38 out.  `int` because the object returns +0x38 in
-	 * `%eax` and nothing narrows it.
+	/**
+	 * @brief Score one sample and report the current verdict.
+	 *
+	 * Accumulates @p sample into the current block, and at the end of a
+	 * block scores it as a hit or miss (see the file comment above for
+	 * the exact rule) and updates the hit/miss streak counters and the
+	 * answer accordingly.
+	 *
+	 * @param sample  The next input sample.
+	 * @return The detector's current answer (1 tone detected, 0 not),
+	 *         as it stands after this sample.
 	 */
 	int process(float sample);
 
-	/*
-	 * `_ZN19GenericToneDetector7processEPfj`, 422 bytes.  `n` samples from
-	 * `samples`, and the answer as it stands after the last of them --
-	 * with `n == 0` returning it without touching the filter at all.
+	/**
+	 * @brief Score @p n samples and report the verdict after the last one.
 	 *
-	 * `VPcmV34Progress` is the only caller in the object: it runs the
-	 * `ANSamToneDetector` embedded at `VPcmFloModem + 0x6f5c` over one
-	 * block on the modem-on-hold arm.  `DSPLIB_GTD_UNWRITTEN` is what that
-	 * translation unit used to make its reference weak while this was
-	 * undefined; it is defined here as nothing, it stays because
-	 * `v34pcmmain.cpp` still spells it, and a weak reference against a real
-	 * definition resolves to that definition.
+	 * Same accumulation and bookkeeping as process(float), plus a second,
+	 * weaker scoring arm enabled by `flag` (see the file comment above --
+	 * the two overloads are NOT the same algorithm). `n == 0` returns the
+	 * current answer without touching the filter at all.
+	 *
+	 * The only caller in the object is `VPcmV34Progress`, running the
+	 * `ANSamToneDetector` embedded in `VPcmFloModem` on the modem-on-hold
+	 * arm. `DSPLIB_GTD_UNWRITTEN` used to mark this overload's reference
+	 * weak in that caller while it was undefined; it is defined here as
+	 * nothing and kept only because `v34pcmmain.cpp` still spells it.
+	 *
+	 * @param samples  Input samples.
+	 * @param n        Number of samples in @p samples.
+	 * @return The detector's current answer (1 tone detected, 0 not).
 	 */
 #ifndef DSPLIB_GTD_UNWRITTEN
 #define DSPLIB_GTD_UNWRITTEN
