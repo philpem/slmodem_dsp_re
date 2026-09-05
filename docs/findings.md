@@ -116168,3 +116168,117 @@ volume hit 100% full from build artifacts accumulated in already-merged, idle
 worktrees), not a defect in this branch -- re-ran clean once space was
 reclaimed. Fourteen `asm("_ZN...")` sites remain, in `V92Precoder.cpp` and
 elsewhere, tracked as Tier 2 item 10 group B. (2026-09-05)
+
+## F10161: v34pcmif.c's RateRenegotiation/HangUp offset chain, named not wrapped
+
+Tier 2 item 5. `VPcmV34InitiateRateRenegotiation` and
+`VPcmV34InitiateHangUp` walk a three-link raw-offset chain -- `p3548`
+(the session, `VPcmFloModem *`) at `+0x175c` to its `V90Demodulator`,
+at `+0x20c` to that demodulator's `connectionEvaluator`, at `+0x8c` to
+`V90ConnectionEvaluator::externalDemandCode` -- and both classes at
+the far end are now fully reconstructed (`include/dsplib/
+V90Demodulator.h`, `include/dsplib/V90ConnectionEvaluator.h`). Named
+the three offsets `SESS_DEMOD`/`DEMOD_CONNEVAL`/
+`CONNEVAL_EXTERNAL_DEMAND` in `v34pcmif.c` rather than building an
+`extern "C"` accessor function: `tools/dis.py` on the blob at both use
+sites (0x655e, 0x6c16) shows a plain load/load/store with no `call`,
+so a wrapper would introduce a `call` the object does not have and
+cost byte identity at a site that already matches. Pure macro
+substitution, cannot move codegen. Fixed five stale mutation anchors
+in `test/mutations/v34pcmif.json` to match.
+
+Verified: `make period` 374 passed, 0 failed; `make byteident-ratchet`
+unchanged at 736/1852 EXACT (39.7%), ratchet OK; `make check64`,
+`tools/onedef.py`, `tools/refcheck.py`, `tools/anchorcheck.py` all
+clean; `tools/mutate.py --suite v34pcmif` -- 126 mutations, 120
+caught, 0 not caught, 6 equivalent (all expected, including the
+reordering mutation correctly marked equivalent since the byte store
+and pointer load don't alias). (2026-09-05)
+
+## F10162: V.34 flag-bit naming across the handshake cluster
+
+Tier 2 item 6. Replaced bare bit-value literals (`0xa00`, `0x40`,
+`0x1000`, `4`, `5`, etc.) with named macros in `include/dsplib/
+v34fsk.h` -- `V34_RX_FLAG_DET_PENDING`, `V34_RX_FLAG_FIR`,
+`V34_EC_FROZEN`, `V34_TXFLAG_CALLER`, `V34_SCR_ANSWERER`,
+`V34_RX_FLAG_PREDICT`, `V34_RX_FLAG_RETRAIN`, `V34_RX_FLAG_TRAINED`,
+`V34_RX_FLAG_DATA`, `V34_TXFLAG_PPSEG`, `V34_CAPS_ASYMMETRIC` and
+others -- across `v34hshak.c`, `v34hstx1.cpp`, `v34rx.c` and
+`v34shell.c`. Pure macro substitution per CLAUDE.md's naming rule
+("name by bit value and keep 1:1 with the object"), cannot move
+codegen. Updated the mutation anchors in seven `test/mutations/*.json`
+files to match the renamed literals, same semantic mutations
+preserved; `v34hsmst44.json`'s anchor became ambiguous after the
+rename (2 matches) and was re-pointed with `tools/reanchor.py` to the
+microstate-44 arm (`t44_accept_len26`) it actually names.
+
+Verified: `make period` 374 passed, 0 failed; `make byteident-ratchet`
+unchanged at 736/1852 EXACT (39.7%), ratchet OK; `make check64`,
+`tools/onedef.py`, `tools/refcheck.py`, `tools/anchorcheck.py` all
+clean (228 suites, 9767 mutations, 0 issues). (2026-09-05)
+
+## F10163: 128 documentation-only narrowing/rounding casts across 35 files
+
+Tier 2 item 9. Clang-tidy's `bugprone-narrowing-conversions` and
+`bugprone-incorrect-roundings` flagged 131 in-scope sites; 128 got an
+explicit cast documenting a conversion the code already performs
+implicitly (e.g. `voicedp.c`'s `query()` result multiplied by a float
+scale, where the blob's own `fildll`/`fstps` shows the load-then-round
+happening at the store the cast now names). Each site was checked
+against the blob's disassembly for the matching idiom before the cast
+was added -- the point is exactly F1990/F2300's "act on what the
+compiler was forced to encode": these casts change nothing about what
+gets emitted, they name what was already forced. Three sites in
+`voicedp.c` were deliberately left alone (their existing form already
+matches the object; a cast there would be redundant, not clarifying).
+Fixed a mutation-anchor regression the pass introduced in
+`v32anstone.json` (3 entries expecting the pre-cast text).
+
+This workstream is also the one that surfaced F8320's "leaves before
+fax" pattern's opposite case operationally: the worktree's branch
+point predated F10156's `t_v90cdesign` speed fix, so its first `make
+period` attempt hung in the same 27-40 minute dead end F10156
+diagnosed and fixed -- caught early (about a minute in) by checking
+the worktree's `t_v90cdesign.cpp` against the known-fixed source
+rather than waiting it out, then resolved by merging master's fix in
+before retrying. A second, unrelated hazard turned up in the same
+worktree: an internal sub-fork independently launched its own scoped
+`make period` while the coordinator's full run was already building
+in the same `build/` directory -- two writers sharing one output tree
+-- caught and stopped before either run could corrupt the other's
+objects.
+
+Verified: `make period` (full suite, not scoped) 374 passed, 0 failed;
+`make byteident-ratchet` unchanged at 736/1852 EXACT (39.7%), ratchet
+OK; `make check64`, `tools/onedef.py`, `tools/refcheck.py`,
+`tools/anchorcheck.py` all clean (228 suites, 9767 mutations, 0
+issues). (2026-09-05)
+
+## F10164: asm() placement-new conversion, group B -- the last 14 sites, workstream closed
+
+Tier 2 item 10 group B, closing out F10155/F10157/F10160's
+conversion of the whole `asm("_ZN...")`-label device. Converts the
+remaining 14 sites -- `V90BitsToSymbol.cpp`, `V90Phase3Demodulator.cpp`,
+`V90Phase4Modulator.cpp`, `V90SpectralVerifier.cpp`,
+`V92BitsToSymbol.cpp`, `V92EchoCanceller.cpp`, `V92Modem.cpp`,
+`V92Phase4Modulator.cpp`, `V92PreFilter.cpp`, `V92Precoder.cpp` and
+`V92Transmitter.cpp` -- to genuine placement `new`/explicit destructor
+calls against `sysdep.h`'s shared operator pair, the same mechanism
+F10157 proved and F10160 extended to 29 more sites. Ten
+mutation-anchor files updated to match the new call syntax, same
+semantic mutations preserved. No new ODR collision found in this
+group (F10157's pattern -- a test file's own local placement-new
+declaration colliding with `sysdep.h`'s -- was checked for and absent
+here).
+
+Zero `asm("_ZN...")` construct/destroy sites remain anywhere in
+`src/pump/v90/`. The device F10155 retracted is now fully gone from
+the tree it was retracted in, not just documented as obsolete.
+
+Verified twice on the real GCC 3.4.2 period compiler -- once on this
+branch alone, once again after merging master's item 5/9 changes in,
+since those touched files this branch's own gate had not yet seen
+together: both runs `make period` 374 passed, 0 failed; `make
+byteident-ratchet` unchanged at 736/1852 EXACT (39.7%), 796/1852 grade
+0-or-1 (43.0%), ratchet OK; `make check64`, `tools/onedef.py`,
+`tools/refcheck.py`, `tools/anchorcheck.py` all clean. (2026-09-05)
