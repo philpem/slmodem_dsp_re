@@ -142,40 +142,64 @@ each site needs its own verification.
 
 Status: launching (items 1 and 3).
 
-## Tier 2 — real fixes, needs scoping, after the byte-identity pass
+## Tier 2 — three sub-groups, different sequencing
 
+Re-scoped 2026-09-05 once F10155 (asm() retraction) landed: items 9 and 10
+turn out to BE the byte-identity improvement pass this session already
+owed, not separate cleanup work waiting on it. Re-split accordingly.
+
+**2a — byte-identity work, do next (this sweep, not deferred):**
+9. `bugprone-narrowing-conversions` (439, clang-tidy) and
+   `bugprone-incorrect-roundings` (43, clang-tidy) -- per-site `dis.py`
+   verification against CLAUDE.md's forced-vs-free framework; only touch
+   a site where the object's own code proves the current shape isn't
+   forced.
+10. **Replace the 50 `asm("_ZN...")` sites with genuine placement-`new`
+    syntax** (F10155) -- declare a shared non-throw placement `operator
+    new`/`operator delete`, convert each site, each gated on its own
+    `byteident.py`/`make period` run. Real opportunity to IMPROVE the
+    byte-identity count at 49 of the 50 sites.
+7. Verify the ~45 non-table `void*` internal signatures against actual
+   table membership; retype whichever aren't forced -- same
+   dis.py-against-the-blob methodology as 9/10, natural to bundle here.
+
+**2b — structural additions, scoped but bigger, after 2a:**
 4. Model enough of `fax_class1::pad_005` to give `class1tx.c`'s
    ctx-as-buffer idiom a real field.
 5. Build the `extern "C"` accessor(s) for `v34pcmif.c`'s `p3548`
    cross-boundary chase.
+
+**2c — pure naming/comment work, safe any time, can run in parallel with
+2a/2b since it mostly touches different files:**
 6. Sweep V.34 for unnamed flag-bit tests specifically and name the ones
    with existing evidence.
-7. Verify the ~45 non-table `void*` internal signatures against actual
-   table membership; retype whichever aren't forced.
 8. Continue the field-naming phase on the 625 remaining unnamed
    identifiers.
-9. `bugprone-narrowing-conversions` (439, clang-tidy) and
-   `bugprone-incorrect-roundings` (43, clang-tidy) -- both need per-site
-   `dis.py` verification before touching, since CLAUDE.md's forced-vs-free
-   framework applies directly to both (a narrowing/rounding shape is
-   often exactly what the blob does).
-10. **Replace the 50 `asm("_ZN...")` sites with genuine placement-`new`
-    syntax** (F10155) -- declare a shared non-throw placement `operator
-    new`/`operator delete`, then convert each site, each gated on its own
-    `byteident.py`/`make period` run. Real opportunity to IMPROVE the
-    byte-identity count at 49 of the 50 sites, not just neutral cleanup.
 
-Status: not started.
+**Sequencing note, still standing**: the `.c`-file phase of the
+COMMENTING pass (thin bare-address comment removal, R/E-narration
+rewrite, the 941 anchor-frozen mutation comments) still waits until AFTER
+2a and 2b land, so function bodies get restructured once and documented
+once -- unchanged from the original decision, just now grounded in a
+concrete Tier 2 rather than an abstract "byte-identity pass."
 
-## PRIORITY — correctness, not style (clang-tidy, F10156 pending)
+Status: 2a launching next; 2b/2c scoped, not started.
 
-`clang-analyzer-core.NullDereference` found **three real null-dereference
-sites in `src/fax/class1rx.c`** (lines 471, 495, 519): "access to field
-`link` dereferences a null pointer loaded from field `vmi_b`." This is a
-correctness question, not a style one -- either a real reconstruction bug
-or a faithful reproduction of a blob crash path, and it needs its own
-investigation before any other cleanup wave, ahead of every style item
-above. Not yet investigated.
+## PRIORITY — correctness, not style (class1rx.c null derefs) — RESOLVED
+
+`clang-analyzer-core.NullDereference` found three sites in
+`src/fax/class1rx.c` (lines 471, 495, 519): "access to field `link`
+dereferences a null pointer loaded from field `vmi_b`." Investigated and
+confirmed FALSE POSITIVE at all three -- `modem_vmi`/`vmi_b` are always
+set together and cleared together across this function's own branches,
+an invariant a function-local analyzer can't see. Checked the one way it
+could theoretically break (a `sysdep_malloc` failure inside
+`FAXVMI_create`) and confirmed it crashes earlier, inside `FAXVMI_create`
+itself, matching this tree's documented convention that the object never
+checks `sysdep_malloc`'s return value. Fixed with an explanatory comment
+at the REINIT PATH block (commit `fd692952`), re-verified against
+`t_class1initrx`/`t_class1delmodem` at unchanged check counts. No
+correctness bug.
 
 ## Tier 3 — clang-tidy, DONE
 
