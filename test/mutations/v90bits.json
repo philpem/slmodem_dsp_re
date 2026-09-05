@@ -12,8 +12,8 @@
  },
  {
   "label": "ctor: the mapper is built with a null V90Parameters",
-  "find": "\tv90bts_mapper_ctor(m, params);",
-  "replace": "\tv90bts_mapper_ctor(m, 0);"
+  "find": "\tnew (m) V90Mapper(params);",
+  "replace": "\tnew (m) V90Mapper(0);"
  },
  {
   "label": "ctor: the mapper allocation is four bytes short",
