@@ -116438,6 +116438,204 @@ this session's own worktree -- the rule this incident needs is: treat
 one, and prefer a path-scoped `git checkout -- <path>` or a throwaway
 commit for any before/after comparison that does not need the whole
 tree. (2026-09-05)
+## F10173. V90Demodulator field naming, wave 6: nine `type_NNNN` fields named across `rateValid`, `phase4ElapsedSamples`/`phase4TimeoutDeadline`, `samplesInPhase`, `timingHistoryEval`, `noEnergyDuration`, `energyDropDetectorArmed`, `nofResampled`/`nofSymbols`, overturning a stale wave-2 decline now that `progress` is written
+
+Field-naming wave 6's `V90Demodulator` half (`include/dsplib/
+V90Demodulator.h`, `src/pump/v90/V90Demodulator.cpp`). Nine fields
+renamed, all `type_NNNN`-family (no bare `fNNNN` remained in this
+class going in) and none a bitfield or width change -- pure identifier
+substitution, so no codegen claim is made or possible.
+
+**Rank 1/2 (a format string, or a typed caller/callee):**
+
+- `byte_280` -> `rateValid`. `getBitRate()` gates on it directly
+  (`if (rateValid == 0) return 0;`); set to 1 in the two `word_3c` arms
+  (0x19, 0x2a) that finish a `constellationDesigner->process()` call
+  and cleared by every phase-3/RRN/FPE entry and by `reset`.
+- `word_44` -> `phase4ElapsedSamples`, `word_48` -> `phase4TimeoutDeadline`.
+  OVERTURNS a wave-2 decline recorded in the old `word_48` comment,
+  which read "the comparison site is in `progress`, which is
+  unwritten" -- `progress` has since been written, in this same file,
+  and its phase-4 arm reads `phase4ElapsedSamples += nofIn; if
+  (phase4ElapsedSamples > phase4TimeoutDeadline) { ...
+  dsplibs_debug_printf("V90Demodulator: Phase4 TimeOut\r\n"); ...`,
+  which is the author's own words for what exceeding the deadline
+  means and so what both operands hold. Same overturn shape as F7480's
+  `eventCode` (wave 3): a prior decline's blocking condition resolved
+  once a sibling function was written, and nobody had gone back to
+  check.
+- `word_38` -> `samplesInPhase`. Accumulated by `nofIn` every
+  `progress` call, cleared by every phase-entry member; the data
+  phase's own steady-state transition compares it against
+  `params->MINIMUM_DURATION_IN_DATA_BEFORE_EC_RRN` -- the author's own
+  parameter name, typing the quantity as a sample duration directly.
+- `word_278` -> `timingHistoryEval`. `enterDataSteadyState` copies
+  `V90PW(params)[PARAMS_TIMING_HISTORY_EVAL]` into it before branching
+  on it (the store is scheduled between the load and the test, but
+  `sessionTermination` reads the identical parameter slot one function
+  earlier and does NOT copy it, which is what says the assignment is
+  in the source). `PARAMS_TIMING_HISTORY_EVAL` is already documented
+  in this file as the author's own name, out of `V90Parameters.h`.
+- `word_27c` -> `noEnergyDuration`. The energy-drop detector's duration
+  counter, compared against `params->NO_ENERGY_DURATION_FOR_REMOTE_
+  RETRAIN` -- the author's own name for the threshold.
+- `word_40` -> `energyDropDetectorArmed`. Gates the comparison against
+  `params->ENERGY_DROP_DETECTOR_THRESHOLD` in `progress`'s common
+  tail; the name borrows that parameter's own vocabulary rather than
+  being pure inference.
+- `word_24c` -> `nofResampled`, `word_258` -> `nofSymbols`. The `nOut`
+  arguments of `V90Resampler::resample` and `V90Equalizer::process`
+  respectively -- both headers' own doc comments name the parameter's
+  role ("set to the number of samples written to `out`" /
+  "receives how many symbols were produced"). `nofSymbols` also has an
+  external reconstructed reader, `VPcmFloModem::getConstellation`
+  (`n = dem->nofSymbols`), confirming the same role from a second,
+  independent site.
+
+**Left unnamed, checked rather than assumed:**
+
+- `word_3c`, `word_48`'s sibling ceilings and the three outcome
+  counters `word_264`/`word_268`/`word_26c` all stay offset-named.
+  `word_3c` was already settled by wave 2/3's rule-3120 reasoning (it
+  is the equaliser's raw `stateCount`, and the dispatch arms are the
+  record). The three counters were RE-CHECKED from the V90Demodulator
+  side rather than taken as settled: `TAG_DiagnosticResults.h` already
+  declines to name the slots they feed (+0x0ec/+0x0f0/+0x0f4) because
+  the V.34 writer's meaning for the same three slots does not transfer
+  to V.90's; this wave found the identical wall from the other
+  direction -- naming a counter of an unnamed `word_3c` value would add
+  a second layer of invention on top of the first.
+- `word_260` -- `progress` maintains it as `(word_260 + nofSymbols) %
+  6`, and its one reconstructed reader, `VPcmFloModem::getConstellation`,
+  already reads it into a local named `lane` and explicitly declines to
+  promote that to a field name ("being a phase counter's base is not
+  the same as being established as one"). Re-checked with a fresh
+  whole-tree grep for a second reader; found none, so the existing
+  derivation stands unchanged rather than being duplicated.
+- `word_270` -- WRITE-ONLY, confirmed with a whole-tree grep (excluding
+  `re/`) rather than assumed: `progress` sets it on three `word_3c`
+  arms (all "silence RRN" related) and `reset` clears it, and nothing
+  anywhere else reads it back. Since the reconstruction is complete,
+  that is a statement about the blob's own instructions and not merely
+  about what this tree has read so far -- the same shape as
+  `V90Equalizer::pad_138`/`cadence::pad_2c0` (F10137), except already
+  fully typed so it stays a confirmed-dead `word_` rather than moving
+  to `pad_`.
+
+**A stale-comment sweep, not a naming action.** `sessionTermination`,
+`progress`, `reset`, `enterChannelVerification` and `reInit` were all
+documented in the header as "declared for the record; not defined
+here" -- true when that text was written, false by the time this wave
+read it: all five are fully defined in `V90Demodulator.cpp`, most of
+them with hundred-line derivations of their own a few sections later
+in the same file. Corrected to say so, since a doc comment that is
+provably false is worse than one that says less.
+
+**Propagation.** `byte_280`/`word_258` also renamed in
+`src/pump/v90/VPcmFloModem.cpp` (`getConstellation`, `n = dem->
+word_258`) and `test/unit/t_v34diag.cpp`, found by a tree-wide grep
+after the first `make one` run caught a stale reference `grep` inside
+`test/`+`src/pump/v90/` alone had missed -- `VPcmFloModem.cpp` is
+outside both of those and is a real external reader. Renamed in five
+mutation-anchor JSON files (`v90demctor`, `v90demod`, `v90demprog`,
+`v90dataph`, `v90getbitrate`, `v34diagflo`) by parsing each as JSON and
+substituting on the decoded `find`/`replace`/`label`/`_` strings with a
+word-boundary regex, rather than `sed` on the raw file text -- the
+F9480/F10134 tooling trap is specifically about `\t`/`\n` literal
+two-character escapes in the raw JSON text corrupting a `\b`-anchored
+`sed`, which parsing around entirely avoids. Every occurrence
+tree-wide of every renamed identifier was re-verified accounted for
+(either renamed, or confirmed to belong to a different class at a
+coincidentally identical offset -- `V90ConstellationDesigner::word_40`,
+`V92Phase4Modulator::word_38`/`word_44`, `V90Phase4Demodulator`'s own
+`word_84`/`word_88` -- and left untouched).
+
+Verification: `make one T="t_v90demctor t_v90demod t_v90demprog
+t_v90dataph t_vpcmrunpcm t_v34diag"` green, check counts unchanged;
+`tools/onedef.py`, `tools/refcheck.py`, `tools/anchorcheck.py` and
+`tools/bannercheck.py src/pump/v90` all clean; `make check64` 64-bit
+clean, both configurations. Docker WAS available in this sandbox
+(built `dsplibs-tc342` fresh): `make period J=3` **374 passed, 0
+failed**, matching master's own test count exactly (no test added or
+lost, as this wave is a pure rename); `make byteident-ratchet`
+**ratchet OK, grade 0 EXACT still 736/1852 (39.7%), grade 0-or-1 still
+796/1852 (43.0%)** -- bit-for-bit unchanged from the floor every prior
+wave has reported, across all thirteen of this wave's renames plus the
+five stale-comment fixes. Both gates run on the fully merged state of
+this branch (both classes' renames together), not scoped per-class.
+
+## F10174. V90ConnectionEvaluator field naming, wave 6: `trn1dEvalEnabled`/`phase3EvalEnabled`, `retrainInsteadOfRateDown` and `debugAlternateState` named, the second pair on weaker structural/usage evidence than the first and said so explicitly
+
+Field-naming wave 6's `V90ConnectionEvaluator` half (`include/dsplib/
+V90ConnectionEvaluator.h`, `src/pump/v90/V90ConnectionEvaluator.cpp`).
+Four fields renamed, all `type_NNNN`-family, pure identifier
+substitution.
+
+- `word_88` -> `trn1dEvalEnabled`. Rank 1: `V90Demodulator::progress`'s
+  `word_3c == 0x06` arm sets it to 1 beside
+  `edprintf("V90Demodulator: enabling connectionEvaluator of
+  TRN1d\r\n")` -- the author's own words for exactly this store.
+  `evaluatePhase3`'s mutually-exclusive `if (altRbsDetectedOnQc) ...
+  else if (trn1dEvalEnabled) ... else if (phase3EvalEnabled) ...` chain
+  is what ties the flag to its own comparison arm (against
+  `TRN1D_ERROR_FOR_V34_FALLBACK`).
+- `word_84` -> `phase3EvalEnabled`. Rank 3 (usage inference), and said
+  so rather than smoothed over: it is `word_88`'s structural twin in
+  the same `if`/`else if` chain, guarding the arm that compares against
+  `PHASE3_ERROR_FOR_V34_FALLBACK` and `PDSNR_THRESHOLD_IN_PHASE3`
+  instead, and it is cleared beside `word_88` at the same two sites
+  (`progress`'s `word_3c == 0x08`/`0x11` arms, both printing "disabling
+  connectionEvaluator of Phase3"). But a whole-tree grep for anywhere
+  it is SET to 1 -- the evidence `word_88` has -- finds nothing: no
+  caller in this tree ever enables it. The name is offered on the
+  structural symmetry and the parameter family alone; if a setter
+  surfaces later outside this tree's current reach, re-check this
+  derivation rather than assume it still holds.
+- `word_94` -> `retrainInsteadOfRateDown`. Rank 1, a format string
+  matched almost verbatim: two sites in `evaluateConnection` (documented
+  in-source as "the rate-down override" and its "second... copy") test
+  `if (retrainInsteadOfRateDown != 0 && verdict ==
+  V90CE_VERDICT_RRN_DOWN)` and upgrade the verdict, beside
+  `edprintf("V90ConnectionEvaluator: initiating Retrain instead of One
+  Rate Down !!\r\n")`. Set once, in `V90Demodulator::progress`'s
+  "'Problematic' ISP Modem detected on USB" arm.
+- `word_80` -> `debugAlternateState`. Rank 3: its only role anywhere in
+  the object is a four-state cycle (0/1/2/3) inside the
+  `debugAlternateDebug`-gated debug arm of `evaluateConnection`, each
+  state issuing a different forced verdict with its own diagnostic
+  ("Alternate Debug Retrain" / "...RRN up" / "...RRN down"). No string
+  prints the NUMBER, only the four verdict strings the states select,
+  so this is usage inference over the whole arm rather than a quoted
+  name.
+
+**Left unnamed** (re-confirmed rather than re-derived): `word_10`,
+`word_14`, `word_18`, `word_1c`, `word_20`, `word_24`, `word_64`,
+`word_68`, `word_90`, `word_98`, `word_b8` all already carry an
+explicit prior-wave decline in this header (F9480, F10134, or the
+pad-removal audit) and a fresh read found no new evidence past what is
+already recorded there. `+0x8c` (`externalDemandCode`) was confirmed
+already named by a same-session sibling workstream
+(`src/pump/v34/v34pcmif.c`) before this wave started, per the brief;
+no further action taken on it here.
+
+**Propagation.** All four renames also apply in
+`src/pump/v90/V90Demodulator.cpp` (`connectionEvaluator->word_84` etc.)
+and `test/unit/t_v90conneval.cpp`, and in three mutation-anchor JSON
+files (`v90conneval`, `v90demprog`, `v90demod`) via the same
+parse-JSON-then-substitute method F10173 uses. Checked against
+`V90Phase4Demodulator`'s own, unrelated `word_84`/`word_88` at the same
+coincidental offsets in a different class -- confirmed untouched.
+
+Verification: `make one T="t_v90conneval t_v90demctor t_v90demod
+t_v90demprog t_v90dataph"` green, check counts unchanged;
+`tools/onedef.py`, `tools/refcheck.py`, `tools/anchorcheck.py` and
+`tools/bannercheck.py src/pump/v90` clean; `make check64` 64-bit clean.
+Docker was available in this sandbox: `make period J=3` 374 passed, 0
+failed; `make byteident-ratchet` ratchet OK, grade 0 EXACT 736/1852
+(39.7%), grade 0-or-1 796/1852 (43.0%) -- unchanged from the pre-wave
+floor. Both gates cover the fully merged branch (this class's renames
+together with F10173's `V90Demodulator` half), so the numbers above are
+shared between the two findings rather than measured twice.
 ## F10175. field-naming wave 6 -- V.90 CP/ADID cluster, twelve real names in V90AutoDigitalImpDetector, V90CP/V92CP re-confirmed exhausted
 
 `docs/fieldnaming.md` wave 6, over `V90CP.{h,cpp}`, `V92CP.{h,cpp}` and

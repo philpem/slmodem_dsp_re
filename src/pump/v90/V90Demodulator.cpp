@@ -99,10 +99,10 @@ DEM_OFF(mp,			0x028, mp);
 DEM_OFF(params,			0x02c, params);
 DEM_OFF(sessionFlag,		0x030, sessionflag);
 DEM_OFF(inPhase3,		0x034, inphase3);
-DEM_OFF(word_38,		0x038, word38);
+DEM_OFF(samplesInPhase,		0x038, word38);
 DEM_OFF(word_3c,		0x03c, word3c);
-DEM_OFF(word_40,		0x040, word40);
-DEM_OFF(word_44,		0x044, word44);
+DEM_OFF(energyDropDetectorArmed,		0x040, word40);
+DEM_OFF(phase4ElapsedSamples,		0x044, word44);
 DEM_OFF(agc,			0x04c, agc);
 DEM_OFF(preFilter,		0x06c, prefilter);
 DEM_OFF(resampler,		0x094, resampler);
@@ -118,17 +118,17 @@ DEM_OFF(spectralVerifier,	0x210, spectralverifier);
 DEM_OFF(autoDigitalImpDetector,	0x23c, adid);
 DEM_OFF(array_244,		0x244, array244);
 DEM_OFF(array_248,		0x248, array248);
-DEM_OFF(word_24c,		0x24c, word24c);
+DEM_OFF(nofResampled,		0x24c, word24c);
 DEM_OFF(array_250,		0x250, array250);
 DEM_OFF(array_254,		0x254, array254);
-DEM_OFF(word_258,		0x258, word258);
+DEM_OFF(nofSymbols,		0x258, word258);
 DEM_OFF(array_25c,		0x25c, array25c);
 DEM_OFF(word_260,		0x260, word260);
 DEM_OFF(word_264,		0x264, word264);
 DEM_OFF(word_270,		0x270, word270);
 DEM_OFF(errorEnergyPrintCounter,		0x284, word284);
-DEM_OFF(word_278,		0x278, word278);
-DEM_OFF(byte_280,		0x280, byte280);
+DEM_OFF(timingHistoryEval,		0x278, word278);
+DEM_OFF(rateValid,		0x280, byte280);
 DEM_OFF(errorEnergyPrintPeriod,		0x288, word288);
 DEM_OFF(timingOffsetPrintCounter,		0x28c, word28c);
 DEM_OFF(timingOffsetPrintPeriod,		0x290, word290);
@@ -270,10 +270,10 @@ V90Demodulator::enterPhase3()
 		dsplibs_debug_printf("V90Demodulator: enter Phase 3\r\n");
 
 	inPhase3 = 1;
-	word_44 = word_38;
-	word_38 = 0;
+	phase4ElapsedSamples = samplesInPhase;
+	samplesInPhase = 0;
 	word_3c = 0;
-	word_40 = 0;
+	energyDropDetectorArmed = 0;
 
 	phase2Info->printInfo();
 	preFilter.selectFilter();
@@ -321,10 +321,10 @@ V90Demodulator::enterPhase3()
 	 */
 	connectionEvaluator->avePdsnr = 0;
 	connectionEvaluator->avePdsnrNofSymbols = 0;
-	connectionEvaluator->word_84 = 0;
-	connectionEvaluator->word_88 = 0;
+	connectionEvaluator->phase3EvalEnabled = 0;
+	connectionEvaluator->trn1dEvalEnabled = 0;
 
-	byte_280 = 0;
+	rateValid = 0;
 
 	/*
 	 * `mov (%edx),%ebx; cmpb $0x0,0x2(%ebx); js` -- a pointer out of the
@@ -557,7 +557,7 @@ V90Demodulator::reInit()
  *    register holding the destination is loaded at 1b5bb, BEFORE the tests,
  *    which is the compiler hoisting an address it needs on every path.
  *
- * 2. IT CLEARS `byte_280`, WHICH IS WHAT `getBitRate` GATES ON.  So after
+ * 2. IT CLEARS `rateValid`, WHICH IS WHAT `getBitRate` GATES ON.  So after
  *    `enterRRN` the reported rate is 0 until something sets it again.  That
  *    is the one observable coupling between this member and the diagnostics
  *    below, and `t_v90dataph.cpp` drives it.
@@ -571,10 +571,10 @@ V90Demodulator::enterRRN()
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("V90Demodulator: RRN detected: " "enter Phase 4\r\n");
 
-	word_38 = 0;
-	word_44 = 0;
+	samplesInPhase = 0;
+	phase4ElapsedSamples = 0;
 	inPhase3 = 2;
-	word_48 = 0x10680 + 2 * (unsigned int)phase2Info->rtd;
+	phase4TimeoutDeadline = 0x10680 + 2 * (unsigned int)phase2Info->rtd;
 
 	errorEnergyPrintPeriod = V90PW(params)[PARAMS_WORD_268];
 	timingOffsetPrintPeriod = V90PW(params)[PARAMS_WORD_27C];
@@ -584,7 +584,7 @@ V90Demodulator::enterRRN()
 	     phase4Demodulator->int_003c != 0 &&
 	     phase4Demodulator->int_0038 != 0) ? 1 : 0;
 
-	byte_280 = 0;
+	rateValid = 0;
 	demapper->linearMappStudyEnabled = 0;
 
 	if (DSPLIB_DEBUG_ON())
@@ -593,7 +593,7 @@ V90Demodulator::enterRRN()
 
 /*
  * enterFPE -- 110 bytes.  `enterRRN` without the connection-evaluator
- * condition, without the `byte_280` clear and without the second diagnostic:
+ * condition, without the `rateValid` clear and without the second diagnostic:
  * the state, the counters, the deadline and the two parameter copies, and
  * nothing else.
  */
@@ -606,10 +606,10 @@ V90Demodulator::enterFPE()
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("V90Demodulator: FPE detected: " "enter Phase 4\r\n");
 
-	word_38 = 0;
-	word_44 = 0;
+	samplesInPhase = 0;
+	phase4ElapsedSamples = 0;
 	inPhase3 = 2;
-	word_48 = 0x10680 + 2 * (unsigned int)phase2Info->rtd;
+	phase4TimeoutDeadline = 0x10680 + 2 * (unsigned int)phase2Info->rtd;
 
 	errorEnergyPrintPeriod = V90PW(params)[PARAMS_WORD_268];
 	timingOffsetPrintPeriod = V90PW(params)[PARAMS_WORD_27C];
@@ -619,7 +619,7 @@ V90Demodulator::enterFPE()
  * enterPhase4 -- 110 bytes, and the same size as `enterFPE` for a reason: it
  * is the same member with two differences, both forced.
  *
- * `word_44` is ACCUMULATED rather than cleared -- `mov 0x38(%ebx),%eax; add
+ * `phase4ElapsedSamples` is ACCUMULATED rather than cleared -- `mov 0x38(%ebx),%eax; add
  * %eax,0x44(%ebx)` before +0x38 is zeroed, so this entry adds the count it
  * found to the running total where the other two discard it -- and the
  * deadline's `lea` is `0x28230(%edx,%edx,4)`, five times the round-trip delay
@@ -635,7 +635,7 @@ V90Demodulator::enterFPE()
  * store one slot later than we did -- fifteen bytes that read like two
  * independent scheduling differences and are one statement.  Fifteen cells
  * were compiled before any was read: all twelve orders of `inPhase3 = 2`,
- * `word_44 += word_38`, `word_38 = 0` and the deadline that keep the
+ * `phase4ElapsedSamples += samplesInPhase`, `samplesInPhase = 0` and the deadline that keep the
  * accumulate ahead of the clear, plus three that sink the clear past the two
  * parameter copies or swap them.  Differing bytes of 110:
  *
@@ -648,7 +648,7 @@ V90Demodulator::enterFPE()
  * **TWO CELLS REACH ZERO, so the preimage is NOT unique and this is a
  * decoding of ONE fact and not of the whole order.**  What both hits agree on
  * -- and what every other cell in the family contradicts -- is that
- * `word_38 = 0;` stands IMMEDIATELY AFTER the deadline: moving it one slot
+ * `samplesInPhase = 0;` stands IMMEDIATELY AFTER the deadline: moving it one slot
  * earlier costs 15 bytes and sinking it past either parameter copy costs 23
  * or 32.  What they disagree on is where `inPhase3 = 2;` goes, first or
  * second, and GCC 3.4.2 emits both identically, so the object cannot say.
@@ -670,9 +670,9 @@ V90Demodulator::enterPhase4()
 		dsplibs_debug_printf("V90Demodulator: enter Phase 4\r\n");
 
 	inPhase3 = 2;
-	word_44 += word_38;
-	word_48 = 0x28230 + 5 * (unsigned int)phase2Info->rtd;
-	word_38 = 0;
+	phase4ElapsedSamples += samplesInPhase;
+	phase4TimeoutDeadline = 0x28230 + 5 * (unsigned int)phase2Info->rtd;
+	samplesInPhase = 0;
 
 	errorEnergyPrintPeriod = V90PW(params)[PARAMS_WORD_268];
 	timingOffsetPrintPeriod = V90PW(params)[PARAMS_WORD_27C];
@@ -700,7 +700,7 @@ V90Demodulator::enterPhase4()
  *
  * `enterPhase4()` IS CALLED, NOT REPEATED.  0x1bdd0..0x1be1d is that member's
  * 110 bytes instruction for instruction -- the `inPhase3 == 2` test, the
- * gated "enter Phase 4" line, the `word_44 += word_38` accumulation and the
+ * gated "enter Phase 4" line, the `phase4ElapsedSamples += samplesInPhase` accumulation and the
  * `lea 0x28230(%edx,%edx,4)` deadline -- inlined by `-O3
  * -finline-functions`.  Its idempotence test can never fail HERE, because the
  * only way in is `inPhase3 == 1`; it is still the callee's test and not a
@@ -846,7 +846,7 @@ V90Demodulator::enterDataPhase()
 	if (inPhase3 == 3)
 		return;
 
-	word_38 = 0;
+	samplesInPhase = 0;
 	inPhase3 = 3;
 	word_3c = 0x1e;
 
@@ -881,7 +881,7 @@ V90Demodulator::enterDataPhase()
  * value therefore prints '+'.  Findings F2300 and F2410.
  *
  * WHAT IS DIFFERENT IS THE GUARD, AND IT IS NOT A PURE TEST.  This member
- * COPIES the evaluation flag into `word_278` and then branches on it:
+ * COPIES the evaluation flag into `timingHistoryEval` and then branches on it:
  *
  *     1b345  mov  0x160(%edx),%eax
  *     1b34b  test %eax,%eax
@@ -906,8 +906,8 @@ V90Demodulator::enterDataSteadyState()
 	inPhase3 = 4;
 	edprintf("V90Demodulator: enter Data steady state\r\n");
 
-	word_278 = V90PW(params)[PARAMS_TIMING_HISTORY_EVAL];
-	if (word_278 != 0) {
+	timingHistoryEval = V90PW(params)[PARAMS_TIMING_HISTORY_EVAL];
+	if (timingHistoryEval != 0) {
 		float mean = resampler.getTimingHistoryMean();
 		float std = resampler.getTimingHistoryStd();
 		int frac;
@@ -1178,7 +1178,7 @@ V90Demodulator::getAT_UD(TAG_DiagnosticResults *results) const
  * print-period counter/period pairs (`errorEnergyPrintCounter`/
  * `errorEnergyPrintPeriod` for the error energy, `timingOffsetPrintCounter`/
  * `timingOffsetPrintPeriod` for the timing offset -- named in finding F10134)
- * and, when `word_40` is set, the energy-drop detector: `agc.level` under
+ * and, when `energyDropDetectorArmed` is set, the energy-drop detector: `agc.level` under
  * `ENERGY_DROP_DETECTOR_THRESHOLD` for `NO_ENERGY_DURATION_FOR_REMOTE_RETRAIN`
  * samples raises a remote retrain.  The exit is then one of three counters --
  * `word_264` for 0x23, `word_268` for 0x1f..0x21 and `word_26c` for 0x26 --
@@ -1239,7 +1239,7 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 	float cur, avg, pdSnr;
 	int verdict, whole, frac, whole2, frac2;
 
-	word_38 += nofIn;
+	samplesInPhase += nofIn;
 
 	/*
 	 * `preFilter.fir.process` until finding F8080: `FloatFIR` is a public
@@ -1250,9 +1250,9 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 	preFilter.process(in, (float *)array_244, nofIn);
 	agc.process((const float *)array_244, (float *)array_244, nofIn);
 	resampler.resample((const float *)array_244, nofIn,
-			   (float *)array_248, word_24c);
-	equalizer->process((float *)array_248, word_24c, (short *)array_250,
-			   (float *)array_254, word_258);
+			   (float *)array_248, nofResampled);
+	equalizer->process((float *)array_248, nofResampled, (short *)array_250,
+			   (float *)array_254, nofSymbols);
 
 	word_3c = equalizer->stateCount;
 
@@ -1344,7 +1344,7 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 		case 0x03:
 			spectralVerifier.startAccumulation();
 			if (quickConnect != 0) {
-				word_40 = 1;
+				energyDropDetectorArmed = 1;
 			} else {
 				agc.alpha = params->AGC_K;
 				edprintf("V90Demodulator: Agc Activated\r\n");
@@ -1370,7 +1370,7 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 					edprintf("V90Demodulator: " "connectionEvaluator of TRN1d "
 						 "is NOT ENABLED due to quick " "connect...\r\n");
 				} else {
-					connectionEvaluator->word_88 = 1;
+					connectionEvaluator->trn1dEvalEnabled = 1;
 					connectionEvaluator->avePdsnrNofSymbols = 0;
 					connectionEvaluator->avePdsnr = 0.0f;
 					edprintf("V90Demodulator: enabling " "connectionEvaluator of "
@@ -1381,8 +1381,8 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 
 		case 0x08:
 			if (params->PROBING_MODE == 0) {
-				connectionEvaluator->word_84 = 0;
-				connectionEvaluator->word_88 = 0;
+				connectionEvaluator->phase3EvalEnabled = 0;
+				connectionEvaluator->trn1dEvalEnabled = 0;
 				connectionEvaluator->avePdsnrNofSymbols = 0;
 				connectionEvaluator->avePdsnr = 0.0f;
 				edprintf("V90Demodulator: disabling " "connectionEvaluator of Phase3\r\n");
@@ -1413,8 +1413,8 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 				 (frac < 0) ? -frac : frac);
 
 			phase3Demodulator->byte_3f9 = 1;
-			connectionEvaluator->word_84 = 0;
-			connectionEvaluator->word_88 = 0;
+			connectionEvaluator->phase3EvalEnabled = 0;
+			connectionEvaluator->trn1dEvalEnabled = 0;
 			connectionEvaluator->avePdsnrNofSymbols = 0;
 			connectionEvaluator->avePdsnr = 0.0f;
 			break;
@@ -1518,7 +1518,7 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 					resampler.adjustHalfBaudBpfGain(
 					    agc.gain);
 			}
-			word_40 = 1;
+			energyDropDetectorArmed = 1;
 
 			if (V90PF(params)[PARAMS_UNNAMED_06C] > agc.gain) {
 				if (V90PF(params)[PARAMS_UNNAMED_06C] * 0.85 >
@@ -1564,8 +1564,8 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 	case 2:
 		nofOut = 0;
 
-		word_44 += nofIn;
-		if (word_44 > word_48) {
+		phase4ElapsedSamples += nofIn;
+		if (phase4ElapsedSamples > phase4TimeoutDeadline) {
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf("V90Demodulator: Phase4 " "TimeOut\r\n");
 
@@ -1641,14 +1641,14 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 			    phase3Demodulator->getMaxUcode(),
 			    (unsigned char)(phase2Info->maxTxPower + 1),
 			    codecType,
-			    connectionEvaluator->word_94,
+			    connectionEvaluator->retrainInsteadOfRateDown,
 			    (V90SpecialSpectralConditions)
 				spectralVerifier.word_28);
 
 			connectionEvaluator->enableRrnDown =
 			    params->ENABLE_RRN_DOWN;
 			connectionEvaluator->enableRrnUp = params->ENABLE_RRN_UP;
-			byte_280 = 1;
+			rateValid = 1;
 
 			if (verdict != 1) {
 				edprintf("V90Demodulator: Data Phase spectral " "parameters:\r\n");
@@ -1695,7 +1695,7 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 					edprintf("V90Demodulator: 'Problematic' " "ISP Modem detected on USB. "
 						 "Masking drop to V34 " "(MAX_NOF_V90_RETRAINS = " "%d)...\r\n",
 						 params->MAX_NOF_V90_RETRAINS);
-					connectionEvaluator->word_94 = 1;
+					connectionEvaluator->retrainInsteadOfRateDown = 1;
 				} else {
 					params->RRN_SILENCE_REQUESTED = 0;
 					edprintf("V90Demodulator: 'Problematic' " "ISP Modem detected NOT on "
@@ -1715,7 +1715,7 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 			    phase4Demodulator->int_0038 != 0) {
 				edprintf("V90Demodulator: freezing timing on " "silence rrn...\r\n");
 				resampler.setBllState(V90_BLL_FROZEN, 1);
-				word_40 = 0;
+				energyDropDetectorArmed = 0;
 
 				cur = equalizer->meanErrorEnergyCurrent;
 				avg = equalizer->meanErrorEnergyMean;
@@ -1748,7 +1748,7 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 		case 0x28:
 			edprintf("V90Demodulator: RtNot detected.\r\n");
 			resampler.setBllState(V90_BLL_TRN2, 1);
-			word_40 = 1;
+			energyDropDetectorArmed = 1;
 			break;
 
 		case 0x2a:
@@ -1806,14 +1806,14 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 			    phase3Demodulator->getMaxUcode(),
 			    (unsigned char)(phase2Info->maxTxPower + 1),
 			    codecType,
-			    connectionEvaluator->word_94,
+			    connectionEvaluator->retrainInsteadOfRateDown,
 			    (V90SpecialSpectralConditions)
 				spectralVerifier.word_28);
 
 			connectionEvaluator->enableRrnDown =
 			    params->ENABLE_RRN_DOWN;
 			connectionEvaluator->enableRrnUp = params->ENABLE_RRN_UP;
-			byte_280 = 1;
+			rateValid = 1;
 
 			if (verdict == 1) {
 				if (DSPLIB_DEBUG_ON())
@@ -1841,7 +1841,7 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 		case 0x35:
 			edprintf("V90Demodulator: freezing timing on silence " "rrn...\r\n");
 			resampler.setBllState(V90_BLL_FROZEN, 1);
-			word_40 = 0;
+			energyDropDetectorArmed = 0;
 			break;
 
 		default:
@@ -1858,7 +1858,7 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 
 	/* ------------------------------------------------ data ---------- */
 	case 3:
-		if (word_38 >= (unsigned int)
+		if (samplesInPhase >= (unsigned int)
 		    params->MINIMUM_DURATION_IN_DATA_BEFORE_EC_RRN)
 			enterDataSteadyState();
 		/* FALLTHROUGH -- 0x1cf01 falls into 0x1cf10 */
@@ -1915,10 +1915,10 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 	}
 
 	/* ------------------------------------------------ common tail --- */
-	if (word_40 != 0) {
+	if (energyDropDetectorArmed != 0) {
 		if (agc.level < params->ENERGY_DROP_DETECTOR_THRESHOLD) {
-			word_27c += nofIn;
-			if (word_27c >= (unsigned int)
+			noEnergyDuration += nofIn;
+			if (noEnergyDuration >= (unsigned int)
 			    params->NO_ENERGY_DURATION_FOR_REMOTE_RETRAIN) {
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf("--------------" "---------------------------------"
@@ -1942,7 +1942,7 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 				}
 			}
 		} else {
-			word_27c = 0;
+			noEnergyDuration = 0;
 		}
 	}
 
@@ -1978,7 +1978,7 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 		}
 	}
 
-	word_260 = (word_260 + word_258) % 6;
+	word_260 = (word_260 + nofSymbols) % 6;
 
 	switch (word_3c) {
 	case 0x1f:
@@ -2041,12 +2041,12 @@ V90Demodulator::reset(unsigned int quickConnectArg)
 		    quickConnectArg);
 
 	inPhase3 = 0;
-	word_27c = 0;
+	noEnergyDuration = 0;
 	word_270 = 0;
-	word_38 = 0;
+	samplesInPhase = 0;
 	word_3c = 0;
-	word_44 = 0;
-	word_40 = 0;
+	phase4ElapsedSamples = 0;
+	energyDropDetectorArmed = 0;
 
 	descrambler.reset(0);
 
@@ -2077,13 +2077,13 @@ V90Demodulator::reset(unsigned int quickConnectArg)
 
 	timingOffsetPrintPeriod = 19200;
 	errorEnergyPrintCounter = 0;
-	word_24c = 0;
+	nofResampled = 0;
 	errorEnergyPrintPeriod = 19200;
 	timingOffsetPrintCounter = 0;
-	word_258 = 0;
+	nofSymbols = 0;
 	word_260 = 0;
-	word_278 = 0;
-	byte_280 = 0;
+	timingHistoryEval = 0;
+	rateValid = 0;
 	quickConnect = quickConnectArg;
 
 	equalizer->quickConnect = quickConnectArg;
@@ -2114,7 +2114,7 @@ V90Demodulator::enterChannelVerification(short, short short414)
 	reset(1);
 
 	inPhase3 = 5;
-	word_38 = 0;
+	samplesInPhase = 0;
 
 	phase3Demodulator->clearVerificationStatus();
 
@@ -2127,7 +2127,7 @@ V90Demodulator::enterChannelVerification(short, short short414)
 
 	equalizer->enterChannelVerification();
 
-	word_40 = 0;
+	energyDropDetectorArmed = 0;
 }
 
 /*
@@ -2136,7 +2136,7 @@ V90Demodulator::enterChannelVerification(short, short short414)
  * EIGHTY-SEVEN BYTES AND NO CALL, because sixty of them are the x87
  * rounding-mode dance.  What it computes is
  *
- *     0                                        if byte_280 == 0
+ *     0                                        if rateValid == 0
  *     (unsigned)(mpa->word_0 * 8000 / 6 + 0.5) otherwise
  *
  * and every part of that is read off the instructions rather than inferred:
@@ -2214,7 +2214,7 @@ V90Demodulator::enterChannelVerification(short, short short414)
 unsigned int
 V90Demodulator::getBitRate() const
 {
-	if (byte_280 == 0)
+	if (rateValid == 0)
 		return 0;
 
 	return (unsigned int)((long double)(mappingParamsAlt->word_0 * 8000u
@@ -2434,8 +2434,8 @@ V90Demodulator::V90Demodulator(unsigned int levels, V90Phase2Info *phase2,
 	array_250 = sysdep_malloc(levels * V90DEM_ARRAY_250_WIDTH);
 	array_254 = sysdep_malloc(levels * V90DEM_ARRAY_254_WIDTH);
 	array_25c = sysdep_malloc(levels * V90DEM_ARRAY_25C_WIDTH);
-	word_24c = 0;
-	word_258 = 0;
+	nofResampled = 0;
+	nofSymbols = 0;
 
 	adid = (V90AutoDigitalImpDetector *)
 	    sysdep_malloc(sizeof(V90AutoDigitalImpDetector));
@@ -2485,9 +2485,9 @@ V90Demodulator::V90Demodulator(unsigned int levels, V90Phase2Info *phase2,
 	word_264 = 0;
 	word_26c = 0;
 	word_268 = 0;
-	word_278 = 0;
-	byte_280 = 0;
-	word_27c = 0;
+	timingHistoryEval = 0;
+	rateValid = 0;
+	noEnergyDuration = 0;
 }
 
 /*

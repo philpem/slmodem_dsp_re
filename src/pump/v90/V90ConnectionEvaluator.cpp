@@ -86,9 +86,9 @@ CE_OFF(avePdsnr,				0x70, word70);
 CE_OFF(avePdsnrNofSymbols,				0x74, word74);
 CE_OFF(delayedRetrainRequest,				0x78, word78);
 CE_OFF(delayedRetrainArmed,				0x7c, word7c);
-CE_OFF(word_80,				0x80, word80);
-CE_OFF(word_84,				0x84, word84);
-CE_OFF(word_88,				0x88, word88);
+CE_OFF(debugAlternateState,				0x80, word80);
+CE_OFF(phase3EvalEnabled,				0x84, word84);
+CE_OFF(trn1dEvalEnabled,				0x88, word88);
 CE_OFF(externalDemandCode,				0x8c, word8c);
 CE_OFF(word_90,				0x90, word90);
 /*
@@ -163,10 +163,10 @@ V90ConnectionEvaluator::reset()
 	word_10 = 0;
 	echoRrnState = 0;
 	meanErrorCheckArmed = 1;
-	word_80 = 0;
+	debugAlternateState = 0;
 	phase4ErrorForV34Fallback = params->PHASE4_ERROR_FOR_V34_FALLBACK;
 	altRbsDetectedOnQc = 0;
-	word_84 = 0;
+	phase3EvalEnabled = 0;
 	initDmin = -1;
 	word_90 = 0;
 	externalDemandCode = -1;
@@ -180,7 +180,7 @@ V90ConnectionEvaluator::reset()
 	word_1c = 0;
 	word_20 = 0;
 
-	word_94 = 0;
+	retrainInsteadOfRateDown = 0;
 	delayedRetrainRequest = 0;
 	delayedRetrainArmed = 0;
 	avePdsnrNofSymbols = 0;
@@ -622,7 +622,7 @@ V90ConnectionEvaluator::evaluatePhase3()
 		}
 		word_1c = 0;
 		word_90 = 0;
-	} else if (word_88 != 0) {
+	} else if (trn1dEvalEnabled != 0) {
 		if (avePdsnr > params->TRN1D_ERROR_FOR_V34_FALLBACK) {
 			word_10 += nofSymbols;
 			if (word_10 >= word_64) {
@@ -640,7 +640,7 @@ V90ConnectionEvaluator::evaluatePhase3()
 		} else {
 			word_10 = 0;
 		}
-	} else if (word_84 != 0) {
+	} else if (phase3EvalEnabled != 0) {
 		if (avePdsnr > params->PHASE3_ERROR_FOR_V34_FALLBACK) {
 			word_10 += nofSymbols;
 			if (word_10 >= word_64) {
@@ -1299,7 +1299,7 @@ V90ConnectionEvaluator::evaluateConnection()
 			}
 
 			/* the external-demand copy of the override */
-			if (word_94 != 0
+			if (retrainInsteadOfRateDown != 0
 			    && verdict == V90CE_VERDICT_RRN_DOWN) {
 				edprintf("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
 					 "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@" "@@@@@@@@@@\r\n");
@@ -1502,7 +1502,7 @@ V90ConnectionEvaluator::evaluateConnection()
 	}
 
 	/* the rate-down override, the second of its two copies */
-	if (word_94 != 0 && verdict == V90CE_VERDICT_RRN_DOWN) {
+	if (retrainInsteadOfRateDown != 0 && verdict == V90CE_VERDICT_RRN_DOWN) {
 		edprintf("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
 			 "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\r\n");
 		edprintf("V90ConnectionEvaluator: initiating Retrain instead "
@@ -1518,19 +1518,19 @@ V90ConnectionEvaluator::evaluateConnection()
 	if (debugAlternateDebug != 0) {
 		word_24 += nofSymbols;
 		if (word_24 >= debugPeriod) {
-			switch (word_80) {
+			switch (debugAlternateState) {
 			case 0:
 			case 2:
 				verdict = V90CE_VERDICT_RETRAIN;
 				edprintf("V90ConnectionEvaluator: Alternate " "Debug Retrain\r\n");
-				word_80++;
+				debugAlternateState++;
 				word_24 = 0;
 				word_90 = 0;
 				break;
 			case 1:
 				verdict = V90CE_VERDICT_RRN_UP;
 				edprintf("V90ConnectionEvaluator: Alternate " "Debug RRN up\r\n");
-				word_80++;
+				debugAlternateState++;
 				word_24 = 0;
 				word_90 = 0;
 				break;
@@ -1538,7 +1538,7 @@ V90ConnectionEvaluator::evaluateConnection()
 				edprintf("V90ConnectionEvaluator: Alternate " "Debug RRN down\r\n");
 				word_24 = 0;
 				verdict = V90CE_VERDICT_RRN_DOWN;
-				word_80 = 0;
+				debugAlternateState = 0;
 				word_98 = 0;
 				word_90 = params->RRN_SILENCE_REQUESTED;
 				break;

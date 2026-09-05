@@ -271,8 +271,8 @@ prog_wire(int side, int trial)
 	    (unsigned int)(trial % 5);
 	((V90ConnectionEvaluator *)ce[side])->nofV90Retrains = 0;
 
-	d->word_40 = (unsigned int)(trial & 1);
-	d->word_27c = (unsigned int)(trial * 13u) % 90u;
+	d->energyDropDetectorArmed = (unsigned int)(trial & 1);
+	d->noEnergyDuration = (unsigned int)(trial * 13u) % 90u;
 	d->errorEnergyPrintCounter = (unsigned int)(trial * 7u) % 40u;
 	d->errorEnergyPrintPeriod = 48u;
 	d->timingOffsetPrintCounter = (unsigned int)(trial * 11u) % 40u;
@@ -297,8 +297,8 @@ prog_wire(int side, int trial)
 	d->array_250 = a250[side];
 	d->array_254 = a254[side];
 	d->array_25c = a25c[side];
-	d->word_24c = 0;
-	d->word_258 = 0;
+	d->nofResampled = 0;
+	d->nofSymbols = 0;
 	d->word_260 = (unsigned int)(trial % 5) + 1u;
 
 	/* The equaliser's twelve arrays, t_v90equproc's arena shape. */
@@ -663,7 +663,7 @@ run_progress(void)
 			    trial);
 
 		seenState[(unsigned)D(1)->word_3c & 0x3fu]++;
-		if (D(1)->word_27c == 0)
+		if (D(1)->noEnergyDuration == 0)
 			sawDrop++;
 		else
 			sawNoDrop++;

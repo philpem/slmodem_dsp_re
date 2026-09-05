@@ -6,17 +6,17 @@
  },
  {
   "label": "the latch is never set",
-  "find": "\tinPhase3 = 1;\n\tword_44 = word_38;",
-  "replace": "\tword_44 = word_38;"
+  "find": "\tinPhase3 = 1;\n\tphase4ElapsedSamples = samplesInPhase;",
+  "replace": "\tphase4ElapsedSamples = samplesInPhase;"
  },
  {
   "label": "the saved word is taken after it is cleared",
-  "find": "\tword_44 = word_38;\n\tword_38 = 0;",
-  "replace": "\tword_38 = 0;\n\tword_44 = word_38;"
+  "find": "\tphase4ElapsedSamples = samplesInPhase;\n\tsamplesInPhase = 0;",
+  "replace": "\tsamplesInPhase = 0;\n\tphase4ElapsedSamples = samplesInPhase;"
  },
  {
   "label": "only two of the three words are cleared",
-  "find": "\tword_3c = 0;\n\tword_40 = 0;",
+  "find": "\tword_3c = 0;\n\tenergyDropDetectorArmed = 0;",
   "replace": "\tword_3c = 0;"
  },
  {
@@ -97,7 +97,7 @@
  },
  {
   "label": "the evaluator's +0x84 is left alone",
-  "find": "\tconnectionEvaluator->avePdsnrNofSymbols = 0;\n\tconnectionEvaluator->word_84 = 0;\n",
+  "find": "\tconnectionEvaluator->avePdsnrNofSymbols = 0;\n\tconnectionEvaluator->phase3EvalEnabled = 0;\n",
   "replace": "\tconnectionEvaluator->avePdsnrNofSymbols = 0;\n"
  },
  {
@@ -107,8 +107,8 @@
  },
  {
   "label": "+0x280 is cleared as a word",
-  "find": "\tconnectionEvaluator->word_88 = 0;\n\n\tbyte_280 = 0;",
-  "replace": "\tconnectionEvaluator->word_88 = 0;\n\n\t*(unsigned int *)((char *)this + 0x280) = 0;"
+  "find": "\tconnectionEvaluator->trn1dEvalEnabled = 0;\n\n\trateValid = 0;",
+  "replace": "\tconnectionEvaluator->trn1dEvalEnabled = 0;\n\n\t*(unsigned int *)((char *)this + 0x280) = 0;"
  },
  {
   "label": "the early exit reads the third byte, not the second",
@@ -138,7 +138,7 @@
  {
   "label": "the retrain writes to +0x40",
   "find": "\t\tword_3c = 0x20;",
-  "replace": "\t\tword_40 = 0x20;"
+  "replace": "\t\tenergyDropDetectorArmed = 0x20;"
  },
  {
   "label": "the entry diagnostic is gated one level too low",

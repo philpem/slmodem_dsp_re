@@ -173,13 +173,13 @@
  },
  {
   "label": "ctor: +0x258 keeps whatever the allocator left",
-  "find": "\tword_24c = 0;\n\tword_258 = 0;",
-  "replace": "\tword_24c = 0;"
+  "find": "\tnofResampled = 0;\n\tnofSymbols = 0;",
+  "replace": "\tnofResampled = 0;"
  },
  {
   "label": "ctor: +0x24c keeps whatever the allocator left",
-  "find": "\tword_24c = 0;\n\tword_258 = 0;",
-  "replace": "\tword_258 = 0;"
+  "find": "\tnofResampled = 0;\n\tnofSymbols = 0;",
+  "replace": "\tnofSymbols = 0;"
  },
  {
   "label": "ctor: +0x264 is not cleared",
@@ -193,23 +193,23 @@
  },
  {
   "label": "ctor: +0x268 is not cleared",
-  "find": "\tword_268 = 0;\n\tword_278 = 0;",
-  "replace": "\tword_278 = 0;"
+  "find": "\tword_268 = 0;\n\ttimingHistoryEval = 0;",
+  "replace": "\ttimingHistoryEval = 0;"
  },
  {
   "label": "ctor: +0x278 is not cleared",
-  "find": "\tword_268 = 0;\n\tword_278 = 0;",
+  "find": "\tword_268 = 0;\n\ttimingHistoryEval = 0;",
   "replace": "\tword_268 = 0;"
  },
  {
   "label": "ctor: +0x280 is not cleared",
-  "find": "\tbyte_280 = 0;\n\tword_27c = 0;",
-  "replace": "\tword_27c = 0;"
+  "find": "\trateValid = 0;\n\tnoEnergyDuration = 0;",
+  "replace": "\tnoEnergyDuration = 0;"
  },
  {
   "label": "ctor: +0x27c is not cleared",
-  "find": "\tbyte_280 = 0;\n\tword_27c = 0;",
-  "replace": "\tbyte_280 = 0;"
+  "find": "\trateValid = 0;\n\tnoEnergyDuration = 0;",
+  "replace": "\trateValid = 0;"
  },
  {
   "label": "ctor: +0x34 is cleared, which the object does not do",

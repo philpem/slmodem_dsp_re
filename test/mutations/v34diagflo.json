@@ -9,8 +9,8 @@
  },
  {
   "label": "getConstellation: the count is not clamped",
-  "find": "\tn = dem->word_258;\n\tif (n > maxCount)\n\t\tn = maxCount;",
-  "replace": "\tn = dem->word_258;"
+  "find": "\tn = dem->nofSymbols;\n\tif (n > maxCount)\n\t\tn = maxCount;",
+  "replace": "\tn = dem->nofSymbols;"
  },
  {
   "label": "getConstellation: the sweep counter does not advance",

@@ -673,8 +673,8 @@ run_reset(void)
 					diff_eq_int("timingOffsetPrintPeriod (%ld)",
 						    (long)D(1)->timingOffsetPrintPeriod,
 						    19200, tag);
-					diff_eq_int("byte_280 (%ld)",
-						    (long)D(1)->byte_280, 0,
+					diff_eq_int("rateValid (%ld)",
+						    (long)D(1)->rateValid, 0,
 						    tag);
 					diff_eq_int("+0x294 took the quick "
 						    "connect argument (%ld)",
@@ -783,10 +783,10 @@ run_enterchannelverification(void)
 
 				diff_eq_int("inPhase3 is 5 (%ld)",
 					    (long)D(1)->inPhase3, 5, tag);
-				diff_eq_int("word_38 (%ld)",
-					    (long)D(1)->word_38, 0, tag);
-				diff_eq_int("word_40 (%ld)",
-					    (long)D(1)->word_40, 0, tag);
+				diff_eq_int("samplesInPhase (%ld)",
+					    (long)D(1)->samplesInPhase, 0, tag);
+				diff_eq_int("energyDropDetectorArmed (%ld)",
+					    (long)D(1)->energyDropDetectorArmed, 0, tag);
 				/*
 				 * The SECOND argument is the one that gets
 				 * through, as the phase 3 demodulator's
@@ -936,7 +936,7 @@ run_getbitrate(void)
 
 			d->mappingParams = mp0;
 			d->mappingParamsAlt = mp;
-			d->byte_280 = flag[f];
+			d->rateValid = flag[f];
 			mp->word_0 = nbits[i];
 			/*
 			 * Never equal to the one next door, and never zero:

@@ -43,9 +43,9 @@
   ]
  },
  {
-  "label": "the input sample count is not accumulated into word_38",
-  "find": "\tword_38 += nofIn;",
-  "replace": "\tword_38 = nofIn;"
+  "label": "the input sample count is not accumulated into samplesInPhase",
+  "find": "\tsamplesInPhase += nofIn;",
+  "replace": "\tsamplesInPhase = nofIn;"
  },
  {
   "label": "the prefilter writes over its own input rather than into +0x244",
@@ -64,18 +64,18 @@
  },
  {
   "label": "the resampler is given the input count, not its own output count",
-  "find": "resampler.resample((const float *)array_244, nofIn,\n\t\t\t   (float *)array_248, word_24c);",
-  "replace": "resampler.resample((const float *)array_244, word_24c,\n\t\t\t   (float *)array_248, word_24c);"
+  "find": "resampler.resample((const float *)array_244, nofIn,\n\t\t\t   (float *)array_248, nofResampled);",
+  "replace": "resampler.resample((const float *)array_244, nofResampled,\n\t\t\t   (float *)array_248, nofResampled);"
  },
  {
   "label": "the equaliser is given the resampler's count and not the caller's",
-  "find": "equalizer->process((float *)array_248, word_24c, (short *)array_250,",
+  "find": "equalizer->process((float *)array_248, nofResampled, (short *)array_250,",
   "replace": "equalizer->process((float *)array_248, nofIn, (short *)array_250,"
  },
  {
   "label": "the equaliser's soft output goes to +0x254 and the hard one to +0x250",
-  "find": "(float *)array_254, word_258);",
-  "replace": "(float *)array_250, word_258);"
+  "find": "(float *)array_254, nofSymbols);",
+  "replace": "(float *)array_250, nofSymbols);"
  },
  {
   "label": "word_3c is the equaliser's stateCount, not its state",
@@ -93,14 +93,14 @@
   "replace": "\tcase 6:\n\t\tnofOut = 0;\n\n\t\tif (spectralVerifier.process"
  },
  {
-  "label": "the data-steady-state entry is guarded on word_38, not word_44",
-  "find": "\t\tif (word_38 >= (unsigned int)\n\t\t    params->MINIMUM_DURATION_IN_DATA_BEFORE_EC_RRN)",
-  "replace": "\t\tif (word_44 >= (unsigned int)\n\t\t    params->MINIMUM_DURATION_IN_DATA_BEFORE_EC_RRN)"
+  "label": "the data-steady-state entry is guarded on samplesInPhase, not phase4ElapsedSamples",
+  "find": "\t\tif (samplesInPhase >= (unsigned int)\n\t\t    params->MINIMUM_DURATION_IN_DATA_BEFORE_EC_RRN)",
+  "replace": "\t\tif (phase4ElapsedSamples >= (unsigned int)\n\t\t    params->MINIMUM_DURATION_IN_DATA_BEFORE_EC_RRN)"
  },
  {
   "label": "the data-steady-state deadline is >=, not >",
-  "find": "if (word_38 >= (unsigned int)\n\t\t    params->MINIMUM_DURATION_IN_DATA_BEFORE_EC_RRN)",
-  "replace": "if (word_38 > (unsigned int)\n\t\t    params->MINIMUM_DURATION_IN_DATA_BEFORE_EC_RRN)"
+  "find": "if (samplesInPhase >= (unsigned int)\n\t\t    params->MINIMUM_DURATION_IN_DATA_BEFORE_EC_RRN)",
+  "replace": "if (samplesInPhase > (unsigned int)\n\t\t    params->MINIMUM_DURATION_IN_DATA_BEFORE_EC_RRN)"
  },
  {
   "label": "case 3 falls through into case 4 rather than breaking",
@@ -170,7 +170,7 @@
  {
   "label": "the phase 4 half takes the evaluator's +0x90",
   "find": "\t\t\tphase4Demodulator->int_0040 =\n\t\t\t    connectionEvaluator->word_90;",
-  "replace": "\t\t\tphase4Demodulator->int_0040 =\n\t\t\t    connectionEvaluator->word_94;"
+  "replace": "\t\t\tphase4Demodulator->int_0040 =\n\t\t\t    connectionEvaluator->retrainInsteadOfRateDown;"
  },
  {
   "label": "the linear mapping study is disabled in data",
@@ -198,9 +198,9 @@
   "replace": ""
  },
  {
-  "label": "the quick-connect arm sets word_40 rather than arming the AGC",
-  "find": "\t\t\tif (quickConnect != 0) {\n\t\t\t\tword_40 = 1;",
-  "replace": "\t\t\tif (quickConnect == 0) {\n\t\t\t\tword_40 = 1;"
+  "label": "the quick-connect arm sets energyDropDetectorArmed rather than arming the AGC",
+  "find": "\t\t\tif (quickConnect != 0) {\n\t\t\t\tenergyDropDetectorArmed = 1;",
+  "replace": "\t\t\tif (quickConnect == 0) {\n\t\t\t\tenergyDropDetectorArmed = 1;"
  },
  {
   "label": "the AGC is armed from AGC_K",
@@ -224,8 +224,8 @@
  },
  {
   "label": "enabling the TRN1d evaluator writes ONE into +0x88",
-  "find": "\t\t\t\t\tconnectionEvaluator->word_88 = 1;",
-  "replace": "\t\t\t\t\tconnectionEvaluator->word_88 = 0;"
+  "find": "\t\t\t\t\tconnectionEvaluator->trn1dEvalEnabled = 1;",
+  "replace": "\t\t\t\t\tconnectionEvaluator->trn1dEvalEnabled = 0;"
  },
  {
   "label": "enabling the TRN1d evaluator clears its average as well as its count",
@@ -239,8 +239,8 @@
  },
  {
   "label": "the phase 3 evaluator is disabled inside probing mode, not outside it",
-  "find": "\t\t\tif (params->PROBING_MODE == 0) {\n\t\t\t\tconnectionEvaluator->word_84 = 0;",
-  "replace": "\t\t\tif (params->PROBING_MODE != 0) {\n\t\t\t\tconnectionEvaluator->word_84 = 0;"
+  "find": "\t\t\tif (params->PROBING_MODE == 0) {\n\t\t\t\tconnectionEvaluator->phase3EvalEnabled = 0;",
+  "replace": "\t\t\tif (params->PROBING_MODE != 0) {\n\t\t\t\tconnectionEvaluator->phase3EvalEnabled = 0;"
  },
  {
   "label": "the lookahead comes from the V.92 message when sessionFlag is set",
@@ -339,7 +339,7 @@
  },
  {
   "label": "freezing the AGC arms the energy-drop detector",
-  "find": "\t\t\tword_40 = 1;\n\n\t\t\tif (V90PF(params)[PARAMS_UNNAMED_06C] > agc.gain) {",
+  "find": "\t\t\tenergyDropDetectorArmed = 1;\n\n\t\t\tif (V90PF(params)[PARAMS_UNNAMED_06C] > agc.gain) {",
   "replace": "\t\t\tif (V90PF(params)[PARAMS_UNNAMED_06C] > agc.gain) {"
  },
  {
@@ -369,13 +369,13 @@
  },
  {
   "label": "the phase 4 deadline accumulates the input count",
-  "find": "\t\tword_44 += nofIn;\n\t\tif (word_44 > word_48) {",
-  "replace": "\t\tword_44 = nofIn;\n\t\tif (word_44 > word_48) {"
+  "find": "\t\tphase4ElapsedSamples += nofIn;\n\t\tif (phase4ElapsedSamples > phase4TimeoutDeadline) {",
+  "replace": "\t\tphase4ElapsedSamples = nofIn;\n\t\tif (phase4ElapsedSamples > phase4TimeoutDeadline) {"
  },
  {
   "label": "the phase 4 deadline is strict",
-  "find": "\t\tword_44 += nofIn;\n\t\tif (word_44 > word_48) {",
-  "replace": "\t\tword_44 += nofIn;\n\t\tif (word_44 >= word_48) {"
+  "find": "\t\tphase4ElapsedSamples += nofIn;\n\t\tif (phase4ElapsedSamples > phase4TimeoutDeadline) {",
+  "replace": "\t\tphase4ElapsedSamples += nofIn;\n\t\tif (phase4ElapsedSamples >= phase4TimeoutDeadline) {"
  },
  {
   "label": "the timeout marks the ISP sensitive",
@@ -414,8 +414,8 @@
  },
  {
   "label": "the USB arm marks the evaluator at +0x94",
-  "find": "\t\t\t\t\tconnectionEvaluator->word_94 = 1;",
-  "replace": "\t\t\t\t\tconnectionEvaluator->word_94 = 0;"
+  "find": "\t\t\t\t\tconnectionEvaluator->retrainInsteadOfRateDown = 1;",
+  "replace": "\t\t\t\t\tconnectionEvaluator->retrainInsteadOfRateDown = 0;"
  },
  {
   "label": "the non-USB arm clears the silence request",
@@ -434,8 +434,8 @@
  },
  {
   "label": "the silence-RRN Ed arm freezes the timing loop",
-  "find": "\t\t\t\tresampler.setBllState(V90_BLL_FROZEN, 1);\n\t\t\t\tword_40 = 0;",
-  "replace": "\t\t\t\tresampler.setBllState(V90_BLL_FROZEN, 1);\n\t\t\t\tword_40 = 1;"
+  "find": "\t\t\t\tresampler.setBllState(V90_BLL_FROZEN, 1);\n\t\t\t\tenergyDropDetectorArmed = 0;",
+  "replace": "\t\t\t\tresampler.setBllState(V90_BLL_FROZEN, 1);\n\t\t\t\tenergyDropDetectorArmed = 1;"
  },
  {
   "label": "the redesign trigger keeps the mean error at +0x274",
@@ -454,13 +454,13 @@
  },
  {
   "label": "RtNot moves the loop to TRN2",
-  "find": "\t\t\tresampler.setBllState(V90_BLL_TRN2, 1);\n\t\t\tword_40 = 1;",
-  "replace": "\t\t\tresampler.setBllState(V90_BLL_TRN2, 1);\n\t\t\tword_40 = 0;"
+  "find": "\t\t\tresampler.setBllState(V90_BLL_TRN2, 1);\n\t\t\tenergyDropDetectorArmed = 1;",
+  "replace": "\t\t\tresampler.setBllState(V90_BLL_TRN2, 1);\n\t\t\tenergyDropDetectorArmed = 0;"
  },
  {
   "label": "state 0x35 clears the energy-drop arm rather than setting it",
-  "find": "\t\t\tresampler.setBllState(V90_BLL_FROZEN, 1);\n\t\t\tword_40 = 0;\n\t\t\tbreak;\n\n\t\tdefault:",
-  "replace": "\t\t\tresampler.setBllState(V90_BLL_FROZEN, 1);\n\t\t\tword_40 = 1;\n\t\t\tbreak;\n\n\t\tdefault:"
+  "find": "\t\t\tresampler.setBllState(V90_BLL_FROZEN, 1);\n\t\t\tenergyDropDetectorArmed = 0;\n\t\t\tbreak;\n\n\t\tdefault:",
+  "replace": "\t\t\tresampler.setBllState(V90_BLL_FROZEN, 1);\n\t\t\tenergyDropDetectorArmed = 1;\n\t\t\tbreak;\n\n\t\tdefault:"
  },
  {
   "label": "phase 4 ends on evaluatePhase4 and its before/after ratio",
@@ -473,9 +473,9 @@
   "replace": "\t\tverdict = 0;\n"
  },
  {
-  "label": "the energy-drop detector runs only when word_40 is set",
-  "find": "\tif (word_40 != 0) {\n\t\tif (agc.level <",
-  "replace": "\tif (word_40 == 0) {\n\t\tif (agc.level <"
+  "label": "the energy-drop detector runs only when energyDropDetectorArmed is set",
+  "find": "\tif (energyDropDetectorArmed != 0) {\n\t\tif (agc.level <",
+  "replace": "\tif (energyDropDetectorArmed == 0) {\n\t\tif (agc.level <"
  },
  {
   "label": "the energy-drop detector compares the AGC LEVEL",
@@ -484,12 +484,12 @@
  },
  {
   "label": "the quiet run is accumulated and not restarted",
-  "find": "\t\t\tword_27c += nofIn;",
-  "replace": "\t\t\tword_27c = nofIn;"
+  "find": "\t\t\tnoEnergyDuration += nofIn;",
+  "replace": "\t\t\tnoEnergyDuration = nofIn;"
  },
  {
   "label": "the quiet run is cleared when the energy comes back",
-  "find": "\t\t} else {\n\t\t\tword_27c = 0;\n\t\t}",
+  "find": "\t\t} else {\n\t\t\tnoEnergyDuration = 0;\n\t\t}",
   "replace": "\t\t} else {\n\t\t}"
  },
  {
@@ -519,13 +519,13 @@
  },
  {
   "label": "the frame phase advances by the equaliser's output count",
-  "find": "\tword_260 = (word_260 + word_258) % 6;",
-  "replace": "\tword_260 = (word_260 + word_24c) % 6;"
+  "find": "\tword_260 = (word_260 + nofSymbols) % 6;",
+  "replace": "\tword_260 = (word_260 + nofResampled) % 6;"
  },
  {
   "label": "the frame phase wraps at six",
-  "find": "\tword_260 = (word_260 + word_258) % 6;",
-  "replace": "\tword_260 = (word_260 + word_258) % 5;"
+  "find": "\tword_260 = (word_260 + nofSymbols) % 6;",
+  "replace": "\tword_260 = (word_260 + nofSymbols) % 5;"
  },
  {
   "label": "the RRN counter is +0x264 and the retrain counter +0x268",

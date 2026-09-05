@@ -12,13 +12,16 @@
  * has its own header now. No field moved when it did -- `word_70`,
  * `word_74`, `word_78`, `word_7c`, `word_84` and `word_88` were the names
  * those two earlier batches gave them, and the offset assertions moved from
- * `V90Demodulator.cpp` to `V90ConnectionEvaluator.cpp` unchanged. Four of the
- * six are renamed now: `word_78` and `word_7c` are `delayedRetrainRequest`
+ * `V90Demodulator.cpp` to `V90ConnectionEvaluator.cpp` unchanged. ALL SIX are
+ * renamed now: `word_78` and `word_7c` are `delayedRetrainRequest`
  * and `delayedRetrainArmed` below, in the naming pass that also settled
  * `initDmin`, `altRbsDetectedOnQc` and `echoRrnState` (finding F9480);
  * `word_70` and `word_74` are `avePdsnr` and `avePdsnrNofSymbols` below,
  * carried through in the second-pass batch that also settled
- * `externalDemandCode` and `meanErrorCheckArmed` (finding F10134).
+ * `externalDemandCode` and `meanErrorCheckArmed` (finding F10134); `word_84`
+ * and `word_88` are `phase3EvalEnabled` and `trn1dEvalEnabled` below, wave 6
+ * (finding F10174), which also renamed the neighbouring `word_80` and
+ * `word_94` even though neither was part of this file's original pair.
  *
  * Not polymorphic: `nm` gives `D1` and `D2` and no `D0`, and GCC emits a
  * deleting destructor only for a virtual class, so offset 0 is a real
@@ -399,10 +402,50 @@ public:
 	 */
 	unsigned int delayedRetrainRequest;	/* +0x78 copied to delayedRetrainArmed */
 	unsigned int delayedRetrainArmed;	/* +0x7c                              */
-	unsigned int word_80;		/* +0x80 zeroed by reset             */
-	unsigned int word_84;		/* +0x84 cleared by enterPhase3      */
-	unsigned int word_88;		/* +0x88 cleared by enterPhase3;
-					 *       reset does NOT touch it     */
+
+	/*
+	 * +0x80  Wave 6 (F10174): PURELY INTERNAL TO THE DEBUG-ALTERNATE ARM.
+	 * `evaluateConnection`'s tail, gated on `debugAlternateDebug != 0`,
+	 * runs a `switch (debugAlternateState)` that cycles 0 -> 1 -> 2 -> 3 -> 0
+	 * (case 3 resets it), issuing a different forced verdict each time --
+	 * "Alternate Debug Retrain", "...RRN up", "...Retrain" again, "...RRN
+	 * down" -- named on CLAUDE.md rule 3 (usage inference): the field's
+	 * only role anywhere in the object is that four-state cycle, and
+	 * `debugAlternateState` says so without claiming a name the object
+	 * states -- no format string prints the NUMBER, only the four verdict
+	 * strings.
+	 */
+	unsigned int debugAlternateState;	/* +0x80 zeroed by reset      */
+
+	/*
+	 * +0x84 and +0x88  Wave 6 (F10174): TWO EVALUATION-REGIME FLAGS,
+	 * mutually exclusive in `evaluatePhase3`'s `if (altRbsDetectedOnQc) ...
+	 * else if (trn1dEvalEnabled) ... else if (phase3EvalEnabled) ...`
+	 * chain -- `trn1dEvalEnabled`'s arm compares `avePdsnr` against
+	 * `TRN1D_ERROR_FOR_V34_FALLBACK`, `phase3EvalEnabled`'s against
+	 * `PHASE3_ERROR_FOR_V34_FALLBACK` and `PDSNR_THRESHOLD_IN_PHASE3` --
+	 * so which parameter family each guards is what types the pair.
+	 *
+	 * THE EVIDENCE IS ASYMMETRIC, and said so rather than smoothed over.
+	 * `trn1dEvalEnabled` is CLAUDE.md rule 1: `V90Demodulator::progress`'s
+	 * `word_3c == 0x06` arm sets +0x88 to 1 beside
+	 * `edprintf("V90Demodulator: enabling connectionEvaluator of
+	 * TRN1d\r\n")` -- the author's own words for exactly this store.
+	 * `phase3EvalEnabled` has NO comparable "enabling" site anywhere in
+	 * this tree; a whole-tree grep for `word_84 = 1`/`->word_84 =` outside
+	 * this header finds only clears (`progress`'s `word_3c == 0x08` and
+	 * `0x11` arms, beside `edprintf("V90Demodulator: disabling
+	 * connectionEvaluator of Phase3\r\n")`, and `enterPhase3` itself), so
+	 * the only support for `phase3EvalEnabled` is the structural symmetry
+	 * with its already-named twin and the parameter family its own arm
+	 * reads -- rule 3, not rule 1, and the name is offered on that
+	 * strength alone. If a caller that sets it turns up outside this
+	 * tree's reach, re-check this derivation rather than assuming it
+	 * holds.
+	 */
+	unsigned int phase3EvalEnabled;	/* +0x84 cleared by enterPhase3      */
+	unsigned int trn1dEvalEnabled;		/* +0x88 cleared by enterPhase3;
+						 *       reset does NOT touch it     */
 
 	/*
 	 * +0x8c  Set to -1 by `reset`, not to 0 -- `mov $0xffffffff,%eax`, a
@@ -435,7 +478,22 @@ public:
 	 * reading, not a derivation, so the field keeps its offset name.
 	 */
 	unsigned int word_90;		/* +0x90 zeroed by reset and by four */
-	unsigned int word_94;		/* +0x94 zeroed by reset             */
+
+	/*
+	 * +0x94  Wave 6 (F10174): CLAUDE.md rule 1, a format string matched
+	 * almost verbatim.  `evaluateConnection` checks it twice -- once right
+	 * after the "One Rate Down" arm decides, once in the tail's "rate-down
+	 * override, the second of its two copies" -- and both times the same
+	 * shape: `if (retrainInsteadOfRateDown != 0 && verdict ==
+	 * V90CE_VERDICT_RRN_DOWN)` upgrades the verdict to a retrain, beside
+	 * the diagnostic "V90ConnectionEvaluator: initiating Retrain instead
+	 * of One Rate Down !!" -- the field's own name, near enough to quote.
+	 * It is set to 1 in exactly one place, `V90Demodulator::progress`'s
+	 * "'Problematic' ISP Modem detected on USB" arm (masking the drop to
+	 * V.34 for a signature-matched MP that would otherwise demand a rate
+	 * down), and cleared only by `reset`.
+	 */
+	unsigned int retrainInsteadOfRateDown;	/* +0x94 zeroed by reset      */
 	/*
 	 * +0x98  Was `pad_98[4]`, and `evaluateConnection` is its only
 	 * writer: five 32-bit stores, four of them a plain zero (0x3e869,

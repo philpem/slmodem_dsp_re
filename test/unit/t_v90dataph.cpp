@@ -293,7 +293,7 @@ setup(int trial, const struct trial_args *t)
 
 		d->inPhase3 = t->latch;
 		d->quickConnect = t->quick;
-		d->byte_280 = (unsigned char)t->enabled;
+		d->rateValid = (unsigned char)t->enabled;
 
 		/*
 		 * `resetLinearMappStudy` walks the detector through the
@@ -586,7 +586,7 @@ run_latch(void)
  *     0x28230 + 5*rtd);
  *   - whether +0x44 is CLEARED or ACCUMULATED;
  *   - `enterRRN`'s three-way conjunction into `additionalCPinfo`, its clear
- *     of `byte_280` and its second diagnostic.
+ *     of `rateValid` and its second diagnostic.
  *
  * THE CONJUNCTION IS THE ONE THING A SWEEP CAN GET WRONG.  The store is 1 on
  * exactly one of four paths, so a grid that never produces a 1 -- or never
@@ -640,14 +640,14 @@ run_state2(void)
 				/* rtd drives both `lea` forms. */
 				P2(side)->rtd = (int)(0x100 * ri + ri);
 
-				D(side)->word_38 = 0x1000u + (unsigned)ri;
-				D(side)->word_44 = 0x2000u + (unsigned)ci;
+				D(side)->samplesInPhase = 0x1000u + (unsigned)ri;
+				D(side)->phase4ElapsedSamples = 0x2000u + (unsigned)ci;
 
 				set_int(side, PARAMS_W268, 0x5150 + ci);
 				set_int(side, PARAMS_W27C, 0x6160 + ri);
 			}
 
-			w44before = D(1)->word_44;
+			w44before = D(1)->phase4ElapsedSamples;
 			dsplib_debug_capture_reset();
 
 			call_entry(which, 0);
@@ -662,13 +662,13 @@ run_state2(void)
 
 			/* The deadline, by name as well as by object. */
 			diff_eq_int("the deadline (%ld)",
-				    (long)D(0)->word_48,
-				    (long)D(1)->word_48, tag);
+				    (long)D(0)->phase4TimeoutDeadline,
+				    (long)D(1)->phase4TimeoutDeadline, tag);
 
 			if (which == E_PHASE4) {
-				if (D(1)->word_44 != w44before)
+				if (D(1)->phase4ElapsedSamples != w44before)
 					sawAccum = 1;
-			} else if (D(1)->word_44 == 0) {
+			} else if (D(1)->phase4ElapsedSamples == 0) {
 				sawCleared = 1;
 			}
 
@@ -917,7 +917,7 @@ run_steady(void)
 			 * would be invisible in the object comparison.
 			 */
 			diff_eq_int("the evaluation flag was copied (%ld)",
-				    (long)D(1)->word_278, (long)ej, tag);
+				    (long)D(1)->timingHistoryEval, (long)ej, tag);
 
 			if (ej == 0) {
 				sawDisabled = 1;

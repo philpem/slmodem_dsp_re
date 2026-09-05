@@ -5,14 +5,14 @@
  {
   "label": "enterRRN: the deadline base moves",
   "fn": "enterRRN",
-  "find": "\tword_44 = 0;\n\tinPhase3 = 2;\n\tword_48 = 0x10680 + 2 * (unsigned int)phase2Info->rtd;\n\n\terrorEnergyPrintPeriod = V90PW(params)[PARAMS_WORD_268];\n\ttimingOffsetPrintPeriod = V90PW(params)[PARAMS_WORD_27C];\n\n\tadditionalCPinfo->word_10 =",
-  "replace": "\tword_44 = 0;\n\tinPhase3 = 2;\n\tword_48 = 0x10681 + 2 * (unsigned int)phase2Info->rtd;\n\n\terrorEnergyPrintPeriod = V90PW(params)[PARAMS_WORD_268];\n\ttimingOffsetPrintPeriod = V90PW(params)[PARAMS_WORD_27C];\n\n\tadditionalCPinfo->word_10 ="
+  "find": "\tphase4ElapsedSamples = 0;\n\tinPhase3 = 2;\n\tphase4TimeoutDeadline = 0x10680 + 2 * (unsigned int)phase2Info->rtd;\n\n\terrorEnergyPrintPeriod = V90PW(params)[PARAMS_WORD_268];\n\ttimingOffsetPrintPeriod = V90PW(params)[PARAMS_WORD_27C];\n\n\tadditionalCPinfo->word_10 =",
+  "replace": "\tphase4ElapsedSamples = 0;\n\tinPhase3 = 2;\n\tphase4TimeoutDeadline = 0x10681 + 2 * (unsigned int)phase2Info->rtd;\n\n\terrorEnergyPrintPeriod = V90PW(params)[PARAMS_WORD_268];\n\ttimingOffsetPrintPeriod = V90PW(params)[PARAMS_WORD_27C];\n\n\tadditionalCPinfo->word_10 ="
  },
  {
   "label": "enterRRN: the delay is not doubled",
   "fn": "enterRRN",
-  "find": "\tword_48 = 0x10680 + 2 * (unsigned int)phase2Info->rtd;\n\n\terrorEnergyPrintPeriod = V90PW(params)[PARAMS_WORD_268];\n\ttimingOffsetPrintPeriod = V90PW(params)[PARAMS_WORD_27C];\n\n\tadditionalCPinfo->word_10 =",
-  "replace": "\tword_48 = 0x10680 + 1 * (unsigned int)phase2Info->rtd;\n\n\terrorEnergyPrintPeriod = V90PW(params)[PARAMS_WORD_268];\n\ttimingOffsetPrintPeriod = V90PW(params)[PARAMS_WORD_27C];\n\n\tadditionalCPinfo->word_10 ="
+  "find": "\tphase4TimeoutDeadline = 0x10680 + 2 * (unsigned int)phase2Info->rtd;\n\n\terrorEnergyPrintPeriod = V90PW(params)[PARAMS_WORD_268];\n\ttimingOffsetPrintPeriod = V90PW(params)[PARAMS_WORD_27C];\n\n\tadditionalCPinfo->word_10 =",
+  "replace": "\tphase4TimeoutDeadline = 0x10680 + 1 * (unsigned int)phase2Info->rtd;\n\n\terrorEnergyPrintPeriod = V90PW(params)[PARAMS_WORD_268];\n\ttimingOffsetPrintPeriod = V90PW(params)[PARAMS_WORD_27C];\n\n\tadditionalCPinfo->word_10 ="
  },
  {
   "label": "enterRRN: the conjunction loses its second term",
@@ -35,14 +35,14 @@
  {
   "label": "enterRRN: the rate gate is not cleared",
   "fn": "enterRRN",
-  "find": "\tbyte_280 = 0;\n\tdemapper->linearMappStudyEnabled = 0;",
+  "find": "\trateValid = 0;\n\tdemapper->linearMappStudyEnabled = 0;",
   "replace": "\tdemapper->linearMappStudyEnabled = 0;"
  },
  {
   "label": "enterRRN: the study is left enabled",
   "fn": "enterRRN",
-  "find": "\tbyte_280 = 0;\n\tdemapper->linearMappStudyEnabled = 0;",
-  "replace": "\tbyte_280 = 0;\n\tdemapper->linearMappStudyEnabled = 1;"
+  "find": "\trateValid = 0;\n\tdemapper->linearMappStudyEnabled = 0;",
+  "replace": "\trateValid = 0;\n\tdemapper->linearMappStudyEnabled = 1;"
  },
  {
   "label": "enterRRN: the latch tests the wrong state",
@@ -53,46 +53,46 @@
  {
   "label": "enterFPE: the deadline base moves",
   "fn": "enterFPE",
-  "find": "\tword_48 = 0x10680 + 2 * (unsigned int)phase2Info->rtd;\n\n\terrorEnergyPrintPeriod = V90PW(params)[PARAMS_WORD_268];\n\ttimingOffsetPrintPeriod = V90PW(params)[PARAMS_WORD_27C];\n}",
-  "replace": "\tword_48 = 0x10600 + 2 * (unsigned int)phase2Info->rtd;\n\n\terrorEnergyPrintPeriod = V90PW(params)[PARAMS_WORD_268];\n\ttimingOffsetPrintPeriod = V90PW(params)[PARAMS_WORD_27C];\n}"
+  "find": "\tphase4TimeoutDeadline = 0x10680 + 2 * (unsigned int)phase2Info->rtd;\n\n\terrorEnergyPrintPeriod = V90PW(params)[PARAMS_WORD_268];\n\ttimingOffsetPrintPeriod = V90PW(params)[PARAMS_WORD_27C];\n}",
+  "replace": "\tphase4TimeoutDeadline = 0x10600 + 2 * (unsigned int)phase2Info->rtd;\n\n\terrorEnergyPrintPeriod = V90PW(params)[PARAMS_WORD_268];\n\ttimingOffsetPrintPeriod = V90PW(params)[PARAMS_WORD_27C];\n}"
  },
  {
   "label": "enterFPE: the counter is not cleared",
   "fn": "enterFPE",
-  "find": "\tword_38 = 0;\n\tword_44 = 0;\n\tinPhase3 = 2;\n\tword_48 = 0x10680 + 2 * (unsigned int)phase2Info->rtd;\n\n\terrorEnergyPrintPeriod = V90PW(params)[PARAMS_WORD_268];\n\ttimingOffsetPrintPeriod = V90PW(params)[PARAMS_WORD_27C];\n}",
-  "replace": "\tword_44 = 0;\n\tinPhase3 = 2;\n\tword_48 = 0x10680 + 2 * (unsigned int)phase2Info->rtd;\n\n\terrorEnergyPrintPeriod = V90PW(params)[PARAMS_WORD_268];\n\ttimingOffsetPrintPeriod = V90PW(params)[PARAMS_WORD_27C];\n}"
+  "find": "\tsamplesInPhase = 0;\n\tphase4ElapsedSamples = 0;\n\tinPhase3 = 2;\n\tphase4TimeoutDeadline = 0x10680 + 2 * (unsigned int)phase2Info->rtd;\n\n\terrorEnergyPrintPeriod = V90PW(params)[PARAMS_WORD_268];\n\ttimingOffsetPrintPeriod = V90PW(params)[PARAMS_WORD_27C];\n}",
+  "replace": "\tphase4ElapsedSamples = 0;\n\tinPhase3 = 2;\n\tphase4TimeoutDeadline = 0x10680 + 2 * (unsigned int)phase2Info->rtd;\n\n\terrorEnergyPrintPeriod = V90PW(params)[PARAMS_WORD_268];\n\ttimingOffsetPrintPeriod = V90PW(params)[PARAMS_WORD_27C];\n}"
  },
  {
   "label": "enterFPE: the two parameter copies are swapped",
   "fn": "enterFPE",
-  "find": "\tword_48 = 0x10680 + 2 * (unsigned int)phase2Info->rtd;\n\n\terrorEnergyPrintPeriod = V90PW(params)[PARAMS_WORD_268];\n\ttimingOffsetPrintPeriod = V90PW(params)[PARAMS_WORD_27C];\n}",
-  "replace": "\tword_48 = 0x10680 + 2 * (unsigned int)phase2Info->rtd;\n\n\terrorEnergyPrintPeriod = V90PW(params)[PARAMS_WORD_27C];\n\ttimingOffsetPrintPeriod = V90PW(params)[PARAMS_WORD_268];\n}"
+  "find": "\tphase4TimeoutDeadline = 0x10680 + 2 * (unsigned int)phase2Info->rtd;\n\n\terrorEnergyPrintPeriod = V90PW(params)[PARAMS_WORD_268];\n\ttimingOffsetPrintPeriod = V90PW(params)[PARAMS_WORD_27C];\n}",
+  "replace": "\tphase4TimeoutDeadline = 0x10680 + 2 * (unsigned int)phase2Info->rtd;\n\n\terrorEnergyPrintPeriod = V90PW(params)[PARAMS_WORD_27C];\n\ttimingOffsetPrintPeriod = V90PW(params)[PARAMS_WORD_268];\n}"
  },
  {
   "label": "enterPhase4: the deadline base moves",
   "fn": "enterPhase4",
-  "find": "\tword_48 = 0x28230 + 5 * (unsigned int)phase2Info->rtd;",
-  "replace": "\tword_48 = 0x28231 + 5 * (unsigned int)phase2Info->rtd;"
+  "find": "\tphase4TimeoutDeadline = 0x28230 + 5 * (unsigned int)phase2Info->rtd;",
+  "replace": "\tphase4TimeoutDeadline = 0x28231 + 5 * (unsigned int)phase2Info->rtd;"
  },
  {
   "label": "enterPhase4: the delay multiplier is four",
   "fn": "enterPhase4",
-  "find": "\tword_48 = 0x28230 + 5 * (unsigned int)phase2Info->rtd;",
-  "replace": "\tword_48 = 0x28230 + 4 * (unsigned int)phase2Info->rtd;"
+  "find": "\tphase4TimeoutDeadline = 0x28230 + 5 * (unsigned int)phase2Info->rtd;",
+  "replace": "\tphase4TimeoutDeadline = 0x28230 + 4 * (unsigned int)phase2Info->rtd;"
  },
  {
   "label": "enterPhase4: the total is assigned, not accumulated",
   "fn": "enterPhase4",
   "why": "Re-anchored by finding F7791: the clear no longer follows the accumulate directly -- the object puts `word_38 = 0;` after the deadline and that is decoded, not transcribed -- so the anchor carries the deadline line instead.",
-  "find": "\tword_44 += word_38;\n\tword_48 = 0x28230",
-  "replace": "\tword_44 = word_38;\n\tword_48 = 0x28230"
+  "find": "\tphase4ElapsedSamples += samplesInPhase;\n\tphase4TimeoutDeadline = 0x28230",
+  "replace": "\tphase4ElapsedSamples = samplesInPhase;\n\tphase4TimeoutDeadline = 0x28230"
  },
  {
   "label": "enterPhase4: the counter is cleared before it is added",
   "fn": "enterPhase4",
   "why": "Re-anchored by finding F7791, same reason as the entry above.",
-  "find": "\tword_44 += word_38;\n\tword_48 = 0x28230 + 5 * (unsigned int)phase2Info->rtd;\n\tword_38 = 0;",
-  "replace": "\tword_38 = 0;\n\tword_44 += word_38;\n\tword_48 = 0x28230 + 5 * (unsigned int)phase2Info->rtd;"
+  "find": "\tphase4ElapsedSamples += samplesInPhase;\n\tphase4TimeoutDeadline = 0x28230 + 5 * (unsigned int)phase2Info->rtd;\n\tsamplesInPhase = 0;",
+  "replace": "\tsamplesInPhase = 0;\n\tphase4ElapsedSamples += samplesInPhase;\n\tphase4TimeoutDeadline = 0x28230 + 5 * (unsigned int)phase2Info->rtd;"
  },
  {
   "label": "enterDataPhase: the two study lengths are swapped",
@@ -127,7 +127,7 @@
  {
   "label": "enterDataSteadyState: the evaluation flag is read, not copied",
   "fn": "enterDataSteadyState",
-  "find": "\tword_278 = V90PW(params)[PARAMS_TIMING_HISTORY_EVAL];\n\tif (word_278 != 0) {",
+  "find": "\ttimingHistoryEval = V90PW(params)[PARAMS_TIMING_HISTORY_EVAL];\n\tif (timingHistoryEval != 0) {",
   "replace": "\tif (V90PW(params)[PARAMS_TIMING_HISTORY_EVAL] != 0) {"
  },
  {
