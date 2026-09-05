@@ -217,22 +217,41 @@ struct vpcm_root {
 #define DSPLIB_VPCM_UNWRITTEN
 #endif
 
-/*
- * One block through V.34/V.90/V.92.  `nin` samples in and the same number
- * out; `*nrx` comes back as the number of bits recovered and `*nbits` as the
- * number the modulator wants for the NEXT block.  Returns a progress code.
+/**
+ * @brief One block through V.34/V.90/V.92. Not written in this tree -- see
+ * the comment above.
+ *
+ * @param obj    The V.34 object (`tagV34Object`, opaque here).
+ * @param in     One block of input samples, as floats.
+ * @param out    One block of output samples, as floats.
+ * @param nin    Samples in @p in (and produced in @p out).
+ * @param rxbits Out: bits recovered this block.
+ * @param nrx    Out: how many bits were written to @p rxbits.
+ * @param txbits In: bits to transmit this block.
+ * @param nbits  In/out: bits available in @p txbits on entry; out, how many
+ *               the modulator wants for the next block.
+ * @return A `VPCM_PROG_*` progress code.
  */
 int VPcmV34Progress(void *obj, float *in, float *out, int nin, int *rxbits,
 		    int *nrx, int *txbits, int *nbits) DSPLIB_VPCM_UNWRITTEN;
 
-/* The echo-cancelled input, for the host's data logger.  32 bytes. */
+/** @brief The echo-cancelled input, for the host's data logger. Not written
+ *  in this tree. @param obj The V.34 object. @param n Out: sample count
+ *  (32 bytes' worth). @return The sample buffer. */
 void *VPcmV34GetCleanedSamples(void *obj, int *n) DSPLIB_VPCM_UNWRITTEN;
 
-/* Which of V.34, V.90 and V.92 the session settled on: 34, 90 or 92. */
+/** @brief Which of V.34, V.90 and V.92 the session settled on. Not written
+ *  in this tree. @param obj The V.34 object. @return 34, 90 or 92. */
 int VPcmV34GetCurrentSessionDP(void *obj) DSPLIB_VPCM_UNWRITTEN;
 
-/* The agreed rates in bit/s, for MDMPRM_RX_RATE and MDMPRM_TX_RATE. */
+/** @brief The agreed receive rate. Not written in this tree.
+ *  @param obj The V.34 object. @return Bit rate in bit/s, for
+ *  MDMPRM_RX_RATE. */
 int VPcmV34GetCurrentRxBitRate(void *obj) DSPLIB_VPCM_UNWRITTEN;
+
+/** @brief The agreed transmit rate. Not written in this tree.
+ *  @param obj The V.34 object. @return Bit rate in bit/s, for
+ *  MDMPRM_TX_RATE. */
 int VPcmV34GetCurrentTxBitRate(void *obj) DSPLIB_VPCM_UNWRITTEN;
 
 /*
@@ -247,14 +266,18 @@ int VPcmV34GetCurrentTxBitRate(void *obj) DSPLIB_VPCM_UNWRITTEN;
 #define VPCM_UNWRITTEN_RXBITRATE	4
 #define VPCM_UNWRITTEN_TXBITRATE	5
 
-/* Which unwritten entry point was reached, or VPCM_WRITTEN for none. */
+/** @brief Which unwritten entry point was last reached.
+ *  @return A `VPCM_UNWRITTEN_*` code, or ::VPCM_WRITTEN for none. */
 int vpcm_unwritten(void);
 
-/*
- * "I am going to read the code afterwards."  Clears the record AND turns the
- * abort off; without this call an unwritten path stops the process, because
- * an arm that returns quietly is indistinguishable from an arm that correctly
- * did nothing.
+/**
+ * @brief Acknowledge an unwritten-path hit: "I am going to read the code
+ * afterwards."
+ *
+ * Clears the record and turns the abort off; without this call, reaching an
+ * unwritten entry point aborts the process, because an arm that returns
+ * quietly is otherwise indistinguishable from one that correctly did
+ * nothing.
  */
 void vpcm_unwritten_reset(void);
 
@@ -267,6 +290,16 @@ void vpcm_unwritten_reset(void);
  * do -- a test calls it by name.  `count` is `m->frag`, which for this
  * datapump the host contract fixes at 48 (finding F964).
  */
+/**
+ * @brief The datapump's `.process`: one buffer in, one buffer out.
+ *
+ * @param dp    The datapump handle; `dp->dp_data` is this same `vpcm_root`.
+ * @param in    One block of input samples.
+ * @param out   One block of output samples.
+ * @param count Samples per block; the host contract fixes this at 48 for
+ *              this datapump (finding F964).
+ * @return A `DPSTAT_*` status code.
+ */
 int vpcm_run(struct dp *dp, void *in, void *out, int count);
 
 /*
@@ -278,15 +311,34 @@ int vpcm_run(struct dp *dp, void *in, void *out, int count);
  * `vpcm_op`; they lose the `static` here for `vpcm_run`'s reason, which is
  * that a test calls them by name.
  */
+/**
+ * @brief Allocate and initialise the V.PCM root object.
+ *
+ * @param modem    The host handle.
+ * @param id       The datapump id to register under.
+ * @param caller   The calling-side flag `vpcm_run`'s connect arm reads.
+ * @param srate    Sample rate; the object tests this against ::VPCM_SRATE.
+ * @param max_frag The host's fragment size cap.
+ * @param op       Out: the datapump's operations table (`vpcm_op`).
+ * @return The new `struct dp *` (the embedded `dp.dp_data` points back at
+ *         the whole `vpcm_root`).
+ */
 struct dp *vpcm_create(void *modem, int id, int caller, int srate,
 		       int max_frag, struct dp_operations *op);
+
+/** @brief Tear the V.PCM root object down. @param dp The handle from
+ *  vpcm_create(). @return A `DPSTAT_*` status code. */
 int vpcm_delete(struct dp *dp);
 
-/* .data+0x30, 24 bytes; `dp_vpcm_init` registers it under three ids. */
+/** @brief The datapump's operations table; `dp_vpcm_init` registers it under
+ *  three ids. */
 extern struct dp_operations vpcm_op;
 
-/* 0x44c0, 72 bytes: three `modem_dp_register` calls and a zero. */
+/** @brief Register the V.PCM datapump under its three ids (V.34, V.90,
+ *  V.92) with `modem_dp_register`. @return 0. */
 int dp_vpcm_init(void);
+
+/** @brief Counterpart of dp_vpcm_init(); the object's own body is empty. */
 void dp_vpcm_exit(void);
 
 /*
@@ -304,9 +356,17 @@ void dp_vpcm_exit(void);
  * src/pump/v90/VPcmXfTerm.cpp the same way and for the same reason, and is
  * repeated here because this is the caller.
  */
+/** @brief Create the C++ V.PCM crossfeed helper. Defined in
+ *  src/pump/v90/VPcmXfCreate.cpp; declared here `void *` because this header
+ *  is included from C. @return A `VPcmFloModem *`, opaque here. */
 void *VPCMXF_Create(int digitalSide, void *v34Object, void *dpRuntime,
 		    unsigned int durationMs, int mode);
+
+/** @brief Delete the object VPCMXF_Create() returned. */
 void VPCMXF_Delete(void *self);
+
+/** @brief Notify the crossfeed helper that the session is ending. Defined in
+ *  src/pump/v90/VPcmXfTerm.cpp. */
 void VPCMXF_SessionTermination(void *self);
 
 #ifdef __cplusplus

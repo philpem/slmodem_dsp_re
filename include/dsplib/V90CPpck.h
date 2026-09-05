@@ -73,37 +73,42 @@ struct tagV90AdditionalCPinfo;
 extern float fltTable2[16];
 extern float fltTable1[7];
 
-/*
- * Expand `f` into one bit per `short`, greedily and most significant first.
+/**
+ * @brief Expand a float into one bit per `short`, greedily and MSB first.
  *
- *   mode 0   Q3.13.  Sixteen magnitude entries off `fltTable2`, weighted 4
- *            down to 2^-13, with the HEAVIEST at `bits[15]`; no sign entry,
- *            the magnitude is taken through `fabs`.  Warns outside [0, 8].
- *   mode 1   Q1.6.  Seven magnitude entries off `fltTable1`, 1 down to
- *            2^-6, heaviest at `bits[6]`, then the sign at `bits[7]`.
- *            Warns outside [-1, 1].
- *   anything else   returns having touched nothing.
+ * `mode 0` is Q3.13: sixteen magnitude entries off `fltTable2`, weighted 4
+ * down to 2^-13 with the heaviest at `bits[15]`; no sign entry, the
+ * magnitude is taken through `fabs`, and values outside [0, 8] only trigger
+ * a debug warning (`dsplibs_debug_printf` behind `DSPLIB_DEBUG_ON()`) -- the
+ * greedy expansion still runs and saturates. `mode 1` is Q1.6: seven
+ * magnitude entries off `fltTable1`, 1 down to 2^-6, heaviest at `bits[6]`,
+ * then the sign at `bits[7]`; out-of-range is [-1, 1] and warns the same
+ * way. Any other mode touches nothing.
  *
- * The warnings are `dsplibs_debug_printf` behind `DSPLIB_DEBUG_ON()` and are
- * the only observable of the out-of-range arms: the expansion runs anyway and
- * saturates, because the greedy loop simply sets every entry it can.
+ * This is the write side of the expansion `V92CP::evaluateInfo` reads back
+ * (`f += fltTable_2[15 - i]` there against `bits[15 - i] = 1` here), over
+ * the other pair of tables.
  *
- * This is the WRITE side of the expansion `V92CP::evaluateInfo` reads back --
- * `f += fltTable_2[15 - i]` there against `bits[15 - i] = 1` here -- over the
- * other pair of tables.
+ * @param f     The value to expand.
+ * @param bits  Destination, one bit per `short`.
+ * @param mode  0 for Q3.13 (16 bits), 1 for Q1.6 (8 bits); anything else is a no-op.
  */
 void float2Bits(float f, short *bits, int mode);
 
-/*
- * Build the analogue modem's CP sequence into `bits`, one bit per `short`,
- * and return the total length INCLUDING the trailing framing bits: the CRC
- * lands at `bits[pos + 1 .. pos + 16]` and the return is `pos + 20`.
+/**
+ * @brief Build the analogue modem's CP sequence.
  *
- * `cleardown` non-zero replaces the five data-rate bits with zero and logs
- * "V90CPPacker: CLEARDOWN indicated !"; the message is the object's own and
- * is what names the parameter.
+ * Packs `params`/`info` into `bits`, one bit per `short`, in seventeen-bit
+ * frames throughout (see the .cpp for the field layout). `cleardown`
+ * non-zero replaces the five data-rate bits with zero and logs
+ * "V90CPPacker: CLEARDOWN indicated !" -- the message is the object's own
+ * and is what names the parameter.
  *
- * See the .cpp for the layout, which is seventeen-bit frames throughout.
+ * @param params     The V.90 mapping parameters to encode.
+ * @param info       Additional CP info (float_08 and others) to encode alongside them.
+ * @param bits       Destination, one bit per `short`.
+ * @param cleardown  Non-zero to force the data-rate bits to zero (cleardown CP).
+ * @return The total length written, including the trailing CRC and framing bits: `pos + 20`.
  */
 int V90CPPacker(V90MappingParams *params, tagV90AdditionalCPinfo *info,
 		short *bits, int cleardown);

@@ -1,70 +1,40 @@
-/*
- * v17dec.h -- the V.17 fax receiver's slicer tables and its four
- *             constellation decision functions.
+/**
+ * @file v17dec.h
+ * @brief The V.17 fax receiver's slicer tables and its four constellation
+ *        decision functions.
  *
- * WHAT THIS IS.  Six slicers for the fractionally spaced equaliser's
- * `fse.decision` slot -- four rate-specific and two for the handshake -- in
- * `src/fax/v17dec.c`, and the constellation, magnitude and angle tables they
- * index, in `src/fax/v17dec_tables.c`.
+ * Six slicers for the fractionally spaced equaliser's `fse.decision` slot --
+ * four rate-specific and two for the handshake -- in `src/fax/v17dec.c`, and
+ * the constellation, magnitude and angle tables they index, in
+ * `src/fax/v17dec_tables.c`.
  *
- * **`V17RX_create` INSTALLS `FAX_FSE_decision_AB`, UNCONDITIONALLY, AND DOES
- * NOT CHOOSE BY BIT RATE.**  This paragraph said the opposite until
- * `V17RX_create` was reconstructed and could be read: its 3,201 bytes contain
- * no relocation against `FSEv17_decision` at all, and the single store into
- * `fpm_fse_cfg::decision` is at .text 0x974e4, outside every rate arm.  The
- * rate-specific four are reached later and from elsewhere --
- * `FSEv17_decision`'s only two referrers in the whole 1.2 MB are
- * `FSE_Bridge_det+0x29` and `FSE_decision_eqtrn+0x6d`, which is the handshake
- * handing over to the data slicer once the rate is settled.  What
- * `V17RX_create` DOES switch on the rate is the Viterbi decoder's
- * constellation (`struct vtb` at state +0x30) and one quality threshold.
- * Finding F9473.
+ * `V17RX_create` installs `FAX_FSE_decision_AB` unconditionally and does not
+ * choose by bit rate: its one store into `fpm_fse_cfg::decision` is outside
+ * every rate arm.  The rate-specific four are reached only later, once the
+ * handshake hands over through `FSEv17_decision[rate]` -- what
+ * `V17RX_create` does switch on the rate is the Viterbi decoder's
+ * constellation (`struct vtb` at state +0x30) and one quality threshold
+ * (finding F9473, correcting an earlier reading written before
+ * `V17RX_create` could be read).
  *
- * It is the shelf-life rule this tree states for its own paragraphs: the
- * claim was a reasonable reading of a table of four function pointers, it was
- * written while the only function that could refute it was unwritten, and
- * nothing could fail on it until then.
+ * The tables are `short`, on two independent grounds: every reference in the
+ * object is a sixteen-bit load at index scale 1, which is forced encoding
+ * (both extensions appear on the same table, `DECv17_IMAP16` -- finding
+ * F7803, the extension follows the declared type of the LOCAL rather than
+ * the array); and nineteen of the twenty-two tables are byte-identical to
+ * V.32bis' own, already reconstructed and tested as `short` in
+ * `src/pump/v32/v32dec_tables.c` (finding F9170).
  *
- * WHY THE TABLES ARE `short`, TWICE OVER.
+ * The three that are NOT identical are where V.17's own Recommendation
+ * departs from V.32bis': `DECv17_MAP_TRN`, `DECv17_ANGL4800` (whose first
+ * three entries are each exactly one more than V.32's `DECv32_ANGL1200`,
+ * recorded as an observation and not explained) and `DECv17_MAP_BRIDGE`,
+ * which V.32bis has no equivalent of.
  *
- *   1. THE LOAD IS SIXTEEN BITS AND THE INDEX SCALE IS ONE.  Every reference
- *      in the object is `movzwl 0x0(%reg,%reg,1)` or `movswl 0x0(%reg,%reg,1)`
- *      -- the index register appears twice with scale 1, which is `2*i`, and
- *      the load is a word.  That is forced encoding in the sense of finding
- *      F613: the compiler had no freedom about the width.  Both extensions
- *      appear on the SAME table (`DECv17_IMAP16` is read `movzwl` at 0x98470
- *      and `movswl` at 0x984ba), which is finding F7803 -- the extension
- *      follows the declared type of the LOCAL, not of the array -- and not a
- *      disagreement about the element type.
- *
- *   2. NINETEEN OF THE TWENTY-TWO ARE BYTE-IDENTICAL TO V.32bis' OWN, which
- *      this tree already reconstructed and tests, as `short`, in
- *      `src/pump/v32/v32dec_tables.c`.  That is a second, independent
- *      extraction of the same numbers agreeing with the first.
- *
- * AND THE THREE THAT ARE NOT IDENTICAL ARE THE POINT OF SAYING SO.  A
- * cross-check that came out 22 of 22 would be reporting that V.17 and V.32bis
- * share a translation unit, which they do not: the two sets are separate
- * symbols in separate sections at separate addresses.  The three that differ
- * are where V.17's own Recommendation departs from V.32bis':
- *
- *   DECv17_MAP_TRN     { 3, 0, 2, 1 }  vs V.32's { 1, 2, 0, 3 }
- *   DECv17_ANGL4800    { 9870, 18062, 26254, 1678 }
- *                      vs V.32's DECv32_ANGL1200 { 9869, 18061, 26253, 1678 }
- *   DECv17_MAP_BRIDGE  { 1, 0, 2, 3 }  -- V.32bis has no such table
- *
- * `DECv17_ANGL4800`'s first three entries are each exactly ONE more than
- * V.32's and the fourth is equal.  That is recorded as an observation, not
- * explained: nothing in the object says why, and a rounding story that fits
- * three of four values is not evidence.  The values are copied from the
- * object's bytes, which is what a byte-exact reconstruction requires whatever
- * the reason.
- *
- * NAMING.  V.17 names these tables by its own BIT RATES where V.32bis names
- * them by its: V.17's 7200 bit/s uses the sixteen-point constellation
- * V.32bis calls 9600, and V.17's 4800 bit/s handshake constellation is
- * V.32's 1200.  The 9600T, 12000 and 14400 names coincide between the two.
- * This is the object's own spelling in both cases, not a convention chosen
+ * V.17 names these tables by its own bit rates where V.32bis names them by
+ * its -- V.17's 7200 bit/s uses the sixteen-point constellation V.32bis
+ * calls 9600, and V.17's 4800 bit/s handshake constellation is V.32's 1200 --
+ * which is the object's own spelling in both cases, not a convention chosen
  * here.
  */
 
@@ -78,7 +48,7 @@ extern "C" {
 #endif
 
 /*
- * THE TABLES.  Element counts are `st_size / 2` and every one of them is
+ * The tables.  Element counts are `st_size / 2` and every one of them is
  * corroborated by the consumer, either by a loop bound the slicer compares
  * against or by the constellation size the rate implies.  See
  * `src/fax/v17dec_tables.c` for the per-table derivation.
@@ -121,41 +91,36 @@ extern const short DECv17_ANGL14400[128];
 extern const short DECv17_MAG14400[128];
 
 /* ------------------------------------------------------------------------ */
-/* THE PART OF THE V.17 RECEIVER THE SLICERS SEE                            */
+/* The part of the V.17 receiver the slicers see                            */
 /* ------------------------------------------------------------------------ */
 
 /*
- * This is `fpm_fse_cfg::owner`, and WHERE it is comes out of `V17RX_create`
- * rather than out of a guess.  `V17RX_create` at 0x974c7 computes
- * `rx_state + 0x170` for `FPM_FSE_init`'s first argument -- which is
- * `V17RXS_FSE`, `v17fax.h`'s own offset for the equaliser -- and at 0x974a1
- * and 0x974ff it computes `rx_state + 0x2c` and stores it as `cfg.owner` and
- * then writes +0x5a, +0x60, +0x64, +0x66 and +0x68 through it.  So `owner` is
- * the receiver state's own bytes 0x2c..0x98, and the region ENDS exactly where
- * `V17RXS_MRF` (0x98) begins.
+ * This is `fpm_fse_cfg::owner`: the receiver state's own bytes 0x2c..0x98
+ * (ending exactly where `V17RXS_MRF`, 0x98, begins), established from
+ * `V17RX_create`'s own computation of `cfg.owner` at `rx_state + 0x2c` and
+ * its writes through it at +0x5a, +0x60, +0x64, +0x66 and +0x68.
  *
- * `V17RX_create` IS NOT RECONSTRUCTED, so this is not that object's type and
+ * `V17RX_create` is not reconstructed, so this is not that object's type and
  * must become it when it is -- the same ruling `v32dec.h` makes about
- * `struct v32_dec`, for the same reason.  Only the fields the seven functions
- * in `src/fax/v17dec.c` touch are named; the rest is padding sized so the
- * named ones land where the disassembly puts them.
+ * `struct v32_dec`, for the same reason.  Only the fields the seven
+ * functions in `src/fax/v17dec.c` touch are named; the rest is padding sized
+ * so the named ones land where the disassembly puts them.
  *
- * THE TWO OFFSETS `v17fax.h` ALREADY NAMES LINE UP AND DO NOT CONTRADICT
- * THIS.  `V17RXS_SGD` is 0x2c, which is `ptr_0000` here; `V17RXS_PTR_0030` is
- * 0x30, which is `struct vtb`'s first member `paths` -- a pointer the state
- * owns and which `V17RX_delete` hands to `sysdep_free`, exactly as that header
- * says.  A `struct vtb` is 0x38 bytes (finding F3210), so it runs 0x30..0x67
- * and `ang_prev` at 0x68 is the next thing the object writes.  The fit is
- * exact at both ends and that is the corroboration for the whole layout.
+ * The two offsets `v17fax.h` already names line up and do not contradict
+ * this: `V17RXS_SGD` is 0x2c, which is `ptr_0000` here, and
+ * `V17RXS_PTR_0030` is 0x30, `struct vtb`'s first member `paths`.  A
+ * `struct vtb` is 0x38 bytes (finding F3210), so it runs 0x30..0x67 and
+ * `ang_prev` at 0x68 is the next thing the object writes -- an exact fit at
+ * both ends, which corroborates the whole layout.
  *
  * `vtb` is a byte array and the four rate slicers cast it, for the reason
  * `v32dec.h` gives: `struct vtb` holds four pointers, so naming it as the
- * struct would make this type a different size in the 64-bit build and every
- * offset after +0x04 in this comment false.
+ * struct would make this type a different size in the 64-bit build and
+ * every offset after +0x04 in this comment false.
  */
 struct v17_dec {
 	unsigned char ptr_0000[4];	/* +0x00 rx state + 0x2c; V17RXS_SGD */
-	unsigned char vtb[0x38];	/* +0x04 VTB_decoder's state         */
+	unsigned char vtb[0x38];	/* +0x04 VTB_decoder's state, F3210  */
 	short ang_prev;			/* +0x3c previous angle (AB only)    */
 	short sym_i;			/* +0x3e the symbol just decided     */
 	short sym_q;			/* +0x40                             */
@@ -172,20 +137,20 @@ struct v17_dec {
 	short eqm_b;			/* +0x4c                             */
 	unsigned char pad4e[2];		/* +0x4e                             */
 	/*
-	 * MODELLED, UNNAMED.  `FAX_FSE_decision_AB` sets it to 1 as it hands
+	 * Modelled, unnamed.  `FAX_FSE_decision_AB` sets it to 1 as it hands
 	 * over to `FSE_decision_eqtrn` and `FSE_decision_eqtrn` clears it when
 	 * the training segment ends, so it is set for exactly the span of the
-	 * equaliser-training phase -- but nothing reconstructed READS it, so
+	 * equaliser-training phase -- but nothing reconstructed reads it, so
 	 * what it tells the reader of it is not established.
 	 */
 	int int_0050;			/* +0x50                             */
 	unsigned char pad54[6];		/* +0x54                             */
 	/*
-	 * Symbols in the CURRENT handshake segment.  All three handshake
+	 * Symbols in the current handshake segment.  All three handshake
 	 * functions increment it, compare it against that segment's length,
 	 * and zero it at the handover -- 0xc8 in `FAX_FSE_decision_AB`, the
 	 * training limit in `FSE_decision_eqtrn`, 0x3e in `FSE_Bridge_det`.
-	 * Signed: every compare against it is `cmpw`/`jle` or `movswl`/`jl`.
+	 * Signed: every compare against it is a signed word compare.
 	 */
 	short count;			/* +0x5a                             */
 	/*
@@ -194,19 +159,19 @@ struct v17_dec {
 	 * tap fixed at 16 rather than carried in a field.  `FAX_FSE_decision_AB`
 	 * seeds it with 0xbb3754 at the handover.
 	 *
-	 * SIGNED, and that is forced: the object reads it `sar $0x10` at
-	 * 0x98902 for the tap and `shr $0x15` at 0x98908 for the fixed one, and
-	 * only a signed operand makes the first of those an arithmetic shift.
+	 * Signed, and that is forced: the object reads it with one arithmetic
+	 * and one logical shift, and only a signed operand makes the first of
+	 * those an arithmetic shift.
 	 */
 	int scram;			/* +0x5c                             */
 	/*
-	 * Non-zero selects the SHORT training path, and that is read off the
-	 * two branches it gates rather than inferred from a name:
-	 * `FSE_decision_eqtrn` trains for 0x25 symbols when it is set and
-	 * 0xb9f when it is clear, and on the short path it hands straight to
-	 * the rate slicer where on the long one it hands to `FSE_Bridge_det`
-	 * first.  It also gates `FAX_FSE_decision_AB`'s early `pll_on`.
-	 * `V17RX_create` copies it in from the control block at +0x10.
+	 * Non-zero selects the short-training path, read off the two branches
+	 * it gates rather than inferred from a name: `FSE_decision_eqtrn`
+	 * trains for 0x25 symbols when it is set and 0xb9f when it is clear,
+	 * and on the short path it hands straight to the rate slicer where on
+	 * the long one it hands to `FSE_Bridge_det` first.  It also gates
+	 * `FAX_FSE_decision_AB`'s early `pll_on`.  `V17RX_create` copies it in
+	 * from the control block at +0x10.
 	 */
 	int short_train;		/* +0x60                             */
 	/*
@@ -218,10 +183,10 @@ struct v17_dec {
 	short rate;			/* +0x64                             */
 	short short_0066;		/* +0x66 set to 3 by V17RX_create    */
 	/*
-	 * Symbols since the receiver started, and NOT per segment: every one
+	 * Symbols since the receiver started, and not per segment: every one
 	 * of the six slicers increments it and none of them ever zeroes it.
 	 *
-	 * IT DOES NOT WRAP TO ZERO.  Five of the six replace 0x8000 with
+	 * It does not wrap to zero.  Five of the six replace 0x8000 with
 	 * 0x4000 on the way past, so after the first 32768 symbols it cycles
 	 * through the top half of the range only.  `FAX_FSE_decision_AB` is
 	 * the exception and increments without the test -- which cannot matter,
@@ -233,22 +198,77 @@ struct v17_dec {
 };
 
 /* ------------------------------------------------------------------------ */
-/* THE SLICERS                                                              */
+/* The slicers                                                              */
 /* ------------------------------------------------------------------------ */
 
-/*
- * The four rate slicers.  Each decides a constellation point, writes that
- * point's ideal angle and magnitude back over the equaliser's measured ones,
- * and hands the UNROTATED received symbol to `VTB_decoder`, whose output
- * through a stack local is the return value.  None of them installs a
- * successor.
+/**
+ * @brief 7200 bit/s slicer: sixteen-point trellis constellation, searched
+ *        exhaustively (no region tree).
+ *
+ * The only one of the four rate slicers with no region tree; it is in fact
+ * V.32bis' `_16Tpt`, not its `_16pt` (which this function's own name would
+ * suggest) -- V.32's `_16pt` has deviation D302's out-of-bounds table read,
+ * and this one shifts by 13 rather than 1 and does not.
+ *
+ * @param state  The equaliser state; `state->cfg.owner` is a `struct
+ *               v17_dec`.
+ * @param angle  Output: the decided point's ideal angle, replacing the
+ *               equaliser's measured one (the carrier PLL's error term).
+ * @param mag    Output: the decided point's ideal magnitude.
+ * @return The decoded symbol, from `VTB_decoder` on the unrotated point.
  */
 unsigned short FAX_FSE_decision_16pt(struct fpm_fse *state, short *angle,
 				     short *mag);
+/**
+ * @brief 9600 bit/s trellis slicer: thirty-two points, folded by a
+ *        45-degree rotation into a one-dimensional search over three
+ *        candidates (two at the ends of the fold, resolved by a real
+ *        squared distance).
+ *
+ * V.32bis' `_32pt` unchanged, thresholds included.
+ *
+ * @param state  The equaliser state; `state->cfg.owner` is a `struct
+ *               v17_dec`.
+ * @param angle  Output: the decided point's ideal angle.
+ * @param mag    Output: the decided point's ideal magnitude.
+ * @return The decoded symbol, from `VTB_decoder` on the unrotated point.
+ */
 unsigned short FAX_FSE_decision_32pt(struct fpm_fse *state, short *angle,
 				     short *mag);
+/**
+ * @brief 12000 bit/s trellis slicer: sixty-four points on a plain
+ *        four-by-four grid, no rotation.
+ *
+ * V.32bis' region tree unchanged; the two axes deliberately split at
+ * different points on their outer bands (asymmetric by one count, not a
+ * misreading -- see `src/fax/v17dec.c`).
+ *
+ * @param state  The equaliser state; `state->cfg.owner` is a `struct
+ *               v17_dec`.
+ * @param angle  Output: the decided point's ideal angle.
+ * @param mag    Output: the decided point's ideal magnitude.
+ * @return The decoded symbol, from `VTB_decoder` on the unrotated point.
+ */
 unsigned short FAX_FSE_decision_64pt(struct fpm_fse *state, short *angle,
 				     short *mag);
+/**
+ * @brief 14400 bit/s trellis slicer: one hundred and twenty-eight points,
+ *        folded by the 45-degree rotation and cut by a ten-leaf region
+ *        tree, with two leaves resolved by a squared distance between one
+ *        specific pair of points rather than by searching.
+ *
+ * Four of the region tree's cuts are one value wider than V.32bis' own
+ * (measured, not carried across); reproduces deviations D1200 (one literal
+ * coordinate one off its table entry) and D370 (a tie-break favouring the
+ * farther point); initialises the index `best`, which the object leaves
+ * uninitialised on a path the region tree makes unreachable (D1201).
+ *
+ * @param state  The equaliser state; `state->cfg.owner` is a `struct
+ *               v17_dec`.
+ * @param angle  Output: the decided point's ideal angle.
+ * @param mag    Output: the decided point's ideal magnitude.
+ * @return The decoded symbol, from `VTB_decoder` on the unrotated point.
+ */
 unsigned short FAX_FSE_decision_128pt(struct fpm_fse *state, short *angle,
 				      short *mag);
 
@@ -264,19 +284,73 @@ unsigned short FAX_FSE_decision_128pt(struct fpm_fse *state, short *angle,
  * `FSE_Bridge_det` is the odd one: it is not installed by `V17RX_create` and
  * is reached only through `FSE_decision_eqtrn`'s long-training arm.
  */
+
+/**
+ * @brief The AB handshake segment, where the receiver starts.
+ *
+ * Two alternating phases 180 degrees apart; decides by the sign of the
+ * phase step rather than by distance, and each phase keeps its own leaky
+ * smoothed magnitude.  Exits on a signal-quality test (the last three
+ * symbols moved apart by more than 4/3 of the two magnitudes' mean square,
+ * after at least 0xc8 symbols), at which point it seeds the TRN generator
+ * and installs `FSE_decision_eqtrn` as the equaliser's next decision
+ * function.  Increments the symbol counter without the wrap test its five
+ * siblings apply (deviation D1202, harmless here since AB always exits
+ * well under 0x8000 symbols).
+ *
+ * @param state  The equaliser state; `state->cfg.owner` is a `struct
+ *               v17_dec`.
+ * @param angle  Output: one of two fixed handshake angles.
+ * @param mag    Output: the fixed handshake magnitude.
+ * @return 3 for an A symbol, 2 for a B symbol, 0 on the segment's last call
+ *         (the handover to `FSE_decision_eqtrn`).
+ */
 unsigned short FAX_FSE_decision_AB(struct fpm_fse *state, short *angle,
 				   short *mag);
+/**
+ * @brief The equaliser-training (TRN) handshake segment.
+ *
+ * Does not look at the received symbol at all: regenerates V.32bis' own TRN
+ * sequence from its own shift register (tap fixed at 16) and reports that
+ * as the decision, so the equaliser adapts against a known reference.
+ * Trains for 0x25 symbols on the short path or 0xb9f on the long one (see
+ * `short_train`), then hands over to `FSEv17_decision[rate]` directly on
+ * the short path or to `FSE_Bridge_det` on the long one.
+ *
+ * @param state  The equaliser state; `state->cfg.owner` is a `struct
+ *               v17_dec`.
+ * @param angle  Output: one of the four handshake angles, from the
+ *               regenerated sequence.
+ * @param mag    Output: the fixed handshake magnitude.
+ * @return The regenerated TRN symbol (0..3), not the received one.
+ */
 unsigned short FSE_decision_eqtrn(struct fpm_fse *state, short *angle,
 				  short *mag);
+/**
+ * @brief The long-training bridge segment.
+ *
+ * Decides the four-point handshake constellation with a deliberately
+ * lopsided metric (deviation D301's shape) for 0x3e symbols, then hands
+ * over to `FSEv17_decision[rate]` -- tested at the top of the call, so the
+ * handover fires one symbol late (the object's own ordering, not a slip).
+ * Reached only through `FSE_decision_eqtrn`'s long-training arm; not
+ * installed directly by `V17RX_create`.
+ *
+ * @param state  The equaliser state; `state->cfg.owner` is a `struct
+ *               v17_dec`.
+ * @param angle  Output: one of the four handshake angles.
+ * @param mag    Output: the fixed handshake magnitude.
+ * @return Always 0: the decided point reaches the caller only through
+ *         `*angle`, never as data.
+ */
 unsigned short FSE_Bridge_det(struct fpm_fse *state, short *angle,
 			      short *mag);
 
 /*
- * `.rodata` 0x9864, 16 bytes, and it is FOUR FUNCTION POINTERS rather than
- * the `short[8]` a value dump of those bytes would suggest.  The object
- * carries an `R_386_32` against `FAX_FSE_decision_16pt`, `_32pt`, `_64pt` and
- * `_128pt` at +0x0, +0x4, +0x8 and +0xc; read as data it would give eight
- * plausible small integers, which is the trap `tools/dis.py` exists for.
+ * `.rodata` 0x9864, 16 bytes, and it is four function pointers rather than
+ * the `short[8]` a value dump of those bytes would suggest -- the object
+ * carries a relocation against each of `FAX_FSE_decision_16pt`, `_32pt`,
+ * `_64pt` and `_128pt`, which is the trap `tools/dis.py` exists for.
  *
  * The order is the rate order: 7200, 9600, 12000, 14400 bit/s.
  */

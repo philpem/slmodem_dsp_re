@@ -1,33 +1,32 @@
-/*
- * V92Parameters.h -- the V.92 half of the parameter block.
+/**
+ * @file V92Parameters.h
+ * @brief The V.92 half of the parameter block.
  *
- * Reconstructed from dsplibs.o, by exactly the method described at the top of
- * V90Parameters.h and with the same standing: SHARED TYPE, FROZEN LAYOUT.
- * `V92Modulator`, `V92EchoCanceller`, `V92Phase4Modulator`, `V92Phase3
- * Modulator`, `V92BitsToSymbol`, `V92Jd` and `V92Phase2Info` all take a
- * `V92Parameters *`.
+ * Reconstructed by the same method as `V90Parameters.h`'s top comment
+ * describes, and with the same standing: a shared type with a frozen
+ * layout. `V92Modulator`, `V92EchoCanceller`, `V92Phase4Modulator`,
+ * `V92Phase3Modulator`, `V92BitsToSymbol`, `V92Jd` and `V92Phase2Info` all
+ * take a `V92Parameters *`.
  *
- * IT IS A SEPARATE CLASS AND NOT A BASE OR A MEMBER OF `V90Parameters`.  Both
- * are constructed independently -- `V90Modem`'s constructor allocates 0x558
- * and calls `V90Parameters::V90Parameters`, `V92Modem`'s allocates 0xdc and
- * calls `V92Parameters::V92Parameters` -- and neither destructor calls the
- * other's.
+ * It is a separate class, not a base or a member of `V90Parameters`: the
+ * two are constructed independently (`V90Modem`'s constructor allocates
+ * 0x558 and calls `V90Parameters::V90Parameters`; `V92Modem`'s allocates
+ * 0xdc and calls `V92Parameters::V92Parameters`), and neither destructor
+ * calls the other's.
  *
- * The evidence is tighter here than for the V.90 block, because the two
- * readings cover the SAME set of offsets rather than one containing the other:
+ * The evidence here is tighter than for the V.90 block, because the two
+ * readings cover the same set of offsets rather than one containing the
+ * other: `loadParams` makes 54 calls at 54 distinct offsets, +0x004..+0x0d8,
+ * and `setToDefault` makes 54 stores at the identical 54 offsets -- no
+ * aliases, no hole, every slot four bytes, and no offset whose declared
+ * reader disagrees with the shape of its default. `V92Modem` then allocates
+ * exactly `sysdep_malloc(0xdc)`, and 0xd8 + 4 == 0xdc.
  *
- *   - `loadParams`   54 calls, 54 distinct offsets, +0x004..+0x0d8.
- *   - `setToDefault` 54 stores, 54 distinct offsets, +0x004..+0x0d8.
- *
- * Identical sets, no aliases, no hole, every slot four bytes, and no offset
- * whose declared reader disagrees with the shape of its default.  `V92Modem`
- * then does `sysdep_malloc(0xdc)` at .text+0x13d90 and +0x13f20, and
- * 0xd8 + 4 == 0xdc.
- *
- * `this` arrives at `0x20(%esp)` in `loadParams` and `0x4(%esp)` in
- * `setToDefault`, which is worth writing down only because reading the second
- * as the first shifts every offset by four and produces a map that looks
- * entirely reasonable -- +0x000..+0x0d4 -- and is wrong in every line.
+ * One easy mistake to repeat: `this` arrives at `0x20(%esp)` in
+ * `loadParams` but at `0x4(%esp)` in `setToDefault`. Reading the second
+ * function's offsets as if `this` were at the first's stack slot shifts
+ * every field by four bytes and produces a map (+0x000..+0x0d4) that looks
+ * entirely reasonable and is wrong in every line.
  */
 
 #ifndef DSPLIB_V92PARAMETERS_H
@@ -37,24 +36,30 @@ struct _tagModemParameters;
 
 class V92Parameters {
 public:
-	/*
-	 * All five members, defined in src/pump/v90/V92Parameters.cpp:
-	 *
-	 *     loadParams(char *)          1384 B, 54 calls
-	 *     setToDefault()               477 B
-	 *     V92Parameters(_tagModemParameters *)   53 B
-	 *     init()                        49 B
-	 *     ~V92Parameters()               1 B   (a bare `ret`)
-	 *
-	 * `loadParams` used to be left out for the reason given at the same
-	 * place in V90Parameters.h and in finding F879; finding F6400 supersedes
-	 * it and records the oracle.
+	/**
+	 * @brief Construct, storing the owning modem parameters pointer.
+	 *        Does not itself populate the V.92 fields below -- see
+	 *        setToDefault()/loadParams()/init().
+	 * @param mp  The owning `_tagModemParameters` block.
 	 */
 	V92Parameters(_tagModemParameters *mp);
+	/** @brief Destroy. Bare `ret` in the object -- nothing to release. */
 	~V92Parameters();
 
+	/** @brief Fill every V.92 field with its compiled-in default. 54
+	 *  stores at 54 distinct offsets, +0x004..+0x0d8 -- see the file
+	 *  comment. */
 	void	setToDefault();
+	/**
+	 * @brief Load V.92 parameter overrides from a text config file, one
+	 *        `NAME = value` line per field. 54 calls at the same 54
+	 *        offsets `setToDefault` fills (finding F6400, which
+	 *        supersedes the earlier decision in finding F879 to leave
+	 *        this member out).
+	 * @param paramFile  Path to the parameter file.
+	 */
 	void	loadParams(char *paramFile);
+	/** @brief Post-load fixup; 49 bytes in the object. */
 	void	init();
 	_tagModemParameters *modemParams;	/* +0x000 */
 	int  	VPCM_SESSION_TYPE;	/* +0x004 */

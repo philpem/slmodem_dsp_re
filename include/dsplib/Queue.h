@@ -61,46 +61,92 @@
 template <class T>
 class Queue {
 public:
+	/**
+	 * @brief Construct a ring buffer that holds @p n items.
+	 *
+	 * Allocates `n + 1` slots (one is always kept empty, so a full ring
+	 * can be told from an empty one without a separate count) and resets
+	 * the read/write cursors. The allocation is not checked: a NULL
+	 * return makes `last` the address -4 and the first write stores
+	 * through it -- the object's own behaviour.
+	 *
+	 * @param n  Capacity in items. Zero is legal: it allocates one slot,
+	 *           holds nothing, and every write() then returns -1.
+	 */
 	Queue(unsigned n);
+
+	/** @brief Free the backing store. `buf` is not nulled afterwards. */
 	~Queue();
 
+	/** @brief Empty the queue: move both cursors to the start of the buffer. */
 	void reset();
 
-	/*
-	 * 0 on success, -1 if there is not room for the whole request.  A
-	 * partial write never happens and `num == 0` succeeds trivially.
-	 *
-	 * BOTH CALL SITES DISCARD THE RETURN, at 0x14d44 and 0x14d5f, as does
-	 * the single-value form's at 0x153c0.  The type is `int` here because
-	 * the object returns 0 and -1; nothing in the blob distinguishes that
-	 * from `unsigned`, and no caller looks.
+	/**
+	 * @brief Write one item.
+	 * @param v  Value to write.
+	 * @return 0 on success, -1 if the queue is full.
 	 */
 	int write(T v);
+
+	/**
+	 * @brief Write @p num items.
+	 *
+	 * A partial write never happens: either all @p num items are written
+	 * or none are. `num == 0` succeeds trivially.
+	 *
+	 * @param p    Items to write, @p num of them.
+	 * @param num  Number of items to write.
+	 * @return 0 on success, -1 if there is not room for the whole request.
+	 */
 	int write(T *p, unsigned num);
+
+	/**
+	 * @brief Read @p num items.
+	 *
+	 * A partial read never happens: either all @p num items are read or
+	 * none are.
+	 *
+	 * @param p    Destination for the read items, @p num of them.
+	 * @param num  Number of items to read.
+	 * @return 0 on success, -1 if fewer than @p num items are available.
+	 */
 	int read(T *p, unsigned num);
 
-	/*
+	/**
+	 * @brief Number of items currently queued.
+	 *
 	 * `always_inline` because the object has NO `count` symbol: both call
 	 * sites open-code it, and an out-of-line weak copy here would be a
-	 * symbol we define and the object does not.  GCC emits one for an
+	 * symbol we define and the object does not. GCC emits one for an
 	 * ordinary in-class definition even when every call is inlined.
+	 *
+	 * @return Number of items currently in the queue.
 	 */
 	__attribute__((always_inline)) unsigned count() const
 	{
 		return (unsigned)((wr + size) - rd) % size;
 	}
 
-	/*
-	 * `always_inline` for `count()`'s reason, and the only call site of
-	 * either is `V92Modulator::progress`'s closing test.  See the file
-	 * comment for why each is spelled the way it is; both spellings are
-	 * the object's and neither is a tidier equivalent.
+	/**
+	 * @brief Whether the queue holds nothing.
+	 *
+	 * `always_inline` for count()'s reason. The only call site of either
+	 * this or isFull() is `V92Modulator::progress`'s closing test; both
+	 * spellings here are the object's own forced codegen, not a tidier
+	 * equivalent (`rd == wr` rather than `count() == 0`, which would
+	 * emit a division).
+	 *
+	 * @return Non-zero if the queue is empty.
 	 */
 	__attribute__((always_inline)) int isEmpty() const
 	{
 		return rd == wr;
 	}
 
+	/**
+	 * @brief Whether the queue is at capacity.
+	 * @return Non-zero if the queue is full.
+	 */
 	__attribute__((always_inline)) int isFull() const
 	{
 		return size - count() - 1 == 0;

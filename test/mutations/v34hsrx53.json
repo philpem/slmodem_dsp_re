@@ -105,7 +105,7 @@
  },
  {
   "label": "the retrain says nothing",
-  "find": "\t\t\tdsplibs_debug_printf(\"V34RETRAIN, retrain is \"\n\t\t\t\t\t     \"initiated in DET_AB\\n\");",
+  "find": "\n\t\t\tdsplibs_debug_printf(\"V34RETRAIN, retrain is \" \"initiated in DET_AB\\n\");",
   "replace": "\t\t\t(void)obj;",
   "fn": "t53_rx_det_ab"
  },

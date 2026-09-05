@@ -46,14 +46,15 @@
 
 #include "harness.h"
 #include "dsplib/FloatIIR.h"
+#include "dsplib/sysdep.h"
 
 /*
- * Placement new, declared here because CXXFLAGS carries -nostdinc++ and <new>
- * is not reachable (nor is the 32-bit libstdc++ that would define it).
- * Inline, so it emits no symbol: the test binaries link with $(CC) and the
- * link line has no C++ runtime on it.
+ * Placement new/delete are declared in sysdep.h (finding F10155), not here
+ * -- both files used to carry their own identical inline declaration
+ * (CXXFLAGS has -nostdinc++, no <new>), which collides once anything else
+ * in the same translation unit pulls sysdep.h in too. sysdep.h's version
+ * is inline the same way this one was, so linkage is unaffected.
  */
-inline void *operator new(size_t, void *p) { return p; }
 
 extern "C" {
 /*

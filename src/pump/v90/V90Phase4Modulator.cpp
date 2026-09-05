@@ -586,8 +586,7 @@ V90Phase4Modulator::recivedSUVtag()
 			if (symbolCount % cpSequenceSymbols != 0) {
 				state = P4M_STATE_UNNAMED_0A;
 			} else {
-				edprintf("V90Phase4Modulator: enter Ed @ "
-					 "%d\r\n", symbolCount);
+				edprintf("V90Phase4Modulator: enter Ed @ " "%d\r\n", symbolCount);
 				state = P4M_STATE_ED;
 				word_2f64 = bitsToSymbol->extraSymbols + 12;
 				symbolCount = 0;
@@ -599,8 +598,7 @@ V90Phase4Modulator::recivedSUVtag()
 			if (symbolCount % cpSequenceSymbols != 0) {
 				state = P4M_STATE_UNNAMED_09;
 			} else {
-				edprintf("V90Phase4Modulator: enter Ed @ "
-					 "%d\r\n", symbolCount);
+				edprintf("V90Phase4Modulator: enter Ed @ " "%d\r\n", symbolCount);
 				state = P4M_STATE_ED;
 				word_2f64 = bitsToSymbol->extraSymbols + 12;
 				symbolCount = 0;
@@ -662,8 +660,7 @@ V90Phase4Modulator::recivedCPtag()
 	if (word_0020 != 0) {
 		if (word_2f9c != 0) {
 			if (symbolCount % cpSequenceSymbols == 0) {
-				edprintf("V90Phase4Modulator: enter Ed @ "
-					 "%d\r\n", symbolCount);
+				edprintf("V90Phase4Modulator: enter Ed @ " "%d\r\n", symbolCount);
 				state = P4M_STATE_ED;
 				word_2f64 = bitsToSymbol->extraSymbols + 12;
 				symbolCount = 0;
@@ -782,8 +779,7 @@ V90Phase4Modulator::recivedFirstSUVuPartTwoRrn()
 			if (symbolCount % V90P4M_RI_PERIOD != 0) {
 				state = P4M_STATE_UNNAMED_19;
 			} else {
-				edprintf("V90Phase4Modulator: enter Rt @ "
-					 "%d\r\n", symbolCount);
+				edprintf("V90Phase4Modulator: enter Rt @ " "%d\r\n", symbolCount);
 				state = P4M_STATE_RT;
 				symbolCount = 0;
 			}
@@ -929,8 +925,7 @@ V90Phase4Modulator::setMappingParams(V90MappingParams *mp)
 	if (mp == 0) {
 		if (dsplibs_debug_level > 1)
 			dsplibs_debug_printf("V90Phase4Modulator: ERROR: Null "
-					     "mappingParams @ setMappingParams"
-					     "\r\n");
+					     "mappingParams @ setMappingParams" "\r\n");
 		return;
 	}
 
@@ -1370,8 +1365,7 @@ V90Phase4Modulator::generateV90Symbol()
 				symbolCount = 0;
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
-					    "V90Phase4Modulator: ERROR: Null "
-					    "MP @ end of TRN2d\r\n");
+					    "V90Phase4Modulator: ERROR: Null " "MP @ end of TRN2d\r\n");
 				break;
 			}
 			state = nextStateAfterTRN2d;
@@ -1482,8 +1476,7 @@ V90Phase4Modulator::generateV90Symbol()
 				symbolCount = 0;
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
-					    "V90Phase4Modulator: ERROR: Null "
-					    "dataPhaseMappingParams @ end of "
+					    "V90Phase4Modulator: ERROR: Null " "dataPhaseMappingParams @ end of "
 					    "Ed\r\n");
 				break;
 			}
@@ -1510,8 +1503,7 @@ V90Phase4Modulator::generateV90Symbol()
 		symbol = sym;
 
 		if (symbolCount == 0x120) {
-			edprintf("V90Phase4Modulator: Phase4 Terminated @ "
-				 "%d\r\n", symbolCount);
+			edprintf("V90Phase4Modulator: Phase4 Terminated @ " "%d\r\n", symbolCount);
 			state = P4M_STATE_TERMINATED;
 			symbolCount = 0;
 			eventCode = 7;
@@ -1561,8 +1553,7 @@ V90Phase4Modulator::generateV90Symbol()
 			state = P4M_STATE_TRN2D;
 			symbolCount = 0;
 			bitsToSymbol->resetNoSpectral(mappingParams2, pcmType);
-			edprintf("V90Phase4Modulator: TRN2d spectral "
-				 "parameters:\r\n");
+			edprintf("V90Phase4Modulator: TRN2d spectral " "parameters:\r\n");
 			displaySpectralParams(mappingParams2);
 			edprintf("V90Phase4Modulator: TRN2d D = %d\r\n",
 				 mappingParams2->word_0);
@@ -1572,8 +1563,7 @@ V90Phase4Modulator::generateV90Symbol()
 	default:
 		symbol = 0;
 		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("V90Phase4Modulator: Illegal "
-					     "state\r\n");
+			dsplibs_debug_printf("V90Phase4Modulator: Illegal " "state\r\n");
 		break;
 	}
 
@@ -1722,12 +1712,10 @@ V90Phase4Modulator::generateV92Symbol()
 				symbolCount = 0;
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
-					    "V90Phase4Modulator: ERROR: Null "
-					    "CP @ end of TRN2d\r\n");
+					    "V90Phase4Modulator: ERROR: Null " "CP @ end of TRN2d\r\n");
 			} else {
 				state = P4M_STATE_SUVD;
-				edprintf("V90Phase4Modulator: enter SUVd @ "
-					 "%d\r\n", symbolCount);
+				edprintf("V90Phase4Modulator: enter SUVd @ " "%d\r\n", symbolCount);
 				symbolCount = 0;
 				cp->word_00 = 1;
 				cp->word_ca0 = word_0028;
@@ -1804,8 +1792,7 @@ V90Phase4Modulator::generateV92Symbol()
 		symbol = sym;
 
 		if (symbolCount == cpSequenceSymbols) {
-			edprintf("V90Phase4Modulator: CPd Terminated @ "
-				 "%d\r\n", symbolCount);
+			edprintf("V90Phase4Modulator: CPd Terminated @ " "%d\r\n", symbolCount);
 			word_0018 = 0;
 			byte_001c = 1;
 			state = P4M_STATE_SUVD;
@@ -1917,8 +1904,7 @@ V90Phase4Modulator::generateV92Symbol()
 		symbol = sym;
 
 		if (symbolCount % cpSequenceSymbols == 0) {
-			edprintf("V90Phase4Modulator: enter FinalSUVd @ "
-				 "%d\r\n", symbolCount);
+			edprintf("V90Phase4Modulator: enter FinalSUVd @ " "%d\r\n", symbolCount);
 			state = P4M_STATE_FINAL_SUVD;
 			symbolCount = 0;
 			cp->word_00 = 1;
@@ -1944,8 +1930,7 @@ V90Phase4Modulator::generateV92Symbol()
 		if (symbolCount == word_2f64) {
 			if (word_0024 != 0 && word_002c != 0 &&
 			    word_0030 == 0) {
-				edprintf("V90Phase4Modulator: enter Silence @ "
-					 "%d\r\n", symbolCount);
+				edprintf("V90Phase4Modulator: enter Silence @ " "%d\r\n", symbolCount);
 				symbolCount = 0;
 				state = word_0034 != 0
 				    ? P4M_STATE_UNNAMED_17
@@ -1957,8 +1942,7 @@ V90Phase4Modulator::generateV92Symbol()
 				symbolCount = 0;
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
-					    "V90Phase4Modulator: ERROR: Null "
-					    "dataPhaseMappingParams @ end of "
+					    "V90Phase4Modulator: ERROR: Null " "dataPhaseMappingParams @ end of "
 					    "Ed\r\n");
 				break;
 			}
@@ -1985,8 +1969,7 @@ V90Phase4Modulator::generateV92Symbol()
 		symbol = sym;
 
 		if (symbolCount == 0x120) {
-			edprintf("V90Phase4Modulator: Phase4 Terminated @ "
-				 "%d\r\n", symbolCount);
+			edprintf("V90Phase4Modulator: Phase4 Terminated @ " "%d\r\n", symbolCount);
 			state = P4M_STATE_TERMINATED;
 			symbolCount = 0;
 			eventCode = 7;
@@ -2036,8 +2019,7 @@ V90Phase4Modulator::generateV92Symbol()
 			state = P4M_STATE_TRN2D;
 			cp->word_3ba8 = mappingParams2->word_0;
 			bitsToSymbol->resetNoSpectral(mappingParams2, pcmType);
-			edprintf("V90Phase4Modulator: TRN2d spectral "
-				 "parameters:\r\n");
+			edprintf("V90Phase4Modulator: TRN2d spectral " "parameters:\r\n");
 			displaySpectralParams(mappingParams2);
 			edprintf("V90Phase4Modulator: TRN2d D = %d\r\n",
 				 mappingParams2->word_0);
@@ -2078,8 +2060,7 @@ V90Phase4Modulator::generateV92Symbol()
 	case P4M_STATE_RT_NOT:
 		symbol = generateRdRtNot();
 		if (symbolCount == 0x18) {
-			edprintf("V90Phase4Modulator: enter SUVd at RRN @ "
-				 "%d\r\n", symbolCount);
+			edprintf("V90Phase4Modulator: enter SUVd at RRN @ " "%d\r\n", symbolCount);
 			state = P4M_STATE_SUVD;
 			symbolCount = 0;
 			resetRRNSecondSection();
@@ -2123,8 +2104,7 @@ V90Phase4Modulator::generateV92Symbol()
 	default:
 		symbol = 0;
 		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("V90Phase4Modulator: Illegal "
-					     "state\r\n");
+			dsplibs_debug_printf("V90Phase4Modulator: Illegal " "state\r\n");
 		break;
 	}
 

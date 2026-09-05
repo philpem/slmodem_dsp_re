@@ -367,8 +367,7 @@ v32_process(void *dp_arg, void *in, void *out, int count)
 		self->symbols_per_block = 12;
 		self->bits_per_symbol = (int)(self->line_rate / V32_BAUD);
 		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("v32: v32_update connect: "
-					     "tx_rate %d, rx_rate %d\n",
+			dsplibs_debug_printf("v32: v32_update connect: " "tx_rate %d, rx_rate %d\n",
 					     st.tx_rate, st.rx_rate);
 		/*
 		 * `self->dp.modem` here rather than `dp->modem`, which is the

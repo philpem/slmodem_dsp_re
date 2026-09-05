@@ -1,92 +1,97 @@
-/*
- * V90Parameters.h -- the parameter block every V.90/V.92/K56Flex object holds
- * a pointer to.
+/**
+ * @file V90Parameters.h
+ * @brief `V90Parameters`, the parameter block every V.90/V.92/K56Flex object
+ *        holds a pointer to: 342 named tuning/behavior knobs loaded from a
+ *        text file or set to their compiled-in defaults.
  *
- * Reconstructed from dsplibs.o.  THIS FILE IS A SHARED TYPE AND ITS LAYOUT IS
- * FROZEN: half the constructors in `VPcmV34Main.cpp`'s span take a
- * `V90Parameters *`, so a later batch that changes a field's offset here
- * changes it for every one of them.  Add methods freely; move nothing.
+ * This file is a shared type and its layout is frozen: half the constructors
+ * in `VPcmV34Main.cpp`'s span take a `V90Parameters *`, so a later batch that
+ * changes a field's offset here changes it for every one of them. Add
+ * methods freely; move nothing. See CLAUDE.md's "One type, one home" section
+ * for this class's own history as the tree's worked example of that rule
+ * (finding F6402) -- the duplication it describes is fixed, not live.
  *
- * THE FIELD NAMES ARE THE ORIGINAL AUTHOR'S, NOT INVENTED.  Finding F226 says
- * the mangling preserves method and type names but never a data member's, and
- * that is still true -- these come from somewhere else.  `loadParams(char *)`
- * is 7,894 bytes of nothing but
+ * The field names are the original author's, not invented. Finding F226
+ * says the mangling preserves method and type names but never a data
+ * member's, and that is still true here -- these come from somewhere else:
+ * `loadParams(char *)` is 7,894 bytes of nothing but
  *
  *     Vparser_read_int  (file, "NAME", &this->field)
  *     Vparser_read_float(file, "NAME", &this->field)
  *
  * 295 calls in a straight line, each carrying the parameter's name as an
  * `R_386_32` against `.rodata.str1.1` or `.rodata.str1.4` and its offset as
- * the displacement of a `lea` off `this`.  `tools/vparse.py` reads all 295 --
+ * the displacement of a `lea` off `this`. `tools/vparse.py` reads all 295 --
  * see finding F860 for why that tool needed a clobber rule before its "0
  * unresolved" meant anything.
  *
- * TWO INDEPENDENT MEASUREMENTS AGREE ON THE LAYOUT, which is gates.md's rule
- * 4 and the reason this header is trusted rather than merely plausible:
+ * Two independent measurements agree on the layout, which is `gates.md`'s
+ * rule 4 and the reason this header is trusted rather than merely plausible:
  *
  *   - `loadParams`   gives 291 distinct (name, offset, int-or-float) triples.
- *   - `setToDefault` gives 339 distinct (offset, width, value) stores, read by
- *     a separate walk of a separate function.
+ *   - `setToDefault` gives 339 distinct (offset, width, value) stores, read
+ *     by a separate walk of a separate function.
  *
- * They overlap on 289 offsets and disagree on NONE: every offset `loadParams`
- * reads with `Vparser_read_float` gets a default whose bit pattern is a
- * plausible float, and every one it reads with `Vparser_read_int` gets a small
- * integer.  Their union is +0x004..+0x554 in steps of four with no hole, and
- * every store in both is four bytes wide.
+ * They overlap on 289 offsets and disagree on none: every offset
+ * `loadParams` reads with `Vparser_read_float` gets a default whose bit
+ * pattern is a plausible float, and every one it reads with
+ * `Vparser_read_int` gets a small integer. Their union is +0x004..+0x554 in
+ * steps of four with no hole, and every store in both is four bytes wide.
  *
- * AND THE SIZE IS MEASURED A THIRD WAY.  `V90Modem`'s constructor does
- * `sysdep_malloc(0x558)` immediately before calling `V90Parameters::
- * V90Parameters`, at .text+0x19551 and again at +0x197b1.  0x554 + 4 == 0x558,
- * so the field span and the allocation agree exactly and there is no trailing
- * padding to argue about.
+ * The size is measured a third way: `V90Modem`'s constructor does
+ * `sysdep_malloc(0x558)` immediately before calling
+ * `V90Parameters::V90Parameters`, at .text+0x19551 and again at +0x197b1.
+ * 0x554 + 4 == 0x558, so the field span and the allocation agree exactly and
+ * there is no trailing padding to argue about.
  *
- * THE FIFTY-ONE `unnamed_*` FIELDS ARE NOT GAPS IN THE MAP.  `setToDefault`
- * writes them and `loadParams` does not, which means exactly what it says:
- * they are parameters the file cannot override.  They are four bytes each and
- * in the right place; only their names are unknown, and inventing one would
- * put a guess where every other line here is a measurement.  Twenty-five of
- * them run consecutively from +0x300 to +0x360 and are very likely one array.
+ * The fifty-one `unnamed_*` fields are not gaps in the map: `setToDefault`
+ * writes them and `loadParams` does not, meaning exactly what it says --
+ * they are parameters the file cannot override. They are four bytes each
+ * and in the right place; only their names are unknown, and inventing one
+ * would put a guess where every other line here is a measurement.
+ * Twenty-five of them run consecutively from +0x300 to +0x360 and are very
+ * likely one array.
  *
- * NINE OF THE FIFTY-ONE ARE FLOATS AND ARE STILL DECLARED `int`.  Finding F878
- * measured them, and each is annotated below with the value the object stores.
- * Two are FORCED -- an `fsts` writes a `float` and there is no other reading
- * of that instruction -- and the other seven are settled by the bit pattern
- * being an exact round decimal as a float and an arbitrary eight-digit integer
- * as an int, three of them consecutive and in the same numeric band as the
- * named float betas on either side.
+ * Nine of the fifty-one are floats and are still declared `int`. Finding
+ * F878 measured them, and each is annotated below with the value the object
+ * stores. Two are forced -- an `fsts` writes a `float` and there is no
+ * other reading of that instruction -- and the other seven are settled by
+ * the bit pattern being an exact round decimal as a float and an arbitrary
+ * eight-digit integer as an int, three of them consecutive and in the same
+ * numeric band as the named float betas on either side.
  *
- * They are annotated rather than retyped, and that is a deferral with a reason
- * rather than an oversight.  `setToDefault` writes the same four bytes either
- * way, so nothing observable changes; what a retype does change is one
- * mutation in `test/mutations/v90params.json` anchored on the literal
- * `unnamed_1b8 = 0x2d83f0ff;`, and re-anchoring a mutation is how nine of them
- * in another suite came to be measuring a different arm from the one their
- * label named, all nine reported CAUGHT (finding F432).  **A LATER BATCH THAT
- * READS ANY OF THESE NINE MUST READ IT AS A FLOAT**, and the batch that does
- * is the one that should retype it, because it will have a reader to test the
- * change against.
+ * They are annotated rather than retyped, and that is a deferral with a
+ * reason rather than an oversight: `setToDefault` writes the same four
+ * bytes either way, so nothing observable changes, while what a retype
+ * does change is one mutation in `test/mutations/v90params.json` anchored
+ * on the literal `unnamed_1b8 = 0x2d83f0ff;` -- and re-anchoring a mutation
+ * is how nine of them in another suite came to measure a different arm from
+ * the one their label named, all nine reported CAUGHT (finding F432).
+ * **A later batch that reads any of these nine must read it as a float**,
+ * and the batch that does is the one that should retype it, because it
+ * will have a reader to test the change against.
  *
- * `make params` structurally cannot see any of this: `paramcheck.py` compares
- * the header with `loadParams`, and these are exactly the offsets `loadParams`
- * does not read.  The gate is not weaker than it looks -- it answers a
- * different question, over the 291 fields that have a name.
+ * `make params` structurally cannot see any of this: `paramcheck.py`
+ * compares the header with `loadParams`, and these are exactly the offsets
+ * `loadParams` does not read. The gate is not weaker than it looks -- it
+ * answers a different question, over the 291 fields that have a name.
  *
- * TWO FIELDS GO THE OTHER WAY -- +0x4f8 `SENSITIVE_ISP_DETECTED` and +0x4fc
+ * Two fields go the other way -- +0x4f8 `SENSITIVE_ISP_DETECTED` and +0x4fc
  * `MAX_TX_RATE_INDEX_FOR_SENSITIVE_ISP` are read by `loadParams` and never
  * written by `setToDefault`, so they start as whatever the allocation left.
  *
- * FOUR OFFSETS ARE READ TWICE UNDER TWO NAMES and are marked `alias` below.
- * The parser is called once per name against the same address, so the second
- * read wins if the file carries both; the field is named for the later call
- * and the earlier name is recorded beside it.  `GERMAN_PBX_*` is three of the
- * four, which is the shape you would expect of a per-market override.
+ * Four offsets are read twice under two names and are marked `alias`
+ * below. The parser is called once per name against the same address, so
+ * the second read wins if the file carries both; the field is named for
+ * the later call and the earlier name is recorded beside it. `GERMAN_PBX_*`
+ * is three of the four, the shape you would expect of a per-market override.
  *
- * `Vparser_read_int` and `Vparser_read_float` ARE THREE-BYTE STUBS in the
+ * `Vparser_read_int` and `Vparser_read_float` are three-byte stubs in the
  * shipped object -- `xor %eax,%eax; ret` -- so none of these reads has any
- * effect at run time and `loadParams` is, behaviourally, a no-op.  It is still
- * the field map, and it is the only thing in the object that knows these
- * names.  An `awk` over `objdump -dr` of the whole of `.text` shows the two
- * `loadParams` members are the ONLY callers of either stub anywhere.
+ * effect at run time and `loadParams` is, behaviourally, a no-op. It is
+ * still the field map, and it is the only thing in the object that knows
+ * these names. An `awk` over `objdump -dr` of the whole of `.text` shows
+ * the two `loadParams` members are the only callers of either stub anywhere.
  *
  * Data members are public because the original's access specifiers are not
  * recoverable (finding F226) and because one access section is what keeps
@@ -100,46 +105,80 @@ struct _tagModemParameters;
 
 class V90Parameters {
 public:
-	/*
-	 * The members, from the mangling.  All seven are defined in
-	 * src/pump/v90/V90Parameters.cpp:
+	/**
+	 * @brief Construct a parameter block and load it for @p mp.
 	 *
-	 *     loadParams(char *)          7894 B
-	 *     setToDefault()              3589 B
-	 *     loadModemParamsData()        344 B
-	 *     V90Parameters(_tagModemParameters *)   89 B
-	 *     init()                        63 B
-	 *     initSession()                 24 B
-	 *     ~V90Parameters()               1 B   (a bare `ret`)
+	 * Stores @p mp, then runs `initSession()` followed by `init()` --
+	 * `SENSITIVE_ISP_DETECTED` and `MAX_TX_RATE_INDEX_FOR_SENSITIVE_ISP`
+	 * are set before `setToDefault()` runs, since it reads both.
 	 *
-	 * `loadParams` USED TO BE LEFT OUT and this comment used to say the
-	 * oracle for it did not exist.  It does: `Vparser_read_int` and
-	 * `Vparser_read_float` are reconstructed in src/core/Vparser.c, both
-	 * sides' copies are weakened out of the differential binary, and a
-	 * logging pair records the (reader, name, offset-from-`this`) triple
-	 * of every call the blob's member and ours make.  The two 295-entry
-	 * sequences are compared in order.  That is not a copy of
-	 * `vparse.py`'s output compared with itself: our third argument is
-	 * `&this->FIELD` resolved by the COMPILER through this header, so the
-	 * offset reaches the log by a path the static walk is not on, and the
-	 * ORDER and the PAIRING of the 295 calls are established by nothing
-	 * else in the tree.  Findings F879 (which this supersedes) and 6400.
+	 * @param mp  The raw modem parameter block this object reads from
+	 *            (`powerReductionTenths`, `modeFlags`, `connectionType`,
+	 *            `paramFile`) and stores a pointer to.
 	 */
 	V90Parameters(_tagModemParameters *mp);
+	/** @brief Destroy the parameter block. Does nothing (a bare `ret` in the object). */
 	~V90Parameters();
 
+	/**
+	 * @brief Set every parameter to its compiled-in default.
+	 *
+	 * 339 stores covering all but two of the 342 named fields (the two
+	 * exceptions, `SENSITIVE_ISP_DETECTED` and
+	 * `MAX_TX_RATE_INDEX_FOR_SENSITIVE_ISP`, are read here but never
+	 * written -- see initSession()) plus the fifty-one `unnamed_*`
+	 * fields the parameter file cannot override. Also computes the
+	 * upstream rate mask from `modemParams`' rate limits and
+	 * `RATE_FORCE`-related flags, and leaves `SILENCE_SCR` untouched
+	 * when an insensitive ISP has been detected.
+	 */
 	void	setToDefault();
+	/**
+	 * @brief Load every named parameter from a text config file.
+	 *
+	 * 295 calls to `Vparser_read_int`/`Vparser_read_float`, one per
+	 * named field (291 fields; four offsets are read twice under two
+	 * names -- see the file comment). Both parser functions are
+	 * three-byte stubs (`xor %eax,%eax; ret`) in the shipped object, so
+	 * this call is, behaviourally, a no-op; it is reproduced because the
+	 * call sequence is the object's own field map and the only place in
+	 * it that records these names (findings F879, F6400).
+	 *
+	 * @param paramFile  Path to the parameter file (unused at run time).
+	 */
 	void	loadParams(char *paramFile);
+	/**
+	 * @brief Fold four values out of the raw modem parameter block.
+	 *
+	 * Reads `modemParams->powerReductionTenths` and, if nonzero,
+	 * computes `DIGITAL_POWER_REDUCTION` (dividing by 5, not 10 --
+	 * see the .cpp) and logs it as `%c%d.%02d`; reads
+	 * `modemParams->modeFlags` bit 1 into `PROBING_MODE` when set;
+	 * copies `modemParams->connectionType` into `LINE_CONNECTION_TYPE`
+	 * only if that is still -1; and sets
+	 * `TRN2D_MEAN_ERROR_STD_EVALUATION_ENABLE` from `modeFlags` bit 0.
+	 * Every step is logged unconditionally through edprintf().
+	 */
 	void	loadModemParamsData();
+	/**
+	 * @brief Set defaults, then load overrides from the config file if any.
+	 *
+	 * Calls setToDefault(), then loadParams(modemParams->paramFile) if
+	 * that path is non-null, then loadModemParamsData() unconditionally.
+	 */
 	void	init();
+	/**
+	 * @brief Reset the two fields setToDefault() reads but never writes.
+	 *
+	 * Sets `SENSITIVE_ISP_DETECTED` to 0 and
+	 * `MAX_TX_RATE_INDEX_FOR_SENSITIVE_ISP` to 14 (the top V.90 upstream
+	 * rate index, i.e. "no cap").
+	 */
 	void	initSession();
 
-	/*
-	 * +0x000 is a POINTER, not a parameter.  `setToDefault` opens with
-	 * `mov 0x0(%ebp),%ebx` and then `mull 0x38(%ebx)`, so it is loaded and
-	 * dereferenced rather than assigned a default, and the constructor's
-	 * single argument is a `_tagModemParameters *`.
-	 */
+	/** +0x000 is a pointer, not a parameter: `setToDefault` loads and
+	 *  dereferences it (`mov 0x0(%ebp),%ebx; mull 0x38(%ebx)`), and it is
+	 *  the constructor's single argument. */
 	_tagModemParameters *modemParams;	/* +0x000 */
 	int  	PROBING_MODE;	/* +0x004 */
 	int  	HW_CODEC_TYPE;	/* +0x008 */
@@ -521,30 +560,32 @@ public:
 	float	TEMP_FLOAT_PARAMETER4;	/* +0x554 */
 };
 
-/*
- * THE RAW VIEW, which is what V90PreFilter.h used to provide by DEFINING A
- * SECOND V90Parameters -- a different class, of a different size, under the
- * same name (finding F1112).  That is undefined behaviour the moment both
- * reach one translation unit, and it was doing real damage: the two sizes
- * were 0x504 and 0x558, so a translation unit holding the smaller one and
+/**
+ * @brief A raw byte/int/float view over the same 0x558 bytes as `V90Parameters`.
+ *
+ * This is what `V90PreFilter.h` used to provide by defining a SECOND
+ * `V90Parameters` -- a different class, of a different size, under the same
+ * name (finding F1112). That was undefined behaviour the moment both
+ * reached one translation unit, and it did real damage: the two sizes were
+ * 0x504 and 0x558, so a translation unit holding the smaller one and
  * allocating from `sizeof` under-allocated by 84 bytes, and
  * `tools/whichfield.py` -- the tool CLAUDE.md points you at to turn a
- * differential offset into a diagnosis -- resolved every offset of this class
- * to `b[8] (unsigned char)` and told you nothing.
+ * differential offset into a diagnosis -- resolved every offset of this
+ * class to `b[8] (unsigned char)` and told you nothing.
  *
- * This is a VIEW rather than a rival: one class, one size, and the word and
- * float arrays laid over it for the regions that are not modelled as fields
- * yet.  The accessors below keep every existing `p->w[0x1c0 / 4]` spelling
- * working, including the ones indexed by a variable or a symbolic constant.
+ * This is a view rather than a rival: one class, one size, with word and
+ * float arrays laid over it for the regions not modelled as fields yet. The
+ * accessors below keep every existing `p->w[0x1c0 / 4]` spelling working,
+ * including ones indexed by a variable or a symbolic constant.
  *
- * A SITE THAT USES THIS IS A SITE WITH WORK LEFT IN IT.  Where the offset
- * lands on a field this header already names, the named field is the better
- * spelling -- and for the forty-odd field-to-field copies in
- * `V90PreFilter::setParamEia6` it is arguably the CORRECT one: those copy
- * `float` parameters, and the int view forces the integer `mov` that finding
- * F1242 says is a spelling to avoid reaching for, because it fits the compiler
- * rather than recording the source.  `make period` can now adjudicate that,
- * which it could not when 1242 was written.  Task #116.
+ * A site that uses this is a site with work left in it. Where the offset
+ * lands on a field this header already names, the named field is the
+ * better spelling -- and for the forty-odd field-to-field copies in
+ * `V90PreFilter::setParamEia6` it is arguably the correct one: those copy
+ * `float` parameters, and the int view forces the integer `mov` that
+ * finding F1242 says is a spelling to avoid reaching for, because it fits
+ * the compiler rather than recording the source. `make period` can now
+ * adjudicate that, which it could not when 1242 was written. Task #116.
  */
 union V90ParamsRaw {
 	unsigned char	b[0x558];

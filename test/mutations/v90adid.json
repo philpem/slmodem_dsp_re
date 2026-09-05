@@ -1259,7 +1259,7 @@
  },
  {
   "label": "report the reference phase instead of the phase being repaired",
-  "find": "\t\t\t\t\t     \"  ----\\n\", phase);",
+  "find": " \"  ----\\n\", phase);",
   "replace": "\t\t\t\t\t     \"  ----\\n\", unSuspectedPhase);"
  },
  {
@@ -2041,7 +2041,7 @@
  },
  {
   "label": "fpg: the projection banner prints the wrong pair",
-  "find": "\t\t\t\t\t     \"%d\\r\\n\", base, minU);",
+  "find": " \"%d\\r\\n\", base, minU);",
   "replace": "\t\t\t\t\t     \"%d\\r\\n\", minU, base);"
  },
  {
@@ -2074,17 +2074,17 @@
  },
  {
   "label": "suh: the false-detection report is not gated",
-  "find": "\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\"V90AutoDigitalImpDetector\"\n\t\t\t\t\t\t     \": alternate rbs false \"",
+  "find": "\n\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\"V90AutoDigitalImpDetector\" \": alternate rbs false \"",
   "replace": "\t\t\tif (1)\n\t\t\t\tdsplibs_debug_printf(\"V90AutoDigitalImpDetector\"\n\t\t\t\t\t\t     \": alternate rbs false \""
  },
  {
   "label": "suh: the false-detection wording",
-  "find": "\t\t\t\t\t\t     \": alternate rbs false \"",
+  "find": " \": alternate rbs false \"",
   "replace": "\t\t\t\t\t\t     \": alternate rbs FALSE \""
  },
  {
   "label": "suh: the false-detection report names the wrong phase",
-  "find": "\t\t\t\t\t\t     \"!!!\\n\", phase);",
+  "find": " \"!!!\\n\", phase);",
   "replace": "\t\t\t\t\t\t     \"!!!\\n\", phase + 1);"
  },
  {
@@ -2199,7 +2199,7 @@
  },
  {
   "label": "suh: the threshold report rounds instead of truncating",
-  "find": "\t\t\t\t\t     \"%d\\n\", (int)thresh);",
+  "find": " \"%d\\n\", (int)thresh);",
   "replace": "\t\t\t\t\t     \"%d\\n\", (int)(thresh + 0.5f));"
  },
  {

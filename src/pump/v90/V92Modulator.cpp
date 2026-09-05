@@ -67,11 +67,15 @@
  * phase 3 modulator on states 4, 6, 9 and 12; `exitCPt` goes to the phase 4
  * modulator on state 0.  Every one of them clears `word_34` on the way out.
  *
- * WHY THE SUB-OBJECTS ARE BUILT THROUGH asm() LABELS: the reason
- * src/pump/v90/V92Precoder.cpp gives in full -- `sysdep_malloc(n); ctor(p)`
- * with no null test between them is `new` over an inline `operator new`, this
- * build is -nostdinc++ with no <new>, and a placement form would add the null
- * test the blob does not have.
+ * THE SUB-OBJECTS USED TO BE BUILT THROUGH asm() LABELS, on the belief
+ * (finding F1340) that a user-declared placement `operator new` -- needed
+ * here since this build is `-nostdinc++` with no `<new>` -- would add a null
+ * test between `sysdep_malloc` and the constructor call that the blob does
+ * not have.  Finding F10155 retracts that: the null check is tied to a
+ * `throw()` placement `operator new`, which is not this project's, and
+ * `include/dsplib/sysdep.h` declares the shared non-throw pair every such
+ * site needs.  Genuine placement `new` is used below instead; see finding
+ * F10157 for the site that proved this mechanism end-to-end.
  *
  * AND WHY ONE OF THE SIX IS `delete` AFTER ALL.  `ResamplerTimingOffset` has
  * a virtual destructor and inherits `Resampler`'s member `operator delete`,
@@ -106,28 +110,7 @@ extern "C" {
 #include "dsplib/ResamplerTimingOffset.h"
 #include "dsplib/Queue.h"
 #include "dsplib/FloatFIR.h"
-
-extern "C" {
-void *sysdep_malloc(unsigned int size);
-void sysdep_free(void *mem);
-
-/* The six complete-object constructors, by the names the relocations carry. */
-void v92mod_bts_ctor(void *self, unsigned int n, void *params)
-	asm("_ZN15V92BitsToSymbolC1EjP13V92Parameters");
-void v92mod_rto_ctor(void *self, unsigned int phases, float ppmScale,
-		     unsigned int taps, float cutoff, float ppm,
-		     unsigned int minHistory)
-	asm("_ZN21ResamplerTimingOffsetC1Ejfjffj");
-void v92mod_p3m_ctor(void *self, void *params)
-	asm("_ZN18V92Phase3ModulatorC1EP13V92Parameters");
-void v92mod_p4m_ctor(void *self, void *params, void *bitsToSymbol, void *cp,
-		     void *mappingParams)
-	asm("_ZN18V92Phase4ModulatorC1EP13V92ParametersP15V92BitsToSymbolP5V92C"
-	    "PP16V92MappingParams");
-void v92mod_queue_ctor(void *self, unsigned int n) asm("_ZN5QueueIfEC1Ej");
-void v92mod_fir_ctor(void *self, unsigned int nTaps, float *coef,
-		     unsigned int blockSize) asm("_ZN8FloatFIRC1EjPfj");
-}
+#include "dsplib/sysdep.h"
 
 #if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
 
@@ -349,30 +332,29 @@ V92Modulator::V92Modulator(unsigned int nSamples, V92Phase2Info *p2,
 					      * sizeof(float));
 
 	p = sysdep_malloc(sizeof(V92BitsToSymbol));
-	v92mod_bts_ctor(p, 3 * blockSize, params);
+	new (p) V92BitsToSymbol(3 * blockSize, params);
 	bitsToSymbol = (V92BitsToSymbol *)p;
 
 	p = sysdep_malloc(sizeof(ResamplerTimingOffset));
-	v92mod_rto_ctor(p, V92MOD_RS_PHASES, V92MOD_RS_PPMSCALE,
-			V92MOD_RS_TAPS, V92MOD_RS_CUTOFF, V92MOD_RS_PPM,
-			V92MOD_RS_MINHISTORY);
+	new (p) ResamplerTimingOffset(V92MOD_RS_PHASES, V92MOD_RS_PPMSCALE,
+				       V92MOD_RS_TAPS, V92MOD_RS_CUTOFF,
+				       V92MOD_RS_PPM, V92MOD_RS_MINHISTORY);
 	resampler = (ResamplerTimingOffset *)p;
 
 	p = sysdep_malloc(sizeof(V92Phase3Modulator));
-	v92mod_p3m_ctor(p, params);
+	new (p) V92Phase3Modulator(params);
 	phase3Modulator = (V92Phase3Modulator *)p;
 
 	p = sysdep_malloc(sizeof(V92Phase4Modulator));
-	v92mod_p4m_ctor(p, params, bitsToSymbol, cp, mappingParams);
+	new (p) V92Phase4Modulator(params, bitsToSymbol, cp, mappingParams);
 	phase4Modulator = (V92Phase4Modulator *)p;
 
 	p = sysdep_malloc(sizeof(Queue<float>));
-	v92mod_queue_ctor(p, (unsigned int)params->MODULATOR_QUEUE_LENGTH);
+	new (p) Queue<float>((unsigned int)params->MODULATOR_QUEUE_LENGTH);
 	queue = (Queue<float> *)p;
 
 	p = sysdep_malloc(sizeof(FloatFIR));
-	v92mod_fir_ctor(p, V92_TXPREFILTER_TAPS, v92TxPreFilter,
-			V92MOD_FIR_BLOCK);
+	new (p) FloatFIR(V92_TXPREFILTER_TAPS, v92TxPreFilter, V92MOD_FIR_BLOCK);
 	txFilter = (FloatFIR *)p;
 
 	reset();
@@ -1213,8 +1195,7 @@ V92Modulator::progress(int *bits, unsigned int &nbits, float *out,
 					enterPhase4();
 					if (DSPLIB_DEBUG_ON())
 						dsplibs_debug_printf(
-						    "V92Modulator progress: "
-						    "Enter phase4\r\n");
+						    "V92Modulator progress: " "Enter phase4\r\n");
 				}
 			} else {
 				buf_7c[i] = (short)

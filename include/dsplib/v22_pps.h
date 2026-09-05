@@ -112,21 +112,39 @@ struct v22_pps {
 	const short *qmap;	/* +0x24 set by the caller, NOT by init  */
 };
 
-/*
- * `fresh` non-zero allocates both history buffers; zero adopts whatever the
- * state already holds, with no size check and no free.  Either way the first
- * `history_len` entries of each are zeroed and both coefficient arrays are
- * permuted.  `imap` and `qmap` are untouched.
+/**
+ * @brief Initialise (or re-arm) the V.22 transmit pulse shaper, permuting its coefficients in place.
+ *
+ * @p fresh non-zero allocates both history buffers; zero adopts whatever
+ * the state already holds, with no size check and no free. Either way the
+ * first `history_len` entries of each are zeroed and both coefficient
+ * arrays are permuted (see the file banner). `imap` and `qmap` are
+ * untouched -- the caller must set them separately (`V22FP_create` does,
+ * directly, right after calling this).
+ *
+ * @param state  The shaper state to initialise.
+ * @param cfg    The configuration; its `coeff_i`/`coeff_q` arrays are permuted in place.
+ * @param fresh  Non-zero to allocate both history buffers; zero to reuse existing ones.
  */
 void V22_PPS_init(struct v22_pps *state, const struct v22_pps_cfg *cfg,
 		  int fresh);
+
+/** @brief Release the V.22 transmit pulse shaper's history buffers. @param state The shaper state to tear down. */
 void V22_PPS_free(struct v22_pps *state);
 
-/*
- * Consume `count` SYMBOLS from `src`, writing about 13.33 output samples per
- * symbol.  The return is the number of samples written, and `src->ridx` is
- * advanced and wrapped.  `need`, `phase` and `widx` persist, so a symbol
+/**
+ * @brief Interpolate `count` V.22 transmit symbols into passband samples.
+ *
+ * Consumes @p count symbols from @p src, writing about 13.33 output samples
+ * per symbol (40 phases / (V22_PPS_STEP + `cfg.step`)). `src->ridx` is
+ * advanced and wrapped. `need`, `phase` and `widx` persist, so a symbol
  * stream may be handed over in any grouping.
+ *
+ * @param state  The shaper state.
+ * @param src    The symbol ring to consume from.
+ * @param out    Output for the interpolated samples.
+ * @param count  How many symbols to consume.
+ * @return The number of samples written.
  */
 short V22_PPS_filter(struct v22_pps *state, struct fpm_smc_ring *src,
 		     short *out, unsigned short count);

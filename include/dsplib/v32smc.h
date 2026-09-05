@@ -111,11 +111,36 @@ extern const short TrellisEncodeDifTable[16];		/* [4][4] */
 extern const short TrellisTransitionTable[32];		/* [8][4] */
 extern const unsigned short SMCv32_MOD[8];
 
+/**
+ * @brief V.32 symbol-mapping coder: absolute-phase encoding.
+ * @param smc    The coder state.
+ * @param out    The symbol ring to append constellation indices to.
+ * @param in     The input words.
+ * @param count  How many words.
+ */
 void SMCv32_encoder_abs(struct v32_smc *smc, struct v32_symout *out,
 			const short *in, unsigned short count);
+
+/**
+ * @brief V.32 symbol-mapping coder: differential-phase encoding (V.32's 4.3 quadrant coding).
+ * @param smc    The coder state; `quad` accumulates the running quadrant.
+ * @param out    The symbol ring to append constellation indices to.
+ * @param in     The input words.
+ * @param count  How many words.
+ */
 void SMCv32_encoder_dif(struct v32_smc *smc, struct v32_symout *out,
 			const short *in, unsigned short count);
-/* `in` is NOT const: the trellis coder masks each word in place. */
+
+/**
+ * @brief V.32 symbol-mapping coder: trellis-coded modulation.
+ *
+ * @p in is not const: the trellis coder masks each word in place.
+ *
+ * @param smc    The coder state.
+ * @param out    The symbol ring to append constellation indices to.
+ * @param in     The input words, masked in place.
+ * @param count  How many words.
+ */
 void SMCv32_encoder_tcm(struct v32_smc *smc, struct v32_symout *out,
 			short *in, unsigned short count);
 

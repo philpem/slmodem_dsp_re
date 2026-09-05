@@ -249,15 +249,13 @@ V92setParamsInfoFromCPUnPck(struct V92ParamsInfo *p, struct V92CPUnPck *cp)
 			  * (double)V92PI_GAIN_SCALE);
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("V92Modulator: constellation gain "
-				     "(before Lu multiplication) = "
-				     "%c%d.%06d\r\n",
+				     "(before Lu multiplication) = " "%c%d.%06d\r\n",
 				     sign_of(p->gain), whole_of(p->gain),
 				     frac_of(p->gain));
 	p->gain = p->gain * V92PI_GAIN_LU;
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("V92Modulator: constellation gain "
-				     "(after Lu multiplication) = "
-				     "%c%d.%06d\r\n",
+				     "(after Lu multiplication) = " "%c%d.%06d\r\n",
 				     sign_of(p->gain), whole_of(p->gain),
 				     frac_of(p->gain));
 
@@ -332,8 +330,7 @@ V92setParamsInfoFromCPUnPck(struct V92ParamsInfo *p, struct V92CPUnPck *cp)
 						     i, cp->LC[i]);
 		for (i = 0; i < V92_CPUNPCK_CONSTELS; i++)
 			if (DSPLIB_DEBUG_ON())
-				dsplibs_debug_printf("CPObj->indexConstel[%d]"
-						     " = %d\r\n",
+				dsplibs_debug_printf("CPObj->indexConstel[%d]" " = %d\r\n",
 						     i, cp->indexConstel[i]);
 
 		p->LC[0] = cp->LC[0];
@@ -364,68 +361,56 @@ V92setParamsInfoFromCPUnPck(struct V92ParamsInfo *p, struct V92CPUnPck *cp)
 		 */
 		if (p->LC[0] != 0) {
 			if (DSPLIB_DEBUG_ON())
-				dsplibs_debug_printf("======== Constellation"
-						     " LC 1 ============="
+				dsplibs_debug_printf("======== Constellation" " LC 1 ============="
 						     "\r\n");
 			for (i = 0; i < p->LC[0]; i++)
 				if (DSPLIB_DEBUG_ON())
-					dsplibs_debug_printf("\tconst1[%d] ="
-							     " %d\r\n", i,
+					dsplibs_debug_printf("\tconst1[%d] =" " %d\r\n", i,
 							     cp->const1[i]);
 		}
 		if (p->LC[1] != 0) {
 			if (DSPLIB_DEBUG_ON())
-				dsplibs_debug_printf("======== Constellation"
-						     " LC 2 ============="
+				dsplibs_debug_printf("======== Constellation" " LC 2 ============="
 						     "\r\n");
 			for (i = 0; i < p->LC[1]; i++)
 				if (DSPLIB_DEBUG_ON())
-					dsplibs_debug_printf("\tconst2[%d] ="
-							     " %d\r\n", i,
+					dsplibs_debug_printf("\tconst2[%d] =" " %d\r\n", i,
 							     cp->const2[i]);
 		}
 		if (p->LC[2] != 0) {
 			if (DSPLIB_DEBUG_ON())
-				dsplibs_debug_printf("======== Constellation"
-						     " LC 3 ============="
+				dsplibs_debug_printf("======== Constellation" " LC 3 ============="
 						     "\r\n");
 			for (i = 0; i < p->LC[2]; i++)
 				if (DSPLIB_DEBUG_ON())
-					dsplibs_debug_printf("\tconst3[%d] ="
-							     " %d\r\n", i,
+					dsplibs_debug_printf("\tconst3[%d] =" " %d\r\n", i,
 							     cp->const3[i]);
 		}
 		if (p->LC[3] != 0) {
 			if (DSPLIB_DEBUG_ON())
-				dsplibs_debug_printf("======== Constellation"
-						     " LC 4 ============="
+				dsplibs_debug_printf("======== Constellation" " LC 4 ============="
 						     "\r\n");
 			for (i = 0; i < p->LC[3]; i++)
 				if (DSPLIB_DEBUG_ON())
-					dsplibs_debug_printf("\tconst4[%d] ="
-							     " %d\r\n", i,
+					dsplibs_debug_printf("\tconst4[%d] =" " %d\r\n", i,
 							     cp->const4[i]);
 		}
 		if (p->LC[4] != 0) {
 			if (DSPLIB_DEBUG_ON())
-				dsplibs_debug_printf("======== Constellation"
-						     " LC 5 ============="
+				dsplibs_debug_printf("======== Constellation" " LC 5 ============="
 						     "\r\n");
 			for (i = 0; i < p->LC[4]; i++)
 				if (DSPLIB_DEBUG_ON())
-					dsplibs_debug_printf("\tconst5[%d] ="
-							     " %d\r\n", i,
+					dsplibs_debug_printf("\tconst5[%d] =" " %d\r\n", i,
 							     cp->const5[i]);
 		}
 		if (p->LC[5] != 0) {
 			if (DSPLIB_DEBUG_ON())
-				dsplibs_debug_printf("======== Constellation"
-						     " LC 6 ============="
+				dsplibs_debug_printf("======== Constellation" " LC 6 ============="
 						     "\r\n");
 			for (i = 0; i < p->LC[5]; i++)
 				if (DSPLIB_DEBUG_ON())
-					dsplibs_debug_printf("\tconst6[%d] ="
-							     " %d\r\n", i,
+					dsplibs_debug_printf("\tconst6[%d] =" " %d\r\n", i,
 							     cp->const6[i]);
 		}
 
@@ -437,8 +422,7 @@ V92setParamsInfoFromCPUnPck(struct V92ParamsInfo *p, struct V92CPUnPck *cp)
 		if (p->LC[0] != 0 || p->LC[1] != 0 || p->LC[2] != 0
 		    || p->LC[3] != 0 || p->LC[4] != 0 || p->LC[5] != 0)
 			if (DSPLIB_DEBUG_ON())
-				dsplibs_debug_printf("========================="
-						     "=========\r\n");
+				dsplibs_debug_printf("=========================" "=========\r\n");
 
 		/*
 		 * UNCONDITIONAL, and a real indexed loop in the object --

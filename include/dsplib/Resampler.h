@@ -98,47 +98,133 @@
 
 class Resampler {
 public:
-	/*
-	 * TWO CONSTRUCTORS, and the difference between them is who owns the
-	 * coefficients.  The `float` overload designs a `LowPassFIR<float>`
-	 * and transposes it into a freshly allocated polyphase bank, storing
-	 * 0 at `coeffsBorrowed`; the `float *` overload adopts the caller's
-	 * array and stores 1.  `~Resampler` frees `coeffs` only when the flag
-	 * is 0, which is the only reason the second one exists here: the
-	 * closure of `dp_vpcm_init` needs only the first, and without the
-	 * second nothing would ever set the flag and the destructor's
-	 * skip-the-free arm would be unreachable.
+	/**
+	 * @brief Construct a resampler that designs its own filter.
+	 *
+	 * Rounds @p taps down to a multiple of four, designs a
+	 * Blackman-windowed `LowPassFIR<float>` of `taps * phases` taps at
+	 * cutoff `cutoff / phases`, and transposes it into a freshly
+	 * allocated polyphase bank (`coeffsBorrowed = 0`, so the destructor
+	 * will free it).
+	 *
+	 * @param phases      Interpolation factor (number of polyphase
+	 *                    branches).
+	 * @param ppmScale    Per-output phase increment, in units of 1/phases
+	 *                    of a sample.
+	 * @param taps        Requested taps per branch; rounded down to a
+	 *                    multiple of four.
+	 * @param cutoff      Filter cutoff passed to the designer as
+	 *                    `cutoff / phases`.
+	 * @param minHistory  Lower bound on the history buffer length; the
+	 *                    buffer is `max(minHistory, 10 * taps)` floats.
 	 */
 	Resampler(unsigned int phases, float ppmScale, unsigned int taps,
 		  float cutoff, unsigned int minHistory);
+
+	/**
+	 * @brief Construct a resampler over caller-supplied coefficients.
+	 *
+	 * Adopts @p coeffs as-is (`coeffsBorrowed = 1`, so the destructor
+	 * will NOT free it) and takes @p taps as given, with no rounding.
+	 *
+	 * @param phases      Interpolation factor (number of polyphase
+	 *                    branches).
+	 * @param ppmScale    Per-output phase increment, in units of 1/phases
+	 *                    of a sample.
+	 * @param taps        Taps per branch, used exactly as given.
+	 * @param coeffs      Polyphase coefficient bank, `phases * taps`
+	 *                    entries, branch `p` at `coeffs + p * taps`.
+	 *                    Ownership stays with the caller.
+	 * @param minHistory  Lower bound on the history buffer length; the
+	 *                    buffer is `max(minHistory, 10 * taps)` floats.
+	 */
 	Resampler(unsigned int phases, float ppmScale, unsigned int taps,
 		  float *coeffs, unsigned int minHistory);
 
+	/**
+	 * @brief Destroy the resampler.
+	 *
+	 * Frees `history` unconditionally and frees `coeffs` only when
+	 * `coeffsBorrowed` is 0 (i.e. this object designed its own filter).
+	 */
 	virtual ~Resampler();
 
+	/**
+	 * @brief Clear history and phase/credit state back to a fresh start.
+	 *
+	 * Zeroes `history` and `pending`, and resets `inputCredit`, `phase`,
+	 * `historyIndex` (to `taps`, not zero -- see the field comment) and
+	 * `pendingCount`.
+	 */
 	virtual void reset();
 
-	/*
-	 * The hook `resample` dispatches through once per output sample.  The
-	 * base body is EMPTY -- `_ZN9Resampler16timingCorrectionEf` is one
-	 * byte, a bare `ret` -- and it is defined in-class here because that
-	 * is what puts it in a `.gnu.linkonce.t.` section, which is where the
-	 * object has it.
+	/**
+	 * @brief Per-output-sample timing hook; `resample()` dispatches
+	 *        through this virtual once per output.
+	 *
+	 * The base implementation is empty -- defined in-class so it lands
+	 * in a `.gnu.linkonce.t.` section, matching the object's placement
+	 * of the one-byte `ret` this compiles to.
+	 *
+	 * @param y  The output sample just produced.
 	 */
 	virtual void timingCorrection(float) { }
 
+	/**
+	 * @brief Resample @p n input samples, producing however many output
+	 *        samples the phase accumulator calls for.
+	 *
+	 * The only member that reads `pending`, `historyIndex` and
+	 * `inputCredit`, and the only one that dispatches through
+	 * timingCorrection(). One input sample is always held back into
+	 * `pending` across calls, for the one-sample look-ahead the
+	 * interpolation needs at a branch-`phases` boundary. Reproduced from
+	 * the object: this reads one sample past `in[n - 1]` on every
+	 * return path, including when the loop has just consumed the last
+	 * sample -- the original's own behaviour, not a transcription slip.
+	 *
+	 * @param in    Input samples.
+	 * @param n     Number of samples in @p in.
+	 * @param out   Output buffer; must be large enough for the samples
+	 *              this call can produce.
+	 * @param nOut  Output: number of samples written to @p out.
+	 */
 	void resample(const float *in, unsigned int n, float *out,
 		      unsigned int &nOut);
 
+	/**
+	 * @brief Set the fractional phase, normalised to [0, 1) of one input
+	 *        sample.
+	 * @param p  Normalised phase; any value outside [0, 1), including
+	 *           negative, sets the phase to 0.
+	 */
 	void setNormalizedPhase(float p);
+
+	/**
+	 * @brief Get the fractional phase, normalised to [0, 1) of one input
+	 *        sample.
+	 * @return `phase / phases`.
+	 */
 	float getNormalizedPhase() const;
 
+	/**
+	 * @brief Copy the last `taps` samples of the history ring to its front.
+	 *
+	 * Called by resample() every time the write cursor reaches the end
+	 * of `history`, so the next inner product can still reach `taps`
+	 * samples back.
+	 */
 	void copyHistoryTail();
+
+	/** @brief Rewind the history write cursor to `taps` (not zero). */
 	void resetHistoryIndex();
 
-	/*
-	 * See the file comment.  Inline, so it is folded into every deleting
-	 * destructor and nothing references `::operator delete`.
+	/**
+	 * @brief Free an instance. Inline so it is folded into every
+	 *        deleting destructor in the chain and nothing references
+	 *        `::operator delete` (see the file comment on linking
+	 *        without libstdc++).
+	 * @param p Memory to free.
 	 */
 	static void operator delete(void *p) { sysdep_free(p); }
 

@@ -180,7 +180,7 @@
  },
  {
   "label": "setMappingParams: the null block gets the wrong message",
-  "find": "\t\t\tdsplibs_debug_printf(\"V90Phase4Modulator: ERROR: Null \"\n\t\t\t\t\t     \"mappingParams @ setMappingParams\"\n\t\t\t\t\t     \"\\r\\n\");",
+  "find": "\n\t\t\tdsplibs_debug_printf(\"V90Phase4Modulator: ERROR: Null \"\n\t\t\t\t\t     \"mappingParams @ setMappingParams\" \"\\r\\n\");",
   "replace": "\t\t\tdsplibs_debug_printf(\"V90Phase4Modulator: enter \"\n\t\t\t\t\t     \"repeatedCPd @ %d\\r\\n\", 0);"
  }
 ]

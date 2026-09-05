@@ -58,20 +58,32 @@
  */
 #define V22_IIR_BLOCK		160
 
-/*
- * Load `state` with the two coefficient sets and clear both histories.
- * `state` must have room for V22_IIR_STATE_WORDS shorts.
+/**
+ * @brief Load the V.22 receive IIR's state with a coefficient set and clear both histories.
+ * @param state  The state array; must have room for V22_IIR_STATE_WORDS shorts.
+ * @param b      Numerator coefficients (V22_IIR_B_TAPS entries), copied in.
+ * @param a      Denominator coefficients (V22_IIR_A_TAPS entries), copied in (a[0] is stored but never read).
  */
 void V22IIRFilterInit(short *state, const short *b, const short *a);
 
-/*
- * Filter V22_IIR_BLOCK samples in place and multiply each result by the
- * corresponding entry of `mix`.
+/**
+ * @brief Filter and demodulate one block through the V.22 receive IIR.
  *
- * The four pointers are the four parts of one state array; they are passed
- * separately because that is how the original's single caller passes them.
- * `mix` is the demodulating carrier, at Q12 -- hence the >> 12 that the
- * numerator's and denominator's own >> 14 do not account for.
+ * Filters V22_IIR_BLOCK samples in place and multiplies each result by the
+ * corresponding entry of @p mix.
+ *
+ * The four pointers are the four parts of one state array; they are
+ * passed separately because that is how the original's single caller
+ * passes them. @p mix is the demodulating carrier, at Q12 -- hence the
+ * `>> 12` that the numerator's and denominator's own `>> 14` do not
+ * account for.
+ *
+ * @param samples  The block, filtered and demodulated in place.
+ * @param b        Numerator coefficients (state's +V22_IIR_OFF_B part).
+ * @param a        Denominator coefficients (state's +V22_IIR_OFF_A part).
+ * @param xhist    Input history (state's +V22_IIR_OFF_X part).
+ * @param yhist    Output history (state's +V22_IIR_OFF_Y part).
+ * @param mix      The demodulating carrier, Q12, one entry per sample.
  */
 void V22_iir_filt_demod(short *samples, const short *b, const short *a,
 			short *xhist, short *yhist, const short *mix);

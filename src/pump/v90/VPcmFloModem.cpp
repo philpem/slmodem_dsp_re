@@ -307,8 +307,7 @@ VPcmFloModem::getV90CpBits(short *bits)
 	if (terminateCpNot != 0) {
 		done = 1;
 		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("GetV90CpBits: Indicating CP "
-					     "termination !!!!\r\n");
+			dsplibs_debug_printf("GetV90CpBits: Indicating CP " "termination !!!!\r\n");
 		bitPointer = 0;
 		return done;
 	}
@@ -319,8 +318,7 @@ VPcmFloModem::getV90CpBits(short *bits)
 		int i;
 
 		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("OK Time to move to CPNot "
-					     "TX...\r\n");
+			dsplibs_debug_printf("OK Time to move to CPNot " "TX...\r\n");
 
 		for (i = 0; i < live; i++)
 			cpBitVector[i] = bitVector[i];
@@ -1524,8 +1522,7 @@ VPcmFloModem::v90RunDemodulator(float *in, unsigned int n, int *rxbits,
 	 */
 	case 0x03:
 		if (retrainLatch != 0) {
-			edprintf("VPcmFloModem (V90): ON Start TRN1d "
-				 "restoring SAS detector\n");
+			edprintf("VPcmFloModem (V90): ON Start TRN1d " "restoring SAS detector\n");
 			modem.ptr_49b4->modemParams->unnamed_0003 |=
 			    CFG_FLAG3_RETRAIN;
 		}
@@ -1556,8 +1553,7 @@ VPcmFloModem::v90RunDemodulator(float *in, unsigned int n, int *rxbits,
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf(
 			    "VPcmFloModem (V90): Train constellation : %d  "
-			    "RRN constellation : %d "
-			    "(0 = 4 points / 1 = 16 points)\r\n",
+			    "RRN constellation : %d " "(0 = 4 points / 1 = 16 points)\r\n",
 			    flags_173a[0], flags_173a[1]);
 
 		silenceScr = (unsigned char)modem.ptr_49b4->SILENCE_SCR;
@@ -1610,8 +1606,7 @@ VPcmFloModem::v90RunDemodulator(float *in, unsigned int n, int *rxbits,
 
 	case 0x15:			/* 0xdbd9 */
 		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("VPcmFloModem (V90): "
-					     "DemodPhase3Error !!! \r\n");
+			dsplibs_debug_printf("VPcmFloModem (V90): " "DemodPhase3Error !!! \r\n");
 		ret = 5;
 		break;
 
@@ -1680,8 +1675,7 @@ VPcmFloModem::v90RunDemodulator(float *in, unsigned int n, int *rxbits,
 					      bitVector, clr);
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf("VPcmFloModem (V90): "
-				    "Building CPnot on MP receive, CPnot "
-				    "length = %d\r\n", nofBits);
+				    "Building CPnot on MP receive, CPnot " "length = %d\r\n", nofBits);
 			setTerminateCpFlag(1);
 		}
 		break;
@@ -1708,13 +1702,11 @@ VPcmFloModem::v90RunDemodulator(float *in, unsigned int n, int *rxbits,
 					      bitVector, 0);
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf("VPcmFloModem (V90): "
-				    "Building CPnot on MPnot receive, CPnot "
-				    "length = %d\r\n", nofBits);
+				    "Building CPnot on MPnot receive, CPnot " "length = %d\r\n", nofBits);
 			setTerminateCpFlag(1);
 			if (modem.ptr_49b4->SENSITIVE_ISP_DETECTED != 0) {
 				edprintf("VPcmFloModem (V90): on sensitive "
-					 "ISP, after one CPnot supposed to "
-					 "move to E...\r\n");
+					 "ISP, after one CPnot supposed to " "move to E...\r\n");
 				setTerminateCpNotFlag(1);
 				setMinNofTransmitSequences(1);
 			}
@@ -1728,8 +1720,7 @@ VPcmFloModem::v90RunDemodulator(float *in, unsigned int n, int *rxbits,
 				       ->int_0038 == 0)) {
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
-					    "VPcmFloModem (V90): Going to "
-					    "terminate CPnot...\r\n");
+					    "VPcmFloModem (V90): Going to " "terminate CPnot...\r\n");
 				setTerminateCpNotFlag(1);
 				setMinNofTransmitSequences(1);
 			}
@@ -1743,22 +1734,19 @@ VPcmFloModem::v90RunDemodulator(float *in, unsigned int n, int *rxbits,
 	 */
 	case 0x1c:
 		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("VPcmFloModem (V90): "
-					     "Ed Received !!!\r\n");
+			dsplibs_debug_printf("VPcmFloModem (V90): " "Ed Received !!!\r\n");
 		setTerminateCpNotFlag(1);
 		setMinNofTransmitSequences(1);
 		if (clr != 0) {
 			if (DSPLIB_DEBUG_ON())
-				dsplibs_debug_printf("VPcmFloModem (V90): "
-				    "Indicating Cleardown !\r\n");
+				dsplibs_debug_printf("VPcmFloModem (V90): " "Indicating Cleardown !\r\n");
 			ret = 8;
 		}
 		break;
 
 	case 0x1d:			/* 0xdda2 */
 		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("VPcmFloModem (V90): "
-					     "Phase4 terminated.\r\n");
+			dsplibs_debug_printf("VPcmFloModem (V90): " "Phase4 terminated.\r\n");
 		break;
 
 	/*
@@ -1767,8 +1755,7 @@ VPcmFloModem::v90RunDemodulator(float *in, unsigned int n, int *rxbits,
 	 */
 	case 0x1e:
 		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("VPcmFloModem (V90): "
-					     "Enter Data Phase\r\n");
+			dsplibs_debug_printf("VPcmFloModem (V90): " "Enter Data Phase\r\n");
 		progressState = 3;
 		ret = 2;
 		retrainLatch = 1;
@@ -1797,8 +1784,7 @@ VPcmFloModem::v90RunDemodulator(float *in, unsigned int n, int *rxbits,
 
 	case 0x21:			/* 0xdb53 */
 		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("VPcmFloModem (V90): "
-					     "retrain requested !!\r\n");
+			dsplibs_debug_printf("VPcmFloModem (V90): " "retrain requested !!\r\n");
 		ret = 5;
 		break;
 
@@ -1867,15 +1853,13 @@ VPcmFloModem::v90RunDemodulator(float *in, unsigned int n, int *rxbits,
 
 	case 0x26:			/* 0xdeac */
 		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("VPcmFloModem (V90): "
-					     "energy drop detected !!\r\n");
+			dsplibs_debug_printf("VPcmFloModem (V90): " "energy drop detected !!\r\n");
 		ret = 5;
 		VPcmV34SetIndicationOfRemoteRetrain(v34Object);
 		break;
 
 	case 0x28:			/* 0xe15f */
-		edprintf("VPcmFloModem (V90): restoring SAS detector "
-			 "(RtNot)\n");
+		edprintf("VPcmFloModem (V90): restoring SAS detector " "(RtNot)\n");
 		modem.ptr_49b4->modemParams->unnamed_0003 |= CFG_FLAG3_RETRAIN;
 		break;
 
@@ -2370,8 +2354,7 @@ VPcmFloModem::runPcmModem(float *in, float *out, unsigned int n, int *rxbits,
 		echoCanceller.setState(V92_ECHO_FILTER_ONLY);
 		modem.demodulator->enterPhase3();
 		if (modem.demodulator->word_3c == 0x20) {
-			edprintf("VPcmFloModem (V92): got V90 Fallback "
-				 "request...\r\n");
+			edprintf("VPcmFloModem (V92): got V90 Fallback " "request...\r\n");
 			ret = 6;
 		}
 		break;
@@ -2539,8 +2522,7 @@ VPcmFloModem::qcLineVerification(float *in, float *out, unsigned int n,
 			if (qcSampleCount >= QC_TONEQ_MIN_SAMPLES) {
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
-					    "VPcmFloModem (QC LineVerify): "
-					    "TONEq mod over (after %d "
+					    "VPcmFloModem (QC LineVerify): " "TONEq mod over (after %d "
 					    "samples), tx silence...\r\n",
 					    qcSampleCount);
 
@@ -2549,10 +2531,8 @@ VPcmFloModem::qcLineVerification(float *in, float *out, unsigned int n,
 			} else {
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
-					    "VPcmFloModem (QC LineVerify): "
-					    "TONEq termination requested, "
-					    "still bellow 50mS (nof samples "
-					    "= %d)...\r\n", qcSampleCount);
+					    "VPcmFloModem (QC LineVerify): " "TONEq termination requested, "
+					    "still bellow 50mS (nof samples " "= %d)...\r\n", qcSampleCount);
 
 				qcTerminateRequested = 1;
 			}
@@ -2560,16 +2540,14 @@ VPcmFloModem::qcLineVerification(float *in, float *out, unsigned int n,
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
 				    "VPcmFloModem (QC LineVerify): got ANSpcm "
-				    "drop detection, with no verification "
-				    "completion status !!!\r\n");
+				    "drop detection, with no verification " "completion status !!!\r\n");
 
 			verificationStatus = (unsigned short)modem.demodulator
 			    ->phase3Demodulator->verificationStatus;
 
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
-				    "VPcmFloModem (QC LineVerify): "
-				    "demodulator verification status is "
+				    "VPcmFloModem (QC LineVerify): " "demodulator verification status is "
 				    "%d\r\n", verificationStatus);
 
 			qcSampleCount = 0;
@@ -2590,8 +2568,7 @@ VPcmFloModem::qcLineVerification(float *in, float *out, unsigned int n,
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
 				    "VPcmFloModem (QC LineVerify): TONEq mod "
-				    "over (after %d samples), tx "
-				    "silence...\r\n", qcSampleCount);
+				    "over (after %d samples), tx " "silence...\r\n", qcSampleCount);
 
 			qcSampleCount = -QC_SILENCE_SAMPLES;
 			qcVerifyState = 2;

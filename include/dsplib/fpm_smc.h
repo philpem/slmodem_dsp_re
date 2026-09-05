@@ -83,12 +83,10 @@ struct fpm_smc_cfg {
 	 * The carrier phasor, indexed by `acc`.  Zero in SMCv22_CFG and never
 	 * read by an `FPM_SMC_*` function -- but read by `SMC_encoder`, the
 	 * fax pumps' copy, which multiplies a constellation point by
-	 * `cosine[acc] + j*sine[acc]` when `f00` is clear.  Named from the
-	 * author's own symbols: V29TX_create stores V29TX_SMC_COSINE at +0x20
-	 * and V29TX_SMC_SINE at +0x24 (0x9bc89 and 0x9bcae).  They are
-	 * relocated POINTERS, not ints; an int16 dump reads them as zeroes,
-	 * and modelling them as `int` cannot survive a 64-bit build.
-	 * See include/dsplib/smc.h and finding F8903.
+	 * `cosine[acc] + j*sine[acc]` when `f00` is clear.  Relocated
+	 * POINTERS, not ints -- an int16 dump reads them as zeroes, and
+	 * modelling them as `int` cannot survive a 64-bit build.  Named
+	 * from V29TX_create's own symbols (F8903); see include/dsplib/smc.h.
 	 */
 	const short *cosine;	/* +0x20                                     */
 	const short *sine;	/* +0x24                                     */
@@ -121,41 +119,52 @@ struct fpm_smc {
  */
 struct fpm_smc_ring {
 	/*
-	 * The DIRECT rails, named by `FPM_PPS_filter`: with `fpm_pps_cfg`'s
-	 * `mapped` clear it reads I and Q straight out of these two, indexed
-	 * by `ridx` -- `mov (%ebx),%edi` and `mov 0x4(%esi),%edx`, both
-	 * 32-bit loads used as `short *` bases.  Only the mapped form is
-	 * reachable from V.22, which is why they read as padding until the
-	 * generic shaper was read.  Nothing else traced touches them.
+	 * The DIRECT rails: with `fpm_pps_cfg.mapped` clear, `FPM_PPS_filter`
+	 * reads I and Q straight out of these two instead of through
+	 * `imap`/`qmap`.  Only the mapped form is reachable from V.22, which
+	 * is why they read as padding until the generic shaper was read
+	 * (F3576).
 	 */
 	short *i;		/* +0x00 `len` I values, direct form         */
 	short *q;		/* +0x04 `len` Q values, direct form         */
-	short *sym;		/* +0x08 `len` symbol indices.  V22_PPS_filter
-				 *       loads these with `movzbl (%ebx,%edi,2)`
-				 *       -- stride two, low byte used.       */
+	short *sym;		/* +0x08 `len` symbol indices, read by
+				 *       V22_PPS_filter (stride two, low
+				 *       byte used)                          */
 	short widx;		/* +0x0c WRITE cursor, advanced per symbol by
 				 *       FPM_SMC_encoder                     */
-	short ridx;		/* +0x0e READ cursor, advanced per symbol by
-				 *       V22_PPS_filter: read at its +0x84,
-				 *       written back at +0x222, wrapped to
-				 *       zero when ridx + 1 reaches len      */
-	short len;		/* +0x10 wrap point for BOTH cursors.  Read by
-				 *       FPM_SMC_encoder at 0xa9c33 and by
-				 *       V22_PPS_filter at its +0x88.        */
+	short ridx;		/* +0x0e READ cursor, advanced and wrapped
+				 *       per symbol by V22_PPS_filter        */
+	short len;		/* +0x10 wrap point for both cursors (F1546) */
 };
 
-/* Load a config and clear the quadrant and carrier accumulators. */
+/**
+ * @brief Load a symbol coder config and clear the quadrant and carrier
+ *        accumulators.
+ * @param smc  State to initialise.
+ * @param cfg  Configuration (mapping mode, masks/shifts, optional carrier).
+ */
 void FPM_SMC_init(struct fpm_smc *smc, const struct fpm_smc_cfg *cfg);
 
-/*
- * Encode `count` data words into `ring`, advancing `ring->widx` (and wrapping
- * it at `ring->len`) once per symbol.  `quad`, `acc` and `widx` are written
- * back even when `count` is zero.
+/**
+ * @brief Encode @p count data words into constellation-point indices.
  *
- * A `widx` seeded at or past `len` is not brought into range before it is
- * used: the wrap is a single `widx + 1 < len` test made AFTER the store, so
- * the first symbol goes to the out-of-range slot and the index snaps to 0
- * only for the second.  One write past the end, not a run of them.
+ * Maps each word to a symbol index (quadrant plus amplitude bits, per
+ * `cfg.direct`), optionally rotates it by the running carrier index, and
+ * writes it into @p ring, advancing `ring->widx` (wrapped at `ring->len`)
+ * once per symbol. `quad`, `acc` and `widx` are written back to @p smc /
+ * @p ring even when @p count is zero.
+ *
+ * A `widx` seeded at or past `ring->len` is not brought into range before
+ * use: the wrap is a single `widx + 1 < len` test made AFTER the store, so
+ * the first symbol goes to the out-of-range slot and the index snaps back
+ * to 0 only from the second symbol on. One write past the end, not a run
+ * of them -- the object's own behaviour, reproduced here.
+ *
+ * @param smc    Symbol coder state.
+ * @param ring   Output ring buffer; `ring->sym` and `ring->widx` are
+ *               written.
+ * @param data   Data words to encode, `count` of them.
+ * @param count  Number of words in @p data.
  */
 void FPM_SMC_encoder(struct fpm_smc *smc, struct fpm_smc_ring *ring,
 		     const unsigned short *data, unsigned short count);

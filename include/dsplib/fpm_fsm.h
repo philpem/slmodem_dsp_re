@@ -44,17 +44,35 @@ extern const struct fpm_fsm_cfg FPM_FSM_CFG_data;
  */
 extern struct fpm_fsm_cfg FPM_FSM_CFG;
 
-/*
- * Build a modulator.  `cfg` supplies the two frequencies, the symbol length
- * in samples and the output scale; the frequencies are stored both as given
- * and pre-scaled for the tone generator.
+/**
+ * @brief Build a frequency-shift modulator.
+ *
+ * Copies @p cfg wholesale and derives the tone generator's pre-scaled
+ * frequencies (`freq * 10/9`) from it.
+ *
+ * @param state  The modulator to initialize.
+ * @param cfg    Supplies the two frequencies, the symbol length in samples
+ *               and the output scale.
  */
 void FPM_FSM_init(struct fpm_fsm *state, const struct fpm_fsm_cfg *cfg);
+
+/**
+ * @brief Release a modulator built by FPM_FSM_init().
+ * @param state  The modulator to tear down.
+ */
 void FPM_FSM_delete(struct fpm_fsm *state);
 
-/*
- * Modulate `nbits` bits, one 16-bit word each, using only bit 0.  Returns the
- * number of samples written: nbits * samples_per_sym.
+/**
+ * @brief Modulate a run of bits into audio.
+ *
+ * Each bit switches the tone generator between the config's two
+ * frequencies for `samples_per_sym` samples.
+ *
+ * @param state  The modulator.
+ * @param bits   @p nbits words, one bit per symbol; only bit 0 of each is read.
+ * @param out    Output buffer, `nbits * samples_per_sym` samples.
+ * @param nbits  Number of bits to modulate.
+ * @return The number of samples written (`nbits * samples_per_sym`).
  */
 short FPM_FSM_modulate(struct fpm_fsm *state, const unsigned short *bits,
 		       short *out, unsigned short nbits);

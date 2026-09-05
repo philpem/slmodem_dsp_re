@@ -632,8 +632,7 @@ V90Phase3Modulator::generateV90Symbol()
 				state = P3M_STATE_ERROR;
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
-					    "V90Phase3Modulator: ERROR: Null "
-					    "JdBits @ end of TRN1d\r\n");
+					    "V90Phase3Modulator: ERROR: Null " "JdBits @ end of TRN1d\r\n");
 			}
 			symbolCount = 0;
 		}
@@ -666,8 +665,7 @@ V90Phase3Modulator::generateV90Symbol()
 				state = P3M_STATE_DIL;
 			} else {
 				state = P3M_STATE_ERROR;
-				edprintf("V90Phase3Modulator: ERROR: Null DIL "
-					 "@ end of JdNOT\r\n");
+				edprintf("V90Phase3Modulator: ERROR: Null DIL " "@ end of JdNOT\r\n");
 			}
 			symbolCount = 0;
 		}
@@ -771,8 +769,7 @@ V90Phase3Modulator::generateV92Symbol()
 				state = P3M_STATE_ERROR;
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
-					    "V90Phase3Modulator: ERROR: Null "
-					    "v92JdBits @ end of TRN1d\r\n");
+					    "V90Phase3Modulator: ERROR: Null " "v92JdBits @ end of TRN1d\r\n");
 			}
 			symbolCount = 0;
 		}
@@ -829,8 +826,7 @@ V90Phase3Modulator::generateV92Symbol()
 				state = P3M_STATE_DIL;
 			} else {
 				state = P3M_STATE_ERROR;
-				edprintf("V90Phase3Modulator: ERROR: Null DIL "
-					 "@ end of JdNOT\r\n");
+				edprintf("V90Phase3Modulator: ERROR: Null DIL " "@ end of JdNOT\r\n");
 			}
 			symbolCount = 0;
 		}

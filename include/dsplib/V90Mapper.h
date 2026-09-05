@@ -1,54 +1,56 @@
-/*
- * V90Mapper.h -- the V.90 downstream constellation mapper.
+/**
+ * @file V90Mapper.h
+ * @brief `V90Mapper`, the V.90 downstream constellation mapper: turns
+ *        buffered payload bits into one six-sample V.90 frame at a time,
+ *        via a modulus encoder, an optional spectral shaper and a serial
+ *        differential (sign) encoder.
  *
- * Reconstructed from dsplibs.o.  Five members and 2,400 bytes of code, of
- * which the constructor, the destructor and both resets are written here;
- * `process` is not.
+ * Five members and 2,400 bytes of code, all five written: the constructor,
+ * the destructor, both resets, and `process`.
  *
- * NOT POLYMORPHIC: `~V90Mapper` is listed with `D1` and `D2` and no `D0`, so
- * offset 0 is a real member and there is no vptr.
+ * Not polymorphic: `~V90Mapper` is listed with `D1` and `D2` and no `D0`,
+ * so offset 0 is a real member and there is no vptr.
  *
- * THE SIZE IS 0x704, AND IT IS THE ORIGINAL COMPILER'S OWN `sizeof`.
- * `V90BitsToSymbol`'s constructor is
+ * The size is 0x704, the original compiler's own `sizeof`: `V90BitsToSymbol`'s
+ * constructor is
  *
  *     movl $0x704,(%esp) ; call sysdep_malloc ; ... ; call V90Mapper::C1
  *
  * -- the allocation is `sizeof(V90Mapper)` written by the compiler that laid
  * the class out, which is better evidence than any displacement (finding
- * F1246).  The "one member of unknown width at 0x700 -- either reading is
- * consistent" sentence that used to stand here IS RETRACTED: +0x700 is a
- * four-byte member and both resets store zero into it with a `movl`, so the
- * class ends exactly at 0x704 with no tail padding at all.  See `word_700`.
+ * F1246). +0x700 is a four-byte member and both resets store zero into it
+ * with a `movl`, so the class ends exactly at 0x704 with no tail padding.
+ * See `word_700`.
  *
- * THE TWO EMBEDDED SUBOBJECTS ARE FIXED POINTS, NOT GUESSES.  The constructor
- * does `lea 0x670(%ebx),%edx ; call ModulusEncoder::C1` and `lea
- * 0x68c(%ebx),%eax ; call V90SpectralShaper::C1` -- a `lea` and not a load,
- * so they are embedded and not pointed at.  `sizeof(ModulusEncoder)` is 0x1c
- * (asserted in src/pump/v90/ModulusCoder.cpp) and 0x670 + 0x1c = 0x68c, so
- * they abut.  `sizeof(V90SpectralShaper)` is 0x6c (asserted in
- * src/pump/v90/V90SpectralShaper.cpp, and derived independently from inside
- * that class) and 0x68c + 0x6c = 0x6f8, which is exactly where the next field
- * the constructor writes sits.  Three sizes settled elsewhere and one
+ * The two embedded sub-objects are fixed points, not guesses. The
+ * constructor does `lea 0x670(%ebx),%edx ; call ModulusEncoder::C1` and
+ * `lea 0x68c(%ebx),%eax ; call V90SpectralShaper::C1` -- a `lea` and not a
+ * load, so they are embedded and not pointed at. `sizeof(ModulusEncoder)`
+ * is 0x1c (asserted in src/pump/v90/ModulusCoder.cpp) and 0x670 + 0x1c =
+ * 0x68c, so they abut. `sizeof(V90SpectralShaper)` is 0x6c (asserted in
+ * src/pump/v90/V90SpectralShaper.cpp, and derived independently from
+ * inside that class) and 0x68c + 0x6c = 0x6f8, exactly where the next
+ * field the constructor writes sits. Three sizes settled elsewhere and one
  * displacement here agree to the byte.
  *
- * AND BOTH RESETS CONFIRM THE FIRST OF THEM FROM THE OTHER SIDE.  They fill
+ * Both resets confirm the first of them from the other side: they fill
  * +0x670..+0x688 with seven words -- the six constellation sizes and
- * `word_08` -- which is `ModulusEncoder`'s whole seven-member layout written
- * out by hand, in the same order and from the same sources as
- * `V90Demapper::reset` writes into its embedded `ModulusDecoder`.  There is
- * no call: the blob has no `ModulusEncoder::reset` symbol (`V92ModulusEncoder`
- * does have one, and the V.90 pair do not), so the stores are the author's
- * own and not an inlined member.
+ * `word_08` -- which is `ModulusEncoder`'s whole seven-member layout
+ * written out by hand, in the same order and from the same sources as
+ * `V90Demapper::reset` writes into its embedded `ModulusDecoder`. There is
+ * no call: the blob has no `ModulusEncoder::reset` symbol
+ * (`V92ModulusEncoder` does have one, and the V.90 pair do not), so the
+ * stores are the author's own and not an inlined member.
  *
- * THE DESTRUCTOR DOES NOT DESTROY THE MODULUS ENCODER.  It calls
+ * The destructor does not destroy the modulus encoder: it calls
  * `V90SpectralShaper::~V90SpectralShaper` and nothing else, which is what a
  * compiler emits when the other member is trivially destructible --
  * `ModulusEncoder` has a constructor and no destructor, and `nm` on the blob
  * shows no `_ZN14ModulusEncoderD*` symbol at all.
  *
  * ---------------------------------------------------------------------------
- * THIS CLASS IS `V90Demapper` SEEN FROM THE TRANSMIT SIDE, AND THAT IS WHERE
- * THE NAMES AT +0x04..+0x14 COME FROM
+ * This class is `V90Demapper` seen from the transmit side, and that is where
+ * the names at +0x04..+0x14 come from
  *
  * `V90Demapper::reset` computes five quantities out of the same
  * `V90MappingParams` and stores them at the same five offsets, by the same
@@ -171,45 +173,65 @@ class V90MappingParams;
 
 class V90Mapper {
 public:
-	/* Defined in src/pump/v90/V90Mapper.cpp. */
+	/**
+	 * @brief Construct the mapper: allocate its bit buffer and zero its state.
+	 * @param params  The V.90 parameter block; stored, not read yet.
+	 */
 	V90Mapper(V90Parameters *params);
+	/** @brief Destroy the mapper: free `buf` (not null-checked, not nulled after) and the spectral shaper. */
 	~V90Mapper();
 
-	/*
-	 * Set up for a connection.  Signatures are the mangling's:
-	 * `_ZN9V90Mapper5resetEP16V90MappingParams7PcmType` and
-	 * `_ZN9V90Mapper15resetNoSpectralEP16V90MappingParams7PcmType`.
+	/**
+	 * @brief Set up for a connection, with spectral shaping.
 	 *
-	 * `pcm` IS TESTED FOR NONZERO AND NEVER COMPARED AGAINST A VALUE --
-	 * `test %ebx,%ebx ; jne` in both -- so zero is mu-law and ANYTHING
-	 * else is A-law, which is what `PcmType` already records.
+	 * Computes `bitsPerFrame`, `signBitGroups`, `signBitGroupSize`,
+	 * `signBitsPerFrame` and `word_08` from @p mp; builds the six
+	 * constellations by companding @p mp's tables per @p pcm; loads the
+	 * modulus encoder's seven fields; resets the sign encoder; and, if
+	 * `signBitGroups` is nonzero, resets the embedded spectral shaper
+	 * and primes the +0x6f8 countdown from `mp->shaperId` (left at 0
+	 * otherwise). `signBitGroupSize` is stored 0 when there is no
+	 * shaper, where V90Demapper::reset() instead leaves the
+	 * corresponding field stale.
 	 *
-	 * `resetNoSpectral` is `reset` without the spectral shaper: it leaves
-	 * +0x0c, +0x10, +0x14, +0x1c and +0x6f8 exactly as it found them and
-	 * READS +0x0c to form `word_08`.  That is the same division of labour
-	 * `V90Demapper` has between its own two.
+	 * @param mp   The V.90 mapping parameters for this connection.
+	 * @param pcm  Zero selects mu-law; any other value selects A-law
+	 *             (tested for nonzero, never compared against a specific value).
 	 */
 	void reset(V90MappingParams *mp, PcmType pcm);
+	/**
+	 * @brief Set up for a connection, without spectral shaping.
+	 *
+	 * `reset()` without the shaper: leaves `signBitsPerFrame`,
+	 * `signBitGroups`, `signBitGroupSize`, `bitsBuffered` and +0x6f8
+	 * exactly as found, but still reads `signBitsPerFrame` to compute
+	 * `word_08`.
+	 *
+	 * @param mp   The V.90 mapping parameters for this connection.
+	 * @param pcm  Zero selects mu-law; any other value selects A-law.
+	 */
 	void resetNoSpectral(V90MappingParams *mp, PcmType pcm);
 
-	/*
-	 * `_ZN9V90Mapper7processEPhjPsRj`, and the return type is `void`
-	 * BECAUSE THE EPILOGUE DOES NOT SET ONE.  The mangling carries no
-	 * return type; the exit at 0x30558 loads the reference operand and
-	 * `%ebp`, stores one through the other and pops, leaving `%eax`
-	 * holding whatever the last path put there -- `nofBits` itself on the
-	 * zero-length path at 0x30439.  A function returning a value would
-	 * have to agree with itself across those paths and this one does not.
+	/**
+	 * @brief Buffer payload bits and emit whole V.90 frames as they fill.
 	 *
-	 * `bits` is one V.90 payload BIT PER BYTE -- `movzbl (%esi,%ebp,1)`
-	 * into a `0x50`-byte buffer, whose contents reach
-	 * `ModulusEncoder::progress` as its `unsigned char *` bit string and
-	 * `V90SpectralShaper::process` as its sign bits, both of which read a
-	 * byte as one bit.  `nofBits` is how many are supplied, `symbols`
-	 * where the finished frames go, and `nofSymbols` how many were
-	 * written -- which is NOT `nofBits / bitsPerFrame * 6`, because the
-	 * priming countdown at +0x6f8 suppresses whole frames and then part
-	 * of one.
+	 * Appends each bit of @p bits to `buf` at `bitsBuffered`; once
+	 * `bitsPerFrame` bits have accumulated, builds one frame (the
+	 * modulus encoder turns the non-sign bits into six digits that
+	 * select a level from each constellation; the sign bits either
+	 * drive the spectral shaper in `signBitGroups` groups of
+	 * `signBitGroupSize` samples, or, with no shaper, the serial
+	 * differential encoder one bit at a time) and takes `bitsPerFrame`
+	 * back off `bitsBuffered` rather than clearing it, so a
+	 * part-filled frame carries over to the next call. The +0x6f8
+	 * priming countdown suppresses whole frames and then part of one at
+	 * the start of a connection, so @p nofSymbols is not simply
+	 * `nofBits / bitsPerFrame * 6`.
+	 *
+	 * @param bits        One payload bit per byte.
+	 * @param nofBits     How many bits of @p bits are valid.
+	 * @param symbols     Receives the finished frames' samples.
+	 * @param nofSymbols  Receives how many samples were written.
 	 */
 	void process(unsigned char *bits, unsigned int nofBits, short *symbols,
 		     unsigned int &nofSymbols);

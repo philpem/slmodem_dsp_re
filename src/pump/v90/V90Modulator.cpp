@@ -32,10 +32,17 @@
  * received, the two silently swap, and nothing but two distinct addresses in
  * a test can tell.
  *
- * WHY THE SUB-OBJECTS ARE BUILT THROUGH asm() LABELS RATHER THAN `new`: the
- * argument is src/pump/v90/V90BitsToSymbol.cpp's and applies unchanged.  Two
- * of the three classes are not this file's to give an `operator new` to in any
- * case.
+ * THE SUB-OBJECTS USED TO BE BUILT THROUGH asm() LABELS RATHER THAN `new`, on
+ * the belief (finding F1340) that a user-declared placement `operator new`
+ * would force GCC to emit a null test the blob does not have between
+ * `sysdep_malloc` and the constructor call -- and that only a class this file
+ * could give its OWN `operator new` to (which two of the three are not) could
+ * even be reached that way.  Finding F10155 retracts the premise: the null
+ * check is tied to a `throw()` placement `operator new`, which is not this
+ * project's, and `include/dsplib/sysdep.h` declares ONE shared non-throw pair
+ * every such site uses, so which class owns it was never the question.
+ * Genuine placement `new` is used below instead; see finding F10157 for the
+ * site that proved this mechanism end-to-end.
  */
 
 #include <stddef.h>
@@ -54,36 +61,14 @@
 #include "dsplib/V90Phase3Modulator.h"
 #include "dsplib/V90Phase4Modulator.h"
 
-extern "C" {
 /*
- * The three constructors, by the names the blob calls at 0x1a628, 0x1a64f and
- * 0x1a6a2.  C1 is the complete-object variant, which is what a `new`
- * expression uses.  Only `V90Phase4Modulator`'s is declared through its class
- * as well, so only that one could have been written any other way.
- */
-void v90mod_bts_ctor(void *self, unsigned int nofSymbols,
-		     V90Parameters *params)
-	asm("_ZN15V90BitsToSymbolC1EjP13V90Parameters");
-void v90mod_p3_ctor(void *self, V90Parameters *params, unsigned int flag)
-	asm("_ZN18V90Phase3ModulatorC1EP13V90Parametersj");
-void v90mod_p4_ctor(void *self, V90Parameters *params, unsigned int flag,
-		    V90BitsToSymbol *bts, V90MP *mp,
-		    V90MappingParams *mappingParams,
-		    V90MappingParams *mappingParams2, V90CP *cp,
-		    unsigned int arg8)
-	asm("_ZN18V90Phase4ModulatorC1EP13V90ParametersjP15V90BitsToSymbol"
-	    "P5V90MPP16V90MappingParamsS7_P5V90CPj");
-
-/* And the two destructors the release path calls, at 0x19bd3 and 0x19bf3. */
-void v90mod_p3_dtor(void *self) asm("_ZN18V90Phase3ModulatorD1Ev");
-void v90mod_p4_dtor(void *self) asm("_ZN18V90Phase4ModulatorD1Ev");
-}
-
-/*
- * The two sizes this file allocates but cannot see a `sizeof` for: the
- * classes are reached through an asm() label and are not declared here.  Both
- * are the blob's own `sizeof`, from the allocation immediately before the
- * constructor call.
+ * The two sizes the constructor allocates, kept as named literals rather than
+ * `sizeof(V90Phase3Modulator)`/`sizeof(V90Phase4Modulator)` even though both
+ * classes are fully declared here now (finding F10155's conversion no longer
+ * needs the asm()-label device that used to keep them opaque).  Both are the
+ * blob's own `sizeof`, from the allocation immediately before the constructor
+ * call, and asserting the literal against the class's own size would be a
+ * change of its own; left alone here.
  */
 #define V90MOD_PHASE3_SIZE	0x398u
 #define V90MOD_PHASE4_SIZE	0x2facu
@@ -155,16 +140,16 @@ V90Modulator::V90Modulator(unsigned int n, V90Phase2Info *p2, V90Jd *jdArg,
 	frameBuf = (unsigned char *)sysdep_malloc(8 * n);
 
 	bts = (V90BitsToSymbol *)sysdep_malloc(sizeof(V90BitsToSymbol));
-	v90mod_bts_ctor(bts, 2 * n + n + 0x1388, params);
+	new (bts) V90BitsToSymbol(2 * n + n + 0x1388, params);
 	bitsToSymbol = bts;
 
 	p3 = (V90Phase3Modulator *)sysdep_malloc(V90MOD_PHASE3_SIZE);
-	v90mod_p3_ctor(p3, params, sessionFlag);
+	new (p3) V90Phase3Modulator(params, sessionFlag);
 	phase3Modulator = p3;
 
 	p4 = (V90Phase4Modulator *)sysdep_malloc(V90MOD_PHASE4_SIZE);
-	v90mod_p4_ctor(p4, params, sessionFlag, bitsToSymbol, mp,
-		       mappingParams2, mappingParams, cp, 0xc);
+	new (p4) V90Phase4Modulator(params, sessionFlag, bitsToSymbol, mp,
+				    mappingParams2, mappingParams, cp, 0xc);
 	phase4Modulator = p4;
 }
 
@@ -187,11 +172,11 @@ V90Modulator::V90Modulator(unsigned int n, V90Phase2Info *p2, V90Jd *jdArg,
 V90Modulator::~V90Modulator()
 {
 	if (phase3Modulator) {
-		v90mod_p3_dtor(phase3Modulator);
+		phase3Modulator->~V90Phase3Modulator();
 		sysdep_free(phase3Modulator);
 	}
 	if (phase4Modulator) {
-		v90mod_p4_dtor(phase4Modulator);
+		phase4Modulator->~V90Phase4Modulator();
 		sysdep_free(phase4Modulator);
 	}
 	if (bitsToSymbol) {
@@ -419,8 +404,7 @@ V90Modulator::acknowledgeCPReception()
 		return;
 
 	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("V90Modulator: exit MP due to CP "
-				     "reception\r\n");
+		dsplibs_debug_printf("V90Modulator: exit MP due to CP " "reception\r\n");
 
 	phase4Modulator->exitMP();
 	eventCode = 0;
@@ -462,8 +446,7 @@ V90Modulator::acknowledgeCPNotReception()
 		mp->infoToBits();
 
 		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("V90Modulator: exit MP due to "
-					     "CPNot reception\r\n");
+			dsplibs_debug_printf("V90Modulator: exit MP due to " "CPNot reception\r\n");
 
 		phase4Modulator->exitMP();
 		eventCode = 0;
@@ -472,8 +455,7 @@ V90Modulator::acknowledgeCPNotReception()
 
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V90Modulator: setting delayed "
-					     "MPNot exit due to CPNot "
-					     "reception\r\n");
+					     "MPNot exit due to CPNot " "reception\r\n");
 	}
 }
 
@@ -482,8 +464,7 @@ V90Modulator::acknowledgeEReception()
 {
 	if (phase4Modulator->state == P4M_STATE_MP_NOT) {
 		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("V90Modulator: exit MPNot due to "
-					     "E reception\r\n");
+			dsplibs_debug_printf("V90Modulator: exit MPNot due to " "E reception\r\n");
 
 		phase4Modulator->exitMPNot();
 		eventCode = 0;
@@ -491,8 +472,7 @@ V90Modulator::acknowledgeEReception()
 		phase4Modulator->delayedMpNotExit = 1;
 
 		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("V90Modulator: setting delayed "
-					     "MPNot exit due to E "
+			dsplibs_debug_printf("V90Modulator: setting delayed " "MPNot exit due to E "
 					     "reception\r\n");
 	}
 }
@@ -661,14 +641,12 @@ V90Modulator::initiateRRN()
 
 	if (state != 3) {
 		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("V90Modulator: RRN requested but "
-					     "NOT approved\r\n");
+			dsplibs_debug_printf("V90Modulator: RRN requested but " "NOT approved\r\n");
 		return -1;
 	}
 
 	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("V90Modulator: RRN requested, enter "
-				     "Phase 4\r\n");
+		dsplibs_debug_printf("V90Modulator: RRN requested, enter " "Phase 4\r\n");
 
 	state = 2;
 	symbolCount = 0;
@@ -748,14 +726,12 @@ V90Modulator::initiateFPE()
 
 	if (state != 3) {
 		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("V90Modulator: FPE requested but "
-					     "NOT approved\r\n");
+			dsplibs_debug_printf("V90Modulator: FPE requested but " "NOT approved\r\n");
 		return -1;
 	}
 
 	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("V90Modulator: FPE requested, enter "
-				     "Phase 4\r\n");
+		dsplibs_debug_printf("V90Modulator: FPE requested, enter " "Phase 4\r\n");
 
 	state = 2;
 	symbolCount = 0;
@@ -880,8 +856,7 @@ V90Modulator::progress(int *bits, unsigned int &nofBits, float *out,
 				if (eventCode == 6 && state != 2) {
 					if (DSPLIB_DEBUG_ON())
 						dsplibs_debug_printf(
-						    "V90Modulator: enter "
-						    "Phase 4\r\n");
+						    "V90Modulator: enter " "Phase 4\r\n");
 
 					phase4Modulator->reset(
 					    (PcmType)phase2Info->pcmType,
@@ -918,8 +893,7 @@ V90Modulator::progress(int *bits, unsigned int &nofBits, float *out,
 		}
 
 		if (state != 3) {
-			edprintf("V90Modulator: Data Phase spectral "
-				 "parameters:\r\n");
+			edprintf("V90Modulator: Data Phase spectral " "parameters:\r\n");
 			displaySpectralParams(mappingParams2);
 
 			state = 3;
@@ -930,8 +904,7 @@ V90Modulator::progress(int *bits, unsigned int &nofBits, float *out,
 
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
-				    "V90Modulator: enter Data Phase, "
-				    "Rate = %d [bps]\r\n",
+				    "V90Modulator: enter Data Phase, " "Rate = %d [bps]\r\n",
 				    state == 3
 					? (unsigned int)(0.5f +
 					      (8000 *
@@ -969,8 +942,7 @@ V90Modulator::progress(int *bits, unsigned int &nofBits, float *out,
 
 	default:
 		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("V90Modulator progress: Illegal "
-					     "state\r\n");
+			dsplibs_debug_printf("V90Modulator progress: Illegal " "state\r\n");
 		break;
 	}
 

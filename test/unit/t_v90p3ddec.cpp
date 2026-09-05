@@ -80,12 +80,17 @@ extern unsigned int ref_dsplibs_debug_level;
 #include "dsplib/modem_params.h"
 #include "dsplib/ANSamToneDetector.h"
 #include "dsplib/V90Phase3Demodulator.h"
+#include "dsplib/sysdep.h"
 
 /*
  * Constructing over storage that already exists, with no <new> to include --
- * the build is -nostdinc++.  Same device as t_floatiirfree.cpp.
+ * the build is -nostdinc++. Placement new/delete are declared in sysdep.h
+ * (finding F10155) rather than locally here: this file's own copy collided
+ * with sysdep.h's once V90Phase3Demodulator.h started pulling the latter in
+ * transitively (redefinition of `operator new(size_t, void*)` under GCC
+ * 3.4.2). Same device as t_floatiirfree.cpp, which had the identical
+ * collision and the identical fix.
  */
-inline void *operator new(size_t n, void *p) { (void)n; return p; }
 
 /* The object is 0x42c; the slot is larger so an overrunning store shows up. */
 #define SLOT		(0x42c + 64)

@@ -79,9 +79,12 @@
 #define CALLPROG_WFS_STATE		8	/* wait for silence */
 #define CALLPROG_BONGTONE_STATE		9
 
-/*
- * Name of a progress message, for logging.  Unknown codes give "", not NULL,
- * so a caller can print the result unconditionally.
+/**
+ * @brief Look up the name of a progress message, for logging.
+ * @param status  One of the `CALLPROG_*` message codes.
+ * @return The message's name, or "" (not NULL) for an unknown or retired
+ *         code (16 and 17 have no name in the original's table) -- a
+ *         caller can print the result unconditionally.
  */
 const char *CALLPROG_Status_string(int status);
 

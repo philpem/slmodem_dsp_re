@@ -71,7 +71,38 @@
  */
 extern const struct fpm_smc_cfg SMC_CFG;
 
+/**
+ * @brief Load a symbol coder config and clear the quadrant/carrier
+ *        accumulators.
+ *
+ * Byte for byte FPM_SMC_init(); see include/dsplib/fpm_smc.h.
+ *
+ * @param smc  State to initialise.
+ * @param cfg  Configuration.
+ */
 void SMC_init(struct fpm_smc *smc, const struct fpm_smc_cfg *cfg);
+
+/**
+ * @brief Encode @p count data words into constellation-point indices or
+ *        complex samples, per `cfg.f00`.
+ *
+ * Extends FPM_SMC_encoder() with a second output form (see the file
+ * comment above): with `cfg.f00` non-zero, behaves exactly like
+ * FPM_SMC_encoder(), writing a rotated symbol index to `ring->sym`; with
+ * `cfg.f00` zero, instead performs a Q15 complex multiply of the
+ * constellation point (`cfg.imap[index]`, `cfg.qmap[index]`) by the
+ * carrier phasor at the accumulator's value BEFORE this symbol's step
+ * (`cfg.cosine[acc]`, `cfg.sine[acc]`), writing the result to
+ * `ring->i[widx]`/`ring->q[widx]` and leaving `ring->sym` untouched.
+ * `cfg.f00` and `cfg.direct` are read once, outside the loop, so a config
+ * edited under a running encoder is not seen until the next call.
+ *
+ * @param smc    Symbol coder state.
+ * @param ring   Output ring buffer; `ring->sym` or `ring->i`/`ring->q`
+ *               (per `cfg.f00`) and `ring->widx` are written.
+ * @param data   Data words to encode, @p count of them.
+ * @param count  Number of words in @p data.
+ */
 void SMC_encoder(struct fpm_smc *smc, struct fpm_smc_ring *ring,
 		 const unsigned short *data, unsigned short count);
 

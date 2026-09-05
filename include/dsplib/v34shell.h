@@ -170,11 +170,20 @@ struct v34_shell {
 	 * the descrambler, which is the same pairing the two function-
 	 * pointer types above describe.
 	 *
-	 * The widths do not match exactly -- `scrambleGPC` takes and
-	 * returns a `short` where `v34_getbits_fn` uses `int` -- and
-	 * `getFrame` is not yet reconstructed, so which typedef matches the
-	 * original is not settled. Both spellings are kept rather than
-	 * choosing one on a guess.
+	 * SETTLED, not still open (finding F10154): `scramble` is the right
+	 * spelling for this pair, not `get_bits`. `getFrame` (v34shell.c)
+	 * calls `s->scramble(objp, (short)pos)` at all three of its call
+	 * sites, and `scrambleGPC`'s own object code reads its second
+	 * argument with `movswl` and returns via `cwtl` -- sign-extension
+	 * instructions consistent only with the genuine `short` parameter
+	 * and return `v34_scramble_fn` declares, ruling out
+	 * `v34_getbits_fn`'s `int`. `v34shell.c`'s own comment above the
+	 * four bit callbacks (`scrambleGPC`/`scrambleGPA`/`descrambleGPC`/
+	 * `descrambleGPA`, in v34scram.c) states this with the disassembly
+	 * evidence; this header's comment had gone stale describing
+	 * `getFrame` as unreconstructed after it no longer was.
+	 * `v34_getbits_fn`/`get_bits` is a documented-but-unused spelling of
+	 * this union member, kept only because nothing forces its removal.
 	 */
 	union {
 		v34_putbits_fn	put_bits;	/* the receive context's sink */

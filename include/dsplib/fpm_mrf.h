@@ -45,24 +45,48 @@ struct fpm_mrf {
 	short *history;		/* +0x18 history_len entries             */
 };
 
-/*
- * `fresh` non-zero means the state is uninitialised: allocate without
- * inspecting the existing buffer.  Zero means re-init, reusing the buffer if
- * it is already large enough.
+/**
+ * @brief Initialise (or re-initialise) an MRF resampler's state.
+ *
+ * Copies @p cfg into @p state and resets `need`/`phase`/`widx` to a fresh
+ * run's start values, then sizes and clears the history buffer.
+ *
+ * @param state  The resampler state to initialise.
+ * @param cfg    Configuration to copy in (branches, decimate, coefficients).
+ * @param fresh  Non-zero if @p state is uninitialised memory: the existing
+ *               `history` pointer is not inspected or freed, only replaced.
+ *               Zero re-initialises in place, reusing the existing buffer
+ *               when it is already large enough for the new tap count and
+ *               reallocating (freeing the old one first) when it is not.
+ *               Calling with `fresh` set on an already-initialised state
+ *               leaks the old buffer -- reproduced from the original.
  */
 void FPM_MRF_init(struct fpm_mrf *state, const struct fpm_mrf_cfg *cfg,
 		  int fresh);
+
+/**
+ * @brief Free an MRF resampler's history buffer.
+ * @param state The resampler state to tear down.
+ */
 void FPM_MRF_free(struct fpm_mrf *state);
 
-/* The library default: 9:10, no coefficients.  A template, not a filter. */
+/** @brief Library default configuration: 9:10, no coefficients. A template
+ *  for callers to copy and patch `coeff`, not a usable filter on its own. */
 extern const struct fpm_mrf_cfg FPM_MRF_CFG;
 
-/*
- * Resample `count` input samples.  Returns the number of outputs produced,
- * which is roughly count * branches / decimate.
+/**
+ * @brief Resample @p count input samples through one MRF filter.
  *
- * `phase`, `widx` and `need` persist across calls, so a stream may be fed in
- * arbitrary fragments -- including fragments shorter than one output needs.
+ * `phase`, `widx` and `need` persist in @p state across calls, so a stream
+ * may be fed in arbitrary fragments -- including fragments shorter than one
+ * output needs.
+ *
+ * @param state  Resampler state (holds the circular history and position).
+ * @param in     Input samples, @p count of them.
+ * @param out    Output buffer; receives the produced samples.
+ * @param count  Number of input samples to consume.
+ * @return Number of output samples produced, roughly `count * branches /
+ *         decimate`.
  */
 short FPM_MRF_filter(struct fpm_mrf *state, const short *in, short *out,
 		     short count);

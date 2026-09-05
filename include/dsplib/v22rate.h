@@ -66,44 +66,64 @@ struct v22fp;
  */
 #define V22_FRONTEND_IIR	2
 
-/*
- * Select the transmit rate: scrambler width, symbol-coder field widths, and
- * the pulse shaper's constellation maps.
+/**
+ * @brief Select the V.22 transmit rate.
+ *
+ * Re-derives the scrambler's width-dependent fields in place (not a call
+ * to `FPM_SDM_init`), moves the symbol coder's quadrant shift and
+ * amplitude mask, and repoints the pulse shaper's constellation maps.
+ *
+ * @param fp    The V.22 datapump instance.
+ * @param rate  V22_RATE_1200 or V22_RATE_2400; anything else is a no-op.
  */
 void SetTxRate(struct v22fp *fp, short rate);
 
-/*
- * Select the receive rate: descrambler width, and the equaliser's slicer.
+/**
+ * @brief Select the V.22 receive rate.
+ *
+ * Re-derives the descrambler's width-dependent fields in place and
+ * repoints the equaliser's slicer at FSEv22_decision12() or
+ * FSEv22_decision24().
+ *
+ * @param fp    The V.22 datapump instance.
+ * @param rate  V22_RATE_1200 or V22_RATE_2400; anything else is a no-op.
  */
 void SetRxRate(struct v22fp *fp, short rate);
 
-/*
- * Re-initialise the symbol-rate recovery loop and the equaliser without
- * reallocating either.
+/**
+ * @brief Re-initialise the V.22 symbol-rate recovery loop and the equaliser without reallocating either.
  *
- * `V22_FSE_init` is handed the equaliser AS ITS OWN CONFIGURATION.  That is
- * not a transcription slip: `struct v22_fse_cfg` is the two words `icoff` and
- * `qcoff`, and `struct v22_fse` opens with the same two in the same places,
- * so passing the state re-seeds it from the coefficient tables it is already
- * pointing at.  Both calls pass `fresh` = 0, so nothing is allocated.
+ * `V22_FSE_init` is handed the equaliser as its own configuration. That is
+ * not a transcription slip: `struct v22_fse_cfg` is the two words `icoff`
+ * and `qcoff`, and `struct v22_fse` opens with the same two in the same
+ * places, so passing the state re-seeds it from the coefficient tables it
+ * is already pointing at. Both calls pass `fresh` = 0, so nothing is
+ * allocated.
+ *
+ * @param fp  The V.22 datapump instance.
  */
 void ResetRx(struct v22fp *fp);
 
-/*
- * One received block: optional IIR front end, rate conversion, level check,
- * AGC, symbol-clock recovery, equalisation.
+/**
+ * @brief Demodulate one received V.22 block: optional IIR front end, rate conversion, level check, AGC, symbol-clock recovery, equalisation.
  *
- * `in` is an INPUT AND TWO SCRATCH BUFFERS.  The rate converter reads it and
- * writes `dsp->rx_scratch`; the clock recovery reads `rx_scratch` and writes
- * back over `in`; the equaliser then reads `in` and writes `sym`.  So `in` is
- * destroyed, and it must be large enough for whatever the resampler produces
- * as well as for what the caller put there.
+ * @p in is an input and two scratch buffers. The rate converter reads it
+ * and writes `dsp->rx_scratch`; the clock recovery reads `rx_scratch` and
+ * writes back over @p in; the equaliser then reads @p in and writes @p sym.
+ * So @p in is destroyed, and it must be large enough for whatever the
+ * resampler produces as well as for what the caller put there.
  *
- * Returns the number of symbols now in `sym`, read back out of the
- * equaliser's own counter rather than from `V22_FSE_receive`'s return, which
- * the object discards.  ZERO IS ALSO THE DISCONNECT ANSWER: when the level
- * check fails the carrier flag is cleared and the function returns 0 without
- * running any of the rest.
+ * Zero is also the disconnect answer: when the level check fails the
+ * carrier flag is cleared and the function returns 0 without running any
+ * of the rest.
+ *
+ * @param fp     The V.22 datapump instance.
+ * @param in     Input samples; destroyed as scratch space (see above).
+ * @param sym    Output for the demodulated symbols.
+ * @param count  How many input samples.
+ * @return The number of symbols now in @p sym, read back out of the
+ *         equaliser's own counter rather than from `V22_FSE_receive`'s
+ *         return, which the object discards.
  */
 unsigned short DemodDataV22(struct v22fp *fp, short *in, unsigned short *sym,
 			    unsigned short count);

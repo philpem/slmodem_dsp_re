@@ -768,13 +768,11 @@ V32FP_recreate(void *modem, const struct v32fp_params *param, void *arg2)
 	 * the macros would stamp this build instead.
 	 */
 	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("V32FP version: %s %s\n",
-				     "Sep 22 2005", "15:48:07");
+		dsplibs_debug_printf("V32FP version: %s %s\n", "Sep 22 2005", "15:48:07");
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf(
 			"V32FP Config: protocol=%d,tx_rate=%d,rx_rate=%d,"
-			"timeout=%d,energy_drop_time=%d,tx_scale=%d,"
-			"options=0x%x,trellis=%d\n",
+			"timeout=%d,energy_drop_time=%d,tx_scale=%d," "options=0x%x,trellis=%d\n",
 			param->protocol, param->tx_rate, param->rx_rate,
 			param->timeout, param->energy_drop_time,
 			param->tx_scale, param->options, param->trellis);

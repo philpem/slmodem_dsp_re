@@ -230,7 +230,7 @@
  },
  {
   "label": "0x65df4 and 0x6abc1 print each other's message",
-  "find": "\t\tdsplibs_debug_printf(\"Repeated info0 is detected (after 1200), \"\n\t\t\t\t     \"errorrecovery is initialized in \"\n\t\t\t\t     \"TX_PHASE1_ANS\\n\");",
+  "find": "\n\t\tdsplibs_debug_printf(\"Repeated info0 is detected (after 1200), \"\n\t\t\t\t     \"errorrecovery is initialized in \" \"TX_PHASE1_ANS\\n\");",
   "replace": "\t\tdsplibs_debug_printf(\"Repeated info0 is detected, errorrecovery \"\n\t\t\t\t     \"is initialized in TX_PHASE1_ANS\\n\");",
   "fn": "t46_body_repeated_late"
  },

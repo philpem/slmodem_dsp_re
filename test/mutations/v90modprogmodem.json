@@ -29,12 +29,12 @@
  },
  {
   "label": "an illegal side falls through to the modulator",
-  "find": "\t} else {\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90Modem progress: Illegal \"\n\t\t\t\t\t     \"modemSide\\r\\n\");\n\t}",
+  "find": "\n\t} else {\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90Modem progress: Illegal \" \"modemSide\\r\\n\");\n\t}",
   "replace": "\t} else {\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90Modem progress: Illegal \"\n\t\t\t\t\t     \"modemSide\\r\\n\");\n\t\tmodulator->progress(bits, nofBits, samples, nofSymbols);\n\t}"
  },
  {
   "label": "the illegal-side report is not gated",
-  "find": "\t} else {\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90Modem progress: Illegal \"\n\t\t\t\t\t     \"modemSide\\r\\n\");\n\t}",
+  "find": "\n\t} else {\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90Modem progress: Illegal \" \"modemSide\\r\\n\");\n\t}",
   "replace": "\t} else {\n\t\tif (1)\n\t\t\tdsplibs_debug_printf(\"V90Modem progress: Illegal \"\n\t\t\t\t\t     \"modemSide\\r\\n\");\n\t}"
  }
 ]

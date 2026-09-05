@@ -187,12 +187,12 @@
  },
  {
   "label": "fill: the size-not-set arm announces BUFFER_OVERFLOW",
-  "find": "V90BitsToSymbol::process(unsigned char *bits, unsigned int nofBits)\n{\n\tunsigned int status = 0;\n\n\tif (symbolsBlockSize == 0) {\n\t\tstatus = 1;\n\t\tif (dsplibs_debug_level > 1)\n\t\t\tdsplibs_debug_printf(\"V90BitsToSymbol - error: \"\n\t\t\t\t\t     \"process called, SIZE_NOT_SET\"\n\t\t\t\t\t     \"\\r\\n\");",
+  "find": "V90BitsToSymbol::process(unsigned char *bits, unsigned int nofBits)\n{\n\tunsigned int status = 0;\n\n\tif (symbolsBlockSize == 0) {\n\t\tstatus = 1;\n\t\tif (dsplibs_debug_level > 1)\n\t\t\tdsplibs_debug_printf(\"V90BitsToSymbol - error: \"\n\t\t\t\t\t     \"process called, SIZE_NOT_SET\" \"\\r\\n\");",
   "replace": "V90BitsToSymbol::process(unsigned char *bits, unsigned int nofBits)\n{\n\tunsigned int status = 0;\n\n\tif (symbolsBlockSize == 0) {\n\t\tstatus = 1;\n\t\tif (dsplibs_debug_level > 1)\n\t\t\tdsplibs_debug_printf(\"V90BitsToSymbol - error: \"\n\t\t\t\t\t     \"process called, BUFFER_OVERFLOW\"\n\t\t\t\t\t     \"\\r\\n\");"
  },
  {
   "label": "fill: the overflow arm announces SIZE_NOT_SET",
-  "find": "\t\t\t\tdsplibs_debug_printf(\"V90BitsToSymbol - \"\n\t\t\t\t\t\t     \"error: process called, \"\n\t\t\t\t\t\t     \"BUFFER_OVERFLOW\\r\\n\");",
+  "find": "\n\t\t\t\tdsplibs_debug_printf(\"V90BitsToSymbol - \" \"error: process called, \"\n\t\t\t\t\t\t     \"BUFFER_OVERFLOW\\r\\n\");",
   "replace": "\t\t\t\tdsplibs_debug_printf(\"V90BitsToSymbol - \"\n\t\t\t\t\t\t     \"error: process called, \"\n\t\t\t\t\t\t     \"SIZE_NOT_SET\\r\\n\");"
  },
  {

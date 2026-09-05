@@ -112,87 +112,114 @@ struct cid_modem {
 /* One home for the sizeof claim above. */
 #define CID_MODEM_BYTES	0x3fc
 
-/*
- * Set the detector thresholds on whichever receivers the mode says exist:
- * the DTMF receiver's `sens` (modes 1 and 5) and the FSK receiver's threshold
- * (modes 0 and 5).  `thr` arrives as an int and is stored as a short, which
- * is the object's own truncation.
+/**
+ * @brief Set the detection threshold on whichever receivers the mode
+ * says exist.
+ *
+ * @param ctx  The service object.
+ * @param thr  Threshold, stored on the DTMF receiver's `sens` (modes 1
+ *             and 5) and/or the FSK receiver's threshold (modes 0 and
+ *             5). Arrives as an int and is stored as a short, the
+ *             object's own truncation.
  */
 void cid_threshold(struct cid_modem *ctx, int thr);
 
-/* Store `v` at +0x264 -- the same slot cid_create seeds from its 2nd arg. */
+/**
+ * @brief Store a value at +0x264, the same slot cid_create() seeds from
+ * its `cid_val` argument.
+ * @param ctx  The service object.
+ * @param v    The value to store.
+ */
 void cid_value(struct cid_modem *ctx, int v);
 
-/*
- * Render whatever the receivers collected into `ctx->strings` and return it.
- * The buffer is cleared first, in full, so the answer is always a run of
- * NUL-terminated fields even when nothing rendered.
+/**
+ * @brief Render whatever the receivers collected into `ctx->strings`.
  *
- * WHICH RECEIVER IS ASKED is `mode != 0 && mode != 2` -- the DTMF side then,
- * and the FSK side otherwise.  Note that mode 2 takes the FSK path despite
- * being above 1, which no other function in this file does; `cid_create`
- * clamps anything above 1 to 5, so it is reachable only by a caller that
- * writes `mode` itself.
+ * The buffer is cleared first, in full, so the answer is always a run
+ * of NUL-terminated fields even when nothing rendered. Which receiver is
+ * asked is `mode != 0 && mode != 2` -- the DTMF side then, and the FSK
+ * side otherwise; mode 2 takes the FSK path despite being above 1, which
+ * no other function in this file does (reachable only by a caller that
+ * writes `mode` itself, since cid_create() clamps anything above 1 to
+ * 5). On the DTMF side it copies SIXTEEN bytes of the receiver's
+ * `digits[20]`, with no terminator of its own. On the FSK side
+ * `ctx->f264 == 2` selects the raw hex dump and anything else the
+ * labelled rendering.
  *
- * On the DTMF side it copies SIXTEEN bytes of the receiver's `digits[20]`,
- * with no terminator of its own -- the twentieth byte and the terminator are
- * the DTMF receiver's business.  On the FSK side `ctx->f264 == 2` selects the
- * raw hex dump and anything else the labelled rendering.
+ * @param ctx  The service object.
+ * @return `ctx->strings`.
  */
 char *cid_get_strings(struct cid_modem *ctx);
 
-/*
- * Build the service object and its receivers.  A null `ctx` allocates
- * CID_MODEM_BYTES and takes `mode` from the argument -- clamped to
- * CID_MODE_AUTOMATIC above 1; a non-null one keeps the mode it has and only
- * (re)builds, handing each constructor the existing pointer so a second call
- * reuses the allocation.  `cid_val` lands at +0x264.  Null on failure.
+/**
+ * @brief Build the Caller ID service object and its receivers.
  *
- * Returns `void *` because `CID_create` stores it as one; the object it hands
- * back is the `struct cid_modem` it was given or allocated.
+ * @param ctx      NULL allocates #CID_MODEM_BYTES and takes @p mode from
+ *                 the argument, clamped to #CID_MODE_AUTOMATIC above 1;
+ *                 non-NULL keeps the mode it already has and only
+ *                 (re)builds, handing each constructor the existing
+ *                 pointer so a second call reuses the allocation.
+ * @param cid_val  Stored at +0x264 (see cid_value()).
+ * @param mode     Initial mode, only used when @p ctx is NULL.
+ * @return The `struct cid_modem *` (as `void *`, matching `CID_create`'s
+ *         own storage), or NULL on failure.
  */
 void *cid_create(struct cid_modem *ctx, int cid_val, int mode);
 
-/*
- * Free the receivers and the object.  `ctx->fsk` is freed unconditionally,
- * which is safe only because the modes that never build one leave it null.
+/**
+ * @brief Free the receivers and the service object.
+ *
+ * `ctx->fsk` is freed unconditionally, which is safe only because the
+ * modes that never build one leave it NULL.
+ *
+ * @param ctx  The service object to free.
  */
 void cid_delete(struct cid_modem *ctx);
 
-/*
- * The service's own state machine, and the top of the Caller ID receiver.
+/**
+ * @brief The service's own state machine: buffer samples and hand
+ * completed blocks to whichever receivers the mode selects.
  *
- * It buffers `*count` samples from `in` into `ctx->samples` and, every time
- * that buffer fills to one block, hands the block to whichever receivers
- * `ctx->mode` selects and reads their verdicts; a call with enough samples
- * runs several blocks, and a partial block is left in the buffer for the next
- * call.  `*count` is set to zero on entry and never read again -- it is an
- * argument in name and an input-length-in, nothing-out in fact.
+ * Buffers `*count` samples from @p in into `ctx->samples` and, every
+ * time that buffer fills to one block, hands the block to the selected
+ * receiver(s) and reads their verdicts; a call with enough samples runs
+ * several blocks, and a partial block is left in the buffer for the
+ * next call.
  *
- * THE THIRD ARGUMENT IS NEVER READ.  `0x48(%esp)` appears nowhere in the 992
- * bytes; it is kept because `CID_process` passes a literal 0 in that slot and
- * the object's stack layout says the function takes four.
- *
- * The result is what `CID_process` turns into its own: 0 while the message is
- * still arriving, 1 for a complete one, and 2 or 3 for the several ways it
- * gives up.  Nothing returns -1.
+ * @param ctx    The service object, updated in place.
+ * @param in     Input samples.
+ * @param what   NEVER READ -- `CID_process` always passes 0, kept only
+ *               because the object's stack layout says the function
+ *               takes four arguments.
+ * @param count  In: number of samples in @p in. Set to zero on entry
+ *               and never read again afterwards -- an argument in name,
+ *               input-length-in/nothing-out in fact.
+ * @return 0 while the message is still arriving, 1 for a complete one,
+ *         and 2 or 3 for the several ways it gives up. Never -1.
  */
 short cid_progress(struct cid_modem *ctx, short *in, int what, short *count);
 
-/*
- * Reset both receivers in place.  Same clamp as cid_create and the same
- * mode gating, but it BUILDS nothing: raising the mode here and then calling
- * this walks a null receiver, exactly as the object does.
+/**
+ * @brief Reset both receivers in place.
+ *
+ * Same clamp as cid_create() and the same mode gating, but this BUILDS
+ * nothing: raising the mode here and then calling this walks a null
+ * receiver, exactly as the object does.
+ *
+ * @param ctx  The service object to reset.
  */
 void cid_reset(struct cid_modem *ctx);
 
-/*
- * Retune both receivers to a new LINE rate.  Same mode gating as
- * cid_threshold: the DTMF receiver's `rate` for modes 1 and 5, the FSK
- * receiver's for modes 0 and 5.  `rate` arrives as an int and is stored as a
- * short on both sides, which is the object's own truncation.
+/**
+ * @brief Retune both receivers to a new line rate.
  *
- * See src/service/cid.c for what it does to the FSK receiver's f02c.
+ * Same mode gating as cid_threshold(): the DTMF receiver's `rate` for
+ * modes 1 and 5, the FSK receiver's for modes 0 and 5. See
+ * src/service/cid.c for what it does to the FSK receiver's `f02c`.
+ *
+ * @param ctx   The service object.
+ * @param rate  New line rate. Arrives as an int and is stored as a
+ *              short on both sides, the object's own truncation.
  */
 void cid_freq_sampl(struct cid_modem *ctx, int rate);
 
@@ -208,40 +235,65 @@ void cid_freq_sampl(struct cid_modem *ctx, int rate);
  * walks backwards under them.
  */
 
-/* First entry at offset >= 2 whose tag is `tag`; -1 if none. */
+/**
+ * @brief Find the first TLV entry with a given tag.
+ * @param buf  The whole message (`buf[0]` type, `buf[1]` total length).
+ * @param tag  The tag to look for.
+ * @return Offset of the first matching entry at offset >= 2, or -1 if none.
+ */
 int _look_for(const char *buf, char tag);
 
-/*
- * First entry at offset >= `start` whose tag is none of 1, 2 or 7 and whose
- * offset is not `except`; -1 if none.  (Tags 1, 2 and 7 are the date/time
- * and the two number/name entries the caller has already taken; `except`
- * lets it skip one further entry by position.)
+/**
+ * @brief Find the first TLV entry whose tag is not one the caller has
+ * already taken.
+ *
+ * Tags 1, 2 and 7 are the date/time and the two number/name entries the
+ * caller has already taken; @p except lets it skip one further entry by
+ * position.
+ *
+ * @param buf     The whole message.
+ * @param start   Search starts at this offset.
+ * @param except  An offset to also skip, or a value no entry can have.
+ * @return Offset of the first entry at offset >= @p start whose tag is
+ *         none of 1, 2 or 7 and whose offset is not @p except, or -1 if
+ *         none.
  */
 int _look_for_other_than(const char *buf, short start, int except);
 
-/*
- * Hex-dump a raw message: buf[1] + 2 bytes (capped at 0xf5), two lowercase
- * hex digits each, NUL-terminated.  `out` therefore needs up to 2*0xf5 + 1
- * bytes.  The cap is on the BYTE count before doubling, which is what the
- * object does -- not on the output length.
+/**
+ * @brief Hex-dump a raw Caller ID message.
+ * @param buf  The message: `buf[1] + 2` bytes are dumped, capped at 0xf5
+ *             (the cap is on the byte count before doubling, matching
+ *             the object).
+ * @param out  Output buffer, needs up to `2*0xf5 + 1` bytes: two
+ *             lowercase hex digits per byte, NUL-terminated.
  */
 void data_raw(const char *buf, char *out);
 
-/*
- * The two renderers `cid_get_strings` picks between, both taking the FSK
- * receiver and the 0x258-byte scratch at `cid_modem + 0x008`.  The message is
- * `cid->data` and `cid->pack_len` says whether there is one; both produce a
- * run of NUL-terminated fields, which is the shape `CID_process` walks.
+/**
+ * @brief Render an FSK Caller ID message as one hex dump.
  *
- * `data_unformatted_output` is one inlined `data_raw` over the whole message.
+ * One of the two renderers cid_get_strings() picks between; an inlined
+ * data_raw() over the whole message (`cid->data`, present iff
+ * `cid->pack_len` is nonzero).
  *
- * `data_formatted_output` writes `LABEL = value` fields -- DATE, TIME, NMBR
- * and, for a multiple-data-message frame, NAME and one MESG per leftover
- * tag.  It writes NOTHING when `pack_len` is zero, and 600 bytes is the
- * object's own budget for it.  See src/service/data.c for the four places it
- * runs past what a careful reading would allow, all of them reproduced.
+ * @param cid  The FSK receiver holding the message.
+ * @param out  Output buffer, the 0x258-byte scratch at `cid_modem + 0x008`.
  */
 void data_unformatted_output(struct cid *cid, char *out);
+
+/**
+ * @brief Render an FSK Caller ID message as labelled fields.
+ *
+ * Writes `LABEL = value` fields -- DATE, TIME, NMBR and, for a
+ * multiple-data-message frame, NAME and one MESG per leftover tag.
+ * Writes NOTHING when `pack_len` is zero. See src/service/data.c for the
+ * four places it runs past what a careful reading would allow, all of
+ * them reproduced.
+ *
+ * @param cid  The FSK receiver holding the message.
+ * @param out  Output buffer, 600 bytes, the object's own budget.
+ */
 void data_formatted_output(struct cid *cid, char *out);
 
 #endif /* DSPLIB_CID_MODEM_H */

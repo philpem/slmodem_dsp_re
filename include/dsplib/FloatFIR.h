@@ -38,12 +38,45 @@ public:
 	 * nothing meaningful in %eax and is `void`; `setCoefficients` returns
 	 * 0 or -1 in %eax.
 	 */
+
+	/**
+	 * @brief Construct a FIR filter.
+	 * @param nTaps      Tap count, rounded down to a multiple of four
+	 *                   (the inner loop is unrolled by four).
+	 * @param coef       Coefficient array, @p nTaps entries; not copied,
+	 *                   not owned.
+	 * @param blockSize  Slack allocated above @p nTaps in the history
+	 *                   buffer, controlling how often it is compacted.
+	 */
 	FloatFIR(unsigned int nTaps, float *coef, unsigned int blockSize);
 	~FloatFIR();
 
+	/** @brief Zero the history buffer and rewind the write position. */
 	void reset();
+
+	/**
+	 * @brief Point at a new coefficient array, and optionally change the
+	 * tap count.
+	 * @param coef   New coefficient array; not copied, not owned.
+	 * @param nTaps  New tap count, rounded down to a multiple of four.
+	 * @return 0 on success, or -1 if the rounded tap count does not fit
+	 *         the existing history buffer -- in which case nothing changes.
+	 */
 	int setCoefficients(float *coef, unsigned int nTaps);
+
+	/**
+	 * @brief Filter one sample.
+	 * @param in  The new input sample.
+	 * @return The filtered output.
+	 */
 	float process(float in);
+
+	/**
+	 * @brief Filter a block of samples.
+	 * @param in     Input samples, @p count entries.
+	 * @param out    Output samples, @p count entries.
+	 * @param count  Number of samples to process.
+	 */
 	void process(const float *in, float *out, unsigned int count);
 
 	/*

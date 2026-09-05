@@ -169,28 +169,44 @@ struct fpm_fse {
 	int diag2_n;		/* +0x4e14                                   */
 };
 
-/*
- * `fresh` non-zero means the state is uninitialised: allocate without
- * inspecting the five existing buffers.  Zero means re-init, which frees all
- * five and allocates again unconditionally -- unlike `FPM_MRF_init`, there is
- * no reuse path.
- */
-/*
- * `count` input samples in, one decoded symbol per `cfg.interp` of them out,
- * and the return is how many symbols that was.  `out` must have room for
- * `count / cfg.interp` of them and `in` is consumed in full unless the tail
- * is shorter than a symbol interval, in which case it is stashed and charged
- * against `state->need` for the next call.
+/**
+ * @brief Run the equaliser/carrier-recovery chain over a block of input
+ * samples.
  *
- * `count` is UNSIGNED -- the object zero-extends it into the sample counter
- * behind the `Decoder Error` report -- but the loop runs on a `short` copy of
- * it, so a count above 0x7fff is negative to the loop and stashes nothing.
+ * @param state  The equaliser, updated in place (adaptation, PLL, history).
+ * @param in     Input samples.
+ * @param out    Decoded symbols, one per `cfg.interp` input samples
+ *               consumed; must have room for `count / cfg.interp` of them.
+ * @param count  Number of input samples. UNSIGNED -- the object
+ *               zero-extends it into the sample counter behind the
+ *               `Decoder Error` report -- but the loop runs on a `short`
+ *               copy of it, so a count above 0x7fff is negative to the
+ *               loop and stashes nothing. @p in is consumed in full
+ *               unless the tail is shorter than a symbol interval, in
+ *               which case it is stashed and charged against
+ *               `state->need` for the next call.
+ * @return The number of symbols written to @p out.
  */
 unsigned short FPM_FSE_receive(struct fpm_fse *state, const short *in,
 			       unsigned short *out, unsigned short count);
 
+/**
+ * @brief Initialise an equaliser.
+ * @param state  The equaliser to initialise.
+ * @param cfg    Configuration, copied wholesale; the working coefficient
+ *               copies and history are seeded from `cfg.icoff`/`cfg.qcoff`.
+ * @param fresh  Nonzero: the state is uninitialised, allocate the five
+ *               buffers without inspecting them. Zero: re-init, which
+ *               frees all five and allocates again unconditionally --
+ *               unlike FPM_MRF_init(), there is no reuse path.
+ */
 void FPM_FSE_init(struct fpm_fse *state, const struct fpm_fse_cfg *cfg,
 		  int fresh);
+
+/**
+ * @brief Free the buffers allocated by FPM_FSE_init().
+ * @param state  The equaliser to tear down.
+ */
 void FPM_FSE_free(struct fpm_fse *state);
 
 /*
@@ -200,14 +216,20 @@ void FPM_FSE_free(struct fpm_fse *state);
  */
 extern struct fpm_fse_cfg FPM_FSE_CFG;
 
-/*
- * Drain one of the two scatter logs into `out`, at most `max` points, and
- * report how many were copied.  `which` selects `diag` (0) or `diag2` (1);
- * anything else copies nothing and reports none.  The log it reads is emptied
- * whether or not anything was copied.
+/**
+ * @brief Drain one of the equaliser's two diagnostic scatter logs.
  *
- * `V32FP_GetDiagnostics` is its only caller in the object and forwards all four
- * arguments; the block it hands over is the V.32 datapump's equaliser.
+ * `V32FP_GetDiagnostics` is its only caller in the object and forwards
+ * all four arguments; the block it hands over is the V.32 datapump's
+ * equaliser.
+ *
+ * @param state  The equaliser.
+ * @param which  0 for `diag`, 1 for `diag2`; anything else copies
+ *               nothing and reports none.
+ * @param out    Output buffer, at most @p max points.
+ * @param max    Maximum points to copy.
+ * @return How many points were copied. The selected log is emptied
+ *         (its count reset) whether or not anything was copied.
  */
 int FSE_getdiag(struct fpm_fse *state, int which, struct fpm_fse_point *out,
 		int max);

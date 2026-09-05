@@ -555,8 +555,7 @@ v34tx1_moh_silence(void *objp)
 
 	if (dsplibs_debug_level > 1)			/* 0x66d98 */
 		dsplibs_debug_printf(
-			"V34F MOH: After 192 silence, org = %d ,"
-			" act = %d\r\n",
+			"V34F MOH: After 192 silence, org = %d ," " act = %d\r\n",
 			o->moh_org, o->moh_message);
 
 	/* 0x66dac */
@@ -641,8 +640,7 @@ v34tx1_txmd(void *objp)
 
 		if (dsplibs_debug_level > 1)		/* 0x6800d */
 			dsplibs_debug_printf(
-				"TX: Done with MD, moving to S/Sbar"
-				" again...\r\n");
+				"TX: Done with MD, moving to S/Sbar" " again...\r\n");
 
 		V34SetupModulator((struct v34_modulator *)
 				  ((char *)o + TX1_MODULATOR),
@@ -1126,8 +1124,7 @@ v34tx1_ppseg(void *objp)
 					+ (unsigned short)tx1_get(o, TX1_COUNT)));
 			if (dsplibs_debug_level > 1)	/* 0x681ef */
 				dsplibs_debug_printf(
-					"V34Hshak: echo start wait time would"
-					" be: NEC %d symbols, FEC %d"
+					"V34Hshak: echo start wait time would" " be: NEC %d symbols, FEC %d"
 					" symbols...\r\n",
 					tx1_get(o, TX1_COUNT),
 					tx1_get(o, TX1_FAA86));
@@ -1251,8 +1248,7 @@ v34tx1_silence(void *objp)
 		tx1_put(o, TX1_FAAE0, 0);
 		if (dsplibs_debug_level > 1)		/* 0x66c72 */
 			dsplibs_debug_printf(
-				"V34RETRAIN, SILENCERETRAIN finished,"
-				" rx->rxflgs,=0x%x,rx->gain=0x%x,"
+				"V34RETRAIN, SILENCERETRAIN finished," " rx->rxflgs,=0x%x,rx->gain=0x%x,"
 				"gainestimate=0x%x\n",
 				rx->flags, rx->agc_gain, rx->agc_start_gain);
 		return V34TX1_LOOP;			/* 0x63941 */
@@ -1571,8 +1567,7 @@ v34tx1_jtxmit(void *objp)
 	if (tx1_get(o, TX1_COUNT) != 0) {
 		if (dsplibs_debug_level > 1)		/* 0x6c725 */
 			dsplibs_debug_printf(
-				"V34Hshak: on J1TXMIT - forced freeze echo"
-				" (count2 = %d)...\r\n",
+				"V34Hshak: on J1TXMIT - forced freeze echo" " (count2 = %d)...\r\n",
 				tx1_get(o, TX1_COUNT));
 		v34FreezeEcho(o);
 		tx1_put(o, TX1_COUNT, 0);
@@ -1707,8 +1702,7 @@ tx1_mp_reload(struct v34_object *o, struct v34_bitsource *b,
 	 */
 	if (dsplibs_debug_level > 1)
 		dsplibs_debug_printf(
-			"V34MP, Starting txmit MP again(%d),"
-			" rxflgs=0x%x,txflags=0x%x\n",
+			"V34MP, Starting txmit MP again(%d)," " rxflgs=0x%x,txflags=0x%x\n",
 			tx1_get(o, TX1_F359E), flags, o->tx_flags);
 }
 
@@ -2135,14 +2129,12 @@ tx1_moh_send(struct v34_object *o)
 	if (*((unsigned char *)o + TX1_FABF9) == 0) {
 		if (dsplibs_debug_level > 1)	/* 0x7041b */
 			dsplibs_debug_printf(
-				"MOH: MHnack received for MHreq,"
-				" sending MHfrr\r\n");
+				"MOH: MHnack received for MHreq," " sending MHfrr\r\n");
 		o->moh_message = 1;		/* 0x70430 */
 	} else {
 		if (dsplibs_debug_level > 1)	/* 0x6a400 */
 			dsplibs_debug_printf(
-				"MOH: MHnack received for MHreq,"
-				" sending MHcda\r\n");
+				"MOH: MHnack received for MHreq," " sending MHcda\r\n");
 		o->moh_message = 3;		/* 0x6a415 */
 	}
 
@@ -2208,8 +2200,7 @@ tx1_moh_hold(struct v34_object *o)
 	if (dsplibs_debug_level > 1)			/* 0x65031 */
 		dsplibs_debug_printf(
 			"MOH: Timeout waiting for MH sequence under"
-			" cleardown, terminating connection without"
-			" acknowledge\r\n");
+			" cleardown, terminating connection without" " acknowledge\r\n");
 
 	/* 0x65046 */
 	tx1_moh_cleardown(o);
@@ -2250,8 +2241,7 @@ v34tx1_tx_dpsk(void *objp)
 
 	if (dsplibs_debug_level > 1)			/* 0x68704 */
 		dsplibs_debug_printf(
-			"End of current MOH msg: isterm=%d, count1(%d),"
-			" pktcount(%d)...\r\n",
+			"End of current MOH msg: isterm=%d, count1(%d)," " pktcount(%d)...\r\n",
 			*((signed char *)o + TX1_FABF8), o->vect_idx,
 			tx1_bitsource(o)->repeats);
 
@@ -2642,8 +2632,7 @@ tx1_ts_rates(struct v34_object *o, struct v34_receiver *rx,
 		term = tx1_ts_scale(cfg, rate, -1);
 		if (dsplibs_debug_level > 1)		/* 0x66b61 */
 			dsplibs_debug_printf(
-				"V34DATARATE,threshold for data rate"
-				" %d = %d\n", rate, term);
+				"V34DATARATE,threshold for data rate" " %d = %d\n", rate, term);
 		if (tx1_get(o, TX1_RX250) < (short)term)
 			break;
 		rate = (short)(rate - 1);
@@ -2657,14 +2646,12 @@ tx1_ts_rates(struct v34_object *o, struct v34_receiver *rx,
 			rate = (short)(d - 1);		/* 0x68308 */
 			if (dsplibs_debug_level > 1)	/* 0x68334 */
 				dsplibs_debug_printf(
-					" TRNSEG4A : returning from local rrn"
-					" down => forcing rate down\n");
+					" TRNSEG4A : returning from local rrn" " down => forcing rate down\n");
 		} else if (rate < d + 1) {
 			rate = (short)(d + 1);		/* 0x63120 */
 			if (dsplibs_debug_level > 1)	/* 0x69100 */
 				dsplibs_debug_printf(
-					" TRNSEG4A : returning from local rrn"
-					" up => forcing rate up\n");
+					" TRNSEG4A : returning from local rrn" " up => forcing rate up\n");
 		}
 		term = tx1_ts_scale(cfg, rate, -1);	/* 0x63134 */
 	}
@@ -2672,8 +2659,7 @@ tx1_ts_rates(struct v34_object *o, struct v34_receiver *rx,
 	/* 0x63198 */
 	if (dsplibs_debug_level > 1)			/* 0x6759e */
 		dsplibs_debug_printf(
-			"V34DATARATE, ethresh data rate = %d,ethreh=%d,"
-			"rate2 = 0x%x,data=%d\n",
+			"V34DATARATE, ethresh data rate = %d,ethreh=%d," "rate2 = 0x%x,data=%d\n",
 			rate, tx1_get(o, TX1_RX250),
 			(unsigned short)tx1_get(o, TX1_F382), term);
 	if (dsplibs_debug_level > 1)			/* 0x675e6 */
@@ -2748,8 +2734,7 @@ tx1_ts_rates(struct v34_object *o, struct v34_receiver *rx,
 	if (dsplibs_debug_level > 1)			/* 0x676f3 */
 		dsplibs_debug_printf(
 			"V34DATARATE, Final choice data rate = %d,"
-			" retrainThresh = %d, renegDownthresh = %d,"
-			" renegUpthresh = %d\n",
+			" retrainThresh = %d, renegDownthresh = %d," " renegUpthresh = %d\n",
 			cfg->rxbits, rx->bad_thresh, rx->bad_long_thresh, rx->good_thresh);
 
 	/* 0x6340f */
@@ -3054,8 +3039,7 @@ v34tx1_trnseg4(void *objp)
 		 */
 		if (dsplibs_debug_level > 1)		/* 0x6917e */
 			dsplibs_debug_printf(
-				"V34Hshak: On J TX start, would freeze EC"
-				" after bulk delay (%d samples,"
+				"V34Hshak: On J TX start, would freeze EC" " after bulk delay (%d samples,"
 				" bulk=%d)\r\n",
 				tx1_get(o, TX1_COUNT), o->rtd);
 	}

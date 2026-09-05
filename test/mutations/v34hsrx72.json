@@ -175,7 +175,7 @@
  },
  {
   "label": "the tone-A wait says nothing",
-  "find": "\t\t\t\t\t    \"V34RETRAIN, waiting for tone A \"\n\t\t\t\t\t    \"at the end of RX_L2\\n\");",
+  "find": "\n\t\t\t\t\t    \"V34RETRAIN, waiting for tone A \" \"at the end of RX_L2\\n\");",
   "replace": "\t\t\t\t\t    \"V34RETRAIN, waiting for tone B \"\n\t\t\t\t\t    \"at the end of RX_L2\\n\");",
   "fn": "t72_rx_l1"
  },
@@ -729,7 +729,7 @@
  },
  {
   "label": "the error line names the wrong thing",
-  "find": "\t\t\t\t    \"V34AGC, -- ERROR-- gainestimate in \"\n\t\t\t\t    \"RX_L1,0x%x\\n\", rx->agc_gain);",
+  "find": "\n\t\t\t\t    \"V34AGC, -- ERROR-- gainestimate in \" \"RX_L1,0x%x\\n\", rx->agc_gain);",
   "replace": "\t\t\t\t    \"V34AGC, -- ERROR-- gainestimate in \"\n\t\t\t\t    \"RX_L2,0x%x\\n\", rx->agc_gain);",
   "fn": "t72_ladder"
  },

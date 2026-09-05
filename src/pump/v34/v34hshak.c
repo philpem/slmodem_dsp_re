@@ -918,14 +918,12 @@ preempindex(void *p, short baudrate)
 			if (i == 5) {
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
-						"V34PREEMPHASIS, - index is "
-						"0, baudrate= %d\n", baudrate);
+						"V34PREEMPHASIS, - index is " "0, baudrate= %d\n", baudrate);
 				return 0;
 			}
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
-					"V34PREEMPHASIS, - index is %d, "
-					"baudrate= %d\n", i, baudrate);
+					"V34PREEMPHASIS, - index is %d, " "baudrate= %d\n", i, baudrate);
 			return i;
 		}
 
@@ -1541,8 +1539,7 @@ v34handshakinit(void *objp, int mode)
 
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf(
-				"V34RNEG, initialize RNEG, tx->txflags= 0x%x,"
-				"rx->rxflgs= 0x%x\n",
+				"V34RNEG, initialize RNEG, tx->txflags= 0x%x," "rx->rxflgs= 0x%x\n",
 				(int)obj->tx_flags, (int)rx->flags);
 		break;
 
@@ -2149,14 +2146,12 @@ probe_preemp(const struct v34_dftbin *bins, unsigned n, int k, short baud)
 			if (i == 5) {
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
-					    "V34PREEMPHASIS, - index is 0, "
-					    "baudrate= %d\n", (int)baud);
+					    "V34PREEMPHASIS, - index is 0, " "baudrate= %d\n", (int)baud);
 				return 0;
 			}
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
-				    "V34PREEMPHASIS, - index is %d, "
-				    "baudrate= %d\n", (int)i, (int)baud);
+				    "V34PREEMPHASIS, - index is %d, " "baudrate= %d\n", (int)i, (int)baud);
 			return i;
 		}
 		/*
@@ -2176,8 +2171,7 @@ probe_preemp(const struct v34_dftbin *bins, unsigned n, int k, short baud)
 		if (i > 9) {
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
-				    "V34PREEMPHASIS, - index is 10, "
-				    "baudrate= %d \n", (int)baud);
+				    "V34PREEMPHASIS, - index is 10, " "baudrate= %d \n", (int)baud);
 			return i;
 		}
 	}
@@ -2238,8 +2232,7 @@ probe_ask(struct v34_receiver *rx, short *msg, int first, int second, int n)
 	probe_backoff(rx, n);
 
 	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("V34PROBE, asking for a power reduction "
-				     "of %d\n", n);
+		dsplibs_debug_printf("V34PROBE, asking for a power reduction " "of %d\n", n);
 }
 
 void
@@ -2428,8 +2421,7 @@ probeselect(void *objp)
 
 not_asking:
 	if (DSPLIB_DEBUG_ON()) {
-		dsplibs_debug_printf("V34PROBE, not asking for power "
-				     "reduction\n");
+		dsplibs_debug_printf("V34PROBE, not asking for power " "reduction\n");
 		dsplibs_debug_printf("V34PROBE, rx->gain=%d ,"
 				     "(obj->rxinfo0.data[1]&0x80)=%d\n",
 				     (int)rx->agc_gain,
@@ -2842,8 +2834,7 @@ settxlevel(void *objp, const short *mp)
 	 */
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("V34TXSCALE, txscale before is %d, "
-				     "reduced txscale is %d dB,"
-				     "final txscale is %d\n",
+				     "reduced txscale is %d dB," "final txscale is %d\n",
 				     (int)*(short *)(m + 0x25d4), (int)want,
 				     scale);
 
@@ -3107,8 +3098,7 @@ ApplyBulkDelay(void *objp, short delay)
 
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
-				    "RTD (%d) lower than min (%d), "
-				    "masking Far EC...\r\n", d, 0x1e);
+				    "RTD (%d) lower than min (%d), " "masking Far EC...\r\n", d, 0x1e);
 
 			back = (short)(d + 15);
 			obj->far_echo_enable = 0;
@@ -3995,8 +3985,7 @@ t3m_micro47(struct t3m_frame *f)
 
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("Repeated info0 is detected, "
-					     "errorrecovery is initialized in "
-					     "TX_PHASE2_xxx\n");
+					     "errorrecovery is initialized in " "TX_PHASE2_xxx\n");
 
 		/*
 		 * 0x6ce34 clears the counter and 0x6ce3b jumps back to
@@ -4188,8 +4177,7 @@ t3m_micro49(struct t3m_frame *f)
 
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("Repeated info0 is detected, "
-					     "errorrecovery is initialized in "
-					     "RX_PHASE1_ANS\n");
+					     "errorrecovery is initialized in " "RX_PHASE1_ANS\n");
 	}
 
 	/*
@@ -4318,8 +4306,7 @@ t3m_micro50(struct t3m_frame *f)
 
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("Repeated info0 is detected, "
-					     "errorrecovery is initialized in "
-					     "RX_PHASE2_ANS\n");
+					     "errorrecovery is initialized in " "RX_PHASE2_ANS\n");
 	}
 
 	/*
@@ -4513,8 +4500,7 @@ t3m_micro51(struct t3m_frame *f)
 
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf(
-				"%s 0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,"
-				"0x%x,0x%x,0x%x\n",
+				"%s 0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x," "0x%x,0x%x,0x%x\n",
 				"V34PROBE, txinfo1a (QC)",
 				w[0], w[1], w[2], w[3], w[4],
 				w[5], w[6], w[7], w[8], w[9]);
@@ -4539,8 +4525,7 @@ t3m_micro51(struct t3m_frame *f)
 	 * change it but the reader has no way to know that from this line.
 	 */
 	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("V34RETRAIN, %s, rx->rxflgs = 0x%x,"
-				     "rx->gain=0x%x\n",
+		dsplibs_debug_printf("V34RETRAIN, %s, rx->rxflgs = 0x%x," "rx->gain=0x%x\n",
 				     f->obj->is_short != 0
 				     ? "transmitting info1a" : "starting DET_AB",
 				     (unsigned)f->rx->flags,
@@ -4619,8 +4604,7 @@ t3m_micro59(struct t3m_frame *f)
 	if ((f->obj->fsk.sr & 7) == 7) {
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("Repeated info0 is detected, "
-					     "errorrecovery is initialized in "
-					     "RX_PHASE2_CALL\n");
+					     "errorrecovery is initialized in " "RX_PHASE2_CALL\n");
 
 		t3m_errrec_arm(f);
 
@@ -4664,8 +4648,7 @@ t3m_micro59(struct t3m_frame *f)
 						   + T3M_RX_FSKIN),
 				   f->rx->rx_samples)) {
 			if (DSPLIB_DEBUG_ON())
-				dsplibs_debug_printf("V34RETRAIN, retrain is "
-						     "initiated in "
+				dsplibs_debug_printf("V34RETRAIN, retrain is " "initiated in "
 						     "RX_PHASE2_CALL\n");
 
 			f->rx->flags = (unsigned short)(f->rx->flags | V34_RX_FLAG_RETRAIN);
@@ -4724,8 +4707,7 @@ t3m_micro59(struct t3m_frame *f)
 						& ~(V34_RX_FLAG_DET_PENDING | V34_RX_FLAG_FIR));
 
 		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("V34AGC, rx->gain =0x%x,"
-					     "rx->slowcf=%d, at end of "
+			dsplibs_debug_printf("V34AGC, rx->gain =0x%x," "rx->slowcf=%d, at end of "
 					     "bulkdelay estimation\n",
 					     (int)f->rx->agc_gain,
 					     (int)f->rx->agc_step);
@@ -4752,8 +4734,7 @@ t3m_micro59(struct t3m_frame *f)
 
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V34 In Retrain. errorrecovery for "
-					     "info0 is initialized in "
-					     "RX_PHASE2_CALL\n");
+					     "info0 is initialized in " "RX_PHASE2_CALL\n");
 	}
 
 	t3m_txblock(f, (short)T3M_U16(f, V34HS_TXSTATE_OFF));
@@ -4807,8 +4788,7 @@ t3m_micro55(struct t3m_frame *f)
 	if (f->obj->fsk.nbits != f->nbits && (f->obj->fsk.sr & 7) == 7) {
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("Repeated info0 is detected, "
-					     "errorrecovery is initialized in "
-					     "TX_PHASE1_CALL\n");
+					     "errorrecovery is initialized in " "TX_PHASE1_CALL\n");
 
 		t3m_errrec_arm(f);
 
@@ -4880,8 +4860,7 @@ t3m_micro55(struct t3m_frame *f)
 
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V34 In Retrain. errorrecovery for "
-					     "info0 is initialized in "
-					     "TX_PHASE1_CALL\n");
+					     "info0 is initialized in " "TX_PHASE1_CALL\n");
 	}
 
 	t3m_txblock(f, (short)T3M_U16(f, V34HS_TXSTATE_OFF));
@@ -5306,8 +5285,7 @@ t3c_micro_moh_tone_drop(struct v34_object *obj)
 	    && t3c_getb(obj, T3C_FABF8) == 0) {
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V34Handshake: Detected signal "
-					     "drop on FRR request, time to "
-					     "move to phase1...\r\n");
+					     "drop on FRR request, time to " "move to phase1...\r\n");
 		t3c_putb(obj, T3C_FABF8, 1);
 	}
 
@@ -5339,8 +5317,7 @@ t3c_micro_moh_tone_drop(struct v34_object *obj)
 	 */
 	if (t3c_getb(obj, T3C_FABF9) != 0) {
 		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("MOH: Timeout waiting for MH "
-					     "sequence under MHfrr, "
+			dsplibs_debug_printf("MOH: Timeout waiting for MH " "sequence under MHfrr, "
 					     "disconnecting...\r\n");
 
 		hs_setstate(obj, HS_TXSTATE, V34HS_MOH_CLEARDOWN);
@@ -5508,8 +5485,7 @@ t41_frr_nack(struct v34_object *obj)
 
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("V34Handshake: Detected signal drop on "
-				     "FRR request (after NACK), time to move "
-				     "to phase1...\r\n");
+				     "FRR request (after NACK), time to move " "to phase1...\r\n");
 
 	t3c_putb(obj, T41_FABF8, 1);
 	t3c_txblock(obj);
@@ -5721,15 +5697,13 @@ t41_tone_ab(struct v34_object *obj)
 	if (obj->role == 0x65) {
 		hs_setstate(obj, HS_MICROSTATE, V34HS_RX_PHASE1_CALL);
 		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("Tone AB detected ending "
-					     "errorrecovery. Switch to "
+			dsplibs_debug_printf("Tone AB detected ending " "errorrecovery. Switch to "
 					     "RX_PHASE1_CALL.\n");
 	} else {
 		obj->fsk.sr = -1;
 		hs_setstate(obj, HS_MICROSTATE, V34HS_TX_PHASE1_ANS);
 		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("Tone AB detected ending "
-					     "errorrecovery. Switch to "
+			dsplibs_debug_printf("Tone AB detected ending " "errorrecovery. Switch to "
 					     "TX_PHASE1_ANS.\n");
 	}
 
@@ -5787,8 +5761,7 @@ t41_marks_late(struct v34_object *obj, short aae0)
 		}
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("DET_SYNC not detected, during "
-					     "search for info1c initiating a "
-					     "retrain\n");
+					     "search for info1c initiating a " "retrain\n");
 		/*
 		 * 0x6e029.  The second argument is built at 0x6e01d as a
 		 * literal 1, and 0x6e02e reloads +0x3596 after the call, so
@@ -5812,8 +5785,7 @@ t41_marks_late(struct v34_object *obj, short aae0)
 	obj->fsk.nbits = 0;
 
 	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("DET_SYNC not detected, during search "
-				     "for info1a\n");
+		dsplibs_debug_printf("DET_SYNC not detected, during search " "for info1a\n");
 
 	t3c_txblock(obj);
 }
@@ -6145,8 +6117,7 @@ t46_body_repeated_late(struct v34_object *obj)
 
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("Repeated info0 is detected (after 1200), "
-				     "errorrecovery is initialized in "
-				     "TX_PHASE1_ANS\n");
+				     "errorrecovery is initialized in " "TX_PHASE1_ANS\n");
 
 	t3c_txblock(obj);
 }
@@ -6213,8 +6184,7 @@ t46_body_retrain(struct v34_object *obj)
 	t46_reset_core(obj);
 
 	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("Repeated info0 is initialized on "
-				     "retrain\n");
+		dsplibs_debug_printf("Repeated info0 is initialized on " "retrain\n");
 
 	t3c_putb(obj, T46_RETRAIN, 0);
 	t3c_txblock(obj);
@@ -7515,8 +7485,7 @@ t53_rx_det_ab(struct v34_object *obj)
 		 * copy of the exit below, so that exit is in the object twice.
 		 */
 		if (DSPLIB_DEBUG_ON())			/* 0x7170a */
-			dsplibs_debug_printf("V34RETRAIN, retrain is "
-					     "initiated in DET_AB\n");
+			dsplibs_debug_printf("V34RETRAIN, retrain is " "initiated in DET_AB\n");
 
 		t3c_txblock(obj);
 		return;
@@ -7527,8 +7496,7 @@ t53_rx_det_ab(struct v34_object *obj)
 	 * the receiver's +0x136 and `count1` is the trace's `[1]`.
 	 */
 	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("V34RETRAIN, End of L2,rx->gain=0x%x,"
-				     "count1=%d\n",
+		dsplibs_debug_printf("V34RETRAIN, End of L2,rx->gain=0x%x," "count1=%d\n",
 				     rx->agc_gain, obj->vect_idx);
 
 	if (obj->role == 0x65) {
@@ -7625,8 +7593,7 @@ t53_rx_det_ab(struct v34_object *obj)
 						     + T41_BLK_A9AC);
 
 			dsplibs_debug_printf(
-			    "%s 0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,"
-			    "0x%x,0x%x\n",
+			    "%s 0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x," "0x%x,0x%x\n",
 			    "V34PROBE, txinfo1c",
 			    (unsigned)p[0], (unsigned)p[1], (unsigned)p[2],
 			    (unsigned)p[3], (unsigned)p[4], (unsigned)p[5],
@@ -7837,8 +7804,7 @@ t4_mp_sequence_end(struct v34_object *obj)
 		if (T4_U8(tbl, 0) & 1)
 			t4_mp_coeffs(obj, tbl);
 		if (DSPLIB_DEBUG_ON())
-			t4_mp_print("V34MP -MP1 sequence,%x,%x,%x,%x,%x,%x,"
-				    "%x,%x,%x,%x\n", tbl);
+			t4_mp_print("V34MP -MP1 sequence,%x,%x,%x,%x,%x,%x," "%x,%x,%x,%x\n", tbl);
 	} else {
 		/*
 		 * 0x6ff47.  `and $0xffffff67` is ~0x98 done thirty-two bits
@@ -7849,8 +7815,7 @@ t4_mp_sequence_end(struct v34_object *obj)
 		rx->flags = (unsigned short)((rx->flags & ~0x98)
 					     | V34_RX_FLAG_TRN_WATCH);
 		if (DSPLIB_DEBUG_ON())
-			t4_mp_print("V34MP -MP sequence,%x,%x,%x,%x,%x,%x,"
-				    "%x,%x,%x,%x\n", tbl);
+			t4_mp_print("V34MP -MP sequence,%x,%x,%x,%x,%x,%x," "%x,%x,%x,%x\n", tbl);
 	}
 
 	/*
@@ -8685,8 +8650,7 @@ t4_rx_receive(struct v34_object *obj)
 		 * return to the gate at 0x65453.
 		 */
 		if (DSPLIB_DEBUG_ON())			/* 0x690e1 */
-			dsplibs_debug_printf("V34RETRAIN, going into retrain "
-					     "in Handshake\n");
+			dsplibs_debug_printf("V34RETRAIN, going into retrain " "in Handshake\n");
 	} else {
 		/*
 		 * 0x67999 is the merge of both not-retraining branches -- the
@@ -9087,8 +9051,7 @@ t72_ladder(struct v34_object *obj, struct v34_receiver *rx)
 			 */
 			if (DSPLIB_DEBUG_ON())		/* 0x71343 */
 				dsplibs_debug_printf(
-				    "V34AGC, -- ERROR-- gainestimate in "
-				    "RX_L1,0x%x\n", rx->agc_gain);
+				    "V34AGC, -- ERROR-- gainestimate in " "RX_L1,0x%x\n", rx->agc_gain);
 			/*
 			 * 0x6aed9.  The `%edx` that 0x6a52c tests below is
 			 * loaded at 0x6a51d on the in-range path and at
@@ -9338,8 +9301,7 @@ t72_rx_l1(struct v34_object *obj)
 				 */
 				if (DSPLIB_DEBUG_ON())	/* 0x6b120 */
 					dsplibs_debug_printf(
-					    "V34RETRAIN, waiting for tone A "
-					    "at the end of RX_L2\n");
+					    "V34RETRAIN, waiting for tone A " "at the end of RX_L2\n");
 			} else if (count == 0xf2c + limit) {
 				/* 0x6c9f1: give up and go round again. */
 				/*
@@ -9707,8 +9669,7 @@ v34handshak(void *vobj)
 		 */
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("DET_SYNC : retrain request "
-					     "detected while searching for "
-					     "info1\n");
+					     "detected while searching for " "info1\n");
 
 		T3M_I32(&frame, T3M_FSKGATE) = 0;	/* 0x6938c, 32-bit */
 
@@ -10097,8 +10058,7 @@ datapumpv34(void *objp)
 		dp_rxput(obj, DP_RX_RATE, hs_get(obj, DP_FAA98));
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V34RNEG, rate renegotiation "
-					     "DOWN initiated due to large "
-					     "error \n");
+					     "DOWN initiated due to large " "error \n");
 		VPcmV34IndicateLocalRRN(obj);
 	}
 
@@ -10112,8 +10072,7 @@ datapumpv34(void *objp)
 		dp_rxput(obj, DP_RX_RATE, hs_get(obj, DP_FAA98));
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V34RNEG, rate renegotiation "
-					     "UP initiated due to small "
-					     "error \n");
+					     "UP initiated due to small " "error \n");
 		VPcmV34IndicateLocalRRN(obj);
 	}
 }

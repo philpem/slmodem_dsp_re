@@ -906,7 +906,7 @@
  },
  {
   "label": "probe: the AGC ceiling applies to the sensitive arms too",
-  "find": "\tprobe_backoff(rx, n);\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V34PROBE, asking for a power reduction \"\n\t\t\t\t     \"of %d\\n\", n);",
+  "find": "\n\n\tprobe_backoff(rx, n);\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V34PROBE, asking for a power reduction \" \"of %d\\n\", n);",
   "replace": "\tprobe_backoff(rx, n);\n\tif (rx->agc_start_gain > 0x1b58)\n\t\trx->agc_start_gain = 0x1b58;\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V34PROBE, asking for a power reduction \"\n\t\t\t\t     \"of %d\\n\", n);",
   "fn": "probe_ask"
  },
@@ -1221,13 +1221,13 @@
  },
  {
   "label": "probe: the search's early exit reports the un-advanced counter",
-  "find": "\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t    \"V34PREEMPHASIS, - index is %d, \"\n\t\t\t\t    \"baudrate= %d\\n\", (int)i, (int)baud);\n\t\t\treturn i;",
+  "find": "\n\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t    \"V34PREEMPHASIS, - index is %d, \" \"baudrate= %d\\n\", (int)i, (int)baud);\n\t\t\treturn i;",
   "replace": "\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t    \"V34PREEMPHASIS, - index is %d, \"\n\t\t\t\t    \"baudrate= %d\\n\", (int)(short)(i - 1),\n\t\t\t\t    (int)baud);\n\t\t\treturn (short)(i - 1);",
   "fn": "probe_preemp"
  },
  {
   "label": "probe: the two index-10 reports are the same string",
-  "find": "\t\t\t\t    \"V34PREEMPHASIS, - index is 10, \"\n\t\t\t\t    \"baudrate= %d \\n\", (int)baud);",
+  "find": "\n\t\t\t\t    \"V34PREEMPHASIS, - index is 10, \" \"baudrate= %d \\n\", (int)baud);",
   "replace": "\t\t\t\t    \"V34PREEMPHASIS, - index is %d, \"\n\t\t\t\t    \"baudrate= %d\\n\", (int)i, (int)baud);",
   "fn": "probe_preemp"
  },

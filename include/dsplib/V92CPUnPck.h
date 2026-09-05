@@ -1,134 +1,102 @@
-/*
- * V92CPUnPck.h -- the unpacked V.92 CP message, as
- * `V92setParamsInfoFromCPUnPck` reads it.
+/**
+ * @file V92CPUnPck.h
+ * @brief The unpacked V.92 CP message, as `V92setParamsInfoFromCPUnPck`
+ *        reads it.
  *
- * WHAT IT IS AND WHERE IT LIVES.  `VPcmFloModem::runPcmModem` calls the
- * unpacker twice, at .text+0xeade and +0xeb27, and both times the second
- * argument is `lea 0x254c(%esi)` -- so this block is INLINE in
- * `VPcmFloModem`, at +0x254c, and is not separately allocated.  The byte the
- * caller tests immediately afterwards, `cmpb $0x0,0x255e(%esi)`, is +0x12 of
- * this block, which is `extendEu` below; that is a small independent check
- * that the base is right.
+ * This block is inline in `VPcmFloModem` at +0x254c, not separately
+ * allocated: `VPcmFloModem::runPcmModem` calls the unpacker twice, both
+ * times passing `lea 0x254c(%esi)` as the second argument. The byte the
+ * caller checks right afterwards, +0x255e (this block's +0x12, `extendEu`
+ * below), is a cheap independent check that the base is right.
  *
- * THE NAME IS THE FUNCTION'S OWN WORD.  Nothing in the object mangles this
- * type -- the unpacker is `extern "C"` and the caller reaches it by
- * displacement -- so `V92CPUnPck` is taken from the only place the author
- * wrote anything about it, the tail of `V92setParamsInfoFromCPUnPck`.  The
- * FIELDS are not invented: the unpacker prints eighteen of them, and every
- * one of those names below is the author's own text from
- * `.rodata.str1.1` / `.rodata.str1.4`, resolved with `tools/relocscan.py
- * --at` (finding F604).  Every name carries the string that proves it.
+ * The struct's name is the only thing the author wrote about it -- the tail
+ * of `V92setParamsInfoFromCPUnPck` -- since nothing mangles this type (the
+ * unpacker is `extern "C"`, the caller reaches it by displacement). Its
+ * field names are likewise not invented: the unpacker prints eighteen of
+ * them, and each is the author's own `.rodata` string, resolved with
+ * `tools/relocscan.py --at` (finding F604). `V92CPUnPck` and `V90CP` turn
+ * out to be the same structure modelled from opposite ends -- thirteen
+ * offset/name landmarks agree (finding F7572).
  *
- * WHAT IS NOT ESTABLISHED IS THE TAIL.  The block runs to at least +0xca0,
- * which is the end of `const6`.  Nothing bounds it above: no method of
- * `VPcmFloModem` refers to any displacement between +0x255e and the end of
- * the class, so the object gives no next field to stop at.  This declaration
- * therefore ends where the evidence does, exactly as
- * `include/dsplib/V92ParamsInfo.h` used to end at its own +0x9c, and a later
- * reader of `V92CP::bitsToInfo` -- which is what FILLS this block -- is what
- * will close it.  Nothing here allocates one, so a short declaration cannot
+ * The tail is not established: the block runs to at least +0xca0 (the end
+ * of `const6`), but no method of `VPcmFloModem` refers to any displacement
+ * between +0x255e and the end of the class, so nothing bounds it above.
+ * This declaration ends where the evidence does; a later reader of
+ * `V92CP::bitsToInfo`, which is what fills this block, is what will close
+ * it. Nothing here allocates one, so a short declaration cannot
  * under-allocate anything the object writes.
  *
- * SIGNEDNESS IS READ AND NOT CHOSEN.  `drn`, `trellisState` and `extendEu`
- * are one byte and every load of them is `movsbl` with the 32-bit result
- * used, which is the forced case of CLAUDE.md's codegen rule.
- * `prefilterGain` is loaded as the low half of a 64-bit integer whose high
- * half is an explicit zero (`push %eax` with %eax = 0, then `fildll`), which
- * is what GCC emits for `(float)` of an *unsigned* 32-bit value and not for a
- * signed one.
+ * Signedness throughout is read off the loads, not chosen: `drn`,
+ * `trellisState` and `extendEu` are one byte each, loaded with `movsbl`
+ * (signed, 32-bit result used -- CLAUDE.md's forced case). `prefilterGain`
+ * is loaded as the low half of a 64-bit integer with an explicit zero high
+ * half, which is what GCC emits for `(float)` of an *unsigned* 32-bit value.
  */
 
 #ifndef DSPLIB_V92CPUNPCK_H
 #define DSPLIB_V92CPUNPCK_H
 
-/*
- * 0x300 bytes between one coefficient array and the next -- +0x058, +0x358,
- * +0x658, +0x958 -- and each is indexed `(%ebp,%edx,2)`, so 384 shorts.
- *
- * That is NOT the same number as the ceiling the unpacker clamps the lengths
- * to, which is V92_PARAMSINFO_MAX_FILTER_LEN = 0x148 = 328.  The declared
- * array is larger than the largest length that can be read out of it; both
- * numbers are the object's and neither is adjusted to fit the other.
+/**
+ * @brief Entries in each of the four coefficient arrays (`z1`, `p1`, `z2`,
+ *        `p2`): 0x300 bytes between one array and the next, each indexed
+ *        `(%ebp,%edx,2)`, so 384 shorts. Larger than the unpacker's own
+ *        clamp on filter length (`V92_PARAMSINFO_MAX_FILTER_LEN` = 328) --
+ *        both numbers are the object's, and neither is adjusted to match
+ *        the other.
  */
 #define V92_CPUNPCK_COEFS	384
 
-/* Twelve `M[%d]`, six `LC[%d]`, six `indexConstel[%d]` -- the loop bounds are
- * `cmp $0xb` and `cmp $0x5` in the three print loops. */
+/** @brief Entries in `M[]` -- loop bound `cmp $0xb` in the `M[%d]` print loop. */
 #define V92_CPUNPCK_MODULI	12
+/** @brief Entries in `LC[]`/`indexConstel[]` -- loop bound `cmp $0x5`. */
 #define V92_CPUNPCK_CONSTELS	6
 
 struct V92CPUnPck {
-	/*
-	 * +0x00  Not read by the unpacker and named by nothing.  Four bytes
-	 * kept as a pad so that every field below sits where the object puts
-	 * it.
-	 */
+	/* +0x00  Not read by the unpacker and named by nothing; kept as a pad
+	 * so every field below sits where the object puts it. */
 	unsigned char pad_00[4];
 
-	/* +0x04  "CPObj->modulosEncoderPresent = %d", .rodata.str1.4:0x32ac.
-	 * The author's spelling of "modulus"; kept as he wrote it. */
+	/* +0x04  Source field's own name; this copy gates the unpack of the
+	 * moduli block (F3600). */
 	int modulosEncoderPresent;
 
-	/* +0x08  "CPObj->prefilterPrecoderPresent = %d", str1.4:0x32d0. */
+	/* +0x08  Ditto, gates the filter block (F3600). */
 	int prefilterPrecoderPresent;
 
-	/* +0x0c  "CPObj->constellationPresent = %d", str1.4:0x32f8. */
+	/* +0x0c  Ditto, gates the constellation block (F3600). */
 	int constellationPresent;
 
-	/*
-	 * +0x10  "CPObj->drn = %d", str1.1:0x94d.  The unpacker makes two
-	 * things of it and prints both:
-	 *
-	 *     paramsInfo->K = 2 * (drn + 17)          lea 0x22(%edi,%edi,1)
-	 *     "Upstream rate = %d" of (drn + 17) * 1333.3333740234375
-	 *
-	 * Both are transcribed; what the two quantities count is not
-	 * established here and is not guessed.
-	 */
+	/* +0x10  Feeds `paramsInfo->K = 2 * (drn + 17)` and the "Upstream
+	 * rate" diagnostic; what the two derived quantities count is not
+	 * established (F3600). */
 	signed char drn;
 
-	/* +0x11  "CPObj->trellisState = %d", str1.1:0x8ff.  Sign-extended into
-	 * the parameter block's `trellisType`. */
+	/* +0x11  Sign-extended into the parameter block's `trellisType` (F3600). */
 	signed char trellisState;
 
-	/* +0x12  "CPObj->extendEu = %d", str1.1:0x936. */
+	/* +0x12  See the file comment above -- also the base-sanity check
+	 * `runPcmModem` reads right after calling the unpacker (F3600). */
 	signed char extendEu;
 
 	/*
-	 * +0x13 was `pad_13[1]` -- REMOVED (finding F10151).  Already
-	 * correctly described as alignment; proved mechanically now by the
-	 * next field's own `+0x14` annotation, which `tools/offcheck.py`
-	 * checks against the compiler's own `offsetof` on every build, and
-	 * by `dis.py` over `V92setParamsInfoFromCPUnPck` (the only
-	 * reconstructed function that touches this struct) finding no
-	 * access to offset 0x13.
+	 * +0x13 was `pad_13[1]` -- REMOVED (finding F10151): pure alignment,
+	 * confirmed by `dis.py` finding no access to offset 0x13.
 	 */
 
-	/*
-	 * +0x14  "CPObj->prefilterGain = %d", str1.1:0x91a.  Scaled by 2^-18
-	 * and then by 4000 to make the parameter block's `gain`; the two
-	 * multiplications are printed either side as the "constellation gain"
-	 * before and after "Lu multiplication".
-	 */
+	/* +0x14  Scaled by 2^-18 then by 4000 to make the parameter block's
+	 * `gain`, as two separate single-precision multiplications rather
+	 * than one combined expression (F3603). Loaded as unsigned (F3600). */
 	unsigned int prefilterGain;
 
-	/*
-	 * +0x18 .. +0x44  "CPObj->M[%d] = %d", str1.1:0x8bc.  An ARRAY, and
-	 * that is forced rather than modelled: the print loop indexes it,
-	 * `mov 0x18(%ebp,%ebx,4),%eax` under `cmp $0xb`.
-	 */
+	/* +0x18 .. +0x44  An array because the print loop indexes it (F3600, F3602). */
 	int M[V92_CPUNPCK_MODULI];
 
 	/*
-	 * +0x48 .. +0x54  The four filter lengths.  The four sit in the same
-	 * order in both blocks and the unpacker's copy is +4 across the board:
-	 * +0x48 -> +0x4c, +0x4c -> +0x50, +0x50 -> +0x54, +0x54 -> +0x58, so
-	 * lz1, lp1, lz2, lp2 here are lz1, lp1, lz2, lp2 there.
-	 *
-	 * "CPObj->lz1" str1.1:0x974, "CPObj->lz2" 0x986, "CPObj->lp1" 0x998,
-	 * "CPObj->lp2" 0x9aa -- and the print order there (lz1, lz2, lp1, lp2)
-	 * is not the declaration order, which is why each is tied to its
-	 * offset by the load beside the string rather than by position.
+	 * +0x48 .. +0x54  The four filter lengths, copied +4 into the
+	 * parameter block (+0x48->+0x4c etc.); the print order there
+	 * (lz1, lz2, lp1, lp2) is not the declaration order, so each name is
+	 * tied to its offset by the load beside its string, not by position
+	 * (F3600, F3601).
 	 */
 	unsigned int lz1;
 	unsigned int lp1;
@@ -137,47 +105,34 @@ struct V92CPUnPck {
 
 	/*
 	 * +0x058, +0x358, +0x658, +0x958  The four coefficient arrays as the
-	 * CP carries them: 16-bit, and scaled on the way out -- z1 and z2 by
-	 * 2^-15, p1 and p2 by 2^-14 (`.rodata.cst4` +0xb0 and +0xb4).
-	 *
-	 * The NAMES here are one remove from the author's: he prints these
-	 * four arrays' lengths as lz1/lp1/lz2/lp2 and prints the *destination*
-	 * arrays as z1/p1/z2/p2, and each source array is read with the
-	 * matching length into the matching destination.  So the pairing is
-	 * measured and the four labels are inherited.  `movswl` on every load
-	 * makes `short` rather than `unsigned short` forced.
+	 * CP carries them: 16-bit, scaled on the way out -- z1/z2 by 2^-15,
+	 * p1/p2 by 2^-14. Names are one remove from the author's: he names
+	 * these arrays' *lengths* lz1/lp1/lz2/lp2 and the destination arrays
+	 * z1/p1/z2/p2; the pairing (which length feeds which destination) is
+	 * measured, and the four labels here are inherited from the
+	 * destinations (F3600). `short`, not `unsigned short`, is forced by
+	 * `movswl` on every load.
 	 */
 	short z1[V92_CPUNPCK_COEFS];
 	short p1[V92_CPUNPCK_COEFS];
 	short z2[V92_CPUNPCK_COEFS];
 	short p2[V92_CPUNPCK_COEFS];
 
-	/*
-	 * +0xc58 .. +0xc6c  "CPObj->LC[%d] = %d", str1.1:0x8d0.  An array, and
-	 * forced: the print loop indexes it under `cmp $0x5`.
-	 */
+	/* +0xc58 .. +0xc6c  An array because the print loop indexes it (F3600, F3602). */
 	unsigned int LC[V92_CPUNPCK_CONSTELS];
 
-	/*
-	 * +0xc70 .. +0xc84  "CPObj->indexConstel[%d] = %d", str1.4:0x328c.
-	 * Forced twice over -- the print loop indexes it AND the copy into the
-	 * parameter block is a real indexed loop.
-	 */
+	/* +0xc70 .. +0xc84  An array, forced twice over: both the print loop
+	 * and the copy into the parameter block index it (F3600, F3602). */
 	int indexConstel[V92_CPUNPCK_CONSTELS];
 
 	/*
-	 * +0xc88 .. +0xc9c  The six constellations the CP carries.
-	 *
-	 * SIX FIELDS AND NOT AN ARRAY, which is the one place in this struct
-	 * where that distinction is legible.  The author prints them from six
-	 * DIFFERENT format strings -- "\tconst1[%d] = %d" (str1.1:0xa1b),
-	 * const2 (0xa08), const3 (0x9f5), const4 (0x9e2), const5 (0x9cf),
-	 * const6 (0x9bc) -- and no access to any of the six, in the prints or
-	 * in the copies, is indexed: every one is a constant displacement.
-	 * The three arrays above are the other way round on both counts.
-	 *
-	 * `int *` because the print pushes four bytes per element for a `%d`;
-	 * a float would have been promoted to double and pushed as eight.
+	 * +0xc88 .. +0xc9c  The six constellations the CP carries -- six
+	 * separate fields and not an array, the one place in this struct
+	 * where that distinction is legible: each is printed from its own
+	 * format string and every access (print or copy) is a constant
+	 * displacement, never indexed, unlike the three arrays above (F3600,
+	 * F3602). `int *`, since the print pushes four bytes per element for
+	 * a `%d` (a `float` would promote to `double` and push eight).
 	 */
 	int *const1;
 	int *const2;
