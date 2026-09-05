@@ -116059,3 +116059,83 @@ comment).
 **No source or header change made.** `src/fax/class1tx.c` and
 `include/dsplib/class1.h` are unchanged from this investigation; the 31
 raw-cast call sites are left exactly as they were. (2026-09-05)
+
+## F10159. Tier 2 item 7's ~45 `void *` candidates: all FORCED or already-documented-unresolved, zero retypes -- the negative result, with per-bucket evidence
+
+`docs/codestyle.md`'s Tier 2 item 7 asked whether the ~45 non-table `void *`
+internal-function-parameter sites (concentrated in `src/call/pulse.c`,
+`src/core/dp_param.c`, `src/core/dp_wrapper.c`, `src/service/cid.c`, and a
+few in the fax cluster) were genuinely forced or reconstruction artifacts
+that could be retyped to their real pointer type with zero codegen risk.
+Re-derived the candidate set from scratch (every `void *` function
+definition tree-wide, outside `re/`, whose body casts the parameter to one
+specific type or forwards it opaquely) and traced every call site and every
+address-taken/stored site for each. **Result: zero safe-to-retype sites.**
+Every one resolves into one of three buckets, and none of the three leaves
+anything to change:
+
+1. **Opaque host handle -- no real type exists to retype to.** `pulse.c`'s
+   six functions (`call_of`, `PulseDialDigit`, `IsPulseDialerReady`,
+   `LastPulseDigitDialed`, `SetPulseBreakTime`, `SetPulseMakeTime`),
+   `dp_param.c`'s `dp_param_get`/`dp_runtime_create` (`dp_runtime_delete`
+   is a bare `sysdep_free(runtime)`, `.text` 0x5a10, three bytes -- no cast
+   at all), and `cid.c`/`voice.c`'s `*_create`'s `modem`/`m` parameter all
+   take `struct modem *`, slmodemd's own type, which this tree never
+   defines (deliberately -- it is the host, not the object). There is
+   nothing to retype to.
+2. **Quoted external ABI contract -- retyping would diverge from a verified
+   signature, not clean one up.** `cid.c:9-13`, `ringdet.h`'s and `vce.h`'s
+   file-header comments quote slmodemd's own declared prototypes
+   (`ref/slmodemd/modem.c`) verbatim, e.g. `void CID_delete(void *cid); int
+   CID_process(void *cid, void *in, int count);` and `extern void
+   RD_ring_details(void *obj, long *freq, long *duration);`. Covers
+   `CID_delete`/`CID_process`, `RD_delete`/`RD_process`/`RD_ring_details`,
+   `VOICE_delete`/`VOICE_command`/`VOICE_process`. These `void *` spellings
+   are the real caller's own words, not ours.
+3. **Confirmed dispatch table -- heterogeneous, so `void *` is load-bearing.**
+   `dp_wrapper_create`'s `void *dp_data` installs into `dp_process_fn`
+   (`dp.h:23`), whose other slots (`b103_process`, `v22_process`,
+   `v23_process`, `v32_process`, `vpcm_run`, `v8_process`) take genuinely
+   different real context types. **Newly confirmed, not previously in any
+   table list**: `include/dsplib/voice.h:66-72`'s `struct voice_config`
+   (`fn_04`/`fn_08`/`fn_0c`) installs `vce_get_sreg` (2-arg,
+   `unsigned int(*)(void*,int)`), `vce_hook_on` and `vce_hook_off` (1-arg,
+   `void(*)(void*)`) at `voice.c:734-736` -- different arities in the same
+   table, forced by construction. **Newly refuted**: `voice.c`'s suspected
+   `RD_create`/`VOICE_create`-style internal dispatch does not exist --
+   grepped, `RD_create`/`VOICE_create`/`CID_create`/`FAX_create` have zero
+   internal call sites; they are pure external entry points, not table
+   members.
+
+**Two sites are correctly not retyped for a fourth reason, already on
+record and re-confirmed rather than newly found**:
+`fax_class1_GetConstalation(void *ctx)` is one of `docs/codestyle.md`'s
+"Settling open signature questions" stubs -- the object's own body is
+`xor %eax,%eax; ret`, reading none of its arguments, so no evidence bounds
+the real arity or type (`class1.h:854-859`'s doc comment already says so).
+`fax_class1_status(struct fax_class1 *ctx, void *modem_status)`'s second
+parameter is forwarded unchanged into `struct faxvmi_status.modem_status`
+(`faxvmi.h:567`), itself declared `void *` and documented as an opaque
+IN-parameter the object never dereferences with a specific type --
+`modem_status` is void* two levels deep, by the object's own contract, not
+by omission.
+
+**Out of scope, correctly not attempted**: the `void *objp`/`obj`/`shellp`
+"self" parameter pattern in `src/pump/v34/` (~110 more sites across
+`v34hshak.c`, `v34rx.c`, `v34shell.c`, `v34pcmif.c`, `v34hstx1.cpp`,
+`v34info.c`, `v34scram.c`, `v34k56.cpp`, `v34pcmmain.cpp`). Spot-checking
+`v34shell.c` found the same shape as bucket 3 above (a real union at
+`v34shell.h:189-191` that `scrambleGPA`/`scrambleGPC`/`descrambleGPA`/
+`descrambleGPC` install into, F10154), suggesting the whole cluster is
+dispatch-driven the same way, but verifying ~110 individual sites is its
+own pass and was not attempted here -- do not assume it is retypeable
+without doing that work.
+
+No `src/` or `include/` changes resulted; nothing to gate. Baselines
+reconfirmed unchanged on this tree before and covering this investigation:
+`make period` 374 passed, 0 failed; `make byteident-ratchet` 736/1852 EXACT
+(39.7%), 796/1852 grade 0-or-1 (43.0%), ratchet OK; `tools/onedef.py` and
+`tools/refcheck.py` both clean. Per this project's own rule, a null result
+that took real per-site tracing to reach is worth exactly as much as a
+retype would have been, and cheaper to get wrong -- recorded here so item 7
+is not re-opened without reading this first. (2026-09-05)

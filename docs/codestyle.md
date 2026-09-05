@@ -178,9 +178,19 @@ owed, not separate cleanup work waiting on it. Re-split accordingly.
     new`/`operator delete`, convert each site, each gated on its own
     `byteident.py`/`make period` run. Real opportunity to IMPROVE the
     byte-identity count at 49 of the 50 sites.
-7. Verify the ~45 non-table `void*` internal signatures against actual
-   table membership; retype whichever aren't forced -- same
-   dis.py-against-the-blob methodology as 9/10, natural to bundle here.
+7. ~~Verify the ~45 non-table `void*` internal signatures against actual
+   table membership; retype whichever aren't forced~~ DONE, RESOLVED
+   (F10159): all ~45 traced individually and all are FORCED -- opaque host
+   handle (no real type exists, e.g. `pulse.c`), quoted external ABI
+   contract (`cid.c`/`ringdet.h`/`vce.h` cite slmodemd's own declared
+   prototypes verbatim), or a confirmed dispatch table (`dp_process_fn`,
+   and a newly-confirmed one, `struct voice_config`'s `fn_04`/`fn_08`/
+   `fn_0c`). Zero safe-to-retype sites, zero source changes. The suspected
+   `voice.c` internal `RD_create`/`VOICE_create` dispatch does not exist
+   (refuted -- those are pure external entry points). The `src/pump/v34/`
+   `void *objp`-style "self" parameter (~110 more sites, out of this
+   item's scope) looks like the same dispatch-table shape on a spot check
+   but was not individually verified -- do not assume it is retypeable.
 
 **2b — structural additions, scoped but bigger, after 2a:**
 4. Model enough of `fax_class1::pad_005` to give `class1tx.c`'s
@@ -210,6 +220,9 @@ item 9). The shared foundation for item 10 (`sysdep.h`'s placement
 end-to-end on `VPCMXF_Create` (F10157, grade 0 EXACT, unchanged) before
 this wave launched, including the ODR-collision fix both groups were
 warned to expect and check for again as more files convert.
+
+Item 4 done (declined, see above). Item 7 done (F10159, zero retypes,
+see above). Items 5/6/9/10 still in progress.
 
 ## PRIORITY — correctness, not style (class1rx.c null derefs) — RESOLVED
 
