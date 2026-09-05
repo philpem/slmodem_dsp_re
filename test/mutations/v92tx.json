@@ -45,13 +45,13 @@
  },
  {
   "label": "the precoder is built with four fewer taps",
-  "find": "\tv92tx_precoder_ctor(p, V92TX_FILTER_TAPS);",
-  "replace": "\tv92tx_precoder_ctor(p, V92TX_FILTER_TAPS - 4);"
+  "find": "\tnew (p) V92Precoder(V92TX_FILTER_TAPS);",
+  "replace": "\tnew (p) V92Precoder(V92TX_FILTER_TAPS - 4);"
  },
  {
   "label": "the pre-filter is built with four fewer taps",
-  "find": "\tv92tx_prefilter_ctor(p, V92TX_FILTER_TAPS);",
-  "replace": "\tv92tx_prefilter_ctor(p, V92TX_FILTER_TAPS - 4);"
+  "find": "\tnew (p) V92PreFilter(V92TX_FILTER_TAPS);",
+  "replace": "\tnew (p) V92PreFilter(V92TX_FILTER_TAPS - 4);"
  },
  {
   "label": "the raw buffer's null test is dropped",

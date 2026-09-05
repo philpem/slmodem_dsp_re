@@ -16,24 +16,26 @@
  * `include/dsplib/V92Transmitter.h` carries the object map, the 0x60 the
  * allocation gives and the evidence for every field.
  *
- * WHY THE SUB-OBJECTS ARE BUILT THROUGH asm() LABELS.  The same reason
- * src/pump/v90/V92Precoder.cpp gives in full: the blob's
- * `sysdep_malloc(n); ctor(p)` with no null test between is what GCC emits for
- * `new T(...)` over an inline `operator new`, the build is `-nostdinc++` with
- * no <new>, and a user-declared placement form makes GCC emit the null test
- * the blob does not have.  So each constructor is called by its mangled name
- * and each destructor through the explicit destructor-call syntax, which
+ * THE FOUR SUB-OBJECTS ARE BUILT WITH ORDINARY PLACEMENT `new`.  This file
+ * used to reach all four constructors through hand-mangled `asm("_ZN...")`
+ * labels, on the belief (finding F1340) that a user-declared placement
+ * `operator new` would make GCC emit a null test the blob does not have.
+ * Finding F10155 retracts that: the check is tied to a `throw()`-declared
+ * placement operator, `-fcheck-new` was never in this project's flags, and
+ * `include/dsplib/sysdep.h`'s shared non-throw placement `operator new`
+ * reproduces the blob's construct-then-check-later shape with no flag
+ * changes, verified under the real period compiler (finding F10157).  Each
+ * destructor still goes through the explicit destructor-call syntax, which
  * needs no header.
  *
- * THAT LAST SENTENCE USED TO READ "the instruction sequence is the blob's
- * either way", AND IT IS WITHDRAWN FOR THE DESTRUCTOR (finding F7816).  It
- * holds for `new`, where both spellings emit identically -- which is why the
- * constructor still goes through the asm() label and loses nothing.  It is
- * FALSE for a free in TAIL POSITION: the delete-expression emits an ordinary
- * `call sysdep_free` and the open-coded `p->~T(); sysdep_free(p)` emits a
- * sibling `jmp`, dropping the frame with it.  So the destructors below use
- * `delete` over an inline replacement `operator delete`, and that is what
- * makes them byte-identical.  refinement.md lever 7.
+ * THE PRECEDING PARAGRAPH USED TO READ "the instruction sequence is the
+ * blob's either way", AND IT IS WITHDRAWN FOR THE DESTRUCTOR (finding
+ * F7816).  It holds for `new`, either spelling.  It is FALSE for a free in
+ * TAIL POSITION: the delete-expression emits an ordinary `call sysdep_free`
+ * and the open-coded `p->~T(); sysdep_free(p)` emits a sibling `jmp`,
+ * dropping the frame with it.  So the destructors below use `delete` over an
+ * inline replacement `operator delete`, and that is what makes them
+ * byte-identical.  refinement.md lever 7.
  *
  * THE CALLING CONVENTION IS PLAIN CDECL, `this` as the first stack argument
  * (`mov 0x20(%esp),%esi` after two pushes and a 0x14-byte frame), so nothing
@@ -43,6 +45,7 @@
 #include <stddef.h>
 
 #include "dsplib/V92Transmitter.h"
+#include "dsplib/sysdep.h"
 
 /*
  * THE REPLACEMENT `operator delete`, AND IT IS READ OFF THE OBJECT.  The blob
@@ -57,7 +60,6 @@
  * open-coded `p->~T(); sysdep_free(p);` emits a sibling `jmp` and drops the
  * frame with it.  refinement.md lever 7.
  */
-extern "C" void sysdep_free(void *p);
 inline void operator delete(void *p) { sysdep_free(p); }
 
 /*
@@ -92,23 +94,6 @@ inline void operator delete[](void *p) { sysdep_free(p); }
 #include "dsplib/V92PreFilter.h"
 #include "dsplib/V92ParamsInfo.h"
 #include "dsplib/debug.h"
-
-extern "C" {
-void *sysdep_malloc(unsigned int size);
-void sysdep_free(void *mem);
-
-/*
- * The four constructors this one calls, by the names the blob's relocations
- * carry.  Every one is the C1 -- the complete-object variant a `new`
- * expression uses.
- */
-void v92tx_moduluscoder_ctor(void *self) asm("_ZN17V92ModulusEncoderC1Ev");
-void v92tx_convcoder_ctor(void *self) asm("_ZN21V92ConvolutionEncoderC1Ev");
-void v92tx_precoder_ctor(void *self, unsigned int nTaps)
-	asm("_ZN11V92PrecoderC1Ej");
-void v92tx_prefilter_ctor(void *self, unsigned int nTaps)
-	asm("_ZN12V92PreFilterC1Ej");
-}
 
 /*
  * Hold the compiler to the map in the header.  `tools/offcheck.py` parses
@@ -184,8 +169,12 @@ V92Transmitter::V92Transmitter()
 	bitsBuffered = 0;
 	K = 0;
 
+	/*
+	 * Every constructor below is the C1 -- the complete-object variant a
+	 * `new` expression uses -- by the names the blob's relocations carry.
+	 */
 	p = sysdep_malloc(sizeof(V92ModulusEncoder));
-	v92tx_moduluscoder_ctor(p);
+	new (p) V92ModulusEncoder();
 	modulusEncoder = (V92ModulusEncoder *)p;
 
 	p = sysdep_malloc(1);
@@ -193,15 +182,15 @@ V92Transmitter::V92Transmitter()
 	byte_58 = (unsigned char *)p;
 
 	p = sysdep_malloc(sizeof(V92ConvolutionEncoder));
-	v92tx_convcoder_ctor(p);
+	new (p) V92ConvolutionEncoder();
 	convolutionEncoder = (V92ConvolutionEncoder *)p;
 
 	p = sysdep_malloc(sizeof(V92Precoder));
-	v92tx_precoder_ctor(p, V92TX_FILTER_TAPS);
+	new (p) V92Precoder(V92TX_FILTER_TAPS);
 	precoder = (V92Precoder *)p;
 
 	p = sysdep_malloc(sizeof(V92PreFilter));
-	v92tx_prefilter_ctor(p, V92TX_FILTER_TAPS);
+	new (p) V92PreFilter(V92TX_FILTER_TAPS);
 	preFilter = (V92PreFilter *)p;
 }
 
