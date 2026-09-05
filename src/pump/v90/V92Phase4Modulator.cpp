@@ -35,20 +35,7 @@
 #include "dsplib/V92Transmitter.h"
 #include "dsplib/debug.h"
 #include "dsplib/encode.h"
-
-extern "C" {
-void *sysdep_malloc(unsigned int size);
-void sysdep_free(void *mem);
-
-/*
- * V92Mapper's complete-object constructor, by the name the relocation at
- * .text+0x179be carries.  Called through an asm() label rather than through
- * `new` for the reason src/pump/v90/V92Precoder.cpp sets out in full: the
- * blob's `sysdep_malloc(n); ctor(p)` with no null test between them is what
- * `new` emits over an inline `operator new`, and this build has no <new>.
- */
-void v92p4m_mapper_ctor(void *self) asm("_ZN9V92MapperC1Ev");
-}
+#include "dsplib/sysdep.h"
 
 #if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
 
@@ -187,6 +174,16 @@ typedef char v92p4m_cp_word110[
  *
  * The store into the caller's `V92CP` is the constructor's, not a side
  * effect: %esi is zeroed at .text+0x179e5 for the sole purpose of it.
+ *
+ * THE MAPPER IS BUILT WITH ORDINARY PLACEMENT `new`.  This file used to reach
+ * `V92Mapper`'s constructor through a hand-mangled `asm("_ZN9V92MapperC1Ev")`
+ * label, on the belief (finding F1340) that a user-declared placement
+ * `operator new` would make GCC emit a null test the blob does not have.
+ * Finding F10155 retracts that: the check is tied to a `throw()`-declared
+ * placement operator, `-fcheck-new` was never in this project's flags, and
+ * `include/dsplib/sysdep.h`'s shared non-throw placement `operator new`
+ * reproduces the blob's construct-then-check-later shape with no flag
+ * changes, verified under the real period compiler (finding F10157).
  * ===========================================================================
  */
 V92Phase4Modulator::V92Phase4Modulator(V92Parameters *p, V92BitsToSymbol *bts,
@@ -195,8 +192,10 @@ V92Phase4Modulator::V92Phase4Modulator(V92Parameters *p, V92BitsToSymbol *bts,
 {
 	void *m;
 
+	/* C1, the complete-object variant, is what the relocation at
+	 * .text+0x179be names. */
 	m = sysdep_malloc(sizeof(V92Mapper));
-	v92p4m_mapper_ctor(m);
+	new (m) V92Mapper();
 	mapper = (V92Mapper *)m;
 
 	word_1c0 = 0;
