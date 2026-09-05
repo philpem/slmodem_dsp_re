@@ -65,7 +65,7 @@
  {
   "label": "process plants the detector's two fields the other way round",
   "find": "\tpcmType = detector->pcmType;",
-  "replace": "\tpcmType = detector->int_a960;"
+  "replace": "\tpcmType = detector->detectedPcmType;"
  },
  {
   "label": "process leaves the mapping block's +0x61c alone",

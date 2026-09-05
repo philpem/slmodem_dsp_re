@@ -82,7 +82,7 @@
  * Finding F8239 owns three of the eight bits of obj + 0x31 and names 0x20 and
  * 0x40; 0x01, 0x04 and 0x08 are not among the named ones, and nothing here
  * tells us what they indicate.  They are therefore spelled as constants
- * wearing their own values -- the flag-side equivalent of `short_2800` -- and
+ * wearing their own values -- the flag-side equivalent of `altRbsFlag` -- and
  * not given roles.  Naming one wrongly is worse than leaving it numbered.
  */
 

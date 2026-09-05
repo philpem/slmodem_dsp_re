@@ -447,7 +447,7 @@ public:
 	 * per-phase flag array at +0x280c) are read by `determineDminForRrn`,
 	 * and `process` writes the field from its second argument, a
 	 * `V90AutoDigitalImpDetector *`. The three displacements land exactly
-	 * on that class's `linMapp[6][128]`, `byte_0d00[6][128]` and
+	 * on that class's `linMapp[6][128]`, `usableMask[6][128]` and
 	 * `byte_280c[6]`, so the declared type stays `short (*)[128]` --
 	 * `&detector->linMapp[0]` is this pointer, value and type alike. See
 	 * finding F3406 (this retracts an earlier standalone-array reading of
@@ -513,7 +513,7 @@ public:
 	 * of the detector it is handed:
 	 *
 	 *     mov 0xa95c(%edi),%eax ; mov %eax,0x28(%ebp)   pcmType
-	 *     mov 0xa960(%edi),%esi ; mov %esi,0x2c(%ebp)   int_a960
+	 *     mov 0xa960(%edi),%esi ; mov %esi,0x2c(%ebp)   detectedPcmType
 	 *
 	 * So the "nothing anywhere in the object writes it" sentence that used
 	 * to stand here is retracted for both. Now named from the writer's own
@@ -547,7 +547,7 @@ public:
 	 * one of the five `V90ConstellationPower::getPower` calls. See
 	 * `pcmType` above for where `process` gets it from.
 	 */
-	int compandingLaw;		/* +0x2c = detector->int_a960       */
+	int compandingLaw;		/* +0x2c = detector->detectedPcmType */
 
 	/*
 	 * +0x30 and +0x44  The constructor's third and second arguments

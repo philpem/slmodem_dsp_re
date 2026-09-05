@@ -985,7 +985,7 @@ p4_setup(long tag, int dly)
 		int j, t;
 
 		for (t = 0; t < 2; t++) {
-			ADI(t)->short_2800[k] = (short)(k & 1);
+			ADI(t)->altRbsFlag[k] = (short)(k & 1);
 			for (j = 0; j < V90ADID_CODES; j++) {
 				ADI(t)->linMapp[k][j] =
 				    (short)(4000 - 20 * j);

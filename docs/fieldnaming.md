@@ -760,3 +760,120 @@ no preceding field for alignment to react to (`v34recv.h`/`v34shell.h`'s
 `pad_000`, `v29data.h`'s `pad_00`). The pad-region-removal workstream is
 therefore exhausted as scoped: every candidate has been checked, and
 nothing provably-safe remains unremoved.
+
+## Wave 6 — V.90 CP/ADID cluster
+
+Launched 2026-09-05, over `V90CP.{h,cpp}`, `V92CP.{h,cpp}` and
+`V90AutoDigitalImpDetector.{h,cpp}` — the V.90/V.92 CP message classes
+and the downstream digital-impairment detector that feeds them. A
+fresh grep for the `(short|int|long|ptr|flags|byte|word|dword|char|
+uint|ushort)_[0-9a-f]+` family across the six files found **70 unique
+names**, not the snapshot's naive per-file sum of 139 — the doc's own
+caveat about re-deriving rather than trusting a prior count held here
+too, though for a different reason than usual: the six files simply
+don't share any of these offset-derived spellings with each other, so
+there was no double-count to find, just an arithmetic sum that was
+never meant to be read as a total.
+
+**`V90CP` and `V92CP`: re-confirmed exhausted, zero renames.** Both
+were already worked by wave 1 and wave 2 — their own per-file counts
+never moved across either pass (`V90CP.h` 27→27, `V90CP.cpp` 24→24,
+`V92CP.h` 25→23, `V92CP.cpp` 20 unchanged) — and both headers already
+carry paragraph-length derivations for nearly every field, ending in
+explicit "nothing here names one" (`V90CP.h`) or "SHAPE IS MEASURED
+AND MEANING IS NOT" (`V92CP.h`) verdicts. Read in full this wave
+(`V90CP.cpp`'s 1296 lines entire, `V92CP.cpp` in full via a targeted
+sweep for every `edprintf`/`dsplibs_debug_printf` call beyond the
+first 150 lines already read closely) and the earlier findings hold:
+`V90CP.cpp` reaches exactly three strings (a bounds check, a bad-CRC
+line, and `printNofRecievedMpMpNot`'s counter line, all three already
+applied), and `V92CP.cpp` reaches exactly two (`V92CP_NOMEM`,
+`V92CP_BADCRC`), neither naming a message field. Spot-checked several
+already-applied names (`rxState`, `stateBitCount`, `word_124`'s
+neutral derivation) against a fresh read and found no inaccuracy.
+
+**`V90AutoDigitalImpDetector`: twelve real names landed (F10175).**
+Three on a format string (`linearMappingVar`, `uniteUrefDistanceThresh`,
+`altRbsDistanceThresh` — all three had already been DERIVED by an
+earlier pass, finding F1425, which explicitly declined to apply them
+on the ground that a rename "buys nothing the comment does not"; that
+ground predates this project's field-naming phase, whose entire
+purpose is to apply exactly this class of already-derived name, so
+the decline is overturned here). One on a typed caller
+(`detectedPcmType`, from `V90Demodulator.cpp`'s own
+`(PcmType)autoDigitalImpDetector->int_a960` cast, kept as `int` rather
+than retyped since the object never constructs a `PcmType` value at
+either store site). Three matched to an already-named sibling field
+for the identical role (`magnitudeCount`/`magnitudeSum`/
+`magnitudeSqSum`, paired with the already-named `altMagnitudeCount`/
+`altMagnitudeSum` at the per-phase granularity one level up — two of
+the three, `float_1000`/`float_9118`, are technically outside the
+`float`-less pattern family the wave brief quoted, renamed anyway as
+the same phenomenon). One matched to an already-written constructor
+docstring (`altRbsExpected`, from `reset`'s own "Nonzero if the session
+should expect alternate RBS"). One on an unambiguous, already-derived
+single role (`usableMask`, F1435). Two on structural usage inference
+following the same precedent `V92CP::rxState`/`stateBitCount` set
+(F10130): `studyState` and `stateSampleCount` for `studyUrefHandler`'s
+seven-way dispatch variable and its per-state counter.
+
+**One field investigated and left bare on purpose: `byte_280c`.** It
+is read as two different, partly OPPOSITE things by its own callers —
+`uniteLinMappInfoOfUnsuspectedPhases`/`porcessSecondStudy` read a set
+bit as "this phase is suspected, skip it", while `setQcLinearMapping`
+reads the identical bit as "this phase HAS a verdict, use its own
+accumulators", and its own comment says outright that the object uses
+the byte both ways and the two callers are not a pair. A single name
+would be right for one reading and wrong-but-plausible for the other —
+the same dual-role shape wave 2's V.34 pass hit with `f208`/`f20a` and
+left bare for the identical reason. The header's own prior text ("the
+phase's 'suspected' flag ... likewise") was itself only half true and
+is corrected in place rather than just left standing next to the new
+name.
+
+**A tooling near-miss for the next wave to skip.** Mid-session, a
+`git stash && make one ...; git stash pop` compound command silently
+discarded every sed-based rename already applied and left an unrelated
+three-file diff (`src/pump/v34/v34hstx1.cpp` and its test/mutation
+pair) sitting in the working tree instead — not a merge, not another
+session's collision (`git worktree list` and `pwd` both confirmed this
+session never left its own worktree), and the reflog's two unexplained
+`reset: moving to HEAD` entries at the same timestamp point at the
+sandbox's own git-command interception wrapper reacting to the
+compound `&&`/`;` chain rather than at anything this session did
+directly. Recovered by redoing the sed passes from the list already
+written down, rather than trying to recover the original stash (`git
+fsck --unreachable` found 441 dangling commits in this repo, far too
+many to search for one by hand). The unrelated v34hstx1 diff was left
+exactly as found. **Do not chain `git stash` with other commands in
+one compound call in this environment.**
+
+Verified: every touched test binary (`t_v90adid`, `t_v90demap`,
+`t_v92dec`, `t_v90p3ddec`, `t_v90p4ddec`, `t_v90cdadjust`) green with
+unchanged check counts; `t_v90adidnan` and `t_v90equproc` reproduce
+their pre-existing DECLARED divergences (`tools/gccdiverge.json`
+findings F6001, F6203) byte-for-byte against an unmodified-tree
+baseline run of the same binary. `make check64` clean both
+configurations; `tools/onedef.py` (301 types, 1 known duplicate),
+`tools/refcheck.py` (13513 references, 0 dangling) and
+`tools/anchorcheck.py` (228 suites, 9767 mutations, 0 anchor problems
+— confirming the plain-literal, non-`\b` sed pass used on the five
+touched mutation JSONs didn't corrupt any `find` string's uniqueness)
+all clean. Docker was available in this sandbox (a sibling session had
+already built `dsplibs-tc342`); `make period J=3` ran to completion
+despite heavy concurrent load from several sibling worktrees' own
+period runs on the same 3-core host, and passed on the real GCC 3.4.2
+compiler: **374 passed, 0 failed**, matching master's own baseline
+exactly. `make byteident-ratchet` was run alongside it — see finding
+F10175 for its result.
+
+Post-wave counts: naive grep still reads ~70 combined, because every
+rename's comment records "Renamed from `old_name`" for provenance (the
+same convention `V92CP::rxState`'s F10130 comment already used), which
+the flat regex cannot distinguish from a live field — the same
+phenomenon wave 3 documented for coincidental cross-class collisions,
+here for a deliberate reason instead. The number that means something
+is the live-declaration count: `V90AutoDigitalImpDetector.h`'s own
+matching fields dropped from 22 to 13, plus `float_9d48` (outside the
+counted family) also gained a real name. `V90CP`/`V92CP` unchanged at
+0 renamed, confirmed rather than assumed.

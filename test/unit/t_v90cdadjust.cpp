@@ -746,8 +746,8 @@ adj_state(int trial, int useDetector, int bigDmin)
 		memset(detBbuf, 0x33, sizeof(detBbuf));
 		detA->pcmType = (PcmType)cur.w28;
 		detB->pcmType = (PcmType)cur.w28;
-		detA->int_a960 = cur.w2c;
-		detB->int_a960 = cur.w2c;
+		detA->detectedPcmType = cur.w2c;
+		detB->detectedPcmType = cur.w2c;
 		for (i = 0; i < V90ADID_PHASES; i++)
 			detA->byte_280c[i] = detB->byte_280c[i] =
 			    (unsigned char)((trial + i) % 3);
@@ -1011,7 +1011,7 @@ run_process(void)
 			    cdA->powerLadderIndex, cur.byte38, trial);
 		diff_eq_int("pcmType is the detector's pcmType (trial %ld)",
 			    cdA->pcmType, cur.w28, trial);
-		diff_eq_int("compandingLaw is the detector's int_a960 (trial %ld)",
+		diff_eq_int("compandingLaw is the detector's detectedPcmType (trial %ld)",
 			    cdA->compandingLaw, cur.w2c, trial);
 		diff_eq_int("the mapping block's +0x61c is 1 (trial %ld)",
 			    (long)mpA.word_61c, 1, trial);

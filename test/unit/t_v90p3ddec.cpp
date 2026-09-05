@@ -633,7 +633,7 @@ dirty(int side, int trial, int st, unsigned int word2c)
 
 	adid[side].short_a948 = (short)((trial >> 1) & 1);
 	for (i = 0; i < V90ADID_PHASES; i++) {
-		adid[side].short_2800[i] = (short)((trial + (int)i) & 1);
+		adid[side].altRbsFlag[i] = (short)((trial + (int)i) & 1);
 		adid[side].byte_280c[i] =
 		    (unsigned char)((trial + (int)i + 1) & 1);
 	}
@@ -1304,12 +1304,12 @@ run_p3d_setdigimp(void)
 				 */
 				for (ph = 0; ph < V90ADID_PHASES; ph++)
 					for (ci = 0; ci < V90ADID_CODES; ci++) {
-						adid[side].float_9d48[ph][ci] =
+						adid[side].linearMappingVar[ph][ci] =
 						    1.0f + (float)((ci * 3u
 							+ ph) % 17u);
-						adid[side].float_1000[ph][ci] =
+						adid[side].magnitudeSum[ph][ci] =
 						    0.5f + (float)(ci % 11u);
-						adid[side].float_9118[ph][ci] =
+						adid[side].magnitudeSqSum[ph][ci] =
 						    2.0f + (float)(ci % 13u);
 					}
 				adid[side].float_a970 = 5.0f;
@@ -1431,9 +1431,9 @@ run_p3d_twolevel(void)
 					adid[side].short_a948 = (short)a;
 					/*
 					 * `isAltRbs` answers yes only when
-					 * `short_2800[phase]` is set AND the
+					 * `altRbsFlag[phase]` is set AND the
 					 * sample is further from the main
-					 * mapping entry than `short_a9a6`.
+					 * mapping entry than `altRbsDistanceThresh`.
 					 * A threshold of 0 on the arm that
 					 * arms the flag is what makes the
 					 * alternate table reachable at all --
@@ -1441,8 +1441,8 @@ run_p3d_twolevel(void)
 					 * reads zero, which is how this was
 					 * found.
 					 */
-					adid[side].short_2800[ph] = (short)a;
-					adid[side].short_a9a6 =
+					adid[side].altRbsFlag[ph] = (short)a;
+					adid[side].altRbsDistanceThresh =
 					    (short)(a ? 0 : 0x4000);
 				}
 

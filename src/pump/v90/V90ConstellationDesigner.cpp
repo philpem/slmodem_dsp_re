@@ -2685,7 +2685,7 @@ V90ConstellationDesigner::process(unsigned int rate,
 	pcmType = detector->pcmType;
 	word_40 = arg13;
 	codecType = codec;
-	compandingLaw = detector->int_a960;
+	compandingLaw = detector->detectedPcmType;
 	powerLadderIndex = powerIndex;
 	mappingParams = mapp;
 	mapp->word_61c = 1;

@@ -101,18 +101,18 @@
  },
  {
   "label": "+0x0c takes the detector's companding law rather than its +0xa960",
-  "find": "\tadditionalCPinfo->word_0c = autoDigitalImpDetector->int_a960;",
+  "find": "\tadditionalCPinfo->word_0c = autoDigitalImpDetector->detectedPcmType;",
   "replace": "\tadditionalCPinfo->word_0c = (unsigned int)autoDigitalImpDetector->pcmType;"
  },
  {
   "label": "+0x0c is left as it was found",
-  "find": "\tadditionalCPinfo->word_0c = autoDigitalImpDetector->int_a960;\n\tadditionalCPinfo->word_10 = 0;",
+  "find": "\tadditionalCPinfo->word_0c = autoDigitalImpDetector->detectedPcmType;\n\tadditionalCPinfo->word_10 = 0;",
   "replace": "\tadditionalCPinfo->word_10 = 0;"
  },
  {
   "label": "+0x10 is left as it was found",
-  "find": "\tadditionalCPinfo->word_0c = autoDigitalImpDetector->int_a960;\n\tadditionalCPinfo->word_10 = 0;",
-  "replace": "\tadditionalCPinfo->word_0c = autoDigitalImpDetector->int_a960;"
+  "find": "\tadditionalCPinfo->word_0c = autoDigitalImpDetector->detectedPcmType;\n\tadditionalCPinfo->word_10 = 0;",
+  "replace": "\tadditionalCPinfo->word_0c = autoDigitalImpDetector->detectedPcmType;"
  },
  {
   "label": "the sixteen-bit slot at +0x14 takes the parameter at +0x4c",
@@ -198,13 +198,13 @@
  },
  {
   "label": "the allow table is the one at +0x2800 and the dMin table the one at +0xd00",
-  "find": "\t\tautoDigitalImpDetector->byte_0d00,\n\t\tautoDigitalImpDetector->short_2800,",
-  "replace": "\t\t(unsigned char (*)[128])autoDigitalImpDetector->short_2800,\n\t\t(short *)autoDigitalImpDetector->byte_0d00,"
+  "find": "\t\tautoDigitalImpDetector->usableMask,\n\t\tautoDigitalImpDetector->altRbsFlag,",
+  "replace": "\t\t(unsigned char (*)[128])autoDigitalImpDetector->altRbsFlag,\n\t\t(short *)autoDigitalImpDetector->usableMask,"
  },
  {
   "label": "the two PcmType arguments are exchanged",
-  "find": "\t\tautoDigitalImpDetector->pcmType,\n\t\t(PcmType)autoDigitalImpDetector->int_a960,",
-  "replace": "\t\t(PcmType)autoDigitalImpDetector->int_a960,\n\t\tautoDigitalImpDetector->pcmType,"
+  "find": "\t\tautoDigitalImpDetector->pcmType,\n\t\t(PcmType)autoDigitalImpDetector->detectedPcmType,",
+  "replace": "\t\t(PcmType)autoDigitalImpDetector->detectedPcmType,\n\t\tautoDigitalImpDetector->pcmType,"
  },
  {
   "label": "the eighth argument is the maximum ucode rather than the unsuspected phase",
@@ -216,7 +216,7 @@
  {
   "label": "the top ucode array is the detector's own rather than the one phase 3 hands over",
   "find": "\t\tphase3Demodulator->getMaxUcode(),\n\t\tsessionFlag != 0 ? jdV92->getMaxLookahead()",
-  "replace": "\t\t(unsigned char *)autoDigitalImpDetector->byte_0d00,\n\t\tsessionFlag != 0 ? jdV92->getMaxLookahead()"
+  "replace": "\t\t(unsigned char *)autoDigitalImpDetector->usableMask,\n\t\tsessionFlag != 0 ? jdV92->getMaxLookahead()"
  },
  {
   "label": "the session flag picks the lookahead the other way round",

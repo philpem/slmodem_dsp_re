@@ -40,7 +40,7 @@
  * for; `t_v90p4dnan` is the worked precedent.  The accidental half went with
  * it: `mu_finite_variances` in `t_v90adid` now turns any seeded word whose
  * exponent field is all ones into the largest finite exponent, keeping its
- * sign and significand, because `float_9d48` holds VARIANCES and the object's
+ * sign and significand, because `linearMappingVar` holds VARIANCES and the object's
  * own writer cannot put a NaN there.  The deliberate half is this file.
  *
  * `make period` has no allow-list and passes this file with the object's own
@@ -78,7 +78,7 @@ extern unsigned int ref_dsplibs_debug_level;
 #define PRE		16
 #define NPHASE		V90ADID_PHASES
 
-/* The last `float_9d48` entry whose four bytes are still inside the object. */
+/* The last `linearMappingVar` entry whose four bytes are still inside the object. */
 #define ADID_VAR_LAST	793
 
 #define PARAMS_BYTES	0x504
@@ -143,8 +143,8 @@ seed(int trial)
 static void
 finite_variances(void)
 {
-	float *a = &ours_o.float_9d48[0][0];
-	float *b = &theirs_o.float_9d48[0][0];
+	float *a = &ours_o.linearMappingVar[0][0];
+	float *b = &theirs_o.linearMappingVar[0][0];
 	int i;
 
 	for (i = 0; i <= ADID_VAR_LAST; i++) {
@@ -169,7 +169,7 @@ adid_set_2800(int pattern)
 	int p;
 
 	for (p = 0; p < NPHASE; p++)
-		ours_o.short_2800[p] = theirs_o.short_2800[p] =
+		ours_o.altRbsFlag[p] = theirs_o.altRbsFlag[p] =
 		    (short)((pattern >> p) & 1);
 }
 
@@ -231,14 +231,14 @@ main(void)
 		adid_set_2800(0x15);
 
 		for (i = 0; i < V90ADID_CODES; i++)
-			ours_o.float_9d48[2][i] =
-			    theirs_o.float_9d48[2][i] = 1.0e9f;
+			ours_o.linearMappingVar[2][i] =
+			    theirs_o.linearMappingVar[2][i] = 1.0e9f;
 		for (i = 0; i < 5; i++) {
 			float v;
 
 			memcpy(&v, &win[w][i], sizeof v);
-			ours_o.float_9d48[2][0x5a - i] =
-			    theirs_o.float_9d48[2][0x5a - i] = v;
+			ours_o.linearMappingVar[2][0x5a - i] =
+			    theirs_o.linearMappingVar[2][0x5a - i] = v;
 		}
 
 		dsplib_debug_capture_reset();
