@@ -116539,3 +116539,81 @@ check count regressed. `tools/onedef.py`, `tools/refcheck.py` and
 configurations). `make period` and `make byteident-ratchet` run under
 `dsplibs-tc342` (GCC 3.4.2) against the fully merged wave-6 tree -- see the
 wave 6 summary in `docs/fieldnaming.md` for the result. (2026-09-05)
+
+## F10165: `flags_173a` split into `trainConstel`/`rrnConstel`/`byte_173c` -- applying evidence two prior findings already had
+
+Field-naming wave 6, over `VPcmFloModem.h`/`.cpp` (with the fresh grep
+against the wave's whole brief -- see `docs/fieldnaming.md`'s wave 6
+section for why the other seven files in the brief needed no change).
+
+F7583 already read `VPcmFloModem.cpp`'s own format string --
+`"... Jd Detected: trainConstel = %d, rrnConstel =%d\r\n"`, printed from
+`flags_173a[0]` and `flags_173a[1]` in that order in the V.92 arm of
+`v90RunDemodulator` -- and named the two bytes in its own text. A second,
+independently-worded format string in `runPcmModem`'s V.90 arm, "Train
+constellation : %d  RRN constellation : %d", names the same two fields
+from a different call site, which was not previously cited alongside
+F7583 and corroborates it. Both F7583 and a later pass (recorded around
+`docs/findings.md`'s F10130) read this
+evidence and explicitly DECLINED to apply it, on the ground that
+`flags_173a[3]` is cleared as one run by three different callers
+(`enterPhase3`, `internalReset`/`VPcmXfCreate.cpp`'s constructor path) and
+splitting a shared array was "not this batch's change" or "a bigger
+change than a naming pass should make unilaterally".
+
+This wave's charter is exactly that batch -- a dedicated field-naming pass
+over this file with authority to split a struct declaration -- so the
+split was made:
+
+- `flags_173a[0]` -> `trainConstel` (rank 1: the format string, twice).
+- `flags_173a[1]` -> `rrnConstel` (rank 1, same evidence).
+- `flags_173a[2]` -> `byte_173c`, KEPT NEUTRAL. Its behaviour is fully
+  established (F7583: a one-shot latch, set when the rate-renegotiation
+  arm finds our own request outstanding, cleared when the far end's own
+  report of the same event arrives afterward) but no format string or
+  typed caller NAMES it, only describes what it does -- CLAUDE.md's
+  distinction between a role that is bounded and one that is settled, and
+  finding 3120's ruling that a wrong name is worse than an offset one.
+
+**Why the split is safe.** Three `unsigned char` members in declaration
+order lay out identically to `unsigned char[3]` -- no alignment padding is
+possible between single-byte members, so no offset moves. Every access
+site in the tree (`VPcmFloModem.cpp`'s `enterPhase3`/`internalReset`/the
+V.90 and V.92 Jd-detected arms/the two rate-renegotiation arms, and
+`VPcmXfCreate.cpp`'s constructor path) already indexed the array with a
+literal `0`/`1`/`2`, never a variable or a loop, so every site converts to
+a named-field access with no change to statement order, control flow, or
+any value. This is a pure identifier change, the same class CLAUDE.md's
+opening paragraph on this whole workstream describes as unable to move
+generated code.
+
+**Propagation.** `include/dsplib/VPcmFloModem.h` (the declaration and its
+comment), `src/pump/v90/VPcmFloModem.cpp` (the `VPCM_OFF` offset-assertion
+macro, now three lines instead of one, and eleven call/assignment sites),
+`src/pump/v90/VPcmXfCreate.cpp` (the constructor's three clearing stores
+and one comment mention -- outside the wave's nominal file list but
+sharing the same class, found by `grep -rln flags_173a`), the cosmetic
+display-name strings in `test/unit/t_vpcmep3.cpp`'s raw-offset poison
+table (offsets unchanged; only the label text updated for clarity), and
+the `find`/`replace` text of three mutation-anchor files
+(`test/mutations/v90rundemod.json`, `vpcmep3.json`, `vpcmrunpcm.json`) --
+verified afterward with `tools/anchorcheck.py` rather than assumed correct
+from the substitution alone.
+
+**Verification.** `make one T="t_vpcmep3 t_vpcmrunpcm t_v90rundemod
+t_vpcmctor t_vpcmflomodem t_vpcmqcline"` all green, no FAIL anywhere in
+the run; `t_vpcmrunpcm`'s 155,541-check `runPcmModem` comparison and
+`t_v90rundemod`'s 95,714-check `v90RunDemodulator` comparison (the two
+heaviest suites over this struct) matched their pre-existing recorded
+counts exactly. `t_v34info1a` (68,561 checks, links the whole `repro`
+tree including the touched `VPcmXfCreate.cpp`) also green.
+`tools/onedef.py` (301 types, 1 known duplicate), `tools/refcheck.py`
+(13,514 references, 0 dangling) and `tools/anchorcheck.py` (228 suites,
+9,767 mutations, 0 anchor issues) all clean; `make check64` clean on both
+configurations. Docker was available in this sandbox: `make period
+J=$(nproc)` against the real GCC 3.4.2 toolchain (`dsplibs-tc342`) ran
+374 passed, 0 failed, matching the pre-existing baseline test count
+exactly (no test added or lost). `make byteident-ratchet` run alongside
+it: grade 0 EXACT still 736/1852 (39.7%), grade 0-or-1 still 796/1852
+(43.0%), `ratchet OK` -- unchanged from the floor five prior waves already
+confirmed, as expected of a pure struct-member split. (2026-09-05)

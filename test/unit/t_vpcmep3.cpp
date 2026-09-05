@@ -203,9 +203,9 @@ struct site {
 };
 
 static const struct site site_v[] = {
-	{ "flags_173a[0]",		0x173a, 1, 0 },
-	{ "flags_173a[1]",		0x173b, 1, 0 },
-	{ "flags_173a[2]",		0x173c, 1, 0 },
+	{ "trainConstel",		0x173a, 1, 0 },
+	{ "rrnConstel",			0x173b, 1, 0 },
+	{ "byte_173c",			0x173c, 1, 0 },
 	{ "droppedToV34",			0x173d, 1, 0 },
 	{ "clr",			0x173e, 1, 0 },
 	{ "v34BaudAllow[0]",		0x0217, 1, 1 },
