@@ -1,16 +1,16 @@
 [
  {
-  "label": "V90Demodulator::getBitRate.  Run it with: tools/mutate.py --suite v90getbitrate.  EVERY MUTATION BELOW MUST LIE INSIDE getBitRate: V90Demodulator.cpp also holds enterPhase3, reInit, reset and enterChannelVerification, and the v90demod suite maps the same file to the same binary for those.  `byte_280 = 0;` appears verbatim inside reset, so the gate's anchors carry the `if (` and the `== 0` that reset's assignment does not have.  A mutation that landed in a sibling would read a verdict at a claim nobody made -- finding F432."
+  "label": "V90Demodulator::getBitRate.  Run it with: tools/mutate.py --suite v90getbitrate.  EVERY MUTATION BELOW MUST LIE INSIDE getBitRate: V90Demodulator.cpp also holds enterPhase3, reInit, reset and enterChannelVerification, and the v90demod suite maps the same file to the same binary for those.  `rateValid = 0;` appears verbatim inside reset, so the gate's anchors carry the `if (` and the `== 0` that reset's assignment does not have.  A mutation that landed in a sibling would read a verdict at a claim nobody made -- finding F432."
  },
  {
   "label": "the gate is gone: every call computes a rate, including the ones made before there is one",
-  "find": "\tif (byte_280 == 0)\n\t\treturn 0;",
+  "find": "\tif (rateValid == 0)\n\t\treturn 0;",
   "replace": "\tif (0)\n\t\treturn 0;"
  },
  {
   "label": "the gate is a SIGNED byte tested > 0, so 0x80 and 0xff close it",
-  "find": "\tif (byte_280 == 0)",
-  "replace": "\tif ((signed char)byte_280 <= 0)"
+  "find": "\tif (rateValid == 0)",
+  "replace": "\tif ((signed char)rateValid <= 0)"
  },
  {
   "label": "the count is read through mappingParams at +0x14, not mappingParamsAlt at +0x18",

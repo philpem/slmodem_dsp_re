@@ -760,3 +760,174 @@ no preceding field for alignment to react to (`v34recv.h`/`v34shell.h`'s
 `pad_000`, `v29data.h`'s `pad_00`). The pad-region-removal workstream is
 therefore exhausted as scoped: every candidate has been checked, and
 nothing provably-safe remains unremoved.
+
+## Wave 6 — V.90 Demodulator/ConnectionEvaluator cluster
+
+`V90Demodulator.{h,cpp}` and `V90ConnectionEvaluator.{h,cpp}` -- the same
+cluster wave 1 and wave 2's second pass both worked, revisited a third time
+per the standing "continue until genuinely exhausted" instruction. Both
+classes are the most heavily pre-derived in the tree at this point: nearly
+every remaining `type_NNNN` already carried a paragraph of prior-wave
+reasoning, most of it ending in an explicit, evidence-backed decline rather
+than a gap nobody had looked at. This wave's real find was less "new fields"
+than "two prior declines whose blocking condition had quietly resolved, and
+nobody had gone back to check."
+
+**Fresh counts, per the doc's own caveat that a grep is always right over a
+prior count.** `V90Demodulator.cpp` 45, `V90Demodulator.h` 18,
+`V90ConnectionEvaluator.h` 19, `V90ConnectionEvaluator.cpp` 15 going in (97
+combined); 33, 12, 20, 11 going out (76 combined) despite thirteen real
+renames landing. As wave 3 first documented for this exact naive-grep method,
+the count does not fall by the rename count for two reasons at once here:
+common offset spellings (`word_3c`, `word_64`, `word_68`, `word_90`, `word_98`,
+`word_b8`) are shared with fields this wave deliberately left alone, and
+several of the new derivation comments themselves *quote* an old offset name
+for provenance (`V90ConnectionEvaluator.h`'s own file-history paragraph names
+`word_70`/`word_74`/`word_78`/`word_7c`/`word_84`/`word_88` as what two
+long-past batches called these fields, and the `phase3EvalEnabled` derivation
+quotes the literal grep pattern `word_84 = 1` it ran and found nothing for) --
+which is exactly the same "the string survives in the corpus via a mention,
+not a live field" effect wave 3's F10139-140 measured, now with the wrinkle
+that some of the surviving mentions are this wave's *own* prose rather than
+an unrelated class's field. The true signal is the per-class rename count
+below, not this aggregate.
+
+### `V90Demodulator` -- nine fields (F10173)
+
+**Two of the nine OVERTURN a wave-2 decline, on the same shape F7480 (wave 3)
+already established: the decline's own blocking condition resolved once a
+sibling function was written, and nobody revisited it.** `word_48`'s header
+comment said outright "the comparison site is in `progress`, which is
+unwritten" -- but `progress` (7,276 bytes, the largest function in this
+reconstruction) has been written for several sessions now, in this exact
+file, and its phase-4 arm reads `phase4ElapsedSamples += nofIn; if
+(phase4ElapsedSamples > phase4TimeoutDeadline) { ...
+dsplibs_debug_printf("V90Demodulator: Phase4 TimeOut\r\n"); ...` -- a format
+string (CLAUDE.md rule 1) naming exactly what exceeding the threshold means,
+and so what both fields (`word_44` and `word_48`) hold. Renamed
+`phase4ElapsedSamples`/`phase4TimeoutDeadline`.
+
+**Six more on rule 1/2, all found the same way: read the whole enclosing
+function, not just the field's own access sites, and check what it is
+compared against.** `rateValid` (`byte_280`, gates `getBitRate()` directly);
+`samplesInPhase` (`word_38`, compared against
+`MINIMUM_DURATION_IN_DATA_BEFORE_EC_RRN`, an author-named parameter);
+`timingHistoryEval` (`word_278`, a direct copy of
+`PARAMS_TIMING_HISTORY_EVAL`, corroborated by `sessionTermination` reading
+the identical parameter slot uncopied a function earlier); `noEnergyDuration`
+(`word_27c`, compared against `NO_ENERGY_DURATION_FOR_REMOTE_RETRAIN`);
+`energyDropDetectorArmed` (`word_40`, gates the comparison against
+`ENERGY_DROP_DETECTOR_THRESHOLD`); `nofResampled`/`nofSymbols` (`word_24c`/
+`word_258`, the documented `nOut` output parameters of
+`V90Resampler::resample`/`V90Equalizer::process`, the latter corroborated by
+a second, independent reconstructed reader outside this class,
+`VPcmFloModem::getConstellation`).
+
+**Three left unnamed, re-checked rather than re-derived.** `word_3c` stays
+on wave 2/3's own rule-3120 reasoning (it is the equaliser's raw
+`stateCount`, arms not values are the record). The three outcome counters
+`word_264`/`word_268`/`word_26c` were re-examined from the V90Demodulator
+side specifically because `TAG_DiagnosticResults.h` already declines a name
+for the slots they feed, on the ground that the V.34 writer's meaning for
+the same slots doesn't transfer -- this wave found the identical wall from
+the other direction (the `word_3c` values that drive each counter are
+themselves unnamed, so naming the counter would add a second layer of
+invention). `word_260` and `word_270` were confirmed rather than assumed:
+the former's one reader (`VPcmFloModem::getConstellation`) already declined
+to promote its own local name (`lane`) to a field name, and a fresh
+whole-tree grep found no second reader to change that; the latter is
+write-only, confirmed with the same grep, and is fully typed already so it
+stays a confirmed-dead `word_` rather than moving to `pad_`.
+
+**A stale-comment sweep, found while reading closely rather than searched
+for.** Five member functions' header doc comments (`sessionTermination`,
+`progress`, `reset`, `enterChannelVerification`, `reInit`) all said
+"declared for the record; not defined here" -- true when written, false for
+several sessions since: all five are fully defined in the `.cpp`, several
+with hundred-line derivations of their own. Corrected to say so.
+
+### `V90ConnectionEvaluator` -- four fields (F10174)
+
+**One pair on genuinely asymmetric evidence, and said so rather than
+smoothed flat.** `trn1dEvalEnabled` (`word_88`) is rule 1: `V90Demodulator::
+progress`'s `word_3c == 0x06` arm sets it beside `edprintf("V90Demodulator:
+enabling connectionEvaluator of TRN1d\r\n")`. `phase3EvalEnabled` (`word_84`)
+is its structural twin in the same `evaluatePhase3` `if`/`else if` chain --
+guarding the arm that reads `PHASE3_ERROR_FOR_V34_FALLBACK`/
+`PDSNR_THRESHOLD_IN_PHASE3` where `trn1dEvalEnabled`'s guards
+`TRN1D_ERROR_FOR_V34_FALLBACK` -- and is cleared beside it at both sites that
+print "disabling connectionEvaluator of Phase3", but a whole-tree grep for
+anywhere it is ever SET finds nothing. Named on the structural symmetry and
+the parameter family alone (rule 3), with the asymmetry recorded in the
+header rather than presented as equally strong.
+
+**One on rule 1, near-verbatim.** `retrainInsteadOfRateDown` (`word_94`):
+`evaluateConnection`'s two copies of "the rate-down override" test it and
+upgrade a verdict beside `edprintf("V90ConnectionEvaluator: initiating
+Retrain instead of One Rate Down !!\r\n")`.
+
+**One on rule 3, a whole-arm reading.** `debugAlternateState` (`word_80`):
+the only thing anywhere in the object that touches it is a four-state cycle
+inside `evaluateConnection`'s `debugAlternateDebug`-gated debug arm, each
+state issuing its own forced verdict and diagnostic. No string names the
+number, only the four verdicts it selects.
+
+**Eleven left unnamed** (`word_10`, `word_14`, `word_18`, `word_1c`,
+`word_20`, `word_24`, `word_64`, `word_68`, `word_90`, `word_98`, `word_b8`):
+each already carries an explicit prior-wave decline (F9480, F10134, or the
+pad-removal audit) and a fresh read found nothing past what is already
+recorded. `+0x8c` (`externalDemandCode`) was already named by a same-session
+sibling workstream before this wave started, per the brief; confirmed and
+left alone.
+
+### Propagation and verification
+
+Both classes' renames reached outside their nominal four files:
+`byte_280`/`word_258` into `src/pump/v90/VPcmFloModem.cpp`
+(`getConstellation`) and `test/unit/t_v34diag.cpp`, and the
+`V90ConnectionEvaluator` four into `V90Demodulator.cpp`
+(`connectionEvaluator->word_84` etc.) and `test/unit/t_v90conneval.cpp` --
+found each time by a tree-wide grep AFTER a first `make one` build caught a
+stale reference the nominal-scope grep had missed (`VPcmFloModem.cpp`
+reaches `V90Demodulator` fields but is outside every file this wave started
+from), matching CLAUDE.md's own warning that evidence and references don't
+automatically reach every file that needs them. Eight mutation-anchor JSON
+files updated (`v90demctor`, `v90demod`, `v90demprog`, `v90dataph`,
+`v90getbitrate`, `v34diagflo`, `v90conneval`, plus checking and finding
+nothing to change in `v90p4ddec`, which shares `word_84`/`word_88` spellings
+for a genuinely different class) by parsing each as JSON and substituting on
+the decoded strings with a word-boundary regex -- sidestepping the
+F9480/F10134 `\t`/`\n`-escape trap entirely rather than re-discovering it a
+third time. Every remaining occurrence of every renamed identifier,
+tree-wide outside `re/`, was checked and is either renamed or confirmed to
+belong to a different class at a coincidentally identical offset
+(`V90ConstellationDesigner::word_40`, `V92Phase4Modulator::word_38`/
+`word_44`, `V90Phase4Demodulator`'s own `word_84`/`word_88`) and left alone.
+
+`make one T="t_v90demctor t_v90demod t_v90demprog t_v90dataph t_v90conneval
+t_vpcmrunpcm t_v34diag"` green, 0 FAIL, check counts matching prior-wave
+baselines exactly where comparable (155,541 for `VPcmFloModem::
+runPcmModem`, matching F10142). `tools/onedef.py` (301 types, 1 known
+duplicate), `tools/refcheck.py` (13,517 references, 0 dangling once this
+wave's own two findings were given proper `## FNNNNN.` headings -- several
+neighbouring findings in the same block used a colon after the number
+instead, which is NOT a valid finding definition to `refcheck.py`'s
+stricter regex, found while filing this wave's own entries and left as a
+note for whoever next touches that block rather than silently reformatted
+here),
+`tools/anchorcheck.py` (228 suites, 9,767 mutations, 0 issues) and
+`tools/bannercheck.py src/pump/v90` all clean. `make check64`: 64-bit clean,
+both configurations.
+
+**Docker was available in this sandbox, unlike every prior wave, and the
+gate that decides ran clean.** Built `dsplibs-tc342` fresh (no cached image
+in this worktree). `make period J=3`: **374 passed, 0 failed** -- the exact
+test count every prior wave's merged tree has reported, confirming this
+wave added no test and broke none, as expected of a pure rename. `make
+byteident-ratchet`: **ratchet OK, grade 0 EXACT 736/1852 (39.7%), grade
+0-or-1 796/1852 (43.0%)** -- bit-for-bit identical to the floor every prior
+wave measured, across thirteen renames plus five corrected doc comments in
+this wave. Both runs cover the fully merged tree (`V90Demodulator` and
+`V90ConnectionEvaluator` renames together), so this is the first wave in
+this phase to close its own loop on the real gate rather than handing it to
+the parent session.

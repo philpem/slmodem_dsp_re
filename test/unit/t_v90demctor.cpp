@@ -881,11 +881,11 @@ struct hole {
 
 static const struct hole hole_v[] = {
 	{ 0x034, 4, "inPhase3" },
-	{ 0x038, 4, "word_38" },
+	{ 0x038, 4, "samplesInPhase" },
 	{ 0x03c, 4, "word_3c" },
-	{ 0x040, 4, "word_40" },
-	{ 0x044, 4, "word_44" },
-	{ 0x048, 4, "pad_48" },
+	{ 0x040, 4, "energyDropDetectorArmed" },
+	{ 0x044, 4, "phase4ElapsedSamples" },
+	{ 0x048, 4, "phase4TimeoutDeadline" },
 	{ 0x148, 0x90, "constellationPower" },
 	{ 0x240, 4, "pad_240" },
 	{ 0x260, 4, "word_260" },
@@ -1120,9 +1120,9 @@ run_ctor(void)
 				    trial);
 
 			/* And the six words the constructor zeroes. */
-			diff_eq_int("word_24c (%ld)", (long)D(1)->word_24c, 0,
+			diff_eq_int("nofResampled (%ld)", (long)D(1)->nofResampled, 0,
 				    trial);
-			diff_eq_int("word_258 (%ld)", (long)D(1)->word_258, 0,
+			diff_eq_int("nofSymbols (%ld)", (long)D(1)->nofSymbols, 0,
 				    trial);
 			diff_eq_int("word_264 (%ld)", (long)D(1)->word_264, 0,
 				    trial);
@@ -1130,11 +1130,11 @@ run_ctor(void)
 				    trial);
 			diff_eq_int("word_26c (%ld)", (long)D(1)->word_26c, 0,
 				    trial);
-			diff_eq_int("word_278 (%ld)", (long)D(1)->word_278, 0,
+			diff_eq_int("timingHistoryEval (%ld)", (long)D(1)->timingHistoryEval, 0,
 				    trial);
-			diff_eq_int("word_27c (%ld)", (long)D(1)->word_27c, 0,
+			diff_eq_int("noEnergyDuration (%ld)", (long)D(1)->noEnergyDuration, 0,
 				    trial);
-			diff_eq_int("byte_280 (%ld)", (long)D(1)->byte_280, 0,
+			diff_eq_int("rateValid (%ld)", (long)D(1)->rateValid, 0,
 				    trial);
 
 			/* What it does NOT write, on both sides. */

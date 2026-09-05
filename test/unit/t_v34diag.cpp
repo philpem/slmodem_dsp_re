@@ -386,7 +386,7 @@ setup(int n, const struct trial *t)
 		((V90Equalizer *)equ_[side])->meanErrorEnergyCurrent =
 		    lvl_v[t->li];
 		d->agc.level = lvl_v[(t->li + 3) % NLVL];
-		d->byte_280 = 1;
+		d->rateValid = 1;
 		((V90MappingParams *)mpar_[side])->word_0 =
 		    (unsigned int)(t->li + 1) * 6u;
 		((V90Phase2Info *)ph2_[side])->rtd = 0x1234 + t->li;
@@ -801,7 +801,7 @@ run_transcript(void)
  * EVERY LENGTH FIELD IS PLANTED AND NEVER SEEDED.  A seeded `unsigned int`
  * length leaves `maxCount` as the only bound and the loop reads a long way
  * off the end of a small array; the six are `V90Equalizer::linearEquLength`
- * and `::dfeLength`, `V90Demodulator::word_258`,
+ * and `::dfeLength`, `V90Demodulator::nofSymbols`,
  * `V92EchoCanceller::filterLength` and both `v34_echo::taps`.
  *
  * THE THREE MUTATING ARMS ARE WHY THE OBJECTS ARE COMPARED AND NOT JUST THE
@@ -980,7 +980,7 @@ setup_visual(int n, const struct vtrial *t)
 		d->autoDigitalImpDetector =
 		    (V90AutoDigitalImpDetector *)adid_[side];
 		d->inPhase3 = (unsigned int)t->phase3;
-		d->word_258 = len_v[t->li];
+		d->nofSymbols = len_v[t->li];
 		d->word_260 = (unsigned int)(n * 7);
 		d->array_254 = con_[side];
 

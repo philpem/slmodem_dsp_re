@@ -1039,14 +1039,14 @@ VPcmFloModem::getConstellation(int_complex *points, unsigned long maxCount)
 
 	dem = modem.demodulator;
 
-	n = dem->word_258;
+	n = dem->nofSymbols;
 	if (n > maxCount)
 		n = maxCount;
 
 	/*
 	 * `array_254` is a `void *` in V90Demodulator.h because the code that
 	 * ALLOCATES it sizes it at eight bytes an element, and this reader
-	 * steps it by four.  The two are not in contradiction -- `word_258` is
+	 * steps it by four.  The two are not in contradiction -- `nofSymbols` is
 	 * a running fill level and not the allocated length -- but nothing
 	 * settles which of the two strides is the element, so the declaration
 	 * stays neutral and the cast is here with the reason on it.

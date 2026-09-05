@@ -1237,8 +1237,8 @@ run_ce_phase3(void)
 			p34_params();
 			SET_CE(avePdsnrNofSymbols, 0u);
 			SET_CE(altRbsDetectedOnQc, (short)1);
-			SET_CE(word_88, 1u);
-			SET_CE(word_84, 1u);
+			SET_CE(trn1dEvalEnabled, 1u);
+			SET_CE(phase3EvalEnabled, 1u);
 			memcpy(before, ce_b, CE_SLOT);
 
 			vb = p3_call(tag, 1);
@@ -1267,8 +1267,8 @@ run_ce_phase3(void)
 			SET_CE(avePdsnrNofSymbols, 37u);
 			SET_CEF(avePdsnr, avg_bits[(unsigned)trial % NAVG]);
 			SET_CE(altRbsDetectedOnQc, (short)0);
-			SET_CE(word_88, 0u);
-			SET_CE(word_84, 0u);
+			SET_CE(trn1dEvalEnabled, 0u);
+			SET_CE(phase3EvalEnabled, 0u);
 			memcpy(before, ce_b, CE_SLOT);
 
 			vb = p3_call(tag, 1);
@@ -1297,8 +1297,8 @@ run_ce_phase3(void)
 			SET_P(MAX_NOF_REMOTE_RETRAINS, ~limits[c].limit);
 			SET_P(unnamed_45c, ~limits[c].limit);
 			SET_CE(nofV90Retrains, limits[c].start);
-			SET_CE(word_88, 1u);
-			SET_CE(word_84, 1u);
+			SET_CE(trn1dEvalEnabled, 1u);
+			SET_CE(phase3EvalEnabled, 1u);
 			SET_CE(word_10, 0u);
 			SET_CE(word_18, 0u);
 			SET_CE(word_64, 1u);	/* would trip at once */
@@ -1365,8 +1365,8 @@ run_ce_phase3(void)
 			SET_P(MAX_NOF_V90_RETRAINS, 100000);
 			SET_CE(nofV90Retrains, 3u);
 			SET_CE(altRbsDetectedOnQc, (short)0);
-			SET_CE(word_88, 1u);
-			SET_CE(word_84, 1u);
+			SET_CE(trn1dEvalEnabled, 1u);
+			SET_CE(phase3EvalEnabled, 1u);
 			SET_CE(word_10, 0u);
 			SET_CE(word_18, 0u);
 			SET_CE(word_64, 500u);
@@ -1434,8 +1434,8 @@ run_ce_phase3(void)
 			SET_P(unnamed_45c, -4);
 			SET_CE(nofV90Retrains, 0u);
 			SET_CE(altRbsDetectedOnQc, (short)0);
-			SET_CE(word_88, 0u);
-			SET_CE(word_84, 1u);
+			SET_CE(trn1dEvalEnabled, 0u);
+			SET_CE(phase3EvalEnabled, 1u);
 			SET_CE(word_10, 0u);
 			SET_CE(word_18, 0u);
 			SET_CE(word_64, 300u);
@@ -1496,8 +1496,8 @@ run_ce_phase3(void)
 			SET_P(MAX_NOF_V90_RETRAINS, 100000);
 			SET_CE(nofV90Retrains, 0u);
 			SET_CE(altRbsDetectedOnQc, (short)0);
-			SET_CE(word_88, 0u);
-			SET_CE(word_84, 1u);
+			SET_CE(trn1dEvalEnabled, 0u);
+			SET_CE(phase3EvalEnabled, 1u);
 			SET_CE(word_10, 0u);
 			SET_CE(word_18, 4444u);
 			SET_CE(word_64, 100000u);
@@ -1543,8 +1543,8 @@ run_ce_phase3(void)
 			SET_P(MAX_NOF_V90_RETRAINS, 100000);
 			SET_CE(nofV90Retrains, 0u);
 			SET_CE(altRbsDetectedOnQc, (short)0);
-			SET_CE(word_88, 1u);
-			SET_CE(word_84, 0u);
+			SET_CE(trn1dEvalEnabled, 1u);
+			SET_CE(phase3EvalEnabled, 0u);
 			SET_CE(word_10, 0u);
 			SET_CE(word_18, 0u);
 			SET_CE(word_64, 1u);
@@ -1589,8 +1589,8 @@ run_ce_phase3(void)
 			SET_P(MAX_NOF_V90_RETRAINS, 100000);
 			SET_CE(nofV90Retrains, 0u);
 			SET_CE(altRbsDetectedOnQc, (short)0);
-			SET_CE(word_88, 0u);
-			SET_CE(word_84, 1u);
+			SET_CE(trn1dEvalEnabled, 0u);
+			SET_CE(phase3EvalEnabled, 1u);
 			SET_CE(word_10, 0u);
 			SET_CE(word_18, 0u);
 			SET_CE(word_64, 100000u);
@@ -1632,8 +1632,8 @@ run_ce_phase3(void)
 			SET_P(MAX_NOF_REMOTE_RETRAINS, 0);
 			SET_CE(nofV90Retrains, 0u);
 			SET_CE(altRbsDetectedOnQc, (short)0);
-			SET_CE(word_88, 0u);
-			SET_CE(word_84, 1u);
+			SET_CE(trn1dEvalEnabled, 0u);
+			SET_CE(phase3EvalEnabled, 1u);
 			SET_CE(word_10, 0u);
 			SET_CE(word_18, 0u);
 			SET_CE(word_64, 100000u);
@@ -2600,9 +2600,9 @@ ec_base(int trial)
 	SET_CE(word_1c, 0);
 	SET_CE(word_20, 0);
 	SET_CE(word_24, 0);
-	SET_CE(word_80, 0);
+	SET_CE(debugAlternateState, 0);
 	SET_CE(word_90, 0);
-	SET_CE(word_94, 0);
+	SET_CE(retrainInsteadOfRateDown, 0);
 	SET_CE(word_98, 0);
 	SET_CE(echoRrnState, 0);
 
@@ -2845,7 +2845,7 @@ ec_scenarios(int lvl)
 	SET_CE(enableRrnDown, 1);
 	SET_CE(initDmin, 10);
 	SET_CE(curDmin, 25);
-	SET_CE(word_94, 1);
+	SET_CE(retrainInsteadOfRateDown, 1);
 	v = ec_step(b + 97, 100, EC_5);
 	ec_is("the V42 retrain is not overridden (%ld)", v, 4, b + 97);
 	ec_ext_no_override = 1;
@@ -2856,7 +2856,7 @@ ec_scenarios(int lvl)
 	SET_CE(enableRrnDown, 1);
 	SET_CE(initDmin, 10);
 	SET_CE(curDmin, 5);
-	SET_CE(word_94, 1);
+	SET_CE(retrainInsteadOfRateDown, 1);
 	v = ec_step(b + 92, 100, EC_5);
 	ec_is("+0x94 turns the rate down into a retrain (%ld)", v, 4, b + 92);
 	ec_is("and clears +0x90 (%ld)", (long)CEB->word_90, 0, b + 92);
@@ -3308,7 +3308,7 @@ ec_scenarios(int lvl)
 	/* -------------------------------------- 4d: the +0x94 override */
 	ec_base(50);
 	SET_CE(enableRrnDown, 1);
-	SET_CE(word_94, 1);
+	SET_CE(retrainInsteadOfRateDown, 1);
 	SET_CE(initDmin, 10);
 	SET_CE(curDmin, 5);
 	SET_CE(word_14, 500);
@@ -3351,7 +3351,7 @@ ec_scenarios(int lvl)
 		/* +0x80 out of range: the switch does nothing at all */
 		ec_base(52);
 		SET_CE(debugAlternateDebug, 1);
-		SET_CE(word_80, 4);
+		SET_CE(debugAlternateState, 4);
 		SET_CE(word_24, 400);
 		v = ec_step(b + 210, 300, EC_5);
 		ec_is("an out-of-range +0x80 decides nothing (%ld)", v, 0,
@@ -3453,7 +3453,7 @@ ec_sweep(int lvl)
 		SET_CE(enableRrnUp, (cfg & 1) ? 1 : 0);
 		SET_CE(enableRrnDown, (cfg & 2) ? 1 : 0);
 		SET_P(HIGH_LEVEL_TX_ACTIVE, (cfg & 4) ? 1 : 0);
-		SET_CE(word_94, (cfg == 5) ? 1 : 0);
+		SET_CE(retrainInsteadOfRateDown, (cfg == 5) ? 1 : 0);
 		SET_CE(retrainCounterFadeCount, 700 + cfg);
 		SET_CE(remoteRrnCounterFadeCount, 900 + cfg);
 		SET_CE(nofV90Retrains, cfg % 5);

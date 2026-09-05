@@ -182,10 +182,12 @@ public:
 	unsigned int getBitRate() const;
 
 	/**
-	 * @brief Declared for the record; not defined here (finding F7520 --
-	 *        the return type is a real `int`/`unsigned int` per the
-	 *        object's epilogue, but which one is not decidable further,
-	 *        and there is no caller in this tree).
+	 * @brief Report and, once, save the resampler's timing-history mean.
+	 *
+	 * Wave 6 (F10173): now defined in the .cpp -- finding F7520's
+	 * "declared for the record" is history, not the current state; the
+	 * return type it settled (a real `int`/`unsigned int` per the
+	 * object's epilogue, which one not decidable further) still stands.
 	 */
 	int sessionTermination();
 
@@ -265,24 +267,25 @@ public:
 
 	/**
 	 * @brief Produce one block of receive-side demodulated bits.
-	 * Declared for the record; not defined here. `void` is want of
-	 * evidence -- return types are not mangled.
+	 * Wave 6 (F10173): defined in the .cpp, the largest function in this
+	 * reconstruction -- see its own file comment there. `void`'s return
+	 * is still want of evidence, since return types are not mangled.
 	 */
 	void progress(int *, unsigned int &, float *, unsigned int);
 	/**
 	 * @brief Per-connection reset.
-	 * Declared for the record; not defined here. Stores its argument
+	 * Wave 6 (F10173): defined in the .cpp. Stores its argument
 	 * into `quickConnect` and into `equalizer->quickConnect` (see
 	 * `quickConnect`'s own comment).
 	 */
 	void reset(unsigned int);
 	/**
 	 * @brief Enter channel verification.
-	 * Declared for the record; not defined here. Sets `inPhase3` to 5
+	 * Wave 6 (F10173): defined in the .cpp. Sets `inPhase3` to 5
 	 * (see that field's comment).
 	 */
 	void enterChannelVerification(short, short);
-	/** @brief Re-initialize the session. Declared for the record; not defined here. */
+	/** @brief Re-initialize the session. Wave 6 (F10173): defined in the .cpp -- two calls and nothing else. */
 	void reInit();
 
 	/* --- data members; see the file comment on the naming --- */
@@ -363,10 +366,20 @@ public:
 	unsigned int inPhase3;
 
 	/*
-	 * +0x038  Saved into +0x044 and cleared, in that order.  Nothing in
-	 * wave 2 says what either holds.
+	 * +0x038  Wave 6 (F10173): `progress` accumulates `nofIn` into this
+	 * every call (`samplesInPhase += nofIn`) and every phase-entry member
+	 * clears it, so it is the sample count since the current phase (or
+	 * sub-state of phase 4) began.  Named on CLAUDE.md's rule 2: the data
+	 * phase's own steady-state transition reads it back as
+	 *
+	 *     if (samplesInPhase >= params->MINIMUM_DURATION_IN_DATA_BEFORE_EC_RRN)
+	 *         enterDataSteadyState();
+	 *
+	 * against `MINIMUM_DURATION_IN_DATA_BEFORE_EC_RRN` -- the author's own
+	 * name, out of `V90Parameters.h` -- which types the quantity as a
+	 * duration in samples directly rather than by inference alone.
 	 */
-	unsigned int word_38;
+	unsigned int samplesInPhase;
 
 	/*
 	 * +0x03c  Cleared by `enterPhase3`, and set to 0x20 by its one
@@ -374,26 +387,59 @@ public:
 	 */
 	unsigned int word_3c;
 
-	unsigned int word_40;		/* +0x040 cleared by `enterPhase3`   */
-	unsigned int word_44;		/* +0x044 receives the old +0x038    */
+	/*
+	 * +0x040  Wave 6 (F10173): gates the "common tail" energy-drop
+	 * detector in `progress` -- `if (energyDropDetectorArmed) { if
+	 * (agc.level < params->ENERGY_DROP_DETECTOR_THRESHOLD) ... }` -- and
+	 * is armed and disarmed at specific `word_3c` arms (armed on quick
+	 * connect and on `RtNot detected`, disarmed on the two "freezing
+	 * timing on silence rrn" arms and by every phase-entry/reset member).
+	 * The name borrows `ENERGY_DROP_DETECTOR_THRESHOLD`'s own vocabulary
+	 * (CLAUDE.md rule 1/2: an author-named parameter typing the role of
+	 * the flag that gates the comparison against it), not usage inference
+	 * alone.
+	 */
+	unsigned int energyDropDetectorArmed;	/* +0x040 */
 
 	/*
-	 * +0x048  WAS `pad_48`, and the three phase-entry members are what
-	 * modelled it.  Each stores a deadline built from
-	 * `phase2Info->rtd` with a single `lea`, and nothing in this batch
-	 * reads it back:
+	 * +0x044  Wave 6 (F10173): OVERTURNS a stale note this header used to
+	 * carry about +0x048 ("the comparison site is in `progress`, which is
+	 * unwritten") -- `progress` has been written since, and its phase-4
+	 * arm reads
+	 *
+	 *     phase4ElapsedSamples += nofIn;
+	 *     if (phase4ElapsedSamples > phase4TimeoutDeadline) {
+	 *         dsplibs_debug_printf("V90Demodulator: Phase4 TimeOut\r\n");
+	 *         ...
+	 *
+	 * -- the author's own words for the condition, CLAUDE.md rule 1,
+	 * naming what exceeding the deadline MEANS and so what both operands
+	 * of the comparison hold.  `enterPhase4` accumulates the outgoing
+	 * `samplesInPhase` into this member rather than discarding it (see
+	 * that method's own long comment on the accumulate/clear/deadline
+	 * ordering); `enterRRN`/`enterFPE` simply clear it, since both are
+	 * themselves entries into the same `inPhase3 == 2` state this field
+	 * times.
+	 */
+	unsigned int phase4ElapsedSamples;	/* +0x044 */
+
+	/*
+	 * +0x048  WAS `pad_48`, then `phase4TimeoutDeadline` (wave 2), and wave 6 (F10173)
+	 * finishes the derivation the old comment deferred.  Each phase-entry
+	 * member stores a deadline built from `phase2Info->rtd` with a single
+	 * `lea`:
 	 *
 	 *     enterRRN, enterFPE   lea 0x10680(%edx,%edx,1)   0x10680 + 2*rtd
 	 *     enterPhase4          lea 0x28230(%edx,%edx,4)   0x28230 + 5*rtd
 	 *
-	 * A word, and no more than that is claimed.  At the 8000 Hz
-	 * downstream rate the two constants are 8.4 s and 20.6 s, which is
-	 * the right order for a phase timeout in samples and is why the name
-	 * is not `word_48` -- but the comparison site is in `progress`, which
-	 * is unwritten, so "deadline" is inference and "sample count" is
-	 * inference on top of it.  MODELLED, UNNAMED, per CLAUDE.md.
+	 * and `progress`'s phase-4 arm is what reads it back, in the
+	 * `phase4ElapsedSamples > phase4TimeoutDeadline` comparison that
+	 * comment describes -- the "Phase4 TimeOut" diagnostic is what both
+	 * fields' names are taken from.  At the 8000 Hz downstream rate the
+	 * two constants are 8.4 s and 20.6 s, the right order for a phase
+	 * timeout in samples, corroborating rather than driving the name.
 	 */
-	unsigned int word_48;		/* +0x048                            */
+	unsigned int phase4TimeoutDeadline;	/* +0x048 */
 
 	/*
 	 * +0x04c  EMBEDDED, and now modelled: `V90Demodulator::reset` does
@@ -534,18 +580,85 @@ public:
 	 */
 	void *array_244;		/* +0x244 n * 4 bytes                */
 	void *array_248;		/* +0x248 n * 12 bytes               */
-	unsigned int word_24c;		/* +0x24c zeroed by the constructor
+
+	/*
+	 * +0x24c  Wave 6 (F10173): the `nOut` argument of
+	 * `resampler.resample(in, n, out, nOut)` -- `V90Resampler.h`'s own
+	 * doc comment, "set to the number of samples written to `out`" --
+	 * and then reused as the `n` argument of the following
+	 * `equalizer->process`, since the equaliser consumes exactly what the
+	 * resampler produced.  CLAUDE.md rule 2, a typed callee.
+	 */
+	unsigned int nofResampled;	/* +0x24c zeroed by the constructor
 					 *        AND by reset               */
 	void *array_250;		/* +0x250 n * 4 bytes                */
 	void *array_254;		/* +0x254 n * 8 bytes                */
-	unsigned int word_258;		/* +0x258 zeroed by the constructor
+
+	/*
+	 * +0x258  Wave 6 (F10173): the `nOut` argument of
+	 * `equalizer->process(in, n, outSym, outFloat, nOut)` --
+	 * `V90Equalizer.h`'s own doc comment, "receives how many symbols were
+	 * produced" -- CLAUDE.md rule 2.
+	 */
+	unsigned int nofSymbols;	/* +0x258 zeroed by the constructor
 					 *        AND by reset               */
 	void *array_25c;		/* +0x25c n * 8 bytes                */
+
+	/*
+	 * +0x260  `progress`'s common tail does
+	 * `word_260 = (word_260 + nofSymbols) % 6`, a self-accumulating
+	 * counter reduced modulo six.  ITS ONE RECONSTRUCTED READER IS OUTSIDE
+	 * THIS CLASS, and already carries a longer derivation than this file
+	 * repeats: `VPcmFloModem::getConstellation` (see that function's own
+	 * "THE HORIZONTAL AXIS OF THE CONSTELLATION TRACE" comment) reads it
+	 * into a local it names `lane`, uses `(word_260 + i) % 6` to pick one
+	 * of six horizontal strip-chart lanes -- one per V.90 frame phase --
+	 * and explicitly declines to promote that to a field name: "being a
+	 * phase counter's base is not the same as being established as one".
+	 * Wave 6 (F10173) re-checked for a second reader with a fresh
+	 * whole-tree grep and found none, so that reasoning still stands and
+	 * this file keeps the same offset name rather than diverging from it.
+	 */
 	unsigned int word_260;		/* +0x260 zeroed by reset            */
 
+	/*
+	 * +0x264, +0x268, +0x26c  THREE OUTCOME COUNTERS, one per `word_3c`
+	 * exit-state group, incremented once each in `progress`'s common
+	 * tail (`case 0x23: word_264++;`, `case 0x1f/0x20/0x21: word_268++;`,
+	 * `case 0x26: word_26c++;`) and read back only by `getAT_UD`, which
+	 * copies each into `TAG_DiagnosticResults::word_0ec/word_0f0/word_0f4`
+	 * verbatim.
+	 *
+	 * WAVE 6 (F10173) CHECKED THE OBVIOUS NAME AND DECLINED IT ON THE SAME
+	 * EVIDENCE `TAG_DiagnosticResults.h` ALREADY RECORDS.  +0x0ec is "THE
+	 * TOTAL NUMBER OF RATE RENEGOTIATIONS" on the V.34 side, and +0x0f0/
+	 * +0x0f4 sit beside it in the same three-word block -- but that
+	 * header's own comment already declines to extend the V.34 reading to
+	 * these three, "because the V.90 writer puts `V90Demodulator::
+	 * word_264`/`word_268`/`word_26c` here instead and nothing establishes
+	 * that the two mean one thing."  This wave re-checked FROM THE V.90
+	 * SIDE rather than taking that as settled and found the same wall from
+	 * the other direction: which `word_3c` value lands in which counter is
+	 * itself an unnamed number (`word_3c` "KEEPS ITS OFFSET NAME" per this
+	 * file's own comment below, on 3120's rule -- naming a counter of an
+	 * unnamed state would add a second layer of invention). Offset names
+	 * stay on both sides of that wall.
+	 */
 	unsigned int word_264;		/* +0x264 zeroed by the constructor  */
 	unsigned int word_268;		/* +0x268 zeroed by the constructor  */
 	unsigned int word_26c;		/* +0x26c zeroed by the constructor  */
+
+	/*
+	 * +0x270  WRITE-ONLY, checked rather than assumed (wave 6, F10173).
+	 * `progress` sets it to 1 on three `word_3c` arms (0x1c, 0x31, 0x33 --
+	 * all "silence RRN" related prints) and `reset` clears it; nothing
+	 * else in this tree, and nothing else `dis.py` shows anywhere in the
+	 * 1.2 MB object, reads it back.  Since the reconstruction is complete,
+	 * that is a statement about the BLOB and not about what this tree has
+	 * read yet -- same shape as `V90Equalizer::pad_138`/`cadence::pad_2c0`
+	 * (F10137), except this member is already fully typed and so stays a
+	 * confirmed-dead `word_` rather than moving to `pad_`.
+	 */
 	unsigned int word_270;		/* +0x270 zeroed by reset            */
 
 	/*
@@ -566,11 +679,45 @@ public:
 	 * expression entirely.  3120's rule.
 	 */
 	float float_274;		/* +0x274                            */
-	unsigned int word_278;		/* +0x278 zeroed by the constructor  */
-	unsigned int word_27c;		/* +0x27c zeroed by the constructor  */
 
-	/* +0x280  Zeroed by the constructor, by `enterPhase3` and by `reset`. */
-	unsigned char byte_280;
+	/*
+	 * +0x278  Wave 6 (F10173): `enterDataSteadyState` does
+	 * `timingHistoryEval = V90PW(params)[PARAMS_TIMING_HISTORY_EVAL]`,
+	 * copying the flag rather than testing it in place -- the store is
+	 * scheduled between the load and the `test`, but it IS in the source,
+	 * because `sessionTermination` reads the identical parameter slot a
+	 * function earlier and does NOT copy it (finding F10134's neighbour;
+	 * see the .cpp for the byte-level argument). `PARAMS_TIMING_HISTORY_
+	 * EVAL`'s own comment already says it is the author's name, out of
+	 * `V90Parameters.h` -- CLAUDE.md rule 2, a named source typing the
+	 * copy.
+	 */
+	unsigned int timingHistoryEval;	/* +0x278 */
+
+	/*
+	 * +0x27c  Wave 6 (F10173): the energy-drop detector's duration
+	 * counter -- `progress`'s common tail adds `nofIn` to this every call
+	 * the AGC level stays under `params->ENERGY_DROP_DETECTOR_THRESHOLD`
+	 * (see `energyDropDetectorArmed` above), resets it to 0 the moment the
+	 * level recovers, and raises a remote retrain once it reaches
+	 * `params->NO_ENERGY_DURATION_FOR_REMOTE_RETRAIN` -- the author's own
+	 * name for the threshold, which is where this name comes from
+	 * (CLAUDE.md rule 1/2).
+	 */
+	unsigned int noEnergyDuration;	/* +0x27c */
+
+	/*
+	 * +0x280  Wave 6 (F10173): `getBitRate` GATES ON THIS DIRECTLY --
+	 * `if (rateValid == 0) return 0;` -- so the reported rate reads zero
+	 * until it is set.  It is set to 1 in exactly the two `word_3c` arms
+	 * (0x19, 0x2a) that finish a `constellationDesigner->
+	 * process()` call (entering the data phase, and redesigning after a
+	 * silence RRN), and cleared by every phase-3/RRN/FPE entry and by
+	 * `reset` -- so "the negotiated rate can be read back" is exactly what
+	 * being non-zero states.  CLAUDE.md rule 2: `getBitRate`, the one
+	 * caller, is the typed evidence.
+	 */
+	unsigned char rateValid;
 
 	/*
 	 * +0x281 WAS `pad_281[3]`, REMOVED (2026-09-04, pad-audit).  An

@@ -194,8 +194,8 @@
 
  {"label": "phase3's arms are three ifs rather than a chain",
   "why": "0x3f612 jumps over the +0xb2 arm straight to the +0x88 test, so the three are exclusive.  Caught because the altRbsDetectedOnQc trials set +0x88 and +0x84 as well and give +0x64 and the retrain duration values that would trip on the first call.",
-  "find": "\t} else if (word_88 != 0) {",
-  "replace": "\t}\n\tif (word_88 != 0) {"},
+  "find": "\t} else if (trn1dEvalEnabled != 0) {",
+  "replace": "\t}\n\tif (trn1dEvalEnabled != 0) {"},
 
  {"label": "phase3's first arm is armed by +0xb0",
   "find": "\tif (altRbsDetectedOnQc != 0) {\n\t\taltRbsDetectedOnQc = 0;",
@@ -223,8 +223,8 @@
   "replace": "\t\t\t\t \"(retrain no %d)\\r\\n\", nofV90Retrains);\n\t\t\tnofV90Retrains = 0;\n\t\t}"},
 
  {"label": "phase3's first arm leaves +0x1c alone",
-  "find": "\t\tword_1c = 0;\n\t\tword_90 = 0;\n\t} else if (word_88 != 0) {",
-  "replace": "\t\tword_90 = 0;\n\t} else if (word_88 != 0) {"},
+  "find": "\t\tword_1c = 0;\n\t\tword_90 = 0;\n\t} else if (trn1dEvalEnabled != 0) {",
+  "replace": "\t\tword_90 = 0;\n\t} else if (trn1dEvalEnabled != 0) {"},
 
  {"label": "the end-of-TRN1d arm uses the EIA6 threshold",
   "why": "The task's brief predicted the EIA6 thresholds would appear in these two functions and they do NOT.  The fixture plants +FLT_MAX in all three of them, so a comparison that picked one up would never fire.",
@@ -241,8 +241,8 @@
   "replace": "\t\t\tword_10 += nofSymbols;\n\t\t\tif (word_10 >= word_68) {\n\t\t\t\tverdict = V90CE_VERDICT_FALLBACK_V34;\n\t\t\t\tedprintf(\"V90ConnectionEvaluator (end of \""},
 
  {"label": "the end-of-TRN1d arm does not clear its duration",
-  "find": "\t\t\t}\n\t\t} else {\n\t\t\tword_10 = 0;\n\t\t}\n\t} else if (word_84 != 0) {",
-  "replace": "\t\t\t}\n\t\t}\n\t} else if (word_84 != 0) {"},
+  "find": "\t\t\t}\n\t\t} else {\n\t\t\tword_10 = 0;\n\t\t}\n\t} else if (phase3EvalEnabled != 0) {",
+  "replace": "\t\t\t}\n\t\t}\n\t} else if (phase3EvalEnabled != 0) {"},
 
  {"label": "the end-of-TRN1d fall-back does not restart the counter",
   "find": "\t\t\t\t\t \"%c%d.%03d\\r\\n\",\n\t\t\t\t\t !(0.0f >= avePdsnr) ? '+' : '-',\n\t\t\t\t\t (int)__builtin_fabsf(avePdsnr),\n\t\t\t\t\t ce_frac3(avePdsnr));\n\t\t\t\tnofV90Retrains = 0;",
@@ -254,8 +254,8 @@
   "replace": "\t\t\t\t\t \"%c%d.%03d\\r\\n\",\n\t\t\t\t\t (0.0f <= avePdsnr) ? '+' : '-',"},
 
  {"label": "the printed magnitude keeps its sign",
-  "find": "\t\t\t\t\t (int)__builtin_fabsf(avePdsnr),\n\t\t\t\t\t ce_frac3(avePdsnr));\n\t\t\t\tnofV90Retrains = 0;\n\t\t\t\tword_1c = 0;\n\t\t\t\tword_90 = 0;\n\t\t\t}\n\t\t} else {\n\t\t\tword_10 = 0;\n\t\t}\n\t} else if (word_84 != 0) {",
-  "replace": "\t\t\t\t\t (int)avePdsnr,\n\t\t\t\t\t ce_frac3(avePdsnr));\n\t\t\t\tnofV90Retrains = 0;\n\t\t\t\tword_1c = 0;\n\t\t\t\tword_90 = 0;\n\t\t\t}\n\t\t} else {\n\t\t\tword_10 = 0;\n\t\t}\n\t} else if (word_84 != 0) {"},
+  "find": "\t\t\t\t\t (int)__builtin_fabsf(avePdsnr),\n\t\t\t\t\t ce_frac3(avePdsnr));\n\t\t\t\tnofV90Retrains = 0;\n\t\t\t\tword_1c = 0;\n\t\t\t\tword_90 = 0;\n\t\t\t}\n\t\t} else {\n\t\t\tword_10 = 0;\n\t\t}\n\t} else if (phase3EvalEnabled != 0) {",
+  "replace": "\t\t\t\t\t (int)avePdsnr,\n\t\t\t\t\t ce_frac3(avePdsnr));\n\t\t\t\tnofV90Retrains = 0;\n\t\t\t\tword_1c = 0;\n\t\t\t\tword_90 = 0;\n\t\t\t}\n\t\t} else {\n\t\t\tword_10 = 0;\n\t\t}\n\t} else if (phase3EvalEnabled != 0) {"},
 
  {"label": "the ordinary phase-3 arm uses the EIA6 threshold",
   "find": "\t\tif (avePdsnr > params->PHASE3_ERROR_FOR_V34_FALLBACK) {",
@@ -439,9 +439,9 @@
 
  {"label": "the +0x9c store is 32 bits wide",
   "equivalent": true,
-  "why": "0x3e40e is `66 89 8b 9c 00 00 00` -- `mov %cx,0x9c(%ebx)`, a 16-bit store, so the object writes two bytes and this writes four. The two it also writes are +0x9e, which `curDmin = 0;` seventeen statements later sets to 0 anyway and which nothing between the two reads. EQUIVALENT ONLY BECAUSE OF THAT ORDER: move the +0x9e store above the +0x9c one, or make anything between them read +0x9e, and this mutation becomes a real defect. It will then be CAUGHT and reported MIScounted, which is the point of registering it. THE ANCHOR CARRIES `word_84 = 0;` ONLY TO STAY UNIQUE: `evaluateConnection` re-latches +0x9c on three of its paths and writes the same statement at three deeper indentations, and `find` is a plain substring search, so the bare statement matched four times once that function was added. The claim, the site and the replacement are unchanged.",
-  "find": "\tword_84 = 0;\n\tinitDmin = -1;",
-  "replace": "\tword_84 = 0;\n\t*(int *)&initDmin = -1;"},
+  "why": "0x3e40e is `66 89 8b 9c 00 00 00` -- `mov %cx,0x9c(%ebx)`, a 16-bit store, so the object writes two bytes and this writes four. The two it also writes are +0x9e, which `curDmin = 0;` seventeen statements later sets to 0 anyway and which nothing between the two reads. EQUIVALENT ONLY BECAUSE OF THAT ORDER: move the +0x9e store above the +0x9c one, or make anything between them read +0x9e, and this mutation becomes a real defect. It will then be CAUGHT and reported MIScounted, which is the point of registering it. THE ANCHOR CARRIES `phase3EvalEnabled = 0;` ONLY TO STAY UNIQUE: `evaluateConnection` re-latches +0x9c on three of its paths and writes the same statement at three deeper indentations, and `find` is a plain substring search, so the bare statement matched four times once that function was added. The claim, the site and the replacement are unchanged.",
+  "find": "\tphase3EvalEnabled = 0;\n\tinitDmin = -1;",
+  "replace": "\tphase3EvalEnabled = 0;\n\t*(int *)&initDmin = -1;"},
 
  {"note": "evaluateConnection, 3,857 bytes.  Five stages, six verdicts and two epilogues; the entries below follow the object in that order.  Eight comparisons are unsigned against a slot the map calls `int` and one is signed against a slot that is not, and each of the nine has its own trial at a negative value because that is the only place the two readings part."},
 
@@ -558,12 +558,12 @@
 
  {"label": "the external-demand override does not need +0x94",
   "why": "0x3e875 is `mov 0x94(%edi),%esi; test %esi,%esi; setne %dl` ANDed with `cmp $0x2,%ecx; sete %bl`.",
-  "find": "\t\t\tif (word_94 != 0\n\t\t\t    && verdict == V90CE_VERDICT_RRN_DOWN) {",
+  "find": "\t\t\tif (retrainInsteadOfRateDown != 0\n\t\t\t    && verdict == V90CE_VERDICT_RRN_DOWN) {",
   "replace": "\t\t\tif (verdict == V90CE_VERDICT_RRN_DOWN) {"},
 
  {"label": "the external-demand override does not need verdict 2",
-  "find": "\t\t\tif (word_94 != 0\n\t\t\t    && verdict == V90CE_VERDICT_RRN_DOWN) {",
-  "replace": "\t\t\tif (word_94 != 0) {"},
+  "find": "\t\t\tif (retrainInsteadOfRateDown != 0\n\t\t\t    && verdict == V90CE_VERDICT_RRN_DOWN) {",
+  "replace": "\t\t\tif (retrainInsteadOfRateDown != 0) {"},
 
  {"label": "the external-demand arm falls through instead of returning",
   "why": "0x3e8b7 is a second `ret` and the only paths to it are the empty call and this arm.  Caught by the trial that arms `debugFallBack` with a period of one before entering the arm: falling through would answer 5.",
@@ -889,12 +889,12 @@
   "replace": "\tswitch (verdict) {\n\tcase V90CE_VERDICT_RRN_NO_RESTRICT:\n\tcase V90CE_VERDICT_RRN_UP:"},
 
  {"label": "the second override does not need +0x94",
-  "find": "\tif (word_94 != 0 && verdict == V90CE_VERDICT_RRN_DOWN) {",
+  "find": "\tif (retrainInsteadOfRateDown != 0 && verdict == V90CE_VERDICT_RRN_DOWN) {",
   "replace": "\tif (verdict == V90CE_VERDICT_RRN_DOWN) {"},
 
  {"label": "the second override does not need verdict 2",
-  "find": "\tif (word_94 != 0 && verdict == V90CE_VERDICT_RRN_DOWN) {",
-  "replace": "\tif (word_94 != 0) {"},
+  "find": "\tif (retrainInsteadOfRateDown != 0 && verdict == V90CE_VERDICT_RRN_DOWN) {",
+  "replace": "\tif (retrainInsteadOfRateDown != 0) {"},
 
  {"label": "the alternate debug arm is entered when its flag is clear",
   "find": "\tif (debugAlternateDebug != 0) {\n\t\tword_24 += nofSymbols;",
@@ -915,7 +915,7 @@
   "replace": "\t\t\tcase 0:"},
 
  {"label": "the alternate retrain does not advance +0x80",
-  "find": " \"Debug Retrain\\r\\n\");\n\t\t\t\tword_80++;",
+  "find": " \"Debug Retrain\\r\\n\");\n\t\t\t\tdebugAlternateState++;",
   "replace": "\t\t\t\t\t \"Debug Retrain\\r\\n\");"},
 
  {"label": "+0x80 == 1 is a retrain",
@@ -923,7 +923,7 @@
   "replace": "\t\t\tcase 1:\n\t\t\t\tverdict = V90CE_VERDICT_RETRAIN;"},
 
  {"label": "+0x80 == 3 does not restart the cycle",
-  "find": "\t\t\t\tword_80 = 0;\n\t\t\t\tword_98 = 0;",
+  "find": "\t\t\t\tdebugAlternateState = 0;\n\t\t\t\tword_98 = 0;",
   "replace": "\t\t\t\tword_98 = 0;"},
 
  {"label": "the debug fall back is a retrain",
