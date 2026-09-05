@@ -116447,5 +116447,8 @@ completion despite that load: **period differential: 374 passed, 0
 failed**, exit 0 -- the same 374 master's own baseline carries, so
 this branch's renames added no new tests and broke none of the
 existing ones on the actual GCC 3.4.2 period compiler, not just the
-host's modern one. `make byteident-ratchet` was run alongside it; see
-`docs/fieldnaming.md`'s wave 6 section for its result. (2026-09-05)
+host's modern one. `make byteident-ratchet` was run alongside it:
+**736/1852 EXACT (39.7%), 796/1852 grade 0-or-1 (43.0%), ratchet OK**
+-- the exact pre-wave floor, unmoved, confirming the twelve renames
+are compile-time-only as CLAUDE.md's own argument says they must be.
+(2026-09-05)

@@ -864,8 +864,9 @@ already built `dsplibs-tc342`); `make period J=3` ran to completion
 despite heavy concurrent load from several sibling worktrees' own
 period runs on the same 3-core host, and passed on the real GCC 3.4.2
 compiler: **374 passed, 0 failed**, matching master's own baseline
-exactly. `make byteident-ratchet` was run alongside it — see finding
-F10175 for its result.
+exactly. `make byteident-ratchet` was run alongside it: **736/1852
+EXACT (39.7%), 796/1852 grade 0-or-1 (43.0%), ratchet OK** — the exact
+pre-wave floor, unmoved.
 
 Post-wave counts: naive grep still reads ~70 combined, because every
 rename's comment records "Renamed from `old_name`" for provenance (the
