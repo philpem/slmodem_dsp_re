@@ -115970,3 +115970,92 @@ Real period compiler: `make period` 374 passed, 0 failed. `byteident.py
 before the conversion, confirming the object code is identical byte for
 byte either way. `make byteident-ratchet`: unchanged at 736/1852 EXACT
 (39.7%). (2026-09-05)
+
+## F10158. `class1tx.c`'s 31 `(unsigned short *)(void *)ctx` scratch-buffer
+casts do NOT bound to one field of `pad_005` -- investigated and declined
+
+**The task.** Model enough of `struct fax_class1`'s `pad_005[0xffb]`
+(`include/dsplib/class1.h` +0x0005) to give the 31 sites in `class1tx.c` that
+reinterpret `ctx` itself as `unsigned short *` a real field to take the
+address of, instead of the raw cast. All 31 sites pass `ctx` (or `ctx+2`) as
+`FAXVMI_process`'s `data` argument, `_handle_data_input`'s or
+`_handle_hdlc_input`'s `dst`, or `cTOOLS_handle_hdlc_output`'s `src` -- so
+the question is what byte range starting at `ctx+0` these calls actually
+read or write, in the worst case across all 31.
+
+**Traced every site to what actually bounds its extent, and found two
+genuinely different, overlapping usage patterns rather than one:**
+
+1. **The fixed-rate data-block path** (`_tx_scrambled_ones_state`,
+   `_tx_nulls_state`, `_tx_data_state`, and their RX-side counterparts
+   `_rx_look_carrier_state`/`_rx_data_state`, all driving `ctx->vmi_b`, the
+   current data modem). This one IS cleanly bounded:
+   `ctx->tx_bytes_per_block = ctx->tx_rate / 400` (`class1tx.c` line 363),
+   and `_init_transmitter`'s own rate table (line ~1084) tops out at
+   `rate = 0x3840` (14400) for the two V.17 long-training codes -- so
+   `tx_bytes_per_block` maxes at 36. `_tx_scrambled_ones_state`'s own fill
+   loop (`for (i = 0; i < ctx->tx_bytes_per_block; i++) ((unsigned short *)
+   (void *)ctx)[i] = 0xff;`, line 2522-2523) is the tightest, most explicit
+   evidence: 36 `unsigned short` elements, i.e. bytes 0..71 of `ctx`. This
+   part alone would cleanly become `unsigned short scratch[36]` overlaying
+   `scratch_frame_len`/`pad_002`/`flags004`/part of `pad_005`.
+
+2. **The length-prefixed HDLC-frame path**
+   (`_hdlc_receive_state`, `_hdlc_receive_between_buffers_state`,
+   `_hdlc_receive_look_carrier_state`, `_send_hdlc_buffer_state`,
+   `_send_hdlc_between_buffer_state`, `_t30_preabmle_state`, `cHDLCtx_off`),
+   driving `ctx->vmi_a`/`ctx->vmi_c`, the V.21 HDLC control channel, and the
+   two host-input unstuffers `_handle_data_input`/`_handle_hdlc_input` that
+   feed `ctx->tx_fifo` on the TX states above. **Neither of these two
+   unstuffers bounds its own write inside the function**: both loop
+   `for (i = 0; i < *count; i++) dst[out++] = ...;` with no cap check
+   against any buffer-size constant, `dst` being `ctx` itself. `*count` (the
+   task's `word8`) is a value `fax_class1_progress` forwards UNEXAMINED from
+   ITS OWN caller (`src/fax/class1.c` line 991-993) -- i.e. from outside
+   this reconstruction entirely (the unwritten host-facing driver loop), so
+   no constant in `src/` bounds it.
+
+   **Independent corroboration that this is not merely "unmeasured" but
+   genuinely larger than the fixed-rate path's 36-element bound**: every one
+   of these TX states' own tail hands its CALLER an advisory headroom value,
+   `*word8 = ctx->tx_fifo->size - ctx->tx_fifo->count - 1`
+   (`_tx_scrambled_ones_state` line 2554-2555, `_tx_nulls_state` line 1768,
+   `_tx_data_state`, all identical in shape) -- and `ctx->tx_fifo` is built
+   with `local.size = 0x800` (`_tx_scrambled_ones_init`, line 355), i.e.
+   2048 elements. A caller honouring that advisory could legally hand back
+   up to 2047 elements (4094 bytes) on the very next call, which
+   `_handle_data_input`/`_handle_hdlc_input` would then write starting at
+   `ctx+0` with no internal cap. 4094 bytes is LARGER than the whole of
+   `pad_005` (0xffb = 4091 bytes) -- so the worst case this idiom is
+   structurally capable of touching runs past `pad_005`'s own end and into
+   `superframe` (`+0x1000`), an already-established, differently-typed
+   neighbour. This is not a case of "we haven't measured the size yet"; it
+   is two call-site families sharing one raw pointer over extents that
+   provably do not nest inside one small field, one of them not provably
+   bounded at all from source we have.
+
+   The one partial bound found in this family -- `_hdlc_receive_between_
+   buffers_state`'s `new_len > 0xff` check (line 2148) -- belongs to
+   `ctx->superframe`'s OWN capacity (0x100 `unsigned short` elements), not
+   to this scratch region; it caps what gets COPIED INTO `superframe`, not
+   what `FAXVMI_process`'s unpack step may have already written at `ctx+0`
+   before that copy runs.
+
+**Declined per CLAUDE.md's own rule for exactly this shape of evidence**
+("If the evidence doesn't cleanly bound the exact byte range... do NOT force
+a field in... a scratch structure with genuinely still-unclear boundaries
+stays `pad_NNNN`"). Forcing a single array field sized for pattern 1 (36
+elements) would be provably too small for pattern 2's own advertised
+headroom and silently wrong-but-plausible for any test that never exercises
+a large HDLC/data chunk in one call -- exactly the trap CLAUDE.md warns is
+worse than leaving the region padded. Sizing for pattern 2's worst case
+(>=2048 elements) would overlap `superframe`, a different, already-typed,
+already-verified field, which is not a change this task's scope covers and
+would need its own separate closure (what actually delimits the two uses at
+runtime, if anything does, is presumably inside the not-yet-reconstructed
+`fax_class1_create`/dispatcher plumbing referenced by class1.h's own banner
+comment).
+
+**No source or header change made.** `src/fax/class1tx.c` and
+`include/dsplib/class1.h` are unchanged from this investigation; the 31
+raw-cast call sites are left exactly as they were. (2026-09-05)
