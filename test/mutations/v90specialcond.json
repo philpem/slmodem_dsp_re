@@ -151,7 +151,7 @@
  },
  {
   "label": "the ISDN and PBX diagnostics are swapped",
-  "find": "\tedprintf(\"V90SpectralVerifier: German PBX conditions \"\n\t\t\t \"detected!\\r\\n\");",
+  "find": "\n\t\tedprintf(\"V90SpectralVerifier: German PBX conditions \" \"detected!\\r\\n\");",
   "replace": "\tedprintf(\"V90SpectralVerifier: German ISDN NT1 box conditions \"\n\t\t\t \"detected!\\r\\n\");"
  },
  {

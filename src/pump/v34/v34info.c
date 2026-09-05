@@ -214,8 +214,7 @@ V34SetINFO0aBits(void *objp, short *bits)
 		if (obj->v90_receiver == 0) {
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
-					"setINFO0aBits - setting info0a "
-					"for %s\n", pcm_name(obj));
+					"setINFO0aBits - setting info0a " "for %s\n", pcm_name(obj));
 			bits[0] = (short)0xff;
 			bits[1] = (short)0x84;
 			bits[2] = 0;
@@ -224,8 +223,7 @@ V34SetINFO0aBits(void *objp, short *bits)
 
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf(
-				"setINFO0aBits - setting info0a "
-				"for V.PCM\n");
+				"setINFO0aBits - setting info0a " "for V.PCM\n");
 		bits[0] = (short)0xff;
 		bits[1] = (short)0x84;
 
@@ -245,8 +243,7 @@ V34SetINFO0aBits(void *objp, short *bits)
 		    != 0) {
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
-					"...indicating V.92 "
-					"capabilities...\n");
+					"...indicating V.92 " "capabilities...\n");
 			bits[1] = (short)(bits[1] | 2);
 		}
 
@@ -256,8 +253,7 @@ V34SetINFO0aBits(void *objp, short *bits)
 
 	if (obj->v90_receiver == 0) {
 		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("setINFO0aBits - setting info0 "
-					     "(Caller) for %s\n",
+			dsplibs_debug_printf("setINFO0aBits - setting info0 " "(Caller) for %s\n",
 					     pcm_name(obj));
 		bits[0] = (short)0xff;
 		bits[1] = (short)0x84;
@@ -455,8 +451,7 @@ V34GiveINFO1aBits(void *objp, const short *bits)
 		if (((unsigned short)bits[3] & 8) != 0) {
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
-					"VPcmV34Main: K56Flex enabled by "
-					"remote, PCM type: local %d, remote "
+					"VPcmV34Main: K56Flex enabled by " "remote, PCM type: local %d, remote "
 					"%d (A=1, Mu=0)\r\n",
 					*(const int *)((const char *)pcm
 						       + 0xc),
@@ -465,8 +460,7 @@ V34GiveINFO1aBits(void *objp, const short *bits)
 		} else {
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
-					"VPcmV34Main: K56Flex disabled by "
-					"remote\r\n");
+					"VPcmV34Main: K56Flex disabled by " "remote\r\n");
 			obj->k56flex_receiver = 0;
 		}
 		goto out;
@@ -689,16 +683,14 @@ VPcmV34InterpretMohMessageBits(void *objp, const short *bits)
 	if (w == 0x77) {
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("MHnack message detected (modem "
-					     "may init MOH in the future) "
-					     "!\r\n");
+					     "may init MOH in the future) " "!\r\n");
 		obj->moh_recvd = 5;
 		return;
 	}
 	if (w == 0x75) {
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("MHnack message detected (modem "
-					     "may NOT init MOH in the future) "
-					     "!\r\n");
+					     "may NOT init MOH in the future) " "!\r\n");
 		obj->short_abe2 = 3;
 		obj->moh_recvd = 5;
 		return;
@@ -709,22 +701,19 @@ VPcmV34InterpretMohMessageBits(void *objp, const short *bits)
 			obj->moh_clrd_sel = 0;
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
-					"MHcld message detected ! , disconnect "
-					"reason is incoming call\r\n");
+					"MHcld message detected ! , disconnect " "reason is incoming call\r\n");
 			break;
 		case 6:
 			obj->moh_clrd_sel = 1;
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
-					"MHcld message detected ! , disconnect "
-					"reason is outgoing call\r\n");
+					"MHcld message detected ! , disconnect " "reason is outgoing call\r\n");
 			break;
 		case 0xa:
 			obj->moh_clrd_sel = 2;
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
-					"MHcld message detected ! , disconnect "
-					"reason is other reason\r\n");
+					"MHcld message detected ! , disconnect " "reason is other reason\r\n");
 			break;
 		default:
 			/*
@@ -735,8 +724,7 @@ VPcmV34InterpretMohMessageBits(void *objp, const short *bits)
 			obj->moh_clrd_sel = 2;
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
-					"MHcld message detected ! , reserved "
-					"disconnect reason (assume other "
+					"MHcld message detected ! , reserved " "disconnect reason (assume other "
 					"reason)\r\n");
 			break;
 		}
@@ -770,8 +758,7 @@ VPcmV34InterpretMohMessageBits(void *objp, const short *bits)
 			"====================================="
 			"====================================\r\n");
 	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("Illegal MH message detected !!! "
-				     "(rxsq[0] = %X)\r\n",
+		dsplibs_debug_printf("Illegal MH message detected !!! " "(rxsq[0] = %X)\r\n",
 				     (int)(unsigned short)bits[0]);
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("forcing message type to MH NACK\r\n");

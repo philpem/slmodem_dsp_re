@@ -146,8 +146,7 @@ connect_2400(struct v22fp *fp, unsigned short *txsym, short *txout,
 				fp->status = V22_MSG_CONNECT_2400;
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
-					    "V22_MSG_CONNECT_2400 In "
-					    "NODE_2400C\n");
+					    "V22_MSG_CONNECT_2400 In " "NODE_2400C\n");
 			} else {
 				fp->hdx->gtimer = 0;
 				fp->hdx->connect_substate = V22_NODE_2400D;

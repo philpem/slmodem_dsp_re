@@ -152,7 +152,7 @@
  },
  {
   "label": "the phase 3 error arm seeds 6 rather than 5",
-  "find": "\t\t\t\t\t     \"DemodPhase3Error !!! \\r\\n\");\n\t\tret = 5;",
+  "find": " \"DemodPhase3Error !!! \\r\\n\");\n\t\tret = 5;",
   "replace": "\t\t\t\t\t     \"DemodPhase3Error !!! \\r\\n\");\n\t\tret = 6;"
  },
  {
@@ -247,7 +247,7 @@
  },
  {
   "label": "the Ed arm's cleardown test is inverted",
-  "find": "\t\tif (clr != 0) {\n\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\"VPcmFloModem (V90): \"\n\t\t\t\t    \"Indicating Cleardown !\\r\\n\");\n\t\t\tret = 8;",
+  "find": "\n\t\tif (clr != 0) {\n\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\"VPcmFloModem (V90): \" \"Indicating Cleardown !\\r\\n\");\n\t\t\tret = 8;",
   "replace": "\t\tif (clr == 0) {\n\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\"VPcmFloModem (V90): \"\n\t\t\t\t    \"Indicating Cleardown !\\r\\n\");\n\t\t\tret = 8;"
  },
  {
@@ -314,7 +314,7 @@
  },
  {
   "label": "the energy-drop arm does not tell the V.34 shell",
-  "find": "\t\t\t\t\t     \"energy drop detected !!\\r\\n\");\n\t\tret = 5;\n\t\tVPcmV34SetIndicationOfRemoteRetrain(v34Object);",
+  "find": " \"energy drop detected !!\\r\\n\");\n\t\tret = 5;\n\t\tVPcmV34SetIndicationOfRemoteRetrain(v34Object);",
   "replace": "\t\t\t\t\t     \"energy drop detected !!\\r\\n\");\n\t\tret = 5;"
  },
  {

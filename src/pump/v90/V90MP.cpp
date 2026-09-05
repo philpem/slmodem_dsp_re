@@ -966,16 +966,14 @@ V90MP::bitsToInfo(int bit)
 			byte_1b = next;
 			word_14 = 4;
 			if (DSPLIB_DEBUG_VERBOSE())
-				dsplibs_debug_printf("V90MP: recieved MP with "
-						     "modified good CRC\r\n");
+				dsplibs_debug_printf("V90MP: recieved MP with " "modified good CRC\r\n");
 		} else {
 			byte_1b = 18;
 			byte_19 = 0;
 			byte_1a = 0;
 			word_14 = 0;
 			if (DSPLIB_DEBUG_ON())
-				dsplibs_debug_printf("V90MP: recieved MP with "
-						     "bad CRC\r\n");
+				dsplibs_debug_printf("V90MP: recieved MP with " "bad CRC\r\n");
 		}
 		break;
 
@@ -1001,8 +999,7 @@ V90MP::bitsToInfo(int bit)
 
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf("V90MP: MP detect"
-					    "ed. Type%d,Rate%d,Trellis%d,NonLi"
-					    "n%d,Shaping%d,CPack%d\r\n",
+					    "ed. Type%d,Rate%d,Trellis%d,NonLi" "n%d,Shaping%d,CPack%d\r\n",
 					    Type, Rate * 2400, Trellis, NonLin,
 					    Shaping, CPack);
 
@@ -1011,22 +1008,15 @@ V90MP::bitsToInfo(int bit)
 				*p = 0;
 
 				if (DSPLIB_DEBUG_VERBOSE())
-					dsplibs_debug_printf("V90MP: Rate Mask"
-							     " - %s\r\n", str);
+					dsplibs_debug_printf("V90MP: Rate Mask" " - %s\r\n", str);
 				if (DSPLIB_DEBUG_VERBOSE())
-					dsplibs_debug_printf("V90MP: h1 real ="
-							     " %d, imag = %d\r"
-							     "\n", h1Real,
+					dsplibs_debug_printf("V90MP: h1 real =" " %d, imag = %d\r" "\n", h1Real,
 							     h1Imag);
 				if (DSPLIB_DEBUG_VERBOSE())
-					dsplibs_debug_printf("V90MP: h2 real ="
-							     " %d, imag = %d\r"
-							     "\n", h2Real,
+					dsplibs_debug_printf("V90MP: h2 real =" " %d, imag = %d\r" "\n", h2Real,
 							     h2Imag);
 				if (DSPLIB_DEBUG_VERBOSE())
-					dsplibs_debug_printf("V90MP: h3 real ="
-							     " %d, imag = %d\r"
-							     "\n", h3Real,
+					dsplibs_debug_printf("V90MP: h3 real =" " %d, imag = %d\r" "\n", h3Real,
 							     h3Imag);
 			}
 		} else {
@@ -1038,8 +1028,7 @@ V90MP::bitsToInfo(int bit)
 
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf("V90MP: MPnot det"
-					    "ected. Type%d,Rate%d,Trellis%d,No"
-					    "nLin%d,Shaping%d,CPack%d\r\n",
+					    "ected. Type%d,Rate%d,Trellis%d,No" "nLin%d,Shaping%d,CPack%d\r\n",
 					    Type, Rate * 2400, Trellis, NonLin,
 					    Shaping, CPack);
 
@@ -1048,22 +1037,15 @@ V90MP::bitsToInfo(int bit)
 				*q = 0;
 
 				if (DSPLIB_DEBUG_ON())
-					dsplibs_debug_printf("V90MP: Rate Mask"
-							     " - %s\r\n", str);
+					dsplibs_debug_printf("V90MP: Rate Mask" " - %s\r\n", str);
 				if (DSPLIB_DEBUG_ON())
-					dsplibs_debug_printf("V90MP: h1 real ="
-							     " %d, imag = %d\r"
-							     "\n", h1Real,
+					dsplibs_debug_printf("V90MP: h1 real =" " %d, imag = %d\r" "\n", h1Real,
 							     h1Imag);
 				if (DSPLIB_DEBUG_ON())
-					dsplibs_debug_printf("V90MP: h2 real ="
-							     " %d, imag = %d\r"
-							     "\n", h2Real,
+					dsplibs_debug_printf("V90MP: h2 real =" " %d, imag = %d\r" "\n", h2Real,
 							     h2Imag);
 				if (DSPLIB_DEBUG_ON())
-					dsplibs_debug_printf("V90MP: h3 real ="
-							     " %d, imag = %d\r"
-							     "\n", h3Real,
+					dsplibs_debug_printf("V90MP: h3 real =" " %d, imag = %d\r" "\n", h3Real,
 							     h3Imag);
 			}
 		}

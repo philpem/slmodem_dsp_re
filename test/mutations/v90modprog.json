@@ -193,7 +193,7 @@
  },
  {
   "label": "the illegal-state message is not gated",
-  "find": "\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90Modulator progress: Illegal \"\n",
+  "find": "\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90Modulator progress: Illegal \" ",
   "replace": "\t\tif (1)\n\t\t\tdsplibs_debug_printf(\"V90Modulator progress: Illegal \"\n"
  },
  {
@@ -213,42 +213,42 @@
  },
  {
   "label": "initiateRRN answers zero when it refused",
-  "find": "\t\t\tdsplibs_debug_printf(\"V90Modulator: RRN requested but \"\n\t\t\t\t\t     \"NOT approved\\r\\n\");\n\t\treturn -1;\n",
+  "find": "\n\t\t\tdsplibs_debug_printf(\"V90Modulator: RRN requested but \" \"NOT approved\\r\\n\");\n\t\treturn -1;\n\t",
   "replace": "\t\t\tdsplibs_debug_printf(\"V90Modulator: RRN requested but \"\n\t\t\t\t\t     \"NOT approved\\r\\n\");\n\t\treturn 0;\n"
  },
  {
   "label": "the refusal message is not gated",
-  "find": "\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90Modulator: RRN requested but \"\n",
+  "find": "\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90Modulator: RRN requested but \" ",
   "replace": "\t\tif (1)\n\t\t\tdsplibs_debug_printf(\"V90Modulator: RRN requested but \"\n"
  },
  {
   "label": "the approval message is not gated",
-  "find": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V90Modulator: RRN requested, enter \"\n",
+  "find": "\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V90Modulator: RRN requested, enter \" ",
   "replace": "\tif (1)\n\t\tdsplibs_debug_printf(\"V90Modulator: RRN requested, enter \"\n"
  },
  {
   "label": "initiateRRN enters the data phase rather than phase 4",
-  "find": "\t\tdsplibs_debug_printf(\"V90Modulator: RRN requested, enter \"\n\t\t\t\t     \"Phase 4\\r\\n\");\n\n\tstate = 2;\n\tsymbolCount = 0;\n\n\tbitsToSymbol->setSymbolsBlockSize(1);\n",
+  "find": "\n\t\tdsplibs_debug_printf(\"V90Modulator: RRN requested, enter \" \"Phase 4\\r\\n\");\n\n\tstate = 2;\n\tsymbolCount = 0;\n\n\tbitsToSymbol->setSymbolsBlockSize(1);\n\n\t",
   "replace": "\t\tdsplibs_debug_printf(\"V90Modulator: RRN requested, enter \"\n\t\t\t\t     \"Phase 4\\r\\n\");\n\n\tstate = 3;\n\tsymbolCount = 0;\n\n\tbitsToSymbol->setSymbolsBlockSize(1);\n"
  },
  {
   "label": "initiateRRN does not restart the symbol count",
-  "find": "\t\tdsplibs_debug_printf(\"V90Modulator: RRN requested, enter \"\n\t\t\t\t     \"Phase 4\\r\\n\");\n\n\tstate = 2;\n\tsymbolCount = 0;\n\n\tbitsToSymbol->setSymbolsBlockSize(1);\n",
+  "find": "\n\t\tdsplibs_debug_printf(\"V90Modulator: RRN requested, enter \" \"Phase 4\\r\\n\");\n\n\tstate = 2;\n\tsymbolCount = 0;\n\n\tbitsToSymbol->setSymbolsBlockSize(1);\n\n\t",
   "replace": "\t\tdsplibs_debug_printf(\"V90Modulator: RRN requested, enter \"\n\t\t\t\t     \"Phase 4\\r\\n\");\n\n\tstate = 2;\n\n\tbitsToSymbol->setSymbolsBlockSize(1);\n"
  },
  {
   "label": "the renegotiation block is zero symbols",
-  "find": "\t\tdsplibs_debug_printf(\"V90Modulator: RRN requested, enter \"\n\t\t\t\t     \"Phase 4\\r\\n\");\n\n\tstate = 2;\n\tsymbolCount = 0;\n\n\tbitsToSymbol->setSymbolsBlockSize(1);\n",
+  "find": "\n\t\tdsplibs_debug_printf(\"V90Modulator: RRN requested, enter \" \"Phase 4\\r\\n\");\n\n\tstate = 2;\n\tsymbolCount = 0;\n\n\tbitsToSymbol->setSymbolsBlockSize(1);\n\n\t",
   "replace": "\t\tdsplibs_debug_printf(\"V90Modulator: RRN requested, enter \"\n\t\t\t\t     \"Phase 4\\r\\n\");\n\n\tstate = 2;\n\tsymbolCount = 0;\n\n\tbitsToSymbol->setSymbolsBlockSize(0);\n"
  },
  {
   "label": "the renegotiation block size is never set",
-  "find": "\t\tdsplibs_debug_printf(\"V90Modulator: RRN requested, enter \"\n\t\t\t\t     \"Phase 4\\r\\n\");\n\n\tstate = 2;\n\tsymbolCount = 0;\n\n\tbitsToSymbol->setSymbolsBlockSize(1);\n",
+  "find": "\n\t\tdsplibs_debug_printf(\"V90Modulator: RRN requested, enter \" \"Phase 4\\r\\n\");\n\n\tstate = 2;\n\tsymbolCount = 0;\n\n\tbitsToSymbol->setSymbolsBlockSize(1);\n\n\t",
   "replace": "\t\tdsplibs_debug_printf(\"V90Modulator: RRN requested, enter \"\n\t\t\t\t     \"Phase 4\\r\\n\");\n\n\tstate = 2;\n\tsymbolCount = 0;\n\n"
  },
  {
   "label": "the two phase 4 states are chosen the other way round",
-  "find": "\t\tdsplibs_debug_printf(\"V90Modulator: RRN requested, enter \"\n\t\t\t\t     \"Phase 4\\r\\n\");\n\n\tstate = 2;\n\tsymbolCount = 0;\n\n\tbitsToSymbol->setSymbolsBlockSize(1);\n\n\tif (bitsToSymbol->nofBitsForNextTime() != 0) {\n",
+  "find": "\n\t\tdsplibs_debug_printf(\"V90Modulator: RRN requested, enter \" \"Phase 4\\r\\n\");\n\n\tstate = 2;\n\tsymbolCount = 0;\n\n\tbitsToSymbol->setSymbolsBlockSize(1);\n\n\tif (bitsToSymbol->nofBitsForNextTime() != 0) {\n\t\t",
   "replace": "\t\tdsplibs_debug_printf(\"V90Modulator: RRN requested, enter \"\n\t\t\t\t     \"Phase 4\\r\\n\");\n\n\tstate = 2;\n\tsymbolCount = 0;\n\n\tbitsToSymbol->setSymbolsBlockSize(1);\n\n\tif (bitsToSymbol->nofBitsForNextTime() == 0) {\n"
  },
  {
@@ -510,12 +510,12 @@
  },
  {
   "label": "the E acknowledge's delayed arm records nothing",
-  "find": "\t\tphase4Modulator->delayedMpNotExit = 1;\n\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90Modulator: setting delayed \"\n\t\t\t\t\t     \"MPNot exit due to E \"",
+  "find": "\n\t\tphase4Modulator->delayedMpNotExit = 1;\n\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90Modulator: setting delayed \" \"MPNot exit due to E \"",
   "replace": "\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90Modulator: setting delayed \"\n\t\t\t\t\t     \"MPNot exit due to E \""
  },
  {
   "label": "the E acknowledge's delayed arm is on the wrong state",
-  "find": "\t} else if (phase4Modulator->state == P4M_STATE_UNNAMED_0D) {\n\t\tphase4Modulator->delayedMpNotExit = 1;\n\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90Modulator: setting delayed \"\n\t\t\t\t\t     \"MPNot exit due to E \"",
+  "find": "\n\t} else if (phase4Modulator->state == P4M_STATE_UNNAMED_0D) {\n\t\tphase4Modulator->delayedMpNotExit = 1;\n\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90Modulator: setting delayed \" \"MPNot exit due to E \"",
   "replace": "\t} else if (phase4Modulator->state == P4M_STATE_MP) {\n\t\tphase4Modulator->delayedMpNotExit = 1;\n\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90Modulator: setting delayed \"\n\t\t\t\t\t     \"MPNot exit due to E \""
  },
  {
@@ -590,7 +590,7 @@
  },
  {
   "label": "the FPE answers zero when it refused",
-  "find": "V90Modulator::initiateFPE()\n{\n\tPhase4ModulatorState p4state;\n\n\tif (state != 3) {\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90Modulator: FPE requested but \"\n\t\t\t\t\t     \"NOT approved\\r\\n\");\n\t\treturn -1;",
+  "find": "V90Modulator::initiateFPE()\n{\n\tPhase4ModulatorState p4state;\n\n\tif (state != 3) {\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90Modulator: FPE requested but \" \"NOT approved\\r\\n\");\n\t\treturn -1;",
   "replace": "V90Modulator::initiateFPE()\n{\n\tPhase4ModulatorState p4state;\n\n\tif (state != 3) {\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90Modulator: FPE requested but \"\n\t\t\t\t\t     \"NOT approved\\r\\n\");\n\t\treturn 0;"
  },
  {

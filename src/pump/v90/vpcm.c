@@ -273,8 +273,7 @@ vpcm_run(struct dp *dp, void *in_v, void *out_v, int count)
 			if ((unsigned)nbits > VPCM_MAX_BITS) {
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
-						"vpcm: too many bits "
-						"requested (%d)\n", nbits);
+						"vpcm: too many bits " "requested (%d)\n", nbits);
 				nbits = (int)VPCM_MAX_BITS;
 			}
 			s->nbits = nbits;
@@ -306,8 +305,7 @@ vpcm_run(struct dp *dp, void *in_v, void *out_v, int count)
 				case VPCM_PROG_RESTART_P2:
 					if (DSPLIB_DEBUG_ON())
 						dsplibs_debug_printf(
-							"vpcm: Re-starting "
-							"phase II\n");
+							"vpcm: Re-starting " "phase II\n");
 					s->stall = 0;
 					mode = VPCM_MODE_IDLE;
 					/*
@@ -333,8 +331,7 @@ vpcm_run(struct dp *dp, void *in_v, void *out_v, int count)
 				case VPCM_PROG_P2_DONE:
 					if (DSPLIB_DEBUG_ON())
 						dsplibs_debug_printf(
-							"vpcm: Phase II "
-							"completed !!!\n");
+							"vpcm: Phase II " "completed !!!\n");
 					if (s->extradelay != 0
 					    && s->params->addedDelay == 0) {
 						modem_set_param(dp->modem,
@@ -370,9 +367,7 @@ vpcm_run(struct dp *dp, void *in_v, void *out_v, int count)
 				case VPCM_PROG_SAME_LINE:
 					if (DSPLIB_DEBUG_ON())
 						dsplibs_debug_printf(
-							"vpcm: Same Line "
-							"Verification "
-							"Status\n");
+							"vpcm: Same Line " "Verification " "Status\n");
 					break;
 
 				default:
@@ -390,8 +385,7 @@ vpcm_run(struct dp *dp, void *in_v, void *out_v, int count)
 				if (s->stall > VPCM_TRAIN_TIMEOUT) {
 					if (DSPLIB_DEBUG_ON())
 						dsplibs_debug_printf(
-							"vpcm: train "
-							"timeout!\n");
+							"vpcm: train " "timeout!\n");
 					mode = VPCM_MODE_ERROR;
 				}
 			}
@@ -491,8 +485,7 @@ vpcm_run(struct dp *dp, void *in_v, void *out_v, int count)
 			if (nbits == 0 && mode == VPCM_MODE_CONNECTED) {
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
-						"vpcm: No symbols "
-						"Requested!!!\n");
+						"vpcm: No symbols " "Requested!!!\n");
 			}
 
 			if (newstat != DPSTAT_OK)

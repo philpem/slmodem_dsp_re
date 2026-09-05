@@ -84,8 +84,7 @@ transmit(struct v8 *v, int *done)
 			if (v->elapsed == v->deadline_a) {
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
-					    "V8: Time Out Waiting For "
-					    "CM...\r\n");
+					    "V8: Time Out Waiting For " "CM...\r\n");
 				v->elapsed++;
 			}
 			v->rx_state = 4;
@@ -109,8 +108,7 @@ transmit(struct v8 *v, int *done)
 			if (v->elapsed == v->deadline_b) {
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
-					    "V8: Timeout waiting for %s "
-					    "message...\r\n",
+					    "V8: Timeout waiting for %s " "message...\r\n",
 					    v->side == 1 ? "CJ" : "JM");
 				v->elapsed++;
 			}

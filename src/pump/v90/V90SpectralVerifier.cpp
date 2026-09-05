@@ -533,8 +533,7 @@ V90SpectralVerifier::checkSpecialSpectralConditions()
 
 	if (leftDelta > leftThr && rightDelta > rightThr) {
 		word_28 = 2;
-		edprintf("V90SpectralVerifier: German PBX conditions "
-			 "detected!\r\n");
+		edprintf("V90SpectralVerifier: German PBX conditions " "detected!\r\n");
 	}
 
 	/*
@@ -580,8 +579,7 @@ V90SpectralVerifier::checkSpecialSpectralConditions()
 	if (ref - test1 > params->SPECTRAL_VERIFIER_SEVERE_CODEC_DELTA
 	    && ref - test2 > params->SPECTRAL_VERIFIER_SEVERE_CODEC_DELTA) {
 		word_28 = 3;
-		edprintf("V90SpectralVerifier: Severe Codec conditions "
-			 "detected!\r\n");
+		edprintf("V90SpectralVerifier: Severe Codec conditions " "detected!\r\n");
 	}
 
 	/*
@@ -595,8 +593,7 @@ V90SpectralVerifier::checkSpecialSpectralConditions()
 	 * comment above has the reason.
 	 */
 	if (word_28 == 0 && DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("V90SpectralVerifier: No special "
-				     "conditions\r\n");
+		dsplibs_debug_printf("V90SpectralVerifier: No special " "conditions\r\n");
 }
 
 /*
@@ -635,8 +632,7 @@ V90SpectralVerifier::printSpectrum() const
 {
 	unsigned int bin;
 
-	edprintf("--------------------------------------------------------"
-		 "\r\n");
+	edprintf("--------------------------------------------------------" "\r\n");
 
 	for (bin = 0; bin < fftLength / 2; bin++) {
 		float v = spectrum[bin];
@@ -646,8 +642,7 @@ V90SpectralVerifier::printSpectrum() const
 			 SV_PRINT_WHOLE(v), SV_FRAC2F(v));
 	}
 
-	edprintf("--------------------------------------------------------"
-		 "\r\n");
+	edprintf("--------------------------------------------------------" "\r\n");
 }
 
 /*

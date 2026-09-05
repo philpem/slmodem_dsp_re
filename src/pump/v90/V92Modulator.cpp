@@ -1213,8 +1213,7 @@ V92Modulator::progress(int *bits, unsigned int &nbits, float *out,
 					enterPhase4();
 					if (DSPLIB_DEBUG_ON())
 						dsplibs_debug_printf(
-						    "V92Modulator progress: "
-						    "Enter phase4\r\n");
+						    "V92Modulator progress: " "Enter phase4\r\n");
 				}
 			} else {
 				buf_7c[i] = (short)

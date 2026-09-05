@@ -149,8 +149,7 @@ create_cid_dtmf(struct dtmf_rx *rx)
 	 * wrote is not recoverable.  Written the plain way.
 	 */
 	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("DTMF Cid Creating   Fs = %d   "
-				     "Threshold = %d !\n",
+		dsplibs_debug_printf("DTMF Cid Creating   Fs = %d   " "Threshold = %d !\n",
 				     (unsigned short)rx->rate, 0);
 
 	/*

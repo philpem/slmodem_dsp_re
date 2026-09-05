@@ -419,7 +419,7 @@
  },
  {
   "label": "the non-USB arm clears the silence request",
-  "find": "\t\t\t\t\tparams->RRN_SILENCE_REQUESTED = 0;\n\t\t\t\t\tedprintf(\"V90Demodulator: 'Problematic' \"\n\t\t\t\t\t\t \"ISP Modem detected NOT on \"",
+  "find": "\n\t\t\t\t\tparams->RRN_SILENCE_REQUESTED = 0;\n\t\t\t\t\tedprintf(\"V90Demodulator: 'Problematic' \" \"ISP Modem detected NOT on \"",
   "replace": "\t\t\t\t\tedprintf(\"V90Demodulator: 'Problematic' \"\n\t\t\t\t\t\t \"ISP Modem detected NOT on \""
  },
  {

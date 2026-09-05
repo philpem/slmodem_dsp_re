@@ -280,7 +280,7 @@
  },
  {
   "label": "sessionTermination: the disabled notice ends CRLF like the others",
-  "find": "\t\t\t\t \"EVALUATION DISABLED !\\n\");",
+  "find": " \"EVALUATION DISABLED !\\n\");",
   "replace": "\t\t\t\t \"EVALUATION DISABLED !\\r\\n\");"
  },
  {

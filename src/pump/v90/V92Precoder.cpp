@@ -210,8 +210,7 @@ V92Precoder::reset(V92MappingParams *params)
 	int i;
 
 	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("V92Precoder: reset 1 (with cfg) "
-				     "called\r\n");
+		dsplibs_debug_printf("V92Precoder: reset 1 (with cfg) " "called\r\n");
 
 	paramsAt9c = p->indexConstel;
 

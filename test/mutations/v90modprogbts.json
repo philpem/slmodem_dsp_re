@@ -26,12 +26,12 @@
  },
  {
   "label": "the underflow arm hands out a whole block",
-  "find": "\t\tsymbolsDone += nofOut;\n\n\t\tif (symbolsDone < symbolsBlockSize) {\n\t\t\tstatus = 3;\n\t\t\tif (dsplibs_debug_level > 1)\n\t\t\t\tdsplibs_debug_printf(\"V90BitsToSymbol - \"\n\t\t\t\t\t\t     \"error: process called, \"\n\t\t\t\t\t\t     \"BUFFER_UNDERFLOW\\r\\n\");\n\t\t\tfor (i = 0; i < symbolsDone; i++)\n\t\t\t\toutSymbols[i] = symbols[i];\n\t\t\tsymbolsDone = 0;",
+  "find": "\n\n\t\tsymbolsDone += nofOut;\n\n\t\tif (symbolsDone < symbolsBlockSize) {\n\t\t\tstatus = 3;\n\t\t\tif (dsplibs_debug_level > 1)\n\t\t\t\tdsplibs_debug_printf(\"V90BitsToSymbol - \" \"error: process called, \"\n\t\t\t\t\t\t     \"BUFFER_UNDERFLOW\\r\\n\");\n\t\t\tfor (i = 0; i < symbolsDone; i++)\n\t\t\t\toutSymbols[i] = symbols[i];\n\t\t\tsymbolsDone = 0;",
   "replace": "\t\tsymbolsDone += nofOut;\n\n\t\tif (symbolsDone < symbolsBlockSize) {\n\t\t\tstatus = 3;\n\t\t\tif (dsplibs_debug_level > 1)\n\t\t\t\tdsplibs_debug_printf(\"V90BitsToSymbol - \"\n\t\t\t\t\t\t     \"error: process called, \"\n\t\t\t\t\t\t     \"BUFFER_UNDERFLOW\\r\\n\");\n\t\t\tfor (i = 0; i < symbolsBlockSize; i++)\n\t\t\t\toutSymbols[i] = symbols[i];\n\t\t\tsymbolsDone = 0;"
  },
  {
   "label": "the underflow arm does not empty the buffer",
-  "find": "\t\tsymbolsDone += nofOut;\n\n\t\tif (symbolsDone < symbolsBlockSize) {\n\t\t\tstatus = 3;\n\t\t\tif (dsplibs_debug_level > 1)\n\t\t\t\tdsplibs_debug_printf(\"V90BitsToSymbol - \"\n\t\t\t\t\t\t     \"error: process called, \"\n\t\t\t\t\t\t     \"BUFFER_UNDERFLOW\\r\\n\");\n\t\t\tfor (i = 0; i < symbolsDone; i++)\n\t\t\t\toutSymbols[i] = symbols[i];\n\t\t\tsymbolsDone = 0;",
+  "find": "\n\n\t\tsymbolsDone += nofOut;\n\n\t\tif (symbolsDone < symbolsBlockSize) {\n\t\t\tstatus = 3;\n\t\t\tif (dsplibs_debug_level > 1)\n\t\t\t\tdsplibs_debug_printf(\"V90BitsToSymbol - \" \"error: process called, \"\n\t\t\t\t\t\t     \"BUFFER_UNDERFLOW\\r\\n\");\n\t\t\tfor (i = 0; i < symbolsDone; i++)\n\t\t\t\toutSymbols[i] = symbols[i];\n\t\t\tsymbolsDone = 0;",
   "replace": "\t\tsymbolsDone += nofOut;\n\n\t\tif (symbolsDone < symbolsBlockSize) {\n\t\t\tstatus = 3;\n\t\t\tif (dsplibs_debug_level > 1)\n\t\t\t\tdsplibs_debug_printf(\"V90BitsToSymbol - \"\n\t\t\t\t\t\t     \"error: process called, \"\n\t\t\t\t\t\t     \"BUFFER_UNDERFLOW\\r\\n\");\n\t\t\tfor (i = 0; i < symbolsDone; i++)\n\t\t\t\toutSymbols[i] = symbols[i];",
   "equivalent": true,
   "why": "EXPECTED UNCAUGHT, and it is the arithmetic rather than a gap in the sweep -- the same argument the `(unsigned int &, short *)` sibling's suite records for its own copy of this store.  On the underflow arm `symbolsDone < symbolsBlockSize`, so the shared leftover shift `for (i = symbolsBlockSize; i < symbolsDone; i++)` cannot run whether the zero was stored or not, `kept` stays 0, and `symbolsDone = kept` writes the same zero five lines later.  The store is in the reconstruction because the blob has `movl $0x0,0x10(%ebp)` at 0x2fb8d and then `mov %ebx,0x10(%ebp)` at 0x2fbbe -- two stores to +0x10 on one path -- and because it is what lets the compiler constant-propagate the shift's bound.  So this line rests on the instructions and not on the suite."
@@ -100,17 +100,17 @@
  },
  {
   "label": "the block-size guard is not strict",
-  "find": "\tif (symbolsBlockSize == 0) {\n\t\tstatus = 1;\n\t\tif (dsplibs_debug_level > 1)\n\t\t\tdsplibs_debug_printf(\"V90BitsToSymbol - error: \"\n\t\t\t\t\t     \"process called, SIZE_NOT_SET\"\n\t\t\t\t\t     \"\\r\\n\");\n\t} else {\n\t\tunsigned int i, kept, nofOut;",
+  "find": "\n\n\tif (symbolsBlockSize == 0) {\n\t\tstatus = 1;\n\t\tif (dsplibs_debug_level > 1)\n\t\t\tdsplibs_debug_printf(\"V90BitsToSymbol - error: \"\n\t\t\t\t\t     \"process called, SIZE_NOT_SET\" \"\\r\\n\");\n\t} else {\n\t\tunsigned int i, kept, nofOut;",
   "replace": "\tif (symbolsBlockSize <= 1) {\n\t\tstatus = 1;\n\t\tif (dsplibs_debug_level > 1)\n\t\t\tdsplibs_debug_printf(\"V90BitsToSymbol - error: \"\n\t\t\t\t\t     \"process called, SIZE_NOT_SET\"\n\t\t\t\t\t     \"\\r\\n\");\n\t} else {\n\t\tunsigned int i, kept, nofOut;"
  },
  {
   "label": "the size-not-set report answers 0",
-  "find": "\tif (symbolsBlockSize == 0) {\n\t\tstatus = 1;\n\t\tif (dsplibs_debug_level > 1)\n\t\t\tdsplibs_debug_printf(\"V90BitsToSymbol - error: \"\n\t\t\t\t\t     \"process called, SIZE_NOT_SET\"\n\t\t\t\t\t     \"\\r\\n\");\n\t} else {\n\t\tunsigned int i, kept, nofOut;",
+  "find": "\n\n\tif (symbolsBlockSize == 0) {\n\t\tstatus = 1;\n\t\tif (dsplibs_debug_level > 1)\n\t\t\tdsplibs_debug_printf(\"V90BitsToSymbol - error: \"\n\t\t\t\t\t     \"process called, SIZE_NOT_SET\" \"\\r\\n\");\n\t} else {\n\t\tunsigned int i, kept, nofOut;",
   "replace": "\tif (symbolsBlockSize == 0) {\n\t\tstatus = 0;\n\t\tif (dsplibs_debug_level > 1)\n\t\t\tdsplibs_debug_printf(\"V90BitsToSymbol - error: \"\n\t\t\t\t\t     \"process called, SIZE_NOT_SET\"\n\t\t\t\t\t     \"\\r\\n\");\n\t} else {\n\t\tunsigned int i, kept, nofOut;"
  },
  {
   "label": "the SIZE_NOT_SET message is the OVERFLOW one",
-  "find": "\t\t\tdsplibs_debug_printf(\"V90BitsToSymbol - error: \"\n\t\t\t\t\t     \"process called, SIZE_NOT_SET\"\n\t\t\t\t\t     \"\\r\\n\");\n\t} else {\n\t\tunsigned int i, kept, nofOut;",
+  "find": "\n\t\t\tdsplibs_debug_printf(\"V90BitsToSymbol - error: \"\n\t\t\t\t\t     \"process called, SIZE_NOT_SET\" \"\\r\\n\");\n\t} else {\n\t\tunsigned int i, kept, nofOut;",
   "replace": "\t\t\tdsplibs_debug_printf(\"V90BitsToSymbol - error: \"\n\t\t\t\t\t     \"process called, BUFFER_OVERFLOW\"\n\t\t\t\t\t     \"\\r\\n\");\n\t} else {\n\t\tunsigned int i, kept, nofOut;"
  }
 ]

@@ -11,7 +11,7 @@
  },
  {
   "label": "swap the two extension BUG messages",
-  "find": "\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t    \"V8: BUG - raw Call Function selected \"\n\t\t\t\t    \"without valid data !!!\\r\\n\");",
+  "find": "\n\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t    \"V8: BUG - raw Call Function selected \" \"without valid data !!!\\r\\n\");",
   "replace": "\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t    \"V8: BUG - raw Protocol selected \"\n\t\t\t\t    \"without valid data !!!\\r\\n\");"
  },
  {

@@ -248,22 +248,22 @@
  },
  {
   "label": "setMappingParams does not reset the bits-to-symbol object",
-  "find": "V92Phase4Modulator::setMappingParams(V92MappingParams *mp)\n{\n\tif (mp == 0) {\n\t\tif (dsplibs_debug_level > 1)\n\t\t\tdsplibs_debug_printf(\"V92Phase4Modulator: ERROR: Null\"\n\t\t\t\t\t     \" mappingParams @\"\n\t\t\t\t\t     \" setMappingParams\\r\\n\");\n\t\treturn;\n\t}\n\tbitsToSymbol->reset(mp);\n",
+  "find": "V92Phase4Modulator::setMappingParams(V92MappingParams *mp)\n{\n\tif (mp == 0) {\n\t\tif (dsplibs_debug_level > 1)\n\t\t\tdsplibs_debug_printf(\"V92Phase4Modulator: ERROR: Null\" \" mappingParams @\"\n\t\t\t\t\t     \" setMappingParams\\r\\n\");\n\t\treturn;\n\t}\n\tbitsToSymbol->reset(mp);\n\t",
   "replace": "V92Phase4Modulator::setMappingParams(V92MappingParams *mp)\n{\n\tif (mp == 0) {\n\t\tif (dsplibs_debug_level > 1)\n\t\t\tdsplibs_debug_printf(\"V92Phase4Modulator: ERROR: Null\"\n\t\t\t\t\t     \" mappingParams @\"\n\t\t\t\t\t     \" setMappingParams\\r\\n\");\n\t\treturn;\n\t}\n"
  },
  {
   "label": "setMappingParams leaves the symbol block size where reset left it",
-  "find": "V92Phase4Modulator::setMappingParams(V92MappingParams *mp)\n{\n\tif (mp == 0) {\n\t\tif (dsplibs_debug_level > 1)\n\t\t\tdsplibs_debug_printf(\"V92Phase4Modulator: ERROR: Null\"\n\t\t\t\t\t     \" mappingParams @\"\n\t\t\t\t\t     \" setMappingParams\\r\\n\");\n\t\treturn;\n\t}\n\tbitsToSymbol->reset(mp);\n\tbitsToSymbol->setSymbolsBlockSize(1);\n",
+  "find": "V92Phase4Modulator::setMappingParams(V92MappingParams *mp)\n{\n\tif (mp == 0) {\n\t\tif (dsplibs_debug_level > 1)\n\t\t\tdsplibs_debug_printf(\"V92Phase4Modulator: ERROR: Null\" \" mappingParams @\"\n\t\t\t\t\t     \" setMappingParams\\r\\n\");\n\t\treturn;\n\t}\n\tbitsToSymbol->reset(mp);\n\tbitsToSymbol->setSymbolsBlockSize(1);\n",
   "replace": "V92Phase4Modulator::setMappingParams(V92MappingParams *mp)\n{\n\tif (mp == 0) {\n\t\tif (dsplibs_debug_level > 1)\n\t\t\tdsplibs_debug_printf(\"V92Phase4Modulator: ERROR: Null\"\n\t\t\t\t\t     \" mappingParams @\"\n\t\t\t\t\t     \" setMappingParams\\r\\n\");\n\t\treturn;\n\t}\n\tbitsToSymbol->reset(mp);\n"
  },
  {
   "label": "setMappingParams sets the symbol block size to two",
-  "find": "V92Phase4Modulator::setMappingParams(V92MappingParams *mp)\n{\n\tif (mp == 0) {\n\t\tif (dsplibs_debug_level > 1)\n\t\t\tdsplibs_debug_printf(\"V92Phase4Modulator: ERROR: Null\"\n\t\t\t\t\t     \" mappingParams @\"\n\t\t\t\t\t     \" setMappingParams\\r\\n\");\n\t\treturn;\n\t}\n\tbitsToSymbol->reset(mp);\n\tbitsToSymbol->setSymbolsBlockSize(1);",
+  "find": "V92Phase4Modulator::setMappingParams(V92MappingParams *mp)\n{\n\tif (mp == 0) {\n\t\tif (dsplibs_debug_level > 1)\n\t\t\tdsplibs_debug_printf(\"V92Phase4Modulator: ERROR: Null\" \" mappingParams @\"\n\t\t\t\t\t     \" setMappingParams\\r\\n\");\n\t\treturn;\n\t}\n\tbitsToSymbol->reset(mp);\n\tbitsToSymbol->setSymbolsBlockSize(1);",
   "replace": "V92Phase4Modulator::setMappingParams(V92MappingParams *mp)\n{\n\tif (mp == 0) {\n\t\tif (dsplibs_debug_level > 1)\n\t\t\tdsplibs_debug_printf(\"V92Phase4Modulator: ERROR: Null\"\n\t\t\t\t\t     \" mappingParams @\"\n\t\t\t\t\t     \" setMappingParams\\r\\n\");\n\t\treturn;\n\t}\n\tbitsToSymbol->reset(mp);\n\tbitsToSymbol->setSymbolsBlockSize(2);"
  },
  {
   "label": "setMappingParams stores its argument as well",
-  "find": "V92Phase4Modulator::setMappingParams(V92MappingParams *mp)\n{\n\tif (mp == 0) {\n\t\tif (dsplibs_debug_level > 1)\n\t\t\tdsplibs_debug_printf(\"V92Phase4Modulator: ERROR: Null\"\n\t\t\t\t\t     \" mappingParams @\"\n\t\t\t\t\t     \" setMappingParams\\r\\n\");\n\t\treturn;\n\t}\n\tbitsToSymbol->reset(mp);",
+  "find": "V92Phase4Modulator::setMappingParams(V92MappingParams *mp)\n{\n\tif (mp == 0) {\n\t\tif (dsplibs_debug_level > 1)\n\t\t\tdsplibs_debug_printf(\"V92Phase4Modulator: ERROR: Null\" \" mappingParams @\"\n\t\t\t\t\t     \" setMappingParams\\r\\n\");\n\t\treturn;\n\t}\n\tbitsToSymbol->reset(mp);",
   "replace": "V92Phase4Modulator::setMappingParams(V92MappingParams *mp)\n{\n\tif (mp == 0) {\n\t\tif (dsplibs_debug_level > 1)\n\t\t\tdsplibs_debug_printf(\"V92Phase4Modulator: ERROR: Null\"\n\t\t\t\t\t     \" mappingParams @\"\n\t\t\t\t\t     \" setMappingParams\\r\\n\");\n\t\treturn;\n\t}\n\tmappingParams = mp;\n\tbitsToSymbol->reset(mp);"
  },
  {
@@ -358,12 +358,12 @@
  },
  {
   "label": "state 4's null-CP arm leaves the state alone",
-  "find": "\t\t\tif (cp == 0) {\n\t\t\t\tstate = 29;\n\t\t\t\tsymbolCount = 0;\n\t\t\t\tif (dsplibs_debug_level > 1)\n\t\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t    \"V92Phase4Modulator: ERROR: Null CP\"\n\t\t\t\t\t    \" @ end of TRN2d\\r\\n\");",
+  "find": "\n\t\t\tif (cp == 0) {\n\t\t\t\tstate = 29;\n\t\t\t\tsymbolCount = 0;\n\t\t\t\tif (dsplibs_debug_level > 1)\n\t\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t    \"V92Phase4Modulator: ERROR: Null CP\" \" @ end of TRN2d\\r\\n\");",
   "replace": "\t\t\tif (cp == 0) {\n\t\t\t\tsymbolCount = 0;\n\t\t\t\tif (dsplibs_debug_level > 1)\n\t\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t    \"V92Phase4Modulator: ERROR: Null CP\"\n\t\t\t\t\t    \" @ end of TRN2d\\r\\n\");"
  },
  {
   "label": "state 4's null-CP message is gated at level 1 rather than above it",
-  "find": "\t\t\t\tif (dsplibs_debug_level > 1)\n\t\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t    \"V92Phase4Modulator: ERROR: Null CP\"\n\t\t\t\t\t    \" @ end of TRN2d\\r\\n\");",
+  "find": "\n\t\t\t\tif (dsplibs_debug_level > 1)\n\t\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t    \"V92Phase4Modulator: ERROR: Null CP\" \" @ end of TRN2d\\r\\n\");",
   "replace": "\t\t\t\tif (dsplibs_debug_level > 0)\n\t\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t    \"V92Phase4Modulator: ERROR: Null CP\"\n\t\t\t\t\t    \" @ end of TRN2d\\r\\n\");"
  },
  {
@@ -603,7 +603,7 @@
  },
  {
   "label": "state 24's boundary is 12599 rather than 2399",
-  "find": "\t\tif (symbolCount > 2399 && symbolCount % 12 == 0) {\n\t\t\tif (cp == 0) {\n\t\t\t\tstate = 29;\n\t\t\t\tsymbolCount = 0;\n\t\t\t\tif (dsplibs_debug_level > 1)\n\t\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t    \"V92Phase4Modulator: ERROR: Null CP\"\n\t\t\t\t\t    \" @ RRN @ end of TRN2u\\r\\n\");\n\t\t\t} else {\n\t\t\t\tedprintf(\"V92Phase4Modulator: on\"",
+  "find": "\n\t\tif (symbolCount > 2399 && symbolCount % 12 == 0) {\n\t\t\tif (cp == 0) {\n\t\t\t\tstate = 29;\n\t\t\t\tsymbolCount = 0;\n\t\t\t\tif (dsplibs_debug_level > 1)\n\t\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t    \"V92Phase4Modulator: ERROR: Null CP\" \" @ RRN @ end of TRN2u\\r\\n\");\n\t\t\t} else {\n\t\t\t\tedprintf(\"V92Phase4Modulator: on\"",
   "replace": "\t\tif (symbolCount > 12599 && symbolCount % 12 == 0) {\n\t\t\tif (cp == 0) {\n\t\t\t\tstate = 29;\n\t\t\t\tsymbolCount = 0;\n\t\t\t\tif (dsplibs_debug_level > 1)\n\t\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t    \"V92Phase4Modulator: ERROR: Null CP\"\n\t\t\t\t\t    \" @ RRN @ end of TRN2u\\r\\n\");\n\t\t\t} else {\n\t\t\t\tedprintf(\"V92Phase4Modulator: on\""
  },
  {
@@ -643,12 +643,12 @@
  },
  {
   "label": "the illegal-state arm returns the last symbol rather than zero",
-  "find": "\tdefault:\n\t\tsym = 0;\n\t\tif (dsplibs_debug_level > 1)\n\t\t\tdsplibs_debug_printf(\"V92Phase4Modulator: Illegal\"\n\t\t\t\t\t     \" state\\r\\n\");",
+  "find": "\n\n\tdefault:\n\t\tsym = 0;\n\t\tif (dsplibs_debug_level > 1)\n\t\t\tdsplibs_debug_printf(\"V92Phase4Modulator: Illegal\" \" state\\r\\n\");",
   "replace": "\tdefault:\n\t\tsym = 1;\n\t\tif (dsplibs_debug_level > 1)\n\t\t\tdsplibs_debug_printf(\"V92Phase4Modulator: Illegal\"\n\t\t\t\t\t     \" state\\r\\n\");"
  },
  {
   "label": "the illegal-state message is gated at level 1 rather than above it",
-  "find": "\tdefault:\n\t\tsym = 0;\n\t\tif (dsplibs_debug_level > 1)\n\t\t\tdsplibs_debug_printf(\"V92Phase4Modulator: Illegal\"\n\t\t\t\t\t     \" state\\r\\n\");",
+  "find": "\n\n\tdefault:\n\t\tsym = 0;\n\t\tif (dsplibs_debug_level > 1)\n\t\t\tdsplibs_debug_printf(\"V92Phase4Modulator: Illegal\" \" state\\r\\n\");",
   "replace": "\tdefault:\n\t\tsym = 0;\n\t\tif (dsplibs_debug_level > 0)\n\t\t\tdsplibs_debug_printf(\"V92Phase4Modulator: Illegal\"\n\t\t\t\t\t     \" state\\r\\n\");"
  },
  {

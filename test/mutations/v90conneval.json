@@ -419,7 +419,7 @@
 
  {"label": "phase3's ordinary retrain limit is compared SIGNED",
   "why": "`ja`/`jb` and `jg`/`jl` agree on every ordinary pair of numbers, so this is invisible until a limit goes negative: unsigned it becomes a value no counter reaches, signed one every counter is already past.  The fixture drives exactly that, in its own small trial rather than inside an accumulating run.",
-  "find": "\t\t\t\tif (nofV90Retrains\n\t\t\t\t    > (unsigned int)params->MAX_NOF_V90_RETRAINS) {\n\t\t\t\t\tverdict = V90CE_VERDICT_FALLBACK_V34;\n\t\t\t\t\tedprintf(\"V90ConnectionEvaluator \"\n\t\t\t\t\t\t \"(phase3): initiating fall \"",
+  "find": "\n\t\t\t\tif (nofV90Retrains\n\t\t\t\t    > (unsigned int)params->MAX_NOF_V90_RETRAINS) {\n\t\t\t\t\tverdict = V90CE_VERDICT_FALLBACK_V34;\n\t\t\t\t\tedprintf(\"V90ConnectionEvaluator \" \"(phase3): initiating fall \"",
   "replace": "\t\t\t\tif ((int)nofV90Retrains\n\t\t\t\t    > params->MAX_NOF_V90_RETRAINS) {\n\t\t\t\t\tverdict = V90CE_VERDICT_FALLBACK_V34;\n\t\t\t\t\tedprintf(\"V90ConnectionEvaluator \"\n\t\t\t\t\t\t \"(phase3): initiating fall \""},
 
  {"label": "phase4's mean-error retrain limit is compared SIGNED",
@@ -429,7 +429,7 @@
 
  {"label": "phase4's ordinary retrain limit is compared SIGNED",
   "why": "`ja`/`jb` and `jg`/`jl` agree on every ordinary pair of numbers, so this is invisible until a limit goes negative: unsigned it becomes a value no counter reaches, signed one every counter is already past.  The fixture drives exactly that, in its own small trial rather than inside an accumulating run.",
-  "find": "\t\t\t\tif (nofV90Retrains\n\t\t\t\t    > (unsigned int)params->MAX_NOF_V90_RETRAINS) {\n\t\t\t\t\tverdict = V90CE_VERDICT_FALLBACK_V34;\n\t\t\t\t\tedprintf(\"V90ConnectionEvaluator \"\n\t\t\t\t\t\t \"(phase4): initiating fall \"",
+  "find": "\n\t\t\t\tif (nofV90Retrains\n\t\t\t\t    > (unsigned int)params->MAX_NOF_V90_RETRAINS) {\n\t\t\t\t\tverdict = V90CE_VERDICT_FALLBACK_V34;\n\t\t\t\t\tedprintf(\"V90ConnectionEvaluator \" \"(phase4): initiating fall \"",
   "replace": "\t\t\t\tif ((int)nofV90Retrains\n\t\t\t\t    > params->MAX_NOF_V90_RETRAINS) {\n\t\t\t\t\tverdict = V90CE_VERDICT_FALLBACK_V34;\n\t\t\t\t\tedprintf(\"V90ConnectionEvaluator \"\n\t\t\t\t\t\t \"(phase4): initiating fall \""},
 
  {"label": "the delayed retrain's limit is compared SIGNED",
@@ -876,7 +876,7 @@
 
  {"label": "the rate-down retrain limit is compared SIGNED",
   "why": "0x3f297 is `jbe`.  Caught by the trial that drives this arm with MAX_NOF_V90_RETRAINS at -1.",
-  "find": "\t\t\tif (nofV90Retrains\n\t\t\t    > (unsigned int)\n\t\t\t      params->MAX_NOF_V90_RETRAINS) {\n\t\t\t\tedprintf(\"V90ConnectionEvaluator: initiating \"\n\t\t\t\t\t \"fall back to V34 due to %d V90 \"\n\t\t\t\t\t \"retrains\\r\\n\", nofV90Retrains);",
+  "find": "\n\t\t\tif (nofV90Retrains\n\t\t\t    > (unsigned int)\n\t\t\t      params->MAX_NOF_V90_RETRAINS) {\n\t\t\t\tedprintf(\"V90ConnectionEvaluator: initiating \"\n\t\t\t\t\t \"fall back to V34 due to %d V90 \" \"retrains\\r\\n\", nofV90Retrains);",
   "replace": "\t\t\tif ((int)nofV90Retrains\n\t\t\t    > params->MAX_NOF_V90_RETRAINS) {\n\t\t\t\tedprintf(\"V90ConnectionEvaluator: initiating \"\n\t\t\t\t\t \"fall back to V34 due to %d V90 \"\n\t\t\t\t\t \"retrains\\r\\n\", nofV90Retrains);"},
 
  {"label": "the retrain case does not re-arm initDmin",
@@ -915,7 +915,7 @@
   "replace": "\t\t\tcase 0:"},
 
  {"label": "the alternate retrain does not advance +0x80",
-  "find": "\t\t\t\t\t \"Debug Retrain\\r\\n\");\n\t\t\t\tword_80++;",
+  "find": " \"Debug Retrain\\r\\n\");\n\t\t\t\tword_80++;",
   "replace": "\t\t\t\t\t \"Debug Retrain\\r\\n\");"},
 
  {"label": "+0x80 == 1 is a retrain",
@@ -935,11 +935,11 @@
   "replace": "\t\t\tverdict = V90CE_VERDICT_FALLBACK_V34;\n\t\t\tedprintf(\"V90ConnectionEvaluator: Debug initiating \""},
 
  {"label": "the debug rate up is a rate down",
-  "find": "\t\t\tverdict = V90CE_VERDICT_RRN_UP;\n\t\t\tedprintf(\"V90ConnectionEvaluator: Debug One Rate \"\n\t\t\t\t \"Up\\r\\n\");",
+  "find": "\n\t\t\tverdict = V90CE_VERDICT_RRN_UP;\n\t\t\tedprintf(\"V90ConnectionEvaluator: Debug One Rate \" \"Up\\r\\n\");",
   "replace": "\t\t\tverdict = V90CE_VERDICT_RRN_DOWN;\n\t\t\tedprintf(\"V90ConnectionEvaluator: Debug One Rate \"\n\t\t\t\t \"Up\\r\\n\");"},
 
  {"label": "the debug rate down is a rate up",
-  "find": "\t\t\tverdict = V90CE_VERDICT_RRN_DOWN;\n\t\t\tedprintf(\"V90ConnectionEvaluator: Debug One Rate \"\n\t\t\t\t \"Down\\r\\n\");",
+  "find": "\n\t\t\tverdict = V90CE_VERDICT_RRN_DOWN;\n\t\t\tedprintf(\"V90ConnectionEvaluator: Debug One Rate \" \"Down\\r\\n\");",
   "replace": "\t\t\tverdict = V90CE_VERDICT_RRN_UP;\n\t\t\tedprintf(\"V90ConnectionEvaluator: Debug One Rate \"\n\t\t\t\t \"Down\\r\\n\");"},
 
  {"label": "the debug rate down does not take the parameter",

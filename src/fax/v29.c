@@ -1519,8 +1519,7 @@ RxHdxIdleV29(void *modem, short *in, short *out, unsigned short *count)
 		RxNextStateV29(modem);
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf(
-				"Decision error is small back to DATA mode "
-				"!!!\n");
+				"Decision error is small back to DATA mode " "!!!\n");
 	}
 
 	return 0;
