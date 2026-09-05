@@ -70,13 +70,13 @@
  },
  {
   "label": "the phase 2 info is built from the modem block rather than from the V92Parameters",
-  "find": "\tv92modem_p2i_ctor(p, parameters);",
-  "replace": "\tv92modem_p2i_ctor(p, modemParams);"
+  "find": "\tnew (p) V92Phase2Info(parameters);",
+  "replace": "\tnew (p) V92Phase2Info(modemParams);"
  },
  {
   "label": "the V92Parameters is built from the descriptor rather than from the modem block",
-  "find": "\tv92modem_params_ctor(p, modemParams);",
-  "replace": "\tv92modem_params_ctor(p, dilDescriptor);"
+  "find": "\tnew (p) V92Parameters(modemParams);",
+  "replace": "\tnew (p) V92Parameters(dilDescriptor);"
  },
  {
   "label": "the constellations are never created",
@@ -110,28 +110,28 @@
  },
  {
   "label": "the modulator is given the phase 2 info and the parameters the other way round",
-  "find": "\t\tv92modem_mod_ctor(p, nSamples, phase2Info, ja, dil, cp,\n\t\t\t\t  mappingParams, parameters);",
-  "replace": "\t\tv92modem_mod_ctor(p, nSamples, parameters, ja, dil, cp,\n\t\t\t\t  mappingParams, phase2Info);"
+  "find": "\t\tnew (p) V92Modulator(nSamples, phase2Info, (V92Ja *)ja, dil,\n\t\t\t\t     cp, mappingParams, parameters);",
+  "replace": "\t\tnew (p) V92Modulator(nSamples, parameters, (V92Ja *)ja, dil,\n\t\t\t\t     cp, mappingParams, phase2Info);"
  },
  {
   "label": "the modulator is given the CP and the parameter block the other way round",
-  "find": "\t\tv92modem_mod_ctor(p, nSamples, phase2Info, ja, dil, cp,\n\t\t\t\t  mappingParams, parameters);",
-  "replace": "\t\tv92modem_mod_ctor(p, nSamples, phase2Info, ja, dil, mappingParams,\n\t\t\t\t  cp, parameters);"
+  "find": "\t\tnew (p) V92Modulator(nSamples, phase2Info, (V92Ja *)ja, dil,\n\t\t\t\t     cp, mappingParams, parameters);",
+  "replace": "\t\tnew (p) V92Modulator(nSamples, phase2Info, (V92Ja *)ja, dil,\n\t\t\t\t     mappingParams, cp, parameters);"
  },
  {
   "label": "the modulator is given the whole modem where the V92Ja belongs",
-  "find": "phase2Info, ja, dil, cp,",
-  "replace": "phase2Info, this, dil, cp,"
+  "find": "(V92Ja *)ja, dil,",
+  "replace": "(V92Ja *)this, dil,"
  },
  {
   "label": "the modulator is given the descriptor a word past where it starts",
-  "find": "phase2Info, ja, dil, cp,",
-  "replace": "phase2Info, ja, (void *)((char *)dil + 4), cp,"
+  "find": "(V92Ja *)ja, dil,",
+  "replace": "(V92Ja *)ja, (tagV90DILdescriptor *)((char *)dil + 4),"
  },
  {
   "label": "the modulator is given one sample too many",
-  "find": "v92modem_mod_ctor(p, nSamples, phase2Info",
-  "replace": "v92modem_mod_ctor(p, nSamples + 1, phase2Info"
+  "find": "new (p) V92Modulator(nSamples, phase2Info",
+  "replace": "new (p) V92Modulator(nSamples + 1, phase2Info"
  },
  {
   "label": "the destruction notice is gated at the verbose level",

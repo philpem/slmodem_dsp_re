@@ -28,12 +28,15 @@
  * two bytes, both the scratch register the epilogue pops into.  Neither is a
  * fact about the source.
  *
- * WHY THE SUB-OBJECTS ARE BUILT THROUGH asm() LABELS: the reason
- * src/pump/v90/V92Modulator.cpp and V92Precoder.cpp give in full --
- * `sysdep_malloc(n)` then the constructor with NO null test between them is
- * `new` over an inline `operator new`; this build is -nostdinc++ with no
- * <new>, and a user-declared placement form makes GCC emit the null test the
- * blob does not have.
+ * THE FIVE SUB-OBJECTS ARE BUILT WITH ORDINARY PLACEMENT `new`.  This file
+ * used to reach all four constructors through hand-mangled `asm("_ZN...")`
+ * labels, on the belief (finding F1340) that a user-declared placement
+ * `operator new` would make GCC emit a null test the blob does not have.
+ * Finding F10155 retracts that: the check is tied to a `throw()`-declared
+ * placement operator, `-fcheck-new` was never in this project's flags, and
+ * `include/dsplib/sysdep.h`'s shared non-throw placement `operator new`
+ * reproduces the blob's construct-then-check-later shape with no flag
+ * changes, verified under the real period compiler (finding F10157).
  *
  * THE FIVE `sysdep_malloc(sizeof(X))` IMMEDIATES ARE THE ORIGINAL COMPILER'S
  * OWN `sizeof`s (finding F1246), and this is the richest single source of them
@@ -88,25 +91,6 @@
 #include "dsplib/V92ParamsInfo.h"
 #include "dsplib/V92Parameters.h"
 #include "dsplib/V92Phase2Info.h"
-
-extern "C" {
-/*
- * The three complete-object constructors, by the names the relocations at
- * .text+0x13da5, +0x13dcb, +0x13de4 and +0x13eb0 carry.  `void *` throughout
- * for the reason V92Modulator.cpp gives: the call is a relocation against a
- * mangled name and nothing here needs the argument types to be checked twice.
- */
-void v92modem_params_ctor(void *self, void *modemParams)
-	asm("_ZN13V92ParametersC1EP19_tagModemParameters");
-void v92modem_p2i_ctor(void *self, void *params)
-	asm("_ZN13V92Phase2InfoC1EP13V92Parameters");
-void v92modem_cp_ctor(void *self) asm("_ZN5V92CPC1Ev");
-void v92modem_mod_ctor(void *self, unsigned int nSamples, void *phase2Info,
-		       void *ja, void *dil, void *cp, void *mappingParams,
-		       void *params)
-	asm("_ZN12V92ModulatorC1EjP13V92Phase2InfoP5V92JaP19tagV90DILdescriptor"
-	    "P5V92CPP16V92MappingParamsP13V92Parameters");
-}
 
 #if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
 
@@ -386,8 +370,10 @@ V92Modem::V92Modem(V92ModemSide side, _tagModemParameters *modemParams,
 
 	modemSide = side;
 
+	/* C1, the complete-object variant, is what the relocation at
+	 * .text+0x13da5 names. */
 	p = sysdep_malloc(sizeof(V92Parameters));
-	v92modem_params_ctor(p, modemParams);
+	new (p) V92Parameters(modemParams);
 	parameters = (V92Parameters *)p;
 
 	dil = dilDescriptor;
@@ -396,12 +382,14 @@ V92Modem::V92Modem(V92ModemSide side, _tagModemParameters *modemParams,
 	 * The argument is read back out of +0x004 rather than kept in a
 	 * register: `mov 0x4(%esi),%ecx` at .text+0x13dbf.
 	 */
+	/* Relocation at .text+0x13dcb. */
 	p = sysdep_malloc(sizeof(V92Phase2Info));
-	v92modem_p2i_ctor(p, parameters);
+	new (p) V92Phase2Info(parameters);
 	phase2Info = (V92Phase2Info *)p;
 
+	/* Relocation at .text+0x13de4. */
 	p = sysdep_malloc(sizeof(V92CP));
-	v92modem_cp_ctor(p);
+	new (p) V92CP();
 	cp = (V92CP *)p;
 
 	/*
@@ -434,10 +422,15 @@ V92Modem::V92Modem(V92ModemSide side, _tagModemParameters *modemParams,
 		 * onwards.  Only `dil` reaches the call in the register the
 		 * parameter arrived in, which is the compiler's choice
 		 * between two spellings of the same value.
+		 *
+		 * `ja` is modelled here as bytes (see the header), so the
+		 * cast to `V92Ja *` is this call site's alone -- the asm()
+		 * label this used to go through took `void *` and needed
+		 * none.
 		 */
 		p = sysdep_malloc(sizeof(V92Modulator));
-		v92modem_mod_ctor(p, nSamples, phase2Info, ja, dil, cp,
-				  mappingParams, parameters);
+		new (p) V92Modulator(nSamples, phase2Info, (V92Ja *)ja, dil,
+				     cp, mappingParams, parameters);
 		modulator = (V92Modulator *)p;
 		break;
 
