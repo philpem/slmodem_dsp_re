@@ -115971,7 +115971,7 @@ before the conversion, confirming the object code is identical byte for
 byte either way. `make byteident-ratchet`: unchanged at 736/1852 EXACT
 (39.7%). (2026-09-05)
 
-## F10158. Tier 2 item 7's ~45 `void *` candidates: all FORCED or already-documented-unresolved, zero retypes -- the negative result, with per-bucket evidence
+## F10159. Tier 2 item 7's ~45 `void *` candidates: all FORCED or already-documented-unresolved, zero retypes -- the negative result, with per-bucket evidence
 
 `docs/codestyle.md`'s Tier 2 item 7 asked whether the ~45 non-table `void *`
 internal-function-parameter sites (concentrated in `src/call/pulse.c`,

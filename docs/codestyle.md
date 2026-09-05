@@ -180,7 +180,7 @@ owed, not separate cleanup work waiting on it. Re-split accordingly.
     byte-identity count at 49 of the 50 sites.
 7. ~~Verify the ~45 non-table `void*` internal signatures against actual
    table membership; retype whichever aren't forced~~ DONE, RESOLVED
-   (F10158): all ~45 traced individually and all are FORCED -- opaque host
+   (F10159): all ~45 traced individually and all are FORCED -- opaque host
    handle (no real type exists, e.g. `pulse.c`), quoted external ABI
    contract (`cid.c`/`ringdet.h`/`vce.h` cite slmodemd's own declared
    prototypes verbatim), or a confirmed dispatch table (`dp_process_fn`,
@@ -212,7 +212,7 @@ rewrite, the 941 anchor-frozen mutation comments) still waits until AFTER
 once -- unchanged from the original decision, just now grounded in a
 concrete Tier 2 rather than an abstract "byte-identity pass."
 
-Status: item 7 done (F10158, zero retypes -- see above); 9/10 still
+Status: item 7 done (F10159, zero retypes -- see above); 9/10 still
 pending; 2b/2c scoped, not started.
 
 ## PRIORITY — correctness, not style (class1rx.c null derefs) — RESOLVED
