@@ -83,28 +83,36 @@ struct cid_modem {
 	 */
 	char strings[0x258];		/* +0x008 what cid_get_strings returns */
 	int mode;			/* +0x260 see the encoding above    */
-	int f264;			/* +0x264 <- cid_create's 2nd arg;
+	/*
+	 * +0x264. Was `f264`; renamed to match the parameter it is a pure
+	 * copy of -- `cid_create`'s own `cid_val` argument (see its own
+	 * doc comment below), which `cid_value()` can later overwrite with
+	 * a value of the caller's choosing. `src/service/cid.c`'s
+	 * `CID_VALUE_RAW` names the one value the object itself tests it
+	 * against (usage inference; see that macro's own comment).
+	 */
+	int cid_val;			/* +0x264 <- cid_create's 2nd arg;
 					 *         rewritten by cid_value   */
 	/*
 	 * +0x268 is `cid_progress`'s BLOCK BUFFER, and that function is what
 	 * settles it: it copies the caller's samples into
-	 * `0x266(%ebx,%edx,2)` with `%edx = f3f8 + 1` -- the same address as
-	 * `0x268 + f3f8*2` -- until `f3f8` reaches the block length, then
+	 * `0x266(%ebx,%edx,2)` with `%edx = samples_fill + 1` -- the same address as
+	 * `0x268 + samples_fill*2` -- until `samples_fill` reaches the block length, then
 	 * hands `ctx + 0x268` and that length to `dtmf_modem` / `cid_modem`
-	 * as their sample pointer.  So it is one `short` array and `f3f8` is
+	 * as their sample pointer.  So it is one `short` array and `samples_fill` is
 	 * its fill level.
 	 *
 	 * THE LENGTH IS BOUNDED FROM BOTH SIDES AND THE TWO DO NOT MEET.
 	 * The lower bound is measured: `cid_progress`'s block length is 192
 	 * at any line rate other than 8000, so at least 192 shorts are
-	 * written.  The upper bound is the layout -- `f3f8` sits at +0x3f8
+	 * written.  The upper bound is the layout -- `samples_fill` sits at +0x3f8
 	 * and 0x3f8 - 0x268 is exactly 400 bytes -- so at most 200.  Nothing
 	 * in the object reads or writes +0x3e8..+0x3f8, so the array is
 	 * declared to fill the space; the eight shorts past 192 are the
 	 * reading, not a measurement.
 	 */
 	short samples[200];		/* +0x268 cid_progress's block      */
-	int f3f8;			/* +0x3f8 fill level of `samples`;
+	int samples_fill;		/* +0x3f8 fill level of `samples`;
 					 *         cleared by cid_create and
 					 *         cid_reset                */
 };
@@ -143,7 +151,7 @@ void cid_value(struct cid_modem *ctx, int v);
  * writes `mode` itself, since cid_create() clamps anything above 1 to
  * 5). On the DTMF side it copies SIXTEEN bytes of the receiver's
  * `digits[20]`, with no terminator of its own. On the FSK side
- * `ctx->f264 == 2` selects the raw hex dump and anything else the
+ * `ctx->cid_val == 2` selects the raw hex dump and anything else the
  * labelled rendering.
  *
  * @param ctx  The service object.

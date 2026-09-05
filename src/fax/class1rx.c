@@ -70,17 +70,17 @@ init_vmi_v17rx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
 	cfg->bit_rate = (short)bit_rate;
 	cfg->ptr_0024 = arg_3;
 	cfg->int_0014 = 0;
-	cfg->ptr_0018 = sysdep_malloc(0x62);
-	cfg->ptr_001c = sysdep_malloc(0x62);
-	cfg->ptr_0020 = sysdep_malloc(2);
+	cfg->coefsave0 = sysdep_malloc(0x62);
+	cfg->coefsave1 = sysdep_malloc(0x62);
+	cfg->ratesave = sysdep_malloc(2);
 
 	*vmi = FAXVMI_CFG;
 	vmi->ptr_0014 = arg_3;
-	vmi->short_0000 = 0;
-	vmi->int_0004 = 1;
-	vmi->short_0008 = 320;
-	vmi->short_000a = 165;
-	vmi->short_000c = 0;
+	vmi->mode = 0;
+	vmi->reverse = 1;
+	vmi->fifo_size = 320;
+	vmi->max_frame = 165;
+	vmi->frame_size = 0;
 	vmi->slot = VMI_SLOT_V17RX;
 	vmi->modem_cfg = cfg;
 }
@@ -103,11 +103,11 @@ init_vmi_v29rx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
 
 	*vmi = FAXVMI_CFG;
 	vmi->ptr_0014 = arg_3;
-	vmi->short_0000 = 0;
-	vmi->int_0004 = 1;
-	vmi->short_0008 = 320;
-	vmi->short_000a = 165;
-	vmi->short_000c = 0;
+	vmi->mode = 0;
+	vmi->reverse = 1;
+	vmi->fifo_size = 320;
+	vmi->max_frame = 165;
+	vmi->frame_size = 0;
 	vmi->slot = VMI_SLOT_V29RX;
 	vmi->modem_cfg = cfg;
 }
@@ -130,19 +130,19 @@ init_vmi_v27rx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
 
 	*vmi = FAXVMI_CFG;
 	vmi->ptr_0014 = arg_3;
-	vmi->short_0000 = 0;
-	vmi->int_0004 = 1;
-	vmi->short_0008 = 320;
-	vmi->short_000a = 165;
-	vmi->short_000c = 0;
+	vmi->mode = 0;
+	vmi->reverse = 1;
+	vmi->fifo_size = 320;
+	vmi->max_frame = 165;
+	vmi->frame_size = 0;
 	vmi->slot = VMI_SLOT_V27RX;
 	vmi->modem_cfg = cfg;
 }
 
 /*
  * Tear the receive-side data modem down: free the config `_init_receiver`
- * built (a V.17 receiver's three sub-allocations first -- `ptr_0018`,
- * `ptr_001c`, `ptr_0020`, in that order, none of it read back afterwards),
+ * built (a V.17 receiver's three sub-allocations first -- `coefsave0`,
+ * `coefsave1`, `ratesave`, in that order, none of it read back afterwards),
  * then the config itself, then the VMI block that held it, then the FAXVMI
  * handle at `ctx->vmi_b`.  `ctx->modem_vmi` is cleared BEFORE the
  * `FAXVMI_delete` call and `ctx->vmi_b` AFTER it, which is the object's own
@@ -164,13 +164,13 @@ _delete_data_rx_modem(struct fax_class1 *ctx)
 	if (vmi->slot == VMI_SLOT_V17RX) {
 		struct v17rx_cfg *cfg = vmi->modem_cfg;
 
-		sysdep_free(cfg->ptr_0020);
+		sysdep_free(cfg->ratesave);
 		vmi = ctx->modem_vmi;
 		cfg = vmi->modem_cfg;
-		sysdep_free(cfg->ptr_001c);
+		sysdep_free(cfg->coefsave1);
 		vmi = ctx->modem_vmi;
 		cfg = vmi->modem_cfg;
-		sysdep_free(cfg->ptr_0018);
+		sysdep_free(cfg->coefsave0);
 		vmi = ctx->modem_vmi;
 	}
 
@@ -404,13 +404,13 @@ _init_receiver(struct fax_class1 *ctx, int rate_code)
 		if (cfg->slot == VMI_SLOT_V17RX) {
 			struct v17rx_cfg *v17 = cfg->modem_cfg;
 
-			sysdep_free(v17->ptr_0020);
+			sysdep_free(v17->ratesave);
 			cfg = ctx->modem_vmi;
 			v17 = cfg->modem_cfg;
-			sysdep_free(v17->ptr_001c);
+			sysdep_free(v17->coefsave1);
 			cfg = ctx->modem_vmi;
 			v17 = cfg->modem_cfg;
-			sysdep_free(v17->ptr_0018);
+			sysdep_free(v17->coefsave0);
 			cfg = ctx->modem_vmi;
 		}
 		sysdep_free(cfg->modem_cfg);

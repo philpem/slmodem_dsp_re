@@ -2159,7 +2159,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 				obj->echo_residual = (short)*in++;
 				modem_serrint(obj);
 				*out++ = (float)obj->tx_sample;
-				if (obj->txq.count < obj->short_2aa0
+				if (obj->txq.count < obj->tx_fill_target
 				    || obj->rxq.count > 5) {
 					if (obj->tx_flags & PROG_TXBIT_DATA)
 						datapumpv34(obj);
@@ -2469,8 +2469,8 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 		ret = obj->progress;
 		if (ret <= 1)
 			goto wrongstate;
-		obj->short_2aa0 = (short)n;
-		while (obj->txq.count < obj->short_2aa0) {
+		obj->tx_fill_target = (short)n;
+		while (obj->txq.count < obj->tx_fill_target) {
 			r = obj->v90_receiver;
 			if (r > 14) {
 				v90RateRenegSilence(obj);
@@ -2686,8 +2686,8 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 
 	/* --- 3: K56flex ----------------------------------------------- */
 	case 3:
-		obj->short_2aa0 = (short)n;
-		while (obj->txq.count < obj->short_2aa0) {
+		obj->tx_fill_target = (short)n;
+		while (obj->txq.count < obj->tx_fill_target) {
 			if (obj->tx_flags & PROG_TXBIT_DATA)
 				modulatevector(obj);
 			else

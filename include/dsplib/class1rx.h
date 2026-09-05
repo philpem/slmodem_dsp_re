@@ -59,8 +59,8 @@ struct faxvmi_cfg;
  *
  * Allocates a `struct v17rx_cfg`, copies `V17RX_CFG` over it, sets
  * `bit_rate` and `ptr_0024 = arg_3`, clears `int_0014`, and allocates three
- * further sub-blocks (0x62, 0x62, 2 bytes) into `ptr_0018`/`ptr_001c`/
- * `ptr_0020`. Copies `FAXVMI_CFG` over `*vmi`, overrides seven fields
+ * further sub-blocks (0x62, 0x62, 2 bytes) into `coefsave0`/`coefsave1`/
+ * `ratesave`. Copies `FAXVMI_CFG` over `*vmi`, overrides seven fields
  * (`ptr_0014 = arg_3`, the four VMI constants, `slot = VMI_SLOT_V17RX`,
  * `modem_cfg = cfg`).
  *
@@ -118,8 +118,8 @@ struct fax_class1;
  * @brief Tear the receive-side data modem down.
  *
  * Frees the config one of the three constructors above built (a V.17
- * receiver's three sub-allocations first, in `ptr_0018`/`ptr_001c`/
- * `ptr_0020` order), then the config itself, the VMI block that held it, and
+ * receiver's three sub-allocations first, in `coefsave0`/`coefsave1`/
+ * `ratesave` order), then the config itself, the VMI block that held it, and
  * finally the FAXVMI handle at `ctx->vmi_b`. `ctx->modem_vmi` is cleared
  * before the `FAXVMI_delete` call and `ctx->vmi_b` after it -- the object's
  * own order, not incidental: `FAXVMI_delete` is handed the value read out of

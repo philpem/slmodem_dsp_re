@@ -26,10 +26,10 @@ ext_expected(unsigned char c)
  *
  * `*matched` is the "something has matched" flag, and it belongs to the
  * caller because the two callers give it different lifetimes: the first
- * keeps it in `febc` and clears it before every marker word, the second in
- * a local that is set up once and then carries across markers -- so once
- * anything has matched there, a later marker whose very first character is
- * wrong is abandoned instead of scanned through.
+ * keeps it in `fn_matched` and clears it before every marker word, the
+ * second in a local that is set up once and then carries across markers --
+ * so once anything has matched there, a later marker whose very first
+ * character is wrong is abandoned instead of scanned through.
  */
 static int
 match_extension(struct v8 *v, const unsigned char *ext, int *at, short *keep,
@@ -124,9 +124,9 @@ evaluateRxJMSequence(struct v8 *v)
 	}
 
 	/*
-	 * The second extension, against its own marker.  `febe` is only ever
-	 * set here, never cleared: whatever the caller left in it stands if
-	 * nothing matches.
+	 * The second extension, against its own marker.  `ext2_matched` is
+	 * only ever set here, never cleared: whatever the caller left in it
+	 * stands if nothing matches.
 	 */
 	matched = 0;
 	for (i = 0; i < (short)seq->wordidx; i++) {
@@ -149,9 +149,9 @@ evaluateRxJMSequence(struct v8 *v)
 
 	/*
 	 * The verdict, and the only place the whole function is summarised.
-	 * It reports the FIRST field only: `febe` does not appear, so a JM
-	 * whose protocol matched but whose call function did not still reads
-	 * as a failure here.  The parenthesis is the author's own gloss on
+	 * It reports the FIRST field only: `ext2_matched` does not appear, so
+	 * a JM whose protocol matched but whose call function did not still
+	 * reads as a failure here.  The parenthesis is the author's own gloss on
 	 * what a failure costs -- see V8UpdateModemParameters, which does
 	 * exactly that.
 	 *
@@ -189,9 +189,10 @@ V8UpdateModemParameters(struct v8 *v, struct v8_cm *out)
 
 	if (v->quick_connect != 0) {
 		/*
-		 * `fdc4` set means the quick-connect sequence was used, and
-		 * this is where the author says so -- which is how the field
-		 * gets its meaning.  Announced before the menu is stamped.
+		 * `quick_connect` set means the quick-connect sequence was
+		 * used, and this is where the author says so -- which is how
+		 * the field gets its meaning.  Announced before the menu is
+		 * stamped.
 		 */
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf(
@@ -220,7 +221,7 @@ V8UpdateModemParameters(struct v8 *v, struct v8_cm *out)
 			out->b2 |= 1;
 		} else if (fn == 0) {
 			/*
-			 * `febc` said a function matched but nothing was
+			 * `fn_matched` said a function matched but nothing was
 			 * remembered.  The complaint is all that happens: the
 			 * walk below still runs, so the modulation list is
 			 * still intersected.
@@ -585,7 +586,7 @@ rebuildJMSequence(struct v8 *v)
 	 *
 	 * Without it the scan stops at the first marker word and settles the
 	 * question there, one way or the other, and what it settles on is
-	 * remembered in `fec2`.
+	 * remembered in `ext2_word`.
 	 */
 	if (all_flags) {
 		if (cm->b2 & V8_CM_EXT2_PRESENT) {

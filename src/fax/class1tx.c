@@ -840,7 +840,7 @@ cTOOLS_handle_hdlc_output(struct fax_class1 *ctx, const unsigned short *src,
  * table's size, announce at `DSPLIB_DEBUG_VERBOSE()`, copy the table over
  * the allocation, override `bitrate` and the caller's fourth argument, then
  * copy `FAXVMI_CFG` over the caller's VMI and override seven fields
- * (`short_0008`/`short_000a` differ by modulation; `slot` is what makes
+ * (`fifo_size`/`max_frame` differ by modulation; `slot` is what makes
  * them three functions).  Neither allocation is checked for NULL, as on
  * the RX side.
  *
@@ -894,11 +894,11 @@ init_vmi_v17tx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
 
 	*vmi = FAXVMI_CFG;
 	vmi->ptr_0014 = arg_3;
-	vmi->short_0000 = 0;
-	vmi->int_0004 = 1;
-	vmi->short_0008 = 0x60;
-	vmi->short_000a = 0x30;
-	vmi->short_000c = 0;
+	vmi->mode = 0;
+	vmi->reverse = 1;
+	vmi->fifo_size = 0x60;
+	vmi->max_frame = 0x30;
+	vmi->frame_size = 0;
 	vmi->slot = VMI_SLOT_V17TX;
 	vmi->modem_cfg = cfg;
 
@@ -924,11 +924,11 @@ init_vmi_v29tx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
 
 	*vmi = FAXVMI_CFG;
 	vmi->ptr_0014 = arg_3;
-	vmi->short_0000 = 0;
-	vmi->int_0004 = 1;
-	vmi->short_0008 = 0x60;
-	vmi->short_000a = 0x35;
-	vmi->short_000c = 0;
+	vmi->mode = 0;
+	vmi->reverse = 1;
+	vmi->fifo_size = 0x60;
+	vmi->max_frame = 0x35;
+	vmi->frame_size = 0;
 	vmi->slot = VMI_SLOT_V29TX;
 	vmi->modem_cfg = cfg;
 
@@ -954,11 +954,11 @@ init_vmi_v27tx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
 
 	*vmi = FAXVMI_CFG;
 	vmi->ptr_0014 = arg_3;
-	vmi->short_0000 = 0;
-	vmi->int_0004 = 1;
-	vmi->short_0008 = 0x40;
-	vmi->short_000a = 0x25;
-	vmi->short_000c = 0;
+	vmi->mode = 0;
+	vmi->reverse = 1;
+	vmi->fifo_size = 0x40;
+	vmi->max_frame = 0x25;
+	vmi->frame_size = 0;
 	vmi->slot = VMI_SLOT_V27TX;
 	vmi->modem_cfg = cfg;
 

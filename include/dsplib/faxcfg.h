@@ -24,15 +24,45 @@
  * are the opposite case, two relocations each at +0x0c and +0x10, and are
  * not written here.
  *
- * Only two fields have evidence for a name: `slot` (+0x0e of
- * `struct faxvmi_cfg`) and `bit_rate` (+0x04 of each modem table) -- see
- * their own field comments below, and findings F9052/F9053. Everything
- * else keeps a `type_NNNN` name: the values are known and their meaning
- * is not. +0x00 is 1 in all three, +0x08 is 60000 in all three, and
- * `struct faxvmi_cfg` holds 128, 50, 128 at +0x08, +0x0a and +0x0c, which
- * the constructors then replace with 320, 165 and 0. Naming those from
- * their values would be a guess, and a wrong name is worse than a padded
- * one.
+ * Several fields have evidence for a name; eight are new this wave
+ * (F10169), on top of `slot`/`bit_rate`/`modem_cfg` from earlier ones:
+ *
+ *   - `slot` (+0x0e of `struct faxvmi_cfg`) and `bit_rate` (+0x04 of each
+ *     modem table) -- see their own field comments below, and findings
+ *     F9052/F9053.
+ *   - `struct faxvmi_cfg`'s own `mode`/`reverse`/`fifo_size`/`max_frame`/
+ *     `frame_size` (+0x00/+0x04/+0x08/+0x0a/+0x0c) -- `FAXVMI_create`
+ *     (`faxvmi.c`) copies this table's head verbatim onto `struct faxvmi`'s
+ *     OWN already-named fields of those exact names (`vmi->mode =
+ *     src->short_0000;` and so on down to `vmi->frame_size =
+ *     src->short_000c;`), and `faxvmi.h`'s own cross-reference comment
+ *     ALREADY states the correspondence field for field, with F9010 for
+ *     `reverse` and F9011/F9019 for `max_frame` -- it had simply never been
+ *     carried across to this struct's own declaration, the same
+ *     evidence-stranded-in-one-file shape F10139/F10140 named for a V.90
+ *     class pair. `faxvmi.h` is another strand of this wave and is not
+ *     edited here; only this struct's own five names move.
+ *   - Three of `struct v17rx_cfg`'s own pointer slots, +0x18/+0x1c/+0x20,
+ *     renamed to `coefsave0`/`coefsave1`/`ratesave`: `src/fax/v17.c`'s own
+ *     `V17RX_create` header comment already mapped them to
+ *     `fpm_fse_cfg::icoff`/`qcoff` and, by construction (F9470, the receive
+ *     instance's head IS this struct), those three offsets are exactly
+ *     `V17RX_OBJ_COEFSAVE0`/`V17RX_OBJ_COEFSAVE1`/`V17RX_OBJ_RATESAVE` in
+ *     `v17fax.h` -- the same storage, named there from
+ *     `StoreCoefV17`/`Restore_rateV17`'s own matched read/write pair, just
+ *     never carried across to this struct's own declaration either.
+ *     `V17RX_OBJ_COEFSAVE0`/`1` are themselves NUMBERED rather than named in
+ *     `v17fax.h` ("which of the two arrays is which rail is not
+ *     established"), so `coefsave0`/`coefsave1` carry the same caveat here.
+ *
+ * Everything else keeps a `type_NNNN` name: the values are known and their
+ * meaning is not. +0x00 is 1 in all three modem tables, +0x08 is 60000 in
+ * all three (never read back by anything reconstructed -- checked directly,
+ * not assumed), and `FAXVMI_CFG`'s own `fifo_size`/`max_frame`/`frame_size`
+ * hold 128, 50 and 128 -- values every constructor immediately overwrites
+ * with 320, 165 and 0 before `FAXVMI_create` ever reads them back, so the
+ * table's OWN three numbers are exactly as arbitrary as before; only the
+ * FIELDS' roles are now established, not these particular defaults.
  *
  * `struct faxvmi_cfg` is a separate type from `struct faxvmi` (`faxvmi.h`)
  * because the object's `struct faxvmi` is at least 0x2c bytes -- `faxvmi.h`
@@ -57,12 +87,29 @@
  * written by anything reconstructed here and is 16 bits by subtraction.
  */
 struct faxvmi_cfg {
-	short		short_0000;	/* +0x00  0 in the table, set to 0   */
+	short		mode;		/* +0x00  0 in the table, set to 0.
+					 * `FAXVMI_create` (`faxvmi.c`) copies
+					 * this straight into `struct faxvmi`'s
+					 * OWN already-named `mode` field
+					 * (`FAXVMI_MODE_SIMP` etc, `faxvmi.h`),
+					 * unchanged.  F10169.               */
 	short		short_0002;	/* +0x02  never written              */
-	int		int_0004;	/* +0x04  0 in the table, set to 1   */
-	short		short_0008;	/* +0x08  128 -> 320                 */
-	short		short_000a;	/* +0x0a   50 -> 165                 */
-	short		short_000c;	/* +0x0c  128 -> 0                   */
+	int		reverse;	/* +0x04  0 in the table, set to 1.
+					 * -> `struct faxvmi::reverse`, F9010:
+					 * `FAXVMI_process` routes the block
+					 * through `vmi_reverse[mode]` when
+					 * set.  F10169.                      */
+	short		fifo_size;	/* +0x08  128 -> 320.  -> `struct
+					 * faxvmi::fifo_size`, the ring
+					 * capacity `FAXVMI_create` asks for.
+					 * F10169.                            */
+	short		max_frame;	/* +0x0a   50 -> 165.  -> `struct
+					 * faxvmi::max_frame`, F9011/F9019
+					 * (four independent confirmations).
+					 * F10169.                            */
+	short		frame_size;	/* +0x0c  128 -> 0.  -> `struct
+					 * faxvmi::frame_size`, the HDLC
+					 * assembly buffer's size.  F10169.   */
 	short		slot;		/* +0x0e  index into the vxx tables.
 					 * Corroborated three ways: derived
 					 * from `vxx_message`'s relocations
@@ -97,9 +144,24 @@ struct v17rx_cfg {
 	int		int_000c;	/* +0x0c  0                          */
 	int		int_0010;	/* +0x10  0                          */
 	int		int_0014;	/* +0x14  0, cleared again on init   */
-	void	       *ptr_0018;	/* +0x18  init: sysdep_malloc(0x62)  */
-	void	       *ptr_001c;	/* +0x1c  init: sysdep_malloc(0x62)  */
-	void	       *ptr_0020;	/* +0x20  init: sysdep_malloc(2)     */
+	void	       *coefsave0;	/* +0x18  init: sysdep_malloc(0x62).
+					 * `V17RX_OBJ_COEFSAVE0` (v17fax.h) --
+					 * same storage, the instance's head
+					 * IS this struct (F9470).  Which rail
+					 * ("0" vs "1") is which is not
+					 * established, so the two are
+					 * numbered and not named further. */
+	void	       *coefsave1;	/* +0x1c  init: sysdep_malloc(0x62).
+					 * `V17RX_OBJ_COEFSAVE1` -- see
+					 * `coefsave0`.               */
+	void	       *ratesave;	/* +0x20  init: sysdep_malloc(2).
+					 * `V17RX_OBJ_RATESAVE` -- a real name,
+					 * from a matched pair:
+					 * `StoreCoefV17` writes it from
+					 * `V17RXS_RATE` and `Restore_rateV17`
+					 * writes `V17RXS_RATE` back from it;
+					 * "rate" is `Restore_rateV17`'s own
+					 * word.                      */
 	void	       *ptr_0024;	/* +0x24  init: the 4th argument     */
 };
 

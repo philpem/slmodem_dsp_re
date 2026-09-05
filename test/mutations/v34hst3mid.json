@@ -314,8 +314,8 @@
  },
  {
   "label": "the entry compares the cursor against the limit the other way",
-  "find": "\twhile (obj->txq.count < obj->short_2aa0) {",
-  "replace": "\twhile (obj->txq.count > obj->short_2aa0) {",
+  "find": "\twhile (obj->txq.count < obj->tx_fill_target) {",
+  "replace": "\twhile (obj->txq.count > obj->tx_fill_target) {",
   "fn": "v34handshak"
  },
  {
