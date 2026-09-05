@@ -425,9 +425,25 @@ int _rx_data_state(struct fax_class1 *ctx, const short *rx, short *tx,
 int _tx_nulls_state(struct fax_class1 *ctx, const short *rx, short *tx,
 		    int word3, int word4, int *rx_count, int *tx_count,
 		    int word7, int *word8);
+/*
+ * `word3`/`word7` are genuinely unused here (see class1tx.c) -- but not
+ * meaningless: in the RX/HDLC siblings the SAME slots are, respectively, the
+ * `dst` buffer `_handle_data_output`/`cTOOLS_handle_hdlc_output` write
+ * through (evidence class 2, those callees' own parameter name) and the
+ * `int *` the byte count they return is written back through (evidence
+ * class 3, usage only).  Named for that unexercised-here status rather than
+ * for the role, per CLAUDE.md's "bounded but not established" rule.
+ * `word4`/`word8` ARE used: `word4` is `_handle_data_input`'s own `src`
+ * (evidence class 2), and `word8` is the object's own `TxDatCnt` (evidence
+ * class 1 -- the exact format string every RX/HDLC sibling in this file
+ * tests it against, e.g. "TxDatCnt !=0 in _rx_look_carrier_state... abort to
+ * command mode\n"), so it is named to match `tx_count`'s own established
+ * "author's word" style rather than transliterated verbatim.
+ */
 int _tx_scrambled_ones_state(struct fax_class1 *ctx, const short *rx,
-			     short *tx, int word3, int word4, int *rx_count,
-			     int *tx_count, int word7, int *word8);
+			     short *tx, int unused_dst, int src,
+			     int *rx_count, int *tx_count, int unused_out_count,
+			     int *tx_data_count);
 int _tx_data_state(struct fax_class1 *ctx, const short *rx, short *tx,
 		   int word3, int word4, int *rx_count, int *tx_count,
 		   int word7, int *word8);
