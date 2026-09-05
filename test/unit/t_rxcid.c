@@ -276,7 +276,8 @@ run_reset(void)
 
 	diff_eq_int("create_cid seeds rate (%ld)", a.cid.rate, 8000, 0);
 	diff_eq_int("create_cid seeds threshold (%ld)", a.cid.threshold, 2, 0);
-	diff_eq_int("create_cid seeds f02c (%ld)", a.cid.f02c, 9, 0);
+	diff_eq_int("create_cid seeds mark_conf_step (%ld)",
+		    a.cid.mark_conf_step, 9, 0);
 	diff_eq_int("reset_cid sizes the history (%ld)",
 		    a.cid.mrf.history_len, 10, 0);
 	diff_eq_int("reset_cid sets nine branches (%ld)",
@@ -319,8 +320,10 @@ run_reset(void)
 	ref_reset_cid(&b.cid);
 	cmp_cid("reset_cid over a dirty object", &a, &b, 2);
 	diff_eq_int("reset_cid keeps rate (%ld)", a.cid.rate, b.cid.rate, 2);
-	diff_eq_int("reset_cid keeps threshold (%ld)", a.cid.threshold, b.cid.threshold, 2);
-	diff_eq_int("reset_cid keeps f02c (%ld)", a.cid.f02c, b.cid.f02c, 2);
+	diff_eq_int("reset_cid keeps threshold (%ld)", a.cid.threshold,
+		    b.cid.threshold, 2);
+	diff_eq_int("reset_cid keeps mark_conf_step (%ld)",
+		    a.cid.mark_conf_step, b.cid.mark_conf_step, 2);
 	diff_eq_int("reset_cid cleared pack_len (%ld)", a.cid.pack_len, 0, 2);
 	diff_eq_int("reset_cid cleared data[119] (%ld)", a.cid.data[119], 0,
 		    2);
@@ -534,8 +537,8 @@ run_modem(short rate, double fs)
 	 * THE TWO THRESHOLDS, SWEPT INTEGER BY INTEGER.  Both are derived from
 	 * the block length rather than stored, so a wrong multiplier moves
 	 * them by one or two and every input that steps the confidence by
-	 * `f02c` steps straight over the gap: an 18 written as 17 survives the
-	 * whole rest of this file.  `mark_conf` is planted at every value
+	 * `mark_conf_step` steps straight over the gap: an 18 written as 17
+	 * survives the whole rest of this file.  `mark_conf` is planted at every value
 	 * around both thresholds instead, once against a block the detector
 	 * rejects (which pins the upper gate, since crossing it is what stops
 	 * the detector running and clearing the count) and once against a
@@ -701,8 +704,8 @@ run_modem(short rate, double fs)
 			sb.cid.pack_state = sa.cid.pack_state;
 			sa.cid.threshold = (short)(k % 5);
 			sb.cid.threshold = sa.cid.threshold;
-			sa.cid.f02c = 9;
-			sb.cid.f02c = 9;
+			sa.cid.mark_conf_step = 9;
+			sb.cid.mark_conf_step = 9;
 
 			noise(in, 96, 7000.0);
 			run("seeded", &sa, &sb, in, 96, k);

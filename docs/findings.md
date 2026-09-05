@@ -117415,3 +117415,129 @@ against the CONCEPT rather than the TYPE.
 No source change. `V92Phase3Modulator.h` and `V92Phase4Modulator.h` are
 unchanged; both pad regions keep their existing, already-correct
 documentation. Nothing to gate. (2026-09-05)
+
+## F10180. Field naming, wave 7 -- `cid.h`'s `f02c` named `mark_conf_step`; `dtmf_rx.h` re-confirmed exhausted; `tagV90AdditionalCPinfo.h`'s five copied fields checked against their V.90-side twin and left neutral
+
+Second cluster of wave 7, scoped to `include/dsplib/cid.h`,
+`include/dsplib/dtmf_rx.h` and `include/dsplib/tagV90AdditionalCPinfo.h` --
+none touched by more than one prior finding (`cid.h` zero, `dtmf_rx.h` one,
+via F10137; `tagV90AdditionalCPinfo.h` zero). `cid_modem.h`/`cid.c`'s own
+struct was wave 6's F10172, which explicitly left `struct cid`'s `f02c`
+untouched as out-of-cluster scope; this finding is that struct's own turn.
+
+**Count re-derived first, per this doc's own caveat.** A naive
+`grep -oE` over the three headers matches many `/* was fNNNN */`-style
+comment mentions and cross-references to fields in OTHER structs
+(`V92CP::byte_04` etc., named inside `tagV90AdditionalCPinfo.h`'s own
+derivation comments) that are not live declarations here. Restricting to
+actual member-declaration lines: `cid.h` has 11 live fields (`f02c` plus
+ten `short_NNN` fields), `dtmf_rx.h` has 5 (`short_000`, `int_004`,
+`short_008`, `short_354[2]`, `short_35c[2]`), `tagV90AdditionalCPinfo.h`
+has 6 (`word_00`, `word_04`, `float_08`, `word_0c`, `word_10`, `short_14`)
+-- 22 total, matching the brief's ~21 estimate.
+
+**`cid.h`: one real name, `f02c` -> `mark_conf_step` (rank 3, unanimous
+usage inference).** No format string or typed caller names it -- the
+header already said as much -- but every writer and the one reader agree
+on a single, unambiguous role. `create_cid` (`src/service/rxcid.c`) seeds
+it at 9; `src/service/cid.c`'s three `mov $0x9` stores (now under
+`CID_MARK_CONF_STEP`, renamed alongside the field for the same reason
+wave 6 renamed `TX1_F2218`'s family) put it back to the identical value on
+every mode transition that touches the FSK receiver; nothing this tree has
+reconstructed ever writes a different value. The one reader, `cid_modem`,
+adds it to `mark_conf` for every block `CID_MTD_detect` answers 0 for
+(tone detected) -- the step that drives `mark_conf` toward the two time
+thresholds `rxcid.c`'s own header comment already derives (F8712). Named
+by the role, matching the object's own `mark_conf` field it steps.
+Propagated to `src/service/cid.c`, `src/service/rxcid.c`,
+`test/unit/t_rxcid.c` and `test/unit/t_cidsvc.c` (including three local
+counter variables, `seen_f02c_9600`/`_8000`/`_mode`, renamed for
+consistency since they specifically track this field's stores). No
+`test/mutations/*.json` references `f02c` (the one grep hit, an address
+`0x3f02c` inside `v90conneval.json`'s own derivation prose, is
+unrelated) -- checked and confirmed, so no anchor file needed touching.
+
+**`cid.h`: ten fields re-confirmed dead, none named.** `short_004`,
+`short_008`, `short_074`, `short_076`, `short_086`, `short_088`,
+`short_08a`, `short_08c`, `short_150` and `short_152` are each cleared by
+`reset_cid` and read by nothing else -- confirmed against ALL SIX
+functions that ever touch `struct cid` (`reset_cid`, `create_cid`,
+`pack_next_bit`, `cid_modem` in `rxcid.c`; `CID_MTD_detect` in
+`cid_mtd.c`; `CID_FSD_demodulate` in `cid_fsd.c`), every one of which is
+already fully reconstructed, so this is the object's own complete closure
+over the struct and not a sample. No format string, no typed caller, and
+zero readers anywhere this tree can see -- left as `type_NNNN`, the
+correct four-state outcome per CLAUDE.md's own ledger, rather than guessed
+at.
+
+**`dtmf_rx.h`: re-confirmed exhausted, zero change.** Wave 3 (F10137)
+already investigated all 5 fields and found every one write-only,
+promoting them from bare `fNNNN` to shaped `type_NNNN` with no name
+possible. A fresh check against the current tree (`grep` over
+`src/service/dtmf_rx.c`, the only file with all four functions
+(`reset_dtmf`, `create_cid_dtmf`, `band_pass`, `dtmf_modem`) that touch
+`struct dtmf_rx`) finds the identical shape: all 5 appear only inside
+`reset_dtmf`'s own clearing code, no reads anywhere. Nothing has changed
+since F10137 and this wave adds no new evidence past re-confirming it.
+
+**`tagV90AdditionalCPinfo.h`: five fields checked against a previously
+unread source, all left neutral.** This header's existing derivation
+(pre-dating the field-naming phase) already traces all five non-pad
+fields (`word_00`, `word_04`, `float_08`, `word_0c`, `word_10`) to their
+V.92-side destination fields in `V92CP` via `setV92CPpckFromParamsInfo`
+(`src/pump/v90/V90MappingParamsInt.cpp`) and explicitly declines to name
+any of them ("NONE OF THE FIVE IS NAMED... carrying an offset name across
+would be adjacency rather than evidence"). This wave read the V.90-side
+twin, `V90CPPacker` (`src/pump/v90/V90CPpck.cpp`), which reaches the same
+struct as its own `info` argument and had not previously been
+cross-checked against this header:
+
+- `word_00`, `word_04` and `word_10` are each also tested by
+  `V90CPPacker` to build one of three `%s` slots in its own
+  `"CP%s%s%s"` debug line (`word_04 == 0` -> `"t"`, `word_10 != 0` ->
+  `"s"`, `word_00 != 0` -> `"'"`), which is a format string (evidence
+  rule 1) for the SHAPE of each -- a boolean selecting one letter of a
+  CP-message-variant name -- and, for `word_10`, independently confirms
+  the RRN-detected-flag origin the header already derives from
+  `V90Demodulator::enterRRN` reaches the message as the same one bit on
+  both sides. None of the three is enough to name what "CPt"/"CPs"/"CP'"
+  actually denote in V.90's own CP message taxonomy: the object states no
+  field names (`V90CPpck.cpp`'s own header comment says so explicitly),
+  and this wave declined to guess an ITU-T mapping from memory rather
+  than a citation. `word_04` additionally reuses the SAME field, in the
+  SAME function, as a non-boolean value stored whole into `bits[19]` and
+  passed to `getDataBitRate` -- a second, different role on one field,
+  the same dual-role shape CLAUDE.md declines a single name for elsewhere
+  in this tree (`v34recv.h`'s `f208`/`f20a`).
+- `word_0c` is stored whole with no test of its own on either side, so
+  nothing new was found for it.
+- `float_08` is encoded as Q3.13 alongside the shaper coefficients
+  (bits 52..67), consistent with a signal-level magnitude and with its
+  V.92-side destination `flt_10`'s own role, but neither side's format
+  string or typed callee says WHICH magnitude.
+
+All five stay as they were; the header's existing "adjacency is not
+evidence" verdict holds and is now cross-checked against the V.90 side
+rather than the V.92 side alone. `short_14` (the sixth live field) was
+not re-investigated -- its existing derivation and CLAUDE.md 3120-rule
+decline are unchanged and already cite the same `V90CPPacker` this wave
+read.
+
+**Verification.** `make one T="t_cidsvc t_cidprog t_cid t_cidleaves
+t_cid_fsd t_cid_mtd t_rxcid"`: every named suite green (`cid_modem at
+8000`/`9600` 1896 checks each, `CID_FSD_demodulate at 7200`/`9600` 13364
+checks each, `cid_freq_sampl: every arm of the object fired` 7 checks,
+etc.), 0 FAIL, exit 0, no check count regressed. Since
+`tagV90AdditionalCPinfo.h`'s change is comment-only, `make one
+T="t_v90modemctor t_v90demctor t_v90unpck t_v90cmask"` was also run to
+confirm the header still compiles and every touched function (`V90CPPacker`
+22546 checks, `setV92CPpckFromParamsInfo` 320 checks,
+`V90Demodulator::V90Demodulator` 6467 checks) stays green. `make check64`
+clean (pre-existing, unrelated `-Wswitch`/`-Wsign-compare` warnings only).
+`tools/onedef.py` (301 types, 1 known duplicate), `tools/refcheck.py`
+(13573 references, 0 dangling) and `tools/anchorcheck.py` (228 suites,
+9767 mutations, 0 anchor problems) all clean -- no mutation-anchor JSON
+needed touching, confirmed directly rather than assumed. Docker and
+`dsplibs-tc342` were both available in this wave's sandbox; `make period
+J=3` and `make byteident-ratchet` run against the fully-changed tree, see
+the wave 7 summary in `docs/fieldnaming.md` for the result. (2026-09-06)

@@ -24,9 +24,9 @@
  *
  * THE TWO THRESHOLDS ARE TIME, NOT LEVEL.  cid_modem derives
  * m = (rate == 9600 ? 49152 : 40960) / count and compares `mark_conf` against
- * m*18/256 and m*12/256.  Since a detected block adds f02c (9) to mark_conf,
- * those work out at 40 ms and 26.7 ms of tone at both rates, independent of
- * the block length.  Finding F8712.
+ * m*18/256 and m*12/256.  Since a detected block adds `mark_conf_step` (9)
+ * to `mark_conf`, those work out at 40 ms and 26.7 ms of tone at both
+ * rates, independent of the block length.  Finding F8712.
  */
 
 #include "dsplib/cid.h"
@@ -72,9 +72,10 @@ static const short V23_MRF_FILT[90] = {
  * Put the receiver back to the state a new one is in.
  *
  * Everything the DSP accumulates is cleared and the resampler is
- * (re-)configured; the three settings `create_cid` and the CID service write
- * -- `rate`, `threshold` and `f02c` -- survive, which is what makes this usable as
- * `cid_reset`'s reset as well as part of construction.
+ * (re-)configured; the three settings `create_cid` and the CID service
+ * write -- `rate`, `threshold` and `mark_conf_step` -- survive, which is
+ * what makes this usable as `cid_reset`'s reset as well as part of
+ * construction.
  *
  * THE `fresh` ARGUMENT IS THE HISTORY POINTER ITSELF.  FPM_MRF_init allocates
  * unconditionally when `fresh` is set and leaks whatever was there, so the
@@ -204,7 +205,7 @@ create_cid(struct cid *cid)
 
 	cid->rate = CID_RATE_8000;
 	cid->threshold = 2;
-	cid->f02c = 9;
+	cid->mark_conf_step = 9;
 
 	/*
 	 * The object's own words, and what NAMED `threshold`: this line calls
@@ -310,8 +311,8 @@ pack_next_bit(short bit, struct cid *cid)
  *   1. copy to a local buffer, track the block mean into `dc` at 0.8 of this
  *      block plus 0.2 of the last, and subtract it.
  *   2. below the 40 ms threshold, run CID_MTD_detect.  IT ANSWERS BACKWARDS:
- *      0 means the 1200 Hz tone IS there and adds `f02c` to `mark_conf`;
- *      anything else clears it.
+ *      0 means the 1200 Hz tone IS there and adds `mark_conf_step` to
+ *      `mark_conf`; anything else clears it.
  *   3. above the 26.7 ms threshold, resample 8000 -> 7200 in place (9600 is
  *      already the demodulator's rate) and apply `gain`.  While `mark_conf`
  *      is still BETWEEN the two thresholds, `gain` is first re-adapted from
@@ -380,8 +381,9 @@ cid_modem(const short *samples, unsigned short count, struct cid *cid)
 
 	/*
 	 * The confidence scale.  m is the number of blocks in 5.12 s, so
-	 * m*18/256 and m*12/256 are 40 ms and 26.7 ms once `f02c`'s step of 9
-	 * per block is divided out -- at both rates and every block length.
+	 * m*18/256 and m*12/256 are 40 ms and 26.7 ms once `mark_conf_step`'s
+	 * step of 9 per block is divided out -- at both rates and every block
+	 * length.
 	 */
 	m = (cid->rate == CID_RATE_9600 ? 49152 : 40960) / (int)count;
 	if (m <= 0)
@@ -392,7 +394,7 @@ cid_modem(const short *samples, unsigned short count, struct cid *cid)
 			cid->mark_conf = 0;
 		} else {
 			cid->mark_conf = (short)((unsigned short)cid->mark_conf
-						 + (unsigned short)cid->f02c);
+						 + (unsigned short)cid->mark_conf_step);
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf("Tone 1200 Detected\n");
 		}
