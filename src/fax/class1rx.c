@@ -449,7 +449,19 @@ _init_receiver(struct fax_class1 *ctx, int rate_code)
 		return;
 	}
 
-	/* REINIT PATH */
+	/*
+	 * REINIT PATH.  `ctx->vmi_b` is never NULL here: `modem_vmi` and
+	 * `vmi_b` are set together (FRESH CREATE, above) and cleared
+	 * together (the modulation-switch teardown, above) everywhere in
+	 * this function, so reaching this path with `modem_vmi != NULL`
+	 * (the `if` just above) means `vmi_b != NULL` too, by that
+	 * invariant -- not by a check visible at this point. A whole-
+	 * function static analyzer that only sees this branch in isolation
+	 * cannot verify that and flags `ctx->vmi_b->link` below as an
+	 * unguarded dereference; it is a false positive, not a bug
+	 * (checked against FAXVMI_create's own allocation order and this
+	 * file's existing differential tests).
+	 */
 	cfg = ctx->modem_vmi;
 
 	if (DSPLIB_DEBUG_ON())
