@@ -516,7 +516,19 @@ struct v34_object {
 		short vect[16];				/* +0x2a80 */
 		int vectp[8];				/* +0x2a80, one per point */
 	};
-	short short_2aa0;					/* +0x2aa0 */
+	/*
+	 * +0x2aa0. `VPcmV34Progress`'s per-call requested sample count
+	 * (`nin & ~3`) stashed here at entry (`v34pcmmain.cpp`'s V.90/K56flex
+	 * arms, `obj->tx_fill_target = (short)n`), then read back nowhere but
+	 * in `while (obj->txq.count < obj->tx_fill_target)` -- the TX-queue
+	 * top-up loop three functions share (`VPcmV34Progress` itself,
+	 * `datapumpv34` and the handshake's `v34tx1_*` dispatch in
+	 * `v34hstx1.cpp`, per finding F714's own read of the five `movzwl
+	 * 0x2aa0(reg)` sites). Usage inference: it is never printed and no
+	 * typed callee takes it, but every one of its five readers and both
+	 * of its writers agree on this one role.
+	 */
+	short tx_fill_target;					/* +0x2aa0 */
 	short vect_idx;					/* +0x2aa2 */
 	short hist1_idx;					/* +0x2aa4 */
 	short hist2_idx;					/* +0x2aa6 */
@@ -551,11 +563,14 @@ struct v34_object {
 	void *p3548;					/* +0x3548 */
 	/*
 	 * adaptecho's adaptation state. `echo_calls` counts calls and gates
-	 * the whole slow path; `echo_alpha` is the LMS step (updateAlpha's
-	 * alpha, and the only short here); `echo_decay_fact` its decay;
-	 * `echo_beta` a shift the step is scaled by, moved between 2, 4 and
-	 * 5 by adaptecho's own ladder; and `echo_energy` the energy
-	 * accumulated over the first 0x8f calls.
+	 * the whole slow path; `echo_alpha` is the near-echo LMS step
+	 * (updateAlpha's alpha -- an EARLIER note here called it "the only
+	 * short here", which stopped being true the moment `far_echo_alpha`
+	 * below is read as its far-echo counterpart rather than left as
+	 * `short_3552`); `echo_decay_fact` its decay; `echo_beta` a shift the
+	 * step is scaled by, moved between 2, 4 and 5 by adaptecho's own
+	 * ladder; and `echo_energy` the energy accumulated over the first
+	 * 0x8f calls.
 	 *
 	 * `echo_decay_start`, `echo_decay_fact` and `echo_beta` are also named
 	 * by their other writer: `GetVPcmMinimalTxPowerReduction` sets all
@@ -568,7 +583,18 @@ struct v34_object {
 	 */
 	int echo_calls;					/* +0x354c */
 	short echo_alpha;					/* +0x3550 */
-	short short_3552;					/* +0x3552 */
+	/*
+	 * +0x3552. `far_echo_alpha` and not `short_3552`: `v34rx.c`'s own
+	 * paired `updateAlpha` calls tag each field with the object's own
+	 * debug string (`updateAlpha`'s `tag` argument, printed verbatim as
+	 * "updateAlpha%s: updated %d => %d") -- `echo_alpha` gets `"NE"`
+	 * (near echo) at both its call sites, this field gets `"FE"` (far
+	 * echo) at its one call site, gated the same way `echo1`/
+	 * `far_echo_enable` gate every other far-echo-only quantity in this
+	 * struct. CLAUDE.md's evidence tier 1: the object's own words, via a
+	 * format string it is passed to and prints from.
+	 */
+	short far_echo_alpha;					/* +0x3552 */
 	int echo_decay_start;					/* +0x3554 */
 	int echo_decay_fact;					/* +0x3558 */
 	int echo_beta;					/* +0x355c */

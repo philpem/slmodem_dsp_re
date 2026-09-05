@@ -254,12 +254,12 @@ FAXVMI_create(struct faxvmi *vmi, const struct faxvmi_cfg *cfg)
 	}
 
 	src = (cfg != NULL) ? cfg : &FAXVMI_CFG;
-	vmi->mode = src->short_0000;
+	vmi->mode = src->mode;
 	vmi->pad_0002 = src->short_0002;
-	vmi->reverse = src->int_0004;
-	vmi->fifo_size = src->short_0008;
-	vmi->max_frame = src->short_000a;
-	vmi->frame_size = src->short_000c;
+	vmi->reverse = src->reverse;
+	vmi->fifo_size = src->fifo_size;
+	vmi->max_frame = src->max_frame;
+	vmi->frame_size = src->frame_size;
 	vmi->slot = src->slot;
 	vmi->int_0010 = (int)(long)src->modem_cfg;
 	vmi->int_0014 = (int)(long)src->ptr_0014;

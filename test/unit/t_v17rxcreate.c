@@ -751,9 +751,9 @@ build_cfg(struct v17rx_cfg *c, long k)
 	if (!cases[k].use_default) {
 		c->bit_rate = cases[k].bit_rate;
 		c->int_0014 = cases[k].retrain;
-		c->ptr_0018 = save0;
-		c->ptr_001c = save1;
-		c->ptr_0020 = ratesave;
+		c->coefsave0 = save0;
+		c->coefsave1 = save1;
+		c->ratesave = ratesave;
 		c->ptr_0024 = (void *)AUX_VALUE;
 	}
 	for (i = 0; i < V17_COEF_N; i++) {

@@ -2743,26 +2743,26 @@
  },
  {
   "label": "21: the echo-adapt start leaves echo_alpha alone",
-  "find": "\t\to->echo_alpha = 0;\n\t\to->short_3552 = 0;\n\t\to->echo_energy = 0;",
-  "replace": "\t\to->short_3552 = 0;\n\t\to->echo_energy = 0;",
+  "find": "\t\to->echo_alpha = 0;\n\t\to->far_echo_alpha = 0;\n\t\to->echo_energy = 0;",
+  "replace": "\t\to->far_echo_alpha = 0;\n\t\to->echo_energy = 0;",
   "fn": "v34tx1_trnseg4"
  },
  {
-  "label": "21: the echo-adapt start leaves short_3552 alone",
-  "find": "\t\to->echo_alpha = 0;\n\t\to->short_3552 = 0;\n\t\to->echo_energy = 0;",
+  "label": "21: the echo-adapt start leaves far_echo_alpha alone",
+  "find": "\t\to->echo_alpha = 0;\n\t\to->far_echo_alpha = 0;\n\t\to->echo_energy = 0;",
   "replace": "\t\to->echo_alpha = 0;\n\t\to->echo_energy = 0;",
   "fn": "v34tx1_trnseg4"
  },
  {
   "label": "21: the echo-adapt start leaves echo_energy alone",
-  "find": "\t\to->echo_alpha = 0;\n\t\to->short_3552 = 0;\n\t\to->echo_energy = 0;",
-  "replace": "\t\to->echo_alpha = 0;\n\t\to->short_3552 = 0;",
+  "find": "\t\to->echo_alpha = 0;\n\t\to->far_echo_alpha = 0;\n\t\to->echo_energy = 0;",
+  "replace": "\t\to->echo_alpha = 0;\n\t\to->far_echo_alpha = 0;",
   "fn": "v34tx1_trnseg4"
  },
  {
   "label": "21: the echo-adapt start writes echo_energy as a halfword",
-  "find": "\t\to->short_3552 = 0;\n\t\to->echo_energy = 0;",
-  "replace": "\t\to->short_3552 = 0;\n\t\t*(short *)&o->echo_energy = 0;",
+  "find": "\t\to->far_echo_alpha = 0;\n\t\to->echo_energy = 0;",
+  "replace": "\t\to->far_echo_alpha = 0;\n\t\t*(short *)&o->echo_energy = 0;",
   "fn": "v34tx1_trnseg4"
  },
  {
@@ -4156,45 +4156,45 @@
  {
   "label": "86: the echo block does not clear echo_calls",
   "fn": "v34tx1_txmd",
-  "find": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->short_3552 = 0;\t\t\t\t/* 0x67025 */",
-  "replace": "\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->short_3552 = 0;\t\t\t\t/* 0x67025 */"
+  "find": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->far_echo_alpha = 0;\t\t\t\t/* 0x67025 */",
+  "replace": "\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->far_echo_alpha = 0;\t\t\t\t/* 0x67025 */"
  },
  {
   "label": "86: the echo block raises bit 2 of tx_flags rather than clearing it",
   "fn": "v34tx1_txmd",
-  "find": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->short_3552 = 0;\t\t\t\t/* 0x67025 */",
-  "replace": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags | V34_EC_FROZEN);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->short_3552 = 0;\t\t\t\t/* 0x67025 */"
+  "find": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->far_echo_alpha = 0;\t\t\t\t/* 0x67025 */",
+  "replace": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags | V34_EC_FROZEN);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->far_echo_alpha = 0;\t\t\t\t/* 0x67025 */"
  },
  {
   "label": "86: the echo block clears bit 3 of tx_flags",
   "fn": "v34tx1_txmd",
-  "find": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->short_3552 = 0;\t\t\t\t/* 0x67025 */",
-  "replace": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~8u);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->short_3552 = 0;\t\t\t\t/* 0x67025 */"
+  "find": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->far_echo_alpha = 0;\t\t\t\t/* 0x67025 */",
+  "replace": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~8u);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->far_echo_alpha = 0;\t\t\t\t/* 0x67025 */"
  },
  {
   "label": "86: the echo block leaves echo_alpha alone",
   "fn": "v34tx1_txmd",
-  "find": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->short_3552 = 0;\t\t\t\t/* 0x67025 */",
-  "replace": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);\n\t\to->short_3552 = 0;\t\t\t\t/* 0x67025 */"
+  "find": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->far_echo_alpha = 0;\t\t\t\t/* 0x67025 */",
+  "replace": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);\n\t\to->far_echo_alpha = 0;\t\t\t\t/* 0x67025 */"
  },
  {
-  "label": "86: the echo block leaves short_3552 alone",
+  "label": "86: the echo block leaves far_echo_alpha alone",
   "fn": "v34tx1_txmd",
-  "find": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->short_3552 = 0;\t\t\t\t/* 0x67025 */",
+  "find": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->far_echo_alpha = 0;\t\t\t\t/* 0x67025 */",
   "replace": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n"
  },
  {
   "label": "86: the echo block clears echo_energy too, as 21's does",
   "fn": "v34tx1_txmd",
-  "find": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->short_3552 = 0;\t\t\t\t/* 0x67025 */",
-  "replace": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->short_3552 = 0;\t\t\t\t/* 0x67025 */\n\t\to->echo_energy = 0;",
+  "find": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->far_echo_alpha = 0;\t\t\t\t/* 0x67025 */",
+  "replace": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->far_echo_alpha = 0;\t\t\t\t/* 0x67025 */\n\t\to->echo_energy = 0;",
   "note": "0x67613 in 21 TRNSEG4 clears the same four AND echo_energy; 0x66fe9 does not."
  },
  {
   "label": "86: the echo block reports the start of echo adaptation, as 21's does",
   "fn": "v34tx1_txmd",
-  "find": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->short_3552 = 0;\t\t\t\t/* 0x67025 */",
-  "replace": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->short_3552 = 0;\t\t\t\t/* 0x67025 */\n\t\tVPcmV34ReportStartOfEchoAdapt(o);"
+  "find": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->far_echo_alpha = 0;\t\t\t\t/* 0x67025 */",
+  "replace": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->far_echo_alpha = 0;\t\t\t\t/* 0x67025 */\n\t\tVPcmV34ReportStartOfEchoAdapt(o);"
  },
  {
   "label": "86: the echo diagnostic is dropped",
@@ -4205,8 +4205,8 @@
  {
   "label": "86: the segment end returns rather than falling into the reconfiguration",
   "fn": "v34tx1_txmd",
-  "find": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->short_3552 = 0;\t\t\t\t/* 0x67025 */\n\t}",
-  "replace": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->short_3552 = 0;\t\t\t\t/* 0x67025 */\n\t\treturn V34TX1_LOOP;\n\t}",
+  "find": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->far_echo_alpha = 0;\t\t\t\t/* 0x67025 */\n\t}",
+  "replace": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->far_echo_alpha = 0;\t\t\t\t/* 0x67025 */\n\t\treturn V34TX1_LOOP;\n\t}",
   "note": "This is exactly what this file did before 0x66fe9 was written: 0x66fe9 ends `jmp 63e7f`, which is the fall-through of the block that jumped to it, so the two bodies are not exclusive."
  }
 ]

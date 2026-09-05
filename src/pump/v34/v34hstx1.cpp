@@ -587,7 +587,7 @@ v34tx1_moh_silence(void *objp)
  * stop; the transfer does not exist.
  *
  * WHAT 0x66fe9 DOES is clear bit 2 of `tx_flags` and zero `echo_calls`, `echo_alpha` and
- * `short_3552` -- the four that gate and seed `adaptecho`'s slow path.  The same
+ * `far_echo_alpha` -- the four that gate and seed `adaptecho`'s slow path.  The same
  * four are cleared at 0x67613 in 21 `TRNSEG4`, which ALSO zeroes `echo_energy`
  * and calls `VPcmV34ReportStartOfEchoAdapt`; the two are near-twins and not
  * one body, so they are written twice rather than factored.  The
@@ -629,7 +629,7 @@ v34tx1_txmd(void *objp)
 		o->tx_flags =				/* 0x67017 */
 			(short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);
 		o->echo_alpha = 0;				/* 0x6701e */
-		o->short_3552 = 0;				/* 0x67025 */
+		o->far_echo_alpha = 0;				/* 0x67025 */
 	}
 
 	if ((unsigned short)o->vect_idx
@@ -2984,7 +2984,7 @@ v34tx1_trnseg4(void *objp)
 		o->echo_calls = 0;
 		o->tx_flags = (short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);
 		o->echo_alpha = 0;
-		o->short_3552 = 0;
+		o->far_echo_alpha = 0;
 		o->echo_energy = 0;
 		VPcmV34ReportStartOfEchoAdapt(o);
 	}

@@ -1279,7 +1279,7 @@ main(void)
 
 			oa.echo_calls = ob.echo_calls = cnt_seed[cnt];
 			oa.echo_alpha = ob.echo_alpha = -0x1800;
-			oa.short_3552 = ob.short_3552 = -0x1400;
+			oa.far_echo_alpha = ob.far_echo_alpha = -0x1400;
 			oa.echo0.adapt_count = ob.echo0.adapt_count = 0;
 			oa.echo1.adapt_count = ob.echo1.adapt_count = 0;
 			for (b = 0; b < 0x12c; b++)
@@ -2629,7 +2629,7 @@ main(void)
 			oa2.hist2_idx = ob2.hist2_idx = 0;
 			oa2.echo_calls = ob2.echo_calls = 0;
 			oa2.echo_alpha = ob2.echo_alpha = -0x1800;
-			oa2.short_3552 = ob2.short_3552 = -0x1400;
+			oa2.far_echo_alpha = ob2.far_echo_alpha = -0x1400;
 			oa2.echo_decay_start = ob2.echo_decay_start = 0x95;
 			oa2.echo_decay_fact = ob2.echo_decay_fact = 0x7000;
 			oa2.echo_beta = ob2.echo_beta = 6;

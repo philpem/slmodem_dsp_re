@@ -23,8 +23,8 @@
  },
  {
   "label": "the run of cleared bytes starts at +0x173b",
-  "find": "\tflags_173a[0] = 0;\n\tflags_173a[1] = 0;",
-  "replace": "\tflags_173a[1] = 0;"
+  "find": "\ttrainConstel = 0;\n\trrnConstel = 0;",
+  "replace": "\trrnConstel = 0;"
  },
  {
   "label": "the Ja termination request is not cleared",

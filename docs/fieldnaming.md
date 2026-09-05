@@ -878,3 +878,256 @@ is the live-declaration count: `V90AutoDigitalImpDetector.h`'s own
 matching fields dropped from 22 to 13, plus `float_9d48` (outside the
 counted family) also gained a real name. `V90CP`/`V92CP` unchanged at
 0 renamed, confirmed rather than assumed.
+## Wave 6 — fax/V8/v34fsk cluster
+
+Launched 2026-09-05, one of several parallel wave-6 clusters (each covering
+disjoint files; this one covers the brief's assigned fax/V.8/v34fsk/fdspkrnl
+set). Scope: `src/fax/v17.c`, `include/dsplib/v17fax.h`,
+`include/dsplib/faxcfg.h`, `include/dsplib/v34fsk.h`,
+`include/dsplib/fdspkrnl.h`, `include/dsplib/v8.h`, `src/v8/{v8hsrx,v8util,
+v8jm,v8handshak,v8hs}.c`, `include/dsplib/class1.h`, `src/service/cid.c`,
+`include/dsplib/cid_modem.h`, `src/fax/class1tx.c`. Worked as four
+sub-clusters given the scope's size and the risk of two agents touching a
+shared struct at once (`class1tx.c` references structs defined in three of
+this wave's OTHER files): a v17fax/faxcfg agent and a V.8 agent in
+parallel, followed by a cid/class1 pass and a v34fsk/fdspkrnl pass done
+directly, once the first two confirmed which structs each nominal file's
+"surprise" `type_NNNN`/bare-`f` hits actually belonged to.
+
+**A scope trap found before any edit, worth recording for the next wave
+that sees a similar file list.** `class1tx.c`'s own fresh grep showed 16
+`type_NNNN`-family hits, not mentioned in the brief's count breakdown at
+all. Checking each hit's OWNING STRUCT (`grep -rn "struct WHATEVER {"`
+rather than assuming the file's own struct) found most belong to
+`struct v21rx_ctl`/`v21tx_ctl` (`v21fax.h`) and `struct faxvmi_ctl`
+(`faxvmi.h`) -- both OUT OF this wave's file list, presumably another
+wave-6 cluster's or nobody's -- and were correctly left untouched; only the
+subset belonging to `struct faxvmi_cfg`/`v17rx_cfg` (both in `faxcfg.h`,
+IN scope) were fair game, handled by the v17fax/faxcfg agent's own
+propagation. The general form: a file's own bare-`f`/`type_NNNN` count
+includes every struct it merely USES, not just the ones it DEFINES, and
+only the defining file's owner may rename.
+
+**v17fax/faxcfg cluster (F10169):** 8 real renames, all in `faxcfg.h`'s own
+`struct faxvmi_cfg` (5 fields) and `struct v17rx_cfg` (3 fields) --
+evidence that was already written down elsewhere in the tree (`faxvmi.h`'s
+own cross-reference comment, `v17.c`'s own `V17RX_create` header comment)
+and had simply never been carried over to this struct's own declaration,
+the same "evidence stranded in one file" shape F10139/F10140 named for a
+V.90 class pair. `v17fax.h` itself needed no changes this wave -- every
+lead chased (`v17tx_cfg::int_0018`/`int_001c`, `v17_status`'s remaining
+fields) dead-ended at an already-neutral target or a genuinely
+non-established role, re-confirmed rather than overturned.
+
+**V.8 cluster, second pass (F10170):** zero new real names -- every
+candidate had already been investigated and declined by wave 2's F10135 --
+but real hygiene: 6 write-only `struct v8` fields promoted bare `fNNNN` to
+shaped `type_NNNN` (partial progress, per CLAUDE.md's four-state ledger),
+and 10 stale comment mentions of fields wave 2 HAD already renamed in the
+struct, whose surrounding prose never caught up, fixed to the current
+names (one propagation hit landing in `src/v8/v8seq.c`, outside the
+nominal six files).
+
+**v34fsk.h/fdspkrnl.h (F10171):** two real names in `v34fsk.h`
+(`tx_fill_target`, usage inference unanimous across every reader/writer;
+`far_echo_alpha`, rank 1 -- the object's own debug-string tag pairs it
+with the already-named `echo_alpha` as "FE" against "NE"), the rest of the
+header re-confirmed as already exhaustively derived by prior sessions'
+deep V.34-handshake work (findings up to F635, down to bit level).
+`fdspkrnl.h` re-confirmed fully exhausted from wave 4 (F10143) with one
+new piece of direct corroborating evidence: `tools/dis.py` against the
+blob's own `TONE_create` confirms its trailing config fields move only as
+one `rep movsl` bulk copy, never field-by-field.
+
+**cid_modem.h/cid.c and class1.h/class1tx.c (F10172):** two real names in
+`struct cid_modem` (`cid_val`, matching the constructor argument it mirrors;
+`samples_fill`, matching an already-written-down-but-unapplied derivation),
+`struct cid`'s own `f02c` correctly left untouched as out-of-cluster-scope.
+`struct fax_class1`'s four remaining bare fields (`f1230`/`f1234`/`f127c`/
+`f12d4`) all re-confirmed rather than re-derived -- three already declined
+by wave 2's F10133, the fourth's existing "propagates to three different
+per-modulation offsets" derivation checked against this wave's own
+F10169 struct renames for a possible single-field resolution and found not
+to close.
+
+### Numbers
+
+Fresh grep, combined across all eleven files in this wave's scope:
+`type_NNNN` 69 -> 70 (net +1: the V.8 cluster's six bare-to-typed
+promotions outweigh the eight `faxcfg.h` fields promoted OUT of
+`type_NNNN` into real names), bare `fNNNN` 25 -> 4 live (`f1230`/`f1234`/
+`f127c`/`f12d4` in `struct fax_class1`, deliberately re-confirmed and left;
+every other post-edit grep hit -- `feed`/`face` dictionary-word false
+positives, `fa48`/`f264` inside prose explicitly narrating a rename's own
+history, `f02c` belonging to a struct outside this wave's scope -- is not
+a live field). Real names landed this wave: 12 (5 `faxvmi_cfg` + 3
+`v17rx_cfg` + 2 `v34fsk.h` + 2 `cid_modem.h`). Bare-to-typed promotions:
+6 (`struct v8`). Confirmed-exhausted-on-re-check, no change: 17
+`v34fsk.h` fields, 18 `fdspkrnl.h` fields, 4 `struct fax_class1` fields,
+several `v17fax.h`/`faxcfg.h` fields chased on a specific lead and
+dead-ended.
+
+### Verification
+
+`make one` across every touched suite (v17/faxcfg: `t_faxcfg`,
+`t_class1txvmi`, `t_class1txcplinit`, `t_class1inittx`, `t_class1initrx`,
+`t_v17rxcreate`; V.8: `t_v8direct`, `t_v8dp`, `t_v8hs`, `t_v8jm`, `t_v8sig`,
+`t_v8util`; v34fsk: `t_v34rx`, `t_v34hstx1`, `t_v34hstb1`, `t_v34datapump`,
+`t_v34hst3core`, `t_v34hst3mid`, `t_v34call`, `t_v34fsk`; cid/class1:
+`t_cidsvc`, `t_cidprog`, `t_cid`, `t_cidleaves`, `t_cid_fsd`, `t_cid_mtd`,
+`t_rxcid`, and the whole `t_class1*` family) — 224 PASS groups total across
+the two combined runs, 0 FAIL, exit 0 both times, no check count regressed
+against the pre-wave baseline. `tools/onedef.py` (301 types, 1 known
+duplicate), `tools/refcheck.py` (13521 references, 0 dangling) and
+`tools/anchorcheck.py` (228 suites, 9767 mutations, 0 anomalies) all clean
+throughout — re-run after every sub-cluster landed, not just once at the
+end. `make check64`: 64-bit clean, both configurations.
+
+Docker and the `dsplibs-tc342` image were both available in this wave's
+sandbox (unlike every prior wave in this ledger) — `make period J=$(nproc)`
+and `make byteident-ratchet` were run for real against the fully merged
+wave-6 tree rather than left for the parent's gate.
+
+**`make period J=$(nproc)` under `dsplibs-tc342` (real GCC 3.4.2): 374
+passed, 0 failed** — the identical count to every prior wave's own gate,
+confirming this wave added zero new period-tier tests (expected: a pure
+rename touches no test count) and regressed none. **`make byteident-ratchet`:
+736/1852 EXACT (39.7%), 796/1852 grade 0-or-1 (43.0%), ratchet OK** —
+bit-for-bit the same floor five prior waves already established, across
+twelve more real field renames and six more bare-to-typed promotions. This
+is the sixth wave running to confirm "a pure rename cannot move codegen"
+empirically rather than only by argument. (One operational note for the
+next wave: `make byteident-ratchet`'s own `tc` prerequisite does not
+inherit `make period`'s `J=$(nproc)` unless passed explicitly — its default
+`J` is `nproc/2` rounded down, which is 1 on a 3-core box and turns a
+few-minute parallel compile into a much longer serial one. Pass
+`J=$(nproc)` on this target too.)
+
+Combined with `make check64` (64-bit clean, both configurations),
+`tools/onedef.py`, `tools/refcheck.py` and `tools/anchorcheck.py` all
+clean, this wave's ~18 real renames and 6 bare-to-typed promotions are
+fully gated exactly as CLAUDE.md requires: not left for the parent session
+this time, because the sandbox happened to have docker and the toolchain
+image already built.
+
+## Wave 6 -- V.90 Phase4/session cluster: mostly already exhausted, one real find
+
+Scope: `V90Phase4Modulator.{h,cpp}`, `V90Phase4Demodulator.{h,cpp}`,
+`V92Phase4Modulator.{h,cpp}`, `VPcmFloModem.cpp` and
+`V90MappingParamsInt.cpp` -- the cluster named in the brief as ~105
+combined `type_NNNN`-family names by an earlier, uncorrected grep.
+
+**A fresh, filtered grep found 69 unique hits across the eight files, and
+the great majority of those are FALSE POSITIVES for this cluster once
+traced to the struct that actually declares the field.** Two grep-pattern
+artefacts explain most of the gap from the brief's ~105:
+
+- Comment prose (`v92modem.modulator->byte_0c`, "`cp->word_3ba8`",
+  "`word_7f6x`" as a two-field shorthand) matches the regex without being a
+  live struct member, the same shape F10142 already documented for
+  `pad_NNNN`.
+- **The larger effect: `VPcmFloModem.cpp` and `V90MappingParamsInt.cpp`
+  are almost entirely free functions and glue code over OTHER classes'
+  objects** (`V90CP`/`V92CP`, `V90MP`, `V90MappingParams`,
+  `tagV90AdditionalCPinfo`, `V90Demodulator`, `V92Modulator`,
+  `V90ConnectionEvaluator`, `V90Phase4Demodulator`, `V90RDetector`), reached
+  through `cp->`, `info->`, `params->`, `dem->`, `modulator->`,
+  `phase4Modulator->`, `rDetector1.` etc. Every `word_NNNN`/`byte_NNNN`
+  hit in these two files traces to one of those OTHER classes' own headers
+  (`V90CP.h`, `V90MappingParams.h`, `V92Modulator.h`, `V90Phase4Demodulator.h`,
+  `V90RDetector.h`, `tagV90AdditionalCPinfo.h`), none of which are in this
+  wave's file list and most of which were already investigated by earlier
+  waves or by the original reconstruction. `int_c` in both files is a third
+  artefact -- the regex's `[0-9a-f]+` matching the first three characters of
+  `int_complex` (a real type name, `include/dsplib/int_complex.h`) and
+  stopping at the first non-hex letter.
+
+**The genuine own-class fields in the three Phase4 headers are, with one
+exception (below), already fully derived and explicitly declined**, by
+work that mostly predates this field-naming phase (findings in the
+F4700-F4822, F5401, F7472 and F7547 range, from the original
+reconstruction) plus this phase's own wave 3 pass (F10139/F10140) over
+`V90Phase4Modulator`/`V90Phase4Demodulator` specifically. Reading all
+three headers end to end found no field where a fresh look turns up
+evidence those passes did not already have: `V90Phase4Modulator`'s
+`word_0018`/`byte_001c`/`word_0020`/`word_0024..0034`/`word_0040`/
+`word_2f64`/`word_2f9c`/`word_2fa0` and `V90Phase4Demodulator`'s
+`int_0028`/`uchar_0030`/`int_0038`/`int_003c`/`int_0040`/`int_0044`/
+`int_0048`/`uint_004c`/`uint_34fc`/`int_3510` and `V92Phase4Modulator`'s
+`word_0c`/`word_18`/`byte_1c`/`word_24`/`word_28`/`word_2c`/`word_30`/
+`word_34`/`word_38`/`byte_42`/`word_44`/`word_1b0`/`word_1b8`/`word_1c0`/
+`word_1c4` each already carry a paragraph explaining what evidence was
+checked and why it stops short of a name -- re-verified here against a
+fresh whole-tree grep for an external reader (the check that worked
+repeatedly in wave 3), finding none for any of them. Recorded as
+re-confirmed rather than re-derived, per this phase's own standing
+practice for exhausted ground.
+
+**The one exception, and it is CLAUDE.md's own headline failure mode:
+`VPcmFloModem::flags_173a[3]` (F10165).** Two prior findings (F7583, and
+a later pass recorded in F10130) had
+already read the object's own format string and identified `[0]`/`[1]` as
+`trainConstel`/`rrnConstel` -- but both explicitly declined to apply the
+name, on the ground that splitting a three-byte array cleared as one run
+by three different callers (`enterPhase3`, `externalReset`,
+`VPcmXfCreate`) was "not this batch's change". This wave's charter is
+exactly that batch, so it was made: `trainConstel` and `rrnConstel` (rank
+1, the format string "trainConstel = %d, rrnConstel =%d" in
+`VPcmFloModem.cpp`'s V.92 Jd-detected arm, corroborated by a second,
+independently-worded format string in the V.90 arm, "Train constellation
+: %d  RRN constellation : %d", naming the same two bytes) are now real
+`unsigned char` members; the third byte keeps a neutral offset name,
+`byte_173c`, since only its BEHAVIOUR (a one-shot local-request/
+remote-report RRN latch, F7583) is established and no format string or
+typed caller names it. The split is a pure declaration change -- three
+`unsigned char`s in sequence lay out identically to `unsigned char[3]`,
+and every site that touched the array already did so by individual
+element, never through a loop or a variable index -- so every clearing
+site (`enterPhase3`, `internalReset`, `VPcmXfCreate.cpp`'s constructor
+path) and every read/write site (the V.90 and V.92 Jd-detected arms, the
+two rate-renegotiation arms) became a named-field access with no
+statement reordered and no width or offset changed. Propagated to
+`VPcmXfCreate.cpp` (constructs the object, outside the nominal file list
+but sharing the same class) and to the cosmetic display-name strings in
+`test/unit/t_vpcmep3.cpp`'s offset table (raw-offset based, not identifier
+based, so purely a clarity fix) and the `find`/`replace` text of three
+mutation-anchor files (`v90rundemod.json`, `vpcmep3.json`,
+`vpcmrunpcm.json`).
+
+**Before/after counts.** 69 unique `type_NNNN`-family names across the
+eight files before; 68 after (`flags_173a` retired, `trainConstel`/
+`rrnConstel` real names, `byte_173c` a new but equally-neutral offset name
+replacing one element of the old array's spelling -- so the net count
+barely moves, same "renamed string survives via unrelated coincidence, or
+here via the array's own remainder" effect wave 3 and wave 4 both
+recorded). The real effect is qualitative: two fields with rank-1 evidence
+sitting unapplied for two prior findings are now applied.
+
+**Verification.** Pure identifier substitution (a struct member split,
+never a reordering, a type change or a value change), so no differential
+test could move and none did: `make one T="t_vpcmep3 t_vpcmrunpcm
+t_v90rundemod t_vpcmctor t_vpcmflomodem t_vpcmqcline"` all green --
+`t_vpcmrunpcm`'s `runPcmModem` check (155,541) and `t_v90rundemod`'s
+`v90RunDemodulator` check (95,714), the two heaviest suites touching this
+struct, both matched the pre-existing figures F10142/F10130 already
+recorded, and every other PASS line in the run (`enterPhase3`'s three
+store-audits, `externalReset`, both constructors and destructors,
+`VPCMXF_Create`, `getV90JaBits`/`getV90CpBits`/`setPhaseIIinfo`/
+`getUinfoValue`, `qcLineVerification`, `vPcmResetPhase3Modem`) showed no
+FAIL and no changed check count. `t_v34info1a` (68,561 checks) also run,
+since it links the full `repro` tree including the touched
+`VPcmXfCreate.cpp`. `tools/onedef.py` (301 types, 1 known duplicate),
+`tools/refcheck.py` (13,514 references, 0 dangling) and
+`tools/anchorcheck.py` (228 suites, 9,767 mutations, 0 issues) all clean;
+`make check64` clean on both configurations (only pre-existing, unrelated
+`-Wswitch`/`-Wsign-compare` warnings). Docker was available in this
+sandbox (unlike most prior waves): `make period J=$(nproc)` run for real
+against GCC 3.4.2 (`dsplibs-tc342`), **374 passed, 0 failed** -- the exact
+pre-existing test count, confirming no test was silently skipped or
+dropped. `make byteident-ratchet` run alongside it: **grade 0 EXACT still
+736/1852 (39.7%), grade 0-or-1 still 796/1852 (43.0%), `ratchet OK`** --
+bit-for-bit the same floor six waves have now confirmed, across a change
+that splits a three-element array into three scalar members. This is the
+first wave in this phase to get both the real period compiler and the
+real ratchet run inside the same sandbox that did the naming work, rather
+than leaving both for the parent's gate.

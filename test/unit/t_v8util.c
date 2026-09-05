@@ -813,7 +813,7 @@ t_v8create(void)
 
 		/* The handshake ran through it: a sample of what it writes. */
 		diff_eq_int("fa3e (%ld)", a->tx_fill_target, b->tx_fill_target, mode);
-		diff_eq_int("fa40 (%ld)", a->fa40, b->fa40, mode);
+		diff_eq_int("fa40 (%ld)", a->short_a40, b->short_a40, mode);
 		diff_eq_int("f9d4 (%ld)", a->tx_state, b->tx_state, mode);
 		diff_eq_int("deadline_a (%ld)", a->deadline_a, b->deadline_a,
 			    mode);

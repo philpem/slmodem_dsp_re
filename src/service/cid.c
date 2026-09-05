@@ -92,11 +92,13 @@ extern int modem_send_to_tty(void *m, const void *buf, int n);
 #define CID_F02C_RESET	9
 
 /*
- * The one value of `f264` -- the `cid_val` slmodemd hands `CID_create`, which
- * `cid_create` parks at +0x264 and `cid_value` overwrites -- that the object
- * tests for: it sends `cid_get_strings` to the raw hex dump instead of the
- * labelled rendering.  Usage inference from that single comparison; no format
- * string names it and no other function reads the field.
+ * The one value of `struct cid_modem::cid_val` (was `f264`, renamed this
+ * wave; see the struct's own field comment for why) -- the `cid_val`
+ * slmodemd hands `CID_create`, which `cid_create` parks at +0x264 and
+ * `cid_value` overwrites -- that the object tests for: it sends
+ * `cid_get_strings` to the raw hex dump instead of the labelled rendering.
+ * Usage inference from that single comparison; no format string names it
+ * and no other function reads the field.
  */
 #define CID_VALUE_RAW	2
 
@@ -223,7 +225,7 @@ CID_process(void *cidp, void *in, int count)
  * so raising the mode here leaves a null pointer that `reset_dtmf` or
  * `reset_cid` then walks -- the object has no guard and neither has this.
  *
- * `f3f8` is `cid_progress`'s sample-buffer fill level, cleared last, and the
+ * `samples_fill` is `cid_progress`'s sample-buffer fill level, cleared last, and the
  * mode-5 arm puts `f02c` back exactly as `cid_freq_sampl` and `cid_create` do.
  */
 void
@@ -235,7 +237,7 @@ cid_reset(struct cid_modem *ctx)
 		reset_dtmf(ctx->dtmf);
 	if (ctx->mode != 1)
 		reset_cid(ctx->fsk);
-	ctx->f3f8 = 0;
+	ctx->samples_fill = 0;
 	if (ctx->mode == CID_MODE_AUTOMATIC)
 		ctx->fsk->f02c = CID_F02C_RESET;
 }
@@ -292,7 +294,7 @@ cid_threshold(struct cid_modem *ctx, int thr)
 void
 cid_value(struct cid_modem *ctx, int v)
 {
-	ctx->f264 = v;
+	ctx->cid_val = v;
 }
 
 /*
@@ -322,7 +324,7 @@ cid_create(struct cid_modem *ctx, int cid_val, int mode)
 		ctx->mode = mode;
 		ctx->fsk = 0;
 		ctx->dtmf = 0;
-		ctx->f3f8 = 0;
+		ctx->samples_fill = 0;
 
 		if (mode > 1) {
 			if (dsplibs_debug_level > 1)
@@ -339,7 +341,7 @@ cid_create(struct cid_modem *ctx, int cid_val, int mode)
 	if (ctx->mode == CID_MODE_AUTOMATIC)
 		ctx->fsk->f02c = CID_F02C_RESET;
 
-	ctx->f264 = cid_val;
+	ctx->cid_val = cid_val;
 	return ctx;
 }
 
@@ -441,14 +443,14 @@ cid_progress(struct cid_modem *ctx, short *in, int what, short *count)
 		/*
 		 * Top up the block from the caller's buffer.  `i` and `n` are
 		 * shorts and the comparison is sixteen bits wide, which is the
-		 * object's; `f3f8` is the fill level and survives the call, so
+		 * object's; `samples_fill` is the fill level and survives the call, so
 		 * a caller feeding fewer samples than a block just returns 0
 		 * and comes back.
 		 */
-		while (i < n && ctx->f3f8 < len)
-			ctx->samples[ctx->f3f8++] = in[i++];
+		while (i < n && ctx->samples_fill < len)
+			ctx->samples[ctx->samples_fill++] = in[i++];
 
-		if (ctx->f3f8 != len)
+		if (ctx->samples_fill != len)
 			return (short)ret;
 
 		if (ctx->mode <= CID_MODE_DTMF) {
@@ -537,7 +539,7 @@ cid_progress(struct cid_modem *ctx, short *in, int what, short *count)
 				    "\n DTMF demodulator Failed after CID_MESSAGE state \n");
 		}
 
-		ctx->f3f8 = 0;
+		ctx->samples_fill = 0;
 	}
 }
 
@@ -571,7 +573,7 @@ cid_get_strings(struct cid_modem *ctx)
 		return out;
 	}
 
-	if (ctx->f264 == CID_VALUE_RAW)
+	if (ctx->cid_val == CID_VALUE_RAW)
 		data_unformatted_output(ctx->fsk, out);
 	else
 		data_formatted_output(ctx->fsk, out);

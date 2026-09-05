@@ -132,13 +132,13 @@
  },
  {
   "label": "Jd's two constellation sizes are handed over the other way round",
-  "find": "\t\tv92modem.modulator->byte_0c = flags_173a[0];\n\t\tv92modem.modulator->byte_0d = flags_173a[1];",
-  "replace": "\t\tv92modem.modulator->byte_0c = flags_173a[1];\n\t\tv92modem.modulator->byte_0d = flags_173a[0];"
+  "find": "\t\tv92modem.modulator->byte_0c = trainConstel;\n\t\tv92modem.modulator->byte_0d = rrnConstel;",
+  "replace": "\t\tv92modem.modulator->byte_0c = rrnConstel;\n\t\tv92modem.modulator->byte_0d = trainConstel;"
  },
  {
   "label": "getConstelationSize is given its two outputs the other way round",
-  "find": "\t\tmodem.jd92->getConstelationSize(&flags_173a[0],\n\t\t\t\t\t\t&flags_173a[1]);",
-  "replace": "\t\tmodem.jd92->getConstelationSize(&flags_173a[1],\n\t\t\t\t\t\t&flags_173a[0]);"
+  "find": "\t\tmodem.jd92->getConstelationSize(&trainConstel,\n\t\t\t\t\t\t&rrnConstel);",
+  "replace": "\t\tmodem.jd92->getConstelationSize(&rrnConstel,\n\t\t\t\t\t\t&trainConstel);"
  },
  {
   "label": "the Jd phase is not installed in the transmitter's resampler",

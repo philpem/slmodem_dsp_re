@@ -282,10 +282,10 @@ v8_txinit(struct v8 *v)
 {
 	int i;
 
-	v->f014 = 1;
-	v->f00c = 0;
-	v->f018 = 0;
-	v->f004 = 0;
+	v->short_014 = 1;
+	v->short_00c = 0;
+	v->short_018 = 0;
+	v->int_004 = 0;
 
 	for (i = 0; i < V8_TX_SHAPE; i++)
 		v->tx_shape[i] = 0;

@@ -182,9 +182,9 @@ VPCMXF_Create(int digitalSide, void *v34Object,
 		return 0;
 	}
 
-	self->flags_173a[0] = 0;
-	self->flags_173a[1] = 0;
-	self->flags_173a[2] = 0;
+	self->trainConstel = 0;
+	self->rrnConstel = 0;
+	self->byte_173c = 0;
 	self->droppedToV34 = 0;
 	self->clr = 0;
 
@@ -199,7 +199,7 @@ VPCMXF_Create(int digitalSide, void *v34Object,
 	self->cpNofBits = 0;
 	/*
 	 * `bitPointer = 0;` BELONGS BELOW THE BAUD TABLE AND NOT BESIDE
-	 * `flags_173a[0]`, AND THE POSITION IS DECODED RATHER THAN CHOSEN --
+	 * `trainConstel`, AND THE POSITION IS DECODED RATHER THAN CHOSEN --
 	 * but only to within a run of six slots, so read the paragraph before
 	 * moving it back.
 	 *

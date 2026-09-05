@@ -112,7 +112,9 @@ VPCM_OFF(v34BaudAllow,		0x0217, flags217);
 VPCM_OFF(bitVector,		0x021e, bitvec);
 VPCM_OFF(nofBits,		0x1736, nofbits);
 VPCM_OFF(bitPointer,		0x1738, bitptr);
-VPCM_OFF(flags_173a,		0x173a, flags173a);
+VPCM_OFF(trainConstel,		0x173a, trainconstel);
+VPCM_OFF(rrnConstel,		0x173b, rrnconstel);
+VPCM_OFF(byte_173c,		0x173c, byte173c);
 VPCM_OFF(droppedToV34,		0x173d, flag173d);
 VPCM_OFF(clr,		0x173e, flag173e);
 VPCM_OFF(sweepCounter,		0x1740, sweep);
@@ -742,9 +744,9 @@ VPcmFloModem::vPcmResetPhase3Modem()
 void
 VPcmFloModem::enterPhase3()
 {
-	flags_173a[0] = 0;
-	flags_173a[1] = 0;
-	flags_173a[2] = 0;
+	trainConstel = 0;
+	rrnConstel = 0;
+	byte_173c = 0;
 	droppedToV34 = 0;
 	clr = 0;
 
@@ -836,12 +838,12 @@ VPcmFloModem::externalReset()
 		dsplibs_debug_printf(
 		    "V90_V34_Main: reinitializing parameters.\r\n");
 
-	flags_173a[0] = 0;		/* +0x173a */
+	trainConstel = 0;		/* +0x173a */
 	nofBits = 0;			/* +0x1736 */
 	cpNofBits = 0;			/* +0x7dcc */
 	bitPointer = 0;			/* +0x1738 */
-	flags_173a[1] = 0;		/* +0x173b */
-	flags_173a[2] = 0;		/* +0x173c */
+	rrnConstel = 0;		/* +0x173b */
+	byte_173c = 0;		/* +0x173c */
 	droppedToV34 = 0;			/* +0x173d */
 	clr = 0;			/* +0x173e */
 
@@ -1266,9 +1268,9 @@ VPcmFloModem::internalReset()
 	nofBits = 0;				/* +0x1736 */
 	cpNofBits = 0;				/* +0x7dcc */
 	bitPointer = 0;				/* +0x1738 */
-	flags_173a[0] = 0;		/* +0x173a */
-	flags_173a[1] = 0;		/* +0x173b */
-	flags_173a[2] = 0;		/* +0x173c */
+	trainConstel = 0;		/* +0x173a */
+	rrnConstel = 0;		/* +0x173b */
+	byte_173c = 0;		/* +0x173c */
 	droppedToV34 = 0;			/* +0x173d */
 	clr = 0;			/* +0x173e */
 	v34BaudAllow[0] = 1;		/* +0x217: the V.90 run of six  */
@@ -1549,12 +1551,12 @@ VPcmFloModem::v90RunDemodulator(float *in, unsigned int n, int *rxbits,
 	 * site (finding F4903); this is a use site.
 	 */
 	case 0x06:
-		modem.jd->getConstelationSize(&flags_173a[0], &flags_173a[1]);
+		modem.jd->getConstelationSize(&trainConstel, &rrnConstel);
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf(
 			    "VPcmFloModem (V90): Train constellation : %d  "
 			    "RRN constellation : %d " "(0 = 4 points / 1 = 16 points)\r\n",
-			    flags_173a[0], flags_173a[1]);
+			    trainConstel, rrnConstel);
 
 		silenceScr = (unsigned char)modem.ptr_49b4->SILENCE_SCR;
 		if (silenceScr != 0
@@ -1567,8 +1569,8 @@ VPcmFloModem::v90RunDemodulator(float *in, unsigned int n, int *rxbits,
 			silenceScr = 0;
 		}
 
-		setNofBitsPhase4(flags_173a[0]);
-		V34XF_IndicateJdReceived(v34Object, flags_173a[0], silenceScr);
+		setNofBitsPhase4(trainConstel);
+		V34XF_IndicateJdReceived(v34Object, trainConstel, silenceScr);
 		VPcmV34LogTimingOffset(v34Object,
 		    (short)(modem.demodulator->resampler.getTimingOffsetPPM()
 			    * VPCM_V90_TIMING_LOG_SCALE));
@@ -1591,7 +1593,7 @@ VPcmFloModem::v90RunDemodulator(float *in, unsigned int n, int *rxbits,
 	 * `additionalCPinfo.word_00` alone.
 	 */
 	case 0x12:
-		V34XF_IndicateDilReceived(v34Object, flags_173a[0]);
+		V34XF_IndicateDilReceived(v34Object, trainConstel);
 		cpNofBits = V90CPPacker(&modem.mappingParams,
 					&modem.additionalCPinfo,
 					cpBitVector, 0);
@@ -1793,7 +1795,7 @@ VPcmFloModem::v90RunDemodulator(float *in, unsigned int n, int *rxbits,
 	 * end asking and 0x23 is the far end asking.  They share eleven
 	 * instructions and differ in four things:
 	 *
-	 *   - 0x22 raises `flags_173a[2]`; 0x23 tests it, and where it is set
+	 *   - 0x22 raises `byte_173c`; 0x23 tests it, and where it is set
 	 *     clears it and does nothing else.  So a remote report that
 	 *     follows our own request is swallowed once.
 	 *   - the diagnostics are "requested" and "detected";
@@ -1802,10 +1804,12 @@ VPcmFloModem::v90RunDemodulator(float *in, unsigned int n, int *rxbits,
 	 *   - 0x23 additionally calls `V90Demodulator::indicateRemoteRateReneg`
 	 *     (0xdac7), which 0x22 jumps past.
 	 *
-	 * `flags_173a[2]` KEEPS ITS OFFSET NAME.  What is established is the
-	 * latch's behaviour, which is recorded in finding F7583; the array is
-	 * cleared as a run of three by `enterPhase3`, `externalReset` and
-	 * `VPcmXfCreate`, and splitting it is not this batch's change.
+	 * `byte_173c` KEEPS ITS OFFSET NAME.  What is established is the
+	 * latch's behaviour, which is recorded in finding F7583; nothing
+	 * names it beyond that (see VPcmFloModem.h). Its two neighbours,
+	 * `trainConstel`/`rrnConstel`, were split out of the same array this
+	 * batch (Wave 6) on the format string F7583 already cites -- see the
+	 * header for why this third byte did not follow them.
 	 *
 	 * THE NARROWING IS FORCED AND THE CAST THAT SPELLS IT IS NOT.  0xda78
 	 * and 0xdb01 are `movswl 0x90(...)`, sixteen bits sign-extended, where
@@ -1824,17 +1828,17 @@ VPcmFloModem::v90RunDemodulator(float *in, unsigned int n, int *rxbits,
 			    "renegotiation requested !!\r\n");
 		VPcmV34SetV90RateReneg(v34Object,
 		    (short)modem.demodulator->connectionEvaluator->word_90,
-		    flags_173a[1]);
-		setNofBitsPhase4(flags_173a[1]);
-		flags_173a[2] = 1;
+		    rrnConstel);
+		setNofBitsPhase4(rrnConstel);
+		byte_173c = 1;
 		VPcmV34IndicateLocalRRN(v34Object);
 		progressState = 2;
 		ret = 1;
 		break;
 
 	case 0x23:
-		if (flags_173a[2] != 0) {
-			flags_173a[2] = 0;
+		if (byte_173c != 0) {
+			byte_173c = 0;
 		} else {
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf("VPcmFloModem (V90): "
@@ -1842,8 +1846,8 @@ VPcmFloModem::v90RunDemodulator(float *in, unsigned int n, int *rxbits,
 			VPcmV34SetV90RateReneg(v34Object,
 			    (short)modem.demodulator->connectionEvaluator
 				       ->word_90,
-			    flags_173a[1]);
-			setNofBitsPhase4(flags_173a[1]);
+			    rrnConstel);
+			setNofBitsPhase4(rrnConstel);
 			VPcmV34IndicateRemoteRRN(v34Object);
 			modem.demodulator->indicateRemoteRateReneg();
 			progressState = 2;
@@ -2085,21 +2089,20 @@ VPcmFloModem::runPcmModem(float *in, float *out, unsigned int n, int *rxbits,
 	 * transmitter, the phase goes to its resampler, and the retrain bit
 	 * in the shared flag byte is cleared unless phase 2 is in progress.
 	 *
-	 * THE FORMAT STRING NAMES THE TWO BYTES: "trainConstel" is
-	 * `flags_173a[0]` and "rrnConstel" is `flags_173a[1]`.  The array
-	 * keeps its offset name because `enterPhase3`, `externalReset` and
-	 * `VPcmXfCreate` clear all three of it as a run and splitting it is
-	 * not this batch's change.
+	 * THE FORMAT STRING NAMES THE TWO BYTES: "trainConstel" and
+	 * "rrnConstel" are their real names now (Wave 6) -- see
+	 * VPcmFloModem.h for why the third byte of the same run,
+	 * `byte_173c`, did not follow them.
 	 */
 	case 7:
-		modem.jd92->getConstelationSize(&flags_173a[0],
-						&flags_173a[1]);
+		modem.jd92->getConstelationSize(&trainConstel,
+						&rrnConstel);
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("VPcmFloModem (V92): Jd Detected:"
 			    " trainConstel = %d, rrnConstel =%d\r\n",
-			    flags_173a[0], flags_173a[1]);
-		v92modem.modulator->byte_0c = flags_173a[0];
-		v92modem.modulator->byte_0d = flags_173a[1];
+			    trainConstel, rrnConstel);
+		v92modem.modulator->byte_0c = trainConstel;
+		v92modem.modulator->byte_0d = rrnConstel;
 		v92modem.modulator->resamplerPhaseOffset =
 		    modem.jd92->getJdPhase();
 		v92modem.modulator->exitSuSecond();

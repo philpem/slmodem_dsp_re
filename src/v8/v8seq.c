@@ -171,8 +171,8 @@ initTxSequence(struct v8 *v)
 /*
  * Which of the five buffers holds what was received.  Three cases, and the
  * middle one is the reason the object keeps a spare pointer at all: once
- * `fdc4` is set the handshake has moved on and the message lives wherever
- * that pointer says, rather than at a fixed place.
+ * `quick_connect` is set the handshake has moved on and the message lives
+ * wherever that pointer says, rather than at a fixed place.
  */
 static const struct v8_tx_sequence *
 rx_sequence(const struct v8 *v)
