@@ -115750,3 +115750,50 @@ same assertion.
 result recorded once the run completes; this finding is written ahead of
 that result closing so the root-cause record survives even if a further
 gate issue turns up in the same run. (2026-09-04)
+
+## F10154. `struct v34_shell`'s `scramble` union member: the "which typedef" question was already settled, in the wrong file's comment
+
+Raised by the project owner as an example to settle during the code-style
+review (`docs/codestyle.md`): `include/dsplib/v34shell.h`'s `+0xe48` union
+comment said "`getFrame` is not yet reconstructed, so which typedef
+matches the original is not settled," hedging between `v34_scramble_fn`
+(`short (*)(void *, short)`) and `v34_getbits_fn`
+(`int (*)(void *, int)`).
+
+**It was never actually about `descrambleGPA`/`descrambleGPC`.** Those two
+install through the union's OTHER live spelling, `put_bits`
+(`v34_putbits_fn`, `void (*)(void *, int, int)`) via `putFrame`
+(`v34shell.c:332-333`, `put(s, (unsigned short)v[0], 16)` -- 3 arguments,
+matching `descrambleGPA`/`descrambleGPC`'s real `int (void *, unsigned
+short, unsigned short)` signature exactly; the `void`-vs-`int` return
+mismatch is harmless since the caller never reads it). Their signature was
+never in question.
+
+**The actual ambiguity is `scrambleGPA`/`scrambleGPC` (same file,
+`src/pump/v34/v34scram.c`) against the `scramble` spelling, and it is
+already resolved with disassembly evidence -- just not where the header
+comment looks.** `getFrame` (`v34shell.c:826`) IS fully reconstructed and
+calls `s->scramble(objp, (short)pos)` at all three of its use sites
+(lines 856, 878, 907) -- two arguments, matching `v34_scramble_fn`
+exactly. `v34shell.c`'s own comment immediately above the four bit
+callbacks states the deciding evidence: `scrambleGPC` reads its second
+argument with `movswl` and returns via `cwtl`, sign-extension instructions
+consistent only with a genuine `short` parameter and return, ruling out
+`v34_getbits_fn`'s `int`.
+
+**Fix**: reworded `v34shell.h`'s union comment to state the resolution and
+cite `v34shell.c`'s own evidence, rather than re-opening a question that
+was already closed. Comment-only, zero behavioral or layout change --
+`scramble`'s type was never wrong, only the header's framing of it as
+still undecided. Same shape as D34/F6402: one file's comment outliving the
+fact it described.
+
+**Five other function-signature-ambiguity cases were checked for the same
+pattern and found to be genuinely, correctly unresolved** (a stub whose
+object body reads none of its arguments, so no evidence bounds true
+arity, and each already declares "the least claim compatible with" family
+convention or the observed call sites per CLAUDE.md's own doctrine for
+this situation): `class1.h`'s `_idle_state_init` and
+`fax_class1_GetConstalation`, `v22_fse.h`'s and `v22ctl.h`'s tail-jump
+diagnostic stubs, and `v27fax.h`'s `GetSNRV17`-family accessor. None of
+these need any change. (2026-09-05)
