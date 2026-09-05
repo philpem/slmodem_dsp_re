@@ -136,22 +136,20 @@ static float v92EchoArmaDen[12] = {
 };
 
 /*
- * `FloatARMA::FloatARMA` by the name the ABI gives it.
- *
- * THE OBJECT DOES NOT USE `new` AND NEITHER DOES THIS.  It calls
+ * `FloatARMA` IS BUILT WITH ORDINARY PLACEMENT `new`.  It calls
  * `sysdep_malloc(0x34)` and then the C1 constructor on the result, with NO
- * null test between them -- which is what `new` with a replaced, throwing
- * `operator new` compiles to and is not what any spelling available here
- * produces: placement new emits the null check that the object does not have,
- * and a real `new` would call `operator new`.  So the constructor is named
- * directly, `this` first on the stack like every other member here (finding
- * F215), and the destructor's existing `arma->~FloatARMA(); sysdep_free(arma)`
- * is the other half of the same asymmetry.
+ * null test between them -- which is what `new` compiles to over an allocator
+ * hooked to `sysdep_malloc`, and this build is `-nostdinc++` with no <new>, so
+ * `include/dsplib/sysdep.h` declares the shared non-throw placement `operator
+ * new`/`operator delete` pair every such site in this tree uses.  This file
+ * used to reach the constructor through a hand-mangled
+ * `asm("_ZN9FloatARMAC1EjjPfS0_j")` label, on the belief (finding F1340) that
+ * a user-declared placement `operator new` would force a null test the blob
+ * does not have; finding F10155 retracts that empirically and F10157 proves
+ * the mechanism end-to-end.  The destructor's existing
+ * `arma->~FloatARMA(); sysdep_free(arma)` needed no trick at all and is
+ * unchanged.
  */
-extern void floatarma_ctor(FloatARMA *self, unsigned int nDen,
-			   unsigned int nNum, float *den, float *num,
-			   unsigned int blockSize)
-	asm("_ZN9FloatARMAC1EjjPfS0_j");
 
 /*
  * The canceller's whole construction: one diagnostic, the initial delay, the
@@ -218,7 +216,7 @@ V92EchoCanceller::V92EchoCanceller(V92Parameters *parameters,
 	echoHistory = (float *)sysdep_malloc(historyAlloc * sizeof(float));
 
 	m = (FloatARMA *)sysdep_malloc(sizeof(FloatARMA));
-	floatarma_ctor(m, 12u, 12u, v92EchoArmaDen, v92EchoArmaNum, 99u);
+	new (m) FloatARMA(12u, 12u, v92EchoArmaDen, v92EchoArmaNum, 99u);
 	arma = m;
 
 	reset();
