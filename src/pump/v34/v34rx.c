@@ -554,7 +554,7 @@ rxinit(void *objp)
 	rx->agc_level = 0;
 	rx->cloop_sin = 0;
 
-	if (rx->flags & 0x0008) {
+	if (rx->flags & V34_RX_FLAG_LATE_TRN) {
 		rx->cloop_p_shift = 2;
 		rx->cloop_i_shift = 10;		/* and cloop_integrator is left alone */
 	} else {
@@ -616,7 +616,7 @@ txmit(void *objp)
 	V34EchoPreFilter(local, (short)n, &obj->prefilter);
 
 	/* Bit 9 of the short at +0x25c2; the original tests byte 0x25c3 for 2. */
-	if ((obj->tx_flags & 0x0200) == 0)
+	if ((obj->tx_flags & V34_EC_FEED) == 0)
 		return;
 
 	for (i = 0; i < n; i++) {
@@ -1573,7 +1573,7 @@ decoderv34(void *objp)
 
 		if (demapFrame(obj, (char *)obj + 0x474,
 			       (char *)obj + 0x470, n)) {
-			rx->flags = (unsigned short)(rx->flags & ~0x100);
+			rx->flags = (unsigned short)(rx->flags & ~V34_RX_FLAG_TRAINED);
 		} else {
 			/*
 			 * The frame was rejected: clear the timing IIR's
@@ -1584,7 +1584,7 @@ decoderv34(void *objp)
 			 */
 			rx->dp.iir2.i = 0;
 			rx->dp.iir2.q = 0;
-			rx->flags = (unsigned short)(rx->flags | 0x100);
+			rx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_TRAINED);
 		}
 
 		/*
@@ -1592,7 +1592,7 @@ decoderv34(void *objp)
 		 * -70 < rtncount < -64.  Below -64 the flag is set regardless.
 		 */
 		if ((short)rx->rtncount < -64) {
-			rx->flags = (unsigned short)(rx->flags | 0x100);
+			rx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_TRAINED);
 			if ((short)rx->rtncount > -70 && DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
 					"V34RENEG, may be renegotiation," "equalizer adaptation disabled\n");
@@ -2481,7 +2481,7 @@ receiver(void *objp)
 					    (int)rx->agc_gain);
 				rx->rx_blocks = 0;
 				flags = (rx->flags & ~V34_RX_FLAG_TRAINED)
-					| 0x600;
+					| (V34_RX_FLAG_DATA | V34_RX_FLAG_DET_PENDING);
 				rx->flags = (unsigned short)flags;
 				V34EqualizerClearCenterTaps(eq);
 				flags = rx->flags;

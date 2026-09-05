@@ -11,7 +11,7 @@
  },
  {
   "label": "65: the segment bit raised in tx_flags is 0x1000",
-  "find": "\t\to->tx_flags = (short)((unsigned short)o->tx_flags | 0x2000u);",
+  "find": "\t\to->tx_flags = (short)((unsigned short)o->tx_flags | V34_TXFLAG_SEG4A);",
   "replace": "\t\to->tx_flags = (short)((unsigned short)o->tx_flags | 0x1000u);"
  },
  {
@@ -191,8 +191,8 @@
  },
  {
   "label": "86: the reconfiguration raises 0x8000 and not 0x8004",
-  "find": "\t\to->tx_flags = (short)((unsigned short)o->tx_flags | 0x8004u);",
-  "replace": "\t\to->tx_flags = (short)((unsigned short)o->tx_flags | 0x8000u);"
+  "find": "\t\to->tx_flags = (short)((unsigned short)o->tx_flags\n\t\t\t\t     | (V34_TXFLAG_PPSEG | V34_EC_FROZEN));",
+  "replace": "\t\to->tx_flags = (short)((unsigned short)o->tx_flags | V34_TXFLAG_PPSEG);"
  },
  {
   "label": "86: seg_symcount is not cleared before it is counted",
@@ -310,12 +310,12 @@
  },
  {
   "label": "70: the data-path test is inverted",
-  "find": "\tif (!(o->tx_flags & 0x10))",
-  "replace": "\tif (o->tx_flags & 0x10)"
+  "find": "\tif (!(o->tx_flags & PROG_TXBIT_DATA))",
+  "replace": "\tif (o->tx_flags & PROG_TXBIT_DATA)"
  },
  {
   "label": "70: the data-path flag is bit 3",
-  "find": "\tif (!(o->tx_flags & 0x10))",
+  "find": "\tif (!(o->tx_flags & PROG_TXBIT_DATA))",
   "replace": "\tif (!(o->tx_flags & 8))"
  },
  {
@@ -496,18 +496,18 @@
  },
  {
   "label": "19: the first guard is bit 5 of tx_flags",
-  "find": "\tif ((unsigned short)o->tx_flags & 0x2000u) {",
+  "find": "\tif ((unsigned short)o->tx_flags & V34_TXFLAG_SEG4A) {",
   "replace": "\tif ((unsigned short)o->tx_flags & 0x0020u) {"
  },
  {
   "label": "19: the first guard is inverted",
-  "find": "\tif ((unsigned short)o->tx_flags & 0x2000u) {",
-  "replace": "\tif (!((unsigned short)o->tx_flags & 0x2000u)) {"
+  "find": "\tif ((unsigned short)o->tx_flags & V34_TXFLAG_SEG4A) {",
+  "replace": "\tif (!((unsigned short)o->tx_flags & V34_TXFLAG_SEG4A)) {"
  },
  {
   "label": "19: the sign guard is bit 14",
-  "find": "\t} else if ((unsigned short)o->tx_flags & 0x8000u) {",
-  "replace": "\t} else if ((unsigned short)o->tx_flags & 0x4000u) {"
+  "find": "\t} else if ((unsigned short)o->tx_flags & V34_TXFLAG_PPSEG) {",
+  "replace": "\t} else if ((unsigned short)o->tx_flags & V34_TXFLAG_NLENCODE) {"
  },
  {
   "label": "19: short_35a4 is tested for non-zero",
@@ -516,8 +516,8 @@
  },
  {
   "label": "19: the bit-13 path moves to TRNSEG4",
-  "find": "\tif ((unsigned short)o->tx_flags & 0x2000u) {\n\t\ths_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4A);",
-  "replace": "\tif ((unsigned short)o->tx_flags & 0x2000u) {\n\t\ths_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4);"
+  "find": "\tif ((unsigned short)o->tx_flags & V34_TXFLAG_SEG4A) {\n\t\ths_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4A);",
+  "replace": "\tif ((unsigned short)o->tx_flags & V34_TXFLAG_SEG4A) {\n\t\ths_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4);"
  },
  {
   "label": "19: the short_35a4-zero path moves to TXMD",
@@ -1074,17 +1074,17 @@
  },
  {
   "label": "69: the generator select is inverted",
-  "find": "\tshort mode = (short)((o->tx_flags & 1) == 0);\n\tshort q;",
-  "replace": "\tshort mode = (short)((o->tx_flags & 1) != 0);\n\tshort q;"
+  "find": "\tshort mode = (short)((o->tx_flags & V34_TXFLAG_CALLER) == 0);\n\tshort q;",
+  "replace": "\tshort mode = (short)((o->tx_flags & V34_TXFLAG_CALLER) != 0);\n\tshort q;"
  },
  {
   "label": "69: the generator select is bit 1 of tx_flags",
-  "find": "\tshort mode = (short)((o->tx_flags & 1) == 0);\n\tshort q;",
+  "find": "\tshort mode = (short)((o->tx_flags & V34_TXFLAG_CALLER) == 0);\n\tshort q;",
   "replace": "\tshort mode = (short)((o->tx_flags & 2) == 0);\n\tshort q;"
  },
  {
   "label": "69: the generator select is role, as 71 and 86's is",
-  "find": "\tshort mode = (short)((o->tx_flags & 1) == 0);\n\tshort q;",
+  "find": "\tshort mode = (short)((o->tx_flags & V34_TXFLAG_CALLER) == 0);\n\tshort q;",
   "replace": "\tshort mode = (short)(o->role == 0x65);\n\tshort q;"
  },
  {
@@ -1239,12 +1239,12 @@
  },
  {
   "label": "64/68: the generator select is inverted",
-  "find": "\tmode = (short)((o->tx_flags & 1) == 0);",
-  "replace": "\tmode = (short)((o->tx_flags & 1) != 0);"
+  "find": "\tmode = (short)((o->tx_flags & V34_TXFLAG_CALLER) == 0);",
+  "replace": "\tmode = (short)((o->tx_flags & V34_TXFLAG_CALLER) != 0);"
  },
  {
   "label": "64/68: the generator select is role, as 71 and 86's is",
-  "find": "\tmode = (short)((o->tx_flags & 1) == 0);",
+  "find": "\tmode = (short)((o->tx_flags & V34_TXFLAG_CALLER) == 0);",
   "replace": "\tmode = (short)(o->role == 0x65);"
  },
  {
@@ -1570,32 +1570,32 @@
  },
  {
   "label": "67: the four-point generator select is inverted",
-  "find": "\tshort pick = (short)((o->tx_flags & 1) == 0);\n\tshort q = (short)V34scrambler",
-  "replace": "\tshort pick = (short)((o->tx_flags & 1) != 0);\n\tshort q = (short)V34scrambler"
+  "find": "\tshort pick = (short)((o->tx_flags & V34_TXFLAG_CALLER) == 0);\n\tshort q = (short)V34scrambler",
+  "replace": "\tshort pick = (short)((o->tx_flags & V34_TXFLAG_CALLER) != 0);\n\tshort q = (short)V34scrambler"
  },
  {
   "label": "67: the four-point generator select is role, as 71 and 86's is",
-  "find": "\tshort pick = (short)((o->tx_flags & 1) == 0);\n\tshort q = (short)V34scrambler",
+  "find": "\tshort pick = (short)((o->tx_flags & V34_TXFLAG_CALLER) == 0);\n\tshort q = (short)V34scrambler",
   "replace": "\tshort pick = (short)(o->role == 0x65);\n\tshort q = (short)V34scrambler"
  },
  {
   "label": "67: the four-point generator select is bit 1 of tx_flags",
-  "find": "\tshort pick = (short)((o->tx_flags & 1) == 0);\n\tshort q = (short)V34scrambler",
+  "find": "\tshort pick = (short)((o->tx_flags & V34_TXFLAG_CALLER) == 0);\n\tshort q = (short)V34scrambler",
   "replace": "\tshort pick = (short)((o->tx_flags & 2) == 0);\n\tshort q = (short)V34scrambler"
  },
  {
   "label": "67: the sixteen-point generator select is inverted",
-  "find": "\tshort pick = (short)((o->tx_flags & 1) == 0);\n\tshort k, q;",
-  "replace": "\tshort pick = (short)((o->tx_flags & 1) != 0);\n\tshort k, q;"
+  "find": "\tshort pick = (short)((o->tx_flags & V34_TXFLAG_CALLER) == 0);\n\tshort k, q;",
+  "replace": "\tshort pick = (short)((o->tx_flags & V34_TXFLAG_CALLER) != 0);\n\tshort k, q;"
  },
  {
   "label": "67: the sixteen-point generator select is role",
-  "find": "\tshort pick = (short)((o->tx_flags & 1) == 0);\n\tshort k, q;",
+  "find": "\tshort pick = (short)((o->tx_flags & V34_TXFLAG_CALLER) == 0);\n\tshort k, q;",
   "replace": "\tshort pick = (short)(o->role == 0x65);\n\tshort k, q;"
  },
  {
   "label": "67: the sixteen-point generator select is bit 1 of tx_flags",
-  "find": "\tshort pick = (short)((o->tx_flags & 1) == 0);\n\tshort k, q;",
+  "find": "\tshort pick = (short)((o->tx_flags & V34_TXFLAG_CALLER) == 0);\n\tshort k, q;",
   "replace": "\tshort pick = (short)((o->tx_flags & 2) == 0);\n\tshort k, q;"
  },
  {
@@ -1945,42 +1945,42 @@
  },
  {
   "label": "67: the exit does not clear vect_idx",
-  "find": "\t\t\to->vect_idx = 0;\n\t\t\trx->flags = (unsigned short)(rx->flags & ~0x20u);\n\t\t\treturn 1;",
-  "replace": "\t\t\trx->flags = (unsigned short)(rx->flags & ~0x20u);\n\t\t\treturn 1;"
+  "find": "\t\t\to->vect_idx = 0;\n\t\t\trx->flags = (unsigned short)(rx->flags & ~V34_RX_FLAG_RENEG);\n\t\t\treturn 1;",
+  "replace": "\t\t\trx->flags = (unsigned short)(rx->flags & ~V34_RX_FLAG_RENEG);\n\t\t\treturn 1;"
  },
  {
   "label": "67: the exit does not drop bit 5 of the flags word",
-  "find": "\t\t\to->vect_idx = 0;\n\t\t\trx->flags = (unsigned short)(rx->flags & ~0x20u);\n\t\t\treturn 1;",
+  "find": "\t\t\to->vect_idx = 0;\n\t\t\trx->flags = (unsigned short)(rx->flags & ~V34_RX_FLAG_RENEG);\n\t\t\treturn 1;",
   "replace": "\t\t\to->vect_idx = 0;\n\t\t\treturn 1;"
  },
  {
   "label": "67: the exit drops bit 4 of the flags word",
-  "find": "\t\t\to->vect_idx = 0;\n\t\t\trx->flags = (unsigned short)(rx->flags & ~0x20u);\n\t\t\treturn 1;",
-  "replace": "\t\t\to->vect_idx = 0;\n\t\t\trx->flags = (unsigned short)(rx->flags & ~0x10u);\n\t\t\treturn 1;"
+  "find": "\t\t\to->vect_idx = 0;\n\t\t\trx->flags = (unsigned short)(rx->flags & ~V34_RX_FLAG_RENEG);\n\t\t\treturn 1;",
+  "replace": "\t\t\to->vect_idx = 0;\n\t\t\trx->flags = (unsigned short)(rx->flags & ~V34_RX_FLAG_TRN_WATCH);\n\t\t\treturn 1;"
  },
  {
   "label": "67: the exit raises bit 5 rather than dropping it",
-  "find": "\t\t\to->vect_idx = 0;\n\t\t\trx->flags = (unsigned short)(rx->flags & ~0x20u);\n\t\t\treturn 1;",
-  "replace": "\t\t\to->vect_idx = 0;\n\t\t\trx->flags = (unsigned short)(rx->flags | 0x20u);\n\t\t\treturn 1;"
+  "find": "\t\t\to->vect_idx = 0;\n\t\t\trx->flags = (unsigned short)(rx->flags & ~V34_RX_FLAG_RENEG);\n\t\t\treturn 1;",
+  "replace": "\t\t\to->vect_idx = 0;\n\t\t\trx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_RENEG);\n\t\t\treturn 1;"
  },
  {
   "label": "67: the exit does not leave the bit loop",
-  "find": "\t\t\to->vect_idx = 0;\n\t\t\trx->flags = (unsigned short)(rx->flags & ~0x20u);\n\t\t\treturn 1;",
-  "replace": "\t\t\to->vect_idx = 0;\n\t\t\trx->flags = (unsigned short)(rx->flags & ~0x20u);\n\t\t\treturn 0;"
+  "find": "\t\t\to->vect_idx = 0;\n\t\t\trx->flags = (unsigned short)(rx->flags & ~V34_RX_FLAG_RENEG);\n\t\t\treturn 1;",
+  "replace": "\t\t\to->vect_idx = 0;\n\t\t\trx->flags = (unsigned short)(rx->flags & ~V34_RX_FLAG_RENEG);\n\t\t\treturn 0;"
  },
  {
   "label": "67: 0x64614's stamp test needs 0x18",
-  "find": "\t\tstamp = (flags & 0x18u) == 0x10u;\t/* 0x64614 */",
-  "replace": "\t\tstamp = (flags & 0x18u) == 0x18u;\t/* 0x64614 */"
+  "find": "\t\tstamp = (flags & (V34_RX_FLAG_TRN_WATCH | V34_RX_FLAG_LATE_TRN))\n\t\t\t== V34_RX_FLAG_TRN_WATCH;\t\t/* 0x64614 */",
+  "replace": "\t\tstamp = (flags & (V34_RX_FLAG_TRN_WATCH | V34_RX_FLAG_LATE_TRN))\n\t\t\t== (V34_RX_FLAG_TRN_WATCH | V34_RX_FLAG_LATE_TRN);\t\t/* 0x64614 */"
  },
  {
   "label": "67: 0x64614's stamp test is bit 4 alone",
-  "find": "\t\tstamp = (flags & 0x18u) == 0x10u;\t/* 0x64614 */",
-  "replace": "\t\tstamp = (flags & 0x10u) != 0;\t\t/* 0x64614 */"
+  "find": "\t\tstamp = (flags & (V34_RX_FLAG_TRN_WATCH | V34_RX_FLAG_LATE_TRN))\n\t\t\t== V34_RX_FLAG_TRN_WATCH;\t\t/* 0x64614 */",
+  "replace": "\t\tstamp = (flags & V34_RX_FLAG_TRN_WATCH) != 0;\t\t/* 0x64614 */"
  },
  {
   "label": "67: 0x64614 never stamps",
-  "find": "\t\tstamp = (flags & 0x18u) == 0x10u;\t/* 0x64614 */",
+  "find": "\t\tstamp = (flags & (V34_RX_FLAG_TRN_WATCH | V34_RX_FLAG_LATE_TRN))\n\t\t\t== V34_RX_FLAG_TRN_WATCH;\t\t/* 0x64614 */",
   "replace": "\t\tstamp = 0;\t\t\t\t/* 0x64614 */"
  },
  {
@@ -2737,8 +2737,8 @@
  },
  {
   "label": "21: the echo-adapt start leaves echo_calls alone",
-  "find": "\t\to->echo_calls = 0;\n\t\to->tx_flags = (short)((unsigned short)o->tx_flags & ~4u);",
-  "replace": "\t\to->tx_flags = (short)((unsigned short)o->tx_flags & ~4u);",
+  "find": "\t\to->echo_calls = 0;\n\t\to->tx_flags = (short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);",
+  "replace": "\t\to->tx_flags = (short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);",
   "fn": "v34tx1_trnseg4"
  },
  {
@@ -2767,13 +2767,13 @@
  },
  {
   "label": "21: the echo-adapt start raises bit 2 of tx_flags rather than clearing it",
-  "find": "\t\to->tx_flags = (short)((unsigned short)o->tx_flags & ~4u);",
-  "replace": "\t\to->tx_flags = (short)((unsigned short)o->tx_flags | 4u);",
+  "find": "\t\to->tx_flags = (short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);",
+  "replace": "\t\to->tx_flags = (short)((unsigned short)o->tx_flags | V34_EC_FROZEN);",
   "fn": "v34tx1_trnseg4"
  },
  {
   "label": "21: the echo-adapt start clears bit 3 of tx_flags",
-  "find": "\t\to->tx_flags = (short)((unsigned short)o->tx_flags & ~4u);",
+  "find": "\t\to->tx_flags = (short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);",
   "replace": "\t\to->tx_flags = (short)((unsigned short)o->tx_flags & ~8u);",
   "fn": "v34tx1_trnseg4"
  },
@@ -2883,20 +2883,20 @@
  },
  {
   "label": "21: the period point raises 0x400 without clearing bit 15",
-  "find": "\t\to->tx_flags = (short)(((unsigned short)o->tx_flags & 0x7fffu)\n\t\t\t\t   | 0x400u);",
+  "find": "\t\to->tx_flags = (short)(((unsigned short)o->tx_flags & ~V34_TXFLAG_PPSEG)\n\t\t\t\t   | 0x400u);",
   "replace": "\t\to->tx_flags = (short)((unsigned short)o->tx_flags | 0x400u);",
   "fn": "v34tx1_trnseg4"
  },
  {
   "label": "21: the period point clears bit 15 without raising 0x400",
-  "find": "\t\to->tx_flags = (short)(((unsigned short)o->tx_flags & 0x7fffu)\n\t\t\t\t   | 0x400u);",
-  "replace": "\t\to->tx_flags = (short)((unsigned short)o->tx_flags & 0x7fffu);",
+  "find": "\t\to->tx_flags = (short)(((unsigned short)o->tx_flags & ~V34_TXFLAG_PPSEG)\n\t\t\t\t   | 0x400u);",
+  "replace": "\t\to->tx_flags = (short)((unsigned short)o->tx_flags & ~V34_TXFLAG_PPSEG);",
   "fn": "v34tx1_trnseg4"
  },
  {
   "label": "21: the period point raises 0x800",
-  "find": "\t\to->tx_flags = (short)(((unsigned short)o->tx_flags & 0x7fffu)\n\t\t\t\t   | 0x400u);",
-  "replace": "\t\to->tx_flags = (short)(((unsigned short)o->tx_flags & 0x7fffu)\n\t\t\t\t   | 0x800u);",
+  "find": "\t\to->tx_flags = (short)(((unsigned short)o->tx_flags & ~V34_TXFLAG_PPSEG)\n\t\t\t\t   | 0x400u);",
+  "replace": "\t\to->tx_flags = (short)(((unsigned short)o->tx_flags & ~V34_TXFLAG_PPSEG)\n\t\t\t\t   | 0x800u);",
   "fn": "v34tx1_trnseg4"
  },
  {
@@ -3355,14 +3355,14 @@
  },
  {
   "label": "66: the snapshot branches on bit 4 of the flags",
-  "find": "\tif (rx->flags & 0x20u) {\n\t\t/* 0x62f5f */",
-  "replace": "\tif (rx->flags & 0x10u) {\n\t\t/* 0x62f5f */",
+  "find": "\tif (rx->flags & V34_RX_FLAG_RENEG) {\n\t\t/* 0x62f5f */",
+  "replace": "\tif (rx->flags & V34_RX_FLAG_TRN_WATCH) {\n\t\t/* 0x62f5f */",
   "fn": "v34tx1_trnseg4a"
  },
  {
   "label": "66: the snapshot branch is inverted",
-  "find": "\tif (rx->flags & 0x20u) {\n\t\t/* 0x62f5f */",
-  "replace": "\tif (!(rx->flags & 0x20u)) {\n\t\t/* 0x62f5f */",
+  "find": "\tif (rx->flags & V34_RX_FLAG_RENEG) {\n\t\t/* 0x62f5f */",
+  "replace": "\tif (!(rx->flags & V34_RX_FLAG_RENEG)) {\n\t\t/* 0x62f5f */",
   "fn": "v34tx1_trnseg4a"
  },
  {
@@ -3573,7 +3573,7 @@
  },
  {
   "label": "66: bit 12 comes down only on the kept path",
-  "find": "\t/* 0x674c8 */\n\trx->flags = (unsigned short)(rx->flags & ~0x1000u);",
+  "find": "\t/* 0x674c8 */\n\trx->flags = (unsigned short)(rx->flags & ~V34_RX_FLAG_PREDICT);",
   "replace": "",
   "fn": "tx1_ts_snapshot"
  },
@@ -4011,14 +4011,14 @@
  },
  {
   "label": "66: +0xaa54's two values are swapped",
-  "find": "\trec[12] = (short)((rx->flags & 0x20u) ? 0x30 : 0x90);",
-  "replace": "\trec[12] = (short)((rx->flags & 0x20u) ? 0x90 : 0x30);",
+  "find": "\trec[12] = (short)((rx->flags & V34_RX_FLAG_RENEG) ? 0x30 : 0x90);",
+  "replace": "\trec[12] = (short)((rx->flags & V34_RX_FLAG_RENEG) ? 0x90 : 0x30);",
   "fn": "tx1_ts_rates"
  },
  {
   "label": "66: +0xaa54 is chosen on bit 4 of the flags",
-  "find": "\trec[12] = (short)((rx->flags & 0x20u) ? 0x30 : 0x90);",
-  "replace": "\trec[12] = (short)((rx->flags & 0x10u) ? 0x30 : 0x90);",
+  "find": "\trec[12] = (short)((rx->flags & V34_RX_FLAG_RENEG) ? 0x30 : 0x90);",
+  "replace": "\trec[12] = (short)((rx->flags & V34_RX_FLAG_TRN_WATCH) ? 0x30 : 0x90);",
   "fn": "tx1_ts_rates"
  },
  {
@@ -4156,45 +4156,45 @@
  {
   "label": "86: the echo block does not clear echo_calls",
   "fn": "v34tx1_txmd",
-  "find": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~4u);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->short_3552 = 0;\t\t\t\t/* 0x67025 */",
-  "replace": "\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~4u);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->short_3552 = 0;\t\t\t\t/* 0x67025 */"
+  "find": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->short_3552 = 0;\t\t\t\t/* 0x67025 */",
+  "replace": "\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->short_3552 = 0;\t\t\t\t/* 0x67025 */"
  },
  {
   "label": "86: the echo block raises bit 2 of tx_flags rather than clearing it",
   "fn": "v34tx1_txmd",
-  "find": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~4u);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->short_3552 = 0;\t\t\t\t/* 0x67025 */",
-  "replace": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags | 4u);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->short_3552 = 0;\t\t\t\t/* 0x67025 */"
+  "find": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->short_3552 = 0;\t\t\t\t/* 0x67025 */",
+  "replace": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags | V34_EC_FROZEN);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->short_3552 = 0;\t\t\t\t/* 0x67025 */"
  },
  {
   "label": "86: the echo block clears bit 3 of tx_flags",
   "fn": "v34tx1_txmd",
-  "find": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~4u);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->short_3552 = 0;\t\t\t\t/* 0x67025 */",
+  "find": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->short_3552 = 0;\t\t\t\t/* 0x67025 */",
   "replace": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~8u);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->short_3552 = 0;\t\t\t\t/* 0x67025 */"
  },
  {
   "label": "86: the echo block leaves echo_alpha alone",
   "fn": "v34tx1_txmd",
-  "find": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~4u);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->short_3552 = 0;\t\t\t\t/* 0x67025 */",
-  "replace": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~4u);\n\t\to->short_3552 = 0;\t\t\t\t/* 0x67025 */"
+  "find": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->short_3552 = 0;\t\t\t\t/* 0x67025 */",
+  "replace": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);\n\t\to->short_3552 = 0;\t\t\t\t/* 0x67025 */"
  },
  {
   "label": "86: the echo block leaves short_3552 alone",
   "fn": "v34tx1_txmd",
-  "find": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~4u);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->short_3552 = 0;\t\t\t\t/* 0x67025 */",
-  "replace": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~4u);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n"
+  "find": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->short_3552 = 0;\t\t\t\t/* 0x67025 */",
+  "replace": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n"
  },
  {
   "label": "86: the echo block clears echo_energy too, as 21's does",
   "fn": "v34tx1_txmd",
-  "find": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~4u);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->short_3552 = 0;\t\t\t\t/* 0x67025 */",
-  "replace": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~4u);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->short_3552 = 0;\t\t\t\t/* 0x67025 */\n\t\to->echo_energy = 0;",
+  "find": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->short_3552 = 0;\t\t\t\t/* 0x67025 */",
+  "replace": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->short_3552 = 0;\t\t\t\t/* 0x67025 */\n\t\to->echo_energy = 0;",
   "note": "0x67613 in 21 TRNSEG4 clears the same four AND echo_energy; 0x66fe9 does not."
  },
  {
   "label": "86: the echo block reports the start of echo adaptation, as 21's does",
   "fn": "v34tx1_txmd",
-  "find": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~4u);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->short_3552 = 0;\t\t\t\t/* 0x67025 */",
-  "replace": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~4u);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->short_3552 = 0;\t\t\t\t/* 0x67025 */\n\t\tVPcmV34ReportStartOfEchoAdapt(o);"
+  "find": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->short_3552 = 0;\t\t\t\t/* 0x67025 */",
+  "replace": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->short_3552 = 0;\t\t\t\t/* 0x67025 */\n\t\tVPcmV34ReportStartOfEchoAdapt(o);"
  },
  {
   "label": "86: the echo diagnostic is dropped",
@@ -4205,8 +4205,8 @@
  {
   "label": "86: the segment end returns rather than falling into the reconfiguration",
   "fn": "v34tx1_txmd",
-  "find": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~4u);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->short_3552 = 0;\t\t\t\t/* 0x67025 */\n\t}",
-  "replace": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~4u);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->short_3552 = 0;\t\t\t\t/* 0x67025 */\n\t\treturn V34TX1_LOOP;\n\t}",
+  "find": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->short_3552 = 0;\t\t\t\t/* 0x67025 */\n\t}",
+  "replace": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->short_3552 = 0;\t\t\t\t/* 0x67025 */\n\t\treturn V34TX1_LOOP;\n\t}",
   "note": "This is exactly what this file did before 0x66fe9 was written: 0x66fe9 ends `jmp 63e7f`, which is the fall-through of the block that jumped to it, so the two bodies are not exclusive."
  }
 ]

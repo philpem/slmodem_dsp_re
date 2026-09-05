@@ -42,6 +42,12 @@
 #include "dsplib/debug.h"	/* initdigital carries five diagnostic call sites */
 #include "dsplib/v34shell.h"
 
+/*
+ * Bit 4 of `tx_flags`, established as `PROG_TXBIT_DATA` beside its other
+ * reader in v34pcmmain.cpp and catalogued in v34fsk.h's own comment on the
+ * field; re-declared here, file-local, for this file's own reader below.
+ */
+#define PROG_TXBIT_DATA		0x10
 
 /*
  * ---------------------------------------------------------------------------
@@ -1612,7 +1618,7 @@ initdigital(void *obj)
 	 * directions are forced to the lower of the pair, which is what makes
 	 * a V.34 connection symmetric by default.
 	 */
-	if (o->rate_mask >= 0 || (o->caps_flags & 1) == 0) {
+	if (o->rate_mask >= 0 || (o->caps_flags & V34_CAPS_ASYMMETRIC) == 0) {
 		int m = ((short)tx <= (short)rx) ? (unsigned short)tx
 						 : (unsigned short)rx;
 
@@ -1688,9 +1694,9 @@ initdigital(void *obj)
 
 	/* Bit 13 of the same word is modulatevector's non-linear encoder. */
 	if (info & 0x2000)
-		o->tx_flags = (short)((unsigned short)o->tx_flags | 0x4000);
+		o->tx_flags = (short)((unsigned short)o->tx_flags | V34_TXFLAG_NLENCODE);
 	else
-		o->tx_flags = (short)((unsigned short)o->tx_flags & ~0x4000);
+		o->tx_flags = (short)((unsigned short)o->tx_flags & ~V34_TXFLAG_NLENCODE);
 
 	if (level > 1)
 		dsplibs_debug_printf("V34DATARATE, finally txbitrate %d," "rxbitrate %d\n",
@@ -2037,13 +2043,13 @@ modulatevector(void *obj)
 		 * when it arrives the data path is switched on and the bit
 		 * set, and nothing reads the counter again.
 		 */
-		if (!(flags & 0x10) && rx->latched != 0) {
+		if (!(flags & PROG_TXBIT_DATA) && rx->latched != 0) {
 			int c = o->train_symcount;
 
 			o->train_symcount = c + 1;
 			if (c >= (int)(unsigned short)tx->span) {
 				o->data_enable = 1;
-				o->tx_flags = (short)(flags | 0x10);
+				o->tx_flags = (short)(flags | PROG_TXBIT_DATA);
 			}
 		}
 
@@ -2200,7 +2206,7 @@ modulatevector(void *obj)
 	}
 
 	o->vect_idx = (short)(n + 1);
-	if (o->tx_flags & 0x4000)
+	if (o->tx_flags & V34_TXFLAG_NLENCODE)
 		V34nlencoder(&o->vect[2 * n], o->txpoint.c);
 	else
 		o->txpoint.word = o->vectp[n];

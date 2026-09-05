@@ -978,26 +978,26 @@
  },
  {
   "label": "49 sets bit 0x400 rather than 0x200",
-  "find": "\tf->rx->flags = (unsigned short)(f->rx->flags | 0x200);\n\n\tif ((f->obj->fsk.sr & 1) == 0) {",
-  "replace": "\tf->rx->flags = (unsigned short)(f->rx->flags | 0x400);\n\n\tif ((f->obj->fsk.sr & 1) == 0) {",
+  "find": "\tf->rx->flags = (unsigned short)(f->rx->flags | V34_RX_FLAG_DET_PENDING);\n\n\tif ((f->obj->fsk.sr & 1) == 0) {",
+  "replace": "\tf->rx->flags = (unsigned short)(f->rx->flags | V34_RX_FLAG_DATA);\n\n\tif ((f->obj->fsk.sr & 1) == 0) {",
   "fn": "t3m_micro49"
  },
  {
   "label": "49 sets the flag only after the shift-register guard",
-  "find": "\tf->rx->flags = (unsigned short)(f->rx->flags | 0x200);\n\n\tif ((f->obj->fsk.sr & 1) == 0) {",
+  "find": "\tf->rx->flags = (unsigned short)(f->rx->flags | V34_RX_FLAG_DET_PENDING);\n\n\tif ((f->obj->fsk.sr & 1) == 0) {",
   "replace": "\tif ((f->obj->fsk.sr & 1) == 0) {",
   "fn": "t3m_micro49"
  },
  {
   "label": "49 tests bit 1 of the shift register",
-  "find": "\tf->rx->flags = (unsigned short)(f->rx->flags | 0x200);\n\n\tif ((f->obj->fsk.sr & 1) == 0) {",
-  "replace": "\tf->rx->flags = (unsigned short)(f->rx->flags | 0x200);\n\n\tif ((f->obj->fsk.sr & 2) == 0) {",
+  "find": "\tf->rx->flags = (unsigned short)(f->rx->flags | V34_RX_FLAG_DET_PENDING);\n\n\tif ((f->obj->fsk.sr & 1) == 0) {",
+  "replace": "\tf->rx->flags = (unsigned short)(f->rx->flags | V34_RX_FLAG_DET_PENDING);\n\n\tif ((f->obj->fsk.sr & 2) == 0) {",
   "fn": "t3m_micro49"
  },
  {
   "label": "49 tests the shift register the other way",
-  "find": "\tf->rx->flags = (unsigned short)(f->rx->flags | 0x200);\n\n\tif ((f->obj->fsk.sr & 1) == 0) {",
-  "replace": "\tf->rx->flags = (unsigned short)(f->rx->flags | 0x200);\n\n\tif ((f->obj->fsk.sr & 1) != 0) {",
+  "find": "\tf->rx->flags = (unsigned short)(f->rx->flags | V34_RX_FLAG_DET_PENDING);\n\n\tif ((f->obj->fsk.sr & 1) == 0) {",
+  "replace": "\tf->rx->flags = (unsigned short)(f->rx->flags | V34_RX_FLAG_DET_PENDING);\n\n\tif ((f->obj->fsk.sr & 1) != 0) {",
   "fn": "t3m_micro49"
  },
  {
@@ -1305,20 +1305,20 @@
  },
  {
   "label": "50 clears only 0x200 of the receiver's flags",
-  "find": "\n\tf->rx->flags = (unsigned short)(f->rx->flags & ~0x0a00);",
-  "replace": "\n\tf->rx->flags = (unsigned short)(f->rx->flags & ~0x0200);",
+  "find": "\n\tf->rx->flags = (unsigned short)(f->rx->flags\n\t\t\t\t\t& ~(V34_RX_FLAG_DET_PENDING | V34_RX_FLAG_FIR));",
+  "replace": "\n\tf->rx->flags = (unsigned short)(f->rx->flags & ~V34_RX_FLAG_DET_PENDING);",
   "fn": "t3m_micro50"
  },
  {
   "label": "50 clears only 0x800 of the receiver's flags",
-  "find": "\n\tf->rx->flags = (unsigned short)(f->rx->flags & ~0x0a00);",
-  "replace": "\n\tf->rx->flags = (unsigned short)(f->rx->flags & ~0x0800);",
+  "find": "\n\tf->rx->flags = (unsigned short)(f->rx->flags\n\t\t\t\t\t& ~(V34_RX_FLAG_DET_PENDING | V34_RX_FLAG_FIR));",
+  "replace": "\n\tf->rx->flags = (unsigned short)(f->rx->flags & ~V34_RX_FLAG_FIR);",
   "fn": "t3m_micro50"
  },
  {
   "label": "50 sets rather than clears the two flag bits",
-  "find": "\n\tf->rx->flags = (unsigned short)(f->rx->flags & ~0x0a00);",
-  "replace": "\n\tf->rx->flags = (unsigned short)(f->rx->flags | 0x0a00);",
+  "find": "\n\tf->rx->flags = (unsigned short)(f->rx->flags\n\t\t\t\t\t& ~(V34_RX_FLAG_DET_PENDING | V34_RX_FLAG_FIR));",
+  "replace": "\n\tf->rx->flags = (unsigned short)(f->rx->flags\n\t\t\t\t\t| (V34_RX_FLAG_DET_PENDING | V34_RX_FLAG_FIR));",
   "fn": "t3m_micro50"
  },
  {
@@ -1341,8 +1341,8 @@
  },
  {
   "label": "50 halves the gain before running rxtiminginit",
-  "find": "\tf->rx->agc_gain = (short)((int)f->rx->agc_gain >> 1);\n\tf->rx->flags = (unsigned short)(f->rx->flags & ~0x0a00);",
-  "replace": "\tf->rx->flags = (unsigned short)(f->rx->flags & ~0x0a00);\n\tf->rx->agc_gain = (short)((int)f->rx->agc_gain >> 1);",
+  "find": "\tf->rx->agc_gain = (short)((int)f->rx->agc_gain >> 1);\n\tf->rx->flags = (unsigned short)(f->rx->flags\n\t\t\t\t\t& ~(V34_RX_FLAG_DET_PENDING | V34_RX_FLAG_FIR));",
+  "replace": "\tf->rx->flags = (unsigned short)(f->rx->flags\n\t\t\t\t\t& ~(V34_RX_FLAG_DET_PENDING | V34_RX_FLAG_FIR));\n\tf->rx->agc_gain = (short)((int)f->rx->agc_gain >> 1);",
   "equivalent": true,
   "why": "the two stores are to two fields and neither reads the other, so no comparison this fixture makes can order them; it is here to say that the order in the object was not proved",
   "fn": "t3m_micro50"
@@ -1444,8 +1444,8 @@
  },
  {
   "label": "51's detector body sets bit 0x400 in the receiver's flags",
-  "find": "\t\tf->rx->flags = (unsigned short)(f->rx->flags | 0x200);\n\t\ths_setstate(f->obj, V34HS_RXSTATE_OFF, V34HS_DET_AB);",
-  "replace": "\t\tf->rx->flags = (unsigned short)(f->rx->flags | 0x400);\n\t\ths_setstate(f->obj, V34HS_RXSTATE_OFF, V34HS_DET_AB);",
+  "find": "\t\tf->rx->flags = (unsigned short)(f->rx->flags | V34_RX_FLAG_DET_PENDING);\n\t\ths_setstate(f->obj, V34HS_RXSTATE_OFF, V34HS_DET_AB);",
+  "replace": "\t\tf->rx->flags = (unsigned short)(f->rx->flags | V34_RX_FLAG_DATA);\n\t\ths_setstate(f->obj, V34HS_RXSTATE_OFF, V34HS_DET_AB);",
   "fn": "t3m_micro51"
  },
  {
@@ -1898,14 +1898,14 @@
  },
  {
   "label": "59's retrain sets 0x20 in the receiver's flags",
-  "find": "\t\t\tf->rx->flags = (unsigned short)(f->rx->flags | 0x40);\n\t\t\tv34handshakinit(f->obj, 1);",
-  "replace": "\t\t\tf->rx->flags = (unsigned short)(f->rx->flags | 0x20);\n\t\t\tv34handshakinit(f->obj, 1);",
+  "find": "\t\t\tf->rx->flags = (unsigned short)(f->rx->flags | V34_RX_FLAG_RETRAIN);\n\t\t\tv34handshakinit(f->obj, 1);",
+  "replace": "\t\t\tf->rx->flags = (unsigned short)(f->rx->flags | V34_RX_FLAG_RENEG);\n\t\t\tv34handshakinit(f->obj, 1);",
   "fn": "t3m_micro59"
  },
  {
   "label": "59's retrain runs v34handshakinit's mode 0",
-  "find": "\t\t\tf->rx->flags = (unsigned short)(f->rx->flags | 0x40);\n\t\t\tv34handshakinit(f->obj, 1);",
-  "replace": "\t\t\tf->rx->flags = (unsigned short)(f->rx->flags | 0x40);\n\t\t\tv34handshakinit(f->obj, 0);",
+  "find": "\t\t\tf->rx->flags = (unsigned short)(f->rx->flags | V34_RX_FLAG_RETRAIN);\n\t\t\tv34handshakinit(f->obj, 1);",
+  "replace": "\t\t\tf->rx->flags = (unsigned short)(f->rx->flags | V34_RX_FLAG_RETRAIN);\n\t\t\tv34handshakinit(f->obj, 0);",
   "fn": "t3m_micro59"
  },
  {
@@ -2106,20 +2106,20 @@
  },
  {
   "label": "59 clears only 0x200 of the receiver's flags",
-  "find": "\t\tf->rx->flags = (unsigned short)(f->rx->flags & ~0x0a00);",
-  "replace": "\t\tf->rx->flags = (unsigned short)(f->rx->flags & ~0x0200);",
+  "find": "\t\tf->rx->flags = (unsigned short)(f->rx->flags\n\t\t\t\t\t\t& ~(V34_RX_FLAG_DET_PENDING | V34_RX_FLAG_FIR));",
+  "replace": "\t\tf->rx->flags = (unsigned short)(f->rx->flags & ~V34_RX_FLAG_DET_PENDING);",
   "fn": "t3m_micro59"
  },
  {
   "label": "59 clears only 0x800 of the receiver's flags",
-  "find": "\t\tf->rx->flags = (unsigned short)(f->rx->flags & ~0x0a00);",
-  "replace": "\t\tf->rx->flags = (unsigned short)(f->rx->flags & ~0x0800);",
+  "find": "\t\tf->rx->flags = (unsigned short)(f->rx->flags\n\t\t\t\t\t\t& ~(V34_RX_FLAG_DET_PENDING | V34_RX_FLAG_FIR));",
+  "replace": "\t\tf->rx->flags = (unsigned short)(f->rx->flags & ~V34_RX_FLAG_FIR);",
   "fn": "t3m_micro59"
  },
  {
   "label": "59 sets rather than clears the two flag bits",
-  "find": "\t\tf->rx->flags = (unsigned short)(f->rx->flags & ~0x0a00);",
-  "replace": "\t\tf->rx->flags = (unsigned short)(f->rx->flags | 0x0a00);",
+  "find": "\t\tf->rx->flags = (unsigned short)(f->rx->flags\n\t\t\t\t\t\t& ~(V34_RX_FLAG_DET_PENDING | V34_RX_FLAG_FIR));",
+  "replace": "\t\tf->rx->flags = (unsigned short)(f->rx->flags\n\t\t\t\t\t\t| (V34_RX_FLAG_DET_PENDING | V34_RX_FLAG_FIR));",
   "fn": "t3m_micro59"
  },
  {
@@ -2476,8 +2476,8 @@
  },
  {
   "label": "58 sets 0x200 only on the path that goes deep",
-  "find": "\t\t/* 0x66038, and it happens whether or not the test below does. */\n\t\tf->rx->flags = (unsigned short)(f->rx->flags | 0x200);\n\n\t\t/* 0x6604c, a full-width equality and not one of 49's, 50's or\n\t\t   59's masked tests of the same register. */\n\t\tif ((unsigned short)f->obj->fsk.sr == 1) {",
-  "replace": "\t\t/* 0x6604c, a full-width equality and not one of 49's, 50's or\n\t\t   59's masked tests of the same register. */\n\t\tif ((unsigned short)f->obj->fsk.sr == 1) {\n\t\t\tf->rx->flags = (unsigned short)(f->rx->flags | 0x200);",
+  "find": "\t\t/* 0x66038, and it happens whether or not the test below does. */\n\t\tf->rx->flags = (unsigned short)(f->rx->flags | V34_RX_FLAG_DET_PENDING);\n\n\t\t/* 0x6604c, a full-width equality and not one of 49's, 50's or\n\t\t   59's masked tests of the same register. */\n\t\tif ((unsigned short)f->obj->fsk.sr == 1) {",
+  "replace": "\t\t/* 0x6604c, a full-width equality and not one of 49's, 50's or\n\t\t   59's masked tests of the same register. */\n\t\tif ((unsigned short)f->obj->fsk.sr == 1) {\n\t\t\tf->rx->flags = (unsigned short)(f->rx->flags | V34_RX_FLAG_DET_PENDING);",
   "fn": "t3m_micro58"
  },
  {
@@ -2524,8 +2524,8 @@
  },
  {
   "label": "58's deep path clears 0x200 where the object sets it again",
-  "find": "\t\t\tf->rx->flags = (unsigned short)(f->rx->flags | 0x200);\n\n\t\t\tt3m_txblock(f, (short)T3M_U16(f, V34HS_TXSTATE_OFF));",
-  "replace": "\t\t\tf->rx->flags = (unsigned short)(f->rx->flags & ~0x200);\n\n\t\t\tt3m_txblock(f, (short)T3M_U16(f, V34HS_TXSTATE_OFF));",
+  "find": "\t\t\tf->rx->flags = (unsigned short)(f->rx->flags | V34_RX_FLAG_DET_PENDING);\n\n\t\t\tt3m_txblock(f, (short)T3M_U16(f, V34HS_TXSTATE_OFF));",
+  "replace": "\t\t\tf->rx->flags = (unsigned short)(f->rx->flags & ~V34_RX_FLAG_DET_PENDING);\n\n\t\t\tt3m_txblock(f, (short)T3M_U16(f, V34HS_TXSTATE_OFF));",
   "fn": "t3m_micro58"
  },
  {

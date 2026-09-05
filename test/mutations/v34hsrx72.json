@@ -5,14 +5,12 @@
  {
   "note": "THE ANCHORS CARRY ADDRESSES because the source lines repeat.  `t72_update_both(obj, rx, n);` is four separate rungs' statement, `dftnlinitSignalBins(obj->probe_bins);` is two, and `hs_setstate(obj, HS_RXSTATE, V34HS_RX_DPSK);` is three -- so the object address in the trailing comment, or the line above, is what makes each anchor sit inside the thing it is about.  Finding F432's hazard, answered with information rather than with indentation."
  },
-
  {
   "label": "the chain does not send 72 to its own arm",
   "find": "\t\t\t\tt72_rx_l1(obj);\t\t/* 0x650c6 */",
   "replace": "\t\t\t\tt3c_txblock(obj);\t/* 0x650c6 */",
   "fn": "v34handshak"
  },
-
  {
   "label": "the counter is not incremented at all",
   "find": "\tobj->short_aa78 = (short)(obj->short_aa78 + 1);",
@@ -229,7 +227,6 @@
   "replace": "\ths_setstate(obj, HS_TXSTATE, V34HS_RX_DPSK);\t\t/* 0x65162 */",
   "fn": "t72_rx_l1"
  },
-
  {
   "label": "the answering end goes to microstate 42, not 41",
   "find": "\t\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC); /* 0x67e7f */",
@@ -314,7 +311,6 @@
   "replace": "\t\tobj->fsk.nbits = 0;\t\t\t\t/* 0x69717 */\n\t\tdpskDetectInfo1Init(obj);",
   "fn": "t72_rx_l1"
  },
-
  {
   "label": "the sample count is one short",
   "find": "\treturn (short)(rx->rx_samples\n\t\t       - (const short *)((const char *)rx + T72_RX_SAMPS));",
@@ -327,7 +323,6 @@
   "replace": "\treturn (short)(rx->rx_samples\n\t\t       - (const short *)((const char *)rx + T72_RX_SAMPS - 4));",
   "fn": "t72_nsamples"
  },
-
  {
   "label": "the probe bank is correlated over five bins",
   "find": "\tdftupdate(obj->probe_bins, V34_NL_BINS, in, n);\t\t/* 0x68dfd */",
@@ -352,7 +347,6 @@
   "replace": "\tdftupdate(obj->probe_bins + 21, V34_NL_BINS, in, n);\t/* 0x68e23 */",
   "fn": "t72_update_both"
  },
-
  {
   "label": "the noise bank is reduced at the probe's shift",
   "find": "\tdftenergy(obj->nl_noise_bins, V34_NL_BINS, 6);\t/* 0x69cec */",
@@ -455,7 +449,6 @@
   "replace": "\t\t\t (signal + noise / 2) / signal);",
   "fn": "t72_measure"
  },
-
  {
   "label": "the receiver's +0x238 is kept sixteen bits wide",
   "find": "\tt3c_puti(obj, T72_FAACC,\t\t\t\t/* 0x67d92 */\n\t\t *(const int *)((const char *)rx + T72_RX_F238));",
@@ -500,14 +493,14 @@
  },
  {
   "label": "the receiver's flag bit is 10, not 11",
-  "find": "\trx->flags = (unsigned short)(rx->flags | 0x800);\t/* 0x67e10 */",
-  "replace": "\trx->flags = (unsigned short)(rx->flags | 0x400);\t/* 0x67e10 */",
+  "find": "\trx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_FIR);\t/* 0x67e10 */",
+  "replace": "\trx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_DATA);\t/* 0x67e10 */",
   "fn": "t72_probe_done"
  },
  {
   "label": "the flags word is replaced rather than ORed",
-  "find": "\trx->flags = (unsigned short)(rx->flags | 0x800);\t/* 0x67e10 */",
-  "replace": "\trx->flags = (unsigned short)0x800;\t\t\t/* 0x67e10 */",
+  "find": "\trx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_FIR);\t/* 0x67e10 */",
+  "replace": "\trx->flags = (unsigned short)V34_RX_FLAG_FIR;\t\t\t/* 0x67e10 */",
   "fn": "t72_probe_done"
  },
  {
@@ -522,7 +515,6 @@
   "replace": "\t/* 0x67e17 */;",
   "fn": "t72_probe_done"
  },
-
  {
   "label": "timing recovery does not run on the ladder",
   "find": "\trxtiming(obj);\t\t\t\t\t/* 0x65524 */",
@@ -683,13 +675,13 @@
  },
  {
   "label": "the gain rung's flag bit is 8, not 9",
-  "find": "\t\trx->flags = (unsigned short)(rx->flags | 0x200);  /* 0x6a510 */",
-  "replace": "\t\trx->flags = (unsigned short)(rx->flags | 0x100);  /* 0x6a510 */",
+  "find": "\t\trx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_DET_PENDING);  /* 0x6a510 */",
+  "replace": "\t\trx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_TRAINED);  /* 0x6a510 */",
   "fn": "t72_ladder"
  },
  {
   "label": "the gain rung does not set a flag bit",
-  "find": "\t\trx->flags = (unsigned short)(rx->flags | 0x200);  /* 0x6a510 */",
+  "find": "\t\trx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_DET_PENDING);  /* 0x6a510 */",
   "replace": "\t\t/* 0x6a510 */;",
   "fn": "t72_ladder"
  },

@@ -88,6 +88,13 @@
 #include "dsplib/v34shell.h"	/* modulatevector                         */
 #include "dsplib/sysdep.h"	/* sysdep_memset                          */
 
+/*
+ * Bit 4 of `tx_flags`, established as `PROG_TXBIT_DATA` beside its other
+ * reader in v34pcmmain.cpp and catalogued in v34fsk.h's own comment on the
+ * field; re-declared here, file-local, for this file's own reader below.
+ */
+#define PROG_TXBIT_DATA		0x10
+
 /* The receiver sub-object; `0x74(%esp)` above. */
 #define TX1_RECEIVER	0x264
 
@@ -359,7 +366,7 @@ v34tx1_xmit0(void *objp)
 	txmit(o);
 
 	if (rx->flags & V34_RX_FLAG_LATE_TRN) {
-		o->tx_flags = (short)((unsigned short)o->tx_flags | 0x2000u);
+		o->tx_flags = (short)((unsigned short)o->tx_flags | V34_TXFLAG_SEG4A);
 		hs_setstate(o, TX1_TXSTATE, V34HS_SSEG);
 		o->prev_quadrant = 0;
 		o->seg_symcount = 0;
@@ -620,7 +627,7 @@ v34tx1_txmd(void *objp)
 
 		o->echo_calls = 0;				/* 0x6700e */
 		o->tx_flags =				/* 0x67017 */
-			(short)((unsigned short)o->tx_flags & ~4u);
+			(short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);
 		o->echo_alpha = 0;				/* 0x6701e */
 		o->short_3552 = 0;				/* 0x67025 */
 	}
@@ -642,7 +649,8 @@ v34tx1_txmd(void *objp)
 		hs_setstate(o, TX1_TXSTATE, V34HS_SSEG);
 		o->seg_symcount = 0;
 		o->tx_scr_sr = 0;
-		o->tx_flags = (short)((unsigned short)o->tx_flags | 0x8004u);
+		o->tx_flags = (short)((unsigned short)o->tx_flags
+				     | (V34_TXFLAG_PPSEG | V34_EC_FROZEN));
 	}
 
 	/* 0x6430c */
@@ -775,7 +783,7 @@ v34tx1_dataxmit(void *objp)
 
 	modulatevector(o);
 
-	if (!(o->tx_flags & 0x10))
+	if (!(o->tx_flags & PROG_TXBIT_DATA))
 		return V34TX1_LOOP;
 
 	rx->equerr_accum = 0;
@@ -939,12 +947,12 @@ v34tx1_sbarseg(void *objp)
 
 	/* 0x671f0 */
 	o->seg_symcount = 0;
-	if ((unsigned short)o->tx_flags & 0x2000u) {
+	if ((unsigned short)o->tx_flags & V34_TXFLAG_SEG4A) {
 		hs_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4A);
 	} else if (tx1_get(o, TX1_F35A4) == 0) {
 		/* 0x68375 */
 		hs_setstate(o, TX1_TXSTATE, V34HS_PPSEG);
-	} else if ((unsigned short)o->tx_flags & 0x8000u) {
+	} else if ((unsigned short)o->tx_flags & V34_TXFLAG_PPSEG) {
 		/* 0x69eca */
 		o->seg_symcount = tx1_get(o, TX1_SEGLEN);
 		hs_setstate(o, TX1_TXSTATE, V34HS_PPSEG);
@@ -1375,7 +1383,7 @@ int
 v34tx1_exmit(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
-	short mode = (short)((o->tx_flags & 1) == 0);
+	short mode = (short)((o->tx_flags & V34_TXFLAG_CALLER) == 0);
 	short q;
 
 	if ((unsigned short)tx1_get(o, TX1_F382) == 0x89b0u) {
@@ -1510,7 +1518,7 @@ v34tx1_jtxmit(void *objp)
 	shift = (unsigned)(2 * (int)o->vect_idx) & 31u;
 	bits = (short)((unsigned)(unsigned short)tx1_get(o, TX1_F25D6) >> shift);
 
-	mode = (short)((o->tx_flags & 1) == 0);
+	mode = (short)((o->tx_flags & V34_TXFLAG_CALLER) == 0);
 	q = (short)V34scrambler((unsigned *)&o->tx_scr_sr, mode, bits, 2);
 	(void)tx1_dpsk4(o, q);
 	txmit(o);
@@ -1745,10 +1753,11 @@ tx1_mp_sequence_end(struct v34_object *o, struct v34_receiver *rx)
 			/* 0x648bf */
 			hs_setstate(o, TX1_TXSTATE, V34HS_EXMIT);
 			o->vect_idx = 0;
-			rx->flags = (unsigned short)(rx->flags & ~0x20u);
+			rx->flags = (unsigned short)(rx->flags & ~V34_RX_FLAG_RENEG);
 			return 1;
 		}
-		stamp = (flags & 0x18u) == 0x10u;	/* 0x64614 */
+		stamp = (flags & (V34_RX_FLAG_TRN_WATCH | V34_RX_FLAG_LATE_TRN))
+			== V34_RX_FLAG_TRN_WATCH;		/* 0x64614 */
 	} else {
 		flags = rx->flags;			/* 0x647a9 */
 		stamp = (flags & 0x18u) == 0x10u;	/* 0x647b0 */
@@ -1784,7 +1793,7 @@ tx1_mp_sequence_end(struct v34_object *o, struct v34_receiver *rx)
 static void
 tx1_mp4(struct v34_object *o, short src)
 {
-	short pick = (short)((o->tx_flags & 1) == 0);
+	short pick = (short)((o->tx_flags & V34_TXFLAG_CALLER) == 0);
 	short q = (short)V34scrambler((unsigned *)&o->tx_scr_sr, pick, src, 2);
 
 	(void)tx1_dpsk4(o, q);
@@ -1814,7 +1823,7 @@ tx1_mp4(struct v34_object *o, short src)
 static void
 tx1_mp16(struct v34_object *o, short src)
 {
-	short pick = (short)((o->tx_flags & 1) == 0);
+	short pick = (short)((o->tx_flags & V34_TXFLAG_CALLER) == 0);
 	short k, q;
 	int point;
 
@@ -2538,7 +2547,7 @@ tx1_ts_snapshot(struct v34_object *o, struct v34_receiver *rx, short *rec)
 	}
 
 	/* 0x674c8 */
-	rx->flags = (unsigned short)(rx->flags & ~0x1000u);
+	rx->flags = (unsigned short)(rx->flags & ~V34_RX_FLAG_PREDICT);
 }
 
 /*
@@ -2793,7 +2802,7 @@ tx1_ts_rates(struct v34_object *o, struct v34_receiver *rx,
 	rec[15] = 0;					/* +0xaa5a */
 	rec[17] = 0;					/* +0xaa5e */
 	rec[14] = 0x10;					/* +0xaa58 */
-	rec[12] = (short)((rx->flags & 0x20u) ? 0x30 : 0x90);
+	rec[12] = (short)((rx->flags & V34_RX_FLAG_RENEG) ? 0x30 : 0x90);
 	rec[11] = 1;					/* +0xaa52 */
 	rec[20] = 0x12;					/* +0xaa64 */
 	rec[21] = 0x12;					/* +0xaa66 */
@@ -2856,7 +2865,7 @@ v34tx1_trnseg4a(void *objp)
 	o->prev_quadrant = (short)(unsigned short)o->cur_quadrant;
 	memcpy((char *)objp + TX1_PTR_AA6C, &rec, sizeof(rec));
 
-	if (rx->flags & 0x20u) {
+	if (rx->flags & V34_RX_FLAG_RENEG) {
 		/* 0x62f5f */
 		rec[2] = 0;
 		rec[0] = 0;
@@ -2973,7 +2982,7 @@ v34tx1_trnseg4(void *objp)
 	if (tx1_get(o, TX1_COUNT) == o->seg_symcount) {
 		/* 0x67613, and this one FALLS BACK INTO THE CHAIN */
 		o->echo_calls = 0;
-		o->tx_flags = (short)((unsigned short)o->tx_flags & ~4u);
+		o->tx_flags = (short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);
 		o->echo_alpha = 0;
 		o->short_3552 = 0;
 		o->echo_energy = 0;
@@ -2997,7 +3006,7 @@ v34tx1_trnseg4(void *objp)
 	baud = cfg->baud;
 	if (n == baud + (baud >> 1)) {
 		/* 0x67278 */
-		o->tx_flags = (short)(((unsigned short)o->tx_flags & 0x7fffu)
+		o->tx_flags = (short)(((unsigned short)o->tx_flags & ~V34_TXFLAG_PPSEG)
 				   | 0x400u);
 		return V34TX1_LOOP;			/* 0x63da2 */
 	}

@@ -1022,13 +1022,14 @@
  },
  {
   "label": "the flag word's cleared nibble is one bit narrower",
-  "find": "\trx->flags = (unsigned short)(rx->flags & ~0x0f00u);",
-  "replace": "\trx->flags = (unsigned short)(rx->flags & ~0x0e00u);",
-  "fn": "t44_accept_len26"
+  "find": "\t * recorded as an equivalence rather than dropped as a duplicate.\n\t */\n\trx->flags = (unsigned short)(rx->flags\n\t\t\t\t     & (unsigned short)~(V34_RX_FLAG_TRAINED\n\t\t\t\t\t\t\t | V34_RX_FLAG_DET_PENDING\n\t\t\t\t\t\t\t | V34_RX_FLAG_DATA\n\t\t\t\t\t\t\t | V34_RX_FLAG_FIR));",
+  "replace": "\t * recorded as an equivalence rather than dropped as a duplicate.\n\t */\n\trx->flags = (unsigned short)(rx->flags & ~0x0e00u);",
+  "fn": "t44_accept_len26",
+  "note": "Anchor carries 2 line(s) above it: another arm of this function spells the same statements, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
   "label": "the flag word is not cleared at all",
-  "find": "\trx->flags = (unsigned short)(rx->flags & ~0x0f00u);\n\tdetectorinit",
+  "find": "\trx->flags = (unsigned short)(rx->flags\n\t\t\t\t     & (unsigned short)~(V34_RX_FLAG_TRAINED\n\t\t\t\t\t\t\t | V34_RX_FLAG_DET_PENDING\n\t\t\t\t\t\t\t | V34_RX_FLAG_DATA\n\t\t\t\t\t\t\t | V34_RX_FLAG_FIR));\n\tdetectorinit",
   "replace": "\tdetectorinit",
   "fn": "t44_accept_len26"
  },
