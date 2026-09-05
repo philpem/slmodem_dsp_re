@@ -20,10 +20,15 @@
  * `include/dsplib/V92BitsToSymbol.h` carries the object map and the 0x20 the
  * allocation gives.
  *
- * WHY THE TRANSMITTER IS BUILT THROUGH AN asm() LABEL: exactly the reason
- * src/pump/v90/V92Precoder.cpp gives -- `sysdep_malloc(n); ctor(p)` with no
- * null test between them is `new`, the build is -nostdinc++ with no <new>,
- * and a placement form would add a null test the blob does not have.
+ * THE TRANSMITTER IS BUILT WITH ORDINARY PLACEMENT `new`.  `sysdep_malloc(n);
+ * ctor(p)` with no null test between them is `new`, and this build is
+ * `-nostdinc++` with no <new> -- `include/dsplib/sysdep.h` declares the
+ * shared non-throw placement `operator new`/`operator delete` pair every
+ * such site in this tree uses.  This file used to reach the constructor
+ * through a hand-mangled `asm("_ZN14V92TransmitterC1Ev")` label, on the
+ * belief (finding F1340) that a user-declared placement `operator new`
+ * would force a null test the blob does not have; finding F10155 retracts
+ * that empirically and F10157 proves the mechanism end-to-end.
  *
  * Plain cdecl, `this` first on the stack (`mov 0x20(%esp),%ebx` after a
  * 0x1c-byte frame and three saves) -- finding F215.
@@ -33,6 +38,7 @@
 
 #include "dsplib/V92BitsToSymbol.h"
 #include "dsplib/V92Transmitter.h"
+#include "dsplib/sysdep.h"
 
 /*
  * THE REPLACEMENT `operator delete`, AND IT IS READ OFF THE OBJECT.  The blob
@@ -78,15 +84,6 @@ inline void operator delete(void *p) { sysdep_free(p); }
 inline void operator delete[](void *p) { sysdep_free(p); }
 #include "dsplib/V92ParamsInfo.h"
 #include "dsplib/debug.h"
-
-extern "C" {
-void *sysdep_malloc(unsigned int size);
-void sysdep_free(void *mem);
-
-/* The complete-object constructor, which is what the relocation at
- * .text+0x4deff names and what a `new` expression uses. */
-void v92btos_transmitter_ctor(void *self) asm("_ZN14V92TransmitterC1Ev");
-}
 
 #if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
 
@@ -138,7 +135,11 @@ V92BitsToSymbol::V92BitsToSymbol(unsigned int n, V92Parameters *p)
 	params = p;
 
 	tx = sysdep_malloc(sizeof(V92Transmitter));
-	v92btos_transmitter_ctor(tx);
+	/*
+	 * C1, the complete-object variant, is what a `new` expression uses
+	 * and what the relocation at .text+0x4deff names.
+	 */
+	new (tx) V92Transmitter();
 	transmitter = (V92Transmitter *)tx;
 
 	symbols = (short *)sysdep_malloc(n * sizeof(short));
