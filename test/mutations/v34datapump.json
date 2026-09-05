@@ -203,14 +203,14 @@
  },
  {
   "label": "the retrain tests bit 5 rather than bit 6",
-  "find": "\tif ((T3C_RX(obj)->flags & 0x40)\n\t    || dp_rxget(obj, DP_RX_BAD) > (short)(obj->baud_rate >> 1)) {",
-  "replace": "\tif ((T3C_RX(obj)->flags & 0x20)\n\t    || dp_rxget(obj, DP_RX_BAD) > (short)(obj->baud_rate >> 1)) {",
+  "find": "\tif ((T3C_RX(obj)->flags & V34_RX_FLAG_RETRAIN)\n\t    || dp_rxget(obj, DP_RX_BAD) > (short)(obj->baud_rate >> 1)) {",
+  "replace": "\tif ((T3C_RX(obj)->flags & V34_RX_FLAG_RENEG)\n\t    || dp_rxget(obj, DP_RX_BAD) > (short)(obj->baud_rate >> 1)) {",
   "fn": "datapumpv34"
  },
  {
   "label": "the retrain wants the flag AND the run rather than either",
-  "find": "\tif ((T3C_RX(obj)->flags & 0x40)\n\t    || dp_rxget(obj, DP_RX_BAD) > (short)(obj->baud_rate >> 1)) {",
-  "replace": "\tif ((T3C_RX(obj)->flags & 0x40)\n\t    && dp_rxget(obj, DP_RX_BAD) > (short)(obj->baud_rate >> 1)) {",
+  "find": "\tif ((T3C_RX(obj)->flags & V34_RX_FLAG_RETRAIN)\n\t    || dp_rxget(obj, DP_RX_BAD) > (short)(obj->baud_rate >> 1)) {",
+  "replace": "\tif ((T3C_RX(obj)->flags & V34_RX_FLAG_RETRAIN)\n\t    && dp_rxget(obj, DP_RX_BAD) > (short)(obj->baud_rate >> 1)) {",
   "fn": "datapumpv34"
  },
  {
@@ -271,13 +271,13 @@
  },
  {
   "label": "the remote block tests bit 6 rather than bit 5",
-  "find": "\tif (T3C_RX(obj)->flags & 0x20) {\n\t\tv34handshakinit(obj, 3);",
-  "replace": "\tif (T3C_RX(obj)->flags & 0x40) {\n\t\tv34handshakinit(obj, 3);",
+  "find": "\tif (T3C_RX(obj)->flags & V34_RX_FLAG_RENEG) {\n\t\tv34handshakinit(obj, 3);",
+  "replace": "\tif (T3C_RX(obj)->flags & V34_RX_FLAG_RETRAIN) {\n\t\tv34handshakinit(obj, 3);",
   "fn": "datapumpv34"
  },
  {
   "label": "the remote block reads the flags cached from before the retrain",
-  "find": "\t/* The far end asked, on bit 5 of the same word, re-read. */\n\tif (T3C_RX(obj)->flags & 0x20) {",
+  "find": "\t/* The far end asked, on bit 5 of the same word, re-read. */\n\tif (T3C_RX(obj)->flags & V34_RX_FLAG_RENEG) {",
   "replace": "\t/* The far end asked, on bit 5 of the same word, re-read. */\n\tif (0) {",
   "fn": "datapumpv34"
  },

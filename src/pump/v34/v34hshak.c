@@ -396,7 +396,8 @@ dpskinit(void *objp, short mode, short high)
 	 * V34_RX_FLAG_DET_PENDING (finding F114) -- the AGC freeze -- so this
 	 * arms a detector and holds the gain still while it settles.
 	 */
-	rx->flags = (unsigned short)(rx->flags | 0xa00);
+	rx->flags = (unsigned short)(rx->flags
+				     | (V34_RX_FLAG_DET_PENDING | V34_RX_FLAG_FIR));
 
 	/*
 	 * The RMS window and its two scalars.  FORTY-EIGHT SHORTS, which is
@@ -490,7 +491,7 @@ v34modeminit(void *objp)
 	rx->rrn_local_dir = 0;
 	rx->baud_copy = 0;
 	obj->is_short = 0;
-	obj->tx_flags = 4;
+	obj->tx_flags = V34_EC_FROZEN;
 	obj->echo_calls = 0;
 	*(short *)(m + 0x3588) = 0;
 	*(short *)(m + 0x358a) = 0;
@@ -528,8 +529,9 @@ v34modeminit(void *objp)
 
 	originate = (obj->role == 0x65);
 
-	obj->tx_flags = (short)(originate ? 4 : 5);
-	rx->flags = (unsigned short)(originate ? 0 : 4);
+	obj->tx_flags = (short)(originate ? V34_EC_FROZEN
+					   : (V34_EC_FROZEN | V34_TXFLAG_CALLER));
+	rx->flags = (unsigned short)(originate ? 0 : V34_SCR_ANSWERER);
 
 	fsk_clear(obj);
 	V34SetupModulator(mod, 600, (short)(originate ? 1200 : 2400), 0, 0, 1);
@@ -537,7 +539,8 @@ v34modeminit(void *objp)
 	fsk_state_init(obj);
 
 	rx->agc_step = 0x199a;
-	rx->flags = (unsigned short)(rx->flags | 0xa00);
+	rx->flags = (unsigned short)(rx->flags
+				     | (V34_RX_FLAG_DET_PENDING | V34_RX_FLAG_FIR));
 	rx->agc_gain = rx->agc_start_gain;
 
 	{
@@ -555,7 +558,7 @@ v34modeminit(void *objp)
 	detectorinit((struct v34_detector *)((char *)obj + 0x3564),
 		     originate ? c2400_ : c1200_, 0, 0xc8, 0x32, 0x600, 0);
 
-	rx->flags = (unsigned short)(rx->flags | 0x200);
+	rx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_DET_PENDING);
 }
 
 /*
@@ -824,12 +827,16 @@ setupreceiver(void *objp)
 	 * `detectorinit` runs with it down; the set puts it back, which is
 	 * what leaves the gain still while the new detector settles.
 	 */
-	rx->flags = (unsigned short)(rx->flags & 0xf0ff);
+	rx->flags = (unsigned short)(rx->flags
+				     & (unsigned short)~(V34_RX_FLAG_TRAINED
+							 | V34_RX_FLAG_DET_PENDING
+							 | V34_RX_FLAG_DATA
+							 | V34_RX_FLAG_FIR));
 
 	detectorinit((struct v34_detector *)((char *)obj + 0x3564),
 		     cdesc, 0, 8, 10, 0x600, 0);
 
-	rx->flags = (unsigned short)(rx->flags | 0x200);
+	rx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_DET_PENDING);
 }
 
 /*
@@ -1414,7 +1421,7 @@ v34handshakinit(void *objp, int mode)
 	m[0xabff] = 0;
 
 	/* txflags, which the V34RNEG diagnostic below names. */
-	obj->tx_flags = (short)(obj->tx_flags & 0x7fff);
+	obj->tx_flags = (short)(obj->tx_flags & ~V34_TXFLAG_PPSEG);
 
 	switch (mode) {
 	case 0:
@@ -1429,7 +1436,7 @@ v34handshakinit(void *objp, int mode)
 		hs_setstate(obj, HS_RXSTATE, V34HS_RX_DPSK);
 		hs_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);
 
-		rx->flags = (unsigned short)(rx->flags | 0x1000);
+		rx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_PREDICT);
 		*(short **)(m + 0xaa70) = (short *)(m + 0xa97c);
 		hs_put(obj, 0xa97c + 0x18, 0x11);
 		hs_put(obj, 0x25dc, 0);
@@ -1454,7 +1461,7 @@ v34handshakinit(void *objp, int mode)
 		 * are counters of two kinds of retrain, and which kind is
 		 * which the object does not say.
 		 */
-		if ((rx->flags & 0x40) || m[0xac17] != 0) {
+		if ((rx->flags & V34_RX_FLAG_RETRAIN) || m[0xac17] != 0) {
 			short n = (short)(*(unsigned short *)(m + 0xac14) + 1);
 
 			m[0xac17] = 0;
@@ -1471,7 +1478,7 @@ v34handshakinit(void *objp, int mode)
 		/* No microstate transition here; mode 1 is the only body
 		 * that leaves it alone. */
 
-		rx->flags = (unsigned short)(rx->flags | 0x1000);
+		rx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_PREDICT);
 		rx->agc_gain = rx->agc_start_gain;
 		hs_put(obj, 0x358a, 2);
 		hs_put(obj, 0x3588, 2);
@@ -1530,7 +1537,7 @@ v34handshakinit(void *objp, int mode)
 		preinitdigital(obj);
 
 		rx->equ_step = 0x400;
-		rx->flags = (unsigned short)(rx->flags & ~0x2000);
+		rx->flags = (unsigned short)(rx->flags & ~V34_RX_FLAG_PRECODE);
 
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf(
@@ -1714,7 +1721,7 @@ const short probe[V34_PROBE_SAMPLES] = {
 static short
 tx_scrambler_mode(const struct v34_object *o)
 {
-	return (short)((o->tx_flags & 1) == 0);
+	return (short)((o->tx_flags & V34_TXFLAG_CALLER) == 0);
 }
 
 /*
@@ -2880,13 +2887,13 @@ v34setuptxmit(void *objp)
 			  *(short *)(m + 0xaa84), *(short *)(m + 0xaa94),
 			  *(short *)(m + 0xaa8a), pcm, 1);
 
-	rx->flags = (unsigned short)(rx->flags & ~0x800);
+	rx->flags = (unsigned short)(rx->flags & ~V34_RX_FLAG_FIR);
 
 	hs_setstate(obj, HS_RXSTATE, V34HS_WAIT);
 	hs_setstate(obj, HS_TXSTATE, V34HS_SSEG);
 
 	obj->seg_symcount = 0;
-	obj->tx_flags = (short)(obj->tx_flags | 0x200);
+	obj->tx_flags = (short)(obj->tx_flags | V34_EC_FEED);
 
 	txinit(obj);
 }
@@ -4196,7 +4203,7 @@ t3m_micro49(struct t3m_frame *f)
 	}
 
 	/* 0x66a74, and it happens before the test that can leave. */
-	f->rx->flags = (unsigned short)(f->rx->flags | 0x200);
+	f->rx->flags = (unsigned short)(f->rx->flags | V34_RX_FLAG_DET_PENDING);
 
 	if ((f->obj->fsk.sr & 1) == 0) {
 		t3m_txblock(f, (short)T3M_U16(f, V34HS_TXSTATE_OFF));
@@ -4342,7 +4349,8 @@ t3m_micro50(struct t3m_frame *f)
 	/* 0x66812 and 0x66818.  0xfffff5ff is ~0x0a00 and not a mask of one
 	   bit; the shift is arithmetic on the sign-extended halfword. */
 	f->rx->agc_gain = (short)((int)f->rx->agc_gain >> 1);
-	f->rx->flags = (unsigned short)(f->rx->flags & ~0x0a00);
+	f->rx->flags = (unsigned short)(f->rx->flags
+					& ~(V34_RX_FLAG_DET_PENDING | V34_RX_FLAG_FIR));
 
 	t3m_txblock(f, (short)T3M_U16(f, V34HS_TXSTATE_OFF));
 }
@@ -4410,7 +4418,7 @@ t3m_micro51(struct t3m_frame *f)
 			     f->obj->role == 0x65 ? c2400_ : c1200_,
 			     0, 0x64, 0x32, 0x800, 0);
 
-		f->rx->flags = (unsigned short)(f->rx->flags | 0x200);
+		f->rx->flags = (unsigned short)(f->rx->flags | V34_RX_FLAG_DET_PENDING);
 		hs_setstate(f->obj, V34HS_RXSTATE_OFF, V34HS_DET_AB);
 	} else {
 		unsigned char *r;
@@ -4660,7 +4668,7 @@ t3m_micro59(struct t3m_frame *f)
 						     "initiated in "
 						     "RX_PHASE2_CALL\n");
 
-			f->rx->flags = (unsigned short)(f->rx->flags | 0x40);
+			f->rx->flags = (unsigned short)(f->rx->flags | V34_RX_FLAG_RETRAIN);
 			v34handshakinit(f->obj, 1);
 			t3m_txblock(f, (short)T3M_U16(f, V34HS_TXSTATE_OFF));
 			return;
@@ -4712,7 +4720,8 @@ t3m_micro59(struct t3m_frame *f)
 
 		/* 0x66477 then 0x66481, the gain before the flags. */
 		f->rx->agc_gain = (short)((int)f->rx->agc_gain >> 1);
-		f->rx->flags = (unsigned short)(f->rx->flags & ~0x0a00);
+		f->rx->flags = (unsigned short)(f->rx->flags
+						& ~(V34_RX_FLAG_DET_PENDING | V34_RX_FLAG_FIR));
 
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V34AGC, rx->gain =0x%x,"
@@ -4957,7 +4966,7 @@ t3m_micro58(struct t3m_frame *f)
 
 	if ((short)n > 0x5f) {
 		/* 0x66038, and it happens whether or not the test below does. */
-		f->rx->flags = (unsigned short)(f->rx->flags | 0x200);
+		f->rx->flags = (unsigned short)(f->rx->flags | V34_RX_FLAG_DET_PENDING);
 
 		/* 0x6604c, a full-width equality and not one of 49's, 50's or
 		   59's masked tests of the same register. */
@@ -4982,7 +4991,7 @@ t3m_micro58(struct t3m_frame *f)
 			/* 0x6c37f, the copy before the flag. */
 			*(short *)((unsigned char *)f->rx + T3M_RX_F264) =
 				f->rx->agc_gain;
-			f->rx->flags = (unsigned short)(f->rx->flags | 0x200);
+			f->rx->flags = (unsigned short)(f->rx->flags | V34_RX_FLAG_DET_PENDING);
 
 			t3m_txblock(f, (short)T3M_U16(f, V34HS_TXSTATE_OFF));
 			return;
@@ -7001,7 +7010,11 @@ t44_accept_len26(struct v34_object *obj, short *rec)
 	 * is on a value that already has the bit, so it changes nothing --
 	 * recorded as an equivalence rather than dropped as a duplicate.
 	 */
-	rx->flags = (unsigned short)(rx->flags & ~0x0f00u);
+	rx->flags = (unsigned short)(rx->flags
+				     & (unsigned short)~(V34_RX_FLAG_TRAINED
+							 | V34_RX_FLAG_DET_PENDING
+							 | V34_RX_FLAG_DATA
+							 | V34_RX_FLAG_FIR));
 	detectorinit(T3C_DET(obj), t44_record(obj, T44_RXCARRDESC),
 		     0, 8, 10, 0x600, 0);
 	rx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_DET_PENDING);
@@ -8953,7 +8966,7 @@ t72_probe_done(struct v34_object *obj, struct v34_receiver *rx)
 	 * +0x122 in the block.  The bit it raises is the one rxstate 4 clears
 	 * at 0x68edd.
 	 */
-	rx->flags = (unsigned short)(rx->flags | 0x800);	/* 0x67e10 */
+	rx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_FIR);	/* 0x67e10 */
 	/*
 	 * 0x67de0 `movzwl 0x264` and 0x67e17 `mov %si,0x136`: sixteen bits
 	 * copied, so the zero-extension never reaches the field -- which
@@ -9062,7 +9075,7 @@ t72_ladder(struct v34_object *obj, struct v34_receiver *rx)
 		 * the substituted gain is at 0x6a517 -- after it.  So the
 		 * flag is raised on the out-of-range path too.
 		 */
-		rx->flags = (unsigned short)(rx->flags | 0x200);  /* 0x6a510 */
+		rx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_DET_PENDING);  /* 0x6a510 */
 
 		if (rx->agc_gain > 0x34ff) {		/* 0x6a50c, signed */
 			/*
@@ -10041,7 +10054,7 @@ datapumpv34(void *objp)
 	 * the same test again, so a `v34handshakinit` that cleared the run
 	 * would report 3 where the entry condition was the flag.
 	 */
-	if ((T3C_RX(obj)->flags & 0x40)
+	if ((T3C_RX(obj)->flags & V34_RX_FLAG_RETRAIN)
 	    || dp_rxget(obj, DP_RX_BAD) > (short)(obj->baud_rate >> 1)) {
 		v34handshakinit(obj, 1);
 		t3c_puti(obj, DP_MODE,
@@ -10055,7 +10068,7 @@ datapumpv34(void *objp)
 	}
 
 	/* The far end asked, on bit 5 of the same word, re-read. */
-	if (T3C_RX(obj)->flags & 0x20) {
+	if (T3C_RX(obj)->flags & V34_RX_FLAG_RENEG) {
 		v34handshakinit(obj, 3);
 		dp_rxput(obj, DP_RX_GOOD, 0);
 		t3c_puti(obj, DP_MODE, 4);

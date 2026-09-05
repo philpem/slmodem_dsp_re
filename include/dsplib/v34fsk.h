@@ -76,6 +76,14 @@ extern "C" {
 #define V34_TXFLAG_PPSEG	(1u << 15)
 
 /*
+ * `struct v34_object::caps_flags` at +0xaa3e.  The field's own comment
+ * (beside its declaration below) already names bit 0: "the other half of
+ * the asymmetric permission" -- paired with `rate_mask`'s sign bit, both
+ * required before the two directions may run at different rates.
+ */
+#define V34_CAPS_ASYMMETRIC	(1u << 0)
+
+/*
  * The three interpolator phases, and the post-detection low-pass.
  *
  * All four are the original's own symbols.  intcoef1 and intcoef3 are exact
