@@ -92,34 +92,55 @@ ratchet) depends on exact layout matching the blob for as long as the
 blob is the oracle. Recorded here so it isn't lost; do not act on it while
 `make period` is still the gate.
 
-## Settling open signature questions
+## Settling open signature questions — RESOLVED (F10154)
 
-The owner asked to settle `descrambleGPA`/`descrambleGPC`'s real signature
-specifically, and flagged there may be other similar cases. In progress --
-see the wave below.
+Not actually about `descrambleGPA`/`descrambleGPC` -- their signature was
+never ambiguous (they install through the union's `put_bits` spelling,
+3-arg, already matching exactly). The real ambiguity was
+`scrambleGPA`/`scrambleGPC` against the union's `scramble` spelling, and
+it was already settled with disassembly evidence (`movswl`/`cwtl` in the
+object's own code) in `v34shell.c`'s own comment -- `v34shell.h`'s comment
+had simply gone stale, describing `getFrame` as unreconstructed after it
+no longer was. Fixed, comment-only (commit `cbd9cad8`). Five other
+function-signature-ambiguity cases found tree-wide were checked and found
+to be genuinely, correctly unresolved already (a stub whose object body
+reads none of its arguments, so no evidence bounds true arity) -- no
+action needed on any of them.
 
-## Investigating -fno-check-new
+## Investigating -fno-check-new — RESOLVED, F1340 RETRACTED (F10155)
 
-The owner's instinct: an `asm()`-label symbol override that bypasses the
-C++ type system to dodge a null-check is worse engineering than just
-accepting the null-check GCC 3.4 would otherwise emit. Question: does
-`-fno-check-new` (or an equivalent) let genuine placement-`new` syntax
-produce the SAME assembly as the current `asm()` override -- i.e. was the
-asm() device solving a problem a flag could have solved instead? In
-progress -- see the wave below. Findings F1339-F1341 are the existing
-record to check against before concluding this is a new idea.
+**The owner's instinct was right, and more completely than asked.**
+`-fcheck-new` is off by default and was never in `tools/toolchain/
+period.mk`'s `TC_FLAGS` -- F1340's reasoning (a `-nostdinc++` build forces
+a user-declared placement form that GCC checks) was general-C++-rule
+reasoning, never empirically tested, and the rule has a condition F1340
+didn't check: the check only fires for a `throw()`-declared placement
+`operator new`, not an ordinary non-throw one. Verified under the real
+period compiler: a minimal non-throw placement `operator new` plus
+genuine `new (self) Thing(...)` syntax, NO flag changes, reproduces the
+blob's exact construct-then-check-later shape at `VPCMXF_Create`.
+Declaring the same operator `throw()` reproduces the check precisely,
+confirming the mechanism. **No build-flag change needed.** The fix is
+source-level: one shared non-throw placement `operator new`/`operator
+delete` pair, then replace each of the 50 `asm("_ZN...")` sites with
+ordinary placement-new syntax -- at 49 of the 50 sites (everywhere except
+`VPCMXF_Create` itself) this doesn't just match the blob, it *removes*
+dead code the `asm()` device carries forward for no reason, a genuine
+byte-identity IMPROVEMENT opportunity. Promoted to its own item under
+Tier 2 (item 10, below) rather than Tier 1's "add a citation" fix, since
+each site needs its own verification.
 
 ## Tier 1 — mechanical, zero byte-identity risk
 
 1. Join the 790 short-wrapped string-literal pairs to the tree's real
    79-80 column convention.
-2. Add the missing F1340 citation as a one-line comment at the 49
-   uncited `asm()`-override sites (pending the -fno-check-new
-   investigation above -- may be superseded by a bigger fix).
+2. ~~Add the missing F1340 citation~~ SUPERSEDED — F1340 is retracted
+   (F10155); the whole `asm()` device is being replaced, not documented
+   further. See Tier 2 item 10.
 3. Rename `class1tx.c`'s leftover positional params (`word3`/`word4`/
    `word7`/`word8`) -- confirmed unused, pure rename.
 
-Status: launching.
+Status: launching (items 1 and 3).
 
 ## Tier 2 — real fixes, needs scoping, after the byte-identity pass
 
@@ -133,21 +154,70 @@ Status: launching.
    table membership; retype whichever aren't forced.
 8. Continue the field-naming phase on the 625 remaining unnamed
    identifiers.
+9. `bugprone-narrowing-conversions` (439, clang-tidy) and
+   `bugprone-incorrect-roundings` (43, clang-tidy) -- both need per-site
+   `dis.py` verification before touching, since CLAUDE.md's forced-vs-free
+   framework applies directly to both (a narrowing/rounding shape is
+   often exactly what the blob does).
+10. **Replace the 50 `asm("_ZN...")` sites with genuine placement-`new`
+    syntax** (F10155) -- declare a shared non-throw placement `operator
+    new`/`operator delete`, then convert each site, each gated on its own
+    `byteident.py`/`make period` run. Real opportunity to IMPROVE the
+    byte-identity count at 49 of the 50 sites, not just neutral cleanup.
 
 Status: not started.
 
-## Tier 3 — needs tooling
+## PRIORITY — correctness, not style (clang-tidy, F10156 pending)
 
-9. Run clang-tidy for redundant-cast detection across the 8,209 casts,
-   plus a broader check set to see what else it surfaces.
+`clang-analyzer-core.NullDereference` found **three real null-dereference
+sites in `src/fax/class1rx.c`** (lines 471, 495, 519): "access to field
+`link` dereferences a null pointer loaded from field `vmi_b`." This is a
+correctness question, not a style one -- either a real reconstruction bug
+or a faithful reproduction of a blob crash path, and it needs its own
+investigation before any other cleanup wave, ahead of every style item
+above. Not yet investigated.
 
-Status: launching (clang-tidy installed by the owner, 2026-09-04).
+## Tier 3 — clang-tidy, DONE
+
+Ran (compile_commands.json generated from the Makefile's real flags,
+confirmed firing on a known-messy file before trusting the full run;
+raw logs `/tmp/clangtidy_out/{redundant_all,broad_all}.log`, not
+preserved past this session -- re-run to regenerate):
+
+- **Redundant casts: 136 real sites** (not 8,209 -- that counted every
+  cast including genuine narrowing/widening). Concentrated in
+  `src/dsp/fpm_tone.c`, `Psd.cpp`, `toneiir.c`. Safe, mechanical,
+  zero byte-identity risk (same-type cast is a compiler no-op).
+- **Safe to act on**: redundant casts (136), `misc-const-correctness`
+  (439, cosmetic), `bugprone-implicit-widening-of-multiplication-result`
+  (90, adds a widening cast before multiply, doesn't change in-range
+  results), every other `clang-analyzer-core.*` finding (~22 combined,
+  small enough to fully triage in one sitting).
+- **Needs `dis.py` verification per site**: `bugprone-narrowing-
+  conversions` (439), `bugprone-incorrect-roundings` (43) -- folded into
+  Tier 2 items 9 above.
+- **Confirms scale, doesn't add new work**: `bugprone-casting-through-
+  void` (4,073) is a much wider net over the same void*/cast concerns
+  (points 1/2/7) already scoped above -- treat as a candidate list against
+  the forced-vs-free classification already built, not as 4,073 new bugs.
+- **Suppress as noise for this codebase**: `misc-use-anonymous-namespace`
+  (142 -- flags deliberate file-scope `static` matching the blob's own
+  measured linkage), `misc-new-delete-overloads` (20 -- the expected
+  shape of the placement-construction apparatus, F1340/F7815/F10155),
+  `misc-include-cleaner` (381), `bugprone-switch-missing-default-case`
+  (44), `clang-analyzer-security.insecureAPI.*` (19, expected for 2005-era
+  C). A `.clang-tidy` config disabling these is worth adding so a future
+  run doesn't re-derive this.
+- **Not yet triaged**: `clang-analyzer-optin.core.EnumCastOutOfRange`
+  (113), `bugprone-too-small-loop-variable` (26, real-bug shape),
+  `bugprone-easily-swappable-parameters` (282, a naming-weakness signal,
+  not something to fix by reordering parameters).
 
 ## Do not touch
 
-`descrambleGPA`/`GPC`'s typedef ambiguity (pending resolution above, but
-not a style fix regardless), the `asm()` mechanism itself (pending the
--fno-check-new investigation, but necessary as things stand), the forced
+The `asm()` mechanism's UNDERLYING NEED is gone (F10155) but the 50 sites
+themselves still work correctly as-is until Tier 2 item 10 replaces them
+-- don't touch them piecemeal outside that workstream. The forced
 fax-dispatch-table `void*` signatures, and the deep nesting in DSP/
-state-machine code -- all confirmed necessary or already correctly
+state-machine code -- both confirmed necessary or already correctly
 handled.
