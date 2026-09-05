@@ -884,8 +884,7 @@ init_vmi_v17tx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
 
 	if (DSPLIB_DEBUG_VERBOSE())
 		dsplibs_debug_printf(
-			"Initializing VMI_V17_TX Modem No ECM "
-			"(Simple Packing)\n");
+			"Initializing VMI_V17_TX Modem No ECM " "(Simple Packing)\n");
 
 	*cfg = V17TX_CFG;
 	cfg->bitrate = bit_rate;
@@ -916,8 +915,7 @@ init_vmi_v29tx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
 
 	if (DSPLIB_DEBUG_VERBOSE())
 		dsplibs_debug_printf(
-			"Initializing VMI_V29_TX Modem No ECM "
-			"(Simple Packing)\n");
+			"Initializing VMI_V29_TX Modem No ECM " "(Simple Packing)\n");
 
 	*cfg = V29TX_CFG;
 	cfg->bitrate = bit_rate;
@@ -947,8 +945,7 @@ init_vmi_v27tx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
 
 	if (DSPLIB_DEBUG_VERBOSE())
 		dsplibs_debug_printf(
-			"Initializing VMI_V27_TX Modem No ECM "
-			"(Simple Packing)\n");
+			"Initializing VMI_V27_TX Modem No ECM " "(Simple Packing)\n");
 
 	*cfg = V27TX_CFG;
 	cfg->bitrate = bit_rate;
@@ -1088,8 +1085,7 @@ _init_transmitter(struct fax_class1 *ctx, int rate_code)
 
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf(
-			"%2d.%02d[sec] Initializing TX modem, "
-			"MODEM_IDX = %d, silence %d ms\n",
+			"%2d.%02d[sec] Initializing TX modem, " "MODEM_IDX = %d, silence %d ms\n",
 			ctx->clock_sec, ctx->clock_frac, ctx->current_mod,
 			ctx->silence_blocks);
 
@@ -1153,8 +1149,7 @@ _init_transmitter(struct fax_class1 *ctx, int rate_code)
 		/* ALWAYS torn down and rebuilt -- no modulation-match check */
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf(
-				"%2d.%02d[sec] New TX Modem... "
-				"Deleting previous existing one\n",
+				"%2d.%02d[sec] New TX Modem... " "Deleting previous existing one\n",
 				ctx->clock_sec, ctx->clock_frac);
 
 		sysdep_free(ctx->modem_vmi->modem_cfg);
@@ -1289,8 +1284,7 @@ _t30_silence_before_tx_state(struct fax_class1 *ctx, const short *rx,
 	if ((unsigned int)ctx->countdown > 400) {
 		if (dsplibs_debug_level > 1)
 			dsplibs_debug_printf(
-			    "%2d.%02d[sec], Elapsed 50MS second, "
-			    "send preamble\n",
+			    "%2d.%02d[sec], Elapsed 50MS second, " "send preamble\n",
 			    ctx->clock_sec, ctx->clock_frac);
 		ctx->state = CLASS1_T30_PREAMBLE_STATE;
 		ctx->countdown = 0;
@@ -1523,8 +1517,7 @@ _rx_look_carrier_state(struct fax_class1 *ctx, const short *rx, short *tx,
 	if (sub == 1) {
 		if (dsplibs_debug_level > 1)
 			dsplibs_debug_printf(
-			    "At %2d.%02d[sec] Data RX connect in "
-			    "_rx_look_carrier_state\n",
+			    "At %2d.%02d[sec] Data RX connect in " "_rx_look_carrier_state\n",
 			    ctx->clock_sec, ctx->clock_frac);
 		ctx->status = FAX_CLASS1_CONNECT;
 		ctx->state = CLASS1_RX_DATA_STATE;
@@ -1534,8 +1527,7 @@ _rx_look_carrier_state(struct fax_class1 *ctx, const short *rx, short *tx,
 	    (unsigned int)ctx->countdown > (unsigned int)limit &&
 	    !(status1 & FAXVMI_RESULT_BIT_2000)) {
 		if (dsplibs_debug_level > 1)
-			dsplibs_debug_printf("S7 time elapsed in look "
-					     "carrier\n");
+			dsplibs_debug_printf("S7 time elapsed in look " "carrier\n");
 		ctx->status = FAX_CLASS1_NO_CARRIER;
 		ctx->state = CLASS1_IDLE_STATE;
 	}
@@ -1545,8 +1537,7 @@ _rx_look_carrier_state(struct fax_class1 *ctx, const short *rx, short *tx,
 
 		if (dsplibs_debug_level > 1)
 			dsplibs_debug_printf(
-			    "TxDatCnt !=0 in _rx_look_carrier_state... "
-			    "abort to command mode\n");
+			    "TxDatCnt !=0 in _rx_look_carrier_state... " "abort to command mode\n");
 		ctx->state = CLASS1_IDLE_STATE;
 		_idle_state_init(ctx);
 		n = cTOOLS_handle_hdlc_output(ctx,
@@ -1616,8 +1607,7 @@ _rx_data_state(struct fax_class1 *ctx, const short *rx, short *tx,
 	} else {
 		if (dsplibs_debug_level > 1)
 			dsplibs_debug_printf(
-			    "At %2d.%02d[sec] No carrier in _rx_data_state, "
-			    "move to idle\n",
+			    "At %2d.%02d[sec] No carrier in _rx_data_state, " "move to idle\n",
 			    ctx->clock_sec, ctx->clock_frac);
 		ctx->state = CLASS1_IDLE_STATE;
 		_idle_state_init(ctx);
@@ -1632,8 +1622,7 @@ _rx_data_state(struct fax_class1 *ctx, const short *rx, short *tx,
 		if (*word8 != 0) {
 			if (dsplibs_debug_level > 1)
 				dsplibs_debug_printf(
-				    "TxDatCnt !=0 in _rx_data_state... "
-				    "abort to command mode\n");
+				    "TxDatCnt !=0 in _rx_data_state... " "abort to command mode\n");
 			ctx->state = CLASS1_IDLE_STATE;
 			_idle_state_init(ctx);
 			n = cTOOLS_handle_hdlc_output(ctx,
@@ -1709,8 +1698,7 @@ _tx_nulls_state(struct fax_class1 *ctx, const short *rx, short *tx,
 	if ((unsigned int)ctx->countdown > 250) {
 		if (dsplibs_debug_level > 1)
 			dsplibs_debug_printf(
-			    "CURRENT_STATE_TIMER > FIVE_SECONDS in "
-			    "_tx_nulls_state\n");
+			    "CURRENT_STATE_TIMER > FIVE_SECONDS in " "_tx_nulls_state\n");
 		ctx->state = CLASS1_IDLE_STATE;
 		ctx->status = FAX_CLASS1_ERROR_ON_HOOK;
 	}
@@ -1720,8 +1708,7 @@ _tx_nulls_state(struct fax_class1 *ctx, const short *rx, short *tx,
 
 		if (dsplibs_debug_level > 1)
 			dsplibs_debug_printf(
-			    "At %2d.%02d[sec] Back to TX_DATA_STATE in "
-			    "_tx_nulls_state\n",
+			    "At %2d.%02d[sec] Back to TX_DATA_STATE in " "_tx_nulls_state\n",
 			    ctx->clock_sec, ctx->clock_frac);
 		ctx->state = CLASS1_TX_DATA_STATE;
 
@@ -1755,8 +1742,7 @@ _tx_nulls_state(struct fax_class1 *ctx, const short *rx, short *tx,
 		if (*word8 < ctx->tx_bytes_per_block) {
 			if (dsplibs_debug_level > 1)
 				dsplibs_debug_printf(
-				    "class1 object fifo under run in "
-				    "_tx_nulls_state !!!\n");
+				    "class1 object fifo under run in " "_tx_nulls_state !!!\n");
 		}
 	}
 
@@ -1850,8 +1836,7 @@ _tx_data_state(struct fax_class1 *ctx, const short *rx, short *tx,
 		if (n < *word8) {
 			if (dsplibs_debug_level > 1)
 				dsplibs_debug_printf(
-				    "At %2d.%02d[sec] Fifo is full in "
-				    "_tx_data_state(%d=>%d>%d)\n",
+				    "At %2d.%02d[sec] Fifo is full in " "_tx_data_state(%d=>%d>%d)\n",
 				    ctx->clock_sec, ctx->clock_frac,
 				    orig_word8, *word8, n);
 		}
@@ -1864,8 +1849,7 @@ _tx_data_state(struct fax_class1 *ctx, const short *rx, short *tx,
 		if (rd < ctx->tx_bytes_per_block) {
 			if (dsplibs_debug_level > 1)
 				dsplibs_debug_printf(
-				    "At %2d.%02d[sec] fifo underrun in "
-				    "_tx_data_state, count %d < %d\n",
+				    "At %2d.%02d[sec] fifo underrun in " "_tx_data_state, count %d < %d\n",
 				    ctx->clock_sec, ctx->clock_frac, rd,
 				    ctx->tx_bytes_per_block);
 		}
@@ -1879,16 +1863,14 @@ _tx_data_state(struct fax_class1 *ctx, const short *rx, short *tx,
 		if (ctx->last_in_byte != 0) {
 			if (dsplibs_debug_level > 1)
 				dsplibs_debug_printf(
-				    "At %2d.%02d[sec] Queue underrun, Stop "
-				    "TX\n",
+				    "At %2d.%02d[sec] Queue underrun, Stop " "TX\n",
 				    ctx->clock_sec, ctx->clock_frac);
 			ctx->state = CLASS1_IDLE_STATE;
 			ctx->status = FAX_CLASS1_OK_NO_CARRIER;
 		} else {
 			if (dsplibs_debug_level > 1)
 				dsplibs_debug_printf(
-				    "At %2d.%02d[sec] Queue underrun, "
-				    "Continue NULLS\n",
+				    "At %2d.%02d[sec] Queue underrun, " "Continue NULLS\n",
 				    ctx->clock_sec, ctx->clock_frac);
 			ctx->state = CLASS1_TX_NULLS_STATE;
 			ctx->countdown = 0;
@@ -1899,8 +1881,7 @@ _tx_data_state(struct fax_class1 *ctx, const short *rx, short *tx,
 	if (status & FAXVMI_STATUS_FULL) {
 		if (dsplibs_debug_level > 1)
 			dsplibs_debug_printf(
-			    "At %2d.%02d[sec] Queue is full in "
-			    "_tx_data_state\n",
+			    "At %2d.%02d[sec] Queue is full in " "_tx_data_state\n",
 			    ctx->clock_sec, ctx->clock_frac);
 	}
 
@@ -1988,8 +1969,7 @@ _hdlc_receive_state(struct fax_class1 *ctx, const short *rx, short *tx,
 		if (!(status & FAXVMI_RESULT_BIT_2000)) {
 			if (dsplibs_debug_level > 1)
 				dsplibs_debug_printf(
-				    "At %2d.%02d[sec] No carrier in HDLC "
-				    "receive state\n",
+				    "At %2d.%02d[sec] No carrier in HDLC " "receive state\n",
 				    ctx->clock_sec, ctx->clock_frac);
 			ctx->state = CLASS1_IDLE_STATE;
 			*(int *)(long)word7 = cTOOLS_handle_hdlc_output(ctx,
@@ -2005,8 +1985,7 @@ _hdlc_receive_state(struct fax_class1 *ctx, const short *rx, short *tx,
 			if (len == 0) {
 				if (dsplibs_debug_level > 1)
 					dsplibs_debug_printf(
-					    "%2d.%02d[sec] Receive buffer "
-					    "with error in "
+					    "%2d.%02d[sec] Receive buffer " "with error in "
 					    "_hdlc_receive_state\n",
 					    ctx->clock_sec, ctx->clock_frac);
 				ctx->delayed_status_countdown = 2;
@@ -2017,8 +1996,7 @@ _hdlc_receive_state(struct fax_class1 *ctx, const short *rx, short *tx,
 
 				if (dsplibs_debug_level > 1)
 					dsplibs_debug_printf(
-					    "%2d.%02d[sec] Receive buffer OK "
-					    "in _hdlc_receive_state\n",
+					    "%2d.%02d[sec] Receive buffer OK " "in _hdlc_receive_state\n",
 					    ctx->clock_sec, ctx->clock_frac);
 				*(int *)(long)word7 =
 				    cTOOLS_handle_hdlc_output(ctx,
@@ -2148,8 +2126,7 @@ _hdlc_receive_between_buffers_state(struct fax_class1 *ctx, const short *rx,
 		if (new_len > 0xff) {
 			if (dsplibs_debug_level > 1)
 				dsplibs_debug_printf(
-				    "SuperFrame full, skipping HDLC "
-				    "frame!\n");
+				    "SuperFrame full, skipping HDLC " "frame!\n");
 		} else {
 			unsigned short *sf = ctx->superframe + ctx->superframe_len;
 			unsigned short *src = (unsigned short *)(void *)ctx
@@ -2166,8 +2143,7 @@ _hdlc_receive_between_buffers_state(struct fax_class1 *ctx, const short *rx,
 	if (!(status & FAXVMI_RESULT_BIT_2000)) {
 		if (dsplibs_debug_level > 1)
 			dsplibs_debug_printf(
-			    "%2d.%02d[sec] No carrier during command "
-			    "mode, NO MESSAGE****\n",
+			    "%2d.%02d[sec] No carrier during command " "mode, NO MESSAGE****\n",
 			    ctx->clock_sec, ctx->clock_frac);
 		ctx->status = FAX_CLASS1_NO_CARRIER_NO_MESSAGE;
 		ctx->state = CLASS1_IDLE_STATE;
@@ -2177,8 +2153,7 @@ _hdlc_receive_between_buffers_state(struct fax_class1 *ctx, const short *rx,
 		if (dsplibs_debug_level > 1)
 			dsplibs_debug_printf(
 			    "%2d.%02d[sec] TxDatCnt>0 in "
-			    "_hdlc_receive_between_buffers_state abort "
-			    "command mode.\n",
+			    "_hdlc_receive_between_buffers_state abort " "command mode.\n",
 			    ctx->clock_sec, ctx->clock_frac);
 		ctx->state = CLASS1_IDLE_STATE;
 		_idle_state_init(ctx);
@@ -2339,8 +2314,7 @@ _hdlc_receive_look_carrier_state(struct fax_class1 *ctx, const short *rx,
 				ctx->gain_attenuation_db = 12 - 3 * i;
 				if (dsplibs_debug_level > 1)
 					dsplibs_debug_printf(
-					    "Gain Attenuation Reuqest: "
-					    "+%d[dB], avg_rms = %d",
+					    "Gain Attenuation Reuqest: " "+%d[dB], avg_rms = %d",
 					    ctx->gain_attenuation_db, (int)(signed char)v);
 				break;
 			}
@@ -2350,8 +2324,7 @@ _hdlc_receive_look_carrier_state(struct fax_class1 *ctx, const short *rx,
 		if (dsplibs_debug_level > 1)
 			dsplibs_debug_printf(
 			    "At %2d.%02d[sec], curent_timeout = %d, No "
-			    "carrier in _hdlc_receive_look_carrier_state, "
-			    "S7 = %d[sec]\n",
+			    "carrier in _hdlc_receive_look_carrier_state, " "S7 = %d[sec]\n",
 			    ctx->clock_sec, ctx->clock_frac, limit,
 			    ctx->s7_timeout);
 		ctx->status = FAX_CLASS1_NO_CARRIER;
@@ -2382,8 +2355,7 @@ _hdlc_receive_look_carrier_state(struct fax_class1 *ctx, const short *rx,
 		if (dsplibs_debug_level > 1)
 			dsplibs_debug_printf(
 			    "At %2d.%02d[sec] TxDatCnt>0 in "
-			    "_hdlc_receive_look_carrier_state abort command "
-			    "mode.\n",
+			    "_hdlc_receive_look_carrier_state abort command " "mode.\n",
 			    ctx->clock_sec, ctx->clock_frac);
 		ctx->state = CLASS1_IDLE_STATE;
 		_idle_state_init(ctx);
@@ -2492,8 +2464,7 @@ _tx_scrambled_ones_state(struct fax_class1 *ctx, const short *rx, short *tx,
 		if (ctx->tx_connect_countdown == 0) {
 			if (dsplibs_debug_level > 1)
 				dsplibs_debug_printf(
-				    "At %2d.%02d[sec] ENABLE_TRANSMIT in "
-				    "_tx_scrambled_ones_state\n",
+				    "At %2d.%02d[sec] ENABLE_TRANSMIT in " "_tx_scrambled_ones_state\n",
 				    ctx->clock_sec, ctx->clock_frac);
 			ctx->transmit_enabled = 1;
 		}
@@ -2510,8 +2481,7 @@ _tx_scrambled_ones_state(struct fax_class1 *ctx, const short *rx, short *tx,
 		if (*tx_data_count > n) {
 			if (dsplibs_debug_level > 1)
 				dsplibs_debug_printf(
-				    "At %2d.%02d[sec] Fifo is full in "
-				    "_tx_scrambled_ones_state\n",
+				    "At %2d.%02d[sec] Fifo is full in " "_tx_scrambled_ones_state\n",
 				    ctx->clock_sec, ctx->clock_frac);
 		}
 
@@ -2533,8 +2503,7 @@ _tx_scrambled_ones_state(struct fax_class1 *ctx, const short *rx, short *tx,
 		if (rd < ctx->tx_bytes_per_block) {
 			if (dsplibs_debug_level > 1)
 				dsplibs_debug_printf(
-				    "class1 object fifo under run in "
-				    "_tx_scrambled_ones_state !!!\n");
+				    "class1 object fifo under run in " "_tx_scrambled_ones_state !!!\n");
 		}
 	}
 
@@ -2597,8 +2566,7 @@ _send_hdlc_buffer_state(struct fax_class1 *ctx, const short *rx, short *tx,
 	if (st.underrun == 1) {
 		if (dsplibs_debug_level > 1)
 			dsplibs_debug_printf(
-			    "%2d.%02d[sec] End of HDLC buffer "
-			    "transmission\n",
+			    "%2d.%02d[sec] End of HDLC buffer " "transmission\n",
 			    ctx->clock_sec, ctx->clock_frac);
 		ctx->state = CLASS1_SEND_HDLC_BETWEEN_BUFFER_STATE;
 		ctx->countdown = 0;
@@ -2676,8 +2644,7 @@ _t30_preabmle_state(struct fax_class1 *ctx, const short *rx, short *tx,
 		if (ctx->hdlc_frame_done != 0) {
 			if (dsplibs_debug_level > 1)
 				dsplibs_debug_printf(
-				    "At %2d.%02d[sec] Elapsed 1 second, "
-				    "send %d buffers\n",
+				    "At %2d.%02d[sec] Elapsed 1 second, " "send %d buffers\n",
 				    ctx->clock_sec, ctx->clock_frac,
 				    ctx->buffers_sent);
 			ctx->state = CLASS1_SEND_HDLC_BUFFER_STATE;
@@ -2688,8 +2655,7 @@ _t30_preabmle_state(struct fax_class1 *ctx, const short *rx, short *tx,
 	if ((unsigned int)ctx->countdown > 0x9c40) {
 		if (dsplibs_debug_level > 1)
 			dsplibs_debug_printf(
-			    "At %2d.%02d[sec] Elapsed 5 second in "
-			    "_t30_preabmle_state\n",
+			    "At %2d.%02d[sec] Elapsed 5 second in " "_t30_preabmle_state\n",
 			    ctx->clock_sec, ctx->clock_frac);
 		ctx->status = FAX_CLASS1_ERROR_NO_CARRIER;
 		ctx->state = CLASS1_IDLE_STATE;
@@ -2792,8 +2758,7 @@ _send_hdlc_between_buffer_state(struct fax_class1 *ctx, const short *rx,
 	if ((unsigned int)ctx->countdown > 250) {
 		if (dsplibs_debug_level > 1)
 			dsplibs_debug_printf(
-			    "At %2d.%02d[sec], CURRENT_STATE_TIMER > "
-			    "5[sec]\n",
+			    "At %2d.%02d[sec], CURRENT_STATE_TIMER > " "5[sec]\n",
 			    ctx->clock_sec, ctx->clock_frac);
 		ctx->status = FAX_CLASS1_ERROR_ON_HOOK;
 		ctx->state = CLASS1_IDLE_STATE;

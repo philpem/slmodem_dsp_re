@@ -196,7 +196,7 @@
  },
  {
   "label": "the sensitive-ISP notice is dropped",
-  "find": "\t\tedprintf(\"VPcmV34Main: Notifying Sensitive ISP \"\n\t\t\t \"detected...\\r\\n\");",
+  "find": "\n\t\tedprintf(\"VPcmV34Main: Notifying Sensitive ISP \" \"detected...\\r\\n\");",
   "replace": "\t\t(void)0;"
  },
  {
@@ -248,7 +248,7 @@
  },
  {
   "label": "a barred K56Flex is refused rather than demoted",
-  "find": "\t\t\t\t\t\"keeping same modulation!!!\\r\\n\");\n\t\t\tdp = DP_KEEP;\n\t\t\tbreak;\n\t\tcase DP_V90:",
+  "find": " \"keeping same modulation!!!\\r\\n\");\n\t\t\tdp = DP_KEEP;\n\t\t\tbreak;\n\t\tcase DP_V90:",
   "replace": "\t\t\t\t\t\"keeping same modulation!!!\\r\\n\");\n\t\t\tbreak;\n\t\tcase DP_V90:"
  },
  {

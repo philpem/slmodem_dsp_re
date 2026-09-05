@@ -884,8 +884,7 @@ V90Parameters::loadModemParamsData()
 		if (frac < 0)
 			frac = -frac;
 
-		edprintf("V90Parameters: setting power reduction to  = "
-			 "%c%d.%02d\r\n",
+		edprintf("V90Parameters: setting power reduction to  = " "%c%d.%02d\r\n",
 			 (0 < DIGITAL_POWER_REDUCTION) ? '+' : '-',
 			 whole, frac);
 	}

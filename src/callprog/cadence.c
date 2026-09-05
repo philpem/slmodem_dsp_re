@@ -512,8 +512,7 @@ cadence_create(struct cadence *c, struct cadence_setup *s, int extra,
 		 * and the \r\n, which the rest of the file does not use. */
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf(
-				"Detection Thresholds: levle_fix=%d,"
-				"--> LEVEL_THRESHOLD=%d\r\n",
+				"Detection Thresholds: levle_fix=%d," "--> LEVEL_THRESHOLD=%d\r\n",
 				level_fix, c->threshold);
 	}
 
@@ -555,8 +554,7 @@ cadence_create(struct cadence *c, struct cadence_setup *s, int extra,
 						  GetBusyToneLooseDetectionEnabled);
 
 		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("Cadence: Busy Tone loose "
-					     "detection is %d\r\n",
+			dsplibs_debug_printf("Cadence: Busy Tone loose " "detection is %d\r\n",
 					     c->looped_match);
 
 		if (!windows_are_set(c))

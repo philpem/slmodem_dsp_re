@@ -69,7 +69,7 @@
  },
  {
   "label": "process has its two error messages swapped",
-  "find": "\t\t\tdsplibs_debug_printf(\"V90BitsToSymbol - error: \"\n\t\t\t\t\t     \"process called, SIZE_NOT_SET\"\n\t\t\t\t\t     \"\\r\\n\");\n\t} else {\n\t\tunsigned int i, kept;",
+  "find": "\n\t\t\tdsplibs_debug_printf(\"V90BitsToSymbol - error: \"\n\t\t\t\t\t     \"process called, SIZE_NOT_SET\" \"\\r\\n\");\n\t} else {\n\t\tunsigned int i, kept;",
   "replace": "\t\t\tdsplibs_debug_printf(\"V90BitsToSymbol - \"\n\t\t\t\t\t     \"error: process called, \"\n\t\t\t\t\t     \"BUFFER_UNDERFLOW\\r\\n\");\n\t} else {\n\t\tunsigned int i, kept;"
  },
  {
@@ -79,14 +79,14 @@
  },
  {
   "label": "process does not clear symbolsDone on the underflow arm",
-  "find": "\t\tunsigned int i, kept;\n\n\t\tif (symbolsDone < symbolsBlockSize) {\n\t\t\tstatus = 3;\n\t\t\tif (dsplibs_debug_level > 1)\n\t\t\t\tdsplibs_debug_printf(\"V90BitsToSymbol - \"\n\t\t\t\t\t\t     \"error: process called, \"\n\t\t\t\t\t\t     \"BUFFER_UNDERFLOW\\r\\n\");\n\t\t\tfor (i = 0; i < symbolsDone; i++)\n\t\t\t\toutSymbols[i] = symbols[i];\n\t\t\tsymbolsDone = 0;",
+  "find": "\n\t\tunsigned int i, kept;\n\n\t\tif (symbolsDone < symbolsBlockSize) {\n\t\t\tstatus = 3;\n\t\t\tif (dsplibs_debug_level > 1)\n\t\t\t\tdsplibs_debug_printf(\"V90BitsToSymbol - \" \"error: process called, \"\n\t\t\t\t\t\t     \"BUFFER_UNDERFLOW\\r\\n\");\n\t\t\tfor (i = 0; i < symbolsDone; i++)\n\t\t\t\toutSymbols[i] = symbols[i];\n\t\t\tsymbolsDone = 0;",
   "replace": "\t\tunsigned int i, kept;\n\n\t\tif (symbolsDone < symbolsBlockSize) {\n\t\t\tstatus = 3;\n\t\t\tif (dsplibs_debug_level > 1)\n\t\t\t\tdsplibs_debug_printf(\"V90BitsToSymbol - \"\n\t\t\t\t\t\t     \"error: process called, \"\n\t\t\t\t\t\t     \"BUFFER_UNDERFLOW\\r\\n\");\n\t\t\tfor (i = 0; i < symbolsDone; i++)\n\t\t\t\toutSymbols[i] = symbols[i];",
   "equivalent": true,
   "why": "EXPECTED UNCAUGHT, and it is a property of the arithmetic rather than a gap in the sweep.  On the underflow arm `symbolsDone < symbolsBlockSize`, so the leftover shift `for (i = symbolsBlockSize; i < symbolsDone; i++)` cannot run whether the zero was stored or not, `kept` stays 0, and `symbolsDone = kept` writes the same zero four lines later.  The store is in the reconstruction because the blob has `movl $0x0,0x10(%ebp)` at 0x2fded and then `mov %ebx,0x10(%ebp)` at 0x2fe1e -- two stores to +0x10 on one path -- and because it is what lets the compiler constant-propagate the loop bound to the `xor %esi,%esi` at 0x2fdf4.  So this one line rests on the instructions and not on the suite."
  },
  {
   "label": "process copies out a whole block on the underflow arm",
-  "find": "\t\tunsigned int i, kept;\n\n\t\tif (symbolsDone < symbolsBlockSize) {\n\t\t\tstatus = 3;\n\t\t\tif (dsplibs_debug_level > 1)\n\t\t\t\tdsplibs_debug_printf(\"V90BitsToSymbol - \"\n\t\t\t\t\t\t     \"error: process called, \"\n\t\t\t\t\t\t     \"BUFFER_UNDERFLOW\\r\\n\");\n\t\t\tfor (i = 0; i < symbolsDone; i++)",
+  "find": "\n\t\tunsigned int i, kept;\n\n\t\tif (symbolsDone < symbolsBlockSize) {\n\t\t\tstatus = 3;\n\t\t\tif (dsplibs_debug_level > 1)\n\t\t\t\tdsplibs_debug_printf(\"V90BitsToSymbol - \" \"error: process called, \"\n\t\t\t\t\t\t     \"BUFFER_UNDERFLOW\\r\\n\");\n\t\t\tfor (i = 0; i < symbolsDone; i++)",
   "replace": "\t\tunsigned int i, kept;\n\n\t\tif (symbolsDone < symbolsBlockSize) {\n\t\t\tstatus = 3;\n\t\t\tif (dsplibs_debug_level > 1)\n\t\t\t\tdsplibs_debug_printf(\"V90BitsToSymbol - \"\n\t\t\t\t\t\t     \"error: process called, \"\n\t\t\t\t\t\t     \"BUFFER_UNDERFLOW\\r\\n\");\n\t\t\tfor (i = 0; i < symbolsBlockSize; i++)"
  },
  {

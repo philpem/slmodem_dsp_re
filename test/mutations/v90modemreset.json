@@ -14,12 +14,12 @@
  },
  {
   "label": "probe mode reports itself and masks nothing",
-  "find": "\t\t\t\t \"masked !!!\\r\\n\");\n\t\t\tqcFlag = 0;",
+  "find": " \"masked !!!\\r\\n\");\n\t\t\tqcFlag = 0;",
   "replace": "\t\t\t\t \"masked !!!\\r\\n\");"
  },
  {
   "label": "probe mode masks the descriptor but not the demodulator's flag",
-  "find": "\tcase V90_MODEM_SIDE_ANALOG:\n\t\tif (ptr_49b4->PROBING_MODE) {\n\t\t\tedprintf(\"due to probe mode quick connect is \"\n\t\t\t\t \"masked !!!\\r\\n\");\n\t\t\tqcFlag = 0;\n\t\t}\n\n\t\tif (qcFlag)\n\t\t\tdilType = DIL_TYPE_ADI_QC;\n\t\telse\n\t\t\tdilType = DIL_TYPE_ADI;\n\n\t\tsetDilDescriptor(dil, dilType);\n\t\tdemodulator->reset(qcFlag);",
+  "find": "\n\n\tcase V90_MODEM_SIDE_ANALOG:\n\t\tif (ptr_49b4->PROBING_MODE) {\n\t\t\tedprintf(\"due to probe mode quick connect is \" \"masked !!!\\r\\n\");\n\t\t\tqcFlag = 0;\n\t\t}\n\n\t\tif (qcFlag)\n\t\t\tdilType = DIL_TYPE_ADI_QC;\n\t\telse\n\t\t\tdilType = DIL_TYPE_ADI;\n\n\t\tsetDilDescriptor(dil, dilType);\n\t\tdemodulator->reset(qcFlag);",
   "replace": "\tcase V90_MODEM_SIDE_ANALOG:\n\t\tif (ptr_49b4->PROBING_MODE)\n\t\t\tedprintf(\"due to probe mode quick connect is \"\n\t\t\t\t \"masked !!!\\r\\n\");\n\n\t\tif (qcFlag && !ptr_49b4->PROBING_MODE)\n\t\t\tdilType = DIL_TYPE_ADI_QC;\n\t\telse\n\t\t\tdilType = DIL_TYPE_ADI;\n\n\t\tsetDilDescriptor(dil, dilType);\n\t\tdemodulator->reset(qcFlag);"
  },
  {
@@ -36,7 +36,7 @@
  },
  {
   "label": "the probe-mode report is not made",
-  "find": "\t\t\tedprintf(\"due to probe mode quick connect is \"\n\t\t\t\t \"masked !!!\\r\\n\");\n",
+  "find": "\n\t\t\tedprintf(\"due to probe mode quick connect is \" \"masked !!!\\r\\n\");\n\t\t\t",
   "replace": ""
  },
  {
@@ -101,7 +101,7 @@
  },
  {
   "label": "the illegal-side report is not gated",
-  "find": "\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90Modem Reset: Illegal \"\n\t\t\t\t\t     \"modemSide\\r\\n\");",
+  "find": "\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90Modem Reset: Illegal \" \"modemSide\\r\\n\");",
   "replace": "\t\tdsplibs_debug_printf(\"V90Modem Reset: Illegal \"\n\t\t\t\t\t     \"modemSide\\r\\n\");"
  },
  {

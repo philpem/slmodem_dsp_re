@@ -93,14 +93,12 @@ V90Modem::printTitle()
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf(V90_BANNER);
 	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("V90Modem Version: %s  (%s)\r\n",
-				     "2.98", "25-Mar-04");
+		dsplibs_debug_printf("V90Modem Version: %s  (%s)\r\n", "2.98", "25-Mar-04");
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf(V90_BANNER);
 
 	edprintf("V90Modem Version Description:\r\n");
-	edprintf("%s\r\n",
-		 "Modified Quick Connect without Memory + Train Time + "
+	edprintf("%s\r\n", "Modified Quick Connect without Memory + Train Time + "
 		 "Constel Power");
 	edprintf("Components: Floreat, ADI, ACD, New BLL\r\n");
 
@@ -187,8 +185,7 @@ V90Modem::reset(unsigned int qcFlag)
 
 	case V90_MODEM_SIDE_ANALOG:
 		if (ptr_49b4->PROBING_MODE) {
-			edprintf("due to probe mode quick connect is "
-				 "masked !!!\r\n");
+			edprintf("due to probe mode quick connect is " "masked !!!\r\n");
 			qcFlag = 0;
 		}
 
@@ -203,8 +200,7 @@ V90Modem::reset(unsigned int qcFlag)
 
 	default:
 		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("V90Modem Reset: Illegal "
-					     "modemSide\r\n");
+			dsplibs_debug_printf("V90Modem Reset: Illegal " "modemSide\r\n");
 		break;
 	}
 }
@@ -254,7 +250,6 @@ V90Modem::progress(int *bits, unsigned int &nofBits, float *samples,
 		demodulator->progress(bits, nofBits, samples, nofSymbols);
 	} else {
 		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("V90Modem progress: Illegal "
-					     "modemSide\r\n");
+			dsplibs_debug_printf("V90Modem progress: Illegal " "modemSide\r\n");
 	}
 }

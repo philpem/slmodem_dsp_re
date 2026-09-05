@@ -128,8 +128,7 @@ v22_data(struct v22fp *fp, unsigned short *txsym, short *txout,
 				fp->status = V22_ST_RETRAIN_REQ;
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
-						"V.22: Retrain request "
-						"detected.");
+						"V.22: Retrain request " "detected.");
 				return;
 			}
 			if (st.flags & V22_STATUS_DESCRAMBLER)
@@ -153,9 +152,7 @@ v22_data(struct v22fp *fp, unsigned short *txsym, short *txout,
 					HDX_0038(fp->hdx) = 1;
 					if (DSPLIB_DEBUG_ON())
 						dsplibs_debug_printf(
-							"Signal quality < "
-							"Retrain level. "
-							"Retrain initiated.");
+							"Signal quality < " "Retrain level. " "Retrain initiated.");
 				}
 			}
 		}
@@ -173,8 +170,7 @@ v22_data(struct v22fp *fp, unsigned short *txsym, short *txout,
 				hdx->carrier_loss_blocks = 0;
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
-						"Carrier back during "
-						"carrier_loss_time (v22_data)"
+						"Carrier back during " "carrier_loss_time (v22_data)"
 						". Retrain initiated.");
 			} else {
 				hdx->carrier_loss_blocks = 0;
@@ -193,8 +189,7 @@ v22_data(struct v22fp *fp, unsigned short *txsym, short *txout,
 			    >= (short)(hdx->carrier_loss_blocks * V22_BLOCK_MS)) {
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
-						"V22_MSG_NO_CARRIER won't be "
-						"reported (carrier_loss_time "
+						"V22_MSG_NO_CARRIER won't be " "reported (carrier_loss_time "
 						"%d of %d ms)\n",
 						(int)(short)(hdx->carrier_loss_blocks
 							     * V22_BLOCK_MS),

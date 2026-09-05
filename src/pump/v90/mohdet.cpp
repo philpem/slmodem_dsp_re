@@ -79,10 +79,8 @@ retrainDetector(tag_retrainReqDet *det, short *in, int nSamples)
 				det->notchDetectSigCnt++;
 				if (dsplibs_debug_level > 1)
 					dsplibs_debug_printf(
-					    "********** retrainDetector() "
-					    "notchDetectSigCnt = %d "
-					    "energyInp>>NOTCH_IN_OUT_RATIO_"
-					    "SHIFT = %d energyOut = %d\r\n",
+					    "********** retrainDetector() " "notchDetectSigCnt = %d "
+					    "energyInp>>NOTCH_IN_OUT_RATIO_" "SHIFT = %d energyOut = %d\r\n",
 					    det->notchDetectSigCnt,
 					    energyInp
 					    >> NOTCH_IN_OUT_RATIO_SHIFT,

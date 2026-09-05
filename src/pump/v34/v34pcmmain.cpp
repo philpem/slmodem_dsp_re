@@ -628,8 +628,7 @@ v90Phase34(void *objp)
 			 */
 			o->seg_symcount = n;
 			dsplibs_debug_printf("Entered v34m->v90Receiver == "
-					     "V90RCV_P3_THIRD_S with "
-					     "tx->symcnt = %d period = %d\n",
+					     "V90RCV_P3_THIRD_S with " "tx->symcnt = %d period = %d\n",
 					     (int)n,
 					     (int)*(const short *)
 					     (m + OB_PERIOD));
@@ -1020,8 +1019,7 @@ v90RateRenegSilence(void *objp)
 
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("move to SCR on silence rrn "
-					     "(disabling SAS detector on "
-					     "silence)\r\n");
+					     "(disabling SAS detector on " "silence)\r\n");
 		o->v90_receiver = 19;
 		o->tx_flags = (short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);
 		((unsigned char *)o->pac3c)[CFG_FLAGS03] &= ~CFG_SAS_DETECT;
@@ -1266,8 +1264,7 @@ VPcmV34InitiateRetrain(void *objp, unsigned char requestedDp)
 
 		obj->dmadelay = (short)(0x610u - (unsigned)ext);
 		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("V34FEC, V34dmadelay set to %d, "
-					     "(ext delay=%d)\n",
+			dsplibs_debug_printf("V34FEC, V34dmadelay set to %d, " "(ext delay=%d)\n",
 					     (int)obj->dmadelay, ext);
 	}
 
@@ -1281,8 +1278,7 @@ VPcmV34InitiateRetrain(void *objp, unsigned char requestedDp)
 	 */
 	if (*(const int *)(*(const unsigned char *const *)(sess + SESS_PCM)
 			   + PCM_SENS) != 0) {
-		edprintf("VPcmV34Main: Notifying Sensitive ISP "
-			 "detected...\r\n");
+		edprintf("VPcmV34Main: Notifying Sensitive ISP " "detected...\r\n");
 		cfg = (unsigned char *)obj->pac3c;
 		cfg[CFG_ISP] = (unsigned char)(cfg[CFG_ISP]
 					       | CFG_ISP_SENSITIVE);
@@ -1309,8 +1305,7 @@ VPcmV34InitiateRetrain(void *objp, unsigned char requestedDp)
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
 					"VPcmV34InitiateRetrain: requested mod"
-					" K56Flex, but params.flex is OFF, "
-					"keeping same modulation!!!\r\n");
+					" K56Flex, but params.flex is OFF, " "keeping same modulation!!!\r\n");
 			dp = DP_KEEP;
 			break;
 		case DP_V90:
@@ -1327,8 +1322,7 @@ VPcmV34InitiateRetrain(void *objp, unsigned char requestedDp)
 		default:
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
-					"VPcmV34InitiateRetrain: unknown "
-					"requested mod (%d), keeping same "
+					"VPcmV34InitiateRetrain: unknown " "requested mod (%d), keeping same "
 					"modulation!!!\r\n", (int)dp);
 			dp = DP_KEEP;
 			break;
@@ -1529,8 +1523,7 @@ V34GiveINFO1dBits(void *objp, const short *bits)
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf(
 			"VPcmV34Main: upstream selection: local cap - %d, "
-			"remote cap - %d, requested in info1 - %d, "
-			"isPCM - %d\r\n",
+			"remote cap - %d, requested in info1 - %d, " "isPCM - %d\r\n",
 			sess->v92modem.phase2Info->v92CapabilitiesLocal,
 			obj->remote_v92,
 			(unsigned short)bits[7] & 0x20,
@@ -2149,8 +2142,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 
 	if ((unsigned int)st > 10) {
 		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("VPcmV34Main: Illegal Modem "
-					     "State !!!!\r\n");
+			dsplibs_debug_printf("VPcmV34Main: Illegal Modem " "State !!!!\r\n");
 		goto reload;
 	}
 
@@ -2203,8 +2195,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 			    && (unsigned int)since < (unsigned int)(n + 0x12c0)) {
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
-					    "VPcmV34Main: Masking CAS "
-					    "detection after %d in train..."
+					    "VPcmV34Main: Masking CAS " "detection after %d in train..."
 					    "\r\n", since);
 				PROG_U8(obj->pac3c, CFG_FLAGS3)
 				    &= (unsigned char)~CFG_FLAG3_RETRAIN;
@@ -2313,15 +2304,13 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 				if (t <= 0x5f) {
 					if (DSPLIB_DEBUG_ON())
 						dsplibs_debug_printf(
-						    "VPcmV34Main: Wait (before"
-						    " P2 COMPLETE)...\r\n");
+						    "VPcmV34Main: Wait (before" " P2 COMPLETE)...\r\n");
 					return 0;
 				}
 				PROG_U8(obj, O_P2STATE) = 1;
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
-					    "VPcmV34Main: Indicating First P2 "
-					    "COMPLETE... (after %d)\r\n",
+					    "VPcmV34Main: Indicating First P2 " "COMPLETE... (after %d)\r\n",
 					    PROG_S32(obj, O_P2DELAY));
 				return 1;
 			}
@@ -2333,16 +2322,14 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 				PROG_S32(obj, O_P2DELAY) = t;
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
-					    "On PHASE2_COMPLETE: added Silence"
-					    " = %d, p2DelayCntr = %d\r\n",
+					    "On PHASE2_COMPLETE: added Silence" " = %d, p2DelayCntr = %d\r\n",
 					    PROG_S32(obj->pac3c, CFG_SILENCE),
 					    t);
 			}
 			if (PROG_S32(obj, O_P2DELAY) <= 0x240) {
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
-					    "VPcmV34Main: Wait (after P2 "
-					    "COMPLETE)...\r\n");
+					    "VPcmV34Main: Wait (after P2 " "COMPLETE)...\r\n");
 				PROG_U8(obj, O_P2STATE)++;
 				return 1;
 			}
@@ -2359,15 +2346,13 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 			    && sess->pcmSessionType != 0) {
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
-					    "VPcmV34Main: Moving to Phase3 "
-					    "Modem V92..\r\n");
+					    "VPcmV34Main: Moving to Phase3 " "Modem V92..\r\n");
 				obj->status = 2;
 			}
 			if (obj->k56flex_receiver > 1) {
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
-					    "VPcmV34Main: Moving to Phase3 "
-					    "Modem K56Flex..\r\n");
+					    "VPcmV34Main: Moving to Phase3 " "Modem K56Flex..\r\n");
 				obj->status = 3;
 				PROG_S16(obj, O_DCCOUNT) = 0;
 			}
@@ -2379,22 +2364,19 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 				if (sess->pcmSessionType != 0) {
 					if (DSPLIB_DEBUG_ON())
 						dsplibs_debug_printf(
-						    "VPcmV34Main: Moving to "
-						    "Phase3 Modem V92..\r\n");
+						    "VPcmV34Main: Moving to " "Phase3 Modem V92..\r\n");
 					obj->status = 2;
 				} else {
 					if (DSPLIB_DEBUG_ON())
 						dsplibs_debug_printf(
-						    "VPcmV34Main: Moving to "
-						    "Phase3 Modem V90..\r\n");
+						    "VPcmV34Main: Moving to " "Phase3 Modem V90..\r\n");
 					obj->status = 1;
 				}
 			}
 			if (obj->k56flex_receiver > 1) {
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
-					    "VPcmV34Main: Moving to Phase3 "
-					    "Modem K56Flex..\r\n");
+					    "VPcmV34Main: Moving to Phase3 " "Modem K56Flex..\r\n");
 				obj->status = 3;
 				PROG_S16(obj, O_DCCOUNT) = 0;
 			}
@@ -2526,8 +2508,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 							PROG_S32(obj, O_DCACC)
 							    = acc;
 							dsplibs_debug_printf(
-							    "Estimated DC = %d"
-							    "  (acc = %d)\n",
+							    "Estimated DC = %d" "  (acc = %d)\n",
 							    (int)(short)e, acc);
 						}
 						PROG_S32(obj, O_DCACC) = 0;
@@ -2738,8 +2719,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 							PROG_S32(obj, O_DCACC)
 							    = acc;
 							dsplibs_debug_printf(
-							    "Estimated DC = %d"
-							    "  (acc = %d)\n",
+							    "Estimated DC = %d" "  (acc = %d)\n",
 							    (int)(short)e, acc);
 						}
 						PROG_S32(obj, O_DCACC) = 0;
@@ -2808,30 +2788,26 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 		} else {
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
-				    "VPcmV34Main: Line verification period "
-				    "completed !!!\r\n");
+				    "VPcmV34Main: Line verification period " "completed !!!\r\n");
 			if ((PROG_U8(obj->pac3c, CFG_FLAGS2)
 			     & CFG_FLAG2_SAMELINE) == 0) {
 				obj->is_short = 0;
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
-					    "VPcmV34Main: Moving to full "
-					    "phase2 upon DP Manager setting..."
+					    "VPcmV34Main: Moving to full " "phase2 upon DP Manager setting..."
 					    "\r\n");
 			} else if (obj->local_short
 				   == (int)sess->verificationStatus) {
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
-					    "VPcmV34Main: Moving to short "
-					    "phase2 due to same line "
+					    "VPcmV34Main: Moving to short " "phase2 due to same line "
 					    "verification...\r\n");
 				obj->is_short = 1;
 			} else {
 				obj->is_short = 0;
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
-					    "VPcmV34Main: Moving to full "
-					    "phase2 due to false same line "
+					    "VPcmV34Main: Moving to full " "phase2 due to false same line "
 					    "verification...\r\n");
 			}
 			if (obj->is_short == 0) {
@@ -2872,8 +2848,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 			if ((unsigned int)(held - n) < (unsigned int)want
 			    && DSPLIB_DEBUG_ON()) {
 				dsplibs_debug_printf(
-				    "VPcmV34Main: ANSam not detected on "
-				    "out-going, assuming 3-way call "
+				    "VPcmV34Main: ANSam not detected on " "out-going, assuming 3-way call "
 				    "supported !\r\n");
 				st = obj->status;
 			}
@@ -2899,8 +2874,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 			if (lim != -1 && (held + n) >= lim) {
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
-					    "VPcmV34Main: Modem On Hold "
-					    "Timeout expired , ending session"
+					    "VPcmV34Main: Modem On Hold " "Timeout expired , ending session"
 					    " !!!\r\n");
 				obj->progress = 0x10;
 				obj->status = 0xa;
@@ -2920,23 +2894,19 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 				    && held <= 0xbb7f) {
 					if (DSPLIB_DEBUG_ON())
 						dsplibs_debug_printf(
-						    "VPcmV34Main: ANSam "
-						    "detected on out going "
-						    "call (later case, after "
-						    "%d smp) ! assuming no "
+						    "VPcmV34Main: ANSam " "detected on out going "
+						    "call (later case, after " "%d smp) ! assuming no "
 						    "3-way call...\r\n", held);
 					obj->short_abe2 = 2;
 				} else if (DSPLIB_DEBUG_ON()) {
 					dsplibs_debug_printf(
-					    "VPcmV34Main: ANSam detected on "
-					    "hold ! requesting Reconnect..."
+					    "VPcmV34Main: ANSam detected on " "hold ! requesting Reconnect..."
 					    "\r\n");
 				}
 			} else {
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
-					    "VPcmV34Main: ANSam detected on "
-					    "out going call ! assuming no "
+					    "VPcmV34Main: ANSam detected on " "out going call ! assuming no "
 					    "3-way call...\r\n");
 				obj->short_abe2 = 2;
 			}
@@ -2962,8 +2932,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 		if (DSPLIB_DEBUG_ON()) {
 			obj->progress = 0;
 			dsplibs_debug_printf("VPcmV34Main: Delay ended, "
-					     "indicating reconnect request..."
-					     "\r\n");
+					     "indicating reconnect request..." "\r\n");
 		}
 		ret = 0xf;
 		obj->progress = 0xf;
@@ -3101,12 +3070,8 @@ done:
 					PROG_S32(obj, O_NOTCH_CNT) = ++cnt;
 					if (DSPLIB_DEBUG_ON())
 						dsplibs_debug_printf(
-						    "********** "
-						    "retrainDetector() "
-						    "notchDetectSigCnt = %d "
-						    "energyInp>>NOTCH_IN_OUT_"
-						    "RATIO_SHIFT = %d "
-						    "energyOut = %d\r\n",
+						    "********** " "retrainDetector() " "notchDetectSigCnt = %d "
+						    "energyInp>>NOTCH_IN_OUT_" "RATIO_SHIFT = %d " "energyOut = %d\r\n",
 						    cnt, ratio, eout);
 				} else {
 					PROG_S32(obj, O_NOTCH_CNT) = 0;
@@ -3128,8 +3093,7 @@ done:
 		if (retrain != 0) {
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
-				    "VPcmV34Main: Retrain Detected by Tone "
-				    "detector !\r\n");
+				    "VPcmV34Main: Retrain Detected by Tone " "detector !\r\n");
 			VPcmV34InitiateRetrain(obj, 0);
 		}
 		return obj->progress;
@@ -3327,8 +3291,7 @@ VPcmV34SetDelays(struct tagV34Object *objp)
 
 		obj->dmadelay = (short)(0x610u - (unsigned)ext);
 		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("V34FEC, V34dmadelay set to %d, "
-					     "(ext delay=%d)\n",
+			dsplibs_debug_printf("V34FEC, V34dmadelay set to %d, " "(ext delay=%d)\n",
 					     (int)obj->dmadelay, ext);
 	}
 

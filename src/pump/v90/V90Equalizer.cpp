@@ -1053,8 +1053,7 @@ V90Equalizer::enterPhase4()
 	ppm = resampler->getTimingOffsetPPM();
 	ppmFrac = ppm - (float)(int)resampler->getTimingOffsetPPM();
 
-	edprintf("V90Equalizer: timing offset on freeze (phase4) = "
-		 "%c%d.%04d\r\n",
+	edprintf("V90Equalizer: timing offset on freeze (phase4) = " "%c%d.%04d\r\n",
 		 !(resampler->getTimingOffsetPPM() <= 0.0f) ? '+' : '-',
 		 (int)__builtin_fabsl((long double)
 				      resampler->getTimingOffsetPPM()),
@@ -1806,8 +1805,7 @@ V90Equalizer::calcMeanErrorStatistics()
 			meanErrorEnergyMin = meanErrorEnergy[i];
 	}
 
-	edprintf("##########################################"
-		 "##########\r\n");
+	edprintf("##########################################" "##########\r\n");
 	edprintf("V90Equalizer: meanErrorEnergy Debug:\r\n");
 	edprintf("V90Equalizer: calculated over %d mean errors\r\n", len);
 	edprintf("--------------------------------------------\r\n");
@@ -1825,8 +1823,7 @@ V90Equalizer::calcMeanErrorStatistics()
 		     "%c%d.%06d\r\n", meanErrorEnergyMin, 1.0e6);
 	edprint_stat("V90Equalizer: meanErrorEnergy max value  = "
 		     "%c%d.%06d\r\n", meanErrorEnergyMax, 1.0e6);
-	edprintf("##########################################"
-		 "##########\r\n");
+	edprintf("##########################################" "##########\r\n");
 
 	return std;
 }

@@ -1693,8 +1693,7 @@ initdigital(void *obj)
 		o->tx_flags = (short)((unsigned short)o->tx_flags & ~0x4000);
 
 	if (level > 1)
-		dsplibs_debug_printf("V34DATARATE, finally txbitrate %d,"
-				     "rxbitrate %d\n",
+		dsplibs_debug_printf("V34DATARATE, finally txbitrate %d," "rxbitrate %d\n",
 				     2400 * (short)cfg->txbits,
 				     2400 * (short)cfg->rxbits);
 
@@ -1722,8 +1721,7 @@ initdigital(void *obj)
 
 		if (level > 1) {
 			dsplibs_debug_printf("V34DATARATE, for tx data rate -"
-					     " %d, PTC - %d, setting nofTxBits"
-					     " to %d\r\n",
+					     " %d, PTC - %d, setting nofTxBits" " to %d\r\n",
 					     (short)bits, o->ptc,
 					     o->nof_tx_bits);
 			bits = (unsigned short)cfg->txbits;
@@ -1752,8 +1750,7 @@ initdigital(void *obj)
 		div = cfg->rx_divtab[(short)bits + 14 * (short)umax - 1] >> 1;
 		if (div == 0) {
 			if (level > 1) {
-				dsplibs_debug_printf("FATAL ERROR(initdigital)"
-						     " - ZERODIV expected!");
+				dsplibs_debug_printf("FATAL ERROR(initdigital)" " - ZERODIV expected!");
 				bits = (unsigned short)cfg->rxbits;
 				umax = (unsigned short)cfg->rx_use_max;
 			}

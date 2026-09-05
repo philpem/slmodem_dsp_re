@@ -375,7 +375,7 @@
  },
  {
   "label": "the step down counts a REMOTE renegotiation",
-  "find": "\t\t\t\t\t     \"error \\n\");\n\t\tVPcmV34IndicateLocalRRN(obj);\n\t}\n\n\tif (dp_rxget(obj, DP_RX_GOOD)",
+  "find": " \"error \\n\");\n\t\tVPcmV34IndicateLocalRRN(obj);\n\t}\n\n\tif (dp_rxget(obj, DP_RX_GOOD)",
   "replace": "\t\t\t\t\t     \"error \\n\");\n\t\tVPcmV34IndicateRemoteRRN(obj);\n\t}\n\n\tif (dp_rxget(obj, DP_RX_GOOD)",
   "fn": "datapumpv34"
  },
@@ -441,7 +441,7 @@
  },
  {
   "label": "the step up counts a REMOTE renegotiation",
-  "find": "\t\t\t\t\t     \"error \\n\");\n\t\tVPcmV34IndicateLocalRRN(obj);\n\t}\n}",
+  "find": " \"error \\n\");\n\t\tVPcmV34IndicateLocalRRN(obj);\n\t}\n}",
   "replace": "\t\t\t\t\t     \"error \\n\");\n\t\tVPcmV34IndicateRemoteRRN(obj);\n\t}\n}",
   "fn": "datapumpv34"
  },
@@ -453,7 +453,7 @@
  },
  {
   "label": "the step up's message loses the trailing space",
-  "find": "\t\t\t\t\t     \"UP initiated due to small \"\n\t\t\t\t\t     \"error \\n\");",
+  "find": "\n\t\t\t\t\t     \"UP initiated due to small \" \"error \\n\");",
   "replace": "\t\t\t\t\t     \"UP initiated due to small \"\n\t\t\t\t\t     \"error\\n\");",
   "fn": "datapumpv34"
  },

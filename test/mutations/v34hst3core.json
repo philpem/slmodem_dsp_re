@@ -344,7 +344,7 @@
  },
  {
   "label": "80's disconnect diagnostic is dropped",
-  "find": "\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"MOH: Timeout waiting for MH \"\n\t\t\t\t\t     \"sequence under MHfrr, \"\n\t\t\t\t\t     \"disconnecting...\\r\\n\");\n\n",
+  "find": "\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"MOH: Timeout waiting for MH \" \"sequence under MHfrr, \"\n\t\t\t\t\t     \"disconnecting...\\r\\n\");\n\n\t\t",
   "replace": ""
  },
  {

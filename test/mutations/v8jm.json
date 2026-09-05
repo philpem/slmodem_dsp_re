@@ -16,27 +16,27 @@
  },
  {
   "label": "give V.80 an indication of its own on the answering side",
-  "find": "\t\t} else if (w == 0x109 && (cm->b2 & 0x02)) {\n\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\"V8: call function DATA \"\n\t\t\t\t\t\t     \"indication...\\r\\n\");\n\t\t\taccept = 1;",
+  "find": "\n\t\t} else if (w == 0x109 && (cm->b2 & 0x02)) {\n\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\"V8: call function DATA \" \"indication...\\r\\n\");\n\t\t\taccept = 1;",
   "replace": "\t\t} else if (w == 0x109 && (cm->b2 & 0x02)) {\n\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\"V8: call function V.80 \"\n\t\t\t\t\t\t     \"indication...\\r\\n\");\n\t\t\taccept = 1;"
  },
  {
   "label": "give V.80 an indication of its own on the calling side",
-  "find": "\t\t\t} else if (w == 0x109 && (cm->b2 & 0x02)) {\n\t\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t    \"V8: call function DATA \"\n\t\t\t\t\t    \"indication...\\r\\n\");\n\t\t\t\tv->fn_matched = 1;",
+  "find": "\n\t\t\t} else if (w == 0x109 && (cm->b2 & 0x02)) {\n\t\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t    \"V8: call function DATA \" \"indication...\\r\\n\");\n\t\t\t\tv->fn_matched = 1;",
   "replace": "\t\t\t} else if (w == 0x109 && (cm->b2 & 0x02)) {\n\t\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t    \"V8: call function V.80 \"\n\t\t\t\t\t    \"indication...\\r\\n\");\n\t\t\t\tv->fn_matched = 1;"
  },
  {
   "label": "swap the two fax directions on the answering side",
-  "find": "\t\t} else if (w == 0x103 && (cm->b2 & 0x01)) {\n\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t    \"V8: call function FAX TX from caller \"\n\t\t\t\t    \"indication...\\r\\n\");",
+  "find": "\n\t\t} else if (w == 0x103 && (cm->b2 & 0x01)) {\n\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t    \"V8: call function FAX TX from caller \" \"indication...\\r\\n\");",
   "replace": "\t\t} else if (w == 0x103 && (cm->b2 & 0x01)) {\n\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t    \"V8: call function FAX RX to caller \"\n\t\t\t\t    \"indication...\\r\\n\");"
  },
  {
   "label": "swap the two fax directions on the calling side",
-  "find": "\t\t\t} else if (w == 0x10b && (cm->b1 & 0x80)) {\n\t\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t    \"V8: call function FAX RX to \"\n\t\t\t\t\t    \"caller indication...\\r\\n\");",
+  "find": "\n\t\t\t} else if (w == 0x10b && (cm->b1 & 0x80)) {\n\t\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t    \"V8: call function FAX RX to \" \"caller indication...\\r\\n\");",
   "replace": "\t\t\t} else if (w == 0x10b && (cm->b1 & 0x80)) {\n\t\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t    \"V8: call function FAX TX from \"\n\t\t\t\t\t    \"caller indication...\\r\\n\");"
  },
  {
   "label": "drop the in-range call function announcement",
-  "find": "\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t    \"V8: Got Call Function Match (in call \"\n\t\t\t\t    \"function range) !!!\\r\\n\");\n\t\t\taccept = 1;",
+  "find": "\n\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t    \"V8: Got Call Function Match (in call \" \"function range) !!!\\r\\n\");\n\t\t\taccept = 1;",
   "replace": "\t\t\taccept = 1;"
  },
  {
@@ -66,7 +66,7 @@
  },
  {
   "label": "swap the two protocol match announcements",
-  "find": "\t\t\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t\t    \"V8: Got Default Protocol \"\n\t\t\t\t\t\t    \"Match (LAPM) !!!\\r\\n\");",
+  "find": "\n\t\t\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t\t    \"V8: Got Default Protocol \" \"Match (LAPM) !!!\\r\\n\");",
   "replace": "\t\t\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t\t    \"V8: Got Protocol Match (in \"\n\t\t\t\t\t\t    \"protocol range) !!!\\r\\n\");"
  },
  {
@@ -111,7 +111,7 @@
  },
  {
   "label": "drop the gloss from the failed verdict",
-  "find": "\t\t\t\t     v->fn_matched != 0 ? \"\"\n\t\t\t\t      : \" (not indicating modulation \"\n\t\t\t\t\t\"capabilities)!!\");",
+  "find": "\n\t\t\t\t     v->fn_matched != 0 ? \"\"\n\t\t\t\t      : \" (not indicating modulation \" \"capabilities)!!\");",
   "replace": "\t\t\t\t     v->fn_matched != 0 ? \"\" : \"\");"
  },
  {
@@ -121,7 +121,7 @@
  },
  {
   "label": "drop the no-call-function-match complaint from the report",
-  "find": "\t} else if (DSPLIB_DEBUG_ON()) {\n\t\tdsplibs_debug_printf(\"V8Report: since no call function match, \"\n\t\t\t\t     \"not indicating any modulation \"\n\t\t\t\t     \"capability...\\r\\n\");\n\t}",
+  "find": "\n\t} else if (DSPLIB_DEBUG_ON()) {\n\t\tdsplibs_debug_printf(\"V8Report: since no call function match, \"\n\t\t\t\t     \"not indicating any modulation \" \"capability...\\r\\n\");\n\t}",
   "replace": "\t}"
  },
  {

@@ -419,8 +419,7 @@ V90Modulator::acknowledgeCPReception()
 		return;
 
 	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("V90Modulator: exit MP due to CP "
-				     "reception\r\n");
+		dsplibs_debug_printf("V90Modulator: exit MP due to CP " "reception\r\n");
 
 	phase4Modulator->exitMP();
 	eventCode = 0;
@@ -462,8 +461,7 @@ V90Modulator::acknowledgeCPNotReception()
 		mp->infoToBits();
 
 		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("V90Modulator: exit MP due to "
-					     "CPNot reception\r\n");
+			dsplibs_debug_printf("V90Modulator: exit MP due to " "CPNot reception\r\n");
 
 		phase4Modulator->exitMP();
 		eventCode = 0;
@@ -472,8 +470,7 @@ V90Modulator::acknowledgeCPNotReception()
 
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V90Modulator: setting delayed "
-					     "MPNot exit due to CPNot "
-					     "reception\r\n");
+					     "MPNot exit due to CPNot " "reception\r\n");
 	}
 }
 
@@ -482,8 +479,7 @@ V90Modulator::acknowledgeEReception()
 {
 	if (phase4Modulator->state == P4M_STATE_MP_NOT) {
 		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("V90Modulator: exit MPNot due to "
-					     "E reception\r\n");
+			dsplibs_debug_printf("V90Modulator: exit MPNot due to " "E reception\r\n");
 
 		phase4Modulator->exitMPNot();
 		eventCode = 0;
@@ -491,8 +487,7 @@ V90Modulator::acknowledgeEReception()
 		phase4Modulator->delayedMpNotExit = 1;
 
 		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("V90Modulator: setting delayed "
-					     "MPNot exit due to E "
+			dsplibs_debug_printf("V90Modulator: setting delayed " "MPNot exit due to E "
 					     "reception\r\n");
 	}
 }
@@ -661,14 +656,12 @@ V90Modulator::initiateRRN()
 
 	if (state != 3) {
 		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("V90Modulator: RRN requested but "
-					     "NOT approved\r\n");
+			dsplibs_debug_printf("V90Modulator: RRN requested but " "NOT approved\r\n");
 		return -1;
 	}
 
 	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("V90Modulator: RRN requested, enter "
-				     "Phase 4\r\n");
+		dsplibs_debug_printf("V90Modulator: RRN requested, enter " "Phase 4\r\n");
 
 	state = 2;
 	symbolCount = 0;
@@ -748,14 +741,12 @@ V90Modulator::initiateFPE()
 
 	if (state != 3) {
 		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("V90Modulator: FPE requested but "
-					     "NOT approved\r\n");
+			dsplibs_debug_printf("V90Modulator: FPE requested but " "NOT approved\r\n");
 		return -1;
 	}
 
 	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("V90Modulator: FPE requested, enter "
-				     "Phase 4\r\n");
+		dsplibs_debug_printf("V90Modulator: FPE requested, enter " "Phase 4\r\n");
 
 	state = 2;
 	symbolCount = 0;
@@ -880,8 +871,7 @@ V90Modulator::progress(int *bits, unsigned int &nofBits, float *out,
 				if (eventCode == 6 && state != 2) {
 					if (DSPLIB_DEBUG_ON())
 						dsplibs_debug_printf(
-						    "V90Modulator: enter "
-						    "Phase 4\r\n");
+						    "V90Modulator: enter " "Phase 4\r\n");
 
 					phase4Modulator->reset(
 					    (PcmType)phase2Info->pcmType,
@@ -918,8 +908,7 @@ V90Modulator::progress(int *bits, unsigned int &nofBits, float *out,
 		}
 
 		if (state != 3) {
-			edprintf("V90Modulator: Data Phase spectral "
-				 "parameters:\r\n");
+			edprintf("V90Modulator: Data Phase spectral " "parameters:\r\n");
 			displaySpectralParams(mappingParams2);
 
 			state = 3;
@@ -930,8 +919,7 @@ V90Modulator::progress(int *bits, unsigned int &nofBits, float *out,
 
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
-				    "V90Modulator: enter Data Phase, "
-				    "Rate = %d [bps]\r\n",
+				    "V90Modulator: enter Data Phase, " "Rate = %d [bps]\r\n",
 				    state == 3
 					? (unsigned int)(0.5f +
 					      (8000 *
@@ -969,8 +957,7 @@ V90Modulator::progress(int *bits, unsigned int &nofBits, float *out,
 
 	default:
 		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("V90Modulator progress: Illegal "
-					     "state\r\n");
+			dsplibs_debug_printf("V90Modulator progress: Illegal " "state\r\n");
 		break;
 	}
 

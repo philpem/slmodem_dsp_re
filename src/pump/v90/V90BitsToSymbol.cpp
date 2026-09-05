@@ -338,8 +338,7 @@ V90BitsToSymbol::process(unsigned char *bits, unsigned int &nofBits,
 		status = 1;
 		if (dsplibs_debug_level > 1)
 			dsplibs_debug_printf("V90BitsToSymbol - error: "
-					     "process called, SIZE_NOT_SET"
-					     "\r\n");
+					     "process called, SIZE_NOT_SET" "\r\n");
 	} else {
 		unsigned int i, kept, nofOut;
 
@@ -350,8 +349,7 @@ V90BitsToSymbol::process(unsigned char *bits, unsigned int &nofBits,
 		if (symbolsDone < symbolsBlockSize) {
 			status = 3;
 			if (dsplibs_debug_level > 1)
-				dsplibs_debug_printf("V90BitsToSymbol - "
-						     "error: process called, "
+				dsplibs_debug_printf("V90BitsToSymbol - " "error: process called, "
 						     "BUFFER_UNDERFLOW\r\n");
 			for (i = 0; i < symbolsDone; i++)
 				outSymbols[i] = symbols[i];
@@ -361,8 +359,7 @@ V90BitsToSymbol::process(unsigned char *bits, unsigned int &nofBits,
 				status = 2;
 				if (dsplibs_debug_level > 1)
 					dsplibs_debug_printf(
-					    "V90BitsToSymbol - error: process "
-					    "called, BUFFER_OVERFLOW\r\n");
+					    "V90BitsToSymbol - error: process " "called, BUFFER_OVERFLOW\r\n");
 				symbolsDone = symbolsBlockSize;
 			}
 			for (i = 0; i < symbolsBlockSize; i++)
@@ -434,8 +431,7 @@ V90BitsToSymbol::process(unsigned char *bits, unsigned int nofBits)
 		status = 1;
 		if (dsplibs_debug_level > 1)
 			dsplibs_debug_printf("V90BitsToSymbol - error: "
-					     "process called, SIZE_NOT_SET"
-					     "\r\n");
+					     "process called, SIZE_NOT_SET" "\r\n");
 	} else {
 		unsigned int nofOut;
 
@@ -445,8 +441,7 @@ V90BitsToSymbol::process(unsigned char *bits, unsigned int nofBits)
 		if (symbolsDone > nofSymbols) {
 			status = 2;
 			if (dsplibs_debug_level > 1)
-				dsplibs_debug_printf("V90BitsToSymbol - "
-						     "error: process called, "
+				dsplibs_debug_printf("V90BitsToSymbol - " "error: process called, "
 						     "BUFFER_OVERFLOW\r\n");
 			symbolsDone = symbolsBlockSize;
 		}
@@ -491,16 +486,14 @@ V90BitsToSymbol::process(unsigned int &nofBits, short *outSymbols)
 		status = 1;
 		if (dsplibs_debug_level > 1)
 			dsplibs_debug_printf("V90BitsToSymbol - error: "
-					     "process called, SIZE_NOT_SET"
-					     "\r\n");
+					     "process called, SIZE_NOT_SET" "\r\n");
 	} else {
 		unsigned int i, kept;
 
 		if (symbolsDone < symbolsBlockSize) {
 			status = 3;
 			if (dsplibs_debug_level > 1)
-				dsplibs_debug_printf("V90BitsToSymbol - "
-						     "error: process called, "
+				dsplibs_debug_printf("V90BitsToSymbol - " "error: process called, "
 						     "BUFFER_UNDERFLOW\r\n");
 			for (i = 0; i < symbolsDone; i++)
 				outSymbols[i] = symbols[i];

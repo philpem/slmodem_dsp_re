@@ -277,8 +277,7 @@ V92BitsToSymbol::process(unsigned char *bits, unsigned int nbits)
 	if (symbolsBlockSize == 0) {
 		ret = V92BTOS_SIZE_NOT_SET;
 		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("V92BitsToSymbol - error: "
-					     "process called, "
+			dsplibs_debug_printf("V92BitsToSymbol - error: " "process called, "
 					     "SIZE_NOT_SET\r\n");
 	} else {
 		unsigned int nout;
@@ -289,8 +288,7 @@ V92BitsToSymbol::process(unsigned char *bits, unsigned int nbits)
 		if (symbolsDone > nSymbols) {
 			ret = V92BTOS_BUFFER_OVERFLOW;
 			if (DSPLIB_DEBUG_ON())
-				dsplibs_debug_printf("V92BitsToSymbol - "
-						     "error: process called, "
+				dsplibs_debug_printf("V92BitsToSymbol - " "error: process called, "
 						     "BUFFER_OVERFLOW\r\n");
 			symbolsDone = symbolsBlockSize;
 		}
@@ -333,8 +331,7 @@ V92BitsToSymbol::process(unsigned int &nbits, short *out)
 	if (symbolsBlockSize == 0) {
 		ret = V92BTOS_SIZE_NOT_SET;
 		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("V92BitsToSymbol - error: "
-					     "process called, "
+			dsplibs_debug_printf("V92BitsToSymbol - error: " "process called, "
 					     "SIZE_NOT_SET\r\n");
 	} else {
 		unsigned int i;
@@ -343,8 +340,7 @@ V92BitsToSymbol::process(unsigned int &nbits, short *out)
 		if (symbolsDone < symbolsBlockSize) {
 			ret = V92BTOS_BUFFER_UNDERFLOW;
 			if (DSPLIB_DEBUG_ON())
-				dsplibs_debug_printf("V92BitsToSymbol - "
-						     "error: process called, "
+				dsplibs_debug_printf("V92BitsToSymbol - " "error: process called, "
 						     "BUFFER_UNDERFLOW\r\n");
 
 			for (i = 0; i < symbolsDone; i++)
@@ -401,8 +397,7 @@ V92BitsToSymbol::process(unsigned char *bits, unsigned int &nbits, short *out)
 	if (symbolsBlockSize == 0) {
 		ret = V92BTOS_SIZE_NOT_SET;
 		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("V92BitsToSymbol - error: "
-					     "process called, "
+			dsplibs_debug_printf("V92BitsToSymbol - error: " "process called, "
 					     "SIZE_NOT_SET\r\n");
 	} else {
 		unsigned int nout;
@@ -415,8 +410,7 @@ V92BitsToSymbol::process(unsigned char *bits, unsigned int &nbits, short *out)
 		if (symbolsDone < symbolsBlockSize) {
 			ret = V92BTOS_BUFFER_UNDERFLOW;
 			if (DSPLIB_DEBUG_ON())
-				dsplibs_debug_printf("V92BitsToSymbol - "
-						     "error: process called, "
+				dsplibs_debug_printf("V92BitsToSymbol - " "error: process called, "
 						     "BUFFER_UNDERFLOW\r\n");
 
 			for (i = 0; i < symbolsDone; i++)
@@ -428,9 +422,7 @@ V92BitsToSymbol::process(unsigned char *bits, unsigned int &nbits, short *out)
 				ret = V92BTOS_BUFFER_OVERFLOW;
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
-						"V92BitsToSymbol - error: "
-						"process called, "
-						"BUFFER_OVERFLOW\r\n");
+						"V92BitsToSymbol - error: " "process called, " "BUFFER_OVERFLOW\r\n");
 				symbolsDone = symbolsBlockSize;
 			}
 

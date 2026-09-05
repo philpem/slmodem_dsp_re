@@ -457,12 +457,12 @@
  },
  {
   "label": "the fallback returns 5 rather than 6",
-  "find": "\t\t\tedprintf(\"VPcmFloModem (V92): got V90 Fallback \"\n\t\t\t\t \"request...\\r\\n\");\n\t\t\tret = 6;",
+  "find": "\n\t\t\tedprintf(\"VPcmFloModem (V92): got V90 Fallback \" \"request...\\r\\n\");\n\t\t\tret = 6;",
   "replace": "\t\t\tedprintf(\"VPcmFloModem (V92): got V90 Fallback \"\n\t\t\t\t \"request...\\r\\n\");\n\t\t\tret = 5;"
  },
  {
   "label": "the fallback code is returned whatever the receiver answered",
-  "find": "\t\tif (modem.demodulator->word_3c == 0x20) {\n\t\t\tedprintf(\"VPcmFloModem (V92): got V90 Fallback \"\n\t\t\t\t \"request...\\r\\n\");\n\t\t\tret = 6;\n\t\t}",
+  "find": "\n\t\tif (modem.demodulator->word_3c == 0x20) {\n\t\t\tedprintf(\"VPcmFloModem (V92): got V90 Fallback \" \"request...\\r\\n\");\n\t\t\tret = 6;\n\t\t}",
   "replace": "\t\tedprintf(\"VPcmFloModem (V92): got V90 Fallback \"\n\t\t\t \"request...\\r\\n\");\n\t\tret = 6;"
  },
  {
