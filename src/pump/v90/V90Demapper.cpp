@@ -485,7 +485,7 @@ V90Demapper::hardDecision(short in)
 		mag = (short)__builtin_abs(in);
 
 		n = constellationSize[rbsFramePosition];
-		if (adiDetector->short_2800[rbsFramePosition] != 0)
+		if (adiDetector->altRbsFlag[rbsFramePosition] != 0)
 			n = 2 * n;
 
 		while (constellation[rbsFramePosition][code] >= mag &&
@@ -541,7 +541,7 @@ V90Demapper::hardDecision(short in)
 		 * shift would say the value was signed and there would be no
 		 * `cwtl` if the result went straight into the word.
 		 */
-		if (adiDetector->short_2800[rbsFramePosition] != 0)
+		if (adiDetector->altRbsFlag[rbsFramePosition] != 0)
 			codes[sampleCount] = (short)(code >> 1);
 		else
 			codes[sampleCount] = code;
@@ -662,10 +662,11 @@ V90Demapper::incrementRBSFramePosition()
  * the name, with one `l`, is the blob's and is kept.
  *
  * WHAT IT IS: the automatic digital-impairment detector has been accumulating
- * a magnitude sum and a sample count per (phase, code) cell -- `float_1000`
- * and `uint_1c00`, which `linearMappingStudy` below is what fills.  This turns
- * each cell's MEAN into the demapper's own constellation table, rounded to
- * nearest, and leaves a cell nothing landed on alone.
+ * a magnitude sum and a sample count per (phase, code) cell --
+ * `magnitudeSum` and `magnitudeCount`, which `linearMappingStudy` below is
+ * what fills.  This turns each cell's MEAN into the demapper's own
+ * constellation table, rounded to nearest, and leaves a cell nothing landed
+ * on alone.
  *
  * BOTH LOOP COUNTERS ARE `unsigned short` AND BOTH BOUNDS ARE 16-BIT.
  * `cmp $0x5,%di; jbe` for the outer and `cmp %di,%bx; jb` for the inner, with
@@ -674,7 +675,7 @@ V90Demapper::incrementRBSFramePosition()
  * compare, and a `short` one would compare with `jle`.
  *
  * THE ROW LENGTH DOUBLES WITH THE DETECTOR'S PER-PHASE FLAG, the same rule
- * `hardDecision` scans under: with `short_2800[i]` set the row holds two
+ * `hardDecision` scans under: with `altRbsFlag[i]` set the row holds two
  * levels per code.  The zero arm loads `constellationSize[i]` with `movzwl`
  * off a 32-bit field (0x313ec) and the non-zero arm loads it 32-bit, doubles
  * it and truncates (0x31336 .. 0x3133f) -- so BOTH arms discard the upper
@@ -726,16 +727,16 @@ V90Demapper::updateConstelation()
 	for (i = 0; i < V90DEMAPPER_CONSTELLATIONS; i++) {
 		unsigned short n;
 
-		if (adiDetector->short_2800[i] != 0)
+		if (adiDetector->altRbsFlag[i] != 0)
 			n = 2 * constellationSize[i];
 		else
 			n = constellationSize[i];
 
 		for (j = 0; j < n; j++)
-			if (adiDetector->uint_1c00[i][j] != 0)
+			if (adiDetector->magnitudeCount[i][j] != 0)
 				constellation[i][j] = (short)
-				    (1.0F / adiDetector->uint_1c00[i][j] *
-				     adiDetector->float_1000[i][j] + 0.5F);
+				    (1.0F / adiDetector->magnitudeCount[i][j] *
+				     adiDetector->magnitudeSum[i][j] + 0.5F);
 	}
 
 	if (DSPLIB_DEBUG_ON())
@@ -803,7 +804,7 @@ V90Demapper::resetNoSpectral(V90MappingParams *mapp)
 	for (i = 0; i < V90DEMAPPER_CONSTELLATIONS; i++) {
 		constellationSize[i] = mapp->constellationSize[i];
 
-		if (adiDetector->short_2800[i] != 0) {
+		if (adiDetector->altRbsFlag[i] != 0) {
 			short k = 0;
 
 			for (j = 0; j < constellationSize[i]; j++) {
@@ -941,7 +942,7 @@ V90Demapper::reset(V90MappingParams *mapp)
 
 		constellationSize[i] = n;
 
-		if (adiDetector->short_2800[i] != 0) {
+		if (adiDetector->altRbsFlag[i] != 0) {
 			short k = 0;
 
 			for (j = 0; j < n; j++) {
@@ -1023,8 +1024,8 @@ V90Demapper::reset(V90MappingParams *mapp)
  * and the LEVEL that was decided for it.  The names below are that reading
  * and are the weakest of CLAUDE.md's three ranks; what is NOT inference is
  * that the first argument is the one whose magnitude is accumulated into
- * `float_1000`, which `V90AutoDigitalImpDetector.h` already documents as a sum
- * of magnitudes with `uint_1c00` as its count.
+ * `magnitudeSum`, which `V90AutoDigitalImpDetector.h` already documents as a
+ * sum of magnitudes with `magnitudeCount` as its count.
  *
  * WHICH NEIGHBOURING PAIR IS MEASURED AGAINST, and the two tests that choose
  * it are the whole first half:
@@ -1098,7 +1099,7 @@ V90Demapper::linearMappingStudy(short sample, short level)
 	} else {
 		short n;
 
-		if (adiDetector->short_2800[decisionFramePosition] != 0)
+		if (adiDetector->altRbsFlag[decisionFramePosition] != 0)
 			n = 2 * constellationSize[decisionFramePosition];
 		else
 			n = constellationSize[decisionFramePosition];
@@ -1117,9 +1118,9 @@ V90Demapper::linearMappingStudy(short sample, short level)
 	}
 
 	if (__builtin_fabsf(diff) < 0.4F * (high - low)) {
-		adiDetector->float_1000[decisionFramePosition][decisionCode] +=
+		adiDetector->magnitudeSum[decisionFramePosition][decisionCode] +=
 		    __builtin_abs(sample);
-		adiDetector->uint_1c00[decisionFramePosition][decisionCode]++;
+		adiDetector->magnitudeCount[decisionFramePosition][decisionCode]++;
 	}
 
 	if (uint_1eb0 + 1 == uint_1ea8) {

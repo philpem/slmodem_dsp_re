@@ -976,7 +976,7 @@ V90Phase3Demodulator::getV90Decision(float sample)
 		symbol = (short)phase3Modulator.generateSymbol();
 		autoDigitalImpDetector->calculateLinearMeanAndVar(s, symbol,
 								  framePosition);
-		if (autoDigitalImpDetector->short_2800[framePosition] != 0) {
+		if (autoDigitalImpDetector->altRbsFlag[framePosition] != 0) {
 			if (P3D_ABS((int)symbol) == ucodeLevel) {
 				if (autoDigitalImpDetector->isAltRbs(
 				    (short)framePosition, ucode, sample))
@@ -1053,7 +1053,7 @@ V90Phase3Demodulator::getV90Decision(float sample)
 	case 0x0c:
 		eventCode = 0;
 		symbol = (short)phase3Modulator.generateSymbol();
-		if (autoDigitalImpDetector->short_2800[framePosition] != 0) {
+		if (autoDigitalImpDetector->altRbsFlag[framePosition] != 0) {
 			decision = s;
 			if (phase3Modulator.usingSegmentLevel == 0)
 				autoDigitalImpDetector
@@ -1153,7 +1153,7 @@ V90Phase3Demodulator::getV90Decision(float sample)
 		symbol = (short)phase3Modulator.generateSymbol();
 		autoDigitalImpDetector->calculateLinearMeanAndVar(s, symbol,
 								  framePosition);
-		if (autoDigitalImpDetector->short_2800[framePosition] != 0) {
+		if (autoDigitalImpDetector->altRbsFlag[framePosition] != 0) {
 			if (P3D_ABS((int)symbol) == ucodeLevel) {
 				if (autoDigitalImpDetector->isAltRbs(
 				    (short)framePosition, ucode, sample))
@@ -1228,7 +1228,7 @@ V90Phase3Demodulator::getV90Decision(float sample)
 		if (phase3Modulator.usingSegmentLevel == 0)
 			autoDigitalImpDetector->calculateLinearMeanAndVar(
 			    s, symbol, framePosition);
-		if (autoDigitalImpDetector->short_2800[framePosition] != 0) {
+		if (autoDigitalImpDetector->altRbsFlag[framePosition] != 0) {
 			decision = s;
 			if (phase3Modulator.usingSegmentLevel == 0)
 				autoDigitalImpDetector
@@ -1270,7 +1270,7 @@ V90Phase3Demodulator::getV90Decision(float sample)
 	case 0x10:
 		eventCode = 0;
 		symbol = (short)phase3Modulator.generateSymbol();
-		if (autoDigitalImpDetector->short_2800[framePosition] != 0) {
+		if (autoDigitalImpDetector->altRbsFlag[framePosition] != 0) {
 			decision = s;
 			if (phase3Modulator.usingSegmentLevel != 0) {
 				if (autoDigitalImpDetector->isAltRbs(
@@ -1819,7 +1819,7 @@ V90Phase3Demodulator::getV92Decision(float sample)
 		adid = autoDigitalImpDetector;
 		adid->calculateLinearMeanAndVar((short)level, (short)sym,
 						framePosition);
-		if (adid->short_2800[framePosition] != 0) {
+		if (adid->altRbsFlag[framePosition] != 0) {
 			if (P3D_ABS(sym) == ucodeLevel) {
 				if ((short)adid->isAltRbs((short)framePosition,
 							  ucode, sample) != 0) {
@@ -1888,7 +1888,7 @@ V90Phase3Demodulator::getV92Decision(float sample)
 		mod = &phase3Modulator;
 		sym = (short)mod->generateSymbol();
 		adid = autoDigitalImpDetector;
-		if (adid->short_2800[framePosition] != 0) {
+		if (adid->altRbsFlag[framePosition] != 0) {
 			decision = (short)level;
 			if (mod->usingSegmentLevel == 0) {
 				code = P3D_CODE(P3D_ABS(sym));
@@ -1969,7 +1969,7 @@ V90Phase3Demodulator::getV92Decision(float sample)
 		adid = autoDigitalImpDetector;
 		adid->calculateLinearMeanAndVar((short)level, (short)sym,
 						framePosition);
-		if (adid->short_2800[framePosition] != 0) {
+		if (adid->altRbsFlag[framePosition] != 0) {
 			if (P3D_ABS(sym) == ucodeLevel) {
 				if ((short)adid->isAltRbs((short)framePosition,
 							  ucode, sample) != 0) {
@@ -2036,7 +2036,7 @@ V90Phase3Demodulator::getV92Decision(float sample)
 		if (mod->usingSegmentLevel == 0)
 			adid->calculateLinearMeanAndVar((short)level,
 			    (short)sym, framePosition);
-		if (adid->short_2800[framePosition] != 0) {
+		if (adid->altRbsFlag[framePosition] != 0) {
 			decision = (short)level;
 			if (mod->usingSegmentLevel == 0) {
 				code = P3D_CODE(P3D_ABS(sym));
@@ -2072,7 +2072,7 @@ V90Phase3Demodulator::getV92Decision(float sample)
 		mod = &phase3Modulator;
 		sym = (short)mod->generateSymbol();
 		adid = autoDigitalImpDetector;
-		if (adid->short_2800[framePosition] != 0) {
+		if (adid->altRbsFlag[framePosition] != 0) {
 			decision = (short)level;
 			if (mod->usingSegmentLevel != 0) {
 				if ((short)adid->isAltRbs((short)framePosition,

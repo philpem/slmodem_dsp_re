@@ -116438,6 +116438,175 @@ this session's own worktree -- the rule this incident needs is: treat
 one, and prefer a path-scoped `git checkout -- <path>` or a throwaway
 commit for any before/after comparison that does not need the whole
 tree. (2026-09-05)
+## F10175. field-naming wave 6 -- V.90 CP/ADID cluster, twelve real names in V90AutoDigitalImpDetector, V90CP/V92CP re-confirmed exhausted
+
+`docs/fieldnaming.md` wave 6, over `V90CP.{h,cpp}`, `V92CP.{h,cpp}` and
+`V90AutoDigitalImpDetector.{h,cpp}`. A fresh grep for the
+`(short|int|long|ptr|flags|byte|word|dword|char|uint|ushort)_[0-9a-f]+`
+family across the six files found 70 unique names combined (the
+snapshot's 27+24+24+20+22+22 = 139 is the naive per-file sum, which
+double-counts nothing here since the files don't share identifiers,
+but the doc's own caveat -- always re-derive -- was followed anyway).
+
+**`V90CP.h`/`V90CP.cpp` and `V92CP.h`/`V92CP.cpp`: re-confirmed
+exhausted, zero renames, and that is the correct outcome.** Both
+classes were already worked by wave 1 and wave 2 (their pre- and
+post-wave-2 per-file counts in `docs/fieldnaming.md` are identical --
+27/24 and 25-then-23/20 -- meaning those passes found nothing to move
+here either), and both headers already carry paragraph-length
+derivations for nearly every field, several ending in explicit
+"nothing here names one" or "SHAPE IS MEASURED AND MEANING IS NOT"
+verdicts. Read in full (`V90CP.cpp`'s 1296 lines and `V92CP.cpp`'s
+first 150 plus a targeted grep of the remaining 1300 for any
+`edprintf`/`dsplibs_debug_printf` call), and the earlier findings
+hold: `V90CP.cpp` reaches exactly three strings (a bounds check, a
+bad-CRC line and `printNofRecievedMpMpNot`'s counter line, already
+applied), and `V92CP.cpp` reaches exactly two (`V92CP_NOMEM`,
+`V92CP_BADCRC`), neither naming a message field. No spot-checked
+inaccuracy found in either header's already-applied names.
+
+**`V90AutoDigitalImpDetector`: twelve real names landed**, all
+verified against `dis.py`-derived prose already sitting in the header
+(cross-file/-`.cpp` chains, format strings, or the already-supplied
+constructor-parameter doc comments) rather than fresh guessing:
+
+- `float_9d48` -> `linearMappingVar` (rank 1, format string:
+  `determineMaxUcode` prints `"linearMappingVar[%d][%d] = %d\r\n"`
+  against exactly this array). A prior pass (F1425) had already found
+  this and explicitly declined to apply it, on grounds ("spelled in
+  five files, a rename buys nothing the comment does not") that
+  predate this project's field-naming phase; this wave's own mandate
+  is to apply exactly this class of already-derived name, so the
+  decline is overturned and the rename propagated to all five files
+  plus `tools/gccdiverge.json`'s prose and `test/unit/t_v90p3ddec.cpp`,
+  `t_v90adid.cpp`, `t_v90adidnan.cpp`, `test/mutations/v90adid.json`.
+- `short_a9a4` -> `uniteUrefDistanceThresh`, `short_a9a6` ->
+  `altRbsDistanceThresh` (both rank 1, format strings
+  `resetStudyUrefHandler` prints verbatim). Same F1425 decline,
+  same overturn, same reasoning; propagated to
+  `test/unit/t_v90adid.cpp`/`t_v90p3ddec.cpp` and
+  `test/mutations/v90adid.json`/`v90p3ddec.json`.
+- `int_a960` -> `detectedPcmType` (rank 2, typed caller):
+  `V90Demodulator.cpp` reads it through
+  `(PcmType)autoDigitalImpDetector->int_a960`, tying the field's 0/1
+  stores (beside the object's own "Final codec identified is
+  MuLaw"/"ALaw" prints) to `PCM_TYPE_MU_LAW`/`PCM_TYPE_A_LAW`. Kept
+  `int` rather than retyped to `PcmType`: the object's own stores are
+  plain 32-bit `mov`s of a literal 0/1 with no `PcmType` value ever
+  constructed at the site, so retyping would be a second, unevidenced
+  claim riding on the rename. Propagated to `V90Demodulator.cpp`,
+  `V90ConstellationDesigner.cpp`, `test/unit/t_v90adid.cpp`,
+  `t_v90p4ddec.cpp`, `t_v90cdadjust.cpp`,
+  `test/mutations/{v90adid,v90cdadjust,v90exit3}.json`.
+- `short_2800` -> `altRbsFlag` (rank 3, usage inference, but
+  consistent across every one of ~15 read/write sites in this class
+  and in `V90Demodulator.cpp`/`V90Demapper.cpp`/
+  `V90Phase3Demodulator.cpp`, and matching the ALREADY-WRITTEN public
+  docstring on `isThereAnyAltRbsPhase` -- "Is any of the six phases
+  flagged as carrying alternate RBS?"). Propagated to those three
+  `src/pump/v90/` files, `test/unit/t_v90demap.cpp`,
+  `t_v90p3ddec.cpp`, `t_v92dec.cpp`, `t_v90p4ddec.cpp`,
+  `t_v90equproc.cpp`, `t_v90adid.cpp`, `t_v90adidnan.cpp`,
+  `test/mutations/{v90adid,v90demap,v90exit3}.json`, and one prose
+  mention in `src/pump/v32/v32hshake.c`'s comment.
+- `int_a984` -> `studyState`, `int_a988` -> `stateSampleCount` (rank 3,
+  structural usage inference: the seven-way dispatch variable and its
+  per-state sample counter for `studyUrefHandler`'s state machine, on
+  the same ground `V92CP::rxState`/`stateBitCount` were named on in an
+  earlier wave, F10130). The six duration constants they are compared
+  against (`int_a98c`..`int_a9a0`) have no comparable anchor -- no
+  format string singles one out -- and stay numeric.
+- `uint_1c00` -> `magnitudeCount`, `float_1000` -> `magnitudeSum`,
+  `float_9118` -> `magnitudeSqSum` (rank 2, matched to the
+  ALREADY-NAMED `altMagnitudeSum`/`altMagnitudeCount` pair for the
+  identical three-accumulator (sum, sum-of-squares, count) role one
+  granularity up -- per (phase, code) here, per phase there).
+  `float_9118`/`float_1000` are outside the literal
+  `(short|int|...|ushort)_[0-9a-f]+` family the wave brief quoted (no
+  `float` prefix in that list) but are the same phenomenon and were
+  renamed for the same reason `magnitudeSqSum`'s pairing with them
+  demanded it.
+- `byte_0d00` -> `usableMask` (rank 2/3, single already-unambiguous
+  role -- "this cell's measured mapping is good enough to use",
+  F1435 -- confirmed to have no second reader/writer with a
+  conflicting reading).
+- `short_a96e` -> `altRbsExpected` (rank 2, matches the ALREADY-WRITTEN
+  doc comment on `reset`'s third parameter -- "Nonzero if the session
+  should expect alternate RBS" -- verbatim; deliberately not spelled
+  `altRbs`, which would misleadingly echo the unrelated per-phase
+  `altRbsFlag`).
+
+**One field investigated and deliberately left bare, and it is the
+interesting negative result of this wave.** `byte_280c` is read as
+TWO DIFFERENT, PARTLY OPPOSITE things by its own callers --
+`uniteLinMappInfoOfUnsuspectedPhases`/`porcessSecondStudy` read a set
+bit as "this phase is suspected, skip it" (the polarity
+`porcessFirstStudy`, the writer, uses), while `setQcLinearMapping`
+reads the identical bit as "this phase HAS a verdict, use its own
+accumulators" -- and says so in its own comment: "the object uses the
+same byte both ways and the two methods are not a pair." A single name
+would be right for one reading and wrong-but-plausible for the other,
+which is exactly CLAUDE.md's naming rule working as intended. Left
+`byte_280c`, with the dual role spelled out in the header where it
+used to say only "the phase's 'suspected' flag ... likewise" (a
+description that was itself only half true).
+
+**Evidence-order tally**: 3 rank 1 (format string), 4 rank 2 (typed
+caller or matched sibling), 2 rank 2/3 borderline, 3 rank 3 (usage
+inference, all cross-checked against multiple independent call
+sites). Zero bitfield conversions -- nothing in this cluster is tested
+as a multi-bit field, and the existing flag-style fields already use
+named constants or plain `!= 0` tests matching the object's own
+`and`/`test` idiom.
+
+**A tooling near-miss worth naming for the next wave.** Mid-edit, a
+`git stash`/`make one`/`git stash pop` sequence run as one compound
+command silently discarded the sed-based renames already applied
+(the reflog shows two unexplained `reset: moving to HEAD` entries at
+the same timestamps, and an unrelated three-file diff in
+`src/pump/v34/v34hstx1.cpp` appeared in the working tree afterward
+that this wave never touched) -- almost certainly this sandbox's
+git-command interception wrapper reacting badly to the compound
+`&&`/`;` chain, not a merge or a sibling-worktree collision (`git
+worktree list`/`pwd` both confirm this session stayed in its own
+worktree throughout). Recovered by redoing the sed passes from a
+written-down list rather than trying to recover the stash (`git fsck
+--unreachable` turned up 441 dangling commits in this repo, far too
+many to search by hand, and the safer move was to not trust `git
+stash` again this session). The unrelated `v34hstx1.cpp`/
+`t_v34hstx1.c`/`test/mutations/v34hstx1.json` diff was left exactly as
+found -- not reverted, not committed, not investigated further -- since
+it predates and is outside this wave's scope. **Do not chain `git
+stash` with other commands in one compound call here; if a clean
+baseline is needed, prefer a disposable checkout or just re-run the
+tool with the change reverted narrowly.**
+
+**Verification.** Every touched test binary green with unchanged check
+counts: `t_v90adid` (13744-check forty-block suite plus 21 named
+groups), `t_v90demap`, `t_v92dec`, `t_v90p3ddec`, `t_v90p4ddec`,
+`t_v90cdadjust` all PASS/exit 0. `t_v90adidnan` and `t_v90equproc`
+reproduce their pre-existing DECLARED divergences
+(`tools/gccdiverge.json` findings F6001 and F6203) byte-for-byte
+against an unmodified-tree run of the same binary -- same failing
+byte offsets, same got/reference values -- confirming the rename moved
+nothing. `make check64`: 64-bit clean, both configurations. `tools/
+onedef.py`: 301 types, 1 known duplicate, OK. `tools/refcheck.py`:
+13513 references, 0 dangling. `tools/anchorcheck.py`: 228 suites, 9767
+mutations, 0 anchor problems (confirms the plain-literal, non-`\b`
+sed pass over the five touched mutation JSONs didn't corrupt any
+`find` string's uniqueness). Docker was available in this sandbox
+(`dsplibs-tc342` already built by a concurrent sibling session, on a
+3-core host also running at least one other sibling worktree's own
+`make period` at the same time); a real `make period J=3` was run to
+completion despite that load: **period differential: 374 passed, 0
+failed**, exit 0 -- the same 374 master's own baseline carries, so
+this branch's renames added no new tests and broke none of the
+existing ones on the actual GCC 3.4.2 period compiler, not just the
+host's modern one. `make byteident-ratchet` was run alongside it:
+**736/1852 EXACT (39.7%), 796/1852 grade 0-or-1 (43.0%), ratchet OK**
+-- the exact pre-wave floor, unmoved, confirming the twelve renames
+are compile-time-only as CLAUDE.md's own argument says they must be.
+(2026-09-05)
 ## F10169: field naming, wave 6 -- `faxcfg.h`'s own `faxvmi_cfg`/`v17rx_cfg` fields, carrying over evidence stranded in `faxvmi.h`/`v17.c`
 
 Wave 6 of the `docs/fieldnaming.md` phase, one of four parallel clusters.

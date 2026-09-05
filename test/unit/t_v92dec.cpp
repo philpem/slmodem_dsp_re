@@ -206,7 +206,7 @@ struct trial_args {
 	unsigned char	ucode;
 	short		ucodeLevel;
 	int		a948;		/* the detector's alt-RBS gate  */
-	int		s2800;		/* short_2800[word_04]          */
+	int		s2800;		/* altRbsFlag[word_04]          */
 	int		b280c;		/* byte_280c[word_04]           */
 	int		usingSeg;	/* the modulator's +0x392       */
 	unsigned int	segmentPos;	/* the modulator's +0x38c       */
@@ -403,7 +403,7 @@ setup(int trial, const struct trial_args *t)
 
 		fill_tables(side, trial);
 		adid[side].short_a948 = (short)t->a948;
-		adid[side].short_2800[t->word_04 % V90ADID_PHASES] =
+		adid[side].altRbsFlag[t->word_04 % V90ADID_PHASES] =
 		    (short)t->s2800;
 		adid[side].byte_280c[t->word_04 % V90ADID_PHASES] =
 		    (unsigned char)t->b280c;
@@ -1025,7 +1025,7 @@ run_states(void)
 	diff_eq_int("...and clear", sawPlain, 1, 0);
 	diff_eq_int("usingSegmentLevel was set", sawSeg, 1, 0);
 	diff_eq_int("...and clear", sawNoSeg, 1, 0);
-	diff_eq_int("short_2800 was set", sawS2800, 1, 0);
+	diff_eq_int("altRbsFlag was set", sawS2800, 1, 0);
 	diff_eq_int("...and clear", sawNoS2800, 1, 0);
 	diff_eq_int("the mu-law arm was taken", sawMu, 1, 0);
 	diff_eq_int("the A-law arm was taken", sawA, 1, 0);

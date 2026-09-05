@@ -76,8 +76,8 @@
  },
  {
   "label": "the detector's flag does not double the search",
-  "find": "\t\tif (adiDetector->short_2800[rbsFramePosition] != 0)\n\t\t\tn = 2 * n;",
-  "replace": "\t\tif (adiDetector->short_2800[rbsFramePosition] != 0)\n\t\t\tn = n + 1;"
+  "find": "\t\tif (adiDetector->altRbsFlag[rbsFramePosition] != 0)\n\t\t\tn = 2 * n;",
+  "replace": "\t\tif (adiDetector->altRbsFlag[rbsFramePosition] != 0)\n\t\t\tn = n + 1;"
  },
  {
   "label": "the scan does not back up to the lower neighbour",
@@ -236,28 +236,28 @@
  },
  {
   "label": "the detector's flag does not double the row",
-  "find": "\t\tif (adiDetector->short_2800[i] != 0)\n\t\t\tn = 2 * constellationSize[i];\n\t\telse\n\t\t\tn = constellationSize[i];",
-  "replace": "\t\tn = constellationSize[i];\n\t\tif (adiDetector->short_2800[i] == 0)\n\t\t\tn = constellationSize[i];"
+  "find": "\t\tif (adiDetector->altRbsFlag[i] != 0)\n\t\t\tn = 2 * constellationSize[i];\n\t\telse\n\t\t\tn = constellationSize[i];",
+  "replace": "\t\tn = constellationSize[i];\n\t\tif (adiDetector->altRbsFlag[i] == 0)\n\t\t\tn = constellationSize[i];"
  },
  {
   "label": "every row is doubled, flag or no flag",
-  "find": "\t\tif (adiDetector->short_2800[i] != 0)\n\t\t\tn = 2 * constellationSize[i];\n\t\telse\n\t\t\tn = constellationSize[i];",
-  "replace": "\t\tn = 2 * constellationSize[i];\n\t\tif (adiDetector->short_2800[i] == 0)\n\t\t\tn = 2 * constellationSize[i];"
+  "find": "\t\tif (adiDetector->altRbsFlag[i] != 0)\n\t\t\tn = 2 * constellationSize[i];\n\t\telse\n\t\t\tn = constellationSize[i];",
+  "replace": "\t\tn = 2 * constellationSize[i];\n\t\tif (adiDetector->altRbsFlag[i] == 0)\n\t\t\tn = 2 * constellationSize[i];"
  },
  {
   "label": "the rounding half is dropped, so the mean truncates",
-  "find": "\t\t\t\t    (1.0F / adiDetector->uint_1c00[i][j] *\n\t\t\t\t     adiDetector->float_1000[i][j] + 0.5F);",
-  "replace": "\t\t\t\t    (1.0F / adiDetector->uint_1c00[i][j] *\n\t\t\t\t     adiDetector->float_1000[i][j]);"
+  "find": "\t\t\t\t    (1.0F / adiDetector->magnitudeCount[i][j] *\n\t\t\t\t     adiDetector->magnitudeSum[i][j] + 0.5F);",
+  "replace": "\t\t\t\t    (1.0F / adiDetector->magnitudeCount[i][j] *\n\t\t\t\t     adiDetector->magnitudeSum[i][j]);"
  },
  {
   "label": "a cell nothing landed on is rewritten anyway",
-  "find": "\t\tfor (j = 0; j < n; j++)\n\t\t\tif (adiDetector->uint_1c00[i][j] != 0)",
-  "replace": "\t\tfor (j = 0; j < n; j++)\n\t\t\tif (adiDetector->uint_1c00[i][j] + 1u != 0)"
+  "find": "\t\tfor (j = 0; j < n; j++)\n\t\t\tif (adiDetector->magnitudeCount[i][j] != 0)",
+  "replace": "\t\tfor (j = 0; j < n; j++)\n\t\t\tif (adiDetector->magnitudeCount[i][j] + 1u != 0)"
  },
  {
   "label": "the mean comes from the next phase's cell",
-  "find": "\t\t\t\t     adiDetector->float_1000[i][j] + 0.5F);",
-  "replace": "\t\t\t\t     adiDetector->float_1000[(i + 1) % 6][j] + 0.5F);"
+  "find": "\t\t\t\t     adiDetector->magnitudeSum[i][j] + 0.5F);",
+  "replace": "\t\t\t\t     adiDetector->magnitudeSum[(i + 1) % 6][j] + 0.5F);"
  },
  {
   "label": "the update line is spelt correctly (transcript only)",
@@ -363,12 +363,12 @@
  },
  {
   "label": "the sample count moves and the sum does not",
-  "find": "\t\tadiDetector->float_1000[decisionFramePosition][decisionCode] +=\n\t\t    __builtin_abs(sample);",
+  "find": "\t\tadiDetector->magnitudeSum[decisionFramePosition][decisionCode] +=\n\t\t    __builtin_abs(sample);",
   "replace": "\t\t;"
  },
  {
   "label": "the sum moves and the count does not",
-  "find": "\t\tadiDetector->uint_1c00[decisionFramePosition][decisionCode]++;",
+  "find": "\t\tadiDetector->magnitudeCount[decisionFramePosition][decisionCode]++;",
   "replace": "\t\t;"
  },
  {
@@ -383,8 +383,8 @@
  },
  {
   "label": "the doubled row length is not doubled",
-  "find": "\t\tif (adiDetector->short_2800[decisionFramePosition] != 0)\n\t\t\tn = 2 * constellationSize[decisionFramePosition];",
-  "replace": "\t\tif (adiDetector->short_2800[decisionFramePosition] != 0)\n\t\t\tn = constellationSize[decisionFramePosition];"
+  "find": "\t\tif (adiDetector->altRbsFlag[decisionFramePosition] != 0)\n\t\t\tn = 2 * constellationSize[decisionFramePosition];",
+  "replace": "\t\tif (adiDetector->altRbsFlag[decisionFramePosition] != 0)\n\t\t\tn = constellationSize[decisionFramePosition];"
  },
  {
   "label": "the run ends one call late",

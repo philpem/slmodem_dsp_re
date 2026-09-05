@@ -41,7 +41,7 @@
  * comparison rather than being blanked out of it.
  *
  * THE DETECTOR IS SHARED WHERE IT IS READ AND SPLIT WHERE IT IS WRITTEN.
- * `hardDecision` only reads `short_2800`, so both sides get one detector and
+ * `hardDecision` only reads `altRbsFlag`, so both sides get one detector and
  * +0x1ea0 compares equal.  `resetLinearMappStudy` CLEARS 768 cells of three
  * arrays in it, so that suite gives each side its own detector, excludes
  * +0x1ea0, and compares the two detectors byte for byte -- which is where the
@@ -599,8 +599,8 @@ run_rlms(void)
 
 		for (p = 0; p < V90ADID_PHASES; p++)
 			for (c = 0; c < V90ADID_CODES; c++)
-				if (a->uint_1c00[p][c] != 0 ||
-				    a->float_1000[p][c] != 0.0f)
+				if (a->magnitudeCount[p][c] != 0 ||
+				    a->magnitudeSum[p][c] != 0.0f)
 					allz = 0;
 		for (p = 0; p < V90ADID_PHASES; p++)
 			for (c = 0; c < V90ADID_CODES; c++)
@@ -691,12 +691,12 @@ run_harddec(void)
 
 			/*
 			 * One detector, shared: `hardDecision` only READS
-			 * `short_2800`, so the two sides store the same
+			 * `altRbsFlag`, so the two sides store the same
 			 * pointer and +0x1ea0 stays in the comparison.
 			 */
 			fill(adi_s[0], (int)sizeof adi_s[0], lf ^ 0x5eedu);
 			for (i = 0; i < V90ADID_PHASES; i++)
-				ADI(0).short_2800[i] = (short)(flag ? i + 1
+				ADI(0).altRbsFlag[i] = (short)(flag ? i + 1
 								    : 0);
 
 			fill(parm_s, (int)PARM_SLOT, lf ^ 0x2b1u);
@@ -743,7 +743,7 @@ run_harddec(void)
 				"V90Demapper", trial);
 			dem_cmp_arrays(trial);
 			diff_eq_int("the detector is untouched (%ld)",
-				    ADI(0).short_2800[phase] ==
+				    ADI(0).altRbsFlag[phase] ==
 				    (short)(flag ? phase + 1 : 0), 1, trial);
 			diff_eq_int("transcript (%ld)",
 				    strcmp(dsplib_debug_capture_text(0),
@@ -1042,10 +1042,10 @@ adi_plant_cells(int s, int zpat)
 
 	for (p = 0; p < V90ADID_PHASES; p++)
 		for (c = 0; c < V90ADID_CODES; c++) {
-			a->uint_1c00[p][c] =
+			a->magnitudeCount[p][c] =
 			    ((c + p + zpat) % 7 == 0)
 			    ? 0u : (unsigned int)(1 + ((c + p) % 4));
-			a->float_1000[p][c] =
+			a->magnitudeSum[p][c] =
 			    (float)((c * 13 + p * 101) % 2001 - 1000);
 		}
 }
@@ -1090,7 +1090,7 @@ run_updconst(void)
 		fill(adi_s[0], (int)sizeof adi_s[0], lf ^ 0x5eedu);
 		adi_plant_cells(0, zpat);
 		for (i = 0; i < V90ADID_PHASES; i++)
-			ADI(0).short_2800[i] = (short)
+			ADI(0).altRbsFlag[i] = (short)
 			    (flag == 0 ? 0 : flag == 1 ? i + 1 : (i & 1));
 
 		fill(parm_s, (int)PARM_SLOT, lf ^ 0x2b1u);
@@ -1138,8 +1138,8 @@ run_updconst(void)
 			for (i = 0; i < V90DEMAPPER_CONSTELLATIONS; i++)
 			    for (j = 0; j < (int)n && j < V90DEMAPPER_LEVELS;
 				 j++) {
-				unsigned int cnt = ADI(0).uint_1c00[i][j];
-				float sum = ADI(0).float_1000[i][j];
+				unsigned int cnt = ADI(0).magnitudeCount[i][j];
+				float sum = ADI(0).magnitudeSum[i][j];
 
 				if (cnt == 0) {
 					if (d->constellation[i][j] ==
@@ -1164,11 +1164,11 @@ run_updconst(void)
 			 * THE DOUBLED BOUND WROTE PAST THE ROW LENGTH.  With
 			 * the flag set the row runs to 2 * size, so a cell at
 			 * `size` itself moved -- which a reconstruction that
-			 * ignored `short_2800` would leave at its seed.
+			 * ignored `altRbsFlag` would leave at its seed.
 			 */
 			if (flag != 0 && n != 0u && n < 64u &&
-			    ADI(0).short_2800[0] != 0 &&
-			    ADI(0).uint_1c00[0][n] != 0u &&
+			    ADI(0).altRbsFlag[0] != 0 &&
+			    ADI(0).magnitudeCount[0][n] != 0u &&
 			    d->constellation[0][n] != b->constellation[0][n])
 				saw_double = 1;
 		}
@@ -1251,7 +1251,7 @@ run_resetns(void)
 			fill(adi_s[0], (int)sizeof adi_s[0], lf ^ 0x11a7u);
 			adi_plant_maps(0, eqpat);
 			for (i = 0; i < V90ADID_PHASES; i++)
-				ADI(0).short_2800[i] = (short)
+				ADI(0).altRbsFlag[i] = (short)
 				    (flag == 0 ? 0 : flag == 1 ? i + 1
 							       : (i & 1));
 
@@ -1403,7 +1403,7 @@ run_resetns(void)
 					if (n == 0u)
 						continue;
 					c0 = MAPP->constellation[i][0];
-					if (ADI(0).short_2800[i] != 0) {
+					if (ADI(0).altRbsFlag[i] != 0) {
 						if (d->constellation[i][0] >=
 						    d->constellation[i][1])
 							saw_pair = 1;
@@ -1546,7 +1546,7 @@ run_reset(void)
 				     lf ^ 0x11a7u);
 				adi_plant_maps(s, eqpat);
 				for (i = 0; i < V90ADID_PHASES; i++)
-					ADI(s).short_2800[i] = (short)
+					ADI(s).altRbsFlag[i] = (short)
 					    (flag == 0 ? 0 : flag == 1 ? i + 1
 								       : (i & 1));
 
@@ -1776,7 +1776,7 @@ run_reset(void)
 					if (n == 0u)
 						continue;
 					c0 = MAPP->constellation[i][0];
-					if (ADI(0).short_2800[i] != 0) {
+					if (ADI(0).altRbsFlag[i] != 0) {
 						if (d->constellation[i][0] >=
 						    d->constellation[i][1])
 							saw_pair = 1;
@@ -1808,8 +1808,8 @@ run_reset(void)
 
 		for (p = 0; p < V90ADID_PHASES; p++)
 			for (c = 0; c < V90ADID_CODES; c++) {
-				if (a->uint_1c00[p][c] != 0 ||
-				    a->float_1000[p][c] != 0.0f)
+				if (a->magnitudeCount[p][c] != 0 ||
+				    a->magnitudeSum[p][c] != 0.0f)
 					allz = 0;
 				if (a->linMapp[p][c] != 0)
 					anyother = 1;
@@ -1909,7 +1909,7 @@ run_lms(void)
 				     lf ^ 0x9a1u);
 				adi_plant_cells(s, xi);
 				for (i = 0; i < V90ADID_PHASES; i++)
-					ADI(s).short_2800[i] =
+					ADI(s).altRbsFlag[i] =
 					    (short)(flag ? i + 1 : 0);
 
 				dem_setup(s, s, dup, lf);
@@ -1927,7 +1927,7 @@ run_lms(void)
 				DEM(s).short_1ea6 = 0;
 				memcpy(dem_before[s], dem_s[s], DEM_SLOT);
 			}
-			cnt_before = ADI(1).uint_1c00[phase][code_v[code]];
+			cnt_before = ADI(1).magnitudeCount[phase][code_v[code]];
 			dsplib_debug_capture_reset();
 
 			our_lms(&DEM(0), lms_x[xi], lms_y[xi]);
@@ -1944,7 +1944,7 @@ run_lms(void)
 					   dsplib_debug_capture_text(1)) == 0,
 				    1, trial);
 
-			cnt_after = ADI(1).uint_1c00[phase][code_v[code]];
+			cnt_after = ADI(1).magnitudeCount[phase][code_v[code]];
 
 			if (prog == 2) {
 				V90Demapper *d = &DEM(1);
@@ -1976,9 +1976,9 @@ run_lms(void)
 					    trial);
 				for (p = 0; p < V90ADID_PHASES; p++)
 					for (c = 0; c < V90ADID_CODES; c++)
-						if (ADI(1).uint_1c00[p][c] !=
+						if (ADI(1).magnitudeCount[p][c] !=
 						    0u ||
-						    ADI(1).float_1000[p][c] !=
+						    ADI(1).magnitudeSum[p][c] !=
 						    0.0f)
 							allz = 0;
 				diff_eq_int("all 768 cells cleared (%ld)",
