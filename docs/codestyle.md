@@ -258,9 +258,10 @@ preserved past this session -- re-run to regenerate):
 
 ## Do not touch
 
-The `asm()` mechanism's UNDERLYING NEED is gone (F10155) but the 50 sites
-themselves still work correctly as-is until Tier 2 item 10 replaces them
--- don't touch them piecemeal outside that workstream. The forced
-fax-dispatch-table `void*` signatures, and the deep nesting in DSP/
-state-machine code -- both confirmed necessary or already correctly
+The `asm()` mechanism's UNDERLYING NEED is gone (F10155). Group A (29 of the
+50 sites -- `V90Demodulator.cpp`, `V90ModemCtor.cpp`, `V90Modulator.cpp`,
+`V92Modulator.cpp`) is converted (F10160); the remaining ~14, group B, are
+this workstream's own remaining piece -- don't touch them piecemeal outside
+it. The forced fax-dispatch-table `void*` signatures, and the deep nesting in
+DSP/state-machine code -- both confirmed necessary or already correctly
 handled.

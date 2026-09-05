@@ -60,44 +60,44 @@
  },
  {
   "label": "the bit-to-symbol stage is given three times the argument",
-  "find": "\tv92mod_bts_ctor(p, 3 * blockSize, params);",
-  "replace": "\tv92mod_bts_ctor(p, 3 * nSamples, params);"
+  "find": "\tnew (p) V92BitsToSymbol(3 * blockSize, params);",
+  "replace": "\tnew (p) V92BitsToSymbol(3 * nSamples, params);"
  },
  {
   "label": "the bit-to-symbol stage is given twice the block",
-  "find": "\tv92mod_bts_ctor(p, 3 * blockSize, params);\n",
-  "replace": "\tv92mod_bts_ctor(p, 2 * blockSize, params);\n"
+  "find": "\tnew (p) V92BitsToSymbol(3 * blockSize, params);\n",
+  "replace": "\tnew (p) V92BitsToSymbol(2 * blockSize, params);\n"
  },
  {
   "label": "the resampler is given one more phase",
-  "find": "\tv92mod_rto_ctor(p, V92MOD_RS_PHASES, V92MOD_RS_PPMSCALE,",
-  "replace": "\tv92mod_rto_ctor(p, V92MOD_RS_PHASES + 1, V92MOD_RS_PPMSCALE,"
+  "find": "\tnew (p) ResamplerTimingOffset(V92MOD_RS_PHASES, V92MOD_RS_PPMSCALE,",
+  "replace": "\tnew (p) ResamplerTimingOffset(V92MOD_RS_PHASES + 1, V92MOD_RS_PPMSCALE,"
  },
  {
   "label": "the resampler is given four more taps",
   "why": "FOUR and not one: `Resampler`'s designing constructor does `taps = (nTaps >> 2) * 4`, so 17 and 16 are the same resampler and a one-tap mutation is genuinely unobservable rather than untested. The same masking `FloatFIR` does to its own tap count, which is D157.",
-  "find": "\t\t\tV92MOD_RS_TAPS, V92MOD_RS_CUTOFF, V92MOD_RS_PPM,",
-  "replace": "\t\t\tV92MOD_RS_TAPS + 4, V92MOD_RS_CUTOFF, V92MOD_RS_PPM,"
+  "find": "\t\t\t\t       V92MOD_RS_TAPS, V92MOD_RS_CUTOFF,\n\t\t\t\t       V92MOD_RS_PPM, V92MOD_RS_MINHISTORY);",
+  "replace": "\t\t\t\t       V92MOD_RS_TAPS + 4, V92MOD_RS_CUTOFF,\n\t\t\t\t       V92MOD_RS_PPM, V92MOD_RS_MINHISTORY);"
  },
  {
   "label": "the queue is one slot shorter",
-  "find": "\tv92mod_queue_ctor(p, (unsigned int)params->MODULATOR_QUEUE_LENGTH);",
-  "replace": "\tv92mod_queue_ctor(p, (unsigned int)params->MODULATOR_QUEUE_LENGTH - 1);"
+  "find": "\tnew (p) Queue<float>((unsigned int)params->MODULATOR_QUEUE_LENGTH);",
+  "replace": "\tnew (p) Queue<float>((unsigned int)params->MODULATOR_QUEUE_LENGTH - 1);"
  },
  {
   "label": "the transmit filter gets one fewer tap",
-  "find": "\tv92mod_fir_ctor(p, V92_TXPREFILTER_TAPS, v92TxPreFilter,",
-  "replace": "\tv92mod_fir_ctor(p, V92_TXPREFILTER_TAPS - 4, v92TxPreFilter,"
+  "find": "\tnew (p) FloatFIR(V92_TXPREFILTER_TAPS, v92TxPreFilter, V92MOD_FIR_BLOCK);",
+  "replace": "\tnew (p) FloatFIR(V92_TXPREFILTER_TAPS - 4, v92TxPreFilter, V92MOD_FIR_BLOCK);"
  },
  {
   "label": "the transmit filter gets one fewer sample of block slack",
-  "find": "\t\t\tV92MOD_FIR_BLOCK);",
-  "replace": "\t\t\tV92MOD_FIR_BLOCK - 1);"
+  "find": "\tnew (p) FloatFIR(V92_TXPREFILTER_TAPS, v92TxPreFilter, V92MOD_FIR_BLOCK);",
+  "replace": "\tnew (p) FloatFIR(V92_TXPREFILTER_TAPS, v92TxPreFilter, V92MOD_FIR_BLOCK - 1);"
  },
  {
   "label": "the transmit filter is given the echo pre-filter's numerator",
-  "find": "v92TxPreFilter,\n\t\t\tV92MOD_FIR_BLOCK);",
-  "replace": "v92TxPreFilter + 1,\n\t\t\tV92MOD_FIR_BLOCK);"
+  "find": "\tnew (p) FloatFIR(V92_TXPREFILTER_TAPS, v92TxPreFilter, V92MOD_FIR_BLOCK);",
+  "replace": "\tnew (p) FloatFIR(V92_TXPREFILTER_TAPS, v92TxPreFilter + 1, V92MOD_FIR_BLOCK);"
  },
  {
   "label": "the sixth argument is filed where the fifth belongs",
@@ -111,8 +111,8 @@
  },
  {
   "label": "the phase 4 modulator is handed the mapping parameters as its CP",
-  "find": "\tv92mod_p4m_ctor(p, params, bitsToSymbol, cp, mappingParams);",
-  "replace": "\tv92mod_p4m_ctor(p, params, bitsToSymbol, mappingParams, cp);"
+  "find": "\tnew (p) V92Phase4Modulator(params, bitsToSymbol, cp, mappingParams);",
+  "replace": "\tnew (p) V92Phase4Modulator(params, bitsToSymbol, mappingParams, cp);"
  },
  {
   "label": "reset does not copy the block size into +0x08",
