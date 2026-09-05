@@ -202,7 +202,14 @@ rewrite, the 941 anchor-frozen mutation comments) still waits until AFTER
 once -- unchanged from the original decision, just now grounded in a
 concrete Tier 2 rather than an abstract "byte-identity pass."
 
-Status: 2a launching next; 2b/2c scoped, not started.
+Status: wave 2 launched 2026-09-05, all seven items in parallel worktrees
+(items 10 as two groups, A: V90Demodulator/V90ModemCtor/V92Modulator/
+V90Modulator, B: the remaining 12 files; item 7; item 4; item 5; item 6;
+item 9). The shared foundation for item 10 (`sysdep.h`'s placement
+`operator new`/`operator delete`, F10155) is already landed and proven
+end-to-end on `VPCMXF_Create` (F10157, grade 0 EXACT, unchanged) before
+this wave launched, including the ODR-collision fix both groups were
+warned to expect and check for again as more files convert.
 
 ## PRIORITY — correctness, not style (class1rx.c null derefs) — RESOLVED
 
