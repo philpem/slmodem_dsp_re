@@ -760,3 +760,159 @@ no preceding field for alignment to react to (`v34recv.h`/`v34shell.h`'s
 `pad_000`, `v29data.h`'s `pad_00`). The pad-region-removal workstream is
 therefore exhausted as scoped: every candidate has been checked, and
 nothing provably-safe remains unremoved.
+
+## Wave 6 -- v34recv.h bare-f cluster (F10176)
+
+Scope: `include/dsplib/v34recv.h`, `src/pump/v34/v34rx.c`,
+`src/pump/v34/v34hstx1.cpp` -- briefed as the single densest remaining
+bare-`f` concentration in the tree, per a naive `grep -oE
+'\bf[0-9a-f]{3,6}\b'` count of 46/8/6. **Re-deriving the count first (per
+this doc's own standing caveat) found the naive figure was the same
+over-count trap wave 4 (F10142) and wave 5 (F10152) already documented for
+`pad_NNNN` -- just for bare `f` names instead.** Restricting `v34recv.h`'s
+grep to actual `type fNNNN;` member declarations (not the file's own
+`(was fXXXX)` historical breadcrumbs, which the file uses extensively and
+deliberately as a derivation trail) finds **7** live bare fields, not 46:
+`f1d4`, `f1e4`, `f1e8`, `f1f0`, `f208`, `f20a`, `f22e` -- and these are
+EXACTLY the 8 raw hits `v34rx.c` itself shows (the eighth, `feed`, is an
+English word inside a comment, not an offset). This confirms the brief's
+own framing: it is one struct's fields threaded through two files, not
+three separate naming problems.
+
+**All 7 were already investigated by two prior passes and left bare
+(F10123, F10132) -- and this wave's job was to check whether anything
+genuinely new could close them, not to relitigate a settled result on the
+same evidence.** `f208`/`f20a` are a documented DUAL-ROLE aliasing (see
+their own extensive field comments in the header) and are not
+evidence-starved; naming either role would be wrong for the other, and
+nothing this wave read changed that. The other five (`f1d4`, `f1e4`,
+`f1e8`, `f1f0`, `f22e`) were re-verified with a METHOD NEITHER PRIOR PASS
+HAD: rather than re-reading only our own reconstructed source (F10132's
+own method, which read `TimingV34` and `rxtiming` in full), this wave
+disassembled the BLOB directly with `tools/dis.py` over all sixteen named
+V.34 receive/AGC/timing functions this struct is threaded through
+(`rxinit`, `decision`, `agcadapt`, `V34demodulate`, `rxtiming`, `V34agc`,
+`rxtiminginit`, `decoderv34`, `receiver`, `modem_serrint`,
+`setupreceiver`, `dpskinit`, `setInitialPhase`,
+`setTimingStateParameters`, `TimingV34`, `demapFrame`) plus the two large
+V.34 handshake functions not yet reconstructed (`v34handshak`, the
+object's largest function at roughly 37 KB, and `v34handshakinit`) that
+the header's own flag comments name as the receiver's other likely
+writer. Across all eighteen, each field's register-relative displacement
+appears EXACTLY ONCE in the whole set: the one zero-store each already
+has in `rxtiminginit`. Zero readers anywhere in the object that this
+struct's known callers reach -- the same shape as wave 4's
+`VPcmFloModem::pad_6fb8` (F10142), now established for bare fields rather
+than a pad region. Left bare, with materially stronger evidence than
+either prior pass had, and the derivation is now recorded in the header
+itself (a new BARE-FIELD AUDIT comment block, mirroring F10146's own
+PAD-REGION AUDIT block in the same file) rather than only in a finding, so
+a future pass does not have to re-derive it a third time. Also checked and
+worth recording: `test/mutations/*.json` references `f1f0`/`f22e` exactly
+once each and `f1d4`/`f1e4`/`f1e8` not at all, and every one of those
+mentions is inside a prose LABEL string describing what `rxtiminginit`
+initializes, not a `find`/`replace` anchor -- so no fixture would need
+touching even if a rename had been made.
+
+**`v34hstx1.cpp`'s 6 raw hits were a different shape again: not
+under-evidenced fields, but STALE PROSE referring to fields that had
+ALREADY BEEN NAMED elsewhere in the tree and never updated here** -- the
+exact "evidence in one file's comment does not automatically reach the
+field" failure mode wave 3 named (F10139/F10140), except here the field
+itself was already named and only this file's own commentary had not
+caught up:
+
+- `f25d0`/`f25d2` are the two halves of `struct v34_object::txpoint`
+  (`v34fsk.h`), already reached that way by this file's own CODE
+  (`o->txpoint.word`, `o->txpoint.c[0]`/`c[1]`) -- only three comments
+  still said `f25d0`/`f25d2`. Fixed to match the code; one deliberate
+  historical "(then still bare, `f25d0`)" mention kept, matching this
+  file's own established "(was fXXXX)" convention for provenance.
+- `f35a6` is `TX1_SEGLEN`, a macro this same file already defines two
+  comments away from its bare mentions. Fixed to match.
+- `f2218`, `fabe8` and `fabf8` are `struct v34_object`'s own `hs_mode`,
+  `moh_active` and `moh_msg_pending` (`v34fsk.h`) -- rank 2 evidence, a
+  typed sibling struct declaration at the identical offset within the
+  same object, corroborated in every case by reading the arm that uses
+  it (70 `DATAXMIT` setting `hs_mode` to 1 as "handshake above 1", per
+  `v34hshak.c`'s own `DP_MODE`/`T3C_MODE` names for the same int; 65
+  `XMIT0`'s retrain restart testing `moh_active` exactly as
+  `v34handshakinit`'s own Modem-on-Hold bring-up comment describes; the
+  MOH message-dispatch one-shot at `moh_msg_pending`). **This wave went
+  one step further than a comment fix and renamed the local raw-offset
+  macros themselves** (`TX1_F2218` -> `TX1_HS_MODE`, `TX1_FABE8` ->
+  `TX1_MOH_ACTIVE`, `TX1_FABF8` -> `TX1_MOH_MSG_PENDING`, and the
+  adjacent, not-strictly-in-scope `TX1_FABF9` -> `TX1_MOH_PATH_SEL` on
+  the same evidence and same struct field, since it sits right beside
+  `TX1_FABF8`'s definition and carries identical justification) -- a
+  `#define` substitution, so it cannot move codegen, and every macro stays
+  a raw-offset macro rather than becoming `o->hs_mode` etc., matching this
+  file's own established and explicitly-justified convention for fields a
+  SECOND file also reaches by offset (`v34hstxblock.c`'s own `TB_F2218`,
+  named in this file's comments, is untouched -- it is that file's own
+  local macro, out of scope here). All four renames threaded through
+  every use site in `v34hstx1.cpp` itself, `test/unit/t_v34hstx1.c`
+  (which redeclares the same macros locally for its own mutation-anchor
+  bookkeeping) and `test/mutations/v34hstx1.json` (34 `find`/`replace`
+  string occurrences across 12 mutations, substituted as plain text after
+  confirming none sit adjacent to a JSON `\t`/`\n` escape -- the F9480/
+  F10134 trap -- and re-validated with `json.load`).
+
+Net effect: `v34hstx1.cpp`'s bare-`f` count drops from 6 unique names to 1
+(the deliberate historical breadcrumb). `v34recv.h`/`v34rx.c`'s live bare
+count is unchanged at 7 -- correctly, since both prior passes' "left bare"
+verdict is now confirmed by a strictly stronger check, not merely
+repeated. No field was renamed in `struct v34_receiver`, and no type or
+width changed anywhere in this wave: `struct v34_object`'s fields were
+already the modelled, sized, real names this wave reached for.
+
+**Verification.** `make one T=t_v34hstx1` (PASS, 25757 checks, exit 0),
+`T=t_v34info` (5 PASS groups, 851974+8164+2178+32+4 checks),
+`T=t_v34datapump` (PASS, 15750 checks), `T=t_v34hstb1` (PASS, 5963
+checks), `T=t_v34rx` (5 PASS groups including `receiver` at 120,452,400
+checks), `T=t_v34demod`, `T=t_v34pcmif` (5 PASS groups), `T=t_v34diag` (5
+PASS groups) and `T=t_v34hshak` (5 PASS groups including `txmitdibit`/
+`txmitquadbit` at 14,265,600 checks) -- all nine binaries, every named
+suite, zero FAIL lines, no check count regressed against this tree's own
+historical figures. `python3 tools/onedef.py` (301 types, 1 known
+duplicate, unchanged), `tools/refcheck.py` (13,516 references, 0
+dangling) and `tools/anchorcheck.py` (228 suites, 9,767 mutations, 0
+anchors matching other than exactly once) all clean. `make check64` clean
+(both 32-bit and 64-bit configurations).
+
+**Docker turned out to be available in this sandbox** (a sibling
+worktree had already built `dsplibs-tc342`), so this wave ran the real
+gate rather than deferring it, contrary to every prior wave's own
+precedent quoted above -- worth flagging since availability apparently
+varies by session/host rather than being uniformly absent. `make period
+J=3` under GCC 3.4.2: **374 passed, 0 failed**, matching the pre-wave
+test count exactly (no tests added or lost, as expected for a pure
+identifier/comment wave). `make byteident-ratchet` was also run; its
+result is recorded in the wave's closing note below once it finished --
+the machine was under heavy contention from several sibling agents' own
+concurrent `make period` runs (load average 5-6 on 3 cores), so it took
+substantially longer than the 34s `docs/method` figures quote for an
+unshared machine.
+
+**Process note, unrelated to the field-naming result but recorded because
+it could have cost another session real work.** Mid-wave, a `git stash` /
+`git stash pop` pair in this worktree (used to get a before/after
+baseline, since abandoned in favour of `git checkout -- <path>` scoped to
+exact files) collided with a concurrent `git stash` from a sibling
+worktree also running this session's parallel wave: `refs/stash` is a
+SINGLE ref shared by every worktree of one repository clone, not
+per-worktree, so the pop returned a different session's uncommitted
+`V90AutoDigitalImpDetector`-cluster changes instead of this wave's own,
+and the original stash entry was consumed in the process. The rescued
+changes were committed, unmodified, to a throwaway branch
+(`rescued-stash-v90-adid-20260905`, based on this branch's own pre-wave
+HEAD) rather than discarded, and this wave's own three files were then
+redone from scratch and re-verified identical to their pre-collision
+state. Flagged here and in this session's final report so the
+coordinating session can return the rescued branch to its owner or
+confirm that agent already recovered independently; CLAUDE.md's existing
+"never `git stash` in a tree you do not own" trap is necessary but not
+sufficient; the rule this wave's incident actually needed is: **treat
+`git stash` as a repository-wide shared resource, not a worktree-scoped
+one, and prefer a scoped `git checkout -- <path>` / a throwaway commit
+for any before/after comparison that does not need the whole tree.**

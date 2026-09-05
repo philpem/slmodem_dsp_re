@@ -175,7 +175,13 @@ struct v34_receiver {
 	 * `v34hshak.c` and three mutation fixtures.
 	 */
 	short           report_interval;            /* +0x1d2 */
-	short           f1d4;            /* +0x1d4 */
+	short           f1d4;            /* +0x1d4 write-once-to-zero
+					  (`rxtiminginit`), never read anywhere
+					  reconstructed nor anywhere in the
+					  blob's own `v34handshak`/
+					  `v34handshakinit` -- see the
+					  BARE-FIELD AUDIT below (F10132,
+					  F10176) */
 	/*
 	 * +0x1d8.  `TimingV34`'s fractional carry: the whole part of each
 	 * symbol's correction goes to the interpolator step, the remainder
@@ -190,8 +196,10 @@ struct v34_receiver {
 					    detector's own integrator, fed
 					    error * timing_i_gain in Q15
 					    (was f1e0) */
-	int             f1e4;            /* +0x1e4 */
-	int             f1e8;            /* +0x1e8 */
+	int             f1e4;            /* +0x1e4 write-once-to-zero, never
+					  read -- see the BARE-FIELD AUDIT
+					  below (F10132, F10176) */
+	int             f1e8;            /* +0x1e8   likewise */
 	/*
 	 * The two timing_out[] indices TimingV34 differences.  setInitialPhase
 	 * picks them, and the pair is (1,2) or (2,1) depending on where the
@@ -199,7 +207,9 @@ struct v34_receiver {
 	 */
 	short           timing_idx_a;    /* +0x1ec (was f1ec) */
 	short           timing_idx_b;    /* +0x1ee (was f1ee) */
-	short           f1f0;            /* +0x1f0 */
+	short           f1f0;            /* +0x1f0 write-once-to-zero, never
+					  read -- see the BARE-FIELD AUDIT
+					  below (F10132, F10176) */
 	short           cloop_cos;       /* +0x1f2 the carrier-recovery loop's
 					  rotator, real part (was f1f2) */
 	short           cloop_sin;       /* +0x1f4   imaginary part (was f1f4) */
@@ -300,7 +310,9 @@ struct v34_receiver {
 					  alignment gap ahead of this `int`
 					  (finding F10146). */
 	unsigned char pad_22c[0x22e - 0x22c];
-	short           f22e;            /* +0x22e */
+	short           f22e;            /* +0x22e write-once-to-zero, never
+					  read -- see the BARE-FIELD AUDIT
+					  below (F10132, F10176) */
 	short           dwell_count;     /* +0x230 TimingV34: symbols spent in
 					  the current timing state so far
 					  (was f230) */
@@ -465,6 +477,32 @@ struct v34_receiver {
  * unread -- only that, unlike the five above, deleting them would not
  * reproduce the object's layout by natural alignment alone, so they stay
  * explicit per this workstream's decision rule.
+ *
+ * BARE-FIELD AUDIT (findings F10132, F10176).  `f1d4`, `f1e4`, `f1e8`,
+ * `f1f0` and `f22e` are this struct's last five bare `fNNNN` members;
+ * F10132 re-grepped the tree and found each written exactly once, to
+ * zero, by `rxtiminginit`, and read by nothing in `src/`, `include/` or
+ * `test/`.  F10176 (V.34 receive/handshake field-naming wave 6) went one
+ * step further and checked the OBJECT directly rather than only our own
+ * reconstructed source: `tools/dis.py` over every V.34 receive/AGC/timing
+ * function this struct is threaded through (`rxinit`, `decision`,
+ * `agcadapt`, `V34demodulate`, `rxtiming`, `V34agc`, `rxtiminginit`,
+ * `decoderv34`, `receiver`, `modem_serrint`, `setupreceiver`, `dpskinit`,
+ * `setInitialPhase`, `setTimingStateParameters`, `TimingV34`,
+ * `demapFrame`) plus the two large handshake functions not yet
+ * reconstructed (`v34handshak`, the object's largest function at 37 KB,
+ * and `v34handshakinit`) that this file's own flag comments say are the
+ * receiver's other likely writer.  Across all eighteen, each of the five
+ * fields' register-relative displacement (its own offset directly in a
+ * function taking `struct v34_receiver *`, or +0x264 more in one taking
+ * the full `struct v34_object *`) appears EXACTLY ONCE: the one
+ * zero-store in `rxtiminginit`.  Zero readers anywhere in the 1.2 MB
+ * object that this struct's own reconstructed and not-yet-reconstructed
+ * callers reach, not merely in what this tree has written -- the same
+ * shape as `VPcmFloModem::pad_6fb8` (F10142).  `f208`/`f20a` are excluded
+ * from this audit: they are not evidence-starved, they are a documented
+ * DUAL-ROLE aliasing (see their own field comments above) and naming
+ * either role would be wrong for the other.  All seven stay bare.
  */
 #if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
 #define V34RECV_ASSERT_OFF(field, off) \

@@ -106,7 +106,7 @@
 #define TX1_RATEWANT	0x022c		/* rate_want, int                  */
 #define TX1_TIMER	0x0238		/* the sample clock's running count*/
 #define TX1_TIMERMARK	0x0248		/* where the span is measured from */
-#define TX1_F2218	0x2218		/* int: selects the tail's arms    */
+#define TX1_HS_MODE	0x2218		/* int: selects the tail's arms    */
 #define TX1_RATEIDX	0xaa98		/* short: the negotiated rate index*/
 #define TX1_RXF21C	0x0480		/* receiver +0x21c, short          */
 #define TX1_RXF220	0x0484		/* receiver +0x220, int            */
@@ -124,11 +124,11 @@
 #define TX1_F25D8	0x25d8		/* 64/68 counts one per pass       */
 #define TX1_F25DA	0x25da		/* 64 needs 2; 66ca8 needs non-zero*/
 #define TX1_F35A2	0x35a2		/* 66ca8's other companion         */
-#define TX1_FABF8	0x00abf8	/* byte: 24's message-dispatch     */
+#define TX1_MOH_MSG_PENDING	0x00abf8	/* byte: 24's message-dispatch     */
 					/* one-shot.  Up here rather than  */
 					/* with 24's other companions      */
 					/* because `run_case_ex` reads it   */
-#define TX1_FABF9	0x00abf9	/* byte: picks 24's message AND    */
+#define TX1_MOH_PATH_SEL	0x00abf9	/* byte: picks 24's message AND    */
 					/* its hold tail's first way out   */
 
 #define NP(a)	((int)(sizeof(a) / sizeof((a)[0])))
@@ -296,7 +296,7 @@ run_case_ex(short txst, int (*arm)(void *), int want, const char *what,
 		snprintf(msg, sizeof(msg),
 			 "%s: the arm cleared the one-shot at +0xabf8", what);
 		diff_eq_int(msg,
-			    before[TX1_FABF8] != 0 && o[TX1_FABF8] == 0, 1, tag);
+			    before[TX1_MOH_MSG_PENDING] != 0 && o[TX1_MOH_MSG_PENDING] == 0, 1, tag);
 	}
 
 	apply(txst, p, np);
@@ -990,7 +990,7 @@ case_ppseg(void)
  * other two pass.
  */
 #define TX1_FAA7A	0xaa7a		/* cleared by the shared prologue  */
-#define TX1_FABE8	0xabe8		/* byte: the Modem-on-Hold flag    */
+#define TX1_MOH_ACTIVE	0xabe8		/* byte: the Modem-on-Hold flag    */
 #define TX1_PTR_AA6C	0xaa6c		/* the self-pointer 54 aims        */
 #define TX1_BLK_A94C	0xa94c		/* the record it is aimed at       */
 #define TX1_BLK_A97C	0xa97c		/* somewhere else to aim it first  */
@@ -1076,7 +1076,7 @@ aim_session(void)
 
 static struct tx1_poke silence[] = {
 	P16(TX1_VECTIDX, 3), P16(TX1_F359C, 0x64), P32(TX1_V90RX, 0),
-	P8(TX1_FABE8, 0),
+	P8(TX1_MOH_ACTIVE, 0),
 	A94C_SEED, RETRAIN_SEED,
 	P16(TX1_FAA7A, 0x3333), PSELF(TX1_PTR_AA6C, TX1_BLK_A97C),
 	/*
@@ -1248,7 +1248,7 @@ case_vectpp_table(void)
 	P16(TX1_RXF21C, 0x5a5a),	P32(TX1_RXF220, 0x33445566),	\
 	P32(TX1_TIMER, 0x0a0b0c0d),	P32(TX1_TIMERMARK, 0x0e0f1011),	\
 	P32(TX1_RATENOW, 0x11111111),	P32(TX1_RATEWANT, 0x22222222),	\
-	P32(TX1_F2218, 3)
+	P32(TX1_HS_MODE, 3)
 
 static const struct tx1_poke dataxmit_off[] = {
 	DATAXMIT_SEED, P16(TX1_F25C2, 0x1001), P16(TX1_RATEIDX, 0x0c)
@@ -2436,9 +2436,9 @@ case_xmitmp_entry(void)
 #define DP_W0		18		/* the reader's word[0]             */
 
 static struct tx1_poke dpsk[] = {
-	P8(TX1_FABE8, 0),			/* DP_E8     */
-	P8(TX1_FABF8, 0x5a),			/* DP_F8     */
-	P8(TX1_FABF9, 0),			/* DP_F9     */
+	P8(TX1_MOH_ACTIVE, 0),			/* DP_E8     */
+	P8(TX1_MOH_MSG_PENDING, 0x5a),			/* DP_F8     */
+	P8(TX1_MOH_PATH_SEL, 0),			/* DP_F9     */
 	P32(TX1_MOHMSG, 7),			/* DP_MSG    */
 	P32(TX1_MOHRCV, 9),			/* DP_RCV    */
 	P16(TX1_VECTIDX, 0x0040),		/* DP_IDX    */
@@ -2573,7 +2573,7 @@ case_dpsk_cold(void)
 	apply(V34HS_TX_DPSK, NULL, 0);
 	o = (const unsigned char *)v34hs_object(0);
 	diff_eq_int("24 TX_DPSK cold: the fill leaves +0xabe8 clear",
-		    o[TX1_FABE8], 0, 2490);
+		    o[TX1_MOH_ACTIVE], 0, 2490);
 	memcpy(&short_358c, o + TX1_F358C, sizeof(short_358c));
 
 	(void)v34tx1_tx_dpsk(v34hs_object(0));
@@ -3482,7 +3482,7 @@ static struct tx1_poke trnseg[36] = {
 	P16(TX1_F25C0, 0),
 	P16(TX1_RATECFG + 0x00, 100),
 	P16(TX1_RATECFG + 0x02, 20),
-	P32(TX1_F2218, 0),
+	P32(TX1_HS_MODE, 0),
 	P16(TX1_RXF21A, 0),
 	P16(TX1_RX250, 0),
 	P16(TX1_F25C6, 0x1234),

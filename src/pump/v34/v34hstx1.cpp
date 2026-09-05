@@ -27,7 +27,7 @@
  *
  * so `0x3a6(%esi)` with `esi` from 0x4c(%esp) is +0x25c2 in the object, not
  * +0x3a6.  The six fields that region carries are `seg_symcount`, `tx_flags`, `prev_quadrant`,
- * `cur_quadrant`, `tx_scr_sr` and `f25d0`, and they are named in `struct v34_object`.
+ * `cur_quadrant`, `tx_scr_sr` and `txpoint`, and they are named in `struct v34_object`.
  *
  * ---------------------------------------------------------------------------
  * TWO PAIRS THAT LOOK LIKE ONE ARM AND ARE NOT.
@@ -141,8 +141,16 @@
 /*
  * +0x2218, an int.  Table 2's tail reads it to choose four of its arms
  * (v34hstxblock.c's `TB_F2218`); 70 is a writer of it.
+ *
+ * Named `hs_mode` in `struct v34_object` (`v34fsk.h`), on `v34hshak.c`'s own
+ * `DP_MODE`/`T3C_MODE` names for the same int: `datapumpv34`'s recovery
+ * supervisor reads it as "handshake above 1", and 70 setting it to 1 here is
+ * exactly that transition.  Kept as a raw-offset macro in this file rather
+ * than reached as `o->hs_mode`, matching every other field here that a
+ * second file also reaches by offset (`v34hstxblock.c`'s own `TB_F2218`) --
+ * see `TX1_FAAE0`/`TX1_FAA3C` above for why that convention is deliberate.
  */
-#define TX1_F2218	0x2218
+#define TX1_HS_MODE	0x2218
 
 /*
  * +0x358e and +0x35a4, two more words of `unmapped_3564`.
@@ -181,8 +189,12 @@
  * +0xabe8, a BYTE.  `v34handshakinit`'s Modem-on-Hold bring-up sets it to one
  * (v34hshak.c:1441) and 74's retrain tests it to choose which microstate the
  * handshake restarts in.  The object reads it with `cmpb`.
+ *
+ * Named `moh_active` in `struct v34_object` (`v34fsk.h`) -- kept as a
+ * raw-offset macro here rather than `o->moh_active`, matching this file's own
+ * convention for fields also reached elsewhere by offset.
  */
-#define TX1_FABE8	0xabe8
+#define TX1_MOH_ACTIVE	0xabe8
 
 /*
  * +0x25d6, +0x25d8 and +0x25da -- the three halfwords of `unmapped_25d6` that
@@ -296,7 +308,8 @@
  * `vect4` holds -- v34pcmmain.cpp and v34k56.cpp spell it the same way.
  *
  * This used to be a `memcpy`, which was a workaround for the C front end
- * warning about `*(int *)&o->f25d0` where the C++ one did not.  The
+ * warning about `*(int *)&o->txpoint` (then still bare, `f25d0`) where the
+ * C++ one did not.  The
  * declaration carries it now: `txpoint` is a union, so the wide store has a
  * member of its own and there is nothing left to work around.
  */
@@ -334,8 +347,9 @@ tx1_put_int(void *objp, unsigned off, int v)
  * ---------------------------------------------------------------------------
  * 65 `XMIT0`, 0x62d83.
  *
- * Send one silent symbol -- `f25d0` and `f25d2` are the two halves of the
- * point `txmit` transmits, and both are cleared before the call -- and then,
+ * Send one silent symbol -- `txpoint.c[0]` and `txpoint.c[1]` are the two
+ * halves of the point `txmit` transmits, and both are cleared before the
+ * call -- and then,
  * if the receiver is holding bit 3 of its flags word, arm the segment:
  * raise 0x2000 in `tx_flags`, move the transmit machine to SSEG, and clear the
  * three fields the next segment counts in.
@@ -794,7 +808,7 @@ v34tx1_dataxmit(void *objp)
 	o->rate_now = idx;
 	o->rate_want = idx;
 
-	tx1_put_int(o, TX1_F2218, 1);
+	tx1_put_int(o, TX1_HS_MODE, 1);
 	return V34TX1_LOOP;
 }
 
@@ -892,8 +906,9 @@ v34tx1_tx_l1(void *objp)
  *
  *   tx_flags & 0x2000      -> TRNSEG4A                          (0x67209)
  *   short_35a4 == 0          -> PPSEG                             (0x68375)
- *   tx_flags & 0x8000      -> PPSEG, and seg_symcount = f35a6 first    (0x69eca)
- *   otherwise           -> TXMD, after f35a6 = short_35a4 * 0x53,
+ *   tx_flags & 0x8000      -> PPSEG, and seg_symcount = TX1_SEGLEN first
+ *                          (0x69eca)
+ *   otherwise           -> TXMD, after TX1_SEGLEN = short_35a4 * 0x53,
  *                          the modulator and the counter     (0x6783e)
  *
  * and all four converge on 0x67236, which zeroes `vect_idx` and +0x358e.
@@ -1228,7 +1243,7 @@ v34tx1_silence(void *objp)
 			return V34TX1_LOOP;		/* 0x63da2 */
 
 		/* 0x66ba1 */
-		if (*((unsigned char *)o + TX1_FABE8) != 0)
+		if (*((unsigned char *)o + TX1_MOH_ACTIVE) != 0)
 			want = V34HS_MOH_TONE;
 		else					/* 0x68a7c */
 			want = o->role == 0x65 ? V34HS_RX_PHASE1_CALL
@@ -1947,11 +1962,11 @@ v34tx1_xmitmp(void *objp)
  * ---------------------------------------------------------------------------
  * THE SHAPE.  One bit, one tone, and three ways for the message to end:
  *
- *     if (fabe8)  vect_idx += 1        the Modem-on-Hold clock
+ *     if (moh_active)  vect_idx += 1        the Modem-on-Hold clock
  *     bit = getbit(*(obj + 0xaa6c))
  *     if (bit >= 0)  {  short_358c ^= bit; vect4[2 * (short_358c & 1)]; txmit;  }
- *     else if (!fabe8)      txstate = 60 TONE_AB and nothing else
- *     else if (!fabf8)      re-arm the reader BY HAND, take one more bit,
+ *     else if (!moh_active)      txstate = 60 TONE_AB and nothing else
+ *     else if (!moh_msg_pending)      re-arm the reader BY HAND, take one more bit,
  *                           send it, and fall into the hold tail
  *     else                  the moh_message dispatch, then the hold tail
  *
@@ -1997,23 +2012,26 @@ v34tx1_xmitmp(void *objp)
  * rewrites both state words, and the tail's clear-down IS the clear-down.
  */
 
-/* +0xabe4 and +0xabe6, two halfwords of `unmapped_abe4`; +0xabe8 is TX1_FABE8
- * above and is the same region's Modem-on-Hold flag.  The clear-down raises
- * +0xabe4 and the two `v34handshakinit` paths raise +0xabe6; no other site in
- * this tree reads either. */
+/* +0xabe4 and +0xabe6, two halfwords of `unmapped_abe4`; +0xabe8 is
+ * TX1_MOH_ACTIVE above and is the same region's Modem-on-Hold flag.  The
+ * clear-down raises +0xabe4 and the two `v34handshakinit` paths raise
+ * +0xabe6; no other site in this tree reads either. */
 #define TX1_FABE4	0xabe4
 #define TX1_FABE6	0xabe6
 
 /*
  * +0xabf8 and +0xabf9, two BYTES of `unmapped_abf8`, read with `cmpb`.
+ * Named `moh_msg_pending` and `moh_path_sel` in `struct v34_object`
+ * (`v34fsk.h`) -- kept as raw-offset macros here, matching this file's own
+ * convention for fields also reached elsewhere by offset.
  *
  * +0xabf8 is a one-shot: while it is up the arm runs the message dispatch and
  * clears it, and once it is down the arm re-arms the reader instead.  +0xabf9
  * chooses twice -- which message is built at 0x6a3f3, and which of the tail's
  * three ways out is taken at 0x65012.  Neither has another reader here.
  */
-#define TX1_FABF8	0xabf8
-#define TX1_FABF9	0xabf9
+#define TX1_MOH_MSG_PENDING	0xabf8
+#define TX1_MOH_PATH_SEL	0xabf9
 
 /*
  * 0x64a13 and 0x67d07, the same nine instructions twice.  The message bit is
@@ -2126,7 +2144,7 @@ tx1_moh_send(struct v34_object *o)
 
 	if (o->short_abe2 != 3)
 		o->short_abe2 = 1;
-	if (*((unsigned char *)o + TX1_FABF9) == 0) {
+	if (*((unsigned char *)o + TX1_MOH_PATH_SEL) == 0) {
 		if (dsplibs_debug_level > 1)	/* 0x7041b */
 			dsplibs_debug_printf(
 				"MOH: MHnack received for MHreq," " sending MHfrr\r\n");
@@ -2178,7 +2196,7 @@ tx1_moh_hold(struct v34_object *o)
 	if ((int)o->vect_idx < ((int)o->rtd >> 4) + 0x4b0)
 		return V34TX1_LOOP;			/* 0x6431f */
 
-	if (*((unsigned char *)o + TX1_FABF9) != 0) {
+	if (*((unsigned char *)o + TX1_MOH_PATH_SEL) != 0) {
 		if (dsplibs_debug_level > 1)		/* 0x6889f */
 			dsplibs_debug_printf(
 				"MOH: Timeout waiting for MH sequence under"
@@ -2214,7 +2232,7 @@ v34tx1_tx_dpsk(void *objp)
 	short bit;
 
 	/* 0x62b9d */
-	if (*((unsigned char *)o + TX1_FABE8) != 0)
+	if (*((unsigned char *)o + TX1_MOH_ACTIVE) != 0)
 		o->vect_idx = (short)((unsigned short)o->vect_idx + 1);
 
 	/* 0x62bb5, and 0x684bb where it does not inline */
@@ -2227,7 +2245,7 @@ v34tx1_tx_dpsk(void *objp)
 	}
 
 	/* 0x64e5c: the message is over.  The flag is RE-READ (0x64e63) */
-	if (*((unsigned char *)o + TX1_FABE8) == 0) {
+	if (*((unsigned char *)o + TX1_MOH_ACTIVE) == 0) {
 		/*
 		 * 0x654dd.  The compare against TONE_AB cannot be false, for
 		 * finding F342's reason at 65: the arm is reached only through
@@ -2242,10 +2260,10 @@ v34tx1_tx_dpsk(void *objp)
 	if (dsplibs_debug_level > 1)			/* 0x68704 */
 		dsplibs_debug_printf(
 			"End of current MOH msg: isterm=%d, count1(%d)," " pktcount(%d)...\r\n",
-			*((signed char *)o + TX1_FABF8), o->vect_idx,
+			*((signed char *)o + TX1_MOH_MSG_PENDING), o->vect_idx,
 			tx1_bitsource(o)->repeats);
 
-	if (*((unsigned char *)o + TX1_FABF8) == 0) {
+	if (*((unsigned char *)o + TX1_MOH_MSG_PENDING) == 0) {
 		/*
 		 * 0x67c4e.  The reader is re-armed BY HAND and read again --
 		 * `getbit`'s own restart arm with the `repeat` test taken out,
@@ -2295,7 +2313,7 @@ v34tx1_tx_dpsk(void *objp)
 	}
 
 	/* 0x64fde */
-	*((unsigned char *)o + TX1_FABF8) = 0;
+	*((unsigned char *)o + TX1_MOH_MSG_PENDING) = 0;
 	return tx1_moh_hold(o);				/* 0x64fec */
 }
 
@@ -2330,15 +2348,16 @@ v34tx1_tx_dpsk(void *objp)
  * configuration at +0xaa84:
  *
  *     n == lim                                        the segment is over
- *     n  > lim  and  f2218 > 3                        likewise
- *     n  < lim  and  f2218 > 3  and  n >= baud+period
+ *     n  > lim  and  hs_mode > 3                        likewise
+ *     n  < lim  and  hs_mode > 3  and  n >= baud+period
  *               and  rx->equerr <= rx+0x250 + 10        likewise (0x6559c)
  *
  * so a run that has passed the nominal length finishes at once, and a run
  * that has passed the SHORTER threshold finishes early when the equaliser
  * error at +0x21a has come down to within ten of the mark at +0x250.
- * `f2218` is the same int table 2's tail reads and the compare is UNSIGNED
- * (`cmpl $0x3 ; jbe`), so a negative value is a large one here.
+ * `hs_mode` (`TX1_HS_MODE`, +0x2218) is the same int table 2's tail reads and
+ * the compare is UNSIGNED (`cmpl $0x3 ; jbe`), so a negative value is a large
+ * one here.
  *
  * `baud >> 1` IS AN ARITHMETIC SHIFT (0x62f02 is `sar`), not a divide: with
  * a negative `baud` the two differ, and the fixture's fill makes them differ.
@@ -2558,7 +2577,7 @@ tx1_ts_snapshot(struct v34_object *o, struct v34_receiver *rx, short *rec)
  * at +0x250, so it stops at the highest rate the line is measured to carry;
  * the receiver's +0x25e and +0x260 clamp it from either side, and a stale
  * sample clock -- the running count at +0x238 within 96,000 of the mark at
- * +0x248, with `f2218` low -- takes two more off it.  What comes out lands in
+ * +0x248, with `hs_mode` (+0x2218) low -- takes two more off it.  What comes out lands in
  * `cfg->rxbits`, is clamped again to the object's own `rate_min` and
  * `rate_max`, is overridden outright by `rate_want`, and is finally
  * bit-reversed into the capability word beside the transmit rate.
@@ -2688,7 +2707,7 @@ tx1_ts_rates(struct v34_object *o, struct v34_receiver *rx,
 	rec[1] = (short)0xfffd;
 	if ((unsigned)tx1_get_int(o, TX1_TIMER)
 	    < (unsigned)(tx1_get_int(o, TX1_TIMER_MARK) + 0x17700)
-	    && (unsigned)tx1_get_int(o, TX1_F2218) <= 3u) {
+	    && (unsigned)tx1_get_int(o, TX1_HS_MODE) <= 3u) {
 		rate = (short)(rate - 2);
 		if ((short)rate < (short)ratemin)
 			rate = ratemin;
@@ -2849,7 +2868,7 @@ v34tx1_trnseg4a(void *objp)
 	lim = baud + (baud >> 1) + period;
 
 	if (n != lim) {
-		if ((unsigned)tx1_get_int(o, TX1_F2218) <= 3u)
+		if ((unsigned)tx1_get_int(o, TX1_HS_MODE) <= 3u)
 			return V34TX1_LOOP;		/* 0x63941 */
 		if (n < lim) {
 			/* 0x6559c */

@@ -355,12 +355,12 @@
  },
  {
   "label": "70: +0x2218 is set to 2",
-  "find": "\ttx1_put_int(o, TX1_F2218, 1);",
-  "replace": "\ttx1_put_int(o, TX1_F2218, 2);"
+  "find": "\ttx1_put_int(o, TX1_HS_MODE, 1);",
+  "replace": "\ttx1_put_int(o, TX1_HS_MODE, 2);"
  },
  {
   "label": "70: +0x2218 is left alone",
-  "find": "\ttx1_put_int(o, TX1_F2218, 1);\n",
+  "find": "\ttx1_put_int(o, TX1_HS_MODE, 1);\n",
   "replace": ""
  },
  {
@@ -942,13 +942,13 @@
  },
  {
   "label": "74: the Modem-on-Hold flag is read as a halfword",
-  "find": "\t\tif (*((unsigned char *)o + TX1_FABE8) != 0)",
-  "replace": "\t\tif (tx1_get(o, TX1_FABE8) != 0)"
+  "find": "\t\tif (*((unsigned char *)o + TX1_MOH_ACTIVE) != 0)",
+  "replace": "\t\tif (tx1_get(o, TX1_MOH_ACTIVE) != 0)"
  },
  {
   "label": "74: the Modem-on-Hold flag is inverted",
-  "find": "\t\tif (*((unsigned char *)o + TX1_FABE8) != 0)",
-  "replace": "\t\tif (*((unsigned char *)o + TX1_FABE8) == 0)"
+  "find": "\t\tif (*((unsigned char *)o + TX1_MOH_ACTIVE) != 0)",
+  "replace": "\t\tif (*((unsigned char *)o + TX1_MOH_ACTIVE) == 0)"
  },
  {
   "label": "74: the flag chooses MOH_TONE_DROP",
@@ -2192,23 +2192,23 @@
  },
  {
   "label": "24: the entry does not tick vect_idx",
-  "find": "\tif (*((unsigned char *)o + TX1_FABE8) != 0)\n\t\to->vect_idx = (short)((unsigned short)o->vect_idx + 1);",
+  "find": "\tif (*((unsigned char *)o + TX1_MOH_ACTIVE) != 0)\n\t\to->vect_idx = (short)((unsigned short)o->vect_idx + 1);",
   "replace": ""
  },
  {
   "label": "24: the entry tick is unconditional",
-  "find": "\tif (*((unsigned char *)o + TX1_FABE8) != 0)\n\t\to->vect_idx = (short)((unsigned short)o->vect_idx + 1);",
+  "find": "\tif (*((unsigned char *)o + TX1_MOH_ACTIVE) != 0)\n\t\to->vect_idx = (short)((unsigned short)o->vect_idx + 1);",
   "replace": "\to->vect_idx = (short)((unsigned short)o->vect_idx + 1);"
  },
  {
   "label": "24: the entry tick is by two",
-  "find": "\tif (*((unsigned char *)o + TX1_FABE8) != 0)\n\t\to->vect_idx = (short)((unsigned short)o->vect_idx + 1);",
-  "replace": "\tif (*((unsigned char *)o + TX1_FABE8) != 0)\n\t\to->vect_idx = (short)((unsigned short)o->vect_idx + 2);"
+  "find": "\tif (*((unsigned char *)o + TX1_MOH_ACTIVE) != 0)\n\t\to->vect_idx = (short)((unsigned short)o->vect_idx + 1);",
+  "replace": "\tif (*((unsigned char *)o + TX1_MOH_ACTIVE) != 0)\n\t\to->vect_idx = (short)((unsigned short)o->vect_idx + 2);"
  },
  {
   "label": "24: the Modem-on-Hold flag is read as a halfword at the entry",
-  "find": "\tif (*((unsigned char *)o + TX1_FABE8) != 0)\n\t\to->vect_idx = (short)((unsigned short)o->vect_idx + 1);",
-  "replace": "\tif (*(short *)((char *)o + TX1_FABE8) != 0)\n\t\to->vect_idx = (short)((unsigned short)o->vect_idx + 1);"
+  "find": "\tif (*((unsigned char *)o + TX1_MOH_ACTIVE) != 0)\n\t\to->vect_idx = (short)((unsigned short)o->vect_idx + 1);",
+  "replace": "\tif (*(short *)((char *)o + TX1_MOH_ACTIVE) != 0)\n\t\to->vect_idx = (short)((unsigned short)o->vect_idx + 1);"
  },
  {
   "label": "24: a zero bit counts as the message being over",
@@ -2257,8 +2257,8 @@
  },
  {
   "label": "24: the message-over flag test is inverted",
-  "find": "\tif (*((unsigned char *)o + TX1_FABE8) == 0) {\n",
-  "replace": "\tif (*((unsigned char *)o + TX1_FABE8) != 0) {\n"
+  "find": "\tif (*((unsigned char *)o + TX1_MOH_ACTIVE) == 0) {\n",
+  "replace": "\tif (*((unsigned char *)o + TX1_MOH_ACTIVE) != 0) {\n"
  },
  {
   "label": "24: the message ends in TONE_AB_CALL",
@@ -2279,8 +2279,8 @@
  },
  {
   "label": "24: the one-shot test is inverted",
-  "find": "\tif (*((unsigned char *)o + TX1_FABF8) == 0) {",
-  "replace": "\tif (*((unsigned char *)o + TX1_FABF8) != 0) {"
+  "find": "\tif (*((unsigned char *)o + TX1_MOH_MSG_PENDING) == 0) {",
+  "replace": "\tif (*((unsigned char *)o + TX1_MOH_MSG_PENDING) != 0) {"
  },
  {
   "label": "24: on hold, the reader is not re-armed by hand",
@@ -2388,18 +2388,18 @@
  },
  {
   "label": "24: the one-shot is not cleared",
-  "find": "\t*((unsigned char *)o + TX1_FABF8) = 0;\n\treturn tx1_moh_hold(o);\t\t\t\t/* 0x64fec */",
+  "find": "\t*((unsigned char *)o + TX1_MOH_MSG_PENDING) = 0;\n\treturn tx1_moh_hold(o);\t\t\t\t/* 0x64fec */",
   "replace": "\treturn tx1_moh_hold(o);\t\t\t\t/* 0x64fec */"
  },
  {
   "label": "24: the one-shot is cleared as a halfword",
-  "find": "\t*((unsigned char *)o + TX1_FABF8) = 0;",
-  "replace": "\t*(short *)((char *)o + TX1_FABF8) = 0;"
+  "find": "\t*((unsigned char *)o + TX1_MOH_MSG_PENDING) = 0;",
+  "replace": "\t*(short *)((char *)o + TX1_MOH_MSG_PENDING) = 0;"
  },
  {
   "label": "24: the message dispatch does not run the hold tail",
-  "find": "\t*((unsigned char *)o + TX1_FABF8) = 0;\n\treturn tx1_moh_hold(o);\t\t\t\t/* 0x64fec */",
-  "replace": "\t*((unsigned char *)o + TX1_FABF8) = 0;\n\treturn V34TX1_LOOP;"
+  "find": "\t*((unsigned char *)o + TX1_MOH_MSG_PENDING) = 0;\n\treturn tx1_moh_hold(o);\t\t\t\t/* 0x64fec */",
+  "replace": "\t*((unsigned char *)o + TX1_MOH_MSG_PENDING) = 0;\n\treturn V34TX1_LOOP;"
  },
  {
   "label": "24: the clear-down leaves the transmit machine alone",
@@ -2503,13 +2503,13 @@
  },
  {
   "label": "24: +0xabf9 picks the two messages the other way round",
-  "find": "\n\tif (*((unsigned char *)o + TX1_FABF9) == 0) {\n\t\tif (dsplibs_debug_level > 1)\t/* 0x7041b */\n\t\t\tdsplibs_debug_printf(\n\t\t\t\t\"MOH: MHnack received for MHreq,\" \" sending MHfrr\\r\\n\");\n\t\to->moh_message = 1;\t\t/* 0x70430 */\n\t} else {\n\t\tif (dsplibs_debug_level > 1)\t/* 0x6a400 */\n\t\t\tdsplibs_debug_printf(\n\t\t\t\t\"MOH: MHnack received for MHreq,\" \" sending MHcda\\r\\n\");\n\t\to->moh_message = 3;\t\t/* 0x6a415 */\n\t}",
-  "replace": "\tif (*((unsigned char *)o + TX1_FABF9) == 0) {\n\t\tif (dsplibs_debug_level > 1)\t/* 0x7041b */\n\t\t\tdsplibs_debug_printf(\n\t\t\t\t\"MOH: MHnack received for MHreq,\"\n\t\t\t\t\" sending MHfrr\\r\\n\");\n\t\to->moh_message = 3;\t\t/* 0x70430 */\n\t} else {\n\t\tif (dsplibs_debug_level > 1)\t/* 0x6a400 */\n\t\t\tdsplibs_debug_printf(\n\t\t\t\t\"MOH: MHnack received for MHreq,\"\n\t\t\t\t\" sending MHcda\\r\\n\");\n\t\to->moh_message = 1;\t\t/* 0x6a415 */\n\t}",
+  "find": "\n\tif (*((unsigned char *)o + TX1_MOH_PATH_SEL) == 0) {\n\t\tif (dsplibs_debug_level > 1)\t/* 0x7041b */\n\t\t\tdsplibs_debug_printf(\n\t\t\t\t\"MOH: MHnack received for MHreq,\" \" sending MHfrr\\r\\n\");\n\t\to->moh_message = 1;\t\t/* 0x70430 */\n\t} else {\n\t\tif (dsplibs_debug_level > 1)\t/* 0x6a400 */\n\t\t\tdsplibs_debug_printf(\n\t\t\t\t\"MOH: MHnack received for MHreq,\" \" sending MHcda\\r\\n\");\n\t\to->moh_message = 3;\t\t/* 0x6a415 */\n\t}",
+  "replace": "\tif (*((unsigned char *)o + TX1_MOH_PATH_SEL) == 0) {\n\t\tif (dsplibs_debug_level > 1)\t/* 0x7041b */\n\t\t\tdsplibs_debug_printf(\n\t\t\t\t\"MOH: MHnack received for MHreq,\"\n\t\t\t\t\" sending MHfrr\\r\\n\");\n\t\to->moh_message = 3;\t\t/* 0x70430 */\n\t} else {\n\t\tif (dsplibs_debug_level > 1)\t/* 0x6a400 */\n\t\t\tdsplibs_debug_printf(\n\t\t\t\t\"MOH: MHnack received for MHreq,\"\n\t\t\t\t\" sending MHcda\\r\\n\");\n\t\to->moh_message = 1;\t\t/* 0x6a415 */\n\t}",
   "fn": "tx1_moh_send"
  },
  {
   "label": "24: the message built is always MHfrr",
-  "find": "\n\tif (*((unsigned char *)o + TX1_FABF9) == 0) {\n\t\tif (dsplibs_debug_level > 1)\t/* 0x7041b */\n\t\t\tdsplibs_debug_printf(\n\t\t\t\t\"MOH: MHnack received for MHreq,\" \" sending MHfrr\\r\\n\");\n\t\to->moh_message = 1;\t\t/* 0x70430 */\n\t} else {\n\t\tif (dsplibs_debug_level > 1)\t/* 0x6a400 */\n\t\t\tdsplibs_debug_printf(\n\t\t\t\t\"MOH: MHnack received for MHreq,\" \" sending MHcda\\r\\n\");\n\t\to->moh_message = 3;\t\t/* 0x6a415 */\n\t}",
+  "find": "\n\tif (*((unsigned char *)o + TX1_MOH_PATH_SEL) == 0) {\n\t\tif (dsplibs_debug_level > 1)\t/* 0x7041b */\n\t\t\tdsplibs_debug_printf(\n\t\t\t\t\"MOH: MHnack received for MHreq,\" \" sending MHfrr\\r\\n\");\n\t\to->moh_message = 1;\t\t/* 0x70430 */\n\t} else {\n\t\tif (dsplibs_debug_level > 1)\t/* 0x6a400 */\n\t\t\tdsplibs_debug_printf(\n\t\t\t\t\"MOH: MHnack received for MHreq,\" \" sending MHcda\\r\\n\");\n\t\to->moh_message = 3;\t\t/* 0x6a415 */\n\t}",
   "replace": "\to->moh_message = 1;",
   "fn": "tx1_moh_send"
  },
@@ -2640,14 +2640,14 @@
  },
  {
   "label": "24: the hold tail's +0xabf9 test is inverted",
-  "find": "\tif (*((unsigned char *)o + TX1_FABF9) != 0) {\n\t\tif (dsplibs_debug_level > 1)\t\t/* 0x6889f */",
-  "replace": "\tif (*((unsigned char *)o + TX1_FABF9) == 0) {\n\t\tif (dsplibs_debug_level > 1)\t\t/* 0x6889f */",
+  "find": "\tif (*((unsigned char *)o + TX1_MOH_PATH_SEL) != 0) {\n\t\tif (dsplibs_debug_level > 1)\t\t/* 0x6889f */",
+  "replace": "\tif (*((unsigned char *)o + TX1_MOH_PATH_SEL) == 0) {\n\t\tif (dsplibs_debug_level > 1)\t\t/* 0x6889f */",
   "fn": "tx1_moh_hold"
  },
  {
   "label": "24: the hold tail reads +0xabf9 as a halfword",
-  "find": "\tif (*((unsigned char *)o + TX1_FABF9) != 0) {\n\t\tif (dsplibs_debug_level > 1)\t\t/* 0x6889f */",
-  "replace": "\tif (*(short *)((char *)o + TX1_FABF9) != 0) {\n\t\tif (dsplibs_debug_level > 1)\t\t/* 0x6889f */",
+  "find": "\tif (*((unsigned char *)o + TX1_MOH_PATH_SEL) != 0) {\n\t\tif (dsplibs_debug_level > 1)\t\t/* 0x6889f */",
+  "replace": "\tif (*(short *)((char *)o + TX1_MOH_PATH_SEL) != 0) {\n\t\tif (dsplibs_debug_level > 1)\t\t/* 0x6889f */",
   "fn": "tx1_moh_hold"
  },
  {
@@ -3299,14 +3299,14 @@
  },
  {
   "label": "66: f2218 is compared signed",
-  "find": "\t\tif ((unsigned)tx1_get_int(o, TX1_F2218) <= 3u)\n\t\t\treturn V34TX1_LOOP;\t\t/* 0x63941 */",
-  "replace": "\t\tif (tx1_get_int(o, TX1_F2218) <= 3)\n\t\t\treturn V34TX1_LOOP;\t\t/* 0x63941 */",
+  "find": "\t\tif ((unsigned)tx1_get_int(o, TX1_HS_MODE) <= 3u)\n\t\t\treturn V34TX1_LOOP;\t\t/* 0x63941 */",
+  "replace": "\t\tif (tx1_get_int(o, TX1_HS_MODE) <= 3)\n\t\t\treturn V34TX1_LOOP;\t\t/* 0x63941 */",
   "fn": "v34tx1_trnseg4a"
  },
  {
   "label": "66: f2218 is compared against two",
-  "find": "\t\tif ((unsigned)tx1_get_int(o, TX1_F2218) <= 3u)\n\t\t\treturn V34TX1_LOOP;\t\t/* 0x63941 */",
-  "replace": "\t\tif ((unsigned)tx1_get_int(o, TX1_F2218) <= 2u)\n\t\t\treturn V34TX1_LOOP;\t\t/* 0x63941 */",
+  "find": "\t\tif ((unsigned)tx1_get_int(o, TX1_HS_MODE) <= 3u)\n\t\t\treturn V34TX1_LOOP;\t\t/* 0x63941 */",
+  "replace": "\t\tif ((unsigned)tx1_get_int(o, TX1_HS_MODE) <= 2u)\n\t\t\treturn V34TX1_LOOP;\t\t/* 0x63941 */",
   "fn": "v34tx1_trnseg4a"
  },
  {
@@ -3803,7 +3803,7 @@
  },
  {
   "label": "66: the fresh clock ignores f2218",
-  "find": "\t    && (unsigned)tx1_get_int(o, TX1_F2218) <= 3u) {",
+  "find": "\t    && (unsigned)tx1_get_int(o, TX1_HS_MODE) <= 3u) {",
   "replace": "\t    ) {",
   "fn": "tx1_ts_rates"
  },
