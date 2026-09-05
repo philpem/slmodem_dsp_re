@@ -53,11 +53,11 @@ make_vmi_c(void)
 	struct faxvmi_cfg cfg = FAXVMI_CFG;
 	struct v21tx_cfg tx_cfg = V21TX_CFG;
 
-	cfg.short_0000 = 2;
-	cfg.int_0004 = 1;
-	cfg.short_0008 = 0x60;
-	cfg.short_000a = 0x34;
-	cfg.short_000c = 0;
+	cfg.mode = 2;
+	cfg.reverse = 1;
+	cfg.fifo_size = 0x60;
+	cfg.max_frame = 0x34;
+	cfg.frame_size = 0;
 	cfg.slot = VMI_SLOT_V21TX;
 	cfg.modem_cfg = &tx_cfg;
 	return FAXVMI_create(NULL, &cfg);
@@ -70,11 +70,11 @@ make_vmi_a(void)
 	struct faxvmi_cfg cfg = FAXVMI_CFG;
 	struct v21rx_cfg rx_cfg = V21RX_CFG;
 
-	cfg.short_0000 = 2;
-	cfg.int_0004 = 1;
-	cfg.short_0008 = 0;
-	cfg.short_000a = 0x60;
-	cfg.short_000c = 0x60;
+	cfg.mode = 2;
+	cfg.reverse = 1;
+	cfg.fifo_size = 0;
+	cfg.max_frame = 0x60;
+	cfg.frame_size = 0x60;
 	cfg.slot = VMI_SLOT_V21RX;
 	cfg.modem_cfg = &rx_cfg;
 	return FAXVMI_create(NULL, &cfg);

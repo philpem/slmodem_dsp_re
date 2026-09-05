@@ -170,7 +170,7 @@ run(int mode, int rate)
 /*
  * cid_get_strings.  The renderers underneath it have their own test
  * (t_cidata); what is measured here is the ROUTING -- which receiver the mode
- * picks, which renderer `f264` picks, that the buffer is cleared in full
+ * picks, which renderer `cid_val` picks, that the buffer is cleared in full
  * first, and that the answer is `ctx + 8` and not a copy.
  *
  * The box is heap-sized with a wide trailing guard because
@@ -196,7 +196,7 @@ static int seen_formatted_path;
 static int seen_rendered;	/* the FSK path wrote something */
 
 static void
-sbuild(struct sbox *a, struct sbox *b, int mode, int f264,
+sbuild(struct sbox *a, struct sbox *b, int mode, int cid_val,
        const unsigned char *msg, int msglen)
 {
 	fill_bytes(a, sizeof(*a));
@@ -204,7 +204,7 @@ sbuild(struct sbox *a, struct sbox *b, int mode, int f264,
 	a->ctx.dtmf = &a->dtmf;
 	a->ctx.fsk = &a->fsk;
 	a->ctx.mode = mode;
-	a->ctx.f264 = f264;
+	a->ctx.cid_val = cid_val;
 
 	/*
 	 * D955/F8587: `pack_len` is a SUBSCRIPT into `data` for the renderers,
@@ -224,7 +224,7 @@ sbuild(struct sbox *a, struct sbox *b, int mode, int f264,
 }
 
 static void
-srun(const char *what, int mode, int f264, const unsigned char *msg,
+srun(const char *what, int mode, int cid_val, const unsigned char *msg,
      int msglen, long tag)
 {
 	static struct sbox a, b;
@@ -233,7 +233,7 @@ srun(const char *what, int mode, int f264, const unsigned char *msg,
 	unsigned char clean[BIGGUARD];
 
 	memset(clean, 0xa5, sizeof(clean));
-	sbuild(&a, &b, mode, f264, msg, msglen);
+	sbuild(&a, &b, mode, cid_val, msg, msglen);
 
 	ra = ref_cid_get_strings(&a.ctx);
 	rb = cid_get_strings(&b.ctx);
@@ -269,7 +269,7 @@ srun(const char *what, int mode, int f264, const unsigned char *msg,
 			 "%s: DTMF path stopped at sixteen (%%ld)", what);
 		diff_eq_int(label, a.ctx.strings[16], 0, tag);
 	} else {
-		if (f264 == 2)
+		if (cid_val == 2)
 			seen_raw_path++;
 		else
 			seen_formatted_path++;
@@ -435,13 +435,13 @@ lifecycle(int mode, int cid_val)
 
 	/*
 	 * DIRTY THE STATE cid_reset IS SUPPOSED TO CLEAR before calling it.
-	 * `f3f8` comes out of create already zero, so a reset that never
+	 * `samples_fill` comes out of create already zero, so a reset that never
 	 * touches it is indistinguishable from one that does unless something
 	 * puts a value there first -- the injection ritual missed exactly that
 	 * mutant until this existed (finding F8732).  The same argument covers
 	 * the receivers, so both are scribbled on identically.
 	 */
-	a->f3f8 = b->f3f8 = 0x1234;
+	a->samples_fill = b->samples_fill = 0x1234;
 	if (a->fsk && b->fsk) {
 		a->fsk->pack_len = b->fsk->pack_len = 11;
 		a->fsk->pack_state = b->fsk->pack_state = 2;
@@ -464,7 +464,7 @@ lifecycle(int mode, int cid_val)
 	 */
 	if (a->dtmf && a->fsk) {
 		a->mode = b->mode = 3;
-		a->f3f8 = b->f3f8 = 0x4321;
+		a->samples_fill = b->samples_fill = 0x4321;
 		ref_cid_reset(a);
 		cid_reset(b);
 		cmp_pair("after reset from mode 3", a, b, tag);

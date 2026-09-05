@@ -228,8 +228,8 @@
  },
  {
   "label": "the prologue's cursor/limit guard is inclusive",
-  "find": "\twhile (obj->txq.count < obj->short_2aa0) {",
-  "replace": "\twhile (obj->txq.count <= obj->short_2aa0) {",
+  "find": "\twhile (obj->txq.count < obj->tx_fill_target) {",
+  "replace": "\twhile (obj->txq.count <= obj->tx_fill_target) {",
   "fn": "v34handshak"
  },
  {

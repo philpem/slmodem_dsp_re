@@ -4,12 +4,12 @@
  * Two state variables, one per direction, which is why a single function
  * covers what looks like it should be two:
  *
- *   `f9d4` drives the transmitter and is dispatched inside a loop that runs
- *   until the transmit queue is full, so one call does as much work as the
- *   queue has room for.
+ *   `tx_state` drives the transmitter and is dispatched inside a loop that
+ *   runs until the transmit queue is full, so one call does as much work as
+ *   the queue has room for.
  *
- *   `f9d6` drives the receiver and is dispatched once, after that loop ends
- *   and only if at least six symbols have arrived.
+ *   `rx_state` drives the receiver and is dispatched once, after that loop
+ *   ends and only if at least six symbols have arrived.
  *
  * The return value is 0 normally, 1 when a deadline expired, and 2 when the
  * handshake finished -- which is what `V8Process` reads as "something
@@ -26,14 +26,14 @@
  * shares anything with the transmit side but the object.
  */
 
-/* Transmit states, as `f9d4` holds them. */
+/* Transmit states, as `tx_state` holds them. */
 #define V8_TX_SILENCE	5
 #define V8_TX_ANSAM	6
 #define V8_TX_FSK_TIMED	23
 #define V8_TX_FSK	43
 #define V8_TX_TONE	45
 
-/* Receive states, as `f9d6` holds them. */
+/* Receive states, as `rx_state` holds them. */
 #define V8_RX_AGC	0x19
 #define V8_RX_SETTLE	0x20
 #define V8_RX_DRAIN	0x23
@@ -157,9 +157,9 @@ v8handshak(struct v8 *v)
 
 	/*
 	 * Transmit until the queue is full.  The comparison is signed, and
-	 * `f21c` does go negative -- `V8Process` decrements it once a sample
-	 * whatever the queue is doing -- so this keeps transmitting where an
-	 * unsigned one would stop.
+	 * `tx_avail` does go negative -- `V8Process` decrements it once a
+	 * sample whatever the queue is doing -- so this keeps transmitting
+	 * where an unsigned one would stop.
 	 */
 	while ((short)v->tx_avail < (short)v->tx_fill_target) {
 		int st = (short)v->tx_state - 5;

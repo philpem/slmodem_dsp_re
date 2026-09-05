@@ -192,16 +192,17 @@
  * (`faxcfg.h`), and the field boundaries agree one for one with what this
  * function then reads back:
  *
- *     +0x04 bit_rate   -> the rate switch at 0x097113, `movswl`
- *     +0x14 int_0014   -> `V17RXC_INT_0010` at 0x09709c
- *     +0x18 ptr_0018   -> `fpm_fse_cfg::icoff`  = `V17RX_OBJ_COEFSAVE0`
- *     +0x1c ptr_001c   -> `fpm_fse_cfg::qcoff`  = `V17RX_OBJ_COEFSAVE1`
- *     +0x24 ptr_0024   -> three configurations' tail context slot
+ *     +0x04 bit_rate    -> the rate switch at 0x097113, `movswl`
+ *     +0x14 int_0014    -> `V17RXC_INT_0010` at 0x09709c
+ *     +0x18 coefsave0   -> `fpm_fse_cfg::icoff`  = `V17RX_OBJ_COEFSAVE0`
+ *     +0x1c coefsave1   -> `fpm_fse_cfg::qcoff`  = `V17RX_OBJ_COEFSAVE1`
+ *     +0x24 ptr_0024    -> three configurations' tail context slot
  *
  * So the second parameter is typed by the object rather than by us, and the
  * three pointers `init_vmi_v17rx` fills with `sysdep_malloc(0x62)`, `(0x62)`
- * and `(2)` are the two 49-entry coefficient saves and the one-short rate
- * save `StoreCoefV17` writes.  Finding F9470.
+ * and `(2)` are the two 49-entry coefficient saves (`coefsave0`/`coefsave1`,
+ * `faxcfg.h`) and the one-short rate save (`ratesave`) `StoreCoefV17`
+ * writes.  Finding F9470, names applied at F10169.
  *
  * ---------------------------------------------------------------------------
  * THE TWO "FRESH" FLAGS ARE NOT THE SAME FLAG, AND ONE OF THEM IS WRONG

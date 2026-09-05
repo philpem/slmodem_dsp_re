@@ -47,12 +47,12 @@ cmp_cfg_scalars(const char *what, struct faxvmi_cfg *a, struct faxvmi_cfg *b,
 		(void)snprintf(buf, sizeof(buf), "%s.%s (%%ld)", what, #name); \
 		diff_eq_int(buf, b->name, a->name, tag); \
 	} while (0)
-	FLD(short_0000);
+	FLD(mode);
 	FLD(short_0002);
-	FLD(int_0004);
-	FLD(short_0008);
-	FLD(short_000a);
-	FLD(short_000c);
+	FLD(reverse);
+	FLD(fifo_size);
+	FLD(max_frame);
+	FLD(frame_size);
 	FLD(slot);
 #undef FLD
 }

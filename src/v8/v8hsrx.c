@@ -8,8 +8,8 @@
  * `v8_handshak_agc` waits for the line to settle and then for a tone.
  *
  * `v8_handshak_demod` turns the demodulator's bits into characters and
- * matches them.  What it matches against is `f9d8`, a sub-state below the
- * receive state, and each value gets its own function below.
+ * matches them.  What it matches against is `rx_substate`, a sub-state below
+ * the receive state, and each value gets its own function below.
  */
 
 #include "dsplib/debug.h"
@@ -106,7 +106,7 @@ v8_handshak_agc(struct v8 *v)
 		r->adapt_rate = 0x800;
 		v->tx_bit = 1;
 		v->block_count = 0;
-		v->fdb4 = 0;
+		v->short_db4 = 0;
 		v->rx_state = 0x28;
 		v->rx_substate = V8_HS_HUNT;
 		v->tx_state = (v->cm->b2 & 0x10) ? 0x2b : 0x17;
@@ -231,8 +231,8 @@ v8_hs_hunt(struct v8 *v)
 
 /*
  * The far end's message has arrived twice the same.  What that means depends
- * on which side this is and on `fa48`; only the two answering arms rebuild
- * the JM and reset the transmitter with it.
+ * on which side this is and on `op_mode`; only the two answering arms
+ * rebuild the JM and reset the transmitter with it.
  */
 static int
 v8_hs_message_done(struct v8 *v)
@@ -254,7 +254,7 @@ v8_hs_message_done(struct v8 *v)
 
 	if (rebuild) {
 		rebuildJMSequence(v);
-		v->fdb4 = 0;
+		v->short_db4 = 0;
 		v->word_count = 0;
 		v->tx_bit = 1;
 		v->tx_seq->shifter = 0;
@@ -262,7 +262,7 @@ v8_hs_message_done(struct v8 *v)
 	}
 
 	r->flags |= V8_RX_DETECTOR_ARMED;
-	v->fa40 = r->gain;
+	v->short_a40 = r->gain;
 	v->block_count = 0;
 	return 0;
 }
@@ -279,12 +279,13 @@ v8_hs_collect(struct v8 *v, int ch)
 	struct v8_tx_sequence *s = v->seq_alt;
 	/*
 	 * The bound check below comes *after* this read in the original, so
-	 * `fdbc == 15` looks at `crc`, and the matching path raises `fdbc`
-	 * with no cap at all.  Reproduced, but read through a view of the
-	 * whole sequence object so that it stays a defined access here.  It
-	 * only runs away on a stream that never sends the marker again and
-	 * whose characters go on matching the transmit fields past the array;
-	 * a well-formed message resets `fdbc` to 1 every fifteen words.
+	 * `word_count == 15` looks at `crc`, and the matching path raises
+	 * `word_count` with no cap at all.  Reproduced, but read through a
+	 * view of the whole sequence object so that it stays a defined access
+	 * here.  It only runs away on a stream that never sends the marker
+	 * again and whose characters go on matching the transmit fields past
+	 * the array; a well-formed message resets `word_count` to 1 every
+	 * fifteen words.
 	 */
 	const short *w = (const short *)s;
 	int idx;

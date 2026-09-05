@@ -52,16 +52,16 @@ compare_vmi(const union vmibuf *ours, const union vmibuf *theirs, long input)
 	size_t i;
 	int tail_ours = 0, tail_theirs = 0;
 
-	diff_eq_int("vmi.short_0000, input %ld", a->short_0000, b->short_0000,
+	diff_eq_int("vmi.mode, input %ld", a->mode, b->mode,
 		    input);
 	diff_eq_int("vmi.short_0002, input %ld", a->short_0002, b->short_0002,
 		    input);
-	diff_eq_int("vmi.int_0004, input %ld", a->int_0004, b->int_0004, input);
-	diff_eq_int("vmi.short_0008, input %ld", a->short_0008, b->short_0008,
+	diff_eq_int("vmi.reverse, input %ld", a->reverse, b->reverse, input);
+	diff_eq_int("vmi.fifo_size, input %ld", a->fifo_size, b->fifo_size,
 		    input);
-	diff_eq_int("vmi.short_000a, input %ld", a->short_000a, b->short_000a,
+	diff_eq_int("vmi.max_frame, input %ld", a->max_frame, b->max_frame,
 		    input);
-	diff_eq_int("vmi.short_000c, input %ld", a->short_000c, b->short_000c,
+	diff_eq_int("vmi.frame_size, input %ld", a->frame_size, b->frame_size,
 		    input);
 	diff_eq_int("vmi.slot, input %ld", a->slot, b->slot, input);
 	diff_eq_int("vmi.ptr_0014 same, input %ld",

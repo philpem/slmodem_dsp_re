@@ -442,13 +442,21 @@ struct v8_rx {
 
 struct v8 {
 	unsigned char		pad000[4];
-	int			f004;		/* +0x004 */
+	/*
+	 * Four fields `v8_txinit` sets, in write order 1/0/0/0 for
+	 * `short_014`/`short_00c`/`short_018`/`int_004` -- and nothing else
+	 * in this reconstruction ever reads back.  F10135 already checked
+	 * and declined a real name here for exactly that reason; re-checked
+	 * with a fresh whole-tree grep for this wave and still no reader.
+	 * Promoted from bare `fNNNN` to their shaped names only.
+	 */
+	int			int_004;	/* +0x004 */
 	unsigned char		pad008[4];
-	short			f00c;		/* +0x00c */
+	short			short_00c;	/* +0x00c */
 	unsigned char		pad00e[6];
-	short			f014;		/* 1        +0x014 */
+	short			short_014;	/* 1        +0x014 */
 	unsigned char		pad016[2];
-	short			f018;		/* +0x018 */
+	short			short_018;	/* +0x018 */
 	unsigned char		pad01a[2];
 
 	struct v8_rx		rx;		/* +0x01c */
@@ -501,7 +509,14 @@ struct v8 {
 	/* The transmit ring's low-water mark: v8handshak's loop tops it up
 	 * to this before running the receiver. */
 	short			tx_fill_target;	/* 0x10     +0xa3e */
-	short			fa40;		/* 0x200    +0xa40 */
+	/*
+	 * Snapshots `rx.gain` when a QCA1-collected message completes
+	 * (v8_hs_message_done); nothing reads it back anywhere in this
+	 * reconstruction.  Promoted to its shaped name only -- F10135 already
+	 * declined a real name here for the same reason, re-checked here with
+	 * no new evidence.
+	 */
+	short			short_a40;	/* 0x200    +0xa40 */
 	/* Q14 master transmit-level scale (unity, 0x4000, by default),
 	 * multiplied into both the V.21 and ANSam amplitude derivations. */
 	short			tx_gain;	/* +0xa42 */
@@ -557,7 +572,13 @@ struct v8 {
 	 */
 	struct v8_tone		tone;		/* +0xda4 */
 
-	short			fdb4;		/* +0xdb4 */
+	/*
+	 * Cleared in several receive-path resets (v8hsrx.c, v8hs.c); nothing
+	 * reads it back anywhere in this reconstruction.  Promoted to its
+	 * shaped name only -- F10135 already declined a real name here for
+	 * the same reason, re-checked here with no new evidence.
+	 */
+	short			short_db4;	/* +0xdb4 */
 	/*
 	 * A scratch counter reused by whichever receive sub-state is active:
 	 * elapsed blocks while waiting for the AGC or the line to settle, the

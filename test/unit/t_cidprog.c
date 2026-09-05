@@ -12,7 +12,7 @@
  * so.
  *
  * THE ORACLE FOR THE BUFFERING IS ARITHMETIC, NOT THE OTHER SIDE.  There is
- * exactly one exit from the outer loop -- `f3f8 != len` -- so a call always
+ * exactly one exit from the outer loop -- `samples_fill != len` -- so a call always
  * drains its input, and the fill level afterwards is
  * `(f3f8_before + n) % len` with `(f3f8_before + n) / len` blocks processed.
  * That is asserted against the REFERENCE on every call, so "the block length
@@ -150,7 +150,7 @@ build(struct box *a, struct box *b, int mode, short rate)
 	a->dtmf.rate = b->dtmf.rate = rate;
 	a->fsk.rate = b->fsk.rate = rate;
 	a->ctx.mode = b->ctx.mode = mode;
-	a->ctx.f3f8 = b->ctx.f3f8 = 0;
+	a->ctx.samples_fill = b->ctx.samples_fill = 0;
 }
 
 /* The block length the object will compute for this pair. */
@@ -217,7 +217,7 @@ run(const char *what, struct box *a, struct box *b, const short *in, int nin,
 	char label[192];
 	short na, nb, ra, rb;
 	int len = blocklen(a);
-	int fill_before = a->ctx.f3f8;
+	int fill_before = a->ctx.samples_fill;
 	int mode_before = a->ctx.mode;
 	short pack_before = a->fsk.pack_len;
 	short conf_before = a->fsk.mark_conf;
@@ -286,11 +286,11 @@ run(const char *what, struct box *a, struct box *b, const short *in, int nin,
 		snprintf(label, sizeof(label),
 			 "%s: reference fill level is (before + n) %% len (%%ld)",
 			 what);
-		diff_eq_int(label, a->ctx.f3f8, total % len, tag);
+		diff_eq_int(label, a->ctx.samples_fill, total % len, tag);
 	} else {
 		snprintf(label, sizeof(label),
 			 "%s: an over-full buffer is left alone (%%ld)", what);
-		diff_eq_int(label, a->ctx.f3f8, fill_before, tag);
+		diff_eq_int(label, a->ctx.samples_fill, fill_before, tag);
 	}
 
 	/* ---- what the OBJECT did, counted on the reference side ---- */
@@ -480,7 +480,7 @@ main(void)
 	diff_begin("cid_progress: the object's shape");
 	diff_eq_int("struct cid_modem is 0x3fc bytes (%ld)",
 		    (int)sizeof(struct cid_modem), CID_MODEM_BYTES, 0);
-	diff_eq_int("the block buffer runs to f3f8 (%ld)",
+	diff_eq_int("the block buffer runs to samples_fill (%ld)",
 		    (int)(sizeof(a.ctx.samples) / sizeof(short)), 200, 0);
 	rc = diff_end();
 
@@ -562,7 +562,7 @@ main(void)
 	/*
 	 * A buffer that is already full at entry, and one that is over-full.
 	 * The first must run a block on no new samples at all -- the object's
-	 * only exit is `f3f8 != len`, so the fill test is what decides and not
+	 * only exit is `samples_fill != len`, so the fill test is what decides and not
 	 * the sample count -- and the second must do nothing.
 	 */
 	diff_begin("cid_progress: the fill level decides, not the sample count");
@@ -571,21 +571,21 @@ main(void)
 
 		build(&a, &b, CID_MODE_FSK, rates[r]);
 		len = blocklen(&a);
-		a.ctx.f3f8 = b.ctx.f3f8 = len;
+		a.ctx.samples_fill = b.ctx.samples_fill = len;
 		snprintf(what, sizeof(what), "full buffer, no samples, rate %d",
 			 (int)rates[r]);
 		run(what, &a, &b, in, 0, (long)r);
 
 		build(&a, &b, CID_MODE_DTMF, rates[r]);
 		len = blocklen(&a);
-		a.ctx.f3f8 = b.ctx.f3f8 = len;
+		a.ctx.samples_fill = b.ctx.samples_fill = len;
 		snprintf(what, sizeof(what),
 			 "full buffer, no samples, DTMF, rate %d",
 			 (int)rates[r]);
 		run(what, &a, &b, in, 0, (long)r);
 
 		build(&a, &b, CID_MODE_FSK, rates[r]);
-		a.ctx.f3f8 = b.ctx.f3f8 = 199;
+		a.ctx.samples_fill = b.ctx.samples_fill = 199;
 		snprintf(what, sizeof(what), "over-full buffer, rate %d",
 			 (int)rates[r]);
 		run(what, &a, &b, in, 64, (long)r);

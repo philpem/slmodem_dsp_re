@@ -238,7 +238,7 @@ txinit(void *objp)
 	struct v34_object *obj = (struct v34_object *)objp;
 
 	obj->echo_alpha = 0;
-	obj->short_3552 = 0;
+	obj->far_echo_alpha = 0;
 	obj->tx_scr_sr = 0;
 	obj->prev_quadrant = 0;
 	obj->seg_symcount = 0;
@@ -1484,7 +1484,7 @@ modem_serrint(void *objp)
 		updateAlpha(&obj->echo_alpha, near_energy, near_step, 0x6666,
 			    0x7f5c, "NE");
 		if (obj->far_echo_enable != 0)
-			updateAlpha(&obj->short_3552, far_energy, far_step, 0x2b84,
+			updateAlpha(&obj->far_echo_alpha, far_energy, far_step, 0x2b84,
 				    0x7f5c, "FE");
 	}
 
@@ -1493,7 +1493,7 @@ modem_serrint(void *objp)
 
 	if (obj->far_echo_enable != 0) {
 		obj->echo1.adapt_count = (short)(obj->echo1.adapt_count + 1);
-		far_err = (short)((((int)obj->short_3552 * out) * 2 + 0x2000)
+		far_err = (short)((((int)obj->far_echo_alpha * out) * 2 + 0x2000)
 				  >> 14);
 	}
 

@@ -52,7 +52,7 @@ v8handshakinit(struct v8 *v)
 	v->dft.im = 0;
 	v->dft.energy = 0;
 	v->dft.re = 0;
-	v->fa40 = 0x200;
+	v->short_a40 = 0x200;
 
 	v8_rxinit(v);
 	v8_txinit(v);
@@ -150,7 +150,7 @@ v8handshakinit(struct v8 *v)
 		}
 
 		v->block_count = 0;
-		v->fdb4 = 0;
+		v->short_db4 = 0;
 		return;
 	}
 
@@ -181,7 +181,7 @@ v8handshakinit(struct v8 *v)
 
 	v->cj_zero_run = 0;
 	v->block_count = 0;
-	v->fdb4 = 0;
+	v->short_db4 = 0;
 }
 
 /*

@@ -116481,6 +116481,262 @@ failed; `make byteident-ratchet` ratchet OK, grade 0 EXACT 736/1852
 floor. Both gates cover the fully merged branch (this class's renames
 together with F10173's `V90Demodulator` half), so the numbers above are
 shared between the two findings rather than measured twice.
+## F10169: field naming, wave 6 -- `faxcfg.h`'s own `faxvmi_cfg`/`v17rx_cfg` fields, carrying over evidence stranded in `faxvmi.h`/`v17.c`
+
+Wave 6 of the `docs/fieldnaming.md` phase, one of four parallel clusters.
+This one covered `src/fax/v17.c`, `include/dsplib/v17fax.h` and
+`include/dsplib/faxcfg.h`. Fresh count at the cluster's own three files:
+31 `type_NNNN`-family identifiers before, 27 after (the naive 4-count drop
+understates 8 real renames -- two of the eight, `short_0000`/`short_000c`,
+still match the naive regex only inside this same wave's own
+historical-derivation prose, and `ptr_0018` survives via `struct
+v27rx_cfg`'s own, unrelated same-spelled field two structs down).
+
+**Eight real struct-field renames, all in `faxcfg.h`, none requiring new
+derivation -- every one was evidence already written down elsewhere in the
+tree and never carried to this struct's own declaration, the same
+"evidence stranded in one file" shape F10139/F10140 named for a V.90 class
+pair:**
+
+`struct faxvmi_cfg` (rank 2, a typed destination struct's own already-named
+fields): `short_0000` -> `mode`, `int_0004` -> `reverse`, `short_0008` ->
+`fifo_size`, `short_000a` -> `max_frame`, `short_000c` -> `frame_size`.
+`FAXVMI_create` (`src/fax/faxvmi.c`) copies this table's head verbatim onto
+`struct faxvmi`'s own already-named fields of those exact spellings, and
+`faxvmi.h`'s own file-header comment already stated the field-for-field
+correspondence (citing F9010 for `reverse`, F9011/F9019 for `max_frame`) --
+it had simply never been applied to `faxcfg.h`'s own struct.
+
+`struct v17rx_cfg` (rank 2, an identity plus a matched read/write pair):
+`ptr_0018` -> `coefsave0`, `ptr_001c` -> `coefsave1`, `ptr_0020` ->
+`ratesave`. `src/fax/v17.c`'s own `V17RX_create` header comment already
+mapped these three offsets to `fpm_fse_cfg::icoff`/`qcoff`, and by finding
+F9470 (the receive instance's head IS this struct) they are the same
+storage as `v17fax.h`'s own `V17RX_OBJ_COEFSAVE0`/`V17RX_OBJ_COEFSAVE1`/
+`V17RX_OBJ_RATESAVE`. The first two macros are themselves left NUMBERED
+rather than named in `v17fax.h` ("which rail is which is not established"),
+so `coefsave0`/`coefsave1` carry the same caveat; `ratesave` is a real name,
+matching a genuinely paired write (`StoreCoefV17`) and read
+(`Restore_rateV17`) of `V17RXS_RATE`, and independently corroborated by
+`test/unit/t_v17rxcreate.c`'s own pre-existing local variable of that exact
+name for this slot.
+
+**Leads chased and declined, no name applied:** `struct v17tx_cfg::
+int_0018`/`int_001c` (v17fax.h) -- both copy to already-neutral targets
+(`V17TXP_INT_000C`, whose own comment already declines a name; `fpm_pps.h`'s
+`aux`, "opaque, sometimes zero" per its own initializer and the identical-
+shape sibling `v27tx_cfg::int_001c`) -- dead end on both, left as `type_NNNN`.
+`v17_status`'s `short_0a`/`short_0c`/`short_0e`/`short_10`/`short_12`/
+`int_18` -- re-verified against `v22status.h`/`v32fpstat.h`, one real but
+non-naming-grade finding (`V17RX_status` writes fields the struct comment
+had only attributed to `V17TX_status`) recorded as a documentation fix, not
+applied as a rename since nothing reads the fields back. `v17rx_cfg`/
+`v27rx_cfg`/`v29rx_cfg`'s remaining known-value-unknown-meaning fields, and
+`v17rx_ctl`'s base fields under its already-named bit constants --
+re-confirmed by tree-wide grep, no new reader anywhere, left alone.
+`v17_dec`'s two fields surfacing in `v17.c`'s own grep count belong to
+`v17dec.h`, out of this cluster's scope by wave 4's own precedent (a struct
+another file defines).
+
+No type or width changed anywhere -- pure identifier substitution.
+Propagated (all checked by `grep -rn` plus `gcc -fsyntax-only`, never by
+assumption) to `include/dsplib/class1rx.h`, `src/fax/class1.c`,
+`src/fax/class1rx.c`, `src/fax/class1tx.c`, `src/fax/faxcfg.c`,
+`src/fax/faxvmi.c` and `test/unit/t_faxcfg.c`/`t_class1txvmi.c`/
+`t_class1txcplinit.c`/`t_class1inittx.c`/`t_class1initrx.c`/
+`t_v17rxcreate.c`. `make one` across all of those (`t_faxcfg`,
+`t_class1txvmi`, `t_class1txcplinit`, `t_class1inittx`, `t_class1initrx`,
+`t_v17rxcreate`, plus the wider class1/fax suite run together with the
+other three wave-6 clusters below) green, no check count regressed.
+(2026-09-05)
+
+## F10170: field naming, wave 6 -- V.8 cluster, second pass: zero new real names, two hygiene fixes
+
+Second pass over `include/dsplib/v8.h` and `src/v8/{v8hsrx,v8util,v8jm,
+v8handshak,v8hs}.c` (wave 2 already did the bulk of this cluster; this is
+what it left bare). Fresh count at the six nominal files: 16 unique bare
+`fNNNN` identifiers before, 1 after.
+
+**Six already-declined fields promoted bare `fNNNN` -> shaped `type_NNNN`,
+zero new real names.** All six (`f004`/`f00c`/`f014`/`f018`/`fa40`/`fdb4`,
+all in `struct v8`) were investigated and DECLINED for a name by finding
+F10135 (wave 2): every one is write-only across the whole reconstructed
+tree, re-confirmed this wave with fresh tree-wide greps (no new reader
+found). Per CLAUDE.md, that is real, partial progress recorded honestly as
+such rather than a guessed name -- `int_004`, `short_00c`, `short_014`,
+`short_018`, `short_a40`, `short_db4`, each with a comment naming its one
+writer and stating "no reconstructed reader" explicitly. Propagated to
+`src/v8/v8util.c` (the `v8_txinit` writers), `src/v8/v8hs.c` and
+`src/v8/v8hsrx.c` (the `fa40`/`fdb4` writers) and `test/unit/t_v8util.c`
+(one `diff_eq_int` field access).
+
+**Ten stale-comment fixes, none a live field.** The other ten grep hits in
+these files were prose in comments still using a field's PRE-wave-2
+spelling after F10135 had already renamed the struct member itself, never
+caught because the comment isn't compiled: `f9d4`/`f9d6`/`f9d8` ->
+`tx_state`/`rx_state`/`rx_substate` (`v8handshak.c`, `v8hsrx.c` file
+headers), `f21c` -> `tx_avail` (`v8handshak.c`), `fa48` -> `op_mode`
+(`v8hsrx.c`, confirmed by re-reading `v8_hs_message_done`'s actual branch
+condition), `fdbc` -> `word_count` (`v8hsrx.c`), `febc`/`febe`/`fec2` ->
+`fn_matched`/`ext2_matched`/`ext2_word` (`v8jm.c`), `fdc4` -> `quick_connect`
+(`v8jm.c`, and `src/v8/v8seq.c` -- outside the nominal six files, found by
+the required tree-wide propagation check and fixed there too). One `fa48`
+mention in `v8.h` was left AS-IS deliberately: it is explicit history
+("`side`... and `op_mode`... were `mode` and `fa48` before it named them"),
+the same convention this project already keeps for `V90Parameters`-style
+worked examples, which is why one `fa48` hit remains in the post-edit
+grep. Diagnostic/mutation-label STRINGS in `test/unit/t_v8hs.c`/`t_v8dp.c`/
+`t_v8jm.c` and `test/mutations/{v8jm,snapshot}.json` that still spell an
+already-renamed field's old name (e.g. local test variables literally named
+`f9d4`) were flagged but left alone -- cosmetic, and this project's own
+established precedent (`t_v8util.c`'s pre-existing `"fa3e"`/`"f9d4"` labels
+on already-renamed fields) is to leave them.
+
+No type or width changed anywhere. `make one T="t_v8direct t_v8dp t_v8hs
+t_v8jm t_v8sig t_v8util"` green (whole-struct byte comparisons included, the
+most sensitive canary for accidental drift from a pure rename), run together
+with the other three wave-6 clusters below; no check count regressed.
+(2026-09-05)
+
+## F10171: field naming, wave 6 -- `v34fsk.h`: two real names off a debug-string tag pair and a queue-fill role; `fdspkrnl.h` re-confirmed exhausted
+
+`include/dsplib/v34fsk.h`: 19 `type_NNNN` fields and one bare-pattern match
+(`feed`, inside the prose "gates the echo feed" -- a dictionary-word false
+positive, not a field, matching the `V90Phase3Modulator`/"feed" precedent
+F10137's cadence pass already established for this regex family). This
+header is the heaviest-derived ground this whole phase has touched (findings
+F553, F614, F630, F631, F633, F634, F635 already cover most of its 19
+fields field-by-field, down to bit level, each ending in an explicit
+"role bounded, not established" or "meaning not measured"); seventeen of
+the nineteen were re-confirmed against those findings with no new evidence
+to add, and are correctly left as `type_NNNN`.
+
+**Two real names landed, both `struct v34_object` fields:**
+
+`short_2aa0` -> `tx_fill_target` (rank 3, usage inference, but unanimous
+across every reader and writer). `VPcmV34Progress`'s own requested sample
+count for the call (`nin & ~3`) is stashed here at entry in both its V.90
+and K56flex arms (`v34pcmmain.cpp`), then read back nowhere except as the
+bound of `while (obj->txq.count < obj->tx_fill_target)` -- the TX-queue
+top-up loop `VPcmV34Progress`, `datapumpv34` and the handshake's
+`v34tx1_*` dispatch (`v34hstx1.cpp`) all share. All five readers and both
+writers agree on exactly this one role.
+
+`short_3552` -> `far_echo_alpha` (rank 1, a format string -- the object's
+own debug tag). `src/pump/v34/v34rx.c`'s two `updateAlpha` call sites for
+the near-echo LMS step (`echo_alpha`, already named) both pass `"NE"` as
+`updateAlpha`'s own `tag` argument, printed verbatim in
+`"updateAlpha%s: updated %d => %d\n"`; the one call site for this field
+passes `"FE"`, gated by the same `far_echo_enable`/`echo1` condition every
+other far-echo-only quantity in this struct already uses. `echo_alpha`'s
+own comment (which called it "the only short here") is corrected to note
+it no longer is.
+
+Renames propagated to `src/pump/v34/{v34hshak.c,v34rx.c,v34pcmmain.cpp,
+v34hstx1.cpp}`, `test/unit/t_v34call.c`/`t_v34rx.c`, and the five mutation
+fixtures that reference either field by name (`v34datapump.json`,
+`v34hstb1.json`, `v34hst3core.json`, `v34hst3mid.json`, `v34hstx1.json`,
+including their `"label"` text) -- checked for the `\t`/`\n`-literal-escape
+substitution trap F9480/F10134 already documented, using a plain string
+substitution rather than a `\b`-anchored regex, and re-validated with
+`tools/anchorcheck.py` afterward (0 anchors matching other than exactly
+once). No type or width changed.
+
+`include/dsplib/fdspkrnl.h`: 18 `type_NNNN` fields, re-confirmed exhausted
+rather than re-derived -- this file was already the diagnostic/session-flag
+cluster's own subject in wave 4 (F10143, which named `fdsp_kernel::status`
+and `mtk_phasor::cosine`/`sine` and left the rest with explicit "no reader
+or writer beyond what the header documents" reasoning). This pass added one
+piece of NEW corroborating evidence rather than trusting the prior wave's
+claim on faith: `tools/dis.py` against the blob's own `TONE_create`
+(0xaf690) confirms directly that `struct fdsp_tone_cfg`'s three trailing
+`int_00NN` fields are copied into `struct fdsp_tone` ONLY as part of one
+`rep movsl $0xc` bulk copy, never touched field-by-field, and that every
+other still-bare field in `fdsp_tone`/`fdsp_channel`/`fdsp_buffers` is
+zeroed by the same handful of `movl $0x0`/`movw $0x0` stores the header
+already describes -- no additional access exists in the object beyond what
+was already reconstructed. Zero renames; this is an honest confirmed-
+exhausted result, not a stall.
+
+`make one T="t_v34rx t_v34hstx1 t_v34hstb1 t_v34datapump t_v34hst3core
+t_v34hst3mid t_v34call t_v34fsk"` all green (75 PASS groups across this
+finding and F10172 together, 0 FAIL), including `v34 updateAlpha` (588
+checks) and `datapumpv34 and the two rate-renegotiation counters` (15750
+checks), the two groups that most directly exercise the renamed fields; no
+check count regressed against the pre-wave baseline. `tools/onedef.py`,
+`tools/refcheck.py` and `tools/anchorcheck.py` all clean. (2026-09-05)
+
+## F10172: field naming, wave 6 -- `cid_modem.h`/`cid.c`: two real names off an already-typed constructor argument and an established fill-level role; `class1.h`/`class1tx.c`'s remaining bare fields re-confirmed
+
+`src/service/cid.c` and `include/dsplib/cid_modem.h`: 3 bare `fNNNN`
+identifiers before (`f02c`, `f264`, `f3f8`; a fourth grep hit, `face` in a
+file-header comment, is a dictionary-word false positive), 0 after in
+`struct cid_modem`'s own scope.
+
+**Two real names, both `struct cid_modem` fields (rank 2, a typed
+constructor argument the field is a pure copy of, plus the object's own
+usage of it):**
+
+`f264` -> `cid_val`. `cid_create`'s own second parameter is already named
+`cid_val` in its existing doc comment, and the field is a straight,
+unconditional copy of it (`ctx->cid_val = cid_val;`), later overwritable
+by `cid_value()`. `src/service/cid.c`'s own `CID_VALUE_RAW` macro already
+named the one value the object tests it against (`cid_get_strings` routes
+to the raw hex dump when `cid_val == 2`) -- usage inference for the VALUE,
+but the field's own name comes from the parameter it mirrors.
+
+`f3f8` -> `samples_fill`. Already thoroughly derived in-file before this
+wave ("`f3f8` is `cid_progress`'s sample-buffer fill level") but never
+applied: `cid_progress` copies incoming samples into `ctx->samples` while
+`ctx->f3f8 < len`, incrementing it once per sample (`ctx->samples[ctx->
+f3f8++] = in[i++];`), and every one of its four other writers
+(`cid_create`, `cid_reset`, and the two `= 0` resets at the mode-5 boundary)
+is consistent with "how many of `samples` are filled so far".
+
+`f02c` (a DIFFERENT struct's field -- `struct cid`, the FSK receiver,
+defined in `cid.h`, out of this cluster's scope) is referenced from
+`cid.c` via `ctx->fsk->f02c` but was correctly left untouched: renaming it
+would mean editing a struct this cluster does not own.
+
+Renames propagated to `test/unit/t_cidsvc.c` (`f264`) and `t_cidsvc.c`/
+`t_cidprog.c` (`f3f8`); no `test/mutations/*.json` fixture references
+either field (checked directly). No type or width changed.
+
+`include/dsplib/class1.h` and `src/fax/class1tx.c`: 4 bare `fNNNN`
+identifiers in `struct fax_class1` (`f1230`, `f1234`, `f127c`, `f12d4`),
+all re-confirmed rather than re-derived. `f1230`/`f1234` and `f127c` were
+already investigated and explicitly left bare by wave 2 (F10133, "written
+once by `_init_transmitter`... nothing reconstructed reads it back yet"
+and "nothing traced reads it back, so what it is FOR is not established");
+re-checked this wave with a fresh tree-wide grep including `class1tx.c`'s
+own six use sites (which write, but do not read, the same two fields under
+their own already-neutral name), no new evidence found. `f12d4` carries its
+own long-standing derivation (its low 16 bits propagate to a per-modulation
+offset of the wrapped modem object, three different offsets for three
+different modulations) that stops short of a name on purpose ("usage
+inference only, kept neutral on purpose") -- chased further this wave by
+checking whether the three target offsets identify a single field in
+`v17tx_cfg`/`v29tx_cfg`/`v27tx_cfg` (the struct wave 6's other cluster,
+F10169, was renaming in parallel); they do not resolve to one consistent
+field across all three modulations at the byte offsets given, so the lead
+does not close and the field stays neutral, consistent with the existing
+derivation rather than overturning it.
+
+`make one T="t_cidsvc t_cidprog t_cid t_cidleaves t_cid_fsd t_cid_mtd
+t_rxcid t_faxcfg t_class1txvmi t_class1txcplinit t_class1inittx
+t_class1initrx t_v17rxcreate t_class1delmodem t_class1delete
+t_class1txstates t_class1rxstates t_class1hdlcctl t_class1create
+t_class1cmd t_class1handlers t_class1hdlcemu t_class1leaves t_class1names
+t_class1progress t_class1silence t_class1states t_class1status"` all green
+(149 PASS groups across every fax/class1/cid/V8 suite touched by this
+wave's four clusters combined, 0 FAIL, exit 0), including every `cid_*`
+check group (`cid_progress: the fill level decides, not the sample count`,
+90 checks, is the one most directly naming `samples_fill`'s role). No
+check count regressed. `tools/onedef.py`, `tools/refcheck.py` and
+`tools/anchorcheck.py` all clean; `make check64` clean (64-bit clean, both
+configurations). `make period` and `make byteident-ratchet` run under
+`dsplibs-tc342` (GCC 3.4.2) against the fully merged wave-6 tree -- see the
+wave 6 summary in `docs/fieldnaming.md` for the result. (2026-09-05)
 
 ## F10165: `flags_173a` split into `trainConstel`/`rrnConstel`/`byte_173c` -- applying evidence two prior findings already had
 
