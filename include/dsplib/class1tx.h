@@ -679,26 +679,42 @@ int _rx_data_state(struct fax_class1 *ctx, const short *rx, short *tx,
 int _tx_nulls_state(struct fax_class1 *ctx, const short *rx, short *tx,
 		    int word3, int word4, int *rx_count, int *tx_count,
 		    int word7, int *word8);
-
 /**
  * @brief TX_SCRAMBLED_ONES_STATE (9). `.text` 0x0009d200, 681 bytes.
  *
  * Fires a one-time #FAX_CLASS1_CONNECT on the session's first call (shared
  * `DATAtx_counter` static with _tx_data_state()). `tx_connect_countdown` is
  * a one-shot countdown that, reaching 0, sets `transmit_enabled`. When host
- * data is available (`*word8 > 0`), unstuffs and queues it into
+ * data is available (`*tx_data_count > 0`), unstuffs and queues it into
  * `ctx->tx_fifo` and recomputes `tx_fifo_ready`. Fills the transmit block
  * with literal 0xFF ("scrambled ones") unconditionally, then, once both
  * `transmit_enabled` and `tx_fifo_ready` are set, moves to
  * #CLASS1_TX_DATA_STATE and overwrites that fill with a real FIFO read.
  * Drives `ctx->vmi_b`, latching `tx_connect_countdown`'s own arming off a
  * status bit distinct from #FAXVMI_RESULT_BIT_2000
- * (#FAXVMI_PROCESS_BIT_0100). Reports remaining FIFO room in `*word8` at
- * the end.
+ * (#FAXVMI_PROCESS_BIT_0100). Reports remaining FIFO room in
+ * `*tx_data_count` at the end.
+ *
+ * `unused_dst`/`unused_out_count` are genuinely unused here (see
+ * class1tx.c) -- but not meaningless: in the RX/HDLC siblings the SAME
+ * slots are, respectively, the `dst` buffer
+ * `_handle_data_output`/`cTOOLS_handle_hdlc_output` write through
+ * (evidence class 2, those callees' own parameter name) and the `int *`
+ * the byte count they return is written back through (evidence class 3,
+ * usage only). Named for that unexercised-here status rather than for
+ * the role, per CLAUDE.md's "bounded but not established" rule. `src`/
+ * `tx_data_count` ARE used: `src` is `_handle_data_input`'s own
+ * parameter (evidence class 2), and `tx_data_count` is the object's own
+ * `TxDatCnt` (evidence class 1 -- the exact format string every RX/HDLC
+ * sibling in this file tests it against, e.g. "TxDatCnt !=0 in
+ * _rx_look_carrier_state... abort to command mode\n"), named to match
+ * `tx_count`'s own established "author's word" style rather than
+ * transliterated verbatim.
  */
 int _tx_scrambled_ones_state(struct fax_class1 *ctx, const short *rx,
-			     short *tx, int word3, int word4, int *rx_count,
-			     int *tx_count, int word7, int *word8);
+			     short *tx, int unused_dst, int src,
+			     int *rx_count, int *tx_count, int unused_out_count,
+			     int *tx_data_count);
 
 /**
  * @brief TX_DATA_STATE (10). `.text` 0x0009d4b0, 618 bytes.

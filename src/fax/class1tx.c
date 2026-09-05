@@ -2419,25 +2419,25 @@ _hdlc_receive_look_carrier_state(struct fax_class1 *ctx, const short *rx,
  * positive; reaching exactly 0 fires "At %2d.%02d[sec] ENABLE_TRANSMIT in
  * _tx_scrambled_ones_state\n" and sets `ctx->transmit_enabled = 1`.
  *
- * `*word8 > 0` unstuffs `word4` through `_handle_data_input` into `ctx`
+ * `*tx_data_count > 0` unstuffs `src` through `_handle_data_input` into `ctx`
  * (the shared scratch-buffer idiom), then `FIFO_write`s the result into
  * `ctx->tx_fifo`, logging a shortfall ("Fifo is full in
  * _tx_scrambled_ones_state").  `ctx->tx_fifo_ready` is then recomputed: 1 when
  * `ctx->tx_fifo->count >= ctx->tx_bytes_per_block` (the FIFO already holds a whole read's
- * worth), else 0 -- but ONLY inside this `*word8 > 0` block; on a call
+ * worth), else 0 -- but ONLY inside this `*tx_data_count > 0` block; on a call
  * where it does not run, `tx_fifo_ready` is left at whatever the last call set.
  *
  * `ctx->tx_bytes_per_block` elements of `ctx` are then filled with the literal `0xff`
  * (the "scrambled ones" this state's name promises) UNCONDITIONALLY, and
- * `*word8` is set to that same count.
+ * `*tx_data_count` is set to that same count.
  *
  * If `ctx->transmit_enabled != 0 && ctx->tx_fifo_ready != 0`: `ctx->state` becomes
  * `CLASS1_TX_DATA_STATE`, and the 0xFF filler is immediately overwritten by
- * a REAL `FIFO_read` into the same buffer -- `*word8` becomes that read's
+ * a REAL `FIFO_read` into the same buffer -- `*tx_data_count` becomes that read's
  * return, logging an underrun ("class1 object fifo under run in
  * _tx_scrambled_ones_state !!!") without undoing the state change.
  *
- * `cnt` (FAXVMI_process's `count`) is seeded from `*word8` AS IT STANDS AT
+ * `cnt` (FAXVMI_process's `count`) is seeded from `*tx_data_count` AS IT STANDS AT
  * THAT POINT -- the fill count or the FIFO_read's return, whichever path
  * ran -- read directly off the object's own `mov %ax,0x22(%esp)` at
  * 0x9d2e7, which is fed by whatever is still in `%eax` from the join above
@@ -2453,7 +2453,7 @@ _hdlc_receive_look_carrier_state(struct fax_class1 *ctx, const short *rx,
  * connect\n", arms `ctx->tx_connect_countdown = 2`, and latches `ctx->tx_connect_latch = 1` so the
  * bit is never re-tested once caught.
  *
- * Tail, unconditional: `*word8 = ctx->tx_fifo->size - ctx->tx_fifo->count - 1`
+ * Tail, unconditional: `*tx_data_count = ctx->tx_fifo->size - ctx->tx_fifo->count - 1`
  * -- the same free-room-minus-one formula `_tx_nulls_state`/`_tx_data_state`
  * end with.
  *
@@ -2468,8 +2468,8 @@ _hdlc_receive_look_carrier_state(struct fax_class1 *ctx, const short *rx,
 
 int
 _tx_scrambled_ones_state(struct fax_class1 *ctx, const short *rx, short *tx,
-			 int word3, int word4, int *rx_count, int *tx_count,
-			 int word7, int *word8)
+			 int unused_dst, int src, int *rx_count, int *tx_count,
+			 int unused_out_count, int *tx_data_count)
 {
 	short cnt;
 	unsigned short result = (unsigned short)*tx_count;
@@ -2477,9 +2477,9 @@ _tx_scrambled_ones_state(struct fax_class1 *ctx, const short *rx, short *tx,
 	int i;
 
 	(void)rx;
-	(void)word3;
+	(void)unused_dst;
 	(void)rx_count;
-	(void)word7;
+	(void)unused_out_count;
 
 	if (dsplibs_debug_level > 2)
 		dsplibs_debug_printf("cDATAtx_counter %d\n", DATAtx_counter);
@@ -2499,15 +2499,15 @@ _tx_scrambled_ones_state(struct fax_class1 *ctx, const short *rx, short *tx,
 		}
 	}
 
-	if (*word8 > 0) {
+	if (*tx_data_count > 0) {
 		int n;
 
-		_handle_data_input(ctx, (const unsigned char *)(long)word4,
-		    (unsigned short *)(void *)ctx, word8);
+		_handle_data_input(ctx, (const unsigned char *)(long)src,
+		    (unsigned short *)(void *)ctx, tx_data_count);
 
 		n = (unsigned short)FIFO_write(ctx->tx_fifo,
-		    (unsigned short *)(void *)ctx, (unsigned short)*word8);
-		if (*word8 > n) {
+		    (unsigned short *)(void *)ctx, (unsigned short)*tx_data_count);
+		if (*tx_data_count > n) {
 			if (dsplibs_debug_level > 1)
 				dsplibs_debug_printf(
 				    "At %2d.%02d[sec] Fifo is full in "
@@ -2521,7 +2521,7 @@ _tx_scrambled_ones_state(struct fax_class1 *ctx, const short *rx, short *tx,
 
 	for (i = 0; i < ctx->tx_bytes_per_block; i++)
 		((unsigned short *)(void *)ctx)[i] = 0xff;
-	*word8 = ctx->tx_bytes_per_block;
+	*tx_data_count = ctx->tx_bytes_per_block;
 
 	if (ctx->transmit_enabled != 0 && ctx->tx_fifo_ready != 0) {
 		int rd;
@@ -2529,7 +2529,7 @@ _tx_scrambled_ones_state(struct fax_class1 *ctx, const short *rx, short *tx,
 		ctx->state = CLASS1_TX_DATA_STATE;
 		rd = FIFO_read(ctx->tx_fifo, (unsigned short *)(void *)ctx,
 		    (unsigned short)ctx->tx_bytes_per_block);
-		*word8 = rd;
+		*tx_data_count = rd;
 		if (rd < ctx->tx_bytes_per_block) {
 			if (dsplibs_debug_level > 1)
 				dsplibs_debug_printf(
@@ -2538,7 +2538,7 @@ _tx_scrambled_ones_state(struct fax_class1 *ctx, const short *rx, short *tx,
 		}
 	}
 
-	cnt = (short)*word8;
+	cnt = (short)*tx_data_count;
 	status = FAXVMI_process(ctx->vmi_b, (unsigned short *)(void *)ctx, tx,
 	    &cnt, &result);
 
@@ -2551,7 +2551,7 @@ _tx_scrambled_ones_state(struct fax_class1 *ctx, const short *rx, short *tx,
 		ctx->tx_connect_latch = 1;
 	}
 
-	*word8 = (int)(unsigned short)ctx->tx_fifo->size
+	*tx_data_count = (int)(unsigned short)ctx->tx_fifo->size
 	       - (int)(unsigned short)ctx->tx_fifo->count - 1;
 	return 0;
 }
