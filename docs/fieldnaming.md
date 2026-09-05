@@ -887,12 +887,14 @@ precedent quoted above -- worth flagging since availability apparently
 varies by session/host rather than being uniformly absent. `make period
 J=3` under GCC 3.4.2: **374 passed, 0 failed**, matching the pre-wave
 test count exactly (no tests added or lost, as expected for a pure
-identifier/comment wave). `make byteident-ratchet` was also run; its
-result is recorded in the wave's closing note below once it finished --
-the machine was under heavy contention from several sibling agents' own
-concurrent `make period` runs (load average 5-6 on 3 cores), so it took
-substantially longer than the 34s `docs/method` figures quote for an
-unshared machine.
+identifier/comment wave). `make byteident-ratchet` was also run, on a full
+rebuild that took substantially longer than the 34s `docs/method` figures
+quote for an unshared machine, since the box was under heavy contention
+from several sibling agents' own concurrent `make period` runs (load
+average 5-6 on 3 cores): **736/1852 EXACT (39.7%), 796/1852 grade 0-or-1
+(43.0%), ratchet OK** -- bit-for-bit identical to the pre-wave floor this
+whole session's field-naming phase has held since wave 1, confirming zero
+codegen drift from this wave's macro renames and comment fixes.
 
 **Process note, unrelated to the field-naming result but recorded because
 it could have cost another session real work.** Mid-wave, a `git stash` /

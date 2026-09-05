@@ -116410,12 +116410,12 @@ widths. **Docker was available in this sandbox** (a sibling worktree's
 `dsplibs-tc342` image was already built), so this wave ran the real gate
 rather than deferring it: `make period J=3` under GCC 3.4.2 --
 **374 passed, 0 failed**, matching the pre-wave baseline test count
-exactly (no tests added or lost). `make byteident-ratchet` was also
-launched; see the wave 6 completion note in `docs/fieldnaming.md` for its
-result once it finished, since it was still running a full rebuild under
-heavy shared-machine contention (load average 5-6 on 3 cores, several
-sibling agents' own `make period` runs concurrent) when this finding was
-first written.
+exactly (no tests added or lost). `make byteident-ratchet` was also run,
+on a full rebuild slowed by heavy shared-machine contention (load average
+5-6 on 3 cores, several sibling agents' own `make period` runs
+concurrent): **736/1852 EXACT (39.7%), 796/1852 grade 0-or-1 (43.0%),
+ratchet OK** -- unchanged from the floor this session's field-naming
+phase has held since wave 1, zero codegen drift from this wave's renames.
 
 **Process incident, unrelated to the field-naming result but recorded
 because it nearly cost a sibling session real work.** Mid-wave, a
