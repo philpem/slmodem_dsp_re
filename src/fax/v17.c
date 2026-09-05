@@ -1141,7 +1141,7 @@ smc_ring_advance(short widx, short len)
 {
 	short next = (short)(widx + 1);
 
-	return (next < len) ? next : 0;
+	return (short)((next < len) ? next : 0);
 }
 
 /*

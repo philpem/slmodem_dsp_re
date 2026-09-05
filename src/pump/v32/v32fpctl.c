@@ -841,5 +841,5 @@ CalcTurnAroundDelay(void *modem)
 		       - (FIELD_U16(hdx, V32_HDX_SHORT_98)
 			  + FIELD_U16(hdx, V32_HDX_SHORT_9C)
 			  + FIELD_U16(hdx, V32_HDX_SHORT_9A)));
-	return left < 0 ? 0 : left;
+	return (short)(left < 0 ? 0 : left);
 }

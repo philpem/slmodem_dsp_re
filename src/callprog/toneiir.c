@@ -185,7 +185,7 @@ toneiir_create(struct toneiir *st, const struct toneiir_cfg *cfg)
 
 		st->n = 0;
 		st->env_band = 0;
-		st->env_prev = prev;
+		st->env_prev = (short)prev;
 		st->env_in = 0;
 	}
 
@@ -232,7 +232,7 @@ toneiir_reset(struct toneiir *st)
 
 	st->env_band = 0;
 	st->n = 0;
-	st->env_prev = prev;
+	st->env_prev = (short)prev;
 	st->env_in = 0;
 	st->total = 0;
 	st->run = 0;
@@ -317,7 +317,7 @@ toneiir_progress(struct toneiir *st, short sample)
 		st->n = 0;
 		st->env_band = 0;
 		st->env_in = 0;
-		st->env_prev = prev;
+		st->env_prev = (short)prev;
 	}
 
 	return result;

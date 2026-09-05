@@ -68,7 +68,7 @@ init_vmi_v17rx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
 			"(Simple Packing)\n");
 
 	*cfg = V17RX_CFG;
-	cfg->bit_rate = bit_rate;
+	cfg->bit_rate = (short)bit_rate;
 	cfg->ptr_0024 = arg_3;
 	cfg->int_0014 = 0;
 	cfg->ptr_0018 = sysdep_malloc(0x62);
@@ -100,7 +100,7 @@ init_vmi_v29rx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
 			"(Simple Packing)\n");
 
 	*cfg = V29RX_CFG;
-	cfg->bit_rate = bit_rate;
+	cfg->bit_rate = (short)bit_rate;
 	cfg->ptr_0014 = arg_3;
 
 	*vmi = FAXVMI_CFG;
@@ -128,7 +128,7 @@ init_vmi_v27rx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
 			"(Simple Packing)\n");
 
 	*cfg = V27RX_CFG;
-	cfg->bit_rate = bit_rate;
+	cfg->bit_rate = (short)bit_rate;
 	cfg->ptr_0018 = arg_3;
 
 	*vmi = FAXVMI_CFG;

@@ -78,14 +78,14 @@ MTK_phasor(struct mtk_phasor *p)
 	 */
 	x = fmodf(p->phase, 6.28318530718f);
 	if (x < 0.0f)
-		x = x + 6.28318530718;
+		x = (float)(x + 6.28318530718);
 	p->phase = x;
 
 	/* 162.97466172610083 is 512/pi, so `n` is the angle in 1/1024ths. */
-	y = x * 162.97466172610083;
+	y = (float)(x * 162.97466172610083);
 	n = (short)y;
 	quadrant = n >> 8;
-	frac = y - n;
+	frac = y - (float)n;
 
 	/*
 	 * Bits 0..7 index the quarter wave and bit 8 says which way along
@@ -112,6 +112,6 @@ MTK_phasor(struct mtk_phasor *p)
 	 */
 	s = x + p->step;
 	if (s >= 3.141592653589793)
-		s = s - 6.28318530718;
+		s = (float)(s - 6.28318530718);
 	p->phase = s;
 }

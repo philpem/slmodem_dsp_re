@@ -52,8 +52,8 @@ GetGain(struct beepgen *bg, float *gain1, float *gain2)
 	int atten = (int)modem_get_param(bg->modem,
 					 GetAdditAttenToBeepgenVoice);
 
-	*gain2 = pow(10.0, (double)atten * -0.05 + base) * 0.276;
-	*gain1 = pow(10.0, (double)-diff * 0.05) * *gain2;
+	*gain2 = (float)(pow(10.0, (double)atten * -0.05 + base) * 0.276);
+	*gain1 = (float)(pow(10.0, (double)-diff * 0.05) * *gain2);
 
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf(
@@ -274,9 +274,9 @@ beepgen_sample(struct beepgen *bg, float *out)
 	struct beepgen_tone *t;
 
 	bg->elapsed++;
-	*out = sin(bg->phase1) * bg->gain1 + cos(bg->phase2) * bg->gain2;
-	bg->phase1 += BEEPGEN_PHASE_STEP * bg->freq1;
-	bg->phase2 += BEEPGEN_PHASE_STEP * bg->freq2;
+	*out = (float)(sin(bg->phase1) * bg->gain1 + cos(bg->phase2) * bg->gain2);
+	bg->phase1 += (float)(BEEPGEN_PHASE_STEP * bg->freq1);
+	bg->phase2 += (float)(BEEPGEN_PHASE_STEP * bg->freq2);
 	if (bg->elapsed <= bg->duration)
 		return 0;
 
@@ -483,7 +483,7 @@ zFLTUTL_Linear2Float(short *src, float *dst, int n, float gain)
 	if (gain == 0.0f)
 		return;
 	for (i = 0; i < n; i++)
-		dst[i] = src[i] * gain;
+		dst[i] = (float)src[i] * gain;
 }
 
 /*
@@ -521,7 +521,7 @@ fComputeRMSValueShortBuf(unsigned int n, short *buf)
 
 	for (i = 0; i < n; i++)
 		sum += buf[i];
-	mean = sum / n;
+	mean = (int)(sum / n);
 	for (i = 0; i < n; i++) {
 		float d = (float)(buf[i] - mean);
 
@@ -542,7 +542,7 @@ CrossDataLinks(short *lin_in, float *flt_out, float *flt_in, short *lin_out,
 	int i;
 
 	for (i = 0; i < n; i++)
-		flt_out[i] = lin_in[i] * (1.0f / 32000.0f);
+		flt_out[i] = (float)lin_in[i] * (1.0f / 32000.0f);
 	for (i = 0; i < n; i++)
 		lin_out[i] = (short)(flt_in[i] * 32000.0f);
 }
@@ -570,7 +570,7 @@ bSearchEnergy(short *new1, short *new2, short *buf1, short *buf2,
 
 	for (i = 0; i < 1000; i++)
 		sum += buf1[1000 + i];
-	mean = sum / 1000;
+	mean = (int)(sum / 1000);
 	for (i = 0; i < 1000; i++) {
 		float d = (float)(buf1[1000 + i] - mean);
 
@@ -609,8 +609,8 @@ FindCorrelation(short *pattern, short *sig, unsigned int *posp,
 			unsigned int j, a;
 
 			for (j = 0; j <= 999; j++)
-				acc += sig[i + j] * pattern[j];
-			corr = acc * 0.0001;
+				acc += (float)(sig[i + j] * pattern[j]);
+			corr = (float)(acc * 0.0001);
 			corrbuf[k] = corr;
 			out[k] = (short)corr;
 			a = (unsigned int)fabs(corr);
@@ -644,7 +644,7 @@ FDSP_DP_Run(int *status, short *rx_lin, float *rx_flt, float *tx_flt,
 
 	(void)hostcount;
 	for (i = 0; i < n; i++)
-		rx_flt[i] = rx_lin[i] * (1.0f / 32000.0f);
+		rx_flt[i] = (float)rx_lin[i] * (1.0f / 32000.0f);
 	for (i = 0; i < n; i++)
 		tx_lin[i] = (short)(tx_flt[i] * 32000.0f);
 	*status = 2;

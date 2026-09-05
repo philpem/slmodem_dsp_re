@@ -97,7 +97,7 @@
  },
  {
   "label": "the reciprocal becomes a division",
-  "find": "\t\tfloat inv = 1.0f / sampleCount;\n\t\tfloat meanIn = in * inv;\n\t\tfloat meanOut = out * inv;",
+  "find": "\t\tfloat inv = 1.0f / (float)sampleCount;\n\t\tfloat meanIn = in * inv;\n\t\tfloat meanOut = out * inv;",
   "replace": "\t\tfloat meanIn = in / sampleCount;\n\t\tfloat meanOut = out / sampleCount;"
  },
  {
@@ -192,7 +192,7 @@
  },
  {
   "label": "the array overload divides instead of multiplying by the reciprocal",
-  "find": "\t\t\tfloat inv = 1.0f / sampleCount;\n\t\t\tfloat meanIn = in * inv;\n\t\t\tfloat meanOut = out * inv;",
+  "find": "\t\t\tfloat inv = 1.0f / (float)sampleCount;\n\t\t\tfloat meanIn = in * inv;\n\t\t\tfloat meanOut = out * inv;",
   "replace": "\t\t\tfloat meanIn = in / sampleCount;\n\t\t\tfloat meanOut = out / sampleCount;"
  },
  {

@@ -217,11 +217,11 @@ int GenericToneDetector::process(float sample)
 	if (++sampleCount != blockLen) {
 		acc_0c = in;
 		acc_10 = out;
-		return detected;
+		return (int)detected;
 	}
 
 	{
-		float inv = 1.0f / sampleCount;
+		float inv = 1.0f / (float)sampleCount;
 		float meanIn = in * inv;
 		float meanOut = out * inv;
 
@@ -248,7 +248,7 @@ int GenericToneDetector::process(float sample)
 		acc_10 = 0;
 	}
 
-	return detected;
+	return (int)detected;
 }
 
 /*
@@ -316,7 +316,7 @@ int GenericToneDetector::process(float *samples, unsigned int n)
 		}
 
 		{
-			float inv = 1.0f / sampleCount;
+			float inv = 1.0f / (float)sampleCount;
 			float meanIn = in * inv;
 			float meanOut = out * inv;
 
@@ -352,7 +352,7 @@ int GenericToneDetector::process(float *samples, unsigned int n)
 		}
 	}
 
-	return detected;
+	return (int)detected;
 }
 
 /*

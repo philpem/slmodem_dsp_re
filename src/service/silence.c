@@ -160,12 +160,12 @@ silence_progress(struct silence *s, float *buf, short n,
 
 		s->nsamp++;
 		acc = acc + buf[i] * buf[i];
-		if (s->nsamp < SILENCE_BLOCK) {
+		if ((float)s->nsamp < SILENCE_BLOCK) {
 			s->energy = acc;
 			continue;
 		}
 
-		acc = acc * SILENCE_BLOCK_RECIP;
+		acc = (float)(acc * SILENCE_BLOCK_RECIP);
 		s->energy = acc;
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf(

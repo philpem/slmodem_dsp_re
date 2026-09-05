@@ -921,9 +921,9 @@ faxvmi_hdlc_frame(struct faxvmi *vmi, unsigned short *src, short count)
 				dsplibs_debug_printf(
 				    "FCL1: FRAME TRANSMITTED (%s)\n",
 				    GetT30FrameNameByID(
-					GetT30FrameIDFromBuffer(hdr[0], hdr[1],
+					(int)(GetT30FrameIDFromBuffer(hdr[0], hdr[1],
 								hdr[2])
-					& 0xffff7fff));
+					& 0xffff7fff)));
 		}
 	}
 

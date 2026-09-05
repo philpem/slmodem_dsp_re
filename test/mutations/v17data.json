@@ -74,22 +74,22 @@
  },
  {
   "label": "the cursor advances before the store rather than after it",
-  "find": "\t\t\tring->sym[widx] = (short)*(const unsigned short *)\n\t\t\t\t\t(const void *)(prm +\n\t\t\t\t\t\t       V17TXP_NOCARRIER_SYM);\n\t\t\tnext = (short)(widx + 1);\n\t\t\twidx = next < len ? next : 0;",
-  "replace": "\t\t\tnext = (short)(widx + 1);\n\t\t\twidx = next < len ? next : 0;\n\t\t\tring->sym[widx] = (short)*(const unsigned short *)\n\t\t\t\t\t(const void *)(prm +\n\t\t\t\t\t\t       V17TXP_NOCARRIER_SYM);"
+  "find": "\t\t\tring->sym[widx] = (short)*(const unsigned short *)\n\t\t\t\t\t(const void *)(prm +\n\t\t\t\t\t\t       V17TXP_NOCARRIER_SYM);\n\t\t\tnext = (short)(widx + 1);\n\t\t\twidx = (short)(next < len ? next : 0);",
+  "replace": "\t\t\tnext = (short)(widx + 1);\n\t\t\twidx = (short)(next < len ? next : 0);\n\t\t\tring->sym[widx] = (short)*(const unsigned short *)\n\t\t\t\t\t(const void *)(prm +\n\t\t\t\t\t\t       V17TXP_NOCARRIER_SYM);"
  },
  {
   "label": "the cursor wraps one short of the ring length",
-  "find": "\t\t\twidx = next < len ? next : 0;",
+  "find": "\t\t\twidx = (short)(next < len ? next : 0);",
   "replace": "\t\t\twidx = next < (short)(len - 1) ? next : 0;"
  },
  {
   "label": "the cursor wraps one past it, so the slot at len is written",
-  "find": "\t\t\twidx = next < len ? next : 0;",
+  "find": "\t\t\twidx = (short)(next < len ? next : 0);",
   "replace": "\t\t\twidx = next <= len ? next : 0;"
  },
  {
   "label": "the wrap test is unsigned, which agrees everywhere except at the truncation corner",
-  "find": "\t\t\twidx = next < len ? next : 0;",
+  "find": "\t\t\twidx = (short)(next < len ? next : 0);",
   "replace": "\t\t\twidx = (unsigned short)next < (unsigned short)len ? next : 0;"
  },
  {

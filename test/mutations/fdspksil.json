@@ -109,7 +109,7 @@
  },
  {
   "label": "the block completes one sample early",
-  "find": "\t\tif (s->nsamp < SILENCE_BLOCK) {",
+  "find": "\t\tif ((float)s->nsamp < SILENCE_BLOCK) {",
   "replace": "\t\tif (s->nsamp <= SILENCE_BLOCK) {"
  },
  {

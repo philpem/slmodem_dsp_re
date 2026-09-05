@@ -107,7 +107,7 @@ V22_MRF_filter(struct v22_mrf *state, const short *in, short *out, short count)
 		 * is what lets a stream be fed in arbitrary fragments.
 		 */
 		if (remaining < need) {
-			need -= remaining;
+			need = (short)(need - remaining);
 			if (widx + remaining > V22_MRF_HISTORY) {
 				sysdep_memcpy(history,
 					      history + V22_MRF_TAPS,
@@ -116,7 +116,7 @@ V22_MRF_filter(struct v22_mrf *state, const short *in, short *out, short count)
 			}
 			sysdep_memcpy(history + widx, in,
 				      (unsigned)remaining * sizeof(short));
-			widx += remaining;
+			widx = (short)(widx + remaining);
 			break;
 		}
 
@@ -128,8 +128,8 @@ V22_MRF_filter(struct v22_mrf *state, const short *in, short *out, short count)
 		sysdep_memcpy(history + widx, in,
 			      (unsigned)need * sizeof(short));
 		in += need;
-		widx += need;
-		remaining -= need;
+		widx = (short)(widx + need);
+		remaining = (short)(remaining - need);
 
 		acc = 0;
 		if (widx < hlen) {

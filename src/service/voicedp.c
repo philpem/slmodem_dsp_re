@@ -357,11 +357,21 @@ voice_set_rx(struct voice_ctx *v)
 	v->rate_bits.s.bits = 8;
 	v->dc = 0.0f;
 	v->dc_init = 1;
-	v->gain_fmt1 = query(v->cfg.modem, VOICE_PARAM_RX_GAIN_FMT1)
+	/*
+	 * `query()`'s `unsigned int` is what the multiply by
+	 * VOICE_RX_PARAM_SCALE already implicitly converts to `float` (the
+	 * usual arithmetic conversions, `query() * float` promotes the
+	 * integer operand) -- the cast below only makes that existing
+	 * conversion explicit, at the point it already happens.  The blob
+	 * loads it with `fildll` and rounds once, in the `fstps` that stores
+	 * the product; making the cast explicit here does not move that
+	 * store or add a second rounding.
+	 */
+	v->gain_fmt1 = (float)query(v->cfg.modem, VOICE_PARAM_RX_GAIN_FMT1)
 		       * VOICE_RX_PARAM_SCALE;
-	v->gain_fmt3 = query(v->cfg.modem, VOICE_PARAM_RX_GAIN_FMT3)
+	v->gain_fmt3 = (float)query(v->cfg.modem, VOICE_PARAM_RX_GAIN_FMT3)
 		       * VOICE_RX_PARAM_SCALE;
-	v->gain_other = query(v->cfg.modem, VOICE_PARAM_RX_GAIN_OTHER)
+	v->gain_other = (float)query(v->cfg.modem, VOICE_PARAM_RX_GAIN_OTHER)
 			* VOICE_RX_PARAM_SCALE;
 }
 
@@ -394,7 +404,7 @@ voice_rx(struct voice_ctx *v, short *rx_lin, float *rx_flt, float *tx_flt,
 	unsigned char *out = (unsigned char *)tx_lin;
 	float *flt = v->flt;
 	float sum = 0.0f;
-	short n = *countp;
+	short n = (short)*countp;
 	unsigned short have = (unsigned short)n;
 	unsigned short i;
 	unsigned short j = 0;
@@ -408,11 +418,11 @@ voice_rx(struct voice_ctx *v, short *rx_lin, float *rx_flt, float *tx_flt,
 
 		for (k = 0; k < have; k++)
 			sum += tx_flt[k];
-		dc = sum / have;
+		dc = sum / (float)have;
 		if (v->dc_init)
 			v->dc_init = 0;
 		else
-			dc = dc * VOICE_RX_DC_FOLD + v->dc * VOICE_RX_DC_KEEP;
+			dc = (float)(dc * VOICE_RX_DC_FOLD + v->dc * VOICE_RX_DC_KEEP);
 		v->dc = dc;
 		for (k = 0; k < have; k++)
 			tx_flt[k] -= v->dc;
@@ -443,7 +453,7 @@ voice_rx(struct voice_ctx *v, short *rx_lin, float *rx_flt, float *tx_flt,
 				return VOICE_RX_TOO_MANY_STATUS;
 			}
 			for (i = 0; i < *countp; i++)
-				v->flt[i] = rx_lin[i] * gain;
+				v->flt[i] = (float)rx_lin[i] * gain;
 		} else {
 			gain = v->gain_other;
 			flt = tx_flt;
@@ -623,17 +633,17 @@ voice_tx(struct voice_ctx *v, short *rx_lin, float *rx_flt, float *tx_flt,
 					       (unsigned short)nread);
 
 		for (k = 0; k < n; k++)
-			sum += v->stage[k] * VOICE_TX_BYTE_SCALE;
-		mean = sum / (int)n;
+			sum += (float)v->stage[k] * VOICE_TX_BYTE_SCALE;
+		mean = sum / (float)(int)n;
 
 		if (VOICE_OUT_IS_LINEAR(v)) {
 			float offset = mean * 64.0f;
 
 			for (k = 0; k < n; k++)
-				flt[k] = v->stage[k] - offset;
+				flt[k] = (float)v->stage[k] - offset;
 		} else {
 			for (k = 0; k < n; k++)
-				flt[k] = v->stage[k] * VOICE_TX_BYTE_SCALE
+				flt[k] = (float)v->stage[k] * VOICE_TX_BYTE_SCALE
 					 - mean;
 		}
 

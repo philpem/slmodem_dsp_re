@@ -38,7 +38,7 @@ static const short fp_pow_coef[FP_POW_TERMS] = {
 short
 FP_Pow_coefficient(int i)
 {
-	return (i >= 0 && i < FP_POW_TERMS) ? fp_pow_coef[i] : 0;
+	return (short)((i >= 0 && i < FP_POW_TERMS) ? fp_pow_coef[i] : 0);
 }
 
 short
@@ -121,5 +121,5 @@ GetFP_Value(short a, short b)
 	if (remaining > 0 && vb != 0)
 		count = (short)((remaining + vb - 1) / vb);
 
-	return ((int)a * (int)b) > 0 ? (short)count : (short)(-count);
+	return (short)(((int)a * (int)b) > 0 ? (short)count : (short)(-count));
 }

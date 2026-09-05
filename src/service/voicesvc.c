@@ -318,7 +318,7 @@ voice_command(struct voice_ctx *v, int cmd, int *arg)
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf(
 			    "VOICE_PLAYBACK_VOLUME_COMMAND %d\n", arg[0]);
-		v->playback_volume = arg[0];
+		v->playback_volume = (short)arg[0];
 		break;
 
 	case VOICE_TIME_MARK_COMMAND:
@@ -404,7 +404,7 @@ voice_modem(struct voice_ctx *v, short *rx_lin, float *rx_flt, float *tx_flt,
 	else
 		detector_set_output_in_stream(v->detector);
 
-	st = detector_progress(v->detector, tx_flt, *countp, out, &det_len);
+	st = detector_progress(v->detector, tx_flt, (short)*countp, out, &det_len);
 
 	r = v->handler(v, rx_lin, rx_flt, tx_flt, (short *)(out + det_len),
 		       hostcount, &saved);

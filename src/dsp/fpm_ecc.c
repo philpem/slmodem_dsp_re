@@ -242,10 +242,10 @@ FPM_ECC_cancel(struct fpm_ecc *state, short *buf, unsigned short count)
 			si = imap[(usym >> 8) & 0xff][usym & 0xff];
 			sq = (short)-qmap[(usym >> 8) & 0xff][usym & 0xff];
 			next = (short)(near_rd + 1);
-			near_rd = (next < line_len) ? next : 0;
+			near_rd = (short)((next < line_len) ? next : 0);
 			if (cfg_near != 0) {
 				next = (short)(near_idx + 1);
-				near_idx = (next < near_len) ? next : 0;
+				near_idx = (short)((next < near_len) ? next : 0);
 				near_i[near_idx] = si;
 				near_q[near_idx] = sq;
 			}
@@ -255,11 +255,11 @@ FPM_ECC_cancel(struct fpm_ecc *state, short *buf, unsigned short count)
 			si = imap[ssym >> 8][ssym & 0xff];
 			sq = (short)-qmap[ssym >> 8][ssym & 0xff];
 			next = (short)(far_idx + 1);
-			far_idx = (next < far_len) ? next : 0;
+			far_idx = (short)((next < far_len) ? next : 0);
 			far_i[far_idx] = si;
 			far_q[far_idx] = sq;
 			next = (short)(far_rd + 1);
-			far_rd = (next < line_len) ? next : 0;
+			far_rd = (short)((next < line_len) ? next : 0);
 			symbols++;
 		}
 	}

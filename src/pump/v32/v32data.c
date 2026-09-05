@@ -112,7 +112,7 @@ TxNoCarrierV32(void *modem, const short *data, short *out,
 		ring->buf[widx] = V32_SYMBOL_NOCARRIER;
 		next = (short)(widx + 1);
 		quad = (short)((quad + 3) & 3);
-		widx = next < limit ? next : 0;
+		widx = (short)(next < limit ? next : 0);
 	}
 
 	/* BOTH write-backs precede the shaper here, unlike V.17 and V.29. */

@@ -160,7 +160,7 @@ int
 v8_fskmodulate(struct v8 *v, short which)
 {
 	struct v8_v21_params *p = &v->v21_params;
-	short step = which != 0 ? p->carrier_b : p->carrier_a;
+	short step = (short)(which != 0 ? p->carrier_b : p->carrier_a);
 	int i;
 
 	for (i = 0; i < V8_QUEUE_BLOCK; i++) {
@@ -566,8 +566,8 @@ biquad_filter(short in, struct v8_detector *d, const short *coeff)
 	x0 = d->acc_a[0];
 	d->acc_b[0] = (short)acc;
 	d->acc_a[0] = (short)(in >> 4);
-	d->acc_b[1] = y0;
-	d->acc_a[1] = x0;
+	d->acc_b[1] = (short)y0;
+	d->acc_a[1] = (short)x0;
 
 	stage1 = (short)(acc >> 4);
 	acc = stage1;
@@ -580,8 +580,8 @@ biquad_filter(short in, struct v8_detector *d, const short *coeff)
 	x0 = d->acc_a[2];
 	d->acc_b[2] = (short)acc;
 	d->acc_a[2] = (short)stage1;
-	d->acc_b[3] = y0;
-	d->acc_a[3] = x0;
+	d->acc_b[3] = (short)y0;
+	d->acc_a[3] = (short)x0;
 	return (short)acc;
 }
 

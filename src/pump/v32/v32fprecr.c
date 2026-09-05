@@ -670,7 +670,7 @@ V32FP_recreate(void *modem, const struct v32fp_params *param, void *arg2)
 	 */
 	fp = (unsigned char *)FP(modem);
 	((struct v32_dec *)FSE(fp)->cfg.owner)->scram_tap =
-		(unsigned short)SDM_RX(fp)->tap1;
+		(short)(unsigned short)SDM_RX(fp)->tap1;
 
 	/* The scratch register bank, and the multi-tone detector. */
 	hdx = (unsigned char *)HDX(modem);
