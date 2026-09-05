@@ -614,7 +614,7 @@ unsigned short
 V27RX_epoch_det(struct fpm_fse *state, short *angle, short *mag)
 {
 	void *dec = state->cfg.owner;
-	short n = state->n_out;
+	short n = (short)state->n_out;
 	short i, q;
 	short di, dq, ei, eq;
 	short avg;
@@ -791,7 +791,7 @@ V27RX_eq_train(struct fpm_fse *state, short *angle, short *mag)
 
 	*mag = V27DEC_MAG;
 
-	err = diff < 0 ? (short)-diff : diff;
+	err = (short)(diff < 0 ? (short)-diff : diff);
 	if (err > V27DEC_QUARTER_TURN)
 		FIELD_S(dec, V27DEC_LAST) =
 			(short)((FIELD_S(dec, V27DEC_LAST) + step)
@@ -871,16 +871,16 @@ V27RX_decision(struct fpm_fse *state, short *angle, short *mag)
 	if (diff > V27DEC_PHASE_FULL)
 		diff -= V27DEC_PHASE_FULL;
 
-	best = diff >= V27DEC_PHASE_FULL
+	best = (short)(diff >= V27DEC_PHASE_FULL
 	     ? (short)(diff - V27DEC_PHASE_FULL)
-	     : (short)(V27DEC_PHASE_FULL - diff);
+	     : (short)(V27DEC_PHASE_FULL - diff));
 	bi = 0;
 
 	for (k = 0; k < n; k = (short)(k + 1)) {
 		short d;
 
-		d = diff >= tbl[k] ? (short)(diff - tbl[k])
-				   : (short)(tbl[k] - diff);
+		d = (short)(diff >= tbl[k] ? (short)(diff - tbl[k])
+				   : (short)(tbl[k] - diff));
 		if (d < best) {
 			bi = k;
 			best = d;
@@ -988,7 +988,7 @@ RxHdxDataV27(void *modem, short *in, short *out, unsigned short *count)
 	}
 
 	n = DemodDataV27(modem, in, (unsigned short *)(void *)out, *count);
-	DescrambleDataV27(modem, (unsigned short *)(void *)out, n);
+	DescrambleDataV27(modem, (unsigned short *)(void *)out, (short)n);
 	*count = 0;
 
 	r = (short)(QualityDetectV27(modem) != V27_QUALITY_UNRELIABLE ? n : 0);
@@ -1256,7 +1256,7 @@ RxHdxPrtcolV27(void *modem, short *in, short *out, unsigned short *count)
 	unsigned short left;
 
 	n = DemodDataV27(modem, in, (unsigned short *)(void *)out, *count);
-	DescrambleDataV27(modem, (unsigned short *)(void *)out, n);
+	DescrambleDataV27(modem, (unsigned short *)(void *)out, (short)n);
 	*count = 0;
 
 	if (CarrierDetectV27(modem) == 0) {

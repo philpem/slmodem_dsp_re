@@ -50,7 +50,7 @@
  },
  {
   "label": "the saturation countdown is half as long",
-  "find": "\t\t\tk->saturation = 0x500 / n * 2;",
+  "find": "\t\t\tk->saturation = (int)(0x500 / n * 2);",
   "replace": "\t\t\tk->saturation = 0x500 / n;",
   "note": "the InitObj round moves and every k->saturation comparison after round 0 shifts by the difference."
  },
@@ -90,7 +90,7 @@
  },
  {
   "label": "the FIR ring wraps to slot 1, not slot 0",
-  "find": "\t\tidx = (short)(idx + 1) < len ? (short)(idx + 1) : 0;\n\t\tdly[idx] = *buf;",
+  "find": "\t\tidx = (short)((short)(idx + 1) < len ? (short)(idx + 1) : 0);\n\t\tdly[idx] = *buf;",
   "replace": "\t\tidx = (short)(idx + 1) < len ? (short)(idx + 1) : 1;\n\t\tdly[idx] = *buf;",
   "note": "wrapping past the end instead (<=) would write dly[len], outside the ring, so the off-by-one is probed from the safe side."
  },
@@ -202,7 +202,7 @@
  },
  {
   "label": "TONE_detect's ring wraps to slot 1, not slot 0",
-  "find": "\t\tidx = (short)(idx + 1) < len ? (short)(idx + 1) : 0;\n\t\tdly[idx] = *buf++;",
+  "find": "\t\tidx = (short)((short)(idx + 1) < len ? (short)(idx + 1) : 0);\n\t\tdly[idx] = *buf++;",
   "replace": "\t\tidx = (short)(idx + 1) < len ? (short)(idx + 1) : 1;\n\t\tdly[idx] = *buf++;"
  },
  {
@@ -232,12 +232,12 @@
  },
  {
   "label": "the residual power is the sum of the squares, not the difference",
-  "find": "\t\t\t(acc * acc - y * y) * (1 - TONE_DETECT_POLE);",
+  "find": "\t\t\t(acc * acc - y * y) * (1 - TONE_DETECT_POLE));",
   "replace": "\t\t\t(acc * acc + y * y) * (1 - TONE_DETECT_POLE);"
  },
  {
   "label": "the total power follows the biquad rather than the FIR",
-  "find": "\t\t\tacc * acc * (1 - TONE_DETECT_POLE);",
+  "find": "\t\t\tacc * acc * (1 - TONE_DETECT_POLE));",
   "replace": "\t\t\ty * y * (1 - TONE_DETECT_POLE);"
  },
  {

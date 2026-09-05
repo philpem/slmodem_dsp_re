@@ -181,8 +181,8 @@ four1(float *data, unsigned long nn, int isign)
 		for (m = 1; m < mmax; m += 2) {
 			for (i = m; i <= n; i += istep) {
 				j = i + mmax;
-				tempr = wr * data[j] - wi * data[j + 1];
-				tempi = wr * data[j + 1] + wi * data[j];
+				tempr = (float)(wr * data[j] - wi * data[j + 1]);
+				tempi = (float)(wr * data[j + 1] + wi * data[j]);
 				data[j] = data[i] - tempr;
 				data[j + 1] = data[i + 1] - tempi;
 				data[i] += tempr;
@@ -236,19 +236,19 @@ realfft(float *data, unsigned long n, int isign)
 		h1i = c1 * (data[i2] - data[i4]);
 		h2r = -c2 * (data[i2] + data[i4]);
 		h2i = c2 * (data[i1] - data[i3]);
-		data[i1] = h1r + wr * h2r - wi * h2i;
-		data[i2] = h1i + wr * h2i + wi * h2r;
-		data[i3] = h1r - wr * h2r + wi * h2i;
-		data[i4] = -h1i + wr * h2i + wi * h2r;
+		data[i1] = (float)(h1r + wr * h2r - wi * h2i);
+		data[i2] = (float)(h1i + wr * h2i + wi * h2r);
+		data[i3] = (float)(h1r - wr * h2r + wi * h2i);
+		data[i4] = (float)(-h1i + wr * h2i + wi * h2r);
 		wr = (wtemp = wr) * wpr - wi * wpi + wr;
 		wi = wi * wpr + wtemp * wpi + wi;
 	}
 	if (isign == 1) {
-		data[1] = (h1r = data[1]) + data[2];
-		data[2] = h1r - data[2];
+		data[1] = (float)((h1r = data[1]) + data[2]);
+		data[2] = (float)(h1r - data[2]);
 	} else {
-		data[1] = c1 * ((h1r = data[1]) + data[2]);
-		data[2] = c1 * (h1r - data[2]);
+		data[1] = (float)(c1 * ((h1r = data[1]) + data[2]));
+		data[2] = (float)(c1 * (h1r - data[2]));
 		four1(data, n >> 1, -1);
 	}
 }

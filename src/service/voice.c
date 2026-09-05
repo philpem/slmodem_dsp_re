@@ -272,9 +272,9 @@ RingDetector_Reset(struct ring_detector *s, struct ring_detector_cfg *c)
 	int athr = thr < 0 ? -thr : thr;
 
 	s->ring_active = 0;
-	s->idle_debounce = athr / (c->fs / 80);
+	s->idle_debounce = (short)(athr / (c->fs / 80));
 	s->fs = c->fs;
-	s->guard_limit = 3 * c->fs / (4 * c->min_freq);
+	s->guard_limit = (short)(3 * c->fs / (4 * c->min_freq));
 	s->min_freq = c->min_freq;
 	s->max_freq = c->max_freq;
 	s->min_on_dur = c->min_on_dur;
@@ -305,9 +305,9 @@ RingDetector_Reset(struct ring_detector *s, struct ring_detector_cfg *c)
 	s->above_run = 0;
 	s->below_run = 0;
 	athr = c->threshold < 0 ? -c->threshold : c->threshold;
-	s->threshold = athr;
-	s->upper_level = athr;
-	s->lower_level = -athr;
+	s->threshold = (short)athr;
+	s->upper_level = (short)athr;
+	s->lower_level = (short)-athr;
 	s->guard_run = 0;
 	s->cycles = 0;
 	s->cross_samples = 0;
@@ -653,12 +653,12 @@ vce_get_sreg(void *modem, unsigned int num)
 			return vi->silence_detect_sensitivity != 0;
 		if (level > VCE_SILENCE_LEVEL_MAX)
 			return VCE_SILENCE_LEVEL_MAX;
-		return level;
+		return (int)level;
 	case SREG_SILENCE_DETECT_DURATION:
-		return vi->silence_detect_period;
+		return (int)vi->silence_detect_period;
 	case SREG_MIC_GAIN:
 	case SREG_LINE_RECORD_GAIN:
-		return vi->rx_gain;
+		return (int)vi->rx_gain;
 	}
 	return 0;
 }
@@ -892,9 +892,9 @@ VOICE_command(void *obj, unsigned int cmd)
 			    "voice: VCE: VOICE_CMD_BEEP, %d %d %d\n",
 			    info->tone1_freq, info->tone2_freq,
 			    info->tone_duration / 10);
-		arg[0] = info->tone1_freq;
-		arg[1] = info->tone2_freq;
-		arg[2] = info->tone_duration / 10;
+		arg[0] = (int)info->tone1_freq;
+		arg[1] = (int)info->tone2_freq;
+		arg[2] = (int)(info->tone_duration / 10);
 		op = VOICE_BEEP_COMMAND;
 		break;
 
@@ -903,7 +903,7 @@ VOICE_command(void *obj, unsigned int cmd)
 			dsplibs_debug_printf(
 			    "voice: VCE: VOICE_CMD_DTMF, %d %d\n",
 			    info->dtmf_symbol, info->tone_duration / 10);
-		arg[0] = info->dtmf_symbol;
+		arg[0] = (int)info->dtmf_symbol;
 		/*
 		 * A duration under 10 ms would round to nothing, so it is
 		 * floored at one unit -- and only the ARGUMENT is floored;
@@ -1021,7 +1021,7 @@ VOICE_process(void *obj, void *in, void *out, int count)
 
 				for (i = 0; i < rlen; i++)
 					v->from_line[i] =
-					    v->lin[i] * VCE_LINE_IN_SCALE;
+					    (float)(v->lin[i] * VCE_LINE_IN_SCALE);
 
 				blkcount = VCE_BLOCK_REF_SAMPLES;
 

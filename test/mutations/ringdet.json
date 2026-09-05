@@ -24,17 +24,17 @@
  },
  {
   "label": "the threshold divider works per 79 samples",
-  "find": "\ts->idle_debounce = athr / (c->fs / 80);",
+  "find": "\ts->idle_debounce = (short)(athr / (c->fs / 80));",
   "replace": "\ts->idle_debounce = athr / (c->fs / 79);"
  },
  {
   "label": "short_38's denominator halves",
-  "find": "\ts->guard_limit = 3 * c->fs / (4 * c->min_freq);",
+  "find": "\ts->guard_limit = (short)(3 * c->fs / (4 * c->min_freq));",
   "replace": "\ts->guard_limit = 3 * c->fs / (2 * c->min_freq);"
  },
  {
   "label": "short_46 forgets its minus",
-  "find": "\ts->lower_level = -athr;",
+  "find": "\ts->lower_level = (short)-athr;",
   "replace": "\ts->lower_level = athr;"
  },
  {

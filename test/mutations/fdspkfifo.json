@@ -54,8 +54,8 @@
  },
  {
   "label": "read does not write the cursor back",
-  "find": "\tf->rd = rd;\n\tf->count -= cnt;\n\treturn cnt;",
-  "replace": "\tf->count -= cnt;\n\treturn cnt;"
+  "find": "\tf->rd = rd;\n\tf->count -= cnt;\n\treturn (short)cnt;",
+  "replace": "\tf->count -= cnt;\n\treturn (short)cnt;"
  },
  {
   "label": "write measures the free room as the whole ring",

@@ -47,12 +47,12 @@
  },
  {
   "label": "Linear2Float loses its gain",
-  "find": "\t\tdst[i] = src[i] * gain;",
+  "find": "\t\tdst[i] = (float)src[i] * gain;",
   "replace": "\t\tdst[i] = src[i] + gain;"
  },
  {
   "label": "the short flavour's mean goes signed",
-  "find": "\tmean = sum / n;",
+  "find": "\tmean = (int)(sum / n);",
   "replace": "\tmean = (int)sum / (int)n;",
   "note": "the two divisions agree until the running sum's top bit is set, which the +/-32768 sample list reaches."
  },
@@ -61,7 +61,7 @@
  },
  {
   "label": "CrossDataLinks scales at 32768 instead of 32000",
-  "find": "\t\tflt_out[i] = lin_in[i] * (1.0f / 32000.0f);",
+  "find": "\t\tflt_out[i] = (float)lin_in[i] * (1.0f / 32000.0f);",
   "replace": "\t\tflt_out[i] = lin_in[i] * (1.0f / 32768.0f);"
  },
  {
@@ -97,7 +97,7 @@
  },
  {
   "label": "GetGain's base scale becomes a float constant",
-  "find": "\t*gain2 = pow(10.0, (double)atten * -0.05 + base) * 0.276;",
+  "find": "\t*gain2 = (float)(pow(10.0, (double)atten * -0.05 + base) * 0.276);",
   "replace": "\t*gain2 = pow(10.0, (double)atten * -0.05 + base) * 0.276f;"
  },
  {
@@ -218,23 +218,23 @@
  },
  {
   "label": "sample: sine and cosine are exchanged",
-  "find": "\t*out = sin(bg->phase1) * bg->gain1 + cos(bg->phase2) * bg->gain2;",
+  "find": "\t*out = (float)(sin(bg->phase1) * bg->gain1 + cos(bg->phase2) * bg->gain2);",
   "replace": "\t*out = cos(bg->phase1) * bg->gain1 + sin(bg->phase2) * bg->gain2;"
  },
  {
   "label": "sample: the two gains are exchanged",
-  "find": "\t*out = sin(bg->phase1) * bg->gain1 + cos(bg->phase2) * bg->gain2;",
+  "find": "\t*out = (float)(sin(bg->phase1) * bg->gain1 + cos(bg->phase2) * bg->gain2);",
   "replace": "\t*out = sin(bg->phase1) * bg->gain2 + cos(bg->phase2) * bg->gain1;"
  },
  {
   "label": "sample: the phase step is the exact 2*pi/8000",
-  "find": "\tbg->phase1 += BEEPGEN_PHASE_STEP * bg->freq1;",
+  "find": "\tbg->phase1 += (float)(BEEPGEN_PHASE_STEP * bg->freq1);",
   "replace": "\tbg->phase1 += 0.0007853981633974483 * bg->freq1;",
   "note": "the object's literal is 0.000785, which is the rounded value and not the exact one; three figures is 0.05% flat at 1633 Hz and the exact constant is a different float in the very first sample."
  },
  {
   "label": "sample: the second phase advances at the first's rate",
-  "find": "\tbg->phase2 += BEEPGEN_PHASE_STEP * bg->freq2;",
+  "find": "\tbg->phase2 += (float)(BEEPGEN_PHASE_STEP * bg->freq2);",
   "replace": "\tbg->phase2 += BEEPGEN_PHASE_STEP * bg->freq1;"
  },
  {
@@ -319,7 +319,7 @@
  },
  {
   "label": "FDSP_DP_Run: the receive scale is 1/32768",
-  "find": "\t\trx_flt[i] = rx_lin[i] * (1.0f / 32000.0f);",
+  "find": "\t\trx_flt[i] = (float)rx_lin[i] * (1.0f / 32000.0f);",
   "replace": "\t\trx_flt[i] = rx_lin[i] * (1.0f / 32768.0f);"
  },
  {

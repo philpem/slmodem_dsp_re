@@ -102,7 +102,7 @@ alaw2linear(unsigned char a_val)
 	a_val ^= 0x55;
 
 	t = (a_val & 0x0f) << 4;
-	seg = ((unsigned)a_val & 0x70) >> 4;
+	seg = (int)(((unsigned)a_val & 0x70) >> 4);
 
 	switch (seg) {
 	case 0:
@@ -159,7 +159,7 @@ ulaw2linear(unsigned char u_val)
 	u_val = (unsigned char)~u_val;
 
 	t = ((u_val & 0x0f) << 3) + PCM_ULAW_BIAS;
-	t <<= ((unsigned)u_val & 0x70) >> 4;
+	t <<= (int)(((unsigned)u_val & 0x70) >> 4);
 
 	return (u_val & 0x80) ? (PCM_ULAW_BIAS - t) : (t - PCM_ULAW_BIAS);
 }

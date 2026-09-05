@@ -375,14 +375,14 @@ bValidateEnergyValue(float *buf, unsigned int n, int *hist,
 	*idxp = (*idxp + 1) % histlen;
 	for (i = 0; i < histlen; i++)
 		sum += hist[i];
-	avg = sum / histlen;
+	avg = (int)(sum / histlen);
 
 	if (avg > 2200) {
 		if (k->saturation == 0) {
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
 				    "Identify High energy\n");
-			k->saturation = 0x500 / n * 2;
+			k->saturation = (int)(0x500 / n * 2);
 		} else {
 			k->saturation--;
 		}
@@ -565,7 +565,7 @@ TONE_create(struct fdsp_tone *t, const struct fdsp_tone_cfg *cfg)
 	 * DOUBLE, and three digits short of the nearest one, which is the
 	 * same habit as MTK_phasor's 6.28318530718 (finding F8780).
 	 */
-	osc.phase = t->freq * 0.0007853981633975;
+	osc.phase = (float)(t->freq * 0.0007853981633975);
 	osc.step = 0.0f;
 	MTK_phasor(&osc);
 	t->phase = 0.0f;
@@ -620,7 +620,7 @@ TONE_create(struct fdsp_tone *t, const struct fdsp_tone_cfg *cfg)
 	biquad = t->ptr_01b4;
 	biquad[1] = 1.0f;
 	biquad[0] = -0.9215999841690063f;
-	biquad[2] = 1.92 * hum.cosine;
+	biquad[2] = (float)(1.92 * hum.cosine);
 	biquad[4] = 1.0f;
 	biquad[3] = -2.0f * hum.cosine;
 	t->ptr_01b8[0] = 0.0f;
@@ -675,9 +675,9 @@ TONE_generate(struct fdsp_tone *t, float *buf, short n)
 		return;
 	}
 	t->elapsed = 0.0f;
-	p = ph.phase + 3.141592653589793;
+	p = (float)(ph.phase + 3.141592653589793);
 	if (p > 6.28318530718)
-		p = p - 6.28318530718;
+		p = (float)(p - 6.28318530718);
 	ph.phase = p;
 	t->phase = ph.phase;
 }
@@ -725,7 +725,7 @@ TONE_detect(struct fdsp_tone *t, float *buf, short n)
 		float w, y;
 		int j;
 
-		idx = (short)(idx + 1) < len ? (short)(idx + 1) : 0;
+		idx = (short)((short)(idx + 1) < len ? (short)(idx + 1) : 0);
 		dly[idx] = *buf++;
 		for (j = idx; j >= 0; j--)
 			acc += *c++ * dly[j];
@@ -738,10 +738,10 @@ TONE_detect(struct fdsp_tone *t, float *buf, short n)
 		t->det_z1 = t->det_z2;
 		t->det_z2 = w;
 
-		e_res = e_res * TONE_DETECT_POLE +
-			(acc * acc - y * y) * (1 - TONE_DETECT_POLE);
-		e_tot = e_tot * TONE_DETECT_POLE +
-			acc * acc * (1 - TONE_DETECT_POLE);
+		e_res = (float)(e_res * TONE_DETECT_POLE +
+			(acc * acc - y * y) * (1 - TONE_DETECT_POLE));
+		e_tot = (float)(e_tot * TONE_DETECT_POLE +
+			acc * acc * (1 - TONE_DETECT_POLE));
 	}
 	t->fir_idx = idx;
 
@@ -775,7 +775,7 @@ TONE_filter(struct fdsp_tone *t, float *buf, short n)
 		float acc = 0.0f;
 		int j;
 
-		idx = (short)(idx + 1) < len ? (short)(idx + 1) : 0;
+		idx = (short)((short)(idx + 1) < len ? (short)(idx + 1) : 0);
 		dly[idx] = *buf;
 		for (j = idx; j >= 0; j--)
 			acc += *c++ * dly[j];

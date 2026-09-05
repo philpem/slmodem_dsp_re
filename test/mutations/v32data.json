@@ -74,8 +74,8 @@
  },
  {
   "label": "the quadrant is stepped once per call rather than once per symbol",
-  "find": "\t\tnext = (short)(widx + 1);\n\t\tquad = (short)((quad + 3) & 3);\n\t\twidx = next < limit ? next : 0;",
-  "replace": "\t\tnext = (short)(widx + 1);\n\t\twidx = next < limit ? next : 0;"
+  "find": "\t\tnext = (short)(widx + 1);\n\t\tquad = (short)((quad + 3) & 3);\n\t\twidx = (short)(next < limit ? next : 0);",
+  "replace": "\t\tnext = (short)(widx + 1);\n\t\twidx = (short)(next < limit ? next : 0);"
  },
  {
   "label": "the quadrant is not written back",
@@ -89,17 +89,17 @@
  },
  {
   "label": "the cursor wraps one short of the ring length",
-  "find": "\t\twidx = next < limit ? next : 0;",
+  "find": "\t\twidx = (short)(next < limit ? next : 0);",
   "replace": "\t\twidx = next < (short)(limit - 1) ? next : 0;"
  },
  {
   "label": "the cursor wraps one past it, so the slot at limit is written",
-  "find": "\t\twidx = next < limit ? next : 0;",
+  "find": "\t\twidx = (short)(next < limit ? next : 0);",
   "replace": "\t\twidx = next <= limit ? next : 0;"
  },
  {
   "label": "the wrap test is unsigned, which agrees everywhere except at the truncation corner",
-  "find": "\t\twidx = next < limit ? next : 0;",
+  "find": "\t\twidx = (short)(next < limit ? next : 0);",
   "replace": "\t\twidx = (unsigned short)next < (unsigned short)limit ? next : 0;"
  },
  {
@@ -109,8 +109,8 @@
  },
  {
   "label": "the cursor advances before the store rather than after it",
-  "find": "\t\tring->buf[widx] = V32_SYMBOL_NOCARRIER;\n\t\tnext = (short)(widx + 1);\n\t\tquad = (short)((quad + 3) & 3);\n\t\twidx = next < limit ? next : 0;",
-  "replace": "\t\tnext = (short)(widx + 1);\n\t\tquad = (short)((quad + 3) & 3);\n\t\twidx = next < limit ? next : 0;\n\t\tring->buf[widx] = V32_SYMBOL_NOCARRIER;"
+  "find": "\t\tring->buf[widx] = V32_SYMBOL_NOCARRIER;\n\t\tnext = (short)(widx + 1);\n\t\tquad = (short)((quad + 3) & 3);\n\t\twidx = (short)(next < limit ? next : 0);",
+  "replace": "\t\tnext = (short)(widx + 1);\n\t\tquad = (short)((quad + 3) & 3);\n\t\twidx = (short)(next < limit ? next : 0);\n\t\tring->buf[widx] = V32_SYMBOL_NOCARRIER;"
  },
  {
   "label": "the cursor is not written back, so a caller filling the ring across calls overwrites the same slots",

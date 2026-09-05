@@ -41,7 +41,7 @@ ModDataB103(struct b103fp *fp, const unsigned short *bits, short *out,
 
 	return (short)(unsigned short)FPM_MRF_filter(&dsp->tx_mrf,
 						     dsp->scratch, out,
-						     nsamples);
+						     (short)nsamples);
 }
 
 /*
@@ -72,7 +72,7 @@ TxNoCarrierB103(struct b103fp *fp, const unsigned short *bits, short *out,
 
 	return (short)(unsigned short)FPM_MRF_filter(&dsp->tx_mrf,
 						     dsp->scratch, out,
-						     nsamples);
+						     (short)nsamples);
 }
 
 /*

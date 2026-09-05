@@ -44,8 +44,8 @@
  },
  {
   "label": "the fmt1 and fmt3 gains are read from each other's parameter",
-  "find": "\tv->gain_fmt1 = query(v->cfg.modem, VOICE_PARAM_RX_GAIN_FMT1)\n\t\t       * VOICE_RX_PARAM_SCALE;",
-  "replace": "\tv->gain_fmt1 = query(v->cfg.modem, VOICE_PARAM_RX_GAIN_FMT3)\n\t\t       * VOICE_RX_PARAM_SCALE;"
+  "find": "\tv->gain_fmt1 = (float)query(v->cfg.modem, VOICE_PARAM_RX_GAIN_FMT1)\n\t\t       * VOICE_RX_PARAM_SCALE;",
+  "replace": "\tv->gain_fmt1 = (float)query(v->cfg.modem, VOICE_PARAM_RX_GAIN_FMT3)\n\t\t       * VOICE_RX_PARAM_SCALE;"
  },
  {
   "label": "the parameter scale is 1/256 rather than 1/128",
@@ -54,7 +54,7 @@
  },
  {
   "label": "the host's answer is read as signed",
-  "find": "\tv->gain_other = query(v->cfg.modem, VOICE_PARAM_RX_GAIN_OTHER)\n\t\t\t* VOICE_RX_PARAM_SCALE;",
+  "find": "\tv->gain_other = (float)query(v->cfg.modem, VOICE_PARAM_RX_GAIN_OTHER)\n\t\t\t* VOICE_RX_PARAM_SCALE;",
   "replace": "\tv->gain_other = (int)query(v->cfg.modem, VOICE_PARAM_RX_GAIN_OTHER)\n\t\t\t* VOICE_RX_PARAM_SCALE;"
  },
  {
@@ -64,12 +64,12 @@
  },
  {
   "label": "the block mean is a sum",
-  "find": "\t\tdc = sum / have;",
+  "find": "\t\tdc = sum / (float)have;",
   "replace": "\t\tdc = sum;"
  },
  {
   "label": "F8790's weights are swapped: 1% of the old estimate, 99% of the new",
-  "find": "\t\t\tdc = dc * VOICE_RX_DC_FOLD + v->dc * VOICE_RX_DC_KEEP;",
+  "find": "\t\t\tdc = (float)(dc * VOICE_RX_DC_FOLD + v->dc * VOICE_RX_DC_KEEP);",
   "replace": "\t\t\tdc = dc * VOICE_RX_DC_KEEP + v->dc * VOICE_RX_DC_FOLD;"
  },
  {
@@ -124,7 +124,7 @@
  },
  {
   "label": "the 16-bit arm converts into the caller's buffer",
-  "find": "\t\t\tfor (i = 0; i < *countp; i++)\n\t\t\t\tv->flt[i] = rx_lin[i] * gain;",
+  "find": "\t\t\tfor (i = 0; i < *countp; i++)\n\t\t\t\tv->flt[i] = (float)rx_lin[i] * gain;",
   "replace": "\t\t\tfor (i = 0; i < *countp; i++)\n\t\t\t\ttx_flt[i] = rx_lin[i] * gain;"
  },
  {

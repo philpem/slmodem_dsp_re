@@ -86,7 +86,7 @@ FIFO8_read(struct fifo8 *f, unsigned char *dst, unsigned short n)
 
 	f->rd = rd;
 	f->count -= cnt;
-	return cnt;
+	return (short)cnt;
 }
 
 /*
@@ -113,7 +113,7 @@ FIFO8_write(struct fifo8 *f, const unsigned char *src, unsigned short n)
 
 	f->wr = wr;
 	f->count += cnt;
-	return cnt;
+	return (short)cnt;
 }
 
 /* The buffer first, then the object -- the second free is a tail call. */

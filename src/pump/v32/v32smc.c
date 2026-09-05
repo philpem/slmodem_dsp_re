@@ -127,7 +127,7 @@ ring_advance(short widx, short limit)
 {
 	short next = (short)(widx + 1);
 
-	return (next < limit) ? next : 0;
+	return (short)((next < limit) ? next : 0);
 }
 
 void

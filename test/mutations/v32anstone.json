@@ -76,23 +76,23 @@
  },
  {
   "label": "the generator is taken from the word below it",
-  "find": "\t\tFPM_TONE_generate(FIELD_TONE(ctx, V32ANS_TONE), out, count);",
+  "find": "\t\tFPM_TONE_generate(FIELD_TONE(ctx, V32ANS_TONE), out, (short)count);",
   "replace": "\t\tFPM_TONE_generate(FIELD_TONE(ctx, V32ANS_TONE - 4), out, count);"
  },
  {
   "label": "the generator is given a block one sample short",
-  "find": "\t\tFPM_TONE_generate(FIELD_TONE(ctx, V32ANS_TONE), out, count);",
+  "find": "\t\tFPM_TONE_generate(FIELD_TONE(ctx, V32ANS_TONE), out, (short)count);",
   "replace": "\t\tFPM_TONE_generate(FIELD_TONE(ctx, V32ANS_TONE), out, count - 1);"
  },
  {
   "label": "the generator is not run at all, so the tone phase emits whatever was in the buffer",
-  "find": "\t\tFPM_TONE_generate(FIELD_TONE(ctx, V32ANS_TONE), out, count);\n\n",
+  "find": "\t\tFPM_TONE_generate(FIELD_TONE(ctx, V32ANS_TONE), out, (short)count);\n\n",
   "replace": "\n"
  },
  {
   "label": "the silence phase runs the generator first and then zeroes over it, which no output comparison can see",
   "find": "\t\tint i;\n\n\t\tfor (i = 0; i < count; i++)\n\t\t\tout[i] = 0;",
-  "replace": "\t\tint i;\n\n\t\tFPM_TONE_generate(FIELD_TONE(ctx, V32ANS_TONE), out, count);\n\t\tfor (i = 0; i < count; i++)\n\t\t\tout[i] = 0;"
+  "replace": "\t\tint i;\n\n\t\tFPM_TONE_generate(FIELD_TONE(ctx, V32ANS_TONE), out, (short)count);\n\t\tfor (i = 0; i < count; i++)\n\t\t\tout[i] = 0;"
  },
  {
   "label": "the silence loop writes one sample too many",

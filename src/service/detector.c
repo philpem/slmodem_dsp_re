@@ -177,7 +177,7 @@ detector_create(struct detector *d, void *modem, detector_sreg_fn get_sreg)
 	 */
 	if (get_sreg != 0)
 		d->dialtone_detect_delay =
-		    get_sreg(modem, SREG_VOICE_DIALTONE_DETECT_DELAY) * 50 / 4;
+		    (int)(get_sreg(modem, SREG_VOICE_DIALTONE_DETECT_DELAY) * 50 / 4);
 	else
 		d->dialtone_detect_delay = 0;
 
@@ -222,7 +222,7 @@ detector_progress(struct detector *d, float *samples, short count,
 		 * (`lea 0x2(%edx),%eax; cmp $0x1,%ax; jbe` at 0xad8bc).
 		 */
 		if (r != DTMF_NOT_YET && r != DTMF_NO_DIGIT) {
-			short c = (r < 0 || r > 15) ? -1 : lookup_table[r];
+			short c = (short)((r < 0 || r > 15) ? -1 : lookup_table[r]);
 
 			if (c < 0) {
 				/* Prints the INDEX, not the character. */

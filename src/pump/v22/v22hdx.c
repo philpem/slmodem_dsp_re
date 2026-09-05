@@ -308,9 +308,9 @@ v22_org_rmloop2(struct v22fp *fp, unsigned short *txdata, short *txout,
 
 		*rxcount = DemodDataV22(fp, rxin, rxsym, *rxcount);
 		if (*rxcount != 0)
-			fp->hdx->r08 += Detect_Rmloop2_ACK(
+			fp->hdx->r08 = (short)(fp->hdx->r08 + Detect_Rmloop2_ACK(
 				rxsym, (const unsigned short *)rxcount,
-				fp->params.bps2);
+				fp->params.bps2));
 
 		RxClampV22(fp, rxin, (short *)rxsym, (short *)rxcount);
 		fp->hdx->connect_substate = 1;
@@ -331,7 +331,7 @@ v22_org_rmloop2(struct v22fp *fp, unsigned short *txdata, short *txout,
 			ack = (short)Detect_Rmloop2_ACK(
 				rxsym, (const unsigned short *)rxcount,
 				fp->params.bps2);
-			fp->hdx->r08 += ack;
+			fp->hdx->r08 = (short)(fp->hdx->r08 + ack);
 		}
 
 		RxClampV22(fp, rxin, (short *)rxsym, (short *)rxcount);
@@ -378,10 +378,10 @@ v22_org_rmloop2(struct v22fp *fp, unsigned short *txdata, short *txout,
 			}
 			DescrambleDataV22(fp, rxsym, *rxcount);
 		}
-		fp->hdx->r08 += Detect_1s(rxsym,
+		fp->hdx->r08 = (short)(fp->hdx->r08 + Detect_1s(rxsym,
 					  (const unsigned short *)rxcount,
 					  fp->params.bps2,
-					  V22_RMLOOP2_ONES_Q15);
+					  V22_RMLOOP2_ONES_Q15));
 
 		RxClampV22(fp, rxin, (short *)rxsym, (short *)rxcount);
 		if ((unsigned short)fp->hdx->r08 > V22_RMLOOP2_PATTERN_MS) {

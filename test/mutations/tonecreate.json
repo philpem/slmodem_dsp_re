@@ -42,7 +42,7 @@
  },
  {
   "label": "the phase scale is 2*pi/4000 rather than 2*pi/8000",
-  "find": "\tosc.phase = t->freq * 0.0007853981633975;",
+  "find": "\tosc.phase = (float)(t->freq * 0.0007853981633975);",
   "replace": "\tosc.phase = t->freq * 0.001570796326795;"
  },
  {
@@ -127,7 +127,7 @@
  },
  {
   "label": "the notch's feedback gain is 2 rather than 2*0.96",
-  "find": "\tbiquad[2] = 1.92 * hum.cosine;",
+  "find": "\tbiquad[2] = (float)(1.92 * hum.cosine);",
   "replace": "\tbiquad[2] = 2.0 * hum.cosine;"
  },
  {

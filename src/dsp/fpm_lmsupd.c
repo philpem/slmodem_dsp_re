@@ -167,7 +167,7 @@ FPM_block_update(short *coeff, short taps, const short *hist, short widx,
 		short j;
 
 		for (j = 0; j < count; j++) {
-			short idx = pos < 0 ? (short)(pos + hlen) : pos;
+			short idx = (short)(pos < 0 ? (short)(pos + hlen) : pos);
 
 			acc = (short)(acc + x[j] * hist[idx]);
 			pos = (short)(pos - step);

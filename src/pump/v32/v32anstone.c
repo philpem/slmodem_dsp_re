@@ -44,7 +44,7 @@ GenerateAnsTone(void *ctx, short *out, int count)
 	int elapsed;
 
 	if (phase == V32ANS_PHASE_TONE) {
-		FPM_TONE_generate(FIELD_TONE(ctx, V32ANS_TONE), out, count);
+		FPM_TONE_generate(FIELD_TONE(ctx, V32ANS_TONE), out, (short)count);
 
 		elapsed = FIELD_I(ctx, V32ANS_ELAPSED) + count;
 		if (elapsed >= FIELD_I(ctx, V32ANS_TONE_LEN)) {
