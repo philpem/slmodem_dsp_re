@@ -115922,3 +115922,51 @@ still serial across all ~90 binaries even though compilation already
 parallelizes under `J` -- parallelizing execution too would let total
 wall time approach the slowest single test rather than their sum, a
 general win independent of this specific fix. (2026-09-05)
+
+## F10157. `VPCMXF_Create` converted from the `asm()` device to genuine placement `new`, grade 0 EXACT unchanged, proving F10155's mechanism end-to-end
+
+First real conversion of the 50 `asm("_ZN...")` sites F10155 identified,
+picked because `VPCMXF_Create` is the one site F1340 called out as
+control-flow-sensitive (the object's null test is after construction, not
+before) rather than merely instruction-count-sensitive -- the strongest
+possible proof case.
+
+`include/dsplib/sysdep.h` now declares the shared, non-throw placement
+`operator new`/`operator delete` pair (inline, so it emits no symbol and
+does not disturb the C++-runtime-free link line), with an explicit warning
+against ever adding `throw()` to match the real `<new>` header -- that is
+exactly the specification that would reintroduce the null check F10155
+proved unnecessary. `src/pump/v90/VPcmXfCreate.cpp`'s `vpcmxf_modem_ctor`
+asm-label free function is gone; the call site is now `new (self)
+VPcmFloModem(...)`.
+
+**A real ODR collision surfaced and was fixed.** Two test files
+(`t_floatiirfree.cpp`, `t_v90p3ddec.cpp`) already carried their own local
+copy of this exact placement `operator new`, predating F10155, for their
+own test-harness needs. `t_v90p3ddec.cpp` collides the moment anything in
+its translation unit pulls in `sysdep.h` transitively (which
+`V90Phase3Demodulator.h` now does, once other conversions land) --
+`redefinition of 'void* operator new(size_t, void*)'` under GCC 3.4.2.
+Fixed by removing both files' local declarations in favour of including
+`sysdep.h`, the same non-throw inline declaration either way. **This
+collision will recur** for any other test file with its own local
+placement-new declaration as more of the 50 `asm()` sites convert and pull
+more headers into more test translation units -- check for it explicitly,
+same grep as here: `grep -rl 'operator new(size_t' test/unit/*.cpp`.
+
+**One mutation anchor needed updating** (`test/mutations/vpcmxfcreate.json`,
+"the sample count is the duration, unconverted") since its `find`/`replace`
+text depended on the exact old call-site text; re-anchored to the new
+`new (self) VPcmFloModem(...)` text, same semantic mutation (swap
+`maxDataBuffer` for the unconverted `durationMs`), verified with
+`anchorcheck.py`.
+
+**Verification.** Host build: `t_vpcmctor`/`t_vpcmrun`/`t_vpcmdp`/
+`t_vpcmqcline`/`t_vpcmrunpcm` all PASS, including `vpcm_create against the
+blob's: the root, the runtime block and the allocator` at 51,123 checks --
+the closest thing to a full-object memory-layout comparison this tree has.
+Real period compiler: `make period` 374 passed, 0 failed. `byteident.py
+--why VPCMXF_Create`: grade 0 EXACT, grade 1 ACCEPT -- unchanged from
+before the conversion, confirming the object code is identical byte for
+byte either way. `make byteident-ratchet`: unchanged at 736/1852 EXACT
+(39.7%). (2026-09-05)
