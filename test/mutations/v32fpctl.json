@@ -279,7 +279,7 @@
  },
  {
   "label": "the turnaround surplus is not clamped at zero",
-  "find": "\treturn left < 0 ? 0 : left;",
+  "find": "\treturn (short)(left < 0 ? 0 : left);",
   "replace": "\treturn left;"
  },
  {

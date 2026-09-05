@@ -27,13 +27,13 @@
  },
  {
   "label": "block_update's circular wrap is a modulo rather than one conditional add",
-  "find": "\t\t\tshort idx = pos < 0 ? (short)(pos + hlen) : pos;",
+  "find": "\t\t\tshort idx = (short)(pos < 0 ? (short)(pos + hlen) : pos);",
   "replace": "\t\t\tshort idx = (short)(((pos % hlen) + hlen) % hlen);"
  },
  {
   "label": "block_update accumulates in 32 bits instead of re-truncating each iteration",
-  "find": "\t\tshort acc = 0;\n\t\tshort pos = (short)(widx - i);\n\t\tshort j;\n\n\t\tfor (j = 0; j < count; j++) {\n\t\t\tshort idx = pos < 0 ? (short)(pos + hlen) : pos;\n\n\t\t\tacc = (short)(acc + x[j] * hist[idx]);",
-  "replace": "\t\tint acc = 0;\n\t\tshort pos = (short)(widx - i);\n\t\tshort j;\n\n\t\tfor (j = 0; j < count; j++) {\n\t\t\tshort idx = pos < 0 ? (short)(pos + hlen) : pos;\n\n\t\t\tacc = acc + x[j] * hist[idx];",
+  "find": "\t\tshort acc = 0;\n\t\tshort pos = (short)(widx - i);\n\t\tshort j;\n\n\t\tfor (j = 0; j < count; j++) {\n\t\t\tshort idx = (short)(pos < 0 ? (short)(pos + hlen) : pos);\n\n\t\t\tacc = (short)(acc + x[j] * hist[idx]);",
+  "replace": "\t\tint acc = 0;\n\t\tshort pos = (short)(widx - i);\n\t\tshort j;\n\n\t\tfor (j = 0; j < count; j++) {\n\t\t\tshort idx = (short)(pos < 0 ? (short)(pos + hlen) : pos);\n\n\t\t\tacc = acc + x[j] * hist[idx];",
   "equivalent": true,
   "why": "PROVED UNOBSERVABLE, AND THE PROOF IS SHORT.  By induction the two accumulators are congruent modulo 65536 at every step: the 16-bit one is trunc16(acc + p) and the wide one is acc + p, and trunc16 is the identity modulo 65536.  Everything downstream is linear over that modulus -- `acc` is used once, in `(short)(coeff[i] + gain * acc)` -- so gain*acc agrees modulo 65536 too and the stored coefficient is bit-identical for every input.  No fixture can separate them, and `t_fpm_lmsupd`'s `acc_trunc_seen` guard, which does fire, only proves the truncation HAPPENS and not that it MATTERS.  So the 16-bit accumulator is settled by the object's `movswl %dx,%esi` at 0x0abdbd and by nothing this tier can do.  Recorded rather than deleted so the negative result is not re-derived; it expires if an instruction-level observable appears (tiers.md, F651).  This is the SECOND equivalent of exactly this shape found in one pass -- see fpmiirblock's `the section output is not narrowed`."
  },

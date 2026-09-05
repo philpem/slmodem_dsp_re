@@ -39,18 +39,18 @@
  },
  {
   "label": "S83 answers the sensitivity instead of the period",
-  "find": "\t\treturn vi->silence_detect_period;",
+  "find": "\t\treturn (int)vi->silence_detect_period;",
   "replace": "\t\treturn vi->silence_detect_sensitivity;"
  },
  {
   "label": "the two gain registers answer tx_gain",
-  "find": "\t\treturn vi->rx_gain;",
+  "find": "\t\treturn (int)vi->rx_gain;",
   "replace": "\t\treturn vi->tx_gain;"
  },
  {
   "label": "S139 falls through to the default answer",
-  "find": "\tcase SREG_MIC_GAIN:\n\tcase SREG_LINE_RECORD_GAIN:\n\t\treturn vi->rx_gain;",
-  "replace": "\tcase SREG_MIC_GAIN:\n\t\treturn vi->rx_gain;"
+  "find": "\tcase SREG_MIC_GAIN:\n\tcase SREG_LINE_RECORD_GAIN:\n\t\treturn (int)vi->rx_gain;",
+  "replace": "\tcase SREG_MIC_GAIN:\n\t\treturn (int)vi->rx_gain;"
  },
  {
   "label": "an unknown register answers 1",

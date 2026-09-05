@@ -170,7 +170,7 @@ FPM_FSE_receive(struct fpm_fse *state, const short *in, unsigned short *out,
 	short taps = state->cfg.taps;
 	short clk_mod = state->cfg.clk_mod;
 	short clk_inc = state->cfg.clk_inc;
-	short left = count;
+	short left = (short)count;
 	/*
 	 * NEITHER IS INITIALISED, and that is measured: the object's prologue
 	 * has no zero store for either.  `theta` is written by `FPM_atan`

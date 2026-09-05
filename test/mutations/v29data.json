@@ -34,22 +34,22 @@
  },
  {
   "label": "the cursor advances before the store rather than after it",
-  "find": "\t\tring->i[widx] = 0;\n\t\tring->q[widx] = 0;\n\t\tnext = (short)(widx + 1);\n\t\twidx = next < len ? next : 0;",
-  "replace": "\t\tnext = (short)(widx + 1);\n\t\twidx = next < len ? next : 0;\n\t\tring->i[widx] = 0;\n\t\tring->q[widx] = 0;"
+  "find": "\t\tring->i[widx] = 0;\n\t\tring->q[widx] = 0;\n\t\tnext = (short)(widx + 1);\n\t\twidx = (short)(next < len ? next : 0);",
+  "replace": "\t\tnext = (short)(widx + 1);\n\t\twidx = (short)(next < len ? next : 0);\n\t\tring->i[widx] = 0;\n\t\tring->q[widx] = 0;"
  },
  {
   "label": "the cursor wraps one short of the ring length",
-  "find": "\t\twidx = next < len ? next : 0;",
+  "find": "\t\twidx = (short)(next < len ? next : 0);",
   "replace": "\t\twidx = next < (short)(len - 1) ? next : 0;"
  },
  {
   "label": "the cursor wraps one past it, so the slot at len is written",
-  "find": "\t\twidx = next < len ? next : 0;",
+  "find": "\t\twidx = (short)(next < len ? next : 0);",
   "replace": "\t\twidx = next <= len ? next : 0;"
  },
  {
   "label": "the wrap test is unsigned, which agrees everywhere except at the truncation corner",
-  "find": "\t\twidx = next < len ? next : 0;",
+  "find": "\t\twidx = (short)(next < len ? next : 0);",
   "replace": "\t\twidx = (unsigned short)next < (unsigned short)len ? next : 0;"
  },
  {

@@ -101,7 +101,7 @@ TxNoCarrierV17(void *modem, const unsigned short *data, short *out,
 					(const void *)(prm +
 						       V17TXP_NOCARRIER_SYM);
 			next = (short)(widx + 1);
-			widx = next < len ? next : 0;
+			widx = (short)(next < len ? next : 0);
 		}
 	}
 

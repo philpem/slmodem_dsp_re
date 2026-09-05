@@ -199,7 +199,7 @@ dcr_process(struct dcr *dcr, short *buf, int len)
 
 	if (dcr->flags & DCR_SUBTRACT)
 		for (i = 0; i < len; i++)
-			buf[i] -= dcr->dc_level;
+			buf[i] = (short)(buf[i] - dcr->dc_level);
 
 	return over;
 }

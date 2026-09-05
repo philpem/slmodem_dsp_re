@@ -79,12 +79,12 @@
  },
  {
   "label": "the mean accumulates the raw byte rather than the scaled one",
-  "find": "\t\t\tsum += v->stage[k] * VOICE_TX_BYTE_SCALE;",
+  "find": "\t\t\tsum += (float)v->stage[k] * VOICE_TX_BYTE_SCALE;",
   "replace": "\t\t\tsum += v->stage[k];"
  },
  {
   "label": "the mean is taken over the requested length, not the length read",
-  "find": "\t\tmean = sum / (int)n;",
+  "find": "\t\tmean = sum / (float)(int)n;",
   "replace": "\t\tmean = sum / (int)nread;"
  },
  {
@@ -94,13 +94,13 @@
  },
  {
   "label": "the linear arm adds the mean instead of removing it",
-  "find": "\t\t\t\tflt[k] = v->stage[k] - offset;",
+  "find": "\t\t\t\tflt[k] = (float)v->stage[k] - offset;",
   "replace": "\t\t\t\tflt[k] = v->stage[k] + offset;"
  },
  {
   "label": "the float arm adds the mean instead of removing it",
-  "find": "\t\t\t\tflt[k] = v->stage[k] * VOICE_TX_BYTE_SCALE\n\t\t\t\t\t - mean;",
-  "replace": "\t\t\t\tflt[k] = v->stage[k] * VOICE_TX_BYTE_SCALE\n\t\t\t\t\t + mean;"
+  "find": "\t\t\t\tflt[k] = (float)v->stage[k] * VOICE_TX_BYTE_SCALE\n\t\t\t\t\t - mean;",
+  "replace": "\t\t\t\tflt[k] = (float)v->stage[k] * VOICE_TX_BYTE_SCALE\n\t\t\t\t\t + mean;"
  },
  {
   "label": "the output scale is chosen on 4 bits per sample rather than 8",

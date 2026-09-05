@@ -125,7 +125,7 @@ V22_PPS_filter(struct v22_pps *state, struct fpm_smc_ring *src, short *out,
 
 			remaining -= need;
 			rd++;
-			rd = (rd < size) ? rd : 0;
+			rd = (short)((rd < size) ? rd : 0);
 
 			widx++;
 			if (widx > V22_PPS_HISTORY - 1) {
@@ -165,7 +165,7 @@ V22_PPS_filter(struct v22_pps *state, struct fpm_smc_ring *src, short *out,
 		*out++ = (short)(d << 2);
 		produced++;
 
-		phase += state->cfg.step + V22_PPS_STEP;
+		phase = (short)(phase + state->cfg.step + V22_PPS_STEP);
 		need = 0;
 		if (phase > V22_PPS_PHASES - 1) {
 			phase -= V22_PPS_PHASES;
@@ -177,7 +177,7 @@ V22_PPS_filter(struct v22_pps *state, struct fpm_smc_ring *src, short *out,
 	state->phase = phase;
 	state->widx = widx;
 	src->ridx = rd;
-	return produced;
+	return (short)produced;
 }
 
 /*

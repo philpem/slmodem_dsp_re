@@ -192,7 +192,7 @@ v23FP_tx_progress(struct v23tx *tx, short *out, int count, const int *bits,
 		}
 
 		bit = tx->resume ? tx->held : *bits;
-		FPM_TONE_set_freq(tx->tone, bit ? tx->mark : tx->space);
+		FPM_TONE_set_freq(tx->tone, (short)(bit ? tx->mark : tx->space));
 		count--;
 		FPM_TONE_generate_demod(tx->tone, out, 1);
 		out++;

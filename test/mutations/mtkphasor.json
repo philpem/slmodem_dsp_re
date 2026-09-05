@@ -9,7 +9,7 @@
  },
  {
   "label": "the correction adds the float 2*pi rather than the double",
-  "find": "\t\tx = x + 6.28318530718;",
+  "find": "\t\tx = (float)(x + 6.28318530718);",
   "replace": "\t\tx = x + 6.28318530718f;"
  },
  {
@@ -22,7 +22,7 @@
  },
  {
   "label": "the scale is 256/pi rather than 512/pi",
-  "find": "\ty = x * 162.97466172610083;",
+  "find": "\ty = (float)(x * 162.97466172610083);",
   "replace": "\ty = x * 81.487330863050415;"
  },
  {
@@ -40,7 +40,7 @@
  },
  {
   "label": "the fraction is taken the other way round",
-  "find": "\tfrac = y - n;",
+  "find": "\tfrac = y - (float)n;",
   "replace": "\tfrac = n - y;"
  },
  {
@@ -98,13 +98,13 @@
  },
  {
   "label": "the wrap adds 2*pi rather than subtracting it",
-  "find": "\t\ts = s - 6.28318530718;",
+  "find": "\t\ts = (float)(s - 6.28318530718);",
   "replace": "\t\ts = s + 6.28318530718;"
  },
  {
   "label": "the advanced phase is not stored",
-  "find": "\t\ts = s - 6.28318530718;\n\tp->phase = s;",
-  "replace": "\t\ts = s - 6.28318530718;"
+  "find": "\t\ts = (float)(s - 6.28318530718);\n\tp->phase = s;",
+  "replace": "\t\ts = (float)(s - 6.28318530718);"
  },
  {
   "note": "NOT here: collapsing the two statements per output into one.  The object applies the sign to the value still in the register -- `fsts` stores the interpolation, `fmuls` scales the 80-bit copy, `fstps` stores that -- which is why the reconstruction is two statements.  Under -mfpmath=387, which is what BOTH builds here use, GCC keeps the 80-bit value for the one-statement spelling too, so the differential tier cannot separate them and the mutant reads NOT CAUGHT while modelling nothing.  It is a codegen claim and belongs to `compare.py`."

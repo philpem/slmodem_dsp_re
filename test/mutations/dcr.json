@@ -104,12 +104,12 @@
  },
  {
   "label": "the correction clamps to the rails instead of wrapping",
-  "find": "\t\tfor (i = 0; i < len; i++)\n\t\t\tbuf[i] -= dcr->dc_level;",
+  "find": "\t\tfor (i = 0; i < len; i++)\n\t\t\tbuf[i] = (short)(buf[i] - dcr->dc_level);",
   "replace": "\t\tfor (i = 0; i < len; i++) {\n\t\t\tint v = buf[i] - dcr->dc_level;\n\t\t\tbuf[i] = (short)(v > 32767 ? 32767\n\t\t\t\t       : v < -32768 ? -32768 : v);\n\t\t}"
  },
  {
   "label": "the correction adds the offset instead of removing it",
-  "find": "\t\t\tbuf[i] -= dcr->dc_level;",
+  "find": "\t\t\tbuf[i] = (short)(buf[i] - dcr->dc_level);",
   "replace": "\t\t\tbuf[i] += dcr->dc_level;"
  },
  {

@@ -348,7 +348,7 @@ dtmf_progress(struct dtmf *d, const float *samples, short count, short mode)
 			result = digit;
 	}
 
-	return result;
+	return (short)result;
 }
 
 /* One store and no read-back; nothing in the object clears it again. */
