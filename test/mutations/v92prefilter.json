@@ -5,23 +5,23 @@
  },
  {
   "label": "the FIR gets one more sample of slack",
-  "find": "\tv92prefilter_floatfir_ctor(f, nTaps, 0, V92PREFILTER_BLOCK);",
-  "replace": "\tv92prefilter_floatfir_ctor(f, nTaps, 0, V92PREFILTER_BLOCK + 1);"
+  "find": "\tnew (f) FloatFIR(nTaps, 0, V92PREFILTER_BLOCK);",
+  "replace": "\tnew (f) FloatFIR(nTaps, 0, V92PREFILTER_BLOCK + 1);"
  },
  {
   "label": "the IIR gets one fewer sample of slack",
-  "find": "\tv92prefilter_floatiir_ctor(i, nTaps, 0, V92PREFILTER_BLOCK);",
-  "replace": "\tv92prefilter_floatiir_ctor(i, nTaps, 0, V92PREFILTER_BLOCK - 1);"
+  "find": "\tnew (i) FloatIIR(nTaps, 0, V92PREFILTER_BLOCK);",
+  "replace": "\tnew (i) FloatIIR(nTaps, 0, V92PREFILTER_BLOCK - 1);"
  },
  {
   "label": "the IIR is built with no taps",
-  "find": "\ti = (FloatIIR *)sysdep_malloc(sizeof(FloatIIR));\n\tv92prefilter_floatiir_ctor(i, nTaps, 0, V92PREFILTER_BLOCK);",
-  "replace": "\ti = (FloatIIR *)sysdep_malloc(sizeof(FloatIIR));\n\tv92prefilter_floatiir_ctor(i, 0, 0, V92PREFILTER_BLOCK);"
+  "find": "\ti = (FloatIIR *)sysdep_malloc(sizeof(FloatIIR));\n\tnew (i) FloatIIR(nTaps, 0, V92PREFILTER_BLOCK);",
+  "replace": "\ti = (FloatIIR *)sysdep_malloc(sizeof(FloatIIR));\n\tnew (i) FloatIIR(0, 0, V92PREFILTER_BLOCK);"
  },
  {
   "label": "the two stores are swapped",
-  "find": "\tv92prefilter_floatfir_ctor(f, nTaps, 0, V92PREFILTER_BLOCK);\n\tfir = f;\n\n\ti = (FloatIIR *)sysdep_malloc(sizeof(FloatIIR));\n\tv92prefilter_floatiir_ctor(i, nTaps, 0, V92PREFILTER_BLOCK);\n\tiir = i;",
-  "replace": "\tv92prefilter_floatfir_ctor(f, nTaps, 0, V92PREFILTER_BLOCK);\n\tiir = (FloatIIR *)f;\n\n\ti = (FloatIIR *)sysdep_malloc(sizeof(FloatIIR));\n\tv92prefilter_floatiir_ctor(i, nTaps, 0, V92PREFILTER_BLOCK);\n\tfir = (FloatFIR *)i;"
+  "find": "\tnew (f) FloatFIR(nTaps, 0, V92PREFILTER_BLOCK);\n\tfir = f;\n\n\ti = (FloatIIR *)sysdep_malloc(sizeof(FloatIIR));\n\tnew (i) FloatIIR(nTaps, 0, V92PREFILTER_BLOCK);\n\tiir = i;",
+  "replace": "\tnew (f) FloatFIR(nTaps, 0, V92PREFILTER_BLOCK);\n\tiir = (FloatIIR *)f;\n\n\ti = (FloatIIR *)sysdep_malloc(sizeof(FloatIIR));\n\tnew (i) FloatIIR(nTaps, 0, V92PREFILTER_BLOCK);\n\tfir = (FloatFIR *)i;"
  },
  {
   "label": "the FIR allocation is four bytes larger than the object",
@@ -30,8 +30,8 @@
  },
  {
   "label": "the constructor also clears the word at +0x00",
-  "find": "\tv92prefilter_floatiir_ctor(i, nTaps, 0, V92PREFILTER_BLOCK);\n\tiir = i;\n}",
-  "replace": "\tv92prefilter_floatiir_ctor(i, nTaps, 0, V92PREFILTER_BLOCK);\n\tiir = i;\n\tword_00 = 0;\n}"
+  "find": "\tnew (i) FloatIIR(nTaps, 0, V92PREFILTER_BLOCK);\n\tiir = i;\n}",
+  "replace": "\tnew (i) FloatIIR(nTaps, 0, V92PREFILTER_BLOCK);\n\tiir = i;\n\tword_00 = 0;\n}"
  },
  {
   "label": "the FIR free's null test is dropped",
@@ -52,8 +52,8 @@
   "label": "the second sub-object is a FloatFIR, not a FloatIIR",
   "equivalent": true,
   "why": "The two classes are behaviourally identical -- same layout, same rounding, same allocation, same zero fill, same starting index -- so this changes which constructor symbol is called and nothing an object comparison or an allocation counter can reach. It is recorded here so that the day it IS caught, somebody looks at why: either FloatIIR has diverged from FloatFIR, or a new check in t_v92precoder.cpp has become sensitive to something it should not be.",
-  "find": "\tv92prefilter_floatiir_ctor(i, nTaps, 0, V92PREFILTER_BLOCK);\n\tiir = i;",
-  "replace": "\tv92prefilter_floatfir_ctor(i, nTaps, 0, V92PREFILTER_BLOCK);\n\tiir = i;"
+  "find": "\tnew (i) FloatIIR(nTaps, 0, V92PREFILTER_BLOCK);\n\tiir = i;",
+  "replace": "\tnew (i) FloatFIR(nTaps, 0, V92PREFILTER_BLOCK);\n\tiir = i;"
  },
  {
   "label": "NOTE: and what the second half of this set is for",

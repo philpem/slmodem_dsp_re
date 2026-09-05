@@ -6,16 +6,20 @@
  * it, and the reason the second sub-object is a FloatIIR and not a second
  * FloatFIR -- which is a relocation and not anything a test can see.
  *
- * The sub-objects are built through an asm() label for the reason
- * src/pump/v90/V92Precoder.cpp gives at length: the original almost certainly
- * wrote `new`/`delete` over an allocator hooked to sysdep_malloc, and this
- * build has no <new> to spell that with.  The instruction sequence is the
- * blob's either way.
+ * The sub-objects are built with ordinary placement `new` over an allocator
+ * hooked to sysdep_malloc (finding F10155/F10157): this build is
+ * `-nostdinc++` with no <new>, so `include/dsplib/sysdep.h` declares the
+ * shared non-throw placement `operator new`/`operator delete` pair every
+ * such site in this tree uses.  This file used to reach both constructors
+ * through hand-mangled `asm("_ZN...")` labels on the belief (finding F1340)
+ * that a user-declared placement `operator new` would force a null test the
+ * blob does not have; F10155 retracts that empirically.
  */
 
 #include <stddef.h>
 
 #include "dsplib/V92PreFilter.h"
+#include "dsplib/sysdep.h"
 
 /*
  * THE REPLACEMENT `operator delete`, AND IT IS READ OFF THE OBJECT.  The blob
@@ -55,18 +59,6 @@ inline void operator delete(void *p) { sysdep_free(p); }
  * re-running the SET diff.
  */
 
-extern "C" {
-void *sysdep_malloc(unsigned int size);
-void sysdep_free(void *mem);
-
-void v92prefilter_floatfir_ctor(void *self, unsigned int nTaps, float *coef,
-				unsigned int blockSize)
-	asm("_ZN8FloatFIRC1EjPfj");
-void v92prefilter_floatiir_ctor(void *self, unsigned int ncoeff, float *coeff,
-				unsigned int blockSize)
-	asm("_ZN8FloatIIRC1EjPfj");
-}
-
 #if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
 #define V92PF_OFF(field, off, tag) \
 	typedef char v92pf_off_##tag[ \
@@ -97,11 +89,11 @@ V92PreFilter::V92PreFilter(unsigned int nTaps)
 	FloatIIR *i;
 
 	f = (FloatFIR *)sysdep_malloc(sizeof(FloatFIR));
-	v92prefilter_floatfir_ctor(f, nTaps, 0, V92PREFILTER_BLOCK);
+	new (f) FloatFIR(nTaps, 0, V92PREFILTER_BLOCK);
 	fir = f;
 
 	i = (FloatIIR *)sysdep_malloc(sizeof(FloatIIR));
-	v92prefilter_floatiir_ctor(i, nTaps, 0, V92PREFILTER_BLOCK);
+	new (i) FloatIIR(nTaps, 0, V92PREFILTER_BLOCK);
 	iir = i;
 }
 
