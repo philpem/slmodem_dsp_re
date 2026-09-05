@@ -117340,3 +117340,78 @@ still 736/1852 (39.7%), grade 0-or-1 still 796/1852 (43.0%), `ratchet
 OK` -- unchanged, as expected of a pure identifier substitution plus a
 disambiguating qualifier neither of which the object's own codegen can
 see. (2026-09-05)
+
+## F10179. F10177's two pad-audit leads closed: both rejected, and the rejection reveals a limit on the twin-diff technique itself
+
+Closes the two structural leads F10177 deferred to the pad-audit rather
+than naming, over `V92Phase3Modulator::pad_44` (against
+`V90Phase3Modulator::jdBits`) and `V92Phase4Modulator::pad_10[8]`
+(against `V90Phase4Modulator::nextStateAfterTRN2d`). Neither survives,
+and neither fails on a type or offset technicality the way F10177's and
+F10178's rejections did -- both fail because the twin does not have the
+CONCEPT at all, which is a different and stronger kind of no than "wrong
+type at the right offset."
+
+**`V92Phase3Modulator::pad_44` is not `jdBits`, because this class has no
+Jd anything.** `V90Phase3Modulator::jdBits` is a pointer, set internally
+(`jdBits = jd != NULL ? jd->getBitVector() : NULL;`) from a `V90Jd`
+object this class holds. `V92Phase3Modulator.h` -- read in full, not
+grepped for the one field -- mentions "Jd" nowhere: no member, no
+constructor argument, no state name. Its own header already lists what
+V.92 phase 3 actually generates -- Ru, Ja, Su and TRN1u segments -- and
+Jd (Joint Detection training) is not among them. `V92Modulator`, the
+only external holder of a pointer to this object and the one caller
+this class's own header flagged as unchecked ("`V92Modulator`... was
+not read for this batch"), was checked here: every `phase3Modulator->`
+access in `V92Modulator.cpp` goes through a named method or an
+already-named field (`state`, `eventCode`, `reset`, five `exit*`
+members), never a raw offset write into +0x44/+0x48. The pad region is
+untouched from every direction this batch can see, exactly as its own
+header already said, and stays `pad_44` -- not because of a technicality
+but because the role it would need to hold does not exist in this
+protocol variant.
+
+**`V92Phase4Modulator::pad_10[8]` is not `nextStateAfterTRN2d`, because
+V90Phase4Modulator and V92Phase4Modulator are not exercising the same
+state-machine SHAPE despite the shared class-name suffix.**
+`V90Phase4Modulator`'s own state alphabet is downstream-flavoured
+(`P4M_STATE_TRN2D`, `_SUVD`, `_CPD`, `_RI`/`_RI_NOT` -- "d"-suffixed
+states throughout), and its `nextStateAfterTRN2d` is a stored variable,
+seeded branchlessly from `sessionFlag`
+(`nextStateAfterTRN2d = sessionFlag != 0 ? P4M_STATE_SUVD :
+P4M_STATE_MP;`) well before the transition it feeds fires. Checking
+whether `V92Phase4Modulator` -- explicitly documented in its OWN header
+as "the V.92 phase 4 UPSTREAM symbol source" -- does the equivalent
+transition the same way: `exitTRN2u` (.text+0x17110, 30 bytes) is
+`if (state == 3 && symbolCount != 0) state = 4;` -- a single hardcoded
+literal target, no stored "next state" field feeding it, nothing seeded
+in advance. The upstream and downstream halves of this phase are
+twins in NAME and in some low-level mechanical fields (this technique's
+own `eventCode`/`symbolCount` finds from F10177 are exactly that kind:
+generic bookkeeping that doesn't care which direction the symbols are
+going), but not in higher-level PROTOCOL STATE-MACHINE STRUCTURE, where
+the two directions' actual control flow differs. `pad_10[8]` was
+already correctly declined for REMOVAL under the pad-removal
+workstream's own `offsetof` discipline (F10150: `eventCode` ends
+4-byte-aligned already, so natural alignment would reproduce 0 bytes of
+gap here, not 8 -- a genuine floor, not a compiler artefact) before
+this batch touched it; this finding adds that it is also not a
+NAMING candidate, for an unrelated and stronger reason.
+
+**The generalizable lesson, for the next time this technique is used on
+an upstream/downstream or otherwise direction-split pair of twins**:
+verify the twin actually implements the same PROTOCOL CONCEPT before
+trusting an offset-and-type match, not just the declared type. A scalar
+counter or a per-symbol status code (F10177's `symbolCount`/`eventCode`)
+is generic enough to survive a direction split; a stored state-machine
+transition variable is not, because the two directions' state machines
+are free to be shaped completely differently even when a shared
+ancestor's naming convention makes them look like parallel structures.
+Both of this finding's leads would have been mis-modelled if pursued on
+name-and-offset alone -- exactly the trap F10177's own `sessionFlag`/
+`word_00` rejection first demonstrated, recurring here one level up,
+against the CONCEPT rather than the TYPE.
+
+No source change. `V92Phase3Modulator.h` and `V92Phase4Modulator.h` are
+unchanged; both pad regions keep their existing, already-correct
+documentation. Nothing to gate. (2026-09-05)

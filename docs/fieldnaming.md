@@ -1501,3 +1501,28 @@ of three checks (offset, type, site).
 the weakest of the three checks (offset, type, then the actual site), not
 the strongest, and skipping straight to a rename off the first two would
 have landed a wrong name in this very pass.
+
+**The two structural (pad-audit) leads also closed, both rejected
+(F10179) -- and for a fourth, stronger reason beyond offset, type or
+site.** `V92Phase3Modulator::pad_44` is not `jdBits`: this class has no
+Jd concept anywhere (V.92 phase 3 generates Ru/Ja/Su/TRN1u, not a Jd
+segment), confirmed by reading the whole header rather than grepping
+for one name, and by checking `V92Modulator` -- the one external owner
+this class's own header flagged as unread -- for any raw write into
+the region, finding none. `V92Phase4Modulator::pad_10[8]` is not
+`nextStateAfterTRN2d`: that field is a stored, branchlessly-seeded
+state-transition variable on the DOWNSTREAM-flavoured V90 twin
+(`P4M_STATE_TRN2D`/`_SUVD`/`_CPD` states), and the UPSTREAM V92 twin's
+own equivalent transition (`exitTRN2u`) is a single hardcoded literal
+with no stored variable feeding it at all -- the two directions' state
+machines are shaped differently even where a shared class-name suffix
+suggests parallel structure. Neither pad region was renamed;
+`pad_10[8]` was already correctly declined for REMOVAL under F10150's
+own alignment-gap proof before this batch, and this finding adds that
+it is also not a naming candidate, for an unrelated reason. Generalizes
+to a fourth check beyond offset/type/site for any future twin-diff pair
+that splits by direction (upstream/downstream, transmit/receive): a
+generic bookkeeping field (a counter, a per-symbol status code) can
+survive the split; a stored protocol-state-machine variable often
+cannot, because the two directions' control flow is free to differ even
+when their class names look parallel.
