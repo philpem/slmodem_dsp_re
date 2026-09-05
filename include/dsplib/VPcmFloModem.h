@@ -396,22 +396,37 @@ public:
 	unsigned short bitPointer;
 
 	/*
-	 * +0x173a  Three bytes `enterPhase3` clears in the same run as
-	 * `droppedToV34` and `clr`, and reads/writes for two different
-	 * purposes: `[0]`/`[1]` are the training/data constellation sizes
-	 * `V90Jd::getConstelationSize`/`V92Jd`'s twin hand back, used to tell
-	 * the V.34 interface what was received (`V34XF_IndicateJdReceived`,
-	 * `V34XF_IndicateDilReceived`) and to seed `setNofBitsPhase4` and the
-	 * V.92 modulator's own copies (`v92modem.modulator->byte_0c`/
-	 * `byte_0d`); `[2]` is a one-shot latch -- set when the
-	 * rate-renegotiation arm finds our own request outstanding, cleared
-	 * (swallowing the report rather than acting on it twice) when the far
-	 * end's report of the same event arrives later (finding F7583).
-	 * `[2]` keeps its offset name; `[0]`/`[1]` stay with it rather than
-	 * splitting out, since all three are cleared together by
-	 * `enterPhase3`, `externalReset` and `VPcmXfCreate`.
+	 * +0x173a and +0x173b  The two constellation sizes
+	 * `V90Jd::getConstelationSize`/`V92Jd`'s twin hand back on Jd
+	 * detection: rank-1 evidence, the object's own format string in
+	 * `runPcmModem`'s V.92 arm, `"... Jd Detected: trainConstel = %d,
+	 * rrnConstel =%d\r\n"`, printed from exactly these two bytes in that
+	 * order. Both feed the V.34 interface (`V34XF_IndicateJdReceived`,
+	 * `V34XF_IndicateDilReceived`), `setNofBitsPhase4`, and the V.92
+	 * modulator's own copies (`v92modem.modulator->byte_0c`/`byte_0d`).
+	 * Was `flags_173a[0]`/`[1]`; F7583 and a later pass (see
+	 * docs/findings.md) both read the format string and both declined to
+	 * split the array anyway, on the ground that three functions
+	 * (`enterPhase3`, `externalReset`, `VPcmXfCreate`) clear it as one
+	 * run and splitting was "not this batch's change" -- which this
+	 * field-naming pass is. The split changes no offset and no width:
+	 * three `unsigned char`s in a row lay out identically to
+	 * `unsigned char[3]`, and every clearing site sets each byte
+	 * individually already.
 	 */
-	unsigned char flags_173a[3];
+	unsigned char trainConstel;
+	unsigned char rrnConstel;
+
+	/*
+	 * +0x173c  The third byte of the same run: a one-shot latch, set
+	 * when the rate-renegotiation arm finds our own request outstanding
+	 * and cleared (swallowing the report rather than acting on it twice)
+	 * when the far end's report of the same event arrives later (finding
+	 * F7583). No format string or typed caller names it -- only its
+	 * behaviour is established -- so it keeps a neutral, offset-derived
+	 * name rather than a guessed one (CLAUDE.md, finding 3120's rule).
+	 */
+	unsigned char byte_173c;
 
 	/*
 	 * +0x173d  Non-zero skips the Uinfo lookup through the modem
