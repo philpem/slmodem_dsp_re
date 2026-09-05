@@ -116140,7 +116140,7 @@ that took real per-site tracing to reach is worth exactly as much as a
 retype would have been, and cheaper to get wrong -- recorded here so item 7
 is not re-opened without reading this first. (2026-09-05)
 
-## F10160: asm() placement-new conversion, group A -- 29 more sites, zero regression
+## F10160. asm() placement-new conversion, group A -- 29 more sites, zero regression
 
 Extends F10157's mechanism from the one proof-of-concept site
 (`VPcmXfCreate.cpp`) to 29 more `asm("_ZN...")`-label construct/destroy sites
@@ -116169,7 +116169,7 @@ worktrees), not a defect in this branch -- re-ran clean once space was
 reclaimed. Fourteen `asm("_ZN...")` sites remain, in `V92Precoder.cpp` and
 elsewhere, tracked as Tier 2 item 10 group B. (2026-09-05)
 
-## F10161: v34pcmif.c's RateRenegotiation/HangUp offset chain, named not wrapped
+## F10161. v34pcmif.c's RateRenegotiation/HangUp offset chain, named not wrapped
 
 Tier 2 item 5. `VPcmV34InitiateRateRenegotiation` and
 `VPcmV34InitiateHangUp` walk a three-link raw-offset chain -- `p3548`
@@ -116195,7 +116195,7 @@ caught, 0 not caught, 6 equivalent (all expected, including the
 reordering mutation correctly marked equivalent since the byte store
 and pointer load don't alias). (2026-09-05)
 
-## F10162: V.34 flag-bit naming across the handshake cluster
+## F10162. V.34 flag-bit naming across the handshake cluster
 
 Tier 2 item 6. Replaced bare bit-value literals (`0xa00`, `0x40`,
 `0x1000`, `4`, `5`, etc.) with named macros in `include/dsplib/
@@ -116217,7 +116217,7 @@ unchanged at 736/1852 EXACT (39.7%), ratchet OK; `make check64`,
 `tools/onedef.py`, `tools/refcheck.py`, `tools/anchorcheck.py` all
 clean (228 suites, 9767 mutations, 0 issues). (2026-09-05)
 
-## F10163: 128 documentation-only narrowing/rounding casts across 35 files
+## F10163. 128 documentation-only narrowing/rounding casts across 35 files
 
 Tier 2 item 9. Clang-tidy's `bugprone-narrowing-conversions` and
 `bugprone-incorrect-roundings` flagged 131 in-scope sites; 128 got an
@@ -116254,7 +116254,7 @@ OK; `make check64`, `tools/onedef.py`, `tools/refcheck.py`,
 `tools/anchorcheck.py` all clean (228 suites, 9767 mutations, 0
 issues). (2026-09-05)
 
-## F10164: asm() placement-new conversion, group B -- the last 14 sites, workstream closed
+## F10164. asm() placement-new conversion, group B -- the last 14 sites, workstream closed
 
 Tier 2 item 10 group B, closing out F10155/F10157/F10160's
 conversion of the whole `asm("_ZN...")`-label device. Converts the
