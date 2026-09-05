@@ -117,33 +117,34 @@
  },
  {
   "label": "hangup: leaf code 1 rather than 2",
-  "find": "+ 0x8c) = 2;",
-  "replace": "+ 0x8c) = 1;"
+  "note": "Anchor updated when the chain was named (SESS_DEMOD/DEMOD_CONNEVAL/CONNEVAL_EXTERNAL_DEMAND); same store, same offsets, new spelling.",
+  "find": "+ CONNEVAL_EXTERNAL_DEMAND) = 2;",
+  "replace": "+ CONNEVAL_EXTERNAL_DEMAND) = 1;"
  },
  {
   "label": "reneg: leaf gets a constant 2 rather than req",
-  "find": "+ 0x8c) = req;",
-  "replace": "+ 0x8c) = 2;",
+  "find": "+ CONNEVAL_EXTERNAL_DEMAND) = req;",
+  "replace": "+ CONNEVAL_EXTERNAL_DEMAND) = 2;",
   "fn": "VPcmV34InitiateRateRenegotiation"
  },
  {
   "label": "reneg: PCM arm writes the flag byte too",
-  "find": "\t\tunsigned char *demod = *(unsigned char **)(sess + 0x175c);\n",
-  "replace": "\t\tunsigned char *demod = *(unsigned char **)(sess + 0x175c);\n\n\t\tsess[0x173e] = 1;\n",
+  "find": "\t\tunsigned char *demod = *(unsigned char **)(sess + SESS_DEMOD);\n",
+  "replace": "\t\tunsigned char *demod = *(unsigned char **)(sess + SESS_DEMOD);\n\n\t\tsess[0x173e] = 1;\n",
   "fn": "VPcmV34InitiateRateRenegotiation"
  },
  {
   "label": "reneg: PCM arm falls through instead of returning",
-  "find": "*(int *)(*(unsigned char **)(demod + 0x20c) + 0x8c) = req;\n\t\treturn;",
-  "replace": "*(int *)(*(unsigned char **)(demod + 0x20c) + 0x8c) = req;",
+  "find": "*(int *)(*(unsigned char **)(demod + DEMOD_CONNEVAL)\n\t\t\t + CONNEVAL_EXTERNAL_DEMAND) = req;\n\t\treturn;",
+  "replace": "*(int *)(*(unsigned char **)(demod + DEMOD_CONNEVAL)\n\t\t\t + CONNEVAL_EXTERNAL_DEMAND) = req;",
   "fn": "VPcmV34InitiateRateRenegotiation"
  },
  {
   "label": "hangup: PCM arm order swapped -- flag byte after the pointer load",
-  "find": "\t\tsess[0x173e] = 1;\n\t\tdemod = *(unsigned char **)(sess + 0x175c);",
-  "replace": "\t\tdemod = *(unsigned char **)(sess + 0x175c);\n\t\tsess[0x173e] = 1;",
+  "find": "\t\tsess[0x173e] = 1;\n\t\tdemod = *(unsigned char **)(sess + SESS_DEMOD);",
+  "replace": "\t\tdemod = *(unsigned char **)(sess + SESS_DEMOD);\n\t\tsess[0x173e] = 1;",
   "equivalent": true,
-  "why": "`sess + 0x173e` is a byte in the session and `sess + 0x175c` is a pointer field 30 bytes past it; the store and the load do not alias, so the order between them is not observable."
+  "why": "`sess + 0x173e` is a byte in the session and `sess + SESS_DEMOD` (0x175c) is a pointer field 30 bytes past it; the store and the load do not alias, so the order between them is not observable."
  },
  {
   "label": "hangup: clears rate_now as well",

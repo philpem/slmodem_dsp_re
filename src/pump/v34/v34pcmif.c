@@ -114,6 +114,38 @@
 #define CFG_FLAG51_CLEAR	0x01
 
 /*
+ * The three-link chain `VPcmV34InitiateRateRenegotiation` and
+ * `VPcmV34InitiateHangUp` both walk to hand a request to the V.90 side:
+ * `p3548` (the session, a `VPcmFloModem *`) to its `V90Demodulator` at
+ * +0x175c, to that demodulator's `connectionEvaluator` at +0x20c
+ * (`include/dsplib/V90Demodulator.h`), to `externalDemandCode` at +0x8c of
+ * THAT object (`include/dsplib/V90ConnectionEvaluator.h`, which derives the
+ * name from `evaluateConnection`'s own dispatch on it).
+ *
+ * NAMED HERE, NOT TYPED, AND THAT IS DELIBERATE RATHER THAN LEFT OVER.  Both
+ * classes at the far end are fully reconstructed now, but `p3548` stays
+ * `void *` in `v34fsk.h` because this is a `.c` file and cannot include a
+ * C++ class header, so reaching a real field needs a call across the
+ * boundary -- the same move `v34hshak.c` makes into `V34SetINFO1aBits`.
+ * That move is right where the object ITSELF calls: `V34SetINFO1aBits` is a
+ * real `call` with a relocation.  It is wrong here, because the object is
+ * not calling anything.  `tools/dis.py` on the blob at both use sites --
+ * 0x655e (`VPcmV34InitiateRateRenegotiation`) and 0x6c16
+ * (`VPcmV34InitiateHangUp`) -- shows a plain three- or four-instruction
+ * load/load/store with no `call`, and `build/tc_out/src_pump_v34_v34pcmif.c.o`
+ * already reproduces those exact instructions.  A wrapper function would put
+ * a `call` where the object has none, costing byte identity at a site that
+ * currently has it -- the same reasoning `v34pcmmain.cpp` gives for spelling
+ * the neighbouring `+0x208` (`DEMOD_DESIGNER`) chain the same way up to the
+ * point a real member call is reached.  So the chase stays raw pointer
+ * arithmetic through these three NAMED offsets rather than becoming either a
+ * guessed struct or a function call.
+ */
+#define SESS_DEMOD		0x175c	/* V90Modem::demodulator, a V90Demodulator*  */
+#define DEMOD_CONNEVAL		0x020c	/* V90Demodulator::connectionEvaluator       */
+#define CONNEVAL_EXTERNAL_DEMAND 0x8c	/* V90ConnectionEvaluator::externalDemandCode */
+
+/*
  * ---------------------------------------------------------------------------
  * THE PUBLIC ACCESSOR SURFACE.  Everything below is what the layer above the
  * datapump calls to ask what the modem is doing or to tell it something, and
@@ -202,9 +234,10 @@ VPcmV34InitiateRateRenegotiation(void *objp, int req)
 
 	if ((unsigned)(obj->status - 1) <= 1) {
 		unsigned char *sess = (unsigned char *)obj->p3548;
-		unsigned char *demod = *(unsigned char **)(sess + 0x175c);
+		unsigned char *demod = *(unsigned char **)(sess + SESS_DEMOD);
 
-		*(int *)(*(unsigned char **)(demod + 0x20c) + 0x8c) = req;
+		*(int *)(*(unsigned char **)(demod + DEMOD_CONNEVAL)
+			 + CONNEVAL_EXTERNAL_DEMAND) = req;
 		return;
 	}
 
@@ -273,10 +306,15 @@ VPcmV34InitiateRateRenegotiation(void *objp, int req)
  *
  * WHAT THE CHAIN IS.  `p3548` is the session object; +0x175c of it is the
  * demodulator -- `VPcmV34GetCurrentRxBitRate` passes exactly that field to
- * `V90Demodulator::getBitRate` -- and +0x20c of the demodulator is a
- * sub-object whose +0x8c takes the request code.  None of the three is
- * reconstructed, so the offsets are spelled out rather than dressed in
- * structs that would be guesses.
+ * `V90Demodulator::getBitRate` -- and +0x20c of the demodulator is
+ * `connectionEvaluator`, a `V90ConnectionEvaluator *` whose +0x8c is
+ * `externalDemandCode`.  THIS IS STALE AS OF THE PARAGRAPH BELOW: at the time
+ * it was written none of the three was reconstructed, so the offsets were
+ * spelled out rather than dressed in structs that would be guesses.  All
+ * three now ARE reconstructed (`include/dsplib/V90Demodulator.h`,
+ * `include/dsplib/V90ConnectionEvaluator.h`), and the macro block above this
+ * section is what keeps the chase a pointer walk through named offsets
+ * rather than a guess -- see it for why that is still right.
  */
 
 /*
@@ -317,8 +355,9 @@ VPcmV34InitiateHangUp(void *objp)
 		unsigned char *demod;
 
 		sess[0x173e] = 1;
-		demod = *(unsigned char **)(sess + 0x175c);
-		*(int *)(*(unsigned char **)(demod + 0x20c) + 0x8c) = 2;
+		demod = *(unsigned char **)(sess + SESS_DEMOD);
+		*(int *)(*(unsigned char **)(demod + DEMOD_CONNEVAL)
+			 + CONNEVAL_EXTERNAL_DEMAND) = 2;
 		return;
 	}
 
