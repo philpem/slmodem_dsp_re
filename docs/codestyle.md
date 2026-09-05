@@ -130,17 +130,36 @@ byte-identity IMPROVEMENT opportunity. Promoted to its own item under
 Tier 2 (item 10, below) rather than Tier 1's "add a citation" fix, since
 each site needs its own verification.
 
-## Tier 1 — mechanical, zero byte-identity risk
+## Tier 1 — mechanical, zero byte-identity risk — DONE
 
-1. Join the 790 short-wrapped string-literal pairs to the tree's real
-   79-80 column convention.
+1. **Done, merged.** 613 short-wrapped string-literal pairs joined across
+   63 `src/` files (the 790 estimate undercounted -- real candidate count
+   was ~1357 line-pairs, 613 joined, 613 correctly left wrapped as
+   genuinely over the limit, 105 correctly excluded as brace-delimited
+   initializer entries, not column-wrapped literals). 225 mutation-anchor
+   strings updated across 40 `test/mutations/*.json` files.
 2. ~~Add the missing F1340 citation~~ SUPERSEDED — F1340 is retracted
    (F10155); the whole `asm()` device is being replaced, not documented
    further. See Tier 2 item 10.
-3. Rename `class1tx.c`'s leftover positional params (`word3`/`word4`/
-   `word7`/`word8`) -- confirmed unused, pure rename.
+3. **Done, merged.** `class1tx.c`'s `_tx_scrambled_ones_state`: `word4`
+   -> `src` (class-2 evidence), `word8` -> `tx_data_count` (class-1, the
+   object's own "TxDatCnt" diagnostic string), `word3`/`word7` ->
+   `unused_dst`/`unused_out_count` (confirmed dead in this function
+   specifically). Same "some params named, some left as wordN" pattern
+   found across every sibling in the `class1_state_fn` dispatch family --
+   flagged for a future pass, not fixed here.
 
-Status: launching (items 1 and 3).
+**Bonus, found while chasing Tier 1's verification runs**: `t_v90cdesign`'s
+27-40 minute runtime (F10156) -- three of its own trials were accidentally
+triggering `calcMtoMatchKtarget`'s own documented unbounded-loop hazard.
+Fixed; `make period`'s full ~90-binary suite now runs in 3m42s, not
+27-40+ minutes.
+
+**Master gate, post-merge**: `make period` 374 passed, 0 failed, exit 0.
+`make byteident-ratchet` unchanged at 736/1852 EXACT (39.7%), 796/1852
+grade 0-or-1 (43.0%) -- zero codegen drift across all of Tier 1.
+
+Status: DONE.
 
 ## Tier 2 — three sub-groups, different sequencing
 
