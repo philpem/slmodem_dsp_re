@@ -116139,3 +116139,32 @@ reconfirmed unchanged on this tree before and covering this investigation:
 that took real per-site tracing to reach is worth exactly as much as a
 retype would have been, and cheaper to get wrong -- recorded here so item 7
 is not re-opened without reading this first. (2026-09-05)
+
+## F10160: asm() placement-new conversion, group A -- 29 more sites, zero regression
+
+Extends F10157's mechanism from the one proof-of-concept site
+(`VPcmXfCreate.cpp`) to 29 more `asm("_ZN...")`-label construct/destroy sites
+across `src/pump/v90/V90Demodulator.cpp` (11), `V90ModemCtor.cpp` (7),
+`V92Modulator.cpp` (6) and `V90Modulator.cpp` (5), converting each to genuine
+placement `new (p) T(...)` construction and explicit `p->~T()` destruction
+against the shared `operator new(size_t, void *)`/`operator delete(void *,
+void *)` pair `sysdep.h` now declares (F10155). Five mutation-anchor files
+(`v90demctor.json`, `v90demod.json`, `v90modemctor.json`, `v90modulator.json`,
+`v92mod.json`) needed their `find`/`replace` text updated to the new call
+syntax, same semantic mutations preserved.
+
+No new ODR collision this time (F10157's pattern -- a test file's own local
+placement-new declaration colliding with `sysdep.h`'s once a header pulls it
+in transitively -- was checked for and not present in the two test files that
+already needed the fix; no third file triggered it here).
+
+Verified on the real GCC 3.4.2 period compiler, not the host build: `make
+check64` clean; `tools/onedef.py`, `tools/refcheck.py`, `tools/anchorcheck.py`
+all clean (228 suites, 9767 mutations, 0 issues); `make period` 374 passed, 0
+failed; `make byteident-ratchet` unchanged at 736/1852 EXACT (39.7%), 796/1852
+grade 0-or-1 (43.0%), ratchet OK. An intervening `make tc` failure on an
+unrelated file (`v32fprecr.c.o`) turned out to be host disk exhaustion (the
+volume hit 100% full from build artifacts accumulated in already-merged, idle
+worktrees), not a defect in this branch -- re-ran clean once space was
+reclaimed. Fourteen `asm("_ZN...")` sites remain, in `V92Precoder.cpp` and
+elsewhere, tracked as Tier 2 item 10 group B. (2026-09-05)

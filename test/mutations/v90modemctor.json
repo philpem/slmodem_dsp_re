@@ -35,13 +35,13 @@
   },
   {
     "label": "ctor: the modulator's mapping parameters are the other way round",
-    "find": "\t\t\t      &mappingParams, &mappingParamsAlt,\n\t\t\t      &additionalCPinfo, &cp, &mp, ptr_49b4,",
-    "replace": "\t\t\t      &mappingParamsAlt, &mappingParams,\n\t\t\t      &additionalCPinfo, &cp, &mp, ptr_49b4,"
+    "find": "\t\t\t\t     &mappingParams, &mappingParamsAlt,\n\t\t\t\t     &additionalCPinfo, &cp, &mp, ptr_49b4,",
+    "replace": "\t\t\t\t     &mappingParamsAlt, &mappingParams,\n\t\t\t\t     &additionalCPinfo, &cp, &mp, ptr_49b4,"
   },
   {
     "label": "ctor: the demodulator's mapping parameters are the other way round",
-    "find": "\t\t\t      &mappingParams, &mappingParamsAlt,\n\t\t\t      &additionalCPinfo, &cp, &mp,\n",
-    "replace": "\t\t\t      &mappingParamsAlt, &mappingParams,\n\t\t\t      &additionalCPinfo, &cp, &mp,\n"
+    "find": "\t\t\t\t       &mappingParams, &mappingParamsAlt,\n\t\t\t\t       &additionalCPinfo, &cp, &mp,\n",
+    "replace": "\t\t\t\t       &mappingParamsAlt, &mappingParams,\n\t\t\t\t       &additionalCPinfo, &cp, &mp,\n"
   },
   {
     "label": "ctor: the modulator's CP and MP records are the other way round",
@@ -50,8 +50,8 @@
   },
   {
     "label": "ctor: the demodulator's CP and MP records are the other way round",
-    "find": "\t\t\t      &additionalCPinfo, &cp, &mp,\n",
-    "replace": "\t\t\t      &additionalCPinfo, &mp, &cp,\n"
+    "find": "\t\t\t\t       &additionalCPinfo, &cp, &mp,\n",
+    "replace": "\t\t\t\t       &additionalCPinfo, &mp, &cp,\n"
   },
   {
     "label": "ctor: the modulator gets the additional CP info where the CP goes",
@@ -60,18 +60,18 @@
   },
   {
     "label": "ctor: the modulator gets the V.92 jitter detector first",
-    "find": "\t\tv90m_mod_ctor(p, nofSymbols, phase2Info, jd, jd92, dil,",
-    "replace": "\t\tv90m_mod_ctor(p, nofSymbols, phase2Info, jd92, jd, dil,"
+    "find": "\t\tnew (p) V90Modulator(nofSymbols, phase2Info, jd, jd92, dil,",
+    "replace": "\t\tnew (p) V90Modulator(nofSymbols, phase2Info, jd92, jd, dil,"
   },
   {
     "label": "ctor: the demodulator gets the V.92 jitter detector first",
-    "find": "\t\tv90m_dem_ctor(p, nofSymbols, phase2Info, jd, jd92, dil,",
-    "replace": "\t\tv90m_dem_ctor(p, nofSymbols, phase2Info, jd92, jd, dil,"
+    "find": "\t\tnew (p) V90Demodulator(nofSymbols, phase2Info, jd, jd92, dil,",
+    "replace": "\t\tnew (p) V90Demodulator(nofSymbols, phase2Info, jd92, jd, dil,"
   },
   {
     "label": "ctor: the demodulator's session flag is the symbol count",
-    "find": "\t\t\t      ptr_49b4, compMode, sessionFlag);",
-    "replace": "\t\t\t      ptr_49b4, compMode, nofSymbols);"
+    "find": "\t\t\t\t       ptr_49b4, compMode, sessionFlag);",
+    "replace": "\t\t\t\t       ptr_49b4, compMode, nofSymbols);"
   },
   {
     "label": "ctor: the demodulator's codec type is read from the minimum rate",
@@ -90,13 +90,13 @@
   },
   {
     "label": "ctor: the jitter detector is built from the modem parameters",
-    "find": "\tv90m_jd_ctor(p, ptr_49b4);",
-    "replace": "\tv90m_jd_ctor(p, modemParams);"
+    "find": "\tnew (p) V90Jd(ptr_49b4);",
+    "replace": "\tnew (p) V90Jd(modemParams);"
   },
   {
     "label": "ctor: the V.92 jitter detector is built from the phase 2 record",
-    "find": "\tv90m_jd92_ctor(p, ptr_49b4);",
-    "replace": "\tv90m_jd92_ctor(p, phase2Info);"
+    "find": "\tnew (p) V92Jd(ptr_49b4);",
+    "replace": "\tnew (p) V92Jd(phase2Info);"
   },
   {
     "label": "ctor: the session flag stored is the symbol count",
@@ -152,7 +152,7 @@
   },
   {
     "label": "dtor: the demodulator is freed without being destroyed",
-    "find": "\t\tv90m_dem_dtor(demodulator);\n\t\tsysdep_free(demodulator);",
+    "find": "\t\tdemodulator->~V90Demodulator();\n\t\tsysdep_free(demodulator);",
     "replace": "\t\tsysdep_free(demodulator);"
   },
   {

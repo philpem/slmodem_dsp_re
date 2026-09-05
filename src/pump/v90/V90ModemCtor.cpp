@@ -94,45 +94,18 @@ typedef char v90m_dem_size[(sizeof(V90Demodulator) == 0x298) ? 1 : -1];
 #endif
 
 /*
- * The two sub-object constructors and the demodulator's destructor, by the
- * names the relocations carry.  `void *` throughout, which is
- * src/pump/v90/V92Modem.cpp's convention for exactly this: the call is a
- * relocation against a mangled name and nothing here needs the argument types
- * checked twice.
- *
- * AND THE CONSTRUCTORS ARE REACHED THIS WAY RATHER THAN BY PLACEMENT `new`,
- * which is the whole V.92 chain's reason and applies unchanged here:
- * `sysdep_malloc(n)` followed by the constructor with NO null test between
- * them is `new` over an INLINE `operator new`, this build is `-nostdinc++`
- * with no <new>, and a user-declared placement form makes GCC emit a null
- * test the blob does not have.
+ * The six nested constructors used to be reached by their mangled names,
+ * `void *` throughout, on the belief (finding F1340) that a user-declared
+ * placement `operator new` -- needed here since this build is `-nostdinc++`
+ * with no `<new>` -- would force GCC to emit a null test the blob does not
+ * have between `sysdep_malloc` and the constructor call.  Finding F10155
+ * retracts that: the null check is tied to the placement `operator new`
+ * being declared `throw()`, which is not this project's, and
+ * `include/dsplib/sysdep.h` declares the shared non-throw pair every such
+ * site needs.  Genuine placement `new` and explicit destructor calls are
+ * used below instead; see finding F10157 for the site that proved this
+ * mechanism end-to-end.
  */
-/* C++ linkage is the default here; the `asm` label supplies the name. */
-void v90m_parm_ctor(void *self, void *modemParams)
-	asm("_ZN13V90ParametersC1EP19_tagModemParameters");
-void v90m_ph2_ctor(void *self, void *params)
-	asm("_ZN13V90Phase2InfoC1EP13V90Parameters");
-void v90m_jd_ctor(void *self, void *params)
-	asm("_ZN5V90JdC1EP13V90Parameters");
-void v90m_jd92_ctor(void *self, void *params)
-	asm("_ZN5V92JdC1EP13V90Parameters");
-void v90m_mod_ctor(void *self, unsigned int nofSymbols, void *phase2Info,
-		   void *jd, void *v92Jd, void *dil, void *mappingParams,
-		   void *mappingParams2, void *additionalCPinfo, void *cp,
-		   void *mp, void *params, unsigned int sessionFlag)
-	asm("_ZN12V90ModulatorC1EjP13V90Phase2InfoP5V90JdP5V92JdP19tagV90DIL"
-	    "descriptorP16V90MappingParamsS9_P22tagV90AdditionalCPinfoP5V90CP"
-	    "P5V90MPP13V90Parametersj");
-void v90m_dem_ctor(void *self, unsigned int levels, void *phase2, void *jd,
-		   void *jdV92, void *dil, void *mappingParams1,
-		   void *mappingParams2, void *cpInfo, void *cp, void *mp,
-		   __tHardwareCodecTypes__ codec, void *params,
-		   V90ComputationalMode compMode, unsigned int flag)
-	asm("_ZN14V90DemodulatorC1EjP13V90Phase2InfoP5V90JdP5V92JdP19tagV90DIL"
-	    "descriptorP16V90MappingParamsS9_P22tagV90AdditionalCPinfoP5V90CP"
-	    "P5V90MP23__tHardwareCodecTypes__P13V90Parameters20V90Computationa"
-	    "lModej");
-void v90m_dem_dtor(void *self) asm("_ZN14V90DemodulatorD1Ev");
 
 /*
  * Hold the compiler to the map in the header.  Guarded on a 32-bit pointer
@@ -265,7 +238,7 @@ V90Modem::V90Modem(V90ModemSide modemSide, _tagModemParameters *modemParams,
 	dil = dilDescriptor;
 
 	p = sysdep_malloc(sizeof(V90Parameters));
-	v90m_parm_ctor(p, modemParams);
+	new (p) V90Parameters(modemParams);
 	ptr_49b4 = (V90Parameters *)p;
 
 	/*
@@ -275,15 +248,15 @@ V90Modem::V90Modem(V90ModemSide modemSide, _tagModemParameters *modemParams,
 	 * reloads, three statements.
 	 */
 	p = sysdep_malloc(sizeof(V90Phase2Info));
-	v90m_ph2_ctor(p, ptr_49b4);
+	new (p) V90Phase2Info(ptr_49b4);
 	phase2Info = (V90Phase2Info *)p;
 
 	p = sysdep_malloc(sizeof(V90Jd));
-	v90m_jd_ctor(p, ptr_49b4);
+	new (p) V90Jd(ptr_49b4);
 	jd = (V90Jd *)p;
 
 	p = sysdep_malloc(sizeof(V92Jd));
-	v90m_jd92_ctor(p, ptr_49b4);
+	new (p) V92Jd(ptr_49b4);
 	jd92 = (V92Jd *)p;
 
 	/*
@@ -303,10 +276,10 @@ V90Modem::V90Modem(V90ModemSide modemSide, _tagModemParameters *modemParams,
 	switch (side) {
 	case V90_MODEM_SIDE_DIGITAL:
 		p = sysdep_malloc(sizeof(V90Modulator));
-		v90m_mod_ctor(p, nofSymbols, phase2Info, jd, jd92, dil,
-			      &mappingParams, &mappingParamsAlt,
-			      &additionalCPinfo, &cp, &mp, ptr_49b4,
-			      sessionFlag);
+		new (p) V90Modulator(nofSymbols, phase2Info, jd, jd92, dil,
+				     &mappingParams, &mappingParamsAlt,
+				     &additionalCPinfo, &cp, &mp, ptr_49b4,
+				     sessionFlag);
 		modulator = (V90Modulator *)p;
 		demodulator = 0;
 		break;
@@ -314,11 +287,11 @@ V90Modem::V90Modem(V90ModemSide modemSide, _tagModemParameters *modemParams,
 	case V90_MODEM_SIDE_ANALOG:
 		modulator = 0;
 		p = sysdep_malloc(sizeof(V90Demodulator));
-		v90m_dem_ctor(p, nofSymbols, phase2Info, jd, jd92, dil,
-			      &mappingParams, &mappingParamsAlt,
-			      &additionalCPinfo, &cp, &mp,
-			      (__tHardwareCodecTypes__)modemParams->codecType,
-			      ptr_49b4, compMode, sessionFlag);
+		new (p) V90Demodulator(nofSymbols, phase2Info, jd, jd92, dil,
+				       &mappingParams, &mappingParamsAlt,
+				       &additionalCPinfo, &cp, &mp,
+				       (__tHardwareCodecTypes__)modemParams->codecType,
+				       ptr_49b4, compMode, sessionFlag);
 		demodulator = (V90Demodulator *)p;
 		break;
 
@@ -364,7 +337,7 @@ V90Modem::~V90Modem()
 		sysdep_free(modulator);
 	}
 	if (demodulator != 0) {
-		v90m_dem_dtor(demodulator);
+		demodulator->~V90Demodulator();
 		sysdep_free(demodulator);
 	}
 	if (phase2Info != 0)

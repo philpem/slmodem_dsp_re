@@ -219,46 +219,40 @@ typedef char v90dem_size[(sizeof(V90Demodulator) == 0x298) ? 1 : -1];
 #define PARAMS_LINEAR_EQU_CURSOR_PLACE	(0x184 / 4)	/* int   */
 
 /*
- * `V90Resampler::reset()` BY ITS MANGLED NAME, and it is not a shortcut.
+ * `V90Resampler::reset()` BY A QUALIFIED CALL, and it is not a shortcut.
  *
  * The object at +0x94 is a V90Resampler -- the constructor builds one there
  * and finding F804 finds `V90Resampler`'s vtable pointer at that offset -- and
  * `reset` calls `_ZN12V90Resampler5resetEv` on it DIRECTLY, not through the
- * vptr.  ONE thing rules out the obvious spelling, and it is enough:
+ * vptr.  `reset()` is declared `virtual`, so the plain spelling
  * `resampler.reset()` dispatches through the vptr, which no test fixture here
  * fills in, and would be an indirect call where the object makes a direct one.
+ * `resampler.V90Resampler::reset()` -- an explicitly qualified member call --
+ * is ordinary C++ for "call this override directly, no matter what the vptr
+ * says", which is exactly the object's own instruction sequence, and needs no
+ * mangled-name device to say so.
  *
- * TWO FURTHER REASONS USED TO BE GIVEN HERE AND ARE NOW FALSE.  Both said the
- * class could not be named at all -- that `V90Resampler.h` brings the OTHER
- * definition of `V90Parameters` (finding F1112) and that declaring the member's
- * type as `V90Resampler` had the same problem one level up.  Writing the
- * lifecycle pair forced that to be solved rather than worked around, because a
- * member typed as the base gets the BASE's constructor and destructor emitted
- * and those are the wrong two symbols; `V90Demodulator.h` now claims the
- * parameter header's include guard and declares the member as what it is.  So
- * `((V90Resampler *)&resampler)->V90Resampler::reset()` WOULD compile today.
- * It is not written, because the first reason stands on its own and the
- * qualified-call spelling is the less obvious of the two.
- *
- * The symbol takes `this` as its first stack argument like every other member
- * here (finding F215), and `ResamplerTimingOffset` is `V90Resampler`'s base at
- * offset zero, so the address is the same one `setTimingOffset` is already
- * called on.
+ * This used to be reached through an `asm("_ZN12V90Resampler5resetEv")`-
+ * labelled free function, on the same reasoning `V90ModemCtor.cpp` gives at
+ * length for the nested constructors elsewhere in this file: two used-to-be
+ * problems with naming the class here directly (`V90Resampler.h` bringing the
+ * other definition of `V90Parameters`, finding F1112, and the member's own
+ * type needing to be `V90Resampler` for the same reason) are both gone --
+ * `V90Demodulator.h` already declares `resampler` as `V90Resampler` -- so the
+ * qualified-call spelling below is available and reproduces the same direct
+ * call with no `asm()` needed.  Finding F10155/F10157's retraction of the
+ * mangled-name device is about a DIFFERENT problem (a placement-`new` null
+ * check that never fires), but the fix in both cases is the same: write the
+ * ordinary C++ that says what the object does.
  */
-extern void v90resampler_reset(ResamplerTimingOffset *self)
-	asm("_ZN12V90Resampler5resetEv");
 
 /*
- * `sessionTermination`'s two summaries of the resampler's timing history,
- * named the same way and for the same reason.  Both are NON-virtual and both
- * are called directly on the embedded object's address, and both read
- * `V90Resampler`'s own +0xa4 and +0xa8 -- the history and its length -- which
- * is why the address handed over must be the base subobject's and not a copy.
+ * `sessionTermination`'s two summaries of the resampler's timing history are
+ * called the plain way, `resampler.getTimingHistoryMean()` and
+ * `resampler.getTimingHistoryStd()`: both are NON-virtual in
+ * `include/dsplib/V90Resampler.h`, so an ordinary call already compiles to the
+ * same direct call the mangled-name device was reaching for.
  */
-extern float v90resampler_timingHistoryMean(ResamplerTimingOffset *self)
-	asm("_ZN12V90Resampler20getTimingHistoryMeanEv");
-extern float v90resampler_timingHistoryStd(ResamplerTimingOffset *self)
-	asm("_ZN12V90Resampler19getTimingHistoryStdEv");
 
 void
 V90Demodulator::enterPhase3()
@@ -432,8 +426,8 @@ V90Demodulator::sessionTermination()
 {
 	if (inPhase3 == 3 && !preFilter.isV90WithEia6()) {
 		if (V90PW(params)[PARAMS_TIMING_HISTORY_EVAL] != 0) {
-			float mean = v90resampler_timingHistoryMean(&resampler);
-			float std = v90resampler_timingHistoryStd(&resampler);
+			float mean = resampler.getTimingHistoryMean();
+			float std = resampler.getTimingHistoryStd();
 			int frac;
 
 			frac = (int)((mean - (float)(int)mean) * 10000.0f);
@@ -914,8 +908,8 @@ V90Demodulator::enterDataSteadyState()
 
 	word_278 = V90PW(params)[PARAMS_TIMING_HISTORY_EVAL];
 	if (word_278 != 0) {
-		float mean = v90resampler_timingHistoryMean(&resampler);
-		float std = v90resampler_timingHistoryStd(&resampler);
+		float mean = resampler.getTimingHistoryMean();
+		float std = resampler.getTimingHistoryStd();
 		int frac;
 
 		frac = (int)((mean - (float)(int)mean) * 10000.0f);
@@ -2070,7 +2064,7 @@ V90Demodulator::reset(unsigned int quickConnectArg)
 		 (int)__builtin_fabsf(offset),
 		 (frac < 0) ? -frac : frac);
 
-	v90resampler_reset(&resampler);
+	resampler.V90Resampler::reset();
 	resampler.setTimingOffset(V90PF(params)[PARAMS_TIMING_OFFSET]);
 
 	cursor = V90PW(params)[PARAMS_LINEAR_EQU_CURSOR_PLACE];
@@ -2305,56 +2299,18 @@ V90Demodulator::getBitRate() const
  * the object's sequence where it is legible and not permuted to chase it.
  */
 
-extern "C" {
 /*
- * The eight nested constructors, by the names the blob calls at 0x1c863,
- * 0x1c886, 0x1c8be, 0x1c8f3, 0x1c969, 0x1c9ed, 0x1ca18 and 0x1ca48.  C1 is the
- * complete-object variant, which is what a `new` expression uses.
+ * The eight nested constructors used to be reached by their mangled names,
+ * by the names the blob calls at 0x1c863, 0x1c886, 0x1c8be, 0x1c8f3, 0x1c969,
+ * 0x1c9ed, 0x1ca18 and 0x1ca48, on the belief (finding F1340) that a
+ * user-declared placement `operator new` would force GCC to emit a null test
+ * the blob does not have between `sysdep_malloc` and the constructor call.
+ * Finding F10155 retracts that -- the null check is tied to a `throw()`
+ * placement `operator new`, which is not this project's -- and
+ * `include/dsplib/sysdep.h` declares the shared non-throw pair every such
+ * site needs.  Genuine placement `new` is used below instead; see finding
+ * F10157 for the site that proved this mechanism end-to-end.
  */
-void v90dem_adid_ctor(void *self, V90Parameters *params)
-	asm("_ZN25V90AutoDigitalImpDetectorC1EP13V90Parameters");
-void v90dem_ce_ctor(void *self, V90Parameters *params)
-	asm("_ZN22V90ConnectionEvaluatorC1EP13V90Parameters");
-void v90dem_p3d_ctor(void *self, V90Parameters *params,
-		     V90SpectralVerifier *verifier, unsigned int flag,
-		     V90AutoDigitalImpDetector *adid)
-	asm("_ZN20V90Phase3DemodulatorC1EP13V90ParametersP19V90SpectralVerifie"
-	    "rjP25V90AutoDigitalImpDetector");
-void v90dem_demapper_ctor(void *self, unsigned int levels,
-			  V90Parameters *params,
-			  V90AutoDigitalImpDetector *adid)
-	asm("_ZN11V90DemapperC1EjP13V90ParametersP25V90AutoDigitalImpDetector");
-void v90dem_p4d_ctor(void *self, V90MappingParams *mappingParams1,
-		     V90MappingParams *mappingParams2, V90Demapper *demapper,
-		     V90CP *cp, V90MP *mp,
-		     Descrambler<unsigned char, int> *descrambler,
-		     V90ConnectionEvaluator *connectionEvaluator,
-		     V90Parameters *params,
-		     V90Phase3Demodulator *phase3Demodulator,
-		     V90AutoDigitalImpDetector *adid, unsigned int flag)
-	asm("_ZN20V90Phase4DemodulatorC1EP16V90MappingParamsS1_P11V90DemapperP"
-	    "5V90CPP5V90MPP11DescramblerIhiEP22V90ConnectionEvaluatorP13V90Par"
-	    "ametersP20V90Phase3DemodulatorP25V90AutoDigitalImpDetectorj");
-void v90dem_equ_ctor(void *self, unsigned int linearEquLen,
-		     unsigned int dfeLen,
-		     V90Phase3Demodulator *phase3Demodulator,
-		     V90Phase4Demodulator *phase4Demodulator,
-		     V90Demapper *demapper,
-		     V90ConnectionEvaluator *connectionEvaluator,
-		     V90SpectralVerifier *verifier, V90Parameters *params,
-		     V90Resampler *resampler, V90PreFilter *preFilter,
-		     V90ComputationalMode mode)
-	asm("_ZN12V90EqualizerC1EjjP20V90Phase3DemodulatorP20V90Phase4Demodula"
-	    "torP11V90DemapperP22V90ConnectionEvaluatorP19V90SpectralVerifierP"
-	    "13V90ParametersP12V90ResamplerP12V90PreFilter20V90ComputationalMo" "de");
-void v90dem_trn2_ctor(void *self, V90Parameters *params,
-		      V90ConstellationPower *power)
-	asm("_ZN15V90TRN2DesignerC1EP13V90ParametersP21V90ConstellationPower");
-void v90dem_cd_ctor(void *self, V90Parameters *params, V90PreFilter *preFilter,
-		    V90ConstellationPower *power)
-	asm("_ZN24V90ConstellationDesignerC1EP13V90ParametersP12V90PreFilterP2"
-	    "1V90ConstellationPower");
-}
 
 /*
  * The resampler's five immediates.  0x42700000 is 60.0f and 0x3f7ae148 is
@@ -2483,46 +2439,47 @@ V90Demodulator::V90Demodulator(unsigned int levels, V90Phase2Info *phase2,
 
 	adid = (V90AutoDigitalImpDetector *)
 	    sysdep_malloc(sizeof(V90AutoDigitalImpDetector));
-	v90dem_adid_ctor(adid, params);
+	new (adid) V90AutoDigitalImpDetector(params);
 	autoDigitalImpDetector = adid;
 
 	ce = (V90ConnectionEvaluator *)
 	    sysdep_malloc(sizeof(V90ConnectionEvaluator));
-	v90dem_ce_ctor(ce, params);
+	new (ce) V90ConnectionEvaluator(params);
 	connectionEvaluator = ce;
 
 	p3d = (V90Phase3Demodulator *)
 	    sysdep_malloc(sizeof(V90Phase3Demodulator));
-	v90dem_p3d_ctor(p3d, params, &spectralVerifier, sessionFlag,
-			autoDigitalImpDetector);
+	new (p3d) V90Phase3Demodulator(params, &spectralVerifier, sessionFlag,
+					autoDigitalImpDetector);
 	phase3Demodulator = p3d;
 
 	dem = (V90Demapper *)sysdep_malloc(sizeof(V90Demapper));
-	v90dem_demapper_ctor(dem, levels * 2, params, autoDigitalImpDetector);
+	new (dem) V90Demapper(levels * 2, params, autoDigitalImpDetector);
 	demapper = dem;
 
 	p4d = (V90Phase4Demodulator *)
 	    sysdep_malloc(sizeof(V90Phase4Demodulator));
-	v90dem_p4d_ctor(p4d, mappingParams, mappingParamsAlt, demapper, cp, mp,
-			&descrambler, connectionEvaluator, params,
-			phase3Demodulator, autoDigitalImpDetector, sessionFlag);
+	new (p4d) V90Phase4Demodulator(mappingParams, mappingParamsAlt, demapper,
+					cp, mp, &descrambler, connectionEvaluator,
+					params, phase3Demodulator,
+					autoDigitalImpDetector, sessionFlag);
 	phase4Demodulator = p4d;
 
 	equ = (V90Equalizer *)sysdep_malloc(sizeof(V90Equalizer));
-	v90dem_equ_ctor(equ, (unsigned int)V90PW(params)[PARAMS_LINEAR_EQU_LENGTH],
-			(unsigned int)V90PW(params)[PARAMS_DFE_LENGTH],
-			phase3Demodulator, phase4Demodulator, demapper,
-			connectionEvaluator, &spectralVerifier, params,
-			&resampler, &preFilter, compMode);
+	new (equ) V90Equalizer((unsigned int)V90PW(params)[PARAMS_LINEAR_EQU_LENGTH],
+			       (unsigned int)V90PW(params)[PARAMS_DFE_LENGTH],
+			       phase3Demodulator, phase4Demodulator, demapper,
+			       connectionEvaluator, &spectralVerifier, params,
+			       &resampler, &preFilter, compMode);
 	equalizer = equ;
 
 	trn2 = (V90TRN2Designer *)sysdep_malloc(sizeof(V90TRN2Designer));
-	v90dem_trn2_ctor(trn2, params, &constellationPower);
+	new (trn2) V90TRN2Designer(params, &constellationPower);
 	trn2Designer = trn2;
 
 	cd = (V90ConstellationDesigner *)
 	    sysdep_malloc(sizeof(V90ConstellationDesigner));
-	v90dem_cd_ctor(cd, params, &preFilter, &constellationPower);
+	new (cd) V90ConstellationDesigner(params, &preFilter, &constellationPower);
 	constellationDesigner = cd;
 
 	word_264 = 0;
