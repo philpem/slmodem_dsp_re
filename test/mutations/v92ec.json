@@ -206,18 +206,18 @@
  },
  {
   "label": "the ARMA gets the numerator where it wanted the denominator",
-  "find": "\tfloatarma_ctor(m, 12u, 12u, v92EchoArmaDen, v92EchoArmaNum, 99u);",
-  "replace": "\tfloatarma_ctor(m, 12u, 12u, v92EchoArmaNum, v92EchoArmaDen, 99u);"
+  "find": "\tnew (m) FloatARMA(12u, 12u, v92EchoArmaDen, v92EchoArmaNum, 99u);",
+  "replace": "\tnew (m) FloatARMA(12u, 12u, v92EchoArmaNum, v92EchoArmaDen, 99u);"
  },
  {
   "label": "the ARMA gets a different block size",
-  "find": "\tfloatarma_ctor(m, 12u, 12u, v92EchoArmaDen, v92EchoArmaNum, 99u);",
-  "replace": "\tfloatarma_ctor(m, 12u, 12u, v92EchoArmaDen, v92EchoArmaNum, 98u);"
+  "find": "\tnew (m) FloatARMA(12u, 12u, v92EchoArmaDen, v92EchoArmaNum, 99u);",
+  "replace": "\tnew (m) FloatARMA(12u, 12u, v92EchoArmaDen, v92EchoArmaNum, 98u);"
  },
  {
   "label": "the ARMA gets eight denominator taps",
-  "find": "\tfloatarma_ctor(m, 12u, 12u, v92EchoArmaDen, v92EchoArmaNum, 99u);",
-  "replace": "\tfloatarma_ctor(m, 8u, 12u, v92EchoArmaDen, v92EchoArmaNum, 99u);"
+  "find": "\tnew (m) FloatARMA(12u, 12u, v92EchoArmaDen, v92EchoArmaNum, 99u);",
+  "replace": "\tnew (m) FloatARMA(8u, 12u, v92EchoArmaDen, v92EchoArmaNum, 99u);"
  },
  {
   "label": "one coefficient of the ARMA denominator is mistyped",

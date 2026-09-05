@@ -27,8 +27,8 @@
   "replace": "\tspectrum[0] = 0.0f;\n\tpsd = (Psd *)sysdep_malloc(sizeof(Psd));"},
 
  {"label": "the Psd is built with the PSD length rather than the transform length",
-  "find": "\tpsd_construct(psd, fftLength,",
-  "replace": "\tpsd_construct(psd, psdLength,"},
+  "find": "\tnew (psd) Psd(fftLength,",
+  "replace": "\tnew (psd) Psd(psdLength,"},
 
  {"label": "the Psd's window and overlap slots are swapped",
   "find": "\t\t      (WindowType)params->SPECTRAL_VERIFIER_FFT_WINDOW,\n\t\t      params->SPECTRAL_VERIFIER_PSD_OVERLAP_LEN);",

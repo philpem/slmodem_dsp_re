@@ -241,26 +241,19 @@ V90Phase3Demodulator::reset(PcmType pcmTypeArg, unsigned char ucodeArg,
 #include "dsplib/ANSamToneDetector.h"
 
 /*
- * THE TWO CONSTRUCTORS ARE CALLED BY THEIR MANGLED NAMES, and that is this
- * tree's settled idiom rather than a workaround invented here:
- * `src/pump/v90/V90BitsToSymbol.cpp` sets out the argument in full and
- * `V90Modulator.cpp` and `V92Precoder.cpp` do the same.  The build is
- * `-nostdinc++`, so there is no <new>; declaring a replacement global
- * `operator new` inline is ill-formed; and a user-declared PLACEMENT form
- * makes GCC emit a null test the blob does not have.  The original almost
- * certainly wrote `new V90SdDetector(...)` over an inline `operator new`, and
- * the instruction sequence is the same either way -- only the spelling
- * differs.  The destructor needs no trick at all, because an explicit
- * destructor call is ordinary C++.
+ * THE TWO SUB-OBJECTS ARE BUILT WITH ORDINARY PLACEMENT `new`.  This file
+ * used to reach both constructors through hand-mangled `asm("_ZN...")`
+ * labels, on the belief (finding F1340) that a user-declared placement
+ * `operator new` -- needed since this build is `-nostdinc++` with no <new> --
+ * would make GCC emit a null test the blob does not have.  Finding F10155
+ * retracts that: the check is tied to a `throw()`-declared placement
+ * operator, `-fcheck-new` was never in this project's flags, and
+ * `include/dsplib/sysdep.h`'s shared non-throw placement `operator new`
+ * reproduces the blob's construct-then-check-later shape with no flag
+ * changes, verified under the real period compiler (finding F10157).  The
+ * destructor needs no trick at all, because an explicit destructor call is
+ * ordinary C++.
  */
-extern "C" {
-void v90p3d_sd_ctor(void *self, float a, float b, float c, unsigned int d)
-	asm("_ZN13V90SdDetectorC1Efffj");
-void v90p3d_ansam_ctor(void *self, unsigned int s1, unsigned int s2, float t,
-		       unsigned int flag, float ratio, unsigned int rate,
-		       unsigned int blockLen, unsigned int blockSize)
-	asm("_ZN17ANSamToneDetectorC1Ejjfjfjjj");
-}
 
 /* The four parameter-block slots the SD detector is built from. */
 #define PARAMS_SD_THRESH_08	(0x284 / 4)	/* float */
@@ -332,17 +325,17 @@ V90Phase3Demodulator::V90Phase3Demodulator(V90Parameters *p,
 	autoDigitalImpDetector = adid;
 
 	sd = (V90SdDetector *)sysdep_malloc(sizeof(V90SdDetector));
-	v90p3d_sd_ctor(sd, V90PF(params)[PARAMS_SD_THRESH_08],
-		       V90PF(params)[PARAMS_SD_THRESH_0C],
-		       V90PF(params)[PARAMS_SD_VALUE_10],
-		       (unsigned int)V90PW(params)[PARAMS_SD_LIMIT]);
+	new (sd) V90SdDetector(V90PF(params)[PARAMS_SD_THRESH_08],
+			       V90PF(params)[PARAMS_SD_THRESH_0C],
+			       V90PF(params)[PARAMS_SD_VALUE_10],
+			       (unsigned int)V90PW(params)[PARAMS_SD_LIMIT]);
 	sdDetector = sd;
 
 	an = (ANSamToneDetector *)sysdep_malloc(sizeof(ANSamToneDetector));
-	v90p3d_ansam_ctor(an, P3D_ANSAM_SAMPLES1, P3D_ANSAM_SAMPLES2,
-			  P3D_ANSAM_THRESHOLD, 0, P3D_ANSAM_RATIO,
-			  P3D_ANSAM_SAMPLE_RATE, P3D_ANSAM_BLOCK_LEN,
-			  P3D_ANSAM_BLOCK_SIZE);
+	new (an) ANSamToneDetector(P3D_ANSAM_SAMPLES1, P3D_ANSAM_SAMPLES2,
+				   P3D_ANSAM_THRESHOLD, 0, P3D_ANSAM_RATIO,
+				   P3D_ANSAM_SAMPLE_RATE, P3D_ANSAM_BLOCK_LEN,
+				   P3D_ANSAM_BLOCK_SIZE);
 	ansamToneDetector = an;
 
 	reset((PcmType)0, 0x40, (Phase3DemodulatorState)0, 0, 0, 0, 0, 0, 1,

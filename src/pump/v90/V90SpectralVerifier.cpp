@@ -63,20 +63,19 @@ inline void operator delete(void *p) { sysdep_free(p); }
 inline void operator delete[](void *p) { sysdep_free(p); }
 
 /*
- * `Psd::Psd` AND `Psd::~Psd` BY THEIR MANGLED NAMES, for the reason
- * V90Demodulator.cpp gives for `V90Resampler::reset`, plus one this class
- * has on its own: the object allocates the `Psd` with `sysdep_malloc` and
- * then runs its constructor over that storage, and C++ has no syntax for
- * that without `<new>`, which this tree builds `-nostdinc++` without.  The
- * symbols are the ones the object calls, `C1` and `D1`, and both take `this`
- * as their first stack argument like everything else here (finding F215).
- */
-extern void psd_construct(void *self, unsigned int length, WindowType window,
-			  unsigned int overlap)
-	asm("_ZN3PsdC1Ej10WindowTypej");
-/*
- * `psd_destruct` IS GONE: `delete psd` calls `Psd::~Psd` (D1) itself, which
- * is the same symbol this asm() label named.  Finding F7816.
+ * `Psd` IS BUILT WITH ORDINARY PLACEMENT `new`.  The object allocates it with
+ * `sysdep_malloc` and then runs its constructor over that storage with no
+ * null test between the two calls, which is what `new` compiles to over an
+ * allocator hooked to `sysdep_malloc` -- and this build is `-nostdinc++` with
+ * no <new>, so `include/dsplib/sysdep.h` declares the shared non-throw
+ * placement `operator new`/`operator delete` pair every such site in this
+ * tree uses.  This file used to reach the constructor through a hand-mangled
+ * `asm("_ZN3PsdC1Ej10WindowTypej")` label, on the belief (finding F1340) that
+ * a user-declared placement `operator new` would force a null test the blob
+ * does not have; finding F10155 retracts that empirically and F10157 proves
+ * the mechanism end-to-end.  The destructor needs no trick at all: `delete
+ * psd` calls `Psd::~Psd` (D1) ordinarily, the same symbol the old asm() label
+ * named for the constructor's C1 (finding F7816).
  */
 
 /* See V90ConstellationDesigner.cpp for why these are here and why guarded. */
@@ -138,7 +137,7 @@ V90SpectralVerifier::V90SpectralVerifier(V90Parameters *p)
 	spectrum = (float *)sysdep_malloc((fftLength / 2) * sizeof(float));
 
 	psd = (Psd *)sysdep_malloc(sizeof(Psd));
-	psd_construct(psd, fftLength,
+	new (psd) Psd(fftLength,
 		      (WindowType)params->SPECTRAL_VERIFIER_FFT_WINDOW,
 		      params->SPECTRAL_VERIFIER_PSD_OVERLAP_LEN);
 

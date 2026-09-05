@@ -24,8 +24,8 @@
  * 484 and `process(unsigned &, short *)` at 11 of 375, with nothing lost
  * anywhere in the tree.  Neither function was edited.  Finding F7843.
  *
- * WHY THE MAPPER IS BUILT THROUGH AN asm() LABEL RATHER THAN `new`.  The
- * blob's constructor is
+ * THE MAPPER IS BUILT WITH ORDINARY PLACEMENT `new`.  The blob's constructor
+ * is
  *
  *     movl $0x704,(%esp) ; call sysdep_malloc ; call V90Mapper::V90Mapper
  *
@@ -35,16 +35,17 @@
  *
  * -- which is exactly what GCC emits for `new V90Mapper(...)` and `delete p`
  * when `operator new` and `operator delete` are inline wrappers over
- * sysdep_malloc and sysdep_free.  That is almost certainly the original's
- * source.  It is not what this file can write: the build is `-nostdinc++`,
- * there is no <new>, and C++ has no other syntax for running a constructor
- * over storage that already exists.  Declaring a replacement global
- * `operator new` inline is ill-formed, and a user-declared PLACEMENT form
- * makes GCC emit the null test the blob does not have.  So the constructor
- * calls V90Mapper's by its mangled name and the destructor uses the explicit
- * destructor call, which needs no trick at all.  The instruction sequence is
- * the blob's either way; only the spelling differs.  src/pump/v90/
- * V92Precoder.cpp reaches the same conclusion for FloatFIR.
+ * sysdep_malloc and sysdep_free.  This file used to reach the constructor
+ * through a hand-mangled `asm("_ZN9V90MapperC1EP13V90Parameters")` label,
+ * on the belief (finding F1340) that a user-declared placement `operator
+ * new` would make GCC emit a null test the blob does not have.  Finding
+ * F10155 retracts that: the check is tied to a `throw()`-declared placement
+ * operator, `-fcheck-new` was never in this project's flags, and
+ * `include/dsplib/sysdep.h`'s shared non-throw placement `operator new`
+ * reproduces this exact construct-then-check-later shape with no flag
+ * changes, verified under the real period compiler (finding F10157).  The
+ * destructor still needs no trick at all: an explicit destructor call is
+ * ordinary C++.
  *
  * THE LOCAL `m` MATTERS.  The blob keeps the fresh pointer in a register
  * across the constructor call and stores it to +0x00 AFTERWARDS; assigning
@@ -107,17 +108,6 @@ inline void operator delete(void *p) { sysdep_free(p); }
 #include "dsplib/V90MappingParams.h"
 #include "dsplib/V90Mapper.h"
 
-extern "C" {
-/*
- * V90Mapper's constructor, by the name the blob calls.  C1 is the
- * complete-object variant, which is what a `new` expression uses and what the
- * relocation at 0x2f766 names.  `sizeof(V90Mapper)` and not the literal 0x704
- * is what the allocation is spelled with, so the two cannot drift apart.
- */
-void v90bts_mapper_ctor(void *self, V90Parameters *params)
-	asm("_ZN9V90MapperC1EP13V90Parameters");
-}
-
 #if __SIZEOF_POINTER__ == 4
 #define V90BTS_OFF(field, off, tag) \
 	typedef char v90bts_off_##tag[ \
@@ -150,8 +140,14 @@ V90BitsToSymbol::V90BitsToSymbol(unsigned int n, V90Parameters *p)
 	V90Mapper *m;
 
 	params = p;
+	/*
+	 * C1, the complete-object variant, is what a `new` expression uses
+	 * and what the relocation at 0x2f766 names.  `sizeof(V90Mapper)`
+	 * and not the literal 0x704 is what the allocation is spelled with,
+	 * so the two cannot drift apart.
+	 */
 	m = (V90Mapper *)sysdep_malloc(sizeof(V90Mapper));
-	v90bts_mapper_ctor(m, params);
+	new (m) V90Mapper(params);
 	mapper = m;
 	symbols = (short *)sysdep_malloc(2 * n);
 	nofSymbols = n;

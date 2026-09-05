@@ -65,13 +65,13 @@
  },
  {
   "label": "ctor: the owned converter takes 0x40 symbols, not 0x140",
-  "find": "\t\tv90p4_bts_ctor(own, 0x140, p);",
-  "replace": "\t\tv90p4_bts_ctor(own, 0x40, p);"
+  "find": "\t\tnew (own) V90BitsToSymbol(0x140, p);",
+  "replace": "\t\tnew (own) V90BitsToSymbol(0x40, p);"
  },
  {
   "label": "ctor: the owned converter is built with no parameters",
-  "find": "\t\tv90p4_bts_ctor(own, 0x140, p);",
-  "replace": "\t\tv90p4_bts_ctor(own, 0x140, 0);"
+  "find": "\t\tnew (own) V90BitsToSymbol(0x140, p);",
+  "replace": "\t\tnew (own) V90BitsToSymbol(0x140, 0);"
  },
  {
   "label": "ctor: the converter is allocated whatever is supplied",

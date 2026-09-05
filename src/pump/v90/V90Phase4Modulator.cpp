@@ -27,11 +27,17 @@
  * same offset in a different class, and src/pump/v90/V90Phase3Modulator.cpp
  * is where that one lives.
  *
- * WHY THE CONVERTER IS BUILT THROUGH AN asm() LABEL RATHER THAN `new`: the
- * argument is src/pump/v90/V90BitsToSymbol.cpp's, and it is the same one --
- * `-nostdinc++` leaves no <new>, a replacement global `operator new` is
- * ill-formed, and a user-declared placement form makes GCC emit a null test
- * the blob does not have.  The instruction sequence is the blob's either way.
+ * THE OWNED CONVERTER IS BUILT WITH ORDINARY PLACEMENT `new`.  This file used
+ * to reach `V90BitsToSymbol`'s constructor through a hand-mangled
+ * `asm("_ZN15V90BitsToSymbolC1EjP13V90Parameters")` label, on the belief
+ * (finding F1340) that a user-declared placement `operator new` would make
+ * GCC emit a null test the blob does not have.  Finding F10155 retracts
+ * that: the check is tied to a `throw()`-declared placement operator,
+ * `-fcheck-new` was never in this project's flags, and
+ * `include/dsplib/sysdep.h`'s shared non-throw placement `operator new`
+ * reproduces the blob's construct-then-check-later shape with no flag
+ * changes, verified under the real period compiler (finding F10157).  The
+ * instruction sequence is the blob's either way.
  *
  * THAT LAST CLAUSE IS WHY THIS RULING SURVIVES FINDING F7786 AND THE
  * DESTRUCTORS' DOES NOT.  7786 shows the object DOES replace global
@@ -64,16 +70,6 @@ extern "C" {
 #include "dsplib/V90MP.h"
 #include "dsplib/V90MappingParams.h"
 #include "dsplib/V90Phase4Modulator.h"
-
-extern "C" {
-/*
- * V90BitsToSymbol's constructor, by the name the blob calls.  C1 is the
- * complete-object variant, which is what a `new` expression uses and what the
- * relocation at 0x2d8f5 names.
- */
-void v90p4_bts_ctor(void *self, unsigned int nofSymbols, V90Parameters *params)
-	asm("_ZN15V90BitsToSymbolC1EjP13V90Parameters");
-}
 
 /* See V90ConstellationDesigner.cpp for why these are here and why guarded. */
 #if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
@@ -197,9 +193,12 @@ V90Phase4Modulator::V90Phase4Modulator(V90Parameters *p, unsigned int flag,
 	} else {
 		V90BitsToSymbol *own;
 
+		/* C1, the complete-object variant, is what a `new`
+		 * expression uses and what the relocation at 0x2d8f5
+		 * names. */
 		own = (V90BitsToSymbol *)
 		    sysdep_malloc(sizeof(V90BitsToSymbol));
-		v90p4_bts_ctor(own, 0x140, p);
+		new (own) V90BitsToSymbol(0x140, p);
 		bitsToSymbol = own;
 		externalBitsToSymbol = 0;
 	}
