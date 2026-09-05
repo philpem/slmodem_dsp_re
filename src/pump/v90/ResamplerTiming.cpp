@@ -357,8 +357,7 @@ ResamplerTiming::adjustHalfBaudBpfGain(float v)
 
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf(
-		    "ResamplerTiming::adjustHalfBaudBpfGain  normFactor = "
-		    "%c%d.%03d\r\n",
+		    "ResamplerTiming::adjustHalfBaudBpfGain  normFactor = " "%c%d.%03d\r\n",
 		    sign_of(normFactor), whole_of(normFactor),
 		    frac_of(normFactor, 1000.0f));
 

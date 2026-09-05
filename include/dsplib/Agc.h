@@ -63,10 +63,29 @@ static inline long double agc_fsqrt(long double x)
 template <class T>
 class Agc {
 public:
+	/** @brief Construct at unity gain, frozen (@c alpha == 1). */
 	Agc();
 
+	/** @brief Reset to unity gain, frozen -- same state as a freshly constructed Agc. */
 	void reset();
+
+	/**
+	 * @brief Freeze the gain at its current value.
+	 *
+	 * Saves the current @c alpha into @c savedAlpha (write-only -- nothing
+	 * in the object ever reads @c savedAlpha back; there is no
+	 * corresponding `unfreeze()`) and sets @c alpha to 1, which stops
+	 * process() from adapting.
+	 */
 	void freeze();
+
+	/**
+	 * @brief Apply the current gain to a block of samples, re-measuring
+	 * and adapting the gain once per @c blockLen samples.
+	 * @param in        Input samples.
+	 * @param out       Output samples, `out[i] = gain * in[i]`.
+	 * @param nSamples  Number of samples to process.
+	 */
 	void process(const T *in, T *out, unsigned nSamples);
 
 	T		alpha;		/* +0x00 pole; exactly 1.0 == frozen  */

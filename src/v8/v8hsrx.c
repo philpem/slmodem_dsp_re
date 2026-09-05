@@ -43,8 +43,7 @@ v8_handshak_agc(struct v8 *v)
 			if (v->elapsed == v->deadline_a) {
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
-					    "V8: Time Out Waiting For "
-					    "ANSam...\r\n");
+					    "V8: Time Out Waiting For " "ANSam...\r\n");
 				v->elapsed++;
 			}
 			v->rx_state = 0xb;

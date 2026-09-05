@@ -311,8 +311,7 @@ V90ConnectionEvaluator::updateCurrentConstellationData(short dmin,
 	word_90 = 0;
 
 	edprintf("V90ConnectionEvaluator UPDATE: curDmin = %d, "
-		 "10*threshUp = %d, 10*threshDown = %d, "
-		 "10*threshRetrain = %d\r\n",
+		 "10*threshUp = %d, 10*threshDown = %d, " "10*threshRetrain = %d\r\n",
 		 dmin, (int)(10 * up), (int)(10 * down), (int)(10 * retrain));
 }
 
@@ -629,8 +628,7 @@ V90ConnectionEvaluator::evaluatePhase3()
 			if (word_10 >= word_64) {
 				verdict = V90CE_VERDICT_FALLBACK_V34;
 				edprintf("V90ConnectionEvaluator (end of "
-					 "TRN1d): initiating fall back to V34 "
-					 "due to large error, avePdsnr = "
+					 "TRN1d): initiating fall back to V34 " "due to large error, avePdsnr = "
 					 "%c%d.%03d\r\n",
 					 !(0.0f >= avePdsnr) ? '+' : '-',
 					 (int)__builtin_fabsf(avePdsnr),
@@ -668,11 +666,8 @@ V90ConnectionEvaluator::evaluatePhase3()
 				if (nofV90Retrains
 				    > (unsigned int)params->MAX_NOF_V90_RETRAINS) {
 					verdict = V90CE_VERDICT_FALLBACK_V34;
-					edprintf("V90ConnectionEvaluator "
-						 "(phase3): initiating fall "
-						 "back to V34 due to %d V90 "
-						 "retrains, avePdsnr = "
-						 "%c%d.%03d\r\n",
+					edprintf("V90ConnectionEvaluator " "(phase3): initiating fall "
+						 "back to V34 due to %d V90 " "retrains, avePdsnr = " "%c%d.%03d\r\n",
 						 nofV90Retrains,
 						 !(0.0f >= avePdsnr) ? '+' : '-',
 						 (int)__builtin_fabsf(avePdsnr),
@@ -680,10 +675,8 @@ V90ConnectionEvaluator::evaluatePhase3()
 					nofV90Retrains = 0;
 				} else {
 					verdict = V90CE_VERDICT_RETRAIN;
-					edprintf("V90ConnectionEvaluator "
-						 "(phase3): initiating Retrain "
-						 "(retrain no %d), due to "
-						 "avePdsnr = %c%d.%03d\r\n",
+					edprintf("V90ConnectionEvaluator " "(phase3): initiating Retrain "
+						 "(retrain no %d), due to " "avePdsnr = %c%d.%03d\r\n",
 						 nofV90Retrains,
 						 !(0.0f >= avePdsnr) ? '+' : '-',
 						 (int)__builtin_fabsf(avePdsnr),
@@ -793,8 +786,7 @@ V90ConnectionEvaluator::evaluateMeanErrorStdPhase3(float std)
 		int frac = (int)((std - (float)(int)std) * 10000.0f);
 
 		edprintf("V90ConnectionEvaluator (phase3): initiating fall "
-			 "back to V34 due to large mean error variance, "
-			 "std = %c%d.%04d\r\n",
+			 "back to V34 due to large mean error variance, " "std = %c%d.%04d\r\n",
 			 !(0.0f >= std) ? '+' : '-',
 			 (int)__builtin_fabsf(std),
 			 (frac < 0) ? -frac : frac);
@@ -877,11 +869,8 @@ V90ConnectionEvaluator::evaluatePhase4(float meanErrBefToAftUpdateRatio)
 				if (nofV90Retrains
 				    > (unsigned int)params->MAX_NOF_V90_RETRAINS) {
 					verdict = V90CE_VERDICT_FALLBACK_V34;
-					edprintf("V90ConnectionEvaluator "
-						 "(phase4): initiating fall "
-						 "back to V34 due to %d V90 "
-						 "retrains, avePdsnr = "
-						 "%c%d.%03d\r\n",
+					edprintf("V90ConnectionEvaluator " "(phase4): initiating fall "
+						 "back to V34 due to %d V90 " "retrains, avePdsnr = " "%c%d.%03d\r\n",
 						 nofV90Retrains,
 						 !(0.0f >= avePdsnr) ? '+' : '-',
 						 (int)__builtin_fabsf(avePdsnr),
@@ -894,19 +883,14 @@ V90ConnectionEvaluator::evaluatePhase4(float meanErrBefToAftUpdateRatio)
 					phase4ErrorForV34Fallback = t;
 					if (DSPLIB_DEBUG_ON())
 						dsplibs_debug_printf(
-						    "V90ConnectionEvaluator "
-						    "(phase4): "
-						    "pdsnrCurrentV34DropThresh"
-						    "Phase4 set to = "
-						    "%c%d.%03d\r\n",
+						    "V90ConnectionEvaluator " "(phase4): " "pdsnrCurrentV34DropThresh"
+						    "Phase4 set to = " "%c%d.%03d\r\n",
 						    !(0.0f >= t) ? '+' : '-',
 						    (int)__builtin_fabsf(t),
 						    ce_frac3(t));
 					verdict = V90CE_VERDICT_RETRAIN;
-					edprintf("V90ConnectionEvaluator "
-						 "(phase4): initiating Retrain "
-						 "(retrain no %d), due to "
-						 "avePdsnr = %c%d.%03d\r\n",
+					edprintf("V90ConnectionEvaluator " "(phase4): initiating Retrain "
+						 "(retrain no %d), due to " "avePdsnr = %c%d.%03d\r\n",
 						 nofV90Retrains,
 						 !(0.0f >= avePdsnr) ? '+' : '-',
 						 (int)__builtin_fabsf(avePdsnr),
@@ -935,8 +919,7 @@ V90ConnectionEvaluator::evaluatePhase4(float meanErrBefToAftUpdateRatio)
 				 * See the block comment above.
 				 */
 				edprintf("V90ConnectionEvaluator (phase4): "
-					 "initiating fall back to V34 due to "
-					 "%d V90 retrains (last one "
+					 "initiating fall back to V34 due to " "%d V90 retrains (last one "
 					 "delayed)\r\n");
 				nofV90Retrains = 0;
 			} else {
@@ -1235,8 +1218,7 @@ V90ConnectionEvaluator::evaluateConnection()
 			if (externalDemandCode == 1 || externalDemandCode == 4) {
 				verdict = V90CE_VERDICT_RRN_NO_RESTRICT;
 				edprintf("V90ConnectionEvaluator: Initiating "
-					 "No Restriction RRN (external "
-					 "demand)\r\n");
+					 "No Restriction RRN (external " "demand)\r\n");
 			} else {
 				verdict = V90CE_VERDICT_RRN_DOWN;
 				edprintf("V90ConnectionEvaluator: Initiating "
@@ -1263,8 +1245,7 @@ V90ConnectionEvaluator::evaluateConnection()
 
 		case 6:
 			edprintf("V90ConnectionEvaluator: Initiating Fast "
-				 "Parameters Exchange called - NOT "
-				 "IMPLEMENTED\r\n");
+				 "Parameters Exchange called - NOT " "IMPLEMENTED\r\n");
 			break;
 
 		default:
@@ -1286,11 +1267,9 @@ V90ConnectionEvaluator::evaluateConnection()
 			if (curDmin >= 2 * initDmin) {
 				nofV90Retrains++;
 				edprintf("V90ConnectionEvaluator: error "
-					 "correction mechanism demanded rate "
-					 "down,\r\n");
+					 "correction mechanism demanded rate " "down,\r\n");
 				edprintf("V90ConnectionEvaluator: initiating "
-					 "retrain (retrain no %d), due to %d "
-					 "rate renegotiations down.\r\n",
+					 "retrain (retrain no %d), due to %d " "rate renegotiations down.\r\n",
 					 nofV90Retrains,
 					 params->
 					 MAX_NOF_RATES_DIFF_BEFORE_RETRAIN);
@@ -1301,8 +1280,7 @@ V90ConnectionEvaluator::evaluateConnection()
 				if (nofV90Retrains
 				    > (unsigned int)
 				      params->MAX_NOF_V90_RETRAINS) {
-					edprintf("V90ConnectionEvaluator: "
-						 "initiating fall back to V34 "
+					edprintf("V90ConnectionEvaluator: " "initiating fall back to V34 "
 						 "due to %d V90 retrains\r\n",
 						 nofV90Retrains);
 					nofV90Retrains = 0;
@@ -1311,8 +1289,7 @@ V90ConnectionEvaluator::evaluateConnection()
 				word_90 = 0;
 			} else {
 				edprintf("V90ConnectionEvaluator: initiating "
-					 "One Rate Down, due to error "
-					 "correction mechanism demand.\r\n");
+					 "One Rate Down, due to error " "correction mechanism demand.\r\n");
 				word_14 = 0;
 				word_10 = 0;
 				verdict = V90CE_VERDICT_RRN_DOWN;
@@ -1325,14 +1302,11 @@ V90ConnectionEvaluator::evaluateConnection()
 			if (word_94 != 0
 			    && verdict == V90CE_VERDICT_RRN_DOWN) {
 				edprintf("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
-					 "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
-					 "@@@@@@@@@@\r\n");
+					 "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@" "@@@@@@@@@@\r\n");
 				edprintf("V90ConnectionEvaluator: initiating "
-					 "Retrain instead of One Rate Down "
-					 "!!\r\n");
+					 "Retrain instead of One Rate Down " "!!\r\n");
 				edprintf("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
-					 "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
-					 "@@@@@@@@@@\r\n");
+					 "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@" "@@@@@@@@@@\r\n");
 				word_90 = 0;
 				verdict = V90CE_VERDICT_RETRAIN;
 			}
@@ -1440,8 +1414,7 @@ V90ConnectionEvaluator::evaluateConnection()
 			      params->MAX_NOF_V90_RETRAINS) {
 				verdict = V90CE_VERDICT_FALLBACK_V34;
 				edprintf("V90ConnectionEvaluator: initiating "
-					 "fall back to V34 due to %d V90 "
-					 "retrains, avePdsnr = %c%d.%02d\r\n",
+					 "fall back to V34 due to %d V90 " "retrains, avePdsnr = %c%d.%02d\r\n",
 					 nofV90Retrains,
 					 !(0.0f >= avePdsnr) ? '+' : '-',
 					 (int)__builtin_fabsf(avePdsnr),
@@ -1450,8 +1423,7 @@ V90ConnectionEvaluator::evaluateConnection()
 			} else {
 				verdict = V90CE_VERDICT_RETRAIN;
 				edprintf("V90ConnectionEvaluator: initiating "
-					 "Retrain (retrain no %d) due to "
-					 "avePdsnr = %c%d.%02d\r\n",
+					 "Retrain (retrain no %d) due to " "avePdsnr = %c%d.%02d\r\n",
 					 nofV90Retrains,
 					 !(0.0f >= avePdsnr) ? '+' : '-',
 					 (int)__builtin_fabsf(avePdsnr),
@@ -1495,8 +1467,7 @@ V90ConnectionEvaluator::evaluateConnection()
 		if (curDmin >= 2 * initDmin) {
 			nofV90Retrains++;
 			edprintf("V90ConnectionEvaluator: initiating retrain, "
-				 "due to %d rate renegotiations down, "
-				 "avePdsnr = %c%d.%02d\r\n",
+				 "due to %d rate renegotiations down, " "avePdsnr = %c%d.%02d\r\n",
 				 params->MAX_NOF_RATES_DIFF_BEFORE_RETRAIN,
 				 !(0.0f >= avePdsnr) ? '+' : '-',
 				 (int)__builtin_fabsf(avePdsnr),
@@ -1510,8 +1481,7 @@ V90ConnectionEvaluator::evaluateConnection()
 			    > (unsigned int)
 			      params->MAX_NOF_V90_RETRAINS) {
 				edprintf("V90ConnectionEvaluator: initiating "
-					 "fall back to V34 due to %d V90 "
-					 "retrains\r\n", nofV90Retrains);
+					 "fall back to V34 due to %d V90 " "retrains\r\n", nofV90Retrains);
 				verdict = V90CE_VERDICT_FALLBACK_V34;
 				nofV90Retrains = 0;
 			}
@@ -1552,23 +1522,20 @@ V90ConnectionEvaluator::evaluateConnection()
 			case 0:
 			case 2:
 				verdict = V90CE_VERDICT_RETRAIN;
-				edprintf("V90ConnectionEvaluator: Alternate "
-					 "Debug Retrain\r\n");
+				edprintf("V90ConnectionEvaluator: Alternate " "Debug Retrain\r\n");
 				word_80++;
 				word_24 = 0;
 				word_90 = 0;
 				break;
 			case 1:
 				verdict = V90CE_VERDICT_RRN_UP;
-				edprintf("V90ConnectionEvaluator: Alternate "
-					 "Debug RRN up\r\n");
+				edprintf("V90ConnectionEvaluator: Alternate " "Debug RRN up\r\n");
 				word_80++;
 				word_24 = 0;
 				word_90 = 0;
 				break;
 			case 3:
-				edprintf("V90ConnectionEvaluator: Alternate "
-					 "Debug RRN down\r\n");
+				edprintf("V90ConnectionEvaluator: Alternate " "Debug RRN down\r\n");
 				word_24 = 0;
 				verdict = V90CE_VERDICT_RRN_DOWN;
 				word_80 = 0;
@@ -1581,8 +1548,7 @@ V90ConnectionEvaluator::evaluateConnection()
 		word_24 += nofSymbols;
 		if (word_24 >= debugPeriod) {
 			verdict = V90CE_VERDICT_FALLBACK_V34;
-			edprintf("V90ConnectionEvaluator: Debug fall back to "
-				 "V34\r\n");
+			edprintf("V90ConnectionEvaluator: Debug fall back to " "V34\r\n");
 			word_24 = 0;
 			word_90 = 0;
 		}
@@ -1590,8 +1556,7 @@ V90ConnectionEvaluator::evaluateConnection()
 		word_24 += nofSymbols;
 		if (word_24 >= debugPeriod) {
 			verdict = V90CE_VERDICT_RETRAIN;
-			edprintf("V90ConnectionEvaluator: Debug initiating "
-				 "Retrain\r\n");
+			edprintf("V90ConnectionEvaluator: Debug initiating " "Retrain\r\n");
 			word_24 = 0;
 			word_90 = 0;
 		}
@@ -1599,8 +1564,7 @@ V90ConnectionEvaluator::evaluateConnection()
 		word_24 += nofSymbols;
 		if (word_24 >= debugPeriod) {
 			verdict = V90CE_VERDICT_RRN_UP;
-			edprintf("V90ConnectionEvaluator: Debug One Rate "
-				 "Up\r\n");
+			edprintf("V90ConnectionEvaluator: Debug One Rate " "Up\r\n");
 			word_24 = 0;
 			word_90 = 0;
 		}
@@ -1608,8 +1572,7 @@ V90ConnectionEvaluator::evaluateConnection()
 		word_24 += nofSymbols;
 		if (word_24 >= debugPeriod) {
 			verdict = V90CE_VERDICT_RRN_DOWN;
-			edprintf("V90ConnectionEvaluator: Debug One Rate "
-				 "Down\r\n");
+			edprintf("V90ConnectionEvaluator: Debug One Rate " "Down\r\n");
 			word_24 = 0;
 			word_98 = 0;
 			word_90 = params->RRN_SILENCE_REQUESTED;

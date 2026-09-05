@@ -30,24 +30,76 @@
 extern "C" {
 #endif
 
+/**
+ * @brief Allocate @p size bytes. Implemented by the host (slmodemd), a
+ *        thin wrapper over `malloc`.
+ * @param size  Bytes to allocate.
+ * @return The new block, or NULL on failure.
+ */
 void *sysdep_malloc(unsigned int size);
+
+/**
+ * @brief Free a block allocated by sysdep_malloc(). Host-implemented,
+ *        a thin wrapper over `free`.
+ * @param mem  The block to free.
+ */
 void sysdep_free(void *mem);
 
+/** @brief Host-implemented wrapper over `memset`. */
 void *sysdep_memset(void *d, int c, size_t l);
+/** @brief Host-implemented wrapper over `memcpy`. */
 void *sysdep_memcpy(void *d, const void *s, size_t l);
+/** @brief Host-implemented wrapper over `memchr`. */
 void *sysdep_memchr(const void *s, int c, size_t l);
 
+/** @brief Host-implemented wrapper over `strlen`. */
 size_t sysdep_strlen(const char *s);
+/** @brief Host-implemented wrapper over `strcpy`. */
 char *sysdep_strcpy(char *d, const char *s);
+/** @brief Host-implemented wrapper over `strcat`. */
 char *sysdep_strcat(char *d, const char *s);
+/** @brief Host-implemented wrapper over `strcmp`. */
 int sysdep_strcmp(const char *s1, const char *s2);
+/** @brief Host-implemented wrapper over `strstr`. */
 char *sysdep_strstr(const char *s1, const char *s2);
 
+/** @brief Host-implemented wrapper over `vsnprintf`. */
 int sysdep_vsnprintf(char *str, unsigned size, const char *format, va_list ap);
+/** @brief Host-implemented wrapper over `sprintf`. */
 int sysdep_sprintf(char *buf, const char *fmt, ...);
 
 #ifdef __cplusplus
 }
+
+/*
+ * Placement `operator new`/`operator delete`, declared by hand because this
+ * build is `-nostdinc++` and has no `<new>` -- and NOT the standard
+ * library's own signature, on purpose (finding F10155, which retracts
+ * F1340's earlier belief that a null-check-free placement `new` was
+ * unreachable under this build).
+ *
+ * THE STANDARD PLACEMENT FORMS ARE DECLARED `throw()`, AND THAT IS EXACTLY
+ * WHAT MUST NOT BE WRITTEN HERE.  GCC 3.4 inserts a null-pointer check
+ * before the constructor call for any placement `new` whose `operator new`
+ * is `throw()` -- required by the standard, since such an operator promises
+ * never to return NULL from an exceptional path -- and the object's own
+ * instructions construct unconditionally, testing the pointer only
+ * afterward (see finding F1340 for the one site, `VPCMXF_Create`, where
+ * that difference is CONTROL FLOW rather than instruction count). Declaring
+ * these two WITHOUT `throw()` was verified empirically under the real
+ * period compiler and exact `TC_FLAGS` to reproduce that exact
+ * construct-then-check-later shape, with no build-flag change of any kind
+ * -- `-fcheck-new` was never being requested by this project's own flags in
+ * the first place, so nothing needs withdrawing, only a placement operator
+ * that does not carry the exception specification that would ask for the
+ * check on its own.
+ *
+ * If anyone is ever tempted to "fix" this to look like the real `<new>`
+ * declaration (`throw()`), don't: that reintroduces the null test the
+ * object does not have, silently, at every site that uses these.
+ */
+inline void *operator new(size_t, void *p) { return p; }
+inline void operator delete(void *, void *) { }
 #endif
 
 #endif /* DSPLIB_SYSDEP_H */

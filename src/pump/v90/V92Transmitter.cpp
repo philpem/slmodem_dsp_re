@@ -359,8 +359,7 @@ V92Transmitter::reset(V92MappingParams *params)
 		dsplibs_debug_printf("On V92 Transmitter reset, here are "
 				     "modulation parameters:\r\n");
 	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("================== General ============"
-				     "======\r\n");
+		dsplibs_debug_printf("================== General ============" "======\r\n");
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("Gain = %c%d.%07d\r\n", sign_of(gain),
 				     whole_of(gain), frac_of(gain));
@@ -395,8 +394,7 @@ V92Transmitter::reset(V92MappingParams *params)
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("m11 = %d\r\n", p->m[11]);
 	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("================== Pre Coder =========="
-				     "======\r\n");
+		dsplibs_debug_printf("================== Pre Coder ==========" "======\r\n");
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("lz1 = %d\r\n", p->lz1);
 	if (DSPLIB_DEBUG_ON())
@@ -404,8 +402,7 @@ V92Transmitter::reset(V92MappingParams *params)
 
 	if (p->lz1 != 0) {
 		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("---------------------------"
-					     "\r\n");
+			dsplibs_debug_printf("---------------------------" "\r\n");
 		for (i = 0; i < p->lz1; i++)
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf("z1[%d] = %c%d.%07d\r\n",
@@ -413,14 +410,12 @@ V92Transmitter::reset(V92MappingParams *params)
 						     whole_of(p->z1[i]),
 						     frac_of(p->z1[i]));
 		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("---------------------------"
-					     "\r\n");
+			dsplibs_debug_printf("---------------------------" "\r\n");
 	}
 
 	if (p->lp1 != 0) {
 		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("---------------------------"
-					     "\r\n");
+			dsplibs_debug_printf("---------------------------" "\r\n");
 		for (i = 0; i < p->lp1; i++)
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf("p1[%d] = %c%d.%07d\r\n",
@@ -428,13 +423,11 @@ V92Transmitter::reset(V92MappingParams *params)
 						     whole_of(p->p1[i]),
 						     frac_of(p->p1[i]));
 		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("---------------------------"
-					     "\r\n");
+			dsplibs_debug_printf("---------------------------" "\r\n");
 	}
 
 	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("================== Pre Filter ========="
-				     "======\r\n");
+		dsplibs_debug_printf("================== Pre Filter =========" "======\r\n");
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("lz2 = %d\r\n", p->lz2);
 	if (DSPLIB_DEBUG_ON())
@@ -442,8 +435,7 @@ V92Transmitter::reset(V92MappingParams *params)
 
 	if (p->lz2 != 0) {
 		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("---------------------------"
-					     "\r\n");
+			dsplibs_debug_printf("---------------------------" "\r\n");
 		for (i = 0; i < p->lz2; i++)
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf("z2[%d] = %c%d.%07d\r\n",
@@ -451,14 +443,12 @@ V92Transmitter::reset(V92MappingParams *params)
 						     whole_of(p->z2[i]),
 						     frac_of(p->z2[i]));
 		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("---------------------------"
-					     "\r\n");
+			dsplibs_debug_printf("---------------------------" "\r\n");
 	}
 
 	if (p->lp2 != 0) {
 		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("---------------------------"
-					     "\r\n");
+			dsplibs_debug_printf("---------------------------" "\r\n");
 		for (i = 0; i < p->lp2; i++)
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf("p2[%d] = %c%d.%07d\r\n",
@@ -466,8 +456,7 @@ V92Transmitter::reset(V92MappingParams *params)
 						     whole_of(p->p2[i]),
 						     frac_of(p->p2[i]));
 		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("---------------------------"
-					     "\r\n");
+			dsplibs_debug_printf("---------------------------" "\r\n");
 	}
 
 	convEncoderOutput = 0;

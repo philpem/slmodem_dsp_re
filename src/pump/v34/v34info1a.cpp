@@ -252,8 +252,7 @@ V34SetINFO1aBits(void *objp, short *bits)
 		if (obj->role == 0x65) {
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
-					"V34SetINFO1aBits: Setting INFO1c for "
-					"K56Flex (Caller-Analog)...\r\n");
+					"V34SetINFO1aBits: Setting INFO1c for " "K56Flex (Caller-Analog)...\r\n");
 
 			put_rev7_high(bits,
 				      bitreverse((unsigned short)obj->short_35a4,

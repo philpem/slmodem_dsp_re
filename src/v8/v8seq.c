@@ -67,8 +67,7 @@ initTxSequence(struct v8 *v)
 			/* Complained about, then repaired -- in that order. */
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
-				    "V8: BUG - raw Call Function selected "
-				    "without valid data !!!\r\n");
+				    "V8: BUG - raw Call Function selected " "without valid data !!!\r\n");
 			cm->b2 &= (unsigned char)~V8_CM_EXT1_PRESENT;
 		}
 	}
@@ -121,8 +120,7 @@ initTxSequence(struct v8 *v)
 		if (emit_extension(seq, &n, cm->ext2) == 0) {
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
-				    "V8: BUG - raw Protocol selected "
-				    "without valid data !!!\r\n");
+				    "V8: BUG - raw Protocol selected " "without valid data !!!\r\n");
 			cm->b2 &= (unsigned char)~V8_CM_EXT2_PRESENT;
 		}
 	}

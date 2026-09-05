@@ -500,8 +500,7 @@ V92Phase3Modulator::reset(short levelArg, V92Phase3ModulatorState stateArg,
 		 */
 		if (dilArg != NULL && DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("BUG BUG BUG BUG BUG - "
-			    "V92Phase3Modulator: no Ja Object, "
-			    "DIL descriptor available !\r\n");
+			    "V92Phase3Modulator: no Ja Object, " "DIL descriptor available !\r\n");
 		jaBitCount = 0;
 		jaBits = NULL;
 	}

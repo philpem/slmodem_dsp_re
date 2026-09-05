@@ -1,98 +1,70 @@
-/*
- * VPcmFloModem.h -- the V.90/V.92 modem's face to the V.34 handshake.
+/**
+ * @file VPcmFloModem.h
+ * @brief The V.90/V.92 modem's face to the V.34 handshake.
  *
- * Reconstructed from dsplibs.o.  The class has twenty-six members in the blob
- * and this tree writes SIX of them out of line -- `getUinfoValue`,
- * `setPhaseIIinfo`, `getV90CpBits`, `getV90JaBits`, `setPcmSessionType` and
- * `enterPhase3` -- plus `externalReset`, the two `setV34BaudFor*`, the three
- * visual diagnostics, and both entry points, `runPcmModem` and
- * `v90RunDemodulator`.  Seven more are reconstructed as `inline` bodies that
- * the two entry points inline exactly as the object does; see the block that
- * lists them below.
- * Everything else is left undeclared rather than declared-and-undefined,
- * because nothing here calls it and a declaration nobody needs is a claim
- * nobody checked.
+ * The class has twenty-six members in the blob. This tree writes six out of
+ * line (`getUinfoValue`, `setPhaseIIinfo`, `getV90CpBits`, `getV90JaBits`,
+ * `setPcmSessionType`, `enterPhase3`), plus `externalReset`, the two
+ * `setV34BaudFor*`, the three visual diagnostics, and both entry points
+ * (`runPcmModem`, `v90RunDemodulator`). Seven more are reconstructed as
+ * `inline` bodies that the two entry points inline exactly as the object
+ * does (see the block that lists them below). Everything else is left
+ * undeclared rather than declared-and-undefined, because nothing here calls
+ * it and a declaration nobody needs is a claim nobody checked.
  *
- * NOT POLYMORPHIC.  tools/cppstruct.py lists the destructor with the `D1` and
- * `D2` variants and no `D0`, and GCC emits a deleting destructor only for a
- * virtual one, so +0x00 is a real member and there is no vptr (finding F228 is
- * the four classes where that is not true).
+ * Not polymorphic: `tools/cppstruct.py` lists the destructor with `D1`/`D2`
+ * and no `D0`, and GCC emits a deleting destructor only for a virtual one,
+ * so +0x00 is a real member and there is no vptr (finding F228 lists the
+ * four classes where that is not true).
  *
- * ===========================================================================
- * THE OBJECT REALLY IS THIRTY-TWO KILOBYTES
- * ===========================================================================
- *
- * docs/v90cpp.md used to say that VPcmFloModem "reaches +32,612, which almost
- * certainly means it indexes *through* `this` into an enclosing session object
- * rather than being that large".  That is finding F268's warning applied in
- * good faith, and for this class it is WRONG.  Run finding F268's own check --
- * trace the base register of every large displacement back to the prologue --
- * and every one of them comes off the `this` stack slot:
- *
- *     getV90JaBits       mov 0xc(%esp),%ecx    -> cmpb 0x7dce(%ecx)
- *     getV90CpBits       mov 0x20(%esp),%ebx   -> movzwl 0x7dd6(%ebx)
- *     setPcmSessionType  mov 0x20(%esp),%esi   -> mov 0x612c(%esi)
- *     setPhaseIIinfo     mov 0x40(%esp),%esi   -> lea 0x7ed4(%esi)
- *     getUinfoValue      mov 0xd0(%esp),%ebx   -> movl $0x0,0x7ed4(%ebx,%edx,4)
- *
- * There is no intervening load.  So these five alone put the object at
- * **0x7f28 = 32,552 bytes at least** -- the last of the four float arrays ends
- * at +0x7f27 -- and the 32,612 the whole class reaches is 60 bytes further on.
- *
- * A FLOOR IS STILL NOT A SIZE, so no size is asserted here or in the .cpp.
- * Twenty-one of the twenty-six members have not been read, and the four
- * arrays at +0x7dd8 are only known to be 21 entries because that is how many
- * `getUinfoValue` clears.  The .cpp asserts OFFSETS; the test allocates a slot
- * larger than the floor and compares the whole slot, which catches a store
+ * @par The object really is thirty-two kilobytes
+ * `docs/v90cpp.md` used to read this class's +32,612 reach as finding
+ * F268's warning sign -- that a displacement this large usually means
+ * indexing *through* `this` into an enclosing session object rather than
+ * the class really being that big. Tracing the base register of the five
+ * largest displacements (in `getV90JaBits`, `getV90CpBits`,
+ * `setPcmSessionType`, `setPhaseIIinfo`, `getUinfoValue`) back to the
+ * prologue finds no intervening load in any of them: all five come
+ * straight off the `this` stack slot. So the floor really is
+ * 0x7f28 = 32,552 bytes (where the last of the four float arrays ends),
+ * with the object's full 32,612-byte reach 60 bytes further on. A floor is
+ * still not a size, so none is asserted here or in the .cpp: twenty-one of
+ * the twenty-six members are unread, and the four arrays at +0x7dd8 are
+ * only known to be `VPCM_L2` entries because that's how many
+ * `getUinfoValue` clears. The .cpp asserts offsets; the test allocates a
+ * slot larger than the floor and compares the whole slot, catching a store
  * past the last modelled field as well as one inside it.
  *
- * ===========================================================================
- * A V90Modem IS EMBEDDED AT +0x1758, AND THAT IS MEASURED THREE WAYS
- * ===========================================================================
+ * @par A V90Modem is embedded at +0x1758
+ * Measured three independent ways: `setPcmSessionType` reaches it with an
+ * add-then-jump into `V90Modem::setSessionFlag` (the same forwarding
+ * signature finding F268 used for the two demodulators); `getV90CpBits`
+ * reads +0x175c as `V90Modem::demodulator` (its own +0x04); and
+ * `setPhaseIIinfo` reads +0x1760 as `V90Phase2Info*`, landing exactly at
+ * `V90Modem`'s declared prefix end (0x1758 + 0x49c0 = 0x6118), immediately
+ * before the next field anything here touches, +0x611c. The third leg is
+ * the weak one -- `V90Modem` asserts no size of its own -- so what holds
+ * the map together is the .cpp's `sizeof(V90Modem) == 0x49c0` assertion
+ * alongside the offsets: a later batch that gives `V90Modem` more prefix
+ * breaks the build here rather than silently shifting every offset past
+ * +0x6118. Two fields inside that embedded `V90Modem` were carved out of
+ * its `pad_08` for this batch: `phase2Info` at +0x08 (this + 0x1760) and
+ * `ptr_49b4` at +0x49b4 (this + 0x610c) -- see
+ * `include/dsplib/V90SessionFlag.h`.
  *
- *   1. `setPcmSessionType` ends `lea 0x1758(%esi),%edi ... jmp
- *      V90Modem::setSessionFlag` -- an ADD before the call, not a load, which
- *      is the same signature finding F268 used for the two demodulators.
- *   2. `getV90CpBits` reads +0x175c as a V90Demodulator*, and V90Modem's
- *      `demodulator` is at +0x04.  0x1758 + 4 = 0x175c.
- *   3. `setPhaseIIinfo` reads +0x1760 as a V90Phase2Info*, and V90Modem's
- *      declared prefix ends at 0x49c0; 0x1758 + 0x49c0 = 0x6118, immediately
- *      before the first field after it that anything here touches, +0x611c.
- *
- * The third is also the weak point: V90Modem asserts no size either, so the
- * four bytes at +0x6118 could belong to either object.  What holds the map
- * together is that the .cpp asserts `sizeof(V90Modem) == 0x49c0` alongside
- * the offsets, so a later batch that gives V90Modem more prefix breaks the
- * build here instead of silently shifting every offset past +0x6118.
- *
- * Two fields inside that V90Modem were carved out of its `pad_08` for this
- * batch: `phase2Info` at +0x08 (this + 0x1760) and `ptr_49b4` at +0x49b4
- * (this + 0x610c).  See include/dsplib/V90SessionFlag.h.
- *
- * ===========================================================================
- * NAMES
- * ===========================================================================
- *
- * The mangling never carries a data member's name (finding F226).  Where the
- * blob names a field some other way the name below is the object's own:
- *
- *   +0x7dce, +0x7dcf, +0x7dd0   `setTerminateJaFlag`, `setTerminateCpFlag`
- *                               and `setTerminateCpNotFlag` are three of the
- *                               twenty-six members, and getV90CpBits prints
- *                               "(terminateCp=%d, terminateCpNot=%d)" from
- *                               +0x7dcf and +0x7dd0 in that order -- which
- *                               leaves +0x7dce, the one getV90JaBits tests,
- *                               for the Ja flag.
- *   +0x7dd6                     `setMinNofTransmitSequences(unsigned short)`
- *                               is a member and this is the unsigned short
- *                               the sequence counter is compared against.
- *   +0x7dd4                     the "#%d" in "End of CP #%d tx....".
- *   +0x7e80                     `L2`: setPhaseIIinfo installs it in
- *                               V90Phase2Info's `L2` slot and getUinfoValue
- *                               prints it as "L2[%d]".
- *
- * Everything else is offset-named or descriptive-and-hedged, and each says
- * below which it is.
+ * @par Names
+ * The mangling never carries a data member's name (finding F226); where
+ * the blob names a field some other way, that name is used below. Four
+ * examples: `setTerminateJaFlag`/`CpFlag`/`CpNotFlag` and
+ * `getV90CpBits`'s own `"(terminateCp=%d, terminateCpNot=%d)"` diagnostic
+ * (printed in that order) between them place the Ja/Cp/CpNot flags at
+ * +0x7dce/+0x7dcf/+0x7dd0; `setMinNofTransmitSequences(unsigned short)`
+ * types the field it's compared against at +0x7dd6; `"End of CP #%d
+ * tx...."` names +0x7dd4; and `L2` at +0x7e80 comes from
+ * `setPhaseIIinfo` installing it in `V90Phase2Info`'s `L2` slot and
+ * `getUinfoValue` printing it as `"L2[%d]"`. Everything else is
+ * offset-named or descriptive-and-hedged, and each field comment says
+ * which.
  */
 
 #ifndef DSPLIB_VPCMFLOMODEM_H
@@ -113,300 +85,276 @@ struct int_complex;
 /* A pointer only; src/pump/v90/VPcmFloModem.cpp includes the definition. */
 class V92Parameters;
 
-/*
- * How many entries of each of the four float arrays `getUinfoValue` clears:
- * `inc %edx; cmp $0x14,%edx; jle` is 0 through 20 inclusive.  The same bound
- * V90PHASE2INFO_L2 and V92PHASE2INFO_L2 record from the two printers, from
- * two other translation units.
- */
+/** @brief Entries in each of the four float arrays getUinfoValue() clears
+ *  (`inc %edx; cmp $0x14,%edx; jle` is 0..20 inclusive) -- the same bound
+ *  `V90PHASE2INFO_L2` and `V92PHASE2INFO_L2` record, from two other
+ *  translation units' printers. */
 #define VPCM_L2			21
 
-/*
- * How many probe tones `getUinfoValue` walks: `cmp $0x18,%edx; jle` is 0
- * through 24, and V34_PROBE_RESULTS in dsplib/v34fsk.h is 25.
- */
+/** @brief Probe tones getUinfoValue() walks (`cmp $0x18,%edx; jle` is
+ *  0..24), matching `V34_PROBE_RESULTS` in dsplib/v34fsk.h. */
 #define VPCM_PROBE_TONES	25
 
 class VPcmFloModem {
 public:
-	/*
-	 * 0xfa60 (C1) and 0xfee0 (C2), 0x28b = 651 bytes each.  Six member
-	 * objects and the wiring between them; see
-	 * src/pump/v90/VPcmFloModemCtor.cpp, which is where every argument
-	 * this hands on is accounted for.
-	 *
-	 * THERE IS NO DECLARED DESTRUCTOR AND THAT IS DELIBERATE.  `D1` at
-	 * 0xd0a0 and `D2` at 0xd030 are six member destructor calls in
-	 * reverse declaration order and nothing else, which is exactly what
-	 * GCC emits for an IMPLICITLY-DECLARED one over these six members.
-	 * Declaring an empty one would not be the same function: CXXFLAGS
-	 * carries `-fno-lifetime-dse`, so a written body is not elided.
-	 *
-	 * THE PRICE IS THAT OUR OBJECT HAS NEITHER SYMBOL.  An implicit
-	 * destructor is implicitly inline, our build has one call site for it
-	 * (`VPCMXF_Delete`), and GCC inlines it there and emits no out-of-line
-	 * copy -- so 194 bytes of the blob are behaviourally reproduced and
-	 * symbolically absent.  Deviation D237, and
-	 * src/pump/v90/VPcmFloModemCtor.cpp says why the two ways of forcing
-	 * the symbols out would each break something that currently matches.
+	/**
+	 * @brief Construct the whole modem: six member objects and the
+	 *        wiring between them. See src/pump/v90/VPcmFloModemCtor.cpp,
+	 *        which accounts for every argument passed on.
+	 * @param v34Object    The owning V.34 object, stored and handed back
+	 *                     to `V34XF_Get*` calls verbatim.
+	 * @param side         Call or answer.
+	 * @param modemParams  Parameters shared with V.34/V.90/V.92.
+	 * @param nSamples     Block size.
+	 * @param v90Mode      V.90 computational mode.
+	 * @param v92Mode      V.92 computational mode.
 	 */
 	VPcmFloModem(void *v34Object, V90ModemSide side,
 		     _tagModemParameters *modemParams, unsigned int nSamples,
 		     V90ComputationalMode v90Mode,
 		     V92ComputationalMode v92Mode);
 
-	/*
-	 * The destructor -- D2 at 0xd030 and D1 at 0xd0a0, 97 bytes each.
-	 * The body is empty: the 97 bytes are the six member destructions
-	 * the compiler generates for the six typed embedded members below,
-	 * in reverse declaration order, which is exactly the blob's call
-	 * sequence.  VPcmFloModem.cpp defines it.
+	/**
+	 * @brief Destroy. No declared body of its own -- the blob's `D1`/`D2`
+	 *        are six member destructor calls in reverse declaration
+	 *        order and nothing else, exactly what GCC emits for an
+	 *        implicitly-declared destructor over these six members.
+	 *        Declaring an empty body here would not be the same
+	 *        function under `-fno-lifetime-dse`, so none is declared;
+	 *        deviation D237 covers the resulting symbol gap.
 	 */
 	~VPcmFloModem();
 
-	/*
-	 * internalReset -- 0xd4f0, 165 bytes of constant stores: the
-	 * transmit-side bookkeeping back to its phase 3 entry values, with
-	 * the V.90 baud allow list (index 5 barred).  VPcmFloModem.cpp.
+	/**
+	 * @brief Reset the transmit-side bookkeeping to its phase-3 entry
+	 *        values, with the V.90 baud allow list applied (index 5
+	 *        barred).
 	 */
 	void internalReset();
 
-	/*
-	 * Turn the V.34 line probe into the Phase 2 record, and report
-	 * whatever the modem already knows about Uinfo.
-	 *
-	 * Returns 0 unless it finds a non-zero short through the modem; the
-	 * return type is not mangled, and `int` is what the object leaves in
-	 * %eax on every path (a `movswl`, or a cleared register).
+	/**
+	 * @brief Turn the V.34 line probe into the Phase 2 record, and
+	 *        report whatever the modem already knows about Uinfo.
+	 * @param probeValid  Nonzero when the V.34 probe result is usable.
+	 * @return 0 unless a non-zero short is found through the modem.
 	 */
 	int getUinfoValue(short probeValid);
 
-	/*
-	 * Fill both Phase 2 records out of the 41 INFO0 bits, install the
-	 * four float arrays in them, and re-apply the PCM session type.
-	 *
-	 * `int *`, not `const int *`: the mangling is `PKi` for a const one
-	 * and this symbol is `Pi`.
+	/**
+	 * @brief Fill both Phase 2 records from the 41 INFO0 bits, install
+	 *        the four float arrays in them, and re-apply the PCM
+	 *        session type.
+	 * @param info0  The 41 INFO0 bits (mutable: `int *`, not `const
+	 *               int *` -- the mangling is `Pi`, not `PKi`).
+	 * @param rtd    Round-trip delay, stored into both records.
 	 */
 	void setPhaseIIinfo(int *info0, int rtd);
 
-	/* Pack the next CP symbol.  Returns 1 once CP is to be terminated. */
+	/**
+	 * @brief Pack the next CP symbol.
+	 * @param bits  Destination for the packed symbol.
+	 * @return 1 once CP is to be terminated, 0 otherwise.
+	 */
 	int getV90CpBits(short *bits);
 
-	/* Pack the next JA symbol.  Returns 1 once JA is to be terminated. */
+	/**
+	 * @brief Pack the next JA symbol.
+	 * @param bits  Destination for the packed symbol.
+	 * @return 1 once JA is to be terminated, 0 otherwise.
+	 */
 	int getV90JaBits(short *bits);
 
-	/* Record V.90 (0) or V.92 (non-zero) and tell the modem. */
+	/**
+	 * @brief Record the session type and tell the embedded modem.
+	 * @param sessionType  0 for V.90, non-zero for V.92.
+	 */
 	void setPcmSessionType(int sessionType);
 
-	/*
-	 * Clear the transmit bookkeeping, hand phase 3 to the demodulator,
-	 * and pack the DIL descriptor into `bitVector` as the JA vector.
-	 *
-	 * Twenty-one constant stores, two calls and two diagnostics; it reads
-	 * nothing but `modem.demodulator`, `dil` and the `nofBits` the packer
-	 * has just written.  The return type is not mangled and nothing here
-	 * establishes it: `void` is what the object supports, since every
-	 * path falls into the tail of `edprintf` and %eax is never set.
+	/**
+	 * @brief Clear the transmit bookkeeping, hand phase 3 to the
+	 *        demodulator, and pack the DIL descriptor into `bitVector`
+	 *        as the JA vector.
 	 */
 	void enterPhase3();
 
-	/*
-	 * `_ZN12VPcmFloModem13externalResetEv`, added by task #88.  It is
-	 * `VPcmV34Create`'s way of putting a constructed modem back to its
-	 * starting state, and its shape is nearly `enterPhase3`'s: the same
-	 * six flags, the same five cleared bytes, the same three CP fields.
-	 * Falls off the end into `dsplibs_debug_printf`'s tail, so `void`.
+	/**
+	 * @brief Put a constructed modem back to its starting state.
+	 *        `VPcmV34Create`'s way of resetting; added by task #88.
+	 *        Nearly `enterPhase3`'s shape: the same six flags, the same
+	 *        five cleared bytes, the same three CP fields.
 	 */
 	void externalReset();
 
-	/*
-	 * Set `v34BaudAllow` for a V.90 session and for a V.34 one.
-	 *
-	 * Six `movb` each and nothing else -- no read, no call, no return
-	 * value set -- so `void` is what the object supports and the only
-	 * difference between the two is the last entry.  The names are the
-	 * object's own, and they are what settles that the array is per-baud;
-	 * see the comment on `v34BaudAllow` for what that does and does not
-	 * claim.  Nothing in the object calls either, so both survive only as
-	 * the out-of-line copy, exactly like `setScramble` in v34shell.h.
-	 */
+	/** @brief Set `v34BaudAllow` for a V.90 session (index 5, the
+	 *  fastest V.34 rate, barred). Not called by anything in the
+	 *  object; survives only as the out-of-line copy, like
+	 *  `setScramble` in v34shell.h. */
 	void setV34BaudForV90();
+	/** @brief Set `v34BaudAllow` for a V.34 session (index 5 allowed,
+	 *  the only difference from setV34BaudForV90()). Likewise
+	 *  uncalled; out-of-line copy only. */
 	void setV34BaudForV34();
 
 	/*
-	 * --- SEVEN MEMBERS `v90RunDemodulator` INLINES ----------------------
+	 * --- Seven members v90RunDemodulator inlines -------------------------
 	 *
-	 * Each is a `T` symbol of its own in the blob with NO incoming
+	 * Each is a `T` symbol of its own in the blob with no incoming
 	 * relocation anywhere in the object, and each one's body appears
-	 * open-coded inside `v90RunDemodulator` -- which is what a call the
-	 * compiler inlined looks like, since the out-of-line copy has to be
+	 * open-coded inside `v90RunDemodulator` -- what a call the compiler
+	 * inlined looks like, since the out-of-line copy still has to be
 	 * emitted for a non-inline member whether anything reaches it or not.
-	 *
-	 *   d110  setTerminateJaFlag(unsigned char)          45 B
-	 *   d140  setTerminateCpFlag(unsigned char)          45 B
-	 *   d170  setTerminateCpNotFlag(unsigned char)       45 B
-	 *   d1a0  setMinNofTransmitSequences(unsigned short) 26 B
-	 *   d1c0  setNofBitsPhase4(unsigned int)             56 B
-	 *   d200  resetBitPointer()                          51 B
-	 *   d5a0  copyMpInfoForInterface()                  183 B
-	 *
-	 * THE `inline` HAS BEEN DROPPED AND ALL SEVEN SYMBOLS ARE CLAIMED
-	 * (this paragraph used to price that move at "451 bytes and seven
-	 * differential tests"; t_vpcmleaves.cpp is the tests).  The fourteen
-	 * inlined sites in `v90RunDemodulator` are unchanged -- GCC still
-	 * inlines a same-TU callee at -O3 -- and the out-of-line copies now
-	 * exist as the blob has them.
+	 * The `inline` keyword has been dropped and all seven symbols are
+	 * claimed (`t_vpcmleaves.cpp` is their tests); the fourteen inlined
+	 * sites in `v90RunDemodulator` are unaffected, since GCC still inlines
+	 * a same-TU callee at -O3.
 	 */
+	/** @brief Set the Ja termination-request flag (`terminateJa`, +0x7dce). */
 	void setTerminateJaFlag(unsigned char v);
+	/** @brief Set the CP termination-request flag (`terminateCp`, +0x7dcf). */
 	void setTerminateCpFlag(unsigned char v);
+	/** @brief Set the CPnot termination-request flag (`terminateCpNot`, +0x7dd0). */
 	void setTerminateCpNotFlag(unsigned char v);
+	/** @brief Set the minimum completed-sequence count before CP may give
+	 *  way to CPnot (`minNofTransmitSequences`, +0x7dd6). */
 	void setMinNofTransmitSequences(unsigned short n);
+	/** @brief Set how many bits getV90CpBits() packs per output word
+	 *  (`nofBitsPerSymbol`, +0x7dd2). */
 	void setNofBitsPhase4(unsigned int constel);
+	/** @brief Rewind the transmit bit pointer to the start of `bitVector`
+	 *  (`bitPointer`, +0x1738). */
 	void resetBitPointer();
+	/** @brief Copy the received MP message from the embedded V90Modem's
+	 *  `V90MP` into this object's own `mpType`..`mpH3Imag` block, so the
+	 *  V.34 interface can read it without reaching into the V.90 modem. */
 	void copyMpInfoForInterface();
 
 	/*
-	 * --- THE THREE VISUAL DIAGNOSTICS -----------------------------------
+	 * --- The three visual diagnostics -------------------------------------
 	 *
 	 * `VPcmV34GetVisualDiagnostics` dispatches to these three for a PCM
-	 * session; see src/pump/v34/v34diag.cpp for the dispatch and
-	 * include/dsplib/int_complex.h for what a point is.
-	 *
-	 * ARGUMENT TYPES ARE THE MANGLING'S and exact --
-	 * `P11int_complexm` is `(int_complex *, unsigned long)`.  RETURN
-	 * TYPES ARE NOT MANGLED (docs/v90cpp.md); all three leave the number
-	 * of points written in %eax on every path, including zero on the
-	 * paths that write none, and `unsigned long` is that count with the
-	 * same width and signedness as the bound it was clamped against.  A
-	 * `size_t` or an `unsigned int` return would compile identically.
-	 *
-	 * ALL THREE ANSWER NOTHING UNLESS A PCM RECEIVER IS RUNNING: the
-	 * first thing each does is `if (pcmSessionType != 0 && info0Layout
-	 * == 0) return 0`, which is the object's `test`/`je` pair at 0xf3c1
-	 * and 0xf3cd and its twins.
+	 * session (src/pump/v34/v34diag.cpp; include/dsplib/int_complex.h for
+	 * what a point is). Argument types are the mangling's exactly
+	 * (`P11int_complexm` is `(int_complex *, unsigned long)`); return
+	 * types are not mangled, but all three leave the point count written
+	 * in %eax on every path (zero on the paths that write none), so
+	 * `unsigned long` -- the same width/signedness as the clamp bound --
+	 * is what the object supports. All three answer nothing unless a PCM
+	 * receiver is running: each opens with the equivalent of
+	 * `if (pcmSessionType != 0 && info0Layout == 0) return 0`.
 	 */
+	/** @brief Fetch constellation trace points for the visual diagnostics.
+	 *  @param points    Destination array.
+	 *  @param maxCount  Capacity of `points`.
+	 *  @return Number of points written. */
 	unsigned long getConstellation(int_complex *points,
 				       unsigned long maxCount);
+	/** @brief Fetch linear-equalizer trace points for the visual diagnostics.
+	 *  @param points    Destination array.
+	 *  @param maxCount  Capacity of `points`.
+	 *  @return Number of points written. */
 	unsigned long getLinearEqualizer(int_complex *points,
 					 unsigned long maxCount);
+	/** @brief Fetch DFE trace points for the visual diagnostics.
+	 *  @param points    Destination array.
+	 *  @param maxCount  Capacity of `points`.
+	 *  @return Number of points written. */
 	unsigned long getDFE(int_complex *points, unsigned long maxCount);
 
 	/*
-	 * --- THE FOUR `VPcmV34Progress` ENTRY POINTS, AND ALL FOUR ARE NOW
-	 * --- WRITTEN --------------------------------------------------------
+	 * --- The four VPcmV34Progress entry points ----------------------------
 	 *
-	 * This block used to be headed "FOUR MEMBERS THIS TREE HAS NOT
-	 * WRITTEN".  `runPcmModem` and `v90RunDemodulator` were written first,
-	 * and `qcLineVerification` and `vPcmResetPhase3Modem` close the set --
-	 * all four are in src/pump/v90/VPcmFloModem.cpp.
-	 *
-	 * THE WEAK ARRANGEMENT BELOW STAYS AND IS NOW A NO-OP THAT COSTS
-	 * NOTHING.  A weak DECLARATION whose symbol is defined at link time
-	 * resolves to the definition, so `v34pcmmain.cpp`'s guard now passes
-	 * at every one of the four sites and the calls happen -- which is what
-	 * the blob does unconditionally.  Removing the macro would be a change
-	 * to the one translation unit that has to keep working if a future
-	 * split ever takes a member back out, so it is left alone.
-	 *
-	 * `VPcmV34Progress` calls all four and nothing else does.  They are
-	 * marked WEAK in the one
-	 * translation unit that calls them -- `src/pump/v34/v34pcmmain.cpp`
-	 * defines `DSPLIB_VPCMFLO_UNWRITTEN` before including this file -- so
-	 * the reference resolves to zero rather than failing the link of all
-	 * 78 test binaries, and the caller tests the pointer-to-member before
-	 * it calls through it.  `include/dsplib/vpcm.h` carries the same
-	 * arrangement for the five `VPcmV34*` entry points and says why at
-	 * length; the rule is the same one, one level further down.
-	 *
-	 * A TU that DEFINES one of these must not define the macro, or the
-	 * definition itself becomes weak.  src/pump/v90/VPcmFloModem.cpp,
-	 * which now defines all four, does not.
-	 *
-	 * The signatures are the manglings and nothing else:
-	 *
-	 *   _ZN12VPcmFloModem11runPcmModemEPfS0_jPiS1_S1_S1_       2,041 B
-	 *   _ZN12VPcmFloModem17v90RunDemodulatorEPfjPiS1_          3,013 B
-	 *   _ZN12VPcmFloModem18qcLineVerificationEPfS0_jPiS1_S1_S1_  779 B
-	 *   _ZN12VPcmFloModem20vPcmResetPhase3ModemEv               149 B
-	 *
-	 * The return types are not mangled; `int` is what `VPcmV34Progress`
-	 * switches on for the first three (`cmp $0x8,%eax` and friends at
-	 * .text+0xbc30, 0xc7fc, 0xba46) and `vPcmResetPhase3Modem`'s result is
-	 * discarded, so it is spelled `void`.
+	 * All four are written, in src/pump/v90/VPcmFloModem.cpp.
+	 * `VPcmV34Progress` (src/pump/v34/v34pcmmain.cpp) calls all four and
+	 * nothing else does. Each is declared weak via
+	 * `DSPLIB_VPCMFLO_UNWRITTEN`, defined empty just below: a weak
+	 * DECLARATION whose symbol is defined at link time resolves to the
+	 * definition, so `v34pcmmain.cpp`'s guard passes at every call site
+	 * and the calls happen unconditionally, matching the blob. The macro
+	 * stays rather than being removed because `v34pcmmain.cpp` has to
+	 * keep working if a future split ever takes a member back out;
+	 * `include/dsplib/vpcm.h` carries the same arrangement for the five
+	 * `VPcmV34*` entry points and explains it at length. A TU that
+	 * DEFINES one of these must not itself define the macro, or the
+	 * definition becomes weak too -- `VPcmFloModem.cpp`, which defines
+	 * all four, does not. Return types are not mangled: `int` is what
+	 * `VPcmV34Progress` switches on for the first three, and
+	 * `vPcmResetPhase3Modem`'s result is discarded, so it is `void`.
 	 */
 #ifndef DSPLIB_VPCMFLO_UNWRITTEN
 #define DSPLIB_VPCMFLO_UNWRITTEN
 #endif
+	/**
+	 * @brief Run one block of the full V.90/V.92 PCM modem: transmit and
+	 *        receive together. `VPcmV34Progress`'s main entry point.
+	 * @param in      Received samples.
+	 * @param out     Transmit samples to send out.
+	 * @param n       Block size, in samples.
+	 * @param rxbits  Received bits, if any completed this block.
+	 * @param nrx     Number of bits written to `rxbits`.
+	 * @param txbits  Transmit bits to encode into `out`.
+	 * @param nbits   Number of bits in `txbits`.
+	 * @return The progress code `VPcmV34Progress` switches on.
+	 */
 	int runPcmModem(float *in, float *out, unsigned int n, int *rxbits,
 			int *nrx, int *txbits, int *nbits)
 		DSPLIB_VPCMFLO_UNWRITTEN;
+	/**
+	 * @brief Run one block of the V.90/V.92 demodulator alone (no
+	 *        transmit side), used while the receive-only phases run.
+	 * @param in      Received samples.
+	 * @param n       Block size, in samples.
+	 * @param rxbits  Received bits, if any completed this block.
+	 * @param nrx     Number of bits written to `rxbits`.
+	 * @return The progress code `VPcmV34Progress` switches on.
+	 */
 	int v90RunDemodulator(float *in, unsigned int n, int *rxbits, int *nrx)
 		DSPLIB_VPCMFLO_UNWRITTEN;
+	/**
+	 * @brief Run one block of the quick-connect line-verification period
+	 *        (see `qcVerifyState` and friends).
+	 * @param in      Received samples.
+	 * @param out     Transmit samples to send out.
+	 * @param n       Block size, in samples.
+	 * @param rxbits  Received bits, if any completed this block.
+	 * @param nrx     Number of bits written to `rxbits`.
+	 * @param txbits  Transmit bits to encode into `out`.
+	 * @param nbits   Number of bits in `txbits`.
+	 * @return 1 once line verification's period ends, 0 otherwise.
+	 */
 	int qcLineVerification(float *in, float *out, unsigned int n,
 			       int *rxbits, int *nrx, int *txbits, int *nbits)
 		DSPLIB_VPCMFLO_UNWRITTEN;
+	/** @brief Reset the modem back to its phase-3 entry state. */
 	void vPcmResetPhase3Modem() DSPLIB_VPCMFLO_UNWRITTEN;
 
 	/* --- data members; see the file comment on the naming --- */
 
-	/*
-	 * +0x0000  The V.34 object, handed to the constructor as its `void *`
+	/* +0x0000  The V.34 object, handed to the constructor as its `void *`
 	 * first argument and passed straight back to `V34XF_GetRTD`,
 	 * `V34XF_GetInfo0BitsPtr` and `V34XF_GetProbeResultsPtr`, all three of
-	 * which take a `void *` (include/dsplib/v34pcmif.h).
-	 */
+	 * which take a `void *` (include/dsplib/v34pcmif.h). */
 	void *v34Object;
 
-	/*
-	 * +0x0004  The DIL descriptor, EMBEDDED, and it is the JA vector's
-	 * source: `enterPhase3` ends
-	 *
-	 *     lea 0x4(%ebx),%eax   -> arg 1 of DILdescriptorPacker
-	 *     lea 0x21e(%ebx),%edx -> arg 2, `bitVector`
-	 *     lea 0x1736(%ebx),%ecx-> arg 3, `&nofBits`
-	 *
-	 * an ADD off `this` for the descriptor, not a load, so the block is
-	 * in the object.  Its TYPE is settled by two independent facts:
-	 * `DILdescriptorPacker` takes a `const tagV90DILdescriptor *`
-	 * (include/dsplib/DILdescriptorPacker.h), and
-	 * `sizeof(tagV90DILdescriptor)` is 0x213, which runs from +0x004 to
-	 * +0x216 and stops exactly where the next measured field, +0x217,
-	 * begins.  The span this replaced was 0x213 bytes of `pad_0004`.
-	 */
+	/* +0x0004  The DIL descriptor, embedded, and the JA vector's source
+	 * (enterPhase3() packs it here). An add off `this`, not a load, so
+	 * the block is in the object; typed by `DILdescriptorPacker` taking
+	 * a `const tagV90DILdescriptor *` and `sizeof(tagV90DILdescriptor)`
+	 * == 0x213 running exactly to the next measured field, +0x217. */
 	tagV90DILdescriptor dil;
 
 	/*
-	 * +0x0217  WHICH OF V.34's SIX SYMBOL RATES THIS SESSION WILL ACCEPT,
-	 * one byte each, 1 for allowed.
-	 *
-	 * It used to be `flags_0217`, offset-named because "nothing
-	 * establishes what they select".  Three readings settle it now and
-	 * none of them is this array's own writers:
-	 *
-	 *   - `chkForceBaudRate` (v34pcmif.c) takes `p3548 + 0x217` as `sel`
-	 *     when a V.90 receiver is up, and then INDEXES IT 1..5 against a
-	 *     cap it prints as "max V34 baud rate index = %d", clearing every
-	 *     entry at or above the cap.  An index that runs 0..5 against a
-	 *     quantity the object itself calls a baud rate index is what
-	 *     names the array; a write of six literals never could.
-	 *   - In its other two arms the same function indexes a LOCAL
-	 *     `unsigned char allow[6]` through the same `sel`, so the two are
-	 *     the same shape by construction.
-	 *   - `VPcmFloModem::setV34BaudForV90` and `::setV34BaudForV34` are
-	 *     six stores to this array and nothing else, and the object's own
-	 *     names for them say the six are V.34 baud.
-	 *
-	 * The two `setV34BaudFor*` differ in the LAST entry alone -- V.90
-	 * bars it, V.34 allows it -- which is the same entry `enterPhase3`
-	 * and `externalReset` bar and `getUinfoValue` allows.  V.34 has
-	 * exactly six symbol rates (2400, 2743, 2800, 3000, 3200, 3429) and
-	 * index 5 is the fastest, so every one of those five sites reads as
-	 * "3429 baud off".  WHAT IS NOT ESTABLISHED is the index-to-rate
-	 * mapping itself: `chkForceBaudRate` bars rates in ascending index
-	 * order, which fixes the direction but not the first entry, and
-	 * nothing read here states it.  The name claims the array is per-baud
-	 * and does not claim which baud.
+	 * +0x0217  Which of V.34's six symbol rates this session will
+	 * accept, one byte each, 1 for allowed. Named (not offset-named) on
+	 * three independent readings: `chkForceBaudRate` (v34pcmif.c) indexes
+	 * `p3548 + 0x217` 1..5 as `sel` against a cap it calls "max V34 baud
+	 * rate index", and in its other arms indexes a local
+	 * `unsigned char allow[6]` the same way; `setV34BaudForV90`/
+	 * `setV34BaudForV34` are six stores to this array and nothing else,
+	 * differing only in the last (fastest, 3429 baud) entry -- which
+	 * `enterPhase3`/`externalReset` bar and `getUinfoValue` allows. The
+	 * index-to-rate mapping itself is not established (only the
+	 * ascending bar order is): the name claims the array is per-baud,
+	 * not which baud each index is.
 	 */
 	unsigned char v34BaudAllow[6];
 
@@ -421,15 +369,15 @@ public:
 
 	/*
 	 * +0x021e  The bit vector currently being transmitted, indexed by
-	 * `bitPointer` and `nofBits` long.  `getV90JaBits` reads it two bits
+	 * `bitPointer` and `nofBits` long. `getV90JaBits` reads it two bits
 	 * at a time; `getV90CpBits` copies `nofBits` of it into
 	 * `cpBitVector` when CP gives way to CPnot.
 	 *
-	 * THE DECLARED LENGTH IS A SPAN, NOT THE ORIGINAL'S BOUND.  Nothing
-	 * read here bounds the array: it is indexed by a count that lives in
-	 * `nofBits`, which these five methods only read.  The declaration
-	 * runs to the next offset that IS measured, so a store anywhere in
-	 * the span is inside a modelled field rather than off the end of one.
+	 * The declared length is a span, not the original's bound: nothing
+	 * read here bounds the array (it's indexed by `nofBits`, which these
+	 * five methods only read), so the declaration runs to the next
+	 * offset that IS measured -- a store anywhere in the span lands
+	 * inside a modelled field rather than off the end of one.
 	 */
 	short bitVector[(0x1736 - 0x21e) / 2];
 
@@ -448,65 +396,49 @@ public:
 	unsigned short bitPointer;
 
 	/*
-	 * +0x173a  Three bytes `enterPhase3` clears, immediately before
-	 * `droppedToV34` and `clr`, which it clears in the same run of
-	 * five `movb $0x0`.
-	 *
-	 * THIS PARAGRAPH USED TO SAY "nothing reads them here" -- true of
-	 * `enterPhase3` alone and false of the class.  `runPcmModem` and
-	 * `v90RunDemodulator` read and write all three: `[0]` and `[1]` are
-	 * the two values `V90Jd::getConstelationSize`/`V92Jd`'s twin hand
-	 * back -- a training and a data constellation size, used to tell
+	 * +0x173a  Three bytes `enterPhase3` clears in the same run as
+	 * `droppedToV34` and `clr`, and reads/writes for two different
+	 * purposes: `[0]`/`[1]` are the training/data constellation sizes
+	 * `V90Jd::getConstelationSize`/`V92Jd`'s twin hand back, used to tell
 	 * the V.34 interface what was received (`V34XF_IndicateJdReceived`,
 	 * `V34XF_IndicateDilReceived`) and to seed `setNofBitsPhase4` and the
 	 * V.92 modulator's own copies (`v92modem.modulator->byte_0c`/
-	 * `byte_0d`).  `[2]` is a one-shot latch: the rate-renegotiation arm
-	 * that finds OUR OWN request outstanding sets it, and the arm that
-	 * later sees the FAR END's report of the same event clears it and
-	 * swallows the report rather than acting on it twice.
-	 *
-	 * `[2]` KEEPS ITS OFFSET NAME.  What is established is the latch's
-	 * behaviour above, which is finding F7583; splitting the array is a
-	 * separate change from fixing this comment and is not made here.
-	 * `[0]`/`[1]` are left with it rather than split out on their own,
-	 * since the array is cleared as one run of three by `enterPhase3`,
-	 * `externalReset` and `VPcmXfCreate` and a partial split would still
-	 * leave a two-purpose array under one name.
+	 * `byte_0d`); `[2]` is a one-shot latch -- set when the
+	 * rate-renegotiation arm finds our own request outstanding, cleared
+	 * (swallowing the report rather than acting on it twice) when the far
+	 * end's report of the same event arrives later (finding F7583).
+	 * `[2]` keeps its offset name; `[0]`/`[1]` stay with it rather than
+	 * splitting out, since all three are cleared together by
+	 * `enterPhase3`, `externalReset` and `VPcmXfCreate`.
 	 */
 	unsigned char flags_173a[3];
 
 	/*
-	 * +0x173d  A byte `getUinfoValue` tests: non-zero skips the lookup
-	 * through the modem entirely and takes the default-flags path.
-	 * `enterPhase3` clears it, so entering phase 3 restores the lookup.
-	 *
-	 * NAMED FROM THE OBJECT'S OWN WORDS.  `runPcmModem` and
-	 * `v90RunDemodulator` both set it, at the one arm each has for
-	 * falling back to V.34 -- `edprintf("... drop to V34 requested
-	 * !!\r\n")` immediately beside the store in each -- which is also
+	 * +0x173d  Non-zero skips the Uinfo lookup through the modem
+	 * entirely and takes the default-flags path in getUinfoValue();
+	 * enterPhase3() clears it, restoring the lookup. Named from the
+	 * object's own words: `runPcmModem` and `v90RunDemodulator` each set
+	 * it at their one V.34-fallback arm, right beside
+	 * `edprintf("... drop to V34 requested !!\r\n")`, which is also
 	 * where `v34BaudAllow` is rewritten to the fallback's own pattern
-	 * (index 1 barred, index 5 allowed, neither `setV34BaudForV90`'s nor
-	 * `setV34BaudForV34`'s).  So the byte is not a bare "skip the
-	 * lookup" switch; it is the record that this session gave up on
-	 * V.90/V.92 and dropped to V.34, and `getUinfoValue`'s short-circuit
-	 * is a consequence of that rather than the byte's whole meaning.
+	 * (index 1 barred, index 5 allowed -- neither `setV34BaudForV90`'s
+	 * nor `setV34BaudForV34`'s). So the byte records that this session
+	 * gave up on V.90/V.92 and dropped to V.34; `getUinfoValue`'s
+	 * short-circuit is a consequence of that, not the byte's whole
+	 * meaning.
 	 */
 	unsigned char droppedToV34;
 
 	/*
-	 * +0x173e  The fifth of `enterPhase3`'s run of five cleared bytes.
-	 *
-	 * THIS PARAGRAPH USED TO SAY "nothing else this tree has read
-	 * touches it".  `runPcmModem`'s CP/CPnot/MP/MPnot/Ed arms are five
-	 * calls to the free function `V90CPPacker`, whose fourth argument is
-	 * "the clear flag", and this field is what four of the five pass --
-	 * the fifth passes a literal 0 instead, which is the one-token
-	 * difference between the otherwise-identical MP and MPnot arms.  The
-	 * OBJECT NAMES IT: the MP arm's own diagnostic is
-	 * `"... CP length = %d (clr=%d)\r\n"` with exactly this field as the
-	 * second argument, so `clr` is the object's own abbreviation and not
-	 * offset-derived.  The Ed-received arm also tests it directly to
-	 * decide whether to report a cleardown (`ret = 8`) or stay silent.
+	 * +0x173e  The fifth of enterPhase3()'s run of five cleared bytes.
+	 * `runPcmModem`'s CP/CPnot/MP/MPnot/Ed arms are five calls to the
+	 * free function `V90CPPacker`, whose fourth argument ("the clear
+	 * flag") is what four of the five pass -- the fifth passes a literal
+	 * 0, the one-token difference between the otherwise-identical MP and
+	 * MPnot arms. The object names it: the MP arm's own diagnostic is
+	 * `"... CP length = %d (clr=%d)\r\n"` with this field as the second
+	 * argument. The Ed-received arm also tests it directly to decide
+	 * whether to report a cleardown (`ret = 8`) or stay silent.
 	 */
 	unsigned char clr;
 
@@ -519,61 +451,34 @@ public:
 	 */
 
 	/*
-	 * +0x1740  THE VISUAL DIAGNOSTICS SWEEP COUNTER, and it is `int`
-	 * rather than `unsigned int` because `getConstellation` DIVIDES it.
-	 *
-	 * The constructor zeroes it (`mov %ebp,0x1740(%ebx)` at 0xfc10, with
-	 * %ebp zero) and that is all this tree could see when the field was
-	 * carved out of `pad_173f`; a store of zero says a field is there and
-	 * four bytes wide and nothing else.  `getConstellation` reads it now,
-	 * once per point, and steps the horizontal coordinate of the trace
-	 * with `counter / 15` in the data phase and `counter / 5` in phase 3.
-	 *
-	 * BOTH DIVISIONS ARE SIGNED, WHICH IS FORCED: 0xf43d and 0xf51d are
-	 * `imul` against a reciprocal followed by `sar $0x1f` and a `sub`,
-	 * which is the quotient fix-up a negative dividend needs.  An unsigned
-	 * divide by 15 or by 5 is `mul` then `shr` with no fix-up at all.  So
-	 * the declared type is `int` -- CLAUDE.md's forced column, finding
-	 * F613's case with a division rather than a table index behind it.
-	 * The field WILL go negative: it is incremented once per point
-	 * forever and never reset.
-	 *
-	 * `sweepCounter` and not `traceX`: what it counts is calls to
-	 * `getConstellation`, one per point, and the coordinate is derived
-	 * from it rather than stored in it.
+	 * +0x1740  The visual diagnostics sweep counter -- `sweepCounter`,
+	 * not `traceX`, because what it counts is calls to
+	 * `getConstellation`, one per point, and the trace coordinate is
+	 * derived from it rather than stored in it. `int` rather than
+	 * `unsigned int` is forced: `getConstellation` divides it by 15 (data
+	 * phase) or 5 (phase 3) with the `imul`-by-reciprocal-plus-`sar`
+	 * fix-up a signed division needs, where an unsigned divide would be a
+	 * plain `mul`/`shr` (CLAUDE.md's forced column, finding F613's case).
+	 * It is incremented once per point forever and never reset, so it
+	 * will go negative.
 	 */
 	int sweepCounter;				/* +0x1740         */
 
 	/*
-	 * +0x1744 .. +0x1757  THE RECEIVED MP MESSAGE, KEPT FOR THE V.34
-	 * INTERFACE.  This span WAS `pad_1744`.
-	 *
-	 * THE WRITER NAMES IT.  `VPcmFloModem::copyMpInfoForInterface`
-	 * (.text+0xd5a0, 183 bytes) is the only thing in the object that
-	 * stores here, its name is the object's own out of the mangling, and
-	 * its whole body is thirteen field-at-a-time copies out of
-	 * `modem.mp` -- the `V90MP` embedded at +0x2428.  Every displacement
-	 * lines up with a field `include/dsplib/V90MP.h` already names from
-	 * `bitsToInfo`'s own diagnostics, in order and at the same widths, so
-	 * the names below are the SOURCE fields' names carried across a copy
-	 * rather than adjacency.
-	 *
-	 * AND THERE IS A READER, WHICH IS WHAT TYPES THEM.
-	 * `getMPrecvdBits(tagV34Object *)` (.text+0x9250) reaches this object
-	 * as `v34obj->p3548` and re-encodes the block into the V.34 side's MP
-	 * word: `setne` on `mpType` for bit 0, `mpRate & 0xf` shifted to bit
-	 * 6, `mpTrellis & 3` shifted to bit 11, `mpNonLin`, `mpShaping` at
-	 * 0x4000 and `mpCPack` at 0x8000 -- the same six discriminators
-	 * V90MP.h records, tested in the same order.  It loads the six bytes
-	 * with `movsbw`/`movsbl`, which is where `char` comes from, and the
-	 * seven halves with `movzwl`.
-	 *
-	 * ONE FIELD IS NOT A PLAIN COPY.  `mpRateMask` is
-	 * `movswl 0x242e ; add %ecx,%ecx`, so it holds `mp.rateMask * 2` --
-	 * the same fourteen bits one place to the left, which is the
-	 * alignment `getMPrecvdBits` then ORs 0x8000 into.  The name is the
-	 * source field's and the doubling is stated here rather than spelled
-	 * into the name.
+	 * +0x1744 .. +0x1757  The received MP message, kept for the V.34
+	 * interface. The writer names it: `copyMpInfoForInterface`
+	 * (.text+0xd5a0) is the only thing that stores here, and its body is
+	 * thirteen field-at-a-time copies out of `modem.mp` (the embedded
+	 * `V90MP` at +0x2428) at matching displacements and widths, so the
+	 * names below are `V90MP.h`'s own source-field names carried across
+	 * the copy. The reader types them: `getMPrecvdBits(tagV34Object *)`
+	 * re-encodes this block into the V.34 side's MP word using the same
+	 * six discriminators `V90MP.h` records, in the same order, loading
+	 * the six bytes with `movsbw`/`movsbl` (hence `char`) and the seven
+	 * halves with `movzwl`. One field is not a plain copy: `mpRateMask`
+	 * holds `mp.rateMask * 2` (`movswl` then `add %ecx,%ecx`) -- the same
+	 * fourteen bits shifted one place, which is the alignment
+	 * `getMPrecvdBits` then ORs 0x8000 into.
 	 */
 	char mpType;			/* +0x1744  V90MP::Type      */
 	char mpRate;			/* +0x1745  V90MP::Rate      */
@@ -589,49 +494,38 @@ public:
 	short mpH3Real;			/* +0x1754  V90MP::h3Real    */
 	short mpH3Imag;			/* +0x1756  V90MP::h3Imag    */
 
-	/*
-	 * +0x1758  The V90Modem, EMBEDDED.  See the file comment for the
-	 * three independent measurements, and the .cpp for the size
-	 * assertion that keeps every offset below it honest.
-	 */
+	/* +0x1758  The V90Modem, embedded. See the file comment for the three
+	 * independent measurements, and the .cpp for the size assertion that
+	 * keeps every offset below it honest. */
 	V90Modem modem;
 
 	/*
-	 * +0x6118  Four bytes between the end of V90Modem's modelled prefix
-	 * and the first field after it.
+	 * +0x6118  Two bytes belonging to VPcmFloModem, not an overrun into
+	 * V90Modem's unmeasured tail: `runPcmModem` and `v90RunDemodulator`,
+	 * both members of this class, read and write both on every call.
 	 *
-	 * THIS PARAGRAPH USED TO SAY "which object they belong to is not
-	 * settled".  It is now: `runPcmModem` and `v90RunDemodulator`, both
-	 * members of THIS class, read and write the first two on every call,
-	 * so they are VPcmFloModem's own and not an overrun into V90Modem's
-	 * unmeasured tail.  (`externalReset` clearing them through the
-	 * VPcmFloModem is what the compiler emits either way and never did
-	 * settle the question; the two entry points are what does.)
-	 *
-	 * `progressState` IS THE FIRST OF THE CLASS'S TWO DISPATCHES.  Both
+	 * `progressState` is the first of the class's two dispatches. Both
 	 * entry points switch on it before anything else, seeding the return
 	 * value they otherwise only refine: 0 and 1 both mean "nothing to
 	 * report yet", 2 means the session is running normally, 3 means a
 	 * rate-renegotiation retrain is outstanding and becomes a report of
 	 * 3 only if the receiver is in phase 4 and the parameter block's
 	 * `ENABLE_ERROR_CORRECTION_RRN` allows it (arm 3 then advances the
-	 * state to 4 itself), and 4 is that retrain in progress.  Every
-	 * other value falls through and reports 0, which is not an error the
-	 * object detects.  The two functions' case 3 differ in the ONE
-	 * place documented at their own call site: `runPcmModem` takes the
-	 * retrain exit when `info0Layout` is non-zero AND the other two
-	 * conditions hold, `v90RunDemodulator` takes it when `info0Layout`
-	 * is zero OR they do -- a single `!` that a mnemonic-only comparison
-	 * of the two functions cannot see.  Usage inference, over the whole
-	 * of both entry points' bodies.
+	 * state to 4 itself), and 4 is that retrain in progress. Every other
+	 * value falls through and reports 0, which the object does not treat
+	 * as an error. The two functions' case 3 differ in one place:
+	 * `runPcmModem` takes the retrain exit when `info0Layout` is
+	 * non-zero AND the other two conditions hold, `v90RunDemodulator`
+	 * takes it when `info0Layout` is zero OR they do -- a single `!`
+	 * that a mnemonic-only comparison of the two functions cannot see.
 	 *
 	 * `retrainLatch` records that the session reached the data phase
 	 * with `CFG_FLAG3_RETRAIN` freshly asserted, so that TRN1d restarting
-	 * later knows to re-assert it (`v90RunDemodulator`'s own diagnostic:
+	 * later knows to re-assert it (`v90RunDemodulator`'s own diagnostic,
 	 * "ON Start TRN1d restoring SAS detector") and so that ending CPt or
-	 * CPnot knows whether to put the retrain bit back.  Set once, on
-	 * entering the data phase, and read by nothing that ever clears it
-	 * again within this class.
+	 * CPnot knows whether to put the retrain bit back. Set once, on
+	 * entering the data phase; nothing in this class ever clears it
+	 * again.
 	 */
 	unsigned char progressState;
 	unsigned char retrainLatch;
@@ -645,137 +539,89 @@ public:
 	 * in the object (F10142); removed F10150.
 	 */
 
-	/*
-	 * +0x611c  V.90 or V.92, as a 0/1 int: `setPcmSessionType` stores
+	/* +0x611c  V.90 or V.92, as a 0/1 int: `setPcmSessionType` stores
 	 * `(arg != 0)` here and `setPhaseIIinfo` reads it back to re-apply
-	 * it.  Both print "setting PCM session to V.%d" with 92 for non-zero
-	 * and 90 for zero, which is where the name comes from.
-	 */
+	 * it. Named from both printing `"setting PCM session to V.%d"` with
+	 * 92 for non-zero and 90 for zero. */
 	int pcmSessionType;
 
-	/*
-	 * +0x6120  Which layout `setPhaseIIinfo` reads the INFO0 bits in.
-	 * It gates exactly two things and nothing else: whether INFO0 bits 38
-	 * and 39 are stored as `txPowerMeasurementPoint` and `pcmType` at
-	 * all, and whether INFO0 bit 26 or bit 27 is the "short phase 2
-	 * remote" byte.  Descriptive and hedged -- the object never names it.
-	 */
+	/* +0x6120  Which layout `setPhaseIIinfo` reads the INFO0 bits in. It
+	 * gates two things only: whether INFO0 bits 38/39 are stored as
+	 * `txPowerMeasurementPoint`/`pcmType` at all, and whether INFO0 bit
+	 * 26 or bit 27 is the "short phase 2 remote" byte. Descriptive and
+	 * hedged -- the object never names it. */
 	int info0Layout;
 
 	/*
-	 * +0x6124  The V92Modem, EMBEDDED, 0xaac bytes.  The constructor
-	 * calls `_ZN8V92ModemC1E...` on `this + 0x6124` -- an ADD off `this`
-	 * and not a load -- and `VPCMXF_Delete` and `~VPcmFloModem` both call
-	 * `_ZN8V92ModemD1Ev` on the same address.  `sizeof(V92Modem)` is
-	 * 0xaac (src/pump/v90/V92Modem.cpp), and 0x6bd0 - 0x6124 is 0xaac, so
-	 * the two agree and the object stops exactly where the next member
-	 * begins.  This is finding F1320's technique and V92Modem.h's own
-	 * upper bound, seen from the other side.
-	 *
-	 * THIS SPAN USED TO BE `pad_6124[4]`, `v92Params`, `v92Phase2Info`
-	 * and `pad_6130[0x6f98 - 0x6130]`.  Those two pointers were read
-	 * correctly and are still at exactly the offsets they were recorded
-	 * at: they are `V92Modem::parameters` (+0x004 of the V92Modem, so
-	 * +0x6128) and `V92Modem::phase2Info` (+0x008, so +0x612c).  What
-	 * changed is that they are now reached through the member that owns
-	 * them, which is what makes the constructor's
-	 * `mov 0x6128(%ebx),%ecx` -- a load of the V92Modem's OWN field to
-	 * pass to `V92EchoCanceller` -- readable as what it is.
+	 * +0x6124  The V92Modem, embedded, 0xaac bytes: the constructor
+	 * builds it with an add off `this` (not a load), both destructors
+	 * destroy it there, and `sizeof(V92Modem)` == 0xaac agrees exactly
+	 * with the gap to the next member at +0x6bd0 (finding F1320's
+	 * technique). This span used to be modelled as two loose pointers,
+	 * `v92Params` and `v92Phase2Info`, plus padding either side; both
+	 * were correct and sit at exactly the offsets recorded
+	 * (`V92Modem::parameters` at the V92Modem's own +0x004, `phase2Info`
+	 * at +0x008) -- what changed is that they're now reached through the
+	 * member that owns them.
 	 */
 	V92Modem v92modem;
 
-	/*
-	 * +0x6bd0  The V92EchoCanceller, EMBEDDED and 0x3c bytes; the
-	 * constructor builds it on `this + 0x6bd0` with the V92Modem's
-	 * `parameters`, and both destructors run `_ZN16V92EchoCancellerD1Ev`
-	 * there.  `sizeof(V92EchoCanceller)` is 0x3c
-	 * (src/pump/v90/V92EchoCanceller.cpp).
-	 */
+	/* +0x6bd0  The V92EchoCanceller, embedded, 0x3c bytes; built with the
+	 * V92Modem's `parameters` and destroyed by both destructors at this
+	 * address. `sizeof(V92EchoCanceller)` == 0x3c agrees. */
 	V92EchoCanceller echoCanceller;
 
-	/*
-	 * +0x6c0c  848 bytes the constructor CLEARS and nothing else in this
-	 * tree touches: `lea 0x6c0c(%ebx),%eax` then
-	 * `sysdep_memset(p, 0, 0x350)`.
-	 *
-	 * IT IS NOT PART OF THE ECHO CANCELLER, and the arithmetic is the
-	 * proof rather than the guess: 0x6c0c is 0x6bd0 + 0x3c, which is one
-	 * past the last byte of a `V92EchoCanceller`, and 0x6c0c + 0x350 is
-	 * 0x6f5c, which is exactly where the `ANSamToneDetector` below
-	 * begins.  So the span is bounded on both sides by objects whose
-	 * sizes are asserted elsewhere, and it belongs to this class.
-	 * Offset-named: a memset says how big a thing is and nothing about
-	 * what it holds.
-	 */
+	/* +0x6c0c  848 bytes the constructor clears (`sysdep_memset(p, 0,
+	 * 0x350)`) and nothing else in this tree touches. Not part of the
+	 * echo canceller: bounded on both sides by objects whose sizes are
+	 * asserted elsewhere (0x6c0c is one past `V92EchoCanceller`'s last
+	 * byte, 0x6c0c + 0x350 is exactly where `ANSamToneDetector` begins),
+	 * so the span belongs to this class. Offset-named: a memset says how
+	 * big a thing is and nothing about what it holds. */
 	unsigned char block_6c0c[0x6f5c - 0x6c0c];	/* +0x6c0c         */
 
-	/*
-	 * +0x6f5c  The ANSamToneDetector, EMBEDDED and 0x3c bytes
-	 * (src/pump/v90/ANSamToneDetector.cpp asserts it).  0x6f5c + 0x3c is
-	 * 0x6f98, which is the next field, so the two bound each other.
-	 */
+	/* +0x6f5c  The ANSamToneDetector, embedded, 0x3c bytes
+	 * (src/pump/v90/ANSamToneDetector.cpp asserts it); 0x6f5c + 0x3c is
+	 * 0x6f98, the next field, so the two bound each other. */
 	ANSamToneDetector ansam;
 
 	/*
-	 * +0x6f98, +0x6fac, +0x6fb0, +0x6fb4  Four words `externalReset`
-	 * zeroes and the constructor zeroes again, and the only four things
-	 * either touches between the V.92 modem and the CP bit vector.
+	 * +0x6f98, +0x6fac, +0x6fb0, +0x6fb4  Four words cleared by
+	 * `externalReset` and the constructor, and the only four things
+	 * `qcLineVerification` touches between the V.92 modem and the CP bit
+	 * vector -- the whole state of the quick-connect line-verification
+	 * period and nothing else, named by its seven
+	 * `"VPcmFloModem (QC LineVerify): "`-prefixed diagnostics (finding
+	 * F7603).
 	 *
-	 * THEY WERE `word_6f98`, `word_6fac`, `word_6fb0` AND `word_6fb4`,
-	 * and the paragraph here used to end "nothing reconstructed reads any
-	 * of them, so they are offset-named".  Something does now:
-	 * `qcLineVerification` is the ONLY member of this class that reads or
-	 * writes any of the four, and it is all four together -- they are the
-	 * whole state of the quick-connect line-verification period and of
-	 * nothing else.  Its seven `dsplibs_debug_printf` messages, all
-	 * prefixed `"VPcmFloModem (QC LineVerify): "`, are what name them.
-	 * Finding F7603.
+	 * `qcVerifyState` (+0x6f98) takes three values: 0 waiting for the
+	 * ANSpcm demodulation to finish, 1 transmitting TONEq, 2 transmitting
+	 * silence after it; the period ends (the function's only non-zero
+	 * return) out of state 2. "State" is inference over the three arms.
 	 *
-	 * `qcVerifyState` -- +0x6f98, three values and no more:
+	 * `qcSampleCount` (+0x6fac) is `int`, forced twice over (`jle`
+	 * against 0x1df, `js`, where an unsigned count would be `jbe` and
+	 * could never go negative): the silence period is spelled as a
+	 * negative count, -384, counting up to zero. The messages print it
+	 * with `%d` and call it "samples".
 	 *
-	 *     0  waiting for the ANSpcm demodulation to finish
-	 *     1  transmitting TONEq          "...start TONEq..."
-	 *     2  transmitting silence after it   "...tx silence..."
+	 * `qcTerminateRequested` (+0x6fb0) is a 0/1 latch; TONEq ends when
+	 * it's set and 480 samples have gone by. 480 samples is 50 ms at the
+	 * 9600 Hz this class's `SineWave` runs at, and the -384 above is
+	 * 40 ms at the same rate.
 	 *
-	 * and the period ends -- `qcLineVerification` returns 1, its only
-	 * non-zero return -- out of state 2 with "Silence after TONEq over,
-	 * move to phase2...".  The value set is the object's; the word
-	 * "state" is inference over three arms and is labelled as such.
-	 *
-	 * `qcSampleCount` -- +0x6fac, AND IT IS `int`.  Forced twice over:
-	 * `jle` at 0xf8a2 and 0xf931 against 0x1df, and `js` at 0xf96c, where
-	 * an unsigned count would be `jbe` and could not be negative at all.
-	 * It has to be signed because the silence period is spelled as a
-	 * NEGATIVE count -- 0xfffffe80, -384 -- that counts up to zero.  The
-	 * function's own messages print it with `%d` and call it "samples".
-	 *
-	 * `qcTerminateRequested` -- +0x6fb0, a 0/1 latch.  The TONEq ends when
-	 * this is set AND 480 samples have gone by; the message at the site
-	 * that sets it is "TONEq termination requested, still bellow 50mS",
-	 * which is also where the two constants come from.  480 samples is
-	 * 50 ms at the 9600 Hz this class's `SineWave` is built for, and the
-	 * -384 above is 40 ms at the same rate.
-	 *
-	 * `verificationStatus` -- +0x6fb4, a COPY of
-	 * `V90Phase3Demodulator::verificationStatus`, which this tree already
-	 * names that.  It is taken with a `movzwl`, so the SOURCE is sixteen
-	 * bits wide even though the field it comes out of is declared 32
-	 * (V90Phase3Demodulator.h) and the word here is 32; the 32-bit result
-	 * is stored, so this is CLAUDE.md's forced column and not 614's free
-	 * one.  `v34pcmmain.cpp` is the reader: it compares `local_short`
-	 * against this word to decide "short phase2 due to same line
-	 * verification".
+	 * `verificationStatus` (+0x6fb4) is a copy of
+	 * `V90Phase3Demodulator::verificationStatus`, taken with a `movzwl`
+	 * (source sixteen bits wide, stored 32-bit result -- CLAUDE.md's
+	 * forced column). `v34pcmmain.cpp` compares it against `local_short`
+	 * to decide "short phase2 due to same line verification".
 	 */
 	unsigned int qcVerifyState;			/* +0x6f98         */
 
-	/*
-	 * +0x6f9c  A SineWave<float, float>, EMBEDDED and 16 bytes -- four
-	 * `Tparam`s, and `Tparam` is `float` here.  The constructor builds it
-	 * with (4800.0f, 980.0f, 0.0f, 9600.0f) and both destructors run
-	 * `_ZN8SineWaveIffED1Ev` on `this + 0x6f9c`.  0x6f9c + 0x10 is
-	 * 0x6fac, the next field, which is finding F1320's bound again and
-	 * agrees with SineWave.h's own four-field map.
-	 */
+	/* +0x6f9c  A SineWave<float, float>, embedded, 16 bytes (four
+	 * `float` `Tparam`s), built with (4800.0f, 980.0f, 0.0f, 9600.0f).
+	 * 0x6f9c + 0x10 is 0x6fac, the next field (finding F1320's bound
+	 * again), agreeing with SineWave.h's own four-field map. */
 	SineWave<float, float> sineWave;
 
 	int qcSampleCount;				/* +0x6fac         */
@@ -783,60 +629,50 @@ public:
 	unsigned int verificationStatus;		/* +0x6fb4         */
 
 	/*
-	 * +0x6fb8  FOUR BYTES, AND NOT EXPLAINED BY ALIGNMENT.  `cpBitVector`
-	 * below is a `short` array and needs only 2-byte alignment, and
+	 * +0x6fb8  Four bytes, not explained by alignment: `cpBitVector`
+	 * below is a `short` array needing only 2-byte alignment, and
 	 * +0x6fb8 is already 4-byte aligned, so a plain field-to-field gap
 	 * would be 0 bytes here, not 4 -- unlike every other `pad_NNNN` in
 	 * this class, which is each exactly as wide as the next field's own
-	 * alignment demands (verified the same way below).
+	 * alignment demands.
 	 *
-	 * CHECKED AND STILL PAD.  A `this`-relative-displacement search of
-	 * every VPcmFloModem member function (`dis.py` over 0xd030..0x1016b,
-	 * which covers all of them) finds no instruction touching
-	 * +0x6fb8..+0x6fbb, and neither does a search of the whole 1.2 MB
-	 * object (`objdump -d` grepped for the literal displacement).  Same
-	 * shape as `cadence`'s `pad_2c0` (F10137): zero readers AND zero
-	 * writers anywhere in the blob, which is the strongest evidence this
-	 * phase can have that space is genuinely unmodelled rather than
-	 * merely unread by what we happen to have reconstructed -- the
-	 * reconstruction is complete, so "nothing touches it" is a fact about
-	 * the object, not a gap in our closure.  Left as one span rather than
-	 * guessed into fields.  Finding F10142.
+	 * Checked and still pad: a `this`-relative-displacement search of
+	 * every VPcmFloModem member function, and of the whole 1.2 MB
+	 * object, finds no instruction touching +0x6fb8..+0x6fbb. Same shape
+	 * as `cadence`'s `pad_2c0` (F10137) -- zero readers and zero writers
+	 * anywhere in the blob, the strongest evidence this phase can have
+	 * that the space is genuinely unmodelled rather than merely unread
+	 * by what's been reconstructed so far, since the reconstruction here
+	 * is complete. Left as one span rather than guessed into fields
+	 * (finding F10142).
 	 */
 	unsigned char pad_6fb8[0x6fbc - 0x6fb8];	/* +0x6fb8         */
 
-	/*
-	 * +0x6fbc  The CP bit vector, `cpNofBits` long.  Filled by
+	/* +0x6fbc  The CP bit vector, `cpNofBits` long. Filled by
 	 * `getV90CpBits` from `bitVector` at the CP-to-CPnot transition and
-	 * read by it on every call.  A SPAN, like `bitVector` above.
-	 */
+	 * read by it on every call. A span, like `bitVector` above. */
 	short cpBitVector[(0x7dcc - 0x6fbc) / 2];
 
-	/* +0x7dcc  How many entries of `cpBitVector` are live.  `movswl`. */
+	/* +0x7dcc  How many entries of `cpBitVector` are live. `movswl`. */
 	short cpNofBits;
 
-	/*
-	 * +0x7dce, +0x7dcf, +0x7dd0  The three termination requests, named by
-	 * the three `setTerminate*Flag(unsigned char)` members and by the
-	 * order they appear in getV90CpBits's own message.  All three are
-	 * tested with `cmpb $0x0`.
-	 */
+	/* +0x7dce, +0x7dcf, +0x7dd0  The three termination requests, named
+	 * by the three `setTerminate*Flag(unsigned char)` members and by the
+	 * order they appear in getV90CpBits()'s own message. All three
+	 * tested with `cmpb $0x0`. */
 	unsigned char terminateJa;
 	unsigned char terminateCp;
 	unsigned char terminateCpNot;
 
-	/*
-	 * +0x7dd1  Set to 1 by `getV90CpBits` when it loads the CPnot vector,
-	 * and required to be 0 for it to do so -- so the switch happens once
-	 * per object.  Descriptive and hedged; the object never names it.
-	 */
+	/* +0x7dd1  Set to 1 by getV90CpBits() when it loads the CPnot
+	 * vector, and required to be 0 for it to do so -- so the switch
+	 * happens once per object. Descriptive and hedged; the object never
+	 * names it. */
 	unsigned char cpNotLoaded;
 
-	/*
-	 * +0x7dd2  How many bits `getV90CpBits` packs into one output word.
-	 * `movzbl`, and the shift count is masked to five bits by the
-	 * hardware.  `enterPhase3` sets it to 2.  Descriptive and hedged.
-	 */
+	/* +0x7dd2  How many bits getV90CpBits() packs into one output word
+	 * (`movzbl`; the shift count is masked to five bits by the
+	 * hardware). enterPhase3() sets it to 2. Descriptive and hedged. */
 	unsigned char nofBitsPerSymbol;
 
 	/*
@@ -848,66 +684,53 @@ public:
 	 * readers/writers anywhere in the object (F10142); removed F10150.
 	 */
 
-	/*
-	 * +0x7dd4, +0x7dd6  The completed-sequence counter and the minimum it
-	 * must reach before CP can give way to CPnot.  Both `movzwl`, and the
-	 * comparison between them is unsigned.  `setMinNofTransmitSequences`
-	 * is a member of this class and takes an `unsigned short`.
-	 * `enterPhase3` sets the counter to 0 and the minimum to 1, so one
-	 * completed sequence is enough unless something raises it afterwards.
-	 */
+	/* +0x7dd4, +0x7dd6  The completed-sequence counter and the minimum it
+	 * must reach before CP can give way to CPnot. Both `movzwl`, compared
+	 * unsigned. `setMinNofTransmitSequences` takes an `unsigned short`.
+	 * enterPhase3() sets the counter to 0 and the minimum to 1, so one
+	 * completed sequence is enough unless something raises it later. */
 	unsigned short nofTransmitSequences;
 	unsigned short minNofTransmitSequences;
 
-	/*
-	 * +0x7dd8, +0x7e2c, +0x7e80, +0x7ed4  Four parallel float arrays of
-	 * VPCM_L2 entries.  `getUinfoValue` clears all four and fills only
-	 * the third; `setPhaseIIinfo` installs all four into both Phase 2
+	/* +0x7dd8, +0x7e2c, +0x7e80, +0x7ed4  Four parallel float arrays of
+	 * VPCM_L2 entries. getUinfoValue() clears all four and fills only
+	 * the third; setPhaseIIinfo() installs all four into both Phase 2
 	 * records, in this order, and the third lands in the slot both
-	 * printers call `L2`.  The other three are offset-named: nothing
-	 * establishes what they hold.
-	 */
+	 * printers call `L2`. The other three are offset-named: nothing
+	 * establishes what they hold. */
 	float array_7dd8[VPCM_L2];
 	float array_7e2c[VPCM_L2];
 	float L2[VPCM_L2];
 	float array_7ed4[VPCM_L2];
 
-	/*
-	 * +0x7f28  A GenericIIR<float, double>, EMBEDDED and 0x34 bytes
-	 * (include/dsplib/GenericIIR.h reaches the same 52 from
-	 * `GenericToneDetector`'s heap allocation of it).  The constructor
-	 * builds it with (5, 5, entFiltDen, entFiltNum, 99) and both
-	 * destructors run `_ZN10GenericIIRIfdED1Ev` on `this + 0x7f28`.
-	 *
-	 * THE LAST FLOAT ARRAY ENDS EXACTLY HERE: 0x7ed4 + 21*4 is 0x7f28.
-	 * That was already the map; what is new is that the filter fills the
-	 * span from there to +0x7f5c, and 0x7f28 + 0x34 is 0x7f5c.
-	 */
+	/* +0x7f28  A GenericIIR<float, double>, embedded, 0x34 bytes; built
+	 * with (5, 5, entFiltDen, entFiltNum, 99). The last float array ends
+	 * exactly here (0x7ed4 + 21*4 == 0x7f28), and the filter fills the
+	 * span from there to +0x7f5c (0x7f28 + 0x34 == 0x7f5c). */
 	GenericIIR<float, double> entFilt;
 
 	/*
 	 * +0x7f5c, +0x7f60, +0x7f64  A byte and two words the constructor
-	 * clears last, after every member is built.  They are the reason
-	 * `sizeof` is 0x7f68 and not 0x7f5c, and they are what turns the
-	 * allocation size into a field map: the three of them plus three
-	 * bytes of alignment fill the object exactly.
+	 * clears last, after every member is built -- the reason `sizeof` is
+	 * 0x7f68 and not 0x7f5c: the three of them plus three bytes of
+	 * alignment fill the object exactly.
 	 *
-	 * `byte_7f5c` STAYS OFFSET-NAMED: nothing this tree has read touches
+	 * `byte_7f5c` stays offset-named: nothing this tree has read touches
 	 * it beyond the constructor's clear.
 	 *
-	 * `ecMode` AND `ecRampCounter` ARE NOT: `runPcmModem` reads and
-	 * writes both, and `VPCM_EC_RAMP_MODE`/`_START`/`_SENTINEL` below are
-	 * the object's own three constants for them.  `ecMode` selects
-	 * whether the echo canceller's input this block is the real
-	 * receive sample (any other value) or a synthetic ramp
-	 * (`VPCM_EC_RAMP_MODE`, entered when the demodulator reports
-	 * rate-renegotiation silence); `ecRampCounter` is the ramp's own
-	 * position, reset to `VPCM_EC_RAMP_START` on every mode change and
-	 * stepped by one per block while the ramp runs, capped at
-	 * `VPCM_EC_RAMP_SENTINEL` -- which `V92EchoCanceller::process` is
-	 * documented (at the ramp's definition, below) to treat as "pass the
-	 * input through untouched".  Usage inference: the object never
-	 * prints either field's name.
+	 * `ecMode`/`ecRampCounter` are named: `runPcmModem` reads and writes
+	 * both, and `VPCM_EC_RAMP_MODE`/`_START`/`_SENTINEL` below are the
+	 * object's own three constants for them. `ecMode` selects whether
+	 * the echo canceller's input this block is the real receive sample
+	 * (any other value) or a synthetic ramp (`VPCM_EC_RAMP_MODE`,
+	 * entered when the demodulator reports rate-renegotiation silence);
+	 * `ecRampCounter` is the ramp's own position, reset to
+	 * `VPCM_EC_RAMP_START` on every mode change and stepped by one per
+	 * block while the ramp runs, capped at `VPCM_EC_RAMP_SENTINEL` --
+	 * which `V92EchoCanceller::process` treats as "pass the input
+	 * through untouched" (documented at the ramp's own definition,
+	 * below). Usage inference: the object never prints either field's
+	 * name.
 	 */
 	unsigned char byte_7f5c;			/* +0x7f5c         */
 

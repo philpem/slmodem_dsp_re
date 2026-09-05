@@ -216,49 +216,67 @@ extern int bInternalBeepInProgress;
 extern struct fdsp_kernel *pGlobalFDSPObj;
 extern unsigned int uCorrelationReportsNo;
 
-/*
- * Create the kernel, or re-initialise one the caller already has, and
- * publish it in `pGlobalFDSPObj`.
+/**
+ * @brief Create the kernel, or re-initialise one the caller already has,
+ * and publish it in #pGlobalFDSPObj.
  *
- * The two delays are the object's own names, from the debug line it prints
- * on entry: the RX one becomes chan_a's window offset and the TX one
- * chan_b's.  A negative RX delay leaves `status` at 0 instead of 2.
- * Returns the kernel, or NULL if any of the six allocations failed.
+ * The two delays are the object's own names, from the debug line it
+ * prints on entry: the RX one becomes chan_a's window offset and the TX
+ * one chan_b's.
+ *
+ * @param k                Caller-owned kernel, or NULL to allocate one.
+ * @param sRxSamplesDelay  RX delay, in samples. A negative value leaves
+ *                         `status` at 0 instead of 2.
+ * @param sTxSamplesDelay  TX delay, in samples.
+ * @return The kernel, or NULL if any of the six allocations failed.
  */
 struct fdsp_kernel *FDSP_DP_Create(struct fdsp_kernel *k,
 				   short sRxSamplesDelay,
 				   short sTxSamplesDelay);
 
-/*
- * Free the kernel, its buffer block and both channels with their taps, and
- * clear `pGlobalFDSPObj`.  A NULL kernel is a no-op; a kernel with a NULL
+/**
+ * @brief Free a kernel, its buffer block and both channels with their taps.
+ *
+ * Clears #pGlobalFDSPObj. A NULL kernel is a no-op; a kernel with a NULL
  * CHANNEL is not, and faults -- see the note at the definition.
+ *
+ * @param k  The kernel to free.
  */
 void FDSP_DP_Delete(struct fdsp_kernel *k);
 
-/*
- * Raise or drop the beep flag, with a debug line either way.  The flag is
- * the object's own; this is only its setter, and the other writer -- the
- * unreconstructed function at 0xaea27 -- writes it directly.
+/**
+ * @brief Raise or drop the internal-beep-in-progress flag.
+ *
+ * Prints a debug line either way. The flag is the object's own
+ * (#bInternalBeepInProgress); this is only its setter, and the other
+ * writer -- the unreconstructed function at 0xaea27 -- writes it directly.
+ *
+ * @param on  Nonzero to set the flag, zero to clear it.
  */
 void FDSP_Kernel_SetInternalBeepInProgress(int on);
 
-/*
- * Zero everything: both buffer arrays, both channels' delay lines, taps,
- * energy rings and ring indices; then the fixed defaults -- 80 taps on
- * chan_a and 40 on chan_b, the LMS step on chan_a and 0.0 on chan_b (the
- * step is one ULP below 0.032f -- finding F8750), `status`
- * 2 and the saturation countdown cleared.
+/**
+ * @brief Zero and default-configure a kernel.
  *
- * The channel POINTERS and the tap POINTERS have to be set before this is
- * called: it dereferences all four and allocates nothing.
+ * Zeroes both buffer arrays, both channels' delay lines, taps, energy
+ * rings and ring indices; then sets the fixed defaults -- 80 taps on
+ * chan_a and 40 on chan_b, the LMS step on chan_a and 0.0 on chan_b (the
+ * step is one ULP below 0.032f -- finding F8750), `status` 2 and the
+ * saturation countdown cleared.
+ *
+ * @param k  The kernel. The channel POINTERS and the tap POINTERS must
+ *           already be set: this dereferences all four and allocates
+ *           nothing.
  */
 void FDSP_Kernel_InitObj(struct fdsp_kernel *k);
 
-/*
- * One step of the quarter-wave table oscillator: `phase` and `step` go in,
- * `cosine` comes back as the cosine and `sine` as the sine, and `phase`
- * is advanced and wrapped at pi.  `src/service/mtk.c`, finding F8780.
+/**
+ * @brief One step of the quarter-wave table oscillator.
+ *
+ * `src/service/mtk.c`, finding F8780.
+ *
+ * @param p  In: `phase` and `step`. Out: `cosine` and `sine` for the
+ *           current phase; `phase` is advanced by `step` and wrapped at pi.
  */
 void MTK_phasor(struct mtk_phasor *p);
 
@@ -311,85 +329,144 @@ struct fdsp_tone_cfg {
  */
 extern struct fdsp_tone_cfg TONE_CFG;
 
-/*
- * Build a tone object from a configuration.
+/**
+ * @brief Build a tone object from a configuration.
  *
- * `t` NULL allocates 0x1c8 bytes; `cfg` NULL means TONE_CFG.  The four
- * heap blocks -- two of `fir_len` floats, one of 20 and one of 8 -- are
- * allocated ONLY when this call did the allocating AND `fir_len` is
- * positive, so a caller supplying its own object must supply those too.
- * Returns `t`, or the allocation.
+ * The four heap blocks -- two of `fir_len` floats, one of 20 and one of
+ * 8 -- are allocated ONLY when this call did the allocating AND
+ * `fir_len` is positive, so a caller supplying its own object must
+ * supply those too.
+ *
+ * @param t    NULL allocates 0x1c8 bytes.
+ * @param cfg  NULL means #TONE_CFG.
+ * @return @p t, or the allocation.
  */
 struct fdsp_tone *TONE_create(struct fdsp_tone *t,
 			      const struct fdsp_tone_cfg *cfg);
 
-/*
- * One 160-sample block through both directions: shift both delay lines up a
- * block, validate each side's reference energy, cancel each direction, then
- * load the fresh reference blocks in reversed.  `in_a`/`out_a` face chan_a
- * (whose reference is `in_b`) and vice versa.  Always returns 1.
+/**
+ * @brief One 160-sample block through both echo-cancellation directions.
+ *
+ * Shifts both delay lines up a block, validates each side's reference
+ * energy, cancels each direction, then loads the fresh reference blocks
+ * in reversed.
+ *
+ * @param k      The kernel.
+ * @param in_a   chan_a's near input.
+ * @param out_b  chan_b's cancelled output.
+ * @param in_b   chan_b's near input (chan_a's reference).
+ * @param out_a  chan_a's cancelled output.
+ * @return 1, always.
  */
 int FDSP_Kernel_Loop(struct fdsp_kernel *k, float *in_a, float *out_b,
 		     float *in_b, float *out_a);
 
-/*
- * One direction, one block: NLMS-ish cancel of `in` against
- * hist[pos .. pos+ntaps-1], pos starting at offset+159 and sliding down one
- * per sample.  The error lands in both `out` and `out2`; taps adapt by
- * e*mu*hist when `update` is set, mu is nonzero and the near sample is
- * below half the window peak; *verdict reports whether more than 80 of the
- * 160 samples sat below that half-peak.
+/**
+ * @brief One direction, one block of NLMS-ish echo cancellation.
  *
- * LOCAL in the blob (regparm(2) there); external and ordinary convention
- * here, as with GetGain.
+ * Cancels @p in against `hist[pos .. pos+ntaps-1]`, @p pos starting at
+ * `offset+159` and sliding down one per sample. LOCAL in the blob
+ * (`regparm(2)` there); external and ordinary convention here, as with
+ * GetGain().
+ *
+ * @param hist     Reference delay line.
+ * @param offset   Window offset into @p hist.
+ * @param coef     Adaptive filter taps, @p ntaps entries.
+ * @param ntaps    Number of taps.
+ * @param in       Near-end input for this block.
+ * @param out      Error output.
+ * @param out2     Error output, duplicated (the other direction's `cross`).
+ * @param verdict  Set to whether more than 80 of the 160 samples sat
+ *                 below half the window peak.
+ * @param mu       LMS step size; taps adapt only when nonzero.
+ * @param update   Nonzero enables tap adaptation (also gated on @p mu
+ *                 and the near sample being below half the window peak).
  */
 void EchoCanceler(float *hist, int offset, float *coef, unsigned int ntaps,
 		  float *in, float *out, float *out2, int *verdict,
 		  float mu, int update);
 
-/*
- * Block-energy gate.  Records the block's scaled RMS in hist[] (ring of
- * `histlen`), and while the running average exceeds 2200 counts down
- * k->saturation, re-initialising the kernel through FDSP_Kernel_InitObj
- * when it reaches zero.  Returns 1 only when the average is quiet and no
- * countdown is pending.  LOCAL in the blob (regparm(2) there).
+/**
+ * @brief Block-energy gate, and the trigger for a delayed kernel re-init.
+ *
+ * Records the block's scaled RMS in @p hist (a ring of @p histlen), and
+ * while the running average exceeds 2200 counts down `k->saturation`,
+ * re-initialising the kernel through FDSP_Kernel_InitObj() when it
+ * reaches zero. LOCAL in the blob (`regparm(2)` there).
+ *
+ * @param buf     Block to measure.
+ * @param n       Number of samples in @p buf.
+ * @param hist    Ring buffer of recent scaled RMS values, @p histlen entries.
+ * @param idxp    Ring write index into @p hist, updated in place.
+ * @param histlen Length of @p hist.
+ * @param k       The kernel, whose `saturation` counter this may drive
+ *                to zero and re-init.
+ * @return 1 only when the average is quiet and no countdown is pending,
+ *         0 otherwise.
  */
 int bValidateEnergyValue(float *buf, unsigned int n, int *hist,
 			 unsigned int *idxp, unsigned int histlen,
 			 struct fdsp_kernel *k);
 
-/*
- * Free the tone object.  The four heap blocks hanging off it are freed only
- * when `fir_len` is positive -- an object that never got a filter never got
- * any of them either.
+/**
+ * @brief Free a tone object.
+ *
+ * The four heap blocks hanging off it are freed only when `fir_len` is
+ * positive -- an object that never got a filter never got any of them
+ * either.
+ *
+ * @param t  The tone object to free.
  */
 void TONE_delete(struct fdsp_tone *t);
 
-/* Amplitude-scaled oscillator with a millisecond timer; see the source. */
+/**
+ * @brief Generate an amplitude-scaled tone with a millisecond timer.
+ * @param t    The tone object, advanced in place.
+ * @param buf  Output samples.
+ * @param n    Number of samples to generate.
+ */
 void TONE_generate(struct fdsp_tone *t, float *buf, short n);
 
-/*
- * Run n samples through the tone object's FIR and its detector biquad, and
- * report:
+/**
+ * @brief Run samples through the tone object's FIR and detector biquad,
+ * and judge whether the tone is present.
  *
- *	2   the smoothed total power (float_0060) is below float_0014 --
- *	    there is nothing to judge
- *	1   float_0060 * float_000c >= float_005c: the residual is small
- *	    against the total, which is what the object treats as the tone
- *	0   there is signal and it fails that test
+ * @p buf is read and not written; the FIR state (`fir_dly`, `fir_idx`)
+ * and the biquad state advance exactly as TONE_filter()'s would.
  *
- * `buf` is read and not written; the FIR state (fir_dly, fir_idx) and the
- * biquad state advance exactly as TONE_filter's would.
+ * @param t    The tone object, updated in place.
+ * @param buf  Input samples.
+ * @param n    Number of samples.
+ * @return 2 if the smoothed total power (`float_0060`) is below
+ *         `float_0014` -- there is nothing to judge; 1 if
+ *         `float_0060 * float_000c >= float_005c` -- the residual is
+ *         small against the total, which is what the object treats as
+ *         the tone; 0 if there is signal and it fails that test.
  */
 int TONE_detect(struct fdsp_tone *t, float *buf, short n);
 
-/* In-place FIR over the tone object's ring delay line. */
+/**
+ * @brief In-place FIR over the tone object's ring delay line.
+ * @param t    The tone object, updated in place.
+ * @param buf  Samples to filter in place.
+ * @param n    Number of samples.
+ */
 void TONE_filter(struct fdsp_tone *t, float *buf, short n);
 
-/* In-place biquad (direct form II transposed-ish; see the source). */
+/**
+ * @brief In-place biquad (direct form II transposed-ish; see the source).
+ * @param t    The tone object, updated in place.
+ * @param buf  Samples to filter in place.
+ * @param n    Number of samples.
+ */
 void TONE_kill(struct fdsp_tone *t, float *buf, short n);
 
-/* buf[0..n-1] = v. */
+/**
+ * @brief Fill a float buffer with a constant.
+ * @param v    The value to fill with.
+ * @param buf  Buffer to fill.
+ * @param n    Number of entries.
+ */
 void zFLTUTL_FloatMemSet(float v, float *buf, unsigned int n);
 
 #ifdef __cplusplus

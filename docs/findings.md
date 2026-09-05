@@ -115750,3 +115750,421 @@ same assertion.
 result recorded once the run completes; this finding is written ahead of
 that result closing so the root-cause record survives even if a further
 gate issue turns up in the same run. (2026-09-04)
+
+## F10154. `struct v34_shell`'s `scramble` union member: the "which typedef" question was already settled, in the wrong file's comment
+
+Raised by the project owner as an example to settle during the code-style
+review (`docs/codestyle.md`): `include/dsplib/v34shell.h`'s `+0xe48` union
+comment said "`getFrame` is not yet reconstructed, so which typedef
+matches the original is not settled," hedging between `v34_scramble_fn`
+(`short (*)(void *, short)`) and `v34_getbits_fn`
+(`int (*)(void *, int)`).
+
+**It was never actually about `descrambleGPA`/`descrambleGPC`.** Those two
+install through the union's OTHER live spelling, `put_bits`
+(`v34_putbits_fn`, `void (*)(void *, int, int)`) via `putFrame`
+(`v34shell.c:332-333`, `put(s, (unsigned short)v[0], 16)` -- 3 arguments,
+matching `descrambleGPA`/`descrambleGPC`'s real `int (void *, unsigned
+short, unsigned short)` signature exactly; the `void`-vs-`int` return
+mismatch is harmless since the caller never reads it). Their signature was
+never in question.
+
+**The actual ambiguity is `scrambleGPA`/`scrambleGPC` (same file,
+`src/pump/v34/v34scram.c`) against the `scramble` spelling, and it is
+already resolved with disassembly evidence -- just not where the header
+comment looks.** `getFrame` (`v34shell.c:826`) IS fully reconstructed and
+calls `s->scramble(objp, (short)pos)` at all three of its use sites
+(lines 856, 878, 907) -- two arguments, matching `v34_scramble_fn`
+exactly. `v34shell.c`'s own comment immediately above the four bit
+callbacks states the deciding evidence: `scrambleGPC` reads its second
+argument with `movswl` and returns via `cwtl`, sign-extension instructions
+consistent only with a genuine `short` parameter and return, ruling out
+`v34_getbits_fn`'s `int`.
+
+**Fix**: reworded `v34shell.h`'s union comment to state the resolution and
+cite `v34shell.c`'s own evidence, rather than re-opening a question that
+was already closed. Comment-only, zero behavioral or layout change --
+`scramble`'s type was never wrong, only the header's framing of it as
+still undecided. Same shape as D34/F6402: one file's comment outliving the
+fact it described.
+
+**Five other function-signature-ambiguity cases were checked for the same
+pattern and found to be genuinely, correctly unresolved** (a stub whose
+object body reads none of its arguments, so no evidence bounds true
+arity, and each already declares "the least claim compatible with" family
+convention or the observed call sites per CLAUDE.md's own doctrine for
+this situation): `class1.h`'s `_idle_state_init` and
+`fax_class1_GetConstalation`, `v22_fse.h`'s and `v22ctl.h`'s tail-jump
+diagnostic stubs, and `v27fax.h`'s `GetSNRV17`-family accessor. None of
+these need any change. (2026-09-05)
+
+## F10155. F1340 IS RETRACTED: the placement-`new` null check it predicted never fires under this project's own flags
+
+The project owner pushed back on the `asm("_ZN...")` symbol-override device
+F1340 justifies -- fifty sites across `src/pump/v90/` reaching a C++
+sub-object's constructor/destructor by a hand-mangled symbol rather than
+ordinary placement `new`/an explicit destructor call -- as worse
+engineering than the null check it was written to dodge, and asked
+whether a compiler flag could suppress the check instead. Empirically
+testing the actual question (never done before F10155 -- `grep`ping
+`docs/findings.md` and the whole tree for "fcheck-new"/"check-new" at
+F1340's own time returns nothing) settles it more completely than the
+owner asked: **the check does not need to be suppressed, because nothing
+in this project's own flags was ever asking GCC to insert it.**
+
+**F1340's reasoning was general-C++-rule reasoning, not measurement, and
+the rule has a condition F1340 didn't check.** GCC only inserts the
+placement-`new` null test when `-fcheck-new` is passed OR the placement
+`operator new` is declared `throw()` (which the standard requires to be
+checked regardless of the flag). `-fcheck-new` is off by default and is
+NOT in `tools/toolchain/period.mk`'s `TC_FLAGS`. An ordinary, non-throw
+placement `operator new` -- the natural, era-appropriate way to write a
+raw-memory placement allocator, and NOT what F1340 assumed a
+`-nostdinc++` build would be forced into -- gets no check inserted at
+all, under the exact flags this project already builds with.
+
+**Verified under the real period compiler (`dsplibs-tc342`), not asserted.**
+The blob's own `VPCMXF_Create` (`tools/dis.py ref/slmodemd/dsplibs.o
+0xfcf0 0xfe90`) constructs immediately after `sysdep_malloc` with zero
+instructions between, testing the pointer only afterward. A minimal
+non-throw `operator new(size_t, void*)` plus an ordinary `new (self)
+Thing(...)` expression, compiled under `TC_FLAGS` with NO flag changes,
+reproduces that exact shape: `call sysdep_malloc` / argument setup /
+`call _ZN5ThingC1E...` with nothing between them / `test %ebx,%ebx; je`
+strictly after. Declaring the same operator `throw()` instead reproduces
+the check GCC 3.4 is documented to force (test-then-branch BEFORE the
+constructor call), confirming the mechanism precisely and that F1340's
+underlying physics (a checked placement `new` really does insert the test
+in front) was right -- what was wrong was assuming this project's own
+placement `operator new` would have to be declared that way.
+
+**Consequence for the other 49 sites.** F1340 itself already says
+`VPCMXF_Create` is the ONE site where the difference is CONTROL FLOW; the
+other 49 are "a compare and a branch that never takes" -- i.e. genuine
+placement-`new` syntax there would not just match the blob, it would
+*improve* byte identity by removing dead code the `asm()` device carries
+forward for no reason.
+
+**No change needed to `tools/toolchain/period.mk` or any build flag.**
+The fix is a source-level one: declare one shared non-throw placement
+`operator new`/`operator delete` pair (visible to every TU under
+`-nostdinc++`, so likely `tools/toolchain/period_compat.h` or an
+equivalent project-wide header) and replace each of the 50
+`asm("_ZN...")`-labeled free functions and their call sites with genuine
+`new (self) ClassName(args...)` expressions / explicit destructor calls.
+Scoped as its own Tier-2-weight workstream (`docs/codestyle.md`) rather
+than folded into the mechanical Tier-1 cleanups, since each site needs
+its own `byteident.py`/`make period` verification -- the constructors
+involved are not all as simple as the test class used to prove the
+mechanism, and CLAUDE.md's own rule applies here as everywhere: measure
+each site, don't assume they all behave like the first one. (2026-09-05)
+
+## F10156. `t_v90cdesign`'s 27-40 minute runtime was a test bug, not the object: three trials hit `calcMtoMatchKtarget`'s own documented unbounded-loop hazard for real
+
+The project owner asked whether `t_v90cdesign`'s 27-40 minute runtime
+(long enough to be `make period`'s own critical path) could be sped up.
+Two independent measurements -- a hand computation of the test's own
+trial arithmetic, and a separately-run instrumented scratch build with
+per-loop checkpoints -- converged on the same exact cause.
+
+**Not the 46,656-shape sweep everyone assumed.** `run_findindex`'s
+exhaustive sweep (F8... era, `docs/remaining.md`'s own "the last and
+heaviest test" note) and the 720-trial `determineDminForRrn` sweeps all
+measured under 0.05 seconds combined, confirmed by direct
+instrumentation. The entire cost was in `run_arith`'s 40-trial
+`calcMtoMatchKtarget` sweep.
+
+**The mechanism.** `V90ConstellationDesigner::calcMtoMatchKtarget`
+(`src/pump/v90/V90ConstellationDesigner.cpp:528-546`) is correctly
+reconstructed and already documents its own hazard in a comment: nothing
+bounds the doubling loop's iteration count, and a `kTarget` below
+`log2(m)` makes the internal `x` negative, so casting its fractional part
+to `unsigned int` wraps to roughly 4.3 billion -- a real property of the
+object's own machine code, reproduced faithfully.
+
+The test's own trial-generation formula in `t_v90cdesign.cpp` (`target =
+(i/5)*6.0f + (i%5)*0.37f + 1.0f`, `m` cycling through `{1, 2, 6, 64,
+128}`) claimed in its own comment to keep `kTarget` above `log2(m)` "on
+purpose" -- but for `i=2,3,4` (`m=6,64,128` at `i/5==0`) the arithmetic
+puts `target` below `log2(m)`, landing exactly on the hazard the
+production code's comment warns about. Verified independently
+(hand-computed and via the instrumented build, `x=-0.140827,
+frac=4294967282` for `i=2`): three of the forty trials, times two sides
+(`our_calcM` and `ref_calcM`, the linked blob object), meant up to six
+multi-billion-iteration loops per test run -- more than enough to account
+for the entire measured 27-40 minutes on its own, with everything else in
+the file demonstrably free.
+
+**Fix, test-only** (`test/unit/t_v90cdesign.cpp`, CLAUDE.md: `test/` is
+not `src/`, free to change as long as verification coverage doesn't
+shrink): raised the trial formula's base offset from `1.0f` to `8.0f`,
+keeping every one of the 40 trials' `kTarget` safely above `log2(128) =
+7` (verified computationally for all 40 trials before landing, not just
+the three that were broken) while preserving the same `n = 0..8`
+integer-boundary-straddling coverage the sweep always intended. No
+`src/` change -- `calcMtoMatchKtarget`'s own unbounded-loop behavior is
+untouched and still faithfully reproduced; only the test stopped
+accidentally triggering it.
+
+**Measured effect.** `make one T=t_v90cdesign`: 1m15s total including a
+full rebuild of all 272 source files, all 9 sections PASS at unchanged
+check counts (496 in "arithmetic leaves", the section containing this
+sweep). Full `make period` (~90 binaries, complete Docker rebuild): 374
+passed, 0 failed, exit 0, in 3m42s wall-clock -- down from 27-40+ minutes
+when `t_v90cdesign` alone dominated the critical path.
+
+**Recommended follow-up, not done here**: `determineDminForRrn`'s fixture
+makes the same "kept above the hazard boundary" claim for its own two
+720-trial sweeps and should be spot-checked the same way before trusting
+it, given the identical claim was just found wrong once already for
+`run_arith`. `tools/toolchain/period_inner.sh`'s test-*execution* loop is
+still serial across all ~90 binaries even though compilation already
+parallelizes under `J` -- parallelizing execution too would let total
+wall time approach the slowest single test rather than their sum, a
+general win independent of this specific fix. (2026-09-05)
+
+## F10157. `VPCMXF_Create` converted from the `asm()` device to genuine placement `new`, grade 0 EXACT unchanged, proving F10155's mechanism end-to-end
+
+First real conversion of the 50 `asm("_ZN...")` sites F10155 identified,
+picked because `VPCMXF_Create` is the one site F1340 called out as
+control-flow-sensitive (the object's null test is after construction, not
+before) rather than merely instruction-count-sensitive -- the strongest
+possible proof case.
+
+`include/dsplib/sysdep.h` now declares the shared, non-throw placement
+`operator new`/`operator delete` pair (inline, so it emits no symbol and
+does not disturb the C++-runtime-free link line), with an explicit warning
+against ever adding `throw()` to match the real `<new>` header -- that is
+exactly the specification that would reintroduce the null check F10155
+proved unnecessary. `src/pump/v90/VPcmXfCreate.cpp`'s `vpcmxf_modem_ctor`
+asm-label free function is gone; the call site is now `new (self)
+VPcmFloModem(...)`.
+
+**A real ODR collision surfaced and was fixed.** Two test files
+(`t_floatiirfree.cpp`, `t_v90p3ddec.cpp`) already carried their own local
+copy of this exact placement `operator new`, predating F10155, for their
+own test-harness needs. `t_v90p3ddec.cpp` collides the moment anything in
+its translation unit pulls in `sysdep.h` transitively (which
+`V90Phase3Demodulator.h` now does, once other conversions land) --
+`redefinition of 'void* operator new(size_t, void*)'` under GCC 3.4.2.
+Fixed by removing both files' local declarations in favour of including
+`sysdep.h`, the same non-throw inline declaration either way. **This
+collision will recur** for any other test file with its own local
+placement-new declaration as more of the 50 `asm()` sites convert and pull
+more headers into more test translation units -- check for it explicitly,
+same grep as here: `grep -rl 'operator new(size_t' test/unit/*.cpp`.
+
+**One mutation anchor needed updating** (`test/mutations/vpcmxfcreate.json`,
+"the sample count is the duration, unconverted") since its `find`/`replace`
+text depended on the exact old call-site text; re-anchored to the new
+`new (self) VPcmFloModem(...)` text, same semantic mutation (swap
+`maxDataBuffer` for the unconverted `durationMs`), verified with
+`anchorcheck.py`.
+
+**Verification.** Host build: `t_vpcmctor`/`t_vpcmrun`/`t_vpcmdp`/
+`t_vpcmqcline`/`t_vpcmrunpcm` all PASS, including `vpcm_create against the
+blob's: the root, the runtime block and the allocator` at 51,123 checks --
+the closest thing to a full-object memory-layout comparison this tree has.
+Real period compiler: `make period` 374 passed, 0 failed. `byteident.py
+--why VPCMXF_Create`: grade 0 EXACT, grade 1 ACCEPT -- unchanged from
+before the conversion, confirming the object code is identical byte for
+byte either way. `make byteident-ratchet`: unchanged at 736/1852 EXACT
+(39.7%). (2026-09-05)
+
+## F10158. `class1tx.c`'s 31 `(unsigned short *)(void *)ctx` scratch-buffer
+casts do NOT bound to one field of `pad_005` -- investigated and declined
+
+**The task.** Model enough of `struct fax_class1`'s `pad_005[0xffb]`
+(`include/dsplib/class1.h` +0x0005) to give the 31 sites in `class1tx.c` that
+reinterpret `ctx` itself as `unsigned short *` a real field to take the
+address of, instead of the raw cast. All 31 sites pass `ctx` (or `ctx+2`) as
+`FAXVMI_process`'s `data` argument, `_handle_data_input`'s or
+`_handle_hdlc_input`'s `dst`, or `cTOOLS_handle_hdlc_output`'s `src` -- so
+the question is what byte range starting at `ctx+0` these calls actually
+read or write, in the worst case across all 31.
+
+**Traced every site to what actually bounds its extent, and found two
+genuinely different, overlapping usage patterns rather than one:**
+
+1. **The fixed-rate data-block path** (`_tx_scrambled_ones_state`,
+   `_tx_nulls_state`, `_tx_data_state`, and their RX-side counterparts
+   `_rx_look_carrier_state`/`_rx_data_state`, all driving `ctx->vmi_b`, the
+   current data modem). This one IS cleanly bounded:
+   `ctx->tx_bytes_per_block = ctx->tx_rate / 400` (`class1tx.c` line 363),
+   and `_init_transmitter`'s own rate table (line ~1084) tops out at
+   `rate = 0x3840` (14400) for the two V.17 long-training codes -- so
+   `tx_bytes_per_block` maxes at 36. `_tx_scrambled_ones_state`'s own fill
+   loop (`for (i = 0; i < ctx->tx_bytes_per_block; i++) ((unsigned short *)
+   (void *)ctx)[i] = 0xff;`, line 2522-2523) is the tightest, most explicit
+   evidence: 36 `unsigned short` elements, i.e. bytes 0..71 of `ctx`. This
+   part alone would cleanly become `unsigned short scratch[36]` overlaying
+   `scratch_frame_len`/`pad_002`/`flags004`/part of `pad_005`.
+
+2. **The length-prefixed HDLC-frame path**
+   (`_hdlc_receive_state`, `_hdlc_receive_between_buffers_state`,
+   `_hdlc_receive_look_carrier_state`, `_send_hdlc_buffer_state`,
+   `_send_hdlc_between_buffer_state`, `_t30_preabmle_state`, `cHDLCtx_off`),
+   driving `ctx->vmi_a`/`ctx->vmi_c`, the V.21 HDLC control channel, and the
+   two host-input unstuffers `_handle_data_input`/`_handle_hdlc_input` that
+   feed `ctx->tx_fifo` on the TX states above. **Neither of these two
+   unstuffers bounds its own write inside the function**: both loop
+   `for (i = 0; i < *count; i++) dst[out++] = ...;` with no cap check
+   against any buffer-size constant, `dst` being `ctx` itself. `*count` (the
+   task's `word8`) is a value `fax_class1_progress` forwards UNEXAMINED from
+   ITS OWN caller (`src/fax/class1.c` line 991-993) -- i.e. from outside
+   this reconstruction entirely (the unwritten host-facing driver loop), so
+   no constant in `src/` bounds it.
+
+   **Independent corroboration that this is not merely "unmeasured" but
+   genuinely larger than the fixed-rate path's 36-element bound**: every one
+   of these TX states' own tail hands its CALLER an advisory headroom value,
+   `*word8 = ctx->tx_fifo->size - ctx->tx_fifo->count - 1`
+   (`_tx_scrambled_ones_state` line 2554-2555, `_tx_nulls_state` line 1768,
+   `_tx_data_state`, all identical in shape) -- and `ctx->tx_fifo` is built
+   with `local.size = 0x800` (`_tx_scrambled_ones_init`, line 355), i.e.
+   2048 elements. A caller honouring that advisory could legally hand back
+   up to 2047 elements (4094 bytes) on the very next call, which
+   `_handle_data_input`/`_handle_hdlc_input` would then write starting at
+   `ctx+0` with no internal cap. 4094 bytes is LARGER than the whole of
+   `pad_005` (0xffb = 4091 bytes) -- so the worst case this idiom is
+   structurally capable of touching runs past `pad_005`'s own end and into
+   `superframe` (`+0x1000`), an already-established, differently-typed
+   neighbour. This is not a case of "we haven't measured the size yet"; it
+   is two call-site families sharing one raw pointer over extents that
+   provably do not nest inside one small field, one of them not provably
+   bounded at all from source we have.
+
+   The one partial bound found in this family -- `_hdlc_receive_between_
+   buffers_state`'s `new_len > 0xff` check (line 2148) -- belongs to
+   `ctx->superframe`'s OWN capacity (0x100 `unsigned short` elements), not
+   to this scratch region; it caps what gets COPIED INTO `superframe`, not
+   what `FAXVMI_process`'s unpack step may have already written at `ctx+0`
+   before that copy runs.
+
+**Declined per CLAUDE.md's own rule for exactly this shape of evidence**
+("If the evidence doesn't cleanly bound the exact byte range... do NOT force
+a field in... a scratch structure with genuinely still-unclear boundaries
+stays `pad_NNNN`"). Forcing a single array field sized for pattern 1 (36
+elements) would be provably too small for pattern 2's own advertised
+headroom and silently wrong-but-plausible for any test that never exercises
+a large HDLC/data chunk in one call -- exactly the trap CLAUDE.md warns is
+worse than leaving the region padded. Sizing for pattern 2's worst case
+(>=2048 elements) would overlap `superframe`, a different, already-typed,
+already-verified field, which is not a change this task's scope covers and
+would need its own separate closure (what actually delimits the two uses at
+runtime, if anything does, is presumably inside the not-yet-reconstructed
+`fax_class1_create`/dispatcher plumbing referenced by class1.h's own banner
+comment).
+
+**No source or header change made.** `src/fax/class1tx.c` and
+`include/dsplib/class1.h` are unchanged from this investigation; the 31
+raw-cast call sites are left exactly as they were. (2026-09-05)
+
+## F10159. Tier 2 item 7's ~45 `void *` candidates: all FORCED or already-documented-unresolved, zero retypes -- the negative result, with per-bucket evidence
+
+`docs/codestyle.md`'s Tier 2 item 7 asked whether the ~45 non-table `void *`
+internal-function-parameter sites (concentrated in `src/call/pulse.c`,
+`src/core/dp_param.c`, `src/core/dp_wrapper.c`, `src/service/cid.c`, and a
+few in the fax cluster) were genuinely forced or reconstruction artifacts
+that could be retyped to their real pointer type with zero codegen risk.
+Re-derived the candidate set from scratch (every `void *` function
+definition tree-wide, outside `re/`, whose body casts the parameter to one
+specific type or forwards it opaquely) and traced every call site and every
+address-taken/stored site for each. **Result: zero safe-to-retype sites.**
+Every one resolves into one of three buckets, and none of the three leaves
+anything to change:
+
+1. **Opaque host handle -- no real type exists to retype to.** `pulse.c`'s
+   six functions (`call_of`, `PulseDialDigit`, `IsPulseDialerReady`,
+   `LastPulseDigitDialed`, `SetPulseBreakTime`, `SetPulseMakeTime`),
+   `dp_param.c`'s `dp_param_get`/`dp_runtime_create` (`dp_runtime_delete`
+   is a bare `sysdep_free(runtime)`, `.text` 0x5a10, three bytes -- no cast
+   at all), and `cid.c`/`voice.c`'s `*_create`'s `modem`/`m` parameter all
+   take `struct modem *`, slmodemd's own type, which this tree never
+   defines (deliberately -- it is the host, not the object). There is
+   nothing to retype to.
+2. **Quoted external ABI contract -- retyping would diverge from a verified
+   signature, not clean one up.** `cid.c:9-13`, `ringdet.h`'s and `vce.h`'s
+   file-header comments quote slmodemd's own declared prototypes
+   (`ref/slmodemd/modem.c`) verbatim, e.g. `void CID_delete(void *cid); int
+   CID_process(void *cid, void *in, int count);` and `extern void
+   RD_ring_details(void *obj, long *freq, long *duration);`. Covers
+   `CID_delete`/`CID_process`, `RD_delete`/`RD_process`/`RD_ring_details`,
+   `VOICE_delete`/`VOICE_command`/`VOICE_process`. These `void *` spellings
+   are the real caller's own words, not ours.
+3. **Confirmed dispatch table -- heterogeneous, so `void *` is load-bearing.**
+   `dp_wrapper_create`'s `void *dp_data` installs into `dp_process_fn`
+   (`dp.h:23`), whose other slots (`b103_process`, `v22_process`,
+   `v23_process`, `v32_process`, `vpcm_run`, `v8_process`) take genuinely
+   different real context types. **Newly confirmed, not previously in any
+   table list**: `include/dsplib/voice.h:66-72`'s `struct voice_config`
+   (`fn_04`/`fn_08`/`fn_0c`) installs `vce_get_sreg` (2-arg,
+   `unsigned int(*)(void*,int)`), `vce_hook_on` and `vce_hook_off` (1-arg,
+   `void(*)(void*)`) at `voice.c:734-736` -- different arities in the same
+   table, forced by construction. **Newly refuted**: `voice.c`'s suspected
+   `RD_create`/`VOICE_create`-style internal dispatch does not exist --
+   grepped, `RD_create`/`VOICE_create`/`CID_create`/`FAX_create` have zero
+   internal call sites; they are pure external entry points, not table
+   members.
+
+**Two sites are correctly not retyped for a fourth reason, already on
+record and re-confirmed rather than newly found**:
+`fax_class1_GetConstalation(void *ctx)` is one of `docs/codestyle.md`'s
+"Settling open signature questions" stubs -- the object's own body is
+`xor %eax,%eax; ret`, reading none of its arguments, so no evidence bounds
+the real arity or type (`class1.h:854-859`'s doc comment already says so).
+`fax_class1_status(struct fax_class1 *ctx, void *modem_status)`'s second
+parameter is forwarded unchanged into `struct faxvmi_status.modem_status`
+(`faxvmi.h:567`), itself declared `void *` and documented as an opaque
+IN-parameter the object never dereferences with a specific type --
+`modem_status` is void* two levels deep, by the object's own contract, not
+by omission.
+
+**Out of scope, correctly not attempted**: the `void *objp`/`obj`/`shellp`
+"self" parameter pattern in `src/pump/v34/` (~110 more sites across
+`v34hshak.c`, `v34rx.c`, `v34shell.c`, `v34pcmif.c`, `v34hstx1.cpp`,
+`v34info.c`, `v34scram.c`, `v34k56.cpp`, `v34pcmmain.cpp`). Spot-checking
+`v34shell.c` found the same shape as bucket 3 above (a real union at
+`v34shell.h:189-191` that `scrambleGPA`/`scrambleGPC`/`descrambleGPA`/
+`descrambleGPC` install into, F10154), suggesting the whole cluster is
+dispatch-driven the same way, but verifying ~110 individual sites is its
+own pass and was not attempted here -- do not assume it is retypeable
+without doing that work.
+
+No `src/` or `include/` changes resulted; nothing to gate. Baselines
+reconfirmed unchanged on this tree before and covering this investigation:
+`make period` 374 passed, 0 failed; `make byteident-ratchet` 736/1852 EXACT
+(39.7%), 796/1852 grade 0-or-1 (43.0%), ratchet OK; `tools/onedef.py` and
+`tools/refcheck.py` both clean. Per this project's own rule, a null result
+that took real per-site tracing to reach is worth exactly as much as a
+retype would have been, and cheaper to get wrong -- recorded here so item 7
+is not re-opened without reading this first. (2026-09-05)
+
+## F10160: asm() placement-new conversion, group A -- 29 more sites, zero regression
+
+Extends F10157's mechanism from the one proof-of-concept site
+(`VPcmXfCreate.cpp`) to 29 more `asm("_ZN...")`-label construct/destroy sites
+across `src/pump/v90/V90Demodulator.cpp` (11), `V90ModemCtor.cpp` (7),
+`V92Modulator.cpp` (6) and `V90Modulator.cpp` (5), converting each to genuine
+placement `new (p) T(...)` construction and explicit `p->~T()` destruction
+against the shared `operator new(size_t, void *)`/`operator delete(void *,
+void *)` pair `sysdep.h` now declares (F10155). Five mutation-anchor files
+(`v90demctor.json`, `v90demod.json`, `v90modemctor.json`, `v90modulator.json`,
+`v92mod.json`) needed their `find`/`replace` text updated to the new call
+syntax, same semantic mutations preserved.
+
+No new ODR collision this time (F10157's pattern -- a test file's own local
+placement-new declaration colliding with `sysdep.h`'s once a header pulls it
+in transitively -- was checked for and not present in the two test files that
+already needed the fix; no third file triggered it here).
+
+Verified on the real GCC 3.4.2 period compiler, not the host build: `make
+check64` clean; `tools/onedef.py`, `tools/refcheck.py`, `tools/anchorcheck.py`
+all clean (228 suites, 9767 mutations, 0 issues); `make period` 374 passed, 0
+failed; `make byteident-ratchet` unchanged at 736/1852 EXACT (39.7%), 796/1852
+grade 0-or-1 (43.0%), ratchet OK. An intervening `make tc` failure on an
+unrelated file (`v32fprecr.c.o`) turned out to be host disk exhaustion (the
+volume hit 100% full from build artifacts accumulated in already-merged, idle
+worktrees), not a defect in this branch -- re-ran clean once space was
+reclaimed. Fourteen `asm("_ZN...")` sites remain, in `V92Precoder.cpp` and
+elsewhere, tracked as Tier 2 item 10 group B. (2026-09-05)

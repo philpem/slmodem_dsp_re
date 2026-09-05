@@ -218,8 +218,7 @@ create_cid(struct cid *cid)
 	 * create_cid_dtmf's 0 is.
 	 */
 	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("FSK CID  Setting  Fs = %d   "
-				     "Threshold = %d !\n",
+		dsplibs_debug_printf("FSK CID  Setting  Fs = %d   " "Threshold = %d !\n",
 				     (unsigned short)cid->rate, 2);
 
 	return cid;

@@ -145,13 +145,13 @@
  {
   "label": "enterDataSteadyState: the mean's sign is the naive spelling",
   "fn": "enterDataSteadyState",
-  "find": "\t\tedprintf(\"V90Demodulator: mean of timing offset History  = \"\n\t\t\t \"%c%d.%04d\\r\\n\",\n\t\t\t !(0.0f >= mean) ? '+' : '-',",
+  "find": "\n\t\tedprintf(\"V90Demodulator: mean of timing offset History  = \" \"%c%d.%04d\\r\\n\",\n\t\t\t !(0.0f >= mean) ? '+' : '-',",
   "replace": "\t\tedprintf(\"V90Demodulator: mean of timing offset History  = \"\n\t\t\t \"%c%d.%04d\\r\\n\",\n\t\t\t (0.0f < mean) ? '+' : '-',"
  },
  {
   "label": "enterDataSteadyState: the std's sign is the naive spelling",
   "fn": "enterDataSteadyState",
-  "find": "\t\tedprintf(\"V90Demodulator: std of timing offset History  = \"\n\t\t\t \"%c%d.%04d\\r\\n\",\n\t\t\t !(0.0f >= std) ? '+' : '-',",
+  "find": "\n\t\tedprintf(\"V90Demodulator: std of timing offset History  = \" \"%c%d.%04d\\r\\n\",\n\t\t\t !(0.0f >= std) ? '+' : '-',",
   "replace": "\t\tedprintf(\"V90Demodulator: std of timing offset History  = \"\n\t\t\t \"%c%d.%04d\\r\\n\",\n\t\t\t (0.0f < std) ? '+' : '-',"
  },
  {
@@ -163,7 +163,7 @@
  {
   "label": "enterDataSteadyState: the study is left enabled",
   "fn": "enterDataSteadyState",
-  "find": "\tdemapper->linearMappStudyEnabled = 0;\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V90Demodulator: disable linear mapping \"\n\t\t\t\t     \"study.\\n\");",
+  "find": "\n\n\tdemapper->linearMappStudyEnabled = 0;\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V90Demodulator: disable linear mapping \" \"study.\\n\");",
   "replace": "\tdemapper->linearMappStudyEnabled = 1;\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V90Demodulator: disable linear mapping \"\n\t\t\t\t     \"study.\\n\");"
  },
  {

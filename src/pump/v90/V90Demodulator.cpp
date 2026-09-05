@@ -219,46 +219,40 @@ typedef char v90dem_size[(sizeof(V90Demodulator) == 0x298) ? 1 : -1];
 #define PARAMS_LINEAR_EQU_CURSOR_PLACE	(0x184 / 4)	/* int   */
 
 /*
- * `V90Resampler::reset()` BY ITS MANGLED NAME, and it is not a shortcut.
+ * `V90Resampler::reset()` BY A QUALIFIED CALL, and it is not a shortcut.
  *
  * The object at +0x94 is a V90Resampler -- the constructor builds one there
  * and finding F804 finds `V90Resampler`'s vtable pointer at that offset -- and
  * `reset` calls `_ZN12V90Resampler5resetEv` on it DIRECTLY, not through the
- * vptr.  ONE thing rules out the obvious spelling, and it is enough:
+ * vptr.  `reset()` is declared `virtual`, so the plain spelling
  * `resampler.reset()` dispatches through the vptr, which no test fixture here
  * fills in, and would be an indirect call where the object makes a direct one.
+ * `resampler.V90Resampler::reset()` -- an explicitly qualified member call --
+ * is ordinary C++ for "call this override directly, no matter what the vptr
+ * says", which is exactly the object's own instruction sequence, and needs no
+ * mangled-name device to say so.
  *
- * TWO FURTHER REASONS USED TO BE GIVEN HERE AND ARE NOW FALSE.  Both said the
- * class could not be named at all -- that `V90Resampler.h` brings the OTHER
- * definition of `V90Parameters` (finding F1112) and that declaring the member's
- * type as `V90Resampler` had the same problem one level up.  Writing the
- * lifecycle pair forced that to be solved rather than worked around, because a
- * member typed as the base gets the BASE's constructor and destructor emitted
- * and those are the wrong two symbols; `V90Demodulator.h` now claims the
- * parameter header's include guard and declares the member as what it is.  So
- * `((V90Resampler *)&resampler)->V90Resampler::reset()` WOULD compile today.
- * It is not written, because the first reason stands on its own and the
- * qualified-call spelling is the less obvious of the two.
- *
- * The symbol takes `this` as its first stack argument like every other member
- * here (finding F215), and `ResamplerTimingOffset` is `V90Resampler`'s base at
- * offset zero, so the address is the same one `setTimingOffset` is already
- * called on.
+ * This used to be reached through an `asm("_ZN12V90Resampler5resetEv")`-
+ * labelled free function, on the same reasoning `V90ModemCtor.cpp` gives at
+ * length for the nested constructors elsewhere in this file: two used-to-be
+ * problems with naming the class here directly (`V90Resampler.h` bringing the
+ * other definition of `V90Parameters`, finding F1112, and the member's own
+ * type needing to be `V90Resampler` for the same reason) are both gone --
+ * `V90Demodulator.h` already declares `resampler` as `V90Resampler` -- so the
+ * qualified-call spelling below is available and reproduces the same direct
+ * call with no `asm()` needed.  Finding F10155/F10157's retraction of the
+ * mangled-name device is about a DIFFERENT problem (a placement-`new` null
+ * check that never fires), but the fix in both cases is the same: write the
+ * ordinary C++ that says what the object does.
  */
-extern void v90resampler_reset(ResamplerTimingOffset *self)
-	asm("_ZN12V90Resampler5resetEv");
 
 /*
- * `sessionTermination`'s two summaries of the resampler's timing history,
- * named the same way and for the same reason.  Both are NON-virtual and both
- * are called directly on the embedded object's address, and both read
- * `V90Resampler`'s own +0xa4 and +0xa8 -- the history and its length -- which
- * is why the address handed over must be the base subobject's and not a copy.
+ * `sessionTermination`'s two summaries of the resampler's timing history are
+ * called the plain way, `resampler.getTimingHistoryMean()` and
+ * `resampler.getTimingHistoryStd()`: both are NON-virtual in
+ * `include/dsplib/V90Resampler.h`, so an ordinary call already compiles to the
+ * same direct call the mangled-name device was reaching for.
  */
-extern float v90resampler_timingHistoryMean(ResamplerTimingOffset *self)
-	asm("_ZN12V90Resampler20getTimingHistoryMeanEv");
-extern float v90resampler_timingHistoryStd(ResamplerTimingOffset *self)
-	asm("_ZN12V90Resampler19getTimingHistoryStdEv");
 
 void
 V90Demodulator::enterPhase3()
@@ -432,8 +426,8 @@ V90Demodulator::sessionTermination()
 {
 	if (inPhase3 == 3 && !preFilter.isV90WithEia6()) {
 		if (V90PW(params)[PARAMS_TIMING_HISTORY_EVAL] != 0) {
-			float mean = v90resampler_timingHistoryMean(&resampler);
-			float std = v90resampler_timingHistoryStd(&resampler);
+			float mean = resampler.getTimingHistoryMean();
+			float std = resampler.getTimingHistoryStd();
 			int frac;
 
 			frac = (int)((mean - (float)(int)mean) * 10000.0f);
@@ -465,8 +459,7 @@ V90Demodulator::sessionTermination()
 			if (V90PF(params)[PARAMS_MIN_STD_FOR_SAVE] >= std) {
 				int *modemParams;
 
-				edprintf("V90Demodulator on "
-					 "sessionTermination: Timing offset "
+				edprintf("V90Demodulator on " "sessionTermination: Timing offset "
 					 "saved in Registry!\r\n");
 
 				modemParams = *(int *const *)&V90PB(params)[0];
@@ -480,13 +473,11 @@ V90Demodulator::sessionTermination()
 			 * and it is reproduced rather than tidied; D200.
 			 */
 			edprintf("V90Demodulator on sessionTermination: "
-				 "Timing offset NOT saved to registry, "
-				 "EVALUATION DISABLED !\n");
+				 "Timing offset NOT saved to registry, " "EVALUATION DISABLED !\n");
 		}
 	} else {
 		edprintf("V90Demodulator on sessionTermination: Timing offset "
-			 "NOT saved to registry (isDataState = %d, "
-			 "isEia6 = %d)\r\n",
+			 "NOT saved to registry (isDataState = %d, " "isEia6 = %d)\r\n",
 			 inPhase3 == 3, preFilter.isV90WithEia6());
 	}
 
@@ -578,8 +569,7 @@ V90Demodulator::enterRRN()
 		return;
 
 	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("V90Demodulator: RRN detected: "
-				     "enter Phase 4\r\n");
+		dsplibs_debug_printf("V90Demodulator: RRN detected: " "enter Phase 4\r\n");
 
 	word_38 = 0;
 	word_44 = 0;
@@ -598,8 +588,7 @@ V90Demodulator::enterRRN()
 	demapper->linearMappStudyEnabled = 0;
 
 	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("V90Demodulator: disable linear mapping "
-				     "study\n");
+		dsplibs_debug_printf("V90Demodulator: disable linear mapping " "study\n");
 }
 
 /*
@@ -615,8 +604,7 @@ V90Demodulator::enterFPE()
 		return;
 
 	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("V90Demodulator: FPE detected: "
-				     "enter Phase 4\r\n");
+		dsplibs_debug_printf("V90Demodulator: FPE detected: " "enter Phase 4\r\n");
 
 	word_38 = 0;
 	word_44 = 0;
@@ -920,20 +908,18 @@ V90Demodulator::enterDataSteadyState()
 
 	word_278 = V90PW(params)[PARAMS_TIMING_HISTORY_EVAL];
 	if (word_278 != 0) {
-		float mean = v90resampler_timingHistoryMean(&resampler);
-		float std = v90resampler_timingHistoryStd(&resampler);
+		float mean = resampler.getTimingHistoryMean();
+		float std = resampler.getTimingHistoryStd();
 		int frac;
 
 		frac = (int)((mean - (float)(int)mean) * 10000.0f);
-		edprintf("V90Demodulator: mean of timing offset History  = "
-			 "%c%d.%04d\r\n",
+		edprintf("V90Demodulator: mean of timing offset History  = " "%c%d.%04d\r\n",
 			 !(0.0f >= mean) ? '+' : '-',
 			 (int)__builtin_fabsf(mean),
 			 (frac < 0) ? -frac : frac);
 
 		frac = (int)((std - (float)(int)std) * 10000.0f);
-		edprintf("V90Demodulator: std of timing offset History  = "
-			 "%c%d.%04d\r\n",
+		edprintf("V90Demodulator: std of timing offset History  = " "%c%d.%04d\r\n",
 			 !(0.0f >= std) ? '+' : '-',
 			 (int)__builtin_fabsf(std),
 			 (frac < 0) ? -frac : frac);
@@ -944,8 +930,7 @@ V90Demodulator::enterDataSteadyState()
 		if (V90PF(params)[PARAMS_MIN_STD_FOR_SAVE] >= std) {
 			int *modemParams;
 
-			edprintf("V90Demodulator: Timing offset saved in "
-				 "Registry!\r\n");
+			edprintf("V90Demodulator: Timing offset saved in " "Registry!\r\n");
 
 			modemParams = *(int *const *)&V90PB(params)[0];
 			modemParams[MODEM_CLOCK_DEVIATION] =
@@ -956,8 +941,7 @@ V90Demodulator::enterDataSteadyState()
 	demapper->linearMappStudyEnabled = 0;
 
 	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("V90Demodulator: disable linear mapping "
-				     "study.\n");
+		dsplibs_debug_printf("V90Demodulator: disable linear mapping " "study.\n");
 }
 
 /*
@@ -1326,28 +1310,22 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 
 			case 3:
 				if (preFilter.isV90WithEia6() != 0) {
-					edprintf("V90Demodulator: Severe Codec "
-						 "conditions were detected due "
+					edprintf("V90Demodulator: Severe Codec " "conditions were detected due "
 						 "to EIA6 loop type...\r\n");
 				} else if (params->
 				    ENABLE_DROP_2_V34_ON_SEVERE_CODEC != 0) {
-					edprintf("V90Demodulator: Severe Codec "
-						 "conditions were detected NOT "
-						 "on EIA6, initiating drop 2 "
-						 "V34...\r\n");
+					edprintf("V90Demodulator: Severe Codec " "conditions were detected NOT "
+						 "on EIA6, initiating drop 2 " "V34...\r\n");
 					word_3c = 0x1f;
 				} else {
-					edprintf("V90Demodulator: Severe Codec "
-						 "conditions were detected NOT "
-						 "on EIA6, drop is masked, "
-						 "doing nothing...\r\n");
+					edprintf("V90Demodulator: Severe Codec " "conditions were detected NOT "
+						 "on EIA6, drop is masked, " "doing nothing...\r\n");
 				}
 				break;
 
 			default:
 				edprintf("V90Demodulator: !!! ERROR !!! : "
-					 "Spectral Verifier returned illegal "
-					 "value !!!\r\n");
+					 "Spectral Verifier returned illegal " "value !!!\r\n");
 				break;
 			}
 		}
@@ -1358,8 +1336,7 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 				word_3c = 0x1f;
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
-					    "V90Demodulator: Request FallBack "
-					    "to V.34 due to line "
+					    "V90Demodulator: Request FallBack " "to V.34 due to line "
 					    "conditions\r\n");
 			}
 			break;
@@ -1387,20 +1364,16 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 					    isThereAnyAltRbsPhase() != 0) {
 						connectionEvaluator->altRbsDetectedOnQc =
 						    1;
-						edprintf("V90Demodulator: "
-							 "setAltRbsDetectedOnQC "
+						edprintf("V90Demodulator: " "setAltRbsDetectedOnQC "
 							 "was called !!!\r\n");
 					}
-					edprintf("V90Demodulator: "
-						 "connectionEvaluator of TRN1d "
-						 "is NOT ENABLED due to quick "
-						 "connect...\r\n");
+					edprintf("V90Demodulator: " "connectionEvaluator of TRN1d "
+						 "is NOT ENABLED due to quick " "connect...\r\n");
 				} else {
 					connectionEvaluator->word_88 = 1;
 					connectionEvaluator->avePdsnrNofSymbols = 0;
 					connectionEvaluator->avePdsnr = 0.0f;
-					edprintf("V90Demodulator: enabling "
-						 "connectionEvaluator of "
+					edprintf("V90Demodulator: enabling " "connectionEvaluator of "
 						 "TRN1d\r\n");
 				}
 			}
@@ -1412,8 +1385,7 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 				connectionEvaluator->word_88 = 0;
 				connectionEvaluator->avePdsnrNofSymbols = 0;
 				connectionEvaluator->avePdsnr = 0.0f;
-				edprintf("V90Demodulator: disabling "
-					 "connectionEvaluator of Phase3\r\n");
+				edprintf("V90Demodulator: disabling " "connectionEvaluator of Phase3\r\n");
 			}
 			edprintf("V90Demodulator: Jd maxLookAhead = %d\r\n",
 				 sessionFlag != 0 ? jdV92->getMaxLookahead()
@@ -1427,8 +1399,7 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 		case 0x11:
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf("V90Demodulator: Dil study "
-						     "Terminated. Enter error "
-						     "relaxation period.\n");
+						     "Terminated. Enter error " "relaxation period.\n");
 			phase3Demodulator->setDigitalImairmentsInfo();
 
 			trn1dRmsRatio = autoDigitalImpDetector->padGain;
@@ -1455,16 +1426,13 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 		case 0x13:
 			if (params->PROBING_MODE != 0) {
 				if (DSPLIB_DEBUG_ON())
-					dsplibs_debug_printf("--------------"
-					    "---------------------------------"
+					dsplibs_debug_printf("--------------" "---------------------------------"
 					    "----------------\r\n");
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf("V90Demodulator: "
-					    "tearing down connection, probing "
-					    "mode ended...\r\n");
+					    "tearing down connection, probing " "mode ended...\r\n");
 				if (DSPLIB_DEBUG_ON())
-					dsplibs_debug_printf("--------------"
-					    "---------------------------------"
+					dsplibs_debug_printf("--------------" "---------------------------------"
 					    "----------------\r\n");
 				word_3c = 0x2b;
 			}
@@ -1570,14 +1538,11 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 					    params->unnamed_304;
 					if (DSPLIB_DEBUG_ON())
 						dsplibs_debug_printf(
-						    "V90Demodulator: Agc Gain "
-						    "very low > Setting DIL "
-						    "extreme overflow "
-						    "protection !!!\r\n");
+						    "V90Demodulator: Agc Gain " "very low > Setting DIL "
+						    "extreme overflow " "protection !!!\r\n");
 				} else if (DSPLIB_DEBUG_ON()) {
 					dsplibs_debug_printf(
-					    "V90Demodulator: Agc Gain low > "
-					    "Setting DIL overflow protection "
+					    "V90Demodulator: Agc Gain low > " "Setting DIL overflow protection "
 					    "!!!\r\n");
 				}
 			} else {
@@ -1602,15 +1567,13 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 		word_44 += nofIn;
 		if (word_44 > word_48) {
 			if (DSPLIB_DEBUG_ON())
-				dsplibs_debug_printf("V90Demodulator: Phase4 "
-						     "TimeOut\r\n");
+				dsplibs_debug_printf("V90Demodulator: Phase4 " "TimeOut\r\n");
 
 			if (connectionEvaluator->word_90 != 0 &&
 			    phase4Demodulator->int_003c != 0 &&
 			    codecType != (__tHardwareCodecTypes__)4) {
 				edprintf("V90Demodulator: Silence rrn not "
-					 "finished on platform other then USB, "
-					 "masking silence rrn...\r\n");
+					 "finished on platform other then USB, " "masking silence rrn...\r\n");
 				params->RRN_SILENCE_REQUESTED = 0;
 			}
 			params->SENSITIVE_ISP_DETECTED = 1;
@@ -1632,8 +1595,7 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 
 			if (connectionEvaluator->word_90 != 0 &&
 			    phase4Demodulator->int_003c != 0) {
-				edprintf("V90Demodulator: Constellation design "
-					 "on silence rrn...\r\n");
+				edprintf("V90Demodulator: Constellation design " "on silence rrn...\r\n");
 				additionalCPinfo->word_04 = 1;
 				if (sessionFlag != 0)
 					phase4Demodulator->enterWaitForCP();
@@ -1689,8 +1651,7 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 			byte_280 = 1;
 
 			if (verdict != 1) {
-				edprintf("V90Demodulator: Data Phase spectral "
-					 "parameters:\r\n");
+				edprintf("V90Demodulator: Data Phase spectral " "parameters:\r\n");
 				displaySpectralParams(mappingParamsAlt);
 				additionalCPinfo->word_04 = 1;
 				if (sessionFlag != 0)
@@ -1705,8 +1666,7 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 					constellationDesigner->pdSnrThreshForRetrain);
 			} else {
 				if (DSPLIB_DEBUG_ON())
-					dsplibs_debug_printf("V90Demodulator: "
-					    "connection design error, "
+					dsplibs_debug_printf("V90Demodulator: " "connection design error, "
 					    "initiating retrain\r\n");
 				if (connectionEvaluator->
 				    indicateLocalRetrain() == 5)
@@ -1732,19 +1692,14 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 				edprintf("###########################################################################\r\n");
 				if (codecType == (__tHardwareCodecTypes__)4) {
 					params->MAX_NOF_V90_RETRAINS = 150;
-					edprintf("V90Demodulator: 'Problematic' "
-						 "ISP Modem detected on USB. "
-						 "Masking drop to V34 "
-						 "(MAX_NOF_V90_RETRAINS = "
-						 "%d)...\r\n",
+					edprintf("V90Demodulator: 'Problematic' " "ISP Modem detected on USB. "
+						 "Masking drop to V34 " "(MAX_NOF_V90_RETRAINS = " "%d)...\r\n",
 						 params->MAX_NOF_V90_RETRAINS);
 					connectionEvaluator->word_94 = 1;
 				} else {
 					params->RRN_SILENCE_REQUESTED = 0;
-					edprintf("V90Demodulator: 'Problematic' "
-						 "ISP Modem detected NOT on "
-						 "USB. Masking Silence "
-						 "RRN...\r\n");
+					edprintf("V90Demodulator: 'Problematic' " "ISP Modem detected NOT on "
+						 "USB. Masking Silence " "RRN...\r\n");
 				}
 				edprintf("###########################################################################\r\n");
 			}
@@ -1758,8 +1713,7 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 			if (connectionEvaluator->word_90 != 0 &&
 			    phase4Demodulator->int_003c != 0 &&
 			    phase4Demodulator->int_0038 != 0) {
-				edprintf("V90Demodulator: freezing timing on "
-					 "silence rrn...\r\n");
+				edprintf("V90Demodulator: freezing timing on " "silence rrn...\r\n");
 				resampler.setBllState(V90_BLL_FROZEN, 1);
 				word_40 = 0;
 
@@ -1771,8 +1725,7 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 				frac2 = (int)((avg - (float)whole2) * 1.0e4f);
 				edprintf("V90Demodulator: Ed received on "
 					 "Silence RRN... current Mean Error = "
-					 "%c%d.%04d,    average Mean Error = "
-					 "%c%d.%04d\r\n",
+					 "%c%d.%04d,    average Mean Error = " "%c%d.%04d\r\n",
 					 !(0.0f >= cur) ? '+' : '-',
 					 (int)__builtin_fabsf(cur),
 					 (frac < 0) ? -frac : frac,
@@ -1807,24 +1760,20 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 
 			if (connectionEvaluator->word_98 != 0) {
 				constellationDesigner->rateAction = 3;
-				edprintf("V90Demodulator: FORCED rate down on "
-					 "silence rrn\r\n");
+				edprintf("V90Demodulator: FORCED rate down on " "silence rrn\r\n");
 			} else if (phase4Demodulator->int_3510 != 0 &&
 				   (unsigned int)
 				   params->MIN_RATE_FOR_SILENCE_RRN_KEEP_RATE >=
 				   prevRate) {
 				constellationDesigner->rateAction = 1;
-				edprintf("V90Demodulator: keeping rate on "
-					 "silence rrn\r\n");
+				edprintf("V90Demodulator: keeping rate on " "silence rrn\r\n");
 			} else if (params->
 			    DEBUG_CONNECTION_EVALUATOR_RATE_DOWN == 2) {
 				constellationDesigner->rateAction = 1;
-				edprintf("V90Demodulator: FORCED keep rate on "
-					 "silence rrn\r\n");
+				edprintf("V90Demodulator: FORCED keep rate on " "silence rrn\r\n");
 			} else {
 				constellationDesigner->rateAction = 3;
-				edprintf("V90Demodulator: one rate down on "
-					 "silence rrn\r\n");
+				edprintf("V90Demodulator: one rate down on " "silence rrn\r\n");
 			}
 
 			cur = equalizer->meanErrorEnergyCurrent;
@@ -1834,8 +1783,7 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 			whole2 = (int)avg;
 			frac2 = (int)((avg - (float)whole2) * 1.0e4f);
 			edprintf("V90Demodulator: about to redesign... current "
-				 "Mean Error = %c%d.%04d,    average Mean "
-				 "Error = %c%d.%04d\r\n",
+				 "Mean Error = %c%d.%04d,    average Mean " "Error = %c%d.%04d\r\n",
 				 !(0.0f >= cur) ? '+' : '-',
 				 (int)__builtin_fabsf(cur),
 				 (frac < 0) ? -frac : frac,
@@ -1869,8 +1817,7 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 
 			if (verdict == 1) {
 				if (DSPLIB_DEBUG_ON())
-					dsplibs_debug_printf("V90Demodulator: "
-					    "connection design error, "
+					dsplibs_debug_printf("V90Demodulator: " "connection design error, "
 					    "initiating retrain\r\n");
 				if (connectionEvaluator->
 				    indicateLocalRetrain() == 5)
@@ -1892,8 +1839,7 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 			break;
 
 		case 0x35:
-			edprintf("V90Demodulator: freezing timing on silence "
-				 "rrn...\r\n");
+			edprintf("V90Demodulator: freezing timing on silence " "rrn...\r\n");
 			resampler.setBllState(V90_BLL_FROZEN, 1);
 			word_40 = 0;
 			break;
@@ -1975,16 +1921,13 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 			if (word_27c >= (unsigned int)
 			    params->NO_ENERGY_DURATION_FOR_REMOTE_RETRAIN) {
 				if (DSPLIB_DEBUG_ON())
-					dsplibs_debug_printf("--------------"
-					    "---------------------------------"
+					dsplibs_debug_printf("--------------" "---------------------------------"
 					    "--------------\r\n");
 				if (DSPLIB_DEBUG_ON())
-					dsplibs_debug_printf("V90Demodulator: "
-					    "REMOTE RETRAIN - Energy Drop "
+					dsplibs_debug_printf("V90Demodulator: " "REMOTE RETRAIN - Energy Drop "
 					    "detected\r\n");
 				if (DSPLIB_DEBUG_ON())
-					dsplibs_debug_printf("--------------"
-					    "---------------------------------"
+					dsplibs_debug_printf("--------------" "---------------------------------"
 					    "--------------\r\n");
 
 				if (connectionEvaluator->
@@ -2011,8 +1954,7 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 			cur = equalizer->meanErrorEnergyCurrent;
 			whole = (int)cur;
 			frac = (int)((cur - (float)whole) * 1.0e3f);
-			dsplibs_debug_printf("V90Demodulator: Error Energy = "
-					     "%c%d.%03d\r\n",
+			dsplibs_debug_printf("V90Demodulator: Error Energy = " "%c%d.%03d\r\n",
 					     !(0.0f >= cur) ? '+' : '-',
 					     (int)__builtin_fabsf(cur),
 					     (frac < 0) ? -frac : frac);
@@ -2122,7 +2064,7 @@ V90Demodulator::reset(unsigned int quickConnectArg)
 		 (int)__builtin_fabsf(offset),
 		 (frac < 0) ? -frac : frac);
 
-	v90resampler_reset(&resampler);
+	resampler.V90Resampler::reset();
 	resampler.setTimingOffset(V90PF(params)[PARAMS_TIMING_OFFSET]);
 
 	cursor = V90PW(params)[PARAMS_LINEAR_EQU_CURSOR_PLACE];
@@ -2357,57 +2299,18 @@ V90Demodulator::getBitRate() const
  * the object's sequence where it is legible and not permuted to chase it.
  */
 
-extern "C" {
 /*
- * The eight nested constructors, by the names the blob calls at 0x1c863,
- * 0x1c886, 0x1c8be, 0x1c8f3, 0x1c969, 0x1c9ed, 0x1ca18 and 0x1ca48.  C1 is the
- * complete-object variant, which is what a `new` expression uses.
+ * The eight nested constructors used to be reached by their mangled names,
+ * by the names the blob calls at 0x1c863, 0x1c886, 0x1c8be, 0x1c8f3, 0x1c969,
+ * 0x1c9ed, 0x1ca18 and 0x1ca48, on the belief (finding F1340) that a
+ * user-declared placement `operator new` would force GCC to emit a null test
+ * the blob does not have between `sysdep_malloc` and the constructor call.
+ * Finding F10155 retracts that -- the null check is tied to a `throw()`
+ * placement `operator new`, which is not this project's -- and
+ * `include/dsplib/sysdep.h` declares the shared non-throw pair every such
+ * site needs.  Genuine placement `new` is used below instead; see finding
+ * F10157 for the site that proved this mechanism end-to-end.
  */
-void v90dem_adid_ctor(void *self, V90Parameters *params)
-	asm("_ZN25V90AutoDigitalImpDetectorC1EP13V90Parameters");
-void v90dem_ce_ctor(void *self, V90Parameters *params)
-	asm("_ZN22V90ConnectionEvaluatorC1EP13V90Parameters");
-void v90dem_p3d_ctor(void *self, V90Parameters *params,
-		     V90SpectralVerifier *verifier, unsigned int flag,
-		     V90AutoDigitalImpDetector *adid)
-	asm("_ZN20V90Phase3DemodulatorC1EP13V90ParametersP19V90SpectralVerifie"
-	    "rjP25V90AutoDigitalImpDetector");
-void v90dem_demapper_ctor(void *self, unsigned int levels,
-			  V90Parameters *params,
-			  V90AutoDigitalImpDetector *adid)
-	asm("_ZN11V90DemapperC1EjP13V90ParametersP25V90AutoDigitalImpDetector");
-void v90dem_p4d_ctor(void *self, V90MappingParams *mappingParams1,
-		     V90MappingParams *mappingParams2, V90Demapper *demapper,
-		     V90CP *cp, V90MP *mp,
-		     Descrambler<unsigned char, int> *descrambler,
-		     V90ConnectionEvaluator *connectionEvaluator,
-		     V90Parameters *params,
-		     V90Phase3Demodulator *phase3Demodulator,
-		     V90AutoDigitalImpDetector *adid, unsigned int flag)
-	asm("_ZN20V90Phase4DemodulatorC1EP16V90MappingParamsS1_P11V90DemapperP"
-	    "5V90CPP5V90MPP11DescramblerIhiEP22V90ConnectionEvaluatorP13V90Par"
-	    "ametersP20V90Phase3DemodulatorP25V90AutoDigitalImpDetectorj");
-void v90dem_equ_ctor(void *self, unsigned int linearEquLen,
-		     unsigned int dfeLen,
-		     V90Phase3Demodulator *phase3Demodulator,
-		     V90Phase4Demodulator *phase4Demodulator,
-		     V90Demapper *demapper,
-		     V90ConnectionEvaluator *connectionEvaluator,
-		     V90SpectralVerifier *verifier, V90Parameters *params,
-		     V90Resampler *resampler, V90PreFilter *preFilter,
-		     V90ComputationalMode mode)
-	asm("_ZN12V90EqualizerC1EjjP20V90Phase3DemodulatorP20V90Phase4Demodula"
-	    "torP11V90DemapperP22V90ConnectionEvaluatorP19V90SpectralVerifierP"
-	    "13V90ParametersP12V90ResamplerP12V90PreFilter20V90ComputationalMo"
-	    "de");
-void v90dem_trn2_ctor(void *self, V90Parameters *params,
-		      V90ConstellationPower *power)
-	asm("_ZN15V90TRN2DesignerC1EP13V90ParametersP21V90ConstellationPower");
-void v90dem_cd_ctor(void *self, V90Parameters *params, V90PreFilter *preFilter,
-		    V90ConstellationPower *power)
-	asm("_ZN24V90ConstellationDesignerC1EP13V90ParametersP12V90PreFilterP2"
-	    "1V90ConstellationPower");
-}
 
 /*
  * The resampler's five immediates.  0x42700000 is 60.0f and 0x3f7ae148 is
@@ -2536,46 +2439,47 @@ V90Demodulator::V90Demodulator(unsigned int levels, V90Phase2Info *phase2,
 
 	adid = (V90AutoDigitalImpDetector *)
 	    sysdep_malloc(sizeof(V90AutoDigitalImpDetector));
-	v90dem_adid_ctor(adid, params);
+	new (adid) V90AutoDigitalImpDetector(params);
 	autoDigitalImpDetector = adid;
 
 	ce = (V90ConnectionEvaluator *)
 	    sysdep_malloc(sizeof(V90ConnectionEvaluator));
-	v90dem_ce_ctor(ce, params);
+	new (ce) V90ConnectionEvaluator(params);
 	connectionEvaluator = ce;
 
 	p3d = (V90Phase3Demodulator *)
 	    sysdep_malloc(sizeof(V90Phase3Demodulator));
-	v90dem_p3d_ctor(p3d, params, &spectralVerifier, sessionFlag,
-			autoDigitalImpDetector);
+	new (p3d) V90Phase3Demodulator(params, &spectralVerifier, sessionFlag,
+					autoDigitalImpDetector);
 	phase3Demodulator = p3d;
 
 	dem = (V90Demapper *)sysdep_malloc(sizeof(V90Demapper));
-	v90dem_demapper_ctor(dem, levels * 2, params, autoDigitalImpDetector);
+	new (dem) V90Demapper(levels * 2, params, autoDigitalImpDetector);
 	demapper = dem;
 
 	p4d = (V90Phase4Demodulator *)
 	    sysdep_malloc(sizeof(V90Phase4Demodulator));
-	v90dem_p4d_ctor(p4d, mappingParams, mappingParamsAlt, demapper, cp, mp,
-			&descrambler, connectionEvaluator, params,
-			phase3Demodulator, autoDigitalImpDetector, sessionFlag);
+	new (p4d) V90Phase4Demodulator(mappingParams, mappingParamsAlt, demapper,
+					cp, mp, &descrambler, connectionEvaluator,
+					params, phase3Demodulator,
+					autoDigitalImpDetector, sessionFlag);
 	phase4Demodulator = p4d;
 
 	equ = (V90Equalizer *)sysdep_malloc(sizeof(V90Equalizer));
-	v90dem_equ_ctor(equ, (unsigned int)V90PW(params)[PARAMS_LINEAR_EQU_LENGTH],
-			(unsigned int)V90PW(params)[PARAMS_DFE_LENGTH],
-			phase3Demodulator, phase4Demodulator, demapper,
-			connectionEvaluator, &spectralVerifier, params,
-			&resampler, &preFilter, compMode);
+	new (equ) V90Equalizer((unsigned int)V90PW(params)[PARAMS_LINEAR_EQU_LENGTH],
+			       (unsigned int)V90PW(params)[PARAMS_DFE_LENGTH],
+			       phase3Demodulator, phase4Demodulator, demapper,
+			       connectionEvaluator, &spectralVerifier, params,
+			       &resampler, &preFilter, compMode);
 	equalizer = equ;
 
 	trn2 = (V90TRN2Designer *)sysdep_malloc(sizeof(V90TRN2Designer));
-	v90dem_trn2_ctor(trn2, params, &constellationPower);
+	new (trn2) V90TRN2Designer(params, &constellationPower);
 	trn2Designer = trn2;
 
 	cd = (V90ConstellationDesigner *)
 	    sysdep_malloc(sizeof(V90ConstellationDesigner));
-	v90dem_cd_ctor(cd, params, &preFilter, &constellationPower);
+	new (cd) V90ConstellationDesigner(params, &preFilter, &constellationPower);
 	constellationDesigner = cd;
 
 	word_264 = 0;

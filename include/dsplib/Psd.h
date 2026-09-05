@@ -58,22 +58,57 @@ public:
 		OUTPUT_LINEAR = 2
 	};
 
-	/*
-	 * `length` is the segment and transform length; `overlap` is how many
-	 * samples each segment shares with the one before it, and is used
-	 * only by `process`.  Two allocations, window first, and neither is
-	 * checked -- `designWindow` writes through the first immediately.
+	/**
+	 * @brief Construct a periodogram over segments of @p length samples.
+	 *
+	 * Allocates the window and spectrum buffers (window first; neither
+	 * allocation is checked -- designWindow() writes through the first
+	 * immediately) and designs the window. The spectrum buffer is left
+	 * uninitialised (allocator garbage) until the first process().
+	 *
+	 * @param length   Segment and transform length.
+	 * @param window   Window shape to design.
+	 * @param overlap  Samples each segment shares with the one before it;
+	 *                 used only by process().
 	 */
 	Psd(unsigned int length, WindowType window, unsigned int overlap);
+
+	/** @brief Free the window and spectrum buffers. */
 	~Psd();
 
+	/** @brief Change the overlap between segments. @param overlap New value. */
 	void setOverlapLength(unsigned int overlap);
+
+	/**
+	 * @brief Redesign the window in place.
+	 *
+	 * The window type itself is not stored -- this rebuilds the window
+	 * coefficients and keeps nothing else, so the object cannot later be
+	 * asked which type it holds.
+	 *
+	 * @param window  New window shape.
+	 */
 	void setWindowType(WindowType window);
 
-	/* freq[i] = i * sampleRate / length, for i < length / 2. */
+	/**
+	 * @brief Fill in the frequency (Hz) of each output bin.
+	 * @param freq        Output buffer, `length / 2` entries.
+	 * @param sampleRate  Sample rate in Hz.
+	 */
 	void getFrequencies(float *freq, float sampleRate) const;
 
-	/* DECLARED, NOT DEFINED.  See the header comment above. */
+	/**
+	 * @brief Compute the Welch periodogram of @p in.
+	 *
+	 * Splits @p in into overlapped, windowed segments, transforms each
+	 * with realfft() and accumulates squared magnitude per bin, then
+	 * scales the accumulated bins per @p option (see #OutputOption).
+	 *
+	 * @param in      Input samples, enough for at least one segment.
+	 * @param count   Number of samples in @p in.
+	 * @param out     Output spectrum, `length / 2` bins.
+	 * @param option  How to scale/report each output bin.
+	 */
 	void process(float *in, unsigned int count, float *out,
 		     OutputOption option);
 

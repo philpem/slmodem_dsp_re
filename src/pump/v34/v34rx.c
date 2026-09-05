@@ -1256,8 +1256,7 @@ adaptecho(void *objp)
 		 */
 		if (lag < 0) {
 			if (DSPLIB_DEBUG_ON())
-				dsplibs_debug_printf("V90NEC, --------ERROR---"
-						     "------ occured in "
+				dsplibs_debug_printf("V90NEC, --------ERROR---" "------ occured in "
 						     "adaptecho\n");
 			return 0;
 		}
@@ -1596,8 +1595,7 @@ decoderv34(void *objp)
 			rx->flags = (unsigned short)(rx->flags | 0x100);
 			if ((short)rx->rtncount > -70 && DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
-					"V34RENEG, may be renegotiation,"
-					"equalizer adaptation disabled\n");
+					"V34RENEG, may be renegotiation," "equalizer adaptation disabled\n");
 		}
 
 		rx->equ_step = 0x2000;
@@ -2172,8 +2170,7 @@ rx_train_point(struct v34_receiver *rx, struct v34_equalizer *eq, short n,
 		if (late > early) {
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
-				    "Detected shifted TRN2... assuming 32 "
-				    "symbols Snot\n");
+				    "Detected shifted TRN2... assuming 32 " "symbols Snot\n");
 			rx->trn_ref_sr = (int)rx->scrambler_sr;
 			V34EqualizerCleanUp(eq);
 			rx->dp.point = rxvect4[k];
@@ -2332,8 +2329,7 @@ receiver(void *objp)
 				rx->flags = (unsigned short)flags;
 				if (DSPLIB_DEBUG_ON()) {
 					dsplibs_debug_printf(
-					    "V34RETRAIN, retrain request "
-					    "detected, rtncount = %d \n",
+					    "V34RETRAIN, retrain request " "detected, rtncount = %d \n",
 					    (int)rx->rtncount);
 					flags = rx->flags;
 				}
@@ -2348,8 +2344,7 @@ receiver(void *objp)
 				rx->flags = (unsigned short)flags;
 				if (DSPLIB_DEBUG_ON()) {
 					dsplibs_debug_printf(
-					    "V34RENEG, RRN request detected,"
-					    "rtncount = %d\n", (int)n);
+					    "V34RENEG, RRN request detected," "rtncount = %d\n", (int)n);
 					flags = rx->flags;
 				}
 			}
@@ -2458,8 +2453,7 @@ receiver(void *objp)
 		if (n == 0x40 && !(flags & V34_RX_FLAG_DET_PENDING)
 		    && DSPLIB_DEBUG_ON()) {
 			dsplibs_debug_printf(
-				"V34AGC, abcddetect gain = 0x%x, "
-				"AGC frozen\n", (int)rx->agc_gain);
+				"V34AGC, abcddetect gain = 0x%x, " "AGC frozen\n", (int)rx->agc_gain);
 			flags = rx->flags;
 		}
 
@@ -2482,8 +2476,7 @@ receiver(void *objp)
 			if ((short)err > 0x600) {
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
-					    "S-S1 is detected,rxsymcnt= %d,"
-					    "pllcnt= %d,gain= 0x%x\n",
+					    "S-S1 is detected,rxsymcnt= %d," "pllcnt= %d,gain= 0x%x\n",
 					    (int)n, (int)rx->pllcnt,
 					    (int)rx->agc_gain);
 				rx->rx_blocks = 0;
@@ -2508,8 +2501,7 @@ receiver(void *objp)
 			    <= obj->rx_energy_floor) {
 				if (DSPLIB_DEBUG_ON()) {
 					dsplibs_debug_printf(
-					    "Signal Energy below Threshold "
-					    "%d, initiate a disconnection",
+					    "Signal Energy below Threshold " "%d, initiate a disconnection",
 					    obj->rx_energy_floor);
 					flags = rx->flags;
 				}

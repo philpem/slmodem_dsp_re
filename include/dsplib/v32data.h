@@ -73,31 +73,48 @@ struct fpm_smc_ring;
 typedef void (*v32_encoder_fn)(struct v32_smc *smc, struct v32_symout *out,
 			       short *data, unsigned short count);
 
-/*
- * Modulate `count` data words into `out`, returning the number of samples.
+/**
+ * @brief Modulate `count` V.32 data words into `out`.
  *
- * The instance pointer is READ AGAIN after the encoder returns (`mov
+ * Encodes through whichever of the three SMCv32 encoders is selected
+ * (V32FP_ENCODER_SEL), then shapes through `FPM_PPS_filter`.
+ *
+ * The instance pointer is read again after the encoder returns (`mov
  * 0x68(%edi),%eax` at 0x81bce), the same idiom `v22data.c` records.
  *
- * `data` IS NOT CONST, and that is the trellis arm's doing rather than this
- * function's: two of the three encoders only read it.
+ * @p data is not const, and that is the trellis arm's doing rather than
+ * this function's: two of the three encoders only read it.
+ *
+ * @param modem  The V.32 datapump instance.
+ * @param data   The data words to modulate.
+ * @param out    Output for the modulated samples.
+ * @param count  How many data words.
+ * @return The number of samples written.
  */
 unsigned short ModDataV32(void *modem, short *data, short *out,
 			  unsigned short count);
 
-/*
- * Fill `count` symbol slots with V32_SYMBOL_NOCARRIER and shape them into
- * `out`, returning the number of samples written.
+/**
+ * @brief Modulate `count` symbols of the fixed no-carrier pattern into `out`.
  *
- * THE SECOND ARGUMENT IS NEVER READ -- nothing at 0x34(%esp) is touched.
+ * Fills @p count symbol slots with V32_SYMBOL_NOCARRIER and shapes them
+ * into @p out.
  *
- * IT ALSO STEPS THE CODER'S QUADRANT ACCUMULATOR BACKWARDS, once per symbol,
- * and never reads it: `quad = (quad + 3) & 3`.  What that is FOR is not
- * established and is not claimed here; `quad` is `v32smc.h`'s name, given by
- * the three encoders that do read it, and all this function does is move it.
+ * The second argument is never read -- nothing at `0x34(%esp)` is touched.
+ * It also steps the coder's quadrant accumulator backwards, once per
+ * symbol, and never reads it: `quad = (quad + 3) & 3`. What that is for
+ * is not established and is not claimed here; `quad` is `v32smc.h`'s
+ * name, given by the three encoders that do read it, and all this
+ * function does is move it.
  *
  * Unlike the V.17 and V.29 functions of the same shape, both write-backs
- * happen BEFORE the shaper runs and the instance pointer is not re-read.
+ * happen before the shaper runs and the instance pointer is not re-read.
+ *
+ * @param modem  The V.32 datapump instance.
+ * @param data   Unread.
+ * @param out    Output for the modulated (silent-pattern) samples.
+ * @param count  How many symbols.
+ * @return The number of samples written.
  */
 unsigned short TxNoCarrierV32(void *modem, const short *data, short *out,
 			      unsigned short count);

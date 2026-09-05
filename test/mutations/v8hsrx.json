@@ -1,12 +1,12 @@
 [
  {
   "label": "announce the ANSam timeout on every block past the deadline",
-  "find": "\t\t\tif (v->elapsed == v->deadline_a) {\n\t\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t    \"V8: Time Out Waiting For \"\n\t\t\t\t\t    \"ANSam...\\r\\n\");\n\t\t\t\tv->elapsed++;\n\t\t\t}",
+  "find": "\n\t\t\tif (v->elapsed == v->deadline_a) {\n\t\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t    \"V8: Time Out Waiting For \" \"ANSam...\\r\\n\");\n\t\t\t\tv->elapsed++;\n\t\t\t}",
   "replace": "\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t    \"V8: Time Out Waiting For ANSam...\\r\\n\");\n\t\t\tif (v->elapsed == v->deadline_a)\n\t\t\t\tv->elapsed++;"
  },
  {
   "label": "drop the ANSam timeout announcement",
-  "find": "\t\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t    \"V8: Time Out Waiting For \"\n\t\t\t\t\t    \"ANSam...\\r\\n\");\n\t\t\t\tv->elapsed++;",
+  "find": "\n\t\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t    \"V8: Time Out Waiting For \" \"ANSam...\\r\\n\");\n\t\t\t\tv->elapsed++;",
   "replace": "\t\t\t\tv->elapsed++;"
  },
  {

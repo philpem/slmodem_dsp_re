@@ -105,35 +105,50 @@ struct fpm_pps {
 	short *hist_q;		/* +0x34                                     */
 };
 
-/*
- * `fresh` non-zero means the two history buffers do not exist yet: allocate
- * without inspecting them.
+/**
+ * @brief Initialise (or re-initialise) a pulse shaper's state.
  *
- * Zero means re-initialise, and there is a REUSE PATH of the same shape as
- * `FPM_SRE_init`'s: the two buffers are freed and reallocated only if the
- * existing `taps` is smaller than `cfg.coeffs / cfg.phases` now asks for.
- * Every scalar is reset either way and both histories are cleared either way.
+ * Copies @p cfg into @p state, seeds `phase` from `cfg.step` (not zero --
+ * the one field with no V.22 counterpart to seed from), and sizes/clears
+ * the two circular history buffers.
  *
- * UNLIKE ITS SIBLING THE TEST GUARDS EXACTLY WHAT IT SIZES -- see deviation
- * D400, and the note at the top of `src/dsp/fpm_pps.c`.  A re-init that
- * raises `cfg.coeffs` without raising the quotient keeps its buffers.
- *
- * `cfg.phases` of zero divides by zero.  The object has no guard.
+ * @param state  Shaper state to initialise.
+ * @param cfg    Configuration to copy in.
+ * @param fresh  Non-zero if the two history buffers do not exist yet:
+ *               allocate without inspecting them. Zero re-initialises in
+ *               place, reusing the existing buffers when `state->taps` is
+ *               already large enough for `cfg.coeffs / cfg.phases` and
+ *               reallocating both (freeing first) when it is not -- unlike
+ *               FPM_SRE_init(), the reuse test here guards exactly what it
+ *               sizes (deviation D400). `cfg.phases` of zero divides by
+ *               zero; the object has no guard against it.
  */
 void FPM_PPS_init(struct fpm_pps *state, const struct fpm_pps_cfg *cfg,
 		  int fresh);
 
-/* Releases both histories, `hist_q` first.  Does not clear the pointers. */
+/**
+ * @brief Free a pulse shaper's two history buffers.
+ *
+ * Releases `hist_q` then `hist_i` without clearing either pointer.
+ *
+ * @param state The shaper state to tear down.
+ */
 void FPM_PPS_free(struct fpm_pps *state);
 
-/*
- * Consume up to `count` SYMBOLS from `src` and write one output sample per
- * phase step, returning how many that was.  `need`, `phase` and `widx`
- * persist and `src->ridx` is advanced and wrapped, so a symbol stream may be
- * handed over in any grouping.
+/**
+ * @brief Shape up to @p count symbols from @p src into passband samples.
  *
- * `count` and the return are both `unsigned short`, and both are forced:
- * the count is decremented through `movzwl %ax`, and so is the counter.
+ * Consumes symbols from @p src (advancing and wrapping `src->ridx`) and
+ * writes one output sample per phase step to @p out. `need`, `phase` and
+ * `widx` persist in @p state across calls, so a symbol stream may be handed
+ * over in any grouping.
+ *
+ * @param state  Shaper state (two circular histories plus phase/index).
+ * @param src    Ring buffer supplying symbols (or I/Q pairs; see
+ *               `cfg.mapped`).
+ * @param out    Output buffer for the shaped samples.
+ * @param count  Number of symbols available to consume.
+ * @return Number of output samples produced.
  */
 unsigned short FPM_PPS_filter(struct fpm_pps *state, struct fpm_smc_ring *src,
 			      short *out, unsigned short count);

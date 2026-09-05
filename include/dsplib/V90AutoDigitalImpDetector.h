@@ -1,46 +1,42 @@
-/*
- * V90AutoDigitalImpDetector.h -- the V.90 downstream digital-impairment
- * detector's object map.
+/**
+ * @file V90AutoDigitalImpDetector.h
+ * @brief `V90AutoDigitalImpDetector`, the V.90 downstream digital-impairment
+ *        detector: studies the far end's TRN1 segment to learn each of the
+ *        six RBS phases' actual companding behaviour.
  *
- * Reconstructed from dsplibs.o.  `V90AutoDigitalImpDetector` is NOT
- * polymorphic -- tools/cppstruct.py lists its destructor with the `D1` and
- * `D2` variants and no `D0`, and GCC emits a deleting destructor only for a
- * virtual one -- so offset 0 is a real member and there is no vptr.  Finding
- * F228 is the four classes where that is not true.
+ * `V90AutoDigitalImpDetector` is not polymorphic -- its destructor appears
+ * with the `D1`/`D2` variants and no `D0`, and GCC emits a deleting
+ * destructor only for a virtual one -- so offset 0 is a real member and
+ * there is no vptr (finding F228 is the four classes in this tree where
+ * that is not true).
  *
- * THE OBJECT IS 43,440 BYTES (0xa9b0).  The largest `this`-relative
- * displacement any of the class's thirty-two members uses is +0xa9ae, and it
- * is a two-byte access -- `mov %ax,0xa9ae(%ebx)` in `resetStudyUrefHandler`
- * and `filds 0xa9ae(%esi)` in `porcessFirstStudy`, whose prologues load
- * `this` into those registers from the first stack argument -- so the object
- * ends at 0xa9b0, which is already four-byte aligned.  A displacement is not
- * a size (finding F215); the .cpp asserts both the size and every offset
- * below.
+ * The object is 43,440 bytes (0xa9b0). The largest `this`-relative
+ * displacement any of the class's thirty-two members uses is +0xa9ae, a
+ * two-byte access, so the object ends at 0xa9b0, already four-byte aligned
+ * (a displacement is not a size, finding F215; the .cpp asserts both the
+ * size and every offset below). The bound is the maximum over all
+ * thirty-two members, found by disassembling every
+ * `_ZN25V90AutoDigitalImpDetector*` symbol and taking the largest
+ * displacement in each (finding F251).
  *
- * The bound is the maximum over ALL thirty-two members, not just the two
- * written here: the two written here reach only +0xa980 and +0xa96c.  It was
- * measured by disassembling every `_ZN25V90AutoDigitalImpDetector*` symbol
- * and taking the largest displacement in each, then checking by hand that the
- * base register of the winner is `this`.  Finding F251.
+ * All thirty-two members are defined and the class is complete: the
+ * lifecycle batch wrote `reset` and `resetLinearMapping`; the first
+ * processing batch added the sixteen whose only callees were already
+ * written; the second added `unitePhasesInfoOfUref` (a leaf) and
+ * `updateUref`, which was blocked on exactly that one call; the study batch
+ * added the four that read and write the study state at the top of the
+ * object; the DIL batch added `updateAltRbsPhaseInDil` with the two members
+ * that are its only callers; the pad-gain batch added `determineMaxUcode`
+ * and `findPadGain`; and the last batch added `studyUrefHandler`, the
+ * per-sample entry point the other thirty-one exist to serve. Every one is
+ * differentially tested against the blob by test/unit/t_v90adid.cpp; the
+ * intra-class call graph is written down in finding F1367 and closed in
+ * finding F1446.
  *
- * ALL THIRTY-TWO ARE DEFINED, AND THE CLASS IS COMPLETE.  The lifecycle batch
- * wrote `reset` and `resetLinearMapping`; the first processing batch added the
- * sixteen whose only callees were already written, the second added
- * `unitePhasesInfoOfUref` -- a leaf -- and `updateUref`, which was blocked on
- * exactly that one call, the study batch added the four that read and
- * write the study state at the top of the object, the DIL batch added
- * `updateAltRbsPhaseInDil` with the two members that are its only callers,
- * the pad-gain batch added `determineMaxUcode` and `findPadGain`, and the
- * last batch added `studyUrefHandler`, which is the per-sample entry point
- * the other thirty-one exist to serve.  Every one is differentially tested
- * against the blob by test/unit/t_v90adid.cpp; the intra-class call graph is
- * written down in finding F1367 and closed in finding F1446.
- *
- * THE OBJECT IS MOSTLY SIX-BY-ONE-HUNDRED-AND-TWENTY-EIGHT ARRAYS.  Six is
- * the number of RBS phases -- every loop in the class runs a `short` index
- * from 0 to 5 inclusive -- and 128 is the seven-bit PCM code magnitude, which
- * is why `reset` masks its `unsigned char` argument with 0x7f before
- * companding it.  The arrays tile the object exactly:
+ * The object is mostly six-by-one-hundred-and-twenty-eight arrays: six is
+ * the number of RBS phases, and 128 is the seven-bit PCM code magnitude
+ * (why `reset` masks its `unsigned char` argument with 0x7f before
+ * companding it). The arrays tile the object exactly:
  *
  *     +0x0000  short[6][128]   linMapp        cleared by resetLinearMapping
  *     +0x0600  short[6][128]   linMappAlt     cleared by resetLinearMapping
@@ -55,37 +51,28 @@
  * and five per-phase scalars at +0x2800, +0x280c, +0x9100, +0x9d18 and
  * +0x9d30 are cleared alongside them.
  *
- * THREE OF THOSE TYPES CHANGED WHEN THE PROCESSING METHODS WERE READ, and no
- * test could have found the change, because `reset` only ever stores zero
- * into them and a zero is a zero whatever the type:
+ * Three of those types changed once the processing methods were read (and
+ * no test could have found the change, since `reset` only ever stores zero
+ * into them): +0x1000 is `float`, not `int`; +0x1c00 and +0x9d30 are
+ * `unsigned int`, not `int`, each converted to floating point with GCC's
+ * unsigned-to-float idiom. The evidence is the disassembly alone -- `make
+ * offsets` checks offsets and the differential tests check behaviour, and a
+ * field only ever written with zero is invisible to both (finding F1360).
  *
- *   +0x1000 is `float`, not `int` -- `calculateLinearMeanAndVar` reaches it
- *   with `fadds`/`fstps` and `updateUref` with `flds`;
- *
- *   +0x1c00 and +0x9d30 are `unsigned int`, not `int` -- every conversion of
- *   them to floating point is `push $0; push val; fildll`, which is GCC's
- *   unsigned-to-float sequence (a signed one is a bare `fildl`).
- *
- * The evidence is the disassembly and nothing else; `make offsets` checks
- * offsets and the differential tests check behaviour, and a field only ever
- * written with zero is invisible to both.  Finding F1360.
- *
- * WHAT THIS BATCH NAMED.  +0x0c00 is `prevLinMapp`, 128 shorts, because
+ * What this batch named: +0x0c00 is `prevLinMapp`, 128 shorts, because
  * `setPrevSessionLinearMapping` fills exactly that many and
- * `setQcLinearMapping` reads them back.  +0x2818 is `sampleStore`, and the
- * multiplier settles its shape: `addReceivedSampleToStorage` indexes it with
- * `imul $0x83e,%phase`, and 6 * 0x83e * 2 = 0x62e8, which is the region's
- * whole extent to +0x8b00.  +0xa956 is `maxUcode[6]`, the six bytes
- * `setMaxUcodeArray` copies in.  +0xa9a6 is the `short` threshold `isAltRbs`
- * compares a distance against.  Finding F1361.
+ * `setQcLinearMapping` reads them back. +0x2818 is `sampleStore`, whose
+ * indexing multiplier settles its shape. +0xa956 is `maxUcode[6]`, the six
+ * bytes `setMaxUcodeArray` copies in. +0xa9a6 is the `short` threshold
+ * `isAltRbs` compares a distance against (finding F1361).
  *
  * Data member names below are invented and mostly offset-derived: the
  * mangling preserves method names and type names but never a data member's
- * name (finding F226).  `linMapp` and `linMappAlt` are named for the method
+ * name (finding F226). `linMapp` and `linMappAlt` are named for the method
  * whose entire body is clearing them, and `params`, `pcmType`, `ucode` and
- * `ucodeLevel` for what `reset` puts in them.  Everything else keeps an
+ * `ucodeLevel` for what `reset` puts in them. Everything else keeps an
  * offset-derived name or is `pad_`, and every `pad_` region is memory this
- * batch did not model rather than memory that is known to be unused.
+ * batch did not model rather than memory known to be unused.
  */
 
 #ifndef DSPLIB_V90AUTODIGITALIMPDETECTOR_H
@@ -117,57 +104,54 @@ class V90Parameters;
 
 class V90AutoDigitalImpDetector {
 public:
-	/*
-	 * THE CONSTRUCTOR IS FIFTEEN BYTES AND ONE STORE (0x40200):
+	/**
+	 * @brief Construct a detector, planting its parameter block.
 	 *
-	 *     mov 0x8(%esp),%edx      ; argument 1
-	 *     mov 0x4(%esp),%eax      ; this
-	 *     mov %edx,0x2814(%eax)
+	 * Plants `params` at +0x2814 and leaves all other 43,425 bytes of the
+	 * object exactly as it found them (measured by the test's whole-object
+	 * comparison) -- so a freshly constructed detector is unusable until
+	 * reset() and resetLinearMapping() have both run. Declared, rather
+	 * than left implicit, because the blob carries a real constructor
+	 * symbol for it (`C1`/`C2`, fifteen bytes, one store).
 	 *
-	 * -- it plants the parameter block at +0x2814 and leaves all 43,425
-	 * remaining bytes of the object exactly as it found them.  So a freshly
-	 * constructed detector is unusable until `reset` and
-	 * `resetLinearMapping` have run, and the test's whole-object comparison
-	 * is what turns "leaves the rest alone" into a measured claim.
-	 * `_ZN25V90AutoDigitalImpDetectorC1EP13V90Parameters` is what types the
-	 * argument; the constructor never dereferences it.
-	 *
-	 * THE DESTRUCTOR IS ONE BYTE, a bare `ret` at 0x40220.  It is declared
-	 * because the blob HAS the symbol: GCC emits an out-of-line destructor
-	 * only for a user-declared one, so a class whose destructor were
-	 * implicit would contribute no `D1`/`D2` at all.  Both exist, one byte
-	 * each, so the original declared it and left the body empty.
-	 *
-	 * DECLARING THESE COSTS THE CALL SITES THEIR DEFAULT CONSTRUCTOR.  A
-	 * user-declared constructor removes the implicit one and a
-	 * user-declared destructor makes the class non-trivially-destructible,
-	 * so `static V90AutoDigitalImpDetector x;` no longer compiles and the
-	 * class may no longer be a union member.  `test/harness/v90demfix.h`,
-	 * `test/unit/t_v90p3dreset.cpp` and `test/unit/t_v90adid.cpp` all did
-	 * one or the other and now use a byte array plus a cast; see the note
-	 * at each site.
+	 * @param params  The session's parameter block. Never dereferenced by
+	 *                the constructor itself.
 	 */
 	V90AutoDigitalImpDetector(V90Parameters *params);
+
+	/**
+	 * @brief Destroy a detector. Does nothing.
+	 *
+	 * Declared (one byte, a bare `ret`) because the blob has the symbol:
+	 * an implicit trivial destructor would contribute no `D1`/`D2` at all.
+	 */
 	~V90AutoDigitalImpDetector();
 
 	/* The two the lifecycle batch defines. */
 
-	/*
-	 * Clear the per-phase measurement state and install the session's
-	 * companding law, its reference code and its "alternate RBS expected"
-	 * flag.  Does NOT touch `linMapp` or `linMappAlt`; those belong to
-	 * `resetLinearMapping`, which is a separate call.
+	/**
+	 * @brief Clear the per-phase measurement state for a new session.
+	 *
+	 * Installs the session's companding law, its reference code and its
+	 * "alternate RBS expected" flag. Does not touch `linMapp` or
+	 * `linMappAlt`; those belong to resetLinearMapping(), a separate call.
+	 *
+	 * @param ucode   The reference PCM code the far end will send as TRN1.
+	 * @param pcmType mu-law or A-law, this session's companding law.
+	 * @param altRbs  Nonzero if the session should expect alternate RBS.
 	 */
 	void reset(unsigned char ucode, PcmType pcmType, short altRbs);
 
-	/*
-	 * Clear both linear-mapping tables and seed each phase's entry for the
-	 * reference code with the reference level.
+	/**
+	 * @brief Clear both linear-mapping tables and seed the reference code.
+	 *
+	 * Clears `linMapp` and `linMappAlt`, then writes `ucodeLevel` into
+	 * every phase's entry for the reference code `ucode` in both.
 	 */
 	void resetLinearMapping();
 
 	/*
-	 * THE EIGHTEEN THE PROCESSING BATCHES DEFINE.  Their argument lists are the
+	 * The eighteen the processing batches define.  Their argument lists are the
 	 * mangling's and so are not a guess; a return type is not mangled, so
 	 * where one is given below it comes from what the object leaves in
 	 * %eax at the `ret` and nothing else.  Three do so deliberately:
@@ -179,46 +163,217 @@ public:
 	 * the value is a table entry.  The two misspellings are the original
 	 * author's.
 	 */
-	void addReceivedSampleToStorage(short, unsigned char, float);
-	void adjustUinfoToPhaseOffset(short);
+
+	/**
+	 * @brief Store one received sample and its histogram bucket.
+	 * @param phase   Which of the six RBS phases the sample belongs to.
+	 * @param code    The sample's PCM code (used to bump `short_8b00`).
+	 * @param sample  The sample's magnitude.
+	 */
+	void addReceivedSampleToStorage(short phase, unsigned char code,
+					float sample);
+
+	/**
+	 * @brief Rotate the reference code's `linMapp` column to start at a
+	 *        given phase.
+	 *
+	 * Reads all six entries out before writing any back, so this is a
+	 * rotation and not an in-place shift.
+	 *
+	 * @param offset  The phase to rotate to the front.
+	 */
+	void adjustUinfoToPhaseOffset(short offset);
+
+	/** @brief Divide both linear-mapping tables through by `padGain`. */
 	void applyPadGainToLinMapp();
-	void calculateLinearMeanAndVar(short, short, unsigned int);
-	void calculateLinearMeanAndVarAlt(short, unsigned int);
-	void clearCamulativeAltVal(short, short);
-	void clearCamulativeVal(short, short);
-	int isAltRbs(short, short, float);
+
+	/**
+	 * @brief Add one sample to a cell's mean/variance accumulators.
+	 *
+	 * @param magnitude  The sample magnitude to accumulate.
+	 * @param level      The linear level whose companded PCM code selects
+	 *                    the cell (converted back to a magnitude here, with
+	 *                    reset()'s masks run in reverse).
+	 * @param phase      Which RBS phase's row to update.
+	 */
+	void calculateLinearMeanAndVar(short magnitude, short level,
+				       unsigned int phase);
+
+	/**
+	 * @brief Add one sample to a phase's alternate-RBS accumulators.
+	 *
+	 * The count is incremented unconditionally, so the eventual mean is
+	 * over every sample offered to the phase, not just an accepted subset.
+	 *
+	 * @param magnitude  The sample magnitude to accumulate.
+	 */
+	void calculateLinearMeanAndVarAlt(short magnitude, unsigned int);
+
+	/** @brief Clear a phase's alternate-RBS mean/variance accumulators. */
+	void clearCamulativeAltVal(short phase, short);
+
+	/** @brief Clear one cell's mean/variance accumulators. */
+	void clearCamulativeVal(short phase, short code);
+
+	/**
+	 * @brief Does this sample look like alternate RBS on this phase?
+	 *
+	 * True when the phase is flagged and the sample's magnitude is
+	 * further from the phase's established level for this code than the
+	 * threshold at +0xa9a6 allows. Both magnitudes are compared as
+	 * magnitudes, since the class works in code magnitudes throughout.
+	 *
+	 * @param phase   The RBS phase to test.
+	 * @param code    The PCM code whose established level to compare
+	 *                against.
+	 * @param sample  The sample's linear level (truncated toward zero).
+	 * @return Nonzero if the sample looks like alternate RBS.
+	 */
+	int isAltRbs(short phase, short code, float sample);
+
+	/** @brief Is any of the six phases flagged as carrying alternate RBS? */
 	int isThereAnyAltRbsPhase();
-	void setConnectionType(short);
-	void setMaxUcodeArray(unsigned char *);
-	void setPrevSessionLinearMapping(short *);
-	short unSuspectedPhaseNearestLinMapp(short, short);
-	void unitePhasesInfoOfUref(short);
-	void updateLinMappMeanAndVar(short, short);
-	void updateLinMappMeanAndVarAlt(short, short);
+
+	/**
+	 * @brief Install the four thresholds that depend on the connection
+	 *        type.
+	 * @param type  The parameter block's connection-type value (2 selects
+	 *              one set of four thresholds, anything else the other).
+	 */
+	void setConnectionType(short type);
+
+	/**
+	 * @brief Copy in the six per-phase maximum usable codes.
+	 * @param from  Six bytes, one per RBS phase.
+	 */
+	void setMaxUcodeArray(unsigned char *from);
+
+	/**
+	 * @brief Copy in the previous session's linear mapping.
+	 * @param from  128 shorts, one per PCM code, shared across all six
+	 *              phases (see `prevLinMapp`).
+	 */
+	void setPrevSessionLinearMapping(short *from);
+
+	/**
+	 * @brief The entry of `linMapp[phase]` nearest in magnitude to `v`.
+	 *
+	 * Searches PCM codes 5..116 inclusive only -- the row's two ends are
+	 * excluded, which is what "unsuspected" is about: the smallest and
+	 * largest codes are the ones a digital impairment reaches first.
+	 *
+	 * @param v      The value to match.
+	 * @param phase  Which phase's `linMapp` row to search.
+	 * @return The nearest entry (a table value, hence `short`).
+	 */
+	short unSuspectedPhaseNearestLinMapp(short v, short phase);
+
+	/**
+	 * @brief Group the unflagged phases at one code by how close their
+	 *        `linMapp` levels are, and give the flagged phases the level
+	 *        and variance of the largest group.
+	 * @param code  The PCM code (column of `linMapp`) to unite.
+	 */
+	void unitePhasesInfoOfUref(short code);
+
+	/**
+	 * @brief Turn one cell's accumulators into a mean and a variance.
+	 *
+	 * Nothing happens when the count is zero, not even a store of zero, so
+	 * a cell that never saw a sample keeps whatever resetLinearMapping()
+	 * gave it.
+	 *
+	 * @param phase  Which RBS phase's cell to finish.
+	 * @param code   Which PCM code's cell to finish.
+	 */
+	void updateLinMappMeanAndVar(short phase, short code);
+
+	/** @brief The alternate-RBS counterpart of updateLinMappMeanAndVar(). */
+	void updateLinMappMeanAndVarAlt(short phase, short code);
+
+	/**
+	 * @brief Turn the reference code's accumulators into a mean and
+	 *        variance, unite the phases, then clear the accumulators.
+	 *
+	 * The three steps run in that order and the clear is unconditional,
+	 * so a cell with no samples keeps its mapping entry and every cell
+	 * starts the next study empty.
+	 */
 	void updateUref();
+
+	/**
+	 * @brief Round each phase's alternate-RBS mean into `linMappAlt`'s
+	 *        reference-code column, then clear the accumulators.
+	 *
+	 * The clear is unconditional and the update is not: a phase that is
+	 * not flagged, or has no samples, still has its accumulators reset.
+	 */
 	void updateUrefAlt();
 
 	/*
-	 * THE FOUR THE STUDY BATCH DEFINES.  All four are leaves -- measured
+	 * The four the study batch defines.  All four are leaves -- measured
 	 * over every `R_386_PC32` in the class, they call only `edprintf` and
 	 * `dsplibs_debug_printf` -- and between them they name every byte of
 	 * the object that was still `pad_` outside the sample store.
 	 *
-	 * `getAltVarThresh` RETURNS A FLOAT, and the mangling does not say so:
-	 * the evidence is `flds 0x34(%esp)` immediately before the epilogue at
-	 * 0x4088c, which leaves a value in %st(0) and nothing in %eax.  x87
-	 * cannot distinguish a `float` return from a `double` one -- both come
-	 * back in %st(0) and the value loaded is a float either way -- so
-	 * `float` is the narrower reading and carries the extra fact that what
-	 * is returned is a float local.
+	 * `getAltVarThresh` returns a `float`, and the mangling does not say
+	 * so: the evidence is `flds 0x34(%esp)` immediately before the
+	 * epilogue, which leaves a value in %st(0) and nothing in %eax. x87
+	 * cannot distinguish a `float` return from a `double` one, so `float`
+	 * is the narrower reading and carries the extra fact that a float
+	 * local is what comes back.
 	 */
-	float getAltVarThresh(float *, float);
+
+	/**
+	 * @brief The variance threshold the alternate-RBS test runs against.
+	 *
+	 * The mean of the below-average half of the six per-phase variances
+	 * `var` hands in -- not the mean of all six -- so a single wild phase
+	 * is excluded from the threshold it would otherwise set. Scaled by
+	 * `factor` and then floored at `altMinVarThresh`.
+	 *
+	 * @param var     The six per-phase variances to threshold.
+	 * @param factor  Scale applied to the below-average mean.
+	 * @return The variance threshold.
+	 */
+	float getAltVarThresh(float *var, float factor);
+
+	/**
+	 * @brief The first study pass: turn the middle of each phase's
+	 *        accumulators into a mapping and flag the phases too rough
+	 *        to trust.
+	 *
+	 * Covers only PCM codes 0x40..0x4f (the reference code excluded), and
+	 * flags a phase as suspected unless more than nine of its fifteen
+	 * neighbouring differences in that window are large.
+	 */
 	void porcessFirstStudy();
-	void resetStudyUrefHandler(unsigned int);
-	void uniteLinMappInfoOfUnsuspectedPhases(unsigned char);
+
+	/**
+	 * @brief Install the study's distance/variance thresholds and report
+	 *        them.
+	 *
+	 * @param qc  Nonzero selects the QC parameter block's own thresholds
+	 *            (scaled from `float_a950`); zero installs the fixed
+	 *            defaults with no scaling.
+	 */
+	void resetStudyUrefHandler(unsigned int qc);
+
+	/**
+	 * @brief Group the phases not flagged at `byte_280c` by how close
+	 *        their `linMapp` entries are, and give every one of them the
+	 *        pooled mean and variance of the largest group.
+	 *
+	 * Unlike unitePhasesInfoOfUref(), this is a single pass with no
+	 * convergence loop, and it clears every phase's accumulators
+	 * (flagged phases included) whether or not a group was formed.
+	 *
+	 * @param at  The PCM code (column of `linMapp`) to unite.
+	 */
+	void uniteLinMappInfoOfUnsuspectedPhases(unsigned char at);
 
 	/*
-	 * THE THREE THE DIL BATCH DEFINES, and they are one cluster on purpose:
+	 * The three the DIL batch defines, and they are one cluster on purpose:
 	 * `porcessSecondStudy` and `setQcLinearMapping` are the only two
 	 * members that call `updateAltRbsPhaseInDil` -- measured over every
 	 * `R_386_PC32` in the class -- and beyond that call the three reach
@@ -231,12 +386,46 @@ public:
 	 * in `porcessSecondStudy` and 0..0x74 in `setQcLinearMapping` -- which
 	 * is the one token that separates two otherwise identical blocks.
 	 */
+
+	/**
+	 * @brief The second study pass: fold suspected phases' recovered
+	 *        mapping into the table and report it.
+	 *
+	 * Finds the first unsuspected phase, calls updateAltRbsPhaseInDil()
+	 * to fold the suspected phases' recovered mapping in, then prints the
+	 * whole `linMapp` table (codes 0..0x7f).
+	 */
 	void porcessSecondStudy();
+
+	/**
+	 * @brief Build the mapping a QC session starts from.
+	 *
+	 * Every phase not flagged at `short_2800` gets a mapping: from its own
+	 * accumulators if it has a verdict at `byte_280c`, or otherwise from
+	 * `prevLinMapp`, the single previous-session row shared by all six
+	 * phases. Finds the first unsuspected phase, calls
+	 * updateAltRbsPhaseInDil(), and prints the mapping table (codes
+	 * 0..0x74).
+	 */
 	void setQcLinearMapping();
+
+	/**
+	 * @brief Rebuild the suspected phases' mapping from the samples they
+	 *        actually received, using the unsuspected phase (`unSuspectedPhase`)
+	 *        as reference.
+	 *
+	 * For each suspected phase and each code in a fixed 115-entry scan
+	 * order (odd codes 63 down to 3, then 2, then even codes 4 up to 64,
+	 * then 65 up to 116), quantises every stored sample for that code to
+	 * the nearest entry of the reference phase's mapping, finds the most
+	 * popular result among the samples that disagree with the reference,
+	 * and gives the phase the reference's entry for `linMapp` and the
+	 * popular value for `linMappAlt`.
+	 */
 	void updateAltRbsPhaseInDil();
 
 	/*
-	 * THE TWO THE PAD-GAIN BATCH DEFINES, and they are the two ends of one
+	 * The two the pad-gain batch defines, and they are the two ends of one
 	 * story.  Both are LEAVES -- measured over every `R_386_PC32` in the
 	 * class, `findPadGain` calls only the four companding routines,
 	 * `edprintf` and `dsplibs_debug_printf`, and `determineMaxUcode` calls
@@ -256,11 +445,35 @@ public:
 	 * `findPadGain` ends either in a plain `ret` or in a tail `jmp` to
 	 * `dsplibs_debug_printf`.
 	 */
-	void determineMaxUcode(short);
+
+	/**
+	 * @brief Decide, per phase, which PCM codes are usable and how high
+	 *        each phase may be driven.
+	 *
+	 * Fills `byte_0d00` with a per-cell "usable" mask (usable when the
+	 * code is within `maxCode` and the cell's variance is small), leaves
+	 * the scan's own top behind in `byte_a954`, and gives every phase a
+	 * `maxUcode[]` entry at or below it.
+	 *
+	 * @param maxCode  The highest code to consider usable at all.
+	 */
+	void determineMaxUcode(short maxCode);
+
+	/**
+	 * @brief Search for the line-pad gain that makes the reference
+	 *        phase's mapping round-trip through a companding law
+	 *        unchanged, and store it in `padGain`.
+	 *
+	 * Starts from `byte_a954`, projects the reference phase's mapping
+	 * through both companding laws at a range of assumed gains, and
+	 * keeps the gain with the smallest round-trip error. Also decides
+	 * which companding law the line is actually using and records it in
+	 * `int_a960`.
+	 */
 	void findPadGain();
 
 	/*
-	 * THE ONE THE LAST BATCH DEFINES, and the biggest member of the class:
+	 * The one the last batch defines, and the biggest member of the class:
 	 * 5,335 bytes, which is a third again the size of the next largest.
 	 * It is the per-sample entry point of the TRN1 study -- one call per
 	 * received sample, with the sample's RBS phase as the second argument
@@ -290,7 +503,23 @@ public:
 	 * members of a union holding one.  The test fixture uses a byte array
 	 * plus a cast for that reason.
 	 */
-	int studyUrefHandler(float, unsigned int);
+
+	/**
+	 * @brief The per-sample entry point of the TRN1 study.
+	 *
+	 * Called once per received sample of the far end's TRN1 segment (a
+	 * long run of the reference PCM code), with the sample's RBS phase.
+	 * Drives a seven-state machine (`int_a984`) through the study's six
+	 * timed passes, each ending in an update of `linMapp`/`linMappAlt`
+	 * for the reference code, and leaves behind the per-phase
+	 * alternate-RBS flags at `short_2800` and `trn1Sigma`.
+	 *
+	 * @param sample  The received sample's linear level.
+	 * @param phase   Which of the six RBS phases the sample belongs to.
+	 * @return 2 when the study is complete, 0 when the sample should not
+	 *         be used, 1 otherwise.
+	 */
+	int studyUrefHandler(float sample, unsigned int phase);
 
 	/*
 	 * Data members are public because the original's access specifiers are
@@ -312,16 +541,14 @@ public:
 	short linMappAlt[V90ADID_PHASES][V90ADID_CODES];	/* +0x0600 */
 
 	/*
-	 * ONE PER CODE, NOT ONE PER PHASE PER CODE.
-	 * `setPrevSessionLinearMapping` copies 128 shorts in -- its loop runs
-	 * a `short` index to 0x7f inclusive -- and that is the whole of the
-	 * 256 bytes to +0x0d00, so the extent is measured rather than assumed.
-	 * `setQcLinearMapping` is the reader.
+	 * One entry per code, not per phase per code -- a single 128-short
+	 * row shared by all six phases (finding F1361). `setPrevSessionLinearMapping`
+	 * is the writer and `setQcLinearMapping` the reader.
 	 */
 	short prevLinMapp[V90ADID_CODES];			/* +0x0c00 */
 
 	/*
-	 * ONE FLAG PER PHASE PER CODE: "this cell's measured mapping is good
+	 * One flag per phase per code: "this cell's measured mapping is good
 	 * enough to use".  `reset` sets all 768 of them to 1 and
 	 * `determineMaxUcode` is the only other member that touches it -- which
 	 * is what settles the meaning, because that method both fills it and
@@ -377,11 +604,11 @@ public:
 	V90Parameters *params;					/* +0x2814 */
 
 	/*
-	 * THE RECEIVED-SAMPLE STORE, and the only field in the object big
-	 * enough to be interesting on its own: 2,110 shorts per phase,
-	 * 25,320 bytes.  `addReceivedSampleToStorage` writes
-	 * `sampleStore[phase][sampleCount[phase]++]` and there is no bound on
-	 * that index anywhere in the method -- see docs/deviations.md D256.
+	 * The received-sample store: 2,110 shorts per phase, 25,320 bytes,
+	 * and the only field in the object big enough to be interesting on
+	 * its own. `addReceivedSampleToStorage` writes
+	 * `sampleStore[phase][sampleCount[phase]++]` with no bound on the
+	 * index anywhere in the method (docs/deviations.md D256).
 	 */
 	short sampleStore[V90ADID_PHASES][V90ADID_SAMPLES];	/* +0x2818 */
 
@@ -418,7 +645,7 @@ public:
 	/*
 	 * The variance `updateLinMappMeanAndVar` and `updateUref` store.
 	 *
-	 * THE OBJECT NAMES IT `linearMappingVar`: `determineMaxUcode` prints
+	 * The object names it `linearMappingVar`: `determineMaxUcode` prints
 	 * exactly this array through "linearMappingVar[%d][%d] = %d\r\n" with
 	 * `unSuspectedPhase` and the loop counter as the two indices.  The
 	 * identifier is left offset-derived because it is spelled in five files
@@ -449,7 +676,7 @@ public:
 	float padGain;						/* +0xa94c */
 
 	/*
-	 * THE DIVISOR EVERY DISTANCE THRESHOLD IS SCALED BY.
+	 * The divisor every distance threshold is scaled by.
 	 * `resetStudyUrefHandler` forms `1.0f / float_a950` once and derives
 	 * +0xa9a4, +0xa9a6, +0xa9a8, +0xa9ac and +0xa9ae from it, and it is
 	 * the only reader in the class: `flds 0xa950(%ebx)` at 0x408b4.  The
@@ -462,12 +689,12 @@ public:
 	float float_a950;					/* +0xa950 */
 
 	/*
-	 * THE OBJECT CALLS THIS ONE `maxUcode` TOO, and it is the scalar the
+	 * The object calls this one `maxUcode` too, and it is the scalar the
 	 * six-byte array below is derived from: `determineMaxUcode` prints it
 	 * as "original maxUcode = %d" while forcing it up to `short_a97a`, and
 	 * then gives every phase a `maxUcode[phase]` at or below it.
 	 *
-	 * ONE BYTE.  `determineMaxUcode` writes it with `mov %bl,0xa954(%ebp)`
+	 * One byte.  `determineMaxUcode` writes it with `mov %bl,0xa954(%ebp)`
 	 * at 0x4449f, 0x444d7, 0x4450a and 0x4468a and reads it back with
 	 * `movzbl 0xa954(%ebp)`; `findPadGain` reads it three ways --
 	 * `movzbl 0xa954(%esi)` at 0x4363e, `cmpb $0x3f,0xa954(%esi)` at
@@ -491,12 +718,11 @@ public:
 	unsigned char pad_a955[1];				/* +0xa955 */
 
 	/*
-	 * Six bytes -- one per phase -- that `setMaxUcodeArray` copies in from
-	 * its argument with a `short` loop to 5 inclusive.  THE VALUES ARE THE
-	 * HIGHEST PCM CODE EACH PHASE MAY BE DRIVEN AT: `determineMaxUcode`
-	 * fills them from `byte_a954` above, walking each phase's `byte_0d00`
-	 * row down to the first usable code, and clamping a flagged phase to
-	 * two below its own argument.
+	 * Six bytes, one per phase, copied in by `setMaxUcodeArray`. The
+	 * values are the highest PCM code each phase may be driven at:
+	 * `determineMaxUcode` fills them from `byte_a954` above, walking each
+	 * phase's `byte_0d00` row down to the first usable code, and clamping
+	 * a flagged phase to two below its own argument.
 	 */
 	unsigned char maxUcode[V90ADID_PHASES];			/* +0xa956 */
 
@@ -504,7 +730,7 @@ public:
 	PcmType pcmType;					/* +0xa95c */
 
 	/*
-	 * WHICH COMPANDING LAW `findPadGain` DECIDED THE LINE IS USING, and the
+	 * Which companding law `findPadGain` decided the line is using, and the
 	 * only thing that writes it: `mov %ecx,0xa960(%esi)` with %ecx zeroed
 	 * at 0x43e93, beside the "Final codec identified is MuLaw" print, and
 	 * `mov %edi,0xa960(%esi)` with %edi = 1 at 0x440c4, beside "Final codec
@@ -515,38 +741,24 @@ public:
 	int int_a960;						/* +0xa960 */
 
 	/*
-	 * THE OBJECT NAMES THIS ONE ITSELF.  `porcessFirstStudy` reaches it
-	 * with `flds 0xa964(%esi)` and prints the product through a format
-	 * string reading "2.5*trn1Sigma=%d", so the name is the original
-	 * author's and not offset-derived.  `studyUrefHandler` is the writer
-	 * -- `fsts 0xa964(%ebx)` at 0x42c5f and 0x42eef -- and is not written
-	 * here yet.  It is the standard deviation the TRN1 segment measured,
+	 * The object names this one itself: `porcessFirstStudy` prints it
+	 * through "2.5*trn1Sigma=%d" (finding F1425); `studyUrefHandler` is
+	 * the writer. It is the standard deviation the TRN1 segment measured,
 	 * and 2.5 of it is the squared-difference threshold that decides
 	 * whether a phase's mapping is smooth enough to trust.
 	 */
 	float trn1Sigma;					/* +0xa964 */
 
 	/*
-	 * THE OBJECT NAMES THIS ONE ITSELF TOO, and it is a PHASE INDEX rather
-	 * than a flag.  `porcessSecondStudy` saves it into a stack slot at
-	 * 0x41d06 and prints exactly that slot through
-	 * "V90AutoDigitalImpDetector: unSuspectedPhase = %d\r\n", so the name
-	 * is the original author's; finding F1425 is the same situation for
-	 * two fields the study batch met, and this one is spelled with the
-	 * object's own name because a field nothing else refers to yet costs
-	 * nothing to name properly.
+	 * The object names this one too, as a phase index rather than a
+	 * flag: `porcessSecondStudy` prints it as
+	 * "V90AutoDigitalImpDetector: unSuspectedPhase = %d\r\n" (finding
+	 * F1429). It is the first phase whose `byte_280c` is clear, and the
+	 * three readers use it as a `short` row index into `linMapp`.
 	 *
-	 * It is the FIRST phase whose `byte_280c` is clear -- the two writers
-	 * both scan for it with the same loop -- and the three readers use it
-	 * as a row index into `linMapp`: `movswl 0xa968(%ebp),%esi ; shl
-	 * $0x7,%esi` in `updateAltRbsPhaseInDil` at 0x418ff, and the same
-	 * `movswl` in `findPadGain` (four times) and `determineMaxUcode`
-	 * (five).  Every access in the class is sixteen bits wide, and the
-	 * readers sign-extend, so it is a `short`.
-	 *
-	 * THE SCAN CANNOT REACH 6.  Both writers stop the increment at 5 --
-	 * `cmp $0x4; jle` -- so "no unsuspected phase at all" is spelled 5,
-	 * which is also a valid phase.  docs/deviations.md D285.
+	 * The scan cannot reach 6: both writers stop the increment at 5, so
+	 * "no unsuspected phase at all" is spelled 5, which is also a valid
+	 * phase (docs/deviations.md D285).
 	 */
 	short unSuspectedPhase;					/* +0xa968 */
 
@@ -587,7 +799,7 @@ public:
 	float float_a980;					/* +0xa980 */
 
 	/*
-	 * THE STUDY HANDLER'S OWN STATE, and the six durations it runs
+	 * The study handler's own state, and the six durations it runs
 	 * against.  `resetStudyUrefHandler` zeroes the first two and copies
 	 * the other six in as 32-bit words from the parameter block -- from
 	 * +0x4a8..+0x4bc when its argument is nonzero and from +0x348..+0x35c
@@ -622,7 +834,7 @@ public:
 	 * for a single sample against a single entry, and the two are set
 	 * together by `resetStudyUrefHandler`.
 	 *
-	 * THE OBJECT'S OWN NAME FOR THIS FIELD IS `uniteUrefDistanceThresh`.
+	 * The object's own name for this field is `uniteUrefDistanceThresh`.
 	 * `resetStudyUrefHandler` prints it with the format string
 	 * "uniteUrefDistanceThresh = %d\r\n" and passes exactly
 	 * `movswl 0xa9a4(%ebx)` as the argument.  The identifier is left
@@ -642,18 +854,12 @@ public:
 	short short_a9a6;					/* +0xa9a6 */
 
 	/*
-	 * THE LAST EIGHT BYTES, and all three are named by the object's own
-	 * format strings rather than by their offsets.
-	 * `resetStudyUrefHandler` prints them as "altMinVarThresh = %c%d.%02d"
-	 * and "neighborUcodeMinDistance=%d neighborUcodeMaxDistance=%d", and
-	 * writes exactly these three fields either side of those calls.
-	 *
-	 * `altMinVarThresh` is a float -- `fstps 0xa9a8` in
-	 * `resetStudyUrefHandler`, `flds 0xa9a8` in `getAltVarThresh`, which
-	 * is the floor that method raises its answer to.  The other two are
-	 * shorts: `filds 0xa9ac`/`filds 0xa9ae` in `porcessFirstStudy`, which
-	 * clamps 2.5 * `trn1Sigma` between them.  +0xa9ae is the displacement
-	 * the object's 0xa9b0 size is measured from (finding F251).
+	 * The last eight bytes, all three named by the object's own format
+	 * strings (finding F1425): `altMinVarThresh` is the floor
+	 * `getAltVarThresh` raises its answer to, and the other two are the
+	 * pair `porcessFirstStudy` clamps `2.5 * trn1Sigma` between.
+	 * `neighborUcodeMaxDistance`'s displacement, +0xa9ae, is what the
+	 * object's 0xa9b0 size is measured from (finding F251).
 	 */
 	float altMinVarThresh;					/* +0xa9a8 */
 	short neighborUcodeMinDistance;				/* +0xa9ac */

@@ -1216,8 +1216,7 @@ RxHdxIdleV27(void *modem, short *in, short *out, unsigned short *count)
 	    && RX_FSE(FIELD_PTR(modem, V27_OBJ_RX))->mse <= V27RX_MSE_IDLE_OK) {
 		RxNextStateV27(modem);
 		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("Decision error is small back to"
-					     " DATA mode !!!\n");
+			dsplibs_debug_printf("Decision error is small back to" " DATA mode !!!\n");
 	}
 
 	return 0;
@@ -1660,8 +1659,7 @@ DataCarrierDetectV27(void *modem, short *samples, unsigned short count)
 				cd &= 1;
 		}
 		if (RX_FSE(rx)->mse > V27RX_MSE_NO_CARRIER && DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("V27 Decoder error too big..."
-					     " no carrier\n");
+			dsplibs_debug_printf("V27 Decoder error too big..." " no carrier\n");
 	} else {
 		short i;
 
@@ -1706,8 +1704,7 @@ DataCarrierDetectV27(void *modem, short *samples, unsigned short count)
 				     * V27RX_RMS_DROP_Q15) >> 15)) {
 			cd = 0;
 			if (DSPLIB_DEBUG_ON())
-				dsplibs_debug_printf("sudden energy drop >"
-						     " 8[dB], no carrier");
+				dsplibs_debug_printf("sudden energy drop >" " 8[dB], no carrier");
 		}
 
 		n = (unsigned short)(FIELD_US(rx, V27RX_RMS_COUNT) + 1);
@@ -1744,8 +1741,7 @@ QualityDetectV27(void *modem)
 	verdict = (short)(RX_AGC(rx)->signal & RX_SRE(rx)->active);
 	if (verdict == 0) {
 		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("V27 Dec error too big..."
-					     " unreliable data\n");
+			dsplibs_debug_printf("V27 Dec error too big..." " unreliable data\n");
 		verdict = V27_QUALITY_UNRELIABLE;
 	}
 

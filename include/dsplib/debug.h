@@ -56,11 +56,26 @@ extern unsigned int dsplibs_debug_level;
  * governs.  See docs/deviations.md.
  */
 
+/**
+ * @brief The host's diagnostic printf, called from every #DSPLIB_DEBUG_ON()
+ * / #DSPLIB_DEBUG_VERBOSE() gated site in the object.
+ * @param fmt  printf-style format string.
+ * @param ...  Format arguments.
+ * @return Host-defined.
+ */
 int dsplibs_debug_printf(const char *fmt, ...);
 
-/*
- * The modem core's data logger.  Declared here for completeness -- the object
- * imports it -- and not yet called by anything reconstructed.
+/**
+ * @brief The modem core's data logger.
+ *
+ * Declared here for completeness -- the object imports it -- and not yet
+ * called by anything reconstructed.
+ *
+ * @param m    The host's modem object.
+ * @param id   Host-defined log stream identifier.
+ * @param buf  Data to log.
+ * @param len  Length of @p buf.
+ * @return Host-defined.
  */
 int modem_debug_log_data(void *m, unsigned id, const void *buf, int len);
 

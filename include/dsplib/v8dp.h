@@ -60,37 +60,58 @@ struct v8_dp {
 	struct v8			*v8;	/* +0x30 */
 };
 
-/*
- * The three dp_operations entry points.
+/**
+ * @brief Create the V.8 datapump wrapper.
  *
- * All three are file-static in the object, and `v8_process` has always been
- * declared here; the other two are declared now for the same reason.  Since
- * finding F221 the object's copies carry `ref_` aliases, so a test can call
- * both sides by name rather than taking `create` and `destroy` out of what
- * `dp_v8_init` registers.  Nothing in `make phase` asserts that our linkage
- * matches the original's, and three of this tree's four datapumps already
- * export what the blob keeps local.
+ * The three dp_operations entry points (this, v8_delete(), v8_process())
+ * are all file-static in the object; they are declared here so a test can
+ * call each side by name (finding F221's `ref_` aliases) rather than
+ * pulling `create`/`destroy` out of what dp_v8_init() registers. Nothing
+ * in `make phase` asserts that our linkage matches the original's, and
+ * three of this tree's four datapumps already export what the blob keeps
+ * local.
+ *
+ * @param modem     The owning modem object.
+ * @param id        Requested datapump id (expected #DP_V8).
+ * @param caller    Non-zero if this end originated the call.
+ * @param srate     Sample rate; anything but 9600 is refused.
+ * @param max_frag  Maximum fragment size.
+ * @param op        Operations table to install into the wrapper.
+ * @return The new `struct dp *`, or NULL on a refused sample rate.
  */
 struct dp *v8_create(void *modem, int id, int caller, int srate, int max_frag,
 		     struct dp_operations *op);
+
+/** @brief Destroy a V.8 datapump wrapper created by v8_create(). */
 int v8_delete(struct dp *dp);
 
-/*
- * One buffer through the handshake.  Returns a DPSTAT_* code, and when the
- * negotiation finishes it publishes the result and asks the modem to change
- * datapump.
+/**
+ * @brief One buffer through the handshake.
+ *
+ * Returns a DPSTAT_* code, and when the negotiation finishes it publishes
+ * the result and asks the modem to change datapump.
+ *
+ * @param dp     The wrapper.
+ * @param in     Input samples.
+ * @param out    Output samples.
+ * @param count  Sample count.
+ * @return A DPSTAT_* status code.
  */
 int v8_process(struct dp *dp, void *in, void *out, int count);
 
-/*
- * Register the datapump.  Called from prop_dp_init, which discards the
- * result -- the object's `prop_dp_init` (+0x1c) calls this and then zeroes
- * %eax for its own return.  The `int` is the object's: `dp_v8_init` ends
- * `xor %eax,%eax` and a `void` body cannot emit that.  Finding F7860.
+/**
+ * @brief Register the V.8 datapump.
+ *
+ * Called from prop_dp_init, which discards the result -- the object's
+ * `prop_dp_init` calls this and then zeroes its own return value. The
+ * `int` return type is the object's own: `dp_v8_init` ends with
+ * `xor %eax,%eax`, which a `void` body cannot emit (finding F7860).
+ *
+ * @return Always 0.
  */
 int dp_v8_init(void);
 
-/* And deregister it. */
+/** @brief Deregister the V.8 datapump. */
 void dp_v8_exit(void);
 
 #endif /* DSPLIB_V8DP_H */

@@ -61,18 +61,18 @@
  },
  {
   "label": "ctor: the converter takes 2n + 0x1388 symbols, not 3n",
-  "find": "\tv90mod_bts_ctor(bts, 2 * n + n + 0x1388, params);",
-  "replace": "\tv90mod_bts_ctor(bts, 2 * n + 0x1388, params);"
+  "find": "\tnew (bts) V90BitsToSymbol(2 * n + n + 0x1388, params);",
+  "replace": "\tnew (bts) V90BitsToSymbol(2 * n + 0x1388, params);"
  },
  {
   "label": "ctor: the converter's constant is 0x1388 decimal, not hex",
-  "find": "\tv90mod_bts_ctor(bts, 2 * n + n + 0x1388, params);",
-  "replace": "\tv90mod_bts_ctor(bts, 2 * n + n + 1388, params);"
+  "find": "\tnew (bts) V90BitsToSymbol(2 * n + n + 0x1388, params);",
+  "replace": "\tnew (bts) V90BitsToSymbol(2 * n + n + 1388, params);"
  },
  {
   "label": "ctor: the phase 3 modulator is built with no session flag",
-  "find": "\tv90mod_p3_ctor(p3, params, sessionFlag);",
-  "replace": "\tv90mod_p3_ctor(p3, params, 0);"
+  "find": "\tnew (p3) V90Phase3Modulator(params, sessionFlag);",
+  "replace": "\tnew (p3) V90Phase3Modulator(params, 0);"
  },
  {
   "label": "ctor: the phase 3 modulator's allocation is short",
@@ -86,23 +86,23 @@
  },
  {
   "label": "ctor: the two mapping parameters do NOT cross on the way down",
-  "find": "\t\t       mappingParams2, mappingParams, cp, 0xc);",
-  "replace": "\t\t       mappingParams, mappingParams2, cp, 0xc);"
+  "find": "\t\t\t\t    mappingParams2, mappingParams, cp, 0xc);",
+  "replace": "\t\t\t\t    mappingParams, mappingParams2, cp, 0xc);"
  },
  {
   "label": "ctor: the phase 4 modulator's eighth argument is 0xd, not 0xc",
-  "find": "\t\t       mappingParams2, mappingParams, cp, 0xc);",
-  "replace": "\t\t       mappingParams2, mappingParams, cp, 0xd);"
+  "find": "\t\t\t\t    mappingParams2, mappingParams, cp, 0xc);",
+  "replace": "\t\t\t\t    mappingParams2, mappingParams, cp, 0xd);"
  },
  {
   "label": "ctor: the phase 4 modulator is given no converter",
-  "find": "\tv90mod_p4_ctor(p4, params, sessionFlag, bitsToSymbol, mp,",
-  "replace": "\tv90mod_p4_ctor(p4, params, sessionFlag, 0, mp,"
+  "find": "\tnew (p4) V90Phase4Modulator(params, sessionFlag, bitsToSymbol, mp,",
+  "replace": "\tnew (p4) V90Phase4Modulator(params, sessionFlag, 0, mp,"
  },
  {
   "label": "ctor: the phase 4 modulator is given no session flag",
-  "find": "\tv90mod_p4_ctor(p4, params, sessionFlag, bitsToSymbol, mp,",
-  "replace": "\tv90mod_p4_ctor(p4, params, 0, bitsToSymbol, mp,"
+  "find": "\tnew (p4) V90Phase4Modulator(params, sessionFlag, bitsToSymbol, mp,",
+  "replace": "\tnew (p4) V90Phase4Modulator(params, 0, bitsToSymbol, mp,"
  },
  {
   "label": "dtor: the phase 3 modulator's guard is dropped",
@@ -111,13 +111,13 @@
  },
  {
   "label": "dtor: the phase 4 modulator is freed without being destroyed",
-  "find": "\t\tv90mod_p4_dtor(phase4Modulator);\n\t\tsysdep_free(phase4Modulator);",
+  "find": "\t\tphase4Modulator->~V90Phase4Modulator();\n\t\tsysdep_free(phase4Modulator);",
   "replace": "\t\tsysdep_free(phase4Modulator);"
  },
  {
   "label": "dtor: the phase 3 modulator is destroyed and not freed",
-  "find": "\t\tv90mod_p3_dtor(phase3Modulator);\n\t\tsysdep_free(phase3Modulator);",
-  "replace": "\t\tv90mod_p3_dtor(phase3Modulator);"
+  "find": "\t\tphase3Modulator->~V90Phase3Modulator();\n\t\tsysdep_free(phase3Modulator);",
+  "replace": "\t\tphase3Modulator->~V90Phase3Modulator();"
  },
  {
   "label": "dtor: the converter is not released",

@@ -67,8 +67,20 @@ extern const short SDMv32_GPA[4];
 extern const short SDMv32_GPC[4];
 extern const short SDMv32_CFG[3];
 
-/* Both work in place over `count` 16-bit words and update `reg`. */
+/**
+ * @brief Scramble `count` V.32 words in place with the self-synchronising scrambler.
+ * @param sdm    The scrambler state; `reg` is updated in place.
+ * @param buf    The words to scramble, in place.
+ * @param count  How many words.
+ */
 void SDMv32_scrambler(struct v32_sdm *sdm, short *buf, unsigned short count);
+
+/**
+ * @brief Descramble `count` V.32 words in place with the self-synchronising descrambler.
+ * @param sdm    The descrambler state; `reg` is updated in place.
+ * @param buf    The words to descramble, in place.
+ * @param count  How many words.
+ */
 void SDMv32_descrambler(struct v32_sdm *sdm, short *buf, unsigned short count);
 
 #ifdef __cplusplus

@@ -175,40 +175,62 @@ struct detector {
 	/* 0x38 bytes in total -- detector_create's allocation size. */
 };
 
-/*
- * Build a detector.  A NULL `d` allocates 0x38 bytes and returns NULL if that
- * fails; anything else is re-initialised in place and the existing dtmf,
- * cadence and tone objects are reused rather than replaced.
+/**
+ * @brief Build a tone/DTMF/cadence detector.
  *
- * `get_sreg` may be NULL, in which case `dialtone_detect_delay` is 0 and the
- * detector is otherwise identical.
+ * @param d        NULL allocates 0x38 bytes and returns NULL if that
+ *                 fails; anything else is re-initialised in place and
+ *                 the existing dtmf, cadence and tone objects are reused
+ *                 rather than replaced.
+ * @param modem    The host's modem object, passed to @p get_sreg.
+ * @param get_sreg May be NULL, in which case `dialtone_detect_delay` is
+ *                 0 and the detector is otherwise identical.
+ * @return The detector (@p d, or the newly allocated one), or NULL on
+ *         allocation failure.
  */
 struct detector *detector_create(struct detector *d, void *modem,
 				 detector_sreg_fn get_sreg);
 
-/* Whole-word store; nothing here reads the value back. */
+/**
+ * @brief Set which of the six detectors run.
+ * @param d       The detector.
+ * @param enable  A mask of `DETECTOR_ENABLE_*` bits. Whole-word store;
+ *                nothing here reads the value back.
+ */
 void detector_set_enable(struct detector *d, short enable);
 
-/*
- * Tear the detector down: the +0x04 block, then all four tones, then whichever
- * of the three cadences are non-NULL, then the detector itself.  The tone
- * pointers are NOT guarded -- `TONE_delete` is handed all four whatever they
- * hold -- and neither is the +0x04 block.
+/**
+ * @brief Tear a detector down.
+ *
+ * Frees the +0x04 block, then all four tones, then whichever of the
+ * three cadences are non-NULL, then the detector itself. The tone
+ * pointers are NOT guarded -- `TONE_delete` is handed all four whatever
+ * they hold -- and neither is the +0x04 block.
+ *
+ * @param d  The detector to free.
  */
 void detector_delete(struct detector *d);
 
+/** @brief Switch to status-code reporting; see the file comment. */
 void detector_set_output_status(struct detector *d);
+/** @brief Switch to in-stream (DLE-escaped) reporting; see the file comment. */
 void detector_set_output_in_stream(struct detector *d);
 
-/*
- * One block of `count` samples, in the -1..+1 float domain the voice path
- * uses.
+/**
+ * @brief Run one block of samples through whichever detectors are enabled.
  *
- * `out` and `outlen` are the caller's DLE-escaped event stream and the count
- * of bytes already in it; both are touched only in DETECTOR_OUTPUT_IN_STREAM
- * mode.  The return is the last status code the block produced, or 0 -- and
- * in stream mode it is always 0, because every arm that would set it takes
- * the other branch.
+ * @param d        The detector, updated in place.
+ * @param samples  @p count samples, in the -1..+1 float domain the voice
+ *                 path uses.
+ * @param count    Number of samples.
+ * @param out      The caller's DLE-escaped event stream. Touched only in
+ *                 #DETECTOR_OUTPUT_IN_STREAM mode.
+ * @param outlen   Count of bytes already in @p out; advanced by however
+ *                 many are appended. Touched only in
+ *                 #DETECTOR_OUTPUT_IN_STREAM mode.
+ * @return The last status code the block produced, or 0 -- in stream
+ *         mode this is always 0, because every arm that would set it
+ *         takes the other branch.
  */
 int detector_progress(struct detector *d, float *samples, short count,
 		      unsigned char *out, unsigned short *outlen);

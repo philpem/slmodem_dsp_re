@@ -613,8 +613,7 @@ V90TRN2Designer::V90TRN2Design(V90MappingParams *mappingParams,
 				     params->nofUcodesInTrn2);
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("\n" "------------------------------"
-				     "------------------------------"
-				     "------------------------------"
+				     "------------------------------" "------------------------------"
 				     "------------" "\r\n");
 
 	for (i = 0; i < params->nofUcodesInTrn2; i++)
@@ -643,8 +642,7 @@ V90TRN2Designer::V90TRN2Design(V90MappingParams *mappingParams,
 
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("\n" "------------------------------"
-				     "------------------------------"
-				     "------------------------------"
+				     "------------------------------" "------------------------------"
 				     "------------" "\r\n");
 	return 1;
 

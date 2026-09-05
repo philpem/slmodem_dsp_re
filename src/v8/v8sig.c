@@ -446,8 +446,7 @@ v8_phase_rev_detect(struct v8_phase_rev *pr, const short *in, short count)
 			 */
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
-				    "ANSAM phase reversals detected "
-				    "delay = %d\n", spacing);
+				    "ANSAM phase reversals detected " "delay = %d\n", spacing);
 			pr->detected = 1;
 		}
 

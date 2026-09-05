@@ -674,10 +674,8 @@ V90Phase4Demodulator::getV90Decision(short sample)
 		if (countInState == linearMappStudyStart) {
 			demapper->linearMappStudyEnabled = 1;
 			if (DSPLIB_DEBUG_ON())
-				dsplibs_debug_printf("V90Phase4Demodulator "
-						     "reset & enable linear "
-						     "mapping study in "
-						     "TRN2.\n");
+				dsplibs_debug_printf("V90Phase4Demodulator " "reset & enable linear "
+						     "mapping study in " "TRN2.\n");
 		}
 		if (demapper->linearMappStudyEnabled != 0)
 			demapper->linearMappingStudy(sample, decision);
@@ -688,8 +686,7 @@ V90Phase4Demodulator::getV90Decision(short sample)
 			int_0028 = 0x19;
 			demapper->linearMappStudyEnabled = 0;
 			if (DSPLIB_DEBUG_ON())
-				dsplibs_debug_printf("V90Phase4Demodulator: "
-						     "disable linear mapping "
+				dsplibs_debug_printf("V90Phase4Demodulator: " "disable linear mapping "
 						     "study\n");
 		}
 		break;
@@ -705,13 +702,11 @@ V90Phase4Demodulator::getV90Decision(short sample)
 
 				if (info == 1) {
 					int_0028 = 0x1a;
-					edprintf("V90Phase4Demodulator: MP "
-						 "detected @ %d\r\n",
+					edprintf("V90Phase4Demodulator: MP " "detected @ %d\r\n",
 						 countInState);
 				} else if (info == 2) {
 					int_0028 = 0x1b;
-					edprintf("V90Phase4Demodulator: MPnot "
-						 "detected @ %d\r\n",
+					edprintf("V90Phase4Demodulator: MPnot " "detected @ %d\r\n",
 						 countInState);
 				}
 			}
@@ -739,9 +734,7 @@ V90Phase4Demodulator::getV90Decision(short sample)
 					 */
 					if (DSPLIB_DEBUG_VERBOSE())
 						dsplibs_debug_printf(
-							"V90Phase4Demodulator:"
-							" MPnot detected on "
-							"WaitForEd @ %d\r\n",
+							"V90Phase4Demodulator:" " MPnot detected on " "WaitForEd @ %d\r\n",
 							countInState);
 				} else if (info == 3 &&
 					   state == P4D_STATE_WAIT_FOR_ED) {
@@ -749,18 +742,15 @@ V90Phase4Demodulator::getV90Decision(short sample)
 					mp->printNofRecievedMpMpNot();
 					if (connectionEvaluator->word_90 != 0 &&
 					    int_003c != 0 && int_0038 != 0) {
-						edprintf("V90Phase4Demodulator:"
-							 " Ed detected @ %d, "
-							 "enter wait for Rt "
-							 "state\r\n",
+						edprintf("V90Phase4Demodulator:" " Ed detected @ %d, "
+							 "enter wait for Rt " "state\r\n",
 							 countInState);
 						countInState = 0;
 						errorEnergyBeforeEC = 0.0f;
 						state = P4D_STATE_SILENCE;
 						resetRRNDetector();
 					} else {
-						edprintf("V90Phase4Demodulator:"
-							 " Ed detected @ %d, "
+						edprintf("V90Phase4Demodulator:" " Ed detected @ %d, "
 							 "enter B1d state\r\n",
 							 countInState);
 						state = P4D_STATE_B1D;
@@ -803,8 +793,7 @@ V90Phase4Demodulator::getV90Decision(short sample)
 				 "delay) = %d\r\n", countInState, b1dBits,
 				 b1dZeros);
 			n = b1dBits - 3 * mappingParams2->word_0 - 0x17;
-			edprintf("V90Phase4Demodulator: B1d BER = "
-				 "%c%d.%08d\r\n",
+			edprintf("V90Phase4Demodulator: B1d BER = " "%c%d.%08d\r\n",
 				 p4d_sign_of((float)((long double)b1dZeros /
 						     (long double)n)),
 				 p4d_whole_of((long double)b1dZeros /
@@ -864,8 +853,7 @@ V90Phase4Demodulator::getV90Decision(short sample)
 				    params->RRN_SILENCE_WAIT_BEFORE_ECHO_CALC &&
 		    countInState % P4D_FRAME == 0) {
 			edprintf("V90Phase4Demodulator: entering "
-				 "CalcErrorEnergyBeforeEchoCancellation state "
-				 "@ %d\r\n", countInState);
+				 "CalcErrorEnergyBeforeEchoCancellation state " "@ %d\r\n", countInState);
 			state = P4D_STATE_CALC_ENERGY_BEFORE_EC;
 			countInState = 0;
 		}
@@ -909,8 +897,7 @@ V90Phase4Demodulator::getV90Decision(short sample)
 				     3 * params->RRN_SILENCE_ECHO_CALC_PERIOD) &&
 		    countInState % P4D_FRAME == 0) {
 			edprintf("V90Phase4Demodulator: entering "
-				 "CalcErrorEnergyAfterEchoCancellation state "
-				 "@ %d\r\n", countInState);
+				 "CalcErrorEnergyAfterEchoCancellation state " "@ %d\r\n", countInState);
 			state = P4D_STATE_CALC_ENERGY_AFTER_EC;
 			countInState = 0;
 			errorEnergyAfterEC = 0.0f;
@@ -994,8 +981,7 @@ V90Phase4Demodulator::getV90Decision(short sample)
 		decision = sample;
 		demapper->incrementRBSFramePosition();
 		if (rDetector1.detectRNot(sample)) {
-			edprintf("V90Phase4Demodulator: RtNot detected @ "
-				 "%d\r\n", countInState);
+			edprintf("V90Phase4Demodulator: RtNot detected @ " "%d\r\n", countInState);
 			enterWaitForMP();
 			int_0028 = 0x28;
 			mp->reset();
@@ -1092,10 +1078,8 @@ V90Phase4Demodulator::getV92Decision(short sample)
 		if (countInState == linearMappStudyStart) {
 			demapper->linearMappStudyEnabled = 1;
 			if (DSPLIB_DEBUG_ON())
-				dsplibs_debug_printf("V90Phase4Demodulator "
-						     "reset & enable linear "
-						     "mapping study in "
-						     "TRN2.\n");
+				dsplibs_debug_printf("V90Phase4Demodulator " "reset & enable linear "
+						     "mapping study in " "TRN2.\n");
 		}
 		if (demapper->linearMappStudyEnabled != 0)
 			demapper->linearMappingStudy(sample, decision);
@@ -1106,8 +1090,7 @@ V90Phase4Demodulator::getV92Decision(short sample)
 			int_0028 = 0x19;
 			demapper->linearMappStudyEnabled = 0;
 			if (DSPLIB_DEBUG_ON())
-				dsplibs_debug_printf("V90Phase4Demodulator: "
-						     "disable linear mapping "
+				dsplibs_debug_printf("V90Phase4Demodulator: " "disable linear mapping "
 						     "study\n");
 		}
 		break;
@@ -1129,15 +1112,13 @@ V90Phase4Demodulator::getV92Decision(short sample)
 						descrambler->process(bits[i]))) {
 				case 1:
 					int_0028 = 0x2d;
-					edprintf("V90Phase4Demodulator: CP "
-						 "detected @ %d\r\n",
+					edprintf("V90Phase4Demodulator: CP " "detected @ %d\r\n",
 						 countInState);
 					break;
 
 				case 2:
 					int_0028 = 0x2e;
-					edprintf("V90Phase4Demodulator: CPnot "
-						 "detected @ %d\r\n",
+					edprintf("V90Phase4Demodulator: CPnot " "detected @ %d\r\n",
 						 countInState);
 					break;
 
@@ -1185,9 +1166,7 @@ V90Phase4Demodulator::getV92Decision(short sample)
 					if (int_003c != 0 && int_0044 != 0 &&
 					    int_0048 == 0) {
 						int_0028 = 0x35;
-						edprintf("V90Phase4Demodulator:"
-							 " First Ed at RRN "
-							 "detected @ %d, "
+						edprintf("V90Phase4Demodulator:" " First Ed at RRN " "detected @ %d, "
 							 "Silence state\r\n",
 							 countInState);
 						countInState = 0;
@@ -1201,8 +1180,7 @@ V90Phase4Demodulator::getV92Decision(short sample)
 						break;
 					}
 					int_0028 = 0x1c;
-					edprintf("V90Phase4Demodulator: Ed "
-						 "detected @ %d, enter B1d "
+					edprintf("V90Phase4Demodulator: Ed " "detected @ %d, enter B1d "
 						 "state\r\n", countInState);
 					state = P4D_STATE_B1D;
 					countInState = 0;
@@ -1240,8 +1218,7 @@ V90Phase4Demodulator::getV92Decision(short sample)
 				 "delay) = %d\r\n", countInState, b1dBits,
 				 b1dZeros);
 			n = b1dBits - 3 * mappingParams2->word_0 - 0x17;
-			edprintf("V90Phase4Demodulator: B1d BER = "
-				 "%c%d.%08d\r\n",
+			edprintf("V90Phase4Demodulator: B1d BER = " "%c%d.%08d\r\n",
 				 p4d_sign_of((float)((long double)b1dZeros /
 						     (long double)n)),
 				 p4d_whole_of((long double)b1dZeros /
@@ -1289,8 +1266,7 @@ V90Phase4Demodulator::getV92Decision(short sample)
 				    params->RRN_SILENCE_WAIT_BEFORE_ECHO_CALC &&
 		    countInState % P4D_FRAME == 0) {
 			edprintf("V90Phase4Demodulator: entering "
-				 "CalcErrorEnergyBeforeEchoCancellation state "
-				 "@ %d\r\n", countInState);
+				 "CalcErrorEnergyBeforeEchoCancellation state " "@ %d\r\n", countInState);
 			state = P4D_STATE_CALC_ENERGY_BEFORE_EC;
 			countInState = 0;
 		}
@@ -1334,8 +1310,7 @@ V90Phase4Demodulator::getV92Decision(short sample)
 				     3 * params->RRN_SILENCE_ECHO_CALC_PERIOD) &&
 		    countInState % P4D_FRAME == 0) {
 			edprintf("V90Phase4Demodulator: entering "
-				 "CalcErrorEnergyAfterEchoCancellation state "
-				 "@ %d\r\n", countInState);
+				 "CalcErrorEnergyAfterEchoCancellation state " "@ %d\r\n", countInState);
 			state = P4D_STATE_CALC_ENERGY_AFTER_EC;
 			countInState = 0;
 			errorEnergyAfterEC = 0.0f;
@@ -1420,8 +1395,7 @@ V90Phase4Demodulator::getV92Decision(short sample)
 		decision = sample;
 		demapper->incrementRBSFramePosition();
 		if (rDetector1.detectRNot(sample)) {
-			edprintf("V90Phase4Demodulator: RtNot detected @ "
-				 "%d\r\n", countInState);
+			edprintf("V90Phase4Demodulator: RtNot detected @ " "%d\r\n", countInState);
 			state = P4D_STATE_WAIT_FOR_V90CP;
 			countInState = 0;
 			int_0028 = 0x28;

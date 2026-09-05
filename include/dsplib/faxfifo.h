@@ -1,41 +1,45 @@
-/*
- * faxfifo.h -- Class 1 fax: the FIFO of 16-bit elements.
+/**
+ * @file faxfifo.h
+ * @brief Class 1 fax: the FIFO of 16-bit elements.
  *
- * `FIFO_read`, `FIFO_write`, `FIFO_delete`, `FIFO_full_test` and now
- * `FIFO_create` (.text 0x096bb0, 167 bytes) are all reconstructed.
+ * `FIFO_read`, `FIFO_write`, `FIFO_delete`, `FIFO_full_test` and
+ * `FIFO_create` (`.text` 0x096bb0, 167 bytes) are all reconstructed.
  *
- * `FIFO_create` WAS DECLINED TWICE (F9020, F9199) FOR ITS DEFAULT TABLE,
- * `FIFO_CFG`.  The blob defines that name TWICE at DIFFERENT VALUES -- a
- * file-local `d` at .data:0x83a0 holding {0, 300, 0}, and a global `R` at
- * .rodata:0x9654 holding {0, 100, 0} -- so `symmap.py` gives it no `ref_`
- * alias by name (F9058) and a naive `src/` definition looked like a multiple
- * definition of a symbol the blob already has (F9199's second reason).
+ * `FIFO_create` was declined twice (F9020, F9199) over its default table,
+ * `FIFO_CFG`: the blob defines that name twice at different values -- a
+ * file-local `d` at `.data:0x83a0` holding `{0, 300, 0}`, and a global `R`
+ * at `.rodata:0x9654` holding `{0, 100, 0}` -- so `symmap.py` gave it no
+ * `ref_` alias by name (F9058) and a naive `src/` definition looked like a
+ * multiple definition of a symbol the blob already has (F9199's second
+ * reason).
  *
- * BOTH OF THOSE ARE SETTLED NOW, MEASURED RATHER THAN TAKEN ON TRUST
- * (F9500).  `V21TX_create`'s relocation at 0x099375 NAMES `FIFO_CFG`, and per
- * CLAUDE.md a relocation that names a symbol resolves to the GLOBAL
- * definition -- so `FIFO_create`'s own two loads at 0x096c1b/0x096c22 (also
- * named relocations) read the same global, and the six bytes below are
- * `00 00 64 00 00 00`, the 100-element copy.  And the "multiple definition"
- * fear does not survive checking `build/dsplibs_ref.o`: `tools/symmap.py`'s
- * redefine map renames EVERY symtab entry called `FIFO_CFG`, local and
- * global alike (`nm` shows both `d` and `R` `ref_FIFO_CFG` after the rename),
- * so nothing in the renamed blob is still named plain `FIFO_CFG` and `src/`
- * is free to define it.  An external reference to `ref_FIFO_CFG` binds to the
- * GLOBAL entry only -- local symbols never satisfy another translation
- * unit's undefined reference -- which is what makes the differential test
- * below able to tell 100 from 300 at all.
+ * Both of those are settled now, measured rather than taken on trust
+ * (F9500). `V21TX_create`'s relocation at 0x099375 names `FIFO_CFG`, and
+ * per CLAUDE.md a relocation that names a symbol resolves to the global
+ * definition -- so `FIFO_create`'s own two loads at 0x096c1b/0x096c22
+ * (also named relocations) read the same global, and the six bytes there
+ * are `00 00 64 00 00 00`, the 100-element copy. The "multiple
+ * definition" fear does not survive checking `build/dsplibs_ref.o`
+ * either: `tools/symmap.py`'s redefine map renames every symtab entry
+ * called `FIFO_CFG`, local and global alike (`nm` shows both `d` and `R`
+ * `ref_FIFO_CFG` after the rename), so nothing in the renamed blob is
+ * still named plain `FIFO_CFG` and `src/` is free to define it. An
+ * external reference to `ref_FIFO_CFG` binds to the global entry only --
+ * local symbols never satisfy another translation unit's undefined
+ * reference -- which is what lets the differential test tell 100 from
+ * 300 at all.
  *
- * WHAT `FIFO_create` ESTABLISHES.  It allocates `sysdep_malloc(0x14)` for the
- * object and `sysdep_malloc(size * 2)` for the buffer, so the object is 20
- * bytes and the buffer holds `size` SIXTEEN-BIT elements -- not bytes.  With
- * a NULL `cfg` it reads `FIFO_CFG` directly (0x096c1b/0x096c22); otherwise it
- * copies six bytes out of the caller's configuration as one 32-bit store to
- * +0x00 and one 16-bit store to +0x04, which is why +0x00 and +0x02 are one
- * aligned pair; then it zeroes +0x0c, +0x0e and +0x10 and clears the whole
- * buffer with LITERAL ZERO, not `fill` -- `movw $0x0,(%ecx,%edx,2)` at
- * 0x096c00, not a re-read of the fill field.  `fill` is what `FIFO_read`
- * pads a shortfall with once the FIFO runs dry; it plays no part in the
+ * What `FIFO_create` establishes: it allocates `sysdep_malloc(0x14)` for
+ * the object and `sysdep_malloc(size * 2)` for the buffer, so the object
+ * is 20 bytes and the buffer holds `size` sixteen-bit elements, not
+ * bytes. With a NULL `cfg` it reads `FIFO_CFG` directly (0x096c1b/
+ * 0x096c22); otherwise it copies six bytes out of the caller's
+ * configuration as one 32-bit store to +0x00 and one 16-bit store to
+ * +0x04, which is why +0x00 and +0x02 are one aligned pair; then it
+ * zeroes +0x0c, +0x0e and +0x10 and clears the whole buffer with a
+ * literal zero, not `fill` -- `movw $0x0,(%ecx,%edx,2)` at 0x096c00, not
+ * a re-read of the fill field. `fill` is what `FIFO_read` pads a
+ * shortfall with once the FIFO runs dry; it plays no part in the
  * buffer's initial contents.
  */
 
@@ -83,46 +87,70 @@ FAXFIFO_ASSERT_OFF(wr, 0x10);
 typedef char fax_fifo_size[(sizeof(struct fax_fifo) == 0x14) ? 1 : -1];
 #endif
 
-/*
- * Occupancy in Q14: 14747 / 16384 is 0.90008..., so this answers "at least
- * 90% full".
+/**
+ * Occupancy threshold in Q14: 14747 / 16384 is 0.90008..., so a
+ * #FIFO_full_test result at or above this means "at least 90% full".
  */
 #define FIFO_FULL_Q14	0x399b
 
-/*
- * 1 when count/size >= 90%, 0 below -- as WRITTEN.  As COMPILED the
- * arithmetic is a 16-bit chain: count << 14 is TRUNCATED TO A SHORT before
- * the divide, so a count of 2 lands on -32768 and, for any POSITIVE size,
- * everything above count == 1 answers "not full" through a negative
- * quotient; with a positive size the only input that can answer 1 is
- * count == 1 with size == 1.  Reproduced, not repaired;
- * docs/deviations.md D952.  `size` is read signed, and zero divides.
+/**
+ * @brief Report whether a FIFO is at least 90% full.
+ *
+ * As written, this is `count / size >= 90%`. As compiled it is not
+ * quite: the arithmetic is a 16-bit chain -- `count << 14` is truncated
+ * to a `short` before the divide, so a count of 2 lands on -32768 and,
+ * for any positive `size`, everything above `count == 1` answers "not
+ * full" through a negative quotient; with a positive `size` the only
+ * input that can answer 1 is `count == 1` with `size == 1`. Reproduced,
+ * not repaired -- see `docs/deviations.md` D952. `size` is read signed,
+ * and a zero `size` divides by zero.
+ *
+ * @param f  The FIFO to test.
+ * @return 1 if (as computed above) at least 90% full, 0 otherwise.
  */
 int FIFO_full_test(struct fax_fifo *f);
 
-/*
- * Take up to `count` elements into `dst` and return HOW MANY WERE REAL.  The
- * shortfall is not left alone: the balance of `count` is filled with
- * `f->fill`, so the destination is always written `count` times.  THAT MAKES
- * `count` THE DESTINATION'S SIZE, not a request -- a caller sizing `dst` from
- * the FIFO's occupancy overruns it (this is D956's shape, so it is called out
- * rather than discovered again).
+/**
+ * @brief Take up to `count` elements out of a FIFO.
  *
- * Every cursor step is 16-bit: `rd` advances and wraps against `size` read as
- * an UNSIGNED short, while FIFO_full_test reads the same field signed.  Both
- * readings are the object's; see D1050.
+ * The shortfall is not left alone: the balance of `count` is filled with
+ * `f->fill`, so `dst` is always written `count` times. That makes
+ * `count` the destination's size, not a request -- a caller sizing
+ * `dst` from the FIFO's occupancy overruns it (this is D956's shape, so
+ * it is called out here rather than rediscovered).
+ *
+ * Every cursor step is 16-bit: `rd` advances and wraps against `size`
+ * read as an unsigned short, while #FIFO_full_test reads the same field
+ * signed. Both readings are the object's own; see D1050.
+ *
+ * @param f      The FIFO to read from.
+ * @param dst    Destination buffer, exactly `count` elements.
+ * @param count  Elements to write to `dst`.
+ * @return How many of those elements were real (the rest were `f->fill`).
  */
 int FIFO_read(struct fax_fifo *f, unsigned short *dst, unsigned short count);
 
-/*
- * Append up to `count` elements from `src`, clamped to the free space, and
- * return how many were taken.  The free space is `(unsigned short)(size -
- * count)`, so a FIFO holding more than `size` wraps to a large free count
- * rather than to zero -- reproduced, D1051.
+/**
+ * @brief Append elements to a FIFO, clamped to the free space.
+ *
+ * The free space is `(unsigned short)(size - count)`, so a FIFO already
+ * holding more than `size` wraps to a large free count rather than to
+ * zero -- reproduced, D1051.
+ *
+ * @param f      The FIFO to write to.
+ * @param src    Source elements.
+ * @param count  How many elements are offered.
+ * @return How many elements were actually taken.
  */
 int FIFO_write(struct fax_fifo *f, unsigned short *src, unsigned short count);
 
-/* Free the buffer, then the object.  The second free is a tail call. */
+/**
+ * @brief Free a FIFO's buffer, then the FIFO itself.
+ *
+ * The second free is a tail call.
+ *
+ * @param f  The FIFO to free.
+ */
 void FIFO_delete(struct fax_fifo *f);
 
 /*
@@ -144,18 +172,22 @@ struct fifo_cfg {
  */
 extern const struct fifo_cfg FIFO_CFG;
 
-/*
- * Build a FIFO, or re-initialise one the caller already has.
+/**
+ * @brief Build a FIFO, or re-initialise one the caller already has.
  *
- * `f` NULL allocates a `sizeof(struct fax_fifo)` (0x14-byte) object and, with
- * it, a `size * 2`-byte buffer; a non-NULL one is re-initialised IN PLACE,
- * replacing its configuration and clearing its buffer without reallocating
- * it -- there is no check that the existing buffer is even big enough for
- * the new `size`, which is the object's own contract and not guarded here
- * either.
+ * `f` NULL allocates a `sizeof(struct fax_fifo)` (0x14-byte) object and,
+ * with it, a `size * 2`-byte buffer; a non-NULL one is re-initialised in
+ * place, replacing its configuration and clearing its buffer without
+ * reallocating it -- there is no check that the existing buffer is even
+ * big enough for the new `size`, which is the object's own contract and
+ * not guarded here either.
  *
- * `cfg` NULL takes `FIFO_CFG`.  There is no failure return: the object does
- * not check `sysdep_malloc`.
+ * `cfg` NULL takes #FIFO_CFG. There is no failure return: the object
+ * does not check `sysdep_malloc`.
+ *
+ * @param f    An existing FIFO to reinitialise, or NULL to allocate one.
+ * @param cfg  Configuration to apply, or NULL for #FIFO_CFG.
+ * @return The FIFO (`f`, or the newly allocated one).
  */
 struct fax_fifo *FIFO_create(struct fax_fifo *f, const struct fifo_cfg *cfg);
 

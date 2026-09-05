@@ -38,6 +38,22 @@
 #ifndef DSPLIB_X87COPY_H
 #define DSPLIB_X87COPY_H
 
+/**
+ * @brief Copy `*src` to `*dst` without letting the value pass through an
+ * x87 register.
+ *
+ * Under GCC >= 4 with `T` the same size as `unsigned` (the `float` case this
+ * exists for), the bytes are moved through an opaque general-register
+ * temporary instead of a plain assignment, which is what stops a modern
+ * compiler's `flds`/`fstps` lowering from quietening a signalling NaN -- see
+ * the file comment for the object's own GCC 3.4.2 behavior and the three
+ * reconstructions this was found from. Under GCC 3 or any other compiler,
+ * and for any other size, it is a plain `*dst = *src`, which is what the
+ * object's own source said and is measurably correct there.
+ *
+ * @param dst Destination.
+ * @param src Source.
+ */
 template <class T>
 static inline void dsplib_assign(T *dst, const T *src)
 {

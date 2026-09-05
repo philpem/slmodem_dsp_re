@@ -192,4 +192,50 @@ derivation trail names its finding number inline.
 | long-tail B | `fpm_mrf.h` through `toneiir.h` (alphabetical second third) | 39 |
 | long-tail C | `v21cfg.h` through `x87copy.h` (alphabetical last third, mostly V.22/V.23/V.32) | 49 |
 
-Status: running.
+Status: **done, merged, gate-verified.** All seven clusters merged into
+master (three clean, four needing conflict resolution — see below). Every
+merge was independently re-verified by the parent before landing: `make
+check64` clean, `python3 tools/refcheck.py` clean, `python3 tools/onedef.py`
+clean, and each cluster's own self-reported "incidental fix" spot-checked
+against the actual cited commit/finding before being trusted, not merged on
+the agent's word alone.
+
+**Merge conflicts, and why they happened.** Four of the seven worktrees had
+branched before recent work landed on master and never merged forward, so
+their diffs were computed against a stale base:
+- `V90 A` conflicted with wave 5's own pad-region-removal work
+  (`V90AutoDigitalImpDetector.h`, `V90ConnectionEvaluator.h`,
+  `V90ConstellationDesigner.h` — 1, 10 and 8 regions) AND with field-naming
+  passes (F9480, F10134) that had renamed fields the stale branch never saw.
+  Resolved by a forked agent, briefed on the root cause, checking every
+  field's CURRENT name in the merged file before choosing a side rather than
+  guessing; independently re-verified before trusting.
+- `long-tail C` conflicted twice with a **different, concurrent session's**
+  own fax-reconstruction work (`v21fax.h`'s `V21TX_create`/`V21RX_control`/
+  `V21RX_status`, none of which existed when this branch forked) — resolved
+  by hand, preserving the new reconstruction content untouched and
+  Doxygen-converting only the functions this pass actually owned.
+
+Both conflict classes are the same root cause: an agent's worktree, once
+created, never sees another session's later commits unless something
+explicitly merges master into it first. Worth stating for whoever plans the
+next wave of parallel agents on this tree: brief every agent to `git merge
+master` immediately before starting, not just at spawn time, since spawn-time
+freshness does not survive a long-running agent sitting behind other
+sessions' commits.
+
+**Gate verification on the fully merged tree** (not just per-cluster):
+`make period` under GCC 3.4.2 — 374 passed, 0 failed, exit 0. `make
+byteident-ratchet` — grade 0 EXACT still 736/1852 (39.7%), grade 0-or-1
+still 796/1852 (43.0%), exactly the pre-pass floor, `ratchet OK`, exit 0.
+Confirms all ~1,220 Doxygen conversions across 222 headers are
+compile-time-only: zero generated-code drift.
+
+## What's left in this phase
+
+The header pass (`include/dsplib/*.h`) is complete. Deferred, per the
+sequencing section above: the `.c`/`.cpp`-file phase (thin bare-address
+comment removal, inline R/E-narration rewrite, the 941 anchor-frozen
+comments across 19 `test/mutations/*.json` files) is intentionally NOT
+started — it comes after the byte-identity improvement pass, so function
+bodies get restructured once and documented once.

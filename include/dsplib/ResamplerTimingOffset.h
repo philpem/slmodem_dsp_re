@@ -54,26 +54,79 @@
 
 class ResamplerTimingOffset : public Resampler {
 public:
+	/**
+	 * @brief Construct with a self-designed filter and a fixed timing
+	 *        offset.
+	 *
+	 * Forwards the first five arguments to Resampler's designing
+	 * constructor, calls `Resampler::reset()` explicitly (the base's,
+	 * not this class's, since it is called before `timingOffset`
+	 * exists), then sets the offset via setTimingOffset().
+	 *
+	 * @param phases      See Resampler::Resampler(unsigned int, float,
+	 *                    unsigned int, float, unsigned int).
+	 * @param ppmScale    See Resampler's constructor.
+	 * @param taps        See Resampler's constructor.
+	 * @param cutoff      See Resampler's constructor.
+	 * @param ppm         Fixed timing offset, in parts per million; see
+	 *                    setTimingOffset().
+	 * @param minHistory  See Resampler's constructor.
+	 */
 	ResamplerTimingOffset(unsigned int phases, float ppmScale,
 			      unsigned int taps, float cutoff, float ppm,
 			      unsigned int minHistory);
+
+	/**
+	 * @brief Construct over caller-supplied coefficients with a fixed
+	 *        timing offset.
+	 *
+	 * Forwards the first five arguments to Resampler's adopting
+	 * constructor; see the other overload for the rest.
+	 *
+	 * @param phases      See Resampler::Resampler(unsigned int, float,
+	 *                    unsigned int, float *, unsigned int).
+	 * @param ppmScale    See Resampler's constructor.
+	 * @param taps        See Resampler's constructor.
+	 * @param coeffs      See Resampler's constructor.
+	 * @param ppm         Fixed timing offset, in parts per million.
+	 * @param minHistory  See Resampler's constructor.
+	 */
 	ResamplerTimingOffset(unsigned int phases, float ppmScale,
 			      unsigned int taps, float *coeffs, float ppm,
 			      unsigned int minHistory);
 
+	/** @brief Destroy the instance. Nothing of this class's own to release. */
 	virtual ~ResamplerTimingOffset();
 
+	/** @brief Reset base state, then zero `timingOffset`. */
 	virtual void reset();
 
-	/*
-	 * The float argument is IGNORED -- the whole body is
-	 * `fldl 0xc; fadds 0x48; fstpl 0xc`.  This is the override that makes
-	 * the base's per-sample hook do something: it advances the phase
-	 * accumulator by a fixed offset instead of by a measurement.
+	/**
+	 * @brief Advance `phase` by the fixed `timingOffset`.
+	 *
+	 * The override that makes the base's empty per-sample hook do
+	 * something: it advances the phase accumulator by a constant rather
+	 * than by a measurement. The argument is ignored -- the object's own
+	 * body never reads it; the base declares the parameter because the
+	 * class one level down (ResamplerTiming) uses it.
 	 */
 	virtual void timingCorrection(float);
 
+	/**
+	 * @brief Set the fixed timing offset.
+	 * @param ppm  Offset in parts per million; stored as
+	 *             `timingOffset = ppmScale * ppm * 1e-6f`, evaluated
+	 *             left to right at extended precision with a single
+	 *             rounding to `float` at the end (matching the object's
+	 *             non-`-ffloat-store` build).
+	 */
 	void setTimingOffset(float ppm);
+
+	/**
+	 * @brief Get the fixed timing offset.
+	 * @return `1e6f * timingOffset / ppmScale`, in parts per million --
+	 *         the inverse of setTimingOffset().
+	 */
 	float getTimingOffsetPPM() const;
 
 	/* Public for offsetof; see V90ConstellationDesigner.h. */

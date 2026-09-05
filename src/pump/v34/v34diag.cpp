@@ -168,8 +168,7 @@ VPcmV34GetDiagnostics(void *objp, struct TAG_DiagnosticResults *results)
 	if (obj->status == V34DIAG_STATUS_V90) {
 		if (xf->info0Layout != 0) {
 			if (DSPLIB_DEBUG_ON())
-				dsplibs_debug_printf("...It is diagnostics "
-						     "of V.90 Analog...\r\n");
+				dsplibs_debug_printf("...It is diagnostics " "of V.90 Analog...\r\n");
 
 			xf->modem.demodulator->getAT_UD(results);
 
@@ -186,16 +185,14 @@ VPcmV34GetDiagnostics(void *objp, struct TAG_DiagnosticResults *results)
 			results->float_06c = V34DIAG_TX_LEVEL_BASE_DB -
 					     obj->tx_pwr_reduction;
 		} else if (DSPLIB_DEBUG_ON()) {
-			dsplibs_debug_printf("...It is diagnostics of V.90 "
-					     "Digital...\r\n");
+			dsplibs_debug_printf("...It is diagnostics of V.90 " "Digital...\r\n");
 		}
 	} else if (obj->status == V34DIAG_STATUS_V92) {
 		if (xf->info0Layout != 0) {
 			V92Modulator *mod;
 
 			if (DSPLIB_DEBUG_ON())
-				dsplibs_debug_printf("...It is diagnostics "
-						     "of V.92 Analog...\r\n");
+				dsplibs_debug_printf("...It is diagnostics " "of V.92 Analog...\r\n");
 
 			xf->modem.demodulator->getAT_UD(results);
 
@@ -224,13 +221,11 @@ VPcmV34GetDiagnostics(void *objp, struct TAG_DiagnosticResults *results)
 
 			results->txCarrier = 0;
 		} else if (DSPLIB_DEBUG_ON()) {
-			dsplibs_debug_printf("...It is diagnostics of V.92 "
-					     "Digital...\r\n");
+			dsplibs_debug_printf("...It is diagnostics of V.92 " "Digital...\r\n");
 		}
 	} else {
 		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("...It is diagnostics of V.34 "
-					     "(or P2)...\r\n");
+			dsplibs_debug_printf("...It is diagnostics of V.34 " "(or P2)...\r\n");
 
 		results->txBaudRate = cfg->baud;
 		results->rxBaudRate = cfg->rx_baud;

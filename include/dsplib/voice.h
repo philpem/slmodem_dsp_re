@@ -348,33 +348,123 @@ struct voice_ctx {
 #define VOICE_PARAM_RX_GAIN_FMT3	0x8a
 #define VOICE_PARAM_RX_GAIN_OTHER	0x8b
 
-/*
- * Map a DLE event code to a status code: 1 -> 10, 2 -> 11, 4 -> 12, and
- * ANY other code answers the first argument back unchanged -- the caller's
- * running status, passed in so the non-event is a no-op.
+/**
+ * @brief Map a detector event code to a host status code.
+ *
+ * @param status The caller's running status, returned unchanged for any
+ *               @p code not listed below.
+ * @param code   A `detector_progress` event code.
+ * @return 10 for code 1, 11 for code 2, 12 for code 4; otherwise @p status.
  */
 int _handle_status(int status, int code);
 
-/*
- * The three per-block handlers, and the two setters that install two of them.
- * See voicedp.c.
+/**
+ * @brief The beep-only per-block handler (`mode` == ::VOICE_MODE_ONLINE).
+ *
+ * Nothing arrives from the line: the block is filled entirely from the beep
+ * generator, and once its queue runs dry the rest of this block and every
+ * later one is silence. @p rx_lin and @p tx_flt are never read.
+ *
+ * @param v          The voice context.
+ * @param rx_lin     Unused.
+ * @param rx_flt     Unused.
+ * @param tx_flt     Unused.
+ * @param tx_lin     Out: the block of samples to send to the line.
+ * @param hostcount  In/out: host byte count (unaffected by this handler).
+ * @param countp     In/out: block sample count.
+ * @return 0 in the paths this tree has reached.
  */
 int voice_online(struct voice_ctx *v, short *rx_lin, float *rx_flt,
 		 float *tx_flt, short *tx_lin, unsigned short *hostcount,
 		 unsigned short *countp);
+
+/**
+ * @brief The transmit per-block handler (`mode` == ::VOICE_MODE_TX).
+ *
+ * Two halves with the FIFO between them: un-escape `*hostcount` bytes of
+ * @p rx_lin (a doubled DLE is one literal byte, a DLE followed by anything
+ * else is a command routed to voice_dle_command() and not copied) into the
+ * FIFO, then take a whole block back out if one is ready, remove its mean,
+ * and convert it into @p tx_lin. @p rx_lin is a byte stream here despite its
+ * declared type, and @p tx_flt is never read.
+ *
+ * @param v          The voice context.
+ * @param rx_lin     In: escaped host bytes, cast to `const unsigned char *`.
+ * @param rx_flt     Unused.
+ * @param tx_flt     Unused.
+ * @param tx_lin     Out: the converted block of line samples.
+ * @param hostcount  In: bytes of @p rx_lin available to un-escape.
+ * @param countp     Out: block sample count produced.
+ * @return 0 in the paths this tree has reached.
+ */
 int voice_tx(struct voice_ctx *v, short *rx_lin, float *rx_flt,
 	     float *tx_flt, short *tx_lin, unsigned short *hostcount,
 	     unsigned short *countp);
+
+/**
+ * @brief The full-duplex per-block handler (`mode` == ::VOICE_MODE_DUPLEX).
+ *
+ * Runs `FDSP_DP_Run` for the datapump kernel's own transmit/receive path,
+ * then overlays a queued beep onto @p rx_flt sample by sample until it
+ * finishes.
+ *
+ * @param v          The voice context.
+ * @param rx_lin     Passed through to `FDSP_DP_Run`.
+ * @param rx_flt     In/out: receive float block; the beep is mixed into it.
+ * @param tx_flt     Passed through to `FDSP_DP_Run`.
+ * @param tx_lin     Passed through to `FDSP_DP_Run`.
+ * @param hostcount  Passed through to `FDSP_DP_Run`.
+ * @param countp     Passed through to `FDSP_DP_Run`.
+ * @return `VOICE_DUPLEX_MODE_STATUS` if the mode changed underneath this
+ *         call, 1 if the beep just finished, 0 otherwise.
+ */
 int voice_duplex(struct voice_ctx *v, short *rx_lin, float *rx_flt,
 		 float *tx_flt, short *tx_lin, unsigned short *hostcount,
 		 unsigned short *countp);
+
+/**
+ * @brief The receive per-block handler (`mode` == ::VOICE_MODE_RX).
+ *
+ * Four stages: fold the block's mean into a running DC estimate and remove
+ * it; scale by the gain the output format selects; convert each sample to
+ * an escaped u-law byte in @p tx_lin, doubling a literal DLE and inserting a
+ * periodic `<DLE>'T'` marker; then let `silence_progress` append its own
+ * escapes, closing the stream with `<DLE><ETX>` if a `<DLE><CAN>` is
+ * pending. @p rx_flt is never read.
+ *
+ * @param v          The voice context.
+ * @param rx_lin     In: line samples.
+ * @param rx_flt     Unused.
+ * @param tx_flt     In (formats 1/3) or scratch: the float working buffer.
+ * @param tx_lin     Out: the escaped byte stream, cast to `unsigned char *`.
+ * @param hostcount  Out: bytes written to @p tx_lin.
+ * @param countp     In: samples in @p rx_lin.
+ * @return 7 if formats 1 or 3 are asked for a block over 200 samples;
+ *         0 otherwise.
+ */
 int voice_rx(struct voice_ctx *v, short *rx_lin, float *rx_flt,
 	     float *tx_flt, short *tx_lin, unsigned short *hostcount,
 	     unsigned short *countp);
 
+/** @brief Go online: mode ::VOICE_MODE_ONLINE, install voice_online(), and
+ *         enable the detector with the context's own mask. */
 void voice_set_online(struct voice_ctx *v);
+
+/** @brief Go duplex: mode ::VOICE_MODE_DUPLEX, install voice_duplex(), and
+ *         enable the detector with a fixed mask (0x24), not the context's. */
 void voice_set_duplex(struct voice_ctx *v);
+
+/**
+ * @brief Arm the receive path: mode ::VOICE_MODE_RX, install voice_rx(),
+ * enable the detector with the receive mask, create the silence detector,
+ * reset the DC estimate to be seeded fresh, fix the rate/format to 8 bit /
+ * 8000 Hz, and read the three receive gains back from the host.
+ */
 void voice_set_rx(struct voice_ctx *v);
+
+/** @brief Arm the transmit path: mode ::VOICE_MODE_TX, install voice_tx(),
+ *         enable the detector with the transmit mask, fix the rate/format
+ *         to 8 bit / 8000 Hz, and latch the one-shot underrun report. */
 void voice_set_tx(struct voice_ctx *v);
 
 /*
@@ -442,9 +532,65 @@ void voice_set_tx(struct voice_ctx *v);
  * gate refusing.  Neither number is named by anything in the object, so both
  * stay literal, exactly as the handlers' 1..13 do.
  */
+/**
+ * @brief Build the voice service core: beep generator, cadence/tone
+ * detector, FIFO, silence detector and datapump kernel.
+ *
+ * Builds a separate, rotated `beepgen_config` local from @p cfg (see
+ * `struct voice_config` above) before allocating, and reads the two FDSP
+ * echo delays back through `STRM_VCE_GetFDSPEnvironmentalParams` for
+ * `FDSP_DP_Create`. The failure arms (a sub-constructor returning NULL) are
+ * unreachable from any fixture, since the only way one fails is a
+ * `sysdep_malloc` the harness allocator cannot be made to fail.
+ *
+ * @param cfg The host's sixteen-byte configuration block.
+ * @return The new context, or NULL if @p cfg is NULL.
+ */
 struct voice_ctx *voice_create(const struct voice_config *cfg);
+
+/**
+ * @brief Tear the voice service down: beep generator, detector, FIFO,
+ * silence detector, datapump kernel (each if non-NULL) and the context
+ * itself.
+ */
 void voice_delete(struct voice_ctx *v);
+
+/**
+ * @brief The voice service's own command dispatch, eleven opcodes wide.
+ *
+ * `VOICE_BEEP_COMMAND` and `VOICE_DTMF_COMMAND` are refused unless `mode` is
+ * online or duplex. `arg` is read as up to three 32-bit words depending on
+ * the opcode; `VOICE_RESET_DUPLEX_COMMAND` reads none.
+ *
+ * @param v   The voice context.
+ * @param cmd One of the `VOICE_*_COMMAND` opcodes.
+ * @param arg The opcode's argument words.
+ * @return 0 if the command was acted on, 7 if it was refused or unknown.
+ */
 int voice_command(struct voice_ctx *v, int cmd, int *arg);
+
+/**
+ * @brief Run one block through the voice service: dispatch to the current
+ * per-block handler, then run the cadence/tone detector over the transmit
+ * float block and fold its status into the return value.
+ *
+ * `*countp` is in/out and changes meaning across the call: in, the block's
+ * sample count for the handler; out, the handler's sample count plus
+ * whatever bytes the detector appended. A pending `<DLE><ETX>` or
+ * `<DLE><CAN>` from voice_dle_command() switches the context back online
+ * before this call returns.
+ *
+ * @param v          The voice context.
+ * @param rx_lin     Passed to the current handler.
+ * @param rx_flt     Passed to the current handler and to the detector.
+ * @param tx_flt     Passed to the current handler.
+ * @param tx_lin     Passed to the current handler; the detector's own bytes
+ *                   are appended after whatever the handler wrote.
+ * @param hostcount  Passed to the current handler.
+ * @param countp     In/out block sample count; see above.
+ * @return One of the `VOICE_*` message codes (0-13), or whatever the
+ *         handler or the detector status mapping produced.
+ */
 int voice_modem(struct voice_ctx *v, short *rx_lin, float *rx_flt,
 		float *tx_flt, short *tx_lin, unsigned short *hostcount,
 		unsigned short *countp);

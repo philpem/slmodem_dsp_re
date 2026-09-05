@@ -28,26 +28,33 @@
 #ifndef DSPLIB_FFT_H
 #define DSPLIB_FFT_H
 
-/*
- * In-place complex DFT of `nn` complex points, `nn` a power of two.
+/**
+ * @brief In-place complex DFT, Numerical Recipes' `four1`.
  *
- * `data[1..2*nn]` is `nn` complex numbers as consecutive (real, imaginary)
- * pairs.  `isign` is +1 for the forward transform and -1 for the inverse;
- * the inverse is NOT scaled by 1/nn -- nothing in the body divides by the
- * length, so the caller owns the normalisation.
+ * @param data   One-based: `data[1..2*nn]` holds @p nn complex numbers as
+ *               consecutive (real, imaginary) pairs. `data[0]` is never
+ *               touched. Not validated -- @p nn must be a power of two or
+ *               the result is silently wrong, not faulted.
+ * @param nn     Number of complex points, a power of two.
+ * @param isign  +1 for the forward transform, -1 for the inverse. The
+ *               inverse is NOT scaled by 1/nn; the caller owns normalisation.
  */
 void four1(float *data, unsigned long nn, int isign);
 
-/*
- * In-place DFT of `n` REAL points, `n` a power of two.
+/**
+ * @brief In-place real DFT, Numerical Recipes' `realfft`.
  *
- * With `isign == 1` the `n` real samples in `data[1..n]` are replaced by
- * `n/2` complex values: `data[1]` and `data[2]` hold the purely real zero
- * and Nyquist terms, and `data[2k+1] , data[2k+2]` the k'th complex
- * coefficient.  With `isign == -1` that packing is transformed back, scaled
- * by 2/n short of the original -- again, no normalisation here.
+ * Calls four1() and nothing else.
  *
- * Calls `four1` and nothing else.
+ * @param data   One-based, `data[1..n]`. With @p isign == 1 the @p n real
+ *               input samples are replaced by `n/2` complex values:
+ *               `data[1]`/`data[2]` hold the purely real zero and Nyquist
+ *               terms, and `data[2k+1]`/`data[2k+2]` the k'th complex
+ *               coefficient. With @p isign == -1 that packing is transformed
+ *               back, scaled by 2/n short of the original. Not validated --
+ *               @p n must be a power of two or the result is silently wrong.
+ * @param n      Number of real points, a power of two.
+ * @param isign  +1 to pack real to complex, -1 to unpack complex to real.
  */
 void realfft(float *data, unsigned long n, int isign);
 

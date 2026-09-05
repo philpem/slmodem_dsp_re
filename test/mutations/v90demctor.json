@@ -223,58 +223,58 @@
  },
  {
   "label": "ctor: the phase 3 demodulator is given a zero session flag",
-  "find": "\tv90dem_p3d_ctor(p3d, params, &spectralVerifier, sessionFlag,",
-  "replace": "\tv90dem_p3d_ctor(p3d, params, &spectralVerifier, 0,"
+  "find": "\tnew (p3d) V90Phase3Demodulator(params, &spectralVerifier, sessionFlag,",
+  "replace": "\tnew (p3d) V90Phase3Demodulator(params, &spectralVerifier, 0,"
  },
  {
   "label": "ctor: the phase 3 demodulator gets the connection evaluator as its detector",
-  "find": "\t\t\tautoDigitalImpDetector);\n\tphase3Demodulator = p3d;",
-  "replace": "\t\t\t(V90AutoDigitalImpDetector *)connectionEvaluator);\n\tphase3Demodulator = p3d;"
+  "find": "\t\t\t\t\tautoDigitalImpDetector);\n\tphase3Demodulator = p3d;",
+  "replace": "\t\t\t\t\t(V90AutoDigitalImpDetector *)connectionEvaluator);\n\tphase3Demodulator = p3d;"
  },
  {
   "label": "ctor: the demapper is given levels rather than twice levels",
-  "find": "\tv90dem_demapper_ctor(dem, levels * 2, params, autoDigitalImpDetector);",
-  "replace": "\tv90dem_demapper_ctor(dem, levels, params, autoDigitalImpDetector);"
+  "find": "\tnew (dem) V90Demapper(levels * 2, params, autoDigitalImpDetector);",
+  "replace": "\tnew (dem) V90Demapper(levels, params, autoDigitalImpDetector);"
  },
  {
   "label": "ctor: the demapper is given three times levels",
-  "find": "\tv90dem_demapper_ctor(dem, levels * 2, params, autoDigitalImpDetector);",
-  "replace": "\tv90dem_demapper_ctor(dem, levels * 3, params, autoDigitalImpDetector);"
+  "find": "\tnew (dem) V90Demapper(levels * 2, params, autoDigitalImpDetector);",
+  "replace": "\tnew (dem) V90Demapper(levels * 3, params, autoDigitalImpDetector);"
  },
  {
   "label": "ctor: the phase 4 demodulator's mapping parameters are swapped",
-  "find": "\tv90dem_p4d_ctor(p4d, mappingParams, mappingParamsAlt, demapper, cp, mp,",
-  "replace": "\tv90dem_p4d_ctor(p4d, mappingParamsAlt, mappingParams, demapper, cp, mp,"
+  "find": "\tnew (p4d) V90Phase4Demodulator(mappingParams, mappingParamsAlt, demapper,",
+  "replace": "\tnew (p4d) V90Phase4Demodulator(mappingParamsAlt, mappingParams, demapper,"
  },
  {
   "label": "ctor: the phase 4 demodulator's CP and MP are swapped",
-  "find": "\tv90dem_p4d_ctor(p4d, mappingParams, mappingParamsAlt, demapper, cp, mp,",
-  "replace": "\tv90dem_p4d_ctor(p4d, mappingParams, mappingParamsAlt, demapper,\n\t\t\t(V90CP *)mp, (V90MP *)cp,"
+  "find": "\tnew (p4d) V90Phase4Demodulator(mappingParams, mappingParamsAlt, demapper,\n\t\t\t\t\tcp, mp, &descrambler, connectionEvaluator,",
+  "replace": "\tnew (p4d) V90Phase4Demodulator(mappingParams, mappingParamsAlt, demapper,\n\t\t\t\t\t(V90CP *)mp, (V90MP *)cp, &descrambler, connectionEvaluator,"
  },
  {
   "label": "ctor: the phase 4 demodulator gets the verifier as its descrambler",
-  "find": "\t\t\t&descrambler, connectionEvaluator, params,",
-  "replace": "\t\t\t(Descrambler<unsigned char, int> *)&spectralVerifier,\n\t\t\tconnectionEvaluator, params,"
+  "find": "\t\t\t\t\tcp, mp, &descrambler, connectionEvaluator,",
+  "replace": "\t\t\t\t\tcp, mp,\n\t\t\t\t\t(Descrambler<unsigned char, int> *)&spectralVerifier,\n\t\t\t\t\tconnectionEvaluator,"
  },
  {
   "label": "ctor: the phase 4 demodulator gets the demapper as its evaluator",
-  "find": "\t\t\t&descrambler, connectionEvaluator, params,",
-  "replace": "\t\t\t&descrambler, (V90ConnectionEvaluator *)demapper, params,"
+  "find": "\t\t\t\t\tcp, mp, &descrambler, connectionEvaluator,",
+  "replace": "\t\t\t\t\tcp, mp, &descrambler, (V90ConnectionEvaluator *)demapper,"
  },
  {
   "label": "ctor: the phase 4 demodulator gets the demapper as its phase 3",
-  "find": "\t\t\tphase3Demodulator, autoDigitalImpDetector, sessionFlag);",
-  "replace": "\t\t\t(V90Phase3Demodulator *)demapper, autoDigitalImpDetector,\n\t\t\tsessionFlag);"
+  "find": "\t\t\t\t\tparams, phase3Demodulator,\n\t\t\t\t\tautoDigitalImpDetector, sessionFlag);",
+  "replace": "\t\t\t\t\tparams, (V90Phase3Demodulator *)demapper,\n\t\t\t\t\tautoDigitalImpDetector, sessionFlag);"
  },
  {
   "label": "ctor: the phase 4 demodulator's session flag is zero",
-  "find": "\t\t\tphase3Demodulator, autoDigitalImpDetector, sessionFlag);",
-  "replace": "\t\t\tphase3Demodulator, autoDigitalImpDetector, 0);"
+  "find": "\t\t\t\t\tparams, phase3Demodulator,\n\t\t\t\t\tautoDigitalImpDetector, sessionFlag);",
+  "replace": "\t\t\t\t\tparams, phase3Demodulator,\n\t\t\t\t\tautoDigitalImpDetector, 0);"
  },
  {
   "label": "ctor: the equaliser's two lengths come from each other's parameters",
-  "find": "\tv90dem_equ_ctor(equ, (unsigned int)V90PW(params)[PARAMS_LINEAR_EQU_LENGTH],\n\t\t\t(unsigned int)V90PW(params)[PARAMS_DFE_LENGTH],",
-  "replace": "\tv90dem_equ_ctor(equ, (unsigned int)V90PW(params)[PARAMS_DFE_LENGTH],\n\t\t\t(unsigned int)V90PW(params)[PARAMS_LINEAR_EQU_LENGTH],"
+  "find": "\tnew (equ) V90Equalizer((unsigned int)V90PW(params)[PARAMS_LINEAR_EQU_LENGTH],\n\t\t\t       (unsigned int)V90PW(params)[PARAMS_DFE_LENGTH],",
+  "replace": "\tnew (equ) V90Equalizer((unsigned int)V90PW(params)[PARAMS_DFE_LENGTH],\n\t\t\t       (unsigned int)V90PW(params)[PARAMS_LINEAR_EQU_LENGTH],"
  },
  {
   "label": "ctor: the equaliser's linear length comes from +0x174",
@@ -288,38 +288,38 @@
  },
  {
   "label": "ctor: the equaliser is given a constant computational mode",
-  "find": "\t\t\t&resampler, &preFilter, compMode);",
-  "replace": "\t\t\t&resampler, &preFilter, (V90ComputationalMode)0);"
+  "find": "\t\t\t       &resampler, &preFilter, compMode);",
+  "replace": "\t\t\t       &resampler, &preFilter, (V90ComputationalMode)0);"
  },
  {
   "label": "ctor: the equaliser's resampler and prefilter are swapped",
-  "find": "\t\t\t&resampler, &preFilter, compMode);",
-  "replace": "\t\t\t(V90Resampler *)&preFilter, (V90PreFilter *)&resampler,\n\t\t\tcompMode);"
+  "find": "\t\t\t       &resampler, &preFilter, compMode);",
+  "replace": "\t\t\t       (V90Resampler *)&preFilter, (V90PreFilter *)&resampler,\n\t\t\t       compMode);"
  },
  {
   "label": "ctor: the equaliser is given the descrambler as its verifier",
-  "find": "\t\t\tconnectionEvaluator, &spectralVerifier, params,",
-  "replace": "\t\t\tconnectionEvaluator,\n\t\t\t(V90SpectralVerifier *)&descrambler, params,"
+  "find": "\t\t\t       connectionEvaluator, &spectralVerifier, params,",
+  "replace": "\t\t\t       connectionEvaluator,\n\t\t\t       (V90SpectralVerifier *)&descrambler, params,"
  },
  {
   "label": "ctor: the equaliser's phase 3 and phase 4 demodulators are swapped",
-  "find": "\t\t\tphase3Demodulator, phase4Demodulator, demapper,",
-  "replace": "\t\t\t(V90Phase3Demodulator *)phase4Demodulator,\n\t\t\t(V90Phase4Demodulator *)phase3Demodulator, demapper,"
+  "find": "\t\t\t       phase3Demodulator, phase4Demodulator, demapper,",
+  "replace": "\t\t\t       (V90Phase3Demodulator *)phase4Demodulator,\n\t\t\t       (V90Phase4Demodulator *)phase3Demodulator, demapper,"
  },
  {
   "label": "ctor: the TRN2 designer is given the descrambler as its power",
-  "find": "\tv90dem_trn2_ctor(trn2, params, &constellationPower);",
-  "replace": "\tv90dem_trn2_ctor(trn2, params,\n\t\t\t (V90ConstellationPower *)&descrambler);"
+  "find": "\tnew (trn2) V90TRN2Designer(params, &constellationPower);",
+  "replace": "\tnew (trn2) V90TRN2Designer(params,\n\t\t\t\t    (V90ConstellationPower *)&descrambler);"
  },
  {
   "label": "ctor: the constellation designer is given the resampler as its prefilter",
-  "find": "\tv90dem_cd_ctor(cd, params, &preFilter, &constellationPower);",
-  "replace": "\tv90dem_cd_ctor(cd, params, (V90PreFilter *)&resampler,\n\t\t       &constellationPower);"
+  "find": "\tnew (cd) V90ConstellationDesigner(params, &preFilter, &constellationPower);",
+  "replace": "\tnew (cd) V90ConstellationDesigner(params, (V90PreFilter *)&resampler,\n\t\t\t\t\t   &constellationPower);"
  },
  {
   "label": "ctor: the constellation designer is given the verifier as its power",
-  "find": "\tv90dem_cd_ctor(cd, params, &preFilter, &constellationPower);",
-  "replace": "\tv90dem_cd_ctor(cd, params, &preFilter,\n\t\t       (V90ConstellationPower *)&spectralVerifier);"
+  "find": "\tnew (cd) V90ConstellationDesigner(params, &preFilter, &constellationPower);",
+  "replace": "\tnew (cd) V90ConstellationDesigner(params, &preFilter,\n\t\t\t\t\t   (V90ConstellationPower *)&spectralVerifier);"
  },
  {
   "label": "dtor: the session is not terminated first",

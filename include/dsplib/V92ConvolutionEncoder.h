@@ -1,29 +1,24 @@
-/*
- * V92ConvolutionEncoder.h -- the V.92 trellis encoder and its state
- * transition table.
+/**
+ * @file V92ConvolutionEncoder.h
+ * @brief The V.92 trellis encoder and its state transition table.
  *
- * Reconstructed from dsplibs.o.  Six members and two static tables; all six
- * and both tables are now defined.
+ * Six members and two static tables, all defined.
  *
- * A ONE-BYTE CONSTRUCTOR IS STILL A DECLARATION.  GCC emits an out-of-line
- * constructor or destructor symbol only for a USER-DECLARED one; an implicit
- * trivial destructor produces no symbol at all.  The blob has C1, C2, D1 and
- * D2 for this class, each one byte, so the original declared both and wrote
- * empty bodies.  That is the whole content of the claim, and the test that
- * carries it asserts the pair writes NOTHING -- not one byte of a seeded
- * object of the full 0x2008, on either side.
+ * A one-byte constructor is still a user declaration: GCC emits an
+ * out-of-line constructor/destructor symbol only for a user-declared one
+ * (an implicit trivial destructor produces no symbol at all), and the blob
+ * has one-byte C1/C2/D1/D2 for this class -- so the original declared both
+ * and wrote empty bodies. The differential test for the pair asserts they
+ * write nothing, not one byte of a seeded 0x2008-byte object, on either
+ * side.
  *
- * THE OBJECT IS 0x2008 BYTES, measured:
- *
- *     53be1:  c7 04 24 08 20 00 00   movl $0x2008,(%esp)
- *     53be8:  e8 ..                  call sysdep_malloc
- *     53bf2:  e8 ..                  call V92ConvolutionEncoder::V92ConvolutionEncoder()
- *
- * and that settles the map exactly, which the displacements alone could not.
- * `process` and `makeStateTtransitionTable` index two arrays, at +0x08 and at
- * +0x1008, both with a scale of four; the first is therefore 0x1000 bytes
- * because the second begins there, and the second is 0x1000 bytes because the
- * object ends at 0x2008.  1,024 ints each (finding F1249).
+ * The object is 0x2008 bytes, measured from the `sysdep_malloc(0x2008)`
+ * immediately preceding this constructor's call, which settles the map
+ * exactly where displacements alone could not: `process` and
+ * `makeStateTtransitionTable` index two arrays, at +0x08 and +0x1008, both
+ * with a scale of four, so the first is 0x1000 bytes (the second begins
+ * there) and the second is 0x1000 bytes (the object ends at 0x2008) --
+ * 1,024 ints each (finding F1249).
  */
 
 #ifndef DSPLIB_V92CONVOLUTIONENCODER_H
@@ -38,45 +33,53 @@
 
 class V92ConvolutionEncoder {
 public:
-	/* Both bodies are empty; both symbols exist. */
+	/** @brief Construct with every member left indeterminate; reset()
+	 *         must be called before use. Empty body. */
 	V92ConvolutionEncoder();
+	/** @brief Destroy. Empty body. */
 	~V92ConvolutionEncoder();
 
-	/*
-	 * `reset` stores its argument at +0x00, rebuilds the tables and THEN
-	 * zeroes +0x04, in that order -- the call sits between the two stores
-	 * in the object, which is the only reason the order is claimable.
+	/**
+	 * @brief Select the encoder mode and rebuild the state transition
+	 *        table for it.
+	 * @param mode  Stored at +0x00, then the table is rebuilt, then
+	 *              `state` (+0x04) is zeroed -- in that order, per the
+	 *              object.
 	 */
 	void reset(int mode);
 
-	/*
-	 * `process` returns an int: the object ends `mov %esi,%eax` on every
-	 * arm including the one that never loaded %esi, so the whole of %eax
-	 * is deliberate and is compared.
+	/**
+	 * @brief Encode four input bits for the current state, advancing to
+	 *        the next state.
+	 * @param in  Four-int input vector (residues/subset bits).
+	 * @return The encoded output value. The full 32 bits of the return
+	 *         register are deliberate and compared -- the object ends
+	 *         `mov %esi,%eax` on every arm, including one that never
+	 *         loaded `%esi`.
 	 */
 	int process(int *in);
 
-	/*
-	 * `inverseMap` returns an int too -- `process` uses the value in %eax
-	 * as the switch's operand.  It reads four ints and writes none, so the
-	 * `int *` is an in-parameter despite the mangling not saying so.
+	/**
+	 * @brief Map an input vector to a coset/subset index for process()'s
+	 *        table lookup.
+	 * @param in  Four-int input vector, read but not written (an
+	 *            in-parameter despite the mangling not distinguishing it).
+	 * @return The index `process` switches on next.
 	 */
 	int inverseMap(int *in);
 
+	/** @brief (Re)build the current mode's `output`/`nextState` tables. */
 	void makeStateTtransitionTable();
 
-	/*
-	 * BOTH TABLES ARE int, not char: `inverseMap` indexes each with a
-	 * four-byte scale (`mov 0x0(,%ecx,4),%eax` against both relocations),
-	 * and `nm`'s 0x100 and 0x40 then give 64 and 16 entries.  Both are `D`
-	 * in the blob -- ordinary writable data -- so neither is const, and
-	 * both are defined in the .cpp in the order .data lays them out.
-	 *
-	 * The reachable index of each is closed by construction: the four
-	 * residues are 0..3, so `subsetLabelTable`'s index is 0..15; its
-	 * values are 0..7, so `cosetMapping4D`'s `8 * a + b` is 0..63.
-	 */
+	/** @brief Coset mapping table: `8 * a + b` for subset value `a`
+	 *  (0..7) and residue `b` (0..7), 64 entries. `int`, not `char`
+	 *  (`inverseMap` indexes it with a four-byte scale); ordinary
+	 *  writable data in the blob, not const. */
 	static int cosetMapping4D[64];
+	/** @brief Subset label table, indexed 0..15 by the four 2-bit
+	 *  residues; values are 0..7 subset selectors feeding
+	 *  cosetMapping4D's `a`. Same width/mutability rationale as
+	 *  cosetMapping4D. */
 	static int subsetLabelTable[16];
 
 	/*
@@ -85,30 +88,23 @@ public:
 	 * standard-layout.
 	 */
 
-	/* +0x00  `reset`'s argument; the selector both `process` and
+	/* +0x00  reset()'s argument; the selector both `process` and
 	 * `makeStateTtransitionTable` switch on, against 0, 1 and 2. */
 	int mode;
 
-	/* +0x04  Zeroed by `reset` after the tables are rebuilt, and carried
-	 * across calls by `process`, which is what makes this a coder. */
+	/* +0x04  Zeroed by reset() after the tables are rebuilt, and carried
+	 * across calls by process(), which is what makes this a coder. */
 	int state;
 
-	/*
-	 * +0x08 AND +0x1008, AND THE ROLES ARE THE REVERSE OF WHAT THESE TWO
-	 * MEMBERS WERE ONCE CALLED HERE.  `process` proves which is which in
-	 * two adjacent instructions:
-	 *
-	 *     8b bc b3 08 10 00 00   mov 0x1008(%ebx,%esi,4),%edi   esi = state*16 + in
-	 *     89 7b 04               mov %edi,0x4(%ebx)             ... and it IS the new state
-	 *     8b 74 8b 08            mov 0x8(%ebx,%ecx,4),%esi      ecx = newstate*16 + in
-	 *
-	 * so +0x1008 is indexed by the CURRENT state and yields the NEXT one,
-	 * and +0x08 is indexed by the NEXT state and yields the value
-	 * `process` returns.  `makeStateTtransitionTable` writes them the same
-	 * way round.  Two arrays and not one 2,048-entry array: the two are
-	 * written at different indices in the same statement.
-	 */
+	/* +0x08  Indexed by the *next* state, yields the value process()
+	 * returns. Named the other way round from an earlier reading of this
+	 * header, corrected by tracing process()'s own two adjacent loads
+	 * (finding F1375). Two separate 1,024-entry arrays, not one
+	 * 2,048-entry array -- they're written at different indices in the
+	 * same statement. */
 	int output[V92CONV_TABLE_ENTRIES];	/* +0x08   */
+	/* +0x1008  Indexed by the *current* state (`state*16 + in`), yields
+	 * the next state (finding F1375). */
 	int nextState[V92CONV_TABLE_ENTRIES];	/* +0x1008 */
 };
 

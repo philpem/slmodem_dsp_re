@@ -26,13 +26,18 @@
 
 extern "C" {
 
-/*
- * Expand `desc` into the framed bit stream the V.90 downstream sends it as,
- * one bit per `short`, and store the number of bits through `nbits`.
+/**
+ * @brief Expand a V.90 DIL descriptor into its framed bit stream.
  *
- * `bits` needs 2,654 entries for the largest descriptor the fields can
- * describe (both sequences 128 long, `dilCount` 255); the object bounds
- * nothing, so a caller supplying less is out of contract.
+ * Packs `*desc` one bit per `short`, in the wire form the V.90 downstream
+ * sends, and stores the number of bits produced through @p nbits.
+ *
+ * @param desc   The descriptor to pack.
+ * @param bits   Output buffer. Needs 2,654 entries for the largest
+ *               descriptor the fields can describe (both sequences 128
+ *               long, `dilCount` 255) -- the object bounds nothing, so a
+ *               caller supplying less is out of contract.
+ * @param nbits  Set to the number of valid entries written to @p bits.
  */
 void DILdescriptorPacker(const tagV90DILdescriptor *desc, short *bits,
 			 short *nbits);

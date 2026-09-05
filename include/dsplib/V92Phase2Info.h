@@ -1,45 +1,21 @@
-/*
- * V92Phase2Info.h -- the V.92 twin of V90Phase2Info.
+/**
+ * @file V92Phase2Info.h
+ * @brief The V.92 twin of V90Phase2Info: what V.92 Phase 2 concluded,
+ *        installed into `VPcmFloModem` by `setPhaseIIinfo`.
  *
- * Reconstructed from dsplibs.o.  The class has three members in the blob --
- * `V92Phase2Info(V92Parameters *)`, `setToDefault()` and `printInfo() const`
- * -- and this tree writes NONE of them.  It is declared here because
- * `VPcmFloModem::setPhaseIIinfo` fills one in through a pointer at
- * VPcmFloModem +0x612c, and writing that method means naming the fields it
- * writes.
+ * `sizeof(V92Phase2Info)` is 0x2c. Identified as the type behind
+ * `VPcmFloModem`'s +0x612c pointer by five independent agreements with the
+ * sibling V90Phase2Info that `setPhaseIIinfo` fills at the same time --
+ * matching field values at +0x00/+0x04/+0x09/+0x0c, and the same float array
+ * stored into both classes' `L2` field (finding F1222).
  *
- * WHY THE POINTER AT +0x612c IS A V92Phase2Info AND NOT A GUESS.  The same
- * method fills a V90Phase2Info at the same time, and copies four values from
- * it into this one -- +0x00, +0x04, +0x09 and +0x0c, which are exactly
- * V90Phase2Info's `pcmType`, `rtd`, `maxTxPower` and
- * `txPowerMeasurementPoint`.  It then stores the SAME float array into
- * V90Phase2Info +0x18 and into this class's +0x20, and
- * `V92Phase2Info::printInfo` prints +0x20 as `L2[%d]` over indices 0..20 --
- * the identical loop bound V90Phase2Info::printInfo uses on its own +0x18.
- * Five agreements, two of them from a translation unit nothing here wrote.
- *
- * THE FIELD NAMES ARE THE AUTHOR'S OWN, out of `V92Phase2Info::printInfo`'s
- * format strings:
- *
- *     V92Phase2Info: pcmType = %s
- *     V92Phase2Info: rtd = %d
- *     V92Phase2Info: Uinfo = %d
- *     V92Phase2Info: maxTxPower [dBm0]  = %c%d.%01d
- *     V92Phase2Info: ShortPhase2: local=%d , remote=%d
- *     V92Phase2Info: v92Capabilities: local=%d , remote=%d
- *     V92Phase2Info: v90UseHighCarrier = %d
- *     V92Phase2Info: L2[%d] = %c%d.%03d
- *
- * and `VPcmFloModem::setPhaseIIinfo`'s own diagnostics agree, calling +0x10
- * and +0x12 "short phase2: local / remote" and +0x11 and +0x13 "V92
- * capabilities: local / remote".  `txPowerMeasurementPoint` is the one
- * exception: `printInfo` does not print +0x0c, and the name is carried over
- * from the whole-word copy out of V90Phase2Info +0x0c.
- *
- * NO SIZE IS ASSERTED.  The largest displacement the two readers reach is
- * +0x24, a four-byte store, so the object is at least 0x28 -- but only two of
- * its three members have been read and neither is the constructor, which is
- * where V90Phase2Info's own size came from.  0x28 is a floor.
+ * Field names are almost all the author's own, out of `printInfo`'s format
+ * strings ("pcmType", "rtd", "Uinfo", "maxTxPower", "ShortPhase2"/
+ * "v92Capabilities" local and remote, "v90UseHighCarrier", `L2[%d]`) and
+ * `setPhaseIIinfo`'s matching diagnostics; `txPowerMeasurementPoint` is the
+ * one exception, named by its whole-word copy from V90Phase2Info rather than
+ * by any V.92-side string, since `printInfo` never prints it (finding
+ * F1222).
  */
 
 #ifndef DSPLIB_V92PHASE2INFO_H
@@ -62,42 +38,26 @@ class V92Parameters;
 
 class V92Phase2Info {
 public:
-	/*
-	 * THE CONSTRUCTOR IS NOW WRITTEN, and the note that used to stand here
-	 * -- "DATA ONLY ... declaring one and defining it would re-open the
-	 * link closure for V92Parameters" -- is superseded.  V92Parameters is
-	 * modelled (55 slots, the author's own names for 54 of them, findings
-	 * F860-862), so there is no closure to re-open; and `vpcm_create`
-	 * cannot link without this symbol.
-	 *
-	 * IT ALSO SETTLED TWO THINGS THE HEADER HAD WRONG, both recorded in
-	 * finding F1222: the object is 0x2c bytes and not 0x28, because the
-	 * constructor stores its argument at +0x28; and +0x14..+0x16, called
-	 * `pad_14[3]` here on the grounds that neither reader reached them,
-	 * are three real fields the constructor fills from the V.92 filter
-	 * parameters.  A padding run is only padding until a third function is
-	 * read.
-	 *
-	 * NO DESTRUCTOR.  `nm` has no `_ZN13V92Phase2InfoD1Ev`, so the
-	 * original declared none and neither do we.
+	/**
+	 * @brief Construct the record: store @p params and fill the three
+	 *        echo-canceller sizing bytes (+0x14..+0x16) from it. No
+	 *        destructor exists in the object, so none is declared here.
+	 * @param params  The V.92 parameter block; only eight of its fields
+	 *                are read.
 	 */
 	V92Phase2Info(V92Parameters *params);
 
-	/*
-	 * setToDefault -- 0x15f10, 87 bytes: the record refilled from the
-	 * five `V92_PHASE2_INFO_*` parameters plus the three echo-canceller
-	 * sizing bytes at +0x14..+0x16 (from `V92_NOF_FILTER_SECTIONS`,
-	 * `V92_MAX_TOTAL_NOF_COEFFS`, `V92_MAX_NOF_COEFFS_IN_EACH_SECTION`),
-	 * with the local/remote capability bytes reset to the local-V.92
-	 * defaults (+0x11 = 1, the rest 0).
-	 *
-	 * printInfo -- 0x16030, 572 bytes, `const` because the symbol is
-	 * `_ZNK...`: the record through `dsplibs_debug_printf` (gated here,
-	 * at level > 1) and `edprintf` (ungated, self-gating one level
-	 * down), in the object's own order.  Both defined in
-	 * src/pump/v90/V92Phase2Info.cpp.
+	/**
+	 * @brief Refill the record from the `V92_PHASE2_INFO_*` defaults and
+	 *        the echo-canceller sizing parameters, resetting the
+	 *        local/remote capability bytes to the local-V.92 defaults
+	 *        (`v92CapabilitiesLocal` = 1, the rest 0).
 	 */
 	void setToDefault();
+	/**
+	 * @brief Log the whole record through the object's own diagnostic
+	 *        calls, in its own field order.
+	 */
 	void printInfo() const;
 
 	/*
@@ -153,13 +113,13 @@ public:
 	/*
 	 * +0x12  "ShortPhase2: remote", and +0x13 "v92Capabilities: remote".
 	 * `setPhaseIIinfo` fills both out of INFO0 bits 26 and 27 -- and
-	 * WHICH BIT GOES TO WHICH IS A RUNTIME CHOICE, see VPcmFloModem.h.
+	 * which bit goes to which is a runtime choice; see VPcmFloModem.h.
 	 */
 	unsigned char shortPhase2Remote;
 	unsigned char v92CapabilitiesRemote;
 
 	/*
-	 * +0x14, +0x15, +0x16  THREE FIELDS, not the padding this used to
+	 * +0x14, +0x15, +0x16  Three fields, not the padding this used to
 	 * call them.  The constructor copies the low byte of
 	 * `V92_NOF_FILTER_SECTIONS`, `V92_MAX_TOTAL_NOF_COEFFS` and
 	 * `V92_MAX_NOF_COEFFS_IN_EACH_SECTION` here, in that order and in
@@ -167,7 +127,7 @@ public:
 	 * count small enough to fit in a byte and the parameter block's own
 	 * `int` width is not carried.
 	 *
-	 * THE NAMES ARE THE PARAMETERS', NOT THE CLASS'S.  Neither
+	 * The names are the parameters', not the class's: neither
 	 * `printInfo` nor `setPhaseIIinfo` touches these three, so no format
 	 * string names them; what is recoverable is which parameter fills
 	 * each, and that is what they are named after.  Finding F1222.

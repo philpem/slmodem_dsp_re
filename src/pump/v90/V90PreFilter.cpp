@@ -436,8 +436,7 @@ V90PreFilter::selectFilter()
 		type = dataBase[codecType].loops[0].coefType;
 		gain = g;
 	} else if (V90PW(p)[0x0c / 4] == 2) {
-		edprintf("V90PreFilter: Connection Type is PBX ISDN BOX "
-			 "(4kHz Null)\r\n");
+		edprintf("V90PreFilter: Connection Type is PBX ISDN BOX " "(4kHz Null)\r\n");
 		g = V90PW(p)[0x58 / 4];
 		type = dataBase[codecType].loops[0].coefType;
 		gain = g;
@@ -642,8 +641,7 @@ V90PreFilter::setParamEia6()
 	 * take it.
 	 */
 	if (xf < 0.0f || xf > 0.0f) {
-		edprintf("V90PreFilter: Setting timing parameters "
-			 "(registry)...\r\n");
+		edprintf("V90PreFilter: Setting timing parameters " "(registry)...\r\n");
 		p = params;
 		V90PF(p)[0x84 / 4] = xf;
 		for (i = 0; i < 18; i++)
@@ -757,8 +755,7 @@ V90PreFilter::V90PreFilter(__tHardwareCodecTypes__ codec, V90Phase2Info *info,
 	} else {
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V90PreFilter: HardwareCodecType"
-					     " loaded by configuration"
-					     " parameters\r\n");
+					     " loaded by configuration" " parameters\r\n");
 
 		switch (V90PW(params)[0x008 / 4]) {
 		case 0:		codecType = 0;	break;
@@ -790,8 +787,7 @@ V90PreFilter::V90PreFilter(__tHardwareCodecTypes__ codec, V90Phase2Info *info,
 			dsplibs_debug_printf(BUGBAR);
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V90PreFilter: External Hardware"
-					     " Codec Index exceeds table"
-					     " length (codec inx = %d, table"
+					     " Codec Index exceeds table" " length (codec inx = %d, table"
 					     " length = %d)\r\n",
 					     codecType, n);
 		if (DSPLIB_DEBUG_ON())

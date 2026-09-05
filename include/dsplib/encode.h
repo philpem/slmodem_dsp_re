@@ -22,24 +22,33 @@ extern "C" {
 #define ENCODE_FMT_MAX	0x100	/* `temp.0`: what vsnprintf is given    */
 #define ENCODE_OUT_MAX	0x10e	/* `cEncodedTemp.1`, and the guard's bound */
 
-/*
- * Encode one byte and step the key.  The whole byte, not a nibble, so this
- * is not the step `edprintf` applies to its own output -- and both move the
- * same shared counter, so interleaving them shifts the key under both.
+/**
+ * @brief Encode one byte and step the shared key.
+ *
+ * The whole byte, not a nibble, so this is not the step edprintf() applies
+ * to its own output -- and both move the same shared counter, so
+ * interleaving calls to the two shifts the key under both.
+ *
+ * @param c  The byte to encode.
+ * @return The encoded byte.
  */
 char cEncodeChar(unsigned char c);
 
-/*
- * Format, encode, and hand the result to `dsplibs_debug_printf`.
+/**
+ * @brief Format a diagnostic message, encode it, and hand it to
+ * `dsplibs_debug_printf`.
  *
- * ONLY THE LAST OF THOSE IS GATED ON THE DEBUG LEVEL.  With diagnostics off
- * the encoding still runs, so every call resets the shared key to zero and
- * leaves it wherever its own output ended.  A caller that mixes `edprintf`
- * and `cEncodeChar` gets different characters out of the latter depending on
- * how many of the former preceded it, at any debug level.
+ * Only the final print is gated on the debug level -- formatting and
+ * encoding always run, so every call resets the shared key to zero and
+ * leaves it wherever its own output ended. A caller that mixes edprintf()
+ * and cEncodeChar() gets different characters out of the latter depending
+ * on how many edprintf() calls preceded it, at any debug level.
  *
  * A formatted message longer than 131 characters is replaced by "too long
  * print string", and that path is the one call that does NOT reset the key.
+ *
+ * @param fmt  printf-style format string.
+ * @param ...  Format arguments.
  */
 void edprintf(const char *fmt, ...);
 

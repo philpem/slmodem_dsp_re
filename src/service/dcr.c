@@ -161,8 +161,7 @@ dcr_process(struct dcr *dcr, short *buf, int len)
 			dcr->dc_level = (short)(sum / count);
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
-				    "DCR: initial DC Evaluation done, "
-				    "DC level %d, %sabled\n",
+				    "DCR: initial DC Evaluation done, " "DC level %d, %sabled\n",
 				    dcr->dc_level,
 				    (dcr->flags & DCR_TRACK) ? "en" : "dis");
 			dcr->state = (dcr->flags & DCR_TRACK)

@@ -558,8 +558,7 @@ VPcmV34Create(void *objp, int side, int ptc, void *runtime, int sessionType)
 
 		obj->dmadelay = (short)(0x610u - (unsigned)ext);
 		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("V34FEC, V34dmadelay set to %d, "
-					     "(ext delay=%d)\n",
+			dsplibs_debug_printf("V34FEC, V34dmadelay set to %d, " "(ext delay=%d)\n",
 					     (int)obj->dmadelay, ext);
 	}
 
@@ -579,22 +578,19 @@ VPcmV34Create(void *objp, int side, int ptc, void *runtime, int sessionType)
 
 		if (stream == -1) {
 			if (DSPLIB_DEBUG_ON())
-				dsplibs_debug_printf("VPcmFlo: From Stream - "
-						     "Entrance Filter according"
+				dsplibs_debug_printf("VPcmFlo: From Stream - " "Entrance Filter according"
 						     " to HW...\r\n");
 			cfg = (unsigned char *)obj->pac3c;
 			sess[SESS_ENTRANCE] = (unsigned char)
 				(*(const int *)(cfg + CFG_F54) == 14);
 		} else if (stream == 1) {
 			if (DSPLIB_DEBUG_ON())
-				dsplibs_debug_printf("VPcmFlo: From Stream - "
-						     "Entrance Filter forced "
+				dsplibs_debug_printf("VPcmFlo: From Stream - " "Entrance Filter forced "
 						     "enabled...\r\n");
 			sess[SESS_ENTRANCE] = 1;
 		} else {
 			if (DSPLIB_DEBUG_ON())
-				dsplibs_debug_printf("VPcmFlo: From Stream - "
-						     "Entrance Filter forced "
+				dsplibs_debug_printf("VPcmFlo: From Stream - " "Entrance Filter forced "
 						     "disabled...\r\n");
 			sess[SESS_ENTRANCE] = 0;
 		}

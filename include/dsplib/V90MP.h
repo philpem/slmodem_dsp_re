@@ -1,54 +1,14 @@
-/*
- * V90MP.h -- the V.90 MP message, one byte per bit.
+/**
+ * @file V90MP.h
+ * @brief `V90MP`: the V.90 MP message, one byte per bit.
  *
- * Reconstructed from dsplibs.o V90MP.cpp.  `V90MP` is not polymorphic --
- * tools/cppstruct.py lists its destructor with the two ordinary variants and
- * not the deleting one, and GCC emits a deleting destructor only for a
- * virtual one -- so offset 0 is a real member and there is no vptr.
+ * `V90MP` is not polymorphic (its destructor has no deleting variant, so
+ * there is no vptr and offset 0 is a real member). Its size, `sizeof == 0x124`,
+ * comes from the gap between it and the sibling `V90CP` member `V90Modem`
+ * constructs right after it in place.
  *
- * THE SIZE IS THE GAP BETWEEN TWO MEMBERS OF V90Modem, which builds both in
- * place:
- *
- *     194ef:  lea 0xcd0(%esi),%ebp        this object
- *     194f5:  lea 0xdf4(%esi),%edi        the V90CP member
- *     194fe:  call _ZN5V90MPC1Ev
- *     19506:  call _ZN5V90CPC1Ev
- *
- * 0xdf4 - 0xcd0 = 0x124 = 292, and the last field the class touches is the
- * four-byte +0x120, which ends exactly there.  Neither class is more than
- * four-byte aligned (+0xdf4 is not eight-byte aligned), so no padding hides
- * between them.
- *
- * WHICH MEMBER PROVED WHICH OFFSET.  The first block was read out of members
- * that are declared and deliberately left undefined; the last two come from
- * `evaluateInfo`, `infoToBits` and `bitsToInfo`, which are defined:
- *
- *     +0x014,+0x019,+0x01a,   `resetDetector` (0x1f3c0), whose whole body is
- *     +0x01b                  these four stores
- *     +0x01c                  `getBitVector` (0x1f700) returns `this+0x1c`
- *     +0x102                  `resetCRC` (0x1f150) writes 1 to sixteen bytes
- *                             from here
- *     +0x114,+0x118,+0x119    `calcSequenceLength` (0x1f910) rounds +0x119+1
- *                             up to a multiple of +0x114 into +0x118
- *     +0x11c,+0x120           `printNofRecievedMpMpNot` (0x20bc0) prints them
- *                             as "received %d MP, %d MPNot"
- *
- *     +0x000..+0x013          the decoded message, named by `bitsToInfo`'s own
- *                             diagnostic:  "MP detected. Type%d,Rate%d,
- *                             Trellis%d,NonLin%d,Shaping%d,CPack%d" for the
- *                             six chars, "Rate Mask - %s" for +0x006, and
- *                             "h1 real = %d, imag = %d" (h2, h3) for the six
- *                             shorts.  Widths are the loads at 0x20b26..0x20b4c
- *                             (`movsbl` on +0x00..+0x05) and 0x2021d..0x20273
- *                             (`movswl` on +0x08..+0x12).
- *
- *     +0x018                  `bitsToInfo` state 2 stores the incoming bit
- *                             there (0x203b5), `infoToBits` copies +0x000 into
- *                             it (0x1fa66) and `evaluateInfo` copies it back
- *                             out (0x1f730).
- *
- * THE MESSAGE IS ELEVEN 17-BIT FRAMES (five when `Type` is zero), which is
- * what `infoToBits` lays out and `evaluateInfo` reads back:
+ * The message itself is eleven 17-bit frames (five when `Type` is zero),
+ * laid out by infoToBits() and read back by evaluateInfo():
  *
  *     frame 0   bits[0x00..0x10]  seventeen ones
  *     frame k   bits[17k]         a zero framing bit, then sixteen data bits
@@ -61,14 +21,13 @@
  *     0x9a..0xa9 zero               0xab..0xba the CRC
  *
  * so the sequence is 0xbb bits long, or 0x55 when `Type` is zero and the
- * message stops after frame 4 with the CRC at 0x45..0x54.  Findings F1385,
+ * message stops after frame 4 with the CRC at 0x45..0x54. Findings F1385,
  * F1386.
  *
- * THE CONSTRUCTOR AND `reset` ARE THE SAME FORTY BYTES, instruction for
- * instruction, and both are plain GLOBAL symbols in `.text` rather than in a
- * linkonce section -- so `reset` is not an in-class inline that the compiler
- * folded into the constructor (GCC 3.4 at -O2 does not inline an ordinary
- * global function).  The original repeated the assignments.  Finding F1237.
+ * The constructor and reset() are the same code, instruction for
+ * instruction -- both plain global symbols, so reset() is not an in-class
+ * inline the compiler folded into the constructor; the original simply
+ * repeated the assignments. Finding F1237.
  */
 
 #ifndef DSPLIB_V90MP_H
@@ -93,79 +52,81 @@
 
 class V90MP {
 public:
-	/* Clear the detector. */
+	/** @brief Construct an MP message object and clear the detector state. */
 	V90MP();
+	/** @brief Destroy an MP message object (clears the frame counters). */
 	~V90MP();
 
-	/*
-	 * Declared, not defined -- see V90CP.h.  Argument types are the
-	 * mangling's and exact; return types are not mangled, so `void` means
-	 * "not established" for all but `getBitVector`, which leaves
-	 * `this+0x1c` in %eax.
+	/**
+	 * @brief Return the decoded/encoded bit vector and its length.
+	 * @param length  Set to the sequence length computed by calcSequenceLength().
+	 * @return Pointer to `bits`, this object's bit vector (`this+0x1c`).
 	 */
 	unsigned char *getBitVector(unsigned int &length);
+	/** @brief Reset the whole object to its just-constructed state. */
 	void reset();
+	/** @brief Reset the receiver's frame-detector state (word_14, byte_19, byte_1a, byte_1b). */
 	void resetDetector();
+	/** @brief Reset the sixteen-byte CRC register to all ones. */
 	void resetCRC();
+	/** @brief Compute the sequence length (byte_118) from the received type bit. */
 	void calcSequenceLength();
 
-	/*
-	 * Defined in src/pump/v90/V90MP.cpp.  `evaluateInfo` and `infoToBits`
-	 * really are void -- neither arranges %eax on any path, and the two
-	 * `ret`s of `evaluateInfo` (0x1f901) leave different leftovers there.
+	/**
+	 * @brief Decode the packed bit vector into the message fields.
 	 *
-	 * `bitsToInfo` is NOT: %edi is zeroed at entry (0x201ab), set to 3 for
-	 * Ed, 1 for MP and 2 for MPnot, and moved to %eax at both returns
-	 * (0x20290, 0x2040e).  It takes one received bit and answers what that
-	 * bit completed.
+	 * Reads `bits` back into `Type`..`h3Imag` and `type`, the inverse of
+	 * infoToBits().
 	 */
 	void evaluateInfo();
+	/**
+	 * @brief Encode the message fields into the packed bit vector.
+	 *
+	 * Lays `Type`..`h3Imag` out into `bits` as the eleven 17-bit frames
+	 * (five when `Type` is zero) described in the file comment (F1385).
+	 */
 	void infoToBits();
+	/**
+	 * @brief Feed one received bit into the frame detector.
+	 *
+	 * Advances the detector's state machine (word_14) bit by bit --
+	 * hunting the preamble, the framing bit, the type bit, the message
+	 * body, then the trailing pad -- and, once a full sequence has
+	 * arrived, calls evaluateInfo() and bumps the appropriate frame
+	 * counter.
+	 *
+	 * @param bit  The next received bit (0 or 1).
+	 * @return 3 if this bit completed an "Ed" (short/no-message) sequence, 1 for MP, 2 for MPnot.
+	 */
 	int bitsToInfo(int bit);
 
-	/*
-	 * The CRC pair, also defined in src/pump/v90/V90MP.cpp.  `calcCRC`
-	 * (0x1f170) is void -- it ends `add $0x10,%esp` / four pops / `ret`
-	 * with nothing arranging %eax, and the byte left in %al is the last
-	 * feedback bit by accident.
-	 *
-	 * `evaluateCRC` (0x1f470) is NOT, and this declaration used to say it
-	 * was: the epilogue at 0x1f6ec is `xor %eax,%eax` / `test %bl,%bl` /
-	 * `sete %al`, and a leftover is never built with a `sete`.  It is the
-	 * same correction the V90CP twin's comment records making, and the
-	 * mangling cannot see it because return types are not mangled -- the
-	 * symbol is `_ZN5V90MP11evaluateCRCEv` either way.  It answers 1 when
-	 * the sixteen received CRC bits match the sixteen it computed.
-	 */
+	/** @brief Compute the sixteen-bit CRC over `bits` into `crc`. */
 	void calcCRC();
-	int evaluateCRC();
-	/*
-	 * Void, and MEASURED rather than assumed: 0x20bef is a CALL to
-	 * `dsplibs_debug_printf` and the two instructions after it are
-	 * `add $0xc,%esp; ret`.  Nothing arranges %eax, so whatever is in it
-	 * is the callee's return by accident.  `reset` reads the same way:
-	 * %eax is left holding `this` because that is where the argument was
-	 * loaded, not because anything returns it.
+	/**
+	 * @brief Check the received CRC against the computed one.
+	 * @return 1 if the sixteen received CRC bits match the sixteen computed ones, 0 otherwise.
 	 */
+	int evaluateCRC();
+	/** @brief Log the received MP/MPnot frame counts via the debug printf. */
 	void printNofRecievedMpMpNot();
-	void PrintBase2(char *, unsigned long, unsigned short);
+	/**
+	 * @brief Render `value`'s low `nofBits` bits as a base-2 string.
+	 * @param out      Destination buffer, `nofBits + 1` bytes.
+	 * @param value    The value to render.
+	 * @param nofBits  How many low-order bits to render.
+	 */
+	void PrintBase2(char *out, unsigned long value, unsigned short nofBits);
 
 	/* Public for the same reason as V90Jd's: it keeps the class
 	 * standard-layout, so the offsetof assertions are well defined. */
 
 	/*
-	 * +0x000..+0x013  THE DECODED MESSAGE.  `evaluateInfo` writes every
-	 * one of these out of `bits`, `infoToBits` reads every one back, and
-	 * `bitsToInfo` prints six of them by name.  The six chars then the
-	 * seven shorts fill the twenty bytes exactly, with no padding, which
-	 * is what keeps `word_14` four-aligned and `sizeof` at 0x124.
-	 *
-	 * SIGNED, not unsigned: the diagnostic loads +0x00..+0x05 with
-	 * `movsbl` (0x20b26) and +0x06..+0x12 with `movswl` (0x2021d), and
-	 * `infoToBits` shifts `Rate` right with `sar` (0x1f9e4) and switches
-	 * on `Trellis` with `jle` (0x1fa00).  For `Rate` and `Trellis` that is
-	 * the load width alone -- `evaluateInfo` only ever puts 0..15 and 0..3
-	 * in them, so no value they can hold reads differently either way.
+	 * +0x000..+0x013  The decoded message: `evaluateInfo` writes every one
+	 * of these out of `bits`, `infoToBits` reads every one back, and
+	 * `bitsToInfo` prints six of them by name. The six chars then seven
+	 * shorts fill the twenty bytes exactly with no padding (keeping
+	 * `word_14` four-aligned and `sizeof` at 0x124), and all are signed --
+	 * forced by the diagnostic's sign-extending loads. See finding F1385.
 	 */
 	char Type;			/* +0x000 bits[0x12]              */
 	char Rate;			/* +0x001 bits[0x18..0x1b]        */
@@ -174,13 +135,13 @@ public:
 	char Shaping;			/* +0x004 bits[0x20]              */
 
 	/*
-	 * +0x005  bits[0x21], and the message's own discriminator: zero is
-	 * "MP detected", anything else "MPnot detected", and it picks which of
-	 * the two counters `bitsToInfo` bumps (0x2031d).
+	 * +0x005  bits[0x21], the message's own discriminator: zero is "MP
+	 * detected", anything else "MPnot detected", and picks which of the
+	 * two counters `bitsToInfo` bumps. See F1385.
 	 */
 	char CPack;
 
-	/* +0x006  bits[0x24..0x31], printed base 2 with the mask 0x2000. */
+	/* +0x006  bits[0x24..0x31], printed base 2 with the mask 0x2000. See F1385. */
 	short rateMask;
 
 	short h1Real;			/* +0x008 bits[0x34..0x43]        */
@@ -284,17 +245,13 @@ public:
 
 	/*
 	 * +0x11c  MP frames received, by the debug string's own words.
-	 *
-	 * UNSIGNED, which the `%d` of `printNofRecievedMpMpNot` cannot tell
-	 * you and `bitsToInfo` can: having bumped the counter it gates its
-	 * diagnostics on `cmp $0x2,%ebp; ja` (0x20a34), and `ja` is the
-	 * unsigned comparison.  The two readings part at 0x80000000, where the
-	 * unsigned one is above two and the signed one below it, so the
-	 * transcript at level 2 decides -- t_v90mp.cpp drives exactly that.
+	 * Unsigned: `bitsToInfo` gates its diagnostics on an unsigned `ja`
+	 * compare against the bumped counter, not the signed reading the
+	 * printf's `%d` alone would suggest. See F1385.
 	 */
 	unsigned int nofRecievedMp;
 
-	/* +0x120  MPNot frames received; `ja` at 0x2033b likewise. */
+	/* +0x120  MPNot frames received; same unsigned proof. See F1385. */
 	unsigned int nofRecievedMpNot;
 };
 

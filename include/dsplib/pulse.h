@@ -59,23 +59,55 @@ struct call {
 	int	pulse_off_hook;				/* +0x5c8 */
 };
 
-/*
- * Both take the value from the country table and write it into the call
- * object, doing nothing at all if the modem has no datapump attached.
+/**
+ * @brief Set the "make" (line-restored) duration of a pulse.
+ *
+ * Takes the value from the country table and writes it into the call
+ * object; does nothing if the modem has no datapump attached.
+ *
+ * @param modem  Modem handle.
+ * @param ms     Duration in milliseconds.
  */
 void SetPulseMakeTime(void *modem, int ms);
+
+/**
+ * @brief Set the "break" (line-interrupted) duration of a pulse.
+ *
+ * Takes the value from the country table and writes it into the call
+ * object; does nothing if the modem has no datapump attached.
+ *
+ * @param modem  Modem handle.
+ * @param ms     Duration in milliseconds.
+ */
 void SetPulseBreakTime(void *modem, int ms);
 
-/* Tell the host the pulse dialler has finished with the line. */
+/**
+ * @brief Tell the host the pulse dialler has finished with the line.
+ *
+ * Does not look at the call object at all -- just clears the parameter
+ * PulseDialDigit() set. So the host, not the library, owns the "a digit is
+ * being pulsed" state; the library only owns the timing.
+ *
+ * @param modem  Modem handle.
+ */
 void LastPulseDigitDialed(void *modem);
 
-/* Begin sending `digit` pulses.  Zero means ten. */
+/**
+ * @brief Begin sending @p digit pulses.
+ * @param modem  Modem handle.
+ * @param digit  Digit to dial, 0-9. A value of 0 dials ten pulses -- how
+ *               loop disconnect has always spelled it.
+ */
 void PulseDialDigit(void *modem, int digit);
 
-/*
- * Advance one 5 ms tick and report whether the digit is complete.  Returns
- * true when there is nothing to send -- including when there is no datapump,
- * so a caller polling this on a torn-down modem terminates rather than hangs.
+/**
+ * @brief Advance the pulse dialler by one 5 ms tick.
+ *
+ * @param modem  Modem handle.
+ * @return Non-zero when the current digit is complete (including when
+ *         there is nothing to send at all, or the modem has no datapump --
+ *         so a caller polling this on a torn-down modem terminates rather
+ *         than hangs).
  */
 int IsPulseDialerReady(void *modem);
 

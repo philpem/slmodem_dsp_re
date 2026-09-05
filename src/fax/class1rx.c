@@ -64,8 +64,7 @@ init_vmi_v17rx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
 
 	if (DSPLIB_DEBUG_VERBOSE())
 		dsplibs_debug_printf(
-			"Initializing VMI_V17_RX Modem No ECM "
-			"(Simple Packing)\n");
+			"Initializing VMI_V17_RX Modem No ECM " "(Simple Packing)\n");
 
 	*cfg = V17RX_CFG;
 	cfg->bit_rate = bit_rate;
@@ -96,8 +95,7 @@ init_vmi_v29rx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
 
 	if (DSPLIB_DEBUG_VERBOSE())
 		dsplibs_debug_printf(
-			"Initializing VMI_V29_RX Modem No ECM "
-			"(Simple Packing)\n");
+			"Initializing VMI_V29_RX Modem No ECM " "(Simple Packing)\n");
 
 	*cfg = V29RX_CFG;
 	cfg->bit_rate = bit_rate;
@@ -124,8 +122,7 @@ init_vmi_v27rx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
 
 	if (DSPLIB_DEBUG_VERBOSE())
 		dsplibs_debug_printf(
-			"Initializing VMI_V27_RX Modem No ECM "
-			"(Simple Packing)\n");
+			"Initializing VMI_V27_RX Modem No ECM " "(Simple Packing)\n");
 
 	*cfg = V27RX_CFG;
 	cfg->bit_rate = bit_rate;
@@ -356,8 +353,7 @@ _init_receiver(struct fax_class1 *ctx, int rate_code)
 
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf(
-			"%2d.%02d[sec] Initializing RX modem receiver, "
-			"MODEM_IDX=%d\n",
+			"%2d.%02d[sec] Initializing RX modem receiver, " "MODEM_IDX=%d\n",
 			ctx->clock_sec, ctx->clock_frac, ctx->current_mod);
 
 	if ((rate_code == 0x4a || rate_code == 0x62 || rate_code == 0x7a ||
@@ -402,8 +398,7 @@ _init_receiver(struct fax_class1 *ctx, int rate_code)
 
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf(
-				"%2d.%02d[sec] New RX Modem... "
-				"Deleting previous existing one\n",
+				"%2d.%02d[sec] New RX Modem... " "Deleting previous existing one\n",
 				ctx->clock_sec, ctx->clock_frac);
 
 		if (cfg->slot == VMI_SLOT_V17RX) {
@@ -449,7 +444,19 @@ _init_receiver(struct fax_class1 *ctx, int rate_code)
 		return;
 	}
 
-	/* REINIT PATH */
+	/*
+	 * REINIT PATH.  `ctx->vmi_b` is never NULL here: `modem_vmi` and
+	 * `vmi_b` are set together (FRESH CREATE, above) and cleared
+	 * together (the modulation-switch teardown, above) everywhere in
+	 * this function, so reaching this path with `modem_vmi != NULL`
+	 * (the `if` just above) means `vmi_b != NULL` too, by that
+	 * invariant -- not by a check visible at this point. A whole-
+	 * function static analyzer that only sees this branch in isolation
+	 * cannot verify that and flags `ctx->vmi_b->link` below as an
+	 * unguarded dereference; it is a false positive, not a bug
+	 * (checked against FAXVMI_create's own allocation order and this
+	 * file's existing differential tests).
+	 */
 	cfg = ctx->modem_vmi;
 
 	if (DSPLIB_DEBUG_ON())

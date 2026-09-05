@@ -96,23 +96,39 @@ struct fpm_ecc {
 	short far_delay;	/* +0x66 INPUT, see above                     */
 };
 
-/*
- * `fresh` non-zero means the state is uninitialised: allocate the eight
- * buffers.  Zero means re-init in place, keeping them.  A NULL `cfg` means
- * "use the library default", `ECC_CFG`.
+/**
+ * @brief Initialise an echo canceller.
  *
- * far_lag + near_delay + far_delay must be non-zero: init divides by it.
+ * `cfg->far_lag + state->near_delay + state->far_delay` must be nonzero:
+ * init divides by it.
+ *
+ * @param state  The canceller. `near_delay`/`far_delay` must already be
+ *               set (they are inputs, not written by init).
+ * @param cfg    Configuration, copied wholesale; NULL for the library
+ *               default (#ECC_CFG).
+ * @param fresh  Nonzero: the state is uninitialised, allocate the eight
+ *               buffers. Zero: re-init in place, keeping them.
  */
 void FPM_ECC_init(struct fpm_ecc *state, const struct fpm_ecc_cfg *cfg,
 		  int fresh);
+
+/**
+ * @brief Free the buffers allocated by FPM_ECC_init() with `fresh != 0`.
+ * @param state  The canceller to tear down.
+ */
 void FPM_ECC_free(struct fpm_ecc *state);
 
-/*
- * Subtract the echo estimate from `count` samples IN PLACE and adapt.
- * Returns the number of symbols consumed off the delay line.
+/**
+ * @brief Subtract the echo estimate from samples in place and adapt the
+ * near/far coefficients.
  *
- * The return type is unverified: the value is a zero-extended 16-bit count in
- * eax and nothing in the object distinguishes short from int there.
+ * @param state  The canceller, updated in place.
+ * @param buf    Samples to cancel in place.
+ * @param count  Number of samples.
+ * @return The number of symbols consumed off the delay line. The return
+ *         type is unverified: the value is a zero-extended 16-bit count
+ *         in %eax and nothing in the object distinguishes `short` from
+ *         `int` there.
  */
 short FPM_ECC_cancel(struct fpm_ecc *state, short *buf, unsigned short count);
 

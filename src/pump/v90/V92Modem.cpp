@@ -275,8 +275,7 @@ V92Modem::printTitle()
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf(V92_BANNER);
 	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("V92Modem Version: %s  (%s)\r\n",
-				     "1.1", "9-Apr-01");
+		dsplibs_debug_printf("V92Modem Version: %s  (%s)\r\n", "1.1", "9-Apr-01");
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf(V92_BANNER);
 

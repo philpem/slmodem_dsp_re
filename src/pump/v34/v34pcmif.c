@@ -1053,16 +1053,14 @@ void
 VPcmV34ReportStartOfEchoAdapt(void *objp)
 {
 	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("VPcmV34Main: Echo adapt start "
-				     "reported...\r\n");
+		dsplibs_debug_printf("VPcmV34Main: Echo adapt start " "reported...\r\n");
 }
 
 void
 VPcmV34ReportMiddleOfEchoAdapt(void *objp)
 {
 	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("VPcmV34Main: Echo adapt middle "
-				     "reported...\r\n");
+		dsplibs_debug_printf("VPcmV34Main: Echo adapt middle " "reported...\r\n");
 }
 
 int *
@@ -1137,8 +1135,7 @@ VPcmV34SetV90RateReneg(void *objp, short rrn_type, unsigned char constel_size)
 
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf(
-			"setV90RateReneg called, rrn type = %d, "
-			"constel size = %d\r\n",
+			"setV90RateReneg called, rrn type = %d, " "constel size = %d\r\n",
 			(int)rrn_type, (int)constel_size);
 
 	/*
@@ -1199,8 +1196,7 @@ V34XF_IndicateJdReceived(void *objp, unsigned char constel,
 
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf(
-			"V34Main: IndicateJdReceived - constel size = %d, "
-			"silence SCR = %d\r\n",
+			"V34Main: IndicateJdReceived - constel size = %d, " "silence SCR = %d\r\n",
 			constel, silence_scr);
 
 	obj->v90_receiver = 3;
@@ -1472,8 +1468,7 @@ V34XF_IndicateK56FlexRateDetermined(void *objp)
 
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf(
-			"K56Flex rate determined, starting MP "
-			"transmission...\r\n");
+			"K56Flex rate determined, starting MP " "transmission...\r\n");
 
 	obj->k56flex_receiver = 5;
 }

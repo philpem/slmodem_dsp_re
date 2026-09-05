@@ -147,103 +147,108 @@ inline void operator delete[](void *p) { sysdep_free(p); }
 template <class T, class I>
 class Scrambler {
 public:
-	/*
-	 * `sysdep_malloc` is NOT checked, exactly as in the blob: a null return
-	 * makes every init pointer a small address and the first `reset` stores
-	 * through it.  The count is `1 + b + c` ELEMENTS -- `<int,...>` emits
-	 * `shl $0x2` on it, which is where `sizeof(T)` is measured -- and the
-	 * body ends in a tail call to `reset(0)`.
+	/**
+	 * @brief Allocate the history buffer and seed it to all zero bits.
+	 *
+	 * `sysdep_malloc` is NOT checked, exactly as in the blob: a null
+	 * return makes every init pointer a small address and the first
+	 * reset() stores through it. Tail-calls `reset(0)`.
+	 *
+	 * @param a  Near tap's distance above `pInitOut`.
+	 * @param b  Far tap's distance above `pInitOut`, and also `tailLength`.
+	 * @param c  Distance `pInitOut` sits above `pLimit`.
 	 */
 	Scrambler(unsigned int a, unsigned int b, unsigned int c);
 
-	/* `pLimit` is NOT nulled, so a second destruction double-frees. */
+	/**
+	 * @brief Free the history buffer.
+	 *
+	 * `pLimit` is NOT nulled, so a second destruction double-frees --
+	 * the object's own behaviour.
+	 */
 	~Scrambler();
 
-	/*
-	 * Put the three running pointers back to their initial values.  This
-	 * is 23 bytes in the blob and does exactly three word copies.
+	/**
+	 * @brief Put the three running pointers back to their initial values.
 	 *
-	 * THE BODY IS OUT OF LINE BECAUSE THE OBJECT CALLS IT.  Written
-	 * inside the class body it is implicitly `inline`, which moves it
-	 * from `--param max-inline-insns-auto` to `max-inline-insns-single`
-	 * and GCC 3.4.2 then expands it into every caller while still
-	 * emitting the weak symbol -- so the symbol table looks right and
-	 * `reset` is wrong.  The object refutes that directly: its
-	 * `Descrambler<h,i>::reset` spends `mov %esi,(%esp)` and
-	 * `call _ZN11DescramblerIhiE19resetHistoryIndexesEv`, where ours had
-	 * the three stores expanded in place.  That is lever 10's tell --
-	 * an EXCESS of instructions with a MISSING call -- read off the
-	 * object rather than inferred.  Finding F7862.
+	 * Defined out of line (see the block below the class) because the
+	 * object calls it rather than inlining it (finding F7862).
 	 */
 	void resetHistoryIndexes();
 
-	/*
-	 * Carry the wrapped history back up to the restart point.  The count
-	 * is `tailLength`; the blob spells the loop as a decrement that stops
-	 * when the counter reaches -1, which is `tailLength` iterations for
-	 * any value including zero.
+	/**
+	 * @brief Carry the wrapped history back up to the restart point.
 	 *
-	 * THE POINTERS WALK; THE INDEX FORM IS WRONG AND COSTS A REGISTER.
-	 * An indexed `for (i = 0; i < n; i++) dst[i] = src[i]` keeps FOUR
-	 * values live across the loop -- both bases, `i` and the bound `n` --
-	 * so it needs a second callee-saved register and emits `push %esi`
-	 * beside `push %ebx`.  The object pushes `%ebx` alone and holds three:
-	 * `src`, `dst` and a counter it compares against the CONSTANT -1
-	 * (`dec %edx; cmp $0xffffffff,%edx; jne`), which is `while (n--)`
-	 * with the loop rotated so entry lands on the test.
-	 *
-	 * Six spellings compiled, five distinct emissions; the two that reach
-	 * the object's instruction sequence are `unsigned int n` and
-	 * `int n` with the same `while (n--)`, and those two emit the SAME
-	 * bytes.  So the decoded fact is the loop's SHAPE and not the
-	 * counter's signedness, which the object cannot distinguish.  All
-	 * five instantiations go SIZE to REGALLOC on it.  Finding F7861.
+	 * Copies `tailLength` elements from `pLimit` to `pInitOut + 1`; see
+	 * the out-of-line definition below for the exact loop shape the
+	 * object requires (finding F7861).
 	 */
 	void copyHistoryTail();
 
-	/*
-	 * Seed the history with one bit, repeated.  `value & 1` is masked in
-	 * the blob before the loop, so only the low bit of the argument can
-	 * reach the buffer.
+	/**
+	 * @brief Seed the history with one repeated bit.
+	 *
+	 * Fills the elements from `pInitOut + 1` up to and including
+	 * `pInitTap2` with `value & 1` -- only the low bit of @p value can
+	 * reach the buffer, masked in the blob before the loop.
+	 *
+	 * @param value  Bit to seed with (only bit 0 is used).
 	 */
 	void reset(T value);
 
-	/*
-	 * One symbol.  Both taps are read at their current positions and then
-	 * stepped down; the output is written where `pOut` points and `pOut`
-	 * steps down after.  Falling below `pLimit` restarts the buffer.
+	/**
+	 * @brief Scramble one symbol.
 	 *
-	 * The `T` temporary is the one this was verified with; see the note on
-	 * `I` in the file comment for why it is not `I` here and why nothing
-	 * can tell.
+	 * Both taps are read at their current positions and then stepped
+	 * down; the output is written where `pOut` points and `pOut` steps
+	 * down after. Falling below `pLimit` restarts the buffer
+	 * (resetHistoryIndexes() then copyHistoryTail()).
+	 *
+	 * @param in  Input symbol.
+	 * @return `in XOR *pTap1 XOR *pTap2`, the scrambled symbol.
 	 */
 	T process(T in);
 
-	/*
-	 * `n` symbols.  The result goes to BOTH `out[i]` -- as an `I`, which
-	 * for `<int,unsigned char>` is narrower than the history -- and to the
-	 * history at `pOut`, in that order.  The blob stores `out[i]` first and
-	 * `*pOut` second, which is only observable if the caller aims `out`
-	 * into the history; it is reproduced rather than tidied.
+	/**
+	 * @brief Scramble @p n symbols in bulk.
 	 *
-	 * DECLARED HERE AND DEFINED BELOW, for `reset`'s reason and on the same
-	 * evidence.  See the block at the foot of this file.
+	 * The result goes to BOTH `out[i]` -- as an `I`, which for
+	 * `<int,unsigned char>` is narrower than the history -- and to the
+	 * history at `pOut`, in that order; the blob stores `out[i]` first
+	 * and `*pOut` second, reproduced even though it is observable only
+	 * if the caller aims @p out into the history.
+	 *
+	 * Declared here and defined below the class, for the same
+	 * out-of-line reason as resetHistoryIndexes().
+	 *
+	 * @param in   Input symbols, @p n of them.
+	 * @param out  Output buffer, @p n entries.
+	 * @param n    Number of symbols to process.
 	 */
 	void process(const T *in, I *out, unsigned int n);
 
-	/*
-	 * `process` with an all-ones input and with an all-zeros one, each
-	 * open-coded rather than calling `process`: the blob's bodies are the
-	 * bulk loop with `in[i]` replaced by the constant, so the all-ones one
-	 * carries an `xor $0x1` and the all-zeros one carries nothing at all.
+	/**
+	 * @brief Scramble @p n symbols of an all-ones input, in bulk.
 	 *
-	 * Only `<unsigned char, unsigned char>` instantiates these, where `T`
-	 * and `I` are the same type and the parameter's spelling is therefore
-	 * not recoverable from the mangling; `I *` is chosen to agree with
-	 * `process`'s output parameter.
+	 * Open-coded rather than calling process() with a constant input --
+	 * the blob's body is the bulk loop with `in[i]` replaced by 1. Only
+	 * `<unsigned char, unsigned char>` instantiates this.
+	 *
+	 * @param out  Output buffer, @p n entries.
+	 * @param n    Number of symbols to process.
 	 */
 	void processAllOnes(I *out, unsigned int n);
 
+	/**
+	 * @brief Scramble @p n symbols of an all-zeros input, in bulk.
+	 *
+	 * Open-coded rather than calling process() with a constant input --
+	 * the blob's body is the bulk loop with `in[i]` replaced by 0. Only
+	 * `<unsigned char, unsigned char>` instantiates this.
+	 *
+	 * @param out  Output buffer, @p n entries.
+	 * @param n    Number of symbols to process.
+	 */
 	void processAllZeros(I *out, unsigned int n);
 
 	/*
@@ -296,29 +301,63 @@ public:
 template <class T, class I>
 class Descrambler {
 public:
-	/* Byte for byte the shape of `Scrambler`'s; see its comment. */
+	/**
+	 * @brief Allocate the history buffer and seed it to all zero bits.
+	 *
+	 * Byte for byte the shape of Scrambler::Scrambler(); see its @brief
+	 * for what each argument means.
+	 */
 	Descrambler(unsigned int a, unsigned int b, unsigned int c);
 
+	/** @brief Free the history buffer. Same as Scrambler::~Scrambler(). */
 	~Descrambler();
 
-	/* Three word copies, as in `Scrambler`; out of line for its reason. */
+	/**
+	 * @brief Put the three running pointers back to their initial values.
+	 * Three word copies, as in Scrambler; out of line for the same reason.
+	 */
 	void resetHistoryIndexes();
 
-	/* The count is `tailLength`, as in `Scrambler`. */
+	/**
+	 * @brief Carry the wrapped history back up to the restart point.
+	 * The count is `tailLength`, as in Scrambler.
+	 */
 	void copyHistoryTail();
 
-	/*
-	 * Seed the history with one bit, repeated.  `value & 1` is masked
-	 * before the loop, so only the low bit of the argument reaches the
-	 * buffer, and the loop runs from `pInitOut + 1` up to and including
-	 * `pInitTap2`.
+	/**
+	 * @brief Seed the history with one repeated bit.
+	 *
+	 * Fills the elements from `pInitOut + 1` up to and including
+	 * `pInitTap2` with `value & 1` -- only the low bit of @p value can
+	 * reach the buffer, masked in the blob before the loop.
+	 *
+	 * @param value  Bit to seed with (only bit 0 is used).
 	 */
 	void reset(T value);
 
-	/* One symbol.  Store, read back, XOR the two taps, step all three. */
+	/**
+	 * @brief Descramble one symbol.
+	 *
+	 * Stores @p in at `pOut`, reads it back, XORs the two taps, then
+	 * steps all three pointers down. Falling below `pLimit` restarts the
+	 * buffer.
+	 *
+	 * @param in  Input symbol.
+	 * @return The descrambled symbol.
+	 */
 	T process(T in);
 
-	/* `n` symbols, the result to `out[i]` as an `I` and nowhere else. */
+	/**
+	 * @brief Descramble @p n symbols in bulk.
+	 *
+	 * The result goes to `out[i]` as an `I`, and nowhere else (unlike
+	 * Scrambler's bulk process(), which also updates the history from
+	 * the same value).
+	 *
+	 * @param in   Input symbols, @p n of them.
+	 * @param out  Output buffer, @p n entries.
+	 * @param n    Number of symbols to process.
+	 */
 	void process(const T *in, I *out, unsigned int n);
 
 	T *pLimit;		/* +0x00 lowest address `pOut` may reach   */

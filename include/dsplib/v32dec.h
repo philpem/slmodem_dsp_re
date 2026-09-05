@@ -68,34 +68,63 @@ struct v32_dec {
 	unsigned int scram;		/* +0x70 TRN generator's register    */
 };
 
+/**
+ * @brief V.32 slicer for the 4-point (1200 baud training) constellation.
+ * @param state  The equaliser state; its decision is at `state->out_i[n_out]`/`out_q[n_out]`.
+ * @param angle  In: measured angle; out: the decided point's ideal angle (the carrier PLL's error).
+ * @param mag    Output: the decided point's ideal magnitude.
+ * @return The decoded bits.
+ */
 unsigned short FSE_decision_4pt(struct fpm_fse *state, short *angle,
 				short *mag);
+
+/** @brief V.32 slicer for the TRN training sequence's constellation. @param state The equaliser state. @param angle In/out: measured then ideal angle. @param mag Output: ideal magnitude. @return The decoded bits. */
 unsigned short FSE_decision_trn(struct fpm_fse *state, short *angle,
 				short *mag);
+
+/** @brief V.32 slicer for constellations C and D. @param state The equaliser state. @param angle In/out: measured then ideal angle. @param mag Output: ideal magnitude. @return The decoded bits. */
 unsigned short FSE_decision_CD(struct fpm_fse *state, short *angle,
 			       short *mag);
+
+/** @brief V.32 slicer for constellations A and B. @param state The equaliser state. @param angle In/out: measured then ideal angle. @param mag Output: ideal magnitude. @return The decoded bits. */
 unsigned short FSE_decision_AB(struct fpm_fse *state, short *angle,
 			       short *mag);
 
-/*
- * 9600 bit/s with no trellis: a sixteen-point decision reported as four
- * differentially encoded bits.  It installs no successor.
+/**
+ * @brief V.32 slicer for 9600 bit/s with no trellis coding.
+ *
+ * A sixteen-point decision reported as four differentially encoded bits.
+ * Installs no successor.
+ *
+ * @param state  The equaliser state.
+ * @param angle  In/out: measured then ideal angle.
+ * @param mag    Output: ideal magnitude.
+ * @return The decoded bits.
  */
 unsigned short FSE_decision_16pt(struct fpm_fse *state, short *angle,
 				 short *mag);
 
 /*
- * THE FOUR TRELLIS SLICERS.  Each decides a point, writes its ideal angle and
- * magnitude, and then hands the UNROTATED received symbol to `VTB_decoder`,
- * whose output through a stack local is the return value.  None of them
- * installs a successor: the datapump leaves a trellis rate by another route.
+ * The four trellis slicers below each decide a point, write its ideal angle
+ * and magnitude, and then hand the UNROTATED received symbol to
+ * `VTB_decoder`, whose output through a stack local is the return value.
+ * None of them installs a successor: the datapump leaves a trellis rate by
+ * another route.
  */
+
+/** @brief V.32 trellis slicer, 16 points (9600 bit/s trellis-coded). @param state The equaliser state. @param angle In/out: measured then ideal angle. @param mag Output: ideal magnitude. @return VTB_decoder()'s decoded bits. */
 unsigned short FSE_decision_16Tpt(struct fpm_fse *state, short *angle,
 				  short *mag);
+
+/** @brief V.32bis trellis slicer, 32 points (12000 bit/s). @param state The equaliser state. @param angle In/out: measured then ideal angle. @param mag Output: ideal magnitude. @return VTB_decoder()'s decoded bits. */
 unsigned short FSE_decision_32pt(struct fpm_fse *state, short *angle,
 				 short *mag);
+
+/** @brief V.32bis trellis slicer, 64 points (14400 bit/s). @param state The equaliser state. @param angle In/out: measured then ideal angle. @param mag Output: ideal magnitude. @return VTB_decoder()'s decoded bits. */
 unsigned short FSE_decision_64pt(struct fpm_fse *state, short *angle,
 				 short *mag);
+
+/** @brief V.32bis trellis slicer, 128 points. @param state The equaliser state. @param angle In/out: measured then ideal angle. @param mag Output: ideal magnitude. @return VTB_decoder()'s decoded bits. */
 unsigned short FSE_decision_128pt(struct fpm_fse *state, short *angle,
 				  short *mag);
 

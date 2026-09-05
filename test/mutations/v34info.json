@@ -29,17 +29,17 @@
  },
  {
   "label": "INFO0a: 'for %s' and 'for V.PCM' swapped",
-  "find": "\t\t\t\t\t\"setINFO0aBits - setting info0a \"\n\t\t\t\t\t\"for %s\\n\", pcm_name(obj));",
+  "find": "\n\t\t\t\t\t\"setINFO0aBits - setting info0a \" \"for %s\\n\", pcm_name(obj));",
   "replace": "\t\t\t\t\t\"setINFO0aBits - setting info0a \"\n\t\t\t\t\t\"for V.PCM\\n\");"
  },
  {
   "label": "INFO0a: the Caller arm claims to be the Digital one",
-  "find": "\t\t\tdsplibs_debug_printf(\"setINFO0aBits - setting info0 \"\n\t\t\t\t\t     \"(Caller) for %s\\n\",",
+  "find": "\n\t\t\tdsplibs_debug_printf(\"setINFO0aBits - setting info0 \" \"(Caller) for %s\\n\",",
   "replace": "\t\t\tdsplibs_debug_printf(\"setINFO0aBits - setting info0d \"\n\t\t\t\t\t     \"(Digital) for %s\\n\","
  },
  {
   "label": "INFO0a: bits[1] base 0x84 becomes 0x8c in the V.PCM arm",
-  "find": "\t\t\t\t\"for V.PCM\\n\");\n\t\tbits[0] = (short)0xff;\n\t\tbits[1] = (short)0x84;",
+  "find": " \"for V.PCM\\n\");\n\t\tbits[0] = (short)0xff;\n\t\tbits[1] = (short)0x84;",
   "replace": "\t\t\t\t\"for V.PCM\\n\");\n\t\tbits[0] = (short)0xff;\n\t\tbits[1] = (short)0x8c;"
  },
  {
@@ -49,7 +49,7 @@
  },
  {
   "label": "INFO0a: V.PCM arm's V.92 bit becomes 1, matching the other arm",
-  "find": "\t\t\t\t\t\"...indicating V.92 \"\n\t\t\t\t\t\"capabilities...\\n\");\n\t\t\tbits[1] = (short)(bits[1] | 2);",
+  "find": "\n\t\t\t\t\t\"...indicating V.92 \" \"capabilities...\\n\");\n\t\t\tbits[1] = (short)(bits[1] | 2);",
   "replace": "\t\t\t\t\t\"...indicating V.92 \"\n\t\t\t\t\t\"capabilities...\\n\");\n\t\t\tbits[1] = (short)(bits[1] | 1);"
  },
  {
@@ -151,7 +151,7 @@
  },
  {
   "label": "INFO1a: the two K56Flex announcements swapped",
-  "find": "\t\t\t\t\t\"VPcmV34Main: K56Flex disabled by \"\n\t\t\t\t\t\"remote\\r\\n\");",
+  "find": "\n\t\t\t\t\t\"VPcmV34Main: K56Flex disabled by \" \"remote\\r\\n\");",
   "replace": "\t\t\t\t\t\"VPcmV34Main: K56Flex enabled by \"\n\t\t\t\t\t\"remote\\r\\n\");"
  },
  {
@@ -301,7 +301,7 @@
  },
  {
   "label": "moh rx: the reserved arm says other reason",
-  "find": "\t\t\t\t\t\"MHcld message detected ! , reserved \"\n\t\t\t\t\t\"disconnect reason (assume other \"\n\t\t\t\t\t\"reason)\\r\\n\");",
+  "find": "\n\t\t\t\t\t\"MHcld message detected ! , reserved \" \"disconnect reason (assume other \"\n\t\t\t\t\t\"reason)\\r\\n\");",
   "replace": "\t\t\t\t\t\"MHcld message detected ! , disconnect \"\n\t\t\t\t\t\"reason is other reason\\r\\n\");"
  },
  {

@@ -96,27 +96,77 @@ public:
 	static void *operator new(size_t n) { return sysdep_malloc(n); }
 	static void operator delete(void *p) { sysdep_free(p); }
 
-	/*
+	/**
+	 * @brief Construct a filter over borrowed coefficient arrays.
+	 *
 	 * Coefficient arrays are borrowed, not copied -- the caller keeps
-	 * ownership and must outlive the filter.  `blockSize` is the largest
-	 * count that will be passed to the block process(); it only sets the
-	 * headroom between buffer compactions.
+	 * ownership and must outlive the filter. Allocates the input/output
+	 * history buffers (sized with `blockSize` headroom) and tail-calls
+	 * reset(); the scratch members `m_i`/`m_acc` are left uninitialised
+	 * by everything before that tail call, matching the object.
+	 *
+	 * @param nden       Number of denominator (feedback) coefficients.
+	 * @param nnum       Number of numerator (feedforward) coefficients.
+	 * @param den        Denominator coefficients, `nden` of them;
+	 *                   `den[0]` doubles as the output divisor (see
+	 *                   process()).
+	 * @param num        Numerator coefficients, `nnum` of them.
+	 * @param blockSize  Largest sample count the block process() will be
+	 *                   called with; only sets the headroom between
+	 *                   buffer compactions.
 	 */
 	GenericIIR(unsigned nden, unsigned nnum, Coeff *den, Coeff *num,
 		   unsigned blockSize);
+
+	/** @brief Free the input and output history buffers. */
 	~GenericIIR();
 
-	/* Clear history and return the write positions to their start. */
+	/**
+	 * @brief Clear both history buffers and rewind the write positions.
+	 *
+	 * Also leaves `m_i` holding `m_outLen` (or zero if there is no
+	 * output history) rather than whatever the last process() left
+	 * there -- the object's own observable behaviour, since both loops
+	 * here count in the `m_i` member rather than a local.
+	 */
 	void reset();
 
-	/* One sample in, one sample out. */
+	/**
+	 * @brief Filter one input sample and produce one output sample.
+	 *
+	 * Computes `acc = sum(num[i]*x[n-i]) - sum(den[i]*y[n-i], i>=1)` at
+	 * extended precision, dividing by `den[0]` only when it is non-zero
+	 * (zero means "already normalised" -- see the file comment above).
+	 * Rounds to `Coeff` once, at the end. Advances (and compacts, via
+	 * compactIn()/compactOut(), when a history buffer's slack runs out)
+	 * both history buffers' write positions.
+	 *
+	 * @param x  The new input sample.
+	 * @return   The filtered output sample.
+	 */
 	Sample process(Sample x);
 
-	/* Block form; equivalent to `count` calls to the single-sample form. */
+	/**
+	 * @brief Filter @p count samples; equivalent to that many calls to
+	 *        the single-sample process().
+	 * @param in     Input samples, @p count of them.
+	 * @param out    Output buffer, @p count entries.
+	 * @param count  Number of samples to filter.
+	 */
 	void process(const Sample *in, Sample *out, unsigned count);
 
 private:
+	/**
+	 * @brief Compact the input history: move the most recent `nnum - 1`
+	 *        entries back to the top of the buffer and rewind `m_inPos`.
+	 *
+	 * Copied high-to-low since source and destination overlap when the
+	 * slack is smaller than the history; order is preserved (newest
+	 * stays newest).
+	 */
 	void compactIn();
+
+	/** @brief Compact the output history; see compactIn() for the shape. */
 	void compactOut();
 
 	/*
