@@ -115858,3 +115858,67 @@ its own `byteident.py`/`make period` verification -- the constructors
 involved are not all as simple as the test class used to prove the
 mechanism, and CLAUDE.md's own rule applies here as everywhere: measure
 each site, don't assume they all behave like the first one. (2026-09-05)
+
+## F10156. `t_v90cdesign`'s 27-40 minute runtime was a test bug, not the object: three trials hit `calcMtoMatchKtarget`'s own documented unbounded-loop hazard for real
+
+The project owner asked whether `t_v90cdesign`'s 27-40 minute runtime
+(long enough to be `make period`'s own critical path) could be sped up.
+Two independent measurements -- a hand computation of the test's own
+trial arithmetic, and a separately-run instrumented scratch build with
+per-loop checkpoints -- converged on the same exact cause.
+
+**Not the 46,656-shape sweep everyone assumed.** `run_findindex`'s
+exhaustive sweep (F8... era, `docs/remaining.md`'s own "the last and
+heaviest test" note) and the 720-trial `determineDminForRrn` sweeps all
+measured under 0.05 seconds combined, confirmed by direct
+instrumentation. The entire cost was in `run_arith`'s 40-trial
+`calcMtoMatchKtarget` sweep.
+
+**The mechanism.** `V90ConstellationDesigner::calcMtoMatchKtarget`
+(`src/pump/v90/V90ConstellationDesigner.cpp:528-546`) is correctly
+reconstructed and already documents its own hazard in a comment: nothing
+bounds the doubling loop's iteration count, and a `kTarget` below
+`log2(m)` makes the internal `x` negative, so casting its fractional part
+to `unsigned int` wraps to roughly 4.3 billion -- a real property of the
+object's own machine code, reproduced faithfully.
+
+The test's own trial-generation formula in `t_v90cdesign.cpp` (`target =
+(i/5)*6.0f + (i%5)*0.37f + 1.0f`, `m` cycling through `{1, 2, 6, 64,
+128}`) claimed in its own comment to keep `kTarget` above `log2(m)` "on
+purpose" -- but for `i=2,3,4` (`m=6,64,128` at `i/5==0`) the arithmetic
+puts `target` below `log2(m)`, landing exactly on the hazard the
+production code's comment warns about. Verified independently
+(hand-computed and via the instrumented build, `x=-0.140827,
+frac=4294967282` for `i=2`): three of the forty trials, times two sides
+(`our_calcM` and `ref_calcM`, the linked blob object), meant up to six
+multi-billion-iteration loops per test run -- more than enough to account
+for the entire measured 27-40 minutes on its own, with everything else in
+the file demonstrably free.
+
+**Fix, test-only** (`test/unit/t_v90cdesign.cpp`, CLAUDE.md: `test/` is
+not `src/`, free to change as long as verification coverage doesn't
+shrink): raised the trial formula's base offset from `1.0f` to `8.0f`,
+keeping every one of the 40 trials' `kTarget` safely above `log2(128) =
+7` (verified computationally for all 40 trials before landing, not just
+the three that were broken) while preserving the same `n = 0..8`
+integer-boundary-straddling coverage the sweep always intended. No
+`src/` change -- `calcMtoMatchKtarget`'s own unbounded-loop behavior is
+untouched and still faithfully reproduced; only the test stopped
+accidentally triggering it.
+
+**Measured effect.** `make one T=t_v90cdesign`: 1m15s total including a
+full rebuild of all 272 source files, all 9 sections PASS at unchanged
+check counts (496 in "arithmetic leaves", the section containing this
+sweep). Full `make period` (~90 binaries, complete Docker rebuild): 374
+passed, 0 failed, exit 0, in 3m42s wall-clock -- down from 27-40+ minutes
+when `t_v90cdesign` alone dominated the critical path.
+
+**Recommended follow-up, not done here**: `determineDminForRrn`'s fixture
+makes the same "kept above the hazard boundary" claim for its own two
+720-trial sweeps and should be spot-checked the same way before trusting
+it, given the identical claim was just found wrong once already for
+`run_arith`. `tools/toolchain/period_inner.sh`'s test-*execution* loop is
+still serial across all ~90 binaries even though compilation already
+parallelizes under `J` -- parallelizing execution too would let total
+wall time approach the slowest single test rather than their sum, a
+general win independent of this specific fix. (2026-09-05)

@@ -362,12 +362,28 @@ run_arith(void)
 	 * above log2(m) on purpose -- see the file header -- and the sweep
 	 * straddles the integer boundaries of the doubling loop, which is
 	 * where the split into 2^n and (2^0.01)^frac can disagree.
+	 *
+	 * The base offset is 8.0f, not the 1.0f this sweep shipped with for
+	 * a long time: with m running up to 128.0f (log2 m = 7), a base of
+	 * 1.0f let i=2,3,4 (m = 6, 64, 128 at i/5 == 0) put kTarget BELOW
+	 * log2(m), landing exactly on `calcMtoMatchKtarget`'s own documented
+	 * hazard -- x negative, its fractional part cast to `unsigned int`
+	 * wraps to roughly 4.3 billion, and the doubling loop the object
+	 * itself has no bound on runs that many times.  Measured: this is
+	 * what made t_v90cdesign take 27-40 minutes, not the 46,656-shape
+	 * sweep above it (which completes in a fraction of a second) -- up
+	 * to six such loops (our_calcM and ref_calcM, three broken trials)
+	 * per run.  8.0f keeps every trial's kTarget above log2(128) with a
+	 * full 1.0 of margin, preserving the same n = 0..8 boundary-straddle
+	 * coverage the sweep always intended, and was re-verified (a
+	 * Python model of this exact arithmetic, all 40 trials, zero
+	 * negative x) before landing.
 	 */
 	for (i = 0; i < 40; i++) {
 		static const float ms[] = { 1.0f, 2.0f, 6.0f, 64.0f, 128.0f };
 		float m = ms[i % 5];
 		float target = (float)(i / 5) * 6.0f + (float)(i % 5) * 0.37f
-			     + 1.0f;
+			     + 8.0f;
 		int g;
 		int r;
 
