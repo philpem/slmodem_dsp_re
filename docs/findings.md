@@ -115797,3 +115797,64 @@ this situation): `class1.h`'s `_idle_state_init` and
 `fax_class1_GetConstalation`, `v22_fse.h`'s and `v22ctl.h`'s tail-jump
 diagnostic stubs, and `v27fax.h`'s `GetSNRV17`-family accessor. None of
 these need any change. (2026-09-05)
+
+## F10155. F1340 IS RETRACTED: the placement-`new` null check it predicted never fires under this project's own flags
+
+The project owner pushed back on the `asm("_ZN...")` symbol-override device
+F1340 justifies -- fifty sites across `src/pump/v90/` reaching a C++
+sub-object's constructor/destructor by a hand-mangled symbol rather than
+ordinary placement `new`/an explicit destructor call -- as worse
+engineering than the null check it was written to dodge, and asked
+whether a compiler flag could suppress the check instead. Empirically
+testing the actual question (never done before F10155 -- `grep`ping
+`docs/findings.md` and the whole tree for "fcheck-new"/"check-new" at
+F1340's own time returns nothing) settles it more completely than the
+owner asked: **the check does not need to be suppressed, because nothing
+in this project's own flags was ever asking GCC to insert it.**
+
+**F1340's reasoning was general-C++-rule reasoning, not measurement, and
+the rule has a condition F1340 didn't check.** GCC only inserts the
+placement-`new` null test when `-fcheck-new` is passed OR the placement
+`operator new` is declared `throw()` (which the standard requires to be
+checked regardless of the flag). `-fcheck-new` is off by default and is
+NOT in `tools/toolchain/period.mk`'s `TC_FLAGS`. An ordinary, non-throw
+placement `operator new` -- the natural, era-appropriate way to write a
+raw-memory placement allocator, and NOT what F1340 assumed a
+`-nostdinc++` build would be forced into -- gets no check inserted at
+all, under the exact flags this project already builds with.
+
+**Verified under the real period compiler (`dsplibs-tc342`), not asserted.**
+The blob's own `VPCMXF_Create` (`tools/dis.py ref/slmodemd/dsplibs.o
+0xfcf0 0xfe90`) constructs immediately after `sysdep_malloc` with zero
+instructions between, testing the pointer only afterward. A minimal
+non-throw `operator new(size_t, void*)` plus an ordinary `new (self)
+Thing(...)` expression, compiled under `TC_FLAGS` with NO flag changes,
+reproduces that exact shape: `call sysdep_malloc` / argument setup /
+`call _ZN5ThingC1E...` with nothing between them / `test %ebx,%ebx; je`
+strictly after. Declaring the same operator `throw()` instead reproduces
+the check GCC 3.4 is documented to force (test-then-branch BEFORE the
+constructor call), confirming the mechanism precisely and that F1340's
+underlying physics (a checked placement `new` really does insert the test
+in front) was right -- what was wrong was assuming this project's own
+placement `operator new` would have to be declared that way.
+
+**Consequence for the other 49 sites.** F1340 itself already says
+`VPCMXF_Create` is the ONE site where the difference is CONTROL FLOW; the
+other 49 are "a compare and a branch that never takes" -- i.e. genuine
+placement-`new` syntax there would not just match the blob, it would
+*improve* byte identity by removing dead code the `asm()` device carries
+forward for no reason.
+
+**No change needed to `tools/toolchain/period.mk` or any build flag.**
+The fix is a source-level one: declare one shared non-throw placement
+`operator new`/`operator delete` pair (visible to every TU under
+`-nostdinc++`, so likely `tools/toolchain/period_compat.h` or an
+equivalent project-wide header) and replace each of the 50
+`asm("_ZN...")`-labeled free functions and their call sites with genuine
+`new (self) ClassName(args...)` expressions / explicit destructor calls.
+Scoped as its own Tier-2-weight workstream (`docs/codestyle.md`) rather
+than folded into the mechanical Tier-1 cleanups, since each site needs
+its own `byteident.py`/`make period` verification -- the constructors
+involved are not all as simple as the test class used to prove the
+mechanism, and CLAUDE.md's own rule applies here as everywhere: measure
+each site, don't assume they all behave like the first one. (2026-09-05)
