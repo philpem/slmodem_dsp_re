@@ -47,7 +47,7 @@
 V92P4M_OFF(state,		0x000, state);
 V92P4M_OFF(symbolCount,		0x004, symbolcount);
 V92P4M_OFF(patternIndex,	0x008, patternindex);
-V92P4M_OFF(word_0c,		0x00c, word0c);
+V92P4M_OFF(eventCode,		0x00c, word0c);
 V92P4M_OFF(pad_10,		0x010, pad10);
 V92P4M_OFF(word_18,		0x018, word18);
 V92P4M_OFF(byte_1c,		0x01c, byte1c);
@@ -1203,7 +1203,7 @@ int V92Phase4Modulator::generateSymbol()
 	short sym;
 
 	symbolCount++;
-	word_0c = 0;
+	eventCode = 0;
 
 	switch (state) {
 	case 0:
@@ -1413,7 +1413,7 @@ int V92Phase4Modulator::generateSymbol()
 			edprintf("V92Phase4Modulator: Phase4 Terminated" " @ %d\r\n", symbolCount);
 			state = V92P4M_STATE_TERMINATED;
 			symbolCount = 0;
-			word_0c = 9;
+			eventCode = 9;
 		}
 		break;
 
@@ -1571,7 +1571,7 @@ int V92Phase4Modulator::generateSymbol()
  *
  * IN THE OBJECT'S ORDER, with nothing elided:
  *
- *     word_0c = 0                 word_44 = suvLimit
+ *     eventCode = 0                 word_44 = suvLimit
  *     amplitude = amplitudeArg    byte_42 = bitsArg
  *     state = stateArg            bitsPerSymbol = bitsArg + 2
  *     symbolCount = 0
@@ -1654,7 +1654,7 @@ V92Phase4Modulator::reset(short amplitudeArg, unsigned char bitsArg,
 {
 	unsigned int i;
 
-	word_0c = 0;
+	eventCode = 0;
 	word_44 = suvLimit;
 	amplitude = amplitudeArg;
 	byte_42 = bitsArg;

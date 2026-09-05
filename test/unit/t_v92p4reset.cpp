@@ -15,7 +15,7 @@
  * ---------------------------------------------------------------------------
  * WHAT reset CLAIMS, IN THE OBJECT'S ORDER
  *
- *     word_0c = 0                 word_44 = suvLimit
+ *     eventCode = 0                 word_44 = suvLimit
  *     amplitude = amplitudeArg    byte_42 = bitsArg
  *     state = stateArg            bitsPerSymbol = bitsArg + 2
  *     symbolCount = 0
@@ -40,7 +40,7 @@
  * RUN A drives `nSymbols == 0`, so `generateSymbol` is never called and every
  * store above is measured against the object seed with no state machine on top
  * of it.  Nine of the sixteen clears are re-written by `generateSymbol` on
- * paths this class does not choose -- `word_0c` is cleared by its prologue on
+ * paths this class does not choose -- `eventCode` is cleared by its prologue on
  * every call, `symbolCount` is incremented by it, `word_1b0` and `word_1b8`
  * and `patternLength` are rewritten by six arms -- so a grid that ALWAYS ran
  * the loop would be measuring the state machine and calling it `reset`.
@@ -706,7 +706,7 @@ setup(long trial, const struct args *a, int runb)
 		 */
 		o->state = 0x7eadbee1;
 		o->symbolCount = 0x11110000u + (unsigned)trial;
-		o->word_0c = 0xdeadbeefu;
+		o->eventCode = 0xdeadbeefu;
 		o->word_18 = 0x18181818u;
 		o->byte_1c = 0x9cu;
 		o->flag_20 = 0x20202020u;

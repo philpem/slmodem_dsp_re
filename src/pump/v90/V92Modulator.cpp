@@ -65,7 +65,7 @@
  * ignored unless the sub-modulator it forwards to is in the one state that
  * member is about, so all five are safe to call at any time.  Four go to the
  * phase 3 modulator on states 4, 6, 9 and 12; `exitCPt` goes to the phase 4
- * modulator on state 0.  Every one of them clears `word_34` on the way out.
+ * modulator on state 0.  Every one of them clears `eventCode` on the way out.
  *
  * THE SUB-OBJECTS USED TO BE BUILT THROUGH asm() LABELS, on the belief
  * (finding F1340) that a user-declared placement `operator new` -- needed
@@ -131,8 +131,8 @@ V92MOD_OFF(cp,			0x20, cp);
 V92MOD_OFF(resamplerPhaseOffset,	0x24, phaseoffset);
 V92MOD_OFF(float_28,		0x28, float28);
 V92MOD_OFF(phase,		0x2c, phase);
-V92MOD_OFF(word_30,		0x30, word30);
-V92MOD_OFF(word_34,		0x34, word34);
+V92MOD_OFF(symbolCount,		0x30, word30);
+V92MOD_OFF(eventCode,		0x34, word34);
 V92MOD_OFF(resamplerPhaseChange,	0x38, phasechange);
 V92MOD_OFF(resamplerPhaseChangeAt,	0x3c, phasechangeat);
 V92MOD_OFF(params,		0x40, params);
@@ -231,8 +231,8 @@ V92Modulator::reset()
 	 * and it is this one.  Finding F8065.
 	 */
 	phase = 0;
-	word_30 = 0;
-	word_34 = 0;
+	symbolCount = 0;
+	eventCode = 0;
 	resamplerPhaseChange = V92MOD_PHASECHG_NONE;
 	blockRemaining = blockSize;
 	queue->reset();
@@ -452,7 +452,7 @@ V92Modulator::getV92TxFilterDelay() const
  * on unchanged; and the last is `phase2Info->rtd`, which `enterPhase4` passes
  * to the phase 4 modulator's `reset` in the same slot.
  *
- * `word_30` AND `word_34` ARE CLEARED AFTER THE CALL, not before, and
+ * `symbolCount` AND `eventCode` ARE CLEARED AFTER THE CALL, not before, and
  * `resamplerPhaseChange` with them -- so a phase change staged by `progress`
  * and not yet applied is dropped by entering phase 3.
  * ===========================================================================
@@ -469,8 +469,8 @@ V92Modulator::enterPhase3()
 	phase3Modulator->reset(4000, V92P3M_STATE_RU, 0, ja, dil,
 			       (unsigned int)phase2Info->rtd);
 	phase = V92MOD_PHASE_3;
-	word_30 = 0;
-	word_34 = 0;
+	symbolCount = 0;
+	eventCode = 0;
 	resamplerPhaseChange = V92MOD_PHASECHG_NONE;
 }
 
@@ -484,13 +484,13 @@ V92Modulator::enterPhase3()
  *     if (phase3Modulator->state != <code>) return;
  *     if (dsplibs_debug_level > 1) printf(<message>);
  *     phase3Modulator-><exit>();
- *     word_34 = 0;
+ *     eventCode = 0;
  *
  * The guard is READ FROM THE SUB-OBJECT, so these are requests rather than
  * commands: three of the four are safe to call in any state and do nothing.
  * The phase 3 modulator's own exit members guard again on the same code
  * (V92Phase3Modulator.h's state table), so the test is duplicated on purpose
- * -- what this layer adds is the `word_34 = 0`, which only happens when the
+ * -- what this layer adds is the `eventCode = 0`, which only happens when the
  * transition really is taken.
  *
  * FOUR SEPARATE BODIES AND NOT A HELPER.  Each is its own blob symbol at its
@@ -509,7 +509,7 @@ V92Modulator::exitJa()
 		dsplibs_debug_printf("V92Modulator: exit Ja\r\n");
 
 	phase3Modulator->exitJa();
-	word_34 = 0;
+	eventCode = 0;
 }
 
 void
@@ -522,7 +522,7 @@ V92Modulator::exitSilence()
 		dsplibs_debug_printf("V92Modulator: exit Silence\r\n");
 
 	phase3Modulator->exitSilence();
-	word_34 = 0;
+	eventCode = 0;
 }
 
 void
@@ -535,7 +535,7 @@ V92Modulator::exitSuSecond()
 		dsplibs_debug_printf("V92Modulator: exit SuSecond\r\n");
 
 	phase3Modulator->exitSuSecond();
-	word_34 = 0;
+	eventCode = 0;
 }
 
 /*
@@ -553,7 +553,7 @@ V92Modulator::exitTRN1uSecond()
 		dsplibs_debug_printf("V92Modulator: exit TRN1uSecond\r\n");
 
 	phase3Modulator->exitTRN1u();
-	word_34 = 0;
+	eventCode = 0;
 }
 
 /*
@@ -577,7 +577,7 @@ V92Modulator::exitCPt()
 		dsplibs_debug_printf("V92Modulator: exit CPt\r\n");
 
 	phase4Modulator->exitCPt();
-	word_34 = 0;
+	eventCode = 0;
 }
 
 /*
@@ -592,12 +592,12 @@ V92Modulator::exitCPt()
  *
  *     if (phase != 3) { print "... requested but NOT approved"; return -1; }
  *     print "... requested, enter Phase 4"
- *     phase = 2 ; word_30 = 0
+ *     phase = 2 ; symbolCount = 0
  *     bitsToSymbol->setSymbolsBlockSize(1)
  *     <FPE only: the modulus encoder's selector goes to 1>
  *     state = bitsToSymbol->nofBitsForNextTime() ? <signal> : <data-to-signal>
  *     phase4Modulator->reset(4000, byte_0d, state, 0, phase2Info->rtd)
- *     word_34 = 0
+ *     eventCode = 0
  *     phase4Modulator->resetBefor<RRN|FPE>()
  *     cp->byte_04 = 0
  *     cp->infoToBits()
@@ -661,7 +661,7 @@ V92Modulator::initiateRRN()
 		    "V92Modulator: RRN requested, enter Phase 4\r\n");
 
 	phase = V92MOD_PHASE_4;
-	word_30 = 0;
+	symbolCount = 0;
 	bitsToSymbol->setSymbolsBlockSize(1);
 
 	if (bitsToSymbol->nofBitsForNextTime() != 0) {
@@ -676,7 +676,7 @@ V92Modulator::initiateRRN()
 
 	phase4Modulator->reset(4000, byte_0d, (V92Phase4ModulatorState)state, 0,
 			       (unsigned int)phase2Info->rtd);
-	word_34 = 0;
+	eventCode = 0;
 	phase4Modulator->resetBeforRRN();
 	cp->byte_04 = 0;
 	cp->infoToBits();
@@ -701,7 +701,7 @@ V92Modulator::initiateFPE()
 		    "V92Modulator: FPE requested, enter Phase 4\r\n");
 
 	phase = V92MOD_PHASE_4;
-	word_30 = 0;
+	symbolCount = 0;
 	bitsToSymbol->setSymbolsBlockSize(1);
 
 	/*
@@ -727,7 +727,7 @@ V92Modulator::initiateFPE()
 
 	phase4Modulator->reset(4000, byte_0d, (V92Phase4ModulatorState)state, 0,
 			       (unsigned int)phase2Info->rtd);
-	word_34 = 0;
+	eventCode = 0;
 	phase4Modulator->resetBeforFPE();
 	cp->byte_04 = 0;
 	cp->infoToBits();
@@ -773,8 +773,8 @@ V92Modulator::enterPhase4()
 	phase4Modulator->reset(4000, byte_0c, V92P4M_RESET_STATE_ZERO, 0,
 			       (unsigned int)phase2Info->rtd);
 	phase = V92MOD_PHASE_4;
-	word_30 = 0;
-	word_34 = 0;
+	symbolCount = 0;
+	eventCode = 0;
 }
 
 /*
@@ -794,7 +794,7 @@ V92Modulator::enterPhase4()
  * level 2 exactly as the other nine are, and the visible effect of the missing
  * gate is on the key a later `cEncodeChar` caller would see.
  *
- * `word_34` GOES TO 10 AND NOT TO ZERO, the only member written that stores it
+ * `eventCode` GOES TO 10 AND NOT TO ZERO, the only member written that stores it
  * anything but zero.  What the code means belongs to `progress`.
  *
  * THE BLOCK SIZE IS RE-READ FROM THE OBJECT (`mov (%ebx),%edx`) rather than
@@ -811,8 +811,8 @@ V92Modulator::enterDataPhase()
 	edprintf("V92Modulator:enter  Data Phase:\r\n");
 
 	phase = V92MOD_PHASE_DATA;
-	word_30 = 0;
-	word_34 = 10;
+	symbolCount = 0;
+	eventCode = 10;
 	bitsToSymbol->setSymbolsBlockSize(blockSize);
 }
 
@@ -1040,7 +1040,7 @@ V92Modulator::mkResampledSignal(unsigned int &n)
  *     bits     the data-phase arm's input words, `Scrambler<int,h>::process`'s
  *              `const int *`
  *     nbits    IN for the data phase, OUT for everything else, and the one
- *              thing the caller is told besides `word_34`
+ *              thing the caller is told besides `eventCode`
  *     out      where `nSamples` floats are handed back
  *     nSamples how many of them, and the ONLY thing the symbol count is
  *              derived from
@@ -1082,7 +1082,7 @@ V92Modulator::mkResampledSignal(unsigned int &n)
  *   1  phase 3, and the arm re-tests `phase` ON EVERY SYMBOL -- the object
  *      reloads +0x2c at the top of each iteration (+0x14e3b) because the
  *      body can move it.  Each symbol latches `phase3Modulator->eventCode`
- *      into `word_34` and then acts on three of its codes:
+ *      into `eventCode` and then acts on three of its codes:
  *
  *          5  entering SuSecond      -> stage a HALF-sample phase change
  *          7  entering TRN1uSecond   -> stage the OFFSET phase change
@@ -1098,7 +1098,7 @@ V92Modulator::mkResampledSignal(unsigned int &n)
  *      same block comes from the phase 4 modulator instead -- which is what the
  *      per-symbol reload buys and why this is one loop and not two.
  *
- *   2  phase 4: symbols from the phase 4 modulator, latching its `word_0c`.
+ *   2  phase 4: symbols from the phase 4 modulator, latching its `eventCode`.
  *      Code 9 at the end of the block enters the data phase and then reports
  *      the bit count the next call has to bring; anything else reports zero.
  *
@@ -1120,7 +1120,7 @@ V92Modulator::mkResampledSignal(unsigned int &n)
  *     queue->read(out, nSamples)
  *     blockRemaining = queuePrime - queue->count() + blockSize
  *     if (phase == 3) nbits = bitsToSymbol->setSymbolsBlockSize(blockRemaining)
- *     if (queue->isEmpty() || queue->isFull()) { print; word_34 = 1; }
+ *     if (queue->isEmpty() || queue->isFull()) { print; eventCode = 1; }
  *
  * THE SECOND OCCUPANCY EXPRESSION ADDS `blockSize` AND NOT `n`, from +0x00 and
  * not from the argument (`mov (%esi),%ebx` at +0x14d79).  The two differ
@@ -1157,8 +1157,8 @@ V92Modulator::progress(int *bits, unsigned int &nbits, float *out,
 	n = (unsigned int)(nSamples * (V92MOD_RATE_NUM / V92MOD_RATE_DEN)
 			   + 0.5f);
 
-	word_34 = 0;
-	word_30 += n;
+	eventCode = 0;
+	symbolCount += n;
 
 	want = queuePrime - queue->count() + n;
 
@@ -1177,21 +1177,21 @@ V92Modulator::progress(int *bits, unsigned int &nbits, float *out,
 				buf_7c[i] = (short)
 				    phase3Modulator->generateSymbol();
 				if (phase3Modulator->eventCode != 0) {
-					word_34 = phase3Modulator->eventCode;
+					eventCode = phase3Modulator->eventCode;
 					/* entering SuSecond */
-					if (word_34 == 5) {
+					if (eventCode == 5) {
 						resamplerPhaseChange =
 						    V92MOD_PHASECHG_HALF;
 						resamplerPhaseChangeAt = i;
 					/* entering TRN1uSecond */
-					} else if (word_34 == 7) {
+					} else if (eventCode == 7) {
 						resamplerPhaseChange =
 						    V92MOD_PHASECHG_OFFSET;
 						resamplerPhaseChangeAt = i;
 					}
 				}
 				/* entering End */
-				if (word_34 == 8) {
+				if (eventCode == 8) {
 					enterPhase4();
 					if (DSPLIB_DEBUG_ON())
 						dsplibs_debug_printf(
@@ -1200,8 +1200,8 @@ V92Modulator::progress(int *bits, unsigned int &nbits, float *out,
 			} else {
 				buf_7c[i] = (short)
 				    phase4Modulator->generateSymbol();
-				if (phase4Modulator->word_0c != 0)
-					word_34 = phase4Modulator->word_0c;
+				if (phase4Modulator->eventCode != 0)
+					eventCode = phase4Modulator->eventCode;
 			}
 		}
 		nbits = 0;
@@ -1212,10 +1212,10 @@ V92Modulator::progress(int *bits, unsigned int &nbits, float *out,
 		for (i = 0; i < blockRemaining; i++) {
 			buf_7c[i] = (short)
 			    phase4Modulator->generateSymbol();
-			if (phase4Modulator->word_0c != 0)
-				word_34 = phase4Modulator->word_0c;
+			if (phase4Modulator->eventCode != 0)
+				eventCode = phase4Modulator->eventCode;
 		}
-		if (word_34 == 9) {
+		if (eventCode == 9) {
 			enterDataPhase();
 			nbits = bitsToSymbol->nofBitsForNextTime();
 		} else {
@@ -1258,6 +1258,6 @@ V92Modulator::progress(int *bits, unsigned int &nbits, float *out,
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf(
 			    "V92Modulator: Queue is Empty/Full !!!\r\n");
-		word_34 = V92MOD_STATUS_QUEUE_LIMIT;
+		eventCode = V92MOD_STATUS_QUEUE_LIMIT;
 	}
 }

@@ -640,8 +640,8 @@ dirty(int trial)
 		unsigned i;
 
 		m->phase = (unsigned int)(1 + trial % 4);
-		m->word_30 = 0xdeadbeefu;
-		m->word_34 = 0x12345678u;
+		m->symbolCount = 0xdeadbeefu;
+		m->eventCode = 0x12345678u;
 		m->resamplerPhaseChange = (unsigned int)(trial % 3);
 		m->resamplerPhaseChangeAt = (unsigned int)(trial * 3);
 		m->blockRemaining = 0xffffu;
@@ -744,10 +744,10 @@ run_enter(void)
 		build(trial);
 		M(0)->phase = phase_values[pi];
 		M(1)->phase = phase_values[pi];
-		M(0)->word_30 = 0xa5a5a5a5u;
-		M(1)->word_30 = 0xa5a5a5a5u;
-		M(0)->word_34 = 0x5a5a5a5au;
-		M(1)->word_34 = 0x5a5a5a5au;
+		M(0)->symbolCount = 0xa5a5a5a5u;
+		M(1)->symbolCount = 0xa5a5a5a5u;
+		M(0)->eventCode = 0x5a5a5a5au;
+		M(1)->eventCode = 0x5a5a5a5au;
 		M(0)->resamplerPhaseChange = V92MOD_PHASECHG_OFFSET;
 		M(1)->resamplerPhaseChange = V92MOD_PHASECHG_OFFSET;
 		/*
@@ -778,7 +778,7 @@ run_enter(void)
 			if (phase_values[pi] == V92MOD_PHASE_3) {
 				diff_eq_int("enterPhase3 did nothing at 1 "
 					    "(trial %ld)",
-					    (int)M(0)->word_34, 0x5a5a5a5a,
+					    (int)M(0)->eventCode, 0x5a5a5a5a,
 					    trial);
 				skipped3 = 1;
 			} else {
@@ -806,7 +806,7 @@ run_enter(void)
 			compare_all("after enterPhase4", trial);
 			if (phase_values[pi] == V92MOD_PHASE_4) {
 				diff_eq_int("enterPhase4 did nothing at 2 "
-					    "(trial %ld)", (int)M(0)->word_34,
+					    "(trial %ld)", (int)M(0)->eventCode,
 					    0x5a5a5a5a, trial);
 				skipped4 = 1;
 			} else {
@@ -814,10 +814,10 @@ run_enter(void)
 					    "(trial %ld)", (int)M(0)->phase,
 					    V92MOD_PHASE_4, trial);
 				diff_eq_int("and cleared the running count "
-					    "(trial %ld)", (int)M(0)->word_30, 0,
+					    "(trial %ld)", (int)M(0)->symbolCount, 0,
 					    trial);
 				diff_eq_int("and the status (trial %ld)",
-					    (int)M(0)->word_34, 0, trial);
+					    (int)M(0)->eventCode, 0, trial);
 				/*
 				 * IT PASSES `byte_0c` AND NOT `byte_0d`, which
 				 * is the ONLY thing separating this call from
@@ -855,7 +855,7 @@ run_enter(void)
 			if (phase_values[pi] == V92MOD_PHASE_DATA) {
 				diff_eq_int("enterDataPhase did nothing at 3 "
 					    "(trial %ld)",
-					    (int)M(0)->word_34, 0x5a5a5a5a,
+					    (int)M(0)->eventCode, 0x5a5a5a5a,
 					    trial);
 				skippedD = 1;
 			} else {
@@ -868,7 +868,7 @@ run_enter(void)
 						->symbolsBlockSize,
 					    (int)M(0)->blockSize, trial);
 				diff_eq_int("and left the status at ten "
-					    "(trial %ld)", (int)M(0)->word_34,
+					    "(trial %ld)", (int)M(0)->eventCode,
 					    10, trial);
 				actedD = 1;
 			}
@@ -939,8 +939,8 @@ run_exits(void)
 			int before, after;
 
 			build(trial);
-			M(0)->word_34 = 0x5a5a5a5au;
-			M(1)->word_34 = 0x5a5a5a5au;
+			M(0)->eventCode = 0x5a5a5a5au;
+			M(1)->eventCode = 0x5a5a5a5au;
 
 			if (exits[e].phase4) {
 				M(0)->phase4Modulator->state = st;
@@ -963,7 +963,7 @@ run_exits(void)
 
 			compare_all(exits[e].name, trial);
 
-			after = (int)M(0)->word_34;
+			after = (int)M(0)->eventCode;
 			if (before == exits[e].acts_on) {
 				diff_eq_int("the exit cleared the status "
 					    "(trial %ld)", after, 0, trial);
@@ -1634,8 +1634,8 @@ run_initiate(void)
 			V92Modulator *m = M(s);
 
 			m->phase = (int)phase_values[pi];
-			m->word_30 = 0xa5a5a5a5u;
-			m->word_34 = 0x5a5a5a5au;
+			m->symbolCount = 0xa5a5a5a5u;
+			m->eventCode = 0x5a5a5a5au;
 			m->byte_0c = (unsigned char)(0x11 + trial);
 			m->byte_0d = (unsigned char)(0x40 + trial);
 			m->bitsToSymbol->symbolsDone = bi ? 3u : 0u;
@@ -1677,9 +1677,9 @@ run_initiate(void)
 				    "(trial %ld)", (int)M(0)->phase,
 				    (int)phase_values[pi], trial);
 			diff_eq_int("and leaves the status alone (trial %ld)",
-				    (int)M(0)->word_34, 0x5a5a5a5a, trial);
+				    (int)M(0)->eventCode, 0x5a5a5a5a, trial);
 			diff_eq_int("and the running count (trial %ld)",
-				    (int)M(0)->word_30, (int)0xa5a5a5a5u,
+				    (int)M(0)->symbolCount, (int)0xa5a5a5a5u,
 				    trial);
 			diff_eq_int("and the encoder's selector (trial %ld)",
 				    (int)modenc_selector(0), 0x77, trial);
@@ -1700,8 +1700,8 @@ run_initiate(void)
 		diff_eq_int("and takes the phase to 4 (trial %ld)",
 			    (int)M(0)->phase, V92MOD_PHASE_4, trial);
 		diff_eq_int("and clears the running count (trial %ld)",
-			    (int)M(0)->word_30, 0, trial);
-		diff_eq_int("and the status (trial %ld)", (int)M(0)->word_34, 0,
+			    (int)M(0)->symbolCount, 0, trial);
+		diff_eq_int("and the status (trial %ld)", (int)M(0)->eventCode, 0,
 			    trial);
 		diff_eq_int("and asks for one symbol a block (trial %ld)",
 			    (int)M(0)->bitsToSymbol->symbolsBlockSize, 1, trial);
@@ -1796,7 +1796,7 @@ run_initiate(void)
  * of `phase` at .text+0x14e3b buys and what a hoisted test would lose.
  *
  * CODE 9 IS THE PHASE 4 SIDE OF THE SAME THING: `V92Phase4Modulator` writes 9
- * into its `word_0c` leaving B1u at symbol 576, `progress` latches it and the
+ * into its `eventCode` leaving B1u at symbol 576, `progress` latches it and the
  * data phase is entered at the end of the block.
  *
  * THE QUEUE'S OWN TWO LIMITS get a row each, and both are asked for with
@@ -2078,8 +2078,8 @@ run_progress(void)
 			    ? m->blockSize : 1u);
 
 			m->phase = progs[pi].phase;
-			m->word_30 = 0xa5a5a5a5u;
-			m->word_34 = 0x5a5a5a5au;
+			m->symbolCount = 0xa5a5a5a5u;
+			m->eventCode = 0x5a5a5a5au;
 			m->resamplerPhaseChange = V92MOD_PHASECHG_NONE;
 			m->resamplerPhaseChangeAt = 0u;
 			m->resamplerPhaseOffset = 0.125f;
@@ -2264,13 +2264,13 @@ run_progress(void)
 			break;
 		case 10:
 			diff_eq_int("the empty queue raised the limit status "
-				    "(trial %ld)", (int)M(0)->word_34,
+				    "(trial %ld)", (int)M(0)->eventCode,
 				    V92MOD_STATUS_QUEUE_LIMIT, trial);
 			sawLimit = 1;
 			break;
 		case 11:
 			diff_eq_int("the full queue raised it too (trial %ld)",
-				    (int)M(0)->word_34,
+				    (int)M(0)->eventCode,
 				    V92MOD_STATUS_QUEUE_LIMIT, trial);
 			sawLimit = 1;
 			break;

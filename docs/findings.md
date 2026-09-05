@@ -117139,3 +117139,131 @@ exactly (no test added or lost). `make byteident-ratchet` run alongside
 it: grade 0 EXACT still 736/1852 (39.7%), grade 0-or-1 still 796/1852
 (43.0%), `ratchet OK` -- unchanged from the floor five prior waves already
 confirmed, as expected of a pure struct-member split. (2026-09-05)
+
+## F10177. Twin-class field naming: V92Modulator/V92Phase4Modulator, three real names off their V90 siblings -- and the technique's own false-positive rate measured
+
+A new naming lever, distinct from the six field-naming waves: rather than
+deriving a role from format strings or usage inside one class, diff two
+INDEPENDENTLY-WRITTEN but closely-related "twin" classes' offset-assertion
+macros (`V90MOD_OFF`/`V92MOD_OFF`, `V90P4_OFF`/`V92P4M_OFF`, etc. -- every
+class's own specifically-named macro, not a generic `*_OFF` wildcard, which
+the first pass of this technique conflated with a NESTED sub-object's own
+macro and had to be corrected before any result could be trusted) for
+offsets where one twin already has a real name and the other still carries
+`type_NNNN`. `V90Modulator`/`V92Modulator`, `V90Phase4Modulator`/
+`V92Phase4Modulator` and ten other such pairs exist tree-wide (enumerated:
+`BitsToSymbol`, `CP`, `CPUnPck`, `Mapper`, `Modem`, `Modulator`,
+`Parameters`, `Phase2Info`, `Phase3Modulator`, `Phase4Modulator`,
+`PreFilter`, `Jd`) -- none formally related by C++ inheritance, so a
+name-offset match is rank-3 structural evidence (independently-written
+sibling classes tend to share a layout because they share an author and a
+protocol lineage), never a type guarantee.
+
+**Thirteen raw offset-overlap hits across nine diffable pairs. Filtering by
+whether the DECLARED TYPE also matches cut that to four candidates before
+any site was traced, and one of those four failed on-the-ground
+verification anyway:**
+
+- **Three applied.** `V92Modulator::symbolCount` (was `word_30`, +0x30,
+  `unsigned int`) matches `V90Modulator::symbolCount` at the same offset,
+  width and derivation ("accumulates symbols since the last phase
+  transition"); confirmed by the increment (`+= n`) and reset-site pattern
+  matching exactly, with no contradicting site found.
+  `V92Modulator::eventCode` (was `word_34`, +0x34) had rank-1-adjacent
+  evidence already sitting in this class's OWN header before this wave:
+  the `V92MOD_STATUS_QUEUE_LIMIT` comment already named the two fields it
+  copies from as "`V92Phase3Modulator::eventCode`" and (before this
+  finding) "`V92Phase4Modulator::word_0c`" -- the evidence was one file
+  away, the same "stranded" shape F10139/F10140/F10169 keep finding.
+  `V92Phase4Modulator::eventCode` (was `word_0c`, +0x0c) is the field that
+  comment names: matches `V90Phase4Modulator::eventCode` at the identical
+  offset and shape ("cleared on (almost) every state entry, set to a small
+  code... copied into the caller's own `eventCode` field"), and the actual
+  assignment site (`this->eventCode = p4->eventCode;` in
+  `V92Modulator::progress`) is a direct, typed confirmation, not inference.
+  A stale claim in this field's own header comment -- that
+  `V92Modulator::progress` was unwritten -- was corrected in the same
+  edit; that function has been fully reconstructed for some time.
+
+- **One declined, and it is the reason this technique needs the type
+  filter, not just the offset one.** `V92Phase3Modulator::word_00`
+  sits at the same +0x00 that `V90Phase3Modulator::sessionFlag`
+  occupies, both `unsigned int`, both the class's first member --
+  maximal surface similarity. Tracing the actual call site
+  (`V92Modulator::enterPhase3`, `phase3Modulator->reset(4000,
+  V92P3M_STATE_RU, 0, ja, dil, (unsigned int)phase2Info->rtd)`) shows
+  the value landing in `word_00` is `phase2Info->rtd`, the round-trip
+  delay -- not a session flag. Sitting at the twin's session-flag
+  offset is coincidence: `V90Phase3Modulator::sessionFlag` is set
+  through its own dedicated `setSessionFlag(unsigned int)` method, a
+  completely different calling convention this class's `reset` does not
+  share. No rename applied; `word_00`'s real role (something derived
+  from RTD) is a fresh, unrelated lead, not chased here.
+
+**Two more candidates surfaced but need one more piece of evidence before
+either applying or declining, left open rather than forced:**
+`V92Phase4Modulator::word_38` against `V90Phase4Modulator::pcmType`
+(`PcmType` enum vs `unsigned int` -- consistent, since an enum shares its
+backing storage with `int` on this target, but the actual observed value
+range at `word_38` has not been checked against `PcmType`'s enumerators)
+and `V92Phase4Modulator::word_44` against `V90Phase4Modulator::
+bitsToSymbol` (`V90BitsToSymbol *` vs `unsigned int` -- same width, but
+pointer vs scalar is a real kind difference; whether `word_44` is ever
+dereferenced as a `V92BitsToSymbol *` is unchecked).
+
+**Two more are structural leads, not naming candidates**, surfaced by the
+same diff: `V92Phase3Modulator::pad_44` sits where `V90Phase3Modulator::
+jdBits` (`unsigned char *`) lives, and `V92Phase4Modulator::pad_10[8]`
+sits where `V90Phase4Modulator::nextStateAfterTRN2d` (a
+`Phase4ModulatorState` enum) lives -- both `pad_NNNN` sides are unmodeled
+space, not confirmed scalars, so before either could be named the
+pad-audit's own `offsetof`/`sizeof` discipline would need to confirm the
+region's actual shape first. Left for that workstream, not renamed here.
+
+**The false-positive rate is the finding as much as the three names are.**
+Of thirteen raw hits: 3 applied, 1 traced and correctly declined, 2 left
+open pending more evidence, 2 are structural (not naming) leads, and 5
+were type mismatches rejected before any site was traced at all (`dil`/
+`byte_0c`, `sessionFlag`/`float_28`, `symbolsBlockSize`/`flag_1c`,
+`codeLevel`/`flag_3c`, `amplitude`/`word_0040` -- same offset, incompatible
+declared type, almost certainly coincidental overlap rather than the same
+field). A name-and-offset match alone would have been wrong for 6 of the
+13 (46%) candidates it raised; the type filter and the one full per-site
+trace it still required are what kept this at CLAUDE.md's own evidentiary
+bar rather than lowering it.
+
+**Propagation required the same `\t`/`\n`-escape-trap discipline F9480/
+F10134 already documented, encountered fresh**: a first attempt used
+`\bword_30\b`-style word-boundary regexes against the mutation JSON files,
+which silently matched nothing, because a JSON-escaped literal `\t`
+immediately preceding the identifier (`"\\tword_30"`) puts a word
+character (`t`) directly against the identifier's first letter with no
+regex word boundary between them. Corrected to plain substring
+replacement after confirming per-file that the target string never
+occurs as a substring of a longer, unrelated identifier. One mutation
+anchor (`v92modstate.json`, "the phase 4 arm does not latch the
+sub-modulator's status") still broke after the bulk rename, because its
+`find` string spanned a cross-class reference
+(`phase4Modulator->word_0c`) the file-scoped rename had correctly not
+touched on its first pass; caught by `anchorcheck.py`, fixed by hand.
+
+Also required precise per-file scoping throughout: `word_0c`, `word_30`
+and `word_34` are each independently reused as placeholder names in
+several UNRELATED classes tree-wide (`V90CP`, `V92CP`,
+`tagV90AdditionalCPinfo`, and `V92Phase4Modulator`'s own SEPARATE
+`word_30`/`word_34`, distinct from `V92Modulator`'s despite the identical
+spelling) -- every file touched was checked for which class's field a
+given bare identifier or `ptr->word_NN` access actually belonged to
+before any substitution, never a blind tree-wide rename.
+
+**Verification.** `make one T="t_v92modstate t_v92p4sym t_v92p4reset
+t_vpcmrunpcm t_vpcmrun t_vpcmctor"`: 48 PASS groups, 0 FAIL, including
+`VPcmFloModem::runPcmModem against the blob` at its full 155,541 checks
+and `V92Phase4Modulator::generateSymbol` at 1,267,201 checks per level --
+no check count regressed. `tools/onedef.py`, `tools/refcheck.py` and
+`tools/anchorcheck.py` (228 suites, 9,767 mutations, 0 issues after the
+one anchor fix above) all clean; `make check64` clean. Real GCC 3.4.2:
+`make period` 374 passed, 0 failed, matching the pre-existing baseline
+exactly. `make byteident-ratchet`: grade 0 EXACT still 736/1852 (39.7%),
+grade 0-or-1 still 796/1852 (43.0%), `ratchet OK` -- unchanged, as
+expected of a pure identifier substitution. (2026-09-05)

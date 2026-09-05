@@ -422,8 +422,8 @@
  },
  {
   "label": "the transmitter's status is read unsigned, so {2,3,10} reorders",
-  "find": "\tevent = (int)v92modem.modulator->word_34;",
-  "replace": "\tevent = (int)(v92modem.modulator->word_34 + 1);"
+  "find": "\tevent = (int)v92modem.modulator->eventCode;",
+  "replace": "\tevent = (int)(v92modem.modulator->eventCode + 1);"
  },
  {
   "label": "status 2 does not latch progressState",

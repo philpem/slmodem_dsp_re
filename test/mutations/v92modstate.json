@@ -45,17 +45,17 @@
  },
  {
   "label": "enterPhase3 takes the phase to 3",
-  "find": "\tphase = V92MOD_PHASE_3;\n\tword_30 = 0;",
-  "replace": "\tphase = V92MOD_PHASE_DATA;\n\tword_30 = 0;"
+  "find": "\tphase = V92MOD_PHASE_3;\n\tsymbolCount = 0;",
+  "replace": "\tphase = V92MOD_PHASE_DATA;\n\tsymbolCount = 0;"
  },
  {
   "label": "enterPhase3 leaves the pending phase change staged",
-  "find": "\tword_34 = 0;\n\tresamplerPhaseChange = V92MOD_PHASECHG_NONE;\n}",
-  "replace": "\tword_34 = 0;\n}"
+  "find": "\teventCode = 0;\n\tresamplerPhaseChange = V92MOD_PHASECHG_NONE;\n}",
+  "replace": "\teventCode = 0;\n}"
  },
  {
   "label": "enterPhase3 leaves +0x30 alone",
-  "find": "\tphase = V92MOD_PHASE_3;\n\tword_30 = 0;\n",
+  "find": "\tphase = V92MOD_PHASE_3;\n\tsymbolCount = 0;\n",
   "replace": "\tphase = V92MOD_PHASE_3;\n"
  },
  {
@@ -80,8 +80,8 @@
  },
  {
   "label": "enterDataPhase leaves the status at zero rather than ten",
-  "find": "\tword_34 = 10;\n\tbitsToSymbol->setSymbolsBlockSize(blockSize);",
-  "replace": "\tword_34 = 0;\n\tbitsToSymbol->setSymbolsBlockSize(blockSize);"
+  "find": "\teventCode = 10;\n\tbitsToSymbol->setSymbolsBlockSize(blockSize);",
+  "replace": "\teventCode = 0;\n\tbitsToSymbol->setSymbolsBlockSize(blockSize);"
  },
  {
   "label": "enterDataPhase hands on what is LEFT of the block rather than the block",
@@ -90,8 +90,8 @@
  },
  {
   "label": "enterDataPhase does not size the bit-to-symbol block at all",
-  "find": "\tword_34 = 10;\n\tbitsToSymbol->setSymbolsBlockSize(blockSize);\n",
-  "replace": "\tword_34 = 10;\n"
+  "find": "\teventCode = 10;\n\tbitsToSymbol->setSymbolsBlockSize(blockSize);\n",
+  "replace": "\teventCode = 10;\n"
  },
  {
   "label": "exitJa acts on JaEnd rather than on Ja",
@@ -105,7 +105,7 @@
  },
  {
   "label": "exitJa does not clear the status",
-  "find": "\tphase3Modulator->exitJa();\n\tword_34 = 0;",
+  "find": "\tphase3Modulator->exitJa();\n\teventCode = 0;",
   "replace": "\tphase3Modulator->exitJa();"
  },
  {
@@ -120,8 +120,8 @@
  },
  {
   "label": "exitSilence forwards to exitJa",
-  "find": "\tphase3Modulator->exitSilence();\n\tword_34 = 0;",
-  "replace": "\tphase3Modulator->exitJa();\n\tword_34 = 0;"
+  "find": "\tphase3Modulator->exitSilence();\n\teventCode = 0;",
+  "replace": "\tphase3Modulator->exitJa();\n\teventCode = 0;"
  },
  {
   "label": "exitSuSecond acts on SuSecondEnd rather than on SuSecond",
@@ -130,7 +130,7 @@
  },
  {
   "label": "exitSuSecond does not clear the status",
-  "find": "\tphase3Modulator->exitSuSecond();\n\tword_34 = 0;",
+  "find": "\tphase3Modulator->exitSuSecond();\n\teventCode = 0;",
   "replace": "\tphase3Modulator->exitSuSecond();"
  },
  {
@@ -140,8 +140,8 @@
  },
  {
   "label": "exitTRN1uSecond forwards to exitSuSecond",
-  "find": "\tphase3Modulator->exitTRN1u();\n\tword_34 = 0;",
-  "replace": "\tphase3Modulator->exitSuSecond();\n\tword_34 = 0;"
+  "find": "\tphase3Modulator->exitTRN1u();\n\teventCode = 0;",
+  "replace": "\tphase3Modulator->exitSuSecond();\n\teventCode = 0;"
  },
  {
   "label": "exitCPt guards on the PHASE 3 modulator's state",
@@ -155,7 +155,7 @@
  },
  {
   "label": "exitCPt does not clear the status",
-  "find": "\tphase4Modulator->exitCPt();\n\tword_34 = 0;",
+  "find": "\tphase4Modulator->exitCPt();\n\teventCode = 0;",
   "replace": "\tphase4Modulator->exitCPt();"
  },
  {
@@ -175,13 +175,13 @@
  },
  {
   "label": "reset leaves the phase alone",
-  "find": "\tphase = 0;\n\tword_30 = 0;",
-  "replace": "\tword_30 = 0;"
+  "find": "\tphase = 0;\n\tsymbolCount = 0;",
+  "replace": "\tsymbolCount = 0;"
  },
  {
   "label": "reset takes the phase to phase 3 rather than to zero",
-  "find": "\tphase = 0;\n\tword_30 = 0;",
-  "replace": "\tphase = V92MOD_PHASE_3;\n\tword_30 = 0;"
+  "find": "\tphase = 0;\n\tsymbolCount = 0;",
+  "replace": "\tphase = V92MOD_PHASE_3;\n\tsymbolCount = 0;"
  },
  {
   "label": "reset copies the block size the other way round",
@@ -370,8 +370,8 @@
  },
  {
   "label": "enterPhase4 leaves the running count alone",
-  "find": "\tphase = V92MOD_PHASE_4;\n\tword_30 = 0;\n\tword_34 = 0;\n}",
-  "replace": "\tphase = V92MOD_PHASE_4;\n\tword_34 = 0;\n}"
+  "find": "\tphase = V92MOD_PHASE_4;\n\tsymbolCount = 0;\n\teventCode = 0;\n}",
+  "replace": "\tphase = V92MOD_PHASE_4;\n\teventCode = 0;\n}"
  },
  {
   "label": "initiateRRN approves from any phase but the data one",
@@ -390,8 +390,8 @@
  },
  {
   "label": "initiateRRN hands the phase 4 modulator byte_0c, not byte_0d",
-  "find": "\tphase4Modulator->reset(4000, byte_0d, (V92Phase4ModulatorState)state, 0,\n\t\t\t       (unsigned int)phase2Info->rtd);\n\tword_34 = 0;\n\tphase4Modulator->resetBeforRRN();",
-  "replace": "\tphase4Modulator->reset(4000, byte_0c, (V92Phase4ModulatorState)state, 0,\n\t\t\t       (unsigned int)phase2Info->rtd);\n\tword_34 = 0;\n\tphase4Modulator->resetBeforRRN();"
+  "find": "\tphase4Modulator->reset(4000, byte_0d, (V92Phase4ModulatorState)state, 0,\n\t\t\t       (unsigned int)phase2Info->rtd);\n\teventCode = 0;\n\tphase4Modulator->resetBeforRRN();",
+  "replace": "\tphase4Modulator->reset(4000, byte_0c, (V92Phase4ModulatorState)state, 0,\n\t\t\t       (unsigned int)phase2Info->rtd);\n\teventCode = 0;\n\tphase4Modulator->resetBeforRRN();"
  },
  {
   "label": "initiateRRN calls the FPE reset -- the two bodies swapped",
@@ -450,18 +450,18 @@
  },
  {
   "label": "progress accumulates the sample count rather than the symbol count",
-  "find": "\tword_34 = 0;\n\tword_30 += n;",
-  "replace": "\tword_34 = 0;\n\tword_30 += nSamples;"
+  "find": "\teventCode = 0;\n\tsymbolCount += n;",
+  "replace": "\teventCode = 0;\n\tsymbolCount += nSamples;"
  },
  {
   "label": "progress overwrites the running count instead of adding to it",
-  "find": "\tword_30 += n;\n",
-  "replace": "\tword_30 = n;\n"
+  "find": "\tsymbolCount += n;\n",
+  "replace": "\tsymbolCount = n;\n"
  },
  {
   "label": "progress does not clear the status on entry",
-  "find": "\tword_34 = 0;\n\tword_30 += n;\n",
-  "replace": "\tword_30 += n;\n"
+  "find": "\teventCode = 0;\n\tsymbolCount += n;\n",
+  "replace": "\tsymbolCount += n;\n"
  },
  {
   "label": "the wanted block ignores what the queue already holds",
@@ -495,13 +495,13 @@
  },
  {
   "label": "the phase 3 arm latches the event code even when it is zero",
-  "find": "\t\t\t\tif (phase3Modulator->eventCode != 0) {\n\t\t\t\t\tword_34 = phase3Modulator->eventCode;",
-  "replace": "\t\t\t\t{\n\t\t\t\t\tword_34 = phase3Modulator->eventCode;"
+  "find": "\t\t\t\tif (phase3Modulator->eventCode != 0) {\n\t\t\t\t\teventCode = phase3Modulator->eventCode;",
+  "replace": "\t\t\t\t{\n\t\t\t\t\teventCode = phase3Modulator->eventCode;"
  },
  {
   "label": "the two resampler phase changes are exchanged",
-  "find": "\t\t\t\t\tif (word_34 == 5) {\n\t\t\t\t\t\tresamplerPhaseChange =\n\t\t\t\t\t\t    V92MOD_PHASECHG_HALF;",
-  "replace": "\t\t\t\t\tif (word_34 == 5) {\n\t\t\t\t\t\tresamplerPhaseChange =\n\t\t\t\t\t\t    V92MOD_PHASECHG_OFFSET;"
+  "find": "\t\t\t\t\tif (eventCode == 5) {\n\t\t\t\t\t\tresamplerPhaseChange =\n\t\t\t\t\t\t    V92MOD_PHASECHG_HALF;",
+  "replace": "\t\t\t\t\tif (eventCode == 5) {\n\t\t\t\t\t\tresamplerPhaseChange =\n\t\t\t\t\t\t    V92MOD_PHASECHG_OFFSET;"
  },
  {
   "label": "the phase change is staged at the start of the block, not at the symbol",
@@ -515,18 +515,18 @@
  },
  {
   "label": "phase 4 is entered on event code 9 rather than 8",
-  "find": "\t\t\t\tif (word_34 == 8) {\n\t\t\t\t\tenterPhase4();",
-  "replace": "\t\t\t\tif (word_34 == 9) {\n\t\t\t\t\tenterPhase4();"
+  "find": "\t\t\t\tif (eventCode == 8) {\n\t\t\t\t\tenterPhase4();",
+  "replace": "\t\t\t\tif (eventCode == 9) {\n\t\t\t\t\tenterPhase4();"
  },
  {
   "label": "the phase 4 arm does not latch the sub-modulator's status",
-  "find": "\t\t\tbuf_7c[i] = (short)\n\t\t\t    phase4Modulator->generateSymbol();\n\t\t\tif (phase4Modulator->word_0c != 0)\n\t\t\t\tword_34 = phase4Modulator->word_0c;\n\t\t}\n\t\tif (word_34 == 9) {",
-  "replace": "\t\t\tbuf_7c[i] = (short)\n\t\t\t    phase4Modulator->generateSymbol();\n\t\t}\n\t\tif (word_34 == 9) {"
+  "find": "\t\t\tbuf_7c[i] = (short)\n\t\t\t    phase4Modulator->generateSymbol();\n\t\t\tif (phase4Modulator->eventCode != 0)\n\t\t\t\teventCode = phase4Modulator->eventCode;\n\t\t}\n\t\tif (eventCode == 9) {",
+  "replace": "\t\t\tbuf_7c[i] = (short)\n\t\t\t    phase4Modulator->generateSymbol();\n\t\t}\n\t\tif (eventCode == 9) {"
  },
  {
   "label": "the data phase is entered on status 8 rather than 9",
-  "find": "\t\tif (word_34 == 9) {\n\t\t\tenterDataPhase();",
-  "replace": "\t\tif (word_34 == 8) {\n\t\t\tenterDataPhase();"
+  "find": "\t\tif (eventCode == 9) {\n\t\t\tenterDataPhase();",
+  "replace": "\t\tif (eventCode == 8) {\n\t\t\tenterDataPhase();"
  },
  {
   "label": "the data phase transition does not report the bit count back",
@@ -612,7 +612,7 @@
  },
  {
   "label": "the queue limit clears the status rather than raising it",
-  "find": "\t\tword_34 = V92MOD_STATUS_QUEUE_LIMIT;",
-  "replace": "\t\tword_34 = 0;"
+  "find": "\t\teventCode = V92MOD_STATUS_QUEUE_LIMIT;",
+  "replace": "\t\teventCode = 0;"
  }
 ]

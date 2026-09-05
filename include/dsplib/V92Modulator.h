@@ -215,14 +215,14 @@ template <class T> class Queue;
 #define V92MOD_TX_FILTER_DELAY	18
 
 /*
- * The one `word_34` code this class originates, and it is named the way the
- * phase codes are: `progress` prints "V92Modulator: Queue is Empty/Full !!!"
- * (.rodata.str1.4+0x3880) and the very next instruction stores 1
+ * The one `eventCode` code this class originates, and it is named the way
+ * the phase codes are: `progress` prints "V92Modulator: Queue is Empty/Full
+ * !!!" (.rodata.str1.4+0x3880) and the very next instruction stores 1
  * (.text+0x14dba). The author's own words for the condition.
  *
  * Every other non-zero value the field holds is copied in from a
  * sub-modulator -- `V92Phase3Modulator::eventCode` or
- * `V92Phase4Modulator::word_0c` -- so those codes belong to those classes'
+ * `V92Phase4Modulator::eventCode` -- so those codes belong to those classes'
  * alphabets and are not respelled here. `progress` compares against 5, 7, 8
  * and 9 as bare numbers for that reason, with the transition each one is
  * beside the comparison. 10 is `enterDataPhase`'s and is likewise written
@@ -274,7 +274,7 @@ public:
 
 	/**
 	 * @brief Reset the transmit graph to its idle state: rearm the
-	 *        scrambler, clear `phase`/`word_30`/`word_34`/
+	 *        scrambler, clear `phase`/`symbolCount`/`eventCode`/
 	 *        `resamplerPhaseChange`, reset and re-prime the sample queue,
 	 *        and reset the shaping filter. The constructor calls this and
 	 *        GCC inlines it (finding F1283).
@@ -466,12 +466,29 @@ public:
 	 * +0x30  Cleared by `reset`, `enterPhase3`, `enterPhase4` and
 	 * `enterDataPhase`, and added to by `progress` -- `add %edi,0x30(%esi)`
 	 * at .text+0x14c80, where %edi is the symbol count the call was asked
-	 * for. So it accumulates symbols since the last phase transition.
-	 * Nothing in the object reads it, which is why the name stays an
-	 * offset: what the count is for is not recoverable from a write-only
-	 * field.
+	 * for. So it accumulates symbols since the last phase transition,
+	 * nothing in this class's own object reads it back, and static usage
+	 * inference alone would stop there.
+	 *
+	 * Named `symbolCount` on a matched-sibling cross-check instead: this
+	 * class's own `V90Modulator` twin (`include/dsplib/V90Modulator.h`)
+	 * carries the identical accumulator, at the identical +0x30, with the
+	 * identical name and the identical derivation ("adds its symbol count
+	 * to it on entry... exactly `V90Phase3Modulator::symbolCount` and
+	 * `V90Phase4Modulator::symbolCount`, which sit in the same role").
+	 * Neither twin was formally derived from the other -- `V92Modulator`
+	 * does not inherit from `V90Modulator` -- so this is rank-3 evidence
+	 * (structural correspondence between two independently-written but
+	 * closely-related classes), not a type guarantee. It is offered here
+	 * because the role, offset, width and clearing sites all agree; a
+	 * name is not applied on offset agreement alone (see `word_34`
+	 * catching a real value directly, and `V92Phase3Modulator::word_00`
+	 * -- +0x00 in that class's own twin pair -- being checked and
+	 * declined for exactly this reason: it turns out to hold
+	 * `phase2Info->rtd`, not a session flag, despite sitting at the same
+	 * offset the twin's session flag occupies).
 	 */
-	unsigned int word_30;
+	unsigned int symbolCount;
 
 	/*
 	 * +0x34  Cleared by `reset`, by all three `enter` members, by all
@@ -479,7 +496,7 @@ public:
 	 * `enterDataPhase`.
 	 *
 	 * `progress` is what it is for. It clears the field on entry, latches
-	 * `V92Phase3Modulator::eventCode` or `V92Phase4Modulator::word_0c`
+	 * `V92Phase3Modulator::eventCode` or `V92Phase4Modulator::eventCode`
 	 * into it once per symbol, and then dispatches on its own copy: 5
 	 * and 7 stage a resampler phase change at that symbol, 8 enters
 	 * phase 4, 9 enters the data phase, and 1 is written on the way out
@@ -487,10 +504,15 @@ public:
 	 * produced here and read by the layer above.
 	 *
 	 * Only the 1 is this class's own code; see `V92MOD_STATUS_QUEUE_LIMIT`
-	 * for why the others are left as bare numbers and why the field keeps
-	 * an offset name.
+	 * for why the others are left as bare numbers. Named `eventCode` to
+	 * match `V90Modulator::eventCode` (same +0x34, same role, same
+	 * "copied in from the sub-modulator's own eventCode" shape) -- this
+	 * class's own header already named the exact source fields it copies
+	 * from (`V92Phase3Modulator::eventCode`, `V92Phase4Modulator`'s own
+	 * field, itself renamed alongside this one on the same cross-check),
+	 * it just had not carried the name across to its own destination.
 	 */
-	unsigned int word_34;
+	unsigned int eventCode;
 
 	/*
 	 * +0x38  Which resampler phase change is pending: 0, 1 or 2, and the

@@ -67,7 +67,7 @@
  *      declared, and a declared binary cannot carry a mutation suite
  *      (findings F2157 and F3002).  The cost of driving it is the whole
  *      mutation surface of this file.
- *   2. `V92Modulator::progress` WRITES `word_34`, which is dispatch 3's
+ *   2. `V92Modulator::progress` WRITES `eventCode`, which is dispatch 3's
  *      selector.  With the real transmitter running, that axis could not be
  *      swept at all -- finding F7458's failure mode exactly.
  *   3. The fan-out itself is t_v90modprog's and t_v92modem's claim, already
@@ -124,7 +124,7 @@ int ref_runPcmModem(void *self, float *in, float *out, unsigned int n,
 /*
  * NOT UNDER TEST HERE, AND CALLED AS FIXTURE.
  *
- * `V90Demodulator::enterPhase3`, which dispatch 3's `word_34 == 3` arm
+ * `V90Demodulator::enterPhase3`, which dispatch 3's `eventCode == 3` arm
  * reaches, ends by printing the Phase 2 record -- and that walks `L2`, which
  * a freshly constructed record holds as a null pointer.  The object's own way
  * of filling it is `setPhaseIIinfo`, which installs the modem's four float
@@ -186,7 +186,7 @@ typedef char vpcmrun_is_0x7f68[(sizeof(VPcmFloModem) == FLO_SIZE) ? 1 : -1];
 
 /*
  * Two more of the parameter block, and they are here for a reason that is
- * not this function's.  Dispatch 3's `word_34 == 3` arm calls
+ * not this function's.  Dispatch 3's `eventCode == 3` arm calls
  * `V90Demodulator::enterPhase3`, which reaches `V90PreFilter::selectFilter`;
  * with `PRE_FILTER_GAIN` at -1 that runs `autoSelection`, which reads the
  * Phase 2 record's `L2` array through a pointer a freshly constructed

@@ -268,23 +268,23 @@
  },
  {
   "label": "generateSymbol does not advance the symbol count",
-  "find": "\tshort sym;\n\n\tsymbolCount++;\n\tword_0c = 0;",
-  "replace": "\tshort sym;\n\n\tword_0c = 0;"
+  "find": "\tshort sym;\n\n\tsymbolCount++;\n\teventCode = 0;",
+  "replace": "\tshort sym;\n\n\teventCode = 0;"
  },
  {
   "label": "generateSymbol advances the count by two",
-  "find": "\tshort sym;\n\n\tsymbolCount++;\n\tword_0c = 0;",
-  "replace": "\tshort sym;\n\n\tsymbolCount += 2;\n\tword_0c = 0;"
+  "find": "\tshort sym;\n\n\tsymbolCount++;\n\teventCode = 0;",
+  "replace": "\tshort sym;\n\n\tsymbolCount += 2;\n\teventCode = 0;"
  },
  {
   "label": "generateSymbol does not clear the report word",
-  "find": "\tshort sym;\n\n\tsymbolCount++;\n\tword_0c = 0;",
+  "find": "\tshort sym;\n\n\tsymbolCount++;\n\teventCode = 0;",
   "replace": "\tshort sym;\n\n\tsymbolCount++;"
  },
  {
   "label": "generateSymbol advances the count after the switch rather than before",
-  "find": "\tsymbolCount++;\n\tword_0c = 0;\n\n\tswitch (state) {",
-  "replace": "\tword_0c = 0;\n\n\tswitch (state) {"
+  "find": "\tsymbolCount++;\n\teventCode = 0;\n\n\tswitch (state) {",
+  "replace": "\teventCode = 0;\n\n\tswitch (state) {"
  },
  {
   "label": "state 0 generates CPu rather than CPt",
@@ -518,13 +518,13 @@
  },
  {
   "label": "B1u does not report the termination code",
-  "find": "\t\t\tstate = V92P4M_STATE_TERMINATED;\n\t\t\tsymbolCount = 0;\n\t\t\tword_0c = 9;",
+  "find": "\t\t\tstate = V92P4M_STATE_TERMINATED;\n\t\t\tsymbolCount = 0;\n\t\t\teventCode = 9;",
   "replace": "\t\t\tstate = V92P4M_STATE_TERMINATED;\n\t\t\tsymbolCount = 0;"
  },
  {
   "label": "B1u reports 8 rather than 9",
-  "find": "\t\t\tstate = V92P4M_STATE_TERMINATED;\n\t\t\tsymbolCount = 0;\n\t\t\tword_0c = 9;",
-  "replace": "\t\t\tstate = V92P4M_STATE_TERMINATED;\n\t\t\tsymbolCount = 0;\n\t\t\tword_0c = 8;"
+  "find": "\t\t\tstate = V92P4M_STATE_TERMINATED;\n\t\t\tsymbolCount = 0;\n\t\t\teventCode = 9;",
+  "replace": "\t\t\tstate = V92P4M_STATE_TERMINATED;\n\t\t\tsymbolCount = 0;\n\t\t\teventCode = 8;"
  },
  {
   "label": "B1u terminates at 384 rather than 576",

@@ -860,7 +860,7 @@ gs_setup(int trial)
 		o->word_1c0 = (unsigned int)((ci + shi) & 1);
 		o->word_1c4 = (unsigned int)((ci + bi) & 1);
 		o->flag_20 = (unsigned int)((shi + bi) & 1);
-		o->word_0c = 0xdeadbeefu;	/* the prologue must clear it */
+		o->eventCode = 0xdeadbeefu;	/* the prologue must clear it */
 
 		o->cp = nullcp ? (V92CP *)0 : (V92CP *)gscp[s];
 		o->mappingParams = ((ci & 1) != 0)
@@ -1020,7 +1020,7 @@ run_generate_symbol(unsigned int lvl)
 		} else {
 			gs_saw_default = 1;
 		}
-		if (M(0)->word_0c != 0)
+		if (M(0)->eventCode != 0)
 			gs_saw_word0c = 1;
 
 		gs_compare_obj(trial);

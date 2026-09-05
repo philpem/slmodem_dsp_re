@@ -1349,7 +1349,7 @@ VPcmFloModem::copyMpInfoForInterface()
  *
  *   - THERE IS NO TRANSMIT HALF HERE.  `runPcmModem` runs the echo canceller,
  *     `V92Modem::progress`, the 0.4f output scaling, `updateEchoHistory` and
- *     a third dispatch on the modulator's `word_34`.  This function calls
+ *     a third dispatch on the modulator's `eventCode`.  This function calls
  *     `V90Modem::progress` and nothing else: it takes `float *in` and no
  *     `out`, and the mangling says so (`PfjPiS1_` against `PfS0_jPiS1_S1_S1_`).
  *   - THERE IS NO `info0Layout` MASTER GATE.  `runPcmModem` returns dispatch
@@ -1927,7 +1927,7 @@ VPcmFloModem::v90RunDemodulator(float *in, unsigned int n, int *rxbits,
  *      the demodulator telling the layer above what it just saw on the line,
  *      and each arm is what the transmitter and the V.34 shell have to do
  *      about it.
- *   3. `v92modem.modulator->word_34` over {2, 3, 10}, a compare chain rather
+ *   3. `v92modem.modulator->eventCode` over {2, 3, 10}, a compare chain rather
  *      than a table, AFTER the transmit block has been produced.
  *
  * `info0Layout` IS THE MASTER GATE.  `mov 0x6120(%esi); test; je` at 0xe470
@@ -1942,7 +1942,7 @@ VPcmFloModem::v90RunDemodulator(float *in, unsigned int n, int *rxbits,
  * stores it and nowhere else.
  *
  * THE COMPARE AT 0xe65b IS SIGNED (`cmp $0x3; je; jg`), which is why dispatch
- * 3 goes through an `int` local.  `V92Modulator::word_34` is declared
+ * 3 goes through an `int` local.  `V92Modulator::eventCode` is declared
  * `unsigned int` and an unsigned switch over {2, 3, 10} compiles to `ja`, not
  * `jg`; that is CLAUDE.md's forced column, and the local states the reading
  * this site makes without moving a declaration eleven other files share.
@@ -2331,7 +2331,7 @@ VPcmFloModem::runPcmModem(float *in, float *out, unsigned int n, int *rxbits,
 
 	echoCanceller.updateEchoHistory(out, n);
 
-	event = (int)v92modem.modulator->word_34;
+	event = (int)v92modem.modulator->eventCode;
 	switch (event) {
 	/*
 	 * 0xe672.  The transmitter has started sending, so the canceller can

@@ -389,7 +389,7 @@ public:
 
 	/**
 	 * @brief The phase 4 upstream state machine itself: advance
-	 *        `symbolCount`, clear `word_0c`, dispatch on `state` through
+	 *        `symbolCount`, clear `eventCode`, dispatch on `state` through
 	 *        a thirty-entry jump table (four slots -- 7, 14, 21, 22 --
 	 *        are the table's holes and are not real states), and
 	 *        generate that segment's symbol, taking any transition the
@@ -553,29 +553,36 @@ public:
 	unsigned int patternIndex;
 
 	/*
-	 * +0x0c  The one thing this class reports back per symbol, and its
-	 * shape is established while its meaning is not (finding F4822).
+	 * +0x0c  The one thing this class reports back per symbol.
 	 *
 	 * `generateSymbol` clears it before the switch, on every call and
 	 * whatever the state; exactly one arm then writes it, the value 9,
 	 * beside the message "Phase4 Terminated @ %d". `reset` clears it
 	 * too. `V92Modulator::progress` is the reader and it latches rather
-	 * than consumes -- `sym = p4->generateSymbol(); ...; if (p4->word_0c)
-	 * this->word_34 = p4->word_0c;` at .text+0x14e2b and +0x14f12 -- and
-	 * then tests its own copy against 9. `V92Phase3Modulator` is read
-	 * the same way at its own +0x14.
+	 * than consumes -- `sym = p4->generateSymbol(); ...; if (p4->eventCode)
+	 * this->eventCode = p4->eventCode;` at .text+0x14e2b and +0x14f12 --
+	 * and then tests its own copy against 9 to decide `enterDataPhase`.
+	 * `V92Phase3Modulator` is read the same way at its own +0x14.
 	 *
-	 * So: a code, zero meaning "nothing happened this symbol", set once
-	 * and read by the layer above. What the code 9 means to that layer
-	 * is `V92Modulator::progress`'s business and that function is
-	 * unwritten, so the field keeps an offset name.
+	 * Named `eventCode` on a matched-sibling cross-check: this class's
+	 * own `V90Phase4Modulator` twin carries the identical field at the
+	 * identical +0x0c, with the identical shape -- "cleared on (almost)
+	 * every state entry, set to a small code... and copied into the
+	 * caller's own `eventCode` field" -- and `V92Modulator::eventCode`'s
+	 * own header already named this exact field (`V92Phase4Modulator`'s
+	 * +0x0c) as one of the two sources it copies from, so the name was
+	 * sitting one file away rather than missing (finding F4822 first
+	 * established the shape; this applies the name once the cross-file
+	 * evidence closed it). What the code 9 means to `V92Modulator::
+	 * progress` is that function's own business, fully reconstructed and
+	 * cited above -- the earlier note that it was unwritten was stale.
 	 */
-	unsigned int word_0c;
+	unsigned int eventCode;
 
 	/*
 	 * +0x10 .. +0x17  Not touched by anything written here.
 	 *
-	 * NOT removable under the pad-removal workstream (F10150): `word_0c`
+	 * NOT removable under the pad-removal workstream (F10150): `eventCode`
 	 * ends at +0x10, already 4-byte aligned, and `word_18` below needs
 	 * only that same 4-byte alignment -- a field-to-field gap here would
 	 * be 0 bytes, not 8, if the member vanished. The compiler's own

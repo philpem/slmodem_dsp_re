@@ -4,8 +4,8 @@
   "why": "Every entry below is a claim the 290 bytes at .text+0x19030 make, read at one sitting with t_v92p4reset.cpp. THE SEVENTEEN CLEARS ARE COUNTED LIKE THIS: sixteen stores of a zero are visible in the disassembly -- +0x0c, +0x04, +0x78, +0x1c0, the CALLER'S +0x110, +0x1c4, +0x28, +0x3c, +0x2c, +0x30, +0x34, +0x18, +0x1c (a `movb`, not a `movl`), +0x20, the caller's +0x000 (also a `movb`) and +0x1bc -- and the seventeenth claim of the same kind is `Scrambler<h,h>::reset`'s ARGUMENT, which is a zero passed rather than a zero stored. Anyone recounting and getting sixteen has counted the stores; anyone getting eighteen has counted `cp->bitsPerSymbol = 1`, which is not a clear and has entries of its own. THREE CLAIMS ARE BEHIND SOMETHING THE OBJECT COMPARE CANNOT SEE, because two sides that both failed the same way agree perfectly: `pattern` is checked against the side's OWN `cp->bits`, `patternLength` against its own `cp->vectorLen`, and `state` against the argument fed in -- absolute checks, not differential ones. WHAT NO ENTRY HERE REACHES: the ORDER of the fourteen clears among themselves, which write disjoint fields and admit no observable between any two permutations; the choice of `mov` widths at +0x40 and +0x44, which no input can separate from the values they carry; and everything inside `generateSymbol`, which t_v92p4sym.cpp's own set of 134 covers and which this set only ever reaches through a loop of at most four calls."
  },
  {
-  "label": "reset does not clear the report word at +0x0c",
-  "find": "\tword_0c = 0;\n\tword_44 = suvLimit;",
+  "label": "reset does not clear eventCode",
+  "find": "\teventCode = 0;\n\tword_44 = suvLimit;",
   "replace": "\tword_44 = suvLimit;"
  },
  {

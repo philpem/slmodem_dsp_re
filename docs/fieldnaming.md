@@ -1456,3 +1456,33 @@ that splits a three-element array into three scalar members. This is the
 first wave in this phase to get both the real period compiler and the
 real ratchet run inside the same sandbox that did the naming work, rather
 than leaving both for the parent's gate.
+
+## New technique: twin-class offset diffing (F10177)
+
+A seventh lever, distinct from the six waves above: diff two
+INDEPENDENTLY-WRITTEN "twin" classes' own offset-assertion macros (e.g.
+`V90Modulator`/`V92Modulator`) for offsets where one twin has a real name
+and the other still carries `type_NNNN`. Twelve such pairs exist tree-wide
+(`BitsToSymbol`, `CP`, `CPUnPck`, `Mapper`, `Modem`, `Modulator`,
+`Parameters`, `Phase2Info`, `Phase3Modulator`, `Phase4Modulator`,
+`PreFilter`, `Jd`) -- none related by C++ inheritance, so an offset match
+is rank-3 structural evidence, never a type guarantee, and the type must
+also match before a site is even traced.
+
+**Measured false-positive rate: 6 of 13 raw hits (46%) would have been
+wrong on offset-and-name-match alone.** Three real names landed
+(`V92Modulator::symbolCount`/`eventCode`, `V92Phase4Modulator::eventCode`);
+one candidate with matching offset AND matching type
+(`V92Phase3Modulator::word_00` against `V90Phase3Modulator::sessionFlag`,
+both `unsigned int`, both the class's first member) traced to a
+completely different quantity (`phase2Info->rtd`) once the actual call
+site was checked, and five more failed on declared-type mismatch before
+any trace was needed. Full derivation, the two open leads
+(`word_38`/`pcmType`, `word_44`/`bitsToSymbol`) and the two structural
+leads for the pad-audit (`V92Phase3Modulator::pad_44`,
+`V92Phase4Modulator::pad_10[8]`) are in finding F10177.
+
+**The lesson for the next use of this technique**: offset agreement is
+the weakest of the three checks (offset, type, then the actual site), not
+the strongest, and skipping straight to a rename off the first two would
+have landed a wrong name in this very pass.
