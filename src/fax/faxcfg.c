@@ -34,12 +34,12 @@
  * would leave behind.
  */
 const struct faxvmi_cfg FAXVMI_CFG = {
-	0,		/* +0x00 */
+	0,		/* +0x00  mode                                       */
 	0,		/* +0x02 */
-	0,		/* +0x04 */
-	128,		/* +0x08 */
-	50,		/* +0x0a */
-	128,		/* +0x0c */
+	0,		/* +0x04  reverse                                    */
+	128,		/* +0x08  fifo_size                                  */
+	50,		/* +0x0a  max_frame                                  */
+	128,		/* +0x0c  frame_size                                 */
 	0,		/* +0x0e  slot                                       */
 	0,		/* +0x10  modem_cfg                                  */
 	0		/* +0x14                                             */
@@ -54,9 +54,9 @@ struct v17rx_cfg V17RX_CFG = {
 	0,		/* +0x0c */
 	0,		/* +0x10 */
 	0,		/* +0x14 */
-	0,		/* +0x18 */
-	0,		/* +0x1c */
-	0,		/* +0x20 */
+	0,		/* +0x18  coefsave0                                  */
+	0,		/* +0x1c  coefsave1                                  */
+	0,		/* +0x20  ratesave                                   */
 	0		/* +0x24 */
 };
 

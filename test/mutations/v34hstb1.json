@@ -1,25 +1,25 @@
 [
  {
   "label": "the loop runs its body once rather than while the test holds",
-  "find": "\twhile (obj->txq.count < obj->short_2aa0) {\n\t\tswitch ((int)hs_get(obj, HS_TXSTATE)) {",
-  "replace": "\tif (obj->txq.count < obj->short_2aa0) {\n\t\tswitch ((int)hs_get(obj, HS_TXSTATE)) {"
+  "find": "\twhile (obj->txq.count < obj->tx_fill_target) {\n\t\tswitch ((int)hs_get(obj, HS_TXSTATE)) {",
+  "replace": "\tif (obj->txq.count < obj->tx_fill_target) {\n\t\tswitch ((int)hs_get(obj, HS_TXSTATE)) {"
  },
  {
   "label": "the entry guard admits a cursor equal to the limit",
-  "find": "\twhile (obj->txq.count < obj->short_2aa0) {",
-  "replace": "\twhile (obj->txq.count <= obj->short_2aa0) {"
+  "find": "\twhile (obj->txq.count < obj->tx_fill_target) {",
+  "replace": "\twhile (obj->txq.count <= obj->tx_fill_target) {"
  },
  {
   "label": "the entry guard is the wrong way round",
-  "find": "\twhile (obj->txq.count < obj->short_2aa0) {",
-  "replace": "\twhile (obj->txq.count > obj->short_2aa0) {"
+  "find": "\twhile (obj->txq.count < obj->tx_fill_target) {",
+  "replace": "\twhile (obj->txq.count > obj->tx_fill_target) {"
  },
  {
   "label": "the limit is read once rather than every pass",
-  "find": "\twhile (obj->txq.count < obj->short_2aa0) {\n\t\tswitch ((int)hs_get(obj, HS_TXSTATE)) {",
-  "replace": "\tshort t3m_lim = obj->short_2aa0;\n\twhile (obj->txq.count < t3m_lim) {\n\t\tswitch ((int)hs_get(obj, HS_TXSTATE)) {",
+  "find": "\twhile (obj->txq.count < obj->tx_fill_target) {\n\t\tswitch ((int)hs_get(obj, HS_TXSTATE)) {",
+  "replace": "\tshort t3m_lim = obj->tx_fill_target;\n\twhile (obj->txq.count < t3m_lim) {\n\t\tswitch ((int)hs_get(obj, HS_TXSTATE)) {",
   "equivalent": true,
-  "why": "0x62925 loads the limit into %dx before the loop and every rejoin block reloads it -- 0x629cf, 0x62d70, 0x63948, 0x640a1 and 0x64326 are all `movzwl 0x2aa0(reg),%edx` -- so the object re-reads it every pass and finding F710 says so. It cannot be OBSERVED to, because NOTHING WRITES +0x2aa0 while the loop is running: the five references in the loop's whole span 0x62950..0x64518 are those five reads, v34hstx1.cpp never assigns short_2aa0, and the only write in src/ is v34handshakinit's `= 6` during bring-up. A cached limit and a re-read limit are therefore the same value on every pass. Recorded equivalent rather than left uncaught, and the `while` keeps the object's form. Finding F714."
+  "why": "0x62925 loads the limit into %dx before the loop and every rejoin block reloads it -- 0x629cf, 0x62d70, 0x63948, 0x640a1 and 0x64326 are all `movzwl 0x2aa0(reg),%edx` -- so the object re-reads it every pass and finding F710 says so. It cannot be OBSERVED to, because NOTHING WRITES +0x2aa0 while the loop is running: the five references in the loop's whole span 0x62950..0x64518 are those five reads, v34hstx1.cpp never assigns tx_fill_target, and the only write in src/ is v34handshakinit's `= 6` during bring-up. A cached limit and a re-read limit are therefore the same value on every pass. Recorded equivalent rather than left uncaught, and the `while` keeps the object's form. Finding F714."
  },
  {
   "label": "68 J1TXMIT dispatches to a different arm",
@@ -39,8 +39,8 @@
  },
  {
   "label": "the transmit state is read once, outside the loop",
-  "find": "\twhile (obj->txq.count < obj->short_2aa0) {\n\t\tswitch ((int)hs_get(obj, HS_TXSTATE)) {",
-  "replace": "\tshort t3m_tx0 = hs_get(obj, HS_TXSTATE);\n\twhile (obj->txq.count < obj->short_2aa0) {\n\t\tswitch ((int)t3m_tx0) {",
+  "find": "\twhile (obj->txq.count < obj->tx_fill_target) {\n\t\tswitch ((int)hs_get(obj, HS_TXSTATE)) {",
+  "replace": "\tshort t3m_tx0 = hs_get(obj, HS_TXSTATE);\n\twhile (obj->txq.count < obj->tx_fill_target) {\n\t\tswitch ((int)t3m_tx0) {",
   "why": "0x62957 re-reads +0x3596 at the top of every pass, and several arms move the transmit machine, so a state hoisted out of the loop dispatches the second pass to the arm the first pass left behind."
  },
  {

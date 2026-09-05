@@ -356,7 +356,7 @@ ep_slot(int ep)
 /* --- the alarm ------------------------------------------------------------ */
 
 /*
- * `datapumpv34`'s handshake loop is `while (txq.count < short_2aa0 || rxq.count >
+ * `datapumpv34`'s handshake loop is `while (txq.count < tx_fill_target || rxq.count >
  * 5) v34handshak(obj)`, and `v34handshak`'s own default arm inside the
  * per-sample loop is the loop bottom (finding F287, D59), so neither is
  * guaranteed to terminate.  Outside `v34hs_step` this file has to arm its own

@@ -509,8 +509,8 @@ const short FAX_HP_COEFF[10] = {
  * `struct v21tx_cfg`/`struct v21rx_cfg` modem configs underneath are their
  * own templates (`V21TX_CFG`/`V21RX_CFG`, `v21cfg.h`), COPIED VERBATIM --
  * unlike the wrapping `faxvmi_cfg`, which the object overrides six of its
- * eight fields on (`short_0000`, `int_0004`, `short_0008`, `short_000a`,
- * `short_000c`, `slot`; `modem_cfg` gets the real pointer; `ptr_0014` alone
+ * eight fields on (`mode`, `reverse`, `fifo_size`, `max_frame`,
+ * `frame_size`, `slot`; `modem_cfg` gets the real pointer; `ptr_0014` alone
  * survives from `FAXVMI_CFG`'s own template, untouched).  Neither malloc's
  * result is NULL-checked before use except `vmi_c_cfg`/`vmi_a_cfg` themselves,
  * immediately before their own `FAXVMI_create` call -- the object's own
@@ -565,11 +565,11 @@ fax_class1_create(struct fax_class1 *existing, const struct fax_class1_cfg *cfg)
 		tx_cfg = sysdep_malloc(sizeof(struct v21tx_cfg));
 		*tx_cfg = V21TX_CFG;
 		*vc = FAXVMI_CFG;
-		vc->short_0000 = 2;
-		vc->int_0004 = 1;
-		vc->short_0008 = 0x60;
-		vc->short_000a = 0x34;
-		vc->short_000c = 0;
+		vc->mode = 2;
+		vc->reverse = 1;
+		vc->fifo_size = 0x60;
+		vc->max_frame = 0x34;
+		vc->frame_size = 0;
 		vc->slot = VMI_SLOT_V21TX;
 		vc->modem_cfg = tx_cfg;
 		if (ctx->vmi_c_cfg != NULL)
@@ -580,11 +580,11 @@ fax_class1_create(struct fax_class1 *existing, const struct fax_class1_cfg *cfg)
 		rx_cfg = sysdep_malloc(sizeof(struct v21rx_cfg));
 		*rx_cfg = V21RX_CFG;
 		*vc = FAXVMI_CFG;
-		vc->short_0000 = 2;
-		vc->int_0004 = 1;
-		vc->short_0008 = 0;
-		vc->short_000a = 0x60;
-		vc->short_000c = 0x60;
+		vc->mode = 2;
+		vc->reverse = 1;
+		vc->fifo_size = 0;
+		vc->max_frame = 0x60;
+		vc->frame_size = 0x60;
 		vc->slot = VMI_SLOT_V21RX;
 		vc->modem_cfg = rx_cfg;
 		if (ctx->vmi_a_cfg != NULL)

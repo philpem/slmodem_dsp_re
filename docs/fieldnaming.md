@@ -760,3 +760,135 @@ no preceding field for alignment to react to (`v34recv.h`/`v34shell.h`'s
 `pad_000`, `v29data.h`'s `pad_00`). The pad-region-removal workstream is
 therefore exhausted as scoped: every candidate has been checked, and
 nothing provably-safe remains unremoved.
+
+## Wave 6 — fax/V8/v34fsk cluster
+
+Launched 2026-09-05, one of several parallel wave-6 clusters (each covering
+disjoint files; this one covers the brief's assigned fax/V.8/v34fsk/fdspkrnl
+set). Scope: `src/fax/v17.c`, `include/dsplib/v17fax.h`,
+`include/dsplib/faxcfg.h`, `include/dsplib/v34fsk.h`,
+`include/dsplib/fdspkrnl.h`, `include/dsplib/v8.h`, `src/v8/{v8hsrx,v8util,
+v8jm,v8handshak,v8hs}.c`, `include/dsplib/class1.h`, `src/service/cid.c`,
+`include/dsplib/cid_modem.h`, `src/fax/class1tx.c`. Worked as four
+sub-clusters given the scope's size and the risk of two agents touching a
+shared struct at once (`class1tx.c` references structs defined in three of
+this wave's OTHER files): a v17fax/faxcfg agent and a V.8 agent in
+parallel, followed by a cid/class1 pass and a v34fsk/fdspkrnl pass done
+directly, once the first two confirmed which structs each nominal file's
+"surprise" `type_NNNN`/bare-`f` hits actually belonged to.
+
+**A scope trap found before any edit, worth recording for the next wave
+that sees a similar file list.** `class1tx.c`'s own fresh grep showed 16
+`type_NNNN`-family hits, not mentioned in the brief's count breakdown at
+all. Checking each hit's OWNING STRUCT (`grep -rn "struct WHATEVER {"`
+rather than assuming the file's own struct) found most belong to
+`struct v21rx_ctl`/`v21tx_ctl` (`v21fax.h`) and `struct faxvmi_ctl`
+(`faxvmi.h`) -- both OUT OF this wave's file list, presumably another
+wave-6 cluster's or nobody's -- and were correctly left untouched; only the
+subset belonging to `struct faxvmi_cfg`/`v17rx_cfg` (both in `faxcfg.h`,
+IN scope) were fair game, handled by the v17fax/faxcfg agent's own
+propagation. The general form: a file's own bare-`f`/`type_NNNN` count
+includes every struct it merely USES, not just the ones it DEFINES, and
+only the defining file's owner may rename.
+
+**v17fax/faxcfg cluster (F10169):** 8 real renames, all in `faxcfg.h`'s own
+`struct faxvmi_cfg` (5 fields) and `struct v17rx_cfg` (3 fields) --
+evidence that was already written down elsewhere in the tree (`faxvmi.h`'s
+own cross-reference comment, `v17.c`'s own `V17RX_create` header comment)
+and had simply never been carried over to this struct's own declaration,
+the same "evidence stranded in one file" shape F10139/F10140 named for a
+V.90 class pair. `v17fax.h` itself needed no changes this wave -- every
+lead chased (`v17tx_cfg::int_0018`/`int_001c`, `v17_status`'s remaining
+fields) dead-ended at an already-neutral target or a genuinely
+non-established role, re-confirmed rather than overturned.
+
+**V.8 cluster, second pass (F10170):** zero new real names -- every
+candidate had already been investigated and declined by wave 2's F10135 --
+but real hygiene: 6 write-only `struct v8` fields promoted bare `fNNNN` to
+shaped `type_NNNN` (partial progress, per CLAUDE.md's four-state ledger),
+and 10 stale comment mentions of fields wave 2 HAD already renamed in the
+struct, whose surrounding prose never caught up, fixed to the current
+names (one propagation hit landing in `src/v8/v8seq.c`, outside the
+nominal six files).
+
+**v34fsk.h/fdspkrnl.h (F10171):** two real names in `v34fsk.h`
+(`tx_fill_target`, usage inference unanimous across every reader/writer;
+`far_echo_alpha`, rank 1 -- the object's own debug-string tag pairs it
+with the already-named `echo_alpha` as "FE" against "NE"), the rest of the
+header re-confirmed as already exhaustively derived by prior sessions'
+deep V.34-handshake work (findings up to F635, down to bit level).
+`fdspkrnl.h` re-confirmed fully exhausted from wave 4 (F10143) with one
+new piece of direct corroborating evidence: `tools/dis.py` against the
+blob's own `TONE_create` confirms its trailing config fields move only as
+one `rep movsl` bulk copy, never field-by-field.
+
+**cid_modem.h/cid.c and class1.h/class1tx.c (F10172):** two real names in
+`struct cid_modem` (`cid_val`, matching the constructor argument it mirrors;
+`samples_fill`, matching an already-written-down-but-unapplied derivation),
+`struct cid`'s own `f02c` correctly left untouched as out-of-cluster-scope.
+`struct fax_class1`'s four remaining bare fields (`f1230`/`f1234`/`f127c`/
+`f12d4`) all re-confirmed rather than re-derived -- three already declined
+by wave 2's F10133, the fourth's existing "propagates to three different
+per-modulation offsets" derivation checked against this wave's own
+F10169 struct renames for a possible single-field resolution and found not
+to close.
+
+### Numbers
+
+Fresh grep, combined across all eleven files in this wave's scope:
+`type_NNNN` 69 -> 70 (net +1: the V.8 cluster's six bare-to-typed
+promotions outweigh the eight `faxcfg.h` fields promoted OUT of
+`type_NNNN` into real names), bare `fNNNN` 25 -> 4 live (`f1230`/`f1234`/
+`f127c`/`f12d4` in `struct fax_class1`, deliberately re-confirmed and left;
+every other post-edit grep hit -- `feed`/`face` dictionary-word false
+positives, `fa48`/`f264` inside prose explicitly narrating a rename's own
+history, `f02c` belonging to a struct outside this wave's scope -- is not
+a live field). Real names landed this wave: 12 (5 `faxvmi_cfg` + 3
+`v17rx_cfg` + 2 `v34fsk.h` + 2 `cid_modem.h`). Bare-to-typed promotions:
+6 (`struct v8`). Confirmed-exhausted-on-re-check, no change: 17
+`v34fsk.h` fields, 18 `fdspkrnl.h` fields, 4 `struct fax_class1` fields,
+several `v17fax.h`/`faxcfg.h` fields chased on a specific lead and
+dead-ended.
+
+### Verification
+
+`make one` across every touched suite (v17/faxcfg: `t_faxcfg`,
+`t_class1txvmi`, `t_class1txcplinit`, `t_class1inittx`, `t_class1initrx`,
+`t_v17rxcreate`; V.8: `t_v8direct`, `t_v8dp`, `t_v8hs`, `t_v8jm`, `t_v8sig`,
+`t_v8util`; v34fsk: `t_v34rx`, `t_v34hstx1`, `t_v34hstb1`, `t_v34datapump`,
+`t_v34hst3core`, `t_v34hst3mid`, `t_v34call`, `t_v34fsk`; cid/class1:
+`t_cidsvc`, `t_cidprog`, `t_cid`, `t_cidleaves`, `t_cid_fsd`, `t_cid_mtd`,
+`t_rxcid`, and the whole `t_class1*` family) — 224 PASS groups total across
+the two combined runs, 0 FAIL, exit 0 both times, no check count regressed
+against the pre-wave baseline. `tools/onedef.py` (301 types, 1 known
+duplicate), `tools/refcheck.py` (13521 references, 0 dangling) and
+`tools/anchorcheck.py` (228 suites, 9767 mutations, 0 anomalies) all clean
+throughout — re-run after every sub-cluster landed, not just once at the
+end. `make check64`: 64-bit clean, both configurations.
+
+Docker and the `dsplibs-tc342` image were both available in this wave's
+sandbox (unlike every prior wave in this ledger) — `make period J=$(nproc)`
+and `make byteident-ratchet` were run for real against the fully merged
+wave-6 tree rather than left for the parent's gate.
+
+**`make period J=$(nproc)` under `dsplibs-tc342` (real GCC 3.4.2): 374
+passed, 0 failed** — the identical count to every prior wave's own gate,
+confirming this wave added zero new period-tier tests (expected: a pure
+rename touches no test count) and regressed none. **`make byteident-ratchet`:
+736/1852 EXACT (39.7%), 796/1852 grade 0-or-1 (43.0%), ratchet OK** —
+bit-for-bit the same floor five prior waves already established, across
+twelve more real field renames and six more bare-to-typed promotions. This
+is the sixth wave running to confirm "a pure rename cannot move codegen"
+empirically rather than only by argument. (One operational note for the
+next wave: `make byteident-ratchet`'s own `tc` prerequisite does not
+inherit `make period`'s `J=$(nproc)` unless passed explicitly — its default
+`J` is `nproc/2` rounded down, which is 1 on a 3-core box and turns a
+few-minute parallel compile into a much longer serial one. Pass
+`J=$(nproc)` on this target too.)
+
+Combined with `make check64` (64-bit clean, both configurations),
+`tools/onedef.py`, `tools/refcheck.py` and `tools/anchorcheck.py` all
+clean, this wave's ~18 real renames and 6 bare-to-typed promotions are
+fully gated exactly as CLAUDE.md requires: not left for the parent session
+this time, because the sandbox happened to have docker and the toolchain
+image already built.

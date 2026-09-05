@@ -9402,7 +9402,7 @@ v34handshak(void *vobj)
 	 * `$(CXXOBJ64)` and this file already calls `V34SetINFO1aBits`.
 	 * Finding F711.
 	 */
-	while (obj->txq.count < obj->short_2aa0) {
+	while (obj->txq.count < obj->tx_fill_target) {
 		switch ((int)hs_get(obj, HS_TXSTATE)) {
 		case V34HS_SILENCE:		/* 5  0x640b4, three tails */
 		case V34HS_SILENCEINFO:		/* 54 */
@@ -9976,12 +9976,12 @@ datapumpv34(void *objp)
 	 * drive this branch only with the loop already satisfied.
 	 */
 	if ((unsigned)t3c_geti(obj, DP_MODE) > 1u) {
-		while (obj->txq.count < obj->short_2aa0 || obj->rxq.count > 5)
+		while (obj->txq.count < obj->tx_fill_target || obj->rxq.count > 5)
 			v34handshak(obj);
 		return;
 	}
 
-	while (obj->txq.count < obj->short_2aa0)
+	while (obj->txq.count < obj->tx_fill_target)
 		modulatevector(obj);
 
 	while (obj->rxq.count > 5) {

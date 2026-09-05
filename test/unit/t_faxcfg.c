@@ -130,18 +130,18 @@ test_shape(void)
 		    (long)sizeof(struct v29rx_cfg), 24, 0);
 
 	/* Every offset the object's instructions name, by hand. */
-	diff_eq_int("faxvmi_cfg.short_0000 at %ld",
-		    (long)offsetof(struct faxvmi_cfg, short_0000), 0x00, 0);
+	diff_eq_int("faxvmi_cfg.mode at %ld",
+		    (long)offsetof(struct faxvmi_cfg, mode), 0x00, 0);
 	diff_eq_int("faxvmi_cfg.short_0002 at %ld",
 		    (long)offsetof(struct faxvmi_cfg, short_0002), 0x02, 0);
-	diff_eq_int("faxvmi_cfg.int_0004 at %ld",
-		    (long)offsetof(struct faxvmi_cfg, int_0004), 0x04, 0);
-	diff_eq_int("faxvmi_cfg.short_0008 at %ld",
-		    (long)offsetof(struct faxvmi_cfg, short_0008), 0x08, 0);
-	diff_eq_int("faxvmi_cfg.short_000a at %ld",
-		    (long)offsetof(struct faxvmi_cfg, short_000a), 0x0a, 0);
-	diff_eq_int("faxvmi_cfg.short_000c at %ld",
-		    (long)offsetof(struct faxvmi_cfg, short_000c), 0x0c, 0);
+	diff_eq_int("faxvmi_cfg.reverse at %ld",
+		    (long)offsetof(struct faxvmi_cfg, reverse), 0x04, 0);
+	diff_eq_int("faxvmi_cfg.fifo_size at %ld",
+		    (long)offsetof(struct faxvmi_cfg, fifo_size), 0x08, 0);
+	diff_eq_int("faxvmi_cfg.max_frame at %ld",
+		    (long)offsetof(struct faxvmi_cfg, max_frame), 0x0a, 0);
+	diff_eq_int("faxvmi_cfg.frame_size at %ld",
+		    (long)offsetof(struct faxvmi_cfg, frame_size), 0x0c, 0);
 	diff_eq_int("faxvmi_cfg.slot at %ld",
 		    (long)offsetof(struct faxvmi_cfg, slot), 0x0e, 0);
 	diff_eq_int("faxvmi_cfg.modem_cfg at %ld",
@@ -155,12 +155,12 @@ test_shape(void)
 		    (long)offsetof(struct v17rx_cfg, int_0008), 0x08, 0);
 	diff_eq_int("v17rx_cfg.int_0014 at %ld",
 		    (long)offsetof(struct v17rx_cfg, int_0014), 0x14, 0);
-	diff_eq_int("v17rx_cfg.ptr_0018 at %ld",
-		    (long)offsetof(struct v17rx_cfg, ptr_0018), 0x18, 0);
-	diff_eq_int("v17rx_cfg.ptr_001c at %ld",
-		    (long)offsetof(struct v17rx_cfg, ptr_001c), 0x1c, 0);
-	diff_eq_int("v17rx_cfg.ptr_0020 at %ld",
-		    (long)offsetof(struct v17rx_cfg, ptr_0020), 0x20, 0);
+	diff_eq_int("v17rx_cfg.coefsave0 at %ld",
+		    (long)offsetof(struct v17rx_cfg, coefsave0), 0x18, 0);
+	diff_eq_int("v17rx_cfg.coefsave1 at %ld",
+		    (long)offsetof(struct v17rx_cfg, coefsave1), 0x1c, 0);
+	diff_eq_int("v17rx_cfg.ratesave at %ld",
+		    (long)offsetof(struct v17rx_cfg, ratesave), 0x20, 0);
 	diff_eq_int("v17rx_cfg.ptr_0024 at %ld",
 		    (long)offsetof(struct v17rx_cfg, ptr_0024), 0x24, 0);
 
@@ -189,18 +189,18 @@ test_values(void)
 	diff_begin("faxcfg: table values against the blob");
 
 	/* FAXVMI_CFG, field by field. */
-	diff_eq_int("FAXVMI_CFG.short_0000 (%ld)", FAXVMI_CFG.short_0000,
-		    ref_FAXVMI_CFG.short_0000, 0x00);
+	diff_eq_int("FAXVMI_CFG.mode (%ld)", FAXVMI_CFG.mode,
+		    ref_FAXVMI_CFG.mode, 0x00);
 	diff_eq_int("FAXVMI_CFG.short_0002 (%ld)", FAXVMI_CFG.short_0002,
 		    ref_FAXVMI_CFG.short_0002, 0x02);
-	diff_eq_int("FAXVMI_CFG.int_0004 (%ld)", FAXVMI_CFG.int_0004,
-		    ref_FAXVMI_CFG.int_0004, 0x04);
-	diff_eq_int("FAXVMI_CFG.short_0008 (%ld)", FAXVMI_CFG.short_0008,
-		    ref_FAXVMI_CFG.short_0008, 0x08);
-	diff_eq_int("FAXVMI_CFG.short_000a (%ld)", FAXVMI_CFG.short_000a,
-		    ref_FAXVMI_CFG.short_000a, 0x0a);
-	diff_eq_int("FAXVMI_CFG.short_000c (%ld)", FAXVMI_CFG.short_000c,
-		    ref_FAXVMI_CFG.short_000c, 0x0c);
+	diff_eq_int("FAXVMI_CFG.reverse (%ld)", FAXVMI_CFG.reverse,
+		    ref_FAXVMI_CFG.reverse, 0x04);
+	diff_eq_int("FAXVMI_CFG.fifo_size (%ld)", FAXVMI_CFG.fifo_size,
+		    ref_FAXVMI_CFG.fifo_size, 0x08);
+	diff_eq_int("FAXVMI_CFG.max_frame (%ld)", FAXVMI_CFG.max_frame,
+		    ref_FAXVMI_CFG.max_frame, 0x0a);
+	diff_eq_int("FAXVMI_CFG.frame_size (%ld)", FAXVMI_CFG.frame_size,
+		    ref_FAXVMI_CFG.frame_size, 0x0c);
 	diff_eq_int("FAXVMI_CFG.slot (%ld)", FAXVMI_CFG.slot,
 		    ref_FAXVMI_CFG.slot, 0x0e);
 	diff_eq_int("FAXVMI_CFG.modem_cfg is null (%ld)",
@@ -225,12 +225,12 @@ test_values(void)
 		    ref_V17RX_CFG.int_0010, 0x10);
 	diff_eq_int("V17RX_CFG.int_0014 (%ld)", V17RX_CFG.int_0014,
 		    ref_V17RX_CFG.int_0014, 0x14);
-	diff_eq_int("V17RX_CFG.ptr_0018 is null (%ld)",
-		    V17RX_CFG.ptr_0018 == 0, ref_V17RX_CFG.ptr_0018 == 0, 0x18);
-	diff_eq_int("V17RX_CFG.ptr_001c is null (%ld)",
-		    V17RX_CFG.ptr_001c == 0, ref_V17RX_CFG.ptr_001c == 0, 0x1c);
-	diff_eq_int("V17RX_CFG.ptr_0020 is null (%ld)",
-		    V17RX_CFG.ptr_0020 == 0, ref_V17RX_CFG.ptr_0020 == 0, 0x20);
+	diff_eq_int("V17RX_CFG.coefsave0 is null (%ld)",
+		    V17RX_CFG.coefsave0 == 0, ref_V17RX_CFG.coefsave0 == 0, 0x18);
+	diff_eq_int("V17RX_CFG.coefsave1 is null (%ld)",
+		    V17RX_CFG.coefsave1 == 0, ref_V17RX_CFG.coefsave1 == 0, 0x1c);
+	diff_eq_int("V17RX_CFG.ratesave is null (%ld)",
+		    V17RX_CFG.ratesave == 0, ref_V17RX_CFG.ratesave == 0, 0x20);
 	diff_eq_int("V17RX_CFG.ptr_0024 is null (%ld)",
 		    V17RX_CFG.ptr_0024 == 0, ref_V17RX_CFG.ptr_0024 == 0, 0x24);
 
@@ -328,12 +328,12 @@ test_value_shape(void)
 		    V29RX_CFG.int_0008, 60000, 0);
 
 	/* FAXVMI_CFG's three non-zero words, by name. */
-	diff_eq_int("FAXVMI_CFG.short_0008 is 128 (%ld)",
-		    FAXVMI_CFG.short_0008, 128, 0);
-	diff_eq_int("FAXVMI_CFG.short_000a is 50 (%ld)",
-		    FAXVMI_CFG.short_000a, 50, 0);
-	diff_eq_int("FAXVMI_CFG.short_000c is 128 (%ld)",
-		    FAXVMI_CFG.short_000c, 128, 0);
+	diff_eq_int("FAXVMI_CFG.fifo_size is 128 (%ld)",
+		    FAXVMI_CFG.fifo_size, 128, 0);
+	diff_eq_int("FAXVMI_CFG.max_frame is 50 (%ld)",
+		    FAXVMI_CFG.max_frame, 50, 0);
+	diff_eq_int("FAXVMI_CFG.frame_size is 128 (%ld)",
+		    FAXVMI_CFG.frame_size, 128, 0);
 	diff_eq_int("FAXVMI_CFG.slot is 0 in the table (%ld)",
 		    FAXVMI_CFG.slot, 0, 0);
 
@@ -422,16 +422,16 @@ compare_vmi(const union vmibuf *ours, const union vmibuf *theirs, long input)
 	size_t i;
 	int tail_ours = 0, tail_theirs = 0;
 
-	diff_eq_int("vmi.short_0000, input %ld", a->short_0000, b->short_0000,
+	diff_eq_int("vmi.mode, input %ld", a->mode, b->mode,
 		    input);
 	diff_eq_int("vmi.short_0002, input %ld", a->short_0002, b->short_0002,
 		    input);
-	diff_eq_int("vmi.int_0004, input %ld", a->int_0004, b->int_0004, input);
-	diff_eq_int("vmi.short_0008, input %ld", a->short_0008, b->short_0008,
+	diff_eq_int("vmi.reverse, input %ld", a->reverse, b->reverse, input);
+	diff_eq_int("vmi.fifo_size, input %ld", a->fifo_size, b->fifo_size,
 		    input);
-	diff_eq_int("vmi.short_000a, input %ld", a->short_000a, b->short_000a,
+	diff_eq_int("vmi.max_frame, input %ld", a->max_frame, b->max_frame,
 		    input);
-	diff_eq_int("vmi.short_000c, input %ld", a->short_000c, b->short_000c,
+	diff_eq_int("vmi.frame_size, input %ld", a->frame_size, b->frame_size,
 		    input);
 	diff_eq_int("vmi.slot, input %ld", a->slot, b->slot, input);
 	/* Passed in identically to both sides, so comparable by value. */
@@ -511,26 +511,26 @@ test_init_v17(void)
 		 * so "all non-null" would survive a swap: they are checked
 		 * for being three DISTINCT addresses, on each side.
 		 */
-		diff_eq_int("cfg.ptr_0018 non-null (ours), input %ld",
-			    ca->ptr_0018 != 0, 1, i);
-		diff_eq_int("cfg.ptr_001c non-null (ours), input %ld",
-			    ca->ptr_001c != 0, 1, i);
-		diff_eq_int("cfg.ptr_0020 non-null (ours), input %ld",
-			    ca->ptr_0020 != 0, 1, i);
-		diff_eq_int("cfg.ptr_0018 non-null (blob), input %ld",
-			    cb->ptr_0018 != 0, 1, i);
-		diff_eq_int("cfg.ptr_001c non-null (blob), input %ld",
-			    cb->ptr_001c != 0, 1, i);
-		diff_eq_int("cfg.ptr_0020 non-null (blob), input %ld",
-			    cb->ptr_0020 != 0, 1, i);
+		diff_eq_int("cfg.coefsave0 non-null (ours), input %ld",
+			    ca->coefsave0 != 0, 1, i);
+		diff_eq_int("cfg.coefsave1 non-null (ours), input %ld",
+			    ca->coefsave1 != 0, 1, i);
+		diff_eq_int("cfg.ratesave non-null (ours), input %ld",
+			    ca->ratesave != 0, 1, i);
+		diff_eq_int("cfg.coefsave0 non-null (blob), input %ld",
+			    cb->coefsave0 != 0, 1, i);
+		diff_eq_int("cfg.coefsave1 non-null (blob), input %ld",
+			    cb->coefsave1 != 0, 1, i);
+		diff_eq_int("cfg.ratesave non-null (blob), input %ld",
+			    cb->ratesave != 0, 1, i);
 		diff_eq_int("the three allocations are distinct, input %ld",
-			    ca->ptr_0018 != ca->ptr_001c &&
-			    ca->ptr_001c != ca->ptr_0020 &&
-			    ca->ptr_0018 != ca->ptr_0020, 1, i);
+			    ca->coefsave0 != ca->coefsave1 &&
+			    ca->coefsave1 != ca->ratesave &&
+			    ca->coefsave0 != ca->ratesave, 1, i);
 		diff_eq_int("and none of them is the config, input %ld",
-			    ca->ptr_0018 != (void *)ca &&
-			    ca->ptr_001c != (void *)ca &&
-			    ca->ptr_0020 != (void *)ca, 1, i);
+			    ca->coefsave0 != (void *)ca &&
+			    ca->coefsave1 != (void *)ca &&
+			    ca->ratesave != (void *)ca, 1, i);
 	}
 
 	return diff_end();
