@@ -5,8 +5,8 @@
  },
  {
   "label": "reset does not clear eventCode",
-  "find": "\teventCode = 0;\n\tword_44 = suvLimit;",
-  "replace": "\tword_44 = suvLimit;"
+  "find": "\teventCode = 0;\n\tthis->suvLimit = suvLimit;",
+  "replace": "\tthis->suvLimit = suvLimit;"
  },
  {
   "label": "reset does not clear symbolCount",
@@ -197,7 +197,7 @@
  },
  {
   "label": "word_44 is not written",
-  "find": "\tword_44 = suvLimit;\n",
+  "find": "\tthis->suvLimit = suvLimit;\n",
   "replace": ""
  },
  {
@@ -223,8 +223,8 @@
  {
   "label": "word_44 is written as a short",
   "why": "`mov %eax,0x44(%esi)` at .text+0x19051 is a four-byte store, and the fifth argument's own type is `unsigned int`. The grid carries 0xffffffff for this entry: every other row of `suvs_a[]` fits in sixteen bits and would agree.",
-  "find": "\tword_44 = suvLimit;",
-  "replace": "\tword_44 = (unsigned int)(unsigned short)suvLimit;"
+  "find": "\tthis->suvLimit = suvLimit;",
+  "replace": "\tthis->suvLimit = (unsigned int)(unsigned short)suvLimit;"
  },
  {
   "label": "reset also clears patternIndex",

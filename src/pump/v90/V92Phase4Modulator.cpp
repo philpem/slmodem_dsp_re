@@ -62,7 +62,7 @@ V92P4M_OFF(flag_3c,		0x03c, flag3c);
 V92P4M_OFF(amplitude,		0x040, amplitude);
 V92P4M_OFF(byte_42,		0x042, byte42);
 V92P4M_OFF(bitsPerSymbol,	0x043, bitspersymbol);
-V92P4M_OFF(word_44,		0x044, word44);
+V92P4M_OFF(suvLimit,		0x044, word44);
 V92P4M_OFF(mappingParams,	0x048, mappingparams);
 V92P4M_OFF(scrambler,		0x04c, scrambler);
 V92P4M_OFF(bitsToSymbol,	0x06c, bitstosymbol);
@@ -1265,7 +1265,7 @@ int V92Phase4Modulator::generateSymbol()
 
 	/*
 	 * SUV.  The message is repacked on every period boundary, and once
-	 * the SUV has run `word_44 + 800` symbols past the point `byte_1c`
+	 * the SUV has run `suvLimit + 800` symbols past the point `byte_1c`
 	 * started the count, the repeated CP takes over.
 	 */
 	case V92P4M_STATE_SUV:
@@ -1276,7 +1276,7 @@ int V92Phase4Modulator::generateSymbol()
 			cp->infoToBits();
 			pattern = cp->getBitVector(patternLength);
 			word_1b0 = patternLength / bitsPerSymbol;
-			if (word_18 > word_44 + 800)
+			if (word_18 > suvLimit + 800)
 				enterRepeatedCP();
 		}
 		break;
@@ -1567,11 +1567,11 @@ int V92Phase4Modulator::generateSymbol()
  * The whole object back to a known state, the CP message repacked, and then
  * `nSymbols` symbols generated before returning.  The last of the class's 34
  * members, and the only one that writes `amplitude`, `byte_42`,
- * `bitsPerSymbol` or `word_44`.
+ * `bitsPerSymbol` or `suvLimit`.
  *
  * IN THE OBJECT'S ORDER, with nothing elided:
  *
- *     eventCode = 0                 word_44 = suvLimit
+ *     eventCode = 0                 this->suvLimit = suvLimit
  *     amplitude = amplitudeArg    byte_42 = bitsArg
  *     state = stateArg            bitsPerSymbol = bitsArg + 2
  *     symbolCount = 0
@@ -1593,7 +1593,7 @@ int V92Phase4Modulator::generateSymbol()
  * source is written in exactly that order and GCC hoists `byte_42` two slots,
  * so the map is not the identity.  The whole single-statement family was then
  * enumerated: every one of the seven positions of `byte_42 = bitsArg`, crossed
- * with both orders of `word_44`/`amplitude`, fourteen compiles.  **NONE of the
+ * with both orders of `suvLimit`/`amplitude`, fourteen compiles.  **NONE of the
  * fourteen emits `0x44` before `0x40`, which the object does**, so the
  * remaining 46 bytes are not a permutation of these statements at all and no
  * spelling in the family can close them.  Closest was 27 of 290, in a spelling
@@ -1655,7 +1655,7 @@ V92Phase4Modulator::reset(short amplitudeArg, unsigned char bitsArg,
 	unsigned int i;
 
 	eventCode = 0;
-	word_44 = suvLimit;
+	this->suvLimit = suvLimit;
 	amplitude = amplitudeArg;
 	byte_42 = bitsArg;
 	state = stateArg;

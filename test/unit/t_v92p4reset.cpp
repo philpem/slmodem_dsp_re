@@ -15,7 +15,7 @@
  * ---------------------------------------------------------------------------
  * WHAT reset CLAIMS, IN THE OBJECT'S ORDER
  *
- *     eventCode = 0                 word_44 = suvLimit
+ *     eventCode = 0                 this->suvLimit = suvLimit
  *     amplitude = amplitudeArg    byte_42 = bitsArg
  *     state = stateArg            bitsPerSymbol = bitsArg + 2
  *     symbolCount = 0
@@ -718,7 +718,7 @@ setup(long trial, const struct args *a, int runb)
 		o->amplitude = (short)(0x4141 + (int)(mix % 7u));
 		o->byte_42 = (unsigned char)(0x42u + (mix % 5u));
 		o->bitsPerSymbol = (unsigned char)(1u + (mix % 9u));
-		o->word_44 = 0x44444444u;
+		o->suvLimit = 0x44444444u;
 		o->prevBit = 1u + (mix % 3u);
 		o->e2uExtended = 0xbcbcbcbcu;
 		o->word_1c0 = 0xc0c0c0c0u;
@@ -935,8 +935,8 @@ compare_absolute(const struct args *a, long trial)
 			    trial);
 		diff_eq_int("state is the argument it was handed (trial %ld)",
 			    (long)M(s)->state, (long)a->state, trial);
-		diff_eq_int("word_44 is the fifth argument (trial %ld)",
-			    (long)M(s)->word_44, (long)a->suv, trial);
+		diff_eq_int("suvLimit is the fifth argument (trial %ld)",
+			    (long)M(s)->suvLimit, (long)a->suv, trial);
 		diff_eq_int("byte_42 is the second argument raw (trial %ld)",
 			    (long)M(s)->byte_42, (long)a->bits, trial);
 		diff_eq_int("amplitude is the first argument (trial %ld)",
@@ -1097,9 +1097,9 @@ run_with_symbols(void)
 			int s;
 
 			for (s = 0; s < 2; s++) {
-				diff_eq_int("word_44 is the fifth argument"
+				diff_eq_int("suvLimit is the fifth argument"
 					    " (trial %ld)",
-					    (long)M(s)->word_44, (long)a.suv,
+					    (long)M(s)->suvLimit, (long)a.suv,
 					    trial);
 				diff_eq_int("byte_42 is the second argument"
 					    " raw (trial %ld)",

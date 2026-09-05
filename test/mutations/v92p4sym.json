@@ -378,28 +378,28 @@
  },
  {
   "label": "SUV repacks at count zero as well",
-  "find": "\t\tif (symbolCount % word_1b0 == 0 && symbolCount != 0) {\n\t\t\tcp->infoToBits();\n\t\t\tpattern = cp->getBitVector(patternLength);\n\t\t\tword_1b0 = patternLength / bitsPerSymbol;\n\t\t\tif (word_18 > word_44 + 800)",
-  "replace": "\t\tif (symbolCount % word_1b0 == 0) {\n\t\t\tcp->infoToBits();\n\t\t\tpattern = cp->getBitVector(patternLength);\n\t\t\tword_1b0 = patternLength / bitsPerSymbol;\n\t\t\tif (word_18 > word_44 + 800)"
+  "find": "\t\tif (symbolCount % word_1b0 == 0 && symbolCount != 0) {\n\t\t\tcp->infoToBits();\n\t\t\tpattern = cp->getBitVector(patternLength);\n\t\t\tword_1b0 = patternLength / bitsPerSymbol;\n\t\t\tif (word_18 > suvLimit + 800)",
+  "replace": "\t\tif (symbolCount % word_1b0 == 0) {\n\t\t\tcp->infoToBits();\n\t\t\tpattern = cp->getBitVector(patternLength);\n\t\t\tword_1b0 = patternLength / bitsPerSymbol;\n\t\t\tif (word_18 > suvLimit + 800)"
  },
  {
   "label": "SUV divides the vector by the CP's bitsPerSymbol rather than its own",
-  "find": "\t\t\tword_1b0 = patternLength / bitsPerSymbol;\n\t\t\tif (word_18 > word_44 + 800)\n\t\t\t\tenterRepeatedCP();",
-  "replace": "\t\t\tword_1b0 = patternLength / cp->bitsPerSymbol;\n\t\t\tif (word_18 > word_44 + 800)\n\t\t\t\tenterRepeatedCP();"
+  "find": "\t\t\tword_1b0 = patternLength / bitsPerSymbol;\n\t\t\tif (word_18 > suvLimit + 800)\n\t\t\t\tenterRepeatedCP();",
+  "replace": "\t\t\tword_1b0 = patternLength / cp->bitsPerSymbol;\n\t\t\tif (word_18 > suvLimit + 800)\n\t\t\t\tenterRepeatedCP();"
  },
  {
   "label": "SUV gives up on the repeated CP at word_44 + 800 inclusive",
-  "find": "\t\t\tif (word_18 > word_44 + 800)\n\t\t\t\tenterRepeatedCP();",
-  "replace": "\t\t\tif (word_18 >= word_44 + 800)\n\t\t\t\tenterRepeatedCP();"
+  "find": "\t\t\tif (word_18 > suvLimit + 800)\n\t\t\t\tenterRepeatedCP();",
+  "replace": "\t\t\tif (word_18 >= suvLimit + 800)\n\t\t\t\tenterRepeatedCP();"
  },
  {
   "label": "SUV's repeated-CP threshold ignores word_44",
-  "find": "\t\t\tif (word_18 > word_44 + 800)\n\t\t\t\tenterRepeatedCP();",
+  "find": "\t\t\tif (word_18 > suvLimit + 800)\n\t\t\t\tenterRepeatedCP();",
   "replace": "\t\t\tif (word_18 > 800)\n\t\t\t\tenterRepeatedCP();"
  },
  {
   "label": "SUV's repeated-CP threshold is 4000 rather than 800",
-  "find": "\t\t\tif (word_18 > word_44 + 800)\n\t\t\t\tenterRepeatedCP();",
-  "replace": "\t\t\tif (word_18 > word_44 + 4000)\n\t\t\t\tenterRepeatedCP();"
+  "find": "\t\t\tif (word_18 > suvLimit + 800)\n\t\t\t\tenterRepeatedCP();",
+  "replace": "\t\t\tif (word_18 > suvLimit + 4000)\n\t\t\t\tenterRepeatedCP();"
  },
  {
   "label": "state 6's CPu message is encoded rather than gated on the debug level",

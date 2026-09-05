@@ -1478,9 +1478,24 @@ both `unsigned int`, both the class's first member) traced to a
 completely different quantity (`phase2Info->rtd`) once the actual call
 site was checked, and five more failed on declared-type mismatch before
 any trace was needed. Full derivation, the two open leads
-(`word_38`/`pcmType`, `word_44`/`bitsToSymbol`) and the two structural
-leads for the pad-audit (`V92Phase3Modulator::pad_44`,
-`V92Phase4Modulator::pad_10[8]`) are in finding F10177.
+(`word_38`/`pcmType`, `word_44`/`bitsToSymbol` -- both since resolved,
+see below) and the two structural leads for the pad-audit
+(`V92Phase3Modulator::pad_44`, `V92Phase4Modulator::pad_10[8]`) are in
+finding F10177.
+
+**Both open leads resolved (F10178), and both the SAME way as the
+`sessionFlag`/`word_00` decline above -- the twin's type matched, but
+the actual site did not.** `word_38` is written from `cp->word_ca0`, a
+CP-message block length, not a PCM law; `word_44` is compared as
+`word_18 > word_44 + 800`, an arithmetic threshold no pointer can be.
+Tracing `word_44` past the rejection found its real name sitting one
+property lookup away regardless: `reset`'s own fifth parameter is
+already `suvLimit`, already documented on this class's header as what
+the field holds -- renamed. Three real names and one incidental one
+from this technique's first two findings combined, against two
+type-matched-but-still-wrong candidates and five type-mismatched ones:
+even a matching declared type is not the finish line, only the second
+of three checks (offset, type, site).
 
 **The lesson for the next use of this technique**: offset agreement is
 the weakest of the three checks (offset, type, then the actual site), not

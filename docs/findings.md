@@ -117267,3 +117267,76 @@ one anchor fix above) all clean; `make check64` clean. Real GCC 3.4.2:
 exactly. `make byteident-ratchet`: grade 0 EXACT still 736/1852 (39.7%),
 grade 0-or-1 still 796/1852 (43.0%), `ratchet OK` -- unchanged, as
 expected of a pure identifier substitution. (2026-09-05)
+
+## F10178. F10177's two open leads resolved: both rejected, and one rejection surfaced a real name anyway
+
+Closes the two candidates F10177 left open rather than forced.
+
+**`V92Phase4Modulator::word_38` against `V90Phase4Modulator::pcmType` --
+REJECTED, cleanly.** The type agreement (`unsigned int` is consistent with
+an enum's backing storage) suggested checking the value; the actual
+source of the value settles it instead. `word_38`'s only external writer
+is `VPcmFloModem.cpp`'s `case 0x31`/`case 0x33` arms:
+`v92modem.modulator->phase4Modulator->word_38 =
+modem.demodulator->cp->word_ca0;` -- and that file's own pre-existing
+comment already identifies `word_ca0` as "how long the received CP's
+counted block was", reached through `demodulator->cp`. A CP-message
+block length is not a PCM-law selector; the two fields share a storage
+type by coincidence and nothing else. No rename.
+
+**`V92Phase4Modulator::word_44` against `V90Phase4Modulator::
+bitsToSymbol` -- REJECTED on type inspection alone, but the rejection
+surfaced its real name.** `word_44` is tested as `word_18 > word_44 +
+800`, an arithmetic threshold comparison, which a `V90BitsToSymbol *`
+pointer cannot be regardless of what evidence might otherwise apply.
+Tracing what `word_44` actually is instead of what it might match found
+it sitting one property lookup away: `reset`'s own fifth parameter is
+already named `suvLimit`, already documented in this class's own header
+as "Stored as `word_44`, the SUV threshold state 5 compares `word_18`
+against, offset by 800" -- rank 2, a typed source (the parameter) that
+had simply never been carried to the field it initializes, the same
+"evidence stranded in one file" shape F10139/F10140/F10169/F10177 keep
+finding. Renamed `word_44` to `suvLimit`.
+
+**The parameter and the field share a name, which the rename makes
+literal rather than avoids.** `reset(..., unsigned int suvLimit)`
+already used that name for its fifth argument; naming the field the
+same forces `this->suvLimit = suvLimit;` at the one assignment site
+(previously `word_44 = suvLimit;`) to disambiguate the now-identical
+parameter and member. `this->` is a compile-time-only qualifier and
+cannot move generated code -- confirmed by the full gate below, not
+assumed. Propagated to `include/dsplib/V92Phase4Modulator.h` (the
+declaration, its own `@param` doc, and the `+0x18` neighbour field's
+comment which names `word_44 + 800` as its own threshold),
+`src/pump/v90/V92Phase4Modulator.cpp` (the OFF-macro line, both live
+comparison/assignment sites, and three comment mentions in the
+`reset`-disassembly narrative -- one of which, the object's own
+emission-order listing, needed the same `this->` prefix added for
+clarity, not just the identifier swapped), `test/unit/t_v92p4reset.cpp`
+and `t_v92p4sym.cpp` (bulk-renamed after confirming, as with F10177,
+that `word_44` is this class's own field everywhere it appears in
+either file and not a coincidentally-named field elsewhere), and the
+`find`/`replace` text of `test/mutations/v92p4reset.json` (5 entries)
+and `v92p4sym.json` (9 entries) -- edited via a JSON-aware script this
+time rather than line-targeted `sed`, and still caught missing the
+`this->` qualifier the source edit had introduced on three of the five
+`v92p4reset.json` entries, fixed by hand afterward. Mutation LABELS
+were deliberately left saying `word_44`, not renamed to match: a label
+is `mutsnap.py`'s key into `test/mutations/snapshot.json`'s recorded
+verdicts, and renaming the label without renaming the matching
+snapshot key would have looked to that tool like a new, unverified
+mutation rather than the same one under its old name -- consistent
+with how every rename this session has handled labels.
+
+**Verification.** `make one T="t_v92p4reset t_v92p4sym"`: 26 PASS
+groups, 0 FAIL, including `V92Phase4Modulator::reset` at both zero and
+1-4 symbols (332,642 and 47,713 checks) and `generateSymbol` at up to
+1,267,201 checks per level -- no check count regressed.
+`tools/onedef.py`, `tools/refcheck.py` and `tools/anchorcheck.py` (228
+suites, 9,767 mutations, 0 issues) all clean; `make check64` clean.
+Real GCC 3.4.2: `make period` 374 passed, 0 failed, matching the
+pre-existing baseline exactly. `make byteident-ratchet`: grade 0 EXACT
+still 736/1852 (39.7%), grade 0-or-1 still 796/1852 (43.0%), `ratchet
+OK` -- unchanged, as expected of a pure identifier substitution plus a
+disambiguating qualifier neither of which the object's own codegen can
+see. (2026-09-05)

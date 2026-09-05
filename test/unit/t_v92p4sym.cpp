@@ -689,8 +689,8 @@ compare_text(long trial)
  * divisor of an unsigned `div` in six arms, so a zero traps on both sides at
  * once and proves nothing, which is `mods[]`'s rule in t_v92p4gen.
  *
- * `word_18` runs over 0, 800 and 801 against a `word_44` of zero, because the
- * state 5 arm compares `word_18 > word_44 + 800` AFTER an increment that
+ * `word_18` runs over 0, 800 and 801 against a `suvLimit` of zero, because the
+ * state 5 arm compares `word_18 > suvLimit + 800` AFTER an increment that
  * `byte_1c` gates: 800 with `byte_1c` clear must not fire and 800 with it set
  * must, which is what separates the increment from the comparison.
  *
@@ -847,13 +847,13 @@ gs_setup(int trial)
 		o->byte_1c = (unsigned char)(shi & 1);
 		/*
 		 * NON-ZERO ON HALF THE TRIALS, and that is a mutation's
-		 * doing: at zero, `word_18 > word_44 + 800` and
+		 * doing: at zero, `word_18 > suvLimit + 800` and
 		 * `word_18 > 800` are the same predicate, and the entry
 		 * that drops the field read NOT CAUGHT over 1,056,001
 		 * checks.  Four is enough -- 801 clears 800 and does not
 		 * clear 804.
 		 */
-		o->word_44 = ((mix & 4) != 0) ? 4u : 0u;
+		o->suvLimit = ((mix & 4) != 0) ? 4u : 0u;
 		o->word_18 = (ci % 3 == 0) ? 0u
 			   : ((ci % 3 == 1) ? 800u : 801u);
 		o->word_2c = (unsigned int)(mix % 4);
@@ -968,7 +968,7 @@ run_generate_symbol(unsigned int lvl)
 		before_pat = (unsigned char *)M(0)->pattern;
 		hadcp = (M(0)->cp != 0);
 		before_18 = M(0)->word_18;
-		before_44 = M(0)->word_44;
+		before_44 = M(0)->suvLimit;
 		before_latch = (M(0)->byte_1c != 0);
 
 		if (lvl != 0)
@@ -1091,7 +1091,7 @@ run_gs_antivacuity(void)
 		    gs_saw_bytelatch_fired, 1, 0);
 	diff_eq_int("the byte_1c latch held at 800", gs_saw_bytelatch_held, 1,
 		    0);
-	diff_eq_int("word_44 held the threshold above 801", gs_saw_offset_held,
+	diff_eq_int("suvLimit held the threshold above 801", gs_saw_offset_held,
 		    1, 0);
 
 	diff_eq_int("some trial fell to the illegal-state arm", gs_saw_default,

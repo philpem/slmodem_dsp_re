@@ -275,8 +275,9 @@ public:
 	 * @param stateArg     Stored as `state`.
 	 * @param nSymbols     How many times `generateSymbol` is called
 	 *                      before returning; zero means not at all.
-	 * @param suvLimit     Stored as `word_44`, the SUV threshold state 5
-	 *                      compares `word_18` against, offset by 800.
+	 * @param suvLimit     Stored as `this->suvLimit`, the SUV threshold
+	 *                      state 5 compares `word_18` against, offset by
+	 *                      800.
 	 */
 	void reset(short amplitudeArg, unsigned char bitsArg,
 		   V92Phase4ModulatorState stateArg, unsigned int nSymbols,
@@ -595,7 +596,7 @@ public:
 	 * +0x18  A counter, and `byte_1c` is its enable. `generateSymbol`'s
 	 * state 5 arm increments it once per symbol and only while `byte_1c`
 	 * is non-zero, and enters the repeated CP once it passes
-	 * `word_44 + 800`. Cleared by the constructor, by `reset`, by
+	 * `suvLimit + 800`. Cleared by the constructor, by `reset`, by
 	 * `enterRepeatedCP`, by `recivedSUVtag`, by `recivedCPtag`, by
 	 * `resetRRNSecondSection` and on both of `generateSymbol`'s two
 	 * remaining paths that touch it. What it counts is symbols in SUV,
@@ -736,12 +737,21 @@ public:
 	 * +0x44  `reset`'s FIFTH argument, stored and read once:
 	 * `mov 0x34(%esp),%eax; mov %eax,0x44(%esi)` at .text+0x1903f, and
 	 * `generateSymbol`'s state 5 arm gives up on SUV and enters the
-	 * repeated CP once `word_18` has passed `word_44 + 800`. So it is a
-	 * threshold that the caller of `reset` sets, offset by 800; what it
-	 * counts is `word_18`'s business and nothing written establishes
-	 * that.
+	 * repeated CP once `word_18` has passed `suvLimit + 800`. So it is
+	 * a threshold that the caller of `reset` sets, offset by 800; what
+	 * it counts is `word_18`'s business and nothing written
+	 * establishes that.
+	 *
+	 * Named `suvLimit` after `reset`'s own parameter of that name
+	 * (rank 2, a typed source already carrying the word) -- this
+	 * class's own header already documented the parameter as
+	 * "Stored as `word_44`, the SUV threshold state 5 gives up at"
+	 * before this rename, so the name was one property lookup away
+	 * rather than missing. `reset`'s body disambiguates the
+	 * now-identical parameter and member name with `this->`, a
+	 * compile-time-only qualifier that cannot move generated code.
 	 */
-	unsigned int word_44;
+	unsigned int suvLimit;
 
 	/* +0x48  The constructor's FOURTH argument, stored and not owned. */
 	V92MappingParams *mappingParams;
