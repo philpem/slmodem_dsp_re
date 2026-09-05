@@ -232,7 +232,7 @@
   "label": "twoLevelDemod tests isAltRbs at its full width",
   "find": "\t    (short)ad->isAltRbs((short)framePosition, ucode, sample) != 0)",
   "replace": "\t    ad->isAltRbs((short)framePosition, ucode, sample) != 0)",
-  "note": "EXPECTED UNCAUGHT.  `V90AutoDigitalImpDetector::isAltRbs` is written as `return d > short_a9a6 ? 1 : 0;`, so its answer is 0 or 1 and the top sixteen bits are always zero -- no input can make the narrowed test and the full-width one disagree.  The `(short)` is in the reconstruction because the object has `test %ax,%ax` at this site and NOT because any test can see it; that is the same footing as the phase-index truncation above, and saying so is the point of leaving the mutation here."
+  "note": "EXPECTED UNCAUGHT.  `V90AutoDigitalImpDetector::isAltRbs` is written as `return d > altRbsDistanceThresh ? 1 : 0;`, so its answer is 0 or 1 and the top sixteen bits are always zero -- no input can make the narrowed test and the full-width one disagree.  The `(short)` is in the reconstruction because the object has `test %ax,%ax` at this site and NOT because any test can see it; that is the same footing as the phase-index truncation above, and saying so is the point of leaving the mutation here."
  },
  {
   "label": "twoLevelDemod's threshold is inclusive",

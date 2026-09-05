@@ -286,8 +286,8 @@ trn2_x87_fsqrt(long double x)
  * arrays would be a second vocabulary for one set of objects.  What the ONE
  * caller passes corroborates the shapes rather than the names --
  * `V90Demodulator::exitPhase3` hands over `V90AutoDigitalImpDetector::linMapp`
- * (+0x0000), `::linMappAlt` (+0x0600), `::byte_0d00` (+0x0d00) and
- * `::short_2800` (+0x2800), and `topUcode` is the return of
+ * (+0x0000), `::linMappAlt` (+0x0600), `::usableMask` (+0x0d00) and
+ * `::altRbsFlag` (+0x2800), and `topUcode` is the return of
  * `V90Phase3Demodulator::getMaxUcode` and `maxLookahead` of
  * `V90Jd::getMaxLookahead`, both of which ARE the author's own words because
  * they come out of a mangled name.  `maxTxIndex` is the author's word too:

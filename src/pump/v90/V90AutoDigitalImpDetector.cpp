@@ -50,18 +50,18 @@ extern "C" {
 
 ADID_OFF(linMapp,      0x0000, linmapp);
 ADID_OFF(linMappAlt,   0x0600, linmappalt);
-ADID_OFF(byte_0d00,    0x0d00, byte0d00);
-ADID_OFF(float_1000,   0x1000, float1000);
-ADID_OFF(uint_1c00,    0x1c00, uint1c00);
-ADID_OFF(short_2800,   0x2800, short2800);
+ADID_OFF(usableMask,    0x0d00, byte0d00);
+ADID_OFF(magnitudeSum,   0x1000, float1000);
+ADID_OFF(magnitudeCount,    0x1c00, uint1c00);
+ADID_OFF(altRbsFlag,   0x2800, short2800);
 ADID_OFF(byte_280c,    0x280c, byte280c);
 ADID_OFF(params,       0x2814, params);
 ADID_OFF(codeHistogram,     0x8b00, short8b00);
 ADID_OFF(sampleCount,       0x9100, int9100);
-ADID_OFF(float_9118,        0x9118, float9118);
+ADID_OFF(magnitudeSqSum,        0x9118, float9118);
 ADID_OFF(altMagnitudeSum,   0x9d18, float9d18);
 ADID_OFF(altMagnitudeCount, 0x9d30, uint9d30);
-ADID_OFF(float_9d48,   0x9d48, float9d48);
+ADID_OFF(linearMappingVar,   0x9d48, float9d48);
 ADID_OFF(short_a948,   0xa948, shorta948);
 ADID_OFF(pcmType,      0xa95c, pcmtype);
 
@@ -87,11 +87,11 @@ ADID_OFF(prevLinMapp,  0x0c00, prevlinmapp);
 ADID_OFF(sampleStore,  0x2818, samplestore);
 ADID_OFF(padGain,      0xa94c, padgain);
 ADID_OFF(maxUcode,     0xa956, maxucode);
-ADID_OFF(short_a9a4,   0xa9a4, shorta9a4);
-ADID_OFF(short_a9a6,   0xa9a6, shorta9a6);
+ADID_OFF(uniteUrefDistanceThresh,   0xa9a4, shorta9a4);
+ADID_OFF(altRbsDistanceThresh,   0xa9a6, shorta9a6);
 ADID_OFF(ucode,        0xa96b, ucode);
 ADID_OFF(ucodeLevel,   0xa96c, ucodelevel);
-ADID_OFF(short_a96e,   0xa96e, shorta96e);
+ADID_OFF(altRbsExpected,   0xa96e, shorta96e);
 ADID_OFF(float_a970,   0xa970, floata970);
 ADID_OFF(float_a974,   0xa974, floata974);
 ADID_OFF(short_a978,   0xa978, shorta978);
@@ -128,8 +128,8 @@ ADID_OFF(float_a980,   0xa980, floata980);
 ADID_OFF(float_a950,   0xa950, floata950);
 ADID_OFF(trn1Sigma,    0xa964, trn1sigma);
 ADID_OFF(byte_a96a,    0xa96a, bytea96a);
-ADID_OFF(int_a984,     0xa984, inta984);
-ADID_OFF(int_a988,     0xa988, inta988);
+ADID_OFF(studyState,     0xa984, inta984);
+ADID_OFF(stateSampleCount,     0xa988, inta988);
 ADID_OFF(int_a98c,     0xa98c, inta98c);
 ADID_OFF(int_a990,     0xa990, inta990);
 ADID_OFF(int_a994,     0xa994, inta994);
@@ -170,7 +170,7 @@ ADID_OFF(unSuspectedPhase, 0xa968, unsuspectedphase);
  *          makes the whole four-byte region one `int`.
  */
 ADID_OFF(byte_a954,    0xa954, bytea954);
-ADID_OFF(int_a960,     0xa960, inta960);
+ADID_OFF(detectedPcmType,     0xa960, inta960);
 
 typedef char adid_size[(sizeof(V90AutoDigitalImpDetector) == 0xa9b0) ? 1 : -1];
 
@@ -327,8 +327,8 @@ adid_updateTrn1Sigma(V90AutoDigitalImpDetector *o, const char *fmt)
 	short phase;
 
 	for (phase = 0; phase < V90ADID_PHASES; phase++)
-		if (o->short_2800[phase] == 0) {
-			sum += o->float_9d48[phase][o->ucode];
+		if (o->altRbsFlag[phase] == 0) {
+			sum += o->linearMappingVar[phase][o->ucode];
 			n = (short)(n + 1);
 		}
 
@@ -426,9 +426,9 @@ V90AutoDigitalImpDetector::~V90AutoDigitalImpDetector()
 void
 V90AutoDigitalImpDetector::clearCamulativeVal(short phase, short code)
 {
-	uint_1c00[phase][code] = 0;
-	float_1000[phase][code] = 0.0f;
-	float_9118[phase][code] = 0.0f;
+	magnitudeCount[phase][code] = 0;
+	magnitudeSum[phase][code] = 0.0f;
+	magnitudeSqSum[phase][code] = 0.0f;
 }
 
 /*
@@ -488,28 +488,28 @@ V90AutoDigitalImpDetector::reset(unsigned char code, PcmType law, short altRbs)
 
 	short_a948 = 0;
 	padGain = 1.0f;
-	short_a96e = altRbs;
+	altRbsExpected = altRbs;
 
 	for (phase = 0; phase < V90ADID_PHASES; phase++) {
 		short ci;
 
 		for (ci = 0; ci < V90ADID_CODES; ci++) {
-			uint_1c00[phase][ci] = 0;
-			float_1000[phase][ci] = 0.0f;
-			float_9118[phase][ci] = 0.0f;
-			float_9d48[phase][ci] = 0.0f;
+			magnitudeCount[phase][ci] = 0;
+			magnitudeSum[phase][ci] = 0.0f;
+			magnitudeSqSum[phase][ci] = 0.0f;
+			linearMappingVar[phase][ci] = 0.0f;
 			codeHistogram[phase][ci] = 0;
-			byte_0d00[phase][ci] = 1;
+			usableMask[phase][ci] = 1;
 		}
 
 		sampleCount[phase] = 0;
-		short_2800[phase] = 0;
+		altRbsFlag[phase] = 0;
 		altMagnitudeCount[phase] = 0;
 		byte_280c[phase] = 0;
 		altMagnitudeSum[phase] = 0.0f;
 	}
 
-	float_a970 = short_a96e != 0 ? 5.0f : 1.5f;
+	float_a970 = altRbsExpected != 0 ? 5.0f : 1.5f;
 	float_a974 = 5.0f;
 
 	if (paramShort(params, V90PARAMETERS_CONNECTION_TYPE) == 2) {
@@ -602,7 +602,7 @@ V90AutoDigitalImpDetector::isThereAnyAltRbsPhase()
 	short phase;
 
 	for (phase = 0; phase < V90ADID_PHASES; phase++)
-		sum = (short)(sum + short_2800[phase]);
+		sum = (short)(sum + altRbsFlag[phase]);
 
 	return sum > 0 ? 1 : 0;
 }
@@ -624,12 +624,12 @@ V90AutoDigitalImpDetector::isAltRbs(short phase, short code, float v)
 {
 	int d;
 
-	if (short_2800[phase] == 0)
+	if (altRbsFlag[phase] == 0)
 		return 0;
 
 	d = adid_abs(adid_abs((int)v) - linMapp[phase][code]);
 
-	return d > short_a9a6 ? 1 : 0;
+	return d > altRbsDistanceThresh ? 1 : 0;
 }
 
 /*
@@ -730,14 +730,14 @@ V90AutoDigitalImpDetector::resetStudyUrefHandler(unsigned int qc)
 		int_a99c = paramWord(params, V90PARAMETERS_STUDY_PLAIN + 0x10);
 		int_a9a0 = paramWord(params, V90PARAMETERS_STUDY_PLAIN + 0x14);
 
-		short_a9a4 = 25;
-		short_a9a6 = 50;
+		uniteUrefDistanceThresh = 25;
+		altRbsDistanceThresh = 50;
 		altMinVarThresh = 4000.0f;
 		neighborUcodeMinDistance = 2500;
 		neighborUcodeMaxDistance = 6000;
 
-		int_a984 = 0;
-		int_a988 = 0;
+		studyState = 0;
+		stateSampleCount = 0;
 		return;
 	}
 
@@ -750,7 +750,7 @@ V90AutoDigitalImpDetector::resetStudyUrefHandler(unsigned int qc)
 	int_a99c = paramWord(params, V90PARAMETERS_STUDY_QC + 0x10);
 	int_a9a0 = paramWord(params, V90PARAMETERS_STUDY_QC + 0x14);
 
-	short_a9a4 = (short)(inv * 25.0f + 0.5f);
+	uniteUrefDistanceThresh = (short)(inv * 25.0f + 0.5f);
 
 	/*
 	 * Clamped BEFORE the store, not after it: the object compares the
@@ -765,7 +765,7 @@ V90AutoDigitalImpDetector::resetStudyUrefHandler(unsigned int qc)
 		altMinVarThresh = f;
 	}
 
-	short_a9a6 = (short)(inv * 50.0f + 0.5f);
+	altRbsDistanceThresh = (short)(inv * 50.0f + 0.5f);
 
 	v = (short)(inv * 2777.7778f + 0.5f);
 	if (v > 2500)
@@ -793,8 +793,8 @@ V90AutoDigitalImpDetector::resetStudyUrefHandler(unsigned int qc)
 	edprintf("prevSession uinfo : %d %d %d %d %d %d\r\n",
 		 linMapp[0][ucode], linMapp[1][ucode], linMapp[2][ucode],
 		 linMapp[3][ucode], linMapp[4][ucode], linMapp[5][ucode]);
-	edprintf("uniteUrefDistanceThresh = %d\r\n", short_a9a4);
-	edprintf("altRbsDistanceThresh = %d\r\n", short_a9a6);
+	edprintf("uniteUrefDistanceThresh = %d\r\n", uniteUrefDistanceThresh);
+	edprintf("altRbsDistanceThresh = %d\r\n", altRbsDistanceThresh);
 	edprintf("neighborUcodeMinDistance=%d neighborUcodeMaxDistance=%d\r\n",
 		 neighborUcodeMinDistance, neighborUcodeMaxDistance);
 	edprintf("altMinVarThresh = %c%d.%02d\r\n",
@@ -804,8 +804,8 @@ V90AutoDigitalImpDetector::resetStudyUrefHandler(unsigned int qc)
 	edprintf("--------------------------------------------------------"
 		 "-------\r\n");
 
-	int_a984 = 0;
-	int_a988 = 0;
+	studyState = 0;
+	stateSampleCount = 0;
 }
 
 /*
@@ -874,7 +874,7 @@ V90AutoDigitalImpDetector::unitePhasesInfoOfUref(short at)
 			short j;
 			float fsum, fsq;
 
-			if (group[i] != ADID_NO_GROUP || short_2800[i] != 0)
+			if (group[i] != ADID_NO_GROUP || altRbsFlag[i] != 0)
 				continue;
 
 			/*
@@ -885,22 +885,22 @@ V90AutoDigitalImpDetector::unitePhasesInfoOfUref(short at)
 			 * than 32,767 samples in a cell pools as a negative
 			 * number.  That is the object's arithmetic.
 			 */
-			total = (short)uint_1c00[i][at];
-			fsum = float_1000[i][at];
-			fsq = float_9118[i][at];
+			total = (short)magnitudeCount[i][at];
+			fsum = magnitudeSum[i][at];
+			fsq = magnitudeSqSum[i][at];
 
 			for (j = (short)(i + 1); j < V90ADID_PHASES; j++) {
 				if (group[j] != ADID_NO_GROUP
-				    || short_2800[j] != 0)
+				    || altRbsFlag[j] != 0)
 					continue;
 				if (adid_abs(linMapp[i][at] - linMapp[j][at])
-				    >= short_a9a4)
+				    >= uniteUrefDistanceThresh)
 					continue;
 
 				group[j] = i;
-				fsum += float_1000[j][at];
-				fsq += float_9118[j][at];
-				total = (short)(total + uint_1c00[j][at]);
+				fsum += magnitudeSum[j][at];
+				fsq += magnitudeSqSum[j][at];
+				total = (short)(total + magnitudeCount[j][at]);
 			}
 
 			/*
@@ -913,7 +913,7 @@ V90AutoDigitalImpDetector::unitePhasesInfoOfUref(short at)
 				float mean = fsum * inv;
 
 				linMapp[i][at] = (short)(mean + 0.5f);
-				float_9d48[i][at] = fsq * inv - mean * mean;
+				linearMappingVar[i][at] = fsq * inv - mean * mean;
 			}
 
 			group[i] = i;
@@ -923,14 +923,14 @@ V90AutoDigitalImpDetector::unitePhasesInfoOfUref(short at)
 				if (group[j] != i)
 					continue;
 				linMapp[j][at] = linMapp[i][at];
-				float_9d48[j][at] = float_9d48[i][at];
+				linearMappingVar[j][at] = linearMappingVar[i][at];
 				count = (short)(count + 1);
 			}
 
 			if (count > best) {
 				best = count;
 				bestValue = linMapp[i][at];
-				bestVar = float_9d48[i][at];
+				bestVar = linearMappingVar[i][at];
 			}
 		}
 
@@ -948,9 +948,9 @@ V90AutoDigitalImpDetector::unitePhasesInfoOfUref(short at)
 		short p;
 
 		for (p = 0; p < V90ADID_PHASES; p++)
-			if (short_2800[p] != 0) {
+			if (altRbsFlag[p] != 0) {
 				linMapp[p][at] = v;
-				float_9d48[p][at] = bestVar;
+				linearMappingVar[p][at] = bestVar;
 			}
 	}
 }
@@ -972,13 +972,13 @@ V90AutoDigitalImpDetector::updateLinMappMeanAndVar(short phase, short code)
 {
 	float inv, mean;
 
-	if (uint_1c00[phase][code] == 0)
+	if (magnitudeCount[phase][code] == 0)
 		return;
 
-	inv = 1.0f / uint_1c00[phase][code];
-	mean = float_1000[phase][code] * inv;
+	inv = 1.0f / magnitudeCount[phase][code];
+	mean = magnitudeSum[phase][code] * inv;
 
-	float_9d48[phase][code] = float_9118[phase][code] * inv - mean * mean;
+	linearMappingVar[phase][code] = magnitudeSqSum[phase][code] * inv - mean * mean;
 	linMapp[phase][code] = (short)(mean + 0.5f);
 }
 
@@ -1003,7 +1003,7 @@ V90AutoDigitalImpDetector::updateUref()
 	short phase;
 
 	for (phase = 0; phase < V90ADID_PHASES; phase++) {
-		if (uint_1c00[phase][ucode] != 0) {
+		if (magnitudeCount[phase][ucode] != 0) {
 			/*
 			 * THE TWO EXTRA INSTRUCTIONS HERE ARE `fxch`, NOT A
 			 * STATEMENT, so lever 2's reading of this symbol's
@@ -1032,11 +1032,11 @@ V90AutoDigitalImpDetector::updateUref()
 			 * emission order already, so lever 3 has nothing
 			 * positional to offer either.  Finding F7846.
 			 */
-			float inv = 1.0f / uint_1c00[phase][ucode];
-			float mean = float_1000[phase][ucode] * inv;
+			float inv = 1.0f / magnitudeCount[phase][ucode];
+			float mean = magnitudeSum[phase][ucode] * inv;
 
-			float_9d48[phase][ucode] =
-			    float_9118[phase][ucode] * inv - mean * mean;
+			linearMappingVar[phase][ucode] =
+			    magnitudeSqSum[phase][ucode] * inv - mean * mean;
 			linMapp[phase][ucode] = (short)(mean + 0.5f);
 		}
 	}
@@ -1044,9 +1044,9 @@ V90AutoDigitalImpDetector::updateUref()
 	unitePhasesInfoOfUref(ucode);
 
 	for (phase = 0; phase < V90ADID_PHASES; phase++) {
-		float_1000[phase][ucode] = 0.0f;
-		uint_1c00[phase][ucode] = 0;
-		float_9118[phase][ucode] = 0.0f;
+		magnitudeSum[phase][ucode] = 0.0f;
+		magnitudeCount[phase][ucode] = 0;
+		magnitudeSqSum[phase][ucode] = 0.0f;
 	}
 }
 
@@ -1084,7 +1084,7 @@ V90AutoDigitalImpDetector::updateUrefAlt()
 	short phase;
 
 	for (phase = 0; phase < V90ADID_PHASES; phase++) {
-		if (short_2800[phase] != 0 && altMagnitudeCount[phase] != 0)
+		if (altRbsFlag[phase] != 0 && altMagnitudeCount[phase] != 0)
 			linMappAlt[phase][ucode] =
 			    (short)(altMagnitudeSum[phase]
 				    * (1.0f / altMagnitudeCount[phase]) + 0.5f);
@@ -1146,14 +1146,14 @@ V90AutoDigitalImpDetector::porcessFirstStudy()
 
 			if (ucode == code)
 				continue;
-			if (uint_1c00[phase][code] == 0)
+			if (magnitudeCount[phase][code] == 0)
 				continue;
 
-			inv = 1.0f / uint_1c00[phase][code];
-			mean = float_1000[phase][code] * inv;
+			inv = 1.0f / magnitudeCount[phase][code];
+			mean = magnitudeSum[phase][code] * inv;
 
-			float_9d48[phase][code] =
-			    inv * float_9118[phase][code] - mean * mean;
+			linearMappingVar[phase][code] =
+			    inv * magnitudeSqSum[phase][code] - mean * mean;
 			linMapp[phase][code] = (short)(mean + 0.5f);
 		}
 	}
@@ -1163,7 +1163,7 @@ V90AutoDigitalImpDetector::porcessFirstStudy()
 	for (phase = 0; phase < V90ADID_PHASES; phase++) {
 		short n = 1;
 
-		if (short_2800[phase] == 0) {
+		if (altRbsFlag[phase] == 0) {
 			for (code = 0x40; code <= 0x4e; code++) {
 				float d = (float)(linMapp[phase][code + 1]
 						  - linMapp[phase][code]);
@@ -1192,15 +1192,15 @@ V90AutoDigitalImpDetector::porcessFirstStudy()
 		unsigned char k;
 
 		for (k = 0; k < ucode; k++) {
-			float_1000[phase][k] = 0.0f;
-			uint_1c00[phase][k] = 0;
-			float_9118[phase][k] = 0.0f;
+			magnitudeSum[phase][k] = 0.0f;
+			magnitudeCount[phase][k] = 0;
+			magnitudeSqSum[phase][k] = 0.0f;
 			linMapp[phase][k] = 0;
 		}
 
-		uint_1c00[phase][ucode] = 0;
-		float_1000[phase][ucode] = 0.0f;
-		float_9118[phase][ucode] = 0.0f;
+		magnitudeCount[phase][ucode] = 0;
+		magnitudeSum[phase][ucode] = 0.0f;
+		magnitudeSqSum[phase][ucode] = 0.0f;
 
 		/*
 		 * The counter is a byte and the object tests its SIGN bit, so
@@ -1209,9 +1209,9 @@ V90AutoDigitalImpDetector::porcessFirstStudy()
 		 * ucode + 1; k < 128` does in C.
 		 */
 		for (k = (unsigned char)(ucode + 1); k < V90ADID_CODES; k++) {
-			uint_1c00[phase][k] = 0;
-			float_1000[phase][k] = 0.0f;
-			float_9118[phase][k] = 0.0f;
+			magnitudeCount[phase][k] = 0;
+			magnitudeSum[phase][k] = 0.0f;
+			magnitudeSqSum[phase][k] = 0.0f;
 			linMapp[phase][k] = 0;
 		}
 	}
@@ -1233,7 +1233,7 @@ V90AutoDigitalImpDetector::porcessFirstStudy()
  * THE MERGE TEST IS AGAINST A VARIANCE, NOT A CONSTANT DISTANCE.  Two phases
  * join when the square of the difference between their entries is less than
  * a quarter of the LEADER's variance, so the tolerance is per phase and per
- * code rather than the single `short_a9a4` the other method uses.  An
+ * code rather than the single `uniteUrefDistanceThresh` the other method uses.  An
  * unordered compare MERGES -- `jae` skips and CF is set by an unordered
  * `fcompp` -- so a NaN variance at +0x9d48 pools everything behind it, which
  * `updateLinMappMeanAndVar` can produce and a seeded object reaches directly.
@@ -1322,7 +1322,7 @@ V90AutoDigitalImpDetector::uniteLinMappInfoOfUnsuspectedPhases(unsigned char at)
 			 * is what makes the object's `jae` merge an unordered
 			 * compare rather than skip it.  Head comment.
 			 */
-			lim = float_9d48[i][at] * 0.25f;
+			lim = linearMappingVar[i][at] * 0.25f;
 			d = (float)(linMapp[i][at] - linMapp[j][at]);
 
 			if (d * d >= lim)
@@ -1346,15 +1346,15 @@ V90AutoDigitalImpDetector::uniteLinMappInfoOfUnsuspectedPhases(unsigned char at)
 		if (byte_280c[j] != 0 || group[j] != bestGroup)
 			continue;
 
-		fsum += float_1000[j][at];
-		fsq += float_9118[j][at];
+		fsum += magnitudeSum[j][at];
+		fsq += magnitudeSqSum[j][at];
 
 		/*
 		 * The pooled count is a `short` and the counts it pools are
 		 * `unsigned int`: the object truncates with `cwtl` after every
 		 * add, the same as `unitePhasesInfoOfUref`.
 		 */
-		total = (short)(total + uint_1c00[j][at]);
+		total = (short)(total + magnitudeCount[j][at]);
 	}
 
 	/*
@@ -1380,12 +1380,12 @@ V90AutoDigitalImpDetector::uniteLinMappInfoOfUnsuspectedPhases(unsigned char at)
 	for (j = 0; j < V90ADID_PHASES; j++) {
 		if (byte_280c[j] == 0) {
 			linMapp[j][at] = r;
-			float_9d48[j][at] = var;
+			linearMappingVar[j][at] = var;
 		}
 
-		float_1000[j][at] = 0.0f;
-		uint_1c00[j][at] = 0;
-		float_9118[j][at] = 0.0f;
+		magnitudeSum[j][at] = 0.0f;
+		magnitudeCount[j][at] = 0;
+		magnitudeSqSum[j][at] = 0.0f;
 	}
 }
 
@@ -1514,7 +1514,7 @@ V90AutoDigitalImpDetector::updateAltRbsPhaseInDil()
 		int base = 0;
 
 		/* Only the phases flagged at +0x2800, and they print too. */
-		if (short_2800[phase] == 0)
+		if (altRbsFlag[phase] == 0)
 			continue;
 
 		for (i = 0; i < 115; i++) {
@@ -1702,7 +1702,7 @@ V90AutoDigitalImpDetector::porcessSecondStudy()
 
 				if (byte_280c[phase] == 0)
 					continue;
-				if (short_2800[phase] != 0)
+				if (altRbsFlag[phase] != 0)
 					continue;
 
 				from = linMapp[phase][at]
@@ -1825,15 +1825,15 @@ V90AutoDigitalImpDetector::calculateLinearMeanAndVar(short v, short level,
 
 	mag = adid_abs(v);
 
-	float_1000[phase][at] += mag;
-	float_9118[phase][at] += mag * mag;
-	uint_1c00[phase][at]++;
+	magnitudeSum[phase][at] += mag;
+	magnitudeSqSum[phase][at] += mag * mag;
+	magnitudeCount[phase][at]++;
 }
 
 /*
  * The re-test that closes the second and third updates: a phase that was
  * flagged as carrying alternate RBS keeps the flag only if its alternate level
- * is STILL further from its plain level than `short_a9a6` allows.
+ * is STILL further from its plain level than `altRbsDistanceThresh` allows.
  *
  * The object writes this block out twice, at 0x42867 and 0x42b79, with
  * `isAltRbs` inlined and its leading "is the phase flagged" test dropped --
@@ -1847,13 +1847,13 @@ adid_recheckAltRbs(V90AutoDigitalImpDetector *o)
 	short phase;
 
 	for (phase = 0; phase < V90ADID_PHASES; phase++) {
-		if (o->short_2800[phase] == 0)
+		if (o->altRbsFlag[phase] == 0)
 			continue;
 
-		o->short_2800[phase] = (short)o->isAltRbs(phase, o->ucode,
+		o->altRbsFlag[phase] = (short)o->isAltRbs(phase, o->ucode,
 		    (float)o->linMappAlt[phase][o->ucode]);
 
-		if (o->short_2800[phase] == 0)
+		if (o->altRbsFlag[phase] == 0)
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf("V90AutoDigitalImpDetector" ": alternate rbs false "
 						     "detection on phase %d " "!!!\n", phase);
@@ -1898,7 +1898,7 @@ V90AutoDigitalImpDetector::studyUrefHandler(float v, unsigned int phase)
 	short sample = (short)v;
 	int ret = 1;
 
-	switch (int_a984) {
+	switch (studyState) {
 	case 0: {
 		/*
 		 * The initial pattern.  Accumulate until +0xa98c samples have
@@ -1911,10 +1911,10 @@ V90AutoDigitalImpDetector::studyUrefHandler(float v, unsigned int phase)
 		short n = 0;
 		short p;
 
-		int_a988++;
+		stateSampleCount++;
 		calculateLinearMeanAndVar(sample, ucodeLevel, phase);
 
-		if (int_a988 != int_a98c)
+		if (stateSampleCount != int_a98c)
 			break;
 
 		/*
@@ -1924,10 +1924,10 @@ V90AutoDigitalImpDetector::studyUrefHandler(float v, unsigned int phase)
 		 * straight into `getAltVarThresh`.  docs/deviations.md D292.
 		 */
 		for (p = 0; p < V90ADID_PHASES; p++) {
-			float inv = 1.0f / uint_1c00[p][ucode];
-			float mean = float_1000[p][ucode] * inv;
+			float inv = 1.0f / magnitudeCount[p][ucode];
+			float mean = magnitudeSum[p][ucode] * inv;
 
-			var[p] = inv * float_9118[p][ucode] - mean * mean;
+			var[p] = inv * magnitudeSqSum[p][ucode] - mean * mean;
 		}
 
 		if (DSPLIB_DEBUG_ON())
@@ -1951,7 +1951,7 @@ V90AutoDigitalImpDetector::studyUrefHandler(float v, unsigned int phase)
 		for (p = 0; p < V90ADID_PHASES; p++)
 			if (var[p] > thresh) {
 				n = (short)(n + 1);
-				short_2800[p] = 1;
+				altRbsFlag[p] = 1;
 			}
 
 		/*
@@ -1961,18 +1961,18 @@ V90AutoDigitalImpDetector::studyUrefHandler(float v, unsigned int phase)
 		 */
 		if (n > 0)
 			for (p = 0; p < V90ADID_PHASES; p++) {
-				float_1000[p][ucode] = 0.0f;
-				uint_1c00[p][ucode] = 0;
-				float_9118[p][ucode] = 0.0f;
+				magnitudeSum[p][ucode] = 0.0f;
+				magnitudeCount[p][ucode] = 0;
+				magnitudeSqSum[p][ucode] = 0.0f;
 			}
 
 		edprintf("V90AutoDigitalImpDetector: Trn1 alternate rbs initial "
-			 "patern  %d%d%d%d%d%d\n", short_2800[0], short_2800[1],
-			 short_2800[2], short_2800[3], short_2800[4],
-			 short_2800[5]);
+			 "patern  %d%d%d%d%d%d\n", altRbsFlag[0], altRbsFlag[1],
+			 altRbsFlag[2], altRbsFlag[3], altRbsFlag[4],
+			 altRbsFlag[5]);
 
-		int_a988 = 0;
-		int_a984 = 1;
+		stateSampleCount = 0;
+		studyState = 1;
 		break;
 	}
 
@@ -1984,11 +1984,11 @@ V90AutoDigitalImpDetector::studyUrefHandler(float v, unsigned int phase)
 		 * narrows it to a `short` first, because those arms reach the
 		 * flag through `isAltRbs` and this one does not.
 		 */
-		int_a988++;
+		stateSampleCount++;
 		calculateLinearMeanAndVar(sample, ucodeLevel, phase);
-		ret = short_2800[phase] == 0 ? 1 : 0;
+		ret = altRbsFlag[phase] == 0 ? 1 : 0;
 
-		if (int_a988 != int_a990)
+		if (stateSampleCount != int_a990)
 			break;
 
 		updateUref();
@@ -2009,8 +2009,8 @@ V90AutoDigitalImpDetector::studyUrefHandler(float v, unsigned int phase)
 			 linMapp[1][ucode], linMapp[2][ucode], linMapp[3][ucode],
 			 linMapp[4][ucode], linMapp[5][ucode]);
 
-		int_a988 = 0;
-		int_a984 = 2;
+		stateSampleCount = 0;
+		studyState = 2;
 		break;
 
 	case 2:
@@ -2020,7 +2020,7 @@ V90AutoDigitalImpDetector::studyUrefHandler(float v, unsigned int phase)
 		 * goes to the ALTERNATE accumulators and the caller is told 0,
 		 * anything else goes to the plain ones.
 		 */
-		int_a988++;
+		stateSampleCount++;
 
 		if (isAltRbs((short)phase, ucode, v)) {
 			calculateLinearMeanAndVarAlt(sample, phase);
@@ -2030,7 +2030,7 @@ V90AutoDigitalImpDetector::studyUrefHandler(float v, unsigned int phase)
 			ret = 1;
 		}
 
-		if (int_a988 != int_a994)
+		if (stateSampleCount != int_a994)
 			break;
 
 		updateUref();
@@ -2058,8 +2058,8 @@ V90AutoDigitalImpDetector::studyUrefHandler(float v, unsigned int phase)
 		adid_recheckAltRbs(this);
 
 		short_a948 = 1;
-		int_a988 = 0;
-		int_a984 = 4;
+		stateSampleCount = 0;
+		studyState = 4;
 		break;
 
 	case 3:
@@ -2068,14 +2068,14 @@ V90AutoDigitalImpDetector::studyUrefHandler(float v, unsigned int phase)
 		 * caller is told 1 either way, so an alternate-RBS sample is
 		 * no longer withheld from whatever is upstream.
 		 */
-		int_a988++;
+		stateSampleCount++;
 
 		if (isAltRbs((short)phase, ucode, v))
 			calculateLinearMeanAndVarAlt(sample, phase);
 		else
 			calculateLinearMeanAndVar(sample, ucodeLevel, phase);
 
-		if (int_a988 != int_a998)
+		if (stateSampleCount != int_a998)
 			break;
 
 		updateUref();
@@ -2104,8 +2104,8 @@ V90AutoDigitalImpDetector::studyUrefHandler(float v, unsigned int phase)
 		adid_updateTrn1Sigma(this, "V90AutoDigitalImpDetector first "
 					   "update : trn1Sigma = %d\n");
 
-		int_a988 = 0;
-		int_a984 = 5;
+		stateSampleCount = 0;
+		studyState = 5;
 		break;
 
 	case 4: {
@@ -2115,13 +2115,13 @@ V90AutoDigitalImpDetector::studyUrefHandler(float v, unsigned int phase)
 		 * to state 3.  The count that fires it is the incremented one
 		 * and what is stored on the firing pass is zero, not it.
 		 */
-		int next = int_a988 + 1;
+		int next = stateSampleCount + 1;
 
 		if (next == int_a99c) {
-			int_a988 = 0;
-			int_a984 = 3;
+			stateSampleCount = 0;
+			studyState = 3;
 		} else {
-			int_a988 = next;
+			stateSampleCount = next;
 		}
 		break;
 	}
@@ -2132,14 +2132,14 @@ V90AutoDigitalImpDetector::studyUrefHandler(float v, unsigned int phase)
 		 * duration at +0xa998 -- and the tail has no re-test of the
 		 * flags, because there is nothing left to correct them for.
 		 */
-		int_a988++;
+		stateSampleCount++;
 
 		if (isAltRbs((short)phase, ucode, v))
 			calculateLinearMeanAndVarAlt(sample, phase);
 		else
 			calculateLinearMeanAndVar(sample, ucodeLevel, phase);
 
-		if (int_a988 != int_a998)
+		if (stateSampleCount != int_a998)
 			break;
 
 		updateUref();
@@ -2167,8 +2167,8 @@ V90AutoDigitalImpDetector::studyUrefHandler(float v, unsigned int phase)
 		adid_updateTrn1Sigma(this, "V90AutoDigitalImpDetector second "
 					   "update : trn1Sigma = %d\n");
 
-		int_a988 = 0;
-		int_a984 = 6;
+		stateSampleCount = 0;
+		studyState = 6;
 		ret = 2;
 		break;
 
@@ -2273,7 +2273,7 @@ V90AutoDigitalImpDetector::findPadGain()
 		int lim = (int)d - 5;
 
 		do {
-			float v = float_9d48[unSuspectedPhase][d];
+			float v = linearMappingVar[unSuspectedPhase][d];
 
 			/* `jb` takes an unordered compare -- finding F1436. */
 			if (!(v >= bestVar)) {
@@ -2492,10 +2492,10 @@ V90AutoDigitalImpDetector::findPadGain()
 	 * which is what the object's `ja` does.
 	 */
 	if (minErrorMuLaw > minErrorALaw) {
-		int_a960 = 1;
+		detectedPcmType = 1;
 		edprintf("Final codec identified is ALaw\r\n");
 	} else {
-		int_a960 = 0;
+		detectedPcmType = 0;
 		edprintf("Final codec identified is MuLaw\r\n");
 		gainValueALaw = gainValueMuLaw;
 	}
@@ -2545,9 +2545,9 @@ V90AutoDigitalImpDetector::applyPadGainToLinMapp()
  *
  * WHAT THE TWO ARE FOR, AND WHY THEY ARE ONE READING.  By this point the
  * class knows, for every RBS phase and every seven-bit code, how noisy that
- * cell's measured mapping is -- `float_9d48`, which the object's own format
+ * cell's measured mapping is -- `linearMappingVar`, which the object's own format
  * string calls `linearMappingVar`.  `determineMaxUcode` turns that into two
- * answers: a per-cell "is this code usable" mask in `byte_0d00`, and the
+ * answers: a per-cell "is this code usable" mask in `usableMask`, and the
  * highest usable code for each phase in `maxUcode[6]`, both hung off one
  * scalar at +0xa954 that it also leaves behind.  `findPadGain` then starts
  * from that scalar, assumes a pad in the line, and searches for the gain that
@@ -2585,7 +2585,7 @@ V90AutoDigitalImpDetector::applyPadGainToLinMapp()
  * emit `fucomp`, which does not, for every spelling tried.  Nothing here
  * reads the x87 status word, so no test can see it -- docs/deviations.md
  * D295.
- * A seeded `float_9d48` reaches all three: one 32-bit pattern in 128 is a
+ * A seeded `linearMappingVar` reaches all three: one 32-bit pattern in 128 is a
  * NaN.  Finding F1436.
  *
  * THREE OF THE LOCALS HERE ARE `volatile`, AND IT IS NOT A HINT.  The object
@@ -2615,7 +2615,7 @@ V90AutoDigitalImpDetector::applyPadGainToLinMapp()
  *   3. a scan DOWNWARDS from the argument for the first window of five
  *      adjacent codes containing more than two "small but not zero"
  *      variances, whose top becomes `byte_a954`, floored at `short_a97a`;
- *   4. `byte_0d00[phase][code]` set to 1 exactly where the code is within the
+ *   4. `usableMask[phase][code]` set to 1 exactly where the code is within the
  *      argument's reach and the variance is under twice the threshold;
  *   5. `maxUcode[phase]` read back out of that mask.
  *
@@ -2667,7 +2667,7 @@ V90AutoDigitalImpDetector::determineMaxUcode(short maxCode)
 
 		for (i = 40; i <= 59; i++)
 			sum += __builtin_fabsf(
-			    float_9d48[unSuspectedPhase][i]);
+			    linearMappingVar[unSuspectedPhase][i]);
 
 		/*
 		 * AND THE FIRST REPORT PRINTS THE PRODUCT AT BOTH PRECISIONS
@@ -2715,7 +2715,7 @@ V90AutoDigitalImpDetector::determineMaxUcode(short maxCode)
 	 */
 	for (k = (unsigned char)(short_a97a + 1); (int)k <= maxCode; k++)
 		edprintf("linearMappingVar[%d][%d] = %d\r\n", unSuspectedPhase,
-			 k, adid_abs((int)float_9d48[unSuspectedPhase][k]));
+			 k, adid_abs((int)linearMappingVar[unSuspectedPhase][k]));
 
 	edprintf("--------------------------------------------------------\r\n");
 
@@ -2738,7 +2738,7 @@ V90AutoDigitalImpDetector::determineMaxUcode(short maxCode)
 		unsigned char d;
 
 		for (d = 0; d <= 4; d++) {
-			float v = float_9d48[unSuspectedPhase][ci - d];
+			float v = linearMappingVar[unSuspectedPhase][ci - d];
 
 			if (v >= varThresh)
 				continue;
@@ -2807,19 +2807,19 @@ V90AutoDigitalImpDetector::determineMaxUcode(short maxCode)
 			unsigned char code;
 
 			for (code = 0; code < V90ADID_CODES; code++) {
-				if (short_2800[phase] != 0)
+				if (altRbsFlag[phase] != 0)
 					continue;
 
 				if ((int)code > (int)maxCode)
-					byte_0d00[phase][code] = 0;
-				else if (__builtin_fabsf(float_9d48[phase][code])
+					usableMask[phase][code] = 0;
+				else if (__builtin_fabsf(linearMappingVar[phase][code])
 					 >= lim)
-					byte_0d00[phase][code] = 0;
+					usableMask[phase][code] = 0;
 				else
-					byte_0d00[phase][code] = 1;
+					usableMask[phase][code] = 1;
 			}
 
-			byte_0d00[phase][ref] = 1;
+			usableMask[phase][ref] = 1;
 		}
 	}
 
@@ -2831,22 +2831,22 @@ V90AutoDigitalImpDetector::determineMaxUcode(short maxCode)
 	 *
 	 * THE WALK HAS NO FLOOR.  It decrements a byte, so it wraps at 0 into
 	 * the previous 128 indices -- which for phases 0..4 is the next
-	 * phase's row and for phase 5 is the start of `float_1000`, both
+	 * phase's row and for phase 5 is the start of `magnitudeSum`, both
 	 * inside the object -- and if all 256 of those bytes are zero it never
 	 * ends.  docs/deviations.md D289.
 	 */
 	for (phase = 0; phase < V90ADID_PHASES; phase++) {
 		unsigned char m = byte_a954;
 
-		if (short_2800[phase] == 0) {
+		if (altRbsFlag[phase] == 0) {
 			maxUcode[phase] = m;
 
-			if (byte_0d00[phase][m] == 0) {
+			if (usableMask[phase][m] == 0) {
 				unsigned char d = m;
 
 				do {
 					d--;
-				} while (byte_0d00[phase][d] == 0);
+				} while (usableMask[phase][d] == 0);
 
 				maxUcode[phase] = d;
 			}
@@ -2964,7 +2964,7 @@ V90AutoDigitalImpDetector::setQcLinearMapping()
 	short ci;
 
 	for (phase = 0; phase < V90ADID_PHASES; phase++) {
-		if (short_2800[phase] != 0)
+		if (altRbsFlag[phase] != 0)
 			continue;
 
 		if (byte_280c[phase] != 0) {

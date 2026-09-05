@@ -311,7 +311,7 @@ setup(int trial, int mode)
 	for (k = 0; k < V90ADID_PHASES; k++) {
 		int j;
 
-		ADI->short_2800[k] = (short)(k & 1);
+		ADI->altRbsFlag[k] = (short)(k & 1);
 		for (j = 0; j < V90ADID_CODES; j++) {
 			ADI->linMapp[k][j] = (short)(4000 - 20 * j);
 			ADI->linMappAlt[k][j] = (short)(3990 - 20 * j);
@@ -1808,12 +1808,12 @@ x3_tables(int shape, unsigned lf)
 
 			ADI->linMapp[k][i] = (short)v;
 			ADI->linMappAlt[k][i] = (short)(v - (i & 7));
-			ADI->byte_0d00[k][i] =
+			ADI->usableMask[k][i] =
 				(unsigned char)(((i * 7 + k) % 5) != 0);
 		}
 		ADI->linMapp[k][0] = 0;
 		ADI->linMappAlt[k][0] = 0;
-		ADI->short_2800[k] = (short)((lf >> k) & 1u);
+		ADI->altRbsFlag[k] = (short)((lf >> k) & 1u);
 		ADI->maxUcode[k] = (unsigned char)(96u + ((lf >> k) & 31u));
 	}
 }
@@ -1900,7 +1900,7 @@ run_exit_phase3(void)
 						 (unsigned)(trial & 0x7fff));
 
 		ADI->pcmType = (PcmType)((trial & 4) ? 1 : 0);
-		ADI->int_a960 = (int)(0x0a960000u + (unsigned)(trial & 0xff));
+		ADI->detectedPcmType = (int)(0x0a960000u + (unsigned)(trial & 0xff));
 		ADI->unSuspectedPhase = (short)(trial * 977);
 
 		fill(x3_ph2, X3_PH2_SLOT, lf ^ 0x2f1u);
@@ -2109,7 +2109,7 @@ run_exit_phase3(void)
 				    trial);
 			diff_eq_int("the detector's word reached +0x0c (%ld)",
 				    (long)X3_ACP(1)->word_0c,
-				    (long)ADI->int_a960, trial);
+				    (long)ADI->detectedPcmType, trial);
 			diff_eq_int("the phase 4 demodulator took the "
 				    "quick-connect flag (%ld)",
 				    (long)P4D(1).quickConnect, (long)qc,

@@ -400,7 +400,7 @@ public:
 	/**
 	 * @brief Build the mapping a QC session starts from.
 	 *
-	 * Every phase not flagged at `short_2800` gets a mapping: from its own
+	 * Every phase not flagged at `altRbsFlag` gets a mapping: from its own
 	 * accumulators if it has a verdict at `byte_280c`, or otherwise from
 	 * `prevLinMapp`, the single previous-session row shared by all six
 	 * phases. Finds the first unsuspected phase, calls
@@ -431,7 +431,7 @@ public:
 	 * `edprintf` and `dsplibs_debug_printf`, and `determineMaxUcode` calls
 	 * only `edprintf`.
 	 *
-	 * `determineMaxUcode` fills `byte_0d00` and reads it back to give every
+	 * `determineMaxUcode` fills `usableMask` and reads it back to give every
 	 * phase a `maxUcode`, and it is what leaves `byte_a954` behind.
 	 * `findPadGain` starts from that byte, projects the reference phase's
 	 * mapping through both companding laws at a range of assumed gains,
@@ -450,7 +450,7 @@ public:
 	 * @brief Decide, per phase, which PCM codes are usable and how high
 	 *        each phase may be driven.
 	 *
-	 * Fills `byte_0d00` with a per-cell "usable" mask (usable when the
+	 * Fills `usableMask` with a per-cell "usable" mask (usable when the
 	 * code is within `maxCode` and the cell's variance is small), leaves
 	 * the scan's own top behind in `byte_a954`, and gives every phase a
 	 * `maxUcode[]` entry at or below it.
@@ -468,7 +468,7 @@ public:
 	 * through both companding laws at a range of assumed gains, and
 	 * keeps the gain with the smallest round-trip error. Also decides
 	 * which companding law the line is actually using and records it in
-	 * `int_a960`.
+	 * `detectedPcmType`.
 	 */
 	void findPadGain();
 
@@ -477,7 +477,7 @@ public:
 	 * 5,335 bytes, which is a third again the size of the next largest.
 	 * It is the per-sample entry point of the TRN1 study -- one call per
 	 * received sample, with the sample's RBS phase as the second argument
-	 * -- and it is a state machine on `int_a984` dispatched through a
+	 * -- and it is a state machine on `studyState` dispatched through a
 	 * seven-entry jump table at `.rodata+0xd70`.  The chain the arms name
 	 * is NOT in numeric order:
 	 *
@@ -509,10 +509,10 @@ public:
 	 *
 	 * Called once per received sample of the far end's TRN1 segment (a
 	 * long run of the reference PCM code), with the sample's RBS phase.
-	 * Drives a seven-state machine (`int_a984`) through the study's six
+	 * Drives a seven-state machine (`studyState`) through the study's six
 	 * timed passes, each ending in an update of `linMapp`/`linMappAlt`
 	 * for the reference code, and leaves behind the per-phase
-	 * alternate-RBS flags at `short_2800` and `trn1Sigma`.
+	 * alternate-RBS flags at `altRbsFlag` and `trn1Sigma`.
 	 *
 	 * @param sample  The received sample's linear level.
 	 * @param phase   Which of the six RBS phases the sample belongs to.
@@ -563,8 +563,10 @@ public:
 	 *
 	 * The reference code's entry is forced back to 1 for every phase at the
 	 * end of that fill, whatever the variance said -- see D289.
+	 *
+	 * Renamed from `byte_0d00`; this wave.
 	 */
-	unsigned char byte_0d00[V90ADID_PHASES][V90ADID_CODES];	/* +0x0d00 */
+	unsigned char usableMask[V90ADID_PHASES][V90ADID_CODES];	/* +0x0d00 */
 
 	/*
 	 * The per-(phase, code) accumulators the mean and variance are formed
@@ -578,16 +580,42 @@ public:
 	 * push %eax; fildll` builds a 64-bit value with a zero high word,
 	 * which is what GCC emits for `(float)(unsigned int)` and never for a
 	 * signed one.
+	 *
+	 * Renamed from `float_1000`/`uint_1c00`, matching the already-named
+	 * `altMagnitudeSum`/`altMagnitudeCount` pair below for the identical
+	 * role at the per-phase granularity; this wave.
 	 */
-	float float_1000[V90ADID_PHASES][V90ADID_CODES];	/* +0x1000 */
-	unsigned int uint_1c00[V90ADID_PHASES][V90ADID_CODES];	/* +0x1c00 */
+	float magnitudeSum[V90ADID_PHASES][V90ADID_CODES];	/* +0x1000 */
+	unsigned int magnitudeCount[V90ADID_PHASES][V90ADID_CODES];	/* +0x1c00 */
 
 	/*
-	 * Per-phase.  `short_2800` is compared against 0 by nine members and
-	 * is the phase's "suspected" flag; `byte_280c` likewise.  Both are
-	 * cleared by `reset` and neither is named here beyond its offset.
+	 * Per-phase.  Nonzero means "this phase is currently judged to carry
+	 * alternate RBS": `studyUrefHandler` sets it from the initial variance
+	 * test and `adid_recheckAltRbs` (V90AutoDigitalImpDetector.cpp) can
+	 * clear it again, and nine other members gate on it -- `isAltRbs`,
+	 * `isThereAnyAltRbsPhase`, `unitePhasesInfoOfUref`, `updateUrefAlt`,
+	 * `porcessFirstStudy`, `porcessSecondStudy` and `updateAltRbsPhaseInDil`
+	 * among them -- consistently as "this phase carries alternate RBS",
+	 * which is what `isThereAnyAltRbsPhase`'s own docstring already said.
+	 * Cleared by `reset`.  Renamed from `short_2800`; this wave.
+	 *
+	 * `byte_280c` IS NOT THE SAME KIND OF FLAG, and is deliberately left
+	 * bare rather than renamed alongside it: the object reads the SAME
+	 * BYTE two different ways from two different callers.
+	 * `uniteLinMappInfoOfUnsuspectedPhases` and `porcessSecondStudy` read a
+	 * set bit as "this phase is suspected, skip it" (`porcessFirstStudy` is
+	 * the writer, from the rough-mapping test); `setQcLinearMapping` reads
+	 * the SAME bit as "this phase HAS a verdict, use its own accumulators"
+	 * with the opposite polarity's meaning at the call site -- its own
+	 * comment says so explicitly: "+0x280c is read here as 'this phase was
+	 * studied' rather than as 'this phase is suspected', which is the
+	 * opposite of how `uniteLinMappInfoOfUnsuspectedPhases` reads it -- the
+	 * object uses the same byte both ways and the two methods are not a
+	 * pair."  A single name would be right for one reading and
+	 * wrong-but-plausible for the other, which is exactly what CLAUDE.md's
+	 * naming rule forbids, so it keeps its offset.
 	 */
-	short short_2800[V90ADID_PHASES];			/* +0x2800 */
+	short altRbsFlag[V90ADID_PHASES];			/* +0x2800 */
 	unsigned char byte_280c[V90ADID_PHASES];		/* +0x280c */
 
 	/*
@@ -626,10 +654,15 @@ public:
 	 * Float from every other user -- `fadds`, `fstps`, `fmuls` -- and
 	 * cleared by `reset` with a 32-bit zero, which is 0.0f.
 	 * `calculateLinearMeanAndVar` accumulates the SQUARE of each magnitude
-	 * here where +0x1000 gets the magnitude itself, which is what makes
-	 * `updateLinMappMeanAndVar`'s `E[x^2] - E[x]^2` a variance.
+	 * here where `magnitudeSum` gets the magnitude itself, which is what
+	 * makes `updateLinMappMeanAndVar`'s `E[x^2] - E[x]^2` a variance.
+	 * Renamed from `float_9118`, paired with `magnitudeSum`/
+	 * `magnitudeCount` below and `altMagnitudeSum`/`altMagnitudeCount`
+	 * beneath that -- the same three-accumulator shape at two
+	 * granularities, per (phase, code) here and per phase there, and the
+	 * "alt" pair already carried real names; this wave.
 	 */
-	float float_9118[V90ADID_PHASES][V90ADID_CODES];	/* +0x9118 */
+	float magnitudeSqSum[V90ADID_PHASES][V90ADID_CODES];	/* +0x9118 */
 
 	/*
 	 * The alternate-RBS pair of the two above, per phase rather than per
@@ -637,7 +670,7 @@ public:
 	 * one and increments the other, `updateLinMappMeanAndVarAlt` and
 	 * `updateUrefAlt` divide, and `clearCamulativeAltVal` and
 	 * `updateUrefAlt` clear both.  Unsigned for the same `fildll` reason
-	 * as +0x1c00.
+	 * as `magnitudeCount`.
 	 */
 	float altMagnitudeSum[V90ADID_PHASES];			/* +0x9d18 */
 	unsigned int altMagnitudeCount[V90ADID_PHASES];	/* +0x9d30 */
@@ -647,12 +680,15 @@ public:
 	 *
 	 * The object names it `linearMappingVar`: `determineMaxUcode` prints
 	 * exactly this array through "linearMappingVar[%d][%d] = %d\r\n" with
-	 * `unSuspectedPhase` and the loop counter as the two indices.  The
-	 * identifier is left offset-derived because it is spelled in five files
-	 * and a rename buys nothing the comment does not, which is the same
-	 * decision finding F1425 records for +0xa9a4 and +0xa9a6.
+	 * `unSuspectedPhase` and the loop counter as the two indices -- rank 1,
+	 * a format string.  A prior pass (finding F1425) left this offset-
+	 * derived on the ground that it is spelled in five files and a rename
+	 * buys nothing the comment does not; this wave's own mandate is
+	 * exactly to apply names CLAUDE.md's evidence order already supports,
+	 * so the rename is now made and propagated to every one of those five
+	 * files (and their test/mutation fixtures).  Renamed from `float_9d48`.
 	 */
-	float float_9d48[V90ADID_PHASES][V90ADID_CODES];	/* +0x9d48 */
+	float linearMappingVar[V90ADID_PHASES][V90ADID_CODES];	/* +0x9d48 */
 
 	/* Cleared by `reset`; `studyUrefHandler` is the only other writer. */
 	short short_a948;					/* +0xa948 */
@@ -721,7 +757,7 @@ public:
 	 * Six bytes, one per phase, copied in by `setMaxUcodeArray`. The
 	 * values are the highest PCM code each phase may be driven at:
 	 * `determineMaxUcode` fills them from `byte_a954` above, walking each
-	 * phase's `byte_0d00` row down to the first usable code, and clamping
+	 * phase's `usableMask` row down to the first usable code, and clamping
 	 * a flagged phase to two below its own argument.
 	 */
 	unsigned char maxUcode[V90ADID_PHASES];			/* +0xa956 */
@@ -737,8 +773,20 @@ public:
 	 * identified is ALaw".  Both stores are 32 bits, which is what makes
 	 * this an `int` and not a byte, and they retire the whole of what was
 	 * `pad_a960[4]`.  Nothing in the class reads it.  Finding F1434.
+	 *
+	 * Named this wave from the two external readers, not from a format
+	 * string on this field itself: `V90ConstellationDesigner::process`
+	 * (via its `V90AutoDigitalImpDetector *` argument) and
+	 * `V90Demodulator.cpp` both read it and the latter CASTS it --
+	 * `(PcmType)autoDigitalImpDetector->detectedPcmType` -- which is what
+	 * ties the 0/1 this field stores to `PCM_TYPE_MU_LAW`/`PCM_TYPE_A_LAW`
+	 * (0 and 1 respectively, `V90Phase3Modulator.h`) rather than leaving it
+	 * an arbitrary flag.  Kept as `int` and not retyped to `PcmType`: the
+	 * object's own stores are plain 32-bit `mov`s of 0/1 with no `PcmType`
+	 * value ever constructed at this site, so retyping would be a second,
+	 * unevidenced claim riding on the rename.  Renamed from `int_a960`.
 	 */
-	int int_a960;						/* +0xa960 */
+	int detectedPcmType;						/* +0xa960 */
 
 	/*
 	 * The object names this one itself: `porcessFirstStudy` prints it
@@ -781,10 +829,16 @@ public:
 	short ucodeLevel;					/* +0xa96c */
 
 	/*
-	 * `reset`'s third argument, and the only thing it selects: nonzero
-	 * puts 5.0f in `float_a970` where zero puts 1.5f.
+	 * `reset`'s third argument, stored unchanged, and the only thing it
+	 * selects: nonzero puts 5.0f in `float_a970` where zero puts 1.5f.
+	 * Named for the argument's own doc comment on `reset` ("Nonzero if the
+	 * session should expect alternate RBS"), and deliberately not just
+	 * `altRbs` -- that would read as the same concept as the per-phase
+	 * `altRbsFlag` this class derives itself, where this is the session's
+	 * own up-front hint and nothing here ties the two together. Usage
+	 * inference, rank 3. Renamed from `short_a96e`.
 	 */
-	short short_a96e;					/* +0xa96e */
+	short altRbsExpected;					/* +0xa96e */
 
 	float float_a970;					/* +0xa970 */
 	float float_a974;					/* +0xa974 */
@@ -817,9 +871,21 @@ public:
 	 * They are eight scalars rather than one array because the object
 	 * copies them with eight independent instruction pairs; a loop over
 	 * an array would be a loop.
+	 *
+	 * The first two are named this wave, on the same structural ground as
+	 * `V92CP::rxState`/`stateBitCount` (finding F10130): `studyState` is
+	 * the seven-way dispatch `studyUrefHandler` switches on -- see the
+	 * method's own doc comment for the chain -- and `stateSampleCount` is
+	 * the per-state sample counter it `incl`s and compares against the six
+	 * durations below.  No format string names either; usage inference,
+	 * but as structurally unambiguous as `rxState`'s own case was.  The six
+	 * durations that follow have no such anchor -- no format string picks
+	 * one out and their only forced fact is "one of six 32-bit copies" --
+	 * so they stay `int_a98c`..`int_a9a0`. Renamed from `int_a984`/
+	 * `int_a988`.
 	 */
-	int int_a984;						/* +0xa984 */
-	int int_a988;						/* +0xa988 */
+	int studyState;						/* +0xa984 */
+	int stateSampleCount;						/* +0xa988 */
 	int int_a98c;						/* +0xa98c */
 	int int_a990;						/* +0xa990 */
 	int int_a994;						/* +0xa994 */
@@ -837,21 +903,24 @@ public:
 	 * The object's own name for this field is `uniteUrefDistanceThresh`.
 	 * `resetStudyUrefHandler` prints it with the format string
 	 * "uniteUrefDistanceThresh = %d\r\n" and passes exactly
-	 * `movswl 0xa9a4(%ebx)` as the argument.  The identifier is left
-	 * offset-derived because it is spelled in three files and a rename
-	 * buys nothing the comment does not; finding F1425.
+	 * `movswl 0xa9a4(%ebx)` as the argument -- rank 1.  A prior pass
+	 * (finding F1425) left this offset-derived on the ground that it is
+	 * spelled in three files and a rename buys nothing the comment does
+	 * not; this wave's mandate is exactly to apply names CLAUDE.md's
+	 * evidence order already supports, so the rename is made and
+	 * propagated to those files.  Renamed from `short_a9a4`.
 	 */
-	short short_a9a4;					/* +0xa9a4 */
+	short uniteUrefDistanceThresh;					/* +0xa9a4 */
 
 	/*
 	 * The distance threshold `isAltRbs` compares against: it answers yes
 	 * when |sample - linMapp[phase][code]| is strictly greater than this.
 	 * `resetStudyUrefHandler` is what puts a value here, and prints it
 	 * under the object's own name: "altRbsDistanceThresh = %d\r\n" with
-	 * `movswl 0xa9a6(%ebx)` as its only argument.  The identifier stays
-	 * offset-derived for the reason given at +0xa9a4.
+	 * `movswl 0xa9a6(%ebx)` as its only argument -- rank 1, same as
+	 * `uniteUrefDistanceThresh` above.  Renamed from `short_a9a6`.
 	 */
-	short short_a9a6;					/* +0xa9a6 */
+	short altRbsDistanceThresh;					/* +0xa9a6 */
 
 	/*
 	 * The last eight bytes, all three named by the object's own format

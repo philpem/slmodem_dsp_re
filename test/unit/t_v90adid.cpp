@@ -894,7 +894,7 @@ run_setdildescriptor(void)
  * over 0..127 -- EXCEPT where a larger value still lands inside the object,
  * which is where the interesting behaviour is.  `calculateLinearMeanAndVar`
  * builds its own index by companding, and that index reaches 255: at phase 5
- * it addresses +0x9F14 in `float_9118`'s row, which is 2,716 bytes short of
+ * it addresses +0x9F14 in `magnitudeSqSum`'s row, which is 2,716 bytes short of
  * the end of the object, so the unmasked index is exercised for real rather
  * than avoided.  `addReceivedSampleToStorage`'s code byte is swept over the
  * whole of 0..255 for the same reason.  Every deviation that is reproducible
@@ -943,7 +943,7 @@ sane_sample_counts(int trial)
  * argument for what each bound is for is at the head of `run_maxucode`.
  */
 
-/* The last `float_9d48` entry whose four bytes are still inside the object. */
+/* The last `linearMappingVar` entry whose four bytes are still inside the object. */
 #define ADID_VAR_LAST	793
 
 /*
@@ -966,7 +966,7 @@ adid_set_2800(int pattern)
 	int p;
 
 	for (p = 0; p < NPHASE; p++)
-		ours_o.short_2800[p] = theirs_o.short_2800[p] =
+		ours_o.altRbsFlag[p] = theirs_o.altRbsFlag[p] =
 		    (short)((pattern >> p) & 1);
 }
 
@@ -989,8 +989,8 @@ plant_window(short usp, unsigned char a954, int minoff, float minval,
 		unsigned char at = (unsigned char)(s - d);
 		float v = (d == minoff) ? minval : other;
 
-		ours_o.float_9d48[usp][at] = v;
-		theirs_o.float_9d48[usp][at] = v;
+		ours_o.linearMappingVar[usp][at] = v;
+		theirs_o.linearMappingVar[usp][at] = v;
 	}
 }
 
@@ -1126,8 +1126,8 @@ run_clears(void)
 		if (memcmp(before, ours.raw, SLOT) != 0)
 			moved = 1;
 		if (trial == 0)
-			first = ours_o.uint_1c00[0][0];
-		else if (ours_o.uint_1c00[0][0] != first)
+			first = ours_o.magnitudeCount[0][0];
+		else if (ours_o.magnitudeCount[0][0] != first)
 			distinct = 1;
 	}
 
@@ -1246,7 +1246,7 @@ run_means(void)
 		seed(trial, trial % 4);
 
 		if ((trial & 3) == 0) {
-			BOTH(uint_1c00[phase][code], 0u);
+			BOTH(magnitudeCount[phase][code], 0u);
 			BOTH(altMagnitudeCount[phase], 0u);
 			zerocount = 1;
 		} else if ((trial & 3) == 2) {
@@ -1280,16 +1280,16 @@ run_means(void)
 			 */
 			int q;
 
-			BOTH(uint_1c00[phase][code], 41u);
-			BOTH(float_1000[phase][code], 143.5f);
-			BOTH(float_9118[phase][code], 600.0f);
+			BOTH(magnitudeCount[phase][code], 41u);
+			BOTH(magnitudeSum[phase][code], 143.5f);
+			BOTH(magnitudeSqSum[phase][code], 600.0f);
 			for (q = 0; q < NPHASE; q++) {
 				BOTH(altMagnitudeCount[q], 41u);
 				BOTH(altMagnitudeSum[q], 143.5f);
 			}
 			nonzerocount = 1;
 		} else {
-			BOTH(uint_1c00[phase][code],
+			BOTH(magnitudeCount[phase][code],
 			     (unsigned)(trial * 7 + 1));
 			BOTH(altMagnitudeCount[phase], (unsigned)(trial + 1));
 			nonzerocount = 1;
@@ -1302,15 +1302,15 @@ run_means(void)
 		 * exercised through the same `fistp`.
 		 */
 		if ((trial & 3) == 1) {
-			BOTH(float_1000[phase][code], 1234.5f);
-			BOTH(float_9118[phase][code], 4000000.0f);
+			BOTH(magnitudeSum[phase][code], 1234.5f);
+			BOTH(magnitudeSqSum[phase][code], 4000000.0f);
 			BOTH(altMagnitudeSum[phase], -987.25f);
 		}
 
 		for (p = 0; p < NPHASE; p++) {
 			short flag = (short)(((trial >> p) & 1) ? p + 1 : 0);
 
-			BOTH(short_2800[p], flag);
+			BOTH(altRbsFlag[p], flag);
 			if (flag != 0)
 				altflag = 1;
 			else
@@ -1503,9 +1503,9 @@ run_queries(void)
 				break;
 			}
 
-			BOTH(short_2800[p], flag);
+			BOTH(altRbsFlag[p], flag);
 		}
-		BOTH(short_a9a6, t);
+		BOTH(altRbsDistanceThresh, t);
 		BOTH(linMapp[phase][code], e);
 		memcpy(before, ours.raw, SLOT);
 
@@ -1513,7 +1513,7 @@ run_queries(void)
 		want = ref_isAltRbs(&theirs_o, phase, code, x);
 		diff_eq_int("isAltRbs (trial %ld)", got, want, trial);
 
-		if (ours_o.short_2800[phase] == 0)
+		if (ours_o.altRbsFlag[phase] == 0)
 			unflagged = 1;
 		else if (got)
 			outside = 1;
@@ -1573,8 +1573,8 @@ run_queries(void)
 
 			seed((int)i + 200, 0);
 			for (p = 0; p < NPHASE; p++)
-				BOTH(short_2800[p], 1);
-			BOTH(short_a9a6, dt[i]);
+				BOTH(altRbsFlag[p], 1);
+			BOTH(altRbsDistanceThresh, dt[i]);
 			BOTH(linMapp[2][9], de[i]);
 
 			got = ours_o.isAltRbs(2, 9, dv[i]);
@@ -1687,7 +1687,7 @@ run_signal(void)
 		 * course of the sequence rather than once at the start.
 		 */
 		for (p = 0; p < NPHASE; p++)
-			BOTH(short_2800[p],
+			BOTH(altRbsFlag[p],
 			     (short)(((block + p) % 3 == 0) ? 0 : 1));
 
 		for (k = 0; k < 6; k++) {
@@ -1763,7 +1763,7 @@ run_signal(void)
 				 * `updateUref` has already run, so clearing at
 				 * entry is enough.
 				 */
-				BOTH(short_2800[(block + k) % 5], 0);
+				BOTH(altRbsFlag[(block + k) % 5], 0);
 				{
 					int g = ours_o.studyUrefHandler(x,
 						    (unsigned int)p);
@@ -1827,7 +1827,7 @@ run_signal(void)
 		 * flag pattern above always leaves one of phases 0..4 clear,
 		 * which is what keeps D281's uninitialised read out of it.
 		 */
-		BOTH(short_a9a4, (short)(1 << (block % 12)));
+		BOTH(uniteUrefDistanceThresh, (short)(1 << (block % 12)));
 		ours_o.updateUref();
 		ref_updateUref(&theirs_o);
 		diff_eq_obj("block: updateUref", V90AutoDigitalImpDetector,
@@ -1927,7 +1927,7 @@ run_signal(void)
 		 * forms no group and reads `bestGroup` uninitialised (D284).
 		 * Two different stack frames; leaving the flag to the previous
 		 * call would make this test nondeterministic.  This guard is a
-		 * different one from the `short_2800` guard above, which is
+		 * different one from the `altRbsFlag` guard above, which is
 		 * D281's.
 		 */
 		{
@@ -1936,7 +1936,7 @@ run_signal(void)
 			int p;
 
 			for (p = 0; p < NPHASE; p++)
-				var[p] = ours_o.float_9d48[p][0x2a];
+				var[p] = ours_o.linearMappingVar[p][0x2a];
 
 			got = fbits(ours_o.getAltVarThresh(var,
 						1.5f + (float)block * 0.25f));
@@ -2080,7 +2080,7 @@ run_signal(void)
  * and variance, and then hands the largest group's answer to every phase that
  * IS flagged.  Nothing about that is reachable from a seeded object by
  * accident: with random `linMapp` entries and a random threshold the merge
- * test is either always true or always false, and with a random `short_2800`
+ * test is either always true or always false, and with a random `altRbsFlag`
  * every phase is flagged.
  *
  * So the six mapping entries, the six flags, the threshold and the six pooled
@@ -2152,7 +2152,7 @@ run_unite(void)
 		int p, q, sawpair = 0, sawflag = 0;
 
 		seed(trial, trial % 4);
-		BOTH(short_a9a4, t);
+		BOTH(uniteUrefDistanceThresh, t);
 
 		for (p = 0; p < NPHASE; p++) {
 			/*
@@ -2163,12 +2163,12 @@ run_unite(void)
 			short flag = (short)((p == trial % 5) ? 0
 					     : ((trial >> p) & 1));
 
-			BOTH(short_2800[p], flag);
+			BOTH(altRbsFlag[p], flag);
 			BOTH(linMapp[p][at], mp[p]);
-			BOTH(uint_1c00[p][at], cp[p]);
-			BOTH(float_1000[p][at], (float)((int)cp[p] * 3));
-			BOTH(float_9118[p][at], (float)((int)cp[p] * 41));
-			BOTH(float_9d48[p][at], 0.25f * (float)p);
+			BOTH(magnitudeCount[p][at], cp[p]);
+			BOTH(magnitudeSum[p][at], (float)((int)cp[p] * 3));
+			BOTH(magnitudeSqSum[p][at], (float)((int)cp[p] * 41));
+			BOTH(linearMappingVar[p][at], 0.25f * (float)p);
 
 			if (flag != 0)
 				sawflag = 1;
@@ -2180,8 +2180,8 @@ run_unite(void)
 
 		for (p = 0; p < NPHASE - 1; p++)
 			for (q = p + 1; q < NPHASE; q++)
-				if (ours_o.short_2800[p] == 0
-				    && ours_o.short_2800[q] == 0
+				if (ours_o.altRbsFlag[p] == 0
+				    && ours_o.altRbsFlag[q] == 0
 				    && (mp[p] - mp[q] < t)
 				    && (mp[q] - mp[p] < t))
 					sawpair = 1;
@@ -2242,14 +2242,14 @@ run_unite(void)
 		int p;
 
 		seed(901, 0);
-		BOTH(short_a9a4, 20);
+		BOTH(uniteUrefDistanceThresh, 20);
 		for (p = 0; p < NPHASE; p++) {
-			BOTH(short_2800[p], (short)(p == NPHASE - 1 ? 1 : 0));
+			BOTH(altRbsFlag[p], (short)(p == NPHASE - 1 ? 1 : 0));
 			BOTH(linMapp[p][at], e[p]);
-			BOTH(uint_1c00[p][at], 1u);
-			BOTH(float_1000[p][at], fs[p]);
-			BOTH(float_9118[p][at], fs[p] * 4.0f);
-			BOTH(float_9d48[p][at], 0.125f * (float)p);
+			BOTH(magnitudeCount[p][at], 1u);
+			BOTH(magnitudeSum[p][at], fs[p]);
+			BOTH(magnitudeSqSum[p][at], fs[p] * 4.0f);
+			BOTH(linearMappingVar[p][at], 0.125f * (float)p);
 		}
 
 		ours_o.unitePhasesInfoOfUref(at);
@@ -2301,18 +2301,18 @@ run_updateuref(void)
 
 		seed(trial, trial % 4);
 		BOTH(ucode, at);
-		BOTH(short_a9a4, (short)(1 << (trial % 12)));
+		BOTH(uniteUrefDistanceThresh, (short)(1 << (trial % 12)));
 
 		for (p = 0; p < NPHASE; p++) {
 			unsigned n = counts[(trial + p) % 8];
 
-			BOTH(short_2800[p], (short)((p == trial % 5) ? 0
+			BOTH(altRbsFlag[p], (short)((p == trial % 5) ? 0
 						    : ((trial >> p) & 1)));
 			BOTH(linMapp[p][at], (short)(100 * p + trial));
-			BOTH(uint_1c00[p][at], n);
-			BOTH(float_1000[p][at], (float)((int)n * 143));
-			BOTH(float_9118[p][at], (float)((int)n * 4001));
-			BOTH(float_9d48[p][at], 0.5f * (float)p);
+			BOTH(magnitudeCount[p][at], n);
+			BOTH(magnitudeSum[p][at], (float)((int)n * 143));
+			BOTH(magnitudeSqSum[p][at], (float)((int)n * 4001));
+			BOTH(linearMappingVar[p][at], 0.5f * (float)p);
 
 			if (n == 0)
 				zero = 1;
@@ -2330,7 +2330,7 @@ run_updateuref(void)
 		diff_eq_int("no store past the object (trial %ld)",
 			    guard_equal(), 1, trial);
 		diff_eq_int("updateUref cleared the count (trial %ld)",
-			    (long)ours_o.uint_1c00[0][at], 0, trial);
+			    (long)ours_o.magnitudeCount[0][at], 0, trial);
 
 		if (memcmp(before, ours.raw, SLOT) != 0)
 			moved = 1;
@@ -2364,17 +2364,17 @@ run_updateuref(void)
 
 		seed(902, 0);
 		BOTH(ucode, at);
-		BOTH(short_a9a4, 2);
+		BOTH(uniteUrefDistanceThresh, 2);
 		for (p = 0; p < NPHASE; p++) {
 			int last = (p == NPHASE - 1);
 
-			BOTH(short_2800[p], (short)(p < 4 ? 1 : 0));
+			BOTH(altRbsFlag[p], (short)(p < 4 ? 1 : 0));
 			BOTH(linMapp[p][at],
 			     (short)(last ? 30000 : 100 * p));
-			BOTH(uint_1c00[p][at], (unsigned)(last ? 2 : 4));
-			BOTH(float_1000[p][at], last ? 287.0f : 400.0f);
-			BOTH(float_9118[p][at], last ? 8000.0f : 100.0f);
-			BOTH(float_9d48[p][at], 0.0f);
+			BOTH(magnitudeCount[p][at], (unsigned)(last ? 2 : 4));
+			BOTH(magnitudeSum[p][at], last ? 287.0f : 400.0f);
+			BOTH(magnitudeSqSum[p][at], last ? 8000.0f : 100.0f);
+			BOTH(linearMappingVar[p][at], 0.0f);
 		}
 
 		ours_o.updateUref();
@@ -2532,8 +2532,8 @@ run_studyreset(void)
 		if (memcmp(before, ours.raw, SLOT) != 0)
 			moved = 1;
 		if (trial == 0)
-			first = ours_o.short_a9a4;
-		else if (ours_o.short_a9a4 != first)
+			first = ours_o.uniteUrefDistanceThresh;
+		else if (ours_o.uniteUrefDistanceThresh != first)
 			distinct = 1;
 	}
 
@@ -2715,7 +2715,7 @@ run_altvarthresh(void)
  * The same shape as `run_unite`, and driven from the same kind of tables, but
  * every decision is a different one: the flag is the BYTE at +0x280c and not
  * the short at +0x2800, the merge test is `d*d < variance/4` and not a
- * distance against `short_a9a4`, and there is no convergence loop.  So the
+ * distance against `uniteUrefDistanceThresh`, and there is no convergence loop.  So the
  * per-phase variance at +0x9d48 has to be forced as well, and it is what the
  * threshold sweep runs on.
  *
@@ -2783,9 +2783,9 @@ run_uniteunsuspected(void)
 
 			BOTH(byte_280c[p], flag);
 			BOTH(linMapp[p][at], mp[p]);
-			BOTH(uint_1c00[p][at], cp[p]);
-			BOTH(float_1000[p][at], (float)((int)cp[p] * 3));
-			BOTH(float_9118[p][at], (float)((int)cp[p] * 41));
+			BOTH(magnitudeCount[p][at], cp[p]);
+			BOTH(magnitudeSum[p][at], (float)((int)cp[p] * 3));
+			BOTH(magnitudeSqSum[p][at], (float)((int)cp[p] * 41));
 			/*
 			 * THE VARIANCE VARIES WITH THE PHASE, which is what
 			 * makes "a quarter of the LEADER's variance" a claim:
@@ -2794,7 +2794,7 @@ run_uniteunsuspected(void)
 			 * that swaps them was NOT CAUGHT until this multiplier
 			 * existed.
 			 */
-			BOTH(float_9d48[p][at], v * (float)(p + 1));
+			BOTH(linearMappingVar[p][at], v * (float)(p + 1));
 
 			if (flag != 0)
 				sawflag = 1;
@@ -2810,7 +2810,7 @@ run_uniteunsuspected(void)
 		 * sense of the test rather than only its value.
 		 */
 		if ((trial & 7) == 6) {
-			BOTH(float_9d48[trial % 5][at], __builtin_nanf(""));
+			BOTH(linearMappingVar[trial % 5][at], __builtin_nanf(""));
 			nanvar = 1;
 		}
 
@@ -2879,10 +2879,10 @@ run_uniteunsuspected(void)
 		for (p = 0; p < NPHASE; p++) {
 			BOTH(byte_280c[p], (unsigned char)(p >= 4 ? 1 : 0));
 			BOTH(linMapp[p][at], e[p]);
-			BOTH(uint_1c00[p][at], 1u);
-			BOTH(float_1000[p][at], fs[p]);
-			BOTH(float_9118[p][at], fs[p] * fs[p]);
-			BOTH(float_9d48[p][at], 400.0f);
+			BOTH(magnitudeCount[p][at], 1u);
+			BOTH(magnitudeSum[p][at], fs[p]);
+			BOTH(magnitudeSqSum[p][at], fs[p] * fs[p]);
+			BOTH(linearMappingVar[p][at], 400.0f);
 		}
 
 		ours_o.uniteLinMappInfoOfUnsuspectedPhases(at);
@@ -2910,10 +2910,10 @@ run_uniteunsuspected(void)
 		for (p = 0; p < NPHASE; p++) {
 			BOTH(byte_280c[p], (unsigned char)(p == 0 ? 0 : 1));
 			BOTH(linMapp[p][at], (short)(p * 1000));
-			BOTH(uint_1c00[p][at], (unsigned)(p == 0 ? 41 : 0));
-			BOTH(float_1000[p][at], p == 0 ? 143.5f : 0.0f);
-			BOTH(float_9118[p][at], p == 0 ? 600.0f : 0.0f);
-			BOTH(float_9d48[p][at], 4.0f);
+			BOTH(magnitudeCount[p][at], (unsigned)(p == 0 ? 41 : 0));
+			BOTH(magnitudeSum[p][at], p == 0 ? 143.5f : 0.0f);
+			BOTH(magnitudeSqSum[p][at], p == 0 ? 600.0f : 0.0f);
+			BOTH(linearMappingVar[p][at], 4.0f);
 		}
 
 		ours_o.uniteLinMappInfoOfUnsuspectedPhases(at);
@@ -2952,10 +2952,10 @@ run_uniteunsuspected(void)
 		for (p = 0; p < NPHASE; p++) {
 			BOTH(byte_280c[p], (unsigned char)(p >= 3 ? 1 : 0));
 			BOTH(linMapp[p][at], e[p]);
-			BOTH(uint_1c00[p][at], (unsigned)(p + 1));
-			BOTH(float_1000[p][at], fs[p]);
-			BOTH(float_9118[p][at], fs[p] * 8.0f);
-			BOTH(float_9d48[p][at], 160000.0f);
+			BOTH(magnitudeCount[p][at], (unsigned)(p + 1));
+			BOTH(magnitudeSum[p][at], fs[p]);
+			BOTH(magnitudeSqSum[p][at], fs[p] * 8.0f);
+			BOTH(linearMappingVar[p][at], 160000.0f);
 		}
 
 		ours_o.uniteLinMappInfoOfUnsuspectedPhases(at);
@@ -2969,7 +2969,7 @@ run_uniteunsuspected(void)
 	/*
 	 * A DIRECTED BLOCK FOR WHOSE VARIANCE THE TOLERANCE COMES FROM.
 	 *
-	 * The object reads `float_9d48[LEADER][at]`, and a table that gives the
+	 * The object reads `linearMappingVar[LEADER][at]`, and a table that gives the
 	 * two phases the same variance cannot tell that from reading the
 	 * candidate's -- measured: the mutation that swaps the index survived
 	 * even the per-phase multiplier above.  So: a distance of 150, a
@@ -2986,10 +2986,10 @@ run_uniteunsuspected(void)
 		for (p = 0; p < NPHASE; p++) {
 			BOTH(byte_280c[p], (unsigned char)(p >= 2 ? 1 : 0));
 			BOTH(linMapp[p][at], (short)(p == 1 ? 150 : 0));
-			BOTH(uint_1c00[p][at], (unsigned)(p + 3));
-			BOTH(float_1000[p][at], (float)(p * 700 + 90));
-			BOTH(float_9118[p][at], (float)(p * 9000 + 500));
-			BOTH(float_9d48[p][at], p == 0 ? 40000.0f : 400000.0f);
+			BOTH(magnitudeCount[p][at], (unsigned)(p + 3));
+			BOTH(magnitudeSum[p][at], (float)(p * 700 + 90));
+			BOTH(magnitudeSqSum[p][at], (float)(p * 9000 + 500));
+			BOTH(linearMappingVar[p][at], p == 0 ? 40000.0f : 400000.0f);
 		}
 
 		ours_o.uniteLinMappInfoOfUnsuspectedPhases(at);
@@ -3027,7 +3027,7 @@ run_uniteunsuspected(void)
  *
  * NOTHING IS CLAMPED HERE.  The clearing loops index `[phase][k]` with a byte
  * `k`, and the worst case the method can reach is phase 5, k = 254 -- which
- * lands at +0x9f14 in `float_9118`'s row, 2,716 bytes short of the end of the
+ * lands at +0x9f14 in `magnitudeSqSum`'s row, 2,716 bytes short of the end of the
  * object.  The unbounded index is exercised for real rather than avoided.
  *
  * THE DEBUG LEVEL IS PART OF THE SWEEP.  This is the class's only member with
@@ -3065,23 +3065,23 @@ run_firststudy(void)
 		BOTH(ucode, at);
 
 		for (p = 0; p < NPHASE; p++) {
-			BOTH(short_2800[p],
+			BOTH(altRbsFlag[p],
 			     (short)(((trial >> p) & 1) ? p + 1 : 0));
 
 			for (c = 0x40; c <= 0x4f; c++) {
 				unsigned n = ((trial + c) & 3) == 0
 					     ? 0u : (unsigned)(c - 0x3f);
 
-				BOTH(uint_1c00[p][c], n);
+				BOTH(magnitudeCount[p][c], n);
 				/*
 				 * A HALF IN THE MEAN, deliberately: a sum that
 				 * divides exactly makes the `+ 0.5f` invisible
 				 * and the mutation that drops it survived until
 				 * this was 100.5 rather than 100.
 				 */
-				BOTH(float_1000[p][c],
+				BOTH(magnitudeSum[p][c],
 				     (float)n * (100.5f + 37.0f * (float)p));
-				BOTH(float_9118[p][c],
+				BOTH(magnitudeSqSum[p][c],
 				     (float)((int)n * (20000 + 11 * c)));
 
 				if (n == 0)
@@ -3176,12 +3176,12 @@ run_firststudy(void)
 			BOTH(ucode, 0x2a);
 
 			for (p = 0; p < NPHASE; p++) {
-				BOTH(short_2800[p], 0);
+				BOTH(altRbsFlag[p], 0);
 				for (c = 0x40; c <= 0x4f; c++) {
 					int i = c - 0x40;
 					int j = i <= k ? i : k;
 
-					BOTH(uint_1c00[p][c], 0u);
+					BOTH(magnitudeCount[p][c], 0u);
 					BOTH(linMapp[p][c],
 					     (short)((j & 1) ? 5000 : 0));
 				}
@@ -3231,11 +3231,11 @@ run_firststudy(void)
 		BOTH(ucode, 0x2a);
 
 		for (p = 0; p < NPHASE; p++) {
-			BOTH(short_2800[p], 0);
+			BOTH(altRbsFlag[p], 0);
 			for (c = 0x40; c <= 0x4f; c++) {
-				BOTH(uint_1c00[p][c], 41u);
-				BOTH(float_1000[p][c], 143.5f);
-				BOTH(float_9118[p][c], 600.0f);
+				BOTH(magnitudeCount[p][c], 41u);
+				BOTH(magnitudeSum[p][c], 143.5f);
+				BOTH(magnitudeSqSum[p][c], 600.0f);
 			}
 		}
 
@@ -3300,15 +3300,15 @@ run_firststudy(void)
 			BOTH(ucode, 0x2a);
 
 			for (p = 0; p < NPHASE; p++) {
-				BOTH(short_2800[p], 0);
+				BOTH(altRbsFlag[p], 0);
 				for (c = 0x40; c <= 0x4f; c++) {
 					int odd = c & 1;
 
-					BOTH(uint_1c00[p][c],
+					BOTH(magnitudeCount[p][c],
 					     odd ? cnt[w] : 0u);
-					BOTH(float_1000[p][c],
+					BOTH(magnitudeSum[p][c],
 					     odd ? sum[w] : 0.0f);
-					BOTH(float_9118[p][c],
+					BOTH(magnitudeSqSum[p][c],
 					     odd ? 600.0f : 0.0f);
 					BOTH(linMapp[p][c], 0);
 				}
@@ -3427,13 +3427,13 @@ run_dilrepair(void)
 
 		if ((trial & 1) == 0) {
 			for (p = 0; p < NPHASE; p++)
-				BOTH(short_2800[p],
+				BOTH(altRbsFlag[p],
 				     (short)(p == (trial / 2) % NPHASE ? 3 : 0));
 			study_debug_on();
 			level2 = 1;
 		} else {
 			for (p = 0; p < NPHASE; p++)
-				BOTH(short_2800[p],
+				BOTH(altRbsFlag[p],
 				     (short)(((trial >> p) & 1) ? p + 1 : 0));
 			level0 = 1;
 		}
@@ -3443,7 +3443,7 @@ run_dilrepair(void)
 				BOTH(linMapp[u][c], lev[(c + trial) % 3]);
 
 		for (p = 0; p < NPHASE; p++) {
-			if (ours_o.short_2800[p] != 0)
+			if (ours_o.altRbsFlag[p] != 0)
 				flagged = 1;
 			else
 				unflagged = 1;
@@ -3478,7 +3478,7 @@ run_dilrepair(void)
 		 * ones a verdict can have been written for.
 		 */
 		for (p = 0; p < NPHASE; p++) {
-			if (ours_o.short_2800[p] == 0)
+			if (ours_o.altRbsFlag[p] == 0)
 				continue;
 
 			for (c = 2; c <= 116; c++) {
@@ -3529,7 +3529,7 @@ run_dilrepair(void)
 		BOTH(unSuspectedPhase, 1);
 
 		for (p = 0; p < NPHASE; p++) {
-			BOTH(short_2800[p], (short)(p >= 4 ? 1 : 0));
+			BOTH(altRbsFlag[p], (short)(p >= 4 ? 1 : 0));
 			for (c = 0; c < V90ADID_CODES; c++)
 				BOTH(codeHistogram[p][c], 0);
 		}
@@ -3637,13 +3637,13 @@ run_secondstudy(void)
 
 		if ((trial & 1) == 0) {
 			for (p = 0; p < NPHASE; p++)
-				BOTH(short_2800[p],
+				BOTH(altRbsFlag[p],
 				     (short)(p == (trial / 2) % NPHASE ? 7 : 0));
 			study_debug_on();
 			level2 = 1;
 		} else {
 			for (p = 0; p < NPHASE; p++)
-				BOTH(short_2800[p],
+				BOTH(altRbsFlag[p],
 				     (short)(((trial >> p) & 3) == 3 ? 1 : 0));
 			level0 = 1;
 		}
@@ -3681,7 +3681,7 @@ run_secondstudy(void)
 
 		for (p = 0; p < NPHASE; p++) {
 			if (ours_o.byte_280c[p] == 0
-			    || ours_o.short_2800[p] != 0)
+			    || ours_o.altRbsFlag[p] != 0)
 				continue;
 
 			for (c = 0; c <= 0x74; c++) {
@@ -3737,7 +3737,7 @@ run_secondstudy(void)
 
 			seed(950 + w, 0);
 			for (p = 0; p < NPHASE; p++) {
-				BOTH(short_2800[p], 0);
+				BOTH(altRbsFlag[p], 0);
 				BOTH(byte_280c[p], (unsigned char)(p == 0 ? 0
 								   : 1));
 				for (c = 0; c < V90ADID_CODES; c++)
@@ -3851,10 +3851,10 @@ run_qcmapping(void)
 				unsigned n = ((trial + c + p) & 3) == 0
 					     ? 0u : (unsigned)(1 + ((c + p) & 7));
 
-				BOTH(uint_1c00[p][c], n);
-				BOTH(float_1000[p][c],
+				BOTH(magnitudeCount[p][c], n);
+				BOTH(magnitudeSum[p][c],
 				     (float)n * (60.5f + 11.0f * (float)p));
-				BOTH(float_9118[p][c],
+				BOTH(magnitudeSqSum[p][c],
 				     (float)((int)n * (3000 + 7 * c)));
 
 				if (n == 0)
@@ -3866,19 +3866,19 @@ run_qcmapping(void)
 
 		if ((trial & 1) == 0) {
 			for (p = 0; p < NPHASE; p++)
-				BOTH(short_2800[p],
+				BOTH(altRbsFlag[p],
 				     (short)(p == (trial / 2) % NPHASE ? 9 : 0));
 			study_debug_on();
 			level2 = 1;
 		} else {
 			for (p = 0; p < NPHASE; p++)
-				BOTH(short_2800[p],
+				BOTH(altRbsFlag[p],
 				     (short)(((trial >> p) & 3) == 3 ? 1 : 0));
 			level0 = 1;
 		}
 
 		for (p = 0; p < NPHASE; p++) {
-			if (ours_o.short_2800[p] != 0)
+			if (ours_o.altRbsFlag[p] != 0)
 				skipped = 1;
 			else if (ours_o.byte_280c[p] != 0)
 				meaned = 1;
@@ -3933,20 +3933,20 @@ run_qcmapping(void)
 
 		seed(960, 0);
 		for (p = 0; p < NPHASE; p++) {
-			BOTH(short_2800[p], (short)(p == 0 ? 1 : 0));
+			BOTH(altRbsFlag[p], (short)(p == 0 ? 1 : 0));
 			BOTH(byte_280c[p], (unsigned char)(p == 1 ? 1 : 0));
 			for (c = 0; c < V90ADID_CODES; c++) {
 				BOTH(codeHistogram[p][c], 0);
-				BOTH(uint_1c00[p][c], 0u);
+				BOTH(magnitudeCount[p][c], 0u);
 				BOTH(linMapp[p][c], (short)(1000 + c + p * 7));
 			}
 		}
 		for (c = 0; c < V90ADID_CODES; c++)
 			BOTH(prevLinMapp[c], (short)(c * 3 - 100));
 
-		BOTH(uint_1c00[1][40], 41u);
-		BOTH(float_1000[1][40], 143.5f);
-		BOTH(float_9118[1][40], 600.0f);
+		BOTH(magnitudeCount[1][40], 41u);
+		BOTH(magnitudeSum[1][40], 143.5f);
+		BOTH(magnitudeSqSum[1][40], 600.0f);
 
 		ours_o.setQcLinearMapping();
 		ref_setQcLinearMapping(&theirs_o);
@@ -3994,7 +3994,7 @@ run_qcmapping(void)
  * therefore a measurement of nothing.  docs/deviations.md D288 and D290 are
  * where the four are written down.
  *
- *   `float_9d48` RUNS OUT AT ENTRY 793.  It is 768 entries long but the
+ *   `linearMappingVar` RUNS OUT AT ENTRY 793.  It is 768 entries long but the
  *   object indexes it as `phase * 128 + code` with a code that reaches 255,
  *   and the object is 0xa9b0 bytes, so the last entry still inside is
  *   (0xa9b0 - 0x9d48) / 4 - 1 = 793.  Phase 5 plus a code of 154 is the first
@@ -4025,7 +4025,7 @@ run_qcmapping(void)
  * byte through 256 values -- but the deepest either reaches is +0x107f, which
  * is inside the object, so both are left alone.  The walk cannot spin
  * forever either: the fill immediately before it sets
- * `byte_0d00[phase][ucode]` to 1 for every phase, and that byte is one of the
+ * `usableMask[phase][ucode]` to 1 for every phase, and that byte is one of the
  * 256 the walk visits.
  * ==========================================================================
  */
@@ -4039,7 +4039,7 @@ run_qcmapping(void)
  * GCC 13 emits the parity test whatever it is told (finding F2304), keeps the
  * entry, and the count comes out different.
  *
- * `float_9d48` holds VARIANCES, and the object's own writer --
+ * `linearMappingVar` holds VARIANCES, and the object's own writer --
  * `updateLinMappMeanAndVar`, behind a guard on a zero sample count -- cannot
  * put a NaN there.  The sweep seeds the whole object from an LFSR, so one
  * trial in sixty-four lands a non-finite word in the window the scan reads,
@@ -4062,8 +4062,8 @@ static long mu_finite_seen;		/* examined  */
 static void
 mu_finite_variances(void)
 {
-	float *a = &ours_o.float_9d48[0][0];
-	float *b = &theirs_o.float_9d48[0][0];
+	float *a = &ours_o.linearMappingVar[0][0];
+	float *b = &theirs_o.linearMappingVar[0][0];
 	int i;
 
 	/*
@@ -4095,7 +4095,7 @@ mu_finite_variances(void)
  * sweep cannot reach.
  *
  * THE THRESHOLD'S TWO CLAMPS NEED A CONSTRUCTED INPUT.  It is the mean of
- * twenty variances times `float_a980`, and a seeded `float_9d48` puts that
+ * twenty variances times `float_a980`, and a seeded `linearMappingVar` puts that
  * mean somewhere astronomical almost every time -- so the grid sets those
  * twenty entries directly: all zero clamps it up to 500, all 1e9 clamps it
  * down to 100000, and a middling set leaves it alone.
@@ -4206,14 +4206,14 @@ run_maxucode(void)
 		for (p = 0; p < NPHASE; p++) {
 			int c;
 
-			if (ours_o.short_2800[p] != 0)
+			if (ours_o.altRbsFlag[p] != 0)
 				continue;
 			if (ours_o.maxUcode[p] == ours_o.byte_a954)
 				direct = 1;
 			else
 				walked = 1;
 			for (c = 0; c < V90ADID_CODES; c++) {
-				if (ours_o.byte_0d00[p][c] == 0)
+				if (ours_o.usableMask[p][c] == 0)
 					mask0 = 1;
 				else
 					mask1 = 1;
@@ -4258,8 +4258,8 @@ run_maxucode(void)
 			adid_set_2800(0x15);
 
 			for (i = 0; i < V90ADID_CODES; i++) {
-				ours_o.float_9d48[g % NPHASE][i] =
-				    theirs_o.float_9d48[g % NPHASE][i] = fill[g];
+				ours_o.linearMappingVar[g % NPHASE][i] =
+				    theirs_o.linearMappingVar[g % NPHASE][i] = fill[g];
 			}
 
 			dsplib_debug_capture_reset();
@@ -4332,14 +4332,14 @@ run_maxucode(void)
 			 * at 40..59 produce and is not a NaN.
 			 */
 			for (i = 0; i < V90ADID_CODES; i++)
-				ours_o.float_9d48[2][i] =
-				    theirs_o.float_9d48[2][i] = 1.0e9f;
+				ours_o.linearMappingVar[2][i] =
+				    theirs_o.linearMappingVar[2][i] = 1.0e9f;
 			for (i = 0; i < 5; i++) {
 				float v;
 
 				memcpy(&v, &win[w][i], sizeof v);
-				ours_o.float_9d48[2][0x5a - i] =
-				    theirs_o.float_9d48[2][0x5a - i] = v;
+				ours_o.linearMappingVar[2][0x5a - i] =
+				    theirs_o.linearMappingVar[2][0x5a - i] = v;
 			}
 
 			dsplib_debug_capture_reset();
@@ -4394,7 +4394,7 @@ run_maxucode(void)
 	 * That row is also the deepest the backwards walk in the last loop
 	 * ever gets here, and it terminates by construction and not by luck:
 	 * all three unflagged phases start the walk at 0xff, `ucode` is 0x41,
-	 * and the fill immediately before sets `byte_0d00[phase][0x41]` to 1
+	 * and the fill immediately before sets `usableMask[phase][0x41]` to 1
 	 * for every phase -- so each walk stops after at most 190 steps
 	 * without wrapping, whatever the seed put in the rest of the row.
 	 *
@@ -4419,22 +4419,22 @@ run_maxucode(void)
 			adid_set_2800(0x15);
 
 			for (i = 0; i < V90ADID_CODES; i++)
-				ours_o.float_9d48[1][i] =
-				    theirs_o.float_9d48[1][i] =
+				ours_o.linearMappingVar[1][i] =
+				    theirs_o.linearMappingVar[1][i] =
 				    (r == 2) ? 1000.0f : 1.0e9f;
 
 			if (r == 0) {
 				BOTH(short_a97a, 0x30);
 				for (i = 0x2c; i <= 0x2e; i++)
-					ours_o.float_9d48[1][i] =
-					    theirs_o.float_9d48[1][i] = 1.0f;
+					ours_o.linearMappingVar[1][i] =
+					    theirs_o.linearMappingVar[1][i] = 1.0f;
 			} else if (r == 1) {
 				BOTH(short_a97a, -1);
 			} else {
 				BOTH(short_a97a, 0x30);
 				for (i = 0x10; i <= 0x1f; i++)
-					ours_o.float_9d48[1][i] =
-					    theirs_o.float_9d48[1][i] = 2000.0f;
+					ours_o.linearMappingVar[1][i] =
+					    theirs_o.linearMappingVar[1][i] = 2000.0f;
 			}
 
 			dsplib_debug_capture_reset();
@@ -4507,7 +4507,7 @@ run_maxucode(void)
 	 * a different grid.  459 of 67,490 is 0.68% of the words examined,
 	 * and what it removed was ONE trial's worth of failure: trial 27,
 	 * whose non-finite word is at flat index 424 --
-	 * `float_9d48[3][40]`, the first of the twenty entries the threshold
+	 * `linearMappingVar[3][40]`, the first of the twenty entries the threshold
 	 * averages, which is why the divergence showed in the REPORT and not
 	 * in the object.  Finding F6001.
 	 */
@@ -4620,9 +4620,9 @@ run_padgain(void)
 		else if (fbits(ours_o.padGain) != fbits(first))
 			distinct = 1;
 
-		if (ours_o.int_a960 == 0)
+		if (ours_o.detectedPcmType == 0)
 			mulaw = 1;
-		else if (ours_o.int_a960 == 1)
+		else if (ours_o.detectedPcmType == 1)
 			alaw = 1;
 
 		g = ours_o.padGain;
@@ -4743,8 +4743,8 @@ run_padgain(void)
 				float v;
 
 				memcpy(&v, &probe[t][i], sizeof v);
-				ours_o.float_9d48[0][0x5f - i] =
-				    theirs_o.float_9d48[0][0x5f - i] = v;
+				ours_o.linearMappingVar[0][0x5f - i] =
+				    theirs_o.linearMappingVar[0][0x5f - i] = v;
 			}
 
 			dsplib_debug_capture_reset();
@@ -4947,7 +4947,7 @@ run_padgain(void)
  * (D292) is the same arithmetic and IS exercised, through the zeros in
  * `counts[]`.
  *
- * `ucode` STOPS AT 0x7f.  The sigma block reads `float_9d48[phase][ucode]` as
+ * `ucode` STOPS AT 0x7f.  The sigma block reads `linearMappingVar[phase][ucode]` as
  * `phase * 128 + ucode` and the last entry of that array inside the object is
  * ADID_VAR_LAST = 793, so phase 5 with a code over 153 would compare memory
  * past the rear guard.  Other sweeps in this file drive the unmasked code where
@@ -5041,11 +5041,11 @@ run_studyuref(void)
 		BOTH(ucode, at);
 		BOTH(ucodeLevel, levels[IDX(trial, 3)]);
 		BOTH(pcmType, law ? PCM_TYPE_A_LAW : PCM_TYPE_MU_LAW);
-		BOTH(int_a984, st);
-		BOTH(int_a988, fire ? dur - 1 : dur - 4);
+		BOTH(studyState, st);
+		BOTH(stateSampleCount, fire ? dur - 1 : dur - 4);
 		study_durations(11, 13, 7, 17, 5);
-		BOTH(short_a9a4, (short)(1 << (trial % 12)));
-		BOTH(short_a9a6, dists[IDX(trial, 7)]);
+		BOTH(uniteUrefDistanceThresh, (short)(1 << (trial % 12)));
+		BOTH(altRbsDistanceThresh, dists[IDX(trial, 7)]);
 		BOTH(float_a970, factors[IDX(trial, 3)]);
 		BOTH(altMinVarThresh, (float)(trial % 5) * 1000.0f);
 		BOTH(short_a948, (short)-1);
@@ -5054,17 +5054,17 @@ run_studyuref(void)
 		for (p = 0; p < NPHASE; p++) {
 			unsigned n = counts[(trial + p) % 8];
 
-			BOTH(short_2800[p], (short)((pat >> p) & 1));
+			BOTH(altRbsFlag[p], (short)((pat >> p) & 1));
 			BOTH(linMapp[p][at], (short)(100 * p + trial * 7));
 			BOTH(linMappAlt[p][at], (short)(50 * p - trial * 3));
-			BOTH(uint_1c00[p][at], n);
-			BOTH(float_1000[p][at], (float)((int)n * 143));
-			BOTH(float_9118[p][at], (float)((int)n * 4001));
-			BOTH(float_9d48[p][at], 0.5f * (float)p + (float)trial);
+			BOTH(magnitudeCount[p][at], n);
+			BOTH(magnitudeSum[p][at], (float)((int)n * 143));
+			BOTH(magnitudeSqSum[p][at], (float)((int)n * 4001));
+			BOTH(linearMappingVar[p][at], 0.5f * (float)p + (float)trial);
 			BOTH(altMagnitudeCount[p], counts[(trial + p + 3) % 8]);
 			BOTH(altMagnitudeSum[p], (float)(trial * 11 + p));
 
-			was[p] = ours_o.short_2800[p];
+			was[p] = ours_o.altRbsFlag[p];
 			if (n == 0)
 				emptycell = 1;
 			else
@@ -5109,7 +5109,7 @@ run_studyuref(void)
 			ret2 = 1;
 
 		if (st < 6) {
-			if (ours_o.int_a984 != st)
+			if (ours_o.studyState != st)
 				fired[st] = 1;
 			else
 				held[st] = 1;
@@ -5122,10 +5122,10 @@ run_studyuref(void)
 				altno = 1;
 		}
 
-		if (st == 0 && ours_o.int_a984 != 0) {
+		if (st == 0 && ours_o.studyState != 0) {
 			any = 0;
 			for (p = 0; p < NPHASE; p++)
-				if (was[p] == 0 && ours_o.short_2800[p] != 0)
+				if (was[p] == 0 && ours_o.altRbsFlag[p] != 0)
 					any = 1;
 			if (any)
 				flagged = 1;
@@ -5133,11 +5133,11 @@ run_studyuref(void)
 				unflagged = 1;
 		}
 
-		if ((st == 2 || st == 3) && ours_o.int_a984 != st)
+		if ((st == 2 || st == 3) && ours_o.studyState != st)
 			for (p = 0; p < NPHASE; p++) {
 				if (was[p] == 0)
 					continue;
-				if (ours_o.short_2800[p] == 0)
+				if (ours_o.altRbsFlag[p] == 0)
 					cleared = 1;
 				else
 					kept = 1;
@@ -5169,8 +5169,8 @@ run_studyuref(void)
 
 			seed(700 + k, 0);
 			BOTH(ucode, 0x2a);
-			BOTH(int_a984, sts[k]);
-			BOTH(int_a988, 3);
+			BOTH(studyState, sts[k]);
+			BOTH(stateSampleCount, 3);
 			dsplib_debug_capture_reset();
 
 			got = ours_o.studyUrefHandler(1.25f, 2u);
@@ -5186,10 +5186,10 @@ run_studyuref(void)
 			diff_eq_int("terminal/default: printed nothing (%ld)",
 				    (long)dsplib_debug_capture_lines(0), 0, k);
 			diff_eq_int("terminal/default: the state is untouched "
-				    "(%ld)", (long)ours_o.int_a984,
+				    "(%ld)", (long)ours_o.studyState,
 				    (long)sts[k], k);
 			diff_eq_int("terminal/default: the count is untouched "
-				    "(%ld)", (long)ours_o.int_a988, 3, k);
+				    "(%ld)", (long)ours_o.stateSampleCount, 3, k);
 			diff_eq_int("terminal/default: the answer (%ld)", got,
 				    sts[k] == 6 ? 2 : 1, k);
 			if (got == 2)
@@ -5219,17 +5219,17 @@ run_studyuref(void)
 			BOTH(ucode, at);
 			BOTH(ucodeLevel, 0);
 			BOTH(pcmType, PCM_TYPE_MU_LAW);
-			BOTH(int_a984, 0);
-			BOTH(int_a988, 4);
+			BOTH(studyState, 0);
+			BOTH(stateSampleCount, 4);
 			study_durations(5, 13, 7, 17, 3);
 			BOTH(float_a970, 1.5f);
 			BOTH(altMinVarThresh, 0.0f);
 
 			for (p = 0; p < NPHASE; p++) {
-				BOTH(short_2800[p], 0);
-				BOTH(uint_1c00[p][at], 4u);
-				BOTH(float_1000[p][at], 400.0f);
-				BOTH(float_9118[p][at],
+				BOTH(altRbsFlag[p], 0);
+				BOTH(magnitudeCount[p][at], 4u);
+				BOTH(magnitudeSum[p][at], 400.0f);
+				BOTH(magnitudeSqSum[p][at],
 				     (k == 1 && p == 3) ? 4000000.0f
 							: 44000.0f);
 				was[p] = 0;
@@ -5248,11 +5248,11 @@ run_studyuref(void)
 					   dsplib_debug_capture_text(1)) == 0,
 				    1, k);
 			diff_eq_int("state 0: the tail fired (%ld)",
-				    (long)ours_o.int_a984, 1, k);
+				    (long)ours_o.studyState, 1, k);
 
 			any = 0;
 			for (p = 0; p < NPHASE; p++)
-				if (was[p] == 0 && ours_o.short_2800[p] != 0)
+				if (was[p] == 0 && ours_o.altRbsFlag[p] != 0)
 					any = 1;
 			if (any)
 				flagged = 1;
@@ -5283,11 +5283,11 @@ run_studyuref(void)
 		BOTH(ucode, 0x2a);
 		BOTH(ucodeLevel, 8031);
 		BOTH(pcmType, PCM_TYPE_A_LAW);
-		BOTH(int_a984, 0);
-		BOTH(int_a988, 0);
+		BOTH(studyState, 0);
+		BOTH(stateSampleCount, 0);
 		study_durations(3, 4, 3, 5, 2);
-		BOTH(short_a9a4, 40);
-		BOTH(short_a9a6, 60);
+		BOTH(uniteUrefDistanceThresh, 40);
+		BOTH(altRbsDistanceThresh, 60);
 		BOTH(float_a970, 1.5f);
 		BOTH(altMinVarThresh, 10.0f);
 		BOTH(short_a948, 0);
@@ -5296,14 +5296,14 @@ run_studyuref(void)
 		for (p = 0; p < NPHASE; p++) {
 			int c;
 
-			BOTH(short_2800[p], 0);
+			BOTH(altRbsFlag[p], 0);
 			BOTH(altMagnitudeCount[p], 0u);
 			BOTH(altMagnitudeSum[p], 0.0f);
 			for (c = 0; c < V90ADID_CODES; c++) {
-				BOTH(uint_1c00[p][c], 0u);
-				BOTH(float_1000[p][c], 0.0f);
-				BOTH(float_9118[p][c], 0.0f);
-				BOTH(float_9d48[p][c], (float)(c + p));
+				BOTH(magnitudeCount[p][c], 0u);
+				BOTH(magnitudeSum[p][c], 0.0f);
+				BOTH(magnitudeSqSum[p][c], 0.0f);
+				BOTH(linearMappingVar[p][c], (float)(c + p));
 				BOTH(linMapp[p][c], (short)(c * 64 + p * 5));
 				BOTH(linMappAlt[p][c], (short)(c * 64 - p * 9));
 			}
@@ -5315,7 +5315,7 @@ run_studyuref(void)
 			unsigned int ph = (unsigned int)(step % NPHASE);
 			int got, refgot;
 
-			BOTH(short_2800[step % 5], 0);
+			BOTH(altRbsFlag[step % 5], 0);
 
 			dsplib_debug_capture_reset();
 			got = ours_o.studyUrefHandler(x, ph);
@@ -5333,8 +5333,8 @@ run_studyuref(void)
 					   dsplib_debug_capture_text(1)) == 0,
 				    1, step);
 
-			if (ours_o.int_a984 >= 0 && ours_o.int_a984 < 8)
-				chain[ours_o.int_a984] = 1;
+			if (ours_o.studyState >= 0 && ours_o.studyState < 8)
+				chain[ours_o.studyState] = 1;
 			if (got == 0)
 				ret0 = 1;
 			else if (got == 2)
@@ -5345,7 +5345,7 @@ run_studyuref(void)
 			diff_eq_int("chain: state %ld was reached", chain[p], 1,
 				    p);
 		diff_eq_int("chain: the machine ended in the terminal state",
-			    (long)ours_o.int_a984, 6, 0);
+			    (long)ours_o.studyState, 6, 0);
 		diff_eq_int("chain: trn1Sigma was written",
 			    ours_o.trn1Sigma != 0.0f, 1, 0);
 	}
@@ -5374,17 +5374,17 @@ run_studyuref(void)
 		BOTH(ucode, at);
 		BOTH(ucodeLevel, 0);
 		BOTH(pcmType, PCM_TYPE_MU_LAW);
-		BOTH(int_a984, 0);
-		BOTH(int_a988, 4);
+		BOTH(studyState, 0);
+		BOTH(stateSampleCount, 4);
 		study_durations(5, 13, 7, 17, 3);
 		BOTH(float_a970, 1.0f);
 		BOTH(altMinVarThresh, 1234.75f);
 
 		for (p = 0; p < NPHASE; p++) {
-			BOTH(short_2800[p], 0);
-			BOTH(uint_1c00[p][at], 1u);
-			BOTH(float_1000[p][at], 0.0f);
-			BOTH(float_9118[p][at], (p == 0) ? 1234.75f : 0.0f);
+			BOTH(altRbsFlag[p], 0);
+			BOTH(magnitudeCount[p][at], 1u);
+			BOTH(magnitudeSum[p][at], 0.0f);
+			BOTH(magnitudeSqSum[p][at], (p == 0) ? 1234.75f : 0.0f);
 		}
 
 		dsplib_debug_capture_reset();
@@ -5398,9 +5398,9 @@ run_studyuref(void)
 			    strcmp(dsplib_debug_capture_text(0),
 				   dsplib_debug_capture_text(1)) == 0, 1, 0);
 		diff_eq_int("on the threshold: the tail fired",
-			    (long)ours_o.int_a984, 1, 0);
+			    (long)ours_o.studyState, 1, 0);
 		diff_eq_int("on the threshold: an equal variance does not flag",
-			    (long)ours_o.short_2800[0], 0, 0);
+			    (long)ours_o.altRbsFlag[0], 0, 0);
 		diff_eq_int("on the threshold: the report was made",
 			    dsplib_debug_capture_lines(0) > 0, 1, 0);
 	}
@@ -5428,20 +5428,20 @@ run_studyuref(void)
 		BOTH(ucode, at);
 		BOTH(ucodeLevel, 0);
 		BOTH(pcmType, PCM_TYPE_MU_LAW);
-		BOTH(int_a984, 5);
-		BOTH(int_a988, 16);
+		BOTH(studyState, 5);
+		BOTH(stateSampleCount, 16);
 		study_durations(11, 13, 7, 17, 5);
-		BOTH(short_a9a4, 1);
-		BOTH(short_a9a6, 30000);
+		BOTH(uniteUrefDistanceThresh, 1);
+		BOTH(altRbsDistanceThresh, 30000);
 
 		for (p = 0; p < NPHASE; p++) {
-			BOTH(short_2800[p], (short)(p >= 3 ? 1 : 0));
-			BOTH(uint_1c00[p][at], 0u);
+			BOTH(altRbsFlag[p], (short)(p >= 3 ? 1 : 0));
+			BOTH(magnitudeCount[p][at], 0u);
 			BOTH(altMagnitudeCount[p], 0u);
 			BOTH(altMagnitudeSum[p], 0.0f);
 			BOTH(linMapp[p][at], (short)(p * 1000));
 			BOTH(linMappAlt[p][at], (short)(p * 1000));
-			BOTH(float_9d48[p][at], (p < 2) ? 1.0f : 0.0f);
+			BOTH(linearMappingVar[p][at], (p < 2) ? 1.0f : 0.0f);
 		}
 
 		dsplib_debug_capture_reset();
@@ -5455,7 +5455,7 @@ run_studyuref(void)
 			    strcmp(dsplib_debug_capture_text(0),
 				   dsplib_debug_capture_text(1)) == 0, 1, 0);
 		diff_eq_int("two thirds: the study finished",
-			    (long)ours_o.int_a984, 6, 0);
+			    (long)ours_o.studyState, 6, 0);
 		diff_eq_int("two thirds: and said so", got, 2, 0);
 	}
 
@@ -5486,20 +5486,20 @@ run_studyuref(void)
 			BOTH(ucodeLevel, (short)(2000 + k * 91));
 			BOTH(pcmType, (k & 1) ? PCM_TYPE_A_LAW
 					      : PCM_TYPE_MU_LAW);
-			BOTH(int_a984, st);
-			BOTH(int_a988, dur - 1);
+			BOTH(studyState, st);
+			BOTH(stateSampleCount, dur - 1);
 			study_durations(11, 13, 7, 17, 5);
-			BOTH(short_a9a6, (short)(k * 40));
+			BOTH(altRbsDistanceThresh, (short)(k * 40));
 			BOTH(float_a970, 1.5f);
 			BOTH(altMinVarThresh, 100.0f);
 
 			for (p = 0; p < NPHASE; p++) {
-				BOTH(short_2800[p], (short)(p == 0 ? 0
+				BOTH(altRbsFlag[p], (short)(p == 0 ? 0
 							    : (k >> p) & 1));
-				BOTH(uint_1c00[p][0x21 + k], (unsigned)(p + 1));
-				BOTH(float_1000[p][0x21 + k],
+				BOTH(magnitudeCount[p][0x21 + k], (unsigned)(p + 1));
+				BOTH(magnitudeSum[p][0x21 + k],
 				     (float)(300 * (p + 1)));
-				BOTH(float_9118[p][0x21 + k],
+				BOTH(magnitudeSqSum[p][0x21 + k],
 				     (float)(91000 * (p + 1)));
 				BOTH(altMagnitudeCount[p], (unsigned)(k + p));
 				BOTH(altMagnitudeSum[p], (float)(k * 100 + p));
@@ -5591,14 +5591,14 @@ run_studyuref(void)
 			BOTH(ucode, at);
 			BOTH(ucodeLevel, 0);
 			BOTH(pcmType, PCM_TYPE_MU_LAW);
-			BOTH(int_a984, 1);
-			BOTH(int_a988, 6);
+			BOTH(studyState, 1);
+			BOTH(stateSampleCount, 6);
 			study_durations(5, 7, 3, 17, 5);
-			BOTH(short_a9a4, 1);
+			BOTH(uniteUrefDistanceThresh, 1);
 
 			for (p = 0; p < NPHASE; p++) {
-				BOTH(short_2800[p], 0);
-				BOTH(uint_1c00[p][at], 0u);
+				BOTH(altRbsFlag[p], 0);
+				BOTH(magnitudeCount[p][at], 0u);
 				BOTH(linMapp[p][at],
 				     (short)((p == 0) ? widths[k]
 					     : (short)(p * 1000 + 7)));
@@ -5623,7 +5623,7 @@ run_studyuref(void)
 			diff_eq_int("width sweep: still silent (%ld)",
 				    (long)dsplib_debug_capture_lines(0), 0, k);
 			diff_eq_int("width sweep: the tail fired (%ld)",
-				    (long)ours_o.int_a984, 2, k);
+				    (long)ours_o.studyState, 2, k);
 			if (a1 != b1 || a2 != b2)
 				keydrift = 1;
 		}
@@ -5632,7 +5632,7 @@ run_studyuref(void)
 		 * AND THE ONE GATED REPORT THAT NEEDS A WITNESS OF ITS OWN.
 		 * The false-detection line only fires when the re-test WITHDRAWS
 		 * a flag, which a seeded object reaches almost never: it needs
-		 * the phase's alternate entry within `short_a9a6` of its plain
+		 * the phase's alternate entry within `altRbsDistanceThresh` of its plain
 		 * one.  Both are planted equal here, so both flagged phases are
 		 * withdrawn and both would print -- which at level 0 is exactly
 		 * the difference between the object's gate and no gate.  Every
@@ -5647,16 +5647,16 @@ run_studyuref(void)
 			BOTH(ucode, at);
 			BOTH(ucodeLevel, 0);
 			BOTH(pcmType, PCM_TYPE_MU_LAW);
-			BOTH(int_a984, 2);
-			BOTH(int_a988, 2);
+			BOTH(studyState, 2);
+			BOTH(stateSampleCount, 2);
 			study_durations(5, 7, 3, 17, 5);
-			BOTH(short_a9a4, 1);
-			BOTH(short_a9a6, 100);
+			BOTH(uniteUrefDistanceThresh, 1);
+			BOTH(altRbsDistanceThresh, 100);
 
 			for (p = 0; p < NPHASE; p++) {
-				BOTH(short_2800[p],
+				BOTH(altRbsFlag[p],
 				     (short)((p == 1 || p == 2) ? 1 : 0));
-				BOTH(uint_1c00[p][at], 0u);
+				BOTH(magnitudeCount[p][at], 0u);
 				BOTH(altMagnitudeCount[p], 0u);
 				BOTH(altMagnitudeSum[p], 0.0f);
 				BOTH(linMapp[p][at], 1234);
@@ -5675,9 +5675,9 @@ run_studyuref(void)
 			diff_eq_int("withdrawal: the gated report stayed shut",
 				    (long)dsplib_debug_capture_lines(0), 0, 0);
 			diff_eq_int("withdrawal: the first flag was withdrawn",
-				    (long)ours_o.short_2800[1], 0, 0);
+				    (long)ours_o.altRbsFlag[1], 0, 0);
 			diff_eq_int("withdrawal: the second flag was withdrawn",
-				    (long)ours_o.short_2800[2], 0, 0);
+				    (long)ours_o.altRbsFlag[2], 0, 0);
 			cleared = 1;
 		}
 

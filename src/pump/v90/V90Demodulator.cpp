@@ -774,7 +774,7 @@ V90Demodulator::exitPhase3()
 		 (int)__builtin_fabsf(ratio),
 		 (frac < 0) ? -frac : frac);
 
-	additionalCPinfo->word_0c = autoDigitalImpDetector->int_a960;
+	additionalCPinfo->word_0c = autoDigitalImpDetector->detectedPcmType;
 	additionalCPinfo->word_10 = 0;
 	additionalCPinfo->short_14 =
 	    (short)V90PW(params)[PARAMS_ANALOG_RATE_MASK];
@@ -793,10 +793,10 @@ V90Demodulator::exitPhase3()
 		mappingParams,
 		autoDigitalImpDetector->linMapp,
 		autoDigitalImpDetector->linMappAlt,
-		autoDigitalImpDetector->byte_0d00,
-		autoDigitalImpDetector->short_2800,
+		autoDigitalImpDetector->usableMask,
+		autoDigitalImpDetector->altRbsFlag,
 		autoDigitalImpDetector->pcmType,
-		(PcmType)autoDigitalImpDetector->int_a960,
+		(PcmType)autoDigitalImpDetector->detectedPcmType,
 		autoDigitalImpDetector->unSuspectedPhase,
 		phase3Demodulator->getMaxUcode(),
 		sessionFlag != 0 ? jdV92->getMaxLookahead()
@@ -1636,7 +1636,7 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 			    mappingParamsAlt,
 			    autoDigitalImpDetector->linMapp,
 			    autoDigitalImpDetector->linMappAlt,
-			    autoDigitalImpDetector->short_2800,
+			    autoDigitalImpDetector->altRbsFlag,
 			    autoDigitalImpDetector->byte_280c,
 			    phase3Demodulator->getMaxUcode(),
 			    (unsigned char)(phase2Info->maxTxPower + 1),
@@ -1801,7 +1801,7 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 			    mappingParamsAlt,
 			    autoDigitalImpDetector->linMapp,
 			    autoDigitalImpDetector->linMappAlt,
-			    autoDigitalImpDetector->short_2800,
+			    autoDigitalImpDetector->altRbsFlag,
 			    autoDigitalImpDetector->byte_280c,
 			    phase3Demodulator->getMaxUcode(),
 			    (unsigned char)(phase2Info->maxTxPower + 1),
