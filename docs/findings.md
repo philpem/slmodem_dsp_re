@@ -115751,7 +115751,7 @@ result recorded once the run completes; this finding is written ahead of
 that result closing so the root-cause record survives even if a further
 gate issue turns up in the same run. (2026-09-04)
 
-## F10154. `class1tx.c`'s 31 `(unsigned short *)(void *)ctx` scratch-buffer
+## F10158. `class1tx.c`'s 31 `(unsigned short *)(void *)ctx` scratch-buffer
 casts do NOT bound to one field of `pad_005` -- investigated and declined
 
 **The task.** Model enough of `struct fax_class1`'s `pad_005[0xffb]`
