@@ -1,15 +1,14 @@
-# Remaining work — prioritised TU list and live status
+# Project status and remaining work
 
 **Numbers are measured, not maintained.** Regenerate with `make coverage`,
 `python3 tools/service.py` and `python3 tools/worklist.py`; this file records
 the *order* (a decision) and the *status* (a ledger). Where a byte count here
 disagrees with the tool, the tool is right — see CLAUDE.md on shelf-life.
 
-**SUPERSEDED, 2026-09-06 — the paragraph and table below are the
-2026-09-03 snapshot and are kept for the history, not as current status.**
-Waves 13-14 closed every unwritten symbol; findings F10191 and F10192 then
-fixed `coverage.py` itself to agree, which it did not at the time this
-snapshot was taken. Current measured state:
+## Current measured state
+
+Waves 13–14 closed every unwritten symbol; findings F10191 and F10192 then
+fixed `coverage.py` itself to agree. Current `make coverage` output is:
 
 ```
 .text 734,605 bytes / 1,852 symbols
@@ -24,9 +23,49 @@ read F10191/F10192 (and Waves 13-14 below) before trusting any tool output
 that disagrees, per CLAUDE.md's rule that the tool is checked, not
 repeated from a comment.
 
-**The snapshot below undercounted real completeness at the time, and the
-"DELIBERATE, not a defect" framing has not aged well — read F221-F224 for
-why the gap existed, then F10191/F10192 for why it is now closed.**
+## Phase ledger
+
+This table was formerly in `README.md`, where its live-looking presentation
+became badly stale. It now sits beside the measured completion ledger that
+superseded it. “Reconstructed” means the reference object's source body is
+present; it does not claim an end-to-end interop result where the state column
+explicitly says that milestone remains open.
+
+| phase | content | state |
+|--:|---|---|
+| 0 | tooling, TU map, differential harness | **done** |
+| 1 | core plumbing (`dp_wrapper`, `FixedRC`, `dp_param`, `FP_math`) | **done** |
+| 2 | Bell 103 / V.21 | **done** — connects and carries data at BER 0 |
+| 3 | call progress / dialler | **done** — originates and answers |
+| 4 | V.23 | **done** — 1200/75 bps, with SpanDSP interop |
+| 5 | V.8 negotiation | **done** — negotiates against SpanDSP over a socket |
+| 6 | V.22 / V.22bis / Bell 212 | **reconstructed** — closed in waves 2–3 below |
+| 7 | V.32 / V.32bis | **reconstructed** — closed in waves 2–3 below |
+| 8 | Caller ID, DTMF, ring detect, voice and beep | **reconstructed** — closed in waves 4–5 below |
+| 9 | fax Class 1 (V.17 / V.27ter / V.29) | **reconstructed** — closed in waves 5–12 below |
+| 10 | V.34 | **done** — reconstructed and driven in a two-ended 33,600-bit/s call at BER 0; see F980–F988 |
+| 11 | V.90 / V.92 | **reconstructed; end-to-end digital-side bring-up remains open** — no unwritten body remains on that path (F7706), but the experiment still lacks the session-state writer identified by F7520 |
+| 12 | 8 kHz retarget | **not started** — `vpcm_create` assumes 9,600 Hz and the four-samples-per-2,400-baud relationship does not map integrally to 8 kHz; settle the architecture before rescaling |
+
+The source-reconstruction phase is therefore complete. Work that remains is
+deliberately a different kind of work:
+
+- close differential-test and mutation-coverage gaps where a real observable
+  path can be constructed;
+- improve period-compiler object-code identity without changing behaviour;
+- finish the V.90 digital-side experiment far enough to terminate a live 56k
+  call; and
+- design and implement the 8 kHz retarget, if that separate phase is pursued.
+
+The detailed wave record below explains how the reconstruction reached this
+state and preserves the evidence behind decisions that still constrain those
+follow-up tasks.
+
+## Superseded 2026-09-03 snapshot
+
+The snapshot below undercounted real completeness at the time, and the
+“DELIBERATE, not a defect” framing has not aged well — read F221–F224 for
+why the gap existed, then F10191/F10192 for why it is now closed.
 `coverage.py`'s `our_symbols()` only counted `T`-kind (global) symbols in
 our own build; a function this tree correctly keeps `static` (matching the
 blob's own local visibility) was invisible to it. `v22_create`/`v22_delete`/
@@ -97,12 +136,14 @@ and read the case count, do not assume the whole bucket behaves like
 This landed as the FIFO chokepoint in wave 5 (below) and unblocked all four TX
 constructors' `FIFO_CFG`/`FIFO_create` dependency in one move.
 
-## The order
+## Historical completion order
 
-Follows README's agreed order and CLAUDE.md's scheduling doctrine (V.32 is
+This was the working order before the reconstruction closed. It follows
+CLAUDE.md's scheduling doctrine (V.32 is
 `Dialer.c +18` **and** `V32mod.c +39` together, never a "Dialer pass"; leaves
 are scheduled on their own merit, not as fax prep — F8320; fax is a project
-phase, last on purpose).
+phase, last on purpose). The statuses in this table are the contemporary
+planning snapshot; the phase ledger above is the current authority.
 
 | # | work | spans involved | size (blob bytes) | status |
 |--:|---|---|--:|---|
