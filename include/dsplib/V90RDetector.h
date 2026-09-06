@@ -176,23 +176,23 @@ public:
 	 * meaningful.  See V90ConstellationDesigner.h.
 	 */
 
-	int int_00;			/* +0x00 */
-	int int_04;			/* +0x04 */
-	int int_08;			/* +0x08 */
-	int int_0c;			/* +0x0c */
-	int int_10;			/* +0x10 */
-	int int_14;			/* +0x14 */
-	int int_18;			/* +0x18 */
-	int int_1c;			/* +0x1c */
-	unsigned short ushort_20;	/* +0x20 */
+	int sampleCount;			/* +0x00 */
+	int rLimit;			/* +0x04 */
+	int rNotLimit;			/* +0x08 */
+	int rfLimit;			/* +0x0c */
+	int rfNotLimit;			/* +0x10 */
+	int positiveRunLength;			/* +0x14 */
+	int negativeRunLength;			/* +0x18 */
+	int notRunLength;			/* +0x1c */
+	unsigned short signBits;	/* +0x20 */
 	/*
 	 * +0x22 was `pad_22[2]` -- REMOVED (finding F10151).  Already
 	 * correctly described as alignment before +0x24; proved mechanically
-	 * by the existing `RD_OFF(ushort_20, 0x20, ...)`/`RD_OFF(int_24,
+	 * by the existing `RD_OFF(signBits, 0x20, ...)`/`RD_OFF(polarity,
 	 * 0x24, ...)` and by `dis.py` over all nine `V90RDetector` methods
 	 * finding no access to offset 0x22/0x23.
 	 */
-	int int_24;			/* +0x24 */
+	int polarity;			/* +0x24 */
 	V90Parameters *params;		/* +0x28 = constructor argument 1  */
 };
 

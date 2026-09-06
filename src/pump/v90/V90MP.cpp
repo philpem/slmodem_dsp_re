@@ -51,16 +51,16 @@ V90MP_OFF(h2Real,		0x00c, h2real);
 V90MP_OFF(h2Imag,		0x00e, h2imag);
 V90MP_OFF(h3Real,		0x010, h3real);
 V90MP_OFF(h3Imag,		0x012, h3imag);
-V90MP_OFF(word_14,		0x014, word14);
+V90MP_OFF(rxState,		0x014, word14);
 V90MP_OFF(type,			0x018, type18);
-V90MP_OFF(byte_19,		0x019, byte19);
-V90MP_OFF(byte_1a,		0x01a, byte1a);
-V90MP_OFF(byte_1b,		0x01b, byte1b);
+V90MP_OFF(onesRun,		0x019, byte19);
+V90MP_OFF(zerosRun,		0x01a, byte1a);
+V90MP_OFF(bitIndex,		0x01b, byte1b);
 V90MP_OFF(bits,			0x01c, bits);
 V90MP_OFF(crc,			0x102, crc);
-V90MP_OFF(word_114,		0x114, word114);
-V90MP_OFF(byte_118,		0x118, byte118);
-V90MP_OFF(byte_119,		0x119, byte119);
+V90MP_OFF(groupSize,		0x114, word114);
+V90MP_OFF(seqLength,		0x118, byte118);
+V90MP_OFF(bodyLength,		0x119, byte119);
 V90MP_OFF(nofRecievedMp,	0x11c, nofmp);
 V90MP_OFF(nofRecievedMpNot,	0x120, nofmpnot);
 typedef char v90mp_size[(sizeof(V90MP) == 0x124) ? 1 : -1];
@@ -95,10 +95,10 @@ typedef char v90mp_size[(sizeof(V90MP) == 0x124) ? 1 : -1];
  */
 V90MP::V90MP()
 {
-	byte_1b = 18;
-	word_14 = 0;
-	byte_19 = 0;
-	byte_1a = 0;
+	bitIndex = 18;
+	rxState = 0;
+	onesRun = 0;
+	zerosRun = 0;
 
 	nofRecievedMp = 0;
 	nofRecievedMpNot = 0;
@@ -137,10 +137,10 @@ V90MP::resetCRC()
 void
 V90MP::resetDetector()
 {
-	byte_1b = 18;
-	word_14 = 0;
-	byte_19 = 0;
-	byte_1a = 0;
+	bitIndex = 18;
+	rxState = 0;
+	onesRun = 0;
+	zerosRun = 0;
 }
 
 /*
@@ -161,10 +161,10 @@ V90MP::resetDetector()
 void
 V90MP::reset()
 {
-	byte_1b = 18;
-	word_14 = 0;
-	byte_19 = 0;
-	byte_1a = 0;
+	bitIndex = 18;
+	rxState = 0;
+	onesRun = 0;
+	zerosRun = 0;
 
 	nofRecievedMp = 0;
 	nofRecievedMpNot = 0;
@@ -188,7 +188,7 @@ V90MP::reset()
 unsigned char *
 V90MP::getBitVector(unsigned int &length)
 {
-	length = byte_118;
+	length = seqLength;
 	return bits;
 }
 
@@ -344,23 +344,23 @@ V90MP::evaluateInfo()
  * calcSequenceLength -- 0x1f910, 116 bytes, between `evaluateInfo` and
  * `infoToBits` in the blob as here.
  *
- * Round `byte_119 + 1` UP to a multiple of the group size and store it in
- * `byte_118` -- except that the exact-multiple arm stores `byte_119 + 1`
+ * Round `bodyLength + 1` UP to a multiple of the group size and store it in
+ * `seqLength` -- except that the exact-multiple arm stores `bodyLength + 1`
  * through a BYTE increment of the saved copy (`incb 0x3(%esp)`), so the two
- * arms agree only below 256.  The division is `div` against `word_114`:
+ * arms agree only below 256.  The division is `div` against `groupSize`:
  * unsigned, and a group size of zero traps exactly as the object does.
  */
 void
 V90MP::calcSequenceLength()
 {
-	unsigned char b = byte_119;
+	unsigned char b = bodyLength;
 	unsigned int w = (unsigned int)b + 1;
-	unsigned int q = w / word_114;
+	unsigned int q = w / groupSize;
 
-	if (q * word_114 != w)
-		byte_118 = (unsigned char)((q + 1) * word_114);
+	if (q * groupSize != w)
+		seqLength = (unsigned char)((q + 1) * groupSize);
 	else
-		byte_118 = (unsigned char)(b + 1);
+		seqLength = (unsigned char)(b + 1);
 }
 
 /*
@@ -391,7 +391,7 @@ V90MP::calcSequenceLength()
  *
  *   - +0x118 is read ONCE into a register before that pad loop, and the loop
  *     can reach far enough to overwrite +0x118 itself (index 0xfc).  `len`
- *     here is that register: writing `i < byte_118` instead would re-read the
+ *     here is that register: writing `i < seqLength` instead would re-read the
  *     field and stop early.
  */
 void
@@ -455,7 +455,7 @@ V90MP::infoToBits()
 
 	type = (char)t;
 	n = t ? 0xbb : 0x55;
-	byte_119 = n;
+	bodyLength = n;
 
 	/*
 	 * calcSequenceLength's body, repeated for the reason above: round
@@ -465,12 +465,12 @@ V90MP::infoToBits()
 	 */
 	{
 		unsigned int want = (unsigned int)n + 1;
-		unsigned int q = want / word_114;
+		unsigned int q = want / groupSize;
 
-		if (q * word_114 == want)
-			byte_118 = (unsigned char)want;
+		if (q * groupSize == want)
+			seqLength = (unsigned char)want;
 		else
-			byte_118 = (unsigned char)((q + 1) * word_114);
+			seqLength = (unsigned char)((q + 1) * groupSize);
 	}
 
 	if (t != 0) {
@@ -544,7 +544,7 @@ V90MP::infoToBits()
 	for (k = 0; k <= 15; k++)
 		bits[end + 1 + k] = crc[k];
 
-	len = byte_118;
+	len = seqLength;
 	if (t != 0) {
 		bits[0xbb] = 0;
 		for (i = 0xbc; i < len; i++)
@@ -665,9 +665,9 @@ V90MP::calcCRC()
  *   - the information bits are bounded by `type ? 0xaa : 0x44`, read from
  *     +0x18 by the same five instructions `calcCRC` uses (0x1f48f..0x1f4a0);
  *   - the peer's sixteen CRC bits are found from +0x119, through the single
- *     displacement `0xc(%edi,%ecx,1)` with %edi holding `this + byte_119`
+ *     displacement `0xc(%edi,%ecx,1)` with %edi holding `this + bodyLength`
  *     (0x1f6cb, 0x1f6d8).  `bits` is at +0x1c, so +0x119 + 0xc + k is
- *     `bits[byte_119 - 0x10 + k]` -- the same expression `bitsToInfo`'s two
+ *     `bits[bodyLength - 0x10 + k]` -- the same expression `bitsToInfo`'s two
  *     inlined copies use with its own `n`.
  *
  * They agree for every value `bitsToInfo` writes (0xbb and 0x55, whose -0x11
@@ -754,7 +754,7 @@ V90MP::evaluateCRC()
 		crc[15] = (unsigned char)(a & 1);
 	}
 
-	n = byte_119;
+	n = bodyLength;
 	sum = 0;
 	for (i = 0; i <= 0xf; i++) {
 		int d = (int)crc[i] - (int)bits[n - 0x10 + i];
@@ -846,35 +846,35 @@ V90MP::bitsToInfo(int bit)
 	char str[76];
 
 	if (bit != 0) {
-		byte_19++;
-		byte_1a = 0;
+		onesRun++;
+		zerosRun = 0;
 	} else {
-		byte_1a++;
-		byte_19 = 0;
+		zerosRun++;
+		onesRun = 0;
 	}
 
-	if (byte_1a == 2 * word_114 && byte_1b == 18) {
+	if (zerosRun == 2 * groupSize && bitIndex == 18) {
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V90MP: Ed detected\r\n");
 		rc = 3;
 	}
 
-	switch (word_14) {
+	switch (rxState) {
 	case 0:
 		/* Seventeen ones is the preamble; sixteen are not enough. */
-		if (byte_19 > 0x10)
-			word_14 = 1;
+		if (onesRun > 0x10)
+			rxState = 1;
 		break;
 
 	case 1:
 		/* The framing zero, or start again. */
 		if (bit == 0) {
-			word_14 = 2;
+			rxState = 2;
 		} else {
-			byte_1b = 18;
-			word_14 = 0;
-			byte_19 = 0;
-			byte_1a = 0;
+			bitIndex = 18;
+			rxState = 0;
+			onesRun = 0;
+			zerosRun = 0;
 		}
 		break;
 
@@ -885,28 +885,28 @@ V90MP::bitsToInfo(int bit)
 		 * and as a type of zero here.
 		 */
 		type = (char)bit;
-		bits[byte_1b] = (unsigned char)bit;
-		byte_1b++;
+		bits[bitIndex] = (unsigned char)bit;
+		bitIndex++;
 		n = type ? 0xbb : 0x55;
-		byte_119 = n;
+		bodyLength = n;
 		{
 			unsigned int want = (unsigned int)n + 1;
-			unsigned int q = want / word_114;
+			unsigned int q = want / groupSize;
 
-			if (q * word_114 == want)
-				byte_118 = (unsigned char)want;
+			if (q * groupSize == want)
+				seqLength = (unsigned char)want;
 			else
-				byte_118 = (unsigned char)((q + 1) * word_114);
+				seqLength = (unsigned char)((q + 1) * groupSize);
 		}
-		word_14 = 3;
+		rxState = 3;
 		break;
 
 	case 3:
-		bits[byte_1b] = (unsigned char)bit;
-		next = (unsigned char)(byte_1b + 1);
-		n = byte_119;
+		bits[bitIndex] = (unsigned char)bit;
+		next = (unsigned char)(bitIndex + 1);
+		n = bodyLength;
 		if (next != n) {
-			byte_1b = next;
+			bitIndex = next;
 			break;
 		}
 
@@ -933,8 +933,8 @@ V90MP::bitsToInfo(int bit)
 		}
 
 		if (sum == 0) {
-			byte_1b = next;
-			word_14 = 4;
+			bitIndex = next;
+			rxState = 4;
 			break;
 		}
 
@@ -963,15 +963,15 @@ V90MP::bitsToInfo(int bit)
 		}
 
 		if (sum == 0) {
-			byte_1b = next;
-			word_14 = 4;
+			bitIndex = next;
+			rxState = 4;
 			if (DSPLIB_DEBUG_VERBOSE())
 				dsplibs_debug_printf("V90MP: recieved MP with " "modified good CRC\r\n");
 		} else {
-			byte_1b = 18;
-			byte_19 = 0;
-			byte_1a = 0;
-			word_14 = 0;
+			bitIndex = 18;
+			onesRun = 0;
+			zerosRun = 0;
+			rxState = 0;
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf("V90MP: recieved MP with " "bad CRC\r\n");
 		}
@@ -979,16 +979,16 @@ V90MP::bitsToInfo(int bit)
 
 	case 4:
 		/* The padding, which is counted and not stored. */
-		byte_1b++;
-		if (byte_1b != byte_118)
+		bitIndex++;
+		if (bitIndex != seqLength)
 			break;
 
 		evaluateInfo();
 
-		byte_1b = 18;
-		word_14 = 0;
-		byte_19 = 0;
-		byte_1a = 0;
+		bitIndex = 18;
+		rxState = 0;
+		onesRun = 0;
+		zerosRun = 0;
 
 		if (CPack == 0) {
 			nofRecievedMp++;

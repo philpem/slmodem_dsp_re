@@ -84,8 +84,8 @@
  },
  {
   "label": "detectRRN prints the second detector's polarity",
-  "find": "\tedprintf(\"V90Phase4Demodulator: Rd detected, polarity = %d\\r\\n\",\n\t\t rd->int_24);",
-  "replace": "\tedprintf(\"V90Phase4Demodulator: Rd detected, polarity = %d\\r\\n\",\n\t\t rDetector2.int_24);"
+  "find": "\tedprintf(\"V90Phase4Demodulator: Rd detected, polarity = %d\\r\\n\",\n\t\t rd->polarity);",
+  "replace": "\tedprintf(\"V90Phase4Demodulator: Rd detected, polarity = %d\\r\\n\",\n\t\t rDetector2.polarity);"
  },
  {
   "label": "detectRRN takes the pair arm when the session flag is SET",
@@ -124,8 +124,8 @@
  },
  {
   "label": "detectFPE prints the polarity of the detector it ran, not +0x3020",
-  "find": "\t\t rDetector1.int_24);\n\tedprintf(\"V90Phase4Demodulator: enter FPE !\");",
-  "replace": "\t\t rDetector2.int_24);\n\tedprintf(\"V90Phase4Demodulator: enter FPE !\");"
+  "find": "\t\t rDetector1.polarity);\n\tedprintf(\"V90Phase4Demodulator: enter FPE !\");",
+  "replace": "\t\t rDetector2.polarity);\n\tedprintf(\"V90Phase4Demodulator: enter FPE !\");"
  },
  {
   "label": "detectFPE does not announce the FPE state",

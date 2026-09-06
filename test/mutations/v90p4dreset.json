@@ -152,23 +152,23 @@
  },
  {
   "label": "reset: the MP is reset at all",
-  "find": "\t\tmp->reset();\n\t\tmp->word_114 = mappingParams1->word_0;",
-  "replace": "\t\tmp->word_114 = mappingParams1->word_0;"
+  "find": "\t\tmp->reset();\n\t\tmp->groupSize = mappingParams1->word_0;",
+  "replace": "\t\tmp->groupSize = mappingParams1->word_0;"
  },
  {
   "label": "reset: the MP's group size is written",
-  "find": "\t\tmp->reset();\n\t\tmp->word_114 = mappingParams1->word_0;",
+  "find": "\t\tmp->reset();\n\t\tmp->groupSize = mappingParams1->word_0;",
   "replace": "\t\tmp->reset();"
  },
  {
   "label": "reset: the MP arm reads mappingParams1, not mappingParams2",
-  "find": "\t\tmp->reset();\n\t\tmp->word_114 = mappingParams1->word_0;",
-  "replace": "\t\tmp->reset();\n\t\tmp->word_114 = mappingParams2->word_0;"
+  "find": "\t\tmp->reset();\n\t\tmp->groupSize = mappingParams1->word_0;",
+  "replace": "\t\tmp->reset();\n\t\tmp->groupSize = mappingParams2->word_0;"
  },
  {
   "label": "reset: the MP arm does NOT write +0x34fc",
-  "find": "\t\tmp->reset();\n\t\tmp->word_114 = mappingParams1->word_0;",
-  "replace": "\t\tmp->reset();\n\t\tmp->word_114 = mappingParams1->word_0;\n\t\tuint_34fc = mappingParams1->word_0;"
+  "find": "\t\tmp->reset();\n\t\tmp->groupSize = mappingParams1->word_0;",
+  "replace": "\t\tmp->reset();\n\t\tmp->groupSize = mappingParams1->word_0;\n\t\tuint_34fc = mappingParams1->word_0;"
  },
  {
   "label": "reset: the demapper is reset at all",

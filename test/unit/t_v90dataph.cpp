@@ -762,7 +762,7 @@ run_dataphase(void)
 						 dsplib_debug_capture_text(1)),
 				    0, tag);
 
-			study = ((V90Demapper *)dmp[1])->uint_1ea8;
+			study = ((V90Demapper *)dmp[1])->studyLength;
 			if (study == 12600u)
 				sawShort = 1;
 			if (study == 30000u)

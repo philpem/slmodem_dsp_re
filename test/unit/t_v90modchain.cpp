@@ -3499,7 +3499,7 @@ static unsigned char pump_map_pre[MAPPER_SIZE];
 /*
  * The MP record's two fields the V.90 arms read: the length `getBitVector`
  * reports, which is also how many bytes the scrambler reads out of the MP, and
- * the group size `6 * mpBitCount / word_114` divides by.  A pseudorandom
+ * the group size `6 * mpBitCount / groupSize` divides by.  A pseudorandom
  * divisor is legal; a pseudorandom ZERO is a SIGFPE.
  */
 /*
@@ -3507,7 +3507,7 @@ static unsigned char pump_map_pre[MAPPER_SIZE];
  * 35, at cases 2 and 3 -- because the message fill hands the mapper this many
  * bits and not `nofBits`, and a fill shorter than one frame emits no symbol
  * for the drain to hand back.  Both are well inside the record they point
- * into: the MP's vector starts at +0x1c below `word_114` at +0x114, and the
+ * into: the MP's vector starts at +0x1c below `groupSize` at +0x114, and the
  * CP's is V90CP_BITS long.
  */
 #define PUMP_MPLEN	0x48u
@@ -3624,8 +3624,8 @@ setup_pump(int trial, int ci, int st, int cnt_i, int variant)
 	}
 
 	fill(mp_store, mp_store, (unsigned char *)0, sizeof(mp_store), 0);
-	MP->byte_118 = (unsigned char)PUMP_MPLEN;
-	MP->word_114 = 3u;
+	MP->seqLength = (unsigned char)PUMP_MPLEN;
+	MP->groupSize = 3u;
 
 	fill(cp2_store, cp2_store, (unsigned char *)0, sizeof(cp2_store), 0);
 	fill((unsigned char *)pump_cpbuf[0], (unsigned char *)pump_cpbuf[0],

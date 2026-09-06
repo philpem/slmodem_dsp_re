@@ -25,7 +25,7 @@
  * strings are compared byte for byte, including the terminator position, over
  * widths 0 (minimal form, leading-zero suppression) through 16 and 32.
  *
- * `calcSequenceLength` divides by `word_114` with a plain `div`, so zero is
+ * `calcSequenceLength` divides by `groupSize` with a plain `div`, so zero is
  * out of the grid: the object faults there and a faulting trial is not a
  * differential trial.
  */
@@ -277,8 +277,8 @@ run_v90mp(void)
 		fill_pair(mp[0], mp[1], MP_SLOT, 2000 + trial);
 
 		/* The divisor is poked non-zero on both sides; see the head. */
-		MP_(0)->word_114 = MP_(1)->word_114 = group;
-		MP_(0)->byte_119 = MP_(1)->byte_119 =
+		MP_(0)->groupSize = MP_(1)->groupSize = group;
+		MP_(0)->bodyLength = MP_(1)->bodyLength =
 		    (unsigned char)(trial * 31 + 5);
 		memcpy(before, mp[0], MP_SLOT);
 
@@ -299,12 +299,12 @@ run_v90mp(void)
 			    MP_(0)->crc[0] == 1 && MP_(0)->crc[15] == 1, 1,
 			    trial);
 		diff_eq_int("the detector was reset (trial %ld)",
-			    MP_(0)->byte_1b == 18 && MP_(0)->word_14 == 0
-			    && MP_(0)->byte_19 == 0 && MP_(0)->byte_1a == 0,
+			    MP_(0)->bitIndex == 18 && MP_(0)->rxState == 0
+			    && MP_(0)->onesRun == 0 && MP_(0)->zerosRun == 0,
 			    1, trial);
 
 		/* Both arms of calcSequenceLength, counted. */
-		if (((unsigned)MP_(0)->byte_119 + 1u) % group == 0u)
+		if (((unsigned)MP_(0)->bodyLength + 1u) % group == 0u)
 			exact++;
 		else
 			rounded++;

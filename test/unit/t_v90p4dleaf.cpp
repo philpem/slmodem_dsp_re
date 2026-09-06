@@ -36,7 +36,7 @@
  *
  * THE POLARITY THE TWO DETECTORS PRINT IS NOT THE SAME FIELD, and that is
  * the blob's, not a slip here.  `detectFPE` detects on `rDetector2` at
- * +0x3028 and prints `rDetector1.int_24` at +0x3020 (finding F4320).  A
+ * +0x3028 and prints `rDetector1.polarity` at +0x3020 (finding F4320).  A
  * fixture that seeded the two detectors alike could not tell that from the
  * obvious reading, so every trial gives them different polarities and every
  * `detectFPE` trial checks the transcript.
@@ -180,30 +180,30 @@ compare_pair(const char *what, long tag)
 static short
 arm_r(V90RDetector *d, int want, int limit)
 {
-	d->int_04 = limit;
-	d->int_14 = 0;
-	d->int_18 = 0;
-	d->int_24 = 0x33;
+	d->rLimit = limit;
+	d->positiveRunLength = 0;
+	d->negativeRunLength = 0;
+	d->polarity = 0x33;
 
 	switch (want) {
 	case 1:
-		d->int_00 = 5;
-		d->ushort_20 = 0x1c;		/* 0x1c * 2     = 0x38 */
-		d->int_14 = limit - 6;
+		d->sampleCount = 5;
+		d->signBits = 0x1c;		/* 0x1c * 2     = 0x38 */
+		d->positiveRunLength = limit - 6;
 		return -300;			/* not > 0: bit 0 stays 0 */
 	case -1:
-		d->int_00 = 5;
-		d->ushort_20 = 0x03;		/* 0x03 * 2 | 1 = 0x07 */
-		d->int_18 = limit - 6;
+		d->sampleCount = 5;
+		d->signBits = 0x03;		/* 0x03 * 2 | 1 = 0x07 */
+		d->negativeRunLength = limit - 6;
 		return 300;
 	case 0:
-		d->int_00 = 5;
-		d->ushort_20 = 0x1c;
-		d->int_14 = limit - 60;
+		d->sampleCount = 5;
+		d->signBits = 0x1c;
+		d->positiveRunLength = limit - 60;
 		return -300;
 	default:
-		d->int_00 = 2;
-		d->ushort_20 = 0x1c;
+		d->sampleCount = 2;
+		d->signBits = 0x1c;
 		return 300;
 	}
 }
@@ -212,30 +212,30 @@ arm_r(V90RDetector *d, int want, int limit)
 static short
 arm_rf(V90RDetector *d, int want, int limit)
 {
-	d->int_0c = limit;
-	d->int_14 = 0;
-	d->int_18 = 0;
-	d->int_24 = 0x44;
+	d->rfLimit = limit;
+	d->positiveRunLength = 0;
+	d->negativeRunLength = 0;
+	d->polarity = 0x44;
 
 	switch (want) {
 	case 1:
-		d->int_00 = 11;
-		d->ushort_20 = 0x666;		/* 0x666 * 2     = 0xccc */
-		d->int_14 = limit - 12;
+		d->sampleCount = 11;
+		d->signBits = 0x666;		/* 0x666 * 2     = 0xccc */
+		d->positiveRunLength = limit - 12;
 		return -300;
 	case -1:
-		d->int_00 = 11;
-		d->ushort_20 = 0x199;		/* 0x199 * 2 | 1 = 0x333 */
-		d->int_18 = limit - 12;
+		d->sampleCount = 11;
+		d->signBits = 0x199;		/* 0x199 * 2 | 1 = 0x333 */
+		d->negativeRunLength = limit - 12;
 		return 300;
 	case 0:
-		d->int_00 = 11;
-		d->ushort_20 = 0x666;
-		d->int_14 = limit - 120;
+		d->sampleCount = 11;
+		d->signBits = 0x666;
+		d->positiveRunLength = limit - 120;
 		return -300;
 	default:
-		d->int_00 = 4;
-		d->ushort_20 = 0x666;
+		d->sampleCount = 4;
+		d->signBits = 0x666;
 		return 300;
 	}
 }
@@ -279,14 +279,14 @@ run_p4d_resetrrndetector(void)
 		 * them, lands here as well as in the object comparison.
 		 */
 		if (trial == 0)
-			first = P4DB->rDetector1.int_04;
-		else if (P4DB->rDetector1.int_04 != first)
+			first = P4DB->rDetector1.rLimit;
+		else if (P4DB->rDetector1.rLimit != first)
 			varied = 1;
-		if (P4DB->rDetector1.int_04 != P4DB->rDetector2.int_04)
+		if (P4DB->rDetector1.rLimit != P4DB->rDetector2.rLimit)
 			split = 1;
 
 		diff_eq_int("the second detector ignores params (%ld)",
-			    (long)P4DB->rDetector2.int_04, 0xb4, tag);
+			    (long)P4DB->rDetector2.rLimit, 0xb4, tag);
 	}
 
 	diff_eq_int("the first detector followed the parameter", varied, 1, 0);
@@ -546,9 +546,9 @@ run_p4d_detectrrn(void)
 		/*
 		 * The OTHER detector's polarity, distinct from anything
 		 * `detectR` can leave in +0x3020, so a body that printed
-		 * `rDetector2.int_24` prints a different number.
+		 * `rDetector2.polarity` prints a different number.
 		 */
-		P4DA->rDetector2.int_24 = P4DB->rDetector2.int_24 =
+		P4DA->rDetector2.polarity = P4DB->rDetector2.polarity =
 		    0x5150 + trial;
 
 		P4DA->sessionFlag = P4DB->sessionFlag = flag;
@@ -652,7 +652,7 @@ run_p4d_detectfpe(void)
 		 * produce, and the detector it runs on will hold 1 or -1
 		 * afterwards, so the two are never confusable.
 		 */
-		P4DA->rDetector1.int_24 = P4DB->rDetector1.int_24 =
+		P4DA->rDetector1.polarity = P4DB->rDetector1.polarity =
 		    0x2600 + trial;
 
 		P4DA->state = P4DB->state = P4D_STATE_WAIT_FOR_MP;
@@ -689,11 +689,11 @@ run_p4d_detectfpe(void)
 				    (long)P4DB->int_003c, 0x3f00 + trial, tag);
 			diff_eq_int("the detector it ran on kept a polarity "
 				    "(%ld)",
-				    (long)(P4DB->rDetector2.int_24 == 1 ||
-					   P4DB->rDetector2.int_24 == -1), 1,
+				    (long)(P4DB->rDetector2.polarity == 1 ||
+					   P4DB->rDetector2.polarity == -1), 1,
 				    tag);
 			diff_eq_int("the one it PRINTS was left alone (%ld)",
-				    (long)P4DB->rDetector1.int_24,
+				    (long)P4DB->rDetector1.polarity,
 				    0x2600 + trial, tag);
 			if (strlen(dsplib_debug_capture_text(1)) > 0)
 				spoke = 1;
@@ -712,7 +712,7 @@ run_p4d_detectfpe(void)
 	 * WHICH DETECTOR'S POLARITY REACHES THE MESSAGE, answered by two runs
 	 * of the BLOB that differ in +0x3020 alone.  `rDetector2` is armed
 	 * identically both times, so it ends at the same polarity; only
-	 * `rDetector1.int_24` moves, and the transcript has to move with it.
+	 * `rDetector1.polarity` moves, and the transcript has to move with it.
 	 */
 	{
 		short sample;
@@ -721,7 +721,7 @@ run_p4d_detectfpe(void)
 		set_level(2);
 		seed_pair(700, 0);
 		sample = arm_rf(&P4DB->rDetector2, 1, 0x60);
-		P4DB->rDetector1.int_24 = 0x0111;
+		P4DB->rDetector1.polarity = 0x0111;
 		dsplib_debug_capture_reset();
 		dsplib_debug_capture_on = 1;
 		diff_eq_int("the blob fired (%ld)",
@@ -735,7 +735,7 @@ run_p4d_detectfpe(void)
 
 		seed_pair(700, 0);
 		sample = arm_rf(&P4DB->rDetector2, 1, 0x60);
-		P4DB->rDetector1.int_24 = 0x0222;
+		P4DB->rDetector1.polarity = 0x0222;
 		dsplib_debug_capture_reset();
 		dsplib_debug_capture_on = 1;
 		diff_eq_int("the blob fired again (%ld)",

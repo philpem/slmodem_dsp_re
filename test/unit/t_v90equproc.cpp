@@ -859,26 +859,26 @@ plant_params(void)
 static void
 arm_group6(V90RDetector *d, int want, int limit, int *run)
 {
-	d->int_04 = limit;
-	d->int_08 = limit;
-	d->int_1c = 0;
-	d->int_14 = 0;
-	d->int_18 = 0;
+	d->rLimit = limit;
+	d->rNotLimit = limit;
+	d->notRunLength = 0;
+	d->positiveRunLength = 0;
+	d->negativeRunLength = 0;
 
 	switch (want) {
 	case 2:
-		d->int_00 = 4;
-		d->ushort_20 = 0x01;	/* -> 0x03 -> 0x07 on the second */
+		d->sampleCount = 4;
+		d->signBits = 0x01;	/* -> 0x03 -> 0x07 on the second */
 		*run = limit - 6;
 		break;
 	case 1:
-		d->int_00 = 5;
-		d->ushort_20 = 0x03;	/* 0x03 * 2 | 1 = 0x07 */
+		d->sampleCount = 5;
+		d->signBits = 0x03;	/* 0x03 * 2 | 1 = 0x07 */
 		*run = limit - 6;
 		break;
 	default:
-		d->int_00 = 2;
-		d->ushort_20 = 0x1c;
+		d->sampleCount = 2;
+		d->signBits = 0x1c;
 		break;
 	}
 }
@@ -887,43 +887,43 @@ arm_group6(V90RDetector *d, int want, int limit, int *run)
 static void
 arm_rnot(V90RDetector *d, int want, int limit)
 {
-	d->int_24 = 0x33;
-	arm_group6(d, want, limit, &d->int_1c);
+	d->polarity = 0x33;
+	arm_group6(d, want, limit, &d->notRunLength);
 }
 
 /* `detectR`: two run counters, and a POSITIVE sample matches 0x07 -> +0x18. */
 static void
 arm_r(V90RDetector *d, int want, int limit)
 {
-	d->int_24 = 0x33;
-	arm_group6(d, want, limit, &d->int_18);
-	d->int_1c = 0;
+	d->polarity = 0x33;
+	arm_group6(d, want, limit, &d->negativeRunLength);
+	d->notRunLength = 0;
 }
 
 /* The twelve-sample pair: 0x333 is the positive pattern, +0x0c the limit. */
 static void
 arm_group12(V90RDetector *d, int want, int limit, int *run)
 {
-	d->int_0c = limit;
-	d->int_10 = limit;
-	d->int_1c = 0;
-	d->int_14 = 0;
-	d->int_18 = 0;
+	d->rfLimit = limit;
+	d->rfNotLimit = limit;
+	d->notRunLength = 0;
+	d->positiveRunLength = 0;
+	d->negativeRunLength = 0;
 
 	switch (want) {
 	case 2:
-		d->int_00 = 10;
-		d->ushort_20 = 0x0cc;	/* -> 0x199 -> 0x333 */
+		d->sampleCount = 10;
+		d->signBits = 0x0cc;	/* -> 0x199 -> 0x333 */
 		*run = limit - 12;
 		break;
 	case 1:
-		d->int_00 = 11;
-		d->ushort_20 = 0x199;	/* 0x199 * 2 | 1 = 0x333 */
+		d->sampleCount = 11;
+		d->signBits = 0x199;	/* 0x199 * 2 | 1 = 0x333 */
 		*run = limit - 12;
 		break;
 	default:
-		d->int_00 = 4;
-		d->ushort_20 = 0x666;
+		d->sampleCount = 4;
+		d->signBits = 0x666;
 		break;
 	}
 }
@@ -931,16 +931,16 @@ arm_group12(V90RDetector *d, int want, int limit, int *run)
 static void
 arm_rfnot(V90RDetector *d, int want, int limit)
 {
-	d->int_24 = 0x44;
-	arm_group12(d, want, limit, &d->int_1c);
+	d->polarity = 0x44;
+	arm_group12(d, want, limit, &d->notRunLength);
 }
 
 static void
 arm_rf(V90RDetector *d, int want, int limit)
 {
-	d->int_24 = 0x44;
-	arm_group12(d, want, limit, &d->int_18);
-	d->int_1c = 0;
+	d->polarity = 0x44;
+	arm_group12(d, want, limit, &d->negativeRunLength);
+	d->notRunLength = 0;
 }
 
 /*
@@ -1082,11 +1082,11 @@ p4_setup(long tag, int dly)
 		 * constellation spacing puts out of reach, so "the detector
 		 * moved" is a counter that cannot fire.  The progress counter
 		 * at +0x1eb0 is incremented on every call that does not
-		 * complete a run, and `uint_1ea8` is planted far away so that
+		 * complete a run, and `studyLength` is planted far away so that
 		 * is every call.
 		 */
-		m->uint_1eb0 = 0u;
-		m->uint_1ea8 = 0x1000u;
+		m->studyProgress = 0u;
+		m->studyLength = 0x1000u;
 		m->errorHistogramCount = 0u;
 		m->histogramDelay = 0;
 		m->histogramIntegration = 0;
@@ -1101,11 +1101,11 @@ p4_setup(long tag, int dly)
 		}
 
 		/* Both message decoders one bit from an answer. */
-		MPR(s).word_14 = 0u;
-		MPR(s).byte_19 = 0;
-		MPR(s).byte_1a = 1;
-		MPR(s).byte_1b = 18;
-		MPR(s).word_114 = 1u;
+		MPR(s).rxState = 0u;
+		MPR(s).onesRun = 0;
+		MPR(s).zerosRun = 1;
+		MPR(s).bitIndex = 18;
+		MPR(s).groupSize = 1u;
 		CPR(s).word_ca4 = 0u;
 		CPR(s).byte_ca9 = 0;
 		CPR(s).byte_caa = 1;
@@ -1895,7 +1895,7 @@ run_data_arm(void)
 				 * study having run, read off the blob's side
 				 * and not off the flag the fixture planted.
 				 */
-				if (((V90Demapper *)dem_s[1])->uint_1eb0 != 0u)
+				if (((V90Demapper *)dem_s[1])->studyProgress != 0u)
 					saw_study = 1;
 				/*
 				 * `outFloat[0]` came back as a converted

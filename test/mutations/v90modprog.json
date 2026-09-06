@@ -430,13 +430,13 @@
  },
  {
   "label": "the Ri exit stores the other block's word in the MP",
-  "find": "\t\tmp->word_114 = mappingParams->word_0;",
-  "replace": "\t\tmp->word_114 = mappingParams2->word_0;"
+  "find": "\t\tmp->groupSize = mappingParams->word_0;",
+  "replace": "\t\tmp->groupSize = mappingParams2->word_0;"
  },
  {
   "label": "the Ri exit writes the MP on both arms",
-  "find": "\tif (sessionFlag)\n\t\tcp->word_3ba8 = mappingParams->word_0;\n\telse\n\t\tmp->word_114 = mappingParams->word_0;",
-  "replace": "\tmp->word_114 = mappingParams->word_0;"
+  "find": "\tif (sessionFlag)\n\t\tcp->word_3ba8 = mappingParams->word_0;\n\telse\n\t\tmp->groupSize = mappingParams->word_0;",
+  "replace": "\tmp->groupSize = mappingParams->word_0;"
  },
  {
   "label": "the CP acknowledge does not set the ack bit",

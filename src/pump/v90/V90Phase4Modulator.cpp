@@ -840,7 +840,7 @@ V90Phase4Modulator::recivedFirstSUVuPartTwoRrn()
  * THE CP SEQUENCE IS RE-DERIVED IN FIVE PLACES BY THE SAME THREE LINES --
  * `getBitVector` into `cpBits`/`cpBitCount`, then `6 * cpBitCount /
  * cp->word_3ba8` into `cpSequenceSymbols` -- and `exitMP` is the MP copy of
- * it against `mp->word_114`.  Six symbols carry one group, so the quotient is
+ * it against `mp->groupSize`.  Six symbols carry one group, so the quotient is
  * a count of symbols; V90Phase4Modulator.h has the argument in full.
  * ===========================================================================
  */
@@ -891,7 +891,7 @@ V90Phase4Modulator::exitMP()
 			state = P4M_STATE_MP_NOT;
 			symbolCount = 0;
 			mpBits = mp->getBitVector(mpBitCount);
-			mpSequenceSymbols = 6 * mpBitCount / mp->word_114;
+			mpSequenceSymbols = 6 * mpBitCount / mp->groupSize;
 		}
 	}
 }
@@ -1374,7 +1374,7 @@ V90Phase4Modulator::generateV90Symbol()
 				 symbolCount);
 			symbolCount = 0;
 			mpBits = mp->getBitVector(mpBitCount);
-			mpSequenceSymbols = 6 * mpBitCount / mp->word_114;
+			mpSequenceSymbols = 6 * mpBitCount / mp->groupSize;
 		}
 		break;
 	}
@@ -1411,7 +1411,7 @@ V90Phase4Modulator::generateV90Symbol()
 			state = P4M_STATE_MP_NOT;
 			symbolCount = 0;
 			mpBits = mp->getBitVector(mpBitCount);
-			mpSequenceSymbols = 6 * mpBitCount / mp->word_114;
+			mpSequenceSymbols = 6 * mpBitCount / mp->groupSize;
 		}
 		break;
 	}

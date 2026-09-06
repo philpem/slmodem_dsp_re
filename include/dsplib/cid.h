@@ -76,8 +76,21 @@ struct cid {
 	 */
 	short threshold;		/* +0x028 create_cid puts 2 here    */
 	short rate;			/* +0x02a 8000 or 9600, the LINE    */
-	short f02c;			/* +0x02c create_cid puts 9 here;
-					 *        cid_modem's confidence step*/
+	/*
+	 * NAMED FROM USAGE, evidence rule 3 -- there is no format string or
+	 * typed caller, but the role is unanimous across every writer and the
+	 * one reader.  `create_cid` seeds it at 9 and `src/service/cid.c`'s
+	 * three `f02c = 9` (now `mark_conf_step = 9`) stores under
+	 * `CID_MARK_CONF_STEP` put it back to the same value on every mode
+	 * transition that touches the FSK receiver -- so nothing this tree has
+	 * reconstructed ever gives it a value other than 9.  The one reader,
+	 * `cid_modem`, adds it to `mark_conf` for every block CID_MTD_detect
+	 * answers 0 for (tone detected), which is the step that drives
+	 * `mark_conf` up toward the two time thresholds `rxcid.c`'s own header
+	 * comment derives (finding F8712).  Field naming wave 7.
+	 */
+	short mark_conf_step;		/* +0x02c create_cid puts 9 here;
+					 *        `mark_conf`'s step size   */
 	short lpf_idx;			/* +0x02e write index, 0..16        */
 	short lpf_hist[17];		/* +0x030 fix_LPF's circular buffer */
 	short ac_idx;			/* +0x052 write index, 0..4         */
@@ -101,11 +114,11 @@ struct cid {
 	short short_08a;		/* +0x08a cleared by reset_cid only */
 	short short_08c;		/* +0x08c cleared by reset_cid only */
 	/*
-	 * The mark-tone confidence.  cid_modem adds `f02c` to it for every
-	 * block CID_MTD_detect answers 0 for and zeroes it otherwise, then
-	 * compares it against two thresholds derived from the block length --
-	 * about 26.7 ms of tone to start resampling and about 40 ms to start
-	 * demodulating.  Finding F8712.
+	 * The mark-tone confidence.  cid_modem adds `mark_conf_step` to it for
+	 * every block CID_MTD_detect answers 0 for and zeroes it otherwise,
+	 * then compares it against two thresholds derived from the block
+	 * length -- about 26.7 ms of tone to start resampling and about 40 ms
+	 * to start demodulating.  Finding F8712.
 	 */
 	short mark_conf;		/* +0x08e mark-tone confidence      */
 	/*
@@ -182,7 +195,7 @@ short CID_FSD_demodulate(const short *samples, short *bits, short count,
  * @param cid      The receiver, for its coefficient state.
  * @return 0 if the tone IS there (backwards from the usual sense), 1 if
  *         it is not. `cid_modem` reads it that way: a zero adds
- *         `cid->f02c` to its confidence counter and anything else
+ *         `cid->mark_conf_step` to its confidence counter and anything else
  *         clears it.
  */
 short CID_MTD_detect(const short *samples, short count, struct cid *cid);
@@ -210,8 +223,8 @@ void pack_next_bit(short bit, struct cid *cid);
  * @brief Put the receiver back to the state a new one is in.
  *
  * Configures the 9:10 resampler from Rxcid.c's own static filter.
- * `rate`, `threshold` and `f02c` are the caller's and survive; everything
- * else is cleared. `FPM_MRF_init` is asked to allocate only when
+ * `rate`, `threshold` and `mark_conf_step` are the caller's and survive;
+ * everything else is cleared. `FPM_MRF_init` is asked to allocate only when
  * `mrf.history` is still NULL, so calling this repeatedly reuses the
  * buffer rather than leaking it.
  *
@@ -222,8 +235,8 @@ void reset_cid(struct cid *cid);
 /**
  * @brief Construct an FSK Caller ID receiver.
  *
- * Seeds `rate` with 8000, `threshold` with 2 and `f02c` with 9, all
- * AFTER calling reset_cid().
+ * Seeds `rate` with 8000, `threshold` with 2 and `mark_conf_step` with 9,
+ * all AFTER calling reset_cid().
  *
  * @param cid  NULL allocates 0x160 bytes; anything else is the caller's
  *             storage.

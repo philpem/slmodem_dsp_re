@@ -690,21 +690,21 @@ run_rd_detect(void)
 		 * check is not the implementation restated.
 		 */
 		diff_eq_int("blob: +0x04 is argument 1 down to a six (%ld)",
-			    (unsigned)((V90RDetector *)theirs)->int_04,
+			    (unsigned)((V90RDetector *)theirs)->rLimit,
 			    a - a % 6u, a);
 		diff_eq_int("blob: +0x08 is argument 2 down to a six (%ld)",
-			    (unsigned)((V90RDetector *)theirs)->int_08,
+			    (unsigned)((V90RDetector *)theirs)->rNotLimit,
 			    b - b % 6u, b);
 		diff_eq_int("blob: +0x0c is argument 1 down to a twelve (%ld)",
-			    (unsigned)((V90RDetector *)theirs)->int_0c,
+			    (unsigned)((V90RDetector *)theirs)->rfLimit,
 			    a - a % 12u, a);
 		diff_eq_int("blob: +0x10 is argument 2 down to a twelve (%ld)",
-			    (unsigned)((V90RDetector *)theirs)->int_10,
+			    (unsigned)((V90RDetector *)theirs)->rfNotLimit,
 			    b - b % 12u, b);
 		diff_eq_int("blob: the polarity starts at +1 (%ld)",
-			    ((V90RDetector *)theirs)->int_24, 1, trial);
+			    ((V90RDetector *)theirs)->polarity, 1, trial);
 		diff_eq_int("ours: the polarity starts at +1 (%ld)",
-			    ((V90RDetector *)ours)->int_24, 1, trial);
+			    ((V90RDetector *)ours)->polarity, 1, trial);
 		diff_eq_int("blob: +0x28 is not reset's business (%ld)",
 			    memcmp(theirs + 0x28, before + 0x28, 4) == 0, 1,
 			    trial);
@@ -755,8 +755,8 @@ run_rd_detect(void)
 			 * sides: reaching -1 through detectR first would test
 			 * one arm of the choice and never the other.
 			 */
-			((V90RDetector *)ours)->int_24 = polarity;
-			((V90RDetector *)theirs)->int_24 = polarity;
+			((V90RDetector *)ours)->polarity = polarity;
+			((V90RDetector *)theirs)->polarity = polarity;
 
 			for (step = 0; step < bits * 8; step++) {
 				/*
@@ -810,16 +810,16 @@ run_rd_detect(void)
 				if (rb == 0)
 					seen0++;
 				if (rb == 1
-				    && ((V90RDetector *)theirs)->int_24 > 0)
+				    && ((V90RDetector *)theirs)->polarity > 0)
 					seenPos++;
 				if (rb == 1
-				    && ((V90RDetector *)theirs)->int_24 < 0)
+				    && ((V90RDetector *)theirs)->polarity < 0)
 					seenNeg++;
 				if (rb == -1)
 					seenNot++;
 				if (((step + 1) % bits) == 0
-				    && ((V90RDetector *)theirs)->int_14 == 0
-				    && ((V90RDetector *)theirs)->int_18 == 0)
+				    && ((V90RDetector *)theirs)->positiveRunLength == 0
+				    && ((V90RDetector *)theirs)->negativeRunLength == 0)
 					seenClear++;
 			}
 		}

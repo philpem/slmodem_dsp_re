@@ -223,7 +223,7 @@ void cid_reset(struct cid_modem *ctx);
  *
  * Same mode gating as cid_threshold(): the DTMF receiver's `rate` for
  * modes 1 and 5, the FSK receiver's for modes 0 and 5. See
- * src/service/cid.c for what it does to the FSK receiver's `f02c`.
+ * src/service/cid.c for what it does to the FSK receiver's `mark_conf_step`.
  *
  * @param ctx   The service object.
  * @param rate  New line rate. Arrives as an int and is stored as a
