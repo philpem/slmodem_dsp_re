@@ -118297,3 +118297,155 @@ the 2026-09-06 field-naming exploration list
 value-correlation mining, item 4's other remaining technique, was being
 tried in a separate concurrent worktree at the time of writing and its
 outcome is not reflected here. (2026-09-06)
+
+## F10189. Value-correlation mining, item 1 of the field-naming exploration
+list: the tool is built and validated, and finds one real correlation on a
+live run -- traced to a test-harness confound and correctly declined
+
+`.claude/nextsteps-fieldnaming.md` (not checked in) listed value-correlation
+mining as the one technique of four still untried after F10186 closed the
+other two: log a candidate field's VALUE at every `diff_eq_obj` checkpoint
+across the real differential corpus, alongside every already-named sibling
+field of the same object at the same moment, and check whether the two
+covary. This is a genuinely new evidence class -- observed runtime
+behaviour, not static usage -- sitting between CLAUDE.md's evidence-order
+rank 2 (a typed caller) and rank 3 (usage inference): real corroboration,
+never proof, because two fields can covary for a reason unrelated to either
+one's meaning.
+
+**The apparatus.** `test/harness/harness.c`'s `diff_eq_obj_` -- the function
+under every `diff_eq_obj()` call in the whole suite -- now calls
+`fieldlog_capture()`, a silent no-op unless both `DSPLIB_FIELDLOG_TYPE` and
+`DSPLIB_FIELDLOG_OUT` are set. When they are and the checkpoint's `type`
+string matches, it appends one JSON line (test name, input, the reference
+side's raw bytes as hex) to the log. This is test apparatus, not `src/`, so
+CLAUDE.md's differential-test rule does not bind it -- it adds zero new test
+inputs and costs one `getenv` pair per process otherwise. `tools/
+fieldcorrelate.py capture` drives it (point it at a type and a log path, it
+runs every built `build/test/t_*` binary); `tools/fieldcorrelate.py
+analyze` resolves byte ranges back into fields via the same DWARF `tools/
+whichfield.py` already reads (from a linked test binary, built `-g`), so it
+carries no struct layout of its own to drift from the object. It checks,
+per candidate-vs-sibling pair: exact equality, a fixed additive offset, a
+fixed XOR mask, either direction of deterministic function, a joint
+function of a PAIR of siblings (for a relationship depending on two fields
+at once), and a Pearson-correlation fallback -- each with a NEAR-match mode
+(>=90% of samples, reporting the exception count) as well as exact, because
+a copy that only happens inside one function is real evidence even where a
+handful of adversarial test inputs deliberately probe the pre-copy state.
+One correctness fix earned its own guard while building this: a
+near-continuous field (float in particular) makes almost every joint
+`(sibling1, sibling2)` pair unique across a corpus, so "no key ever mapped
+to two different candidate values" can be true VACUOUSLY, never actually
+tested twice -- the joint check now requires several keys to have actually
+recurred, not just a low distinct-tuple count.
+
+**Validated against a real prior-wave, shared-derivation pair before being
+trusted on anything unnamed**, per CLAUDE.md's "any tool here must be shown
+to fire": `V90ConnectionEvaluator`'s `delayedRetrainRequest`/
+`delayedRetrainArmed` (F7485/F9480 -- `delayedRetrainRequest` was named off
+a format string, rule 1; `delayedRetrainArmed` was named by usage
+inference, as "the copy `getV90CpBits` makes of +0x78", explicitly weaker
+evidence per that file's own comment). Captured 4367 real
+`V90ConnectionEvaluator` checkpoints from `t_v90conneval`: over the WHOLE
+corpus the two fields agree only 59.9% of the time (below the tool's 90%
+near-match floor, correctly reported as no correlation, because most
+checkpoints are far from the one function where the copy happens), but
+restricted to `"after evaluatePhase4"` checkpoints alone (684 samples) the
+tool reports `delayedRetrainArmed == delayedRetrainRequest` in 98.8% of
+samples with 8 named exceptions -- matching a hand-verified count
+(676/684) exactly, and matching the header's own citation of the
+relationship. This is the validation the task asked for: a case where two
+related fields were named together off a shared derivation, and the tool
+independently rediscovers that derivation from pure runtime observation.
+
+**Applied for real, against three targets.** No `src/`/`include/` change
+resulted from any of them -- this is a complete negative result, not an
+early stop, per the two structural findings below and the confound below
+that.
+
+1. **`struct fdsp_tone`'s ten remaining placeholders** (`float_000c`,
+   `float_0014`, `float_005c`, `float_0060`, `short_0064`, `int_0068`,
+   `int_006c`, `short_01b0`, `ptr_01b4`, `ptr_01b8`): captured all 8 real
+   `diff_eq_obj` checkpoints the whole corpus has for this type
+   (`t_fdspkrnl.c`'s `"tone after generate"`). Every one of the ten is a
+   SINGLE constant value across all 8 -- the tool's own "both sides must
+   vary or the check is vacuous" guard correctly refuses to report anything
+   for a field that never moves, which independently reconfirms F10143/
+   F10186's static conclusion ("zeroed... and read by nothing
+   reconstructed") by a completely different method: not just no reader in
+   the object, but no observed VALUE change anywhere in the real
+   differential corpus either. **`struct fdsp_channel`'s siblings
+   (`short_168a`, `short_1690`, `short_1692`) are not reachable by this
+   technique at all** -- `t_fdspkrnl.c`'s own comment explains why: the
+   class has a raw pointer member (`coef`), so its test compares
+   field-by-field with `diff_eq_int` rather than through one `diff_eq_obj`
+   call, and this technique's capture hook is on `diff_eq_obj_` alone. That
+   is a real, structural boundary of the technique as built, not a
+   per-field negative -- a future extension would need a second hook on
+   `diff_eq_int_`, which does not carry a whole-object base pointer to
+   read siblings from and so cannot simply reuse this design.
+2. **`v34fsk.h`/`v17fax.h`'s residue is unreachable by this technique for
+   the same structural reason.** `grep -c diff_eq_obj test/unit/t_v34fsk.c
+   test/unit/t_v17fax.c` is zero for both -- neither file's tests compare
+   whole objects through `diff_eq_obj` at all, so `fieldlog_capture` never
+   fires for either type regardless of what env vars are set.
+   Value-correlation mining as built here needs a `diff_eq_obj` checkpoint
+   to hook; where a test suite uses a different comparison idiom, it has
+   nothing to attach to. Left on the exploration list for whoever adds the
+   `diff_eq_int_` hook.
+3. **`V92CP`'s eighteen reachable placeholders, checked against all six of
+   the class's already-named siblings (`suv`, `rxState`, `stateBitCount`,
+   `bitsPerSymbol`, `vectorLen`, `msgLen`) over 24371 real checkpoints from
+   nine test binaries** (`t_v90cmask`, `t_v90cp`, `t_v92cpcrc`,
+   `t_v92cpeval`, `t_v92info`, `t_v92cpb2i`, `t_v92modem`, `t_v92p4mod`,
+   `t_v92p4reset`). Thirteen (`byte_00`, `char_01`, `char_02`, `byte_03`,
+   `byte_04`, `word_08`, `word_0c`, `flt_10`, `byte_24`, `word_104`,
+   `word_10c`, `word_110`, `byte_118`, `byte_119`, `byte_11a`, `word_11c`,
+   `word_124`, `word_914`) show nothing at all. **Five consecutive floats,
+   `flt_10`/`flt_14`/`flt_18`/`flt_1c`/`flt_20` (+0x10..+0x20), DID show a
+   real, tool-detected signal** -- pairwise Pearson r of 0.95-0.97 between
+   several of them, and exact joint-pair functional determinism against
+   `suv`/`stateBitCount`/`bitsPerSymbol` over ~689 distinct joint states --
+   and it was traced rather than trusted. `t_v92cpcrc.cpp` and
+   `t_v92cpeval.cpp` both seed a per-trial LFSR (`lfsr = seed | 1u`) and
+   fill the object's raw bytes from it before each checkpoint; the joint-
+   tuple cardinality the tool reports (688-689) matches that per-test trial
+   count almost exactly, which is the signature of every field --
+   related or not, named or not -- being a deterministic function of the
+   SAME hidden trial index, not of each other. Restricting the log to the
+   two test groups doing genuine protocol decode rather than raw byte-fill
+   (`--test-filter drawn`, 4696 samples of `"...over drawn bit vectors"`/
+   `"...over drawn fields"`) did not weaken the correlation at all --
+   every float still shows joint-pair determinism against `suv`/
+   `stateBitCount`/`bitsPerSymbol` at essentially the same ~689-tuple
+   cardinality -- which is what a shared-seed confound predicts (the seed
+   still drives every field in those tests too) and is not what a genuine
+   pairwise field relationship would do. **Declined**, per CLAUDE.md's
+   "naming something wrongly is worse than leaving it padded": this is
+   exactly the coincidental-correlation shape the task brief warned about,
+   confirmed by mechanism rather than assumed, and no name resulted.
+
+**Evidence-strength note, since this is a new class.** Every result the
+tool prints carries CLAUDE.md's rank explicitly (~2.5: stronger than usage
+inference, weaker than a typed caller or a format string) and the observed
+distinct-value counts on both sides, because a correlation seen over two
+observed states is far weaker evidence than one seen over many
+independently varying ones -- the same caution CLAUDE.md gives for a small
+state space, now surfaced as a number rather than left to be remembered.
+
+**What changed and what didn't.** New: `tools/fieldcorrelate.py` (capture
++ analyze) and the `fieldlog_capture` hook in `test/harness/harness.c`
+(inert unless both env vars are set; zero new test inputs). No field in
+`include/`/`src/` was renamed -- this is a genuine negative result on the
+naming question, and the tool is committed anyway as a permanent, reusable
+capability for future waves, per the ground rule that a validated negative
+plus a working tool is a complete outcome. Real `make period`: 374 passed,
+0 failed -- exactly F10187's last recorded baseline, unchanged, as expected
+from a `test/harness/`-only, apparatus-only change with no `src/` edit.
+Real `make byteident-ratchet`: 736/1852 grade-0 EXACT (39.7%), 796/1852
+grade-0-or-1 (43.0%), ratchet OK -- unchanged from F10188's last recorded
+state, for the same reason. Closes item 1 of the 2026-09-06 field-naming
+exploration list; three of its four items are now tried (items 2/3 F10186;
+item 4, enum/jump-table matching, is a separate concurrent session's
+F10188). (2026-09-06)

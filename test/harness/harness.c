@@ -54,6 +54,62 @@ diff_end(void)
 }
 
 /*
+ * ===========================================================================
+ * Value-correlation capture: apparatus for tools/fieldcorrelate.py.
+ *
+ * `diff_eq_obj` already has, at every checkpoint in the whole differential
+ * corpus, the one thing field-naming-by-usage-inference never gets to see: a
+ * live instance of a named type with every field at a real, test-driven
+ * value.  This taps that stream without adding a single test input -- it is
+ * off unless BOTH env vars below are set, so an ordinary `make test` or
+ * `make period` run never touches it and pays one `getenv` pair per process.
+ *
+ * FIELDLOG_TYPE is matched against `type` by exact string equality: the same
+ * spelling the call site already passes to `diff_eq_obj`/`diff_eq_obj_`
+ * (`"V90CP"`, `"struct v34_receiver"`, ...).  Each matching checkpoint
+ * appends one JSON line: which test (`diff_name`), the input identifier
+ * already threaded through every other diff_eq_* call, and the reference
+ * side's raw bytes as hex.  The reference side, not ours -- this is mining
+ * the BLOB's own behaviour, and on a passing test the two are identical
+ * anyway.
+ *
+ * tools/fieldcorrelate.py resolves the byte ranges back into fields itself,
+ * via the same DWARF tools/whichfield.py already reads, so this stays a
+ * dumb, cheap byte-and-metadata sink and carries no struct layout of its
+ * own to go stale.
+ */
+static FILE *fieldlog_fp;
+static const char *fieldlog_type;
+static int fieldlog_checked;
+
+static void
+fieldlog_capture(const char *type, const void *want, size_t n, long input)
+{
+	const unsigned char *b;
+	size_t i;
+
+	if (!fieldlog_checked) {
+		const char *path = getenv("DSPLIB_FIELDLOG_OUT");
+
+		fieldlog_checked = 1;
+		fieldlog_type = getenv("DSPLIB_FIELDLOG_TYPE");
+		if (fieldlog_type && path)
+			fieldlog_fp = fopen(path, "a");
+	}
+	if (fieldlog_fp == 0 || fieldlog_type == 0 ||
+	    strcmp(fieldlog_type, type) != 0)
+		return;
+
+	fprintf(fieldlog_fp, "{\"test\":\"%s\",\"n\":%lu,\"input\":%ld,"
+		"\"hex\":\"", diff_name, (unsigned long)n, input);
+	b = want;
+	for (i = 0; i < n; i++)
+		fprintf(fieldlog_fp, "%02x", b[i]);
+	fprintf(fieldlog_fp, "\"}\n");
+	fflush(fieldlog_fp);
+}
+
+/*
  * Compare two objects and say WHERE they differ, not just that they do.
  *
  * This is the loop at t_v34rx.c:187 -- `for (i = 0; i < sizeof(da); i++)
@@ -81,6 +137,8 @@ diff_eq_obj_(const char *file, int line, const char *what, const char *type,
 {
 	const unsigned char *a = got, *b = want;
 	size_t i = 0, runs = 0;
+
+	fieldlog_capture(type, want, n, input);
 
 	diff_checks++;
 	while (i < n) {
