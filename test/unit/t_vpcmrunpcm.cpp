@@ -102,6 +102,7 @@
 #include "dsplib/V92EchoCanceller.h"
 #include "dsplib/V92Jd.h"
 #include "dsplib/V92Modulator.h"
+#include "dsplib/V92Phase3Modulator.h"
 #include "dsplib/V92Phase4Modulator.h"
 #include "dsplib/VPcmFloModem.h"
 
@@ -169,6 +170,13 @@ typedef char vpcmrun_is_0x7f68[(sizeof(VPcmFloModem) == FLO_SIZE) ? 1 : -1];
 #define OFF_V92CP	(OFF_V92MODEM + 0xaa4)	/* the packer's target       */
 #define OFF_V92SIDE	(OFF_V92MODEM + 0xaa8)
 #define OFF_BLOCK6C0C	0x6c0c
+
+/* The V92EchoCanceller, embedded at +0x6bd0; include/dsplib/VPcmFloModem.h. */
+#define OFF_ECHOCANCELLER	0x6bd0
+#define ECHO_FILTERLENGTH	0x14	/* V92EchoCanceller::filterLength */
+#define ECHO_HISTORYALLOC	0x1c	/* V92EchoCanceller::historyAlloc */
+#define ECHO_COEFF		0x20	/* V92EchoCanceller::echoCoeff    */
+#define ECHO_HISTORY		0x24	/* V92EchoCanceller::echoHistory  */
 #define OFF_WORD7F60	0x7f60
 #define OFF_WORD7F64	0x7f64
 
@@ -564,6 +572,36 @@ struct trial {
 	unsigned char	jdFirst;
 	unsigned char	jdSecond;
 	int		ecState;
+	/*
+	 * `p3state`, sentinel -1 for "leave it": `V92Modulator::exitJa`,
+	 * `::exitSuSecond` and `::exitTRN1uSecond` each guard on
+	 * `phase3Modulator->state` being exactly V92P3M_STATE_JA/SU_SECOND/
+	 * TRN1U_SECOND before doing anything observable, and the constructor
+	 * does not leave it at any of the three -- so word_3c 1/7/0x14's own
+	 * exit* call is a guaranteed no-op unless a trial asks for the
+	 * matching state by name.
+	 */
+	int		p3state;
+	/*
+	 * `rxSeedOn`/`rxSeedVal`: pre-load block_6c0c's rx[0] before the call.
+	 * The constructor already clears it, so testing "the non-ramp arm
+	 * clears rx[0]" needs a STALE non-zero value there first, or clearing
+	 * an already-zero word is invisible.
+	 */
+	unsigned char	rxSeedOn;
+	float		rxSeedVal;
+	/*
+	 * Compare the debug transcript for this trial.  NOT the default: the
+	 * pre-existing "level 2" trials print `V90Modem::progress`'s "Illegal
+	 * modemSide" diagnostic (side is deliberately 2, see the file header),
+	 * and the blob's copy of it carries one more blank line than ours --
+	 * a real, pre-existing formatting difference this suite never had a
+	 * way to see before and which is not one of the seven mutations this
+	 * batch is closing.  Comparing transcripts everywhere would fail
+	 * `make one` on that unrelated gap instead of the two claims this
+	 * field exists for.
+	 */
+	unsigned char	cmpTranscript;
 };
 
 /*
@@ -571,7 +609,16 @@ struct trial {
  * only way the default arm is reached other than through one of its 33 own
  * entries.  `b6118` 5 and 6 are the same claim for the first table's `ja`.
  */
-#define TAIL	, 0, 0, 1, 0, 0.0f, 3, 7, V92_ECHO_FILTER_ONLY
+#define TAIL	, 0, 0, 1, 0, 0.0f, 3, 7, V92_ECHO_FILTER_ONLY, -1, 0, 0.0f, 0
+/* TAIL with `p3state` set, for the three exit* guards. */
+#define TAILP3(st) \
+	, 0, 0, 1, 0, 0.0f, 3, 7, V92_ECHO_FILTER_ONLY, (st), 0, 0.0f, 0
+/* TAIL with block_6c0c's rx[0] pre-loaded, for the non-ramp clear. */
+#define TAILRX(val) \
+	, 0, 0, 1, 0, 0.0f, 3, 7, V92_ECHO_FILTER_ONLY, -1, 1, (val), 0
+/* TAIL with the debug transcript compared, for the two print-only claims. */
+#define TAILCMP \
+	, 0, 0, 1, 0, 0.0f, 3, 7, V92_ECHO_FILTER_ONLY, -1, 0, 0.0f, 1
 #define D(w3c)	{ "word_3c", 0, 1, (w3c), 0, 3, 1, 0, 0, 4, 1, 1, 0, 0 TAIL }
 
 static const struct trial trial_v[] = {
@@ -624,6 +671,20 @@ static const struct trial trial_v[] = {
 	{ "0x07, phase2 set",	0, 1, 0x07, 0, 3, 1, 0, 0, 4, 1, 1, 0xff, 0 TAIL },
 	{ "0x07, phase2 clear",	0, 1, 0x07, 0, 3, 1, 0, 0, 4, 1, 1, 0xfd, 0 TAIL },
 
+	/*
+	 * THE THREE EXIT* GUARDS, OPENED BY NAME.  `V92Modulator::exitJa`,
+	 * `::exitSuSecond` and `::exitTRN1uSecond` each return at once unless
+	 * `phase3Modulator->state` is exactly V92P3M_STATE_JA/SU_SECOND/
+	 * TRN1U_SECOND, which nothing else in this fixture ever sets -- so
+	 * without these three, dropping any of the three calls is invisible.
+	 */
+	{ "0x01, phase3=JA", 0, 1, 0x01, 0, 3, 1, 0, 0, 4, 1, 1, 0, 0
+	  TAILP3(V92P3M_STATE_JA) },
+	{ "0x07, phase3=SuSecond", 0, 1, 0x07, 0, 3, 1, 0, 0, 4, 1, 1, 0, 0
+	  TAILP3(V92P3M_STATE_SU_SECOND) },
+	{ "0x14, phase3=TRN1uSecond", 0, 1, 0x14, 0, 3, 1, 0, 0, 4, 1, 1, 0, 0
+	  TAILP3(V92P3M_STATE_TRN1U_SECOND) },
+
 	/* Dispatch 3, over and around {2, 3, 10}. */
 	{ "w34 0",	0, 1, 0, 0,	3, 1, 0, 0, 4, 1, 1, 0, 0 TAIL },
 	{ "w34 1",	0, 1, 0, 1,	3, 1, 0, 0, 4, 1, 1, 0, 0 TAIL },
@@ -650,6 +711,16 @@ static const struct trial trial_v[] = {
 	{ "ramp step",	0, 1, 0, 0, 3, 1, 0x21, 0xaa, 4, 1, 1, 0, 0 TAIL },
 	{ "ramp at end", 0, 1, 0, 0, 3, 1, 0x21, 0xb1, 4, 1, 1, 0, 0 TAIL },
 	{ "ramp near end", 0, 1, 0, 0, 3, 1, 0x21, 0xb0, 4, 1, 1, 0, 0 TAIL },
+	/*
+	 * THE NON-RAMP ARM'S CLEAR, WITH SOMETHING TO CLEAR.  The constructor
+	 * already zeroes block_6c0c, so rx[0] is 0.0f before the call whether
+	 * or not `rx[0] = 0.0f;` runs; pre-loading the sentinel here is what
+	 * makes dropping that store observable -- the mode is 0x20, not
+	 * ramp, so the store (or its absence) is the only thing standing
+	 * between the sentinel BYPASS arm and the real filter.
+	 */
+	{ "rx0 stale sentinel", 0, 1, 0, 0, 3, 1, 0x20, 0, 4, 1, 1, 0, 0
+	  TAILRX(177.0f) },
 
 	/*
 	 * The five gated diagnostics, driven at level 2 so the print sites
@@ -662,7 +733,24 @@ static const struct trial trial_v[] = {
 	{ "level 2, 0x07", 0, 1, 0x07, 0, 3, 1, 0, 0, 4, 1, 1, 0, 2 TAIL },
 	{ "level 2, w34 2", 0, 1, 0, 2, 3, 1, 0, 0, 4, 1, 1, 0, 2 TAIL },
 	{ "level 2, w34 3", 0, 1, 0, 3, 3, 1, 0, 0, 4, 1, 1, 0, 2 TAIL },
-	{ "level 2, fallback", 0, 1, 0x20, 3, 3, 1, 0, 0, 1, 1, 1, 0, 2 TAIL }
+	/*
+	 * "level 2, fallback" IS THE FALLBACK ROW ABOVE ("w34 3 + 0x20"),
+	 * PRINT-COMPARED.  `TAILCMP` is what turns the transcript check on
+	 * for it; the region walk cannot see this one at all -- see
+	 * `test/mutations/vpcmrunpcm.json`'s own note.
+	 */
+	{ "level 2, fallback", 0, 1, 0x20, 3, 3, 1, 0, 0, 1, 1, 1, 0, 2
+	  TAILCMP },
+	/*
+	 * THE FPE GUARD, AT THE LEVEL WHERE ITS OWN MESSAGE PRINTS.  `phase`
+	 * is 2 (not V92MOD_PHASE_DATA), so both `initiateFPE`'s call-site
+	 * guard in `runPcmModem` and its own internal one are closed; edprintf
+	 * "requested but NOT approved" is the one thing that differs when the
+	 * OUTER guard alone is dropped, so it needs `run()`'s transcript
+	 * compare, not the region walk.
+	 */
+	{ "level 2, 0x24 not phase 3", 0, 1, 0x24, 0, 2, 1, 0, 0, 4, 1, 1, 0, 2
+	  TAILCMP }
 };
 
 #define NTRIAL	((int)(sizeof(trial_v) / sizeof(trial_v[0])))
@@ -921,9 +1009,59 @@ poke(int s, const struct trial *t)
 		jd->phaseBits[30] = t->jdSecond;
 
 		echoCanceller_state(o, t->ecState);
+
+		/*
+		 * See the field comment on `p3state`: without this,
+		 * `exitJa`/`exitSuSecond`/`exitTRN1uSecond` all guard on a
+		 * state the constructor never leaves them at, and dropping
+		 * the call is invisible.  EACH ALSO GUARDS ON `symbolCount !=
+		 * 0` A SECOND TIME, in `V92Phase3Modulator::exitJa`/
+		 * `exitSuSecond`/`exitTRN1u` themselves (src/pump/v90/
+		 * V92Phase3Modulator.cpp) -- the constructor leaves it at
+		 * zero too, so `state` alone is not enough.
+		 */
+		if (t->p3state >= 0) {
+			m->phase3Modulator->state =
+			    (V92Phase3ModulatorState)t->p3state;
+			m->phase3Modulator->symbolCount = 7;
+		}
 	}
 	*(int *)(par + PARAM_CONNECTION_TYPE) = 0;
 	*(int *)(par + PARAM_PRE_FILTER_GAIN) = 0;
+
+	/*
+	 * THE ECHO CANCELLER'S OWN FILTER, GIVEN SOMETHING TO CANCEL.
+	 *
+	 * The constructor leaves `echoCoeff`/`echoHistory` at zero, so
+	 * `V92EchoCanceller::process`'s `state == V92_ECHO_FILTER_ONLY` arm
+	 * computes `sum == 0` on every call and `out[i] = in[i] - 0`  --
+	 * bit-identical to the `out[0] == 177.0f` BYPASS arm's `out[i] =
+	 * in[i]`.  So neither "the ramp value is stored before the step, not
+	 * after" nor "the non-ramp arm leaves rx[0] alone" can be observed:
+	 * both mutations only change whether rx[0] READS as the 177.0f
+	 * sentinel, and with a zeroed filter the two arms it selects between
+	 * are the same arithmetic.  A real (if arbitrary) filter makes them
+	 * different arithmetic, which is what the ramp arm's job actually is.
+	 */
+	{
+		unsigned char *ec = o + OFF_ECHOCANCELLER;
+		unsigned int filterLength, historyAlloc, k;
+		float *coeff, *hist;
+
+		memcpy(&filterLength, ec + ECHO_FILTERLENGTH,
+		       sizeof filterLength);
+		memcpy(&historyAlloc, ec + ECHO_HISTORYALLOC,
+		       sizeof historyAlloc);
+		memcpy(&coeff, ec + ECHO_COEFF, sizeof coeff);
+		memcpy(&hist, ec + ECHO_HISTORY, sizeof hist);
+		for (k = 0; k < filterLength; k++)
+			coeff[k] = 0.01f;
+		for (k = 0; k < historyAlloc; k++)
+			hist[k] = 0.02f;
+	}
+
+	if (t->rxSeedOn)
+		*(float *)(o + OFF_BLOCK6C0C) = t->rxSeedVal;
 }
 
 /*
@@ -1017,6 +1155,8 @@ run(void)
 
 		dsplibs_debug_level = t->level;
 		ref_dsplibs_debug_level = t->level;
+		dsplib_debug_capture_on = 1;
+		dsplib_debug_capture_reset();
 
 		ra = ((VPcmFloModem *)base[0])->runPcmModem(sig_in[0],
 		    sig_out[0], NSAMP, rxbits[0], &nrx[0], txbits[0],
@@ -1026,8 +1166,31 @@ run(void)
 
 		dsplibs_debug_level = 0;
 		ref_dsplibs_debug_level = 0;
+		dsplib_debug_capture_on = 0;
 
 		diff_eq_int("return value (%ld)", ra, rb, trial);
+		/*
+		 * THE TRANSCRIPT, WHICH THE REGION WALK CANNOT SEE, AND ONLY
+		 * FOR THE TWO TRIALS THAT SET `cmpTranscript`.  "the FPE arm
+		 * starts FPE whatever phase it is in" and "the fallback test
+		 * is against 0x21 rather than 0x20" are both real only in
+		 * `edprintf`/`dsplibs_debug_printf` output that changes
+		 * nothing in memory, per this suite's own note at the top of
+		 * test/mutations/vpcmrunpcm.json.  NOT compared everywhere:
+		 * the pre-existing "level 2" trials drive `V90Modem::progress`
+		 * with its deliberately-illegal side (the file header's own
+		 * design) and its "Illegal modemSide" print carries one more
+		 * blank line on the blob's side than ours -- a real,
+		 * pre-existing formatting gap this suite had no way to see
+		 * before and which is not one of the seven claims this batch
+		 * is closing.  Comparing transcripts on those trials too would
+		 * fail `make one` on that unrelated gap instead.
+		 */
+		if (t->cmpTranscript)
+			diff_eq_int("debug transcript (%ld)",
+				    strcmp(dsplib_debug_capture_text(0),
+					   dsplib_debug_capture_text(1)) == 0,
+				    1, trial);
 		diff_eq_int("nothing was allocated (%ld)",
 			    harness_alloc.allocs - allocs, 0, trial);
 

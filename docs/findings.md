@@ -119729,3 +119729,42 @@ additions named above and no removals. `make one T="t_v32rxhdx t_v32seq"`
 passed every differential group, including every rate signal and all receive
 half-duplex states. The authoritative `make period J=3` gate passed **374/374**;
 `make check64` is clean in both configurations. (2026-09-06)
+
+## F10203. The unfinished DTMF/VPCM mutation follow-ups are closed: 196 mutations, 187 caught and 9 proved equivalent, with no gaps
+
+The `audit/fax-voice-cid-mutation-gaps` worktree contained one service-layer
+fixture gap and the concrete VPCM follow-ups left by F10199.  It was not a
+source-reconstruction branch: the registered fax, voice and caller-ID snapshot
+entries already had zero `NOT caught` verdicts, while these six suites named
+ten unresolved rows.  All six were rerun live after rebasing onto current
+`master`, rather than treating their old snapshot keys as evidence.
+
+Three fixture extensions close nine real gaps.  `t_dtmfrx` now starts a tone
+halfway through a block, exposing the receiver's realignment boundary.
+`t_vpcmrun` drives both the phase-II stall-counter reset and its exact training
+deadline.  `t_vpcmrunpcm` supplies a nonzero echo filter and a stale receive
+sentinel, opens the three guarded phase-3 exit states with a nonzero symbol
+count, and selectively compares captured debug transcripts for the two effects
+that cannot reach memory.  Those changes move `dtmfrx` 48 -> 49 caught,
+`vpcmrun` 11 -> 13 caught, and `vpcmrunpcm` 88 -> 95 caught.  In particular,
+the formerly-equivalent FPE caller guard is observably different at debug level
+2: the callee's refusal message appears only when the outer guard is removed,
+so its obsolete `equivalent` marker was removed after the rebase.
+
+The tenth row is not executable behaviour.  `vpcmcreate`'s extra clear covers
+bytes that the immediately preceding whole-object `memset` already cleared;
+it is now recorded as equivalent with the exact covering ranges, rather than
+left as an unexplained survivor.  The pre-existing `vpcmguard` and `vpcmweak`
+equivalence proofs remain valid and were preserved through the rebase.
+
+The final live totals are: `dtmfrx` 49/49 caught; `vpcmrun` 13 caught plus 5
+equivalent; `vpcmrunpcm` 95/95 caught; `vpcmcreate` 29 caught plus 2 equivalent;
+`vpcmguard` 1 caught plus 1 equivalent; and `vpcmweak` 1 equivalent.  Across
+all six that is **196 mutations: 187 caught, 9 equivalent, 0 NOT caught,
+0 unusable and 0 miscounted**.  `test/mutations/snapshot.json` was regenerated
+from those post-rebase runs, so all six entries describe the integrated tree.
+
+**Verification.** `make one T="t_dtmfrx t_vpcmrun t_vpcmrunpcm t_vpcmcreate
+t_vpcmguard" J=3` passes, including 157988 checks in `t_vpcmrunpcm`.  The
+authoritative `make period J=3` passes **374/374**, and `make check64` is clean
+in both configurations. (2026-09-06)

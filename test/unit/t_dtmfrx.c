@@ -1167,6 +1167,66 @@ main(void)
 	}
 	rc |= diff_end();
 
+	/*
+	 * A tone onset that lands MID-BLOCK rather than on a block boundary.
+	 * Every case above switches modes exactly at a 160-sample boundary,
+	 * which never drives dtmf_modem's state-1 realignment branch: it only
+	 * fires when band_pass reads the FIRST half of a block as quiet and
+	 * the SECOND half as loud, and a clean block-aligned onset instead
+	 * makes both halves agree.  Real line audio has no reason to respect
+	 * our block grid, so this constructs the edge directly: silence,
+	 * then one block whose first half is silence and second half is the
+	 * start of a tone, then blocks continuing that same tone -- which is
+	 * what makes the very next call actually read back the half-block
+	 * `hold` carried over the edge.
+	 *
+	 * Placed LAST, deliberately: `fresh()` draws from the shared `rnd()`
+	 * stream through `fill_bytes`, and "band_pass at its exact thresholds"
+	 * above it carries genuine leftover filter state (`bp_state[]`) across
+	 * its own `fresh()` calls -- inserting more `fresh()` calls ahead of
+	 * that test shifts which garbage lands there and silently moved its
+	 * "threshold staircase" mutation from caught to uncaught the first
+	 * time this was tried mid-file.  Nothing after this point in the file
+	 * still depends on rnd()'s exact position the way that test does.
+	 */
+	diff_begin("dtmf_rx: dtmf_modem with a tone onset mid-block");
+	for (rate_i = 0; rate_i < 2; rate_i++) {
+		double fs = rate_i ? 9600.0 : 8000.0;
+		short rate = (short)(rate_i ? 9600 : 8000);
+		long tag = 0;
+		int k;
+
+		fresh(&a, &b, rate, 0);
+		p1 = p2 = 0.0;
+		for (i = 0; i < 4; i++) {
+			tone_block(blk, 160, fs, 0.0, 0.0, 0.0, 0.0,
+				   &p1, &p2, 0);
+			run_modem("onset lead-in", &a, &b, blk, 160, tag++);
+		}
+
+		/* first 80 samples silent, second 80 the start of '5' */
+		for (k = 0; k < 80; k++)
+			blk[k] = 0;
+		p1 = p2 = 0.0;
+		tone_block(blk + 80, 80, fs, low_hz[1], 6000.0,
+			   high_hz[1], 6000.0, &p1, &p2, 0);
+		run_modem("onset split block", &a, &b, blk, 160, tag++);
+
+		for (i = 0; i < 7; i++) {
+			tone_block(blk, 160, fs, low_hz[1], 6000.0,
+				   high_hz[1], 6000.0, &p1, &p2, 0);
+			run_modem("onset tone", &a, &b, blk, 160, tag++);
+		}
+		for (i = 0; i < 8; i++) {
+			tone_block(blk, 160, fs, 0.0, 0.0, 0.0, 0.0,
+				   &p1, &p2, 0);
+			run_modem("onset gap", &a, &b, blk, 160, tag++);
+		}
+		diff_eq_int("the reference collected a digit from the split "
+			    "onset (%ld)", b.rx.ndigits > 0, 1, rate_i);
+	}
+	rc |= diff_end();
+
 	/* ---- the assertions that make the run non-vacuous ---- */
 
 	diff_begin("dtmf_rx: guards");

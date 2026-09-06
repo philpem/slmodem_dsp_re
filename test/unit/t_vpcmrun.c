@@ -58,6 +58,15 @@ extern unsigned int ref_dsplibs_debug_level;
 extern unsigned int dsplibs_debug_level;
 
 /*
+ * For `run_stall` below: a SECOND, INDEPENDENT construction of the same
+ * datapump, with no V.8 and no peer at all.  `dsplib/vpcm.h` already declares
+ * `vpcm_create`/`vpcm_op` (ours); these are the blob's other halves.
+ */
+extern struct dp *ref_vpcm_create(void *modem, int id, int caller, int srate,
+				  int max_frag, struct dp_operations *op);
+extern struct dp_operations ref_vpcm_op;
+
+/*
  * --- the unwritten boundary, supplied -------------------------------------
  *
  * `VPcmV34Main.cpp` is not reconstructed, so these five come from the blob.
@@ -593,6 +602,142 @@ run_v34(struct dp_operations *ops, int run)
 		ops->destroy(dp[ep]);
 }
 
+/*
+ * ===========================================================================
+ * `run_stall` -- `s->stall`'s two mutations, neither of which the 8,000-block
+ * connecting call above ever drives: a real 33,600 connect makes progress,
+ * so it never accumulates 3,000 unchanged `VPCM_PROG_RESTART_P2` (0) blocks
+ * and it never revisits code 0 after leaving it.
+ *
+ * NO PEER AND NO WIRE.  `vpcm_run` reaches the dispatch once `nproc > 0` and
+ * the mute counter has run out (`vpcm_create` seeds it at 528 samples, 11
+ * blocks); nothing about that needs a far end, so two independent objects --
+ * ours from `vpcm_create`, the blob's from `ref_vpcm_create` -- are compared
+ * directly, exactly as `t_vpcmdp.c`'s construction fixture compares them,
+ * with `vpcm_run` added on top.
+ *
+ * SILENCE DOES NOT SIT AT CODE 0 FOREVER, AND THAT IS WHY THIS POKES FIELDS
+ * RATHER THAN RUNNING 3,000 REAL BLOCKS.  Measured by tracing `rb->status`
+ * and `rb->stall`: a genuinely silent line reports `VPCM_PROG_RESTART_P2`
+ * for only about 150 blocks before `VPcmV34Progress`'s OWN internal give-up
+ * reports a FAIL code and `mode` goes to ERROR that way -- a real but
+ * DIFFERENT path, which would reach `VPCM_MODE_ERROR` without either stall
+ * mutation being tested at all.  A loud out-of-band tone doesn't move `prog`
+ * off 0 either (same trace).  So both claims below are tested by writing
+ * `s->status` and `s->stall` directly, exactly as `t_vpcmguard.c`'s
+ * `root_reset` pokes `obj->status` to steer a dispatch without driving the
+ * signal that would naturally produce it -- the precondition is injected,
+ * never the branch: every dispatch below still runs on `vpcm_run`'s own
+ * code, from a REAL `prog` a REAL call computed.
+ *
+ * ORDER MATTERS: both pokes happen well before block ~150, while the line
+ * is still genuinely reporting RESTART_P2 on its own.
+ */
+static int
+run_stall(void)
+{
+	/* An opaque handle; the fake modem shim keys off it, not off contents. */
+	void *const modem = (void *)0xD1A3u;
+	struct dp *da, *db;
+	short in[FRAG], out_a[FRAG], out_b[FRAG];
+	struct vpcm_root *ra, *rb;
+	int blk;
+	int rc = 0;
+
+	harness_modem_reset(0, 0);
+	da = vpcm_create(modem, VPCM_DP_V34, 1, VPCM_SRATE, VPCM_MAX_FRAG,
+			 &vpcm_op);
+	db = ref_vpcm_create(modem, VPCM_DP_V34, 1, VPCM_SRATE, VPCM_MAX_FRAG,
+			     &ref_vpcm_op);
+
+	diff_begin("vpcm_run: the stall counter's reset and its deadline");
+	diff_eq_int("our vpcm_create returned an object", da != 0, 1, 0);
+	diff_eq_int("the blob's did too", db != 0, 1, 0);
+	if (da == 0 || db == 0) {
+		rc |= diff_end();
+		return rc;
+	}
+	ra = (struct vpcm_root *)da->dp_data;
+	rb = (struct vpcm_root *)db->dp_data;
+
+	memset(in, 0, sizeof(in));
+
+	/*
+	 * Blocks 0..49: run the line in genuinely, so `stall` is built up by
+	 * the object's own code and not by a poke -- 11 muted, then ~38 real
+	 * silent blocks accumulating `stall` under `VPCM_PROG_RESTART_P2`.
+	 */
+	for (blk = 0; blk < 50; blk++) {
+		int sa, sb;
+		char msg[96];
+
+		memset(out_a, 0x5a, sizeof(out_a));
+		memset(out_b, 0x5a, sizeof(out_b));
+		sa = vpcm_run(da, in, out_a, FRAG);
+		sb = ref_vpcm_run(db, in, out_b, FRAG);
+
+		snprintf(msg, sizeof(msg), "block %d: return code (%%ld)", blk);
+		diff_eq_int(msg, sa, sb, blk);
+		snprintf(msg, sizeof(msg), "block %d: stall counter (%%ld)", blk);
+		diff_eq_int(msg, ra->stall, rb->stall, blk);
+	}
+	diff_eq_int("...and the count is really moving by block 49",
+		    rb->stall > 0, 1, 0);
+
+	/*
+	 * THE RESET MUTATION.  Fake "something else was just reported" on
+	 * both sides, then run one more real (still-silent) block.  `prog`
+	 * is still genuinely 0 here, so `s->status(99) != prog(0)` is a real
+	 * comparison and the object's own dispatch takes `case
+	 * VPCM_PROG_RESTART_P2` on its own terms.  Without the reset, `stall`
+	 * keeps the count built up over blocks 11-49 instead of restarting;
+	 * WITH it, both sides read 0 right after this call.
+	 */
+	ra->status = 99;
+	rb->status = 99;
+	memset(out_a, 0x5a, sizeof(out_a));
+	memset(out_b, 0x5a, sizeof(out_b));
+	vpcm_run(da, in, out_a, FRAG);
+	ref_vpcm_run(db, in, out_b, FRAG);
+	diff_eq_int("the reset ran on the blob's side (stall back to 0)",
+		    rb->stall, 0, 0);
+	diff_eq_int("...and ours agrees (the reset mutation's claim)",
+		    ra->stall, rb->stall, 0);
+
+	/*
+	 * THE OFF-BY-ONE MUTATION.  `status` is already back at 0 (the
+	 * dispatch's own tail assigns it), so poking `stall` to one below the
+	 * deadline and running one more real silent block lands EXACTLY on
+	 * the boundary `>` (correct) and `>=` (mutant) disagree on: `stall`
+	 * becomes `VPCM_TRAIN_TIMEOUT` (3000) after this call, which is not
+	 * `> 3000` and is `>= 3000`.  A second call then crosses the boundary
+	 * both readings agree is past it, so the blob's own trajectory is
+	 * checked at both steps rather than asserted from arithmetic alone.
+	 */
+	ra->stall = VPCM_TRAIN_TIMEOUT - 1;
+	rb->stall = VPCM_TRAIN_TIMEOUT - 1;
+	memset(out_a, 0x5a, sizeof(out_a));
+	memset(out_b, 0x5a, sizeof(out_b));
+	vpcm_run(da, in, out_a, FRAG);
+	ref_vpcm_run(db, in, out_b, FRAG);
+	diff_eq_int("at stall == TIMEOUT exactly, the blob has NOT given up",
+		    rb->mode, VPCM_MODE_IDLE, 0);
+	diff_eq_int("...and ours agrees (the off-by-one mutation's claim)",
+		    ra->mode, rb->mode, 0);
+	diff_eq_int("...stall itself still agrees too", ra->stall, rb->stall, 0);
+
+	memset(out_a, 0x5a, sizeof(out_a));
+	memset(out_b, 0x5a, sizeof(out_b));
+	vpcm_run(da, in, out_a, FRAG);
+	ref_vpcm_run(db, in, out_b, FRAG);
+	diff_eq_int("one block later, past TIMEOUT, the blob HAS given up",
+		    rb->mode, VPCM_MODE_ERROR, 0);
+	diff_eq_int("...and ours agrees", ra->mode, rb->mode, 0);
+
+	rc |= diff_end();
+	return rc;
+}
+
 /* --- main ----------------------------------------------------------------- */
 
 int
@@ -1039,5 +1184,8 @@ main(void)
 				printf("      codes %#x seq %#x\n",
 				       v34res[run][ep].codemask,
 				       v34res[run][ep].codeseq);
+
+	rc |= run_stall();
+
 	return rc;
 }

@@ -12,14 +12,17 @@
    "separate translation units at all -- see the head of",
    "src/pump/v34/v34pcmcreate.cpp, and finding F1264.",
    "",
-   "31 entries: 29 caught, 1 equivalent and recorded as such, 1 survivor",
-   "that is deliberate.",
+   "31 entries: 29 caught, 2 equivalent and recorded as such.",
    "",
-   "THE DELIBERATE SURVIVOR is the second memset, which is redundant --",
+   "THE SECOND EQUIVALENT is the second memset, which is redundant --",
    "0x264 + 0x79c is entirely inside the 0xac4c the first one already",
    "cleared (D195).  It is transcribed because the object has it, and a",
    "set that did not show it to be unobservable would be claiming more",
-   "than the tier can see.",
+   "than the tier can see.  IT USED TO SURVIVE UNRECORDED -- an",
+   "'equivalent' entry with no `\"equivalent\": true` on it reads NOT",
+   "caught to mutsnap.py exactly like a real gap, which cost this one a",
+   "look before F10199 gave it the marker its own reasoning already",
+   "argued for.",
    "",
    "TWO SURVIVED BEFORE THE TEST SEEDED THE OBJECT.  The other was the",
    "LEADING memset shortened to the receiver's length, which is a real",
@@ -42,7 +45,9 @@
  {
   "label": "the redundant second memset is dropped",
   "find": "\tsysdep_memset(rx, 0, sizeof(struct v34_receiver));",
-  "replace": "\t(void)0;"
+  "replace": "\t(void)0;",
+  "equivalent": true,
+  "why": "0x264 + 0x79c (sizeof(struct v34_receiver)) is 0xa00, entirely inside the 0xac4c the preceding sysdep_memset(obj, 0, VPCM_V34_BYTES) already cleared, so `rx`'s whole span is already zero by the time this line would run.  D195 and the source comment at src/pump/v34/v34pcmcreate.cpp:210-214 make the same argument; it is the deliberate documented survivor this suite's own header note names, missing only the `equivalent` marker.  No input can separate the two: the object has it because it is the object's, not because it does anything."
  },
  {
   "label": "the K56flex pointer is not restored across the memset",

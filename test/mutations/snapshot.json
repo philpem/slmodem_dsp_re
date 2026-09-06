@@ -322,8 +322,8 @@
    }
   },
   "dtmfrx": {
-   "key": "7b057b58190d0ebfe088c74d09fdde7468bb8b6f91cb65f7ec4c3ea702a281f0",
-   "summary": "49 mutations: 48 caught (48 by test, 0 by strings), 1 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "key": "11388b32620373883027764e24773e6959cf1bac1ae3a3feaeb1da8856e59a2e",
+   "summary": "49 mutations: 49 caught (49 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "'C' does not terminate the string": "caught",
     "a new code sets stable to one unconditionally": "caught",
@@ -365,7 +365,7 @@
     "the quietest step of the staircase is lost": "caught",
     "the raw energy is scaled by 2^15 like the filtered one": "caught",
     "the raw energy is taken after the filter rather than before it": "caught",
-    "the realignment keeps the first half of the block rather than the second": "uncaught",
+    "the realignment keeps the first half of the block rather than the second": "caught",
     "the sample counter is not restarted after a decision": "caught",
     "the sens == 1 substitution uses the code rather than the stable count": "caught",
     "the silence path commits the pending digit without checking it is stable": "caught",
@@ -10571,8 +10571,8 @@
    }
   },
   "vpcmcreate": {
-   "key": "758bd7963113e2299a939943549b8b39ecebf55bd86cc92666bf4bead3b0c5e1",
-   "summary": "31 mutations: 29 caught (29 by test, 0 by strings), 1 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
+   "key": "f7a91d554f83d4aabbcbda14dd1d610415f21c9a9b7dec8587181db065221b81",
+   "summary": "31 mutations: 29 caught (29 by test, 0 by strings), 0 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
    "verdicts": {
     "+0x254's offset is 10001 rather than 10000": "caught",
     "+0x254's scale short is read unsigned": "equivalent",
@@ -10600,7 +10600,7 @@
     "the quick-connect bit is bit 5 rather than bit 4": "caught",
     "the rate ceiling starts at 0 rather than 14": "caught",
     "the receiver's +0x262 is 0x610 rather than 0x600": "caught",
-    "the redundant second memset is dropped": "uncaught",
+    "the redundant second memset is dropped": "equivalent",
     "the session pointer is not restored across the memset": "caught",
     "the side-to-role polarity is reversed": "caught",
     "the two indices reach channel verification the other way round": "caught",
@@ -10832,7 +10832,7 @@
    }
   },
   "vpcmguard": {
-   "key": "686040da231f912d0b3e4051d31aa12447749440dbfc640f17ae6e1c12ee2c34",
+   "key": "ba94bce3b6547724a57cde9082d07ebc73c14d8de5a0f9f7bc2ab32d40edcd78",
    "summary": "2 mutations: 1 caught (1 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "the guard returns quietly instead of stopping": "equivalent",
@@ -10906,8 +10906,8 @@
    }
   },
   "vpcmrun": {
-   "key": "6fc9d980e02e433388fb1a7a1855b2d534f7f2e76accea6f0c5af48455270e76",
-   "summary": "18 mutations: 11 caught (11 by test, 0 by strings), 2 NOT caught, 0 unusable, 5 equivalent, 0 MIScounted",
+   "key": "4aac29a24c0b0165c1d33bbab50a2bc95756d53237af2dc647b6616cbe7e0290",
+   "summary": "18 mutations: 13 caught (13 by test, 0 by strings), 0 NOT caught, 0 unusable, 5 equivalent, 0 MIScounted",
    "verdicts": {
     "`nbits` is not carried to the next block": "caught",
     "float -> short adds a half before truncating": "caught",
@@ -10920,18 +10920,18 @@
     "the input residue is never copied back to the front of the queue": "equivalent",
     "the mute path is always taken": "caught",
     "the output queue is not compacted": "caught",
-    "the phase-II restart arm does not reset the stall counter": "uncaught",
+    "the phase-II restart arm does not reset the stall counter": "caught",
     "the progress code is remembered wrong": "caught",
     "the receive bit mask is dropped": "equivalent",
     "the session-type fallback picks V.90 rather than V.34": "caught",
-    "the training timeout fires one block early": "uncaught",
+    "the training timeout fires one block early": "caught",
     "the two rate parameters are set in the other order": "caught",
     "the tx widening loop runs upward, so a store eats an unread byte": "caught"
    }
   },
   "vpcmrunpcm": {
-   "key": "9ff5f19c80ff1bf97d682ffc58a643c70736a7d3cb099ae1566d3e16742b40e2",
-   "summary": "95 mutations: 88 caught (88 by test, 0 by strings), 6 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
+   "key": "c1f70bf5d7b5d0232a7844090d175902382d04dd0860a5ac501019adf9761679",
+   "summary": "95 mutations: 95 caught (95 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "0x15 and 0x21 do not share an arm": "caught",
     "0x1c calls recivedFirstRrnEd rather than recivedEd": "caught",
@@ -10942,7 +10942,7 @@
     "0x2b seeds 7 rather than 8": "caught",
     "0x35 calls recivedEd rather than recivedFirstRrnEd": "caught",
     "Jd's two constellation sizes are handed over the other way round": "caught",
-    "TRN1u does not leave the second": "uncaught",
+    "TRN1u does not leave the second": "caught",
     "TRN1u packs the CP message from the ALTERNATE mapping block": "caught",
     "TRN2u packs the CP message from the FIRST mapping block": "caught",
     "every status above 3 latches progressState": "caught",
@@ -10967,9 +10967,9 @@
     "the CPt arm sets the retrain bit whatever retrainLatch says": "caught",
     "the CPt arm's flag test is inverted": "caught",
     "the FPE arm does not latch progressState": "caught",
-    "the FPE arm starts FPE whatever phase it is in": "equivalent",
+    "the FPE arm starts FPE whatever phase it is in": "caught",
     "the FPE arm tests phase 2 rather than phase 3": "caught",
-    "the Jd arm does not leave the SU second": "uncaught",
+    "the Jd arm does not leave the SU second": "caught",
     "the Jd phase is not installed in the transmitter's resampler": "caught",
     "the SUV arm and the tagged SUV arm are swapped": "caught",
     "the V.34 fallback arm does not raise droppedToV34": "caught",
@@ -10986,15 +10986,15 @@
     "the fallback arm bars the fastest baud, as enterPhase3 does": "caught",
     "the fallback code is returned whatever the receiver answered": "caught",
     "the fallback returns 5 rather than 6": "caught",
-    "the fallback test is against 0x21 rather than 0x20": "uncaught",
+    "the fallback test is against 0x21 rather than 0x20": "caught",
     "the local rate-reneg arm starts RRN whatever phase it is in": "caught",
     "the master gate is inverted: the body runs when info0Layout is zero": "caught",
     "the master gate returns 0 rather than what the first table seeded": "caught",
-    "the non-ramp arm leaves the receive buffer's first sample alone": "uncaught",
+    "the non-ramp arm leaves the receive buffer's first sample alone": "caught",
     "the phase 2 test is the wrong way round": "caught",
     "the ramp mode is 0x20, one below the object's": "caught",
     "the ramp starts at zero rather than 0xaa": "caught",
-    "the ramp value is stored before the step, not after": "uncaught",
+    "the ramp value is stored before the step, not after": "caught",
     "the rate-reneg arm does not latch progressState": "caught",
     "the rate-reneg arm ignores the parameter block": "caught",
     "the rate-reneg arm latches 3 rather than 4": "caught",
@@ -11012,7 +11012,7 @@
     "the scaling runs after the echo history absorbs the block": "caught",
     "the seeded return value is discarded at the end": "caught",
     "the sentinel is 176 rather than 177": "caught",
-    "the silence arm does not stop the Ja transmission": "uncaught",
+    "the silence arm does not stop the Ja transmission": "caught",
     "the silence-off arm leaves the mode at the ramp value": "caught",
     "the silence-on arm seeds 1 rather than 0": "caught",
     "the silent-RRN SUV arm reads the CP counter at the wrong offset": "caught",
@@ -11058,7 +11058,7 @@
    }
   },
   "vpcmweak": {
-   "key": "0587bd2196a067d56e0ab4863df3e306bb7b38261c8788d72a4397252415c9a3",
+   "key": "05f3d18d9ba281cb9c27ee47c0b392a3c6e0fe213c9d65e12e553e885b718648",
    "summary": "1 mutations: 0 caught (0 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "the comparing translation unit declares the five plain, not weak": "equivalent"
