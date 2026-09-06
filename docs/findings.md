@@ -117994,3 +117994,119 @@ a null result reached by tracing all 115 sites rather than assuming the
 F10159 hint generalized, worth exactly as much as a retype would have
 been per this project's own rule for negative results (F10159).
 (2026-09-06)
+
+## F10186. Item 4 of the field-naming exploration list -- multi-hop
+dataflow and offset-indexed `relocscan` sweeps tried for real, on
+`V92Phase4Modulator.h`, `v34fsk.h`, `fdspkrnl.h` and `v17fax.h`: negative
+result, and the residue's own shape is why
+
+`.claude/nextsteps-fieldnaming.md` (not checked in) listed two untried
+techniques: (2) multi-hop dataflow tracing past the immediate caller,
+systematized rather than the one hand-worked case
+(`V92Modulator::eventCode`, F4822); (3) a `relocscan.py` sweep indexed by
+remaining FIELD/offset rather than by struct, on the theory that six
+prior waves searching format strings struct-by-struct might have missed
+a debug print nobody connected to a specific field. Both were run for
+real against a fresh live-count of the four files the exploration note
+suggested (`livecount.py`, comment/string-stripped, not raw grep):
+`V92Phase4Modulator.h` 15 live (2 `pad_NNNN`, 13 `type_NNNN`), `v34fsk.h`
+18 (1 pad, 17 type), `fdspkrnl.h` 12 (3 pad, 9 type), `v17fax.h` 11 (1
+pad, 10 type) -- lower than the exploration note's own counts because
+waves since 2026-09-06 morning had already landed some of them.
+
+**Result: no new name landed on any of the four files.** Not because the
+techniques weren't applied, but because this specific residue's shape
+forecloses both of them structurally, which is itself the finding worth
+recording so the next wave does not re-spend the same effort here.
+
+**Technique 3 (offset-indexed `relocscan`), worked in full on
+`V92Phase4Modulator.h`.** Every `V92Phase4Modulator::` member function
+(`.text`+0x16de0..0x19160, all twenty-nine of them, generateSymbol
+included at 4KB) was disassembled with `tools/dis.py` and every
+`.rodata.str1.1`/`.rodata.str1.4` relocation it references was resolved
+to its actual string text (34 distinct format strings plus the bare
+trace "recivedSUVtag called\r\n"). All of them are state-transition
+traces of the shape "V92Phase4Modulator: enter <state> @ %d" or "ERROR:
+Null <thing> @ <site>" -- the one `%d` every printf-style one of them
+takes is `0x4(%esi)`, the class's own state/symbol counter (already
+covered by existing derivations), never any of the twelve still-unnamed
+fields (`word_18`, `byte_1c`, `word_24`, `word_28`, `word_30`, `word_34`,
+`word_38`, `flag_20`, `flag_3c`, `word_1b0`, `word_1b8`, `word_1c0`,
+`word_1c4`). This is the complete set of debug output the class can ever
+produce -- there is no sixth string left over from six prior struct-by-
+struct passes; there simply is no print of any of these fields, full
+stop. This corroborates the header's own per-field citations (each
+already names its exact read/write `.text` addresses) independently,
+via a different search axis, rather than re-deriving them.
+
+**Technique 2 (multi-hop dataflow), same file.** Of the twelve fields
+above, only one is ever passed to an external typed callee at all --
+`word_2c`, already named `word_2c`'s own successor `V92CP::setSUV` call
+IS the resolved case (`word_2c` itself stays offset-named because
+nothing establishes what it holds besides zero; the callee only fixes
+its ROLE as a SUV value, already in the header). None of the other
+eleven is ever passed as a call argument anywhere -- each is tested,
+stored to or copied from another field of the same object, and nothing
+else. Multi-hop dataflow needs a call boundary to trace through; where a
+field never crosses one, there is no first hop, let alone a second.
+
+**`v34fsk.h` and `v17fax.h`: the residue is the same shape, already
+proven by finding numbers up to F635/F9470/F10144.** Read in full: the
+remaining fields split into two buckets, and both close off multi-hop
+the same way. (a) Genuinely zero-reader fields -- `v34fsk.h`'s
+`short_382` ("written six times and read nowhere in this object"),
+`short_abe2`/`short_abe4`/`short_abe6` ("[read] by nothing this tree has
+reconstructed"); `v17fax.h`'s `short_0e`/`short_16` ("NOT WRITTEN"). A
+field with no reader anywhere in the 1.2MB object cannot be printed
+(nothing loads it to hand to a `printf`) and cannot be dataflow-traced
+forward (nothing consumes its value), so both techniques are foreclosed
+by the same fact for the same reason. (b) Fields that ARE read, but only
+by the object's own untyped, offset-parameterized multiplexers --
+`v34fsk.h`'s `short_3588`/`short_358a`/`short_358c` and the three state
+words are reached through `hs_get`/`hs_put`/`hs_setstate`, which take
+the OFFSET as a runtime argument specifically so one function can serve
+three unrelated state machines (F632); tracing "the caller of the
+caller" here does not sharpen the field's type, it just finds the next
+generic dispatch site. Confirmed concretely for `v17fax.h`'s
+`short_10`/`v17_status`: `nm`/`objdump -dr` over the whole object shows
+the lowercase adapters `v17tx_status`/`v17rx_status` (themselves tail-
+jumps into `V17TX_status`/`V17RX_status`) have **zero callers anywhere
+in the 1.2MB object** -- no `R_386_PC32` relocation targets either
+symbol from any other function. This is the same "exported API surface
+with no internal caller" shape CLAUDE.md's fax-leaves paragraph
+describes for 129 of 139 no-entry-point symbols: there is no first hop
+out of the object at all, so multi-hop dataflow has nothing to walk.
+
+**`fdspkrnl.h`: both techniques foreclosed by construction, and this was
+already the header's own conclusion (F10143), re-confirmed rather than
+re-derived.** `struct fdsp_channel`'s `short_168a`/`short_1692` are
+commented "not yet seen touched" and `short_1690` "zeroed by InitObj"
+with no other access; `struct fdsp_tone`'s `short_0064`, `short_01b0`
+and `ptr_01b4`/`ptr_01b8` are "cleared... and read by nothing
+reconstructed". Same argument as (a) above: no reader anywhere means no
+possible debug print and no possible forward dataflow.
+
+**Why this is a complete result and not an early stop.** The two
+techniques are general methods for finding evidence that was there all
+along but unindexed by struct; both were run to exhaustion (every member
+function of the one file dense enough to make technique 3 worth a full
+sweep, every remaining field of all four files checked against the
+call-argument and reader criteria technique 2 needs) rather than sampled.
+The negative result is a fact about this specific residue -- six prior
+waves' struct-by-struct passes already reached everything that has a
+format string or a typed callee, plus the offset-multiplexer and zero-
+reader shapes above account for the rest -- not a claim that the two
+techniques are worthless in general. A future field with an actual
+unindexed reader elsewhere in the tree, or an actual call boundary
+crossing into typed code, is still a legitimate target for either.
+
+No `src/` or `include/` changes resulted; nothing to gate. Baselines
+reconfirmed unchanged (no `src/`/`test/` edits this session): `make
+period` 374 passed, 0 failed; `make byteident-ratchet` 736/1852 EXACT
+(39.7%), 796/1852 grade 0-or-1 (43.0%), ratchet OK -- both per the
+pre-session state F10185 last recorded. `tools/onedef.py`,
+`tools/refcheck.py` and `tools/anchorcheck.py` not re-run since no
+mutation anchors, `docs/fieldnaming.md` cross-references or types were
+touched by this finding. Closes item 4 of the 2026-09-06 field-naming
+exploration list (`.claude/nextsteps-fieldnaming.md`).
+(2026-09-06)
