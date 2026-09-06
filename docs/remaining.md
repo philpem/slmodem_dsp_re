@@ -44,10 +44,11 @@ code-generation improvement may not weaken the differential evidence.
 1. **Secure the measurement — done.** Refuse partial test-object trees,
    regenerate the tested baseline from all 374 drivers, and ratchet exact
    symbol membership rather than the headline count.
-2. **Clear named-relocation mismatches — implemented, integration gate
-   pending.** The single case, `FPM_FSM_init`, is exact after correcting the
-   shared `FPM_TONE_CFG` representation; the branch still awaits the SpanDSP
-   prerequisite needed by the aggregate `make phase` gate.
+2. **Clear named-relocation mismatches — done.** The single case,
+   `FPM_FSM_init`, is exact after correcting the shared `FPM_TONE_CFG`
+   representation. The complete period, behavioural and SpanDSP interop gates
+   pass; F10205–F10206 record the measurements and the two stale interop-harness
+   assumptions uncovered when the aggregate gate first reached that tier.
 3. **Resolve ambiguous section relocations.** Classify the seven `UNRESOLVED`
    functions so section-relative references can be compared by identity.
 4. **Close same-size byte mismatches.** Work the 138 `BYTES` functions from

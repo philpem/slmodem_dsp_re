@@ -79,12 +79,16 @@ long modem_get_param(void *m, unsigned p) { (void)m; (void)p; return 0; }
 long modem_get_sreg(void *m, unsigned n) { (void)m; (void)n; return 0; }
 
 /*
- * The FDSP kernel's not-yet-reconstructed callees.  fdspkrnl.c imports
- * them (the differential build forwards them to the blob's own code); no
- * interop test enters the voice path, so reaching one here is a test bug
- * and aborts rather than returning something plausible.
+ * Host TTY callbacks imported by the now-reconstructed voice and caller-ID
+ * services.  The interop tests never enter those services, but every interop
+ * binary deliberately links the complete source tree.  Model an empty input
+ * pipe and a host that accepts the complete output buffer, matching the
+ * normal success shape used by the differential runtime.
  */
-void FDSP_Kernel_InitObj(void *k) { (void)k; abort(); }
+int modem_recv_from_tty(void *m, void *buf, int n)
+{ (void)m; (void)buf; (void)n; return 0; }
+int modem_send_to_tty(void *m, const void *buf, int n)
+{ (void)m; (void)buf; return n; }
 
 /*
  * The diagnostic hooks.

@@ -58,7 +58,7 @@ side_create(struct side *s, const struct v8_ops *ops, int mode,
 	 */
 	cfg.timeout_a = 30;
 	cfg.timeout_b = 30;
-	cfg.f10 = 0;
+	cfg.rate = 0;
 	cfg.cm = &s->cm;
 
 	/*

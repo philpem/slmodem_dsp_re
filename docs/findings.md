@@ -119860,9 +119860,37 @@ object exports one 36-byte `FPM_TONE_CFG`, no `_data` symbol, and its embedded
 `check64`, `params`, `coverage`, `debugcov`, `onedef`, `vendor` and `banners`
 tiers all passed (including their recorded modern-compiler allow-list).
 
-The aggregate `make phase` cannot yet be called green in this checkout: it
-refuses before running because `third_party/spandsp/src/.libs/libspandsp.a`
-is absent, and this environment lacks Autoconf, Automake and Libtool needed to
-bootstrap that ignored test-only checkout. This is an external interop
-prerequisite, not a differential or identity failure; keep the branch out of
-master until the interop tier can run. (2026-09-06)
+The first aggregate `make phase` attempt stopped at its ignored SpanDSP
+checkout because the development prerequisites were not yet installed. After
+installing them, the pinned `6a0e9f51fd5a6bd3f8c3a5337522e4b6743a6637`
+SpanDSP tree bootstrapped and built successfully. The aggregate run then
+reached the interop tier and exposed the stale harness integration described
+in F10206; after that correction all five SpanDSP binaries passed. (2026-09-06)
+
+## F10206. Completing the source tree left two stale assumptions in the separately linked interop harness
+
+The Phase 2 aggregate gate was the first run in this checkout with the pinned
+SpanDSP archive available. It uncovered no `FPM_TONE_CFG` regression, but it
+did find two independent pieces of test integration drift. First,
+`test/interop/v8neg.c` still assigned `struct v8_cfg.f10`, even though F10135
+renamed that recovered field to `rate`; replacing that one stale member name
+does not change the scenario or its value. Second, `runtime64.c` still defined
+an aborting `FDSP_Kernel_InitObj` placeholder after the real implementation
+landed in `src/service/fdspkrnl.c`, while it lacked the TTY callbacks imported
+by the now-reconstructed voice and caller-ID services. Because every 64-bit
+interop binary intentionally links all of `$(SRC)`, the result was one
+duplicate definition and two undefined symbols before any interop test ran.
+
+The obsolete FDSP placeholder is removed. The 64-bit runtime now supplies an
+empty `modem_recv_from_tty` input pipe and a successful
+`modem_send_to_tty` sink, matching the host-call success shapes in the
+differential runtime. These services are not entered by the modem protocols
+under test; their definitions keep the full-source link check meaningful.
+`make interop J=3` then passed Bell 103 (8 checks), V.23 (20), V.8 signal
+detection (11), in-process V.8 negotiation (20), and separate-process
+reconstruction-versus-blob V.8 negotiation (48), for 107 checks and no
+failures. The complete `make phase J=3` boundary subsequently passed: all
+374 period-compiler differential binaries, the modern differential suite and
+its documented allow-list, both 64-bit configurations, interop, coverage,
+debug coverage, reference integrity, one-definition, vendor and banner gates.
+(2026-09-07)
