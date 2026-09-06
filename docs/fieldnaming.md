@@ -1526,3 +1526,130 @@ generic bookkeeping field (a counter, a per-symbol status code) can
 survive the split; a stored protocol-state-machine variable often
 cannot, because the two directions' control flow is free to differ even
 when their class names look parallel.
+
+## Wave 7 -- third cluster, V.90 receive-path helpers (F10181)
+
+Launched 2026-09-06 over six files with zero or one prior mention in
+this ledger: `V90RDetector.h`, `V90MP.h`, `V90Demapper.h`, `sgd.h`,
+`V90CPUnPck.h`, `V92CPUnPck.h`. The brief's own naive-grep estimate was
+roughly 32 live fields combined; re-deriving the count by checking every
+hit against an actual member declaration (not a comment, a provenance
+note, or a cross-reference to another class's field) gave 10 + 7 + 6 +
+5 + 0 + 0 = 28. The two `*CPUnPck` twins were already fully named by
+earlier work (F7570, F7572, F3600-F3603) before this wave's brief was
+written -- the twin-class offset-diffing technique (F10177-F10179) had
+nothing to apply itself to, since neither side of the pair has an
+unnamed field left.
+
+**`V90RDetector.h`: all ten `int_NNNN`/`ushort_NNNN` fields promoted to
+real names** -- `sampleCount`, `rLimit`, `rNotLimit`, `rfLimit`,
+`rfNotLimit`, `positiveRunLength`, `negativeRunLength`, `notRunLength`,
+`signBits`, `polarity`. Every one already had a complete behavioural
+derivation sitting in the header's own file comment from an earlier
+pass that stopped short of applying it; this batch is the promotion,
+following the same "derivation already banked, not yet spent" pattern
+F10132/F10165 established. Usage inference throughout (no format
+string, no typed caller -- the class's nine methods are the only
+evidence there is), but unambiguous, since all nine methods are fully
+reconstructed and every field's role is pinned down by name already in
+the header prose. Propagated to `V90RDetector.cpp`'s offset-assertion
+macros and to five `test/unit/` files reaching the class's two embedded
+instances (`rDetector1`/`rDetector2` in `V90Phase4Demodulator`) by
+pointer or by member; two unrelated structs (`v21_status` in the fax V.21
+code, and V.17's analogue) that coincidentally reuse `int_18` for their
+own, unrelated field were checked and correctly left untouched.
+
+**`V90MP.h`: all seven fields promoted** -- `rxState` (`word_14`, the
+five-state receive jump-table variable), `onesRun`/`zerosRun`
+(`byte_19`/`byte_1a`), `bitIndex` (`byte_1b`), `groupSize` (`word_114`),
+`seqLength`/`bodyLength` (`byte_118`/`byte_119`, the padded-to-group
+length `getBitVector` reports versus the raw pre-padding body length
+`calcSequenceLength` rounds from). All usage inference, all bounded by
+the class's own nine reconstructed methods -- `calcSequenceLength` and
+`bitsToInfo`'s state-2 arm write both `byte_118`/`byte_119` on every
+path, which is what separates the two rather than either name being
+guessed. The harder part was finding every genuine external touch
+without renaming a same-spelled but unrelated field: `V90CP`, `V92CP`
+and `V90ConnectionEvaluator` each have their own field at one or more of
+these seven exact spellings, checked and excluded by receiver (`cp->`/
+`c->`/`CPB->`/`GEN->`/`ce->`/`A->`/`B->`), while `word_114` -- the one
+field genuinely reached from outside `V90MP.cpp` -- was followed through
+`V90Phase4Demodulator`, `V90Modulator`, `V90Phase4Modulator` and
+`V90Modem::mp`.
+
+**A live third occurrence of the JSON-escape `\b`-boundary trap
+(F9480/F10134).** The first pass's `\b`-anchored rename silently failed
+inside `test/mutations/v90mp.json` and `v90rdet.json`, because a
+`"find"` string like `"...\n\tword_14 = 0;\n"` stores `\t`/`\n` as
+literal two-character escapes -- the byte immediately before `word_14`
+is the literal `t`, a word character, so `\b` never matches there.
+`make one`'s own anchor check caught it exactly as CLAUDE.md predicts:
+every affected mutation reported `matches 0 time(s)` once the renamed
+source no longer contained the old spelling, and the `refs` target
+failed outright. Fixed with a plain substring `str.replace()` over just
+those two files (checked first that none of the seventeen renamed names
+across both classes is a substring of a longer identifier already
+present in either file). Every other mutation JSON this wave touched
+used a full literal substring as its match text already (e.g.
+`"mp->word_114"`) and needed no such fix.
+
+**`V90Demapper.h`: three of six candidates promoted, three
+re-confirmed correctly bare.** `completedRunCount` (`short_1e9c`),
+`studyLength`/`studyProgress` (`uint_1ea8`/`uint_1eb0`) -- the same
+withheld-derivation pattern again: the header already spelled
+`uint_1ea8` as `/* the length */` in a comment, and `resetLinearMappStudy`'s
+own parameter (named `length` in this tree already) stores into it
+directly. `word_08`, `short_1ea4` and `short_1ea6` were re-checked
+against the same standard and left alone -- each already carries an
+explicit, still-valid reason in the header (`word_08` per F3120's
+ruling against naming an arithmetic derivation that assumes an unwritten
+sibling class's behaviour; `short_1ea4`/`short_1ea6`, read only as two
+independent zero-tests gating a flag in a class this tree has not
+written).
+
+**`sgd.h`: all five fields re-confirmed exhausted, strengthened past
+the header's existing claim.** `short_0006` (two separate structs),
+`short_000a`, `short_000e`, `short_0012`, `short_0016` were already
+"never read/written by any SGD function"; this wave additionally read
+the thirteen TX half-duplex call sites in `v17.c`/`v27.c`/`v29.c` that
+build a local `sgd_gen_cfg` on the stack (the ones the file's own
+`SGD_CTL` comment already names) and confirmed every one sets only
+`data_word`/`word_syms` before handing the struct to `SGD_control` --
+never any of the five. Left as `type_NNNN` rather than reclassified to
+`pad_NNNN`: each sits immediately after a same-width sibling with no
+4-byte boundary to reach, so there is no alignment argument for calling
+it a gap, only an absence of any reader or writer -- exactly CLAUDE.md's
+"shape known, meaning not" resting state, not "unmodelled space."
+
+**`V90CPUnPck.h`/`V92CPUnPck.h`: no work needed, both already
+complete.** Reading both in full found zero live `type_NNNN`- or
+bare-`fNNNN`-pattern members; the only regex hits were prose inside
+comments naming OTHER classes' fields for context
+(`V92CP::byte_24`, `V90MappingParams::word_61c`), the provenance-note
+over-count this project's own counting method already warns about.
+
+**Verification.** `make one T="t_v90mp t_jdmpleaves t_v90designers
+t_v90eqdata t_v90modchain t_v90modprog t_v90p4ddec t_v90p4dleaf
+t_v90p4mgen t_v90demap t_v90dataph"` green with unchanged check counts;
+`t_v90equproc` reproduces the pre-existing `V90Equalizer::process`
+RESET-arm failure (F6203, GCC-13-vs-3.4.2 x87 excess precision) at the
+exact same count (731/120974) on both sides of a `git stash` A/B,
+confirming it is not a regression. After the JSON-anchor fix,
+`onedef.py`, `refcheck.py` and `anchorcheck.py` (both standalone and via
+`make one`'s `refs` target) report zero `NOT UNIQUE` anchors and zero
+`LIVE MUTANT`s. `make check64` clean on both configurations (only
+pre-existing `-Wswitch` warnings, unrelated). Docker was available in
+this sandbox:
+
+`make period J=$(nproc)` run for real against GCC 3.4.2
+(`dsplibs-tc342`): **374 passed, 0 failed** -- the exact pre-existing
+test count, confirming no test was silently skipped or dropped by this
+wave's renames. `make byteident-ratchet` run alongside it: **grade 0
+EXACT still 736/1852 (39.7%), grade 0-or-1 still 796/1852 (43.0%),
+`ratchet OK`** -- bit-for-bit the same floor prior waves established,
+across ten `V90RDetector` renames, seven `V90MP` renames (plus the
+fifteen files their propagation touched) and three `V90Demapper`
+renames. This is the second wave in this phase (after F10142/F10165's)
+to get both the real period compiler and the real ratchet run inside
+the same sandbox that did the naming work, rather than leaving both for
+the parent's gate.

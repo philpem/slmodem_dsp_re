@@ -65,11 +65,11 @@ public:
 	unsigned char *getBitVector(unsigned int &length);
 	/** @brief Reset the whole object to its just-constructed state. */
 	void reset();
-	/** @brief Reset the receiver's frame-detector state (word_14, byte_19, byte_1a, byte_1b). */
+	/** @brief Reset the receiver's frame-detector state (rxState, onesRun, zerosRun, bitIndex). */
 	void resetDetector();
 	/** @brief Reset the sixteen-byte CRC register to all ones. */
 	void resetCRC();
-	/** @brief Compute the sequence length (byte_118) from the received type bit. */
+	/** @brief Compute the sequence length (seqLength) from the received type bit. */
 	void calcSequenceLength();
 
 	/**
@@ -89,7 +89,7 @@ public:
 	/**
 	 * @brief Feed one received bit into the frame detector.
 	 *
-	 * Advances the detector's state machine (word_14) bit by bit --
+	 * Advances the detector's state machine (rxState) bit by bit --
 	 * hunting the preamble, the framing bit, the type bit, the message
 	 * body, then the trailing pad -- and, once a full sequence has
 	 * arrived, calls evaluateInfo() and bumps the appropriate frame
@@ -125,7 +125,7 @@ public:
 	 * of these out of `bits`, `infoToBits` reads every one back, and
 	 * `bitsToInfo` prints six of them by name. The six chars then seven
 	 * shorts fill the twenty bytes exactly with no padding (keeping
-	 * `word_14` four-aligned and `sizeof` at 0x124), and all are signed --
+	 * `rxState` four-aligned and `sizeof` at 0x124), and all are signed --
 	 * forced by the diagnostic's sign-extending loads. See finding F1385.
 	 */
 	char Type;			/* +0x000 bits[0x12]              */
@@ -165,7 +165,7 @@ public:
 	 *     3  filling `bits` until +0x119 bits have arrived, then the CRC
 	 *     4  running out the padding to +0x118, then `evaluateInfo`
 	 */
-	unsigned int word_14;
+	unsigned int rxState;
 
 	/*
 	 * +0x018  The received message's type bit, kept apart from `Type`
@@ -184,14 +184,14 @@ public:
 	 * clears it on a zero, and state 0 leaves for state 1 when it passes
 	 * sixteen -- the seventeen-bit preamble.
 	 */
-	unsigned char byte_19;
+	unsigned char onesRun;
 
 	/*
 	 * +0x01a  Cleared by `resetDetector` alongside +0x19: the run of ZERO
 	 * bits, the mirror image.  A run of 2 * +0x114 zeros with the bit
 	 * index still at its initial 18 is the object's "Ed detected".
 	 */
-	unsigned char byte_1a;
+	unsigned char zerosRun;
 
 	/*
 	 * +0x01b  Set to 18 by `resetDetector`.  A BYTE here, where the two
@@ -203,7 +203,7 @@ public:
 	 * the message's own content starts -- frame 0 is seventeen ones and
 	 * bit 17 is a framing zero, so neither is ever stored.
 	 */
-	unsigned char byte_1b;
+	unsigned char bitIndex;
 
 	/* +0x01c  The bit vector, one byte per bit.  See V90MP_BITS. */
 	unsigned char bits[V90MP_BITS];
@@ -214,13 +214,13 @@ public:
 	/*
 	 * +0x112 was `pad_112[2]` -- REMOVED (finding F10151).  Already
 	 * correctly described as alignment; proved mechanically by the
-	 * existing `V90MP_OFF(crc, 0x102, ...)`/`V90MP_OFF(word_114, 0x114,
+	 * existing `V90MP_OFF(crc, 0x102, ...)`/`V90MP_OFF(groupSize, 0x114,
 	 * ...)` and by `dis.py` over every `V90MP` method finding no access
 	 * to 0x112/0x113.
 	 */
 
 	/* +0x114  `calcSequenceLength`'s divisor: the group size. */
-	unsigned int word_114;
+	unsigned int groupSize;
 
 	/*
 	 * +0x118  The sequence length, which `getBitVector` reports through
@@ -228,17 +228,17 @@ public:
 	 * stores it with `mov %al`, and `getBitVector` loads it with `movzbl`
 	 * into a 32-bit result that is then stored whole.
 	 */
-	unsigned char byte_118;
+	unsigned char seqLength;
 
 	/*
 	 * +0x119  `calcSequenceLength`'s input, likewise read with `movzbl`.
 	 */
-	unsigned char byte_119;
+	unsigned char bodyLength;
 
 	/*
 	 * +0x11a was `pad_11a[2]` -- REMOVED (finding F10151).  Already
 	 * correctly described as alignment; proved mechanically by the
-	 * existing `V90MP_OFF(byte_119, 0x119, ...)`/`V90MP_OFF
+	 * existing `V90MP_OFF(bodyLength, 0x119, ...)`/`V90MP_OFF
 	 * (nofRecievedMp, 0x11c, ...)` and by `dis.py` finding no access to
 	 * 0x11a/0x11b.
 	 */

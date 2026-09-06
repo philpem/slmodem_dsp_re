@@ -393,18 +393,18 @@ public:
 	 * an equality, so it carries no signedness evidence either.
 	 *
 	 * It is a count of completed study runs -- the increment is on the
-	 * path where `uint_1eb0 + 1` reaches `uint_1ea8` -- and nothing in
+	 * path where `studyProgress + 1` reaches `studyLength` -- and nothing in
 	 * that function ever clears it; only `resetLinearMappStudy` and
 	 * `reset` do. So the `== 2` test fires exactly once per study, on the
 	 * second completed run, and what it does there is raise `short_1ea6`
 	 * below.
 	 */
-	short short_1e9c;
+	short completedRunCount;
 	/*
 	 * +0x1e9e was `pad_1e9e[2]` -- REMOVED (finding F10151): the same
 	 * short-to-pointer-sized-field alignment gap as +0x665 above, ahead
 	 * of `adiDetector` at +0x1ea0.  Both ends already asserted
-	 * (`DEM_OFF(short_1e9c, 0x1e9c, short1e9c)`, `DEM_OFF(adiDetector,
+	 * (`DEM_OFF(completedRunCount, 0x1e9c, short1e9c)`, `DEM_OFF(adiDetector,
 	 * 0x1ea0, adi)`), and the same `dis.py` sweep finds no access to
 	 * 0x1e9e/0x1e9f.
 	 */
@@ -445,7 +445,7 @@ public:
 	 *
 	 * And the two stores are under different conditions: 0x315b6 sets
 	 * +0x1ea4 on every completed run; 0x3170f sets +0x1ea6 only when
-	 * `short_1e9c` reaches two, the second completed run, once per study.
+	 * `completedRunCount` reaches two, the second completed run, once per study.
 	 * So one is "a run has finished" and the other "a second run has
 	 * finished" -- bounded, but what the equaliser does with the
 	 * distinction is in a function nobody has written, so the names stay
@@ -472,13 +472,13 @@ public:
 	 * the argument's type rather than by the branch.
 	 *
 	 * `linearMappingStudy`'s own behaviour confirms both names: the test
-	 * is `uint_1eb0 + 1 == uint_1ea8` and the progress is stored only on
+	 * is `studyProgress + 1 == studyLength` and the progress is stored only on
 	 * the arm that fails it; the arm that passes rewinds it to zero and
 	 * runs the end-of-run pass. A length that is set once and only read,
 	 * against a progress that counts to it and restarts, is exactly what
 	 * the pair was named for.
 	 */
-	unsigned int uint_1ea8;			/* the length  */
+	unsigned int studyLength;			/* the length  */
 
 	/*
 	 * +0x1eac and +0x1eae  The code the last `hardDecision` chose, and the
@@ -501,7 +501,7 @@ public:
 	short decisionCode;
 	short decisionFramePosition;
 
-	unsigned int uint_1eb0;			/* the progress; see +0x1ea8 */
+	unsigned int studyProgress;			/* the progress; see +0x1ea8 */
 
 	/*
 	 * +0x1eb4  The linear mapping study's enable flag. Three writers

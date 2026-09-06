@@ -3,41 +3,41 @@
 
  {"label": "NOTE: the suite's binary moved with this batch", "why": "It was build/test/t_v90cp, which drives the constructor and destructor of V90CP, V92CP and V90MP together.  It is now build/test/t_v90mp, which drives those AND `reset`, `getBitVector` and `printNofRecievedMpMpNot`.  t_v90cp keeps its own lifecycle coverage; the duplication is what makes the repoint safe, since a set pointed at a binary that does not drive it reports NOT CAUGHT for everything and is indistinguishable from an untested claim."},
 
- {"label": "the detector's counter left alone", "find": "V90MP::V90MP()\n{\n\tbyte_1b = 18;\n\tword_14 = 0;\n", "replace": "V90MP::V90MP()\n{\n\tbyte_1b = 18;\n"},
+ {"label": "the detector's counter left alone", "find": "V90MP::V90MP()\n{\n\tbitIndex = 18;\n\trxState = 0;\n", "replace": "V90MP::V90MP()\n{\n\tbitIndex = 18;\n"},
 
- {"label": "the detector's counter cleared as a byte", "find": "V90MP::V90MP()\n{\n\tbyte_1b = 18;\n\tword_14 = 0;", "replace": "V90MP::V90MP()\n{\n\tbyte_1b = 18;\n\t*(unsigned char *)&word_14 = 0;"},
+ {"label": "the detector's counter cleared as a byte", "find": "V90MP::V90MP()\n{\n\tbitIndex = 18;\n\trxState = 0;", "replace": "V90MP::V90MP()\n{\n\tbitIndex = 18;\n\t*(unsigned char *)&rxState = 0;"},
 
- {"label": "the detector's first flag left alone", "find": "V90MP::V90MP()\n{\n\tbyte_1b = 18;\n\tword_14 = 0;\n\tbyte_19 = 0;\n", "replace": "V90MP::V90MP()\n{\n\tbyte_1b = 18;\n\tword_14 = 0;\n"},
+ {"label": "the detector's first flag left alone", "find": "V90MP::V90MP()\n{\n\tbitIndex = 18;\n\trxState = 0;\n\tonesRun = 0;\n", "replace": "V90MP::V90MP()\n{\n\tbitIndex = 18;\n\trxState = 0;\n"},
 
- {"label": "the detector's second flag left alone", "find": "V90MP::V90MP()\n{\n\tbyte_1b = 18;\n\tword_14 = 0;\n\tbyte_19 = 0;\n\tbyte_1a = 0;\n", "replace": "V90MP::V90MP()\n{\n\tbyte_1b = 18;\n\tword_14 = 0;\n\tbyte_19 = 0;\n"},
+ {"label": "the detector's second flag left alone", "find": "V90MP::V90MP()\n{\n\tbitIndex = 18;\n\trxState = 0;\n\tonesRun = 0;\n\tzerosRun = 0;\n", "replace": "V90MP::V90MP()\n{\n\tbitIndex = 18;\n\trxState = 0;\n\tonesRun = 0;\n"},
 
- {"label": "+0x1b starts at 17, not 18", "find": "V90MP::V90MP()\n{\n\tbyte_1b = 18;", "replace": "V90MP::V90MP()\n{\n\tbyte_1b = 17;"},
+ {"label": "+0x1b starts at 17, not 18", "find": "V90MP::V90MP()\n{\n\tbitIndex = 18;", "replace": "V90MP::V90MP()\n{\n\tbitIndex = 17;"},
 
- {"label": "+0x1b is four bytes wide, as it is in the CP classes", "find": "V90MP::V90MP()\n{\n\tbyte_1b = 18;\n", "replace": "V90MP::V90MP()\n{\n\t*(unsigned int *)&byte_1b = 18;\n"},
+ {"label": "+0x1b is four bytes wide, as it is in the CP classes", "find": "V90MP::V90MP()\n{\n\tbitIndex = 18;\n", "replace": "V90MP::V90MP()\n{\n\t*(unsigned int *)&bitIndex = 18;\n"},
 
- {"label": "+0x1b left alone", "find": "V90MP::V90MP()\n{\n\tbyte_1b = 18;\n\tword_14 = 0;\n", "replace": "V90MP::V90MP()\n{\n\tword_14 = 0;\n"},
+ {"label": "+0x1b left alone", "find": "V90MP::V90MP()\n{\n\tbitIndex = 18;\n\trxState = 0;\n", "replace": "V90MP::V90MP()\n{\n\trxState = 0;\n"},
 
- {"label": "the MP counter left alone", "find": "V90MP::V90MP()\n{\n\tbyte_1b = 18;\n\tword_14 = 0;\n\tbyte_19 = 0;\n\tbyte_1a = 0;\n\n\tnofRecievedMp = 0;\n", "replace": "V90MP::V90MP()\n{\n\tbyte_1b = 18;\n\tword_14 = 0;\n\tbyte_19 = 0;\n\tbyte_1a = 0;\n\n"},
+ {"label": "the MP counter left alone", "find": "V90MP::V90MP()\n{\n\tbitIndex = 18;\n\trxState = 0;\n\tonesRun = 0;\n\tzerosRun = 0;\n\n\tnofRecievedMp = 0;\n", "replace": "V90MP::V90MP()\n{\n\tbitIndex = 18;\n\trxState = 0;\n\tonesRun = 0;\n\tzerosRun = 0;\n\n"},
 
- {"label": "the MPNot counter left alone", "find": "V90MP::V90MP()\n{\n\tbyte_1b = 18;\n\tword_14 = 0;\n\tbyte_19 = 0;\n\tbyte_1a = 0;\n\n\tnofRecievedMp = 0;\n\tnofRecievedMpNot = 0;\n", "replace": "V90MP::V90MP()\n{\n\tbyte_1b = 18;\n\tword_14 = 0;\n\tbyte_19 = 0;\n\tbyte_1a = 0;\n\n\tnofRecievedMp = 0;\n"},
+ {"label": "the MPNot counter left alone", "find": "V90MP::V90MP()\n{\n\tbitIndex = 18;\n\trxState = 0;\n\tonesRun = 0;\n\tzerosRun = 0;\n\n\tnofRecievedMp = 0;\n\tnofRecievedMpNot = 0;\n", "replace": "V90MP::V90MP()\n{\n\tbitIndex = 18;\n\trxState = 0;\n\tonesRun = 0;\n\tzerosRun = 0;\n\n\tnofRecievedMp = 0;\n"},
 
- {"label": "the MP counter starts at 1", "find": "V90MP::V90MP()\n{\n\tbyte_1b = 18;\n\tword_14 = 0;\n\tbyte_19 = 0;\n\tbyte_1a = 0;\n\n\tnofRecievedMp = 0;", "replace": "V90MP::V90MP()\n{\n\tbyte_1b = 18;\n\tword_14 = 0;\n\tbyte_19 = 0;\n\tbyte_1a = 0;\n\n\tnofRecievedMp = 1;"},
+ {"label": "the MP counter starts at 1", "find": "V90MP::V90MP()\n{\n\tbitIndex = 18;\n\trxState = 0;\n\tonesRun = 0;\n\tzerosRun = 0;\n\n\tnofRecievedMp = 0;", "replace": "V90MP::V90MP()\n{\n\tbitIndex = 18;\n\trxState = 0;\n\tonesRun = 0;\n\tzerosRun = 0;\n\n\tnofRecievedMp = 1;"},
 
  {"label": "the destructor clears the counters", "find": "V90MP::~V90MP()\n{\n}", "replace": "V90MP::~V90MP()\n{\n\tnofRecievedMp = 0;\n}"},
 
  {"label": "the destructor clears the counters, volatile so it survives", "find": "V90MP::~V90MP()\n{\n}\n", "replace": "V90MP::~V90MP()\n{\n\t*(volatile int *)&nofRecievedMp = 0;\n}\n"},
 
- {"label": "reset leaves the detector's counter alone", "find": "V90MP::reset()\n{\n\tbyte_1b = 18;\n\tword_14 = 0;\n", "replace": "V90MP::reset()\n{\n\tbyte_1b = 18;\n"},
+ {"label": "reset leaves the detector's counter alone", "find": "V90MP::reset()\n{\n\tbitIndex = 18;\n\trxState = 0;\n", "replace": "V90MP::reset()\n{\n\tbitIndex = 18;\n"},
 
- {"label": "reset clears the detector's counter as a byte", "find": "V90MP::reset()\n{\n\tbyte_1b = 18;\n\tword_14 = 0;", "replace": "V90MP::reset()\n{\n\tbyte_1b = 18;\n\t*(unsigned char *)&word_14 = 0;"},
+ {"label": "reset clears the detector's counter as a byte", "find": "V90MP::reset()\n{\n\tbitIndex = 18;\n\trxState = 0;", "replace": "V90MP::reset()\n{\n\tbitIndex = 18;\n\t*(unsigned char *)&rxState = 0;"},
 
- {"label": "reset starts +0x1b at 17, not 18", "find": "V90MP::reset()\n{\n\tbyte_1b = 18;", "replace": "V90MP::reset()\n{\n\tbyte_1b = 17;"},
+ {"label": "reset starts +0x1b at 17, not 18", "find": "V90MP::reset()\n{\n\tbitIndex = 18;", "replace": "V90MP::reset()\n{\n\tbitIndex = 17;"},
 
- {"label": "reset leaves the MP counter alone", "find": "V90MP::reset()\n{\n\tbyte_1b = 18;\n\tword_14 = 0;\n\tbyte_19 = 0;\n\tbyte_1a = 0;\n\n\tnofRecievedMp = 0;\n", "replace": "V90MP::reset()\n{\n\tbyte_1b = 18;\n\tword_14 = 0;\n\tbyte_19 = 0;\n\tbyte_1a = 0;\n\n"},
+ {"label": "reset leaves the MP counter alone", "find": "V90MP::reset()\n{\n\tbitIndex = 18;\n\trxState = 0;\n\tonesRun = 0;\n\tzerosRun = 0;\n\n\tnofRecievedMp = 0;\n", "replace": "V90MP::reset()\n{\n\tbitIndex = 18;\n\trxState = 0;\n\tonesRun = 0;\n\tzerosRun = 0;\n\n"},
 
- {"label": "the length is the byte SIGN-extended", "why": "The one thing getBitVector says beyond the +0x1c.  `movzbl` and `movsbl` agree on every value below 0x80, so this is caught only because t_v90mp.cpp sweeps +0x118 across the boundary and asserts it did.", "find": "\tlength = byte_118;", "replace": "\tlength = (unsigned int)(int)(signed char)byte_118;"},
+ {"label": "the length is the byte SIGN-extended", "why": "The one thing getBitVector says beyond the +0x1c.  `movzbl` and `movsbl` agree on every value below 0x80, so this is caught only because t_v90mp.cpp sweeps +0x118 across the boundary and asserts it did.", "find": "\tlength = seqLength;", "replace": "\tlength = (unsigned int)(int)(signed char)seqLength;"},
 
- {"label": "the length reported is the group size, not the sequence length", "find": "\tlength = byte_118;\n", "replace": "\tlength = word_114;\n"},
+ {"label": "the length reported is the group size, not the sequence length", "find": "\tlength = seqLength;\n", "replace": "\tlength = groupSize;\n"},
 
  {"label": "the bit vector starts at the object, not at +0x1c", "find": "\treturn bits;", "replace": "\treturn (unsigned char *)this;"},
 
@@ -93,9 +93,9 @@
 
  {"label": "the short sequence is as long as the long one", "find": "\tn = t ? 0xbb : 0x55;\n", "replace": "\tn = 0xbb;\n"},
 
- {"label": "infoToBits rounds the sequence length up unconditionally", "why": "The `je` at 0x1fa92 short-circuits an exact multiple straight to +0x119 + 1; without it a group size that divides exactly adds a whole spare group.  The group sweep in t_v90mp.cpp includes 1, 2, 4, 0x2f, 0x5e and 0xbc, all of which divide 0xbc.", "find": "\n\t\tif (q * word_114 == want)\n\t\t\tbyte_118 = (unsigned char)want;", "replace": "\n\t\tif (0)\n\t\t\tbyte_118 = (unsigned char)want;"},
+ {"label": "infoToBits rounds the sequence length up unconditionally", "why": "The `je` at 0x1fa92 short-circuits an exact multiple straight to +0x119 + 1; without it a group size that divides exactly adds a whole spare group.  The group sweep in t_v90mp.cpp includes 1, 2, 4, 0x2f, 0x5e and 0xbc, all of which divide 0xbc.", "find": "\n\t\tif (q * groupSize == want)\n\t\t\tseqLength = (unsigned char)want;", "replace": "\n\t\tif (0)\n\t\t\tseqLength = (unsigned char)want;"},
 
- {"label": "infoToBits rounds the length down", "find": "\n\t\t\tbyte_118 = (unsigned char)((q + 1) * word_114);", "replace": "\n\t\t\tbyte_118 = (unsigned char)(q * word_114);"},
+ {"label": "infoToBits rounds the length down", "find": "\n\t\t\tseqLength = (unsigned char)((q + 1) * groupSize);", "replace": "\n\t\t\tseqLength = (unsigned char)(q * groupSize);"},
 
  {"label": "h1Imag is packed into frame 3 with h1Real", "find": "\t\tfor (i = 0x45; i <= 0x54; i++) {", "replace": "\t\tfor (i = 0x44; i <= 0x53; i++) {"},
 
@@ -117,33 +117,33 @@
 
  {"label": "the CRC lands one bit early", "find": "\t\tbits[end + 1 + k] = crc[k];", "replace": "\t\tbits[end + k] = crc[k];"},
 
- {"label": "the padding re-reads +0x118 instead of the register it was loaded into", "why": "PROVEN EQUIVALENT, and the proof is the interesting part.  The object loads +0x118 once into %edx before the pad loop, and that loop can reach index 0xfc, which IS +0x118 -- so `i < byte_118` re-reading the field would stop early and `i < len` would not.  It does not: `bits` is declared 0xe6 long, GCC uses that bound to conclude that `bits[i]` cannot alias the member at +0x118, and hoists the load out of the loop in BOTH forms.  Compiling the two with this tree's own CXXFLAGS and diffing `objdump -d --no-show-raw-insn` over the whole object gives one differing line, the file name in objdump's banner.  So the local copy in our source is legibility rather than necessity, and the mutation cannot be caught by any test -- which is why it is recorded here rather than left as an untested claim.  Finding F1386.", "find": "\t\tfor (i = 0xbc; i < len; i++)", "replace": "\t\tfor (i = 0xbc; i < byte_118; i++)", "equivalent": true},
+ {"label": "the padding re-reads +0x118 instead of the register it was loaded into", "why": "PROVEN EQUIVALENT, and the proof is the interesting part.  The object loads +0x118 once into %edx before the pad loop, and that loop can reach index 0xfc, which IS +0x118 -- so `i < seqLength` re-reading the field would stop early and `i < len` would not.  It does not: `bits` is declared 0xe6 long, GCC uses that bound to conclude that `bits[i]` cannot alias the member at +0x118, and hoists the load out of the loop in BOTH forms.  Compiling the two with this tree's own CXXFLAGS and diffing `objdump -d --no-show-raw-insn` over the whole object gives one differing line, the file name in objdump's banner.  So the local copy in our source is legibility rather than necessity, and the mutation cannot be caught by any test -- which is why it is recorded here rather than left as an untested claim.  Finding F1386.", "find": "\t\tfor (i = 0xbc; i < len; i++)", "replace": "\t\tfor (i = 0xbc; i < seqLength; i++)", "equivalent": true},
 
  {"label": "the short arm pads from after its CRC, as the long arm does", "why": "This is the CORRECTED form of finding F1386's defect and it must be CAUGHT: the object really does write bits[0x45] and start the pad loop there, destroying the sixteen CRC bits it has just laid down at 0x45..0x54.  If this one ever stops being caught, the test has stopped driving a type-zero message.", "find": "\t\tbits[0x45] = 0;\n\t\tfor (i = 0x45; i < len; i++)", "replace": "\t\tbits[0x55] = 0;\n\t\tfor (i = 0x56; i < len; i++)"},
 
- {"label": "the two run counters are swapped", "find": "\tif (bit != 0) {\n\t\tbyte_19++;\n\t\tbyte_1a = 0;", "replace": "\tif (bit != 0) {\n\t\tbyte_1a++;\n\t\tbyte_19 = 0;"},
+ {"label": "the two run counters are swapped", "find": "\tif (bit != 0) {\n\t\tonesRun++;\n\t\tzerosRun = 0;", "replace": "\tif (bit != 0) {\n\t\tzerosRun++;\n\t\tonesRun = 0;"},
 
  {"label": "a one counts as a one only in its low byte", "why": "`test %esi,%esi` at 0x201ad looks at the whole int, and 0x100 is therefore a one here while state 2 stores its low byte and calls it a type of zero.  The argument sweep carries 0x100 and 0x101 for exactly this.", "find": "\tif (bit != 0) {\n", "replace": "\tif ((unsigned char)bit != 0) {\n"},
 
- {"label": "Ed is one group of zeros, not two", "find": "\tif (byte_1a == 2 * word_114 && byte_1b == 18) {", "replace": "\tif (byte_1a == word_114 && byte_1b == 18) {"},
+ {"label": "Ed is one group of zeros, not two", "find": "\tif (zerosRun == 2 * groupSize && bitIndex == 18) {", "replace": "\tif (zerosRun == groupSize && bitIndex == 18) {"},
 
- {"label": "Ed does not care where the bit index is", "find": "\tif (byte_1a == 2 * word_114 && byte_1b == 18) {\n", "replace": "\tif (byte_1a == 2 * word_114) {\n"},
+ {"label": "Ed does not care where the bit index is", "find": "\tif (zerosRun == 2 * groupSize && bitIndex == 18) {\n", "replace": "\tif (zerosRun == 2 * groupSize) {\n"},
 
  {"label": "Ed answers 1 rather than 3", "find": "\t\trc = 3;", "replace": "\t\trc = 1;"},
 
- {"label": "sixteen ones are enough for the preamble", "find": "\t\tif (byte_19 > 0x10)\n\t\t\tword_14 = 1;", "replace": "\t\tif (byte_19 >= 0x10)\n\t\t\tword_14 = 1;"},
+ {"label": "sixteen ones are enough for the preamble", "find": "\t\tif (onesRun > 0x10)\n\t\t\trxState = 1;", "replace": "\t\tif (onesRun >= 0x10)\n\t\t\trxState = 1;"},
 
- {"label": "the framing zero goes straight to state 3", "find": "\t\tif (bit == 0) {\n\t\t\tword_14 = 2;", "replace": "\t\tif (bit == 0) {\n\t\t\tword_14 = 3;"},
+ {"label": "the framing zero goes straight to state 3", "find": "\t\tif (bit == 0) {\n\t\t\trxState = 2;", "replace": "\t\tif (bit == 0) {\n\t\t\trxState = 3;"},
 
- {"label": "another one in state 1 is ignored rather than starting again", "find": "\t\t} else {\n\t\t\tbyte_1b = 18;\n\t\t\tword_14 = 0;\n\t\t\tbyte_19 = 0;\n\t\t\tbyte_1a = 0;\n\t\t}", "replace": "\t\t}"},
+ {"label": "another one in state 1 is ignored rather than starting again", "find": "\t\t} else {\n\t\t\tbitIndex = 18;\n\t\t\trxState = 0;\n\t\t\tonesRun = 0;\n\t\t\tzerosRun = 0;\n\t\t}", "replace": "\t\t}"},
 
  {"label": "the type flag is reduced to 0 or 1 on the way in", "find": "\t\ttype = (char)bit;", "replace": "\t\ttype = (char)(bit != 0);"},
 
- {"label": "state 2 does not advance the bit index", "find": "\t\tbits[byte_1b] = (unsigned char)bit;\n\t\tbyte_1b++;", "replace": "\t\tbits[byte_1b] = (unsigned char)bit;"},
+ {"label": "state 2 does not advance the bit index", "find": "\t\tbits[bitIndex] = (unsigned char)bit;\n\t\tbitIndex++;", "replace": "\t\tbits[bitIndex] = (unsigned char)bit;"},
 
- {"label": "state 2 leaves the receiver in state 3 only after the length", "find": "\t\tword_14 = 3;\n\t\tbreak;", "replace": "\t\tword_14 = 4;\n\t\tbreak;"},
+ {"label": "state 2 leaves the receiver in state 3 only after the length", "find": "\t\trxState = 3;\n\t\tbreak;", "replace": "\t\trxState = 4;\n\t\tbreak;"},
 
- {"label": "the message ends when the index reaches the padded length", "find": "\t\tif (next != n) {", "replace": "\t\tif (next != byte_118) {"},
+ {"label": "the message ends when the index reaches the padded length", "find": "\t\tif (next != n) {", "replace": "\t\tif (next != seqLength) {"},
 
  {"label": "bitsToInfo takes the CRC's extent from +0x119, not from the type", "why": "The object reads +0x18 at 0x2049f and derives 0xaa or 0x44 from THAT, not from +0x119 -- so an object whose type flag and sequence length disagree checks a different span.  t_v90mp.cpp drives that pair apart in its short-sequence block.", "find": "\t\tend = type ? 0xaa : 0x44;", "replace": "\t\tend = (unsigned char)(n - 0x11);"},
 
@@ -153,7 +153,7 @@
 
  {"label": "the second CRC pass taps 4 and 11", "find": "\t\t\tbits[0x70] = (unsigned char)(bits[0x70] == 0);\n\n\t\tfor (k = 0; k <= 15; k++)\n\t\t\tcrc[k] = 1;\n\t\tfor (i = 0x12; i < end; i++) {\n\t\t\tif (i % 17 == 0)\n\t\t\t\ti++;\n\t\t\tx = (unsigned char)(crc[0] + bits[i]);\n\t\t\tfor (k = 0; k < 15; k++)\n\t\t\t\tcrc[k] = crc[k + 1];\n\t\t\tcrc[3] =", "replace": "\t\t\tbits[0x70] = (unsigned char)(bits[0x70] == 0);\n\n\t\tfor (k = 0; k <= 15; k++)\n\t\t\tcrc[k] = 1;\n\t\tfor (i = 0x12; i < end; i++) {\n\t\t\tif (i % 17 == 0)\n\t\t\t\ti++;\n\t\t\tx = (unsigned char)(crc[0] + bits[i]);\n\t\t\tfor (k = 0; k < 15; k++)\n\t\t\t\tcrc[k] = crc[k + 1];\n\t\t\tcrc[4] ="},
 
- {"label": "the CRC is compared against the sixteen bits before the end", "find": "\t\t\tint d = (int)crc[k] - (int)bits[n - 0x10 + k];\n\n\t\t\tsum += (unsigned char)(d < 0 ? -d : d);\n\t\t}\n\n\t\tif (sum == 0) {\n\t\t\tbyte_1b = next;\n\t\t\tword_14 = 4;\n\t\t\tbreak;", "replace": "\t\t\tint d = (int)crc[k] - (int)bits[n - 0x11 + k];\n\n\t\t\tsum += (unsigned char)(d < 0 ? -d : d);\n\t\t}\n\n\t\tif (sum == 0) {\n\t\t\tbyte_1b = next;\n\t\t\tword_14 = 4;\n\t\t\tbreak;"},
+ {"label": "the CRC is compared against the sixteen bits before the end", "find": "\t\t\tint d = (int)crc[k] - (int)bits[n - 0x10 + k];\n\n\t\t\tsum += (unsigned char)(d < 0 ? -d : d);\n\t\t}\n\n\t\tif (sum == 0) {\n\t\t\tbitIndex = next;\n\t\t\trxState = 4;\n\t\t\tbreak;", "replace": "\t\t\tint d = (int)crc[k] - (int)bits[n - 0x11 + k];\n\n\t\t\tsum += (unsigned char)(d < 0 ? -d : d);\n\t\t}\n\n\t\tif (sum == 0) {\n\t\t\tbitIndex = next;\n\t\t\trxState = 4;\n\t\t\tbreak;"},
 
  {"label": "the CRC comparison sums into an int, not into a byte", "why": "`add %al,0x4e(%esp)` and `cmpb $0x0` -- sixteen absolute differences accumulated in ONE BYTE, so sixteen differences of 16 sum to 256 and read as a match.  t_v90mp.cpp builds exactly that case out of the CRC the blob itself computed.  NOTE THE SOURCE SHAPE this depends on: the accumulation is `sum += (unsigned char)|d|` and the truncation is the DECLARATION's.  Written `sum = (unsigned char)(sum + |d|)` the cast does the truncating, the declared width stops mattering, and this mutation survives while looking exactly like a test that is missing -- which is how it was found.", "find": "\tunsigned char x, sum, n, next, end;", "replace": "\tunsigned char x, n, next, end;\n\tunsigned int sum;"},
 
@@ -161,11 +161,11 @@
 
  {"label": "the repaired bit is 0x71", "find": "\t\t\tbits[0x70] = (unsigned char)(bits[0x70] == 0);", "replace": "\t\t\tbits[0x71] = (unsigned char)(bits[0x71] == 0);"},
 
- {"label": "a bad CRC leaves the state machine where it was", "find": "\t\t} else {\n\t\t\tbyte_1b = 18;\n\t\t\tbyte_19 = 0;\n\t\t\tbyte_1a = 0;\n\t\t\tword_14 = 0;", "replace": "\t\t} else {\n\t\t\tbyte_1b = next;"},
+ {"label": "a bad CRC leaves the state machine where it was", "find": "\t\t} else {\n\t\t\tbitIndex = 18;\n\t\t\tonesRun = 0;\n\t\t\tzerosRun = 0;\n\t\t\trxState = 0;", "replace": "\t\t} else {\n\t\t\tbitIndex = next;"},
 
  {"label": "\"modified good CRC\" is announced at level 2, not level 3", "find": "\t\t\tif (DSPLIB_DEBUG_VERBOSE())\n\t\t\t\tdsplibs_debug_printf(\"V90MP: recieved MP with \"", "replace": "\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\"V90MP: recieved MP with \""},
 
- {"label": "the padding is counted to the sequence length, not past it", "find": "\t\tbyte_1b++;\n\t\tif (byte_1b != byte_118)", "replace": "\t\tbyte_1b++;\n\t\tif (byte_1b != byte_119)"},
+ {"label": "the padding is counted to the sequence length, not past it", "find": "\t\tbitIndex++;\n\t\tif (bitIndex != seqLength)", "replace": "\t\tbitIndex++;\n\t\tif (bitIndex != bodyLength)"},
 
  {"label": "the message is evaluated without being decoded first", "find": "\t\tevaluateInfo();", "replace": "\t\tif (0)\n\t\t\tevaluateInfo();"},
 
@@ -205,19 +205,19 @@
 
  {"label": "NOTE: the CRC pair landed with this batch", "why": "`calcCRC` (0x1f170) and `evaluateCRC` (0x1f470) put a THIRD and FOURTH copy of the shift register in this file -- the original's own repetition, not an inlining, for finding F1237's reason -- so every anchor below names the member it means.  The first five are the ONE trap this pair has: the V.90 CP twin bounds the information bits with `word_3bb0 - 0x11` and finds the peer's CRC at `word_3bb0 - 0x10`, and 0xbb-0x11 is 0xaa while 0x55-0x11 is 0x44, so a transcription of the CP source is indistinguishable from the MP source on every object the class itself can build.  t_v90mp.cpp's inconsistent type/+0x119 pairs are what tell them apart, and these mutations are what prove those trials work."},
 
- {"label": "calcCRC bounds the extent with +0x119, as the V.90 CP twin does", "find": "V90MP::calcCRC()\n{\n\tunsigned int i, end;\n\tunsigned char a;\n\n\tend = type ? 0xaa : 0x44;", "replace": "V90MP::calcCRC()\n{\n\tunsigned int i, end;\n\tunsigned char a;\n\n\tend = byte_119 - 0x11;"},
+ {"label": "calcCRC bounds the extent with +0x119, as the V.90 CP twin does", "find": "V90MP::calcCRC()\n{\n\tunsigned int i, end;\n\tunsigned char a;\n\n\tend = type ? 0xaa : 0x44;", "replace": "V90MP::calcCRC()\n{\n\tunsigned int i, end;\n\tunsigned char a;\n\n\tend = bodyLength - 0x11;"},
 
  {"label": "calcCRC seeds the register instead of carrying it in", "find": "V90MP::calcCRC()\n{\n\tunsigned int i, end;\n\tunsigned char a;\n\n\tend", "replace": "V90MP::calcCRC()\n{\n\tunsigned int i, end;\n\tunsigned char a;\n\tint s;\n\n\tfor (s = 0; s <= 0xf; s++)\n\t\tcrc[s] = 1;\n\tend"},
 
  {"label": "calcCRC does not skip the framing bits", "find": "\tunsigned char a;\n\n\tend = type ? 0xaa : 0x44;\n\n\tfor (i = 0x12; i < end; ) {\n\t\tif (i % 17 == 0)", "replace": "\tunsigned char a;\n\n\tend = type ? 0xaa : 0x44;\n\n\tfor (i = 0x12; i < end; ) {\n\t\tif (0)"},
 
- {"label": "evaluateCRC bounds the extent with +0x119, as the V.90 CP twin does", "find": "\tfor (c = 0; c <= 0xf; c++)\n\t\tcrc[c] = 1;\n\n\tend = type ? 0xaa : 0x44;", "replace": "\tfor (c = 0; c <= 0xf; c++)\n\t\tcrc[c] = 1;\n\n\tend = byte_119 - 0x11;"},
+ {"label": "evaluateCRC bounds the extent with +0x119, as the V.90 CP twin does", "find": "\tfor (c = 0; c <= 0xf; c++)\n\t\tcrc[c] = 1;\n\n\tend = type ? 0xaa : 0x44;", "replace": "\tfor (c = 0; c <= 0xf; c++)\n\t\tcrc[c] = 1;\n\n\tend = bodyLength - 0x11;"},
 
  {"label": "evaluateCRC finds the peer's CRC from the type flag, not from +0x119", "find": "\t\tint d = (int)crc[i] - (int)bits[n - 0x10 + i];", "replace": "\t\tint d = (int)crc[i] - (int)bits[end + 1 + i];"},
 
  {"label": "evaluateCRC seeds the register with zeros, not the ones of clause 1", "find": "\tfor (c = 0; c <= 0xf; c++)\n\t\tcrc[c] = 1;", "replace": "\tfor (c = 0; c <= 0xf; c++)\n\t\tcrc[c] = 0;"},
 
- {"label": "the peer's CRC is read most significant bit first", "find": "\tn = byte_119;\n\tsum = 0;\n\tfor (i = 0; i <= 0xf; i++) {\n\t\tint d = (int)crc[i] - (int)bits[n - 0x10 + i];", "replace": "\tn = byte_119;\n\tsum = 0;\n\tfor (i = 0; i <= 0xf; i++) {\n\t\tint d = (int)crc[i] - (int)bits[n - 0x10 + (15u - i)];"},
+ {"label": "the peer's CRC is read most significant bit first", "find": "\tn = bodyLength;\n\tsum = 0;\n\tfor (i = 0; i <= 0xf; i++) {\n\t\tint d = (int)crc[i] - (int)bits[n - 0x10 + i];", "replace": "\tn = bodyLength;\n\tsum = 0;\n\tfor (i = 0; i <= 0xf; i++) {\n\t\tint d = (int)crc[i] - (int)bits[n - 0x10 + (15u - i)];"},
 
  {"label": "the tap at 11 is at 12", "why": "The polynomial itself: 0x8408's set bits are 15, 10 and 3, so a tap one place over is a different generator.  Caught by the differential tier AND, independently, by run_mp_crc_spec against Figure 14/V.34.", "find": "\t\tcrc[9] = crc[10];\n\t\tcrc[10] = (unsigned char)((crc[11] + a) & 1);\n\t\tcrc[11] = crc[12];\n\t\tcrc[12] = crc[13];\n\t\tcrc[13] = crc[14];\n\t\tcrc[14] = crc[15];\n\t\tcrc[15] = (unsigned char)(a & 1);\n\t}\n}\n\n/*\n * evaluateCRC", "replace": "\t\tcrc[9] = crc[10];\n\t\tcrc[10] = (unsigned char)((crc[12] + a) & 1);\n\t\tcrc[11] = crc[12];\n\t\tcrc[12] = crc[13];\n\t\tcrc[13] = crc[14];\n\t\tcrc[14] = crc[15];\n\t\tcrc[15] = (unsigned char)(a & 1);\n\t}\n}\n\n/*\n * evaluateCRC"}
 ]

@@ -28,16 +28,16 @@
 	typedef char rd_off_##tag[ \
 	    ((int)__builtin_offsetof(V90RDetector, field) == (off)) ? 1 : -1]
 
-RD_OFF(int_00,    0x00, int00);
-RD_OFF(int_04,    0x04, int04);
-RD_OFF(int_08,    0x08, int08);
-RD_OFF(int_0c,    0x0c, int0c);
-RD_OFF(int_10,    0x10, int10);
-RD_OFF(int_14,    0x14, int14);
-RD_OFF(int_18,    0x18, int18);
-RD_OFF(int_1c,    0x1c, int1c);
-RD_OFF(ushort_20, 0x20, ushort20);
-RD_OFF(int_24,    0x24, int24);
+RD_OFF(sampleCount,    0x00, int00);
+RD_OFF(rLimit,    0x04, int04);
+RD_OFF(rNotLimit,    0x08, int08);
+RD_OFF(rfLimit,    0x0c, int0c);
+RD_OFF(rfNotLimit,    0x10, int10);
+RD_OFF(positiveRunLength,    0x14, int14);
+RD_OFF(negativeRunLength,    0x18, int18);
+RD_OFF(notRunLength,    0x1c, int1c);
+RD_OFF(signBits, 0x20, ushort20);
+RD_OFF(polarity,    0x24, int24);
 RD_OFF(params,    0x28, params);
 typedef char rd_size[(sizeof(V90RDetector) == 0x2c) ? 1 : -1];
 #endif
@@ -82,17 +82,17 @@ V90RDetector::~V90RDetector()
 void
 V90RDetector::reset(unsigned int rSamples, unsigned int rNotSamples)
 {
-	int_00 = 0;
-	int_14 = 0;
-	int_18 = 0;
-	int_1c = 0;
-	int_24 = 1;
-	ushort_20 = 0;
+	sampleCount = 0;
+	positiveRunLength = 0;
+	negativeRunLength = 0;
+	notRunLength = 0;
+	polarity = 1;
+	signBits = 0;
 
-	int_04 = (int)(rSamples / 6u * 6u);
-	int_08 = (int)(rNotSamples / 6u * 6u);
-	int_0c = (int)(rSamples / 12u * 12u);
-	int_10 = (int)(rNotSamples / 12u * 12u);
+	rLimit = (int)(rSamples / 6u * 6u);
+	rNotLimit = (int)(rNotSamples / 6u * 6u);
+	rfLimit = (int)(rSamples / 12u * 12u);
+	rfNotLimit = (int)(rNotSamples / 12u * 12u);
 }
 
 /*
@@ -121,40 +121,40 @@ int
 V90RDetector::detectR(short sample)
 {
 	int found = 0;
-	unsigned int bits = (unsigned int)ushort_20 * 2u;
+	unsigned int bits = (unsigned int)signBits * 2u;
 	int taken;
 
 	if (sample > 0)
 		bits |= 1u;
-	ushort_20 = (unsigned short)bits;
+	signBits = (unsigned short)bits;
 
-	taken = int_00 + 1;
+	taken = sampleCount + 1;
 	if (taken != 6) {
-		int_00 = taken;
+		sampleCount = taken;
 		return 0;
 	}
 
-	if (ushort_20 == 0x38) {
-		int_18 = 0;
-		int_14 += 6;
-		if (int_14 == int_04) {
-			int_24 = 1;
+	if (signBits == 0x38) {
+		negativeRunLength = 0;
+		positiveRunLength += 6;
+		if (positiveRunLength == rLimit) {
+			polarity = 1;
 			found = 1;
 		}
-	} else if (ushort_20 == 0x07) {
-		int_14 = 0;
-		int_18 += 6;
-		if (int_18 == int_04) {
-			int_24 = -1;
+	} else if (signBits == 0x07) {
+		positiveRunLength = 0;
+		negativeRunLength += 6;
+		if (negativeRunLength == rLimit) {
+			polarity = -1;
 			found = 1;
 		}
 	} else {
-		int_14 = 0;
-		int_18 = 0;
+		positiveRunLength = 0;
+		negativeRunLength = 0;
 	}
 
-	int_00 = 0;
-	ushort_20 = 0;
+	sampleCount = 0;
+	signBits = 0;
 	return found;
 }
 
@@ -173,29 +173,29 @@ int
 V90RDetector::detectRNot(short sample)
 {
 	int verdict = 0;
-	unsigned int reg = (unsigned int)ushort_20 * 2u;
+	unsigned int reg = (unsigned int)signBits * 2u;
 	int used;
 
 	if (sample > 0)
 		reg |= 1u;
-	ushort_20 = (unsigned short)reg;
+	signBits = (unsigned short)reg;
 
-	used = int_00 + 1;
+	used = sampleCount + 1;
 	if (used != 6) {
-		int_00 = used;
+		sampleCount = used;
 		return 0;
 	}
 
-	if ((unsigned int)ushort_20 == (int_24 > 0 ? 0x07u : 0x38u)) {
-		int_1c += 6;
-		if (int_1c == int_08)
+	if ((unsigned int)signBits == (polarity > 0 ? 0x07u : 0x38u)) {
+		notRunLength += 6;
+		if (notRunLength == rNotLimit)
 			verdict = -1;
 	} else {
-		int_1c = 0;
+		notRunLength = 0;
 	}
 
-	int_00 = 0;
-	ushort_20 = 0;
+	sampleCount = 0;
+	signBits = 0;
 	return verdict;
 }
 
@@ -208,40 +208,40 @@ int
 V90RDetector::detectRf(short sample)
 {
 	int hit = 0;
-	unsigned int sr = (unsigned int)ushort_20 * 2u;
+	unsigned int sr = (unsigned int)signBits * 2u;
 	int seen;
 
 	if (sample > 0)
 		sr |= 1u;
-	ushort_20 = (unsigned short)sr;
+	signBits = (unsigned short)sr;
 
-	seen = int_00 + 1;
+	seen = sampleCount + 1;
 	if (seen != 12) {
-		int_00 = seen;
+		sampleCount = seen;
 		return 0;
 	}
 
-	if (ushort_20 == 0xccc) {
-		int_18 = 0;
-		int_14 += 12;
-		if (int_14 == int_0c) {
-			int_24 = 1;
+	if (signBits == 0xccc) {
+		negativeRunLength = 0;
+		positiveRunLength += 12;
+		if (positiveRunLength == rfLimit) {
+			polarity = 1;
 			hit = 1;
 		}
-	} else if (ushort_20 == 0x333) {
-		int_14 = 0;
-		int_18 += 12;
-		if (int_18 == int_0c) {
-			int_24 = -1;
+	} else if (signBits == 0x333) {
+		positiveRunLength = 0;
+		negativeRunLength += 12;
+		if (negativeRunLength == rfLimit) {
+			polarity = -1;
 			hit = 1;
 		}
 	} else {
-		int_14 = 0;
-		int_18 = 0;
+		positiveRunLength = 0;
+		negativeRunLength = 0;
 	}
 
-	int_00 = 0;
-	ushort_20 = 0;
+	sampleCount = 0;
+	signBits = 0;
 	return hit;
 }
 
@@ -253,28 +253,28 @@ int
 V90RDetector::detectRfNot(short sample)
 {
 	int answer = 0;
-	unsigned int shifted = (unsigned int)ushort_20 * 2u;
+	unsigned int shifted = (unsigned int)signBits * 2u;
 	int count;
 
 	if (sample > 0)
 		shifted |= 1u;
-	ushort_20 = (unsigned short)shifted;
+	signBits = (unsigned short)shifted;
 
-	count = int_00 + 1;
+	count = sampleCount + 1;
 	if (count != 12) {
-		int_00 = count;
+		sampleCount = count;
 		return 0;
 	}
 
-	if ((unsigned int)ushort_20 == (int_24 > 0 ? 0x333u : 0xcccu)) {
-		int_1c += 12;
-		if (int_1c == int_10)
+	if ((unsigned int)signBits == (polarity > 0 ? 0x333u : 0xcccu)) {
+		notRunLength += 12;
+		if (notRunLength == rfNotLimit)
 			answer = -1;
 	} else {
-		int_1c = 0;
+		notRunLength = 0;
 	}
 
-	int_00 = 0;
-	ushort_20 = 0;
+	sampleCount = 0;
+	signBits = 0;
 	return answer;
 }

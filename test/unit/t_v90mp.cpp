@@ -225,10 +225,10 @@ guard_intact(long tag)
 static void
 check_constructed(V90MP *o, long tag)
 {
-	diff_eq_int("word_14 (%ld)", (long)o->word_14, 0, tag);
-	diff_eq_int("byte_19 (%ld)", (long)o->byte_19, 0, tag);
-	diff_eq_int("byte_1a (%ld)", (long)o->byte_1a, 0, tag);
-	diff_eq_int("byte_1b (%ld)", (long)o->byte_1b, 18, tag);
+	diff_eq_int("rxState (%ld)", (long)o->rxState, 0, tag);
+	diff_eq_int("onesRun (%ld)", (long)o->onesRun, 0, tag);
+	diff_eq_int("zerosRun (%ld)", (long)o->zerosRun, 0, tag);
+	diff_eq_int("bitIndex (%ld)", (long)o->bitIndex, 18, tag);
 	diff_eq_int("nofRecievedMp (%ld)", (long)o->nofRecievedMp, 0, tag);
 	diff_eq_int("nofRecievedMpNot (%ld)", (long)o->nofRecievedMpNot, 0,
 		    tag);
@@ -419,8 +419,8 @@ run_mp_getbitvector(void)
 
 		i = (unsigned)trial % (sizeof(lens) / sizeof(lens[0]));
 		seed_pair(trial + 300, trial & 3);
-		MPA->byte_118 = lens[i];
-		MPB->byte_118 = lens[i];
+		MPA->seqLength = lens[i];
+		MPB->seqLength = lens[i];
 		if (lens[i] >= 0x80)
 			high_seen = 1;
 		memcpy(before_a, mp_a, MP_SLOT);
@@ -777,7 +777,7 @@ run_mp_infotobits(void)
 
 		seed_pair(trial + 600, trial & 3);
 		set_info(trial);
-		MPA->word_114 = MPB->word_114 = g;
+		MPA->groupSize = MPB->groupSize = g;
 		memcpy(before, mp_b, MP_SLOT);
 
 		MPA->infoToBits();
@@ -828,19 +828,19 @@ run_mp_infotobits(void)
 			if (len <= 0xfc)
 				diff_eq_int("+0x118 is the length rounded up "
 					    "to a group (%ld)",
-					    (long)MPB->byte_118, (long)len,
+					    (long)MPB->seqLength, (long)len,
 					    tag);
 			else
 				diff_eq_int("+0x118 padded over itself (%ld)",
-					    (long)MPB->byte_118, 0, tag);
+					    (long)MPB->seqLength, 0, tag);
 
 			if (len <= 0xfd)
 				diff_eq_int("+0x119 is the sequence's bit "
-					    "count (%ld)", (long)MPB->byte_119,
+					    "count (%ld)", (long)MPB->bodyLength,
 					    (long)want, tag);
 			else
 				diff_eq_int("+0x119 was padded over (%ld)",
-					    (long)MPB->byte_119, 0, tag);
+					    (long)MPB->bodyLength, 0, tag);
 
 			want = len;
 		}
@@ -930,7 +930,7 @@ run_mp_roundtrip(void)
 
 		seed_pair(trial + 700, trial & 3);
 		set_info(trial);
-		MPA->word_114 = MPB->word_114 = groups[trial % NGROUPS];
+		MPA->groupSize = MPB->groupSize = groups[trial % NGROUPS];
 		memcpy(origbuf, mp_b, sizeof(V90MP));
 
 		MPA->infoToBits();
@@ -1062,8 +1062,8 @@ run_mp_bitstoinfo(void)
 			seed_pair(trial + 800, trial & 3);
 			narrow_bits(trial);
 
-			MPA->word_14 = MPB->word_14 = st;
-			MPA->word_114 = MPB->word_114 =
+			MPA->rxState = MPB->rxState = st;
+			MPA->groupSize = MPB->groupSize =
 			    groups[trial % NGROUPS];
 			MPA->type = MPB->type = (char)(trial & 1);
 			/*
@@ -1072,29 +1072,29 @@ run_mp_bitstoinfo(void)
 			 * is set up to reach it and the rest are not.
 			 */
 			if (trial % 3 == 0) {
-				MPA->word_114 = MPB->word_114 = 4;
-				MPA->byte_1a = MPB->byte_1a = 7;
+				MPA->groupSize = MPB->groupSize = 4;
+				MPA->zerosRun = MPB->zerosRun = 7;
 				/*
 				 * ...and half of those with the index NOT at
 				 * 18, because the run length alone is not the
 				 * condition: `cmpb $0x12,0x1b(%ebx); jne` at
 				 * 0x202d0 is the other half of it.
 				 */
-				MPA->byte_1b = MPB->byte_1b =
+				MPA->bitIndex = MPB->bitIndex =
 				    (unsigned char)(((trial / 6) & 1) ? 19
 								     : 18);
 			} else {
-				MPA->byte_1a = MPB->byte_1a =
+				MPA->zerosRun = MPB->zerosRun =
 				    (unsigned char)trial;
-				MPA->byte_1b = MPB->byte_1b =
+				MPA->bitIndex = MPB->bitIndex =
 				    (unsigned char)(0x12 + (trial % 40));
 			}
-			MPA->byte_19 = MPB->byte_19 =
+			MPA->onesRun = MPB->onesRun =
 			    (unsigned char)(trial % 20 == 0 ? 0x10 : trial);
-			MPA->byte_118 = MPB->byte_118 =
-			    (unsigned char)(MPB->byte_1b + (trial % 3));
-			MPA->byte_119 = MPB->byte_119 =
-			    (unsigned char)(MPB->byte_1b + (trial % 2));
+			MPA->seqLength = MPB->seqLength =
+			    (unsigned char)(MPB->bitIndex + (trial % 3));
+			MPA->bodyLength = MPB->bodyLength =
+			    (unsigned char)(MPB->bitIndex + (trial % 2));
 
 			if (trial == 0)
 				memcpy(first, mp_b, MP_SLOT);
@@ -1102,19 +1102,19 @@ run_mp_bitstoinfo(void)
 			drive_bit(bit, tag);
 
 			states[st] = 1;
-			if (st <= 4 && MPB->word_14 > 4)
+			if (st <= 4 && MPB->rxState > 4)
 				diff_eq_int("a known state stayed known (%ld)",
-					    (long)MPB->word_14, 0, tag);
+					    (long)MPB->rxState, 0, tag);
 			if (memcmp(first, mp_b, MP_SLOT) != 0)
 				varied = 1;
 
 			/* The run counters, checked against the blob. */
 			if (bit != 0)
 				diff_eq_int("a one cleared the zero run (%ld)",
-					    (long)MPB->byte_1a, 0, tag);
+					    (long)MPB->zerosRun, 0, tag);
 			else
 				diff_eq_int("a zero cleared the one run (%ld)",
-					    (long)MPB->byte_19, 0, tag);
+					    (long)MPB->onesRun, 0, tag);
 		}
 	}
 
@@ -1125,14 +1125,14 @@ run_mp_bitstoinfo(void)
 
 		set_level(0);
 		seed_pair(trial + 810, trial & 3);
-		MPA->word_14 = MPB->word_14 = 0;
-		MPA->word_114 = MPB->word_114 = 4;
-		MPA->byte_19 = MPB->byte_19 = run;
-		MPA->byte_1a = MPB->byte_1a = 0;
-		MPA->byte_1b = MPB->byte_1b = 18;
+		MPA->rxState = MPB->rxState = 0;
+		MPA->groupSize = MPB->groupSize = 4;
+		MPA->onesRun = MPB->onesRun = run;
+		MPA->zerosRun = MPB->zerosRun = 0;
+		MPA->bitIndex = MPB->bitIndex = 18;
 		drive_bit(1, tag);
 		diff_eq_int("seventeen ones and not sixteen (%ld)",
-			    (long)MPB->word_14, run + 1 > 0x10 ? 1 : 0, tag);
+			    (long)MPB->rxState, run + 1 > 0x10 ? 1 : 0, tag);
 		ed = 1;
 	}
 
@@ -1166,11 +1166,11 @@ run_mp_bitstoinfo_crc(void)
 			seed_pair(trial + 900, trial & 3);
 			set_info(trial);
 			MPA->Type = MPB->Type = (char)type;
-			MPA->word_114 = MPB->word_114 = 4;
+			MPA->groupSize = MPB->groupSize = 4;
 			MPA->infoToBits();
 			ref_mp_infotobits(mp_b);
 
-			n = MPB->byte_119;
+			n = MPB->bodyLength;
 			if (type == 0) {
 				/*
 				 * Put back the CRC the short arm destroyed
@@ -1195,10 +1195,10 @@ run_mp_bitstoinfo_crc(void)
 				MPB->bits[0x30] = MPA->bits[0x30];
 			}
 
-			MPA->word_14 = MPB->word_14 = 3;
-			MPA->byte_1b = MPB->byte_1b = (unsigned char)(n - 1);
-			MPA->byte_19 = MPB->byte_19 = 3;
-			MPA->byte_1a = MPB->byte_1a = 3;
+			MPA->rxState = MPB->rxState = 3;
+			MPA->bitIndex = MPB->bitIndex = (unsigned char)(n - 1);
+			MPA->onesRun = MPB->onesRun = 3;
+			MPA->zerosRun = MPB->zerosRun = 3;
 
 			drive_bit(MPB->bits[n - 1], tag);
 
@@ -1213,14 +1213,14 @@ run_mp_bitstoinfo_crc(void)
 			if (damage == 0 || (damage == 1 && type == 0)) {
 				good = 1;
 				diff_eq_int("a good CRC advances to state 4 "
-					    "(%ld)", (long)MPB->word_14, 4,
+					    "(%ld)", (long)MPB->rxState, 4,
 					    tag);
 				diff_eq_int("...and keeps the index (%ld)",
-					    (long)MPB->byte_1b, (long)n, tag);
+					    (long)MPB->bitIndex, (long)n, tag);
 			} else if (damage == 1) {
 				modified = 1;
 				diff_eq_int("the mended CRC advances too "
-					    "(%ld)", (long)MPB->word_14, 4,
+					    "(%ld)", (long)MPB->rxState, 4,
 					    tag);
 				diff_eq_int("...and the bit stayed mended "
 					    "(%ld)", (long)MPB->bits[0x70],
@@ -1230,17 +1230,17 @@ run_mp_bitstoinfo_crc(void)
 					shortbad = 1;
 				bad = 1;
 				diff_eq_int("a bad CRC resets the detector "
-					    "(%ld)", (long)MPB->word_14, 0,
+					    "(%ld)", (long)MPB->rxState, 0,
 					    tag);
 				diff_eq_int("...to bit 18 (%ld)",
-					    (long)MPB->byte_1b, 18, tag);
+					    (long)MPB->bitIndex, 18, tag);
 			}
 		}
 	}
 
 	/*
 	 * A sequence length below 0x10 makes the comparison read BELOW the bit
-	 * vector -- the object indexes `this + byte_119 + k + 0xc` with no
+	 * vector -- the object indexes `this + bodyLength + k + 0xc` with no
 	 * check at all -- and both sides must read the same bytes.
 	 */
 	for (trial = 0; trial < 8; trial++) {
@@ -1248,11 +1248,11 @@ run_mp_bitstoinfo_crc(void)
 
 		set_level(0);
 		seed_pair(trial + 950, trial & 3);
-		MPA->word_14 = MPB->word_14 = 3;
-		MPA->word_114 = MPB->word_114 = 4;
+		MPA->rxState = MPB->rxState = 3;
+		MPA->groupSize = MPB->groupSize = 4;
 		MPA->type = MPB->type = (char)(trial & 1);
-		MPA->byte_119 = MPB->byte_119 = (unsigned char)(trial + 1);
-		MPA->byte_1b = MPB->byte_1b = (unsigned char)trial;
+		MPA->bodyLength = MPB->bodyLength = (unsigned char)(trial + 1);
+		MPA->bitIndex = MPB->bitIndex = (unsigned char)trial;
 		drive_bit(trial & 1, tag);
 	}
 
@@ -1275,15 +1275,15 @@ run_mp_bitstoinfo_crc(void)
 		seed_pair(77, 1);
 		set_info(3);
 		MPA->Type = MPB->Type = 1;
-		MPA->word_114 = MPB->word_114 = 4;
+		MPA->groupSize = MPB->groupSize = 4;
 		MPA->infoToBits();
 		ref_mp_infotobits(mp_b);
-		n = MPB->byte_119;
+		n = MPB->bodyLength;
 
-		MPA->word_14 = MPB->word_14 = 3;
-		MPA->byte_1b = MPB->byte_1b = (unsigned char)(n - 1);
-		MPA->byte_19 = MPB->byte_19 = 1;
-		MPA->byte_1a = MPB->byte_1a = 1;
+		MPA->rxState = MPB->rxState = 3;
+		MPA->bitIndex = MPB->bitIndex = (unsigned char)(n - 1);
+		MPA->onesRun = MPB->onesRun = 1;
+		MPA->zerosRun = MPB->zerosRun = 1;
 		drive_bit(MPB->bits[n - 1], tag);
 
 		for (k = 0; k < 16; k++) {
@@ -1292,14 +1292,14 @@ run_mp_bitstoinfo_crc(void)
 			MPA->bits[n - 0x10 + k] = v;
 			MPB->bits[n - 0x10 + k] = v;
 		}
-		MPA->word_14 = MPB->word_14 = 3;
-		MPA->byte_1b = MPB->byte_1b = (unsigned char)(n - 1);
-		MPA->byte_19 = MPB->byte_19 = 1;
-		MPA->byte_1a = MPB->byte_1a = 1;
+		MPA->rxState = MPB->rxState = 3;
+		MPA->bitIndex = MPB->bitIndex = (unsigned char)(n - 1);
+		MPA->onesRun = MPB->onesRun = 1;
+		MPA->zerosRun = MPB->zerosRun = 1;
 		drive_bit(MPB->bits[n - 1], tag + 1);
 
 		diff_eq_int("sixteen differences of 16 sum to zero in a byte "
-			    "and read as a match (%ld)", (long)MPB->word_14, 4,
+			    "and read as a match (%ld)", (long)MPB->rxState, 4,
 			    tag + 1);
 		wrapped = 1;
 	}
@@ -1339,7 +1339,7 @@ run_mp_bitstoinfo_report(void)
 
 			seed_pair(trial + 1000, trial & 3);
 			set_info(trial);
-			MPA->word_114 = MPB->word_114 = 4;
+			MPA->groupSize = MPB->groupSize = 4;
 			/*
 			 * THE TOP BIT, on half the trials.  `Type` and `CPack`
 			 * are printed with `%d` after a `movsbl`, and that is
@@ -1370,13 +1370,13 @@ run_mp_bitstoinfo_report(void)
 			MPA->bits[0x21] = MPB->bits[0x21] = (unsigned char)
 			    (isMp ? 0 : (trial & 2) ? 0x80 : 1 + (trial % 7));
 
-			MPA->word_14 = MPB->word_14 = 4;
-			MPA->byte_118 = MPB->byte_118 =
+			MPA->rxState = MPB->rxState = 4;
+			MPA->seqLength = MPB->seqLength =
 			    (unsigned char)(0x20 + trial);
-			MPA->byte_1b = MPB->byte_1b =
+			MPA->bitIndex = MPB->bitIndex =
 			    (unsigned char)(0x1f + trial);
-			MPA->byte_19 = MPB->byte_19 = 5;
-			MPA->byte_1a = MPB->byte_1a = 5;
+			MPA->onesRun = MPB->onesRun = 5;
+			MPA->zerosRun = MPB->zerosRun = 5;
 			MPA->nofRecievedMp = MPB->nofRecievedMp = start;
 			MPA->nofRecievedMpNot = MPB->nofRecievedMpNot = start;
 
@@ -1385,7 +1385,7 @@ run_mp_bitstoinfo_report(void)
 			if (isMp) {
 				mp = 1;
 				diff_eq_int("an MP answers 1 (%ld)",
-					    (long)MPB->word_14, 0, tag);
+					    (long)MPB->rxState, 0, tag);
 				diff_eq_int("the MP counter moved (%ld)",
 					    (long)MPB->nofRecievedMp,
 					    (long)(start + 1), tag);
@@ -1466,7 +1466,7 @@ run_mp_bitstoinfo_answers(void)
  *     0xbb - 0x11 == 0xaa      0x55 - 0x11 == 0x44
  *     0xbb - 0x10 == 0xab      0x55 - 0x10 == 0x45
  *
- * so the CP form `end = byte_119 - 0x11` and the MP form
+ * so the CP form `end = bodyLength - 0x11` and the MP form
  * `end = type ? 0xaa : 0x44` are indistinguishable on every object the class
  * itself can build.  The MP member really does read the TYPE FLAG for the
  * extent and the LENGTH FIELD for where the peer's CRC sits, and the only
@@ -1570,7 +1570,7 @@ run_mp_calccrc(void)
 		seed_pair(trial + 400, trial % 4);
 		MPA->type = MPB->type =
 		    (char)(t ? (0x80 | (trial + 1)) & 0xff : 0);
-		MPA->byte_119 = MPB->byte_119 = crc_lens[trial % CRC_NLENS];
+		MPA->bodyLength = MPB->bodyLength = crc_lens[trial % CRC_NLENS];
 		fill_bits(trial & 1);
 		fill_crc(trial % 4, in);
 		memcpy(keep, mp_b, MP_SLOT);
@@ -1584,7 +1584,7 @@ run_mp_calccrc(void)
 		ref_mp_calccrc(mp_b);
 		memcpy(r1, MPB->crc, V90MP_CRC);
 		memcpy(mp_b, keep, MP_SLOT);
-		MPB->byte_119 = alt;
+		MPB->bodyLength = alt;
 		ref_mp_calccrc(mp_b);
 		memcpy(r2, MPB->crc, V90MP_CRC);
 		if (alt != crc_lens[trial % CRC_NLENS]) {
@@ -1690,7 +1690,7 @@ blob_good_message(int type1)
  * A message whose CRC really is where +0x119 says and is NOT where the type
  * flag would put it.
  *
- * THIS IS THE ONLY SHAPE THAT CAN SEPARATE `bits[byte_119 - 0x10 + k]` FROM
+ * THIS IS THE ONLY SHAPE THAT CAN SEPARATE `bits[bodyLength - 0x10 + k]` FROM
  * `bits[end + 1 + k]`, and the mutation set proves it: with only the trials
  * above, "evaluateCRC finds the peer's CRC from the type flag" survived.  The
  * two expressions name the same sixteen positions for every +0x119 the class
@@ -1754,7 +1754,7 @@ run_mp_evaluatecrc(void)
 		fill_bits(trial & 1);
 		fill_crc(trial % 4, 0);
 		MPA->type = MPB->type = (char)(t ? 1 : 0);
-		MPA->byte_119 = MPB->byte_119 = crc_lens[trial % CRC_NLENS];
+		MPA->bodyLength = MPB->bodyLength = crc_lens[trial % CRC_NLENS];
 
 		if (good) {
 			/*
@@ -1764,7 +1764,7 @@ run_mp_evaluatecrc(void)
 			 * across, so both sides see bits nothing of ours
 			 * wrote.
 			 */
-			MPB->byte_119 = blob_good_message(t);
+			MPB->bodyLength = blob_good_message(t);
 			memcpy(mp_a, mp_b, sizeof(V90MP));
 			if (trial % 6 == 3) {
 				/* ... unless one information bit is bent. */
@@ -1774,7 +1774,7 @@ run_mp_evaluatecrc(void)
 			}
 		} else if (trial % 6 == 1) {
 			/* The CRC where +0x119 says and nowhere else. */
-			MPB->byte_119 = blob_displaced_message();
+			MPB->bodyLength = blob_displaced_message();
 			memcpy(mp_a, mp_b, sizeof(V90MP));
 			good = 1;
 			displaced = 1;
@@ -2057,7 +2057,7 @@ run_mp_crc_spec(void)
 		spec_layout(MPB->bits, t1, (unsigned)trial);
 		memcpy(MPA->bits, MPB->bits, V90MP_BITS);
 		MPA->type = MPB->type = (char)(t1 ? 1 : 0);
-		MPA->byte_119 = MPB->byte_119 =
+		MPA->bodyLength = MPB->bodyLength =
 		    (unsigned char)(crc_at + 16u);
 		spec_seed(MPA);
 		spec_seed(MPB);

@@ -7,17 +7,17 @@
  {
   "label": "the parameter block lands at +0x24",
   "find": "\tparams = p;\n}",
-  "replace": "\t*(V90Parameters **)&int_24 = p;\n}"
+  "replace": "\t*(V90Parameters **)&polarity = p;\n}"
  },
  {
   "label": "the constructor also clears the counter at +0x00",
   "find": "\tparams = p;\n}",
-  "replace": "\tint_00 = 0;\n\tparams = p;\n}"
+  "replace": "\tsampleCount = 0;\n\tparams = p;\n}"
  },
  {
   "label": "the constructor clears the shift register too",
   "find": "\tparams = p;\n}",
-  "replace": "\tparams = p;\n\tushort_20 = 0;\n}"
+  "replace": "\tparams = p;\n\tsignBits = 0;\n}"
  },
  {
   "label": "the destructor clears the parameter block pointer",
@@ -34,110 +34,110 @@
   "why": "The four detectors are one function written four times -- the object emitted all four in full with no call between them -- so a mutation in one of them is a mutation the other three do not have.  That is why the local names differ between them: an anchor that matched two of the four would be reported UNUSABLE, and UNUSABLE does not fail a run (finding F1264).  What the entries below cover is every constant the four disagree on (6 against 12, 0x38/0x07 against 0xccc/0x333, +0x04 against +0x08/+0x0c/+0x10), the sign test that puts a ZERO sample on the negative side, the equality against the limit, and reset's rounding.  Nothing here can mutate the ORDER of the two stores in a group's tail, because the counter and the register are cleared on every path and no observer sees them between."},
 
  {"label": "reset rounds the first limit to a twelve rather than a six",
-  "find": "\tint_04 = (int)(rSamples / 6u * 6u);",
-  "replace": "\tint_04 = (int)(rSamples / 12u * 12u);"},
+  "find": "\trLimit = (int)(rSamples / 6u * 6u);",
+  "replace": "\trLimit = (int)(rSamples / 12u * 12u);"},
 
  {"label": "reset takes the six-sample limits from each other's argument",
-  "find": "\tint_04 = (int)(rSamples / 6u * 6u);\n\tint_08 = (int)(rNotSamples / 6u * 6u);",
-  "replace": "\tint_04 = (int)(rNotSamples / 6u * 6u);\n\tint_08 = (int)(rSamples / 6u * 6u);"},
+  "find": "\trLimit = (int)(rSamples / 6u * 6u);\n\trNotLimit = (int)(rNotSamples / 6u * 6u);",
+  "replace": "\trLimit = (int)(rNotSamples / 6u * 6u);\n\trNotLimit = (int)(rSamples / 6u * 6u);"},
 
  {"label": "reset does not round at all",
-  "find": "\tint_0c = (int)(rSamples / 12u * 12u);",
-  "replace": "\tint_0c = (int)rSamples;"},
+  "find": "\trfLimit = (int)(rSamples / 12u * 12u);",
+  "replace": "\trfLimit = (int)rSamples;"},
 
  {"label": "reset rounds signed",
-  "find": "\tint_10 = (int)(rNotSamples / 12u * 12u);",
-  "replace": "\tint_10 = (int)rNotSamples / 12 * 12;"},
+  "find": "\trfNotLimit = (int)(rNotSamples / 12u * 12u);",
+  "replace": "\trfNotLimit = (int)rNotSamples / 12 * 12;"},
 
  {"label": "reset starts the polarity negative",
-  "find": "\tint_1c = 0;\n\tint_24 = 1;\n\tushort_20 = 0;",
-  "replace": "\tint_1c = 0;\n\tint_24 = -1;\n\tushort_20 = 0;"},
+  "find": "\tnotRunLength = 0;\n\tpolarity = 1;\n\tsignBits = 0;",
+  "replace": "\tnotRunLength = 0;\n\tpolarity = -1;\n\tsignBits = 0;"},
 
  {"label": "reset leaves the Not run counter",
-  "find": "\tint_18 = 0;\n\tint_1c = 0;\n\tint_24 = 1;",
-  "replace": "\tint_18 = 0;\n\tint_24 = 1;"},
+  "find": "\tnegativeRunLength = 0;\n\tnotRunLength = 0;\n\tpolarity = 1;",
+  "replace": "\tnegativeRunLength = 0;\n\tpolarity = 1;"},
 
  {"label": "detectR counts a zero sample as positive",
   "find": "\tif (sample > 0)\n\t\tbits |= 1u;",
   "replace": "\tif (sample >= 0)\n\t\tbits |= 1u;"},
 
  {"label": "detectR shifts the register the other way",
-  "find": "\tunsigned int bits = (unsigned int)ushort_20 * 2u;",
-  "replace": "\tunsigned int bits = (unsigned int)ushort_20 / 2u;"},
+  "find": "\tunsigned int bits = (unsigned int)signBits * 2u;",
+  "replace": "\tunsigned int bits = (unsigned int)signBits / 2u;"},
 
  {"label": "detectR's group is five samples",
   "find": "\tif (taken != 6) {",
   "replace": "\tif (taken != 5) {"},
 
  {"label": "detectR's two patterns are each other's",
-  "find": "\tif (ushort_20 == 0x38) {",
-  "replace": "\tif (ushort_20 == 0x07) {"},
+  "find": "\tif (signBits == 0x38) {",
+  "replace": "\tif (signBits == 0x07) {"},
 
  {"label": "detectR steps the positive run by one sample rather than by six",
-  "find": "\t\tint_14 += 6;",
-  "replace": "\t\tint_14 += 1;"},
+  "find": "\t\tpositiveRunLength += 6;",
+  "replace": "\t\tpositiveRunLength += 1;"},
 
  {"label": "detectR fires once the run is past the limit as well as on it",
-  "find": "\t\tif (int_14 == int_04) {",
-  "replace": "\t\tif (int_14 >= int_04) {"},
+  "find": "\t\tif (positiveRunLength == rLimit) {",
+  "replace": "\t\tif (positiveRunLength >= rLimit) {"},
 
  {"label": "detectR's negative pattern leaves the polarity positive",
-  "find": "\t\tif (int_18 == int_04) {\n\t\t\tint_24 = -1;",
-  "replace": "\t\tif (int_18 == int_04) {\n\t\t\tint_24 = 1;"},
+  "find": "\t\tif (negativeRunLength == rLimit) {\n\t\t\tpolarity = -1;",
+  "replace": "\t\tif (negativeRunLength == rLimit) {\n\t\t\tpolarity = 1;"},
 
  {"label": "detectR's neither-pattern branch clears only one counter",
-  "find": "\t} else {\n\t\tint_14 = 0;\n\t\tint_18 = 0;\n\t}\n\n\tint_00 = 0;\n\tushort_20 = 0;\n\treturn found;",
-  "replace": "\t} else {\n\t\tint_14 = 0;\n\t}\n\n\tint_00 = 0;\n\tushort_20 = 0;\n\treturn found;"},
+  "find": "\t} else {\n\t\tpositiveRunLength = 0;\n\t\tnegativeRunLength = 0;\n\t}\n\n\tsampleCount = 0;\n\tsignBits = 0;\n\treturn found;",
+  "replace": "\t} else {\n\t\tpositiveRunLength = 0;\n\t}\n\n\tsampleCount = 0;\n\tsignBits = 0;\n\treturn found;"},
 
  {"label": "detectR leaves the sign register for the next group",
-  "find": "\tint_00 = 0;\n\tushort_20 = 0;\n\treturn found;",
-  "replace": "\tint_00 = 0;\n\treturn found;"},
+  "find": "\tsampleCount = 0;\n\tsignBits = 0;\n\treturn found;",
+  "replace": "\tsampleCount = 0;\n\treturn found;"},
 
  {"label": "detectRNot picks its pattern the other way round",
-  "find": "\tif ((unsigned int)ushort_20 == (int_24 > 0 ? 0x07u : 0x38u)) {",
-  "replace": "\tif ((unsigned int)ushort_20 == (int_24 > 0 ? 0x38u : 0x07u)) {"},
+  "find": "\tif ((unsigned int)signBits == (polarity > 0 ? 0x07u : 0x38u)) {",
+  "replace": "\tif ((unsigned int)signBits == (polarity > 0 ? 0x38u : 0x07u)) {"},
 
  {"label": "detectRNot treats a zero polarity as positive",
-  "find": "\tif ((unsigned int)ushort_20 == (int_24 > 0 ? 0x07u : 0x38u)) {",
-  "replace": "\tif ((unsigned int)ushort_20 == (int_24 >= 0 ? 0x07u : 0x38u)) {"},
+  "find": "\tif ((unsigned int)signBits == (polarity > 0 ? 0x07u : 0x38u)) {",
+  "replace": "\tif ((unsigned int)signBits == (polarity >= 0 ? 0x07u : 0x38u)) {"},
 
  {"label": "detectRNot measures against the R limit",
-  "find": "\t\tif (int_1c == int_08)",
-  "replace": "\t\tif (int_1c == int_04)"},
+  "find": "\t\tif (notRunLength == rNotLimit)",
+  "replace": "\t\tif (notRunLength == rLimit)"},
 
  {"label": "detectRNot answers +1",
   "find": "\t\t\tverdict = -1;",
   "replace": "\t\t\tverdict = 1;"},
 
  {"label": "detectRNot keeps its run counter across a group that did not match",
-  "find": "\t} else {\n\t\tint_1c = 0;\n\t}\n\n\tint_00 = 0;\n\tushort_20 = 0;\n\treturn verdict;",
-  "replace": "\t}\n\n\tint_00 = 0;\n\tushort_20 = 0;\n\treturn verdict;"},
+  "find": "\t} else {\n\t\tnotRunLength = 0;\n\t}\n\n\tsampleCount = 0;\n\tsignBits = 0;\n\treturn verdict;",
+  "replace": "\t}\n\n\tsampleCount = 0;\n\tsignBits = 0;\n\treturn verdict;"},
 
  {"label": "detectRf's group is six samples, like detectR's",
   "find": "\tif (seen != 12) {",
   "replace": "\tif (seen != 6) {"},
 
  {"label": "detectRf looks for the six-bit patterns",
-  "find": "\tif (ushort_20 == 0xccc) {",
-  "replace": "\tif (ushort_20 == 0x38) {"},
+  "find": "\tif (signBits == 0xccc) {",
+  "replace": "\tif (signBits == 0x38) {"},
 
  {"label": "detectRf steps its run by six",
-  "find": "\t\tint_14 += 12;",
-  "replace": "\t\tint_14 += 6;"},
+  "find": "\t\tpositiveRunLength += 12;",
+  "replace": "\t\tpositiveRunLength += 6;"},
 
  {"label": "detectRf measures against the six-sample limit",
-  "find": "\t\tif (int_14 == int_0c) {",
-  "replace": "\t\tif (int_14 == int_04) {"},
+  "find": "\t\tif (positiveRunLength == rfLimit) {",
+  "replace": "\t\tif (positiveRunLength == rLimit) {"},
 
  {"label": "detectRfNot picks its pattern the other way round",
-  "find": "\tif ((unsigned int)ushort_20 == (int_24 > 0 ? 0x333u : 0xcccu)) {",
-  "replace": "\tif ((unsigned int)ushort_20 == (int_24 > 0 ? 0xcccu : 0x333u)) {"},
+  "find": "\tif ((unsigned int)signBits == (polarity > 0 ? 0x333u : 0xcccu)) {",
+  "replace": "\tif ((unsigned int)signBits == (polarity > 0 ? 0xcccu : 0x333u)) {"},
 
  {"label": "detectRfNot steps its run by six",
-  "find": "\t\tint_1c += 12;",
-  "replace": "\t\tint_1c += 6;"},
+  "find": "\t\tnotRunLength += 12;",
+  "replace": "\t\tnotRunLength += 6;"},
 
  {"label": "detectRfNot measures against the twelve-sample R limit",
-  "find": "\t\tif (int_1c == int_10)",
-  "replace": "\t\tif (int_1c == int_0c)"}
+  "find": "\t\tif (notRunLength == rfNotLimit)",
+  "replace": "\t\tif (notRunLength == rfLimit)"}
 ]

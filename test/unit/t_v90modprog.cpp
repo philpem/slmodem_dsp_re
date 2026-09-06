@@ -419,7 +419,7 @@ plausible_mp(V90MP *mp, int trial)
 	mp->h2Imag = (short)(0x4567 + trial);
 	mp->h3Real = (short)(0x5678 + trial);
 	mp->h3Imag = (short)(0x6789 + trial);
-	mp->word_114 = 4u;		/* the group size; zero faults      */
+	mp->groupSize = 4u;		/* the group size; zero faults      */
 	/* The same 7105 argument as `V90CP::byte_13` above. */
 	mp->CPack = 1;
 }
@@ -2339,7 +2339,7 @@ run_edges(void)
 		 * them -- so "nothing was written" has to be said against what
 		 * was there, not against a constant.
 		 */
-		mp114_pre = MODEM(1)->mp.word_114;
+		mp114_pre = MODEM(1)->mp.groupSize;
 		cp3ba8_pre = MODEM(1)->cp.word_3ba8;
 
 		compare_graph("before the edge", 0, tag);
@@ -2484,21 +2484,21 @@ run_edges(void)
 				else
 					diff_eq_int("V.90 puts the frame size "
 						    "in the MP (%ld)",
-						    (long)MODEM(1)->mp.word_114,
+						    (long)MODEM(1)->mp.groupSize,
 						    (long)BPF_RI, tag);
 				diff_eq_int("and the event was cleared (%ld)",
 					    (long)MOD(1)->eventCode, 0, tag);
 			} else {
 				diff_eq_int("a state that is not Ri leaves "
 					    "the MP divisor (%ld)",
-					    (long)MODEM(1)->mp.word_114,
+					    (long)MODEM(1)->mp.groupSize,
 					    (long)mp114_pre, tag);
 				diff_eq_int("and the CP one (%ld)",
 					    (long)MODEM(1)->cp.word_3ba8,
 					    (long)cp3ba8_pre, tag);
 				diff_eq_int("and neither is the block's word "
 					    "(%ld)",
-					    (long)(MODEM(1)->mp.word_114
+					    (long)(MODEM(1)->mp.groupSize
 						   != BPF_RI), 1, tag);
 			}
 			break;

@@ -313,7 +313,7 @@ V90Phase4Demodulator::resetRRNDetector()
  *
  * THE LOCAL POINTER IS THE OBJECT'S, AND IT WAS MEASURED RATHER THAN
  * PREFERRED.  Written the obvious way -- `rDetector1.detectR(sample)` and
- * then `rDetector1.int_24` -- this compiles to 123 bytes with one
+ * then `rDetector1.polarity` -- this compiles to 123 bytes with one
  * callee-saved register: GCC re-derives the field address as `0x3020(%ebx)`
  * off `this` instead of keeping `&rDetector1` live across the call.  The
  * blob is 143 bytes, holds `this` in %esi and `&rDetector1` in %ebx, and
@@ -339,7 +339,7 @@ V90Phase4Demodulator::detectRRN(short sample)
 		return 0;
 
 	edprintf("V90Phase4Demodulator: Rd detected, polarity = %d\r\n",
-		 rd->int_24);
+		 rd->polarity);
 	state = P4D_STATE_RD_DETECTED;
 	countInState = 0;
 	int_0028 = 0;
@@ -433,7 +433,7 @@ V90Phase4Demodulator::trn2dKnownDemod(short)
  *     25d90:  8b 8b 20 30 ..   mov 0x3020(%ebx),%ecx   ; 0x2ffc + 0x24
  *
  * -- the detection runs on `rDetector2` at +0x3028 and the "%d" comes from
- * +0x3020, which is `rDetector1.int_24`.  `rDetector2.int_24` would be
+ * +0x3020, which is `rDetector1.polarity`.  `rDetector2.polarity` would be
  * +0x304c.  Both are `lea`/`mov` off the same base in the same 22
  * instructions, so this is not a misread of which object is which; it is a
  * copy of `detectRRN` whose second reference was not updated.  Finding F4320.
@@ -450,7 +450,7 @@ V90Phase4Demodulator::detectFPE(short sample)
 		return 0;
 
 	edprintf("V90Phase4Demodulator: Rf detected, polarity = %d\r\n",
-		 rDetector1.int_24);
+		 rDetector1.polarity);
 	edprintf("V90Phase4Demodulator: enter FPE !");
 	state = P4D_STATE_FPE;
 	countInState = 0;
@@ -603,7 +603,7 @@ V90Phase4Demodulator::getDecision(short sample)
  *
  * THE TWO ARMS THAT NAME A DETECTOR'S POLARITY HOLD A LOCAL POINTER, and
  * that is finding F4321 again rather than register allocation being chased.
- * `detectR` and then `rDetector1.int_24` written as two independent member
+ * `detectR` and then `rDetector1.polarity` written as two independent member
  * accesses makes GCC re-derive the field address off `this`; the object keeps
  * `&rDetector1` live across the call and reads `0x24(%ebx)`, which is one
  * address expression used twice.  The arms that do NOT print a polarity --
@@ -632,7 +632,7 @@ V90Phase4Demodulator::getV90Decision(short sample)
 		decision = sample;
 		if (rd->detectR(sample)) {
 			edprintf("V90Phase4Demodulator: Ri detected @ %d, "
-				 "polarity = %d\r\n", countInState, rd->int_24);
+				 "polarity = %d\r\n", countInState, rd->polarity);
 			state = P4D_STATE_WAIT_FOR_RI_NOT;
 			countInState = 0;
 			int_0028 = 0x16;
@@ -836,7 +836,7 @@ V90Phase4Demodulator::getV90Decision(short sample)
 			int_0028 = 0x2c;
 			trn2dDDLength = params->RRN_TRN2D_DD_LENGTH;
 			mp->reset();
-			mp->word_114 = mappingParams1->word_0;
+			mp->groupSize = mappingParams1->word_0;
 			demapper->resetNoSpectral(mappingParams1);
 		}
 		break;
@@ -968,7 +968,7 @@ V90Phase4Demodulator::getV90Decision(short sample)
 		demapper->incrementRBSFramePosition();
 		if (rd->detectR(sample)) {
 			edprintf("V90Phase4Demodulator: Rt detected @ %d, "
-				 "polarity = %d\r\n", countInState, rd->int_24);
+				 "polarity = %d\r\n", countInState, rd->polarity);
 			state = P4D_STATE_WAIT_FOR_RT_NOT;
 			countInState = 0;
 			int_0038 = 0;
@@ -985,7 +985,7 @@ V90Phase4Demodulator::getV90Decision(short sample)
 			enterWaitForMP();
 			int_0028 = 0x28;
 			mp->reset();
-			mp->word_114 = mappingParams1->word_0;
+			mp->groupSize = mappingParams1->word_0;
 			edprintf("V90Phase4Demodulator: No reset to demapper, "
 				 "current Phase - %d\r\n",
 				 demapper->rbsFramePosition);
@@ -1042,7 +1042,7 @@ V90Phase4Demodulator::getV92Decision(short sample)
 		decision = sample;
 		if (rd->detectR(sample)) {
 			edprintf("V90Phase4Demodulator: Ri detected @ %d, "
-				 "polarity = %d\r\n", countInState, rd->int_24);
+				 "polarity = %d\r\n", countInState, rd->polarity);
 			state = P4D_STATE_WAIT_FOR_RI_NOT;
 			countInState = 0;
 			int_0028 = 0x16;
@@ -1381,7 +1381,7 @@ V90Phase4Demodulator::getV92Decision(short sample)
 		demapper->incrementRBSFramePosition();
 		if (rd->detectR(sample)) {
 			edprintf("V90Phase4Demodulator: Rt detected @ %d, "
-				 "polarity = %d\r\n", countInState, rd->int_24);
+				 "polarity = %d\r\n", countInState, rd->polarity);
 			int_0028 = 0x27;
 			state = P4D_STATE_WAIT_FOR_RT_NOT;
 			countInState = 0;
@@ -1533,7 +1533,7 @@ V90Phase4Demodulator::reset(unsigned char code, Phase4DemodulatorState st,
 		cp->word_3ba8 = groupSize;
 	} else {
 		mp->reset();
-		mp->word_114 = mappingParams1->word_0;
+		mp->groupSize = mappingParams1->word_0;
 	}
 
 	if (mappingParams1 != 0 && autoDigitalImpDetector != 0)

@@ -614,7 +614,7 @@ public:
 	/*
 	 * +0x34fc  Modelled, unnamed, and the width is now settled: `movl`,
 	 * four bytes. `reset` writes it on the V.92 arm alone -- the same
-	 * value the V.90 arm stores into `mp->word_114` instead -- and
+	 * value the V.90 arm stores into `mp->groupSize` instead -- and
 	 * nothing else in the object reaches it.
 	 *
 	 * What the value is is bounded and not established. The same word

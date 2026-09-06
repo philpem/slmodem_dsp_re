@@ -40,7 +40,7 @@
  * blanked in a scratch copy before the object comparison, and the two objects
  * are then compared themselves.
  *
- * SHARED: the `V90MP`.  `V90MP::getBitVector` is `length = byte_118; return
+ * SHARED: the `V90MP`.  `V90MP::getBitVector` is `length = seqLength; return
  * bits;` and writes nothing, so one record keeps `mp` at +0x48 and `mpBits`
  * at +0x2f58 IN the comparison rather than blanked out of it -- and +0x2f58
  * is exactly where `exitMP`'s work lands.  Finding F1105 the useful way round.
@@ -219,8 +219,8 @@ setup(int trial, int mode, int latch, unsigned int count)
 	 * the byte at +0x118 has to stay small enough that `6 * length` does
 	 * not wrap.
 	 */
-	MPR->byte_118 = 0x24;
-	MPR->word_114 = 3u;
+	MPR->seqLength = 0x24;
+	MPR->groupSize = 3u;
 
 	fill(p4m_s[0], P4M_SLOT, lf);
 	memcpy(p4m_s[1], p4m_s[0], P4M_SLOT);

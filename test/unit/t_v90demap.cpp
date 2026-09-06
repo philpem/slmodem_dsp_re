@@ -552,9 +552,9 @@ run_rlms(void)
 		 * rather than only compared: two reconstructions that both
 		 * dropped it would agree (finding F224).
 		 */
-		diff_eq_int("uint_1ea8 (%ld)", (long)DEM(1).uint_1ea8,
+		diff_eq_int("studyLength (%ld)", (long)DEM(1).studyLength,
 			    (long)n_v[ni], trial);
-		diff_eq_int("short_1e9c (%ld)", (long)DEM(1).short_1e9c, 0,
+		diff_eq_int("completedRunCount (%ld)", (long)DEM(1).completedRunCount, 0,
 			    trial);
 		diff_eq_int("short_1ea4 (%ld)", (long)DEM(1).short_1ea4, 0,
 			    trial);
@@ -562,7 +562,7 @@ run_rlms(void)
 			    trial);
 		diff_eq_int("decisionFramePosition (%ld)",
 			    (long)DEM(1).decisionFramePosition, 0, trial);
-		diff_eq_int("uint_1eb0 (%ld)", (long)DEM(1).uint_1eb0, 0,
+		diff_eq_int("studyProgress (%ld)", (long)DEM(1).studyProgress, 0,
 			    trial);
 		/*
 		 * AND +0x1eac IS NOT ONE OF THEM.  `decisionCode` sits between
@@ -581,8 +581,8 @@ run_rlms(void)
 		 * their seed and every comparison above would still pass.
 		 */
 		if (memcmp(adi_s[1], adi_s[0], sizeof adi_s[0]) == 0 &&
-		    DEM(1).uint_1eb0 != ((V90Demapper *)dem_before[1])->
-					uint_1eb0)
+		    DEM(1).studyProgress != ((V90Demapper *)dem_before[1])->
+					studyProgress)
 			changed = 1;
 	}
 
@@ -1733,12 +1733,12 @@ run_reset(void)
 						  ->errorHistogramCount, trial);
 
 				/* The six study words, and the one between. */
-				diff_eq_int("uint_1eb0 (%ld)",
-					    (long)d->uint_1eb0, 0, trial);
-				diff_eq_int("uint_1ea8 (%ld)",
-					    (long)d->uint_1ea8, 0, trial);
-				diff_eq_int("short_1e9c (%ld)",
-					    (long)d->short_1e9c, 0, trial);
+				diff_eq_int("studyProgress (%ld)",
+					    (long)d->studyProgress, 0, trial);
+				diff_eq_int("studyLength (%ld)",
+					    (long)d->studyLength, 0, trial);
+				diff_eq_int("completedRunCount (%ld)",
+					    (long)d->completedRunCount, 0, trial);
 				diff_eq_int("short_1ea4 (%ld)",
 					    (long)d->short_1ea4, 0, trial);
 				diff_eq_int("short_1ea6 (%ld)",
@@ -1919,10 +1919,10 @@ run_lms(void)
 					    lsize_v[(xi + i) % 3];
 				DEM(s).decisionFramePosition = (short)phase;
 				DEM(s).decisionCode = (short)code_v[code];
-				DEM(s).uint_1ea8 = 4u;
-				DEM(s).uint_1eb0 = (unsigned int)
+				DEM(s).studyLength = 4u;
+				DEM(s).studyProgress = (unsigned int)
 				    (prog == 0 ? 0 : prog == 1 ? 2 : 3);
-				DEM(s).short_1e9c = (short)(xi & 1);
+				DEM(s).completedRunCount = (short)(xi & 1);
 				DEM(s).short_1ea4 = 0;
 				DEM(s).short_1ea6 = 0;
 				memcpy(dem_before[s], dem_s[s], DEM_SLOT);
@@ -1962,17 +1962,17 @@ run_lms(void)
 				 * wiped what it read.
 				 */
 				diff_eq_int("progress rewound (%ld)",
-					    (long)d->uint_1eb0, 0, trial);
+					    (long)d->studyProgress, 0, trial);
 				diff_eq_int("short_1ea4 raised (%ld)",
 					    (long)d->short_1ea4, 1, trial);
-				diff_eq_int("short_1e9c advanced (%ld)",
-					    (long)d->short_1e9c,
-					    (long)(short)(b->short_1e9c + 1),
+				diff_eq_int("completedRunCount advanced (%ld)",
+					    (long)d->completedRunCount,
+					    (long)(short)(b->completedRunCount + 1),
 					    trial);
 				diff_eq_int("short_1ea6 tracks the second run"
 					    " (%ld)",
 					    (long)d->short_1ea6,
-					    (long)(d->short_1e9c == 2 ? 1 : 0),
+					    (long)(d->completedRunCount == 2 ? 1 : 0),
 					    trial);
 				for (p = 0; p < V90ADID_PHASES; p++)
 					for (c = 0; c < V90ADID_CODES; c++)
@@ -1991,9 +1991,9 @@ run_lms(void)
 					saw_line = 1;
 			} else {
 				diff_eq_int("progress advanced (%ld)",
-					    (long)DEM(1).uint_1eb0,
+					    (long)DEM(1).studyProgress,
 					    (long)(((V90Demapper *)
-						    dem_before[1])->uint_1eb0
+						    dem_before[1])->studyProgress
 						   + 1u), trial);
 				diff_eq_int("short_1ea4 untouched (%ld)",
 					    (long)DEM(1).short_1ea4, 0, trial);

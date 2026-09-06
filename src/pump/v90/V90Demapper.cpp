@@ -120,14 +120,14 @@ DEM_OFF(errorCount,		0x1290, errcount);
 DEM_OFF(errorHistogramCount,	0x1e90, errhist);
 DEM_OFF(histogramDelay,		0x1e94, histdelay);
 DEM_OFF(histogramIntegration,	0x1e98, histint);
-DEM_OFF(short_1e9c,		0x1e9c, short1e9c);
+DEM_OFF(completedRunCount,		0x1e9c, short1e9c);
 DEM_OFF(adiDetector,		0x1ea0, adi);
 DEM_OFF(short_1ea4,		0x1ea4, short1ea4);
 DEM_OFF(short_1ea6,		0x1ea6, short1ea6);
-DEM_OFF(uint_1ea8,		0x1ea8, uint1ea8);
+DEM_OFF(studyLength,		0x1ea8, uint1ea8);
 DEM_OFF(decisionCode,		0x1eac, deccode);
 DEM_OFF(decisionFramePosition,	0x1eae, decpos);
-DEM_OFF(uint_1eb0,		0x1eb0, uint1eb0);
+DEM_OFF(studyProgress,		0x1eb0, uint1eb0);
 DEM_OFF(linearMappStudyEnabled,	0x1eb4, lmstudyenabled);
 
 /*
@@ -388,12 +388,12 @@ V90Demapper::resetLinearMappStudy(unsigned int n)
 		for (code = 0; code < V90DEMAPPER_LEVELS; code++)
 			adiDetector->clearCamulativeVal(phase, code);
 
-	uint_1eb0 = 0;
+	studyProgress = 0;
 	decisionFramePosition = 0;
 	short_1ea4 = 0;
 	short_1ea6 = 0;
-	short_1e9c = 0;
-	uint_1ea8 = n;
+	completedRunCount = 0;
+	studyLength = n;
 }
 
 /*
@@ -1004,19 +1004,19 @@ V90Demapper::reset(V90MappingParams *mapp)
 		for (code = 0; code < V90DEMAPPER_LEVELS; code++)
 			adiDetector->clearCamulativeVal(phase, code);
 
-	uint_1eb0 = 0;
+	studyProgress = 0;
 	decisionFramePosition = 0;
 	short_1ea4 = 0;
 	short_1ea6 = 0;
-	short_1e9c = 0;
-	uint_1ea8 = 0;
+	completedRunCount = 0;
+	studyLength = 0;
 	linearMappStudyEnabled = 0;
 }
 
 /*
  * `linearMappingStudy` -- 779 bytes at 0x31410, and the largest member of the
  * class after `hardDecision`.  One decided sample in, one cell of the
- * detector's running mean out, and every `uint_1ea8` calls a whole pass that
+ * detector's running mean out, and every `studyLength` calls a whole pass that
  * turns those means into the constellation and starts again.
  *
  * ITS CALLER IS `V90Equalizer::process`, which calls it at 0x3a3dd -- so the
@@ -1073,7 +1073,7 @@ V90Demapper::reset(V90MappingParams *mapp)
  * are read into the constellation BEFORE they are wiped, and the order of
  * those two is observable.
  *
- * `short_1e9c` IS NOT CLEARED HERE.  It counts completed runs and is only ever
+ * `completedRunCount` IS NOT CLEARED HERE.  It counts completed runs and is only ever
  * zeroed by `resetLinearMappStudy`, so the `== 2` test fires exactly once per
  * study and `short_1ea6` is "a second run has finished" where `short_1ea4`,
  * set unconditionally below, is "a run has finished".
@@ -1123,14 +1123,14 @@ V90Demapper::linearMappingStudy(short sample, short level)
 		adiDetector->magnitudeCount[decisionFramePosition][decisionCode]++;
 	}
 
-	if (uint_1eb0 + 1 == uint_1ea8) {
+	if (studyProgress + 1 == studyLength) {
 		short phase, code;
 
-		short_1e9c++;
-		if (short_1e9c == 2)
+		completedRunCount++;
+		if (completedRunCount == 2)
 			short_1ea6 = 1;
 
-		uint_1eb0 = 0;
+		studyProgress = 0;
 		short_1ea4 = 1;
 
 		updateConstelation();
@@ -1139,6 +1139,6 @@ V90Demapper::linearMappingStudy(short sample, short level)
 			for (code = 0; code < V90DEMAPPER_LEVELS; code++)
 				adiDetector->clearCamulativeVal(phase, code);
 	} else {
-		uint_1eb0++;
+		studyProgress++;
 	}
 }

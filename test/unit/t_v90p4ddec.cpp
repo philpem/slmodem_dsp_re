@@ -428,7 +428,7 @@ setup(int trial, int mode)
 		 * THE TWO DECODERS ARE PLANTED ONE BIT FROM AN ANSWER, and
 		 * without this neither bit loop ever produces one.  Both
 		 * answer on a run of zeros while the cursor is still at its
-		 * home 18 -- `byte_1a == 2 * word_114` for the MP record and
+		 * home 18 -- `zerosRun == 2 * groupSize` for the MP record and
 		 * `byte_caa == 2 * word_3ba8` for the CP one -- so a group
 		 * size of 1 and a run already at 1 turns the first zero bit
 		 * `Descrambler` hands over into `Ed detected` (3) for V.90 and
@@ -436,11 +436,11 @@ setup(int trial, int mode)
 		 * the cursor alone, so the condition survives the other seven
 		 * bits of the frame.
 		 */
-		MPR(s).word_14 = 0u;
-		MPR(s).byte_19 = 0;
-		MPR(s).byte_1a = 1;
-		MPR(s).byte_1b = 18;
-		MPR(s).word_114 = 1u;
+		MPR(s).rxState = 0u;
+		MPR(s).onesRun = 0;
+		MPR(s).zerosRun = 1;
+		MPR(s).bitIndex = 18;
+		MPR(s).groupSize = 1u;
 		CPR(s).word_ca4 = 0u;
 		CPR(s).byte_ca9 = 0;
 		CPR(s).byte_caa = 1;
@@ -559,12 +559,12 @@ compare_peers(long tag)
 static short
 arm_r(V90RDetector *d, int want, int limit)
 {
-	d->int_04 = limit;
-	d->int_08 = limit;
-	d->int_1c = 0;
-	d->int_14 = 0;
-	d->int_18 = 0;
-	d->int_24 = 0x33;
+	d->rLimit = limit;
+	d->rNotLimit = limit;
+	d->notRunLength = 0;
+	d->positiveRunLength = 0;
+	d->negativeRunLength = 0;
+	d->polarity = 0x33;
 
 	switch (want) {
 	/*
@@ -575,24 +575,24 @@ arm_r(V90RDetector *d, int want, int limit)
 	 * eleven mutations reading NOT CAUGHT.  Finding F4811.
 	 */
 	case 2:
-		d->int_00 = 5;
-		d->ushort_20 = 0x03;		/* 0x03 * 2 | 1 = 0x07 */
-		d->int_08 = limit;
-		d->int_1c = limit - 6;
+		d->sampleCount = 5;
+		d->signBits = 0x03;		/* 0x03 * 2 | 1 = 0x07 */
+		d->rNotLimit = limit;
+		d->notRunLength = limit - 6;
 		return 300;
 	case 1:
-		d->int_00 = 5;
-		d->ushort_20 = 0x1c;
-		d->int_14 = limit - 6;
+		d->sampleCount = 5;
+		d->signBits = 0x1c;
+		d->positiveRunLength = limit - 6;
 		return -300;
 	case -1:
-		d->int_00 = 5;
-		d->ushort_20 = 0x03;
-		d->int_18 = limit - 6;
+		d->sampleCount = 5;
+		d->signBits = 0x03;
+		d->negativeRunLength = limit - 6;
 		return 300;
 	default:
-		d->int_00 = 2;
-		d->ushort_20 = 0x1c;
+		d->sampleCount = 2;
+		d->signBits = 0x1c;
 		return 300;
 	}
 }
@@ -600,34 +600,34 @@ arm_r(V90RDetector *d, int want, int limit)
 static short
 arm_rf(V90RDetector *d, int want, int limit)
 {
-	d->int_0c = limit;
-	d->int_10 = limit;
-	d->int_1c = 0;
-	d->int_14 = 0;
-	d->int_18 = 0;
-	d->int_24 = 0x44;
+	d->rfLimit = limit;
+	d->rfNotLimit = limit;
+	d->notRunLength = 0;
+	d->positiveRunLength = 0;
+	d->negativeRunLength = 0;
+	d->polarity = 0x44;
 
 	switch (want) {
 	/* And `detectRfNot`: twelve to the group, +0x10, and 0x333. */
 	case 2:
-		d->int_00 = 11;
-		d->ushort_20 = 0x199;		/* 0x199 * 2 | 1 = 0x333 */
-		d->int_10 = limit;
-		d->int_1c = limit - 12;
+		d->sampleCount = 11;
+		d->signBits = 0x199;		/* 0x199 * 2 | 1 = 0x333 */
+		d->rfNotLimit = limit;
+		d->notRunLength = limit - 12;
 		return 300;
 	case 1:
-		d->int_00 = 11;
-		d->ushort_20 = 0x666;
-		d->int_14 = limit - 12;
+		d->sampleCount = 11;
+		d->signBits = 0x666;
+		d->positiveRunLength = limit - 12;
 		return -300;
 	case -1:
-		d->int_00 = 11;
-		d->ushort_20 = 0x199;
-		d->int_18 = limit - 12;
+		d->sampleCount = 11;
+		d->signBits = 0x199;
+		d->negativeRunLength = limit - 12;
 		return 300;
 	default:
-		d->int_00 = 4;
-		d->ushort_20 = 0x666;
+		d->sampleCount = 4;
+		d->signBits = 0x666;
 		return 300;
 	}
 }
@@ -1486,13 +1486,13 @@ run_p4d_reset(void)
 		 * the counter below is the denominator for.
 		 */
 		diff_eq_int("the two detectors took the same first argument "
-			    "(%ld)", (long)P4D(1).rDetector1.int_04,
-			    (long)P4D(1).rDetector2.int_04, trial);
+			    "(%ld)", (long)P4D(1).rDetector1.rLimit,
+			    (long)P4D(1).rDetector2.rLimit, trial);
 		diff_eq_int("the first detector took the literal 0x18 (%ld)",
-			    (long)P4D(1).rDetector1.int_08, 0x18L, trial);
+			    (long)P4D(1).rDetector1.rNotLimit, 0x18L, trial);
 		diff_eq_int("the second detector took the literal 0x18 (%ld)",
-			    (long)P4D(1).rDetector2.int_08, 0x18L, trial);
-		if (P4D(1).rDetector1.int_04 != 0x18)
+			    (long)P4D(1).rDetector2.rNotLimit, 0x18L, trial);
+		if (P4D(1).rDetector1.rLimit != 0x18)
 			rlen++;
 
 		/*
@@ -1514,7 +1514,7 @@ run_p4d_reset(void)
 				    (long)(0xc1c1c100u + (unsigned int)trial),
 				    trial);
 			diff_eq_int("the MP took the group size (%ld)",
-				    (long)MPR(1).word_114,
+				    (long)MPR(1).groupSize,
 				    (long)MAPP1->word_0, trial);
 			if (memcmp(mp_pre, mp_s[1], MP_SLOT) != 0)
 				mparm++;

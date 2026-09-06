@@ -50,13 +50,13 @@
  },
  {
   "label": "exitMP: the MP sequence is not re-derived",
-  "find": "\t\t} else {\n\t\t\tedprintf(\"V90Phase4Modulator: enter MPNot @ %d\\r\\n\",\n\t\t\t\t symbolCount);\n\t\t\tstate = P4M_STATE_MP_NOT;\n\t\t\tsymbolCount = 0;\n\t\t\tmpBits = mp->getBitVector(mpBitCount);\n\t\t\tmpSequenceSymbols = 6 * mpBitCount / mp->word_114;",
+  "find": "\t\t} else {\n\t\t\tedprintf(\"V90Phase4Modulator: enter MPNot @ %d\\r\\n\",\n\t\t\t\t symbolCount);\n\t\t\tstate = P4M_STATE_MP_NOT;\n\t\t\tsymbolCount = 0;\n\t\t\tmpBits = mp->getBitVector(mpBitCount);\n\t\t\tmpSequenceSymbols = 6 * mpBitCount / mp->groupSize;",
   "replace": "\t\t} else {\n\t\t\tedprintf(\"V90Phase4Modulator: enter MPNot @ %d\\r\\n\",\n\t\t\t\t symbolCount);\n\t\t\tstate = P4M_STATE_MP_NOT;\n\t\t\tsymbolCount = 0;\n\t\t\tmpBits = mp->getBitVector(mpBitCount);"
  },
  {
   "label": "exitMP: the sequence length is bits, not symbols",
-  "find": "\t\t} else {\n\t\t\tedprintf(\"V90Phase4Modulator: enter MPNot @ %d\\r\\n\",\n\t\t\t\t symbolCount);\n\t\t\tstate = P4M_STATE_MP_NOT;\n\t\t\tsymbolCount = 0;\n\t\t\tmpBits = mp->getBitVector(mpBitCount);\n\t\t\tmpSequenceSymbols = 6 * mpBitCount / mp->word_114;",
-  "replace": "\t\t} else {\n\t\t\tedprintf(\"V90Phase4Modulator: enter MPNot @ %d\\r\\n\",\n\t\t\t\t symbolCount);\n\t\t\tstate = P4M_STATE_MP_NOT;\n\t\t\tsymbolCount = 0;\n\t\t\tmpBits = mp->getBitVector(mpBitCount);\n\t\t\tmpSequenceSymbols = mpBitCount / mp->word_114;"
+  "find": "\t\t} else {\n\t\t\tedprintf(\"V90Phase4Modulator: enter MPNot @ %d\\r\\n\",\n\t\t\t\t symbolCount);\n\t\t\tstate = P4M_STATE_MP_NOT;\n\t\t\tsymbolCount = 0;\n\t\t\tmpBits = mp->getBitVector(mpBitCount);\n\t\t\tmpSequenceSymbols = 6 * mpBitCount / mp->groupSize;",
+  "replace": "\t\t} else {\n\t\t\tedprintf(\"V90Phase4Modulator: enter MPNot @ %d\\r\\n\",\n\t\t\t\t symbolCount);\n\t\t\tstate = P4M_STATE_MP_NOT;\n\t\t\tsymbolCount = 0;\n\t\t\tmpBits = mp->getBitVector(mpBitCount);\n\t\t\tmpSequenceSymbols = mpBitCount / mp->groupSize;"
  },
  {
   "label": "exitMP: it hands on to Ed rather than MPNot",

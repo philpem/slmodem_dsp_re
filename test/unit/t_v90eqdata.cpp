@@ -507,7 +507,7 @@ run_enterdataphase(void)
 					    "(%ld)",
 					    (long)((V90Phase4Demodulator *)
 						   edp_p4d[1])->rDetector2
-						  .int_04, 0xb4, tag);
+						  .rLimit, 0xb4, tag);
 
 				if (mmxin) {
 					saw_mmxin = 1;
