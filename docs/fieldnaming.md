@@ -1659,7 +1659,12 @@ failed** -- the identical count to every prior wave's own gate (wave 6's
 own entry above records the same 374), confirming this wave added zero
 new period-tier tests (expected of a pure rename) and regressed none.
 Launched under `nohup`, polled to completion via `pgrep` rather than
-assumed from a tail.
+assumed from a tail. **`make byteident-ratchet`: 736/1852 EXACT (39.7%),
+796/1852 grade 0-or-1 (43.0%), ratchet OK** -- bit-for-bit the same floor
+every prior wave in this ledger already established, across nine more
+real field renames. This is the seventh wave confirming "a pure rename
+cannot move codegen" empirically rather than only by argument.
+
 ## Wave 7 -- third cluster, V.90 receive-path helpers (F10181)
 
 Launched 2026-09-06 over six files with zero or one prior mention in
