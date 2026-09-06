@@ -1155,14 +1155,74 @@ const signed char MMinTable[32] = {
  * The initialisers, and the four bit callbacks they install.
  *
  * These take a pointer to the shell's own fields rather than to the object --
- * see V34_SHELL_FIELDS in v34shell.h -- so each starts by winding it back to
- * the struct the rest of this file works in.  The two spellings meet here and
- * nowhere else.
+ * see V34_SHELL_FIELDS in v34shell.h.
+ *
+ * THIS USED TO SAY THEY WIND THAT POINTER BACK TO A struct v34_shell, AND
+ * THAT WAS WRONG (finding pending).  `demapFrame`, `getFrame` and `putFrame`
+ * take the OBJECT pointer and address every field of struct v34_shell at
+ * its documented, object-relative offset -- `putFrame`'s own disassembly
+ * reads `0xa14(%ebp)`, `0xe48(%ebp)`, `0xa00(%ebp)`, all large.  These four
+ * are never handed that pointer; they are handed one already AT +0xa00 --
+ * V34_SHELL_FIELDS names the distance from the object, but these functions
+ * never apply it themselves -- and the object's own code addresses every
+ * field they touch with a SMALL displacement from THAT pointer directly:
+ * `initV34`'s prologue stores through `(%ecx)`, `0x24(%ecx)`, never through
+ * a materialised `fields - 0xa00`.  Winding back to struct v34_shell and
+ * re-adding the field's absolute offset reaches the same byte -- so this
+ * passed every differential test -- but costs a `sub $0xa00,%reg` plus a
+ * 32-bit displacement per access where the object's own compile needed
+ * neither.  struct v34_shell_fields below is that same layout with the
+ * leading V34_SHELL_FIELDS bytes removed, so nothing here ever has occasion
+ * to materialise the subtraction.
  */
-static struct v34_shell *
+
+/*
+ * struct v34_shell's own fields, from `span` (+0xa00 there) onward, counted
+ * from THEIR OWN start instead of from the enclosing object.  Not an
+ * independent claim about layout -- every offset here is pinned to struct
+ * v34_shell's, at the bottom of this file -- only about which pointer the
+ * displacement is counted from.
+ */
+struct v34_shell_fields {
+	short		span;			/* +0x000 */
+	short		subframe_limit;		/* +0x002 */
+	short		group_count;		/* +0x004 */
+	short		remainder;		/* +0x006 */
+	short		wide_accum;		/* +0x008 */
+	short		short_a0a;		/* +0x00a */
+	unsigned char	pad_00c[0x00e - 0x00c];
+	short		wide_bits;		/* +0x00e */
+	short		wide_bits_alt;		/* +0x010 */
+	short		count;			/* +0x012 */
+	short		idx_width;		/* +0x014 */
+	short		feedback_mask;		/* +0x016 */
+	short		hist[6];		/* +0x018 */
+	const short *	coeff;			/* +0x024 */
+	const short *	conv;			/* +0x028 */
+	short		conv_sr[6];		/* +0x02c */
+	short		prev_k;			/* +0x038 */
+	short		invert;			/* +0x03a */
+	short		subframe_count;		/* +0x03c */
+	short		frame_count;		/* +0x03e */
+	short		frame_limit;		/* +0x040 */
+	short		divisor;		/* +0x042 */
+	short		cost_shift;		/* +0x044 */
+	short		wrap;			/* +0x046 */
+	short		t1[0x80];		/* +0x048 */
+	short		t2[0x80];		/* +0x148 */
+	int		t3[0x80];		/* +0x248 */
+	union {
+		v34_putbits_fn	put_bits;
+		v34_getbits_fn	get_bits;
+		v34_scramble_fn	scramble;
+	};					/* +0x448 */
+	short		latched;		/* +0x44c */
+};
+
+static struct v34_shell_fields *
 shell_of(void *fields)
 {
-	return (struct v34_shell *)((char *)fields - V34_SHELL_FIELDS);
+	return (struct v34_shell_fields *)fields;
 }
 
 /*
@@ -1214,7 +1274,7 @@ scaleVector(short *v, short scale)
 void
 preinitV34(void *fields)
 {
-	struct v34_shell *s = shell_of(fields);
+	struct v34_shell_fields *s = shell_of(fields);
 	short i;
 
 	for (i = 0; i <= 0x7f; i++) {
@@ -1256,7 +1316,7 @@ preinitV34(void *fields)
 void
 initG248(void *fields)
 {
-	struct v34_shell *s = shell_of(fields);
+	struct v34_shell_fields *s = shell_of(fields);
 	unsigned n = (unsigned short)s->count;
 	unsigned top = 2 * (n - 1);
 	unsigned i, j, k, cursor, len;
@@ -1310,8 +1370,8 @@ int
 initV34(void *fields, short baud, short bitrate, short use_max,
 	short depth, const short *coeff, short divisor)
 {
-	struct v34_shell *s = shell_of(fields);
-	unsigned rate = (unsigned short)baud;
+	struct v34_shell_fields *s = shell_of(fields);
+	unsigned short rate = (unsigned short)baud;
 	unsigned group = (unsigned short)(7 + (rate == 0xab7 || rate == 0xd65));
 	unsigned span, q, m, u, idx, w;
 	unsigned i, j, k, n, top, cursor, len;
@@ -2251,6 +2311,52 @@ V34SH_ASSERT(state, 0x12cc);
 V34SH_ASSERT(state_idx, 0x144c);
 V34SH_ASSERT(scr, 0xe74);
 V34SH_ASSERT(rx_bitpos, 0xe80);
+
+/*
+ * struct v34_shell_fields (above shell_of()) is struct v34_shell's own
+ * fields, counted from their own start -- so every one of its offsets must
+ * equal the matching struct v34_shell offset minus V34_SHELL_FIELDS.  Not an
+ * independent layout; a corroboration.
+ */
+#define V34SHF_ASSERT(field, shfield) \
+	typedef char v34shf_off_##field[ \
+		((int)__builtin_offsetof(struct v34_shell_fields, field) \
+		 == (int)__builtin_offsetof(struct v34_shell, shfield) \
+			 - V34_SHELL_FIELDS) \
+		? 1 : -1]
+
+V34SHF_ASSERT(span, span);
+V34SHF_ASSERT(subframe_limit, subframe_limit);
+V34SHF_ASSERT(group_count, group_count);
+V34SHF_ASSERT(remainder, remainder);
+V34SHF_ASSERT(wide_accum, wide_accum);
+V34SHF_ASSERT(short_a0a, short_a0a);
+V34SHF_ASSERT(wide_bits, wide_bits);
+V34SHF_ASSERT(wide_bits_alt, wide_bits_alt);
+V34SHF_ASSERT(count, count);
+V34SHF_ASSERT(idx_width, idx_width);
+V34SHF_ASSERT(feedback_mask, feedback_mask);
+V34SHF_ASSERT(hist, hist);
+V34SHF_ASSERT(coeff, coeff);
+V34SHF_ASSERT(conv, conv);
+V34SHF_ASSERT(conv_sr, conv_sr);
+V34SHF_ASSERT(prev_k, prev_k);
+V34SHF_ASSERT(invert, invert);
+V34SHF_ASSERT(subframe_count, subframe_count);
+V34SHF_ASSERT(frame_count, frame_count);
+V34SHF_ASSERT(frame_limit, frame_limit);
+V34SHF_ASSERT(divisor, divisor);
+V34SHF_ASSERT(cost_shift, cost_shift);
+V34SHF_ASSERT(wrap, wrap);
+V34SHF_ASSERT(t1, t1);
+V34SHF_ASSERT(t2, t2);
+V34SHF_ASSERT(t3, t3);
+V34SHF_ASSERT(put_bits, put_bits);
+V34SHF_ASSERT(latched, latched);
+
+typedef char v34shf_size[(sizeof(struct v34_shell_fields)
+			  <= sizeof(struct v34_shell) - V34_SHELL_FIELDS)
+			 ? 1 : -1];
 
 /*
  * And the object's, which preinitdigital and the two data buffers pin.

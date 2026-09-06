@@ -554,13 +554,13 @@ rxinit(void *objp)
 	rx->agc_level = 0;
 	rx->cloop_sin = 0;
 
-	if (rx->flags & V34_RX_FLAG_LATE_TRN) {
-		rx->cloop_p_shift = 2;
-		rx->cloop_i_shift = 10;		/* and cloop_integrator is left alone */
-	} else {
+	if (!(rx->flags & V34_RX_FLAG_LATE_TRN)) {
 		rx->cloop_integrator = 0;
 		rx->cloop_p_shift = 2;
 		rx->cloop_i_shift = 8;
+	} else {
+		rx->cloop_p_shift = 2;
+		rx->cloop_i_shift = 10;	/* and cloop_integrator is left alone */
 	}
 
 	rx->rtncount = 0;   rx->err_symcount = 0;  rx->cloop_phase_hi = 0;  rx->equerr = 0;

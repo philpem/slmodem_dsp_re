@@ -1000,18 +1000,22 @@ void
 dftnlinitSignalBins(struct v34_dftbin *bins)
 {
 	short i;
+	struct v34_dftbin *p;
 
 	/*
 	 * `inc` is cleared in the loop and then written again below.  That is
 	 * the object's -- the loop zeroes all four fields uniformly and the
 	 * frequencies are assigned afterwards -- and folding the two would
 	 * lose the fact that the loop is the same loop as the noise bank's.
+	 * Walked as a pointer, not indexed: the object holds a plain
+	 * `add $0x2c,%edx` cursor over the loop rather than a
+	 * base-plus-index address at each field.
 	 */
-	for (i = 0; i <= 3; i++) {
-		bins[i].phase = 0;
-		bins[i].inc = 0;
-		bins[i].acc_re = 0;
-		bins[i].acc_im = 0;
+	for (i = 0, p = bins; i <= 3; i++, p++) {
+		p->phase = 0;
+		p->inc = 0;
+		p->acc_re = 0;
+		p->acc_im = 0;
 	}
 
 	bins[0].inc = DFT_BIN(7);
@@ -1028,12 +1032,13 @@ void
 dftnlinitNoiseBins(struct v34_dftbin *bins)
 {
 	short i;
+	struct v34_dftbin *p;
 
-	for (i = 0; i <= 3; i++) {
-		bins[i].phase = 0;
-		bins[i].inc = 0;
-		bins[i].acc_re = 0;
-		bins[i].acc_im = 0;
+	for (i = 0, p = bins; i <= 3; i++, p++) {
+		p->phase = 0;
+		p->inc = 0;
+		p->acc_re = 0;
+		p->acc_im = 0;
 	}
 
 	bins[0].inc = DFT_BIN(6);

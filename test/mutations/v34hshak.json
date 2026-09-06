@@ -242,8 +242,8 @@
  },
  {
   "label": "the signal bank clears three bins",
-  "find": "\t */\n\tfor (i = 0; i <= 3; i++) {",
-  "replace": "\t */\n\tfor (i = 0; i <= 2; i++) {",
+  "find": "\t * base-plus-index address at each field.\n\t */\n\tfor (i = 0, p = bins; i <= 3; i++, p++) {",
+  "replace": "\t * base-plus-index address at each field.\n\t */\n\tfor (i = 0, p = bins; i <= 2; i++, p++) {",
   "fn": "dftnlinitSignalBins"
  },
  {
@@ -254,8 +254,8 @@
  },
  {
   "label": "the noise bank clears three bins",
-  "find": "\tshort i;\n\n\tfor (i = 0; i <= 3; i++) {",
-  "replace": "\tshort i;\n\n\tfor (i = 0; i <= 2; i++) {",
+  "find": "\tshort i;\n\tstruct v34_dftbin *p;\n\n\tfor (i = 0, p = bins; i <= 3; i++, p++) {",
+  "replace": "\tshort i;\n\tstruct v34_dftbin *p;\n\n\tfor (i = 0, p = bins; i <= 2; i++, p++) {",
   "fn": "dftnlinitNoiseBins"
  },
  {
