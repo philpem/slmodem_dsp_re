@@ -44,7 +44,9 @@ struct tagV90DILdescriptor;
  * the same spelling include/dsplib/V90Equalizer.h uses for
  * `V90ComputationalMode` and for the same reason. The mangling records the
  * enum's name and nothing about its enumerators, so naming them would put a
- * guess into the record.
+ * guess into the record where the mangling is the only evidence available --
+ * which is true of `V92ComputationalMode` (nothing in the object reads it)
+ * but NOT of `V92ModemSide`: see below.
  *
  * `V92ModemSide`'s underlying type is `unsigned int`, measured rather than
  * assumed: the destructor's range test (`cmpl $0x1,0xaa8(%esi); jbe`) is
@@ -59,23 +61,32 @@ struct tagV90DILdescriptor;
  * declaration, since a fixed base is C++11 and the author's compiler was
  * C++98 (docs/method/compilers.md, V2); the pin is ours; the object names no
  * enumerator.
+ *
+ * `V92_MODEM_SIDE_DIGITAL`/`V92_MODEM_SIDE_ANALOG` ARE REAL ENUMERATORS,
+ * not macros outside the enum -- unlike `V92ComputationalMode` just above,
+ * this one has evidence beyond the mangling: the constructor's own
+ * diagnostic string, `test %ebx,%ebx` then "Digital" when zero and "Analog"
+ * otherwise at .text+0x13d64, into "V92Modem Construction (as %s Modem)".
+ * CLAUDE.md's strongest evidence tier applies here, so filling the
+ * enumerators in is naming a value the object itself prints, not inventing
+ * one -- the same reasoning V90Modem.h now uses for its own twin enum.
  */
-enum V92ModemSide { V92ModemSide_BASE_PIN = 0xffffffffu };
+enum V92ModemSide {
+	V92_MODEM_SIDE_DIGITAL = 0,
+	V92_MODEM_SIDE_ANALOG = 1,
+	V92ModemSide_BASE_PIN = 0xffffffffu
+};
 enum V92ComputationalMode { V92ComputationalMode_BASE_PIN = -0x7fffffff - 1 };
 
 typedef char v92modem_side_is_unsigned[
     ((enum V92ModemSide)-1 > (enum V92ModemSide)0) ? 1 : -1];
 
 /*
- * The two the object names, from the string the constructor selects at
- * .text+0x13d64: `test %ebx,%ebx` then "Digital" when zero and "Analog"
- * otherwise, into "V92Modem Construction (as %s Modem)".  The switch that
- * follows gives the same pair their meaning -- the ANALOG side is the one
- * that builds a `V92Modulator`, which is V.92 upstream PCM: the analog client
- * is the transmitter.  Anything else is the "Illegal modemSide" arm.
+ * The switch in the constructor gives the pair their meaning -- the ANALOG
+ * side is the one that builds a `V92Modulator`, which is V.92 upstream PCM:
+ * the analog client is the transmitter.  Anything else is the "Illegal
+ * modemSide" arm.
  */
-#define V92_MODEM_SIDE_DIGITAL	0
-#define V92_MODEM_SIDE_ANALOG	1
 
 /*
  * The span between +0x00c and +0xa9c is the class's embedded `V92Ja`,

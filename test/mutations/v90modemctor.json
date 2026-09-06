@@ -132,7 +132,7 @@
   },
   {
     "label": "dtor: the illegal-side test is `> 2` and not `> 1`",
-    "find": "\tif (side > 1) {",
+    "find": "\tif (side > V90_MODEM_SIDE_ANALOG) {",
     "replace": "\tif (side > 2) {"
   },
   {

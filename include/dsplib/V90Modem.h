@@ -112,26 +112,33 @@ struct tagV90DILdescriptor;
  * `V92ModemSide` at the same shape in the sibling class (finding F1332).
  * `_BASE_PIN` is ours; the object names no enumerator.
  *
+ * `V90_MODEM_SIDE_DIGITAL`/`V90_MODEM_SIDE_ANALOG` ARE REAL ENUMERATORS,
+ * not macros outside the enum, unlike `V90ComputationalMode` below and the
+ * other opaque enums this tree declines to fill in (`PreFilterCoefType`,
+ * `__tHardwareCodecTypes__`): those are genuinely unnamed because the
+ * mangling is the ONLY evidence and it carries no enumerator, so a name
+ * there would be invented. Here the mangling is not the evidence -- the
+ * constructor's own diagnostic string is: `modemSide == 0 ? "Digital" :
+ * "Analog"` at .text+0x19514, corroborated independently by the two
+ * strings' own `.rodata.str1.1` order (V90ModemCtor.cpp), CLAUDE.md's
+ * strongest evidence tier. Naming a real value the object itself prints is
+ * not the same act as naming one it doesn't, so the two enums are handled
+ * differently even though both started from the same C++98-vs-mangling
+ * constraint.
+ *
  * `V90ComputationalMode` has one home only, in V90Equalizer.h, which this
  * file now includes: C++98 has no opaque enum declaration, so a definition
  * may not be repeated in a second header the way an earlier version of
  * this file did (docs/method/compilers.md, V2).
  */
-enum V90ModemSide { V90ModemSide_BASE_PIN = 0xffffffffu };
+enum V90ModemSide {
+	V90_MODEM_SIDE_DIGITAL = 0,
+	V90_MODEM_SIDE_ANALOG = 1,
+	V90ModemSide_BASE_PIN = 0xffffffffu
+};
 
 typedef char v90modem_side_is_unsigned[
     ((enum V90ModemSide)-1 > (enum V90ModemSide)0) ? 1 : -1];
-
-/*
- * The two values the code distinguishes, spelled as macros for V92Modem.h's
- * reason: an enumerator would be a name, and the mangling carries none. 0
- * builds the modulator and prints "Digital"; 1 builds the demodulator and
- * prints "Analog". Which of these `vpcm_create` reaches is settled
- * elsewhere -- it passes a literal 0 to `VPCMXF_Create`, which inverts it, so
- * the shipped side is always analog (findings F701, F702).
- */
-#define V90_MODEM_SIDE_DIGITAL	0
-#define V90_MODEM_SIDE_ANALOG	1
 
 /*
  * `tagV90AdditionalCPinfo`, embedded at +0xcb8, 0x18 bytes -- the mangling

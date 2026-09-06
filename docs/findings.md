@@ -118110,3 +118110,101 @@ mutation anchors, `docs/fieldnaming.md` cross-references or types were
 touched by this finding. Closes item 4 of the 2026-09-06 field-naming
 exploration list (`.claude/nextsteps-fieldnaming.md`).
 (2026-09-06)
+
+## F10187. `V90ModemSide`/`V92ModemSide`: the `_BASE_PIN`-only-enum pattern
+fixed where it was actually wrong, and left alone everywhere else it looked
+the same
+
+User's observation (2026-09-06): `V90Modem.h`'s `V90ModemSide` was an enum
+containing only the `_BASE_PIN` type-pinning sentinel, with its two real
+values (`V90_MODEM_SIDE_DIGITAL`/`_ANALOG`) spelled as external `#define`s
+instead of enumerators -- so a `switch (side)` case-labelled with the
+macros doesn't read as covering the enum, and every reader comparing
+`side` against the macro is comparing an enum-typed value to a bare `int`.
+The ask was to move real, established values inside the enum and use them
+by name at every use site, where that is actually correct to do.
+
+**It is not correct everywhere the `_BASE_PIN`-only shape appears, and
+the difference matters.** All eleven files using the pin trick were
+triaged (`V90CodecType.h`, `V90ConstellationPower.h`, `V90Equalizer.h`,
+`V90Modem.h`, `V90Phase3Demodulator.h`, `V90Phase4Demodulator.h`,
+`V90Phase4Modulator.h`, `V90PreFilter.h`, `V90SpectralConditions.h`,
+`V92EchoCanceller.h`, `V92Modem.h`):
+
+- **Six already have real enumerators alongside the pin** and needed no
+  change: `V90ConstellationPower.h`, `V90Phase3Demodulator.h`,
+  `V90Phase4Demodulator.h`, `V90Phase4Modulator.h`,
+  `V90SpectralConditions.h`, `V92EchoCanceller.h`. Their other `#define`s
+  (`V90CP_CONSTELLATIONS`, `V90P4M_BITS`, etc.) are array sizes and
+  byte-layout constants, not enum values -- nothing left duplicated
+  outside the enum.
+- **Two have no external `#define` at all to move in**, and their own
+  header comments already explain why the enum is genuinely empty:
+  `V90CodecType.h`'s `__tHardwareCodecTypes__` ("naming a real enumerator
+  would record a guess" -- the mangling is the only evidence, and it
+  names no value) and `V90PreFilter.h`'s `PreFilterCoefType` (three
+  values ARE known from `setFilter`'s dispatch, 1/2/3, but "what the
+  author called it is not [known], and an invented name would be believed
+  by every later reader with no test able to catch it wrong" -- so the
+  file already, correctly, leaves the case labels as plain integers).
+- **One (`V90Equalizer.h`'s `V90ComputationalMode`) has a `#define`
+  (`V90EQU_COMP_MODE_1`) but it is not a real name either** -- the
+  header's own comment: "what 1 is called is not established here", and
+  `V92Modem.h`'s twin `V92ComputationalMode` has no evidence at all
+  ("nothing in the object reads it"). Moving either into the enum would
+  manufacture the appearance of a confirmed value where none exists --
+  exactly the class of error CLAUDE.md's naming rule warns against, just
+  applied to a value instead of a field. Left alone, same as the two
+  above.
+- **Two -- `V90Modem.h`'s `V90ModemSide` and `V92Modem.h`'s
+  `V92ModemSide` -- are the genuine target**, and unlike every declined
+  case above, BOTH have format-string evidence, CLAUDE.md's strongest
+  evidence tier, already cited in their own file comments before this
+  finding: `V90ModemCtor.cpp`'s constructor prints `modemSide == 0 ?
+  "Digital" : "Analog"` at `.text+0x19514` (independently corroborated by
+  the two strings' own `.rodata.str1.1` order, eight bytes apart, in the
+  order a compiler emits them for source written in that order), and
+  `V92Modem.cpp`'s constructor does the same at `.text+0x13d64`. Naming a
+  value the object itself prints in its own diagnostic output is not the
+  same act as inventing one, so these two get filled in and the other
+  nine do not.
+
+**What changed.** `V90ModemSide`/`V92ModemSide` now declare
+`V90_MODEM_SIDE_DIGITAL = 0`/`V90_MODEM_SIDE_ANALOG = 1` (and the V92
+twins) as real enumerators alongside their `_BASE_PIN`, with the old
+`#define`s removed -- the identifier spelling is unchanged, so every
+existing use site (`case V90_MODEM_SIDE_ANALOG:`, `side ==
+V92_MODEM_SIDE_DIGITAL`, etc., across `V90Modem.cpp`, `V90ModemCtor.cpp`,
+`V92Modem.cpp`, `VPcmFloModemCtor.cpp` and their mutation-anchor JSON)
+needed no text change at all. One bare-literal site DID need the
+by-name treatment the user asked for: `V90ModemCtor.cpp`'s destructor
+range guard, `if (side > 1)`, became `if (side >
+V90_MODEM_SIDE_ANALOG)` (its V92 twin in `V92Modem.cpp` already used
+the named form). `test/mutations/v90modemctor.json`'s matching anchor
+(`"dtor: the illegal-side test is \`> 2\` and not \`> 1\`"`) had its
+`find` text updated to match; the `replace` text and the label are
+unchanged, since the mutation itself (threshold 1 -> 2) is unchanged.
+
+**Why this is free.** An enumerator and a `#define` of the same integer
+value are both compile-time substitutions; a `switch`/`==` against either
+compiles to the identical comparison instruction (CLAUDE.md's naming
+rule: "cannot move code generation"). The only observable effect is that
+GCC's `-Wswitch` exhaustiveness check now recognizes both `switch
+(side)`/`switch (modemSide)` statements as covering their enum's real
+values -- the pre-existing "case value not in enumerated type" warnings
+on both switches (visible in `make check64` before this change) are gone
+after it, with no other warning change.
+
+**Verification.** `make one` on `t_v90modemctor`, `t_v90modprog`,
+`t_v92modem`, `t_vpcmctor`, `t_vpcmqcline` (the five suites touching
+either enum or the rewritten guard) -- all exit 0, no check count
+regressed. `tools/onedef.py` (301 types, 1 known duplicate),
+`tools/refcheck.py` (13591 references, 0 dangling) and
+`tools/anchorcheck.py` (228 suites, 9767 mutations, 0 anchor problems)
+all clean. `make check64` clean, and confirmed the two `-Wswitch`
+warnings this change targets are gone (`grep -c` for both patterns: 0).
+Real `make period`: 374 passed, 0 failed, unchanged. Real `make
+byteident-ratchet`: 736/1852 grade-0 EXACT (39.7%), 796/1852 grade-0-or-1
+(43.0%), ratchet OK -- byte-for-byte unchanged, as the "free" argument
+above predicts. Closes item 5 of the 2026-09-06 field-naming exploration
+list. (2026-09-06)

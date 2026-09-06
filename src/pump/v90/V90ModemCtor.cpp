@@ -326,7 +326,7 @@ V90Modem::~V90Modem()
 	 * `cmpl $0x1,0x49bc(%esi); jbe` -- UNSIGNED, which is why
 	 * `V90ModemSide` has an `unsigned int` base.  See V90Modem.h.
 	 */
-	if (side > 1) {
+	if (side > V90_MODEM_SIDE_ANALOG) {
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf(
 			    "V90Modem Destructor: Illegal modemSide\r\n");
