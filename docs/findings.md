@@ -119654,3 +119654,34 @@ check64`, `tools/onedef.py` (1 known duplicate, unchanged,
 `V90Phase4Demodulator`), `tools/refcheck.py` (13689 references, 0
 dangling), `tools/anchorcheck.py` (228 suites, 9767 mutations, 0 issues)
 all clean.
+
+## F10201. The live V.8 mutation sweep is complete: all nine suites, 95 mutations, 95 caught, no gaps or equivalence claims
+
+F10198 explicitly left V.8 out of its V.34/V.32/V.22 sweep and named it as
+the next open data-mode scope. All nine suites in `test/mutations/suites.json`
+whose source is under `src/v8/` were therefore run live rather than inferred
+from the stale snapshot: `v8agc`, `v8dp`, `v8handshak`, `v8hs`, `v8hsrx`,
+`v8jm`, `v8proc`, `v8seq` and `v8sig`.
+
+The result is exhaustive for the registered V.8 surface: respectively
+5 + 4 + 5 + 7 + 11 + 29 + 17 + 9 + 8 = **95 mutations**, every one caught
+by its test binary. There are **0 NOT caught, 0 unusable, 0 equivalent and
+0 miscounted** across the scope. No mutation needed reclassification and no
+new fixture was required. This is a useful negative result: unlike F10198's
+V.34 receiver-count boundary and F10199's V.90/VPCM follow-ups, the stale V.8
+records concealed no live gap.
+
+The nine entries in `test/mutations/snapshot.json` were refreshed after the
+live runs. Their verdict maps and summaries are unchanged; only their keys
+moved, as expected after F10197's `v8dp.h`/`v8proc.c` field-name consolidation
+changed source text without behaviour. No `src/`, test or mutation-definition
+file changed in this pass.
+
+**Verification.** All nine `tools/mutate.py --suite ... --jobs 3` runs exited
+zero with the totals above. `make one T=t_v8sig` is green, including the full
+V.8 signal-path trace and its 16 groups; the other suite baselines also ran
+green as part of `mutate.py`, which refuses to score a non-green baseline.
+`tools/refcheck.py` and `tools/anchorcheck.py` remain clean through the normal
+`make one` preflight. Since this pass changes only the recorded mutation
+snapshot and documentation, it cannot alter generated code or period-tier
+behaviour. (2026-09-06)

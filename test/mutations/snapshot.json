@@ -5003,7 +5003,7 @@
    }
   },
   "v8agc": {
-   "key": "31e8b6afc8ac56cfbec104f4e78afd96bdda9f400edda80ed31c8048747809d8",
+   "key": "73c6fd8e8fde6a73b81d6ab0872ad56ab1ab3b3b1ac4a97d5786cd22e4436732",
    "summary": "5 mutations: 5 caught (5 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "drop the look-for-ANSam-again announcement": "caught",
@@ -5014,7 +5014,7 @@
    }
   },
   "v8dp": {
-   "key": "8a907ee313685193af42fcb72cfc0ca331673f87815f31850fb7ec9e5d276eab",
+   "key": "13eb0cca1d37c46e449d643719fb9829df74ea0c6be086b6baf675240fe3b5bc",
    "summary": "4 mutations: 4 caught (4 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "announce the create before the rate is checked": "caught",
@@ -5024,7 +5024,7 @@
    }
   },
   "v8handshak": {
-   "key": "d4c32a92e017e32cddca2dc59ba525d41095af8513399061c8051606f7ee042d",
+   "key": "a44d2bb14a52a1ce03c33aa30723dcc29e7118a0e6aced7991efae2889bd7244",
    "summary": "5 mutations: 5 caught (5 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "announce the CM timeout on every block past the deadline": "caught",
@@ -5035,7 +5035,7 @@
    }
   },
   "v8hs": {
-   "key": "1493e62de01aefa1d8d3fcf91a2e7a5c080fd7cc8657270695801aa776bcb590",
+   "key": "71a8e737ddaaf1f956f209dd3647630322730c09cf6443838bb4e4f0d72227eb",
    "summary": "7 mutations: 7 caught (7 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "announce LAPM even when a raw protocol is given": "caught",
@@ -5048,7 +5048,7 @@
    }
   },
   "v8hsrx": {
-   "key": "cd60a5c6acf7f5b98a5daa86c4b4f2e7fbd9553e3ded8e7543d57b4bf2a3ddd2",
+   "key": "5f985eccba078eefd50f08b4fec193ec63a3f16af6defed4e4ba2f34fcce7698",
    "summary": "11 mutations: 11 caught (11 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "announce the ANSam detection before the JM is checked for": "caught",
@@ -5065,7 +5065,7 @@
    }
   },
   "v8jm": {
-   "key": "b91a07c4bd70db4ace57a9e0d2381431dd5001f3980cc4bef25725ea802ad297",
+   "key": "0f7c591c11c900a5a7d6fb0d5f477038dc1af6113a7f15adbded5fbb1aee6537",
    "summary": "29 mutations: 29 caught (29 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "abandon the marker word when the local extension fails to match": "caught",
@@ -5100,7 +5100,7 @@
    }
   },
   "v8proc": {
-   "key": "7c6e9b4dbee2aeacb098f2dde0fff342bfce291a3ad60f81bfeecbd4dcbd7047",
+   "key": "f9bd4bdea28d6aa30b334cd66d496da9a68c3c242643f2dd75703450c2f98bdc",
    "summary": "17 mutations: 17 caught (17 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "accept a negotiation that agreed on nothing": "caught",
@@ -5123,7 +5123,7 @@
    }
   },
   "v8seq": {
-   "key": "b528321d59fd0e5731df44a0a668c624ea18cf1ad496212d8d9affd44bd57d2b",
+   "key": "b1bf05fb9bdd87540f2d6328f577b47e6ee299214fa2ca5d30b5b45277094ec9",
    "summary": "9 mutations: 9 caught (9 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "announce the banner before the selector is validated": "caught",
@@ -5138,7 +5138,7 @@
    }
   },
   "v8sig": {
-   "key": "ef200a4dd6e653c0dc17be01d4dab4aba38fe656584b1cf292c6111df97c86ff",
+   "key": "fe2152d0f132718507ef6a2d1cbc739a000da351e8796111c01e0d9a73f57230",
    "summary": "8 mutations: 8 caught (8 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "drop the phase-reversal announcement": "caught",
