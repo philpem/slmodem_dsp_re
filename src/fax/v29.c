@@ -255,9 +255,9 @@ V29RX_create(void *modem, const struct v29rx_cfg *params)
 	/*
 	 * The notch and tone detector.  Everything but `freq` survives, and
 	 * the 1700 Hz that replaces it is V.29's own carrier -- where
-	 * `FPM_TONE_CFG_data` carries V.25's 2100 Hz answer tone.
+	 * `FPM_TONE_CFG` carries V.25's 2100 Hz answer tone.
 	 */
-	tcfg = FPM_TONE_CFG_data;
+	tcfg = FPM_TONE_CFG;
 	tcfg.freq = V29RX_TONE_HZ;
 	FIELD_PTR(det, V29DET_TONE) = FPM_TONE_create(
 		(struct fpm_tone *)FIELD_PTR(DET(modem), V29DET_TONE), &tcfg);

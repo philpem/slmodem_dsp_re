@@ -156,7 +156,7 @@ CreateV23Modem(struct v23modem *m, int mode, const struct v23_cfg *cfg)
 	m->silence_samples = cfg->sample_rate / V23_SILENCE_DIVISOR;
 
 	if (cfg->answer_tone) {
-		tone = FPM_TONE_CFG_data;
+		tone = FPM_TONE_CFG;
 		tone.freq = V23_ANSWER_TONE_HZ;		/* already 2100 */
 		tone.rev_period = 0;			/* no V.25 reversals */
 		tone.scale = (short)(m->mode != 0 ? V23_ANSWER_TONE_SCALE : 0);

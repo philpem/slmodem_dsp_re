@@ -238,7 +238,7 @@ V22FP_create(struct v22fp *fp, const struct v22fp_cfg *cfg)
 	 * not mistaken for a measurement.
 	 */
 	tone = TONEv22_CFG;
-	tone.src = FPM_TONE_CFG_data.src;
+	tone.src = FPM_TONE_CFG.src;
 	hdx->tone = FPM_TONE_create(hdx->tone, &tone);
 
 	/*
@@ -253,7 +253,7 @@ V22FP_create(struct v22fp *fp, const struct v22fp_cfg *cfg)
 	hdx->mtd2 = FPM_MTD_create(hdx->mtd2, &MTDv22_CFG2);
 
 	tone = TONEv22INIT_CFG;
-	tone.src = FPM_TONE_CFG_data.src;
+	tone.src = FPM_TONE_CFG.src;
 	gen = FPM_TONE_create(NULL, &tone);
 
 	/* Two bits per symbol at 1200, four at 2400. */

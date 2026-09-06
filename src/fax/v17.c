@@ -218,17 +218,13 @@
  * D1222.
  *
  * ---------------------------------------------------------------------------
- * `FPM_TONE_CFG` IS SPELLED `FPM_TONE_CFG_data` HERE, AND THAT IS THE TREE'S
- * SPLIT AND NOT A SECOND TABLE
+ * `FPM_TONE_CFG` IS THE CONFIGURATION STRUCTURE
  *
  * The object's `FPM_TONE_CFG` is the 36-byte structure itself (`R` at .rodata
  * 0xd000, `st_size` 0x24), and this function copies all nine of its dwords.
- * `src/dsp/fpm_tone_cfg.c` names those bytes `FPM_TONE_CFG_data` and keeps
- * `FPM_TONE_CFG` as a `const short *const` pointing at them, which every other
- * caller in the tree already works round the same way (`b103fp.c`,
- * `v22fp.c`, `v23rx.c`, `fpm_fsm.c`).  `t_v17rxcreate.c` compares
- * `FPM_TONE_CFG_data` against `ref_FPM_TONE_CFG` byte for byte rather than
- * assuming it.
+ * `src/dsp/fpm_tone_cfg.c` defines that structure under the same exported
+ * name.  `t_v17rxcreate.c` compares `FPM_TONE_CFG` against `ref_FPM_TONE_CFG`
+ * byte for byte, with the embedded prototype pointer followed separately.
  *
  * ---------------------------------------------------------------------------
  * `fpm_sre_cfg` + 0x34 IS ONE 32-BIT FIELD AND THE HEADER MODELS TWO SHORTS
@@ -340,7 +336,7 @@ V17RX_create(void *modem, const struct v17rx_cfg *params)
 	 * V.25 answer tone to V.17's own 1800 Hz carrier and otherwise copied
 	 * whole.
 	 */
-	tonecfg = FPM_TONE_CFG_data;
+	tonecfg = FPM_TONE_CFG;
 	tonecfg.freq = 1800;
 	FIELD_PTR(CTL(modem), V17RXC_TONE) = FPM_TONE_create(
 		(struct fpm_tone *)FIELD_PTR(CTL(modem), V17RXC_TONE),

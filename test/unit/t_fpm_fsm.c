@@ -1,14 +1,12 @@
 /*
  * t_fpm_fsm.c -- differential test of the FSK modulator.
  *
- * FPM_FSM_init is not reconstructed (it builds the FPM_TONE object), so the
- * test builds *two* states with the reference init.  Cloning one would not
- * work: the state holds a pointer to a tone object, so both sides would
- * mutate the same oscillator and the comparison would be meaningless.
+ * The reference and reconstructed init each build an independent state and
+ * tone object.  Cloning one would leave both sides mutating the same
+ * oscillator and make the comparison meaningless.
  *
- * Our modulate then drives a reference-built tone object through our own
- * FPM_TONE functions, which are separately verified bit-exact -- so a
- * mismatch here is the modulator's, not the oscillator's.
+ * The test compares the configuration and initial tone state, then drives
+ * both modulators through two passes without resetting their oscillators.
  */
 
 #include <string.h>

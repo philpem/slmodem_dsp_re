@@ -414,7 +414,7 @@ build(struct fix *f, unsigned seed, const struct prof *pr, int state)
 	put_ptr(fp, T_FSE_DECISION, (void *)0);
 
 	for (t = 0; t < 3; t++) {
-		f->tone[t].cfg = FPM_TONE_CFG_data;
+		f->tone[t].cfg = FPM_TONE_CFG;
 		f->tone[t].cfg.freq = (short)(1100 + t * 500);
 		f->tone[t].cfg.damp = (short)(31000 - t * 2500);
 		f->tone[t].cfg.scale = (short)(8000 + t * 700);

@@ -1,12 +1,11 @@
 /*
  * t_fpm_tone.c -- differential test of the tone generator.
  *
- * FPM_TONE_create is not reconstructed yet, so objects are built with the
- * *reference* implementation and then copied: both sides operate on
- * byte-identical starting state.  That isolates the functions under test from
- * the one that is still pending, and it is stronger than it sounds -- the
- * whole 0x108-byte object is compared afterwards, so a write to any field,
- * named or not, shows up.
+ * FPM_TONE_create is compared with explicit and NULL configurations, including
+ * the allocated buffers.  Generator tests also use cloned reference-built
+ * objects to isolate their state updates; detector tests build independent
+ * buffers for both sides.  The whole 0x108-byte object is compared afterwards,
+ * so a write to any field, named or not, shows up.
  *
  * The reversal path needs care to reach: at the default 450-unit period and
  * 8 samples per unit, it takes 3600 samples to fire once.  Short bursts never

@@ -68,8 +68,8 @@ tone_ptr_field(unsigned int off)
 static void
 fx_build(void)
 {
-	tone_a = FPM_TONE_create((struct fpm_tone *)0, &FPM_TONE_CFG_data);
-	tone_b = ref_FPM_TONE_create((struct fpm_tone *)0, &FPM_TONE_CFG_data);
+	tone_a = FPM_TONE_create((struct fpm_tone *)0, &FPM_TONE_CFG);
+	tone_b = ref_FPM_TONE_create((struct fpm_tone *)0, &FPM_TONE_CFG);
 	memcpy(pristine_a, tone_a, FPM_TONE_STATE_SIZE);
 	memcpy(pristine_b, tone_b, FPM_TONE_STATE_SIZE);
 }

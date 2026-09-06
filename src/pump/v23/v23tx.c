@@ -122,7 +122,7 @@ v23FP_tx_create(struct v23tx *tx, short mark, short space, short period_len,
 
 	cfg = TONEv23_CFG;
 	cfg.scale = V23TX_SCALE;
-	cfg.src = FPM_TONE_CFG_data.src;	/* the shared 53-tap prototype */
+	cfg.src = FPM_TONE_CFG.src;	/* the shared 53-tap prototype */
 	tx->tone = FPM_TONE_create(NULL, &cfg);
 
 	return tx;

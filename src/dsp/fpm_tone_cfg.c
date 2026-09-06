@@ -33,7 +33,7 @@ const short ToneLPF[53] = {
  * rather than a short[] so the embedded pointer is a pointer, which is the
  * whole point.
  */
-const struct fpm_tone_cfg FPM_TONE_CFG_data = {
+const struct fpm_tone_cfg FPM_TONE_CFG = {
 	.freq = 2100,		/* the ITU-T V.25 answer tone */
 	.scale = 27852,
 	.rev_period = 450,	/* 450 ms at 8 kHz, the V.25 figure */
@@ -53,5 +53,3 @@ const struct fpm_tone_cfg FPM_TONE_CFG_data = {
 	.rev_lag = 40		/* samples; 2*40 is `rev_hist`'s 80 words */
 	/* r16 and extra are zero */
 };
-
-const short *const FPM_TONE_CFG = (const short *)&FPM_TONE_CFG_data;

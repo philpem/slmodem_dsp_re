@@ -589,7 +589,7 @@ fixture(struct fix *f, const struct trial *t)
 
 	/* The three tone detectors and the multi-tone detector. */
 	for (i = 0; i < 3; i++) {
-		f->tone[i].cfg = FPM_TONE_CFG_data;
+		f->tone[i].cfg = FPM_TONE_CFG;
 		f->tone[i].cfg.freq = (short)(1100 + i * 500);
 		f->tone[i].cfg.damp = (short)(31000 - i * 2500);
 		f->tone[i].cfg.scale = (short)(8000 + i * 700);

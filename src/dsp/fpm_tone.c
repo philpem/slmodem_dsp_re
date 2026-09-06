@@ -171,7 +171,7 @@ FPM_TONE_create(struct fpm_tone *state, const struct fpm_tone_cfg *cfg)
 
 	sysdep_memcpy(&state->cfg,
 		      cfg != NULL ? (const void *)cfg
-				  : (const void *)FPM_TONE_CFG,
+				  : (const void *)&FPM_TONE_CFG,
 		      sizeof(state->cfg));
 
 	len = state->cfg.len;

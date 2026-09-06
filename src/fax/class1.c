@@ -646,7 +646,7 @@ fax_class1_create(struct fax_class1 *existing, const struct fax_class1_cfg *cfg)
 	ctx->delayed_status_countdown = 0;
 
 	if (cfg->mode == CLASS1_ANS_ORG_ANSWER) {
-		struct fpm_tone_cfg tone = FPM_TONE_CFG_data;
+		struct fpm_tone_cfg tone = FPM_TONE_CFG;
 
 		ctx->state = CLASS1_ANSWER_TONE_STATE;
 		ctx->prev_state = CLASS1_ANSWER_TONE_STATE;
@@ -670,7 +670,7 @@ fax_class1_create(struct fax_class1 *existing, const struct fax_class1_cfg *cfg)
 	}
 
 	{
-		struct fpm_tone_cfg tone = FPM_TONE_CFG_data;
+		struct fpm_tone_cfg tone = FPM_TONE_CFG;
 
 		tone.freq = 1100;
 		tone.scale = 6400;

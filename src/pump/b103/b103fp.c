@@ -985,7 +985,7 @@ B103FP_create(struct b103fp *fp, const struct b103_cfg *cfg)
 	hdx->tone_lo = NULL;
 
 	/* The receive local oscillator: default frequency, then overridden. */
-	tone = FPM_TONE_CFG_data;
+	tone = FPM_TONE_CFG;
 	hdx->tone_lo = FPM_TONE_create(NULL, &tone);
 	hdx->tone_lo->inc = 0x159a;		/* 1350.1 Hz */
 	hdx->tone_lo->phase = 0;
@@ -996,7 +996,7 @@ B103FP_create(struct b103fp *fp, const struct b103_cfg *cfg)
 	 * radius replaced -- the tone it listens for is the MARK of the pair
 	 * this station receives.
 	 */
-	tone = FPM_TONE_CFG_data;
+	tone = FPM_TONE_CFG;
 	tone.ratio = 0x55c3;
 	tone.min_level = 6;
 	tone.damp = 0x7c00;

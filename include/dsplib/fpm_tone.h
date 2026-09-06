@@ -182,8 +182,7 @@ struct fpm_tone {
 	short kill_state[4];		/* +0x100 .. +0x107                   */
 };
 
-extern const struct fpm_tone_cfg FPM_TONE_CFG_data;
-extern const short *const FPM_TONE_CFG;
+extern const struct fpm_tone_cfg FPM_TONE_CFG;
 extern const short ToneLPF[53];
 
 /**

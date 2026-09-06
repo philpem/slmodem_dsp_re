@@ -119798,3 +119798,71 @@ not present to rebuild `build/tc_out` in this pass, but the existing tree is
 newer than every relevant source, the direct full ratchet scan passed at the
 749-name baseline, Python compilation and both self-tests passed, and
 `git diff --check` is clean. (2026-09-06)
+
+## F10205. `FPM_TONE_CFG` is the configuration object itself, and a fabricated pointer split caused `FPM_FSM_init`'s nine relocation mismatches
+
+The F10204 baseline's sole RELOC function is `FPM_FSM_init`. Its complete
+178 raw code bytes already agree with the reference, including every inline
+REL addend. `tools/toolchain/byteident.py --why FPM_FSM_init` reports nine
+differing relocation targets and rejects row 12 at `@FPM_TONE_CFG,%edx`
+against `@FPM_TONE_CFG_data,%edx`. The nine `R_386_32` sites are at function
+offsets `+0x2b`, `+0x3b`, `+0x44`, `+0x4e`, `+0x58`, `+0x61`, `+0x6b`,
+`+0x75` and `+0x7e`; their addends are `4, 0, 8, 12, 16, 20, 24, 28, 32`.
+The tenth relocation, the call to `FPM_TONE_create` at `+0xa6`, agrees.
+These were measured with `byteident.body`/`verdict` and checked against both
+objects with `tools/dis.py`, using the current GCC 3.4.2 objects.
+
+`readelf -sW ref/slmodemd/dsplibs.o` identifies `FPM_TONE_CFG` as a GLOBAL
+OBJECT of size 36 at `.rodata+0xd000`. Before this correction,
+`readelf -sW build/tc_out/src_dsp_fpm_tone_cfg.c.o` instead showed a 4-byte
+GLOBAL OBJECT under that name and a separate 36-byte `FPM_TONE_CFG_data`.
+Its relocation table confirmed the former pointed at the latter. The header
+and definition made the discrepancy explicit: the struct carried `_data`,
+while `FPM_TONE_CFG` was a `const short *const`. This is F8122's shared
+definition problem, already identified for `v23FP_tx_create`, now corrected
+at its source. No function-order experiment was repeated: F7827 already
+exhausted all six orders in `fpm_fsm.c` without changing its emitted code.
+
+The definition and public declaration now name the const struct
+`FPM_TONE_CFG`, with the same fields, values and `ToneLPF` pointer. The
+fabricated pointer object is removed. Production and test consumers use the
+struct directly, or take its address when passing a configuration pointer.
+`FPM_TONE_create`'s NULL-config fallback is the one former pointer-value use:
+it now passes `&FPM_TONE_CFG` to the config copy. Merely replacing the name
+inside `FPM_FSM_init` could not have corrected the old definition; it would
+either add an indirection or interpret the pointer storage as config bytes.
+The `ref_FPM_TONE_CFG` declarations and all numeric initializers are retained.
+
+The existing tests cover each affected representation: `t_fpm_fsm` compares
+the independently initialized FSM and tone states, `t_fpm_tone` exercises the
+NULL-config fallback and compares the created buffers, and `t_v17rxcreate`
+compares the complete config payload with the blob while following the one
+embedded prototype pointer separately. No comparison was weakened and no
+relocation-name mapping was added to the measurement tools.
+
+**Focused verification.** `make one T="t_fpm_fsm t_fpm_tone t_fpm_tone_own
+t_v17rxcreate" J=3` compiled and linked all four modern differential binaries;
+the sandbox rejected their 32-bit system calls, and running those same four
+binaries outside it passed every group. This includes 80 FSM-init checks,
+289 NULL-tone-config checks, and 632,936 compared words over 156 modem blocks
+in `t_v17rxcreate`. `make check64` passed both configurations. `refcheck.py`
+checked 13,696 references and 2,480 headings with no unresolved or stale
+entries, and `git diff --check` is clean. The rebuilt modern config object
+exports one 36-byte `FPM_TONE_CFG` and no `_data` object.
+
+**Deciding and whole-tree verification.** The authoritative GCC 3.4.2
+`make period J=3` passed **374/374**. A fresh 272-object toolchain build moved
+EXACT **749 -> 750**, RELOC **1 -> 0**, with REGALLOC 53, UNRESOLVED 7, BYTES
+138 and SIZE 904 unchanged. The complete exact-set diff contains only
+`FPM_FSM_init` and no loss; `--why FPM_FSM_init` now reports EXACT. The period
+object exports one 36-byte `FPM_TONE_CFG`, no `_data` symbol, and its embedded
+`ToneLPF` relocation remains intact. The full modern `make test` plus
+`check64`, `params`, `coverage`, `debugcov`, `onedef`, `vendor` and `banners`
+tiers all passed (including their recorded modern-compiler allow-list).
+
+The aggregate `make phase` cannot yet be called green in this checkout: it
+refuses before running because `third_party/spandsp/src/.libs/libspandsp.a`
+is absent, and this environment lacks Autoconf, Automake and Libtool needed to
+bootstrap that ignored test-only checkout. This is an external interop
+prerequisite, not a differential or identity failure; keep the branch out of
+master until the interop tier can run. (2026-09-06)

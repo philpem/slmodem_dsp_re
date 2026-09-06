@@ -213,7 +213,7 @@ short V22DiconnectThreshTable[V22_DISCONNECT_THRESHOLDS] = {
  *
  * `src` is NULL in both, which would have `FPM_TONE_create` read 53 words
  * from address zero.  `V22FP_create` is what closes that: it copies one of
- * these to the stack and assigns `FPM_TONE_CFG_data.src` -- the library's
+ * these to the stack and assigns `FPM_TONE_CFG.src` -- the library's
  * shared 53-tap prototype -- into the copy before creating anything.  That
  * assignment is what types these as `struct fpm_tone_cfg`; it reads the
  * dword at the library config's +0x10, and the only thing there is `src`.

@@ -155,7 +155,7 @@ BwChDem_Create(struct bwchdem *bw, const struct v23_cfg *cfg)
 	 * which is the original's doing and is why `rev_period` is still set
 	 * on a detector that never looks for reversals.
 	 */
-	tone = FPM_TONE_CFG_data;
+	tone = FPM_TONE_CFG;
 	tone.freq = BWCH_MARK_HZ;
 	tone.ratio = BWCH_TONE_RATIO;
 	tone.min_level = BWCH_TONE_MIN_LEVEL;

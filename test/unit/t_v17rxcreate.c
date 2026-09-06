@@ -60,14 +60,13 @@
  * actually supports.
  *
  * ---------------------------------------------------------------------------
- * `FPM_TONE_CFG` IS TWO DIFFERENT THINGS EITHER SIDE OF THE LINE
+ * `FPM_TONE_CFG` IS COMPARED BEFORE THE CONSTRUCTOR COPIES IT
  *
- * In the object it is the 36-byte configuration; in this tree it is a
- * `const short *const` pointing at `FPM_TONE_CFG_data`, which holds those
- * bytes.  `V17RX_create` copies all nine dwords, so the two must agree --
- * `check_shape` compares `FPM_TONE_CFG_data` against `ref_FPM_TONE_CFG` byte
- * for byte rather than leaving it to the tone object's own comparison, where a
- * disagreement would surface as an unexplained field.
+ * Both copies are the 36-byte configuration structure.  `V17RX_create`
+ * copies all nine dwords, so `check_shape` compares `FPM_TONE_CFG` against
+ * `ref_FPM_TONE_CFG` byte for byte and follows the embedded prototype pointer
+ * separately.  A disagreement is then reported at the table itself before
+ * it can surface as an unexplained field in the tone object.
  */
 
 #include <stddef.h>
@@ -783,13 +782,12 @@ check_shape(void)
 	diff_begin("V17RX_create: the configuration it derives");
 
 	/*
-	 * The tree's `FPM_TONE_CFG_data` against the object's own
-	 * `FPM_TONE_CFG`, which is what this constructor copies.  See the head
-	 * of this file for why the two are spelled differently.
+	 * The tree's `FPM_TONE_CFG` against the object's own copy, which is
+	 * what this constructor copies.  The prototype is followed separately.
 	 */
 	{
 		const unsigned char *p = (const unsigned char *)
-					 &FPM_TONE_CFG_data;
+					 &FPM_TONE_CFG;
 		const unsigned char *q = (const unsigned char *)
 					 &ref_FPM_TONE_CFG;
 		int src_off = OFF(struct fpm_tone_cfg, src);
@@ -809,13 +807,13 @@ check_shape(void)
 				break;
 			}
 		}
-		diff_eq_int("FPM_TONE_CFG_data == ref_FPM_TONE_CFG, "
+		diff_eq_int("FPM_TONE_CFG == ref_FPM_TONE_CFG, "
 			    "first differing byte (%ld)", bad, -1,
 			    (long)sizeof(struct fpm_tone_cfg));
 		cmp_target("FPM_TONE_CFG.src (ToneLPF)", ToneLPF,
 			   ref_FPM_TONE_CFG.src, 53 * 2, 0);
 		diff_eq_int("our FPM_TONE_CFG.src is ToneLPF (%ld)",
-			    FPM_TONE_CFG_data.src == ToneLPF, 1, 0);
+			    FPM_TONE_CFG.src == ToneLPF, 1, 0);
 	}
 
 	diff_eq_int("SDM_CFG matches the blob's (%ld)",
@@ -1015,7 +1013,7 @@ check_shape(void)
 			diff_eq_int("the notch is retuned to 1800 Hz (%ld)",
 				    t->cfg.freq, 1800, k);
 			diff_eq_int("and the built-in is still 2100 (%ld)",
-				    FPM_TONE_CFG_data.freq, 2100, k);
+				    FPM_TONE_CFG.freq, 2100, k);
 		}
 
 		/* The state head, whose eleven constants are this function's. */

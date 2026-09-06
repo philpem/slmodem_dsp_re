@@ -587,7 +587,7 @@ V32FP_recreate(void *modem, const struct v32fp_params *param, void *arg2)
 	 * 3000 Hz.  `fresh` clears the slot first so that FPM_TONE_create
 	 * allocates rather than re-using.
 	 */
-	tonecfg = FPM_TONE_CFG_data;
+	tonecfg = FPM_TONE_CFG;
 	tonecfg.freq = 2100;
 	tonecfg.scale = 0x16a1;
 	tonecfg.rev_period = 0;

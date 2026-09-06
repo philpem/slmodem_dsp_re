@@ -435,7 +435,7 @@ tonefix_build(struct tonefix *f, unsigned seed)
 
 	put_ptr(f->obj, V32_OBJ_HDX, f->hdx);
 	for (t = 0; t < 3; t++) {
-		f->tone[t].cfg = FPM_TONE_CFG_data;
+		f->tone[t].cfg = FPM_TONE_CFG;
 		f->tone[t].cfg.freq = (short)(1100 + t * 500);
 		/*
 		 * The three configurations have to differ in something

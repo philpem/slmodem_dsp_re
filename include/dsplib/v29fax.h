@@ -1828,7 +1828,7 @@ int QualityDetectV29(void *modem);
  * The constants the constructor plants that are not any module's own.
  *
  * `V29RX_TONE_HZ` is 1700, which is V.29's carrier frequency, and it
- * replaces `FPM_TONE_CFG_data`'s 2100 (V.25's answer tone) in the copy
+ * replaces `FPM_TONE_CFG`'s 2100 (V.25's answer tone) in the copy
  * the detector gets. `V29RX_MTD_*` and `V29RX_V21_MTD_*` are the two tone
  * detectors' thresholds; the V.21 one runs on 300 bit/s channel 2 and
  * takes `V21_CHAN2_MTD_COEFF`.

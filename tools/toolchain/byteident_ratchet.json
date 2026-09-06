@@ -1,6 +1,6 @@
 {
   "compared": 1852,
-  "exact": 749,
+  "exact": 750,
   "exact_symbols": [
     "B103LocLoopNextState",
     "BwChDem_Delete",
@@ -33,6 +33,7 @@
     "FPM_FSD_free",
     "FPM_FSE_free",
     "FPM_FSM_delete",
+    "FPM_FSM_init",
     "FPM_MRF_free",
     "FPM_MTD_delete",
     "FPM_PPS_free",

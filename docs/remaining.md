@@ -23,13 +23,13 @@ read F10191/F10192 (and Waves 13-14 below) before trusting any tool output
 that disagrees, per CLAUDE.md's rule that the tool is checked, not
 repeated from a comment.
 
-The current period-compiler identity baseline is **749 of 1,852 functions
-positionally byte-exact (40.4%)**. A further 53 are instruction-equivalent
+The current period-compiler identity baseline is **750 of 1,852 functions
+positionally byte-exact (40.5%)**. A further 53 are instruction-equivalent
 after consistent register renaming, so the strict exact-or-register-allocation
-total is 802 (43.3%); the tool also reports seven unresolved section
-relocations, one differing named relocation target, 138 same-size byte
+total is 803 (43.4%); the tool also reports seven unresolved section
+relocations, no differing named relocation target, 138 same-size byte
 mismatches and 904 size mismatches. `byteident.py` now ratchets the complete
-749-name exact set, not just its cardinality, so an exact function cannot
+750-name exact set, not just its cardinality, so an exact function cannot
 regress while an unrelated gain conceals it.
 
 This is a function-level `.text` measurement, not yet proof that the
@@ -44,9 +44,10 @@ code-generation improvement may not weaken the differential evidence.
 1. **Secure the measurement — done.** Refuse partial test-object trees,
    regenerate the tested baseline from all 374 drivers, and ratchet exact
    symbol membership rather than the headline count.
-2. **Clear named-relocation mismatches.** Start with the single current case,
-   `FPM_FSM_init`, and correct shared symbol representation rather than
-   papering over a caller.
+2. **Clear named-relocation mismatches — implemented, integration gate
+   pending.** The single case, `FPM_FSM_init`, is exact after correcting the
+   shared `FPM_TONE_CFG` representation; the branch still awaits the SpanDSP
+   prerequisite needed by the aggregate `make phase` gate.
 3. **Resolve ambiguous section relocations.** Classify the seven `UNRESOLVED`
    functions so section-relative references can be compared by identity.
 4. **Close same-size byte mismatches.** Work the 138 `BYTES` functions from

@@ -73,7 +73,7 @@ FPM_FSM_init(struct fpm_fsm *state, const struct fpm_fsm_cfg *cfg)
 	 * output scale.  The frequency is not set here -- modulate retunes per
 	 * bit, so whatever the default carries is immediately replaced.
 	 */
-	tone = FPM_TONE_CFG_data;
+	tone = FPM_TONE_CFG;
 	tone.scale = state->cfg.scale;
 
 	/*

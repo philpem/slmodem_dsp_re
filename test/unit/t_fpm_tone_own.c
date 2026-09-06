@@ -159,7 +159,7 @@ main(void)
 {
 	static struct fixture fa;	/* the blob's         */
 	static struct fixture fb;	/* the reconstruction */
-	struct fpm_tone_cfg cfg = FPM_TONE_CFG_data;
+	struct fpm_tone_cfg cfg = FPM_TONE_CFG;
 	struct fpm_tone *ra, *rb;
 	struct counts base, ca, cb, da, db;
 	int rc = 0;
