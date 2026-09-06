@@ -6,20 +6,18 @@
  *   dp_call_exit                  src/call/call.c      (0x31e0)
  *   dp_vpcm_exit                  src/pump/v90/vpcm.c  (0x4510)
  *
- * THE TWO LOGS ARE NOT SYMMETRIC HERE, ON PURPOSE.  Five of the aggregate's
- * seven datapumps are written (call, b103, v23, v8, vpcm) and two are not
- * (v22, v32).  An unwritten `dp_v22_init` resolves to the blob's own copy for
- * BOTH sides -- but every host callback the blob makes goes through its
- * renamed imports, so the blob's copy registers into `harness_reg_ref`
- * whichever side called it.  Our `prop_dp_init` therefore fills BOTH logs:
- * the five written pumps land in `harness_reg_ours`, the two unwritten in
- * `harness_reg_ref`.  The differential statement is that those two pieces
- * are complementary ordered subsequences of what `ref_prop_dp_init` alone
- * produces -- same ids, same order, nothing extra, nothing lost.
- *
- * When v22 and v32 are written this split collapses: `blob_regs` below goes
- * to zero and the subsequence check degenerates to straight equality.  The
- * test is written to survive that day, not to assert the split.
+ * THE SPLIT THIS FILE WAS WRITTEN AGAINST HAS COLLAPSED.  All seven of the
+ * aggregate's datapumps are written now (call, b103, v22, v23, v32, v8,
+ * vpcm) -- v22 was the last, `src/core/dp_init.c` wiring `dp_v22_init` and
+ * `dp_v22_exit` through `v22.h` in place of the local
+ * `DSPLIB_DPINIT_UNWRITTEN` weak declarations it used to carry.  Nothing
+ * calls the blob's copy of any of the seven from OUR side any more, so
+ * `harness_reg_ref` stays empty across the whole `prop_dp_init`/
+ * `prop_dp_exit` run below and every registration lands in
+ * `harness_reg_ours` alone.  `is_interleaving()` still runs -- it degenerates
+ * to straight equality with an empty blob side and costs nothing to keep --
+ * but the explicit zero checks below are what actually PROVE the collapse
+ * rather than merely tolerate it.
  */
 
 #include <string.h>
@@ -124,6 +122,16 @@ main(void)
 				    harness_reg_ours.count,
 				    harness_reg_ref.id,
 				    harness_reg_ref.count), 1, 0);
+	/*
+	 * The collapse itself: all seven datapumps are ours now, so nothing
+	 * should land in the blob's log at all.  This is strictly stronger
+	 * than the interleave check above, which would also pass on the old
+	 * split.
+	 */
+	diff_eq_int("all seven are ours: nothing registers to the blob (%ld)",
+		    harness_reg_ref.count, 0, 0);
+	diff_eq_int("all seven are ours: our count is the whole reference (%ld)",
+		    harness_reg_ours.count, nref, 0);
 
 	/* The three VPCM ids share one table; the reference agrees. */
 	{
@@ -161,6 +169,10 @@ main(void)
 				    harness_reg_ours.deregistered,
 				    harness_reg_ref.dereg_id,
 				    harness_reg_ref.deregistered), 1, 0);
+	diff_eq_int("all seven are ours: nothing deregisters from the blob (%ld)",
+		    harness_reg_ref.deregistered, 0, 0);
+	diff_eq_int("all seven are ours: our dereg count is the whole reference (%ld)",
+		    harness_reg_ours.deregistered, nref_dereg, 0);
 
 	/* Init and exit name the same table for the same id, both sides. */
 	for (i = 0; i < harness_reg_ours.deregistered; i++) {

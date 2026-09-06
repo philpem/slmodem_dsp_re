@@ -1115,3 +1115,56 @@ now **empty**. What's left in the whole 1.2 MB is bookkeeping only:
 brief) and whatever stub arms already-written dispatch functions route into
 (the "also on the board" note near the top of this file) — neither is a
 symbol left to write.
+
+## Wave 14 — the last stale scaffold: `dp_init.c` graduates `dp_v22_init`/`dp_v22_exit` out of the weak/unwritten idiom
+
+With no symbols left to write (Wave 13, above), a session briefed to write
+`v22_create`/`v22_delete`/`v22_process` found them already in `src/pump/v22/
+v22.c` — this file said so already, a month of wall-clock earlier ("ALREADY
+WRITTEN, invisible", top of this document). The actual gap the brief's
+premise had been chasing was one file over: `src/core/dp_init.c` still
+declared `dp_v22_init`/`dp_v22_exit` under the `DSPLIB_DPINIT_UNWRITTEN`
+weak idiom, with a comment calling V.22 "the ONE datapump this tree has not
+written yet" — true when written (`eea174a1`), false since `v22.c` got real
+definitions of both (`0112bf79`) and nobody went back to retire the now-
+redundant local declarations. V.32 made the identical trip earlier and DID
+get cleaned up (`v32.h` is `dp_init.c`'s only source for its pair); V.22 was
+the one straggler, and closing it makes all seven of `prop_dp_init`'s
+datapumps come from their own header with nothing declared weak anywhere in
+the file.
+
+Not a link-time defect — a weak reference with a strong definition
+elsewhere always resolves to the strong one, so every build already called
+`v22.c`'s real `dp_v22_init`/`dp_v22_exit` — but a stale claim in `src/`
+about which functions were still unwritten, exactly the shelf-life failure
+CLAUDE.md calls out for comments and rules files. `test/unit/t_dpinit.c`
+carried the same problem one layer out: its header comment described a
+five-written/two-unwritten split between `harness_reg_ours` and
+`harness_reg_ref` that V.32's earlier graduation had already partly closed,
+said explicitly that the test was "written to survive that day, not to
+assert" the collapse, and its existing assertions were loose enough to pass
+under either state. Four new checks (`harness_reg_ref.count == 0` and
+`harness_reg_ours.count == nref` after `prop_dp_init()`, the same pair for
+`deregistered`/`nref_dereg` after `prop_dp_exit()`) make the collapse itself
+the assertion instead of an incidental case the old ones tolerated.
+
+`make one T=t_dpinit`: 54 checks (was 50), PASS. Real `make period`, `J=3`:
+374 passed, 0 failed — unchanged, as expected for a wiring-only fix with no
+new test binary. Real `make byteident-ratchet`: 736/1852 grade-0 EXACT
+(39.7%), 796/1852 grade-0-or-1 (43.0%), ratchet OK — byte-for-byte
+identical to the pre-fix run. Finding F10190.
+
+**With this closed, `DSPLIB_DPINIT_UNWRITTEN` has zero remaining uses and is
+deleted along with the two declarations it decorated.** The similarly-named
+`DSPLIB_VPCM_UNWRITTEN` idiom in `vpcm.h` is unrelated and untouched — it is
+`#define`d empty (not weak) once `v34pcmif.c`/`v34pcmmain.cpp` supply real
+`VPcmV34*` bodies, and the declarations it decorates are still shared with
+genuinely unwritten uses elsewhere.
+
+This wave's conclusion is the same as Wave 13's, restated because a fresh
+session's brief assumed otherwise: there is no unwritten `.text` or `.data`
+symbol left in the object. What surfaces next, if anything, will likely be
+more of this shape — a stale claim about the tree's own state rather than a
+byte still to reconstruct — and the fix for that shape is reading this file
+and `tools/service.py`'s own output before trusting an inherited brief,
+exactly as CLAUDE.md's `V90Parameters` example already prescribes.

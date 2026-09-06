@@ -118449,3 +118449,89 @@ state, for the same reason. Closes item 1 of the 2026-09-06 field-naming
 exploration list; three of its four items are now tried (items 2/3 F10186;
 item 4, enum/jump-table matching, is a separate concurrent session's
 F10188). (2026-09-06)
+
+## F10190. `dp_init.c` still declared `dp_v22_init`/`dp_v22_exit` weak and
+unwritten a wave after `v22.c` wrote them; the wiring is now graduated and
+`t_dpinit.c`'s split-collapse is proved rather than merely tolerated
+
+(Renumbered twice before landing: first drafted as F10188, which collided
+with a concurrent session's enum/jump-table finding (now above); then as
+F10189, which collided with a second concurrent session's value-correlation
+finding (immediately above this one) by the time of the next rebase.
+CLAUDE.md's numbering rule: say what a renumbered finding used to be
+called, so a reference that still resolves is not silently pointed at the
+wrong entry.)
+
+**What was actually asked for versus what was there.** The brief was to
+write `v22_create`/`v22_delete`/`v22_process` on the premise the worktree's
+`make period` baseline predated them. It didn't: `src/pump/v22/v22.c`
+already carries all three (`static`, matching the blob's `t` visibility --
+`docs/remaining.md` recorded this as "ALREADY WRITTEN, invisible" to
+`coverage.py`'s count over a month before this session), and Wave 13 of
+`docs/remaining.md` had already declared the object's real reconstruction
+work empty. What was still there, and was the actual gap: `src/core/
+dp_init.c` declared
+
+```c
+#define DSPLIB_DPINIT_UNWRITTEN __attribute__((weak))
+extern int dp_v22_init(void) DSPLIB_DPINIT_UNWRITTEN;
+extern void dp_v22_exit(void) DSPLIB_DPINIT_UNWRITTEN;
+```
+
+under a comment reading "The ONE datapump this tree has not written yet" --
+true when that comment was written (commit `eea174a1`, the `dp_init`/CID/MOH
+leaves wave), false since `0112bf79` gave `v22.c` real, non-weak definitions
+of both and a plain, non-weak pair of prototypes in `include/dsplib/v22.h`.
+Nobody had gone back to `dp_init.c` to drop the now-redundant local
+declarations, the macro, or the stale comment -- V.32 had made the same trip
+through this exact idiom earlier and DID get cleaned up (its pair lives in
+`v32.h` and `dp_init.c` just includes it), so V.22 was the one straggler.
+
+**Why this was latent rather than a live defect.** A weak *reference* to a
+symbol that also has a strong (non-weak) definition elsewhere resolves to
+the strong one at link time regardless -- `v22.c`'s `dp_v22_init`/
+`dp_v22_exit` were always what every build actually called. `make one
+T=t_dpinit` and the real `make period` baseline this session confirmed
+(374 passed, 0 failed, run BEFORE this fix) already reflected that. The
+defect was purely in what the source claimed about itself: a reader trusting
+the comment and the weak declaration would conclude V.22's registration
+pair might still resolve to the blob's copy, which had stopped being true a
+wave ago. CLAUDE.md's own warning about a rules file (and by extension a
+source comment) having "the same shelf-life problem as a comment and no gate
+behind it" (F6100/F6103) applies here verbatim, one level down from the
+rules file.
+
+**The fix.** `dp_init.c` now `#include`s `dsplib/v22.h` alongside the other
+six datapump headers and no longer declares `dp_v22_init`/`dp_v22_exit`
+itself; `DSPLIB_DPINIT_UNWRITTEN` is deleted rather than left with zero
+uses (it had exactly two, both removed). The file's header comment records
+that all seven datapumps are now written and says where the graduation
+happened, mirroring V.32's own note in `v32.h`.
+
+**`t_dpinit.c`'s comment was carrying the same shelf-life problem, one layer
+further out.** It documented "THE TWO LOGS ARE NOT SYMMETRIC HERE, ON
+PURPOSE" -- five pumps landing in `harness_reg_ours`, two (v22, v32)
+resolving to the blob and landing in `harness_reg_ref` -- and said outright
+"When v22 and v32 are written this split collapses... The test is written to
+survive that day, not to assert the split." That day had already arrived
+(V.32 graduated earlier, V.22 with this change); the test's existing
+assertions (`is_interleaving`, the combined-count checks) were written loose
+enough to pass under EITHER the split or the collapse, so they never
+actually distinguished the two states. Four new assertions make the
+collapse itself the thing under test rather than an incidental case the old
+assertions happened to tolerate: `harness_reg_ref.count == 0` and
+`harness_reg_ours.count == nref` after `prop_dp_init()`, and the same pair
+for `deregistered`/`nref_dereg` after `prop_dp_exit()`. Each is strictly
+stronger than the interleave check beside it -- it would have FAILED under
+the old (pre-`0112bf79`) split, and passes now because nothing calls the
+blob's registration or deregistration from our side any more.
+
+**Verification.** `make one T=t_dpinit`: 54 checks, PASS (up from 50 before
+the four new assertions; no existing check's outcome changed). Real `make
+period`, `J=3`: 374 passed, 0 failed -- unchanged from this session's
+pre-fix baseline, as expected for a wiring fix with no new test binary.
+Real `make byteident-ratchet`: 736/1852 grade-0 EXACT (39.7%), 796/1852
+grade-0-or-1 (43.0%), ratchet OK -- byte-for-byte identical to the pre-fix
+run, which is exactly what a change confined to a `weak`-vs-plain
+declaration and a test file predicts: no code generation depends on how a
+symbol that is defined either way gets declared. (2026-09-06)

@@ -23,31 +23,28 @@
  * functions between (0x60..0x33f), so one contiguous translation unit
  * containing both halves is impossible and the CID wrappers live in
  * `src/service/cid.c`.
+ *
+ * ALL SEVEN ARE NOW WRITTEN.  `dp_v22_init`/`dp_v22_exit`
+ * (`src/pump/v22/v22.c`) were the last graduation, following V.32's into
+ * `v32.h`.  Both used to be declared here under a local
+ * `DSPLIB_DPINIT_UNWRITTEN` weak idiom -- the same shape `vpcm.h`'s
+ * `DSPLIB_VPCM_UNWRITTEN` still names elsewhere -- so that the differential
+ * binaries could bridge the real names to the blob's copy through
+ * `test/harness/unwritten.c` while `v22.c` did not yet exist; that bridge is
+ * long gone (see `unwritten.c`'s own note) and this file no longer needs the
+ * idiom at all.  Every prototype below comes from its own datapump's header;
+ * nothing here is declared weak.  Finding F8538/F8600-8604 record when
+ * `v22.c` itself landed; this wiring was the piece left behind.
  */
 
 #include "dsplib/b103.h"
 #include "dsplib/call.h"
 #include "dsplib/dp.h"
+#include "dsplib/v22.h"
 #include "dsplib/v23.h"
 #include "dsplib/v32.h"
 #include "dsplib/v8dp.h"
 #include "dsplib/vpcm.h"
-
-/*
- * The ONE datapump this tree has not written yet.  No header declares it;
- * V.32's pair is now `src/pump/v32/v32.c`'s and comes in through `v32.h`.
- * Declared `int`/`void` on the family pattern -- the result is discarded, so
- * the caller's code is the `call` either way.
- *
- * WEAK, the `DSPLIB_VPCM_UNWRITTEN` idiom (vpcm.h explains it at length):
- * the differential binaries bridge each name to the blob's copy through
- * `test/harness/unwritten.c`, and the interop binaries -- no blob, and
- * nothing there calls `prop_dp_init` -- resolve the weak references to
- * zero.  No null tests: the object calls all seven unconditionally.
- */
-#define DSPLIB_DPINIT_UNWRITTEN __attribute__((weak))
-extern int dp_v22_init(void) DSPLIB_DPINIT_UNWRITTEN;
-extern void dp_v22_exit(void) DSPLIB_DPINIT_UNWRITTEN;
 
 int
 prop_dp_init(void)
