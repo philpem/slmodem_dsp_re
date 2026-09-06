@@ -118893,9 +118893,12 @@ and none moved bucket or byte count from this pass's baseline -- confirming
 the FPM_TONE_generate retype, the bps2 fix and the CSE split touched only
 their intended call sites.
 
-**Before/after.** Tree-wide grade 0 EXACT: 736 before, 736 after (none of
-the four closed all the way; the declined register swap is the common
-blocker on three of them and `v22_answer` has its own separate grade-1
+**Before/after.** Tree-wide grade 0 EXACT: 736 at this pass's own start,
+737 after rebasing onto F10193's `V32LocLoopNextState` closure (landed on
+`master` concurrently, unrelated files), 737 after this pass's own commit
+-- none of the four closed all the way, so this pass's own net is +0
+tree-wide; the declined register swap is the common blocker on three of them
+and `v22_answer` has its own separate grade-1
 tail). `v22_answer` SIZE 1 byte -> BYTES 1 byte (now correct length);
 `v22_ans_rmloop2` BYTES 11 -> BYTES 7; `v22_local_loop` SIZE 2 -> BYTES 97
 (now correct length, was previously the wrong length too); `v22_org_rmloop2`
