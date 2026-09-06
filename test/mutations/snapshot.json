@@ -2951,8 +2951,8 @@
    }
   },
   "v34hst3core": {
-   "key": "2d4996c6ad7773ad9133f4c257b4c5547b0ea36a516dab09cd28d14973bf3183",
-   "summary": "70 mutations: 69 caught (69 by test, 0 by strings), 1 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "key": "7039dd1b6b75ab5b432e065f308b793492bcd017127247a6bac60131387c24f2",
+   "summary": "70 mutations: 70 caught (70 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "0x644c9 reports progress 1": "caught",
     "62 copies the counter onto itself": "caught",
@@ -2976,7 +2976,7 @@
     "79's MOH path runs the DET_SYNC store as well": "caught",
     "79's MOH path stores the microstate without the trace": "caught",
     "79's detector carrier select is inverted": "caught",
-    "79's detector carrier select tests f359c against 0x66": "caught",
+    "79's detector carrier select tests role against 0x66": "caught",
     "79's detector limit is 0x64, as microstate 44's is": "caught",
     "79's detector polarity is zero": "caught",
     "79's detector thresholds are exchanged": "caught",
@@ -3016,7 +3016,7 @@
     "the detector's answer is inverted": "caught",
     "the fskdemodulate gate is inverted": "caught",
     "the prologue's cursor/limit guard is inclusive": "caught",
-    "the receiver-count guard excludes 5": "uncaught",
+    "the receiver-count guard excludes 5": "caught",
     "the tail compares the two timer words signed": "caught",
     "the tail counts rather than resets at the level limit": "caught",
     "the tail doubles +0xaa96 instead of tripling it": "caught",

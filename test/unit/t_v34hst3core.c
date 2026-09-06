@@ -843,6 +843,38 @@ main(void)
 	     V34HS_MOH_SILENCE);
 
 	/*
+	 * AND THE GUARD'S OWN BOUNDARY, `<= 5` against `< 5`.  Same route,
+	 * same everything above, except the rxstate is RX_DPSK rather than
+	 * `V34HS_SILENCE` -- and that swap is the point.  `V34HS_SILENCE` is
+	 * not one of the compare chain's five special values (0x62a09's
+	 * `RX_DPSK`, `RECEIVE`, `WAIT`, and the second chain's `DET_AB`,
+	 * `RX_L1`), so whether the `<= 5` guard sends this case to the block
+	 * route directly or a `< 5` guard lets it fall into the chain, the
+	 * chain itself falls through to the SAME once-per-block dispatch --
+	 * which is exactly why 800 above cannot see the guard move (finding
+	 * F424's neighbour: a test can drive the boundary and still not be
+	 * the one that can tell two spellings of it apart). RX_DPSK is one of
+	 * the five, so a `< 5` guard at count 5 reaches 0x64a64 -- `V34agc`,
+	 * `fskdemodulate` and the microstate table, all of which 800 already
+	 * measured at eleven extra bytes over the block route's one -- while
+	 * an `<= 5` guard never leaves the block route at all.  `V34HS_FSKGATE`
+	 * is pinned for the same reason `begin()` pins it: non-zero diverts at
+	 * 0x64a87 before either of those two calls, which would blur the two
+	 * guards' difference rather than sharpen it.
+	 */
+	v34hs_setup(0);
+	v34hs_route(V34HS_ROUTE_TXBLOCK, 0);
+	v34hs_state(V34HS_PHASE1, V34HS_RX_DPSK, V34HS_MOH_SILENCE);
+	v34hs_poke_int(T3T_MODE, 0);
+	v34hs_poke_int(T3T_TIMER_LO, 1000);
+	v34hs_poke_int(T3T_TIMER_HI, 2000);
+	v34hs_poke_int(T3T_LVL_LIMIT, 0x7fffffff);
+	v34hs_poke_int(T3T_LVL_COUNT, 0);
+	v34hs_poke_int(V34HS_FSKGATE, 0);
+	step("txblock route, exactly 5, rxstate is RX_DPSK", 801, 1, 0,
+	     V34HS_PHASE1, V34HS_MOH_SILENCE);
+
+	/*
 	 * THE POINTER HOLES.  `v34hs_compare` skips thirty-five pointer
 	 * fields and compares each by offset from its own base; this asserts
 	 * every one of them was reached, so the skip list cannot go stale

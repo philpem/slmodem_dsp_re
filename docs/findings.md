@@ -119205,3 +119205,112 @@ identical to the pre-change count -- and real `make byteident-ratchet`
 reports `ratchet OK (exact 736 -> 737, regalloc 53 -> 53)`, no decrease (the
 +1 predates this change; a struct-pointer retype and two field renames
 cannot themselves move codegen).
+
+## F10198. A live mutation sweep of the V.34/V.32/V.22 suites: one real gap closed (`v34hst3core`'s receiver-count guard), four already known and still blocked, none found equivalent-but-unflagged, no bugs
+
+`docs/findings.md`'s F3001 and the batches around F343/F345/F421-424/F452
+triaged this tree's uncaught-mutation list once already, in depth, and this
+session's job was to re-measure it LIVE (the recorded snapshot for every
+suite but one was stale, some by a year: `mutsnap.py --check` read 1 current,
+227 stale of 228) rather than trust the record, and to look for anything new.
+
+**METHOD.** Every suite in `test/mutations/suites.json` whose source is under
+`src/pump/v22`, `src/pump/v32` or `src/pump/v34` -- 42 suites, 9,510 baseline
+mutations covering B.103 and V.23 too, since both share `v22fp.c`'s FSK modem
+and neither has a `.c` or a suite of its own (`grep -ril` over `src/` for
+`b103`/`v23` turns up only shared FSK/config files, confirmed against
+`tools/service.py`'s own classifier) -- run one at a time, `--jobs 3`, ~80
+minutes wall clock. V.8 is open per this file's own table but was not in the
+five subsystems this pass's brief named, and was left for a follow-up.
+
+**RESULT, before any fix.** V.22 and V.32: 0 NOT CAUGHT across all 16 suites,
+every prior stale-snapshot equivalence claim (F651, F8231, F8232, F714 and
+others) reproduced live with the same reasoning. V.34: 19 NOT CAUGHT, in
+exactly four suites -- `v34k56` 10, `v34datapump` 4, `v34hsmst44` 3,
+`v34hstx1` 2 -- and a fifth, `v34hst3core` 1, that closes below. Every one of
+the 19 matches F3001/F279/F343/F424/F452's prior triage LABEL FOR LABEL: no
+new NOT CAUGHT mutation exists anywhere in scope that a previous session had
+not already named and explained from `dis.py`.
+
+**THE ONE CLOSED: `v34hst3core`'s "the receiver-count guard excludes 5".**
+`v34handshak`'s prologue is `if (*(short *)frame.rx <= 5) { t3c_txblock(obj);
+return; }` (`src/pump/v34/v34hshak.c:9500`, 0x629f1's `cmpw $0x5,(%ebx);
+jle`), and the mutation flips it to `< 5`. `test/unit/t_v34hst3core.c`
+already drove the boundary -- its "txblock route, MOH_SILENCE" case (tag 800)
+sets the receiver count to exactly 5 via `v34hs_route(V34HS_ROUTE_TXBLOCK,
+0)` -- and its own comment even names the check as "the check that the guard
+chose". It still could not catch the mutation, because that case's rxstate is
+`V34HS_SILENCE`, which is not one of the compare chain's five special values
+at 0x62a02/0x62b71 (`RX_DPSK`, `RECEIVE`, `WAIT`, `DET_AB`, `RX_L1`) -- so
+whether the guard sends count 5 straight to the block route or lets it fall
+into the chain, the chain itself falls through to the SAME once-per-block
+transmit dispatch, and the two guards produce identical bytes. Added a second
+case, identical in every other respect, with rxstate `V34HS_RX_DPSK`: a `<= 5`
+guard still goes straight to the block route (1 byte changed, matching tag
+800's own measurement), while a `< 5` guard at count 5 falls into the chain,
+matches RX_DPSK, and reaches 0x64a64 -- `V34agc`, `fskdemodulate` and the
+microstate table, the same eleven extra bytes tag 800's comment already
+quantifies. `tools/mutate.py --suite v34hst3core --only "excludes 5"` moved
+from NOT CAUGHT to caught; the full suite is now 70/70, 0 NOT CAUGHT, 0
+equivalent, and `mutsnap.py --update v34hst3core` recorded it.
+
+**THE FOUR NOT CLOSED, confirmed rather than re-derived.** Each already has a
+disassembly-backed reason on record and none changed:
+
+  - `v34k56` (10): F279 already ruled these unreachable-in-this-tree or
+    dead-and-equivalent-but-kept-because-the-blob-does-it, and named exactly
+    which eight Ja/MP mutations and which two no-op-callee ones. Unchanged.
+  - `v34datapump` (4): F452's dispatch-ordering gap -- the `||`/`&&` on the
+    handshake loop and three statement-order claims either side of
+    `receiver` -- is blocked on table 1's arms (`v34hstx1.cpp`) not being
+    wired into `v34handshak`'s own dispatch, which is a reconstruction task
+    far larger than a mutation-gap pass and already named as such rather than
+    hidden, in `test/mutations/v34datapump.json` itself.
+  - `v34hstx1` (2): F424's "67: initdigital is not called" / "67: +0x3598 is
+    not set" pair. A fixture that drives the guard's zero side was written,
+    run, and reverted: `initdigital` aims two shell `coeff` pointers at
+    `obj + 0xe84` / `obj + 0x2a68`, which are addresses INTO EACH SIDE's own
+    object and outside `holes[]`'s skip list, so `v34hs_compare`'s byte sweep
+    reports them as differing on every run. Closing it costs two `holes[]`
+    entries that three OTHER tests assert are always exercised, and none of
+    those three reach `initdigital` -- a real conflict, not a gap in effort.
+  - `v34hsmst44` (3): one ("the probeselect diagnostic swaps its two rates")
+    needs a probe-bin input that makes `probeselect`'s rate ladder settle
+    somewhere other than 2400 on both sides, which is a full reverse-read of
+    the V.34 rate-negotiation ladder and was not attempted this pass; two
+    ("the probe results are not given to the INFO1a arm"'s sibling on the
+    INFO1c arm, and "the INFO1d decoder is given the answer's record") need a
+    session with `v90_receiver` non-zero AND a valid `VPcmFloModem`, which
+    `T44T_V90RECV`/`aim_session` make partly reachable (a sibling case in
+    this same file already gets a NON-zero `v90_receiver` past the wall for a
+    different mutation) but `V34GiveINFO1dBits` additionally dereferences
+    `sess->v92modem.phase2Info->v92CapabilitiesLocal`, a second pointer level
+    `aim_session` does not build. Investigated, not closed; a plausible next
+    step is named rather than a fixture attempted and hoped for.
+
+**NO REAL BUG.** Every NOT CAUGHT mutation left open changes behaviour only
+on an input the object itself cannot reach in this tree's current wiring (an
+unwritten dispatch, an unbuilt fixture object, an untried probe rate), not on
+one the blob and this tree could disagree on today. Nothing here is a
+wrong-but-plausible difference from the blob.
+
+**SCOPE NOT COVERED.** V.8 (open per this file's table, not named in this
+pass's brief) and the fifty-odd non-open-service suites in `suites.json`
+(V.90/V.92, voice, ring/CID) were not swept. Step 3 of the brief -- spot-check
+large-delta functions with no mutation suite via `dis.py` against `src/` --
+was not reached; `v34handshak` in particular already carries the density of
+`dis.py`-cited findings in this file that the brief asked a spot-check to
+produce, so a fresh one was judged lower value than finishing the live sweep
+and closing what it found. Both are natural continuations for a follow-up
+pass.
+
+**Verification.** `make one T=t_v34hst3core`: PASS, 6,253 checks (was
+6,221), no regression. Real `make period`: 374 passed, 0 failed (one test
+extended in place, no new binary, so the count matches `master`).
+`tools/onedef.py`, `python3 tools/refcheck.py`, `tools/anchorcheck.py`
+(228 suites, 9,767 mutations, 0 skipped, 0 anchors matching other than once)
+and `make check64` all clean. `make byteident-ratchet`: `ratchet OK (exact
+736 -> 737, regalloc 53 -> 53)` -- no change from this pass, which touched
+no `src/`. `mutsnap.py --update v34hst3core` recorded the new baseline; the
+other 227 entries are unchanged and still stale, as they were before this
+pass. (2026-09-06)
