@@ -239,7 +239,8 @@ v22_ans_rmloop2(struct v22fp *fp, unsigned short *txsym, short *txout,
 		*txcount = ModDataV22(fp, txsym, txout, *txcount);
 		*rxcount = DemodDataV22(fp, rxin, rxsym, *rxcount);
 		if (*rxcount != 0) {
-			int n = Detect_1s(rxsym, rxcount, fp->params.bps,
+			/* `bps2`, not `bps` -- see the note at F10194. */
+			int n = Detect_1s(rxsym, rxcount, fp->params.bps2,
 					  V22_DET_THRESH_Q15);
 
 			hdx = fp->hdx;
@@ -253,8 +254,9 @@ v22_ans_rmloop2(struct v22fp *fp, unsigned short *txsym, short *txout,
 		*txcount = ModDataV22(fp, txsym, txout, *txcount);
 		*rxcount = DemodDataV22(fp, rxin, rxsym, *rxcount);
 		if (*rxcount != 0) {
+			/* `bps2`, not `bps` -- see the note at F10194. */
 			detected = (short)Detect_1s(rxsym, rxcount,
-						    fp->params.bps,
+						    fp->params.bps2,
 						    V22_DET_THRESH_Q15);
 			hdx = fp->hdx;
 			hdx->r08 = (short)((unsigned short)hdx->r08
@@ -291,15 +293,20 @@ v22_ans_rmloop2(struct v22fp *fp, unsigned short *txsym, short *txout,
 		break;
 
 	case V22_RMLOOP2_ANSWER:
+		/*
+		 * `fp->params.bps2` here, not `bps` -- v22fp.h's own note
+		 * records the two as always equal, but the object's compare
+		 * is `cmpw $0x4b0,0x4(...)`, the `bps2` offset (F10194).
+		 */
 		MakeTxData((short *)txsym, (const short *)txcount,
-			   fp->params.bps == V22_RMLOOP2_BPS_1200
+			   fp->params.bps2 == V22_RMLOOP2_BPS_1200
 				   ? V22_TXDATA_SYMBOL_2
 				   : V22_TXDATA_SYMBOL_10);
 		ScrambleDataV22(fp, txsym, *txcount);
 		*txcount = ModDataV22(fp, txsym, txout, *txcount);
 		*rxcount = DemodDataV22(fp, rxin, rxsym, *rxcount);
 		if (*rxcount != 0
-		    && (short)Detect_1s(rxsym, rxcount, fp->params.bps,
+		    && (short)Detect_1s(rxsym, rxcount, fp->params.bps2,
 					V22_DET_THRESH_Q15) == 0) {
 			hdx = fp->hdx;
 			hdx->trained = 0;

@@ -118787,3 +118787,127 @@ TC_OUT=build/tc_out python3 tools/toolchain/byteident.py` before and
 after. `make period` and `make byteident-ratchet` re-run after the
 `V32LocLoopNextState` fix alone (`v32.c` and `v32nsrng.c` are
 byte-for-byte their pre-pass selves in the committed tree). (2026-09-06)
+## F10194. Four V.22 rate-loop `+0`-delta near-misses, three closed further:
+one true field/type defect (`FPM_TONE_generate`'s `void`), one field-offset
+confusion (`bps` for `bps2`), one statement-order CSE trap, and a `hdx`/`fp`
+register swap declined as free.
+
+`byteident.py --near 60` (F8320-era baseline) named four V.22 "rate loop"
+functions across four sibling files, all sitting at `+0` instruction-count
+delta against the blob -- the shape lever 0 flags as "operand order,
+statement order, register allocation, or width/signedness, not a missing
+statement": `v22_answer` (`v22org.c`), `v22_ans_rmloop2` (`v22ans.c`),
+`v22_local_loop` (`v22loop.c`), `v22_org_rmloop2` (`v22hdx.c`). None of the
+four closed to grade 0 in this pass, but three moved substantially closer
+and the residual on all three reduces to ONE understood, declined cause.
+
+**1. `FPM_TONE_generate` was fpm_tone.h's own long-flagged defect, and it
+touched two of the four.** `v22loop.h` and `v22org.h` already carried the
+derivation -- the object's `FPM_TONE_generate` loads its own sign-extended
+`count` argument into `%eax` at every return and the blob's three call
+sites (one in `v22_local_loop`, two in `v22_answer`) store `%ax` straight
+into `*txcount` -- but `fpm_tone.h` declared it `void`, so the reconstruction
+spelled the store as the literal count instead of a return value, exactly
+as the header's own note said to. Retyped `FPM_TONE_generate` to `short` in
+`fpm_tone.h`, gave `src/dsp/fpm_tone.c` a real `return count;`, and rewrote
+all three call sites as `*txcount = FPM_TONE_generate(...)`. `FPM_TONE_generate`
+itself is not grade 0 either before or after (a pre-existing, unrelated
+4-instruction excess; SIZE, 68 blob / 72 ours before and after) so this is
+not a regression there. Every other caller (`fpm_fsm.c`, `class1.c`,
+`class1tx.c`, `v23modem.c`, `v32anstone.c`, `v32txhdx.c`) discards the
+return already and needed no change -- C permits ignoring a non-void return.
+
+**2. The hysteresis if/else in three of the four functions is laid out
+BACKWARDS from the blob**, and it is the same shape every time: `if
+(detected != ABSENT) { conditional-zero } else { unconditional add }`, and
+the blob places the ADD arm as the fall-through/hot path with the
+conditional-zero arm out of line, the opposite of what a literal
+transcription of the `if`/`else` order gives. Confirmed by compiling both
+orders (2 cells, not a search): flipping the condition
+(`if (detected == ABSENT) { add } else { conditional-zero }`) reproduces the
+blob's block order exactly in `v22_local_loop` and in `v22_answer`'s NODE_3
+arm (`v22_originate`'s own copy of the same shape, NODE_6, was NOT touched --
+it carries an unrelated 9-instruction absence putting it outside this
+near-miss cluster, and the bystander check below shows it untouched).
+`v22_answer` also needed the `gap` local's `= 0` hoisted ABOVE the branch
+(computed unconditionally, then overwritten to `V22_BLOCK_MS` only on the
+add arm) to match the object's own hoist of that shared value -- a second,
+independent 2-cell confirmation of the same swapped order.
+
+**3. `v22_ans_rmloop2`'s `V22_RMLOOP2_ANSWER` case read `fp->params.bps`
+where the object reads `fp->params.bps2`**, at four sites (one `MakeTxData`
+pattern-selecting ternary, three `Detect_1s` calls in three different
+sub-states). `v22fp.h` already documents the two fields as "always equal"
+behaviourally (`bps2` is a copy of `bps`), so this was invisible to every
+differential test and is a naming-only defect: `movswl 0x2(%reg)` in ours
+against the object's `movswl 0x4(%reg)`, forced (F604-class: not a
+free encoding, a different field). Fixed all four sites. Went from BYTES
+11 differing bytes to BYTES 7.
+
+**4. A CSE trap in `v22_org_rmloop2`'s case 2**: `fp->hdx->r08 = (short)
+(fp->hdx->r08 + Detect_1s(...))` written as one statement lets GCC hoist
+the shared `fp->hdx` load to BEFORE the embedded `Detect_1s` call, where the
+blob reloads `fp->hdx` AFTER the call (this file's own header note: "the
+instance pointer is re-read after every call"). Splitting the call result
+into a named temporary (`short n = Detect_1s(...); fp->hdx->r08 = ...`)
+forces the load after the call, matching the blob's instruction order
+exactly at that site. A second, unrelated one-line fix in the same
+function: `Detect_Rmloop2_ACK(...) == 0` compared the full 32-bit `int`
+return where the blob narrows to 16 bits first (`test %ax,%ax`, not `%eax`)
+-- added the `(short)` cast already used at this function's other two call
+sites of the same callee. Together these took `v22_org_rmloop2` from SIZE
+1 byte differing (a different total length) to BYTES 90 differing (now the
+SAME length as the blob).
+
+**THE RESIDUAL ON ALL THREE TOUCHED FUNCTIONS IS ONE THING, AND IT IS
+DECLINED.** Normalising `v22_local_loop`'s and `v22_org_rmloop2`'s
+disassembly under a register-swap map (every `%ebx` for `%esi` and back)
+against the blob's own listing removes essentially the entire remaining
+diff -- 126 of 128 differing lines in `v22_local_loop`, all but a handful
+of prologue/epilogue restore-order lines in `v22_org_rmloop2` -- leaving
+`fp` bound to `%esi` where the blob binds it to `%ebx` (and the
+short-lived cached pointer taking the other register) for the WHOLE
+function, from the first instruction. This is CLAUDE.md's own "not free of
+the thing you first blamed" register-allocation case: lever 3 (TU
+emission order) does not apply, since `v22loop.c` is a one-function file
+and `v22org.c`'s two functions (`v22_answer`, `v22_originate`) are already
+in the blob's `nm -n` order (confirmed, no reorder available). Lever 3b was
+tested directly and ruled out: compiling `v22loop.c` with `-fno-rename-registers`
+added to the tree's own flag set reproduces the identical swap, so it is
+not `-frename-registers` doing it (the same negative result 7772 already
+recorded for a different pair). No TU-level or peephole2 lever reaches a
+single-function file's own parameter-to-register assignment, and repeating
+the declaration-order swap tried in `v22_local_loop` (`hdx` before `st`)
+changed nothing either (2 cells, both identical). Declined per the
+fit-vs-recovery ruling (F7782): the domain available to a single-function
+file is exhausted by these probes and none moves it, so this is recorded
+as CLAUDE.md's ordinary "free" register choice rather than chased further.
+`v22_answer` (BYTES 1 byte differing after both fixes) shows a related but
+distinct grade-1 REJECT ("USE CONFLICT") in its own tail, not probed
+further under the same budget.
+
+**Bystanders, checked and clean.** `v22_originate` (`v22org.c`, shares the
+NODE_6 copy of lever-2's if/else shape) and `v22_data` (`v22ans.c`) and
+`v22_retrain` (`v22hdx.c`) were re-measured after every edit to their file
+and none moved bucket or byte count from this pass's baseline -- confirming
+the FPM_TONE_generate retype, the bps2 fix and the CSE split touched only
+their intended call sites.
+
+**Before/after.** Tree-wide grade 0 EXACT: 736 before, 736 after (none of
+the four closed all the way; the declined register swap is the common
+blocker on three of them and `v22_answer` has its own separate grade-1
+tail). `v22_answer` SIZE 1 byte -> BYTES 1 byte (now correct length);
+`v22_ans_rmloop2` BYTES 11 -> BYTES 7; `v22_local_loop` SIZE 2 -> BYTES 97
+(now correct length, was previously the wrong length too); `v22_org_rmloop2`
+SIZE 1 -> BYTES 90 (now correct length). Every closure here is a real,
+disassembly-forced fix (a documented `void` defect, a field-offset
+confusion, a branch-order swap confirmed by 2-cell compiles each, a CSE
+split) and not a fit -- none of them is "closer bytes" on its own; each
+made a SPECIFIC named defect disappear from the diff, which is why the
+byte count went UP on three of the four (SIZE's wrong LENGTH became
+BYTES's right length with more of the remainder still showing) rather than
+down. `make one` on `t_v22ans`, `t_v22hdx`, `t_v22loop`, `t_v22org` and
+`t_v22modem`; real `make period`; `tools/onedef.py`, `tools/refcheck.py`,
+`tools/anchorcheck.py`, `make check64` and `make byteident-ratchet` all
+clean -- see the branch's own commit for the exact period/ratchet counts.
+(2026-09-06)

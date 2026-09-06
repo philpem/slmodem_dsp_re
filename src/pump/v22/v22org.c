@@ -141,12 +141,11 @@ v22_answer(struct v22fp *fp, unsigned short *txsym, short *txout,
 			dsplibs_debug_printf("V22_answer,NODE_1\n");
 
 		/*
-		 * The answer tone.  `FPM_TONE_generate` returns its `count` in
-		 * the object and fpm_tone.h declares it `void`; the count is the
-		 * literal below, so the store is spelled out.  See v22org.h.
+		 * The answer tone.  `FPM_TONE_generate` returns its `count`
+		 * in the object; see v22org.h and F10194, which retyped
+		 * fpm_tone.h so this is one statement again.
 		 */
-		FPM_TONE_generate(fp->hdx->tone, txout, V22_ORG_BLOCK);
-		*txcount = V22_ORG_BLOCK;
+		*txcount = FPM_TONE_generate(fp->hdx->tone, txout, V22_ORG_BLOCK);
 
 		*rxcount = 0;
 		RxClampV22(fp, rxin, (short *)rxsym, (short *)rxcount);
@@ -181,10 +180,9 @@ v22_answer(struct v22fp *fp, unsigned short *txsym, short *txout,
 		 * sends the tone instead, over the top of what `ModDataV22` has
 		 * just produced.
 		 */
-		if ((unsigned int)fp->hdx->gtimer > V22_ANS_NODE_3_TONE_MS) {
-			FPM_TONE_generate(fp->hdx->tone, txout, V22_ORG_BLOCK);
-			*txcount = V22_ORG_BLOCK;
-		}
+		if ((unsigned int)fp->hdx->gtimer > V22_ANS_NODE_3_TONE_MS)
+			*txcount = FPM_TONE_generate(fp->hdx->tone, txout,
+						      V22_ORG_BLOCK);
 
 		*rxcount = DemodDataV22(fp, rxin, rxsym, *rxcount);
 
@@ -198,15 +196,14 @@ v22_answer(struct v22fp *fp, unsigned short *txsym, short *txout,
 					  fp->dsp->rx_count);
 
 		if (*rxcount != 0 && SignalDetect(fp) == 1) {
-			if (detected != 0) {
-				gap = 0;
-				if ((unsigned short)fp->hdx->r08
-				    <= V22_ORG_MIN_RUN_MS)
-					fp->hdx->r08 = 0;
-			} else {
+			gap = 0;
+			if (detected == 0) {
 				gap = V22_BLOCK_MS;
 				fp->hdx->r08 = (short)(fp->hdx->r08
 						       + V22_BLOCK_MS);
+			} else if ((unsigned short)fp->hdx->r08
+				    <= V22_ORG_MIN_RUN_MS) {
+				fp->hdx->r08 = 0;
 			}
 
 			/*

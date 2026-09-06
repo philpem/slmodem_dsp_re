@@ -87,14 +87,10 @@ v22_local_loop(struct v22fp *fp, unsigned short *txsym, short *txout,
 		/*
 		 * The object stores `FPM_TONE_generate`'s return into
 		 * `*txcount`, and that return is its own `count` argument --
-		 * see the derivation in v22loop.h.  fpm_tone.h declares the
-		 * function `void`, so the value is spelled here as the
-		 * constant the object would have got back.  The two are the
-		 * same by that derivation and by nothing weaker; a retyped
-		 * fpm_tone.h would let this become one statement again.
+		 * see the derivation in v22loop.h and F10194, which retyped
+		 * fpm_tone.h so this is one statement again.
 		 */
-		FPM_TONE_generate(hdx->tone, txout, V22_TX_BLOCK);
-		*txcount = V22_TX_BLOCK;
+		*txcount = FPM_TONE_generate(hdx->tone, txout, V22_TX_BLOCK);
 
 		*rxcount = 0;
 		RxClampV22(fp, rxin, (short *)rxsym, (short *)rxcount);
@@ -175,7 +171,11 @@ v22_local_loop(struct v22fp *fp, unsigned short *txsym, short *txout,
 					  fp->dsp->rx_count);
 
 		if (*rxcount != 0 && SignalDetect(fp) == 1) {
-			if (detected != FPM_MTD_ABSENT) {
+			if (detected == FPM_MTD_ABSENT) {
+				hdx = fp->hdx;
+				hdx->r08 = (short)((unsigned short)hdx->r08
+						   + V22_LOOP_BLOCK_MS);
+			} else {
 				/*
 				 * The hysteresis.  Past V22_LOOP_S1_HOLD_MS a
 				 * detection no longer resets the counter, so
@@ -186,10 +186,6 @@ v22_local_loop(struct v22fp *fp, unsigned short *txsym, short *txout,
 				if ((unsigned short)hdx->r08
 				    <= V22_LOOP_S1_HOLD_MS)
 					hdx->r08 = 0;
-			} else {
-				hdx = fp->hdx;
-				hdx->r08 = (short)((unsigned short)hdx->r08
-						   + V22_LOOP_BLOCK_MS);
 			}
 
 			/*
@@ -200,8 +196,7 @@ v22_local_loop(struct v22fp *fp, unsigned short *txsym, short *txout,
 			if ((short)Detect_1s(rxsym, rxcount, V22_LOOP_DET_BPS,
 					     V22_LOOP_ONES_Q15) == 0) {
 				DescrambleDataV22(fp, rxsym, *rxcount);
-				hdx = fp->hdx;
-				hdx->r0a = (short)((unsigned short)hdx->r0a
+				fp->hdx->r0a = (short)((unsigned short)fp->hdx->r0a
 						   + Detect_1s(rxsym, rxcount,
 							V22_LOOP_DET_BPS,
 							V22_LOOP_ONES_Q15));

@@ -40,7 +40,7 @@ FPM_TONE_set_scale(struct fpm_tone *state, short scale)
 	state->cfg.scale = scale;
 }
 
-void
+short
 FPM_TONE_generate(struct fpm_tone *state, short *out, short count)
 {
 	struct fpm_phasor p;
@@ -88,6 +88,8 @@ FPM_TONE_generate(struct fpm_tone *state, short *out, short count)
 	}
 
 	state->phase = (short)p.phase;
+
+	return count;
 }
 
 /*

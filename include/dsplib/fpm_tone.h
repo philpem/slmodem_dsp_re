@@ -236,8 +236,13 @@ void FPM_TONE_set_scale(struct fpm_tone *state, short scale);
  * @param state  Tone object.
  * @param out    Output buffer, @p count samples.
  * @param count  Number of samples to generate.
+ * @return @p count -- see v22loop.h and v22org.h for the derivation.  The
+ *         object's `FPM_TONE_generate` loads its own sign-extended `count`
+ *         argument into `%eax` at both of its returns; this was long
+ *         declared `void` here with call sites spelling the literal instead
+ *         (finding F10194).
  */
-void FPM_TONE_generate(struct fpm_tone *state, short *out, short count);
+short FPM_TONE_generate(struct fpm_tone *state, short *out, short count);
 
 /**
  * @brief Generate @p count samples of the demodulator's reference oscillator.

@@ -129,16 +129,15 @@
  * the amplitude drops 3 dB each time.  2225 Hz is not 2100; nothing in the
  * object says why, and it is recorded rather than explained.
  *
- * `FPM_TONE_generate` IS DECLARED `void` IN fpm_tone.h AND THE OBJECT RETURNS
+ * `FPM_TONE_generate` WAS DECLARED `void` IN fpm_tone.h AND THE OBJECT RETURNS
  * `count`.  Both of its call sites in `v22_answer` store `%ax` into
  * `*txcount`, and the blob's `FPM_TONE_generate` loads `0xc(%esp)` -- which
  * its prologue filled with `movswl` of its own `count` argument -- into `%eax`
  * on both of its exits.  So the object's store is `*txcount = count`, and
- * `count` is the literal 160 at both sites.  This file spells that as the
- * literal rather than as a return value, because changing fpm_tone.h's
- * declaration is a change to a differentially-tested module and is not this
- * file's to make.  It is recorded here so that the next reader of fpm_tone.h
- * knows the declaration understates the object.
+ * `count` is the literal 160 at both sites.  Finding F10194 retyped
+ * fpm_tone.h to `short` and gave the function a real `return count;`, so both
+ * call sites here now spell it as a return value, `*txcount =
+ * FPM_TONE_generate(...)`, matching the object.
  *
  * ---------------------------------------------------------------------------
  * WHAT IS NOT RENAMED

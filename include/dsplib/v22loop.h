@@ -96,7 +96,7 @@
  *     is `params.r08` as `V22FP_create` copied it.
  *
  * ---------------------------------------------------------------------------
- * ONE PROTOTYPE IN THE TREE IS WRONG, AND IT IS NOT THIS ONE
+ * ONE PROTOTYPE IN THE TREE WAS WRONG, AND IT WAS NOT THIS ONE (fixed, F10194)
  *
  * Sub-state 1 stores `FPM_TONE_generate`'s return into `*txcount`:
  *
@@ -108,8 +108,8 @@
  * 0xaae15, from the slot written at 0xaad68).  So the object's
  * `FPM_TONE_generate` returns `count`, exactly as `FPM_TONE_generate_demod`
  * and `FPM_TONE_generate2` are already recorded as doing, and fpm_tone.h's
- * `void` is a defect.  Retyping it is not this file's to do, so the source
- * writes the constant and says why; see the note at the call site.
+ * `void` was a defect.  Finding F10194 retyped it, so the call site now
+ * spells this as one statement, `*txcount = FPM_TONE_generate(...)`.
  */
 
 #ifndef DSPLIB_V22LOOP_H
