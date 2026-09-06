@@ -119060,3 +119060,70 @@ own count). `tools/onedef.py`, `python3 tools/refcheck.py`,
 `ratchet OK (exact 736 -> 737, regalloc 53 -> 53)` -- no decrease, the +1
 being F10193's `V32LocLoopNextState` picked up by the rebase and not this
 pass's own work, which closed nothing. (2026-09-06)
+
+## F10196. F861's fifty-one `V90Parameters unnamed_*` fields checked against slmodemd's own source, and none of them cross the host boundary -- measured, so do not re-run this cross-reference
+
+*2026-09-06.* F861/F862 declined to name fifty-one `V90Parameters` fields
+because `setToDefault` writes them and `loadParams` never reads them back --
+correct as far as the object goes, but that only checks whether dsplibs.o's
+own code re-reads a field, not whether slmodemd's own C source names the same
+memory the way `vce_get_sreg`/`struct voice_info` (F8771) did for voice. This
+pass ran that second check for the whole V.90/V.92 cluster and it is
+negative, rigorously, not merely unattempted:
+
+- **The struct itself never leaves the library's heap.** `V90Parameters` is
+  `sysdep_malloc`'d 0x558 bytes by its OWN constructor
+  (`_ZN13V90ParametersC1EP19_tagModemParameters`, F861's third measurement);
+  no `dp_operations` callback, `modem_get_param` case or `vpcm_delete`-style
+  round trip anywhere in the object hands its address, or a copy of any of
+  its fields, back to the host. Its consumers (`V90Equalizer`,
+  `V90ConnectionEvaluator`, `V90Mapper`, `V90Demapper`, `V90BitsToSymbol`,
+  `V90ConstellationDesigner`, `V90Modulator`, `V90Phase3Demodulator`,
+  `V90Phase3Modulator`, `V90AutoDigitalImpDetector`, `ResamplerTiming`,
+  `tagV90AdditionalCPinfo`) are all internal V.90 pump classes, none host-facing.
+- **Its one host-adjacent member is already fully accounted for, and is not
+  one of the 51.** `V90Parameters::modemParams` at +0x000 is a
+  `_tagModemParameters *` (`include/dsplib/modem_params.h`), which IS
+  slmodemd's `m->dp_runtime` (three independently-verified steps, F820-823,
+  documented at the top of that header) -- but that block is 0x88 = 136 bytes,
+  a fraction of `V90Parameters`' own 0x558, and every field the object reads
+  out of it is already named or marked `unnamed_*`-with-constant in that same
+  header. None of the 51 fields in `V90Parameters.h` (offsets from +0x06c to
+  +0x4bc and beyond) alias anything in `_tagModemParameters` -- they are past
+  its end. All 51 are `setToDefault`-only per F861/F878: no dependency on
+  `modemParams` at all, confirmed by their own header comments ("1.0f",
+  "= 60", "= 0", etc., not "from modeFlags" the way `PROBING_MODE` and
+  `TRN2D_MEAN_ERROR_STD_EVALUATION_ENABLE` -- both NAMED fields, not among
+  the 51 -- are documented to be).
+- **slmodemd's own host<->library parameter API has no V.90/V.92 entries at
+  all.** `ref/slmodemd/modem_param.h`'s `MODEM_PARAMETER_NAMES` enum
+  (`MDMPRM_NONE` through `MDMPRM_LAST`, 63 entries, reproduced verbatim in
+  `include/dsplib/modem_params.h`) is dial/ring/call-progress/homologation
+  parameters (`GetHookFlashTime`, `GetDialPauseTime`, busy/ringback/congestion
+  cadence tables) plus `MDMPRM_DSPINFO`/`MDMPRM_VOICEINFO`/`MDMPRM_DPRUNTIME`,
+  all three already fully cross-referenced (`struct dsp_info`,
+  `struct voice_info`/F8771, `_tagModemParameters` above). `grep -c "case
+  MDMPRM\|case Get" ref/slmodemd/modem_param.c` is 63 lines and none of them
+  mention V.90, computational mode, probing, pad type or power reduction.
+- **The four `SREG_V90_*` S-registers (210-213: `PAD_TYPE`, `POWER_REDUCTION`,
+  `PROBING_MODE`, `COMPUTATIONAL_MODE`, `modem_defs.h:311-314`) are a
+  near-miss, not a match.** Their names echo `V90Parameters::PROBING_MODE`
+  and `DIGITAL_POWER_REDUCTION` -- both already-named fields, not among the
+  51 -- but `modem_get_sreg`/`modem_set_sreg` (`modem.c:1655-1668`) are
+  `return m->sregs[num]` / `m->sregs[num] = val` with no ioctl, no
+  `modem_get_param` call and no other side effect: purely local storage in
+  slmodemd's own `struct modem`, dispatched nowhere. Nothing in this source
+  tree ever moves a value between `m->sregs[210..213]` and `dsplibs.o`.
+  `PROBING_MODE`'s actual bridge to the host is the already-documented
+  `modemParams->modeFlags` bit 1 (`_tagModemParameters`+0x050), a completely
+  separate mechanism from the S-registers.
+
+**So: 51 candidates checked, 0 host-visible, 0 named.** The correct
+disposition for all 51 remains `unnamed_*`/`unnamed_NNN` exactly as F861/F878
+left them -- this is CLAUDE.md's "a thorough negative result... is a complete,
+valuable, and expected possible outcome," not a gap to keep re-probing. `V92`
+carries none of these at all: F861 already measured `V92Parameters::loadParams`
+and `setToDefault` as covering the IDENTICAL 54 offsets, so there is no
+write-once-never-read set to check there. No source, header or test file
+changed; this is a documentation-only finding recording a completed negative
+search so a future session does not re-run it.
