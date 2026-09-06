@@ -171,8 +171,8 @@ v8_process(struct dp *dp, void *in, void *out, int count)
 		}
 
 		/* Common to all four: what was agreed goes to the modem. */
-		st->dspinfo->f08 = (st->cm->b2 >> 6) & 1;
-		st->dspinfo->f0c = st->cm->menu;
+		st->dspinfo->qc_lapm = (st->cm->b2 >> 6) & 1;
+		st->dspinfo->qc_index = st->cm->menu;
 		break;
 
 	case V8_ORG_BAD_QCA1d_MESSAGE:
@@ -187,7 +187,7 @@ v8_process(struct dp *dp, void *in, void *out, int count)
 		if (st->want != 92 && st->want != 90) {
 			ret = DPSTAT_ERROR;
 		} else if (st->f20 == 0) {
-			st->dspinfo->f08 &= 1;
+			st->dspinfo->qc_lapm &= 1;
 			arg = 92;
 		}
 		break;

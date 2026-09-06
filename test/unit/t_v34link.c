@@ -211,10 +211,10 @@ rt_cm(int ep)
 	return (struct v8_cm *)rt_buf[ep];
 }
 
-static struct v8_dspinfo *
+static struct dsp_info *
 rt_info(int ep)
 {
-	return (struct v8_dspinfo *)info_buf[ep];
+	return (struct dsp_info *)info_buf[ep];
 }
 
 static void
@@ -310,7 +310,7 @@ struct v8res {
 	int	blocks;		/* blocks until it asked to change   */
 	int	status;		/* the DPSTAT_* it returned          */
 	int	requested;	/* what it asked to change TO        */
-	int	f08, f0c;	/* what it published through dspinfo */
+	int	qc_lapm, qc_index;	/* what it published through dspinfo */
 	int	b0, b1, b2;
 	int	menu, offered;
 };
@@ -366,8 +366,8 @@ run_v8(struct dp_operations *ops)
 	}
 
 	for (ep = 0; ep < NEP; ep++) {
-		v8res[ep].f08 = rt_info(ep)->f08;
-		v8res[ep].f0c = rt_info(ep)->f0c;
+		v8res[ep].qc_lapm = rt_info(ep)->qc_lapm;
+		v8res[ep].qc_index = rt_info(ep)->qc_index;
 		v8res[ep].b0 = rt_cm(ep)->b0;
 		v8res[ep].b1 = rt_cm(ep)->b1;
 		v8res[ep].b2 = rt_cm(ep)->b2;
@@ -717,12 +717,12 @@ main(void)
 		 * so they are a third, independent reading of "the handover
 		 * fired here", one that no shared log can blur.
 		 */
-		snprintf(msg, sizeof(msg), "%s: dspinfo f08 published",
+		snprintf(msg, sizeof(msg), "%s: dspinfo qc_lapm published",
 			 ep_name[ep]);
-		diff_eq_int(msg, r->f08, 0, ep);
-		snprintf(msg, sizeof(msg), "%s: dspinfo f0c published",
+		diff_eq_int(msg, r->qc_lapm, 0, ep);
+		snprintf(msg, sizeof(msg), "%s: dspinfo qc_index published",
 			 ep_name[ep]);
-		diff_eq_int(msg, r->f0c, 0, ep);
+		diff_eq_int(msg, r->qc_index, 0, ep);
 	}
 	/*
 	 * NOT THE SAME MODEM TWICE.  The two ends differ only in `caller`, so

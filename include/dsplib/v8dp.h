@@ -11,6 +11,7 @@
 
 #include "dsplib/dp.h"
 #include "dsplib/v8.h"
+#include "dsplib/modem_params.h"
 
 /* The id this datapump registers under. */
 #define DP_V8	8
@@ -29,12 +30,19 @@
 /* The only rate the handshake runs at. */
 #define V8_DP_RATE	9600
 
-/* Where the negotiated result is left for whoever asked for the call. */
-struct v8_dspinfo {
-	unsigned char	pad00[8];
-	int		f08;			/* +0x08 */
-	int		f0c;			/* +0x0c */
-};
+/*
+ * Where the negotiated result is left for whoever asked for the call.
+ *
+ * `dspinfo` below is the SAME 16-byte host block `include/dsplib/
+ * modem_params.h`'s `struct dsp_info` already names in full (finding F822,
+ * derived from `vpcm_delete`/`dp_runtime_create`): both are reached the same
+ * way, `modem_get_param(modem, MDMPRM_DSPINFO)`, and this wrapper only ever
+ * touches the block's last two words -- `qc_lapm` at +0x08, `qc_index` at
+ * +0x0c -- leaving `connection_type`/`clock_deviation` at +0x00/+0x04 to
+ * whichever datapump actually negotiates a line rate.  No separate type is
+ * declared for it; `struct v8_dp` below points at `struct dsp_info` directly
+ * (finding F10197).
+ */
 
 /*
  * The wrapper's object, 52 bytes.  The first five words are the datapump
@@ -54,7 +62,7 @@ struct v8_dp {
 	 * MDMPRM_DSPINFO is an address, not a number: the wrapper writes the
 	 * negotiated result into it when the handshake finishes.
 	 */
-	struct v8_dspinfo	*dspinfo;	/* +0x24 */
+	struct dsp_info		*dspinfo;	/* +0x24 */
 	struct v8_cm		*cm;		/* +0x28 */
 	int			f2c;		/* +0x2c */
 	struct v8			*v8;	/* +0x30 */

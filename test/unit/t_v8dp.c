@@ -184,7 +184,7 @@ main(void)
 		 * MDMPRM_DSPINFO, but the negotiated path writes the agreed
 		 * result through it.
 		 */
-		static struct v8_dspinfo info_a, info_b;
+		static struct dsp_info info_a, info_b;
 		static const struct {
 			const char	*name;
 			short		f9d4, f9d6, f9d8;
@@ -355,11 +355,11 @@ main(void)
 					 * so that writing them on the wrong
 					 * branch shows up.
 					 */
-					diff_eq_int("published f08 (%ld)",
-						    info_b.f08, info_a.f08,
+					diff_eq_int("published qc_lapm (%ld)",
+						    info_b.qc_lapm, info_a.qc_lapm,
 						    (long)(lvl * 64 + si));
-					diff_eq_int("published f0c (%ld)",
-						    info_b.f0c, info_a.f0c,
+					diff_eq_int("published qc_index (%ld)",
+						    info_b.qc_index, info_a.qc_index,
 						    (long)(lvl * 64 + si));
 				}
 

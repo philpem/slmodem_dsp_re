@@ -61,7 +61,7 @@ v8_create(void *modem, int id, int caller, int srate, int max_frag,
 	st->answerer = caller == 0;
 	st->want = id;
 	st->f20 = 0;
-	st->dspinfo = (struct v8_dspinfo *)(intptr_t)
+	st->dspinfo = (struct dsp_info *)(intptr_t)
 		      modem_get_param(modem, MDMPRM_DSPINFO);
 
 	cm = dp_param_get(modem);

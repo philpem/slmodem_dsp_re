@@ -119127,3 +119127,81 @@ and `setToDefault` as covering the IDENTICAL 54 offsets, so there is no
 write-once-never-read set to check there. No source, header or test file
 changed; this is a documentation-only finding recording a completed negative
 search so a future session does not re-run it.
+
+## F10197. `v8dp.h`'s `f08`/`f0c` are the SAME two `struct dsp_info` words F822 already named -- `qc_lapm`/`qc_index`, reached by V.8's own copy of the same pointer
+
+*2026-09-06.* A slmodemd-crossreference pass over V.34/voice/CID/ring/fax
+(the vce_get_sreg/voice_info method, F8771) turned up one more instance of
+the same shape one file over from where F822 first found it.
+
+`v8_create` (`src/v8/v8dp.c`) fetches `modem_get_param(modem,
+MDMPRM_DSPINFO)` into `st->dspinfo` -- disassembly confirms the immediate is
+`0xb` (11 = `MDMPRM_DSPINFO`) at the object's own `v8_create+0x9f`
+(`call modem_get_param`, `mov %eax,0x24(%esi)`), the same call F822 already
+traced from `vpcm_create`/`vpcm_delete`/`dp_runtime_create` to slmodemd's
+`struct dsp_info` (`modem_defs.h:366`: `connection_type`, `clock_deviation`,
+`qc_lapm`, `qc_index`, in that order, 16 bytes). `v8dp.h` had never made that
+connection: it declared its own 16-byte shadow, `struct v8_dspinfo { pad00[8];
+int f08; int f0c; }`, with `f08`/`f0c` at exactly +0x08/+0x0c -- the same
+offsets and widths as `qc_lapm`/`qc_index` in the ALREADY-NAMED host struct,
+reached through the SAME parameter number and the SAME API boundary. This is
+not a second derivation of `dsp_info`'s layout; it is the discovery that a
+second file in this tree was talking about it under a different, unnamed
+type.
+
+**What V.8 does with the two words it touches matches the host's own names
+for them, not just their offsets.** `v8proc.c`'s `v8_process` writes both,
+on the arm that fires once the CM/JM negotiation lands on quick connect or a
+survived modulation (`st->cm->b2 & 0x10` for QC, or one of the three `b0`
+capability bits otherwise -- the same branch the file's own comment already
+walks through for F164's V90/V34/V32 bits):
+
+    st->dspinfo->f08 = (st->cm->b2 >> 6) & 1;   /* now qc_lapm */
+    st->dspinfo->f0c = st->cm->menu;            /* now qc_index */
+
+`qc_lapm` is a single bit taken from CM/JM byte 2 bit 6 -- exactly the shape
+of a boolean flag, and named "QC" + "LAPM" on the host side for a value only
+ever written on the quick-connect/negotiated-result arm this pass reads,
+which is the same "QC" the object's own branch is testing two lines above.
+`qc_index` is the raw `cm->menu` byte -- an index-shaped value copied
+whole, matching a name that says "index" and not "flag". Neither host name
+was GUESSED at from the object's own behaviour; both were already declared
+in `include/dsplib/modem_params.h` by F822 before this pass started, and
+this pass's contribution is the cross-file identification, not a fresh
+derivation of what the bits mean.
+
+`struct v8_dspinfo` is retired rather than kept as a same-shape twin:
+`struct v8_dp::dspinfo` now points at `struct dsp_info` directly (`v8dp.h`
+already includes `dsplib/modem_params.h`'s header for `MDMPRM_DSPINFO`,
+so the include is not new), matching the precedent `include/dsplib/vpcm.h`
+already set for the same struct. `pad00[8]` needed no replacement: `struct
+dsp_info` already names those eight bytes `connection_type`/
+`clock_deviation`, and neither is written by anything in `src/v8/` --
+consistent with F822's own finding that a V.34/V.32/V.90/V.92 datapump, not
+V.8, is what publishes the connection type and clock deviation once one is
+negotiated.
+
+Renamed at both writers in `v8proc.c`, the one caster in `v8dp.c`, and every
+test that names the type or the two fields: `test/unit/t_v8dp.c` (two
+`diff_eq_int` field comparisons), `test/unit/t_v8direct.c` (the type only --
+it compares the whole 16-byte block with `memcmp`, so no field name was
+live there), and `test/unit/t_v34link.c` (the type, its own accessor
+`rt_info()`, and a locally-named `struct v8res` snapshot pair renamed to
+match for consistency, since a V.34 test file walking the same handoff is
+this pass's own territory and not vpcm's). `test/mutations/v8proc.json`'s
+one anchor referencing the old field names updated in its `find`/`replace`
+text only, per the rule against ever touching a mutation's `label`.
+
+**Verification.** `make one T="t_v8dp t_v8direct t_v34link t_v34conn"`: 15
+groups, all PASS, 0 FAIL (`v8_process: the whole object, per block` alone is
+159,324 checks). `tools/onedef.py` (300 types, 1 known duplicate, unchanged),
+`python3 tools/refcheck.py` (13,641 references, 0 dangling) and
+`tools/anchorcheck.py` (228 suites, 9,767 mutations, 0 anchors matching
+other than exactly once) all clean. This is a pure identifier substitution
+and a type consolidation onto an EXISTING, already-verified layout (no `pad`
+region resized, no offset moved), so it cannot move generated code; real
+`make period` (GCC 3.4.2, docker) confirms it -- 374 passed, 0 failed,
+identical to the pre-change count -- and real `make byteident-ratchet`
+reports `ratchet OK (exact 736 -> 737, regalloc 53 -> 53)`, no decrease (the
++1 predates this change; a struct-pointer retype and two field renames
+cannot themselves move codegen).

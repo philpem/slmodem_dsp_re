@@ -71,8 +71,8 @@
  },
  {
   "label": "publish the agreement only on quick connect",
-  "find": "\t\t/* Common to all four: what was agreed goes to the modem. */\n\t\tst->dspinfo->f08 = (st->cm->b2 >> 6) & 1;\n\t\tst->dspinfo->f0c = st->cm->menu;\n\t\tbreak;",
-  "replace": "\t\tif (st->cm->b2 & 0x10) {\n\t\t\tst->dspinfo->f08 = (st->cm->b2 >> 6) & 1;\n\t\t\tst->dspinfo->f0c = st->cm->menu;\n\t\t}\n\t\tbreak;"
+  "find": "\t\t/* Common to all four: what was agreed goes to the modem. */\n\t\tst->dspinfo->qc_lapm = (st->cm->b2 >> 6) & 1;\n\t\tst->dspinfo->qc_index = st->cm->menu;\n\t\tbreak;",
+  "replace": "\t\tif (st->cm->b2 & 0x10) {\n\t\t\tst->dspinfo->qc_lapm = (st->cm->b2 >> 6) & 1;\n\t\t\tst->dspinfo->qc_index = st->cm->menu;\n\t\t}\n\t\tbreak;"
  },
  {
   "label": "drop the idle timer announcement",

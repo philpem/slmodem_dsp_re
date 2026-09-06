@@ -92,7 +92,7 @@ ops_of(int ref)
 }
 
 static struct v8_cm cm_a, cm_b;
-static struct v8_dspinfo info_a, info_b;
+static struct dsp_info info_a, info_b;
 
 static struct v8_dp dp_na, dp_nb, dp_at_create;
 static struct v8 v8_na, v8_nb, v8_at_create;
@@ -123,7 +123,7 @@ selfrel(const void *p, const void *base, size_t n)
 static void
 normalise_dp(struct v8_dp *dst, const struct v8_dp *src,
 	     const struct dp_operations *op, const struct v8_cm *cm,
-	     const struct v8_dspinfo *info, const char *side, long tag)
+	     const struct dsp_info *info, const char *side, long tag)
 {
 	char b[128];
 
