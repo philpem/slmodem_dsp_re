@@ -108,9 +108,9 @@ short V32_ESEQ[V32_RATE_COUNT] = {
 static int
 v32_common_rate(void *modem, unsigned short seq)
 {
+	int rate = V32_RATE_NONE;
 	void *fp = FIELD_PTR(modem, V32_OBJ_FP);
 	short local = V32_RATE_SEQ[FIELD_S(fp, V32FP_RX_RATE_INDEX)];
-	int rate = V32_RATE_NONE;
 
 	if ((seq & 0x0008) && (local & 0x0008))
 		rate = 5;

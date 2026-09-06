@@ -480,8 +480,7 @@ RxHdxRateSequence(void *modem, short *in, unsigned short *out,
 	FIELD_U32(hdx, V32HDX_TIMER) +=
 		(unsigned int)FIELD_S16(hdx, V32HDX_SYMBOL_LEN);
 
-	n = DemodDataV32(modem, in, out, *count);
-	*count = n;
+	*count = n = DemodDataV32(modem, in, out, *count);
 	DescrambleDataV32(modem, (short *)out, n);
 
 	/*
@@ -517,8 +516,7 @@ RxHdxSequence(void *modem, short *in, unsigned short *out,
 	FIELD_U32(hdx, V32HDX_TIMER) +=
 		(unsigned int)FIELD_S16(hdx, V32HDX_SYMBOL_LEN);
 
-	n = DemodDataV32(modem, in, out, *count);
-	*count = n;
+	*count = n = DemodDataV32(modem, in, out, *count);
 	DescrambleDataV32(modem, (short *)out, n);
 
 	if (DetSequence(modem, (const short *)out, *count) >= 0)
@@ -598,8 +596,7 @@ RxHdxData(void *modem, short *in, unsigned short *out, unsigned short *count)
 	FIELD_U32(hdx, V32HDX_TIMER) +=
 		(unsigned int)FIELD_S16(hdx, V32HDX_SYMBOL_LEN);
 
-	n = DemodDataV32(modem, in, out, *count);
-	*count = n;
+	*count = n = DemodDataV32(modem, in, out, *count);
 	DescrambleDataV32(modem, (short *)out, n);
 
 	*count = RxClampV32(modem, in, (short *)out, *count);
@@ -629,8 +626,7 @@ RxHdxToneData(void *modem, short *in, unsigned short *out,
 	}
 
 	/* The demodulation comes AFTER the timeout check, not before it. */
-	n = DemodDataV32(modem, in, out, *count);
-	*count = n;
+	*count = n = DemodDataV32(modem, in, out, *count);
 	DescrambleDataV32(modem, (short *)out, n);
 
 	*count = RxClampV32(modem, in, (short *)out, *count);

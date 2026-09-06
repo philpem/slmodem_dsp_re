@@ -119685,3 +119685,47 @@ green as part of `mutate.py`, which refuses to score a non-green baseline.
 `make one` preflight. Since this pass changes only the recorded mutation
 snapshot and documentation, it cannot alter generated code or period-tier
 behaviour. (2026-09-06)
+
+## F10202. Two source-shape changes make eight V.32 functions byte-exact: four chained demodulator assignments and one declaration-order cursor carried through four inlined copies
+
+Two files were worked as translation units, and their whole exact-symbol sets
+were compared before and after rather than inferred from the headline count.
+Against current `master`, grade-0 EXACT moves **741 -> 749**, grade 0-or-1
+**801 -> 809**, BYTES **146 -> 138**, with SIZE unchanged at 904 and REGALLOC
+unchanged at 53. The exact-set diff contains eight additions and no losses.
+
+**`v32rxhdx.c`: four direct closures from the same two-spelling domain.**
+`RxHdxRateSequence`, `RxHdxSequence`, `RxHdxData` and `RxHdxToneData` each
+contained the same pair of consecutive statements:
+
+```
+n = DemodDataV32(modem, in, out, *count);
+*count = n;
+```
+
+The blob's source shape is the chained assignment
+`*count = n = DemodDataV32(...)`. With GCC 3.4.2 that spelling keeps the
+callee's unsigned-short result in the form the following `DescrambleDataV32`
+call consumes, eliminating the `mov`/`movzwl` mismatch at the first differing
+row. The domain here has exactly the two natural spellings above; the split
+form leaves all four as BYTES with six differing bytes apiece, while the
+chained form makes all four positionally EXACT: 258, 222, 139 and 234 bytes.
+
+**`v32seq.c`: one declaration moved, four inlined copies close together.**
+`v32_common_rate` is static and inlined into `DecodeRateSeq`, `CodeRateSeq`,
+`CodeFinalRateSeq` and `SeqToRate`. Moving its `int rate = V32_RATE_NONE`
+declaration ahead of the `fp` and `local` initialisers changes no evaluation
+or value, but seeds GCC 3.4.2's allocation/emission cursor in the order the
+object used. All four callers move from BYTES to positionally EXACT together:
+152, 164, 164 and 150 bytes. That four-function bystander result is why this
+change is recorded at translation-unit scope rather than described only as a
+`DecodeRateSeq` fix.
+
+**Verification.** After rebasing onto the F10200/F10201 master, `make tc`
+compiled all 272 objects with GCC 3.4.2 and `make byteident-ratchet` reported
+`ratchet OK (exact 736 -> 749, regalloc 53 -> 53)`. A direct `--list-exact`
+diff against the freshly rebuilt master object tree showed exactly the eight
+additions named above and no removals. `make one T="t_v32rxhdx t_v32seq"`
+passed every differential group, including every rate signal and all receive
+half-duplex states. The authoritative `make period J=3` gate passed **374/374**;
+`make check64` is clean in both configurations. (2026-09-06)
