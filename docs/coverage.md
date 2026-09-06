@@ -7,14 +7,14 @@ dsplibs.o reconstruction coverage
 
   .text                          734605 bytes, 1861 symbols
 
-  translated  [#################################.]  97.8%    718301 bytes, 1848 symbols
-  tested      [#####.............................]  15.6%    112064 bytes, 106 of 1848 that can be
+  translated  [#################################.]  97.9%    719230 bytes, 1851 symbols
+  tested      [#####.............................]  15.6%    112064 bytes, 106 of 1851 that can be
 
   `tested` is the share of what we have translated that some test drives
   against the blob itself, not a self-consistency check.  Its denominator
   is what CAN be driven that way: everything with a `ref_` alias in
   build/dsplibs_ref.o, which since the Makefile globalizes first includes
-  the file-local symbols too -- 43 of ours (16742 bytes).
+  the file-local symbols too -- 46 of ours (17671 bytes).
 
   translated, alias exists, and NOT tested:
     _ZN12V90Equalizer7processEPfjPsS0_Rj           9364 bytes
@@ -289,6 +289,7 @@ dsplibs.o reconstruction coverage
     FPM_AGC_agc                                     566 bytes
     FAX_create                                      564 bytes
     _ZN9FloatARMA7processEPKfPfj                    562 bytes
+    v22_process                                     557 bytes   (file-local)
     v90RateReneg                                    555 bytes
     _ZN12V90PreFilterC2E23__tHardwareCodecTypes__P13V90Phase2InfoP13V90Parameters    552 bytes
     _ZN12V90PreFilterC1E23__tHardwareCodecTypes__P13V90Phase2InfoP13V90Parameters    552 bytes
@@ -475,6 +476,7 @@ dsplibs.o reconstruction coverage
     _Z16setDilDescriptorP19tagV90DILdescriptor7DilType    305 bytes
     V27RX_epoch_det                                 303 bytes
     pack_next_bit                                   301 bytes
+    v22_create                                      300 bytes   (file-local)
     dp_runtime_create                               298 bytes
     toneiir_create                                  297 bytes
     _ZN12V90Equalizer23restoreEqualizerToFloatEv    297 bytes
@@ -1175,6 +1177,7 @@ dsplibs.o reconstruction coverage
     _ZN5V90CP5resetEv                                73 bytes
     V92createFilterCoefficients                      73 bytes
     v23_delete                                       72 bytes   (file-local)
+    v22_delete                                       72 bytes   (file-local)
     dp_v22_init                                      72 bytes
     b103_delete                                      72 bytes   (file-local)
     alaw2linear                                      72 bytes
@@ -1782,15 +1785,77 @@ dsplibs.o reconstruction coverage
 
   we define these and the object has no symbol of that name --
   either a helper split out of a larger function, or drift:
+    AnalyseDialString.part.0
     CID_MTD_coeff
     FPM_log10_table_derived
+    VPcmV34Progress.cold
+    _ZL11trn1uSymbolP18V92Phase3Modulator
+    _ZL12tx1_moh_holdP10v34_object.isra.0
+    _ZL13arma_convolvePKfS0_j
+    _ZL13ec_filter_sumPKfS0_j
+    _ZL14v92jd_crc_bitsPiPKh
+    _ZL15scrambledSymbolP18V90Phase3Modulatorh
+    _ZL17ce_echo_rrn_debugP22V90ConnectionEvaluator
+    _ZL17floatfir_convolvePKfS0_j
+    _ZL18adid_recheckAltRbsP25V90AutoDigitalImpDetector
+    _ZL20adid_updateTrn1SigmaP25V90AutoDigitalImpDetectorPKc
+    _ZL26setConstellationMaskInlineP16V90MappingParamsiPKs
+    _ZL31setCodecConstellationMaskInlineP16V90MappingParamsiPKs
     _ZN10GenericIIRIfdE10compactOutEv
     _ZN10GenericIIRIfdE9compactInEv
     _ZN10GenericIIRIfdEdlEPv
     _ZN10GenericIIRIfdEnwEj
+    _ZN12V90Equalizer11enterPhase4Ev.part.0
+    _ZN12V90Equalizer21convertEqualizerToMmxEv.part.0
+    _ZN12V90Equalizer23restoreEqualizerToFloatEv.part.0
+    _ZN12V92Modulator17mkResampledSignalERj.part.0
+    _ZN14V90Demodulator10exitPhase3Ev.part.0
+    _ZN14V90Demodulator14enterDataPhaseEv.part.0
+    _ZN14V90Demodulator20enterDataSteadyStateEv.part.0
+    _ZN18V90Phase3Modulator17resetDILGeneratorEPK19tagV90DILdescriptor.part.0
+    _ZN19V90SpectralVerifier30checkSpecialSpectralConditionsEv.part.0.constprop.0
+    _ZN5V90Jd10unPackDataEi.cold
+    _ZN5V92Jd12unPackJdDataEi.cold
+    _ZN5V92Jd17unPackJdPhaseDataEi.cold
+    _handle_data_input.part.0
+    agc_rms
+    begin_next
+    biquad
+    build_timeouts
+    depth_half
+    digit_finished
+    ecc_adapt
+    ecc_filter
+    echo_rewind
+    emit_gap
+    fse_differential
+    fse_quality
     hs_get
     hs_put
     hs_setstate
+    match_extension
+    pps_rail
+    probe_preemp
+    probe_preemp_shape
+    quarter_rotate
+    request_state
+    rx_predict
+    shell_group
+    sre_ingest
+    t3m_errrec_core
+    t3m_tail
+    t3m_txblock
+    t41_after_guards
+    t41_marks_late
+    t44_det_info_accept
+    t44_mdlength.isra.0
+    t44_print10
+    t46_info0_counting
+    t46_past_the_counter
+    t46_reset_core
+    t4_mp_sequence_end
+    t72_measure
+    v32_common_rate
     v34handshak_txblock
     v34handshak_unwritten
     v34handshak_unwritten_reset
@@ -1817,11 +1882,13 @@ dsplibs.o reconstruction coverage
     v34tx1_xmitmp
     v8_handshak_agc
     v8_handshak_demod
+    vpcm_run.cold
     vpcm_unwritten
     vpcm_unwritten_reset
+    vtb_acs
+    vtb_branch
 
   what is left, by translation-unit span:
-    v22.c                                            929 bytes     3 symbols
     Dialer.c +18                                     895 bytes     1 symbols
     pow.S#279 +1                                       0 bytes     9 symbols
 ```

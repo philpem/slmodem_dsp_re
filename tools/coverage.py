@@ -181,7 +181,8 @@ def blob_addresses(path):
 
 
 def our_symbols(build):
-    """Global text symbols our own compiler output defines.
+    """Text symbols our own compiler output defines: every global one, plus
+    a local (`static`) one where the name is unambiguous.
 
     build/src, or build/repro when build/src is empty -- the two-directory
     whitelist the docstring argues for, probed rather than assumed since a
@@ -190,13 +191,30 @@ def our_symbols(build):
     the whole project read `translated 0.0%, 0 bytes, 0 symbols` at exit 0
     after a plain `make`, which is indistinguishable from a reconstruction
     that has not started.  Findings F3055 and F3110; tools/objtree.py.
+
+    A LOCAL NAME IS COUNTED ONLY WHEN IT DEFINES ONE OBJECT, NOT WHEN IT
+    APPEARS ONCE. `static void reset(void)` in two unrelated files is legal
+    C and common in this tree, and a name occurring in two of our own
+    object files is exactly as ambiguous as one occurring in two of the
+    blob's -- `unaliasable()`'s whole argument, applied to our own side
+    instead of the blob's. Counting occurrences and keeping only the
+    singletons is what makes that safe: `v22_create`/`v22_delete`/
+    `v22_process` are `static` in both the blob and this reconstruction (F10190)
+    and were invisible to every prior version of this function, which kept
+    only `T`/`W` kinds and so could never credit a correctly-`static`
+    function -- 929 bytes read as unwritten while fully written and tested.
+    Finding F10191.
     """
     _d, objs = objtree.read("the translated share of the blob", build)
     syms = set()
+    local_count = {}
     for path in objs:
         for sym, (_size, kind) in nm_symbols(path).items():
             if kind in ("T", "W"):
                 syms.add(sym)
+            elif kind == "t":
+                local_count[sym] = local_count.get(sym, 0) + 1
+    syms.update(name for name, n in local_count.items() if n == 1)
     return syms
 
 

@@ -118535,3 +118535,70 @@ grade-0-or-1 (43.0%), ratchet OK -- byte-for-byte identical to the pre-fix
 run, which is exactly what a change confined to a `weak`-vs-plain
 declaration and a test file predicts: no code generation depends on how a
 symbol that is defined either way gets declared. (2026-09-06)
+
+## F10191. `tools/coverage.py` undercounted correctly-`static` reconstructed
+functions -- `our_symbols()` only credited global/weak text symbols
+
+F10190's own dp_init.c fix confirmed `v22_create`/`v22_delete`/`v22_process`
+are fully written, `static` (matching the blob's own local linkage,
+confirmed with `nm ref/slmodemd/dsplibs.o` directly rather than trusting the
+`ref_`-promoted copy: `t v22_create`/`t v22_delete`/`t v22_process`), and
+already exercised by `t_v22del.c` through their `ref_` aliases. Yet `make
+coverage` kept listing `v22.c` under "what is left, by translation-unit
+span" at 929 bytes / 3 symbols, unchanged before and after F10190 landed --
+the fix that made them correct did not make the tool see them.
+
+**Cause.** `our_symbols()` builds the "have we translated this" membership
+test from our own build's text symbols, but filtered to `kind in ("T",
+"W")` -- global and weak only. A blob symbol that is genuinely `t` (local)
+in the original, reconstructed correctly as `static` in `src/`, is
+therefore invisible to this function no matter how complete or tested it
+is: `main()`'s `done_l = {n: s for n, s in lo.items() if n in ours}` can
+never find it there. This is not the `unaliasable()` case (multi-TU name
+collisions, already handled and reported separately) -- it fires even when
+the local symbol is uniquely named and cleanly aliased, which is exactly
+the v22 case: all three names appear in `build/dsplibs_ref.o` as
+`ref_v22_create`/`ref_v22_delete`/`ref_v22_process`.
+
+**Why a flat name check wasn't already there, and why it must not simply be
+added.** `static void reset(void)` in two unrelated files is ordinary,
+common C, and this tree has 68 distinct local text-symbol names across its
+own build today. Crediting a match by bare name without checking which
+object defined it would let an unrelated static function in File B falsely
+satisfy the blob's local symbol in File A the moment they share a spelling
+-- the identical risk `unaliasable()`'s own docstring already states for
+the blob's side, just unaddressed on ours.
+
+**Fix.** `our_symbols()` now also counts a local (`t`) name, but only when
+it occurs in EXACTLY ONE of our own object files -- computed by counting
+occurrences across every object `objtree.read` returns, the same object set
+the function already scanned, so no new build state has to exist for the
+tool to trust. Measured before trusting it: 55 blob-local symbols exist,
+all 55 are already uniquely aliased by `symmap.py`'s two-pass rename (zero
+in `unaliasable()`'s list today), and cross-checking against our own
+build found exactly 68 distinct local names, zero of which occur in more
+than one of our own object files -- so the singleton-count guard changes
+nothing for any name that would have been ambiguous either way, and the
+fix is a strict widening with no new false-positive path opened. Exactly
+three names cross from unwritten to written under the fix, and they are
+the three F10190 already established were correct:
+`v22_create`/`v22_delete`/`v22_process` (300/72/557 bytes, 929 total).
+
+**Verification.** Before: `translated` 97.8% (718,301 bytes, 1,848
+symbols), `v22.c` present in "what is left" at 929 bytes / 3 symbols.
+After: `translated` 97.9% (719,230 bytes, 1,851 symbols) -- the exact
+929-byte, 3-symbol delta and nothing else -- `v22.c` gone from "what is
+left" (only `Dialer.c +18`'s already-explained inlining artifact and
+`pow.S#279`'s libm stub labels remain), and the `tested` denominator grows
+by the same three names (43 -> 46 of ours drivable via `ref_`, +929
+bytes), confirming all three are correctly recognized as both translated
+and aliasable, not just translated. `tested` itself still shows all three
+as NOT YET driven in THIS run, which is `tested_symbols()` correctly
+reporting an incremental `build/test/` tree with only 19 test objects
+compiled in it (no `t_v22del.o` present to be scanned) rather than a
+defect in this fix -- `t_v22del.c` does call `ref_v22_create`/
+`ref_v22_delete` directly, and a full `make phase`/`make test` run would
+show it. A pure `tools/` change with no `src/`/`include/`/`test/` edit, so
+there is nothing for `make period`/`make byteident-ratchet` to gate --
+`tools/refcheck.py` clean, `docs/coverage.md` regenerated to match.
+(2026-09-06)
