@@ -94,6 +94,14 @@ struct fpm_agc_cfg;
  * THE SIGN IS NOT ESTABLISHED, exactly as for `faxcfg.h`'s `bit_rate`: every
  * comparison the object makes on `chan2` is against zero, which carries no
  * sign, and the only value it holds is 1.
+ *
+ * CONFIRMED-EXHAUSTED, WAVE 7: `short_0002`/`short_0006`/`int_0008`/
+ * `int_000c`/`int_0010` were re-checked against this struct's own three
+ * `faxcfg.h` siblings (`v17rx_cfg`/`v27rx_cfg`/`v29rx_cfg`), which carry the
+ * identical shape at the identical offsets and stay unnamed there too for
+ * the same reason (`int_0008` is 60000 in all four and read back by
+ * nothing; the rest are zero and untouched) -- a negative twin-class
+ * result, not an unexamined one.
  */
 struct v21rx_cfg {
 	short		chan2;		/* +0x00  1: use channel 2's tables  */
@@ -151,6 +159,20 @@ extern struct v21rx_cfg V21RX_CFG;
  * sits in every sibling table in this file; 60000 is the same literal
  * `V21RX_CFG.int_0008` and every one of `faxcfg.h`'s siblings carry at their
  * own +0x08. 3200 has no parallel elsewhere in this file and is not named.
+ *
+ * CONFIRMED-EXHAUSTED, WAVE 7: every field re-checked against `V21TX_
+ * create`'s own reads (none past a bulk copy -- see the header comment) and
+ * against the sibling `v17tx_cfg`/`v27tx_cfg`/`v29tx_cfg` (F10183, this
+ * wave) at the same offsets; none of those siblings' own established
+ * fields (`fifo_size_factor`/`scale_mul`/`flags`, all further along the
+ * struct) land inside this table's own +0x00..+0x18, since V.21's
+ * transmit config is a different, shorter shape (write-only, no FIFO
+ * size factor of its own -- `V21TX_create`'s FIFO is a fixed 6 elements,
+ * not derived from any field here). `short_0000`'s own three-arm behaviour
+ * is already fully derived above; it is not `chan2` under another name,
+ * since arms 0 and 1 are observably IDENTICAL (both take the same
+ * unconditionally-overwritten tone pair) where `chan2` genuinely selects
+ * between two different table sets.
  */
 struct v21tx_cfg {
 	short	short_0000;	/* +0x00  1                                 */

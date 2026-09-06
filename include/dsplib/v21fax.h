@@ -174,19 +174,41 @@ struct v21_tx_dsp {
  * lowercase adapter `v21tx_control` (faxadapt.c), which forwards `arg`
  * unchanged from its own caller.
  *
- * `int_0004` and `int_0008` are `int`, both loaded and stored whole; `int_0008`
+ * `int_0004` and `scale` are `int`, both loaded and stored whole; `scale`
  * is then NARROWED to `short` on its way into `dsp->fsm.cfg.scale`
  * (`mov %dx,0x6(%ecx)`, the object's own truncation, so the source keeps the
  * cast rather than declaring the field `short` and losing the wide load).
- * `flags_0c` and `flags_0d` are `unsigned char`, each read once with
+ * `mask` and `flags` are `unsigned char`, each read once with
  * `movzbl` and tested bit by bit.
+ *
+ * `scale` IS RANK 2: `V21TX_control` (`src/fax/v21.c`) assigns it straight
+ * into `dsp->fsm.cfg.scale`, `struct fpm_fsm_cfg`'s own already-named field
+ * (`fpm_fsm.h`), narrowed exactly the way the object narrows it.
+ *
+ * `mask` AND `flags` ARE FOUND BY TWIN-CLASS DIFFING against `struct
+ * v27tx_ctl` (this wave), not usage inference alone: `V27TX_control` tests
+ * `mask`'s bit 2 against `V27TX_HANDLE_FLAGS`' own bit 2 and ORs it in on a
+ * hit, exactly the shape `V21TX_control` runs here (`arg->mask &
+ * V21TXCTL_SET_TXFLAGS_BIT2` -> `V21TX_FLAGS(modem) |=
+ * V21TXCTL_SET_TXFLAGS_BIT2`, same bit position, same "test a mask bit,
+ * OR the matching handle-flag bit" shape) -- so this byte is the same role
+ * as V.27ter's `mask`, not a second `flags` byte.  `flags`'s own REINIT bit
+ * sits at bit 1 in both `struct v21tx_ctl` and `struct v27tx_ctl`
+ * (`V21TXCTL_REINIT`/`V27TXCTL_FLAGS_REINIT`), and its "force a params-block
+ * int" bit sits at bit 4 in both (`V21TXCTL_SET_PARAMS_INT0004`/
+ * `V27TXCTL_FLAGS_FORCE_INT_0008`) -- three independent bit-position matches
+ * across two structs from two different modulations, which is what makes
+ * this a real name and not a guess: per F10177-F10179's ruling, offset and
+ * type agreement alone are the weakest of the three checks, and what closes
+ * it here is the SITE -- both functions branch on the bit the same way.
  */
 struct v21tx_ctl {
 	unsigned char	unmapped_0000[0x04];
 	int		int_0004;	/* +0x04 -> cfg->int_0008           */
-	int		int_0008;	/* +0x08 -> dsp->fsm.cfg.scale, narrowed */
-	unsigned char	flags_0c;	/* +0x0c                            */
-	unsigned char	flags_0d;	/* +0x0d                            */
+	int		scale;		/* +0x08 -> dsp->fsm.cfg.scale, narrowed */
+	unsigned char	mask;		/* +0x0c bit 2 -> V21TX_FLAGS bit 2 */
+	unsigned char	flags;		/* +0x0d bit 1 REINIT, bit 4 forces
+					 *       V21TXP_INT_0004           */
 	unsigned char	unmapped_000e[0x02];	/* +0x0e                     */
 	unsigned char	unmapped_0010[0x04];	/* +0x10                     */
 };
@@ -203,13 +225,15 @@ struct v21tx_ctl {
  */
 
 /*
- * `flags_0c` bit 2 is ORed into `V21TX_FLAGS(modem)`; nothing pairs that
- * byte with a reader that would type any of its bits (v21fax.h's own note
- * on `V21TX_OBJ_FLAGS` above), so the name states only which bit this
- * function sets.  `flags_0d` bit 4 sets `V21TXP_INT_0004` -- an already-
- * named field ("int: zero selects the FIFO arm") -- as a boolean; bit 1
- * gates the self-referential `V21TX_create(modem, modem)` reinit, the same
- * move `V17RX_control` makes (finding F9900).
+ * `mask` bit 2 is ORed into `V21TX_FLAGS(modem)`; nothing pairs that
+ * byte with a reader that would type any of its OTHER bits (v21fax.h's own
+ * note on `V21TX_OBJ_FLAGS` above), so the name states only which bit this
+ * function tests -- see `struct v21tx_ctl`'s own comment for why the byte
+ * itself is named `mask` rather than left as `flags_0c`.  `flags` bit 4 sets
+ * `V21TXP_INT_0004` -- an already-named field ("int: zero selects the FIFO
+ * arm") -- as a boolean; bit 1 gates the self-referential `V21TX_create
+ * (modem, modem)` reinit, the same move `V17RX_control` makes (finding
+ * F9900).
  */
 #define V21TXCTL_SET_TXFLAGS_BIT2	(1 << 2)	/* 0x04 */
 #define V21TXCTL_SET_PARAMS_INT0004	(1 << 4)	/* 0x10 */
@@ -296,14 +320,26 @@ struct v21_rx_hdx {
  * its only referrer is the lowercase adapter `v21rx_control` (faxadapt.c),
  * which forwards this argument unchanged from ITS OWN caller.
  *
- * `int_0004` is `int`, loaded and stored whole.  `flags_0d` is `unsigned
+ * `int_0004` is `int`, loaded and stored whole.  `flags` is `unsigned
  * char`, read once with `movzbl` and tested bit by bit.
+ *
+ * `flags` IS RENAMED FROM `flags_0d` BY TWIN-CLASS DIFFING (this wave),
+ * against `struct v27rx_ctl`'s own already-real-named `flags` field: both
+ * put their REINIT bit at bit 1 (`V21RXCTL_REINIT`/`V27RXCTL_FLAGS_REINIT`)
+ * and both put a "force" bit at bit 4
+ * (`V21RXCTL_SET_HDX_INT0000`/`V27RXCTL_FLAGS_FORCE_NOCARRIER`) -- the same
+ * byte shape as `struct v21tx_ctl`'s own `flags` above, which the same
+ * technique renamed from the transmit side.  The two bits' MEANINGS still
+ * differ per modulation (one forces a stored hdx field, the other forces
+ * "no carrier"), which is exactly why only the byte's ROLE -- "a control
+ * flags byte with REINIT at bit 1" -- is asserted here, not a bit-for-bit
+ * identity.
  */
 struct v21rx_ctl {
 	unsigned char	unmapped_0000[0x04];
 	int		int_0004;	/* +0x04 -> cfg->int_0008           */
 	unsigned char	unmapped_0008[0x05];
-	unsigned char	flags_0d;	/* +0x0d                            */
+	unsigned char	flags;		/* +0x0d                            */
 };
 
 /*

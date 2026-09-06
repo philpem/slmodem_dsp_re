@@ -185,14 +185,14 @@ test_init_v27(void)
 			    cb->int_0004, i);
 		diff_eq_int("cfg.int_0008, input %ld", ca->int_0008,
 			    cb->int_0008, i);
-		diff_eq_int("cfg.int_000c, input %ld", ca->int_000c,
-			    cb->int_000c, i);
-		diff_eq_int("cfg.flags_0010, input %ld", ca->flags_0010,
-			    cb->flags_0010, i);
+		diff_eq_int("cfg.scale_mul, input %ld", ca->scale_mul,
+			    cb->scale_mul, i);
+		diff_eq_int("cfg.flags, input %ld", ca->flags,
+			    cb->flags, i);
 		diff_eq_int("cfg.short_0012, input %ld", ca->short_0012,
 			    cb->short_0012, i);
-		diff_eq_int("cfg.int_0014, input %ld", ca->int_0014,
-			    cb->int_0014, i);
+		diff_eq_int("cfg.fifo_size_factor, input %ld",
+			    ca->fifo_size_factor, cb->fifo_size_factor, i);
 		diff_eq_int("cfg.int_0018, input %ld", ca->int_0018,
 			    cb->int_0018, i);
 		diff_eq_int("cfg.int_001c is the argument, input %ld",
@@ -247,12 +247,12 @@ test_init_v29(void)
 			    cb->int_0008, i);
 		diff_eq_int("cfg.int_000c, input %ld", ca->int_000c,
 			    cb->int_000c, i);
-		diff_eq_int("cfg.flags_10, input %ld", ca->flags_10,
-			    cb->flags_10, i);
+		diff_eq_int("cfg.flags, input %ld", ca->flags,
+			    cb->flags, i);
 		diff_eq_int("cfg.short_0012, input %ld", ca->short_0012,
 			    cb->short_0012, i);
-		diff_eq_int("cfg.int_0014, input %ld", ca->int_0014,
-			    cb->int_0014, i);
+		diff_eq_int("cfg.fifo_size_factor, input %ld",
+			    ca->fifo_size_factor, cb->fifo_size_factor, i);
 		diff_eq_int("cfg.int_0018 is the argument, input %ld",
 			    ca->int_0018 == (int)(long)&marker[i & 3], 1, i);
 		diff_eq_int("cfg.int_0018 same on both sides, input %ld",

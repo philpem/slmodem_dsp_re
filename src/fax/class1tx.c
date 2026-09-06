@@ -290,15 +290,15 @@ const struct v21rx_ctl V21RX_CTL = {
 	{ 0x00, 0x00, 0x2c, 0x01 },	/* unmapped_0000 */
 	60000,				/* int_0004      */
 	{ 0, 0, 0, 0, 0 },		/* unmapped_0008 */
-	0x00,				/* flags_0d      */
+	0x00,				/* flags         */
 };
 
 const struct v21tx_ctl V21TX_CTL = {
 	{ 0x2c, 0x01, 0x00, 0x00 },	/* unmapped_0000 */
 	60000,				/* int_0004      */
-	3200,				/* int_0008      */
-	0x00,				/* flags_0c      */
-	0x00,				/* flags_0d      */
+	3200,				/* scale         */
+	0x00,				/* mask          */
+	0x00,				/* flags         */
 	{ 0, 0 },			/* unmapped_000e */
 	{ 0, 0, 0, 0 },			/* unmapped_0010 */
 };
@@ -381,7 +381,7 @@ cHDLCtx_preamble_state_init(struct fax_class1 *ctx)
 	struct v21tx_ctl req = V21TX_CTL;
 	struct faxvmi_ctl ctl = FAXVMI_CTL;
 
-	req.flags_0d |= V21TXCTL_REINIT;
+	req.flags |= V21TXCTL_REINIT;
 	ctl.int_0014 = (int)(long)&req;
 
 	FAXVMI_control(ctx->vmi_c, &ctl);
@@ -417,7 +417,7 @@ _cHDLCrx_init_from_idle(struct fax_class1 *ctx, int arg2)
 	struct faxvmi_ctl ctl = FAXVMI_CTL;
 	int ret;
 
-	req.flags_0d |= V21RXCTL_REINIT;
+	req.flags |= V21RXCTL_REINIT;
 
 	ctl.ptr_0000 = (void *)1;
 	ctl.int_000c = 1;
@@ -466,7 +466,7 @@ cHDLCtx_off_init(struct fax_class1 *ctx)
 	struct faxvmi_ctl ctl = FAXVMI_CTL;
 	int ret;
 
-	req.flags_0d |= V21RXCTL_REINIT;
+	req.flags |= V21RXCTL_REINIT;
 
 	ctl.ptr_0000 = (void *)1;
 	ctl.int_000c = 1;
@@ -859,19 +859,18 @@ cTOOLS_handle_hdlc_output(struct fax_class1 *ctx, const unsigned short *src,
  * caught by `t_class1txvmi.c` disagreeing with the blob rather than assumed
  * absent: after the six/seven-dword table copy, all three OVERRIDE the
  * FIFO size factor's low 16 bits with a literal 16-bit store (`movw`) --
- * `struct v17tx_cfg::fifo_size_factor` here, still `int_0014` at the same
- * offset in `struct v27tx_cfg`/`struct v29tx_cfg` (neither renamed by this
- * pass; see `v17fax.h`'s own note on why V.17's copy was and V.29's was
- * not, finding F10144) -- `0x1` for V.17, `0x2` for V.27ter and V.29.
- * V.17's table default is already 1, so that one is invisible to any test
- * that only checks the FINAL value; V.27ter's and V.29's tables are also 1
- * (`tabdump.py` over the blob's own `.data` confirms it, independent of
- * either reconstructed table), so their override to 2 is a real, visible
- * change from the default. `cfg->fifo_size_factor = <value>;` (or
- * `cfg->int_0014 = <value>;` for the other two) after the table copy
- * reproduces this -- a plain `int` assignment stores the same final 32 bits
- * as the object's narrower `movw`, since the upper 16 bits are already zero
- * from the dword copy, so no encoding trick is needed for behavioural
+ * `fifo_size_factor` in all three of `struct v17tx_cfg`/`struct v27tx_cfg`/
+ * `struct v29tx_cfg` now (the latter two renamed this wave onto V.17's own
+ * already-established name, findings F10144 and this wave's own) -- `0x1`
+ * for V.17, `0x2` for V.27ter and V.29.  V.17's table default is already 1,
+ * so that one is invisible to any test that only checks the FINAL value;
+ * V.27ter's and V.29's tables are also 1 (`tabdump.py` over the blob's own
+ * `.data` confirms it, independent of either reconstructed table), so their
+ * override to 2 is a real, visible change from the default.
+ * `cfg->fifo_size_factor = <value>;` after the table copy reproduces this
+ * for all three now -- a plain `int` assignment stores the same final 32
+ * bits as the object's narrower `movw`, since the upper 16 bits are already
+ * zero from the dword copy, so no encoding trick is needed for behavioural
  * fidelity.
  */
 int
@@ -919,7 +918,7 @@ init_vmi_v29tx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
 
 	*cfg = V29TX_CFG;
 	cfg->bitrate = bit_rate;
-	cfg->int_0014 = 2;
+	cfg->fifo_size_factor = 2;
 	cfg->int_0018 = (int)(long)arg_3;
 
 	*vmi = FAXVMI_CFG;
@@ -949,7 +948,7 @@ init_vmi_v27tx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
 
 	*cfg = V27TX_CFG;
 	cfg->bitrate = bit_rate;
-	cfg->int_0014 = 2;
+	cfg->fifo_size_factor = 2;
 	cfg->int_001c = (int)(long)arg_3;
 
 	*vmi = FAXVMI_CFG;

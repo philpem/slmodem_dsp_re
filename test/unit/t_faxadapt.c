@@ -1544,9 +1544,9 @@ run_control(void)
 
 		memset(&arg, 0, sizeof arg);
 		arg.int_0004 = 555;
-		arg.int_0008 = 42;
-		arg.flags_0c = V21TXCTL_SET_TXFLAGS_BIT2;
-		arg.flags_0d = V21TXCTL_SET_PARAMS_INT0004;
+		arg.scale = 42;
+		arg.mask = V21TXCTL_SET_TXFLAGS_BIT2;
+		arg.flags = V21TXCTL_SET_PARAMS_INT0004;
 		la0 = la;
 		lb0 = lb;
 		reta = v21tx_control(&la, &arg);
@@ -1583,7 +1583,7 @@ run_control(void)
 
 		memset(&arg, 0, sizeof arg);
 		arg.int_0004 = 987;
-		arg.flags_0d = V21RXCTL_SET_HDX_INT0000;
+		arg.flags = V21RXCTL_SET_HDX_INT0000;
 		la0 = la;
 		lb0 = lb;
 		reta = v21rx_control(&la, &arg);

@@ -534,7 +534,7 @@ static const struct {
 	const char *name;
 	int null_arg;
 	int int_0004;
-	unsigned char flags_0d;
+	unsigned char flags;
 } ctl_cases[] = {
 	{ "NULL arg",                  1,     0, 0 },
 	{ "flags clear",               0, 60000, 0 },
@@ -578,7 +578,7 @@ test_control(void)
 
 		memset(&arga, 0, sizeof arga);
 		arga.int_0004 = ctl_cases[k].int_0004;
-		arga.flags_0d = ctl_cases[k].flags_0d;
+		arga.flags = ctl_cases[k].flags;
 		argb = arga;
 
 		rb = ref_V21RX_control(b, ctl_cases[k].null_arg ? NULL

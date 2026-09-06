@@ -95,22 +95,58 @@ struct v27rx_cfg;
  * `protocol`/`bitrate` are rank 2: `V27TX_status` reads the transmit
  * handle's own +0x00/+0x02 back as `V27STAT_PROTOCOL`/`V27STAT_TX_BPS`, and
  * `V27TX_create`'s only branch on the config tests +0x02 against 2400 and
- * 4800.  `flags_0010`/`short_0012` split the fifth dword because
+ * 4800.  `flags`/`short_0012` split the fifth dword because
  * `V27TX_status` reads the handle's own +0x10 back as a short
  * (`V27TX_HANDLE_FLAGS`); nothing splits the others, so they stay one `int`
  * each.  Usage inference for the rest, flagged per CLAUDE.md.
+ *
+ * `scale_mul` (this wave, was `int_000c`) IS RANK 2, not usage inference:
+ * `V27TX_create` reads it back directly into the pulse shaper's own
+ * configuration, `pcfg.scale = V27TX_PPS_SCALE[rate] * modem->int_000c`
+ * (`src/fax/v27.c`), and `struct v27tx_ctl::scale_mul` -- already named,
+ * below -- is this SAME multiplication driven by the runtime request
+ * instead of the handle's own field; that field's own comment already drew
+ * the parallel ("here driven by the request instead of the handle's own
+ * int_000c") before this struct's own field had caught up to it, the
+ * evidence-stranded-in-one-file shape F10139/F10140/F10169 keep finding.
+ *
+ * `flags` (this wave, was `flags_0010`) is the same "genuine flags word"
+ * case CLAUDE.md's four-state ledger allows a plain name for even without
+ * every bit resolved: `V27TX_create` sets its bit 2 unconditionally
+ * (`*FIELD(modem, V27TX_HANDLE_FLAGS) |= 0x04;`) and `V27TX_status` reads
+ * it back as `V27STAT_FLAGS_FROM_TX`, so the WORD's role (a flags short
+ * `V27TX_create` seeds and `V27TX_status` reports) is established even
+ * though no other bit is.  `struct v21_status`'s own `flags`/`flags1` and
+ * `struct v27rx_ctl`/`v27tx_ctl`'s own `flags` are the same move.
+ *
+ * `fifo_size_factor` (this wave, was `int_0014`) is TWIN-CLASS EVIDENCE
+ * (F10177's technique) from `v17fax.h`'s own `struct v17tx_cfg::
+ * fifo_size_factor`, already real-named there (finding F10144): both are
+ * "the transmit FIFO's element count is this field times a per-rate/fixed
+ * factor", read back by the respective `V??TX_create` to size the FIFO, and
+ * V.17's own field comment already anticipates the match ("V.29's own copy
+ * is left as a candidate for whoever visits it" -- this wave visits V.27ter's
+ * instead, on the identical role, and V.29's own copy below).
  */
 struct v27tx_cfg {
 	short	protocol;	/* +0x00                                     */
 	short	bitrate;	/* +0x02  2400 or 4800                       */
 	int	int_0004;	/* +0x04                                     */
 	int	int_0008;	/* +0x08  60000, `v27rx_cfg`'s own value      */
-	int	int_000c;	/* +0x0c  1; multiplies into the PPS gain     */
-	short	flags_0010;	/* +0x10  `V27TX_HANDLE_FLAGS`                */
+	int	scale_mul;	/* +0x0c  1; multiplies into the PPS gain,
+					same role as `v27tx_ctl::scale_mul`  */
+	short	flags;		/* +0x10  `V27TX_HANDLE_FLAGS`                */
 	short	short_0012;	/* +0x12                                     */
-	int	int_0014;	/* +0x14  the transmit FIFO's element count is
-					this * `V27TX_FRMSIZE[rate]`         */
-	int	int_0018;	/* +0x18  `== 0` seeds `V27TXP_TRAIN_LONG`    */
+	int	fifo_size_factor; /* +0x14  the transmit FIFO's element count
+					  is this * `V27TX_FRMSIZE[rate]`;
+					  `v17tx_cfg`'s own field, same name */
+	int	int_0018;	/* +0x18  `== 0` seeds `V27TXP_TRAIN_LONG`,
+					the same role `V27RX_create` derives
+					`V27SH_TRAIN_LONG` from out of
+					`faxcfg.h`'s own `v27rx_cfg::int_0014`
+					(out of this wave's scope) -- checked
+					and left neutral, since even that
+					established sibling stays unnamed   */
 	int	int_001c;	/* +0x1c  `FPM_PPS_CFG`'s `aux`, across the
 					`(void *)(long)` idiom D1250 names   */
 };

@@ -1526,3 +1526,137 @@ generic bookkeeping field (a counter, a per-symbol status code) can
 survive the split; a stored protocol-state-machine variable often
 cannot, because the two directions' control flow is free to differ even
 when their class names look parallel.
+
+## Wave 7 — fax V.21/V.27/V.29 cluster (first cluster)
+
+Launched 2026-09-06. Scope: `include/dsplib/v21cfg.h`, `v21fax.h`,
+`v27fax.h`, `v29data.h` -- genuinely untouched ground, zero or one prior
+mention of any of the four in this ledger, unlike every wave above. Worked
+by one agent straight through (no sub-cluster split; the four files are
+small enough and their crossover -- V.21/V.27/V.29 fax modulation classes
+sharing layout and terminology, the same family V.17's own cluster
+(F10169-F10172, wave 6) already covers -- was the point of grouping them).
+
+**Method**: read each file in full before touching a field, per CLAUDE.md's
+evidence order. A comment-and-string-stripping script (written this wave,
+not kept) separated genuine live field declarations from the prose that
+dominates these four files' `type_NNNN`/bare-`f` grep hits -- provenance
+notes, historical narration, and stray "renamed from X" mentions all match
+the naive pattern and none of them are live fields. Real counts, by
+`(short|int|long|...)_[hex]`-family fields only (no bare `fNNNN` survived
+in any of the four -- these files' one prior touch, wave 2/6's fax
+passes, had already promoted or resolved them all):
+
+    v21cfg.h    13 fields  (5 in `v21rx_cfg`, 8 in `v21tx_cfg`)
+    v21fax.h    17 fields  (4 `v21tx_ctl`, 3 `v21_rx_dsp`, 1 `v21_rx_hdx`,
+                            2 `v21rx_ctl`, 7 `v21_status`)
+    v27fax.h    11 fields  (8 `v27tx_cfg`, 1 `v27rx_ctl`, 2 `v27tx_ctl`)
+    v29data.h    8 fields  (all `v29tx_cfg`)
+                --
+                49 fields total -- higher than the brief's rough 39
+                estimate, which undercounted because it did not separate
+                the two `v21fax.h` control structs' own field lists from
+                their surrounding prose before counting.
+
+**`v21fax.h`'s two control structs, five real names (F10182).** One by
+direct rank-2 evidence (`v21tx_ctl::int_0008` -> `scale`, assigned
+straight into `fpm_fsm_cfg::scale`), four by TWIN-CLASS DIFFING (F10177's
+technique) against `v27fax.h`'s own already-real-named `v27tx_ctl`/
+`v27rx_ctl` fields `mask`/`flags`: `v21tx_ctl::flags_0c` -> `mask` and
+both structs' `flags_0d` -> `flags`, on three independent bit-position
+matches traced to the actual call SITE in both `V21TX_control`/
+`V21RX_control` and their V.27ter counterparts (not offset-and-type
+alone, which F10177-F10179 already ruled is the weakest of the three
+checks). See F10182 for the full derivation, including why `v21rx_ctl`
+never developed a `mask`-shaped second control byte at all (its own
+`V21RX_control` never tests a bitmask over multiple enables the way
+`V27RX_control` does) and so only its `flags` byte moves.
+
+**`v27tx_cfg`/`v29tx_cfg`, three real names apiece, closing a lead
+`v17fax.h` had explicitly left open (F10183).** `fifo_size_factor` (was
+`int_0014` in both) is `v17tx_cfg::fifo_size_factor`'s own already-named
+role -- F10144's comment on that field named V.29's copy "a candidate for
+whoever visits it" by name, and this wave visits it, plus V.27ter's
+sibling on the identical role under a different per-rate multiplier.
+`v29tx_cfg`'s copy is also a STALE-COMMENT correction: this file's own
+header claimed the field was pure usage inference with nothing reading it
+back, which had gone stale the moment `V29TX_create`'s own FIFO-sizing
+line was written. `v27tx_cfg::int_000c` -> `scale_mul`, rank 2 found
+in-file (not by twin-diffing): `V27TX_create` reads it back directly into
+the pulse shaper's `scale`, and `v27tx_ctl::scale_mul` (an earlier wave)
+already documents this as the SAME multiplication driven by a request
+instead of the handle's own field. `v27tx_cfg::flags_0010` and
+`v29tx_cfg::flags_10` -> `flags` on both, the "genuine flags word" case
+CLAUDE.md's four-state ledger allows a plain name for without every bit
+resolved, matching `struct v21_status`'s own `flags`/`flags1` and
+`v27rx_ctl`/`v27tx_ctl`'s own `flags` elsewhere in this same cluster.
+**`v29tx_cfg::int_000c` at the SAME offset as `v27tx_cfg`'s renamed
+`scale_mul` does NOT get the name** -- `V29TX_create` never reads it back
+(`pcfg.scale = V29TX_PPS_SCALE[rate]`, no multiplication, checked
+directly against the object's own comment), so the site fails even though
+offset and type agree; left as `int_000c`, confirmed rather than renamed.
+`v27tx_cfg::int_0018` ("== 0 seeds `V27TXP_TRAIN_LONG`") was traced,
+found well-established, and STILL left neutral: its own twin
+(`faxcfg.h`'s `v27rx_cfg::int_0014`, seeding `V27SH_TRAIN_LONG` the
+identical way) is itself unnamed and out of this wave's file scope, so
+there is no established real name to import without inventing one from
+the role alone -- exactly the trap CLAUDE.md's naming section warns
+against. See F10183 for the full derivation and the file-by-file edit
+list.
+
+**`v21cfg.h`, fully confirmed-exhausted, zero renames.** Both structs'
+remaining thirteen fields were checked against `faxcfg.h`'s three
+sibling `v??rx_cfg` tables (same shape, same offsets, same "60000 /
+zero, read by nothing" pattern, themselves unnamed) and against this
+wave's own `v27tx_cfg`/`v29tx_cfg` renames (none of which land inside
+`v21tx_cfg`'s own +0x00..+0x18, since V.21's transmit FIFO size is a
+fixed literal rather than derived from any config field) -- a negative
+twin-class result recorded in both structs' own header comments rather
+than left as a silent no-op, so the next pass does not re-derive it.
+`v21tx_cfg::short_0000` was checked specifically against `chan2`-style
+channel-select naming and rejected: its two "valid" arms are
+behaviourally IDENTICAL (both take a tone pair immediately overwritten
+by the same unconditional load), unlike `chan2`, which genuinely
+selects between two live table sets.
+
+### Numbers
+
+Fresh grep after the wave, combined across all four files: `type_NNNN`
+49 -> 40 (9 real renames: `scale`/`mask`/`flags`/`flags` in `v21fax.h`,
+`scale_mul`/`flags`/`fifo_size_factor` in `v27fax.h`,
+`flags`/`fifo_size_factor` in `v29data.h`), bare `fNNNN` 0 -> 0
+(none present at the start). Confirmed-exhausted, no change: all 13
+`v21cfg.h` fields, `v21fax.h`'s remaining 13 (`v21tx_ctl::int_0004`,
+`v21_rx_dsp`'s three, `v21_rx_hdx::int_0000`, `v21rx_ctl::int_0004`,
+`v21_status`'s seven), `v27fax.h`'s remaining 8 (`v27tx_cfg::int_0004`/
+`int_0008`/`short_0012`/`int_0018`/`int_001c`, `v27rx_ctl::int_0004`,
+`v27tx_ctl::int_0004`/`int_0010`), `v29data.h`'s remaining 6
+(`short_0004`/`short_0006`/`int_0008`/`int_000c`/`short_0012`/
+`int_0018`). 13+13+8+6 = 40, matching the total above.
+
+### Verification
+
+`make one` across every touched suite: `t_v21fax` (10 groups, largest
+202500 checks), `t_v21create` (4 groups), `t_v21txcreate` (8 groups),
+`t_v21cfg` (9 groups), `t_faxadapt` (9 groups), `t_class1txvmi` (4
+groups), `t_v27fax` (19 groups, largest 43047), `t_v27txcreate` (10
+groups), `t_v29txcreate` (7 groups), `t_v29fax` (19 groups, largest
+36134), `t_v29data` (2 groups), `t_faxcfg` (7 groups),
+`t_class1txcplinit` (14 groups), `t_class1inittx` (12 groups),
+`t_class1initrx` (16 groups) -- every check count identical to the
+pre-wave baseline, all PASS, exit 0. `tools/onedef.py` (301 types, 1
+known duplicate), `tools/refcheck.py` (13576 references, 0 dangling) and
+`tools/anchorcheck.py` (228 suites, 9767 mutations, 0 anomalies) all
+clean; no mutation-anchor JSON under `test/mutations/` referenced any of
+the renamed field names (`v29data.json` is the only file in that
+directory naming any of the four scope files, and its own anchors do not
+touch `struct v29tx_cfg`'s fields). `make check64`: 64-bit clean, both
+configurations, pre-existing unrelated warnings only.
+
+Docker and `dsplibs-tc342` were available in this wave's sandbox.
+**`make period J=3` under the real GCC 3.4.2 image: 374 passed, 0
+failed** -- the identical count to every prior wave's own gate (wave 6's
+own entry above records the same 374), confirming this wave added zero
+new period-tier tests (expected of a pure rename) and regressed none.
+Launched under `nohup`, polled to completion via `pgrep` rather than
+assumed from a tail.

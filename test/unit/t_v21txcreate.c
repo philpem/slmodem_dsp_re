@@ -677,9 +677,9 @@ static const struct {
 	const char *name;
 	int null_arg;
 	int int_0004;
-	int int_0008;
-	unsigned char flags_0c;
-	unsigned char flags_0d;
+	int scale;
+	unsigned char mask;
+	unsigned char flags;
 } tctl_cases[] = {
 	{ "NULL arg",                     1,     0,     0, 0, 0 },
 	{ "flags clear",                  0, 60000,   500, 0, 0 },
@@ -723,9 +723,9 @@ test_control(void)
 
 		memset(&arga, 0, sizeof arga);
 		arga.int_0004 = tctl_cases[k].int_0004;
-		arga.int_0008 = tctl_cases[k].int_0008;
-		arga.flags_0c = tctl_cases[k].flags_0c;
-		arga.flags_0d = tctl_cases[k].flags_0d;
+		arga.scale = tctl_cases[k].scale;
+		arga.mask = tctl_cases[k].mask;
+		arga.flags = tctl_cases[k].flags;
 		argb = arga;
 
 		rb = ref_V21TX_control(b, tctl_cases[k].null_arg ? NULL

@@ -861,8 +861,8 @@ RxHdxDataV21(void *modem, short *in, short *out, short *count)
  * from `arg->int_0004`; `V21RX_HDX(modem)->int_0000` -- the SAME field
  * `RxHdxDataV21` gates demodulation on, above, and whose header comment used
  * to read "nothing written sets it" -- is set to 1 when
- * `V21RXCTL_SET_HDX_INT0000` is set in `arg->flags_0d` and to 0 otherwise;
- * and `V21RXCTL_REINIT` (also in `flags_0d`) calls `V21RX_create(modem,
+ * `V21RXCTL_SET_HDX_INT0000` is set in `arg->flags` and to 0 otherwise;
+ * and `V21RXCTL_REINIT` (also in `flags`) calls `V21RX_create(modem,
  * modem)`, the same self-referential reinit `v17fax.h` documents for
  * `V17RX_control` (finding F9470/F9900: the receive handle's head, byte for
  * byte, IS a `struct v21rx_cfg`, so passing it as its own `params` re-copies
@@ -884,9 +884,9 @@ V21RX_control(void *modem, const struct v21rx_ctl *arg)
 	cfg->int_0008 = arg->int_0004;
 
 	V21RX_HDX(modem)->int_0000 =
-		(arg->flags_0d & V21RXCTL_SET_HDX_INT0000) != 0;
+		(arg->flags & V21RXCTL_SET_HDX_INT0000) != 0;
 
-	if (arg->flags_0d & V21RXCTL_REINIT)
+	if (arg->flags & V21RXCTL_REINIT)
 		V21RX_create(modem, (const struct v21rx_cfg *)modem);
 
 	return 1;
@@ -1210,10 +1210,10 @@ TxHdxDataV21(void *modem, unsigned short *in, short *out, short *budget)
  * V21TX_control -- .text 0x0a2ba0, 94 bytes.
  *
  * `arg == NULL` returns 0 and touches nothing.  Otherwise, in the object's
- * own order: `dsp->fsm.cfg.scale` is set from `arg->int_0008`, narrowed to
+ * own order: `dsp->fsm.cfg.scale` is set from `arg->scale`, narrowed to
  * `short` as the object narrows it; `cfg->int_0008` (the transmit handle's
  * own head, `struct v21tx_cfg`) is set unconditionally from `arg->int_0004`;
- * `arg->flags_0c`'s bit 2 ORs into `V21TX_FLAGS(modem)`; `arg->flags_0d`'s
+ * `arg->mask`'s bit 2 ORs into `V21TX_FLAGS(modem)`; `arg->flags`'s
  * bit 4 sets `V21TXP_INT_0004` (of the params block at `V21TX_OBJ_PARAMS`)
  * to a boolean; and bit 1 of the same byte calls `V21TX_create(modem,
  * modem)` -- the self-referential reinit `V17RX_control`'s header comment
@@ -1230,16 +1230,16 @@ V21TX_control(void *modem, const struct v21tx_ctl *arg)
 	if (arg == NULL)
 		return 0;
 
-	V21TX_DSP(modem)->fsm.cfg.scale = (short)arg->int_0008;
+	V21TX_DSP(modem)->fsm.cfg.scale = (short)arg->scale;
 	cfg->int_0008 = arg->int_0004;
 
-	if (arg->flags_0c & V21TXCTL_SET_TXFLAGS_BIT2)
+	if (arg->mask & V21TXCTL_SET_TXFLAGS_BIT2)
 		V21TX_FLAGS(modem) |= V21TXCTL_SET_TXFLAGS_BIT2;
 
 	AT_I(prm, V21TXP_INT_0004) =
-		(arg->flags_0d & V21TXCTL_SET_PARAMS_INT0004) != 0;
+		(arg->flags & V21TXCTL_SET_PARAMS_INT0004) != 0;
 
-	if (arg->flags_0d & V21TXCTL_REINIT)
+	if (arg->flags & V21TXCTL_REINIT)
 		V21TX_create(modem, (const struct v21tx_cfg *)modem);
 
 	return 1;

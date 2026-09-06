@@ -1852,10 +1852,11 @@ struct v27tx_cfg V27TX_CFG = {
 	9600,			/* bitrate -- neither of V.27ter's own rates  */
 	0,			/* int_0004                                  */
 	60000,			/* int_0008 -- v27rx_cfg's own value          */
-	1,			/* int_000c -- the PPS gain multiplier        */
-	0,			/* flags_0010                                */
+	1,			/* scale_mul -- the PPS gain multiplier       */
+	0,			/* flags                                     */
 	0,			/* short_0012                                */
-	1,			/* int_0014 -- the FIFO's own size multiplier */
+	1,			/* fifo_size_factor -- the FIFO's own size
+					multiplier, `v17tx_cfg`'s own name   */
 	0,			/* int_0018 -- V27TXP_TRAIN_LONG's source     */
 	0,			/* int_001c -- FPM_PPS_CFG's aux              */
 };
@@ -1919,7 +1920,7 @@ SetScramblerV27(void *modem)
  * `sete` idiom `V27RX_create` uses for `V27SH_TRAIN_LONG` one struct over.
  *
  * THE PPS `scale` FIELD IS NOT THE TABLE VALUE ALONE: `V27TX_PPS_SCALE[rate]`
- * is multiplied by the config's own `int_000c` (default 1, so invisible on
+ * is multiplied by the config's own `scale_mul` (default 1, so invisible on
  * `V27TX_CFG` itself) -- V.27ter's own caller-adjustable output gain, which
  * V.29's `V29TX_create` does not have at the identical field.
  */
@@ -2000,7 +2001,7 @@ V27TX_create(void *modem, const struct v27tx_cfg *params)
 	{
 		struct fifo_cfg fc;
 		unsigned short n = (unsigned short)
-			((struct v27tx_cfg *)modem)->int_0014;
+			((struct v27tx_cfg *)modem)->fifo_size_factor;
 		void *existing;
 		short rate;
 
@@ -2086,7 +2087,7 @@ V27TX_create(void *modem, const struct v27tx_cfg *params)
 		pcfg.step = V27TX_PPS_DOWN_FACT[rate];
 		pcfg.mapped = 1;
 		pcfg.scale = V27TX_PPS_SCALE[rate] *
-			((struct v27tx_cfg *)modem)->int_000c;
+			((struct v27tx_cfg *)modem)->scale_mul;
 		pcfg.step_adj = 0;
 		pcfg.imap = V27TX_PPS_IMAP[rate];
 		pcfg.qmap = V27TX_PPS_QMAP[rate];

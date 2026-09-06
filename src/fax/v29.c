@@ -842,7 +842,7 @@ V29RX_decision(struct fpm_fse *state, short *angle, short *mag)
 
 /*
  * The transmit configuration and the tables `V29TX_create` builds its DSP
- * sub-objects from.  `protocol`/`bitrate`/`flags_10` are typed by
+ * sub-objects from.  `protocol`/`bitrate`/`flags` are typed by
  * `V29TX_status`'s own reads (`V29TXS_PROTOCOL`/`_BITRATE`/`_FLAGS_10`,
  * v29fax.h); `int_0008` is 60000, `v21tx_cfg`'s own value at the identical
  * offset.  The rest are usage inference; see v29data.h.
@@ -854,10 +854,11 @@ struct v29tx_cfg V29TX_CFG = {
 	0,			/* short_0006                                */
 	60000,			/* int_0008                                  */
 	1,			/* int_000c                                  */
-	0,			/* flags_10                                  */
+	0,			/* flags                                     */
 	0,			/* short_0012                                */
-	1,			/* int_0014 -- V29TX_create's own transmit
-					FIFO size is int_0014 * 48           */
+	1,			/* fifo_size_factor -- V29TX_create's own
+					transmit FIFO size is this * 48,
+					`v17tx_cfg`'s own field, same name    */
 	0,			/* int_0018 -- V29TX_create's own FPM_PPS_CFG
 					aux, across the (void *)(long) idiom */
 };
@@ -1047,7 +1048,7 @@ V29TX_create(void *modem, const struct v29tx_cfg *params)
 	{
 		struct fifo_cfg fc;
 		unsigned short n = (unsigned short)
-			((struct v29tx_cfg *)modem)->int_0014;
+			((struct v29tx_cfg *)modem)->fifo_size_factor;
 
 		fc.word0 = FIFO_CFG.word0;
 		fc.size = (short)(n * 3 * 16);

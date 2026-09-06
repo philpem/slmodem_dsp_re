@@ -149,6 +149,28 @@ void GenEQTrnSequenceV29(void *modem, unsigned short *out, unsigned short n);
  * constructor's whole-struct copy -- the same shape `V29RX_control` gave
  * `V29_OBJ_INT_0008` (finding F10103).  Still nothing reconstructed reads it
  * back.  Finding F10107.
+ *
+ * `flags` (this wave, was `flags_10`) IS RANK 2, not usage inference: it is
+ * exactly `v29fax.h`'s own `V29TXS_FLAGS_10`, "tested there as a bit mask"
+ * per this file's own note above, and `V29TX_control`'s request sets its
+ * bit 2 independently of the constructor's copy (`v29fax.h`'s
+ * `V29TXCTL_CTL0_BIT2` comment).  The same "genuine flags word" case
+ * `struct v27tx_cfg::flags` is this wave, one modulation over.
+ *
+ * `fifo_size_factor` (this wave, was `int_0014`) CORRECTS A STALE FILE
+ * COMMENT, not merely a twin-class import: this struct's own header used to
+ * say "the rest are usage inference: nothing reconstructed reads them
+ * back", but `V29TX_create` (`src/fax/v29.c`) reads this field directly --
+ * `n = ((struct v29tx_cfg *)modem)->int_0014` -- to size the transmit FIFO
+ * at `n * 3 * 16`, matching the object's own comment there ("THE TRANSMIT
+ * FIFO'S SIZE IS COMPUTED, NOT A LITERAL -- int_0014 * 3 * 16").  That is
+ * `v17fax.h`'s own `struct v17tx_cfg::fifo_size_factor` role and default
+ * (1, "* 3 * 16") exactly, and `v17fax.h`'s own field comment (finding
+ * F10144) already named V.29's copy "a candidate for whoever visits it" --
+ * this wave does.  `struct v27tx_cfg::fifo_size_factor` is the third
+ * sibling, renamed the same wave on the same evidence (though V.27ter's own
+ * multiplier is `V27TX_FRMSIZE[rate]` rather than the fixed 3*16, so the
+ * SHAPE matches and the constant does not).
  */
 struct v29tx_cfg {
 	short	protocol;	/* +0x00  0                                  */
@@ -157,9 +179,10 @@ struct v29tx_cfg {
 	short	short_0006;	/* +0x06  0                                  */
 	int	int_0008;	/* +0x08  60000, as in every sibling table   */
 	int	int_000c;	/* +0x0c  1                                  */
-	short	flags_10;	/* +0x10  0; V29TXS_FLAGS_10                 */
+	short	flags;		/* +0x10  0; V29TXS_FLAGS_10                 */
 	short	short_0012;	/* +0x12  0                                  */
-	int	int_0014;	/* +0x14  1                                  */
+	int	fifo_size_factor; /* +0x14  1 -> FIFO capacity, * 3 * 16,
+					  `v17tx_cfg`'s own field, same name */
 	int	int_0018;	/* +0x18  0                                  */
 };
 

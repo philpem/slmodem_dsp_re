@@ -117415,3 +117415,162 @@ against the CONCEPT rather than the TYPE.
 No source change. `V92Phase3Modulator.h` and `V92Phase4Modulator.h` are
 unchanged; both pad regions keep their existing, already-correct
 documentation. Nothing to gate. (2026-09-05)
+
+## F10182. `v21tx_ctl`/`v21rx_ctl` (v21fax.h): four real names by twin-class diffing against `v27tx_ctl`/`v27rx_ctl`, one by a direct callee type
+
+Wave 7, first cluster (`v21cfg.h`/`v21fax.h`/`v27fax.h`/`v29data.h`) --
+genuinely untouched files, zero or one prior mention in
+`docs/fieldnaming.md`. This entry covers `v21fax.h`'s two control-request
+structs.
+
+**`struct v21tx_ctl::int_0008` -> `scale` (rank 2, a direct callee/field
+type, not twin-diffing).** `V21TX_control` (`src/fax/v21.c`) assigns it
+straight into `dsp->fsm.cfg.scale`, `struct fpm_fsm_cfg`'s own
+already-named field, narrowed to `short` exactly as the object narrows
+it (`mov %dx,0x6(%ecx)`). This is the single strongest piece of evidence
+in this file's own two control structs and needed no twin.
+
+**`struct v21tx_ctl::flags_0c` -> `mask`, and both structs'
+`flags_0d` -> `flags` (rank 3, corroborated by the SITE, not just offset
+and type -- per F10177-F10179's own ruling that offset-and-type
+agreement alone is the weakest of three checks).** `struct v27tx_ctl`
+(v27fax.h) already carries real names `mask`/`flags` at the identical
+two-byte positions, established independently in an earlier wave. Tracing
+what `V21TX_control` actually does with each byte against what
+`V27TX_control` does with its own:
+
+- `arg->mask`'s bit 2 (`V21TXCTL_SET_TXFLAGS_BIT2`, `1<<2`) is tested and,
+  on a hit, ORs the SAME bit into the handle's own flags byte
+  (`V21TX_FLAGS(modem) |= V21TXCTL_SET_TXFLAGS_BIT2`) -- the exact shape
+  `V27TX_control` runs over its own `mask`'s bit 2
+  (`V27TXCTL_MASK_HANDLE_FLAG_04`) against `V27TX_HANDLE_FLAGS`. Same bit
+  position, same "test one mask bit, OR the matching handle-flag bit"
+  site, not merely the same offset.
+- `flags`'s REINIT bit sits at bit 1 in `v21tx_ctl`, `v21rx_ctl` AND
+  `v27tx_ctl`/`v27rx_ctl` (`V21TXCTL_REINIT`/`V21RXCTL_REINIT`/
+  `V27TXCTL_FLAGS_REINIT`/`V27RXCTL_FLAGS_REINIT`, all `1<<1`), and each
+  gates the identical self-referential `V??TX_create(modem, modem)` /
+  `V??RX_create(rx, rx)` reinit idiom (finding F9900's family).
+- `flags`'s "force a params-block field" bit sits at bit 4 in all four of
+  `v21tx_ctl`/`v21rx_ctl`/`v27tx_ctl`/`v27rx_ctl`
+  (`V21TXCTL_SET_PARAMS_INT0004`/`V21RXCTL_SET_HDX_INT0000`/
+  `V27TXCTL_FLAGS_FORCE_INT_0008`/`V27RXCTL_FLAGS_FORCE_NOCARRIER`), though
+  which field each one forces differs per modulation -- the byte's ROLE
+  ("a control-flags byte carrying REINIT at bit 1 and a force-bit at bit
+  4") is what is asserted, not a claim that any bit's MEANING transfers.
+
+Three independent bit-position matches across four structs from two
+modulations is the SITE-level evidence F10177-F10179 says is the deciding
+check, not the offset or the type alone -- and unlike that technique's own
+`sessionFlag`/`word_00` and `pad_44`/`pad_10` rejections, every match here
+held once the actual call sites were read, so nothing was declined.
+
+`v21rx_ctl` has no `v27rx_ctl`-style `mask` byte at all (its own +0x0c is
+`unmapped_0008[5]`, entirely untouched by `V21RX_control`), so only its
+`flags_0d` moves; `flags_0c` in `v21tx_ctl` is the only one of the four
+bytes with a real cross-struct pairing for BOTH sub-roles ("mask" and
+"flags"), because `v21rx_ctl` never developed a second control byte in
+the object to begin with.
+
+Renamed in `include/dsplib/v21fax.h` (both structs and their surrounding
+comments), `src/fax/v21.c` (`V21RX_control`/`V21TX_control` bodies and
+header comments), `src/fax/class1tx.c` (`V21RX_CTL`/`V21TX_CTL` template
+initialisers and three `req.flags |= ...REINIT` call sites), and the
+differential fixtures that poke these structs field-by-field:
+`test/unit/t_v21create.c`, `test/unit/t_v21txcreate.c`,
+`test/unit/t_faxadapt.c` (local fixture struct members renamed to match,
+since they feed the real fields directly).
+
+Verification: `make one T=t_v21fax`, `t_v21create`, `t_v21txcreate`,
+`t_faxadapt` -- same check counts as before the rename (300/12339/3414/
+104452/202500/49786/124/26/46/55 for `t_v21fax`'s ten groups; 600/645/
+600/82 for `t_v21create`; 191/41/155/8/22/204 for `t_v21txcreate`, plus
+sizes/FPM_FSM_CFG checks; 48/36/12/15/18/16/4/4/4/4/4/8/8/40/32 for
+`t_faxadapt`'s groups), all still PASS, exit 0. A pure identifier
+substitution cannot move generated code; these numbers confirm it didn't.
+(2026-09-06)
+
+## F10183. `fifo_size_factor`/`scale_mul`/`flags` land on `v27tx_cfg` and `v29tx_cfg`, completing the twin-class family `v17fax.h` started (F10144)
+
+Wave 7, same cluster as F10182. Covers `v27fax.h`'s `struct v27tx_cfg` and
+`v29data.h`'s `struct v29tx_cfg`.
+
+**`fifo_size_factor` (was `int_0014` in both) is the twin-class technique
+(F10177) CLOSING A LEAD `v17fax.h` had already opened and left**:
+`v17fax.h`'s own `struct v17tx_cfg::fifo_size_factor` field comment
+(finding F10144) already stated "`V29TX_CFG` carries an identical field at
+the same offset with an identical role and default, still spelled
+`int_0014` there -- V.29's own copy is left as a candidate for whoever
+visits it." This wave visits it, and V.27ter's sibling turns out to carry
+the same role under a different multiplier.
+
+For V.29 this is also a STALE-COMMENT correction, not only a twin import:
+`v29data.h`'s own struct comment claimed "the rest are usage inference:
+nothing reconstructed reads them back" for every field but the four
+already named, which was true when written but had gone stale -- `V29TX_
+create` (`src/fax/v29.c`) reads `((struct v29tx_cfg *)modem)->int_0014`
+directly to size the transmit FIFO (`n * 3 * 16`), and the object's own
+comment already sitting a few lines above that call spells out "THE
+TRANSMIT FIFO'S SIZE IS COMPUTED, NOT A LITERAL -- `int_0014 * 3 * 16`" --
+the exact "V.17's own role, evidence stranded in the wrong file" shape
+F10139/F10140/F10169 keep finding.
+
+For V.27ter the read is likewise direct, not inferred from the twin:
+`V27TX_create` (`src/fax/v27.c`) reads `((struct v27tx_cfg *)modem)->
+int_0014` to size its own FIFO at `n * V27TX_FRMSIZE[rate]` -- same
+role (a FIFO capacity factor), different multiplier (a per-rate table
+rather than V.17/V.29's fixed 3*16), which is exactly the "SHAPE matches,
+constant does not" case CLAUDE.md's evidence-order section anticipates:
+the field's ROLE is asserted, not that all three moduluations share one
+formula.
+
+**`scale_mul` (was `int_000c` in `v27tx_cfg`) is rank 2, found IN THIS
+FILE, not by twin-diffing**: `V27TX_create` reads it back directly,
+`pcfg.scale = V27TX_PPS_SCALE[rate] * modem->int_000c` -- and
+`v27tx_ctl::scale_mul` (already real-named, an earlier wave) is the exact
+same multiplication driven by a runtime request instead of the handle's
+own field; that field's OWN comment already said so ("here driven by the
+request instead of the handle's own `int_000c`") before this struct's
+field had caught up to it. `v29tx_cfg`'s own `int_000c` at the identical
+offset does NOT get this name: `V29TX_create` never reads it back at all
+(checked directly -- `pcfg.scale = V29TX_PPS_SCALE[rate]`, no
+multiplication), so despite the offset and type matching, the SITE does
+not, and F10177-F10179's ruling says the site decides. Left as `int_000c`
+in `v29tx_cfg`, confirmed rather than renamed.
+
+**`flags` (was `flags_0010` in `v27tx_cfg`, `flags_10` in `v29tx_cfg`) is
+the "genuine flags word" case CLAUDE.md's four-state ledger allows a plain
+name for without every bit resolved**: both are read back by their
+respective `V??TX_status` (`V27TX_HANDLE_FLAGS`/`V29TXS_FLAGS_10`) and
+set by their own `V??TX_create`/`V??TX_control`, so the WORD's role (a
+flags short the constructor seeds and status reports) is established even
+though only one bit (`V27STAT_FLAGS_FROM_TX`/`V29TXS_10_BIT2`, both bit
+2) is. `struct v21_status::flags`/`flags1` and `v27rx_ctl`/`v27tx_ctl`'s
+own `flags` are the same move, elsewhere in this same cluster and an
+earlier wave respectively.
+
+`v27tx_cfg::int_0018` ("== 0 seeds V27TXP_TRAIN_LONG") was traced and
+LEFT NEUTRAL despite a well-established role, because its own twin
+(`faxcfg.h`'s `struct v27rx_cfg::int_0014`, which seeds `V27SH_TRAIN_LONG`
+the identical way) is itself unnamed and out of this wave's file scope --
+there is no established real name to import, and inventing one from the
+role alone would be exactly the "wrong name is worse than unnamed" trap
+CLAUDE.md warns against. Recorded so the next pass over `faxcfg.h` sees
+the pairing already traced.
+
+Renamed in `include/dsplib/v27fax.h` (struct + comments),
+`include/dsplib/v29data.h` (struct + comments), `src/fax/v27.c` (`V27TX_
+CFG` initialiser, `V27TX_create`, field-access comments),
+`src/fax/v29.c` (`V29TX_CFG` initialiser, `V29TX_create`),
+`src/fax/class1tx.c` (`init_vmi_v27tx`/`init_vmi_v29tx`'s own
+`cfg->fifo_size_factor = 2;` overrides and their shared header comment),
+and the differential fixtures at `test/unit/t_class1txvmi.c` (the V.27ter
+and V.29 field-by-field comparison blocks; the V.17 and the V.29's own
+untouched `int_000c` block are unchanged).
+
+Verification: `make one T=t_v27fax` (19 groups, largest 43047 checks,
+all PASS), `t_v27txcreate` (10 groups, all PASS), `t_v29fax` (19 groups,
+largest 36134 checks, all PASS), `t_v29txcreate` (7 groups, all PASS),
+`t_v29data` (2 groups, all PASS), `t_class1txvmi` (4 groups: 140/135/135/6
+checks, all PASS) -- every check count identical to the pre-rename
+baseline, exit 0 throughout. (2026-09-06)
