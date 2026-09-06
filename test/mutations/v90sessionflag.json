@@ -22,7 +22,9 @@
  {
   "label": "demodulator prints after storing the flag",
   "find": "\tedprintf(\"V90Demodulator: setSessionFlag, flag = %d\\r\\n\", flag);\n\n\tsessionFlag = flag;",
-  "replace": "\tsessionFlag = flag;\n\n\tedprintf(\"V90Demodulator: setSessionFlag, flag = %d\\r\\n\", flag);"
+  "replace": "\tsessionFlag = flag;\n\n\tedprintf(\"V90Demodulator: setSessionFlag, flag = %d\\r\\n\", flag);",
+  "equivalent": true,
+  "why": "The two statements are independent: edprintf's format only reads `flag` (the parameter, a local copy `sessionFlag = flag` cannot change), and `sessionFlag = flag` does not read anything edprintf could have modified -- edprintf has no side effect on this object's state at all. Swapping them changes neither what is printed nor what is stored for any input. The object's own order is documented in the comment immediately above this function ('THE DIAGNOSTIC COMES FIRST') and is worth keeping for codegen/similarity reasons, but no differential input can fail on the swap."
  },
  {
   "label": "demodulator prints the field rather than the argument",
@@ -47,7 +49,9 @@
  {
   "label": "modem reads the side after storing the flag",
   "find": "\tint which = side;\n\n\tsessionFlag = flag;",
-  "replace": "\tint which;\n\n\tsessionFlag = flag;\n\twhich = side;"
+  "replace": "\tint which;\n\n\tsessionFlag = flag;\n\twhich = side;",
+  "equivalent": true,
+  "why": "This file's own comment immediately above V90Modem::setSessionFlag already makes the argument: reading `side` before or after storing `sessionFlag` 'matters only if the two could alias and they cannot -- they are distinct members of one object.' So moving the read of `side` after the store to `sessionFlag` cannot change the value `which` ends up holding, for any input. Formalizing that comment's conclusion as the mutation's expected verdict."
  },
  {
   "label": "phase 4 demodulator's subobject sits at +0x4c",

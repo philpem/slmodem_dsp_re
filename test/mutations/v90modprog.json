@@ -50,7 +50,8 @@
  {
   "label": "the phase 3 arm copies the event code even when it is zero",
   "find": "\t\t\t\tif (phase3Modulator->eventCode != 0)\n\t\t\t\t\teventCode = phase3Modulator->eventCode;\n",
-  "replace": "\t\t\t\teventCode = phase3Modulator->eventCode;\n"
+  "replace": "\t\t\t\teventCode = phase3Modulator->eventCode;\n",
+  "note": "UNCAUGHT, not claimed equivalent.  The two spellings differ only when this member's own `eventCode` is already non-zero from a PRIOR call and `phase3Modulator->eventCode` now reads zero -- the original leaves the stale non-zero value in place, the mutant clears it.  Separating them needs a sequence of at least two calls (a call that leaves eventCode non-zero, then one where the phase 3 modulator's own event code has gone back to zero), which is the same class of driving difficulty F7512/F7513 record for `V90Demodulator::progress`'s adjacent `stateCount`/`word_3c` dispatch: the value is reset on entry to the surrounding machinery on some paths and this fixture does not walk it through a state that leaves the stale value and then re-enters with a zero one. Not investigated further in this pass -- flagged for whoever extends this fixture's multi-call coverage."
  },
  {
   "label": "phase 3 ends on the wrong event code",

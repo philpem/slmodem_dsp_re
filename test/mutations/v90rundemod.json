@@ -53,7 +53,8 @@
  {
   "label": "the demodulator is run with the wrong sample count",
   "find": "\t/* 0xd890.  Unconditional; there is no gate in front of it. */\n\tmodem.progress(rxbits, *(unsigned int *)nrx, in, n);",
-  "replace": "\t/* 0xd890.  Unconditional; there is no gate in front of it. */\n\tmodem.progress(rxbits, *(unsigned int *)nrx, in, n - 1);"
+  "replace": "\t/* 0xd890.  Unconditional; there is no gate in front of it. */\n\tmodem.progress(rxbits, *(unsigned int *)nrx, in, n - 1);",
+  "note": "UNCAUGHT, not claimed equivalent.  `n` is `NSAMP`, fixed at 48 in every trial this suite runs (test/unit/t_v90rundemod.cpp) and never swept, so 47-vs-48 is tested at exactly one point rather than across a range.  V90Demodulator::progress's internal chain (prefilter/AGC/resampler/equaliser) processes samples in blocks, so whether dropping the last of 48 changes any checked output (rxbits, nrx, the whole-object comparison) depends on where 48 and 47 land relative to those block boundaries for this fixture's specific starting state -- not established in this pass. Worth trying a second NSAMP value, or reading V90Demodulator::progress's block arithmetic directly, before assuming either verdict."
  },
  {
   "label": "the SD arm does not latch progressState",

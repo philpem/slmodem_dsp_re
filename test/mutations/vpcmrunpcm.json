@@ -68,7 +68,8 @@
  {
   "label": "the ramp value is stored before the step, not after",
   "find": "\t\tif (ecRampCounter != VPCM_EC_RAMP_SENTINEL)\n\t\t\tecRampCounter++;\n\t\trx[0] = (float)ecRampCounter;",
-  "replace": "\t\trx[0] = (float)ecRampCounter;\n\t\tif (ecRampCounter != VPCM_EC_RAMP_SENTINEL)\n\t\t\tecRampCounter++;"
+  "replace": "\t\trx[0] = (float)ecRampCounter;\n\t\tif (ecRampCounter != VPCM_EC_RAMP_SENTINEL)\n\t\t\tecRampCounter++;",
+  "note": "UNCAUGHT.  The 'ramp step'/'ramp near end' trials in test/unit/t_vpcmrunpcm.cpp do plant ecMode=VPCM_EC_RAMP_MODE with ecRampCounter away from the sentinel, so this line does run with a value that would change by one under the two spellings. But `rx[0]` is immediately consumed by `echoCanceller.process(in, rx, n)` on the next line, and only that call's OUTPUT (not this raw value) reaches the checked outputs (return value, rxbits/txbits, nrx, nbits) via `modem.progress`. Whether the canceller's transform is sensitive enough to a +/-1 difference in one sample of its reference input to move a checked output is not established here -- closing this needs either reading V92EchoCanceller::process's handling of this specific sample or asserting on `rx[]` directly before the call, neither done in this pass."
  },
  {
   "label": "the ramp mode is 0x20, one below the object's",
@@ -83,7 +84,8 @@
  {
   "label": "the non-ramp arm leaves the receive buffer's first sample alone",
   "find": "\t} else {\t\t\t\t\t\t/* 0xe48b */\n\t\trx[0] = 0.0f;\n\t}",
-  "replace": "\t}"
+  "replace": "\t}",
+  "note": "UNCAUGHT, same root cause as 'the ramp value is stored before the step' above: `rx[0]` here is immediately overwritten by `echoCanceller.process(in, rx, n)`'s own write to `rx`, and only that call's output reaches a checked value. If the canceller's process() always overwrites index 0 of its output regardless of what was there on entry, dropping this store would be a genuine equivalence; if it can pass an input sample through unmodified under some internal state, it is a real gap. Not established either way in this pass."
  },
  {
   "label": "the echo canceller is given the transmit block, not the line signal",
@@ -113,7 +115,8 @@
  {
   "label": "the silence arm does not stop the Ja transmission",
   "find": "\t\tv92modem.modulator->exitJa();",
-  "replace": ""
+  "replace": "",
+  "note": "UNCAUGHT.  V92Modulator::exitJa() (src/pump/v90/V92Modulator.cpp) opens with `if (phase3Modulator->state != V92P3M_STATE_JA) return;` before touching anything, so the call is a no-op unless phase3Modulator is already IN the Ja state. This suite's trials reach this line via word_3c == 1 (the D() table) but do not separately plant phase3Modulator->state -- it is whatever reset()/fill left it at, not V92P3M_STATE_JA -- so on this fixture's inputs the guard is never open and removing the call changes nothing that runs. Not claimed equivalent: a trial that plants phase3Modulator into V92P3M_STATE_JA first (mirroring the ramp group's two-step setup) would separate them, and that is future work rather than a proof of no separation. The sibling exitSuSecond/exitTRN1uSecond mutations below are the same shape on their own state constants."
  },
  {
   "label": "the silence-on arm seeds 1 rather than 0",
@@ -148,7 +151,8 @@
  {
   "label": "the Jd arm does not leave the SU second",
   "find": "\t\tv92modem.modulator->exitSuSecond();",
-  "replace": ""
+  "replace": "",
+  "note": "UNCAUGHT, same shape as 'the silence arm does not stop the Ja transmission' above: V92Modulator::exitSuSecond() guards on `phase3Modulator->state != V92P3M_STATE_SU_SECOND`, which this fixture's trials do not plant, so the call is a no-op on every input this suite drives. Not claimed equivalent -- planting that state would separate them."
  },
  {
   "label": "the retrain bit is cleared whatever the phase 2 bit says",
@@ -178,7 +182,8 @@
  {
   "label": "TRN1u does not leave the second",
   "find": "\t\tv92modem.modulator->exitTRN1uSecond();",
-  "replace": ""
+  "replace": "",
+  "note": "UNCAUGHT, same shape as 'the silence arm does not stop the Ja transmission' above: V92Modulator::exitTRN1uSecond() guards on `phase3Modulator->state != V92P3M_STATE_TRN1U_SECOND`, which this fixture's trials do not plant, so the call is a no-op on every input this suite drives. Not claimed equivalent -- planting that state would separate them."
  },
  {
   "label": "the CPt arm does not latch progressState",
@@ -268,7 +273,9 @@
  {
   "label": "the FPE arm starts FPE whatever phase it is in",
   "find": "\t\tif (v92modem.modulator->phase == V92MOD_PHASE_DATA)\n\t\t\tv92modem.modulator->initiateFPE();",
-  "replace": "\t\tv92modem.modulator->initiateFPE();"
+  "replace": "\t\tv92modem.modulator->initiateFPE();",
+  "equivalent": true,
+  "why": "V92Modulator::initiateFPE() (src/pump/v90/V92Modulator.cpp) opens with the IDENTICAL test: `if (phase != V92MOD_PHASE_DATA) { ...; return -1; }` before doing anything else, and this call site's return value is discarded either way. So removing the caller's guard cannot change behaviour for any phase value: outside V92MOD_PHASE_DATA the callee's own guard makes the call a no-op exactly as the caller's guard would have, and inside V92MOD_PHASE_DATA both spellings call it. No input distinguishes them; the redundant outer check is the object's own style; see the sibling 'the FPE arm tests phase 2 rather than phase 3' mutation on the same site, which IS a different, observable claim (which phase value gates it) and is caught."
  },
  {
   "label": "the FPE arm tests phase 2 rather than phase 3",
@@ -453,7 +460,8 @@
  {
   "label": "the fallback test is against 0x21 rather than 0x20",
   "find": "\t\tif (modem.demodulator->word_3c == 0x20) {",
-  "replace": "\t\tif (modem.demodulator->word_3c == 0x21) {"
+  "replace": "\t\tif (modem.demodulator->word_3c == 0x21) {",
+  "note": "UNCAUGHT even though the 'w34 3 + 0x20' trial in test/unit/t_vpcmrunpcm.cpp is built specifically to reach this branch (see its own comment on `V90Demodulator::enterPhase3` clearing word_3c). The branch is entered/skipped differently between the two spellings on that trial, but whatever it does inside evidently does not move return value, rxbits/txbits, nrx or nbits -- the only things this suite checks. Not investigated further in this pass: needs reading what the 0x20 branch's body (the V.90 fallback report) actually writes and whether any of it is checked anywhere in this file."
  },
  {
   "label": "the fallback returns 5 rather than 6",

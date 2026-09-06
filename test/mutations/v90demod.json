@@ -28,7 +28,9 @@
   "label": "the EIA-6 answer is cached across setParamEia6",
   "find": "\tif (preFilter.isV90WithEia6()) {",
   "replace": "\tint eia6 = preFilter.isV90WithEia6();\n\n\tif (eia6) {",
-  "note": "EXPECTED UNCAUGHT, AND EQUIVALENT: isV90WithEia6 is `(cap == 1) || (V90PW(params)[0x500/4] == 6)` where `cap` comes from refLoop, codecType and the static dataBase.  Between the two calls the object runs setParamEia6, which writes thirty words of the parameter block and NONE of them is +0x500, and displayParamEia6, which is one `ret`.  Neither touches refLoop or codecType.  Held fixed: those bodies, which t_v90prefilter.cpp checks.  The second call stays because the blob makes it."
+  "note": "EXPECTED UNCAUGHT, AND EQUIVALENT: isV90WithEia6 is `(cap == 1) || (V90PW(params)[0x500/4] == 6)` where `cap` comes from refLoop, codecType and the static dataBase.  Between the two calls the object runs setParamEia6, which writes thirty words of the parameter block and NONE of them is +0x500, and displayParamEia6, which is one `ret`.  Neither touches refLoop or codecType.  Held fixed: those bodies, which t_v90prefilter.cpp checks.  The second call stays because the blob makes it.",
+  "equivalent": true,
+  "why": "Formalizing this note's own conclusion (finding F293, this file's header comment): the note already argues and states 'AND EQUIVALENT'; this adds the machine-readable flag so mutate.py's report and mutsnap.py's snapshot count it as equivalent rather than as an open gap."
  },
  {
   "label": "the resampler sits at +0x90",
@@ -149,7 +151,9 @@
   "label": "the eighth argument is not narrowed to short",
   "find": "\t\t\t\t (short)preFilter.isV90WithEia6(), 1, 0.0f,",
   "replace": "\t\t\t\t (short)(int)preFilter.isV90WithEia6(), 1, 0.0f,",
-  "note": "EXPECTED UNCAUGHT: `isV90WithEia6` returns `(cap == 1) || (V90PW(params)[0x500/4] == 6)`, which is 0 or 1, so no input can give it a non-zero high half-word and the narrowing can never be observed.  Held fixed: that isV90WithEia6's body is what src/pump/v90/V90PreFilter.cpp says it is, which t_v90prefilter.cpp checks.  The `(short)` stays because the blob's `cwtl` is there."
+  "note": "EXPECTED UNCAUGHT: `isV90WithEia6` returns `(cap == 1) || (V90PW(params)[0x500/4] == 6)`, which is 0 or 1, so no input can give it a non-zero high half-word and the narrowing can never be observed.  Held fixed: that isV90WithEia6's body is what src/pump/v90/V90PreFilter.cpp says it is, which t_v90prefilter.cpp checks.  The `(short)` stays because the blob's `cwtl` is there.",
+  "equivalent": true,
+  "why": "Unconditionally equivalent regardless of isV90WithEia6's value range: `isV90WithEia6()` is declared `int` (include/dsplib/V90PreFilter.h), so `(int)preFilter.isV90WithEia6()` is a cast of an int to its own type, which C guarantees changes nothing -- `(short)(int)x` and `(short)x` are the same expression for every possible int x, not only for the 0/1 this callee happens to return. Stronger than the note's own argument but agrees with it."
  },
  {
   "label": "the equaliser's cursor is halved with an arithmetic shift",

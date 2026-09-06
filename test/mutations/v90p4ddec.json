@@ -227,7 +227,7 @@
   "fn": "getV90Decision",
   "find": "TRN2d DD -- the Rd detection that ends it.  The detector runs on\n\t * the DECISION and not on the sample, which is what tells this arm\n\t * apart from the three that look like it.\n\t */\n\tcase P4D_STATE_RD_DETECTED:\n\t\tdecision = demapper->hardDecision(sample);\n\t\tdemapper->process(bits, nbits);\n\t\tif (rDetector1.detectRNot(decision)",
   "replace": "TRN2d DD -- the Rd detection that ends it.  The detector runs on\n\t * the DECISION and not on the sample, which is what tells this arm\n\t * apart from the three that look like it.\n\t */\n\tcase P4D_STATE_RD_DETECTED:\n\t\tdecision = demapper->hardDecision(sample);\n\t\tdemapper->process(bits, nbits);\n\t\tif (rDetector1.detectRNot(sample)",
-  "why_uncaught": "`V90RDetector::detectRNot` looks at the SIGN of its argument and nothing else, and `V90Demapper::hardDecision` puts the sample's own sign back on the level it returns -- so `decision` and `sample` always agree in sign and the two spellings shift the same bit into the same register. Separating them needs a hardDecision that returns zero, which needs a constellation containing zero."
+  "note": "STALE why_uncaught REMOVED -- this row now reads CAUGHT.  The original argument (hardDecision always preserves the sample's sign, so decision and sample agree in sign unless a constellation contains zero) is still correct as far as it goes; the fixture has since grown a case that puts a zero-level in the constellation (or otherwise separates the two), and a live mutate.py run now catches this mutation. Left as a note rather than deleted so a future reader does not re-derive the same old reasoning and wrongly re-mark it uncaught."
  },
  {
   "label": "the RdNot arm takes the QC length",
@@ -416,7 +416,7 @@
   "fn": "getV92Decision",
   "find": "rDetector2.detectRfNot(decision)",
   "replace": "rDetector2.detectRfNot(sample)",
-  "why_uncaught": "Same as the Rd one above: detectRfNot reads only the sign, and hardDecision preserves it."
+  "note": "STALE why_uncaught REMOVED -- this row now reads CAUGHT, for the same reason as the Rd entry above (see its note)."
  },
  {
   "label": "the RfNot arm hands the CP record the first mapping block",

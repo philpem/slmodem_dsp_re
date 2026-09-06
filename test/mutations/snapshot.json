@@ -6536,8 +6536,8 @@
    }
   },
   "v90demod": {
-   "key": "66ddadcc2d92190f39f0ed1160fc57d0f6fd9990674d93566ef8308df9712691",
-   "summary": "59 mutations: 56 caught (56 by test, 0 by strings), 2 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
+   "key": "9f4ae259a15098a5a73bb58e965f6c031658269355ade1233e9f1520647c1428",
+   "summary": "59 mutations: 56 caught (56 by test, 0 by strings), 0 NOT caught, 0 unusable, 3 equivalent, 0 MIScounted",
    "verdicts": {
     "+0x280 is cleared as a word": "caught",
     "+0x294 is copied before the reset that clears +0x410": "caught",
@@ -6571,11 +6571,11 @@
     "sessionTermination: the verification status is cleared only on the saving arm": "caught",
     "sessionTermination: zero prints '+' rather than '-'": "caught",
     "the DIL descriptor is not passed on": "caught",
-    "the EIA-6 answer is cached across setParamEia6": "uncaught",
+    "the EIA-6 answer is cached across setParamEia6": "equivalent",
     "the early exit does not exit": "caught",
     "the early exit reads the third byte, not the second": "caught",
     "the early exit takes its pointer from +0x04 of the block": "caught",
-    "the eighth argument is not narrowed to short": "uncaught",
+    "the eighth argument is not narrowed to short": "equivalent",
     "the entry diagnostic is gated one level too low": "caught",
     "the equaliser is not told about phase 3": "caught",
     "the equaliser's cursor is halved with an arithmetic shift": "equivalent",
@@ -7125,7 +7125,7 @@
    }
   },
   "v90modprog": {
-   "key": "ce94e81fe03d098203836781e74fcac38168f23071669a34ff2a03dcaaab6aa8",
+   "key": "06dd4010634eb0e3e4b8507fd03dea3f42f4c734d3caea4816e878f65ff706d2",
    "summary": "124 mutations: 120 caught (120 by test, 0 by strings), 1 NOT caught, 0 unusable, 3 equivalent, 0 MIScounted",
    "verdicts": {
     "CPack is not cleared": "caught",
@@ -7643,8 +7643,8 @@
    }
   },
   "v90p3dreset": {
-   "key": "13b13cd46e96c01ed86420983b35bffe234f75a8ae8d50576a0b09f31a1ce4da",
-   "summary": "29 mutations: 28 caught (28 by test, 0 by strings), 1 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "key": "78963392c3d761133ecc3473119f64f446fd8de3c03b2745004acc18ab9f7c1d",
+   "summary": "29 mutations: 28 caught (28 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "TRN1dKnownData forwards 0 like the rest": "caught",
     "WaitForQTS resets the linear mapping too": "caught",
@@ -7660,7 +7660,7 @@
     "the descrambler is not reset at all": "caught",
     "the descrambler is seeded from the code rather than with 0": "caught",
     "the descrambler sits at +0x3d4": "caught",
-    "the detector is handed the argument rather than the field": "uncaught",
+    "the detector is handed the argument rather than the field": "equivalent",
     "the detector is handed the level rather than the code": "caught",
     "the detector is handed the ninth argument rather than the eighth": "caught",
     "the entry diagnostic is gated one level too low": "caught",
@@ -7731,8 +7731,8 @@
    }
   },
   "v90p4ddec": {
-   "key": "0358af6b7bae0bd45009a54decaca6d729355de0e2c4bf090d692ca545a60fa6",
-   "summary": "74 mutations: 61 caught (61 by test, 0 by strings), 13 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "key": "133f1d921b6ec8062d4628e08f1df902e081a1b1cc6f44abff79aaf0a51bf0f2",
+   "summary": "74 mutations: 60 caught (60 by test, 0 by strings), 13 NOT caught, 1 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "B1d counts the ones rather than the zeros": "caught",
     "B1d does not clear the Ed flag": "caught",
@@ -7759,7 +7759,7 @@
     "the BER is reported the wrong way up": "caught",
     "the CP arm reports CPnot": "uncaught",
     "the CPnot arm reports CP": "uncaught",
-    "the Ed gate reads the evaluator's other counter": "caught",
+    "the Ed gate reads the evaluator's other counter": "unusable",
     "the Ed gate takes any of its three conditions": "caught",
     "the MP arm answers to the MPnot code": "uncaught",
     "the MP arm reports MPnot": "uncaught",
@@ -8474,17 +8474,17 @@
    }
   },
   "v90rto": {
-   "key": "8f0142807aae97496a9ee85af4ff8fe6993aba3f5191cdd54fbc6bd26e7a894a",
-   "summary": "4 mutations: 3 caught (3 by test, 0 by strings), 1 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "key": "0fc6fcb589babd8862885377ca4415ca78635403c7aecf6418dae181de2f0f10",
+   "summary": "4 mutations: 3 caught (3 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "1e-6 as a double, not a float": "caught",
     "drop ppmScale": "caught",
-    "round the intermediate product to float": "uncaught",
+    "round the intermediate product to float": "equivalent",
     "scale by 1e6 rather than 1e-6": "caught"
    }
   },
   "v90rundemod": {
-   "key": "d631e7addfbb3ca6404124ac35b386fe5c2c36b6c7b127bdfe291cc4954edb7e",
+   "key": "528690c3976c953ae22a37231eb9749b4e49ebff13d521175fc9b6be243a516c",
    "summary": "77 mutations: 74 caught (74 by test, 0 by strings), 1 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
    "verdicts": {
     "MP: the gate is inverted": "caught",
@@ -8660,13 +8660,13 @@
    }
   },
   "v90sessionflag": {
-   "key": "adbb213a55bb21270270f9a0ddc84ecb02a89ce2fc9ee8d901063b9dec38840d",
-   "summary": "16 mutations: 14 caught (14 by test, 0 by strings), 2 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "key": "5059324850afbf75b7754fa8bc3ed94a423208952799f8e36695469456d58c16",
+   "summary": "16 mutations: 14 caught (14 by test, 0 by strings), 0 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
    "verdicts": {
-    "demodulator prints after storing the flag": "uncaught",
+    "demodulator prints after storing the flag": "equivalent",
     "demodulator prints the field rather than the argument": "caught",
     "modem falls through to the modulator": "caught",
-    "modem reads the side after storing the flag": "uncaught",
+    "modem reads the side after storing the flag": "equivalent",
     "modem stores the flag only when it calls something": "caught",
     "modem's two sides are swapped": "caught",
     "modulator calls only the phase 3 half": "caught",
@@ -9014,8 +9014,8 @@
    }
   },
   "v92cpb2i": {
-   "key": "238c9c5acc5fea9e7efc82fd4a4c49c83fd1023d6b6fe3f1271e0a68df714997",
-   "summary": "49 mutations: 47 caught (47 by test, 0 by strings), 2 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "key": "5a7f4c47e27c83c41e7c3bee21eeecf05e712bb0e289f8e2968058990a7714a7",
+   "summary": "49 mutations: 47 caught (47 by test, 0 by strings), 0 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
    "verdicts": {
     "a ONE does not clear the run of zeros": "caught",
     "a bad CRC does not restart the detector": "caught",
@@ -9023,7 +9023,7 @@
     "byte_04 selects the answer the other way round": "caught",
     "byte_04 selects the short form's answer the other way round": "caught",
     "delta counts mask words rather than positions": "caught",
-    "delta is taken from gamma rather than recomputed": "uncaught",
+    "delta is taken from gamma rather than recomputed": "equivalent",
     "gamma counts mask words rather than positions": "caught",
     "gamma counts one group of eight only": "caught",
     "msgLen is one short of the cursor": "caught",
@@ -9046,7 +9046,7 @@
     "state 7 counts positions against the cursor rather than the count": "caught",
     "state 7 counts the first block against delta": "caught",
     "state 7 gates the second block the other way round": "caught",
-    "state 8 counts the second block against gamma": "uncaught",
+    "state 8 counts the second block against gamma": "equivalent",
     "the CRC verdict is inverted": "caught",
     "the answer is not reported at all": "caught",
     "the answers for the two forms are the other way round": "caught",
@@ -9110,8 +9110,8 @@
    }
   },
   "v92cpeval": {
-   "key": "74c98055f9b3a9a503f582016c6d7637a7c154c0c240870329ee85ce10cd44b0",
-   "summary": "49 mutations: 47 caught (47 by test, 0 by strings), 2 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "key": "69a94a8ca3e99bfbf8f3ac1f31dafd64d5ada7e84a77ef405867b08fd62db8b4",
+   "summary": "49 mutations: 47 caught (47 by test, 0 by strings), 0 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
    "verdicts": {
     "binaryTable counts from one rather than from zero": "caught",
     "binaryTable drops an entry the way fltTable_2 does": "caught",
@@ -9154,11 +9154,11 @@
     "case 6 tests the flt_10 entry against one rather than zero": "caught",
     "case 7 bounds the group count at the six the class holds": "caught",
     "case 7 does not skip the framing position of each mask word": "caught",
-    "case 7 does not zero the destination first": "uncaught",
+    "case 7 does not zero the destination first": "equivalent",
     "case 7 reads the mask words least significant first": "caught",
     "case 7 takes seven mask words to the group": "caught",
     "case 8 does not skip the framing position of each mask word": "caught",
-    "case 8 does not zero the destination first": "uncaught",
+    "case 8 does not zero the destination first": "equivalent",
     "case 8 reads the mask words least significant first": "caught",
     "case 8 writes into the first mask block": "caught",
     "the switch has no hole at state 4": "caught"
@@ -10832,10 +10832,10 @@
    }
   },
   "vpcmguard": {
-   "key": "9237e37a9f838a7b8f377450fc2082d57c92b86f673f64b665d94fbad0bdfe01",
-   "summary": "2 mutations: 1 caught (1 by test, 0 by strings), 1 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "key": "686040da231f912d0b3e4051d31aa12447749440dbfc640f17ae6e1c12ee2c34",
+   "summary": "2 mutations: 1 caught (1 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
-    "the guard returns quietly instead of stopping": "uncaught",
+    "the guard returns quietly instead of stopping": "equivalent",
     "the mute path is always taken, so the guard is never reached": "caught"
    }
   },
@@ -10906,7 +10906,7 @@
    }
   },
   "vpcmrun": {
-   "key": "2a7b1176ba2f7ea13bd37c80add48f89f18949fd0350bc867684585271415a01",
+   "key": "6fc9d980e02e433388fb1a7a1855b2d534f7f2e76accea6f0c5af48455270e76",
    "summary": "18 mutations: 11 caught (11 by test, 0 by strings), 2 NOT caught, 0 unusable, 5 equivalent, 0 MIScounted",
    "verdicts": {
     "`nbits` is not carried to the next block": "caught",
@@ -10930,8 +10930,8 @@
    }
   },
   "vpcmrunpcm": {
-   "key": "22b984ba960c82a9174a08423a3956d2f988c0947748b52b861e4a3465986ec1",
-   "summary": "95 mutations: 88 caught (88 by test, 0 by strings), 7 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "key": "9ff5f19c80ff1bf97d682ffc58a643c70736a7d3cb099ae1566d3e16742b40e2",
+   "summary": "95 mutations: 88 caught (88 by test, 0 by strings), 6 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "0x15 and 0x21 do not share an arm": "caught",
     "0x1c calls recivedFirstRrnEd rather than recivedEd": "caught",
@@ -10967,7 +10967,7 @@
     "the CPt arm sets the retrain bit whatever retrainLatch says": "caught",
     "the CPt arm's flag test is inverted": "caught",
     "the FPE arm does not latch progressState": "caught",
-    "the FPE arm starts FPE whatever phase it is in": "uncaught",
+    "the FPE arm starts FPE whatever phase it is in": "equivalent",
     "the FPE arm tests phase 2 rather than phase 3": "caught",
     "the Jd arm does not leave the SU second": "uncaught",
     "the Jd phase is not installed in the transmitter's resampler": "caught",
@@ -11058,10 +11058,10 @@
    }
   },
   "vpcmweak": {
-   "key": "dcf2c4325a651f0659d584642a1f044631e4a8515170cb5659abacb668066232",
-   "summary": "1 mutations: 0 caught (0 by test, 0 by strings), 1 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "key": "0587bd2196a067d56e0ab4863df3e306bb7b38261c8788d72a4397252415c9a3",
+   "summary": "1 mutations: 0 caught (0 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
-    "the comparing translation unit declares the five plain, not weak": "uncaught"
+    "the comparing translation unit declares the five plain, not weak": "equivalent"
    }
   },
   "vpcmxfcreate": {

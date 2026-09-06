@@ -144,6 +144,8 @@
   "label": "the detector is handed the argument rather than the field",
   "find": "\tautoDigitalImpDetector->reset(ucodeArg, pcmType, altRbs);",
   "replace": "\tautoDigitalImpDetector->reset(ucodeArg, pcmTypeArg, altRbs);",
-  "note": "EXPECTED UNCAUGHT: pcmType was assigned pcmTypeArg above and nothing between the two writes it, so the two expressions are the same value.  Held fixed: that `pcmType = pcmTypeArg;` is itself checked, which the whole-object comparison does."
+  "note": "EXPECTED UNCAUGHT: pcmType was assigned pcmTypeArg above and nothing between the two writes it, so the two expressions are the same value.  Held fixed: that `pcmType = pcmTypeArg;` is itself checked, which the whole-object comparison does.",
+  "equivalent": true,
+  "why": "Formalizing this note's own conclusion: pcmType == pcmTypeArg is guaranteed at this call by the unconditional assignment immediately above with no intervening write, so the two arguments are the same value for every input the object can receive."
  }
 ]

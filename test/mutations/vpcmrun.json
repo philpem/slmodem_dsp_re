@@ -121,12 +121,14 @@
   "label": "the phase-II restart arm does not reset the stall counter",
   "find": "\t\t\t\t\ts->stall = 0;\n",
   "replace": "\t\t\t\t\t(void)0;\n",
-  "fn": "vpcm_run"
+  "fn": "vpcm_run",
+  "note": "UNCAUGHT ON PURPOSE, per finding F1005: driving this needs t_vpcmrun to produce 3,000 unchanged code-0 blocks so `stall` actually reaches VPCM_TRAIN_TIMEOUT, which the connecting-call fixture this suite drives does not do. Left uncaught rather than made catchable; F1005 calls out that closing it is a new fixture, not a wider assertion on this one."
  },
  {
   "label": "the training timeout fires one block early",
   "find": "\t\t\t\tif (s->stall > VPCM_TRAIN_TIMEOUT) {\n",
   "replace": "\t\t\t\tif (s->stall >= VPCM_TRAIN_TIMEOUT) {\n",
-  "fn": "vpcm_run"
+  "fn": "vpcm_run",
+  "note": "UNCAUGHT ON PURPOSE, same reason as 'the phase-II restart arm does not reset the stall counter' above (finding F1005): needs 3,000 unchanged code-0 blocks to reach VPCM_TRAIN_TIMEOUT, which this suite's fixture does not produce."
  }
 ]

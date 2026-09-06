@@ -221,12 +221,16 @@
  {
   "label": "case 7 does not zero the destination first",
   "find": "\t\t\t\tshort_42[k][j] = 0;\n",
-  "replace": ""
+  "replace": "",
+  "equivalent": true,
+  "why": "`short_42[k][j] = 0;` is immediately followed by an `int acc = 0;` accumulation over `i` that never reads `short_42[k][j]`, and the loop ends with the unconditional `short_42[k][j] = (short)acc;` a few lines below -- so whatever this line stores is overwritten before anything reads it. Dropping it cannot change any observable value for any input; it is the same shape as D195's redundant memset in VPcmV34Create (finding F1260), one array element instead of a whole block."
  },
  {
   "label": "case 8 does not zero the destination first",
   "find": "\t\t\t\tshort_a2[k][j] = 0;\n",
-  "replace": ""
+  "replace": "",
+  "equivalent": true,
+  "why": "Same shape as 'case 7 does not zero the destination first' above: `short_a2[k][j] = 0;` is dead, unconditionally overwritten by `short_a2[k][j] = (short)acc;` at the end of the same iteration with no intervening read."
  },
  {
   "label": "case 7 takes seven mask words to the group",

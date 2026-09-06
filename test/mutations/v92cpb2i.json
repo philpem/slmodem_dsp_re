@@ -111,7 +111,9 @@
  {
   "label": "delta is taken from gamma rather than recomputed",
   "find": "\t\t\tdelta = 136u * word_10c;\n",
-  "replace": "\t\t\tdelta = gamma;\n"
+  "replace": "\t\t\tdelta = gamma;\n",
+  "equivalent": true,
+  "why": "This file's own header comment (above bitsToInfo) already derives it: `gamma = 136 * word_10c` is set entering state 7 and `delta = 136 * word_10c` entering state 8, taken from the same field at different moments, and they differ only if something moves word_10c between the two -- 'evaluateInfo case 7 does not, and case 8 has not run yet.' So at the point this line runs, gamma already equals 136u * word_10c bit for bit, and assigning `delta = gamma` stores the identical value `delta = 136u * word_10c` would have computed. No input separates them. Contrast 'state 7 counts the first block against delta' on the sibling case, which IS caught: there `delta` still holds a stale value from a previous message, not a fresh one."
  },
  {
   "label": "state 7 counts the first block against delta",
@@ -121,7 +123,9 @@
  {
   "label": "state 8 counts the second block against gamma",
   "find": "\t\tif ((unsigned int)stateBitCount == delta) {",
-  "replace": "\t\tif ((unsigned int)stateBitCount == gamma) {"
+  "replace": "\t\tif ((unsigned int)stateBitCount == gamma) {",
+  "equivalent": true,
+  "why": "Same derivation as 'delta is taken from gamma rather than recomputed' above: by the time state 8 tests this, gamma and delta were both set to 136u * word_10c with nothing moving word_10c in between (this file's header comment), so they hold the identical value and testing against either name gives the same answer for every input this state machine can reach."
  },
  {
   "label": "state 7 gates the second block the other way round",

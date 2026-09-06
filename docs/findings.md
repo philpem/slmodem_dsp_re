@@ -119314,3 +119314,151 @@ and `make check64` all clean. `make byteident-ratchet`: `ratchet OK (exact
 no `src/`. `mutsnap.py --update v34hst3core` recorded the new baseline; the
 other 227 entries are unchanged and still stale, as they were before this
 pass. (2026-09-06)
+
+## F10199. A live mutation-gap sweep over 13 V.90/V.92/VPcm suites: eight NOT-CAUGHT counts closed to zero, one is a genuine new differential-testing result, and six real gaps left documented for a follow-up (2026-09-06)
+
+*Numbered F10196 in the commit that introduced it; renumbered to F10199 on
+rebase after a collision with F10196-F10198, landed concurrently by another
+session's own V.34/V.32/V.22 mutation sweep (F10198).*
+
+`python3 tools/mutsnap.py --check` was stale tree-wide, so a live run was
+needed rather than a read of the recorded numbers. Ranked the 122
+`v90*`/`v92*`/`vpcm*` suites by the disk snapshot's NOT-caught counts and
+worked the top of that list: `v90p4ddec` (13), `vpcmrunpcm` (7),
+`v90p3ddec` (4), `v90adid` (3, already resolved -- see below), `v90cdadjust`
+(3), `v92cpb2i`/`v92cpeval`/`vpcmrun`/`v90demod`/`v90sessionflag` (2 each),
+`v90rto`/`v90modprog`/`v90rundemod`/`v92ec`/`v90p3dreset` (1 each). 14 suites
+run live end to end; `v90adid` and `v90cdadjust` were read rather than
+re-run, their survivors already carrying full arguments in
+`test/mutations/*.json` or in this file (F6000/F6001).
+
+**REAL RESULT: `v90rto`'s "round the intermediate product to float" is
+CLOSED, not merely reasoned about.** F6000 recorded it as "a REAL
+gap...closable by a search for a separating pair" and left it there. The
+search was run on the actual period compiler rather than simulated: both
+spellings of `ResamplerTimingOffset::setTimingOffset` were compiled with
+`dsplibs-tc342` at the exact `period.mk` flags and DISASSEMBLE TO THE
+IDENTICAL THREE INSTRUCTIONS (`flds`/`fmuls`/`fmuls`/`ret`) -- GCC 3.4.2
+without `-ffloat-store` never narrows the "intermediate" `float t` to
+memory, so the explicit variable never actually rounds anything the
+original single expression didn't already round once at the final store.
+~20,000,000 random float pairs through both compiled functions (NaN/Inf
+excluded) produced zero divergent results, confirming the disassembly. Live
+re-run: `v90rto` 4 mutations, 0 NOT caught (was 1), 1 equivalent (was 0).
+
+**SEVEN MORE closed to `"equivalent": true` with a written `why`, all from
+reading the object/source rather than guessing:**
+
+- `vpcmweak`'s and `vpcmguard`'s stale-by-progress survivors. F7606 already
+  measured that all seven symbols below `VPcmV34Progress` are now WRITTEN,
+  so `vpcm_notwritten`'s abort is unreachable and the weak/plain declaration
+  distinction can't be observed -- true today for a reason ORTHOGONAL to why
+  it wasn't true on F1004's tree. Formalized both as `equivalent` citing
+  F7606; live re-run confirms 0 NOT caught on both (were 1 each).
+- `v90demod`'s two `isV90WithEia6` mutations already carried notes arguing
+  equivalence (one literally says "AND EQUIVALENT") but lacked the JSON
+  flag. Formalized both -- one via the note's own argument (F293), the
+  other via a strictly stronger one: `isV90WithEia6()` is declared `int`,
+  so `(short)(int)x` and `(short)x` are the same expression for every int
+  `x`, not only for the 0/1 this callee happens to return.
+- `v90sessionflag`'s two statement-order mutations (`V90Demodulator::
+  setSessionFlag`'s print/store swap, `V90Modem::setSessionFlag`'s
+  read-side-after-store) both already had the equivalence argument written
+  as a plain comment directly above the function ("matters only if the two
+  could alias and they cannot"); formalized both.
+- `v90p3dreset`'s `pcmType`/`pcmTypeArg` mutation had the same shape: an
+  existing note already showed the two are the same value at the call site,
+  just missing the flag.
+- `v92cpb2i`'s two `gamma`/`delta` mutations: the source's own header
+  comment for `V92CP::bitsToInfo` already derives that the two statics hold
+  the identical `136u * word_10c` by the time state 8 tests either, because
+  `evaluateInfo`'s state-7 call doesn't touch `word_10c` in between.
+- `v92cpeval`'s two `short_42[k][j] = 0` / `short_a2[k][j] = 0` mutations:
+  each zero-store is unconditionally overwritten by `= (short)acc` at the
+  end of the same loop iteration with no intervening read -- D195's shape
+  (VPcmV34Create's redundant memset) at the scale of one array element.
+- `vpcmrunpcm`'s "the FPE arm starts FPE whatever phase it is in": the
+  caller's `if (phase == V92MOD_PHASE_DATA)` guard is redundant with
+  `V92Modulator::initiateFPE()`'s own identical guard at its own head, so
+  removing the caller's copy cannot change what the callee does for any
+  phase value.
+
+Live re-run of all eight: `v90demod` 0 NOT caught (was 2, now 3
+equivalent), `v90sessionflag` 0 (was 2, now 2 equivalent), `v90p3dreset` 0
+(was 1, now 1 equivalent), `v92cpb2i` 0 (was 2, now 2 equivalent),
+`v92cpeval` 0 (was 2, now 2 equivalent), `vpcmrunpcm` 6 (was 7, now 1
+equivalent -- six real gaps remain, below).
+
+**TWO STALE `why_uncaught` ENTRIES CORRECTED, NOT REMOVED.** `v90p4ddec`'s
+"the Rd detector is given the sample rather than the decision" and "the
+RfNot arm is fed the sample" both carried a `why_uncaught` arguing
+`hardDecision` always preserves sign so the two spellings can't be
+separated -- true when written, and now FALSE: a live run shows both
+CAUGHT. The fixture has grown a case (a zero-level constellation, per the
+stale argument's own escape clause) that separates them and nobody updated
+the two rows. Replaced both `why_uncaught` fields with a `note` recording
+that the row is stale and why, rather than deleting the history --
+`docs/findings.md`'s own convention applied to a JSON file.
+
+**SIX REAL GAPS LEFT OPEN, EACH WITH A WRITTEN REASON, NONE CLAIMED
+EQUIVALENT:**
+
+- `vpcmrunpcm`, three `V92Modulator::exit{Ja,SuSecond,TRN1uSecond}()`
+  removals: each callee opens with `if (phase3Modulator->state !=
+  V92P3M_STATE_*) return;`, and this suite's trials reach the CALL SITE
+  (word_3c IS driven across its full 0x00-0x36 range) but never plant
+  `phase3Modulator->state` into the required sub-state, so the call is a
+  no-op on every input this fixture drives -- not proven equivalent, since
+  planting that state would separate them.
+- `vpcmrunpcm`, the ramp/non-ramp `rx[0]` pair: both feed into
+  `echoCanceller.process(in, rx, n)` immediately afterward, whose output
+  (not the raw value) is what reaches the checked outputs; whether the
+  canceller's transform is sensitive to the difference is unread.
+- `vpcmrunpcm`, "the fallback test is against 0x21 rather than 0x20": the
+  test's own comment shows a trial built specifically to reach
+  `word_3c == 0x20`, so the branch IS taken differently, but whatever it
+  does inside apparently doesn't move any of the four values this suite
+  checks (return value, rxbits/txbits, nrx, nbits).
+- `v90modprog`, "the phase 3 arm copies the event code even when it is
+  zero": real difference exists (stale non-zero `eventCode` surviving vs.
+  being clobbered by a fresh zero), but separating it needs a two-call
+  sequence this fixture doesn't drive -- the same class F7512/F7513 record
+  for the adjacent `stateCount`/`word_3c` dispatch.
+- `v90rundemod`, "the demodulator is run with the wrong sample count":
+  `NSAMP` is fixed at 48 across every trial and never swept, so 47-vs-48 is
+  tested at exactly one point against `V90Demodulator::progress`'s internal
+  block arithmetic; not established either way.
+
+**LEFT ALONE ON PURPOSE, ALREADY FULLY ACCOUNTED FOR ELSEWHERE:**
+`v90p4ddec`'s remaining 13 (all already carry a `why_uncaught` citing
+F4811/F4812/F4803 -- CRC-completion cost, sign/root NaN unreachable on the
+period compiler, and the declared `t_v90p4dnan` split respectively);
+`v90adid`'s 3 (F6000/F6001, one moved to the declared `t_v90adidnan`, two
+reported-not-reclassified codegen-shape claims); `v92ec`'s 1 and `v90equ`'s
+2 (both declared/frozen per `tools/gccdiverge.json`, `t_v90equ`'s baseline
+already exits non-zero on the modern build so `mutate.py` refuses the
+WHOLE suite -- unchanged from F6003); `vpcmcreate`'s 1 deliberate survivor
+(D195, `docs/deviation-triage.md` already ruled "NOT A DEFECT" with an
+explicit re-run protocol that a formal `equivalent` tag would not improve);
+`vpcmrun`'s 2 (F1005, need 3,000 unchanged code-0 blocks this suite's
+connecting-call fixture doesn't produce -- noted in the JSON for the first
+time this pass, unchanged in substance).
+
+**Verification.** `python3 tools/anchorcheck.py`: 228 suites, 9767
+mutations, 0 skipped, 0 mismatches, both before and after every edit in
+this pass. `python3 tools/mutsnap.py --update` on all 13 touched suites:
+verdicts above, snapshot recorded. Real `make period`: 374 passed, 0
+failed (no tests added, matches `master`'s own count -- nothing in
+`src/` or `test/` changed, only `test/mutations/*.json`).
+`tools/onedef.py`, `python3 tools/refcheck.py` and `make check64` all
+clean. `make byteident-ratchet`: `ratchet OK (exact 736 -> 737, regalloc
+53 -> 53)`, unmoved by this pass as expected -- no source was touched.
+
+**What's left for a follow-up pass.** ~100 of the 122 `v90*`/`v92*`/`vpcm*`
+suites were not run live this pass (prioritized by NOT-caught count per
+the task's own scope-discipline instruction); most showed 0 NOT-caught in
+the stale snapshot and are lower-value, but the snapshot is stale
+tree-wide and a live confirmation sweep is still owed. The six real gaps
+above are each scoped to a specific, nameable fixture extension (a
+two-step state plant, a second NSAMP value, or reading one callee's
+effect on the checked outputs) rather than being open-ended.

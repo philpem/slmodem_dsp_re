@@ -6,7 +6,9 @@
   "label": "the guard returns quietly instead of stopping",
   "find": "\tif (!vpcm_unwritten_soft)\n\t\tabort();\n",
   "replace": "\tif (0)\n\t\tabort();\n",
-  "fn": "vpcm_notwritten"
+  "fn": "vpcm_notwritten",
+  "equivalent": true,
+  "why": "vpcm_notwritten's hard-abort arm is unreachable in this binary: all five VPcmV34* entry points and the seven symbols below VPcmV34Progress are now WRITTEN (finding F7606), so vpcm_run never calls vpcm_notwritten(...) with vpcm_unwritten_soft false -- there is no unresolved callee left below VPcmV34Progress for t_vpcmguard to reach (see the note at the head of test/unit/t_vpcmguard.c and F7606's own re-measurement, which found this row identical to its stored verdict at 9ddfc5bc). Removing the abort from dead code cannot be observed by any call this suite makes."
  },
  {
   "label": "the mute path is always taken, so the guard is never reached",
