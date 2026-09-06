@@ -117912,3 +117912,85 @@ unrelated to this change -- see the item-5 enum/`#define` note in
 match to the pre-change baseline. Real `make byteident-ratchet`: 736/1852
 grade-0 EXACT (39.7%), 796/1852 grade-0-or-1 (43.0%), ratchet OK -- the
 Tier Zero floor unchanged. (2026-09-06)
+
+## F10185. The V.34 `void *objp`/`obj`/`shellp` "self"-parameter cluster
+(F10159's deferred ~110 sites): done, and it is a negative result --
+four confirmed forced, the rest evidence-free either way, none retyped
+
+F10159 explicitly declined to verify this cluster -- `void *objp`/`obj`/
+`shellp` self parameters across `src/pump/v34/{v34hshak.c,v34rx.c,
+v34shell.c,v34pcmif.c,v34hstx1.cpp,v34info.c,v34scram.c,v34k56.cpp,
+v34pcmmain.cpp}` -- noting only that `v34shell.c` showed the same
+confirmed-dispatch shape as its own bucket 3 (F10154's real union at
+`v34shell.h:189-191`) and that the other ~110 sites needed their own
+per-site pass. That pass is now done: 115 function definitions taking
+`void *objp`/`obj`/`shellp` as their first parameter, extracted
+mechanically from all nine files (not by re-reading F10159's estimate).
+
+**Method.** For each of the 115, two checks: (1) is the function's
+ADDRESS ever taken anywhere in the tree (stored into a field, an array,
+or otherwise used as a value rather than called by name) -- a tree-wide
+grep for `(=\s*|&)NAME[,;)]` across every occurrence, which finds a real
+struct-field assignment or `&`-of-function and does not fire on a call
+or on comment prose naming the function; (2) for anything not caught by
+(1), whether the function's OBJECT SYMBOL is C++-mangled -- which would
+encode its true parameter type directly, the way `include/dsplib/
+v34pcmif.h`'s post-`extern "C"` block already does for `getMPrecvdBits`
+and five siblings (`_ZN...` relocations force those into C++ linkage,
+so their symbols carry `P12tagV34Object`, not an opaque type, and they
+are ALREADY declared `struct tagV34Object *` -- confirming they are not
+part of this cluster at all, and were fixed before this pass).
+
+**Result -- four are confirmed forced, all four already documented, no
+new work needed on them.** `scrambleGPA`, `scrambleGPC`, `descrambleGPA`
+and `descrambleGPC` (`v34scram.c`) are the only address-taken hits in
+the whole cluster: `v34digital.c:85,88` and `v34shell.c:1236` each
+assign one of them to `tx->scramble`/`s->scramble`, the anonymous union
+member `v34shell.h:189-191` declares as `v34_scramble_fn` (itself
+`void (*)(void *shell, ...)`), and `t_vpcmdp.c`/`t_vpcmcreate.c` take
+`&scrambleGPA`/`&descrambleGPA` etc. directly to build a comparison
+table. This is F10154's dispatch table confirmed from the caller side
+now as well as the callee side -- exactly F10159's bucket 3, and it is
+the ONLY genuinely forced void* in the cluster.
+
+**The other 111 have no address ever taken, anywhere.** Every remaining
+function in the 115 is called only by its own name, with a literal `(`
+immediately following, at every one of its several thousand combined
+occurrences (comments, declarations, calls) tree-wide. None sits in a
+table, a struct field, or an `&`-of-function expression. All nine files
+are `.c` or plain-function `.cpp` under `extern "C"` linkage --
+`v34hstx1.cpp` confirmed unmangled already (CLAUDE.md's own citation,
+"nineteen T v34tx1_*, zero _Z"), and `v34k56.cpp`'s own file-header
+comment states directly that `k56FlexPhase34` "exports... with no
+mangling, so it was declared `extern \"C\"`" for an unrelated reason (two
+of its calls need C++ linkage to reach `K56FlexFloModem`'s mangled
+members, but the function itself stays unmangled). So none of the 111
+carries the mangled-name evidence that settled the six `VPcmV34*`
+siblings, and there is no dispatch table to settle it the other way
+either.
+
+**Retyping them anyway is not supported, even though it would be
+codegen-free.** Under this ABI a `void *` parameter and a `struct
+v34_object *` parameter compile identically -- cdecl passes every
+pointer as the same 32-bit value regardless of pointee type, so `make
+period`/`make byteident-ratchet` could not tell the two apart and a
+retype would pass every gate whether or not it matched the original.
+That is exactly the shape CLAUDE.md's naming rule warns about: a change
+no test can fail on is a change believed on faith, not evidence, and
+"naming (or here, typing) something wrongly is worse than leaving it
+alone" applies the same way to a parameter's declared type as it does to
+a field's name. Compounding it, nine of `v34hshak.c`'s twelve
+self-parameter functions have no caller anywhere in the object at all
+(the file's own header comment: reachable only from the still-
+unreconstructed `v34handshak`), so there is not even an indirect,
+weaker signal to read for those. **Left unchanged, all 111.**
+
+No `src/` or `include/` changes resulted; nothing to gate. Baselines
+reconfirmed unchanged going in: `make period` 374 passed, 0 failed;
+`make byteident-ratchet` 736/1852 EXACT (39.7%), 796/1852 grade 0-or-1
+(43.0%), ratchet OK. This closes item 3 of the 2026-09-06 field-naming
+exploration list (`.claude/nextsteps-fieldnaming.md`, not checked in) --
+a null result reached by tracing all 115 sites rather than assuming the
+F10159 hint generalized, worth exactly as much as a retype would have
+been per this project's own rule for negative results (F10159).
+(2026-09-06)
