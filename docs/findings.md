@@ -118914,3 +118914,149 @@ down. `make one` on `t_v22ans`, `t_v22hdx`, `t_v22loop`, `t_v22org` and
 `tools/anchorcheck.py`, `make check64` and `make byteident-ratchet` all
 clean -- see the branch's own commit for the exact period/ratchet counts.
 (2026-09-06)
+
+## F10195. `V90Phase4Modulator.cpp`'s five `+0`-delta near-misses all
+declined after real enumeration: four trace to one shared destructor-rooted
+register-allocation cursor, two to `-freorder-blocks` physical block layout
+(2026-09-06)
+
+`byteident.py --near 60` found five symbols at `+0` instruction-count delta
+against the blob, all in this one file: `setRdRtSymbols` (BYTES, 512 bytes),
+`setRfSymbols` (SIZE, 1005), `generateV90Symbol` (SIZE, 2235),
+`generateV92Symbol` (SIZE, 3922) and, below the requested top four,
+`recivedCPtag` (BYTES, 282). Baseline at this branch's fork point (before
+F10193/F10194 landed on `master`): grade 0 EXACT 736 of 1852 symbols both
+objects define; 32 of this file's 45 member functions already exact. None
+of the five closed to grade 0 in this pass; all five are DECLINED, and they
+resolve into two independent, well-characterised causes rather than five
+open questions.
+
+**Cause 1, four symbols: a shared register-allocation cursor rooted at the
+destructor, which sits at TU emission index 0 where no lever here can
+reach it.**
+
+- `setRdRtSymbols` -- BYTES, 2 bytes differ, grade 1 ACCEPT. `dis.py` on
+  both objects shows the ENTIRE diff is the discard register at the
+  function's two epilogues: it reserves one dead stack slot
+  (`sub $0x4,%esp`) purely as outgoing-argument scratch for the repeated
+  `alaw2linear`/`ulaw2linear` calls, and discards it before each `ret` with
+  a `pop` whose destination is never read again. The blob pops `%eax`
+  there; we pop `%edx`. This is `docs/method/refinement.md` lever 3b's
+  `i386.md:17507` `add $imm,%esp` -> `pop %reg` conversion, filled by GCC
+  3.4.2's round-robin `peep2_find_free_register` cursor -- a property of
+  what preceded this function in the TU's emission order, not of anything
+  in its own source. Corrects an earlier, now-stale in-file comment
+  claiming this function already matched the object exactly.
+- `setRfSymbols` -- SIZE, 10 bytes differ, grade 1 REJECT. `--why`'s row 7
+  `NON-REGISTER OPERAND .+519 | .+528` is `and $0x7f,%al` (blob, the
+  AL-specific 2-byte encoding) against `and $0x7f,%dl` (ours, the general
+  3-byte r8 form) -- the SAME instruction; only which register holds the
+  byte changes the encoded length. Same mechanism as `setRdRtSymbols`, one
+  register over.
+- `recivedCPtag` -- BYTES, 4 bytes differ, grade 1 ACCEPT. `dis.py` shows
+  the body byte-for-byte identical except the first two loads: blob puts
+  `0x20(%ebx)` in `%eax` and `0x2f9c(%ebx)` in `%edx`; ours has the two
+  swapped. Nothing else in the function differs.
+- The shared root: `~V90Phase4Modulator` (`D2Ev`/`D1Ev`), this class's
+  first-emitted members (TU emission index 0-1), is itself not grade 0 for
+  a register-allocation reason -- blob 28 instructions against our 26. The
+  blob holds `this` in `%esi` AND `bitsToSymbol` in `%ebx` as two separate
+  callee-saved registers across the `V90BitsToSymbol` destructor call, so
+  it never re-reads the field afterwards; we hold only `this` and reload
+  the field from memory once the call clobbers the scratch that held it.
+  Two alternate spellings were compiled and both moved further away
+  (F7782's hill-climbing rule): a hoisted local with a combined `&&`
+  condition gives 30 instructions (GCC merges the two tests with
+  `sete`/`setne` instead of the blob's two sequential branches); the same
+  local in a nested `if` gives 21 (over-shrinks the body). Left at the
+  direct field-access spelling, 2-cell enumeration, no cell reached zero.
+  Because the destructor sits at TU emission index 0, lever 3's reordering
+  mechanism categorically cannot reach it (finding F7808's corollary --
+  nothing precedes the first symbol to move), so the four symbols above
+  cannot be closed by reordering either while their shared upstream cause
+  stands. DECLINED on that basis, not hill-climbed; the destructor's own
+  fix (if one is ever found) is a precondition for the other three.
+
+**Cause 2, two symbols: `-freorder-blocks` physical case-body layout,
+tested and distinguished from case-declaration order.**
+
+- `generateV90Symbol` -- SIZE, 7 bytes differ (ours 0x8b4/2228, blob
+  0x8bb/2235); `generateV92Symbol` -- SIZE, 3 bytes differ (ours
+  0xf4f/3919, blob 0xf52/3922). `instrcount.py` gives the OBJECT'S OWN
+  instruction count on both sides (541/541, 941/941), so per lever 2 this
+  is encoding, not a missing or extra statement. Walking every `jmp`/`jcc`
+  in both switch-dispatch pumps and pairing by target STATE (not trusting
+  the aggregate) shows the object places some case bodies far enough from
+  the shared return path to need a near (5-byte) jump where ours is close
+  enough for a short (2-byte) one, and vice versa elsewhere -- e.g.
+  `generateRi()`'s return is a near `jmp` in the blob's `generateV90Symbol`
+  and a short one in ours; the `P4M_STATE_UNNAMED_13`/`_17`
+  `symbol = 0; break;` trampoline shared by both pumps sits ~0x37 from the
+  return path in the blob (short) and ~0x2d1 in ours (near). The object's
+  case bodies sit in a PHYSICAL ORDER in `.text` neither pump's source
+  order produces.
+- TESTED AND REFUTED per lever 1's own "branch that would kill it": moved
+  the `UNNAMED_13`/`UNNAMED_17` group (`UNNAMED_13`/`RT`/`RT_NOT` in the
+  V.90 pump) to the very FIRST case position and, separately, the very
+  LAST position immediately before `default:`, in both pumps -- four
+  `make tc` rebuilds in total. All four produced object code
+  BYTE-IDENTICAL to the unperturbed source (confirmed by both the
+  `--why` verdict and an `nm -S` check that the trampoline's compiled
+  address does not move). The compiler emits the same physical layout for
+  every source spelling tried, so the map from case-declaration order to
+  block placement is CONSTANT here and this is not a statement/case-order
+  difference open to lever 1.
+- DECLINED, not fitted. The actual carrier is GCC 3.4's `-freorder-blocks`
+  basic-block layout for this switch under `-O3`, driven by properties of
+  the compiled CFG (`predict.c`'s static heuristics) that this project has
+  no source-level lever to steer once case order is ruled out; reaching
+  for `__attribute__((noinline))`, splitting a case, or `volatile` would be
+  fitting the compiler rather than deriving the source, which CLAUDE.md
+  forbids. `--why`'s "row 28 MNEMONIC xor vs mov" on both pumps is
+  downstream of the same cause (`alpha_why` walks each object's own
+  address order, so a different physical block order puts different code
+  at the same row index without either side missing or gaining an
+  instruction) and not a second, independent defect.
+
+**A third lever tried and reverted: `reset()`'s position in the TU.** Both
+the blob and our own object emit `V90Phase4Modulator::reset` dead last
+among this class's members even though it is declared early in the file
+(right after the constructors), which is a lever-3 candidate on its face.
+Moved the definition to the end of the file, after `generateSymbol`, on
+that strength; NULL result -- the whole tree's grade-0 counts did not move
+by one symbol, and the resulting `nm -n` order still did not match the
+blob's (ours placed `reset` immediately before `generateSymbol`; the blob
+has it after the entire generate-family, i.e. dead last of the two).
+Reverted rather than kept, per `docs/method/refinement.md`'s "a null
+result can cost too much to keep" -- this one was cheap, but it also
+never reached the order it was aimed at, so it bought nothing durable to
+offset the diff noise. The attempt and its outcome are recorded in a
+comment in place of the move.
+
+**A related structural observation, recorded rather than pursued to a
+conclusion.** `nm -n --defined-only` restricted to this file's `T`/`W`
+symbols shows the blob and our object matching EXACTLY in emission order
+for the first 35 of 45 symbols (both destructors through both
+constructors), then diverging on a full permutation of the last 10 (a
+tail block that contains both `generateV90Symbol` and `generateV92Symbol`
+among others). Given cause 2 above already accounts for both functions'
+byte deltas as an intra-function block-layout property confirmed constant
+under case reordering, a whole-file emission-order permutation was not
+pursued further within this pass's budget; left as an open angle for a
+future pass rather than a disproven one, since it was not itself tested.
+
+**Bystanders: none.** This file's own grade-0 EXACT count is unchanged at
+32 of 45 before and after. Tree-wide grade 0 EXACT: 736 at this branch's
+fork point, 737 after rebasing onto `master`'s concurrent F10193/F10194
+landings (unrelated files), 737 after this pass's own commit -- this
+pass's net contribution is +0, all five candidates declined.
+
+**Verification.** `make one` on `t_v90p4seq`, `t_v90leaves`, `t_v90p4mtab`,
+`t_v90modchain`, `t_v90sessionflag`, `t_v90demctor`, `t_v90p4ddec`,
+`t_v90p4mgen` and `t_v90modprog`: all green, no regressions. Real
+`make period`: 374 passed, 0 failed (no tests added, matches `master`'s
+own count). `tools/onedef.py`, `python3 tools/refcheck.py`,
+`tools/anchorcheck.py` and `make check64` all clean. `make byteident-ratchet`:
+`ratchet OK (exact 736 -> 737, regalloc 53 -> 53)` -- no decrease, the +1
+being F10193's `V32LocLoopNextState` picked up by the rebase and not this
+pass's own work, which closed nothing. (2026-09-06)

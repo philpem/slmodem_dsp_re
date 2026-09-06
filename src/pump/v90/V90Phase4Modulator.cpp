@@ -212,6 +212,28 @@ V90Phase4Modulator::V90Phase4Modulator(V90Parameters *p, unsigned int flag,
  * The ownership flag is read FIRST and short-circuits the whole release, so a
  * supplied converter is never touched however non-null it is.  Neither the
  * pointer nor the flag is cleared afterwards.
+ *
+ * NOT GRADE 0: blob 28 instructions against our 26 (byteident's lever-2
+ * "absence" reading).  Disassembly shows this is a register-allocation
+ * choice, not a missing statement: the blob holds `this` in %esi AND
+ * `bitsToSymbol` in %ebx as two separate callee-saved registers across the
+ * `V90BitsToSymbol` destructor call, so it never re-reads the field; we hold
+ * only `this` and reload the field from memory after the call clobbers the
+ * scratch that held it.  The reload/no-reload difference costs +1 in the
+ * shared tail and the missing second callee-saved restore costs +1 in the
+ * early-exit path -- accounts for the whole delta 2.
+ *
+ * Two alternate spellings were compiled and declined (F7782's hill-climbing
+ * rule -- neither is closer to a match, both moved further away):
+ *   `V90BitsToSymbol *bts = bitsToSymbol; if (!ext && bts) {...}`
+ *       -> blob 28 / ours 30: the combined `&&` condition made GCC merge the
+ *          two tests with sete/setne instead of the blob's two sequential
+ *          branches.
+ *   the same local hoisted into a nested `if (!ext) { if (bts) {...} }`
+ *       -> blob 28 / ours 21: over-shrank the body instead.
+ * Left as the direct field-access spelling above (2-cell enumeration, no
+ * cell reached zero); a wider search was not run since this pair is outside
+ * this pass's assignment (v90p4mod refinement task, F10192-adjacent).
  * ===========================================================================
  */
 V90Phase4Modulator::~V90Phase4Modulator()
@@ -288,6 +310,18 @@ V90Phase4Modulator::setSessionFlag(unsigned int flag)
  * +0x2f6fd is inside the back edge, not above it: either pump may store
  * through `this`, so the compiler must re-read the selector.  Writing the
  * test outside the loop would be a different program.
+ *
+ * ITS POSITION IN THE TU IS A LEVER-3 CANDIDATE, TRIED AND REVERTED. Both the
+ * blob and our own object emit `reset` dead last among this class's members
+ * even though it is declared early in this file, and this function was moved
+ * to the end of the file (after `generateSymbol`) on that strength.  It was a
+ * NULL: the whole tree's grade-0 counts (736 EXACT / 796 grade-0-or-1) did not
+ * move by one symbol, and the resulting `nm -n` order still did not match the
+ * blob's (ours put `reset` immediately before `generateSymbol`; the blob has
+ * it after the whole generate-family, dead last).  Reverted rather than kept,
+ * per refinement.md's "a null result can cost too much to keep" -- this one
+ * was cheap, but it also isn't a durable measured fact worth the diff noise,
+ * since it never reached the order it was aimed at.
  * ===========================================================================
  */
 void
@@ -650,6 +684,15 @@ V90Phase4Modulator::recivedPartTwoSilenceRrnSUVtag()
  * that acts when `word_0020` is NON-zero, and the only one that sets
  * `cp->word_00` to 1 rather than 0 -- V90CP.h reads that as selecting the
  * short form of the message.
+ *
+ * NOT GRADE 0, BUT ONLY BY A REGISTER SWAP: `--why` reports BYTES (4 bytes
+ * differ), grade 1 ACCEPT.  `dis.py` on both objects shows the entire body
+ * byte-for-byte identical except the FIRST two loads -- blob puts
+ * `0x20(%ebx)` in %eax and `0x2f9c(%ebx)` in %edx; ours has the two swapped.
+ * Nothing else in the function differs.  This is the same REGALLOC-cursor
+ * family as `setMappingParams`/`setRdRtSymbols`/`setRfSymbols` below --
+ * traced, not fixed, and DECLINED for the same reason: see the shared note
+ * at `setRdRtSymbols`.
  */
 void
 V90Phase4Modulator::recivedCPtag()
@@ -963,13 +1006,43 @@ V90Phase4Modulator::setMappingParams(V90MappingParams *mp)
  * 10 and 11 negated.  Each `neg %eax` is between the call and the 16-bit
  * store, so the negation happens in `int` and the truncation after it.
  *
- * `setRdRtSymbols` IS IDENTICAL TO THE OBJECT AND `setRfSymbols` IS NOT, AND
- * THE DIFFERENCE IS SIX INSTRUCTIONS' SCHEDULING.  Same source shape, same
- * macro, twice the length; on the longer one GCC moves a `mov` or a `neg`
- * one or two slots against its neighbour six times and changes nothing else
- * -- same count, same instructions, same operands.  That is the free column
- * (CLAUDE.md), and the twin matching exactly is what says the shape is right
- * rather than a coincidence of length.
+ * NEITHER IS GRADE 0, AND THE EARLIER CLAIM HERE THAT `setRdRtSymbols` MATCHED
+ * WAS STALE -- corrected against `dis.py`/`--why` rather than repeated
+ * (CLAUDE.md's own warning about a comment's shelf life).  Both differences
+ * are register-allocation, not a shape defect, and both are DECLINED for this
+ * pass:
+ *
+ *   setRdRtSymbols  2 bytes differ.  The function reserves one dead stack
+ *                   slot (`sub $0x4,%esp`) purely as an outgoing-argument
+ *                   scratch for the repeated `alaw2linear`/`ulaw2linear`
+ *                   calls, and discards it at each of its two epilogues with
+ *                   a `pop` whose destination register is never read
+ *                   afterwards.  The object pops %eax there; we pop %edx.
+ *                   Both are the i386.md:17507 `add $imm,%esp` -> `pop %reg`
+ *                   conversion's `match_scratch`, filled by GCC 3.4.2's
+ *                   round-robin `peep2_find_free_register` cursor
+ *                   (`docs/method/refinement.md` lever 3b) -- a property of
+ *                   what came before this function in the TU's EMISSION
+ *                   order, not of anything in this function's own source.
+ *
+ *   setRfSymbols    10 bytes differ, `--why`'s row 7 non-register-operand
+ *                   is `and $0x7f,%al` (blob, the AL-specific 2-byte
+ *                   encoding) against `and $0x7f,%dl` (ours, the general
+ *                   3-byte r8 form) -- the SAME instruction; only which
+ *                   register holds the byte changes the encoding length.
+ *                   Same mechanism as `setRdRtSymbols`, one register over.
+ *
+ * BOTH TRACE TO THE SAME ROOT, which the derivation above the destructor
+ * (`~V90Phase4Modulator`, this class's first-emitted member) now documents:
+ * the destructor itself is not grade 0 for a register-allocation reason, sits
+ * at TU emission index 0 where lever 3's reorder mechanism categorically
+ * cannot reach it (finding F7808's corollary -- nothing precedes the first
+ * symbol to move), and a 2-cell enumeration there did not close it.
+ * `recivedCPtag` (this file, above `recivedE2u`) is the same family again --
+ * a pure register swap, nothing else differing.  All three read as one
+ * finding, not three: the scratch-register cursor's state reaching this file
+ * is set upstream of every one of them, and closing it means closing the
+ * destructor first.  DECLINED here on that basis; not hill-climbed.
  * ===========================================================================
  */
 void
@@ -1311,6 +1384,53 @@ V90Phase4Modulator::generateMP()
  * message is ONE `symbolCount` in the source -- GCC 3.4 propagates the
  * constant out of the equality test, which it does identically at +0x2ddd1,
  * +0x2df29 and +0x2e1b8.
+ *
+ * A RESIDUAL SIZE GAP ON BOTH PUMPS, DECLINED AFTER A REAL ENUMERATION.
+ * `generateV90Symbol` is SIZE, ours 0x8b4 against the object's 0x8bb (-7);
+ * `generateV92Symbol` is SIZE, ours 0xf4f against 0xf52 (+3).  Both have the
+ * OBJECT'S OWN instruction count -- 541 for 541, 941 for 941
+ * (`instrcount.py`) -- so per lever 2 this is encoding, not a missing or
+ * extra statement, and both pumps' every `jmp`/`jcc` was walked and paired by
+ * TARGET STATE rather than trusted from the total: e.g. `generateRi()`'s own
+ * return in `generateV90Symbol` is a near `jmp` (5 bytes) in the object,
+ * because the object places `case P4M_STATE_RI` far from the shared return
+ * path, and a short `jmp` (2 bytes) here, because our compile places it
+ * close -- one clean 3-byte swap, with more of the same sign scattered
+ * through the rest of the switch to make up the other 4.  `generateV92Symbol`
+ * has the mirror shape at the trampoline shared by `P4M_STATE_UNNAMED_13` and
+ * `P4M_STATE_UNNAMED_17` (`symbol = 0; break;`): short in the object (2
+ * bytes, ~0x37 from the return path) and near in ours (5 bytes, ~0x2d1 from
+ * it).  So the object's case bodies sit in a PHYSICAL ORDER in `.text` that
+ * is not ours, and every short/near choice downstream of that follows.
+ *
+ * TESTED AND REFUTED: it is not source case-label order.  Lever 1 says
+ * enumerate before reading a cell, and the candidate here is small and
+ * concrete -- move ONE case group to a different position in the switch and
+ * rebuild.  Both pumps were tried at their two most extreme placements: the
+ * `UNNAMED_13`/`UNNAMED_17` (`UNNAMED_13`/`RT`/`RT_NOT` in the V.90 pump)
+ * group as the very FIRST case right after `switch (state) {`, and again as
+ * the very LAST case immediately before `default:`.  All four rebuilds
+ * (`make tc`) produced OBJECT CODE IDENTICAL, byte for byte, to the
+ * unperturbed source -- same SIZE verdict, same byte count, same `--why`
+ * row.  That is lever 1's own "branch that would kill it": the compiler
+ * emits the same layout for every spelling tried, so the map is constant and
+ * this is not a statement/case-order difference open to that lever.  (A
+ * `nm -S` diff before/after each rebuild confirms the trampoline's compiled
+ * address does not move.)
+ *
+ * DECLINED, not fitted.  The actual carrier is GCC 3.4's basic-block layout
+ * for this switch's jump table -- `-freorder-blocks` under `-O3`, operating
+ * on properties of the compiled CFG this project has no source-level lever
+ * to steer once case order is shown not to be it -- and reaching for one
+ * anyway (`__attribute__((noinline))`, splitting a case, `volatile`) would be
+ * fitting the compiler rather than deriving the source, which CLAUDE.md
+ * forbids.  `--why`'s "row 28 MNEMONIC xor vs mov" on both pumps is
+ * downstream of the same cause: `alpha_why` walks each object's instructions
+ * in that object's OWN address order, so a different physical block order
+ * puts genuinely different code at the same row index without either side
+ * missing or gaining an instruction -- it is not a second, independent
+ * defect, and closing the SIZE gap (if a lever for it is ever found) should
+ * be expected to close this row too.
  * ===========================================================================
  */
 short
@@ -1659,6 +1779,12 @@ V90Phase4Modulator::generateSUVd()
  *
  * The RANGE CHECK is `cmp $0x1e` and not `cmp $0x1b`, which is what makes
  * 0x1c, 0x1d and 0x1e reachable here and not there.
+ *
+ * RESIDUAL: SIZE, ours 0xf4f against 0xf52 (+3 to the object), same 941
+ * instructions both sides.  See the DECLINE note above `generateV90Symbol`
+ * -- the mechanism, the two-position enumeration that refuted case order,
+ * and the "row 28" reading are all shared between the two pumps and
+ * recorded there rather than twice.
  * ===========================================================================
  */
 short
