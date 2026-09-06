@@ -119462,3 +119462,195 @@ tree-wide and a live confirmation sweep is still owed. The six real gaps
 above are each scoped to a specific, nameable fixture extension (a
 two-step state plant, a second NSAMP value, or reading one callee's
 effect on the checked outputs) rather than being open-ended.
+
+## F10200. Four more V.34 handshake/rx-init `+0`-delta near-misses closed,
+two improved and declined further, one decoded and declined, aimed at
+their whole translation units (2026-09-06)
+
+`byteident.py --near 80` named three V.34 near-misses at `+0`
+instruction-count delta, one per file: `datapumpv34` (`v34hshak.c:9963`,
+1028 bytes), `initV34` (`v34shell.c:1310`, 805 bytes) and `rxinit`
+(`v34rx.c:516`, 454 bytes). No other unclaimed V.34 near-miss existed in
+the same scan (`V34EchoHistoryBackwardClean`, the other V.34 name in the
+list, is defined in `v34filters.c`, out of scope for this pass).
+Baseline: grade 0 EXACT 737 of 1852. Per docs/method/refinement.md's own
+strongest instruction, each file was worked as a whole translation unit
+(every symbol the file defines scored before and after), not as a
+single-symbol worklist. Final: grade 0 EXACT **741 of 1852** (+4, 0
+regressions, 0 bystanders lost).
+
+**`v34hshak.c`: `dftnlinitSignalBins` and `dftnlinitNoiseBins` CLOSED to
+grade 0.** A full-file `instrcount.py` sweep of the file's ~41 symbols
+(prompted by `datapumpv34`'s own near-miss) found both at 18 instructions
+against the object's 18 but 87 bytes against 83 -- lever 0's warning that
+an equal instruction count is not equal code. `dis.py` showed the object
+walking a single pointer through the loop (`add $0x2c,%edx`, every field
+addressed `disp(%edx)`) where our array-indexed source (`bins[i].field`)
+recomputed a base-plus-index address (`(%edx,%ecx,1)`, an extra SIB byte)
+at every access. Rewriting the loop as a walked `struct v34_dftbin *p`
+reproduced the object exactly in both functions -- verified byte-for-byte
+via `dis.py`, 83 of 83 bytes each. This is lever-13-adjacent but distinct
+from it: not about hoisting a value out of memory, but about whether the
+compiler folds a loop's address computation into an incrementing base
+register (no SIB byte) or leaves it as a base-plus-index computation (a
+SIB byte per access), forced by whether the source spells the traversal
+as pointer-walk or array-index even at equal instruction *count*. Two
+mutation anchors in `test/mutations/v34hshak.json` quoting the old loop
+header were updated in lockstep (same semantic mutation, `<=3` -> `<=2`
+loop bound, preserved); `anchorcheck.py` clean, 0 issues over 228 suites /
+9767 mutations.
+
+**`v34hshak.c`: `datapumpv34` DECLINED, unchanged (SIZE, 40 differing
+bytes) -- extends F8044/F8045 with two new negatives.** F8045's own
+14-cell enumeration (local `rx`/`tx` pointers, `if`/`else` `dp_run`,
+`unsigned short err` compared via `(short)err`) reached SIZE 34 and
+declined with two named open questions: loop-rotation shape, and further
+signedness sites. Independently reproduced that SIZE-34 cell from
+scratch and extended it with one further genuinely correct fix beyond
+F8045's own domain: `hs_get(obj, DP_FAA98)`'s result stored through an
+`unsigned short faa98` local before assignment to `rx->baud_copy` closes
+the `movswl`/`movzwl` mismatch at three `+0xaa98` sites (lever 8 -- the
+extension follows the declared type of the LOCAL, not the field or the
+call's return type) -- correct, but does not move the total below
+F8045's own 34, since the residual causes are unchanged. Two new
+negatives close off F8045's open questions rather than leaving them
+open: (1) explicit `if`-guarded `do`/`while` restructuring of both of
+the function's early loops, tried this time with `%edi`/`%esi` genuinely
+established (F8045's own tree only ever introduced `rx`, never `tx`, so
+`%edi` never existed there to test against) -- one loop's shape is
+completely unaffected by the restructuring, the other changes to a
+still-non-matching shape; both reverted. (2) The full rx/tx pointer
+rewrite invalidates 40+ mutation anchors in
+`test/mutations/v34datapump.json` (`make one T=t_v34datapump` fails at
+the `refs` tier, dozens of "NOT UNIQUE ... matches 0 time(s))"),
+confirming it is not worth paying for a non-closing result. Source
+reverted in full to the pre-session state (`diff` confirmed identical);
+`make one T=t_v34datapump` passes, 15750 checks, 0 anchor issues.
+
+**`v34shell.c`: `preinitV34` and `setScramble` CLOSED to grade 0 as
+bystanders of a single addressing-defect fix.** `preinitV34`, `initV34`,
+`initG248` and `setScramble` all take a `fields` pointer that every
+caller sets to `object + V34_SHELL_FIELDS` (0xa00); the file's own
+`shell_of()` wound this pointer BACK to a `struct v34_shell *` on the
+strength of an in-file comment claiming that struct is "the struct the
+rest of this file works in." That comment was wrong for these four
+functions specifically. `putFrame`/`getFrame`/`demapFrame`, which really
+do take the object pointer, address every field at its large
+object-relative offset in the blob (`0xa14(%ebp)`, `0xa00(%ebp)`,
+confirming `struct v34_shell`'s own layout is right for THEM);
+`initV34`'s own blob code addresses the same fields with a SMALL
+displacement straight from `fields`, with the `-0xa00` subtraction never
+materialized anywhere in its body. Winding back and re-adding the offset
+reaches the same byte value (why every differential test already
+passed), but costs a `sub $0xa00,%reg` plus a 32-bit displacement the
+object's own compile never paid. Fix: added `struct v34_shell_fields`
+(the same field layout as `struct v34_shell` from `span` onward, counted
+from its own start, tied to the parent struct's own offsets via 28
+`V34SHF_ASSERT` compile-time assertions so it cannot silently drift), and
+changed `shell_of()` to a bare cast. `preinitV34` and `setScramble`
+reached grade 0 EXACT as a direct consequence, with no further edit of
+their own bodies. Lever 13 (syntactic form of the reference forces which
+base pointer the compiler counts displacements from), corroborated
+against three sibling functions using the OTHER pointer.
+
+**`v34shell.c`: `initV34` and `initG248` IMPROVED, residuals DECLINED as
+`-freorder-blocks` block placement.** `initV34`: the addressing fix above
+plus one more forced fix (`rate` retyped `unsigned` -> `unsigned short`;
+the object keeps it in `%cx` for three compares, lever 8, the destination
+local's own declared type) took it from 73 to 38 differing bytes (blob
+235 / ours 228 instructions -- the file's original `+0`-delta reading
+was, per lever 0, a SUM: removing ~9 instructions of address-computation
+overhead exposed a real, pre-existing 7-instruction gap that had been
+cancelling it). That gap is the blob placing the `else` arm of a 3-way
+`if (rate>0xaf0) / else if (==0xaf0) / else` chain over `span` as the hot
+fallthrough with the other two arms as far, out-of-line blocks (one a
+2-instruction tail block at the very end of the function) --
+`-freorder-blocks` physical layout, not a statement-order or missing-code
+defect. Falsified as statement order over an EXHAUSTIVE 3-cell enumeration
+of the chain's test order (`>`-first/original: 38 bytes, -7 instructions;
+`==`-first: worse, -7, 770 bytes total; `<`-first: 15 bytes, -1) plus one
+duplication spelling (repeating the three stores per arm instead of
+merging after the chain: worse, +5, 822 bytes total) -- none reached
+zero. Per F7782, reverted to the `>`-first source; `initV34` stands at
+SIZE, 38 differing bytes. `initG248`: the same addressing fix alone took
+it from (blob 81 / ours 76, 5 missing) to SIZE 19 bytes (blob 81 / ours
+75); the object hoists a `cursor = xyz[n]` load to immediately after
+computing `top`, spilling it to a stack slot ahead of the `t1`/`t2`
+double loops for later use in the `t3` loop, where our source computes it
+after both loops in program order. Moving the computation earlier (one
+cell, matching the apparent hoist) made things WORSE (74 vs 81, delta -7,
+up from -6) and was reverted; declined without a full exhaustive
+callee-set enumeration under this pass's budget, same residual family as
+`initV34`.
+
+**`v34rx.c`: `rxinit`'s `if`/`else` layout DECODED (unique 2-cell
+preimage); whole-symbol closure DECLINED, a separate register-allocation
+residual is the blocker.** Source read (before this pass):
+`if (rx->flags & V34_RX_FLAG_LATE_TRN) { p_shift=2; i_shift=10; } else {
+integrator=0; p_shift=2; i_shift=8; }`, compiling to the LATE_TRN-true
+arm as fallthrough and the false arm as an out-of-line jump target -- 11
+total instructions physically emitted for the construct (6 inline + a
+non-merged 5-instruction out-of-line block). The blob's own layout is the
+opposite: `jne` to the LATE_TRN-true arm out of line, the false arm
+inline, and -- the fact this decodes -- the true arm's out-of-line code
+`jmp`s directly INTO the false arm's tail store instruction
+(`mov %ax,0x202(%ebx)`) rather than repeating it, a cross-jump merge that
+only fires when both arms compute their final value into the SAME
+register ahead of the shared instruction. Writing the logically
+equivalent negation (`if (!(flags & LATE_TRN)) { integrator=0; p_shift=2;
+i_shift=8; } else { p_shift=2; i_shift=10; }`) is the unique cell of the
+2-cell domain (original vs. negated) that reproduces this: the compiler
+now emits `jne` to the true-arm block and performs the exact same
+cross-jump merge, taking the construct itself to the blob's own 10
+instructions. This is a real, forced fact (evidence: the object's own
+cross-jump structure, not a guess), and `make one T=t_v34rx` confirms it
+behaviorally (88208 checks, PASS both before and after -- the rewrite is
+logically identical to the original, as it must be).
+
+It does not close the symbol. Fixing the construct removed the one
+"extra" instruction that had been masking an unrelated, pre-existing
+defect in the function's 20-statement field-zeroing tail (an interleaved
+chain of `xor %reg,%reg` / `mov %reg,FIELD(%ebx)` pairs recycling three
+registers): the blob carries one more `xor %eax,%eax` in that tail than
+our source produces, at a point where the immediately following store
+uses a DIFFERENT already-zero register -- i.e. a genuinely dead
+instruction in the object itself, not a value we're failing to compute.
+`rxinit`'s STORE ORDER already matches the blob's exactly, field for
+field, throughout this tail (confirmed by a full row-by-row `dis.py`
+diff), which rules out a statement-order cause per lever 1's own
+domain-scoping rule; the difference is purely which hardware register the
+allocator assigns and how many times it re-zeroes one, which
+CLAUDE.md's own framework holds is not determined by the statement being
+looked at. `rxinit` additionally sits at emission index 0 of its own
+translation unit (the lowest blob address among all of `v34rx.c`'s
+symbols, confirmed via `nm -n` against the blob's own address order),
+which is lever 3's own stated boundary: nothing in this file precedes it
+that could be reordered to change its register allocation. Before this
+fix, the whole-symbol byte delta was SIZE 1 (453 vs 454); after it, SIZE
+8 (446 vs 454) -- WORSE in raw byte-delta terms, because the newly
+exposed tail defect is larger than the construct fix's own saving. This
+is the same lever-0 "a `+0` delta is a sum, not a fact" pattern as
+`initV34` above, with the two defects' relative sizes simply going the
+other way. The construct fix is kept (forced, derived, behaviorally
+verified); the tail residual is DECLINED as a register-allocation
+artifact not reached by any lever in `docs/method/refinement.md` given
+its TU-emission-index-0 position. `rxinit` contributes 0 to the
+whole-object grade-0/grade-1 counts either way (SIZE bucket before and
+after), so this closure neither helps nor hurts `make byteident-ratchet`.
+
+**Verification.** `make tc` (exact GCC 3.4.2, `dsplibs-tc342`): 272/272
+objects, 0 failed, no new warnings. `make one` green on all five covering
+binaries with checks-count >= baseline, 0 new FAIL: `t_v34hshak`
+(includes "PASS v34 handshake: the three DFT bank initialisers 8730
+checks"), `t_v34shell`, `t_v34rx` (88208 checks on `rxinit` itself),
+`t_v34datapump` (15750 checks), `t_v34hstx1` (25757 checks, confirms it
+only mentions `initV34` in a comment and never calls it). Real `make
+period` (Docker, `dsplibs-tc342`): **374 passed, 0 failed**, both before
+and after a rebase onto `origin/master` (95933ee6 -> merged cleanly, no
+conflicts). `make byteident-ratchet`: `ratchet OK (exact 736 -> 741,
+regalloc 53 -> 53)` (stored baseline was 736, one behind master's own
+737 at fork time -- the pass's own +4 lands on top of that). `make
+check64`, `tools/onedef.py` (1 known duplicate, unchanged,
+`V90Phase4Demodulator`), `tools/refcheck.py` (13689 references, 0
+dangling), `tools/anchorcheck.py` (228 suites, 9767 mutations, 0 issues)
+all clean.
