@@ -118,6 +118,33 @@ import objtree                                            # noqa: E402
 PARTIAL = {
 }
 
+# Blob symbols confirmed COMPLETE in src/ that `our_symbols()` can never see,
+# because the modern host compiler inlines them entirely into their sole
+# caller -- the object's own GCC 3.4.2 did not, so the blob still carries a
+# genuine standalone local symbol (`nm` shows real `t`, not zero bytes) and
+# there is nothing to name for CLAUDE.md's inlining-boundary trap to catch.
+# Each entry is a finding, not a guess: a wrong one would silently inflate
+# `translated` forever, since nothing else would ever check it again.
+INLINED_AWAY = {
+    "GetNextDigitAndReturnNextState":
+        "F8490 -- written in src/dialer/dialer.c, tested indirectly through "
+        "DialerProgress by t_dialerprog since every modern compiler tried "
+        "here inlines it away; the object's own compiler did not, and a "
+        "`ref_` alias exists (build/dsplibs_ref.o) for a test to call it "
+        "directly if one is ever written.",
+}
+
+# Blob symbols that are not this reconstruction's target at all: libm's own
+# `pow()`, statically linked into the object as `pow.S` rather than authored
+# by dsplibs.o's own developer.  F1990 traced the object's four unordered
+# float comparisons to exactly this function and called it "libm and not our
+# code" -- there is no reconstruction work here to schedule, ever, and
+# leaving these nine names in `blob` makes the denominator claim otherwise.
+NOT_OURS = {
+    "pow", "one", "zero", "inf_zero", "infinity", "minfinity",
+    "mzero", "minf_mzero", "limit",
+}
+
 # Symbols we define that the object has no counterpart for, and why that is
 # expected rather than drift.  Anything not matching these is reported.
 BENIGN = (
@@ -155,15 +182,22 @@ BENIGN = (
 # and outside what this measures.
 #
 def nm_symbols(path):
-    """{name: (size, kind)} for the T/t/W symbols a file defines."""
+    """{name: (size, kind)} for the T/t/W symbols a file defines.
+
+    Excludes NOT_OURS everywhere this is read, blob or ours alike: libm's
+    `pow()` internals are not a name any DSP function in this tree could
+    legitimately collide with, so dropping them here rather than only in
+    `main()` means every tool built on this function (worklist.py included)
+    stops carrying them as apparent remaining work.
+    """
     out = subprocess.run(["nm", "-S", "--defined-only", path],
                          capture_output=True, text=True).stdout
     syms = {}
     for line in out.splitlines():
         f = line.split()
-        if len(f) == 4 and f[2] in "TtW":
+        if len(f) == 4 and f[2] in "TtW" and f[3] not in NOT_OURS:
             syms[f[3]] = (int(f[1], 16), f[2])
-        elif len(f) == 3 and f[1] in "TtW":
+        elif len(f) == 3 and f[1] in "TtW" and f[2] not in NOT_OURS:
             syms[f[2]] = (0, f[1])
     return syms
 
@@ -204,6 +238,11 @@ def our_symbols(build):
     only `T`/`W` kinds and so could never credit a correctly-`static`
     function -- 929 bytes read as unwritten while fully written and tested.
     Finding F10191.
+
+    INLINED_AWAY's names are added on top, unconditionally: each is a blob
+    symbol independently confirmed complete in src/ that no amount of
+    scanning our own build's `nm` output can ever find, because the modern
+    host compiler removes the standalone symbol entirely. Finding F10192.
     """
     _d, objs = objtree.read("the translated share of the blob", build)
     syms = set()
@@ -215,6 +254,7 @@ def our_symbols(build):
             elif kind == "t":
                 local_count[sym] = local_count.get(sym, 0) + 1
     syms.update(name for name, n in local_count.items() if n == 1)
+    syms.update(INLINED_AWAY)
     return syms
 
 

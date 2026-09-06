@@ -5,7 +5,42 @@
 the *order* (a decision) and the *status* (a ledger). Where a byte count here
 disagrees with the tool, the tool is right — see CLAUDE.md on shelf-life.
 
-Measured post-wave-12-merge, 2026-09-03:
+**SUPERSEDED, 2026-09-06 — the paragraph and table below are the
+2026-09-03 snapshot and are kept for the history, not as current status.**
+Waves 13-14 closed every unwritten symbol; findings F10191 and F10192 then
+fixed `coverage.py` itself to agree, which it did not at the time this
+snapshot was taken. Current measured state:
+
+```
+.text 734,605 bytes / 1,852 symbols
+translated 98.0%  (720,125 bytes / 1,852 symbols)  -- ALL of them
+what is left, by translation-unit span: EMPTY
+```
+
+There is no unwritten `.text` or `.data` symbol left anywhere in the
+object, and for the first time `make coverage`'s own report says so
+without a caveat needing to be read alongside it. Do not re-derive this —
+read F10191/F10192 (and Waves 13-14 below) before trusting any tool output
+that disagrees, per CLAUDE.md's rule that the tool is checked, not
+repeated from a comment.
+
+**The snapshot below undercounted real completeness at the time, and the
+"DELIBERATE, not a defect" framing has not aged well — read F221-F224 for
+why the gap existed, then F10191/F10192 for why it is now closed.**
+`coverage.py`'s `our_symbols()` only counted `T`-kind (global) symbols in
+our own build; a function this tree correctly keeps `static` (matching the
+blob's own local visibility) was invisible to it. `v22_create`/`v22_delete`/
+`v22_process` were exactly this shape — confirmed by reading `src/pump/v22/
+v22.c` directly (`static struct dp *v22_create(...)`, `nm` shows lowercase
+`t` in both our build and the blob) — genuinely complete, not remaining
+work, and F10191 fixed `our_symbols()` to credit any local name that is
+unambiguous on both sides rather than continuing to work around the gap by
+hand. F10192 closed the other two: `GetNextDigitAndReturnNextState`
+(inlined away by the modern compiler, credited by name via a small cited
+registry) and `pow.S`'s nine libm-internal names (excluded from the count
+entirely, since they were never this reconstruction's target).
+
+Measured post-wave-12-merge, 2026-09-03, superseded above:
 
 ```
 .text 734,605 bytes / 1,861 symbols
@@ -20,17 +55,6 @@ remaining, by name-match, 14 symbols / 1,973 bytes:
 
 Merged master period-green at **374 passed, 0 failed**, onedef/banners/check64
 clean, duplicate-symbol sweep clean.
-
-**The `translated` percentage undercounts real completeness, and it is
-DELIBERATE, not a defect — read F221-F224 before re-deriving this.**
-`coverage.py`'s `our_symbols()` only counts `T`-kind (global) symbols in
-our own build; a function this tree correctly keeps `static` (matching the
-blob's own local visibility) is invisible to it. `v22_create`/`v22_delete`/
-`v22_process` are exactly this shape — confirmed by reading `src/pump/v22/
-v22.c` directly (`static struct dp *v22_create(...)`, `nm` shows lowercase
-`t` in both our build and the blob) — genuinely complete, not remaining
-work. **The only symbols with real, verified-independently work left in
-the entire object are the two no-entry-point leaves.**
 
 ## A correction that overturns three findings: `FIFO_CFG` was never actually
 ## blocked, and the reasoning that said it was applies to fewer of F9058's
@@ -1168,3 +1192,49 @@ more of this shape — a stale claim about the tree's own state rather than a
 byte still to reconstruct — and the fix for that shape is reading this file
 and `tools/service.py`'s own output before trusting an inherited brief,
 exactly as CLAUDE.md's `V90Parameters` example already prescribes.
+
+## Wave 15 — the tool catches up: `coverage.py` closes its own last two gaps
+
+Wave 14's own conclusion ("no unwritten `.text` or `.data` symbol left in
+the object") was true and `make coverage` still disagreed with it, still
+listing `Dialer.c +18` (895 B) and `pow.S#279` (9 sym, 0 B) as remaining.
+Both were already fully explained in prose — F8490 for the first,
+F1990 for the second — but `coverage.py`'s own numbers never caught up,
+and this document's own top-of-file snapshot spent three days citing the
+gap as "DELIBERATE, not a defect" rather than as something to fix.
+
+**`GetNextDigitAndReturnNextState`** is written, in `src/dialer/dialer.c`,
+and tested through `t_dialerprog` — the modern host compiler inlines it
+into `DialerProgress` entirely, so no amount of scanning our own build's
+`nm` output can find a standalone symbol for it, while the object's own
+GCC 3.4.2 kept it as a real local (`nm` confirms `t` at `0x07abb0`, nonzero
+size). Added to a new, cited `INLINED_AWAY` registry in `tools/coverage.py`,
+credited unconditionally in `our_symbols()`.
+
+**`pow.S`'s nine names** (`pow` itself plus eight zero-recorded-size float
+constant labels) are libm's own implementation, statically linked into the
+object rather than authored by dsplibs.o's own developer — F1990 already
+established this from the object's four unordered float comparisons, all
+four inside `pow`. Added to a new `NOT_OURS` set, filtered inside
+`nm_symbols()` itself so `worklist.py` (which calls the same function)
+drops them too, not only `coverage.py`'s own report.
+
+Both are small, cited, one-entry-per-finding registries in the same shape
+as the existing `PARTIAL`/`BENIGN` ones — a claim checked against the
+object, not a heuristic that could silently swallow a real gap.
+
+`make coverage`'s own numbers, after: `.text` 734,605 bytes / **1,852**
+symbols (down from 1,861 — the nine `NOT_OURS` names no longer counted in
+the denominator at all), `translated` **98.0%, 720,125 bytes, 1,852 of
+1,852 symbols**, and "what is left, by translation-unit span" **EMPTY**.
+`python3 tools/worklist.py` independently agrees from the same underlying
+functions: "0 symbols the blob defines and src/ does not, 0 bytes."
+`tools/onedef.py` and `tools/refcheck.py` clean. A pure `tools/` change,
+nothing for `make period`/`make byteident-ratchet` to gate. Finding F10192.
+
+**This is the measurement finally agreeing with what Wave 13 already
+established.** No new reconstruction happened this wave — the object's
+`.text`/`.data` were complete before it started and remain exactly as
+complete after. What changed is that `make coverage` can now be read
+directly, without a caveat, for the first time since this file's
+9-day-old top-of-file summary was written.

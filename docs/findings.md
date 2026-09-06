@@ -118602,3 +118602,82 @@ show it. A pure `tools/` change with no `src/`/`include/`/`test/` edit, so
 there is nothing for `make period`/`make byteident-ratchet` to gate --
 `tools/refcheck.py` clean, `docs/coverage.md` regenerated to match.
 (2026-09-06)
+
+## F10192. The last two entries in "what is left" close: an inlining
+artefact credited by name, libm's `pow()` excluded from the count entirely
+-- `make coverage`'s "what is left" is now EMPTY
+
+`docs/remaining.md`'s own summary named exactly two things beyond F10191's
+v22 fix: `Dialer.c +18` (895 bytes, `GetNextDigitAndReturnNextState`,
+already established by F8490 as fully written and only invisible because
+the modern host compiler inlines it into `DialerProgress` -- the object's
+own GCC 3.4.2 did not) and `pow.S#279` (9 symbols, 0 bytes, libm's `pow()`
+and its internal float-constant labels, already established by F1990 as
+"libm and not our code"). Neither needed a line of reconstruction; both
+needed the TOOL to stop claiming they were missing.
+
+**`GetNextDigitAndReturnNextState`.** Confirmed independently before
+trusting F8490's citation: `nm ref/slmodemd/dsplibs.o` shows a real,
+nonzero-size local (`t`) symbol at 0x07abb0; `nm build/src/dialer/dialer.o`
+shows none at all, because `GetNextDigitAndReturnNextState`'s call site
+(`src/dialer/dialer.c:619`, inside `DialerProgress`) is fully inlined by
+every modern compiler tried here. `nm build/dsplibs_ref.o` shows
+`ref_GetNextDigitAndReturnNextState` exists -- symmap.py's two-pass
+globalize-and-rename gave it a `ref_` alias despite the modern build never
+producing a standalone symbol to alias FROM on our side, because the alias
+comes from the BLOB's own local symbol, not from a match against ours. So
+it is drivable by a test that calls it directly, though none does yet;
+`t_dialerprog` only exercises it as a side effect of driving
+`DialerProgress`. Added to `tools/coverage.py`'s new `INLINED_AWAY` dict --
+a curated, cited, one-entry-per-finding registry, the same shape as the
+existing `PARTIAL`/`BENIGN` ones -- and unioned into `our_symbols()`'s
+returned set unconditionally, since no amount of scanning `nm` output on
+our own build could ever find a symbol the compiler removed.
+
+**`pow.S`'s nine names.** `nm -S --defined-only ref/slmodemd/dsplibs.o`
+confirms all nine are genuine object-file symbols (`pow` itself `T`,
+global; the other eight -- `one`, `zero`, `inf_zero`, `infinity`,
+`minfinity`, `mzero`, `minf_mzero`, `limit` -- `t`, local, all with no
+recorded ELF symbol-table size, which is why every prior reading of them
+showed 0 bytes and is not evidence they were somehow already "free").
+F1990 had already traced the object's four unordered float comparisons
+(`fucompp`×3, `fucomp`×1, against 406 ordered) to exactly this function and
+called it libm, not the reconstruction's own code -- this finding adds no
+new evidence, it only makes the TOOL agree. Added as `tools/coverage.py`'s
+new `NOT_OURS` set, filtered inside `nm_symbols()` itself (not only in
+`main()`) so every tool built on that function -- `worklist.py` included --
+stops carrying these nine as apparent remaining work, rather than only
+`coverage.py`'s own report.
+
+**Why a curated name list and not a blanket heuristic.** Both registries
+are the same shape as `PARTIAL`/`BENIGN`: a short, hand-written, cited list
+checked against what the object actually contains, not a rule that could
+silently swallow a real gap. `INLINED_AWAY` crediting a name that turned
+out to be genuinely unwritten would inflate `translated` with no test able
+to catch it -- exactly CLAUDE.md's "naming something wrongly is worse than
+leaving it padded", applied to a measurement claim instead of a field name.
+Confirmed both registries currently total the exact ten names this finding
+names and nothing more, by construction (they are the full contents of the
+Python literals, not derived).
+
+**Verification.** Before: `translated` 97.9% (719,230 bytes / 1,851
+symbols out of 1,861 total), "what is left" listing `Dialer.c +18` and
+`pow.S#279 +1`. After: `.text` total itself drops to 1,852 symbols (the
+nine `NOT_OURS` names no longer counted in the denominator at all --
+`text_size()`'s byte total is unaffected, since it reads the section
+header directly rather than summing symbol sizes), `translated` reads
+98.0% (720,125 bytes / 1,852 symbols -- ALL 1,852), and "what is left, by
+translation-unit span" is EMPTY for the first time. `GetNextDigitAndReturnNextState`
+correctly still shows in "translated, alias exists, and NOT tested" at 895
+bytes, file-local -- accurately reflecting that it is drivable but not yet
+directly driven, not silently marked fully covered.
+`python3 tools/worklist.py` independently confirms from the same
+`our_symbols()`/`nm_symbols()` functions: "0 symbols the blob defines and
+src/ does not, 0 bytes" and "1852 symbols written, 720125 bytes" -- the
+two tools agree because they share the fixed functions rather than each
+recomputing the same thing differently. `tools/onedef.py` and
+`tools/refcheck.py` clean. A pure `tools/` change with no
+`src/`/`include/`/`test/` edit, so nothing for `make period`/
+`make byteident-ratchet` to gate. `docs/coverage.md` regenerated;
+`docs/remaining.md`'s 2026-09-03 summary (predating F10191 entirely) is
+now stale in the same way and updated alongside this finding. (2026-09-06)
