@@ -118208,3 +118208,92 @@ byteident-ratchet`: 736/1852 grade-0 EXACT (39.7%), 796/1852 grade-0-or-1
 (43.0%), ratchet OK -- byte-for-byte unchanged, as the "free" argument
 above predicts. Closes item 5 of the 2026-09-06 field-naming exploration
 list. (2026-09-06)
+
+## F10188. Item 4's last untried technique, enum/jump-table matching, tried
+for real over the WHOLE object's switch population: negative, and the one
+real count-match it turns up was already resolved by stronger evidence
+
+`.claude/nextsteps-fieldnaming.md` left one technique from item 4 untried
+after F10186: "for small-value-range int/byte fields, check whether a
+disassembled `switch` dispatches on that exact value count, matching state
+counts against a plausibly-related already-named enum elsewhere in the same
+subsystem." Run to exhaustion rather than sampled, two ways:
+
+**1. Every `switch` in already-reconstructed `src/` whose condition is a
+struct field** (not a local, parameter or bare enum already typed):
+`grep -rn "switch\s*("` over the whole tree, then manually triaged every
+match whose condition names an offset-derived (`word_NN`, `byte_NN`,
+`field_NN` etc.) or bare (`fNNNN`) field. Seven fields, nine switch sites:
+`V90Demodulator::word_3c` (x8, two tables of 22 and 29 entries),
+`V90CP::word_ca4` (x2, cases 3/5/6/7/8/10/11), `V90CP::word_cb0` (a 3-arm
+bit-flag dispatch), `V90CP::byte_11` (a trivial 2-bit unpack, 4 arms),
+`V90SpectralVerifier::word_28` (4 arms: 0/1/2/3), `V92ModulusEncoder::
+field_50` (3 arms: 0/1/2), and V.32's `V32FP_SHORT_2E` (a 6-entry jump
+table, accessed through `FIELD_S16`, not a named struct field at all since
+`v32fpctl.h`'s object is deliberately unmodelled -- see its own file
+banner).
+
+**2. A whole-object jump-table census, orthogonal to (1) and covering every
+FUNCTION regardless of whether it is reconstructed yet.** `objdump -d
+ref/slmodemd/dsplibs.o` for `jmp *0xNN(,%eXX,4)` finds **98 indirect jumps
+in the entire 1.2 MB object**; mapping each address to its enclosing symbol
+via `nm -S --size-sort` resolves them to ~80 distinct functions (some
+functions dispatch more than once). Cross-checked every one of those 80
+names against `src/` by name: **all 80 are already reconstructed.** (One
+apparent miss, `_Z19interpretMohTimeouts`, is a mangling misread --
+`interpretMohTimeout(short)`, singular, already in `src/pump/v90/
+mohdet.cpp` -- not a real gap.) So there is no not-yet-written function
+anywhere in the object whose jump table this technique could still find;
+(1)'s source-level sweep already had complete coverage of the population
+the technique targets.
+
+**Only one of the seven fields is a genuine count-match against an
+already-named sibling enum, and it was resolved by STRONGER evidence years
+before this session.** `V90SpectralVerifier::word_28`'s 4 arms line up
+per-arm with `V90SpectralConditions.h`'s `V90SpecialSpectralConditions`
+(`_NONE`, `_GERMAN_ISDN_NT1`, `_GERMAN_PBX`, `_SEVERE_CODEC`) -- but the
+header's own comment on `word_28` already cites this exact correspondence
+via format strings ("German ISDN NT1 box conditions detected!", "German PBX
+conditions detected!", "Severe Codec conditions detected!") and the
+parameter names each arm touches (`GERMAN_ISDN_NT1_BOX_FILTER_GAIN`,
+`GERMAN_PBX_PRE_FILTER_GAIN`), which is CLAUDE.md rank-1 evidence and
+already recorded as finding F3528. The field is deliberately KEPT under its
+offset name pending a coordinated multi-file rename (three call sites, two
+unit tests, one mutation anchor's `find` text) rather than renamed on the
+spot -- a decision already on record, not something this session's
+technique newly establishes. Enum/jump-table matching independently
+reaches the same four-way correspondence but adds no evidence beyond what
+F3528 already has; it is a confirmation, not a discovery.
+
+**The other five have no viable match.** `word_3c`'s two tables (22 and 29
+entries) are `V90Demodulator`'s own top-level dispatch, already documented
+per-arm in `V90Demodulator.h`/`.cpp` with no enum of that size anywhere in
+the tree to compare against. `word_ca4`, `word_cb0` and `byte_11` are
+`V90CP`'s bit-parser/message-decoder states, each already carrying full
+per-arm derivation in `V90CP.h`/`.cpp` (bit-field decode, not a role a
+sibling enum could name better). `V92ModulusEncoder::field_50`'s 3 arms
+have no plausibly-related 3-valued enum in the tree: `PcmType` is 2-valued,
+`V90TxPowerMeasurementPoint` is 2-valued, and `OutputOption`'s 3 values
+(`OUTPUT_DB`/`OUTPUT_DB_PEAK`/`OUTPUT_LINEAR`) belong to `Psd`, an unrelated
+PSD-output class with no domain connection to modulus/digit conversion --
+a coincidental count match CLAUDE.md's own caution ("many small enums share
+the same size by chance") says to leave alone, and it is left alone.
+`V32FP_SHORT_2E` is not a struct field to begin with (the object is
+deliberately unmodelled, per `v32fpctl.h`) and its 6-entry table is already
+independently corroborated against `v32seq.h`'s rate ladder (finding
+F8647) -- stronger evidence than a count match could add.
+
+**No `src/`/`include/` change resulted; nothing to gate.** No rename was
+made on count-match alone, per CLAUDE.md's rule and this technique's own
+brief. Baselines reconfirmed unchanged (no `src/`/`test/` edits this
+session): real `make period` 374 passed, 0 failed; real `make
+byteident-ratchet` 736/1852 EXACT (39.7%), 796/1852 grade-0-or-1 (43.0%),
+ratchet OK -- both matching the pre-session state F10187 last recorded.
+`tools/onedef.py`, `tools/refcheck.py` and `tools/anchorcheck.py` not
+re-run since no mutation anchors, `docs/fieldnaming.md` cross-references or
+types were touched. Closes the enum/jump-table-matching arm of item 4 of
+the 2026-09-06 field-naming exploration list
+(`.claude/nextsteps-fieldnaming.md`) with a recorded negative result;
+value-correlation mining, item 4's other remaining technique, was being
+tried in a separate concurrent worktree at the time of writing and its
+outcome is not reflected here. (2026-09-06)
