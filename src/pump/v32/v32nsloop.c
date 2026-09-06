@@ -259,10 +259,16 @@ V32LocLoopNextState(void *modem)
 
 		SetAdaptEqV32(modem, V32_ADAPTEQ_MU1);
 		rate = (short)GetRateV32(modem);
-		FIELD_U8(modem, V32_OBJ_FLAGS) |=
-			V32_FLAG_01 | V32_FLAG_08 | V32_FLAG_10;
+		/*
+		 * The STATUS store and the FLAGS or-in are independent and the
+		 * object emits them in this order -- STATUS first -- rather
+		 * than the other way round; the two-cell enumeration is
+		 * unique (finding F10193).
+		 */
 		FIELD_U8(modem, V32_OBJ_STATUS) =
 			(unsigned char)V32_CONNECT[rate];
+		FIELD_U8(modem, V32_OBJ_FLAGS) |=
+			V32_FLAG_01 | V32_FLAG_08 | V32_FLAG_10;
 		break;
 
 	case V32_STATE_ERROR:

@@ -118681,3 +118681,109 @@ recomputing the same thing differently. `tools/onedef.py` and
 `make byteident-ratchet` to gate. `docs/coverage.md` regenerated;
 `docs/remaining.md`'s 2026-09-03 summary (predating F10191 entirely) is
 now stale in the same way and updated alongside this finding. (2026-09-06)
+
+## F10193. `V32LocLoopNextState` closed to grade 0 on a two-cell lever-1
+enumeration; `v32_create`, `v32_process` and `V32RngRespNextState`
+declined after real enumeration finds the difference is not
+statement-order (2026-09-06)
+
+A `--near 60` scan of the V.32 near-miss set found four symbols at `+0`
+instruction-count delta against the blob, all covering V.32's negotiation
+and loop-dispatch family: `v32_create` (`src/pump/v32/v32.c`), `v32_process`
+(same file), `V32RngRespNextState` (`src/pump/v32/v32nsrng.c`) and
+`V32LocLoopNextState` (`src/pump/v32/v32nsloop.c`, its own file). Baseline
+before any edit: grade 0 EXACT 736 of 1852 symbols both objects define.
+
+**`V32LocLoopNextState` -- CLOSED, unique preimage of 2.** `--why` pointed
+at a `MNEMONIC cwtl vs orb` mismatch; `dis.py` on both objects at state I
+showed the object storing `V32_OBJ_STATUS = V32_CONNECT[rate]` BEFORE
+or-ing in `V32_OBJ_FLAGS`, while our source (and the compiled object) did
+the FLAGS or-in first, then the STATUS store. These are two independent,
+data-flow-unrelated statements, so the domain is the full 2-cell
+enumeration of their order; swapping to STATUS-then-FLAGS is the unique
+cell that maps onto the object's bytes exactly (`grade 0 verdict: EXACT`,
+`grade 1: ACCEPT`). This file defines nothing else, so the whole-file
+score after the fix is the whole-tree delta: grade 0 EXACT 736 -> 737,
++1 with 0 bystanders (there was nothing else in the file to move).
+
+**`v32_create` -- DECLINED, exhausted a 36-cell domain with no preimage.**
+`--why` initially rejected on a `NON-REGISTER OPERAND` row; `dis.py`
+side-by-side showed two independent groups of statements reordered
+relative to the blob: the three struct-field stores `self->dp.id = id;
+self->dp.op = op; self->dp.modem = modem;`, and the three `struct v32fp_cfg`
+field assignments `cfg.timeout = 60000; cfg.energy_drop_time = 700;
+cfg.r10 = 1;`. Compiled all 3! orderings of the first group alone (no
+effect on the byte-diff count at all -- 42 bytes differ in every cell,
+so this group is a CONSTANT MAP and not a source-order lever by itself),
+all 3! of the second group alone (best cell 33 of 42 bytes, at
+`(r10, timeout, edt)`; no cell reaches zero), and the full 6x6=36-cell
+CROSS PRODUCT of both groups together (`/tmp/claude_perm_test3.log`,
+not kept -- scratch): every cell's verdict is one of {42, 39, 33} bytes
+differing, `EXACT matches: []`. Per the fit-vs-recovery ruling (F7782),
+an exhausted domain with no zero cell means the domain was drawn around
+the wrong code, or the difference is not a statement-order difference at
+all; 33 of 42 is a near-miss and not a grade, so DECLINED rather than
+kept at the closest cell. Source restored to its pre-experiment state
+(`git checkout`), no `src/` change survives.
+
+**`v32_process` -- DECLINED, genuine `-freorder-blocks` block placement,
+not statement or case order.** `instrcount.py` showed instruction counts
+matching exactly (213 ours, 213 blob) while `ourbytes` (886) exceeds
+`blobbytes` (871) by 15 -- a same-instruction-count, different-ENCODING-
+length divergence. Walking both objects' `call`-instruction function-
+relative offsets as anchors (`objdump -d` on both, offsets recomputed
+against each function's own base) found the two streams agree exactly up
+to offset 0x1a8 (the "unknown status" debug-print call) and diverge by
+exactly +15 bytes from the very next call onward. `dis.py` at that point
+showed the object placing the CONNECT arm's `if (DSPLIB_DEBUG_ON())
+dsplibs_debug_printf("v32: process: connect %x.\n", ...)` print body far
+from its own gate (near the end of the function, in what reads as a
+`-freorder-blocks`-relocated cold block), while our compile places a
+DIFFERENT case's body (matching the NOCARRIER arm's debug gate) physically
+adjacent to the jump table instead. The two objects therefore lay out the
+switch's case bodies in different orders in `.text`, which is a GCC
+block-placement decision (`-freorder-blocks`/`bb-reorder`, driven by
+`predict.c`'s static heuristics on the function's own CFG), not a
+statement- or case-declaration-order property we tested: our source's
+switch case labels are already written in the same A-B-C.../OK-nocarrier-
+error-connect-default order the header comment describes matching the
+blob's logical machine, and `V32_STATE_G`'s numeric value (8) rules out a
+simple ascending-case-value explanation. Not pursued further with a
+full case-order permutation (10+ independent case bodies makes that
+domain intractable within this pass's budget); recorded as a genuine
+`-freorder-blocks` question for a future pass with more room, not as
+something disproven.
+
+**`V32RngRespNextState` -- DECLINED, same block-placement family as
+`v32_process`, falsified on one concrete lever.** `--why` rejected on a
+`NON-REGISTER OPERAND .+128 | .+96` row (`instrcount.py`: 306 vs 306
+instructions, 1304 vs 1310 bytes -- again same instruction count,
+different encoded length). `dis.py` at the jump-table dispatch showed the
+object places `V32_STATE_G`'s body (identifiable from its `orb $0x8,
+0x31(%esi)` matching `FIELD_U8(modem, V32_OBJ_FLAGS) |= V32_FLAG_08;`,
+the first statement of case G) immediately after the table, while our
+compile places a different case's body there. Tested the concrete,
+falsifiable hypothesis that source case-declaration order controls this:
+moved `case V32_STATE_G` to be textually first in the switch in a scratch
+copy of the file (`git diff`-free -- compiled via a one-off `docker run`
+directly, never staged into `src/`) and recompiled; the emitted block
+immediately after the jump table did NOT change at all, byte-for-byte
+identical to the un-reordered compile. This is Lever 1's "branch that
+would kill it": the map from source case order to first-emitted block is
+CONSTANT here, so it is not a case-order difference, and per the same
+`-freorder-blocks`/`predict.c` reasoning as `v32_process` above, declined
+without further permutation.
+
+**Bystander check.** `V32RngInitNextState`, `V32RngRespNextState`'s file
+sibling, was read and left untouched; recompiling `v32nsrng.c` moved
+neither symbol (both objects rebuilt identically to their pre-pass
+state once the scratch edits were reverted). `v32.c`'s `v32_delete`,
+`dp_v32_init` and `dp_v32_exit` were likewise unaffected by the (reverted)
+experiments on `v32_create`.
+
+**Net result: grade 0 EXACT 736 -> 737 (1 closed of 4 candidates), the
++1 with 0 bystanders**, confirmed by `BLOB=ref/slmodemd/dsplibs.o
+TC_OUT=build/tc_out python3 tools/toolchain/byteident.py` before and
+after. `make period` and `make byteident-ratchet` re-run after the
+`V32LocLoopNextState` fix alone (`v32.c` and `v32nsrng.c` are
+byte-for-byte their pre-pass selves in the committed tree). (2026-09-06)
