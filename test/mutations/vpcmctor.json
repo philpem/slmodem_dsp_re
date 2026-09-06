@@ -103,7 +103,7 @@
  {
   "label": "the echo canceller is given the V.90 parameters",
   "find": "\t  echoCanceller(v92modem.parameters, nSamples, 199),",
-  "replace": "\t  echoCanceller((V92Parameters *)modem.ptr_49b4, nSamples, 199),"
+  "replace": "\t  echoCanceller((V92Parameters *)modem.params, nSamples, 199),"
  },
  {
   "label": "the ANSam detector's first tone is 6001 Hz",

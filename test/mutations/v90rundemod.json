@@ -22,7 +22,7 @@
  },
  {
   "label": "dispatch 1 case 3 ignores the parameter block",
-  "find": "\t\t\t&& modem.ptr_49b4->ENABLE_ERROR_CORRECTION_RRN != 0)) {\n\t\t\tprogressState = 4;",
+  "find": "\t\t\t&& modem.params->ENABLE_ERROR_CORRECTION_RRN != 0)) {\n\t\t\tprogressState = 4;",
   "replace": "\t\t\t)) {\n\t\t\tprogressState = 4;"
  },
  {
@@ -77,8 +77,8 @@
  },
  {
   "label": "the TRN1d arm clears the retrain bit rather than setting it",
-  "find": "\t\t\tmodem.ptr_49b4->modemParams->unnamed_0003 |=\n\t\t\t    CFG_FLAG3_RETRAIN;\n\t\t}\n\t\tbreak;\n\n\t/*\n\t * 0xdcab.",
-  "replace": "\t\t\tmodem.ptr_49b4->modemParams->unnamed_0003 &=\n\t\t\t    (unsigned char)~CFG_FLAG3_RETRAIN;\n\t\t}\n\t\tbreak;\n\n\t/*\n\t * 0xdcab."
+  "find": "\t\t\tmodem.params->modemParams->unnamed_0003 |=\n\t\t\t    CFG_FLAG3_RETRAIN;\n\t\t}\n\t\tbreak;\n\n\t/*\n\t * 0xdcab.",
+  "replace": "\t\t\tmodem.params->modemParams->unnamed_0003 &=\n\t\t\t    (unsigned char)~CFG_FLAG3_RETRAIN;\n\t\t}\n\t\tbreak;\n\n\t/*\n\t * 0xdcab."
  },
  {
   "label": "the Jd arm reads the two constellation codes the other way round",
@@ -87,13 +87,13 @@
  },
  {
   "label": "the Jd arm takes the silence flag as a truth value rather than a byte",
-  "find": "\t\tsilenceScr = (unsigned char)modem.ptr_49b4->SILENCE_SCR;",
-  "replace": "\t\tsilenceScr = (unsigned char)(modem.ptr_49b4->SILENCE_SCR != 0);"
+  "find": "\t\tsilenceScr = (unsigned char)modem.params->SILENCE_SCR;",
+  "replace": "\t\tsilenceScr = (unsigned char)(modem.params->SILENCE_SCR != 0);"
  },
  {
   "label": "the Jd arm's round-trip comparison is SIGNED",
-  "find": "\t\t    && (unsigned int)modem.phase2Info->rtd\n\t\t       > (unsigned int)\n\t\t\t modem.ptr_49b4->MINIMUM_RTD_FOR_NON_SILENCE_SCR) {",
-  "replace": "\t\t    && modem.phase2Info->rtd\n\t\t       > modem.ptr_49b4->MINIMUM_RTD_FOR_NON_SILENCE_SCR) {"
+  "find": "\t\t    && (unsigned int)modem.phase2Info->rtd\n\t\t       > (unsigned int)\n\t\t\t modem.params->MINIMUM_RTD_FOR_NON_SILENCE_SCR) {",
+  "replace": "\t\t    && modem.phase2Info->rtd\n\t\t       > modem.params->MINIMUM_RTD_FOR_NON_SILENCE_SCR) {"
  },
  {
   "label": "the Jd arm's round-trip comparison is the other way round",
@@ -172,8 +172,8 @@
  },
  {
   "label": "arm 0x17's retrainLatch test is inverted",
-  "find": "\t\tsetTerminateCpNotFlag(1);\n\t\tif (retrainLatch != 0)\n\t\t\tmodem.ptr_49b4->modemParams->unnamed_0003 |=",
-  "replace": "\t\tsetTerminateCpNotFlag(1);\n\t\tif (retrainLatch == 0)\n\t\t\tmodem.ptr_49b4->modemParams->unnamed_0003 |="
+  "find": "\t\tsetTerminateCpNotFlag(1);\n\t\tif (retrainLatch != 0)\n\t\t\tmodem.params->modemParams->unnamed_0003 |=",
+  "replace": "\t\tsetTerminateCpNotFlag(1);\n\t\tif (retrainLatch == 0)\n\t\t\tmodem.params->modemParams->unnamed_0003 |="
  },
  {
   "label": "the TRN2d arm raises the additional-CP-info word rather than clearing it",
@@ -207,8 +207,8 @@
  },
  {
   "label": "MPnot: the sensitive-ISP tail is never taken",
-  "find": "\t\t\tif (modem.ptr_49b4->SENSITIVE_ISP_DETECTED != 0) {",
-  "replace": "\t\t\tif (modem.ptr_49b4->SENSITIVE_ISP_DETECTED == 0) {"
+  "find": "\t\t\tif (modem.params->SENSITIVE_ISP_DETECTED != 0) {",
+  "replace": "\t\t\tif (modem.params->SENSITIVE_ISP_DETECTED == 0) {"
  },
  {
   "label": "MPnot: the else arm's conjunction is an AND rather than an OR",

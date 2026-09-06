@@ -227,7 +227,7 @@
  },
  {
   "label": "the V.90 parameter block is not reinitialised",
-  "find": "\tsweepCounter = 0;\t\t\t/* +0x1740 */\n\n\tmodem.ptr_49b4->init();\n",
+  "find": "\tsweepCounter = 0;\t\t\t/* +0x1740 */\n\n\tmodem.params->init();\n",
   "replace": "\tsweepCounter = 0;\t\t\t/* +0x1740 */\n"
  },
  {
@@ -277,18 +277,18 @@
  },
  {
   "label": "the phase-2 bit is withdrawn instead of the retrain one",
-  "find": "\tmodem.ptr_49b4->modemParams->unnamed_0003 &=\n\t    (unsigned char)~CFG_FLAG3_RETRAIN;",
-  "replace": "\tmodem.ptr_49b4->modemParams->unnamed_0003 &=\n\t    (unsigned char)~CFG_FLAG3_PHASE2;"
+  "find": "\tmodem.params->modemParams->unnamed_0003 &=\n\t    (unsigned char)~CFG_FLAG3_RETRAIN;",
+  "replace": "\tmodem.params->modemParams->unnamed_0003 &=\n\t    (unsigned char)~CFG_FLAG3_PHASE2;"
  },
  {
   "label": "the whole flag byte is cleared rather than one bit of it",
-  "find": "\tmodem.ptr_49b4->modemParams->unnamed_0003 &=\n\t    (unsigned char)~CFG_FLAG3_RETRAIN;",
-  "replace": "\tmodem.ptr_49b4->modemParams->unnamed_0003 = 0;"
+  "find": "\tmodem.params->modemParams->unnamed_0003 &=\n\t    (unsigned char)~CFG_FLAG3_RETRAIN;",
+  "replace": "\tmodem.params->modemParams->unnamed_0003 = 0;"
  },
  {
   "label": "the retrain is asked for rather than withdrawn",
-  "find": "\tmodem.ptr_49b4->modemParams->unnamed_0003 &=\n\t    (unsigned char)~CFG_FLAG3_RETRAIN;",
-  "replace": "\tmodem.ptr_49b4->modemParams->unnamed_0003 |= CFG_FLAG3_RETRAIN;"
+  "find": "\tmodem.params->modemParams->unnamed_0003 &=\n\t    (unsigned char)~CFG_FLAG3_RETRAIN;",
+  "replace": "\tmodem.params->modemParams->unnamed_0003 |= CFG_FLAG3_RETRAIN;"
  },
  {
   "label": "the oscillator is not restarted",

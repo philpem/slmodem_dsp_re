@@ -49,7 +49,7 @@
  * breaks the build here rather than silently shifting every offset past
  * +0x6118. Two fields inside that embedded `V90Modem` were carved out of
  * its `pad_08` for this batch: `phase2Info` at +0x08 (this + 0x1760) and
- * `ptr_49b4` at +0x49b4 (this + 0x610c) -- see
+ * `params` at +0x49b4 (this + 0x610c) -- see
  * `include/dsplib/V90SessionFlag.h`.
  *
  * @par Names

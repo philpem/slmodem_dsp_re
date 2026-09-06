@@ -140,7 +140,7 @@ public:
  * `V90Modem` moved to include/dsplib/V90Modem.h, whole, once its
  * construction path was written. It used to be declared here as
  *
- *     modulator; demodulator; phase2Info; pad_0c[0x49a8]; ptr_49b4;
+ *     modulator; demodulator; phase2Info; pad_0c[0x49a8]; params;
  *     sessionFlag; side
  *
  * with `side` spelled `int` and `pad_0c` unmodelled. `V90Modem::V90Modem`

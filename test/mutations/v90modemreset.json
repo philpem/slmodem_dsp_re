@@ -19,13 +19,13 @@
  },
  {
   "label": "probe mode masks the descriptor but not the demodulator's flag",
-  "find": "\n\n\tcase V90_MODEM_SIDE_ANALOG:\n\t\tif (ptr_49b4->PROBING_MODE) {\n\t\t\tedprintf(\"due to probe mode quick connect is \" \"masked !!!\\r\\n\");\n\t\t\tqcFlag = 0;\n\t\t}\n\n\t\tif (qcFlag)\n\t\t\tdilType = DIL_TYPE_ADI_QC;\n\t\telse\n\t\t\tdilType = DIL_TYPE_ADI;\n\n\t\tsetDilDescriptor(dil, dilType);\n\t\tdemodulator->reset(qcFlag);",
-  "replace": "\tcase V90_MODEM_SIDE_ANALOG:\n\t\tif (ptr_49b4->PROBING_MODE)\n\t\t\tedprintf(\"due to probe mode quick connect is \"\n\t\t\t\t \"masked !!!\\r\\n\");\n\n\t\tif (qcFlag && !ptr_49b4->PROBING_MODE)\n\t\t\tdilType = DIL_TYPE_ADI_QC;\n\t\telse\n\t\t\tdilType = DIL_TYPE_ADI;\n\n\t\tsetDilDescriptor(dil, dilType);\n\t\tdemodulator->reset(qcFlag);"
+  "find": "\n\n\tcase V90_MODEM_SIDE_ANALOG:\n\t\tif (params->PROBING_MODE) {\n\t\t\tedprintf(\"due to probe mode quick connect is \" \"masked !!!\\r\\n\");\n\t\t\tqcFlag = 0;\n\t\t}\n\n\t\tif (qcFlag)\n\t\t\tdilType = DIL_TYPE_ADI_QC;\n\t\telse\n\t\t\tdilType = DIL_TYPE_ADI;\n\n\t\tsetDilDescriptor(dil, dilType);\n\t\tdemodulator->reset(qcFlag);",
+  "replace": "\tcase V90_MODEM_SIDE_ANALOG:\n\t\tif (params->PROBING_MODE)\n\t\t\tedprintf(\"due to probe mode quick connect is \"\n\t\t\t\t \"masked !!!\\r\\n\");\n\n\t\tif (qcFlag && !params->PROBING_MODE)\n\t\t\tdilType = DIL_TYPE_ADI_QC;\n\t\telse\n\t\t\tdilType = DIL_TYPE_ADI;\n\n\t\tsetDilDescriptor(dil, dilType);\n\t\tdemodulator->reset(qcFlag);"
  },
  {
   "label": "the mask is re-derived at the call rather than applied to the variable",
   "find": "\t\tdemodulator->reset(qcFlag);",
-  "replace": "\t\tdemodulator->reset(ptr_49b4->PROBING_MODE ? 0u : qcFlag);",
+  "replace": "\t\tdemodulator->reset(params->PROBING_MODE ? 0u : qcFlag);",
   "equivalent": true,
   "why": "The object masks the VARIABLE -- `xor %esi,%esi` at 0x19a6d, where %esi is `qcFlag` -- and this spelling recomputes the same mask at the one remaining reader.  Nothing between the two sites writes PROBING_MODE, so the two programs agree on every input; it is here because it is the near-miss of the mutation above, and separating a defect from a rewrite is the point of recording it as equivalent rather than as a gap."
  },
@@ -41,18 +41,18 @@
  },
  {
   "label": "the probe-mode test is on the connection type",
-  "find": "\t\tif (ptr_49b4->PROBING_MODE) {",
-  "replace": "\t\tif (ptr_49b4->LINE_CONNECTION_TYPE) {"
+  "find": "\t\tif (params->PROBING_MODE) {",
+  "replace": "\t\tif (params->LINE_CONNECTION_TYPE) {"
  },
  {
   "label": "the probe-mode test is narrowed to a byte",
-  "find": "\t\tif (ptr_49b4->PROBING_MODE) {",
-  "replace": "\t\tif ((unsigned char)ptr_49b4->PROBING_MODE) {"
+  "find": "\t\tif (params->PROBING_MODE) {",
+  "replace": "\t\tif ((unsigned char)params->PROBING_MODE) {"
  },
  {
   "label": "the probe-mode test is narrowed to a short",
-  "find": "\t\tif (ptr_49b4->PROBING_MODE) {",
-  "replace": "\t\tif ((unsigned short)ptr_49b4->PROBING_MODE) {"
+  "find": "\t\tif (params->PROBING_MODE) {",
+  "replace": "\t\tif ((unsigned short)params->PROBING_MODE) {"
  },
  {
   "label": "the two DilTypes are chosen the other way round",
@@ -107,7 +107,7 @@
  {
   "label": "the banner prints the masked flag rather than the argument",
   "find": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V90Modem Reset, qcFlag = %d\\r\\n\",\n\t\t\t\t     qcFlag);\n\n\tprintTitle();",
-  "replace": "\tprintTitle();\n\n\tif (side == V90_MODEM_SIDE_ANALOG && ptr_49b4->PROBING_MODE)\n\t\tqcFlag = 0;\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V90Modem Reset, qcFlag = %d\\r\\n\",\n\t\t\t\t     qcFlag);"
+  "replace": "\tprintTitle();\n\n\tif (side == V90_MODEM_SIDE_ANALOG && params->PROBING_MODE)\n\t\tqcFlag = 0;\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V90Modem Reset, qcFlag = %d\\r\\n\",\n\t\t\t\t     qcFlag);"
  },
  {
   "label": "the descriptor is installed after the demodulator is reset",

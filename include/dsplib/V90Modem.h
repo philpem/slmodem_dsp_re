@@ -47,7 +47,7 @@
  *            (src/pump/v90/V90MP.cpp) and 0xdf4 - 0xcd0 is 0x124.
  *     +0xdf4 `V90CP::V90CP()`, argument 9 (`P5V90CP`).  `sizeof(V90CP)` is
  *            0x3bc0 (src/pump/v90/V90CP.cpp) and 0x49b4 - 0xdf4 is 0x3bc0.
- *            So the V90CP runs exactly up to `ptr_49b4` and there is no
+ *            So the V90CP runs exactly up to `params` and there is no
  *            unmodelled span left anywhere in this object.
  *
  * THE ONE SIZE THAT RESTS ON ADJACENCY ALONE is `tagV90AdditionalCPinfo`'s
@@ -211,7 +211,7 @@ public:
 	 * @brief Print a banner and reset whichever side was built.
 	 *
 	 * Digital side: calls V90Modulator::reset() and nothing else.
-	 * Analog side: if `ptr_49b4->PROBING_MODE` is set, forces @p qcFlag
+	 * Analog side: if `params->PROBING_MODE` is set, forces @p qcFlag
 	 * to 0 and prints a warning (the masked value, not the argument, is
 	 * what both the descriptor selection below and
 	 * V90Demodulator::reset() see); selects and installs the DIL
@@ -246,7 +246,7 @@ public:
 	 * `V90Parameters::V90Parameters` writes +0x49b4, and both sizes match
 	 * the `sizeof` those two classes already assert.
 	 *
-	 * `ptr_49b4` KEEPS ITS OFFSET NAME.  Two batches' worth of offset
+	 * `params` KEEPS ITS OFFSET NAME.  Two batches' worth of offset
 	 * assertions and one `+ 0x20` cast name it that; only its type was
 	 * ever new, and the constructor adds ownership to the record and not
 	 * a name.
@@ -272,7 +272,15 @@ public:
 	V90MP mp;				/* +0x0cd0 argument 10    */
 	V90CP cp;				/* +0x0df4 argument 9     */
 
-	V90Parameters *ptr_49b4;		/* +0x49b4 OWNED          */
+	/*
+	 * Named on the unanimous sibling convention: every other class
+	 * holding a `V90Parameters *` (V90Phase2Info, V90Jd, V92Jd,
+	 * V90Demodulator, V90Modulator and more) already calls it `params`,
+	 * and the constructor confirms it directly -- this field is loaded
+	 * from the `params` argument and immediately re-passed as `params`
+	 * to V90Phase2Info's, V90Jd's and V92Jd's own constructors.
+	 */
+	V90Parameters *params;		/* +0x49b4 OWNED          */
 
 	unsigned int sessionFlag;		/* +0x49b8                */
 	V90ModemSide side;			/* +0x49bc                */

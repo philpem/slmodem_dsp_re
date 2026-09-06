@@ -147,7 +147,7 @@ VPCM_OFF(ecMode,		0x7f60, ecmode);
 /* The three the map depends on being where V90SessionFlag.h puts them. */
 VPCM_OFF(modem.demodulator,	0x175c, mdmdem);
 VPCM_OFF(modem.phase2Info,	0x1760, mdmp2i);
-VPCM_OFF(modem.ptr_49b4,	0x610c, mdm49b4);
+VPCM_OFF(modem.params,	0x610c, mdm49b4);
 
 typedef char vpcm_modem_size[(sizeof(V90Modem) == 0x49c0) ? 1 : -1];
 
@@ -591,7 +591,7 @@ VPcmFloModem::getUinfoValue(short skipProbe)
 	 */
 	uinfo = 0;
 	if (droppedToV34 == 0) {
-		uinfo = *(short *)((unsigned char *)modem.ptr_49b4 + 0x20);
+		uinfo = *(short *)((unsigned char *)modem.params + 0x20);
 		if (uinfo != 0)
 			return uinfo;
 	}
@@ -645,7 +645,7 @@ VPcmFloModem::getUinfoValue(short skipProbe)
  * `_tagModemParameters::unnamed_0003`, and the two bits BOTH entry points
  * touch.  The names are `src/pump/v34/v34pcmmain.cpp`'s, for the same byte
  * reached the other way round -- that file gets there as `obj->pac3c + 3` and
- * these two as `modem.ptr_49b4->modemParams->unnamed_0003`, and they are the
+ * these two as `modem.params->modemParams->unnamed_0003`, and they are the
  * same storage.  Bit 2 is the one `VPcmFloModemCtor.cpp` clears at 0xfca5 and
  * `v90RateRenegSilence` clears again after printing "disabling SAS detector
  * on silence".
@@ -687,11 +687,11 @@ VPcmFloModem::getUinfoValue(short skipProbe)
  * `V90Parameters::init` REBUILDS THE WHOLE PARAMETER BLOCK -- `setToDefault`,
  * then the parameter file if there is one, then `loadModemParamsData` -- so
  * every V.90 tunable goes back to its default here and not just the phase 3
- * ones.  It is called on `modem.ptr_49b4`, the block the V90Modem owns.
+ * ones.  It is called on `modem.params`, the block the V90Modem owns.
  *
  * THE LAST TWO STORES ARE THE HAND-BACK TO THE V.34 SIDE.  `CFG_FLAG3_RETRAIN`
  * is cleared out of `_tagModemParameters::unnamed_0003` -- `andb $0xfb,0x3
- * (%edx)` at 0xf27e, through TWO pointers, `modem.ptr_49b4->modemParams` --
+ * (%edx)` at 0xf27e, through TWO pointers, `modem.params->modemParams` --
  * which withdraws any retrain this session had asked for, and `progressState` is
  * set to 1, which is the dispatch value `runPcmModem` and `v90RunDemodulator`
  * both read first and both turn into a return of 1.
@@ -727,7 +727,7 @@ VPcmFloModem::vPcmResetPhase3Modem()
 {
 	sweepCounter = 0;			/* +0x1740 */
 
-	modem.ptr_49b4->init();
+	modem.params->init();
 	modem.setSessionFlag((unsigned int)pcmSessionType);
 	modem.reset(0);
 	v92modem.reset();
@@ -735,7 +735,7 @@ VPcmFloModem::vPcmResetPhase3Modem()
 
 	ecMode = 0;
 	ecRampCounter = 0;
-	modem.ptr_49b4->modemParams->unnamed_0003 &=
+	modem.params->modemParams->unnamed_0003 &=
 	    (unsigned char)~CFG_FLAG3_RETRAIN;
 	sineWave.phase = 0.0f;
 	progressState = 1;
@@ -830,8 +830,8 @@ VPcmFloModem::externalReset()
 	v34BaudAllow[4] = 1;		/* +0x21b */
 	v34BaudAllow[5] = 0;		/* +0x21c */
 
-	modem.ptr_49b4->initSession();
-	modem.ptr_49b4->init();
+	modem.params->initSession();
+	modem.params->init();
 	v92modem.parameters->init();
 
 	if (DSPLIB_DEBUG_ON())
@@ -1481,7 +1481,7 @@ VPcmFloModem::v90RunDemodulator(float *in, unsigned int n, int *rxbits,
 	case 3:
 		if (info0Layout == 0
 		    || (modem.demodulator->inPhase3 == 4
-			&& modem.ptr_49b4->ENABLE_ERROR_CORRECTION_RRN != 0)) {
+			&& modem.params->ENABLE_ERROR_CORRECTION_RRN != 0)) {
 			progressState = 4;
 			ret = 3;
 		} else {
@@ -1525,7 +1525,7 @@ VPcmFloModem::v90RunDemodulator(float *in, unsigned int n, int *rxbits,
 	case 0x03:
 		if (retrainLatch != 0) {
 			edprintf("VPcmFloModem (V90): ON Start TRN1d " "restoring SAS detector\n");
-			modem.ptr_49b4->modemParams->unnamed_0003 |=
+			modem.params->modemParams->unnamed_0003 |=
 			    CFG_FLAG3_RETRAIN;
 		}
 		break;
@@ -1558,11 +1558,11 @@ VPcmFloModem::v90RunDemodulator(float *in, unsigned int n, int *rxbits,
 			    "RRN constellation : %d " "(0 = 4 points / 1 = 16 points)\r\n",
 			    trainConstel, rrnConstel);
 
-		silenceScr = (unsigned char)modem.ptr_49b4->SILENCE_SCR;
+		silenceScr = (unsigned char)modem.params->SILENCE_SCR;
 		if (silenceScr != 0
 		    && (unsigned int)modem.phase2Info->rtd
 		       > (unsigned int)
-			 modem.ptr_49b4->MINIMUM_RTD_FOR_NON_SILENCE_SCR) {
+			 modem.params->MINIMUM_RTD_FOR_NON_SILENCE_SCR) {
 			edprintf("VPcmFloModem (V90): phase3 SCR set to NOT "
 				 "silence, due to RTD %d\r\n",
 				 (unsigned int)modem.phase2Info->rtd);
@@ -1581,7 +1581,7 @@ VPcmFloModem::v90RunDemodulator(float *in, unsigned int n, int *rxbits,
 	 * ends with, on its own here and under the same phase-2 guard.
 	 */
 	case 0x08:
-		cfgFlags = &modem.ptr_49b4->modemParams->unnamed_0003;
+		cfgFlags = &modem.params->modemParams->unnamed_0003;
 		if ((*cfgFlags & CFG_FLAG3_PHASE2) == 0)
 			*cfgFlags &= (unsigned char)~CFG_FLAG3_RETRAIN;
 		break;
@@ -1624,7 +1624,7 @@ VPcmFloModem::v90RunDemodulator(float *in, unsigned int n, int *rxbits,
 	case 0x17:
 		setTerminateCpNotFlag(1);
 		if (retrainLatch != 0)
-			modem.ptr_49b4->modemParams->unnamed_0003 |=
+			modem.params->modemParams->unnamed_0003 |=
 			    CFG_FLAG3_RETRAIN;
 		break;
 
@@ -1706,7 +1706,7 @@ VPcmFloModem::v90RunDemodulator(float *in, unsigned int n, int *rxbits,
 				dsplibs_debug_printf("VPcmFloModem (V90): "
 				    "Building CPnot on MPnot receive, CPnot " "length = %d\r\n", nofBits);
 			setTerminateCpFlag(1);
-			if (modem.ptr_49b4->SENSITIVE_ISP_DETECTED != 0) {
+			if (modem.params->SENSITIVE_ISP_DETECTED != 0) {
 				edprintf("VPcmFloModem (V90): on sensitive "
 					 "ISP, after one CPnot supposed to " "move to E...\r\n");
 				setTerminateCpNotFlag(1);
@@ -1761,7 +1761,7 @@ VPcmFloModem::v90RunDemodulator(float *in, unsigned int n, int *rxbits,
 		progressState = 3;
 		ret = 2;
 		retrainLatch = 1;
-		modem.ptr_49b4->modemParams->unnamed_0003 |= CFG_FLAG3_RETRAIN;
+		modem.params->modemParams->unnamed_0003 |= CFG_FLAG3_RETRAIN;
 		VPcmV34LogTimingOffset(v34Object,
 		    (short)(modem.demodulator->resampler.getTimingOffsetPPM()
 			    * VPCM_V90_TIMING_LOG_SCALE));
@@ -1864,7 +1864,7 @@ VPcmFloModem::v90RunDemodulator(float *in, unsigned int n, int *rxbits,
 
 	case 0x28:			/* 0xe15f */
 		edprintf("VPcmFloModem (V90): restoring SAS detector " "(RtNot)\n");
-		modem.ptr_49b4->modemParams->unnamed_0003 |= CFG_FLAG3_RETRAIN;
+		modem.params->modemParams->unnamed_0003 |= CFG_FLAG3_RETRAIN;
 		break;
 
 	/*
@@ -2019,7 +2019,7 @@ VPcmFloModem::runPcmModem(float *in, float *out, unsigned int n, int *rxbits,
 	case 3:
 		if (info0Layout != 0
 		    && modem.demodulator->inPhase3 == 4
-		    && modem.ptr_49b4->ENABLE_ERROR_CORRECTION_RRN != 0) {
+		    && modem.params->ENABLE_ERROR_CORRECTION_RRN != 0) {
 			progressState = 4;
 			ret = 3;
 		} else {
@@ -2107,7 +2107,7 @@ VPcmFloModem::runPcmModem(float *in, float *out, unsigned int n, int *rxbits,
 		    modem.jd92->getJdPhase();
 		v92modem.modulator->exitSuSecond();
 
-		cfgFlags = &modem.ptr_49b4->modemParams->unnamed_0003;
+		cfgFlags = &modem.params->modemParams->unnamed_0003;
 		if ((*cfgFlags & CFG_FLAG3_PHASE2) == 0)
 			*cfgFlags &= (unsigned char)~CFG_FLAG3_RETRAIN;
 		break;
@@ -2137,7 +2137,7 @@ VPcmFloModem::runPcmModem(float *in, float *out, unsigned int n, int *rxbits,
 		ret = 1;
 		v92modem.modulator->exitCPt();
 		if (retrainLatch != 0)
-			modem.ptr_49b4->modemParams->unnamed_0003 |=
+			modem.params->modemParams->unnamed_0003 |=
 			    CFG_FLAG3_RETRAIN;
 		break;
 
@@ -2160,7 +2160,7 @@ VPcmFloModem::runPcmModem(float *in, float *out, unsigned int n, int *rxbits,
 	case 0x1e:
 		progressState = 3;
 		ret = 2;
-		modem.ptr_49b4->modemParams->unnamed_0003 |=
+		modem.params->modemParams->unnamed_0003 |=
 		    CFG_FLAG3_RETRAIN;
 		VPcmV34LogTimingOffset(v34Object,
 		    (short)(modem.demodulator->resampler.getTimingOffsetPPM()

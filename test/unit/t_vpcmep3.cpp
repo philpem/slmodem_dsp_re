@@ -630,7 +630,7 @@ run_externalreset(void)
 				}
 
 				for (side = 0; side < 2; side++) {
-					V(side)->modem.ptr_49b4 =
+					V(side)->modem.params =
 					    (V90Parameters *)v90p;
 					V(side)->v92modem.parameters =
 					    (V92Parameters *)v92p;

@@ -1881,3 +1881,21 @@ Docker and `dsplibs-tc342` were available in this wave's sandbox; `make
 period J=3` and `make byteident-ratchet` were run for real against this
 cluster's own changes rather than deferred to the parent's gate --
 results below once the run completed.
+
+## Twin-class pairs the offset-diff technique couldn't reach: closed (F10184)
+
+The three pairs F10177-F10179 flagged as unreachable by the twin-diff
+technique itself (no second half to diff against) are now all resolved:
+
+- `CPUnPck` (`V90CPUnPck.h`/`V92CPUnPck.h`) -- already fully named,
+  found during wave 7's own investigation, no work needed.
+- `Parameters` (`V90Parameters.h`/`V92Parameters.h`) -- already fully
+  named, same wave.
+- `Modem` (`V90Modem.h`/`V92Modem.h`) -- `V92Modem.h` has zero live
+  fields; `V90Modem.h` had exactly one, `ptr_49b4`, confirmed by
+  live-count before committing to it. Named `params` on an unbroken
+  eighteen-class sibling convention plus a direct typed-constructor-
+  argument match (see F10184 for the full evidence and verification).
+
+This closes the twin-class review entirely -- no reachable pair is left
+with an unnamed field.

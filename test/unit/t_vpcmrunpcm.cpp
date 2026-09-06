@@ -158,7 +158,7 @@ typedef char vpcmrun_is_0x7f68[(sizeof(VPcmFloModem) == FLO_SIZE) ? 1 : -1];
 #define OFF_JD92	0x1768		/* V90Modem::jd92, 0xe576    */
 #define OFF_CP		0x254c		/* V90Modem::cp, 0xeacb      */
 #define OFF_CP_EXTENDEU	(OFF_CP + 0x12)	/* cmpb $0x0,0x255e, 0xeae3  */
-#define OFF_V90PARAMS	0x610c		/* V90Modem::ptr_49b4        */
+#define OFF_V90PARAMS	0x610c		/* V90Modem::params        */
 #define OFF_SIDE	0x6114		/* V90Modem::side, +0x49bc   */
 #define OFF_BYTE6118	0x6118
 #define OFF_BYTE6119	0x6119		/* cmpb $0x0,0x6119, 0xe85a  */

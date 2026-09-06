@@ -60,7 +60,7 @@
 #include "dsplib/V90Modulator.h"
 
 /*
- * `reset` names a `DilType` and dereferences `ptr_49b4`, so it needs both of
+ * `reset` names a `DilType` and dereferences `params`, so it needs both of
  * these where `printTitle` and `progress` needed neither.  The DIL header
  * pulls in `V90Phase3Modulator.h` for `tagV90DILdescriptor`, which
  * V90Modem.h only forward-declares.
@@ -184,7 +184,7 @@ V90Modem::reset(unsigned int qcFlag)
 		break;
 
 	case V90_MODEM_SIDE_ANALOG:
-		if (ptr_49b4->PROBING_MODE) {
+		if (params->PROBING_MODE) {
 			edprintf("due to probe mode quick connect is " "masked !!!\r\n");
 			qcFlag = 0;
 		}

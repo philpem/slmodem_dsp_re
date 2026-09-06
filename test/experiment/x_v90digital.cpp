@@ -467,7 +467,7 @@ probe_construct(const struct probe_in *in, struct probe_out *o)
 	o->v[6] = m->modulator ? (long)m->modulator->state : -1;
 	o->v[7] = (long)harness_alloc.allocs;
 	o->v[8] = (long)harness_alloc.bytes;
-	o->v[9] = m->ptr_49b4 != 0;
+	o->v[9] = m->params != 0;
 
 	/*
 	 * The mapping block AS THE CONSTRUCTOR LEFT IT.  Finding F7520's claim
@@ -595,8 +595,8 @@ probe_run(const struct probe_in *in, struct probe_out *o)
 	m->phase2Info->pcmType = PCM_TYPE_MU_LAW;
 	m->phase2Info->Uinfo = 0x40;
 	m->phase2Info->rtd = 7;
-	m->ptr_49b4->DEBUG_DIGITAL_MODEM_INITIATE_RRN = 0;
-	m->ptr_49b4->DEBUG_DIGITAL_MODEM_INITIATE_RRN_TIME = 0;
+	m->params->DEBUG_DIGITAL_MODEM_INITIATE_RRN = 0;
+	m->params->DEBUG_DIGITAL_MODEM_INITIATE_RRN_TIME = 0;
 
 	STAGE(o, 3);
 	if (in->useBlob)
@@ -862,7 +862,7 @@ probe_loopback(const struct probe_in *in, struct probe_out *o)
 	dig->modem.phase2Info->pcmType = PCM_TYPE_MU_LAW;
 	dig->modem.phase2Info->Uinfo = 0x40;
 	dig->modem.phase2Info->rtd = 7;
-	dig->modem.ptr_49b4->DEBUG_DIGITAL_MODEM_INITIATE_RRN = 0;
+	dig->modem.params->DEBUG_DIGITAL_MODEM_INITIATE_RRN = 0;
 	mod->reset();
 	mod->enterPhase3();
 	nd = mod->nofSymbols;
@@ -966,7 +966,7 @@ probe_eventcodes(const struct probe_in *in, struct probe_out *o)
 	m->phase2Info->pcmType = PCM_TYPE_MU_LAW;
 	m->phase2Info->Uinfo = 0x40;
 	m->phase2Info->rtd = 7;
-	m->ptr_49b4->DEBUG_DIGITAL_MODEM_INITIATE_RRN = 0;
+	m->params->DEBUG_DIGITAL_MODEM_INITIATE_RRN = 0;
 	n = mod->nofSymbols;
 	if (n > NOUT)
 		n = NOUT;

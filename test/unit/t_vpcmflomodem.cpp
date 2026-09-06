@@ -154,7 +154,7 @@ setup(int trial)
 		m->modem.modulator = (V90Modulator *)0;
 		m->modem.demodulator = (V90Demodulator *)dem[side];
 		m->modem.phase2Info = P90(side);
-		m->modem.ptr_49b4 = (V90Parameters *)u49[side];
+		m->modem.params = (V90Parameters *)u49[side];
 		m->modem.sessionFlag = 0x11223344u;
 		m->modem.side = (V90ModemSide)2;		/* neither half; see the head */
 		m->v92modem.phase2Info = P92(side);
@@ -188,8 +188,8 @@ snap_vp(unsigned char *dst, int side)
 	    (M(side)->modem.demodulator == (V90Demodulator *)dem[side]);
 	s->modem.phase2Info = (V90Phase2Info *)(long)
 	    (M(side)->modem.phase2Info == P90(side));
-	s->modem.ptr_49b4 = (V90Parameters *)(long)
-	    (M(side)->modem.ptr_49b4 == (V90Parameters *)u49[side]);
+	s->modem.params = (V90Parameters *)(long)
+	    (M(side)->modem.params == (V90Parameters *)u49[side]);
 	s->v92modem.phase2Info = (V92Phase2Info *)(long)
 	    (M(side)->v92modem.phase2Info == P92(side));
 }

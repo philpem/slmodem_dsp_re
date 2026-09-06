@@ -54,7 +54,7 @@ SF_OFF(V90Demodulator,	     connectionEvaluator,	0x020c, dem_20c);
 SF_OFF(V90Modem,	     modulator,			0x0000, mdm_mod);
 SF_OFF(V90Modem,	     demodulator,		0x0004, mdm_dem);
 SF_OFF(V90Modem,	     phase2Info,		0x0008, mdm_p2i);
-SF_OFF(V90Modem,	     ptr_49b4,			0x49b4, mdm_49b4);
+SF_OFF(V90Modem,	     params,			0x49b4, mdm_49b4);
 SF_OFF(V90Modem,	     sessionFlag,		0x49b8, mdm_flag);
 SF_OFF(V90Modem,	     side,			0x49bc, mdm_side);
 #endif /* 32-bit host */

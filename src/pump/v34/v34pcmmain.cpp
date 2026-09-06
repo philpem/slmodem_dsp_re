@@ -152,7 +152,7 @@ typedef char ob4_k56_check[(OB4_ANCHOR + OB4_K56_RECEIVER ==
  * `p3548` IS A `VPcmFloModem`, and this function is what settles it: it hands
  * that pointer straight to `VPcmFloModem::setPcmSessionType` as `this`.  Every
  * offset below then agrees with include/dsplib/VPcmFloModem.h --
- * `SESS_GATE` is its `info0Layout`, `SESS_PCM` its `modem.ptr_49b4` and
+ * `SESS_GATE` is its `info0Layout`, `SESS_PCM` its `modem.params` and
  * `SESS_DEMOD` its `modem.demodulator` -- which is three independent
  * confirmations of a map that was built without this function.
  *
@@ -2813,7 +2813,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 			if (obj->is_short == 0) {
 				PROG_U8(sess->v92modem.phase2Info, 0x10) = 0;
 				obj->local_short = 0;
-				sess->modem.ptr_49b4->init();
+				sess->modem.params->init();
 			}
 			obj->status = 0;
 			obj->progress = 0;

@@ -70,7 +70,7 @@
  {
   "label": "Cp: +0x20c is reached from the modem rather than the demodulator",
   "find": "\tseen = modem.demodulator->connectionEvaluator;",
-  "replace": "\tseen = (V90ConnectionEvaluator *)modem.ptr_49b4;"
+  "replace": "\tseen = (V90ConnectionEvaluator *)modem.params;"
  },
  {
   "label": "Cp: the termination path leaves the pointer where it was",
@@ -243,8 +243,8 @@
  },
  {
   "label": "Uinfo: the modem's short is read from +0x1e, not +0x20",
-  "find": "\t\tuinfo = *(short *)((unsigned char *)modem.ptr_49b4 + 0x20);",
-  "replace": "\t\tuinfo = *(short *)((unsigned char *)modem.ptr_49b4 + 0x1e);"
+  "find": "\t\tuinfo = *(short *)((unsigned char *)modem.params + 0x20);",
+  "replace": "\t\tuinfo = *(short *)((unsigned char *)modem.params + 0x1e);"
  },
  {
   "label": "Uinfo: the round-trip delay is not passed on",

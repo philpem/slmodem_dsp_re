@@ -276,7 +276,7 @@ static unsigned int nb[2];
 #define P4M(s)		(MOD(s)->phase4Modulator)
 #define BTS(s)		(MOD(s)->bitsToSymbol)
 #define MAPPER(s)	(BTS(s)->mapper)
-#define PARAMS(s)	(MODEM(s)->ptr_49b4)
+#define PARAMS(s)	(MODEM(s)->params)
 
 /* ================================================================= seeding */
 
@@ -514,7 +514,7 @@ blkmap_take(unsigned int side)
 		blk_set(s, B_P2INFO, MODEM(s)->phase2Info);
 		blk_set(s, B_JD, MODEM(s)->jd);
 		blk_set(s, B_JD92, MODEM(s)->jd92);
-		blk_set(s, B_PARAMS, MODEM(s)->ptr_49b4);
+		blk_set(s, B_PARAMS, MODEM(s)->params);
 		if (side == 1)
 			blk_set(s, B_DEM, MODEM(s)->demodulator);
 		if (side != 0)
@@ -686,8 +686,8 @@ compare_graph(const char *what, unsigned int side, long tag)
 
 	cmp_region(what, "V90Phase2Info", MODEM(0)->phase2Info,
 		   MODEM(1)->phase2Info, 0x24, tag);
-	cmp_region(what, "V90Parameters", MODEM(0)->ptr_49b4,
-		   MODEM(1)->ptr_49b4, sizeof(V90Parameters), tag);
+	cmp_region(what, "V90Parameters", MODEM(0)->params,
+		   MODEM(1)->params, sizeof(V90Parameters), tag);
 
 	if (side == 1) {
 		cmp_region_p(what, "V90Demodulator", MODEM(0)->demodulator,

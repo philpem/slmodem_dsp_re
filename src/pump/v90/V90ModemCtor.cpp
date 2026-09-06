@@ -133,7 +133,7 @@ V90M_OFF(mappingParamsAlt,	0x0668, mapparamsalt);
 V90M_OFF(additionalCPinfo,	0x0cb8, cpinfo);
 V90M_OFF(mp,			0x0cd0, mp);
 V90M_OFF(cp,			0x0df4, cp);
-V90M_OFF(ptr_49b4,		0x49b4, ptr49b4);
+V90M_OFF(params,		0x49b4, ptr49b4);
 V90M_OFF(sessionFlag,		0x49b8, sessionflag);
 V90M_OFF(side,			0x49bc, side);
 
@@ -239,7 +239,7 @@ V90Modem::V90Modem(V90ModemSide modemSide, _tagModemParameters *modemParams,
 
 	p = sysdep_malloc(sizeof(V90Parameters));
 	new (p) V90Parameters(modemParams);
-	ptr_49b4 = (V90Parameters *)p;
+	params = (V90Parameters *)p;
 
 	/*
 	 * The V90Parameters pointer is read back OUT OF THE OBJECT for each
@@ -248,15 +248,15 @@ V90Modem::V90Modem(V90ModemSide modemSide, _tagModemParameters *modemParams,
 	 * reloads, three statements.
 	 */
 	p = sysdep_malloc(sizeof(V90Phase2Info));
-	new (p) V90Phase2Info(ptr_49b4);
+	new (p) V90Phase2Info(params);
 	phase2Info = (V90Phase2Info *)p;
 
 	p = sysdep_malloc(sizeof(V90Jd));
-	new (p) V90Jd(ptr_49b4);
+	new (p) V90Jd(params);
 	jd = (V90Jd *)p;
 
 	p = sysdep_malloc(sizeof(V92Jd));
-	new (p) V92Jd(ptr_49b4);
+	new (p) V92Jd(params);
 	jd92 = (V92Jd *)p;
 
 	/*
@@ -278,7 +278,7 @@ V90Modem::V90Modem(V90ModemSide modemSide, _tagModemParameters *modemParams,
 		p = sysdep_malloc(sizeof(V90Modulator));
 		new (p) V90Modulator(nofSymbols, phase2Info, jd, jd92, dil,
 				     &mappingParams, &mappingParamsAlt,
-				     &additionalCPinfo, &cp, &mp, ptr_49b4,
+				     &additionalCPinfo, &cp, &mp, params,
 				     sessionFlag);
 		modulator = (V90Modulator *)p;
 		demodulator = 0;
@@ -291,7 +291,7 @@ V90Modem::V90Modem(V90ModemSide modemSide, _tagModemParameters *modemParams,
 				       &mappingParams, &mappingParamsAlt,
 				       &additionalCPinfo, &cp, &mp,
 				       (__tHardwareCodecTypes__)modemParams->codecType,
-				       ptr_49b4, compMode, sessionFlag);
+				       params, compMode, sessionFlag);
 		demodulator = (V90Demodulator *)p;
 		break;
 
@@ -350,8 +350,8 @@ V90Modem::~V90Modem()
 		jd92->~V92Jd();
 		sysdep_free(jd92);
 	}
-	if (ptr_49b4 != 0) {
-		ptr_49b4->~V90Parameters();
-		sysdep_free(ptr_49b4);
+	if (params != 0) {
+		params->~V90Parameters();
+		sysdep_free(params);
 	}
 }

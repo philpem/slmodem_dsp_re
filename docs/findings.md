@@ -117861,3 +117861,54 @@ needed touching, confirmed directly rather than assumed. Docker and
 `dsplibs-tc342` were both available in this wave's sandbox; `make period
 J=3` and `make byteident-ratchet` run against the fully-changed tree, see
 the wave 7 summary in `docs/fieldnaming.md` for the result. (2026-09-06)
+
+## F10184. `V90Modem::ptr_49b4` named `params` -- the last field the twin-class
+offset-diff technique couldn't reach
+
+The last untouched field from the twin-class review (F10177-F10179):
+`V90Modem`/`V92Modem` is a matched pair, but `V92Modem.h` has zero live
+fields left and `V90Modem.h` has exactly one, so there is no second half
+to diff against. `V90Parameters *ptr_49b4` at +0x49b4 is CLAUDE.md's own
+cited worked example of the `type_NNNN` category -- modeled (typed,
+sized) but unnamed.
+
+**Evidence.** Every other class in the tree holding a `V90Parameters *`
+member names it `params`, with no exception: `V90Phase2Info`, `V90Jd`,
+`V92Jd`, `V90Demodulator`, `V90Modulator`, `V90Mapper`,
+`V90AutoDigitalImpDetector`, `V90ConnectionEvaluator`,
+`V90ConstellationDesigner`, `V90SpectralVerifier`, `V90Demapper`,
+`V90Equalizer`, `V90TRN2Designer`, `V90Phase3Demodulator`,
+`V90Phase3Modulator`, `V90Phase4Demodulator`, `V90Phase4Modulator`,
+`V90BitsToSymbol`, `V90PreFilter` -- eighteen classes, one spelling. This
+is not naming by majority vote: `V90ModemCtor.cpp`'s constructor loads
+this exact field from its own `params` argument and immediately
+re-passes it, under that same argument, into `V90Phase2Info`'s, `V90Jd`'s
+and `V92Jd`'s constructors (`new (p) V90Jd(ptr_49b4)` etc.) -- the typed
+callee confirms the identity CLAUDE.md ranks second in its evidence
+order, not just the naming pattern.
+
+`ptr_49b4` was also reached, unprefixed, from three call sites outside
+`V90Modem` itself -- `V90ModemReset.cpp`'s `V90Modem::reset` (as
+`ptr_49b4->PROBING_MODE` and friends), `VPcmFloModem.cpp` (as
+`modem.ptr_49b4->...`, a dozen sites), and `v34pcmmain.cpp` (as
+`sess->modem.ptr_49b4->init()`) -- so the rename is a plain,
+non-colliding substring replace across all of `include/`, `src/` and
+`test/` (`ptr_49b4` is not a substring of any other identifier in the
+tree); no mutation-anchor JSON carries this string in a `label`, only in
+`find`/`replace` text, so nothing needed renumbering.
+
+**Verification.** `make one T=t_v90modemctor`: 385/380/468/106/106/450/
+450/33/61 checks across every constructor/destructor/reset/diagnostics
+path, all green. `make one` on the six other touched suites
+(`t_v90modprog`, `t_vpcmflomodem`, `t_v34info1a`, `t_v90rundemod`,
+`t_vpcmep3`, `t_vpcmrunpcm`) run sequentially (not in parallel, to avoid
+racing on shared `build/repro` objects) -- all exit 0. `tools/onedef.py`
+(301 types, 1 known duplicate), `tools/refcheck.py` (13593 references, 0
+dangling) and `tools/anchorcheck.py` (228 suites, 9767 mutations, 0
+anchor problems) all clean. `make check64` clean (same pre-existing
+`-Wswitch` warnings on `V90ModemSide`/`V92ModemSide` noted elsewhere,
+unrelated to this change -- see the item-5 enum/`#define` note in
+`docs/fieldnaming.md`). Real `make period`: 374 passed, 0 failed, exact
+match to the pre-change baseline. Real `make byteident-ratchet`: 736/1852
+grade-0 EXACT (39.7%), 796/1852 grade-0-or-1 (43.0%), ratchet OK -- the
+Tier Zero floor unchanged. (2026-09-06)

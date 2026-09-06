@@ -42,18 +42,18 @@
  },
  {
   "label": "the rate-reneg arm ignores the parameter block",
-  "find": "\t\t    && modem.ptr_49b4->ENABLE_ERROR_CORRECTION_RRN != 0) {",
+  "find": "\t\t    && modem.params->ENABLE_ERROR_CORRECTION_RRN != 0) {",
   "replace": "\t\t    ) {"
  },
  {
   "label": "the rate-reneg arm does not latch progressState",
-  "find": "\t\t    && modem.ptr_49b4->ENABLE_ERROR_CORRECTION_RRN != 0) {\n\t\t\tprogressState = 4;\n\t\t\tret = 3;\n\t\t} else {\n",
-  "replace": "\t\t    && modem.ptr_49b4->ENABLE_ERROR_CORRECTION_RRN != 0) {\n\t\t\tret = 3;\n\t\t} else {\n"
+  "find": "\t\t    && modem.params->ENABLE_ERROR_CORRECTION_RRN != 0) {\n\t\t\tprogressState = 4;\n\t\t\tret = 3;\n\t\t} else {\n",
+  "replace": "\t\t    && modem.params->ENABLE_ERROR_CORRECTION_RRN != 0) {\n\t\t\tret = 3;\n\t\t} else {\n"
  },
  {
   "label": "the rate-reneg arm latches 3 rather than 4",
-  "find": "\t\t    && modem.ptr_49b4->ENABLE_ERROR_CORRECTION_RRN != 0) {\n\t\t\tprogressState = 4;\n\t\t\tret = 3;\n\t\t} else {\n",
-  "replace": "\t\t    && modem.ptr_49b4->ENABLE_ERROR_CORRECTION_RRN != 0) {\n\t\t\tprogressState = 3;\n\t\t\tret = 3;\n\t\t} else {\n"
+  "find": "\t\t    && modem.params->ENABLE_ERROR_CORRECTION_RRN != 0) {\n\t\t\tprogressState = 4;\n\t\t\tret = 3;\n\t\t} else {\n",
+  "replace": "\t\t    && modem.params->ENABLE_ERROR_CORRECTION_RRN != 0) {\n\t\t\tprogressState = 3;\n\t\t\tret = 3;\n\t\t} else {\n"
  },
  {
   "label": "the rate-reneg arm's other exit seeds 3 rather than 2",
@@ -152,18 +152,18 @@
  },
  {
   "label": "the retrain bit is cleared whatever the phase 2 bit says",
-  "find": "\n\t\tcfgFlags = &modem.ptr_49b4->modemParams->unnamed_0003;\n\t\tif ((*cfgFlags & CFG_FLAG3_PHASE2) == 0)\n\t\t\t*cfgFlags &= (unsigned char)~CFG_FLAG3_RETRAIN;\n\t\tbreak;\n\n\t/* 0xe7bb.  End of TRN1u: pack the CP message from the first set. */\n",
-  "replace": "\n\t\tcfgFlags = &modem.ptr_49b4->modemParams->unnamed_0003;\n\t\t*cfgFlags &= (unsigned char)~CFG_FLAG3_RETRAIN;\n\t\tbreak;\n\n\t/* 0xe7bb.  End of TRN1u: pack the CP message from the first set. */\n"
+  "find": "\n\t\tcfgFlags = &modem.params->modemParams->unnamed_0003;\n\t\tif ((*cfgFlags & CFG_FLAG3_PHASE2) == 0)\n\t\t\t*cfgFlags &= (unsigned char)~CFG_FLAG3_RETRAIN;\n\t\tbreak;\n\n\t/* 0xe7bb.  End of TRN1u: pack the CP message from the first set. */\n",
+  "replace": "\n\t\tcfgFlags = &modem.params->modemParams->unnamed_0003;\n\t\t*cfgFlags &= (unsigned char)~CFG_FLAG3_RETRAIN;\n\t\tbreak;\n\n\t/* 0xe7bb.  End of TRN1u: pack the CP message from the first set. */\n"
  },
  {
   "label": "the phase 2 test is the wrong way round",
-  "find": "\t\tv92modem.modulator->exitSuSecond();\n\n\t\tcfgFlags = &modem.ptr_49b4->modemParams->unnamed_0003;\n\t\tif ((*cfgFlags & CFG_FLAG3_PHASE2) == 0)\n\t\t\t*cfgFlags &= (unsigned char)~CFG_FLAG3_RETRAIN;\n\t\tbreak;\n\n",
-  "replace": "\t\tv92modem.modulator->exitSuSecond();\n\n\t\tcfgFlags = &modem.ptr_49b4->modemParams->unnamed_0003;\n\t\tif ((*cfgFlags & CFG_FLAG3_PHASE2) != 0)\n\t\t\t*cfgFlags &= (unsigned char)~CFG_FLAG3_RETRAIN;\n\t\tbreak;\n\n"
+  "find": "\t\tv92modem.modulator->exitSuSecond();\n\n\t\tcfgFlags = &modem.params->modemParams->unnamed_0003;\n\t\tif ((*cfgFlags & CFG_FLAG3_PHASE2) == 0)\n\t\t\t*cfgFlags &= (unsigned char)~CFG_FLAG3_RETRAIN;\n\t\tbreak;\n\n",
+  "replace": "\t\tv92modem.modulator->exitSuSecond();\n\n\t\tcfgFlags = &modem.params->modemParams->unnamed_0003;\n\t\tif ((*cfgFlags & CFG_FLAG3_PHASE2) != 0)\n\t\t\t*cfgFlags &= (unsigned char)~CFG_FLAG3_RETRAIN;\n\t\tbreak;\n\n"
  },
  {
   "label": "the bit cleared is the phase 2 one, not the retrain one",
-  "find": "\t\tcfgFlags = &modem.ptr_49b4->modemParams->unnamed_0003;\n\t\tif ((*cfgFlags & CFG_FLAG3_PHASE2) == 0)\n\t\t\t*cfgFlags &= (unsigned char)~CFG_FLAG3_RETRAIN;\n\t\tbreak;\n\n\t/* 0xe7bb.  End of TRN1u: pack the CP message from the first set. */\n",
-  "replace": "\t\tcfgFlags = &modem.ptr_49b4->modemParams->unnamed_0003;\n\t\tif ((*cfgFlags & CFG_FLAG3_PHASE2) == 0)\n\t\t\t*cfgFlags &= (unsigned char)~CFG_FLAG3_PHASE2;\n\t\tbreak;\n\n\t/* 0xe7bb.  End of TRN1u: pack the CP message from the first set. */\n"
+  "find": "\t\tcfgFlags = &modem.params->modemParams->unnamed_0003;\n\t\tif ((*cfgFlags & CFG_FLAG3_PHASE2) == 0)\n\t\t\t*cfgFlags &= (unsigned char)~CFG_FLAG3_RETRAIN;\n\t\tbreak;\n\n\t/* 0xe7bb.  End of TRN1u: pack the CP message from the first set. */\n",
+  "replace": "\t\tcfgFlags = &modem.params->modemParams->unnamed_0003;\n\t\tif ((*cfgFlags & CFG_FLAG3_PHASE2) == 0)\n\t\t\t*cfgFlags &= (unsigned char)~CFG_FLAG3_PHASE2;\n\t\tbreak;\n\n\t/* 0xe7bb.  End of TRN1u: pack the CP message from the first set. */\n"
  },
  {
   "label": "TRN1u packs the CP message from the ALTERNATE mapping block",
@@ -192,13 +192,13 @@
  },
  {
   "label": "the CPt arm sets the retrain bit whatever retrainLatch says",
-  "find": "\t\tv92modem.modulator->exitCPt();\n\t\tif (retrainLatch != 0)\n\t\t\tmodem.ptr_49b4->modemParams->unnamed_0003 |=\n\t\t\t    CFG_FLAG3_RETRAIN;\n\t\tbreak;\n",
-  "replace": "\t\tv92modem.modulator->exitCPt();\n\t\tmodem.ptr_49b4->modemParams->unnamed_0003 |=\n\t\t    CFG_FLAG3_RETRAIN;\n\t\tbreak;\n"
+  "find": "\t\tv92modem.modulator->exitCPt();\n\t\tif (retrainLatch != 0)\n\t\t\tmodem.params->modemParams->unnamed_0003 |=\n\t\t\t    CFG_FLAG3_RETRAIN;\n\t\tbreak;\n",
+  "replace": "\t\tv92modem.modulator->exitCPt();\n\t\tmodem.params->modemParams->unnamed_0003 |=\n\t\t    CFG_FLAG3_RETRAIN;\n\t\tbreak;\n"
  },
  {
   "label": "the CPt arm's flag test is inverted",
-  "find": "\t\tv92modem.modulator->exitCPt();\n\t\tif (retrainLatch != 0)\n\t\t\tmodem.ptr_49b4->modemParams->unnamed_0003 |=\n\t\t\t    CFG_FLAG3_RETRAIN;\n",
-  "replace": "\t\tv92modem.modulator->exitCPt();\n\t\tif (retrainLatch == 0)\n\t\t\tmodem.ptr_49b4->modemParams->unnamed_0003 |=\n\t\t\t    CFG_FLAG3_RETRAIN;\n"
+  "find": "\t\tv92modem.modulator->exitCPt();\n\t\tif (retrainLatch != 0)\n\t\t\tmodem.params->modemParams->unnamed_0003 |=\n\t\t\t    CFG_FLAG3_RETRAIN;\n",
+  "replace": "\t\tv92modem.modulator->exitCPt();\n\t\tif (retrainLatch == 0)\n\t\t\tmodem.params->modemParams->unnamed_0003 |=\n\t\t\t    CFG_FLAG3_RETRAIN;\n"
  },
  {
   "label": "the retrain arm seeds 3 rather than 2",
@@ -212,7 +212,7 @@
  },
  {
   "label": "the retrain arm does not set the retrain bit",
-  "find": "\tcase 0x1e:\n\t\tprogressState = 3;\n\t\tret = 2;\n\t\tmodem.ptr_49b4->modemParams->unnamed_0003 |=\n\t\t    CFG_FLAG3_RETRAIN;",
+  "find": "\tcase 0x1e:\n\t\tprogressState = 3;\n\t\tret = 2;\n\t\tmodem.params->modemParams->unnamed_0003 |=\n\t\t    CFG_FLAG3_RETRAIN;",
   "replace": "\tcase 0x1e:\n\t\tprogressState = 3;\n\t\tret = 2;"
  },
  {
