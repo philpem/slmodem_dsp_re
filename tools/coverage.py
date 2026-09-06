@@ -24,15 +24,17 @@ a call as a definition.  By reading symbol tables:
   ours     every T symbol our own build defines, from build/src/**/*.o --
            or build/repro/**/*.o, whichever a build has actually filled
   blob     every T and t symbol dsplibs.o defines, with its size
-  tested   every `ref_NAME` a compiled test object actually REFERENCES,
-           from `nm -u` on build/test/**/*.o
+  tested   every `ref_NAME` a compiled differential-test object actually
+           REFERENCES, from `nm -u` on the complete expected test-driver
+           object set under build/test/
 
 That last distinction matters and was got wrong once.  Every test file opens
 with a block of `extern ref_*` declarations, so grepping the sources counts a
 symbol as tested the moment it is declared -- including one whose calls were
 deleted in some earlier revision.  An undefined symbol in the object file
 means the compiler emitted a reference to it, which only a call or an address
-can do.
+can do.  The test-object set is checked before it is read.  A partial tree is
+not a low score: it is an incomplete measurement, and this tool refuses it.
 
 The interop programs compile straight to executables with no intermediate
 object, so those few sources are still read by name; they are listed
@@ -297,6 +299,88 @@ def aliased_symbols(build):
 INTEROP_BY_NAME = ("test/interop/v8peer.c",)
 
 
+# These are the same two classes of objects the differential-test link rule
+# uses: every top-level t_*.c/cpp driver, and the explicit shared HARNESS
+# sources from the Makefile.
+# Do not walk build/test/ and hope its current contents are a complete suite:
+# a failed parallel build leaves a plausible-looking prefix there, which made
+# the `tested` result read 1.2% instead of 99.9% (F7586).
+TEST_DRIVER_DIR = os.path.join("test", "unit")
+TEST_HARNESS_SOURCES = (
+    "test/harness/harness.c",
+    "test/harness/runtime.c",
+    "test/harness/fakedp.c",
+    "test/harness/v34hsstep.c",
+    "test/harness/unwritten.c",
+)
+
+
+def expected_test_objects(build):
+    """{source: object} for every object that coverage may read.
+
+    Keep the source selection in step with Makefile's TESTS/CXXTESTS and
+    explicit HARNESS lists.  The paths are derived rather than globbed under build/ so
+    a left-over object can neither conceal a missing driver nor contribute a
+    stale `ref_` reference to the measurement.
+    """
+    sources = []
+    for suffix in (".c", ".cpp"):
+        sources.extend(sorted(
+            os.path.join(TEST_DRIVER_DIR, name)
+            for name in os.listdir(TEST_DRIVER_DIR)
+            if name.startswith("t_") and name.endswith(suffix)))
+    sources.extend(TEST_HARNESS_SOURCES)
+
+    out = {}
+    for source in sources:
+        stem, _suffix = os.path.splitext(source)
+        obj = os.path.join(build, stem + ".o")
+        if obj in out.values():
+            sys.exit("coverage.py: test sources map more than once to %s; "
+                     "refusing an ambiguous driver set" % obj)
+        out[source] = obj
+    return out
+
+
+def require_complete_test_objects(build):
+    """Return the complete current test-driver object set or refuse.
+
+    A missing object is enough to make `tested` a false percentage.  A source
+    newer than its object is the same problem when coverage.py is run directly
+    instead of through make.  Unlike objtree.py's source-object census, this
+    is fatal: `tested` cannot truthfully describe a partial suite.
+    """
+    try:
+        expected = expected_test_objects(build)
+    except OSError as exc:
+        sys.exit("coverage.py: cannot enumerate test drivers: %s" % exc)
+    if not expected:
+        sys.exit("coverage.py: NO TEST DRIVERS, so `tested` has no "
+                 "denominator; refusing to report a percentage")
+
+    missing = [source for source, obj in expected.items()
+               if not os.path.isfile(obj)]
+    stale = [source for source, obj in expected.items()
+             if os.path.isfile(obj)
+             and os.path.getmtime(source) > os.path.getmtime(obj)]
+    if missing or stale:
+        details = []
+        if missing:
+            details.append("%d missing" % len(missing))
+        if stale:
+            details.append("%d stale" % len(stale))
+        sample = sorted(missing + stale)[:5]
+        sys.exit(
+            "coverage.py: REFUSING incomplete test-driver object tree: %s "
+            "among %d expected object(s) under %s/.\n"
+            "  Examples: %s\n"
+            "  `make coverage` builds the complete set before measuring. "
+            "Finding F7586."
+            % (", ".join(details), len(expected),
+               os.path.join(build, "test"), ", ".join(sample)))
+    return list(expected.values())
+
+
 def undefined(path):
     out = subprocess.run(["nm", "-u", path], capture_output=True,
                          text=True).stdout
@@ -306,13 +390,10 @@ def undefined(path):
 def tested_symbols(build, extra_sources=INTEROP_BY_NAME):
     """Symbols some test actually references, not merely declares."""
     found = set()
-    for root, _dirs, files in os.walk(os.path.join(build, "test")):
-        for name in files:
-            if not name.endswith(".o"):
-                continue
-            for sym in undefined(os.path.join(root, name)):
-                if sym.startswith("ref_"):
-                    found.add(sym[4:])
+    for path in require_complete_test_objects(build):
+        for sym in undefined(path):
+            if sym.startswith("ref_"):
+                found.add(sym[4:])
 
     pat = re.compile(r"\bref_([A-Za-z_][A-Za-z0-9_]*)\s*\(")
     for src in extra_sources:

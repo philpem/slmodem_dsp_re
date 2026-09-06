@@ -80849,14 +80849,15 @@ no warning of any kind.  Eight is about what the two `INTEROP_BY_NAME`
 sources contribute on their own, which is to say the walk found essentially
 nothing and said so as a percentage.
 
-**WHAT IS NOT DONE HERE.**  No change to `coverage.py`.  The repair is for
-`tested_symbols` to refuse, or at least warn, on a `build/test` holding fewer
-objects than there are test sources -- which is what `objtree.py` already
-does one directory over -- and that is a change to a tool seven other numbers
-depend on, on a branch scoped to one function.  What IS in the record is that
-`docs/coverage.md` must be regenerated from a COMPLETE `make phase` and never
-from a failed one, and that a `tested` figure far from the last committed one
-is a symptom of the tree rather than of the work.
+**THE PHASE-1 REPAIR IS NOW DONE.**  `coverage.py` enumerates exactly the
+top-level `test/unit/t_*.c[pp]` drivers plus the Makefile's five explicit
+`HARNESS` sources, rather than walking whatever `.o` files happen to exist
+under `build/test`.  It refuses if any expected object is absent or older than
+its source, so a partial suite cannot render a false `tested` percentage;
+left-over objects cannot contribute stale `ref_` references either.  The
+`coverage` target now depends on that complete driver-object set before it
+regenerates `docs/coverage.md`.  A direct tool invocation remains guarded,
+while `make coverage` supplies the normal repair path.
 
 ======================================================================
 
@@ -119768,3 +119769,32 @@ from those post-rebase runs, so all six entries describe the integrated tree.
 t_vpcmguard" J=3` passes, including 157988 checks in `t_vpcmrunpcm`.  The
 authoritative `make period J=3` passes **374/374**, and `make check64` is clean
 in both configurations. (2026-09-06)
+
+## F10204. The byte-identity floor is now a set, and coverage refuses to turn a partial test build into a plausible percentage
+
+The first convergence baseline is **749 of 1,852 grade-0 EXACT functions**
+under GCC 3.4.2, with 53 REGALLOC, seven UNRESOLVED, one RELOC, 138 BYTES and
+904 SIZE. The former ratchet stored only `{exact, regalloc, compared}`. That
+allowed a previously exact function to regress whenever an unrelated function
+became exact in the same change: the count stayed level and the gate passed.
+`byteident_ratchet.json` now stores the sorted 749-name exact set, and the gate
+fails with the names of every loss. Its dedicated self-test proves the masked
+same-count replacement is rejected; the older alpha-equivalence self-test
+still passes 20/20.
+
+F7586's other plausible-number failure is closed at the same boundary.
+`coverage.py` now derives the exact object paths for all 374 `test/unit/t_*`
+drivers and the Makefile's five shared harness sources, refuses any missing or
+stale object, and reads no stray object left under `build/test`. The Makefile
+gives `coverage` the same complete object set as prerequisites. An isolated
+temporary tree was accepted with all 379 objects and refused after one was
+removed, showing the detector fires rather than merely going clean.
+
+Running `make coverage` over the complete tree exposed that the committed
+document itself was stale: it said 106 of 1,852 drivable functions (15.6%),
+while the complete measurement is **1,844 of 1,852 (99.7%), 718,285 bytes**.
+`docs/coverage.md` is regenerated with the latter. The period Docker image was
+not present to rebuild `build/tc_out` in this pass, but the existing tree is
+newer than every relevant source, the direct full ratchet scan passed at the
+749-name baseline, Python compilation and both self-tests passed, and
+`git diff --check` is clean. (2026-09-06)

@@ -221,6 +221,10 @@ HARNESS_OBJ:= $(patsubst %.c,$(BUILD)/%.o,$(HARNESS))
 TESTS      := $(basename $(notdir $(wildcard test/unit/t_*.c)))
 CXXTESTS   := $(basename $(notdir $(wildcard test/unit/t_*.cpp)))
 TESTBIN    := $(addprefix $(BUILD)/test/,$(TESTS) $(CXXTESTS))
+# Coverage reads the undefined `ref_*` references from these objects, not
+# from the linked executables.  Keeping this explicit makes `make coverage`
+# build the entire denominator even after a previous test build stopped early.
+TESTOBJ    := $(addprefix $(BUILD)/test/unit/,$(addsuffix .o,$(TESTS) $(CXXTESTS)))
 
 REF        := $(BUILD)/dsplibs_ref.o
 GLOBALS    := $(BUILD)/globals.txt
@@ -964,7 +968,7 @@ byteident-ratchet: tc
 similarity: tc
 	@$(PYTHON) tools/toolchain/compare.py --ratchet
 
-coverage: $(BUILD)/tumap.json $(OBJ) $(REF)
+coverage: $(BUILD)/tumap.json $(OBJ) $(REF) $(TESTOBJ) $(HARNESS_OBJ)
 	@$(PYTHON) tools/coverage.py --md docs/coverage.md
 
 # The same measurement enumerated rather than summarised: which functions,

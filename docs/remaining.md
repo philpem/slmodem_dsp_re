@@ -23,6 +23,46 @@ read F10191/F10192 (and Waves 13-14 below) before trusting any tool output
 that disagrees, per CLAUDE.md's rule that the tool is checked, not
 repeated from a comment.
 
+The current period-compiler identity baseline is **749 of 1,852 functions
+positionally byte-exact (40.4%)**. A further 53 are instruction-equivalent
+after consistent register renaming, so the strict exact-or-register-allocation
+total is 802 (43.3%); the tool also reports seven unresolved section
+relocations, one differing named relocation target, 138 same-size byte
+mismatches and 904 size mismatches. `byteident.py` now ratchets the complete
+749-name exact set, not just its cardinality, so an exact function cannot
+regress while an unrelated gain conceals it.
+
+This is a function-level `.text` measurement, not yet proof that the
+partially-linked object is byte-for-byte identical. The final objective also
+requires matching data contents, section and symbol layout, relocations,
+padding and definition emission order. Behavioural equivalence remains a
+separate mandatory gate: matching the original's code is acceptable, but a
+code-generation improvement may not weaken the differential evidence.
+
+## Byte-exact convergence plan
+
+1. **Secure the measurement — done.** Refuse partial test-object trees,
+   regenerate the tested baseline from all 374 drivers, and ratchet exact
+   symbol membership rather than the headline count.
+2. **Clear named-relocation mismatches.** Start with the single current case,
+   `FPM_FSM_init`, and correct shared symbol representation rather than
+   papering over a caller.
+3. **Resolve ambiguous section relocations.** Classify the seven `UNRESOLVED`
+   functions so section-relative references can be compared by identity.
+4. **Close same-size byte mismatches.** Work the 138 `BYTES` functions from
+   the smallest differing-byte count, always diffing the complete exact set.
+5. **Recover translation-unit emission order.** Use the 53 `REGALLOC`
+   functions and their neighbours to infer definition/declaration order and
+   GCC 3.4.2's carried allocation state; retain only changes that improve the
+   whole translation unit.
+6. **Partition the size mismatches.** Split the 904 `SIZE` functions by
+   instruction delta, source-shape family and translation unit, taking the
+   smallest constrained domains before the large algorithmic cases.
+7. **Converge the partially-linked object.** Add section/data/relocation/layout
+   comparison alongside function identity, close the eight direct-test naming
+   gaps where a real observable exists, and keep `make period` authoritative
+   throughout.
+
 ## Phase ledger
 
 This table was formerly in `README.md`, where its live-looking presentation

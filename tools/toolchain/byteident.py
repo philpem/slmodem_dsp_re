@@ -65,7 +65,15 @@ ROOT = os.path.dirname(os.path.dirname(HERE))
 # falls when a function GRADUATES to EXACT, so gating on it fails on
 # progress.  REGALLOC is reported with its direction and is informational.
 #
+# The floor is the exact SYMBOL SET, not only its cardinality.  An aggregate
+# count lets one function quietly fall out of EXACT while another enters it:
+# the headline remains unchanged and the regression is certified.  That is
+# precisely backwards for a ratchet -- every symbol it has banked must remain
+# banked.  Keep the counts as redundant, human-readable integrity checks and
+# for the existing REGALLOC note, but decide grade 0 from membership.
+#
 RATCHET = os.path.join(HERE, "byteident_ratchet.json")
+RATCHET_EXACT_SYMBOLS = "exact_symbols"
 
 
 def _default_blob():
@@ -606,6 +614,77 @@ def _staleness():
     return fmt(newest_src), fmt(newest_obj)
 
 
+def _ratchet_membership(was, now):
+    """Validate a membership baseline and return (lost, gained) exact symbols.
+
+    Older ratchets stored only an aggregate `exact` count.  They cannot tell
+    whether a replacement symbol concealed a regression, so accepting one
+    would weaken this check exactly where it is meant to be strict.  Refuse
+    it with a re-blessing instruction rather than silently retaining the old
+    count-only behaviour.
+    """
+    if not isinstance(was, dict):
+        raise ValueError("baseline is not a JSON object")
+    if RATCHET_EXACT_SYMBOLS not in was:
+        raise ValueError(
+            "baseline is legacy aggregate-only data (no %r); run --update "
+            "to record the current exact-symbol set" % RATCHET_EXACT_SYMBOLS)
+    for label, row in (("baseline", was), ("current result", now)):
+        symbols = row.get(RATCHET_EXACT_SYMBOLS)
+        if (not isinstance(symbols, list) or
+                any(not isinstance(k, str) for k in symbols)):
+            raise ValueError("%s %r must be a list of symbol names"
+                             % (label, RATCHET_EXACT_SYMBOLS))
+        if len(set(symbols)) != len(symbols):
+            raise ValueError("%s %r contains duplicate symbol names"
+                             % (label, RATCHET_EXACT_SYMBOLS))
+        for field in ("exact", "regalloc", "compared"):
+            value = row.get(field)
+            if type(value) is not int or value < 0:
+                raise ValueError("%s %r must be a non-negative integer"
+                                 % (label, field))
+        if row["exact"] != len(symbols):
+            raise ValueError("%s exact count (%d) disagrees with its %r (%d)"
+                             % (label, row["exact"], RATCHET_EXACT_SYMBOLS,
+                                len(symbols)))
+    return (sorted(set(was[RATCHET_EXACT_SYMBOLS]) -
+                   set(now[RATCHET_EXACT_SYMBOLS])),
+            sorted(set(now[RATCHET_EXACT_SYMBOLS]) -
+                   set(was[RATCHET_EXACT_SYMBOLS])))
+
+
+def ratchet_self_test():
+    """Exercise the strict direction: equal counts must not hide a loss."""
+    def row(symbols):
+        return {"exact": len(symbols), "regalloc": 53, "compared": 1852,
+                RATCHET_EXACT_SYMBOLS: symbols}
+
+    cases = [
+        ("a replacement cannot conceal an exact-symbol loss", row(["a", "b"]),
+         row(["b", "c"]), (["a"], ["c"])),
+        ("an exact-set gain loses nothing", row(["a", "b"]),
+         row(["a", "b", "c"]), ([], ["c"])),
+    ]
+    bad = 0
+    for name, was, now, want in cases:
+        got = _ratchet_membership(was, now)
+        ok = got == want
+        bad += not ok
+        print("  %s  %-56s want=%s got=%s"
+              % ("ok  " if ok else "FAIL", name, want, got))
+    try:
+        _ratchet_membership({"exact": 2, "regalloc": 53, "compared": 1852},
+                            row(["a", "b"]))
+        ok = False
+    except ValueError as e:
+        ok = "legacy aggregate-only" in str(e)
+    bad += not ok
+    print("  %s  %-56s legacy count-only baseline is rejected"
+          % ("ok  " if ok else "FAIL", ""))
+    print("\n  %d case(s), %d failure(s)" % (len(cases) + 1, bad))
+    return 1 if bad else 0
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -619,15 +698,19 @@ def main():
                     help="print the row alpha_equal rejects SYMBOL on")
     ap.add_argument("--self-test", action="store_true",
                     help="prove alpha_equal both accepts and REJECTS")
+    ap.add_argument("--ratchet-self-test", action="store_true",
+                    help="prove the exact-symbol ratchet rejects a masked loss")
     ap.add_argument("--limit", type=int, default=25)
     ap.add_argument("--ratchet", action="store_true",
-                    help="fail if fewer symbols are grade-0 EXACT than last time")
+                    help="fail if any previously grade-0 EXACT symbol regresses")
     ap.add_argument("--update", action="store_true",
-                    help="record the current EXACT count as the new floor")
+                    help="record the current exact-symbol set as the new floor")
     a = ap.parse_args()
 
     if a.self_test:
         return self_test()
+    if a.ratchet_self_test:
+        return ratchet_self_test()
 
     if a.near:
         #
@@ -807,28 +890,38 @@ def main():
     if buckets["NODATA"]:
         print("  NODATA  -- could not be disassembled     : %4d" % len(buckets["NODATA"]))
 
-    now = {"exact": ex, "regalloc": ra, "compared": n}
+    now = {"exact": ex, "regalloc": ra, "compared": n,
+           RATCHET_EXACT_SYMBOLS: sorted(k for _, _, k in buckets["EXACT"])}
     if a.update:
         with open(RATCHET, "w") as f:
             json.dump(now, f, indent=2, sort_keys=True)
             f.write("\n")
-        print("\nratchet updated: %s" % now)
+        print("\nratchet updated: %d exact symbol(s), %d compared, %d regalloc"
+              % (now["exact"], now["compared"], now["regalloc"]))
         return 0
     if a.ratchet:
         try:
             was = json.load(open(RATCHET))
         except (OSError, ValueError):
             sys.exit("no %s -- run with --update to set the floor" % RATCHET)
-        if now["exact"] < was["exact"]:
-            print("\nRATCHET FAILED -- fewer symbols are grade-0 EXACT than last"
-                  "\ntime, and no differential test can see that: `make period`"
-                  "\nproves BEHAVIOUR, not CODE GENERATION.")
+        try:
+            lost, gained_symbols = _ratchet_membership(was, now)
+        except ValueError as e:
+            sys.exit("byteident.py: invalid ratchet baseline %s: %s"
+                     % (RATCHET, e))
+        if lost:
+            print("\nRATCHET FAILED -- a previously grade-0 EXACT symbol regressed"
+                  "\nwhile another gain could have kept the aggregate count level."
+                  "\n`make period` proves BEHAVIOUR, not CODE GENERATION.")
             print("    exact  was %d, now %d" % (was["exact"], now["exact"]))
+            print("\n  Lost exact symbol(s):")
+            for k in lost:
+                print("    %s" % k)
             print("\n  If the change was deliberate (e.g. a genuine behavioural"
                   "\n  fix that necessarily changes codegen), re-bless with"
-                  "\n  --update and say in the commit message why fewer symbols"
-                  "\n  match.  If it was a pure rename or comment change, it"
-                  "\n  should not have moved this number at all -- find out what"
+                  "\n  --update and say in the commit message which exact symbols"
+                  "\n  changed and why.  If it was a pure rename or comment change,"
+                  "\n  it should not have moved this set at all -- find out what"
                   "\n  else changed before re-blessing.")
             return 1
         if now["regalloc"] < was["regalloc"]:
@@ -838,7 +931,7 @@ def main():
                   "\n  same period; a fall in regalloc alongside a rise in exact"
                   "\n  is progress, not regression."
                   % (was["regalloc"], now["regalloc"], was["exact"], now["exact"]))
-        gained = now["exact"] > was["exact"] or now["regalloc"] > was["regalloc"]
+        gained = bool(gained_symbols) or now["regalloc"] > was["regalloc"]
         print("\nratchet OK%s" % ("" if not gained else
               " (exact %d -> %d, regalloc %d -> %d)"
               % (was["exact"], now["exact"], was["regalloc"], now["regalloc"])))
