@@ -84,12 +84,12 @@ extern int modem_send_to_tty(void *m, const void *buf, int n);
 #define CID_CHUNK	192
 
 /*
- * What `cid_freq_sampl` puts back into the FSK receiver's f02c, and what
- * `create_cid` seeds it with.  Usage inference only -- the object has no
- * string and no other caller that types it, and the value is the same 9 down
- * all three of cid_freq_sampl's arms.
+ * What `cid_freq_sampl` puts back into the FSK receiver's
+ * `mark_conf_step`, and what `create_cid` seeds it with.  Usage inference
+ * only -- the object has no string and no other caller that types it, and
+ * the value is the same 9 down all three of cid_freq_sampl's arms.
  */
-#define CID_F02C_RESET	9
+#define CID_MARK_CONF_STEP	9
 
 /*
  * The one value of `struct cid_modem::cid_val` (was `f264`, renamed this
@@ -225,8 +225,9 @@ CID_process(void *cidp, void *in, int count)
  * so raising the mode here leaves a null pointer that `reset_dtmf` or
  * `reset_cid` then walks -- the object has no guard and neither has this.
  *
- * `samples_fill` is `cid_progress`'s sample-buffer fill level, cleared last, and the
- * mode-5 arm puts `f02c` back exactly as `cid_freq_sampl` and `cid_create` do.
+ * `samples_fill` is `cid_progress`'s sample-buffer fill level, cleared
+ * last, and the mode-5 arm puts `mark_conf_step` back exactly as
+ * `cid_freq_sampl` and `cid_create` do.
  */
 void
 cid_reset(struct cid_modem *ctx)
@@ -239,7 +240,7 @@ cid_reset(struct cid_modem *ctx)
 		reset_cid(ctx->fsk);
 	ctx->samples_fill = 0;
 	if (ctx->mode == CID_MODE_AUTOMATIC)
-		ctx->fsk->f02c = CID_F02C_RESET;
+		ctx->fsk->mark_conf_step = CID_MARK_CONF_STEP;
 }
 
 /*
@@ -248,18 +249,20 @@ cid_reset(struct cid_modem *ctx)
  * both sides, which is the object's own truncation of the int argument.
  *
  * THE THREE STORES OF 9 ARE THE OBJECT'S.  It writes `movw $0x9,0x2c(...)`
- * three times over, into the FSK receiver's f02c, from three separate tests:
- * mode 0 with rate 9600, mode 0 with rate 8000, and mode > 1 for any rate.
- * The first two are if-converted in the object -- one `sete` for `mode == 0`,
- * reused, ANDed against a second `sete` per rate -- so they are two
- * statements sharing a condition and not one test of a rate pair.  The value
- * is 9 in all three, which is also what create_cid seeds f02c with, so the
- * net effect over the modes and rates this service uses is to put it back.
- * Kept as three because that is what the object encodes; nothing here reads
- * a rate-dependent value into it.
+ * three times over, into the FSK receiver's mark_conf_step, from three
+ * separate tests: mode 0 with rate 9600, mode 0 with rate 8000, and
+ * mode > 1 for any rate.  The first two are if-converted in the object --
+ * one `sete` for `mode == 0`, reused, ANDed against a second `sete` per
+ * rate -- so they are two statements sharing a condition and not one test
+ * of a rate pair.  The value is 9 in all three, which is also what
+ * create_cid seeds mark_conf_step with, so the net effect over the modes
+ * and rates this service uses is to put it back.  Kept as three because
+ * that is what the object encodes; nothing here reads a rate-dependent
+ * value into it.
  *
- * Mode 1 touches the FSK receiver not at all, which is why the pointer may be
- * null there: every f02c store is under `mode == 0` or `mode > 1`.
+ * Mode 1 touches the FSK receiver not at all, which is why the pointer
+ * may be null there: every mark_conf_step store is under `mode == 0` or
+ * `mode > 1`.
  */
 void
 cid_freq_sampl(struct cid_modem *ctx, int rate)
@@ -270,11 +273,11 @@ cid_freq_sampl(struct cid_modem *ctx, int rate)
 		ctx->fsk->rate = (short)rate;
 
 	if (ctx->mode == 0 && rate == CID_RATE_9600)
-		ctx->fsk->f02c = CID_F02C_RESET;
+		ctx->fsk->mark_conf_step = CID_MARK_CONF_STEP;
 	if (ctx->mode == 0 && rate == CID_RATE_8000)
-		ctx->fsk->f02c = CID_F02C_RESET;
+		ctx->fsk->mark_conf_step = CID_MARK_CONF_STEP;
 	if (ctx->mode > 1)
-		ctx->fsk->f02c = CID_F02C_RESET;
+		ctx->fsk->mark_conf_step = CID_MARK_CONF_STEP;
 }
 
 /*
@@ -339,7 +342,7 @@ cid_create(struct cid_modem *ctx, int cid_val, int mode)
 	if (ctx->mode != 1)
 		ctx->fsk = create_cid(ctx->fsk);
 	if (ctx->mode == CID_MODE_AUTOMATIC)
-		ctx->fsk->f02c = CID_F02C_RESET;
+		ctx->fsk->mark_conf_step = CID_MARK_CONF_STEP;
 
 	ctx->cid_val = cid_val;
 	return ctx;

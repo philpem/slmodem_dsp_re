@@ -20,9 +20,9 @@
  *
  * ANTI-VACUITY.  Every arm of the object is counted ON THE REFERENCE SIDE and
  * asserted to have fired: the DTMF store, the FSK store, and each of the
- * three separate `f02c = 9` writes (mode 0 at 9600, mode 0 at 8000, mode
- * above 1).  A counter read off our own side would report our code's
- * coverage, not the object's -- finding F134.
+ * three separate `mark_conf_step = 9` writes (mode 0 at 9600, mode 0 at
+ * 8000, mode above 1).  A counter read off our own side would report our
+ * code's coverage, not the object's -- finding F134.
  */
 
 #include <stdio.h>
@@ -70,9 +70,9 @@ fill_bytes(void *p, size_t n)
 /* Anti-vacuity, all counted on the REFERENCE side. */
 static int seen_dtmf_store;
 static int seen_fsk_store;
-static int seen_f02c_9600;
-static int seen_f02c_8000;
-static int seen_f02c_mode;
+static int seen_mark_conf_step_9600;
+static int seen_mark_conf_step_8000;
+static int seen_mark_conf_step_mode;
 static int seen_dtmf_gated;
 static int seen_fsk_gated;
 
@@ -156,13 +156,13 @@ run(int mode, int rate)
 	if (mode != 1 && a.fsk.rate == (short)rate
 	    && a0.fsk.rate != (short)rate)
 		seen_fsk_store++;
-	if (a.fsk.f02c == 9 && a0.fsk.f02c != 9) {
+	if (a.fsk.mark_conf_step == 9 && a0.fsk.mark_conf_step != 9) {
 		if (mode > 1)
-			seen_f02c_mode++;
+			seen_mark_conf_step_mode++;
 		else if (mode == 0 && rate == 9600)
-			seen_f02c_9600++;
+			seen_mark_conf_step_9600++;
 		else if (mode == 0 && rate == 8000)
-			seen_f02c_8000++;
+			seen_mark_conf_step_8000++;
 	}
 }
 
@@ -519,12 +519,12 @@ main(void)
 		    seen_dtmf_store);
 	diff_eq_int("FSK rate stores (%ld)", seen_fsk_store > 0, 1,
 		    seen_fsk_store);
-	diff_eq_int("f02c stores from mode 0 at 9600 (%ld)",
-		    seen_f02c_9600 > 0, 1, seen_f02c_9600);
-	diff_eq_int("f02c stores from mode 0 at 8000 (%ld)",
-		    seen_f02c_8000 > 0, 1, seen_f02c_8000);
-	diff_eq_int("f02c stores from mode > 1 (%ld)", seen_f02c_mode > 0, 1,
-		    seen_f02c_mode);
+	diff_eq_int("mark_conf_step stores from mode 0 at 9600 (%ld)",
+		    seen_mark_conf_step_9600 > 0, 1, seen_mark_conf_step_9600);
+	diff_eq_int("mark_conf_step stores from mode 0 at 8000 (%ld)",
+		    seen_mark_conf_step_8000 > 0, 1, seen_mark_conf_step_8000);
+	diff_eq_int("mark_conf_step stores from mode > 1 (%ld)",
+		    seen_mark_conf_step_mode > 0, 1, seen_mark_conf_step_mode);
 	diff_eq_int("mode 0 cases with the DTMF gate shut (%ld)",
 		    seen_dtmf_gated > 0, 1, seen_dtmf_gated);
 	diff_eq_int("mode 1 cases with the FSK gate shut (%ld)",

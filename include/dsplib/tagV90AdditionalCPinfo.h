@@ -54,6 +54,20 @@ struct tagV90AdditionalCPinfo {
 	 * `mov (%ecx),%ebx; mov %bl,0x4(%edx)`.  So the field is four bytes
 	 * and only its low one survives the copy.  `byte_04` reaches the
 	 * message as `bits[33]` and separately gates `V92CP::word_110`.
+	 *
+	 * FIELD NAMING WAVE 7 -- CHECKED, NOT NAMED.  The V.90-side twin of
+	 * `setV92CPpckFromParamsInfo`, `V90CPPacker` (`src/pump/v90/
+	 * V90CPpck.cpp`), reaches this same field as `info->word_00` and
+	 * types it as a BOOLEAN: bit 33 of the message, and its own debug
+	 * line builds the packed message's name as "CP%s%s%s" with
+	 * `info->word_00 != 0` selecting the third `%s`, a literal `'`
+	 * (so a message with the bit set prints as "...CP'").  That is a
+	 * format string (evidence rule 1) for the SHAPE -- a one-bit
+	 * message-variant selector -- but not for what setting the bit
+	 * MEANS; V90CPpck.cpp's own header comment says as much ("the
+	 * object states no field names") and this wave found nothing to
+	 * add past that.  Left unnamed rather than guessed at ITU-T's own
+	 * CP/CP' distinction from memory.
 	 */
 	unsigned int word_00;			/* +0x00                  */
 
@@ -65,6 +79,19 @@ struct tagV90AdditionalCPinfo {
 	 * at the one site that performs it.  `char_01` is what selects the
 	 * long form of the CP message, and it also selects between the two
 	 * constants `setV92CPpckFromParamsInfo` subtracts at the end.
+	 *
+	 * FIELD NAMING WAVE 7 -- CHECKED, NOT NAMED.  `V90CPPacker` reaches
+	 * it as `info->word_04`: stored whole into `bits[19]` (NOT a
+	 * boolean there -- "TRUNCATED TO 16 BITS, not a boolean" per that
+	 * function's own header comment) and, separately, tested for zero
+	 * to select the same "CP%s%s%s" message name's FIRST `%s` (a
+	 * literal `t`, inverted -- `== 0` prints "t") and to pick which of
+	 * two `getDataBitRate` branches runs.  So the object reuses this
+	 * one field as both a rate-selecting index into `bits[19..24]` and
+	 * a boolean gate over the SAME comparison -- two roles on one
+	 * field, exactly the shape CLAUDE.md's dual-role rule declines a
+	 * single name for (cf. `f208`/`f20a` in `v34recv.h`).  Left
+	 * unnamed.
 	 */
 	unsigned int word_04;			/* +0x04                  */
 
@@ -75,12 +102,25 @@ struct tagV90AdditionalCPinfo {
 	 * The copy itself is a `movl` -- GCC 3.4.2 copies a float that way at
 	 * `-O3`, which was probed rather than assumed (finding F5820) -- so the
 	 * width is forced and the type comes from the other end.
+	 *
+	 * FIELD NAMING WAVE 7 -- CHECKED, NOT NAMED.  `V90CPPacker` reaches
+	 * it as `info->float_08`, encoded through `float2Bits` as Q3.13
+	 * across bits[52..67] (blocks 3/4) alongside the shaper
+	 * coefficients -- consistent with a signal-level magnitude, matching
+	 * `flt_10`'s own role on the V.92 side, but no format string or
+	 * typed callee on either side names WHICH magnitude.  Left unnamed.
 	 */
 	float float_08;				/* +0x08                  */
 
 	/*
 	 * +0x0c  Four bytes, low one into `V92CP::byte_03`, which is
 	 * `bits[35]` stored whole.
+	 *
+	 * FIELD NAMING WAVE 7 -- CHECKED, NOT NAMED.  `V90CPPacker` reaches
+	 * it as `info->word_0c`, stored whole (truncated to a `short`) into
+	 * `bits[35]` with no test of its own -- the same "stored, not
+	 * branched on" shape as `V92CP::byte_03`, so nothing on this side
+	 * adds a boolean or magnitude reading either.
 	 */
 	unsigned int word_0c;			/* +0x0c                  */
 
@@ -101,6 +141,15 @@ struct tagV90AdditionalCPinfo {
 	 * named for its writer and not for its meaning, and finding F4342's
 	 * rule is why the retraction is spelled out rather than the sentence
 	 * simply deleted.
+	 *
+	 * FIELD NAMING WAVE 7 -- CHECKED, NOT NAMED.  `V90CPPacker` reaches
+	 * it as `info->word_10`, stored into `bits[30]` and ALSO tested for
+	 * non-zero to select "CP%s%s%s"'s second `%s`, a literal `s` (a
+	 * message with the bit set prints "...CPs...").  So the V.90 side
+	 * agrees with the RRN-detected-flag origin above (both reach the
+	 * message as one bit set at the same moment) but still names only
+	 * the SHAPE (a boolean selecting a CP message variant), not what
+	 * "CPs" denotes.  Left unnamed.
 	 */
 	unsigned int word_10;			/* +0x10                  */
 
