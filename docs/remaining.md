@@ -23,18 +23,20 @@ read F10191/F10192 (and Waves 13-14 below) before trusting any tool output
 that disagrees, per CLAUDE.md's rule that the tool is checked, not
 repeated from a comment.
 
-The current period-compiler identity baseline is **775 of 1,852 functions
-positionally byte-exact (41.8%)**. A further 54 are instruction-equivalent
-after consistent register renaming, so the strict exact-or-register-allocation
-total is 832 (44.9%), including three conservatively unresolved anonymous
+The current period-compiler identity baseline is **810 of 1,852 functions
+positionally byte-exact (43.7%)**. A further 53 are instruction-equivalent
+after consistent register renaming. The tool's displayed grade-0-or-1 total
+is 867 (46.8%), including four conservatively unresolved anonymous
 ordinary-rodata tables; the tool also reports no differing named relocation
-target, 118 same-size byte mismatches and 902 size mismatches. `byteident.py`
+target, 86 same-size byte mismatches and 899 size mismatches. `byteident.py`
 ratchets the complete exact-name set, not just its cardinality, so an exact function
 cannot regress while an unrelated gain conceals it. F10207 explains why this
 stricter baseline adds seven real exact functions but removes three earlier
 false claims whose relocation addends had never been compared; F10208 records
-the first Phase-4 convergence batch. The full phase gate passes and the
-complete 775-name set is now the enforced ratchet baseline.
+the first Phase-4 convergence batch. F10237 records the fresh aggregate
+checkpoint, with 35 exact names added and none lost since that batch. The
+full phase gate passes and the complete 810-name set is now the enforced
+ratchet baseline. Phase 4 remains in progress.
 
 This is a function-level `.text` measurement, not yet proof that the
 partially-linked object is byte-for-byte identical. The final objective also
@@ -58,15 +60,15 @@ code-generation improvement may not weaken the differential evidence.
    exposed three anonymous ordinary-rodata tables the old tool had incorrectly
    called exact; they remain explicit `UNRESOLVED` rather than being accepted
    by an unsafe byte-prefix heuristic.
-4. **Close same-size byte mismatches — in progress.** The first constrained
-   batch reduced `BYTES` from 138 to 118 and gained one additional exact
-   function from `SIZE`; work the remainder from the smallest differing-byte
+4. **Close same-size byte mismatches — in progress.** The constrained
+   batches have reduced `BYTES` from 138 to 86, with additional exact gains
+   from other grades; work the remainder from the smallest differing-byte
    count, always diffing the complete exact set.
-5. **Recover translation-unit emission order.** Use the 54 `REGALLOC`
+5. **Recover translation-unit emission order.** Use the 53 `REGALLOC`
    functions and their neighbours to infer definition/declaration order and
    GCC 3.4.2's carried allocation state; retain only changes that improve the
    whole translation unit.
-6. **Partition the size mismatches.** Split the 902 `SIZE` functions by
+6. **Partition the size mismatches.** Split the 899 `SIZE` functions by
    instruction delta, source-shape family and translation unit, taking the
    smallest constrained domains before the large algorithmic cases.
 7. **Converge the partially-linked object.** Add section/data/relocation/layout
