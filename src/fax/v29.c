@@ -1219,13 +1219,18 @@ V29TX_delete(void *modem)
  * `unsigned short` and the saved copy is a `short` local.  Everything else
  * about the loop -- the 16-bit `test %cx,%cx`, the 16-bit store of the total
  * -- is consistent with both and settles nothing.  Finding F8877.
+ *
+ * The opening clear is deliberately through the byte containing bit 9.  A
+ * dword `&= ~V29_STATUS_ERROR` is value-equivalent, but GCC 3.4.2 emits a
+ * dword AND for it; the object has `andb $0xfd,0x19`.
  */
 int
 V29RX_modem(void *modem, short *in, short *out, unsigned short *count)
 {
 	short produced = 0;
 
-	FIELD_INT(modem, V29_OBJ_STATUS) &= ~V29_STATUS_ERROR;
+	FIELD_BYTE(modem, V29_OBJ_STATUS + 1) &=
+		(unsigned char)~(V29_STATUS_ERROR >> 8);
 
 	/*
 	 * A do-while: the object has no test above the loop head, only
@@ -2783,7 +2788,8 @@ SeedScramblerV29(void *modem, int seed)
  *
  * `which` is loaded `movswl` and the 32-bit result is compared and
  * decremented, so `short` is forced.  Only 0 and 1 write anything; the object
- * tests for each in turn and returns.
+ * tests for each in turn and returns.  A two-case switch is also the source
+ * shape that preserves the object's full-width decrement between the tests.
  *
  * WHAT IT WRITES IS `fpm_smc_cfg`'s `direct`, and that is not inference: the
  * transmitter's block puts `struct fpm_smc` at +0x34 (`v29data.h`, confirmed
@@ -2796,10 +2802,14 @@ SeedScramblerV29(void *modem, int seed)
 void
 SetEncoderV29(void *modem, short which)
 {
-	if (which == 0)
+	switch (which) {
+	case 0:
 		V29TX(modem)->smc.cfg.direct = 0;
-	else if (which == 1)
+		break;
+	case 1:
 		V29TX(modem)->smc.cfg.direct = 1;
+		break;
+	}
 }
 
 /*
