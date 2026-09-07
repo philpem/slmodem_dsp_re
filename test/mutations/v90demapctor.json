@@ -26,18 +26,18 @@
  },
  {
   "label": "the four-byte array is sized in elements rather than bytes",
-  "find": "\tcodes = (unsigned int *)sysdep_malloc(levels * 4);",
-  "replace": "\tcodes = (unsigned int *)sysdep_malloc(levels);"
+  "find": "\tcodes = new unsigned int[levels];",
+  "replace": "\tcodes = (unsigned int *)new unsigned char[levels];"
  },
  {
   "label": "the one-byte array is sized four bytes to the element",
-  "find": "\tsigns = (unsigned char *)sysdep_malloc(levels);",
-  "replace": "\tsigns = (unsigned char *)sysdep_malloc(levels * 4);"
+  "find": "\tsigns = new unsigned char[levels];",
+  "replace": "\tsigns = (unsigned char *)new unsigned int[levels];"
  },
  {
   "label": "the two allocations are stored the other way round",
-  "find": "\tcodes = (unsigned int *)sysdep_malloc(levels * 4);\n\tsigns = (unsigned char *)sysdep_malloc(levels);",
-  "replace": "\tsigns = (unsigned char *)sysdep_malloc(levels * 4);\n\tcodes = (unsigned int *)sysdep_malloc(levels);"
+  "find": "\tcodes = new unsigned int[levels];\n\tsigns = new unsigned char[levels];",
+  "replace": "\tsigns = (unsigned char *)new unsigned int[levels];\n\tcodes = (unsigned int *)new unsigned char[levels];"
  },
  {
   "label": "the element count is the byte count",

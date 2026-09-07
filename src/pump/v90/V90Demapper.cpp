@@ -88,6 +88,8 @@
 #include "dsplib/V90MappingParams.h"
 #include "dsplib/V90Demapper.h"
 
+void *operator new[](size_t);
+
 /*
  * Hold the compiler to the map in the header, as `V90ConnectionEvaluator.cpp`
  * does.  Skipped on the 64-bit `check64` pass, where a 32-bit layout is not
@@ -152,8 +154,9 @@ typedef char v90dem_size[(sizeof(V90Demapper) == 0x1eb8) ? 1 : -1];
  * `mov %ebx,(%esp)` before the second, with `%ebx` the first argument
  * throughout; `sampleCapacity` then receives `%ebx` itself.  The element
  * TYPES used to be unknown and are not any more -- `process` hands both
- * blocks to callees whose manglings type them -- so the casts below are what
- * `sysdep_malloc` returning `void *` costs and nothing more.
+ * blocks to callees whose manglings type them.  Ordinary array-new expressions
+ * over the inline replacement below reproduce those two direct allocator
+ * calls; the primitive arrays need no cookies or element constructors.
  *
  * THE ORDER OF THE STORES IS THE OBJECT'S ORDER, and the paragraph that used
  * to stand here said the opposite.  It read: "the eight zeroed words and the
@@ -186,15 +189,15 @@ typedef char v90dem_size[(sizeof(V90Demapper) == 0x1eb8) ? 1 : -1];
  * excluded outright, and of the two that do not, `params` first is the one
  * that reaches 1.
  *
- * ONE BYTE IS LEFT AND IT IS THE FREE COLUMN, named rather than shrugged at
- * (2900).  The epilogue discards the `sub $0x4` slot with a `pop` into a dead
- * register: the blob picks `%eax` and we pick `%ebx`, one byte of modrm, both
- * values dead.  No source text chooses that, `byteident.py` grades both
- * constructors **grade 1 ACCEPT** where they were REJECT before, and the
- * register difference that USED to sit at 0xaf -- `mov 0x18(%esp),%ecx`
- * against `%edx` -- disappeared when the store order was fixed.  That is
- * 7779's rule confirmed in a second function: a register difference
- * downstream of a store-order difference is not independent evidence.
+ * THE LAST BYTE WAS CLONE IDENTITY, NOT A FREE CHOICE WITHIN EITHER BODY.
+ * The blob's C1 exactly matched our old C2 and its C2 exactly matched our old
+ * C1: the two dead-pop choices had crossed labels.  Using `new[]` for both
+ * typed arrays, with the replacement definition after this constructor,
+ * makes GCC 3.4.2 emit both clones under the blob's own labels and all 193
+ * bytes of each now agree.  The earlier register difference at 0xaf had
+ * already disappeared when the store order was fixed; this is the same rule
+ * one step later -- a register byte downstream of source shape is not
+ * independent evidence.
  *
  * THE SIX COUNTS ARE A ROLLED LOOP, not six stores.  `mov %ebx,0x630(%esi,
  * %eax,4); inc %eax; cmp $0x5,%eax; jbe` -- one store and a back edge, where
@@ -207,8 +210,8 @@ V90Demapper::V90Demapper(unsigned int levels, V90Parameters *params,
 	unsigned int i;
 
 	adiDetector = adi;
-	codes = (unsigned int *)sysdep_malloc(levels * 4);
-	signs = (unsigned char *)sysdep_malloc(levels);
+	codes = new unsigned int[levels];
+	signs = new unsigned char[levels];
 	sampleCapacity = levels;
 
 	sampleCount = 0;
@@ -225,6 +228,11 @@ V90Demapper::V90Demapper(unsigned int levels, V90Parameters *params,
 
 	this->params = params;
 	errorHistogramCount = 0;
+}
+
+inline void *operator new[](size_t n)
+{
+	return sysdep_malloc(n);
 }
 
 /*

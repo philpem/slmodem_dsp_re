@@ -21,13 +21,13 @@
  },
  {
   "label": "ctor: the two mapping-parameter arguments are swapped on arrival",
-  "find": "\tmappingParams = mpsA;\n\tphase2Info = p2;",
-  "replace": "\tmappingParams = mpsB;\n\tphase2Info = p2;"
+  "find": "\tmappingParams = mpsA;\n\tmappingParams2 = mpsB;",
+  "replace": "\tmappingParams = mpsB;\n\tmappingParams2 = mpsB;"
  },
  {
   "label": "ctor: mappingParams2 takes the sixth argument as well",
-  "find": "\tmappingParams2 = mpsB;\n\tparams = par;",
-  "replace": "\tmappingParams2 = mpsA;\n\tparams = par;"
+  "find": "\tmappingParams = mpsA;\n\tmappingParams2 = mpsB;",
+  "replace": "\tmappingParams = mpsA;\n\tmappingParams2 = mpsA;"
  },
  {
   "label": "ctor: the V90CP and the V90MP land in each other's fields",
