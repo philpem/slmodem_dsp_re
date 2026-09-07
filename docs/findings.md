@@ -121056,3 +121056,57 @@ all 2,500 finding headings.  The complete 272-object pinned build reports
 1,852 shared symbols.  The strict exact-name ratchet passes with the target
 still honestly classified BYTES5.
 (2026-09-07)
+
+## F10228. `V22FP_modem` has no exact preimage in 504 shift, count-alias and declaration cells
+
+The fresh repository-default GCC 3.4.2 baseline is **BYTES 6/346**, agreeing
+with the target left by F10208.  Its 105 instruction rows differ in only
+three places: the receive shift count is loaded with `movswl` instead of
+`movzwl`, and two independent call-argument preparations are interchanged.
+The blob forms `&tx_syms` before loading the `rx_out_internal` address; ours
+loads the array address first.  Casting the shift count to `unsigned short`
+removes one differing byte but leaves five, with `alpha_why` rejecting row
+42 (`lea` versus `mov`).  This is not a pure register-renaming residual.
+
+Four complete finite domains were compiled as real `v22fp.c` translation
+units under the unchanged pinned flags, totaling **504 cells**:
+
+- **80 shift/count-alias cells:** eight shift forms (direct signed field,
+  direct unsigned-short cast, and six loop-local forms: `unsigned short`,
+  `unsigned int`, `int`, separately assigned `unsigned short`, and const
+  unsigned-short/int locals), crossed with five count-address alias forms
+  (none, TX only, RX only, both in either order) and two initialization sites
+  (after the count seeds or immediately before the handler call).
+- **240 prefix cells:** all six declaration orders of TX count, RX count and
+  loop index; joined versus separate count initialization; both seed-read
+  orders in the separate forms; direct versus unsigned-short-cast shift
+  count; and the same five call-local count-address alias forms.  The
+  seed-read-order control is duplicated where initialization stays joined.
+- **64 call-address cells:** all 16 ordered subsets of aliases for TX count,
+  RX count and the receive-symbol array, crossed with both initialization
+  sites and plain versus const pointer locals.  Every cell uses the
+  unsigned-short shift-count cast.
+- **120 sample/shift-local cells:** three shift types (unsigned short, int,
+  unsigned int), two signed sample types (short, int), both load orders,
+  function versus loop declaration scope, and the five call-local
+  count-address alias forms.  Shift values are read once per iteration,
+  never hoisted out of the loop.
+
+There are **zero EXACT cells**.  Of the 504 cells, 384 remain same-size
+BYTES and 120 grow from 346 to 366 bytes; **45 cells** attain the best
+five-byte residual and none improves on it.  All **three shared TU names**
+were scored for every cell.  `V22FP_create` remains 2409 versus 2449 bytes,
+and `V22FP_delete` remains 296 versus 332; both bystander bodies and their
+canonical relocations are unchanged in every candidate.  The TU exact-name
+set is empty before and throughout the domain, with no bystander gain or
+loss.
+
+No source, test, mutation or compiler-option change is retained.  In
+particular the historical five-byte cast is still declined rather than
+banked as Phase 4 progress.  This bounds the stated source domains, not all
+ordinary C preimages.  All probe generators, candidate sources, objects and
+logs were removed after recording the results.  Only this finding is left;
+reference integrity and whitespace checks pass.  With no accepted code
+change, differential tests and the full-tree ratchet were not rerun or
+claimed as new validation.
+(2026-09-07)
