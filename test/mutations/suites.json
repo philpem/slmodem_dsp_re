@@ -52,6 +52,10 @@
   "src/service/dtmf_rx.c",
   "build/test/t_dtmfrx"
  ],
+ "faxadaptcreate": [
+  "src/fax/faxadapt.c",
+  "build/test/t_faxadapt"
+ ],
  "floatarma": [
   "src/dsp/FloatARMA.cpp",
   "build/test/t_floatarma"

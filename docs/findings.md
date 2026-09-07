@@ -121697,3 +121697,64 @@ unusable, equivalent or miscounted cases. The repository-wide reference and
 9,768-anchor structural audits are clean. All candidate generators, sources,
 objects and score artifacts were kept outside the repository and removed
 after recording these measurements. (2026-09-07)
+
+## F10234. Leaving the opposite-width clear last closes both remaining fax-adapter create residues
+
+`v27rx_create` and `v29tx_create` each began as a same-size BYTES 15 body,
+196 bytes against the reference.  Their first 27 instructions and their
+default-configuration tails already agreed.  Both divergences were the same
+schedule around the rate comparison.  For V.27 RX the reconstruction emitted
+the `pack_width = 0` store before the comparison, while the object compares
+the rate, stores the returned handle, then clears `pack_width` before `setne`.
+For V.29 TX the reconstruction similarly emitted `unpack_width = 0` before
+the comparison, while the object places that clear after the handle store and
+before `setne`.  The displaced six-byte store accounts for all fifteen
+positional byte differences in each body.
+
+The prescribed finite domain was exhausted independently for both functions:
+all **24 orders** of the four final assignments, both declaration orders of
+`local` and `handle`, and three configuration-copy forms (the struct-valued
+ternary, an if/else pair of struct assignments, and a pointer fallback followed
+by one struct assignment).  This is **144 complete `faxadapt.c` translation-
+unit compiles per function, 288 total**, under the unchanged GCC 3.4.2 flags.
+Each function has **16 exact cells**.  They are both declaration orders,
+ternary or if/else copying, and four final-statement orders; none of the 48
+pointer-fallback cells is exact.
+
+The exact cells expose one shared source fact rather than a unique original
+spelling: calculate and store the rate-dependent width before the opposite,
+unconditional zero-width clear.  The retained edits are therefore the
+smallest preimages, moving only that clear to the end in each function.  For
+`v27rx_create` the retained final source order is handle, count, unpack width,
+pack-width clear; for `v29tx_create` it is count, handle, pack width,
+unpack-width clear.  Reversing either last pair is behaviorally equivalent:
+the assignments write distinct fields and neither right-hand side reads the
+field the other assignment changes.  Their order is settled only by the
+object's code-generation evidence, and the old schedules are recorded as
+equivalent mutations rather than claimed as differential-test cases.
+
+All **40 shared text definitions** in the translation unit were scored for
+every exact candidate.  The retained combination grows the TU exact-name set
+from **28 to 30**, changing only `v27rx_create` and `v29tx_create` from BYTES
+15 to EXACT, with no exact loss or unwanted definition.  A baseline object
+compiled under the same `faxadapt.c` basename has exactly the same 40 symbol
+addresses and sizes, `.text` and every other ELF section size and offset, and
+all 99 relocation records as the retained object.  Thus the two gains do not
+perturb translation-unit order or partial-link layout.  No assembly, volatile
+access, register constraint, attribute or compiler flag is introduced.
+
+The combined 272-object report moves **807 to 809 EXACT** and **88 to 86
+BYTES**, with 4 UNRESOLVED, 53 REGALLOC, 900 SIZE and 0 RELOC unchanged over
+1,852 shared symbols.  Both complete 196-byte targets report grade-0 EXACT and
+grade-1 ACCEPT.  The focused modern differential passes **265 checks across
+15 groups**, and the pinned GCC 3.4.2 differential reports **1 passed, 0
+failed**.  The creation cases now compare the returned handles' copied config
+blocks and status readback for every default and explicit rate arm, in addition
+to the adapter fields; those checks catch wrong constructor-config forwarding
+that the previous width-only comparisons could not observe.  The new
+`faxadaptcreate` suite catches all **12/12** behavior-changing mutations and
+records the two old, behaviorally equivalent clear schedules separately; a
+fresh snapshot verification reports all 14 labels unchanged.  Repository
+audits check 13,731 references, 2,507 finding headings, 230 suites and 9,790
+mutation anchors with no issue.  The strict exact-name ratchet passes at 809
+EXACT and 53 REGALLOC. (2026-09-07)

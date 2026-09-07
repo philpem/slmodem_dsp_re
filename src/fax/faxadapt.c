@@ -340,7 +340,9 @@ v27tx_create(struct faxvmi_link *dp, const struct v27tx_cfg *cfg)
 
 /*
  * v27rx_create, 0x09c630.  Two rates, 2400 and 4800; unpack_width is 2 for
- * 2400 and 3 otherwise (0x09c68b..0x09c6a4, `setne`+2).
+ * 2400 and 3 otherwise (0x09c68b..0x09c6a4, `setne`+2).  Keep pack_width's
+ * unconditional clear last: that source order reproduces the object's
+ * intervening clear under GCC 3.4.2 (finding F10234).
  */
 void
 v27rx_create(struct faxvmi_link *dp, const struct v27rx_cfg *cfg)
@@ -353,8 +355,8 @@ v27rx_create(struct faxvmi_link *dp, const struct v27rx_cfg *cfg)
 	handle = V27RX_create((void *)(long)dp->int_0014, &local);
 	dp->int_0014 = (int)(long)handle;
 	dp->pack_count = 0;
-	dp->pack_width = 0;
 	dp->unpack_width = (local.bit_rate == 2400) ? 2 : 3;
+	dp->pack_width = 0;
 }
 
 /* v27tx_delete, 0x09c700. */
@@ -440,7 +442,9 @@ v27rx_control(struct faxvmi_link *dp, void *req)
  * branches on `local.bitrate` (0x09c89b: `cmpw $0x1c20,0x12(%esp)` is
  * local's +0x02, the struct's own `bitrate` offset, against 7200 decimal):
  * 3 for 7200, 4 otherwise (0x09c8ab..0x09c8ae, `setne`+3) -- the same shape
- * v29rx_create's `unpack_width` already uses.
+ * v29rx_create's `unpack_width` already uses.  Keep unpack_width's
+ * unconditional clear last for the object's emitted schedule (finding
+ * F10234).
  */
 void
 v29tx_create(struct faxvmi_link *dp, const struct v29tx_cfg *cfg)
@@ -453,8 +457,8 @@ v29tx_create(struct faxvmi_link *dp, const struct v29tx_cfg *cfg)
 	handle = V29TX_create((void *)(long)dp->int_0014, &local);
 	dp->pack_count = 0x30;
 	dp->int_0014 = (int)(long)handle;
-	dp->unpack_width = 0;
 	dp->pack_width = (local.bitrate == 7200) ? 3 : 4;
+	dp->unpack_width = 0;
 }
 
 /*
