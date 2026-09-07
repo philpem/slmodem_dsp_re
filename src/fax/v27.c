@@ -1523,11 +1523,17 @@ V27TX_status(const void *tx, void *status)
 				| V27STAT_FLAGS_BIT0);
 	*FIELD(status, V27STAT_FLAGS) =
 			(unsigned char)(flags & (unsigned char)~V27STAT_FLAGS_BIT1);
+	/*
+	 * Compute the final byte before clearing +0x15.  The object loads the
+	 * source's +0x10 first, then performs the clear, then stores this value.
+	 * Reusing `flags` is the ordinary-source form that preserves that order
+	 * under GCC 3.4.2; see finding F10231.
+	 */
+	flags = (unsigned char)((flags & V27STAT_FLAGS_BIT0)
+				| (*FIELD(tx, V27TX_HANDLE_FLAGS)
+				   & V27STAT_FLAGS_FROM_TX));
 	*FIELD(status, V27STAT_FLAGS2) &= (unsigned char)~V27STAT_FLAGS2_BIT0;
-	*FIELD(status, V27STAT_FLAGS) =
-			(unsigned char)((flags & V27STAT_FLAGS_BIT0)
-					| (*FIELD(tx, V27TX_HANDLE_FLAGS)
-					   & V27STAT_FLAGS_FROM_TX));
+	*FIELD(status, V27STAT_FLAGS) = flags;
 
 	FIELD_I(status, V27STAT_WORD_18) = FIELD_I(tx, V27STAT_WORD_18);
 

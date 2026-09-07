@@ -1,0 +1,48 @@
+[
+ {
+  "label": "NOTE: V27TX_status behavior and its byte-exact but behaviorally equivalent scheduling form",
+  "why": "t_v27fax compares the full caller-owned status region against the blob for null, disjoint, and every four-byte overlap from -0x20 through +0x20. It separately pins the two flags bytes and models six wrong readings. The final-value computation before the +0x15 clear is byte-exact source evidence, not a new behavior claim: the clear can alias the source's +0x10, but changes only bit 0 while the later result admits only bit 2. The final mutation records that exactness-only distinction as equivalent instead of pretending a differential test can catch it."
+ },
+ {
+  "label": "V27TX_status tests the source rather than the destination for null",
+  "find": "\tif (status == 0)\n\t\treturn 0;\n\n\tFIELD_US(status, V27STAT_PROTOCOL)",
+  "replace": "\tif (tx == 0)\n\t\treturn 0;\n\n\tFIELD_US(status, V27STAT_PROTOCOL)"
+ },
+ {
+  "label": "V27TX_status takes +0x10 from the protocol rather than the bit rate",
+  "find": "\tFIELD_US(status, V27STAT_WORD_10) = FIELD_US(tx, V27STAT_TX_BPS);",
+  "replace": "\tFIELD_US(status, V27STAT_WORD_10) = FIELD_US(tx, V27STAT_PROTOCOL);"
+ },
+ {
+  "label": "V27TX_status reuses the first bit-rate copy instead of rereading the source",
+  "find": "\tFIELD_US(status, V27STAT_WORD_10) = FIELD_US(tx, V27STAT_TX_BPS);",
+  "replace": "\tFIELD_US(status, V27STAT_WORD_10) = FIELD_US(status, V27STAT_TX_BPS);"
+ },
+ {
+  "label": "V27TX_status clears bit 0 as the other fax transmitters do",
+  "find": "\tflags = (unsigned char)(*FIELD(status, V27STAT_FLAGS)\n\t\t\t\t| V27STAT_FLAGS_BIT0);",
+  "replace": "\tflags = (unsigned char)(*FIELD(status, V27STAT_FLAGS)\n\t\t\t\t& (unsigned char)~V27STAT_FLAGS_BIT0);"
+ },
+ {
+  "label": "V27TX_status leaves the second flags byte alone",
+  "find": "\t*FIELD(status, V27STAT_FLAGS2) &= (unsigned char)~V27STAT_FLAGS2_BIT0;",
+  "replace": ""
+ },
+ {
+  "label": "V27TX_status discards bit 0 from the first flags calculation",
+  "find": "\tflags = (unsigned char)((flags & V27STAT_FLAGS_BIT0)\n\t\t\t\t| (*FIELD(tx, V27TX_HANDLE_FLAGS)",
+  "replace": "\tflags = (unsigned char)((flags & 0)\n\t\t\t\t| (*FIELD(tx, V27TX_HANDLE_FLAGS)"
+ },
+ {
+  "label": "V27TX_status does not copy the final word",
+  "find": "\tFIELD_I(status, V27STAT_WORD_18) = FIELD_I(tx, V27STAT_WORD_18);",
+  "replace": ""
+ },
+ {
+  "label": "V27TX_status computes the final flags byte after clearing the adjacent byte",
+  "find": "\tflags = (unsigned char)((flags & V27STAT_FLAGS_BIT0)\n\t\t\t\t| (*FIELD(tx, V27TX_HANDLE_FLAGS)\n\t\t\t\t   & V27STAT_FLAGS_FROM_TX));\n\t*FIELD(status, V27STAT_FLAGS2) &= (unsigned char)~V27STAT_FLAGS2_BIT0;\n\t*FIELD(status, V27STAT_FLAGS) = flags;",
+  "replace": "\t*FIELD(status, V27STAT_FLAGS2) &= (unsigned char)~V27STAT_FLAGS2_BIT0;\n\t*FIELD(status, V27STAT_FLAGS) =\n\t\t(unsigned char)((flags & V27STAT_FLAGS_BIT0)\n\t\t\t| (*FIELD(tx, V27TX_HANDLE_FLAGS)\n\t\t\t   & V27STAT_FLAGS_FROM_TX));",
+  "equivalent": true,
+  "why": "For disjoint objects the order is trivially invisible. If the destination's +0x15 aliases the source's +0x10, the clear changes only bit 0 and the source contribution is masked with 0x04, so the computed bit 2 is unchanged. The two stores target distinct destination bytes. Thus both orders return and store the same values for every permitted overlap; only GCC 3.4.2 code generation distinguishes them."
+ }
+]

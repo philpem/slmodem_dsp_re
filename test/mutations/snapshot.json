@@ -1441,6 +1441,20 @@
     "the window is not clamped while the history is still filling": "caught"
    }
   },
+  "v27status": {
+   "key": "1efe1401d3b4bba054cda4413d397568c0812bfe8354d5536850e7ffe3f393c3",
+   "summary": "8 mutations: 7 caught (7 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
+   "verdicts": {
+    "V27TX_status clears bit 0 as the other fax transmitters do": "caught",
+    "V27TX_status computes the final flags byte after clearing the adjacent byte": "equivalent",
+    "V27TX_status discards bit 0 from the first flags calculation": "caught",
+    "V27TX_status does not copy the final word": "caught",
+    "V27TX_status leaves the second flags byte alone": "caught",
+    "V27TX_status reuses the first bit-rate copy instead of rereading the source": "caught",
+    "V27TX_status takes +0x10 from the protocol rather than the bit rate": "caught",
+    "V27TX_status tests the source rather than the destination for null": "caught"
+   }
+  },
   "v29data": {
    "key": "00e71f61f22a7065daab73e52860ecc967e042635549bbe6a1824176333b9455",
    "summary": "22 mutations: 22 caught (22 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
