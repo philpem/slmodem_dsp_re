@@ -120054,3 +120054,34 @@ in the reordered candidate, then moves the otherwise raw-identical 355-byte
 ratchet while investigating GCC constructor-clone generation and the original
 partial-link symbol/section provenance; do not describe the open issue as a
 constructor/destructor code tradeoff again. (2026-09-07)
+
+## F10210. Descrambler's last six bytes are the placement of its `pOut` decrement, with two exact preimages
+
+`Descrambler<unsigned char,int>::process(const unsigned char *,int *,unsigned
+int)` began Phase 4 as a 120-byte `BYTES6` COMDAT.  Both defining translation
+units had the same residual: after the loop's final compare, the updated
+output-pointer spill and the `this->pOut` member store were adjacent but in the
+opposite order from the reference.  Every other instruction, operand and both
+relocations already agreed.
+
+F8046 had exhausted nine loop/tap/xor forms and decoded the `pTap2--` then
+`pTap1--` order, but stopped at that scheduler residual.  The follow-up domain
+has seven ordinary source forms: post-increment and split output increments
+with `--pOut` still in the condition; the split increment moved after the
+restart block; explicit next-output and destination-pointer locals; and the
+post-increment and split forms with `--pOut` as a statement before the output
+store.  The first two retain six differing bytes, the next three change the
+instruction stream, and the final two are byte-exact.  Thus the recovered fact
+is the standalone decrement's placement, not whether the author used
+`*out++ = r` or its split spelling; the compact exact preimage is retained.
+
+The sequencing change preserves defined behaviour.  There is still exactly
+one decrement before the same comparison, the output value and destination do
+not depend on `pOut`, and an `int *out` store overlapping the pointer-valued
+`pOut` member would already violate the C++ aliasing rules.  Both independently
+emitted COMDAT copies are exact.  The complete name-set ratchet passes with
+`EXACT` **775 -> 776**, `BYTES` **118 -> 117**, and every other bucket
+unchanged.  The focused modern test passes 437,632 differential checks across
+all five instantiations, the GCC 3.4.2 differential binary passes, and the full
+36-mutation Scrambler suite reports 33 caught and three proved equivalent,
+with no uncaught or unusable entries. (2026-09-07)

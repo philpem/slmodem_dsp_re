@@ -818,11 +818,15 @@ T Descrambler<T, I>::process(T in)
  * the ORDER and not which of the four the author typed -- F0's
  * several-preimages case.
  *
- * STILL OPEN AT SIX BYTES, and the residual is named: one
- * `mov %eax,0x28(%esp)` sits one instruction earlier in ours than in the
- * object, with every other instruction and operand identical.  That is
- * scheduling, which is tiers.md's free column, so this is recorded as
- * decoded-and-open rather than closed.  Finding F8046.
+ * F8046 left six bytes: the updated output-pointer spill and the `pOut` member
+ * store were adjacent but scheduled in the opposite order.  Phase 4 then
+ * exhausted seven natural spellings of that residual.  Keeping `--pOut`
+ * inside the condition leaves six bytes with either `*out++ = r` or its split
+ * form; moving the output increment after the restart block or introducing
+ * `nextOut`/destination locals changes the instruction stream.  The two exact
+ * preimages both spell `--pOut` as the preceding statement, followed by the
+ * output store, with post-increment and split output forms emitting the same
+ * bytes.  The compact one is retained below.  Finding F10210.
  */
 template <class T, class I>
 void Descrambler<T, I>::process(const T *in, I *out, unsigned int n)
@@ -834,8 +838,9 @@ void Descrambler<T, I>::process(const T *in, I *out, unsigned int n)
 		r = (I)(*pOut ^ *pTap1 ^ *pTap2);
 		pTap2--;
 		pTap1--;
+		--pOut;
 		*out++ = r;
-		if (--pOut < pLimit) {
+		if (pOut < pLimit) {
 			resetHistoryIndexes();
 			copyHistoryTail();
 		}
