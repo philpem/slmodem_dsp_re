@@ -62,10 +62,11 @@ ModDataV17(void *modem, const unsigned short *data, short *out,
 		 (struct fpm_smc_ring *)(void *)FIELD(fp, V17FP_SMC_RING),
 		 data, count);
 
-	fp = FIELD_PTR(modem, V17TX_OBJ_FP);
-	return FPM_PPS_filter((struct fpm_pps *)(void *)FIELD(fp, V17FP_PPS),
+	return FPM_PPS_filter((struct fpm_pps *)(void *)
+				FIELD(FIELD_PTR(modem, V17TX_OBJ_FP), V17FP_PPS),
 			      (struct fpm_smc_ring *)(void *)
-					FIELD(fp, V17FP_SMC_RING),
+					FIELD(FIELD_PTR(modem, V17TX_OBJ_FP),
+					      V17FP_SMC_RING),
 			      out, count);
 }
 
