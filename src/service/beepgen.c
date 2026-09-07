@@ -511,17 +511,20 @@ fComputeRMSValueFloatBuf(unsigned int n, float *buf)
  * Same shape over shorts, with an INTEGER mean: sum/n in unsigned integer
  * division, so the removed mean is floor-ish and the residual is what the
  * object computes, not what a float mean would give.
+ * Initialise the power accumulator after the integer sum pass: this places
+ * the x87 zero at the division, as in the object (finding F10223).
  */
 float
 fComputeRMSValueShortBuf(unsigned int n, short *buf)
 {
 	unsigned int sum = 0, i;
 	int mean;
-	float acc = 0.0f;
+	float acc;
 
 	for (i = 0; i < n; i++)
 		sum += buf[i];
 	mean = (int)(sum / n);
+	acc = 0.0f;
 	for (i = 0; i < n; i++) {
 		float d = (float)(buf[i] - mean);
 
