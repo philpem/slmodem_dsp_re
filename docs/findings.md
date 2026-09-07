@@ -121185,3 +121185,110 @@ clean.  The strict exact-name ratchet and the aggregate's full `make phase`
 remain the integration boundary.  Diagnostic objects are ignored under
 `build/v92p4-ctor-variants` and `build/v92p4-ctor-perms`; they are not build
 inputs. (2026-09-07)
+
+## F10229. Scrambler constructor instantiation closes the copies but worsens partial-link order; 346 source cells yield no acceptable preimage
+
+The fresh default GCC 3.4.2 build reproduces F8144/F8146's all-copy hazard:
+`_ZN9ScramblerIhiEC1Ejjj`, the 102-byte `Scrambler<unsigned char, int>`
+constructor, is EXACT in `src/dsp/Scrambler.cpp` but **BYTES22** in both
+`V90Phase3Modulator.cpp` and `V92Phase3Modulator.cpp`.  The complete
+272-object baseline scores **804 EXACT, 4 UNRESOLVED, 53 REGALLOC, 91 BYTES,
+900 SIZE and 0 RELOC** over 1,852 shared names, with four COMDAT verdict
+disagreements.  No compiler flags, assembly, volatile accesses or hard-register
+constraints were introduced.
+
+The finite ordinary-C++ domain contains **346 cells** in five families:
+
+- **32 constructor-body cells:** allocation through a local or the member,
+  allocation size local or direct, reset zero local or literal, forward or
+  reverse local declaration order, and either independent tap-store order.
+  The 16 normal-tap-order cells reproduce every affected object byte for
+  byte.  Reversing the taps changes nine constructor copies and loses three
+  exact copies: the `Scrambler<h,h>` and `Scrambler<h,int>` constructors in
+  `Scrambler.cpp`, and the `Scrambler<h,h>` constructor in
+  `V92Phase4Modulator.cpp`.  The target triple worsens to BYTES32/36/36;
+  there are no gains.
+- **16 header-definition positions:** move the complete constructor
+  definition to each boundary among the other 15 out-of-line template
+  definitions or before the final `#endif`.  All 16 reproduce every
+  affected object byte for byte.
+- **50 explicit-constructor-instantiation positions:** insert
+  `template Scrambler<unsigned char, int>::Scrambler(unsigned int, unsigned int, unsigned int);`
+  at every method-definition boundary, every file-static-helper boundary,
+  immediately after the final include, or at EOF.  There are 28 V.90 and
+  22 V.92 positions.  Six positions in each TU make that TU's target C1
+  EXACT, with no shared-function bystander change or exact loss.  All 50
+  positions additionally emit the C2 constructor in the changed TU.
+- **48 compensating parent-definition positions:** with that explicit
+  constructor instantiation after the includes, move the complete parent
+  modulator constructor definition to each other method/helper boundary,
+  immediately after the declaration, or EOF (27 V.90 and 21 V.92 cells).
+  All retain the target exact gain, but all retain the same three displaced
+  parent/TRN symbol positions in the changed TU.  None repairs the layout
+  regression described below.
+- **200 existing-member-instantiation positions:** independently instantiate
+  `void reset(unsigned char)`, the destructor, `void resetHistoryIndexes()`
+  or `void copyHistoryTail()` at the same 50 client-TU positions, without
+  explicitly instantiating the constructor.  Every cell retains the
+  EXACT/BYTES22/BYTES22 target triple and every shared function's original
+  body.  The 50 destructor cells add D2 definitions; the other 150 add no
+  symbols.  There are zero exact gains or losses.
+
+Dependency enumeration identifies **34 TUs** including `Scrambler.h`.
+Both header domains rebuild all 34; the client-TU domains rebuild the changed
+TU and reuse the other 33 unchanged controls.  Every cell is scored over all
+**513 shared function copies, 458 distinct shared names and 296 baseline
+exact copies**, not merely the chosen constructor.  The 34 control objects
+are individually byte-identical to the complete pinned baseline build.
+The initial 36-position constructor pilot is subsumed by the complete
+50-position family above, not counted again.
+
+The explicit-constructor hits establish an emission boundary, not a unique
+authorial spelling: they precede the first helper that uses
+`Scrambler<h,int>::process`, `scrambledSymbol` in V.90 and `jaSymbol` in
+V.92.  Explicit instantiation is a plausible ordinary source mechanism, but
+the stronger layout evidence rejects these particular placements.  Combining
+the two after-include hits makes all three C1 copies exact.  A complete
+`byteident --comdat --list-exact` audit reports **805 EXACT and 90 BYTES**,
+all other grades unchanged; exact-set subtraction gains only
+`_ZN9ScramblerIhiEC1Ejjj` and loses nothing.  COMDAT disagreements fall from
+four to three.  This tempting per-function improvement is deliberately not
+retained.
+
+The decisive audit uses pinned binutils 2.15 `ld -r`, with all **272 objects
+in Makefile SRC-then-CXXSRC order**, a link map and C1/C2 symbol tracing.
+In both arms C1 and C2 are selected from `Scrambler.cpp`; the extra client
+copies are discarded.  The two partial objects have identical section
+headers, no added or removed global names, and the same 1,177,534-byte file
+size, but their complete bytes are not identical.  Exactly six global
+symbol locations change: the parent C1/C2 pair moves ahead of its TRN
+generator in each client TU.  Before/after partial-link offsets are:
+
+| Symbol | Baseline | Explicit instantiation |
+|---|---:|---:|
+| `V90Phase3Modulator::generateTRN1d` | 576688 | 576944 |
+| V.90 parent C1 | 576752 | 576688 |
+| V.90 parent C2 | 576880 | 576816 |
+| `V92Phase3Modulator::generateTRN1u` | 659248 | 659472 |
+| V.92 parent C1 | 659312 | 659248 |
+| V.92 parent C2 | 659424 | 659360 |
+
+The blob places each TRN generator before its parent constructor pair:
+V.90 offsets 176816/181408/181536 and V.92 offsets 91584/93440/93552.
+Thus the candidate reverses an already-correct relative-order signal even
+though discarded COMDAT copies improve the worst-copy byteident grade.
+Every one of the 12 successful explicit-constructor positions has this
+three-symbol displacement in its TU, and the 48 compensating placements
+cannot remove it.  The last 200-cell family supplies no alternative exact
+gain.  This is a bounded negative, not a proof that all ordinary preimages
+are exhausted.
+
+No source, test, mutation, compiler-option or ratchet change is retained.
+All probe generators, candidate sources, objects and logs were removed after
+recording the measurements.  Only this finding remains; reference integrity
+and whitespace checks pass.  With no accepted code change, focused modern
+and period differential tests, mutation runs and the full-tree ratchet were
+not rerun or claimed as new validation.  The baseline pinned build and both
+complete byteident censuses above are code-generation measurements, not
+substitutes for differential tests.
+(2026-09-07)
