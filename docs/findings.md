@@ -120656,3 +120656,68 @@ and loses nothing: EXACT +4 and BYTES -4, every other bucket unchanged.
 The enumeration objects and validation transcripts are under
 `build/modulus-probe/` in the isolated worktree; they are not build inputs.
 (2026-09-07)
+
+## F10220. Four const value parameters recover two identical float-copy schedules
+
+`V90SpectralShapingFilter::setFilterCoeff(float,float,float,float)` and
+`SineWave<float,float>`'s complete-object constructor contain the same 32
+bytes in the reference: load `this` into `%edx`, load two argument words,
+then interleave each remaining load with the preceding argument's store.
+Both reconstructions emitted 32 bytes with 24 differing bytes.  They loaded
+the first argument before `this`, then copied each remaining argument just
+before its store.  There is no arithmetic, conversion, call, or relocation
+in either reference body.
+
+The finite domain comprised **616 complete GCC 3.4.2 translation-unit
+compiles**, using the unchanged repository flags.  For each function, all
+24 store orders were compiled in nine forms: separate assignments, a comma
+expression, separate scopes, nested assignment/comma expressions, local
+value copies, local references, local pointers, builtin byte copies, and the
+existing `dsplib_assign` helper.  SineWave additionally received all 24
+member-initializer orders.  Those 456 cells and two baselines contained no
+exact target.  All 120 orders of the filter's five definitions and all six
+orders of SineWave's three definitions also failed to close either target.
+The definition permutations preserved the complete line multiset.
+
+The remaining 32 cells enumerated every subset of the four by-value
+parameters declared `const`, separately in each original function.  **Only
+mask 15, all four parameters const, is exact in each sixteen-cell domain.**
+The source edit keeps the existing bodies and adds those qualifiers to the
+definitions.  This recovers the qualifier set within that domain; it does
+not assert a unique original body among untested combinations of equivalent
+spellings.  No assembly, register constraint, compiler flag, field type, or
+public function type was changed.  SineWave retains the existing modern
+compiler copy helper that preserves signalling NaNs.
+
+Every shared symbol in every candidate TU was scored with `byteident.py`'s
+`body`, `verdict`, and `alpha_equal`.  The accepted pair changes only the two
+target grades among **nine shared names**.  The filter's two exact
+constructors and exact reset remain exact; its progress/getMetric size
+residuals and SineWave's generate residual retain their exact previous
+bodies.  An additional comparison over **all eleven emitted names** covers
+SineWave's C2 and D2 clones, which the reference does not export: C2 receives
+the same 24-byte change as C1 and now reproduces the reference C1 body; D2
+and every other bystander are unchanged.  All **263 SineWave candidate C2
+copies** were additionally compared: each equals its corresponding C1, and
+only the all-const candidate is exact against the reference C1.  A census of all 272 normal build
+objects finds only these two defining TUs for this family, so no additional
+COMDAT copy is hidden by the per-TU comparison.
+
+Focused modern `make one T='t_sinewave t_v90spectral' J=3` and GCC 3.4.2
+`make period T='t_sinewave t_v90spectral' J=3` pass after the edit.  SineWave
+checks **9,738,336** points; the spectral suite checks **45,108**, including
+1,116 setter/reset checks.  The period summary is **2 passed, 0 failed**.
+The existing `v90ssfilter` mutation suite catches all **25 of 25** mutations,
+with zero unusable or equivalent entries, and the standalone anchor census
+resolves all **9,767** anchors exactly once.  The signature edits detach no
+anchor.  Sources, candidate objects, full per-cell verdicts and validation
+logs remain in the worktree's ignored `build/float-probe` directory.
+
+The complete 272-object build and `byteident.py --ratchet --list-exact`
+report **792 EXACT, 4 UNRESOLVED, 53 REGALLOC, 103 BYTES, 900 SIZE, 0 RELOC**
+over 1,852 shared symbols.  Comparing the full pre-edit and post-edit exact
+name sets proves **790 to 792, precisely the two target gains and zero
+losses**; all other buckets are unchanged.  The strict 775-name ratchet
+passes.  This is the F10217 aggregate plus the two const-parameter fixes,
+with no other source changes.
+(2026-09-07)
