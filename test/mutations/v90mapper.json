@@ -229,8 +229,8 @@
  },
  {
   "label": "process: nofOut is counted inside the copy loop",
-  "find": "\t\t\tfor (k = start; k < V90MAPPER_FRAME; k++)\n\t\t\t\tsymbols[nofOut + k - start] = samples[k];\n\t\t\tnofOut += V90MAPPER_FRAME - start;",
-  "replace": "\t\t\tfor (k = start; k < V90MAPPER_FRAME; k++)\n\t\t\t\tsymbols[nofOut++] = samples[k];"
+  "find": "\t\t\t\t\tfor (k = start; k < V90MAPPER_FRAME; k++)\n\t\t\t\t\t\tsymbols[nofOut + k - start] = samples[k];\n\t\t\t\t\tnofOut += V90MAPPER_FRAME\n\t\t\t\t\t    - uint_6f8 * signBitGroupSize;",
+  "replace": "\t\t\t\t\tfor (k = start; k < V90MAPPER_FRAME; k++)\n\t\t\t\t\t\tsymbols[nofOut++] = samples[k];"
  },
  {
   "label": "process: the bit count is cleared rather than reduced by a frame",
@@ -239,18 +239,18 @@
  },
  {
   "label": "process: the frame is declared ready one bit early",
-  "find": "\t\tif (bitsBuffered < bitsPerFrame)",
-  "replace": "\t\tif (bitsBuffered + 1 < bitsPerFrame)"
+  "find": "\t\tif (bitsBuffered >= bitsPerFrame) {",
+  "replace": "\t\tif (bitsBuffered + 1 >= bitsPerFrame) {"
  },
  {
   "label": "process: the modulus bits start at the top of the buffer",
-  "find": "\t\tmodulusEncoder.progress((unsigned char *)buf\n\t\t\t\t\t    + signBitsPerFrame, codes);",
-  "replace": "\t\tmodulusEncoder.progress((unsigned char *)buf, codes);"
+  "find": "\t\t\tmodulusEncoder.progress((unsigned char *)buf\n\t\t\t\t\t\t    + signBitsPerFrame, codes);",
+  "replace": "\t\t\tmodulusEncoder.progress((unsigned char *)buf, codes);"
  },
  {
   "label": "process: a zero sign bit is taken as positive",
-  "find": "\t\t\t\tsamples[k] = signs[k] ? levels[k]\n\t\t\t\t\t\t      : (short)-levels[k];",
-  "replace": "\t\t\t\tsamples[k] = signs[k] ? (short)-levels[k]\n\t\t\t\t\t\t      : levels[k];"
+  "find": "\t\t\t\t\tsamples[k] = signs[k] ? levels[k]\n\t\t\t\t\t\t\t      : (short)-levels[k];",
+  "replace": "\t\t\t\t\tsamples[k] = signs[k] ? (short)-levels[k]\n\t\t\t\t\t\t\t      : levels[k];"
  },
  {
   "label": "process: the shaper's bit pointer strides by the whole block",
@@ -264,13 +264,13 @@
  },
  {
   "label": "process: the partial arm leaves the countdown running",
-  "find": "\t\t\tnofOut += V90MAPPER_FRAME - start;\n\t\t\tuint_6f8 = 0;",
-  "replace": "\t\t\tnofOut += V90MAPPER_FRAME - start;"
+  "find": "\t\t\t\t\tnofOut += V90MAPPER_FRAME\n\t\t\t\t\t    - uint_6f8 * signBitGroupSize;\n\t\t\t\t\tuint_6f8 = 0;",
+  "replace": "\t\t\t\t\tnofOut += V90MAPPER_FRAME\n\t\t\t\t\t    - uint_6f8 * signBitGroupSize;"
  },
  {
   "label": "process: the countdown boundary is inclusive",
-  "find": "\t\t} else if (uint_6f8 < signBitGroups) {",
-  "replace": "\t\t} else if (uint_6f8 <= signBitGroups) {"
+  "find": "\t\t\t\tif (uint_6f8 >= signBitGroups) {",
+  "replace": "\t\t\t\tif (uint_6f8 > signBitGroups) {"
  },
  {
   "label": "process: the answer is never written back",
@@ -279,8 +279,8 @@
  },
  {
   "label": "process: the sign encoder is fed the frame backwards",
-  "find": "\t\t\t\tsigns[k] = signEncoder.process(\n\t\t\t\t    ((unsigned char *)buf)[k]);",
-  "replace": "\t\t\t\tsigns[k] = signEncoder.process(\n\t\t\t\t    ((unsigned char *)buf)[V90MAPPER_FRAME - 1 - k]);"
+  "find": "\t\t\t\t\tsigns[k] = signEncoder.process(\n\t\t\t\t\t    ((unsigned char *)buf)[k]);",
+  "replace": "\t\t\t\t\tsigns[k] = signEncoder.process(\n\t\t\t\t\t    ((unsigned char *)buf)[V90MAPPER_FRAME - 1 - k]);"
  },
  {
   "label": "process: every shaper group starts at the head of the frame",
