@@ -108,8 +108,12 @@ typedef char v90mod_size[(sizeof(V90Modulator) == 0x70) ? 1 : -1];
  * bytes each.
  *
  * Twelve arguments, eleven of them stored straight through, and five
- * allocations of which none is null-checked.  +0x2c..+0x37 is left exactly as
- * it was found; `reset` is the member that clears it.
+ * allocations of which none is null-checked.  Their source-store order is
+ * load-bearing for GCC 3.4.2 even though every store precedes the first
+ * allocation and the fields are independent.  The order below is the unique
+ * exact result among its 66 single-swap neighbours; a bounded permutation
+ * search found it from the former 18-byte near match.  +0x2c..+0x37 is left
+ * exactly as it was found; `reset` is the member that clears it.
  * ===========================================================================
  */
 V90Modulator::V90Modulator(unsigned int n, V90Phase2Info *p2, V90Jd *jdArg,
@@ -123,16 +127,16 @@ V90Modulator::V90Modulator(unsigned int n, V90Phase2Info *p2, V90Jd *jdArg,
 	V90Phase3Modulator *p3;
 	V90Phase4Modulator *p4;
 
-	mappingParams = mpsA;
 	phase2Info = p2;
 	jd = jdArg;
 	v92Jd = v92JdArg;
 	dil = dilArg;
+	mappingParams = mpsA;
 	mappingParams2 = mpsB;
-	params = par;
 	cp = cpArg;
 	mp = mpArg;
 	additionalCPinfo = acp;
+	params = par;
 	sessionFlag = flag;
 	nofSymbols = n;
 

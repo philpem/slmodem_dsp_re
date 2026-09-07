@@ -120316,3 +120316,55 @@ anchor audit still finds all 9,767 mutation anchors exactly once. A complete
 BYTES -3 from checkpoint `aeb4a533`, with no other bucket change. The shared
 ratchet remains at the published checkpoint pending aggregate integration.
 (2026-09-07)
+
+## F10214. Store scheduling and allocation spelling recover four V90 constructor clones; the Phase 4 constructor remains bounded at 40 bytes
+
+Both 338-byte `V90Modulator` constructor clones began as `BYTES 18` near
+matches.  All twelve independent member stores precede the first allocation,
+but their source order still determines GCC 3.4.2's carried registers and
+instruction schedule.  A bounded permutation search found the exact order
+`phase2Info`, `jd`, `v92Jd`, `dil`, `mappingParams`, `mappingParams2`, `cp`,
+`mp`, `additionalCPinfo`, `params`, `sessionFlag`, `nofSymbols`.  Both C1 and
+C2 are now **EXACT**.  All 66 single-swap neighbours of that result were also
+compiled; the accepted order was the only exact member of that local
+neighbourhood.  A preliminary complete 24-permutation search over the
+`params`/`cp`/`mp`/`additionalCPinfo` subdomain had no exact member and a
+minimum of 18 differing bytes.
+
+The two 193-byte `V90Demapper` constructor clones each began as `REGALLOC 1`.
+Cross-comparison supplied the important missing evidence: the blob's C1 was
+byte-exact against our C2 and the blob's C2 was byte-exact against our C1.
+Thus both required bodies already existed, but under crossed ABI labels.  A
+16-cell experiment crossed raw allocator calls, `new[]` for either primitive
+array, or `new[]` for both, with an inline replacement `operator new[]`
+definition before the constructor, after it, after the destructor, or at end
+of file.  Using ordinary array-new expressions for both arrays and placing
+the replacement definition immediately after the constructor makes both ABI
+clones **EXACT**.  The equivalent end-of-file placement is also exact; placing
+the definition before the constructor leaves both one byte away, and placing
+it after the destructor fixes C1 only.  `nm` confirms that no allocation
+operator is emitted: the primitive arrays need neither cookies nor element
+constructors, and `sysdep_malloc` remains the sole undefined allocator.  The
+reference and reconstruction now both emit C1 at `.text+0` and C2 at
+`.text+0xd0`.
+
+The related 213-byte `V90Phase4Modulator` clones were investigated but not
+changed.  Permuting nine independent stores reduced a diagnostic candidate
+from `BYTES 62` to `BYTES 40`.  All six permutations of the remaining three
+stores (`word_2f9c`, `mappingParams2`, and `word_2fa0`) produced 76, 60, 40,
+41, 60, and 76 byte differences, never exact.  Ordinary zero spellings,
+branch-duplicated zero stores, and four placements of the same inline
+replacement allocation operator also failed to improve the 40-byte result.
+This is a bounded negative, not a claim that no exact source preimage exists;
+none of its diagnostic changes was accepted.
+
+The complete 272-object GCC 3.4.2 build reports **782 EXACT, 4 UNRESOLVED, 54
+REGALLOC, 110 BYTES, 902 SIZE, 0 RELOC** over 1,852 shared symbols: EXACT +4,
+REGALLOC -2, BYTES -2, with no hidden verdict losses in the affected
+translation units.  The strict 775-name ratchet passes.  Focused modern and
+period differential tests pass `t_v90modchain` and `t_v90demapctor`; the
+updated mutation suites catch 26/26 and 17/17 changes respectively.  The
+standalone anchor audit still resolves all 9,767 mutations in 228 suites.
+Experiment generators and results are under `/tmp/v90mod-*`, `/tmp/v90p4-*`,
+and `/tmp/v90dem-*`; they are diagnostic artifacts, not build inputs.
+(2026-09-07)
