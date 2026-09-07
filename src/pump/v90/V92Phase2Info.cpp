@@ -97,17 +97,19 @@ typedef char v92p2i_size[(sizeof(V92Phase2Info) == 0x2c) ? 1 : -1];
  * And the parameter block itself at +0x28, stored FIRST, which is what sizes
  * the object.
  *
- * The store order below is the object's, including the two places where it
- * interleaves a constant between two copies.  GCC is free to reorder and does;
- * what is not free is which byte gets which value.
+ * Finding F10224 recovers the ordinary-C++ source schedule that makes GCC
+ * 3.4.2 emit the object's store order.  In particular the second boolean is
+ * materialised in an integer local before the four capability constants and
+ * stored after them; the carrier clear follows all three filter-count copies.
+ * What is not free is which byte gets which value.
  * ===========================================================================
  */
 /*
  * setToDefault -- 0x15f10, 87 bytes, immediately BEFORE the constructor in
  * the blob as here.  The constructor's fourteen stores minus the one that
  * sizes the object: `params` is read back from +0x28 instead of stored.
- * The store order below is the object's, as in the constructor.  The local
- * is `blk` (the constructor's is `p`) and the constants carry offset
+ * It uses the same F10224 source schedule as the constructor.  The parameter
+ * block is called `blk` here (the constructor's is `p`) and the constants carry offset
  * comments because the mutation suite anchors on the constructor's exact
  * text and an anchor must match exactly once (`make refs`); neither an
  * identifier nor a comment moves codegen.
@@ -116,48 +118,49 @@ void
 V92Phase2Info::setToDefault()
 {
 	V92Parameters *blk = params;
+	int txpoint;
 
 	pcmType = (blk->V92_PHASE2_INFO_A_OR_MU != 0);
 	rtd = blk->V92_PHASE2_INFO_RTD;
 	Uinfo = (unsigned char)blk->V92_PHASE2_INFO_UINFO;
 	maxTxPower = (unsigned char)blk->V92_PHASE2_INFO_MAX_TX_POWER;
+	txpoint = (blk->V92_PHASE2_INFO_TX_POWER_MEASURE_POINT != 0);
 
 	shortPhase2Remote = 0;		/* +0x12 */
 	v92CapabilitiesRemote = 0;	/* +0x13 */
 	shortPhase2Local = 0;		/* +0x10 */
 	v92CapabilitiesLocal = 1;	/* +0x11 */
-
-	txPowerMeasurementPoint =
-	    (blk->V92_PHASE2_INFO_TX_POWER_MEASURE_POINT != 0);
+	txPowerMeasurementPoint = txpoint;
 
 	nofFilterSections = (unsigned char)blk->V92_NOF_FILTER_SECTIONS;
 	maxTotalNofCoeffs = (unsigned char)blk->V92_MAX_TOTAL_NOF_COEFFS;
-	v90UseHighCarrier = 0;		/* +0x17 */
 	maxNofCoeffsInEachSection =
 	    (unsigned char)blk->V92_MAX_NOF_COEFFS_IN_EACH_SECTION;
+	v90UseHighCarrier = 0;		/* +0x17 */
 }
 
 V92Phase2Info::V92Phase2Info(V92Parameters *p)
 {
+	int txpoint;
+
 	params = p;
 	pcmType = (p->V92_PHASE2_INFO_A_OR_MU != 0);
 	rtd = p->V92_PHASE2_INFO_RTD;
 	Uinfo = (unsigned char)p->V92_PHASE2_INFO_UINFO;
 	maxTxPower = (unsigned char)p->V92_PHASE2_INFO_MAX_TX_POWER;
+	txpoint = (p->V92_PHASE2_INFO_TX_POWER_MEASURE_POINT != 0);
 
 	shortPhase2Remote = 0;
 	v92CapabilitiesRemote = 0;
 	shortPhase2Local = 0;
 	v92CapabilitiesLocal = 1;
-
-	txPowerMeasurementPoint =
-	    (p->V92_PHASE2_INFO_TX_POWER_MEASURE_POINT != 0);
+	txPowerMeasurementPoint = txpoint;
 
 	nofFilterSections = (unsigned char)p->V92_NOF_FILTER_SECTIONS;
 	maxTotalNofCoeffs = (unsigned char)p->V92_MAX_TOTAL_NOF_COEFFS;
-	v90UseHighCarrier = 0;
 	maxNofCoeffsInEachSection =
 	    (unsigned char)p->V92_MAX_NOF_COEFFS_IN_EACH_SECTION;
+	v90UseHighCarrier = 0;
 }
 
 /*
