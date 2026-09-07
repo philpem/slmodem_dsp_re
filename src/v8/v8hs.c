@@ -14,6 +14,8 @@
  *   anything else  nothing beyond the preamble every shape shares.
  */
 
+#include <string.h>
+
 #include "dsplib/debug.h"
 #include "dsplib/v8.h"
 #include "dsplib/sysdep.h"
@@ -206,13 +208,11 @@ v8handshakinit(struct v8 *v)
  * spellings compile to another.  A two-element domain, exhausted, and only
  * one element produces the object's control flow: 167 differing bytes to 25.
  *
- * THE RESIDUAL 25 ARE NOT STATEMENT ORDER, and that is measured.  All 720
- * orderings of the six configuration copies below were compiled: 76 distinct
- * emissions, NONE at zero, best 12.  Our source order IS the blob's emission
- * order (0xa44, 0xa48, 0xa4c, 0xa50, 0xa54, 0xa58) and it is OUR compiler
- * that permutes it, hoisting the `cfg->cm` load; no source order is the
- * preimage.  Rule 0's third case -- the difference is not what it looks like.
- * Declined rather than hill-climbed to 12.
+ * The rate copy uses byte access to retain the dependency between its store
+ * and the following CM pointer load.  A scalar int assignment lets GCC
+ * 3.4.2 hoist that pointer load, changing 25 bytes; memcpy reproduces all
+ * 1124 bytes.  The six field values and their source order are unchanged.
+ * See F10218 for the finite domain and the compiler's alias-set evidence.
  */
 struct v8 *
 V8Create(const struct v8_cfg *cfg)
@@ -224,7 +224,7 @@ V8Create(const struct v8_cfg *cfg)
 		v->op_mode = cfg->op_mode;
 		v->timeout_a = cfg->timeout_a;
 		v->timeout_b = cfg->timeout_b;
-		v->rate = cfg->rate;
+		memcpy(&v->rate, &cfg->rate, sizeof(v->rate));
 		v->cm = cfg->cm;
 
 		/*
