@@ -503,6 +503,7 @@ DescrambleDataV32(void *modem, short *buf, unsigned short count)
  * V32_ADAPTEQ_MU0 and _MU1 both switch adaptation on and differ only in which
  * of `fpm_fse_cfg::mu[]` the LMS update takes its step size from.  Any other
  * value does nothing at all -- not even the switch-off.
+ * The MU1, OFF, MU0 case order recovers the period emission (F10227).
  */
 void
 SetAdaptEqV32(void *modem, unsigned short mode)
@@ -510,6 +511,11 @@ SetAdaptEqV32(void *modem, unsigned short mode)
 	unsigned char *fp;
 
 	switch (mode) {
+	case V32_ADAPTEQ_MU1:
+		fp = FP(modem);
+		FIELD_INT(fp, V32FP_EQ_ADAPT) = 1;
+		FSE(fp)->mu_sel = 1;
+		break;
 	case V32_ADAPTEQ_OFF:
 		fp = FP(modem);
 		FIELD_INT(fp, V32FP_EQ_ADAPT) = 0;
@@ -518,11 +524,6 @@ SetAdaptEqV32(void *modem, unsigned short mode)
 		fp = FP(modem);
 		FIELD_INT(fp, V32FP_EQ_ADAPT) = 1;
 		FSE(fp)->mu_sel = 0;
-		break;
-	case V32_ADAPTEQ_MU1:
-		fp = FP(modem);
-		FIELD_INT(fp, V32FP_EQ_ADAPT) = 1;
-		FSE(fp)->mu_sel = 1;
 		break;
 	default:
 		break;
