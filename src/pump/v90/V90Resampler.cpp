@@ -27,17 +27,18 @@
  * ---------------------------------------------------------------------------
  * A NOTE ON +0x0f4 OF `V90Parameters`, WHICH THIS FILE READS AS A FLOAT
  *
- * `include/dsplib/V90Parameters.h` is frozen and declares +0x0f0
+ * `include/dsplib/V90Parameters.h` declares +0x0f0
  * `BLL_TRN1_QC_SLOW_K2` (with `BLL_TRN1_QC_SLOW_K1` recorded beside it as an
- * alias) and +0x0f4 `unnamed_0f4`, an `int` written by `setToDefault` and by
- * nothing else.  `setBllState`'s TRN1_QC_SLOW arm settles what those two are:
+ * alias) and +0x0f4 `unnamed_0f4`, now a float after finding F7960 corrected
+ * its former int type.  `setBllState`'s TRN1_QC_SLOW arm settles what those
+ * two are:
  * it copies +0x0f0 into `bllK1` and +0x0f4 into `bllK2`, with two plain
  * 32-bit `mov`s and no conversion, exactly as its thirteen sibling arms copy
  * the (K1, K2) pair at +0x088, +0x090, +0x098 and so on.  So +0x0f0 is the
- * K1 of the pair and +0x0f4 is the K2, and +0x0f4 holds a FLOAT.  The frozen
- * header is not edited here -- the arm copies the four bytes with
- * `__builtin_memcpy`, which is what the object's `mov` does and what an
- * `int`-typed read would NOT do, since that would convert rather than copy.
+ * K1 of the pair and +0x0f4 is the K2, and +0x0f4 holds a FLOAT.  The arm
+ * retains its four-byte `__builtin_memcpy`, now a same-type copy.  Numeric
+ * conversion of an int holding those bits would not reproduce the mov.
+ * F10211 updates the mutation to model that defect after the type correction.
  *
  * IT IS A `memcpy` AT THE SITE AND NOT A HELPER, AND THE OBJECT SAYS SO.
  * This used to go through a `static float asFloat(int)`, and the extra
@@ -274,8 +275,9 @@ V90Resampler::setBllState(V90BllState state, unsigned int countSamples)
 		break;
 	}
 
-	bllState = state;
+	/* F10211: the two-store domain; the anonymous table stays unresolved. */
 	stateSamples = 0;
+	bllState = state;
 }
 
 /*

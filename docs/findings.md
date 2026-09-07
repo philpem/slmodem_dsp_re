@@ -120159,3 +120159,121 @@ the two complete changed translation units (28 and 22 comparable symbols)
 finds only the three intended verdict changes. The shared ratchet file remains
 at the published checkpoint floor for the aggregate integration to refresh.
 (2026-09-07)
+
+## F10211. Ordinary allocation expressions recover all four V92 transmitter clone identities; the resampler's two bytes expose an anonymous table
+
+F10209's remaining constructor-label problem is now closed. Ordinary `new`
+for the four subobjects, `new[]` for both byte buffers, and local inline
+replacement allocation operators defined after the destructor make GCC 3.4.2
+emit **D2, D1, C1, C2, reset, process**, the reference's order. The constructor
+definition still precedes the destructor in the source. Both constructors,
+both destructors and `process` match their OWN original symbol names, bytes
+and relocation identities. D1 gains exactness; no formerly exact body loses
+it. Every other function in the two changed translation units retains its
+complete baseline body and relocation list, including the still-imperfect
+transmitter `reset`: the result is not just an unchanged aggregate grade.
+This uses no assembly, register constraints, attributes or flag changes.
+
+The source evidence is the six original `sysdep_malloc` calls, the C1
+constructor relocation targets, the paired null-guarded buffer deletions,
+and the absence of referenced or defined global allocation-operator symbols
+in the blob. Ordinary allocation expressions over inlined replacements
+explain those observations together. The one-byte allocation is an array,
+matching its `delete[]`; a local pointer preserves the original clear before
+the pointer is stored in the owner. The allocation operators have no
+`throw()` specification, so they preserve the original unchecked
+allocation/constructor path described in F10155 and F10157. Exact function
+bytes prove that path in the period build; the dynamic fixtures do not claim
+an exhaustive out-of-memory proof.
+
+This is a new finite domain, not a repetition of F10209's negative result:
+
+| allocation family | positions / method orders | compilations | zero-loss all-four exact |
+|---|---|---:|---:|
+| ordinary new for four subobjects, existing raw buffers | four / two | 8 | 0 |
+| ordinary new for all six allocations, scalar one-byte allocation | four / two | 8 | 2 |
+| array one-byte allocation with value initialization | four / two | 8 | 0 |
+| array one-byte allocation with local pointer and explicit clear | four / two | 8 | 2 |
+
+The four allocation-operator definition positions were before the
+constructor, after the constructor, after the destructor and at the end of
+the file; method orders were constructor-first and destructor-first. All 32
+candidates compiled. The two scalar-allocation hits were diagnostic only:
+they do not match the existing array-deletion spelling. Array value
+initialization changed both constructor sizes by three bytes. The accepted
+array/local-pointer family has the same two hits: constructor-first with
+operators after the destructor, or destructor-first with operators after the
+constructor. The former preserves the existing method definition order.
+
+GCC's source separates clone creation order from final emission order.
+[`clone_function_decl` in GCC 3.4.2 `cp/class.c`](https://github.com/gcc-mirror/gcc/blob/releases/gcc-3.4.2/gcc/cp/class.c)
+builds the complete constructor before the base constructor, while
+`build_clone` prepends each to the clone chain. That chain is consequently
+C2,C1, not C1,C2. [`maybe_clone_body` in `cp/optimize.c`](https://github.com/gcc-mirror/gcc/blob/releases/gcc-3.4.2/gcc/cp/optimize.c)
+traverses it and calls `expand_or_defer_fn` on each clone;
+[`cp/semantics.c`](https://github.com/gcc-mirror/gcc/blob/releases/gcc-3.4.2/gcc/cp/semantics.c)
+then hands functions to the call graph. Thus the clone chain alone was not
+a proof that C2 must precede C1 physically. The measured allocation-definition
+dependency changes final emission order without changing the original
+allocation sizes or calls. F7812's carried peephole scratch state remains an
+explanation of the old two-pop mismatch, not a reason to reject this new
+source preimage.
+
+For the partially-linked-object objective the result is stronger than five
+separate function grades: the first **736 raw consecutive `.text` bytes**,
+including all alignment padding and relocation operands, now match with
+the same ABI labels at the same relative offsets: D2 at `0x000`, D1 at
+`0x0b0`, C1 at `0x160`, and C2 at `0x220`. `reset` begins at `0x2e0` on both
+sides but remains 2,161 versus 2,284 bytes. The otherwise raw-identical
+355-byte `process` starts at `0xb60` in the blob and `0xbd0` here. The complete
+six-function span is still 3,267 versus 3,379 bytes: no whole-TU or
+whole-object identity is claimed.
+
+The independent `V90Resampler::setBllState` tail has only two orders for its
+two stores. Both were compiled. Writing `stateSamples = 0` before
+`bllState = state` reproduces all non-relocation instruction bytes, including
+the original scratch-register choice, while the compiler keeps the
+reference's emitted state-store/zero-store order. The strict grade moves
+from `BYTES 2` to **`UNRESOLVED 1`**, not EXACT: eliminating the byte mismatch
+exposes the anonymous jump-table relocation `.rodata+0xbc0` in the blob versus
+`.rodata+0` here. The conservative checker is unchanged. An independent ELF
+read confirms all sixteen table entries carry `R_386_32 .text` relocations
+and exactly the same function-relative destinations:
+`71, 8a, a0, c9, f2, 11b, 144, 16d, 196, 1bf, 1e8, 211, 23a, 263, 28c, 4b`
+(hex). This establishes matching switch destinations for this table, not a
+general anonymous-relocation resolver or an extra exact-name ratchet entry.
+
+`V92deleteConstellations` and `V92deleteFilterCoefficients` remain `BYTES 3`.
+Fresh disassembly confirms F7818's same final call/return versus sibling-jump
+distinction. The original STT_FILE bracket includes `V92MappingParamsInt.cpp`
+between `V92Jd.cpp` and `V92Modem.cpp`, but that is not an exact attribution
+of the five reconstructed `V92ParamsInfo.c` functions to a C++ input object.
+No stronger language/TU provenance was found, so neither function was
+changed merely to access C++ delete-expression lowering. F7818's bounded
+negative and its evidence threshold remain in force.
+
+The focused modern and GCC 3.4.2 differential runs pass `t_v92tx`,
+`t_v92txreset`, `t_v92btosproc` and `t_resampler`. Constructor fixtures check
+six allocation sizes, field contents, the cleared byte and allocator guards;
+destructor fixtures cover all 64 null/non-null pointer combinations for D1
+and D2. V92 mutations pass 18/18 and resampler mutations pass 25/25, all caught
+by execution. The resampler run exposed an older stale mutation: after
+F7960 changed `unnamed_0f4` to float, casting that float to float no longer
+modeled conversion of its integer bit pattern. The mutation now explicitly
+copies the bits to an int before converting, restoring its original defect
+and caught verdict. The V92 one-byte-clear mutation now removes only the
+clear, retaining the pointer store so its label describes its sole defect.
+
+Experiment artifacts are `/tmp/v92_abi_near_batch.py`,
+`/tmp/v92-abi-near-batch/`, `/tmp/v92_abi_physical_check.py` and
+`/tmp/v92_abi_table_check.py`; these are diagnostic outputs, not build inputs.
+The accepted source itself reproduces the identity result with the standard
+toolchain and unchanged checker. The complete 272-object build reports
+**776 EXACT, 4 UNRESOLVED, 54 REGALLOC, 116 BYTES, 902 SIZE, 0 RELOC** over
+1,852 shared symbols: EXACT +1, UNRESOLVED +1, BYTES -2 and no change to
+REGALLOC or SIZE. The strict 775-name membership ratchet passes without any
+loss; its shared floor is deliberately left unchanged for the aggregate
+integration update. The full `make phase J=4` passes, including period
+differential 374/374, the existing modern compiler allowlist, both 64-bit
+configurations, five interoperability checks and coverage/debug gates. The
+standalone anchor audit passes all 9,767 mutations in 228 suites. (2026-09-07)
