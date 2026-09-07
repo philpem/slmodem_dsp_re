@@ -120477,3 +120477,52 @@ block (148 checks), and `V29RX_modem` (111 direct checks), with the complete
 focused binaries pass under GCC 3.4.2.  The standalone mutation-anchor audit
 still resolves all 9,767 anchors exactly once.  Diagnostic objects are under
 `/tmp/slmodem-nearest`; they are not build inputs. (2026-09-07)
+
+## F10217. `v29rx_create` closes on the placement of its final pack-width clear
+
+The lowercase fax adapter `v29rx_create` is 171 bytes with 18 differing bytes;
+it is distinct from the uppercase DSP constructor `V29RX_create`, whose
+unchanged source produces 2,112 bytes against the reference's 2,127.  The
+adapter's residue is the schedule after `V29RX_create` returns: GCC places
+both zero-width/count stores before the handle store, whereas the object
+places the pack-width clear between the rate compare and its `setne`.
+
+A finite domain of **144 complete `faxadapt.c` compiles** combined all 24
+orders of the four final stores, both declaration orders of `local` and
+`handle`, and three config-copy forms: the existing struct-valued ternary,
+an if/else with two assignments, and a pointer fallback followed by one
+assignment.  Every object was scored with `byteident.py`'s `body`, `verdict`,
+and `alpha_equal`.  Eight cells are exact.  They share the ordering fact
+that the handle/count stores precede `unpack_width`, with `pack_width = 0`
+last; the first pair may occur in either order, either declaration order
+works, and ternary and if/else copies both work.  The pointer fallback is
+49 bytes shorter in all 48 of its cells and never matches.  Thus the recovered
+fact is the final clear's placement, not a unique original declaration or
+statement order.  The accepted edit only moves that one clear below the
+unpack-width assignment.  All **40 shared functions** in the translation unit
+were compared in both directions: only `v29rx_create` changes its verdict or
+differing-byte count, from BYTES 18 to EXACT.
+
+`_delete_data_tx_modem` was bounded and left unchanged at BYTES 24 of 117.
+A 36-cell domain combined three config-free alias forms, two handle-load/
+clear forms, and six FIFO-read/alias-use forms.  Direct FIFO reads remain
+BYTES 24 or 21; cached FIFO forms become 100 bytes (SIZE 17), although the
+first 75 bytes then agree with the reference.  A second complete 16-cell
+domain combined two cached-FIFO load positions with eight ordinary branch,
+early-return, goto and final-clear spellings.  Every cell still emits 100
+bytes and none improves its grade.  No teardown edit was retained; the
+shorter variants do not reproduce the reference's duplicated return tail.
+
+Focused modern `make one T=t_faxadapt J=3` and deciding GCC 3.4.2
+`make period T=t_faxadapt J=3` both pass **253 checks across 15 groups**,
+including 48 receive-adapter creation checks.  The period summary is
+**1 passed, 0 failed**.  The experiments use the repository's unchanged
+GCC 3.4.2 flags and `dsplibs-tc342` image, with no assembly or forced
+registers.  The full 272-object `make byteident-ratchet J=3` passes the
+775-name exact-set floor and reports **790 EXACT, 4 UNRESOLVED, 53 REGALLOC,
+105 BYTES, 900 SIZE, 0 RELOC** over 1,852 shared symbols: EXACT +1 and
+BYTES -1 from F10216's checkpoint, with every other bucket unchanged.
+Their generated sources and objects remain under this worktree's
+ignored `build/v29rx-probe`, `build/lifecycle-probe`, and
+`build/lifecycle-tail-probe` directories, not among its build inputs.
+(2026-09-07)

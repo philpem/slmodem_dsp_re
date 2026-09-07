@@ -460,6 +460,8 @@ v29tx_create(struct faxvmi_link *dp, const struct v29tx_cfg *cfg)
 /*
  * v29rx_create, 0x09c910.  Two rates, 9600 and 7200; unpack_width is 3 for
  * 7200 and 4 otherwise (0x09c967..0x09c97a, `setne`+3).
+ * Keep pack_width's clear after unpack_width: this source order reproduces
+ * the object's intervening clear under GCC 3.4.2 (finding F10217).
  */
 void
 v29rx_create(struct faxvmi_link *dp, const struct v29rx_cfg *cfg)
@@ -472,8 +474,8 @@ v29rx_create(struct faxvmi_link *dp, const struct v29rx_cfg *cfg)
 	handle = V29RX_create((void *)(long)dp->int_0014, &local);
 	dp->int_0014 = (int)(long)handle;
 	dp->pack_count = 0;
-	dp->pack_width = 0;
 	dp->unpack_width = (local.bit_rate == 7200) ? 3 : 4;
+	dp->pack_width = 0;
 }
 
 /* v29tx_delete, 0x09c9c0. */
