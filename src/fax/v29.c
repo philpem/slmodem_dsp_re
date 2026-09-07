@@ -1806,6 +1806,7 @@ int
 V29TX_modem(void *modem, unsigned short *in, short *out, unsigned short *count)
 {
 	void *prm;
+	int result;
 	unsigned short taken;
 	short budget;
 	short total;
@@ -1849,8 +1850,14 @@ V29TX_modem(void *modem, unsigned short *in, short *out, unsigned short *count)
 	}
 
 	*count = (unsigned short)total;
+	/*
+	 * The result is a raw int field in the wrapped object.  Copying its
+	 * representation avoids a typed-alias read and keeps the count store
+	 * ahead of the result load, as in the original object.
+	 */
+	memcpy(&result, FIELD(modem, V29TX_OBJ_RESULT), sizeof result);
 
-	return FIELD_INT(modem, V29TX_OBJ_RESULT);
+	return result;
 }
 
 /*

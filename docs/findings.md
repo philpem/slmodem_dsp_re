@@ -120054,3 +120054,42 @@ in the reordered candidate, then moves the otherwise raw-identical 355-byte
 ratchet while investigating GCC constructor-clone generation and the original
 partial-link symbol/section provenance; do not describe the open issue as a
 constructor/destructor code tradeoff again. (2026-09-07)
+
+## F10213. Three finite C source-shape domains close three same-size functions without behavioural changes
+
+`_look_for_other_than`, `V29TX_modem` and the file-local `v22_create` each
+began this batch in `BYTES`, with 15, six and twelve differing bytes
+respectively. They are now byte-exact under GCC 3.4.2, including their
+relocations, and the complete protected 775-name exact set is unchanged.
+
+For `_look_for_other_than`, the complete domain is the two orders of its
+independent `pos` and `len` declarations. Declaring `pos` first is the unique
+exact preimage. It does not change either initializer or the loop: both
+locals have been initialized before the first expression that reads them.
+
+For `v22_create`, all six permutations of the three independent configuration
+stores `f10 = 700`, `f14 = 0` and `f18 = 1` were compiled. The unique exact
+preimage writes `f10`, then `f18`, then `f14`. The configuration is not
+observed until the subsequent `V22FP_create` call, so this is source store
+order rather than a behavioural change.
+
+`V29TX_modem`'s residual was the order of its final count store and result
+load. A direct typed load through the byte-offset object view lets the
+compiler hoist the load; copying the four-byte representation into an `int`
+local with `memcpy` retains the count store first and reproduces all 182
+bytes. This is the alias-safe spelling already used for raw object fields in
+the fax sources: the copied representation and returned `int` are unchanged,
+and it introduces no compiler barrier, volatile access or target-specific
+construct.
+
+The focused modern differential run passed `t_v29txcreate`, `t_v29fax`,
+`t_v22dp`, `t_cidleaves` and `t_cidsvc`. Among their direct checks are 1,250
+consecutive V.29 modem calls, 124 additional V.29 modem comparisons, all six
+V.22 `(id, caller)` construction arms (126 checks), and 1,202 CID leaf
+comparisons. The same five binaries passed under GCC 3.4.2. The standalone
+anchor audit still finds all 9,767 mutation anchors exactly once. A complete
+272-object toolchain build reports **778 EXACT, three UNRESOLVED, 54 REGALLOC,
+115 BYTES, 902 SIZE and zero RELOC** over 1,852 shared symbols: EXACT +3 and
+BYTES -3 from checkpoint `aeb4a533`, with no other bucket change. The shared
+ratchet remains at the published checkpoint pending aggregate integration.
+(2026-09-07)
