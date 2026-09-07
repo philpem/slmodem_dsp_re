@@ -11,12 +11,12 @@
  * not have, and `V90Demapper::~V90Demapper` running no destructor over its
  * embedded decoder is the corroboration.
  *
- * SEVEN MEMBERS AND NOT AN ARRAY.  The blob zeroes them with seven separate
- * `movl $0x0` in descending address order, which is a member-initialiser list
- * over seven scalars; a `for` loop or a `memset` over an array is neither
- * that shape nor that length.  The member-initialiser list below is written
- * ascending and GCC is free to emit it either way -- what it may not do is
- * turn it into a loop.
+ * SEVEN SCALARS ZEROED IN DESCENDING ADDRESS ORDER.  A full member-initialiser
+ * list emits ascending stores under GCC 3.4.2, regardless of its written
+ * order.  The chained assignment below emits the blob's seven descending
+ * stores and makes all four default-constructor clones byte-exact (F10219).
+ * Descending separate assignments also match, so the object establishes the
+ * store order without uniquely identifying the author's source spelling.
  */
 
 #include <stddef.h>
@@ -46,9 +46,9 @@ typedef char moddec_size[(sizeof(ModulusDecoder) == 0x1c) ? 1 : -1];
 #endif
 
 ModulusEncoder::ModulusEncoder()
-	: field_00(0), field_04(0), field_08(0), field_0c(0), field_10(0),
-	  field_14(0), field_18(0)
 {
+	field_00 = field_04 = field_08 = field_0c = field_10 = field_14 =
+		field_18 = 0;
 }
 
 /*
@@ -71,9 +71,9 @@ ModulusEncoder::ModulusEncoder(unsigned int a, unsigned int b, unsigned int c,
  * functions are 53 bytes each and differ in nothing but their symbol names.
  */
 ModulusDecoder::ModulusDecoder()
-	: field_00(0), field_04(0), field_08(0), field_0c(0), field_10(0),
-	  field_14(0), field_18(0)
 {
+	field_00 = field_04 = field_08 = field_0c = field_10 = field_14 =
+		field_18 = 0;
 }
 
 /*

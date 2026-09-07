@@ -120585,3 +120585,74 @@ the aggregate's full `make phase` boundary remains separate.
 Diagnostic sources, objects, result tables, RTL dumps and test logs are
 under this worktree's `build/v8create_*`; no experiment is a build input.
 (2026-09-07)
+
+### F10219. Modulus default constructors: a chained assignment recovers all four 53-byte bodies
+
+The four `ModulusEncoder` / `ModulusDecoder` default-constructor C1/C2
+symbols were BYTES25 at `59372c3d`. Each has nine instructions: load `this`,
+seven immediate zero stores, and return. The blob stores at offsets
+`0x18, 0x14, 0x10, 0x0c, 0x08, 0x04, 0x00`; the reconstruction's full
+member-initialiser list emitted the opposite order. `byteident --why`
+rejects row 1 on the destination operand, not a register choice. The old
+source comment incorrectly identified the descending stores as evidence of
+a member-initialiser list.
+
+The first finite domain contains 260 real-TU variants, changing the two
+defaults together: every subset of seven members placed in an initializer
+list, with the remaining body assignments ascending or descending (128 times
+two), two full initializer-list orders, and two chained-assignment orders.
+It produces 178 distinct emissions per default constructor and exactly three
+preimages: seven descending body assignments; `field_18(0)` followed by six
+descending body assignments; and an ascending chained assignment. The other
+six TU symbols have one emission each across the entire domain. The accepted
+chain lists members in address order and evaluates its assignments from the
+last member back to the first. Several preimages establish the store order
+and exclude a full initializer list; they do not identify one unique original
+source spelling.
+
+The independent seven-store domain exhausts all 7! = 5,040 permutations in
+the real TU. Each default clone has 5,040 distinct emissions and exactly one
+preimage, the descending assignment order; the other six symbols again have
+one emission each. Scoring uses `byteident.body`, `verdict`, and the grade-1
+predicate. A cached scorer shares identical reference/candidate function
+payloads, verifies its ELF slice against `body`, and requires every relocation
+to name an undefined external symbol before caching; it measures all ten
+symbols in every cell. An independent uncached run agrees on all 50,400
+symbol scores.
+
+All 6! = 720 definition orders were also compiled with the original full
+initializer lists. The default constructors remain BYTES25 in every cell,
+and all four seven-argument constructors remain EXACT. The generator's
+reversed control visibly reverses the emitted definition blocks, so this
+null is not an unchanged-input artefact. The two progress members each have
+two emissions: encoder `progress` stays EXACT in 360 cells and grows from
+497 to 498 bytes in the other 360; decoder `progress` is 451 or 452 bytes.
+Thus a definition reorder cannot close the defaults and can lose an existing
+exact symbol. No reorder is retained.
+
+These are strong `GLOBAL` functions in `.text`, with separate C2 and C1
+bodies, not weak COMDAT definitions. Both objects emit the base-object clone
+before the complete-object clone. The blob also carries separate FILE names
+`V90ModulusDecoder.cpp` and `V90ModulusEncoder.cpp`; this reconstruction
+combines the two classes in one TU. No symbol binding, clone declaration,
+class layout, compiler flag, assembly, or register constraint is changed.
+The candidate keeps all five already-exact TU symbols and leaves decoder
+`progress` at its original 451 bytes against the blob's 534.
+
+Modern differential binaries pass `t_moduluscoder` (5,100 checks),
+`t_v90demapctor` (1,508), and `t_v90modchain` (324,881). The same three suites
+pass under GCC 3.4.2, 3 passed and 0 failed, and direct comparison of the
+period differential's constructor object confirms that it carries the changed
+bodies. Five existing constructor mutation anchors were updated for the chain,
+preserving their omitted-word, wrong-value, and extra-word defects; the
+`moduluscoder` mutation run catches all 23 mutations through the differential
+test, with none unusable or surviving. The complete anchor audit resolves all
+9,767 anchors exactly once, and all 13,719 finding references resolve.
+
+The complete 272-object GCC 3.4.2 build reports **793 EXACT, 4 UNRESOLVED, 53
+REGALLOC, 102 BYTES, 900 SIZE, 0 RELOC** over 1,852 shared symbols. Against
+`59372c3d`, the exact-name set gains precisely the four default constructors
+and loses nothing: EXACT +4 and BYTES -4, every other bucket unchanged.
+The enumeration objects and validation transcripts are under
+`build/modulus-probe/` in the isolated worktree; they are not build inputs.
+(2026-09-07)
