@@ -120085,3 +120085,77 @@ unchanged.  The focused modern test passes 437,632 differential checks across
 all five instantiations, the GCC 3.4.2 differential binary passes, and the full
 36-mutation Scrambler suite reports 33 caught and three proved equivalent,
 with no uncaught or unusable entries. (2026-09-07)
+
+## F10212. The Jd exit reaches exactness through source store order; two TRN leaves reach register equivalence
+
+At checkpoint `aeb4a533`, `V90Phase3Modulator::exitJd` differed in ten of
+88 bytes. Its source copied the emitted count-before-state store order, but
+GCC 3.4.2 schedules the count clear ahead of a preceding state assignment.
+Writing the state assignment first therefore reproduces all 88 bytes,
+including the separate return sequences previously attributed to a free
+tail-merge decision in F7560's discussion.
+
+The finite domain was three guard forms (separate early returns, a combined
+early return, and an enclosing positive guard), two boundary-branch orders,
+two conditional-assignment forms (ternary and if/else), and two store orders:
+24 compilations, four distinct emissions, six exact preimages. Every exact
+preimage places the state assignment first. The accepted change keeps the
+existing guards and ternary expressions and swaps only those two statements.
+
+`V90Phase3Modulator::generateTRN1d` and
+`V92Phase3Modulator::generateTRN1u` each move from seven differing bytes to
+two, and from BYTES to REGALLOC. Ordinary conditional-expression returns
+reproduce the original narrow loads and separate sign extensions; the V.92
+standalone method also avoids the extra extension introduced by its
+reconstructed short-returning helper. Both residual differences are the
+register holding the constant input bit: `mov $1,%edx; mov %edx,4(%esp)`
+versus the original `%ecx` pair. Strict `alpha_why` accepts both complete
+instruction streams. This is a register-equivalence result, not byte identity.
+
+The TRN domains contained 15 V.90 and 16 V.92 forms: early/conditional/local
+returns with both condition polarities, short/int result locals, post-call
+sample locals, and the V.92 helper's promoted return type. They produced six
+and seven distinct emissions respectively. A second domain placed the
+conditional-expression method at every member-definition boundary and EOF:
+20 V.90 placements and 14 V.92 placements. All retain the same two-byte
+register difference, so neither method was moved in the accepted source.
+
+The other assigned near matches remain open after bounded negative results:
+
+- The four `V90SpectralVerifier` frequency accessors retain F7985's operand
+  load-order difference. Eight quotient forms, including compound assignment
+  to the parameter and float/double/long-double locals, yielded two emissions
+  and no exact match. No volatile qualifier was introduced.
+- `V92Phase4Modulator::generateE2u` retains F8145's narrow reload/sign-extension
+  difference. All six local declaration orders crossed with both independent
+  output-store orders yielded two emissions (BYTES8 and BYTES34), neither
+  exact. The existing source is retained.
+- The `Scrambler<unsigned char,unsigned char>` constructor's ten-byte miss is
+  specifically its COMDAT copy in `V90Phase4Modulator.cpp`; the copies in
+  `Scrambler.cpp` and `V92Phase4Modulator.cpp` already match. Ten dependency-
+  preserving constructor orders (five positions for `tailLength`, two orders
+  for the tap-pointer stores) were compiled in all three translation units.
+  None closes the V.90 copy, and all nonbaseline orders lose the other two
+  exact copies. The shared header is unchanged.
+- `V90SpectralShaper::reset` retains F7826's base-register difference. The
+  earlier Phase-4 experiment in this session rotated and reversed the eight
+  member definitions: 14 valid orders produced one reset emission, BYTES15,
+  while two orders failed because `advanceTrellis` preceded `pow10Table`.
+  No unsupported live-range local was added.
+
+The three changed functions are exercised directly by `t_v90modprog`,
+`t_v90p3mod`, and `t_v92p3mod`; the focused GCC 3.4.2 differential run passes
+3/3. Three Jd-exit mutation anchors were updated for the store order, with
+184 anchors across the affected translation units checked for unique matches.
+All three focused modern differential binaries also pass, including the
+direct leaf checks and 2,297 phase-3 exit checks. A focused mutation run catches
+all eleven Jd-exit mutations, with no unusable mutants; it is explicitly a
+subset run, not a replacement snapshot for the eighteen-mutation suite.
+The complete period-toolchain build passes 272/272 translation units. The
+strict 775-name ratchet passes at **776 EXACT, 56 REGALLOC, 115 BYTES,
+902 SIZE, three UNRESOLVED, zero RELOC**, over 1,852 symbols: deltas +1, +2,
+-3, and zero respectively. All 775 protected names remain exact. Scoring
+the two complete changed translation units (28 and 22 comparable symbols)
+finds only the three intended verdict changes. The shared ratchet file remains
+at the published checkpoint floor for the aggregate integration to refresh.
+(2026-09-07)

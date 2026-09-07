@@ -28,17 +28,17 @@
  },
  {
   "label": "the Jd exit's repetition is 71 symbols",
-  "find": "\tif (symbolCount % 72u == 0) {\n\t\tsymbolCount = 0;\n\t\tstate = sessionFlag ? P3M_STATE_JD_PHASE : P3M_STATE_JD_NOT;",
-  "replace": "\tif (symbolCount % 71u == 0) {\n\t\tsymbolCount = 0;\n\t\tstate = sessionFlag ? P3M_STATE_JD_PHASE : P3M_STATE_JD_NOT;"
+  "find": "\tif (symbolCount % 72u == 0) {\n\t\tstate = sessionFlag ? P3M_STATE_JD_PHASE : P3M_STATE_JD_NOT;",
+  "replace": "\tif (symbolCount % 71u == 0) {\n\t\tstate = sessionFlag ? P3M_STATE_JD_PHASE : P3M_STATE_JD_NOT;"
  },
  {
   "label": "the Jd exit's boundary test is inverted",
-  "find": "\tif (symbolCount % 72u == 0) {\n\t\tsymbolCount = 0;\n\t\tstate = sessionFlag ? P3M_STATE_JD_PHASE : P3M_STATE_JD_NOT;",
-  "replace": "\tif (symbolCount % 72u != 0) {\n\t\tsymbolCount = 0;\n\t\tstate = sessionFlag ? P3M_STATE_JD_PHASE : P3M_STATE_JD_NOT;"
+  "find": "\tif (symbolCount % 72u == 0) {\n\t\tstate = sessionFlag ? P3M_STATE_JD_PHASE : P3M_STATE_JD_NOT;",
+  "replace": "\tif (symbolCount % 72u != 0) {\n\t\tstate = sessionFlag ? P3M_STATE_JD_PHASE : P3M_STATE_JD_NOT;"
  },
  {
   "label": "the Jd exit's boundary arm does not restart the count",
-  "find": "\t\tsymbolCount = 0;\n\t\tstate = sessionFlag ? P3M_STATE_JD_PHASE : P3M_STATE_JD_NOT;",
+  "find": "\t\tstate = sessionFlag ? P3M_STATE_JD_PHASE : P3M_STATE_JD_NOT;\n\t\tsymbolCount = 0;",
   "replace": "\t\tstate = sessionFlag ? P3M_STATE_JD_PHASE : P3M_STATE_JD_NOT;"
  },
  {

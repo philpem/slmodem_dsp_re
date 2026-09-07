@@ -233,10 +233,11 @@ trn1uSymbol(V92Phase3Modulator *m)
  * THE SIX LEAF METHODS, claimed by the VPcmV34Main leaf pass -- `generateRu`
  * 0x163a0, `generateRuNot` 0x16400, `genereteSu` 0x16460, `genereteSuNot`
  * 0x164e0, `generateJa` 0x16570 and `generateTRN1u` 0x165c0, in the blob's
- * emission order (ahead of `generateSymbol` at 0x16600, as here).  Each is
- * one call to the file-static body above, which the compiler inlines
- * straight back; `int` is measured off the standalone bodies, each of which
- * widens a short into %eax itself (`movswl`).
+ * emission order (ahead of `generateSymbol` at 0x16600, as here). Five call
+ * the file-static body above, which the compiler inlines straight back;
+ * TRN1u spells its conditional expression directly to retain its standalone
+ * extension sequence. `int` is measured off the standalone bodies, each of
+ * which widens a short into %eax itself.
  * ===========================================================================
  */
 int
@@ -272,7 +273,9 @@ V92Phase3Modulator::generateJa()
 int
 V92Phase3Modulator::generateTRN1u()
 {
-	return trn1uSymbol(this);
+	/* Preserve the standalone body's single sign extension on each path;
+	 * the helper's short return adds a second extension here (F10212). */
+	return scrambler.process(1) ? (short)-codeLevel : codeLevel;
 }
 
 /*
