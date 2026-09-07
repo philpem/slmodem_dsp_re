@@ -121758,3 +121758,40 @@ fresh snapshot verification reports all 14 labels unchanged.  Repository
 audits check 13,731 references, 2,507 finding headings, 230 suites and 9,790
 mutation anchors with no issue.  The strict exact-name ratchet passes at 809
 EXACT and 53 REGALLOC. (2026-09-07)
+
+## F10237. The fresh 810-name checkpoint protects all accumulated Phase-4 exact gains
+
+A clean pinned build of aggregate `d391ad09` completes **272 objects from
+272 sources, zero failures, GCC 3.4.2 (`dsplibs-tc342`)**.  An independent
+complete `byteident --comdat --list-exact` census confirms **810 EXACT,
+4 UNRESOLVED, 53 REGALLOC, 86 BYTES, 899 SIZE and 0 RELOC**, over **1,852
+shared names**.  All four COMDAT verdict disagreements remain explicit and
+are scored by the worst defining copy, not a convenient linker selection.
+
+The stored ratchet had remained at F10208's 775-name floor while later
+closures accumulated.  Exact-set subtraction proves **35 added names and
+zero lost names** before the ordinary `byteident.py --update` operation
+records the complete **810-name** set.  This changes protection, not source
+or scoring rules: a future exact-name loss must fail even if another gain
+keeps the count at 810.  The membership self-test passes all three cases,
+including that concealed-loss control; the identity self-test also passes
+all 20 register/padding cases and 59 relocation cases.
+
+`docs/remaining.md` now reports the verified checkpoint and retains Phase 4
+as **in progress**, with the plan and historical phase ledger preserved.
+This is still function-level `.text` identity, not a claim that the complete
+partial link matches the blob.  Data, sections, symbol layout, relocation
+records, padding and emission order remain independent obligations.  F10229
+demonstrates why a per-copy exact gain can still be rejected for worsening
+partial-link order.  No such source change is introduced by this checkpoint.
+
+The updated JSON is independently checked against the census's exact set,
+then the strict ratchet passes with the new floor.  Full `make phase J=4`
+passes: the deciding period differential tier reports **374 passed, zero
+failed**, the modern tier retains only its documented compiler divergences,
+and the 64-bit, interop, coverage and debug boundaries are green.  The final
+boundary measures **48,943/51,416 source lines over 232 files, 1,425 debug
+sites and 35 anchored deviation sites**.  Reference integrity and whitespace
+checks pass.  No reconstruction source, test, compiler option or checker
+implementation changes in this checkpoint.
+(2026-09-07)
