@@ -5,8 +5,8 @@
  },
  {
   "label": "reset pairs mode 0 with three bits",
-  "find": "\t\tbits = 2;\n\t\tpower = 5.0f;",
-  "replace": "\t\tbits = 3;\n\t\tpower = 5.0f;"
+  "find": "\t\tpower = 5.0f;\n\t\tbits = 2;",
+  "replace": "\t\tpower = 5.0f;\n\t\tbits = 3;"
  },
  {
   "label": "reset installs mode 0's power for mode 1 as well",
@@ -20,8 +20,8 @@
  },
  {
   "label": "reset stores the scale where the mode goes",
-  "find": "\tmode = modeArg;\n\tscale = scaleArg;",
-  "replace": "\tmode = (unsigned char)scaleArg;\n\tscale = scaleArg;"
+  "find": "\tscale = scaleArg;\n\tmode = modeArg;",
+  "replace": "\tscale = scaleArg;\n\tmode = (unsigned char)scaleArg;"
  },
  {
   "label": "the bit packer runs from the bottom up",

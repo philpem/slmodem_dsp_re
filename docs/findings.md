@@ -121795,3 +121795,81 @@ sites and 35 anchored deviation sites**.  Reference integrity and whitespace
 checks pass.  No reconstruction source, test, compiler option or checker
 implementation changes in this checkpoint.
 (2026-09-07)
+
+## F10238. Reversing two independent source-order pairs closes V92Mapper reset's two register bytes
+
+`V92Mapper::reset(short, unsigned char)` began as a 56-byte grade-0
+**BYTES2** body. The two byte positions are one asymmetric live range in the
+zero-mode arm. The reconstruction materialized `5.0f` with
+`b8 00 00 a0 40` and stored it with `89 43 28`, using EAX; the reference has
+`b9 00 00 a0 40` and `89 4b 28`, using ECX. The nonzero arm already uses EAX
+exactly, and every other instruction, operand, branch displacement and byte
+in the function agrees. Grade 1 therefore accepts the baseline as a pure
+register allocation, but grade 0 correctly retains the two literal byte
+differences.
+
+A finite evidence-led domain compiled **146 complete `V92Mapper.cpp`
+translation units**, yielding **10 distinct target bodies**:
+
+- **24 local/member cells** cross three equivalent zero-mode control forms
+  with direct, explicitly qualified, dereferenced, initialized local, const
+  local, register local, separately assigned local and pointer-alias stores of
+  `5.0f`. All 24 reproduce the baseline object.
+- **12 control-flow cells** cover positive and negated tests, reversed arms,
+  early returns, two switch orders, two labelled/goto layouts and two
+  redundant two-condition trees. Six reproduce BYTES2 and six produce
+  BYTES9; none is exact.
+- **14 prefix/lifetime cells** vary the two common member-store orders,
+  explicit member access, value/pointer aliases for each argument and a saved
+  zero predicate. Every cell reproduces BYTES2.
+- **72 constant-expression cells** cross eighteen equivalent zero-arm
+  expressions with four nonzero-arm literal forms. Sixty-eight reproduce
+  BYTES2. The four `5.0f + modeArg` cells retain an unnecessary conversion and
+  are SIZE11.
+- **24 statement-order cells** exhaust the six orders of the common `mode`,
+  `scale` and conditional blocks, and both source orders of `bits`/`power` in
+  each arm. This final family contains **three EXACT cells**; the other 21 are
+  five BYTES2, four SIZE1, four SIZE3 and eight SIZE14 bodies.
+
+All three exact cells put the common source assignments in `scale`, `mode`,
+conditional order. Within the conditional they are: `bits`, `power` in the
+zero arm and `power`, `bits` in the nonzero arm; the reverse combination; or
+`power`, `bits` in both arms. GCC 3.4.2 lowers all three to the same reference
+bytes, so the unavailable source cannot be distinguished among them. The
+retained second form is the narrowest explanation of the observed zero-arm
+residue: it keeps the already-exact nonzero source arm and reverses only the
+two common assignments and the zero-arm assignments.
+
+These reorderings preserve behaviour. The four destinations are distinct
+non-volatile scalar members, their right-hand sides have no side effects, and
+there is no call or other observer between them. No assembly, attribute,
+volatile access, hard-register constraint or compiler-option change is used.
+The important distinction is source order versus emitted order: despite the
+retained `scale`-before-`mode` and zero-arm `power`-before-`bits` spelling,
+the exact object tests `modeArg`, stores `mode` before `scale`, and stores
+`bits` before `power` in both arms.
+
+Every one of the 146 cells was scored with `byteident.py` over all **six
+shared text names**. Only `reset` changes in any cell. The exact C1/C2 and
+D1/D2 constructors/destructors remain exact, `process` remains BYTES33 at
+107 bytes, and no definition is added or removed. The retained object has
+the same section sizes and offsets, symbol order/addresses/sizes, and
+relocation table as the baseline object, so substituting it in the fixed
+partial-link order cannot move a section or symbol.
+
+The complete report moves **810 to 811 EXACT** and **53 to 52 REGALLOC**, with
+4 UNRESOLVED, 86 BYTES, 899 SIZE and 0 RELOC unchanged over 1,852 shared
+names. BYTES stays at 86 because the baseline reset's grade-1 acceptance put
+it in the aggregate REGALLOC bucket; its stricter grade-0 verdict was BYTES2.
+The exact-name ratchet passes.
+
+Focused modern `t_v92convmapper` testing passes, including **127 reset
+checks** over seven scales and six mode bytes. The pinned GCC 3.4.2
+differential reports **1 passed, 0 failed**. Two mutation anchors moved with
+the recovered source order, and the `v92mapper` suite catches **12/12**
+mutations by test with no unusable, equivalent or miscounted case. Existing
+coverage was not duplicated: it already compares the whole 44-byte object,
+checks the guard bytes and proves variation for all 42 reset argument pairs.
+The repository reference and 9,790-anchor structural audits are clean. All
+probe generators, candidate sources, objects and temporary census copies were
+removed after recording these results. (2026-09-07)
