@@ -121001,3 +121001,58 @@ other translation units, this is exactly `SetAdaptEqV32` moving from BYTES to
 EXACT: **803 to 804 exact names**, with no loss.  The aggregate's full
 `make phase` remains the integration boundary.
 (2026-09-07)
+
+## F10226. Ordinary call and local forms do not recover t30_silence_before_tx_state's two-store schedule
+
+`_t30_silence_before_tx_state` remains a 194-byte **BYTES5** residual.  Its
+reference and reconstructed bodies have the same instructions, operands,
+relocations and control flow except for the two outgoing stores before the
+`_put_silence` call.  Both first load `edx = 160` and `eax = tx`; the reference
+then stores `%eax` to `(%esp)` followed by `%edx` to `4(%esp)`, while GCC 3.4.2
+reverses those independent stores.  F10208's x86 hard-register variable can
+fit that order, but is still rejected: it is neither a recovered source
+property nor acceptable portable C.
+
+The bounded ordinary-C search compiled **569 complete `class1tx.c`
+translation units** under the repository's pinned GCC 3.4.2 flags.  The first
+184 cells cover 64 direct pointer/count expression and cast combinations plus
+120 combinations of six integer temporary types, automatic/`register`/`const`
+storage, both declaration orders, both assignment orders, and initialized or
+separate-assignment forms.  Another 334 cells place pointer and integer locals
+at function entry in all valid combinations, reuse otherwise-dead incoming
+parameters as carriers, vary compatible array/pointer/qualified parameter
+declarators, spell discarded results and comma expressions differently, and
+inline wrappers with both normal and reversed formal-parameter order.  All
+518 of those cells emit the baseline five-byte residue.
+
+The remaining 51 cells cover compatible local function pointers, initialized
+and assigned two-field structs in both member orders, split one-field structs,
+one-element arrays, inline identity functions, value-preserving pointer/integer
+round trips on the supported ILP32/LP64 targets, and by-value inline aggregate
+wrappers.  The complete domain collapses to only **five distinct full-TU
+emissions**.  A total of 555 candidates reproduce the baseline TU emission;
+the other groups contain 3, 3, 3 and 5 candidates.  Those fourteen candidates
+change only this target's register allocation and/or constant-store schedule,
+but none becomes exact.  No candidate uses assembly, `volatile`, a hard
+register, a compiler option change, or a behavioral change.
+
+Every distinct emission was scored over all **44 shared function names** in
+the translation unit with positional bytes and canonical relocation targets.
+All 43 bystanders retain their baseline bytes and grades in every group; no
+exact-name gain conceals a loss.  With no ordinary preimage in the stated
+domain, the source is deliberately unchanged and the aggregate exact-name set
+is unchanged.  The candidate sources, objects and scoring results are outside
+the tree under `/tmp/t30-enum`; neither probe generator nor scorer is retained.
+
+Focused modern `make one T='t_class1delete t_class1progress' J=4` passes
+**1,108 checks**, of which 147 directly exercise this handler across the
+countdown boundary and debug levels.  The same two suites pass under GCC
+3.4.2, 2 passed and 0 failed.  There is no registered mutation suite for this
+`class1tx.c` handler.  The complete preflight audit nevertheless checks all
+228 registered suites and resolves all 9,768 mutation anchors exactly once;
+the standalone reference audit resolves all 13,725 references and validates
+all 2,500 finding headings.  The complete 272-object pinned build reports
+**803 EXACT, 4 UNRESOLVED, 53 REGALLOC, 92 BYTES, 900 SIZE and 0 RELOC** over
+1,852 shared symbols.  The strict exact-name ratchet passes with the target
+still honestly classified BYTES5.
+(2026-09-07)
