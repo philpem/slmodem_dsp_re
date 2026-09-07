@@ -409,6 +409,9 @@ _send_silence_state(struct fax_class1 *ctx, const short *rx, short *tx,
 		    int word7, int *word8)
 {
 	int i;
+	/* Keep the bound named: GCC 3.4.2 otherwise rewrites the signed
+	 * `i < 160` test as `i <= 159`, unlike the object's cmp/jl pair. */
+	int n = CLASS1_BLOCK_SAMPLES;
 
 	(void)rx;
 	(void)word3;
@@ -418,7 +421,7 @@ _send_silence_state(struct fax_class1 *ctx, const short *rx, short *tx,
 	(void)word8;
 
 	ctx->countdown--;
-	for (i = 0; i < CLASS1_BLOCK_SAMPLES; i++)
+	for (i = 0; i < n; i++)
 		tx[i] = 0;
 	*tx_count = CLASS1_BLOCK_SAMPLES;
 	if (ctx->countdown == 0)

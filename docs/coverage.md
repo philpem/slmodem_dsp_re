@@ -52,7 +52,6 @@ dsplibs.o reconstruction coverage
     CID_MTD_coeff
     FPM_log10_table_derived
     VPcmV34Progress.cold
-    _ZL11trn1uSymbolP18V92Phase3Modulator
     _ZL12tx1_moh_holdP10v34_object.isra.0
     _ZL13arma_convolvePKfS0_j
     _ZL13ec_filter_sumPKfS0_j

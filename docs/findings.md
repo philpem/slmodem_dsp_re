@@ -102180,9 +102180,10 @@ leave the same sixteen bits. The test drives a script producing 40,003 samples
 in three calls to reach the corner and counts it as path coverage, not as a
 verdict.
 
-The status word is the same shape of reading one level down: `andb $0xfd,
-0x19(%eax)` is GCC's narrowing of `&= ~0x200` on the `int` at +0x18, which the
-function returns whole after the loop.
+The status word is read one level down: `andb $0xfd,0x19(%eax)` clears bit 9
+while the function still returns the whole `int` at +0x18. F10216 corrects
+the original source-shape claim here: GCC 3.4.2 does not narrow a dword
+`&= ~0x200` to this byte operation; the byte lvalue must be explicit.
 
 
 ### F8878. `V29TX_status`'s dead store to the report's +0x14 is not dead, and the reason is the aliasing the C standard gives two unrelated parameters
@@ -104544,9 +104545,10 @@ coverage -- "the overlapping case ran and the two sides agreed" -- not as a
 separation. Counting it as one would be the decoration F134 warns about.
 
 **BIT 15 OF THE STATUS WORD IS TESTED AS A BYTE**, `testb $0x80,0x19(%esi)`
-at 0x0a461d, which is GCC's narrowing of `& 0x8000` on the `int` at +0x18 --
-exactly as `V29RX_modem`'s `andb $0xfd,0x19` is its narrowing of `&= ~0x200`,
-and the word is spelled as the `int` it is at both sites. Its complement is
+at 0x0a461d, which is GCC's narrowing of `& 0x8000` on the `int` at +0x18.
+That read-only narrowing does not imply the same transformation for a
+read-modify-write: F10216 confirms `V29RX_modem` needs an explicit byte lvalue
+for its `andb $0xfd,0x19`. Its complement is
 the reported `quality`, so a set bit is quality zero. That is the same shape
 and the same reported field as V.21's `V21RX_FLAG_LOW_SNR` (F8896) -- a
 corroboration, not the derivation, and the seven flag bits keep neutral names
@@ -120423,3 +120425,55 @@ suite catches 37/37 mutations, the 9,767-anchor audit is clean, and both
 64-bit configurations pass.  Experiment sources and objects are under
 `/tmp/v90jd-*`, `/tmp/v90mp-*`, and `/tmp/v90ce-*`; they are diagnostic
 artifacts, not build inputs. (2026-09-07)
+
+## F10216. A named loop bound and two V.29 source-shape corrections close three of the nearest byte residuals
+
+`_send_silence_state` differed in two of its 64 bytes.  The direct
+`for (i = 0; i < CLASS1_BLOCK_SAMPLES; i++)` is transformed by GCC 3.4.2
+into `cmp $159; jle`; the blob has the equivalent signed `cmp $160; jl`.
+Naming the already-constant bound in a local `int n` reproduces the complete
+function exactly.  This is not a changed limit: the loop still writes samples
+0 through 159 and the subsequent count store remains 160.  The bounded domain
+also included `!=`, `do` and post-increment `while` loops, explicit break and
+goto control flow, a signed-difference test, and a `register` counter.  They
+produced the original two-byte form, a one-byte `jne` form, or a much larger
+subtraction loop; none was exact.
+
+Two functions in `v29.c` close together.  `SetEncoderV29` is a two-case
+`switch`, not an if/else chain: the switch reproduces the blob's full-width
+`test; je; dec; je` dispatch and all 43 bytes, while retaining the same three
+behaviours for arguments 0, 1, and every other short.  `V29RX_modem` must clear
+the byte containing status bit 9 explicitly.  The previous F8877 wording said
+GCC narrowed a dword `&= ~0x200` to `andb $0xfd,0x19`; compiling that exact
+source with the pinned compiler disproves it—it emits a dword AND.  The byte
+lvalue produces the observed instruction and makes all 127 bytes exact.  The
+whole status field remains an `int` for the final return; this is only the
+width of the read-modify-write.  Both source changes are value-equivalent to
+their predecessors, so the evidence for them is the object-code tier rather
+than a behavioural mutation.
+
+Several neighbouring residuals were bounded and left unchanged.  The complete
+six permutations of the handle, count, and zero-width stores in each of
+`v27rx_create` and `v29tx_create` produced minima of 15 differing bytes, their
+existing results.  Reversing the opening stores in both SDM initialisers and
+both declaration orders of two optimized-away pointer aliases left
+`FPM_SDM_init` and `SDM_init` at 18 bytes.  Four ordinary local-scope and
+argument-alias forms left `voice_duplex` at its eight-byte partial register
+swap.  `FDSP_DP_Delete` was also compiled with a null-assigned parameter, a
+saved dead pointer, and file-local versions of the blob's three local BSS
+objects.  File locality correctly changes the relocation to `.bss`, but none
+reproduces the zero value held in `%ebx` across the final free; the static form
+also loses the differential tests' direct access and is not retained.
+`v22_ans_rmloop2`'s cached `hdx` spelling does not change its seven-byte
+register-allocation residual, corroborating F10194 rather than reopening it.
+
+The complete 272-object GCC 3.4.2 build reports **789 EXACT, 4 UNRESOLVED, 53
+REGALLOC, 106 BYTES, 900 SIZE, 0 RELOC** over 1,852 shared symbols: EXACT +3
+and BYTES -3 from the published 786 checkpoint, with every other bucket
+unchanged.  The strict 775-name ratchet passes.  Focused modern differential
+tests pass `_send_silence_state` (170 checks), the V.29 accessor and encoder
+block (148 checks), and `V29RX_modem` (111 direct checks), with the complete
+`t_v29fax` binary passing all of its additional V.29 paths.  The same two
+focused binaries pass under GCC 3.4.2.  The standalone mutation-anchor audit
+still resolves all 9,767 anchors exactly once.  Diagnostic objects are under
+`/tmp/slmodem-nearest`; they are not build inputs. (2026-09-07)
