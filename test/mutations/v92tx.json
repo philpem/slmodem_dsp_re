@@ -5,8 +5,8 @@
  },
  {
   "label": "the raw buffer at +0x08 is a byte short",
-  "find": "\tbitBuffer = (unsigned char *)sysdep_malloc(V92TX_BUF08_BYTES);",
-  "replace": "\tbitBuffer = (unsigned char *)sysdep_malloc(V92TX_BUF08_BYTES - 1);"
+  "find": "\tbitBuffer = new unsigned char[V92TX_BUF08_BYTES];",
+  "replace": "\tbitBuffer = new unsigned char[V92TX_BUF08_BYTES - 1];"
  },
  {
   "label": "+0x0c is not cleared",
@@ -20,38 +20,38 @@
  },
  {
   "label": "the one-byte buffer is allocated and not cleared",
-  "find": "\tp = sysdep_malloc(1);\n\t*(unsigned char *)p = 0;\n\tbyte_58 = (unsigned char *)p;",
-  "replace": "\tp = sysdep_malloc(1);"
+  "find": "\tunsigned char *p = new unsigned char[1];\n\t*p = 0;\n\tbyte_58 = p;",
+  "replace": "\tunsigned char *p = new unsigned char[1];\n\tbyte_58 = p;"
  },
  {
   "label": "the one-byte buffer is a word",
-  "find": "\tp = sysdep_malloc(1);",
-  "replace": "\tp = sysdep_malloc(4);"
+  "find": "\tunsigned char *p = new unsigned char[1];",
+  "replace": "\tunsigned char *p = new unsigned char[4];"
  },
  {
   "label": "the modulus encoder is given the pre-filter's size",
-  "find": "\tp = sysdep_malloc(sizeof(V92ModulusEncoder));",
-  "replace": "\tp = sysdep_malloc(sizeof(V92PreFilter));"
+  "find": "\tmodulusEncoder = new V92ModulusEncoder();",
+  "replace": "\tmodulusEncoder = new (sysdep_malloc(sizeof(V92PreFilter))) V92ModulusEncoder();"
  },
  {
   "label": "the convolution encoder's allocation is four bytes larger",
-  "find": "\tp = sysdep_malloc(sizeof(V92ConvolutionEncoder));",
-  "replace": "\tp = sysdep_malloc(sizeof(V92ConvolutionEncoder) + 4);"
+  "find": "\tconvolutionEncoder = new V92ConvolutionEncoder();",
+  "replace": "\tconvolutionEncoder = new (sysdep_malloc(sizeof(V92ConvolutionEncoder) + 4)) V92ConvolutionEncoder();"
  },
  {
   "label": "the precoder's allocation is four bytes larger",
-  "find": "\tp = sysdep_malloc(sizeof(V92Precoder));",
-  "replace": "\tp = sysdep_malloc(sizeof(V92Precoder) + 4);"
+  "find": "\tprecoder = new V92Precoder(V92TX_FILTER_TAPS);",
+  "replace": "\tprecoder = new (sysdep_malloc(sizeof(V92Precoder) + 4)) V92Precoder(V92TX_FILTER_TAPS);"
  },
  {
   "label": "the precoder is built with four fewer taps",
-  "find": "\tnew (p) V92Precoder(V92TX_FILTER_TAPS);",
-  "replace": "\tnew (p) V92Precoder(V92TX_FILTER_TAPS - 4);"
+  "find": "\tprecoder = new V92Precoder(V92TX_FILTER_TAPS);",
+  "replace": "\tprecoder = new V92Precoder(V92TX_FILTER_TAPS - 4);"
  },
  {
   "label": "the pre-filter is built with four fewer taps",
-  "find": "\tnew (p) V92PreFilter(V92TX_FILTER_TAPS);",
-  "replace": "\tnew (p) V92PreFilter(V92TX_FILTER_TAPS - 4);"
+  "find": "\tpreFilter = new V92PreFilter(V92TX_FILTER_TAPS);",
+  "replace": "\tpreFilter = new V92PreFilter(V92TX_FILTER_TAPS - 4);"
  },
  {
   "label": "the raw buffer's null test is dropped",

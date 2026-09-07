@@ -16,7 +16,7 @@
  * `include/dsplib/V92Transmitter.h` carries the object map, the 0x60 the
  * allocation gives and the evidence for every field.
  *
- * THE FOUR SUB-OBJECTS ARE BUILT WITH ORDINARY PLACEMENT `new`.  This file
+ * THE FOUR SUB-OBJECTS ARE BUILT WITH ORDINARY `new`.  This file
  * used to reach all four constructors through hand-mangled `asm("_ZN...")`
  * labels, on the belief (finding F1340) that a user-declared placement
  * `operator new` would make GCC emit a null test the blob does not have.
@@ -24,9 +24,10 @@
  * placement operator, `-fcheck-new` was never in this project's flags, and
  * `include/dsplib/sysdep.h`'s shared non-throw placement `operator new`
  * reproduces the blob's construct-then-check-later shape with no flag
- * changes, verified under the real period compiler (finding F10157).  Each
- * destructor still goes through the explicit destructor-call syntax, which
- * needs no header.
+ * changes, verified under the real period compiler (finding F10157).
+ * Ordinary new over the inline allocation replacements below also preserves
+ * that shape, and recovers the original constructor clone emission order
+ * (finding F10211).
  *
  * THE PRECEDING PARAGRAPH USED TO READ "the instruction sequence is the
  * blob's either way", AND IT IS WITHDRAWN FOR THE DESTRUCTOR (finding
@@ -46,6 +47,10 @@
 
 #include "dsplib/V92Transmitter.h"
 #include "dsplib/sysdep.h"
+
+/* Definitions follow the destructor; their position is measured below. */
+void *operator new(size_t);
+void *operator new[](size_t);
 
 /*
  * THE REPLACEMENT `operator delete`, AND IT IS READ OFF THE OBJECT.  The blob
@@ -163,9 +168,7 @@ typedef char v92tx_prefilter_size[(sizeof(V92PreFilter) == 0x14) ? 1 : -1];
  */
 V92Transmitter::V92Transmitter()
 {
-	void *p;
-
-	bitBuffer = (unsigned char *)sysdep_malloc(V92TX_BUF08_BYTES);
+	bitBuffer = new unsigned char[V92TX_BUF08_BYTES];
 	bitsBuffered = 0;
 	K = 0;
 
@@ -173,25 +176,17 @@ V92Transmitter::V92Transmitter()
 	 * Every constructor below is the C1 -- the complete-object variant a
 	 * `new` expression uses -- by the names the blob's relocations carry.
 	 */
-	p = sysdep_malloc(sizeof(V92ModulusEncoder));
-	new (p) V92ModulusEncoder();
-	modulusEncoder = (V92ModulusEncoder *)p;
+	modulusEncoder = new V92ModulusEncoder();
 
-	p = sysdep_malloc(1);
-	*(unsigned char *)p = 0;
-	byte_58 = (unsigned char *)p;
+	unsigned char *p = new unsigned char[1];
+	*p = 0;
+	byte_58 = p;
 
-	p = sysdep_malloc(sizeof(V92ConvolutionEncoder));
-	new (p) V92ConvolutionEncoder();
-	convolutionEncoder = (V92ConvolutionEncoder *)p;
+	convolutionEncoder = new V92ConvolutionEncoder();
 
-	p = sysdep_malloc(sizeof(V92Precoder));
-	new (p) V92Precoder(V92TX_FILTER_TAPS);
-	precoder = (V92Precoder *)p;
+	precoder = new V92Precoder(V92TX_FILTER_TAPS);
 
-	p = sysdep_malloc(sizeof(V92PreFilter));
-	new (p) V92PreFilter(V92TX_FILTER_TAPS);
-	preFilter = (V92PreFilter *)p;
+	preFilter = new V92PreFilter(V92TX_FILTER_TAPS);
 }
 
 /*
@@ -210,24 +205,15 @@ V92Transmitter::V92Transmitter()
  * object unchanged and moves only `harness_alloc.free_null`, which is why
  * t_v92tx.cpp asserts that counter over all sixty-four null combinations.
  *
- * THE DEFINITION STAYS BELOW THE CONSTRUCTOR, AND THAT IS A MEASURED CHOICE
- * RATHER THAN THE OBJECT'S ORDER.  With the present order, C1, C2 and D2 are
- * exact by name; D1 differs only because its two stack-adjustment pops use
- * `%eax` where the blob uses `%edx`.  Moving this block above the constructor
- * emits D2, D1, C2, C1 and reproduces all 736 original code bytes through
- * both constructors, including padding and relocation operands.  The catch
- * is narrower than the old comment claimed: GCC labels the two constructor
- * bodies C2,C1 where the blob labels those same byte sequences C1,C2, so the
- * strict per-symbol comparison reports two constructor losses even though
- * the physical code matches in emission order.
- *
- * All 24 definition-block orders, 25 placements of the two replacement-delete
- * definitions and 96 further guard, local, constructor, declaration,
- * attribute and compiler-flag candidates were measured.  None fixes that
- * same-name clone mapping without losing an existing exact symbol.  That is
- * a bounded negative, not an impossibility proof: constructor clone emission
- * and the original partial-link symbol provenance remain open.  Keep the
- * strict ratchet until they are resolved.  Findings F7842 and F10209.
+ * THE CLONE-ORDER MISMATCH IS RESOLVED (finding F10211).  Ordinary new/new[]
+ * and the later allocation-operator definitions make GCC emit
+ * D2,D1,C1,C2,reset,process, the object's own order.  Both constructors and
+ * both destructors now match
+ * by their original symbol names, and their first 736 physical code bytes
+ * match including padding.  The earlier negative domains (F7842, F10209)
+ * omitted this allocation-expression/declaration family.  The compiler's
+ * carried scratch state explains the old two-pop D1 discrepancy; it did not
+ * make an exact D1 incompatible with exact constructors.
  * ===========================================================================
  */
 V92Transmitter::~V92Transmitter()
@@ -267,6 +253,19 @@ V92Transmitter::~V92Transmitter()
 
 	delete convolutionEncoder;
 }
+
+/*
+ * The object allocates through sysdep_malloc and defines no global allocation
+ * operator symbols.  Inline replacements explain both observations.  Keep
+ * the definitions here: over the enumerated ordinary-new family, defining
+ * them before the constructor leaves its clones C2-first, while defining
+ * them here yields the original D2,D1,C1,C2 order and all four exact bodies.
+ * Neither operator is throw()-declared; allocation failure follows the
+ * object's unchecked allocation/constructor calls.  Finding F10211 records
+ * the complete 32-candidate allocation-expression/definition-position domain.
+ */
+inline void *operator new(size_t n) { return sysdep_malloc(n); }
+inline void *operator new[](size_t n) { return sysdep_malloc(n); }
 
 /*
  * The float-as-%c%d.%07d idiom, the same three helpers

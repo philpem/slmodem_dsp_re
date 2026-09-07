@@ -36,12 +36,12 @@
  },
  {
   "label": "setBllState does not record the new state",
-  "find": "\tbllState = state;\n\tstateSamples = 0;",
+  "find": "\tstateSamples = 0;\n\tbllState = state;",
   "replace": "\tstateSamples = 0;"
  },
  {
   "label": "setBllState does not restart the sample count",
-  "find": "\tbllState = state;\n\tstateSamples = 0;",
+  "find": "\tstateSamples = 0;\n\tbllState = state;",
   "replace": "\tbllState = state;"
  },
  {
@@ -77,7 +77,7 @@
  {
   "label": "TRN1_QC_SLOW converts +0x0f4 rather than copying its bits",
   "find": "\t\t__builtin_memcpy(&bllK2, &params->unnamed_0f4, sizeof bllK2);",
-  "replace": "\t\tbllK2 = (float)params->unnamed_0f4;"
+  "replace": "\t\t{ int bits; __builtin_memcpy(&bits, &params->unnamed_0f4, sizeof bits); bllK2 = (float)bits; }"
  },
  {
   "label": "MEDIUM prints SLOW2's name",
