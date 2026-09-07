@@ -120721,3 +120721,54 @@ losses**; all other buckets are unchanged.  The strict 775-name ratchet
 passes.  This is the F10217 aggregate plus the two const-parameter fixes,
 with no other source changes.
 (2026-09-07)
+
+## F10223. Delaying the short-buffer power accumulator's initialization closes its 85-byte body
+
+`fComputeRMSValueShortBuf` differed in 29 of its 85 bytes.  The first
+rejected instruction is a misplaced `fldz`: the source initializes the
+floating accumulator on entry, so GCC 3.4.2 carries that x87 zero through
+the integer summation loop.  The reference loads the zero after this loop,
+beside the unsigned integer division that computes the mean.  Everything
+from the second loop onward already agrees positionally; the earlier zero
+shifts the first loop by two bytes while the aligned second loop stays put.
+
+A complete **six-cell ordinary-C domain** crossed three initialization
+positions (before summation, between summation and mean, after mean) with
+two declaration forms (an initialized declaration at that position, or an
+entry declaration and a separate assignment).  Both before-summation cells
+retain BYTES 29.  All four after-summation cells are EXACT, including the
+two which place the assignment after the division in the source: GCC
+schedules their `fldz` immediately before the division.  Thus the recovered
+fact is that initialization follows the sum pass; the object does not
+distinguish declaration form or its position relative to the mean assignment.
+The accepted source keeps the declaration at the top and initializes `acc`
+after `mean`.  Neither unsigned sum/division, either loop, float types,
+subtraction, accumulation order, nor the final divide changes.
+
+All six candidates compile the complete translation unit at the unchanged
+GCC 3.4.2 flags, and are scored by `byteident.py`'s own `body`, `verdict`,
+and `alpha_equal`.  Comparing all **23 shared `beepgen.c` symbols** in both
+directions finds only `fComputeRMSValueShortBuf` changing its grade or
+differing-byte count: BYTES 29 to EXACT, with no bystander loss.  The
+generated domain and objects live under this worktree's ignored
+`build/rms-probe/`, outside the build's source list.  No assembly, volatile
+access, forced register, or compiler flag is introduced.
+
+Modern and GCC 3.4.2 `t_beepgen` both pass **178,693 checks across 15
+groups**, including the 146-check RMS/max-absolute-value group.  The actual
+period differential object also scores EXACT for this function.  The
+registered `beepgen` mutation suite catches **64 of 64 mutations by test**,
+with no unusable, equivalent or surviving entries; its anchors need no edit.
+The complete 228-suite anchor audit checks all **9,767 anchors** with no
+missing, repeated, vacuous or misplaced entry, and `refcheck.py` resolves
+all 13,723 finding references.  The first modern make-one invocation reached
+the reference gate before this finding had been added; after the heading
+was written, the reference check and the separately built modern binary
+passed.
+
+The complete 272-object `make byteident-ratchet J=3` passes the strict
+775-name exact floor and reports **796 EXACT, 4 UNRESOLVED, 53 REGALLOC,
+99 BYTES, 900 SIZE, 0 RELOC** over 1,852 shared symbols.  Relative to this
+worktree's rebased `08b01fa9` aggregate, the exact-name set gains only
+`fComputeRMSValueShortBuf`, loses nothing, and moves one function from BYTES
+to EXACT.  The fresh `--why` report is EXACT / ACCEPT.  (2026-09-07)
