@@ -19,18 +19,18 @@
  },
  {
   "label": "the first rate group is one bit short",
-  "find": "\tfor (i = 0; i <= 15; i++)\n\t\tbits[V90JD_GROUP1 + 1 + i] = (unsigned char)((mask >> i) & 1);",
-  "replace": "\tfor (i = 0; i <= 14; i++)\n\t\tbits[V90JD_GROUP1 + 1 + i] = (unsigned char)((mask >> i) & 1);"
+  "find": "\tmask = params->DIGITAL_RATE_MASK;\n\tfor (i = 0; i <= 15; i++) {\n\t\tif ((mask >> i) & 1)",
+  "replace": "\tmask = params->DIGITAL_RATE_MASK;\n\tfor (i = 0; i <= 14; i++) {\n\t\tif ((mask >> i) & 1)"
  },
  {
   "label": "the second rate group stops where V92Jd's does",
-  "find": "\tfor (i = 0; i <= 11; i++)\n\t\tbits[V90JD_GROUP2 + 1 + i] =",
-  "replace": "\tfor (i = 0; i <= 10; i++)\n\t\tbits[V90JD_GROUP2 + 1 + i] ="
+  "find": "\tfor (i = 0; i <= 11; i++) {\n\t\tif ((mask >> (i + 16)) & 1)",
+  "replace": "\tfor (i = 0; i <= 10; i++) {\n\t\tif ((mask >> (i + 16)) & 1)"
  },
  {
   "label": "the second rate group starts one bit low in the mask",
-  "find": "\t\t    (unsigned char)((mask >> (i + 16)) & 1);",
-  "replace": "\t\t    (unsigned char)((mask >> (i + 15)) & 1);"
+  "find": "\t\tif ((mask >> (i + 16)) & 1)",
+  "replace": "\t\tif ((mask >> (i + 15)) & 1)"
  },
  {
   "label": "the rate mask is read from the wrong parameter",

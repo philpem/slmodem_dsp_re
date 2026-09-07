@@ -120368,3 +120368,58 @@ standalone anchor audit still resolves all 9,767 mutations in 228 suites.
 Experiment generators and results are under `/tmp/v90mod-*`, `/tmp/v90p4-*`,
 and `/tmp/v90dem-*`; they are diagnostic artifacts, not build inputs.
 (2026-09-07)
+
+## F10215. Original Jd definition order closes one function; three larger scheduling domains remain bounded
+
+The blob emits the last four `V90Jd` definitions as `packData`,
+`unPackReset`, `unPackData`, `getBitVector`; the reconstruction instead put
+`getBitVector` immediately after `packData`.  Moving its definition to the
+blob's position leaves `packData` unchanged, makes the 20-byte
+`unPackReset` **EXACT**, and reduces `getBitVector` from 247 to 224 differing
+bytes without changing its 537-byte size.  This is a definition-order result,
+not a body edit: `unPackReset` still has the same three assignments and
+`getBitVector` still calls the same inlined `packData` before returning
+`bits`.
+
+The two V90Jd constructors were each one byte shorter than the blob.  The
+missing instruction form is forced by the object: the blob tests each shifted
+mask bit and writes it with `setne`, while the direct masked assignment emits
+`and`/`mov`.  Spelling the already-tested branch form used by `setRatesMask`
+makes both clones the correct 119-byte size.  They remain `BYTES 50`, so this
+is not claimed as identity.  The remaining schedule was tested over all six
+orders of the three opening zero stores, ten ordinary chained/copy zero
+spellings, seven positions of `unpackWord = 0`, thirteen direct/local/scope
+forms for the two constellation loads, four inline pair helpers, and four
+placements of an inline zero helper.  One clone reaches eight differing bytes
+when the word store follows the first lookahead bit, but the other remains 39
+bytes away; the blob's two clones are identical.  That non-exact position was
+not accepted.  The 12-cell cross product of the two CRC-tap computations and
+six final tap-store orders also leaves `packData` at its existing `BYTES 230`;
+the current computation order is better than its reverse and final store
+order is a constant map.
+
+`V90MP::evaluateInfo` remains a one-byte `REGALLOC` match.  All 720 orders of
+its six independent h-coefficient zero stores were compiled: the current
+order is the unique one-byte result, with every other order three to seven
+bytes away.  Eleven local-variable forms, five equivalent early-return/block
+forms, and moving `printNofRecievedMpMpNot` to the blob's last position do not
+change the byte.  No MP source change was retained.
+
+`V90ConnectionEvaluator::reset` remains `BYTES 120`.  Single-swap hill
+neighbourhoods over its ten opening stores descended 120 -> 100 -> 68 -> 60;
+both tied 60-byte paths are local minima.  A source order inferred by inverting
+the observed emitted-store permutation reaches 97 bytes, not identity.  These
+are useful bounds on that 10! domain but not exact preimages, so none was
+retained.
+
+The full 272-object build now reports **786 EXACT, 4 UNRESOLVED, 53 REGALLOC,
+109 BYTES, 900 SIZE, 0 RELOC** over 1,852 shared symbols.  From the published
+785 checkpoint, exact rises by one; the REGALLOC fall is the same
+`unPackReset` graduating to exact, while both constructors move from SIZE to
+same-size BYTES.  The strict 775-name exact ratchet passes.  Focused modern
+and GCC 3.4.2 differential runs pass `t_v90jd` and `t_v90packdata`, including
+36,469 ordinary and 12,483 seeded unpack comparisons.  The updated `v90jd`
+suite catches 37/37 mutations, the 9,767-anchor audit is clean, and both
+64-bit configurations pass.  Experiment sources and objects are under
+`/tmp/v90jd-*`, `/tmp/v90mp-*`, and `/tmp/v90ce-*`; they are diagnostic
+artifacts, not build inputs. (2026-09-07)
