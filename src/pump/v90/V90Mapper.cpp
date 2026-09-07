@@ -415,49 +415,52 @@ V90Mapper::process(unsigned char *bits, unsigned int nofBits, short *symbols,
 	for (i = 0; i < nofBits; i++) {
 		unsigned int k;
 
-		((unsigned char *)buf)[bitsBuffered] = bits[i];
+		unsigned char *out = (unsigned char *)buf;
+		out[bitsBuffered] = bits[i];
 		bitsBuffered++;
-		if (bitsBuffered < bitsPerFrame)
-			continue;
+		if (bitsBuffered >= bitsPerFrame) {
+			modulusEncoder.progress((unsigned char *)buf
+						    + signBitsPerFrame, codes);
 
-		modulusEncoder.progress((unsigned char *)buf
-					    + signBitsPerFrame, codes);
-
-		for (k = 0; k < V90MAPPER_FRAME; k++)
-			levels[k] = constellation[k][codes[k]];
-
-		if (signBitGroups != 0) {
-			for (k = 0; k < signBitGroups; k++)
-				spectralShaper.process(
-				    &levels[k * signBitGroupSize],
-				    (unsigned char *)buf
-					+ k * (signBitGroupSize - 1),
-				    &samples[k * signBitGroupSize]);
-		} else {
-			for (k = 0; k < V90MAPPER_FRAME; k++) {
-				signs[k] = signEncoder.process(
-				    ((unsigned char *)buf)[k]);
-				samples[k] = signs[k] ? levels[k]
-						      : (short)-levels[k];
-			}
-		}
-
-		if (uint_6f8 == 0) {
 			for (k = 0; k < V90MAPPER_FRAME; k++)
-				symbols[nofOut + k] = samples[k];
-			nofOut += V90MAPPER_FRAME;
-		} else if (uint_6f8 < signBitGroups) {
-			unsigned int start = uint_6f8 * signBitGroupSize;
+				levels[k] = constellation[k][codes[k]];
 
-			for (k = start; k < V90MAPPER_FRAME; k++)
-				symbols[nofOut + k - start] = samples[k];
-			nofOut += V90MAPPER_FRAME - start;
-			uint_6f8 = 0;
-		} else {
-			uint_6f8 -= signBitGroups;
+			if (signBitGroups != 0) {
+				for (k = 0; k < signBitGroups; k++)
+					spectralShaper.process(
+					    &levels[k * signBitGroupSize],
+					    (unsigned char *)buf
+						+ k * (signBitGroupSize - 1),
+					    &samples[k * signBitGroupSize]);
+			} else {
+				for (k = 0; k < V90MAPPER_FRAME; k++) {
+					signs[k] = signEncoder.process(
+					    ((unsigned char *)buf)[k]);
+					samples[k] = signs[k] ? levels[k]
+							      : (short)-levels[k];
+				}
+			}
+
+			if (uint_6f8 != 0) {
+				if (uint_6f8 >= signBitGroups) {
+					uint_6f8 -= signBitGroups;
+				} else {
+					unsigned int start = uint_6f8 * signBitGroupSize;
+
+					for (k = start; k < V90MAPPER_FRAME; k++)
+						symbols[nofOut + k - start] = samples[k];
+					nofOut += V90MAPPER_FRAME
+					    - uint_6f8 * signBitGroupSize;
+					uint_6f8 = 0;
+				}
+			} else {
+				for (k = 0; k < V90MAPPER_FRAME; k++)
+					symbols[nofOut + k] = samples[k];
+				nofOut += V90MAPPER_FRAME;
+			}
+
+			bitsBuffered -= bitsPerFrame;
 		}
-
-		bitsBuffered -= bitsPerFrame;
 	}
 
 	nofSymbols = nofOut;

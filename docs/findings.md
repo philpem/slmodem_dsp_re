@@ -121625,3 +121625,75 @@ mutation suites and the full-tree ratchet were not rerun or claimed as new
 validation because no code change was accepted.  This excludes the stated
 cleanup-helper domain, not every ordinary C preimage.
 (2026-09-07)
+
+## F10232. V90Mapper's nested frame arm, byte pointer and countdown tree recover its 530-byte process body
+
+`V90Mapper::process(unsigned char *, unsigned int, short *, unsigned int &)`
+started this branch at **SIZE42**: the period object was 488 bytes and 148
+instructions against the reference's 530 bytes and 154 instructions. Unlike
+V92Mapper's F10230 residue, neither body contains an x87 instruction. Its
+power/root/quotient/scale and qualifier axes therefore cannot explain this
+body and were not repeated. The first concrete byte difference instead had
+the same address but the opposite i386 SIB spelling: the reference stores the
+incoming byte with `(%ecx,%edi,1)`, while the direct cast-and-subscript source
+emitted `(%edi,%ecx,1)`.
+
+A finite ordinary-C++ search compiled **148 complete `V90Mapper.cpp`
+translation units**, producing **20 distinct target bodies**, in three
+evidence-led families:
+
+- **18 tail cells** cross six equivalent decision trees for the zero,
+  partial-countdown and whole-countdown cases with three ways to spell the
+  partial copy's start/count expression. A nonzero outer test, a `>=` inner
+  countdown test, and repeating `uint_6f8 * signBitGroupSize` in the output
+  count recover the reference's instruction sequence and size. Only branch
+  displacements and the SIB byte remain different.
+- **100 store cells** retain that tail and cross five equivalent nonzero tests,
+  four equivalent `>=` tests and five buffer-store forms. Declaring an
+  ordinary `unsigned char *out` local and subscripting it is the only store
+  form that recovers the reference SIB operand order. The other pointer-add,
+  reverse-add, direct-subscript and index-local spellings do not.
+- **30 outer-control cells** retain those two findings and cross five
+  frame-ready control structures, three equivalent loop bounds and prefix or
+  postfix increment. Exactly **six cells are EXACT**: all three nested
+  frame-ready forms (`>=`, negated `<`, and empty `<` arm plus `else`), with
+  either increment spelling, but only the source-order loop condition
+  `i < nofBits`. The early-`continue` forms are not exact.
+
+The six hits are a compiler preimage collision, so they cannot identify the
+unavailable source's precise predicate or increment spelling. The retained
+form is the direct positive nested condition with the existing postfix
+increment. It adds no attribute, assembly, volatile access, hard-register
+constraint or compiler option. The transformations are semantically
+equivalent: the frame work still executes exactly when `bitsBuffered` reaches
+`bitsPerFrame`; the three countdown arms retain the same boundary, copies and
+state updates; and the repeated count expression is evaluated before
+`uint_6f8` is cleared.
+
+Every first-family cell and every prospective hit was scored as a complete
+translation unit over all **seven shared text names**, not just the target.
+The accepted cell changes only `process`, from SIZE42 to **EXACT 530/530**.
+The already-exact C1/C2 and D1/D2 constructor/destructor names stay exact,
+`reset` and `resetNoSpectral` retain their baseline verdicts, and the defined
+name set is unchanged. The complete report therefore moves **806 to 807
+EXACT** and **900 to 899 SIZE**, with 4 UNRESOLVED, 53 REGALLOC, 89 BYTES and
+0 RELOC unchanged over 1,852 shared names. The strict exact-name ratchet
+passes.
+
+The partial-link check replaced only this one input object in the complete
+272-object manifest and linked both variants in the same order. The global
+text name set and its relative order are identical. `process` is the last
+body in its input section, so no sibling moves; the following input begins 48
+bytes later, comprising the required 42-byte body growth and six bytes of
+16-byte input-section alignment. There is no new definition or relative
+order reversal of the kind rejected in F10229.
+
+Focused modern `t_v90modchain` testing passes, including **7,573** ordinary
+`process` checks, **144** checks for the unreachable copy arm and **161** for
+the strict countdown boundary. The pinned GCC 3.4.2 differential reports **1
+passed, 0 failed**. After moving seven structural anchors to the recovered
+source form, the `v90mapper` suite catches **47/47 mutations by test**, with no
+unusable, equivalent or miscounted cases. The repository-wide reference and
+9,768-anchor structural audits are clean. All candidate generators, sources,
+objects and score artifacts were kept outside the repository and removed
+after recording these measurements. (2026-09-07)
