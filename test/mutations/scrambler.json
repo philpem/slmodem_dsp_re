@@ -191,7 +191,7 @@
   },
   {
     "label": "D process(bulk): the restart fires one symbol early",
-    "find": "\t\t*out++ = r;\n\t\tif (--pOut < pLimit) {",
-    "replace": "\t\t*out++ = r;\n\t\tif (--pOut <= pLimit) {"
+    "find": "\t\t--pOut;\n\t\t*out++ = r;\n\t\tif (pOut < pLimit) {",
+    "replace": "\t\t--pOut;\n\t\t*out++ = r;\n\t\tif (pOut <= pLimit) {"
   }
 ]
