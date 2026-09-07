@@ -82,9 +82,11 @@ int V92Mapper::constelAmplitudeTable[16] = {
 };
 
 /*
- * The byte is stored before the short although the short's argument was
- * loaded first, and `mode` is tested before either store -- the object's
- * order, kept because it costs nothing to keep.
+ * The byte is emitted before the short although the recovered source order
+ * assigns the short first, and `mode` is tested before either store.  The
+ * zero-mode arm likewise writes `power` first in source but emits `bits`
+ * first.  Those inversions are GCC's schedule, not observable store-order
+ * requirements; finding F10238 records the finite source-order preimages.
  *
  * 0x40a00000 is 5.0f and 0x41a80000 is 21.0f; both are stored as 32-bit
  * integer immediates, which is how GCC spells a float constant with no
@@ -93,12 +95,12 @@ int V92Mapper::constelAmplitudeTable[16] = {
 void
 V92Mapper::reset(short scaleArg, unsigned char modeArg)
 {
-	mode = modeArg;
 	scale = scaleArg;
+	mode = modeArg;
 
 	if (modeArg == 0) {
-		bits = 2;
 		power = 5.0f;
+		bits = 2;
 	} else {
 		bits = 3;
 		power = 21.0f;
