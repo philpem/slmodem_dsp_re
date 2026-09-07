@@ -26,10 +26,13 @@
  * The four constructor stores.  The object's constructor is nine `mov`s and
  * nothing else, so a signalling NaN handed to it lands in the member intact;
  * `dsplib_assign` is the natural assignment plus what a modern compiler needs
- * to produce that.  See dsplib/x87copy.h.
+ * to produce that.  See dsplib/x87copy.h.  The const qualifiers on all four
+ * by-value parameters recover the period compiler's interleaved load/store
+ * schedule: the other fifteen qualifier masks do not match (finding F10220).
  */
 template <class Tout, class Tparam>
-SineWave<Tout, Tparam>::SineWave(Tparam a, Tparam f, Tparam p, Tparam sr)
+SineWave<Tout, Tparam>::SineWave(const Tparam a, const Tparam f,
+			      const Tparam p, const Tparam sr)
 {
 	dsplib_assign(&amplitude, &a);
 	dsplib_assign(&frequency, &f);

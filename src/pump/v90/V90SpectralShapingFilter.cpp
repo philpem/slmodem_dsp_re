@@ -62,15 +62,18 @@ V90SpectralShapingFilter::V90SpectralShapingFilter()
  * The four arguments into the four coefficient words IN ORDER.  The object
  * copies them as integers, four `mov`s and no x87, because a stack float
  * argument copied to a float member needs no arithmetic; ours converts
- * through the coprocessor, and the two differ for exactly one input class --
- * a signalling NaN, which x87 quietens and `mov` does not.  That is the same
+ * through the coprocessor on modern GCC.  The two differ for exactly one
+ * input class -- a signalling NaN, which x87 quietens and `mov` does not.
+ * That is the same
  * boundary V90SdDetector's constructor sits on (finding F1242), so it is
  * measured the same way: the test sweeps bit patterns and leaves signalling
- * NaNs out.
+ * NaNs out.  On GCC 3.4.2 these are integer copies.  All four by-value
+ * parameters are const: of all sixteen qualifier masks, only this one emits
+ * the object's interleaved argument loads and stores (finding F10220).
  */
 void
-V90SpectralShapingFilter::setFilterCoeff(float c0, float c1, float c2,
-					 float c3)
+V90SpectralShapingFilter::setFilterCoeff(const float c0, const float c1,
+					 const float c2, const float c3)
 {
 	coeff[0] = c0;
 	coeff[1] = c1;
