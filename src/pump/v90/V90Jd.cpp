@@ -159,12 +159,25 @@ V90Jd::V90Jd(V90Parameters *params)
 	bits[47] = (unsigned char)params->V34_PHASE4_CONSTELLATION;
 	bits[48] = (unsigned char)params->V34_RRN_CONSTELLATION;
 
+	/*
+	 * Keep the branch spelling used by setRatesMask above.  GCC 3.4.2
+	 * lowers it to the blob's `test`/`setne` stores.  Assigning the
+	 * equivalent masked expression directly instead produces `and`/`mov`
+	 * and leaves each constructor clone one byte short.
+	 */
 	mask = params->DIGITAL_RATE_MASK;
-	for (i = 0; i <= 15; i++)
-		bits[V90JD_GROUP1 + 1 + i] = (unsigned char)((mask >> i) & 1);
-	for (i = 0; i <= 11; i++)
-		bits[V90JD_GROUP2 + 1 + i] =
-		    (unsigned char)((mask >> (i + 16)) & 1);
+	for (i = 0; i <= 15; i++) {
+		if ((mask >> i) & 1)
+			bits[V90JD_GROUP1 + 1 + i] = 1;
+		else
+			bits[V90JD_GROUP1 + 1 + i] = 0;
+	}
+	for (i = 0; i <= 11; i++) {
+		if ((mask >> (i + 16)) & 1)
+			bits[V90JD_GROUP2 + 1 + i] = 1;
+		else
+			bits[V90JD_GROUP2 + 1 + i] = 0;
+	}
 }
 
 /*
@@ -464,19 +477,6 @@ V90Jd::packData()
 		bits[V90JD_GROUP3 + 1 + i] = (unsigned char)crc[i];
 }
 
-/*
- * 0x1ef10, 537 bytes -- packData's 534 plus `lea 0x2(%edi),%eax`.  The body is
- * not written out again: the object has it twice because GCC inlined this
- * call, not because the author wrote it twice, and compiling the call is what
- * established that (F7944, and the packData comment above for the ledger).
- */
-unsigned char *
-V90Jd::getBitVector()
-{
-	packData();
-	return bits;
-}
-
 void
 V90Jd::unPackReset()
 {
@@ -691,4 +691,22 @@ V90Jd::unPackData(int bit)
 	}
 
 	return 0;
+}
+
+/*
+ * 0x1ef10, 537 bytes -- packData's 534 plus `lea 0x2(%edi),%eax`.  The body is
+ * not written out again: the object has it twice because GCC inlined this
+ * call, not because the author wrote it twice, and compiling the call is what
+ * established that (F7944, and the packData comment above for the ledger).
+ *
+ * This definition follows `unPackData`, matching the blob's physical order:
+ * packData, unPackReset, unPackData, getBitVector.  Moving it from immediately
+ * after packData leaves packData unchanged, makes unPackReset byte-exact, and
+ * reduces getBitVector's residual without changing any function's behaviour.
+ */
+unsigned char *
+V90Jd::getBitVector()
+{
+	packData();
+	return bits;
 }
