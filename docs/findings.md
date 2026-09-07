@@ -121873,3 +121873,70 @@ checks the guard bytes and proves variation for all 42 reset argument pairs.
 The repository reference and 9,790-anchor structural audits are clean. All
 probe generators, candidate sources, objects and temporary census copies were
 removed after recording these results. (2026-09-07)
+
+## F10239. A 680-cell ordinary-C++ search bounds V90Mapper's two remaining reset residues without an exact preimage
+
+The two definitions left in `V90Mapper.cpp` after F10232 were measured again
+with the pinned GCC 3.4.2 flags before selecting a target.  `V90Mapper::reset`
+is SIZE33: **550 bytes and 137 instructions** against the reference's 517
+bytes and 131 instructions.  The smaller `V90Mapper::resetNoSpectral` is
+SIZE17: **421 bytes and 107 instructions** against 404 bytes and 105
+instructions.  The latter was therefore searched first.  The other five
+shared definitions in the translation unit -- C1/C2, D1/D2 and `process` --
+were already EXACT.
+
+The difference is not an unexplained register-allocation residue.  In the
+reference, one stack local begins at zero and advances by 128 after each outer
+iteration.  It is added to `mp` once to form a source-row base, and is added
+to `j` for both the converted store and the zero tail, whose destinations are
+`0x56(this, row + j, 2)`.  The reconstructed two-dimensional spelling instead
+strength-reduces the converted destination into a row pointer advancing by
+256, while retaining a separate 128-byte source-row offset.  That accounts
+for the extra setup and outer-loop updates and identifies source shape,
+indexing shape and local lifetime as the finite levers to test.
+
+The search compiled **680 complete `V90Mapper.cpp` translation units** under
+the unchanged period flags in five bounded families:
+
+- **80 cells** crossed five row computations (`i * 128`, `i << 7`, assignment
+  inside the loop, a `for` update and a tail update) with four source and four
+  destination spellings (two-dimensional, flat cast, first-row flat and a
+  named pointer).  There was no exact cell; the closest sizes were 406 and
+  407 bytes, while the one exact-size body had only 104 instructions.
+- **144 cells** crossed three row lifetimes, eight source-row pointer
+  declarations/initialisations, two flat destination spellings and three
+  declaration orders.  No cell was exact.  The 403-byte cells had 103
+  instructions.
+- **216 cells** added an explicit `row + j` local, crossing signed, unsigned
+  and `size_t` index types, three declaration/assignment orders, four source
+  forms, two destination forms and three row lifetimes.  This recovered the
+  reference's indexed destination store and 0x1c-byte frame in the structural
+  near forms, but none exceeded 103 instructions; the exact-size cells were
+  still 102 instructions and BYTES, not exact.
+- **96 cells** put the PCM decision outside two explicit conversion loops,
+  crossing two row updates, four source forms, two destinations, two local
+  orders and three equivalent nonzero predicates.  GCC folded these back to
+  the already-seen 421-byte, 107- or 103-instruction bodies; none was exact.
+- **144 cells** held the closest one-offset loop fixed and crossed direct,
+  pointer and reference access to the modulus encoder, three placements of
+  the sign clear, three zero-value local forms and four field-store orders.
+  GCC eliminated the access aliases and produced the same 398-byte,
+  103-instruction body throughout; none was exact.
+
+An explicit nonempty guard was also compiled as a diagnostic boundary.  It
+delays source-row construction as suggested by the reference, but emits both
+the source-level zero test and the loop's unsigned bound test, growing the
+body to 414 bytes rather than supplying the missing preimage.  It was not
+retained.  No assembly, volatile access, hard-register constraint, attribute
+or compiler-option variation was admitted to any family.
+
+Every one of the 680 objects was audited over all **seven shared text names**.
+There are zero exact-name losses, zero defined-name-set or relative-order
+changes, and no grade change in the unselected `reset`.  Since there is no
+exact target candidate, none can reach the partial-link acceptance gate; with
+all source candidates discarded, the baseline input object and partial-link
+layout are unchanged.  No source, test or mutation change is retained: a
+behaviorally equivalent but nonexact schedule would make the byte-exact goal
+worse rather than advance it.  The search therefore bounds this ordinary
+source domain negatively and leaves both resets for a future lever supported
+by new object evidence. (2026-09-07)
