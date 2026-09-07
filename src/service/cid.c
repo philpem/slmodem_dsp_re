@@ -614,8 +614,9 @@ _look_for(const char *buf, char tag)
 int
 _look_for_other_than(const char *buf, short start, int except)
 {
-	short len = buf[1];
+	/* This order is the original object's preimage under GCC 3.4.2. */
 	short pos = start;
+	short len = buf[1];
 
 	while (pos < len) {
 		char tag = buf[pos];

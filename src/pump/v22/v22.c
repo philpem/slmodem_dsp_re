@@ -193,9 +193,10 @@ v22_create(void *modem, int id, int caller, int srate, int max_frag,
 	cfg.rate = (id == V22_DP_ID_BELL212) ? 2 : (id == V22_DP_ID_V22);
 	cfg.f08 = 60000;		/* 3000 blocks, the node deadline */
 	cfg.f0c = 0;
+	/* Independent stores, in the original object's unique emission order. */
 	cfg.f10 = 700;			/* 35 blocks, the carrier grace   */
-	cfg.f14 = 0;
 	cfg.f18 = 1;
+	cfg.f14 = 0;
 
 	dp->fp = V22FP_create(NULL, &cfg);
 	if (dp->fp == NULL) {
