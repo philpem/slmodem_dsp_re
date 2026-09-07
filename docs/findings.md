@@ -120943,3 +120943,61 @@ once, all 13,724 pre-finding references resolve, the pinned build compiles all
 800 EXACT.  Candidate sources, objects and enumeration results remain outside
 the tree under `/tmp/v92p2info-enum`; no search generator is retained.
 (2026-09-07)
+
+## F10227. `SetAdaptEqV32` closes with the MU1, OFF, MU0 source-case order
+
+The committed `SetAdaptEqV32` was a same-size BYTES residual: **6 differing
+bytes in 79**.  Its dispatch, stores and offsets already matched; the two
+active branches used different pointer and 16-bit-store scratch registers.
+F10208 rejected a hard-register fit.  This pass uses only ordinary C and the
+repository's unchanged GCC 3.4.2 flags, compiling the complete `v32fpctl.c`
+translation unit for every candidate.
+
+The complete initial **32-cell** domain crossed independently cached/direct
+FP accesses in the three cases with both store orders in each active case.
+The FP spellings were codegen-free, and the four store-order combinations
+left 6, 15, 14 and 23 differing bytes.  A **72-cell** domain then crossed all
+six source-case orders, all four positions of the default arm, and three
+pointer declaration forms: shared FP, branch-local FP, and branch-local FP
+with a named FSE pointer.  Exactly **12 cells** matched: every default and
+declaration form with the source-case order **MU1, OFF, MU0**.  The other five
+orders (OFF/MU0/MU1, OFF/MU1/MU0, MU0/OFF/MU1, MU0/MU1/OFF and MU1/MU0/OFF)
+left 6, 3, 8, 8 and 5 differing bytes respectively; the three- and five-byte
+residues were REGALLOC, not additional exact preimages.
+
+A complete **126-cell** check crossed the six case orders with three selector
+expressions (the constant, `mode - V32_ADAPTEQ_MU0`, and
+`mode == V32_ADAPTEQ_MU1`) and seven value forms (direct, `int` or
+`unsigned short` local before or after the FP load, and assignment back to
+`mode` before or after that load).  All selector spellings were codegen-free:
+the same case order accounted for all **21 exact cells**.  Thus the **230
+complete candidates** contain 33 exact emissions, but recover only the
+case-order fact, not a unique default position, pointer scope or selector
+spelling.  The retained change simply moves the existing MU1 case before OFF;
+every store and declaration is unchanged, and the default arm still performs
+no dereference.
+
+All **21 shared names** were scored for every candidate.  All 20 bystander
+bodies and canonical relocations remained identical to baseline in every
+cell, preserving the entire 11-name exact set.  The retained target raises
+the translation unit to **12 exact names**, with no loss.  The experiment
+sources, objects and logs live only in ignored `build/setadapteq-*` paths and
+are not build inputs.
+
+The retained source passes the focused modern differential suite at **6,546
+checks** and the pinned GCC 3.4.2 suite at **1 passed, 0 failed**.  Moving MU1
+detached one mutation anchor that formerly included the following default
+label; its new anchor names the same MU1 case and still changes `mu_sel` to
+`pll_sel`.  The complete `v32fpctl` mutation suite catches **60/60**, with no
+unusable, equivalent or surviving mutations.  All **9,768 anchors across 228
+suites** resolve exactly once, as do all **13,725 finding references**; the
+two suites covering this TU also pass their scoped 87-anchor audit.
+
+The authoritative GCC 3.4.2 build compiles **272/272 objects** without failure.
+The full 1,852-symbol report is **804 EXACT, 4 UNRESOLVED, 53 REGALLOC, 91
+BYTES, 900 SIZE, 0 RELOC**, and the strict 775-name exact-set ratchet passes.
+Combined with the whole-TU baseline/final body comparison and the unchanged
+other translation units, this is exactly `SetAdaptEqV32` moving from BYTES to
+EXACT: **803 to 804 exact names**, with no loss.  The aggregate's full
+`make phase` remains the integration boundary.
+(2026-09-07)

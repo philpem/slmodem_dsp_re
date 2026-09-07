@@ -149,8 +149,8 @@
  },
  {
   "label": "the equaliser's step selector is one field above mu_sel",
-  "find": "\t\tFSE(fp)->mu_sel = 1;\n\t\tbreak;\n\tdefault:",
-  "replace": "\t\tFSE(fp)->pll_sel = 1;\n\t\tbreak;\n\tdefault:"
+  "find": "\tcase V32_ADAPTEQ_MU1:\n\t\tfp = FP(modem);\n\t\tFIELD_INT(fp, V32FP_EQ_ADAPT) = 1;\n\t\tFSE(fp)->mu_sel = 1;",
+  "replace": "\tcase V32_ADAPTEQ_MU1:\n\t\tfp = FP(modem);\n\t\tFIELD_INT(fp, V32FP_EQ_ADAPT) = 1;\n\t\tFSE(fp)->pll_sel = 1;"
  },
  {
   "label": "the receive loops are switched on where the object switches them off",
