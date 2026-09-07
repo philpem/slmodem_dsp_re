@@ -121110,3 +121110,78 @@ reference integrity and whitespace checks pass.  With no accepted code
 change, differential tests and the full-tree ratchet were not rerun or
 claimed as new validation.
 (2026-09-07)
+
+## F10225. Filing the four pointers before the three clears makes both V92 phase-4 constructor clones exact
+
+`V92Phase4Modulator::V92Phase4Modulator(V92Parameters *,
+V92BitsToSymbol *, V92CP *, V92MappingParams *)` began with 30 differing
+bytes in its 164-byte C1 body and 32 in its same-size C2 body.  Both sides
+already agreed byte for byte through construction of the embedded scrambler,
+the `sizeof(V92Mapper) == 0x2c` allocation, ordinary placement construction of
+the mapper, and the store of that mapper at +0x70.  The last two immediate
+clears at +0x18 and +0x1c also agreed.  The entire residue was therefore the
+schedule of these seven intervening stores:
+
+```
+word_1c0 = 0;       mappingParams = mp;   params = p;
+word_1c4 = 0;       cp = c;               cp->word_110 = 0;
+bitsToSymbol = bts;
+```
+
+A complete ordinary-C++ statement-order domain enumerated all **5,040**
+permutations.  The **2,520** in which `cp->word_110 = 0` follows `cp = c` are
+behaviour-preserving and were compiled as complete translation units with the
+unchanged GCC 3.4.2 flags; the other half dereference the old, uninitialised
+member and were rejected rather than scored as candidates.  The valid domain
+produced **1,176 distinct C1/C2 emission pairs**.  Exactly three source orders
+make both clones EXACT:
+
+```
+mappingParams, params, cp, bitsToSymbol, word_1c0, word_1c4, cp->word_110
+mappingParams, cp, params, bitsToSymbol, word_1c0, word_1c4, cp->word_110
+cp, mappingParams, params, bitsToSymbol, word_1c0, word_1c4, cp->word_110
+```
+
+They all lower to the same reference bytes, so the unavailable source cannot
+be distinguished among them.  The retained first form is the clearest: it
+files the independent pointer members first, then performs the three clears.
+This recovers a scheduling preimage, not an observable order; the constructor
+fixture already documents why no call can observe the order of these disjoint
+stores.  The caller-owned CP clear remains after `cp = c`, preserving the one
+real dependency.
+
+Initializer-list, local-declaration and qualifier changes were not needed or
+allowed to enlarge the successful domain.  The exact prefix already fixes the
+existing `void *m`, allocation and placement-construction spelling.  Moreover,
+moving pointer members into the initializer list would store members declared
+before `scrambler` before that subobject's constructor, whereas the blob stores
+all four only after mapper construction.  Thus the only still-free ordinary
+source axis was the seven-statement order, and that axis was exhausted without
+assembly, volatile access, a hard register, an attribute or a compiler-flag
+change.
+
+The retained period object scores both mangled names EXACT at **164/164
+bytes**.  A comparison of all **44 shared text definitions** in
+`V92Phase4Modulator.cpp` finds that only C1 and C2 change their blob verdict;
+the exact-name set grows from **30 to 32**, with no loss.  The constructors are
+ordinary global `T` definitions rather than COMDAT copies.  All weak template
+definitions emitted by this translation unit retain their prior blob verdicts;
+the only conservative separate-object comparison is `generateSymbol`'s
+already-unresolved section-relative jump-table relocation, whose blob verdict
+does not change.
+
+The full 272-object report moves **800 to 802 EXACT** and **95 to 93 BYTES**,
+with 4 UNRESOLVED, 53 REGALLOC, 900 SIZE and 0 RELOC unchanged over 1,852
+shared symbols.  Focused modern testing passes all six `t_v92p4mod` cases:
+both C1/C2 constructors with shared and separate caller-owned V92CP objects,
+and both destructor clones.  The pinned GCC 3.4.2 differential reports **1
+passed, 0 failed**.  The constructor suite catches **17/17** mutations after
+five anchors were moved to the retained statement order.  The three other
+suites sharing this source also retain their recorded outcomes:
+`v92p4gen` **103/103 caught**, `v92p4reset` **44 caught plus 2 recorded
+equivalents**, and `v92p4sym` **134/134 caught**, with no unusable or unexpected
+surviving mutant.  The repository-wide reference and 9,768-anchor audit is
+clean.  The strict exact-name ratchet and the aggregate's full `make phase`
+remain the integration boundary.  Diagnostic objects are ignored under
+`build/v92p4-ctor-variants` and `build/v92p4-ctor-perms`; they are not build
+inputs. (2026-09-07)

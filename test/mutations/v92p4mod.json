@@ -25,13 +25,13 @@
  },
  {
   "label": "+0x1c0 is not cleared",
-  "find": "\tword_1c0 = 0;\n\tmappingParams = mp;",
-  "replace": "\tmappingParams = mp;"
+  "find": "\tbitsToSymbol = bts;\n\tword_1c0 = 0;",
+  "replace": "\tbitsToSymbol = bts;"
  },
  {
   "label": "+0x1c4 is not cleared",
-  "find": "\tword_1c4 = 0;\n\tcp = c;",
-  "replace": "\tcp = c;"
+  "find": "\tbitsToSymbol = bts;\n\tword_1c0 = 0;\n\tword_1c4 = 0;\n\tcp->word_110 = 0;",
+  "replace": "\tbitsToSymbol = bts;\n\tword_1c0 = 0;\n\tcp->word_110 = 0;"
  },
  {
   "label": "+0x18 is not cleared",
@@ -60,18 +60,18 @@
  },
  {
   "label": "the caller's V92CP is left alone",
-  "find": "\tcp->word_110 = 0;\n\tbitsToSymbol = bts;",
-  "replace": "\tbitsToSymbol = bts;"
+  "find": "\tcp->word_110 = 0;\n\tword_18 = 0;",
+  "replace": "\tword_18 = 0;"
  },
  {
   "label": "the word cleared in the caller's V92CP is +0x114",
-  "find": "\tcp->word_110 = 0;\n\tbitsToSymbol",
-  "replace": "\t*(unsigned int *)((unsigned char *)cp + 0x114) = 0;\n\tbitsToSymbol"
+  "find": "\tcp->word_110 = 0;\n\tword_18",
+  "replace": "\t*(unsigned int *)((unsigned char *)cp + 0x114) = 0;\n\tword_18"
  },
  {
   "label": "the caller's V92CP is cleared through the mapping parameters instead",
-  "find": "\tcp = c;\n\tcp->word_110 = 0;",
-  "replace": "\tcp = c;\n\t((V92CP *)mp)->word_110 = 0;"
+  "find": "\tword_1c4 = 0;\n\tcp->word_110 = 0;\n\tword_18 = 0;",
+  "replace": "\tword_1c4 = 0;\n\t((V92CP *)mp)->word_110 = 0;\n\tword_18 = 0;"
  },
  {
   "label": "the mapper's null test is dropped",

@@ -151,7 +151,9 @@ typedef char v92p4m_cp_word110[
  * ===========================================================================
  * V92Phase4Modulator::V92Phase4Modulator (.text+0x17970 / +0x17a20, 164 B)
  *
- * The whole body, in the object's own order:
+ * The whole body, in the blob's emitted order.  The ordinary-source preimage
+ * below deliberately lists the seven movable stores in a different order;
+ * GCC 3.4.2 schedules that spelling into this sequence (finding F10225):
  *
  *     Scrambler<unsigned char,unsigned char>(this + 0x4c, 5, 0x17, 0x63)
  *     malloc(0x2c) -> V92Mapper() -> +0x70
@@ -198,13 +200,13 @@ V92Phase4Modulator::V92Phase4Modulator(V92Parameters *p, V92BitsToSymbol *bts,
 	new (m) V92Mapper();
 	mapper = (V92Mapper *)m;
 
-	word_1c0 = 0;
 	mappingParams = mp;
 	params = p;
-	word_1c4 = 0;
 	cp = c;
-	cp->word_110 = 0;
 	bitsToSymbol = bts;
+	word_1c0 = 0;
+	word_1c4 = 0;
+	cp->word_110 = 0;
 	word_18 = 0;
 	byte_1c = 0;
 }
