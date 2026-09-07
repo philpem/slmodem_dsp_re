@@ -121501,3 +121501,76 @@ whitespace checks passing.  Because no code change was accepted, focused
 modern/period differential tests, mutation suites and the full-tree ratchet
 were not rerun or claimed as new validation.
 (2026-09-07)
+
+## F10235. `generateE2u`'s output-address carrier has no exact preimage in 40 scope, declaration and initialization cells
+
+`_ZN18V92Phase4Modulator11generateE2uEv` remains **BYTES 8/239** under
+the repository-default GCC 3.4.2 flags.  F8143 bounded method-definition
+order, F8145 bounded return/control-flow spellings and identified the output
+address as an untested direction, and F10212 bounded local declaration and
+independent output-store orders.  This pass follows that specific remaining
+direction: the final `bitsToSymbol->process(n, &sym)` call, without changing
+the callee's `unsigned int &` / `short *` signature, the signed `short sym`
+object, or either arm's observable operations.
+
+The first **16 cells** cross four address carriers (direct `&sym`, an
+initialized `short *`, a declared pointer assigned immediately before the
+call, and a `short &` alias), function versus inner-block scope, and both
+legal declaration-group orders.  An initialized alias must follow the
+declaration of `sym`; the order axis therefore places that group before or
+after `n`/`last`, rather than inventing an invalid forward reference.  In
+the block arm `sym` remains in function scope and the working declarations
+and original body are enclosed in a block.  The direct-address cells serve
+as controls for the scope/order axes.
+
+Eight cells, the direct addresses and late-assigned pointers, reproduce
+the **complete baseline object byte for byte**.  The eight early initialized
+pointer/reference cells instead grow `generateE2u` to 252 bytes, SIZE13.
+This is a real initialization-timing effect rather than evidence that a
+pointer declaration alone reproduces the missing reload/sign-extension
+split.
+
+One evidence-led extension contains **24 cells**: the same four carriers,
+three initialization sites (function entry, after the mapper arm's early
+return, or immediately before the final call), and returning through the
+original `sym` versus through the carrier.  Pointer assignment is separate
+from its function-entry declaration; initialized pointers and references are
+declared at the selected site.  The direct-address control's alternate
+return is `*(&sym)`.  All cells retain the same output object; no second
+output slot, pointee qualifier, assembly, volatile access or hard-register
+variable is introduced.  Twelve extension cells reproduce the baseline,
+six produce SIZE13, and six produce SIZE15 (254 bytes).
+
+Thus **40 complete TU compiles collapse to three complete ELF objects**:
+20 baseline-identical BYTES8 cells, 14 SIZE13 cells and six SIZE15 cells.
+There are **zero exact preimages**.  Every cell was scored with
+`byteident.py`'s own body/relocation comparator over all **44 shared
+definitions**, including the Scrambler copies.  The **32-name exact set**
+is unchanged throughout, including the recently closed parent C1/C2 and
+the exact template constructors, destructors and process helpers.
+
+The two nonbaseline emissions also change `generateCPu`, `generateSUVu`
+and `generateSymbol`.  The first pair remain 303 bytes against 304 in the
+blob, so their unchanged SIZE1 grades would conceal the body changes in a
+count-only audit.  `generateSymbol` is 4008 bytes against 4055 at baseline;
+the SIZE13 family makes it 4014 (SIZE41), while the SIZE15 family leaves
+its size at 4008 (SIZE47) but still changes its body.  Neither is an exact
+bystander gain.
+
+All three emissions preserve the complete defined-name and binding/type
+sets.  The baseline-identical cells also preserve every section header and
+symbol offset/size.  Each nonbaseline emission changes section headers and
+seven defined-symbol offset/size records.  No such candidate qualifies for
+the exact/no-loss prerequisite to an aggregate partial-link acceptance
+audit, and no partial-link improvement is claimed for them.  The whole-TU
+and layout measurements therefore reject the tempting source variations
+without relying solely on the target's score or the exact-name count.
+
+No source, test, mutation, compiler-option or ratchet edit is retained.
+This bounds the stated address-carrier domain, not all ordinary C++
+preimages.  All probe scripts, candidate sources, objects and score records
+were removed after documenting the result.  Only this finding remains;
+reference integrity and whitespace checks pass.  Because no code change
+was accepted, focused modern/period differential tests, mutations and the
+full-tree ratchet were not rerun or claimed as new validation.
+(2026-09-07)
