@@ -321,6 +321,7 @@ run_rx_create(void)
 	for (k = 0; k < (long)(sizeof(v27_cases) / sizeof(v27_cases[0])); k++) {
 		struct v27rx_cfg c;
 		struct faxvmi_link la, lb;
+		unsigned char sa[64], sb[64];
 
 		c = V27RX_CFG;
 		c.bit_rate = v27_cases[k].bit_rate;
@@ -339,6 +340,18 @@ run_rx_create(void)
 		snprintf(buf, sizeof(buf), "v27rx_create %s: unpack_width (%%ld)",
 			 v27_cases[k].name);
 		diff_eq_int(buf, la.unpack_width, lb.unpack_width, k);
+		memset(sa, 0xa5, sizeof sa);
+		memset(sb, 0xa5, sizeof sb);
+		v27rx_status(&la, sa);
+		ref_v27rx_status(&lb, sb);
+		snprintf(buf, sizeof(buf), "v27rx_create %s: status (%%ld)",
+			 v27_cases[k].name);
+		diff_eq_int(buf, memcmp(sa, sb, sizeof sa), 0, k);
+		snprintf(buf, sizeof(buf), "v27rx_create %s: copied config (%%ld)",
+			 v27_cases[k].name);
+		diff_eq_int(buf,
+			    memcmp((void *)(long)la.int_0014,
+				   (void *)(long)lb.int_0014, sizeof c), 0, k);
 
 		V27RX_delete((void *)(long)la.int_0014);
 		ref_V27RX_delete((void *)(long)lb.int_0014);
@@ -562,6 +575,7 @@ run_tx_create_v29(void)
 	     k++) {
 		struct v29tx_cfg c;
 		struct faxvmi_link la, lb;
+		unsigned char sa[64], sb[64];
 
 		c = V29TX_CFG;
 		c.bitrate = v29tx_cases[k].bit_rate;
@@ -589,6 +603,18 @@ run_tx_create_v29(void)
 		snprintf(buf, sizeof(buf), "v29tx_create %s: handle set (%%ld)",
 			 v29tx_cases[k].name);
 		diff_eq_int(buf, la.int_0014 != 0, lb.int_0014 != 0, k);
+		memset(sa, 0xa5, sizeof sa);
+		memset(sb, 0xa5, sizeof sb);
+		v29tx_status(&la, sa);
+		ref_v29tx_status(&lb, sb);
+		snprintf(buf, sizeof(buf), "v29tx_create %s: status (%%ld)",
+			 v29tx_cases[k].name);
+		diff_eq_int(buf, memcmp(sa, sb, sizeof sa), 0, k);
+		snprintf(buf, sizeof(buf), "v29tx_create %s: copied config (%%ld)",
+			 v29tx_cases[k].name);
+		diff_eq_int(buf,
+			    memcmp((void *)(long)la.int_0014,
+				   (void *)(long)lb.int_0014, sizeof c), 0, k);
 
 		V29TX_delete((void *)(long)la.int_0014);
 		ref_V29TX_delete((void *)(long)lb.int_0014);

@@ -376,6 +376,26 @@
     "the tone/raw comparison is the other way round": "caught"
    }
   },
+  "faxadaptcreate": {
+   "key": "cca6894362b32d77d7d275a33f330c20ff71774446fb2a2778aac4a52c1e1fc3",
+   "summary": "14 mutations: 12 caught (12 by test, 0 by strings), 0 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
+   "verdicts": {
+    "v27rx_create always hands the constructor the default configuration": "caught",
+    "v27rx_create clears pack_width before calculating unpack_width": "equivalent",
+    "v27rx_create compares the receive rate against 4800 rather than 2400": "caught",
+    "v27rx_create ignores a caller-provided configuration": "caught",
+    "v27rx_create leaves a nonzero receive pack count": "caught",
+    "v27rx_create leaves a nonzero receive pack width": "caught",
+    "v27rx_create reverses the two unpack widths": "caught",
+    "v29tx_create always hands the constructor the default configuration": "caught",
+    "v29tx_create clears unpack_width before calculating pack_width": "equivalent",
+    "v29tx_create compares the transmit rate against 9600 rather than 7200": "caught",
+    "v29tx_create ignores a caller-provided configuration": "caught",
+    "v29tx_create leaves a nonzero transmit unpack width": "caught",
+    "v29tx_create reverses the two pack widths": "caught",
+    "v29tx_create uses the V27 transmit budget": "caught"
+   }
+  },
   "fdspdp": {
    "key": "bd115f48a35c234d3f4ccd3eb835325154bc2e0aefdf1b769a6ef98799ce4ecb",
    "summary": "22 mutations: 22 caught (22 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
