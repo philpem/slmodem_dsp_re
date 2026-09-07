@@ -121574,3 +121574,54 @@ reference integrity and whitespace checks pass.  Because no code change
 was accepted, focused modern/period differential tests, mutations and the
 full-tree ratchet were not rerun or claimed as new validation.
 (2026-09-07)
+
+## F10236. `FDSP_DP_Delete`'s final cleanup helper is a constant map over 12 ordinary C cells
+
+A fresh repository-default GCC 3.4.2 compile of `src/service/fdspkrnl.c`
+confirms **BYTES 10/157** for `FDSP_DP_Delete`.  The blob clears EBX before
+the final `sysdep_free`, preserves that zero across the call, and stores it
+to `pGlobalFDSPObj`.  The reconstruction calls first, clears EAX afterwards,
+and stores EAX.  The resulting instruction lengths also change the null-
+argument branch destination and the alignment padding.  Strict `alpha_why`
+rejects row 4's differing branch target; this is not a complete grade-1
+register-renaming match.  F10216 had already bounded a null-assigned
+parameter, a saved dead pointer and file-local BSS declarations without
+recovering the zero carrier.
+
+This domain tests **four ordinary inline cleanup forms at three definition
+positions**, for **12 complete TU compiles**.  The forms are: a void wrapper
+around the final free followed by the caller's global clear; a wrapper that
+frees and returns a null kernel pointer for assignment to the global; a
+wrapper that frees and returns a separately passed null result parameter;
+and a wrapper that frees and writes null through an output pointer to the
+global.  Each helper is declared before `FDSP_DP_Delete`, then defined
+before that function, immediately after it, or at EOF.  Every candidate
+preserves the original null-kernel early return, all channel dereferences
+and free order, and the final global clear after freeing the kernel.  No
+assembly, volatile, forced register, field-locality or compiler-option
+change is involved.
+
+**All 12 complete ELF objects are byte-identical to the fresh baseline.**
+Every helper fully disappears: no helper definition or call survives.  This
+is a constant map, with zero exact preimages and no new residue supporting
+an extension of the chosen family.  All **14 shared text names** were
+scored with `byteident.py`'s own body/relocation comparator in every cell;
+all thirteen bystanders are unchanged.  The exact-name set remains the
+same three names: `FDSP_Kernel_SetInternalBeepInProgress`, `TONE_delete`
+and `zFLTUTL_FloatMemSet`.
+
+The complete definition names, binding/type letters, offsets and sizes,
+and every ELF section header are also identical.  Whole-object byte
+identity makes these variants interchangeable inputs to a fixed partial
+link, so no new helper selection or layout risk is concealed by the
+per-function result.  A new aggregate `ld -r` run is not claimed; there is
+no changed input object or accepted source change to validate that way.
+
+Only this bounded finding is retained.  The source, tests, mutations and
+ratchet are unchanged; all probe scripts, candidate sources, objects and
+score records were removed after recording the result.  Reference integrity
+and whitespace checks pass.  Focused modern/period differential tests,
+mutation suites and the full-tree ratchet were not rerun or claimed as new
+validation because no code change was accepted.  This excludes the stated
+cleanup-helper domain, not every ordinary C preimage.
+(2026-09-07)
