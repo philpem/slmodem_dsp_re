@@ -120772,3 +120772,70 @@ The complete 272-object `make byteident-ratchet J=3` passes the strict
 worktree's rebased `08b01fa9` aggregate, the exact-name set gains only
 `fComputeRMSValueShortBuf`, loses nothing, and moves one function from BYTES
 to EXACT.  The fresh `--why` report is EXACT / ACCEPT.  (2026-09-07)
+
+## F10221. An out-of-range-first condition closes `Resampler::setNormalizedPhase` without losing NaN rejection
+
+`Resampler::setNormalizedPhase(float)` began with 26 differing bytes in its
+57-byte body.  Both sides load the phase, compare it first with zero and then
+with one, multiply an accepted value by `phases` at extended precision, and
+store the result as a double.  The residue was control-flow orientation.  The
+reconstruction's second compare ended in `jae` to the zero arm and put the
+scaled arm first; the blob uses `jb` to the scaled arm and puts the zero arm
+first.  The blob's first ordered comparison also settles the unordered case:
+an x87 unordered result sets carry, so its first `jb` takes every NaN directly
+to the zero store.
+
+A complete domain of **20 ordinary C++ source forms** crossed conjunctions,
+disjunctions and negated relational predicates with nested arms, explicit
+returns, a preassigned result, a conditional expression, a named Boolean and
+two labelled-control-flow forms.  No assembly, volatile access, register
+constraint, attribute or compiler flag was used.  The domain produced four
+distinct emissions:
+
+| cells | result | shared source fact |
+|---:|---|---|
+| 9 | **EXACT**, 57 bytes | test the out-of-range path as the primary arm |
+| 8 | BYTES 26, 57 bytes | test the accepted range as the primary arm |
+| 1 | SIZE, 66 bytes | preassign zero before testing the accepted range |
+| 2 | BYTES 26, 57 bytes | reverse the order of the two nested bounds |
+
+Nine cells are exact, so this does not identify a unique original spelling.
+Two of those nine accept a NaN under ordinary IEEE C++ semantics even though
+GCC 3.4.2's `-mno-ieee-fp` lowering happens to send it to zero; they were
+rejected as behaviourally wrong source forms.  The remaining **seven exact
+preimages** preserve the blob's NaN result on both the period and modern
+compilers.  The retained form is the clearest of them:
+
+```
+if (!(p >= 0.0f) || p >= 1.0f)
+        phase = 0;
+else
+        phase = p * phases;
+```
+
+The negated lower bound is load-bearing: unlike `p < 0.0f`, it is true for an
+unordered value in C++ and therefore makes the source itself say what the blob
+does.  Under GCC 3.4.2 it emits the blob's complete 57 bytes and both canonical
+relocations.  The recovery establishes the primary-arm orientation and NaN
+routing, not which of the seven equivalent exact spellings appeared in the
+unavailable source.
+
+The differential phase grid now includes a quiet NaN for every constructor
+shape and checks both stored double words against the blob and against zero.
+The focused modern run passes all 16 `t_resampler` groups; its phase group
+reports **1,760 checks**.  The focused GCC 3.4.2 run reports **1 passed, 0
+failed**.  The complete resampler mutation suite catches **27/27**, including
+a new mutation which replaces the negated lower bound with `p < 0.0f` and is
+caught by the NaN rows.  All 9,768 mutation anchors across 228 suites still
+resolve exactly once.
+
+The full 272-object byte-identity scan reports **792 EXACT, 4 UNRESOLVED, 53
+REGALLOC, 103 BYTES, 900 SIZE and 0 RELOC** over 1,852 shared symbols: exactly
+`setNormalizedPhase` moves from BYTES to EXACT and no exact symbol is lost.
+A direct baseline/final comparison of all **14 shared functions** in
+`Resampler.cpp` confirms that it is the only function whose verdict or
+differing-byte count changes.
+The strict 775-name exact-set ratchet passes.  The aggregate's full `make
+phase` boundary remains for integration.  The 20 diagnostic objects are under
+this worktree's ignored `build/resampler-variants`; they are not build inputs.
+(2026-09-07)
