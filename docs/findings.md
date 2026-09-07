@@ -120885,3 +120885,61 @@ the 26-anchor audit is clean, and the complete mutation suite still catches
 **26/26**.  Candidate sources and objects are under `/tmp/moddatav17-enum`
 and are diagnostic artifacts, not build inputs.  The aggregate's full
 `make phase` remains the integration gate. (2026-09-07)
+
+## F10224. An integer temporary and source-order tail recover all three V92Phase2Info initialisers
+
+`V92Phase2Info::V92Phase2Info(V92Parameters *)`'s C1 and C2 clones were
+same-size **BYTES** residuals: each was 91 bytes and differed from the reference
+in 31 byte positions.  `V92Phase2Info::setToDefault()` has the same thirteen
+field writes, apart from loading rather than storing the parameter pointer, and
+had the identical 31-byte scheduling residual.  The values, member offsets and
+casts were already correct; the reference interleaves the second boolean's
+compare with the constant stores and emits the carrier clear after the three
+filter-count copies.
+
+The finite search comprised **1,296 complete GCC 3.4.2 translation-unit
+compiles** under the repository flags.  First, all 120 orders of the second
+boolean store and four capability stores, then all 720 orders including the
+preceding `maxTxPower` copy, failed to close the clones (the best left 15
+differing bytes).  On that best prefix, all 24 orders of the final three copies
+and carrier clear had a unique zero-residue order: the three copies followed by
+the clear, reducing each clone to six differing bytes.  Finally, all 360
+topological orders obtained by splitting the boolean computation from its
+member store had exactly one zero-residue order: compute it after
+`maxTxPower`, perform the four constant stores, then store the saved result.
+
+An additional 72-cell type, initialisation and parameter-qualifier domain
+tested `bool`, `char`, `unsigned char`, `short`, `unsigned short`, `int`,
+`unsigned int`, `long` and `unsigned long`; separate, top-initialised,
+middle-initialised and zero-then-assigned forms; and both plain and top-level
+`const` parameter pointers.  Thirty-six cells were exact.  Within this domain
+the evidence therefore bounds the temporary to a non-byte integer type and
+rules out only top-of-function value initialisation: all six tested integer
+types of at least 16 bits work in the separate, middle-initialised and
+zero-then-assigned forms, and the top-level pointer qualifier is codegen-free.
+The retained spelling is the least elaborate exact member of that equivalence
+class, a separately declared `int` assigned at the point of use.  No assembly,
+`volatile`, hard-register constraint, compiler option, ABI type or behaviour
+was changed.
+
+Every candidate compile was scored across all four shared names in
+`V92Phase2Info.cpp`, not just the target clones.  Applying the same recovered
+source schedule to `setToDefault` makes it exact too.  C1, C2 and
+`setToDefault` are now byte-for-byte exact; the non-target `printInfo` object
+body is byte-for-byte unchanged and retains its pre-existing SIZE residual.
+A full-tree A/B made by replacing only this translation unit in an otherwise
+identical 272-object output proves the exact-name set moves **797 to 800**:
+precisely those three gains, no losses.  BYTES moves 98 to 95; UNRESOLVED 4,
+REGALLOC 53, SIZE 900 and RELOC 0 are unchanged over all 1,852 shared symbols.
+
+Focused modern `make one T='t_v92p2info t_p2echoleaves' J=4` passes **978
+checks**, including constructor, reset and print differential coverage.  The
+matching GCC 3.4.2 period command passes **2 of 2** suites.  The updated
+`v92p2info` mutation anchors resolve exactly once and all **12 of 12** semantic
+mutations are caught by the differential test, with none unusable, equivalent
+or surviving.  The complete anchor audit resolves all 9,767 anchors exactly
+once, all 13,724 pre-finding references resolve, the pinned build compiles all
+272 source objects without failure, and the strict exact-name ratchet passes at
+800 EXACT.  Candidate sources, objects and enumeration results remain outside
+the tree under `/tmp/v92p2info-enum`; no search generator is retained.
+(2026-09-07)
