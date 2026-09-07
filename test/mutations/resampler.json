@@ -100,13 +100,18 @@
  },
  {
   "label": "setNormalizedPhase accepts 1.0",
-  "find": "\tif (p >= 0.0f && p < 1.0f)",
-  "replace": "\tif (p >= 0.0f && p <= 1.0f)"
+  "find": "\tif (!(p >= 0.0f) || p >= 1.0f)",
+  "replace": "\tif (!(p >= 0.0f) || p > 1.0f)"
  },
  {
   "label": "setNormalizedPhase accepts a negative phase",
-  "find": "\tif (p >= 0.0f && p < 1.0f)",
-  "replace": "\tif (p < 1.0f)"
+  "find": "\tif (!(p >= 0.0f) || p >= 1.0f)",
+  "replace": "\tif (p >= 1.0f)"
+ },
+ {
+  "label": "setNormalizedPhase accepts a NaN",
+  "find": "\tif (!(p >= 0.0f) || p >= 1.0f)",
+  "replace": "\tif (p < 0.0f || p >= 1.0f)"
  },
  {
   "label": "setNormalizedPhase scales by taps, not phases",

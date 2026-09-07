@@ -196,7 +196,7 @@ public:
 	 * @brief Set the fractional phase, normalised to [0, 1) of one input
 	 *        sample.
 	 * @param p  Normalised phase; any value outside [0, 1), including
-	 *           negative, sets the phase to 0.
+	 *           negative or unordered, sets the phase to 0.
 	 */
 	void setNormalizedPhase(float p);
 

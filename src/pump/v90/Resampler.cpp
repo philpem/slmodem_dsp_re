@@ -429,8 +429,8 @@ Resampler::getNormalizedPhase() const
 /*
  * Normalized means "in [0, 1) of one input sample", so the stored value is
  * scaled by `phases`.  ANYTHING OUTSIDE [0, 1) GIVES ZERO, including a
- * negative, and the two comparisons are against the 0.0f at
- * .rodata.cst4+0x1d4 and the 1.0f at +0x1d8.
+ * negative or an unordered value, and the two comparisons are against the
+ * 0.0f at .rodata.cst4+0x1d4 and the 1.0f at +0x1d8.
  *
  * `p * phases` is computed at extended precision: `fildll` puts the exact
  * integer on the x87 stack, `fmulp` multiplies there, and the only rounding
@@ -440,10 +440,11 @@ Resampler::getNormalizedPhase() const
 void
 Resampler::setNormalizedPhase(float p)
 {
-	if (p >= 0.0f && p < 1.0f)
-		phase = p * phases;
-	else
+	/* The negated lower bound deliberately rejects NaN as well as negatives. */
+	if (!(p >= 0.0f) || p >= 1.0f)
 		phase = 0;
+	else
+		phase = p * phases;
 }
 
 /*

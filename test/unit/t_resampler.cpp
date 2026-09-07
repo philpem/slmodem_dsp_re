@@ -654,6 +654,25 @@ case_phase(void)
 			diff_eq_int("getNormalizedPhase after %ld/64",
 				    (long)fbits(g0), (long)fbits(g1), k);
 		}
+		{
+			unsigned nan_bits = 0x7fc00000u;
+			unsigned d0w[2], d1w[2];
+			float p;
+
+			memcpy(&p, &nan_bits, sizeof p);
+			rs_setnp(obj[0], p);
+			ref_rs_setnp(obj[1], p);
+			memcpy(d0w, obj[0] + 0x0c, 8);
+			memcpy(d1w, obj[1] + 0x0c, 8);
+			diff_eq_int("shape %ld: a NaN phase is rejected (low)",
+				    (long)d0w[0], (long)d1w[0], i);
+			diff_eq_int("shape %ld: a NaN phase is rejected (high)",
+				    (long)d0w[1], (long)d1w[1], i);
+			diff_eq_int("shape %ld: rejected NaN stores zero (low)",
+				    (long)d1w[0], 0, i);
+			diff_eq_int("shape %ld: rejected NaN stores zero (high)",
+				    (long)d1w[1], 0, i);
+		}
 
 		rs_dtor(obj[0]);
 		ref_rs_dtor(obj[1]);
