@@ -121292,3 +121292,88 @@ not rerun or claimed as new validation.  The baseline pinned build and both
 complete byteident censuses above are code-generation measurements, not
 substitutes for differential tests.
 (2026-09-07)
+
+## F10230. V92Mapper's quotient local leaves a six-byte load-order residue in 222 ordinary C++ cells
+
+`V92Mapper::process(unsigned char *)` is a 107-byte BYTES body, with 33 byte
+positions different from the reference at this branch's baseline. Its loop is
+already identical. The residue begins after it: the reconstruction loads the
+table row, keeps `scale` on the x87 stack, and divides at stack depth two. The
+reference instead loads `power`, loads the row selector while that load is in
+flight, takes the square root, forms `table / root` at stack depth one, and
+only then loads and multiplies by `scale`.
+
+A `long double quotient` for `table / root`, followed by the existing scaled
+return, reproduces all but one adjacent instruction pair. The reference has
+
+```
+flds   0x28(%esi)          power
+movzbl 0x02(%esi),%eax     mode
+```
+
+where every best ordinary candidate emits those two loads in the opposite
+order. Everything after them, including `fsqrt`, the relocated table load,
+`de f1` (FDIVRP), the delayed `filds` of `scale`, the control-word sequence,
+`fmulp`, `fistps`, and the epilogue, is positionally identical. Swapping a
+three-byte and a four-byte instruction accounts for the remaining **BYTES 6
+of 107**. `byteident --why` rejects the original at row 15, `flds` against
+`movzbl`; this is x87/integer scheduling, not register allocation.
+
+The first prescribed domain contains **24 complete translation units**: six
+evaluation/local shapes (direct, root local, index local, both root/index
+orders, and a power local), crossed with quotient-local present/absent and a
+short scale-local present/absent. It produces ten target emissions and no
+exact cell. The quotient-local cells establish the six-byte residue; scale
+locals make the body a different size.
+
+Only axes exposed by that residual were extended. The complete extension is:
+
+- **72 cells:** six power accesses (direct, float, const float, long double,
+  const long double, and const-reference locals), three mode/index accesses
+  (direct, index local, and mode local), both declaration orders, and
+  initialized versus separately assigned quotient locals. All 72 collapse to
+  the same BYTES6 emission.
+- **36 cells:** float, double, and long-double root locals crossed with the
+  same three quotient types and initialized/separately assigned forms for
+  both. None is exact; narrowing types also produce larger or smaller bodies.
+- **6 cells:** every formal/call order of an ordinary inline quotient helper's
+  `acc`, `mode`, and `power` value arguments. The helper is fully inlined;
+  every order emits BYTES6 and no extra definition.
+- **48 cells:** auto/register storage for `acc` and `i`, auto/const/register
+  long-double quotient, top-level `const` on the input pointer, and both
+  multiplication operand orders. All 48 emit the same BYTES6 body.
+- **12 cells:** every field order of a local `{power, mode, scale}` aggregate,
+  using aggregate initialization or ordered member assignments. These retain
+  a real stack aggregate and all miss by size.
+- **24 cells:** six equivalent quotient constructions (initialized or assigned
+  directly, root then quotient update, amplitude then `/=`, distinct root
+  local, and distinct amplitude local), crossed with four scaling forms
+  (`scale*q`, `q*scale`, `q*=scale`, and a result local). They reduce to two
+  same-size emissions, BYTES6 and BYTES11, with no exact cell.
+
+Thus **222 cells** produce **27 distinct target bodies and zero preimages**.
+There are 148 BYTES6 cells; no other same-size cell is closer. Closer byte
+counts among SIZE cells are not a grade and are not banked. The domain does
+not claim that no ordinary C++ preimage exists; it bounds the evaluation tree,
+quotient/root/scale temporary, type, storage-class, top-level qualifier,
+inline-helper argument-order, and aggregate-copy explanations supported by
+the observed residue. No assembly constraint, volatile access, hard register,
+attribute, compiler flag, or behavioural change was introduced.
+
+Every candidate was compiled as the complete `V92Mapper.cpp` translation unit
+with the unchanged pinned GCC 3.4.2 flags and scored through
+`byteident.py`'s own body, relocation, verdict, and grade-1 paths. All **six
+shared text names** were checked in every cell. The exact C1/C2 and D1/D2
+constructor/destructor names remain exact throughout; `reset` retains its
+baseline BYTES2 body and grade. No candidate adds or removes a definition,
+and no bystander score changes. The TU exact-name set therefore remains the
+same four names.
+
+No source, test, mutation, or compiler-option edit is retained. The existing
+`t_v92convmapper` differential and `v92mapper` mutation suite already cover
+the accumulator width, table row, divide direction, square-root edge cases,
+scale, and final truncation; there is no semantic change for them to validate
+here. Probe generators, sources, objects, compiler diagnostics, and score
+tables were kept outside the repository under `/tmp/v92mapper-probe` during
+the run and removed after recording this bounded negative. Reference and
+whitespace checks pass. (2026-09-07)
