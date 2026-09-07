@@ -121377,3 +121377,66 @@ here. Probe generators, sources, objects, compiler diagnostics, and score
 tables were kept outside the repository under `/tmp/v92mapper-probe` during
 the run and removed after recording this bounded negative. Reference and
 whitespace checks pass. (2026-09-07)
+
+## F10231. Computing V27TX_status's final flags byte before the adjacent clear closes all 118 bytes
+
+`V27TX_status` began at BYTES 33 with the same 118-byte size as the blob.
+The first fifteen instructions agreed exactly, through the second read of the
+transmitter's bit rate.  The first rejection was not a register choice: the
+reconstruction emitted the `andb $0xfe,status[0x15]` clear before the
+`status[0x12]` and `status[0x10]` stores.  The blob performs both stores,
+computes and stores the first `status[0x14]` value, loads `tx[0x10]`, and only
+then clears `status[0x15]`.  Everything after that clear already agreed.
+Thus 33 differing bytes described one displaced four-byte instruction, not
+33 independent facts.
+
+A complete **43-cell ordinary-C domain** crossed four types for a named copy
+of `tx[0x10]` (`unsigned char`, `signed char`, `unsigned int`, `int`), both
+declaration orders relative to the existing `flags` local, and five placements
+of its load relative to the first flags calculation, first flags store and
+adjacent-byte clear.  Three further cells used a pointer local, a separate
+final-value local, or reused the existing `flags` local for that final value.
+All were complete `v27.c` translation-unit compiles under the unchanged GCC
+3.4.2 flags.  The domain produced **six exact cells**: the separate final-value
+local, reuse of `flags`, and the masked `unsigned char` or `signed char` copy
+under either declaration order.  Unmasked copies loaded before the clear were
+grade-1 equivalent but not byte-exact; copies loaded before the first flags
+store became shorter, and copies loaded after the clear retained the original
+BYTES 33 schedule.
+
+The retained form adds no local and is the smallest exact preimage.  It reuses
+`flags` to compute
+
+```
+(flags & 0x01) | (tx[0x10] & 0x04)
+```
+
+before clearing `status[0x15]`, then stores the saved byte to `status[0x14]`.
+This is behavior-preserving even for every overlapping placement of the two
+caller blocks.  The only potentially aliased intervening operation clears bit
+0, while the source contribution admits only bit 2; the clear therefore
+cannot change the computed result.  The two destination stores themselves
+address adjacent, distinct bytes.  The blob nevertheless settles their
+machine order, which is why the old post-clear expression is recorded as an
+equivalent mutation rather than falsely claimed as catchable.
+
+Comparing all **40 shared text definitions** in the translation unit moves
+only `V27TX_status` from BYTES 33 to EXACT and grows its exact-name set from
+**7 to 8**, with no loss or unwanted definition.  `RxNextStateV27` and
+`TxNextStateV27` conservatively compare UNRESOLVED between separately linked
+candidate objects because their jump tables use section-relative relocations;
+their blob verdicts and every other bystander's verdict are unchanged.  No
+assembly, volatile access, register constraint, attribute or compiler flag is
+introduced.
+
+The retained period object reports grade-0 EXACT and grade-1 ACCEPT for the
+complete 118-byte symbol.  The full 272-object report moves **806 to 807
+EXACT** and **89 to 88 BYTES**, with 4 UNRESOLVED, 53 REGALLOC, 900 SIZE and
+0 RELOC unchanged over 1,852 shared symbols.  Focused modern testing passes
+all 20 `t_v27fax` cases, including all **272 `V27TX_status` checks**, and the
+pinned GCC 3.4.2 differential reports **1 passed, 0 failed**.  The new
+`v27status` mutation suite catches all **7/7** behavior-changing mutations and
+records the old post-clear source schedule as the one proved-equivalent
+mutation.  Repository audits check 13,726 references, 2,504 finding headings,
+229 suites and 9,776 mutation anchors with no issue.  The strict byte-identity
+ratchet passes at 807 EXACT and 53 REGALLOC. (2026-09-07)

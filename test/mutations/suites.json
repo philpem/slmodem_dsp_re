@@ -184,6 +184,10 @@
   "src/pump/v22/v22_fse.c",
   "build/test/t_v22recv"
  ],
+ "v27status": [
+  "src/fax/v27.c",
+  "build/test/t_v27fax"
+ ],
  "v29data": [
   "src/pump/v29/v29data.c",
   "build/test/t_v29data"
