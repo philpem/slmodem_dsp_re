@@ -120526,3 +120526,62 @@ Their generated sources and objects remain under this worktree's
 ignored `build/v29rx-probe`, `build/lifecycle-probe`, and
 `build/lifecycle-tail-probe` directories, not among its build inputs.
 (2026-09-07)
+
+## F10218. V8Create's last 25 bytes close through the rate copy's alias dependency
+
+The pinned GCC 3.4.2 baseline confirms F7830/F7961's residual: `V8Create`
+has 1,124 bytes and 244 instructions on both sides, but 25 non-relocation
+bytes differ. The first rejected instruction is row 16: the blob stores
+`%ecx` at `v+0xa50`, while ours loads `cfg+0x14` into `%eax`. All differences
+lie between function offsets `+0x3c` and `+0x5c`. The blob completes the five
+integer configuration copies, loads `dsplibs_debug_level`, loads `cfg->cm`,
+compares the debug level, and stores `v->cm`. The scalar source lets the
+compiler hoist the CM pointer load above the timeout and rate stores.
+
+The previous 720 permutations bounded statement order, but did not bound
+the memory access forms. A new complete 114-cell domain contains the
+baseline, 21 named-scalar load placements, 14 debug-level or debug-predicate
+placements, all 63 nonempty subsets of field copies expressed with
+`__builtin_memcpy`, four configuration-pointer aliases, three allocation
+spellings, two temporary-config copies, and six field-pointer aliases.
+It produces **16 EXACT, 84 BYTES, and 14 SIZE** cells, with no non-exact
+cell accepted at grade 1. All sixteen exact cells copy `rate` with memcpy
+and keep `cm` as a scalar assignment; the other four copy choices are free.
+Copying only `cm` gives nine differing bytes, which is not retained.
+
+Five additional forms isolate the operation: standard `memcpy` is also
+EXACT; standard and builtin `memmove`, and forward and backward character
+copy loops each give 1,121 bytes (SIZE -3). The retained source uses ordinary
+`memcpy(&v->rate, &cfg->rate, sizeof(v->rate))` and `<string.h>`.
+The allocated destination cannot overlap the live input configuration,
+and copying the representation of one int preserves the scalar value.
+No assembly, register constraint, volatile access, or layout change is
+needed. There is no external memcpy reference in the resulting object.
+
+The compiler's RTL provides an independent explanation: the original rate
+load/store carry alias set 7, while the CM pointer uses set 27. Memcpy's
+rate load/store instead carry alias set 0. The broader alias dependency
+prevents the pointer load from crossing that store and reproduces the
+blob's complete instruction ordering, including the intervening debug
+load and comparison. This proves an exact source form, not that the
+unavailable original source necessarily spelled its copy as memcpy.
+Both translation-unit bystanders, `v8handshakinit` and `V8Delete`, remain
+byte-identical to their baseline objects; `V8Delete` was already EXACT.
+
+The full 272-object GCC 3.4.2 rebuild and `byteident.py --ratchet
+--list-exact` report **790 EXACT, 4 UNRESOLVED, 53 REGALLOC, 105 BYTES,
+900 SIZE, 0 RELOC** over 1,852 shared symbols. Against this worktree's
+measured baseline, EXACT rises 789 -> 790 and BYTES falls 106 -> 105;
+every other bucket is unchanged. The exact-set difference is precisely
+`+V8Create`, with no lost symbols, and the strict 775-name ratchet passes.
+
+Focused modern and GCC 3.4.2 differential runs both pass `t_v8util`,
+`t_v8dp`, and `t_v8hs`, before and after the edit. Modern output preserves
+all 21 PASS groups and their check counts, including 91 constructor checks,
+229,387 initializer checks, and 170 datapump creation/deletion checks.
+Both 64-bit configurations compile cleanly, and the seven `v8hs` mutation
+anchors each still resolve exactly once. These are focused validation;
+the aggregate's full `make phase` boundary remains separate.
+Diagnostic sources, objects, result tables, RTL dumps and test logs are
+under this worktree's `build/v8create_*`; no experiment is a build input.
+(2026-09-07)
