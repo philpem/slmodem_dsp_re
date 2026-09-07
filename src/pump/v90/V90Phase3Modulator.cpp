@@ -536,13 +536,14 @@ V90Phase3Modulator::generateJd()
  * 0x2b2b0, 60 bytes.  NOT the shared body: the scrambler is driven with a
  * constant 1 and its raw output picks the sign directly -- `polarity` is
  * neither read nor written, which is what separates TRN1d from JdNot.
+ * A conditional expression reproduces the object's separate narrow load and
+ * sign extension on both return paths. The remaining two differing bytes
+ * only select the register holding the constant input bit (F10212).
  */
 int
 V90Phase3Modulator::generateTRN1d()
 {
-	if (scrambler.process(1))
-		return codeLevel;
-	return (short)-codeLevel;
+	return scrambler.process(1) ? codeLevel : (short)-codeLevel;
 }
 
 /* 0x2b9f0 and 0x2ba40, 80 bytes each: the two V.92 vectors, same body. */
@@ -1066,11 +1067,11 @@ V90Phase3Modulator::generateSymbol()
  * `cmp $0x1 ; sbb ; and $0x3 ; add $imm` is GCC's if-conversion of the
  * conditional, not something the source spells.
  *
- * THE TWO CLEAR `symbolCount` ON OPPOSITE SIDES OF THE STATE STORE.  `exitJd`
- * writes the count first (0x2adad) and the state second (0x2adc1);
- * `exitJdPhase` writes the state first (0x2ae0d) and the count second
- * (0x2ae14).  Each is written its own way; unifying them would be tidying the
- * object rather than reproducing it.
+ * THE EMITTED STORE ORDER DIFFERS FROM THE SOURCE ORDER. `exitJd` writes
+ * the count first (0x2adad) and the state second (0x2adc1), but GCC 3.4.2
+ * reproduces all 88 bytes only when the state assignment precedes the count
+ * clear in source. The 24-cell guard/branch/store-order domain in F10212
+ * confirms this. `exitJdPhase` writes the state first in both representations.
  *
  * NEITHER TOUCHES `eventCode`.  `exitDIL` is the only one of the four exits
  * that raises an event, and it raises it only when phase 3 is over.
@@ -1084,8 +1085,8 @@ V90Phase3Modulator::exitJd()
 		return;
 
 	if (symbolCount % 72u == 0) {
-		symbolCount = 0;
 		state = sessionFlag ? P3M_STATE_JD_PHASE : P3M_STATE_JD_NOT;
+		symbolCount = 0;
 	} else {
 		state = sessionFlag ? P3M_STATE_V92JD_END : P3M_STATE_JD_END;
 	}
