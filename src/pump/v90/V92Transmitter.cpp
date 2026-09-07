@@ -211,18 +211,23 @@ V92Transmitter::V92Transmitter()
  * t_v92tx.cpp asserts that counter over all sixty-four null combinations.
  *
  * THE DEFINITION STAYS BELOW THE CONSTRUCTOR, AND THAT IS A MEASURED CHOICE
- * RATHER THAN THE OBJECT'S ORDER.  The blob emits this file D2, D1, C1, C2,
- * reset, process; we emit C2, C1, D2, D1, reset, process.  Moving this whole
- * block above the constructor -- refinement.md lever 3 -- reaches D2, D1, C2,
- * C1 and is a NET LOSS OF ONE: D1 gains byte identity (its two residual bytes
- * are a `pop %edx` where we emit `pop %eax`, which is peephole2's
- * esp-adjust-to-pop pattern taking a scratch off the round-robin cursor, so
- * D1 is EXPOSED in lever 3b's sense) and C1 and C2 both LOSE theirs, because
- * the cursor state now arriving at them is the destructors' and not the file
- * head's.  The blob's C1-before-C2 clone order is not reachable from here at
- * all: GCC 3.4.2 emits this class's constructor clones C2-first whatever the
- * source says, so the file cannot hold both.  Reverted, and the measurement
- * kept -- 7797's ruling.  Finding F7842.
+ * RATHER THAN THE OBJECT'S ORDER.  With the present order, C1, C2 and D2 are
+ * exact by name; D1 differs only because its two stack-adjustment pops use
+ * `%eax` where the blob uses `%edx`.  Moving this block above the constructor
+ * emits D2, D1, C2, C1 and reproduces all 736 original code bytes through
+ * both constructors, including padding and relocation operands.  The catch
+ * is narrower than the old comment claimed: GCC labels the two constructor
+ * bodies C2,C1 where the blob labels those same byte sequences C1,C2, so the
+ * strict per-symbol comparison reports two constructor losses even though
+ * the physical code matches in emission order.
+ *
+ * All 24 definition-block orders, 25 placements of the two replacement-delete
+ * definitions and 96 further guard, local, constructor, declaration,
+ * attribute and compiler-flag candidates were measured.  None fixes that
+ * same-name clone mapping without losing an existing exact symbol.  That is
+ * a bounded negative, not an impossibility proof: constructor clone emission
+ * and the original partial-link symbol provenance remain open.  Keep the
+ * strict ratchet until they are resolved.  Findings F7842 and F10209.
  * ===========================================================================
  */
 V92Transmitter::~V92Transmitter()

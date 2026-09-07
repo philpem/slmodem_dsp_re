@@ -110,15 +110,28 @@ typedef char v92me_size[(sizeof(V92ModulusEncoder) == 0x54) ? 1 : -1];
 #endif
 
 /*
- * Thirteen scalars, one `movl $0x0` each in the object -- so a
- * member-initialiser list and not a loop, and not `memset(this, 0, ...)`,
+ * Thirteen scalars, one `movl $0x0` each in the object -- represented by
+ * descending assignments and not a loop, and not `memset(this, 0, ...)`,
  * which would also have cleared +0x00..+0x14 and +0x4c, +0x50.
+ * Initialiser lists follow member declaration order even if written in
+ * reverse. Of the ascending/descending initialiser-list and body-assignment
+ * forms, only descending body assignments reproduce both 96-byte clones.
  */
 V92ModulusEncoder::V92ModulusEncoder()
-	: field_18(0), field_1c(0), field_20(0), field_24(0), field_28(0),
-	  field_2c(0), field_30(0), field_34(0), field_38(0), field_3c(0),
-	  field_40(0), field_44(0), field_48(0)
 {
+	field_48 = 0;
+	field_44 = 0;
+	field_40 = 0;
+	field_3c = 0;
+	field_38 = 0;
+	field_34 = 0;
+	field_30 = 0;
+	field_2c = 0;
+	field_28 = 0;
+	field_24 = 0;
+	field_20 = 0;
+	field_1c = 0;
+	field_18 = 0;
 }
 
 /*

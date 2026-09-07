@@ -3,8 +3,7 @@
  * @brief The V.92 modulus encoder.
  *
  * Three members, 6,910 bytes: the constructor, `reset(V92MappingParams *)`
- * and `progress`. This tree defines the constructor and declares the other
- * two.
+ * and `progress`. All three are reconstructed.
  *
  * No destructor: the blob has no D0/D1/D2 for this class, so none is
  * declared here -- declaring one would emit a symbol the original does not
@@ -16,9 +15,10 @@
  * agreeing with the furthest member access at +0x50 (finding F1248).
  *
  * The constructor's own zeroing starts at +0x18: thirteen separate
- * `movl $0x0` in descending address order, which is what GCC emits for a
- * member-initialiser list over thirteen scalars (an array would be a loop
- * or a `memset`), leaving +0x00..+0x14 and +0x4c/+0x50 exactly as found.
+ * `movl $0x0` in descending address order. Descending scalar assignments
+ * reproduce that order; a member-initialiser list follows declaration
+ * order and emits ascending stores. Both leave +0x00..+0x14 and
+ * +0x4c/+0x50 exactly as found.
  * `reset` is what fills those: the first six words and the last two, at two
  * of its exits, and it copies the parameter block into +0x18 upward.
  *
@@ -38,9 +38,9 @@ class V92MappingParams;
 
 class V92ModulusEncoder {
 public:
-	/** @brief Construct with every member left indeterminate; reset()
-	 *         must be called before use. Empty body -- 96 bytes of
-	 *         `movl $0x0`/`ret`, no call. */
+	/** @brief Clear the thirteen words at +0x18..+0x48 and leave the
+	 *         remaining members indeterminate; call reset() before use.
+	 *         96 bytes of `movl $0x0`/`ret`, no call. */
 	V92ModulusEncoder();
 
 	/**
@@ -96,7 +96,7 @@ public:
 	 * down to `bytes[0]`, one bit per byte (finding F1376, and F1377 for
 	 * where `reset` gets these thirteen values from). The names are left
 	 * as `field_NNNN` rather than renumbered, because six mutation
-	 * entries and the constructor's initialiser list quote them.
+	 * entries and the constructor's assignments quote them.
 	 */
 	unsigned int field_18;
 	unsigned int field_1c;

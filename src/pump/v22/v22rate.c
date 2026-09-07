@@ -44,8 +44,8 @@ SetTxRate(struct v22fp *fp, short rate)
 		dsp->sdm.shift2 = (short)(dsp->sdm.cfg.tap2
 					  - V22_SDM_BITS_1200);
 		/* No amplitude bits at 1200, so no quadrant shift either. */
-		dsp->smc.cfg.qshift = 0;
 		dsp->smc.cfg.amask = 0;
+		dsp->smc.cfg.qshift = 0;
 		dsp->pps.imap = SMCv22_IMAP_1200BPS;
 		dsp->pps.qmap = SMCv22_QMAP_1200BPS;
 		dsp->r28 = 0;
@@ -61,8 +61,8 @@ SetTxRate(struct v22fp *fp, short rate)
 		dsp->sdm.shift2 = (short)(dsp->sdm.cfg.tap2
 					  - V22_SDM_BITS_2400);
 		/* Two amplitude bits below two quadrant bits. */
-		dsp->smc.cfg.qshift = 2;
 		dsp->smc.cfg.amask = 3;
+		dsp->smc.cfg.qshift = 2;
 		dsp->pps.imap = SMCv22_IMAP_2400BPS;
 		dsp->pps.qmap = SMCv22_QMAP_2400BPS;
 		dsp->r28 = 1;

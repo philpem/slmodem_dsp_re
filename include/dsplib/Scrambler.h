@@ -77,15 +77,17 @@
  * process(h)` is 107 bytes and `Scrambler<unsigned char,int>::process(h)` is
  * 118: same `T`, same body, and the byte-wide temporary of the first against
  * the 32-bit one of the second is `I` again.  For `T = unsigned char` the two
- * are BEHAVIOURALLY IDENTICAL -- every operand is already a byte and both the
- * store and the return truncate -- so no test in this tree can tell them
- * apart, and the single-value `process` keeps the `T` temporary it was
- * verified with rather than being rewritten on evidence no gate can check.
- * Recorded so a later batch does not re-derive it.
+ * are BEHAVIOURALLY IDENTICAL -- every operand is already a byte, so the XOR
+ * cannot exceed one byte.  The original's 32-bit XOR and register-held result
+ * nevertheless identify the single-value temporary as `I`, too.
  *
- * The return type is not mangled and nothing pins it: `<h,h>` returns a
- * zero-extended byte and `<h,i>` a full register, which is what either
- * spelling gives.  `T` is kept for both templates.
+ * The return type is not mangled, but the callers now pin its width:
+ * V90Phase3Modulator::generateTRN1d and V92Phase3Modulator::generateTRN1u
+ * both test EAX after calling `<h,i>::process(h)`.  A byte return tests AL.
+ * The scalar Scrambler therefore returns `I`; `<h,h>` is unchanged and
+ * `<i,h>` has no scalar instantiation.  Descrambler's independent declaration
+ * is unchanged.  Differential tests check all byte-valued results, while the
+ * caller disassembly is what distinguishes the ABI declarations.
  *
  * ---------------------------------------------------------------------------
  * THE CONSTRUCTOR AND DESTRUCTOR ARE DECLARED, and the reason this file used
@@ -207,7 +209,7 @@ public:
 	 * @param in  Input symbol.
 	 * @return `in XOR *pTap1 XOR *pTap2`, the scrambled symbol.
 	 */
-	T process(T in);
+	I process(T in);
 
 	/**
 	 * @brief Scramble @p n symbols in bulk.
@@ -692,12 +694,12 @@ Descrambler<T, I>::~Descrambler()
 }
 
 template <class T, class I>
-T Scrambler<T, I>::process(T in)
+I Scrambler<T, I>::process(T in)
 {
 	T *out = pOut;
-	T r;
+	I r;
 
-	r = (T)(in ^ *pTap1 ^ *pTap2);
+	r = (I)(in ^ *pTap1 ^ *pTap2);
 	pTap1--;
 	pTap2--;
 	*out = r;

@@ -239,7 +239,7 @@ voice_set_online(struct voice_ctx *v)
 {
 	v->mode = 2;
 	v->handler = voice_online;
-	detector_set_enable(v->detector, (short)v->detector_enable);
+	detector_set_enable(v->detector, v->detector_enable);
 }
 
 /*
@@ -526,7 +526,7 @@ voice_set_tx(struct voice_ctx *v)
 {
 	v->mode = 1;
 	v->handler = voice_tx;
-	detector_set_enable(v->detector, (short)v->detector_enable_tx);
+	detector_set_enable(v->detector, v->detector_enable_tx);
 
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("PCM 8 bit.\n");

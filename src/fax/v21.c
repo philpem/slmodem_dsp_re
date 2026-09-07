@@ -1333,7 +1333,7 @@ CarrierDetectV21(void *modem)
 {
 	struct v21_rx_dsp *dsp = V21RX_DSP(modem);
 
-	return dsp->int_0008 & dsp->int_0004;
+	return dsp->int_0004 & dsp->int_0008;
 }
 
 /*

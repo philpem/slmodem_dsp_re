@@ -180,9 +180,10 @@ V92BitsToSymbol::~V92BitsToSymbol()
  * V92Transmitter.cpp already make: `V92MappingParams` is the mangling's name
  * for the block this tree models as `struct V92ParamsInfo`.
  *
- * The load is hoisted above the three stores in the object, which is
- * scheduling; the store ORDER, +0x10 before +0x18 before +0x14 before the
- * byte at +0x1c, is what is written here.
+ * All 24 orders of the four assignments were compiled with GCC 3.4.2.
+ * Only reading/storing K first, followed by the cursor, block size and flag,
+ * reproduces all 68 bytes. The scheduler delays the K store until after
+ * the two zero stores, giving the object's +0x10, +0x18, +0x14, +0x1c order.
  * ===========================================================================
  */
 void
@@ -190,9 +191,9 @@ V92BitsToSymbol::reset(V92MappingParams *p)
 {
 	transmitter->reset(p);
 
+	bitsPerFrame = (unsigned int)((struct V92ParamsInfo *)p)->K;
 	symbolsDone = 0;
 	symbolsBlockSize = 0;
-	bitsPerFrame = (unsigned int)((struct V92ParamsInfo *)p)->K;
 	flag_1c = 1;
 }
 

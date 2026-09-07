@@ -790,8 +790,8 @@ vpcm_delete(struct dp *dp)
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("vpcm: delete...\n");
 
-	s->info->connection_type = (unsigned int)s->params->connectionType;
 	s->info->clock_deviation = s->params->clockDeviation;
+	s->info->connection_type = (unsigned int)s->params->connectionType;
 
 	VPCMXF_SessionTermination(s->v34.xf);
 	VPCMXF_Delete(s->v34.xf);

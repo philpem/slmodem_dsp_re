@@ -14,7 +14,7 @@
  },
  {
   "label": "voice_set_online enables the detector with the duplex constant",
-  "find": "\tdetector_set_enable(v->detector, (short)v->detector_enable);",
+  "find": "\tdetector_set_enable(v->detector, v->detector_enable);",
   "replace": "\tdetector_set_enable(v->detector, 0x24);"
  },
  {
@@ -39,8 +39,8 @@
  },
  {
   "label": "voice_set_tx uses the receive detector mask",
-  "find": "\tdetector_set_enable(v->detector, (short)v->detector_enable_tx);",
-  "replace": "\tdetector_set_enable(v->detector, (short)v->detector_enable_rx);"
+  "find": "\tdetector_set_enable(v->detector, v->detector_enable_tx);",
+  "replace": "\tdetector_set_enable(v->detector, v->detector_enable_rx);"
  },
  {
   "label": "voice_set_tx writes a 7200 Hz format",

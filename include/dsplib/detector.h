@@ -197,7 +197,7 @@ struct detector *detector_create(struct detector *d, void *modem,
  * @param enable  A mask of `DETECTOR_ENABLE_*` bits. Whole-word store;
  *                nothing here reads the value back.
  */
-void detector_set_enable(struct detector *d, short enable);
+void detector_set_enable(struct detector *d, unsigned short enable);
 
 /**
  * @brief Tear a detector down.

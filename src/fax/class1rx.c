@@ -67,8 +67,8 @@ init_vmi_v17rx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
 			"Initializing VMI_V17_RX Modem No ECM " "(Simple Packing)\n");
 
 	*cfg = V17RX_CFG;
-	cfg->bit_rate = (short)bit_rate;
 	cfg->ptr_0024 = arg_3;
+	cfg->bit_rate = (short)bit_rate;
 	cfg->int_0014 = 0;
 	cfg->coefsave0 = sysdep_malloc(0x62);
 	cfg->coefsave1 = sysdep_malloc(0x62);

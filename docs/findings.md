@@ -119959,3 +119959,98 @@ modern differential tests (including their documented compiler allow-list),
 both 64-bit configurations, SpanDSP interoperability, reconstruction coverage,
 debug coverage and the byte-identity ratchet at the complete 754-name exact
 set. (2026-09-07)
+
+## F10208. The first same-size convergence batch adds 21 exact functions without fitting register choices
+
+Phase 4 began at 754 `EXACT`, three `UNRESOLVED`, 53 `REGALLOC`, zero `RELOC`,
+138 `BYTES` and 904 `SIZE`. The first batch was deliberately drawn from small,
+finite source-shape domains and scored against the complete exact-name set,
+not against its cardinality. It ends at **775/1,852 exact (41.8%)**, three
+`UNRESOLVED`, 54 `REGALLOC`, zero `RELOC`, 118 `BYTES` and 902 `SIZE`. Thus 20
+same-size mismatches close, one size mismatch closes, and a second size
+mismatch becomes instruction-equivalent modulo live-range register naming.
+
+The 21 additions are:
+
+- `CalcTurnAroundDelay`, `CarrierDetectV21`, `CarrierDetectV27`,
+  `CarrierDetectV29`, `FIFO_full_test`, `ScrambleDataV17`, `SetTxRate` and
+  `init_vmi_v17rx`;
+- `V90ConstellationDesigner::findMinValueIndex`,
+  `findConstelMaxValueIndex`, `V90SpectralShapingFilter::reset`,
+  `V90Jd::setRatesMask`, `V92Jd::setRatesMask`, `V92BitsToSymbol::reset`, both
+  `V92ModulusEncoder` constructor clones, and `vpcm_delete`;
+- `detector_set_enable`, `voice_set_online` and `voice_set_tx`, after the
+  detector mask parameter was corrected from signed to unsigned 16-bit; and
+- `V90Phase3Modulator::generateJdNot`, a bystander of correcting
+  `Scrambler<unsigned char, int>::process` to return and hold its `int`
+  intermediate. Original callers test the full EAX result, not AL. The
+  Scrambler body itself moves from `SIZE` to `REGALLOC`: the remaining seven
+  bytes name registers, while the instruction and operand graph agrees.
+
+The finite domains matter. All 24 orders of the four
+`V92BitsToSymbol::reset` assignments produced 24 emissions and exactly one
+match. Four monotone constructor forms left exactly the descending body
+assignments as the preimage of both `V92ModulusEncoder` clones. Twelve of the
+24 declaration orders for each constellation-extrema helper match, and all
+share the derived relation that the value is declared before the length.
+`V90SpectralShapingFilter::reset` likewise has a unique matching chained-store
+order. The small C functions use independent operand/store/declaration orders
+whose complete function bytes and relocations match, rather than accepting a
+smaller residual count.
+
+Four apparent extra closures were rejected: hard-coded x86 register variables
+could close `_t30_silence_before_tx_state` and `SetAdaptEqV32`, and an empty
+memory-clobber asm could close `V29TX_modem`; a shift-count cast moved
+`V22FP_modem` only from six differing bytes to five. None is a recovered
+source property or a completed finite preimage, so all four were restored.
+This is F7782's fit/recovery boundary applied in the direction that prevents a
+headline exact count from replacing evidence.
+
+The aggregate GCC 3.4.2 build completed all 272 translation units and the
+period differential tier passed 374/374. Focused modern/period suites and all
+9,767 mutation anchors passed after four constructor anchors were lengthened
+to remain unique when the new reset order duplicated their former short text.
+The complete `make phase` boundary also passes: modern differential tests,
+both 64-bit configurations, all five SpanDSP interop checks, reconstruction
+coverage, debug coverage and the updated complete 775-name identity ratchet.
+(2026-09-07)
+
+## F10209. The V92 transmitter destructor does not require different constructor code; the unresolved part is clone identity
+
+F7842's statement that exact D1 can be gained only by losing the two exact
+constructors was too broad. Moving the destructor definition before the
+constructor makes GCC 3.4.2 emit `D2, D1, C2, C1`. The reference is `D2, D1,
+C1, C2`, but the first **736 consecutive raw `.text` bytes are identical**,
+including alignment padding and relocation operands:
+
+| reference label | reordered label | relative offset | bytes |
+|---|---|---:|---:|
+| D2 | D2 | `0x000` | 173 identical |
+| D1 | D1 | `0x0b0` | 173 identical |
+| C1 | C2 | `0x160` | 180 identical |
+| C2 | C1 | `0x220` | 180 identical |
+
+The strict name-based function metric must still reject that candidate: C1
+and C2 are different ABI symbols even though their two bodies cross-match.
+What the physical comparison proves is narrower and important for the final
+partially-linked-object objective: the four required machine-code bodies are
+not mutually incompatible. The remaining problem is why the reconstructed
+compile maps the two constructor clones to the opposite labels.
+
+The widened investigation compiled 96 successful candidates: 48 destructor
+local/guard/expression forms, eight constructor spelling/order combinations,
+six declaration-order/exception-specification variants, eight definition
+attribute variants, six diagnostic compiler-flag variants, and nineteen
+visibility/inline/clone-retention variants plus the baseline. A separate
+25-cell cross-product moved the scalar and array replacement-delete definitions
+among five translation-unit positions. None gains same-name D1 without an
+existing exact-name loss. That is a bounded negative over the tested domains,
+not an impossibility proof.
+
+Nor is the entire translation unit already exact. `reset` is a substantive
+2,161-byte versus 2,284-byte mismatch. It begins at the same relative `0x2e0`
+in the reordered candidate, then moves the otherwise raw-identical 355-byte
+`process` body 112 bytes later after alignment. Keep the strict per-symbol
+ratchet while investigating GCC constructor-clone generation and the original
+partial-link symbol/section provenance; do not describe the open issue as a
+constructor/destructor code tradeoff again. (2026-09-07)

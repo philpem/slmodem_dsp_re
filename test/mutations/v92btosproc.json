@@ -42,18 +42,18 @@
  },
  {
   "label": "reset leaves the symbol cursor alone",
-  "find": "\ttransmitter->reset(p);\n\n\tsymbolsDone = 0;\n",
-  "replace": "\ttransmitter->reset(p);\n\n"
+  "find": "->K;\n\tsymbolsDone = 0;\n",
+  "replace": "->K;\n"
  },
  {
   "label": "reset leaves the block size alone",
-  "find": "\tsymbolsBlockSize = 0;\n\tbitsPerFrame",
-  "replace": "\tbitsPerFrame"
+  "find": "->K;\n\tsymbolsDone = 0;\n\tsymbolsBlockSize = 0;\n\tflag_1c = 1;",
+  "replace": "->K;\n\tsymbolsDone = 0;\n\tflag_1c = 1;"
  },
  {
   "label": "reset clears the flag rather than setting it",
-  "find": "->K;\n\tflag_1c = 1;",
-  "replace": "->K;\n\tflag_1c = 0;"
+  "find": "->K;\n\tsymbolsDone = 0;\n\tsymbolsBlockSize = 0;\n\tflag_1c = 1;",
+  "replace": "->K;\n\tsymbolsDone = 0;\n\tsymbolsBlockSize = 0;\n\tflag_1c = 0;"
  },
  {
   "label": "reset does not call the transmitter",

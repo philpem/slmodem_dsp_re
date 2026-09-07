@@ -39,16 +39,16 @@
   "replace": "\tstate[3] = c3;"},
 
  {"label": "reset clears the coefficients rather than the state",
-  "find": "\tstate[0] = state[1] = state[2] = state[3] = 0.0f;",
+  "find": "\tstate[3] = state[2] = state[1] = state[0] = 0.0f;",
   "replace": "\tcoeff[0] = coeff[1] = coeff[2] = coeff[3] = 0.0f;"},
 
  {"label": "reset leaves the energy accumulator alone",
-  "find": "\tstate[0] = state[1] = state[2] = state[3] = 0.0f;",
-  "replace": "\tstate[0] = state[1] = state[2] = 0.0f;"},
+  "find": "\tstate[3] = state[2] = state[1] = state[0] = 0.0f;",
+  "replace": "\tstate[2] = state[1] = state[0] = 0.0f;"},
 
  {"label": "reset clears the block length as well",
-  "find": "\tstate[0] = state[1] = state[2] = state[3] = 0.0f;",
-  "replace": "\tstate[0] = state[1] = state[2] = state[3] = 0.0f;\n\tblockLength = 0;"},
+  "find": "\tstate[3] = state[2] = state[1] = state[0] = 0.0f;",
+  "replace": "\tstate[3] = state[2] = state[1] = state[0] = 0.0f;\n\tblockLength = 0;"},
 
  {"label": "the first section adds where the object subtracts",
   "find": "\t\tlong double mid = (sample - prevIn * b2) + prevMid * b0;",

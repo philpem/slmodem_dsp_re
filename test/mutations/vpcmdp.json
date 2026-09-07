@@ -397,8 +397,8 @@
 },
 {
  "label": "delete: the two dsp_info words are crossed",
- "find": "\ts->info->connection_type = (unsigned int)s->params->connectionType;\n\ts->info->clock_deviation = s->params->clockDeviation;\n",
- "replace": "\ts->info->connection_type = (unsigned int)s->params->clockDeviation;\n\ts->info->clock_deviation = s->params->connectionType;\n"
+ "find": "\ts->info->clock_deviation = s->params->clockDeviation;\n\ts->info->connection_type = (unsigned int)s->params->connectionType;\n",
+ "replace": "\ts->info->clock_deviation = s->params->connectionType;\n\ts->info->connection_type = (unsigned int)s->params->clockDeviation;\n"
 },
 {
  "label": "delete: connection_type is not copied out",

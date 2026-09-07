@@ -1798,8 +1798,8 @@ V90ConstellationDesigner::setMinMaxRates(unsigned int min, unsigned int max)
 int
 V90ConstellationDesigner::findConstelMaxValueIndex(V90MappingParams *p)
 {
-	unsigned int bestLen = p->constellationSize[0];
 	unsigned int bestVal = p->constellation[0][0];
+	unsigned int bestLen = p->constellationSize[0];
 	int best = 0;
 	unsigned int i;
 
@@ -2030,12 +2030,16 @@ V90ConstellationDesigner::adjustConstellationsPower()
  * THE TIE-BREAK IS THE ASYMMETRY WORTH SEEING.  On an equal first byte the
  * function takes the constellation with the LARGER size, in the minimum and
  * the maximum alike -- the two bodies differ in exactly one condition code.
+ *
+ * The value is declared before the length in both functions.  Of all 24
+ * orders of the four initial declarations, precisely the 12 with that
+ * relation reproduce both 86-byte bodies; the others swap ebx and esi.
  */
 int
 V90ConstellationDesigner::findMinValueIndex(V90MappingParams *p)
 {
-	unsigned int bestLen = p->constellationSize[0];
 	unsigned int bestVal = p->constellation[0][0];
+	unsigned int bestLen = p->constellationSize[0];
 	int best = 0;
 	unsigned int i;
 

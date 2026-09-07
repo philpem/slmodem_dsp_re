@@ -5,28 +5,28 @@
  },
  {
   "label": "the cleared range starts below +0x18",
-  "find": "\t: field_18(0), field_1c(0),",
-  "replace": "\t: productLo(0), field_18(0), field_1c(0),"
+  "find": "\tfield_18 = 0;",
+  "replace": "\tfield_18 = 0;\n\tproductLo = 0;"
  },
  {
   "label": "the cleared range stops one word short",
-  "find": "\t  field_40(0), field_44(0), field_48(0)",
-  "replace": "\t  field_40(0), field_44(0)"
+  "find": "\tfield_48 = 0;\n",
+  "replace": ""
  },
  {
   "label": "the cleared range runs one word too far",
-  "find": "\t  field_40(0), field_44(0), field_48(0)\n{\n}",
-  "replace": "\t  field_40(0), field_44(0), field_48(0), field_4c(0)\n{\n}"
+  "find": "\tfield_48 = 0;",
+  "replace": "\tfield_4c = 0;\n\tfield_48 = 0;"
  },
  {
   "label": "the range is cleared with a memset over the whole object",
-  "find": "\t: field_18(0), field_1c(0), field_20(0), field_24(0), field_28(0),\n\t  field_2c(0), field_30(0), field_34(0), field_38(0), field_3c(0),\n\t  field_40(0), field_44(0), field_48(0)\n{\n}",
+  "find": "{\n\tfield_48 = 0;\n\tfield_44 = 0;\n\tfield_40 = 0;\n\tfield_3c = 0;\n\tfield_38 = 0;\n\tfield_34 = 0;\n\tfield_30 = 0;\n\tfield_2c = 0;\n\tfield_28 = 0;\n\tfield_24 = 0;\n\tfield_20 = 0;\n\tfield_1c = 0;\n\tfield_18 = 0;\n}",
   "replace": "{\n\t__builtin_memset(this, 0, sizeof *this);\n}"
  },
  {
   "label": "one of the thirteen is set to one, not zero",
-  "find": "\t  field_2c(0), field_30(0), field_34(0),",
-  "replace": "\t  field_2c(0), field_30(1), field_34(0),"
+  "find": "\tfield_30 = 0;",
+  "replace": "\tfield_30 = 1;"
  },
  {
   "label": "NOTE: what the reset entries are for",
@@ -99,8 +99,8 @@
  },
  {
   "label": "the constructor also touches the words below the range",
-  "find": "\t  field_40(0), field_44(0), field_48(0)\n{\n}\n",
-  "replace": "\t  field_40(0), field_44(0), field_48(0)\n{\n\tproductLo = 0;\n}\n"
+  "find": "\tfield_18 = 0;\n}\n",
+  "replace": "\tfield_18 = 0;\n\tproductLo = 0;\n}\n"
  },
  {
   "label": "NOTE: what the progress entries are for",

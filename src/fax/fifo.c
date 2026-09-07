@@ -91,9 +91,10 @@ int
 FIFO_full_test(struct fax_fifo *f)
 {
 	short num = (short)(f->count << 14);
+	short threshold = FIFO_FULL_Q14;
 
 	num = (short)(num / f->size);
-	return num >= FIFO_FULL_Q14;
+	return num >= threshold;
 }
 
 /*

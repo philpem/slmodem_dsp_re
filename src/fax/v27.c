@@ -1778,7 +1778,7 @@ CarrierDetectV27(void *modem)
 {
 	void *rx = FIELD_PTR(modem, V27_OBJ_RX);
 
-	return RX_SRE(rx)->active & RX_AGC(rx)->signal;
+	return RX_AGC(rx)->signal & RX_SRE(rx)->active;
 }
 
 short

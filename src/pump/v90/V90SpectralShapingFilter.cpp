@@ -87,14 +87,15 @@ V90SpectralShapingFilter::setFilterCoeff(float c0, float c1, float c2,
  * statements, and deliberately: the two would otherwise be the same four
  * lines in one file, every `find` string over either would match twice, and
  * `mutate.py` would report the suite UNUSABLE -- which does not fail a run
- * (finding F1264).  The chain evaluates right to left where the object stores
- * +0x10 first, and that is a distinction no observer can make: four zeroes
- * into four distinct words with no call and no aliasing between them.
+ * (finding F1264).  All 24 orders of the chain were compiled with GCC 3.4.2;
+ * only 3,2,1,0 emits the object's four stores, +0x10 through +0x1c in that
+ * order, and makes all 22 bytes identical.  The other five symbols in this
+ * translation unit keep their bytes, including both exact constructors.
  */
 void
 V90SpectralShapingFilter::reset()
 {
-	state[0] = state[1] = state[2] = state[3] = 0.0f;
+	state[3] = state[2] = state[1] = state[0] = 0.0f;
 }
 
 /*

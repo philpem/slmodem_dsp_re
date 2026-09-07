@@ -358,7 +358,7 @@ detector_delete(struct detector *d)
  * established about the object.
  */
 void
-detector_set_enable(struct detector *d, short enable)
+detector_set_enable(struct detector *d, unsigned short enable)
 {
 	d->enable = enable;
 }

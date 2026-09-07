@@ -115,7 +115,7 @@ template Scrambler<unsigned char, int>::~Scrambler();
 template void Scrambler<unsigned char, int>::resetHistoryIndexes();
 template void Scrambler<unsigned char, int>::copyHistoryTail();
 template void Scrambler<unsigned char, int>::reset(unsigned char);
-template unsigned char Scrambler<unsigned char, int>::process(unsigned char);
+template int Scrambler<unsigned char, int>::process(unsigned char);
 
 /* Scrambler<int, unsigned char> -- six members, 379 bytes.  Bulk form only. */
 template Scrambler<int, unsigned char>::Scrambler(unsigned int, unsigned int,

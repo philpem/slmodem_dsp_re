@@ -81,17 +81,27 @@ V90Jd::setConstelSize(unsigned char first, unsigned char second)
  * `bits[35..46]` -- skipping the framing byte at `bits[34]`.  `sar` in the
  * object, so the parameter is signed, and both counters are `jle`: `int`,
  * as in the constructor (see the block comment below).
+ * Explicit branch stores retain the original TEST/SETNE with GCC 3.4.2;
+ * storing the equivalent boolean expression instead emits AND/MOV.
  */
 void
 V90Jd::setRatesMask(int mask)
 {
 	int i;
 
-	for (i = 0; i <= 15; i++)
-		bits[18 + i] = (unsigned char)(((mask >> i) & 1) != 0);
+	for (i = 0; i <= 15; i++) {
+		if ((mask >> i) & 1)
+			bits[18 + i] = 1;
+		else
+			bits[18 + i] = 0;
+	}
 
-	for (i = 0; i <= 11; i++)
-		bits[35 + i] = (unsigned char)(((mask >> (16 + i)) & 1) != 0);
+	for (i = 0; i <= 11; i++) {
+		if ((mask >> (16 + i)) & 1)
+			bits[35 + i] = 1;
+		else
+			bits[35 + i] = 0;
+	}
 }
 
 /*

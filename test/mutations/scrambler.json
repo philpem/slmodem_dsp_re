@@ -120,18 +120,18 @@
   },
   {
     "label": "process(T): the far tap is not in the XOR (<h,h>, <h,i>)",
-    "find": "\tr = (T)(in ^ *pTap1 ^ *pTap2);\n\tpTap1--;\n\tpTap2--;\n\t*out = r;\n\tif (--pOut < pLimit) {",
-    "replace": "\tr = (T)(in ^ *pTap1);\n\tpTap1--;\n\tpTap2--;\n\t*out = r;\n\tif (--pOut < pLimit) {"
+    "find": "\tr = (I)(in ^ *pTap1 ^ *pTap2);\n\tpTap1--;\n\tpTap2--;\n\t*out = r;\n\tif (--pOut < pLimit) {",
+    "replace": "\tr = (I)(in ^ *pTap1);\n\tpTap1--;\n\tpTap2--;\n\t*out = r;\n\tif (--pOut < pLimit) {"
   },
   {
     "label": "process(T): the far tap does not step",
-    "find": "\tr = (T)(in ^ *pTap1 ^ *pTap2);\n\tpTap1--;\n\tpTap2--;\n\t*out = r;\n\tif (--pOut < pLimit) {",
-    "replace": "\tr = (T)(in ^ *pTap1 ^ *pTap2);\n\tpTap1--;\n\t*out = r;\n\tif (--pOut < pLimit) {"
+    "find": "\tr = (I)(in ^ *pTap1 ^ *pTap2);\n\tpTap1--;\n\tpTap2--;\n\t*out = r;\n\tif (--pOut < pLimit) {",
+    "replace": "\tr = (I)(in ^ *pTap1 ^ *pTap2);\n\tpTap1--;\n\t*out = r;\n\tif (--pOut < pLimit) {"
   },
   {
     "label": "process(T): the restart fires one symbol early",
-    "find": "\tr = (T)(in ^ *pTap1 ^ *pTap2);\n\tpTap1--;\n\tpTap2--;\n\t*out = r;\n\tif (--pOut < pLimit) {",
-    "replace": "\tr = (T)(in ^ *pTap1 ^ *pTap2);\n\tpTap1--;\n\tpTap2--;\n\t*out = r;\n\tif (--pOut <= pLimit) {"
+    "find": "\tr = (I)(in ^ *pTap1 ^ *pTap2);\n\tpTap1--;\n\tpTap2--;\n\t*out = r;\n\tif (--pOut < pLimit) {",
+    "replace": "\tr = (I)(in ^ *pTap1 ^ *pTap2);\n\tpTap1--;\n\tpTap2--;\n\t*out = r;\n\tif (--pOut <= pLimit) {"
   },
   {
     "label": "process(bulk): the intermediate is T, not I -- finding F870, <i,h>",

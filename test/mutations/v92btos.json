@@ -35,23 +35,23 @@
  },
  {
   "label": "the block size is not cleared",
-  "find": "\tsymbolsDone = 0;\n\tsymbolsBlockSize = 0;\n\tflag_1c = 1;",
-  "replace": "\tsymbolsDone = 0;\n\tflag_1c = 1;"
+  "find": "\tnSymbols = n;\n\tsymbolsDone = 0;\n\tsymbolsBlockSize = 0;\n\tflag_1c = 1;",
+  "replace": "\tnSymbols = n;\n\tsymbolsDone = 0;\n\tflag_1c = 1;"
  },
  {
   "label": "the flag is cleared rather than set",
-  "find": "\tsymbolsBlockSize = 0;\n\tflag_1c = 1;",
-  "replace": "\tsymbolsBlockSize = 0;\n\tflag_1c = 0;"
+  "find": "\tnSymbols = n;\n\tsymbolsDone = 0;\n\tsymbolsBlockSize = 0;\n\tflag_1c = 1;",
+  "replace": "\tnSymbols = n;\n\tsymbolsDone = 0;\n\tsymbolsBlockSize = 0;\n\tflag_1c = 0;"
  },
  {
   "label": "the flag is written as a word",
-  "find": "\tsymbolsBlockSize = 0;\n\tflag_1c = 1;\n}",
-  "replace": "\tsymbolsBlockSize = 0;\n\t*(unsigned int *)&flag_1c = 1;\n}"
+  "find": "\tnSymbols = n;\n\tsymbolsDone = 0;\n\tsymbolsBlockSize = 0;\n\tflag_1c = 1;\n}",
+  "replace": "\tnSymbols = n;\n\tsymbolsDone = 0;\n\tsymbolsBlockSize = 0;\n\t*(unsigned int *)&flag_1c = 1;\n}"
  },
  {
   "label": "the constructor also clears the bit count at +0x14, which it does NOT",
-  "find": "\tsymbolsBlockSize = 0;\n\tflag_1c = 1;",
-  "replace": "\tsymbolsBlockSize = 0;\n\tbitsPerFrame = 0;\n\tflag_1c = 1;"
+  "find": "\tnSymbols = n;\n\tsymbolsDone = 0;\n\tsymbolsBlockSize = 0;\n\tflag_1c = 1;",
+  "replace": "\tnSymbols = n;\n\tsymbolsDone = 0;\n\tsymbolsBlockSize = 0;\n\tbitsPerFrame = 0;\n\tflag_1c = 1;"
  },
  {
   "label": "the parameter block is not stored",

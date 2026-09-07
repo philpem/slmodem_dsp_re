@@ -2538,7 +2538,7 @@ CarrierDetectV29(void *modem)
 {
 	void *rx = RX(modem);
 
-	return RX_SRE(rx)->active & RX_AGC(rx)->signal;
+	return RX_AGC(rx)->signal & RX_SRE(rx)->active;
 }
 
 /*

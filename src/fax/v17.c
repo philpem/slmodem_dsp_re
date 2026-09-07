@@ -1969,11 +1969,9 @@ V17RX_status(void *modem, struct v17_status *status)
 void
 ScrambleDataV17(void *modem, unsigned short *data, unsigned short count)
 {
-	void *fp;
-
-	fp = FIELD_PTR(modem, V17TX_OBJ_FP);
-	SDM_scrambler((struct fpm_sdm *)(void *)FIELD(fp, V17FP_SDM), data,
-		      count);
+	SDM_scrambler((struct fpm_sdm *)(void *)
+		      FIELD(FIELD_PTR(modem, V17TX_OBJ_FP), V17FP_SDM),
+		      data, count);
 }
 
 /* --------------------------------------------------------------------- */

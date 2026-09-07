@@ -274,8 +274,8 @@
  },
  {
   "label": "the turnaround budget is charged only twice",
-  "find": "\t\t       - (FIELD_U16(hdx, V32_HDX_SHORT_98)\n\t\t\t  + FIELD_U16(hdx, V32_HDX_SHORT_9C)\n\t\t\t  + FIELD_U16(hdx, V32_HDX_SHORT_9A)));",
-  "replace": "\t\t       - (FIELD_U16(hdx, V32_HDX_SHORT_98)\n\t\t\t  + FIELD_U16(hdx, V32_HDX_SHORT_9C)));"
+  "find": "\t\t       - (FIELD_U16(hdx, V32_HDX_SHORT_9C)\n\t\t\t  + FIELD_U16(hdx, V32_HDX_SHORT_98)\n\t\t\t  + FIELD_U16(hdx, V32_HDX_SHORT_9A)));",
+  "replace": "\t\t       - (FIELD_U16(hdx, V32_HDX_SHORT_9C)\n\t\t\t  + FIELD_U16(hdx, V32_HDX_SHORT_98)));"
  },
  {
   "label": "the turnaround surplus is not clamped at zero",

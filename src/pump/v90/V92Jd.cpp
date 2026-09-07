@@ -86,19 +86,26 @@ V92Jd::setMaxLookahead(unsigned char v)
  * loop stops one earlier than V90Jd's (`cmp $0xa` against `cmp $0xb`), which
  * is the constructor's difference too.  `sar`, so the parameter is signed,
  * and both counters `jle`: `int`.
+ * As in V90Jd, explicit branch stores retain GCC 3.4.2's TEST/SETNE pair.
  */
 void
 V92Jd::setRatesMask(int mask)
 {
 	int k;
 
-	for (k = 0; k <= 15; k++)
-		bits[V90JD_GROUP1 + 1 + k] =
-		    (unsigned char)(((mask >> k) & 1) != 0);
+	for (k = 0; k <= 15; k++) {
+		if ((mask >> k) & 1)
+			bits[V90JD_GROUP1 + 1 + k] = 1;
+		else
+			bits[V90JD_GROUP1 + 1 + k] = 0;
+	}
 
-	for (k = 0; k <= 10; k++)
-		bits[V90JD_GROUP2 + 1 + k] =
-		    (unsigned char)(((mask >> (16 + k)) & 1) != 0);
+	for (k = 0; k <= 10; k++) {
+		if ((mask >> (16 + k)) & 1)
+			bits[V90JD_GROUP2 + 1 + k] = 1;
+		else
+			bits[V90JD_GROUP2 + 1 + k] = 0;
+	}
 }
 
 /*
