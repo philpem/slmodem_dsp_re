@@ -121440,3 +121440,64 @@ records the old post-clear source schedule as the one proved-equivalent
 mutation.  Repository audits check 13,726 references, 2,504 finding headings,
 229 suites and 9,776 mutation anchors with no issue.  The strict byte-identity
 ratchet passes at 807 EXACT and 53 REGALLOC. (2026-09-07)
+
+## F10233. `voice_duplex` has no exact preimage in 128 parameter-qualification, alias and local-order cells
+
+The fresh GCC 3.4.2 control compiled from `src/service/voicedp.c` remains
+**BYTES 8/251**, extending rather than repeating F10216's four local-scope
+and argument-alias probes.  Eight instruction rows differ from the blob.
+The incoming `tx_lin` and `tx_flt` pointers use exchanged EAX/EDX carriers,
+including the outgoing stores to stack offsets 0x10 and 0x0c; two short-lived
+loads after `FDSP_DP_Run` likewise exchange those registers.  Strict
+`alpha_why` rejects row 12 with a USE CONFLICT, so the complete stream is
+not grade-1 register-equivalent.  No argument order or pointee qualification
+was changed to influence this result.
+
+The prescribed **32-cell** domain independently adds top-level `const` to
+each of the four buffer-pointer parameters, crossed with passing those
+parameters directly or through four initialized named pointer aliases.
+There are 16 baseline-identical cells and 16 BYTES80 cells.  The only
+effective axis is top-level const on the long-lived `rx_flt` parameter;
+the other three qualifiers and the outgoing aliases are inert.  The worse
+body remains 251 bytes but has 70 non-padding instruction rows against the
+blob's 68, and is not a register-equivalence improvement.
+
+That observation licenses one bounded extension around the other long-lived
+parameters and local lifetimes.  Its **96 cells** independently qualify
+the `v`, `rx_flt` and `countp` pointer parameters, cross all six declaration
+orders of `ret`, `i` and `r`, and either initialize all three at function
+entry before `FDSP_DP_Run` or initialize them at their original use sites
+(`ret` before the call, `i` and `r` inside the beep arm).  Declarations are
+at function scope in both arms.  The extension produces BYTES8 in 24 cells,
+BYTES80 in 24, BYTES72 in 24, BYTES45 in 12 and BYTES46 in 12.  Every cell
+remains 251 bytes; none is exact or closer than the original eight bytes.
+
+Across both families, **128 complete translation-unit compiles produce six
+distinct complete objects and zero exact preimages**.  Forty cells reproduce
+the entire baseline ELF object byte for byte, not merely the target body.
+Every cell is scored with `byteident.py`'s own body and relocation comparator
+over all **eight shared text names**.  All seven bystanders preserve their
+complete bodies and canonical relocations.  The exact-name set is unchanged:
+`voice_set_online` and `voice_set_tx`.  The other bystanders are
+`voice_online`, `voice_rx`, `voice_set_duplex`, `voice_set_rx` and `voice_tx`.
+There are no additional local text definitions hidden outside that shared
+denominator.
+
+The complete defined-symbol names, binding/type letters, offsets and sizes
+are identical in all 128 candidates, as are the full ELF section headers.
+Thus no source variant adds a helper or changes TU layout, and the baseline-
+identical cells cannot change partial-link selection or layout.  No differing
+candidate reaches the exact/no-loss prerequisite for a final aggregate
+`ld -r` audit; no aggregate partial-link identity is claimed for those
+rejected objects.  The compiler image and flags remain the repository-default
+`dsplibs-tc342` GCC 3.4.2 configuration throughout, without assembly, volatile,
+hard-register variables or extra compiler options.
+
+No source, test, mutation or ratchet change is retained.  This bounds the
+specified source domains, not every ordinary C preimage.  All probe scripts,
+candidate sources, objects and score records were removed after documenting
+the measurements.  Only this finding remains, with reference integrity and
+whitespace checks passing.  Because no code change was accepted, focused
+modern/period differential tests, mutation suites and the full-tree ratchet
+were not rerun or claimed as new validation.
+(2026-09-07)
