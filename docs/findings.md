@@ -120839,3 +120839,49 @@ The strict 775-name exact-set ratchet passes.  The aggregate's full `make
 phase` boundary remains for integration.  The 20 diagnostic objects are under
 this worktree's ignored `build/resampler-variants`; they are not build inputs.
 (2026-09-07)
+
+## F10222. `ModDataV17` closes when the post-encoder instance access remains in both filter arguments
+
+`ModDataV17` began at 98 bytes and 29 instructions on both sides, with 29
+non-relocation bytes different.  The mnemonic multisets were equal.  Our
+cached post-encoder `fp` let GCC reload `modem->fp` immediately after the
+indirect encoder call and assign the two long-lived arguments to `%ebx` and
+`%esi` opposite the blob.  The blob instead stores `count` and `out` first,
+then reloads the instance into `%eax` for the filter arguments.
+
+A complete **45-cell** domain crossed five ordinary spellings of the first
+indirect dispatch (table and selector locals independently present or inlined,
+both inlined, and a selected-function local) with nine ways to express the
+second call's shared base (one cached local, a separately named local, two
+mixed cached/direct forms, direct pointer and ring locals in both orders,
+cached pointer and ring locals in both orders, and the two direct expressions).
+All were real `v17data.c` translation-unit compiles with the repository's
+unchanged GCC 3.4.2 flags.  They produced eight distinct target emissions:
+**4 EXACT, 32 BYTES 29, and 9 SIZE +2**.  Every exact cell is one of the four
+first-dispatch forms without the selected-function temporary crossed with the
+same second-call form: both `FPM_PPS_filter` subobjects are derived directly
+from `FIELD_PTR(modem, V17TX_OBJ_FP)` in their argument expressions.  None of
+the other eight second-call forms is exact.  Thus this is a several-preimage
+recovery of that post-call expression fact; it does not distinguish whether
+the original named the table or selector in the first call.
+
+The retained edit keeps the existing table and selector locals and changes
+only the second call.  The two added reads are ordinary, non-volatile reads
+with no side effect between their argument computations, so they have the
+same value semantics as the local cache.  GCC common-subexpression eliminates
+them to the blob's single post-call load.  The resulting 98 bytes, including
+the `FPM_PPS_filter` relocation, are exact.  The translation unit has only one
+other function, `TxNoCarrierV17`; all 45 candidates leave its body
+byte-identical to the baseline, so the retained cell has no bystander loss.
+
+The full 272-object byte-identity report moves **791 -> 792 EXACT** and
+**104 -> 103 BYTES**, with 4 UNRESOLVED, 53 REGALLOC, 900 SIZE and 0 RELOC
+unchanged over all 1,852 shared symbols.  The strict 775-name exact-set ratchet
+passes.  Focused modern differential testing passes `ModDataV17` at 69,808
+checks, `TxNoCarrierV17` at 28,174, and 15 separating trials; the pinned
+GCC 3.4.2 run reports `t_v17data` **1 passed, 0 failed**.  The source-shape
+change detached one mutation anchor; it was moved to the same ring argument,
+the 26-anchor audit is clean, and the complete mutation suite still catches
+**26/26**.  Candidate sources and objects are under `/tmp/moddatav17-enum`
+and are diagnostic artifacts, not build inputs.  The aggregate's full
+`make phase` remains the integration gate. (2026-09-07)

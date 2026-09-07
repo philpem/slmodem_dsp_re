@@ -34,8 +34,8 @@
  },
  {
   "label": "the shaper is filtered from a ring that is not the one the encoder wrote",
-  "find": "\treturn FPM_PPS_filter((struct fpm_pps *)(void *)FIELD(fp, V17FP_PPS),\n\t\t\t      (struct fpm_smc_ring *)(void *)\n\t\t\t\t\tFIELD(fp, V17FP_SMC_RING),\n\t\t\t      out, count);",
-  "replace": "\treturn FPM_PPS_filter((struct fpm_pps *)(void *)FIELD(fp, V17FP_PPS),\n\t\t\t      (struct fpm_smc_ring *)(void *)\n\t\t\t\t\tFIELD(fp, V17FP_SMC),\n\t\t\t      out, count);"
+  "find": "\treturn FPM_PPS_filter((struct fpm_pps *)(void *)\n\t\t\t\tFIELD(FIELD_PTR(modem, V17TX_OBJ_FP), V17FP_PPS),\n\t\t\t      (struct fpm_smc_ring *)(void *)\n\t\t\t\t\tFIELD(FIELD_PTR(modem, V17TX_OBJ_FP),\n\t\t\t\t\t      V17FP_SMC_RING),\n\t\t\t      out, count);",
+  "replace": "\treturn FPM_PPS_filter((struct fpm_pps *)(void *)\n\t\t\t\tFIELD(FIELD_PTR(modem, V17TX_OBJ_FP), V17FP_PPS),\n\t\t\t      (struct fpm_smc_ring *)(void *)\n\t\t\t\t\tFIELD(FIELD_PTR(modem, V17TX_OBJ_FP),\n\t\t\t\t\t      V17FP_SMC),\n\t\t\t      out, count);"
  },
  {
   "label": "the shaper's count is the number of samples it may write rather than the number of symbols offered",
