@@ -119,7 +119,7 @@ static const short TONE_quarter_cosine[513] = {
  * Detection thresholds, .rodata+0x6900.  Indexed as 45 - level, so the table
  * reads backwards: a lower level number gives a larger threshold.
  */
-static const short Detection_Threshold[16] = {
+static const short ThresholdsTable[16] = {
 	 90,  92,  96,  97,  99, 102, 185, 188,
 	190, 250, 280, 285, 370, 390, 470, 560
 };
@@ -194,7 +194,7 @@ TONE_read(short phase)
 short
 Get_Detection_Threshold_Table(short level)
 {
-	return Detection_Threshold[(short)(45 - level)];
+	return ThresholdsTable[(short)(45 - level)];
 }
 
 /*

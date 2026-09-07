@@ -22,13 +22,17 @@ So this tool reports one number per function and one count over the tree:
 
 RELOCATED FIELDS ARE COMPARED BY TARGET, NOT BY VALUE, and that is not a
 loosening -- it is the only correct comparison.  A four-byte field under an
-`R_386_32` or `R_386_PC32` holds a placeholder the linker will overwrite; in
-the blob it is frequently 0 or -4, and ours is whatever our assembler chose.
-Comparing those bytes literally would report a difference that does not exist,
-so each relocated field is compared by (relocation type, target symbol)
-instead.  A function that is byte-equal everywhere else but CALLS SOMETHING
+`R_386_32` or `R_386_PC32` holds an inline addend that the linker combines with
+the relocation destination.  Different section layouts can encode the same
+destination differently, so each relocated field is compared by relocation
+type and canonical destination, retaining the addend for both kinds.
+A function that is byte-equal everywhere else but CALLS SOMETHING
 DIFFERENT is reported separately, as `RELOC`, because that is a real
 difference this tool must not hide.
+
+Function identity here compares relocation destination identity.  Symbol
+binding and visibility remain separate whole-object checks; canonicalizing a
+destination does not prove the same symbol interposition or export behavior.
 
     tools/toolchain/byteident.py                  counts, then the misses
     tools/toolchain/byteident.py --list-exact     the exact set, for a diff
@@ -39,6 +43,7 @@ Denominator: the symbols the blob and `TC_OUT` both define, which is
 """
 
 import argparse
+import functools
 import glob
 import json
 import os
@@ -103,8 +108,125 @@ def sizes(path):
     return d
 
 
+@functools.lru_cache(maxsize=None)
+def section_symbols(path):
+    """Section names and all symbol starts, retaining ambiguity, per object.
+
+    Read SECTION records as well as ordinary symbols: equal numeric values in
+    different sections do not identify the same address.  Count records, not
+    just distinct names, so duplicate local names cannot create a false match.
+    """
+    out = subprocess.run(["readelf", "--syms", "--wide", path],
+                         capture_output=True, text=True, check=True).stdout
+    sections, starts, objects = {}, {}, {}
+    for line in out.splitlines():
+        fields = line.split()
+        if len(fields) != 8 or not fields[0].endswith(":"):
+            continue
+        _, value, size, kind, _, _, index, name = fields
+        if not index.isdigit():
+            continue
+        if kind == "SECTION":
+            sections.setdefault(name, []).append(index)
+        elif kind in ("OBJECT", "FUNC", "NOTYPE"):
+            starts.setdefault((index, int(value, 16)), []).append(name)
+            if kind == "OBJECT" and int(size, 0):
+                objects.setdefault(index, []).append(
+                    (int(value, 16), int(size, 0), name))
+    return sections, starts, mergeable_entries(path), objects
+
+
+def mergeable_entries(path):
+    """ELF SHF_MERGE entries: (entry size, is string, bytes), by section."""
+    out = subprocess.run(["readelf", "--section-headers", "--wide", path],
+                         capture_output=True, text=True, check=True).stdout
+    entries = {}
+    with open(path, "rb") as obj:
+        for line in out.splitlines():
+            match = re.match(r"\s*\[\s*(\d+)\]\s+(.*)", line)
+            if not match:
+                continue
+            fields = match.group(2).split()
+            if len(fields) < 10:
+                continue
+            _, kind, _, offset, size, entsize, flags = fields[:7]
+            if kind != "PROGBITS" or "M" not in flags:
+                continue
+            entry_size, is_string = int(entsize, 16), "S" in flags
+            if not entry_size or (is_string and entry_size != 1):
+                continue
+            obj.seek(int(offset, 16))
+            data = obj.read(int(size, 16))
+            if len(data) != int(size, 16):
+                raise ValueError("truncated ELF merge section in " + path)
+            entries[match.group(1)] = (entry_size, is_string, data)
+    return entries
+
+
+def relocation_target(kind, target, field, symbols):
+    """Canonical R_386_32 target from unique symbols or ELF merge entries.
+
+    ELF/i386 REL stores its addend in the four relocated bytes, not in the
+    relocation record.  Object interiors require a unique nonzero-sized OBJECT
+    interval; nearest symbols, overlapping objects and aliases do not resolve.
+    Unresolved section offsets and named-symbol addends remain in tagged,
+    hashable tuples, so neither byte masking nor synthetic-looking symbol
+    names can erase a distinction.  PC-relative addends are retained but
+    section-relative PC32 destinations are not resolved yet.
+    """
+    sections, starts, entries, objects = symbols
+    tag = "section" if target in sections else "symbol"
+    if kind not in ("R_386_32", "R_386_PC32"):
+        return (tag, target, 0)
+    if len(field) != 4:
+        raise ValueError(kind + " relocation needs four addend bytes")
+    addend = int.from_bytes(field, "little")
+    indices = sections.get(target, [])
+    if kind == "R_386_32" and len(indices) == 1:
+        names = starts.get((indices[0], addend), [])
+        containing = [(start, size, name)
+                      for start, size, name in objects.get(indices[0], [])
+                      if start <= addend < start + size]
+        if len(names) == 1 and (not containing or
+                               len(containing) == 1 and
+                               containing[0][0] == addend and
+                               containing[0][2] == names[0]):
+            return ("symbol", names[0], 0)
+        if not names and len(containing) == 1:
+            start, _, name = containing[0]
+            if starts.get((indices[0], start)) == [name]:
+                return ("symbol", name, addend - start)
+        # Linkers may merge identical strings and suffixes at different
+        # offsets.  SHF_MERGE also licenses fixed-size entries, compared in
+        # full together with the offset inside the entry.  Ordinary rodata
+        # never takes this path, nor do ambiguous symbol starts/intervals.
+        if not names and not containing and indices[0] in entries:
+            entry_size, is_string, data = entries[indices[0]]
+            if is_string:
+                end = data.find(b"\0", addend)
+                if end >= 0:
+                    return ("merge-string", data[addend:end + 1])
+            elif entry_size and addend < len(data):
+                start = addend - addend % entry_size
+                end = start + entry_size
+                if end <= len(data):
+                    return ("merge-entry", entry_size, data[start:end], addend - start)
+    return (tag, target, addend)
+
+
+def render_relocation(target):
+    """Text for grade-1 operands/diagnostics; grade 0 compares the tuples.
+
+    Encode byte payloads as hex so a string containing register-like text
+    cannot participate in register renaming.  Tuple tags keep the rendering
+    distinct from real symbol names even when they resemble synthetic names.
+    """
+    return repr(tuple(item.hex() if isinstance(item, bytes) else item
+                      for item in target)).replace("%", r"\x25")
+
+
 def body(path, sym):
-    """(bytes, {offset: (type, target)}) for one function, offsets relative."""
+    """(bytes, {offset: (type, canonical target)}), offsets relative."""
     out = subprocess.run(
         ["objdump", "-dr", "--disassemble=" + sym, path],
         capture_output=True, text=True).stdout
@@ -124,7 +246,12 @@ def body(path, sym):
     if base is None:
         return None, None
     n = max(data) + 1 if data else 0
-    return bytes(data.get(i, 0) for i in range(n)), relocs
+    raw = bytes(data.get(i, 0) for i in range(n))
+    symbols = section_symbols(path) if relocs else ({}, {}, {}, {})
+    relocs = {off: (kind, relocation_target(kind, target, raw[off:off + 4],
+                                           symbols))
+              for off, (kind, target) in relocs.items()}
+    return raw, relocs
 
 
 REG32 = {"al": "eax", "ah": "eax", "ax": "eax", "eax": "eax",
@@ -208,6 +335,7 @@ def _fields(ops):
 
 def insns(path, sym):
     """[(mnemonic, operand text)] with addresses and symbol comments dropped."""
+    _, relocs = body(path, sym)
     out = subprocess.run(
         ["objdump", "-dr", "--disassemble=" + sym, "--no-show-raw-insn", path],
         capture_output=True, text=True).stdout
@@ -227,8 +355,10 @@ def insns(path, sym):
             #
             r = RELOC.match(line)
             if r and rows:
-                tag = "@" + r.group(3)
-                sub, k = re.subn(r"0x[0-9a-f]+|\$0x[0-9a-f]+", tag, rows[-1][1])
+                off = int(r.group(1), 16) - base
+                tag = "@%s:%s" % (relocs[off][0], render_relocation(relocs[off][1]))
+                literal = r"\$?0x[0-9a-f]+"
+                candidates = list(re.finditer(literal, rows[-1][1]))
                 #
                 # A CALL HAS NO NUMERIC LITERAL LEFT TO REPLACE -- its operand
                 # is a bare address already rewritten to `.+N` above -- so a
@@ -237,17 +367,23 @@ def insns(path, sym):
                 # hypothetical: `V90PreFilter`'s destructors call
                 # `FloatFIR::~FloatFIR` D2 in the blob and D1 in ours, and
                 # both were being certified as "same instructions and
-                # operands".  Append where nothing was replaced.
+                # operands".  Append where nothing was replaced.  Multiple
+                # hex literals can include unrelated immediates (cmpl $1,
+                # address); preserve all operands and append in that case.
+                # A conservative false rejection is safer than erasing $1.
                 #
-                rows[-1][1] = sub if k else (rows[-1][1] + " " + tag).strip()
+                if len(candidates) == 1:
+                    rows[-1][1] = re.sub(literal, lambda _: tag, rows[-1][1])
+                else:
+                    rows[-1][1] = (rows[-1][1] + " " + tag).strip()
             continue
         at = int(m.group(1), 16)
         if base is None:
             base = at
-        body = line.split("\t", 1)[1].strip()
-        body = body.split("#", 1)[0].strip()
-        body = re.sub(r"<[^>]*>", "", body).strip()
-        parts = body.split(None, 1)
+        instruction = line.split("\t", 1)[1].strip()
+        instruction = instruction.split("#", 1)[0].strip()
+        instruction = re.sub(r"<[^>]*>", "", instruction).strip()
+        parts = instruction.split(None, 1)
         ops = parts[1].strip() if len(parts) > 1 else ""
         #
         # A BRANCH TARGET IS AN ABSOLUTE ADDRESS AND THE TWO OBJECTS PUT THE
@@ -268,9 +404,10 @@ def insns(path, sym):
     # blob's addend rides inline against a SECTION symbol and ours is a named
     # symbol with a zero addend (finding F604).  Comparing the printed
     # displacement scores that as a difference in code where there is none.
-    # Replace every numeric literal in a relocated instruction's operands with
-    # the relocation's TARGET, so two instructions relocated against the same
-    # thing compare equal and two relocated against different things do not.
+    # Replace a sole hex literal with the relocation's canonical TARGET.
+    # Where the operands contain several literals, keep them all and append
+    # the target: choosing one without decoding its byte field could erase a
+    # different immediate.  Zero literals also requires appending the target.
     #
     return [tuple(r) for r in rows]
 
@@ -447,31 +584,22 @@ def verdict(a, ra, b, rb):
     diff = sum(1 for i in range(len(a)) if i not in masked and a[i] != b[i])
     if diff:
         return "BYTES", diff
-    if ra != rb:
-        #
-        # A SECTION-RELATIVE RELOCATION AND A NAMED-SYMBOL ONE CAN NAME THE
-        # SAME THING.  `objdump` prints the blob's string and table references
-        # as `R_386_32 .rodata` with the offset as an inline addend, and ours
-        # as `R_386_32 v8_costab` -- finding F604.  Comparing the printed names
-        # scores that as a differing target when nothing differs, so a pair
-        # where one side names a section is reported as UNRESOLVED and NOT as
-        # a difference.  Resolving it properly needs the addend, which
-        # `objdump -dr` does not print.
-        #
-        sections = (".text", ".rodata", ".data", ".bss")
-        hard = soft = 0
-        for k in set(ra) | set(rb):
-            x, y = ra.get(k), rb.get(k)
-            if x == y:
-                continue
-            if (x and x[1].startswith(sections)) or (y and y[1].startswith(sections)):
-                soft += 1
-            else:
-                hard += 1
-        if hard:
-            return "RELOC", hard
-        if soft:
-            return "UNRESOLVED", soft
+    # A section tag means destination identity was not proved.  Equal section
+    # names and offsets in separate objects do not supply that missing proof,
+    # so inspect these even when the relocation dictionaries compare equal.
+    hard = soft = 0
+    for k in set(ra) | set(rb):
+        x, y = ra.get(k), rb.get(k)
+        if x is None or y is None or x[0] != y[0]:
+            hard += 1
+        elif x[1][0] == "section" or y[1][0] == "section":
+            soft += 1
+        elif x != y:
+            hard += 1
+    if hard:
+        return "RELOC", hard
+    if soft:
+        return "UNRESOLVED", soft
     return "EXACT", 0
 
 
@@ -571,6 +699,241 @@ def self_test():
     print("\n  %d case(s), %d accept, %d reject, %d failure(s)"
           % (len(SELF_TESTS), sum(1 for c in SELF_TESTS if c[1]),
              sum(1 for c in SELF_TESTS if not c[1]), bad))
+    return 1 if relocation_self_test() or bad else 0
+
+
+def relocation_self_test():
+    """Proven symbol/merge identities must fire, and near misses must refuse."""
+    from io import BytesIO
+    from types import SimpleNamespace
+    from unittest.mock import patch
+
+    symbols = ({".data": ["1"], ".bss": ["2"], ".rodata.str1.1": ["3"]}, {
+        ("1", 0x30): ["vpcm_op"],
+        ("1", 0x3a0): ["v92TxPreFilter"],
+        ("2", 0x8ec): ["bInternalBeepInProgress"],
+        ("1", 0x100): ["first", "alias"],
+        ("1", 0x200): ["duplicate", "duplicate"],
+    }, {"3": (1, True, b"same\0different\0same\0unterminated")}, {})
+    cases = [
+        ("operation table resolves", "R_386_32", ".data", 0x30, ("symbol", "vpcm_op", 0)),
+        ("filter resolves", "R_386_32", ".data", 0x3a0, ("symbol", "v92TxPreFilter", 0)),
+        ("beep flag resolves", "R_386_32", ".bss", 0x8ec,
+         ("symbol", "bInternalBeepInProgress", 0)),
+        ("inside unsized symbol refused", "R_386_32", ".data", 0x31, ("section", ".data", 0x31)),
+        ("wrong section refused", "R_386_32", ".bss", 0x30, ("section", ".bss", 0x30)),
+        ("two names refused", "R_386_32", ".data", 0x100, ("section", ".data", 0x100)),
+        ("duplicate names refused", "R_386_32", ".data", 0x200, ("section", ".data", 0x200)),
+        ("named addend retained", "R_386_32", "vpcm_op", 4, ("symbol", "vpcm_op", 4)),
+        ("full unsigned addend retained", "R_386_32", "vpcm_op", 0xffffffff,
+         ("symbol", "vpcm_op", 0xffffffff)),
+        ("PC-relative resolution excluded", "R_386_PC32", ".data", 0x30,
+         ("section", ".data", 0x30)),
+        ("PC-relative addend retained", "R_386_PC32", "callee", 0xfffffffc,
+         ("symbol", "callee", 0xfffffffc)),
+        ("mergeable string resolves by bytes", "R_386_32", ".rodata.str1.1", 0,
+         ("merge-string", b"same\0")),
+        ("unterminated string refused", "R_386_32", ".rodata.str1.1", 20,
+         ("section", ".rodata.str1.1", 20)),
+        ("out-of-section string offset refused", "R_386_32", ".rodata.str1.1", 99,
+         ("section", ".rodata.str1.1", 99)),
+    ]
+    checks = []
+    for label, kind, target, addend, want in cases:
+        got = relocation_target(kind, target, addend.to_bytes(4, "little"), symbols)
+        checks.append((label, got == want))
+    ambiguous_sections = ({".data": ["1", "3"]}, *symbols[1:])
+    checks.append(("duplicate section names refused", relocation_target(
+        "R_386_32", ".data", (0x30).to_bytes(4, "little"), ambiguous_sections)
+        == ("section", ".data", 0x30)))
+    for kind in ("R_386_32", "R_386_PC32"):
+        try:
+            relocation_target(kind, ".data", b"\x30\x00\x00", symbols)
+        except ValueError:
+            checks.append(("truncated " + kind + " addend refused", True))
+        else:
+            checks.append(("truncated " + kind + " addend refused", False))
+
+    def sample(target, addend, kind="R_386_32"):
+        raw = b"\xa1" + addend.to_bytes(4, "little") + b"\xc3"
+        canonical = relocation_target(kind, target, raw[1:5], symbols)
+        return raw, {1: (kind, canonical)}
+
+    for label, left, right, want in [
+            ("resolved section is EXACT", (".data", 0x30), ("vpcm_op", 0), "EXACT"),
+            ("wrong section addend is UNRESOLVED", (".data", 0x31),
+             ("vpcm_op", 0), "UNRESOLVED"),
+            ("ambiguous start is UNRESOLVED", (".data", 0x100),
+             ("first", 0), "UNRESOLVED"),
+            ("equal ambiguous starts remain UNRESOLVED", (".data", 0x100),
+             (".data", 0x100), "UNRESOLVED"),
+            ("equal unproved section offsets remain UNRESOLVED", (".data", 0x31),
+             (".data", 0x31), "UNRESOLVED"),
+            ("named addend difference is RELOC", ("vpcm_op", 0),
+             ("vpcm_op", 4), "RELOC"),
+            ("section addend difference is UNRESOLVED", (".data", 0x31),
+             (".data", 0x32), "UNRESOLVED"),
+            ("equal strings at different offsets are EXACT", (".rodata.str1.1", 0),
+             (".rodata.str1.1", 15), "EXACT"),
+            ("different string bytes are RELOC", (".rodata.str1.1", 0),
+             (".rodata.str1.1", 5), "RELOC"),
+            ("PC32 addend -4 versus zero is RELOC", ("callee", 0xfffffffc, "R_386_PC32"),
+             ("callee", 0, "R_386_PC32"), "RELOC"),
+            ("equal PC32 addends are EXACT", ("callee", 0xfffffffc, "R_386_PC32"),
+             ("callee", 0xfffffffc, "R_386_PC32"), "EXACT"),
+            ("differing relocation kinds are RELOC", ("callee", 0, "R_386_32"),
+             ("callee", 0, "R_386_PC32"), "RELOC"),
+            ("section-looking symbol names are RELOC", (".data_fake", 0),
+             ("other", 0), "RELOC"),
+            ("symbol and merged-string names cannot collide", ("string:73616d6500", 0),
+             (".rodata.str1.1", 0), "RELOC"),
+            ("symbol addend and literal name cannot collide", ("vpcm_op+0x4", 0),
+             ("vpcm_op", 4), "RELOC")]:
+        checks.append((label, verdict(*sample(*left), *sample(*right))[0] == want))
+
+    def merge_target(data, entry_size, offset):
+        metadata = ({".rodata.cst": ["1"]}, {},
+                    {"1": (entry_size, False, data)}, {})
+        return relocation_target("R_386_32", ".rodata.cst",
+                                 offset.to_bytes(4, "little"), metadata)
+
+    for label, left, right, equal in [
+            ("identical full merge entries resolve", (b"abcdabcd", 4, 1),
+             (b"abcdabcd", 4, 5), True),
+            ("differing full merge entries refuse", (b"abcd", 4, 1),
+             (b"zbcd", 4, 1), False),
+            ("merge entry sizes must match", (b"abcd", 4, 1),
+             (b"abcd", 2, 1), False),
+            ("merge intra-entry offsets must match", (b"abcd", 4, 1),
+             (b"abcd", 4, 2), False)]:
+        checks.append((label, (merge_target(*left) == merge_target(*right)) == equal))
+    for label, data, entry_size, offset in [
+            ("truncated merge entry refused", b"abcdef", 4, 5),
+            ("merge section end refused", b"abcd", 4, 4),
+            ("merge offset out of range refused", b"abcd", 4, 10),
+            ("zero merge entry size refused", b"abcd", 0, 1)]:
+        checks.append((label, merge_target(data, entry_size, offset) ==
+                       ("section", ".rodata.cst", offset)))
+
+    object_symbols = ({".data": ["1"]}, {
+        ("1", 0x10): ["FIFO_CFG"], ("1", 0x30): ["fixedRc_UpFact"],
+        ("1", 0x50): ["FrameNames"], ("1", 0x70): ["wide"],
+        ("1", 0x78): ["overlap"], ("1", 0x90): ["alias_a", "alias_b"],
+    }, {}, {"1": [(0x10, 8, "FIFO_CFG"), (0x30, 16, "fixedRc_UpFact"),
+                  (0x50, 8, "FrameNames"), (0x70, 16, "wide"),
+                  (0x78, 8, "overlap"), (0x90, 8, "alias_a"),
+                  (0x90, 8, "alias_b")]})
+    for label, offset, want in [
+            ("FIFO_CFG interior resolves", 0x14, ("symbol", "FIFO_CFG", 4)),
+            ("fixedRc_UpFact interior resolves", 0x38, ("symbol", "fixedRc_UpFact", 8)),
+            ("FrameNames interior resolves", 0x54, ("symbol", "FrameNames", 4)),
+            ("sized object exact start resolves", 0x10, ("symbol", "FIFO_CFG", 0)),
+            ("object boundary end refused", 0x18, ("section", ".data", 0x18)),
+            ("overlapping object interiors refused", 0x7c, ("section", ".data", 0x7c)),
+            ("overlapping object start refused", 0x78, ("section", ".data", 0x78)),
+            ("aliased object interior refused", 0x94, ("section", ".data", 0x94))]:
+        checks.append((label, relocation_target("R_386_32", ".data",
+                       offset.to_bytes(4, "little"), object_symbols) == want))
+
+    collision_targets = [
+        ("symbol", "string:73616d6500", 0), ("merge-string", b"same\0"),
+        ("symbol", "merge:4:73616d65+0x1", 0), ("merge-entry", 4, b"same", 1),
+        ("symbol", "x+0x4", 0), ("symbol", "x", 4), ("section", "x", 4),
+    ]
+    checks.append(("tagged destinations are hashable and collision-free",
+                   len(set(collision_targets)) == len(collision_targets)))
+    checks.append(("diagnostic rendering keeps destination kinds distinct",
+                   len({render_relocation(t) for t in collision_targets}) ==
+                   len(collision_targets)))
+
+    # Exercise both objdump consumers and the ELF metadata reader together.
+    # The fixture has identical bytes in mergeable and ordinary rodata; only
+    # the former may be interpreted as a string.
+    def fixture_run(command, **kwargs):
+        if "--syms" in command:
+            output = ("1: 00000000 0 SECTION LOCAL DEFAULT 1 .data\n"
+                      "2: 00000030 24 OBJECT LOCAL DEFAULT 1 vpcm_op\n"
+                      "3: 00000000 0 SECTION LOCAL DEFAULT 3 .rodata.str1.1\n"
+                      "4: 00000000 0 SECTION LOCAL DEFAULT 4 .rodata\n"
+                      "5: 00000000 0 SECTION LOCAL DEFAULT 5 .rodata.cst4\n")
+        elif "--section-headers" in command:
+            output = ("[ 3] .rodata.str1.1 PROGBITS 00000000 000000 000005 01 AMS 0 0 1\n"
+                      "[ 4] .rodata PROGBITS 00000000 000000 000005 00 A 0 0 1\n"
+                      "[ 5] .rodata.cst4 PROGBITS 00000000 000000 000004 04 AM 0 0 4\n")
+        elif any(arg in ("--disassemble=compare1", "--disassemble=compare2")
+                 for arg in command):
+            immediate = 1 if "--disassemble=compare1" in command else 2
+            if "--no-show-raw-insn" in command:
+                output = ("0:\tcmpl $0x%x,0x30\n 2: R_386_32 .data\n7:\tret\n"
+                          % immediate)
+            else:
+                output = ("0:\t83 3d 30 00 00 00 %02x \tcmpl $0x%x,0x30\n"
+                          " 2: R_386_32 .data\n7:\tc3 \tret\n"
+                          % (immediate, immediate))
+        elif "--disassemble=call" in command:
+            if "--no-show-raw-insn" in command:
+                output = "0:\tcall 1\n 1: R_386_PC32 callee\n5:\tret\n"
+            else:
+                output = "0:\te8 fc ff ff ff \tcall 1\n 1: R_386_PC32 callee\n5:\tc3 \tret\n"
+        elif any(arg in ("--disassemble=absolute", "--disassemble=relative")
+                 for arg in command):
+            relative = "--disassemble=relative" in command
+            register = "ecx" if relative else "eax"
+            kind = "R_386_PC32" if relative else "R_386_32"
+            if "--no-show-raw-insn" in command:
+                output = ("0:\tmov 0x0,%%%s\n 2: %s vpcm_op\n6:\tret\n"
+                          % (register, kind))
+            else:
+                output = ("0:\t8b %s 00 00 00 00 \tmov 0x0,%%%s\n"
+                          " 2: %s vpcm_op\n6:\tc3 \tret\n"
+                          % ("0d" if relative else "05", register, kind))
+        elif "--no-show-raw-insn" in command:
+            output = "0:\tmov 0x30,%eax\n 1: R_386_32 .data\n5:\tret\n"
+        else:
+            output = "0:\ta1 30 00 00 00 \tmov 0x30,%eax\n 1: R_386_32 .data\n5:\tc3 \tret\n"
+        return SimpleNamespace(stdout=output)
+
+    fixture_path = "<byteident-relocation-self-test>"
+    with patch.object(subprocess, "run", side_effect=fixture_run), \
+            patch("builtins.open", return_value=BytesIO(b"same\0")):
+        raw, relocs = body(fixture_path, "fixture")
+        checks.append(("body preserves bytes and resolves inline addend",
+                       raw == b"\xa1\x30\0\0\0\xc3" and
+                       relocs == {1: ("R_386_32", ("symbol", "vpcm_op", 0))}))
+        checks.append(("instruction operands use canonical relocation",
+                       insns(fixture_path, "fixture") ==
+                       [("mov", "@R_386_32:('symbol', 'vpcm_op', 0),%eax"), ("ret", "")]))
+        compare1 = insns(fixture_path, "compare1")
+        compare2 = insns(fixture_path, "compare2")
+        checks.append(("relocated compare preserves unrelated immediate",
+                       compare1[0] == ("cmpl", "$0x1,0x30 @R_386_32:('symbol', 'vpcm_op', 0)")))
+        checks.append(("relocated cmpl $1 versus $2 must reject grade 1",
+                       not alpha_equal(compare1, compare2)))
+        checks.append(("zero-literal PC32 call retains destination and addend",
+                       insns(fixture_path, "call") ==
+                       [("call", ".+1 @R_386_PC32:('symbol', 'callee', 4294967292)"), ("ret", "")]))
+        checks.append(("register change cannot hide a relocation-kind change",
+                       verdict(*body(fixture_path, "absolute"),
+                               *body(fixture_path, "relative"))[0] == "BYTES" and
+                       not alpha_equal(insns(fixture_path, "absolute"),
+                                       insns(fixture_path, "relative"))))
+        parsed = section_symbols(fixture_path)
+        checks.append(("ELF symbol sizes license object interior resolution",
+                       relocation_target("R_386_32", ".data", b"\x34\0\0\0",
+                                         parsed) == ("symbol", "vpcm_op", 4)))
+        checks.append(("ELF merge flag and entry size license fixed entries",
+                       relocation_target("R_386_32", ".rodata.cst4", b"\1\0\0\0",
+                                         parsed) == ("merge-entry", 4, b"same", 1)))
+        checks.append(("ELF flags restrict string resolution",
+                       relocation_target("R_386_32", ".rodata.str1.1", b"\0" * 4,
+                                         parsed) == ("merge-string", b"same\0") and
+                       relocation_target("R_386_32", ".rodata", b"\0" * 4,
+                                         parsed) == ("section", ".rodata", 0)))
+    section_symbols.cache_clear()
+    bad = sum(not ok for _, ok in checks)
+    for label, ok in checks:
+        print("  %s  %s" % ("ok  " if ok else "FAIL", label))
+    print("\n  %d relocation case(s), %d failure(s)" % (len(checks), bad))
     return 1 if bad else 0
 
 
@@ -697,7 +1060,7 @@ def main():
     ap.add_argument("--why", metavar="SYMBOL",
                     help="print the row alpha_equal rejects SYMBOL on")
     ap.add_argument("--self-test", action="store_true",
-                    help="prove alpha_equal both accepts and REJECTS")
+                    help="prove alpha_equal and relocation resolution accept and REJECT")
     ap.add_argument("--ratchet-self-test", action="store_true",
                     help="prove the exact-symbol ratchet rejects a masked loss")
     ap.add_argument("--limit", type=int, default=25)

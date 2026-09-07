@@ -229,8 +229,9 @@ static const size_t tx_pointers[] = {
 /*
  * The four filter designs are separate copies of the same numbers -- one set
  * in the object file, one in v8v21.c -- so the pointers can never match.
- * Compare 48 coefficients through each, then blank the four words so the
+ * Compare all 41 coefficients through each, then blank the four words so the
  * whole-object sweep still covers everything around them.
+ * The next seven words in the blob are alignment padding, not coefficients.
  */
 static void
 compare_filters(void)
@@ -247,7 +248,7 @@ compare_filters(void)
 		diff_eq_int("filter %ld is set", pb[k] != 0, pa[k] != 0, k);
 		if (pa[k] == 0 || pb[k] == 0)
 			continue;
-		for (i = 0; i < 48; i++)
+		for (i = 0; i < V8_V21_FILTER_TAPS; i++)
 			diff_eq_int("filter coefficient %ld", pb[k][i],
 				    pa[k][i], i);
 	}

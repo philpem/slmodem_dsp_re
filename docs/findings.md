@@ -119894,3 +119894,68 @@ failures. The complete `make phase J=3` boundary subsequently passed: all
 its documented allow-list, both 64-bit configurations, interop, coverage,
 debug coverage, reference integrity, one-definition, vendor and banner gates.
 (2026-09-07)
+
+## F10207. Resolving seven section relocations exposed three older false exact claims, and the stricter result is 754 of 1,852
+
+Phase 3 began at 750 `EXACT`, seven `UNRESOLVED`, 53 `REGALLOC`, zero `RELOC`,
+138 `BYTES` and 904 `SIZE`. The seven unresolved functions were not one
+problem. Four referenced real local objects through a section symbol:
+`FDSP_Kernel_SetInternalBeepInProgress` used
+`bInternalBeepInProgress`, both `V92Modulator` constructors used
+`v92TxPreFilter`, and `dp_vpcm_exit` used `vpcm_op` three times. Two G.711
+converters had byte-identical tables in the wrong linkage and section, and
+`v8_cosread` had a byte-identical cosine table under the wrong public name.
+
+The resolver now reads the inline addend carried by ELF/i386 REL fields and
+compares a tagged destination identity rather than masking those four bytes.
+It resolves only a unique exact symbol start or a unique point inside a
+nonzero-sized object. ELF `SHF_MERGE` strings compare their complete
+NUL-terminated bytes; fixed-size merge entries compare the complete entry,
+entry size and intra-entry offset. Ordinary anonymous rodata is deliberately
+excluded. `R_386_PC32` addends are retained too. The grade-1 instruction path
+uses the same destinations and no longer replaces unrelated immediates in an
+instruction that happens to contain a relocation. The self-test grew from 20
+alpha cases to those 20 plus 59 relocation cases; it includes wrong addends,
+ambiguous/overlapping symbols, object-end boundaries, merge-entry size and
+content differences, tagged-identity collisions, and a relocated compare
+whose separate immediate must remain observable.
+
+Preserving addends invalidated 28 names from the old 750-name floor. Sixteen
+were identical four- or eight-byte `SHF_MERGE` entries and three were bounded
+interior references to `FIFO_CFG+4`, `fixedRc_UpFact+8` and `FrameNames+4`;
+the strict rules above prove those nineteen exact. Six more exposed genuine
+source-data drift and were fixed rather than hidden: `message_names`,
+`ThresholdsTable`, the four existing `IIR2100_Coef_*` arrays used by both
+ANSam constructors, `toneiir_configuration_default` and its initialized
+rodata defaults, and the ten V.21 coefficient objects now carry their object
+names. The eight V.21 mark/space filters are 41 shorts, not 48: the old test
+compared seven alignment-padding words beyond each blob symbol, while the
+consumer reads indices 0 through 39. The three remaining invalidated names
+are `V32LocLoopNextState`, `_Z17getSegmentPointer7PcmTypei`, and
+`_ZN21V90ConstellationPower20getConstellationInfoEP16V90MappingParams26V90TxPowerMeasurementPointj`.
+Their complete ordinary-rodata tables appear equivalent, including the two
+jump tables' function-relative targets, but neither object gives them a
+bounded symbol. They are now `UNRESOLVED`, not exact; a prefix match would be
+a new false proof.
+
+The two G.711 tables are mutable global `_a2u` and `_u2a` objects again. Their
+128 bytes each match, and source order is intentionally `_u2a` then `_a2u`:
+GCC 3.4.2 emits the definitions in reverse, giving the blob's `_a2u`, `_u2a`
+data order. The V.8 cosine table is the blob's local `v8_costbl`. Removing the
+four duplicate ANSam arrays also makes those constructors refer to the one
+coefficient bank the object actually contains. Together with the strict
+resolver, all seven Phase-3 targets are now `EXACT`.
+
+The resulting honest floor is **754/1,852 exact (40.7%)**, with three
+`UNRESOLVED`, 53 `REGALLOC`, zero `RELOC`, 138 `BYTES` and 904 `SIZE`.
+Relative to the old membership set this is seven additions and three removals,
+net +4; relative to what the old tool had actually proved it is seven new
+exact functions and three corrected overclaims.
+
+The completed phase passed all 20 alpha-normalization, 59 relocation-resolution
+and three ratchet self-tests, the focused PCM/V.8/call-progress/tone tests, all
+374 period-compiler differential binaries, and the complete `make phase` gate:
+modern differential tests (including their documented compiler allow-list),
+both 64-bit configurations, SpanDSP interoperability, reconstruction coverage,
+debug coverage and the byte-identity ratchet at the complete 754-name exact
+set. (2026-09-07)

@@ -87,7 +87,7 @@ typedef char v8_pr_window[V8_OFFSET_OK == 0 || offsetof(struct v8_phase_rev, win
  * regenerating the table would silently change one sample of every tone V.8
  * emits.
  */
-const short v8_costab[V8_COSTAB_SIZE] = {
+static const short v8_costbl[V8_COSTAB_SIZE] = {
 	 16384,  16379,  16364,  16339,  16305,  16260,  16206,  16142,
 	 16069,  15985,  15892,  15790,  15678,  15557,  15426,  15286,
 	 15136,  14978,  14810,  14634,  14449,  14255,  14053,  13842,
@@ -147,7 +147,7 @@ v8_absfn(short x)
 short
 v8_cosread(unsigned char phase)
 {
-	return v8_costab[phase];
+	return v8_costbl[phase];
 }
 
 /*

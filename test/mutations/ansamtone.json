@@ -16,28 +16,28 @@
  },
  {
   "label": "the numerator is passed as the denominator and back",
-  "find": "\t\t\t      sampleRate == ANSAM_RATE_13 ? ansamDen13\n\t\t\t\t\t\t\t  : ansamDen11,\n\t\t\t      sampleRate == ANSAM_RATE_13 ? ansamNum13\n\t\t\t\t\t\t\t  : ansamNum11,",
-  "replace": "\t\t\t      sampleRate == ANSAM_RATE_13 ? ansamNum13\n\t\t\t\t\t\t\t  : ansamNum11,\n\t\t\t      sampleRate == ANSAM_RATE_13 ? ansamDen13\n\t\t\t\t\t\t\t  : ansamDen11,"
+  "find": "\t\t\t      sampleRate == ANSAM_RATE_13 ? IIR2100_Coef_A_8000\n\t\t\t\t\t\t\t  : IIR2100_Coef_A_9600,\n\t\t\t      sampleRate == ANSAM_RATE_13 ? IIR2100_Coef_B_8000\n\t\t\t\t\t\t\t  : IIR2100_Coef_B_9600,",
+  "replace": "\t\t\t      sampleRate == ANSAM_RATE_13 ? IIR2100_Coef_B_8000\n\t\t\t\t\t\t\t  : IIR2100_Coef_B_9600,\n\t\t\t      sampleRate == ANSAM_RATE_13 ? IIR2100_Coef_A_8000\n\t\t\t\t\t\t\t  : IIR2100_Coef_A_9600,"
  },
  {
   "label": "the 13-tap denominator serves the 11-tap arm too",
-  "find": "\t\t\t\t\t\t\t  : ansamDen11,",
-  "replace": "\t\t\t\t\t\t\t  : ansamDen13,"
+  "find": "\t\t\t\t\t\t\t  : IIR2100_Coef_A_9600,",
+  "replace": "\t\t\t\t\t\t\t  : IIR2100_Coef_A_8000,"
  },
  {
   "label": "the 13-tap numerator serves the 11-tap arm too",
-  "find": "\t\t\t\t\t\t\t  : ansamNum11,",
-  "replace": "\t\t\t\t\t\t\t  : ansamNum13,"
+  "find": "\t\t\t\t\t\t\t  : IIR2100_Coef_B_9600,",
+  "replace": "\t\t\t\t\t\t\t  : IIR2100_Coef_B_8000,"
  },
  {
-  "label": "one coefficient of the 13-tap denominator is mistyped",
-  "find": "\t0.895414910356467,",
-  "replace": "\t0.895414910356468,"
+  "label": "the 8000 Hz denominator uses the 9600 Hz table",
+  "find": "\t\t\t      sampleRate == ANSAM_RATE_13 ? IIR2100_Coef_A_8000\n\t\t\t\t\t\t\t  : IIR2100_Coef_A_9600,",
+  "replace": "\t\t\t      sampleRate == ANSAM_RATE_13 ? IIR2100_Coef_A_9600\n\t\t\t\t\t\t\t  : IIR2100_Coef_A_9600,"
  },
  {
-  "label": "the 11-tap numerator's first zero is not zero",
-  "find": "\t2.312202029234315e-09,\n\t0.0,",
-  "replace": "\t2.312202029234315e-09,\n\t1.0e-09,"
+  "label": "the 8000 Hz numerator uses the denominator table",
+  "find": "\t\t\t      sampleRate == ANSAM_RATE_13 ? IIR2100_Coef_B_8000\n\t\t\t\t\t\t\t  : IIR2100_Coef_B_9600,",
+  "replace": "\t\t\t      sampleRate == ANSAM_RATE_13 ? IIR2100_Coef_A_8000\n\t\t\t\t\t\t\t  : IIR2100_Coef_B_9600,"
  },
  {
   "label": "the two durations are exchanged",

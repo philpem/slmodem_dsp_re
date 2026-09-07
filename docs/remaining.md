@@ -23,14 +23,16 @@ read F10191/F10192 (and Waves 13-14 below) before trusting any tool output
 that disagrees, per CLAUDE.md's rule that the tool is checked, not
 repeated from a comment.
 
-The current period-compiler identity baseline is **750 of 1,852 functions
-positionally byte-exact (40.5%)**. A further 53 are instruction-equivalent
+The current period-compiler identity baseline is **754 of 1,852 functions
+positionally byte-exact (40.7%)**. A further 53 are instruction-equivalent
 after consistent register renaming, so the strict exact-or-register-allocation
-total is 803 (43.4%); the tool also reports seven unresolved section
-relocations, no differing named relocation target, 138 same-size byte
-mismatches and 904 size mismatches. `byteident.py` now ratchets the complete
-750-name exact set, not just its cardinality, so an exact function cannot
-regress while an unrelated gain conceals it.
+total is 807 (43.6%); the tool also reports three conservatively unresolved
+anonymous ordinary-rodata tables, no differing named relocation target, 138
+same-size byte mismatches and 904 size mismatches. `byteident.py` ratchets the
+complete 754-name exact set, not just its cardinality, so an exact function
+cannot regress while an unrelated gain conceals it. F10207 explains why this
+stricter baseline adds seven real exact functions but removes three earlier
+false claims whose relocation addends had never been compared.
 
 This is a function-level `.text` measurement, not yet proof that the
 partially-linked object is byte-for-byte identical. The final objective also
@@ -49,8 +51,11 @@ code-generation improvement may not weaken the differential evidence.
    representation. The complete period, behavioural and SpanDSP interop gates
    pass; F10205–F10206 record the measurements and the two stale interop-harness
    assumptions uncovered when the aggregate gate first reached that tier.
-3. **Resolve ambiguous section relocations.** Classify the seven `UNRESOLVED`
-   functions so section-relative references can be compared by identity.
+3. **Resolve ambiguous section relocations — done.** All seven original cases
+   are exact. Relocation addends are now part of the identity proof, which also
+   exposed three anonymous ordinary-rodata tables the old tool had incorrectly
+   called exact; they remain explicit `UNRESOLVED` rather than being accepted
+   by an unsafe byte-prefix heuristic.
 4. **Close same-size byte mismatches.** Work the 138 `BYTES` functions from
    the smallest differing-byte count, always diffing the complete exact set.
 5. **Recover translation-unit emission order.** Use the 53 `REGALLOC`

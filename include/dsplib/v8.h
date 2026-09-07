@@ -22,8 +22,6 @@
 /* One cycle of cosine, in 256 steps. */
 #define V8_COSTAB_SIZE	256
 
-extern const short v8_costab[V8_COSTAB_SIZE];
-
 /*
  * A bin of the handshake's DFT.  Sixteen bytes; `v8_dftenergy` reads the two
  * halves of the complex value and writes the magnitude squared beside them.
@@ -326,6 +324,9 @@ struct v8_cm {
 
 /* The 61-tap filter v8_V21_Init copies in, chosen by channel. */
 #define V8_V21_TAPS	61
+
+/* Stored size of each V.21 mark/space design; the correlator uses 40 taps. */
+#define V8_V21_FILTER_TAPS	41
 
 /* What v8_V21_Init sets in the receiver's flag word. */
 #define V8_RX_V21_ARMED	0x800

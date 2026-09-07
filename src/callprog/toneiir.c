@@ -88,13 +88,15 @@
  * overwrites both coefficient pointers, both counts, the interval, the
  * threshold, the duration, `keep_on_gap` and the scales before using it.
  */
-static const short toneiir_default_scales[IIR_FILTER_SCALES];
-static const short toneiir_default_a[IIR_FILTER_COEFF];
-static const short toneiir_default_b[IIR_FILTER_COEFF];
+/* These are initialized .rodata objects in the blob, not tentative BSS
+ * definitions: default_scales +0x61cc, default_b +0x61d6, default_a +0x61ee. */
+static const short default_scales[IIR_FILTER_SCALES] = { 0 };
+static const short default_a[IIR_FILTER_COEFF] = { 0 };
+static const short default_b[IIR_FILTER_COEFF] = { 0 };
 
-static const struct toneiir_cfg toneiir_default_configuration = {
-	.a		= toneiir_default_a,
-	.b		= toneiir_default_b,
+static const struct toneiir_cfg toneiir_configuration_default = {
+	.a		= default_a,
+	.b		= default_b,
 	.n_a		= 12,
 	.n_b		= 12,
 	.interval	= 500,
@@ -105,7 +107,7 @@ static const struct toneiir_cfg toneiir_default_configuration = {
 	.duration_ms	= 2200,
 	.gap_tolerance	= 4,
 	.keep_on_gap	= 0,
-	.scales		= toneiir_default_scales
+	.scales		= default_scales
 };
 
 /*
@@ -164,7 +166,7 @@ toneiir_create(struct toneiir *st, const struct toneiir_cfg *cfg)
 	if (st == 0)
 		st = (struct toneiir *)sysdep_malloc(sizeof(*st));
 	if (cfg == 0)
-		cfg = &toneiir_default_configuration;
+		cfg = &toneiir_configuration_default;
 
 	st->cfg = *cfg;
 
@@ -332,7 +334,7 @@ toneiir_delete(struct toneiir *st)
 void
 toneiir_get_default_configuration(struct toneiir_cfg *dst)
 {
-	*dst = toneiir_default_configuration;
+	*dst = toneiir_configuration_default;
 }
 
 struct iir_filter *

@@ -51,7 +51,7 @@ struct callprog_status_name {
  * direct index would have worked for all but the last, and the original
  * searches anyway.
  */
-static const struct callprog_status_name callprog_status_names[] = {
+static const struct callprog_status_name message_names[] = {
 	{ CALLPROG_NO_MESSAGE,		"CALLPROG_NO_MESSAGE"		},
 	{ CALLPROG_NO_RING,		"CALLPROG_NO_RING"		},
 	{ CALLPROG_NO_DIAL_TONE,	"CALLPROG_NO_DIAL_TONE"		},
@@ -71,8 +71,8 @@ static const struct callprog_status_name callprog_status_names[] = {
 	{ CALLPROG_MAX_MESSAGES,	"CALLPROG_MAX_MESSAGES"		}
 };
 
-#define CALLPROG_STATUS_NAMES \
-	((int)(sizeof(callprog_status_names) / sizeof(callprog_status_names[0])))
+#define MESSAGE_NAMES \
+	((int)(sizeof(message_names) / sizeof(message_names[0])))
 
 /*
  * The scan does not stop at the first hit -- it runs the whole table and
@@ -86,9 +86,9 @@ CALLPROG_Status_string(int status)
 	const char *name = "";
 	int i;
 
-	for (i = 0; i < CALLPROG_STATUS_NAMES; i++)
-		if (callprog_status_names[i].status == status)
-			name = callprog_status_names[i].name;
+	for (i = 0; i < MESSAGE_NAMES; i++)
+		if (message_names[i].status == status)
+			name = message_names[i].name;
 
 	return name;
 }
