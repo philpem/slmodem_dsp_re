@@ -49,8 +49,12 @@
 
 #include "harness.h"
 #include "v34hsstep.h"
+#include "dsplib/v34det.h"
+#include "dsplib/v34fsk.h"
 #include "dsplib/v34hshak.h"
 #include "dsplib/v34filt.h"	/* the eight half-sine windows, by name    */
+
+extern void ref_dftenergy(void *bins, short nbins, short scale);
 
 /* The tail's own inputs, pinned so that the arm is the only variable. */
 #define T44T_PROGRESS	0x0004
@@ -103,6 +107,7 @@
 #define T44T_SR		0xaae2	/* short: `fsk.sr`                         */
 #define T44T_FABAE	0xabae
 #define T44T_FABC2	0xabc2
+#define T44T_REMOTE_V92 0xabc8
 #define T44T_LOCALSHORT	0xabca
 #define T44T_ISSHORT	0xabcc
 #define T44T_RX_FLAGS	(0x0264 + 0x122)
@@ -252,8 +257,11 @@ peek_ptr_a(unsigned off)
  * side, and the arena's own claim is untouched.
  */
 #define T44T_SESS	0x3548		/* the object's pointer to it       */
+#define T44T_SESS_TYPE	0x611c
+#define T44T_SESS_LAYOUT 0x6120
 #define T44T_SESS_CAPS	0x612c
 #define T44T_SESS_UP	0x1760
+#define T44T_CFG_V92LITE 0x02
 
 static unsigned char caps_buf[2][64];
 static unsigned char caps_saved[2][2][4];
@@ -297,6 +305,35 @@ restore_session(long tag)
 	diff_eq_int("the session capability bytes, side against side",
 		    memcmp(caps_buf[0], caps_buf[1], sizeof(caps_buf[0])), 0,
 		    tag);
+}
+
+/*
+ * A probe bank state which `dftenergy` can really produce.  The integer and
+ * double accumulators retain the 1:64 relationship left by a product exactly
+ * divisible by 64; the public reducer then derives every `denergy`, rather
+ * than the test planting impossible fractional energies in its output field.
+ */
+static void
+prepare_probe_energy(void)
+{
+	int side, i;
+
+	for (side = 0; side < 2; side++) {
+		struct v34_object *obj = (struct v34_object *)v34hs_object(side);
+
+		for (i = 0; i < V34_PROBE_BINS; i++) {
+			obj->probe_bins[i].acc_re = i + 1;
+			obj->probe_bins[i].acc_im = 0;
+			obj->probe_bins[i].sum_re = (double)(64 * (i + 1));
+			obj->probe_bins[i].sum_im = 0.0;
+			obj->probe_results[i] = 0.0;
+		}
+	}
+
+	dftenergy(((struct v34_object *)v34hs_object(0))->probe_bins,
+		  (short)V34_PROBE_BINS, 2);
+	ref_dftenergy(((struct v34_object *)v34hs_object(1))->probe_bins,
+		      (short)V34_PROBE_BINS, 2);
 }
 
 /*
@@ -1458,6 +1495,89 @@ main(void)
 		    v34hs_peek_short(0, T44T_REC_A9AC + T44T_R_F2C + 2), 0, 230);
 
 	/*
+	 * THE V.92-CAPABLE ANSWER PATH, with the incoming record where the
+	 * real predecessor leaves it.  Microstate 72 aims +0xaa70 at A9DC
+	 * before DET_INFO; the older case above inherited bring-up's A97C
+	 * pointer while separately planting the decoded fields in A9DC.  This
+	 * sibling makes the clocked record and the decoded record one object.
+	 *
+	 * The final bit and CRC are hand-staged, so this remains an arm-local
+	 * differential witness rather than a claim that the whole INFO1c bit
+	 * stream ran through the FSK receiver.  Everything after acceptance is
+	 * a supported state: receiver 1 is the entry state, both V.92
+	 * capabilities are present, bit 0x20 requests PCM upstream, and the
+	 * signed V92Lite configuration byte bars the retrain while preserving
+	 * that selection.  The INFO1a builder then advances the receiver to 2.
+	 *
+	 * This makes the decoder argument observable in state, not just prose:
+	 * the correct incoming A9DC record selects PCM and sets answer bit 0x20;
+	 * the wrong freshly-zeroed A9AC record does neither.  The probe results
+	 * are independently non-zero values derived by `dftenergy`, so omitting
+	 * their copy is observable as well.
+	 */
+	begin(V34HS_MOH_SILENCE);
+	v34hs_poke_self_ptr(T44T_PTR_AA70, T44T_REC_A9DC);
+	{
+		int i, side;
+
+		for (i = 0; i < 10; i++) {
+			v34hs_poke_short(T44T_REC_A9DC + 2 * i, (short)i);
+			v34hs_poke_short(T44T_REC_A9AC + 2 * i, 0);
+		}
+		/* Canonical seven-bit descriptor and the INFO1d PCM request. */
+		v34hs_poke_short(T44T_REC_A9DC + 0, 3);
+		v34hs_poke_short(T44T_REC_A9DC + 2, 8);
+		v34hs_poke_short(T44T_REC_A9DC + 14, 0x20);
+		v34hs_poke_short(T44T_REC_A9DC + T44T_R_NBITS, 0x4d);
+		v34hs_poke_short(T44T_REC_A9DC + T44T_R_CRC, 0x1234);
+		v34hs_poke_short(T44T_NBITS, 5);
+		v34hs_poke_short(T44T_SR, 0x1234);
+		v34hs_poke_short(T44T_COUNT, 0x4d + 0x0f);
+		v34hs_poke_short(T44T_F359C, 0x0066);
+		v34hs_poke_int(T44T_V90RECV, 1);
+		v34hs_poke_int(T44T_K56RECV, 0);
+		v34hs_poke_short(T44T_REMOTE_V92, 1);
+
+		aim_session();
+		for (side = 0; side < 2; side++) {
+			unsigned char *sess = session_of(side);
+			struct v34_object *obj =
+				(struct v34_object *)v34hs_object(side);
+			int zero = 0;
+
+			caps_buf[side][0x11] = 1;
+			memcpy(sess + T44T_SESS_LAYOUT, &zero, sizeof(zero));
+			((unsigned char *)obj->pac3c)[T44T_CFG_V92LITE] = 0x80;
+		}
+	}
+	prepare_probe_energy();
+	v34hs_step();
+	restore_session(232);
+	v34hs_compare("accept, 0x4d bits, V.92-capable incoming record", 232);
+	diff_eq_int("0x4d V.92: the incoming record stayed selected",
+		    (int)(*(char *const *)((const char *)v34hs_object(0)
+					       + T44T_PTR_AA70)
+			  - (const char *)v34hs_object(0)),
+		    T44T_REC_A9DC, 232);
+	diff_eq_int("0x4d V.92: the session remains PCM",
+		    *(const int *)(session_of(0) + T44T_SESS_TYPE), 1, 232);
+	diff_eq_int("0x4d V.92: the answer carries the PCM bit",
+		    (unsigned short)v34hs_peek_short(0, T44T_REC_A9AC + 14)
+			    & 0x20,
+		    0x20, 232);
+	diff_eq_int("0x4d V.92: the receiver advances to INFO1d sent",
+		    *(const int *)((const char *)v34hs_object(0) + T44T_V90RECV),
+		    2, 232);
+	diff_eq_int("0x4d V.92: first probe energy copied",
+		    ((const struct v34_object *)v34hs_object(0))->probe_results[0]
+			    == 4096.0,
+		    1, 232);
+	diff_eq_int("0x4d V.92: last probe energy copied",
+		    ((const struct v34_object *)v34hs_object(0))->probe_results[24]
+			    == 2560000.0,
+		    1, 232);
+
+	/*
 	 * ALREADY IN TX_DPSK, so that transition is a no-op and its
 	 * diagnostic is not printed -- the one guard of the three arms that
 	 * CAN be driven from both sides, because the microstate is 44 on
@@ -1477,22 +1597,12 @@ main(void)
 		    V34HS_TX_DPSK, 231);
 
 	/*
-	 * AND WHAT NO CASE HERE CAN DRIVE, named rather than left to look
-	 * like an oversight.  Both PCM receivers are zero on every 0x4d case
-	 * above, and neither can be turned on:
-	 *
-	 *   K56flex   sends `V34SetINFO1aBits` into a PCM configuration block
-	 *             through +0xac18, which the fixture does not build
-	 *   V.90      sends `V34GiveINFO1dBits` into a `VPcmFloModem` in the
-	 *             session, which it does not build either
-	 *
-	 * So in THIS arm `V34GiveProbeResults` returns before it copies
-	 * anything (v34info.c) and the record it is given cannot be checked,
-	 * and `V34GiveINFO1dBits` returns before it reads its buffer, so the
-	 * record IT is given cannot be checked.  Both calls are checked in
-	 * the 0x26 arm instead, at case 195, which gets a V.90 receiver by
-	 * aiming the session's two capability pointers -- and that trick does
-	 * not reach the PCM block.  Two mutations record the gap.
+	 * Case 232 closes the former two V.90 call gaps locally.  It does not
+	 * claim a continuous received INFO1c: that stronger composition is a
+	 * separate 95-step sequence through microstates 72, 41 and all 93
+	 * message/CRC bits of 44.  Keeping the boundary explicit is important:
+	 * a caught local mutation is not evidence that the live connection has
+	 * reached this exchange.
 	 */
 
 	/*

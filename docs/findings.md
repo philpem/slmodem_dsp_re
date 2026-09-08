@@ -122211,3 +122211,52 @@ The complete `make phase J=4` boundary remains green: **374/374 period
 differential groups** pass with the 64-bit and interoperability tiers, and
 coverage/debug instrumentation remains **49,018/51,416 source lines (95.3%)**.
 (2026-09-08)
+
+## F10246. A V.92-capable INFO1c answer closes all three live microstate-44 mutation gaps
+
+The first proposed `DET_INFO` witness would have killed two mutations for the
+wrong reasons.  It left the receive clock aimed at bring-up's `A97C` record
+while decoding separately planted `A9DC` fields, entered with
+`v90_receiver == 2` even though this arm performs the transition from 1 to 2,
+and planted fractional `denergy` values which the integer-product DFT cannot
+produce.  None of those is retained.
+
+The accepted case mirrors the real answering predecessor by aiming `+0xaa70`
+at the incoming `A9DC` record and completing that same record.  Its ten
+message entries are byte-valued, its descriptor uses the canonical `[3, 8]`
+encoding, and receiver state 1 is paired with local and remote V.92
+capability.  INFO1d bit `0x20` requests PCM upstream, while the supported
+negative V92Lite configuration prevents the retrain exit.  The correct input
+therefore leaves the session in PCM mode and the INFO1a answer carries bit
+`0x20`; substituting the freshly zeroed answer record leaves both clear.  The
+wrong-record mutation is consequently observed in persistent state and output,
+not merely through a diagnostic string.
+
+The probe bins use integral double and integer accumulators with the same
+1:64 relationship left by an exactly divisible DFT product.  Candidate and
+blob `dftenergy` calls derive the source values before the handshake step;
+the first and last copied results must then be exactly 4,096 and 2,560,000.
+That rejects an omitted `V34GiveProbeResults` call.  The resulting legal
+energy profile also makes the two rates selected by `probeselect` unequal, so
+the previously invisible swapped diagnostic arguments are caught by one exact
+transcript assertion.
+
+The modern test passes **6,114 checks** and the GCC 3.4.2 period differential
+reports **1/1 passed**.  Each of the three formerly surviving mutations is
+caught independently.  The complete **214-mutation** suite reports **207
+caught by tests, 0 uncaught, 0 unusable and 7 equivalent**, with no earlier
+caught verdict regressing.  Across the seven current targeted suites the
+aggregate is now **1,201 caught, 87 uncaught, 35 equivalent and one
+unbuildable out of 1,324**.
+
+The final message bit and CRC are still staged at the arm boundary.  A bounded
+stronger composition is known: one real state-72 answer exit publishes
+`A9DC`, state 41 enters `DET_INFO`, and 93 state-44 calls consume the 77-bit
+payload and its 16 CRC bits.  That would validate cross-arm publication and
+the whole receive clock, but it is separate work and is not implied by these
+three local mutation catches.
+
+The complete `make phase J=4` boundary remains green: **374/374 period
+differential groups** pass with the 64-bit and interoperability tiers, and
+coverage/debug instrumentation remains **49,018/51,416 source lines (95.3%)**.
+(2026-09-08)

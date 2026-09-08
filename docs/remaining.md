@@ -180,10 +180,11 @@ an exact definition; non-exact definitions retain this finite-evidence limit.
 - **Refresh mutation evidence by risk cluster — first tranche complete.**
   F10243 reruns and records the three changed V.90 suites and four known-risk
   V.34 suites. With F10244's follow-up they cover 1,324 mutations in all, with
-  1,198 caught, 90 uncaught, 35 equivalent and one unbuildable. F10245 closes
+  1,201 caught, 87 uncaught, 35 equivalent and one unbuildable. F10245 closes
   both remaining ordinary `v34hstx1` survivors with a legal once-only digital
-  initialization path, so sixteen former survivors are now caught and no
-  caught verdict regressed. These seven
+  initialization path; F10246 closes all three `v34hsmst44` survivors with a
+  V.92-capable INFO1c answer and reachable probe energies. Nineteen former
+  survivors are now caught and no caught verdict regressed. These seven
   entries are current while the other 223 registered suites deliberately
   remain stale, so this supports only the named clusters and not a tree-wide
   confidence claim. Triage the live
