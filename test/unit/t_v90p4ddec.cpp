@@ -117,6 +117,11 @@ short ref_p4d_getv90decision(void *, short)
 	asm("ref__ZN20V90Phase4Demodulator14getV90DecisionEs");
 short ref_p4d_getv92decision(void *, short)
 	asm("ref__ZN20V90Phase4Demodulator14getV92DecisionEs");
+void ref_cp_infotobits(void *) asm("ref__ZN5V90CP10infoToBitsEv");
+int ref_cp_bitstoinfo(void *, unsigned char)
+	asm("ref__ZN5V90CP10bitsToInfoEh");
+void ref_mp_infotobits(void *) asm("ref__ZN5V90MP10infoToBitsEv");
+int ref_mp_bitstoinfo(void *, int) asm("ref__ZN5V90MP10bitsToInfoEi");
 
 int our_p4d_getdecision(void *, short)
 	asm("_ZN20V90Phase4Demodulator11getDecisionEs");
@@ -156,6 +161,10 @@ static unsigned char dem_cmp[2][DEM_SLOT];
 static unsigned char cp_s[2][CP_SLOT] __attribute__((aligned(8)));
 static unsigned char cp_cmp[2][CP_SLOT];
 static unsigned char mp_s[2][MP_SLOT] __attribute__((aligned(8)));
+
+/* Blob-built, CRC-valid stimuli for the completed-message trials below. */
+static unsigned char cp_gen_s[CP_SLOT] __attribute__((aligned(8)));
+static unsigned char mp_gen_s[MP_SLOT] __attribute__((aligned(8)));
 
 static unsigned int code_s[2][NSAMPLE];
 static unsigned char sign_s[2][NSAMPLE];
@@ -957,6 +966,365 @@ run_sweep(int v92)
 	diff_eq_int("level 3 printed at least as much as level 2",
 		    printed_at_3 >= printed_at_2, 1, 0);
 
+	return diff_end();
+}
+
+/* ======================================= completed MP and CP messages =====
+ *
+ * The state sweeps above put each decoder one ZERO away from its Ed answer.
+ * That reaches the surrounding arms, but it cannot reach the replies which
+ * exist only after a complete message has passed its sixteen-bit CRC.  These
+ * trials close that hole with messages built by the BLOB'S transmit-side
+ * `infoToBits`, not by arithmetic repeated in this test.  Each sequence is
+ * fed directly into the paired receive records until only its last padding
+ * bit remains; that last bit then travels through hardDecision, the demapper,
+ * the descrambler and the decision member under test.
+ *
+ * The prefeed is part of the fixture, not the claim.  Its two return streams
+ * must agree and remain quiet, and the whole paired fixture is compared before
+ * the decision call.  The blob-side decoder state is then asserted to be one
+ * bit from reporting, so a green trial cannot mean that the message stalled.
+ */
+
+#define CPGEN	(*(V90CP *)cp_gen_s)
+#define MPGEN	(*(V90MP *)mp_gen_s)
+
+static void
+prefeed_mp(int cpack, long tag)
+{
+	unsigned int i, n;
+	int agreed = 1;
+	int quiet = 1;
+
+	memset(mp_gen_s, 0, sizeof mp_gen_s);
+	MPGEN.Type = 1;             /* the blob's type-zero encoder destroys CRC */
+	MPGEN.Rate = 3;
+	MPGEN.Trellis = 2;
+	MPGEN.NonLin = 1;
+	MPGEN.Shaping = 0;
+	MPGEN.CPack = (char)cpack;
+	MPGEN.rateMask = 0x1255;
+	MPGEN.h1Real = 0x1234;
+	MPGEN.h1Imag = -0x1234;
+	MPGEN.h2Real = 0x2345;
+	MPGEN.h2Imag = -0x2345;
+	MPGEN.h3Real = 0x3456;
+	MPGEN.h3Imag = -0x3456;
+	MPGEN.groupSize = 8u;
+	ref_mp_infotobits(mp_gen_s);
+	n = MPGEN.seqLength;
+
+	for (i = 0; i < 2; i++) {
+		MPR(i).rxState = 0u;
+		MPR(i).onesRun = 0;
+		MPR(i).zerosRun = 0;
+		MPR(i).bitIndex = 18;
+		MPR(i).groupSize = 8u;
+		MPR(i).nofRecievedMp = 0u;
+		MPR(i).nofRecievedMpNot = 0u;
+	}
+
+	set_level(0);
+	for (i = 0; i + 1 < n; i++) {
+		int a = MPR(0).bitsToInfo(MPGEN.bits[i]);
+		int b = ref_mp_bitstoinfo(mp_s[1], MPGEN.bits[i]);
+
+		if (a != b)
+			agreed = 0;
+		if (b != 0)
+			quiet = 0;
+	}
+
+	diff_eq_int("the MP prefeed answers agreed (%ld)", agreed, 1, tag);
+	diff_eq_int("the MP prefeed reported nothing (%ld)", quiet, 1, tag);
+	diff_eq_int("the blob built a non-empty MP sequence (%ld)", n > 1u, 1,
+		    tag);
+	diff_eq_int("the MP completing bit is padding zero (%ld)",
+		    (long)MPGEN.bits[n - 1], 0L, tag);
+	diff_eq_int("the MP decoder is in its padding state (%ld)",
+		    (long)MPR(1).rxState, 4L, tag);
+	diff_eq_int("the MP decoder is one bit from reporting (%ld)",
+		    (long)((unsigned int)MPR(1).bitIndex + 1u),
+		    (long)MPR(1).seqLength, tag);
+	compare_all("after the MP prefeed", tag);
+}
+
+static void
+prefeed_cp(int shortform, int byte13, int cpbit, long tag)
+{
+	unsigned int i, n;
+	int agreed = 1;
+	int quiet = 1;
+
+	memset(cp_gen_s, 0, sizeof cp_gen_s);
+	CPGEN.word_00 = shortform;
+	CPGEN.word_ca0 = (unsigned int)cpbit;
+	CPGEN.byte_13 = (unsigned char)byte13;
+	CPGEN.byte_10 = 7;
+	CPGEN.byte_11 = 2;
+	CPGEN.byte_12 = 1;
+	CPGEN.word_14 = 0x1234;
+	CPGEN.word_3ba8 = 6u;
+	ref_cp_infotobits(cp_gen_s);
+	n = CPGEN.word_3bac;
+
+	for (i = 0; i < 2; i++) {
+		CPR(i).word_ca4 = 0u;
+		CPR(i).byte_ca9 = 0;
+		CPR(i).byte_caa = 0;
+		CPR(i).word_cac = 18u;
+		CPR(i).word_cb0 = 0u;
+		CPR(i).word_3ba8 = 6u;
+		CPR(i).word_3bbc = -1;
+	}
+
+	set_level(0);
+	for (i = 0; i + 1 < n; i++) {
+		int a = CPR(0).bitsToInfo(CPGEN.bits[i]);
+		int b = ref_cp_bitstoinfo(cp_s[1], CPGEN.bits[i]);
+
+		if (a != b)
+			agreed = 0;
+		if (b != 0)
+			quiet = 0;
+	}
+
+	diff_eq_int("the CP prefeed answers agreed (%ld)", agreed, 1, tag);
+	diff_eq_int("the CP prefeed reported nothing (%ld)", quiet, 1, tag);
+	diff_eq_int("the blob built a non-empty CP sequence (%ld)", n > 1u, 1,
+		    tag);
+	diff_eq_int("the CP completing bit is padding zero (%ld)",
+		    (long)CPGEN.bits[n - 1], 0L, tag);
+	diff_eq_int("the CP decoder is in its padding state (%ld)",
+		    (long)CPR(1).word_ca4, 13L, tag);
+	diff_eq_int("the CP decoder is one bit from reporting (%ld)",
+		    (long)(CPR(1).word_cac % 6u), 5L, tag);
+	compare_all("after the CP prefeed", tag);
+}
+
+/* Make the real demapper drain exactly one known zero on the final call. */
+static void
+arm_one_zero_bit(void)
+{
+	int s;
+
+	for (s = 0; s < 2; s++) {
+		DEM(s).bitsPerFrame = 1u;
+		DEM(s).signBitsPerFrame = 1u;
+		DEM(s).signBitGroups = 0u;
+		DEM(s).modulusDecoder.field_18 = 0u;
+		DEM(s).signDecoder.prev_ = 0;
+		sign_s[s][0] = 0;
+	}
+}
+
+static void
+check_one_zero_bit(Phase4DemodulatorState state, long tag)
+{
+	diff_eq_int("the final demapper call emitted one bit (%ld)",
+		    (long)P4D(1).nbits, 1L, tag);
+	diff_eq_int("and that bit was zero (%ld)", (long)P4D(1).bits[0], 0L,
+		    tag);
+	diff_eq_int("the completed message left the receive state (%ld)",
+		    (long)P4D(1).state, (long)state, tag);
+	diff_eq_int("the completed message counted exactly one sample (%ld)",
+		    (long)P4D(1).countInState, 0x11L, tag);
+}
+
+static int
+run_completed_mp(void)
+{
+	long tag = 800000L;
+	int cpack;
+	int saw[3] = { 0, 0, 0 };
+	int gate_shut = 0, gate_open = 0;
+
+	diff_begin("V90Phase4Demodulator::getV90Decision -- complete MP");
+
+	for (cpack = 0; cpack <= 1; cpack++) {
+		short r[2];
+		int s;
+		int want = cpack ? 0x1b : 0x1a;
+
+		setup((int)tag, 0);
+		for (s = 0; s < 2; s++) {
+			P4D(s).state = P4D_STATE_WAIT_FOR_MP;
+			P4D(s).sessionFlag = 0u;
+			P4D(s).countInState = 0x10u;
+		}
+		prefeed_mp(cpack, tag);
+		arm_one_zero_bit();
+
+		set_level(2);
+		dsplib_debug_capture_reset();
+		dsplib_debug_capture_on = 1;
+		r[0] = our_p4d_getv90decision(p4d_s[0], 300);
+		r[1] = ref_p4d_getv90decision(p4d_s[1], 300);
+		dsplib_debug_capture_on = 0;
+
+		compare_all("after the complete MP", tag);
+		check_one_zero_bit(P4D_STATE_WAIT_FOR_MP, tag);
+		diff_eq_int("the complete-MP decision agreed (%ld)",
+			    (long)r[0], (long)r[1], tag);
+		diff_eq_int("the complete MP selected its progress code (%ld)",
+			    (long)P4D(1).int_0028, (long)want, tag);
+		diff_eq_int("the complete-MP transcripts agreed (%ld)",
+			    strcmp(dsplib_debug_capture_text(0),
+				   dsplib_debug_capture_text(1)) == 0, 1, tag);
+		if ((!cpack && MPR(1).nofRecievedMp == 1u &&
+		     P4D(1).int_0028 == want) ||
+		    (cpack && MPR(1).nofRecievedMpNot == 1u &&
+		     P4D(1).int_0028 == want))
+			saw[cpack + 1]++;
+		tag++;
+	}
+
+	/* The WaitForEd copy of reply 2 has this class's only level-3 line. */
+	for (cpack = 2; cpack <= 3; cpack++) {
+		int s;
+		int present;
+
+		setup((int)tag, 0);
+		for (s = 0; s < 2; s++) {
+			P4D(s).state = P4D_STATE_WAIT_FOR_ED;
+			P4D(s).sessionFlag = 0u;
+			P4D(s).countInState = 0x10u;
+		}
+		prefeed_mp(1, tag);
+		arm_one_zero_bit();
+
+		set_level((unsigned)cpack);
+		dsplib_debug_capture_reset();
+		dsplib_debug_capture_on = 1;
+		(void)our_p4d_getv90decision(p4d_s[0], 300);
+		(void)ref_p4d_getv90decision(p4d_s[1], 300);
+		dsplib_debug_capture_on = 0;
+		compare_all("after WaitForEd's complete MPnot", tag);
+		check_one_zero_bit(P4D_STATE_WAIT_FOR_ED, tag);
+		diff_eq_int("the WaitForEd transcripts agreed (%ld)",
+			    strcmp(dsplib_debug_capture_text(0),
+				   dsplib_debug_capture_text(1)) == 0, 1, tag);
+		present = strstr(dsplib_debug_capture_text(1),
+				 "MPnot detected on WaitForEd") != 0;
+		diff_eq_int("the WaitForEd MPnot line follows level 3 (%ld)",
+			    present, cpack == 3, tag);
+		if (present)
+			gate_open++;
+		else
+			gate_shut++;
+		tag++;
+	}
+
+	set_level(0);
+	diff_eq_int("one completed MP reply 1 was observed", saw[1], 1, 0);
+	diff_eq_int("one completed MP reply 2 was observed", saw[2], 1, 0);
+	diff_eq_int("one WaitForEd MPnot trial shut the gate", gate_shut, 1, 0);
+	diff_eq_int("one WaitForEd MPnot trial opened the gate", gate_open, 1, 0);
+	return diff_end();
+}
+
+struct cp_trial {
+	int answer;
+	int int_003c;
+	int int_0040;
+	int cpbit;
+	int int_0048;
+	int code;
+	int uchar_0030;
+	int int_0044;
+};
+
+static int
+run_completed_cp(void)
+{
+	static const struct cp_trial trial[] = {
+		/* Replies 1 and 2: the two long-message discriminators. */
+		{ 1, 0, 0, 0, 0, 0x2d, 0, 0 },
+		{ 2, 0, 0, 0, 0, 0x2e, 0, 0 },
+		/* Reply 3: shallow guard, full AND table, and the +0x48 arm. */
+		{ 3, 0, 0, 0, 0, 0x2f, 1, 0 },
+		{ 3, 1, 0, 0, 0, 0x2f, 1, 0 },
+		{ 3, 1, 0, 1, 0, 0x31, 1, 1 },
+		{ 3, 1, 1, 0, 0, 0x31, 1, 1 },
+		{ 3, 1, 1, 1, 0, 0x31, 1, 1 },
+		{ 3, 1, 1, 1, 1, 0x32, 1, 0 },
+		/* Reply 4 has the same table, but its byte store follows guard 1. */
+		{ 4, 0, 0, 0, 0, 0x30, 0, 0 },
+		{ 4, 1, 0, 0, 0, 0x30, 1, 0 },
+		{ 4, 1, 0, 1, 0, 0x33, 1, 1 },
+		{ 4, 1, 1, 0, 0, 0x33, 1, 1 },
+		{ 4, 1, 1, 1, 0, 0x33, 1, 1 },
+		{ 4, 1, 1, 1, 1, 0x34, 1, 0 }
+	};
+	long tag = 810000L;
+	int saw[5] = { 0, 0, 0, 0, 0 };
+	unsigned int k;
+
+	diff_begin("V90Phase4Demodulator::getV92Decision -- complete CP");
+
+	for (k = 0; k < sizeof trial / sizeof trial[0]; k++) {
+		const struct cp_trial *t = &trial[k];
+		short r[2];
+		int s;
+		int shortform = t->answer >= 3;
+		int byte13 = (t->answer == 2 || t->answer == 4);
+
+		setup((int)tag, 0);
+		for (s = 0; s < 2; s++) {
+			P4D(s).state = P4D_STATE_WAIT_FOR_V90CP;
+			P4D(s).sessionFlag = 1u;
+			P4D(s).countInState = 0x10u;
+			P4D(s).int_003c = t->int_003c;
+			P4D(s).int_0040 = t->int_0040;
+			P4D(s).int_0044 = 0;
+			P4D(s).int_0048 = t->int_0048;
+			P4D(s).uchar_0030 = 0;
+			P4D(s).uint_004c = 0x55667788u;
+		}
+		prefeed_cp(shortform, byte13, t->cpbit, tag);
+		arm_one_zero_bit();
+
+		set_level(2);
+		dsplib_debug_capture_reset();
+		dsplib_debug_capture_on = 1;
+		r[0] = our_p4d_getv92decision(p4d_s[0], 300);
+		r[1] = ref_p4d_getv92decision(p4d_s[1], 300);
+		dsplib_debug_capture_on = 0;
+
+		compare_all("after the complete CP", tag);
+		check_one_zero_bit(P4D_STATE_WAIT_FOR_V90CP, tag);
+		diff_eq_int("the complete-CP decision agreed (%ld)",
+			    (long)r[0], (long)r[1], tag);
+		diff_eq_int("the complete CP selected its progress code (%ld)",
+			    (long)P4D(1).int_0028, (long)t->code, tag);
+		diff_eq_int("the complete CP left the expected Ed byte (%ld)",
+			    (long)P4D(1).uchar_0030, (long)t->uchar_0030, tag);
+		diff_eq_int("the complete CP left the expected deep flag (%ld)",
+			    (long)P4D(1).int_0044, (long)t->int_0044, tag);
+		diff_eq_int("the complete CP preserved the +0x48 arm flag (%ld)",
+			    (long)P4D(1).int_0048, (long)t->int_0048, tag);
+		diff_eq_int("the complete CP copied its message bit when reached "
+			    "(%ld)", (long)P4D(1).uint_004c,
+			    (long)((t->answer >= 3 && t->int_003c != 0)
+				   ? (unsigned int)t->cpbit : 0x55667788u), tag);
+		diff_eq_int("the complete CP left the expected hold-off (%ld)",
+			    (long)CPR(1).word_3bbc,
+			    (long)(t->answer <= 2 ? 0 : -1), tag);
+		diff_eq_int("the complete-CP transcripts agreed (%ld)",
+			    strcmp(dsplib_debug_capture_text(0),
+				   dsplib_debug_capture_text(1)) == 0, 1, tag);
+		if (P4D(1).int_0028 == t->code)
+			saw[t->answer]++;
+		tag++;
+	}
+
+	set_level(0);
+	diff_eq_int("one completed CP reply 1 was observed", saw[1], 1, 0);
+	diff_eq_int("one completed CP reply 2 was observed", saw[2], 1, 0);
+	diff_eq_int("six completed CP reply 3 paths were observed", saw[3], 6,
+		    0);
+	diff_eq_int("six completed CP reply 4 paths were observed", saw[4], 6,
+		    0);
 	return diff_end();
 }
 
@@ -2191,6 +2559,8 @@ main(void)
 
 	rc |= run_sweep(0);
 	rc |= run_sweep(1);
+	rc |= run_completed_mp();
+	rc |= run_completed_cp();
 	rc |= run_getdecision();
 	rc |= run_p4d_reset();
 	rc |= run_exit_phase3();
