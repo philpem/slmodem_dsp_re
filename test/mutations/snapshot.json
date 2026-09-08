@@ -6211,7 +6211,7 @@
    }
   },
   "v90cpower": {
-   "key": "ec2e359fd57322dc522c7053a69c1d55b2110e5602e591bd0f84376baf3ea745",
+   "key": "f49478f89a69d8cc216435ddd6a1d76c5a4746fa1cec335e7b9b604f054a3c4f",
    "summary": "5 mutations: 5 caught (5 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "the constructor clears the whole 144 bytes": "caught",
@@ -7048,7 +7048,7 @@
    }
   },
   "v90mapper": {
-   "key": "6f8ad1b7bbd925cda2dca7fe316c70b2bf14829bc33c5240ac658f7c6fde7a23",
+   "key": "6dce02d2fcdb8201d1bb9c4d8d9af4a454627c2af07d9d18a0f42d571c7eaae8",
    "summary": "47 mutations: 47 caught (47 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "ctor: +0x04 is left as it was found": "caught",
@@ -7712,7 +7712,7 @@
    }
   },
   "v90p3mod": {
-   "key": "d557e92c3fb215903cbd0a1cb1205dbdcd8888cae8d4e49e4aa0b658527eec31",
+   "key": "22802d83281cdf574257982aac554c59fd50768554cda33bd55345fa95cab38f",
    "summary": "25 mutations: 25 caught (25 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "ctor: the V90Parameters * is not stored": "caught",

@@ -74,6 +74,7 @@
 #include <string.h>
 
 #include "harness.h"
+#include "v90table1.h"
 
 #include "dsplib/V90MappingParams.h"
 #include "dsplib/V90ConstellationPower.h"
@@ -116,6 +117,8 @@ extern unsigned int ref_averagePowerLimits[V90CP_POWER_INDICES]
 	asm("ref__ZN21V90ConstellationPower18averagePowerLimitsE");
 
 }
+
+typedef float (*getpower_fn)(void *, void *, int, int);
 
 /*
  * The same cheap varied fill the other V.90 tests use, so a value that happens
@@ -396,6 +399,81 @@ run_getpower(void)
 	return diff_end();
 }
 
+/*
+ * TABLE 1/V.90 THROUGH `getPower`'S OWN UCODE CONVERSION.
+ *
+ * Make a one-codeword mapping: every one of the six mapping-frame
+ * constellations contains the same single Ucode, `word_0 + shaperSR - 6` is
+ * zero, and therefore every selected level has fraction one.  The method's
+ * sum and final factor of 1/6 reduce to exactly that Table 1 level squared.
+ * This enters the production code which applies the mu-law/A-law Ucode mask;
+ * it does not duplicate either mask in the test.
+ *
+ * The expected value is formed from the Recommendation's integer linear
+ * level, squared in double (exact throughout this range), then converted to
+ * float once.  `diff_eq_float` is intentionally bit-exact: there is no ULP
+ * allowance for a result that is exactly representable by that specified
+ * conversion.  Reconstruction and blob each get their own oracle assertion.
+ */
+static int
+run_getpower_table1_side(const char *name, getpower_fn getpower,
+			 V90ConstellationPower *cp)
+{
+	int law;
+
+	diff_begin(name);
+
+	for (law = 0; law < 2; law++) {
+		unsigned int u;
+
+		for (u = 0; u < 128; u++) {
+			const struct v90_table1_row *row = &v90_table1[u];
+			int level = law ? row->a_linear : row->mu_linear;
+			float want = (float)((double)level * (double)level);
+			float got;
+			unsigned int i;
+			long tag = (long)(law * 128 + u);
+
+			memset(&mp, 0, sizeof(mp));
+			mp.word_0 = 6;
+			mp.shaperSR = 0;
+			for (i = 0; i < V90CP_CONSTELLATIONS; i++) {
+				mp.constellationSize[i] = 1;
+				mp.constellation[i][0] = (unsigned char)u;
+				mp.codecConstellation[i][0] = (unsigned char)u;
+			}
+			memcpy(mpSnap, &mp, sizeof(mp));
+
+			reseed((unsigned)tag + 13001u);
+			fillbytes(cp, sizeof(*cp));
+
+			got = getpower(cp, &mp, 0, law);
+			diff_eq_int("left the Table 1 mapping unchanged (%ld)",
+				    memcmp(mpSnap, &mp, sizeof(mp)), 0, tag);
+
+			diff_eq_float("Table 1 squared level for Ucode %ld",
+				      got, want, tag);
+		}
+	}
+
+	return diff_end();
+}
+
+static int
+run_getpower_table1(void)
+{
+	int rc = 0;
+
+	rc |= run_getpower_table1_side(
+	    "V90ConstellationPower::getPower, reconstruction vs Table 1/V.90",
+	    our_getpower, cpA);
+	rc |= run_getpower_table1_side(
+	    "V90ConstellationPower::getPower, blob vs Table 1/V.90",
+	    ref_getpower, cpB);
+
+	return rc;
+}
+
 static int
 run_ladder(void)
 {
@@ -527,6 +605,7 @@ main(void)
 	rc |= run_calcmod();
 	rc |= run_getinfo();
 	rc |= run_getpower();
+	rc |= run_getpower_table1();
 	rc |= run_ladder();
 	rc |= run_islegal();
 
