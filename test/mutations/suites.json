@@ -756,6 +756,10 @@
   "src/pump/v90/V90SpectralVerifier.cpp",
   "build/test/t_v90specialcond"
  ],
+ "v90specgeomstd": [
+  "src/pump/v90/V90SpectralShaper.cpp",
+  "build/test/t_v90shapeact"
+ ],
  "v90specshaper": [
   "src/pump/v90/V90SpectralShaper.cpp",
   "build/test/t_v90spectral"

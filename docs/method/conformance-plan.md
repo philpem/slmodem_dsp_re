@@ -388,7 +388,7 @@ pass**, and each is marked with the candidate non-conformance it settles.
 | 14 | Table 20/V.92 | `V92DILdescriptorPacker`'s CRC extent | 1 | `t_v92dilpack.cpp` (**done**, F10262) |
 | 15 | 5.4.2, 5.4.3/V.90 | `ModulusEncoder`/`Decoder` bit weighting, and `out[5] < M5` | 2,1 | `t_moduluscoder.cpp` (**done**, F10263) |
 | 16 | Tables 2, 14, 17/V.90; 23, 30/V.92 | the whole `drn` → rate chain | 3 | `t_v90demod.cpp`, `t_v90unpck.cpp`, `t_v92mpunpck.cpp`, `t_v92unpck.c` (**done**, F10264) |
-| 17 | Tables 3, 5/V.90 | `V90SpectralShaper`'s frame geometry | 3 | `t_v90shapeact.cpp` (extend) |
+| 17 | Tables 3, 5/V.90 | `V90SpectralShaper`'s frame geometry | 3 | `t_v90shapeact.cpp`, `t_v90modchain.cpp` (**done**, F10265) |
 | 18 | 5.4.5.1, Table 4/V.90 | the differential-coding recurrences | 3,2 | `t_diffcoder.cpp` (extend) |
 | 19 | Table 1/V.90 via G.711 | `codeSegmentsBoundriesLookupTable` | 3 | `t_v90p3mod.cpp` (extend) |
 | 20 | clause 5/V.8 | the HDLC-flag invariant over the whole CM/JM stream | 1 | `t_v8util.c` (extend) |
@@ -940,6 +940,12 @@ should be re-derived with it rather than the total carried forward.
     its selected rate is disabled by the received Table 13 mask, then reports
     success and preserves that rate through both initial design and RRN owner
     paths. Take item 17 next.
+13. **Item 17 is complete** (F10265): independent leaf and owner oracles cover
+    all twelve legal spectral-frame configurations, including Table 3's forced
+    position zero, consecutive user-bit groups and Table 5's placements at
+    offsets 0, 2, 3 and 4. Both implementations conform. The initial trellis
+    state is implementor-defined and the geometry fixtures deliberately hold
+    metric selection outside their claim. Take item 18 next.
 
 **Before any of it, read `docs/method/tiers.md` §5 and finding F7413.** The two
 rules a spec block gets wrong if it is written from the code rather than from

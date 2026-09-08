@@ -1211,6 +1211,8 @@ void our_map_process(void *, unsigned char *, unsigned int, short *,
 void ref_map_process(void *, unsigned char *, unsigned int, short *,
 		     unsigned int *) asm("ref__ZN9V90Mapper7processEPhjPsRj");
 }
+typedef void (*map_process)(void *, unsigned char *, unsigned int, short *,
+			    unsigned int *);
 
 /*
  * WHAT BOUNDS A `process` CASE, and why it needs its own table rather than
@@ -1563,6 +1565,195 @@ run_mapper_process(void)
 		    saw_overfull > 0, 1, saw_overfull);
 
 	return diff_end();
+}
+
+/*
+ * TABLES 3 AND 5/V.90 THROUGH THE PRODUCTION MAPPER.
+ *
+ * A V.90 data frame always has six symbols.  With spectral redundancy Sr,
+ * Table 3 divides it into Sr shaping frames of width 6/Sr, and Table 5 maps
+ * those frames, in order, onto the six consecutive data-symbol positions:
+ *
+ *       Sr = 1:  [ 0 .. 5 ]
+ *       Sr = 2:  [ 0 .. 2 ] [ 3 .. 5 ]
+ *       Sr = 3:  [ 0 .. 1 ] [ 2 .. 3 ] [ 4 .. 5 ]
+ *
+ * Each shaping frame owns its position zero, so the S = 6-Sr user sign bits
+ * are consumed consecutively in groups of width-1.  This fixture is an
+ * independent scalar rendition of precisely that finite geometry.  It does
+ * NOT compare reconstruction with blob: each is separately checked against
+ * the Recommendation-derived grouping and sign oracle.
+ *
+ * The Recommendation leaves the initial shaping state implementation-defined.
+ * reset() chooses zero, and we deliberately hold the trellis in its priming
+ * phase for this one data frame (three shaping calls at most).  That makes the
+ * checks about Table 3/5's input ownership and placement, rather than about a
+ * later implementation-specific metric tie-break.  The real mapper priming
+ * countdown is left intact and is checked separately below.
+ */
+static const unsigned char v90_frame_std_payload[5] = { 1, 0, 1, 1, 0 };
+
+static void
+build_mp_frame_std(unsigned int sr, unsigned int id)
+{
+	unsigned int k;
+
+	memset(rst_mp, 0, sizeof(rst_mp));
+	for (k = 0; k < V90MAPPER_CONSTELLATIONS; k++) {
+		/* Distinct non-silence levels make a wrong sample start visible. */
+		RST_MP->constellationSize[k] = 1;
+		RST_MP->constellation[k][0] = (unsigned char)(k + 1u);
+	}
+	RST_MP->word_0 = V90MAPPER_FRAME - sr;
+	RST_MP->shaperSR = (int)sr;
+	RST_MP->shaperId = id;
+	RST_MP->shaperA1 = 0.5f;
+	RST_MP->shaperA2 = -0.25f;
+	RST_MP->shaperB1 = 0.125f;
+	RST_MP->shaperB2 = -0.0625f;
+}
+
+/* Table 3's serial odd-bit and per-position differential encoders. */
+static void
+v90_frame_std_signs(unsigned int sr, unsigned char want[6])
+{
+	unsigned char odd_prev = 0;
+	unsigned char pde_prev[6] = { 0, 0, 0, 0, 0, 0 };
+	unsigned int width = V90MAPPER_FRAME / sr;
+	unsigned int g, i, bit = 0;
+
+	for (g = 0; g < sr; g++)
+		for (i = 0; i < width; i++) {
+			unsigned char raw = i ? v90_frame_std_payload[bit++] : 0;
+			unsigned char coded = raw;
+			unsigned int at = g * width + i;
+
+			if (i & 1u) {
+				coded ^= odd_prev;
+				odd_prev = coded;
+			}
+			want[at] = (unsigned char)(coded ^ pde_prev[i]);
+			pde_prev[i] = want[at];
+		}
+}
+
+static int
+run_mapper_frame_std_side(const char *name, unsigned char *obj,
+				 mapper_ctor ctor, dtor destroy, map_reset reset,
+				 map_process process)
+{
+	unsigned int sr, id;
+
+	diff_begin(name);
+	for (sr = 1; sr <= 3; sr++)
+		for (id = 0; id <= 3; id++) {
+			V90Mapper *mapper = (V90Mapper *)(void *)obj;
+			unsigned char want[6];
+			unsigned int width = V90MAPPER_FRAME / sr;
+			unsigned int nof = 0xa5a5a5a5u;
+			short symbols[V90MAPPER_FRAME];
+			unsigned int g, i;
+			long tag = (long)(sr * 10u + id);
+
+			seed_trial(7800 + (int)tag);
+			build_mp_frame_std(sr, id);
+			harness_alloc_reset();
+			ctor(obj, PARAMS);
+			reset(obj, RST_MP, 0);
+
+			/* These seven values are Tables 3/5's owner-level geometry. */
+			diff_eq_int("Table 3 retained Sr (%ld)",
+				    (int)mapper->spectralShaper.shaperSR, (int)sr, tag);
+			diff_eq_int("Table 3 retained shaping delay id (%ld)",
+				    (int)mapper->spectralShaper.shaperId, (int)id, tag);
+			diff_eq_int("Table 3 width is 6/Sr (%ld)",
+				    (int)mapper->signBitGroupSize, (int)width, tag);
+			diff_eq_int("Table 3 has Sr shaping frames (%ld)",
+				    (int)mapper->signBitGroups, (int)sr, tag);
+			diff_eq_int("Table 3 has 6-Sr user sign bits (%ld)",
+				    (int)mapper->signBitsPerFrame,
+				    (int)(V90MAPPER_FRAME - sr), tag);
+			diff_eq_int("shaper width agrees with its owner (%ld)",
+				    (int)mapper->spectralShaper.blockLength, (int)width,
+				    tag);
+			diff_eq_int("one frame contains exactly its user sign bits (%ld)",
+				    (int)mapper->bitsPerFrame,
+				    (int)(V90MAPPER_FRAME - sr), tag);
+
+			/* Keep Table 3's frame placement observable, not a trellis KAT. */
+			mapper->spectralShaper.primeFrames = 3;
+			memset(symbols, 0x5a, sizeof(symbols));
+			process(obj, (unsigned char *)v90_frame_std_payload,
+				V90MAPPER_FRAME - sr, symbols, &nof);
+
+			v90_frame_std_signs(sr, want);
+			diff_eq_int("mapper priming output count (%ld)", (int)nof,
+				    (int)(id < sr ? V90MAPPER_FRAME - id * width : 0u),
+				    tag);
+
+			/* The last call's local bits prove the final Table 5 group start. */
+			for (i = 0; i < width; i++) {
+				unsigned int at = (sr - 1u) * width + i;
+				unsigned char raw = i ? v90_frame_std_payload[
+					V90MAPPER_FRAME - sr - (width - 1u) + i - 1u]
+					: 0;
+
+				diff_eq_int("last shaping frame received its consecutive bit (%ld)",
+					    mapper->spectralShaper.frameBits[i], raw,
+					    tag * 10 + (long)i);
+				diff_eq_int("last shaping frame produced Table 3 sign (%ld)",
+					    mapper->spectralShaper.signBits[i], want[at],
+					    tag * 10 + (long)i);
+			}
+
+			/*
+			 * Locate every input shaping frame after the Sr calls.  A frame
+			 * still in the line is at (id - shifts_after_it - 1)*width; a frame at
+			 * delay-line position zero leaves before that call's shift, so one
+			 * with shifts_after_it >= id is in that call's samples[] slot. Thus
+			 * all twelve
+			 * (Sr,id) cases directly verify the starts 0; 0,3; and 0,2,4.
+			 */
+			for (g = 0; g < sr; g++) {
+				unsigned int after = sr - 1u - g;
+				for (i = 0; i < width; i++) {
+					unsigned int at = g * width + i;
+					short want_sample = want[at] ? mapper->levels[at]
+						: (short)-mapper->levels[at];
+					short got;
+
+					if (after < id)
+						got = mapper->spectralShaper.delayLine[
+							(id - after - 1u) * width + i];
+					else
+						got = mapper->samples[(g + id)
+							* width + i];
+					diff_eq_int("Table 5 group owns its samples (%ld)",
+						    got, want_sample,
+						    tag * 100 + (long)at);
+				}
+			}
+
+			destroy(obj);
+			diff_eq_int("nothing left allocated after Table 3/5 (%ld)",
+				    harness_alloc.live, 0, tag);
+		}
+
+	return diff_end();
+}
+
+static int
+run_mapper_frame_std(void)
+{
+	int rc = 0;
+
+	rc |= run_mapper_frame_std_side(
+	    "V90Mapper::process, reconstruction vs Tables 3 and 5/V.90",
+	    map_a, our_mapper_c1, our_mapper_d1, our_map_reset, our_map_process);
+	rc |= run_mapper_frame_std_side(
+	    "V90Mapper::process, blob vs Tables 3 and 5/V.90",
+	    map_b, ref_mapper_c1, ref_mapper_d1, ref_map_reset, ref_map_process);
+	return rc;
 }
 
 /*
@@ -4569,6 +4760,7 @@ main(void)
 	rc |= run_mapper_table1();
 
 	rc |= run_mapper_process();
+	rc |= run_mapper_frame_std();
 	rc |= run_mapper_process_arm();
 	rc |= run_mapper_process_boundary();
 
