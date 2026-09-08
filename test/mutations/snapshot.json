@@ -1313,7 +1313,7 @@
    }
   },
   "scrambler": {
-   "key": "56bb0187f8d1b42888e74fb79598faf60c0578cf508b3702076e1a43054fe215",
+   "key": "9c7422eb314dd6eb46d639b2b7bbdf5e2d6476ad68e74d8262b36ce0b40f6805",
    "summary": "36 mutations: 33 caught (33 by test, 0 by strings), 0 NOT caught, 0 unusable, 3 equivalent, 0 MIScounted",
    "verdicts": {
     "D ctor: pInitOut sits at pLimit": "caught",
@@ -1352,6 +1352,26 @@
     "reset: the fill stops one short of pInitTap2": "caught",
     "reset: two bits of the argument reach the buffer": "caught",
     "resetHistoryIndexes: pTap1 goes to pInitOut": "caught"
+   }
+  },
+  "scramblerstd": {
+   "key": "79b7a03861027f6a1173e167add214983fbedb5d3cc0caac8da2794e393de3d3",
+   "summary": "14 mutations: 14 caught (14 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "Descrambler reset seeds one instead of the requested zero": "caught",
+    "Descrambler's far x^-23 polynomial tap is one bit earlier": "caught",
+    "Descrambler's near polynomial tap is one bit later": "caught",
+    "Scrambler reset seeds one instead of the requested zero": "caught",
+    "Scrambler's far x^-23 polynomial tap is one bit earlier": "caught",
+    "Scrambler's near polynomial tap is one bit later": "caught",
+    "bulk Descrambler feeds its decoded result back": "caught",
+    "bulk Scrambler feeds input rather than quotient back": "caught",
+    "bulk Scrambler omits the far feedback term": "caught",
+    "bulk Scrambler omits the near feedback term": "caught",
+    "single-value Descrambler feeds its decoded result back": "caught",
+    "single-value Scrambler feeds the input rather than quotient back": "caught",
+    "single-value Scrambler omits the far feedback term": "caught",
+    "single-value Scrambler omits the near feedback term": "caught"
    }
   },
   "tonecreate": {
@@ -6764,6 +6784,15 @@
     "the two words copied out of the parameter block are swapped": "caught"
    }
   },
+  "v90demodstd": {
+   "key": "4954b2413707e56eea1b0ae722e8dfd9d5bcf2e40423665974afa795e48b12e5",
+   "summary": "3 mutations: 3 caught (3 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "V90 demodulator owner far tap is 22": "caught",
+    "V90 demodulator owner slack is 98": "caught",
+    "V90 demodulator owner uses near tap 5": "caught"
+   }
+  },
   "v90demprog": {
    "key": "5795af3e19a55ddb9a89347ec6847b6df994fefad8792b22b84da362c269c94c",
    "summary": "100 mutations: 29 caught (29 by test, 0 by strings), 71 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
@@ -7508,6 +7537,15 @@
     "the session-flag fork is inverted": "caught"
    }
   },
+  "v90modstd": {
+   "key": "1e8c25ac756bd165c3d857387e3b11d339b99ec747c55527814a4e7283f863a7",
+   "summary": "3 mutations: 3 caught (3 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "V90 modulator owner far tap is 22": "caught",
+    "V90 modulator owner slack is 98": "caught",
+    "V90 modulator owner uses near tap 5": "caught"
+   }
+  },
   "v90modulator": {
    "key": "cf13762ffaac9104c5f0f4a98c15ddcf00ea8bc07d318a818ab50bdaf0590d27",
    "summary": "26 mutations: 26 caught (26 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
@@ -7824,6 +7862,15 @@
     "twoLevelDemod's two decoders run the other way round": "uncaught"
    }
   },
+  "v90p3demodstd": {
+   "key": "8330d7d46dfc1d9130969e2917188a05f863a6245812647c0bba3acfe582f94a",
+   "summary": "3 mutations: 3 caught (3 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "V90 phase-3 demod owner far tap is 22": "caught",
+    "V90 phase-3 demod owner slack is 98": "caught",
+    "V90 phase-3 demod owner uses near tap 5": "caught"
+   }
+  },
   "v90p3dreset": {
    "key": "78963392c3d761133ecc3473119f64f446fd8de3c03b2745004acc18ab9f7c1d",
    "summary": "29 mutations: 28 caught (28 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
@@ -7888,6 +7935,15 @@
     "generateSymbol tests the flag for one rather than for non-zero": "caught",
     "generateSymbol tests the low byte of the session flag": "caught",
     "generateSymbol truncates the symbol to a byte": "caught"
+   }
+  },
+  "v90p3modstd": {
+   "key": "4c4f11c573c6ed7ed4c9dcccb93de86021b7dd823913df8562b87703539cf2e4",
+   "summary": "3 mutations: 3 caught (3 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "V90 phase-3 owner far tap is 22": "caught",
+    "V90 phase-3 owner slack is 98": "caught",
+    "V90 phase-3 owner uses near tap 5": "caught"
    }
   },
   "v90p4dctor": {
@@ -8174,6 +8230,15 @@
     "recivedSUVtag: the CPd case does not raise the latch": "caught",
     "recivedSUVtag: the SUVd case waits in the CPd waiting state": "caught",
     "recivedSUVtag: the first latch is not read": "caught"
+   }
+  },
+  "v90p4modstd": {
+   "key": "9fdd17ba13a580f8944c34c3c1500edf5cbbe92c975b318bc85539bb1fee5127",
+   "summary": "3 mutations: 3 caught (3 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "V90 phase-4 owner far tap is 22": "caught",
+    "V90 phase-4 owner slack is 98": "caught",
+    "V90 phase-4 owner uses near tap 5": "caught"
    }
   },
   "v90p4mreset": {
@@ -9732,6 +9797,15 @@
     "the two sides are exchanged: the digital one builds the modulator": "caught"
    }
   },
+  "v92modscramstd": {
+   "key": "a607d630f01a40d6254c046063472ab5780ac9bd4b53431987101fc27d49c731",
+   "summary": "3 mutations: 3 caught (3 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "V92Modulator owner has buffer slack 100 instead of 99": "caught",
+    "V92Modulator upstream owner has far delay 24 instead of 23": "caught",
+    "V92Modulator upstream owner incorrectly selects downstream GPC": "caught"
+   }
+  },
   "v92modstate": {
    "key": "8a5f0b7cb673dd621efe545acaa40e9879c4ccd6e42b13ed6248f1b5a1f59852",
    "summary": "122 mutations: 121 caught (121 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
@@ -10062,6 +10136,15 @@
     "the warm-up loop is one symbol short": "caught"
    }
   },
+  "v92p3modscramstd": {
+   "key": "d26a58c2669cf3276eeacd7a8afb1786978719a04a66b308c96beb8c2f017c65",
+   "summary": "3 mutations: 3 caught (3 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "V92Phase3Modulator owner has buffer slack 100 instead of 99": "caught",
+    "V92Phase3Modulator upstream owner has far delay 24 instead of 23": "caught",
+    "V92Phase3Modulator upstream owner incorrectly selects downstream GPC": "caught"
+   }
+  },
   "v92p4gen": {
    "key": "e2a2a5fd9096b15a9f3b47bd3c46b7f2983f19feaa7d279781ad8ea3f035bcc1",
    "summary": "103 mutations: 103 caught (103 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
@@ -10192,6 +10275,15 @@
     "the scrambler's two taps are exchanged": "caught",
     "the second and third arguments are exchanged": "caught",
     "the word cleared in the caller's V92CP is +0x114": "caught"
+   }
+  },
+  "v92p4modscramstd": {
+   "key": "c99d6f2fb40bfa355cae15707818b44bdff70c2c7b5d8ef50639f35971d9f885",
+   "summary": "3 mutations: 3 caught (3 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "V92Phase4Modulator owner has buffer slack 100 instead of 99": "caught",
+    "V92Phase4Modulator upstream owner has far delay 24 instead of 23": "caught",
+    "V92Phase4Modulator upstream owner incorrectly selects downstream GPC": "caught"
    }
   },
   "v92p4reset": {

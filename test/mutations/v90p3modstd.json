@@ -1,0 +1,6 @@
+[
+ {"_": ["Literal V.90 owner geometry assertions in t_v90p3mod.cpp."]},
+ {"label":"V90 phase-3 owner uses near tap 5","find":": scrambler(18, 23, 99)","replace":": scrambler(5, 23, 99)"},
+ {"label":"V90 phase-3 owner far tap is 22","find":": scrambler(18, 23, 99)","replace":": scrambler(18, 22, 99)"},
+ {"label":"V90 phase-3 owner slack is 98","find":": scrambler(18, 23, 99)","replace":": scrambler(18, 23, 98)"}
+]

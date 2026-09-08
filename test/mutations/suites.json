@@ -176,6 +176,10 @@
   "include/dsplib/Scrambler.h",
   "build/test/t_scrambler"
  ],
+ "scramblerstd": [
+  "include/dsplib/Scrambler.h",
+  "build/test/t_scrambler"
+ ],
  "v17data": [
   "src/pump/v17/v17data.c",
   "build/test/t_v17data"
@@ -512,6 +516,10 @@
   "src/pump/v90/V90Demodulator.cpp",
   "build/test/t_v90demod"
  ],
+ "v90demodstd": [
+  "src/pump/v90/V90Demodulator.cpp",
+  "build/test/t_v90demctor"
+ ],
  "v90demprog": [
   "src/pump/v90/V90Demodulator.cpp",
   "build/test/t_v90demprog"
@@ -588,6 +596,10 @@
   "src/pump/v90/V90Phase4Modulator.cpp",
   "build/test/t_v90modprog"
  ],
+ "v90modstd": [
+  "src/pump/v90/V90Modulator.cpp",
+  "build/test/t_v90modchain"
+ ],
  "v90modulator": [
   "src/pump/v90/V90Modulator.cpp",
   "build/test/t_v90modchain"
@@ -612,11 +624,19 @@
   "src/pump/v90/V90Phase3Demodulator.cpp",
   "build/test/t_v90p3ddec"
  ],
+ "v90p3demodstd": [
+  "src/pump/v90/V90Phase3Demodulator.cpp",
+  "build/test/t_v90rxctor"
+ ],
  "v90p3dreset": [
   "src/pump/v90/V90Phase3Demodulator.cpp",
   "build/test/t_v90p3dreset"
  ],
  "v90p3mod": [
+  "src/pump/v90/V90Phase3Modulator.cpp",
+  "build/test/t_v90p3mod"
+ ],
+ "v90p3modstd": [
   "src/pump/v90/V90Phase3Modulator.cpp",
   "build/test/t_v90p3mod"
  ],
@@ -643,6 +663,10 @@
  "v90p4mgen": [
   "src/pump/v90/V90Phase4Modulator.cpp",
   "build/test/t_v90p4mgen"
+ ],
+ "v90p4modstd": [
+  "src/pump/v90/V90Phase4Modulator.cpp",
+  "build/test/t_v90modchain"
  ],
  "v90p4mreset": [
   "src/pump/v90/V90Phase4Modulator.cpp",
@@ -804,6 +828,10 @@
   "src/pump/v90/V92Modulator.cpp",
   "build/test/t_v92mod"
  ],
+ "v92modscramstd": [
+  "src/pump/v90/V92Modulator.cpp",
+  "build/test/t_v92mod"
+ ],
  "v92modem": [
   "src/pump/v90/V92Modem.cpp",
   "build/test/t_v92modem"
@@ -828,11 +856,19 @@
   "src/pump/v90/V92Phase3Modulator.cpp",
   "build/test/t_v92p3mod"
  ],
+ "v92p3modscramstd": [
+  "src/pump/v90/V92Phase3Modulator.cpp",
+  "build/test/t_v92p3mod"
+ ],
  "v92p4gen": [
   "src/pump/v90/V92Phase4Modulator.cpp",
   "build/test/t_v92p4gen"
  ],
  "v92p4mod": [
+  "src/pump/v90/V92Phase4Modulator.cpp",
+  "build/test/t_v92p4mod"
+ ],
+ "v92p4modscramstd": [
   "src/pump/v90/V92Phase4Modulator.cpp",
   "build/test/t_v92p4mod"
  ],

@@ -1,0 +1,17 @@
+[
+  {
+    "label": "V92Phase3Modulator upstream owner incorrectly selects downstream GPC",
+    "find": ": scrambler(5, 23, 99)",
+    "replace": ": scrambler(18, 23, 99)"
+  },
+  {
+    "label": "V92Phase3Modulator upstream owner has far delay 24 instead of 23",
+    "find": ": scrambler(5, 23, 99)",
+    "replace": ": scrambler(5, 24, 99)"
+  },
+  {
+    "label": "V92Phase3Modulator owner has buffer slack 100 instead of 99",
+    "find": ": scrambler(5, 23, 99)",
+    "replace": ": scrambler(5, 23, 100)"
+  }
+]

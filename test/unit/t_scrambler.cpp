@@ -910,6 +910,261 @@ run_dii(void)
 	return diff_end();
 }
 
+/*
+ * ===========================================================================
+ * V.90 5.3/6.5 AND V.92 6.3, independently of dsplibs.o.
+ *
+ * The bit-serial model below is the Recommendations' divide/multiply
+ * definition, not the template's pointer-walking implementation.  V.90 uses
+ * 1 + x^-18 + x^-23; V.92 upstream uses 1 + x^-5 + x^-23.  A scrambler feeds
+ * its output back into the history (division), while a descrambler feeds the
+ * received input back (multiplication).
+ *
+ * Fixed zero-history impulse responses pin tap numbering and chronology
+ * without consulting the scalar model.  A second varied stream then exercises
+ * all five emitted template forms, using their single or bulk interface as
+ * applicable.  Reconstruction and blob are reported in separate groups.
+ * Owner-class selection of these forms is tested in the owner fixtures.
+ * ===========================================================================
+ */
+typedef void (*standard_ctor_fn)(void *, unsigned, unsigned, unsigned);
+typedef void (*standard_dtor_fn)(void *);
+typedef void (*standard_reset_fn)(void *);
+typedef int (*standard_process_fn)(void *, int);
+
+struct standard_subject {
+	const char *name;
+	standard_ctor_fn ctor;
+	standard_dtor_fn dtor;
+	standard_reset_fn reset;
+	standard_process_fn process;
+	int scramble;
+};
+
+static const unsigned short standard_scramble_impulse[2][8] = {
+	{ 0x0001, 0x0084, 0x4010, 0x0840,
+	  0x0121, 0x9400, 0x5000, 0x4048 },
+	{ 0x8421, 0x4290, 0x690a, 0x90ac,
+	  0x0ae6, 0xbe69, 0xeed2, 0x4902 }
+};
+
+static const unsigned short standard_descramble_impulse[2][8] = {
+	{ 0x0001, 0x0084, 0, 0, 0, 0, 0, 0 },
+	{ 0x0021, 0x0080, 0, 0, 0, 0, 0, 0 }
+};
+
+struct standard_model {
+	unsigned char history[23];
+};
+
+static int
+standard_step(struct standard_model *m, int input, unsigned near_tap,
+	      int scramble)
+{
+	int output = (input & 1) ^ m->history[near_tap - 1u]
+		     ^ m->history[22];
+	unsigned int i;
+
+	for (i = 22; i > 0; i--)
+		m->history[i] = m->history[i - 1u];
+	m->history[0] = (unsigned char)(scramble ? output : (input & 1));
+	return output;
+}
+
+/* Normalise the five reconstruction instantiations to one-bit calls. */
+static void std_our_shh_ctor(void *p, unsigned a, unsigned b, unsigned c)
+{ new (p) ScramblerHH(a, b, c); }
+static void std_our_shh_dtor(void *p) { ((ScramblerHH *)p)->~ScramblerHH(); }
+static void std_our_shh_reset(void *p) { ((ScramblerHH *)p)->reset(0); }
+static int std_our_shh_process(void *p, int in)
+{ return ((ScramblerHH *)p)->process((unsigned char)in); }
+static int std_our_shh_process_bulk(void *p, int in)
+{
+	unsigned char input = (unsigned char)in;
+	unsigned char out;
+	((ScramblerHH *)p)->process(&input, &out, 1);
+	return out;
+}
+
+static void std_our_shi_ctor(void *p, unsigned a, unsigned b, unsigned c)
+{ new (p) ScramblerHI(a, b, c); }
+static void std_our_shi_dtor(void *p) { ((ScramblerHI *)p)->~ScramblerHI(); }
+static void std_our_shi_reset(void *p) { ((ScramblerHI *)p)->reset(0); }
+static int std_our_shi_process(void *p, int in)
+{ return ((ScramblerHI *)p)->process((unsigned char)in); }
+
+static void std_our_sih_ctor(void *p, unsigned a, unsigned b, unsigned c)
+{ new (p) ScramblerIH(a, b, c); }
+static void std_our_sih_dtor(void *p) { ((ScramblerIH *)p)->~ScramblerIH(); }
+static void std_our_sih_reset(void *p) { ((ScramblerIH *)p)->reset(0); }
+static int std_our_sih_process(void *p, int in)
+{
+	unsigned char out;
+	((ScramblerIH *)p)->process(&in, &out, 1);
+	return out;
+}
+
+static void std_our_dhi_ctor(void *p, unsigned a, unsigned b, unsigned c)
+{ new (p) DescramblerHI(a, b, c); }
+static void std_our_dhi_dtor(void *p) { ((DescramblerHI *)p)->~DescramblerHI(); }
+static void std_our_dhi_reset(void *p) { ((DescramblerHI *)p)->reset(0); }
+static int std_our_dhi_process(void *p, int in)
+{ return ((DescramblerHI *)p)->process((unsigned char)in); }
+static int std_our_dhi_process_bulk(void *p, int in)
+{
+	unsigned char input = (unsigned char)in;
+	int out;
+	((DescramblerHI *)p)->process(&input, &out, 1);
+	return out;
+}
+
+static void std_our_dii_ctor(void *p, unsigned a, unsigned b, unsigned c)
+{ new (p) DescramblerII(a, b, c); }
+static void std_our_dii_dtor(void *p) { ((DescramblerII *)p)->~DescramblerII(); }
+static void std_our_dii_reset(void *p) { ((DescramblerII *)p)->reset(0); }
+static int std_our_dii_process(void *p, int in)
+{ return ((DescramblerII *)p)->process(in); }
+
+/* The same normalisation through the blob's independently renamed aliases. */
+static void std_ref_shh_reset(void *p) { ref_shh_reset(p, 0); }
+static int std_ref_shh_process(void *p, int in)
+{ return ref_shh_proc1(p, (unsigned char)in); }
+static int std_ref_shh_process_bulk(void *p, int in)
+{
+	unsigned char input = (unsigned char)in;
+	unsigned char out;
+	ref_shh_procn(p, &input, &out, 1);
+	return out;
+}
+static void std_ref_shi_reset(void *p) { ref_shi_reset(p, 0); }
+static int std_ref_shi_process(void *p, int in)
+{ return ref_shi_proc1(p, (unsigned char)in); }
+static void std_ref_sih_reset(void *p) { ref_sih_reset(p, 0); }
+static int std_ref_sih_process(void *p, int in)
+{
+	unsigned char out;
+	ref_sih_procn(p, &in, &out, 1);
+	return out;
+}
+static void std_ref_dhi_reset(void *p) { ref_dhi_reset(p, 0); }
+static int std_ref_dhi_process(void *p, int in)
+{ return ref_dhi_proc1(p, (unsigned char)in); }
+static int std_ref_dhi_process_bulk(void *p, int in)
+{
+	unsigned char input = (unsigned char)in;
+	int out;
+	ref_dhi_procn(p, &input, &out, 1);
+	return out;
+}
+static void std_ref_dii_reset(void *p) { ref_dii_reset(p, 0); }
+static int std_ref_dii_process(void *p, int in)
+{ return ref_dii_proc1(p, in); }
+
+union standard_slot {
+	unsigned char raw[sizeof(ScramblerHH)];
+	double align;
+};
+
+static int
+run_standard_subject(const struct standard_subject *s, unsigned int subject)
+{
+	union standard_slot slot;
+	unsigned int polynomial;
+
+	for (polynomial = 0; polynomial < 2; polynomial++) {
+		const unsigned short *kat = s->scramble
+			? standard_scramble_impulse[polynomial]
+			: standard_descramble_impulse[polynomial];
+		unsigned int near_tap = polynomial ? 5u : 18u;
+		struct standard_model model;
+		unsigned int bit;
+
+		s->ctor(slot.raw, near_tap, 23, 99);
+		for (bit = 0; bit < 128; bit++) {
+			int expected = (kat[bit / 16u] >> (bit % 16u)) & 1u;
+			int got = s->process(slot.raw, bit == 0 ? 1 : 0);
+			long tag = (long)subject * 10000L
+				 + (long)polynomial * 1000L + (long)bit;
+
+			diff_eq_int("fixed impulse response (%ld)",
+				    got, expected, tag);
+		}
+
+		s->reset(slot.raw);
+		memset(&model, 0, sizeof(model));
+		for (bit = 0; bit < 256; bit++) {
+			int input = (int)(((bit * 0x9e37u + 0x5a5au)
+					   ^ (bit >> 2)) & 1u);
+			int expected = standard_step(&model, input, near_tap,
+						     s->scramble);
+			int got = s->process(slot.raw, input);
+			long tag = (long)subject * 10000L
+				 + (long)polynomial * 1000L + 200L + (long)bit;
+
+			diff_eq_int("scalar recurrence (%ld)",
+				    got, expected, tag);
+		}
+		s->dtor(slot.raw);
+	}
+	return 0;
+}
+
+static int
+run_standard_implementation(const char *group,
+			    const struct standard_subject *subjects)
+{
+	unsigned int i;
+
+	diff_begin(group);
+	for (i = 0; i < 7; i++)
+		run_standard_subject(&subjects[i], i);
+	return diff_end();
+}
+
+static int
+run_standards(void)
+{
+	static const struct standard_subject ours[7] = {
+		{ "Scrambler<h,h> single", std_our_shh_ctor, std_our_shh_dtor,
+		  std_our_shh_reset, std_our_shh_process, 1 },
+		{ "Scrambler<h,h> bulk", std_our_shh_ctor, std_our_shh_dtor,
+		  std_our_shh_reset, std_our_shh_process_bulk, 1 },
+		{ "Scrambler<h,i>", std_our_shi_ctor, std_our_shi_dtor,
+		  std_our_shi_reset, std_our_shi_process, 1 },
+		{ "Scrambler<i,h>", std_our_sih_ctor, std_our_sih_dtor,
+		  std_our_sih_reset, std_our_sih_process, 1 },
+		{ "Descrambler<h,i> single", std_our_dhi_ctor, std_our_dhi_dtor,
+		  std_our_dhi_reset, std_our_dhi_process, 0 },
+		{ "Descrambler<h,i> bulk", std_our_dhi_ctor, std_our_dhi_dtor,
+		  std_our_dhi_reset, std_our_dhi_process_bulk, 0 },
+		{ "Descrambler<i,i>", std_our_dii_ctor, std_our_dii_dtor,
+		  std_our_dii_reset, std_our_dii_process, 0 }
+	};
+	static const struct standard_subject refs[7] = {
+		{ "Scrambler<h,h> single", ref_shh_ctor, ref_shh_dtor,
+		  std_ref_shh_reset, std_ref_shh_process, 1 },
+		{ "Scrambler<h,h> bulk", ref_shh_ctor, ref_shh_dtor,
+		  std_ref_shh_reset, std_ref_shh_process_bulk, 1 },
+		{ "Scrambler<h,i>", ref_shi_ctor, ref_shi_dtor,
+		  std_ref_shi_reset, std_ref_shi_process, 1 },
+		{ "Scrambler<i,h>", ref_sih_ctor, ref_sih_dtor,
+		  std_ref_sih_reset, std_ref_sih_process, 1 },
+		{ "Descrambler<h,i> single", ref_dhi_ctor, ref_dhi_dtor,
+		  std_ref_dhi_reset, std_ref_dhi_process, 0 },
+		{ "Descrambler<h,i> bulk", ref_dhi_ctor, ref_dhi_dtor,
+		  std_ref_dhi_reset, std_ref_dhi_process_bulk, 0 },
+		{ "Descrambler<i,i>", ref_dii_ctor, ref_dii_dtor,
+		  std_ref_dii_reset, std_ref_dii_process, 0 }
+	};
+	int rc = 0;
+
+	rc |= run_standard_implementation(
+	    "V.90/V.92 scrambler standards oracle, reconstruction", ours);
+	rc |= run_standard_implementation(
+	    "V.90/V.92 scrambler standards oracle, blob", refs);
+	return rc;
+}
+
 static int
 run_count(void)
 {
@@ -930,6 +1185,7 @@ main(void)
 	bad |= run_ih();
 	bad |= run_dhi();
 	bad |= run_dii();
+	bad |= run_standards();
 	bad |= run_count();
 
 	return bad;
