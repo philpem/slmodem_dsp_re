@@ -175,11 +175,15 @@ an exact definition; non-exact definitions retain this finite-evidence limit.
   bounded cases are `GenEQTrnSequenceV29`, the V.27 tail-state helpers, and,
   if direct attribution is desired, the inlined dialler helper. This is quick
   confidence work, but lower risk than the V.90 composition failure.
-- **Refresh mutation evidence by risk cluster.** The current snapshot reports
-  zero current and all 230 registered suites stale, so it cannot support a
-  current tree-wide confidence claim. Re-record the V.90 and V.34 survivor
-  clusters first, fix live survivors, then take an aggregate checkpoint; a
-  complete 9,000-plus-mutation refresh before triage is the higher-cost option.
+- **Refresh mutation evidence by risk cluster — first tranche complete.**
+  F10243 reruns and records the three changed V.90 suites and four known-risk
+  V.34 suites: 1,324 mutations in all, with 1,195 caught, 93 uncaught, 35
+  equivalent and one unbuildable. Thirteen former survivors are now caught;
+  no caught verdict regressed. These seven entries are current while the other
+  223 registered suites deliberately remain stale, so this supports only the
+  named clusters and not a tree-wide confidence claim. Triage the live
+  survivors through issues #1 and #4 before paying for a complete
+  9,000-plus-mutation refresh.
 - **Add independent standards oracles.** Begin with V.90 Table 1's 512 published
   PCM values, then V.8 ANSam, V.34 Table 17 and the V.90 CP CRC extent. These do
   not improve equivalence to the blob; they answer the separate and important
