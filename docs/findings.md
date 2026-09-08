@@ -122098,3 +122098,51 @@ and the coverage/debug-site checks are green. Measured source-line coverage
 rises to **49,018/51,416 (95.3%)**, and one previously unexecuted Phase-4
 demodulator debug site is now live.
 (2026-09-08)
+
+## F10243. Seven targeted mutation suites are current, with thirteen former survivors closed
+
+Mutation testing is a sensitivity check, not an equivalence proof. A caught
+mutation says that the selected fixture and its observations reject that one
+planted alternative. An uncaught mutation demonstrates a blind spot or an
+equivalent behavior; it does not by itself show that the reconstruction is
+wrong. Even a perfect mutation score would not quantify unmodelled faults or
+extend the finite differential input domain. These runs use the modern
+compiler, while the GCC 3.4.2 differential gate remains authoritative for
+the known compiler-dependent floating cases.
+
+The targeted refresh covers exactly seven named suites and **1,324
+mutations**. Its aggregate is **1,195 caught by tests, 93 uncaught, 35 marked
+equivalent and one unbuildable**; none is caught only by string checks. The
+previous stale classifications for the same sets totalled 1,182 caught and
+106 uncaught. No caught verdict regressed. All thirteen changes are stronger
+fixtures: the constructed receive chain catches three old `v90demprog`
+survivors, and the complete CP/MP paths catch all ten completed-message
+survivors in `v90p4ddec`.
+
+The per-suite results are:
+
+- `v90demprog`: **29/100 caught**, 71 uncaught, up from 26 caught;
+- `v90p4ddec`: **70/74 caught**, 3 uncaught and 1 unbuildable, up from 60
+  caught;
+- `v90p4dreset`: **54/54 caught**, unchanged;
+- `v34k56`: **15/28 caught**, 10 uncaught and 3 equivalent, unchanged;
+- `v34datapump`: **72/78 caught**, 4 uncaught and 2 equivalent, unchanged;
+- `v34hsmst44`: **204/214 caught**, 3 uncaught and 7 equivalent, unchanged;
+- `v34hstx1`: **751/776 caught**, 2 uncaught and 23 equivalent, unchanged.
+
+The three newly caught receive-chain alternatives identify exactly what the
+new composition added: the equalizer's event source, the zero-capability V.34
+fallback, and accumulation rather than restart of the quiet run. Its other 71
+survivors remain a state/reachability backlog across later Phase 3, Phase 4,
+data, retrain and timing-loop behavior. `v90p4ddec` now catches every one of
+the three MP and seven CP complete-message alternatives. Its remaining three
+survivors are the separate `linearMappingStudy` argument-order fixture gap and
+the two known modern-compiler floating/NaN cases; the evaluator-field mutation
+cannot compile because the proposed field does not exist.
+
+The four V.34 suites reproduce their prior verdicts label for label. Their 19
+uncaught cases therefore remain known reachability/order gaps rather than
+regressions introduced by this work. Recording only these seven suites leaves
+**7 current and 223 stale** snapshot entries. The stale entries are retained
+deliberately and must not be quoted as current tree-wide evidence.
+(2026-09-08)
