@@ -123084,3 +123084,57 @@ self-test and every structural check. Suite line coverage remains
 **49,019/51,416** (`95.3%`).
 
 (2026-09-08)
+
+## F10265. V.90 spectral-frame geometry conforms throughout its legal domain
+
+Tables 3 and 5/V.90 define a finite enabled domain that differential agreement
+cannot validate: `Sr=1,2,3` divides each six-symbol data frame into one width-6,
+two width-3 or three width-2 shaping frames. Position zero of every shaping
+frame is forced to zero, the remaining positions consume `6-Sr` consecutive
+user sign bits, and frame-relative parity restarts at each Table 5 placement.
+The lookahead domain is the four values 0 through 3; the Recommendation leaves
+the initial spectral-shaping state to the implementor.
+
+The new leaf oracle invokes reconstruction and blob separately against a
+scalar rendition of the forced bit, odd-position serial recurrence,
+per-position parallel recurrence, sign polarity, delay-line placement and
+lookahead shift. It runs **180 complete transformations per implementation**:
+all three legal `Sr` values, all four lookaheads, both binary histories and all
+binary input-pattern paths through the active lookahead window. Each side
+passes **5,477 assertions**. A literal two-frame `Sr=2` answer pins the second
+group to data positions 3 through 5, while the pre-existing absolute action
+checks cover all four Table 5 polarity rules and include frame-relative parity
+away from offset zero. Trellis scoring is deliberately held in priming, so the
+fixture does not turn an implementor-defined initial choice or floating-point
+metric tie-break into a standards claim.
+
+The owner oracle closes the composition gap rather than assuming that a
+correct leaf is called correctly. Across all twelve legal `(Sr, lookahead)`
+configurations, `V90Mapper::reset` and `process` are separately checked against
+literal widths `{6,3,2}`, group counts `{1,2,3}`, sign-bit counts `{5,4,3}` and
+Table 5 starts `{0}`, `{0,3}`, `{0,2,4}`. It verifies actual consecutive bit
+consumption and signed sample placement through the production mapper. Both
+reconstruction and blob pass **268 owner assertions**. No legal-domain
+departure was found. `Sr=0` is the unshaped bypass and direct zero-width shaper
+processing remains the already documented out-of-domain D930 behavior.
+
+The new `v90specgeomstd` suite catches **14/14** focused alternatives: wrong
+width/window/write position, loss of the forced bit, payload off-by-one,
+incorrect serial or parallel coding, reversed sign polarity, shortened frame
+actions, global instead of frame-local parity, a wrong polarity rule and
+reversed temporal action placement. The impacted broader `V90Mapper` suite
+retains **47/47 caught** mutations, including the owner group-count, group-width
+and pointer-stride alternatives. These results prove sensitivity to those
+named errors, not universal functional equivalence; the executable standards
+claim is bounded to the twelve legal configurations and the enumerated input-
+pattern paths above. Because the owner fixture is shared, the targeted refresh
+remeasures all nine affected suites: **377 mutations**, of which 375 are caught
+and the two existing `v90p4msym` cases remain proved equivalent. The mutation
+snapshot is **53 current and 209 stale of 262 registered suites**.
+
+The complete phase boundary passes **375/375** period-compiler differential
+binaries, the 64-bit and interoperability gates, the partial-link comparator
+self-test and every structural check. Suite line coverage remains
+**49,019/51,416** (`95.3%`).
+
+(2026-09-08)

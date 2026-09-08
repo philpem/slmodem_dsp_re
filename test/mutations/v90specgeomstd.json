@@ -1,0 +1,75 @@
+[
+ {
+  "note": "Focused sensitivity checks for the independent V.90 Tables 3 and 5 spectral-frame oracle in t_v90shapeact.cpp. The broader differential fixtures remain responsible for non-standard inputs, trellis metric selection and compiler-era floating-point behavior. These mutations show sensitivity to the named geometry, recurrence and polarity alternatives; they do not prove universal functional equivalence."
+ },
+ {
+  "label": "Table 3 uses Sr itself as the shaping-frame width",
+  "find": "\t\tblockLength = 6 / sr;",
+  "replace": "\t\tblockLength = sr;"
+ },
+ {
+  "label": "the active window omits the current shaping frame",
+  "find": "\twindowLength = (shaperId + 1) * blockLength;",
+  "replace": "\twindowLength = shaperId * blockLength;"
+ },
+ {
+  "label": "new samples are written one shaping frame too early",
+  "find": "\twriteIndex = shaperId * blockLength;",
+  "replace": "\twriteIndex = (shaperId ? shaperId - 1 : 0) * blockLength;"
+ },
+ {
+  "label": "Table 3 position zero is forced to one",
+  "find": "\tframeBits[0] = 0;",
+  "replace": "\tframeBits[0] = 1;"
+ },
+ {
+  "label": "the first user sign bit overwrites reserved position zero",
+  "find": "\t\tframeBits[i + 1] = bits[i];",
+  "replace": "\t\tframeBits[i] = bits[i];"
+ },
+ {
+  "label": "the final user sign bit is omitted from each shaping frame",
+  "find": "\tfor (i = 0; i < blockLength - 1; i++)\n\t\tframeBits[i + 1] = bits[i];",
+  "replace": "\tfor (i = 0; i < blockLength - 2; i++)\n\t\tframeBits[i + 1] = bits[i];"
+ },
+ {
+  "label": "odd serial differential coding is applied to even positions",
+  "find": "\t\tif (i & 1)\n\t\t\tcodedBits[i] = oddEncoder.process(frameBits[i]);",
+  "replace": "\t\tif ((i & 1) == 0)\n\t\t\tcodedBits[i] = oddEncoder.process(frameBits[i]);"
+ },
+ {
+  "label": "the parallel differential stage is bypassed",
+  "find": "\tpde.process(codedBits, signBits);",
+  "replace": "\tfor (i = 0; i < blockLength; i++)\n\t\tsignBits[i] = codedBits[i];"
+ },
+ {
+  "label": "a zero sign bit selects the positive sample",
+  "find": "\t\tdelayLine[pos] = signBits[i] ? in[i] : -in[i];",
+  "replace": "\t\tdelayLine[pos] = signBits[i] ? -in[i] : in[i];"
+ },
+ {
+  "label": "a frame action stops before its final sample",
+  "find": "\tfor (i = start; i < start + blockLength; i++) {",
+  "replace": "\tfor (i = start; i + 1 < start + blockLength; i++) {"
+ },
+ {
+  "label": "Rule C parity is global instead of shaping-frame local",
+  "find": "\t\t\tdst[i] = ((i - start) & 1) ? delayLine[i]\n\t\t\t\t\t\t  : -delayLine[i];",
+  "replace": "\t\t\tdst[i] = (i & 1) ? delayLine[i]\n\t\t\t\t\t  : -delayLine[i];"
+ },
+ {
+  "label": "Rule D parity is global instead of shaping-frame local",
+  "find": "\t\t\tdst[i] = ((i - start) & 1) ? -delayLine[i]\n\t\t\t\t\t\t  : delayLine[i];",
+  "replace": "\t\t\tdst[i] = (i & 1) ? -delayLine[i]\n\t\t\t\t\t  : delayLine[i];"
+ },
+ {
+  "label": "Rule B keeps every sample instead of inverting it",
+  "find": "\t\tcase V90SS_NEGATE_ALL:\n\t\t\tdst[i] = -delayLine[i];",
+  "replace": "\t\tcase V90SS_NEGATE_ALL:\n\t\t\tdst[i] = delayLine[i];"
+ },
+ {
+  "label": "Rule A's action digit is applied newest-first instead of oldest-first",
+  "find": "\t\tcase 1:\n\t\t\tapplyFrameAction(V90SS_KEEP_ALL, dst,\n\t\t\t\t\t (shaperId - m) * blockLength);",
+  "replace": "\t\tcase 1:\n\t\t\tapplyFrameAction(V90SS_KEEP_ALL, dst,\n\t\t\t\t\t m * blockLength);"
+ }
+]

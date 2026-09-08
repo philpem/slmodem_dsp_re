@@ -5845,7 +5845,7 @@
    }
   },
   "v90bits": {
-   "key": "c157d9499b2aff4b4a295e5de57a4d03a1aab75abee1aa4b5bf16a94e3afcc47",
+   "key": "6568e9d23a4df44b2955dc2b72549607e61b7c94833a2e15fd9350a09d129d85",
    "summary": "44 mutations: 44 caught (44 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "ctor: bitsPerFrame is initialised, which the blob does not do": "caught",
@@ -7280,7 +7280,7 @@
    }
   },
   "v90mapper": {
-   "key": "6dce02d2fcdb8201d1bb9c4d8d9af4a454627c2af07d9d18a0f42d571c7eaae8",
+   "key": "1db60f194cbbdc456d02ef8f0967f049e31b29835ccf1f74005145586271039b",
    "summary": "47 mutations: 47 caught (47 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "ctor: +0x04 is left as it was found": "caught",
@@ -7593,7 +7593,7 @@
    }
   },
   "v90modstd": {
-   "key": "1e8c25ac756bd165c3d857387e3b11d339b99ec747c55527814a4e7283f863a7",
+   "key": "fa5d7fa0ae0560ce4d0b5f366a11f455b6b644612300020b3b5427b285d1426f",
    "summary": "3 mutations: 3 caught (3 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "V90 modulator owner far tap is 22": "caught",
@@ -7602,7 +7602,7 @@
    }
   },
   "v90modulator": {
-   "key": "cf13762ffaac9104c5f0f4a98c15ddcf00ea8bc07d318a818ab50bdaf0590d27",
+   "key": "aae8b207c4d3095170d6de9f0cd846331f3f7ef2a6056faa3798210b0ce926bc",
    "summary": "26 mutations: 26 caught (26 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "ctor: mappingParams2 takes the sixth argument as well": "caught",
@@ -8200,8 +8200,8 @@
    }
   },
   "v90p4mctor": {
-   "key": "d133ec45e9636a37d913c46afe92c55f4e10b7924b9ea3b5dd60f14536f4a15e",
-   "summary": "20 mutations: 20 caught (20 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "key": "3a1fdd150a4784d1b47b0e7745b6fa9d6354717198932ab7447827fb6d053831",
+   "summary": "32 mutations: 32 caught (32 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "ctor: +0x2f9c is left as it was found": "caught",
     "ctor: +0x2fa0 is left as it was found": "caught",
@@ -8222,7 +8222,19 @@
     "dtor: the null guard is dropped": "caught",
     "dtor: the ownership flag is not consulted": "caught",
     "dtor: the ownership flag is read the wrong way round": "caught",
-    "dtor: the pointer is nulled afterwards, which the blob does not do": "caught"
+    "dtor: the pointer is nulled afterwards, which the blob does not do": "caught",
+    "setMappingParams: the block is never sized": "caught",
+    "setMappingParams: the block is two symbols": "caught",
+    "setMappingParams: the block is zero symbols": "caught",
+    "setMappingParams: the converter gets the no-spectral reset": "caught",
+    "setMappingParams: the law is always A-law": "caught",
+    "setMappingParams: the law is always mu-law": "caught",
+    "setMappingParams: the modulator's own block is used": "caught",
+    "setMappingParams: the null block gets the wrong message": "caught",
+    "setMappingParams: the null block is announced below the gate": "caught",
+    "setMappingParams: the null guard is inverted": "caught",
+    "setMappingParams: the second block is used": "caught",
+    "setMappingParams: the two calls are the wrong way round": "caught"
    }
   },
   "v90p4mgen": {
@@ -8288,7 +8300,7 @@
    }
   },
   "v90p4modstd": {
-   "key": "9fdd17ba13a580f8944c34c3c1500edf5cbbe92c975b318bc85539bb1fee5127",
+   "key": "92562dc25eb480bfca4ba89a2a7230d61880d70b154f00e6c673946709ca6d72",
    "summary": "3 mutations: 3 caught (3 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "V90 phase-4 owner far tap is 22": "caught",
@@ -8297,7 +8309,7 @@
    }
   },
   "v90p4mreset": {
-   "key": "b62e08990328a1e70c849b4b7401df06ad1f2f228c5b5bfab979dc788690483b",
+   "key": "c242f6d555a988781eb4d23492f3ce89c2c2076d880cf5a7b828a475a6949388",
    "summary": "37 mutations: 37 caught (37 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "reset: +0x04 takes argument three and not a constant": "caught",
@@ -8340,7 +8352,7 @@
    }
   },
   "v90p4msym": {
-   "key": "1417820c3f683b70ea2cd10259d95575076af3af09d9de54041c8b8bc195c3c0",
+   "key": "0373bca784266a2597d9a2a4b58507cd482d2a693bd232e5b379c1f75f50b2ef",
    "summary": "171 mutations: 169 caught (169 by test, 0 by strings), 0 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
    "verdicts": {
     "v90: +0x0c is not cleared on entry": "caught",
@@ -9000,6 +9012,26 @@
     "the modem takes its two halves from the wrong offsets": "caught",
     "the modem's flag goes to +0x49bc, where the side is": "caught",
     "the modulator's flag goes to +0x2c": "caught"
+   }
+  },
+  "v90specgeomstd": {
+   "key": "61c017cc09a7973065aba3822e80d3d25e40d19c28cc6e0ac10cc6ab002eb9bf",
+   "summary": "14 mutations: 14 caught (14 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "Rule A's action digit is applied newest-first instead of oldest-first": "caught",
+    "Rule B keeps every sample instead of inverting it": "caught",
+    "Rule C parity is global instead of shaping-frame local": "caught",
+    "Rule D parity is global instead of shaping-frame local": "caught",
+    "Table 3 position zero is forced to one": "caught",
+    "Table 3 uses Sr itself as the shaping-frame width": "caught",
+    "a frame action stops before its final sample": "caught",
+    "a zero sign bit selects the positive sample": "caught",
+    "new samples are written one shaping frame too early": "caught",
+    "odd serial differential coding is applied to even positions": "caught",
+    "the active window omits the current shaping frame": "caught",
+    "the final user sign bit is omitted from each shaping frame": "caught",
+    "the first user sign bit overwrites reserved position zero": "caught",
+    "the parallel differential stage is bypassed": "caught"
    }
   },
   "v90specialcond": {

@@ -1,6 +1,7 @@
 /*
  * t_v90shapeact.cpp -- differential test of the V.90 spectral shaper's two
- * polarity primitives and the two data tables they are driven from:
+ * polarity primitives and the two data tables they are driven from, plus an
+ * independent Tables 3 and 5/V.90 frame-geometry oracle:
  *
  *     V90SpectralShaper::applyFrameAction(ACTIONS, short *, int)   0x328f0
  *     V90SpectralShaper::applyAction(int, short *)                 0x32a10
@@ -81,6 +82,11 @@ void our_ss_action(void *self, int action, short *dst)
 	asm("_ZN17V90SpectralShaper11applyActionEiPs");
 void ref_ss_action(void *self, int action, short *dst)
 	asm("ref__ZN17V90SpectralShaper11applyActionEiPs");
+
+void our_ss_process(void *self, short *in, unsigned char *bits, short *out)
+	asm("_ZN17V90SpectralShaper7processEPsPhS0_");
+void ref_ss_process(void *self, short *in, unsigned char *bits, short *out)
+	asm("ref__ZN17V90SpectralShaper7processEPsPhS0_");
 
 extern unsigned int ref_pow10Table[5];
 extern unsigned int ref_dsplibs_debug_level;
@@ -678,6 +684,290 @@ run_tables(void)
 	return diff_end();
 }
 
+/* ================================================= Tables 3 and 5/V.90 === */
+
+/*
+ * This is deliberately not another reconstruction-vs-blob comparison.  The
+ * Recommendation fixes a finite geometry which both could reproduce wrongly:
+ * a six-symbol data frame contains Sr shaping frames of width 6/Sr.  Within
+ * EACH shaping frame p(0) is forced to zero; its remaining positions consume
+ * the caller's bits.  The odd serial recurrence and the parallel recurrence
+ * are then evaluated below from their definitions, not by calling either
+ * implementation's coders.
+ *
+ * The trellis's initial state is implementation-defined in 5.4.5, so this
+ * oracle does not claim that reset chooses either state.  It seeds both legal
+ * binary histories explicitly and holds off the non-normative trellis choice
+ * while measuring the framing transformation.  For every Sr=1,2,3, every
+ * lookahead 0..3, both histories, and every binary path of lookahead+1 input
+ * frames, there is one complete transformation.  The count is
+ *
+ *   3 * 2 * (2 + 4 + 8 + 16) = 180
+ *
+ * on EACH side.  A path bit controls a deliberately non-uniform payload
+ * frame; thus all paths are exercised without making local positions collapse
+ * onto one another.  The Sr=2 KAT below separately makes the data-frame
+ * offset-three/local-parity case literal and readable.
+ */
+
+#define FRAME_OUT_FILL	((short)0x6b6b)
+
+static V90SpectralShaper *
+standard_setup(int blob, unsigned id, unsigned sr, int trial)
+{
+	V90SpectralShaper *s;
+
+	harness_alloc_reset();
+	fill_pair(ss_a.raw, ss_b.raw, SS_SLOT, trial);
+	if (blob) {
+		ref_ss_ctor(ss_b.raw);
+		ref_ss_reset(ss_b.raw, id, sr, C_A1, C_A2, C_B1, C_B2);
+		s = &SS_B;
+	} else {
+		our_ss_ctor(ss_a.raw);
+		our_ss_reset(ss_a.raw, id, sr, C_A1, C_A2, C_B1, C_B2);
+		s = &SS_A;
+	}
+	return s;
+}
+
+static void
+standard_teardown(int blob)
+{
+	if (blob)
+		ref_ss_dtor(ss_b.raw);
+	else
+		our_ss_dtor(ss_a.raw);
+}
+
+/* One completely scalar Table 3/5 transformation. */
+static void
+standard_oracle_frame(unsigned width, unsigned char *bits,
+			      unsigned char *odd, unsigned char *parallel,
+			      unsigned char *frame, unsigned char *coded,
+			      unsigned char *sign)
+{
+	unsigned i;
+
+	frame[0] = 0;
+	for (i = 1; i < width; i++)
+		frame[i] = bits[i - 1];
+
+	for (i = 0; i < width; i++) {
+		if (i & 1u) {
+			coded[i] = (unsigned char)(frame[i] ^ *odd);
+			*odd = coded[i];
+		} else
+			coded[i] = frame[i];
+
+		sign[i] = (unsigned char)(coded[i] ^ parallel[i]);
+		parallel[i] = sign[i];
+	}
+}
+
+static void
+standard_model_process(unsigned id, unsigned width, short *model,
+		       unsigned char *sign, short *in, short *want_out)
+{
+	unsigned i, pos = id * width;
+
+	for (i = 0; i < width; i++)
+		model[pos + i] = sign[i] ? in[i] : (short)-in[i];
+	for (i = 0; i < width; i++)
+		want_out[i] = model[i];
+	for (i = width; i < (id + 1u) * width; i++)
+		model[i - width] = model[i];
+}
+
+static void
+standard_check_frame(V90SpectralShaper *s, const unsigned char *frame,
+		     const unsigned char *coded,
+		     const unsigned char *sign, const unsigned char *parallel,
+		     const short *model, const short *out, const short *want_out,
+		     const short *in, const short *in_before,
+		     const unsigned char *bits, const unsigned char *bits_before,
+		     unsigned width,
+	const unsigned char *guard, const unsigned char *raw, long tag)
+{
+	unsigned i, last_odd;
+	int input_ok = 1, out_ok = 1;
+
+	for (i = 0; i < width; i++) {
+		if (out[i] != want_out[i])
+			out_ok = 0;
+	}
+	for (i = width; i < V90SS_FRAME_BITS; i++)
+		if (out[i] != FRAME_OUT_FILL)
+			out_ok = 0;
+	if (memcmp(in, in_before, width * sizeof(*in)) != 0)
+		input_ok = 0;
+	if (memcmp(bits, bits_before, width - 1u) != 0)
+		input_ok = 0;
+
+	diff_eq_int("Table 3 forced/payload frame bits (%ld)",
+		    memcmp(s->frameBits, frame, width) == 0, 1, tag);
+	diff_eq_int("Table 4 local odd recurrence (%ld)",
+		    memcmp(s->codedBits, coded, width) == 0, 1, tag);
+	diff_eq_int("Table 3/5 parallel sign bits (%ld)",
+		    memcmp(s->signBits, sign, width) == 0, 1, tag);
+	diff_eq_int("Table 3/5 parallel history (%ld)",
+		    memcmp(s->pde.state_, parallel, width) == 0, 1, tag);
+	/* The final local position may be even (not serially encoded). */
+	last_odd = width - 1u;
+	if ((last_odd & 1u) == 0u)
+		last_odd--;
+	diff_eq_int("Table 3/5 serial history (%ld)",
+		    (long)s->oddEncoder.prev_, (long)coded[last_odd], tag);
+	diff_eq_int("Table 5 signed samples and lookahead output (%ld)",
+		    out_ok, 1, tag);
+	diff_eq_int("Table 5 delay-line shift (%ld)",
+		    memcmp(s->delayLine, model, SS_BUF * sizeof(short)) == 0, 1,
+		    tag);
+	diff_eq_int("process leaves inputs usable (%ld)", input_ok, 1, tag);
+	diff_eq_int("process stays within its object slot (%ld)",
+		    memcmp(raw + sizeof(V90SpectralShaper), guard,
+			   SS_SLOT - sizeof(V90SpectralShaper)) == 0, 1, tag);
+}
+
+static void
+run_standard_paths_side(int blob, long *tagp)
+{
+	unsigned sr, id, initial, path;
+	for (sr = 1; sr <= 3u; sr++) {
+		unsigned width = 6u / sr;
+
+		for (id = 0; id <= 3u; id++) {
+			for (initial = 0; initial <= 1u; initial++) {
+				for (path = 0; path < (1u << (id + 1u)); path++) {
+					V90SpectralShaper *s;
+					short model[SS_BUF], in[V90SS_FRAME_BITS];
+					short in_before[V90SS_FRAME_BITS];
+					short out[V90SS_FRAME_BITS], want_out[V90SS_FRAME_BITS];
+					unsigned char bits[V90SS_FRAME_BITS - 1u];
+					unsigned char bits_before[V90SS_FRAME_BITS - 1u];
+					unsigned char frame[V90SS_FRAME_BITS];
+					unsigned char coded[V90SS_FRAME_BITS];
+					unsigned char sign[V90SS_FRAME_BITS];
+					unsigned char parallel[V90SS_FRAME_BITS];
+					unsigned char odd = (unsigned char)initial;
+					unsigned char guard[SS_SLOT - sizeof(V90SpectralShaper)];
+					unsigned char *raw = blob ? ss_b.raw : ss_a.raw;
+					unsigned f, i;
+
+					(*tagp)++;
+					s = standard_setup(blob, id, sr, (int)*tagp);
+					memset(model, 0, sizeof(model));
+					memset(parallel, (int)initial, width);
+					/* A chosen legal history, not a claim about reset(). */
+					s->oddEncoder.prev_ = (unsigned char)initial;
+					memset(s->pde.state_, (int)initial, width);
+					s->state = initial;
+					/* Keep advanceTrellis outside this framing-only oracle. */
+					s->primeFrames = id + 1u;
+					memcpy(guard, raw + sizeof(V90SpectralShaper),
+					       sizeof(guard));
+
+					for (f = 0; f <= id; f++) {
+						unsigned bit = (path >> f) & 1u;
+
+						for (i = 0; i < V90SS_FRAME_BITS; i++) {
+							out[i] = FRAME_OUT_FILL;
+							want_out[i] = FRAME_OUT_FILL;
+						}
+						for (i = 0; i < width; i++) {
+							int v = 1000 + (int)(97u * f + 13u * i
+									       + 41u * sr + 7u * id);
+
+							in[i] = (short)(((f + i) & 1u) ? -v : v);
+						}
+						for (i = 0; i + 1u < width; i++)
+							bits[i] = (unsigned char)(bit
+								^ ((f + i) & 1u));
+						memcpy(in_before, in, width * sizeof(*in));
+						memcpy(bits_before, bits, width - 1u);
+
+						standard_oracle_frame(width, bits, &odd,
+								      parallel, frame, coded, sign);
+						standard_model_process(id, width, model, sign, in,
+								       want_out);
+						if (blob)
+							ref_ss_process(ss_b.raw, in, bits, out);
+						else
+							our_ss_process(ss_a.raw, in, bits, out);
+						standard_check_frame(s, frame, coded, sign,
+								     parallel, model, out, want_out, in,
+								     in_before, bits, bits_before, width,
+								     guard, raw, *tagp);
+					}
+
+					standard_teardown(blob);
+					diff_eq_int("Table 3/5 path has no allocation fault (%ld)",
+						    harness_alloc.live == 0
+						    && harness_alloc.bad_free == 0, 1, *tagp);
+				}
+			}
+		}
+	}
+}
+
+static void
+run_sr2_offset_kat_side(int blob, long *tagp)
+{
+	/* Table 5: the second width-3 frame maps to $3,$4,$5, not global parity. */
+	static const unsigned char want0[3] = { 0u, 1u, 0u };
+	static const unsigned char want1[3] = { 0u, 0u, 1u };
+	static const unsigned char want_six[6] = { 0u, 1u, 0u, 0u, 0u, 1u };
+	static const short in0[3] = { 101, 102, 103 };
+	static const short in1[3] = { 201, 202, 203 };
+	unsigned char bits0[2] = { 1u, 0u }, bits1[2] = { 0u, 1u };
+	unsigned char got[6];
+	short out[3] = { FRAME_OUT_FILL, FRAME_OUT_FILL, FRAME_OUT_FILL };
+	V90SpectralShaper *s;
+
+	(*tagp)++;
+	s = standard_setup(blob, 1u, 2u, (int)*tagp);
+	s->oddEncoder.prev_ = 0;
+	memset(s->pde.state_, 0, 3u);
+	s->primeFrames = 2u; /* exclude the implementation-defined trellis arm */
+	if (blob)
+		ref_ss_process(ss_b.raw, (short *)in0, bits0, out);
+	else
+		our_ss_process(ss_a.raw, (short *)in0, bits0, out);
+	memcpy(got, s->signBits, 3u);
+	diff_eq_int("Sr=2 KAT first Table 5 frame ($0..$2) (%ld)",
+		    memcmp(got, want0, 3u) == 0, 1, *tagp);
+
+	if (blob)
+		ref_ss_process(ss_b.raw, (short *)in1, bits1, out);
+	else
+		our_ss_process(ss_a.raw, (short *)in1, bits1, out);
+	memcpy(got + 3u, s->signBits, 3u);
+	diff_eq_int("Sr=2 KAT second Table 5 frame ($3..$5) (%ld)",
+		    memcmp(got + 3u, want1, 3u) == 0, 1, *tagp);
+	diff_eq_int("Sr=2 KAT full Table 5 sign sequence (%ld)",
+		    memcmp(got, want_six, sizeof(got)) == 0, 1, *tagp);
+	diff_eq_int("Sr=2 KAT emits the first shaping frame (%ld)",
+		    out[0] == -101 && out[1] == 102 && out[2] == -103, 1, *tagp);
+	standard_teardown(blob);
+	diff_eq_int("Sr=2 KAT has no allocation fault (%ld)",
+		    harness_alloc.live == 0 && harness_alloc.bad_free == 0, 1, *tagp);
+}
+
+static int
+run_frame_standard(void)
+{
+	long tag = 0;
+
+	diff_begin("V.90 Tables 3 and 5 spectral-frame geometry");
+	run_standard_paths_side(0, &tag);
+	run_standard_paths_side(1, &tag);
+	run_sr2_offset_kat_side(0, &tag);
+	run_sr2_offset_kat_side(1, &tag);
+	diff_eq_int("180 Table 3/5 transformations per side", tag - 2, 360,
+		    tag);
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -689,6 +979,7 @@ main(void)
 	bad |= run_tables();
 	bad |= run_frameact();
 	bad |= run_action();
+	bad |= run_frame_standard();
 
 	return bad;
 }
