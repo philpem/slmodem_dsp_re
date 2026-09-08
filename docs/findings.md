@@ -122627,3 +122627,43 @@ interop checks, the partial-link comparator self-test and every structural
 gate. Suite line coverage is 49,019/51,416 (95.3%).
 
 (2026-09-08)
+
+## F10255. V.92 CP has correct CRC framing but two more legal-domain numeric defects
+
+The new V.92 oracle builds protocol words before framing them and computes the
+CRC with an independent scalar implementation of the V.34 Figure 14
+`x^16 + x^12 + x^5 + 1` register. It then judges reconstruction and blob in
+separate groups. For Table 23 it crosses CPt and CPu with all six maximum
+constellation indices and both single/paired mask forms: 24 packer cases
+covering all twelve legal extents. For Table 24 it runs all 23 legal CPus
+`drn` values. Every fixed field, reserved bit, start bit, mask word, message
+length, padded length and CRC wire bit comes from those table definitions.
+
+The CRC result is conforming. For every legal Table 23/24 shape, the all-one
+seed, protected information positions, skipped framing positions, final CRC
+location and bit-zero-first wire order agree with the independent oracle. A
+second group hand-builds sixteen bounded Table 30 CPd vectors, crossing all
+eight optional-part presence combinations at two legal lengths. These prove
+the generic `calcCRC`/`evaluateCRC` leaf against CPd framing only; `V92CP` does
+not own Table 30's CPd encoder or parser, and the test says so in its group
+name and source comment.
+
+The payload checks confirm D920 and expose two further defects that a
+reconstruction/blob comparison cannot see. Table 23's unsigned Q3.13 value
+1/256 must be integer 32, but both sides encode 48 because `fltTable_2` omits
+2^-8 and repeats 2^-9; a supplied integer 32 decodes as 1/512. That is D1455.
+More seriously, V.92 clause 3.5 says signed Q formats are two's complement,
+while all four Table 23 Q1.6 coefficients use a sign bit plus `fabs`. Each
+side encodes -1/4 as `0x90` rather than `0xf0`, and decodes a supplied `0xf0`
+as -7/4. That is D1456. Passing expected-departure assertions means those
+violations were observed; it does not call them conforming.
+
+The new groups report 1,664/1,664 checks for the reconstruction and
+1,664/1,664 for the separately invoked blob. The targeted standards suite
+catches 19/19 mutations, and the refreshed pre-existing differential CRC
+suite catches 35/35, with no unusable, equivalent or surviving mutation.
+The complete phase boundary passes 375/375 period differential groups, both
+interop checks, the partial-link comparator self-test and all structural
+gates. Suite line coverage remains 49,019/51,416 lines (95.3%).
+
+(2026-09-08)

@@ -1,0 +1,118 @@
+[
+ {
+  "label": "NOTE: these mutations measure the independent V.92 Tables 23, 24 and 30 framing/CRC oracle and its three explicit Table 23 departure checks. A repaired Q3.13 table, signed-Q1.6 codec or mask decoder is expected to fail because the baseline deliberately records the blob's behavior."
+ },
+ {
+  "label": "sensitivity to the reproduced departure: restore Q3.13's missing 2^-8 weight",
+  "find": "\t0.015625f,\t0.0078125f,\t0.001953125f,\t0.001953125f,",
+  "replace": "\t0.015625f,\t0.0078125f,\t0.00390625f,\t0.001953125f,"
+ },
+ {
+  "label": "sensitivity to the reproduced departure: encode a1 as signed Q1.6 two's complement",
+  "find": "\t\t\tbits[76] = (unsigned char)(flt_14 < 0);\n\t\t\tx = (float)fabs(flt_14);\n\t\t\tp = &bits[75];\n\t\t\tfor (j = 0; j <= 6; j++) {\n\t\t\t\tif (fltTable_1[j] > x) {\n\t\t\t\t\t*p = 0;\n\t\t\t\t} else {\n\t\t\t\t\t*p = 1;\n\t\t\t\t\tx -= fltTable_1[j];\n\t\t\t\t}\n\t\t\t\tp--;\n\t\t\t}",
+  "replace": "\t\t\t{\n\t\t\t\tsigned char q = (signed char)(flt_14 * 64.0f);\n\n\t\t\t\tfor (j = 0; j <= 7; j++) {\n\t\t\t\t\tbits[69 + j] = (unsigned char)(q & 1);\n\t\t\t\t\tq = (signed char)(q >> 1);\n\t\t\t\t}\n\t\t\t}",
+  "fn": "infoToBits"
+ },
+ {
+  "label": "sensitivity to the reproduced departure: decode a1 as signed Q1.6 two's complement",
+  "find": "\t\t\tif (m == 0)\n\t\t\t\tflt_14 = f;\n\t\t\telse\n\t\t\t\tflt_18 = f;",
+  "replace": "\t\t\tif (m == 0) {\n\t\t\t\tint q = 0;\n\n\t\t\t\tfor (j = 0; j <= 7; j++)\n\t\t\t\t\tq |= (bits[69 + j] & 1) << j;\n\t\t\t\tflt_14 = (float)(signed char)q / 64.0f;\n\t\t\t} else {\n\t\t\t\tflt_18 = f;\n\t\t\t}",
+  "fn": "evaluateInfo"
+ },
+ {
+  "label": "the V.34 CRC register starts at zero instead of all ones",
+  "find": "\tfor (i = 0; i <= V92CP_CRC - 1; i++)\n\t\tcrc[i] = 1;",
+  "replace": "\tfor (i = 0; i <= V92CP_CRC - 1; i++)\n\t\tcrc[i] = 0;",
+  "fn": "resetCRC"
+ },
+ {
+  "label": "the protected extent includes the final framing bit",
+  "find": "\tunsigned int n = msgLen - 17;",
+  "replace": "\tunsigned int n = msgLen - 16;",
+  "fn": "calcCRC"
+ },
+ {
+  "label": "the protected extent starts one information bit late",
+  "find": "\tfor (i = 18; i < n; i++) {",
+  "replace": "\tfor (i = 19; i < n; i++) {",
+  "fn": "calcCRC"
+ },
+ {
+  "label": "the CRC clocks every V.92 framing bit",
+  "find": "\t\tif (i % 17 == 0)\n\t\t\ti++;\n",
+  "replace": "",
+  "fn": "calcCRC"
+ },
+ {
+  "label": "the CRC treats sixteen positions as a complete V.92 group",
+  "find": "\t\tif (i % 17 == 0)",
+  "replace": "\t\tif (i % 16 == 0)",
+  "fn": "calcCRC"
+ },
+ {
+  "label": "the CRC feedback ignores the transmitted information bit",
+  "find": "\t\tt = (unsigned char)(crc[0] + bits[i]);",
+  "replace": "\t\tt = (unsigned char)crc[0];",
+  "fn": "calcCRC"
+ },
+ {
+  "label": "the x^12 CRC feedback tap is removed",
+  "find": "\t\tcrc[3] = (unsigned char)((crc[4] + t) & 1);",
+  "replace": "\t\tcrc[3] = crc[4];",
+  "fn": "calcCRC"
+ },
+ {
+  "label": "evaluateCRC reads the received field one position early",
+  "find": "\t\tint d = (int)crc[j] - (int)bits[msgLen - V92CP_CRC + j];",
+  "replace": "\t\tint d = (int)crc[j] - (int)bits[msgLen - V92CP_CRC + j - 1];",
+  "fn": "evaluateCRC"
+ },
+ {
+  "label": "Table 23 and 24 frame sync contains sixteen ones",
+  "find": "\tfor (i = 0; i <= 16; i++)\n\t\tbits[i] = 1;",
+  "replace": "\tfor (i = 0; i <= 15; i++)\n\t\tbits[i] = 1;",
+  "fn": "infoToBits"
+ },
+ {
+  "label": "the first Table 23 and 24 start bit is one",
+  "find": "\tbits[17] = 0;\n\tbits[18] = byte_00;",
+  "replace": "\tbits[17] = 1;\n\tbits[18] = byte_00;",
+  "fn": "infoToBits"
+ },
+ {
+  "label": "the CPu type low bit is always encoded as zero",
+  "find": "\t\tbits[19] = (unsigned char)(b & 1);",
+  "replace": "\t\tbits[19] = 0;",
+  "fn": "infoToBits"
+ },
+ {
+  "label": "the data signalling rate field carries four bits instead of five",
+  "find": "\t\tfor (i = 0; i <= 4; i++) {\n\t\t\tbits[21 + i] = (unsigned char)(t & 1);",
+  "replace": "\t\tfor (i = 0; i <= 3; i++) {\n\t\t\tbits[21 + i] = (unsigned char)(t & 1);",
+  "fn": "infoToBits"
+ },
+ {
+  "label": "the Table 23 codec bit is forced to mu-law",
+  "find": "\t\t\tbits[34] = 0;\n\t\t\tbits[35] = byte_03;",
+  "replace": "\t\t\tbits[34] = 0;\n\t\t\tbits[35] = 0;",
+  "fn": "infoToBits"
+ },
+ {
+  "label": "the Table 23 codec-mask block is emitted when its flag is clear",
+  "find": "\t\t\tif (bits[128] != 0) {",
+  "replace": "\t\t\tif (bits[128] == 0) {",
+  "fn": "infoToBits"
+ },
+ {
+  "label": "the V.92 message length omits the final CRC bit",
+  "find": "\tmsgLen = pos + 17;",
+  "replace": "\tmsgLen = pos + 16;",
+  "fn": "infoToBits"
+ },
+ {
+  "label": "the V.92 padding does not advance past an exact frame boundary",
+  "find": "\tvectorLen = ((unsigned int)word_11c / quantum + 1) * quantum;",
+  "replace": "\tvectorLen = ((unsigned int)word_11c / quantum) * quantum;",
+  "fn": "infoToBits"
+ }
+]

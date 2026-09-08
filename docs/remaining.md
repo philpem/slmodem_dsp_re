@@ -203,12 +203,14 @@ an exact definition; non-exact definitions retain this finite-evidence limit.
   evidence after later test dependencies invalidated its key. F10254 makes
   seven standards suites current: `v8seqstd`, `v8jmstd`, `v8hsrxstd`,
   `v8dpstd`, `v23modemstd`, `fpmtonecfgstd` and `fpmtonetickstd`, together
-  **23/23 caught**. With `v34hstx1`, the ledger is now **8 current and 230
-  stale** of 238 registered suites. This supports only the named clusters and
+  **23/23 caught**. F10255 then refreshes the existing `v92cpcrc` suite at
+  **35/35 caught** and adds `v92cpcrcstd` at **19/19 caught**. With
+  `v34hstx1`, the ledger is now **10 current and 229 stale** of 239 registered
+  suites. This supports only the named clusters and
   not a tree-wide confidence claim. Triage the live
   survivors through issues #1 and #9 before paying for a complete
   9,000-plus-mutation refresh.
-- **Add independent standards oracles — six numbered blocks complete.** F10249 consumes
+- **Add independent standards oracles — seven numbered blocks complete.** F10249 consumes
   every published PCM codeword and linear cell in V.90 Table 1 and reports 256
   reconstruction checks and 256 blob checks separately; both conform. F10250
   moves the literal table into one shared test-only fixture and drives all
@@ -232,8 +234,12 @@ an exact definition; non-exact definitions retain this finite-evidence limit.
   V.21 withdrawal mask, PSTN-access b5 echo, two-octet CJ acceptance and the
   production twelve-second ANSam timeout. The production V.23 path instead
   conforms at a 3.0-second answer tone and 60 ms silence, as do the measured
-  answer-tone frequency and reversal. Continue by reusing the CP fixture
-  shape for V.92; ANSam spectrum, absolute level, transition quality
+  answer-tone frequency and reversal. F10255 covers all CPt/CPu Table 23
+  length shapes, every Table 24 CPus rate and representative instances of all
+  Table 30 optional-part shapes through the generic CRC leaf. CRC framing,
+  extent and bit order conform, while independent payload values confirm
+  D920 and expose D1455/D1456 in the Q3.13 and signed-Q1.6 fields. Continue
+  with the V.90 Jd oracle; ANSam spectrum, absolute level, transition quality
   and duration remain separately scoped. These oracles do not improve
   equivalence to the blob; they answer whether both implementations reproduce
   a defect in it.

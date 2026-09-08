@@ -12832,3 +12832,39 @@ datapump does not.
 **Status:** faithfully reproduced original defect; executable standards
 departure, finding F10254. It is reachable when an answering call receives
 neither terminating signal. Documentation only, for blob fidelity.
+
+## D1455 🐛 V.92 CP omits the 2^-8 weight from its unsigned Q3.13 field
+
+V.92 Table 23 defines bits 52:67 as one unsigned Q3.13 value, and clause 3.5
+defines that notation as thirteen fractional bits. Its sixteen wire weights
+must therefore run consecutively from 2^-13 through 2^2. `fltTable_2` instead
+contains 2^-9 twice and no 2^-8.
+
+The independent Table 23 oracle supplies exactly 1/256. Both reconstruction
+and blob emit integer 48 (`0x0030`) instead of the required 32 (`0x0020`). In
+the other direction, a correctly encoded integer 32 becomes 1/512 instead of
+1/256. A reconstruction/blob round trip hides the error because both halves
+use the same malformed table; the Recommendation-derived values do not.
+
+**Status:** faithfully reproduced original defect; executable standards
+departure, finding F10255. It affects legal CPt/CPu filter-gain values in the
+interval that needs the missing weight. Documentation only, for blob fidelity.
+
+## D1456 🐛 V.92 CP treats signed Q1.6 coefficients as sign-and-magnitude
+
+V.92 clause 3.5 explicitly defines every signed Qa.b field as two's
+complement. Table 23 applies signed Q1.6 to all four spectral-shaping
+coefficients at bits 69:76, 77:84, 86:93 and 94:101. `V92CP::infoToBits`
+instead emits seven magnitude bits from `fabs` followed by a separate sign
+bit; `evaluateInfo` reconstructs the magnitude and negates it when that bit is
+set.
+
+For -1/4, signed Q1.6 requires -16, or `0xf0`. Both reconstruction and blob
+emit the sign-and-magnitude word `0x90`. Conversely, all four fields decode an
+independently supplied `0xf0` as -7/4 rather than -1/4. The executable oracle
+checks every field in both directions and reports each implementation
+separately.
+
+**Status:** faithfully reproduced original defect; executable standards
+departure, finding F10255. Any negative legal shaping coefficient can be
+misrepresented. Documentation only, for blob fidelity.

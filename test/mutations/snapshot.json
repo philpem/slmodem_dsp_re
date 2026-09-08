@@ -9185,7 +9185,7 @@
    }
   },
   "v92cpcrc": {
-   "key": "74151726e7e324f3332bc49a90fe3674200fce16e743d9bdd82accb41a194a6f",
+   "key": "8b2f3c9d6cf0c5dd408ed32e0a955efbf7b41357dd5b7ff364796b17eba48962",
    "summary": "35 mutations: 35 caught (35 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "evaluateCRC does not reset the register first": "caught",
@@ -9223,6 +9223,31 @@
     "the tap at stage three is a plain shift": "caught",
     "the tap at stage three is at stage two": "caught",
     "the verdict is inverted": "caught"
+   }
+  },
+  "v92cpcrcstd": {
+   "key": "b368d87b51c70786bd9eb3aa8687368e47d7ee560c9d1cb130e3de27cc6c3019",
+   "summary": "19 mutations: 19 caught (19 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "Table 23 and 24 frame sync contains sixteen ones": "caught",
+    "evaluateCRC reads the received field one position early": "caught",
+    "sensitivity to the reproduced departure: decode a1 as signed Q1.6 two's complement": "caught",
+    "sensitivity to the reproduced departure: encode a1 as signed Q1.6 two's complement": "caught",
+    "sensitivity to the reproduced departure: restore Q3.13's missing 2^-8 weight": "caught",
+    "the CPu type low bit is always encoded as zero": "caught",
+    "the CRC clocks every V.92 framing bit": "caught",
+    "the CRC feedback ignores the transmitted information bit": "caught",
+    "the CRC treats sixteen positions as a complete V.92 group": "caught",
+    "the Table 23 codec bit is forced to mu-law": "caught",
+    "the Table 23 codec-mask block is emitted when its flag is clear": "caught",
+    "the V.34 CRC register starts at zero instead of all ones": "caught",
+    "the V.92 message length omits the final CRC bit": "caught",
+    "the V.92 padding does not advance past an exact frame boundary": "caught",
+    "the data signalling rate field carries four bits instead of five": "caught",
+    "the first Table 23 and 24 start bit is one": "caught",
+    "the protected extent includes the final framing bit": "caught",
+    "the protected extent starts one information bit late": "caught",
+    "the x^12 CRC feedback tap is removed": "caught"
    }
   },
   "v92cpeval": {
