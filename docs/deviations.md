@@ -4372,11 +4372,22 @@ and not fixed for the other six rates `V34SetupModulator` handles.
 
 ---
 
-## D156 🐛 💤 the ANSam phase-reversal detector's window is wider than the spacing real ANSam produces, so its report has never fired
+## D156 ❌ RETRACTED — the ANSam phase-reversal detector can fire on real ANSam
 
-*Task #98 sweep, from fix list §8.15. **Reachability: CANNOT FIRE.** Status: CONFIRMED. Fix class: documentation only.*
+*Task #98 sweep, from fix list §8.15. Retracted by finding F10251.*
 
-**Finding F169.** Observed never to fire in any test.
+The original evidence was an invalid short fixture: its 4096 samples were
+less than the generator's normal 4320-sample reversal interval, its counter
+was planted near the boundary, and the detector verdict was never asserted.
+The conclusion that real ANSam reversals were “far closer” than the detector's
+window had the relationship backwards.
+
+F10251 replaces that inference with legal-shape, independently synthesized
+2100 Hz, 15 Hz, 20%-AM signals. Both the reconstruction and blob accept the
+450 ms nominal interval, and a clean native generator stream also reaches the
+detector. They miss the legal 425 and 475 ms transmitter endpoints, which is
+an interoperability-coverage limitation rather than proof that the detector
+can never fire. The test now asserts all three outcomes.
 
 ---
 
@@ -12740,3 +12751,31 @@ them -- and `t_class1txvmi.c` drives all three against `ref_init_vmi_*tx`.
 **Status:** ours, not the author's, and marked in `class1tx.h`. The pass
 that writes `_init_transmitter` should take all three back to `static` in
 the same commit, exactly as D1081 prescribes for the RX trio.
+
+## D1451 🐛 the V.8 ANSam transmitter's 15.234375 Hz envelope is outside the 15 ± 0.1 Hz requirement
+
+ITU-T V.8 (02/98), clause 7.2 specifies a 15 ± 0.1 Hz sinusoidal amplitude
+modulation. The original object and reconstruction both initialize the
+14-bit envelope accumulator to a step of 26 at 9600 samples/s:
+
+```
+26 × 9600 / 16384 = 15.234375 Hz
+```
+
+That is above the 15.1 Hz limit. This is not a one-unit transcription error:
+step 25 produces 14.6484375 Hz, below the 14.9 Hz limit, so no integer step in
+this accumulator can conform. `t_v8sig` judges reconstruction and blob
+separately against the literal frequency bounds and records the expected
+departure for both; it also asserts that step 25 fails, keeping the structural
+reason executable.
+
+The surrounding transmitter parameters conform in the same oracle: the
+carrier is exactly 2100 Hz, controlled calls through each production generator
+put the envelope extrema inside 0.8 ± 0.01 and 1.2 ± 0.01 of average, and the
+phase reversal is exactly 450 ms. The 15.234375 Hz behavior remains unchanged
+because the reconstruction's first obligation is fidelity to the blob. A
+conforming alternative would need a finer or fractional envelope accumulator,
+not merely a different immediate.
+
+**Status:** faithfully reproduced original defect; executable standards
+departure, finding F10251.

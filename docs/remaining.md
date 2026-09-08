@@ -193,22 +193,30 @@ an exact definition; non-exact definitions retain this finite-evidence limit.
   caught and no caught verdict regressed. The remaining datapump loop-swap is
   a documented conditional-equivalence candidate, still conservatively
   counted as uncaught. These seven
-  entries remain historical evidence. F10250's shared Table 1 fixture changed
-  the mutation key; its focused refresh makes `v90p3mod`, `v90mapper` and
-  `v90cpower` current at **77/77 caught**, while the other 227 registered suites
-  are now deliberately stale. This supports only the named clusters and not a
+  entries remain historical evidence. F10250's three-suite 77/77 result is
+  retained as historical evidence. F10251 subsequently changes shared V.8
+  source and its public structure names; its focused refresh makes `v8sig`
+  current at **8/8 caught**, while the other 229 registered suites are now
+  deliberately stale. This supports only the named clusters and not a
   tree-wide confidence claim. Triage the live
   survivors through issues #1 and #9 before paying for a complete
   9,000-plus-mutation refresh.
-- **Add independent standards oracles — first block complete.** F10249 consumes
+- **Add independent standards oracles — two blocks complete.** F10249 consumes
   every published PCM codeword and linear cell in V.90 Table 1 and reports 256
   reconstruction checks and 256 blob checks separately; both conform. F10250
   moves the literal table into one shared test-only fixture and drives all
   three inlined Ucode-mask sites through their production methods: 2,048
   output-vs-table assertions pass, split between reconstruction and blob.
-  Continue with V.8 ANSam, V.34 Table 17 and the V.90 CP CRC extent. These do
-  not improve equivalence to the blob; they answer the separate and important
-  question of whether both implementations reproduce a defect in the blob.
+  F10251 then judges V.8 ANSam against clause 7.2 with separate reconstruction
+  and blob reports. Carrier, controlled production-envelope extrema, reversal
+  timing and reversal-disable behavior conform; both sides faithfully retain
+  the original's 15.234375 Hz envelope outside the 15 ± 0.1 Hz requirement.
+  Independent legal-shape detector stimuli accept 450 ms but miss the allowed
+  425 and 475 ms endpoints, recorded as interoperability coverage rather than
+  a receiver-conformance verdict. Continue with V.34 Table 17 and the V.90 CP
+  CRC extent; ANSam spectrum, absolute level, transition quality and duration
+  remain separately scoped. These oracles do not improve equivalence to the
+  blob; they answer whether both implementations reproduce a defect in it.
 
 ## Phase ledger
 

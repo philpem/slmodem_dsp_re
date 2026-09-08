@@ -23,11 +23,11 @@
 void
 v8_ansaminit(struct v8 *v)
 {
-	v->tone.mod_phase = 0;
-	v->tone.carrier_step = 0x1a;
-	v->tone.mod_step = 0xe00;
-	v->tone.reversal_count = 0;
 	v->tone.carrier_phase = 0;
+	v->tone.envelope_step = 0x1a;
+	v->tone.carrier_step = 0xe00;
+	v->tone.reversal_count = 0;
+	v->tone.envelope_phase = 0;
 	v->tone.amplitude = v8_mpyint(0x3e80, v->tx_gain);
 	v->tone.reversal_enable = 1;
 }
@@ -261,7 +261,7 @@ v8_agcadapt(struct v8 *v)
  * Four samples of ANSam.
  *
  * Two phase accumulators: the carrier, and a slower one that modulates its
- * amplitude by five percent either way.  The amplitude itself is negated
+ * amplitude by twenty percent either way.  The amplitude itself is negated
  * every 1080 blocks, and that inversion is the whole point -- it is what
  * tells a listening modem this is ANSam and not a bare answer tone.
  *
@@ -275,26 +275,26 @@ v8_ansamgenerate(struct v8 *v, short *out)
 	int i;
 
 	for (i = 0; i < V8_QUEUE_BLOCK; i++) {
+		unsigned envelope;
 		unsigned carrier;
-		unsigned modulator;
 		short depth;
 		short level;
+
+		envelope = ((unsigned)(unsigned short)t->envelope_phase
+			    + (unsigned short)t->envelope_step) & 0x3fff;
+		t->envelope_phase = (short)envelope;
 
 		carrier = ((unsigned)(unsigned short)t->carrier_phase
 			   + (unsigned short)t->carrier_step) & 0x3fff;
 		t->carrier_phase = (short)carrier;
 
-		modulator = ((unsigned)(unsigned short)t->mod_phase
-			     + (unsigned short)t->mod_step) & 0x3fff;
-		t->mod_phase = (short)modulator;
-
 		depth = v8_mpyint(V8_ANSAM_DEPTH,
-				  v8_cosread((unsigned char)((carrier + 0x20)
+				  v8_cosread((unsigned char)((envelope + 0x20)
 							     >> 6)));
 		level = v8_mpyint((short)(depth + V8_ANSAM_UNITY), t->amplitude);
 
 		out[i] = v8_fsktxfilter(v,
-			v8_mpyint(v8_cosread((unsigned char)((t->mod_phase + 0x20)
+			v8_mpyint(v8_cosread((unsigned char)((t->carrier_phase + 0x20)
 							     >> 6)), level));
 	}
 

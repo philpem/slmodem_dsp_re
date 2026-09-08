@@ -11,6 +11,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
+#include <math.h>
 
 #include "harness.h"
 #include "dsplib/debug.h"
@@ -193,7 +194,11 @@ t_sig_trace(void)
 			}
 		}
 
-		/* And a stretch of ANSam, long enough for the reversals. */
+		/*
+		 * A 4096-sample ANSam stretch.  That is shorter than the normal
+		 * 4320-sample (450-ms) reversal interval; seeding the counter near
+		 * its boundary makes this trace contain one reversal, not several.
+		 */
 		fill(&obj_a, sizeof(obj_a), 5000u);
 		ref_v8_txinit(&obj_a);
 		ref_v8_ansaminit(&obj_a);
@@ -209,13 +214,10 @@ t_sig_trace(void)
 		ref_v8_phase_rev_init(&pb);
 		for (blk = 0; blk < 4096; blk += 64) {
 			/*
-			 * ANSam's own reversals come far too close together to
-			 * pass the spacing test -- the sweep above never sees
-			 * a detection at all, which is why it does not assert
-			 * one.  So the run is placed where a real ANSam would
-			 * have taken it after four thousand steady samples:
-			 * 4200 maps to a spacing of 437, inside the window,
-			 * and both sides are placed there alike.
+			 * This trace is deliberately a diagnostic-state probe, not a
+			 * claim that its one generated reversal can establish ANSam.
+			 * The manual run/reversal state puts the next correlation event at
+			 * a 437-ms accepted spacing, so the level-2 diagnostic is covered.
 			 */
 			pa.run = pb.run = 4200;
 			pa.reversals = pb.reversals = 2;
@@ -266,12 +268,257 @@ t_sig_trace(void)
 	return diff_end();
 }
 
+/*
+ * The V.8 ANSam oracle deliberately starts each side from a clean, usable
+ * transmitter.  `v8_ansamgenerate` shares the V.21 shaping FIR, so merely
+ * zeroing the object would turn a perfectly good oscillator into silence:
+ * V8_V21_Init supplies that FIR's taps.  The 0x4000 gain is Q14 unity.
+ */
+static void
+ansam_clean_ref(struct v8 *v)
+{
+	memset(v, 0, sizeof(*v));
+	v->tx_gain = 0x4000;
+	ref_v8_txinit(v);
+	ref_v8_V21_Init(v, 1, 0);
+	ref_v8_ansaminit(v);
+}
+
+static void
+ansam_clean_ours(struct v8 *v)
+{
+	memset(v, 0, sizeof(*v));
+	v->tx_gain = 0x4000;
+	v8_txinit(v);
+	v8_V21_Init(v, 1, 0);
+	v8_ansaminit(v);
+}
+
+static void
+ansam_phase_stimulus(short *samples, int spacing)
+{
+	int i, nsamples = 5 * spacing;
+	const double pi = 3.14159265358979323846;
+
+	/*
+	 * An independently synthesized V.8 ANSam waveform: 2100-Hz carrier,
+	 * 15-Hz, 20-percent AM and a 180-degree flip after each requested
+	 * interval.  It shares neither the reconstruction's table nor its
+	 * fixed-point arithmetic, and five intervals leave four reversals for the
+	 * detector after its correlation warm-up.
+	 */
+	for (i = 0; i < nsamples; i++) {
+		double carrier = sin(2.0 * pi * 2100.0 * (double)i / 9600.0);
+		double envelope = 1.0 + 0.2 * sin(2.0 * pi * 15.0
+							 * (double)i / 9600.0);
+		double phase = ((i / spacing) & 1) ? -1.0 : 1.0;
+
+		samples[i] = (short)(phase * 12000.0 * envelope * carrier);
+	}
+}
+
+/*
+ * Isolate the production envelope multiply from the carrier and FIR.  A
+ * stationary carrier at cos(0) and a single current-sample FIR tap leave one
+ * common scale factor, so the three returned levels can be judged directly
+ * against V.8's relative 0.8/1.0/1.2 envelope limits.  This calls each
+ * implementation's real generator; it does not infer the blob's depth from
+ * the reconstruction's V8_ANSAM_DEPTH macro.
+ */
+static int
+ansam_level_ref(short envelope_phase)
+{
+	struct v8 v;
+	short out[V8_QUEUE_BLOCK];
+
+	ansam_clean_ref(&v);
+	memset(v.v21_taps, 0, sizeof(v.v21_taps));
+	memset(v.rx_scratch, 0, sizeof(v.rx_scratch));
+	v.v21_taps[V8_V21_TAPS - 1] = 0x4000;
+	v.tone.envelope_phase = envelope_phase;
+	v.tone.envelope_step = 0;
+	v.tone.carrier_phase = 0;
+	v.tone.carrier_step = 0;
+	v.tone.reversal_enable = 0;
+	ref_v8_ansamgenerate(&v, out);
+	return out[0];
+}
+
+static int
+ansam_level_ours(short envelope_phase)
+{
+	struct v8 v;
+	short out[V8_QUEUE_BLOCK];
+
+	ansam_clean_ours(&v);
+	memset(v.v21_taps, 0, sizeof(v.v21_taps));
+	memset(v.rx_scratch, 0, sizeof(v.rx_scratch));
+	v.v21_taps[V8_V21_TAPS - 1] = 0x4000;
+	v.tone.envelope_phase = envelope_phase;
+	v.tone.envelope_step = 0;
+	v.tone.carrier_phase = 0;
+	v.tone.carrier_step = 0;
+	v.tone.reversal_enable = 0;
+	v8_ansamgenerate(&v, out);
+	return out[0];
+}
+
+static int
+ansam_detect_ref(const short *samples, int nsamples)
+{
+	struct v8_phase_rev pr;
+	int i;
+
+	memset(&pr, 0, sizeof(pr));
+	ref_v8_phase_rev_init(&pr);
+	for (i = 0; i < nsamples; i += 64) {
+		int n = nsamples - i;
+
+		if (n > 64)
+			n = 64;
+		ref_v8_phase_rev_detect(&pr, samples + i, (short)n);
+	}
+	return pr.detected;
+}
+
+static int
+ansam_detect_ours(const short *samples, int nsamples)
+{
+	struct v8_phase_rev pr;
+	int i;
+
+	memset(&pr, 0, sizeof(pr));
+	v8_phase_rev_init(&pr);
+	for (i = 0; i < nsamples; i += 64) {
+		int n = nsamples - i;
+
+		if (n > 64)
+			n = 64;
+		v8_phase_rev_detect(&pr, samples + i, (short)n);
+	}
+	return pr.detected;
+}
+
+static int
+t_ansam_standard(void)
+{
+	static short stimulus[5 * 4560];
+	short out[V8_QUEUE_BLOCK];
+	static const int timing_ms[3] = { 425, 450, 475 };
+	int i, block, lo, average, hi;
+	int rc = 0;
+
+	diff_begin("V.8 ANSam/reconstruction");
+	ansam_clean_ours(&obj_b);
+	diff_eq_int("the carrier is 2100 Hz", obj_b.tone.carrier_step * 9600,
+		    2100 * 16384, 0);
+	diff_eq_int("the envelope step is the blob's exact value",
+		    obj_b.tone.envelope_step, 0x1a, 0);
+	diff_eq_int("known departure: 15.234-Hz envelope misses 14.9..15.1 Hz",
+		    (long)obj_b.tone.envelope_step * 9600 * 10 >= 149 * 16384
+		    && (long)obj_b.tone.envelope_step * 9600 * 10 <= 151 * 16384,
+		    0, 0);
+	diff_eq_int("the adjacent 14.648-Hz step also misses the tolerance",
+		    25L * 9600 * 10 >= 149 * 16384
+		    && 25L * 9600 * 10 <= 151 * 16384, 0, 25);
+	lo = ansam_level_ours(0x2000);
+	average = ansam_level_ours(0x1000);
+	hi = ansam_level_ours(0);
+	diff_eq_int("lower envelope is within 0.8 +/- 0.01",
+		    lo * 100 >= average * 79 && lo * 100 <= average * 81, 1, lo);
+	diff_eq_int("upper envelope is within 1.2 +/- 0.01",
+		    hi * 100 >= average * 119 && hi * 100 <= average * 121, 1, hi);
+	diff_eq_int("envelope extrema surround the average",
+		    lo < average && average < hi, 1, average);
+	diff_eq_int("the configured amplitude is unity-scaled", obj_b.tone.amplitude,
+		    16000, 0);
+	diff_eq_int("the reversal period is 450 ms",
+		    0x438 * V8_QUEUE_BLOCK * 1000, 450 * 9600, 0);
+	for (block = 0; block < 0x438 - 1; block++)
+		v8_ansamgenerate(&obj_b, out);
+	diff_eq_int("no early phase reversal", obj_b.tone.amplitude, 16000, 0);
+	diff_eq_int("the reversal counter reaches its final block",
+		    obj_b.tone.reversal_count, 0x437, 0);
+	v8_ansamgenerate(&obj_b, out);
+	diff_eq_int("the phase reverses at 450 ms", obj_b.tone.amplitude,
+		    -16000, 0);
+	diff_eq_int("the reversal counter wraps", obj_b.tone.reversal_count, 0, 0);
+	obj_b.tone.reversal_enable = 0;
+	for (block = 0; block < V8_ANSAM_REVERSAL; block++)
+		v8_ansamgenerate(&obj_b, out);
+	diff_eq_int("disabled phase reversals leave the polarity unchanged",
+		    obj_b.tone.amplitude, -16000, 0);
+	for (i = 0; i < 3; i++) {
+		int spacing = timing_ms[i] * 9600 / 1000;
+
+		ansam_phase_stimulus(stimulus, spacing);
+		diff_eq_int("independent %ld-ms detector stimulus",
+			    ansam_detect_ours(stimulus, 5 * spacing),
+			    timing_ms[i] == 450, timing_ms[i]);
+	}
+	rc |= diff_end();
+
+	diff_begin("V.8 ANSam/blob");
+	ansam_clean_ref(&obj_a);
+	diff_eq_int("the carrier is 2100 Hz", obj_a.tone.carrier_step * 9600,
+		    2100 * 16384, 0);
+	diff_eq_int("the envelope step is the blob's exact value",
+		    obj_a.tone.envelope_step, 0x1a, 0);
+	diff_eq_int("known departure: 15.234-Hz envelope misses 14.9..15.1 Hz",
+		    (long)obj_a.tone.envelope_step * 9600 * 10 >= 149 * 16384
+		    && (long)obj_a.tone.envelope_step * 9600 * 10 <= 151 * 16384,
+		    0, 0);
+	diff_eq_int("the adjacent 14.648-Hz step also misses the tolerance",
+		    25L * 9600 * 10 >= 149 * 16384
+		    && 25L * 9600 * 10 <= 151 * 16384, 0, 25);
+	lo = ansam_level_ref(0x2000);
+	average = ansam_level_ref(0x1000);
+	hi = ansam_level_ref(0);
+	diff_eq_int("lower envelope is within 0.8 +/- 0.01",
+		    lo * 100 >= average * 79 && lo * 100 <= average * 81, 1, lo);
+	diff_eq_int("upper envelope is within 1.2 +/- 0.01",
+		    hi * 100 >= average * 119 && hi * 100 <= average * 121, 1, hi);
+	diff_eq_int("envelope extrema surround the average",
+		    lo < average && average < hi, 1, average);
+	diff_eq_int("the configured amplitude is unity-scaled", obj_a.tone.amplitude,
+		    16000, 0);
+	diff_eq_int("the reversal period is 450 ms",
+		    0x438 * V8_QUEUE_BLOCK * 1000, 450 * 9600, 0);
+	for (block = 0; block < 0x438 - 1; block++)
+		ref_v8_ansamgenerate(&obj_a, out);
+	diff_eq_int("no early phase reversal", obj_a.tone.amplitude, 16000, 0);
+	diff_eq_int("the reversal counter reaches its final block",
+		    obj_a.tone.reversal_count, 0x437, 0);
+	ref_v8_ansamgenerate(&obj_a, out);
+	diff_eq_int("the phase reverses at 450 ms", obj_a.tone.amplitude,
+		    -16000, 0);
+	diff_eq_int("the reversal counter wraps", obj_a.tone.reversal_count, 0, 0);
+	obj_a.tone.reversal_enable = 0;
+	for (block = 0; block < V8_ANSAM_REVERSAL; block++)
+		ref_v8_ansamgenerate(&obj_a, out);
+	diff_eq_int("disabled phase reversals leave the polarity unchanged",
+		    obj_a.tone.amplitude, -16000, 0);
+	for (i = 0; i < 3; i++) {
+		int spacing = timing_ms[i] * 9600 / 1000;
+
+		ansam_phase_stimulus(stimulus, spacing);
+		diff_eq_int("independent %ld-ms detector stimulus",
+			    ansam_detect_ref(stimulus, 5 * spacing),
+			    timing_ms[i] == 450, timing_ms[i]);
+	}
+	rc |= diff_end();
+
+	return rc;
+}
+
 int
 main(void)
 {
 	int rc = 0;
 	int k, i, n;
 	long moved = 0;
+
+	rc |= t_ansam_standard();
 
 	diff_begin("v8_ansaminit");
 	for (k = 0; k < 8; k++) {
@@ -586,8 +833,10 @@ main(void)
 	rc |= diff_end();
 
 	/*
-	 * The detector, fed real ANSam: the generator's own output, so the
-	 * signal has the phase reversals the detector exists to find.
+	 * The detector, fed generated ANSam.  This 4096-sample capture is shorter
+	 * than one normal reversal interval; its near-boundary seed makes one
+	 * reversal observable for the differential state comparison, not a full
+	 * two-reversal standards verdict.
 	 */
 	diff_begin("v8_phase_rev_detect");
 	{
@@ -598,13 +847,13 @@ main(void)
 		for (k = 0; k < 6; k++) {
 			int blk;
 
-			/* Generate a stretch of ANSam into `air`. */
+			/* Generate one near-boundary ANSam reversal into `air`. */
 			fill(&obj_a, sizeof(obj_a), 5000u + k);
 			ref_v8_txinit(&obj_a);
 			ref_v8_ansaminit(&obj_a);
 			obj_a.tone.amplitude = (short)(6000 + k * 400);
 			obj_a.tone.reversal_enable = 1;
-			/* Start near a reversal so several happen. */
+			/* Start near a reversal so this short capture contains one. */
 			obj_a.tone.reversal_count = (short)(0x430 - k);
 			for (blk = 0; blk < 1024; blk++)
 				ref_v8_ansamgenerate(&obj_a, air + blk * 4);

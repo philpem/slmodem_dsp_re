@@ -197,17 +197,18 @@ struct v8_tone {
 	/*
 	 * ANSam: a 2100 Hz carrier (`carrier_phase`/`carrier_step`) whose
 	 * amplitude (`amplitude`) is modulated by a slower oscillator
-	 * (`mod_phase`/`mod_step`) and negated every `reversal_count` reaches
+	 * (`envelope_phase`/`envelope_step`) and negated every
+	 * `reversal_count` reaches
 	 * V8_ANSAM_REVERSAL blocks -- the periodic phase reversal that is
 	 * ITU-T V.8's whole reason for ANSam over a plain answer tone, and
 	 * confirmed by V8_ANSAM_REVERSAL*4 samples at 9600 Hz landing on the
 	 * standard's 450 ms.  `reversal_enable` gates the counter so a caller
 	 * can have the tone without the reversals.
 	 */
-	short	carrier_phase;			/* +0x00 */
-	short	mod_phase;			/* +0x02 */
-	short	carrier_step;	/* 0x1a          +0x04 */
-	short	mod_step;	/* 0xe00         +0x06 */
+	short	envelope_phase;			/* +0x00 */
+	short	carrier_phase;			/* +0x02 */
+	short	envelope_step;	/* 0x1a          +0x04 */
+	short	carrier_step;	/* 0xe00         +0x06 */
 	short	amplitude;	/* scaled        +0x08 */
 	short	reversal_count;			/* +0x0a */
 	short	f0c;				/* +0x0c */
@@ -1090,7 +1091,7 @@ int v8_handshak_demod(struct v8 *v);
 #define V8_HS_TAKEN_TX	0x33	/* side == 1, op_mode == 1 */
 
 #define V8_ANSAM_REVERSAL	0x438
-#define V8_ANSAM_DEPTH		0xccd	/* Q14: 0.05 */
+#define V8_ANSAM_DEPTH		0xccd	/* Q14: 0.20 */
 #define V8_ANSAM_UNITY		0x4000	/* Q14: 1.0  */
 
 /**
