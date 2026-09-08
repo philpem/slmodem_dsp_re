@@ -121940,3 +121940,61 @@ behaviorally equivalent but nonexact schedule would make the byte-exact goal
 worse rather than advance it.  The search therefore bounds this ordinary
 source domain negatively and leaves both resets for a future lever supported
 by new object evidence. (2026-09-07)
+
+## F10240. The first partial-link comparator exposes input order as a first-order limit and separates faithful from fixed builds
+
+Function-local identity could not answer the final-object question. F10229
+already supplied the counterexample: a Scrambler constructor body could be
+made exact in more defining copies while moving six partially-linked symbols
+away from the blob. `tools/objsnap.sh` could only hash six named sections and
+could neither locate a difference nor distinguish an absent section from an
+empty one. It was useful as a bystander check, not as an aggregate objective.
+
+`tools/toolchain/partialcmp.py` now compares two ELF32 little-endian i386
+relocatable objects over five independent dimensions: ordered allocated
+section descriptors (plus `.note.GNU-stack` policy), positioned PROGBITS
+contents, NOBITS sizes, relocation records normalized by section, offset,
+type and target name, and defined-symbol records/order. REL addends remain in
+the compared bytes rather than being masked. Debug sections, string-table
+packing and file offsets do not decide the semantic verdict; raw-file equality
+is reported separately. Every printed ratio has its reference denominator,
+`--json` records a branch experiment, and `--require-exact` supplies the final
+strict verdict while the default remains a non-failing census.
+
+The source build needed a distinction that the earlier plan had missed.
+`period_inner.sh` defines `DSPLIB_REPRODUCE_BUGS`, because differential tests
+must reproduce D4, but the ordinary `period.mk` identity tree does not. A
+partial-link candidate from that tree therefore cannot equal the blob even if
+all recoverable source and order questions close. `make tc-repro` now builds a
+separate 272-object GCC 3.4.2 tree with the compatibility define; `make
+partial-link` consumes its complete manifest in order and invokes binutils
+2.15 inside `dsplibs-tc342`. The candidate lives outside the object-globbing
+directory so it cannot become a 273rd compiler output on a later census.
+
+The first faithful `make partial-compare` run completes all 272 manifest
+entries and measures **92 reference compared sections versus 120 candidate**.
+All 92 reference section names exist in the candidate; **57 section contents
+are already exact**, and **51,072/943,398** allocated reference bytes agree at
+the same position. NOBITS is 2,836 versus 2,352 bytes. Relocations are
+**266/18,317** exact records, with 17,277 candidate records; defined symbols
+are **175/2,907** exact records, with 2,981 candidate records. The first FILE
+symbol is `dp_init.c` in the blob and `call.c` in the alphabetically ordered
+reconstruction manifest. Thus input order is not a speculative future lever:
+it is the first observed aggregate disagreement.
+
+The detector was made to fail before its clean result was trusted. Its real
+ELF fixture accepts an exact copy and separately detects planted text, data,
+NOBITS-size, executable-stack-policy, relocation-target, inline-addend and
+symbol-order changes: **8 comparisons, 8 pass**, over 17 allocated bytes, one
+relocation and six defined symbols. Comparing the real blob with itself under
+`--require-exact` reports 943,398/943,398 bytes, 18,317/18,317 relocations and
+2,907/2,907 symbols exact. The self-test is now a cheap `make phase` tier. No
+reconstruction source or behavioural test changes in this finding.
+
+The completed cold `make phase J=4` gate passes: the period compiler reports
+**374/374 differential groups**, the 64-bit and interoperability tiers pass,
+and the coverage census reports 48,943/51,416 source lines (95.2%) with the
+coverage and debug-site checks green. This includes the comparator's planted
+self-test; the deliberately isolated modern-compiler NaN mismatch remains an
+allowed diagnostic while `make period` is authoritative for that case.
+(2026-09-08)

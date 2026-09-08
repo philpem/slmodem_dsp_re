@@ -23,8 +23,8 @@ read F10191/F10192 (and Waves 13-14 below) before trusting any tool output
 that disagrees, per CLAUDE.md's rule that the tool is checked, not
 repeated from a comment.
 
-The current period-compiler identity baseline is **810 of 1,852 functions
-positionally byte-exact (43.7%)**. A further 53 are instruction-equivalent
+The current period-compiler identity result is **811 of 1,852 functions
+positionally byte-exact (43.8%)**. A further 52 are instruction-equivalent
 after consistent register renaming. The tool's displayed grade-0-or-1 total
 is 867 (46.8%), including four conservatively unresolved anonymous
 ordinary-rodata tables; the tool also reports no differing named relocation
@@ -35,8 +35,9 @@ stricter baseline adds seven real exact functions but removes three earlier
 false claims whose relocation addends had never been compared; F10208 records
 the first Phase-4 convergence batch. F10237 records the fresh aggregate
 checkpoint, with 35 exact names added and none lost since that batch. The
-full phase gate passes and the complete 810-name set is now the enforced
-ratchet baseline. Phase 4 remains in progress.
+full phase gate passes and the complete 810-name set is the enforced ratchet
+floor; one newer exact function is above that floor. Phase 4 remains in
+progress.
 
 This is a function-level `.text` measurement, not yet proof that the
 partially-linked object is byte-for-byte identical. The final objective also
@@ -71,10 +72,91 @@ code-generation improvement may not weaken the differential evidence.
 6. **Partition the size mismatches.** Split the 899 `SIZE` functions by
    instruction delta, source-shape family and translation unit, taking the
    smallest constrained domains before the large algorithmic cases.
-7. **Converge the partially-linked object.** Add section/data/relocation/layout
-   comparison alongside function identity, close the eight direct-test naming
-   gaps where a real observable exists, and keep `make period` authoritative
-   throughout.
+7. **Converge the partially-linked object.** The first
+   section/data/relocation/layout comparator now exists alongside function
+   identity; use its independent dimensions to recover input and definition
+   order, close direct-test naming gaps where a real observable exists, and
+   keep `make period` authoritative throughout.
+
+### Immediate execution order (2026-09-08)
+
+The partially-linked objective changes the order of the remaining refinement
+work. A locally exact function is not progress if it moves the aggregate's
+sections, symbols or padding farther away, and byte identity is not a substitute
+for behavioural evidence.
+
+1. **Measure the aggregate first.** `make partial-compare` partially links all
+   272 faithful GCC 3.4.2 objects with binutils 2.15 in manifest order and
+   compares that candidate with the blob. It reports allocated section
+   metadata and order, positionally equal code/data bytes, NOBITS size,
+   normalized relocations, defined-symbol records and symbol order. The
+   planted `make partial-compare-selftest` proves that code, data, relocation
+   target and symbol-order changes all fire. The report is diagnostic while
+   the objects differ; JSON snapshots from `partialcmp.py --json` are the
+   before/after record for an ordering experiment. The first faithful census
+   compares 92 reference sections with 120 candidate sections: 57 sections
+   already have exact contents, 51,072 of 943,398 allocated reference bytes
+   agree at the same position, 266 of 18,317 relocation records are exact,
+   and 175 of 2,907 defined-symbol records are exact. The first FILE-symbol
+   mismatch is `dp_init.c` against the reconstruction's alphabetically first
+   `call.c`, direct evidence that input order is already a first-order limit.
+2. **Audit behavioural confidence before buying more byte matches.** Separate
+   functions with no direct differential observable, shallow dispatcher-arm
+   coverage, stale or absent mutation evidence, or a missing independent
+   standards oracle. Work the highest-risk reachable groups before returning
+   to compiler archaeology. Exact object code is conclusive evidence for an
+   exact definition, but does not validate the other 1,041 definitions.
+3. **Resume constrained same-size work in paired families.** The first fresh
+   candidates are the two `V92CP` constructor clones and the related
+   `ModDataV27`/`ModDataV29` pair. Do not reopen the recently bounded T30,
+   V22FP, V92 E2u, voice-duplex, FDSP delete, Scrambler, V90Mapper-reset, SDM
+   initializer or fax teardown domains without new evidence.
+4. **Then use the 52 REGALLOC functions as emission-order probes.** Investigate
+   definition and explicit-instantiation order per translation unit, but retain
+   a permutation only when the complete function exact-set does not regress,
+   `make period` remains green, and the partial-link report improves or stays
+   structurally identical. Establish a ratchet only after the useful aggregate
+   dimensions and their acceptable trade-offs have been measured; a premature
+   scalar score would hide one kind of regression behind another.
+
+### Behavioural-confidence choices
+
+“Phase 1” is a historical content phase, not a universal confidence grade. A
+useful line to bring a definition up to is: period-compiler differential
+agreement on meaningful reachable inputs; assertions over outputs, persistent
+state and guarded buffers; an explicit non-vacuity count; and current mutation
+evidence for the claims the fixture makes. Independent Recommendation-derived
+answers are a further oracle for whether the blob itself is correct. On that
+definition, the choices are:
+
+- **V.90 receive-chain composition — recommended first.** F7513 records that a
+  deeper, legal-looking `V90Demodulator::progress` fixture reached
+  `V90Phase3Demodulator::getDecision` and failed 155 of 1,868 period checks. The
+  wiring was reverted, leaving the present fixture green but limited to three
+  of 31 progress events, with 74 of its 100 deliberately retained mutations
+  uncaught. First reproduce and minimize the old disagreement, proving the
+  fixture legal before assigning blame; then add one naturally generated event
+  from each major receive phase rather than planting state overwritten by the
+  equalizer prologue.
+- **V.90 phase-4 completed-message paths.** Build CRC-valid CP and MP frames for
+  `getV90Decision`/`getV92Decision`. This is a bounded way to cover the eleven
+  ordinary fixture gaps already named by the mutation file, including answers
+  that the present one-bit-from-complete fixture cannot produce.
+- **Small direct-attribution gaps.** The generated coverage report names eight
+  definitions (1,840 bytes) without a direct `ref_` reference. Most are already
+  covered indirectly or are dead one-byte destructor clones. The worthwhile
+  bounded cases are `GenEQTrnSequenceV29`, the V.27 tail-state helpers, and,
+  if direct attribution is desired, the inlined dialler helper. This is quick
+  confidence work, but lower risk than the V.90 composition failure.
+- **Refresh mutation evidence by risk cluster.** The current snapshot reports
+  zero current and all 230 registered suites stale, so it cannot support a
+  current tree-wide confidence claim. Re-record the V.90 and V.34 survivor
+  clusters first, fix live survivors, then take an aggregate checkpoint; a
+  complete 9,000-plus-mutation refresh before triage is the higher-cost option.
+- **Add independent standards oracles.** Begin with V.90 Table 1's 512 published
+  PCM values, then V.8 ANSam, V.34 Table 17 and the V.90 CP CRC extent. These do
+  not improve equivalence to the blob; they answer the separate and important
+  question of whether both implementations reproduce a defect in the blob.
 
 ## Phase ledger
 
