@@ -14,26 +14,27 @@
  * function steps the same object `v34handshak` does.  A second fixture would
  * be that geometry built a second time.
  *
- * WHAT THIS TEST CANNOT DRIVE, AND WHY IT IS NOT A CHOICE.
+ * THE HANDSHAKE LOOP IS DRIVEN AT A REAL ONE-SIDED BOUNDARY.
  *
  * The +0x2218 > 1 branch calls `v34handshak` until the transmit block is full
  * AND the receive queue is drained -- and `v34handshak`'s own prologue reads
  * those same two fields to pick its dispatch.  So:
  *
- *   cursor < limit          -> table 1, the per-sample loop, whose arms live
- *                              in v34hstx1.cpp as separate entry points and
- *                              are not wired into `v34handshak`; it halts.
+ *   cursor < limit          -> table 1, the per-sample loop.  Its SILENCEINFO
+ *                              cold-start arm is now reconstructed and moves
+ *                              an eight-sample cursor to the twelve-sample
+ *                              limit in one call.
  *   cursor >= limit,
  *   receiver count > 5      -> the rxstate chain, and no arm anybody has
  *                              written lowers the receive count or raises the
  *                              cursor, so the loop cannot terminate.
  *
- * Every iteration of that loop therefore either halts in `t3c_unwritten` or
- * spins.  What IS drivable is the branch with the loop condition already
- * false, which is a real case -- the object reaches it whenever a block
- * completes -- and it is driven below with the tail's triggers armed, so a
- * reconstruction that took the wrong branch would retrain and be caught.
- * Finding F452 records the rest.
+ * The transmit-only half is enough to distinguish the object's OR from AND:
+ * with the receive count already at five, OR calls the real table-1 arm and
+ * completes the block while AND skips it.  The receive-only half remains a
+ * non-terminating chain and is not manufactured as a test state.  Finding
+ * F452 records the original limitation and the boundary case below records
+ * the part that completing table 1 made testable.
  *
  * THE OTHER TWO LOOPS DO RUN.  `modulatevector` advances the transmit cursor
  * four samples a call through `txmit`, and `receiver` drains the receive
@@ -84,8 +85,11 @@ extern void ref_VPcmV34IndicateRemoteRRN(void *obj);
 
 /* The receiver, at +0x264, whose own offsets these are plus that base. */
 #define O_FLAGS		(0x264 + 0x122)	/* bit 6 retrain, bit 5 remote RRN  */
+#define O_VECTPP	(0x264 + 0x120)	/* PP-sequence cursor               */
 #define O_BLOCKS	(0x264 + 0x124)	/* blocks received, capped          */
+#define O_PLLCNT	(0x264 + 0x1c0)	/* timing/acquisition state         */
 #define O_ERR		(0x264 + 0x21a)	/* the block's error measure        */
+#define O_ERRACC	(0x264 + 0x220)	/* unpublished error accumulation  */
 #define O_THR_A		(0x264 + 0x252)
 #define O_THR_B		(0x264 + 0x254)
 #define O_THR_C		(0x264 + 0x256)
@@ -134,7 +138,7 @@ static int debug_on;
 /* What each trial did, per diagnostics setting, for the claims at the end. */
 struct rec {
 	unsigned	changed, hash, lines;
-	int		err, blocks;
+	int		err, blocks, vectpp, txcur, bad;
 	int		used;
 };
 
@@ -257,6 +261,12 @@ run(const char *name, const struct poke *pk, const struct oracle *ex, long tag)
 	seen[debug_on][trial_now].lines = o->lines;
 	seen[debug_on][trial_now].err = (int)v34hs_peek_short(1, O_ERR);
 	seen[debug_on][trial_now].blocks = (int)v34hs_peek_short(1, O_BLOCKS);
+	seen[debug_on][trial_now].vectpp =
+		(int)v34hs_peek_short(1, O_VECTPP);
+	seen[debug_on][trial_now].txcur =
+		(int)v34hs_peek_short(1, O_TXCUR);
+	seen[debug_on][trial_now].bad =
+		(int)v34hs_peek_short(1, O_BAD);
 	seen[debug_on][trial_now].used = 1;
 
 	if (dump)
@@ -351,6 +361,21 @@ static const struct poke pk_hs_zero[] = {
 static const struct poke pk_hs_two[] = {
 	{ O_MODE,	4, 2 },
 	{ O_BAD_LONG,	2, 201 },
+	PK_END
+};
+
+/*
+ * One live condition, on the normal cold-start SILENCEINFO transmit arm.
+ * The object uses OR, calls `v34handshak` once and fills the last four samples.
+ * Replacing OR with AND sees the already-drained receive queue and skips the
+ * call, leaving the cursor at eight.  This became drivable when table 1 was
+ * completed; it is not a planted interior transmit state.
+ */
+static const struct poke pk_hs_tx_only[] = {
+	{ O_MODE,	4, 2 },
+	{ O_TXCUR,	2, 8 },
+	{ O_TXLIM,	2, 12 },
+	{ O_RXCNT,	2, 5 },
 	PK_END
 };
 
@@ -718,16 +743,17 @@ static const struct poke pk_rx_span_exact[] = {
 };
 
 /*
- * THE ONE THING THE FIXTURE'S `receiver` DOES NOT DO, seeded as hard as it
- * can be from outside.
+ * THE ONE THING THE FIXTURE'S ordinary receiver cases do not do, seeded as
+ * hard as it can be from outside.
  *
  * `receiver` refreshes +0x21a only when the counter at +0x21c wraps through
  * 0x400, and it writes +0x124 only on the decoder's two paths -- and it
  * returns before either, because reaching them needs a symbol decision and
  * this fixture's receive queue carries the arena's fill rather than a signal.
- * So the two ORDERING claims about this loop -- read the measure after the
- * call, bump the count before it -- are not testable here, and
- * test/mutations/v34datapump.json carries both as named gaps.
+ * The two ordering claims therefore need legal witnesses of their own below:
+ * DATA symbol 18 is the first symbol of PP, while symbol 17 takes the
+ * receiver's early clear-and-return path; and a shortened but consistent
+ * 1023-symbol error history makes the next symbol publish a new measure.
  *
  * The case is kept, and the two fields are ASSERTED unchanged below, so that
  * the gap is a checked property rather than an assumption: a fixture that
@@ -738,6 +764,46 @@ static const struct poke pk_rx_equerr[] = {
 	{ O_RXCNT,	2, 12 },
 	{ O_F21C,	2, 0x3ff },
 	{ O_BAD,	2, 11 },
+	PK_END
+};
+
+/*
+ * A LEGAL DATA-MODE BOUNDARY, not a planted decoder state.  The public
+ * handshake bring-up has configured the receive chain, and symbols through
+ * 17 leave the PP cursor at zero.  `datapumpv34` must bump rx_blocks BEFORE
+ * it calls `receiver`: 17 becomes 18, the first PP point is consumed and
+ * vectpp_idx becomes one.  Moving the bump after `receiver` instead presents
+ * 17, which takes the documented early clear-and-return path and leaves the
+ * cursor at zero.  Eight queued sample pairs make this exactly one receiver
+ * iteration with the normal four-output demodulator configuration.
+ */
+static const struct poke pk_rx_prebump[] = {
+	{ O_RXCNT,	2, 8 },
+	{ O_FLAGS,	2, V34_RX_FLAG_DATA },
+	{ O_BLOCKS,	2, 17 },
+	{ O_VECTPP,	2, 0 },
+	PK_END
+};
+
+/*
+ * A CONSISTENT SHORTENED ERROR HISTORY.  Acquisition state 4 reaches the
+ * equaliser-error tail with TRAINED and DATA clear.  The next symbol wraps
+ * err_symcount, publishes the positive accumulated error at +0x21a, and the
+ * datapump must compare that NEW value with zero.  Reading +0x21a before the
+ * receiver call instead sees the planted old zero and clears bad_run.
+ * Seeding 1023 symbols' accumulation avoids 1023 noisy public calls without
+ * inventing a state the receiver cannot produce.
+ */
+static const struct poke pk_rx_fresh_err[] = {
+	{ O_RXCNT,	2, 8 },
+	{ O_FLAGS,	2, V34_RX_FLAG_PREDICT },
+	{ O_PLLCNT,	2, 4 },
+	{ O_BLOCKS,	2, 20 },
+	{ O_ERR,	2, 0 },
+	{ O_F21C,	2, 0x3ff },
+	{ O_ERRACC,	4, 0x10000 },
+	{ O_THR_A,	2, 0 },
+	{ O_BAD,	2, 7 },
 	PK_END
 };
 
@@ -824,6 +890,8 @@ static const struct trial trials[] = {
   { "mode 0 takes the data path", pk_hs_zero, { 5, 2, 1, 0, KEEP }, 111 },
   { "the same trigger at mode 2 does nothing", pk_hs_two,
     { 2, BASE_WHY, 0, 0, BASE_PROGRESS }, 112 },
+  { "handshake OR runs with only the transmit side pending", pk_hs_tx_only,
+    { 2, BASE_WHY, 0, 0, 8 }, 113 },
 
   /* The stale-clock guard. */
   { "span exactly 288000 is not stale", pk_stale_under,
@@ -919,7 +987,11 @@ static const struct trial trials[] = {
   { "a span of exactly 1152000 leaves +0x25c alone", pk_rx_span_exact,
     { BASE_MODE, BASE_WHY, 0, 0, 5 }, 610 },
   { "+0x21c seeded at its wrap: `receiver` still writes neither field",
-    pk_rx_equerr, { BASE_MODE, BASE_WHY, 0, 0, BASE_PROGRESS }, 611 }
+    pk_rx_equerr, { BASE_MODE, BASE_WHY, 0, 0, BASE_PROGRESS }, 611 },
+  { "+0x124 is bumped before receiver at the PP boundary", pk_rx_prebump,
+    { BASE_MODE, BASE_WHY, 0, 0, BASE_PROGRESS }, 612 },
+  { "the supervisor reads the error published by receiver", pk_rx_fresh_err,
+    { BASE_MODE, BASE_WHY, 0, 0, BASE_PROGRESS }, 613 }
 };
 
 #define NTRIALS	((int)(sizeof(trials) / sizeof(trials[0])))
@@ -1000,10 +1072,10 @@ main(void)
 
 	/*
 	 * Second: how many trials wrote NOTHING AT ALL.  Eleven of the
-	 * thirty-six are "this arm must not run" cases, and for those the
+	 * thirty-nine are "this arm must not run" cases, and for those the
 	 * differential comparison alone is a comparison of two silences; the
 	 * count is what stops a change that quietly turned an armed case
-	 * inert from still passing.  The other twenty-five must all have
+	 * inert from still passing.  The other twenty-eight must all have
 	 * moved the object.
 	 */
 	{
@@ -1047,7 +1119,7 @@ main(void)
 			if (seen[1][i].lines != 0)
 				traced++;
 		diff_eq_int("trials that printed with the diagnostics on",
-			    traced, 15, 0);
+			    traced, 16, 0);
 	}
 
 	/*
@@ -1064,6 +1136,25 @@ main(void)
 		    seen[0][index_of(611)].err, 0x2000, 611);
 	diff_eq_int("the fixture's `receiver` leaves +0x124 alone",
 		    seen[0][index_of(611)].blocks, 0x123 + 2, 611);
+
+	/*
+	 * Trial 612 is the absolute oracle for the pre-increment order.  Whole
+	 * state agreement says ours matches the blob; these two values say both
+	 * sides actually crossed the PP boundary rather than agreeing on the
+	 * symbol-17 early return.
+	 */
+	diff_eq_int("the PP-boundary case presents symbol 18 to receiver",
+		    seen[0][index_of(612)].blocks, 18, 612);
+	diff_eq_int("the PP-boundary case consumes the first PP point",
+		    seen[0][index_of(612)].vectpp, 1, 612);
+	diff_eq_int("the fresh receiver error increments the bad run",
+		    seen[0][index_of(613)].bad, 8, 613);
+	diff_eq_int("the receiver publishes the accumulated error before supervision",
+		    seen[0][index_of(613)].err, 160, 613);
+
+	/* The absolute oracle that separates OR from AND in the handshake loop. */
+	diff_eq_int("the transmit-only handshake condition completes the block",
+		    seen[0][index_of(113)].txcur, 12, 113);
 
 	/* --- the separations, each one a claim some mutation would break --- */
 
