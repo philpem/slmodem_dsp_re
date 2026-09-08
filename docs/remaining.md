@@ -93,7 +93,8 @@ targeted mutation refresh](https://github.com/philpem/slmodem_dsp_re/issues/3),
 [#5 independent standards oracles](https://github.com/philpem/slmodem_dsp_re/issues/5),
 [#6 partial-link order](https://github.com/philpem/slmodem_dsp_re/issues/6),
 and [#7 constrained exact paired
-families](https://github.com/philpem/slmodem_dsp_re/issues/7).
+families](https://github.com/philpem/slmodem_dsp_re/issues/7), with the live
+V.34 mutation gaps separated into [#9](https://github.com/philpem/slmodem_dsp_re/issues/9).
 
 1. **Measure the aggregate first.** `make partial-compare` partially links all
    272 faithful GCC 3.4.2 objects with binutils 2.15 in manifest order and
@@ -164,11 +165,12 @@ an exact definition; non-exact definitions retain this finite-evidence limit.
   `getV92Decision`. The new groups pass 886 differential checks and explicitly
   observe MP/MPnot, all four CP replies, the CP guard truth tables and the
   WaitForEd level-3 diagnostic gate. This addresses ten ordinary fixture gaps
-  already named by the mutation file; the targeted refresh in issue #3 must
-  now verify that those planted alternatives are actually rejected. The
-  separate eleventh gap is the `linearMappingStudy(sample, decision)`
-  argument-order survivor, which needs a targeted constellation rather than a
-  completed message.
+  already named by the mutation file; F10243 verifies that all ten planted
+  alternatives are rejected. The separate eleventh
+  `linearMappingStudy(sample, decision)` argument-order gap is also closed by
+  F10244 and [issue
+  #8](https://github.com/philpem/slmodem_dsp_re/issues/8): an asymmetric legal
+  constellation now makes the correct and swapped calls observably different.
 - **Small direct-attribution gaps.** The generated coverage report names eight
   definitions (1,840 bytes) without a direct `ref_` reference. Most are already
   covered indirectly or are dead one-byte destructor clones. The worthwhile
@@ -177,12 +179,13 @@ an exact definition; non-exact definitions retain this finite-evidence limit.
   confidence work, but lower risk than the V.90 composition failure.
 - **Refresh mutation evidence by risk cluster — first tranche complete.**
   F10243 reruns and records the three changed V.90 suites and four known-risk
-  V.34 suites: 1,324 mutations in all, with 1,195 caught, 93 uncaught, 35
-  equivalent and one unbuildable. Thirteen former survivors are now caught;
-  no caught verdict regressed. These seven entries are current while the other
-  223 registered suites deliberately remain stale, so this supports only the
-  named clusters and not a tree-wide confidence claim. Triage the live
-  survivors through issues #1 and #4 before paying for a complete
+  V.34 suites. With F10244's follow-up they cover 1,324 mutations in all, with
+  1,196 caught, 92 uncaught, 35 equivalent and one unbuildable. Fourteen
+  former survivors are now caught; no caught verdict regressed. These seven
+  entries are current while the other 223 registered suites deliberately
+  remain stale, so this supports only the named clusters and not a tree-wide
+  confidence claim. Triage the live
+  survivors through issues #1 and #9 before paying for a complete
   9,000-plus-mutation refresh.
 - **Add independent standards oracles.** Begin with V.90 Table 1's 512 published
   PCM values, then V.8 ANSam, V.34 Table 17 and the V.90 CP CRC extent. These do
