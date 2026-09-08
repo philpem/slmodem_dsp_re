@@ -12896,7 +12896,7 @@ legal indices; no system-level receive-negotiation effect is claimed here.
 departure, finding F10256. The transmitted Jd sequence violates Table 13's
 reserved-bit requirement. Documentation only, for blob fidelity.
 
-## D1458 🐛 V.90 DIL descriptors expose an inactive Ucode when N is odd
+## D1458 🐛 V.90/V.92 DIL descriptors expose an inactive Ucode when N is odd
 
 V.90 Table 12 groups training Ucodes two per sixteen-information-bit frame.
 When the count `N` is odd, the seven positions where a second Ucode would have
@@ -12904,6 +12904,11 @@ appeared, its following reserved position and the remaining frame position are
 all reserved and must be zero. `DILdescriptorPacker` nevertheless always packs
 both array slots in the final frame, so the inactive `dilCode[N]` value occupies
 seven of those reserved positions and is included in the CRC.
+
+`V92DILdescriptorPacker` inherits the same Table 12 prefix and repeats the same
+unconditional pair read. Its corresponding witness changes the Table 20 CRC
+from `0xdc67` to `0xa368`. The shipped V.92 path also uses even `N=144`, so
+that does not change the reachability ruling.
 
 An independent complete-frame oracle sets the legal active descriptor to
 `N=1` and the inactive slot to 127. Reconstruction and blob both emit ones at
@@ -12914,6 +12919,26 @@ legal descriptor, not an out-of-range field test. The two shipped
 another production caller can supply an odd count is not yet measured.
 
 **Status:** faithfully reproduced original defect; executable standards
-departure, finding F10261. Documentation only, for blob fidelity; production
-reachability remains [issue
+departure, findings F10261 and F10262. Documentation only, for blob fidelity;
+production reachability remains [issue
 #12](https://github.com/philpem/slmodem_dsp_re/issues/12).
+
+## D1459 🐛 V.92 DIL descriptors stop before the required twelve-bit boundary
+
+V.92 clause 8.5.4 and Table 20 require zero fill after the CRC until each DIL
+descriptor reaches the next multiple of twelve bits. The Recommendation makes
+the minimum case explicit: when `N=0`, the descriptor is 276 bits long.
+`V92DILdescriptorPacker` instead copies the V.90 packer's one-or-two-bit tail
+rule and rounds only to an even length, returning 274 for that minimum.
+
+This is directly production-reachable. The two shipped descriptors both use
+`N=144`; the ordinary ADI preset produces 1,736 bits instead of 1,740 and the
+ADI-QC preset produces 1,600 instead of 1,608. `V92Phase3Modulator::jaSymbol`
+repeats the returned vector modulo that short count, so it does not restore the
+missing fill between descriptors. `exitJa` aligns only the eventual end of the
+whole Ja sequence to twelve symbols.
+
+**Status:** faithfully reproduced original defect; executable standards
+departure, finding F10262. Documentation only in the blob-faithful path.
+Receiver/interoperability impact and an explicit opt-in standards path remain
+[issue #13](https://github.com/philpem/slmodem_dsp_re/issues/13).
