@@ -1,0 +1,75 @@
+[
+ {
+  "note": "Focused sensitivity checks for the independent ITU-T V.90 Tables 14/15 oracle in t_v90cpower.cpp. Table 15 expectations are literal published amplitudes squared in the test. The Table-14 expectation enumerates every one of 32768 codewords and obtains each mixed-radix digit directly, rather than using this file's modulus-boundary fraction algorithm."
+ },
+ {
+  "label": "Table 15 row zero is one power unit higher",
+  "find": "\t228735376, 203804176, 181710400, 161900176, 144288144,",
+  "replace": "\t228735377, 203804176, 181710400, 161900176, 144288144,"
+ },
+ {
+  "label": "Table 15's middle power limit is one unit higher",
+  "find": "\t 40704400,  36240400,  32307856,  28815424,  25684624,",
+  "replace": "\t 40704401,  36240400,  32307856,  28815424,  25684624,"
+ },
+ {
+  "label": "Table 15's final published power limit is one unit lower",
+  "find": "\t  7246864,   6451600,   5740816,   5112121,   4549689",
+  "replace": "\t  7246864,   6451599,   5740816,   5112121,   4549689"
+ },
+ {
+  "label": "the Table 14 codeword count exponent is one higher",
+  "find": "\t\t\t\t+ mappingParams->word_0 - 6);",
+  "replace": "\t\t\t\t+ mappingParams->word_0 - 5);"
+ },
+ {
+  "label": "the Table 14 codeword range includes 2^K itself",
+  "find": "\tremaining[0] = codewordCount - 1;",
+  "replace": "\tremaining[0] = codewordCount;"
+ },
+ {
+  "label": "the mixed-radix place value multiplies by the next constellation",
+  "find": "\t\tproduct *= mappingParams->constellationSize[i - 1];",
+  "replace": "\t\tproduct *= mappingParams->constellationSize[i];"
+ },
+ {
+  "label": "the digit-boundary point takes the below-boundary arm",
+  "find": "\t\t\tif (modulus[i] > j)\n\t\t\t\tfraction = placeValue[i] / (double)codewordCount",
+  "replace": "\t\t\tif (modulus[i] >= j)\n\t\t\t\tfraction = placeValue[i] / (double)codewordCount"
+ },
+ {
+  "label": "the below-boundary occurrence count loses its extra codeword",
+  "find": "\t\t\t\tfraction = placeValue[i] / (double)codewordCount\n\t\t\t\t\t   * (double)(remaining[i + 1] + 1);",
+  "replace": "\t\t\t\tfraction = placeValue[i] / (double)codewordCount\n\t\t\t\t\t   * (double)remaining[i + 1];"
+ },
+ {
+  "label": "the boundary occurrence fraction adds instead of subtracting",
+  "find": "\t\t\t\tfraction = 1.0 - 1.0 / (double)codewordCount",
+  "replace": "\t\t\t\tfraction = 1.0 + 1.0 / (double)codewordCount"
+ },
+ {
+  "label": "the above-boundary occurrence count gains an extra codeword",
+  "find": "\t\t\t\tfraction = placeValue[i] / (double)codewordCount\n\t\t\t\t\t   * (double)remaining[i + 1];",
+  "replace": "\t\t\t\tfraction = placeValue[i] / (double)codewordCount\n\t\t\t\t\t   * (double)(remaining[i + 1] + 1);"
+ },
+ {
+  "label": "the Table 14 sum covers only five of the six symbol positions",
+  "find": "\tfor (i = 0; i < V90CP_CONSTELLATIONS; i++) {\n\t\tunsigned int j;",
+  "replace": "\tfor (i = 0; i < V90CP_CONSTELLATIONS - 1; i++) {\n\t\tunsigned int j;"
+ },
+ {
+  "label": "the two Table 14 companding laws are exchanged",
+  "find": "\t\t\tif (pcmType != PCM_TYPE_MU_LAW)",
+  "replace": "\t\t\tif (pcmType == PCM_TYPE_MU_LAW)"
+ },
+ {
+  "label": "the codec measurement point uses the ordinary constellation in position three",
+  "find": "\t\tconstellation = (point == V90_TX_POWER_OVER_CODEC_CONSTELLATION)\n\t\t\t\t? mappingParams->codecConstellation[3]\n\t\t\t\t: mappingParams->constellation[3];",
+  "replace": "\t\tconstellation = mappingParams->constellation[3];"
+ },
+ {
+  "label": "the Table 14 frame average divides by five symbol positions",
+  "find": "\tpower = power * (1.0 / 6.0);",
+  "replace": "\tpower = power * (1.0 / 5.0);"
+ }
+]

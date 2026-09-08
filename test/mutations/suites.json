@@ -480,6 +480,10 @@
   "src/pump/v90/V90ConstellationPower.cpp",
   "build/test/t_v90designers"
  ],
+ "v90cpowerstd": [
+  "src/pump/v90/V90ConstellationPower.cpp",
+  "build/test/t_v90cpower"
+ ],
  "v90cppck": [
   "src/pump/v90/V90CPpck.cpp",
   "build/test/t_v90cmask"

@@ -6296,7 +6296,7 @@
    }
   },
   "v90cpmembers": {
-   "key": "d854f7cb70e7dacd34787118bfee8aef5994c4bcdb30c375b947375e59fd0596",
+   "key": "9556a0afc234d626c421423c76ca36510e5d224986bd20675143d1663c82fa21",
    "summary": "19 mutations: 19 caught (19 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "an out-of-range index writes a length instead of writing nothing": "caught",
@@ -6329,6 +6329,26 @@
     "the constructor writes the LAST byte only": "caught",
     "the destructor clears the first byte": "caught",
     "the destructor clears the first byte, volatile so it survives": "caught"
+   }
+  },
+  "v90cpowerstd": {
+   "key": "b15ebe195473f904157a4f542c65c78ef7106ecf88039820b41bf0e9941e9ca9",
+   "summary": "14 mutations: 14 caught (14 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "Table 15 row zero is one power unit higher": "caught",
+    "Table 15's final published power limit is one unit lower": "caught",
+    "Table 15's middle power limit is one unit higher": "caught",
+    "the Table 14 codeword count exponent is one higher": "caught",
+    "the Table 14 codeword range includes 2^K itself": "caught",
+    "the Table 14 frame average divides by five symbol positions": "caught",
+    "the Table 14 sum covers only five of the six symbol positions": "caught",
+    "the above-boundary occurrence count gains an extra codeword": "caught",
+    "the below-boundary occurrence count loses its extra codeword": "caught",
+    "the boundary occurrence fraction adds instead of subtracting": "caught",
+    "the codec measurement point uses the ordinary constellation in position three": "caught",
+    "the digit-boundary point takes the below-boundary arm": "caught",
+    "the mixed-radix place value multiplies by the next constellation": "caught",
+    "the two Table 14 companding laws are exchanged": "caught"
    }
   },
   "v90cppck": {
