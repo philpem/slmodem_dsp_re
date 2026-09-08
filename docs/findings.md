@@ -122739,8 +122739,59 @@ The `v34scramstd` suite catches 14/14 mutations across every material near
 tap, far tap, fold and feedforward term. `v34scrampair` separately catches both
 transmit- and receive-assignment swaps. Neither suite has an unusable,
 equivalent or surviving mutation. The complete phase boundary passed 375/375
-period differential groups, both interoperability checks, the
-partial-link comparator self-test, and every structural gate passed. Suite
-line coverage remains 49,019/51,416 (`95.3%`).
+period differential groups, both interoperability checks, the partial-link
+comparator self-test and every structural gate. Suite line coverage remains
+49,019/51,416 (`95.3%`).
+
+(2026-09-08)
+
+## F10258. V.90's power ladder and mixed-radix average conform to Tables 14 and 15
+
+The previous `t_v90cpower` had strong reconstruction/blob agreement, but its
+general `getPower` sweep asked the blob for the expected answer. Its independent
+Table-1 block reduced every constellation to one point, making every frequency
+exactly one; it therefore said nothing independent about the mixed-radix
+weights. The new standards block closes both gaps without importing the
+production table or arithmetic.
+
+For Table 15 the fixture literally transcribes the 32 published amplitudes
+from 15124 through 2540 and squares each one. Reconstruction and blob both
+match all 32 power limits. The implementation's final three entries are
+2396^2, 2261^2 and 2133^2: a private continuation beyond the Recommendation's
+last row, still covered by the existing differential comparison but not
+mislabelled as standard data. All 32 normative values are exactly representable
+as binary32; the fixture's former contrary comment is corrected.
+
+For the formula below Table 14, the oracle enumerates every integer codeword
+from zero through 2^15 - 1. It extracts each of the six mixed-radix digits by
+division, obtains the corresponding literal Table-1 level, sums its square and
+divides once by `6 * 2^15`. This shares neither `calcModulusParameters` nor
+`getPower`'s three boundary-frequency arms. Two legal geometries include both
+an exact radix product (`8,8,8,4,4,4`) and non-uniform point frequencies
+(`6,6,6,6,6,6`), crossed with both measurement points and both companding laws.
+All eight results match each implementation exactly after the specified float
+return conversion. The legal inequality `2^K <= product(M_i)` also proves why
+the implementation's sixth-digit truncation equals a remainder throughout
+the standards domain even though the two differ in the older robustness sweep.
+
+A constructive K=18 boundary makes the finite-precision limit visible rather
+than hiding it. Its exact mu-law power is `432864445/3`, which is `13/3` above
+Table-15 row 4, while binary32 rounds down to row 4 exactly; both implementations
+therefore return index 4 where an infinite-precision classification would
+return 3. That is not recorded as a standards departure: downward rounding is
+the Recommendation's advised direction for the analogue modem, and the action
+taken on excess power is expressly left to national rules. Five checks per
+implementation pin the independently summed numerator, exact inequality,
+rounded value and classification.
+
+The standards groups report 45/45 checks for reconstruction and 45/45 for the
+separately invoked blob. `v90cpowerstd` catches all 14 focused mutations across
+the table, codeword count, mixed-radix occurrence arms, constellation choice,
+companding law and six-symbol divisor. The refreshed pre-existing
+`v90cpmembers` suite catches 19/19, with no unusable, equivalent or surviving
+mutation in either suite. The complete phase boundary passes 375/375 period
+differential groups, both interoperability checks, the partial-link comparator
+self-test and every structural gate. Suite line coverage remains
+49,019/51,416 (`95.3%`).
 
 (2026-09-08)

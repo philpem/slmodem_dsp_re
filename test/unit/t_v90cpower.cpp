@@ -46,10 +46,10 @@
  *   THE LADDER'S ENDS AND ITS EXACT BOUNDARY.  Random floats never land on a
  *   limit, so `getPowerIndexForPower` is driven at every entry's exact value,
  *   just above and just below it, past both ends, and at both infinities.
- *   Every entry below 8388608 is exactly representable as a float and the
- *   larger ones are not, so the exact-value cases are computed through
- *   `(float)` and the assertion is on agreement between the two sides rather
- *   than on a predicted index.
+ *   Every normative Table-15 limit is exactly representable as a float,
+ *   despite most exceeding 2^24: their low zero bits provide the required
+ *   spacing.  The assertion here remains differential; the independent
+ *   Table-15 check appears at the end of the fixture.
  *
  *   THE UNSIGNED BOUND of `isLegalPowerIndex`: 0xFFFFFFFF is what proves the
  *   comparison is `setbe` and not a signed one.
@@ -119,6 +119,7 @@ extern unsigned int ref_averagePowerLimits[V90CP_POWER_INDICES]
 }
 
 typedef float (*getpower_fn)(void *, void *, int, int);
+typedef unsigned int (*pindex_fn)(void *, float);
 
 /*
  * The same cheap varied fill the other V.90 tests use, so a value that happens
@@ -594,6 +595,234 @@ run_islegal(void)
 	return diff_end();
 }
 
+/*
+ * ===========================================================================
+ * ITU-T V.90 TABLES 14 AND 15, independently of dsplibs.o.
+ *
+ * Table 15 prints 32 amplitude limits.  Its power limits are their squares;
+ * the roots below are a literal transcription, so this check neither copies
+ * the production power table nor learns an expected value from the blob.
+ * The implementation's final three entries continue the half-decibel ladder
+ * beyond the Recommendation and are intentionally outside this oracle.
+ *
+ * For the formula below Table 14, enumerate all 2^K mapping-frame codewords.
+ * Constellation i's mixed-radix digit is obtained directly from the codeword,
+ * its Table-1 linear level is squared, and the total is divided by 6 * 2^K.
+ * This is deliberately not getPower's boundary/modulus/fraction algorithm.
+ * The two K=15 geometries include an exact product and a non-power-of-two
+ * product, so the second has genuinely non-uniform digit occurrence counts.
+ * ===========================================================================
+ */
+static const unsigned short table15_amplitude[32] = {
+	15124, 14276, 13480, 12724, 12012, 11340, 10708, 10108,
+	 9544,  9008,  8504,  8028,  7580,  7156,  6756,  6380,
+	 6020,  5684,  5368,  5068,  4784,  4516,  4264,  4024,
+	 3800,  3588,  3388,  3196,  3020,  2852,  2692,  2540
+};
+
+static void
+setup_standard_mapping(const unsigned char sizes[V90CP_CONSTELLATIONS])
+{
+	unsigned int i;
+
+	memset(&mp, 0, sizeof(mp));
+	mp.word_0 = 6;
+	mp.shaperSR = 15;
+	for (i = 0; i < V90CP_CONSTELLATIONS; i++) {
+		unsigned int j;
+
+		mp.constellationSize[i] = sizes[i];
+		for (j = 0; j < sizes[i]; j++) {
+			/* Descending, unique within every constellation. */
+			mp.constellation[i][j] =
+			    (unsigned char)(127u - (i * 17u + j));
+			mp.codecConstellation[i][j] =
+			    (unsigned char)(126u - (i * 13u + j));
+		}
+	}
+}
+
+static float
+standard_table14_power(int point, int pcmType)
+{
+	const unsigned long long codewords = 1ull << 15;
+	unsigned long long sum = 0;
+	unsigned long long r;
+
+	for (r = 0; r < codewords; r++) {
+		unsigned long long place = 1;
+		unsigned int i;
+
+		for (i = 0; i < V90CP_CONSTELLATIONS; i++) {
+			unsigned int digit =
+			    (unsigned int)((r / place) % mp.constellationSize[i]);
+			unsigned int ucode = point == 1
+			    ? mp.codecConstellation[i][digit]
+			    : mp.constellation[i][digit];
+			const struct v90_table1_row *row = &v90_table1[ucode];
+			long level = pcmType == 0 ? row->mu_linear : row->a_linear;
+
+			sum += (unsigned long long)(level * level);
+			place *= mp.constellationSize[i];
+		}
+	}
+
+	return (float)((double)sum / (6.0 * (double)codewords));
+}
+
+static int
+run_standard_power_side(const char *name, getpower_fn getpower,
+			V90ConstellationPower *cp,
+			const unsigned int *power_limits)
+{
+	static const unsigned char geometries[2][V90CP_CONSTELLATIONS] = {
+		{ 8, 8, 8, 4, 4, 4 },
+		{ 6, 6, 6, 6, 6, 6 }
+	};
+	unsigned int i;
+
+	diff_begin(name);
+
+	for (i = 0; i < sizeof(table15_amplitude)
+			     / sizeof(table15_amplitude[0]); i++) {
+		unsigned int root = table15_amplitude[i];
+		unsigned int expected = root * root;
+
+		diff_eq_int("Table 15 squared amplitude row %ld",
+			    power_limits[i], expected, (long)i);
+	}
+
+	for (i = 0; i < 2; i++) {
+		int point;
+
+		setup_standard_mapping(geometries[i]);
+		for (point = 0; point < 2; point++) {
+			int law;
+
+			for (law = 0; law < 2; law++) {
+				long tag = (long)i * 4L + (long)point * 2L + law;
+				float expected = standard_table14_power(point, law);
+				float got;
+
+				memset((void *)cp, 0, sizeof(*cp));
+				got = getpower(cp, &mp, point, law);
+				diff_eq_float("Table 14 average-power formula (%ld)",
+					      got, expected, tag);
+			}
+		}
+	}
+
+	return diff_end();
+}
+
+static int
+run_standard_power(void)
+{
+	int rc = 0;
+
+	rc |= run_standard_power_side(
+	    "V.90 Tables 14/15 power oracle, reconstruction",
+	    our_getpower, cpA, V90ConstellationPower::averagePowerLimits);
+	rc |= run_standard_power_side(
+	    "V.90 Tables 14/15 power oracle, blob",
+	    ref_getpower, cpB, ref_averagePowerLimits);
+	return rc;
+}
+
+/*
+ * A finite-precision boundary in Table 15's recommended comparison direction.
+ * The exact K=18 mean is 432864445/3, thirteen thirds above row 4's limit,
+ * but binary32 rounds it down to that limit.  The Recommendation leaves the
+ * action on excess power to national rules, so this is a visible classification
+ * limitation, not a standards departure.
+ */
+static void
+setup_power_boundary_mapping(void)
+{
+	static const unsigned char rows[V90CP_CONSTELLATIONS][8] = {
+		{  91,  82,  79,  66, 59, 35, 20, 12 },
+		{ 124, 121, 117, 114, 107, 101, 89, 87 },
+		{  96,  75,  60,  58, 47, 41, 19, 16 },
+		{ 120, 110, 104,  93, 70, 66, 34, 13 },
+		{ 119, 114, 105,  98, 71, 63, 49, 45 },
+		{ 122, 120, 113,  88, 79, 68, 19, 13 }
+	};
+	unsigned int i;
+
+	memset(&mp, 0, sizeof(mp));
+	mp.word_0 = 24;
+	mp.shaperSR = 0;
+	for (i = 0; i < V90CP_CONSTELLATIONS; i++) {
+		mp.constellationSize[i] = 8;
+		memcpy(mp.constellation[i], rows[i], sizeof(rows[i]));
+		memcpy(mp.codecConstellation[i], rows[i], sizeof(rows[i]));
+	}
+}
+
+static unsigned long long
+power_boundary_sum(void)
+{
+	unsigned long long sum = 0;
+	unsigned int i;
+
+	for (i = 0; i < V90CP_CONSTELLATIONS; i++) {
+		unsigned int j;
+
+		for (j = 0; j < mp.constellationSize[i]; j++) {
+			unsigned int ucode = mp.codecConstellation[i][j];
+			long level = v90_table1[ucode].mu_linear;
+
+			sum += (unsigned long long)(level * level);
+		}
+	}
+	return sum;
+}
+
+static int
+run_power_boundary_side(const char *name, getpower_fn getpower,
+			pindex_fn pindex, V90ConstellationPower *cp,
+			const unsigned int *power_limits)
+{
+	unsigned long long exact_sum;
+	float got;
+	unsigned int index;
+
+	diff_begin(name);
+	setup_power_boundary_mapping();
+	exact_sum = power_boundary_sum();
+	memset((void *)cp, 0, sizeof(*cp));
+	got = getpower(cp, &mp, V90_TX_POWER_OVER_CODEC_CONSTELLATION,
+			 PCM_TYPE_MU_LAW);
+	index = pindex(cp, got);
+
+	diff_eq_int("the boundary rows give the derived squared-level sum (%ld)",
+		    exact_sum == 6925831120ull, 1, 0);
+	diff_eq_int("exact power exceeds Table 15 row 4 (%ld)",
+		    exact_sum > 48ull * power_limits[4], 1, 4);
+	diff_eq_int("exact power does not exceed Table 15 row 3 (%ld)",
+		    exact_sum <= 48ull * power_limits[3], 1, 3);
+	diff_eq_float("binary32 power rounds to Table 15 row 4 (%ld)",
+		      got, (float)power_limits[4], 4);
+	diff_eq_int("rounded boundary classifies at index 4 (%ld)",
+		    index, 4, 4);
+	return diff_end();
+}
+
+static int
+run_power_boundary(void)
+{
+	int rc = 0;
+
+	rc |= run_power_boundary_side(
+	    "V.90 Table 15 rounding boundary, reconstruction",
+	    our_getpower, our_pindex, cpA,
+	    V90ConstellationPower::averagePowerLimits);
+	rc |= run_power_boundary_side(
+	    "V.90 Table 15 rounding boundary, blob",
+	    ref_getpower, ref_pindex, cpB, ref_averagePowerLimits);
+	return rc;
+}
+
 int
 main(void)
 {
@@ -608,6 +837,8 @@ main(void)
 	rc |= run_getpower_table1();
 	rc |= run_ladder();
 	rc |= run_islegal();
+	rc |= run_standard_power();
+	rc |= run_power_boundary();
 
 	return rc;
 }

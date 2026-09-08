@@ -211,12 +211,14 @@ an exact definition; non-exact definitions retain this finite-evidence limit.
   caught**, with the latter's two additional mutations still proved
   equivalent. The ledger is now **13 current and 227 stale** of 240 registered
   suites. F10257 adds `v34scramstd` at **14/14 caught** and `v34scrampair` at
-  **2/2 caught**, making **15 current and 227 stale** of 242 registered suites.
+  **2/2 caught**. F10258 adds `v90cpowerstd` at **14/14 caught** and refreshes
+  `v90cpmembers` at **19/19 caught**, making **17 current and 226 stale** of
+  243 registered suites.
   This supports only the named clusters and
   not a tree-wide confidence claim. Triage the live
   receive/selection gaps through issues #1 and #10 before paying for a complete
   9,000-plus-mutation refresh.
-- **Add independent standards oracles — nine numbered blocks complete.** F10249 consumes
+- **Add independent standards oracles — ten numbered blocks complete.** F10249 consumes
   every published PCM codeword and linear cell in V.90 Table 1 and reports 256
   reconstruction checks and 256 blob checks separately; both conform. F10250
   moves the literal table into one shared test-only fixture and drives all
@@ -250,7 +252,12 @@ an exact definition; non-exact definitions retain this finite-evidence limit.
   default 28-bit parameter mask drives six ITU-reserved transmit positions
   high. F10257 directly implements V.34 equations 7-1 and 7-2, pins them with
   fixed all-one and impulse streams, and confirms both GPC/GPA directions and
-  the caller/answer callback pairing. Continue with the V.90 power oracle;
+  the caller/answer callback pairing. F10258 transcribes all 32 V.90 Table-15
+  amplitudes and independently enumerates the Table-14 average over complete
+  legal 2^15-codeword spaces. Both the table and mixed-radix weighting
+  conform; a measured exact-above/float-equal boundary follows the specified
+  analogue-modem rounding direction. The first ten blocks found enough shared
+  protocol defects to justify continuing into the ranked §5.2 list;
   ANSam spectrum, absolute level, transition quality and duration remain
   separately scoped. These oracles do not improve
   equivalence to the blob; they answer whether both implementations reproduce

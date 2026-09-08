@@ -376,7 +376,7 @@ pass**, and each is marked with the candidate non-conformance it settles.
 | 7 | Tables 23, 24, 30/V.92 + 10.1.2.3.2/V.34 | `V92CP`'s CRC extent and the CPt/CPu/CPus arms | 1,2 | `t_v92cpcrc.cpp` (**done**, F10255) | 3,328 | **D920, D1455, D1456 confirmed** |
 | 8 | Table 13/V.90 | `V90Jd`'s CRC extent **and** its rate-capability mask | 1,2 | `t_v90jd.cpp` (**done**, F10256) | 534 | **D1457 confirmed** |
 | 9 | eq. 7-1, 7-2 and clause 7/V.34 | `scrambleGPC`/`GPA`, `descrambleGPC`/`GPA`, the pairing | 3,2 | `t_v34scram.c` (**done**, F10257) | 848 | — |
-| 10 | Table 15/V.90 and the formula under Table 14 | `averagePowerLimits`, `getPower` | 3 | `t_v90cpower.cpp` (extend) | ~40 | — |
+| 10 | Table 15/V.90 and the formula under Table 14 | `averagePowerLimits`, `getPower` | 3 | `t_v90cpower.cpp` (**done**, F10258) | 90 | — |
 
 ### F5.2 Do next — eleven
 
@@ -462,6 +462,14 @@ with fixed zero-history all-one and impulse streams pinning its chronology and
 word order. Each implementation passes 424 checks covering both transmit
 quotients, both receive products, long independent streams and the caller/
 answer callback pairing. The tested arithmetic and pairing conform.
+
+**#10 — V.90 constellation power (complete, F10258).** The 32 published
+Table-15 amplitudes are transcribed literally and squared in the fixture.
+Separately, a brute-force oracle enumerates every one of 2^15 codewords for
+two legal constellation geometries, both companding laws and both measurement
+points; it does not reuse `getPower`'s modulus-boundary arithmetic. Each
+implementation passes 40 table/formula checks and five finite-precision
+boundary checks. The tested table and weighting conform.
 
 ---
 
@@ -582,10 +590,11 @@ it.
   somebody's taste.
 - **R16** — clause 11/V.25, inhibiting the 2100 Hz detector: *"the detector
   **may** be inhibited"*, *"It is **suggested** that…"*.
-- **R17** — the NOTE under Table 15/V.90: *"The actions that a digital modem
-  takes when a constellation set is found to have an average power above the
-  appropriate limit are a national matter and are beyond the scope of this
-  Recommendation."*
+- **R17** — the NOTES under Table 15/V.90. The calculation is advised to round
+  no higher than infinite precision at the analogue modem, while the action a
+  digital modem takes after finding excess power is a national matter. F10258
+  exhibits one exact-above/float-equal boundary: its downward rounding follows
+  the analogue recommendation, and the resulting action remains unspecified.
 - **R18** — V.25 Cor. 1's whole substantive content: *"there is a **potential**
   for failure to connect if the phase reversal option of answer tone is not
   used"*. Advisory. `v23modem.c` sets `rev_period = 0` and `v8_ansaminit` sets
@@ -865,11 +874,10 @@ should be re-derived with it rather than the total carried forward.
    its independent CRC and framing-test structure.
 5. **Items 4 and 6 are complete** (V.8/V.25, F10254). They confirmed N1, N2,
    N5 and N6, while the production 160-sample V.23 cadence retired N7.
-6. **Items 7, 8 and 9 are complete** (V.92 CP, V.90 Jd and V.34 scramblers,
-   F10255–F10257). Do item 10 next, then
-   reassess. **Ten blocks is enough to know whether this
-   tier's yield is closer to "one D920 per ten blocks" or to "everything
-   conforms", and the answer should decide whether §5.2 is written at all.**
+6. **Items 7–10 are complete** (V.92 CP, V.90 Jd, V.34 scramblers and V.90
+   power, F10255–F10258). The ten-block sample found multiple shared protocol
+   defects as well as conforming blocks, so the independent tier has paid for
+   itself. Continue into §5.2 in rank order, starting with item 11.
 
 **Before any of it, read `docs/method/tiers.md` §5 and finding F7413.** The two
 rules a spec block gets wrong if it is written from the code rather than from
