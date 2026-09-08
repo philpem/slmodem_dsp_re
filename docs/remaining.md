@@ -195,13 +195,15 @@ an exact definition; non-exact definitions retain this finite-evidence limit.
   counted as uncaught. These seven
   entries remain historical evidence. F10250's three-suite 77/77 result is
   retained as historical evidence. F10251 subsequently changes shared V.8
-  source and its public structure names; its focused refresh makes `v8sig`
-  current at **8/8 caught**, while the other 229 registered suites are now
-  deliberately stale. This supports only the named clusters and not a
+  source and its public structure names; its focused refresh made `v8sig`
+  current at **8/8 caught**. F10252's shared V.34 source-comment update then
+  invalidates that key, while its own targeted refresh makes `v34hstx1`
+  current at **753 caught, 23 equivalent, 0 uncaught**. The other 229
+  registered suites are deliberately stale. This supports only the named clusters and not a
   tree-wide confidence claim. Triage the live
   survivors through issues #1 and #9 before paying for a complete
   9,000-plus-mutation refresh.
-- **Add independent standards oracles — two blocks complete.** F10249 consumes
+- **Add independent standards oracles — three blocks complete.** F10249 consumes
   every published PCM codeword and linear cell in V.90 Table 1 and reports 256
   reconstruction checks and 256 blob checks separately; both conform. F10250
   moves the literal table into one shared test-only fixture and drives all
@@ -213,10 +215,15 @@ an exact definition; non-exact definitions retain this finite-evidence limit.
   the original's 15.234375 Hz envelope outside the 15 ± 0.1 Hz requirement.
   Independent legal-shape detector stimuli accept 450 ms but miss the allowed
   425 and 475 ms endpoints, recorded as interoperability coverage rather than
-  a receiver-conformance verdict. Continue with V.34 Table 17 and the V.90 CP
-  CRC extent; ANSam spectrum, absolute level, transition quality and duration
-  remain separately scoped. These oracles do not improve equivalence to the
-  blob; they answer whether both implementations reproduce a defect in it.
+  a receiver-conformance verdict. F10252 then derives the V.34 Table 17 line
+  probe independently for reconstruction and blob: all 21 frequencies and
+  phases, four omitted bins and equal amplitudes conform. Its production-path
+  checks run all 1,536 L1 samples, prove 24 repetitions/160 ms, observe the
+  L1-to-L2 transition and confirm the four-to-one power ratio. Continue with
+  the V.90 CP CRC extent; ANSam spectrum, absolute level, transition quality
+  and duration remain separately scoped. These oracles do not improve
+  equivalence to the blob; they answer whether both implementations reproduce
+  a defect in it.
 
 ## Phase ledger
 

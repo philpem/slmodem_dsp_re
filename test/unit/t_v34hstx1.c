@@ -74,6 +74,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 
 #include "harness.h"
 #include "v34hsstep.h"
@@ -1372,6 +1373,191 @@ case_probe_table(void)
 {
 	diff_eq_int("probe, 64 shorts at .rodata+0x2c00",
 		    memcmp(probe, ref_probe, sizeof(probe)), 0, 5199);
+}
+
+/*
+ * INDEPENDENT V.34 TABLE 17 ORACLE.
+ *
+ * These are the Recommendation's frequencies and phases, not a restatement
+ * of `probe`.  At the V.34 9600-Hz sample rate a 64-point DFT has 150-Hz
+ * bins.  The table explicitly omits four in-band bins; they are just as much
+ * part of the oracle as the twenty-one present tones.  Run it separately on
+ * the reconstruction and on the blob: the existing memcmp then says their
+ * byte identity does not hide a shared departure from the Recommendation.
+ *
+ * The short table is a rounded synthesis.  A half-LSB error in each of 64
+ * samples can leave at most one unit of DFT amplitude in an absent bin, hence
+ * the <= 1.0 bound below.  The present-tone checks intentionally compare the
+ * twenty-one amplitudes only with one another: equal amplitude is Table 17's
+ * property, whereas a measured absolute level would not be an oracle.
+ */
+struct table17_tone {
+	unsigned hz;
+	int phase;
+};
+
+static const struct table17_tone table17_tones[] = {
+	{  150,   0 }, {  300, 180 }, {  450,   0 }, {  600,   0 },
+	{  750,   0 }, { 1050,   0 }, { 1350,   0 }, { 1500,   0 },
+	{ 1650, 180 }, { 1950,   0 }, { 2100,   0 }, { 2250, 180 },
+	{ 2550,   0 }, { 2700, 180 }, { 2850,   0 }, { 3000, 180 },
+	{ 3150, 180 }, { 3300, 180 }, { 3450, 180 }, { 3600,   0 },
+	{ 3750,   0 }
+};
+
+static const unsigned table17_omitted[] = { 900, 1200, 1800, 2400 };
+
+#define TABLE17_PI	3.14159265358979323846
+#define TABLE17_BIN_HZ	150u
+#define TABLE17_RATE_HZ	9600u
+
+static void
+case_table17_oracle(const short samples[V34_PROBE_SAMPLES],
+			    const char *subject, long tag)
+{
+	unsigned i, n;
+	char msg[128];
+	double reference_magnitude = 0.0;
+
+	for (i = 0; i < NP(table17_tones); i++) {
+		unsigned bin = table17_tones[i].hz / TABLE17_BIN_HZ;
+		double re = 0.0, im = 0.0;
+		double magnitude, phase, delta;
+
+		for (n = 0; n < V34_PROBE_SAMPLES; n++) {
+			double theta = 2.0 * TABLE17_PI * bin * n
+				       / V34_PROBE_SAMPLES;
+			re += samples[n] * cos(theta);
+			im -= samples[n] * sin(theta);
+		}
+		magnitude = hypot(re, im) / (V34_PROBE_SAMPLES / 2);
+		phase = atan2(im, re) * 180.0 / TABLE17_PI;
+		delta = fabs(phase - table17_tones[i].phase);
+		if (delta > 180.0)
+			delta = 360.0 - delta;
+
+		snprintf(msg, sizeof(msg),
+			 "%s Table 17 %u Hz equal, non-zero amplitude",
+			 subject, table17_tones[i].hz);
+		if (i == 0)
+			diff_eq_int(msg, magnitude > 1.0, 1, tag + 2 * i);
+		else
+			diff_eq_int(msg, fabs(magnitude - reference_magnitude) <= 2.0,
+				    1, tag + 2 * i);
+		snprintf(msg, sizeof(msg),
+			 "%s Table 17 %u Hz phase", subject, table17_tones[i].hz);
+		diff_eq_int(msg, delta <= 0.01, 1, tag + 2 * i + 1);
+		if (i == 0)
+			reference_magnitude = magnitude;
+	}
+
+	for (i = 0; i < NP(table17_omitted); i++) {
+		unsigned bin = table17_omitted[i] / TABLE17_BIN_HZ;
+		double re = 0.0, im = 0.0;
+		double magnitude;
+
+		for (n = 0; n < V34_PROBE_SAMPLES; n++) {
+			double theta = 2.0 * TABLE17_PI * bin * n
+				       / V34_PROBE_SAMPLES;
+			re += samples[n] * cos(theta);
+			im -= samples[n] * sin(theta);
+		}
+		magnitude = hypot(re, im) / (V34_PROBE_SAMPLES / 2);
+		snprintf(msg, sizeof(msg),
+			 "%s Table 17 omits %u Hz", subject, table17_omitted[i]);
+		diff_eq_int(msg, magnitude <= 1.0, 1, tag + 42 + i);
+	}
+}
+
+static void
+case_table17_tx_l1(void)
+{
+	struct v34_object *o;
+	int *written;
+	short nominal[V34_PROBE_SAMPLES], doubled[V34_PROBE_SAMPLES];
+	long long nominal_energy = 0, doubled_energy = 0;
+	int i, j, matches_nominal = 1, matches_doubled = 1, early = 0;
+
+	/*
+	 * Capture complete TX_L2 nominal and TX_L1 doubled periods. Sixteen
+	 * four-sample calls are only 64 of the 230 queue slots, so no ring-wrap
+	 * interpretation is required before the saved spans are inspected.
+	 */
+	v34hs_setup(0);
+	v34hs_state(V34HS_TX_L2, V34HS_SILENCE, V34HS_TX_L1);
+	v34hs_poke_short(TX1_VECTIDX, 0);
+	v34hs_poke_short(TX1_F25D4, 0x4000);
+	o = (struct v34_object *)v34hs_object(0);
+	for (i = 0; i < V34_PROBE_SAMPLES / V34_QUEUE_BURST; i++) {
+		written = o->txq.wr;
+		v34tx1_tx_l1(o);
+		for (j = 0; j < V34_QUEUE_BURST; j++)
+			nominal[i * V34_QUEUE_BURST + j] = (short)written[j];
+	}
+
+	v34hs_setup(0);
+	v34hs_state(V34HS_TX_L1, V34HS_SILENCE, V34HS_TX_L1);
+	v34hs_poke_short(TX1_VECTIDX, 0);
+	v34hs_poke_short(TX1_F25D4, 0x4000);
+	o = (struct v34_object *)v34hs_object(0);
+	for (i = 0; i < V34_PROBE_SAMPLES / V34_QUEUE_BURST; i++) {
+		written = o->txq.wr;
+		v34tx1_tx_l1(o);
+		for (j = 0; j < V34_QUEUE_BURST; j++)
+			doubled[i * V34_QUEUE_BURST + j] = (short)written[j];
+	}
+
+	for (i = 0; i < V34_PROBE_SAMPLES; i++) {
+		if (nominal[i] != probe[i])
+			matches_nominal = 0;
+		if (doubled[i] != 2 * probe[i])
+			matches_doubled = 0;
+		nominal_energy += (long long)nominal[i] * nominal[i];
+		doubled_energy += (long long)doubled[i] * doubled[i];
+	}
+	diff_eq_int("TX_L2's full nominal period follows the Table 17 waveform",
+		    matches_nominal, 1, 5269);
+	diff_eq_int("TX_L1's full doubled period is twice the Table 17 waveform",
+		    matches_doubled, 1, 5270);
+	diff_eq_int("TX_L1's doubled path has four times the waveform energy",
+		    doubled_energy == 4 * nominal_energy, 1, 5271);
+
+	/* 384 four-sample calls are 24 complete 64-sample repetitions. */
+	v34hs_setup(0);
+	v34hs_state(V34HS_TX_L1, V34HS_SILENCE, V34HS_TX_L1);
+	v34hs_poke_short(TX1_VECTIDX, 0);
+	v34hs_poke_short(TX1_F25D4, 0x4000);
+	o = (struct v34_object *)v34hs_object(0);
+	for (i = 0; i < 383; i++) {
+		v34tx1_tx_l1(o);
+		if (o->microstate != V34HS_TX_L1 || o->vect_idx != 4 * (i + 1))
+			early = 1;
+	}
+	diff_eq_int("TX_L1 does not transition before the 384th four-sample call",
+		    early, 0, 5272);
+	v34tx1_tx_l1(o);
+	diff_eq_int("TX_L1 transitions to TX_L2 on the 384th four-sample call",
+		    o->microstate, V34HS_TX_L2, 5273);
+	diff_eq_int("TX_L1 resets its period index at the 24th repetition",
+		    o->vect_idx, 0, 5274);
+}
+
+static void
+case_table17_reconstruction(void)
+{
+	/* 46 checks: 21 tone amplitudes, 21 phases, four absences. */
+	case_table17_oracle(probe, "reconstruction", 5170);
+	/* This makes the Recommendation's units executable, too. */
+	diff_eq_int("Table 17's 9600 Hz / 64 samples is 150 Hz per DFT bin",
+		    TABLE17_RATE_HZ / V34_PROBE_SAMPLES, TABLE17_BIN_HZ, 5266);
+	case_table17_tx_l1();
+}
+
+static void
+case_table17_blob(void)
+{
+	/* Keep original-code conformance visibly separate from byte equality. */
+	case_table17_oracle(ref_probe, "blob", 5220);
 }
 
 /* --- 69 EXMIT ------------------------------------------------------------- */
@@ -4236,8 +4422,9 @@ case_trnseg4a(void)
 int
 main(void)
 {
+	int rc = 0;
+
 	dump = getenv("V34TX1_DUMP") != NULL;
-	diff_begin("v34handshak table 1: nineteen per-sample transmit arms");
 
 	/*
 	 * The diagnostics are ON, and unconditionally; see the head of this
@@ -4250,6 +4437,15 @@ main(void)
 	 */
 	v34hs_debug(1);
 	trace = getenv("V34TX1_TRACE") != NULL;
+	diff_begin("V.34 Table 17/reconstruction");
+	case_table17_reconstruction();
+	rc |= diff_end();
+
+	diff_begin("V.34 Table 17/blob");
+	case_table17_blob();
+	rc |= diff_end();
+
+	diff_begin("v34handshak table 1: nineteen per-sample transmit arms");
 
 	case_xmit0();
 	case_txlevel();
@@ -4287,5 +4483,5 @@ main(void)
 	case_trnseg4a_entry();
 	case_trnseg4a();
 
-	return diff_end();
+	return rc | diff_end();
 }

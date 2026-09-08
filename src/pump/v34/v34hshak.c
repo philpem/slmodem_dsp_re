@@ -1692,16 +1692,17 @@ const int vect16[16] = {
  * twenty-four periods.  src/pump/v34/v34hstx1.cpp is where that is written
  * and t_v34hstx1.c is where it compares.
  *
- * The values are a property of the object rather than a derivation.  They
- * came out of `.rodata` BY TOOL, not read off a listing, and what proves the
- * transcription is `t_v34hstx1.c`'s `memcmp` against `ref_probe` -- the same
- * check `vect4` and `vect16` get.
+ * The values came out of `.rodata` BY TOOL, not read off a listing, and the
+ * byte transcription remains proved by `t_v34hstx1.c`'s `memcmp` against
+ * `ref_probe` -- the same check `vect4` and `vect16` get.  The independent
+ * oracle there now derives the waveform from V.34 Table 17 as well: all
+ * twenty-one frequencies and phases, the four omitted bins, equal tone
+ * amplitudes, 24 repetitions and the L1/L2 power ratio.  Finding F10252.
  *
- * Two facts about the numbers, verified over all sixty-four rather than
- * spotted: the array is EVEN about index 32 (`probe[32 + k] == probe[32 - k]`
- * for every k in 1..31) and `probe[32] == -probe[0]`.  Nothing here reads
- * anything into that; it is recorded because it is what a transcription error
- * would most likely break.  The largest magnitude is 13,317, which is why
+ * Two consequences of that derivation, verified over all sixty-four rather
+ * than spotted, are that the array is EVEN about index 32
+ * (`probe[32 + k] == probe[32 - k]` for every k in 1..31) and
+ * `probe[32] == -probe[0]`.  The largest magnitude is 13,317, which is why
  * TX_L1's second loop can double a sample without a short overflowing.
  */
 const short probe[V34_PROBE_SAMPLES] = {

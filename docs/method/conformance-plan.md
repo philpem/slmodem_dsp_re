@@ -368,7 +368,7 @@ pass**, and each is marked with the candidate non-conformance it settles.
 | # | clause | site | shape | fixture | checks | settles |
 |--:|---|---|:-:|---|--:|---|
 | 1 | 7.2/V.8 | `v8_ansaminit`, `v8_ansamgenerate`, `v8_phase_rev_detect` | 3 | `t_v8sig.c` (**done**, F10251; spectrum remains item 21) | 34 | **N3, N4** |
-| 2 | Table 17/V.34 | `probe[64]`, `TX_L1`'s repetition count | 3 | `t_v34hstx1.c` (extend) | ~50 | — |
+| 2 | Table 17/V.34 | `probe[64]`, `TX_L1`'s repetition count | 3 | `t_v34hstx1.c` (**done**, F10252) | 99 | — |
 | 3 | Table 14/V.90 + 10.1.2.3.2/V.34 | `V90CP::calcCRC` / `evaluateCRC` | 1 | **new** `t_v90cpcrc.cpp` | ~1,000 | — |
 | 4 | 5.1, 5.2, Tables 2–7/V.8 | `V8UpdateModemParameters`, `ext_word`, `v8_getbit` | 1,2,3 | `t_v8jm.c`, `t_v8util.c` (extend) | ~80 | **N5, N1** |
 | 5 | Table 1/V.90 | `ulaw2linear`, `alaw2linear`, the three Ucode-mask paths | 3 | `t_pcm.c`, `t_v90p3mod.cpp`, `t_v90modchain.cpp`, `t_v90cpower.cpp` (**done**, F10249–F10250) | 512 + direct-path checks | — |
@@ -414,7 +414,7 @@ ms exactly), reversal-disable behavior, and the detector interoperability gap
 at the two legal timing endpoints, which is N4. Absolute V.2 level,
 out-of-band power and reversal-transient quality remain separately scoped.
 
-**#2 — Table 17/V.34 against `probe[64]`.** The sharpest *methodological* case,
+**#2 — Table 17/V.34 against `probe[64]` (complete, F10252).** The sharpest *methodological* case,
 because the tree says out loud what the test would fix: *"The values are a
 property of the object rather than a derivation."* Sixty-four numbers pulled out
 of `.rodata` by tool and checked by a `memcmp` against the blob — the definition
@@ -727,7 +727,9 @@ defect, not a blob deviation.
 ### What came out conforming, stated as a search result rather than a blank
 
 - `probe[64]` matches Table 17/V.34 tone for tone, phase for phase, absence for
-  absence — 46 of 46. Verified here.
+  absence — 46 of 46 separately for the reconstruction and blob in executable
+  F10252. The production-path checks also prove the 150 Hz repetition rate,
+  24-period/160 ms L1 duration, L1-to-L2 transition and four-to-one power ratio.
 - `ulaw2linear` and `alaw2linear` match all 128 literal rows of Table 1/V.90
   in the executable F10249 oracle: 256 of 256 checks for the reconstruction
   and 256 of 256 for the blob. F10250 exercises the `^0xff`/`^0xd5` Ucode
@@ -824,9 +826,10 @@ should be re-derived with it rather than the total carried forward.
 2. **Item 1 is complete** (ANSam, F10251). It settled N3, N4 and N8 while
    leaving the separately listed spectral, absolute-level and duration work
    explicit.
-3. **Do item 2 next** (Table 17/V.34), which retires a comment that admits the values
-   are underived.
-4. **Item 3** (V90CP CRC), which is also where `t_v90cpcrc.cpp` gets created;
+3. **Item 2 is complete** (Table 17/V.34, F10252). It retires the comment that
+   admitted the values were underived and directly exercises the full L1
+   duration and transition to L2.
+4. **Do item 3 next** (V90CP CRC), which is also where `t_v90cpcrc.cpp` gets created;
    item 7 (V92CP) then reuses everything item 3 builds.
 5. **Items 4 and 6** — the rest of the V.8 and V.25 work, and the other four
    candidate non-conformances.
