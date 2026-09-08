@@ -122907,3 +122907,45 @@ self-test and every structural check. Suite line coverage remains
 **49,019/51,416** (`95.3%`).
 
 (2026-09-08)
+
+## F10261. V.90 Table 12 framing and CRC conform except for odd-count reserved Ucode bits
+
+The former `t_dilpack` established broad reconstruction/blob agreement but did
+not decide whether either stream followed V.90 Table 12. The new oracle builds
+the variable-length information stream directly from the table, independently
+inserts each seventeen-bit frame start, and computes the protected information
+bits with a scalar V.34 Figure-14 `x^16 + x^12 + x^5 + 1` CRC. It calls neither
+production packing nor CRC helpers and obtains no expected value from a
+round-trip.
+
+Sixteen legal shapes cover `N=0..255`, sequence lengths `1..128`, every useful
+sixteen-bit boundary remainder, both terminal-fill parities, and the minimum
+and maximum descriptor lengths. Three literal complete-wire known answers pin
+the independent builder and CRC together: the 240-bit minimum, a 256-bit odd
+count, and a 274-bit boundary-crossing case. Reconstruction and blob each pass
+64 generated frame/length/CRC/guard assertions and 12 literal-KAT assertions.
+The older differential and robustness groups retain their 1,677 passing
+checks.
+
+The standards comparison also exposes D1458. For odd `N`, the packer reads the
+inactive `dilCode[N]` slot and transmits it where Table 12 requires reserved
+zeros. With `N=1` and inactive value 127, both implementations set wire bits
+230 through 236 and change the CRC from the conforming `0xd031` to `0x5b41`.
+The expected-departure groups report this separately for reconstruction and
+blob. Both shipped descriptor presets use even `N=144`, so direct production
+reachability is not claimed; it remains
+[issue #12](https://github.com/philpem/slmodem_dsp_re/issues/12).
+
+The new `dilpackstd` suite catches all 25 focused framing, field-order, extent
+and CRC alternatives. One is the standards-correct odd-slot zeroing change,
+which the expected-departure test catches as a loss of blob fidelity. The
+refreshed `dilpack` suite catches seven mutations and records its eighth as
+proved equivalent: the explicit zero before the CRC repeats a zero already
+written by the last DIL frame, or by the last segment frame when `N=0`. The
+snapshot ledger is **31 current and 223 stale of 254 registered suites**.
+The complete phase boundary passes **375/375** period-compiler differential
+binaries, the 64-bit and interoperability gates, the partial-link comparator
+self-test and every structural check. Suite line coverage remains
+**49,019/51,416** (`95.3%`).
+
+(2026-09-08)

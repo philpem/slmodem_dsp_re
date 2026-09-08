@@ -224,11 +224,14 @@ an exact definition; non-exact definitions retain this finite-evidence limit.
   F10260 adds the complete V.92 Jd/Jp framing oracle and refreshes both of its
   suites at **51/51 existing** and **20/20 standards mutations caught**, making
   **29 current and 224 stale of 253 registered suites**.
+  F10261 adds the V.90 Table 12 DIL descriptor oracle at **25/25 standards
+  mutations caught** and refreshes `dilpack` at **7/8 caught, 1 proved
+  equivalent**, making **31 current and 223 stale of 254 registered suites**.
   This supports only the named clusters and
   not a tree-wide confidence claim. Triage the live
   receive/selection gaps through issues #1 and #10 before paying for a complete
   9,000-plus-mutation refresh.
-- **Add independent standards oracles — twelve numbered blocks complete.** F10249 consumes
+- **Add independent standards oracles — thirteen numbered blocks complete.** F10249 consumes
   every published PCM codeword and linear cell in V.90 Table 1 and reports 256
   reconstruction checks and 256 blob checks separately; both conform. F10250
   moves the literal table into one shared test-only fixture and drives all
@@ -282,7 +285,14 @@ an exact definition; non-exact definitions retain this finite-evidence limit.
   framing/CRC mutations and all 51 refreshed differential mutations are
   caught. No legal-message departure was found; D162 and D271 are retracted
   because the former analysis applied V.90 Table 13 fields to V.92's distinct
-  Jd/Jp layouts. Reset/history handover remains issue #11.
+  Jd/Jp layouts. F10261 independently builds variable-length V.90 Table 12
+  descriptors and their Figure-14 CRC. Reconstruction and blob each pass 64
+  generated and 12 fixed-known-answer assertions. Both also expose D1458:
+  with odd `N`, the inactive `dilCode[N]` slot occupies seven reserved-zero
+  wire positions and changes the CRC. The shipped presets use even `N=144`;
+  broader production reachability remains
+  [issue #12](https://github.com/philpem/slmodem_dsp_re/issues/12).
+  Reset/history handover remains issue #11.
   ANSam spectrum, absolute level, transition quality and duration remain
   separately scoped. These oracles do not improve
   equivalence to the blob; they answer whether both implementations reproduce
