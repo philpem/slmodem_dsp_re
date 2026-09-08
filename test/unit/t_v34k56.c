@@ -18,9 +18,9 @@
  * a set of blanked-out fields that were never pointers at all.
  *
  * ONE POINTER IS DELIBERATELY SHARED.  `pac18` is the `K56FlexFloModem` this
- * function hands to its two bit sources, and `t_v90leaves` has already
- * measured that all four members of that class write nothing at all through
- * the pointer they are given.  So both sides get the SAME buffer, there is
+ * function hands to its two bit sources, and `t_v34diag` directly measures
+ * that the K56 stubs -- including these two getters -- write nothing through
+ * the pointers they are given.  So both sides get the SAME buffer, there is
  * nothing to blank, and a store through it would show up as the two sides
  * disagreeing about a buffer only one of them could have written.
  *
@@ -43,8 +43,9 @@
  * data flag was never set" and "the receiver state never became 3 or 2 on
  * those arms".  A "this arm ran at least once" check for them would be
  * unsatisfiable arithmetic dressed as coverage, which is the shape that
- * failed loudly twice already in this tree.  Finding F281 measures the gap and
- * names the four mutations that go uncaught because of it.
+ * failed loudly twice already in this tree.  Finding F281 records the old
+ * ten-uncaught classification; F10248 corrects those ten to whole-program
+ * behavioral equivalents without claiming the dormant bytes are tested.
  */
 
 #include <stdio.h>

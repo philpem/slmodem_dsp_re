@@ -92,13 +92,15 @@
   "label": "the Ja arm does not consult the bit source at all",
   "find": "\t\tint done = (short)k56->getK56FlexJaBits(&o->cur_quadrant);",
   "replace": "\t\tint done = 0;",
-  "why_uncaught": "the stub returns 0 and writes nothing through the pointer, so the call has no observable effect; witnessed instead by the mangled undefined symbol in build/src/pump/v34/v34k56.o, not by any test"
+  "equivalent": true,
+  "why": "The directly called, nonvirtual getK56FlexJaBits in this same blob is exactly three bytes, `xor %eax,%eax; ret`: it returns zero and writes nothing through the supplied pointer for every object and input.  Replacing that call with `done = 0` therefore preserves every observable result of the fixed linked blob.  The call remains in the reconstruction because its relocation and bytes matter to object identity; this classification is behavioral, not permission to remove it."
  },
  {
   "label": "the MP arm does not consult the bit source at all",
   "find": "\t\tint done = (short)k56->getK56FlexMpBits(&o->cur_quadrant);",
   "replace": "\t\tint done = 0;",
-  "why_uncaught": "as above, for getK56FlexMpBits"
+  "equivalent": true,
+  "why": "The directly called, nonvirtual getK56FlexMpBits is likewise exactly `xor %eax,%eax; ret`, so it always returns zero and has no stores or other side effects.  `done = 0` is consequently indistinguishable for every call in the fixed linked blob.  Its original call and relocation are still required for object identity."
  },
  {
   "label": "case 3 increments the index it shifted with, not a re-read",
@@ -110,41 +112,57 @@
  {
   "label": "DEAD: the Ja completion arm sets state 4 rather than 3",
   "find": "\t\to->k56flex_receiver = 3;",
-  "replace": "\t\to->k56flex_receiver = 4;"
+  "replace": "\t\to->k56flex_receiver = 4;",
+  "equivalent": true,
+  "why": "This store is dominated by `getK56FlexJaBits` returning nonzero.  That directly called three-byte getter always returns zero, so the completion arm is unreachable for every state of the fixed linked blob and neither value can be observed."
  },
  {
   "label": "DEAD: the Ja completion arm writes 0x8990 rather than 0x899f",
   "find": "*(short *)(m + OB_TXBITS) = (short)0x899f;",
-  "replace": "*(short *)(m + OB_TXBITS) = (short)0x8990;"
+  "replace": "*(short *)(m + OB_TXBITS) = (short)0x8990;",
+  "equivalent": true,
+  "why": "The Ja completion block is dominated by a nonzero return from getK56FlexJaBits, whose exact body always returns zero without side effects.  The block is unreachable in the fixed linked blob, so neither constant reaches +0x25d6."
  },
  {
   "label": "DEAD: the Ja completion arm does not set the data flag",
   "find": "\t\trx->flags |= V34_RX_FLAG_DATA;",
-  "replace": "\t\t(void)0;"
+  "replace": "\t\t(void)0;",
+  "equivalent": true,
+  "why": "The Ja completion block is dominated by getK56FlexJaBits returning nonzero, but its exact three-byte body always returns zero.  The DATA-flag store is therefore unreachable for every execution of the fixed linked blob."
  },
  {
   "label": "DEAD: the Ja completion arm does not reset vect_idx",
   "find": "\t\to->vect_idx = 0;\n\t\to->k56flex_receiver = 3;",
-  "replace": "\t\to->k56flex_receiver = 3;"
+  "replace": "\t\to->k56flex_receiver = 3;",
+  "equivalent": true,
+  "why": "The Ja completion block cannot execute because the directly called getK56FlexJaBits always returns zero.  No legal input can reach this reset in the fixed linked blob, irrespective of the incoming vect_idx."
  },
  {
   "label": "DEAD: the MP completion arm sets state 6 rather than 2",
   "find": "\t\to->k56flex_receiver = 2;",
-  "replace": "\t\to->k56flex_receiver = 6;"
+  "replace": "\t\to->k56flex_receiver = 6;",
+  "equivalent": true,
+  "why": "This store is dominated by `getK56FlexMpBits` returning nonzero.  That directly called three-byte getter always returns zero, so the MP completion arm is unreachable in the fixed linked blob and neither state can be observed."
  },
  {
   "label": "DEAD: the MP completion arm writes the wrong txstate",
   "find": "\t\t\t*(short *)(m + OB_TXSTATE) = V34HS_EXMIT;",
-  "replace": "\t\t\t*(short *)(m + OB_TXSTATE) = V34HS_DATAXMIT;"
+  "replace": "\t\t\t*(short *)(m + OB_TXSTATE) = V34HS_DATAXMIT;",
+  "equivalent": true,
+  "why": "The MP completion arm is dominated by a nonzero return from getK56FlexMpBits, whose exact body always returns zero without side effects.  Consequently neither transmit-state value is written in any execution of the fixed linked blob."
  },
  {
   "label": "DEAD AND EQUIVALENT: the MP arm's compare-then-store is a store",
   "find": "\t\tif (*(short *)(m + OB_TXSTATE) != V34HS_EXMIT)\n\t\t\t*(short *)(m + OB_TXSTATE) = V34HS_EXMIT;",
-  "replace": "\t\t*(short *)(m + OB_TXSTATE) = V34HS_EXMIT;"
+  "replace": "\t\t*(short *)(m + OB_TXSTATE) = V34HS_EXMIT;",
+  "equivalent": true,
+  "why": "Independently of reachability, both forms leave ordinary writable nonvolatile storage equal to V34HS_EXMIT.  In this blob the containing MP completion arm is also unreachable because getK56FlexMpBits always returns zero.  The compare-then-store spelling remains because it is the object's spelling."
  },
  {
   "label": "DEAD: the MP completion arm skips initdigital",
   "find": "\t\tinitdigital(o);",
-  "replace": "\t\t(void)0;"
+  "replace": "\t\t(void)0;",
+  "equivalent": true,
+  "why": "The call sits only in the MP completion arm, dominated by getK56FlexMpBits returning nonzero.  That getter's exact three-byte body always returns zero, so neither initdigital nor its omission is reachable in the fixed linked blob."
  }
 ]
