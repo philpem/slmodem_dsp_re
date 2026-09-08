@@ -121998,3 +121998,58 @@ coverage and debug-site checks green. This includes the comparator's planted
 self-test; the deliberately isolated modern-compiler NaN mismatch remains an
 allowed diagnostic while `make period` is authoritative for that case.
 (2026-09-08)
+
+## F10241. The 155 receive-chain differences were an invalid-state fixture artefact, and a constructed chain is green
+
+F7513 recorded that wiring `V90Equalizer::process` deeply enough to call
+`V90Phase3Demodulator::getDecision` made all 155 `t_v90demprog` trials differ
+on their equalised-symbol block. It called that a real divergence in the
+already-written callee. That conclusion was too strong: the new wiring made
+the call real, but did not make its input object real.
+
+`v90demfix.h::setup` fills the complete 0x42c-byte Phase-3-demodulator slot
+with deterministic pseudorandom bytes and wires only the pointers needed by
+the shallow users of that shared fixture. It neither constructs nor resets
+the object. Replaying that exact fill establishes that the selector at +0x28
+was greater than 0x21 in **all 155 trials**. Those values take
+`getV90Decision`'s documented default path, where the blob leaves the return
+register unwritten and the reconstruction deliberately leaves `decision`
+uninitialised. Feeding that compiler-dependent value into the equaliser
+explains exactly one failed equalised-block assertion per trial. The old result
+therefore said nothing about the accuracy of either decision function.
+
+The broad fixture had a second measurement error. It counted
+`V90Demodulator::word_3c` after the whole call and described the three distinct
+values as receive events. `progress` is allowed to replace the equaliser's
+event with a later connection-evaluator outcome, so that was a count of final
+outcomes, not dispatcher inputs. The fixture now counts the producer's
+`V90Equalizer::stateCount` separately: it produces **one distinct event, 0**,
+and the whole demodulator produces **three final outcomes**. It also asserts
+the 155 invalid historical seeds rather than leaving the premise of the old
+failure in prose. The corrected broad group passes **1,870 checks**.
+
+A second group now tests a valid composition instead of legalising one word in
+a raw slot. Each side constructs its own full V90Parameters, automatic digital
+impairment detector, connection evaluator, resampler and
+V90Phase3Demodulator; the Phase-3 constructor performs the real reset and owns
+real SD and ANSam detector allocations. The equaliser is reset, wired to those
+peers and entered through `enterPhase3`. Four sequential `progress` calls keep
+state between blocks, once for V.90 and once for V.92. The configured SD input
+naturally produces event 1 and then the quiet event 0; neither event is
+planted.
+
+The composed group compares the demodulator, resampler, equaliser and its
+arrays, Phase-3 demodulator, SD detector and history, evaluator, full parameter
+block, all intermediate/output buffers and the diagnostic transcript. It
+passes **140 checks** on both the modern and period builds;
+`make period T=t_v90demprog` reports **1/1 passed**. No reconstruction source
+changes are justified by this investigation. Later Phase-3 states and the
+Phase-4/data compositions remain genuine coverage work; the completed-message
+work in issue #2 is the next bounded step. Mutation results are deliberately
+not claimed here because their targeted refresh follows the fixture changes.
+
+The complete `make phase J=4` boundary remains green after this change:
+**374/374 period differential groups** pass, as do the 64-bit and
+interoperability tiers, and measured source-line coverage is
+**48,971/51,416 (95.2%)** with the coverage and debug-site checks green.
+(2026-09-08)
