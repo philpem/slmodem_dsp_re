@@ -52,6 +52,7 @@
 
 #include "harness.h"
 #include "dsplib/V92DILdescriptorPacker.h"
+#include "dsplib/V90DilDescriptorSettings.h"
 
 extern "C" {
 void blobV92Packer(void *desc, unsigned char *bits, int *nbits)
@@ -386,6 +387,495 @@ run_shape(void)
 	return diff_end();
 }
 
+/*
+ * ===========================================================================
+ * ITU-T V.92 TABLE 20, independently of V92DILdescriptorPacker/dsplibs.o.
+ *
+ * The differential tests above prove reconstruction/blob agreement, including
+ * over many non-standard raw byte patterns.  This oracle instead creates the
+ * information stream in Table 20 field order, inserts the literal one-start-
+ * bit-per-sixteen framing and uses an independent bit-serial V.34 Figure 14
+ * CRC.  It does not call either packer to obtain an expected value and is not
+ * a packing round trip.
+ *
+ * Table 20 inherits Table 12 through the start bit after the Ucodes, then adds
+ * nineteen rate-capability bits and thirteen reserved zeros before the CRC.
+ * The implementation's fixed mask has the low sixteen capabilities enabled
+ * and the high three disabled.  That is a valid fixed mask in the absence of
+ * evidence that an owning modem enables a different set; the oracle therefore
+ * states that precondition rather than inventing a variable input the function
+ * does not have.
+ *
+ * Unlike V.90, V.92 requires zero fill to the next MULTIPLE OF TWELVE bits.
+ * Both implementations only extend to an even length.  Conforming-length
+ * controls and explicit expected-departure cases are kept separate below.
+ * ===========================================================================
+ */
+typedef void (*table20_pack_fn)(void *, unsigned char *, int *);
+
+struct table20_subject {
+	const char *oracle_group;
+	const char *kat_group;
+	const char *preset_group;
+	const char *odd_group;
+	table20_pack_fn pack;
+};
+
+static void
+table20_our_pack(void *d, unsigned char *bits, int *nbits)
+{
+	V92DILdescriptorPacker((tagV90DILdescriptor *)d, bits, nbits);
+}
+
+static void
+table20_blob_pack(void *d, unsigned char *bits, int *nbits)
+{
+	blobV92Packer(d, bits, nbits);
+}
+
+static void
+table20_put(unsigned char *information, unsigned int *at,
+	    unsigned int value, unsigned int width)
+{
+	unsigned int i;
+
+	for (i = 0; i < width; i++)
+		information[(*at)++] = (unsigned char)((value >> i) & 1u);
+}
+
+/* Figure 14 in chronological order: x^16+x^12+x^5+1, preload all ones. */
+static unsigned int
+table20_crc(const unsigned char *information, unsigned int n)
+{
+	unsigned int reg = 0xffffu;
+	unsigned int i;
+
+	for (i = 0; i < n; i++) {
+		unsigned int feedback =
+		    (reg ^ (unsigned int)information[i]) & 1u;
+
+		reg >>= 1;
+		if (feedback)
+			reg ^= 0x8408u;
+	}
+	return reg & 0xffffu;
+}
+
+static unsigned int
+table20_information(unsigned char information[NBITS],
+		    const tagV90DILdescriptor *d)
+{
+	unsigned int at = 0;
+	unsigned int i;
+
+	/* V.90 Table 12 frames 1 and 2. */
+	table20_put(information, &at, d->dilCount, 8);
+	table20_put(information, &at, 0, 8);
+	table20_put(information, &at, (unsigned int)d->seq1Length - 1u, 7);
+	table20_put(information, &at, 0, 1);
+	table20_put(information, &at, (unsigned int)d->seq2Length - 1u, 7);
+	table20_put(information, &at, 0, 1);
+
+	/* SP and TP, zero-padded independently to complete information frames. */
+	for (i = 0; i < d->seq1Length; i++)
+		table20_put(information, &at, d->seq1[i], 1);
+	while (at & 15u)
+		table20_put(information, &at, 0, 1);
+	for (i = 0; i < d->seq2Length; i++)
+		table20_put(information, &at, d->seq2[i], 1);
+	while (at & 15u)
+		table20_put(information, &at, 0, 1);
+
+	/* H1..H8, REF1..REF8 and exactly N active Ucodes. */
+	for (i = 0; i < 8u; i++) {
+		table20_put(information, &at, d->segmentSize[i], 7);
+		table20_put(information, &at, 0, 1);
+	}
+	for (i = 0; i < 8u; i++) {
+		table20_put(information, &at, d->segmentCode[i], 7);
+		table20_put(information, &at, 0, 1);
+	}
+	for (i = 0; i < d->dilCount; i++) {
+		table20_put(information, &at, d->dilCode[i], 7);
+		table20_put(information, &at, 0, 1);
+	}
+	while (at & 15u)
+		table20_put(information, &at, 0, 1);
+
+	/* Table 20's valid fixed rate mask: low sixteen on, high three off. */
+	table20_put(information, &at, 0xffffu, 16);
+	table20_put(information, &at, 0, 3);
+	table20_put(information, &at, 0, 13);
+	return at;
+}
+
+static unsigned int
+table20_frame(unsigned char expected[NBITS],
+	      const tagV90DILdescriptor *d, unsigned int *crc_at,
+	      unsigned int *crc_word)
+{
+	unsigned char information[NBITS];
+	unsigned int info_len = table20_information(information, d);
+	unsigned int at = 0;
+	unsigned int i;
+
+	for (i = 0; i < 17u; i++)
+		expected[at++] = 1;
+	for (i = 0; i < info_len; i++) {
+		if ((i & 15u) == 0)
+			expected[at++] = 0;
+		expected[at++] = information[i];
+	}
+	*crc_at = at;
+	expected[at++] = 0;
+	*crc_word = table20_crc(information, info_len);
+	for (i = 0; i < 16u; i++)
+		expected[at++] = (unsigned char)((*crc_word >> i) & 1u);
+
+	/* Bit C+17 and every bit needed to reach the next 12-bit boundary. */
+	do {
+		expected[at++] = 0;
+	} while (at % 12u);
+	return at;
+}
+
+static unsigned int
+table20_wire_crc(const unsigned char *wire, unsigned int crc_at)
+{
+	unsigned int word = 0;
+	unsigned int i;
+
+	for (i = 0; i < 16u; i++)
+		word |= (unsigned int)(wire[crc_at + 1u + i] & 1u) << i;
+	return word;
+}
+
+static int
+table20_guard(const unsigned char *wire, unsigned int len)
+{
+	unsigned int i;
+
+	if (len > NBITS)
+		return 0;
+	for (i = len; i < NBITS; i++)
+		if (wire[i] != 0xa5)
+			return 0;
+	return 1;
+}
+
+static void
+table20_descriptor(tagV90DILdescriptor *d, unsigned int n,
+		   unsigned int lsp, unsigned int ltp, unsigned int seed)
+{
+	unsigned int i;
+
+	memset(d, 0, sizeof(*d));
+	d->dilCount = (unsigned char)n;
+	d->seq1Length = (unsigned char)lsp;
+	d->seq2Length = (unsigned char)ltp;
+	for (i = 0; i < lsp; i++)
+		d->seq1[i] = (unsigned char)((i * 5u + seed) & 1u);
+	for (i = 0; i < ltp; i++)
+		d->seq2[i] = (unsigned char)((i * 3u + seed / 2u + 1u) & 1u);
+	for (i = 0; i < 8u; i++) {
+		d->segmentSize[i] = (unsigned char)((seed + 13u * i) & 0x7fu);
+		d->segmentCode[i] =
+		    (unsigned char)((127u - seed - 7u * i) & 0x7fu);
+	}
+	for (i = 0; i < n; i++)
+		d->dilCode[i] = (unsigned char)((seed + 29u * i) & 0x7fu);
+}
+
+static int
+run_table20_oracle_subject(const struct table20_subject *s)
+{
+	/* q=ceil(LSP/16)+ceil(LTP/16)+ceil(N/2) is 5, 12, 17, 24 or 144. */
+	static const struct {
+		unsigned char n, lsp, ltp, seed;
+	} legal[] = {
+		{   5,   1,   1,  3 }, {  19,   1,   1,  5 },
+		{  20,   1,   1,  7 }, {   1, 128, 128, 11 },
+		{   2, 128, 128, 13 }, {  43,  16,  16, 17 },
+		{ 255, 128, 128, 19 }
+	};
+	tagV90DILdescriptor d;
+	unsigned char actual[NBITS];
+	unsigned char expected[NBITS];
+	unsigned int trial;
+
+	diff_begin(s->oracle_group);
+	for (trial = 0; trial < sizeof(legal) / sizeof(legal[0]); trial++) {
+		unsigned int crc_at, crc_word, expected_len;
+		int actual_len = LEN_SENTINEL;
+
+		table20_descriptor(&d, legal[trial].n, legal[trial].lsp,
+				   legal[trial].ltp, legal[trial].seed);
+		memset(actual, 0xa5, sizeof(actual));
+		expected_len = table20_frame(expected, &d, &crc_at, &crc_word);
+		s->pack(&d, actual, &actual_len);
+
+		diff_eq_int("Table 20 complete length is a multiple of 12 (%ld)",
+			    actual_len, expected_len, (long)trial);
+		diff_eq_int("Table 20 complete framed vector is exact (%ld)",
+			    memcmp(actual, expected, expected_len), 0, (long)trial);
+		diff_eq_int("Table 20 CRC has the exact information extent (%ld)",
+			    table20_wire_crc(actual, crc_at), crc_word,
+			    (long)trial);
+		diff_eq_int("Table 20 kept the output guard (%ld)",
+			    table20_guard(actual, (unsigned int)actual_len), 1,
+			    (long)trial);
+	}
+	return diff_end();
+}
+
+struct table20_kat {
+	unsigned int crc_at, crc, standard_len, source_len, byte_len;
+	unsigned char bytes[39];
+};
+
+static void
+table20_kat_descriptor(tagV90DILdescriptor *d, unsigned int which)
+{
+	unsigned int i;
+
+	memset(d, 0, sizeof(*d));
+	d->seq1Length = d->seq2Length = 1;
+	if (which == 1) {
+		d->dilCount = 1;
+		d->seq1[0] = d->seq2[0] = 1;
+		for (i = 0; i < 8u; i++) {
+			d->segmentSize[i] = (unsigned char)i;
+			d->segmentCode[i] = (unsigned char)(16u * i);
+		}
+		d->dilCode[0] = 127;
+	} else if (which == 2) {
+		d->dilCount = 2;
+		d->seq1Length = 17;
+		d->seq2Length = 16;
+		for (i = 0; i < 17u; i++)
+			d->seq1[i] = (unsigned char)(i & 1u);
+		d->seq2[0] = d->seq2[15] = 1;
+		for (i = 0; i < 8u; i++) {
+			d->segmentSize[i] = (unsigned char)(127u - i);
+			d->segmentCode[i] = (unsigned char)(127u - 16u * i);
+		}
+		d->dilCode[0] = 0;
+		d->dilCode[1] = 127;
+	} else if (which == 3) {
+		d->dilCount = 6;
+	}
+}
+
+static void
+table20_pack_bytes(unsigned char *bytes, const unsigned char *wire,
+		   unsigned int nbits)
+{
+	unsigned int i;
+
+	memset(bytes, 0, (nbits + 7u) / 8u);
+	for (i = 0; i < nbits; i++)
+		bytes[i / 8u] |= (unsigned char)((wire[i] & 1u) << (i & 7u));
+}
+
+static int
+table20_prefix_matches(const unsigned char *wire, unsigned int nbits,
+		       const unsigned char *packed)
+{
+	unsigned int i;
+
+	for (i = 0; i < nbits; i++)
+		if ((wire[i] & 1u) != ((packed[i / 8u] >> (i & 7u)) & 1u))
+			return 0;
+	return 1;
+}
+
+static int
+run_table20_kat_subject(const struct table20_subject *s)
+{
+	static const struct table20_kat kats[] = {
+		{ 255, 0xfa14, 276, 274, 35,
+		  { 0xff, 0xff, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00,
+		    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		    0x00, 0x00, 0x00, 0xc0, 0xff, 0x3f, 0x00, 0x00,
+		    0x14, 0xfa, 0x00 } },
+		{ 272, 0xdc67, 300, 290, 38,
+		  { 0xff, 0xff, 0x05, 0x00, 0x00, 0x00, 0x10, 0x00,
+		    0x20, 0x00, 0x00, 0x40, 0x00, 0x81, 0x01, 0x04,
+		    0x05, 0x0c, 0x0e, 0x00, 0x40, 0x00, 0x81, 0x01,
+		    0x04, 0x05, 0x0c, 0xce, 0x1f, 0x80, 0xff, 0x7f,
+		    0x00, 0x00, 0xce, 0xb8, 0x01, 0x00 } },
+		{ 289, 0xfd8d, 312, 308, 39,
+		  { 0xff, 0xff, 0x09, 0x00, 0x80, 0x78, 0xa0, 0xaa,
+		    0x0a, 0x00, 0x40, 0x00, 0xa0, 0x3f, 0x3f, 0x7d,
+		    0x7c, 0xf6, 0xf4, 0xe4, 0xe1, 0xf9, 0x7b, 0xf3,
+		    0xf5, 0xe4, 0xe7, 0xc5, 0xc7, 0x03, 0x80, 0x3f,
+		    0xff, 0xff, 0x00, 0x00, 0x34, 0xf6, 0x03 } }
+	};
+	tagV90DILdescriptor d;
+	unsigned char actual[NBITS], expected[NBITS], packed[39];
+	unsigned int k;
+
+	diff_begin(s->kat_group);
+	for (k = 0; k < sizeof(kats) / sizeof(kats[0]); k++) {
+		unsigned int crc_at, crc_word, standard_len;
+		int actual_len = LEN_SENTINEL;
+
+		table20_kat_descriptor(&d, k);
+		memset(actual, 0xa5, sizeof(actual));
+		standard_len = table20_frame(expected, &d, &crc_at, &crc_word);
+		table20_pack_bytes(packed, expected, standard_len);
+		s->pack(&d, actual, &actual_len);
+
+		diff_eq_int("fixed Table 20 standard length KAT (%ld)",
+			    standard_len, kats[k].standard_len, (long)k);
+		diff_eq_int("fixed Table 20 standard packed-wire KAT (%ld)",
+			    memcmp(packed, kats[k].bytes, kats[k].byte_len), 0,
+			    (long)k);
+		diff_eq_int("expected fill departure: source length KAT (%ld)",
+			    actual_len, kats[k].source_len, (long)k);
+		diff_eq_int("source prefix agrees with fixed Table 20 KAT (%ld)",
+			    table20_prefix_matches(actual,
+				(unsigned int)actual_len, kats[k].bytes), 1,
+			    (long)k);
+		diff_eq_int("fixed Table 20 CRC KAT (%ld)",
+			    table20_wire_crc(actual, kats[k].crc_at), kats[k].crc,
+			    (long)k);
+		diff_eq_int("fixed Table 20 KAT kept the guard (%ld)",
+			    table20_guard(actual, (unsigned int)actual_len), 1,
+			    (long)k);
+	}
+
+	/* KAT D: q=5, a length at which the implementation's fill is conforming. */
+	{
+		unsigned int crc_at, crc_word, standard_len;
+		int actual_len = LEN_SENTINEL;
+
+		table20_kat_descriptor(&d, 3);
+		memset(actual, 0xa5, sizeof(actual));
+		standard_len = table20_frame(expected, &d, &crc_at, &crc_word);
+		s->pack(&d, actual, &actual_len);
+		diff_eq_int("fixed Table 20 conforming control length", actual_len,
+			    324, 0);
+		diff_eq_int("fixed Table 20 conforming control standard length",
+			    standard_len, 324, 0);
+		diff_eq_int("fixed Table 20 conforming control CRC",
+			    table20_wire_crc(actual, crc_at), 0xf26b, 0);
+		diff_eq_int("fixed Table 20 conforming control vector",
+			    memcmp(actual, expected, standard_len), 0, 0);
+		diff_eq_int("fixed Table 20 conforming control kept the guard",
+			    table20_guard(actual, (unsigned int)actual_len), 1, 0);
+	}
+	return diff_end();
+}
+
+static int
+run_table20_preset_subject(const struct table20_subject *s)
+{
+	static const struct {
+		DilType type;
+		unsigned int lsp, ltp, source_len, standard_len;
+	} presets[] = {
+		{ DIL_TYPE_ADI,    120, 120, 1736, 1740 },
+		{ DIL_TYPE_ADI_QC,  60,  60, 1600, 1608 }
+	};
+	tagV90DILdescriptor d;
+	unsigned char actual[NBITS], expected[NBITS];
+	unsigned int p;
+
+	diff_begin(s->preset_group);
+	for (p = 0; p < sizeof(presets) / sizeof(presets[0]); p++) {
+		unsigned int crc_at, crc_word, standard_len;
+		int actual_len = LEN_SENTINEL;
+
+		memset(&d, 0xa5, sizeof(d));
+		setDilDescriptor(&d, presets[p].type);
+		memset(actual, 0xa5, sizeof(actual));
+		standard_len = table20_frame(expected, &d, &crc_at, &crc_word);
+		s->pack(&d, actual, &actual_len);
+
+		diff_eq_int("shipped preset has N=144 (%ld)", d.dilCount, 144,
+			    (long)p);
+		diff_eq_int("shipped preset has exact LSP (%ld)", d.seq1Length,
+			    presets[p].lsp, (long)p);
+		diff_eq_int("shipped preset has exact LTP (%ld)", d.seq2Length,
+			    presets[p].ltp, (long)p);
+		diff_eq_int("reachable fill departure: source preset length (%ld)",
+			    actual_len, presets[p].source_len, (long)p);
+		diff_eq_int("reachable Table 20 standard preset length (%ld)",
+			    standard_len, presets[p].standard_len, (long)p);
+		diff_eq_int("reachable preset is an exact standard prefix (%ld)",
+			    memcmp(actual, expected, (unsigned int)actual_len), 0,
+			    (long)p);
+		diff_eq_int("reachable preset CRC has exact extent (%ld)",
+			    table20_wire_crc(actual, crc_at), crc_word, (long)p);
+		diff_eq_int("reachable preset kept the guard (%ld)",
+			    table20_guard(actual, (unsigned int)actual_len), 1,
+			    (long)p);
+	}
+	return diff_end();
+}
+
+static int
+run_table20_odd_subject(const struct table20_subject *s)
+{
+	tagV90DILdescriptor d;
+	unsigned char actual[NBITS];
+	int actual_len = LEN_SENTINEL;
+	unsigned int i;
+	int inactive_ones = 1;
+
+	diff_begin(s->odd_group);
+	table20_kat_descriptor(&d, 1);
+	d.dilCode[1] = 127;
+	memset(actual, 0xa5, sizeof(actual));
+	s->pack(&d, actual, &actual_len);
+	for (i = 230; i <= 236; i++)
+		if (actual[i] != 1)
+			inactive_ones = 0;
+
+	diff_eq_int("expected departure: inactive odd-N Ucode is emitted",
+		    inactive_ones, 1, 0);
+	diff_eq_int("expected departure: inactive Ucode changes Table 20 CRC",
+		    table20_wire_crc(actual, 272), 0xa368, 0);
+	diff_eq_int("odd-N departure retains the source length", actual_len,
+		    290, 0);
+	diff_eq_int("odd-N departure kept the guard",
+		    table20_guard(actual, (unsigned int)actual_len), 1, 0);
+	return diff_end();
+}
+
+static int
+run_table20(void)
+{
+	static const struct table20_subject subjects[] = {
+		{
+			"V.92 Table 20 reconstruction standards oracle",
+			"V.92 Table 20 reconstruction fixed KATs",
+			"V.92 Table 20 reconstruction reachable fill departures",
+			"V.92 Table 20 reconstruction odd-N departure",
+			table20_our_pack
+		},
+		{
+			"V.92 Table 20 blob standards oracle",
+			"V.92 Table 20 blob fixed KATs",
+			"V.92 Table 20 blob reachable fill departures",
+			"V.92 Table 20 blob odd-N departure",
+			table20_blob_pack
+		}
+	};
+	unsigned int i;
+	int rc = 0;
+
+	for (i = 0; i < sizeof(subjects) / sizeof(subjects[0]); i++) {
+		rc |= run_table20_oracle_subject(&subjects[i]);
+		rc |= run_table20_kat_subject(&subjects[i]);
+		rc |= run_table20_preset_subject(&subjects[i]);
+		rc |= run_table20_odd_subject(&subjects[i]);
+	}
+	return rc;
+}
+
 int
 main(void)
 {
@@ -394,6 +884,7 @@ main(void)
 	rc |= run_cases();
 	rc |= run_sweep();
 	rc |= run_shape();
+	rc |= run_table20();
 
 	return rc;
 }

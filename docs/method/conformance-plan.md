@@ -385,7 +385,7 @@ pass**, and each is marked with the candidate non-conformance it settles.
 | 11 | 5.3, 6.5/V.90; 6.3/V.92 | the eight `Scrambler`/`Descrambler` sites, taps measured as delays | 3 | `t_scrambler.cpp` plus direct owner fixtures (**done**, F10259) |
 | 12 | Tables 21,22/V.92 | `V92Jd`'s Jd/Jp framing and CRC extent | 1 | `t_v92jd.cpp` (**done**, F10260) |
 | 13 | Table 12/V.90 | `DILdescriptorPacker`'s CRC extent | 1 | `t_dilpack.cpp` (**done**, F10261) |
-| 14 | Table 20/V.92 | `V92DILdescriptorPacker`'s CRC extent | 1 | `t_v92dilpack.cpp` (extend) |
+| 14 | Table 20/V.92 | `V92DILdescriptorPacker`'s CRC extent | 1 | `t_v92dilpack.cpp` (**done**, F10262) |
 | 15 | 5.4.2, 5.4.3/V.90 | `ModulusEncoder`/`Decoder` bit weighting, and `out[5] < M5` | 2,1 | `t_moduluscoder.cpp` (extend) |
 | 16 | Tables 2, 14, 17/V.90; 23, 30/V.92 | the whole `drn` → rate chain | 3 | `t_v90demod.cpp`, `t_v92unpck.c` (extend) |
 | 17 | Tables 3, 5/V.90 | `V90SpectralShaper`'s frame geometry | 3 | `t_v90shapeact.cpp` (extend) |
@@ -911,6 +911,12 @@ should be re-derived with it rather than the total carried forward.
    which Table 12 reserves as zero. Take item 14 next; production reachability
    of odd-count descriptors remains separately tracked in
    [issue #12](https://github.com/philpem/slmodem_dsp_re/issues/12).
+10. **Item 14 is complete** (F10262): a payload-first Table 20 builder, scalar
+    Figure-14 CRC and three literal complete-wire answers confirm the framing
+    and CRC but expose D1459. The blob pads descriptors only to an even length,
+    not the required twelve-bit boundary; both shipped presets reach it. Take
+    item 15 next. Receiver impact and an opt-in interop path remain
+    [issue #13](https://github.com/philpem/slmodem_dsp_re/issues/13).
 
 **Before any of it, read `docs/method/tiers.md` §5 and finding F7413.** The two
 rules a spec block gets wrong if it is written from the code rather than from

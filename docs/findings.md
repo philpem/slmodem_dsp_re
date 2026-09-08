@@ -122949,3 +122949,50 @@ self-test and every structural check. Suite line coverage remains
 **49,019/51,416** (`95.3%`).
 
 (2026-09-08)
+
+## F10262. V.92 Table 20 CRC conforms, but shipped Ja descriptors omit required fill
+
+The independent Table 20 oracle builds the inherited V.90 information prefix,
+adds nineteen analogue-transmitter capability positions and thirteen reserved
+zeros, inserts every frame start, and computes the complete protected stream
+with a scalar V.34 Figure-14 CRC. The fixed production capability mask enables
+24,000 through 44,000 bit/s and disables the highest three rates; that is a
+legal fixed mask under the explicit precondition that those are the enabled
+transmitter capabilities, so no configuration claim is inferred from the leaf.
+
+Seven legal controls whose required twelve-bit length equals the blob's even
+length pass 28 exact frame/length/CRC/guard assertions separately on
+reconstruction and blob. Three independently derived complete packed-wire
+answers then pin the minimum, odd-count and boundary-crossing messages; a
+fourth fixed CRC control pins a genuinely conforming 324-bit shape. Each side
+passes 23 known-answer assertions. The older 1,366 differential, length-sweep
+and structural assertions remain green.
+
+The literal answers expose D1459: the packer correctly writes the Table 20
+prefix and CRC but stops after even padding instead of filling to the next
+multiple of twelve. The minimum message is 274 rather than the explicitly
+required 276 bits. More importantly, direct `setDilDescriptor` inputs prove
+both shipped shapes reach the departure: ADI is 1,736 rather than 1,740 bits,
+and ADI-QC is 1,600 rather than 1,608. Reconstruction and blob each pass 16
+separately labelled expected-departure assertions. The cyclic Ja reader uses
+the returned short length unchanged; final sequence-end alignment does not
+repair descriptor-to-descriptor boundaries. Receiver impact remains
+[issue #13](https://github.com/philpem/slmodem_dsp_re/issues/13).
+
+Table 20 also inherits D1458. With odd `N=1`, both packers transmit inactive
+`dilCode[1]` into seven reserved positions and change the independently derived
+CRC from `0xdc67` to `0xa368`; four checks per implementation preserve that
+fact separately from conforming inputs. The shipped presets remain even-count.
+
+The new `v92dilpackstd` suite catches all 35 focused alternatives across
+framing, fields, capability/reserved positions, CRC and tail behavior. Its
+standards-correct twelve-bit-fill and odd-slot-zeroing mutations are caught by
+the explicitly blob-faithful departure groups, not misreported as conformance
+failures. The snapshot ledger is **32 current and 223 stale of 255 registered
+suites**.
+The complete phase boundary passes **375/375** period-compiler differential
+binaries, the 64-bit and interoperability gates, the partial-link comparator
+self-test and every structural check. Suite line coverage remains
+**49,019/51,416** (`95.3%`).
+
+(2026-09-08)
