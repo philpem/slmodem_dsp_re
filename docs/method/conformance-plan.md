@@ -387,7 +387,7 @@ pass**, and each is marked with the candidate non-conformance it settles.
 | 13 | Table 12/V.90 | `DILdescriptorPacker`'s CRC extent | 1 | `t_dilpack.cpp` (**done**, F10261) |
 | 14 | Table 20/V.92 | `V92DILdescriptorPacker`'s CRC extent | 1 | `t_v92dilpack.cpp` (**done**, F10262) |
 | 15 | 5.4.2, 5.4.3/V.90 | `ModulusEncoder`/`Decoder` bit weighting, and `out[5] < M5` | 2,1 | `t_moduluscoder.cpp` (**done**, F10263) |
-| 16 | Tables 2, 14, 17/V.90; 23, 30/V.92 | the whole `drn` → rate chain | 3 | `t_v90demod.cpp`, `t_v92unpck.c` (extend) |
+| 16 | Tables 2, 14, 17/V.90; 23, 30/V.92 | the whole `drn` → rate chain | 3 | `t_v90demod.cpp`, `t_v90unpck.cpp`, `t_v92mpunpck.cpp`, `t_v92unpck.c` (**done**, F10264) |
 | 17 | Tables 3, 5/V.90 | `V90SpectralShaper`'s frame geometry | 3 | `t_v90shapeact.cpp` (extend) |
 | 18 | 5.4.5.1, Table 4/V.90 | the differential-coding recurrences | 3,2 | `t_diffcoder.cpp` (extend) |
 | 19 | Table 1/V.90 via G.711 | `codeSegmentsBoundriesLookupTable` | 3 | `t_v90p3mod.cpp` (extend) |
@@ -809,6 +809,14 @@ defect, not a blob deviation.
   branch, match Table 23/V.92 **including which arm takes which constant**;
   `V92ParamsInfo.c` uses `(drn + 17)` per Table 30/V.92, correctly different
   from CPu/CPt's 20.
+- Every legal non-cleardown rate number maps correctly through the bounded
+  arithmetic chain: V.90 CP/CPt and V.92 CPu/CPt `drn=1..22`, V.92 CPd
+  `drn=1..19`, and V.90's nearest-integer bit-rate display over `D=21..42`.
+  The direct CP/CPt conversion helpers have no internal callers, so those
+  exhaustive results are leaf evidence, not a claim about an absent owner
+  receive path. The provider mask is a separate failure: the constellation
+  designer warns but accepts a selected rate whose Table 13 bit is clear
+  (D1460).
 - `V90Jd::getBitVector` matches Table 13/V.90's framing and CRC extent:
   sync 0:16 all ones, start bits at 17/34/51, CRC over 18:33 and 35:50 only,
   written to 52:67 low bit first, fill 68:71 zero, 72 bits total. Its rate
@@ -824,7 +832,7 @@ defect, not a blob deviation.
   goes on V.21(L) and JM on V.21(H) per 3.4 and 3.6; CJ is three all-zero octets
   per 3.5; and 6.3/7.3's PCM co-presence rules hold.
 
-The independent-oracle passes have now established D920 and D1451–D1457 as
+The independent-oracle passes have now established D920 and D1451–D1460 as
 protocol non-conformances in this scope. Each remains reproduced for blob
 fidelity and is named by the executable expected-departure assertion that
 distinguishes faithful equivalence from standards correctness.
@@ -924,6 +932,14 @@ should be re-derived with it rather than the total carried forward.
     modulus is a legal optimization: `2^K <= product(M0..M5)` proves the
     residual after the first five divisions is strictly below `M5`. Take item
     16 next.
+12. **Item 16 is complete** (F10264): Recommendation-derived expectations
+    exhaust every legal non-cleardown CP, CPt, CPu and CPd rate number, while
+    an independent rational oracle checks every legal downstream V.90 data
+    rate. Both implementations conform on those bounded mappings. The same
+    phase confirms D1460: `V90ConstellationDesigner::process` merely warns when
+    its selected rate is disabled by the received Table 13 mask, then reports
+    success and preserves that rate through both initial design and RRN owner
+    paths. Take item 17 next.
 
 **Before any of it, read `docs/method/tiers.md` §5 and finding F7413.** The two
 rules a spec block gets wrong if it is written from the code rather than from

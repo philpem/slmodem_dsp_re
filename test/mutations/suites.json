@@ -556,6 +556,18 @@
   "src/pump/v90/V90Demodulator.cpp",
   "build/test/t_v90demod"
  ],
+ "v90ratestd": [
+  "src/pump/v90/V90Demodulator.cpp",
+  "build/test/t_v90demod"
+ ],
+ "v90ratemaskstd": [
+  "src/pump/v90/V90ConstellationDesigner.cpp",
+  "build/test/t_v90cdadjust"
+ ],
+ "v90cpdrnstd": [
+  "src/pump/v90/V90MappingParamsInt.cpp",
+  "build/test/t_v90unpck"
+ ],
  "v90jd": [
   "src/pump/v90/V90Jd.cpp",
   "build/test/t_v90jd"
@@ -864,6 +876,10 @@
   "src/pump/v90/V90MappingParamsInt.cpp",
   "build/test/t_v92mpunpck"
  ],
+ "v92cpdrnstd": [
+  "src/pump/v90/V90MappingParamsInt.cpp",
+  "build/test/t_v92mpunpck"
+ ],
  "v92p2info": [
   "src/pump/v90/V92Phase2Info.cpp",
   "build/test/t_v92p2info"
@@ -921,6 +937,10 @@
   "build/test/t_v92txreset"
  ],
  "v92unpck": [
+  "src/pump/v90/V92ParamsInfo.c",
+  "build/test/t_v92unpck"
+ ],
+ "v92ratestd": [
   "src/pump/v90/V92ParamsInfo.c",
   "build/test/t_v92unpck"
  ],

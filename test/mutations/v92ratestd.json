@@ -1,0 +1,10 @@
+[
+ {"label": "NOTE: V.92 Table 30 legal CPd rate matrix",
+  "why": "The existing v92unpck suite differentially checks the general +17 and doubling operations. This standards suite challenges holes and the upper endpoint inside Table 30's complete legal non-cleardown DRn=1..19 domain."},
+ {"label": "the legal middle CPd rate DRn=10 is omitted",
+  "find": "\tp->K = 2 * (cp->drn + 17);",
+  "replace": "\tp->K = 2 * ((cp->drn == 10 ? 9 : cp->drn) + 17);"},
+ {"label": "the legal top CPd rate DRn=19 is treated as reserved",
+  "find": "\tp->K = 2 * (cp->drn + 17);",
+  "replace": "\tp->K = 2 * ((cp->drn == 19 ? 18 : cp->drn) + 17);"}
+]

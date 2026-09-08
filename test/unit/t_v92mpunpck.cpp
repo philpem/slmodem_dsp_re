@@ -606,6 +606,120 @@ run_trials(void)
 	return diff_end();
 }
 
+/* ---------------- V.92 Table 23 independent downstream-rate oracle */
+
+/*
+ * This is DIRECT-API evidence only.  As established above, no relocation in
+ * the shipped object calls setParamsInfoFromV92CPUnPck, so these tests judge
+ * the helper itself and do not claim that an internal production path reaches
+ * it.
+ *
+ * Table 23's non-cleardown downstream rate number DRn is 1..22.  For a CPu
+ * (type 1), D is DRn+20; for a CPt (type 0), D is DRn+8.  The two literal
+ * tables below keep the endpoint and every interior expectation independent
+ * of the production helper.  DRn=0 is cleardown, and 23..31 are reserved;
+ * neither category is included in these conformance groups.
+ */
+
+typedef void (*table23_unpack_fn)(V90MappingParams *, V92CP *);
+
+struct table23_subject {
+	const char *name;
+	table23_unpack_fn unpack;
+	int type;
+	unsigned int side;
+};
+
+static const unsigned int table23_d[2][22] = {
+	/* CPt, type 0: literal endpoints D=9 and D=30. */
+	{ 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
+	  20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30 },
+	/* CPu, type 1: literal endpoints D=21 and D=42. */
+	{ 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31,
+	  32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42 }
+};
+
+static unsigned char table23_cp_before[sizeof(V92CP)];
+
+static int
+run_table23_subject(const struct table23_subject *subject)
+{
+	V90MappingParams *dst;
+	unsigned char *guard;
+	unsigned int first = 0, last = 0;
+	int drn;
+
+	diff_begin(subject->name);
+
+	for (drn = 1; drn <= 22; drn++) {
+		unsigned int seed = 1800u + subject->side * 100u
+		    + (unsigned int)subject->type * 40u + (unsigned int)drn;
+		unsigned int expected = table23_d[subject->type][drn - 1];
+
+		seed_all(seed, &cases[0], 0, FM_VARIED);
+		cp.char_01 = (signed char)subject->type;
+		cp.char_02 = (signed char)drn;
+		memcpy(table23_cp_before, &cp, sizeof cp);
+
+		if (subject->side == 0) {
+			dst = &ours.p;
+			guard = ours.guard;
+		} else {
+			dst = &theirs.p;
+			guard = theirs.guard;
+		}
+		subject->unpack(dst, &cp);
+
+		diff_eq_int("Table 23 D for DRn %ld", dst->word_0,
+		    expected, (long)drn);
+		diff_eq_int("D remains in the literal type-specific domain"
+		    " for DRn %ld", dst->word_0 >= table23_d[subject->type][0]
+		    && dst->word_0 <= table23_d[subject->type][21], 1,
+		    (long)drn);
+		diff_eq_int("destination guard survives DRn %ld",
+		    memcmp(guard, seedcopy.guard, GUARD) == 0, 1, (long)drn);
+		diff_eq_int("V92CP input is unchanged for DRn %ld",
+		    memcmp(&cp, table23_cp_before, sizeof cp) == 0,
+		    1, (long)drn);
+
+		if (drn == 1)
+			first = dst->word_0;
+		if (drn == 22)
+			last = dst->word_0;
+	}
+
+	diff_eq_int("literal DRn=1 endpoint is D=%ld", first,
+	    table23_d[subject->type][0],
+	    (long)table23_d[subject->type][0]);
+	diff_eq_int("literal DRn=22 endpoint is D=%ld", last,
+	    table23_d[subject->type][21],
+	    (long)table23_d[subject->type][21]);
+	diff_eq_int("the legal non-cleardown domain has %ld entries", 22, 22, 22);
+
+	return diff_end();
+}
+
+static int
+run_table23(void)
+{
+	static const struct table23_subject subjects[] = {
+		{ "V.92 Table 23 CPt direct-API oracle, reconstruction",
+		  setParamsInfoFromV92CPUnPck, 0, 0 },
+		{ "V.92 Table 23 CPu direct-API oracle, reconstruction",
+		  setParamsInfoFromV92CPUnPck, 1, 0 },
+		{ "V.92 Table 23 CPt direct-API oracle, blob",
+		  blobUnpack, 0, 1 },
+		{ "V.92 Table 23 CPu direct-API oracle, blob",
+		  blobUnpack, 1, 1 }
+	};
+	int rc = 0;
+	unsigned int i;
+
+	for (i = 0; i < sizeof subjects / sizeof subjects[0]; i++)
+		rc |= run_table23_subject(&subjects[i]);
+	return rc;
+}
+
 int
 main(void)
 {
@@ -613,6 +727,7 @@ main(void)
 
 	rc |= run_map();
 	rc |= run_trials();
+	rc |= run_table23();
 
 	return rc;
 }

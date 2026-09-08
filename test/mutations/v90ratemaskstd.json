@@ -1,0 +1,16 @@
+[
+ {"label": "NOTE: V.90 Table 13 provider-rate capability enforcement",
+  "why": "The expected-departure fixture first obtains an ordinary successful legal D with all 22 capability bits set, then clears exactly bit D-21 and proves the blob and reconstruction only warn while keeping the same successful selection. These mutations establish sensitivity to the branch index, the warning, and two plausible enforcement consequences; they do not turn mutation into a standards oracle."},
+ {"label": "the provider mask is indexed one rate too high",
+  "find": "if (((rateMask >> (mappingParams->word_0 - 21)) & 1) == 0) {",
+  "replace": "if (((rateMask >> (mappingParams->word_0 - 20)) & 1) == 0) {"},
+ {"label": "the provider rate mask is ignored without a warning",
+  "find": "if (((rateMask >> (mappingParams->word_0 - 21)) & 1) == 0) {",
+  "replace": "if (0 && ((rateMask >> (mappingParams->word_0 - 21)) & 1) == 0) {"},
+ {"label": "a selected provider-masked rate rejects the design",
+  "find": "if (((rateMask >> (mappingParams->word_0 - 21)) & 1) == 0) {\n\t\t\tedprintf(RATE_MASK_BANNER_RULE);",
+  "replace": "if (((rateMask >> (mappingParams->word_0 - 21)) & 1) == 0) {\n\t\t\tfailed = 1;\n\t\t\tedprintf(RATE_MASK_BANNER_RULE);"},
+ {"label": "a selected provider-masked rate is moved down one step",
+  "find": "if (((rateMask >> (mappingParams->word_0 - 21)) & 1) == 0) {\n\t\t\tedprintf(RATE_MASK_BANNER_RULE);",
+  "replace": "if (((rateMask >> (mappingParams->word_0 - 21)) & 1) == 0) {\n\t\t\tmappingParams->word_0--;\n\t\t\tedprintf(RATE_MASK_BANNER_RULE);"}
+]
