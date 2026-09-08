@@ -6,10 +6,11 @@ whether the blob is right**: hand the differential, codegen and mutation tiers
 a function that faithfully reproduces an object which mis-implements the
 standard and all three go green.
 
-The tier has exactly ONE instance today — `V90MP`'s CRC pair against
-10.1.2.3.2/V.34 and Table 16/V.90, in `test/unit/t_v90mp.cpp`'s
-`run_mp_crc_spec`, 1,084 checks (finding F7413). Grepping all 242 files of
-`test/unit/` for a Recommendation reference returns that file and nothing else.
+The tier has two instances today. `V90MP`'s CRC pair is checked against
+10.1.2.3.2/V.34 and Table 16/V.90 in `test/unit/t_v90mp.cpp`'s
+`run_mp_crc_spec`, 1,084 checks (finding F7413). Table 1/V.90 is independently
+transcribed into `test/unit/t_pcm.c` and checks the reconstruction and blob
+decoders separately, 256 checks per side (finding F10249).
 
 **Headline numbers.** One *pairing* is one clause-to-site row, and every count
 below is read off a numbered list in the section named beside it — so a reader
@@ -162,7 +163,12 @@ they judge is landed and used at three separate sites:
   `src/pump/v90/V90Mapper.cpp`;
 - `alaw2linear` and `ulaw2linear` in `src/service/pcm.c`.
 
-**Checked during this survey: 0 mismatches in 512.**
+**Checked during this survey: 0 mismatches in 512.** Finding F10249 turns the
+decoder half into an executable oracle: all 128 literal rows are inputs to 256
+reconstruction-vs-Recommendation and 256 blob-vs-Recommendation assertions,
+with zero departures. The three inlined Ucode masks remain survey results,
+not claims made by `t_pcm`; they need direct checks through their owning C++
+fixtures.
 
 ### F3.3 Tables 7–10/V.92 — the ANSpcm codeword sequences. NOT USABLE YET.
 
@@ -365,7 +371,7 @@ pass**, and each is marked with the candidate non-conformance it settles.
 | 2 | Table 17/V.34 | `probe[64]`, `TX_L1`'s repetition count | 3 | `t_v34hstx1.c` (extend) | ~50 | — |
 | 3 | Table 14/V.90 + 10.1.2.3.2/V.34 | `V90CP::calcCRC` / `evaluateCRC` | 1 | **new** `t_v90cpcrc.cpp` | ~1,000 | — |
 | 4 | 5.1, 5.2, Tables 2–7/V.8 | `V8UpdateModemParameters`, `ext_word`, `v8_getbit` | 1,2,3 | `t_v8jm.c`, `t_v8util.c` (extend) | ~80 | **N5, N1** |
-| 5 | Table 1/V.90 | `ulaw2linear`, `alaw2linear`, the Ucode masks | 3 | `t_pcm.c` (extend) | 512 | — |
+| 5 | Table 1/V.90 | `ulaw2linear`, `alaw2linear`; Ucode masks remain direct-site follow-up | 3 | `t_pcm.c` (**done**, F10249) | 512 | — |
 | 6 | 3.5, 8.2.2, 8.2.3/V.8; 2.3, 4.4/V.25 | CJ count, ANSam duration, the V.23 answering sequence, `FPM_TONE_CFG` | 3 | `t_v8hs.c`, `t_v23modem.c`, `t_fpm_tone.c` (extend) | ~20 | **N2, N6, N7** |
 | 7 | Tables 23, 24, 30/V.92 + 10.1.2.3.2/V.34 | `V92CP`'s CRC extent and the CPt/CPu/CPus arms | 1,2 | `t_v92cpcrc.cpp` (extend) | ~800 | — |
 | 8 | Table 13/V.90 | `V90Jd`'s CRC extent **and** its rate-capability mask | 1,2 | `t_v90jd.cpp` (extend) | ~300 | — |
@@ -719,8 +725,11 @@ have caught it and it is the cheapest thing in this section to fix.
 
 - `probe[64]` matches Table 17/V.34 tone for tone, phase for phase, absence for
   absence — 46 of 46. Verified here.
-- `ulaw2linear`, `alaw2linear` and the `^0xff`/`^0xd5` Ucode masks match
-  Table 1/V.90 — 512 of 512. Verified here.
+- `ulaw2linear` and `alaw2linear` match all 128 literal rows of Table 1/V.90
+  in the executable F10249 oracle: 256 of 256 checks for the reconstruction
+  and 256 of 256 for the blob. The `^0xff`/`^0xd5` Ucode masks also matched the
+  survey derivation, but are not yet exercised against the literal table
+  through their three production sites.
 - `averagePowerLimits[0..31]` are Table 15/V.90's amplitudes squared exactly —
   32 of 32. Verified here. Entries 32, 33 and 34 (2396², 2261², 2133²) continue
   the ladder three half-decibel steps past the Recommendation's last row; **that
@@ -801,10 +810,12 @@ should be re-derived with it rather than the total carried forward.
 
 ## F10. Order of work
 
-1. **Item 5 first** (Table 1/V.90 into `t_pcm.c`). Smallest, already verified,
-   and it establishes the second worked example in the tree — a spec block for a
+1. **Item 5 is complete** (Table 1/V.90 into `t_pcm.c`, finding F10249). It
+   establishes the second worked example in the tree — a spec block for a
    *table* rather than for an *algorithm*, which is the shape nine of the
    twenty-one items need and which `run_mp_crc_spec` does not demonstrate.
+   Direct production-path checks for the three Ucode masks remain a bounded
+   follow-up and are not attributed to this decoder fixture.
 2. **Item 1** (ANSam). Highest yield, smallest fixture change, and it settles
    N3, N4 and N8 in one sitting.
 3. **Item 2** (Table 17/V.34), which retires a comment that admits the values
