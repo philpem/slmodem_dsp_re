@@ -179,13 +179,17 @@ an exact definition; non-exact definitions retain this finite-evidence limit.
   confidence work, but lower risk than the V.90 composition failure.
 - **Refresh mutation evidence by risk cluster — first tranche complete.**
   F10243 reruns and records the three changed V.90 suites and four known-risk
-  V.34 suites. With F10244's follow-up they cover 1,324 mutations in all. F10245 closes
-  both remaining ordinary `v34hstx1` survivors with a legal once-only digital
-  initialization path; F10246 closes all three `v34hsmst44` survivors with a
+  V.34 suites. With F10244's follow-up they cover 1,324 mutations in all.
+  F10245 closes both remaining ordinary `v34hstx1` survivors with a legal
+  once-only digital initialization path; F10246 closes all three
+  `v34hsmst44` survivors with a
   V.92-capable INFO1c answer and reachable probe energies; F10247 closes three
   of four `v34datapump` ordering survivors at real handshake, PP and error-
-  publication boundaries. The current aggregate is 1,204 caught, 84 uncaught,
-  35 equivalent and one unbuildable. Twenty-two former survivors are now
+  publication boundaries. F10248 corrects all ten `v34k56` survivors to
+  fixed-callee behavioral equivalents: both direct getters are exact
+  return-zero stubs and the eight changed completion blocks cannot execute.
+  The current aggregate is 1,204 caught, 74 uncaught, 45 equivalent and one
+  unbuildable. Twenty-two former survivors are now
   caught and no caught verdict regressed. The remaining datapump loop-swap is
   a documented conditional-equivalence candidate, still conservatively
   counted as uncaught. These seven

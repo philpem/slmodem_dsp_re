@@ -122308,3 +122308,46 @@ suite's equivalent count and no invalid pointer alias or planted impossible
 state is used to kill it.
 
 (2026-09-08)
+
+## F10248. The ten K56 survivors are fixed-callee equivalents, not reachable behavior gaps
+
+F281 deliberately counted ten `v34k56` mutations as uncaught: two remove calls
+to the K56 Ja/MP bit getters and eight alter the completion blocks reached only
+when those getters return nonzero.  That preserved the useful coverage fact
+that the blocks are dormant, but its accounting distinction was wrong.  If a
+change cannot affect any execution of the linked program, it is behaviorally
+equivalent even when its source bytes differ and its latent block is untested.
+
+The proof is over the fixed callees, not a finite input sample.  In the
+reference object `getK56FlexJaBits(short *)` at `.text+0x10270` and
+`getK56FlexMpBits(short *)` at `.text+0x10280` are each exactly three bytes,
+`31 c0 c3` (`xor %eax,%eax; ret`).  `k56FlexPhase34` calls those exact
+nonvirtual symbols through direct relocations at `+0xa812` and `+0xa975`, then
+tests the saved return values before the completion blocks at `+0xa830` and
+`+0xa9a6`.  The getters always return zero and cannot write through their
+arguments.  Replacing either call with a literal zero is therefore
+indistinguishable, and every change inside the two nonzero tails is unreachable
+for every state of this linked blob.  The compare-then-store mutation in the MP
+tail is independently equivalent as well because both forms leave the same
+ordinary nonvolatile short value.
+
+The coherent public paths corroborate the dominators.  K56 negotiation can
+advance the receiver to the Ja state, and the public rate-determined indication
+can select the MP state, but the respective getter still returns zero on every
+iteration.  `t_v34diag` separately compares both getters against the blob and
+asserts that their output buffers remain unchanged; `t_v34k56` retains the
+complementary anti-vacuity assertions that neither completion tail ran.
+
+All ten mutation records now carry explicit equivalence reasons.  The refreshed
+**28-mutation** suite reports **15 caught by tests, zero uncaught, zero unusable
+and 13 equivalent**.  This is an accounting correction with **no increase in
+executed coverage** and no claim that the dormant blocks' bytes are exact.  The
+original calls and blocks remain necessary for the byte-exact object objective;
+a counterfactual build that forces both getters to return nonzero could compare
+their latent behavior, but it would not be evidence about the original linked
+program and is not reported as such here.
+
+Across the seven current targeted suites the aggregate becomes **1,204 caught,
+74 uncaught, 45 equivalent and one unbuildable out of 1,324**.
+
+(2026-09-08)
