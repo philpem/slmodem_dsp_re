@@ -25,6 +25,8 @@ extern void ref_v8_V21_Init(struct v8 *v, short ch, short ans);
 extern void ref_v8_ansaminit(struct v8 *v);
 extern void ref_initTxSequence(struct v8 *v);
 extern int ref_V8Process(struct v8 *v, const short *in, short *out, int n);
+extern struct v8 *ref_V8Create(const struct v8_cfg *cfg);
+extern void ref_V8Delete(struct v8 *v);
 extern void ref_v8_phase_rev_init(struct v8_phase_rev *pr);
 extern void ref_v8_detectorinit(struct v8 *v, struct v8_detector *d,
 				const short *t, short a3, short a4, short a5,
@@ -402,6 +404,130 @@ t_hs_trace(void)
 	return diff_end();
 }
 
+/*
+ * These are standards checks rather than another reconstruction/blob
+ * comparison.  Keep the two executions separate: their agreement is not
+ * evidence that either meets V.8.
+ */
+static int
+t_cj_standard_one(const char *name, int reference)
+{
+	struct v8 *v;
+	struct v8_cm cm;
+	struct v8_cfg cfg;
+	int i, rc;
+
+	memset(&cm, 0, sizeof(cm));
+	memset(&cfg, 0, sizeof(cfg));
+	cfg.side = 1;
+	cfg.timeout_a = 12;
+	cfg.timeout_b = 7;
+	cfg.rate = 9600;
+	cfg.cm = &cm;
+	v = reference ? ref_V8Create(&cfg) : V8Create(&cfg);
+
+	diff_begin(name);
+	diff_eq_int("V.8 object allocated (%ld)", v != NULL, 1, 0);
+	if (v == NULL)
+		return diff_end();
+
+	/*
+	 * A CJ wire character is start=0, eight data zeroes, stop=1.  The
+	 * receiver sees it as 0x001, with the most recent bit at the low end.
+	 * Enter the real CJ receiver with an already-full transmit queue, so the
+	 * assertion concerns reception alone.
+	 */
+	v->tx_state = 5;
+	v->rx_state = 0x28;
+	v->rx_substate = V8_HS_CJ;
+	v->tx_avail = v->tx_fill_target;
+	v->sym_avail = 40;
+	v->v21_params.samples_per_bit = 0x20;
+	v->v21_params.inbuf_pos = 0;
+	v->v21_params.gap_count = 5;
+	v->v21_params.gap_seen = 5;
+	v->block_count = 0;
+	v->cj_zero_run = 0;
+
+	for (i = 0; i < 2; i++) {
+		v->v21_params.bitcount = 10;
+		v->v21_params.bits = 0x001;
+		v->sym_avail = 40;
+		if (reference)
+			rc = ref_v8handshak(v);
+		else
+			rc = v8handshak(v);
+		(void)rc;
+		if (i == 0)
+			diff_eq_int("one CJ octet does not finish reception",
+				    v->rx_state != 0x63, 1, 1);
+	}
+
+	/* §3.5 and §8.2.3 require all THREE octets.  This is deliberately
+	 * expected to be false for the recovered implementation: retain the
+	 * departure as a result rather than silently redefining CJ to two. */
+	diff_eq_int("V.8 CJ conformance after two octets (known departure) (%ld)",
+		    v->rx_state != 0x63, 0, 2);
+
+	if (reference)
+		ref_V8Delete(v);
+	else
+		V8Delete(v);
+	return diff_end();
+}
+
+static int
+t_ansam_duration_one(const char *name, int reference)
+{
+	struct v8 *v;
+	struct v8_cm cm;
+	struct v8_cfg cfg;
+	int blocks = 0;
+	int rc = 0;
+
+	memset(&cm, 0, sizeof(cm));
+	memset(&cfg, 0, sizeof(cfg));
+	cfg.side = 1;
+	cfg.timeout_a = 12; /* the production v8dp default */
+	cfg.timeout_b = 7;
+	cfg.rate = 9600;
+	cfg.cm = &cm;
+	v = reference ? ref_V8Create(&cfg) : V8Create(&cfg);
+
+	diff_begin(name);
+	diff_eq_int("V.8 object allocated (%ld)", v != NULL, 1, 0);
+	if (v == NULL)
+		return diff_end();
+
+	/* Drive one real four-sample TX_ANSAM block per call, without CM or
+	 * sigC.  `elapsed` is in these blocks, while deadline() is configured
+	 * as timeout * 9600 / 4. */
+	while (blocks <= (12 * 9600) / 4) {
+		v->tx_avail = (short)(v->tx_fill_target - 4);
+		v->sym_avail = 0;
+		if (reference)
+			rc = ref_v8handshak(v);
+		else
+			rc = v8handshak(v);
+		if (rc != 0)
+			break;
+		blocks++;
+	}
+
+	diff_eq_int("configured timeout is twelve seconds (%ld)", blocks * 4,
+		    12 * 9600, blocks);
+	/* §8.2.2 permits 5 +/- 1 seconds.  The expected zero preserves the
+	 * known 12-second departure as an explicit standards verdict. */
+	diff_eq_int("V.8 ANSam duration conformance (known departure) (%ld)",
+		    blocks * 4 >= 4 * 9600 && blocks * 4 <= 6 * 9600, 0, blocks);
+
+	if (reference)
+		ref_V8Delete(v);
+	else
+		V8Delete(v);
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -682,5 +808,12 @@ main(void)
 	rc |= diff_end();
 
 	rc |= t_hs_trace();
+
+	/* Independent V.8 clauses; the expected departures are intentionally
+	 * separate for reconstruction and reference/blob. */
+	rc |= t_cj_standard_one("V.8 CJ/reconstruction", 0);
+	rc |= t_cj_standard_one("V.8 CJ/blob", 1);
+	rc |= t_ansam_duration_one("V.8 ANSam duration/reconstruction", 0);
+	rc |= t_ansam_duration_one("V.8 ANSam duration/blob", 1);
 	return rc;
 }

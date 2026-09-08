@@ -1,0 +1,17 @@
+[
+ {
+  "label": "NOTE: these are FPM_TONE_generate tick-arithmetic mutations. The V.25 oracle drives the production 160-sample path and measures the resulting legal reversal interval and 180-degree state jump."
+ },
+ {
+  "label": "reversal accounting uses four-sample ticks, making the 450 setting reverse too early",
+  "find": "\telapsed = (unsigned short)state->rev_count\n\t\t  + (count >> 3);",
+  "replace": "\telapsed = (unsigned short)state->rev_count\n\t\t  + (count >> 2);",
+  "fn": "FPM_TONE_generate"
+ },
+ {
+  "label": "reversal accounting uses sixteen-sample ticks, making the 450 setting reverse too late",
+  "find": "\telapsed = (unsigned short)state->rev_count\n\t\t  + (count >> 3);",
+  "replace": "\telapsed = (unsigned short)state->rev_count\n\t\t  + (count >> 4);",
+  "fn": "FPM_TONE_generate"
+ }
+]

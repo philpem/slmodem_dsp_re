@@ -1,0 +1,23 @@
+[
+ {
+  "label": "NOTE: V.8 §8.2.2 permits ANSam for 5 ± 1 seconds. The production wrapper's 12-second setting is a recorded departure; 4–6 second alternatives are sensitivity mutations, not claims that the blob baseline is conformant."
+ },
+ {
+  "label": "sensitivity to correcting the 12-second ANSam departure: configure the five-second nominal",
+  "find": "\tcfg.timeout_a = 0x0c;",
+  "replace": "\tcfg.timeout_a = 0x05;",
+  "fn": "v8_create"
+ },
+ {
+  "label": "sensitivity to correcting the 12-second ANSam departure: configure the four-second lower boundary",
+  "find": "\tcfg.timeout_a = 0x0c;",
+  "replace": "\tcfg.timeout_a = 0x04;",
+  "fn": "v8_create"
+ },
+ {
+  "label": "sensitivity to correcting the 12-second ANSam departure: configure the six-second upper boundary",
+  "find": "\tcfg.timeout_a = 0x0c;",
+  "replace": "\tcfg.timeout_a = 0x06;",
+  "fn": "v8_create"
+ }
+]

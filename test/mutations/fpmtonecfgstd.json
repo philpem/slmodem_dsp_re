@@ -1,0 +1,25 @@
+[
+ {
+  "label": "NOTE: V.25 §2.2 frequency and §2.3 reversal-boundary mutations for the independent FPM_TONE_CFG oracle. No dBm0 claim is represented here."
+ },
+ {
+  "label": "FPM_TONE_CFG frequency is one hertz below V.25's 2085-Hz lower boundary",
+  "find": "\t.freq = 2100,\t\t/* the ITU-T V.25 answer tone */",
+  "replace": "\t.freq = 2084,\t\t/* the ITU-T V.25 answer tone */"
+ },
+ {
+  "label": "FPM_TONE_CFG frequency is one hertz above V.25's 2115-Hz upper boundary",
+  "find": "\t.freq = 2100,\t\t/* the ITU-T V.25 answer tone */",
+  "replace": "\t.freq = 2116,\t\t/* the ITU-T V.25 answer tone */"
+ },
+ {
+  "label": "FPM_TONE_CFG reversal period is one millisecond below V.25's 425-ms lower boundary",
+  "find": "\t.rev_period = 450,\t/* 450 ms at 8 kHz, the V.25 figure */",
+  "replace": "\t.rev_period = 424,\t/* 450 ms at 8 kHz, the V.25 figure */"
+ },
+ {
+  "label": "FPM_TONE_CFG reversal period is one millisecond above V.25's 475-ms upper boundary",
+  "find": "\t.rev_period = 450,\t/* 450 ms at 8 kHz, the V.25 figure */",
+  "replace": "\t.rev_period = 476,\t/* 450 ms at 8 kHz, the V.25 figure */"
+ }
+]

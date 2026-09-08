@@ -1,0 +1,35 @@
+[
+ {
+  "label": "NOTE: these mutations measure the independent Table 1 framing and normal no-CRC serializer controls in t_v8util; they do not extend a V.8 conformance claim to the implementation's optional CRC mode."
+ },
+ {
+  "label": "ext_word sends the octet in host bit order instead of V.8 least-significant-bit-first order",
+  "find": "\treturn (short)((charFlip(c) << 1) | 1);",
+  "replace": "\treturn (short)(((unsigned short)c << 1) | 1);",
+  "fn": "ext_word"
+ },
+ {
+  "label": "ext_word omits the Table 1 stop bit",
+  "find": "\treturn (short)((charFlip(c) << 1) | 1);",
+  "replace": "\treturn (short)(charFlip(c) << 1);",
+  "fn": "ext_word"
+ },
+ {
+  "label": "ext_word sets the Table 1 start bit to one",
+  "find": "\treturn (short)((charFlip(c) << 1) | 1);",
+  "replace": "\treturn (short)((charFlip(c) << 1) | 0x201);",
+  "fn": "ext_word"
+ },
+ {
+  "label": "normal v8_getbit emits the low end of the framed word instead of its next high-order bit",
+  "find": "\ts->nleft = (short)(s->nleft - 1);\n\treturn (s->shifter >> (short)s->nleft) & 1;",
+  "replace": "\ts->nleft = (short)(s->nleft - 1);\n\treturn s->shifter & 1;",
+  "fn": "v8_getbit"
+ },
+ {
+  "label": "normal v8_getbit repeats a sequence whose repeat flag is clear",
+  "find": "\t\tif (s->repeat == 0)\n\t\t\treturn V8_GETBIT_END;",
+  "replace": "\t\tif (s->repeat != 0)\n\t\t\treturn V8_GETBIT_END;",
+  "fn": "v8_getbit"
+ }
+]

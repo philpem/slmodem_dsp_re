@@ -363,6 +363,144 @@ t_evaluate_cases(void)
 	return diff_end();
 }
 
+typedef int (*update_fn)(struct v8 *, struct v8_cm *);
+typedef void (*rebuild_fn)(struct v8 *);
+
+/*
+ * Independent V.8 Table 4/7 checks.  The literals below are ten transmitted
+ * bits read from the Recommendation, not V8_SEQ_* constants and not words
+ * made by initTxSequence.  In this representation bit 9 is the start bit,
+ * bits 8..1 are b0..b7, and bit 0 is the stop bit.
+ */
+static void
+standard_update_setup(struct v8 *v, struct v8_cm *out, int offer_v21,
+		      int offer_v90)
+{
+	memset(v, 0, sizeof(*v));
+	memset(out, 0, sizeof(*out));
+	v->fn_matched = 1;
+	v->fn_word = 0x107;		/* Table 3: data. */
+	v->seq[2].word[0] = (short)(offer_v90 ? 0x149 : 0x141);
+	v->seq[2].word[1] = 0x011;
+	v->seq[2].word[2] = (short)(0x051 | (offer_v21 ? 0x002 : 0));
+	if (offer_v90) {
+		v->seq[2].word[3] = 0x163;	/* Table 7: digital access. */
+		v->seq[2].word[4] = 0x1c5;	/* Table 5: digital V.90. */
+		v->seq[2].wordidx = 5;
+	} else {
+		v->seq[2].wordidx = 3;
+	}
+	out->b0 = 0xe8;	/* locally available: V.90, V.34, V.34 HD, V.32 */
+	out->b1 = 0x3f;	/* locally available: V.22 through V.21 */
+}
+
+static int
+run_update_standard(const char *name, update_fn update)
+{
+	struct v8 v;
+	struct v8_cm out;
+	int rc;
+
+	diff_begin(name);
+
+	standard_update_setup(&v, &out, 0, 0);
+	rc = update(&v, &out);
+	diff_eq_int("a Table 4 menu is accepted", rc, 0, 0);
+	diff_eq_int("V.23 follows modn2 b2", (out.b1 & 0x10) != 0, 1, 0);
+	diff_eq_int("known departure: absent modn2 b7 withdraws V.21",
+		    (out.b1 & 0x20) == 0, 0, 0);
+
+	standard_update_setup(&v, &out, 1, 0);
+	update(&v, &out);
+	diff_eq_int("present modn2 b7 retains V.21", (out.b1 & 0x20) != 0,
+		    1, 0);
+
+	standard_update_setup(&v, &out, 1, 1);
+	update(&v, &out);
+	diff_eq_int("Tables 4, 5 and 7 jointly retain V.90",
+		    (out.b0 & 0x08) != 0, 1, 0);
+	v.seq[2].word[3] = 0x161;	/* The digital-access bit is now absent. */
+	out.b0 |= 0x08;
+	update(&v, &out);
+	diff_eq_int("V.90 is withdrawn without digital access",
+		    (out.b0 & 0x08) == 0, 1, 0);
+
+	return diff_end();
+}
+
+static void
+standard_rebuild_setup(struct v8 *v, struct v8_cm *cm, int remote_b5)
+{
+	static const short cm_prefix[] = {
+		0x3ff, 0x00f, 0x107, 0x141, 0x011, 0x011
+	};
+	unsigned i;
+
+	memset(v, 0, sizeof(*v));
+	memset(cm, 0, sizeof(*cm));
+	cm->b1 = 0x40;		/* This answerer accepts Table 3 data. */
+	v->cm = cm;
+	v->tx_seq = &v->seq[2];
+	for (i = 0; i < sizeof(cm_prefix) / sizeof(cm_prefix[0]); i++)
+		v->seq[0].word[i] = cm_prefix[i];
+	/* Table 7 access0: b5 is word bit 3; start and stop remain literal. */
+	v->seq[0].word[i++] = (short)(0x161 | (remote_b5 ? 0x008 : 0));
+	v->seq[0].wordidx = (short)i;
+}
+
+static int
+rebuilt_access_b5(const struct v8 *v)
+{
+	int i;
+
+	for (i = 0; i < v->seq[2].nbits / 10; i++) {
+		unsigned short w = (unsigned short)v->seq[2].word[i];
+
+		if ((w & 0xfff1u) == 0x161u)
+			return (w & 0x008u) != 0;
+	}
+	return -1;
+}
+
+static int
+run_rebuild_standard(const char *name, rebuild_fn rebuild)
+{
+	struct v8 v;
+	struct v8_cm cm;
+
+	diff_begin(name);
+
+	standard_rebuild_setup(&v, &cm, 0);
+	rebuild(&v);
+	diff_eq_int("JM contains a Table 7 access category",
+		    rebuilt_access_b5(&v) >= 0, 1, 0);
+	diff_eq_int("received access0 b5 zero remains zero",
+		    rebuilt_access_b5(&v), 0, 0);
+
+	standard_rebuild_setup(&v, &cm, 1);
+	rebuild(&v);
+	diff_eq_int("known departure: JM echoes received access0 b5",
+		    rebuilt_access_b5(&v), 0, 0);
+
+	return diff_end();
+}
+
+static int
+t_v8_tables_standard(void)
+{
+	int rc = 0;
+
+	rc |= run_update_standard("V.8 Tables 4/5/7/reconstruction",
+				  V8UpdateModemParameters);
+	rc |= run_update_standard("V.8 Tables 4/5/7/blob",
+				  ref_V8UpdateModemParameters);
+	rc |= run_rebuild_standard("V.8 Table 7 JM/reconstruction",
+				   rebuildJMSequence);
+	rc |= run_rebuild_standard("V.8 Table 7 JM/blob",
+				   ref_rebuildJMSequence);
+	return rc;
+}
+
 /*
  * V8UpdateModemParameters' five messages.  Four of them are one per exit --
  * quick connect, no call function match, a match with nothing remembered, and
@@ -483,6 +621,8 @@ main(void)
 	unsigned b0, b1, b2;
 	int ext, k;
 	long matched = 0, rejected = 0, second = 0;
+
+	rc |= t_v8_tables_standard();
 
 	diff_begin("evaluateRxJMSequence");
 

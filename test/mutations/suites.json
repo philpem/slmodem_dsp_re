@@ -120,6 +120,14 @@
   "src/dsp/fpm_tone.c",
   "build/test/t_fpm_tone"
  ],
+ "fpmtonetickstd": [
+  "src/dsp/fpm_tone.c",
+  "build/test/t_fpm_tone"
+ ],
+ "fpmtonecfgstd": [
+  "src/dsp/fpm_tone_cfg.c",
+  "build/test/t_fpm_tone"
+ ],
  "fsegetdiag": [
   "src/dsp/fpm_fse.c",
   "build/test/t_v32fpsub"
@@ -187,6 +195,10 @@
  "v22recv": [
   "src/pump/v22/v22_fse.c",
   "build/test/t_v22recv"
+ ],
+ "v23modemstd": [
+  "src/pump/v23/v23modem.c",
+  "build/test/t_v23modem"
  ],
  "v27status": [
   "src/fax/v27.c",
@@ -356,6 +368,10 @@
   "src/v8/v8dp.c",
   "build/test/t_v8dp"
  ],
+ "v8dpstd": [
+  "src/v8/v8dp.c",
+  "build/test/t_v8dp"
+ ],
  "v8handshak": [
   "src/v8/v8handshak.c",
   "build/test/t_v8hs"
@@ -368,7 +384,15 @@
   "src/v8/v8hsrx.c",
   "build/test/t_v8hs"
  ],
+ "v8hsrxstd": [
+  "src/v8/v8hsrx.c",
+  "build/test/t_v8hs"
+ ],
  "v8jm": [
+  "src/v8/v8jm.c",
+  "build/test/t_v8jm"
+ ],
+ "v8jmstd": [
   "src/v8/v8jm.c",
   "build/test/t_v8jm"
  ],
@@ -377,6 +401,10 @@
   "build/test/t_v8dp"
  ],
  "v8seq": [
+  "src/v8/v8seq.c",
+  "build/test/t_v8util"
+ ],
+ "v8seqstd": [
   "src/v8/v8seq.c",
   "build/test/t_v8util"
  ],

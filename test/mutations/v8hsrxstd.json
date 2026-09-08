@@ -1,0 +1,15 @@
+[
+ {
+  "label": "NOTE: V.8 §3.5/§8.2.3 requires three complete CJ octets. The baseline deliberately records the recovered two-octet departure; the Recommendation-correct count is a sensitivity mutation, not a claim that the mutant is less conformant."
+ },
+ {
+  "label": "CJ receiver accepts after one octet rather than the reproduced two-octet departure",
+  "find": "#define V8_HS_CJ_COUNT\t\t2",
+  "replace": "#define V8_HS_CJ_COUNT\t\t1"
+ },
+ {
+  "label": "sensitivity to correcting the reproduced CJ departure: require V.8's three octets",
+  "find": "#define V8_HS_CJ_COUNT\t\t2",
+  "replace": "#define V8_HS_CJ_COUNT\t\t3"
+ }
+]

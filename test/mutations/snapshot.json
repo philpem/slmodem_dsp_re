@@ -849,6 +849,16 @@
     "the two gear-shift scalings are transposed, so the integrator is scaled the wrong way at both ends": "caught"
    }
   },
+  "fpmtonecfgstd": {
+   "key": "aef39d88e8607aba55b90340172f120eddd458c30f45bad564d094c8578d2d9b",
+   "summary": "4 mutations: 4 caught (4 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "FPM_TONE_CFG frequency is one hertz above V.25's 2115-Hz upper boundary": "caught",
+    "FPM_TONE_CFG frequency is one hertz below V.25's 2085-Hz lower boundary": "caught",
+    "FPM_TONE_CFG reversal period is one millisecond above V.25's 475-ms upper boundary": "caught",
+    "FPM_TONE_CFG reversal period is one millisecond below V.25's 425-ms lower boundary": "caught"
+   }
+  },
   "fpmtonekill": {
    "key": "89082ab26303390791bd9feba61b21f3fdde3797c534759956e34f02049e52df",
    "summary": "6 mutations: 6 caught (6 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
@@ -894,6 +904,14 @@
     "the term leaving the correlation window is never subtracted": "caught",
     "the threshold is taken against the unclamped energy": "caught",
     "the two energy terms share one truncation instead of one each": "caught"
+   }
+  },
+  "fpmtonetickstd": {
+   "key": "bbf9936391b157ccbbcdf6e17e9a6d847e0e63377bf414309c114cdfe28b6189",
+   "summary": "2 mutations: 2 caught (2 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "reversal accounting uses four-sample ticks, making the 450 setting reverse too early": "caught",
+    "reversal accounting uses sixteen-sample ticks, making the 450 setting reverse too late": "caught"
    }
   },
   "fsegetdiag": {
@@ -1459,6 +1477,16 @@
     "the history shifts by one more than the tap count": "caught",
     "the window clamp uses >= where the object uses >": "equivalent",
     "the window is not clamped while the history is still filling": "caught"
+   }
+  },
+  "v23modemstd": {
+   "key": "0f0900117ec312e8c22aede6b4824aebc2d2086cae695df265b56e7f447b7e4e",
+   "summary": "4 mutations: 4 caught (4 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "V.23 answer tone lasts five seconds, above V.25's four-second maximum": "caught",
+    "V.23 answer tone lasts two seconds, below V.25's 2.6-second minimum": "caught",
+    "V.23 post-tone nominal silence is 100 ms, above V.25's 95-ms upper bound": "caught",
+    "V.23 post-tone nominal silence is 25 ms and emits only 40 ms in 160-sample blocks": "caught"
    }
   },
   "v27status": {
@@ -5057,6 +5085,15 @@
     "report the wanted id as the caller flag": "caught"
    }
   },
+  "v8dpstd": {
+   "key": "ce14869aebc0ca9157454b6c1d48e72218db9af84220df6f089c8ac9db1eaf85",
+   "summary": "3 mutations: 3 caught (3 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "sensitivity to correcting the 12-second ANSam departure: configure the five-second nominal": "caught",
+    "sensitivity to correcting the 12-second ANSam departure: configure the four-second lower boundary": "caught",
+    "sensitivity to correcting the 12-second ANSam departure: configure the six-second upper boundary": "caught"
+   }
+  },
   "v8handshak": {
    "key": "a44d2bb14a52a1ce03c33aa30723dcc29e7118a0e6aced7991efae2889bd7244",
    "summary": "5 mutations: 5 caught (5 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
@@ -5098,6 +5135,14 @@
     "swap the two good-message verdicts": "caught"
    }
   },
+  "v8hsrxstd": {
+   "key": "bcdbeba86f53111df1c686ff5a23e4bd7fd85174be13bbcd87d02cd54081e6a4",
+   "summary": "2 mutations: 2 caught (2 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "CJ receiver accepts after one octet rather than the reproduced two-octet departure": "caught",
+    "sensitivity to correcting the reproduced CJ departure: require V.8's three octets": "caught"
+   }
+  },
   "v8jm": {
    "key": "0f7c591c11c900a5a7d6fb0d5f477038dc1af6113a7f15adbded5fbb1aee6537",
    "summary": "29 mutations: 29 caught (29 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
@@ -5131,6 +5176,15 @@
     "swap the two fax directions on the calling side": "caught",
     "swap the two protocol match announcements": "caught",
     "swap v23 and v21 in the settled menu": "caught"
+   }
+  },
+  "v8jmstd": {
+   "key": "5e4f7187488435a853d335e0abb9883a575e73fdbfabe94f9351fd4c1d787843",
+   "summary": "3 mutations: 3 caught (3 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "Table 7 clear-bit control: force caller-cellular b5 into every rebuilt JM access word": "caught",
+    "sensitivity to the reproduced departure: echo received Table 7 access b5 into the rebuilt JM": "caught",
+    "sensitivity to the reproduced departure: test only Table 4's V.21 bit instead of including the stop bit": "caught"
    }
   },
   "v8proc": {
@@ -5169,6 +5223,17 @@
     "swap JM and CM in the length banner": "caught",
     "swap the QC1A banner for the CJ one": "caught",
     "swap the two extension BUG messages": "caught"
+   }
+  },
+  "v8seqstd": {
+   "key": "19a0061b4f4afaaef3c0802d5fadc95d632523b850e3edd9615c45665a6b7f22",
+   "summary": "5 mutations: 5 caught (5 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "ext_word omits the Table 1 stop bit": "caught",
+    "ext_word sends the octet in host bit order instead of V.8 least-significant-bit-first order": "caught",
+    "ext_word sets the Table 1 start bit to one": "caught",
+    "normal v8_getbit emits the low end of the framed word instead of its next high-order bit": "caught",
+    "normal v8_getbit repeats a sequence whose repeat flag is clear": "caught"
    }
   },
   "v8sig": {

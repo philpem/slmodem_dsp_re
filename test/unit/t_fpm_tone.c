@@ -39,6 +39,74 @@ extern void ref_FPM_TONE_filter(void *state, short *samples, short count);
  */
 static short kill_pass0[40][64];
 
+/* V.25's answer-tone checks are intentionally run on each implementation
+ * alone.  A fixed-point scale has no calibrated dBm0 mapping here, so this
+ * covers only independently derivable frequency, reversal period and phase. */
+static int
+t_fpm_v25_one(const char *name, int reference)
+{
+	struct fpm_tone *t;
+	short out[160];
+	int inc, block, previous, reversal_sample = -1;
+	int phase_delta = -1;
+
+	t = reference
+		? ref_FPM_TONE_create(NULL, ref_FPM_TONE_CFG)
+		: FPM_TONE_create(NULL, &FPM_TONE_CFG);
+	diff_begin(name);
+	diff_eq_int("FPM tone object allocated (%ld)", t != NULL, 1, 0);
+	if (t == NULL)
+		return diff_end();
+
+	/* V.25 §2.2: 2100 +/- 15 Hz.  The implementation's documented 8 kHz
+	 * phase-increment formula is evaluated here, rather than trusting an
+	 * output FFT or the configuration field by itself. */
+	diff_eq_int("V.25 configured frequency (%ld)", t->cfg.freq, 2100, 0);
+	inc = ((int)t->cfg.freq * 0x8312 + 0x1000) >> 13;
+	diff_eq_int("independent phase increment (%ld)", t->inc, inc, 0);
+	diff_eq_int("V.25 quantized frequency is legal (%ld)",
+		    inc * 8000 >= 2085 * 32768 && inc * 8000 <= 2115 * 32768,
+		    1, inc);
+
+	/* The 450 counter units are eight samples at 8 kHz.  In the production
+	 * V.23 framing path the counter advances 20 units per 160-sample call,
+	 * so its first legal reversal occurs at 23*160 = 3680 samples (460 ms).
+	 * Check the actual oscillator state jump too: one half of its 0x8000
+	 * cycle is exactly 180 degrees, inside §2.3's 180 +/- 10 degrees. */
+	diff_eq_int("V.25 configured reversal period (%ld)",
+		    t->cfg.rev_period, 450, 0);
+	previous = t->rev_count;
+	for (block = 1; block <= 23; block++) {
+		int before = (unsigned short)t->phase & 0x7fff;
+		int normal = (before + 160 * inc) & 0x7fff;
+		int now;
+
+		if (reference)
+			ref_FPM_TONE_generate(t, out, 160);
+		else
+			FPM_TONE_generate(t, out, 160);
+		now = t->rev_count;
+		if (now < previous) {
+			reversal_sample = block * 160;
+			phase_delta = (((unsigned short)t->phase & 0x7fff)
+				       - normal) & 0x7fff;
+		}
+		previous = now;
+	}
+	diff_eq_int("reversal was observed (%ld)", reversal_sample != -1, 1, 0);
+	diff_eq_int("V.25 reversal interval is legal (%ld)",
+		    reversal_sample >= 425 * 8 && reversal_sample <= 475 * 8,
+		    1, reversal_sample);
+	diff_eq_int("V.25 reversal is 180 degrees (%ld)", phase_delta, 0x4000,
+		    reversal_sample);
+
+	if (reference)
+		ref_FPM_TONE_delete(t);
+	else
+		FPM_TONE_delete(t);
+	return diff_end();
+}
+
 /* Compare the whole object, so unnamed fields are covered too. */
 static void
 compare_state(const unsigned char *ours, const unsigned char *ref,
@@ -406,6 +474,12 @@ main(void)
 		diff_eq_int("reference built an object (%ld)", 0, 1, 0);
 		return diff_end();
 	}
+
+	/* Independent V.25 configuration/orbit checks.  These are not folded
+	 * into the differential groups below: matching a blob is not a standards
+	 * oracle. */
+	rc |= t_fpm_v25_one("V.25 FPM_TONE_CFG/reconstruction", 0);
+	rc |= t_fpm_v25_one("V.25 FPM_TONE_CFG/blob", 1);
 
 	/* create: the whole object, buffers included. */
 	diff_begin("FPM_TONE_create default cfg");

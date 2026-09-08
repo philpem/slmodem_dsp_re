@@ -1,0 +1,23 @@
+[
+ {
+  "label": "NOTE: these mutations measure the independent Table 4 and Table 7 controls in t_v8jm. The baseline deliberately records the object's two known departures, so mutations that apply the Recommendation-correct result are sensitivity checks, not claims that the mutant is less conformant."
+ },
+ {
+  "label": "sensitivity to the reproduced departure: test only Table 4's V.21 bit instead of including the stop bit",
+  "find": "\t\t\t\tif ((f & 3) == 0)\n\t\t\t\t\tout->b1 &= 0xdf;",
+  "replace": "\t\t\t\tif ((f & 2) == 0)\n\t\t\t\t\tout->b1 &= 0xdf;",
+  "fn": "V8UpdateModemParameters"
+ },
+ {
+  "label": "Table 7 clear-bit control: force caller-cellular b5 into every rebuilt JM access word",
+  "find": "\tjm->word[n] = V8_SEQ_TAIL_B;",
+  "replace": "\tjm->word[n] = (short)(V8_SEQ_TAIL_B | 0x008);",
+  "fn": "rebuildJMSequence"
+ },
+ {
+  "label": "sensitivity to the reproduced departure: echo received Table 7 access b5 into the rebuilt JM",
+  "find": "\tjm->word[n] = V8_SEQ_TAIL_B;",
+  "replace": "\tjm->word[n] = V8_SEQ_TAIL_B;\n\tfor (i = 0; i < (short)rx->wordidx; i++)\n\t\tif (((unsigned short)rx->word[i] & V8_JM_FN_MASK) == 0x161)\n\t\t\tjm->word[n] |= (short)((unsigned short)rx->word[i] & 0x008);",
+  "fn": "rebuildJMSequence"
+ }
+]
