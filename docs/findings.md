@@ -122146,3 +122146,37 @@ regressions introduced by this work. Recording only these seven suites leaves
 **7 current and 223 stale** snapshot entries. The stale entries are retained
 deliberately and must not be quoted as current tree-wide evidence.
 (2026-09-08)
+
+## F10244. An asymmetric TRN2 constellation makes the Phase-4 mapping-study argument order observable
+
+The last ordinary `v90p4ddec` survivor swapped
+`linearMappingStudy(sample, decision)` to `(decision, sample)`. The state sweep
+could not distinguish them: its boundary decision put both calls outside the
+study's accumulation gate. The new focused V.90 `TRN2D_DD` trial uses a legal
+three-level descending row `[340, 300, 200]` and sample 280. `hardDecision`
+selects interior code 1 and level 300. The correct call compares the difference
+20 with 40% of the lower gap 100 and accumulates; the swapped call compares it
+with 40% of the upper gap 40 and skips.
+
+`t_v90p4ddec` normally shares its automatic-impairment detector because the
+older Phase-4 paths only read it. This path writes its magnitude accumulator,
+so the trial saves a full detector preimage, runs the candidate and retains its
+postimage, restores the preimage, then runs the blob and retains that postimage.
+It compares the complete postimages and also requires the blob's target cell to
+contain count 1 and sum 280. Absolute assertions hold the selected decision and
+code, study progress, partial-frame sample count, zero output-bit count,
+unchanged receive state and one-sample state count.
+
+The new group passes **27 checks** on the modern build and
+`make period T=t_v90p4ddec` remains **1/1 passed** under GCC 3.4.2. The exact
+swapped-argument mutation is caught, and the full suite improves from 70 to
+**71 of 74 caught**, with no prior caught verdict regressing. The two remaining
+survivors are the documented modern-compiler floating/NaN alternatives; the
+fourth mutation proposes a nonexistent evaluator field and cannot compile.
+This is again a finite witness for a named behavior, not general functional
+equivalence.
+
+The complete `make phase J=4` boundary remains green: **374/374 period
+differential groups** pass with the 64-bit, interoperability, coverage and
+debug-site tiers. Coverage remains **49,018/51,416 source lines (95.3%)**.
+(2026-09-08)

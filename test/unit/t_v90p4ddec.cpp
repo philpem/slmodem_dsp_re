@@ -969,6 +969,110 @@ run_sweep(int v92)
 	return diff_end();
 }
 
+/* ================================= linear-mapping argument order ======== */
+
+/*
+ * ONE LEGAL TRN2 DECISION THAT DISTINGUISHES THE TWO ARGUMENTS passed to
+ * `linearMappingStudy`.  The three-level row [340, 300, 200] is descending,
+ * as `hardDecision` requires, and sample 280 decides to code 1, level 300.
+ * In the real call
+ *
+ *     linearMappingStudy(sample, decision)
+ *
+ * the lower-neighbour arm admits |280 - 300| < 0.4 * (300 - 200) and
+ * accumulates 280.  With the arguments swapped the upper-neighbour arm tests
+ * the same difference against 0.4 * (340 - 300), and skips it.  Because the
+ * fixture's detector is normally shared, each call starts from a saved
+ * preimage and its complete detector postimage is retained separately.  A
+ * swapped reconstructed call therefore cannot be hidden by the blob's later
+ * write to the same detector.
+ */
+static int
+run_linear_mapping_argument_order(void)
+{
+	const long trial = 690000L;
+	const short sample = 280;
+	const int phase = 0;
+	const int code = 1;
+	static unsigned char adi_before[sizeof(V90AutoDigitalImpDetector)]
+		__attribute__((aligned(8)));
+	static unsigned char adi_after[2][sizeof(V90AutoDigitalImpDetector)]
+		__attribute__((aligned(8)));
+	short decision[2];
+	int s;
+
+	diff_begin("V90Phase4Demodulator::getV90Decision -- linear-mapping "
+		   "argument order");
+
+	set_level(0);
+	setup((int)trial, 0);
+	for (s = 0; s < 2; s++) {
+		V90Phase4Demodulator *d = &P4D(s);
+		V90Demapper *m = &DEM(s);
+
+		d->state = P4D_STATE_TRN2D_DD;
+		d->countInState = 0u;
+		d->linearMappStudyStart = 1u;
+		d->trn2dDDLength = 0x400u;
+		d->int_0028 = 0x55;
+		d->nbits = 0u;
+
+		m->rbsFramePosition = (unsigned int)phase;
+		m->sampleCount = 0u;
+		m->frameStart = 0u;
+		m->constellationSize[phase] = 3u;
+		m->constellation[phase][0] = 340;
+		m->constellation[phase][1] = 300;
+		m->constellation[phase][2] = 200;
+		m->linearMappStudyEnabled = 0;
+		m->studyLength = 4u;
+		m->studyProgress = 0u;
+		m->completedRunCount = 0;
+		m->short_1ea4 = 0;
+		m->short_1ea6 = 0;
+	}
+
+	ADI->magnitudeSum[phase][code] = 0.0f;
+	ADI->magnitudeCount[phase][code] = 0u;
+	ADI->altRbsFlag[phase] = 0;
+	memcpy(adi_before, adi_s, sizeof adi_before);
+
+	decision[0] = our_p4d_getv90decision(p4d_s[0], sample);
+	memcpy(adi_after[0], adi_s, sizeof adi_after[0]);
+	memcpy(adi_s, adi_before, sizeof adi_before);
+	decision[1] = ref_p4d_getv90decision(p4d_s[1], sample);
+	memcpy(adi_after[1], adi_s, sizeof adi_after[1]);
+
+	compare_all("after the linear-mapping argument-order trial", trial);
+	diff_eq_int("the decision agreed (%ld)", (long)decision[0],
+		    (long)decision[1], trial);
+	diff_eq_int("the complete detector postimages agreed (%ld)",
+		    memcmp(adi_after[0], adi_after[1], sizeof adi_after[0]) == 0,
+		    1, trial);
+
+	/* Absolute blob-side checks: the trial must reach and measure the cell. */
+	diff_eq_int("the planted sample decided to level 300 (%ld)",
+		    (long)decision[1], 300L, trial);
+	diff_eq_int("the planted sample selected code 1 (%ld)",
+		    (long)DEM(1).decisionCode, (long)code, trial);
+	diff_eq_int("the blob study call advanced (%ld)",
+		    (long)DEM(1).studyProgress, 1L, trial);
+	diff_eq_int("the blob study call accumulated the target cell (%ld)",
+		    (long)ADI->magnitudeCount[phase][code], 1L, trial);
+	diff_eq_float("the target cell accumulated the sample, not the level",
+		      ADI->magnitudeSum[phase][code], 280.0f, trial);
+	diff_eq_int("the demapper retained its one partial-frame sample (%ld)",
+		    (long)DEM(1).sampleCount, 1L, trial);
+	diff_eq_int("the partial frame produced no bits (%ld)",
+		    (long)P4D(1).nbits, 0L, trial);
+	diff_eq_int("the receive state was unchanged (%ld)",
+		    (long)P4D(1).state, (long)P4D_STATE_TRN2D_DD, trial);
+	diff_eq_int("the call counted exactly one sample (%ld)",
+		    (long)P4D(1).countInState, 1L, trial);
+
+	return diff_end();
+}
+
 /* ======================================= completed MP and CP messages =====
  *
  * The state sweeps above put each decoder one ZERO away from its Ed answer.
@@ -2559,6 +2663,7 @@ main(void)
 
 	rc |= run_sweep(0);
 	rc |= run_sweep(1);
+	rc |= run_linear_mapping_argument_order();
 	rc |= run_completed_mp();
 	rc |= run_completed_cp();
 	rc |= run_getdecision();

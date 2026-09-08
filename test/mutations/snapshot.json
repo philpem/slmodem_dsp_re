@@ -7765,8 +7765,8 @@
    }
   },
   "v90p4ddec": {
-   "key": "56dd791ac70f58b67dad86530ca0839a84299858c1b5dd86e35b3778be03c5f1",
-   "summary": "74 mutations: 70 caught (70 by test, 0 by strings), 3 NOT caught, 1 unusable, 0 equivalent, 0 MIScounted",
+   "key": "67cfb9645cd3046d660a32da5d80f4229b87f07cff5c55aadb512f0e30878b7f",
+   "summary": "74 mutations: 71 caught (71 by test, 0 by strings), 2 NOT caught, 1 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "B1d counts the ones rather than the zeros": "caught",
     "B1d does not clear the Ed flag": "caught",
@@ -7836,7 +7836,7 @@
     "the mean is taken over one sample too many": "caught",
     "the silence wait uses the echo period": "caught",
     "the study flag is set to two": "caught",
-    "the study is fed its two arguments the other way round": "uncaught",
+    "the study is fed its two arguments the other way round": "caught",
     "the study is never switched off": "caught",
     "the study starts one sample late": "caught",
     "the termination message has its two counts swapped": "caught",
@@ -7881,7 +7881,7 @@
    }
   },
   "v90p4dreset": {
-   "key": "8a5bf2baadc0df411480472b7ddff27d1864abd23d6dd334b642ab24a0c96531",
+   "key": "a81c6ba291f7ab1fef986eb4e1d4ae3597a52a9c083330caea1338e624b01785",
    "summary": "54 mutations: 54 caught (54 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "reset: +0x08 takes argument one and not a constant": "caught",
