@@ -122516,3 +122516,56 @@ differential groups, both 64-bit and all interoperability tiers, with
 49,018/51,416 source lines covered (95.3%).
 
 (2026-09-08)
+
+## F10253. The V.90 CP CRC conforms across all twelve legal Table 14 length shapes
+
+The older `V90CP` fixtures established exact agreement with the object and
+caught local changes to `calcCRC` and `evaluateCRC`. They could not establish
+the premise both implementations shared: that `word_3bb0 - 17`, a walk from
+bit 18, and a skip at every multiple of seventeen select exactly the
+information bits ITU-T V.90 assigns to CP.
+
+Table 14 supplies the missing independent layout. Frame sync is bits 0:16;
+fixed starts are 17, 34, ... 255; the final CRC-frame start is `272 + delta`;
+the CRC is 273+delta through 288+delta; and the three following fill bits are
+289+delta through 291+delta. If `m` is the maximum legal constellation index
+0..5, gamma is `136*m` and delta is gamma without codec masks or
+`2*gamma + 136` with them. Delta is consequently always a multiple of
+136 = 8*17. This proves, rather than assumes, why the object's generic
+multiple-of-seventeen skip remains valid through the variable body and why
+its controlling field must be `word_3bb0 = 289 + delta`.
+
+New fixture `t_v90cpcrc.cpp` enumerates all six `m` values with both codec-mask
+states and two independently generated payloads each. It does not call
+`infoToBits` to build its expected vectors. Instead it lays out Table 14,
+gathers the protected positions without using `% 17`, and applies V.34
+10.1.2.3.2/Figure 14: all-ones preload, polynomial
+`x^16 + x^12 + x^5 + 1`, and register bit 0 first on the wire. The reflected
+0x8408 integer spelling is pinned by the external LSB-first `"123456789"`
+check value 0x6f91 and by four zero-stream residues whose normal 0x1021 values
+are exact bit reversals. There is no official CP worked CRC vector; those
+checks pin the independently implemented generator without pretending that
+one exists in the Recommendation.
+
+Each implementation is reported in its own group rather than compared to the
+other. Besides checking every one of the sixteen resulting register stages,
+the fixture flips frame-sync, fixed/variable start, CRC and fill positions and
+shows they do not enter `calcCRC`; flips the type/header, base-mask and final
+information positions and checks a freshly computed changed remainder; then
+checks acceptance of the derived CRC and rejection of a changed information
+bit, changed CRC bit and reversed CRC order. Guards on both ends of the raw
+object remain intact.
+
+The result is conforming on the tested scope: **682/682 reconstruction checks
+and 682/682 independently invoked blob checks** pass, and focused GCC 3.4.2
+period differential reports 1/1. A new targeted mutation suite catches all
+11/11 standards-sensitive alternatives, with no survivor, unusable or
+equivalent entry. As elsewhere, that mutation result says the stated checks
+are sensitive to those alternatives; the Recommendation-derived oracle, not
+the mutation score, is what supports the correctness claim.
+
+The complete phase boundary passes 375/375 period differential groups, both
+64-bit and all interoperability tiers, with 49,018/51,416 source lines covered
+(95.3%).
+
+(2026-09-08)

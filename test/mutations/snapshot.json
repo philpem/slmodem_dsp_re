@@ -6123,6 +6123,23 @@
     "the values and counts block is four frames, not five": "caught"
    }
   },
+  "v90cpcrc": {
+   "key": "cd7cbd4f4d9c77a8da148900185348ab2aadb34237bb845cc53864f8c7cb2c61",
+   "summary": "11 mutations: 11 caught (11 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "calcCRC clocks the Table 14 start bits": "caught",
+    "calcCRC drops the feedback bit instead of stage 15": "caught",
+    "calcCRC includes the final framing start in the protected extent": "caught",
+    "calcCRC moves the x12 feedback tap one stage": "caught",
+    "calcCRC starts after the CP type bit": "caught",
+    "calcCRC treats sixteen-bit groups as complete frames": "caught",
+    "evaluateCRC clocks the Table 14 start bits": "caught",
+    "evaluateCRC includes the final framing start in the protected extent": "caught",
+    "evaluateCRC preloads zero rather than the required all-ones register": "caught",
+    "evaluateCRC reads the peer CRC one bit late": "caught",
+    "evaluateCRC returns the opposite standards verdict": "caught"
+   }
+  },
   "v90cpinfo": {
    "key": "882a119a67b492a27ae0404766fda4d279daee9d1e12e297123451faa00e45fe",
    "summary": "22 mutations: 22 caught (22 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
