@@ -122260,3 +122260,51 @@ The complete `make phase J=4` boundary remains green: **374/374 period
 differential groups** pass with the 64-bit and interoperability tiers, and
 coverage/debug instrumentation remains **49,018/51,416 source lines (95.3%)**.
 (2026-09-08)
+
+## F10247. Three legal datapump boundaries close three ordering gaps; the two complete data loops still commute
+
+The four surviving `v34datapump` mutations were all statement-order claims,
+but the fixture's explanation for two of them had gone stale as neighbouring
+reconstruction work advanced.  Three now have legal, independently observable
+witnesses:
+
+- At the DATA-mode 17-to-18 symbol boundary, `datapumpv34`'s pre-increment
+  makes `receiver` consume the first PP point and advance `vectpp_idx` to one.
+  Moving the increment after the call presents symbol 17 instead and takes the
+  receiver's real early-clear return.
+- A consistent shortened 1,023-symbol acquisition history makes the next
+  receiver call publish a positive accumulated equaliser error.  The correct
+  post-call read increments `bad_run` from seven to eight; hoisting the read
+  sees the previous zero and clears the run.  The blob's exact published error
+  for this input is also asserted as 160, so the counter is not the only proof
+  that publication occurred.
+- Completing the handshake's table-1 transmit arms made the old `||`/`&&`
+  blocker obsolete.  In the normal cold-start `SILENCEINFO` state, a pending
+  four-sample transmit tail with the receive queue already drained must still
+  call `v34handshak`; the blob fills the cursor from 8 to 12.  The `&&` mutant
+  skips that call.
+
+Every case starts with the normal public V.34 harness bring-up, is checked
+ours-against-blob over the whole object and all pointed arenas, and has a
+blob-against-blob control.  The modern binary passes **16,850 checks** and the
+GCC 3.4.2 period differential reports **1/1 passed**.  Each of the three named
+mutations is caught independently.  The complete **78-mutation** suite now
+reports **75 caught by tests, one uncaught, zero unusable and two equivalent**,
+with no previous caught verdict regressing.  Across the seven current targeted
+suites the aggregate is consequently **1,204 caught, 84 uncaught, 35
+equivalent and one unbuildable out of 1,324**.
+
+The sole survivor swaps the complete transmit and receive data loops.  A
+read/write-set audit found no legal cross-loop dependency: the modulator owns
+the transmit shell, vector, queue, modulator, prefilter and optional echo delay
+lines; the receiver owns the receive queue, timing, equaliser, decoder and
+receive history.  The apparent shared shell access is a read of `latched`,
+which `receiver` does not write, and neither loop can expose ordering through a
+modulator diagnostic.  The existing both-loops case confirms commutation for
+one initialized state, but that finite observation plus a manual audit is not
+a general proof.  The mutation therefore remains recorded as **uncaught** and
+is only a conditional-equivalence candidate; it has not been promoted to the
+suite's equivalent count and no invalid pointer alias or planted impossible
+state is used to kill it.
+
+(2026-09-08)
