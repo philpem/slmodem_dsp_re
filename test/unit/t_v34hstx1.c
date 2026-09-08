@@ -2203,40 +2203,27 @@ case_xmitmp(void)
 	xmitmp[XM_359E].val = 4;
 	run_xmitmp("67 XMITMP, the exit on the first bit of the pass", 6738);
 	/*
-	 * THE RUN WITH +0x3598 CLEAR -- the one that calls `initdigital` --
-	 * IS NOT HERE, AND THE REASON IS THE FIXTURE'S AND NOT THE ARM'S.
+	 * THE SAME EXIT WITH +0x3598 CLEAR, so this is the first sequence that
+	 * reaches `initdigital`.  The old version of this case could not be kept:
+	 * `initV34` aims the two shell `coeff` pointers at object +0xe84 and
+	 * object +0x2a68, and the harness then compared their instance-specific
+	 * addresses as bytes.  They are now pointer holes +0x0a24 and +0x2604,
+	 * checked by offset from each side's own object, so the case is legal.
 	 *
-	 * It was written, run, and taken out again.  `initdigital` reaches
-	 * `initV34` twice and each call stores its `coeff` argument at
-	 * shell +0x24 -- and that argument is `obj + 0xe84` for the receive
-	 * context and `obj + 0x2a68` for the transmit one, so what lands at
-	 * +0x0a24 and +0x2604 is a pointer INTO EACH SIDE'S OWN OBJECT.  The
-	 * two sides then hold two addresses of the same offset, which is
-	 * exactly the class `holes[]` exists for and neither offset is in it,
-	 * so `v34hs_compare`'s byte sweep reports them and the step signature
-	 * differs with them.
-	 *
-	 * MEASURED, because it is worth having and it is not a claim this file
-	 * makes: those were the only two bytes that differed OF THE BYTES THAT
-	 * WERE COMPARED -- every shell field and the rate configuration both
-	 * `initV34` calls wrote agreed.  The four pointer holes at +0x0a28,
-	 * +0x0e48, +0x2608 and +0x2a28 were SKIPPED and not agreed: `initV34`
-	 * aims those at library tables, so side A holds ours and side B the
-	 * blob's, and neither the ordinary run nor `V34HS_REFINIT` can settle
-	 * two addresses of two copies (findings F324 and F359).  That hazard is
-	 * real here and is named rather than measured; it is just not what
-	 * made the run fail.  The run is recorded rather than committed
-	 * because closing it means adding two entries to a list three other
-	 * tests assert every entry of is exercised, and they do not reach
-	 * `initdigital`.
-	 *
-	 * WHAT IS THEREFORE UNTESTED IS TWO LINES, and finding F424 names
-	 * them: the call itself and the store of one into +0x3598.  Both are
-	 * in the suite as mutations and both go uncaught, which is finding
-	 * F343's way of making a gap concrete rather than leaving it silent.
-	 * 6724 still covers the guard, because it is the path where +0x3598
-	 * is already set.
+	 * The whole-object and whole-arena comparison observes `initdigital`'s
+	 * writes and catches an omitted call.  The literal assertion afterwards
+	 * is separate: agreement alone would not say that both sides did not omit
+	 * the store which makes the call once-only.
 	 */
+	xm_reset();
+	xmitmp[XM_FLAGS].val = 0x01f1;
+	xmitmp[XM_IDX].val = 0x56;
+	xmitmp[XM_AA3C].val = 0x5a5b;
+	xmitmp[XM_359E].val = 4;
+	xmitmp[XM_3598].val = 0;
+	run_xmitmp("67 XMITMP, the sequence ends, initdigital runs once", 6739);
+	diff_eq_int("67 XMITMP, initdigital is recorded as done",
+		    v34hs_peek_short(0, TX1_F3598), 1, 6739);
 
 	/*
 	 * The three ways of NOT taking that exit, one guard at a time.  Each
