@@ -258,7 +258,7 @@ clause fixes four things:
 | 2 | `V90CP::calcCRC` / `resetCRC` / `evaluateCRC` | `src/pump/v90/V90CP.cpp` | 14/V.90 | `t_v90cpleaf.cpp`, `t_v90cpinfo.cpp` | no |
 | 3 | `V92CP::calcCRC` / `resetCRC` / `evaluateCRC` | `src/pump/v90/V92CP.cpp` | 23,24,30/V.92 | `t_v92cpcrc.cpp` | no |
 | 4 | `v90jd_crc_bits` + its extent | `src/pump/v90/V90Jd.cpp` | 13/V.90 | `t_v90jd.cpp` | no |
-| 5 | `v92jd_crc_bits` + its extent | `src/pump/v90/V92Jd.cpp` | 27/V.92 | `t_v92jd.cpp` | no |
+| 5 | `v92jd_crc_bits` + its extent | `src/pump/v90/V92Jd.cpp` | 21,22/V.92 (Jd/Jp; not Table 27's SUVu) | `t_v92jd.cpp` | no |
 | 6 | `dilCrcBit` + its extent | `src/pump/v90/DILdescriptorPacker.cpp` | 12/V.90 | `t_dilpack.cpp` | no |
 | 7 | `dilCrcBit` + its extent | `src/pump/v90/V92DILdescriptorPacker.cpp` | 20/V.92 | `t_v92dilpack.cpp` | no |
 | 8 | `v8_crc` | `src/v8/v8util.c` | none — see R12 | `t_v8util.c` | not testable |
@@ -383,7 +383,7 @@ pass**, and each is marked with the candidate non-conformance it settles.
 | # | clause | site | shape | fixture |
 |--:|---|---|:-:|---|
 | 11 | 5.3, 6.5/V.90; 6.3/V.92 | the eight `Scrambler`/`Descrambler` sites, taps measured as delays | 3 | `t_scrambler.cpp` plus direct owner fixtures (**done**, F10259) |
-| 12 | Table 27/V.92 | `V92Jd`'s CRC extent | 1 | `t_v92jd.cpp` (extend) |
+| 12 | Tables 21,22/V.92 | `V92Jd`'s Jd/Jp framing and CRC extent | 1 | `t_v92jd.cpp` (**done**, F10260) |
 | 13 | Table 12/V.90 | `DILdescriptorPacker`'s CRC extent | 1 | `t_dilpack.cpp` (extend) |
 | 14 | Table 20/V.92 | `V92DILdescriptorPacker`'s CRC extent | 1 | `t_v92dilpack.cpp` (extend) |
 | 15 | 5.4.2, 5.4.3/V.90 | `ModulusEncoder`/`Decoder` bit weighting, and `out[5] < M5` | 2,1 | `t_moduluscoder.cpp` (extend) |
@@ -899,6 +899,11 @@ should be re-derived with it rather than the total carried forward.
    selections pass, with all 38 new targeted mutations caught. Take item 12
    next. Reset/history handover remains independently tracked in
    [issue #11](https://github.com/philpem/slmodem_dsp_re/issues/11).
+8. **Item 12 is complete** (F10260): independent Table 21 Jd and Table 22 Jp
+   frame builders, a separate scalar Figure-14 CRC, and five literal packed
+   known answers all agree with reconstruction and blob. The audit corrects
+   the former Table-27 attribution and retracts D162 and D271. Take item 13
+   next.
 
 **Before any of it, read `docs/method/tiers.md` §5 and finding F7413.** The two
 rules a spec block gets wrong if it is written from the code rather than from

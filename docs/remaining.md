@@ -221,11 +221,14 @@ an exact definition; non-exact definitions retain this finite-evidence limit.
   **15/15 V.90 owners** and **9/9 V.92 owners** are caught. It also refreshes
   the older `scrambler` suite at **33/36 caught, 3 equivalent**, making
   **27 current and 225 stale of 252 registered suites**.
+  F10260 adds the complete V.92 Jd/Jp framing oracle and refreshes both of its
+  suites at **51/51 existing** and **20/20 standards mutations caught**, making
+  **29 current and 224 stale of 253 registered suites**.
   This supports only the named clusters and
   not a tree-wide confidence claim. Triage the live
   receive/selection gaps through issues #1 and #10 before paying for a complete
   9,000-plus-mutation refresh.
-- **Add independent standards oracles — eleven numbered blocks complete.** F10249 consumes
+- **Add independent standards oracles — twelve numbered blocks complete.** F10249 consumes
   every published PCM codeword and linear cell in V.90 Table 1 and reports 256
   reconstruction checks and 256 blob checks separately; both conform. F10250
   moves the literal table into one shared test-only fixture and drives all
@@ -272,7 +275,14 @@ an exact definition; non-exact definitions retain this finite-evidence limit.
   `t_v92mod` / `t_v92p3mod` / `t_v92p4mod`; five V.90 owners separately pass
   GPC geometry checks in four direct-constructor fixtures. All 38 new focused
   mutations are caught and no departure is found in that bounded scope.
-  Reset/history handover remains issue #11.
+  F10260 independently constructs the complete V.92 Table 21 Jd and Table 22
+  Jp messages, including the Figure-14 CRC, and pins the scalar model with
+  five literal packed-wire known answers. Reconstruction and blob each pass
+  489 generated assertions plus 15 known-answer assertions. All 20 focused
+  framing/CRC mutations and all 51 refreshed differential mutations are
+  caught. No legal-message departure was found; D162 and D271 are retracted
+  because the former analysis applied V.90 Table 13 fields to V.92's distinct
+  Jd/Jp layouts. Reset/history handover remains issue #11.
   ANSam spectrum, absolute level, transition quality and duration remain
   separately scoped. These oracles do not improve
   equivalence to the blob; they answer whether both implementations reproduce

@@ -1,0 +1,111 @@
+[
+ {
+  "_": [
+   "Bounded independent V.92 Tables 21/22 CRC sensitivity checks for t_v92jd.cpp.",
+   "These anchors target the two 32-bit CRC payload extents, the all-ones preload,",
+   "the two polynomial taps and low-bit-first CRC wire order. Existing v92jd",
+   "mutations already cover constructor/accessor/unpacker behavior; this suite",
+   "only adds the standards-critical pack/CRC alternatives."
+  ]
+ },
+ {
+  "label": "V.92 data CRC covers only its first 16 payload bits",
+  "find": "for (g = 0; g <= 1; g++)\n\t\tv92jd_crc_bits(crc,\n\t\t\t       &bits[V90JD_GROUP1 + 1 + g * V90JD_GROUP]);",
+  "replace": "for (g = 0; g <= 0; g++)\n\t\tv92jd_crc_bits(crc,\n\t\t\t       &bits[V90JD_GROUP1 + 1 + g * V90JD_GROUP]);"
+ },
+ {
+  "label": "V.92 phase CRC covers only its first 16 payload bits",
+  "find": "for (g = 0; g <= 1; g++)\n\t\tv92jd_crc_bits(crc,\n\t\t\t       &phaseBits[V90JD_GROUP1 + 1 + g * V90JD_GROUP]);",
+  "replace": "for (g = 0; g <= 0; g++)\n\t\tv92jd_crc_bits(crc,\n\t\t\t       &phaseBits[V90JD_GROUP1 + 1 + g * V90JD_GROUP]);"
+ },
+ {
+  "label": "V.92 data CRC starts one bit into the wrong framed group",
+  "find": "&bits[V90JD_GROUP1 + 1 + g * V90JD_GROUP]);",
+  "replace": "&bits[V90JD_GROUP1 + 2 + g * V90JD_GROUP]);"
+ },
+ {
+  "label": "V.92 phase CRC starts one bit into the wrong framed group",
+  "find": "&phaseBits[V90JD_GROUP1 + 1 + g * V90JD_GROUP]);",
+  "replace": "&phaseBits[V90JD_GROUP1 + 2 + g * V90JD_GROUP]);"
+ },
+ {
+  "label": "V.92 CRC tap 3 reads the wrong register cell",
+  "find": "static void\nv92jd_crc_bits(int *crc, const unsigned char *in)\n{\n\tint k;\n\n\tfor (k = 0; k <= 15; k++) {\n\t\tint t = in[k] + crc[0];\n\t\tint tap3 = (crc[4] + t) & 1;",
+  "replace": "static void\nv92jd_crc_bits(int *crc, const unsigned char *in)\n{\n\tint k;\n\n\tfor (k = 0; k <= 15; k++) {\n\t\tint t = in[k] + crc[0];\n\t\tint tap3 = (crc[5] + t) & 1;"
+ },
+ {
+  "label": "V.92 CRC tap 10 reads the wrong register cell",
+  "find": "static void\nv92jd_crc_bits(int *crc, const unsigned char *in)\n{\n\tint k;\n\n\tfor (k = 0; k <= 15; k++) {\n\t\tint t = in[k] + crc[0];\n\t\tint tap3 = (crc[4] + t) & 1;\n\t\tint tap10 = (crc[11] + t) & 1;",
+  "replace": "static void\nv92jd_crc_bits(int *crc, const unsigned char *in)\n{\n\tint k;\n\n\tfor (k = 0; k <= 15; k++) {\n\t\tint t = in[k] + crc[0];\n\t\tint tap3 = (crc[4] + t) & 1;\n\t\tint tap10 = (crc[12] + t) & 1;"
+ },
+ {
+  "label": "V.92 data CRC is wired most-significant bit first",
+  "find": "bits[V90JD_GROUP3 + 1 + i] = (unsigned char)crc[i];",
+  "replace": "bits[V90JD_GROUP3 + 1 + i] = (unsigned char)crc[15 - i];"
+ },
+ {
+  "label": "V.92 phase CRC is wired most-significant bit first",
+  "find": "phaseBits[V90JD_GROUP3 + 1 + i] = (unsigned char)crc[i];",
+  "replace": "phaseBits[V90JD_GROUP3 + 1 + i] = (unsigned char)crc[15 - i];"
+ },
+ {
+  "label": "V.92 data CRC does not preload all ones",
+  "find": "for (i = 0; i <= 15; i++)\n\t\tcrc[i] = 1;\n\n\tfor (g = 0; g <= 1; g++)\n\t\tv92jd_crc_bits(crc,\n\t\t\t       &bits",
+  "replace": "for (i = 0; i <= 15; i++)\n\t\tcrc[i] = 0;\n\n\tfor (g = 0; g <= 1; g++)\n\t\tv92jd_crc_bits(crc,\n\t\t\t       &bits"
+ },
+ {
+  "label": "V.92 phase CRC does not preload all ones",
+  "find": "for (i = 0; i <= 15; i++)\n\t\tcrc[i] = 1;\n\n\tfor (g = 0; g <= 1; g++)\n\t\tv92jd_crc_bits(crc,\n\t\t\t       &phaseBits",
+  "replace": "for (i = 0; i <= 15; i++)\n\t\tcrc[i] = 0;\n\n\tfor (g = 0; g <= 1; g++)\n\t\tv92jd_crc_bits(crc,\n\t\t\t       &phaseBits"
+ },
+ {
+  "label": "V.92 Jd sync run has only sixteen ones",
+  "find": "V92Jd::packJdData()\n{\n\tint i, g;\n\n\tfor (i = 0; i <= 16; i++)\n\t\tbits[i] = 1;",
+  "replace": "V92Jd::packJdData()\n{\n\tint i, g;\n\n\tfor (i = 0; i <= 15; i++)\n\t\tbits[i] = 1;"
+ },
+ {
+  "label": "V.92 Jp sync run has only sixteen ones",
+  "find": "V92Jd::packJdPhaseData()\n{\n\tint i, g;\n\n\tfor (i = 0; i <= 16; i++)\n\t\tphaseBits[i] = 1;",
+  "replace": "V92Jd::packJdPhaseData()\n{\n\tint i, g;\n\n\tfor (i = 0; i <= 15; i++)\n\t\tphaseBits[i] = 1;"
+ },
+ {
+  "label": "V.92 Jd first start bit is one",
+  "find": "bits[V90JD_GROUP1] = 0;\n\tbits[V90JD_GROUP2] = 0;\n\tbits[V90JD_GROUP3] = 0;",
+  "replace": "bits[V90JD_GROUP1] = 1;\n\tbits[V90JD_GROUP2] = 0;\n\tbits[V90JD_GROUP3] = 0;"
+ },
+ {
+  "label": "V.92 Jp second start bit is one",
+  "find": "phaseBits[V90JD_GROUP1] = 0;\n\tphaseBits[V90JD_GROUP2] = 0;\n\tphaseBits[V90JD_GROUP3] = 0;",
+  "replace": "phaseBits[V90JD_GROUP1] = 0;\n\tphaseBits[V90JD_GROUP2] = 1;\n\tphaseBits[V90JD_GROUP3] = 0;"
+ },
+ {
+  "label": "V.92 Jd first fill bit is one",
+  "find": "bits[68] = 0;\n\tbits[69] = 0;\n\tbits[70] = 0;\n\tbits[71] = 0;",
+  "replace": "bits[68] = 1;\n\tbits[69] = 0;\n\tbits[70] = 0;\n\tbits[71] = 0;"
+ },
+ {
+  "label": "V.92 Jp last fill bit is one",
+  "find": "phaseBits[68] = 0;\n\tphaseBits[69] = 0;\n\tphaseBits[70] = 0;\n\tphaseBits[71] = 0;",
+  "replace": "phaseBits[68] = 0;\n\tphaseBits[69] = 0;\n\tphaseBits[70] = 0;\n\tphaseBits[71] = 1;"
+ },
+ {
+  "label": "V.92 Jd leaves the last reserved run bit uncleared",
+  "find": "for (i = 0; i <= 5; i++)\n\t\tbits[V90JD_GROUP2 + 7 + i] = 0;",
+  "replace": "for (i = 0; i <= 4; i++)\n\t\tbits[V90JD_GROUP2 + 7 + i] = 0;"
+ },
+ {
+  "label": "V.92 Jd reserved bit 48 is one",
+  "find": "bits[V90JD_GROUP2 + 14] = 0;",
+  "replace": "bits[V90JD_GROUP2 + 14] = 1;"
+ },
+ {
+  "label": "V.92 Jp leaves the last reserved run bit uncleared",
+  "find": "for (i = 0; i <= 11; i++)\n\t\tphaseBits[V90JD_GROUP2 + 1 + i] = 0;",
+  "replace": "for (i = 0; i <= 10; i++)\n\t\tphaseBits[V90JD_GROUP2 + 1 + i] = 0;"
+ },
+ {
+  "label": "V.92 Jp reserved bit 50 is one",
+  "find": "phaseBits[V90JD_GROUP2 + 16] = 0;",
+  "replace": "phaseBits[V90JD_GROUP2 + 16] = 1;"
+ }
+]

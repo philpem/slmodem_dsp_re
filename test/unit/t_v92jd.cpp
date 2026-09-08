@@ -1023,6 +1023,320 @@ run_unpackers_states(void)
 	return diff_end();
 }
 
+/*
+ * ===========================================================================
+ * ITU-T V.92 TABLES 21 AND 22, independently of dsplibs.o.
+ *
+ * Table 21 is Jd: 22 rate capabilities, six reserved zero bits, the zero
+ * message tag, one more reserved zero and two lookahead bits.  Table 22 is Jp:
+ * the Q16 Jd phase, twelve reserved zero bits, the one message tag, two
+ * constellation-size bits and a final reserved zero.
+ *
+ * Both use the same 72-bit framing: seventeen sync ones; three zero start
+ * bits at 17, 34 and 51; information at 18:33 and 35:50; CRC at 52:67,
+ * register bit zero first; and four zero fill bits.  The reflected bit-serial
+ * CRC below is V.34 Figure 14's x^16+x^12+x^5+1 with an all-ones preload.  It
+ * neither calls V92Jd helpers nor takes an expected value from the blob.
+ *
+ * Some planning text called this Table 27; the published Jd/Jp layouts are
+ * Tables 21 and 22, which are the names used here.
+ * ===========================================================================
+ */
+typedef void (*table22_pack_fn)(void *);
+
+struct table22_subject {
+	const char *group;
+	union jd_slot *slot;
+	table22_pack_fn pack_jd;
+	table22_pack_fn pack_jp;
+};
+
+static void
+table22_our_pack_jd(void *p)
+{
+	((V92Jd *)p)->packJdData();
+}
+
+static void
+table22_our_pack_jp(void *p)
+{
+	((V92Jd *)p)->packJdPhaseData();
+}
+
+static unsigned int
+table22_crc(const unsigned char *information, unsigned int n)
+{
+	unsigned int reg = 0xffffu;
+	unsigned int i;
+
+	for (i = 0; i < n; i++) {
+		unsigned int feedback =
+		    (reg ^ (unsigned int)information[i]) & 1u;
+
+		reg >>= 1;
+		if (feedback)
+			reg ^= 0x8408u;
+	}
+	return reg & 0xffffu;
+}
+
+static unsigned int
+table22_payload_at(unsigned int i)
+{
+	return i < 16u ? 18u + i : 35u + i - 16u;
+}
+
+static unsigned int
+table22_frame(unsigned char wire[V90JD_BITS],
+	      const unsigned char information[32])
+{
+	unsigned int reg;
+	unsigned int i;
+
+	memset(wire, 0, V90JD_BITS);
+	for (i = 0; i <= 16u; i++)
+		wire[i] = 1;
+	for (i = 0; i < 32u; i++)
+		wire[table22_payload_at(i)] = information[i];
+	reg = table22_crc(information, 32);
+	for (i = 0; i < 16u; i++)
+		wire[52u + i] = (unsigned char)((reg >> i) & 1u);
+	return reg;
+}
+
+static int
+table22_guard_intact(const union jd_slot *slot)
+{
+	unsigned int i;
+
+	for (i = (unsigned int)sizeof(V92Jd); i < SLOT; i++)
+		if (slot->raw[i] != 0x5a)
+			return 0;
+	return 1;
+}
+
+static unsigned int
+table22_object_crc(const V92Jd *jd)
+{
+	unsigned int reg = 0;
+	unsigned int i;
+
+	for (i = 0; i < 16u; i++)
+		reg |= (unsigned int)(jd->crc[i] & 1) << i;
+	return reg;
+}
+
+struct table22_kat {
+	int jp;
+	unsigned int value;
+	unsigned int auxiliary;
+	unsigned int crc;
+	unsigned char wire[9];
+};
+
+static void
+table22_wire_bytes(unsigned char bytes[9], const unsigned char bits[V90JD_BITS])
+{
+	unsigned int i;
+
+	memset(bytes, 0, 9);
+	for (i = 0; i < V90JD_BITS; i++)
+		bytes[i / 8u] |= (unsigned char)((bits[i] & 1u) << (i % 8u));
+}
+
+static int
+run_table22_kats_subject(const struct table22_subject *s)
+{
+	/*
+	 * Fixed published-layout anchors, independently calculated from Tables
+	 * 21/22 and Figure 14.  These literal bytes (earliest wire bit in bit 0)
+	 * do not pass through table22_crc() or table22_frame().
+	 */
+	static const struct table22_kat kats[] = {
+		{ 0, 0x000001u, 1u, 0x5d9eu,
+		  { 0xff, 0xff, 0x05, 0x00, 0x00, 0x00, 0xe2, 0xd9, 0x05 } },
+		{ 0, 0x3fffffu, 3u, 0xf366u,
+		  { 0xff, 0xff, 0xfd, 0xff, 0xfb, 0x01, 0x66, 0x36, 0x0f } },
+		{ 1, 0x0000u, 0u, 0x13a0u,
+		  { 0xff, 0xff, 0x01, 0x00, 0x00, 0x80, 0x00, 0x3a, 0x01 } },
+		{ 1, 0x8000u, 1u, 0x3e4eu,
+		  { 0xff, 0xff, 0x01, 0x00, 0x02, 0x80, 0xe1, 0xe4, 0x03 } },
+		{ 1, 0xffffu, 3u, 0x7387u,
+		  { 0xff, 0xff, 0xfd, 0xff, 0x03, 0x80, 0x73, 0x38, 0x07 } }
+	};
+	V92Jd *jd = (V92Jd *)s->slot->raw;
+	unsigned char actual[9];
+	unsigned int k;
+
+	diff_begin(s->group);
+	for (k = 0; k < sizeof(kats) / sizeof(kats[0]); k++) {
+		const struct table22_kat *kat = &kats[k];
+		unsigned int i;
+
+		memset(s->slot->raw, 0x5a, SLOT);
+		if (!kat->jp) {
+			for (i = 0; i < 22u; i++)
+				jd->bits[table22_payload_at(i)] =
+				    (unsigned char)((kat->value >> i) & 1u);
+			jd->bits[47] = 0;
+			jd->bits[49] = (unsigned char)(kat->auxiliary & 1u);
+			jd->bits[50] =
+			    (unsigned char)((kat->auxiliary >> 1) & 1u);
+			s->pack_jd(jd);
+			table22_wire_bytes(actual, jd->bits);
+		} else {
+			for (i = 0; i < 16u; i++)
+				jd->phaseBits[table22_payload_at(i)] =
+				    (unsigned char)((kat->value >> i) & 1u);
+			jd->phaseBits[47] = 1;
+			jd->phaseBits[48] = (unsigned char)(kat->auxiliary & 1u);
+			jd->phaseBits[49] =
+			    (unsigned char)((kat->auxiliary >> 1) & 1u);
+			s->pack_jp(jd);
+			table22_wire_bytes(actual, jd->phaseBits);
+		}
+
+		diff_eq_int("fixed Table 21/22 wire KAT is exact (%ld)",
+			    memcmp(actual, kat->wire, sizeof(actual)), 0, (long)k);
+		diff_eq_int("fixed Table 21/22 CRC KAT is exact (%ld)",
+			    table22_object_crc(jd), kat->crc, (long)k);
+		diff_eq_int("fixed Table 21/22 KAT kept the object guard (%ld)",
+			    table22_guard_intact(s->slot), 1, (long)k);
+	}
+	return diff_end();
+}
+
+static int
+run_table22_subject(const struct table22_subject *s)
+{
+	static const unsigned int masks[] = {
+		0u, 0x3fffffu, 0x155555u
+	};
+	static const unsigned short phases[] = {
+		0x0000, 0xffff, 0xaaaa, 0x5555, 0x1234, 0x8000
+	};
+	V92Jd *jd = (V92Jd *)s->slot->raw;
+	unsigned char information[32];
+	unsigned char expected[V90JD_BITS];
+	unsigned int look;
+	unsigned int m;
+	long sample = 0;
+
+	diff_begin(s->group);
+
+	/*
+	 * Table 21: the three aggregate masks plus all 22 one-hot capability
+	 * positions, crossed with the three legal lookahead values 1..3.
+	 */
+	for (m = 0; m < sizeof(masks) / sizeof(masks[0]) + 22u; m++)
+		for (look = 1; look <= 3u; look++) {
+			unsigned int mask = m < sizeof(masks) / sizeof(masks[0])
+				? masks[m]
+				: 1u << (m - sizeof(masks) / sizeof(masks[0]));
+			unsigned int i;
+			unsigned int reg;
+
+			memset(s->slot->raw, 0x5a, SLOT);
+			memset(information, 0, sizeof(information));
+			for (i = 0; i < 22u; i++)
+				information[i] = (unsigned char)((mask >> i) & 1u);
+			information[28] = 0; /* Jd tag */
+			information[30] = (unsigned char)(look & 1u);
+			information[31] = (unsigned char)((look >> 1) & 1u);
+
+			/* The packer receives the already-defined semantic fields. */
+			for (i = 0; i < 22u; i++)
+				jd->bits[table22_payload_at(i)] = information[i];
+			jd->bits[47] = 0;
+			jd->bits[49] = information[30];
+			jd->bits[50] = information[31];
+			reg = table22_frame(expected, information);
+			s->pack_jd(jd);
+
+			diff_eq_int("Table 21 Jd vector is exact (%ld)",
+				    memcmp(jd->bits, expected, V90JD_BITS), 0,
+				    sample);
+			diff_eq_int("Table 21 CRC has the exact information extent (%ld)",
+				    table22_object_crc(jd), reg, sample);
+			diff_eq_int("Table 21 kept the object guard (%ld)",
+				    table22_guard_intact(s->slot), 1, sample);
+			sample++;
+		}
+
+	/*
+	 * Table 22: fixed edge patterns and all sixteen one-hot phase bits,
+	 * crossed with all four constellation-size bit pairs.
+	 */
+	for (m = 0; m < sizeof(phases) / sizeof(phases[0]) + 16u; m++)
+		for (look = 0; look < 4u; look++) {
+			unsigned int phase = m < sizeof(phases) / sizeof(phases[0])
+				? phases[m]
+				: 1u << (m - sizeof(phases) / sizeof(phases[0]));
+			unsigned int i;
+			unsigned int reg;
+
+			memset(s->slot->raw, 0x5a, SLOT);
+			memset(information, 0, sizeof(information));
+			for (i = 0; i < 16u; i++)
+				information[i] = (unsigned char)((phase >> i) & 1u);
+			information[28] = 1; /* Jp tag */
+			information[29] = (unsigned char)(look & 1u);
+			information[30] = (unsigned char)((look >> 1) & 1u);
+
+			for (i = 0; i < 16u; i++)
+				jd->phaseBits[table22_payload_at(i)] = information[i];
+			jd->phaseBits[47] = 1;
+			jd->phaseBits[48] = information[29];
+			jd->phaseBits[49] = information[30];
+			reg = table22_frame(expected, information);
+			s->pack_jp(jd);
+
+			diff_eq_int("Table 22 Jp vector is exact (%ld)",
+				    memcmp(jd->phaseBits, expected, V90JD_BITS), 0,
+				    sample);
+			diff_eq_int("Table 22 CRC has the exact information extent (%ld)",
+				    table22_object_crc(jd), reg, sample);
+			diff_eq_int("Table 22 kept the object guard (%ld)",
+				    table22_guard_intact(s->slot), 1, sample);
+			sample++;
+		}
+
+	return diff_end();
+}
+
+static int
+run_table22(void)
+{
+	static const struct table22_subject subjects[] = {
+		{
+			"V.92 Tables 21/22 reconstruction standards oracle",
+			&ours, table22_our_pack_jd, table22_our_pack_jp
+		},
+		{
+			"V.92 Tables 21/22 blob standards oracle",
+			&theirs, ref_packJdData, ref_packJdPhaseData
+		}
+	};
+	static const struct table22_subject kat_subjects[] = {
+		{
+			"V.92 Tables 21/22 reconstruction fixed KATs",
+			&ours, table22_our_pack_jd, table22_our_pack_jp
+		},
+		{
+			"V.92 Tables 21/22 blob fixed KATs",
+			&theirs, ref_packJdData, ref_packJdPhaseData
+		}
+	};
+	unsigned int i;
+	int rc = 0;
+
+	for (i = 0; i < sizeof(subjects) / sizeof(subjects[0]); i++)
+		rc |= run_table22_subject(&subjects[i]);
+	for (i = 0; i < sizeof(kat_subjects) / sizeof(kat_subjects[0]); i++)
+		rc |= run_table22_kats_subject(&kat_subjects[i]);
+	return rc;
+}
+
 int
 main(void)
 {
@@ -1036,6 +1350,7 @@ main(void)
 	rc |= run_accessors();
 	rc |= run_unpackers();
 	rc |= run_unpackers_states();
+	rc |= run_table22();
 
 	return rc;
 }

@@ -122865,3 +122865,45 @@ boundary require a state-machine audit. Neither the leaf oracle nor correct
 constructor taps close that question.
 
 (2026-09-08)
+
+## F10260. V.92 Jd/Jp framing and CRC conform; two suspected field-layout defects are retracted
+
+The existing `V92Jd` fixture was strong differential evidence, including both
+pack/unpack round trips and awkward seeded state, but it let the production
+transmitter manufacture the receiver's expected frame. The new standards
+block instead builds all 72 wire positions directly from V.92 Table 21 (Jd)
+and Table 22 (Jp), and computes their protected 32 information bits with an
+independent scalar form of V.34 Figure 14's
+`x^16 + x^12 + x^5 + 1` CRC. The model uses the all-one preload and emits
+register bit zero first. It shares neither the production frame loops nor the
+production sixteen-cell shift register.
+
+Five literal nine-byte known answers sit outside both helpers and pin their
+joint interpretation: two Jd rate/lookahead messages and three Jp
+phase/constellation messages, including zero, endpoint and high-bit cases.
+The generated grid then exercises all 22 legal Jd rate positions separately,
+three aggregate masks, all three legal nonzero lookahead values, all sixteen
+Jp phase positions separately, six aggregate phase words and all four
+constellation pairs. Reconstruction and independently invoked blob each pass
+489 generated assertions plus 15 fixed-known-answer assertions. Sync, all
+three start bits, reserved fields, message tags, fill, CRC extent, taps,
+preload and bit order all conform for the tested legal messages.
+
+The audit also corrects the plan's former Table-27 attribution: V.92 Table 27
+is SUVu, while Jd and Jp are Tables 21 and 22. That correction retracts two
+older suspected defects. D162's untouched constructor `bits[48]` is a Table-21
+reserved position which `packJdData` clears before CRC and transmission; it is
+not a missing constellation field. D271's `phaseBits[29..30]` accessor is the
+correct unframed location of Table-22 Jp wire positions 48 and 49; the
+constellation fields belong to Jp, not Jd. No production behavior changes.
+
+The new `v92jdstd` suite catches all 20 focused alternatives across complete
+framing and CRC behavior, with no unusable, equivalent or surviving mutation.
+The refreshed pre-existing `v92jd` suite catches all 51 mutations. The
+snapshot ledger is **29 current and 224 stale of 253 registered suites**.
+The complete phase boundary passes **375/375** period-compiler differential
+binaries, the 64-bit and interoperability gates, the partial-link comparator
+self-test and every structural check. Suite line coverage remains
+**49,019/51,416** (`95.3%`).
+
+(2026-09-08)
