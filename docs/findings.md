@@ -122474,3 +122474,45 @@ mutations were caught, and the complete phase boundary passed 374/374 period
 comparisons with 49,018/51,416 source lines covered (95.3%).
 
 (2026-09-08)
+
+## F10252. V.34 Table 17 independently derives the blob's line-probe table and the complete L1 segment
+
+Clause 10.1.2.4 and Table 17 of ITU-T V.34 (02/98) define L1 independently of
+this object: equal-amplitude cosines on 150 Hz-spaced bins from 150 through
+3750 Hz, with four omissions at 900, 1200, 1800 and 2400 Hz and the initial
+phase of every retained tone tabulated. L1 repeats at 150 ± 0.01% Hz for
+160 ms (24 repetitions), 6 dB above nominal; L2 is the same signal at nominal
+level.
+
+`t_v34hstx1` now performs a 64-point DFT at 9600 samples/s against those literal
+21 frequency/phase rows and four literal omissions. It reports 46/46 checks
+separately for `probe` and the blob's `ref_probe`: every required tone is
+present with the tabulated phase, their amplitudes agree within the bound for
+a rounded short synthesis, and all four omitted bins contain only bounded
+quantisation residue. This is separate from the existing `memcmp`, which
+continues to prove that all 128 table bytes are identical to the object.
+
+The production-path half starts `v34tx1_tx_l1` at its legal zero index and Q14
+unity scale. Calls 1 through 383 retain L1 and advance by four samples each;
+call 384 emits samples 1532 through 1535, changes the microstate to L2 and
+resets the index. That is 1,536 samples, exactly 24 periods and 160 ms. Complete
+64-sample captures show that L2 emits `probe` and L1 emits twice `probe`, with
+exactly four times its energy. The fixed-point result is 6.0206 dB rather than
+an invented exact 6.0000 dB; this is the usual integer representation of the
+Recommendation's 6 dB level relationship, not recorded as a departure.
+
+The existing differential cases still establish that the blob has the same
+four-sample output paths and the same exact transition boundary. The new
+standard groups deliberately do not use that agreement as their oracle. They
+also do not claim the L2 upper duration of 550 ms plus round-trip delay, which
+depends on the wider Phase 2 receive state machine and remains outside this
+single transmit arm.
+
+Focused validation passes 53 reconstruction checks, 46 blob checks and all
+25,847 existing `v34hstx1` checks. The targeted mutation refresh accounts for
+all 776 registered changes: 753 caught, 23 behaviorally equivalent, none
+uncaught or unusable. The complete phase boundary passes 374/374 period
+differential groups, both 64-bit and all interoperability tiers, with
+49,018/51,416 source lines covered (95.3%).
+
+(2026-09-08)
