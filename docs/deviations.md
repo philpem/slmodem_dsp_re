@@ -12868,3 +12868,23 @@ separately.
 **Status:** faithfully reproduced original defect; executable standards
 departure, finding F10255. Any negative legal shaping coefficient can be
 misrepresented. Documentation only, for blob fidelity.
+
+## D1457 🐛 V.90 Jd transmits six ITU-reserved positions from its rate mask
+
+V.90 Table 13 defines 22 data-rate capabilities: wire bits 18:33 carry mask
+bits 0:15 and bits 35:40 carry mask bits 16:21. Bits 41:46 are reserved for
+the ITU; a digital modem must transmit them as zero and an analogue modem
+must not interpret them. `V90Jd` instead treats the second group as twelve
+rate bits and copies mask bits 16:27 into wire bits 35:46.
+
+This is reachable without a contrived caller. `V90Parameters::setToDefault`
+sets `DIGITAL_RATE_MASK` to `0x0fffffff`, so its ordinary default drives all
+six reserved wire positions high. The independent Table 13 oracle proves
+each position separately and the aggregate default on reconstruction and
+blob. The receiver-side accessor also returns those positions in its internal
+mask, although the production constellation designer only consults the 22
+legal indices; no system-level receive-negotiation effect is claimed here.
+
+**Status:** faithfully reproduced original defect; executable standards
+departure, finding F10256. The transmitted Jd sequence violates Table 13's
+reserved-bit requirement. Documentation only, for blob fidelity.

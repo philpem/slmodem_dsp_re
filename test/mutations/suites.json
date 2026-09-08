@@ -532,6 +532,10 @@
   "src/pump/v90/V90Jd.cpp",
   "build/test/t_v90jd"
  ],
+ "v90jdstd": [
+  "src/pump/v90/V90Jd.cpp",
+  "build/test/t_v90jd"
+ ],
  "v90loadparams": [
   "src/pump/v90/V90Parameters.cpp",
   "build/test/t_v90loadparams"

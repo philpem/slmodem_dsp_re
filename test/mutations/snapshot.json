@@ -7060,8 +7060,8 @@
    }
   },
   "v90jd": {
-   "key": "de009800ada46da1b62c958867cc1fc12cbef02e5dcba6fbc58b7cc34b1cc250",
-   "summary": "39 mutations: 39 caught (39 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "key": "67f60add9db7a1864a73655ea7c31d3c414280c3d225966b73bc5e8c3801854b",
+   "summary": "37 mutations: 37 caught (37 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "an unknown state clears the run length instead of keeping it": "caught",
     "getConstelationSize reads the framed positions": "caught",
@@ -7074,9 +7074,7 @@
     "getRatesMask's second group is eleven bits, not twelve": "caught",
     "getRatesMask's second group is shifted from 0, not from 16": "caught",
     "getRatesMask's second group reads the framed layout": "caught",
-    "group 0 is one bit short": "caught",
     "group 2's marker is accepted as a 1 rather than a 0": "caught",
-    "the CRC's two feedback taps are transposed": "caught",
     "the constellation bits carry the whole word, not its low byte": "caught",
     "the destructor is not empty": "caught",
     "the first payload run is fifteen bytes": "caught",
@@ -7102,6 +7100,26 @@
     "the unpacker's second byte is left as it was": "caught",
     "the unpacker's word is left as it was": "caught",
     "unPackData reports a completed message on every call": "caught"
+   }
+  },
+  "v90jdstd": {
+   "key": "518d5cfb4bdfc284c7604be60afe6d93bf9545e09cdd4abad48465b47fa55bbc",
+   "summary": "14 mutations: 14 caught (14 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "Table 13 CRC clocks each group's start bit as information": "caught",
+    "Table 13 CRC excludes constellation and lookahead information": "caught",
+    "Table 13 CRC moves the x12 feedback tap one stage": "caught",
+    "Table 13 CRC starts from zero instead of the Figure 14 all-ones preload": "caught",
+    "Table 13 frame sync has sixteen ones rather than seventeen": "caught",
+    "Table 13 transmits CRC bit fifteen first": "caught",
+    "Table 13's final fill bit is omitted": "caught",
+    "Table 13's first fill bit is one": "caught",
+    "Table 13's second legal rate group starts at mask bit fifteen": "caught",
+    "Table 13's second legal rate group starts at mask bit seventeen": "caught",
+    "Table 13's training and rate-renegotiation constellation bits are transposed": "caught",
+    "Table 13's two lookahead bits are transposed": "caught",
+    "getRatesMask hides Table 13's six reserved positions from its internal result": "caught",
+    "the constructor correctly limits Table 13 to twenty-two rate bits": "caught"
    }
   },
   "v90loadparams": {
@@ -8410,8 +8428,8 @@
    }
   },
   "v90packdata": {
-   "key": "f7a6952862e9d9d8c4cd24b7b1b9b6c27f4a843295f590c7df867f03405d1b59",
-   "summary": "23 mutations: 21 caught (21 by test, 0 by strings), 0 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
+   "key": "44f3226738c7ed551fea5f241e0c5593b64e308e03f7d3adaf571483fdf5e985",
+   "summary": "24 mutations: 22 caught (22 by test, 0 by strings), 0 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
    "verdicts": {
     "both passes read group 1": "caught",
     "group 0 is one bit short": "caught",
@@ -8434,6 +8452,7 @@
     "the CRC register reset is one int short": "caught",
     "the CRC register reset skips crc[0]": "caught",
     "the CRC register starts at zero, not all ones": "caught",
+    "the CRC's two feedback taps are transposed": "caught",
     "the four trailing bits are set rather than cleared": "caught",
     "the second group is taken one byte further on": "caught"
    }
