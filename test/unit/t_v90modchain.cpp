@@ -60,6 +60,7 @@
 #include <string.h>
 
 #include "harness.h"
+#include "v90table1.h"
 #include "dsplib/debug.h"
 /* `pcm.h` has no linkage guard of its own; same wrapper as the .cpp uses. */
 extern "C" {
@@ -1121,6 +1122,80 @@ run_mapper_pcm(const char *name, mapper_ctor our_c, mapper_ctor ref_c,
 		    differ > 0, 1, differ);
 
 	return diff_end();
+}
+
+/*
+ * TABLE 1/V.90 THROUGH THE PRODUCTION MAPPER.
+ *
+ * `t_pcm` checks the two G.711 decoders against the literal Recommendation
+ * table.  That does not execute the Ucode conversion embedded in
+ * `V90Mapper::resetNoSpectral`, so this deliberately enters through the
+ * mapper's real reset and checks the resulting linear constellation.  The
+ * mapping block contains one legal 128-entry row, indexed by every Ucode;
+ * the other five rows contain one legal Ucode apiece rather than relying on
+ * an empty-constellation edge case.
+ *
+ * The reconstruction and blob are each compared directly with Table 1.  A
+ * reconstruction-vs-blob agreement is retained as a separate check, but is
+ * not allowed to stand in for the Recommendation oracle.
+ */
+static int
+run_mapper_table1_side(const char *name, unsigned char *obj,
+		       mapper_ctor ctor, dtor destroy, map_reset reset)
+{
+	int law;
+
+	diff_begin(name);
+
+	for (law = 0; law < 2; law++) {
+		V90Mapper *mapper = (V90Mapper *)(void *)obj;
+		unsigned int i, u;
+
+		seed_trial(7600 + law);
+		memset(rst_mp, 0, sizeof(rst_mp));
+		RST_MP->word_0 = V90MAPPER_FRAME;
+		RST_MP->shaperSR = 0;
+		for (i = 0; i < V90MAPPER_CONSTELLATIONS; i++) {
+			RST_MP->constellationSize[i] = 1;
+			RST_MP->constellation[i][0] = 0;
+		}
+		RST_MP->constellationSize[0] = V90MAPPER_LEVELS;
+		for (u = 0; u < V90MAPPER_LEVELS; u++)
+			RST_MP->constellation[0][u] = (unsigned char)u;
+
+		harness_alloc_reset();
+		ctor(obj, PARAMS);
+		reset(obj, RST_MP, law);
+		for (u = 0; u < V90MAPPER_LEVELS; u++) {
+			const struct v90_table1_row *row = &v90_table1[u];
+			int want = law ? row->a_linear : row->mu_linear;
+			long tag = (long)(law * V90MAPPER_LEVELS + u);
+
+			diff_eq_int("Table 1 level for Ucode %ld",
+				    mapper->constellation[0][u], want, tag);
+		}
+
+		destroy(obj);
+		diff_eq_int("nothing left allocated after Table 1 law %ld",
+			    harness_alloc.live, 0, law);
+	}
+
+	return diff_end();
+}
+
+static int
+run_mapper_table1(void)
+{
+	int rc = 0;
+
+	rc |= run_mapper_table1_side(
+	    "V90Mapper::resetNoSpectral, reconstruction vs Table 1/V.90",
+	    map_a, our_mapper_c1, our_mapper_d1, our_map_resetns);
+	rc |= run_mapper_table1_side(
+	    "V90Mapper::resetNoSpectral, blob vs Table 1/V.90",
+	    map_b, ref_mapper_c1, ref_mapper_d1, ref_map_resetns);
+
+	return rc;
 }
 
 /* ------------------------------------------------------ V90Mapper::process */
@@ -4447,6 +4522,7 @@ main(void)
 			     "test", our_mapper_c1, ref_mapper_c1,
 			     our_mapper_d1, ref_mapper_d1, our_map_resetns,
 			     ref_map_resetns);
+	rc |= run_mapper_table1();
 
 	rc |= run_mapper_process();
 	rc |= run_mapper_process_arm();

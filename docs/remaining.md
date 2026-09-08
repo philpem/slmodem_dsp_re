@@ -188,24 +188,27 @@ an exact definition; non-exact definitions retain this finite-evidence limit.
   publication boundaries. F10248 corrects all ten `v34k56` survivors to
   fixed-callee behavioral equivalents: both direct getters are exact
   return-zero stubs and the eight changed completion blocks cannot execute.
-  The current aggregate is 1,204 caught, 74 uncaught, 45 equivalent and one
+  The F10248 aggregate was 1,204 caught, 74 uncaught, 45 equivalent and one
   unbuildable. Twenty-two former survivors are now
   caught and no caught verdict regressed. The remaining datapump loop-swap is
   a documented conditional-equivalence candidate, still conservatively
   counted as uncaught. These seven
-  entries are current while the other 223 registered suites deliberately
-  remain stale, so this supports only the named clusters and not a tree-wide
-  confidence claim. Triage the live
+  entries remain historical evidence. F10250's shared Table 1 fixture changed
+  the mutation key; its focused refresh makes `v90p3mod`, `v90mapper` and
+  `v90cpower` current at **77/77 caught**, while the other 227 registered suites
+  are now deliberately stale. This supports only the named clusters and not a
+  tree-wide confidence claim. Triage the live
   survivors through issues #1 and #9 before paying for a complete
   9,000-plus-mutation refresh.
 - **Add independent standards oracles — first block complete.** F10249 consumes
   every published PCM codeword and linear cell in V.90 Table 1 and reports 256
-  reconstruction checks and 256 blob checks separately; both conform. The
-  decoder fixture does not execute the three inlined Ucode-mask sites, which
-  remain a bounded direct-path follow-up. Continue with V.8 ANSam, V.34 Table
-  17 and the V.90 CP CRC extent. These do not improve equivalence to the blob;
-  they answer the separate and important question of whether both
-  implementations reproduce a defect in the blob.
+  reconstruction checks and 256 blob checks separately; both conform. F10250
+  moves the literal table into one shared test-only fixture and drives all
+  three inlined Ucode-mask sites through their production methods: 2,048
+  output-vs-table assertions pass, split between reconstruction and blob.
+  Continue with V.8 ANSam, V.34 Table 17 and the V.90 CP CRC extent. These do
+  not improve equivalence to the blob; they answer the separate and important
+  question of whether both implementations reproduce a defect in the blob.
 
 ## Phase ledger
 

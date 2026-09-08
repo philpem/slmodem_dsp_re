@@ -36,6 +36,7 @@
 #include <string.h>
 
 #include "harness.h"
+#include "v90table1.h"
 #include "dsplib/V90Phase3Modulator.h"
 
 extern "C" {
@@ -425,6 +426,94 @@ run_resetdilgenerator(void)
 		    1, 0);
 
 	return diff_end();
+}
+
+/*
+ * V.90 Table 1 is an oracle outside both implementations.  In particular,
+ * these are not checks of the spelling of the two masks in
+ * resetDILGenerator(): each call puts a Ucode through the actual descriptor
+ * expansion, then observes the two independently expanded destinations.
+ *
+ * One entry in each destination is sufficient to cover its loop for every
+ * Ucode and law.  The descriptor is otherwise an ordinary, bounded DIL: one
+ * entry, one bit in each sequence and eight one-symbol segments.  It can be
+ * passed to the production method without relying on seeded bytes or an
+ * out-of-range count.
+ */
+static void
+v90_table1_descriptor(struct tagV90DILdescriptor *d, unsigned char ucode)
+{
+	unsigned int i;
+
+	memset(d, 0, sizeof(*d));
+	d->dilCount = 1;
+	d->seq1Length = 1;
+	d->seq2Length = 1;
+	d->seq1[0] = 0;
+	d->seq2[0] = 0;
+	for (i = 0; i < 8; i++) {
+		d->segmentSize[i] = 1;
+		d->segmentCode[i] = ucode;
+	}
+	d->dilCode[0] = ucode;
+}
+
+static int
+run_v90_table1(void)
+{
+	struct tagV90DILdescriptor d;
+	int law, ucode;
+	int rc = 0;
+
+	/*
+	 * Keep these as two oracle reports, rather than comparing the two sides
+	 * with each other: a shared departure from Recommendation V.90 Table 1
+	 * must be visible.  `v90_table1` is a literal transcription in the shared
+	 * harness fixture, not a value derived by either compander.
+	 */
+	diff_begin("V.90 Table 1/V90Phase3Modulator reconstruction");
+	for (law = PCM_TYPE_MU_LAW; law <= PCM_TYPE_A_LAW; law++) {
+		for (ucode = 0; ucode < 128; ucode++) {
+			int expected = law == PCM_TYPE_MU_LAW
+				? v90_table1[ucode].mu_linear
+				: v90_table1[ucode].a_linear;
+			long tag = (long)law * 128L + ucode;
+
+			seed((int)tag, ucode % 4);
+			v90_table1_descriptor(&d, (unsigned char)ucode);
+			ours.o.pcmType = (PcmType)law;
+			ours.o.resetDILGenerator(&d);
+
+			diff_eq_int("segment Ucode %ld linear", ours.o.segmentLevel[0],
+				    expected, tag);
+			diff_eq_int("DIL Ucode %ld linear", ours.o.dilLevel[0],
+				    expected, tag);
+		}
+	}
+	rc |= diff_end();
+
+	diff_begin("V.90 Table 1/V90Phase3Modulator blob");
+	for (law = PCM_TYPE_MU_LAW; law <= PCM_TYPE_A_LAW; law++) {
+		for (ucode = 0; ucode < 128; ucode++) {
+			int expected = law == PCM_TYPE_MU_LAW
+				? v90_table1[ucode].mu_linear
+				: v90_table1[ucode].a_linear;
+			long tag = (long)law * 128L + ucode;
+
+			seed((int)tag, ucode % 4);
+			v90_table1_descriptor(&d, (unsigned char)ucode);
+			theirs.o.pcmType = (PcmType)law;
+			ref_resetDILGenerator(&theirs.o, &d);
+
+			diff_eq_int("segment Ucode %ld linear", theirs.o.segmentLevel[0],
+				    expected, tag);
+			diff_eq_int("DIL Ucode %ld linear", theirs.o.dilLevel[0],
+				    expected, tag);
+		}
+	}
+	rc |= diff_end();
+
+	return rc;
 }
 
 /*
@@ -2369,6 +2458,7 @@ main(void)
 	rc |= run_table();
 	rc |= run_setsessionflag();
 	rc |= run_resetdilgenerator();
+	rc |= run_v90_table1();
 	rc |= run_scrambler();
 	rc |= run_generate(0);
 	rc |= run_generate(1);

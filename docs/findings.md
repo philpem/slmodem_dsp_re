@@ -122382,3 +122382,38 @@ boundary remains green: **374/374 period differential groups** pass with the
 **49,018/51,416 source lines (95.3%)**.
 
 (2026-09-08)
+
+## F10250. All three production Ucode mappings conform to the literal V.90 table
+
+F10249 deliberately stopped at the G.711 decoders: copying `^ 0xff` and
+`^ 0xd5` into `t_pcm` would only have tested the copied expressions, not the
+three production sites. The literal 128-row Table 1 fixture now lives in the
+test harness and is consumed through each owning method instead.
+
+`V90Phase3Modulator::resetDILGenerator` receives a bounded one-entry DIL whose
+segment and DIL code are each swept over all 128 Ucodes under both laws. Its
+two independently expanded level arrays make **512 Recommendation assertions
+per implementation**. `V90Mapper::resetNoSpectral` receives one legal
+128-entry constellation plus five nonempty singleton rows and makes **256
+level assertions per implementation**. `V90ConstellationPower::getPower`
+receives six singleton constellations containing the same Ucode; with one
+codeword every fraction is one, so the published level squared is the exact
+expected mean power, making another **256 value assertions per
+implementation**. Each method reports reconstruction and blob separately.
+
+All **2,048 production-output-vs-Table-1 assertions pass**. There is therefore
+no wrong-together Ucode mapping hidden behind the already green differential
+tests, and the whole Table 1 block now covers both decoders and all three
+production mapping paths. The focused GCC 3.4.2 run passes **4/4 binaries**.
+
+The changed test fixtures were mutation-refreshed only in their owning suites:
+`v90p3mod` **25/25**, `v90mapper` **47/47**, and `v90cpower` **5/5** mutations
+are caught, 77/77 in all. Because the shared test-harness fixture participates
+in the snapshot key, the other 227 suites are now visibly stale; no tree-wide
+mutation claim is made.
+
+The complete `make phase J=4` boundary remains green: **374/374 period
+differential groups** pass with the 64-bit and interoperability tiers, and
+coverage/debug instrumentation remains **49,018/51,416 source lines (95.3%)**.
+
+(2026-09-08)
