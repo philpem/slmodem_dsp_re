@@ -198,12 +198,13 @@ an exact definition; non-exact definitions retain this finite-evidence limit.
   source and its public structure names; its focused refresh made `v8sig`
   current at **8/8 caught**. F10252's shared V.34 source-comment update then
   invalidates that key, while its own targeted refresh makes `v34hstx1`
-  current at **753 caught, 23 equivalent, 0 uncaught**. The other 229
+  current at **753 caught, 23 equivalent, 0 uncaught**. F10253 adds the
+  independent `v90cpcrc` suite, current at **11/11 caught**. The other 229
   registered suites are deliberately stale. This supports only the named clusters and not a
   tree-wide confidence claim. Triage the live
   survivors through issues #1 and #9 before paying for a complete
   9,000-plus-mutation refresh.
-- **Add independent standards oracles — three blocks complete.** F10249 consumes
+- **Add independent standards oracles — four blocks complete.** F10249 consumes
   every published PCM codeword and linear cell in V.90 Table 1 and reports 256
   reconstruction checks and 256 blob checks separately; both conform. F10250
   moves the literal table into one shared test-only fixture and drives all
@@ -219,8 +220,11 @@ an exact definition; non-exact definitions retain this finite-evidence limit.
   probe independently for reconstruction and blob: all 21 frequencies and
   phases, four omitted bins and equal amplitudes conform. Its production-path
   checks run all 1,536 L1 samples, prove 24 repetitions/160 ms, observe the
-  L1-to-L2 transition and confirm the four-to-one power ratio. Continue with
-  the V.90 CP CRC extent; ANSam spectrum, absolute level, transition quality
+  L1-to-L2 transition and confirm the four-to-one power ratio. F10253 covers
+  all twelve legal V.90 Table 14 CP length shapes, independently derives the
+  protected extent and CRC, and reports 682 reconstruction plus 682 blob
+  checks; both conform. Continue with the remaining V.8/V.25 work and then
+  reuse the CP fixture shape for V.92; ANSam spectrum, absolute level, transition quality
   and duration remain separately scoped. These oracles do not improve
   equivalence to the blob; they answer whether both implementations reproduce
   a defect in it.

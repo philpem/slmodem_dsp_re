@@ -424,6 +424,10 @@
   "src/pump/v90/V90CP.cpp",
   "build/test/t_v90cpb2i"
  ],
+ "v90cpcrc": [
+  "src/pump/v90/V90CP.cpp",
+  "build/test/t_v90cpcrc"
+ ],
  "v90cpinfo": [
   "src/pump/v90/V90CP.cpp",
   "build/test/t_v90cpinfo"
