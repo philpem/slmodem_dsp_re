@@ -2289,8 +2289,8 @@
    }
   },
   "v34hsmst44": {
-   "key": "fc2ba8b00e5f987e369faa8799b41c3af14cbb76a67a966ca8e935a00ced8b62",
-   "summary": "214 mutations: 204 caught (204 by test, 0 by strings), 3 NOT caught, 0 unusable, 7 equivalent, 0 MIScounted",
+   "key": "c3e3fbe35c680bd13638b1201f3ca57aabde6a53c1c89a8ccf9e5278d155736f",
+   "summary": "214 mutations: 207 caught (207 by test, 0 by strings), 0 NOT caught, 0 unusable, 7 equivalent, 0 MIScounted",
    "verdicts": {
     "+0x128 is not set": "caught",
     "+0x128 is set to five": "caught",
@@ -2358,11 +2358,11 @@
     "the INFO1c arm does not zero the counter": "caught",
     "the INFO1c arm does not zero the first trace counter": "caught",
     "the INFO1c arm ends in TX_PHASE1_ANS": "caught",
-    "the INFO1c arm gives no probe results": "uncaught",
+    "the INFO1c arm gives no probe results": "caught",
     "the INFO1c arm resets the counter after the transition": "caught",
     "the INFO1c arm transmits L1 rather than DPSK": "caught",
     "the INFO1d answer is inverted": "caught",
-    "the INFO1d decoder is given the answer's record": "uncaught",
+    "the INFO1d decoder is given the answer's record": "caught",
     "the MOH decoder is given the installed record instead": "caught",
     "the MOH diagnostic prints the counter as zero": "caught",
     "the MOH diagnostic swaps its two data words": "caught",
@@ -2469,7 +2469,7 @@
     "the probe results are not given to the INFO1a arm": "caught",
     "the probeselect diagnostic prints the carrier as the receive rate": "caught",
     "the probeselect diagnostic prints the carrier as the transmit rate": "caught",
-    "the probeselect diagnostic swaps its two rates": "uncaught",
+    "the probeselect diagnostic swaps its two rates": "caught",
     "the rate table is given the carrier": "caught",
     "the rate tables read the transmit baud rate": "caught",
     "the record is installed at +0xaa70 instead of +0xaa6c": "caught",

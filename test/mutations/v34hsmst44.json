@@ -1193,7 +1193,6 @@
   "label": "the probeselect diagnostic swaps its two rates",
   "find": "\t\t\t\t     (int)hs_get(obj, T44_TXBAUD),\n\t\t\t\t     (int)obj->baud_rate);",
   "replace": "\t\t\t\t     (int)obj->baud_rate,\n\t\t\t\t     (int)hs_get(obj, T44_TXBAUD));",
-  "note": "NOT CAUGHT, and it is a gap.  `probeselect` settles both rates at 2400 on every case this file drives -- it is the bottom of its ladder and the fixture's probe bins do not admit anything higher -- so the two arguments are equal and the order between them is invisible.  The two mutations below check WHICH field each argument reads, which is the half that can be seen; a case that steered `probeselect` to two different rates would close the rest.",
   "fn": "t44_accept_len4d"
  },
  {
@@ -1210,7 +1209,6 @@
  },
  {
   "label": "the INFO1d decoder is given the answer's record",
-  "note": "NOT CAUGHT, and it is a gap and not an equivalence.  `V34GiveINFO1dBits` returns before it reads its buffer when `v90_receiver` is zero (src/pump/v34/v34pcmmain.cpp), and zero is what every case here holds it at, because the V.90 path walks the session to a `VPcmFloModem` this fixture does not build -- the same wall the 0x26 arm's non-zero branch met and got past only by aiming two session pointers at buffers the test owns.  A case that builds a V.92 session would catch this and there is no such fixture in the tree.",
   "find": "\tif (V34GiveINFO1dBits(obj, t44_record(obj, T44_PTR_AA70)) != 0)",
   "replace": "\tif (V34GiveINFO1dBits(obj, t44_record(obj, T44_PTR_AA6C)) != 0)",
   "fn": "t44_accept_len4d"
