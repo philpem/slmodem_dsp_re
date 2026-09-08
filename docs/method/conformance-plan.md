@@ -386,7 +386,7 @@ pass**, and each is marked with the candidate non-conformance it settles.
 | 12 | Tables 21,22/V.92 | `V92Jd`'s Jd/Jp framing and CRC extent | 1 | `t_v92jd.cpp` (**done**, F10260) |
 | 13 | Table 12/V.90 | `DILdescriptorPacker`'s CRC extent | 1 | `t_dilpack.cpp` (**done**, F10261) |
 | 14 | Table 20/V.92 | `V92DILdescriptorPacker`'s CRC extent | 1 | `t_v92dilpack.cpp` (**done**, F10262) |
-| 15 | 5.4.2, 5.4.3/V.90 | `ModulusEncoder`/`Decoder` bit weighting, and `out[5] < M5` | 2,1 | `t_moduluscoder.cpp` (extend) |
+| 15 | 5.4.2, 5.4.3/V.90 | `ModulusEncoder`/`Decoder` bit weighting, and `out[5] < M5` | 2,1 | `t_moduluscoder.cpp` (**done**, F10263) |
 | 16 | Tables 2, 14, 17/V.90; 23, 30/V.92 | the whole `drn` → rate chain | 3 | `t_v90demod.cpp`, `t_v92unpck.c` (extend) |
 | 17 | Tables 3, 5/V.90 | `V90SpectralShaper`'s frame geometry | 3 | `t_v90shapeact.cpp` (extend) |
 | 18 | 5.4.5.1, Table 4/V.90 | the differential-coding recurrences | 3,2 | `t_diffcoder.cpp` (extend) |
@@ -916,7 +916,14 @@ should be re-derived with it rather than the total carried forward.
     and CRC but expose D1459. The blob pads descriptors only to an even length,
     not the required twelve-bit boundary; both shipped presets reach it. Take
     item 15 next. Receiver impact and an opt-in interop path remain
-    [issue #13](https://github.com/philpem/slmodem_dsp_re/issues/13).
+   [issue #13](https://github.com/philpem/slmodem_dsp_re/issues/13).
+11. **Item 15 is complete** (F10263): independent scalar division and
+    positional-weight oracles cover every legal `K=6..39`, literal known
+    answers, every one-hot input and mixed-radix carry boundaries. Both the
+    reconstruction and blob conform. The apparently unused sixth encoder
+    modulus is a legal optimization: `2^K <= product(M0..M5)` proves the
+    residual after the first five divisions is strictly below `M5`. Take item
+    16 next.
 
 **Before any of it, read `docs/method/tiers.md` §5 and finding F7413.** The two
 rules a spec block gets wrong if it is written from the code rather than from

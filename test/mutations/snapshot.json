@@ -1045,7 +1045,7 @@
    }
   },
   "moduluscoder": {
-   "key": "745e7fe77c771b036d66258b19564daa70afb0f9492f1c5d938356514aa645e6",
+   "key": "8c76b9876c9f148c7f2920d51013ecf5883cb56e0de812f928e971c8c59ac399",
    "summary": "23 mutations: 23 caught (23 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "the decoder clears one word that is not its own": "caught",
@@ -1071,6 +1071,21 @@
     "the second digit is divided out by the first modulus": "caught",
     "the second digit takes the third modulus": "caught",
     "the sixth word is the fifth quotient's remainder instead": "caught"
+   }
+  },
+  "moduluscoderstd": {
+   "key": "45bd50894859c78f22eaded032db2acda222fd834a355dcfc4bb32e6d993e826",
+   "summary": "9 mutations: 9 caught (9 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "bit one is given weight two instead of one": "caught",
+    "the decoder emits the high accumulator bit": "caught",
+    "the decoder reverses every reconstructed bit": "caught",
+    "the decoder's final Horner stage uses the second digit": "caught",
+    "the decoder's final Horner stage uses the second modulus": "caught",
+    "the encoder ignores the input low bit": "caught",
+    "the first digit uses the second modulus": "caught",
+    "the first remainder is added before division": "caught",
+    "the sixth digit is offset upward by M5": "caught"
    }
   },
   "mohdet": {

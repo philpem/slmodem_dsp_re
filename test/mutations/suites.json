@@ -148,6 +148,10 @@
   "src/pump/v90/ModulusCoder.cpp",
   "build/test/t_moduluscoder"
  ],
+ "moduluscoderstd": [
+  "src/pump/v90/ModulusCoder.cpp",
+  "build/test/t_moduluscoder"
+ ],
  "notch": [
   "src/dsp/notch.c",
   "build/test/t_notch"
