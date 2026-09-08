@@ -373,7 +373,7 @@ pass**, and each is marked with the candidate non-conformance it settles.
 | 4 | 5.1, 5.2, Tables 2–7/V.8 | `V8UpdateModemParameters`, `ext_word`, `v8_getbit` | 1,2,3 | `t_v8jm.c`, `t_v8util.c` (**done**, F10254) | 296 | **N5, N1 confirmed** |
 | 5 | Table 1/V.90 | `ulaw2linear`, `alaw2linear`, the three Ucode-mask paths | 3 | `t_pcm.c`, `t_v90p3mod.cpp`, `t_v90modchain.cpp`, `t_v90cpower.cpp` (**done**, F10249–F10250) | 512 + direct-path checks | — |
 | 6 | 3.5, 8.2.2, 8.2.3/V.8; 2.3, 4.4/V.25 | CJ count, ANSam duration, the V.23 answering sequence, `FPM_TONE_CFG` | 3 | `t_v8hs.c`, `t_v8dp.c`, `t_v23modem.c`, `t_fpm_tone.c` (**done**, F10254) | 1,308 | **N2, N6 confirmed; N7 retired** |
-| 7 | Tables 23, 24, 30/V.92 + 10.1.2.3.2/V.34 | `V92CP`'s CRC extent and the CPt/CPu/CPus arms | 1,2 | `t_v92cpcrc.cpp` (extend) | ~800 | — |
+| 7 | Tables 23, 24, 30/V.92 + 10.1.2.3.2/V.34 | `V92CP`'s CRC extent and the CPt/CPu/CPus arms | 1,2 | `t_v92cpcrc.cpp` (**done**, F10255) | 3,328 | **D920, D1455, D1456 confirmed** |
 | 8 | Table 13/V.90 | `V90Jd`'s CRC extent **and** its rate-capability mask | 1,2 | `t_v90jd.cpp` (extend) | ~300 | — |
 | 9 | eq. 7-1, 7-2 and clause 7/V.34 | `scrambleGPC`/`GPA`, `descrambleGPC`/`GPA`, the pairing | 3,2 | `t_v34scram.c` (extend) | ~200 | — |
 | 10 | Table 15/V.90 and the formula under Table 14 | `averagePowerLimits`, `getPower` | 3 | `t_v90cpower.cpp` (extend) | ~40 | — |
@@ -435,6 +435,16 @@ is `289 + δ`; and "every multiple of seventeen is framing" survives the
 variable-length body only because γ is 136 times the constellation index, δ is γ
 or 2γ+136, and 136 = 8 × 17. That argument is nowhere in the tree. Everything
 about the method transfers from `run_mp_crc_spec`.
+
+**#7 — `V92CP` and Tables 23/24, plus Table 30's CRC shape (complete,
+F10255).** All twelve Table 23 extent shapes are built independently for both
+CPt and CPu, and every legal `drn` is exercised through CPus. The same generic
+CRC leaf is also held to all eight Table 30 optional-part combinations at two
+bounded legal lengths; this is explicitly not a claim that `V92CP` implements
+CPd's encoder or parser. The result confirms the CRC extent and wire order but
+also makes three payload departures executable: D920's reversed constellation
+mask, D1455's missing unsigned-Q3.13 weight, and D1456's sign-and-magnitude
+reading of signed-Q1.6 coefficients.
 
 ---
 
@@ -834,7 +844,7 @@ should be re-derived with it rather than the total carried forward.
    its independent CRC and framing-test structure.
 5. **Items 4 and 6 are complete** (V.8/V.25, F10254). They confirmed N1, N2,
    N5 and N6, while the production 160-sample V.23 cadence retired N7.
-6. Do item 7 next, reusing item 3's CP oracle structure, then 8, 9, 10, and
+6. **Item 7 is complete** (V.92 CP, F10255). Do items 8, 9 and 10 next, then
    reassess. **Ten blocks is enough to know whether this
    tier's yield is closer to "one D920 per ten blocks" or to "everything
    conforms", and the answer should decide whether §5.2 is written at all.**

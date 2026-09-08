@@ -58,6 +58,8 @@ void our_cp_resetdet(void *) asm("_ZN5V92CP13resetDetectorEv");
 void our_cp_reset(void *) asm("_ZN5V92CP5resetEv");
 void our_cp_calccrc(void *) asm("_ZN5V92CP7calcCRCEv");
 int our_cp_evalcrc(void *) asm("_ZN5V92CP11evaluateCRCEv");
+void our_cp_pack(void *) asm("_ZN5V92CP10infoToBitsEv");
+void our_cp_info(void *) asm("_ZN5V92CP12evaluateInfoEv");
 
 unsigned char *ref_cp_getbv(void *, unsigned int &)
 	asm("ref__ZN5V92CP12getBitVectorERj");
@@ -67,6 +69,8 @@ void ref_cp_resetdet(void *) asm("ref__ZN5V92CP13resetDetectorEv");
 void ref_cp_reset(void *) asm("ref__ZN5V92CP5resetEv");
 void ref_cp_calccrc(void *) asm("ref__ZN5V92CP7calcCRCEv");
 int ref_cp_evalcrc(void *) asm("ref__ZN5V92CP11evaluateCRCEv");
+void ref_cp_pack(void *) asm("ref__ZN5V92CP10infoToBitsEv");
+void ref_cp_info(void *) asm("ref__ZN5V92CP12evaluateInfoEv");
 }
 
 /*
@@ -534,6 +538,371 @@ run_crafted(void)
 	return diff_end();
 }
 
+/*
+ * Independent standards tier.  V.92 (11/2000), Tables 23/24 specify CPt,
+ * CPu and CPus.  Table 30 supplies additional CPd layouts for the CRC LEAF
+ * ONLY: V92CP's packer and parser do not implement CPd.  V.34 (02/1998),
+ * 10.1.2.3.2/Figure 14 supplies the CRC generator.
+ *
+ * Build payload WORDS from the tables, then serialize them with framing.
+ * The CRC oracle consumes the words before framing exists, using a scalar
+ * normal-polynomial register.  It does not inspect production bits, copy
+ * the production skip loop, or obtain any answer from the other side.
+ */
+typedef void (*spec_void_fn)(void *);
+typedef int (*spec_eval_fn)(void *);
+
+#define SPEC_GUARD 64u
+static unsigned char spec_store[SPEC_GUARD + sizeof(V92CP) + SPEC_GUARD]
+	__attribute__((aligned(8)));
+static unsigned char spec_bits[V92CP_BITS];
+static unsigned short spec_words[112];
+static unsigned int spec_nwords;
+
+static V92CP *
+spec_reset(void)
+{
+	V92CP *p = (V92CP *)(spec_store + SPEC_GUARD);
+	memset(spec_store, 0x5a, sizeof(spec_store));
+	memset((unsigned char *)p, 0, sizeof(*p));
+	memset(p->bits, 0xa5, sizeof(p->bits));
+	memset(spec_bits, 0xa5, sizeof(spec_bits));
+	spec_nwords = 0;
+	return p;
+}
+
+static int
+spec_guards(void)
+{
+	unsigned int i;
+	for (i = 0; i < SPEC_GUARD; i++)
+		if (spec_store[i] != 0x5a ||
+		    spec_store[SPEC_GUARD + sizeof(V92CP) + i] != 0x5a)
+			return 0;
+	return 1;
+}
+
+static unsigned int
+spec_normal_crc(void)
+{
+	unsigned int r = 0xffffu, w, b;
+	for (w = 0; w < spec_nwords; w++) {
+		for (b = 0; b < 16u; b++) {
+			unsigned int feedback = (r >> 15) ^
+				((spec_words[w] >> b) & 1u);
+			r = (r << 1) & 0xffffu;
+			if (feedback)
+				r ^= 0x1021u;
+		}
+	}
+	return r;
+}
+
+static void
+spec_word(unsigned int w)
+{
+	spec_words[spec_nwords++] = (unsigned short)w;
+}
+
+/* Return length INCLUDING CRC, EXCLUDING the mandatory zero fill bit. */
+static unsigned int
+spec_wire(unsigned int quantum)
+{
+	unsigned int pos = 17u, w, b, r = spec_normal_crc();
+	unsigned int length, vector;
+	memset(spec_bits, 0, sizeof(spec_bits));
+	memset(spec_bits, 1, 17u);
+	for (w = 0; w < spec_nwords; w++) {
+		pos++;
+		for (b = 0; b < 16u; b++)
+			spec_bits[pos++] = (unsigned char)
+				((spec_words[w] >> b) & 1u);
+	}
+	pos++;
+	/* Figure 14's bit-zero output is the MSB of our normal register. */
+	for (b = 0; b < 16u; b++)
+		spec_bits[pos++] = (unsigned char)((r >> (15u - b)) & 1u);
+	length = pos;
+	vector = ((length + 1u + quantum - 1u) / quantum) * quantum;
+	memset(spec_bits + vector, 0xa5, sizeof(spec_bits) - vector);
+	return length;
+}
+
+static unsigned int
+spec_mask(unsigned int block, unsigned int constellation, unsigned int chord)
+{
+	/* Sparse, asymmetric words expose order errors in every chord/block. */
+	return (1u << ((constellation + chord + 1u) & 15u)) |
+	       (1u << ((constellation + 2u * chord + 7u + block) & 15u));
+}
+
+static void
+spec_table23(V92CP *p, unsigned int type, unsigned int m,
+	     unsigned int paired, unsigned int rate)
+{
+	unsigned int i, j, block, first_indices = 0, last_indices = 0;
+	p->char_01 = (signed char)type;
+	p->char_02 = (signed char)rate;
+	p->byte_03 = (unsigned char)(m & 1u);
+	p->byte_04 = (unsigned char)paired;
+	p->word_08 = m % 3u;
+	p->word_0c = m % 3u;
+	p->flt_10 = 1.0f;
+	p->flt_14 = 0.5f;
+	p->flt_18 = 0.25f;
+	p->flt_1c = 0.125f;
+	p->flt_20 = 0.0625f;
+	p->byte_24 = (unsigned char)paired;
+	p->word_10c = (unsigned short)(m + 1u);
+	for (i = 0; i < 6u; i++) {
+		unsigned int index = i == 5u ? m : i % (m + 1u);
+		p->word_28[i] = index;
+		if (i < 4u)
+			first_indices |= index << (4u * i);
+		else
+			last_indices |= index << (4u * (i - 4u));
+	}
+	/* Table 23's seven fixed information words; reserved bits stay zero. */
+	spec_word((type << 1) | (rate << 3) | ((m % 3u) << 13) |
+		  (paired << 15));
+	spec_word((m & 1u) | ((m % 3u) << 14));
+	spec_word(8192u); /* 1.0 in unsigned Q3.13 */
+	spec_word(32u | (16u << 8)); /* +1/2, +1/4 in signed Q1.6 */
+	spec_word(8u | (4u << 8)); /* +1/8, +1/16 */
+	spec_word(first_indices);
+	spec_word(last_indices | (paired << 8));
+	for (block = 0; block <= paired; block++)
+		for (i = 0; i <= m; i++)
+			for (j = 0; j < 8u; j++) {
+				unsigned int mask = spec_mask(block, i, j);
+				if (block == 0)
+					p->short_42[i][j] = (short)mask;
+				else
+					p->short_a2[i][j] = (short)mask;
+				spec_word(mask);
+			}
+}
+
+static void
+spec_check_message(V92CP *p, spec_void_fn calc, spec_eval_fn eval,
+		   unsigned int length, unsigned int vector, long tag, int packed)
+{
+	unsigned int i, crc_at = length - 16u, r = spec_normal_crc();
+	int good = 1;
+	if (packed) {
+		diff_eq_int("standard msgLen (%ld)", p->msgLen, length, tag);
+		diff_eq_int("standard vectorLen (%ld)", p->vectorLen, vector, tag);
+		diff_eq_int("standard fields, framing, CRC order and fill (%ld)",
+			memcmp(p->bits, spec_bits, vector) == 0, 1, tag);
+		for (i = vector; i < V92CP_BITS; i++)
+			if (p->bits[i] != 0xa5)
+				good = 0;
+		diff_eq_int("untouched bit-vector tail (%ld)", good, 1, tag);
+	}
+	/* Test calcCRC independently of resetCRC and independently of packing. */
+	memcpy(p->bits, spec_bits, sizeof(spec_bits));
+	p->msgLen = length;
+	memset(p->crc, 1, sizeof(p->crc));
+	calc(p);
+	good = 1;
+	for (i = 0; i < 16u; i++)
+		if (p->crc[i] != ((r >> (15u - i)) & 1u))
+			good = 0;
+	diff_eq_int("independent V.34 CRC register (%ld)", good, 1, tag);
+	diff_eq_int("CRC leaves message and unused tail intact (%ld)",
+		memcmp(p->bits, spec_bits, sizeof(spec_bits)) == 0, 1, tag);
+	diff_eq_int("independently supplied CRC accepted (%ld)", eval(p), 1, tag);
+	for (i = 0; i < 16u; i++) {
+		p->bits[crc_at + i] ^= 1u;
+		diff_eq_int("each corrupted CRC bit rejected (%ld)", eval(p), 0,
+			tag * 16 + i);
+		p->bits[crc_at + i] ^= 1u;
+	}
+	/* First/last payload positions belong to the CRC, unlike all markers. */
+	p->bits[18] ^= 1u;
+	diff_eq_int("first information bit protected (%ld)", eval(p), 0, tag);
+	p->bits[18] ^= 1u;
+	p->bits[crc_at - 2u] ^= 1u;
+	diff_eq_int("last information bit protected (%ld)", eval(p), 0, tag);
+	p->bits[crc_at - 2u] ^= 1u;
+	for (i = 0; i < 17u; i++)
+		p->bits[i] ^= 1u;
+	for (i = 17u; i < crc_at; i += 17u)
+		p->bits[i] ^= 1u;
+	for (i = length; i < vector; i++)
+		p->bits[i] ^= 1u;
+	diff_eq_int("CRC excludes sync, starts and fill (%ld)", eval(p), 1, tag);
+	diff_eq_int("object guards intact (%ld)", spec_guards(), 1, tag);
+}
+
+static int
+run_standard_pack(const char *name, spec_void_fn pack, spec_void_fn calc,
+		  spec_eval_fn eval)
+{
+	unsigned int type, m, paired, rate;
+	long tag = 0;
+	diff_begin(name);
+	for (type = 0; type < 2u; type++)
+		for (m = 0; m < 6u; m++)
+			for (paired = 0; paired < 2u; paired++) {
+				V92CP *p = spec_reset();
+				unsigned int length, quantum, vector;
+				p->bitsPerSymbol = (unsigned char)(2u + paired);
+				spec_table23(p, type, m, paired,
+					     (m * 4u + paired) % 23u);
+				quantum = 12u * (type == 0 ? 1u : 2u + paired);
+				length = spec_wire(quantum);
+				vector = ((length + quantum) / quantum) * quantum;
+				pack(p);
+				spec_check_message(p, calc, eval, length, vector, tag++, 1);
+			}
+	for (rate = 0; rate <= 22u; rate++) {
+		V92CP *p = spec_reset();
+		unsigned int length, quantum = 12u * (2u + (rate & 1u));
+		unsigned int vector;
+		p->char_01 = 2;
+		p->char_02 = (signed char)rate;
+		p->byte_04 = (unsigned char)(rate & 1u);
+		p->bitsPerSymbol = (unsigned char)(quantum / 12u);
+		/* Nonzero irrelevant fields make accidentally taking the long arm visible. */
+		p->word_08 = 3;
+		p->word_10c = 6;
+		spec_word(4u | (rate << 3) | ((rate & 1u) << 15));
+		length = spec_wire(quantum);
+		vector = ((length + quantum) / quantum) * quantum;
+		pack(p);
+		spec_check_message(p, calc, eval, length, vector, tag++, 1);
+	}
+	return diff_end();
+}
+
+/* Table 30 shapes, not CPd behavioral integration: all eight optional-part
+ * combinations, with two filter/constellation lengths.  CRC sees the packed
+ * words only; this cannot validate the actual CPd parser or its parameters. */
+static int
+run_standard_cpd(const char *name, spec_void_fn calc, spec_eval_fn eval)
+{
+	unsigned int flags, variant, i;
+	diff_begin(name);
+	for (flags = 0; flags < 8u; flags++)
+		for (variant = 0; variant < 2u; variant++) {
+			V92CP *p = spec_reset();
+			unsigned int n = variant + 1u, length, vector;
+			spec_word((flags << 1) | (19u << 4) | (variant << 15));
+			spec_word(16384u); /* Table 30's 4G field, positive Q0.16 */
+			if (flags & 1u)
+				for (i = 0; i < 6u; i++)
+					spec_word(0x0202u);
+			if (flags & 2u) {
+				spec_word(n); spec_word(n); spec_word(1u); spec_word(0u);
+				for (i = 0; i < 2u * n; i++)
+					spec_word(0u);
+				spec_word(16384u); /* prefilter z2(0)=1/2 */
+			}
+			if (flags & 4u) {
+				spec_word(0u); spec_word(0u); /* all indices select set zero */
+				spec_word(n); spec_word(0u); spec_word(0u); /* LC1=n */
+				for (i = 0; i < n; i++)
+					spec_word((i + 1u) * 128u); /* positive, increasing points */
+			}
+			length = spec_wire(6u);
+			vector = ((length + 6u) / 6u) * 6u;
+			p->msgLen = length;
+			p->vectorLen = vector;
+			memcpy(p->bits, spec_bits, sizeof(spec_bits));
+			spec_check_message(p, calc, eval, length, vector,
+					   flags * 2u + variant, 0);
+		}
+	return diff_end();
+}
+
+static int
+run_standard_departures(const char *name, spec_void_fn pack, spec_void_fn info)
+{
+	V92CP *p = spec_reset();
+	unsigned int i, actual = 0;
+	diff_begin(name);
+	p->bitsPerSymbol = 1;
+	spec_table23(p, 0, 0, 0, 1);
+	p->flt_10 = 1.0f / 256.0f;
+	pack(p);
+	for (i = 0; i < 16u; i++)
+		actual |= (unsigned int)p->bits[52u + i] << i;
+	/* 2^13/256 = 32.  Passing these checks records the shared departure. */
+	diff_eq_int("Q3.13 mathematical value differs from wire (%ld)",
+		actual != 8192u / 256u, 1, 0);
+	diff_eq_int("duplicated 2^-9 weight emits code 48 (%ld)", actual, 48, 0);
+	diff_eq_int("object guards intact (%ld)", spec_guards(), 1, 0);
+	p = spec_reset();
+	memset(p->bits, 0, sizeof(p->bits));
+	p->bits[57] = 1; /* independent Table 23 Q3.13 code 32 */
+	p->rxState = 6;
+	info(p);
+	diff_eq_int("Q3.13 received code 32 departs from 1/256 (%ld)",
+		p->flt_10 != 1.0f / 256.0f, 1, 0);
+	diff_eq_float("Q3.13 received code 32 becomes 1/512 (%ld)",
+		p->flt_10, 1.0f / 512.0f, 0);
+	diff_eq_int("Q3.13 decode guards intact (%ld)", spec_guards(), 1, 0);
+	p = spec_reset();
+	memset(p->bits, 0, sizeof(p->bits));
+	p->bits[137] = 1; /* Table 23 explicitly assigns this bit to Ucode 0 */
+	p->rxState = 7;
+	p->word_10c = 1;
+	p->word_124 = 136;
+	info(p);
+	diff_eq_int("D920 Ucode 0 departs from mask bit zero (%ld)",
+		(unsigned short)p->short_42[0][0] != 1u, 1, 0);
+	diff_eq_int("D920 Ucode 0 becomes mask bit fifteen (%ld)",
+		(unsigned short)p->short_42[0][0], 0x8000u, 0);
+	diff_eq_int("mask decode guards intact (%ld)", spec_guards(), 1, 0);
+	/* V.92 3.5 defines signed Qa.b as TWO'S COMPLEMENT.  Table 23's
+	 * a1, a2, b1 and b2 all use Q1.6.  -1/4 therefore has integer code
+	 * -16, represented by 0xf0; each implementation instead uses a sign
+	 * bit and magnitude.  Positive values in the general conformance
+	 * vectors above avoid declaring that shared mistake to be correct. */
+	{
+		static const unsigned int at[4] = { 69u, 77u, 86u, 94u };
+		unsigned int field, bit;
+		float decoded[4];
+		p = spec_reset();
+		p->bitsPerSymbol = 1;
+		spec_table23(p, 0, 0, 0, 1);
+		p->flt_14 = p->flt_18 = p->flt_1c = p->flt_20 = -0.25f;
+		pack(p);
+		for (field = 0; field < 4u; field++) {
+			actual = 0;
+			for (bit = 0; bit < 8u; bit++)
+				actual |= (unsigned int)p->bits[at[field] + bit] << bit;
+			diff_eq_int("negative Q1.6 field departs from two's complement (%ld)",
+				actual != ((256u - 16u) & 255u), 1, field);
+			diff_eq_int("negative Q1.6 field emits sign-magnitude 0x90 (%ld)",
+				actual, 0x90u, field);
+		}
+		diff_eq_int("signed Q1.6 encode guards intact (%ld)", spec_guards(), 1, 0);
+		p = spec_reset();
+		memset(p->bits, 0, sizeof(p->bits));
+		for (field = 0; field < 4u; field++)
+			for (bit = 0; bit < 8u; bit++)
+				p->bits[at[field] + bit] = (unsigned char)
+					((0xf0u >> bit) & 1u);
+		p->rxState = 6;
+		info(p);
+		decoded[0] = p->flt_14;
+		decoded[1] = p->flt_18;
+		decoded[2] = p->flt_1c;
+		decoded[3] = p->flt_20;
+		for (field = 0; field < 4u; field++) {
+			diff_eq_int("received Q1.6 0xf0 departs from -1/4 (%ld)",
+				decoded[field] != -0.25f, 1, field);
+			/* Sign-magnitude reads 0x70/64 = 7/4, then negates it. */
+			diff_eq_float("received Q1.6 0xf0 becomes -7/4 (%ld)",
+				decoded[field], -7.0f / 4.0f, field);
+		}
+		diff_eq_int("signed Q1.6 decode guards intact (%ld)", spec_guards(), 1, 0);
+	}
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -556,6 +925,18 @@ main(void)
 	rc |= run_small();
 	rc |= run_crc();
 	rc |= run_crafted();
+	rc |= run_standard_pack("V.92 Tables 23/24 reconstruction standards oracle",
+		our_cp_pack, our_cp_calccrc, our_cp_evalcrc);
+	rc |= run_standard_pack("V.92 Tables 23/24 blob standards oracle",
+		ref_cp_pack, ref_cp_calccrc, ref_cp_evalcrc);
+	rc |= run_standard_cpd("V.92 Table 30 reconstruction CRC leaf only",
+		our_cp_calccrc, our_cp_evalcrc);
+	rc |= run_standard_cpd("V.92 Table 30 blob CRC leaf only",
+		ref_cp_calccrc, ref_cp_evalcrc);
+	rc |= run_standard_departures("V.92 reconstruction expected departures",
+		our_cp_pack, our_cp_info);
+	rc |= run_standard_departures("V.92 blob expected departures",
+		ref_cp_pack, ref_cp_info);
 
 	return rc;
 }
