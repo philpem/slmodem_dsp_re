@@ -418,6 +418,287 @@ run_progress(void)
 	return diff_end();
 }
 
+/* ---------------------- V.90 5.4.2/5.4.3 independent standards oracle */
+
+/*
+ * The differential sweep above establishes agreement with the blob over a
+ * deliberately broad implementation domain.  It does not establish the
+ * V.90 mixed-radix equations: an encoder and decoder with matching mistakes
+ * can round-trip, and blob agreement is not an independent expected result.
+ *
+ * This second layer implements the standard directly.  The K modulus-coded
+ * input bits are b0 first, so
+ *
+ *       R = sum(b[j] * 2^j).
+ *
+ * Six digits are then K[i] = R[i] modulo M[i], with
+ * R[i+1] = (R[i] - K[i]) / M[i].  Legal V.90 parameters satisfy
+ * 2^K <= product(M[0]..M[5]); consequently the production shortcut which
+ * leaves the final quotient in out[5], without reading field_14, is correct:
+ * that quotient is necessarily less than M[5].
+ *
+ * Only standards-legal values are judged here: Phase 4 K=6..24 and data-mode
+ * K=15..39 (covered together as every K from 6 through 39), and every modulus
+ * is in 1..128 with enough combined capacity.  The older >=64-bit signedness
+ * and oversized-modulus trials remain useful robustness/fidelity checks, but
+ * they are not presented as V.90 conformance evidence.
+ */
+
+#define MC_STD_MAX_BITS 39
+#define MC_STD_GUARD 9
+#define MC_STD_WORD_GUARD 4
+
+typedef void (*mc_progress_fn)(void *, unsigned char *, unsigned int *);
+
+struct mc_std_subject {
+	const char *name;
+	mc_progress_fn encoder;
+	mc_progress_fn decoder;
+};
+
+static void
+mc_std_setup(unsigned char *obj, const unsigned int m[6], unsigned int k,
+	     unsigned int salt)
+{
+	unsigned int fields[7];
+	int i;
+
+	for (i = 0; i < MOD_SLOT; i++)
+		obj[i] = (unsigned char)(0x81u + 17u * (unsigned)i + salt);
+	for (i = 0; i < 6; i++)
+		fields[i] = m[i];
+	fields[6] = k;
+	memcpy(obj, fields, sizeof fields);
+}
+
+/* Positional weights keep this decoder oracle structurally unlike the
+ * production decoder's reverse Horner chain. */
+static unsigned long long
+mc_std_from_digits(const unsigned int digits[6], const unsigned int m[6])
+{
+	unsigned long long value = 0;
+	unsigned long long weight = 1;
+	int i;
+
+	for (i = 0; i < 6; i++) {
+		value += (unsigned long long)digits[i] * weight;
+		weight *= m[i];
+	}
+	return value;
+}
+
+static void
+mc_std_digits(unsigned long long value, const unsigned int m[6],
+	      unsigned int digits[6])
+{
+	int i;
+
+	for (i = 0; i < 6; i++) {
+		digits[i] = (unsigned int)(value % m[i]);
+		value /= m[i];
+	}
+}
+
+static void
+mc_std_run_value(const struct mc_std_subject *s, const unsigned int m[6],
+		 unsigned int k, unsigned long long value, long tag,
+		 const unsigned int *literal_digits)
+{
+	unsigned char enc_obj[MOD_SLOT], dec_obj[MOD_SLOT];
+	unsigned char enc_before[MOD_SLOT], dec_before[MOD_SLOT];
+	unsigned char bits[MC_STD_MAX_BITS + MC_STD_GUARD];
+	unsigned char bits_before[MC_STD_MAX_BITS + MC_STD_GUARD];
+	unsigned char decoded[MC_STD_MAX_BITS + MC_STD_GUARD];
+	unsigned int got[6 + MC_STD_WORD_GUARD];
+	unsigned int input[6 + MC_STD_WORD_GUARD];
+	unsigned int expected[6];
+	static const unsigned int word_guard[MC_STD_WORD_GUARD] = {
+		0xd15ea506u, 0xd15ea507u, 0xd15ea508u, 0xd15ea509u
+	};
+	static const unsigned char byte_guard[MC_STD_GUARD] = {
+		0x5a, 0x5a, 0x5a, 0x5a, 0x5a, 0x5a, 0x5a, 0x5a, 0x5a
+	};
+	unsigned long long reconstructed;
+	unsigned int i;
+
+	mc_std_digits(value, m, expected);
+	if (literal_digits != 0)
+		diff_eq_int("fixed KAT agrees with the scalar oracle (case %ld)",
+		    memcmp(expected, literal_digits, sizeof expected) == 0, 1,
+		    tag);
+
+	mc_std_setup(enc_obj, m, k, (unsigned int)tag);
+	memcpy(enc_before, enc_obj, sizeof enc_obj);
+	for (i = 0; i < sizeof bits; i++)
+		bits[i] = (unsigned char)(i < k ? ((value >> i) & 1u) : 0xa5u);
+	memcpy(bits_before, bits, sizeof bits);
+	for (i = 0; i < sizeof got / sizeof got[0]; i++)
+		got[i] = 0xd15ea500u + i;
+
+	s->encoder(enc_obj, bits, got);
+	diff_eq_int("encoder emits all six standard digits (case %ld)",
+	    memcmp(got, literal_digits != 0 ? literal_digits : expected,
+		   sizeof expected) == 0, 1, tag);
+	for (i = 0; i < 6; i++)
+		diff_eq_int("each digit is strictly below its modulus"
+		    " (case/digit %ld)", got[i] < m[i], 1,
+		    tag * 10 + (long)i);
+	diff_eq_int("encoder object is unchanged (case %ld)",
+	    memcmp(enc_obj, enc_before, sizeof enc_obj) == 0, 1, tag);
+	diff_eq_int("encoder input and its guard are unchanged (case %ld)",
+	    memcmp(bits, bits_before, sizeof bits) == 0, 1, tag);
+	diff_eq_int("encoder writes exactly six words (case %ld)",
+	    memcmp(got + 6, word_guard,
+		   MC_STD_WORD_GUARD * sizeof got[0]) == 0, 1, tag);
+
+	/* Feed the decoder the oracle digits, never the subject's output. */
+	mc_std_setup(dec_obj, m, k, (unsigned int)tag + 29u);
+	memcpy(dec_before, dec_obj, sizeof dec_obj);
+	for (i = 0; i < 6; i++)
+		input[i] = literal_digits != 0 ? literal_digits[i] : expected[i];
+	for (; i < sizeof input / sizeof input[0]; i++)
+		input[i] = 0xc0dec000u + i;
+	for (i = 0; i < sizeof decoded; i++)
+		decoded[i] = 0x5au;
+
+	reconstructed = mc_std_from_digits(input, m);
+	diff_eq_int("positional decoder oracle reconstructs R (case %ld)",
+	    reconstructed == value, 1, tag);
+	s->decoder(dec_obj, decoded, input);
+	for (i = 0; i < k; i++)
+		bits_before[i] = (unsigned char)((reconstructed >> i) & 1u);
+	diff_eq_int("decoder emits b0 first (case %ld)",
+	    memcmp(decoded, bits_before, k) == 0, 1, tag);
+	diff_eq_int("decoder writes exactly K bits (case %ld)",
+	    memcmp(decoded + k, byte_guard, MC_STD_GUARD) == 0, 1, tag);
+	diff_eq_int("decoder leaves all six digits and their guard unchanged"
+	    " (case %ld)", memcmp(input,
+		literal_digits != 0 ? literal_digits : expected,
+		6 * sizeof input[0]) == 0
+	    && input[6] == 0xc0dec006u && input[7] == 0xc0dec007u
+	    && input[8] == 0xc0dec008u && input[9] == 0xc0dec009u,
+	    1, tag);
+	diff_eq_int("decoder object is unchanged (case %ld)",
+	    memcmp(dec_obj, dec_before, sizeof dec_obj) == 0, 1, tag);
+}
+
+struct mc_std_kat {
+	unsigned int k;
+	unsigned int m[6];
+	unsigned long long value;
+	unsigned int digits[6];
+};
+
+static const struct mc_std_kat mc_std_kats[] = {
+	{ 6, { 2, 2, 2, 2, 2, 2 }, 32ULL, { 0, 0, 0, 0, 0, 1 } },
+	{ 6, { 2, 2, 2, 2, 2, 2 }, 63ULL, { 1, 1, 1, 1, 1, 1 } },
+	{ 17, { 3, 5, 7, 11, 13, 17 }, 14ULL, { 2, 4, 0, 0, 0, 0 } },
+	{ 17, { 3, 5, 7, 11, 13, 17 }, 15ULL, { 0, 0, 1, 0, 0, 0 } },
+	{ 17, { 3, 5, 7, 11, 13, 17 }, 15014ULL,
+	  { 2, 4, 6, 10, 12, 0 } },
+	{ 17, { 3, 5, 7, 11, 13, 17 }, 15015ULL,
+	  { 0, 0, 0, 0, 0, 1 } },
+	{ 17, { 3, 5, 7, 11, 13, 17 }, 15016ULL,
+	  { 1, 0, 0, 0, 0, 1 } },
+	{ 17, { 3, 5, 7, 11, 13, 17 }, 0x1abcdULL,
+	  { 2, 0, 0, 9, 3, 7 } },
+	{ 17, { 3, 5, 7, 11, 13, 17 }, 0x1ffffULL,
+	  { 1, 0, 2, 5, 9, 8 } },
+	{ 39, { 64, 64, 64, 128, 128, 128 }, 0x4000000000ULL,
+	  { 0, 0, 0, 0, 0, 64 } },
+	{ 39, { 64, 64, 64, 128, 128, 128 }, 0x7fffffffffULL,
+	  { 63, 63, 63, 127, 127, 127 } },
+	{ 39, { 128, 127, 126, 125, 124, 123 }, 0x123456789aULL,
+	  { 26, 19, 90, 47, 57, 2 } },
+	{ 39, { 128, 127, 126, 125, 124, 123 }, 0x7fffffffffULL,
+	  { 127, 15, 114, 26, 39, 17 } },
+	{ 35, { 128, 128, 128, 128, 128, 1 }, 0x7ffffffffULL,
+	  { 127, 127, 127, 127, 127, 0 } }
+};
+
+static void
+mc_std_power_moduli(unsigned int k, unsigned int m[6])
+{
+	unsigned int q = k / 6;
+	unsigned int r = k % 6;
+	unsigned int i;
+
+	/* Rotate the larger radices with K so every digit position sees them. */
+	for (i = 0; i < 6; i++) {
+		unsigned int pos = (i + k) % 6;
+		m[i] = 1u << (q + (pos < r ? 1u : 0u));
+	}
+}
+
+static int
+run_mc_standards_subject(const struct mc_std_subject *s)
+{
+	unsigned int m[6];
+	unsigned int k, i, j;
+	long tag = 0;
+
+	diff_begin(s->name);
+
+	/* Literal, externally derived known-answer vectors anchor bit and radix
+	 * order independently of the scalar implementation above. */
+	for (i = 0; i < sizeof mc_std_kats / sizeof mc_std_kats[0]; i++) {
+		const struct mc_std_kat *v = &mc_std_kats[i];
+		mc_std_run_value(s, v->m, v->k, v->value, tag++, v->digits);
+	}
+
+	for (k = 6; k <= 39; k++) {
+		unsigned long long limit = 1ULL << k;
+		unsigned long long weight;
+
+		mc_std_power_moduli(k, m);
+		mc_std_run_value(s, m, k, 0, tag++, 0);
+		mc_std_run_value(s, m, k, limit - 1, tag++, 0);
+
+		/* Every individual input-bit weight. */
+		for (i = 0; i < k; i++)
+			mc_std_run_value(s, m, k, 1ULL << i, tag++, 0);
+
+		/* Both sides of every mixed-radix carry boundary in range. */
+		weight = 1;
+		for (i = 0; i < 6; i++) {
+			weight *= m[i];
+			if (weight >= limit)
+				break;
+			mc_std_run_value(s, m, k, weight - 1, tag++, 0);
+			mc_std_run_value(s, m, k, weight, tag++, 0);
+			if (weight + 1 < limit)
+				mc_std_run_value(s, m, k, weight + 1, tag++, 0);
+		}
+
+		/* Assert the legal-domain precondition itself, rather than silently
+		 * relying on the generator. */
+		weight = 1;
+		for (j = 0; j < 6; j++)
+			weight *= m[j];
+		diff_eq_int("six moduli cover 2^K (K %ld)", weight >= limit,
+		    1, (long)k);
+	}
+
+	return diff_end();
+}
+
+static int
+run_mc_standards(void)
+{
+	static const struct mc_std_subject subjects[] = {
+		{ "V.90 5.4.2/5.4.3 standards oracle, reconstruction",
+		  our_menc_prog, our_mdec_prog },
+		{ "V.90 5.4.2/5.4.3 standards oracle, blob",
+		  ref_menc_prog, ref_mdec_prog }
+	};
+	int bad = 0;
+	unsigned int i;
+
+	for (i = 0; i < sizeof subjects / sizeof subjects[0]; i++)
+		bad |= run_mc_standards_subject(&subjects[i]);
+	return bad;
+}
+
 /*
  * V92ModulusEncoder::reset -- the parameter block in, the product out.
  *
@@ -1029,6 +1310,7 @@ main(void)
 			   our_mdec2, ref_mdec, ref_mdec2);
 	bad |= run_v92me();
 	bad |= run_progress();
+	bad |= run_mc_standards();
 	bad |= run_v92me_reset();
 	bad |= run_v92me_progress();
 	bad |= run_v92me_chosen();

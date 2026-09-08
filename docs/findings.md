@@ -122996,3 +122996,41 @@ self-test and every structural check. Suite line coverage remains
 **49,019/51,416** (`95.3%`).
 
 (2026-09-08)
+
+## F10263. V.90 mixed-radix coding conforms throughout the legal domain
+
+The prior modulus-coder fixture established broad differential agreement and
+round-trip behavior, including deliberately invalid oversized inputs. Neither
+claim independently establishes V.90 clauses 5.4.2 and 5.4.3: paired encoder
+and decoder mistakes can round-trip, while reconstruction/blob agreement can
+faithfully reproduce a shared standards defect.
+
+The new standards block therefore invokes reconstruction and blob separately.
+Its encoder oracle computes `R = sum(b[j] * 2^j)` and performs scalar divisions;
+its structurally distinct decoder oracle reconstructs `R` from positional
+mixed-radix weights rather than copying the implementation's reverse Horner
+chain. Fourteen literal known-answer vectors pin bit and radix order. Generated
+coverage spans every legal `K=6..39`, zero and maximum values, every one-hot
+input, and both sides of every in-range mixed-radix carry boundary. Guard and
+immutability checks cover both objects, both input arrays and exact output
+extents. Reconstruction and blob each pass **20,403 assertions** over **1,357
+vectors**.
+
+The audit resolves the suspicious sixth-modulus omission without trading blob
+fidelity against conformance. After five divisions, the encoder emits the
+remaining quotient directly as digit `K5`. For every legal parameter set,
+`R < 2^K <= M0*M1*M2*M3*M4*M5`; division by the first five moduli therefore
+proves `K5 < M5`. Reading `M5` or applying a final remainder would be redundant.
+The signed 64-bit concern likewise requires `K >= 64`, outside V.90's maximum
+of 39. No legal-domain standards departure is found.
+
+The new `moduluscoderstd` suite catches **9/9** focused changes to bit weights,
+remainder arithmetic, the sixth-digit bound and independent decoding. The
+refreshed pre-existing `moduluscoder` suite catches **23/23** mutations. This
+shows that the fixtures distinguish those named alternatives; it is not a
+universal equivalence proof. The algebraic sixth-digit bound is universal
+under the standard's capacity precondition, while the executable oracle is
+finite evidence over its enumerated legal vectors. The mutation snapshot is
+**34 current and 222 stale of 256 registered suites**.
+
+(2026-09-08)

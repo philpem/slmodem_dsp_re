@@ -93,8 +93,13 @@ targeted mutation refresh](https://github.com/philpem/slmodem_dsp_re/issues/3),
 [#5 independent standards oracles](https://github.com/philpem/slmodem_dsp_re/issues/5),
 [#6 partial-link order](https://github.com/philpem/slmodem_dsp_re/issues/6),
 and [#7 constrained exact paired
-families](https://github.com/philpem/slmodem_dsp_re/issues/7), with the live
-V.34 mutation gaps separated into [#9](https://github.com/philpem/slmodem_dsp_re/issues/9).
+families](https://github.com/philpem/slmodem_dsp_re/issues/7), with V.90 rate
+selection tracked in [#10](https://github.com/philpem/slmodem_dsp_re/issues/10),
+odd-count DIL reachability in
+[#12](https://github.com/philpem/slmodem_dsp_re/issues/12), and the reachable
+V.92 Ja fill departure in
+[#13](https://github.com/philpem/slmodem_dsp_re/issues/13). The former live
+V.34 mutation gaps in #9 are closed.
 Scrambler reset timing and history handover between training and data owners
 are separately tracked in [#11](https://github.com/philpem/slmodem_dsp_re/issues/11);
 the generic bit recurrence and constructor tap checks do not close that issue.
@@ -229,12 +234,15 @@ an exact definition; non-exact definitions retain this finite-evidence limit.
   equivalent**, making **31 current and 223 stale of 254 registered suites**.
   F10262 adds the V.92 Table 20 descriptor oracle at **35/35 standards
   mutations caught**, making **32 current and 223 stale of 255 registered
-  suites**.
+  suites**. F10263 adds independent V.90 modulus encoder/decoder oracles:
+  reconstruction and blob each pass **20,403 checks**, while all **9/9** new
+  standards mutations and all **23/23** refreshed differential mutations are
+  caught. The ledger is **34 current and 222 stale of 256 registered suites**.
   This supports only the named clusters and
   not a tree-wide confidence claim. Triage the live
   receive/selection gaps through issues #1 and #10 before paying for a complete
   9,000-plus-mutation refresh.
-- **Add independent standards oracles — fourteen numbered blocks complete.** F10249 consumes
+- **Add independent standards oracles — fifteen numbered blocks complete.** F10249 consumes
   every published PCM codeword and linear cell in V.90 Table 1 and reports 256
   reconstruction checks and 256 blob checks separately; both conform. F10250
   moves the literal table into one shared test-only fixture and drives all
@@ -301,6 +309,13 @@ an exact definition; non-exact definitions retain this finite-evidence limit.
   length, returning 1,736/1,600 bits where Table 20 requires 1,740/1,608.
   Receiver impact and an explicit interop mode remain
   [issue #13](https://github.com/philpem/slmodem_dsp_re/issues/13).
+  F10263 independently implements the V.90 mixed-radix equations with scalar
+  division on the encoder side and positional weights on the decoder side.
+  Every legal `K=6..39`, fixed known answers, one-hot inputs and radix carry
+  boundaries pass separately for reconstruction and blob. No standards
+  departure is found. The encoder's residual sixth digit does not need an
+  explicit `% M5`: the required capacity inequality proves it is already
+  strictly below `M5` on every legal input.
   Reset/history handover remains issue #11.
   ANSam spectrum, absolute level, transition quality and duration remain
   separately scoped. These oracles do not improve
