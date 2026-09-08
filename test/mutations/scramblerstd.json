@@ -1,0 +1,75 @@
+[
+ {
+  "note": "Focused sensitivity checks for the independent V.90/V.92 polynomial oracle in t_scrambler.cpp. Fixed impulse responses and a separate bit-serial recurrence cover 1+x^-18+x^-23 and 1+x^-5+x^-23 across every emitted Scrambler/Descrambler template form. Owner-class polynomial selection is deliberately outside this header-level suite."
+ },
+ {
+  "label": "Scrambler's near polynomial tap is one bit later",
+  "find": "\tpInitTap1 = pInitOut + a;\n\tpInitTap2 = pInitOut + b;\n\treset(0);\n}\n\ntemplate <class T, class I>\nScrambler<T, I>::~Scrambler()",
+  "replace": "\tpInitTap1 = pInitOut + a + 1;\n\tpInitTap2 = pInitOut + b;\n\treset(0);\n}\n\ntemplate <class T, class I>\nScrambler<T, I>::~Scrambler()"
+ },
+ {
+  "label": "Scrambler's far x^-23 polynomial tap is one bit earlier",
+  "find": "\tpInitTap1 = pInitOut + a;\n\tpInitTap2 = pInitOut + b;\n\treset(0);\n}\n\ntemplate <class T, class I>\nScrambler<T, I>::~Scrambler()",
+  "replace": "\tpInitTap1 = pInitOut + a;\n\tpInitTap2 = pInitOut + b - 1;\n\treset(0);\n}\n\ntemplate <class T, class I>\nScrambler<T, I>::~Scrambler()"
+ },
+ {
+  "label": "Descrambler's near polynomial tap is one bit later",
+  "find": "\tpInitTap1 = pInitOut + a;\n\tpInitTap2 = pInitOut + b;\n\treset(0);\n}\n\ntemplate <class T, class I>\nDescrambler<T, I>::~Descrambler()",
+  "replace": "\tpInitTap1 = pInitOut + a + 1;\n\tpInitTap2 = pInitOut + b;\n\treset(0);\n}\n\ntemplate <class T, class I>\nDescrambler<T, I>::~Descrambler()"
+ },
+ {
+  "label": "Descrambler's far x^-23 polynomial tap is one bit earlier",
+  "find": "\tpInitTap1 = pInitOut + a;\n\tpInitTap2 = pInitOut + b;\n\treset(0);\n}\n\ntemplate <class T, class I>\nDescrambler<T, I>::~Descrambler()",
+  "replace": "\tpInitTap1 = pInitOut + a;\n\tpInitTap2 = pInitOut + b - 1;\n\treset(0);\n}\n\ntemplate <class T, class I>\nDescrambler<T, I>::~Descrambler()"
+ },
+ {
+  "label": "single-value Scrambler omits the near feedback term",
+  "find": "\tr = (I)(in ^ *pTap1 ^ *pTap2);\n\tpTap1--;\n\tpTap2--;\n\t*out = r;",
+  "replace": "\tr = (I)(in ^ *pTap2);\n\tpTap1--;\n\tpTap2--;\n\t*out = r;"
+ },
+ {
+  "label": "single-value Scrambler omits the far feedback term",
+  "find": "\tr = (I)(in ^ *pTap1 ^ *pTap2);\n\tpTap1--;\n\tpTap2--;\n\t*out = r;",
+  "replace": "\tr = (I)(in ^ *pTap1);\n\tpTap1--;\n\tpTap2--;\n\t*out = r;"
+ },
+ {
+  "label": "single-value Scrambler feeds the input rather than quotient back",
+  "find": "\tpTap1--;\n\tpTap2--;\n\t*out = r;\n\tif (--pOut < pLimit) {",
+  "replace": "\tpTap1--;\n\tpTap2--;\n\t*out = in;\n\tif (--pOut < pLimit) {"
+ },
+ {
+  "label": "bulk Scrambler omits the near feedback term",
+  "find": "\t\tI r = (I)(*in ^ *pTap1 ^ *pTap2);\n\n\t\tpTap1--;\n\t\tpTap2--;\n\t\tin++;",
+  "replace": "\t\tI r = (I)(*in ^ *pTap2);\n\n\t\tpTap1--;\n\t\tpTap2--;\n\t\tin++;"
+ },
+ {
+  "label": "bulk Scrambler omits the far feedback term",
+  "find": "\t\tI r = (I)(*in ^ *pTap1 ^ *pTap2);\n\n\t\tpTap1--;\n\t\tpTap2--;\n\t\tin++;",
+  "replace": "\t\tI r = (I)(*in ^ *pTap1);\n\n\t\tpTap1--;\n\t\tpTap2--;\n\t\tin++;"
+ },
+ {
+  "label": "bulk Scrambler feeds input rather than quotient back",
+  "find": "\t\tT *p = pOut;\n\t\tI r = (I)(*in ^ *pTap1 ^ *pTap2);\n\n\t\tpTap1--;\n\t\tpTap2--;\n\t\tin++;\n\t\t*out++ = r;\n\t\t*p = (T)r;",
+  "replace": "\t\tT *p = pOut;\n\t\tT history = *in;\n\t\tI r = (I)(*in ^ *pTap1 ^ *pTap2);\n\n\t\tpTap1--;\n\t\tpTap2--;\n\t\tin++;\n\t\t*out++ = r;\n\t\t*p = history;"
+ },
+ {
+  "label": "single-value Descrambler feeds its decoded result back",
+  "find": "\t*pOut = in;\n\tr = (I)(*pOut ^ *pTap1 ^ *pTap2);\n\tpTap1--;",
+  "replace": "\t*pOut = in;\n\tr = (I)(*pOut ^ *pTap1 ^ *pTap2);\n\t*pOut = (T)r;\n\tpTap1--;"
+ },
+ {
+  "label": "bulk Descrambler feeds its decoded result back",
+  "find": "\t\t*pOut = *in++;\n\t\tr = (I)(*pOut ^ *pTap1 ^ *pTap2);\n\t\tpTap2--;",
+  "replace": "\t\t*pOut = *in++;\n\t\tr = (I)(*pOut ^ *pTap1 ^ *pTap2);\n\t\t*pOut = (T)r;\n\t\tpTap2--;"
+ },
+ {
+  "label": "Scrambler reset seeds one instead of the requested zero",
+  "find": "\tbit = (T)(value & 1);\n\tfor (p = pInitOut + 1; p <= pInitTap2; p++)\n\t\t*p = bit;\n}\n\ntemplate <class T, class I>\nvoid Descrambler<T, I>::reset",
+  "replace": "\tbit = (T)((value & 1) | 1);\n\tfor (p = pInitOut + 1; p <= pInitTap2; p++)\n\t\t*p = bit;\n}\n\ntemplate <class T, class I>\nvoid Descrambler<T, I>::reset"
+ },
+ {
+  "label": "Descrambler reset seeds one instead of the requested zero",
+  "find": "void Descrambler<T, I>::reset(T value)\n{\n\tT bit;\n\tT *p;\n\n\tresetHistoryIndexes();\n\tbit = (T)(value & 1);",
+  "replace": "void Descrambler<T, I>::reset(T value)\n{\n\tT bit;\n\tT *p;\n\n\tresetHistoryIndexes();\n\tbit = (T)((value & 1) | 1);"
+ }
+]

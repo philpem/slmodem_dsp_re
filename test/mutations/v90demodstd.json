@@ -1,0 +1,6 @@
+[
+ {"_": ["Literal V.90 owner geometry assertions in t_v90demctor.cpp."]},
+ {"label":"V90 demodulator owner uses near tap 5","find":"descrambler(V90DEM_DSC_TAP1, V90DEM_DSC_TAIL, V90DEM_DSC_OUT)","replace":"descrambler(5, V90DEM_DSC_TAIL, V90DEM_DSC_OUT)"},
+ {"label":"V90 demodulator owner far tap is 22","find":"descrambler(V90DEM_DSC_TAP1, V90DEM_DSC_TAIL, V90DEM_DSC_OUT)","replace":"descrambler(V90DEM_DSC_TAP1, 22, V90DEM_DSC_OUT)"},
+ {"label":"V90 demodulator owner slack is 98","find":"descrambler(V90DEM_DSC_TAP1, V90DEM_DSC_TAIL, V90DEM_DSC_OUT)","replace":"descrambler(V90DEM_DSC_TAP1, V90DEM_DSC_TAIL, 98)"}
+]

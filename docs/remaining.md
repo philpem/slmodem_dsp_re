@@ -95,6 +95,9 @@ targeted mutation refresh](https://github.com/philpem/slmodem_dsp_re/issues/3),
 and [#7 constrained exact paired
 families](https://github.com/philpem/slmodem_dsp_re/issues/7), with the live
 V.34 mutation gaps separated into [#9](https://github.com/philpem/slmodem_dsp_re/issues/9).
+Scrambler reset timing and history handover between training and data owners
+are separately tracked in [#11](https://github.com/philpem/slmodem_dsp_re/issues/11);
+the generic bit recurrence and constructor tap checks do not close that issue.
 
 1. **Measure the aggregate first.** `make partial-compare` partially links all
    272 faithful GCC 3.4.2 objects with binutils 2.15 in manifest order and
@@ -214,11 +217,15 @@ an exact definition; non-exact definitions retain this finite-evidence limit.
   **2/2 caught**. F10258 adds `v90cpowerstd` at **14/14 caught** and refreshes
   `v90cpmembers` at **19/19 caught**, making **17 current and 226 stale** of
   243 registered suites.
+  F10259 adds 38 uniquely anchored scrambler mutations: **14/14 generic**,
+  **15/15 V.90 owners** and **9/9 V.92 owners** are caught. It also refreshes
+  the older `scrambler` suite at **33/36 caught, 3 equivalent**, making
+  **27 current and 225 stale of 252 registered suites**.
   This supports only the named clusters and
   not a tree-wide confidence claim. Triage the live
   receive/selection gaps through issues #1 and #10 before paying for a complete
   9,000-plus-mutation refresh.
-- **Add independent standards oracles — ten numbered blocks complete.** F10249 consumes
+- **Add independent standards oracles — eleven numbered blocks complete.** F10249 consumes
   every published PCM codeword and linear cell in V.90 Table 1 and reports 256
   reconstruction checks and 256 blob checks separately; both conform. F10250
   moves the literal table into one shared test-only fixture and drives all
@@ -258,6 +265,14 @@ an exact definition; non-exact definitions retain this finite-evidence limit.
   conform; a measured exact-above/float-equal boundary follows the specified
   analogue-modem rounding direction. The first ten blocks found enough shared
   protocol defects to justify continuing into the ranked §5.2 list;
+  F10259 now independently checks the generic V.90/V.92 scramblers with
+  **5,376 reconstruction and 5,376 blob checks**, and verifies all three V.92
+  owners' literal GPA delay/layout selection separately for each side. Their
+  complete focused fixtures pass **47,340 / 154,543 / 3,126 checks** in
+  `t_v92mod` / `t_v92p3mod` / `t_v92p4mod`; five V.90 owners separately pass
+  GPC geometry checks in four direct-constructor fixtures. All 38 new focused
+  mutations are caught and no departure is found in that bounded scope.
+  Reset/history handover remains issue #11.
   ANSam spectrum, absolute level, transition quality and duration remain
   separately scoped. These oracles do not improve
   equivalence to the blob; they answer whether both implementations reproduce

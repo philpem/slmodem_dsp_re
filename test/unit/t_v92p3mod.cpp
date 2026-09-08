@@ -984,6 +984,26 @@ ctor_compare(long input)
 	const ScramblerHI *a = &ours.o.scrambler;
 	const ScramblerHI *b = &theirs.o.scrambler;
 
+	/* V.92 section 6.3 / V.34 equation 7-2: upstream GPA.  Each
+	 * subject is checked against literals, not against the other subject.
+	 * The 99-element slack is the owner layout, not a standards mandate. */
+	diff_eq_int("reconstruction GPA near delay (case %ld)",
+		    a->pInitTap1 - a->pInitOut, 5, input);
+	diff_eq_int("reconstruction GPA far delay (case %ld)",
+		    a->pInitTap2 - a->pInitOut, 23, input);
+	diff_eq_int("reconstruction GPA history length (case %ld)",
+		    a->tailLength, 23, input);
+	diff_eq_int("reconstruction owner slack (case %ld)",
+		    a->pInitOut - a->pLimit, 99, input);
+	diff_eq_int("blob GPA near delay (case %ld)",
+		    b->pInitTap1 - b->pInitOut, 5, input);
+	diff_eq_int("blob GPA far delay (case %ld)",
+		    b->pInitTap2 - b->pInitOut, 23, input);
+	diff_eq_int("blob GPA history length (case %ld)",
+		    b->tailLength, 23, input);
+	diff_eq_int("blob owner slack (case %ld)",
+		    b->pInitOut - b->pLimit, 99, input);
+
 	memcpy(cmp_a.raw, ours.raw, SLOT);
 	memcpy(cmp_b.raw, theirs.raw, SLOT);
 	memset(cmp_a.raw + 0x18, 0, 0x1c);	/* the Scrambler's seven */

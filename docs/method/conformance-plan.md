@@ -382,7 +382,7 @@ pass**, and each is marked with the candidate non-conformance it settles.
 
 | # | clause | site | shape | fixture |
 |--:|---|---|:-:|---|
-| 11 | 5.3, 6.5/V.90; 6.3/V.92 | the eight `Scrambler`/`Descrambler` sites, taps measured as delays | 3 | `t_scrambler.cpp` (extend) |
+| 11 | 5.3, 6.5/V.90; 6.3/V.92 | the eight `Scrambler`/`Descrambler` sites, taps measured as delays | 3 | `t_scrambler.cpp` plus direct owner fixtures (**done**, F10259) |
 | 12 | Table 27/V.92 | `V92Jd`'s CRC extent | 1 | `t_v92jd.cpp` (extend) |
 | 13 | Table 12/V.90 | `DILdescriptorPacker`'s CRC extent | 1 | `t_dilpack.cpp` (extend) |
 | 14 | Table 20/V.92 | `V92DILdescriptorPacker`'s CRC extent | 1 | `t_v92dilpack.cpp` (extend) |
@@ -470,6 +470,23 @@ two legal constellation geometries, both companding laws and both measurement
 points; it does not reuse `getPower`'s modulus-boundary arithmetic. Each
 implementation passes 40 table/formula checks and five finite-precision
 boundary checks. The tested table and weighting conform.
+
+**#11 — V.90/V.92 generic scramblers and owner selection (done,
+F10259).** An independent chronological bit model and fixed impulse answers
+now judge all five emitted template forms through seven scalar/bulk interfaces,
+for both GPC and GPA. Reconstruction and blob each pass 5,376 checks. These
+are finite zero-history impulse and varied-stream checks across the production
+100-bit buffer cycle, not proof of every possible history or call partition.
+All eight owner constructors pass separate literal geometry checks on both
+reconstruction and blob: five V.90 sites select `(18,23,99)` and three V.92
+sites select `(5,23,99)`. Delay 18/5 and 23 follow the Recommendation; slack
+99 is an implementation-layout expectation. Twenty-four focused owner
+mutations are caught, **15/15** for V.90 and **9/9** for V.92; the generic
+oracle catches **14/14**, and the older generic suite refreshes at **33/36
+caught, 3 equivalent**. No departure was found. Reset timing and cross-owner
+history handover are a separate
+[issue #11](https://github.com/philpem/slmodem_dsp_re/issues/11), not a result
+of the leaf oracle or constructor geometry checks.
 
 ---
 
@@ -877,7 +894,11 @@ should be re-derived with it rather than the total carried forward.
 6. **Items 7–10 are complete** (V.92 CP, V.90 Jd, V.34 scramblers and V.90
    power, F10255–F10258). The ten-block sample found multiple shared protocol
    defects as well as conforming blocks, so the independent tier has paid for
-   itself. Continue into §5.2 in rank order, starting with item 11.
+   itself. Continue into §5.2 in rank order.
+7. **Item 11 is complete** (F10259): the generic oracle and all eight owner
+   selections pass, with all 38 new targeted mutations caught. Take item 12
+   next. Reset/history handover remains independently tracked in
+   [issue #11](https://github.com/philpem/slmodem_dsp_re/issues/11).
 
 **Before any of it, read `docs/method/tiers.md` §5 and finding F7413.** The two
 rules a spec block gets wrong if it is written from the code rather than from

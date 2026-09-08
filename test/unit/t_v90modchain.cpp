@@ -2250,9 +2250,29 @@ slot_u32(const unsigned char *o, unsigned off)
 
 /* ====================================================== V90Phase4Modulator */
 
+static void
+check_v90_p4_scrambler(void *owner, void *ref, long tag)
+{
+	Scrambler<unsigned char, unsigned char> *s[2] = {
+	    &((V90Phase4Modulator *)owner)->scrambler,
+	    &((V90Phase4Modulator *)ref)->scrambler };
+	int i;
+
+	for (i = 0; i < 2; i++) {
+		diff_eq_int("V.90 phase-4 tap1/out is 18 (side %ld)",
+			    s[i]->pTap1 - s[i]->pOut, 18, tag * 2 + i);
+		diff_eq_int("V.90 phase-4 tap2/out is 23 (side %ld)",
+			    s[i]->pTap2 - s[i]->pOut, 23, tag * 2 + i);
+		diff_eq_int("V.90 phase-4 tail is 23 (side %ld)",
+			    s[i]->tailLength, 23, tag * 2 + i);
+		diff_eq_int("V.90 phase-4 slack is 99 (side %ld)",
+			    s[i]->pOut - s[i]->pLimit, 99, tag * 2 + i);
+	}
+}
+
 /* Varied and never zero; `flag` and `arg8` are drawn apart so they differ. */
 static const unsigned int flagv[] = {
-	1u, 2u, 0x80u, 0x8000u, 0xffffu, 0x7fffffffu, 0xffffffffu, 5u
+	0u, 1u, 2u, 0x80u, 0x8000u, 0xffffu, 0x7fffffffu, 0xffffffffu
 };
 static const unsigned int arg8v[] = {
 	0xcu, 3u, 0x11u, 0x1234u, 0x40u, 0xfeu, 0x7fu, 0x100u
@@ -2298,6 +2318,8 @@ run_p4m_ctor(const char *name, p4m_ctor our_c, p4m_ctor ref_c, dtor our_d,
 		ref_c(p4m_b, PARAMS, flag, bts, MP, MPS_A, MPS_B, CP, arg8);
 		b_allocs = harness_alloc.allocs - base_allocs - a_allocs;
 		b_bytes = harness_alloc.bytes - base_bytes - a_bytes;
+		if (flag == 0)
+			check_v90_p4_scrambler(p4m_a, p4m_b, trial);
 
 		live_refresh();
 
@@ -2526,6 +2548,26 @@ run_p4m_dtor(const char *name, p4m_ctor our_c, p4m_ctor ref_c, dtor our_d,
 
 /* =========================================================== V90Modulator */
 
+static void
+check_v90_mod_scrambler(void *owner, void *ref, long tag)
+{
+	Scrambler<int, unsigned char> *s[2] = {
+	    &((V90Modulator *)owner)->scrambler,
+	    &((V90Modulator *)ref)->scrambler };
+	int i;
+
+	for (i = 0; i < 2; i++) {
+		diff_eq_int("V.90 modulator tap1/out is 18 (side %ld)",
+			    s[i]->pTap1 - s[i]->pOut, 18, tag * 2 + i);
+		diff_eq_int("V.90 modulator tap2/out is 23 (side %ld)",
+			    s[i]->pTap2 - s[i]->pOut, 23, tag * 2 + i);
+		diff_eq_int("V.90 modulator tail is 23 (side %ld)",
+			    s[i]->tailLength, 23, tag * 2 + i);
+		diff_eq_int("V.90 modulator slack is 99 (side %ld)",
+			    s[i]->pOut - s[i]->pLimit, 99, tag * 2 + i);
+	}
+}
+
 static const unsigned int modn[] = {
 	1u, 2u, 3u, 7u, 0x10u, 0x40u, 0x60u, 0x80u
 };
@@ -2558,6 +2600,8 @@ run_mod_ctor(const char *name, mod_ctor our_c, mod_ctor ref_c, dtor our_d,
 		      MP, PARAMS, flag);
 		b_allocs = harness_alloc.allocs - a_allocs;
 		b_bytes = harness_alloc.bytes - a_bytes;
+		if (flag == 0)
+			check_v90_mod_scrambler(mod_a, mod_b, trial);
 
 		live_refresh();
 

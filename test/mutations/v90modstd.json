@@ -1,0 +1,6 @@
+[
+ {"_": ["Literal V.90 owner geometry assertions in t_v90modchain.cpp."]},
+ {"label":"V90 modulator owner uses near tap 5","find":": scrambler(0x12, 0x17, 0x63)","replace":": scrambler(5, 0x17, 0x63)"},
+ {"label":"V90 modulator owner far tap is 22","find":": scrambler(0x12, 0x17, 0x63)","replace":": scrambler(0x12, 22, 0x63)"},
+ {"label":"V90 modulator owner slack is 98","find":": scrambler(0x12, 0x17, 0x63)","replace":": scrambler(0x12, 0x17, 98)"}
+]

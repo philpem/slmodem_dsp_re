@@ -236,17 +236,19 @@ scram_geometry(long trial)
 	    (const unsigned char *)slot_ptr(theirs, 0x58);
 	unsigned tail;
 
+	/* V.92 section 6.3 selects GPA; keep these literals independent of
+	 * production macros.  Slack 99 is an owner-layout expectation. */
 	memcpy(&tail, ours + 0x68, sizeof(tail));
 
 	diff_eq_int("the near tap is 5 elements up (trial %ld)",
-		    (int)(t1 - out), V92P4M_SCRAM_TAP1, trial);
+		    (int)(t1 - out), 5, trial);
 	diff_eq_int("the far tap is 23 elements up (trial %ld)",
-		    (int)(t2 - out), V92P4M_SCRAM_TAP2, trial);
+		    (int)(t2 - out), 23, trial);
 	diff_eq_int("the restart point is 99 elements above the base "
-		    "(trial %ld)", (int)(out - lim), V92P4M_SCRAM_SLACK,
+		    "(trial %ld)", (int)(out - lim), 99,
 		    trial);
 	diff_eq_int("tailLength is the far tap (trial %ld)", (int)tail,
-		    V92P4M_SCRAM_TAP2, trial);
+		    23, trial);
 	diff_eq_int("pOut is at its initial value (trial %ld)",
 		    slot_ptr(ours, 0x5c) == (void *)out, 1, trial);
 	diff_eq_int("pTap1 is at its initial value (trial %ld)",
@@ -255,12 +257,15 @@ scram_geometry(long trial)
 		    slot_ptr(ours, 0x64) == (void *)t2, 1, trial);
 
 	diff_eq_int("ref near tap is 5 elements up (trial %ld)",
-		    (int)(rt1 - rout), V92P4M_SCRAM_TAP1, trial);
+		    (int)(rt1 - rout), 5, trial);
 	diff_eq_int("ref far tap is 23 elements up (trial %ld)",
-		    (int)(rt2 - rout), V92P4M_SCRAM_TAP2, trial);
+		    (int)(rt2 - rout), 23, trial);
 	diff_eq_int("ref restart point is 99 elements above the base "
-		    "(trial %ld)", (int)(rout - rlim), V92P4M_SCRAM_SLACK,
+		    "(trial %ld)", (int)(rout - rlim), 99,
 		    trial);
+	memcpy(&tail, theirs + 0x68, sizeof(tail));
+	diff_eq_int("blob GPA history has 23 elements (trial %ld)",
+		    (int)tail, 23, trial);
 }
 
 /* The V92CP, compared against the seed everywhere but the one word the

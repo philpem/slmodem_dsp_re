@@ -1,0 +1,6 @@
+[
+ {"_": ["Literal V.90 owner geometry assertions in t_v90rxctor.cpp."]},
+ {"label":"V90 phase-3 demod owner uses near tap 5","find":"descrambler(P3D_DSC_TAP1, P3D_DSC_TAIL, P3D_DSC_OUT)","replace":"descrambler(5, P3D_DSC_TAIL, P3D_DSC_OUT)"},
+ {"label":"V90 phase-3 demod owner far tap is 22","find":"descrambler(P3D_DSC_TAP1, P3D_DSC_TAIL, P3D_DSC_OUT)","replace":"descrambler(P3D_DSC_TAP1, 22, P3D_DSC_OUT)"},
+ {"label":"V90 phase-3 demod owner slack is 98","find":"descrambler(P3D_DSC_TAP1, P3D_DSC_TAIL, P3D_DSC_OUT)","replace":"descrambler(P3D_DSC_TAP1, P3D_DSC_TAIL, 98)"}
+]

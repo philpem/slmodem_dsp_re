@@ -963,6 +963,21 @@ run_ctor(void)
 			shared_restore(&snap_pre);
 			build(1, which, t);
 			a2 = harness_alloc;
+			if (t->flag == 0) {
+				int side;
+				for (side = 0; side < 2; side++) {
+				Descrambler<unsigned char, int> *s =
+				    &D(side)->descrambler;
+				diff_eq_int("V.90 demod tap1/out is 18 (%ld)",
+					    s->pTap1 - s->pOut, 18, trial);
+				diff_eq_int("V.90 demod tap2/out is 23 (%ld)",
+					    s->pTap2 - s->pOut, 23, trial);
+				diff_eq_int("V.90 demod tail is 23 (%ld)",
+					    s->tailLength, 23, trial);
+				diff_eq_int("V.90 demod slack is 99 (%ld)",
+					    s->pOut - s->pLimit, 99, trial);
+				}
+			}
 
 			nlive = harness_alloc_live_set(live, MAXLIVE);
 			if (nlive > MAXLIVE)

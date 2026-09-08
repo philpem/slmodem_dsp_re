@@ -1992,6 +1992,24 @@ ctor_compare(long input)
 		    input);
 }
 
+static void
+check_v90_p3_owner(long tag)
+{
+	const ScramblerHI *s[2] = { &ours.o.scrambler, &theirs.o.scrambler };
+	int i;
+
+	for (i = 0; i < 2; i++) {
+		diff_eq_int("V.90 phase-3 tap1/out is 18 (side %ld)",
+			    s[i]->pTap1 - s[i]->pOut, 18, tag * 2 + i);
+		diff_eq_int("V.90 phase-3 tap2/out is 23 (side %ld)",
+			    s[i]->pTap2 - s[i]->pOut, 23, tag * 2 + i);
+		diff_eq_int("V.90 phase-3 tail is 23 (side %ld)",
+			    s[i]->tailLength, 23, tag * 2 + i);
+		diff_eq_int("V.90 phase-3 slack is 99 (side %ld)",
+			    s[i]->pOut - s[i]->pLimit, 99, tag * 2 + i);
+	}
+}
+
 static int
 run_ctor_dtor(void)
 {
@@ -2034,6 +2052,8 @@ run_ctor_dtor(void)
 			else
 				ref_ctor(&theirs.o, par_block, flag);
 			saw_variant[variant] = 1;
+			if (flag == 0)
+				check_v90_p3_owner(input);
 
 			diff_eq_int("both constructors allocated once "
 				    "(case %ld)",

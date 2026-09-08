@@ -376,6 +376,23 @@ run_p3d_ctor(void)
 				ref_p3d_ctor2(p3b, PARAMS, argblk[0], flag, ADID);
 			a2 = harness_alloc;
 
+			if (flag == 0) {
+				int side;
+				for (side = 0; side < 2; side++) {
+				V90Phase3Demodulator *x =
+				    (V90Phase3Demodulator *)(side ? p3b : p3a);
+				Descrambler<int, int> *s = &x->descrambler;
+				diff_eq_int("V.90 phase-3 demod tap1/out is 18 (%ld)",
+					    s->pTap1 - s->pOut, 18, trial);
+				diff_eq_int("V.90 phase-3 demod tap2/out is 23 (%ld)",
+					    s->pTap2 - s->pOut, 23, trial);
+				diff_eq_int("V.90 phase-3 demod tail is 23 (%ld)",
+					    s->tailLength, 23, trial);
+				diff_eq_int("V.90 phase-3 demod slack is 99 (%ld)",
+					    s->pOut - s->pLimit, 99, trial);
+				}
+			}
+
 			nlive = harness_alloc_live_set(live, 64);
 			if (nlive > 64)
 				nlive = 64;

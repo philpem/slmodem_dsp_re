@@ -256,19 +256,25 @@ scram_geometry(long trial)
 	const unsigned char *rt2 =
 	    (const unsigned char *)slot_ptr(theirs, 0x60);
 
+	/* V.92 section 6.3 selects GPA: literal expectations must not share
+	 * the owner's initializer macros.  Slack 99 is the production layout. */
 	diff_eq_int("the near tap is 5 ints up (trial %ld)", (int)(t1 - out),
-		    V92MOD_SCRAM_TAP1 * SCRAM_ELEM, trial);
+		    5 * SCRAM_ELEM, trial);
 	diff_eq_int("the far tap is 23 ints up (trial %ld)", (int)(t2 - out),
-		    V92MOD_SCRAM_TAP2 * SCRAM_ELEM, trial);
+		    23 * SCRAM_ELEM, trial);
 	diff_eq_int("the restart point is 99 ints above the base (trial %ld)",
-		    (int)(out - lim), V92MOD_SCRAM_SLACK * SCRAM_ELEM, trial);
+		    (int)(out - lim), 99 * SCRAM_ELEM, trial);
 	diff_eq_int("ref near tap is 5 ints up (trial %ld)", (int)(rt1 - rout),
-		    V92MOD_SCRAM_TAP1 * SCRAM_ELEM, trial);
+		    5 * SCRAM_ELEM, trial);
 	diff_eq_int("ref far tap is 23 ints up (trial %ld)", (int)(rt2 - rout),
-		    V92MOD_SCRAM_TAP2 * SCRAM_ELEM, trial);
+		    23 * SCRAM_ELEM, trial);
 	diff_eq_int("ref restart point is 99 ints above the base (trial %ld)",
-		    (int)(rout - rlim), V92MOD_SCRAM_SLACK * SCRAM_ELEM,
+		    (int)(rout - rlim), 99 * SCRAM_ELEM,
 		    trial);
+	diff_eq_int("reconstruction GPA history has 23 elements (trial %ld)",
+		    ((V92Modulator *)ours)->scrambler.tailLength, 23, trial);
+	diff_eq_int("blob GPA history has 23 elements (trial %ld)",
+		    ((V92Modulator *)theirs)->scrambler.tailLength, 23, trial);
 	diff_eq_int("pOut is at its initial value (trial %ld)",
 		    slot_ptr(ours, 0x64) == (void *)out, 1, trial);
 	diff_eq_int("pTap1 is at its initial value (trial %ld)",

@@ -122795,3 +122795,73 @@ self-test and every structural gate. Suite line coverage remains
 49,019/51,416 (`95.3%`).
 
 (2026-09-08)
+
+## F10259. The generic V.90/V.92 bit recurrences and all eight owner selections independently conform
+
+The generic `Scrambler`/`Descrambler` tests formerly established agreement
+with the blob, including arbitrary-width values and synthetic buffer wraps.
+The new `t_scrambler` standards groups independently implement the chronological
+bit recurrence derived from V.34 clause 7, equations 7-1 and 7-2. For near
+delay `a`, scrambling is `y[n] = x[n] XOR y[n-a] XOR y[n-23]`; descrambling
+uses the received scrambled bits, not the decoded output, for both delays.
+GPC uses `a=18`; GPA uses `a=5`. Fixed zero-history impulse answers pin tap
+numbering and chronology separately from the scalar model. These are derived
+known answers, not vectors printed by the Recommendation.
+
+Seven interfaces cover all five emitted template forms: scalar and bulk
+`Scrambler<h,h>`, scalar `Scrambler<h,i>`, bulk `Scrambler<i,h>`, scalar and
+bulk `Descrambler<h,i>`, and scalar `Descrambler<i,i>`. Each is driven against
+both polynomials with zero-history impulse and varied legal-bit streams,
+crossing the production 100-bit buffer cycle. Reconstruction and independently
+invoked blob each pass **5,376 checks**. This establishes finite independent
+evidence for the tested recurrences, zero initialization and history wrapping;
+it is not universal equivalence or validation of every call partition.
+
+Endpoint choice is a separate claim. V.90 sections 5.3 and 6.5 assign GPC to
+digital transmission and GPA to analogue transmission; V.92 sections 5 and
+6.3 retain those assignments. This is digital/analogue direction, not the
+call/answer selection used by a stand-alone V.34 connection. Sources:
+[V.34](https://www.itu.int/rec/dologin_pub.asp?id=T-REC-V.34-199802-I!!PDF-E&lang=e&type=items),
+[V.90](https://www.itu.int/rec/dologin_pub.asp?id=T-REC-V.90-199809-I!!PDF-E&lang=e&type=items),
+[V.92](https://www.itu.int/rec/dologin_pub.asp?id=T-REC-V.92-200011-I!!PDF-E&lang=e&type=items).
+
+All eight production owner constructors now receive separate literal geometry
+checks for reconstruction and blob while their owned allocations are still
+alive. The five V.90 sites use near delay 18; the three V.92 sites use near
+delay 5. Every site uses far delay 23, history length 23 and slack 99. The
+delays and history length express GPC/GPA requirements; slack 99 expresses the
+implementation's allocation layout, not a normative buffer size. Existing
+fixture allocation and teardown patterns are unchanged. The complete V.90
+fixture totals are **158,490** (`t_v90p3mod`), **325,493**
+(`t_v90modchain`), **10,770** (`t_v90demctor`) and **551**
+(`t_v90rxctor`). The V.92 totals are **47,340** (`t_v92mod`), **154,543**
+(`t_v92p3mod`) and **3,126** (`t_v92p4mod`). These totals include
+pre-existing differential checks and are not counts of new standards
+assertions alone. Macro-based expectations in the V.92 fixtures were replaced
+with literals, so a changed production constant cannot change its own oracle.
+
+The five V.90 suites `v90p3modstd`, `v90p4modstd`, `v90modstd`,
+`v90demodstd` and `v90p3demodstd` catch **15/15** owner mutations. The three
+V.92 suites `v92modscramstd`, `v92p3modscramstd` and `v92p4modscramstd` catch
+**9/9**. At each initializer they exchange GPC/GPA near-tap selection, move
+the far delay, or alter buffer slack. The generic `scramblerstd` suite catches
+**14/14** changes to tap construction, feedback, history choice and reset
+seeding; the pre-existing `scrambler` suite was refreshed at **33/36 caught,
+3 equivalent**. All 38 new anchors match uniquely. The mutation ledger is now
+**27 current and 225 stale of 252 registered suites**. No standards departure
+is found in this bounded scope.
+
+The full phase boundary passes **375/375** period-compiler differential
+binaries, the 64-bit and interoperability gates, and **49,019/51,416** source
+lines (`95.3%`).
+
+Reset timing and training/data history handover remain a separate
+[issue #11](https://github.com/philpem/slmodem_dsp_re/issues/11). In particular,
+the V.92 RiNot-to-TRN2d arm has no explicit reset, unlike its V.90 sibling,
+but the enclosing owner reset already zeros history and Ri/RiNot do not
+consume scrambled bits. The omitted call alone therefore establishes no
+departure; repeated-entry reachability and any history consumed before that
+boundary require a state-machine audit. Neither the leaf oracle nor correct
+constructor taps close that question.
+
+(2026-09-08)

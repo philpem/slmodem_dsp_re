@@ -1,0 +1,17 @@
+[
+  {
+    "label": "V92Modulator upstream owner incorrectly selects downstream GPC",
+    "find": ": scrambler(V92MOD_SCRAM_TAP1, V92MOD_SCRAM_TAP2, V92MOD_SCRAM_SLACK)",
+    "replace": ": scrambler(18, V92MOD_SCRAM_TAP2, V92MOD_SCRAM_SLACK)"
+  },
+  {
+    "label": "V92Modulator upstream owner has far delay 24 instead of 23",
+    "find": ": scrambler(V92MOD_SCRAM_TAP1, V92MOD_SCRAM_TAP2, V92MOD_SCRAM_SLACK)",
+    "replace": ": scrambler(V92MOD_SCRAM_TAP1, 24, V92MOD_SCRAM_SLACK)"
+  },
+  {
+    "label": "V92Modulator owner has buffer slack 100 instead of 99",
+    "find": ": scrambler(V92MOD_SCRAM_TAP1, V92MOD_SCRAM_TAP2, V92MOD_SCRAM_SLACK)",
+    "replace": ": scrambler(V92MOD_SCRAM_TAP1, V92MOD_SCRAM_TAP2, 100)"
+  }
+]
