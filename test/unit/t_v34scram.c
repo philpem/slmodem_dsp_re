@@ -23,13 +23,16 @@
 #include <string.h>
 
 #include "harness.h"
+#include "dsplib/v34digital.h"
 #include "dsplib/v34fsk.h"
 #include "dsplib/v34scram.h"
+#include "dsplib/v34shell.h"
 
 extern short ref_scrambleGPC(void *obj, short nbits);
 extern short ref_scrambleGPA(void *obj, short nbits);
 extern int ref_descrambleGPC(void *obj, unsigned short b, unsigned short n);
 extern int ref_descrambleGPA(void *obj, unsigned short b, unsigned short n);
+extern void ref_preinitdigital(void *obj);
 
 static struct v34_object oa;
 static unsigned char ob[sizeof(struct v34_object)];
@@ -98,6 +101,253 @@ seed(unsigned seed_word, short count, int capture)
 	poke_int(0x218, 0x40);
 	for (i = 0; i < 0x40; i++)
 		poke_int(0x118 + i * 4, (int)(seed_word + (unsigned)i * 7919u));
+}
+
+/*
+ * ===========================================================================
+ * ITU-T V.34 CLAUSE 7, independently of dsplibs.o.
+ *
+ * Equations 7-1 and 7-2 define the call-mode polynomial as taps (18, 23)
+ * and the answer-mode polynomial as taps (5, 23).  The model below is the
+ * Recommendation's bit-serial division/multiplication, deliberately not the
+ * production code's four-word, sixteen-bit-at-once identities.  Input bit 0
+ * is processed first; after each production call the newest sixteen quotient
+ * coefficients are the high half of scrambler.w[3].
+ *
+ * Each implementation gets its own group.  The receiver is driven from an
+ * independently chosen scrambled stream rather than from either production
+ * scrambler, so matching defects in a scrambler/descrambler pair cannot close
+ * into a false-positive round trip.
+ * ===========================================================================
+ */
+
+typedef short (*std_scramble_fn)(void *, short);
+typedef int (*std_descramble_fn)(void *, unsigned short, unsigned short);
+typedef void (*std_init_fn)(void *);
+
+struct std_subject {
+	const char *group;
+	void *obj;
+	std_scramble_fn gpc;
+	std_scramble_fn gpa;
+	std_descramble_fn dgpc;
+	std_descramble_fn dgpa;
+	std_init_fn init;
+};
+
+struct serial_model {
+	unsigned char history[128];
+};
+
+/* Divide when `scramble` is set; multiply when it is clear. */
+static unsigned short
+serial_word(struct serial_model *m, unsigned short word, unsigned near_tap,
+	    int scramble)
+{
+	unsigned short out = 0;
+	unsigned bit;
+
+	for (bit = 0; bit < 16; bit++) {
+		unsigned in = (word >> bit) & 1u;
+		unsigned v = in ^ m->history[near_tap - 1u]
+				^ m->history[23u - 1u];
+		unsigned i;
+
+		out |= (unsigned short)(v << bit);
+		for (i = sizeof(m->history) - 1u; i > 0; i--)
+			m->history[i] = m->history[i - 1u];
+		m->history[0] = (unsigned char)(scramble ? v : in);
+	}
+	return out;
+}
+
+static unsigned short
+standard_word(unsigned step)
+{
+	static const unsigned short edge[] = {
+		0x0000, 0xffff, 0x0001, 0x8000, 0x1234, 0xa5a5
+	};
+	unsigned x;
+
+	if (step < sizeof(edge) / sizeof(edge[0]))
+		return edge[step];
+	x = 0x9e3779b9u * (step + 1u) ^ 0x5bd1e995u;
+	x ^= x >> 13;
+	return (unsigned short)x;
+}
+
+/*
+ * Fixed zero-history known-answer vectors.  These are transcribed constants,
+ * not results from serial_word(): they independently pin the Recommendation's
+ * tap numbering and least-significant-bit-first wire order.  The second input
+ * is a single one bit followed by seven zero words.
+ */
+static const unsigned short standard_kat[2][2][8] = {
+	{
+		{ 0xffff, 0xff83, 0xc00f, 0xf83f,
+		  0x00e0, 0x8c00, 0xcfff, 0x3fc7 },
+		{ 0x0001, 0x0084, 0x4010, 0x0840,
+		  0x0121, 0x9400, 0x5000, 0x4048 }
+	},
+	{
+		{ 0x7c1f, 0x3e70, 0x2706, 0x7064,
+		  0xf9a2, 0x95d8, 0xa5b1, 0xc701 },
+		{ 0x8421, 0x4290, 0x690a, 0x90ac,
+		  0x0ae6, 0xbe69, 0xeed2, 0x4902 }
+	}
+};
+
+static int
+run_standard_subject(const struct std_subject *s)
+{
+	struct v34_object *obj = (struct v34_object *)s->obj;
+	unsigned poly;
+
+	diff_begin(s->group);
+
+	/* Clause-7 known answers, checked without consulting the scalar model. */
+	for (poly = 0; poly < 2; poly++) {
+		std_scramble_fn fn = poly ? s->gpa : s->gpc;
+		unsigned pattern;
+
+		for (pattern = 0; pattern < 2; pattern++) {
+			unsigned step;
+
+			memset(obj, 0, sizeof(*obj));
+			obj->data_enable = 1;
+			obj->tx_n = 8;
+			for (step = 0; step < 8; step++)
+				obj->tx_data[step] = pattern
+					? (step == 0 ? 1 : 0) : 0xffff;
+
+			for (step = 0; step < 8; step++) {
+				long tag = (long)poly * 100L
+					   + (long)pattern * 10L + (long)step;
+
+				fn(obj, 16);
+				diff_eq_int("fixed clause-7 known answer (%ld)",
+					    (obj->scrambler.w[3] >> 16) & 0xffffu,
+					    standard_kat[poly][pattern][step], tag);
+			}
+		}
+	}
+
+	/* Transmit: primary data divided by GPC or GPA, 16 bits per call. */
+	for (poly = 0; poly < 2; poly++) {
+		struct serial_model model;
+		std_scramble_fn fn = poly ? s->gpa : s->gpc;
+		unsigned near_tap = poly ? 5u : 18u;
+		unsigned step;
+
+		memset(obj, 0, sizeof(*obj));
+		memset(&model, 0, sizeof(model));
+		obj->data_enable = 1;
+		obj->tx_n = 32;
+		for (step = 0; step < 32; step++)
+			obj->tx_data[step] = (int)standard_word(step);
+
+		for (step = 0; step < 32; step++) {
+			unsigned short expected = serial_word(&model,
+				(unsigned short)obj->tx_data[step], near_tap, 1);
+			short left = (short)(200 - (int)step);
+			short got = fn(obj, left);
+			long tag = (long)poly * 1000L + (long)step;
+
+			diff_eq_int("clause 7 scrambler consumes sixteen bits (%ld)",
+				    got, (short)(left - 16), tag);
+			diff_eq_int("equation 7 scrambler quotient word (%ld)",
+				    (long)((obj->scrambler.w[3] >> 16) & 0xffffu),
+				    (long)expected, tag);
+			diff_eq_int("standard stream advances once (%ld)",
+				    obj->tx_rd, (long)step + 1L, tag);
+		}
+	}
+
+	/*
+	 * Receive: multiplication by the polynomial.  The word interface keeps
+	 * one sixteen-bit word buffered, so call n emits call n-1; the final zero
+	 * word flushes the 32nd independently modelled result.
+	 */
+	for (poly = 0; poly < 2; poly++) {
+		struct serial_model model;
+		unsigned short expected[32];
+		std_descramble_fn fn = poly ? s->dgpa : s->dgpc;
+		unsigned near_tap = poly ? 5u : 18u;
+		unsigned step;
+
+		memset(obj, 0, sizeof(*obj));
+		memset(&model, 0, sizeof(model));
+		obj->data_enable = 1;
+		for (step = 0; step < 32; step++)
+			expected[step] = serial_word(&model, standard_word(step),
+						     near_tap, 0);
+
+		for (step = 0; step <= 32; step++) {
+			unsigned short in = step < 32 ? standard_word(step) : 0;
+			long tag = 2000L + (long)poly * 1000L + (long)step;
+
+			diff_eq_int("clause 7 descrambler returns zero (%ld)",
+				    fn(obj, in, 16), 0, tag);
+			diff_eq_int("descrambler emits after one buffered word (%ld)",
+				    obj->rx_n, step == 0 ? 0 : (long)step, tag);
+			if (step > 0)
+				diff_eq_int("equation 7 descrambler product word (%ld)",
+					    obj->rx_data[step - 1u],
+					    expected[step - 1u], tag);
+		}
+	}
+
+	/*
+	 * Clause 7 assigns GPC to the call-mode transmission and GPA to the
+	 * answer-mode transmission.  A station therefore receives with the
+	 * OTHER role's polynomial: call is GPC-out/GPA-in, answer GPA-out/GPC-in.
+	 */
+	for (poly = 0; poly < 2; poly++) {
+		int call_mode = poly == 0;
+		struct v34_shell *rx;
+		struct v34_shell *tx;
+		long tag = 4000L + (long)poly;
+
+		memset(obj, 0, sizeof(*obj));
+		obj->role = (short)(call_mode ? 0x65 : 0x66);
+		s->init(obj);
+		rx = (struct v34_shell *)obj;
+		tx = (struct v34_shell *)((unsigned char *)obj + V34_SHELL_TX);
+
+		diff_eq_int("call/answer transmit polynomial pairing (%ld)",
+			    tx->scramble == (call_mode ? s->gpc : s->gpa), 1,
+			    tag);
+		diff_eq_int("peer receive polynomial pairing (%ld)",
+			    (const void *)rx->put_bits
+			    == (const void *)(call_mode ? s->dgpa : s->dgpc), 1,
+			    tag);
+	}
+
+	return diff_end();
+}
+
+static int
+run_standards_oracle(void)
+{
+	static const struct std_subject subjects[] = {
+		{
+			"V.34 clause 7/reconstruction", &oa,
+			scrambleGPC, scrambleGPA, descrambleGPC, descrambleGPA,
+			preinitdigital
+		},
+		{
+			"V.34 clause 7/blob", ob,
+			ref_scrambleGPC, ref_scrambleGPA,
+			ref_descrambleGPC, ref_descrambleGPA,
+			ref_preinitdigital
+		}
+	};
+	unsigned i;
+	int rc = 0;
+
+	for (i = 0; i < sizeof(subjects) / sizeof(subjects[0]); i++)
+		rc |= run_standard_subject(&subjects[i]);
+	return rc;
 }
 
 int
@@ -277,6 +527,8 @@ main(void)
 		}
 	}
 	rc |= diff_end();
+
+	rc |= run_standards_oracle();
 
 	return rc;
 }

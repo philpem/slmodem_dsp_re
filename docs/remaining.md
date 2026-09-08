@@ -210,12 +210,13 @@ an exact definition; non-exact definitions retain this finite-evidence limit.
   at **37/37 caught** and `v90packdata` at **22/22 challengeable mutations
   caught**, with the latter's two additional mutations still proved
   equivalent. The ledger is now **13 current and 227 stale** of 240 registered
-  suites. This supports
-  only the named clusters and
+  suites. F10257 adds `v34scramstd` at **14/14 caught** and `v34scrampair` at
+  **2/2 caught**, making **15 current and 227 stale** of 242 registered suites.
+  This supports only the named clusters and
   not a tree-wide confidence claim. Triage the live
   receive/selection gaps through issues #1 and #10 before paying for a complete
   9,000-plus-mutation refresh.
-- **Add independent standards oracles — eight numbered blocks complete.** F10249 consumes
+- **Add independent standards oracles — nine numbered blocks complete.** F10249 consumes
   every published PCM codeword and linear cell in V.90 Table 1 and reports 256
   reconstruction checks and 256 blob checks separately; both conform. F10250
   moves the literal table into one shared test-only fixture and drives all
@@ -247,8 +248,11 @@ an exact definition; non-exact definitions retain this finite-evidence limit.
   independently assembles complete Table 13 Jd messages and confirms their
   framing, CRC and 22 legal rate capabilities. It also exposes D1457: the
   default 28-bit parameter mask drives six ITU-reserved transmit positions
-  high. Continue with the V.34 scrambler oracle; ANSam spectrum, absolute
-  level, transition quality and duration remain separately scoped. These oracles do not improve
+  high. F10257 directly implements V.34 equations 7-1 and 7-2, pins them with
+  fixed all-one and impulse streams, and confirms both GPC/GPA directions and
+  the caller/answer callback pairing. Continue with the V.90 power oracle;
+  ANSam spectrum, absolute level, transition quality and duration remain
+  separately scoped. These oracles do not improve
   equivalence to the blob; they answer whether both implementations reproduce
   a defect in it.
 
