@@ -122667,3 +122667,44 @@ interop checks, the partial-link comparator self-test and all structural
 gates. Suite line coverage remains 49,019/51,416 lines (95.3%).
 
 (2026-09-08)
+
+## F10256. V.90 Jd's framing and CRC conform, but its rate mask occupies six reserved bits
+
+The old Jd round trip was strong differential evidence but a circular
+standards test: `getBitVector` built the message later accepted by
+`unPackData`, so shared framing or CRC mistakes could agree. The new Table 13
+oracle instead assembles all 72 wire positions directly and uses an
+independent scalar V.34 Figure-14 CRC with the all-one seed and reflected
+`0x8408` polynomial. A fixed `123456789` known answer checks that helper before
+either subject is invoked.
+
+The legal grid drives every one of Table 13's 22 rate capabilities separately,
+then all-enabled and alternating masks, both constellation fields and all
+three legal lookahead values. The complete standards-built vector is compared
+with each transmitter, then fed to that same subject's receiver without using
+its transmitter as the fixture. Reconstruction and blob each pass 267/267
+checks. The seventeen-one sync, three start bits, 32 protected information
+positions, CRC seed and taps, bit-zero-first CRC field, four fill bits and all
+22 legal rate positions conform.
+
+The independent layout also corrects the former claim that Table 13 contains
+28 rate bits. Only wire bits 18:33 and 35:40 are capabilities. Bits 41:46 are
+reserved for the ITU and must be transmitted as zero. Both implementations
+copy parameter-mask bits 22:27 into those positions, and
+`V90Parameters::setToDefault` supplies `0x0fffffff`, setting all six in an
+ordinary configuration. The oracle proves the six positions one at a time and
+the aggregate default: D1457. Receiver acceptance is not labelled a defect,
+because the Recommendation says not to interpret reserved bits. The internal
+accessor exposes them, but `V90ConstellationDesigner::process` only consults
+legal indices 0:21; issue #10 separately owns the more important question of
+what happens when one of those legal capability bits is clear.
+
+The new independent-oracle suite catches 14/14 focused mutations. Refreshed
+evidence catches all 37 `v90jd` mutations and all 22 challengeable
+`v90packdata` mutations; the latter retains two mechanically justified
+equivalents and has no unexplained survivor. The complete phase boundary
+passes 375/375 period differential groups, both interop checks, the
+partial-link comparator self-test and every structural gate. Suite line
+coverage remains 49,019/51,416 (95.3%).
+
+(2026-09-08)

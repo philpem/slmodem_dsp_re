@@ -1,0 +1,75 @@
+[
+ {
+  "note": "Focused sensitivity checks for the independent ITU-T V.90 Table 13 oracle in t_v90jd.cpp. The first mutation is a deliberate transmit-side standards repair: Table 13 has 22 rate capabilities and reserves wire bits 41:46, while the blob and reconstruction emit those six positions from the parameter mask. The second changes the accessor's observed internal behaviour; it is not called a standards repair because Table 13 says receivers do not interpret reserved bits and downstream processing only consults bits 0..21. The remaining mutations exercise the independently derived framing, field directions and V.34 Figure 14 CRC rather than differential equality."
+ },
+ {
+  "label": "the constructor correctly limits Table 13 to twenty-two rate bits",
+  "find": "\tfor (i = 0; i <= 11; i++) {\n\t\tif ((mask >> (i + 16)) & 1)",
+  "replace": "\tfor (i = 0; i <= 11; i++) {\n\t\tif (i <= 5 && ((mask >> (i + 16)) & 1))"
+ },
+ {
+  "label": "getRatesMask hides Table 13's six reserved positions from its internal result",
+  "find": "\tfor (i = 0; i <= 11; i++)\n\t\tif (bits[16 + i])\n\t\t\tmask |= 1 << (i + 16);",
+  "replace": "\tfor (i = 0; i <= 5; i++)\n\t\tif (bits[16 + i])\n\t\t\tmask |= 1 << (i + 16);"
+ },
+ {
+  "label": "Table 13 CRC starts from zero instead of the Figure 14 all-ones preload",
+  "find": "\t/* resetCrc() inlined, 0x1e9a0: the register starts all ones. */\n\tfor (i = 0; i <= 15; i++)\n\t\tcrc[i] = 1;",
+  "replace": "\t/* resetCrc() inlined, 0x1e9a0: the register starts all ones. */\n\tfor (i = 0; i <= 15; i++)\n\t\tcrc[i] = 0;"
+ },
+ {
+  "label": "Table 13 CRC clocks each group's start bit as information",
+  "find": "\t\tfor (k = 0; k <= 15; k++) {\n\t\t\tint t = bits[V90JD_GROUP1 + 1 + g * V90JD_GROUP + k]\n\t\t\t    + crc[0];",
+  "replace": "\t\tfor (k = 0; k <= 15; k++) {\n\t\t\tint t = bits[V90JD_GROUP1 + g * V90JD_GROUP + k]\n\t\t\t    + crc[0];"
+ },
+ {
+  "label": "Table 13 CRC excludes constellation and lookahead information",
+  "find": "\t\tfor (k = 0; k <= 15; k++) {\n\t\t\tint t = bits[V90JD_GROUP1 + 1 + g * V90JD_GROUP + k]\n\t\t\t    + crc[0];",
+  "replace": "\t\tfor (k = 0; k <= 15; k++) {\n\t\t\tint t = ((g == 1 && k >= 12) ? 0 :\n\t\t\t    bits[V90JD_GROUP1 + 1 + g * V90JD_GROUP + k])\n\t\t\t    + crc[0];"
+ },
+ {
+  "label": "Table 13 transmits CRC bit fifteen first",
+  "find": "\t/* Group 3 carries the CRC, low bit first. */\n\tfor (i = 0; i <= 15; i++)\n\t\tbits[V90JD_GROUP3 + 1 + i] = (unsigned char)crc[i];",
+  "replace": "\t/* Group 3 carries the CRC, low bit first. */\n\tfor (i = 0; i <= 15; i++)\n\t\tbits[V90JD_GROUP3 + 1 + i] = (unsigned char)crc[15 - i];"
+ },
+ {
+  "label": "Table 13 frame sync has sixteen ones rather than seventeen",
+  "find": "\t/* Group 0, seventeen 1 bits, and the object writes them first. */\n\tfor (i = 0; i <= 16; i++)\n\t\tbits[i] = 1;",
+  "replace": "\t/* Group 0, seventeen 1 bits, and the object writes them first. */\n\tfor (i = 0; i <= 15; i++)\n\t\tbits[i] = 1;"
+ },
+ {
+  "label": "Table 13's second legal rate group starts at mask bit fifteen",
+  "find": "\tfor (i = 0; i <= 11; i++) {\n\t\tif ((mask >> (i + 16)) & 1)",
+  "replace": "\tfor (i = 0; i <= 11; i++) {\n\t\tif ((mask >> (i + 15)) & 1)"
+ },
+ {
+  "label": "Table 13's second legal rate group starts at mask bit seventeen",
+  "find": "\tfor (i = 0; i <= 11; i++) {\n\t\tif ((mask >> (i + 16)) & 1)",
+  "replace": "\tfor (i = 0; i <= 11; i++) {\n\t\tif ((mask >> (i + 17)) & 1)"
+ },
+ {
+  "label": "Table 13's training and rate-renegotiation constellation bits are transposed",
+  "find": "\tbits[47] = (unsigned char)params->V34_PHASE4_CONSTELLATION;\n\tbits[48] = (unsigned char)params->V34_RRN_CONSTELLATION;",
+  "replace": "\tbits[47] = (unsigned char)params->V34_RRN_CONSTELLATION;\n\tbits[48] = (unsigned char)params->V34_PHASE4_CONSTELLATION;"
+ },
+ {
+  "label": "Table 13's two lookahead bits are transposed",
+  "find": "\tbits[49] = (unsigned char)(look & 1);\n\tbits[50] = (unsigned char)((look >> 1) & 1);",
+  "replace": "\tbits[50] = (unsigned char)(look & 1);\n\tbits[49] = (unsigned char)((look >> 1) & 1);"
+ },
+ {
+  "label": "Table 13's first fill bit is one",
+  "find": "\tbits[V90JD_GROUP3] = 0;\n\tbits[68] = 0;\n\tbits[69] = 0;",
+  "replace": "\tbits[V90JD_GROUP3] = 0;\n\tbits[68] = 1;\n\tbits[69] = 0;"
+ },
+ {
+  "label": "Table 13's final fill bit is omitted",
+  "find": "\tbits[69] = 0;\n\tbits[70] = 0;\n\tbits[71] = 0;",
+  "replace": "\tbits[69] = 0;\n\tbits[70] = 0;\n\t/* bits[71] is left as it was. */"
+ },
+ {
+  "label": "Table 13 CRC moves the x12 feedback tap one stage",
+  "find": "\tfor (g = 0; g <= 1; g++) {\n\t\tint k;\n\n\t\tfor (k = 0; k <= 15; k++) {\n\t\t\tint t = bits[V90JD_GROUP1 + 1 + g * V90JD_GROUP + k]\n\t\t\t    + crc[0];\n\t\t\tint tap3 = (crc[4] + t) & 1;",
+  "replace": "\tfor (g = 0; g <= 1; g++) {\n\t\tint k;\n\n\t\tfor (k = 0; k <= 15; k++) {\n\t\t\tint t = bits[V90JD_GROUP1 + 1 + g * V90JD_GROUP + k]\n\t\t\t    + crc[0];\n\t\t\tint tap3 = (crc[5] + t) & 1;"
+ }
+]

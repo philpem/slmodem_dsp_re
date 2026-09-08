@@ -66,6 +66,16 @@ void ref_getConstelationSize(void *self, unsigned char *first,
 unsigned char ref_getMaxLookahead(void *self)
 	asm("ref__ZN5V90Jd15getMaxLookaheadEv");
 
+/* Direct aliases for the standards-oracle half at the end of this file. */
+unsigned char *our_std_getBitVector(void *self)
+	asm("_ZN5V90Jd12getBitVectorEv");
+int our_std_unPackData(void *self, int bit)
+	asm("_ZN5V90Jd10unPackDataEi");
+void our_std_unPackReset(void *self)
+	asm("_ZN5V90Jd11unPackResetEv");
+int our_std_getRatesMask(void *self)
+	asm("_ZN5V90Jd12getRatesMaskEv");
+
 /*
  * THE CONSTRUCTOR AND DESTRUCTOR ARE REACHED BY SYMBOL, on both sides, which
  * is the only way to drive them in place.  C++ offers no syntax for running a
@@ -808,6 +818,311 @@ run_unpackdata_states(void)
 	return diff_end();
 }
 
+/*
+ * ===========================================================================
+ * ITU-T V.90 TABLE 13, independently of dsplibs.o.
+ *
+ * The differential tests above prove that this source reproduces the object.
+ * They cannot prove that the two agree with V.90.  Table 13 supplies the Jd
+ * framing and field positions, and V.34 10.1.2.3.2/Figure 14 supplies the CRC:
+ * preload all ones, clock every information bit except the start bits, and
+ * transmit register bit zero first.  Each implementation is therefore run in
+ * its own group below and compared with a vector built only from those rules.
+ *
+ * TABLE 13 HAS TWENTY-TWO RATE CAPABILITIES, NOT TWENTY-EIGHT.  Wire bits
+ * 18..33 carry 28,000 through 48,000 bit/s and bits 35..40 carry 49,333
+ * through 56,000 bit/s.  Bits 41..46 are reserved and shall be zero.  The
+ * class's 28-bit constructor emits those six reserved positions anyway, which
+ * is a definite transmit-side departure.  Its accessor also exposes them in
+ * the internal mask, but downstream code consults only bits 0..21 and Table 13
+ * says a receiver does not interpret the reserved positions, so no system-level
+ * receive violation is claimed.  The legal grid keeps them zero; a separate
+ * grid records all three facts for both reconstruction and object.
+ * ===========================================================================
+ */
+
+typedef unsigned char *(*std_get_fn)(void *);
+typedef void (*std_ctor_fn)(void *, V90Parameters *);
+typedef void (*std_reset_fn)(void *);
+typedef int (*std_unpack_fn)(void *, int);
+typedef int (*std_mask_fn)(void *);
+
+struct std_subject {
+	const char *group;
+	union jd_slot *slot;
+	std_ctor_fn ctor;
+	std_get_fn get;
+	std_reset_fn reset;
+	std_unpack_fn unpack;
+	std_mask_fn mask;
+};
+
+#define TABLE13_RATE_BITS 22u
+#define TABLE13_RATE_MASK ((1u << TABLE13_RATE_BITS) - 1u)
+
+/* Figure 14 in wire order: x^16 + x^12 + x^5 + 1 reflected as 0x8408. */
+static unsigned int
+table13_crc16(const unsigned char *information, unsigned int n)
+{
+	unsigned int reg = 0xffffu;
+	unsigned int i;
+
+	for (i = 0; i < n; i++) {
+		unsigned int feedback =
+		    (reg ^ (unsigned int)information[i]) & 1u;
+
+		reg >>= 1;
+		if (feedback)
+			reg ^= 0x8408u;
+	}
+	return reg & 0xffffu;
+}
+
+/* A payload index to its Table 13 wire position.  This is not i % 17. */
+static unsigned int
+table13_payload_at(unsigned int i)
+{
+	return i < 16u ? 18u + i : 35u + i - 16u;
+}
+
+/* Build the complete 72-bit Table 13 sequence from standards-legal fields. */
+static unsigned int
+table13_vector(unsigned char out[V90JD_BITS], unsigned int rate_mask,
+	       unsigned int training_constellation,
+	       unsigned int rr_constellation, unsigned int lookahead)
+{
+	unsigned char information[32];
+	unsigned int i;
+	unsigned int reg;
+
+	memset(out, 0, V90JD_BITS);
+	for (i = 0; i <= 16u; i++)
+		out[i] = 1;
+
+	/* The three start positions and the four fill positions stay zero. */
+	for (i = 0; i < TABLE13_RATE_BITS; i++)
+		out[table13_payload_at(i)] =
+		    (unsigned char)((rate_mask >> i) & 1u);
+	out[47] = (unsigned char)(training_constellation & 1u);
+	out[48] = (unsigned char)(rr_constellation & 1u);
+	out[49] = (unsigned char)(lookahead & 1u);
+	out[50] = (unsigned char)((lookahead >> 1) & 1u);
+
+	/* Table 13's two payload groups, gathered explicitly around bit 34. */
+	for (i = 0; i < 32u; i++)
+		information[i] = out[table13_payload_at(i)];
+	reg = table13_crc16(information, 32u);
+	for (i = 0; i < 16u; i++)
+		out[52u + i] = (unsigned char)((reg >> i) & 1u);
+
+	return reg;
+}
+
+static int
+table13_guard_intact(const union jd_slot *slot)
+{
+	unsigned int i;
+
+	for (i = (unsigned int)sizeof(V90Jd); i < SLOT; i++)
+		if (slot->raw[i] != 0x5a)
+			return 0;
+	return 1;
+}
+
+static V90Jd *
+table13_prepare(const struct std_subject *s, unsigned int rate_mask,
+		unsigned int training_constellation,
+		unsigned int rr_constellation, unsigned int lookahead)
+{
+	V90Parameters *p = (V90Parameters *)params.raw;
+
+	memset(s->slot->raw, 0x5a, SLOT);
+	memset(params.raw, 0, sizeof(params.raw));
+	p->DIGITAL_RATE_MASK = (int)rate_mask;
+	p->MAX_SPECTRAL_SHAPER_LOOKAHEAD = (int)lookahead;
+	p->V34_PHASE4_CONSTELLATION = (int)training_constellation;
+	p->V34_RRN_CONSTELLATION = (int)rr_constellation;
+	s->ctor(s->slot->raw, p);
+	return (V90Jd *)s->slot->raw;
+}
+
+static unsigned int
+table13_register_word(const V90Jd *jd)
+{
+	unsigned int i, word = 0;
+
+	for (i = 0; i < 16u; i++)
+		word |= (unsigned int)(jd->crc[i] & 1) << i;
+	return word;
+}
+
+static unsigned int
+table13_wire_crc(const unsigned char *bits)
+{
+	unsigned int i, word = 0;
+
+	for (i = 0; i < 16u; i++)
+		word |= (unsigned int)(bits[52u + i] & 1u) << i;
+	return word;
+}
+
+static void
+table13_known_answer(void)
+{
+	static const char text[] = "123456789";
+	unsigned char bits[72];
+	unsigned int i, j, n = 0;
+
+	for (i = 0; i < 9u; i++)
+		for (j = 0; j < 8u; j++)
+			bits[n++] = (unsigned char)
+			    (((unsigned int)(unsigned char)text[i] >> j) & 1u);
+	diff_eq_int("Figure 14/V.34 over 123456789 is 0x6f91",
+		    (long)table13_crc16(bits, n), 0x6f91, 0);
+}
+
+static int
+run_table13_subject(const struct std_subject *s)
+{
+	unsigned int trial;
+
+	diff_begin(s->group);
+	table13_known_answer();
+
+	/*
+	 * Twenty-two one-hot masks prove every capability's direction.  The
+	 * all-set and alternating cases make simultaneous bits observable too.
+	 * Lookahead deliberately cycles over Table 13's legal 1..3, never zero.
+	 */
+	for (trial = 0; trial < 24u; trial++) {
+		unsigned char expected[V90JD_BITS];
+		unsigned int rate_mask;
+		unsigned int c0 = trial & 1u;
+		unsigned int c1 = (trial >> 1) & 1u;
+		unsigned int lookahead = trial % 3u + 1u;
+		unsigned int reg;
+		unsigned char *wire;
+		V90Jd *jd;
+		int early = 0, done = 0;
+		unsigned int i;
+
+		if (trial < TABLE13_RATE_BITS)
+			rate_mask = 1u << trial;
+		else if (trial == TABLE13_RATE_BITS)
+			rate_mask = TABLE13_RATE_MASK;
+		else
+			rate_mask = 0x002aaaaau;
+
+		reg = table13_vector(expected, rate_mask, c0, c1, lookahead);
+		jd = table13_prepare(s, rate_mask, c0, c1, lookahead);
+		wire = s->get(jd);
+
+		diff_eq_int("Table 13 vector begins at this+2 (%ld)",
+			    (long)(wire - s->slot->raw), 2, (long)trial);
+		diff_eq_int("Table 13 vector is exact (%ld)",
+			    (long)memcmp(wire, expected, V90JD_BITS), 0,
+			    (long)trial);
+		diff_eq_int("Table 13 register is the Figure 14 remainder (%ld)",
+			    (long)table13_register_word(jd), (long)reg,
+			    (long)trial);
+		diff_eq_int("Table 13 writes CRC bit zero first (%ld)",
+			    (long)table13_wire_crc(wire), (long)reg,
+			    (long)trial);
+		diff_eq_int("Table 13 reserved bits 41:46 are zero (%ld)",
+			    (long)(wire[41] | wire[42] | wire[43] |
+				   wire[44] | wire[45] | wire[46]), 0,
+			    (long)trial);
+		if (trial < TABLE13_RATE_BITS)
+			diff_eq_int("the selected Table 13 rate bit is on the wire (%ld)",
+				    (long)wire[table13_payload_at(trial)], 1,
+				    (long)trial);
+
+		/* A sequence built by the standard, not by either subject, decodes. */
+		s->reset(jd);
+		for (i = 0; i < V90JD_BITS; i++) {
+			int rc = s->unpack(jd, expected[i]);
+
+			if (i + 1u < V90JD_BITS)
+				early |= rc;
+			else
+				done = rc;
+		}
+		diff_eq_int("Table 13 does not complete early (%ld)", early, 0,
+			    (long)trial);
+		diff_eq_int("Table 13 completes on bit 71 (%ld)", done, 1,
+			    (long)trial);
+		diff_eq_int("Table 13 rate capabilities decode in order (%ld)",
+			    (long)(unsigned int)s->mask(jd), (long)rate_mask,
+			    (long)trial);
+		diff_eq_int("Table 13 kept the object guard (%ld)",
+			    table13_guard_intact(s->slot), 1, (long)trial);
+	}
+
+	/*
+	 * EXPECTED TRANSMIT DEPARTURE: the implementation emits Table 13's six
+	 * reserved positions from rate-mask bits 22..27.  One case per position
+	 * prevents a partial repair from leaving this acknowledgement green.  The
+	 * seventh case is the aggregate 0x0fffffff mask that
+	 * V90Parameters::setToDefault installs, proving this is reached by the
+	 * ordinary default configuration rather than only by one-hot probes.
+	 *
+	 * Receiver acceptance is NOT called a departure: Table 13 says those bits
+	 * are not interpreted.  The accessor's 28-bit result is recorded as an
+	 * internal behaviour only; V90ConstellationDesigner clamps its loop bound
+	 * and consults only mask indices 0..21.
+	 */
+	for (trial = 0; trial < 7u; trial++) {
+		unsigned char malformed[V90JD_BITS];
+		unsigned int rate_mask = trial < 6u ?
+		    1u << (TABLE13_RATE_BITS + trial) : 0x0fffffffu;
+		V90Jd *jd = table13_prepare(s, rate_mask, 0, 0, 1);
+		unsigned char *wire = s->get(jd);
+		unsigned int i;
+		int done = 0;
+
+		diff_eq_int("expected TX departure: a reserved Table 13 bit is emitted (%ld)",
+			    (long)(wire[41] | wire[42] | wire[43] |
+				   wire[44] | wire[45] | wire[46]), 1,
+			    (long)trial);
+		memcpy(malformed, wire, sizeof(malformed));
+		s->reset(jd);
+		for (i = 0; i < V90JD_BITS; i++)
+			done = s->unpack(jd, malformed[i]);
+		diff_eq_int("receiver accepts ignored reserved positions (%ld)",
+			    done, 1, (long)trial);
+		diff_eq_int("accessor exposes the reserved positions internally (%ld)",
+			    (long)(unsigned int)s->mask(jd), (long)rate_mask,
+			    (long)trial);
+		diff_eq_int("reserved-bit departure kept the guard (%ld)",
+			    table13_guard_intact(s->slot), 1, (long)trial);
+	}
+
+	return diff_end();
+}
+
+static int
+run_table13(void)
+{
+	static const struct std_subject subjects[] = {
+		{
+			"V90Jd Table 13/reconstruction", &ours,
+			our_ctor1, our_std_getBitVector, our_std_unPackReset,
+			our_std_unPackData, our_std_getRatesMask
+		},
+		{
+			"V90Jd Table 13/blob", &theirs,
+			ref_ctor1, ref_getBitVector, ref_unPackReset,
+			ref_unPackData, ref_getRatesMask
+		}
+	};
+	int rc = 0;
+	unsigned int i;
+
+	for (i = 0; i < sizeof(subjects) / sizeof(subjects[0]); i++)
+		rc |= run_table13_subject(&subjects[i]);
+	return rc;
+}
+
 int
 main(void)
 {
@@ -820,6 +1135,7 @@ main(void)
 	rc |= run_accessors();
 	rc |= run_unpackdata();
 	rc |= run_unpackdata_states();
+	rc |= run_table13();
 
 	return rc;
 }

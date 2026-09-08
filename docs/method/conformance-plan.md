@@ -374,7 +374,7 @@ pass**, and each is marked with the candidate non-conformance it settles.
 | 5 | Table 1/V.90 | `ulaw2linear`, `alaw2linear`, the three Ucode-mask paths | 3 | `t_pcm.c`, `t_v90p3mod.cpp`, `t_v90modchain.cpp`, `t_v90cpower.cpp` (**done**, F10249–F10250) | 512 + direct-path checks | — |
 | 6 | 3.5, 8.2.2, 8.2.3/V.8; 2.3, 4.4/V.25 | CJ count, ANSam duration, the V.23 answering sequence, `FPM_TONE_CFG` | 3 | `t_v8hs.c`, `t_v8dp.c`, `t_v23modem.c`, `t_fpm_tone.c` (**done**, F10254) | 1,308 | **N2, N6 confirmed; N7 retired** |
 | 7 | Tables 23, 24, 30/V.92 + 10.1.2.3.2/V.34 | `V92CP`'s CRC extent and the CPt/CPu/CPus arms | 1,2 | `t_v92cpcrc.cpp` (**done**, F10255) | 3,328 | **D920, D1455, D1456 confirmed** |
-| 8 | Table 13/V.90 | `V90Jd`'s CRC extent **and** its rate-capability mask | 1,2 | `t_v90jd.cpp` (extend) | ~300 | — |
+| 8 | Table 13/V.90 | `V90Jd`'s CRC extent **and** its rate-capability mask | 1,2 | `t_v90jd.cpp` (**done**, F10256) | 534 | **D1457 confirmed** |
 | 9 | eq. 7-1, 7-2 and clause 7/V.34 | `scrambleGPC`/`GPA`, `descrambleGPC`/`GPA`, the pairing | 3,2 | `t_v34scram.c` (extend) | ~200 | — |
 | 10 | Table 15/V.90 and the formula under Table 14 | `averagePowerLimits`, `getPower` | 3 | `t_v90cpower.cpp` (extend) | ~40 | — |
 
@@ -445,6 +445,16 @@ CPd's encoder or parser. The result confirms the CRC extent and wire order but
 also makes three payload departures executable: D920's reversed constellation
 mask, D1455's missing unsigned-Q3.13 weight, and D1456's sign-and-magnitude
 reading of signed-Q1.6 coefficients.
+
+**#8 — `V90Jd` and Table 13 (complete, F10256).** Twenty-two one-hot legal
+capability masks, two aggregate masks, both constellation fields and every
+legal lookahead value are assembled into complete 72-bit messages without
+using either implementation as an oracle. Reconstruction and blob each pass
+267 checks for framing, Figure-14 CRC generation, wire order and receipt of a
+standard-built vector. The legal fields conform. An additional one-hot sweep
+and the production default mask confirm D1457: both implementations copy six
+mask bits into positions Table 13 reserves and requires the transmitter to
+clear.
 
 ---
 
@@ -766,9 +776,12 @@ defect, not a blob deviation.
   branch, match Table 23/V.92 **including which arm takes which constant**;
   `V92ParamsInfo.c` uses `(drn + 17)` per Table 30/V.92, correctly different
   from CPu/CPt's 20.
-- `V90Jd::getBitVector` matches Table 13/V.90 end to end, CRC extent included:
+- `V90Jd::getBitVector` matches Table 13/V.90's framing and CRC extent:
   sync 0:16 all ones, start bits at 17/34/51, CRC over 18:33 and 35:50 only,
-  written to 52:67 low bit first, fill 68:71 zero, 72 bits total.
+  written to 52:67 low bit first, fill 68:71 zero, 72 bits total. Its rate
+  field does **not** match end to end: Table 13 has 22 capabilities and
+  reserves bits 41:46, while the implementation emits parameter-mask bits
+  22:27 there (D1457).
 - `V90CP::evaluateInfo` was checked for D920's defect and does not have it: it
   uses no `binaryTable`, and its accumulate loops walk downward from the high
   index, which correctly realises Table 14's LSB:MSB column convention.
@@ -778,9 +791,10 @@ defect, not a blob deviation.
   goes on V.21(L) and JM on V.21(H) per 3.4 and 3.6; CJ is three all-zero octets
   per 3.5; and 6.3/7.3's PCM co-presence rules hold.
 
-The only *established* non-conformance in scope remains D920,
-`V92CP::evaluateInfo` reading the constellation mask words bit-reversed, settled
-by finding F6800 against Table 14/V.90 and Table 23/V.92.
+The independent-oracle passes have now established D920 and D1451–D1457 as
+protocol non-conformances in this scope. Each remains reproduced for blob
+fidelity and is named by the executable expected-departure assertion that
+distinguishes faithful equivalence from standards correctness.
 
 ---
 
@@ -844,7 +858,8 @@ should be re-derived with it rather than the total carried forward.
    its independent CRC and framing-test structure.
 5. **Items 4 and 6 are complete** (V.8/V.25, F10254). They confirmed N1, N2,
    N5 and N6, while the production 160-sample V.23 cadence retired N7.
-6. **Item 7 is complete** (V.92 CP, F10255). Do items 8, 9 and 10 next, then
+6. **Items 7 and 8 are complete** (V.92 CP and V.90 Jd, F10255–F10256). Do
+   items 9 and 10 next, then
    reassess. **Ten blocks is enough to know whether this
    tier's yield is closer to "one D920 per ten blocks" or to "everything
    conforms", and the answer should decide whether §5.2 is written at all.**
