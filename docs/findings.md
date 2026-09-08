@@ -122708,3 +122708,39 @@ partial-link comparator self-test and every structural gate. Suite line
 coverage remains 49,019/51,416 (95.3%).
 
 (2026-09-08)
+
+## F10257. V.34's GPC/GPA arithmetic and caller pairing conform to clause 7
+
+The prior `t_v34scram` was broad differential evidence over long runs and
+awkward register states, but it had no independent account of either
+polynomial. A new bit-serial model now implements clause 7 directly:
+`y[n] = x[n] XOR y[n-a] XOR y[n-23]` for scrambling and
+`x[n] = y[n] XOR y[n-a] XOR y[n-23]` for descrambling, with `a = 18` for GPC
+and `a = 5` for GPA. It shares neither the production four-word identities nor
+their sixteen-bit folding.
+
+Two fixed zero-history streams independently pin tap indexing and chronology:
+eight all-one words and an impulse followed by seven zero words, for both GPC
+and GPA. The longer scalar runs feed varied primary-channel words directly to
+each transmitter and feed an independently chosen scrambled stream to each
+receiver. That separation matters: a production scrambler feeding its paired
+production descrambler could conceal complementary mistakes. It also accounts
+for the receiver ABI's one-word buffer explicitly rather than treating the
+first delayed output as protocol state.
+
+Reconstruction and blob each pass 424/424 checks. Both transmitter quotients,
+both receiver products, least-significant-bit-first word order, sixteen-bit
+consumption and the zero-history vectors agree with equations 7-1 and 7-2.
+`preinitdigital` also assigns the correct local pair: a calling modem transmits
+GPC and receives the answering modem's GPA; an answering modem transmits GPA
+and receives the caller's GPC. No standards departure was found in this block.
+
+The `v34scramstd` suite catches 14/14 mutations across every material near
+tap, far tap, fold and feedforward term. `v34scrampair` separately catches both
+transmit- and receive-assignment swaps. Neither suite has an unusable,
+equivalent or surviving mutation. The complete phase boundary passed 375/375
+period differential groups, both interoperability checks, the
+partial-link comparator self-test, and every structural gate passed. Suite
+line coverage remains 49,019/51,416 (`95.3%`).
+
+(2026-09-08)

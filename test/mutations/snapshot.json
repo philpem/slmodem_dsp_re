@@ -5000,6 +5000,34 @@
     "updateAlpha's rounding constant halved": "caught"
    }
   },
+  "v34scrampair": {
+   "key": "487ef80a9a97a8e9c58e809e79bb3bf81e522c9364b0515fec68c4006457d8fe",
+   "summary": "2 mutations: 2 caught (2 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "the call and answer receive polynomials are exchanged": "caught",
+    "the call and answer transmit polynomials are exchanged": "caught"
+   }
+  },
+  "v34scramstd": {
+   "key": "44fd57090bf70bc3f29dc7b6b09a43d32d8cfc4cb4ff45b6b8eb0f046a84eb76",
+   "summary": "14 mutations: 14 caught (14 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "GPA receive omits the x^-5 feedforward term": "caught",
+    "GPA receive uses x^-22 in place of the x^-23 tap": "caught",
+    "GPA receive uses x^-4 in place of the x^-5 tap": "caught",
+    "GPA transmit advances four bits in the first recursive fold": "caught",
+    "GPA transmit omits its final recursive x^-5 fold": "caught",
+    "GPA transmit shifts its retained x^-5 history by four": "caught",
+    "GPA transmit starts its x^-5 fold one bit early": "caught",
+    "GPA transmit uses x^-22 in place of the x^-23 tap": "caught",
+    "GPC receive omits the x^-18 feedforward term": "caught",
+    "GPC receive uses x^-19 in place of the x^-18 tap": "caught",
+    "GPC receive uses x^-22 in place of the x^-23 tap": "caught",
+    "GPC transmit omits the x^-18 feedback term": "caught",
+    "GPC transmit uses x^-19 in place of the x^-18 tap": "caught",
+    "GPC transmit uses x^-22 in place of the x^-23 tap": "caught"
+   }
+  },
   "v34shell": {
    "key": "1227730f01d8f37fe820f1e39d6b850dc32e1706f4e5b406478ed24926572958",
    "summary": "24 mutations: 21 caught (21 by test, 0 by strings), 0 NOT caught, 0 unusable, 3 equivalent, 0 MIScounted",

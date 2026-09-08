@@ -1,0 +1,75 @@
+[
+ {
+  "note": "Focused sensitivity checks for the independent ITU-T V.34 clause-7 oracle in t_v34scram.c. The fixed known-answer vectors pin bit order and tap numbering, while the scalar equations independently cover long transmit and receive streams. These mutations alter each material term of GPC = 1 + x^-18 + x^-23 and GPA = 1 + x^-5 + x^-23 on both sides of the link."
+ },
+ {
+  "label": "GPC transmit uses x^-19 in place of the x^-18 tap",
+  "find": "\tw1 = (w3 << 2) | (s->w[1] >> 16);\n\ts->w[1] = w1;",
+  "replace": "\tw1 = (w3 << 3) | (s->w[1] >> 16);\n\ts->w[1] = w1;"
+ },
+ {
+  "label": "GPC transmit uses x^-22 in place of the x^-23 tap",
+  "find": "\tw1 = (w3 << 2) | (s->w[1] >> 16);\n\ts->w[1] = w1;\n\tw2 = (w3 << 7) | (s->w[2] >> 16);",
+  "replace": "\tw1 = (w3 << 2) | (s->w[1] >> 16);\n\ts->w[1] = w1;\n\tw2 = (w3 << 6) | (s->w[2] >> 16);"
+ },
+ {
+  "label": "GPC transmit omits the x^-18 feedback term",
+  "find": "\ts->w[3] = w0 ^ w1 ^ w2;\n\n\treturn (short)(nbits - 16);",
+  "replace": "\ts->w[3] = w0 ^ w2;\n\n\treturn (short)(nbits - 16);"
+ },
+ {
+  "label": "GPA transmit starts its x^-5 fold one bit early",
+  "find": "\ta = ((w3 >> 11) | h1) ^ t;",
+  "replace": "\ta = ((w3 >> 10) | h1) ^ t;"
+ },
+ {
+  "label": "GPA transmit advances four bits in the first recursive fold",
+  "find": "\ta = ((w3 >> 11) | h1) ^ t;\n\ta = ((a << 5) | h1) ^ t;",
+  "replace": "\ta = ((w3 >> 11) | h1) ^ t;\n\ta = ((a << 4) | h1) ^ t;"
+ },
+ {
+  "label": "GPA transmit omits its final recursive x^-5 fold",
+  "find": "\ta = ((a << 5) | h1) ^ t;\n\n\ts->w[3] = a;",
+  "replace": "\t/* final x^-5 fold omitted */\n\n\ts->w[3] = a;"
+ },
+ {
+  "label": "GPA transmit shifts its retained x^-5 history by four",
+  "find": "\ts->w[3] = a;\n\ts->w[1] = h1 | (a << 5);",
+  "replace": "\ts->w[3] = a;\n\ts->w[1] = h1 | (a << 4);"
+ },
+ {
+  "label": "GPA transmit uses x^-22 in place of the x^-23 tap",
+  "find": "\tw0 = (in << 16) | (s->w[0] >> 16);\n\ts->w[0] = w0;\n\tw2 = (w3 << 7) | (s->w[2] >> 16);\n\ts->w[2] = w2;\n\n\tt = w0 ^ w2;",
+  "replace": "\tw0 = (in << 16) | (s->w[0] >> 16);\n\ts->w[0] = w0;\n\tw2 = (w3 << 6) | (s->w[2] >> 16);\n\ts->w[2] = w2;\n\n\tt = w0 ^ w2;"
+ },
+ {
+  "label": "GPC receive uses x^-19 in place of the x^-18 tap",
+  "find": "\tdescram_tail(d, (w0 << 2) | (w1 >> 16), (w0 << 7) | (w2 >> 16),\n\t\t     bits, nbits);",
+  "replace": "\tdescram_tail(d, (w0 << 3) | (w1 >> 16), (w0 << 7) | (w2 >> 16),\n\t\t     bits, nbits);"
+ },
+ {
+  "label": "GPC receive uses x^-22 in place of the x^-23 tap",
+  "find": "\tdescram_tail(d, (w0 << 2) | (w1 >> 16), (w0 << 7) | (w2 >> 16),\n\t\t     bits, nbits);",
+  "replace": "\tdescram_tail(d, (w0 << 2) | (w1 >> 16), (w0 << 6) | (w2 >> 16),\n\t\t     bits, nbits);"
+ },
+ {
+  "label": "GPC receive omits the x^-18 feedforward term",
+  "find": "\tscram_output(obj, (unsigned short)(w0 ^ w1 ^ w2));\n\n\tdescram_tail(d, (w0 << 2)",
+  "replace": "\tscram_output(obj, (unsigned short)(w0 ^ w2));\n\n\tdescram_tail(d, (w0 << 2)"
+ },
+ {
+  "label": "GPA receive uses x^-4 in place of the x^-5 tap",
+  "find": "\tt = (w0 << 5) | w1;\n\tscram_output(obj, (unsigned short)(w0 ^ t ^ w2));",
+  "replace": "\tt = (w0 << 4) | w1;\n\tscram_output(obj, (unsigned short)(w0 ^ t ^ w2));"
+ },
+ {
+  "label": "GPA receive omits the x^-5 feedforward term",
+  "find": "\tt = (w0 << 5) | w1;\n\tscram_output(obj, (unsigned short)(w0 ^ t ^ w2));",
+  "replace": "\tt = (w0 << 5) | w1;\n\tscram_output(obj, (unsigned short)(w0 ^ w2));"
+ },
+ {
+  "label": "GPA receive uses x^-22 in place of the x^-23 tap",
+  "find": "\tdescram_tail(d, t >> 16, (w0 << 7) | (w2 >> 16), bits, nbits);",
+  "replace": "\tdescram_tail(d, t >> 16, (w0 << 6) | (w2 >> 16), bits, nbits);"
+ }
+]

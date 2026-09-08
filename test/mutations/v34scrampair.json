@@ -1,0 +1,15 @@
+[
+ {
+  "note": "Focused sensitivity checks for V.34 clause 7's caller pairing. A call-mode modem transmits through GPC and receives the answer modem's GPA; answer mode does the converse. These mutations isolate the two callback assignments in preinitdigital."
+ },
+ {
+  "label": "the call and answer transmit polynomials are exchanged",
+  "find": "\tif (obj->role == 0x65) {\n\t\ttx->scramble = scrambleGPC;\n\t\trx->scramble = (v34_scramble_fn)descrambleGPA;\n\t} else {\n\t\ttx->scramble = scrambleGPA;\n\t\trx->scramble = (v34_scramble_fn)descrambleGPC;\n\t}",
+  "replace": "\tif (obj->role == 0x65) {\n\t\ttx->scramble = scrambleGPA;\n\t\trx->scramble = (v34_scramble_fn)descrambleGPA;\n\t} else {\n\t\ttx->scramble = scrambleGPC;\n\t\trx->scramble = (v34_scramble_fn)descrambleGPC;\n\t}"
+ },
+ {
+  "label": "the call and answer receive polynomials are exchanged",
+  "find": "\tif (obj->role == 0x65) {\n\t\ttx->scramble = scrambleGPC;\n\t\trx->scramble = (v34_scramble_fn)descrambleGPA;\n\t} else {\n\t\ttx->scramble = scrambleGPA;\n\t\trx->scramble = (v34_scramble_fn)descrambleGPC;\n\t}",
+  "replace": "\tif (obj->role == 0x65) {\n\t\ttx->scramble = scrambleGPC;\n\t\trx->scramble = (v34_scramble_fn)descrambleGPC;\n\t} else {\n\t\ttx->scramble = scrambleGPA;\n\t\trx->scramble = (v34_scramble_fn)descrambleGPA;\n\t}"
+ }
+]

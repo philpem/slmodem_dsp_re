@@ -375,7 +375,7 @@ pass**, and each is marked with the candidate non-conformance it settles.
 | 6 | 3.5, 8.2.2, 8.2.3/V.8; 2.3, 4.4/V.25 | CJ count, ANSam duration, the V.23 answering sequence, `FPM_TONE_CFG` | 3 | `t_v8hs.c`, `t_v8dp.c`, `t_v23modem.c`, `t_fpm_tone.c` (**done**, F10254) | 1,308 | **N2, N6 confirmed; N7 retired** |
 | 7 | Tables 23, 24, 30/V.92 + 10.1.2.3.2/V.34 | `V92CP`'s CRC extent and the CPt/CPu/CPus arms | 1,2 | `t_v92cpcrc.cpp` (**done**, F10255) | 3,328 | **D920, D1455, D1456 confirmed** |
 | 8 | Table 13/V.90 | `V90Jd`'s CRC extent **and** its rate-capability mask | 1,2 | `t_v90jd.cpp` (**done**, F10256) | 534 | **D1457 confirmed** |
-| 9 | eq. 7-1, 7-2 and clause 7/V.34 | `scrambleGPC`/`GPA`, `descrambleGPC`/`GPA`, the pairing | 3,2 | `t_v34scram.c` (extend) | ~200 | — |
+| 9 | eq. 7-1, 7-2 and clause 7/V.34 | `scrambleGPC`/`GPA`, `descrambleGPC`/`GPA`, the pairing | 3,2 | `t_v34scram.c` (**done**, F10257) | 848 | — |
 | 10 | Table 15/V.90 and the formula under Table 14 | `averagePowerLimits`, `getPower` | 3 | `t_v90cpower.cpp` (extend) | ~40 | — |
 
 ### F5.2 Do next — eleven
@@ -455,6 +455,13 @@ standard-built vector. The legal fields conform. An additional one-hot sweep
 and the production default mask confirm D1457: both implementations copy six
 mask bits into positions Table 13 reserves and requires the transmitter to
 clear.
+
+**#9 — V.34 primary-channel scramblers (complete, F10257).** A bit-serial
+model implements equations 7-1 and 7-2 directly as delays 18/23 and 5/23,
+with fixed zero-history all-one and impulse streams pinning its chronology and
+word order. Each implementation passes 424 checks covering both transmit
+quotients, both receive products, long independent streams and the caller/
+answer callback pairing. The tested arithmetic and pairing conform.
 
 ---
 
@@ -858,8 +865,8 @@ should be re-derived with it rather than the total carried forward.
    its independent CRC and framing-test structure.
 5. **Items 4 and 6 are complete** (V.8/V.25, F10254). They confirmed N1, N2,
    N5 and N6, while the production 160-sample V.23 cadence retired N7.
-6. **Items 7 and 8 are complete** (V.92 CP and V.90 Jd, F10255–F10256). Do
-   items 9 and 10 next, then
+6. **Items 7, 8 and 9 are complete** (V.92 CP, V.90 Jd and V.34 scramblers,
+   F10255–F10257). Do item 10 next, then
    reassess. **Ten blocks is enough to know whether this
    tier's yield is closer to "one D920 per ten blocks" or to "everything
    conforms", and the answer should decide whether §5.2 is written at all.**
