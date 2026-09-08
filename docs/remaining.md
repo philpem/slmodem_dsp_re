@@ -157,10 +157,18 @@ an exact definition; non-exact definitions retain this finite-evidence limit.
   composition remain open in [issue
   #1](https://github.com/philpem/slmodem_dsp_re/issues/1); do not revive the old
   invalid-state fixture as evidence against the source.
-- **V.90 phase-4 completed-message paths.** Build CRC-valid CP and MP frames for
-  `getV90Decision`/`getV92Decision`. This is a bounded way to cover the eleven
-  ordinary fixture gaps already named by the mutation file, including answers
-  that the present one-bit-from-complete fixture cannot produce.
+- **V.90 phase-4 completed-message paths — fixture complete.** F10242 builds
+  CRC-valid CP and MP frames with the blob's transmit-side encoders, prefeeds
+  each paired decoder to one bit before its reply, and sends that final zero
+  through the real demapper and descrambler into `getV90Decision` or
+  `getV92Decision`. The new groups pass 886 differential checks and explicitly
+  observe MP/MPnot, all four CP replies, the CP guard truth tables and the
+  WaitForEd level-3 diagnostic gate. This addresses ten ordinary fixture gaps
+  already named by the mutation file; the targeted refresh in issue #3 must
+  now verify that those planted alternatives are actually rejected. The
+  separate eleventh gap is the `linearMappingStudy(sample, decision)`
+  argument-order survivor, which needs a targeted constellation rather than a
+  completed message.
 - **Small direct-attribution gaps.** The generated coverage report names eight
   definitions (1,840 bytes) without a direct `ref_` reference. Most are already
   covered indirectly or are dead one-byte destructor clones. The worthwhile

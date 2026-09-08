@@ -122053,3 +122053,48 @@ The complete `make phase J=4` boundary remains green after this change:
 interoperability tiers, and measured source-line coverage is
 **48,971/51,416 (95.2%)** with the coverage and debug-site checks green.
 (2026-09-08)
+
+## F10242. Blob-built complete CP and MP frames reach the Phase-4 reply arms
+
+The broad `t_v90p4ddec` state sweep exercised every top-level decision state,
+but its planted message decoders could produce only the zero-run Ed reply. It
+could not reach the replies that exist only after a complete message passes a
+sixteen-bit CRC. That left ten ordinary alternatives in
+`test/mutations/v90p4ddec.json` without a witness: three around MP/MPnot and
+seven around the CP reply switch. The `linearMappingStudy` argument-order case
+is a separate eleventh fixture gap and is not a completed-message path.
+
+The new groups obtain their stimuli from the blob's own transmit-side
+`V90MP::infoToBits` and `V90CP::infoToBits`. They feed each sequence into the
+paired candidate/blob receive records until exactly its final padding zero
+remains. The real Phase-4 decision call then passes one known zero through the
+demapper and transparent descrambler to finish the message. The fixture
+asserts that the prefeed was quiet and agreed, that each decoder is one bit
+from reporting, and that the final demapper call emits exactly that one zero;
+this prevents a reply planted directly into decoder state from masquerading
+as end-to-end coverage.
+
+The MP group observes reply 1 and reply 2 exactly once in `WAIT_FOR_MP`, with
+the matching receive counter and progress code, and observes the MPnot notice
+absent at diagnostic level 2 and present at level 3 in `WAIT_FOR_ED`. The CP
+group observes replies 1 and 2 once each and six paths for each of replies 3
+and 4. Those paths cover the shallow `int_003c` guard, both inputs of the
+`int_0040 == 0 && cp->word_ca0 == 0` condition, its fallback, and the distinct
+`int_0048` progress codes. Absolute assertions hold the resulting code, Ed
+byte, copied CP bit, deep flag, preserved `int_0048`, receive state, sample
+count and CP hold-off, in addition to whole-object and transcript comparison.
+
+The complete-MP group passes **182 checks** and the complete-CP group passes
+**704 checks** on the modern build. All pre-existing groups remain green, and
+`make period T=t_v90p4ddec` reports **1/1 passed** under GCC 3.4.2. These are
+finite behavioral witnesses against the blob, not a proof that either side
+implements the external protocol correctly: the frame generator is another
+blob function, and the targeted mutation refresh must still demonstrate that
+the ten named alternatives are rejected.
+
+The complete `make phase J=4` boundary passes after the fixture change:
+**374/374 period differential groups**, the 64-bit and interoperability tiers,
+and the coverage/debug-site checks are green. Measured source-line coverage
+rises to **49,018/51,416 (95.3%)**, and one previously unexecuted Phase-4
+demodulator debug site is now live.
+(2026-09-08)
