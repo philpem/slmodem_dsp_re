@@ -122180,3 +122180,34 @@ The complete `make phase J=4` boundary remains green: **374/374 period
 differential groups** pass with the 64-bit, interoperability, coverage and
 debug-site tiers. Coverage remains **49,018/51,416 source lines (95.3%)**.
 (2026-09-08)
+
+## F10245. A legal state-67 exit observes both V.34 digital initialization and its once-only latch
+
+The two remaining ordinary `v34hstx1` mutation survivors were both on the
+same state-67 exit.  The old fixture entered it with `+0x3598` already set, so
+it exercised the guard but could not observe either the call to `initdigital`
+or the following store which records that initialization has happened.  An
+older note said that clearing the latch made the test's two instance-relative
+`coeff` pointers disagree as raw addresses.  That fixture limitation no
+longer exists: the harness now treats `+0x0a24` and `+0x2604` as pointer holes
+and verifies their targets by offset from each side's own object.
+
+The new case therefore repeats the existing legal state-67 completing
+sequence with `+0x3598` clear.  Its normal whole-object, arena and diagnostic
+comparison observes the writes made by `initdigital`; an additional absolute
+postcondition requires `+0x3598 == 1`, so agreement alone cannot let two
+omitted stores pass.  The modern differential binary passes **25,857 checks**
+and `make period T=t_v34hstx1` reports **1/1 passed** under GCC 3.4.2.
+
+Each focused mutation is caught independently.  The complete **776-mutation**
+suite reports **753 caught by tests, 0 uncaught, 0 unusable and 23 equivalent**,
+with no previous caught verdict regressing.  This closes the suite's two live
+reachability gaps; it remains finite evidence for two named alternatives, not
+a proof of the whole transmit state machine.  Across the seven targeted
+suites in F10243/F10244 the current aggregate is consequently **1,198 caught,
+90 uncaught, 35 equivalent and one unbuildable out of 1,324**.
+
+The complete `make phase J=4` boundary remains green: **374/374 period
+differential groups** pass with the 64-bit and interoperability tiers, and
+coverage/debug instrumentation remains **49,018/51,416 source lines (95.3%)**.
+(2026-09-08)

@@ -3617,8 +3617,8 @@
    }
   },
   "v34hstx1": {
-   "key": "793dbc0eab3bf3de03c7a3a7b0ec4c4473d6a10c9957fe667d5b0f5f59498b6d",
-   "summary": "776 mutations: 751 caught (751 by test, 0 by strings), 2 NOT caught, 0 unusable, 23 equivalent, 0 MIScounted",
+   "key": "7c894fad14dcd78de34021b01c1c78d0b96b63efd84a4e02eeb433781fed725a",
+   "summary": "776 mutations: 753 caught (753 by test, 0 by strings), 0 NOT caught, 0 unusable, 23 equivalent, 0 MIScounted",
    "verdicts": {
     "18: only the first symbol is transmitted": "caught",
     "18: the SBARSEG guard is deleted": "caught",
@@ -4127,7 +4127,7 @@
     "67: +0x3590 is tested even on a pass that has stuffed": "caught",
     "67: +0x3590 pushes nothing into the reader": "caught",
     "67: +0x3590 pushes three bits": "caught",
-    "67: +0x3598 is not set": "uncaught",
+    "67: +0x3598 is not set": "caught",
     "67: +0x359e counts down": "caught",
     "67: +0x359e is cleared when the flag WAS up": "caught",
     "67: +0x359e is cleared whether or not the flag was up": "caught",
@@ -4141,7 +4141,7 @@
     "67: 0x647b0's stamp test needs 0x18": "caught",
     "67: cur_quadrant is not cleared before the loop": "caught",
     "67: every bit lands in bit 0": "caught",
-    "67: initdigital is not called": "uncaught",
+    "67: initdigital is not called": "caught",
     "67: initdigital runs on every sequence": "caught",
     "67: the +0x3598 guard is inverted": "caught",
     "67: the bit count does not depend on the constellation": "caught",
