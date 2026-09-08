@@ -734,7 +734,7 @@ COVCOUNTS  := build-cov/measured.txt
 # the sub-make through the jobserver, so the eight still run in parallel with
 # each other.  Findings 1563, 3215 and 3521.
 PHASE_TIERS := period test check64 interop params coverage debugcov onedef \
-               vendor banners
+               vendor banners partial-compare-selftest
 
 phase: prereq
 	@$(MAKE) --no-print-directory $(PHASE_TIERS)
@@ -955,9 +955,18 @@ period: $(REF)
 # was standing in for.  The guard STAYS: it still catches the directory being
 # read by something that did not come through make.
 #
-.PHONY: tc byteident byteident-ratchet similarity
+.PHONY: tc tc-repro byteident byteident-ratchet similarity partial-link \
+	partial-compare partial-compare-selftest
 tc:
 	@$(MAKE) -f tools/toolchain/period.mk -j$(J)
+
+# A dedicated faithful-object tree.  The normal byte-identity census omits
+# DSPLIB_REPRODUCE_BUGS so it can measure the shipping/fixed source; a candidate
+# for the lost object must enable the one deliberately reproduced defect.
+tc-repro:
+	@$(MAKE) -f tools/toolchain/period.mk -j$(J) \
+		TC_OUT='$(abspath $(BUILD)/tc_repro)' \
+		TC_EXTRA='-DDSPLIB_REPRODUCE_BUGS'
 
 byteident: tc
 	@$(PYTHON) tools/toolchain/byteident.py
@@ -967,6 +976,20 @@ byteident-ratchet: tc
 
 similarity: tc
 	@$(PYTHON) tools/toolchain/compare.py --ratchet
+
+# Link with binutils 2.15 in the period image.  DIFFERENT is the expected
+# report until convergence, so partial-compare is a census rather than a phase
+# gate.  partialcmp.py --require-exact supplies the strict final-object gate.
+partial-link: tc-repro
+	@tools/toolchain/partiallink.sh $(BUILD)/partial/dsplibs.o \
+		$(BUILD)/tc_repro/tc_manifest.txt
+
+partial-compare: partial-link
+	@$(PYTHON) tools/toolchain/partialcmp.py $(BLOB) \
+		$(BUILD)/partial/dsplibs.o
+
+partial-compare-selftest:
+	@$(PYTHON) tools/toolchain/partialcmp.py --self-test
 
 coverage: $(BUILD)/tumap.json $(OBJ) $(REF) $(TESTOBJ) $(HARNESS_OBJ)
 	@$(PYTHON) tools/coverage.py --md docs/coverage.md
