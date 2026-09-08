@@ -85,6 +85,16 @@ work. A locally exact function is not progress if it moves the aggregate's
 sections, symbols or padding farther away, and byte identity is not a substitute
 for behavioural evidence.
 
+The executable backlog is tracked as GitHub issues: [#1 receive-chain
+composition](https://github.com/philpem/slmodem_dsp_re/issues/1), [#2 complete
+Phase-4 messages](https://github.com/philpem/slmodem_dsp_re/issues/2), [#3
+targeted mutation refresh](https://github.com/philpem/slmodem_dsp_re/issues/3),
+[#4 direct-attribution gaps](https://github.com/philpem/slmodem_dsp_re/issues/4),
+[#5 independent standards oracles](https://github.com/philpem/slmodem_dsp_re/issues/5),
+[#6 partial-link order](https://github.com/philpem/slmodem_dsp_re/issues/6),
+and [#7 constrained exact paired
+families](https://github.com/philpem/slmodem_dsp_re/issues/7).
+
 1. **Measure the aggregate first.** `make partial-compare` partially links all
    272 faithful GCC 3.4.2 objects with binutils 2.15 in manifest order and
    compares that candidate with the blob. It reports allocated section
@@ -129,15 +139,24 @@ evidence for the claims the fixture makes. Independent Recommendation-derived
 answers are a further oracle for whether the blob itself is correct. On that
 definition, the choices are:
 
-- **V.90 receive-chain composition — recommended first.** F7513 records that a
-  deeper, legal-looking `V90Demodulator::progress` fixture reached
-  `V90Phase3Demodulator::getDecision` and failed 155 of 1,868 period checks. The
-  wiring was reverted, leaving the present fixture green but limited to three
-  of 31 progress events, with 74 of its 100 deliberately retained mutations
-  uncaught. First reproduce and minimize the old disagreement, proving the
-  fixture legal before assigning blame; then add one naturally generated event
-  from each major receive phase rather than planting state overwritten by the
-  equalizer prologue.
+Mutation evidence is deliberately not called equivalence proof. A green
+differential trial establishes agreement only for that finite input and its
+observed state; killing a planted mutant establishes only that the same fixture
+can distinguish that particular alternative. It neither extends the input
+domain nor rules out an unmodelled fault. Exact object code is conclusive for
+an exact definition; non-exact definitions retain this finite-evidence limit.
+
+- **V.90 receive-chain composition — first pass complete.** F10241 corrects
+  F7513: all 155 old trials left the Phase-3 demodulator in a seeded state above
+  its valid 0..0x21 range, then consumed that default path's deliberately
+  indeterminate return. The apparent callee divergence was a fixture artefact.
+  The broad group also produced one equalizer event and three final outcomes,
+  not three of 31 events. A new graph with real per-side Phase-3 construction
+  and reset passes 140 differential checks across V.90/V.92 sequential calls
+  and naturally produces events 1 and 0. Later Phase-3 events and Phase-4/data
+  composition remain open in [issue
+  #1](https://github.com/philpem/slmodem_dsp_re/issues/1); do not revive the old
+  invalid-state fixture as evidence against the source.
 - **V.90 phase-4 completed-message paths.** Build CRC-valid CP and MP frames for
   `getV90Decision`/`getV92Decision`. This is a bounded way to cover the eleven
   ordinary fixture gaps already named by the mutation file, including answers

@@ -31,6 +31,7 @@
 #include "dsplib/V90MP.h"
 #include "dsplib/V90Phase4Demodulator.h"
 #include "dsplib/tagV90AdditionalCPinfo.h"
+#include "dsplib/modem_params.h"
 
 extern "C" {
 void ref_dem_progress(void *self, int *out, unsigned int *nofOut, float *in,
@@ -50,6 +51,36 @@ void ref_vr_dtor(void *s) asm("ref__ZN12V90ResamplerD1Ev");
 void equ_reset(void *s, unsigned int cursor) asm("_ZN12V90Equalizer5resetEj");
 void ref_equ_reset(void *s, unsigned int cursor)
 	asm("ref__ZN12V90Equalizer5resetEj");
+void equ_enter_p3(void *s) asm("_ZN12V90Equalizer11enterPhase3Ev");
+void ref_equ_enter_p3(void *s)
+	asm("ref__ZN12V90Equalizer11enterPhase3Ev");
+
+#define PARAM_CTOR "_ZN13V90ParametersC1EP19_tagModemParameters"
+void param_ctor(void *s, void *mp) asm(PARAM_CTOR);
+void ref_param_ctor(void *s, void *mp) asm("ref_" PARAM_CTOR);
+void param_dtor(void *s) asm("_ZN13V90ParametersD1Ev");
+void ref_param_dtor(void *s) asm("ref__ZN13V90ParametersD1Ev");
+
+#define ADID_CTOR "_ZN25V90AutoDigitalImpDetectorC1EP13V90Parameters"
+void adid_ctor(void *s, void *p) asm(ADID_CTOR);
+void ref_adid_ctor(void *s, void *p) asm("ref_" ADID_CTOR);
+void adid_dtor(void *s) asm("_ZN25V90AutoDigitalImpDetectorD1Ev");
+void ref_adid_dtor(void *s)
+	asm("ref__ZN25V90AutoDigitalImpDetectorD1Ev");
+
+#define CE_CTOR "_ZN22V90ConnectionEvaluatorC1EP13V90Parameters"
+void ce_ctor(void *s, void *p) asm(CE_CTOR);
+void ref_ce_ctor(void *s, void *p) asm("ref_" CE_CTOR);
+void ce_dtor(void *s) asm("_ZN22V90ConnectionEvaluatorD1Ev");
+void ref_ce_dtor(void *s) asm("ref__ZN22V90ConnectionEvaluatorD1Ev");
+
+#define P3D_CTOR "_ZN20V90Phase3DemodulatorC1EP13V90ParametersP19V90SpectralVerifierjP25V90AutoDigitalImpDetector"
+void p3d_ctor(void *s, void *p, void *sv, unsigned int flag, void *ad)
+	asm(P3D_CTOR);
+void ref_p3d_ctor(void *s, void *p, void *sv, unsigned int flag, void *ad)
+	asm("ref_" P3D_CTOR);
+void p3d_dtor(void *s) asm("_ZN20V90Phase3DemodulatorD1Ev");
+void ref_p3d_dtor(void *s) asm("ref__ZN20V90Phase3DemodulatorD1Ev");
 
 #define DM_CTOR	"_ZN11V90DemapperC1EjP13V90ParametersP25V90AutoDigitalImpDetector"
 void dm_ctor(void *s, unsigned int n, void *p, void *adi) asm(DM_CTOR);
@@ -96,13 +127,13 @@ void ref_td_ctor(void *s, void *p, void *pw) asm("ref_" TD_CTOR);
  * requirement and not a taste.  t_v90demod's `wire_life` uses the same pair.
  */
 /*
- * HOW MANY DISTINCT `word_3c` ARMS THE SWEEP ACTUALLY REACHES.  It is not a
- * target and it is not plantable (7513); it is a DENOMINATOR, asserted so that
- * a fixture change which narrowed the spread fails here instead of passing
- * silently with fewer arms driven.  Against the thirty-one the two tables
- * between them dispatch, this is what the receive chain produces.
+ * TWO DIFFERENT DENOMINATORS.  The reset equaliser produces one event value;
+ * `progress` may then replace that value with a connection-evaluator outcome,
+ * so counting its final `word_3c` used to misreport three reached event arms.
+ * Keep the producer event and final outcome separate.
  */
-#define PROG_ARMS	3
+#define PROG_EVENTS	1
+#define PROG_OUTCOMES	3
 
 #define PROG_LELEN	8u
 #define PROG_M		16u
@@ -212,6 +243,19 @@ static unsigned char pre_ce[2][CE_SLOT];
 static unsigned char pre_cdz[2][CDZ_SLOT];
 static unsigned char pre_parm[2][PARM_SLOT];
 static unsigned char pre_acp[2][ACP_SLOT];
+static unsigned char pre_equ[2][EQU_SLOT];
+static unsigned char pre_p3d[2][P3D_SLOT];
+static unsigned char pre_flow_parm[2][sizeof(V90Parameters) + 64u];
+static unsigned char pre_vr[2][sizeof(V90Resampler)];
+
+/* Full parameter objects for the constructed Phase-3 composition.  The
+ * shared historical fixture intentionally carries only the old 0x504-byte
+ * view and therefore cannot legally host V90Parameters' 0x558-byte ctor. */
+static unsigned char flow_parm_[2][sizeof(V90Parameters) + 64u]
+	__attribute__((aligned(8)));
+static struct _tagModemParameters flow_mparm[2];
+
+#define FLOW_PARAMS(s) ((V90Parameters *)flow_parm_[s])
 
 /*
  * The per-side words this file plants with a per-side address.  Every other
@@ -338,13 +382,14 @@ prog_wire(int side, int trial)
 	 * THAT IS MEASURED RATHER THAN LAZY.  Wiring them real -- and forcing
 	 * `state` to PHASE3 so `process` would take the arm that reads
 	 * `phase3Demod->eventCode` -- was tried, and it makes the equaliser call
-	 * `V90Phase3Demodulator::getDecision` once per symbol over inputs that
-	 * member's own binary never presents.  `make phase` then failed on the
-	 * PERIOD compiler, 155 of 1,868, on the equalised symbols: a real
-	 * divergence in an already-written callee, reached from here, and not
-	 * this member's to chase.  With them seeded the equaliser takes its
-	 * cheap arms, both sides agree, and what `progress` does with the
-	 * answer is still compared.  Finding F7513.
+	 * `V90Phase3Demodulator::getDecision` once per symbol.  The old attempt
+	 * failed 155 of 1,868 PERIOD checks, but F10241 establishes that every
+	 * one of its seeded Phase-3 states lay above the implemented 0..0x21
+	 * range, whose return is deliberately indeterminate.  That was a fixture
+	 * defect, not evidence against the callee.  The separate constructed
+	 * composition below supplies a real Phase-3 peer; this broad sweep keeps
+	 * the cheap equaliser arm and measures its event and final outcome
+	 * separately.  Finding F7513 records the original result.
 	 */
 
 	memset(&eqa[side], 0, sizeof eqa[side]);
@@ -491,11 +536,13 @@ run_progress(void)
 	int sawLevel[3];
 	int seen[5];
 	int sawDrop = 0, sawNoDrop = 0, sawPrint = 0;
-	int seenState[64];
-	int distinct = 0;
+	int seenEvent[64], seenOutcome[64];
+	int distinctEvent = 0, distinctOutcome = 0;
+	int invalidSeededP3 = 0;
 
 	sawLevel[0] = sawLevel[1] = sawLevel[2] = 0;
-	memset(seenState, 0, sizeof seenState);
+	memset(seenEvent, 0, sizeof seenEvent);
+	memset(seenOutcome, 0, sizeof seenOutcome);
 	seen[0] = seen[1] = seen[2] = seen[3] = seen[4] = 0;
 
 	diff_begin("V90Demodulator::progress");
@@ -529,6 +576,13 @@ run_progress(void)
 		t.idx = trial;
 
 		setup(trial + 900, &t);
+		/* Reproduce F7513's prerequisite exactly.  The old composed
+		 * experiment entered the equaliser's Phase-3 arm while leaving
+		 * this seeded word as though it were a constructed state.  Every
+		 * trial lands outside the implemented 0..0x21 state range, where
+		 * getDecision's return is deliberately indeterminate. */
+		if ((unsigned int)P3(1)->state > 0x21u)
+			invalidSeededP3++;
 
 		for (i = 0; i < FIR_TAPS; i++)
 			fir_bank[i] = (i == 0) ? 1.0f : 0.0f;
@@ -662,7 +716,9 @@ run_progress(void)
 				   dsplib_debug_capture_text(1)) == 0, 1,
 			    trial);
 
-		seenState[(unsigned)D(1)->word_3c & 0x3fu]++;
+		seenEvent[(unsigned)((V90Equalizer *)equ[1])->stateCount &
+			  0x3fu]++;
+		seenOutcome[(unsigned)D(1)->word_3c & 0x3fu]++;
 		if (D(1)->noEnergyDuration == 0)
 			sawDrop++;
 		else
@@ -676,19 +732,23 @@ run_progress(void)
 
 	set_level(0);
 
-	for (si = 0; si < 64; si++)
-		if (seenState[si])
-			distinct++;
+	for (si = 0; si < 64; si++) {
+		if (seenEvent[si])
+			distinctEvent++;
+		if (seenOutcome[si])
+			distinctOutcome++;
+	}
 	/*
-	 * A DENOMINATOR FOR THE ARM COVERAGE, and it is the honest number.
-	 * `word_3c` is `equalizer->stateCount`, which `V90Equalizer::process`
-	 * clears on entry and refills from its own state arms, so the arm this
-	 * sweep takes is the equaliser's answer and not a planted value.  This
-	 * counts the DISTINCT answers the sweep produced, so a fixture change
-	 * that narrowed them would fail here rather than pass silently.
+	 * TWO DENOMINATORS, not one mislabeled count.  `stateCount` is the
+	 * event `progress` consumed.  `word_3c` is the final outcome after the
+	 * phase switch and evaluator have had permission to replace that event.
 	 */
-	diff_eq_int("the sweep reached the same number of word_3c arms it did "
-		    "when this count was taken", distinct, PROG_ARMS, 0);
+	diff_eq_int("the broad sweep produced the measured number of equalizer "
+		    "events", distinctEvent, PROG_EVENTS, 0);
+	diff_eq_int("the broad sweep produced the measured number of final "
+		    "outcomes", distinctOutcome, PROG_OUTCOMES, 0);
+	diff_eq_int("all historical Phase-3 peers were invalid seeded states",
+		    invalidSeededP3, 5 * (N_P3 + N_P4 + N_DATA), 0);
 	diff_eq_int("the demodulator was driven in every phase",
 		    seen[0] && seen[1] && seen[2] && seen[3] && seen[4], 1, 0);
 	diff_eq_int("level 0 was driven", sawLevel[0] > 0, 1, 0);
@@ -702,12 +762,262 @@ run_progress(void)
 	return diff_end();
 }
 
+/*
+ * A LEGAL PHASE-3 COMPOSITION, kept separate from the broad seeded sweep.
+ * The old experiment changed the equaliser state to PHASE3 but left its
+ * Phase-3 peer as random bytes.  Here each side constructs its own complete
+ * parameter block, impairment detector, evaluator and Phase-3 demodulator;
+ * the latter's constructor performs the real reset and owns real SD/ANSam
+ * allocations.  Only then is the equaliser reset, wired and entered.
+ *
+ * The deliberately permissive but finite SD thresholds make one transition
+ * arise from detector input.  No event is planted in either the equaliser or
+ * demodulator: event 1 is therefore evidence that progress composed the
+ * prefilter, AGC, resampler, equaliser and P3 decision machine successfully.
+ */
+static int
+run_constructed_phase3(void)
+{
+	struct trial_args t;
+	int flag, call;
+	int calls = 0, sawEvent = 0, sawQuiet = 0;
+	int sawV90 = 0, sawV92 = 0;
+
+	diff_begin("V90Demodulator::progress, constructed Phase-3 chain");
+
+	for (flag = 0; flag < 2; flag++) {
+		int side;
+
+		t.latch = 1;
+		t.flag = (unsigned int)flag;
+		t.eia6 = 6;
+		t.blockByte = 0;
+		t.pcmType = flag;
+		t.idx = 0;
+		setup(4000 + flag, &t);
+
+		for (side = 0; side < 2; side++) {
+			unsigned int i;
+
+			prog_wire(side, 500 + flag);
+			prog_deep(side, 500 + flag);
+			memset(&flow_mparm[side], 0, sizeof flow_mparm[side]);
+			flow_mparm[side].minRate = 4800;
+			flow_mparm[side].maxRate = 33600;
+			flow_mparm[side].connectionType = -1;
+			for (i = 0; i < FIR_TAPS; i++)
+				fir_bank[i] = (i == 0) ? 1.0f : 0.0f;
+			for (i = 0; i < PROG_IN; i++)
+				prog_in[i] = (float)(int)((i + (unsigned)flag) % 7u)
+					     * 0.125f;
+		}
+
+		param_ctor(flow_parm_[0], &flow_mparm[0]);
+		ref_param_ctor(flow_parm_[1], &flow_mparm[1]);
+
+		for (side = 0; side < 2; side++) {
+			V90Demodulator *d = D(side);
+			V90Equalizer *e = (V90Equalizer *)equ[side];
+
+			d->params = FLOW_PARAMS(side);
+			d->preFilter.params = FLOW_PARAMS(side);
+			d->preFilter.refLoop = 0;
+			d->spectralVerifier.params = FLOW_PARAMS(side);
+			d->spectralVerifier.accumCount = 0;
+			d->spectralVerifier.accumulating = 0;
+			d->spectralVerifier.word_28 = 0;
+			d->sessionFlag = (unsigned int)flag;
+			d->inPhase3 = 1;
+			d->quickConnect = 0;
+			e->params = FLOW_PARAMS(side);
+		}
+
+		vr_ctor(&D(0)->resampler, PROG_PHASES, 1.0f, PROG_TAPS, 0.25f,
+			FLOW_PARAMS(0), 0.0f, 0);
+		ref_vr_ctor(&D(1)->resampler, PROG_PHASES, 1.0f, PROG_TAPS,
+			    0.25f, FLOW_PARAMS(1), 0.0f, 0);
+		adid_ctor(&adid[0], FLOW_PARAMS(0));
+		ref_adid_ctor(&adid[1], FLOW_PARAMS(1));
+		ce_ctor(ce[0], FLOW_PARAMS(0));
+		ref_ce_ctor(ce[1], FLOW_PARAMS(1));
+		p3d_ctor(p3d[0], FLOW_PARAMS(0), &D(0)->spectralVerifier,
+			  (unsigned int)flag, &adid[0]);
+		ref_p3d_ctor(p3d[1], FLOW_PARAMS(1), &D(1)->spectralVerifier,
+			      (unsigned int)flag, &adid[1]);
+
+		for (side = 0; side < 2; side++) {
+			V90Demodulator *d = D(side);
+			V90Equalizer *e = (V90Equalizer *)equ[side];
+			V90SdDetector *sd = P3(side)->sdDetector;
+
+			d->phase3Demodulator = P3(side);
+			d->connectionEvaluator =
+			    (V90ConnectionEvaluator *)ce[side];
+			d->autoDigitalImpDetector = &adid[side];
+			e->phase3Demod = P3(side);
+			/* Inactive peers are null, not seeded pseudo-objects. */
+			e->phase4Demod = 0;
+			e->demapper = 0;
+			e->connEval = (V90ConnectionEvaluator *)ce[side];
+			e->spectralVerifier = &d->spectralVerifier;
+			e->preFilter = &d->preFilter;
+
+			/* Finite, valid detector configuration: energy always clears
+			 * the floor and a single positive correlation verdict is
+			 * sufficient. */
+			sd->thresh_08 = -1.0f;
+			sd->thresh_0c = -1.0f;
+			sd->value_10 = -2.0f;
+			sd->limit = 1;
+		}
+
+		equ_reset(equ[0], 2);
+		ref_equ_reset(equ[1], 2);
+		equ_enter_p3(equ[0]);
+		ref_equ_enter_p3(equ[1]);
+
+		diff_eq_int("constructed P3 starts in WaitForSd (session %ld)",
+			    (long)P3(1)->state, 0, flag);
+		diff_eq_int("equalizer entered Phase3 (session %ld)",
+			    (long)((V90Equalizer *)equ[1])->state, 1, flag);
+		diff_eq_int("constructed receive graph is wired (session %ld)",
+			    ((V90Equalizer *)equ[1])->phase3Demod == P3(1) &&
+			    ((V90Equalizer *)equ[1])->connEval ==
+				(V90ConnectionEvaluator *)ce[1] &&
+			    P3(1)->autoDigitalImpDetector == &adid[1] &&
+			    D(1)->phase3Demodulator == P3(1), 1, flag);
+		diff_eq_int("constructed SD storage is valid (session %ld)",
+			    P3(1)->sdDetector != 0 &&
+			    P3(1)->sdDetector->history != 0 &&
+			    P3(1)->sdDetector->historyLength == 12, 1, flag);
+
+		for (call = 0; call < 4; call++) {
+			unsigned int nofOut[2];
+			unsigned char pre_sd[2][sizeof(V90SdDetector)];
+			V90SdDetector *sd0 = P3(0)->sdDetector;
+			V90SdDetector *sd1 = P3(1)->sdDetector;
+			long tag = flag * 100 + call;
+
+			memcpy(pre_equ[0], equ[0], EQU_SLOT);
+			memcpy(pre_equ[1], equ[1], EQU_SLOT);
+			memcpy(pre_p3d[0], p3d[0], P3D_SLOT);
+			memcpy(pre_p3d[1], p3d[1], P3D_SLOT);
+			memcpy(pre_vr[0], &D(0)->resampler, sizeof pre_vr[0]);
+			memcpy(pre_vr[1], &D(1)->resampler, sizeof pre_vr[1]);
+			memcpy(pre_ce[0], ce[0], CE_SLOT);
+			memcpy(pre_ce[1], ce[1], CE_SLOT);
+			memcpy(pre_flow_parm[0], flow_parm_[0],
+			       sizeof flow_parm_[0]);
+			memcpy(pre_flow_parm[1], flow_parm_[1],
+			       sizeof flow_parm_[1]);
+			memcpy(pre_sd[0], sd0, sizeof *sd0);
+			memcpy(pre_sd[1], sd1, sizeof *sd1);
+
+			dsplib_debug_capture_reset();
+			dsplib_debug_capture_on = 1;
+			nofOut[0] = nofOut[1] = 0xa5a5a5a5u;
+			D(0)->progress(prog_out[0], nofOut[0], prog_in, PROG_IN);
+			ref_dem_progress(D(1), prog_out[1], &nofOut[1], prog_in,
+					 PROG_IN);
+			dsplib_debug_capture_on = 0;
+
+			prog_snap(cmp_a, 0);
+			prog_snap(cmp_b, 1);
+			diff_eq_obj_(__FILE__, __LINE__, "after composed progress",
+				     "V90Demodulator", cmp_a, cmp_b, DEM_SLOT,
+				     tag);
+			diff_eq_int("composed nofOut (%ld)", (long)nofOut[0],
+				    (long)nofOut[1], tag);
+			diff_eq_int("composed resampled block (%ld)",
+				    memcmp(a248[0], a248[1], sizeof a248[0]) == 0,
+				    1, tag);
+			diff_eq_int("composed prefilter/AGC block (%ld)",
+				    memcmp(a244[0], a244[1], sizeof a244[0]) == 0,
+				    1, tag);
+			diff_eq_int("composed equalized symbols (%ld)",
+				    memcmp(a250[0], a250[1], sizeof a250[0]) == 0,
+				    1, tag);
+			diff_eq_int("composed equalizer float output (%ld)",
+				    memcmp(a254[0], a254[1], sizeof a254[0]) == 0,
+				    1, tag);
+			diff_eq_int("composed equalizer arrays (%ld)",
+				    memcmp(&eqa[0], &eqa[1], sizeof eqa[0]) == 0,
+				    1, tag);
+			diff_eq_int("composed output (%ld)",
+				    memcmp(prog_out[0], prog_out[1],
+					   sizeof prog_out[0]) == 0, 1, tag);
+			mask_cmp(__FILE__, __LINE__, "composed equalizer",
+				 "V90Equalizer", equ[0], equ[1], pre_equ[0],
+				 pre_equ[1], EQU_SLOT, tag);
+			mask_cmp(__FILE__, __LINE__, "composed resampler",
+				 "V90Resampler", (unsigned char *)&D(0)->resampler,
+				 (unsigned char *)&D(1)->resampler, pre_vr[0],
+				 pre_vr[1], sizeof(V90Resampler), tag);
+			mask_cmp(__FILE__, __LINE__, "composed P3 demodulator",
+				 "V90Phase3Demodulator", p3d[0], p3d[1],
+				 pre_p3d[0], pre_p3d[1], P3D_SLOT, tag);
+			mask_cmp(__FILE__, __LINE__, "composed SD detector",
+				 "V90SdDetector", (unsigned char *)sd0,
+				 (unsigned char *)sd1, pre_sd[0], pre_sd[1],
+				 sizeof *sd0, tag);
+			diff_eq_int("composed SD history (%ld)",
+				    memcmp(sd0->history, sd1->history,
+					   12 * sizeof(float)) == 0, 1, tag);
+			mask_cmp(__FILE__, __LINE__, "composed evaluator",
+				 "V90ConnectionEvaluator", ce[0], ce[1],
+				 pre_ce[0], pre_ce[1], CE_SLOT, tag);
+			mask_cmp(__FILE__, __LINE__, "composed parameter block",
+				 "V90Parameters", flow_parm_[0], flow_parm_[1],
+				 pre_flow_parm[0], pre_flow_parm[1],
+				 sizeof(V90Parameters), tag);
+			diff_eq_int("composed transcript (%ld)",
+				    strcmp(dsplib_debug_capture_text(0),
+					   dsplib_debug_capture_text(1)) == 0,
+				    1, tag);
+
+			if (((V90Equalizer *)equ[1])->stateCount == 1)
+				sawEvent++;
+			if (((V90Equalizer *)equ[1])->stateCount == 0)
+				sawQuiet++;
+			calls++;
+		}
+
+		if (flag)
+			sawV92++;
+		else
+			sawV90++;
+
+		p3d_dtor(p3d[0]);
+		ref_p3d_dtor(p3d[1]);
+		ce_dtor(ce[0]);
+		ref_ce_dtor(ce[1]);
+		adid_dtor(&adid[0]);
+		ref_adid_dtor(&adid[1]);
+		vr_dtor(&D(0)->resampler);
+		ref_vr_dtor(&D(1)->resampler);
+		param_dtor(flow_parm_[0]);
+		ref_param_dtor(flow_parm_[1]);
+		teardown();
+	}
+
+	diff_eq_int("both session flavours were composed", sawV90 && sawV92,
+		    1, 0);
+	diff_eq_int("all composed progress calls ran", calls, 8, 0);
+	diff_eq_int("detector-produced event 1 was observed", sawEvent > 0, 1,
+		    0);
+	diff_eq_int("post-transition event 0 was observed", sawQuiet > 0, 1,
+		    0);
+
+	return diff_end();
+}
+
 int
 main(void)
 {
 	int rc = 0;
 
 	rc |= run_progress();
+	rc |= run_constructed_phase3();
 
 	return rc;
 }
