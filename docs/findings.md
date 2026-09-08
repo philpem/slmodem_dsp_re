@@ -4181,7 +4181,7 @@ sides wrong in exactly the same way, and every check would still pass.
 
 Two kinds of evidence answer the other question, and both are now in place.
 
-### The constants are the standard's
+### The constants identify the signals, but one misses the standard
 
 Derived from the reconstruction's own integers, at the rate the handshake
 runs at:
@@ -4197,11 +4197,13 @@ runs at:
     V.21 ch2 mark      0x0580 /  8192 * 9600 = 1650.0 Hz
 ```
 
-V.8 specifies 2100 Hz amplitude modulated at 15 Hz with a phase reversal
-every 450 ms; V.21 specifies 980/1180 and 1650/1850. These are not close to
-those numbers, they are those numbers -- which also settles that the
-handshake's sample rate really is 9600, since no other rate makes the same
-integers come out right.
+V.8 specifies a 2100 ± 1 Hz carrier, a 15 ± 0.1 Hz envelope and reversals every
+450 ± 25 ms; V.21 specifies 980/1180 and 1650/1850. The carrier and reversal
+interval land exactly, and the V.21 values identify their channels. The
+15.234375 Hz envelope does **not** land inside V.8's tolerance; D1451 and the
+executable F10251 oracle supersede this finding's former claim that every
+number was the standard's. The combination still settles that the handshake's
+sample rate is 9600.
 
 ### An independent implementation agrees
 
@@ -4211,10 +4213,10 @@ nothing to do with this object file, and runs the signal both ways:
 - SpanDSP's own tone detector identifies our generated ANSam as
   `MODEM_CONNECT_TONES_ANSAM_PR`.
 - SpanDSP's generated ANSam, resampled from 8000 to 9600 by the
-  reconstructed converter, gives our phase-reversal detector eight
-  reversals. That direction matters more than the first: it is what would
-  catch a detector tuned to our own generator's quirks rather than to the
-  standard.
+  reconstructed converter, gives our phase-reversal detector eight reversal
+  events but no final detector verdict. It is useful signal-path evidence,
+  not proof of the detector's accepted timing range. F10251 supplies the
+  missing isolated detector assertions.
 
 The full V.8 state machine's verdict is printed but not asserted on in that
 file, because nothing there replies to SpanDSP -- its negotiation cannot
@@ -8977,11 +8979,11 @@ consecutive clipping blocks `V8: Due to overflow, looking for ANSam again...`
 waiting on the tone.
 
 The phase detector's one message names the spacing it measures: `ANSAM phase
-reversals detected delay = %d`.  It had never fired in any test: real ANSam's
-reversals are far closer together than the window the detector accepts, which
-is why t_v8sig's sweep counted detections and then discarded the count.  The
-trace test places the run where four thousand steady samples would have left
-it instead.
+reversals detected delay = %d`. At this point it had never fired in a valid
+test, but the reason recorded here was wrong: the 4096-sample fixture was
+shorter than the normal 4320-sample interval and manually planted detector
+state to cover the diagnostic. F10251 retracts D156, demonstrates a real
+450-ms verdict, and retains the diagnostic-state probe under an honest name.
 
 With these placed the V.8 module is complete -- 1670 blob sites, none left in
 src/v8 that is not an inlining artefact -- so the renames finding F164
@@ -113503,13 +113505,14 @@ or dangling references.
    `cfg.rate = V8_DP_RATE`, typing the field as the datapump's sample rate.
 3. *ITU-T standard cross-reference* (new this wave, ranked above usage
    inference per the brief). `struct v8_tone`'s ANSam fields
-   (`carrier_phase`/`carrier_step`, `mod_phase`/`mod_step`, `amplitude`,
+   (`carrier_phase`/`carrier_step`, `envelope_phase`/`envelope_step`, `amplitude`,
    `reversal_count`/`reversal_enable`) were named from `v8_ansamgenerate`'s own
    arithmetic, and confirmed rather than merely inferred by V8_ANSAM_REVERSAL
    (0x438) blocks of 4 samples at 9600 Hz landing on exactly 450 ms -- ITU-T
    V.8's own figure for ANSam's phase-reversal period. This is what licenses
    calling the amplitude negation a "reversal" rather than a generic sign
-   flip.
+   flip. F10251 later corrected the first naming pass's carrier/envelope
+   transposition; the offsets and layout never changed.
 4. *Usage inference*, the majority of the wave, always cross-checked against
    the enclosing function or state machine as a whole rather than the field in
    isolation (the brief's other new method): the two state-machine registers
@@ -122415,5 +122418,59 @@ mutation claim is made.
 The complete `make phase J=4` boundary remains green: **374/374 period
 differential groups** pass with the 64-bit and interoperability tiers, and
 coverage/debug instrumentation remains **49,018/51,416 source lines (95.3%)**.
+
+(2026-09-08)
+
+## F10251. The ANSam oracle finds one transmitter departure and retracts the “detector never fires” claim
+
+Clause 7.2 of ITU-T V.8 (02/98) provides an independent judge for the modified
+answer tone: a 2100 ± 1 Hz carrier, sinusoidal amplitude modulation at
+15 ± 0.1 Hz, envelope extrema at 0.8 ± 0.01 and 1.2 ± 0.01 times average, and
+phase reversals every 450 ± 25 ms. `t_v8sig` now reports the reconstruction and
+blob separately against those literal bounds instead of comparing them only
+with each other.
+
+Both implementations conform on the 2100 Hz carrier and the 450 ms reversal
+interval. Controlled calls through each real `v8_ansamgenerate` isolate the
+envelope multiply and put its lower and upper levels inside the two relative
+limits. Disabling phase reversals leaves the carrier polarity unchanged across
+a whole additional interval, as clause 7.2 requires when echo-canceller
+disabling is not requested.
+
+Both also share one standards departure: their 14-bit envelope accumulator
+steps by 26 at 9600 samples/s, producing **15.234375 Hz**, outside 14.9–15.1
+Hz. Step 25 produces 14.6484375 Hz, so this is a structural quantisation limit,
+not a one-unit transcription error. D1451 records the original defect and the
+reconstruction retains it faithfully.
+
+The detector half uses independently synthesized 2100 Hz carriers with a
+15 Hz, 20% sinusoidal envelope and four 180-degree reversals. Both
+implementations accept the 450 ms nominal interval and reject legal 425 and
+475 ms transmitter endpoints. V.8 states transmitted-signal tolerances rather
+than a numeric receiver passband, so these are recorded as **detector
+interoperability-coverage results**, not direct receiver-conformance failures.
+They nevertheless expose behavior a conformant far-end transmitter may reach.
+
+This also retracts D156. Its old evidence used a 4096-sample capture, shorter
+than the native 4320-sample interval, seeded the generator counter near a
+reversal and never asserted a final detector verdict. A clean native stream and
+the independent 450 ms waveform both establish that the detector can fire.
+The fixture comments now describe the planted diagnostic state honestly.
+
+Finally, the `struct v8_tone` names now match their actual roles: offsets +0/+4
+are the envelope phase/step and +2/+6 are the carrier phase/step. The old
+“five percent” depth comments now say twenty percent. These are semantic-name
+and comment corrections only; layout, generated code and blob-faithful
+behavior are unchanged.
+
+The direct oracle deliberately does not claim V.2 absolute line-power
+calibration, the 24 dB out-of-band requirement, reversal-transition quality or
+the separate 5 ± 1 s handshake duration. Those require spectral/calibration
+or state-machine fixtures and remain explicit follow-ups.
+
+Validation passed all 17 reconstruction checks and all 17 independently called
+blob checks. The focused period differential passed 1/1 cases, all 8 `v8sig`
+mutations were caught, and the complete phase boundary passed 374/374 period
+comparisons with 49,018/51,416 source lines covered (95.3%).
 
 (2026-09-08)

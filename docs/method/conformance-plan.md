@@ -344,7 +344,7 @@ or MH must be written against the amendment, not against V.92 (11/2000).
 | 5.4.5.1, Table 4/V.90 | `$0 = s0 ⊕ $5(prev)`, `$i = si ⊕ $i−1` | `V90SpectralShaper.cpp`, `src/dsp/DiffCoder.cpp` | yes |
 | Table 13/V.90 | `rate(bit n) = 28000 + (n−18)·8000/6` over the Jd mask | `src/pump/v90/V90Jd.cpp` | yes |
 | G.711 endpoints, via Table 1/V.90 | `codeSegmentsBoundriesLookupTable[2][8]` | `src/pump/v90/V90Phase3Modulator.cpp` | yes |
-| 7.2/V.8 | ANSam: 2100 ± 1 Hz, 15 ± 0.1 Hz envelope, depth 0.8–1.2, reversals 450 ± 25 ms, ≥ 24 dB out of band | `v8_ansaminit`, `v8_ansamgenerate`, `v8_phase_rev_detect`, `src/v8/v8sig.c` | yes |
+| 7.2/V.8 | ANSam: 2100 ± 1 Hz, 15 ± 0.1 Hz envelope, extrema 0.8/1.2 relative to average, reversals 450 ± 25 ms, ≥ 24 dB out of band | `v8_ansaminit`, `v8_ansamgenerate`, `v8_phase_rev_detect`, `src/v8/v8sig.c` | yes |
 | 3.5, 8.2.2, 8.2.3/V.8 | CJ is three all-zero octets; ANSam runs 5 ± 1 s; JM stops after all three CJ octets | `src/v8/v8hs.c`, `v8hsrx.c`, `v8handshak.c` | yes |
 | 3.4, 3.6/V.8 | CM on V.21(L), JM on V.21(H) | `v8_V21_Init` call sites | yes |
 | Tables 1–7/V.8 | the preamble patterns and every category and option-bit code | `include/dsplib/v8.h`, `src/v8/v8seq.c`, `v8jm.c` | yes |
@@ -367,7 +367,7 @@ pass**, and each is marked with the candidate non-conformance it settles.
 
 | # | clause | site | shape | fixture | checks | settles |
 |--:|---|---|:-:|---|--:|---|
-| 1 | 7.2/V.8 | `v8_ansaminit`, `v8_ansamgenerate`, `v8_phase_rev_detect` | 3 | `t_v8sig.c` (extend) | ~30 | **N3, N4** |
+| 1 | 7.2/V.8 | `v8_ansaminit`, `v8_ansamgenerate`, `v8_phase_rev_detect` | 3 | `t_v8sig.c` (**done**, F10251; spectrum remains item 21) | 34 | **N3, N4** |
 | 2 | Table 17/V.34 | `probe[64]`, `TX_L1`'s repetition count | 3 | `t_v34hstx1.c` (extend) | ~50 | — |
 | 3 | Table 14/V.90 + 10.1.2.3.2/V.34 | `V90CP::calcCRC` / `evaluateCRC` | 1 | **new** `t_v90cpcrc.cpp` | ~1,000 | — |
 | 4 | 5.1, 5.2, Tables 2–7/V.8 | `V8UpdateModemParameters`, `ext_word`, `v8_getbit` | 1,2,3 | `t_v8jm.c`, `t_v8util.c` (extend) | ~80 | **N5, N1** |
@@ -396,9 +396,9 @@ pass**, and each is marked with the candidate non-conformance it settles.
 
 ### F5.3 The top three, and why each earns its place
 
-**#1 — 7.2/V.8's ANSam parameters.** It earns the top slot on yield: it is the
-only block in the plan that has already convicted the object twice, and one of
-the two is structural rather than a typo. *"amplitude-modulated by a sinewave at
+**#1 — 7.2/V.8's ANSam parameters (complete, F10251).** It earned the top slot
+on yield: the executable oracle convicted the object once, and the departure is
+structural rather than a typo. *"amplitude-modulated by a sinewave at
 15 ± 0.1 Hz"* against `v->tone.f04 = 0x1a` — 26 steps of a 14-bit accumulator at
 9600 Hz is **15.234 Hz**, and step 25 is 14.648, so with a granularity of
 9600/16384 = 0.586 Hz **no integer step can land inside the tolerance**. Both
@@ -407,10 +407,12 @@ tier compares two identical immediates; and mutation would report the change
 CAUGHT at a claim nobody made. Only the Recommendation can say the number is
 wrong. The same block covers the carrier (`0xe00` → exactly 2100.000 Hz, which
 also *proves* the 9600 Hz sample rate by arithmetic rather than by comment), the
-envelope depth (`0xccd`/`0x4000` → exactly [0.800, 1.200], dead on
+envelope extrema (`0xccd`/`0x4000` → exactly [0.800, 1.200], dead on
 *"0.8 ± 0.01 and 1.2 ± 0.01"* — and incidentally shows two source comments
-calling it "five percent" to be wrong), the transmit reversal interval (450.0 ms
-exactly) and the receive acceptance window, which is N4.
+calling it "five percent" to be wrong), the transmit reversal interval (450.0
+ms exactly), reversal-disable behavior, and the detector interoperability gap
+at the two legal timing endpoints, which is N4. Absolute V.2 level,
+out-of-band power and reversal-transient quality remain separately scoped.
 
 **#2 — Table 17/V.34 against `probe[64]`.** The sharpest *methodological* case,
 because the tree says out loud what the test would fix: *"The values are a
@@ -651,20 +653,22 @@ second sync. JM stops one octet early. The *transmitter* is correct — three
 octets of `0x001`, `nbits = 30`.
 
 **N3 — the ANSam envelope is 15.234 Hz against a ± 0.1 Hz tolerance, and no
-integer step can fix it.** *(Verified here.)* 7.2/V.8: *"amplitude-modulated by a sinewave at
+integer step can fix it.** *(Now executable in F10251.)* 7.2/V.8: *"amplitude-modulated by a sinewave at
 15 ± 0.1 Hz."* `tone.f04 = 0x1a` = 26 over a 14-bit accumulator at 9600 Hz gives
 `26/16384 × 9600 = 15.234 Hz`; 25 gives 14.648. Granularity is 0.586 Hz, so the
-deviation is **structural, not a transcription slip**. `src/v8/v8sig.c:27` and
-the inline copy at `src/v8/v8hs.c:166`. Verified during this survey.
+deviation is **structural, not a transcription slip**. `src/v8/v8sig.c` and
+the inline copy in `src/v8/v8hs.c` both retain the blob's value. D1451 records
+the faithfully reproduced transmitter departure.
 
-**N4 — the phase-reversal detector's window is narrower than the transmit
-tolerance the spec permits.** *(From the delegated V.8 survey; the millisecond
-scaling was derived there, not here.)* 7.2/V.8: *"phase reversals at an interval of
-450 ± 25 ms"*; 2.3/V.25: *"at intervals of 425 to 475 ms."* The test at
-`src/v8/v8sig.c:441` accepts [431, 469] ms. Stated precisely: the clauses
-constrain the *transmitter*, so the finding is that the detector does not cover
-the tolerance a conformant remote is allowed to use. Our own transmitter is
-exactly 450.0 ms and conformant.
+**N4 — the phase-reversal detector does not cover both endpoints a conformant
+transmitter may use.** *(Now executable in F10251.)* 7.2/V.8 specifies phase
+reversals at 450 ± 25 ms. Independent legal-shape ANSam waveforms demonstrate
+that both implementations accept 450 ms but miss 425 and 475 ms. The clause
+constrains the *transmitter*, not a receiver passband, so this is detector
+interoperability coverage rather than a direct receiver-conformance verdict.
+Do not restate the internal integer comparison as an exact external acceptance
+window: correlation-event latency is part of the measured spacing. Our own
+transmitter is exactly 450.0 ms and conformant.
 
 **N5 — the V.21-availability bit can never be cleared, because the mask includes
 the stop bit.** *(Verified here, and the fix confirmed against the transmit
@@ -712,14 +716,13 @@ already records in a comment and nothing enforces. **Softer than N3 or N5**,
 because the delivered timing does conform; what does not is the nominal figure,
 and whether that matters depends on a frame size the library does not fix.
 
-**N8 — two source comments describe the ANSam envelope depth as five percent
-and it is twenty.** *(From the delegated V.8 survey.)* `include/dsplib/v8.h:844` says `/* Q14: 0.05 */` and
-`src/v8/v8sig.c:264` says *"modulates its amplitude by five percent either
-way"*. `0xccd`/`0x4000` is 0.2000, and 7.2/V.8 wants *"between (0.8 ± 0.01) and
-(1.2 ± 0.01) times its average amplitude"* — which the code hits exactly. **The
-code is right and the documentation is wrong**, so this is a comment defect
-rather than a deviation; it is listed here because item 1's test is what would
-have caught it and it is the cheapest thing in this section to fix.
+**N8 — resolved by F10251: two source comments described the ANSam envelope
+depth as five percent when it is twenty.** `0xccd`/`0x4000` is 0.2000, and
+7.2/V.8 wants extrema between 0.8 ± 0.01 and 1.2 ± 0.01 times average, which
+controlled calls through each production generator now verify. The comments
+say twenty percent, and the formerly transposed carrier/envelope field names
+now describe what their offsets actually drive. This was a documentation
+defect, not a blob deviation.
 
 ### What came out conforming, stated as a search result rather than a blank
 
@@ -818,9 +821,10 @@ should be re-derived with it rather than the total carried forward.
    Finding F10250 completes the bounded direct production-path follow-up for
    all three Ucode masks without attributing those results to the decoder
    fixture.
-2. **Item 1** (ANSam). Highest yield, smallest fixture change, and it settles
-   N3, N4 and N8 in one sitting.
-3. **Item 2** (Table 17/V.34), which retires a comment that admits the values
+2. **Item 1 is complete** (ANSam, F10251). It settled N3, N4 and N8 while
+   leaving the separately listed spectral, absolute-level and duration work
+   explicit.
+3. **Do item 2 next** (Table 17/V.34), which retires a comment that admits the values
    are underived.
 4. **Item 3** (V90CP CRC), which is also where `t_v90cpcrc.cpp` gets created;
    item 7 (V92CP) then reuses everything item 3 builds.

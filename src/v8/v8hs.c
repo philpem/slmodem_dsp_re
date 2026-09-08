@@ -164,12 +164,12 @@ v8handshakinit(struct v8 *v)
 	v->deadline_a = deadline(v->timeout_a);
 	v->deadline_b = deadline(v->timeout_b);
 
-	v->tone.mod_phase = 0;
-	v->tone.carrier_step = 0x1a;
-	v->tone.mod_step = 0xe00;
+	v->tone.carrier_phase = 0;
+	v->tone.envelope_step = 0x1a;
+	v->tone.carrier_step = 0xe00;
 	v->tone.reversal_count = 0;
 	v->elapsed = 0;
-	v->tone.carrier_phase = 0;
+	v->tone.envelope_phase = 0;
 	v->tone.amplitude = v8_mpyint(0x3e80, v->tx_gain);
 	v->tone.reversal_enable = 1;
 
