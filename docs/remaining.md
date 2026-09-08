@@ -198,10 +198,14 @@ an exact definition; non-exact definitions retain this finite-evidence limit.
   confidence claim. Triage the live
   survivors through issues #1 and #9 before paying for a complete
   9,000-plus-mutation refresh.
-- **Add independent standards oracles.** Begin with V.90 Table 1's 512 published
-  PCM values, then V.8 ANSam, V.34 Table 17 and the V.90 CP CRC extent. These do
-  not improve equivalence to the blob; they answer the separate and important
-  question of whether both implementations reproduce a defect in the blob.
+- **Add independent standards oracles — first block complete.** F10249 consumes
+  every published PCM codeword and linear cell in V.90 Table 1 and reports 256
+  reconstruction checks and 256 blob checks separately; both conform. The
+  decoder fixture does not execute the three inlined Ucode-mask sites, which
+  remain a bounded direct-path follow-up. Continue with V.8 ANSam, V.34 Table
+  17 and the V.90 CP CRC extent. These do not improve equivalence to the blob;
+  they answer the separate and important question of whether both
+  implementations reproduce a defect in the blob.
 
 ## Phase ledger
 
