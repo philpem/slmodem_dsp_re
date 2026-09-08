@@ -44,6 +44,7 @@ extern void ref_V8Delete(struct v8 *v);
 extern int ref_V8GetMessage(struct v8 *v, unsigned char *out, int *count);
 extern int ref_V8SetMessage(struct v8 *v, int which, const unsigned char *o,
 			    int n);
+extern int ref_v8_getbit(struct v8_tx_sequence *s);
 
 
 /* The two objects every comparison below runs through. */
@@ -165,6 +166,179 @@ t_charflip(void)
 			    charFlip(charFlip(b)), i, i);
 	}
 	return diff_end();
+}
+
+/*
+ * V.8 Tables 1--7 are unusually useful as an independent wire oracle.  The
+ * table values below are the transmitted octets, copied as octets rather than
+ * as this implementation's ten-bit words.  An ordinary character has the
+ * Table 1 start bit at transmitted position zero, octet bit 0..7 at positions
+ * one through eight, and its stop bit at position nine.  Building that word
+ * from those positions keeps this test independent of charFlip(), ext_word(),
+ * and the V8_SEQ_* implementation constants.
+ */
+static unsigned short
+v8_table_word(unsigned char octet)
+{
+	unsigned short word = 1;
+	int bit;
+
+	for (bit = 0; bit < 8; bit++)
+		if (octet & (1u << bit))
+			word |= (unsigned short)(1u << (8 - bit));
+	return word;
+}
+
+static int
+v8_table_bit(unsigned char octet, int position)
+{
+	if (position == 0)
+		return 0;
+	if (position == 9)
+		return 1;
+	return (octet >> (position - 1)) & 1;
+}
+
+typedef void (*v8_init_sequence_fn)(struct v8 *);
+typedef int (*v8_set_message_fn)(struct v8 *, int, const unsigned char *, int);
+typedef int (*v8_getbit_fn)(struct v8_tx_sequence *);
+
+/*
+ * The non-preamble bytes are literal rows from Tables 2--7.  `b0`, `b1`, and
+ * `b2` choose the documented category in the public menu representation; the
+ * expected bytes deliberately do not use that representation or any source
+ * constant.  The access0 row is the published zero-access form only: the
+ * received-CM b5 echo is the separate N1 conformance question.
+ */
+struct v8_table_row {
+	const char	*name;
+	unsigned char	b0, b1, b2;
+	unsigned char	ext1[4], ext2[4];
+	unsigned char	octets[10];
+	int		n;
+};
+
+static const struct v8_table_row v8_table_rows[] = {
+	/* Table 2: the four Call Function codes. */
+	{ "Table 2 data", 0x00, 0x40, 0x00, { 0 }, { 0 },
+	  { 0xc1, 0x05, 0x10, 0x10, 0x2a, 0x0d }, 6 },
+	{ "Table 2 call-Rx-fax", 0x00, 0x80, 0x00, { 0 }, { 0 },
+	  { 0xa1, 0x05, 0x10, 0x10, 0x2a, 0x0d }, 6 },
+	{ "Table 2 call-Tx-fax", 0x00, 0x00, 0x01, { 0 }, { 0 },
+	  { 0x81, 0x05, 0x10, 0x10, 0x2a, 0x0d }, 6 },
+	{ "Table 2 V.80", 0x00, 0x00, 0x02, { 0 }, { 0 },
+	  { 0x21, 0x05, 0x10, 0x10, 0x2a, 0x0d }, 6 },
+
+	/* Tables 3--5: all V.34/V.32 and low-rate modulation option bits. */
+	{ "Tables 3--5 low-rate modulation", 0x00, 0x7f, 0x00, { 0 }, { 0 },
+	  { 0xc1, 0x05, 0xd6, 0x94, 0x2a, 0x0d }, 6 },
+	{ "Tables 3--5 V.90/V.34/V.32", 0xe8, 0x40, 0x00, { 0 }, { 0 },
+	  { 0xc1, 0xe5, 0x11, 0x10, 0x0d, 0x27, 0x10 }, 7 },
+
+	/* Tables 6--7: a literal raw protocol plus the access0 terminator. */
+	{ "Tables 6--7 raw protocol and access0", 0x00, 0x00, 0x0c,
+	  { 0x5a, 0xa5, 0, 0 }, { 0x12, 0x81, 0, 0 },
+	  { 0x5a, 0xa5, 0x05, 0x10, 0x10, 0x12, 0x81, 0x0d }, 8 }
+};
+
+static int
+run_v8_table_oracle(const char *group, const char *subject,
+		       v8_init_sequence_fn init, v8_set_message_fn set,
+		       v8_getbit_fn getbit)
+{
+	/* Table 1's three printed ten-bit patterns, most-significant bit first. */
+	static const unsigned short table1_patterns[] = { 0x3ff, 0x001, 0x00f };
+	/* These payloads exercise every start/data/stop position through SetMessage. */
+	static const unsigned char framing_octets[] = {
+		0x00, 0x01, 0x80, 0x55, 0xc1, 0x2a
+	};
+	unsigned i, j;
+	int rc;
+
+	diff_begin(group);
+
+	/* Table 1's preamble is emitted by the sequence builder. */
+	memset(&obj_b, 0, sizeof(obj_b));
+	memset(&cm_b, 0, sizeof(cm_b));
+	cm_b.b1 = 0x40; /* Table 2 data: give the builder a legal function. */
+	obj_b.cm = &cm_b;
+	obj_b.tx_seq = &obj_b.seq[0];
+	init(&obj_b);
+	diff_eq_int("Table 1 all-one preamble (%ld)", obj_b.seq[0].word[0],
+		    table1_patterns[0], 0);
+	diff_eq_int("Table 1 0000001111 preamble (%ld)", obj_b.seq[0].word[1],
+		    table1_patterns[2], 1);
+
+	/*
+	 * Table 1's framed all-zero character is also the CJ character.  SetMessage
+	 * reaches ext_word directly; the words and the emitted serial order are
+	 * separately checked against transmitted bit positions.
+	 */
+	memset(&obj_b, 0, sizeof(obj_b));
+	diff_eq_int("%s SetMessage accepts Table rows", set(&obj_b, 0,
+		    framing_octets, (int)sizeof(framing_octets)), 0, 0);
+	diff_eq_int("Table 1 0000000001 character", obj_b.seq[0].word[0],
+		    table1_patterns[1], 0);
+	diff_eq_int("SetMessage bit count", obj_b.seq[0].nbits,
+		    (long)(sizeof(framing_octets) * 10), 0);
+	for (i = 0; i < sizeof(framing_octets); i++)
+		diff_eq_int("Table 1 framed word (%ld)", obj_b.seq[0].word[i],
+			    v8_table_word(framing_octets[i]), (long)i);
+
+	obj_b.seq[0].repeat = 0;
+	for (i = 0; i < sizeof(framing_octets); i++)
+		for (j = 0; j < 10; j++)
+			diff_eq_int("Table 1 transmitted bit (%ld)",
+				    getbit(&obj_b.seq[0]), v8_table_bit(framing_octets[i], j),
+				    (long)(i * 10 + j));
+	diff_eq_int("Table 1 end after final stop bit", getbit(&obj_b.seq[0]),
+		    -1, 0);
+
+	for (i = 0; i < sizeof(v8_table_rows) / sizeof(v8_table_rows[0]); i++) {
+		const struct v8_table_row *row = &v8_table_rows[i];
+		struct v8_tx_sequence *seq = &obj_b.seq[0];
+
+		memset(&obj_b, 0, sizeof(obj_b));
+		memset(&cm_b, 0, sizeof(cm_b));
+		cm_b.b0 = row->b0;
+		cm_b.b1 = row->b1;
+		cm_b.b2 = row->b2;
+		memcpy(cm_b.ext1, row->ext1, sizeof(cm_b.ext1));
+		memcpy(cm_b.ext2, row->ext2, sizeof(cm_b.ext2));
+		obj_b.cm = &cm_b;
+		obj_b.tx_seq = seq;
+		init(&obj_b);
+
+		diff_eq_int("Tables 2--7 prefix all ones (%ld)", seq->word[0],
+			    0x3ff, (long)i);
+		diff_eq_int("Tables 2--7 prefix marker (%ld)", seq->word[1],
+			    0x00f, (long)i);
+		diff_eq_int("Tables 2--7 word count (%ld)", seq->nbits,
+			    (long)((row->n + 2) * 10), (long)i);
+		for (j = 0; j < (unsigned)row->n; j++)
+			diff_eq_int("Tables 2--7 transmitted octet (%ld)",
+				    seq->word[j + 2], v8_table_word(row->octets[j]),
+				    (long)(i * 16 + j));
+	}
+
+	/* Mention the subject in the final non-vacuity assertion without comparing it. */
+	diff_eq_int(subject, (long)(sizeof(v8_table_rows) / sizeof(v8_table_rows[0])),
+		    7, 0);
+	rc = diff_end();
+	return rc;
+}
+
+static int
+t_v8_table_oracle(void)
+{
+	int rc = 0;
+
+	rc |= run_v8_table_oracle("V.8 Tables 1--7/reconstruction",
+		"reconstruction Table rows", initTxSequence, V8SetMessage,
+		v8_getbit);
+	rc |= run_v8_table_oracle("V.8 Tables 1--7/blob", "blob Table rows",
+		ref_initTxSequence, ref_V8SetMessage, ref_v8_getbit);
+	return rc;
 }
 
 /*
@@ -1159,6 +1333,7 @@ main(void)
 	rc |= t_copycoeff();
 	rc |= t_dftenergy();
 	rc |= t_charflip();
+	rc |= t_v8_table_oracle();
 	rc |= t_inits();
 	rc |= t_txsequence();
 	rc |= t_handshakinit();

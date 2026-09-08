@@ -12779,3 +12779,56 @@ not merely a different immediate.
 
 **Status:** faithfully reproduced original defect; executable standards
 departure, finding F10251.
+
+## D1452 🐛 V.8 JM drops the caller's cellular PSTN-access indication
+
+ITU-T V.8 (02/98), clause 7.4 requires JM access0 b5 to be ONE if and only if
+the received CM access0 b5 was ONE. In the transmitted ten-bit representation,
+the zero-access category is `0x161` and b5 is word bit 3, so a cellular caller
+arrives as `0x169`.
+
+`rebuildJMSequence` recognizes the received access category but retains only
+b7 for its digital-connection decision. It later emits the constant `0x161`.
+The new Table 7 oracle feeds both `0x161` and `0x169`: reconstruction and blob
+both preserve zero and both turn one back into zero. The framing, category
+recognition and location of b5 come from literal Recommendation rows rather
+than from the implementation's constants.
+
+**Status:** faithfully reproduced original defect; executable standards
+departure, finding F10254. It is reachable whenever the caller identifies
+itself as cellular. Documentation only: changing the reconstruction alone
+would cease to reproduce the object.
+
+## D1453 🐛 V.8 JM stops after two CJ octets instead of three
+
+V.8 clauses 3.5 and 8.2.3 define CJ as three consecutive all-zero octets with
+start and stop bits, and require JM to continue until all three are received.
+The transmitter is correct: its CJ sequence is three `0x001` ten-bit
+characters. The receiver instead defines `V8_HS_CJ_COUNT` as 2 and completes
+the real handshake receive state after the second character.
+
+The independent state-machine test feeds complete literal CJ characters. One
+does not finish reception; two do, on both reconstruction and blob. Its
+passing expected-departure verdict means the violation was observed, not that
+two octets were accepted as conforming.
+
+**Status:** faithfully reproduced original defect; executable standards
+departure, finding F10254. The early termination is reached on an ordinary
+successful V.8 negotiation. Documentation only, for blob fidelity.
+
+## D1454 🐛 the production V.8 datapump allows twelve seconds of ANSam
+
+V.8 clause 8.2.2 requires ANSam to last 5 ± 1 seconds when neither CM nor a
+suitable sigC terminates it. The production `v8_create` wrapper supplies
+`timeout_a = 12`. A separate wrapper oracle proves ownership of that value;
+the handshake oracle then runs the genuine four-sample transmit arm without
+CM or sigC and observes 115,200 samples, exactly twelve seconds at 9600 Hz.
+Reconstruction and blob give the same independently reported result.
+
+This is a production-default defect rather than a claim about every use of
+`V8Create`: its public configuration can request another timeout. The shipped
+datapump does not.
+
+**Status:** faithfully reproduced original defect; executable standards
+departure, finding F10254. It is reachable when an answering call receives
+neither terminating signal. Documentation only, for blob fidelity.

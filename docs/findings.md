@@ -122569,3 +122569,61 @@ The complete phase boundary passes 375/375 period differential groups, both
 (95.3%).
 
 (2026-09-08)
+
+## F10254. Independent V.8/V.25 oracles confirm four shared departures and retire the suspected V.23 timing fault
+
+The differential suite already drove the V.8 encoder, decoder and handshake
+deeply. It could not answer whether the ten-bit words agreed with V.8 rather
+than merely with the object. New groups therefore construct a character from
+the Recommendation's transmitted positions: start ZERO, octet bits b0 through
+b7, then stop ONE. They transcribe the Table 1 preambles and literal octets
+from Tables 2 through 7, feed them through `V8SetMessage`, `v8_getbit` and
+`initTxSequence`, and judge reconstruction and blob separately. Both conform
+on framing, bit order, the four call functions, the modulation categories,
+protocol, PSTN access and V.90 availability: 139/139 checks per implementation.
+
+The receive and rebuild half adds nine Table 4/5/7 checks per implementation.
+The neighboring V.23 bit and the three-way V.90 condition behave as the tables
+say. Two results do not. First, `V8UpdateModemParameters` tests raw modn2 with
+`f & 3`; raw bit 0 is the mandatory stop ONE, so an absent V.21 at raw bit 1
+can never clear the local V.21 offer. This independently confirms D16/D86.
+Second, a received cellular access0 word `0x169` is rebuilt as the constant
+`0x161`, losing b5 despite clause 7.4's if-and-only-if rule. That is D1452.
+Both sides exhibit both departures; the separate group names prevent their
+agreement from being mistaken for standards evidence.
+
+The same rule settles V.8 timing. Clauses 3.5 and 8.2.3 require three complete
+CJ octets. A real state-machine drive remains active after one literal
+`0x001` character but completes after the second on both sides, confirming
+D1453. Clause 8.2.2 permits 5 ± 1 seconds of ANSam when neither CM nor sigC
+terminates it. The production datapump independently proves it supplies
+`timeout_a = 12`; the genuine four-sample transmit arm then runs 115,200
+samples, exactly twelve seconds at 9600 Hz. That is D1454. The test labels
+both as **known departures** and expects the conformance predicate to be
+false. PASS means the stated violation was observed, not that two CJ octets
+or twelve seconds were redefined as legal.
+
+The V.25 candidates go the other way. `FPM_TONE_CFG`'s 2100 Hz setting
+quantizes to 2099.85 Hz at 8 kHz, inside 2100 ± 15 Hz. In the production
+160-sample cadence its first phase reversal occurs at 3,680 samples (460 ms),
+inside 425–475 ms, and the measured state jump is exactly half of the 0x8000
+cycle, or 180 degrees. The V.23 answering path deliberately chooses plain ANS,
+runs 150 energy-bearing 160-sample blocks (24,000 samples, 3.0 seconds), then
+three zero blocks (480 samples, 60 ms) before data. Those land inside V.25's
+3.3 ± 0.7 second and 75 ± 20 ms ranges. N7's nominal 400-sample reading was
+therefore not the externally delivered production interval and is retired.
+No absolute-power claim is made because the fixed-point scale has no calibrated
+dBm0 mapping in these fixtures.
+
+Across the two completed plan items, the new standards groups report 802/802
+checks for the reconstruction and 802/802 separately invoked blob checks.
+That total includes the explicit expected-departure predicates above. Seven
+focused mutation suites challenge the independent constants, framing,
+category decisions, timeout ownership and cadence boundaries: all 23/23
+mutants are caught, with none unusable, equivalent or surviving.
+
+The complete phase boundary passes 375/375 period differential groups, both
+interop checks, the partial-link comparator self-test and every structural
+gate. Suite line coverage is 49,019/51,416 (95.3%).
+
+(2026-09-08)

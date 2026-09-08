@@ -321,6 +321,97 @@ build(const char *tag, int mode, int answer_tone, int sample_rate,
 	compare_graph(tag, *ours, *ref);
 }
 
+/* A V.25 timing oracle for the production V.23 framing contract: 8 kHz in
+ * 160-sample blocks.  It intentionally does not infer a dBm0 level from the
+ * fixed-point scale. */
+static int
+t_v23_v25_one(const char *name, int reference)
+{
+	struct v23_cfg cfg;
+	struct v23modem *m;
+	short in[160], out[160];
+	int tx_bits[64], rx_bits[64];
+	int tx_nbits, rx_nbits;
+	int i, block;
+	int rc;
+
+	memset(&cfg, 0, sizeof(cfg));
+	cfg.answer_tone = 1;
+	cfg.sample_rate = 8000;
+	cfg.silence_limit = 100000;
+	m = reference ? ref_CreateV23Modem(NULL, 1, &cfg)
+		      : CreateV23Modem(NULL, 1, &cfg);
+
+	diff_begin(name);
+	diff_eq_int("V.23 object allocated (%ld)", m != NULL, 1, 0);
+	if (m == NULL)
+		return diff_end();
+
+	/* V.25 calls for an unmodulated 2100 +/- 15 Hz ANS.  Whether phase
+	 * reversals are requested is conditional on echo-canceller policy, so
+	 * record this V.23 path's deliberate plain-ANS choice rather than call
+	 * rev_period=0 a standards failure. */
+	diff_eq_int("V.25 answer-tone frequency (%ld)",
+		    m->answer_tone->cfg.freq >= 2085
+		    && m->answer_tone->cfg.freq <= 2115, 1, 0);
+	diff_eq_int("V.23 selects plain ANS (%ld)",
+		    m->answer_tone->cfg.rev_period, 0, 0);
+
+	memset(in, 0, sizeof(in));
+	memset(tx_bits, 0, sizeof(tx_bits));
+	memset(rx_bits, 0, sizeof(rx_bits));
+	for (block = 0; block < 150; block++) {
+		int nonzero = 0;
+
+		memset(out, 0, sizeof(out));
+		tx_nbits = 0;
+		rx_nbits = 0;
+		if (reference)
+			rc = ref_V23ModemMain(m, tx_bits, &tx_nbits, out, 160,
+					in, 160, rx_bits, &rx_nbits);
+		else
+			rc = V23ModemMain(m, tx_bits, &tx_nbits, out, 160,
+					in, 160, rx_bits, &rx_nbits);
+		(void)rc;
+		for (i = 0; i < 160; i++)
+			nonzero |= out[i] != 0;
+		diff_eq_int("tone block carries energy (%ld)", nonzero, 1, block);
+	}
+
+	/* §4.3's 3.3 +/- 0.7 s range is 20,800..32,000 samples at 8 kHz. */
+	diff_eq_int("V.25 answer-tone duration (%ld)", 150 * 160 >= 20800
+		    && 150 * 160 <= 32000, 1, 150 * 160);
+	diff_eq_int("entered post-tone silence (%ld)", m->state, 1, 0);
+
+	for (block = 0; block < 3; block++) {
+		tx_nbits = 0;
+		rx_nbits = 0;
+		memset(out, 0x5a, sizeof(out));
+		if (reference)
+			rc = ref_V23ModemMain(m, tx_bits, &tx_nbits, out, 160,
+					in, 160, rx_bits, &rx_nbits);
+		else
+			rc = V23ModemMain(m, tx_bits, &tx_nbits, out, 160,
+					in, 160, rx_bits, &rx_nbits);
+		(void)rc;
+		for (i = 0; i < 160; i++)
+			diff_eq_int("post-tone silence sample %ld", out[i], 0,
+				    block * 160 + i);
+	}
+
+	/* The `>` transition makes the production 160-sample path emit 480
+	 * samples, or 60 ms: within §4.4's 75 +/- 20 ms (440..760 samples). */
+	diff_eq_int("V.25 post-tone silence duration (%ld)",
+		    3 * 160 >= 440 && 3 * 160 <= 760, 1, 3 * 160);
+	diff_eq_int("entered V.23 data (%ld)", m->state, 2, 0);
+
+	if (reference)
+		ref_DeleteV23Modem(m);
+	else
+		DeleteV23Modem(m);
+	return diff_end();
+}
+
 /* ------------------------------------------------------------------ */
 
 #define NSAMP 24000
@@ -352,6 +443,11 @@ main(void)
 	generate(bw_signal + NSAMP / 3, NSAMP - NSAMP / 3, 390, 450, bw_period,
 		 data, 64);
 	memset(quiet, 0, sizeof(quiet));
+
+	/* Independent V.25 framing/timing oracles, deliberately not a
+	 * reconstruction/blob comparison. */
+	rc |= t_v23_v25_one("V.25 V.23 answer/reconstruction", 0);
+	rc |= t_v23_v25_one("V.25 V.23 answer/blob", 1);
 
 	diff_begin("CreateV23Modem: the whole graph, four configurations");
 	/*

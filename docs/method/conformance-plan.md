@@ -370,9 +370,9 @@ pass**, and each is marked with the candidate non-conformance it settles.
 | 1 | 7.2/V.8 | `v8_ansaminit`, `v8_ansamgenerate`, `v8_phase_rev_detect` | 3 | `t_v8sig.c` (**done**, F10251; spectrum remains item 21) | 34 | **N3, N4** |
 | 2 | Table 17/V.34 | `probe[64]`, `TX_L1`'s repetition count | 3 | `t_v34hstx1.c` (**done**, F10252) | 99 | — |
 | 3 | Table 14/V.90 + 10.1.2.3.2/V.34 | `V90CP::calcCRC` / `evaluateCRC` | 1 | `t_v90cpcrc.cpp` (**done**, F10253) | 1,364 | — |
-| 4 | 5.1, 5.2, Tables 2–7/V.8 | `V8UpdateModemParameters`, `ext_word`, `v8_getbit` | 1,2,3 | `t_v8jm.c`, `t_v8util.c` (extend) | ~80 | **N5, N1** |
+| 4 | 5.1, 5.2, Tables 2–7/V.8 | `V8UpdateModemParameters`, `ext_word`, `v8_getbit` | 1,2,3 | `t_v8jm.c`, `t_v8util.c` (**done**, F10254) | 296 | **N5, N1 confirmed** |
 | 5 | Table 1/V.90 | `ulaw2linear`, `alaw2linear`, the three Ucode-mask paths | 3 | `t_pcm.c`, `t_v90p3mod.cpp`, `t_v90modchain.cpp`, `t_v90cpower.cpp` (**done**, F10249–F10250) | 512 + direct-path checks | — |
-| 6 | 3.5, 8.2.2, 8.2.3/V.8; 2.3, 4.4/V.25 | CJ count, ANSam duration, the V.23 answering sequence, `FPM_TONE_CFG` | 3 | `t_v8hs.c`, `t_v23modem.c`, `t_fpm_tone.c` (extend) | ~20 | **N2, N6, N7** |
+| 6 | 3.5, 8.2.2, 8.2.3/V.8; 2.3, 4.4/V.25 | CJ count, ANSam duration, the V.23 answering sequence, `FPM_TONE_CFG` | 3 | `t_v8hs.c`, `t_v8dp.c`, `t_v23modem.c`, `t_fpm_tone.c` (**done**, F10254) | 1,308 | **N2, N6 confirmed; N7 retired** |
 | 7 | Tables 23, 24, 30/V.92 + 10.1.2.3.2/V.34 | `V92CP`'s CRC extent and the CPt/CPu/CPus arms | 1,2 | `t_v92cpcrc.cpp` (extend) | ~800 | — |
 | 8 | Table 13/V.90 | `V90Jd`'s CRC extent **and** its rate-capability mask | 1,2 | `t_v90jd.cpp` (extend) | ~300 | — |
 | 9 | eq. 7-1, 7-2 and clause 7/V.34 | `scrambleGPC`/`GPA`, `descrambleGPC`/`GPA`, the pairing | 3,2 | `t_v34scram.c` (extend) | ~200 | — |
@@ -631,22 +631,22 @@ the modem-on-hold path is absent.
 the object; a conformance failure is a DEVIATION, recorded in
 `docs/deviations.md`'s shape with the clause quoted and the side named, and any
 fix goes behind `DSPLIB_REPRODUCE_BUGS` with `src/dsp/fpm_div.c` as the pattern.
-D920, D923 and D250 are the worked dispositions. **Nothing below has been
-written to `docs/deviations.md`**; they are candidates for a test to adjudicate,
-not findings. Every one names the side as **both** — the reconstruction
+D920, D923 and D250 are the worked dispositions. Entries below remain
+candidates until a finding names their executable result and a D-number;
+F10251 and F10254 now do so where marked. Every one names the side as
+**both** — the reconstruction
 reproduces the object faithfully at each site, which is exactly why no existing
 tier can see them.
 
 **N1 — JM's PSTN-access b5 is a constant where the clause is an "if and only
-if".** *(From the delegated V.8 survey; the line and the constant were not
-re-read here.)* 7.4/V.8: *"Bit b5 is set to ONE if and only if the corresponding bit (b5)
+if" (now executable: F10254, D1452).** 7.4/V.8: *"Bit b5 is set to ONE if and only if the corresponding bit (b5)
 is set to ONE in the received CM."* `rebuildJMSequence` writes the fixed
 `V8_SEQ_TAIL_B = 0x161` at `src/v8/v8jm.c:727` and never inspects the received
 access0. A CM from a DCE on a cellular connection (b5 = 1) gets a JM with b5 = 0.
 Both sides emit the same constant.
 
-**N2 — CJ is accepted after two octets, not three.** *(From the delegated V.8
-survey; the counter's entry value was traced there, not here.)* 8.2.3/V.8: *"JM
+**N2 — CJ is accepted after two octets, not three (now executable: F10254,
+D1453).** 8.2.3/V.8: *"JM
 transmission shall continue until signal CJ is detected and **all 3 octets** of
 CJ have been received."* `V8_HS_CJ_COUNT = 2` at `src/v8/v8hsrx.c:164`, with
 `fdb6` zero on entry from `v8_hs_message_done`, so the counter fires on the
@@ -672,7 +672,7 @@ window: correlation-event latency is part of the measured spacing. Our own
 transmitter is exactly 450.0 ms and conformant.
 
 **N5 — the V.21-availability bit can never be cleared, because the mask includes
-the stop bit.** *(Verified here, and the fix confirmed against the transmit
+the stop bit (now independently executable: F10254; already D16/D86).** *(Verified here, and the fix confirmed against the transmit
 side.)* 5.1/V.8 fixes every octet as *"preceded by a start-bit (ZERO), and
 followed by a stop-bit (ONE)"*, and Table 4/V.8 item 12 puts V.21 availability
 at modn2 b7. `V8UpdateModemParameters` tests
@@ -696,26 +696,26 @@ bit 6 = b2 = Table 4 item 10, V.23 duplex, which is a real information bit and
 matches `cm->b1` bit 4 exactly. The raw indexing is therefore deliberate and
 correct for modn2, whose two tested bits happen to sit at word bits 6 and 1;
 only the `& 3` is wrong. A textbook shape-1 defect — the operation includes a
-field the spec excludes — and not recorded in `docs/deviations.md`.
+field the spec excludes — recorded as D16 and again in D86's reachability pass.
 
-**N6 — ANSam is transmitted for 12 s against a 5 ± 1 s clause.** *(From the
-delegated V.8 survey; `deadline()`'s arithmetic was traced there, not here.)* 8.2.2/V.8:
+**N6 — ANSam is transmitted for 12 s against a 5 ± 1 s clause (now executable:
+F10254, D1454).** 8.2.2/V.8:
 *"If not terminated by the receipt of CM or a suitable sigC, ANSam shall be
 transmitted for a period of 5 ± 1 s."* `cfg.timeout_a = 0x0c`
 (`src/v8/v8dp.c:84`) through `deadline()` gives 12 × 2400 four-sample blocks =
 12 s. Weaker than the others because the value is *configuration* — a caller
 could pass 5 — but the library's own datapump passes 12.
 
-**N7 — the post-answer-tone silence is 50 ms nominal against 75 ± 20 ms.**
-*(Verified here.)*
+**N7 — RETIRED: the production post-answer-tone silence is 60 ms, inside
+75 ± 20 ms (F10254).**
 4.4/V.25: *"At the end of the transmission of the answering tone, the DCE shall
 provide a silent period for 75 ± 20 ms."* `V23_SILENCE_DIVISOR = 20` gives
 8000/20 = 400 samples = 50 ms, below the window's 55 ms floor. It is carried
 into range only by frame quantisation — `elapsed > limit` with 160-sample frames
 runs 480 samples, 60 ms — a compensation `src/pump/v23/v23modem.c:96-106`
-already records in a comment and nothing enforces. **Softer than N3 or N5**,
-because the delivered timing does conform; what does not is the nominal figure,
-and whether that matters depends on a frame size the library does not fix.
+already records in a comment. The production wrapper supplies that 160-sample
+cadence. The raw function accepts other counts, so 160 is a wrapper-level
+framing precondition rather than a defect in the delivered production path.
 
 **N8 — resolved by F10251: two source comments described the ANSam envelope
 depth as five percent when it is twenty.** `0xccd`/`0x4000` is 0.2000, and
@@ -832,9 +832,10 @@ should be re-derived with it rather than the total carried forward.
    duration and transition to L2.
 4. **Item 3 is complete** (V90CP CRC, F10253); item 7 (V92CP) can now reuse
    its independent CRC and framing-test structure.
-5. **Do items 4 and 6 next** — the rest of the V.8 and V.25 work, and the other four
-   candidate non-conformances.
-6. Then 8, 9, 10, and reassess. **Ten blocks is enough to know whether this
+5. **Items 4 and 6 are complete** (V.8/V.25, F10254). They confirmed N1, N2,
+   N5 and N6, while the production 160-sample V.23 cadence retired N7.
+6. Do item 7 next, reusing item 3's CP oracle structure, then 8, 9, 10, and
+   reassess. **Ten blocks is enough to know whether this
    tier's yield is closer to "one D920 per ten blocks" or to "everything
    conforms", and the answer should decide whether §5.2 is written at all.**
 

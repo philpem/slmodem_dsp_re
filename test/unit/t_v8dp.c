@@ -40,6 +40,34 @@ ops_of(int ref)
 	return 0;
 }
 
+/* Pin the ownership of V.8 8.2.2's timeout to the production wrapper. */
+static int
+t_ansam_timeout_standard(const char *name, struct dp_operations *op)
+{
+	struct v8_cm cm;
+	struct dp *dp;
+	struct v8_dp *vdp;
+
+	diff_begin(name);
+	memset(&cm, 0, sizeof(cm));
+	harness_param_reset();
+	harness_param_set(MDMPRM_DSPINFO, 0);
+	harness_param_set(MDMPRM_DPRUNTIME, (long)(intptr_t)&cm);
+	dp = op->create((void *)0xD1A1u, DP_V34, 0, 9600, 160, op);
+	diff_eq_int("production V.8 datapump allocated (%ld)", dp != 0, 1, 0);
+	if (dp == 0)
+		return diff_end();
+	vdp = (struct v8_dp *)dp;
+	diff_eq_int("production timeout is twelve seconds (%ld)",
+		    vdp->v8->timeout_a, 12, 0);
+	/* V.8 8.2.2 permits 5 +/- 1 seconds. */
+	diff_eq_int("V.8 ANSam duration conformance (known departure) (%ld)",
+		    vdp->v8->timeout_a >= 4 && vdp->v8->timeout_a <= 6, 0,
+		    vdp->v8->timeout_a);
+	op->destroy(dp);
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -53,6 +81,11 @@ main(void)
 	ob = ops_of(0);
 	diff_eq_int("both registered", ob != 0 && oa != 0, 1, 0);
 	rc |= diff_end();
+	if (oa != 0 && ob != 0) {
+		rc |= t_ansam_timeout_standard(
+			"V.8 ANSam default/reconstruction", ob);
+		rc |= t_ansam_timeout_standard("V.8 ANSam default/blob", oa);
+	}
 
 	diff_begin("v8_create and v8_delete");
 	if (oa == 0 || ob == 0)

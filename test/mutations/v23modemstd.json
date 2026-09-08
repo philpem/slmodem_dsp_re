@@ -1,0 +1,25 @@
+[
+ {
+  "label": "NOTE: these mutations measure the independent V.25 timing oracle over V.23's production 8 kHz/160-sample framing path. They are not absolute-level checks."
+ },
+ {
+  "label": "V.23 answer tone lasts two seconds, below V.25's 2.6-second minimum",
+  "find": "#define V23_TONE_SECONDS\t3",
+  "replace": "#define V23_TONE_SECONDS\t2"
+ },
+ {
+  "label": "V.23 answer tone lasts five seconds, above V.25's four-second maximum",
+  "find": "#define V23_TONE_SECONDS\t3",
+  "replace": "#define V23_TONE_SECONDS\t5"
+ },
+ {
+  "label": "V.23 post-tone nominal silence is 100 ms, above V.25's 95-ms upper bound",
+  "find": "#define V23_SILENCE_DIVISOR\t20",
+  "replace": "#define V23_SILENCE_DIVISOR\t10"
+ },
+ {
+  "label": "V.23 post-tone nominal silence is 25 ms and emits only 40 ms in 160-sample blocks",
+  "find": "#define V23_SILENCE_DIVISOR\t20",
+  "replace": "#define V23_SILENCE_DIVISOR\t40"
+ }
+]
