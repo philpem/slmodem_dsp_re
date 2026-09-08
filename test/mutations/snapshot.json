@@ -223,8 +223,8 @@
    }
   },
   "dilpack": {
-   "key": "2a34484b5bc2ea81ec15bba9b4e5159c7db642cdf93c37a427022bdd3a1698a2",
-   "summary": "8 mutations: 7 caught (7 by test, 0 by strings), 1 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "key": "83af0349cda51339ef5d8eb0aefb3985a30baa14db09a3d86426dba68558bcf9",
+   "summary": "8 mutations: 7 caught (7 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "CRC covers frame 0 too": "caught",
     "CRC register starts all 0s": "caught",
@@ -233,7 +233,38 @@
     "always take the two-trailing-zero tail": "caught",
     "drop the framing 0 after the CRC": "caught",
     "invert the tail test": "caught",
-    "the frame-boundary 0 before the CRC is dropped": "uncaught"
+    "the frame-boundary 0 before the CRC is dropped": "equivalent"
+   }
+  },
+  "dilpackstd": {
+   "key": "c1f59a45d4cb9ad661ae690b2c17ce58afd71ddcf2a27b2ec5832fa55570fd71",
+   "summary": "25 mutations: 25 caught (25 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "CRC feedback is not inserted at the final tap": "caught",
+    "CRC omits the last data bit of every frame": "caught",
+    "CRC polynomial tap at stage ten is shifted": "caught",
+    "CRC polynomial tap at stage three is shifted": "caught",
+    "CRC skips the first data bit of every frame": "caught",
+    "CRC wire order is reversed": "caught",
+    "DIL code pairs use the second value twice": "caught",
+    "DIL count is emitted most-significant bit first": "caught",
+    "DIL frame separator is one": "caught",
+    "SP framing insertion is one position late": "caught",
+    "SP length is encoded without subtracting one": "caught",
+    "TP framing insertion is one position late": "caught",
+    "TP length is encoded without subtracting one": "caught",
+    "count frame loses its final reserved fill bit": "caught",
+    "first data frame loses its start separator": "caught",
+    "odd DIL count correctly zeroes the inactive Ucode slot": "caught",
+    "odd DIL count is rounded down to complete pairs": "caught",
+    "segment frame separator is one": "caught",
+    "segment size and code fields are interchanged": "caught",
+    "seq1 padding is not zero fill": "caught",
+    "seq2 padding is not zero fill": "caught",
+    "sequence length frame boundary is one": "caught",
+    "seven-bit fields shift in the wrong direction": "caught",
+    "sync preamble is filled with zeroes": "caught",
+    "sync preamble is only sixteen ones": "caught"
    }
   },
   "dpinit": {

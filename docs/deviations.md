@@ -12895,3 +12895,25 @@ legal indices; no system-level receive-negotiation effect is claimed here.
 **Status:** faithfully reproduced original defect; executable standards
 departure, finding F10256. The transmitted Jd sequence violates Table 13's
 reserved-bit requirement. Documentation only, for blob fidelity.
+
+## D1458 🐛 V.90 DIL descriptors expose an inactive Ucode when N is odd
+
+V.90 Table 12 groups training Ucodes two per sixteen-information-bit frame.
+When the count `N` is odd, the seven positions where a second Ucode would have
+appeared, its following reserved position and the remaining frame position are
+all reserved and must be zero. `DILdescriptorPacker` nevertheless always packs
+both array slots in the final frame, so the inactive `dilCode[N]` value occupies
+seven of those reserved positions and is included in the CRC.
+
+An independent complete-frame oracle sets the legal active descriptor to
+`N=1` and the inactive slot to 127. Reconstruction and blob both emit ones at
+wire positions 230 through 236 and produce CRC `0x5b41`; zero reserved bits
+would produce `0xd031`. This is an inactive-storage dependency on an otherwise
+legal descriptor, not an out-of-range field test. The two shipped
+`setDilDescriptor` presets use even `N=144`, so they do not reach it; whether
+another production caller can supply an odd count is not yet measured.
+
+**Status:** faithfully reproduced original defect; executable standards
+departure, finding F10261. Documentation only, for blob fidelity; production
+reachability remains [issue
+#12](https://github.com/philpem/slmodem_dsp_re/issues/12).

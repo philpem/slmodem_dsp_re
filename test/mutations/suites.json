@@ -40,6 +40,10 @@
   "src/pump/v90/DILdescriptorPacker.cpp",
   "build/test/t_dilpack"
  ],
+ "dilpackstd": [
+  "src/pump/v90/DILdescriptorPacker.cpp",
+  "build/test/t_dilpack"
+ ],
  "dtmf": [
   "src/service/dtmf.c",
   "build/test/t_dtmf"

@@ -304,6 +304,396 @@ run_shape(void)
 	return diff_end();
 }
 
+/*
+ * ===========================================================================
+ * ITU-T V.90 TABLE 12, independently of DILdescriptorPacker and dsplibs.o.
+ *
+ * The differential tests above establish reconstruction/blob agreement.  This
+ * oracle instead writes Table 12's information stream in field order, inserts
+ * one zero start bit before every sixteen information bits and computes the
+ * V.34 Figure 14 CRC over the information bits only.  It does not call a
+ * production packing or CRC helper and does not obtain expectations from the
+ * blob or from a pack/unpack round trip.
+ *
+ * Legal LSP and LTP are 1..128.  N is 0..255; for N=0 Table 12 specifically
+ * encodes LSP-1=LTP-1=0.  Each H, REF and Ucode is seven bits, followed by a
+ * reserved zero.  If N is odd, all nine positions after the final seven-bit
+ * Ucode are reserved zeros.  The last rule has a separate expected-departure
+ * probe below because both implementations instead expose dilCode[N].
+ * ===========================================================================
+ */
+typedef void (*table12_pack_fn)(const void *, short *, short *);
+
+struct table12_subject {
+	const char *oracle_group;
+	const char *kat_group;
+	const char *departure_group;
+	table12_pack_fn pack;
+};
+
+static void
+table12_our_pack(const void *d, short *bits, short *nbits)
+{
+	DILdescriptorPacker((const tagV90DILdescriptor *)d, bits, nbits);
+}
+
+static void
+table12_blob_pack(const void *d, short *bits, short *nbits)
+{
+	blobPacker(d, bits, nbits);
+}
+
+static void
+table12_put(unsigned char *information, unsigned int *at,
+	    unsigned int value, unsigned int width)
+{
+	unsigned int i;
+
+	for (i = 0; i < width; i++)
+		information[(*at)++] = (unsigned char)((value >> i) & 1u);
+}
+
+/* Figure 14 in chronological bit order: x^16+x^12+x^5+1, preload all ones. */
+static unsigned int
+table12_crc(const unsigned char *information, unsigned int n)
+{
+	unsigned int reg = 0xffffu;
+	unsigned int i;
+
+	for (i = 0; i < n; i++) {
+		unsigned int feedback =
+		    (reg ^ (unsigned int)information[i]) & 1u;
+
+		reg >>= 1;
+		if (feedback)
+			reg ^= 0x8408u;
+	}
+	return reg & 0xffffu;
+}
+
+static unsigned int
+table12_information(unsigned char information[NBITS],
+		    const tagV90DILdescriptor *d)
+{
+	unsigned int at = 0;
+	unsigned int i;
+
+	/* Frames 1 and 2: N, reserved, LSP-1, reserved, LTP-1, reserved. */
+	table12_put(information, &at, d->dilCount, 8);
+	table12_put(information, &at, 0, 8);
+	table12_put(information, &at, (unsigned int)d->seq1Length - 1u, 7);
+	table12_put(information, &at, 0, 1);
+	table12_put(information, &at, (unsigned int)d->seq2Length - 1u, 7);
+	table12_put(information, &at, 0, 1);
+
+	/* SP and TP, each padded with zero to a sixteen-bit boundary. */
+	for (i = 0; i < d->seq1Length; i++)
+		table12_put(information, &at, d->seq1[i], 1);
+	while (at & 15u)
+		table12_put(information, &at, 0, 1);
+	for (i = 0; i < d->seq2Length; i++)
+		table12_put(information, &at, d->seq2[i], 1);
+	while (at & 15u)
+		table12_put(information, &at, 0, 1);
+
+	/* H1..H8, REF1..REF8 and the N active Ucodes. */
+	for (i = 0; i < 8u; i++) {
+		table12_put(information, &at, d->segmentSize[i], 7);
+		table12_put(information, &at, 0, 1);
+	}
+	for (i = 0; i < 8u; i++) {
+		table12_put(information, &at, d->segmentCode[i], 7);
+		table12_put(information, &at, 0, 1);
+	}
+	for (i = 0; i < d->dilCount; i++) {
+		table12_put(information, &at, d->dilCode[i], 7);
+		table12_put(information, &at, 0, 1);
+	}
+	while (at & 15u)
+		table12_put(information, &at, 0, 1);
+	return at;
+}
+
+static unsigned int
+table12_frame(short expected[NBITS], const tagV90DILdescriptor *d,
+	      unsigned int *crc_at, unsigned int *crc_word)
+{
+	unsigned char information[NBITS];
+	unsigned int info_len = table12_information(information, d);
+	unsigned int at = 0;
+	unsigned int i;
+
+	for (i = 0; i < 17u; i++)
+		expected[at++] = 1;
+	for (i = 0; i < info_len; i++) {
+		if ((i & 15u) == 0)
+			expected[at++] = 0;
+		expected[at++] = (short)information[i];
+	}
+	*crc_at = at;
+	expected[at++] = 0;
+	*crc_word = table12_crc(information, info_len);
+	for (i = 0; i < 16u; i++)
+		expected[at++] = (short)((*crc_word >> i) & 1u);
+	expected[at++] = 0;
+	if (at & 1u)
+		expected[at++] = 0;
+	return at;
+}
+
+static unsigned int
+table12_wire_crc(const short *wire, unsigned int crc_at)
+{
+	unsigned int word = 0;
+	unsigned int i;
+
+	for (i = 0; i < 16u; i++)
+		word |= (unsigned int)(wire[crc_at + 1u + i] & 1) << i;
+	return word;
+}
+
+static int
+table12_guard(const short *wire, unsigned int len)
+{
+	unsigned int i;
+
+	if (len > NBITS)
+		return 0;
+	for (i = len; i < NBITS; i++)
+		if (wire[i] != (short)0x5a5a)
+			return 0;
+	return 1;
+}
+
+static void
+table12_descriptor(tagV90DILdescriptor *d, unsigned int n,
+		   unsigned int lsp, unsigned int ltp, unsigned int seed)
+{
+	unsigned int i;
+
+	memset(d, 0, sizeof(*d));
+	d->dilCount = (unsigned char)n;
+	d->seq1Length = (unsigned char)lsp;
+	d->seq2Length = (unsigned char)ltp;
+	for (i = 0; i < lsp; i++)
+		d->seq1[i] = (unsigned char)((i * 5u + seed) & 1u);
+	for (i = 0; i < ltp; i++)
+		d->seq2[i] = (unsigned char)((i * 3u + seed / 2u + 1u) & 1u);
+	for (i = 0; i < 8u; i++) {
+		d->segmentSize[i] = (unsigned char)((seed + 13u * i) & 0x7fu);
+		d->segmentCode[i] =
+		    (unsigned char)((127u - seed - 7u * i) & 0x7fu);
+	}
+	for (i = 0; i < n; i++)
+		d->dilCode[i] = (unsigned char)((seed + 29u * i) & 0x7fu);
+}
+
+static int
+run_table12_oracle_subject(const struct table12_subject *s)
+{
+	static const struct {
+		unsigned char n, lsp, ltp, seed;
+	} legal[] = {
+		{   0,   1,   1,  0 }, {   1,   1,   1,  3 },
+		{   2,  16,  16,  5 }, {   3,  17,  15,  7 },
+		{   7,  31,  32, 11 }, {   8,  32,  33, 13 },
+		{  15,  63,  64, 17 }, {  16,  64,  65, 19 },
+		{  31, 127, 128, 23 }, {  32, 128, 127, 29 },
+		{ 127,   5,  11, 31 }, { 128, 100,   3, 37 },
+		{ 143, 120,  60, 41 }, { 144, 120, 120, 43 },
+		{ 254,   7,  23, 47 }, { 255, 128, 128, 53 }
+	};
+	tagV90DILdescriptor d;
+	short actual[NBITS];
+	short expected[NBITS];
+	unsigned int trial;
+
+	diff_begin(s->oracle_group);
+	for (trial = 0; trial < sizeof(legal) / sizeof(legal[0]); trial++) {
+		unsigned int crc_at, crc_word, expected_len;
+		short actual_len = (short)0x7bcd;
+		unsigned int i;
+
+		table12_descriptor(&d, legal[trial].n, legal[trial].lsp,
+				   legal[trial].ltp, legal[trial].seed);
+		for (i = 0; i < NBITS; i++)
+			actual[i] = (short)0x5a5a;
+		expected_len = table12_frame(expected, &d, &crc_at, &crc_word);
+		s->pack(&d, actual, &actual_len);
+
+		diff_eq_int("Table 12 length is exact (%ld)", actual_len,
+			    expected_len, (long)trial);
+		diff_eq_int("Table 12 framed vector is exact (%ld)",
+			    memcmp(actual, expected, expected_len * sizeof(short)),
+			    0, (long)trial);
+		diff_eq_int("Table 12 CRC has the exact information extent (%ld)",
+			    table12_wire_crc(actual, crc_at), crc_word,
+			    (long)trial);
+		diff_eq_int("Table 12 kept the output guard (%ld)",
+			    table12_guard(actual, (unsigned int)actual_len), 1,
+			    (long)trial);
+	}
+	return diff_end();
+}
+
+struct table12_kat {
+	unsigned int crc, crc_at, nbits;
+	unsigned char bytes[35];
+};
+
+static void
+table12_kat_descriptor(tagV90DILdescriptor *d, unsigned int which)
+{
+	unsigned int i;
+
+	memset(d, 0, sizeof(*d));
+	if (which == 0) {
+		d->seq1Length = d->seq2Length = 1;
+	} else if (which == 1) {
+		d->dilCount = 1;
+		d->seq1Length = d->seq2Length = 1;
+		d->seq1[0] = d->seq2[0] = 1;
+		for (i = 0; i < 8u; i++) {
+			d->segmentSize[i] = (unsigned char)i;
+			d->segmentCode[i] = (unsigned char)(16u * i);
+		}
+		d->dilCode[0] = 127;
+	} else {
+		d->dilCount = 2;
+		d->seq1Length = 17;
+		d->seq2Length = 16;
+		for (i = 0; i < 17u; i++)
+			d->seq1[i] = (unsigned char)(i & 1u);
+		d->seq2[0] = d->seq2[15] = 1;
+		for (i = 0; i < 8u; i++) {
+			d->segmentSize[i] = (unsigned char)(127u - i);
+			d->segmentCode[i] = (unsigned char)(127u - 16u * i);
+		}
+		d->dilCode[0] = 0;
+		d->dilCode[1] = 127;
+	}
+}
+
+static void
+table12_bytes(unsigned char *bytes, const short *wire, unsigned int nbits)
+{
+	unsigned int i;
+
+	memset(bytes, 0, (nbits + 7u) / 8u);
+	for (i = 0; i < nbits; i++)
+		bytes[i / 8u] |= (unsigned char)((wire[i] & 1) << (i & 7u));
+}
+
+static int
+run_table12_kat_subject(const struct table12_subject *s)
+{
+	static const struct table12_kat kats[] = {
+		{ 0x51f7, 221, 240,
+		  { 0xff, 0xff, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00,
+		    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		    0x00, 0x00, 0x00, 0xc0, 0x7d, 0x14 } },
+		{ 0xd031, 238, 256,
+		  { 0xff, 0xff, 0x05, 0x00, 0x00, 0x00, 0x10, 0x00,
+		    0x20, 0x00, 0x00, 0x40, 0x00, 0x81, 0x01, 0x04,
+		    0x05, 0x0c, 0x0e, 0x00, 0x40, 0x00, 0x81, 0x01,
+		    0x04, 0x05, 0x0c, 0xce, 0x1f, 0x80, 0x18, 0x68 } },
+		{ 0x377e, 255, 274,
+		  { 0xff, 0xff, 0x09, 0x00, 0x80, 0x78, 0xa0, 0xaa,
+		    0x0a, 0x00, 0x40, 0x00, 0xa0, 0x3f, 0x3f, 0x7d,
+		    0x7c, 0xf6, 0xf4, 0xe4, 0xe1, 0xf9, 0x7b, 0xf3,
+		    0xf5, 0xe4, 0xe7, 0xc5, 0xc7, 0x03, 0x80, 0x3f,
+		    0x7e, 0x37, 0x00 } }
+	};
+	tagV90DILdescriptor d;
+	short actual[NBITS];
+	unsigned char bytes[35];
+	unsigned int k;
+
+	diff_begin(s->kat_group);
+	for (k = 0; k < sizeof(kats) / sizeof(kats[0]); k++) {
+		short actual_len = (short)0x7bcd;
+		unsigned int i;
+
+		table12_kat_descriptor(&d, k);
+		for (i = 0; i < NBITS; i++)
+			actual[i] = (short)0x5a5a;
+		s->pack(&d, actual, &actual_len);
+		table12_bytes(bytes, actual, kats[k].nbits);
+
+		diff_eq_int("fixed Table 12 length KAT is exact (%ld)",
+			    actual_len, kats[k].nbits, (long)k);
+		diff_eq_int("fixed Table 12 packed-wire KAT is exact (%ld)",
+			    memcmp(bytes, kats[k].bytes,
+				   (kats[k].nbits + 7u) / 8u), 0, (long)k);
+		diff_eq_int("fixed Table 12 CRC KAT is exact (%ld)",
+			    table12_wire_crc(actual, kats[k].crc_at), kats[k].crc,
+			    (long)k);
+		diff_eq_int("fixed Table 12 KAT kept the guard (%ld)",
+			    table12_guard(actual, (unsigned int)actual_len), 1,
+			    (long)k);
+	}
+	return diff_end();
+}
+
+static int
+run_table12_departure_subject(const struct table12_subject *s)
+{
+	tagV90DILdescriptor d;
+	short actual[NBITS];
+	short actual_len = (short)0x7bcd;
+	unsigned int i;
+	int inactive_ones = 1;
+
+	diff_begin(s->departure_group);
+	table12_kat_descriptor(&d, 1);
+	d.dilCode[1] = 127; /* inactive storage: Table 12 requires reserved zero */
+	for (i = 0; i < NBITS; i++)
+		actual[i] = (short)0x5a5a;
+	s->pack(&d, actual, &actual_len);
+	for (i = 230; i <= 236; i++)
+		if (actual[i] != 1)
+			inactive_ones = 0;
+
+	diff_eq_int("expected departure: inactive odd-N Ucode is emitted",
+		    inactive_ones, 1, 0);
+	diff_eq_int("expected departure: inactive Ucode changes the CRC",
+		    table12_wire_crc(actual, 238), 0x5b41, 0);
+	diff_eq_int("odd-N departure leaves the exact descriptor length",
+		    actual_len, 256, 0);
+	diff_eq_int("odd-N departure kept the output guard",
+		    table12_guard(actual, (unsigned int)actual_len), 1, 0);
+	return diff_end();
+}
+
+static int
+run_table12(void)
+{
+	static const struct table12_subject subjects[] = {
+		{
+			"V.90 Table 12 reconstruction standards oracle",
+			"V.90 Table 12 reconstruction fixed KATs",
+			"V.90 Table 12 reconstruction expected departure",
+			table12_our_pack
+		},
+		{
+			"V.90 Table 12 blob standards oracle",
+			"V.90 Table 12 blob fixed KATs",
+			"V.90 Table 12 blob expected departure",
+			table12_blob_pack
+		}
+	};
+	unsigned int i;
+	int rc = 0;
+
+	for (i = 0; i < sizeof(subjects) / sizeof(subjects[0]); i++) {
+		rc |= run_table12_oracle_subject(&subjects[i]);
+		rc |= run_table12_kat_subject(&subjects[i]);
+		rc |= run_table12_departure_subject(&subjects[i]);
+	}
+	return rc;
+}
+
 int
 main(void)
 {
@@ -312,6 +702,7 @@ main(void)
 	rc |= run_cases();
 	rc |= run_sweep();
 	rc |= run_shape();
+	rc |= run_table12();
 
 	return rc;
 }

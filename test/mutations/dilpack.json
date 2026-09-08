@@ -22,5 +22,7 @@
   "replace": "\t\tbits[crcAt + i] = (short)crc[i];"},
  {"label": "the frame-boundary 0 before the CRC is dropped",
   "find": "\tcrcAt = segmentAt + DIL_SEGMENT_BITS + DIL_FRAME * dilFrames - 1;\n\tbits[crcAt] = 0;",
-  "replace": "\tcrcAt = segmentAt + DIL_SEGMENT_BITS + DIL_FRAME * dilFrames - 1;"}
+  "replace": "\tcrcAt = segmentAt + DIL_SEGMENT_BITS + DIL_FRAME * dilFrames - 1;",
+  "equivalent": true,
+  "why": "The removed store is redundant for every descriptor. If dilFrames is nonzero, the last DIL-frame iteration has already written bits[at + 16] at exactly crcAt. If dilFrames is zero, the final segment-field iteration has already written bits[at + 8] at exactly crcAt. Both stores write zero, and no intervening operation changes the position. The object contains the repeated store, so its presence remains code-reconstruction evidence rather than a behavior a fixture can distinguish."}
 ]
