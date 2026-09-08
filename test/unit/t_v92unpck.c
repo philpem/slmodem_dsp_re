@@ -416,6 +416,97 @@ run_transcripts(void)
 	return diff_end();
 }
 
+/* ----------------------------- V.92 Table 30 independent rate oracle */
+
+/*
+ * The runs above compare the reconstruction with the blob over the whole
+ * unpacker, including its diagnostic text.  Agreement does not establish
+ * that the CPd data signalling rate is interpreted as Table 30 requires, so
+ * this layer judges each implementation separately.
+ *
+ * For a non-cleardown CPd, Table 30 defines DRn values 1 through 19.  Those
+ * select 18 through 36 upstream data-rate units, and the mapping block's K is
+ * twice that number: 36 through 72.  The literal table below is deliberately
+ * not obtained from the production expression.  In particular, the debug
+ * transcript's separately scaled and integer-formatted "Upstream rate" is a
+ * diagnostic only and is not used as the standards oracle here.  DRn zero
+ * (cleardown) and reserved/out-of-domain values 20 through 31 remain outside
+ * these conformance groups.
+ */
+
+typedef void (*table30_unpack_fn)(struct V92ParamsInfo *,
+				  struct V92CPUnPck *);
+
+struct table30_subject {
+	const char *name;
+	table30_unpack_fn unpack;
+};
+
+static const int table30_k[19] = {
+	36, 38, 40, 42, 44, 46, 48, 50, 52, 54,
+	56, 58, 60, 62, 64, 66, 68, 70, 72
+};
+
+static struct V92CPUnPck table30_cp_before;
+static int table30_const_before[V92_PARAMSINFO_CONSTELLATIONS][NCONST];
+
+static int
+run_table30_subject(const struct table30_subject *subject, unsigned int side)
+{
+	static const struct tcase dormant = {
+		"Table 30", 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
+	};
+	int drn;
+
+	diff_begin(subject->name);
+
+	for (drn = 1; drn <= 19; drn++) {
+		unsigned int seed = 1200u + side * 100u + (unsigned int)drn;
+
+		seed_outputs(seed);
+		seed_cp(seed, &dormant);
+		wire((int)side);
+		cp.drn = (signed char)drn;
+		memcpy(&table30_cp_before, &cp, sizeof cp);
+		memcpy(table30_const_before, cpconst, sizeof cpconst);
+
+		/* No transcript participates in this standards verdict. */
+		dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+		subject->unpack(&pi[side].p, &cp);
+
+		diff_eq_int("Table 30 K for DRn %ld", pi[side].p.K,
+		    table30_k[drn - 1], (long)drn);
+		diff_eq_int("destination guard survives DRn %ld",
+		    memcmp(pi[side].guard, seedcopy.guard, GUARD) == 0,
+		    1, (long)drn);
+		diff_eq_int("CP input is unchanged for DRn %ld",
+		    memcmp(&cp, &table30_cp_before, sizeof cp) == 0,
+		    1, (long)drn);
+		diff_eq_int("CP pointed-to inputs are unchanged for DRn %ld",
+		    memcmp(cpconst, table30_const_before, sizeof cpconst) == 0,
+		    1, (long)drn);
+	}
+
+	return diff_end();
+}
+
+static int
+run_table30(void)
+{
+	static const struct table30_subject subjects[] = {
+		{ "V.92 Table 30 CPd rate oracle, reconstruction",
+		  V92setParamsInfoFromCPUnPck },
+		{ "V.92 Table 30 CPd rate oracle, blob",
+		  ref_V92setParamsInfoFromCPUnPck }
+	};
+	int rc = 0;
+	unsigned int i;
+
+	for (i = 0; i < sizeof subjects / sizeof subjects[0]; i++)
+		rc |= run_table30_subject(&subjects[i], i);
+	return rc;
+}
+
 int
 main(void)
 {
@@ -461,6 +552,7 @@ main(void)
 
 	rc |= run_level0();
 	rc |= run_transcripts();
+	rc |= run_table30();
 
 	return rc;
 }

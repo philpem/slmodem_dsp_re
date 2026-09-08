@@ -491,6 +491,98 @@ run_trials(void)
 	return diff_end();
 }
 
+/*
+ * ---------------------------------------------------------------------------
+ * V.90 Table 14 unpacked-rate oracle.
+ *
+ * This is DIRECT-API evidence, deliberately labelled as such.  The source's
+ * zero-relocation audit says `setParamsInfoFromCPUnPck` has no internal
+ * caller, so this does not pretend to prove an owner-level CP receive path.
+ * It does prove the complete public helper separately for the reconstruction
+ * and blob, against the table's non-cleardown domain:
+ *
+ *     CP:   drn 1..22 -> D = drn + 20  (21..42)
+ *     CPt:  drn 1..22 -> D = drn +  8  ( 9..30)
+ *
+ * `drn == 0` is CP's cleardown representation and 23..31 are reserved, so
+ * none belongs in a conformance assertion.  The existing `run_trials` keeps
+ * its deliberately broader differential/robustness inputs unchanged.
+ */
+typedef void (*standard_v90_unpck_fn)(V90MappingParams *, V90CPUnPck *);
+
+static void
+standard_ours_v90_unpck(V90MappingParams *p, V90CPUnPck *c)
+{
+	setParamsInfoFromCPUnPck(p, c);
+}
+
+static void
+standard_blob_v90_unpck(V90MappingParams *p, V90CPUnPck *c)
+{
+	blobUnpack(p, c);
+}
+
+static int
+run_standard_v90_unpck_rate(const char *subject,
+			     standard_v90_unpck_fn unpck, int side)
+{
+	unsigned int form, drn;
+	long tag = 40000;
+	int saw_cp_low = 0, saw_cp_high = 0;
+	int saw_cpt_low = 0, saw_cpt_high = 0;
+
+	diff_begin(subject);
+
+	for (form = 0; form < 2u; form++)
+		for (drn = 1u; drn <= 22u; drn++) {
+			struct V90CPUnPck cp_before;
+			struct tagV90AdditionalCPinfo info_before;
+			struct slot *out = side == 0 ? &ours : &theirs;
+			unsigned int want = drn + (form == 0 ? 20u : 8u);
+
+			/* A normal in-bounds mask shape; rate is the sole variable. */
+			seed_all((unsigned int)tag, &cases[0],
+				 (unsigned char)(drn & 1u));
+			cp.dataBitRate = drn;
+			info.word_04 = form == 0 ? 1u : 0u;
+			memcpy(&cp_before, &cp, sizeof(cp_before));
+			memcpy(&info_before, &info, sizeof(info_before));
+
+			unpck(&out->p, &cp);
+
+			diff_eq_int("V.90 Table 14 unpacked D (%ld)",
+				    (long)out->p.word_0, (long)want, tag);
+			diff_eq_obj_(__FILE__, __LINE__, subject,
+				     "the destination guard", out->guard,
+				     seedcopy.guard, GUARD, tag);
+			diff_eq_obj_(__FILE__, __LINE__, subject,
+				     "the CP input remains unchanged", &cp, &cp_before,
+				     sizeof(cp), tag);
+			diff_eq_obj_(__FILE__, __LINE__, subject,
+				     "the adjacent CP-info input remains unchanged",
+				     &info, &info_before, sizeof(info), tag);
+
+			if (form == 0 && drn == 1u)
+				saw_cp_low = out->p.word_0 == 21u;
+			if (form == 0 && drn == 22u)
+				saw_cp_high = out->p.word_0 == 42u;
+			if (form != 0 && drn == 1u)
+				saw_cpt_low = out->p.word_0 == 9u;
+			if (form != 0 && drn == 22u)
+				saw_cpt_high = out->p.word_0 == 30u;
+			tag++;
+		}
+
+	diff_eq_int("all 44 non-cleardown CP/CPt drn values were tested",
+		    (long)(tag - 40000), 44, 0);
+	diff_eq_int("CP's first legal D is literally 21", saw_cp_low, 1, 0);
+	diff_eq_int("CP's last legal D is literally 42", saw_cp_high, 1, 0);
+	diff_eq_int("CPt's first legal D is literally 9", saw_cpt_low, 1, 0);
+	diff_eq_int("CPt's last legal D is literally 30", saw_cpt_high, 1, 0);
+
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -498,6 +590,12 @@ main(void)
 
 	rc |= run_map();
 	rc |= run_trials();
+	rc |= run_standard_v90_unpck_rate(
+		"V.90 Table 14 reconstruction direct-API unpacked-rate oracle",
+		standard_ours_v90_unpck, 0);
+	rc |= run_standard_v90_unpck_rate(
+		"V.90 Table 14 blob direct-API unpacked-rate oracle",
+		standard_blob_v90_unpck, 1);
 
 	return rc;
 }

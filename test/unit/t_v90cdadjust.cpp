@@ -118,6 +118,7 @@
 #include "harness.h"
 
 #include "dsplib/debug.h"
+#include "dsplib/encode.h"
 extern "C" {
 #include "dsplib/pcm.h"
 }
@@ -1233,6 +1234,204 @@ run_loud(void)
 	return diff_end();
 }
 
+/*
+ * ==========================================================================
+ * The provider rate mask, against the selected rate
+ * ==========================================================================
+ *
+ * `process` tests bit D-21 after it has selected the legal downstream count
+ * D, but the clear arm appears to be diagnostic only.  Prove that with a
+ * CONTROL and a replay, independently for the reconstruction and the blob:
+ * first run the existing safe composed fixture with all twenty-two legal
+ * capability bits enabled, then rebuild the IDENTICAL state and clear only
+ * the bit belonging to the D that the control selected.
+ *
+ * This deliberately establishes one deterministic reachable counterexample,
+ * not twenty-two forced-rate cases.  `forceRate`'s refinement cost and shift
+ * exponent become pathological at parts of that exhaustive grid (D336 and
+ * D337, and the fixture comment above), so forcing every D would turn a
+ * protocol claim into a test of whether the harness happens to terminate.
+ * One successful legal D is sufficient to distinguish enforcement from a
+ * warning: if the selected capability is clear and every operational result
+ * survives unchanged, the mask did not constrain the selection.
+ */
+#define V90_LEGAL_RATE_MASK	0x003fffffu
+
+typedef int (*mask_proc_fn)(void *, unsigned int, void *, float, int, void *,
+			    void *, void *, short *, unsigned char *,
+			    unsigned char *, unsigned char, int,
+			    unsigned int, int);
+
+struct mask_result {
+	int ret;
+	unsigned int d;
+	unsigned int rate;
+	int force;
+	int rateForce;
+	int rrnUp;
+	int rrnDown;
+};
+
+static void
+mask_prepare(int trial)
+{
+	adj_fixture(trial, 1);
+	/* The widest legal window makes any force/retry action a result of the
+	 * mask trial, not a pre-existing restriction in the varied fixture. */
+	cur.forced = 0;
+	cur.power = 0;
+	cur.redundancy = 0;
+	cur.minRate = 28000u;
+	cur.maxRate = 56000u;
+	cur.word24 = 0;
+	cur.rateMask = (int)V90_LEGAL_RATE_MASK;
+	adj_state(trial, 1, 0);
+}
+
+static struct mask_result
+mask_call(mask_proc_fn fn, int side, int trial, unsigned int mask, int loud)
+{
+	V90ConstellationDesigner *cd = side == 0 ? cdA : cdB;
+	V90Parameters *par = side == 0 ? parA : parB;
+	V90MappingParams *mp = side == 0 ? &mpA : &mpB;
+	V90AutoDigitalImpDetector *det = side == 0 ? detA : detB;
+	short (*uc)[128] = side == 0 ? ucA : ucB;
+	short (*al)[128] = side == 0 ? alA : alB;
+	short *dmin = side == 0 ? dminA : dminB;
+	unsigned char *last = side == 0 ? lastA : lastB;
+	unsigned char *top = side == 0 ? topA : topB;
+	struct mask_result r;
+
+	if (loud) {
+		dsplib_debug_capture_reset();
+		dsplibs_debug_level = 2;
+		ref_dsplibs_debug_level = 2;
+		dsplib_debug_capture_on = 1;
+	}
+	r.ret = fn(cd, 40u + (unsigned)(trial % 20), det, cur.noise,
+		       (int)mask, mp, uc, al, dmin, last, top, cur.byte38,
+		       trial % 16, 0x1000u + (unsigned)trial, cur.cond);
+	if (loud) {
+		dsplib_debug_capture_on = 0;
+		dsplibs_debug_level = 0;
+		ref_dsplibs_debug_level = 0;
+	}
+	r.d = mp->word_0;
+	r.rate = cd->word_24;
+	r.force = par->FORCE_RATE_ENABLE;
+	r.rateForce = par->RATE_FORCE;
+	r.rrnUp = par->ENABLE_RRN_UP;
+	r.rrnDown = par->ENABLE_RRN_DOWN;
+	return r;
+}
+
+static int
+run_rate_mask_departure_one(const char *name, mask_proc_fn fn, int side)
+{
+	struct mask_result control;
+	struct mask_result masked;
+	unsigned int selected = 0;
+	unsigned int one = 0;
+	unsigned int maskedMask;
+	unsigned int controlLines;
+	unsigned int maskedLines;
+	int trial;
+	int found = 0;
+	long tag;
+
+	diff_begin(name);
+
+	/* Find the first ordinary composed case that succeeds at a legal D.
+	 * The search is deterministic and bounded by the fixture's existing
+	 * fully exercised population. */
+	for (trial = 0; trial < ADJ_TRIALS; trial++) {
+		mask_prepare(trial);
+		control = mask_call(fn, side, trial, V90_LEGAL_RATE_MASK, 0);
+		if (control.ret == 0 && control.d >= 21u && control.d <= 42u &&
+		    control.force == 0 && control.rrnUp == 0 &&
+		    control.rrnDown == 0) {
+			found = 1;
+			break;
+		}
+	}
+
+	tag = side * 1000 + trial;
+	diff_eq_int("a successful legal all-enabled control exists (%ld)",
+		    found, 1, tag);
+	if (!found)
+		return diff_end();
+
+	selected = control.d - 21u;
+	one = 1u << selected;
+	maskedMask = V90_LEGAL_RATE_MASK & ~one;
+	diff_eq_int("control D lies in 21..42 (%ld)",
+		    control.d >= 21u && control.d <= 42u, 1, tag);
+	diff_eq_int("control's selected capability is enabled (%ld)",
+		    (V90_LEGAL_RATE_MASK & one) != 0, 1, tag);
+	diff_eq_int("control succeeds (%ld)", control.ret, 0, tag);
+	diff_eq_int("control did not force a rate (%ld)", control.force, 0,
+		    tag);
+	diff_eq_int("control did not request RRN up (%ld)", control.rrnUp, 0,
+		    tag);
+	diff_eq_int("control did not request RRN down (%ld)", control.rrnDown,
+		    0, tag);
+
+	/* Capture the all-enabled control too.  The warning block is seven
+	 * `edprintf` calls, so the blob can prove it ran by the exact line-count
+	 * delta even though its encoded text is intentionally opaque.  Our side
+	 * additionally switches its own encoder to plain mode and names the
+	 * warning text directly. */
+	if (side == 0)
+		dsplib_encode_plain = 1;
+	mask_prepare(trial);
+	control = mask_call(fn, side, trial, V90_LEGAL_RATE_MASK, 1);
+	controlLines = dsplib_debug_capture_lines(side);
+
+	mask_prepare(trial);
+	diff_eq_int("exactly the selected capability is clear (%ld)",
+		    (V90_LEGAL_RATE_MASK ^ maskedMask) == one, 1, tag);
+	masked = mask_call(fn, side, trial, maskedMask, 1);
+	maskedLines = dsplib_debug_capture_lines(side);
+
+	diff_eq_int("the clear selected bit emitted the seven-line provider warning (%ld)",
+		    maskedLines, controlLines + 7u, tag);
+	if (side == 0)
+		diff_eq_int("the provider-mask warning is named in the transcript (%ld)",
+		    strstr(dsplib_debug_capture_text(side),
+			   "Rate Used Masked By Provider") != 0, 1, tag);
+	dsplib_encode_plain = 0;
+	diff_eq_int("masked selection still succeeds (%ld)", masked.ret,
+		    control.ret, tag);
+	diff_eq_int("masked selection keeps the same D (%ld)", masked.d,
+		    control.d, tag);
+	diff_eq_int("masked selection keeps the same rate (%ld)", masked.rate,
+		    control.rate, tag);
+	diff_eq_int("masked selection does not force a retry rate (%ld)",
+		    masked.force, control.force, tag);
+	diff_eq_int("masked selection leaves RATE_FORCE unchanged (%ld)",
+		    masked.rateForce, control.rateForce, tag);
+	diff_eq_int("masked selection does not request RRN up (%ld)",
+		    masked.rrnUp, control.rrnUp, tag);
+	diff_eq_int("masked selection does not request RRN down (%ld)",
+		    masked.rrnDown, control.rrnDown, tag);
+
+	return diff_end();
+}
+
+static int
+run_rate_mask_departure(void)
+{
+	int rc = 0;
+
+	rc |= run_rate_mask_departure_one(
+	    "V.90 reconstruction expected rate-mask departure", our_proc, 0);
+	rc |= run_rate_mask_departure_one(
+	    "V.90 blob expected rate-mask departure", ref_proc, 1);
+	return rc;
+}
+
+#undef V90_LEGAL_RATE_MASK
+
 int
 main(void)
 {
@@ -1244,6 +1443,7 @@ main(void)
 	rc |= run_ank();
 	rc |= run_cdes();
 	rc |= run_process();
+	rc |= run_rate_mask_departure();
 	rc |= run_loud();
 
 	return rc;

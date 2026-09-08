@@ -5937,7 +5937,7 @@
    }
   },
   "v90cdadjust": {
-   "key": "84ce8e509f5e5e04a9d858c87e1667dab77fd71ee13affda9347a9e9de134166",
+   "key": "de81573d486f098a0919d9adf27be9bf3ca6f50610c6278e7f9acba993874b96",
    "summary": "35 mutations: 30 caught (30 by test, 0 by strings), 3 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
    "verdicts": {
     "adjustConstellationsPower clamps the ladder index at 22 rather than 21 -- EXPECTED TO SURVIVE": "equivalent",
@@ -6297,6 +6297,15 @@
     "evaluateCRC preloads zero rather than the required all-ones register": "caught",
     "evaluateCRC reads the peer CRC one bit late": "caught",
     "evaluateCRC returns the opposite standards verdict": "caught"
+   }
+  },
+  "v90cpdrnstd": {
+   "key": "c7b82b99c2cb2d378db19f9ff4c7033d4032bd4242a373303a7e034c66aacdfa",
+   "summary": "3 mutations: 3 caught (3 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "the legal CP upper endpoint DRn=22 is capped at 21": "caught",
+    "the legal CPt upper endpoint DRn=22 is capped at 21": "caught",
+    "the legal middle DRn=11 is treated as DRn=10": "caught"
    }
   },
   "v90cpinfo": {
@@ -6766,7 +6775,7 @@
    }
   },
   "v90demod": {
-   "key": "9f4ae259a15098a5a73bb58e965f6c031658269355ade1233e9f1520647c1428",
+   "key": "135518b71a1e66cdc8256bdb0c8f0274d65b77a95c5ee67515b3053c3099d677",
    "summary": "59 mutations: 56 caught (56 by test, 0 by strings), 0 NOT caught, 0 unusable, 3 equivalent, 0 MIScounted",
    "verdicts": {
     "+0x280 is cleared as a word": "caught",
@@ -7167,7 +7176,7 @@
    }
   },
   "v90getbitrate": {
-   "key": "faba7eca145ae4dea0a177bdba85c3cd2182dde79a3154b4f14f7051f2f51b8f",
+   "key": "af58f71e4172f4e90fd90c8e5fac9e939a8a31b90ea99fcb1b70269c31a01018",
    "summary": "10 mutations: 9 caught (9 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "THE READ IS A DRAIN: the count is consumed, and only the object comparison can see it": "caught",
@@ -8697,6 +8706,24 @@
     "the unsupported type takes bank 2, not bank 1": "caught"
    }
   },
+  "v90ratemaskstd": {
+   "key": "f70cb54fe0c70836a0b801cd68cc4f58fbfde3f169af7c983af67a453021f997",
+   "summary": "4 mutations: 4 caught (4 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "a selected provider-masked rate is moved down one step": "caught",
+    "a selected provider-masked rate rejects the design": "caught",
+    "the provider mask is indexed one rate too high": "caught",
+    "the provider rate mask is ignored without a warning": "caught"
+   }
+  },
+  "v90ratestd": {
+   "key": "32a3d549cfed70277e74370d7de281ef30b69d59683051e6d21f8bc4d8de6a9d",
+   "summary": "2 mutations: 2 caught (2 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "the legal middle rate D=30 is treated as unavailable": "caught",
+    "the legal top rate D=42 is capped one unit low": "caught"
+   }
+  },
   "v90rdet": {
    "key": "50865650fe8dbf8ea85fb04a0fd7a500a976c7cab331c8c7e735febc805f7d80",
    "summary": "33 mutations: 33 caught (33 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
@@ -9123,7 +9150,7 @@
    }
   },
   "v90unpck": {
-   "key": "08f854930ce7ac6230127ff271cc56048006a8046cbd714df5ea7e2b5df58ac5",
+   "key": "7d8a4cf8b9af872b123dcec53b6fc21f83bd7f9d4f7975bae126d03f60e19458",
    "summary": "26 mutations: 24 caught (24 by test, 0 by strings), 0 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
    "verdicts": {
     "distinctIndex is copied for five constellations rather than six": "caught",
@@ -9426,6 +9453,15 @@
     "the protected extent includes the final framing bit": "caught",
     "the protected extent starts one information bit late": "caught",
     "the x^12 CRC feedback tap is removed": "caught"
+   }
+  },
+  "v92cpdrnstd": {
+   "key": "eba4fb4f1a7f35bf4cadb864c04875d90262beb83a3ac9e05c5c51130b9740d7",
+   "summary": "3 mutations: 3 caught (3 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "the legal CPt upper endpoint DRn=22 is capped at 21": "caught",
+    "the legal CPu upper endpoint DRn=22 is capped at 21": "caught",
+    "the legal middle DRn=11 is treated as DRn=10": "caught"
    }
   },
   "v92cpeval": {
@@ -10109,7 +10145,7 @@
    }
   },
   "v92mpunpck": {
-   "key": "0f17b523d298e20cff7c1453bb654947b0e343899787c092e620a6985ac0fd97",
+   "key": "24120a2d1f43633a882d589b2a356602b2e62558a047aa29453c8b9d368d393f",
    "summary": "34 mutations: 31 caught (31 by test, 0 by strings), 0 NOT caught, 0 unusable, 3 equivalent, 0 MIScounted",
    "verdicts": {
     "distinctIndex is copied for five constellations rather than six": "caught",
@@ -10671,6 +10707,14 @@
     "the two stores are swapped": "caught"
    }
   },
+  "v92ratestd": {
+   "key": "65abcf45ef8672f299d06fc0aa3b2c336eea054f95576284e542a136ee721b5d",
+   "summary": "2 mutations: 2 caught (2 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "the legal middle CPd rate DRn=10 is omitted": "caught",
+    "the legal top CPd rate DRn=19 is treated as reserved": "caught"
+   }
+  },
   "v92tx": {
    "key": "c2fa4df16319d69e0f7ce0214030725ebd20198340fa8b24f212951cd6181ebd",
    "summary": "18 mutations: 18 caught (18 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
@@ -10747,7 +10791,7 @@
    }
   },
   "v92unpck": {
-   "key": "32b6f307420a07fa3f4a1750445fa14c35a9a6b558af9bc5cabe52f0c0f87731",
+   "key": "3f4c4a7a9c067924d6535f32a5c4094ba3c91b4d96c6727eb5c84fdd20c48c64",
    "summary": "31 mutations: 30 caught (30 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "K is the drn without the offset": "caught",
@@ -11508,7 +11552,7 @@
    }
   },
   "vpcmxfterm": {
-   "key": "40d153e95096c4c40ec896cfe1d52d7ecb3abe284d3616bdf0a1e499f5ead408",
+   "key": "7eb263c71614aaeafa43f1c42af1eb2608ac724f174d100628d2c5dd3b050b4f",
    "summary": "5 mutations: 5 caught (5 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "nothing is forwarded at all": "caught",

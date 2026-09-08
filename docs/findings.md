@@ -123034,3 +123034,53 @@ finite evidence over its enumerated legal vectors. The mutation snapshot is
 **34 current and 222 stale of 256 registered suites**.
 
 (2026-09-08)
+
+## F10264. The complete legal V.90/V.92 rate-number arithmetic conforms, but the V.90 provider mask is advisory only
+
+The independent rate oracles cover each Recommendation-defined discrete
+domain without asking the reconstruction or blob for the expected answer.
+V.90 Table 14 CP and CPt exhaust `drn=1..22` against independently expressed
+`D=drn+20` and `D=drn+8` expectations; V.92 Table 23 CPu and CPt exhaust the
+same 22 values against literal tables. V.92 Table 30 CPd exhausts `drn=1..19`
+against a literal
+`K=36,38,...,72` table. V.90 Table 2 independently checks every legal
+`D=21..42` against nearest-integer `(D*8000+3)/6`. Cleardown zero and reserved
+five-bit encodings are explicitly outside these conformance domains.
+
+Reconstruction and blob each pass 181 V.90 CP/CPt direct-helper assertions,
+125 V.90 downstream-display assertions and 76 V.92 CPd assertions. V.92's
+CPu/CPt helper passes 182 assertions per implementation. The CP/CPt conversion
+helpers have no internal callers in the object, so those exhaustive blocks are
+labelled direct-API evidence; they establish the bounded leaf mappings, not an
+owner receive path that does not exist. Combined with the earlier independent
+wire-field oracles, no arithmetic or field-order departure was found anywhere
+in the legal `drn` to rate chain.
+
+The audit did find D1460 one layer above that arithmetic. Table 13 says a mask
+bit indicates that its downstream rate is supported and enabled in the digital
+modem transmitter. Starting from an ordinary successful legal design, the new
+expected-departure fixture restores the identical state and clears only the
+selected rate's bit. Both implementations print seven extra warning lines but
+still return success, preserve the same `D` and reported rate, leave force-rate
+state unchanged and request neither RRN direction. Reconstruction passes 17
+assertions and the blob 16. This is production-reachable: the demodulator gives
+the received Jd mask to the designer both during initial design and RRN
+redesign, sets `rateValid`, and continues with the accepted mapping.
+
+Five new standards/expected-departure mutation suites catch all **14/14**
+focused alternatives: legal interior holes and upper endpoints in each rate
+domain, the provider-mask index, loss of the warning, rejection of a disabled
+selection and lowering it by one rate. That means these fixtures distinguish
+those named errors; it is not a proof over unmutated behavior. The exhaustive
+literal oracles prove only their finite legal domains, and the owner-path audit
+establishes reachability rather than end-to-end interoperability. Refreshed
+broader suites retain 24 caught plus two proved-equivalent V.90 unpacker
+mutations and 31 caught plus three proved-equivalent V.92 unpacker mutations.
+The mutation snapshot is **46 current and 215 stale of 261 registered suites**.
+
+The complete phase boundary passes **375/375** period-compiler differential
+binaries, the 64-bit and interoperability gates, the partial-link comparator
+self-test and every structural check. Suite line coverage remains
+**49,019/51,416** (`95.3%`).
+
+(2026-09-08)

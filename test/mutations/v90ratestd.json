@@ -1,0 +1,10 @@
+[
+ {"label": "NOTE: V.90 Table 2 legal downstream-rate matrix",
+  "why": "The existing v90getbitrate suite establishes broad blob fidelity, machine signedness and rounding behavior. This standards suite challenges values inside the complete legal D=21..42 domain that the older sampled legal cases do not enumerate."},
+ {"label": "the legal middle rate D=30 is treated as unavailable",
+  "find": "(long double)(mappingParamsAlt->word_0 * 8000u",
+  "replace": "(long double)((mappingParamsAlt->word_0 == 30u ? 0u : mappingParamsAlt->word_0) * 8000u"},
+ {"label": "the legal top rate D=42 is capped one unit low",
+  "find": "(long double)(mappingParamsAlt->word_0 * 8000u",
+  "replace": "(long double)((mappingParamsAlt->word_0 == 42u ? 41u : mappingParamsAlt->word_0) * 8000u"}
+]

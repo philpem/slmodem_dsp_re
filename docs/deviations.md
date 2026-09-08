@@ -12942,3 +12942,31 @@ whole Ja sequence to twelve symbols.
 departure, finding F10262. Documentation only in the blob-faithful path.
 Receiver/interoperability impact and an explicit opt-in standards path remain
 [issue #13](https://github.com/philpem/slmodem_dsp_re/issues/13).
+
+## D1460 🐛 V.90 constellation selection only warns when the chosen provider rate is disabled
+
+V.90 Table 13 defines each of its 22 rate-mask positions as indicating that
+the corresponding downstream data signalling rate is supported and enabled in
+the digital modem transmitter. `V90ConstellationDesigner::process` consults
+the correct bit, indexed by `D - 21`, but a clear bit only emits the seven-line
+`Rate Used Masked By Provider` warning. It does not fail the design, lower the
+rate or request rate renegotiation.
+
+The executable witness first obtains a successful legal design with all 22
+bits enabled, restores the exact input state, and clears only the bit belonging
+to the selected `D`. Reconstruction and blob both emit the warning, return the
+same successful verdict, preserve the same `D` and bit rate, leave rate forcing
+unchanged, and request neither RRN direction. The test uses one deterministic
+reachable selection rather than forcing all 22: several unrelated designer
+inputs encounter the already documented D336/D337 pathologies.
+
+This is an owner-reachable defect rather than a dead diagnostic. The
+demodulator passes `jd->getRatesMask()` into `process` on initial constellation
+design and again on redesign during rate renegotiation, sets `rateValid = 1`,
+and continues with `mappingParamsAlt` when the designer returns success.
+
+**Status:** faithfully reproduced original defect; executable standards
+departure, finding F10264. Documentation only in the blob-faithful path. The
+focused mutation suite proves sensitivity to the mask index, warning and two
+plausible enforcement consequences; it does not itself prove the standard's
+required behavior.

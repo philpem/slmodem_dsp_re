@@ -1,0 +1,21 @@
+[
+ {
+  "label": "NOTE: V.90 Table 14 complete legal CP/CPt DRn domain",
+  "why": "The older v90unpck suite checks the two offsets and broad blob fidelity. This standards suite challenges a legal interior value and each upper endpoint inside the complete non-cleardown DRn=1..22 domain; its fixture judges reconstruction and blob separately against literal Table 14 answers."
+ },
+ {
+  "label": "the legal middle DRn=11 is treated as DRn=10",
+  "find": "\tsetDataBitRateInline(params, (int)cp->info->word_04,\n\t\t\t     (int)cp->dataBitRate);",
+  "replace": "\tsetDataBitRateInline(params, (int)cp->info->word_04,\n\t\t\t     (int)(cp->dataBitRate == 11 ? 10 : cp->dataBitRate));"
+ },
+ {
+  "label": "the legal CP upper endpoint DRn=22 is capped at 21",
+  "find": "\tsetDataBitRateInline(params, (int)cp->info->word_04,\n\t\t\t     (int)cp->dataBitRate);",
+  "replace": "\tsetDataBitRateInline(params, (int)cp->info->word_04,\n\t\t\t     (int)(cp->info->word_04 != 0 && cp->dataBitRate == 22 ? 21 : cp->dataBitRate));"
+ },
+ {
+  "label": "the legal CPt upper endpoint DRn=22 is capped at 21",
+  "find": "\tsetDataBitRateInline(params, (int)cp->info->word_04,\n\t\t\t     (int)cp->dataBitRate);",
+  "replace": "\tsetDataBitRateInline(params, (int)cp->info->word_04,\n\t\t\t     (int)(cp->info->word_04 == 0 && cp->dataBitRate == 22 ? 21 : cp->dataBitRate));"
+ }
+]

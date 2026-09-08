@@ -1007,6 +1007,151 @@ run_getbitrate(void)
 	return diff_end();
 }
 
+/*
+ * ---------------------------------------------------------------------------
+ * V.90 downstream-rate standards oracle.
+ *
+ * This is deliberately beside, rather than folded into, `run_getbitrate`.
+ * That older group is a differential/robustness sweep: it reaches unsigned
+ * overflow and arbitrary mapping counts specifically to settle the object's
+ * machine arithmetic.  Here the domain is only the twenty-two rates V.90
+ * permits.  Table 2 gives D = K+S = 21..42 and the downstream rate is
+ *
+ *                    D * 8000 / 6 bit/s,
+ *
+ * rounded to the nearest integer.  Multiplication by 8000 cannot make a tie
+ * modulo six, so `(D * 8000 + 3) / 6` is the independent integer oracle.
+ * Neither implementation supplies an expected answer to the other: each gets
+ * its own complete group below.
+ *
+ * These slots are not the older group's storage.  A whole-slot before image
+ * proves this const accessor did not write the receiver, both mapping blocks,
+ * or either adjacent guard.  The two mapping blocks are deliberately live and
+ * different: +0x18 is the specified source and +0x14 holds another plausible
+ * count, so reading the neighbouring pointer is a wrong answer rather than a
+ * fault.
+ */
+#define GBR_STD_GUARD 64
+struct gbr_std_dem_slot {
+	unsigned char bytes[DEM_SLOT];
+	unsigned char guard[GBR_STD_GUARD];
+};
+struct gbr_std_map_slot {
+	unsigned char bytes[32];
+	unsigned char guard[GBR_STD_GUARD];
+};
+static struct gbr_std_dem_slot gbr_std_dem[2] __attribute__((aligned(8)));
+static struct gbr_std_map_slot gbr_std_mpa[2] __attribute__((aligned(8)));
+static struct gbr_std_map_slot gbr_std_mp0[2] __attribute__((aligned(8)));
+
+typedef unsigned int (*standard_rate_fn)(const V90Demodulator *);
+
+static unsigned int
+standard_ours_getbitrate(const V90Demodulator *d)
+{
+	return d->getBitRate();
+}
+
+static unsigned int
+standard_blob_getbitrate(const V90Demodulator *d)
+{
+	return ref_dem_getBitRate(d);
+}
+
+static unsigned int
+v90_table2_rate(unsigned int d)
+{
+	return (d * 8000u + 3u) / 6u;
+}
+
+static void
+standard_rate_case(const char *subject, standard_rate_fn rate, int side,
+		   unsigned int dcount, unsigned char valid, long tag)
+{
+	struct gbr_std_dem_slot dem_before;
+	struct gbr_std_map_slot mpa_before, mp0_before;
+	V90Demodulator *d;
+	V90MappingParams *mpa, *mp0;
+	unsigned int got, want;
+
+	lfsr_state = 0x31d9u + 0x9e37u * (unsigned int)tag;
+	fill_pair(&gbr_std_dem[0], &gbr_std_dem[1], sizeof(gbr_std_dem[0]));
+	fill_pair(&gbr_std_mpa[0], &gbr_std_mpa[1], sizeof(gbr_std_mpa[0]));
+	fill_pair(&gbr_std_mp0[0], &gbr_std_mp0[1], sizeof(gbr_std_mp0[0]));
+
+	d = (V90Demodulator *)gbr_std_dem[side].bytes;
+	mpa = (V90MappingParams *)gbr_std_mpa[side].bytes;
+	mp0 = (V90MappingParams *)gbr_std_mp0[side].bytes;
+	d->mappingParams = mp0;
+	d->mappingParamsAlt = mpa;
+	d->rateValid = valid;
+	mpa->word_0 = dcount;
+	mp0->word_0 = dcount + 7u;
+
+	/* The two sources must remain distinguishable before the accessor runs. */
+	diff_eq_int("standard rate mapping blocks differ (%ld)",
+		    (long)(mpa != mp0 && mpa->word_0 != mp0->word_0), 1, tag);
+
+	memcpy(&dem_before, &gbr_std_dem[side], sizeof(dem_before));
+	memcpy(&mpa_before, &gbr_std_mpa[side], sizeof(mpa_before));
+	memcpy(&mp0_before, &gbr_std_mp0[side], sizeof(mp0_before));
+
+	got = rate(d);
+	want = valid == 0 ? 0u : v90_table2_rate(dcount);
+	diff_eq_int("V.90 Table 2 downstream rate (%ld)",
+		    (long)got, (long)want, tag);
+
+	diff_eq_obj_(__FILE__, __LINE__, subject,
+		     "V90Demodulator remains immutable",
+		     &gbr_std_dem[side], &dem_before,
+		     sizeof(gbr_std_dem[side]), tag);
+	diff_eq_obj_(__FILE__, __LINE__, subject,
+		     "mappingParamsAlt and its guard remain immutable",
+		     &gbr_std_mpa[side], &mpa_before,
+		     sizeof(gbr_std_mpa[side]), tag);
+	diff_eq_obj_(__FILE__, __LINE__, subject,
+		     "mappingParams and its guard remain immutable",
+		     &gbr_std_mp0[side], &mp0_before,
+		     sizeof(gbr_std_mp0[side]), tag);
+}
+
+static int
+run_standard_v90_rate(const char *subject, standard_rate_fn rate, int side)
+{
+	unsigned int dcount;
+	long tag = 98000;
+	int saw_low = 0, saw_high = 0, saw_one_third = 0, saw_two_thirds = 0;
+
+	diff_begin(subject);
+
+	/* Every legal capability, 28000 through 56000 bit/s. */
+	for (dcount = 21u; dcount <= 42u; dcount++) {
+		standard_rate_case(subject, rate, side, dcount, 1u, tag++);
+		if (dcount == 21u)
+			saw_low = 1;
+		if (dcount == 42u)
+			saw_high = 1;
+		if ((dcount % 3u) == 1u)
+			saw_one_third = 1;
+		if ((dcount % 3u) == 2u)
+			saw_two_thirds = 1;
+	}
+
+	/* The validity byte is an any-non-zero gate, not a signed predicate. */
+	standard_rate_case(subject, rate, side, 22u, 0u, tag++);
+	standard_rate_case(subject, rate, side, 22u, 0x80u, tag++);
+
+	diff_eq_int("all 22 legal downstream capabilities were tested",
+		    (long)(tag - 98000 - 2), 22, 0);
+	diff_eq_int("the 28000 bit/s endpoint was tested", saw_low, 1, 0);
+	diff_eq_int("the 56000 bit/s endpoint was tested", saw_high, 1, 0);
+	diff_eq_int("a one-third fractional rate was tested", saw_one_third, 1, 0);
+	diff_eq_int("a two-thirds fractional rate was tested", saw_two_thirds, 1,
+		    0);
+
+	return diff_end();
+}
+
 /* ------------------------------------ V90Demodulator::sessionTermination */
 
 /*
@@ -1608,6 +1753,12 @@ main(void)
 	bad |= run_reset();
 	bad |= run_enterchannelverification();
 	bad |= run_getbitrate();
+	bad |= run_standard_v90_rate(
+		"V.90 Table 2 reconstruction downstream-rate oracle",
+		standard_ours_getbitrate, 0);
+	bad |= run_standard_v90_rate(
+		"V.90 Table 2 blob downstream-rate oracle",
+		standard_blob_getbitrate, 1);
 	bad |= run_sessterm();
 	bad |= run_vpcmxf_sessterm();
 
