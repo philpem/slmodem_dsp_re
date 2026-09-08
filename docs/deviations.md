@@ -4431,7 +4431,7 @@ can never fire. The test now asserts all three outcomes.
 
 ---
 
-## D162 🐛 `V92Jd`'s constructor leaves one constellation bit unwritten
+## D162 ❌ RETRACTED — `V92Jd`'s unwritten constructor byte is reserved and cleared before transmission
 
 **Where:** `src/pump/v90/V92Jd.cpp`, `V92Jd::V92Jd(V90Parameters *)`, from
 0x11c80.
@@ -4440,20 +4440,18 @@ can never fire. The test now asserts all three outcomes.
 writes `bits[48]`, so that byte keeps whatever was in the storage the object
 was built over.
 
-**Why it looks wrong:** `V90Jd`'s constructor, which is otherwise the same
-function, fills BOTH of those bytes — `bits[47]` from
-`V34_PHASE4_CONSTELLATION` and `bits[48]` from `V34_RRN_CONSTELLATION` — and
-the header's bit map calls the pair "constellation size, 2 bits".  A two-bit
-field with one bit initialised and one bit inherited is the shape of a slip.
+**Why the original suspicion was wrong:** it borrowed V.90 Table 13's field
+meanings for a V.92 message. [V.92 Table 21](https://www.itu.int/rec/dologin_pub.asp?id=T-REC-V.92-200011-I!!PDF-E&lang=e&type=items)
+makes bit 47 the Jd/Jp identifier and bit 48 reserved. `packJdData` explicitly
+clears bit 48, together with reserved bits 41..46, before computing the CRC
+or returning the transmit vector. No uninitialised constellation field reaches
+the wire through the packer.
 
-**Reachable?** On every construction.  Whether it can be OBSERVED is a
-different question and is not settled here: `packJdData` is not written yet
-and may fill `bits[48]` before anything transmits the vector.  **Unmeasured**,
-and it stays that way until that member is read.
+**Status: NOT A DEFECT (2026-09-08).** The observation about the constructor
+remains true; the defect interpretation is retracted. Finding F1223 is retained
+as the historical account. No production change is warranted, and the existing
+seeded constructor comparison should continue to preserve the untouched byte.
 
-**Not fixed.** `t_v92jd.cpp` seeds the slot with varied bytes and compares the
-whole object, so a reconstruction that helpfully cleared `bits[48]` fails
-rather than passes.  Finding F1223.
 ## D163 🐛 💤 `V90CP::printNofRecievedMpMpNot` prints `"V90MP: received %d MP, %d MPNot"` — the CP class's debug line names the other class
 
 *V.90/V.92 message-parameter batch. **Reachability: unmeasured** — diagnostic only, and only above `dsplibs_debug_level > 1`. Status: CONFIRMED — the literal at `.rodata.str1.4+0xd6b0` is byte for byte `V90MP`'s at `+0x5a34`. Fix class: documentation only; reproduced, not corrected.*
@@ -5401,13 +5399,22 @@ And what that one caller passes is NOT a constant:
 
 **Findings F1390 and F1395.** The constructors and the packers put the rate mask at `bits[18..33]` and `bits[35..46]`, the constellation pair at `bits[47..48]` and the lookahead pair at `bits[49..50]`, around a 17-byte group frame; the accessors read `bits[0..27]`, `bits[28..29]` and `bits[30..31]`, with no frame at all, and `getJdPhase` reads `phaseBits[0..15]` where the constructor writes the Q16 phase at `phaseBits[18..33]`.  The two layouts differ by the framing and by 18 or 19 positions, so a Jd object cannot decode the message it just packed -- **and it never has to.** `unPackData` fills the flat one from the wire and the accessors read it; the packs fill the framed one and `getBitVector` hands it out.  The mapping is framed `18 + p` for payload 0..15, `35 + (p - 16)` for 16..31 and `52 + (p - 32)` for 32..47, identical in all three unpackers.  Both halves are reproduced exactly as the object has them, each is driven against the blob, and the ROUND TRIP -- pack, feed back one bit at a time, read out through the accessors -- is driven end to end in `t_v90jd.cpp` and `t_v92jd.cpp`.
 
-## D271 ⚠ 💤 `V92Jd::getConstelationSize` reads `phaseBits[29..30]` where `V90Jd`'s otherwise identical accessor reads `bits[28..29]`
+## D271 ❌ RETRACTED — V.92's constellation-size fields correctly belong to Jp
 
-*Message and echo batch of 2026-08-11, from `V92Jd::getConstelationSize` (blob 0x11f00), +0x08 and +0x12. **Reachability: unmeasured** -- no caller has been read. Status: CONFIRMED. Fix class: none proposed.*
+*Message and echo batch of 2026-08-11, from `V92Jd::getConstelationSize`
+(blob 0x11f00), +0x08 and +0x12. Status: NOT A DEFECT, explained by the
+Recommendation on 2026-09-08. Fix class: none.*
 
 **Findings F1391, F1395 and F1396.** Three of `V92Jd`'s four accessors are `V90Jd`'s instruction for instruction and read `bits`; this one reads +0x67 and +0x68, which in `V92Jd`'s map is the SECOND vector, and at one index higher than `V90Jd`'s reads in the first.  +0x67 is +0x1f plus the 0x48 that `phaseBits` displaces everything after it by.
 
-**THE INDEX IS NOW EXPLAINED AND THE VECTOR IS NOT, so this entry narrows rather than closing.**  All four accessors read the layout the unpackers fill, and in the PHASE message payload 28 is the constant tag byte `unPackJdPhaseData` checks (`cmpb $0x1,0x66(%ebx)` at 0x128bc), so the constellation pair sits one position later there -- 29..30 -- than in the data message.  What no reading accounts for is the vector: this accessor takes the pair out of `phaseBits` while `getRatesMask` and `getMaxLookahead` take theirs out of `bits`, so a `V92Jd` that has received a DATA message answers `getConstelationSize` from the phase vector.  Reproduced; the fixture paints the two vectors with different values so that reading the right index in the wrong vector diverges.
+**Both the index and the vector are correct.** [V.92 Table 22](https://www.itu.int/rec/dologin_pub.asp?id=T-REC-V.92-200011-I!!PDF-E&lang=e&type=items)
+places the training and renegotiation constellation-size fields at Jp wire
+positions 48 and 49. This class calls Jp its phase message; `unPackJdPhaseData`
+strips framing, placing those fields at `phaseBits[29]` and `[30]`. Table 21's
+Jd instead contains rate capability and lookahead, which correctly come from
+`bits`. The earlier suspicion came from assuming the V.90 and V.92 messages
+owned the same fields. Historical findings F1391, F1395 and F1396 remain as
+the record of that earlier interpretation; no source behaviour needs changing.
 
 ## D272 🐛 `V92EchoCanceller::process` decides whether to filter at all by comparing the OUTPUT buffer's first sample with 177.0f
 

@@ -9608,7 +9608,7 @@
    }
   },
   "v92jd": {
-   "key": "314250ed9dff97943f37e358ed2ce1601d931b2bb72075baf3435b11edd5053b",
+   "key": "087e85bf1a6defa2db40f43905baadceb7d8419be8be64c5c2f3aa48b39f6be3",
    "summary": "51 mutations: 51 caught (51 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "getConstelationSize reads V90Jd's positions instead": "caught",
@@ -9662,6 +9662,32 @@
     "the rate mask is read from the V.90 parameter": "caught",
     "the second rate group runs to V90Jd's twelve bits": "caught",
     "the two lookahead bits are transposed": "caught"
+   }
+  },
+  "v92jdstd": {
+   "key": "b0e17822b4ce9ab508324747d3f0f486775a69460520bc5e1cd2cc8af6be3647",
+   "summary": "20 mutations: 20 caught (20 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "V.92 CRC tap 10 reads the wrong register cell": "caught",
+    "V.92 CRC tap 3 reads the wrong register cell": "caught",
+    "V.92 Jd first fill bit is one": "caught",
+    "V.92 Jd first start bit is one": "caught",
+    "V.92 Jd leaves the last reserved run bit uncleared": "caught",
+    "V.92 Jd reserved bit 48 is one": "caught",
+    "V.92 Jd sync run has only sixteen ones": "caught",
+    "V.92 Jp last fill bit is one": "caught",
+    "V.92 Jp leaves the last reserved run bit uncleared": "caught",
+    "V.92 Jp reserved bit 50 is one": "caught",
+    "V.92 Jp second start bit is one": "caught",
+    "V.92 Jp sync run has only sixteen ones": "caught",
+    "V.92 data CRC covers only its first 16 payload bits": "caught",
+    "V.92 data CRC does not preload all ones": "caught",
+    "V.92 data CRC is wired most-significant bit first": "caught",
+    "V.92 data CRC starts one bit into the wrong framed group": "caught",
+    "V.92 phase CRC covers only its first 16 payload bits": "caught",
+    "V.92 phase CRC does not preload all ones": "caught",
+    "V.92 phase CRC is wired most-significant bit first": "caught",
+    "V.92 phase CRC starts one bit into the wrong framed group": "caught"
    }
   },
   "v92loadparams": {

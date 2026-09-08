@@ -1,7 +1,9 @@
 # Triage of the 🐛 entries in `docs/deviations.md`
 
-`docs/deviations.md` carries 351 entries, **232 of them marked 🐛 — "defect in
-the original"**. Five files in `src/` carry a `DSPLIB_REPRODUCE_BUGS` arm.
+The original survey counted 351 entries in `docs/deviations.md`, **232 of
+them marked 🐛 — "defect in the original"**. These are historical cohort
+counts, not a fresh register census. Five files in `src/` carried a
+`DSPLIB_REPRODUCE_BUGS` arm.
 Between those two numbers is this document's reason to exist: the overwhelming
 majority of the things this tree has called a bug have never been
 **dispositioned**. Nobody decided whether they are real, whether anything can
@@ -21,20 +23,26 @@ own preamble is that a defect recorded there is not quietly corrected here.
 
 ## The denominator, before anything else
 
+The tables retain the original 232-entry cohort. The 2026-09-08 standards
+audit moves D162 from undecidable to NOT A DEFECT: decided 97 to 98,
+undecidable 21 to 20, and NOT A DEFECT 17 to 18. D271 is also retracted in
+the register but was not a bug-marked member of this cohort, so it changes
+none of these counts. Other later register changes are not a new census here.
+
 A detector must report its denominator (`CLAUDE.md`, findings F134, F2400,
 F3100), and so must a triage.
 
 | | count |
 |---|---|
-| entries in `docs/deviations.md` | 351 |
-| marked 🐛 | **232** |
+| entries at the original register census | 351 |
+| marked 🐛 at that census | **232** |
 | of those, **examined** here | **118** |
-| **decided** here | **97** |
-| left **undecidable**, each with the deciding evidence named | **21** |
+| **decided** here | **98** |
+| left **undecidable**, each with the deciding evidence named | **20** |
 | not reached, and named in full at the end | **114** |
 
-Of the 118 examined, **20 turned out not to be defects of the object** — 17
-NOT A DEFECT and 3 misfiled. **One in six.** The full breakdown is in the
+Of the 118 examined, **21 turned out not to be defects of the object** — 18
+NOT A DEFECT and 3 misfiled. **About one in six.** The full breakdown is in the
 closing census; it is repeated here because it is the headline: *the 🐛 count
 is not a defect count, and the gap is large enough to matter.*
 
@@ -800,27 +808,23 @@ array and each able to write a bit past the caller's bit buffer.
   differential trial.
 - **Citation:** none; addresses given.
 
-## D162 — `V92Jd`'s constructor leaves one constellation bit unwritten
+## D162 — NOT A DEFECT: reserved Jd bit 48 is cleared by the packer
 
-**DEFECT, UNDECIDABLE FROM HERE.** `V90Jd`'s constructor, otherwise the same
-function, fills both `bits[47]` and `bits[48]` — from
-`V34_PHASE4_CONSTELLATION` and `V34_RRN_CONSTELLATION` — and the header's bit
-map calls the pair "constellation size, 2 bits". `V92Jd` writes a literal 0
-into `bits[47]` and never writes `bits[48]`. A two-bit field with one bit
-initialised and one inherited is the shape of a slip, and the sibling
-comparison is the same instrument that made D920 convincing.
+**The 2026-09-08 standards audit settles the former undecidable row.** The
+sibling comparison used the wrong Recommendation's layout. V.92 Table 21
+makes bit 47 the Jd/Jp identifier and bit 48 reserved; V.90 Table 13's
+constellation fields do not transfer to this class. `packJdData` clears bit
+48, together with bits 41..46, before computing the CRC or returning the
+transmit vector. The constructor's untouched byte is therefore harmless in
+the specified packing lifecycle.
 
-- **Evidence tier 2** (the sibling class and the header's bit map type the
-  field).
-- **Verdict: UNDECIDABLE FROM HERE.** **The evidence that would decide it is
-  `packJdData`**, which is not written yet and may fill `bits[48]` before
-  anything transmits the vector. If it does, this is not a defect at all; if
-  it does not, an uninitialised bit reaches the wire and the entry becomes one
-  of the most serious in the register.
-- **Test.** Already correctly guarded: `t_v92jd.cpp` seeds the slot with
-  varied bytes and compares the whole object, so a reconstruction that
-  helpfully cleared `bits[48]` fails rather than passes. Leave it.
-- **Citation:** finding F1223. AGREES.
+- **Evidence:** [official V.92 Table 21](https://www.itu.int/rec/dologin_pub.asp?id=T-REC-V.92-200011-I!!PDF-E&lang=e&type=items)
+  and the explicit reserved-bit clears in `V92Jd::packJdData`.
+- **Verdict: NOT A DEFECT.** No production behaviour change warranted.
+- **Test:** preserve the seeded constructor comparison. Constructor state
+  alone is not a packed message; the wire oracle belongs after packing.
+- **Historical citation:** finding F1223 accurately records the untouched
+  byte, but does not establish that the byte reaches the wire uninitialised.
 
 ## D275 — `V92Jd`'s two receive directions share one pair of state bytes
 
@@ -1570,7 +1574,7 @@ tier 3 throughout.
 | entry | where the index actually comes from | verdict |
 |---|---|---|
 | D131 | `max_bits` and the caller's fragment size — Bell 103, no V.8/V.34/V.90 field. `DemodDataB103` feeds 48 samples against a 64-sample/8-bit ceiling. | DEFECT, UNREACHABLE |
-| D162 | not an index at all — see the correction below | UNDECIDABLE on observability |
+| D162 | reserved transmit field, explicitly cleared by the packer | NOT A DEFECT; also misfiled as an index |
 | D265 | a transmit-side constant slip (0x45 where 0x55/0x56 was meant); nothing subscripted by a received value | defect stands as recorded; misfiled |
 | D266 | a fixed constant; wire-*triggered* by any CRC failure, but nothing is indexed | misfiled |
 | D277 | caller behaviour. Its own non-entry hazard `vec[unpack[1]]` is bounded by Table 13's 72-bit Jd plus each storing state's cap | misfiled |
@@ -1579,14 +1583,13 @@ tier 3 throughout.
 | D323 | `linearEquLength` and `dfeWindowHalf` from `reset` / `setLinearEquEdgesFadingParams` — the parameter block | misfiled |
 | D344 | `(which << 7) + i` inside the constellation designer. The recommendation bounds the CONTENT (Ucodes 0..127, §3.5, exactly the 128-entry row); what is unbounded is the walk, which stops only on a `signed char` sign flip at 0x80 | misfiled |
 
-**A correction worth carrying, on D162.** ITU-T V.90 Table 13 makes bits 47
-and 48 **two independent one-bit fields** — *"47 Size of constellation used to
-transmit CP, E and SCR **during training sequences**"* and *"48 … **during
-rate renegotiation procedures**"* — not "constellation size, 2 bits" as the
-class header says. **So the uninitialised byte is a whole field, not half of
-one**, which strengthens D162 rather than weakening it: an unwritten
-`bits[48]` is an unwritten *rate-renegotiation constellation size*, not one
-bit of a two-bit number.
+**Correction to this family's former D162 argument.** It applied V.90 Table
+13 to a V.92 Jd message. V.92 Table 21 instead reserves bit 48, and
+`packJdData` clears it before transmission. The actual V.92 constellation
+fields are Jp wire positions 48 and 49 in Table 22, owned by `phaseBits`.
+D162 is NOT A DEFECT, as established in Family 3 above. Family 7's three
+unresolved index questions remain D88, D93 and D333; D162 had already been
+excluded from those three as a misfiled non-index case.
 
 ## Left undecidable — 3, with the evidence that would decide each
 
@@ -2425,28 +2428,30 @@ shipped country is inside the sixteen-entry table**; only index 15 goes unused.
 
 # The closing census
 
-Computed by a script over the verdict ledger and the register's own headings,
-not counted by hand — the same discipline `CLAUDE.md` requires of a detector.
+The original census was computed by a script over the verdict ledger and
+register headings. Its historical cohort is retained below with the single
+explicit D162 disposition update described at the start, not presented as
+a fresh census of today's register.
 
 | | count |
 |---|---|
-| 🐛 entries in `docs/deviations.md` | **232** |
+| 🐛 entries in the original register census | **232** |
 | **examined here** | **118** |
-| **decided here** | **97** |
-| **left undecidable**, each with the deciding evidence named | **21** |
+| **decided here** | **98** |
+| **left undecidable**, each with the deciding evidence named | **20** |
 | not reached | **114** |
 
 | disposition | count |
 |---|---|
-| NOT A DEFECT | **17** |
+| NOT A DEFECT | **18** |
 | MISFILED — real, but not a deviation of the object | **3** |
 | DEFECT, UNREACHABLE | **36** |
 | DEFECT, REACHABLE — NO FIX WARRANTED | **14** |
 | DEFECT, REACHABLE, FIX WARRANTED | **26** |
 | ALREADY DISPOSITIONED by an existing fix | **1** |
-| UNDECIDABLE FROM HERE | **21** |
+| UNDECIDABLE FROM HERE | **20** |
 
-**Twenty of 118 — one in six — are not defects of the object at all.** That is
+**Twenty-one of 118 — about one in six — are not defects of the object at all.** That is
 the number this document exists to produce, and it is high enough that the
 register's 🐛 count should not be quoted as a defect count again without
 qualification.
