@@ -928,6 +928,181 @@ test_gen_eq_trn_sequence(void)
 	return diff_end();
 }
 
+/*
+ * The state-machine test above reaches both leaves, but its observations are
+ * shared with their callers.  These direct calls keep the attribution honest:
+ * each starts from a constructor-built graph, crosses the rate and wrap
+ * boundaries, and observes the leaf's own output/cursors or scrambler state.
+ */
+static int
+test_tx_no_carrier_direct(void)
+{
+	static const unsigned short counts[] = { 0, 1, 2, 7 };
+	long trials = 0, wraps = 0;
+	int rate, ci;
+
+	diff_begin("v27txcreate: TxNoCarrierV27 directly");
+
+	for (rate = 0; rate < 2; rate++) {
+		for (ci = 0; ci < (int)(sizeof(counts) / sizeof(counts[0]));
+		     ci++) {
+			void *a, *b, *ta, *tb;
+			void *pa, *pb;
+			struct fpm_smc_ring *ra, *rb;
+			struct v27tx_cfg ca, cb;
+			unsigned short ina[10], inb[10];
+			short outa[512], outb[512];
+			unsigned short before_a[10], before_b[10];
+			unsigned short count = counts[ci];
+			short start;
+			short reta, retb;
+			int i;
+			long tag = rate * 100 + ci;
+
+			ca = V27TX_CFG;
+			cb = V27TX_CFG;
+			ca.bitrate = cb.bitrate = (short)(rate == 0 ? 2400 : 4800);
+			a = V27TX_create(0, &ca);
+			b = ref_V27TX_create(0, &cb);
+			diff_eq_int("both built (%ld)", a != 0 && b != 0, 1, tag);
+			if (a == 0 || b == 0)
+				continue;
+
+			ta = FIELD_PTR(a, V27_OBJ_TX);
+			tb = FIELD_PTR(b, V27_OBJ_TX);
+			pa = FIELD_PTR(a, V27_OBJ_TXDATA);
+			pb = FIELD_PTR(b, V27_OBJ_TXDATA);
+			ra = (struct fpm_smc_ring *)(void *)FIELD(ta, V27TX_RING);
+			rb = (struct fpm_smc_ring *)(void *)FIELD(tb, V27TX_RING);
+			diff_eq_int("ring lengths agree (%ld)", ra->len, rb->len, tag);
+			diff_eq_int("ring has room (%ld)", ra->len > 1, 1, tag);
+			if (ra->len <= 1 || ra->len != rb->len) {
+				V27TX_delete(a);
+				ref_V27TX_delete(b);
+				continue;
+			}
+
+			start = (short)(ra->len - 1);
+			/* The shaper consumes the symbol just written at the wrap edge. */
+			ra->widx = rb->widx = start;
+			ra->ridx = rb->ridx = start;
+			for (i = 0; i < ra->len; i++)
+				ra->sym[i] = rb->sym[i] = (short)(0x120 + i);
+			for (i = 0; i < 10; i++) {
+				ina[i] = inb[i] = (unsigned short)(0x9000 + i);
+				before_a[i] = (short)ina[i];
+				before_b[i] = (short)inb[i];
+			}
+			memset(outa, 0xa5, sizeof(outa));
+			memset(outb, 0xa5, sizeof(outb));
+
+			reta = TxNoCarrierV27(a, ina, outa, count);
+			retb = ref_TxNoCarrierV27(b, inb, outb, count);
+
+			diff_eq_int("return (%ld)", reta, retb, tag);
+			diff_eq_int("return fits output (%ld)", reta >= 0 && reta < 512,
+				    1, tag);
+			if (reta >= 0 && reta < 512 && retb == reta)
+				cmp_shorts("out[%ld]", outa, outb, reta);
+			if (reta >= 0 && reta < 512 && retb == reta) {
+				diff_eq_int("ours output guard (%ld)", outa[reta],
+					    (short)0xa5a5, tag);
+				diff_eq_int("blob output guard (%ld)", outb[retb],
+					    (short)0xa5a5, tag);
+			}
+			for (i = 0; i < 10; i++) {
+				diff_eq_int("input ours unchanged (%ld)", ina[i], before_a[i],
+					    tag * 100 + i);
+				diff_eq_int("input blob unchanged (%ld)", inb[i], before_b[i],
+					    tag * 100 + i);
+			}
+			for (i = 0; i < ra->len; i++) {
+				diff_eq_int("ring symbol (%ld)", ra->sym[i], rb->sym[i],
+					    tag * 1000 + i);
+			}
+			for (i = 0; i < count; i++) {
+				short slot = (short)((start + i < ra->len) ? start + i
+								       : start + i - ra->len);
+
+				diff_eq_int("no-carrier symbol (%ld)", ra->sym[slot],
+					    V27TX_NOCARR_SYMBOL[rate], tag * 1000 + slot);
+			}
+			diff_eq_int("write cursor (%ld)", ra->widx, rb->widx, tag);
+			diff_eq_int("read cursor (%ld)", ra->ridx, rb->ridx, tag);
+			diff_eq_int("rate survives (%ld)", AT_S(pa, V27TXP_RATE),
+				    AT_S(pb, V27TXP_RATE), tag);
+			if (count > 1 && ra->widx < start)
+				wraps++;
+			trials++;
+
+			V27TX_delete(a);
+			ref_V27TX_delete(b);
+		}
+	}
+
+	diff_eq_int("direct trials (%ld)", trials, 8, trials);
+	diff_eq_int("write cursor wrapped (%ld)", wraps > 0, 1, wraps);
+
+	return diff_end();
+}
+
+static int
+test_set_scrambler_direct(void)
+{
+	static const unsigned short regs[] = { 0, 1, 0x55aa, 0xffff };
+	long trials = 0;
+	int rate, ri;
+
+	diff_begin("v27txcreate: SetScramblerV27 directly");
+
+	for (rate = 0; rate < 2; rate++) {
+		for (ri = 0; ri < (int)(sizeof(regs) / sizeof(regs[0])); ri++) {
+			void *a, *b, *ta, *tb;
+			struct sdmv27 *sa, *sb;
+			struct v27tx_cfg ca, cb;
+			int i;
+			long tag = rate * 100 + ri;
+
+			ca = V27TX_CFG;
+			cb = V27TX_CFG;
+			ca.bitrate = cb.bitrate = (short)(rate == 0 ? 2400 : 4800);
+			a = V27TX_create(0, &ca);
+			b = ref_V27TX_create(0, &cb);
+			diff_eq_int("both built (%ld)", a != 0 && b != 0, 1, tag);
+			if (a == 0 || b == 0)
+				continue;
+
+			ta = FIELD_PTR(a, V27_OBJ_TX);
+			tb = FIELD_PTR(b, V27_OBJ_TX);
+			sa = (struct sdmv27 *)(void *)FIELD(ta, V27TX_SDM);
+			sb = (struct sdmv27 *)(void *)FIELD(tb, V27TX_SDM);
+			memset(sa, 0x5a, sizeof(*sa));
+			memset(sb, 0x5a, sizeof(*sb));
+			sa->reg = sb->reg = regs[ri];
+
+			SetScramblerV27(a);
+			ref_SetScramblerV27(b);
+
+			for (i = 0; i < (int)sizeof(*sa); i++)
+				diff_eq_int("scrambler byte (%ld)",
+					    ((unsigned char *)(void *)sa)[i],
+					    ((unsigned char *)(void *)sb)[i], tag * 100 + i);
+			diff_eq_int("saved register survives (%ld)", sa->reg, regs[ri],
+				    tag);
+			diff_eq_int("bits for rate (%ld)", sa->nbits,
+				    V27TX_SDM_NUM_BITS[rate], tag);
+			trials++;
+
+			V27TX_delete(a);
+			ref_V27TX_delete(b);
+		}
+	}
+
+	diff_eq_int("direct trials (%ld)", trials, 8, trials);
+
+	return diff_end();
+}
+
 /* ------------------------------------------------------------------------- */
 
 int
@@ -945,6 +1120,8 @@ main(void)
 	rc |= test_tx_control();
 	rc |= test_tx_control_null_req();
 	rc |= test_gen_eq_trn_sequence();
+	rc |= test_tx_no_carrier_direct();
+	rc |= test_set_scrambler_direct();
 
 	return rc;
 }
