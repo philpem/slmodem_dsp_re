@@ -76,6 +76,8 @@ def main():
     ap.add_argument("--image", default="dsplibs-tc342")
     ap.add_argument("--compiler-path", default="/opt/gcc342/bin",
                     help="directory prepended to PATH inside the image")
+    ap.add_argument("--native-user", action="store_true",
+                    help="do not force the host UID (needed by the Gentoo image)")
     ap.add_argument("--base-flags", default=BASE_FLAGS)
     ap.add_argument("--blob", type=pathlib.Path,
                     default=ROOT / "ref/slmodemd/dsplibs.o")
@@ -91,10 +93,12 @@ def main():
           % (len(rows), ref_size, ref_insns, a.image))
     for name, extra in rows:
         output = a.work / (name + ".o")
-        cmd = ["docker", "run", "--rm", "--user", "%d:%d" %
-               (os.getuid(), os.getgid()), "--platform", "linux/386",
+        cmd = ["docker", "run", "--rm"]
+        if not a.native_user:
+            cmd += ["--user", "%d:%d" % (os.getuid(), os.getgid())]
+        cmd += ["--platform", "linux/386",
                "-v", "%s:/src" % ROOT, "-v", "%s:/out" % a.work,
-               "-w", "/src", a.image, "/bin/sh", "-lc",
+               "-w", "/src", a.image, "/bin/sh", "-c",
                "export PATH=%s:$PATH; exec gcc -c %s %s -o /out/%s %s" %
                (a.compiler_path, shlex.join(shlex.split(a.base_flags)),
                 shlex.join(extra), output.name, "/src/" + str(source.relative_to(ROOT)))]
