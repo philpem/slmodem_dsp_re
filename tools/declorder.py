@@ -12,6 +12,7 @@ import itertools
 import os
 import pathlib
 import re
+import shlex
 import shutil
 import subprocess
 
@@ -73,6 +74,10 @@ def main():
                     default=pathlib.Path("/tmp/declorder"))
     ap.add_argument("--extra", default="",
                     help="extra period GCC flags, e.g. '-O2'")
+    ap.add_argument("--image", default="dsplibs-tc342")
+    ap.add_argument("--compiler-path", default="/opt/gcc342/bin")
+    ap.add_argument("--native-user", action="store_true",
+                    help="do not force the host UID (needed by the Gentoo image)")
     a = ap.parse_args()
     source = a.source.resolve()
     names = [x.strip() for x in a.names.split(",") if x.strip()]
@@ -93,12 +98,16 @@ def main():
         lines[start:start + len(block)] = perm
         candidate.write_text("".join(lines))
         obj = out / ("%03d.o" % n)
-        cmd = ["docker", "run", "--rm", "--user", "%d:%d" %
-               (os.getuid(), os.getgid()), "--platform", "linux/386",
+        cmd = ["docker", "run", "--rm"]
+        if not a.native_user:
+            cmd += ["--user", "%d:%d" % (os.getuid(), os.getgid())]
+        cmd += ["--platform", "linux/386",
                "-v", "%s:/src" % ROOT, "-v", "%s:/variant" % a.work,
-               "-v", "%s:/out" % out, "-w", "/src", "dsplibs-tc342",
-               "gcc", "-c"] + DEFAULT_FLAGS + a.extra.split() + [
-                   "-o", "/out/%03d.o" % n, "/variant/%s" % source.name]
+               "-v", "%s:/out" % out, "-w", "/src", a.image,
+               "/bin/sh", "-c",
+               "export PATH=%s:$PATH; exec gcc -c %s %s -o /out/%03d.o /variant/%s" %
+               (a.compiler_path, shlex.join(DEFAULT_FLAGS), shlex.join(a.extra.split()),
+                n, source.name)]
         subprocess.check_call(cmd)
         rows.append((body_size(obj, a.symbol), instruction_count(obj, a.symbol),
                      hashlib.sha256(obj.read_bytes()).hexdigest(), n))
