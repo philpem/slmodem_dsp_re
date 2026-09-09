@@ -421,6 +421,112 @@ positioned bytes, 905/18,317 relocations and 222/2,907 symbols exact.
 Rxcid's outstanding source recovery is separately tracked in GitHub #25,
 linked from #22; the new global-profile losses remain inquiries in #22.
 
+### Global inline-limit follow-up: inspect the non-exact functions too
+
+A complete 273-object length census of auto81 finds 26 shared functions with
+changed lengths: 11 increase their absolute reference length gap and 15
+decrease it. Length is a locator, not an accuracy score. Inspecting actual
+relocations confirms additional call-boundary regressions invisible to the
+six-gain/four-loss exact-set summary:
+
+| Function | Reference / baseline / auto81 bytes | New call under auto81 |
+| --- | --- | --- |
+| V90CP::bitsToInfo | 2391 / 2350 / 1650 | evaluateCRC |
+| V90Phase3Modulator::generateV90Symbol | 1790 / 1759 / 1081 | generateDIL, twice |
+| V90Phase3Modulator::generateV92Symbol | 2044 / 1938 / 1278 | generateDIL, twice |
+| V90Jd::getBitVector | 537 / 537 / 22 | packData |
+
+These helpers are expanded in the reference and baseline. In particular,
+`getBitVector`'s equal baseline length is not byte identity: it is BYTES(224).
+Recovering only the four lost EXACT functions would not settle this profile.
+The local census is reproducible with
+`python3 build/issue22-global-inline-audit.py`; its complete rows are saved in
+`build/issue20-followup/global-auto81-lengths.json`.
+
+The experimental partial link uses the same recovered 273-input ordering
+(172 anchored, 101 source-order retained) and Gentoo period linker:
+
+| Strict partial-link census | Production baseline | Global auto81 |
+| --- | ---: | ---: |
+| Positioned bytes / 943398 | 54109 | 54676 |
+| Exact relocations / 18317 | 905 | 904 |
+| Exact symbols / 2907 | 222 | 222 |
+| Candidate content size delta | -41996 | -50936 |
+| Completion | DIFFERENT | DIFFERENT |
+
+`partialcmp.py --require-exact` exits **1** for the auto81 partial link, as
+required. The 567 additional matching positioned bytes are not a completion
+claim or justification for accepting the call-boundary regressions. JSON and
+text reports are `build/issue22-auto81/partial.{json,txt}`, with the baseline
+JSON at `build/issue20-followup/partial-baseline.json`. No production changes
+or differential acceptance are claimed for this experiment.
+
+#### V92Modulator: expansion is recoverable, but plain inline loses an export
+
+Fourteen full-TU cells combine O3/auto81 with seven source/option controls;
+twelve compile and two `extern inline` C++ forms are rejected by GCC 3.4.2.
+The parent independently rescored all **284 shared-symbol verdicts** and
+verified both unmodified control objects are byte-identical to their existing
+global-build counterparts.
+
+An explicit `inline` declaration recovers the two 734-byte exact constructors
+at auto81 but removes the strong exported `reset` definition entirely, even
+with `-fkeep-inline-functions`. The denominator drops from 24 to 23, so
+15/23 exact is not a valid replacement for either baseline. Moving the reset
+definition after the constructor has no effect at either profile: the
+compiler still sees its body across the whole TU.
+
+Two diagnostic controls recover the constructors and retain the reset export:
+`always_inline`, and duplicating reset's body at its call site. The former
+produces an object **byte-identical to the complete O3 baseline**, independently
+confirmed by the parent. This isolates the expansion mechanism, but gives no
+evidence that the author wrote the attribute; the latter introduces unjustified
+duplication and changes emission order. Neither is retained as reconstructed
+source. Artifacts: `build/issue22-v92mod-inline/{run_matrix.py,results.json,run.log}`.
+
+#### V92Jd: a preceding-emission carrier, not wrong reset stores
+
+A complete 16-cell product tests pack-function swap, getters-last, unpacker
+swap, and reset-function swap, under auto81. Parent rescoring confirms all
+**336 verdicts**. Two cells give 13/21 exact, up from 9/21, without exact
+losses: move both getters after the existing reset/data-unpack/phase-unpack
+tail, leaving reset and unpack order unchanged. Either pack order works.
+The four gains are both resets and both getters. This decodes a shared
+ordering property in that domain, not a unique authorial order.
+
+Equal scores are not unchanged bodies: parent raw-body/relocation comparison
+finds an additional one-byte change inside `unPackJdData`, hidden behind its
+unchanged SIZE(413) result. The other 16 shared bodies/relocation dictionaries
+are unchanged. At the unchanged O3 profile, the useful getters-last candidate
+leaves **all 21 function bodies and relocation dictionaries unchanged**, with
+11/21 exact; this is not an independent function-identity improvement under
+the retained flags.
+
+Blindly copying the full reference emission order is different again: it
+gives 11/21 under auto81 rather than 13, and changes non-exact unpackers.
+At O3 it retains 11 exact, but parent inspection also finds 25-byte changes
+in each packer, despite their unchanged SIZE scores. Source definition order
+and final emission order are not interchangeable. No source change is retained
+on these experiments alone. Records are in `build/issue22-v92jd-order`,
+including `results.json`, `o3-control.json` and `o3-best-control.json`.
+
+#### The other successful Phase4 threshold, 82
+
+The global 82 build also completes **273/273 objects, zero failures**.
+Whole-object comparison against 81 finds **272/273 byte-identical objects**;
+only V90Demodulator changes. Its 26-symbol TU retains the same 16 exact
+functions; `progress` changes from 7471 to 7750 bytes (reference 7276).
+The complete census confirms **815/1852 exact**, the identical six-gain,
+four-loss set measured at 81 against the 813-function baseline.
+Thus 82 does not recover the four lost exact functions or the call-boundary
+regressions discussed above.
+
+Its strict partial link is still DIFFERENT: 54578/943398 positioned bytes,
+908/18317 exact relocations, 222/2907 exact symbols, content delta -50648.
+Artifacts: `build/issue22-auto82`,
+`build/issue20-followup/global-auto82-{build.log,exact.txt}`. Neither endpoint
+of the successful Phase4 interval is a clean global replacement.
+
 ## Reproducibility gap
 
 The main build defaults had been updated to Gentoo, but `flagsweep.py` and
