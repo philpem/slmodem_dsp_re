@@ -47,7 +47,7 @@ def definitions(text, names):
                     break
         if end is None:
             raise RuntimeError("unclosed definition for %s" % name)
-        spans.append((start, end, text[start:end]))
+        spans.append((start, end, text[start:end], name))
     if len({(x[0], x[1]) for x in spans}) != len(spans):
         raise RuntimeError("definition spans overlap")
     return sorted(spans)
@@ -56,7 +56,7 @@ def definitions(text, names):
 def substitute(text, spans, permutation):
     pieces = []
     cursor = 0
-    for (start, end, _), replacement in zip(spans, permutation):
+    for (start, end, _, _), replacement in zip(spans, permutation):
         pieces.append(text[cursor:start])
         pieces.append(replacement)
         cursor = end
@@ -90,9 +90,9 @@ def main():
     a.work = a.work.resolve()
     a.work.mkdir(parents=True, exist_ok=True)
     rows = []
-    for n, perm in enumerate(itertools.permutations([x[2] for x in spans])):
+    for n, perm in enumerate(itertools.permutations(spans)):
         candidate = a.work / source.name
-        candidate.write_text(substitute(text, spans, perm))
+        candidate.write_text(substitute(text, spans, [x[2] for x in perm]))
         output = a.work / ("%03d.o" % n)
         cmd = ["docker", "run", "--rm", "--user", "%d:%d" %
                (os.getuid(), os.getgid()), "--platform", "linux/386",
@@ -101,14 +101,17 @@ def main():
                "gcc", "-c"] + FLAGS + a.extra.split() + ["-o", "/out/%03d.o" % n,
                "/variant/%s" % source.name]
         subprocess.check_call(cmd)
-        rows.append((metrics(output, a.symbol), hashlib.sha256(output.read_bytes()).hexdigest(), n))
+        rows.append((metrics(output, a.symbol), hashlib.sha256(output.read_bytes()).hexdigest(),
+                     n, tuple(x[3] for x in perm)))
     groups = {}
-    for size, digest, n in rows:
-        groups.setdefault((size, digest), []).append(n)
+    for size, digest, n, order in rows:
+        groups.setdefault((size, digest), []).append((n, order))
     print("function order: %d candidates; %d distinct objects" % (len(rows), len(groups)))
     for (size, _), candidates in sorted(groups.items()):
+        rendered = "; ".join("%03d=%s" % (n, ",".join(order))
+                             for n, order in candidates)
         print("  %3d candidate(s): %d bytes, %s" %
-              (len(candidates), size, ",".join(map(str, candidates))))
+              (len(candidates), size, rendered))
 
 
 if __name__ == "__main__":
