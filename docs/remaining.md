@@ -119,6 +119,15 @@ the generic bit recurrence and constructor tap checks do not close that issue.
    and 175 of 2,907 defined-symbol records are exact. The first FILE-symbol
    mismatch is `dp_init.c` against the reconstruction's alphabetically first
    `call.c`, direct evidence that input order is already a first-order limit.
+   `partial-link` now derives `tc_link_manifest.txt` and records the complete
+   provenance in `link-order.json`: unique FILE-name matches and authoritative
+   function attribution anchor an input; a merged recovered
+   input is placed at its earliest proven original TU, and unsupported inputs
+   retain stable source order. The first derived-order census is
+   54,674/943,398 bytes, 844/18,317 relocations and 185/2,907 symbols exact,
+   versus 51,072, 266 and 175 respectively. It leaves 57 exact sections and
+   changes the NOBITS shortfall from 484 to 488 bytes; the report keeps that
+   trade-off visible rather than hiding it behind a scalar score.
 2. **Audit behavioural confidence before buying more byte matches.** Separate
    functions with no direct differential observable, shallow dispatcher-arm
    coverage, stale or absent mutation evidence, or a missing independent

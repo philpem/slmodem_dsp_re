@@ -981,8 +981,12 @@ similarity: tc
 # report until convergence, so partial-compare is a census rather than a phase
 # gate.  partialcmp.py --require-exact supplies the strict final-object gate.
 partial-link: tc-repro
+	@$(PYTHON) tools/toolchain/recoverorder.py --blob $(BLOB) \
+		--manifest $(BUILD)/tc_repro/tc_manifest.txt \
+		--output $(BUILD)/tc_repro/tc_link_manifest.txt \
+		--json $(BUILD)/partial/link-order.json
 	@tools/toolchain/partiallink.sh $(BUILD)/partial/dsplibs.o \
-		$(BUILD)/tc_repro/tc_manifest.txt
+		$(BUILD)/tc_repro/tc_link_manifest.txt
 
 partial-compare: partial-link
 	@$(PYTHON) tools/toolchain/partialcmp.py $(BLOB) \
@@ -990,6 +994,7 @@ partial-compare: partial-link
 
 partial-compare-selftest:
 	@$(PYTHON) tools/toolchain/partialcmp.py --self-test
+	@$(PYTHON) tools/toolchain/recoverorder.py --self-test
 
 coverage: $(BUILD)/tumap.json $(OBJ) $(REF) $(TESTOBJ) $(HARNESS_OBJ)
 	@$(PYTHON) tools/coverage.py --md docs/coverage.md
