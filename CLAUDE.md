@@ -484,6 +484,15 @@ level. Compare complete translation units, including non-exact bodies and
 symbol binding; an exact-set gain alone does not establish the original
 profile. See `docs/cid-dcr-audit.md` and GitHub #22 for measured controls.
 
+**Before source/flag refinement, read `docs/method/experiment-design.md`.**
+It is #22's anti-loop workflow: baseline controls, crossed source/option
+experiments, bounded domains, explicit stopping/reframing, and full-TU review
+including non-exact bodies and exports. Current exact matches are evidence,
+not a reason to freeze potentially compensating source/flag choices. Do not
+require monotonic improvement during exploration or adopt a candidate merely
+for a net score gain. Record the next discriminating test in the issue before
+repeating a stalled line of inquiry.
+
 **Every reconstruction experiment must enable `DSPLIB_REPRODUCE_BUGS`.**
 Use the shared experiment-toolchain helpers to append the define after
 configurable flags. Record and review the actual complete compiler command
@@ -545,16 +554,19 @@ came from getting that backwards.
   identity, operands included.
   **ENUMERATE, DO NOT SEARCH.** The candidate spellings are a small finite
   family: compile ALL of them. If exactly one maps onto the object you have
-  DECODED the author's order, and this holds even where the compiler reordered
-  your source, which 617's rule had made look impossible (7770). If several
+  recovered an order within that declared family, even where the compiler
+  reordered your source (7770). Do not claim uniqueness across untested source
+  forms or compiler profiles. If several
   map, you have decoded a specific FACT and the finding must say which. If none
-  does, the difference is not statement order at all — 16 spellings of
+  does, those tested statement orders do not explain the difference under
+  those controls — not a global exclusion of statement order. For example, 16 spellings of
   `packData`'s loops, maximum 516 against the object's 534 (7785).
 
 **THE RULING ON FIT VERSUS RECOVERY (7782), because these levers all raise
 it.** Byte identity is the target and it is TAKEN when the candidate space is
 exhausted and exactly one element maps onto the object — the preimage is
-unique, so the source is derived from the object rather than fitted to it.
+unique within an evidence-backed domain, rather than selected by a near-match
+score. This does not prove uniqueness over all possible source/flag choices.
 It is DECLINED when you are hill-climbing on byte count: one pass declined
 `V92Phase4Modulator::reset` at 27 differing bytes of 290 because its
 14-spelling enumeration contained no match, and another declined a 2-of-387

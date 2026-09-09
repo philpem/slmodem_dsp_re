@@ -1,5 +1,12 @@
 # Refinement: what actually closes the last bytes
 
+For experiment planning, source/flag interactions and stopping/reframing a
+stalled search, first read [experiment-design.md](experiment-design.md).
+This page supplies the individual levers; that workflow prevents a locally
+successful lever from becoming an untested global assumption. A unique
+preimage below is unique within its declared domain, not a claim that all
+possible source/flag combinations have been excluded.
+
 Every lever here was measured in this tree, and every one carries its
 counterexample. A lever without a known failure is a lever nobody has pushed
 hard enough yet.
