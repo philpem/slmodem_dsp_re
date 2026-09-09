@@ -122069,6 +122069,39 @@ self-test; the deliberately isolated modern-compiler NaN mismatch remains an
 allowed diagnostic while `make period` is authoritative for that case.
 (2026-09-08)
 
+## F10217. DCR's recovered compiler preimage is accepted through stack-layout variance, not a source rewrite
+
+The reference object identifies Gentoo's patched GCC 3.4.2-r2.  With that
+compiler, `DSPLIB_REPRODUCE_BUGS`, and DCR alone compiled as
+`-O2 -fno-rerun-cse-after-loop`, `dcr_process` is one byte short of the
+568-byte blob body.  `byteident.py` rejects grade 0 solely because the
+prologue reserves `0x5c` bytes where the blob reserves `0x2c`; after the
+live-range renaming used by its grade-1 check, that is the first and only
+non-register operand mismatch.  The emitted control flow, operations and
+operands otherwise agree.
+
+The source was deliberately left in its clear ordinary-C form.  Count-before-
+sum order in EVALUATE does not change this result; the corresponding TRACK
+order is worse.  Case-local `blocksum` and `sum` are 21 bytes short.  The
+five-local declaration domain, all 120 cells, is separately exhausted under
+normal O2 and under O2/no-cprop; no source spelling is retained merely to
+alter a compiler frame.  The frame can plausibly be influenced by the
+historical Gentoo SSP/PIE compiler bundle even without a canary instruction,
+but that possibility is recorded as a variance, not asserted as proof.
+
+`TC_DCR_FLAGS` carries the per-TU preimage in both period build paths, so the
+global reconstruction flags and unrelated objects do not move.  The strict
+partial-link completion check is unchanged: this result is **not** byte
+identity and `partialcmp.py --require-exact` must still reject the complete
+object until every section, relocation and symbol is exact.
+
+The first exact-Gentoo partial-link run moves positioned reference contents
+from 53,452 to **54,109** bytes, candidate delta from -42,008 to **-41,996**,
+exact relocations from 891 to **905**, exact symbols from 220 to **222**, and
+the first `vce_hook_on` position gap from 48 to **32** bytes.  It remains
+`DIFFERENT` as required.  The focused native-Gentoo period gate passes
+`t_dcr` (1 passed, 0 failed). (2026-09-09)
+
 ## F10241. The 155 receive-chain differences were an invalid-state fixture artefact, and a constructed chain is green
 
 F7513 recorded that wiring `V90Equalizer::process` deeply enough to call

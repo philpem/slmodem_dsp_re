@@ -6,7 +6,7 @@ cd "$(dirname "$0")/../.."
 
 output=${1:-build/partial/dsplibs.o}
 manifest=${2:-build/tc_repro/tc_manifest.txt}
-image=${TC_IMAGE:-dsplibs-tc342}
+image=${TC_IMAGE:-dsplibs-tc342-gentoo}
 object_dir=$(dirname "$manifest")
 
 [ -s "$manifest" ] || {

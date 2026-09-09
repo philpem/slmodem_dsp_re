@@ -31,6 +31,10 @@ FLAGS="-O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387
 CFLAGS="$FLAGS -std=gnu99"
 CXXFLAGS="$FLAGS -fno-exceptions -fno-rtti"
 
+# Keep DCR's recovered optimisation preimage local to its translation unit.
+# See the matching TC_DCR_FLAGS in period.mk and finding F10217.
+DCR_FLAGS="-O2 -fno-rerun-cse-after-loop"
+
 HARNESS="test/harness/harness.c test/harness/runtime.c
          test/harness/fakedp.c test/harness/v34hsstep.c
          test/harness/unwritten.c"
@@ -63,7 +67,8 @@ compile_one() {
 		&& return 0
 	case $f in
 	*.cpp)	g++ -c $CXXFLAGS -o "$o" "$f" 2>"$o.log" ;;
-	*)	gcc -c $CFLAGS   -o "$o" "$f" 2>"$o.log" ;;
+	*)	case $f in src/service/dcr.c) cflags="$CFLAGS $DCR_FLAGS" ;; *) cflags="$CFLAGS" ;; esac
+		gcc -c $cflags -o "$o" "$f" 2>"$o.log" ;;
 	esac || { echo "$f" >> "$OUT/failed"; sed -n '1,4p' "$o.log" >&2; }
 }
 

@@ -67,7 +67,7 @@ cd "$(dirname "$0")/../.."
 # 185 passed / 0 failed -- so this tier decides between none of the three.
 # Set PERIOD_OUT with it: build/period is incremental on SOURCE mtime and
 # does not notice that the compiler changed.
-IMG=${PERIOD_IMG:-dsplibs-tc342}
+IMG=${PERIOD_IMG:-dsplibs-tc342-gentoo}
 
 if ! docker image inspect "$IMG" >/dev/null 2>&1; then
     echo "tools/toolchain: no docker image '$IMG'.  Build it with" >&2
@@ -146,8 +146,25 @@ NAME="dsplibs-period-$$"
 cleanup() { docker rm -f "$NAME" >/dev/null 2>&1 || true; }
 trap cleanup EXIT INT TERM
 
-docker run --rm --name "$NAME" --user "$(id -u):$(id -g)" \
-    --platform linux/386 -v "$PWD:/src" -v "$PWD/$OUT:/out" -w /src \
-    -e "SRC=$SRC" -e "CXXSRC=$CXXSRC" -e "TESTS=$TESTS" -e "J=$J" -e "REF=$REF" \
-    -e "KEEP=${KEEP:-}" \
-    "$IMG" sh /src/tools/toolchain/period_inner.sh
+# GCC's 2005 Gentoo driver invokes `whoami`; an arbitrary host UID is absent
+# from that stage3's passwd file and makes the driver select its bootstrap
+# compiler.  Run that one image as root, then restore the bind mount's
+# ownership before returning.  The stock images keep the ordinary host UID.
+if [ "$IMG" = dsplibs-tc342-gentoo ]; then
+    docker run --rm --name "$NAME" --platform linux/386 \
+        -v "$PWD:/src" -v "$PWD/$OUT:/out" -w /src \
+        -e "SRC=$SRC" -e "CXXSRC=$CXXSRC" -e "TESTS=$TESTS" -e "J=$J" -e "REF=$REF" \
+        -e "KEEP=${KEEP:-}" -e "OUT_UID=$(id -u)" -e "OUT_GID=$(id -g)" \
+        "$IMG" sh -c '
+            sh /src/tools/toolchain/period_inner.sh
+            status=$?
+            chown -R "$OUT_UID:$OUT_GID" /out
+            exit "$status"
+        '
+else
+    docker run --rm --name "$NAME" --user "$(id -u):$(id -g)" \
+        --platform linux/386 -v "$PWD:/src" -v "$PWD/$OUT:/out" -w /src \
+        -e "SRC=$SRC" -e "CXXSRC=$CXXSRC" -e "TESTS=$TESTS" -e "J=$J" -e "REF=$REF" \
+        -e "KEEP=${KEEP:-}" \
+        "$IMG" sh /src/tools/toolchain/period_inner.sh
+fi

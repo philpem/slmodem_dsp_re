@@ -61,8 +61,10 @@ TC_OUT   ?= $(CURDIR)/build/tc_out
 #   TC_IMAGE=dsplibs-tc      the OLD image, Debian sarge's GCC 3.4.4; the
 #                            default is `dsplibs-tc342`, GCC 3.4.2 itself
 #                            (Dockerfile.exact).  Finding F2200
+#   TC_IMAGE=dsplibs-tc342
+#                            stock GCC 3.4.2, retained as an A/B arm.
 #   TC_IMAGE=dsplibs-tc342-gentoo
-#                            the THIRD arm and the only exact one: Gentoo's
+#                            the default and only exact arm: Gentoo's
 #                            gcc-3.4.2-r2, built from the ebuild inside
 #                            stage3-x86-2005.0, printing the blob's .comment
 #                            back byte for byte (Dockerfile.gentoo).  It is
@@ -85,7 +87,7 @@ TC_OUT   ?= $(CURDIR)/build/tc_out
 # object rebuilds.  Findings F2155 and F1990 are the flag record; this is still
 # not a supported way to build the tree differently from what they say.
 #
-TC_IMAGE ?= dsplibs-tc342
+TC_IMAGE ?= dsplibs-tc342-gentoo
 TC_EXTRA ?=
 
 # `-mno-ieee-fp` IS IN `make period` TOO NOW, so the two sets are identical
@@ -114,6 +116,13 @@ TC_FLAGS := -O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387 \
             -Iinclude -D__SIZEOF_POINTER__=4 \
             -include tools/toolchain/period_compat.h
 TC_FLAGS += $(TC_EXTRA)
+
+# DCR's recovered GCC preimage is O2 without the post-loop CSE rerun.  Its
+# instruction graph matches the blob under live-range renaming; the only
+# remaining difference is the compiler's 0x5c versus 0x2c frame reservation.
+# This is deliberately source-specific: changing the global level would move
+# hundreds of unrelated functions.  Finding F10217 records the evidence.
+TC_DCR_FLAGS := -O2 -fno-rerun-cse-after-loop
 
 # Appended AFTER $(TC_EXTRA), exactly as `build.sh` ordered them, so the
 # override semantics above are unchanged.
@@ -171,9 +180,17 @@ TC_STALE   := $(filter-out $(TC_OBJ),$(wildcard $(TC_OUT)/*.o))
 TC_STALE_D := $(filter-out $(patsubst $(TC_OUT)/%,$(TC_DEPDIR)/%.d,$(TC_OBJ)), \
                            $(wildcard $(TC_DEPDIR)/*.d))
 
+# The recovered Gentoo driver calls `whoami`, so it cannot run as this host's
+# unrecorded bind-mount UID.  Build outputs are ignored and their directory is
+# user-writable, so root-owned objects remain removable between configurations.
+ifeq ($(TC_IMAGE),dsplibs-tc342-gentoo)
+TC_RUN := docker run --rm --label dsplibs-tc --platform linux/386 \
+	  -v '$(CURDIR):/src' -v '$(TC_OUT):/out' -w /src $(TC_IMAGE)
+else
 TC_RUN := docker run --rm --label dsplibs-tc \
-          --user $(shell id -u):$(shell id -g) --platform linux/386 \
-          -v '$(CURDIR):/src' -v '$(TC_OUT):/out' -w /src $(TC_IMAGE)
+	  --user $(shell id -u):$(shell id -g) --platform linux/386 \
+	  -v '$(CURDIR):/src' -v '$(TC_OUT):/out' -w /src $(TC_IMAGE)
+endif
 
 .DEFAULT_GOAL := tc
 .PHONY: tc tc-image tc-reap tc-clean FORCE
@@ -215,8 +232,8 @@ tc: $(TC_OBJ) $(TC_GCCVER)
 FORCE:
 
 $(TC_STAMP): FORCE | $(TC_OUT) tc-image
-	@printf 'image %s\nflags %s\ncxx   %s\n' \
-	        '$(TC_IMAGE)' '$(TC_FLAGS)' '$(TC_CXXONLY)' > '$@.new'
+	@printf 'image %s\nflags %s\ncxx   %s\ndcr   %s\n' \
+	        '$(TC_IMAGE)' '$(TC_FLAGS)' '$(TC_CXXONLY)' '$(TC_DCR_FLAGS)' > '$@.new'
 	@if cmp -s '$@.new' '$@'; then rm -f '$@.new'; else \
 	   mv '$@.new' '$@'; \
 	   echo "  TC-CFG  $(TC_IMAGE) $(if $(TC_EXTRA),TC_EXTRA=$(TC_EXTRA) ,)-- rebuilding every object"; \
@@ -259,7 +276,7 @@ tc-image:
 define TC_CC_RULE
 $(call tcobj,$(1)): $(1) $$(TC_STAMP) | $$(TC_DEPDIR)
 	@echo '  TC-CC   $(1)'
-	@$$(TC_RUN) gcc -c $$(TC_FLAGS) -MMD -MP -MT '$$@' \
+	@$$(TC_RUN) gcc -c $$(TC_FLAGS) $(if $(filter src/service/dcr.c,$(1)),$(TC_DCR_FLAGS)) -MMD -MP -MT '$$@' \
 	    -MF '/out/.deps/$$(@F).d' -o '/out/$$(@F)' '$$<'
 endef
 
