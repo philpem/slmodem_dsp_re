@@ -1,11 +1,11 @@
 /*
  * t_vce.c -- differential test of the four `vce_*` / `STRM_VCE_*` functions.
  *
- * THE REFERENCE SIDE IS DECLARED PLAINLY, NOT `regparm(2)`.  Three of the four
- * are `t` in the object, which is F8462's shape -- and F8462's conclusion does
- * NOT carry: these three read their arguments off the stack, so they are
- * ordinary cdecl and a `__attribute__((regparm(2)))` declaration here would
- * silently compare two different calls.  Finding F8770 has the prologues.
+ * The first three functions are `t` in the object.  This test reaches both
+ * sides through the callback tables made by `VOICE_create`, rather than
+ * publishing an external declaration that would change the reconstructed
+ * object's binding.  Their stack-based prologues establish ordinary cdecl;
+ * no `regparm(2)` declaration is involved.  Finding F8770.
  *
  * WHAT COUNTS AS AN OBSERVABLE RESULT:
  *
@@ -40,15 +40,16 @@
 
 #include "harness.h"
 #include "dsplib/debug.h"
+#include "dsplib/cadence.h"
+#include "dsplib/detector.h"
 #include "dsplib/vce.h"
 #include "dsplib/modem_params.h"
+#include "dsplib/voice.h"
 
 extern unsigned int ref_dsplibs_debug_level;
-extern void ref_vce_hook_on(void *p);
-extern void ref_vce_hook_off(void *p);
-extern int ref_vce_get_sreg(void *modem, unsigned int num);
 extern void ref_STRM_VCE_GetFDSPEnvironmentalParams(short *psFarEchoDelay,
 						    short *psNearEchoDelay);
+extern void *ref_VOICE_create(void *modem, unsigned int rate);
 
 extern int dsplib_debug_capture_on;
 void dsplib_debug_capture_reset(void);
@@ -58,6 +59,86 @@ const char *dsplib_debug_capture_text(int side);
 static long seen_arm[8];	/* one per known register, [7] is the default */
 static long seen_band[4];	/* the four sensitivity levels 0..3         */
 static long sregs_compared;
+static struct vce *ours_vce;
+static struct vce *ref_vce;
+static int callback_modem;
+static struct voice_info callback_info;
+static void fill_info(struct voice_info *vi, unsigned int sens,
+		      unsigned int period);
+
+/* VOICE_create needs this same country fixture as t_voiceapi. */
+static void
+set_voice_params(void)
+{
+	unsigned k;
+	static const int on_off[4] = {
+		GetMaxBusyCadenceOnTime, GetMinBusyCadenceOnTime,
+		GetMinBusyCadenceOffTime, GetMaxBusyCadenceOffTime
+	};
+
+	harness_param_reset();
+	harness_param_set(MDMPRM_VOICEINFO, (long)(size_t)&callback_info);
+	harness_param_set(GetDialToneCallProgressFilterIndex, 1);
+	harness_param_set(GetBusyToneCallProgressFilterIndex, 1);
+	harness_param_set(GetCongestionToneCallProgressFilterIndex, 1);
+	harness_param_set(GetRingbackToneCallProgressFilterIndex, 1);
+	harness_param_set(GetDialToneFilterSubindex, 0);
+	harness_param_set(GetCallProgressSamplesBufferLength, 666);
+	harness_param_set(GetDialToneValidationTime, 50);
+	harness_param_set(GetDialToneDetectionThreshold, 40);
+	harness_param_set(GetBusyToneLooseDetectionEnabled, 0);
+	harness_param_set(GetBusyDetectionCyclesNumber, 3);
+	harness_param_set(GetCongestionDetectionCyclesNumber, 3);
+	harness_param_set(GetRingbackDetectionCyclesNumber, 3);
+	harness_param_set(GetBusyToneDiffTime, 3);
+	for (k = 0; k < 4; k++)
+		harness_param_set(on_off[k], (int)(60 + k * 13));
+}
+
+static void
+callbacks_init(void)
+{
+	fill_info(&callback_info, 110, 111);
+	set_voice_params();
+	ours_vce = (struct vce *)VOICE_create(&callback_modem, VCE_RATE_8000);
+	ref_vce = (struct vce *)ref_VOICE_create(&callback_modem, VCE_RATE_8000);
+}
+
+static int
+ours_sreg(void *modem, unsigned int num)
+{
+	return (int)ours_vce->voice->cfg.fn_04(modem, (int)num);
+}
+
+static void
+ours_hook_on(void *modem)
+{
+	ours_vce->voice->cfg.fn_08(modem);
+}
+
+static void
+ours_hook_off(void *modem)
+{
+	ours_vce->voice->cfg.fn_0c(modem);
+}
+
+static int
+ref_sreg(void *modem, unsigned int num)
+{
+	return (int)ref_vce->voice->cfg.fn_04(modem, (int)num);
+}
+
+static void
+ref_hook_on(void *modem)
+{
+	ref_vce->voice->cfg.fn_08(modem);
+}
+
+static void
+ref_hook_off(void *modem)
+{
+	ref_vce->voice->cfg.fn_0c(modem);
+}
 
 static void
 set_level(unsigned int lvl)
@@ -132,8 +213,8 @@ t_sreg(void)
 				long tag = (long)(num * 1000 + s * 10 + p);
 				int a, b;
 
-				a = ref_vce_get_sreg(modem, num);
-				b = vce_get_sreg(modem, num);
+				a = ref_sreg(modem, num);
+				b = ours_sreg(modem, num);
 				diff_eq_int("vce_get_sreg(%ld)", b, a, tag);
 				sregs_compared++;
 				seen_arm[arm_of(num)]++;
@@ -152,8 +233,8 @@ t_sreg(void)
 	harness_param_reset();
 	fill_info(&vi, 100, 200);
 	harness_param_set(MDMPRM_VOICEINFO, (long)(size_t)&vi);
-	(void)ref_vce_get_sreg(modem, 7);
-	(void)vce_get_sreg(modem, 7);
+	(void)ref_sreg(modem, 7);
+	(void)ours_sreg(modem, 7);
 	diff_eq_int("an unknown register still fetches VOICEINFO",
 		    harness_param_ours.calls, harness_param_ref.calls, 7);
 	diff_eq_int("...exactly once", harness_param_ours.calls, 1, 7);
@@ -227,12 +308,12 @@ t_debug(void)
 		dsplib_debug_capture_reset();
 		dsplib_debug_capture_on = 1;
 
-		ref_vce_hook_on(modem);
-		vce_hook_on(modem);
-		ref_vce_hook_off(modem);
-		vce_hook_off(modem);
-		(void)ref_vce_get_sreg(modem, SREG_MIC_GAIN);
-		(void)vce_get_sreg(modem, SREG_MIC_GAIN);
+		ref_hook_on(modem);
+		ours_hook_on(modem);
+		ref_hook_off(modem);
+		ours_hook_off(modem);
+		(void)ref_sreg(modem, SREG_MIC_GAIN);
+		(void)ours_sreg(modem, SREG_MIC_GAIN);
 		ref_STRM_VCE_GetFDSPEnvironmentalParams(&fa, &na);
 		STRM_VCE_GetFDSPEnvironmentalParams(&fb, &nb);
 
@@ -284,6 +365,11 @@ main(void)
 {
 	int failed = 0;
 
+	callbacks_init();
+	if (ours_vce == 0 || ref_vce == 0) {
+		fprintf(stderr, "t_vce: VOICE_create fixture failed\n");
+		return 1;
+	}
 	failed |= t_sreg();
 	failed |= t_env_params();
 	failed |= t_debug();

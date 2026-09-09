@@ -23,9 +23,9 @@
  *
  * THE THREE CALLBACKS CANNOT BE COMPARED BY VALUE, and that is F8770 rather
  * than a fixture weakness: `vce_get_sreg`, `vce_hook_on` and `vce_hook_off`
- * are `t` in the object and external here, so `VOICE_create` stores three
- * different addresses on the two sides.  Each side is checked to have stored
- * ITS OWN three, which is the same move t_voicesvc makes for `handler`.
+ * are `t` in both objects, so `VOICE_create` stores different addresses on
+ * the two sides.  Each side is checked to have populated its own table,
+ * which is the same move t_voicesvc makes for `handler`.
  *
  * COVERAGE IS COUNTED FROM THE RUN (F134).  `VOICE_command`'s eight arms are
  * counted by matching the REFERENCE side's own transcript against the one
@@ -63,10 +63,6 @@ extern unsigned int ref_dsplibs_debug_level;
 extern void *ref_VOICE_create(void *modem, unsigned int rate);
 extern void ref_VOICE_delete(void *obj);
 extern int ref_VOICE_command(void *obj, unsigned int cmd);
-
-extern int ref_vce_get_sreg(void *modem, unsigned int num);
-extern void ref_vce_hook_on(void *p);
-extern void ref_vce_hook_off(void *p);
 
 extern int ref_voice_online(struct voice_ctx *v, short *rx_lin, float *rx_flt,
 			    float *tx_flt, short *tx_lin,
@@ -258,10 +254,10 @@ normalise_ctx(struct voice_ctx *c)
 	c->dp = 0;
 	c->handler = 0;
 	/*
-	 * F8770: the three callbacks VOICE_create installs are file-local in
-	 * the object and external here, so the two sides necessarily store
-	 * different addresses.  Each side's own three are checked by identity
-	 * in `check_callbacks` instead.
+	 * F8770: the three callbacks VOICE_create installs are file-local, so the
+	 * two sides necessarily store different addresses.  `check_callbacks`
+	 * verifies each table is populated and that its getter propagates to
+	 * beepgen, rather than naming a non-public function.
 	 */
 	c->cfg.fn_04 = 0;
 	c->cfg.fn_08 = 0;
@@ -271,35 +267,23 @@ normalise_ctx(struct voice_ctx *c)
 static void
 check_callbacks(struct vce *ours, struct vce *ref, long tag)
 {
-	diff_eq_int("our cfg.fn_04 is vce_get_sreg",
-		    (void *)ours->voice->cfg.fn_04 == (void *)vce_get_sreg, 1,
-		    tag);
-	diff_eq_int("our cfg.fn_08 is vce_hook_on",
-		    (void *)ours->voice->cfg.fn_08 == (void *)vce_hook_on, 1,
-		    tag);
-	diff_eq_int("our cfg.fn_0c is vce_hook_off",
-		    (void *)ours->voice->cfg.fn_0c == (void *)vce_hook_off, 1,
-		    tag);
-	diff_eq_int("ref cfg.fn_04 is ref_vce_get_sreg",
-		    (void *)ref->voice->cfg.fn_04 == (void *)ref_vce_get_sreg,
-		    1, tag);
-	diff_eq_int("ref cfg.fn_08 is ref_vce_hook_on",
-		    (void *)ref->voice->cfg.fn_08 == (void *)ref_vce_hook_on,
-		    1, tag);
-	diff_eq_int("ref cfg.fn_0c is ref_vce_hook_off",
-		    (void *)ref->voice->cfg.fn_0c == (void *)ref_vce_hook_off,
-		    1, tag);
+	diff_eq_int("our callback table is populated",
+		    ours->voice->cfg.fn_04 != 0 && ours->voice->cfg.fn_08 != 0 &&
+		    ours->voice->cfg.fn_0c != 0, 1, tag);
+	diff_eq_int("ref callback table is populated",
+		    ref->voice->cfg.fn_04 != 0 && ref->voice->cfg.fn_08 != 0 &&
+		    ref->voice->cfg.fn_0c != 0, 1, tag);
 	/*
 	 * And the rotation still holds through this layer: the S-register
 	 * getter is what reaches beepgen's `fn_0124`, the slot beepgen calls
 	 * as f(modem, 24).  F8813, seen from one level further out.
 	 */
-	diff_eq_int("our beepgen fn_0124 is vce_get_sreg",
+	diff_eq_int("our beepgen fn_0124 is the configured getter",
 		    (void *)ours->voice->beepgen->fn_0124 ==
-			(void *)vce_get_sreg, 1, tag);
-	diff_eq_int("ref beepgen fn_0124 is ref_vce_get_sreg",
+			(void *)ours->voice->cfg.fn_04, 1, tag);
+	diff_eq_int("ref beepgen fn_0124 is the configured getter",
 		    (void *)ref->voice->beepgen->fn_0124 ==
-			(void *)ref_vce_get_sreg, 1, tag);
+			(void *)ref->voice->cfg.fn_04, 1, tag);
 }
 
 static void

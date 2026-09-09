@@ -14,18 +14,10 @@
  *   VOICE_process                        .text 0x000bd0   2016 bytes
  *   STRM_VCE_GetFDSPEnvironmentalParams  .text 0x0013b0    152 bytes
  *
- * THREE OF THEM ARE `t` IN THE OBJECT AND OUR COPIES ARE EXTERNAL, which is
- * the `GetGain` precedent (finding F8462) and the `AnalyseDialString` one
- * before it: a static we cannot name is a static we cannot test.
- *
- * WHAT IS NOT INHERITED WITH IT.  F8462's three carry GCC 3.4's static-
- * function `regparm(2)`, so their tests declare the reference side
- * `__attribute__((regparm(2)))`.  THESE THREE DO NOT -- every one of them
- * reads its arguments off the stack in the object (`mov 0x10(%esp),%eax` in
- * `vce_hook_on`, `mov 0x10(%esp)`/`0x14(%esp)` in `vce_get_sreg`), so they
- * are ordinary cdecl and their `ref_` aliases are declared plainly.  Being
- * LOCAL is not on its own enough to predict the convention; the body is.
- * Finding F8770.
+ * The first three are file-local in both the blob and this reconstruction.
+ * Tests reach them through the callback table `VOICE_create` installs, which
+ * is the public route the host uses too; publishing declarations here would
+ * make the partial link observably wrong.
  */
 
 #ifndef DSPLIB_VCE_H
@@ -106,36 +98,6 @@ struct voice_info {
  */
 #define STRM_VCE_FAR_ECHO_DELAY		51
 #define STRM_VCE_NEAR_ECHO_DELAY	369
-
-/**
- * @brief Off-hook notification (diagnostic only).
- *
- * The whole body is a debug-level gate and a printf of @p p with `%p`; there
- * is no other observable effect at any debug level.
- *
- * @param p Opaque pointer, printed and otherwise untouched.
- */
-void vce_hook_on(void *p);
-
-/** @brief On-hook notification. Same shape as vce_hook_on(), diagnostic only. */
-void vce_hook_off(void *p);
-
-/**
- * @brief The voice service's own S-register reader.
- *
- * Not a call into slmodemd's `modem_get_sreg`: it fetches `struct voice_info`
- * via `MDMPRM_VOICEINFO` and answers seven register numbers out of that
- * block and three built-in constants (S24, S72, S73). Any other register
- * number returns 0, including ones the host itself has a value for. The
- * block is fetched unconditionally before the switch, even for the three
- * constant answers, so the `modem_get_param` call is always made.
- *
- * @param modem The host handle, passed through to `modem_get_param`.
- * @param num   The S-register number (`SREG_*`).
- * @return The register's value, or 0 for any register this function does
- *         not know.
- */
-int vce_get_sreg(void *modem, unsigned int num);
 
 /**
  * @brief Report the two FDSP echo delays, in samples.

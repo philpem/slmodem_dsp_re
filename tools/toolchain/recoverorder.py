@@ -17,7 +17,9 @@ FIRM = set(("class", "prefix", "ambig-stem"))
 # each contain symbols whose reference locations identify which occurrence
 # they represent; a basename alone cannot do that.
 SOURCE_FILE_OCCURRENCE = {
-    "src/service/voice.c": ("voice.c", 0),
+	"src/service/cid.c": ("cid.c", 0),
+	"src/service/cidcore/cid.c": ("cid.c", 1),
+	"src/service/voice.c": ("voice.c", 0),
     "src/voice/voice.c": ("voice.c", 1),
     "src/service/voicecmd.c": ("voice.c", 1),
     "src/service/voicedp.c": ("voice.c", 1),
