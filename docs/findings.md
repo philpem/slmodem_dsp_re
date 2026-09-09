@@ -120322,6 +120322,33 @@ BYTES -3 from checkpoint `aeb4a533`, with no other bucket change. The shared
 ratchet remains at the published checkpoint pending aggregate integration.
 (2026-09-07)
 
+## F10214. `dcr_process` is peephole2-exposed, but its predecessor cursor and its local-declaration domain are already exhausted
+
+The 22-byte `dcr_process` size gap is not grounds to change the period flags.
+Compiling the complete `src/service/dcr.c` translation unit under the exact
+GCC 3.4.2 image with `-fno-peephole2` and `DSPLIB_REPRODUCE_BUGS` makes the
+function 567 bytes against the blob's 568, rather than the normal build's 546.
+That proves the function is exposed to the pass and makes a translation-unit
+cursor a live hypothesis.  It does NOT reproduce the body: its instruction
+sequence remains a different shape, so the near size is not a flag conclusion.
+`-fno-rename-registers` also changes allocation but does not improve the
+comparison.
+
+The only preceding functions in this input are `dcr_create`, `dcr_delete` and
+`dcr_reset`.  `dcr_create` is itself peephole2-exposed, but its normal-period
+object is byte-exact to the blob; `dcr_delete` and `dcr_reset` are unaffected.
+The known scratch-register cursor is therefore present but has no measured
+desynchronisation before `dcr_process`.
+
+The five independent locals in `dcr_process` (`over`, `i`, `blocksum`, `sum`
+and `count`) form a finite 5! declaration-order domain.  All 120 orders were
+compiled as complete `dcr.c` translation units with the period compiler and
+the reproduction define.  They produced one object hash and the same
+546-byte `dcr_process`; changing `int over = 0` into a declaration followed
+by its immediate assignment does the same.  No source spelling from that
+domain is a unique preimage, so none is retained.  The remaining DCR gap is
+not licensed for a flag change or a byte-count hill climb. (2026-09-09)
+
 ## F10214. Store scheduling and allocation spelling recover four V90 constructor clones; the Phase 4 constructor remains bounded at 40 bytes
 
 Both 338-byte `V90Modulator` constructor clones began as `BYTES 18` near
