@@ -527,6 +527,81 @@ Artifacts: `build/issue22-auto82`,
 `build/issue20-followup/global-auto82-{build.log,exact.txt}`. Neither endpoint
 of the successful Phase4 interval is a clean global replacement.
 
+## Issue 22: source visibility versus whole-TU analysis
+
+A twelve-cell full-TU matrix crosses four source forms with O3, auto81 and
+O3/no-unit-at-a-time: unchanged, explicitly qualified wrapper call, wrapper
+definition before its callee, and a diagnostic noinline callee. The parent
+independently rescored all **636 shared-symbol verdicts** and compared every
+shared body/relocation dictionary with the existing O3 and auto81 objects.
+
+Both unmodified controls reproduce all 53 shared bodies and relocations.
+Strict object comparison also confirms every allocated section/content and
+relocation record matches their respective baseline; the only defined-symbol
+difference is the experimental STT_FILE name `baseline.cpp` instead of
+`V90Phase4Modulator.cpp`. This is an explained experimental filename difference,
+not a waiver for the eventual reference filename or partial-link gate.
+
+The qualified-call form does not change any shared body at O3 or auto81.
+Moving the wrapper before its callee likewise has no effect under those
+profiles. But combining the move with `-fno-unit-at-a-time` preserves the
+reference's five-byte wrapper tail-call: definition order becomes relevant
+when deferred whole-TU analysis is disabled. Neither that move nor the option
+alone recovers the wrapper from the O3 baseline.
+
+The option has its own bystanders. Unchanged source at O3/no-unit stays at
+37/53 exact but gains the Scrambler constructor and loses
+`resetRRNSecondSection`. The moved-wrapper combination has 43/53 exact:
+**seven gains and one loss**, not the same exact set as auto81. All non-exact
+body/relocation changes remain in the recorded matrix. Equal aggregate counts
+do not make these profiles equivalent.
+
+Diagnostic noinline at O3 gives all 53 shared bodies/relocation dictionaries
+identical to auto81. It isolates the callee-inlining decision as sufficient
+to reproduce that TU's auto81 function results, without asserting that the
+author wrote an attribute or that every resulting difference has the same
+internal compiler cause. It remains diagnostic, not retained source.
+
+Artifacts: `build/issue22-phase4-source-cost/{run.py,results.json,sources,objects,logs}`.
+The associated agent workflow is now maintained in
+`docs/method/experiment-design.md`, linked from AGENTS/CLAUDE and refinement.
+No source or production flags were changed by this matrix.
+
+### Global no-unit control: compiler rejection exposes a source constraint
+
+The unchanged-source global `-fno-unit-at-a-time` build initially stopped at
+Queue. A subsequent `make -k` attempted the remaining inputs and finished with
+**271/273 objects present, two failed TUs**, exit 2. The failed TUs are
+`src/dsp/Queue.cpp` and `src/pump/v90/V92Modulator.cpp`. GCC reports forced-inline
+Queue helper bodies unavailable: `count` in both TUs, and `isEmpty`/`isFull`
+in V92Modulator. This is a measured source/profile incompatibility, not proof
+that the original global option is excluded independently of source.
+
+There is **no global accuracy or partial-link result** for this incomplete
+profile. Do not substitute the 271 objects for a complete build or quietly
+borrow the two missing baseline objects. Logs are
+`build/issue20-followup/global-no-unit-{build.log,keep-going.log}`; outputs
+remain isolated in `build/issue22-no-unit`.
+
+A bounded four-cell Queue control crosses retained O3/no-unit with original
+header/removal of **only count's always_inline attribute**. The parent
+independently rescored the three successful objects (18 shared-symbol
+verdicts); the fourth reproduces the compiler rejection.
+
+- Under O3, both original and attribute-removed Queue objects are **entirely
+  byte-identical** to `build/tc_repro`'s Queue object, independently verified.
+- Under no-unit, removing the attribute permits compilation and retains
+  3/6 exact shared functions, but introduces three definitions absent from
+  the baseline/reference: `count`, `copy1<float>`, and
+  `dsplib_assign<float>`. It is not an accepted replacement.
+
+This bounds the header comment's attribute rationale to its tested historical
+context; it does not establish that removing it is neutral in other consumers.
+Next work in #22 is to test Queue helper visibility/instantiation and header
+consumers as a source/profile combination, preserving the reference's export
+surface. No attribute is removed from production on this single-TU result.
+Artifacts: `build/issue22-queue-inline/{run.py,results.json,overlay,objects,logs}`.
+
 ## Reproducibility gap
 
 The main build defaults had been updated to Gentoo, but `flagsweep.py` and

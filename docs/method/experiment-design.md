@@ -45,6 +45,12 @@ Preserve invalid runs as invalid and rerun; do not repair their conclusions
 after the fact. #22 required reruns for omitted register renaming and omitted
 bug reproduction.
 
+A period-compiler rejection under alternative flags is evidence about the
+tested source/profile pair. Investigate required inline bodies, instantiation
+and visibility before ruling out the profile globally or changing source just
+to make it compile. An incomplete build has no valid whole-object accuracy
+denominator; report compilation coverage and the failures separately.
+
 ## 2. Cross explanations, rather than hill-climbing one axis
 
 Before compiling, write a prediction and a falsifier. Example: "If automatic
