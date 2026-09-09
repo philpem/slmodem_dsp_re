@@ -170,6 +170,131 @@ length gap: the constructor still differs, and Reset is 433 versus 449 bytes.
 No candidate was retained or promoted to differential acceptance. Issue #21
 tracks the remaining work.
 
+### Issue 22: literal `-O` and attribution controls
+
+The preserved application Makefile uses `-O`, but links an already-built
+`dsplibs.o`; it does not establish the library's flags. On the recovered
+Gentoo compiler, direct `-O`/`-O1` comparisons produced ten byte-identical
+whole-object pairs: five C/C++ TUs under minimal and current explicit-option
+profiles. Subsequent historical-profile experiments use literal `-O`.
+
+An ownership map resolves all 91 lost exact symbols across 51 TU owner
+groups, and all 15 gains across nine groups. This is a worklist, not a vote
+for an optimization level. Its script and output are
+`build/issue20-followup/map-profile-sets.py` and `profile-map.txt`.
+
+The ring extension compiled 29 source forms under four literal-O profiles:
+minimal, current explicit period options, and each with
+`-foptimize-sibling-calls`. All 116 objects built; all 2,436 shared-symbol
+verdicts were scored. Every cell has zero EXACT except current explicit
+options plus sibling-call optimization, which has one: `RD_ring_details`.
+Disassembly shows precisely the reference's four-instruction tail jump in
+that case, versus a call/return without the option. No Reset/Create source
+form closes. This identifies a relevant option without identifying the
+original optimization level. Artifacts: `build/issue20-followup/o-ring*`.
+
+V32's explicit-inline recovery also works under plain O2, without disabling
+the CSE rerun: the same nine exact functions out of thirteen. A separate
+twelve-cell literal-O domain tested plain/inline source with minimal or
+current explicit options, plus sibling-call and unit-at-a-time controls.
+Minimal profiles have zero exact functions; all full-option profiles have
+two (`GetSequence`, `RateToSeq`). The parent independently rescored all 156
+verdicts. Literal O therefore does not recover this TU in the tested source
+domain, but is not excluded for other forms or additional options. Artifacts:
+`build/o-v32`, including twenty earlier O2/O3 control cells.
+
+No production source or executable flags changed in these experiments. The
+strict partial-link baseline is unchanged, and no differential acceptance
+is claimed for rejected variants. Open tests and further loss clusters
+remain on GitHub issue #22, separate from this measured record.
+
+The small-C control separates another confound: `B103LocLoopNextState` is
+EXACT under plain O2 and loses that status only with no-rerun-CSE (15
+differing bytes, same 138-byte length). The full B103 TU has 5/17 exact
+under O2, 4/17 under O2/no-rerun, and 3/17 under O3. Plain O2 retains
+the O3 exact set and also `TxHdxDataB103` and `RxHdxStartB103`.
+This is not a claim that its non-exact functions all improve. Seven profiles
+over B103 and PCM produced fourteen objects, independently rescored by the
+parent (161 verdicts). Both fresh O3 objects are byte-identical to their
+`build/tc_repro` controls. Artifacts: `build/o-small-controls`.
+
+Two C++ controls independently confirm that the causes are mixed:
+
+| TU | Shared functions | O3 EXACT | O2/no-rerun | O2 | O2 + web | O2 + inline-functions |
+|---|---:|---:|---:|---:|---:|---:|
+| ResamplerTiming | 14 | 11 | 4 | 6 | 6 | 11 |
+| V90BitsToSymbol | 11 | 10 | 7 | 7 | 7 | 10 |
+
+Plain O2 restores `ResamplerTiming::invertPhase` and `SdHalfBaudDft`;
+their loss was the no-rerun option. Enabling automatic inlining restores
+the other five ResamplerTiming losses and the three V90BitsToSymbol losses,
+with the exact sets matching O3. The parent rescored all six new objects
+(75 verdicts), preserved in `build/o-cpp-losses`. This establishes the
+option mechanism, not whether a different original source could achieve it
+without that option.
+
+The PCM control also exposed an omitted option in the experiment, rather
+than a reason to change its source. Gentoo GCC's `-Q -v` enabled-option
+reports differ by `-funswitch-loops` between O3 and O2 plus web/automatic
+inlining. A standalone O2+unswitch cell does not restore `alaw2linear`, but
+O2+web+automatic-inlining+unswitch does: the **entire PCM object** is
+byte-identical to faithful O3, independently checked with `cmp`.
+The two additional objects and actual compiler-option logs are under
+`build/o-small-controls`. This proves the combined setting reproduces the
+control; it does not prove which combination the original author passed,
+or that unswitch acts locally inside this loop-free function.
+
+Two C++ source-inline probes bound the V32 analogy. The reference exports
+`ResamplerTiming::reset(unsigned)` and `V90BitsToSymbol::nofBitsForNextTime`
+as strong GLOBAL DEFAULT functions, of 106 and 134 bytes respectively.
+Adding `inline` to the former's definition under O2 emits a WEAK 89-byte
+COMDAT body; adding it to the latter emits no standalone definition at all.
+The parent checked those symbol tables. These particular source edits cannot
+reproduce the reference's binding surface, regardless of any caller gains.
+Unlike the static C helper in V32, they are not successful source-inline
+recoveries. Their isolated sources and objects are in `build/o-cpp-losses`;
+other source organizations remain untested.
+
+### Global plain-O2 control: fourteen losses were the extra CSE option
+
+A fresh isolated build of all 273 TUs succeeded with plain O2, current
+explicit options and `DSPLIB_REPRODUCE_BUGS`. The DCR exception was
+explicitly overridden too, so this is genuinely global O2:
+
+```
+make -f tools/toolchain/period.mk -j6 \
+  TC_OUT="$PWD/build/issue22-o2" \
+  TC_EXTRA='-O2 -DDSPLIB_REPRODUCE_BUGS' TC_DCR_FLAGS=-O2
+TC_OUT=build/issue22-o2 python3 tools/toolchain/byteident.py --list-exact
+```
+
+| Profile | Compared | EXACT | Gains vs baseline | Losses vs baseline |
+|---|---:|---:|---:|---:|
+| O3, provisional DCR exception | 1,852 | 813 | — | — |
+| O2, no-rerun-CSE globally | 1,851 | 737 | 15 | 91 |
+| Plain O2 globally | 1,851 | 754 | 19 | 78 |
+
+Plain O2 restores **14 of the original 91 losses**, retains all 15 previous
+gains, and adds four gains. It also loses `fComputeRMSValueShortBuf`, which
+was exact in both earlier profiles: 77 old losses remain, plus this one new
+loss. Thus the original 91 were not an isolated optimization-level test.
+The missing shared-definition denominator remains important; neither O2
+profile shares the baseline's `GetNextDigitAndReturnNextState` definition.
+
+The four additional gains are `create_cid`,
+`V90Phase4Modulator::recivedE2u`, `recivedCPtag`, and
+`V90AutoDigitalImpDetector::applyPadGainToLinMapp`. The restored set includes
+the three independently investigated B103/ResamplerTiming cases above;
+the full fourteen-name set is in
+`build/issue20-followup/three-profile-summary.txt`, alongside all directional
+set differences. `compare-three-profiles.py` verifies the exact-name counts
+against each report's denominator-bearing headings before producing it.
+The complete plain-O2 report is `global-o2-exact.txt` in the same directory.
+
+This is an experimental control, not an adopted global profile. No production
+source/flags or completion criteria changed. Source-plus-options recovery
+of the remaining losses and validation of the new gains remain issue #22.
+
 ## Reproducibility gap
 
 The main build defaults had been updated to Gentoo, but `flagsweep.py` and
