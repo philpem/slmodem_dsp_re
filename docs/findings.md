@@ -122089,6 +122089,14 @@ alter a compiler frame.  The frame can plausibly be influenced by the
 historical Gentoo SSP/PIE compiler bundle even without a canary instruction,
 but that possibility is recorded as a variance, not asserted as proof.
 
+The stack and tuning candidates do not remove that residue: every supported
+`-mpreferred-stack-boundary` value (2, 3 and 4) preserves the 0x5c frame, and
+the i386, Pentium and Pentium-4 `-mtune` alternatives do not close it either;
+`-mincoming-stack-boundary` is not implemented by this GCC.  The whole-tree
+Gentoo A/B of the recovered DCR pair changes 187 of 273 translation-unit
+objects, so it is evidence for a local exception, not a replacement global
+profile.
+
 `TC_DCR_FLAGS` carries the per-TU preimage in both period build paths, so the
 global reconstruction flags and unrelated objects do not move.  The strict
 partial-link completion check is unchanged: this result is **not** byte
