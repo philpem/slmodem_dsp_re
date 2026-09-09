@@ -137,6 +137,39 @@ CID work is tracked in [#23](https://github.com/philpem/slmodem_dsp_re/issues/23
 and [#24](https://github.com/philpem/slmodem_dsp_re/issues/24), respectively;
 these are task records, separate from the findings and deviations logs.
 
+### Follow-up: source and flags can recover lost matches together
+
+The first reviewed sample supports this possibility. In `v32seq.c`, O2 plus
+no-rerun-CSE leaves calls to the plain `static` helper `v32_common_rate`,
+where the reference contains its expanded rate ladder. This initially looked
+like evidence against O2, but the absence of a helper symbol and repeated
+ladder do not distinguish automatic inlining under O3 from an explicitly
+`inline` helper under O2.
+
+A four-cell full-TU experiment measured both source forms under O3 and
+O2/no-rerun-CSE. Both O3 forms have 9 EXACT of 13 shared functions. Plain
+static under O2/no-rerun has 5; explicit `static inline` restores the same
+9-function exact set, recovering `SeqToRate`, `DecodeRateSeq`,
+`CodeFinalRateSeq` and `CodeRateSeq`. The remaining functions still differ;
+matching exact sets is not full-TU identity. The parent independently rescored
+the generated objects in `build/lost-exact-audit/objects`.
+
+Thus at least four of the 91 losses are recoverable through a source/flag
+combination. This neither identifies the original global setting nor proves
+all 91 losses have the same cause. No source or production flags were changed.
+Issue #22 remains open for broader inline/declaration and optimizer controls.
+
+For ring detection, independent review scored all 60 generated objects in
+`build/ring-followup`, 21 shared functions each (1,260 verdicts). The domains
+cover explicit Reset inlining, initial and reset-store order, the debug-call
+sample-rate expression, and six local-temporary forms, under O2/O3. All 30
+O2 cells retained 10 exact functions; all 30 O3 cells retained 7. None made
+`RingDetector_Reset` or `RingDetector_Create` exact. Selected candidates emit
+a 451-byte constructor against 452 in the reference, but this is only a
+length gap: the constructor still differs, and Reset is 433 versus 449 bytes.
+No candidate was retained or promoted to differential acceptance. Issue #21
+tracks the remaining work.
+
 ## Reproducibility gap
 
 The main build defaults had been updated to Gentoo, but `flagsweep.py` and
