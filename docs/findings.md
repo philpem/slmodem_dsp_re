@@ -120367,6 +120367,28 @@ spelling, and grouping the five `int` declarations each compile to the normal
 `-O3` body as well.  The blob-wide evidence still selects `-O3`; a closer size
 alone cannot license an unproven per-translation-unit exception. (2026-09-09)
 
+## F10216. DCR's count-first source order narrows the `-O2` near arm, but no order/control combination closes it
+
+The reference evaluates each measuring phase's count before its sum.  Our
+source originally writes the two independent assignments in the other order,
+so the complete two-by-two domain was compiled under both optimisation arms:
+
+| EVALUATE | TRACK | `-O3` size gap | `-O2` size gap |
+|---|---|---:|---:|
+| sum then count | sum then count | 22 | 4 |
+| count then sum | sum then count | 22 | 2 |
+| sum then count | count then sum | 22 | 4 |
+| count then sum | count then sum | 22 | 2 |
+
+This is a real source-order effect under `-O2`: EVALUATE's count-first form
+adds two bytes and is closer to the reference.  It is still not instruction
+identity, and every `-O3` arm remains 22 bytes short, so no cell is retained.
+The obvious companion form -- store the accumulators only on the unfinished
+arm, while retaining the normal `>=` tests -- widens the gaps to 34 (`-O3`)
+and 12 (`-O2`) bytes.  The direct `<` early-continue form is worse again: 26
+and 18 bytes respectively.  This leaves no recovered combination in this
+domain and no basis for adopting a per-file `-O2` flag. (2026-09-09)
+
 ## F10214. Store scheduling and allocation spelling recover four V90 constructor clones; the Phase 4 constructor remains bounded at 40 bytes
 
 Both 338-byte `V90Modulator` constructor clones began as `BYTES 18` near
