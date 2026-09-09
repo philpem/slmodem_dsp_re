@@ -35,6 +35,7 @@ def symbol_metrics(path, symbol):
     for line in symbols.splitlines():
         fields = line.split()
         if len(fields) >= 4 and fields[3] == symbol:
+            start = int(fields[0], 16)
             size = int(fields[1], 16)
             break
     else:
@@ -45,8 +46,11 @@ def symbol_metrics(path, symbol):
     # `-r` prints relocation records as ``address: R_386_*`` and their
     # address prefix resembles an instruction.  Count disassembly without
     # relocations; byteident.py remains the acceptance test.
-    instructions = sum(bool(re.match(r"^\s*[0-9a-f]+:\s+[a-z]", line))
-                       for line in dis.splitlines())
+    instructions = 0
+    for line in dis.splitlines():
+        match = re.match(r"^\s*([0-9a-f]+):\s+[a-z]", line)
+        if match and start <= int(match.group(1), 16) < start + size:
+            instructions += 1
     return size, instructions
 
 
