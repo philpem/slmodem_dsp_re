@@ -471,11 +471,28 @@ questions and only the first leaves a trace, so "no cmov in 1.2 MB" bounds the
 instruction set and says nothing about scheduling. Finding it took the match
 from 30 to 82 (finding F612). `-frename-registers` took it to 92 (616).
 
-**The level is `-O3`, and 616's ruling against it is overturned** -- on a tree
+**The retained baseline is `-O3`; it is not a uniquely recovered original
+command line.** The historical result overturned 616's ruling against it: on a tree
 three times the size, `-O2` matches 313 and `-O3` matches 324, and the `-O3`
 set gains 15 while losing 4 rather than swapping. 616 measured at 92 of 365,
 where `-finline-functions` had almost nothing to inline across. `make period`
 is green at both, and there is no divergence to declare. Finding F2155.
+
+**Issue #22 keeps the original profile open.** Source/inline choices and
+individual options can reproduce matches under more than one optimization
+level. Compare complete translation units, including non-exact bodies and
+symbol binding; an exact-set gain alone does not establish the original
+profile. See `docs/cid-dcr-audit.md` and GitHub #22 for measured controls.
+
+**Every reconstruction experiment must enable `DSPLIB_REPRODUCE_BUGS`.**
+Use the shared experiment-toolchain helpers to append the define after
+configurable flags. Record and review the actual complete compiler command
+against the baseline's `.build-config` before interpreting a one-option
+control; a copied flag list missing `-frename-registers` is a different
+experiment. Execute the assembler selected by the compiler to identify it:
+printing `gcc -print-prog-name=as` alone is not its version. Preserve invalid
+runs as explicitly invalid artifacts, exclude their results, and rerun the
+correct controls. Two delegated matrices required this correction in #22.
 
 `-mno-ieee-fp` is the newest and its worth is not in its +2 (302 -> 304): the object's float
 compares are ordered, 406 `fcom`-family against four `fucom` that are all

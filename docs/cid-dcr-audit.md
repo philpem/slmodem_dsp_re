@@ -295,6 +295,132 @@ This is an experimental control, not an adopted global profile. No production
 source/flags or completion criteria changed. Source-plus-options recovery
 of the remaining losses and validation of the new gains remain issue #22.
 
+## Issue 22: follow-up on the four new gains and the new loss
+
+The Beepgen RMS loss is independently recoverable under O2 with `-fweb`.
+All nine corrected full-TU cells were independently rescored (207 verdicts).
+O2+web retains the same seven exact functions as O3, including both
+`fComputeRMSValueShortBuf` and `detector_delete`; O2/no-rerun/no-web retains
+six. Inlining and unswitching without web do not recover RMS. The reference
+retains a preheader comparison which plain O2 deletes; changed padding keeps
+both functions at 85 bytes. This is an optimizer interaction, not a newly
+identified arithmetic defect. The first nine cells omitted register renaming
+and are explicitly invalid controls; only the `*-rename` objects under
+`build/issue22-rms` support these conclusions.
+
+For `V90AutoDigitalImpDetector::applyPadGainToLinMapp`, the entire target
+body differs by one byte under O3: a dead epilogue `pop` uses ECX where the
+reference uses EDX. Plain O2 uses EDX; automatic inlining and the CSE option
+also perturb this register choice through the TU. There is no observed
+calculation change in this target. Ten recorded profiles were independently
+rescored over all 34 shared functions (340 verdicts). Plain O2 has 13 exact
+functions versus O3's 12. The full records are in
+`build/issue22-adid/identity.json`; this does not certify the TU's remaining
+non-exact functions or justify a source rewrite to steer a dead register.
+
+### Rxcid: a source change can recover the O3 constructor too
+
+The reference `create_cid` calls `reset_cid`. O3 inlines the current reset
+body and emits a 612-byte constructor versus the reference's 183 bytes.
+Plain O2 preserves the call and reproduces the constructor exactly. The
+two-byte O2/no-rerun mismatch is only EDX versus ECX materializing the
+diagnostic's constant argument, with earlier reset code also changed.
+
+But this is not evidence for an O2-only original. The reference reset
+branches between initialization arguments zero and one; our boolean argument
+expression compiles to `sete`. Testing an explicit conditional with two
+literal-argument calls gives GCC a different inlining-cost estimate and
+recovers the exact constructor under O3 as well. A sixteen-cell domain
+tested boolean/ternary/two branch orders, pointer versus direct-array clear,
+and O2/O3. These are observations about compiled source candidates, not proof
+of the author's unique spelling.
+
+The original also expands `pack_next_bit` inside `cid_modem`. Explicit
+GNU-C inline preserves its strong exported definition and restores that
+expansion under O2, unlike the C++ weak-binding probes above. It does not
+close the remaining function. Twenty-two source/option cells and eight
+if-conversion controls scored all four shared symbols; disabling either
+if-conversion pass does not reproduce the reset branch from the boolean
+expression in this domain.
+
+A further completed 384-cell source-order domain tested all 24 orders of
+the four initial clears and all 16 combinations of four independently
+differing store pairs, using the nonnull-first/direct-array candidate at
+O3. Every constructor remained exact, but **no reset matched exactly**.
+Thus the constructor recovery does not identify the reset's store order.
+No source candidate was retained, and no behavioural acceptance is claimed.
+The complete sources, commands, domains and scores are in
+`build/issue22-rxcid` (430 objects, 1,720 symbol verdicts).
+
+### Phase 4: exact-set gains conceal mismatched call boundaries
+
+All twelve corrected option cells were independently rescored over 53 shared
+functions (636 verdicts). O2 and O3 without automatic inlining have the same
+43-function exact set; O3 and O2 with automatic inlining have the same 37.
+Web and unswitching do not change this split in the tested domain. The six
+gains include `recivedE2u`, `recivedCPtag`, `setRfSymbols`, `setRdRtSymbols`,
+`recivedFirstRrnE2u` and `recivedPartTwoSilenceRrnSUVtag`.
+
+That is **not** a clean file-level replacement. The reference's two large
+pumps expand internal state helpers, as O3 does. O2 leaves seven such call
+relocations in `generateV90Symbol` and thirteen in `generateV92Symbol`.
+Their lengths are respectively reference/O3/O2: 2235/2228/1894 and
+3922/3919/3305 bytes. The important evidence is the mismatched call
+boundaries, not a preference for the smaller size gap. Selective inlining,
+through options and/or original source organization, remains unresolved.
+The initial macro-free batch is explicitly invalid and preserved under
+`build/issue22-phase4-invalid-no-repro`; only the corrected
+`build/issue22-phase4` matrix is evidence.
+
+The threshold follow-up found a combined profile, after resolving a coarse
+sweep's gap. Thirteen initial controls covered automatic-inline limits
+20/40/60/80/100/150, six `-finline-limit` values and default O3. Limits
+40–80 retained the six gains and fully expanded the V90 pump, but left one
+unwanted `enterRepeatedCPd` call in the V92 pump. A second complete domain
+tested **every integer 81–99**, plus 200:
+
+- **81 and 82:** 43/53 exact, both pumps fully expanded, and the five-byte
+  wrapper still tail-calls `recivedSUVtag`, as the reference does.
+- **83–99 and 200:** 37/53 exact; both pumps expand but the wrapper is also
+  expanded incorrectly.
+
+The parent independently rescored all 33 threshold cells (1,749 symbol
+verdicts), and checked the 81 pump bodies against the O3 control. Both raw text
+bodies and their relocation dictionaries are unchanged; `byteident` still
+reports UNRESOLVED for each comparison because each dictionary includes an
+unproved section-relative target. This is not promoted to an EXACT claim.
+The constructors change within BYTES; the remaining non-exact functions
+retain their O3 bodies. The reference itself is still not fully reproduced.
+
+Thus 81–82 satisfies the tested **call-boundary combination**, not proof
+that the original build specified either number. Reconstructed source can
+change the compiler's inline-cost estimates. Artifacts are under
+`build/issue22-phase4-threshold{,-gap}`.
+
+The global 81 control completed: **273/273 objects built successfully**, with
+the existing DCR exception retained and bug reproduction enabled. EXACT rises
+from **813/1852 to 815/1852**, but the set is **six gains and four losses**.
+The gains are the six Phase4 functions above. The losses are both
+`V92Modulator` constructors and `V92Jd::unPackJdReset` /
+`V92Jd::unPackJdPhaseReset`. This is not an adopted global profile.
+
+Independent full-TU rescoring gives V92Modulator 16/24 to 14/24 exact and
+V92Jd 11/21 to 9/21. Both constructors change from the reference's exact
+734-byte body to 581 bytes: auto81 leaves a call to `V92Modulator::reset`
+where the reference and baseline expand it. Both Jd resets remain 20 bytes
+but change from EXACT to BYTES(2). The next inquiry is selective expansion
+and source inline-cost effects for the constructors, separately from the Jd
+reset emission differences; a net gain cannot settle either question.
+Artifacts: `build/issue22-auto81` and
+`build/issue20-followup/global-auto81-{build.log,exact.txt}`.
+
+No production source or flags changed, and no experimental candidate is
+claimed differentially accepted. The strict partial-link result remains
+DIFFERENT, with the unchanged production baseline of 54,109/943,398
+positioned bytes, 905/18,317 relocations and 222/2,907 symbols exact.
+Rxcid's outstanding source recovery is separately tracked in GitHub #25,
+linked from #22; the new global-profile losses remain inquiries in #22.
+
 ## Reproducibility gap
 
 The main build defaults had been updated to Gentoo, but `flagsweep.py` and
