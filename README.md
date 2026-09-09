@@ -126,3 +126,20 @@ Three tiers, because no single one is sufficient:
    distinguishes *correct* from *bug-compatible*. Where the blob and SpanDSP
    disagree the blob wins by default, but the deviation gets recorded in
    `docs/interop.md`.
+
+## Final-object completion gate
+
+Functional and function-level checks are necessary but do not establish that
+the reconstructed partial link is the original object. Completion requires a
+strict partial-link comparison against the blob:
+
+```sh
+make partial-link
+python3 tools/toolchain/partialcmp.py ref/slmodemd/dsplibs.o \
+    build/partial/dsplibs.o --require-exact
+```
+
+The command fails unless every compared section, allocated byte, NOBITS size,
+relocation record and defined-symbol record/order matches. `make
+partial-compare` is the non-failing diagnostic census to use while convergence
+is still in progress; it must not be mistaken for the completion gate.
