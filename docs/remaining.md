@@ -185,6 +185,21 @@ an exact definition; non-exact definitions retain this finite-evidence limit.
   bounded cases are `GenEQTrnSequenceV29`, the V.27 tail-state helpers, and,
   if direct attribution is desired, the inlined dialler helper. This is quick
   confidence work, but lower risk than the V.90 composition failure.
+
+  Issue #4 classifies the four priority names rather than treating a missing
+  direct relocation as a missing behavioural test. `GenEQTrnSequenceV29` has
+  no internal caller (the V.29 state machine repeats its LFSR inline), so
+  `t_v29data` calls it directly over every seven-bit starting state and named
+  counts. `TxNoCarrierV27` and `SetScramblerV27` are both reached through the
+  V.27 transmit machine, but `t_v27txcreate` also calls each directly on
+  constructor-built graphs: the former crosses both rates and a ring wrap;
+  the latter crosses both rates and preserved-register values. Their direct
+  denominators are reported by those tests. `GetNextDigitAndReturnNextState`
+  remains intentionally indirect through `t_dialerprog`: it is file-static,
+  completely inlined by the modern compiler, and that caller test already
+  observes its parser state, generated audio, persistent object and debug
+  transcript. A synthetic wrapper would add a test-only ABI rather than a
+  direct blob observation.
 - **Refresh mutation evidence by risk cluster — first tranche complete.**
   F10243 reruns and records the three changed V.90 suites and four known-risk
   V.34 suites. With F10244's follow-up they cover 1,324 mutations in all.

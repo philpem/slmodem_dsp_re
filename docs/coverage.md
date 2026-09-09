@@ -8,7 +8,7 @@ dsplibs.o reconstruction coverage
   .text                          734605 bytes, 1852 symbols
 
   translated  [#################################.]  98.0%    720125 bytes, 1852 symbols
-  tested      [##################################]  99.7%    718285 bytes, 1844 of 1852 that can be
+  tested      [##################################]  99.8%    718627 bytes, 1847 of 1852 that can be
 
   `tested` is the share of what we have translated that some test drives
   against the blob itself, not a self-consistency check.  Its denominator
@@ -19,9 +19,6 @@ dsplibs.o reconstruction coverage
   translated, alias exists, and NOT tested:
     GetNextDigitAndReturnNextState                  895 bytes   (file-local)
     v22_process                                     557 bytes   (file-local)
-    TxNoCarrierV27                                  151 bytes
-    GenEQTrnSequenceV29                              99 bytes
-    SetScramblerV27                                  92 bytes
     _handle_status                                   44 bytes
     _ZN5V92JdD2Ev                                     1 bytes
     _ZN5V90JdD2Ev                                     1 bytes

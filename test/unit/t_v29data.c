@@ -42,6 +42,8 @@
 extern unsigned short ref_TxNoCarrierV29(void *modem,
 					 const unsigned short *data,
 					 short *out, unsigned short count);
+extern void ref_GenEQTrnSequenceV29(void *modem, unsigned short *out,
+				     unsigned short count);
 extern void ref_FPM_PPS_init(void *state, const void *cfg, int fresh);
 extern unsigned short ref_FPM_PPS_filter(void *state, void *src, short *out,
 					 unsigned short count);
@@ -485,6 +487,79 @@ run_bigcount(void)
 		tx_bigcount++;
 }
 
+/*
+ * GenEQTrnSequenceV29 has no internal referrer: TxHdxEQCondV29 repeats the
+ * recurrence inline rather than calling it.  Exercise the exported leaf on
+ * its own, over every possible seven-bit starting register, so this is a
+ * direct observation rather than evidence inherited from the state machine.
+ */
+#define EQ_OUT_MAX	64
+#define EQ_GUARD	0xa5a5
+
+struct eq_fix {
+	unsigned char modem[V29TX_OBJ_SCRAM + sizeof(void *)];
+	unsigned char scram[V29SCRAM_SR + sizeof(short)];
+	unsigned short out[EQ_OUT_MAX + 2];
+};
+
+static int
+test_eq_training_generator(void)
+{
+	static const unsigned short counts[] = { 0, 1, 2, 7, 8, 63, 64 };
+	unsigned long trials = 0, nonzero_symbols = 0, zero_symbols = 0;
+	unsigned seed, ci;
+
+	diff_begin("GenEQTrnSequenceV29 directly, every LFSR seed");
+
+	for (seed = 0; seed < 128; seed++) {
+		for (ci = 0; ci < sizeof(counts) / sizeof(counts[0]); ci++) {
+			struct eq_fix a, b;
+			unsigned short count = counts[ci];
+			unsigned short i;
+			long tag = (long)seed * 100 + (long)ci;
+
+			memset(&a, 0x5a, sizeof(a));
+			memset(&b, 0x5a, sizeof(b));
+			put_ptr(a.modem, V29TX_OBJ_SCRAM, a.scram);
+			put_ptr(b.modem, V29TX_OBJ_SCRAM, b.scram);
+			put_short(a.scram, V29SCRAM_SR, (short)seed);
+			put_short(b.scram, V29SCRAM_SR, (short)seed);
+			for (i = 0; i < EQ_OUT_MAX + 2; i++)
+				a.out[i] = b.out[i] = EQ_GUARD;
+
+			GenEQTrnSequenceV29(a.modem, a.out + 1, count);
+			ref_GenEQTrnSequenceV29(b.modem, b.out + 1, count);
+
+			for (i = 0; i < count; i++) {
+				diff_eq_int("symbol (%ld)", a.out[i + 1], b.out[i + 1],
+					    tag * 100 + i);
+				if (a.out[i + 1] == 0)
+					zero_symbols++;
+				if (a.out[i + 1] == 0xb)
+					nonzero_symbols++;
+			}
+			diff_eq_int("leading guard (%ld)", a.out[0], EQ_GUARD, tag);
+			diff_eq_int("trailing guard (%ld)", a.out[count + 1],
+				    EQ_GUARD, tag);
+			diff_eq_int("LFSR state (%ld)",
+				    *(short *)(void *)(a.scram + V29SCRAM_SR),
+				    *(short *)(void *)(b.scram + V29SCRAM_SR), tag);
+			if (count == 0)
+				diff_eq_int("zero count preserves state (%ld)",
+					    *(short *)(void *)(a.scram + V29SCRAM_SR),
+					    (short)seed, tag);
+			trials++;
+		}
+	}
+
+	diff_eq_int("trials (%ld)", trials, 128 * 7, trials);
+	diff_eq_int("both constellation choices occurred (%ld)",
+		    nonzero_symbols > 0 && zero_symbols > 0, 1,
+		    nonzero_symbols + zero_symbols);
+
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -516,6 +591,7 @@ main(void)
 		big_ib + 32768, big_qb + 32768, 0);
 	run_bigcount();
 	rc = diff_end();
+	rc |= test_eq_training_generator();
 
 	diff_begin("v29data separating trials");
 	diff_eq_int("V.17's symbol form separates (%ld)", tx_sym_sep > 0, 1,
