@@ -685,6 +685,20 @@ Ghidra's x87 modelling is weak. Nobody has measured it here.
 
 ## Findings and numbering
 
+**Track outstanding work in GitHub issues.** Tasks, defects to investigate,
+and open lines of inquiry belong in issues, linked to their parent milestone
+where appropriate. Check existing issues before creating another; update
+them with evidence, next actions and completion criteria as work progresses.
+The findings and deviations logs remain the record of measured conclusions
+and original-binary behavior; they are not the task queue. Link between the
+issue and the relevant finding rather than treating either as a substitute
+for the other.
+
+Shared tool improvements and these working instructions belong on `master`.
+Keep active investigation branches current by merging or rebasing `master`
+after shared changes land; keep experimental reconstruction changes separate.
+`AGENTS.md` is a symlink to this file, so both agents read the same rules.
+
 `docs/findings.md` is the record. Append; do not renumber history.
 
 **The V.90 session holds 247–331.** This tree's recent work is 340 onwards;

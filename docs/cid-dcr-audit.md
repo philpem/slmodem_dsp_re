@@ -103,6 +103,13 @@ measure whether it improved them. The completed comparison does:
 
 The exact-name sets gain **15** and lose **91**. The missing shared definition
 is `GetNextDigitAndReturnNextState`, so even the denominator must be compared.
+This rejects a flag-only replacement on the **current source**, not O2 as
+an original compiler setting. Some source reconstructions may compensate for
+the wrong optimization profile; an exact match under O3 does not establish
+that their source form is original. Audit lost matches by translation unit,
+source history and emitted mechanism, and test source/flag combinations
+before deciding between those explanations. GitHub issue
+[#22](https://github.com/philpem/slmodem_dsp_re/issues/22) tracks this inquiry.
 The reports are `build/cid-dcr-audit/baseline-exact.txt` and
 `build/cid-dcr-audit/o2-norerun-exact.txt`, produced by `byteident.py
 --list-exact` against `build/tc_repro` and `/tmp/tc-gentoo-o2-norerun`.
@@ -124,6 +131,11 @@ source fails to do so at both O2 and O3. Giving that definition explicit
 levels, but does not reach exact identity. Thus inline eligibility and
 optimization level are separate, measurable questions. This experiment is
 recorded in `build/ring-inline-audit`; no source change was retained.
+The combined ring-detector follow-up is tracked in
+[#21](https://github.com/philpem/slmodem_dsp_re/issues/21). Remaining DCR and
+CID work is tracked in [#23](https://github.com/philpem/slmodem_dsp_re/issues/23)
+and [#24](https://github.com/philpem/slmodem_dsp_re/issues/24), respectively;
+these are task records, separate from the findings and deviations logs.
 
 ## Reproducibility gap
 
