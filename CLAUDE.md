@@ -453,8 +453,9 @@ It needs the stage3 and the six `SRC_URI` tarballs, neither in git;
 `tools/toolchain/gentoo-3.4.2-r2/fetch-distfiles.sh` pulls and verifies the
 latter. **Use it by default even where a stock 3.4.2 comparison happens to
 agree.** The blob's own compiler banner is stronger provenance than a
-tree-wide aggregate, and a locally exposed stack-layout variance in
-`dcr_process` established that the vendor bundle can matter. `-O3` (2155) and
+tree-wide aggregate. DCR's earlier "stack-only" interpretation was retracted:
+the first rejection from `byteident.py --why` does not establish that it is
+the only difference (see `docs/cid-dcr-audit.md`). `-O3` (2155) and
 `-mno-ieee-fp` (1990) were re-measured on the real compiler and both survive
 symbol for symbol. Findings F2320, F2500, F2501 and F10217.
 

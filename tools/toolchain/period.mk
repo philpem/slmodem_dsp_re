@@ -114,11 +114,11 @@ TC_FLAGS := -O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387 \
             -include tools/toolchain/period_compat.h
 TC_FLAGS += $(TC_EXTRA)
 
-# DCR's recovered GCC preimage is O2 without the post-loop CSE rerun.  Its
-# instruction graph matches the blob under live-range renaming; the only
-# remaining difference is the compiler's 0x5c versus 0x2c frame reservation.
-# This is deliberately source-specific: changing the global level would move
-# hundreds of unrelated functions.  Finding F10217 records the evidence.
+# Provisional DCR candidate: O2 without the post-loop CSE rerun. The earlier
+# claim that only its frame differed was incorrect: SIZE measures length,
+# and --why reports only the first rejection. See docs/cid-dcr-audit.md and
+# the correction to F10217. This audit leaves the existing setting in place;
+# it is not evidence that the original file used these options.
 TC_DCR_FLAGS := -O2 -fno-rerun-cse-after-loop
 
 # Appended AFTER $(TC_EXTRA), exactly as `build.sh` ordered them, so the

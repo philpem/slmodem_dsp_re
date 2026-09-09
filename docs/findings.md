@@ -123016,6 +123016,32 @@ self-test and every structural check. Suite line coverage remains
 
 (2026-09-08)
 
+## CID/DCR audit correction: the stack-only interpretation in the DCR F10217 is withdrawn
+
+The DCR finding above misread `SIZE (1)` as one differing byte and the first
+`alpha_why` rejection as the only disagreement. `SIZE` measures the length
+difference; `alpha_why` returns at its first rejection. The 567-byte candidate
+also differs in scheduling, spills, store placement and branch structure.
+Its 161-instruction total hides an extra comparison, a missing jump, and a
+memory-operand division where the reference uses a register. Thus the user's
+conditional acceptance of a stack-only difference was based on an
+unestablished premise. The per-TU flag remains provisional, not a recovered
+original compiler profile.
+
+The Gentoo driver does not enable SSP by default; explicitly disabling it
+does not change DCR. Enabling it adds protection code and regresses the
+previously exact small functions. The completed whole-tree comparison of
+the DCR flag pair gains 15 exact functions but loses 91 (813 to 737 exact),
+so changed-object hashes alone had not justified the earlier interpretation.
+
+`docs/cid-dcr-audit.md` records 1,699 combined source/flag cells, 33 delegated
+scope/order follow-ups and the full-tree set comparison. None closes the
+CID or DCR process function. Eight ring-wrapper follow-up cells isolate a
+promising combination of inline eligibility and optimization level, without
+accepting a near-size result. The experiment tools' remaining stock-compiler
+defaults are corrected separately. No reconstruction source or strict
+completion criterion changes in this audit. (2026-09-09)
+
 ## F10261. V.90 Table 12 framing and CRC conform except for odd-count reserved Ucode bits
 
 The former `t_dilpack` established broad reconstruction/blob agreement but did

@@ -31,8 +31,9 @@ FLAGS="-O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387
 CFLAGS="$FLAGS -std=gnu99"
 CXXFLAGS="$FLAGS -fno-exceptions -fno-rtti"
 
-# Keep DCR's recovered optimisation preimage local to its translation unit.
-# See the matching TC_DCR_FLAGS in period.mk and finding F10217.
+# Keep the provisional DCR candidate local to its translation unit.
+# See TC_DCR_FLAGS in period.mk and the corrected finding F10217: the earlier
+# stack-only equivalence claim was not supported by the complete comparison.
 DCR_FLAGS="-O2 -fno-rerun-cse-after-loop"
 
 HARNESS="test/harness/harness.c test/harness/runtime.c
