@@ -39,10 +39,13 @@ def symbol_metrics(path, symbol):
             break
     else:
         raise RuntimeError("%s is not defined by %s" % (symbol, path))
-    dis = subprocess.check_output(["objdump", "-dr", "-Mintel",
+    dis = subprocess.check_output(["objdump", "-d", "-Mintel", "--no-show-raw-insn",
                                    "--disassemble=" + symbol, str(path)],
                                   text=True)
-    instructions = sum(bool(re.match(r"^\s*[0-9a-f]+:\s", line))
+    # `-r` prints relocation records as ``address: R_386_*`` and their
+    # address prefix resembles an instruction.  Count disassembly without
+    # relocations; byteident.py remains the acceptance test.
+    instructions = sum(bool(re.match(r"^\s*[0-9a-f]+:\s+[a-z]", line))
                        for line in dis.splitlines())
     return size, instructions
 
