@@ -126,7 +126,7 @@
  * classes at the far end are fully reconstructed now, but `p3548` stays
  * `void *` in `v34fsk.h` because this is a `.c` file and cannot include a
  * C++ class header, so reaching a real field needs a call across the
- * boundary -- the same move `v34hshak.c` makes into `V34SetINFO1aBits`.
+ * boundary -- the same move `V34hshak.c` makes into `V34SetINFO1aBits`.
  * That move is right where the object ITSELF calls: `V34SetINFO1aBits` is a
  * real `call` with a relocation.  It is wrong here, because the object is
  * not calling anything.  `tools/dis.py` on the blob at both use sites --
@@ -1152,7 +1152,7 @@ VPcmV34SetV90RateReneg(void *objp, short rrn_type, unsigned char constel_size)
 
 	preinitdigital(obj);
 
-	/* The `[1]` counter every handshake trace prints; see v34hshak.c. */
+	/* The `[1]` counter every handshake trace prints; see V34hshak.c. */
 	*(short *)(m + 0x2aa2) = 0;
 
 	obj->progress = 6;
@@ -1533,7 +1533,7 @@ VPcmV34SetIndicationOfRemoteRetrain(void *objp)
 
 /*
  * ---------------------------------------------------------------------------
- * Layout, pinned.  Same argument as dpsk.c's block: these offsets sit in
+ * Layout, pinned.  Same argument as DPSK.c's block: these offsets sit in
  * regions that are otherwise padding, so a field that drifted would compile
  * silently.  Guarded to a 32-bit ABI because `struct v34_object` holds
  * pointers and its member offsets are only the object's on that target.

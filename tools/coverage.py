@@ -105,7 +105,7 @@ import objtree                                            # noqa: E402
 # of which is a permanent structural assertion, but "no REACHABLE arm is
 # unwritten".  That is now checkable in one grep:
 #
-#     grep -n 't3m_notwritten(\|t3c_unwritten(' src/pump/v34/v34hshak.c
+#     grep -n 't3m_notwritten(\|t3c_unwritten(' src/pump/v34/V34hshak.c
 #
 # which reports the two definitions, `t3c_unwritten`'s own call of
 # `t3m_notwritten`, and exactly one call site -- table 3's `default:`.  That
@@ -129,7 +129,7 @@ PARTIAL = {
 # `translated` forever, since nothing else would ever check it again.
 INLINED_AWAY = {
     "GetNextDigitAndReturnNextState":
-        "F8490 -- written in src/dialer/dialer.c, tested indirectly through "
+        "F8490 -- written in src/dialer/Dialer.c, tested indirectly through "
         "DialerProgress by t_dialerprog since every modern compiler tried "
         "here inlines it away; the object's own compiler did not, and a "
         "`ref_` alias exists (build/dsplibs_ref.o) for a test to call it "

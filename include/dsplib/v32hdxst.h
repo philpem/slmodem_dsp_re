@@ -254,7 +254,7 @@ short TxHdxNull(void *modem, short *data, short *out, unsigned short *left);
 
 /*
  * Eleven of the twelve receive states below share one shape (see
- * v32rxhdx.c's file banner): charge one block's worth of symbols against
+ * V32rxhdx.c's file banner): charge one block's worth of symbols against
  * `hdx->timer`, do the state's own work (which may install a successor via
  * `V32NextState[hdx->mode]`), and post a fault reason at `V32_OBJ_STATUS`
  * if the timer has reached `hdx->limit`. `RxHdxError` alone does neither.

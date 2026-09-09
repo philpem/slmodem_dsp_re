@@ -249,7 +249,7 @@ preserved past this session -- re-run to regenerate):
 
 - **Redundant casts: 136 real sites** (not 8,209 -- that counted every
   cast including genuine narrowing/widening). Concentrated in
-  `src/dsp/fpm_tone.c`, `Psd.cpp`, `toneiir.c`. Safe, mechanical,
+  `src/dsp/fpm_tone.c`, `psd.cpp`, `toneiir.c`. Safe, mechanical,
   zero byte-identity risk (same-type cast is a compiler no-op).
 - **Safe to act on**: redundant casts (136), `misc-const-correctness`
   (439, cosmetic), `bugprone-implicit-widening-of-multiplication-result`

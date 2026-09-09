@@ -37,7 +37,7 @@
  * microstate 79) and this is why the restart can be driven at all.
  *
  * THE FSK RECEIVER IS HELD STILL.  `obj->fsk_inhibit` non-zero makes
- * `fskdemodulate` return before it touches `nbits` or `sr` (dpsk.c), so the
+ * `fskdemodulate` return before it touches `nbits` or `sr` (DPSK.c), so the
  * two fields this arm reads are the test's to choose rather than whatever the
  * fill's coefficients made of four samples.  One case at the end leaves it
  * clear, so the arm is also driven downstream of the real demodulator.

@@ -25,7 +25,7 @@
  *
  * THE SIGNAL IS GENERATED AT 7200 Hz FOR THE 8000 CASE.  `cid->rate` says
  * 8000, the coefficient table is called 7200, and the bit length is six
- * samples: 1200 baud at 7200 Hz.  See src/service/cid_fsd.c.
+ * samples: 1200 baud at 7200 Hz.  See src/service/Cidfsd.c.
  */
 
 #include <math.h>

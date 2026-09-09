@@ -147,7 +147,7 @@ endif
 # OBJECT NAME <- SOURCE PATH, FORWARD ONLY.  The name is the full path with
 # slashes turned into underscores, extension and all:
 #
-#     src/pump/v34/v34hshak.c   ->   src_pump_v34_v34hshak.c.o
+#     src/pump/v34/V34hshak.c   ->   src_pump_v34_v34hshak.c.o
 #
 # It is NOT reversible -- `src/core/dp_wrapper.c` and a directory called `dp`
 # produce the same string -- so there is no pattern rule that could express it

@@ -170,7 +170,7 @@ struct sgd_control_req {
  * detector half of `SGD_control` is a no-op on every one of these sites.
  * Bare name, no protocol prefix, shared across all three modulations'
  * transmit families symmetrically: this is shared TX-side scratch, not any
- * one modulation's table.  See `SGD_CTL` in `sgd.c` and findings F9600/F9700.
+ * one modulation's table.  See `SGD_CTL` in `Sgd.c` and findings F9600/F9700.
  */
 extern struct sgd_control_req SGD_CTL;
 

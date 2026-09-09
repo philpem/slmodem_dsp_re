@@ -132,7 +132,7 @@ extern "C" {
  *      obj + 0x3594    rxstate
  *      obj + 0x3596    txstate
  *
- * See src/pump/v34/v34hshak.c for the derivation. It matters for planning:
+ * See src/pump/v34/V34hshak.c for the derivation. It matters for planning:
  * eighty-seven states over three machines is not seven slices of one, and
  * `tools/cfgsplit.py` should be pointed at `v34handshak` with that in mind
  * (docs/fastpass.md).
@@ -190,7 +190,7 @@ void hs_setstate(struct v34_object *obj, unsigned off, short next);
  * unless the test has called v34handshak_unwritten_reset(), which turns the
  * abort into an ordinary return so the caller can inspect the code
  * afterwards. `test/unit/t_v34hst3mid.c` is that caller, and checks the
- * code after every step. See src/pump/v34/v34hshak.c and finding F547.
+ * code after every step. See src/pump/v34/V34hshak.c and finding F547.
  */
 #define T3M_WRITTEN			0
 #define T3M_UNWRITTEN_TBL1		1
@@ -288,7 +288,7 @@ void datapumpv34(void *obj);
 /*
  * ---------------------------------------------------------------------------
  * The handshake's support functions -- everything in V34hshak.c that is not
- * `v34handshak` itself.  See src/pump/v34/v34hshak.c.
+ * `v34handshak` itself.  See src/pump/v34/V34hshak.c.
  */
 
 #define V34_SCALE_ENTRIES	28	/* two rows of fourteen */

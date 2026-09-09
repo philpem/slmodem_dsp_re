@@ -96,7 +96,7 @@
  * blocks and prints, and does neither here.  The duplication is the
  * original's.  This file exists partly because of it: finding F1264, one
  * source file is one mutation suite's namespace, and putting a near-copy of
- * `externalReset`'s tail into `VPcmFloModem.cpp` would make anchors in both
+ * `externalReset`'s tail into `VpcmFloModem.cpp` would make anchors in both
  * match twice -- which `tools/mutate.py` calls UNUSABLE, and unusable does
  * not fail a run.
  */
@@ -260,7 +260,7 @@ VPCMXF_Create(int digitalSide, void *v34Object,
  * embedded objects are declared with their real types, so `{}` IS the
  * original's destructor, whatever its body said.
  *
- * IT IS DEFINED IN THIS FILE AND NOT IN VPcmFloModem.cpp, because the TU is
+ * IT IS DEFINED IN THIS FILE AND NOT IN VpcmFloModem.cpp, because the TU is
  * a codegen carrier: the blob's `VPCMXF_Delete` INLINES the destructor (six
  * member-destructor relocations at 0xf6d5..0xf71b, no `D1` among them),
  * which GCC only does for a same-TU definition -- exactly the relationship

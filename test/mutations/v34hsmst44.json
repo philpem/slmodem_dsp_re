@@ -768,7 +768,7 @@
   "find": "\traw = (short)(((hs_get(obj, T44_REC_A9DC) & 3) << 5)",
   "replace": "\traw = (short)(((hs_get(obj, T44_REC_A9DC) & 7) << 5)",
   "equivalent": true,
-  "why": "EQUIVALENT, and it says where the field ends.  Bit 2 of +0xa9dc lands at bit 7 of the assembled value, and `bitreverse(v, 7)` reads only bits 0..6 (src/pump/v34/v34rx.c), so the widened mask can reach +0x35a2 only through the first store -- which the equivalence above shows is invisible.  The cases seed +0xa9dc with bit 2 SET so that this is measured rather than assumed.  HELD FIXED: the same two conditions as above.",
+  "why": "EQUIVALENT, and it says where the field ends.  Bit 2 of +0xa9dc lands at bit 7 of the assembled value, and `bitreverse(v, 7)` reads only bits 0..6 (src/pump/v34/V34RX.c), so the widened mask can reach +0x35a2 only through the first store -- which the equivalence above shows is invisible.  The cases seed +0xa9dc with bit 2 SET so that this is measured rather than assumed.  HELD FIXED: the same two conditions as above.",
   "fn": "t44_mdlength"
  },
  {
@@ -800,7 +800,7 @@
   "find": "\ths_put(obj, T44_F35A2, raw);\n\n\trev = bitreverse((unsigned short)raw, 7);",
   "replace": "\trev = bitreverse((unsigned short)raw, 7);",
   "equivalent": true,
-  "why": "EQUIVALENT.  0x6eea2 and 0x6f4f8 store the UNREVERSED value into +0x35a2 and 0x6eec3 and 0x6f519 store the reversed one over it four instructions later, with `bitreverse` -- which takes its argument in a register -- between.  Nothing reads +0x35a2 in between, so no fixture can see the first store.  HELD FIXED: that `bitreverse` reads nothing out of the object, which src/pump/v34/v34rx.c shows.",
+  "why": "EQUIVALENT.  0x6eea2 and 0x6f4f8 store the UNREVERSED value into +0x35a2 and 0x6eec3 and 0x6f519 store the reversed one over it four instructions later, with `bitreverse` -- which takes its argument in a register -- between.  Nothing reads +0x35a2 in between, so no fixture can see the first store.  HELD FIXED: that `bitreverse` reads nothing out of the object, which src/pump/v34/V34RX.c shows.",
   "fn": "t44_mdlength"
  },
  {

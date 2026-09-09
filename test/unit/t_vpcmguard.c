@@ -12,7 +12,7 @@
  * required the child to have died of SIGABRT.
  *
  * `qcLineVerification` and `vPcmResetPhase3Modem` were the last two, and both
- * are now in src/pump/v90/VPcmFloModem.cpp.  **All seven are written**, so
+ * are now in src/pump/v90/VpcmFloModem.cpp.  **All seven are written**, so
  * every guard below `VPcmV34Progress` is unreachable and there is nothing
  * left in this tree for a fork to watch abort.  The two groups that drove one
  * are therefore deleted rather than weakened -- a group whose premise has
@@ -87,7 +87,7 @@
  * be: fork, call it, and require the child to have died of SIGABRT.  That is
  * the argument the surviving `V34PCM_WRITTEN` assertion inherits.
  *
- * The soft half is `v34hshak.c`'s rule, and finding F547's argument: a test
+ * The soft half is `V34hshak.c`'s rule, and finding F547's argument: a test
  * that dies cannot then be asked WHICH path it took, so the stop is what a
  * test opts out of BY NAME -- `v34pcm_unwritten_reset` -- and the code is
  * always recorded either way.
@@ -255,7 +255,7 @@ main(void)
 	/*
 	 * AND `v90RunDemodulator` IS DEFINED TOO, so the three are two.  It
 	 * is `VPcmFloModem`'s other entry point (.text+0xd860, 3,013 bytes),
-	 * reconstructed in src/pump/v90/VPcmFloModem.cpp with
+	 * reconstructed in src/pump/v90/VpcmFloModem.cpp with
 	 * test/unit/t_v90rundemod.cpp against the blob; finding F7580.  The
 	 * assertion is INVERTED rather than deleted, for the same reason the
 	 * five above are asserted at all: the guard surface is the claim, and
@@ -267,7 +267,7 @@ main(void)
 	/*
 	 * AND THESE TWO CLOSE THE SET.  `qcLineVerification` (.text+0xf750,
 	 * 779 bytes) and `vPcmResetPhase3Modem` (.text+0xf200, 149 bytes) are
-	 * reconstructed in src/pump/v90/VPcmFloModem.cpp; findings F7603 and
+	 * reconstructed in src/pump/v90/VpcmFloModem.cpp; findings F7603 and
 	 * F7604.  Both assertions are INVERTED rather than deleted, exactly as
 	 * `v90RunDemodulator`'s was: the guard surface is the claim, and a
 	 * symbol silently dropping out of it is what this file notices.  With

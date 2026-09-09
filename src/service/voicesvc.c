@@ -22,8 +22,8 @@
  * sits between `voice_command` and `voice_modem` in the blob and this tree
  * keeps it in src/voice/voice.c; past 0xac960 the same TU runs on into
  * `GetGain`, the `beepgen_*` set and the `detector_*` set, which are split
- * across src/service/beepgen.c, src/service/detector.c and
- * src/service/fdspkrnl.c.  That split is existing practice and is not undone
+ * across src/service/Beepgen.c, src/service/detector.c and
+ * src/service/Fdspkrnl.c.  That split is existing practice and is not undone
  * here; the ORDER of the four definitions below is the object's, because
  * emission order is a register-allocation carrier (F7796, F7800).
  *

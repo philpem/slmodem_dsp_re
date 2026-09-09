@@ -167,8 +167,8 @@ V90TRN2Designer::setTrn2DummyConstel(V90MappingParams *mappingParams)
  * function either -- it is correctly rounded where `fyl2x` is not -- so the
  * sequence is written out.
  *
- * THE COPY IS DELIBERATE AND IT IS THE FOURTH.  `Psd.cpp`, `V90Equalizer.cpp`
- * and `VPcmFloModem.cpp` each carry the same eight lines, and Psd.cpp says why
+ * THE COPY IS DELIBERATE AND IT IS THE FOURTH.  `psd.cpp`, `V90Equalizer.cpp`
+ * and `VpcmFloModem.cpp` each carry the same eight lines, and psd.cpp says why
  * a shared header is a separate concern: a new C++ header has to be added to
  * `offcheck.py`'s SKIP_HEADERS or the `offsets` gate breaks files nobody
  * touched.  Finding F876.

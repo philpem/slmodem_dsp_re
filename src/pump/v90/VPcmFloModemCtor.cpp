@@ -144,7 +144,7 @@
 /*
  * Hold the compiler to the header's map for the six members and the tail.
  * The offsets the five ALREADY-WRITTEN members establish are asserted in
- * src/pump/v90/VPcmFloModem.cpp and are not repeated; these are the ones this
+ * src/pump/v90/VpcmFloModem.cpp and are not repeated; these are the ones this
  * constructor is the evidence for.
  *
  * `sizeof(VPcmFloModem) == 0x7f68` IS THE ONE ASSERTION THIS BATCH ADDS THAT

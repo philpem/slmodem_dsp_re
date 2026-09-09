@@ -148,7 +148,7 @@ struct v34_fskdelay {
  * pads are not a claim about what is in them, and the struct's size is not
  * a claim about the object's size; it is a lower bound.
  *
- * Every named offset is checked by a static assertion in dpsk.c, so the
+ * Every named offset is checked by a static assertion in DPSK.c, so the
  * padding cannot drift silently once the surrounding translation units
  * arrive and start filling it in.
  *
@@ -393,7 +393,7 @@ struct v34_object {
 	short data_enable;				/* +0x2214 */
 	unsigned char unmapped_2216[0x2218 - 0x2216];
 	/*
-	 * `v34hshak.c`'s own `DP_MODE`/`T3C_MODE`: the recovery supervisor in
+	 * `V34hshak.c`'s own `DP_MODE`/`T3C_MODE`: the recovery supervisor in
 	 * `datapumpv34` reads it as "handshake above 1", and `v90p34`'s
 	 * table-2 tail is the same int's other reader.
 	 */
@@ -584,7 +584,7 @@ struct v34_object {
 	int echo_calls;					/* +0x354c */
 	short echo_alpha;					/* +0x3550 */
 	/*
-	 * +0x3552. `far_echo_alpha` and not `short_3552`: `v34rx.c`'s own
+	 * +0x3552. `far_echo_alpha` and not `short_3552`: `V34RX.c`'s own
 	 * paired `updateAlpha` calls tag each field with the object's own
 	 * debug string (`updateAlpha`'s `tag` argument, printed verbatim as
 	 * "updateAlpha%s: updated %d => %d") -- `echo_alpha` gets `"NE"`
@@ -603,7 +603,7 @@ struct v34_object {
 	 * +0x3564 is the object's own `struct v34_detector`, and the two
 	 * ends meet exactly: `sizeof(struct v34_detector)` is 0x24 and
 	 * 0x3564 + 0x24 is 0x3588, where the next field measured below
-	 * begins. v34hshak.c reaches it there as `T3C_DETECTOR`/`T3M_DETECTOR`
+	 * begins. V34hshak.c reaches it there as `T3C_DETECTOR`/`T3M_DETECTOR`
 	 * and casts, and those arms are differentially tested.
 	 *
 	 * It is not embedded here, deliberately: two things meeting is
@@ -624,7 +624,7 @@ struct v34_object {
 	 * the original source's spelling and not its compiler's: the period
 	 * compiler compiles `s->a == 2 && s->b == 2` on two adjacent shorts
 	 * into two separate `cmpw` and never fuses them (measured, finding
-	 * F631). v34hshak.c reads exactly those two sites through `T3M_I32`
+	 * F631). V34hshak.c reads exactly those two sites through `T3M_I32`
 	 * and every other site through `T3M_I16`, which is why both
 	 * readings survive -- this span is finding F553's shape (one
 	 * region, two widths, both the object's), and the offset spelling
@@ -637,7 +637,7 @@ struct v34_object {
 	 * struct and is not a measurement.
 	 *
 	 * `fNNNN` and not a description: what they are for was not measured.
-	 * v34hshak.c knows them as `T3M_F3588` and `T3M_F358A` and records
+	 * V34hshak.c knows them as `T3M_F3588` and `T3M_F358A` and records
 	 * what each use does.
 	 */
 	short short_3588;					/* +0x3588 */
@@ -649,7 +649,7 @@ struct v34_object {
 	 * word being assembled -- a 32-bit result that is used, CLAUDE.md's
 	 * own case for acting on the extension. Thirty accesses, all
 	 * sixteen bits wide. `v34handshak`'s microstate 48 inverts bit 0 of
-	 * it -- v34hshak.c's `T3M_TOGGLE` and `T3C_F358C`.
+	 * it -- V34hshak.c's `T3M_TOGGLE` and `T3C_F358C`.
 	 */
 	short short_358c;					/* +0x358c */
 	unsigned char unmapped_358e[0x3592 - 0x358e];
@@ -690,7 +690,7 @@ struct v34_object {
 	short txstate;					/* +0x3596 */
 	unsigned char unmapped_3598[0x359c - 0x3598];
 	/*
-	 * The calling/answering role. `v34hshak.c` reads it into a variable
+	 * The calling/answering role. `V34hshak.c` reads it into a variable
 	 * it names `originate` (`originate = (obj->role == 0x65)`), and
 	 * forty-odd call sites elsewhere compare it against 0x65/0x66
 	 * directly to choose everything from the scrambler polynomial to
@@ -893,7 +893,7 @@ struct v34_object {
 	 * the five message records on a 0x30 stride, and
 	 * `info_caps`/`caps_flags` read straight out of the same words (see
 	 * the note on `struct v34_bitsource` in v34hshak.h) -- and
-	 * v34hshak.c's use sites cast to three different pointer types at
+	 * V34hshak.c's use sites cast to three different pointer types at
 	 * different arms. A pointer type here would pick a winner the
 	 * object does not (finding F634).
 	 */
@@ -907,7 +907,7 @@ struct v34_object {
 	 * 243 accesses, all sixteen bits wide -- the busiest field in the
 	 * handshake after the three state words, and the one six of
 	 * `v34handshak`'s microstate arms bump. It is the `[2]` every state
-	 * transition prints (v34hshak.c's `HS_TRACE_2`), which is what
+	 * transition prints (V34hshak.c's `HS_TRACE_2`), which is what
 	 * settles the sign: it is loaded `movswl` straight into a debug
 	 * printf argument slot, and the varargs promotion of an `unsigned
 	 * short` would have been `movzwl` instead. The `movzwl` loads found
@@ -917,11 +917,11 @@ struct v34_object {
 	 * `short_aa78` and not `counter`: what it counts differs per arm --
 	 * ticks in one, symbols in another -- and a name that says "counter"
 	 * would read as measured when only the width and the sign are.
-	 * v34hshak.c knows it as `T3M_COUNTER`/`T3C_COUNT` (finding F633).
+	 * V34hshak.c knows it as `T3M_COUNTER`/`T3C_COUNT` (finding F633).
 	 */
 	short short_aa78;					/* +0xaa78 */
 	/*
-	 * +0xaa7a. `v34hshak.c`'s own `T41_FAA7A`: cleared unconditionally on
+	 * +0xaa7a. `V34hshak.c`'s own `T41_FAA7A`: cleared unconditionally on
 	 * entry to microstate 41's DET_SYNC arm. No other reader or writer in
 	 * this tree, so what it signals downstream is not established --
 	 * only that this one arm resets it.
@@ -987,7 +987,7 @@ struct v34_object {
 	 *
 	 * Both are sixteen bits wide at every access and neither is ever
 	 * sign-extended, so the signedness is not settled -- `short` here is
-	 * the struct's convention, not a measurement. v34hshak.c knows them
+	 * the struct's convention, not a measurement. V34hshak.c knows them
 	 * as `T3M_FABAE` and `T3M_FABC2` (finding F635).
 	 */
 	short short_abae[10];				/* +0xabae */
@@ -1060,7 +1060,7 @@ struct v34_object {
 	/*
 	 * The Modem-on-Hold active flag: while set, 24 `TX_DPSK`'s clock ticks
 	 * `vect_idx` once per call. `v34hstx1.cpp`'s `TX1_FABE8` and
-	 * `v34hshak.c`'s microstate 41 (`T41_FABE8`) are the same offset under
+	 * `V34hshak.c`'s microstate 41 (`T41_FABE8`) are the same offset under
 	 * two names. +0xabea is still unmapped.
 	 */
 	short moh_active;				/* +0xabe8 */

@@ -121,7 +121,7 @@ algorithm (§3.4, and nothing implements it).
 
 Twenty-one frequencies with twenty-one phases and — just as load-bearing —
 **four in-band absences**: 900, 1200, 1800 and 2400 Hz are not in the table.
-`const short probe[V34_PROBE_SAMPLES]` at `src/pump/v34/v34hshak.c:1698` is one
+`const short probe[V34_PROBE_SAMPLES]` at `src/pump/v34/V34hshak.c:1698` is one
 150 Hz period of that waveform, 64 samples, played round and round by
 `v34hstx1.cpp`'s `TX_L1`.
 
@@ -262,7 +262,7 @@ clause fixes four things:
 | 6 | `dilCrcBit` + its extent | `src/pump/v90/DILdescriptorPacker.cpp` | 12/V.90 | `t_dilpack.cpp` | no |
 | 7 | `dilCrcBit` + its extent | `src/pump/v90/V92DILdescriptorPacker.cpp` | 20/V.92 | `t_v92dilpack.cpp` | no |
 | 8 | `v8_crc` | `src/v8/v8util.c` | none — see R12 | `t_v8util.c` | not testable |
-| 9 | `getbit`'s fold | `src/pump/v34/v34hshak.c`, `v34hstx1.cpp` | 14–16/V.34 | `t_v34hstx1.c` | no |
+| 9 | `getbit`'s fold | `src/pump/v34/V34hshak.c`, `v34hstx1.cpp` | 14–16/V.34 | `t_v34hstx1.c` | no |
 
 Sites 1–7 are the **reflected** spelling: feedback `crc[0] ^ bit` into stage 15,
 XORed into 3 and 10 — 0x8408, which is 0x1021 reversed. Sites 8 and 9 are the
@@ -282,7 +282,7 @@ every one of them, is the EXTENT: which bit index the register starts at, which
 it stops at, and which indices are skipped as framing.
 
 **Site 8 is the one exception, and it is why §9 counts nineteen CRC symbols and
-not twenty.** `v8_crc` really is the same register — `v34hshak.c:2926` says so
+not twenty.** `v8_crc` really is the same register — `V34hshak.c:2926` says so
 and the code agrees — so 10.1.2.3.2/V.34 governs its polynomial and its
 seeding, and those are the two things the algebra above has already settled.
 What it has no clause for is an EXTENT: **V.8 defines no CRC over CM or JM**,
@@ -332,7 +332,7 @@ or MH must be written against the amendment, not against V.92 (11/2000).
 
 | clause | what it fixes | site in `src/` | exists |
 |---|---|---|---|
-| Table 17/V.34 | 21 probing tones, 21 phases, 4 absences; 24 repetitions at 6 dB | `probe[64]` `v34hshak.c:1698`; `TX_L1`, `v34hstx1.cpp` | yes |
+| Table 17/V.34 | 21 probing tones, 21 phases, 4 absences; 24 repetitions at 6 dB | `probe[64]` `V34hshak.c:1698`; `TX_L1`, `v34hstx1.cpp` | yes |
 | Table 1/V.90 | 128 Ucodes × codeword and linear value, both laws | `src/service/pcm.c`; the `^0xff`/`^0xd5` masks at three V.90 sites | yes |
 | Table 15/V.90 | 32 average-power limits, printed as squared amplitudes | `V90ConstellationPower::averagePowerLimits` | yes |
 | the formula under Table 14/V.90 | the average-power sum, `/(6 · 2^K)` | `V90ConstellationPower::getPower` | yes |
@@ -348,7 +348,7 @@ or MH must be written against the amendment, not against V.92 (11/2000).
 | 3.5, 8.2.2, 8.2.3/V.8 | CJ is three all-zero octets; ANSam runs 5 ± 1 s; JM stops after all three CJ octets | `src/v8/v8hs.c`, `v8hsrx.c`, `v8handshak.c` | yes |
 | 3.4, 3.6/V.8 | CM on V.21(L), JM on V.21(H) | `v8_V21_Init` call sites | yes |
 | Tables 1–7/V.8 | the preamble patterns and every category and option-bit code | `include/dsplib/v8.h`, `src/v8/v8seq.c`, `v8jm.c` | yes |
-| 2.1, 2.2, 2.3, 4.4/V.25 | 1300 ± 15 Hz on 0.5–0.7 s / off 1.5–2.0 s; 2100 ± 15 Hz for 3.3 ± 0.7 s; reversals 425–475 ms; silence 75 ± 20 ms | `src/dsp/fpm_tone_cfg.c`, `src/pump/v23/v23modem.c`, `src/callprog/callingtone.c` | yes |
+| 2.1, 2.2, 2.3, 4.4/V.25 | 1300 ± 15 Hz on 0.5–0.7 s / off 1.5–2.0 s; 2100 ± 15 Hz for 3.3 ± 0.7 s; reversals 425–475 ms; silence 75 ± 20 ms | `src/dsp/fpm_tone_cfg.c`, `src/pump/v23/v23modem.c`, `src/callprog/CallingTone.c` | yes |
 | Table 8, Table 9/V.34 | SWP and AMP | — | **no** |
 | Tables 7–10/V.92 | the ANSpcm sequences | — | **no** |
 | Table 33/V.92, Tables 25/28/29 | T1 timeout encoding, RM symbol pattern | — | **no** |
@@ -574,7 +574,7 @@ it.
 
 ### The differential tier already pins it, and no independent derivation exists
 
-- **R6** — Table 1/V.34, symbol rates, against `v34hshak.c`'s tables.
+- **R6** — Table 1/V.34, symbol rates, against `V34hshak.c`'s tables.
 - **R7** — Table 2/V.34, carrier frequencies, same.
 - **R8** — Tables 3 and 4/V.34, the α, β and γ parameters, same. All three are
   held against the blob's own tables; no extent, no direction, and the values

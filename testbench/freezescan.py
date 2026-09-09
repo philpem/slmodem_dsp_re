@@ -3,7 +3,7 @@
 
     freezescan.py captures/frz-*.slmodemd.log
 
-THE CHAIN THIS TESTS.  `v34rx.c` disables equaliser adaptation for every
+THE CHAIN THIS TESTS.  `V34RX.c` disables equaliser adaptation for every
 `f798 < -64`; the object's own message prints only in the six-wide band
 -70 < f798 < -64, so the log undercounts by an unknown factor and
 `V34EQFREEZE` was added to count them all.  Separately, the retrain detector

@@ -550,7 +550,7 @@ main(void)
 	/*
 	 * THE BODY.  It forces the transmit state to TX_DPSK, so this case
 	 * cannot avoid table 2's arm at 0x644c9; that arm is three
-	 * instructions and is written in src/pump/v34/v34hshak.c with a note
+	 * instructions and is written in src/pump/v34/V34hshak.c with a note
 	 * saying it belongs to #56.  Nine fields are written, two of them
 	 * pointers back into the object, and the microstate goes to DET_SYNC.
 	 */

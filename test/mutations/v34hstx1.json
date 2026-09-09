@@ -452,7 +452,7 @@
   "find": "\tif (tx1_get(o, TX1_MICROSTATE) != V34HS_TX_L1)",
   "replace": "\tif (!doubled)",
   "equivalent": true,
-  "why": "nothing between the two reads writes +0x3592: `txwritequeue` (v34rx.c:58) writes q->count, the four ring slots and q->wr and nothing else, and the ring is at +0x2220.  So the re-read at 0x62cf5 is the object's spelling and not a second observation"
+  "why": "nothing between the two reads writes +0x3592: `txwritequeue` (V34RX.c:58) writes q->count, the four ring slots and q->wr and nothing else, and the ring is at +0x2220.  So the re-read at 0x62cf5 is the object's spelling and not a second observation"
  },
  {
   "label": "19: the first symbol is vect4[0]",
@@ -826,7 +826,7 @@
   "find": "\ttx1_put(o, TX1_FAA7A, 0);\n\ttxwritequeue(&o->txq, quiet);",
   "replace": "\ttxwritequeue(&o->txq, quiet);\n\ttx1_put(o, TX1_FAA7A, 0);",
   "equivalent": true,
-  "why": "`txwritequeue` (v34rx.c:58) writes q->count, four ring slots and q->wr, all inside +0x221c..+0x2668, and +0xaa7a is nowhere near it -- so the two stores commute.  The object does the clear first and it is written that way"
+  "why": "`txwritequeue` (V34RX.c:58) writes q->count, four ring slots and q->wr, all inside +0x221c..+0x2668, and +0xaa7a is nowhere near it -- so the two stores commute.  The object does the clear first and it is written that way"
  },
  {
   "label": "5/54/74: the arm dispatches on the microstate",
@@ -3271,7 +3271,7 @@
   "replace": "\to->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);\n\ttxmit(o);\n\n\t/* 0x62edc */",
   "fn": "v34tx1_trnseg4a",
   "equivalent": true,
-  "why": "`txmit` (v34rx.c) reads +0x25d0/+0x25d2, the modulator at +0x1450, the queue at +0x221c and the two echo cancellers, and writes none of +0x25c0 -- so the increment and the call commute for EVERY object.  The object does the call first and it is written that way"
+  "why": "`txmit` (V34RX.c) reads +0x25d0/+0x25d2, the modulator at +0x1450, the queue at +0x221c and the two echo cancellers, and writes none of +0x25c0 -- so the increment and the call commute for EVERY object.  The object does the call first and it is written that way"
  },
  {
   "label": "66: the count is advanced after the segment test, as 86 advances it",

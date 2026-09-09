@@ -326,7 +326,7 @@ _set_modem_rate(int code, int *mod, int *rate)
  * `class1_state_functions`, which shows up as an `R_386_32` against the
  * SECTION symbol with the address as an inline addend
  * (`.text+0x092ef4 -> .text:0x092dd0`) and so appears in no call graph and
- * under no name.  `getbit` and `ApplyBulkDelay` in `src/pump/v34/v34hshak.c`
+ * under no name.  `getbit` and `ApplyBulkDelay` in `src/pump/v34/V34hshak.c`
  * are the precedent for writing a file-local as a global so that its
  * `ref_` alias can be driven directly (F221, F227); the storage class is a
  * knowing divergence and is recorded as D1053.

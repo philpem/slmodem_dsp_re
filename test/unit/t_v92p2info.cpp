@@ -3,7 +3,7 @@
  *
  * The class's first test.  Until the constructor there was nothing to drive:
  * `include/dsplib/V92Phase2Info.h` was a data-only header, its offsets
- * asserted from src/pump/v90/VPcmFloModem.cpp because the class had no source
+ * asserted from src/pump/v90/VpcmFloModem.cpp because the class had no source
  * file, and the only thing that touched an instance was VPcmFloModem's own
  * fixture comparing a block of bytes.
  *

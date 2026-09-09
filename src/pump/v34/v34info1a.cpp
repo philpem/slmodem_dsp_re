@@ -108,7 +108,7 @@
  * V.34 object and `bits` is `obj + 0xa9ac` at all three call sites in
  * `v34handshak`, so nothing the function reads can alias what it writes, and
  * a differential test cannot distinguish the two.  Recorded here rather than
- * left to be rediscovered, the way VPcmFloModem.cpp records its two.
+ * left to be rediscovered, the way VpcmFloModem.cpp records its two.
  *
  * THE RETURN VALUE IS 0 ON EVERY PATH AND NO CALLER LOOKS AT IT.  All three
  * call sites in `v34handshak` step straight on to a load; nothing tests
@@ -302,7 +302,7 @@ V34SetINFO1aBits(void *objp, short *bits)
 	 * SHORT PHASE 2 SKIPS THE RATE NEGOTIATION, so the rate configuration
 	 * is written here instead of arriving from `setfinalrate`, and the
 	 * upstream goes back to V.34.  `tx_pwr_reduction` is the transmit power
-	 * reduction v34hshak.c computes; this clears it.
+	 * reduction V34hshak.c computes; this clears it.
 	 */
 	if (obj->is_short != 0) {
 		struct v34_ratecfg *cfg =

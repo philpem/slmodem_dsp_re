@@ -106,7 +106,7 @@
  * ---------------------------------------------------------------------------
  * WHAT IS NAMED HERE AND WHAT IS NOT
  *
- * hdx + 0x78 and + 0x84 already have names -- `src/pump/v32/v32txhdx.c`
+ * hdx + 0x78 and + 0x84 already have names -- `src/pump/v32/V32TXHDX.c`
  * derived them from the transmit states and this file uses the same spellings
  * behind `#ifndef`.  hdx + 0x7c, + 0x80, + 0x48 and obj + 0x30's two reason
  * codes do not: they are spelled as constants wearing their own values, which
@@ -177,7 +177,7 @@
 #endif
 
 /*
- * The handshake state's countdown, in symbols.  Derived in v32txhdx.c from the
+ * The handshake state's countdown, in symbols.  Derived in V32TXHDX.c from the
  * transmit states, which are what subtract from it; guarded because that file
  * and this one spell the same field.
  */

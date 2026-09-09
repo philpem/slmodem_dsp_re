@@ -105,7 +105,7 @@ extern int VPcmV34Create(void *obj, int side, int max_frag, void *dpRuntime,
  * ---------------------------------------------------------------------------
  * The unwritten-path record.
  *
- * `v34hshak.c`'s `t3m_notwritten` verbatim in shape, and for its reasons:
+ * `V34hshak.c`'s `t3m_notwritten` verbatim in shape, and for its reasons:
  * ALWAYS record a code, and ALWAYS stop unless a test has said by name that
  * it is going to read the code afterwards.  An entry point that returned
  * quietly would leave `vpcm_run` running and carrying nothing, which is

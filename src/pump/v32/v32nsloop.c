@@ -80,7 +80,7 @@
  * ---------------------------------------------------------------------------
  * NAMING
  *
- * hdx + 0x78 is `v32txhdx.c`'s `V32HDX_STATE_LEFT`, spelled the same here
+ * hdx + 0x78 is `V32TXHDX.c`'s `V32HDX_STATE_LEFT`, spelled the same here
  * behind `#ifndef`.  hdx + 0x7c, + 0x80, + 0x90 and + 0x96 are MODELLED,
  * UNNAMED and wear their own offsets, which is `v32hshake.c`'s treatment of
  * obj + 0x31's unnamed bits; nothing in the object names any of the four.  The
@@ -106,7 +106,7 @@
 #define HDX(m)		FIELD_PTR((m), V32_OBJ_HDX)
 
 /*
- * The handshake state's countdown, in symbols.  Derived in v32txhdx.c from the
+ * The handshake state's countdown, in symbols.  Derived in V32TXHDX.c from the
  * transmit states, which are what subtract from it.
  */
 #ifndef V32HDX_STATE_LEFT

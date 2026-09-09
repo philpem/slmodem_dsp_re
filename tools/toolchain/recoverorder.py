@@ -13,6 +13,16 @@ sys.path.insert(0, str(ROOT / "tools"))
 import tumap
 
 FIRM = set(("class", "prefix", "ambig-stem"))
+# The blob contains two inputs named voice.c.  These reconstructed sources
+# each contain symbols whose reference locations identify which occurrence
+# they represent; a basename alone cannot do that.
+SOURCE_FILE_OCCURRENCE = {
+    "src/service/voice.c": ("voice.c", 0),
+    "src/voice/voice.c": ("voice.c", 1),
+    "src/service/voicecmd.c": ("voice.c", 1),
+    "src/service/voicedp.c": ("voice.c", 1),
+    "src/service/voicesvc.c": ("voice.c", 1),
+}
 
 
 def defined_symbols(path):
@@ -59,15 +69,31 @@ def recover(rows, directory, names, attribution):
             raise ValueError("missing %s for %s" % (path, source))
         evidence = []
         same_name = names.get(os.path.basename(source), [])
-        if len(same_name) == 1:
+        filename_choice = None
+        override = SOURCE_FILE_OCCURRENCE.get(source)
+        if override:
+            filename, occurrence = override
+            choices = names.get(filename, [])
+            if occurrence >= len(choices):
+                raise ValueError("%s has no %dth %s input in the blob" %
+                                 (source, occurrence, filename))
+            seq, tu = choices[occurrence]
+            filename_choice = (seq, "file-occurrence", tu, filename)
+            evidence.append(filename_choice)
+        elif len(same_name) == 1:
             seq, tu = same_name[0]
-            evidence.append((seq, "filename", tu, os.path.basename(source)))
+            filename_choice = (seq, "filename", tu, os.path.basename(source))
+            evidence.append(filename_choice)
         for symbol in defined_symbols(path):
             item = attribution.get(symbol)
             if item and item.get("how") in FIRM and "|" not in item["tu"]:
                 for seq, tu in names.get(item["tu"], []):
                     evidence.append((seq, "attributed-symbol", tu, symbol))
-        chosen = min(evidence) if evidence else None
+        # The blob's unique FILE spelling is direct provenance for the input
+        # object.  A reconstructed source can contain material from other
+        # original TUs, so a symbol-attribution vote must not move that input
+        # ahead of its own surviving filename.
+        chosen = filename_choice or (min(evidence) if evidence else None)
         # One reconstructed input can represent several original TUs.  Its
         # earliest proven constituent is the only placement that ld can model.
         key = (0, chosen[0], ordinal) if chosen else (1, ordinal, ordinal)
@@ -80,7 +106,8 @@ def recover(rows, directory, names, attribution):
 def self_test():
     assert sorted([(0, 7, 0, "late"), (1, 1, 1, "unknown")])[0][-1] == "late"
     assert min([(4, "filename"), (9, "attributed-symbol")])[0] == 4
-    print("recoverorder self-test: 2 ordering cases, 2 passed")
+    assert SOURCE_FILE_OCCURRENCE["src/service/voice.c"] == ("voice.c", 0)
+    print("recoverorder self-test: 3 ordering cases, 3 passed")
 
 
 def main():

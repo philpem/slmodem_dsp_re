@@ -230,7 +230,7 @@ rather than on its own.
 Whoever writes it should read finding F273 (the object
 is genuinely 32 KB, and the old "indexes through `this`" sentence in
 docs/v90cpp.md is corrected), finding F274 (a `V90Modem` is EMBEDDED at
-+0x1758, and `sizeof(V90Modem) == 0x49c0` is asserted in VPcmFloModem.cpp for
++0x1758, and `sizeof(V90Modem) == 0x49c0` is asserted in VpcmFloModem.cpp for
 exactly that reason), and finding F275 (+0x1760 is a `V90Phase2Info` and
 +0x612c a `V92Phase2Info`). `include/dsplib/VPcmFloModem.h` already carries the
 class; add fields to it rather than starting a new map, and put anything new

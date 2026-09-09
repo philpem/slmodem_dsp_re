@@ -328,7 +328,7 @@ float zfFLTUTL_GetMaxAbsValue(float *buf, unsigned int n);
  *
  * Sits between FindCorrelation() and zfFLTUTL_GetMaxAbsValue() in the
  * object (0xae490) and so is inside this file's address range even
- * though its name belongs with fdspkrnl.c; declared here for that
+ * though its name belongs with Fdspkrnl.c; declared here for that
  * reason, to move when FDSP_DP_Create lands.
  *
  * Converts `*countp` samples each way and does nothing else: the

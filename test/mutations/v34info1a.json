@@ -203,7 +203,7 @@
   "replace": "\tif (obj->v90_receiver == 2)\n\t\treturn 0;"
  },
  {
-  "label": "Two changes that CANNOT alter behaviour, kept because 'we tried this and it survived, and here is why' is worth more than silence.  Both rest on one property of bitreverse (src/pump/v34/v34rx.c): with nbits == 7 it returns a value in 0..127, so it is non-negative and fits in three bits after a shift of four.  Nothing else is held fixed -- neither depends on any input this test chooses."
+  "label": "Two changes that CANNOT alter behaviour, kept because 'we tried this and it survived, and here is why' is worth more than silence.  Both rest on one property of bitreverse (src/pump/v34/V34RX.c): with nbits == 7 it returns a value in 0..127, so it is non-negative and fits in three bits after a shift of four.  Nothing else is held fixed -- neither depends on any input this test chooses."
  },
  {
   "label": "the three-bit slice of the reversed Uinfo is masked to four bits",
@@ -234,6 +234,6 @@
   "find": "v = (int)(((unsigned short)bits[2] & 3) * 2)",
   "replace": "v = (int)(((unsigned short)bits[2] & 7) * 2)",
   "equivalent": true,
-  "why": "the third bit lands at position 3 of the gathered value and bitreverse(v, 3) reads only positions 0, 1 and 2 (src/pump/v34/v34rx.c).  Nothing this test chooses can make it observable, and the same is true of any input at all."
+  "why": "the third bit lands at position 3 of the gathered value and bitreverse(v, 3) reads only positions 0, 1 and 2 (src/pump/v34/V34RX.c).  Nothing this test chooses can make it observable, and the same is true of any input at all."
  }
 ]

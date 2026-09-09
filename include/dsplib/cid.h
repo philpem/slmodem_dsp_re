@@ -11,7 +11,7 @@
  *   Cidmtd.c   CID_MTD_detect       .text 0x0926a0    259 bytes
  *
  * one translation unit each (finding F1410).  `Rxcid.c` -- reset_cid,
- * create_cid, pack_next_bit and cid_modem -- is src/service/rxcid.c, and it
+ * create_cid, pack_next_bit and cid_modem -- is src/service/Rxcid.c, and it
  * is what named everything below +0x028 and everything from +0x086 to +0x152
  * (finding F8710).
  *
@@ -86,7 +86,7 @@ struct cid {
 	 * reconstructed ever gives it a value other than 9.  The one reader,
 	 * `cid_modem`, adds it to `mark_conf` for every block CID_MTD_detect
 	 * answers 0 for (tone detected), which is the step that drives
-	 * `mark_conf` up toward the two time thresholds `rxcid.c`'s own header
+	 * `mark_conf` up toward the two time thresholds `Rxcid.c`'s own header
 	 * comment derives (finding F8712).  Field naming wave 7.
 	 */
 	short mark_conf_step;		/* +0x02c create_cid puts 9 here;
@@ -133,7 +133,7 @@ struct cid {
 	/*
 	 * `pack_next_bit`'s territory (Rxcid.c): the async framer that turns
 	 * the demodulated bit stream into message bytes.  The six framer names
-	 * are usage inference from that one function -- see src/service/rxcid.c
+	 * are usage inference from that one function -- see src/service/Rxcid.c
 	 * for the derivation.  The LENGTH of `data` is reset_cid's: it clears
 	 * exactly 120 bytes from +0x0d8 and then clears +0x150 and +0x152 as
 	 * two separate shorts alongside +0x154 and +0x156.
@@ -153,7 +153,7 @@ struct cid {
 	 * (finding F10151).  Trailing padding: `pack_len` ends at +0x15e
 	 * and the struct's own alignment (forced to 4 by its several `int`
 	 * members and `mrf`'s pointer) rounds `sizeof` up to +0x160 on its
-	 * own.  `src/service/cid_mtd.c`'s existing `cid_size_check[sizeof
+	 * own.  `src/service/Cidmtd.c`'s existing `cid_size_check[sizeof
 	 * (struct cid) == 0x160 ? 1 : -1]` is a hard compile-time proof,
 	 * and 0x160 is also `create_cid`'s literal allocation size, not
 	 * adjacency alone.  `dis.py` over `cid_modem`/`create_cid`/
@@ -188,7 +188,7 @@ short CID_FSD_demodulate(const short *samples, short *bits, short count,
  * @brief The mark-tone (1200 Hz) detector.
  *
  * Two cascaded notches take out 1200 Hz and 1300 Hz; what is left is
- * compared with the input's own energy. See src/service/cid_mtd.c.
+ * compared with the input's own energy. See src/service/Cidmtd.c.
  *
  * @param samples  Input samples.
  * @param count    Number of samples.

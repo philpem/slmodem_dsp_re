@@ -42,7 +42,7 @@ WHAT IT PINS, and why each case is here rather than being a nice idea.
    6 together are what stop the smoothing being tuned into uselessness.
 
 THIS TESTS THE PYTHON MODEL, NOT THE C.  `preemphshape.py` and
-`probe_preemp_shape()` in v34hshak.c were written from the same figures but not
+`probe_preemp_shape()` in V34hshak.c were written from the same figures but not
 from each other, and finding F1960 cross-checked them on a real capture: same
 index, same bin count, residuals agreeing to 0.04 dB^2.  So this pins the
 model the C implements.  A C-level test that drives `probeselect()` and reads

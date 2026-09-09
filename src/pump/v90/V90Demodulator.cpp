@@ -961,9 +961,9 @@ V90Demodulator::enterDataSteadyState()
  * exactly what `getAT_UD` does to both of its results.
  *
  * THIS IS THE THIRD COPY of the same four-line helper -- `x87_log10` in
- * V90Equalizer.cpp, `psd_x87_log10` in Psd.cpp, `trn2_x87_log10` in
- * V90TRN2Designer.cpp and the one in VPcmFloModem.cpp -- and it is a copy
- * deliberately, on the reasoning VPcmFloModem.cpp already wrote down:
+ * V90Equalizer.cpp, `psd_x87_log10` in psd.cpp, `trn2_x87_log10` in
+ * V90TRN2Designer.cpp and the one in VpcmFloModem.cpp -- and it is a copy
+ * deliberately, on the reasoning VpcmFloModem.cpp already wrote down:
  * hoisting it into a shared header from a worktree touches files other
  * batches own for no behavioural gain.  Recorded so a later cleanup can
  * collapse them all at once.
@@ -2269,7 +2269,7 @@ V90Demodulator::getBitRate() const
  *  3. EVERY ALLOCATION KEEPS THE FRESH POINTER IN A LOCAL ACROSS THE
  *     CONSTRUCTOR CALL AND STORES IT TO THE MEMBER AFTERWARDS.  Assigning the
  *     member first and passing the member would make GCC store and then reload
- *     across the call, for the aliasing reason above; V90BitsToSymbol.cpp sets
+ *     across the call, for the aliasing reason above; V90bitsToSymbol.cpp sets
  *     the argument out in full and V90Modulator.cpp follows it.
  *
  *  4. THE NESTED CONSTRUCTORS ARE CALLED BY THEIR MANGLED NAMES.  The build is
@@ -2520,7 +2520,7 @@ V90Demodulator::V90Demodulator(unsigned int levels, V90Phase2Info *phase2,
  *
  * NOTHING IS NULLED AFTER BEING RELEASED, so a second destruction double-frees.
  * That is the blob's behaviour and is reproduced, as it is in
- * V90Modulator.cpp and V90BitsToSymbol.cpp.
+ * V90Modulator.cpp and V90bitsToSymbol.cpp.
  *
  * THE LAST FIVE CALLS ARE NOT WRITTEN HERE and must not be: the compiler emits
  * `~V90SpectralVerifier`, `~Descrambler<unsigned char,int>`,

@@ -219,7 +219,7 @@ typedef char ob4_k56_check[(OB4_ANCHOR + OB4_K56_RECEIVER ==
  *                     out of the field it has just stored.
  *   OB_FORCE_LOW_BAUD `probeselect` opens with `if (*(short *)(m + 0x359a))
  *                     goto rate_2400`, jumping over the whole symbol-rate
- *                     ladder (src/pump/v34/v34hshak.c).  This function is the
+ *                     ladder (src/pump/v34/V34hshak.c).  This function is the
  *                     only writer read so far and it sets it exactly when the
  *                     maximum bit-rate index came out as 1 -- 2400 bit/s,
  *                     which the lowest symbol rate is the only way to carry.
@@ -469,7 +469,7 @@ getMPrecvdBits(struct tagV34Object *objp)
  *     both set, anything else do nothing
  *
  * BIT 4 OF THE FLAGS WORD IS WRITTEN HERE.  `v34recv.h` calls it
- * `V34_RX_FLAG_TRN_WATCH` after its READER in `v34rx.c`; the macro is used
+ * `V34_RX_FLAG_TRN_WATCH` after its READER in `V34RX.c`; the macro is used
  * below because it is the same bit of the same word, and for no stronger
  * reason.  Nothing here is a claim about TRN2.
  *
@@ -482,7 +482,7 @@ getMPrecvdBits(struct tagV34Object *objp)
  *     K56flex twin passes the literal 1.  Both emitters pass
  *     `tx_scrambler_mode(o)`, which is bit 0 of `tx_flags`; nothing in these
  *     1,358 bytes loads +0x25c2 at all.  Mode 0 is the CALLING station's
- *     polynomial (v34hshak.c), so a reconstruction that called an emitter
+ *     polynomial (V34hshak.c), so a reconstruction that called an emitter
  *     here agrees with the blob for every object whose `tx_flags` bit 0 is
  *     clear and disagrees for every one where it is set.
  *   - there is NO differential encoding: the scrambler's two bits go
@@ -506,7 +506,7 @@ getMPrecvdBits(struct tagV34Object *objp)
  * written: there is no variable shift.
  */
 
-/* The handshake's transmit state machine; see v34hshak.c. */
+/* The handshake's transmit state machine; see V34hshak.c. */
 #define OB_TXSTATE		0x3596
 
 /*
@@ -2045,7 +2045,7 @@ extern int alias_toneDetectorProcess(GenericToneDetector *, float *,
 /*
  * ---------------------------------------------------------------------------
  * The unwritten-path record.  `vpcm.c`'s `vpcm_notwritten` verbatim in shape,
- * and for the reason `v34hshak.c`'s `t3m_notwritten` gives: an arm that
+ * and for the reason `V34hshak.c`'s `t3m_notwritten` gives: an arm that
  * returns quietly is indistinguishable from an arm that correctly did
  * nothing, so the default is to STOP, and a test opts out of the stop BY NAME
  * before it reads the code.

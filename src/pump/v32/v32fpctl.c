@@ -784,7 +784,7 @@ RxClampV32(void *modem, short *in, short *out, unsigned short count)
 
 /*
  * FILE-LOCAL IN THE OBJECT and global here, which is the arrangement
- * `src/pump/v34/v34hshak.c` already uses for `getbit`: a `static` has no
+ * `src/pump/v34/V34hshak.c` already uses for `getbit`: a `static` has no
  * symbol for the differential harness to compare against, and the blob's copy
  * is reached as `ref_v32_null_protocol` through `symmap.py --globals`.
  *

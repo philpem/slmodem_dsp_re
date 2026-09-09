@@ -659,7 +659,7 @@ case_tone_ab(void)
 	/*
 	 * WHAT THE FILL LEAVES AT +0x358c IS NOT ASSERTED, because it is the
 	 * fill's and every `V34HS_SEED` moves it: `v34handshakinit` clears
-	 * the field only on the Modem-on-Hold path (v34hshak.c:1480) and the
+	 * the field only on the Modem-on-Hold path (V34hshak.c:1480) and the
 	 * cases here are brought up in mode 0.  That is exactly why both
 	 * values are POKED rather than one of them being reached by luck.
 	 * `V34TX1_DUMP=1` prints what this fill happened to leave.
@@ -1204,7 +1204,7 @@ case_silence_entry(void)
 
 /*
  * `vectpp` IS DATA THIS TREE ALREADY HAD AND DID NOT PROVE.  It was static in
- * v34rx.c, where `receiver` slices against it as ninety-six shorts; 20 PPSEG
+ * V34RX.c, where `receiver` slices against it as ninety-six shorts; 20 PPSEG
  * reads the same bytes as forty-eight four-byte points, which is why the blob
  * exports it and why it is global now.  Proved against `ref_vectpp` the way
  * `probe` and `vect4` are: the fifteen PPSEG runs read four of the
@@ -2547,7 +2547,7 @@ case_xmitmp_entry(void)
  * advance would be invisible to the "wrote something" guard and to finding
  * F323's byte count -- which is half of why 24 and 60 agree cold.  These runs
  * put the record INSIDE the object, at +0xaa0c, which is one whole 0x30-byte
- * slot of the five-record array (v34hshak.c's mode 2/3 blanks the same one)
+ * slot of the five-record array (V34hshak.c's mode 2/3 blanks the same one)
  * and does not overlap +0xaa78, +0xaa7e or the pointer itself.
  *
  * Every field the arm writes is seeded away from what it stores (finding
@@ -2574,7 +2574,7 @@ case_xmitmp_entry(void)
  * this tree names either.  The array runs +0xa94c, +0xa97c, +0xa9ac, +0xa9dc,
  * +0xaa0c and +0xaa3c; `v34handshakinit` aims +0xaa70 at +0xa97c and +0xaa6c
  * at +0xa94c, `getMPrecvdBits` uses +0xaa3c and `settxlevel` reads +0xa9dc as
- * a transmit-level table (v34hshak.c's `v34setuptxmit`), which leaves +0xa9ac
+ * a transmit-level table (V34hshak.c's `v34setuptxmit`), which leaves +0xa9ac
  * and +0xaa0c.
  */
 #define DP_REC		0xaa0c		/* where these runs put the reader  */
@@ -3000,7 +3000,7 @@ case_tx_dpsk(void)
 	 * PUTTING THE TAIL PAST THE THRESHOLD WOULD HIDE IT, which is why this
 	 * run does not: every way the tail can move the machine leaves exactly
 	 * what a spurious clear-down leaves -- the retrain's own
-	 * `v34handshakinit` clears +0xabe4 (v34hshak.c:1307) and rewrites both
+	 * `v34handshakinit` clears +0xabe4 (V34hshak.c:1307) and rewrites both
 	 * state words, and the tail's clear-down IS the clear-down.
 	 *
 	 * 2433 is the same shape with a NEGATIVE moh_message, which is the only
@@ -3104,7 +3104,7 @@ case_tx_dpsk(void)
 	 * 0x6a42e reads +0xaa6c BEFORE the call and 0x6a448 writes it after,
 	 * so `VPcmV34SetMohMessageBits` fills `word[0]` of the record the
 	 * reader was on and the twelve stores re-arm +0xa94c.  In the object's
-	 * own configuration those are one record (v34hshak.c:1451) and no fill
+	 * own configuration those are one record (V34hshak.c:1451) and no fill
 	 * or handshake can tell them apart; a poke is the only way.
 	 */
 	dp_reset();

@@ -16,7 +16,7 @@
  * End to end: -6 dB from 135 Hz to 1280 Hz, within 1.3 dB across the whole
  * 350..620 Hz call-progress range, and a 105 dB null at 2260 Hz.  It is a
  * band-limiter, not a tone filter -- picking tones out of this band is
- * cadence.c's job.
+ * Cadence.c's job.
  */
 
 #include "dsplib/toneiir.h"

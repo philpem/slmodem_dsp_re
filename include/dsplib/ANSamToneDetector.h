@@ -44,7 +44,7 @@
  * The four tables are 11 and 13 `double`s, they are file-local (the
  * relocations are against the .data SECTION symbol with the offset as an
  * inline addend -- finding F604), and they are transcribed in
- * src/dsp/ANSamToneDetector.cpp in the order the object lays them out.  The
+ * src/dsp/AnsamToneDetector.cpp in the order the object lays them out.  The
  * other seven arguments go straight through in order.
  *
  * THE OTHER RATE IS 9600, AND BOTH CALL SITES SAY SO.  Four relocations name

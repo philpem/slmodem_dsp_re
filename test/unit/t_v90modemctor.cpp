@@ -248,7 +248,7 @@ typedef void (*dtorfn)(void *);
 
 /*
  * `sizeof(V90Modem)` is 0x49c0 and the assertion is here as well as in
- * src/pump/v90/VPcmFloModem.cpp because this file's storage is a byte array:
+ * src/pump/v90/VpcmFloModem.cpp because this file's storage is a byte array:
  * a class that shrank would leave the tail of the slot inside the guard and
  * the guard check would then be testing the object.
  */

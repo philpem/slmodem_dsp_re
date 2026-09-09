@@ -1,6 +1,6 @@
 [
  {
-  "note": "src/service/fifo8.c against build/test/t_fdspkfifo.  The claims: the built-in default parameters (a LOCAL .data object in the blob, so only the cfg == NULL path can compare them), which allocation each create path makes, the clip against free room, the clip against bytes held, the two cursors' wrap, the pad-out with cfg.fill, and the two frees in delete."
+  "note": "src/service/Fifo8.c against build/test/t_fdspkfifo.  The claims: the built-in default parameters (a LOCAL .data object in the blob, so only the cfg == NULL path can compare them), which allocation each create path makes, the clip against free room, the clip against bytes held, the two cursors' wrap, the pad-out with cfg.fill, and the two frees in delete."
  },
  {
   "label": "the built-in default ring is one byte longer",

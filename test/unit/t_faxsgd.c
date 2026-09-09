@@ -1,5 +1,5 @@
 /*
- * t_faxsgd.c -- differential test of the SGD sequence engine (src/fax/sgd.c).
+ * t_faxsgd.c -- differential test of the SGD sequence engine (src/fax/Sgd.c).
  *
  * THIS TEST IS A REBUILD, AND THE THING IT REBUILDS IS THE DETECTOR THAT
  * CAUGHT THE LAST ATTEMPT.  Wave 1 wrote the engine, failed 96 of 3,603
@@ -252,7 +252,7 @@ run_create(void)
 	 * legitimately different addresses.  They are checked for what they
 	 * POINT AT rather than compared, and every other field of the config
 	 * is compared one at a time, so that a wrong constant in
-	 * src/fax/sgd.c's SGD_CFG cannot hide behind the pointer exclusion.
+	 * src/fax/Sgd.c's SGD_CFG cannot hide behind the pointer exclusion.
 	 */
 	{
 		struct sgd *x, *y;

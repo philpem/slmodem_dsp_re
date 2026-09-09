@@ -2,7 +2,7 @@
  * dualtone.h -- Dual Tone Detector: answer-tone detection.
  *
  * Despite living in the call-progress module, this is not a call-progress
- * tone detector.  Dial tone, ringback and busy are cadence.c's job.  What
+ * tone detector.  Dial tone, ringback and busy are Cadence.c's job.  What
  * this decides is how the far end answered:
  *
  *   a pure tone at 2100 Hz          a modem, announcing itself with the

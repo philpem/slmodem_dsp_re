@@ -25,7 +25,7 @@ which `dsplibs_debug_printf` lines have a hit count of zero?
 It agrees with the hand analysis where the two overlap, which is the reason to
 trust it: finding F154 worked out by hand that 3 of `CALLPROG_Progress`'s sites
 were verified and the rest were not, and this reports 3 live sites in
-callprog.c and 30 dead, having been told nothing.
+Callprog.c and 30 dead, having been told nothing.
 
 WHY THE WHOLE SUITE IN ONE RUN
 

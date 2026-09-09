@@ -102,11 +102,11 @@
 #define TX1_TXSTATE	0x3596
 
 /*
- * +0xaa78, the counter three of these six read.  v34hshak.c calls it
+ * +0xaa78, the counter three of these six read.  V34hshak.c calls it
  * `HS_TRACE_2` because every handshake diagnostic prints it as `[2]`;
  * `v34handshakinit` zeroes it and the arms here count it DOWN to zero (78,
  * 85) or count `vect_idx` UP to it (86).  It is inside `unmapped_aa78`, so
- * it is reached by offset exactly as v34hshak.c:421 reaches it.
+ * it is reached by offset exactly as V34hshak.c:421 reaches it.
  */
 #define TX1_COUNT	0xaa78
 
@@ -116,13 +116,13 @@
  */
 #define TX1_SEGLEN	0x35a6
 
-/* The modulator, where V34SetupModulator writes it -- v34hshak.c:302. */
+/* The modulator, where V34SetupModulator writes it -- V34hshak.c:302. */
 #define TX1_MODULATOR	0x1450
 
 /*
  * +0x358c.  60 masks it with one to choose between two of `vect4`'s four
  * points.  It is inside `unmapped_3564`; the only other site in the tree is
- * v34hshak.c:1480, where `v34handshakinit` clears it.
+ * V34hshak.c:1480, where `v34handshakinit` clears it.
  */
 #define TX1_F358C	0x358c
 
@@ -142,7 +142,7 @@
  * +0x2218, an int.  Table 2's tail reads it to choose four of its arms
  * (v34hstxblock.c's `TB_F2218`); 70 is a writer of it.
  *
- * Named `hs_mode` in `struct v34_object` (`v34fsk.h`), on `v34hshak.c`'s own
+ * Named `hs_mode` in `struct v34_object` (`v34fsk.h`), on `V34hshak.c`'s own
  * `DP_MODE`/`T3C_MODE` names for the same int: `datapumpv34`'s recovery
  * supervisor reads it as "handshake above 1", and 70 setting it to 1 here is
  * exactly that transition.  Kept as a raw-offset macro in this file rather
@@ -177,7 +177,7 @@
 /*
  * +0xaae0 and +0xaae2.  `struct v34_object` names them `fsk.nbits` and
  * `fsk.sr` because the FSK demodulator reaches them that way; the handshake
- * uses them as two words of its own -- v34hshak.c's table-3 core reaches them
+ * uses them as two words of its own -- V34hshak.c's table-3 core reaches them
  * by offset as `T3C_FAAE0` and `T3C_FAAE2` for the same reason, and 74's
  * retrain writes -1 and 0 into them.  Reached by offset here so that the
  * name of the other reader is not asserted to be the meaning here.
@@ -187,7 +187,7 @@
 
 /*
  * +0xabe8, a BYTE.  `v34handshakinit`'s Modem-on-Hold bring-up sets it to one
- * (v34hshak.c:1441) and 74's retrain tests it to choose which microstate the
+ * (V34hshak.c:1441) and 74's retrain tests it to choose which microstate the
  * handshake restarts in.  The object reads it with `cmpb`.
  *
  * Named `moh_active` in `struct v34_object` (`v34fsk.h`) -- kept as a
@@ -267,7 +267,7 @@
 /*
  * +0xaa0c, the second of the five 0x30-byte message records that run from
  * +0xa94c to +0xaa3c.  `struct v34_object` names its first halfword
- * `info_rates`; v34hshak.c:1406 blanks the SAME twelve fields at +0x14
+ * `info_rates`; V34hshak.c:1406 blanks the SAME twelve fields at +0x14
  * through +0x2c that 21's completion blanks, which is what says the two are
  * one record and not two overlapping readings of one region.  Reached by
  * offset here for the reason TX1_FAAE0 and TX1_FAA3C are.
@@ -276,7 +276,7 @@
 
 /*
  * +0xaa6c and +0xa94c: the self-pointer and the record it is aimed at.
- * `v34handshakinit` aims the same pair on its mode-4 path (v34hshak.c:1451),
+ * `v34handshakinit` aims the same pair on its mode-4 path (V34hshak.c:1451),
  * and 54's completion aims it again before handing the record to
  * `V34SetINFO0aBits`.  The harness excludes +0xaa6c from the byte comparison
  * and checks it by offset instead (finding F324).
@@ -395,7 +395,7 @@ v34tx1_xmit0(void *objp)
  *
  * Both arms carry the loop twice -- once with the 0x04000000 tap and once
  * with 0x00002000 -- and choose between the copies with `role == 0x65`.
- * That is `V34scrambler`'s `mode` argument exactly: v34rx.c hoists the same
+ * That is `V34scrambler`'s `mode` argument exactly: V34RX.c hoists the same
  * branch out of the same loop, over the same register at +0x25cc, with the
  * same two generators.  `bits` is the literal 3 and `nbits` is 2, so two
  * scrambled bits come out and the register advances twice.
@@ -613,7 +613,7 @@ v34tx1_moh_silence(void *objp)
  * two tests jumping to one `mov $0x1,%eax` at 0x65696 -- and its sixth is the
  * literal zero.  The three rate fields are the transmit half of the rate
  * configuration at +0xaa84: `baud`, `carrier` and the pre-emphasis index at
- * +0x06, which is the same triple v34hshak.c:522 reads.
+ * +0x06, which is the same triple V34hshak.c:522 reads.
  *
  * THE ARM ENDS AT 0x6430c, WHICH IS SHARED, and its one instruction --
  * `seg_symcount += 1` -- is written here rather than in the caller because it is
@@ -684,7 +684,7 @@ v34tx1_txmd(void *objp)
  *     62d4f  and    $0x1,%edi
  *     62d52  mov    0x0(,%edi,8),%edx      <== R_386_32 vect4
  *
- * `vect4` is in the order (+,+) (+,-) (-,-) (-,+) -- clockwise, v34hshak.c --
+ * `vect4` is in the order (+,+) (+,-) (-,-) (-,+) -- clockwise, V34hshak.c --
  * so entries 0 and 2 are the two ENDS of a diagonal and the two points this
  * sends are exact negations of one another.  A tone alternating between them
  * is A or B depending on which the flag picks, which is the state's name.
@@ -1014,7 +1014,7 @@ v34tx1_sbarseg(void *objp)
  *
  * ONE POINT OF `vectpp` PER PASS, and the index is `vect_idx` itself rather
  * than a mask: `movswl 0x2aa2(%ebp),%esi` then `mov 0x0(,%esi,4),%edx`, so the
- * table is read as FORTY-EIGHT FOUR-BYTE ENTRIES where v34rx.c reads the same
+ * table is read as FORTY-EIGHT FOUR-BYTE ENTRIES where V34RX.c reads the same
  * bytes as ninety-six shorts.  That is the same (re, im)-in-one-int packing
  * `vect4` has, and it is why `vectpp` is global in the object.
  *
@@ -1299,7 +1299,7 @@ v34tx1_silence(void *objp)
 		/*
 		 * RE-READ, not the pointer just stored, because that is what
 		 * the object does at 0x685f2 and 0x69fe1 -- the same reading
-		 * v34hshak.c:1459 records for `v34handshakinit`'s copy of
+		 * V34hshak.c:1459 records for `v34handshakinit`'s copy of
 		 * this sequence.  `V34SetINFO0aBits` does not write +0xaa6c,
 		 * so nothing observable turns on it.
 		 */
@@ -1598,7 +1598,7 @@ v34tx1_jtxmit(void *objp)
  *
  * THE WHOLE OF 0x639db..0x63aae IS `getbit` INLINED, and that is a
  * measurement rather than a resemblance: every arm of the reader
- * v34hshak.c:2513 carries is here, in the same order and on the same fields
+ * V34hshak.c:2513 carries is here, in the same order and on the same fields
  * -- the "still have bits" short cut at 0x64588, the whole-word refill at
  * 0x63a1d, the PART-word refill at 0x646f6 that does not advance `idx`, the
  * CRC-16 flush at 0x64781, the "overrun by exactly sixteen" arm at 0x64857
@@ -1610,7 +1610,7 @@ v34tx1_jtxmit(void *objp)
  *
  * WHAT THAT COSTS, named rather than implied: no mutation in
  * `test/mutations/v34hstx1.json` then tests the reader.  `tools/mutate.py`
- * anchors on source text and the reader's text is in `v34hshak.c`, which is
+ * anchors on source text and the reader's text is in `V34hshak.c`, which is
  * `t_v34hshak.c`'s suite and not this one.  What the runs here DO test is
  * that the call is the right one on the right record, and every branch the
  * arm takes around it.
@@ -1942,7 +1942,7 @@ v34tx1_xmitmp(void *objp)
  * THE 2,220 BYTES ARE `getbit` INLINED TWICE, which is finding F424's result
  * at 67 for a second time and is why this arm is short.  0x62bb5..0x62c64
  * with 0x649f1, 0x654a7, 0x67b95, 0x68480 and 0x6876a is the reader
- * v34hshak.c:2513 carries, arm for arm and field for field: the "still have
+ * V34hshak.c:2513 carries, arm for arm and field for field: the "still have
  * bits" short cut at 0x62bc9, the whole-word refill at 0x654a7, the PART-word
  * refill at 0x62bfc that does not advance `idx`, the CRC-16 fold at 0x62c35,
  * the flush at 0x67ba8, the "overrun by exactly sixteen" arm at 0x6876a, and
@@ -1955,7 +1955,7 @@ v34tx1_xmitmp(void *objp)
  * So the arm is two calls, the way 78 and 85 are written over
  * `tx1_ja_common` and 67 over `getbit`.  What it costs, named rather than
  * implied, is finding F424's cost unchanged: `tools/mutate.py` anchors on
- * source text and the reader's text is in `v34hshak.c`, which is
+ * source text and the reader's text is in `V34hshak.c`, which is
  * `t_v34hshak.c`'s suite.  What the runs here test is that each call is the
  * right one on the right record and every branch the arm takes around them.
  *
@@ -2008,7 +2008,7 @@ v34tx1_xmitmp(void *objp)
  * instead.  It has to be that run and not one past the threshold: it is the
  * only place a clear-down that should not have happened is visible, because
  * BOTH of the tail's ways out leave exactly what a spurious clear-down leaves
- * -- the retrain's own `v34handshakinit` clears +0xabe4 (v34hshak.c:1307) and
+ * -- the retrain's own `v34handshakinit` clears +0xabe4 (V34hshak.c:1307) and
  * rewrites both state words, and the tail's clear-down IS the clear-down.
  */
 
@@ -2128,7 +2128,7 @@ tx1_moh_reinit(struct v34_object *o, const char *msg)
  * `VPcmV34SetMohMessageBits` fills `word[0]` of WHATEVER THE READER WAS
  * POINTING AT and the twelve stores below re-arm the record at +0xa94c.  In
  * the object's own configuration those are the same record --
- * `v34handshakinit`'s mode 4 aims +0xaa6c at +0xa94c (v34hshak.c:1451) -- so
+ * `v34handshakinit`'s mode 4 aims +0xaa6c at +0xa94c (V34hshak.c:1451) -- so
  * only a poke separates them, and `t_v34hstx1.c` aims the pointer elsewhere
  * for exactly one run.
  *
@@ -2944,7 +2944,7 @@ v34tx1_trnseg4a(void *objp)
  * are reached through `setupreceiver` and no table had to be extracted for
  * it; they are already global in v34filters.c.
  *
- * The +0xaa0c record is blanked next, and it is v34hshak.c:1406's TWELVE
+ * The +0xaa0c record is blanked next, and it is V34hshak.c:1406's TWELVE
  * FIELDS in a different order -- +0x14 to -1 and the other eleven to zero.
  * Two of them are 32-bit stores and ten are halfwords; written in the object's
  * order here, which is not the record's.

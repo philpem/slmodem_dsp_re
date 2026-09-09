@@ -115,7 +115,7 @@ def self_test():
         #
         ("src/callprog/elliptic.c", "\t  8192, -14430,   7822,   8192,",
          {"7822": "7829"}, "\t  8192, -14430,   7822,   8192,"),
-        ("src/callprog/cpfiltrs.c", "\t8192, -14686, 7832,", {"7832": "7839"},
+        ("src/callprog/CPfiltrs.c", "\t8192, -14686, 7832,", {"7832": "7839"},
          "\t8192, -14686, 7832,"),
         #
         # A bare parenthetical in CODE is not enough either -- it could be an

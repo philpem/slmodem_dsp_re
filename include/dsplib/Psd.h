@@ -18,9 +18,9 @@
  *      which GCC emits only under `-funsafe-math-optimizations` -- not in
  *      this tree's derived flag set, and not a flag to reach for, because it
  *      changes every other expression in the translation unit too.  A libm
- *      `log10` is a different function in the last place.  Psd.cpp uses an
+ *      `log10` is a different function in the last place.  psd.cpp uses an
  *      inline-asm helper that is the object's own two instructions, as
- *      V90Equalizer.cpp and VPcmFloModem.cpp already do.
+ *      V90Equalizer.cpp and VpcmFloModem.cpp already do.
  *
  * THE WINDOW TYPE IS NOT STORED.  `setWindowType` redesigns the window in
  * place and keeps nothing, so the object cannot be asked which one it holds.

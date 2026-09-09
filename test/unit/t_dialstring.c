@@ -184,7 +184,7 @@ main(void)
 
 	/*
 	 * And with the diagnostics on.  Not a claim on the dead-site count --
-	 * debugcov reports six sites in dialer.c that never execute and all
+	 * debugcov reports six sites in Dialer.c that never execute and all
 	 * six are in `pulse_digit` and `DialerProgress`, which nothing here
 	 * touches.  What this adds is the transcript at grades and on the
 	 * `store` path that the IsDialStringInvalid route cannot produce: the

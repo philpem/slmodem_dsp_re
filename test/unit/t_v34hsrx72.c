@@ -26,7 +26,7 @@
  * both written by `fskdemodulate` on the same step, from a burst `V34agc`
  * has just rewritten -- but `obj->fsk_inhibit` at +0x402 makes
  * `fskdemodulate` return without doing anything at all, not even running the
- * detector (v34fsk.h, dpsk.c:210).  Nothing on this path writes it, so
+ * detector (v34fsk.h, DPSK.c:210).  Nothing on this path writes it, so
  * setting it leaves the two fields exactly as poked and the gate at 0x65145
  * becomes an ordinary two-way choice.  That is what lets 0x6881e, 0x6afd7,
  * 0x6b120, 0x6c9f1, 0x7086b and 0x69723 -- 530 bytes -- be tested at all,

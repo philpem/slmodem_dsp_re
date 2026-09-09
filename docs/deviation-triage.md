@@ -196,7 +196,7 @@ recognisable slice of them:
 |---|---|
 | `src/dsp/fpm_div.c` | D1 D4 |
 | `src/pump/v34/v34filters.c` | D26 D27 D28 D29 D30 D31 D32 |
-| `src/pump/v34/v34hshak.c` | D35 D36 D37 D43 D51 D52 D53 D54 D59 |
+| `src/pump/v34/V34hshak.c` | D35 D36 D37 D43 D51 D52 D53 D54 D59 |
 | `src/pump/v32/v32fse.c` | D301 D302 D370 D371 D451 |
 | `src/pump/v90/V92CP.cpp` | D503 D520 D570 D571 D920 D921 D923 |
 

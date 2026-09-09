@@ -2,7 +2,7 @@ PRE-REGISTRATION -- shape-matched pre-emphasis, scored on equaliser workload
 Written 2026-08-14, before the code had ever been run.
 
 THE CHANGE UNDER TEST
-  probe_preemp_shape() in v34hshak.c, gated DSPLIB_V34_SHAPE_PREEMP.
+  probe_preemp_shape() in V34hshak.c, gated DSPLIB_V34_SHAPE_PREEMP.
   Scores all eleven V.34 transmit-spectrum templates against the measured probe
   bins and returns the best fit, instead of reducing the channel to a two-point
   tilt and indexing a counter that can only reach 6-10.  Findings F1956, F1957.

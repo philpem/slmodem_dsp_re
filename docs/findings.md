@@ -2506,7 +2506,7 @@ answered with a pure answer tone* and *the far end answered with an FSK
 carrier*, which is exactly the distinction `CALLPROG_MODEM_ANSWER`,
 `CALLPROG_V8BIS_MODEM_ANSWER` and `CALLPROG_VOICE_ANSWER` need.
 
-Dial tone, ringback and busy are not detected here at all. That is cadence.c's
+Dial tone, ringback and busy are not detected here at all. That is Cadence.c's
 job, and it uses an entirely different filter bank.
 
 Two details worth keeping:
@@ -2598,7 +2598,7 @@ self-consistent, plausible, and wrong. Four uses in the object pin it:
 ```
 
 This also settles what `CALLPROG_Create`'s configuration block is for, and it
-should make cadence.c substantially easier: its magic numbers are named.
+should make Cadence.c substantially easier: its magic numbers are named.
 
 ## F45. CallingTone.c was written for 9600 Hz and is used at 8000
 
@@ -4943,7 +4943,7 @@ Q14 value is only safe above -16384 and this table is read by code that
 negates it -- but that is a guess, and the reconstruction does not act on it.
 
 The consequence is concrete and small: **the table cannot be generated**, and
-`src/pump/v34/dftc.c` emits it as data. A reconstruction that computed it
+`src/pump/v34/DFTC.c` emits it as data. A reconstruction that computed it
 would be wrong by one LSB at exactly the index the phase accumulator lands on
 for half a turn, which is not a rare input.
 
@@ -7597,7 +7597,7 @@ the equaliser).
     into `f1fc`.  That is a phase-error term: the imaginary part of
     (decision* x target).
   - `0x5c40e` is `agc_rms` AGAIN -- the 36-tap `0x38e` window, the
-    normalise/`sqrt_table`/index chain, identical to the one in v34rx.c.  A
+    normalise/`sqrt_table`/index chain, identical to the one in V34RX.c.  A
     FOURTH copy.  It compares the result against `obj[0x22c]` and, if not
     greater, writes 10 into `obj[0]` -- which is the datapump's own status
     word, so this is the receiver declaring loss of signal.
@@ -7754,7 +7754,7 @@ busy, congestion or ringback, and says so.
 
 Restoring the call sites themselves is still owed; this is the half that can
 be banked without placing each gate exactly, and it is the half that helps
-whoever reads `cadence.c` next.
+whoever reads `Cadence.c` next.
 
 ### F137. The object holds TWO shell contexts, receive and transmit, 0x1be0 apart
 
@@ -8709,7 +8709,7 @@ Smaller facts worth their line:
   DialerCreate and IsDialStringInvalid, with "ILLEGAL!" for a grade past
   VALID, reachable by no caller.
 - Every gate in Dialer.c is `> 1`; the level sweep asserts silence at level 1
-  and byte-identical transcripts at 2 and 3.  Unlike cadence.c (finding F155),
+  and byte-identical transcripts at 2 and 3.  Unlike Cadence.c (finding F155),
   there is no second tier here.
 
 Verification: 23/23 mutations caught by t_dialerprog's transcript comparison
@@ -10337,7 +10337,7 @@ running `make strings` as part of the caught check.
 
 **The suite-to-binary pairing was tribal knowledge.**  v8hs.json is caught
 7 of 7 by `t_v8util` and 1 of 7 by `t_v8hs`, whose name it shares.
-dialer_grading.json belongs to dialer.c and `t_dialer`, not to dialercfg.c.
+dialer_grading.json belongs to Dialer.c and `t_dialer`, not to dialercfg.c.
 Pointing a set at the wrong binary yields NOT CAUGHT for every mutation in
 it, which is indistinguishable from the set being genuinely untested.  Fixed
 with `test/mutations/suites.json` and `--suite`, so the pairing is stated
@@ -10418,9 +10418,9 @@ no level to configure and no second run to diff against.
 **77 of 278 sites never execute.**  By file:
 
 ```
-   callprog.c   30 of 33      v34rx.c      12 of 24
-   cadence.c    17 of 24      v34info.c     4 of 26
-   dialer.c      9 of 39      v34hshak.c    2 of 10
+   Callprog.c   30 of 33      V34RX.c      12 of 24
+   Cadence.c    17 of 24      v34info.c     4 of 26
+   Dialer.c      9 of 39      V34hshak.c    2 of 10
    fpm_div.c     1 of 1       v34shell.c    1 of 5
    fpm_mrf.c     1 of 1
 ```
@@ -10428,7 +10428,7 @@ no level to configure and no second run to diff against.
 THE RECONCILIATION IS THE REASON TO TRUST IT.  Finding F154 worked out by
 hand, from the disassembly and from which mutations went red, that 3 of
 `CALLPROG_Progress`'s sites were verified and the other 26 were not.  This
-reports 3 live sites in callprog.c and 30 dead, having been told nothing
+reports 3 live sites in Callprog.c and 30 dead, having been told nothing
 about any of it, and names the three: `request_state`'s STATE line and
 `run_timeouts`' two timeouts.  Two methods with nothing in common agreeing
 on a number that small is the strongest evidence either has produced.
@@ -10524,7 +10524,7 @@ reconstruction's claims about a debug transcript are claims about content and
 position.
 
 **DOES IT REPLACE THE DEBUG-PATH SWEEP?**  No.  Tested directly, since it is
-the sort of thing that sounds true: `CR` alone over callprog.c, where
+the sort of thing that sounds true: `CR` alone over Callprog.c, where
 `debugcov` says 30 of 33 sites never execute.  184 mutants, 81 seconds, 85
 uncaught -- **13 of the 30 dead sites**, and no false catches among them.
 
@@ -10544,7 +10544,7 @@ not miss more than half.
 
 ### F194. One transcript test drove 24 sites live, and found three placements wrong
 
-`debugcov` said 77 sites never execute and 30 of them were in callprog.c, in
+`debugcov` said 77 sites never execute and 30 of them were in Callprog.c, in
 `CALLPROG_Create`, `_Delete` and `_Dial` -- functions two tests already CALL,
 at level 0, where every gated site is unreachable.  Adding one level-1..3
 transcript comparison to `t_callprog_create` took the tree from **77 dead
@@ -10729,7 +10729,7 @@ sees 162. The 120a-121k narrative refers to its own sub-findings that way
 throughout — about twenty. Matching bare `\d+[a-z]` instead takes `1u`, `0f`,
 `02x`, `400s` and every printf width in the test suite; restricted to three
 digits and a letter it still takes `837k` out of `P(k) = -21k^2 + 837k - 354`
-in v34rx.c. This runs in `make test`, where a false positive is worse than a
+in V34RX.c. This runs in `make test`, where a false positive is worse than a
 miss, so the keyword stays required. Write the word and it is covered.
 
 ### F197. The silence check, everywhere, and what it says about drivers
@@ -10956,9 +10956,9 @@ rediscovering: **the sites were never unreachable.  The tests already called
 the functions, with the right arguments, in the right states.  They called
 them with the diagnostics off.**
 
-  callprog.c  CALLPROG_Create/_Delete/_Dial, called by two tests   194
-  cadence.c   all four tones and both refusals, swept 220 ways     201
-  dialer.c    sixteen combinations of the three fields             here
+  Callprog.c  CALLPROG_Create/_Delete/_Dial, called by two tests   194
+  Cadence.c   all four tones and both refusals, swept 220 ways     201
+  Dialer.c    sixteen combinations of the three fields             here
 
 In each case the fix was one loop -- run the existing cases again with
 `dsplibs_debug_level` raised and the transcripts compared -- and in two of
@@ -11446,7 +11446,7 @@ is findings F144 and F176 again: a section-symbol relocation with an addend
 does not answer to a grep for the name.
 
 Same shape as `cosread` and as four of the seven functions already in
-v34hshak.c: global, testable, and with their arguments and bank sizes read
+V34hshak.c: global, testable, and with their arguments and bank sizes read
 out of the code because no call site states them.
 
 The bin numbers are the object's own `bin << 8`, and one bin is 150 Hz at
@@ -13889,8 +13889,8 @@ reason.  A differential test that passes while disagreeing with the blob is
 what this tier exists to not have.  The comment in their place says what to
 restore and when.
 
-Overall the day's sweep took the dead-site count from 30 to 17: dialer.c is
-finished at 0, callprog.c is at 10.
+Overall the day's sweep took the dead-site count from 30 to 17: Dialer.c is
+finished at 0, Callprog.c is at 10.
 
 **RESOLVED by finding F604.** The line was not missing a condition -- it was
 one arm's message being treated as every arm's preamble. The sixteen-site
@@ -13938,7 +13938,7 @@ mistake that was made.
 
 #### What found it
 
-Not a review, and not the mutation suite.  The site was one of callprog.c's
+Not a review, and not the mutation suite.  The site was one of Callprog.c's
 dead debug sites, and it stayed dead because `run_dial_no_accessor` drove the
 branch at level 0 only.  Adding a level sweep to a block that already existed
 was the whole of the work.  **Reaching a branch is not the same as reaching
@@ -13984,7 +13984,7 @@ the wrong reason is invisible until something counts what it reached.**
 
 #### Where callprog stands
 
-`callprog.c` is down to three dead sites, all of them the `^` block that
+`Callprog.c` is down to three dead sites, all of them the `^` block that
 finding F239 blocks.  Every remaining one is a consequence of a reconstruction
 defect rather than of the fixture, so the sweep of this file is finished until
 that placement is settled.  The day's total: 30 dead sites to 10.
@@ -13993,7 +13993,7 @@ that placement is settled.  The day's total: 30 dead sites to 10.
 
 > **Deviation D144** (`docs/deviations.md`): a gate that cannot fire, or code that cannot do what it was evidently written to do.
 
-`v34rx.c`'s two dead debug sites had different answers, and only measurement
+`V34RX.c`'s two dead debug sites had different answers, and only measurement
 separated them.
 
 #### `decoderv34`'s renegotiation notice: missed by three
@@ -14526,7 +14526,7 @@ share tails is not a switch whose arms share code: the shared tail here is one
 Both readings were mutated in-tree against the restored cases: the old
 preamble shape fails 8 checks, and a mode 2 that says nothing fails 2.
 
-`callprog.c` now has **no dead debug sites** -- it had three -- and the tree's
+`Callprog.c` now has **no dead debug sites** -- it had three -- and the tree's
 total goes from 9 to 6, all of them in V.34.
 
 ### F605. The fifteen missing callprog call sites were an inlining boundary, and one message
@@ -14540,7 +14540,7 @@ one". Finding F604 disproved that. This is the rest of it: the shortfall is
 almost entirely a measurement artefact, and what remains is a single message.
 
 **Where the number came from.** `debugaudit.py --missing` counts per FUNCTION
-NAME. Our `callprog.c` is factored into five `static` helpers -- `enter_state`,
+NAME. Our `Callprog.c` is factored into five `static` helpers -- `enter_state`,
 `request_state`, `detect`, `apply_event`, `run_timeouts` -- and the object has
 no symbol for any of them: its `CALLPROG_Progress` is one function of 0xb71
 bytes with the lot inlined. So our sites in those helpers were counted against
@@ -14549,10 +14549,10 @@ whole difference as missing. Six of the fifteen were sitting a few lines away
 in a helper.
 
 `debugaudit.py` now also reports per FILE, which has no such boundary to fall
-through. Per file, `callprog.c` is nine short, not fifteen.
+through. Per file, `Callprog.c` is nine short, not fifteen.
 
 **What the nine are: one message, eleven times.** Enumerating every site in the
-four blob functions that map to `callprog.c` -- 43 in total -- and comparing
+four blob functions that map to `Callprog.c` -- 43 in total -- and comparing
 the multiset of format strings against ours gives exactly one row that differs:
 
     blob 11   ours 1   'STATE:  %s --> %s\n'
@@ -14564,7 +14564,7 @@ called from **eleven places**, one for each. The correspondence is exact, and
 the remaining "-9" is that eleven-against-one plus the caret message, which we
 now say from two arms where the object shares one site between them (344).
 
-So there is no missing behaviour in `callprog.c`. The count was never a
+So there is no missing behaviour in `Callprog.c`. The count was never a
 shopping list of unreconstructed conditions; that reading is what sent 239
 looking in the wrong place.
 
@@ -14878,7 +14878,7 @@ slashes into underscores and `src/core/dp_wrapper.c` came back as
 The honest summary of the exercise: the work-finder found no missing code among
 its top four, and its top four were mostly an artefact of how it counted. The
 per-object list it prints now is flatter and more trustworthy -- after
-`fixedrc.c` at 25%, everything is between 59% and 100%, which is the range
+`FixedRC.c` at 25%, everything is between 59% and 100%, which is the range
 different-but-equivalent factoring produces.
 
 ### F611. The thirteen convolutions are the compiler's doing, but only because the source handed it constants
@@ -15459,7 +15459,7 @@ divisible by 7 and `13716/16000 = 3429/4000` is merely close, while
 wrap, one to the half-step initial phase, and the interpolator is exact instead
 of drifting one part in 6000.
 
-The source comments are NOT updated: `v34rx.c` and `v34hshak.c` are open in the
+The source comments are NOT updated: `V34RX.c` and `V34hshak.c` are open in the
 V.90 session's worktrees. The cross-references belong there and are owed once
 `v34handshak` lands.
 
@@ -15515,7 +15515,7 @@ which are IMAGES in the PDF. alpha, beta and gamma are the parameters OF a
 shape the text never states. Without the figure geometry there is no response
 to integrate, so the RMS-gain hypothesis cannot be tested from this source.
 
-**Two structural facts that contradict the source comment.** `v34hshak.c` reads
+**Two structural facts that contradict the source comment.** `V34hshak.c` reads
 the tables as "the ten pre-emphasis characteristics V.34 defines plus the flat
 one, truncated where the rate cannot use them all". The counts do not fit:
 
@@ -16715,7 +16715,7 @@ the complementary one -- `f25c8` is in 0..3 and the point is `vect4[f25c8]`
 exactly, not `vect4[(d + f25c6) & 3]`.
 
 The object indexes both tables UNMASKED. A `& 3` is equivalent while
-`V34scrambler`'s two-bit return contract holds -- which is v34rx.c's contract
+`V34scrambler`'s two-bit return contract holds -- which is V34RX.c's contract
 and not this function's, so the mask is recorded as a surviving mutation and
 not written into the code.
 
@@ -17183,7 +17183,7 @@ there is no intervening load. The last of the four float arrays runs to
 at least**, and the 32,612 the whole class reaches is sixty bytes further on.
 
 **A floor is still not a size** and none is asserted: twenty-one of the
-twenty-six members have not been read. `src/pump/v90/VPcmFloModem.cpp` asserts
+twenty-six members have not been read. `src/pump/v90/VpcmFloModem.cpp` asserts
 offsets, and `test/unit/t_vpcmflomodem.cpp` allocates a slot larger than the
 floor and compares the whole slot, which is the shape finding F268 argued for
 and catches a store past the last modelled field as well as one inside it.
@@ -17210,7 +17210,7 @@ guess:
 
 The third is also the weak point, because `V90SessionFlag.h` deliberately
 asserts no size (finding F268), so the four bytes at +0x6118 could belong to
-either object. What holds the map together is that `VPcmFloModem.cpp` asserts
+either object. What holds the map together is that `VpcmFloModem.cpp` asserts
 `sizeof(V90Modem) == 0x49c0` next to its offsets: that is **not** a claim
 about the blob, it is the hook that turns a later batch giving V90Modem more
 prefix into a compile error here instead of a silent shift of every offset
@@ -17284,7 +17284,7 @@ that no amount of "it looks like a dB conversion" would give:
   the middle and rounded once when it is stored. Writing the third as two
   `float` assignments inserts a fourth rounding that the object does not have.
 - **The logarithm is `fldlg2`/`fxch`/`fyl2x`**, the same sequence
-  `V90Equalizer` uses (its `x87_log10` is duplicated in VPcmFloModem.cpp
+  `V90Equalizer` uses (its `x87_log10` is duplicated in VpcmFloModem.cpp
   rather than hoisted, deliberately -- see the comment there).
 - **The report subtracts and never stores.** `L2[14] - L2[i]` for i in 15..20
   lives in st(0) at extended precision through the sign test, the truncation
@@ -17626,7 +17626,7 @@ Had `nofBits` been anywhere earlier the object would overrun its own buffer on
 a descriptor it can represent, so two independently derived offsets agree
 about a bound neither was derived from.
 
-`src/pump/v90/VPcmFloModem.cpp` asserts `sizeof(tagV90DILdescriptor) == 0x213`
+`src/pump/v90/VpcmFloModem.cpp` asserts `sizeof(tagV90DILdescriptor) == 0x213`
 beside its offsets, for the same reason it asserts `sizeof(V90Modem)`: a later
 batch that gives the descriptor another field must break the build here rather
 than silently shift every offset from +0x217 to +0x7f27.
@@ -17871,7 +17871,7 @@ can distinguish them, for any input. `~6` is transcribed because
 **A gathered bit above what `bitreverse` reads.** The baud recovery gathers
 `((bits[2] & 3) * 2) | ((bits[3] & 0x80) >> 7)` and reverses three bits.
 Widening the first mask to `& 7` puts a bit at position 3, and
-`bitreverse(v, 3)` reads positions 0, 1 and 2 only (`src/pump/v34/v34rx.c`).
+`bitreverse(v, 3)` reads positions 0, 1 and 2 only (`src/pump/v34/V34RX.c`).
 Held fixed: bitreverse's loop bound, and nothing else.
 
 **Two shifts of a value that is known non-negative and seven bits wide.**
@@ -18021,7 +18021,7 @@ From the first, two more:
   the maximum V.34 baud rate index", which `chkForceBaudRate` reads. Bit 2 is
   a second and unrelated reader, and it gates
 - **+0xabfe**, a byte inside `unmapped_abfb` that `v34handshakinit` clears
-  (v34hshak.c:1306) and this sets to 1.
+  (V34hshak.c:1306) and this sets to 1.
 
 BOTH GATES ARE `cmpl $0x1` + `ja`, so both are `DSPLIB_DEBUG_ON()`. The test
 sweeps levels 0, 1 AND 2 for exactly the reason `t_v34shell.c` gives: level 1
@@ -18313,7 +18313,7 @@ A later batch that models the class properly should collect both.
 
 **`+0x359a` forces the lowest symbol rate.** `probeselect` opens with
 `if (*(short *)(m + 0x359a) != 0) goto rate_2400`, jumping over the entire
-symbol-rate ladder (`src/pump/v34/v34hshak.c`). `VPcmV34InitiateRetrain` is
+symbol-rate ladder (`src/pump/v34/V34hshak.c`). `VPcmV34InitiateRetrain` is
 the only writer this tree has read, and it sets the flag in exactly one place:
 when the maximum bit-rate index came out as **1**, which is 2400 bit/s and
 which the lowest symbol rate is the only way to carry. Two sites, one meaning.
@@ -18367,7 +18367,7 @@ One of them cannot be seen, and the reason is in the object rather than in the
 fixture:
 
 > **`obj->is_short = 0` at +0xabcc is dead.** `v34modeminit` clears the same
-> field unconditionally (`src/pump/v34/v34hshak.c:416`), mode 1 always calls
+> field unconditionally (`src/pump/v34/V34hshak.c:416`), mode 1 always calls
 > it, and nothing between the two reads the field. So no *caller* can observe
 > the store either -- it is not a test gap.
 >
@@ -19777,7 +19777,7 @@ one before a commit rather than after.
 
 ### F350. The first four arms of `v34handshak` land, and an arm is never only an arm
 
-`src/pump/v34/v34hshak.c`, `test/unit/t_v34hst3core.c`, 5,233 checks, and
+`src/pump/v34/V34hshak.c`, `test/unit/t_v34hst3core.c`, 5,233 checks, and
 this is the first test in the tree that puts our own `v34handshak` on side A
 of `test/harness/v34hsstep.c`.
 
@@ -19863,7 +19863,7 @@ own standard (findings F223 and F249) is that those are different claims.
 
 The second reason is that four batches are landing arms in parallel and one
 symbol cannot hold four partial reconstructions. The file is
-`src/pump/v34/v34hshak_t3mid.c`, a split of `v34hshak.c`'s translation unit
+`src/pump/v34/v34hshak_t3mid.c`, a split of `V34hshak.c`'s translation unit
 in the shape `V90PreFilter_loops.cpp` already uses, and everything file-local
 in it is `T3M_*`.
 
@@ -19888,7 +19888,7 @@ Every case in `t_v34hst3mid.c` is run twice, once with our entry and once
 with `NULL`, because a green ours-versus-blob run says nothing unless the
 same seed is green blob-versus-blob.
 
-`hs_setstate`, `hs_get` and `hs_put` lost their `static` in `v34hshak.c` for
+`hs_setstate`, `hs_get` and `hs_put` lost their `static` in `V34hshak.c` for
 the reason finding F223's six did, only stronger: the arms print the same
 three transitions from the same three format strings, and the two context
 arguments each string takes are in a **different order per string**. A second
@@ -20126,7 +20126,7 @@ whoever holds the merge will not look.
 |---|---|---|
 | table 2's arms 0x64480 (txstate 5), 0x64518 (18/19) and 0x644c9 (24/51/54/60/74) | `w4_hs_t2` owns table 2 and will have all seven | **keep table 2's batch's.** Ours is verified only on the routes a table-3 arm can present: 0x64480's three routes to progress 1 all want a microstate or rxstate this route cannot reach, and only its fall-through and its first route are exercised here |
 | the tail at 0x62a40, 88 instructions | reached from BOTH tables, so `w4_hs_t2` and `w4_hs_t3core` may each have one | either, but **diff them before choosing**. Two readings differ silently rather than at the link: the `[0x238] > [0x23c]` compare is UNSIGNED, and `%cx` is a PARAMETER and not `obj->txstate` |
-| `hs_get`, `hs_put`, `hs_setstate` lost their `static` in `v34hshak.c`, declared in `v34hshak.h` | any batch whose arms print a transition | identical change, no conflict in substance; take it once |
+| `hs_get`, `hs_put`, `hs_setstate` lost their `static` in `V34hshak.c`, declared in `v34hshak.h` | any batch whose arms print a transition | identical change, no conflict in substance; take it once |
 | `CXXOBJ64` in the `Makefile` | nobody yet | needed, and it is the tree's first `.c` -> `.cpp` reference: arm 51 calls `V34SetINFO1aBits` in `v34info1a.cpp` and the 64-bit interop link used `$(SRC)`, which is C only. The C++ half now builds to `build/64/*.o` -- objects, not sources, because `g++` would compile the `.c` half as C++ -- and is added to all six 64-bit links. Still no `-lstdc++` |
 
 **The tail is the dangerous one.** Nothing in `make phase` compares two
@@ -20877,7 +20877,7 @@ and the local maximum (337) before use, as that file instructs.
 
 `.rodata+0x3000`'s entry for 41 is 0x669a4, 3,945 exclusive bytes and 161
 basic blocks -- the third largest arm of table 3 after 44's 6,046 and 46's
-3,198 (finding F286). `src/pump/v34/v34hshak.c`, `test/unit/t_v34hst3m41.c`,
+3,198 (finding F286). `src/pump/v34/V34hshak.c`, `test/unit/t_v34hst3m41.c`,
 5,008 checks, and every leaf of the arm is driven: it contains no
 `t3c_unwritten` and no path that halts.
 
@@ -21130,7 +21130,7 @@ arm. `docs/v34handshak.md`'s "44 writes 23 B cold" was the fixture's fill
 sending it out through 0x6bd8d on the first bit; every exit above is now
 driven deliberately.
 
-**Landed**: `src/pump/v34/v34hshak.c`, `test/unit/t_v34hsmst44.c`, 2,435
+**Landed**: `src/pump/v34/V34hshak.c`, `test/unit/t_v34hsmst44.c`, 2,435
 checks, `v34hs_ours(1)` so side A is the reconstruction.
 
 
@@ -21400,9 +21400,9 @@ silent in the same way.
   "\tv34handshakinit(obj, 1);"
 ```
 
-Both were unique in `src/pump/v34/v34hshak.c` when that suite was written,
+Both were unique in `src/pump/v34/V34hshak.c` when that suite was written,
 and that is counted rather than argued: `git show
-3799879:src/pump/v34/v34hshak.c | grep -c` gives 1 and 1, and the same grep
+3799879:src/pump/v34/V34hshak.c | grep -c` gives 1 and 1, and the same grep
 after microstate 41 landed gives 3 and 2. So `tools/mutate.py` reported
 
 ```
@@ -21454,7 +21454,7 @@ estimating:
   land at all.** 41's three are 24, 60 and 74, and all three select table 2's
   arm at 0x644c9, which is already written. An arm that leaves 18, 19, 20, 21,
   64, 66, 67, 68, 69, 70 or 5 needs one of table 2's other six targets, which
-  `src/pump/v34/v34hstxblock.c` has and `src/pump/v34/v34hshak.c` does not --
+  `src/pump/v34/v34hstxblock.c` has and `src/pump/v34/V34hshak.c` does not --
   so it is a merge, not a reconstruction.
 - **41's arm is closed and reaches nothing else's.** `tools/cfgsplit.py`'s
   ownership walk from 0x669a4, minus the closure of the transmit dispatch at
@@ -21473,7 +21473,7 @@ estimating:
 `.rodata+0x3000`'s entry for 46 is 0x65d6d, and `cfgsplit` gives it 3,198
 bytes exclusive in twenty-five ranges scattered from 0x65d6d to 0x716f4 --
 the largest arm of table 3 after 44, 41 and the shared arm's twenty-four
-entries. It is `src/pump/v34/v34hshak.c`'s `t46_micro_tx_phase1_ans` and
+entries. It is `src/pump/v34/V34hshak.c`'s `t46_micro_tx_phase1_ans` and
 `test/unit/t_v34hst346.c`, 3,375 checks.
 
 The answerer has sent its phase-1 INFO0 and is waiting for the caller's.
@@ -21588,7 +21588,7 @@ used.**
 
 The record at +0xa94c that all four of 46's bodies rearm is armed by
 `v34handshakinit`'s mode 4 with the SAME twelve stores and the SAME
-constants -- `src/pump/v34/v34hshak.c` line 1466 onwards, transcribed by an
+constants -- `src/pump/v34/V34hshak.c` line 1466 onwards, transcribed by an
 earlier batch from 0x6fd00-odd and tested by `t_v34hshak.c`:
 
 ```
@@ -21619,7 +21619,7 @@ All three are repaired here by widening the anchor -- a leading newline and
 one tab, or the line after -- and each carries a `note` saying why. The
 repair is to the anchor and never to the mutation: all three still change
 what they always changed, and all three are caught again. **A batch that
-adds code to `v34hshak.c` must re-run `v34hshak`, `v34hst3core` and
+adds code to `V34hshak.c` must re-run `v34hshak`, `v34hst3core` and
 `v34hstxblock` for this reason and not only for renames.**
 
 This batch's own `find` strings begin with a newline for the same reason.
@@ -21824,7 +21824,7 @@ of `cfgsplit`'s ranges for 0x65d6d are driven, and `record_is_armed` asserts
 that they AGREE rather than the test merely passing. 3,375 checks.
 
 **And the mutation run is the anti-vacuity witness for `v34hs_ours(1)`.**
-Every mutation lands in `v34hshak.c`, which is OUR side; with side A left on
+Every mutation lands in `V34hshak.c`, which is OUR side; with side A left on
 the blob all 75 would report NOT CAUGHT whatever the test asserted. 74
 caught is proof that the reconstruction is the code that ran, and that is a
 stronger statement than the comment at the top of the test.
@@ -21906,7 +21906,7 @@ is the shape that admits it.
 
 ### F417. +0xaae2 is a halfword in this arm, whatever microstate 62's comment says
 
-`T3C_FAAE2` in `src/pump/v34/v34hshak.c` is commented "byte: bit 0 gates
+`T3C_FAAE2` in `src/pump/v34/V34hshak.c` is commented "byte: bit 0 gates
 RX_PHASE3_CALL", and microstate 62's arm does read it with `t3c_getb`.
 Microstate 46 reads the same offset five times and every one of them is
 sixteen bits wide:
@@ -21998,7 +21998,7 @@ into something the arm does not share -- `T41_FABC2`, `T46_MSG_LAST`,
 
 #### The rule this leaves
 
-**After adding an arm, re-run every suite over `v34hshak.c` and read the
+**After adding an arm, re-run every suite over `V34hshak.c` and read the
 UNUSABLE count, not the NOT-CAUGHT count.** The one that matters is the one
 that does not fail.
 
@@ -22129,7 +22129,7 @@ collision and `make phase` is green.
 **It is still two reconstructions of one function.**
 
 ```
-src/pump/v34/v34hshak.c        v34handshak         arms 41, 44 (part), 46,
+src/pump/v34/V34hshak.c        v34handshak         arms 41, 44 (part), 46,
                                                    62, 79, 80, the 24-state
                                                    shared arm
 src/pump/v34/v34hshak_t3mid.c  v34handshak_t3mid   arms 47/56, 48, 49, 50,
@@ -22159,7 +22159,7 @@ wrong answer that no current test can produce.
 
 #### What unification costs, and why it is a task and not a fix
 
-Moving the seven arms into `v34hshak.c`'s switch means choosing between the
+Moving the seven arms into `V34hshak.c`'s switch means choosing between the
 two tails, the two guard chains and the three duplicated table 2 arms --
 choosing, in each case, against the disassembly rather than against whichever
 copy happens to be first. Finding F373 says to keep `w4_hs_t2`'s table 2 arms,
@@ -22243,7 +22243,7 @@ disassembly, both are already right and the two copies already agree.
 +0x238 and `0x238(%esi)` its +0x23c.
 
 ```c
-v34hshak.c        if ((unsigned)t3c_geti(obj, T3C_TIMER_LO)
+V34hshak.c        if ((unsigned)t3c_geti(obj, T3C_TIMER_LO)
                       > (unsigned)t3c_geti(obj, T3C_TIMER_HI))
 v34hshak_t3mid.c  if (T3M_U32(f, T3M_ELAPSED) > T3M_U32(f, T3M_DEADLINE))
 ```
@@ -22447,7 +22447,7 @@ out of. 0xa94c + 0x30 = 0xa97c, + 0x30 = 0xa9ac, + 0x30 = 0xa9dc: the stride
 is exactly the record whose fields findings F400-401 mapped, which is
 corroboration of the layout from four addresses rather than one.
 
-Landed in `src/pump/v34/v34hshak.c` -- the `v34hshak.c` reconstruction and not
+Landed in `src/pump/v34/V34hshak.c` -- the `V34hshak.c` reconstruction and not
 `v34hshak_t3mid.c`'s, finding F348 -- and `test/unit/t_v34hsmst44.c`, 5,640
 checks against 3,393 before. **Microstate 44 is complete**: no `t44_*`
 function contains a `t3c_unwritten` any more, which is a grep and not an
@@ -22973,7 +22973,7 @@ can be seen.
 Finding F347's rule fired again, and in both directions at once.
 
 **Outward.** `tools/reanchor.py` over every suite registered against
-`src/pump/v34/v34hshak.c` found two entries that had been unique when they
+`src/pump/v34/V34hshak.c` found two entries that had been unique when they
 were written and were not any more:
 
 ```
@@ -23494,7 +23494,7 @@ belonging to another machine: dispatched on `txstate == 51`, it tests
 
 `.rodata + 0x2c00`, 64 signed shorts, GLOBAL, and 51 is its only reader in
 the object. It is now `const short probe[V34_PROBE_SAMPLES]` in
-`src/pump/v34/v34hshak.c` beside `vect4` and `vect16`, declared in
+`src/pump/v34/V34hshak.c` beside `vect4` and `vect16`, declared in
 `v34hshak.h`, and proved by `memcmp` against `ref_probe` exactly as those two
 are. It went from `.rodata` to the source BY TOOL; the memcmp is what says
 the transcription is right, not a reading.
@@ -23549,7 +23549,7 @@ The other four equivalences, each with what is held fixed:
                                   short.  A property of the TABLE'S VALUES,
                                   so a different table would make this
                                   mutation live
-  51: the microstate not re-read  `txwritequeue` (v34rx.c:58) writes
+  51: the microstate not re-read  `txwritequeue` (V34RX.c:58) writes
      after the queue is written   q->count, four ring slots and q->wr and
                                   nothing else, so the value at 0x62cf5 is
                                   the value at 0x62c7f
@@ -23742,7 +23742,7 @@ of the arm.
 #### `vectpp` -- 192 bytes this tree had and had never proved
 
 20 loads `.rodata+0x2c80` as FORTY-EIGHT FOUR-BYTE POINTS
-(`mov 0x0(,%esi,4),%edx`) where v34rx.c's `receiver` slices against the same
+(`mov 0x0(,%esi,4),%edx`) where V34RX.c's `receiver` slices against the same
 bytes as ninety-six shorts. That is why the blob exports the symbol, and it
 was `static` here while this file was its only reader. It is now
 `const short vectpp[96]` declared in `v34rx.h`, and `t_v34hstx1.c` proves it
@@ -24184,7 +24184,7 @@ PLUS FOUR.
 #### 0x639db..0x63aae IS `getbit` INLINED, and the arm is one call
 
 The 2,024 bytes are mostly one function this tree already has.  Every arm of
-the reader `v34hshak.c:2513` carries is in the block list, in the same order
+the reader `V34hshak.c:2513` carries is in the block list, in the same order
 and on the same fields:
 
 ```
@@ -24203,7 +24203,7 @@ and on the same fields:
 So the arm is written as `bit = getbit(b)`, the way 78 and 85 are written over
 `tx1_ja_common`.  **What that costs is that no mutation in
 `test/mutations/v34hstx1.json` tests the reader**: `tools/mutate.py` anchors on
-source text and the reader's text is in `v34hshak.c`, which is
+source text and the reader's text is in `V34hshak.c`, which is
 `t_v34hshak.c`'s suite.  What the runs here do test is that the call is the
 right one on the right record, and every branch the arm takes around it.
 
@@ -24471,7 +24471,7 @@ register convention is finding F421's, unchanged: `0x4c(%esp)` is the object +
 
 Finding F424's result at 67 for a second time, and it is why the arm is short.
 0x62bb5..0x62c64 with 0x649f1, 0x654a7, 0x67b95, 0x68480 and 0x6876a is the
-reader `v34hshak.c:2513` carries, arm for arm and field for field:
+reader `V34hshak.c:2513` carries, arm for arm and field for field:
 
 ```
   62bc9   avail non-zero: no refill, emit
@@ -24614,7 +24614,7 @@ the hold tail leaves at 0x6431f, so neither of the other two guards holds --
 and the run is still worth having, because it is the ONLY place a clear-down
 that should not have happened is visible.  Past the threshold both of the
 tail's ways out leave exactly what a spurious clear-down leaves: the retrain's
-`v34handshakinit` clears +0xabe4 (v34hshak.c:1307) and rewrites both state
+`v34handshakinit` clears +0xabe4 (V34hshak.c:1307) and rewrites both state
 words, and the tail's clear-down IS the clear-down.  Two mutations --
 `the clear-down runs to moh_message four` and `the clear-down's range is
 signed` -- went uncaught until that run existed, and the temptation was to
@@ -24907,7 +24907,7 @@ Six things, each of which cost a batch and none of which is in 340-345:
 - **A `.rodata` table the arm needs may not be in the tree, or may be
   `static` where the blob's binding is global.**  51 needed `probe`
   (`.rodata+0x2c00`, 64 signed shorts) which did not exist; 20 needed
-  `vectpp`, which existed but was `static` in v34rx.c and has two readers at
+  `vectpp`, which existed but was `static` in V34RX.c and has two readers at
   two element widths.  Both are now extracted and proved by `memcmp` against
   the blob's copy -- and that memcmp is not redundant, because the runs read
   ten of `probe`'s sixty-four entries and a one-count change in entry 0
@@ -25011,9 +25011,9 @@ printing nothing -- that reads as a hole and is not one.
 
 #### Files outside `v34hstx1` that this batch touched
 
-`src/pump/v34/v34hshak.c` gained `probe` (+35 lines, beside `vect4`) and
-`src/pump/v34/v34rx.c` changed `vectpp` from `static` to the blob's own
-global binding; the two headers followed.  Both are additive, but v34hshak.c
+`src/pump/v34/V34hshak.c` gained `probe` (+35 lines, beside `vect4`) and
+`src/pump/v34/V34RX.c` changed `vectpp` from `static` to the blob's own
+global binding; the two headers followed.  Both are additive, but V34hshak.c
 is the file three other batches are writing microstate arms in, so a merge
 should expect to meet them there.
 
@@ -25201,14 +25201,14 @@ rather than left to agree.
 
 #### The completion is `setupreceiver` INLINED, and that is 1,000 bytes of it
 
-0x64c04..0x64d4a is store for store `v34hshak.c`'s `setupreceiver`: `rxinit`,
+0x64c04..0x64d4a is store for store `V34hshak.c`'s `setupreceiver`: `rxinit`,
 `f128 = 4`, the six-way switch on +0xaa96 setting f1b0/f1ae/f1be/f1ac, the
 eight-way switch on +0xaaa8 setting `carrier` and `f1ba`, `agc_step = 0x2000`,
 `agc_gain = f262`, `flags &= 0xf0ff`, `detectorinit(obj+0x3564,
 *(obj+0xaab0), 0, 8, 10, 0x600, 0)`, `flags |= 0x200` -- the same literals in
 the same order, both switches without a default, and the same two diagnostics.
 Checked against the standalone function's own disassembly at 0x5f040 and
-against `v34hshak.c:706-713`, not inferred from the shape.
+against `V34hshak.c:706-713`, not inferred from the shape.
 
 **So no third `.rodata` table had to be extracted**, and that is worth saying
 because 421 and 422 each needed one: the eight `hsine*` tables this arm reaches
@@ -25216,7 +25216,7 @@ are reached *through* `setupreceiver` and are already global in
 `v34filters.c`.  Recognising the inline is what turned twenty of the
 twenty-three block ranges into one call, exactly as 424 and 425's `getbit` did.
 
-The blank that follows it is `v34hshak.c:1406`'s **twelve fields** of the
+The blank that follows it is `V34hshak.c:1406`'s **twelve fields** of the
 +0xaa0c record -- +0x14 to -1 and eleven zeros, two of them 32-bit -- in a
 different order.  One record, two writers, and that is what says the region is
 a record rather than two overlapping readings.
@@ -25390,7 +25390,7 @@ No source or test file outside `v34hstx1.cpp`, `v34hstx1.h` and
 `t_v34hstx1.c` was touched -- the only other files in the commit are this one,
 `docs/v34handshak.md` and the line `make phase` regenerates in
 `docs/coverage.md`.  That is worth saying because 421 had to add `probe` to
-`v34hshak.c` and 422 had to change `vectpp`'s binding in `v34rx.c`: 21 needed
+`V34hshak.c` and 422 had to change `vectpp`'s binding in `V34RX.c`: 21 needed
 no table, because the thousand bytes of it that read tables are
 `setupreceiver` inlined and that function -- and its eight `hsine*` tables --
 were reconstructed long ago.
@@ -25934,7 +25934,7 @@ F134's argument and the fourth time it has applied to this file.
 `DEFN` was `^([A-Za-z_][A-Za-z_0-9]*)\(`, and `[A-Za-z_0-9]` does not include
 `:`.  So **every qualified C++ method was invisible** -- and because a bare
 `^NAME(` also matches a MACRO INVOCATION at column 0, what the index filled
-up with instead was noise.  `VPcmFloModem.cpp` reported 45 definitions, all
+up with instead was noise.  `VpcmFloModem.cpp` reported 45 definitions, all
 45 of them `VPCM_OFF(...)` and not one a function:
 
 ```
@@ -25962,7 +25962,7 @@ With the tool able to count, the tree had one:
   NOT UNIQUE  vpcmflomodem: Uinfo: the second default flag is 1   matches 2 time(s)
 ```
 
-`flags_0217[0..3]` is written twice in `VPcmFloModem.cpp` in identical text,
+`flags_0217[0..3]` is written twice in `VpcmFloModem.cpp` in identical text,
 in `getUinfoValue` and in `enterPhase3`, whose copy belongs to a different
 suite.  `mutate.py` does print `ANCHOR MATCHES 2 TIMES`, but an unusable
 mutation does not fail a run (finding F347), so the suite went on reporting
@@ -25993,7 +25993,7 @@ its list is what task #31 acts on; the total is not, and 356a also calls its
 eight-line excerpt "complete" when the excerpt is eight of the twenty-three.
 
 One thing the recount adds that changes the batching: **all 23 are in
-`v34hshak.c` and none in `v34hshak_t3mid.c`**.  Task #25's stated reason for
+`V34hshak.c` and none in `v34hshak_t3mid.c`**.  Task #25's stated reason for
 unifying before renaming -- so the rename lands on one file instead of two --
 is therefore wrong.  The order is still right, but the reason is the shared
 anchors, not the file count.
@@ -26006,7 +26006,7 @@ Task #25 handed over two readings of one guard and asked which the object
 does.  The two:
 
 ```c
-v34hshak.c       if (hs_get(obj, T3C_TXCURSOR) < hs_get(obj, T3C_TXLIMIT))
+V34hshak.c       if (hs_get(obj, T3C_TXCURSOR) < hs_get(obj, T3C_TXLIMIT))
                          t3c_unwritten();          /* and FALLS THROUGH */
 v34hshak_t3mid.c if (T3M_I16(&frame, T3M_TXCURSOR) < obj->f2aa0) {
                          t3m_notwritten(T3M_UNWRITTEN_TBL1); return; }
@@ -26039,7 +26039,7 @@ instruction the guard at 0x6293e jumps to.  The compare is SIGNED (`jge` /
 `jl`) on two halfwords, which both readings already had.
 
 **Neither source is a wrong reading and the difference is a property of the
-STUB.**  `v34hshak.c`'s fall-through is unreachable in practice, because
+STUB.**  `V34hshak.c`'s fall-through is unreachable in practice, because
 `t3c_unwritten` was `abort()`; `v34hshak_t3mid.c`'s `return` is what is left
 when the loop body does not exist, since there is no loop to fall out of.
 The unified `v34handshak` returns, and the comment beside it says the object
@@ -26055,12 +26055,12 @@ a state the object never reaches.
 
 ### F547. Two unwritten-path mechanisms, both right, and the one that had to replace them
 
-`v34hshak.c` and `v34hshak_t3mid.c` each answered "what does a path with no
+`V34hshak.c` and `v34hshak_t3mid.c` each answered "what does a path with no
 reconstruction do" and answered it differently:
 
 | | mechanism | argument |
 |---|---|---|
-| `v34hshak.c` | `t3c_unwritten()` -> `abort()` | an arm that returns quietly is indistinguishable from an arm that correctly did nothing, and most of the table is missing |
+| `V34hshak.c` | `t3c_unwritten()` -> `abort()` | an arm that returns quietly is indistinguishable from an arm that correctly did nothing, and most of the table is missing |
 | `v34hshak_t3mid.c` | `t3m_notwritten(code)`, records the first code and returns | a test that dies cannot then be asked WHICH path it reached, and `t_v34hst3mid.c` asks after every step |
 
 Both arguments hold, and the merge could keep neither unchanged: `abort()`
@@ -26091,7 +26091,7 @@ re-coding them one by one is a separate job with no test behind it.
 ### F548. The unify: what moved, what was chosen, and what was deliberately not touched
 
 Task #25.  `src/pump/v34/v34hshak_t3mid.c` is gone and its 1,645 lines are in
-`src/pump/v34/v34hshak.c`; there is one `v34handshak` with all fifteen written
+`src/pump/v34/V34hshak.c`; there is one `v34handshak` with all fifteen written
 arms, the 24-state shared arm and the default.
 
 **What was moved verbatim, and why that was the whole strategy.**  443
@@ -26122,7 +26122,7 @@ evaporates **without printing anything**.  Measured after the flatten rather
 than assumed:
 
 ```
-$ arm_map(open('src/pump/v34/v34hshak.c').read())
+$ arm_map(open('src/pump/v34/V34hshak.c').read())
 41 t41_micro_det_sync   47 t3m_micro47   55 t3m_micro55   63 t3m_micro63
 44 t44_micro_det_info   48 t3m_micro48   56 t3m_micro47   79 t3c_micro_moh_tone
 46 t46_micro_tx_phase1_ans ...           58 t3m_micro58   80 t3c_micro_moh_tone_drop
@@ -26167,7 +26167,7 @@ The second guard, and the two files disagreed about it in a way task #25 did
 not list.
 
 ```c
-v34hshak.c       if (hs_get(obj, T3C_RECEIVER) <= 5) { t3c_txblock(obj); return; }
+V34hshak.c       if (hs_get(obj, T3C_RECEIVER) <= 5) { t3c_txblock(obj); return; }
 v34hshak_t3mid.c if (*(short *)frame.rx <= 5) { t3m_notwritten(RXIDLE); return; }
 ```
 
@@ -26183,7 +26183,7 @@ v34hshak_t3mid.c if (*(short *)frame.rx <= 5) { t3m_notwritten(RXIDLE); return; 
 
 0x62ae3 is three instructions above 0x62af1, which
 `v34hshak_t3mid.c`'s own header comment already names as "the once-per-block
-transmit dispatch".  So `jle` goes to the block route: **`v34hshak.c` is
+transmit dispatch".  So `jle` goes to the block route: **`V34hshak.c` is
 right and `T3M_UNWRITTEN_RXIDLE` was a stub for a route that batch chose not
 to write, not a reading of the object.**  The compare is signed and both had
 that.
@@ -26315,7 +26315,7 @@ real fields.  Every use is a bare 16-bit access and none is `MACRO + off`.
 
 `T3M_RECEIVER`, which the unify brought in as a second spelling of the same
 base, is gone with it: `t3m_frame_init` uses `T3C_RX(obj)`.  540 scoped the
-23 to the pre-unify `v34hshak.c` and so did not count it, but leaving two
+23 to the pre-unify `V34hshak.c` and so did not count it, but leaving two
 spellings of one base in one file after a batch whose whole purpose was
 removing them would have been worse than the widened scope.
 
@@ -26522,9 +26522,9 @@ only the decimals splits one `%x` format into four and inflates every
 
 #### The part that makes this actionable: most of it is calls not made
 
-`hs_setstate` (`src/pump/v34/v34hshak.c`) emits every
+`hs_setstate` (`src/pump/v34/V34hshak.c`) emits every
 `V34HSHAKE: txstate/rxstate/microstate` line and `v34FreezeEcho`
-(`src/pump/v34/v34rx.c`) emits `Freeze EC` and both echo-canceller report
+(`src/pump/v34/V34RX.c`) emits `Freeze EC` and both echo-canceller report
 headers.  **Both already exist in this tree, and both are already correct.**
 The table-1 arms in `v34hstx1.cpp` poke the state word and the
 `V34_EC_FROZEN` bit directly instead of calling them.  So the second-largest
@@ -26817,7 +26817,7 @@ the first half of the repair.
 
 ### F572. `v34FreezeEcho` was written, correct and dead, and folding it back cost 78 mutation anchors
 
-`v34FreezeEcho` (`src/pump/v34/v34rx.c:958`) is three stores and two calls:
+`v34FreezeEcho` (`src/pump/v34/V34RX.c:958`) is three stores and two calls:
 raise `V34_EC_FROZEN` in `f25c2`, print `V34HSHAK: Freeze EC`, then report the
 near and the far canceller under their own headers. It had **no caller
 anywhere in `src/`**. Three arms of `v34hstx1.cpp` inlined its body instead,
@@ -26836,7 +26836,7 @@ at `tx1_ja_common` (78 and 85), `v34tx1_jtxmit` (64) and `v34tx1_trnseg4`
 totals.** In all seven affected cases our transcript already printed the two
 `?======= Nothing to report =========` bodies and was missing exactly the
 three headers -- so the callee was running and only the wrapper was absent.
-The stronger argument is structural: `v34FreezeEcho` is in `v34rx.c`, the arms
+The stronger argument is structural: `v34FreezeEcho` is in `V34RX.c`, the arms
 are in `v34hstx1.cpp`, and GCC 3.4.2 cannot inline across translation units,
 so a printed `Freeze EC` at a table-1 arm *proves* a call rather than an
 inlining. 21 lines, 7 cases, all closed, no byte change.
@@ -26939,7 +26939,7 @@ empty so both print the same "Nothing to report" line. They stay uncaught and
 stay named.
 
 What the fold does change is *where the claim lives*. Near-then-far order and
-the flag bit are now properties of `v34FreezeEcho` in `v34rx.c`, and the
+the flag bit are now properties of `v34FreezeEcho` in `V34RX.c`, and the
 `v34rx` suite already asserts all three against a fixture that seeds the two
 cancellers with DIFFERENT coefficients (`t_v34rx.c:2506`, whose comment
 records that the swap "was NOT CAUGHT until these two patterns did"):
@@ -27039,7 +27039,7 @@ across source lines and a naive grep answers the wrong question.
 | 402 | `V34DATARATE, ...` | the rate-selection body, mostly arm 66. Eight format strings -- thresholds, `ethresh`, `equerr`/`preerr`, the automatic min/max, the final choice with its three renegotiation thresholds, the MP bit dump and two `precoefs` forms. `v34shell.c` has three *different* `V34DATARATE` strings; none of the eight is among them. This is the largest single piece of unwritten V.34 in the fixture's reach. |
 | 51 | `V34INFO, V.34bis is not possible` | absent from `src/`; belongs with the INFO0a/INFO1a decision. |
 | 47 | fourteen one-offs | the largest is 15x `echo start wait time would be: NEC %d symbols, FEC %d symbols`, then 10x `On J TX start, would freeze EC after bulk delay`, 7x `Moving to TX MD`. These are the thirteen trace blocks `v34tx1_trnseg4`'s comment already lists by address. |
-| 42 | `MOH:` and `End of current MOH msg` | arm 24's Modem-on-Hold paths. Six distinct strings, **all absent**. `v34hshak.c` has one `Timeout waiting for MH sequence` but it is the `under MHfrr` variant; the missing ones are `under MHreq` (two) and `under cleardown`, and its function `t3c_micro_moh_tone_drop` is `static` in a file this branch does not own. |
+| 42 | `MOH:` and `End of current MOH msg` | arm 24's Modem-on-Hold paths. Six distinct strings, **all absent**. `V34hshak.c` has one `Timeout waiting for MH sequence` but it is the `under MHfrr` variant; the missing ones are `under MHreq` (two) and `under cleardown`, and its function `t3c_micro_moh_tone_drop` is `static` in a file this branch does not own. |
 | 14 | `V34MP, ...` | three format strings around MP/MP' retransmission. |
 
 **The distinction worth keeping.** 570 said "most of it is calls not made".
@@ -27105,7 +27105,7 @@ Task #35, and the direction finding F550 left open.  `src/pump/v34/v34hstxblock.
 -- `v34handshak_txblock`, all seven of table 2's targets, its own copy of the
 tail, its own suite and its own test -- is deleted, and its arms, its mutation
 set and its test now sit on `t3m_txblock`/`t3m_tail` in
-`src/pump/v34/v34hshak.c`.  There is one `v34handshak` and now one table 2.
+`src/pump/v34/V34hshak.c`.  There is one `v34handshak` and now one table 2.
 
 **The anchor arithmetic did not decide it, and it should not have.**  550
 priced direction (b) -- collapse onto `v34handshak_txblock` -- at 40 anchors;
@@ -27150,7 +27150,7 @@ addresses.  Read out of the object rather than out of either file --
 
 Seven targets.  `t3m_txblock` had FOUR of them -- 0x64480, 0x64518, 0x644c9
 and 0x62a40 through the out-of-range branch -- so **three target addresses
-were unique to `v34hstxblock.c`** and **none was unique to `v34hshak.c`**.
+were unique to `v34hstxblock.c`** and **none was unique to `V34hshak.c`**.
 The fourth thing it was missing has no address of its own, which is exactly
 why listing addresses could not find it: the FIFTY-FOUR in-range entries that
 name 0x62a40.  `idx < T3M_TBL2_COUNT` sent them into the switch, `default:`
@@ -27175,7 +27175,7 @@ the object comparison, which is 551's rule applied again: the CLAIM the trial
 made survives, the constant it asserted cannot.
 
 **What moved, and the numbers.**  Every suite that touches
-`src/pump/v34/v34hshak.c`, run before and after:
+`src/pump/v34/V34hshak.c`, run before and after:
 
 ```
   suite          mutations  caught  NOT caught  unusable  equivalent
@@ -27209,7 +27209,7 @@ checks in the tree to make a count look tidier.
 **One stale reference is left on purpose.**  `src/pump/v34/v34hstx1.cpp:128`
 names "`v34hstxblock.c`'s `TB_F2218`" in a comment; a concurrent batch owns
 that file and this one did not touch it.  The offset is right and the file it
-credits is gone -- the live spelling is `T3M_MODE` in `v34hshak.c`.  Whoever
+credits is gone -- the live spelling is `T3M_MODE` in `V34hshak.c`.  Whoever
 next edits `v34hstx1.cpp` should fix the sentence.
 
 ======================================================================
@@ -27229,7 +27229,7 @@ $ python3 -c "import json; \
     json.dump(ms, open('/tmp/reload.json','w'), indent=1)"
 $ for b in t_v34hst3mid t_v34hst3core t_v34hsmst44 t_v34hst346 \
            t_v34hst3m41 t_v34datapump t_v34hshak t_v34hstbl2; do
-      python3 tools/mutate.py src/pump/v34/v34hshak.c build/test/$b /tmp/reload.json
+      python3 tools/mutate.py src/pump/v34/V34hshak.c build/test/$b /tmp/reload.json
   done
 ```
 
@@ -27271,7 +27271,7 @@ the shim, and of the 27 direct calls only eight do not spell
 `V34HS_TXSTATE_OFF` at the call:
 
 ```
-$ grep -n 't3m_txblock(f,\|t3m_tail(f,' src/pump/v34/v34hshak.c \
+$ grep -n 't3m_txblock(f,\|t3m_tail(f,' src/pump/v34/V34hshak.c \
       | grep -v 'V34HS_TXSTATE_OFF'
   3143:      t3m_tail(f, tx);                 t3m_txblock's own out-of-range branch
   3217:      t3m_tail(f, tx);                 and its fall-through
@@ -27896,7 +27896,7 @@ its `gained:` line is the only signal that the floor is behind.
 ======================================================================
 ### F630. The detector at +0x3564 tiles exactly to +0x3588, and that is adjacency and not a bound
 
-`v34hshak.c` has said for a while that a `struct v34_detector` lives inside
+`V34hshak.c` has said for a while that a `struct v34_detector` lives inside
 `struct v34_object` at +0x3564 -- `T3C_DETECTOR`, `T3M_DETECTOR`, and the
 `T3C_DET(obj)` cast the microstate arms reach it through. Splitting the
 `unmapped_3564` pad needed a split point, so the size was measured rather
@@ -27925,7 +27925,7 @@ bits wide -- halfword load, halfword store or `cmpw`. Two sites are not:
     65c24:  81 b9 88 35 00 00 02 00 02 00   cmpl $0x20002,0x3588(%ecx)
     66495:  81 b8 88 35 00 00 02 00 02 00   cmpl $0x20002,0x3588(%eax)
 
-Both read the pair as one 32-bit word against 2 and 2. `v34hshak.c` already
+Both read the pair as one 32-bit word against 2 and 2. `V34hshak.c` already
 spells exactly those two sites `T3M_I32` and every other site `T3M_I16`, on
 the reading in the comment there; this settles *whose* spelling it is.
 
@@ -27995,7 +27995,7 @@ second place to get that order wrong while every byte of the object still
 matches. There is no field for a field access to name. Changing the signature
 to take a member pointer would change codegen to buy a spelling.
 
-So the field map and the macros are held together instead: `v34hshak.c`
+So the field map and the macros are held together instead: `V34hshak.c`
 asserts `offsetof(struct v34_object, txstate) == V34HS_TXSTATE_OFF` and the
 other two at compile time, and `make offsets` holds the `/* +0x3596 */`
 annotation against the compiler independently.
@@ -28038,7 +28038,7 @@ not taken. The region these are aimed at has two readings this tree holds
 equally -- the five message records from +0xa94c on a 0x30 stride, and
 `info_caps`/`caps_flags` at +0xaa3c read straight out of the same two words
 (the note on `struct v34_bitsource` in `v34hshak.h` sets that out) -- and
-`v34hshak.c`'s own use sites cast to `unsigned short *`, `unsigned char *`
+`V34hshak.c`'s own use sites cast to `unsigned short *`, `unsigned char *`
 and `short *` in different arms. A pointer type here picks a winner the
 object does not. `void *p3548` at +0x3548 is the precedent for an honestly
 under-claimed pointer and these follow it.
@@ -28091,7 +28091,7 @@ wrong `[0xB - 0xA]` slides every field after it and both spellings compile.
 **Most were left, deliberately, and the count of "most" is not quotable.**
 The brief said to prefer fewer well-evidenced fields to a full sweep. Trying
 to state the remainder as a ratio ran straight into a trap worth recording:
-scraping every `#define <PREFIX>_NAME 0xNNNN` out of `v34hshak.c` and
+scraping every `#define <PREFIX>_NAME 0xNNNN` out of `V34hshak.c` and
 `v34hstx1.cpp` and asking `whichfield.py struct v34_object` about each yields
 73 distinct values, 24 of which resolve to a named field after this batch --
 **and at least five of those 24 are not object offsets at all.** `T46_CNT_LOW`
@@ -28111,9 +28111,9 @@ reader's width before declaring anything.
 
 ### F637. A compile-time check placed where a mutation already measured the same thing turned a CAUGHT mutation into an UNUSABLE one
 
-Finding F632 bound v34hshak.c's offset macros to the fields task #33 named,
+Finding F632 bound V34hshak.c's offset macros to the fields task #33 named,
 with the negative-array typedef v34shell.c already uses. The first version
-asserted all six spellings of the three state words -- v34hshak.c's own
+asserted all six spellings of the three state words -- V34hshak.c's own
 `HS_MICROSTATE`/`HS_RXSTATE`/`HS_TXSTATE` and v34hshak.h's three
 `V34HS_*_OFF`. `make phase` passed. `tools/mutsnap.py --verify` did not:
 
@@ -28132,7 +28132,7 @@ unusable mutation does not fail a run (finding F347); it is the silent loss
 measuring the thing it was written to measure. A tautology checked at
 compile time is not worth an empirical guarantee given up.
 
-So the asserts are split by who already covers what. v34hshak.c's own three
+So the asserts are split by who already covers what. V34hshak.c's own three
 macros are covered by that mutation and are NOT asserted. v34hshak.h's three
 -- which all fifty-nine call sites pass and which no mutation in the tree
 touches -- are asserted, along with the nine `T3M_*`/`T3C_*` macros for the
@@ -28162,7 +28162,7 @@ header edit made all 48 entries stale and re-running was the honest response
     verdict changes: 0
 
 The seven that were NOT CAUGHT at the fork point **across the suites pinned
-to `v34hshak.c`** are the same seven, matched by name rather than by count --
+to `V34hshak.c`** are the same seven, matched by name rather than by count --
 which is the whole reason `--verify` compares labels. Tree-wide the figure is
 larger and always was: **37 across all 48 suites**, in ten of them --
 `v34hstx1` 11, `v34k56` 10, `v34datapump` 4, `v34hsmst44` 3, and one or two
@@ -28206,13 +28206,13 @@ amending them, because both are pushed. What each said and what is true:
   3. **636 said "sixty-one of the seventy-nine were left".** Both numbers
      were wrong and the ratio should not have been quoted at all -- see the
      corrected paragraph. The trap is worth the space: the offset-macro
-     blocks in `v34hshak.c` and `v34hstx1.cpp` also hold RECEIVER-relative
+     blocks in `V34hshak.c` and `v34hstx1.cpp` also hold RECEIVER-relative
      offsets and plain limit CONSTANTS, and `whichfield.py struct v34_object`
      resolves both to whatever the object happens to have at that byte.
      `T46_CNT_LOW` is 0xc7, which is the number 199.
 
   4. **638's "the same seven NOT CAUGHT" read tree-wide.** Seven is the
-     subtotal over the suites pinned to `v34hshak.c`, which is what the
+     subtotal over the suites pinned to `V34hshak.c`, which is what the
      brief scoped it to; tree-wide it is 37, in ten suites.
 
 None of the four changes a field, a width or a sign. Three of them are the
@@ -28854,7 +28854,7 @@ TOO, since `v34handshak`'s microstate arm 51 calls `V34SetINFO1aBits` and that
 lives in a .cpp."*
 
 The proof is by existence rather than by reading the Makefile:
-`src/pump/v34/v34hshak.c` already calls `V34SetINFO1aBits` at line 3888 and
+`src/pump/v34/V34hshak.c` already calls `V34SetINFO1aBits` at line 3888 and
 `V34SetINFO0aBits` at 5397, and `make phase` is green. So the *reason*
 `v34hstx1.cpp` is a `.cpp` still stands -- 78 and 85 tail-call `v90Phase34`
 and `k56FlexPhase34` (finding F344) -- but the *consequence* nobody may call it
@@ -28905,7 +28905,7 @@ complete, "an artefact of the two-file split rather than real work". It was
 not, and the distinction matters for how the answer was reached.
 
 **Table 1's nineteen ARMS were complete. The loop that dispatches to them did
-not exist.** `grep 'v34tx1_' src/pump/v34/v34hshak.c` returned nothing before
+not exist.** `grep 'v34tx1_' src/pump/v34/V34hshak.c` returned nothing before
 this session: `t_v34hstx1.c` called each arm directly, one at a time, and let
 the blob's own `v34handshak` supply the loop around it. What the guard covered
 was the loop -- the entry test at 0x62933, the `(short)txstate - 5` index, the
@@ -29063,12 +29063,12 @@ disjoint: the per-target reach sums to the union byte for byte.
 | 0x65473 | 53 | 1,629 [**1,632** over TEN ranges, not thirteen; see 727] | 41 | `V34agc`, `V34SetINFO1aBits`, `probeselect`, `tone_detect`, `v34handshakinit` |
 | 0x6754b | FSK gate body | 1,088 [**1,089**; see 719] | 38 | `dftupdate`, `dftenergy` |
 | 0x6752c | 35 WAIT | 31 | 1 | `rxreadqueue` |
-| 0x64a87 | FSK gate test | 0 | -- | **already written**, v34hshak.c's `T3M_FSKGATE` |
+| 0x64a87 | FSK gate test | 0 | -- | **already written**, V34hshak.c's `T3M_FSKGATE` |
 
 Three things follow that the byte counts alone do not say:
 
 - **0x64a87 is not work.** It is `test %esi,%esi; jne 0x6754b` over the int at
-  +0xa8a0, and `v34hshak.c` already implements it. The guard named two
+  +0xa8a0, and `V34hshak.c` already implements it. The guard named two
   addresses and one of them is a branch we have.
 - **0x6752c is four instructions**: `rxreadqueue`, reload txstate, jump to the
   transmit dispatch. It is the cheapest arm in the function.
@@ -29225,7 +29225,7 @@ correspondence below for `detectRetrainReq`:
   0x69353   return runs == tone_runs
 ```
 
-which is `src/pump/v34/v34hshak.c`'s `detectRetrainReq` line for line.
+which is `src/pump/v34/V34hshak.c`'s `detectRetrainReq` line for line.
 
 **The inlined copy also confirms that function's subtlest existing claim.**
 Its comment says the state-2 RESET arm falls into the shared `runs ==
@@ -29484,7 +29484,7 @@ rather than unobservable.
 
 `v34handshak`'s second compare chain at 0x62b71 named two states that had no
 reconstruction. One of them now does: 0x65473 is `t53_rx_det_ab` in
-`src/pump/v34/v34hshak.c`, compared case by case against the blob through
+`src/pump/v34/V34hshak.c`, compared case by case against the blob through
 `test/unit/t_v34hsrx53.c` -- 2,743 checks, `v34hs_ours(1)`, the whole
 44,096-byte object plus the arena plus both transcripts on every case.
 
@@ -29527,7 +29527,7 @@ local -- that is FORCED, and it is what a codegen comparison would want.
 
 **This reconstruction writes the twelve stores by offset from `obj` anyway**,
 because those nine statements already exist in this file as microstate 41's
-(0x6d387, v34hshak.c) and reusing them is worth more than matching one
+(0x6d387, V34hshak.c) and reusing them is worth more than matching one
 instruction. The two spellings cannot differ:
 
 - the store two instructions earlier is what the reload reads;
@@ -29709,7 +29709,7 @@ would be writing something the object does not have.
 ### F731. rxstate 4 `RECEIVE` is written, and `T3M_UNWRITTEN_RXSTATE` is down to one arm
 
 `v34handshak`'s largest rxstate arm, 0x653e4, is in
-`src/pump/v34/v34hshak.c` as `t4_rx_receive` and compares against the blob
+`src/pump/v34/V34hshak.c` as `t4_rx_receive` and compares against the blob
 through `test/unit/t_v34hsrx4.c` -- 7,641 checks over fifty cases, every one
 of them a whole-object, whole-arena, whole-transcript comparison with
 `v34hs_ours(1)` putting this tree's `v34handshak` on side A.
@@ -29770,7 +29770,7 @@ missed.
 `v34setuptxmit` -- `settxlevel`, `V34SetupModulator`, one receiver flag
 cleared, two state transitions, two transmit flags and `txinit` -- which this
 file already reconstructs and which microstate 63's arm already inlines at
-0x6597d, as v34hshak.c's own comment there says.  It came out as a call, and
+0x6597d, as V34hshak.c's own comment there says.  It came out as a call, and
 with it the two transition printf bodies at 0x7135f and 0x713c1 that belong
 to those transitions.  That is 490 bytes rather than 70.
 
@@ -30072,7 +30072,7 @@ authority for that arm.
 
 The last arm of `v34handshak`'s rxstate chain, 0x650c6, is
 `t72_rx_l1`/`t72_ladder`/`t72_measure`/`t72_probe_done`/`t72_update_both`/
-`t72_nsamples` in `src/pump/v34/v34hshak.c`, and it compares against the blob
+`t72_nsamples` in `src/pump/v34/V34hshak.c`, and it compares against the blob
 through `test/unit/t_v34hsrx72.c` -- 5,826 checks over forty-nine cases, each
 one a whole-object, whole-arena, both-transcripts comparison with
 `v34hs_ours(1)`.
@@ -30190,7 +30190,7 @@ subtree needs a signal rather than a seed. Every path to 0x6881e does run
 
 **But `obj->fsk_inhibit` at +0x402 makes `fskdemodulate` return without doing
 anything at all** -- not even running the detector -- which `v34fsk.h` has
-recorded since `dpsk.c` was written and `dpsk.c:210` implements. Nothing on
+recorded since `DPSK.c` was written and `DPSK.c:210` implements. Nothing on
 this path writes it, `V34agc` does not touch it, and it is not one of the
 thirty-seven pointer skips. So setting it leaves both fields exactly as poked
 and the gate becomes an ordinary two-way choice.
@@ -30707,7 +30707,7 @@ blob's copy" reading that finding F359 would otherwise suggest.
 #### Where the damage lands
 
 Receiver +0x1ae, and +0x1cc..+0x1e3 — object +0x430, +0x43c, +0x444. All four
-are modelled fields, not `pad_*`: `f1ae`, `f1cc`, `f1d0`, `f1e0`. `v34rx.c`
+are modelled fields, not `pad_*`: `f1ae`, `f1cc`, `f1d0`, `f1e0`. `V34RX.c`
 zeroes the last three at lines 495-502 and sets `f1ae` from the baud ladder at
 1091-1103, so a rate-dependent path is implicated.
 
@@ -30825,7 +30825,7 @@ the same tree. `git status` showed a source file modified that this session had
 never touched:
 
      M src/pump/v90/ResamplerTimingOffset.cpp     (then, moments later)
-     M src/pump/v90/VPcmFloModem.cpp
+     M src/pump/v90/VpcmFloModem.cpp
 
 That is the mutation harness doing its job. `mutate.py` patches the source in
 place, builds, runs the suite, and restores in a `finally` — which covers an
@@ -31591,7 +31591,7 @@ was reaching one arm of one function in the file it is about.
 ======================================================================
 ### F921. `preempindex`'s two live announcements differ by one space, and the note saying they could not be reached was arithmetic nobody had run
 
-`tools/debugcov.py` named `v34hshak.c:823` and `:834` as the file's last two
+`tools/debugcov.py` named `V34hshak.c:823` and `:834` as the file's last two
 never-executed sites.  Task #55, and both are the same shape as 920: the
 function is swept exhaustively -- five baud rates by eleven limits by sixteen
 measurements, 880 cases -- and every one of them runs at level 0.  **A
@@ -31950,8 +31950,8 @@ broke rather than by what they proved.
 | the wire looped each endpoint back to itself | the same collapse, on **all four runs** -- and NOT the run-to-run comparison |
 | `mode` poked to 1 at the last block, with two rate words | `blocks in which the mode word left handshaking`, `the mode word at the end`, and both rate claims, on all four runs |
 | the mode left at 0, so `datapumpv34` takes the DATA branch | **SIGSEGV**, exit 139 -- loud, and not a passing run |
-| `src/pump/v34/v34rx.c`'s history-ring bound 0x257 -> 0x256 | `block 149 object`; `diagnose` names +0x2aa6 (the index), +0x2f58 and +0x3406 (the ring's first and last entries) |
-| one word of `v34hshak.c`'s txstate format string | `block 13 transcript` -- and **0 root bytes differ**, which only the transcript tier can see |
+| `src/pump/v34/V34RX.c`'s history-ring bound 0x257 -> 0x256 | `block 149 object`; `diagnose` names +0x2aa6 (the index), +0x2f58 and +0x3406 (the ring's first and last entries) |
+| one word of `V34hshak.c`'s txstate format string | `block 13 transcript` -- and **0 root bytes differ**, which only the transcript tier can see |
 | both scrambler pointers set NULL on the originator | the two `still ours` claims -- and see finding F904, because nothing else moved |
 
 The third row is `docs/method/gates.md` rule 3 on the one detector this test
@@ -33711,7 +33711,7 @@ cost two full re-record runs, and looked convincingly like a concurrency bug.
 `--suite v34hshak` run the instant `git status` went dirty:
 
 ```
-    M src/pump/v34/v34hshak.c
+    M src/pump/v34/V34hshak.c
 
     -#define HS_RXSTATE	0x3594
     +#define HS_RXSTATE	0x3596
@@ -33778,8 +33778,8 @@ would have been the regression.  **Two concurrent `--jobs 8` runs of
 against a fabricated copy three ways: a live owner is refused, a dead owner is
 reported stale and taken, no lock proceeds silently.  The copy was shown to be
 the thing being used rather than decoration by diffing it against the tree
-mid-run — `Files <copy>/src/pump/v34/v34hshak.c and <tree>/src/pump/v34/
-v34hshak.c differ` — in the same instant that `git status` on the tree was
+mid-run — `Files <copy>/src/pump/v34/V34hshak.c and <tree>/src/pump/v34/
+V34hshak.c differ` — in the same instant that `git status` on the tree was
 clean.  Without that second observation every other check here is vacuous.
 
 **A SIGKILL leaks a directory, so the next run reaps it.**  Workdirs are named
@@ -33804,7 +33804,7 @@ transcript, the verdicts and the exit status are all normal — which is
 So every path is spelled relative to the tree before the chdir, and one
 outside it is refused rather than silently copied from nowhere.  Watched
 firing both ways: an absolute in-tree source runs the suite normally and
-leaves `git status` clean, and `/tmp/bench/src/callprog/cadence.c` exits 1
+leaves `git status` clean, and `/tmp/bench/src/callprog/Cadence.c` exits 1
 with `the source is outside the tree, so it cannot be mutated in a copy of it`.
 
 ### F941. Editing `tools/mutate.py` invalidates the whole mutation snapshot, and the snapshot is right to say so
@@ -34296,7 +34296,7 @@ cheaper answer visible, since `src/dsp/fft.cpp` now demonstrates that a
 `#pragma GCC optimize("unsafe-math-optimizations")` on one translation unit gets
 the x87 expansion with no Makefile change and no asm -- GCC 13 emits
 `fldlg2`/`fyl2x` for `log10` under exactly that flag, verified directly. What
-that does NOT settle, and what the next batch owns, is that `Psd.cpp` is also
+that does NOT settle, and what the next batch owns, is that `psd.cpp` is also
 built 64-bit for `$(CXXOBJ64)`, where there is no x87 at all and the pragma buys
 nothing. That is the question to answer before writing `process`, not after.
 
@@ -34407,7 +34407,7 @@ say why. This is why -- mechanism first and value second, and the order
 matters, because the value in finding F962 was found by reading the mechanism
 and not by moving a number until something happened.
 
-The four steps, each read out of `src/pump/v34/v34hshak.c` before any
+The four steps, each read out of `src/pump/v34/V34hshak.c` before any
 experiment:
 
 ```
@@ -35002,7 +35002,7 @@ none of which calls `vpcm_run` -- link unchanged, and it is why this tree does
 NOT define a symbol named after 7,278 bytes of the object it has not written:
 a stub called `VPcmV34Progress` would make `debugaudit.py --missing` and
 `compare.py` count that span as reconstructed.  `vpcm_run` tests each pointer
-and takes `vpcm_notwritten()` when it is null, on `v34hshak.c`'s
+and takes `vpcm_notwritten()` when it is null, on `V34hshak.c`'s
 `t3m_notwritten` rule -- always record a code, and stop unless a test has said
 by name (`vpcm_unwritten_reset`) that it will read the code afterwards.
 
@@ -35759,7 +35759,7 @@ and from two directions.
 `v34handshak` runs table 1 to fill the transmit block and then ONE step of the
 microstate machine (`docs/v34handshak.md`: table 3 is reached through rxstate
 43 `RX_DPSK`, which runs `V34agc` and `fskdemodulate` first).  `V34agc` reads
-a burst of **four** samples (`v34rx.c`, "over four samples instead of two").
+a burst of **four** samples (`V34RX.c`, "over four samples instead of two").
 So one microstate step consumes four received samples at the guarded 9,600 Hz.
 
 **Measured, from this tree's own record and not re-run.**  Finding F1002 fixes
@@ -35796,7 +35796,7 @@ asked to.  What picks 96 is the instruction sequence.  The 40 ms below is
 evidence about what the constant MEANS, not about whether it is 95 or 96.
 
 **THREE ARMS CARRY `0x5f`, AND TWO OF THEM REVERSE A TONE PHASE AT THAT
-INSTANT.**  Read off `v34hshak.c`, whose arms were written before this was
+INSTANT.**  Read off `V34hshak.c`, whose arms were written before this was
 asked.  The third, arm 58, is a different use of the same constant and is
 treated below:
 
@@ -36211,7 +36211,7 @@ select, and was careful not to call it unreachable: *"the field is global
 state, and `v34handshak` and `probeselect` both write in that region; whether
 either can put 2743 there has not been measured."* It names its own trigger --
 `unmeasured` -- task #47, or whenever `probeselect` lands*. It has landed, at
-`src/pump/v34/v34hshak.c:1825-2336`.
+`src/pump/v34/V34hshak.c:1825-2336`.
 
 Every writer of `+0xaa96` in the reconstruction, and what it can write:
 
@@ -37223,7 +37223,7 @@ that is the shape a reader has to have before anything else makes sense:
 **`struct v34_object + 0x3548` IS A `VPcmFloModem *`.**  The saved value is
 later used as `edi` and dereferenced at `0x175c(%edi)` -- which is
 `VPcmFloModem::modem.demodulator` at exactly the offset
-`src/pump/v90/VPcmFloModem.cpp` already asserts -- and the result is handed to
+`src/pump/v90/VpcmFloModem.cpp` already asserts -- and the result is handed to
 `V90Demodulator::enterChannelVerification`.  Two independent uses, one layout.
 So the V.PCM modem is NOT embedded in the V.34 object; it is pointed at, it is
 built by the caller, and `VPcmV34Create` is the CONFIGURATOR of an already
@@ -37872,18 +37872,18 @@ the 56k bullet was measured on -- `MDMCTL_IODELAY` was later hardcoded to 48
 where the tested tree returned `MODEM_FRAMESIZE` (192), and `MDMPRM_CODECTYPE`
 was changed to an "unknown codec" value. Anyone treating the fork's README as
 a measurement of the fork's current behaviour is reading across that gap.
-### F1180. A third of `v34hshak.c`'s bare-address comments are load-bearing for a mutation anchor, and `anchorcheck.py` is what says so
+### F1180. A third of `V34hshak.c`'s bare-address comments are load-bearing for a mutation anchor, and `anchorcheck.py` is what says so
 
 *Numbered at 1180 to clear 1146, the highest in use on any branch at the time
 (`master` and `worktree-agent-a8aacbf0a764df71a`), because four sessions were
 appending in parallel.*
 
-`src/pump/v34/v34hshak.c` carries **270 comments whose entire text is an
+`src/pump/v34/V34hshak.c` carries **270 comments whose entire text is an
 object address** -- `/* 0x6abae */`, `/* 0x6aa0b, 0x6c9aa */`, `/* else
 0x6c133 */`. They are what task #65's comment pass exists to replace. **168 of
 them cannot be touched**, and the reason is not style:
 
-    $ tools/cmtsites.py src/pump/v34/v34hshak.c
+    $ tools/cmtsites.py src/pump/v34/V34hshak.c
     270 thin comments, 168 frozen by a mutation anchor, 102 free
 
 `tools/mutate.py` locates every mutation by an EXACT SUBSTRING of the source,
@@ -38497,7 +38497,7 @@ than field names.
 ### F1187. `V92Phase3Modulator` IS 80 BYTES, AND THE WHOLE FIELD MAP CAME OUT OF THE CONSTRUCTOR
 
 *Renumbered from 1180 at merge: the comment-pass batch had independently
-taken 1180 for the mutation-anchor hazard in `v34hshak.c`. Both were written
+taken 1180 for the mutation-anchor hazard in `V34hshak.c`. Both were written
 against the same highest-in-use number on different branches. Cited as 1180
 nowhere outside this batch — checked before moving it.*
 
@@ -40009,7 +40009,7 @@ recoverable is which parameter fills each.  `nofFilterSections`,
 and the header says so.
 
 **Two consequences worth knowing.**  The class's offset assertions moved from
-`src/pump/v90/VPcmFloModem.cpp`, which had been carrying them because the
+`src/pump/v90/VpcmFloModem.cpp`, which had been carrying them because the
 class had no source file of its own, into the new
 `src/pump/v90/V92Phase2Info.cpp`; and `sizeof(V92Phase2Info)` changing from
 0x28 to 0x2c is safe only because nothing embeds one by value — every user
@@ -40192,7 +40192,7 @@ nothing else on the list.
 
 *The answer to "can this be localised and improved". It can, to one filter.*
 
-`v34FreezeEcho` (blob `0x5e200`, `src/pump/v34/v34rx.c:958`) sets
+`v34FreezeEcho` (blob `0x5e200`, `src/pump/v34/V34RX.c:958`) sets
 `V34_EC_FROZEN` and then dumps both cancellers, so the coefficient reports in
 the log are each pass's FINAL ADAPTED STATE. Comparing pass 1 against pass 2 in
 the eight forced-retrain calls of 1211:
@@ -41073,8 +41073,8 @@ these ten is `OBJECT LOCAL` and every one has exactly one referencing function
 
 | table | referenced only from | so it was defined in |
 |---|---|---|
-| `entFiltNum`, `entFiltDen`, `v34initialbauds` | `VPcmFloModem`'s constructor | `VPcmFloModem.cpp` |
-| `IIR2100_Coef_{A,B}_{8000,9600}` | `ANSamToneDetector`'s constructor | `ANSamToneDetector.cpp` |
+| `entFiltNum`, `entFiltDen`, `v34initialbauds` | `VPcmFloModem`'s constructor | `VpcmFloModem.cpp` |
+| `IIR2100_Coef_{A,B}_{8000,9600}` | `ANSamToneDetector`'s constructor | `AnsamToneDetector.cpp` |
 | `v92echoPreFilter_{a,b}` | `V92EchoCanceller`'s constructor | `V92EchoCanceller.cpp` |
 | `v92TxPreFilter` | `V92Modulator`'s constructor | `V92Modulator.cpp` |
 
@@ -41090,7 +41090,7 @@ finding F604's trap in its data form. `relocscan.py --at .data:0xNN` is what
 answers it.
 
 **And it is not free.** Acting on it would mean putting `entFiltNum` back into
-a `VPcmFloModem.cpp` that does not exist yet, so this batch gathers all ten in
+a `VpcmFloModem.cpp` that does not exist yet, so this batch gathers all ten in
 `src/pump/v90/vpcm_tables.c` under the precedent `v34pcm_tables.c` already set
 for `V34DisconnectThreshTable`. That is a debt with a specific failure mode,
 recorded in the file's header: a later `static double entFiltNum[5]` in the
@@ -42758,7 +42758,7 @@ V90Demodulator::sessionTermination`.
 
 +0x175c is `modem.demodulator`, which is not a new measurement: a V90Modem is
 embedded in a VPcmFloModem at +0x1758 and `demodulator` is its +0x04
-(`VPcmFloModem.h`, and `VPcmFloModem.cpp`'s
+(`VPcmFloModem.h`, and `VpcmFloModem.cpp`'s
 `VPCM_OFF(modem.demodulator, 0x175c)`).  So the handle the V.PCM interface
 passes around is a `VPcmFloModem *`.
 
@@ -42789,7 +42789,7 @@ there is nothing there to compare.
 **Its own translation unit, ahead of the collision.**  In the object it is not:
 0xf730 sits between `VPCMXF_Delete` and `VPcmFloModem::qcLineVerification`.
 `src/pump/v90/VPcmXfTerm.cpp` exists for finding F1264's reason -- one source
-file is one mutation suite's namespace, `VPcmFloModem.cpp` already carries two,
+file is one mutation suite's namespace, `VpcmFloModem.cpp` already carries two,
 and the rest of the `VPCMXF_` family is unwritten and will want its own
 anchors.
 
@@ -43533,7 +43533,7 @@ done for some time without anyone asking which fifteen or why. Compiling each
 by hand inside the container answers it, and the answer is concentrated:
 
     v34info1a.cpp          V90Demodulator.cpp        V90SessionFlag.cpp
-    v34pcmcreate.cpp       V90Equalizer.cpp          VPcmFloModem.cpp
+    v34pcmcreate.cpp       V90Equalizer.cpp          VpcmFloModem.cpp
     v34pcmmain.cpp         V90Phase3Demodulator.cpp  VPcmXfTerm.cpp
                            V90PreFilter.cpp
 
@@ -43727,7 +43727,7 @@ construction-time one**, and 0 after construction is correct.
     mov    %ecx,0x2218(%ebx)
 
 so it stores `2 + <a byte>`, and 2 is what it stores when that byte is zero.
-This tree already has that code -- `src/pump/v34/v34hshak.c` calls the field
+This tree already has that code -- `src/pump/v34/V34hshak.c` calls the field
 `T3C_MODE` and `src/pump/v34/v34pcmif.c` writes 5 to it in three places.  So
 the answer to 806 was in the reconstruction the whole time, in a function
 nobody thought to look at because the question had been framed as a
@@ -43990,7 +43990,7 @@ five cleared bytes, the same three CP fields -- but it is NOT a call to it:
 neither here.  The duplication is the original's, and it is why `VPCMXF_Create`
 is its own translation unit: finding F1264, one source file is one mutation
 suite's namespace, and a near-copy of `externalReset`'s tail inside
-`VPcmFloModem.cpp` would make anchors in both match twice.
+`VpcmFloModem.cpp` would make anchors in both match twice.
 
 ======================================================================
 
@@ -45039,7 +45039,7 @@ function-pointer table would put the reference in `.rel.data` and a
 `dtmf_detect` carries both INLINE -- the comparison chains at 0x0ade8d and
 0x0adec9 are the same tests instruction for instruction -- so GCC 3.4.2 emitted
 out-of-line copies of two helpers nothing calls.  That is why `closure.py`'s 27
-symbols do not include them, and why `src/service/dtmf.c` has them `static`.
+symbols do not include them, and why `src/service/Dtmf.c` has them `static`.
 
 ======================================================================
 
@@ -45215,7 +45215,7 @@ within a few samples: **2,534 of 46,080** whole-object comparisons failed.
 argued from the modern compiler.**  The worry about a `volatile float`
 barrier is that it forces a store under a modern compiler and might force an
 EXTRA one under the original's, which would pass `make phase` and fail the
-standard that matters.  Both forms of `src/service/dtmf.c` were built in
+standard that matters.  Both forms of `src/service/Dtmf.c` were built in
 `tools/toolchain`'s container and the bias arm disassembled:
 
     plain  `x = notch(...)`   call; jmp -- 3.4.2 emits NO store either, so
@@ -45342,7 +45342,7 @@ and a counter stepped across 2^31, where it is the other way round.
 
 **Two fields were deliberately NOT renamed.**  +0x70 and +0x74 are the running
 average PDSNR and its weight (finding F1382), but `V90Demodulator.cpp` and
-`VPcmFloModem.cpp` refer to +0x70, +0x74, +0x78, +0x7c, +0x84 and +0x88 by
+`VpcmFloModem.cpp` refer to +0x70, +0x74, +0x78, +0x7c, +0x84 and +0x88 by
 their offset names and belong to other work; renaming them would edit files
 this batch does not own, and the derivation is recorded in the header instead.
 What did change is the TYPE of +0x70, from `unsigned int` to `float`, and that
@@ -46245,7 +46245,7 @@ print it and nothing else.  +0x78 and +0x7c are a delayed-retrain request and
 its acknowledgement: phase 4's last arm runs only when both are non-zero,
 prints "Initiating retrain (delayed)...", and clears both.  Every one of those
 four slots is referred to by its offset name in a file this batch does not own
-(`t_v90leaves.cpp`, `VPcmFloModem.cpp`), so the derivations are recorded in
+(`t_v90leaves.cpp`, `VpcmFloModem.cpp`), so the derivations are recorded in
 `include/dsplib/V90ConnectionEvaluator.h` and no field was renamed.  A name is
 worth less than a file another batch is editing.
 
@@ -47861,7 +47861,7 @@ compiler cannot meet.
 
 **The sweep is complete.** `src/` and `include/` now contain **no `volatile`
 at all** outside a comment, and every remaining `(double)` is an ordinary
-integer-to-double conversion, a `sizeof`, a libm argument, or `dftc.c`'s
+integer-to-double conversion, a `sizeof`, a libm argument, or `DFTC.c`'s
 deliberate widening. Nine files still cite GCC 13 and all nine are
 explanation — mostly of why `-ffloat-store` is the wrong fix — not shims.
 
@@ -52819,7 +52819,7 @@ the only things left that are big enough to matter.
 
 *Renumbered: this was numbered **1500** until 2026-08-12. `v22-datapump` had independently taken 1500-1502 and reached master first, so this session's first three findings moved to 1700-1702. Nothing else about the finding changed.*
 
-*Both were read out of `tools/dis.py` and are in `src/service/dtmf_rx.c`
+*Both were read out of `tools/dis.py` and are in `src/service/Dtmf_Rx.c`
 beside `band_pass` and `dtmf_modem`, the two the same translation unit already
 had (finding F1410).*
 
@@ -52945,7 +52945,7 @@ The function is small and every constant in it is now checked by a test:
 ```
 
 **0x38c had never been checked by anything.** `include/dsplib/dtmf_rx.h` has
-carried the size since the header was written and `src/service/dtmf_rx.c`
+carried the size since the header was written and `src/service/Dtmf_Rx.c`
 asserts `sizeof(struct dtmf_rx) == 0x38c` at compile time, but nothing tied
 either to the object -- the assertion pins OUR struct against a number read off
 a disassembly, and a number read wrongly would have silently narrowed every
@@ -53067,7 +53067,7 @@ accessor `FPM_div_table_entry` therefore stays too, since a static has no
 ### F1507. `CID_MTD_detect`: A MARK-TONE GATE THAT ANSWERS BACKWARDS, OVER 1200 Hz AND 1300 Hz
 
 *`Cidmtd.c`, .text 0x0926a0, 259 bytes -- one function and four file-static
-tables, reconstructed whole into `src/service/cid_mtd.c`.*
+tables, reconstructed whole into `src/service/Cidmtd.c`.*
 
 Two notches in cascade, then one comparison:
 
@@ -53114,7 +53114,7 @@ object.
 
 The tables are file-static (`nm` shows `d`, not `D`), which is how finding
 F1410 separates this translation unit from `Dtmf_Detector.c` next door in
-.data. That also means no test can name them, so `cid_mtd.c` exports
+.data. That also means no test can name them, so `Cidmtd.c` exports
 `CID_MTD_coeff` for the differential comparison -- the same arrangement
 `fpm_div.c` uses, and for the same reason.
 
@@ -53123,7 +53123,7 @@ F1410 separates this translation unit from `Dtmf_Detector.c` next door in
 ### F1508. `CID_FSD_demodulate`: A DELAY-LINE DISCRIMINATOR, AN ADAPTIVE SLICER, AND TWO ARMS THAT CANNOT RUN
 
 *`Cidfsd.c`, .text 0x092280, 1049 bytes, reconstructed whole into
-`src/service/cid_fsd.c`.*
+`src/service/Cidfsd.c`.*
 
 Four stages, and the middle two are where the size is.
 
@@ -53298,10 +53298,10 @@ So each claim was broken on purpose and the suite re-run:
 
 | mutation | caught by |
 |---|---|
-| `cid_mtd.c`: swap the two notches in the cascade | 446/1143 at 8000, 370/1189 at 9600 |
-| `cid_fsd.c`: the low-end seed shifts `>> 3` not `>> 4` | 258/13364 at 7200, 2768/13364 at 9600 |
-| `cid_fsd.c`: drop `cid->dead = 0` | 3403/13364 at 7200, 3220/13364 at 9600 |
-| `cid_mtd.c`: `sizeof(struct cid)` asserted as 0x158 | compile error, as intended |
+| `Cidmtd.c`: swap the two notches in the cascade | 446/1143 at 8000, 370/1189 at 9600 |
+| `Cidfsd.c`: the low-end seed shifts `>> 3` not `>> 4` | 258/13364 at 7200, 2768/13364 at 9600 |
+| `Cidfsd.c`: drop `cid->dead = 0` | 3403/13364 at 7200, 3220/13364 at 9600 |
+| `Cidmtd.c`: `sizeof(struct cid)` asserted as 0x158 | compile error, as intended |
 
 **The first is the one worth having.** Two IIR sections in cascade COMMUTE:
 swapping them leaves the overall transfer function, and therefore
@@ -56012,8 +56012,8 @@ re-verify a property nothing here depends on.
 **THE TWO COMPILERS ARE NOT THE SAME COMPILER.** Same source, same flags,
 `.comment` stripped, byte-compared: **165 of 183 objects identical, 18
 differing.** They are `DspMath.cpp`, `fpm_agc.c`, `fpm_mrf.c`,
-`GenericToneDetector.cpp`, `b103fp.c`, `v34hshak.c`, `v34hstx1.cpp`,
-`v34rx.c`, `v34shell.c`, `ResamplerTimingOffset.cpp`,
+`GenericToneDetector.cpp`, `b103fp.c`, `V34hshak.c`, `v34hstx1.cpp`,
+`V34RX.c`, `v34shell.c`, `ResamplerTimingOffset.cpp`,
 `V90AutoDigitalImpDetector.cpp`, `V90Resampler.cpp`,
 `V92ConvolutionEncoder.cpp`, `V92Modem.cpp`, `V92Precoder.cpp`, `v8jm.c`,
 `v8seq.c` and `v8sig.c`.
@@ -56457,7 +56457,7 @@ times worse than the equaliser achieves" reading was an artefact of comparing
 across two operating points, and is withdrawn.**
 
 The mechanism half stands and is worth having. `equerr` is not an instantaneous
-reading: `v34rx.c:2640` accumulates `mag = dr*dr + di*di` into `rx->f220` under a
+reading: `V34RX.c:2640` accumulates `mag = dr*dr + di*di` into `rx->f220` under a
 counter `rx->f21c` that wraps at `0x3ff`, publishing `rx->f21a = mag >> 16` once
 per **1024 symbols** -- 0.30 s at 3429 baud, exactly the `V34EQU` spacing in
 every log. The rate ladder at `v34hstx1.cpp:2624` walks `rate` down while
@@ -56602,7 +56602,7 @@ reach, permanently.
 
 **AND THE HARNESS IS NOW VALIDATED FOR RECEIVER-SIDE CHANGES.** An identical
 result is worth only as much as the demonstration that a different one would
-show, so `dsplib_v34_seed_defect` was added (v34rx.c, set only by
+show, so `dsplib_v34_seed_defect` was added (V34RX.c, set only by
 tools/benchflags.c from `DSPLIB_V34_SEED_DEFECT`, linked only into the bench
 hybrid). It halves the equaliser's adaptation error -- a small, realistic
 defect that adapts slower without breaking the handshake. Same recording:
@@ -56970,7 +56970,7 @@ running next, and it is a three-arm design rather than another A/B.
 ### F1913. THE DATAPUMP DOES MEASURE SNR — AT THE BOTTOM OF THE BAND, AGAINST MID-BAND NOISE, AND IT FEEDS POWER REDUCTION RATHER THAN THE RATE DECISION. 13% OF THE MEASUREMENTS COLLAPSE TO ZERO
 
 Chasing "why do the hardware modems converge faster on the same path" found
-machinery this thread had not looked at. `t72_measure` (`v34hshak.c:8744`)
+machinery this thread had not looked at. `t72_measure` (`V34hshak.c:8744`)
 computes, per line probe:
 
     noise  = sum of nl_noise_bins[0..3].energy          900, 1200, 1800, 2400 Hz
@@ -57368,7 +57368,7 @@ Healthy, healthy, healthy, saturated. One block. And at every retrain the
 stillness counter reads exactly 141 -- the threshold -- with `equerr` between
 14352 and 32767. So the sequence is: the receiver loses the signal completely,
 its equalised output stops moving because there is nothing to track, and the
-retrain detector (`v34rx.c:2290`) reads that stillness as a far-end retrain
+retrain detector (`V34RX.c:2290`) reads that stillness as a far-end retrain
 request. **The detector is not faulty; it is reporting a corpse.**
 
 **FOUR MECHANISMS TESTED ON DATA, ALL DEAD:**
@@ -57441,7 +57441,7 @@ this, seen one cycle at a time.
 **WHY EACH RETRAIN COSTS ~10 SECONDS: THE SHORT PATH IS UNREACHABLE ON A V.34
 CALL.** The object has one -- `local_short`, "requesting short phase2",
 `prev_bulk_delay` reused instead of re-measuring the round trip
-(`v34hshak.c:4116`). Across every call recorded here:
+(`V34hshak.c:4116`). Across every call recorded here:
 
     "requesting short phase2"   0 occurrences
     SILENCERETRAIN            264 occurrences
@@ -57633,7 +57633,7 @@ bottom each time.
     "V34RENEG, RRN request detected"  19 occurrences
 
 So the heavy mechanism dominates. The receiver even HAS the light one's
-detector -- `v34rx.c:2347` sets `V34_RX_FLAG_RENEG` when the stillness counter
+detector -- `V34RX.c:2347` sets `V34_RX_FLAG_RENEG` when the stillness counter
 passes back down through -0x84..-0x78 -- but the calls are ending up in full
 retrains regardless.
 
@@ -57655,7 +57655,7 @@ bench call. #149 is re-pointed at this.
 
 ### F1926. THE FULL RETRAIN HAS A SECOND TRIGGER THAT NOBODY REQUESTED — A TIMEOUT ON `f124 > 7 * baud_rate` WITH FLAG 0x80 CLEAR
 
-Reading the retrain path for 1925/#149. `v34hshak.c:8563`, the only consumer of
+Reading the retrain path for 1925/#149. `V34hshak.c:8563`, the only consumer of
 `V34_RX_FLAG_RETRAIN`:
 
     if ((flags & V34_RX_FLAG_RETRAIN) != 0
@@ -57739,7 +57739,7 @@ against the Courier on the same far end, and the whole difference is ours.
 
 ### F1928. THE RETRAIN BRANCH I INSTRUMENTED IS NOT THE ONE THAT FIRES — FOURTEEN CALL SITES REACH `v34handshakinit` AND I MEASURED ONE
 
-1926 identified two ways into a full handshake at `v34hshak.c`'s
+1926 identified two ways into a full handshake at `V34hshak.c`'s
 `V34_RX_FLAG_RETRAIN` branch: the far end asking, or a local timeout on
 `f124 > 7 * baud_rate` with flag 0x80 clear. `V34RTNWHY` was added to say which,
 and six 120-second calls were placed.
@@ -57759,7 +57759,7 @@ call and up to twelve SILENCERETRAINs. They simply do not come through that
 branch.
 
 **THE REASON IS COUNTABLE.** `v34handshakinit` has **fourteen call sites**
-across `v34hshak.c`, `v34hstx1.cpp`, `v34pcmmain.cpp`, `v34pcmif.c` and
+across `V34hshak.c`, `v34hstx1.cpp`, `v34pcmmain.cpp`, `v34pcmif.c` and
 `v34pcmcreate.cpp`, carrying four distinct `mode` values (0, 1, 2, 3). One of
 them was instrumented. The other thirteen were not.
 
@@ -57778,7 +57778,7 @@ carefully-argued mechanism turned out to be watching the wrong code
 reading a plausible branch and assuming it is the live one. Counting the call
 sites first would have cost one grep.
 
-### F1929. THE RETRAIN TRIGGER, NAMED AT LAST: `v34hshak.c:10017`, AND HALF THE FULL HANDSHAKES ARE A BAD-BLOCK RUN WE DECIDE ON OURSELVES
+### F1929. THE RETRAIN TRIGGER, NAMED AT LAST: `V34hshak.c:10017`, AND HALF THE FULL HANDSHAKES ARE A BAD-BLOCK RUN WE DECIDE ON OURSELVES
 
 1928 established that instrumenting one of fourteen `v34handshakinit` call
 sites measured nothing. Logging the callee with `__builtin_return_address(0)`,
@@ -57787,11 +57787,11 @@ sites (page-aligned ASLR preserves them; a `call rel32` is 5 bytes so
 return = call + 5), names the doors:
 
     return low12   call site       mode   what it is
-    0x07b          0x33076         1      v34hshak.c:10017  -- the dominant one
-    0x0d8          0x330d3         3      v34hshak.c:10041  -- rate renegotiation
-    0x1ab          0x331a6         2      v34hshak.c:10058
+    0x07b          0x33076         1      V34hshak.c:10017  -- the dominant one
+    0x0d8          0x330d3         3      V34hshak.c:10041  -- rate renegotiation
+    0x1ab          0x331a6         2      V34hshak.c:10058
 
-**THE DOMINANT ENTRY, `v34hshak.c:10017`:**
+**THE DOMINANT ENTRY, `V34hshak.c:10017`:**
 
     if ((T3C_RX(obj)->flags & 0x40)                               /* far end asked */
         || dp_rxget(obj, DP_RX_BAD) > (short)(obj->baud_rate >> 1)) { /* BAD-BLOCK RUN */
@@ -57858,7 +57858,7 @@ one 1921 and 1929 leaned on.
 **PART THREE -- AND THIS IS THE REAL DEFECT IN 1929.** The split of eleven
 retrains into "far end asked" (5) and "our bad-block run" (6) was read from
 bit 0x40 of `rx->flags` logged at entry to `v34handshakinit`. That bit is
-cleared at `v34hshak.c:1546`:
+cleared at `V34hshak.c:1546`:
 
     rx->flags = (unsigned short)((rx->flags & ~0x1d8) | 0x18);
 
@@ -57875,7 +57875,7 @@ flag looks like and NOT what independent per-event requests look like.
 
 **SO 1929's SPLIT IS WITHDRAWN AS A PROPORTION.** What survives is:
 
-* the trigger site is `v34hshak.c:10017` and its two conditions are the far
+* the trigger site is `V34hshak.c:10017` and its two conditions are the far
   end's flag and our own `DP_RX_BAD > baud_rate/2` bad-block run -- that is read
   from the code and stands;
 * at least some full retrains are caused by our own bad-block run, since six
@@ -57884,7 +57884,7 @@ flag looks like and NOT what independent per-event requests look like.
   include flags set earlier and never consumed.
 
 **WHAT WOULD MEASURE IT PROPERLY:** log at the moment the flag is SET
-(`v34rx.c:2350`, where the stillness detector raises it) rather than at the
+(`V34RX.c:2350`, where the stillness detector raises it) rather than at the
 moment it is read, and pair each set with the next handshake entry. A counter
 of sets, versus a counter of mode-1 entries with the flag clear, gives the
 proportion without depending on when it is cleared.
@@ -57892,11 +57892,11 @@ proportion without depending on when it is cleared.
 ### F1931. MEASURED AT THE POINT THE FLAG IS PRODUCED: AT LEAST 6 OF 11 FULL RETRAINS ARE SELF-INFLICTED, AND TWO CALLS RETRAINED WITH NO FAR-END REQUEST AT ALL
 
 1930 withdrew 1929's "5 asked / 6 ours" split because bit 0x40 is cleared only
-inside `case 1:`'s consuming arm at `v34hshak.c:1546`, so a flag read at
+inside `case 1:`'s consuming arm at `V34hshak.c:1546`, so a flag read at
 handshake entry may have been set during an earlier mode-0/2/3 entry and never
 consumed. The fix is to count where the flag is SET rather than where it is
 read -- `V34RTNCOUNT` already logs exactly that, at the stillness detector in
-`v34rx.c`.
+`V34RX.c`.
 
     call             flag sets   mode-1 entries at 10017   entries with flag CLEAR
     src-courier-1        4                5                        2
@@ -57934,7 +57934,7 @@ triggered by its own bad-block counter rather than by the far end; each costs
 this trigger (1925).
 
 **THE CHANGE THAT FOLLOWS**, and it is now precisely located: route the
-`DP_RX_BAD > baud_rate/2` arm of `v34hshak.c:10017` to a §11.6 rate renegotiation
+`DP_RX_BAD > baud_rate/2` arm of `V34hshak.c:10017` to a §11.6 rate renegotiation
 instead of `v34handshakinit(obj, 1)`. The far end's arm keeps the full retrain,
 because responding to a request is not ours to reinterpret. That is #149.
 
@@ -57991,10 +57991,10 @@ while that is worked out.
 already has a layered recovery and I added a fourth path without reading the
 other three.
 
-    v34hshak.c:10017   DP_RX_BAD      > baud_rate / 2   ->  FULL RETRAIN  (~10 s)
-    v34hshak.c:10088   flags & 0x20                 ->  renegotiation (remote asked)
-    v34hshak.c:10107   DP_RX_BAD_LONG > 2 * baud_rate   ->  renegotiation DOWN, "large error"
-    v34hshak.c:10122   DP_RX_GOOD     > 8 * baud_rate   ->  renegotiation UP,   "small error"
+    V34hshak.c:10017   DP_RX_BAD      > baud_rate / 2   ->  FULL RETRAIN  (~10 s)
+    V34hshak.c:10088   flags & 0x20                 ->  renegotiation (remote asked)
+    V34hshak.c:10107   DP_RX_BAD_LONG > 2 * baud_rate   ->  renegotiation DOWN, "large error"
+    V34hshak.c:10122   DP_RX_GOOD     > 8 * baud_rate   ->  renegotiation UP,   "small error"
 
 The design is sound in shape -- a bad run steps down, a good run steps up, and
 a request from the far end is honoured. **The thresholds are the wrong way
@@ -58037,10 +58037,10 @@ the object's own renegotiation sites perform and my branch omitted.
 The field at `+0xaa96` was carried as `faa96` and described variously in
 comments as "the block rate" and "the frame length". Neither is right.
 
-**IT HOLDS THE SYMBOL RATE ITSELF.** `v34hshak.c:8307` compares it against
+**IT HOLDS THE SYMBOL RATE ITSELF.** `V34hshak.c:8307` compares it against
 `0xd65`, `0xc80`, `0xbb8` and `0xaf0` -- **3429, 3200, 3000 and 2800** -- which
 are V.34 symbol rates in baud, not indices. It is written once, from
-`T3M_TXBAUD` (`v34hshak.c:4428`), aliases `rx_baud` in the shell's record
+`T3M_TXBAUD` (`V34hshak.c:4428`), aliases `rx_baud` in the shell's record
 (`v34shell.c:2287`), and `V34SetupDemodulator` passes it straight to
 `t44_setup_rate` as `baud`. Renamed to **`baud_rate`** across 106 uses in ten
 files, including the mutation JSON that anchors on the text.
@@ -58052,7 +58052,7 @@ seconds. **That is wrong** and a falsification pass caught it.
 
 `DP_RX_BAD` is advanced by `dp_run` once per `receiver()` call, and
 `receiver()` consumes `rx->f128` samples per call. `f128` is **4** at every
-one of its four write sites (`v34rx.c:1087`, `v34hshak.c:521`, `771`, `6909`),
+one of its four write sites (`V34RX.c:1087`, `V34hshak.c:521`, `771`, `6909`),
 on a 9600 Hz stream -- so the counter ticks at a FIXED **2400 per second**,
 independent of the negotiated baud. The thresholds scale with `baud_rate`;
 the counter does not.
@@ -58111,7 +58111,7 @@ needs roughly 35 dB for 33600. Spending 10 dB of headroom leaves an enormous
 margin, so the unused dynamic range is not what costs us rate.
 
 **AND THE FAR END WANTS US QUIETER, NOT LOUDER.** The transmit scale is set by
-`settxlevel` (`v34hshak.c:2745`) from the power-reduction field of the far
+`settxlevel` (`V34hshak.c:2745`) from the power-reduction field of the far
 end's MP message, and the logs are unambiguous:
 
     txscale before is 5793, reduced txscale is 3 dB, final txscale is 4099   x20
@@ -58631,7 +58631,7 @@ canceller can span it. That was asserted rather than checked, so here is the
 check.
 
 **THE MECHANISM IS REAL AND IS IN THE CODE.** `ApplyBulkDelay`
-(`v34hshak.c:3024`) points the far echo canceller at the measured round-trip
+(`V34hshak.c:3024`) points the far echo canceller at the measured round-trip
 delay, and rejects it two ways:
 
     if (d <= 0)              d = 0x90;   /* prints "bulk delay first estimation" */
@@ -58793,7 +58793,7 @@ string the BLOB prints, `"V34 bulk delay estimation %d (FAR=%d)"`, emitted by
      median gap 11.6 s
 
 **EACH ESTIMATE IS A SEPARATE HANDSHAKE, checked rather than assumed.** There
-are two `ApplyBulkDelay` call sites (`v34hshak.c:4170`, `:4623`) and a short
+are two `ApplyBulkDelay` call sites (`V34hshak.c:4170`, `:4623`) and a short
 retrain reuses `prev_bulk_delay`, so one handshake emitting two estimates would
 inflate the interval count and make this incomparable with 1921. It does not:
 of 614 intervals, **614 contain a handshake state transition and 0 contain
@@ -59205,7 +59205,7 @@ every proposal to fix the retrain problem by fixing the jitter buffer is now
 unsupported.
 
 **WHAT SURVIVES, AND IT IS THE MORE IMPORTANT HALF.** The retrains are still
-triggered by our own bad-block run at `v34hshak.c:10017` (1931), the ladder is
+triggered by our own bad-block run at `V34hshak.c:10017` (1931), the ladder is
 still inverted (1933/1934), retraining still costs up to half the throughput
 (1947), and raising that threshold still reduced retrains 3.0 -> 1.0 on the
 bench (1953). That line needed no jitter-buffer mechanism to justify it and
@@ -59482,7 +59482,7 @@ for `preemph` and `pre_emph`. The code spells it **`preemp`** -- one 'h' short.
 A whole implemented subsystem was invisible to three separate searches, and I
 came within one step of reporting "we never comply with what the far end asks"
 as a finding. The object's own name for the selector is `preempindex`, which
-is in `v34hshak.c`'s header comment and which I had read several times without
+is in `V34hshak.c`'s header comment and which I had read several times without
 connecting it.
 
 **RULE:** before concluding a subsystem is absent, grep for the SHORTENED and
@@ -59787,7 +59787,7 @@ falsified, which is the only useful thing about it.
 **SO ONE OF TWO THINGS IS TRUE and neither is established yet:**
 
   * `rx->flags & 0x40` has a producer I did not find. My grep matched
-    `flags.*| *0x40` and found exactly one site, `v34hshak.c:4860`, whose
+    `flags.*| *0x40` and found exactly one site, `V34hshak.c:4860`, whose
     companion message `"retrain is initiated in RX_PHASE2_CALL"` appears ONCE
     in 1197 handshakes across every capture. Three firings in a single call
     cannot come from that. A helper, an `hs_put`, or a differently-spelled
@@ -60421,7 +60421,7 @@ would invert the reading into a non-story.
 MP builder puts in the trellis bits. `V90MP.cpp` models them (`Trellis` at
 bits 0x1d..0x1e, decode at :180, `switch` at :276) but that is the V.90 path
 and its `Trellis%d,NonLin%d,Shaping%d` string appears in **zero** captures,
-because `AT+MS=34,1` never runs it. The V.34 equivalent in `v34hshak.c` is what
+because `AT+MS=34,1` never runs it. The V.34 equivalent in `V34hshak.c` is what
 to read. Task #169.
 
 **AND SIZE IT: ~1 dB against an 8-12 dB deficit.** Even fully confirmed this is
@@ -60456,7 +60456,7 @@ outside `V90MP.cpp:180`'s decode -- which looked damning -- says nothing
 whatever about the V.34 path.
 
 **AND THE V.34 MP TRANSMIT BUILDER IS NOT IN THE RECONSTRUCTION.** Every
-`t4_mp_*` function in `v34hshak.c` is RECEIVE-side: `t4_mp_packer`,
+`t4_mp_*` function in `V34hshak.c` is RECEIVE-side: `t4_mp_packer`,
 `t4_mp_runlength`, `t4_mp_word`, `t4_mp_coeffs`, `t4_mp_e_sequence`,
 `t4_mp_sequence_end`, `t4_mp_print`. `setfinalrate` decodes the *received* MP
 at `+0xa9de..+0xa9e3` and `settxlevel` reads its power fields. There is no
@@ -60469,7 +60469,7 @@ the blob's 262** -- by far the largest gap in the tree.
 > GAP, NOT A RECONSTRUCTION GAP.** `debugaudit --missing` reports "MISSING
 > diagnostic call sites, **in functions already reconstructed**... the level
 > ships at zero, so a missing call and a present one behave identically"
-> (finding F134). `v34handshak` is 487 lines in `v34hshak.c` and is
+> (finding F134). `v34handshak` is 487 lines in `V34hshak.c` and is
 > reconstructed. I read a debug-coverage number as a completeness number and
 > inferred "plausibly whole arms of its state machine are not reconstructed",
 > which the tool explicitly says is not what it measures. Withdrawn.
@@ -60567,7 +60567,7 @@ open receiver questions need, and `probeselect` is where it pays first.
 It is, the estimate was already being logged before this session started, and
 the premise 1904, 1913 and 1914 were written on is wrong.
 
-**THE TWO NUMBERS COME OUT OF THE SAME 1024-SYMBOL BLOCK** of v34rx.c's error
+**THE TWO NUMBERS COME OUT OF THE SAME 1024-SYMBOL BLOCK** of V34RX.c's error
 accumulator, and their ratio is dimensionless:
 
     equerr = f21a = (SUM |decision - equaliser out|^2) >> 16
@@ -60583,7 +60583,7 @@ threshold into the SNR that rate demands.
 **`sigpow` IS PINNED, so the scale never moved and `equerr` alone was always an
 SNR.** Over every settled-constellation block in the archive it is 163815 to
 163836 -- a spread of 0.006% on 163820 -- across every rate, every far end and
-both sides of the phase 3/4 boundary the comment at v34rx.c:2735 said the
+both sides of the phase 3/4 boundary the comment at V34RX.c:2735 said the
 scale moved at. It is the power of the *decision*, which V.34 holds constant
 as the constellation grows, so it is a constellation constant and not a
 measurement. **The offset is 10*log10(163820) = 52.14 dB**, and that makes the
@@ -61029,7 +61029,7 @@ and in ours:
 compared as a 16-bit pattern require the unsigned condition, and the object
 uses the signed one. The object also re-extends `up` with `movswl %cx,%edi`
 before the division -- a signed short's promotion -- and `r = (int)s->down %
-(int)s->up` at `src/core/fixedrc.c:154` reaches `cltd; idiv` from a
+(int)s->up` at `src/core/FixedRC.c:154` reaches `cltd; idiv` from a
 zero-extended value here and a sign-extended one there.
 
 So the original declared `down` and `up` as **`short`**, and we declare them
@@ -61213,7 +61213,7 @@ one.  Left, and the five that are the object's are what the suite pins.
     644ea  bp=u16; cmp $1; sbb; add $0x4                      -> bp==0 ? 3 : 4
     64541  esi=(x>>3)&1; cmp $1; sbb; add $0x3                -> bit ? 3 : 2
 
-and `src/pump/v34/v34hshak.c` already computes all four values -- lines 3424
+and `src/pump/v34/V34hshak.c` already computes all four values -- lines 3424
 and 3453 are the last two verbatim, and the 0x30/0x90 pair is the one the
 V.8 message-length note already records at 0x64656.
 
@@ -61295,7 +61295,7 @@ different distribution.
 
 **THE OBJECT-LEVEL TEST IS THE SHARP ONE.** All 183 translation units built by
 both, `.comment` stripped, compared as bytes: **182 identical, 1 differing.**
-The one is `src/service/dtmf_detector.c`, and inside it `DTMF_MTD_detect` --
+The one is `src/service/Dtmf_Detector.c`, and inside it `DTMF_MTD_detect` --
 **261 instructions on both sides, the same multiset, a different order**, first
 divergence at instruction 27, code size unchanged. It matches on neither arm,
 so it moves no number. That is the entire measurable effect of Gentoo's 96
@@ -61671,14 +61671,14 @@ layout:
 
 Contiguity alone would prove nothing -- a unit boundary can fall between any
 two adjacent symbols, and the linker concatenates units in link order.  What
-carries it is that `vect16` and `vect4` are `v34hshak.c`'s in this tree and are
+carries it is that `vect16` and `vect4` are `V34hshak.c`'s in this tree and are
 adjacent THERE with nothing between them, while the object has exactly 0x10
 bytes between them and `rxvect4` occupying them.  A symbol cannot be inserted
 into the middle of another unit's block, so `rxvect4` is defined in the
 HANDSHAKE unit between those two, and declared `extern` in the receive unit
 that uses it.
 
-**NOT MOVED HERE.**  `src/pump/v34/v34hshak.c` is held by another session for
+**NOT MOVED HERE.**  `src/pump/v34/V34hshak.c` is held by another session for
 the diagnostics restoration and this branch does not touch it.  The move is a
 storage-class and file-placement change with no behaviour in it -- no
 differential test can pin it, and the evidence that it is right is the object's
@@ -61878,8 +61878,8 @@ call at each leaf where the index is statically known.
 comment above its own per-file rollup, and finding F605 named it: where the
 reconstruction splits one of the original's functions into static helpers,
 our sites sit in functions the blob has no symbol for and are counted against
-neither side. `callprog.c` is the tool's own worked example. **The per-file
-total is the number with no boundary to fall through.** For `v34hshak.c` the
+neither side. `Callprog.c` is the tool's own worked example. **The per-file
+total is the number with no boundary to fall through.** For `V34hshak.c` the
 four per-function rows sum to 305 missing (261 + 31 + 11 + 2), while the
 per-file total is `-235 (blob 338, ours 103)`. **Seventy sites are the
 difference**, and they are not missing -- they are in this file's static
@@ -61900,7 +61900,7 @@ found `updateAlpha` wrong in all three.
 work that was requested for `probeselect` does not exist to be done. What the
 `--missing` count is measuring there is our factoring. The real backlog is in
 the per-file rollup, where no helper can hide a site: `v8handshak.c` -8 (blob
-10, ours 0), `callprog.c` -9, `b103fp.c` -7, `dialer.c` -4, and `v23rx.c`,
+10, ours 0), `Callprog.c` -9, `b103fp.c` -7, `Dialer.c` -4, and `v23rx.c`,
 `b103.c` and `call.c` at -4 each.
 
 ### F2601. THE OBJECT HAS 43 DIAGNOSTIC SITES WHERE OUR SOURCE HAS 44 EXPANSIONS, BECAUSE GCC CROSS-JUMPED THE 9 dB ARM ONTO THE VARIABLE REQUEST'S TAIL
@@ -61973,7 +61973,7 @@ field were inherited the two runs would differ in it.
     w = (unsigned short *)(f->m + 0xa9ac);
     V34SetINFO1aBits(f->obj, (short *)w);
 
-at `v34hshak.c:4108`, and at `:6764` through the pointer `v34handshak` aims
+at `V34hshak.c:4108`, and at `:6764` through the pointer `v34handshak` aims
 at that same record -- three call sites in all, which is the count
 `v34info1a.cpp`'s own header states. It
 accumulates into what is there -- `bits[0] = (...) | (unsigned short)bits[0]`
@@ -62054,8 +62054,8 @@ is evidence that every `src/` landing is still AHEAD.**  Six branches sit *at*
 `626e2e7` -- `codegen-same-size`, `defect-rc-signedness`, `v90-select-mirror`,
 `fix/reproduce-default`, `mutation-rerecord` and `master` itself -- and three
 of them are known to be carrying `src/` edits that have not landed
-(diagnostics in `v34hshak.c` and `callprog/`, a signedness fix in
-`core/fixedrc.c`, float sign selects in `pump/v34` and `pump/v90`, and a
+(diagnostics in `V34hshak.c` and `callprog/`, a signedness fix in
+`core/FixedRC.c`, float sign selects in `pump/v34` and `pump/v90`, and a
 same-size codegen triage that may touch anything).  `mutsnap.py`'s key covers
 `Makefile`, `src/`, `include/`, `test/harness/` and `tools/mutate.py`, so the
 FIRST of those to land invalidates all 124 entries at once -- including any
@@ -62082,7 +62082,7 @@ a baseline, and the re-record wants a tree with the five agents landed.
 was written against `master` at `626e2e7`.  During this session's own
 `make phase` run `master` advanced seven commits to `6c0df0f`, and one of them
 -- `6470df6`, "struct rc_state is signed throughout, and the divide was a
-paraphrase" -- edits `src/core/fixedrc.c` and `include/dsplib/fixedrc.h`, both
+paraphrase" -- edits `src/core/FixedRC.c` and `include/dsplib/fixedrc.h`, both
 inside `mutsnap.py`'s key.  So all 124 entries were invalidated again while a
 single `make phase` was running, which is the whole argument for not having
 spent the afternoon re-recording them.  This finding is left dated rather than
@@ -62829,7 +62829,7 @@ So the real queue is small and is in the modules nobody has been to yet:
 `V34DATA, getting into data mode from Handshake, Tx bit rate - %d, Rx bit
 Rate - %d\n`.
 
-`callprog.c` cannot be settled this way and is the one row that still needs
+`Callprog.c` cannot be settled this way and is the one row that still needs
 reading: all 18 of `CALLPROG_Progress`'s resolvable strings are present and
 the other 11 sites push more than one string before the call, which is the
 case `--strings` documents itself as getting wrong. `--sites` is the tool for
@@ -62975,7 +62975,7 @@ control flow is a jump table that can be read exhaustively; the cross-jumped
 four are not, and guessing at them is what "wrong-but-plausible is worse than
 missing" forbids.
 
-### F2954. `toneiir_reset`'s `movzwl` IS A MEASURED DECLINE, AND `callprog.c`'s GAP IS NOT A STRING GAP AT ALL
+### F2954. `toneiir_reset`'s `movzwl` IS A MEASURED DECLINE, AND `Callprog.c`'s GAP IS NOT A STRING GAP AT ALL
 
 Two pieces of work that were handed over as available and are not, both
 declined on measurement rather than on argument.
@@ -62997,13 +62997,13 @@ It is not one, on two independent grounds:
     is the definition of fitting the compiler. 617's own conclusion is that
     everything else on that list stays untouched, and it still holds.
 
-**`callprog.c` -9.** Named as the next true gap after `v8handshak.c`. It is
+**`Callprog.c` -9.** Named as the next true gap after `v8handshak.c`. It is
 not a string gap: `--absent` finds **0 absent over `CALLPROG_Progress`, with
 11 of its 29 sites unresolvable**, and all 18 resolvable strings are in the
 tree. The 11 are the case `--strings` documents itself as getting wrong --
 more than one string pushed before a single call -- so nothing about them can
 be read off the format table either way, and the count gap is at least partly
-`callprog.c`'s own static helpers, which is the worked example in
+`Callprog.c`'s own static helpers, which is the worked example in
 `debugaudit.py`'s comment. Whatever is there needs `--sites` read by hand;
 what it is NOT is nine dropped messages.
 
@@ -64622,7 +64622,7 @@ THE LABELS CAME FROM THE SMALL FUNCTIONS INSTEAD:
     named from elsewhere, so the string is checked against known answers on
     both sides of the one it settles: +0x06 was `f06` and is `preemp`.
   - `VPcmV34SetDelays` prints "V34FEC, V34dmadelay set to %d, (ext delay=%d)"
-    with the stored value first: `f25c` is `dmadelay`. `v34hshak.c` calls the
+    with the stored value first: `f25c` is `dmadelay`. `V34hshak.c` calls the
     same offset "dma delay" in "...Modifying dma delay from %d to %d" -- a
     second, independent confirmation the rename found rather than needed.
   - `VPcmV34NotifyDP` sets +0x262 to 1 under "Valid in samples" and 0 under
@@ -64717,7 +64717,7 @@ into `obj->dmadelay0` and friends. 506 occurrences across seven files.
 
 THE SYMPTOM POINTED SOMEWHERE ELSE ENTIRELY. `make refs` did not report
 damaged anchors. It reported **17 LIVE MUTANTS**, in `v34hstx1.cpp`,
-`v34hshak.c`, `v34shell.c` and `v34pcmmain.cpp` -- files the rename had not
+`V34hshak.c`, `v34shell.c` and `v34pcmmain.cpp` -- files the rename had not
 touched and functions the batch had nothing to do with. A live mutant normally
 means a test has stopped discriminating, which is a serious result and invites
 a hunt through the test suite. Here it meant an anchor no longer matched its
@@ -65430,7 +65430,7 @@ source name the same quantity from opposite ends.
 
 **WHAT WOULD KILL THE AGC CANDIDATE, and it must be checked before anyone
 builds on this.** Three other sites do the same restore -- `dpskinit` twice
-(v34hshak.c:392, :541) and `setupreceiver` (:815). If the cold-start path
+(V34hshak.c:392, :541) and `setupreceiver` (:815). If the cold-start path
 reaches any of them before its phase 4, the asymmetry closes and mode 0's
 omission means nothing. **This is a hypothesis with a named refutation, not a
 mechanism.** `setupreceiver` is the one to look at first, by its name.
@@ -65525,7 +65525,7 @@ rather than by evidence, which is a weaker position than the AGC one occupied
 an hour ago, and the next step is to measure it rather than read it.
 
 **STILL UNCHECKED, and it is the honest gap:** `t44_accept_len26`
-(v34hshak.c:6663) is a SIXTH `agc_gain = f262` site, in a message handler, and
+(V34hshak.c:6663) is a SIXTH `agc_gain = f262` site, in a message handler, and
 whether the cold-start path receives that message before its phase 4 was not
 established. It does not rescue the candidate -- the measurement above is
 downstream of every restore site and says the gain is right -- but it is
@@ -68251,7 +68251,7 @@ load-bearing for its 8 kHz conclusion:
 - "`VPcmV34Create` writes an internal `0x2580` sample-rate field" -- the `0x2580`
   it writes is `bulk_len`, the bulk-delay ring length for the far echo canceller
   (`src/pump/v34/v34pcmcreate.cpp:284`, typed at `include/dsplib/v34fsk.h:637`,
-  consumed at `src/pump/v34/v34rx.c:623-624`). 9600 samples is one second at
+  consumed at `src/pump/v34/V34RX.c:623-624`). 9600 samples is one second at
   9600 Hz so the value may still be rate-derived, but it is not a sample-rate
   field.
 
@@ -69517,7 +69517,7 @@ because the control word is already set to round towards zero.
 
 Finding F876 records that the `fldlg2`/`fxch`/`fyl2x` sequence is what GCC
 emits for `log10()` "only under `-funsafe-math-optimizations`", and three
-files -- `Psd.cpp`, `V90Equalizer.cpp`, `VPcmFloModem.cpp` -- carry an inline
+files -- `psd.cpp`, `V90Equalizer.cpp`, `VpcmFloModem.cpp` -- carry an inline
 x87 helper on the strength of it.  The CONCLUSION is right and the flag is
 not.  Measured on the period compiler in `tools/toolchain/` (GCC 3.4.2 exact,
 `dsplibs-tc342`), one probe function whose body is
@@ -71555,12 +71555,12 @@ rules` warnings fall out as:
 
 | shape | warned sites | file(s) |
 |---|--:|---|
-| A  `*(int *)&o->f25d0` -- a short PAIR stored as one word | 15 | v34hshak.c, v34shell.c, v34k56.cpp, v34pcmmain.cpp |
+| A  `*(int *)&o->f25d0` -- a short PAIR stored as one word | 15 | V34hshak.c, v34shell.c, v34k56.cpp, v34pcmmain.cpp |
 | B  `*(int *)&o->vect[2 * n]` -- a short array read as points | 1 | v34shell.c |
 | C  `*(int *)&s->state[i].a` -- four shorts stored as two halves | 2 | v34shell.c |
 | D  `*(int *)&s->frame[0]` -- a wide field over two elements | 5 | v34shell.c |
-| E  `((short *)&obj->hist_2aa8[k])[0]` -- the ELEMENT TYPE is wrong | 2 | v34rx.c |
-| F  `(struct v34_receiver *)&(obj)->rxq` -- a whole-struct overlay | 2 | v34hshak.c |
+| E  `((short *)&obj->hist_2aa8[k])[0]` -- the ELEMENT TYPE is wrong | 2 | V34RX.c |
+| F  `(struct v34_receiver *)&(obj)->rxq` -- a whole-struct overlay | 2 | V34hshak.c |
 
 **The count is five files, not the six the row implies.**
 `src/pump/v34/v34hstx1.cpp` contributes ZERO warnings, because
@@ -71571,7 +71571,7 @@ just was not in the warning list.
 
 **FOUR MORE SITES ARE THE SAME DEFECT AND DO NOT WARN.**  GCC only sees
 through the BASE expression, so `((short *)&obj->hist_2aa8[k])[1]` at
-v34rx.c:1434 and :2383 are silent while their `[0]` partners warn.  And
+V34RX.c:1434 and :2383 are silent while their `[0]` partners warn.  And
 `demapFrame`'s `(&s->state[st].a)[i]` walks for `i` in 0..3 -- pointer
 arithmetic across four separately declared members -- are a different rule
 (6.5.6p8, not 6.5p7) with no warning at all and the same owner ruling against
@@ -71610,7 +71610,7 @@ stores per entry** -- `mov %si,0x2aa8(%edx)` at 0x5d0f7 and
 `mov %si,0x2aaa(%edx)` at 0x5d0fe.  A 32-bit field would have taken one
 `movl`; two `movw` to adjacent offsets is two fields.
 
-The header declared `int hist_2aa8[0x12c]` and both writers -- v34rx.c:1433
+The header declared `int hist_2aa8[0x12c]` and both writers -- V34RX.c:1433
 and :2382 -- reached the halves back out through
 `((short *)&obj->hist_2aa8[k])[0..1]`.  Now `short hist_2aa8[0x12c][2]`:
 the same 0x4b0 bytes at the same offset, four casts deleted, and the two
@@ -71728,7 +71728,7 @@ the names carried no meaning the offsets did not.  `t_v34shell` and
 
 ## F5305. `T3C_RX` is left as it is, and the reason is that the fix is an EMBED and not a cast
 
-Two of the 27 warnings are one line, `v34hshak.c`:
+Two of the 27 warnings are one line, `V34hshak.c`:
 
     #define T3C_RX(obj)	((struct v34_receiver *)&(obj)->rxq)
 
@@ -77329,7 +77329,7 @@ scheduling between the two and is 614's free column. Not chased.
 The rule this tree carries is that anchors break on RENAMES and on losing
 UNIQUENESS, not on new fields. This is the second half of it happening with no
 rename anywhere: writing `process(unsigned char *, unsigned int)` into
-`V90BitsToSymbol.cpp` cost five anchors in `v90btsproc.json` --
+`V90bitsToSymbol.cpp` cost five anchors in `v90btsproc.json` --
 `\t\tstatus = 1;`, the SIZE_NOT_SET `dsplibs_debug_printf`, the
 `dsplibs_debug_level > 1` line above it, `if (symbolsBlockSize == 0) {` and the
 `if (extraSymbolsPending)` tail -- every one of which had been unique and now
@@ -78503,7 +78503,7 @@ has the author's word for it.
 **The rename is still not made, and the reason is coordination and not
 evidence.**  `word_78` is spelled 45 times across nine files; `V90Equalizer`
 has a DIFFERENT member of the same name at its own +0x78, so a mechanical
-rename is unsafe; and `VPcmFloModem.cpp` plus two mutation sets refer to this
+rename is unsafe; and `VpcmFloModem.cpp` plus two mutation sets refer to this
 one by its offset name and belong to other work.  The evidence is recorded in
 `V90ConnectionEvaluator.h` so that the pass owning those files can make it in
 one move.  Naming it wrongly is worse than leaving it padded, and naming it
@@ -79036,7 +79036,7 @@ suite and these five live in four files, all four against `t_v90modprog`:
 | suite | source | mutations | caught | uncaught | unusable | equivalent |
 |---|---|--:|--:|--:|--:|--:|
 | `v90modprog` | `V90Modulator.cpp` | 61 | 57 | 1 | 0 | 3 |
-| `v90modprogbts` | `V90BitsToSymbol.cpp` | 20 | 18 | 0 | 0 | 2 |
+| `v90modprogbts` | `V90bitsToSymbol.cpp` | 20 | 18 | 0 | 0 | 2 |
 | `v90modprogmodem` | `V90Modem.cpp` | 6 | 6 | 0 | 0 | 0 |
 | `v90modprogp4m` | `V90Phase4Modulator.cpp` | 4 | 4 | 0 | 0 | 0 |
 
@@ -79150,7 +79150,7 @@ felt mechanical.
 - **Extend from the occurrence inside the RIGHT function.** A second, separate
   hazard when a file has overloads: growing from the file's FIRST occurrence
   makes the anchor unique and pins it to whichever overload comes first, which
-  for `V90BitsToSymbol.cpp` is not the one the label names. The repair has to
+  for `V90bitsToSymbol.cpp` is not the one the label names. The repair has to
   choose its starting occurrence inside the target definition's byte range and
   check the winning candidate is still there. `tools/anchorcheck.py`'s
   "lands in an arm their label does not name" check is the same idea one level
@@ -80377,7 +80377,7 @@ The sequence, all four steps taken in good faith:
 `d8102a5d` and `30c54b34` are byte-identical trees -- `git diff --stat`
 between them is empty -- so step 3 looked like step 2's dry run and was.  **The
 last amendment was not cosmetic**: `git diff --stat 30c54b34 ea9b651a` is
-`src/pump/v90/VPcmFloModem.cpp | 6 +++---` plus the test and the suite.  Six
+`src/pump/v90/VpcmFloModem.cpp | 6 +++---` plus the test and the suite.  Six
 lines of the reconstruction itself, and a mutation set recorded against source
 that was no longer in the tree.
 
@@ -80433,7 +80433,7 @@ and the highest number anywhere in the repository is 7573.
 
 `VPcmFloModem::v90RunDemodulator(float *, unsigned int, int *, int *)`
 (.text+0xd860, **0xbc5 = 3,013 bytes**) is reconstructed in
-`src/pump/v90/VPcmFloModem.cpp`, beside the `runPcmModem` that landed with
+`src/pump/v90/VpcmFloModem.cpp`, beside the `runPcmModem` that landed with
 finding F7571.  With it, both of the class's entry points exist and the
 analogue V.90 receive path runs end to end.
 
@@ -80561,7 +80561,7 @@ apparatus -- both sides built by `VPCMXF_Create`, the comparison surface
 discovered by walking every word that is a live allocation base on BOTH
 sides, and the three-way rule for a differing word -- with this function's own
 axes.  A binary of its own rather than more trials in `t_vpcmrunpcm` because
-a mutation set over `VPcmFloModem.cpp` scored by ONE binary cannot tell which
+a mutation set over `VpcmFloModem.cpp` scored by ONE binary cannot tell which
 of the two functions a row belongs to; `suites.json` already maps four sets
 over this file to four binaries for exactly that reason.
 
@@ -80639,7 +80639,7 @@ owner's.
 
 ### F7582. Arm 0x1f IS `setV34BaudForV34()`, byte for byte, and `runPcmModem`'s comment saying otherwise is retracted
 
-`src/pump/v90/VPcmFloModem.cpp`'s comment on `runPcmModem`'s case 0x1f reads
+`src/pump/v90/VpcmFloModem.cpp`'s comment on `runPcmModem`'s case 0x1f reads
 that the six stores there "are not either of `setV34BaudForV90`'s or
 `setV34BaudForV34`'s: index 1 is barred and index 5 is allowed, which is the
 opposite of both".
@@ -80717,7 +80717,7 @@ embedded `V90Phase4Modulator` at +0x50 -- beside the fuller class in
 `include/dsplib/V90Phase4Demodulator.h`.
 
 `v90RunDemodulator`'s MPnot arm reads that class's +0x3c and +0x38 (0xd9b8).
-`VPcmFloModem.cpp` already has the partial model, through `VPcmFloModem.h`
+`VpcmFloModem.cpp` already has the partial model, through `VPcmFloModem.h`
 and `V90SessionFlag.h`, so adding `#include "dsplib/V90Phase4Demodulator.h"`
 is a **redefinition the compiler rejects outright**.  That is worth recording
 precisely because CLAUDE.md's account of this hazard is that it fails
@@ -80881,7 +80881,7 @@ argument.
 `0257d7b5` is 245; the new binary is the only thing added to the tier and
 nothing else moved.  Writing the trials into `t_vpcmrunpcm` instead would have
 left the count at 245, which is why the binary is separate: a mutation set
-over `VPcmFloModem.cpp` scored by one binary cannot say which of the file's
+over `VpcmFloModem.cpp` scored by one binary cannot say which of the file's
 two entry points a row belongs to.
 
 `t_v90rundemod` itself is **95,714 checks in the differential group and 16 in
@@ -81245,8 +81245,8 @@ are in exactly three files.
 | `V90MappingParamsInt.cpp` | `setParamsInfoFromCPUnPck`, **callerless** |
 
 Not one is in `V90Modulator.cpp`, `V90Modem.cpp`, `V90ModemCtor.cpp`,
-`V90Phase4Modulator.cpp`, `V90BitsToSymbol.cpp`, `V90Mapper.cpp`,
-`VPcmFloModem.cpp`, `VPcmXfCreate.cpp` or `vpcm.c`.
+`V90Phase4Modulator.cpp`, `V90bitsToSymbol.cpp`, `V90Mapper.cpp`,
+`VpcmFloModem.cpp`, `VPcmXfCreate.cpp` or `vpcm.c`.
 
 **THAT CLOSES BOTH ESCAPE HATCHES 7520 LEFT OPEN.**  7520 declined to call the
 vendor's branch broken because the block "could be intended to arrive from the
@@ -81745,7 +81745,7 @@ first the buffer is zeroed, after the second it has just been filled by
 
 `v90rundemod`'s "the demodulator is run with the wrong sample count" anchored
 on the single line `modem.progress(rxbits, *(unsigned int *)nrx, in, n);`,
-which was unique in `VPcmFloModem.cpp` until `qcLineVerification` landed in
+which was unique in `VpcmFloModem.cpp` until `qcLineVerification` landed in
 the same file calling `V90Modem::progress` with the same argument list.
 `anchorcheck.py` reported `matches 2 time(s)` and `make one` refused --
 loudly, which is the good case; findings F347 and F7521 are what a
@@ -81758,7 +81758,7 @@ occurrence; the edit was made by hand and checked against the tool's rule.
 
 **7521's test, and it is not "the grown anchor is unique".**  What has to be
 proved is that it mutates the SAME SITE.  So: take `9ddfc5bc`'s
-`VPcmFloModem.cpp`, where **both** anchors match exactly once, apply each, and
+`VpcmFloModem.cpp`, where **both** anchors match exactly once, apply each, and
 compare the two mutants.
 
 	master:  short anchor matches 1, grown anchor matches 1
@@ -81880,7 +81880,7 @@ SIXTEEN-BIT load:
 and identically at 0xf8ea.  The 32-bit result IS stored, so this is CLAUDE.md's
 FORCED column and not 614's free one.  `include/dsplib/VPcmFloModem.h` said so
 in the same batch that wrote the member -- and
-`src/pump/v90/VPcmFloModem.cpp` copied the whole 32-bit field at both sites
+`src/pump/v90/VpcmFloModem.cpp` copied the whole 32-bit field at both sites
 anyway.  **The header carried the derivation and the source did not implement
 it**, which is finding F6100's shape with a comment and its own code rather
 than a comment and a tool.
@@ -83198,7 +83198,7 @@ facts in one function -- all of them read off relocations rather than out of
 instructions.
 
 **The five bytes were a statement order.**  The blob divides `out_rate` by the
-GCD first and `in_rate` second; `src/core/fixedrc.c` did the reverse, so the
+GCD first and `in_rate` second; `src/core/FixedRC.c` did the reverse, so the
 two quotients landed in each other's registers from the first `idiv` onward.
 Swapping the two lines closed all five.  The corroboration inside the same
 function is the loop below them, which tests `fixedRc_UpFact[mode]` before
@@ -83220,7 +83220,7 @@ inference from style:
   3.4 puts `const int x[]` in `.rodata`; `nm -S` on our object showed both
   tables as `R` before the change and `d` after.
 
-Nothing outside `fixedrc.c` names either table and no header declares them, so
+Nothing outside `FixedRC.c` names either table and no header declares them, so
 `static int` costs nothing.  With it, both sides' relocations target `.data`,
 `verdict()` compares them by name and they agree, and the function is
 **EXACT**.
@@ -83320,7 +83320,7 @@ a check that renders a clean number while measuring the wrong thing.
 **1. THE OBJECTS WERE STALE, AND NOTHING ANYWHERE WOULD HAVE SAID SO.**
 `build/tc_out` is written only by `tools/toolchain/build.sh`.  `make phase`
 does not build it and no Makefile rule depends on it, so the refinement merge
-changed `src/v8/v8v21.c`, `src/core/fixedrc.c` and `src/pump/v34/v34hshak.c`
+changed `src/v8/v8v21.c`, `src/core/FixedRC.c` and `src/pump/v34/V34hshak.c`
 and left the period objects untouched:
 
     newest source  05:15      newest object  04:19      200 objects
@@ -84050,7 +84050,7 @@ merge.
 
 ======================================================================
 
-### F7779. FOUR MORE IN `VPcmFloModem.cpp`, AND THE COMPILER REORDERED OUR SOURCE IN EVERY ONE
+### F7779. FOUR MORE IN `VpcmFloModem.cpp`, AND THE COMPILER REORDERED OUR SOURCE IN EVERY ONE
 
 Reserved block for this batch: **7779-7781**.  Every ref this repository knows
 about was swept for its highest `### <n>.` heading -- `refs/heads`,
@@ -85532,7 +85532,7 @@ whole functions, and every `find` still occurs exactly once.
                               (a) loadParams -- NOT the target, and out of
                                   the BYTES bucket
                               (c) C2, 4 differing bytes before and after
-    VPcmFloModem.cpp          order  3/16 -> 16/16, then REVERTED
+    VpcmFloModem.cpp          order  3/16 -> 16/16, then REVERTED
                               (c) NOTHING.  setPcmSessionType 5 differing
                                   bytes before and after, and the order WAS
                                   fully achieved, so this is a real null and
@@ -85543,7 +85543,7 @@ whole functions, and every `find` still occurs exactly once.
                                   pair, which is the region 7796 names as not
                                   reachable by definition order
 
-**`VPcmFloModem.cpp` WAS REVERTED THOUGH IT LOST NOTHING, AND THE REASON IS
+**`VpcmFloModem.cpp` WAS REVERTED THOUGH IT LOST NOTHING, AND THE REASON IS
 THE PRICE RATHER THAN THE GRADE.**  Reaching 16 of 16 took **twelve macro
 blocks hoisted** on top of the permutation -- the largest diff of the six
 files -- and bought zero symbols; the tree measures 474 with it reverted, which
@@ -85663,7 +85663,7 @@ It fires on an injected moved `#endif` and on a macro left below its user, and
 it is clean on every file this wave committed.  Four macro blocks in
 `V90AutoDigitalImpDetector.cpp`, three in `V90ConstellationDesigner.cpp` and
 two in `V90Equalizer.cpp` were hoisted above the definitions on its evidence;
-`VPcmFloModem.cpp` needed **twelve**, which is most of why that file was
+`VpcmFloModem.cpp` needed **twelve**, which is most of why that file was
 reverted rather than kept for a null.
 
 **THESE NUMBERS WERE TAKEN WITH A GAP.**  Master held 7796 and a sibling
@@ -86231,7 +86231,7 @@ type is silent when they reach a program through separate translation units and
 LOUD when they reach one `#include` list, and this pair is the second kind.
 The consequence is that no translation unit can hold both, so no `sizeof` can
 be taken against the wrong one -- and the five translation units that reach the
-partial model (`VPcmFloModem.cpp`, `V90Phase3Demodulator.cpp`,
+partial model (`VpcmFloModem.cpp`, `V90Phase3Demodulator.cpp`,
 `V90SessionFlag.cpp`, `x_v90digital.cpp`, `t_v90sessionflag.cpp`) were checked
 and **none of them writes `sizeof(V90Phase4Demodulator)` at all.**  The hazard
 is latent and 7584's account of it stands; it is still the tree's last carried
@@ -87743,7 +87743,7 @@ domain collapses to TWO distinct emissions:**
 identity introduces a local the current source does not have, and every cell
 that does not introduce one stays at fifteen.  **The domain of spellings that
 add nothing is exhausted, with no preimage** -- which is 7782's stopping rule,
-and the same shape as `V92Phase4Modulator::reset` (7771) and `VPcmFloModem.cpp`
+and the same shape as `V92Phase4Modulator::reset` (7771) and `VpcmFloModem.cpp`
 (7797/7798): the measurement is the deliverable and the diff is not kept.
 
 **THE TEST THAT SETTLED IT, and it is the one to reuse: NAME THE INSTRUCTION A
@@ -87798,7 +87798,7 @@ whichever register each split found free, so **changing what scratch a
 function consumes changes the state that arrives at its SUCCESSOR** -- with no
 definition moving anywhere.
 
-Measured on `src/service/dtmf_rx.c`, which has four symbols and was already
+Measured on `src/service/Dtmf_Rx.c`, which has four symbols and was already
 4 of 4 in the blob's `nm -n` order, so lever 3 had nothing positional to
 offer:
 
@@ -87816,7 +87816,7 @@ did, and the second inherits the cursor where the object left it.
 move this".  It also says "this symbol's own scratch consumption is part of
 the state its successors see", which is a reason to fix an EXPOSED symbol
 EARLY in a file and re-measure the whole file before touching anything below
-it.  `dtmf_rx.c` went 2 of 4 exact to 4 of 4 on one function's statement
+it.  `Dtmf_Rx.c` went 2 of 4 exact to 4 of 4 on one function's statement
 order.
 
 **The other side of the same mechanism, measured on eight files.**  Lever 3 is
@@ -88013,7 +88013,7 @@ N/A.**  The tell is an EXCESS of instructions with a MISSING call.  Counted as
 every call present; `indicateJaTransmission` 2/2; `_Z16VPcmV34SetDelays...`
 4/4; the four `v34pcmif.c` getters 0/0.  No call is missing on our side
 anywhere in the set, and where an instruction count differed it ran the wrong
-way for this lever.  `v34filters.c`, `dtmf_rx.c` and the `fpm_*.c` family are
+way for this lever.  `v34filters.c`, `Dtmf_Rx.c` and the `fpm_*.c` family are
 `.c` files with no classes, so the lever is N/A by construction.
 
 **Lever 12 -- spill width is forced.  NO.**  `fstps` count over the whole set:
@@ -89023,7 +89023,7 @@ emission order and change not one byte anywhere in the tree
 while 7796's kept neutral files are the counter-precedent.
 
 **Kept.** The two are not in conflict once the rule is read as what it was
-measuring. 9a's case was `VPcmFloModem.cpp`, which reached 16 of 16 in order,
+measuring. 9a's case was `VpcmFloModem.cpp`, which reached 16 of 16 in order,
 gained nothing, and had cost **twelve macro blocks hoisted** on top of the
 permutation -- preprocessor risk, in a tree where a moved `#endif` silently
 swallowed live code (7799). The price was the objection, not the nullity.
@@ -89891,7 +89891,7 @@ F7846 declined this over 2,218 cells in three domains. The boundary:
 
 - The object's `v90RunDemodulator` makes **51 calls and all 51 carry an
   `R_386_PC32`** -- and so do all 51 of ours. No LOCAL callee on either side.
-- `VPcmFloModem.cpp` does define two `static inline` helpers, `x87_log10` and
+- `VpcmFloModem.cpp` does define two `static inline` helpers, `x87_log10` and
   `x86_abs`, which is F7940's exact shape. **Both are used only inside
   `getUinfoValue`** (lines 536 and 558, against this function's 1389-1945), so
   neither is inlined here.
@@ -90329,7 +90329,7 @@ Order against the blob, for the next pass, so nobody re-derives it:
                   toneiir.c 8/8, dp_param.c 3/3, fpm_ecc.c 3/3, v8dp.c 4/4,
                   Queue.cpp 6/6, SineWave.cpp 3/3, v34scram.c 4/4
     OUT of order  FloatIIR.cpp 11/12, GenericToneDetector.cpp 4/7,
-                  v34rx.c 10/27, v34hshak.c 11/21, v34shell.c 7/12,
+                  V34RX.c 10/27, V34hshak.c 11/21, v34shell.c 7/12,
                   v8util.c 7/14, v8sig.c 7/15, and four fpm_*.c
                   -- all screened out above except v34shell.c
 
@@ -91049,7 +91049,7 @@ zero over all 734.
 `alpha_equal` ACCEPTS it -- a pure `%eax`/`%edx` exchange over five
 instructions, which is the tree's REGALLOC bucket and the bucket lever 3 exists
 for.  Lever 3's positional route is spent here: F7797 already took
-`VPcmFloModem.cpp` to 16 of 16 in the blob's emission order for no gain and
+`VpcmFloModem.cpp` to 16 of 16 in the blob's emission order for no gain and
 reverted it, at a cost of twelve macro hoists.
 
 Lever 3b's advance test says the symbol is nonetheless EXPOSED, taking a
@@ -91753,7 +91753,7 @@ the whole point:
 six — and the wider span of 45 contains not one BYTES, REGALLOC or UNRESOLVED
 row. It is SIZE and nothing else.** `b103fp.c` is 14 open symbols and 5,418
 bytes, every one SIZE; `v22fp.c` 2 of 2 SIZE; `v22_sre.c`, `v22_fse.c`,
-`v22dec.c`, `v22_pps.c`, `v22_mrf.c`, `v23rx.c`, `bwchdem.c` the same.
+`V22Dec.c`, `v22_pps.c`, `v22_mrf.c`, `v23rx.c`, `bwchdem.c` the same.
 
 (A census taken part-way through this pass reads 3 BYTES rather than 6,
 because three of the six had already closed. **Take the baseline census before
@@ -92222,7 +92222,7 @@ been run on them; splitting the difference silently is what produced 32,921.
 
 Measured as follows. `tools/service.py` reports `Dialer.c +18` as the largest
 open **data-mode** span at **9,539 bytes**, which made it look like the obvious
-next reconstruction target now that `src/dialer/dialer.c` and `dialercfg.c`
+next reconstruction target now that `src/dialer/Dialer.c` and `dialercfg.c`
 exist. **Every data-mode symbol in it is V.32.**
 
 `service.py --list data`, restricted to that span, is 35 symbols:
@@ -94588,7 +94588,7 @@ running when make is interrupted. Measure the case you actually have.
 **THE FOUR TRAPS. Three of them build clean and produce a wrong answer.**
 
 1. **The object name is not stem-preserving, so no pattern rule can express
-   it.** `src/pump/v34/v34hshak.c` → `src_pump_v34_v34hshak.c.o`: the whole
+   it.** `src/pump/v34/V34hshak.c` → `src_pump_v34_v34hshak.c.o`: the whole
    path, extension included, slashes to underscores — and `build.sh`'s own
    comment says the encoding is not reversible. Rules are generated forward,
    source → object, by `$(foreach)`/`$(eval)`; the reverse mapping stays where
@@ -94948,14 +94948,14 @@ The no-entry-point bucket's voice-area spans held twenty `.text` symbols,
 exported-API-surface class F8320's reverse-edge probe identified). All twenty
 are now in `src/`, each behind a differential test:
 
-    src/service/beepgen.c   GetGain 432, beepgen_get_freqs 469,
+    src/service/Beepgen.c   GetGain 432, beepgen_get_freqs 469,
                             check_for_valid 52, check_for_valid_easy 34,
                             zFLTUTL_Float2Linear 101, zFLTUTL_Linear2Float 49,
                             fComputeRMSValueFloatBuf 82,
                             fComputeRMSValueShortBuf 85, CrossDataLinks 123,
                             bSearchEnergy 267, FindCorrelation 275,
                             zfFLTUTL_GetMaxAbsValue 106
-    src/service/fdspkrnl.c  EchoCanceler 359, zFLTUTL_FloatMemSet 27,
+    src/service/Fdspkrnl.c  EchoCanceler 359, zFLTUTL_FloatMemSet 27,
                             bValidateEnergyValue 296, FDSP_Kernel_Loop 530,
                             TONE_generate 254, TONE_filter 185, TONE_kill 133
     src/service/voice.c     RingDetector_Reset 449
@@ -95122,14 +95122,14 @@ test says why. `t_ringdet` covers the full clamp/sign grid, 8,967
 configurations, whole-struct compare against an 0xa5 prefill, plus one
 captured-transcript configuration comparing all six formatted values.
 
-### F8466. bInternalBeepInProgress is defined in fdspkrnl.c, and its second referrer is the unwritten function at 0xaea27
+### F8466. bInternalBeepInProgress is defined in Fdspkrnl.c, and its second referrer is the unwritten function at 0xaea27
 
 The `.bss` word at 0x8ec, LOCAL in the blob, suppresses
 `bValidateEnergyValue` entirely when set. `relocscan --at .bss:0x8ec` finds
 exactly two referrers: 0xaebeb (bValidateEnergyValue) and 0xaea3f, inside
 the unwritten function between EchoCanceler's end (0xaea26) and
 zFLTUTL_FloatMemSet (0xaea70) -- presumably the beep path's setter, same
-TU. Defined non-static in `src/service/fdspkrnl.c` for the same testability
+TU. Defined non-static in `src/service/Fdspkrnl.c` for the same testability
 trade the LOCAL functions make (the blob side's copy has a `ref_` alias via
 the two-pass objcopy, so both sides are drivable). If the 0xaea27 function
 turns out to live elsewhere when written, the definition moves with the
@@ -95139,7 +95139,7 @@ unwritten, in the Beepgen.c span).
 ### F8490. `GetNextDigitAndReturnNextState` was already written -- it is the inlining-boundary artefact wearing a leaf's name
 
 The no-entry-point bucket lists it as 895 unwritten bytes in `Dialer.c +18`.
-It has been in `src/dialer/dialer.c` since the dialler pass, as the file
+It has been in `src/dialer/Dialer.c` since the dialler pass, as the file
 static the object also has (`t` at 0x07abb0, argument in `%eax` per F51's
 convention) -- and the modern compiler inlines it entirely into
 `DialerProgress`, so our object emits NO standalone symbol and every tool
@@ -95267,7 +95267,7 @@ names usage inference and marked so.  (2026-08-30)
 
 ### F8497. The SGD engine is WITHDRAWN, not written: `det_at` proves the object model wrong, and 3,603 checks are what caught it
 
-`src/fax/sgd.c` was written in this batch and is removed again rather than
+`src/fax/Sgd.c` was written in this batch and is removed again rather than
 committed.  Under the period compiler `t_faxsgd` fails 96 of 3,603 checks,
 and the shape of the failure is a layout claim and not an arithmetic one:
 
@@ -95284,7 +95284,7 @@ no amount of adjusting the detector's arithmetic reaches them, and F8495's
 "0x5c bytes, a 13-dword config copy" must be treated as UNCONFIRMED for the
 status half of the object.
 
-Withdrawn: `src/fax/sgd.c` (5 functions, 212 lines), `include/dsplib/sgd.h`,
+Withdrawn: `src/fax/Sgd.c` (5 functions, 212 lines), `include/dsplib/sgd.h`,
 `test/unit/t_faxsgd.c`.  The rest of the batch is unaffected -- nothing
 outside those three files names an `SGD_` symbol, only a comment in
 `src/dsp/fpm_xor.c` does, and `GenEQTrnSequenceV29` and `_handle_status`
@@ -95518,7 +95518,7 @@ count. The name therefore describes what its only two readers (`TxHdxTone`,
 `TxHdxNull`) do with it rather than the table it usually comes from; naming it
 `SYMBOL_LEN_84` would have been the wrong-name-believed-for-ever failure
 CLAUDE.md rates worse than padding. Macros `V32HDX_STATE_LEFT` and
-`V32HDX_BLOCK_CHARGE` in `src/pump/v32/v32txhdx.c`.
+`V32HDX_BLOCK_CHARGE` in `src/pump/v32/V32TXHDX.c`.
 
 ## F8566. The V.32 transmit states' count clamp is a SIGNED compare with an UNSIGNED SIXTEEN-BIT TRUNCATION, and it is not a `min`
 
@@ -95967,7 +95967,7 @@ a translation unit in the original, which agrees with the blob's `FILE` symbols.
 
 This tree splits by ROLE rather than by the blob's translation units, so the
 function lives in `src/pump/v32/v32fpctl.c` with the family it configures and
-`v32rxhdx.c` calls it. Differentially identical; a tier-2 residual of one call
+`V32rxhdx.c` calls it. Differentially identical; a tier-2 residual of one call
 sequence in one function.
 
 ## F8576. `RxHdxSequenceE` is the first reader AND writer found of `v32seq.h`'s five scratch registers, and it uses `regs[4]`
@@ -96562,7 +96562,7 @@ seven zeroes, and the two other seven-entry tables in the same module —
 than a key. `tools/relocscan.py --at .rodata:0x8544` names the one caller in a
 single command.
 
-### F8530. `src/core/fixedrc.c` allocates with `calloc` and frees with `free` where the object uses `sysdep_malloc` and `sysdep_free`, and nothing in the tree could see it
+### F8530. `src/core/FixedRC.c` allocates with `calloc` and frees with `free` where the object uses `sysdep_malloc` and `sysdep_free`, and nothing in the tree could see it
 
 Found by accident, and the accident is the point: `t_v22del.c` builds a V.22
 datapump with the BLOB's `v22_create` and tears it down with OUR `v22_delete`,
@@ -96579,8 +96579,8 @@ the harness's ledger never saw the calls.
 
     RcFixed_Create   b0f2f   six sysdep_malloc sites, three sysdep_memset
     RcFixed_Delete   b0d90   three sysdep_free sites
-    src/core/fixedrc.c:194,198   calloc
-    src/core/fixedrc.c:200,238,239   free
+    src/core/FixedRC.c:194,198   calloc
+    src/core/FixedRC.c:200,238,239   free
 
 **No existing test can fail on this**, which is why it survived. Every test
 that touches a rate converter builds it and destroys it on the same side, and
@@ -96602,7 +96602,7 @@ change itself.** `calloc` also ZEROES, and the object's `sysdep_malloc` does
 not — `RcFixed_Create` follows two of its six allocations with an explicit
 `sysdep_memset` and the rest with nothing, so a straight substitution changes
 which regions start zeroed and that is a behavioural question needing its own
-reading of all six sites. `src/core/fixedrc.c` is also outside the V.22 scope
+reading of all six sites. `src/core/FixedRC.c` is also outside the V.22 scope
 this was found under, and three V.22 reconstructions were in flight against
 the same base commit.
 
@@ -98327,7 +98327,7 @@ is the strongest evidence available here: neither function references any
 from, and every label these two emit is written as seven separate immediate
 byte stores rather than copied from a string constant.
 
-Both written to `src/service/data.c` on 2026-08-31 and driven by
+Both written to `src/service/Data.c` on 2026-08-31 and driven by
 `test/unit/t_datafmt.c`.
 
 ## F8701. The formatted renderer's whole layout is one idiom, `out += i + 1`, and it explains three of the four oddities
@@ -98372,7 +98372,7 @@ inlined `data_raw` do is a `movsbl`: 0x906a5, 0x906ce, 0x90709, 0x908f0,
 That is not an inconsistency, it is the argument types.  `cid->data` is
 `unsigned char[]`, which is how `cid.h` already declares it; `_look_for`,
 `_look_for_other_than` and `data_raw` all take a `const char *`, so the same
-bytes are re-read signed through those.  `src/service/data.c` casts at the
+bytes are re-read signed through those.  `src/service/Data.c` casts at the
 three call boundaries and nowhere else, and the resulting extension matches
 the object at every site.
 
@@ -98395,7 +98395,7 @@ apart.
 But `_look_for` (0x0903c0) and `_look_for_other_than` (0x090410) are
 `cid.c`'s, and finding F1410 puts `cid.c` and `Data.c` in different
 translation units.  GCC 3.4.2 cannot inline across that boundary, so Data.c
-must have had its own copies.  `src/service/data.c` writes them as
+must have had its own copies.  `src/service/Data.c` writes them as
 `data_look_for` and `data_look_for_other_than`, static, with the derivation
 in a comment; both are inlined away at -O3 and neither leaves a symbol, which
 is what the object shows.
@@ -98451,7 +98451,7 @@ eight defects, seven caught by the suite as first written, one not.
 
 ## F8710. Rxcid.c is closed, and `+0x024` was never a field of `struct cid`: it is `mrf.history`
 
-`src/service/rxcid.c` now carries all four of the original's `Rxcid.c`
+`src/service/Rxcid.c` now carries all four of the original's `Rxcid.c`
 (2026-08-31):
 
     reset_cid       .text 0x0918b0    517 bytes
@@ -98471,7 +98471,7 @@ make every reset allocate a new resampler buffer and leak the last one --
 `FPM_MRF_init` with `fresh` set does not inspect the existing pointer and does
 not free it (`src/dsp/fpm_mrf.c`).  It is not a field.  `struct fpm_mrf` is 0x1c
 bytes and sits at `cid + 0x0c`, so `mrf.history` is at `cid + 0x24` exactly, and
-the object is asking "have I allocated yet".  `src/service/cid_mtd.c` had
+the object is asking "have I allocated yet".  `src/service/Cidmtd.c` had
 already worked out the arithmetic ("the `fpm_mrf` at +0x0c has one at +0x24")
 without drawing the conclusion.  The source is `FPM_MRF_init(&cid->mrf, &cfg,
 cid->mrf.history == NULL)`, `t_rxcid` requires the pointer to be UNCHANGED
@@ -98576,7 +98576,7 @@ against one it accepts, and all four gate sites are then caught.
 
 ## F8713. What `t_rxcid` pins and what it provably cannot: eight mutations that are equivalent, not missed
 
-Fifty-three distinct mutations were injected into `src/service/rxcid.c` and the
+Fifty-three distinct mutations were injected into `src/service/Rxcid.c` and the
 test re-run for each (F134's ritual).  Forty-five are caught.  The eight that
 are not were each traced, and all eight are behaviourally equivalent to the
 original -- they are limits of the differential tier, not gaps in the fixture,
@@ -98622,7 +98622,7 @@ with different lengths, different sections and different linkage:
     _V23_MRF_FILT   .rodata 0x0081c0   96 bytes   48 shorts   GLOBAL `R`
      V23_MRF_FILT   .rodata 0x009240  180 bytes   90 shorts   LOCAL  `r`
 
-The global is `src/pump/v23/v23filt.c`'s, and the name-collision note in
+The global is `src/pump/v23/V23filt.c`'s, and the name-collision note in
 `include/dsplib/v23fp.h` covers it.  The local is Rxcid.c's own static and is
 what `reset_cid` installs, with `branches = 9`, `decimate = 10`, `taps = 90` --
 so `FPM_MRF_filter` reads it as nine polyphase phases of ten by its coefficient
@@ -99118,7 +99118,7 @@ or `sqrt` relocation anywhere in the 1.2 MB and no such symbol defined in it**
 had the flag on.
 
 `fft.cpp` puts `#pragma GCC optimize` at file scope because the whole file
-wants it. `beepgen.c` cannot: the reciprocal tails and mean-removed sums of
+wants it. `Beepgen.c` cannot: the reciprocal tails and mean-removed sums of
 `fComputeRMSValue*Buf`, `bSearchEnergy` and `FindCorrelation` share the
 translation unit and are already differentially green under the tree's
 ordinary flags, and reassociation is exactly what would move them. So the
@@ -99177,7 +99177,7 @@ are `<= 7` and `<= 1`, which is what the reconstruction spells.
 
 ### F8766. The `Beepgen.c` span is NOT all callerless surface, and the reverse edges are what say so
 
-*2026-08-31.* `beepgen.c`'s header comment said none of its symbols has an
+*2026-08-31.* `Beepgen.c`'s header comment said none of its symbols has an
 internal caller in the blob, which was true of the eleven leaves that had been
 written. It is not true of the span: `readelf -r` finds `beepgen_create`
 called once, from `voice_create` at 0xac2d5, `create_dtmf` called from
@@ -99457,7 +99457,7 @@ the step feeds every tap update in `EchoCanceler`, so the two sides' filters
 diverge from the first adapting block. The differential tier found it on the
 first run; the header's comment had been wrong for as long as it existed.
 
-`src/service/fdspkrnl.c` now spells the constant as the float's exact value,
+`src/service/Fdspkrnl.c` now spells the constant as the float's exact value,
 `0.031999997794628143310546875f`, which every correctly-rounding compiler must
 reproduce bit for bit. `0.0319999978f` also works on GCC 14 and was declined:
 nine significant digits round-trip a float only if the compiler's
@@ -99481,7 +99481,7 @@ and `mov %dx,0x4(%ebx)`. A four-byte load plus a two-byte load, and the
 same pair on the way out, is GCC's **structure assignment of a six-byte
 object**, not three field copies -- three shorts copied individually would
 be three `movzwl`/`movw` pairs. So the ring's first six bytes are a nested
-struct of the parameters, and `src/service/fifo8.c` spells it that way.
+struct of the parameters, and `src/service/Fifo8.c` spells it that way.
 
 The blob agrees by name: the default instance it reads when the argument is
 NULL is a LOCAL `.data` object at 0x83a0 called **`FIFO_CFG`** -- the
@@ -99776,7 +99776,7 @@ across the binary.
 
 ### F8781. `TONE_create` is a 2100 Hz answer-tone builder, and its allocation gate has TWO conditions rather than one
 
-*2026-08-31.* 521 bytes at 0xaf690, `src/service/fdspkrnl.c`, with
+*2026-08-31.* 521 bytes at 0xaf690, `src/service/Fdspkrnl.c`, with
 `TONE_CFG` (`.data` 0x83c0, 48 bytes) and the `ToneLPF` it points at
 (`.data` 0x8400, 212 bytes). Proved by `t_tonecreate` at 86,136 checks,
 mutation set 33 of 33 caught.
@@ -99786,7 +99786,7 @@ mutation set 33 of 33 caught.
 over the head of a 0x1c8-byte tone object, and both configs in `.data` are
 0x30 bytes. So the author cannot have declared them as whole tone objects,
 and `struct fdsp_tone_cfg` is a real type rather than a convenience;
-`fdspkrnl.c` asserts its eight named fields against `struct fdsp_tone`'s
+`Fdspkrnl.c` asserts its eight named fields against `struct fdsp_tone`'s
 offsets so the two layouts cannot drift apart silently.
 
 **THE GATE IS `test %edx,%eax` OVER TWO `set` RESULTS** (0xaf6d9): `setne`
@@ -99840,7 +99840,7 @@ positive length is worth checking against D995 when someone does write it.
 ### F8782. `FDSP_DP_Create` and `FDSP_DP_Delete`: the kernel's constructor names its own two arguments, and both functions dereference a channel before they test it
 
 *2026-08-31.* 650 bytes at 0xae5c0 and 157 at 0xae520, both written into
-`src/service/fdspkrnl.c` with the two `.bss` words they touch. Proved by
+`src/service/Fdspkrnl.c` with the two `.bss` words they touch. Proved by
 `t_fdspdp` at 24,580 checks, mutation set 22 of 22 caught.
 
 **THE ARGUMENTS ARE NAMED BY THE OBJECT'S OWN FORMAT STRING**, which is
@@ -100429,7 +100429,7 @@ over every value either function can produce and no differential test can
 separate them.
 
 **Recorded, and NOT acted on.** Retyping either would change the codegen of
-`src/service/fdspkrnl.c` and `src/callprog/cadence.c`, which are settled
+`src/service/Fdspkrnl.c` and `src/callprog/Cadence.c`, which are settled
 against the object on their own account; the honest move is to leave the
 declarations where the definitions put them and hand this to a codegen pass
 that can measure both arms under the period compiler. It is the same class of
@@ -100463,7 +100463,7 @@ three things, and three fields elsewhere were renamed or retyped:
   allocating path and nothing ever builds it; `detector_delete`'s NULL guard
   is the only code that looks at it. Nothing names it, so nothing names it.
 
-The two renames reach `src/service/beepgen.c`'s `detector_delete`,
+The two renames reach `src/service/Beepgen.c`'s `detector_delete`,
 `test/unit/t_voicedpdel.c` and the three anchors in
 `test/mutations/voicedpdel.json` that quote that function's text; all four
 were updated together and `mutsnap.py --check` is unchanged at 228 stale, 0
@@ -100670,7 +100670,7 @@ has no arm for opcode 4, and `voice.h` gives it no name.
 `struct fdsp_kernel *` at both ends. `voice.h` had it as `int *`.
 
 It is spelled `void *` rather than the true type because `FDSP_DP_Run`
-(declared in beepgen.h, defined in src/service/beepgen.c) declares the SAME
+(declared in beepgen.h, defined in src/service/Beepgen.c) declares the SAME
 object `int *status` -- that function's only use of it is to store 2 into the
 kernel's `int_00` -- and `voicedp.c:697` passes this field straight into it.
 `void *` is the one spelling both call sites accept without a cast; `int *`
@@ -101052,7 +101052,7 @@ The array is therefore sized for 9600 and nothing else, which is the rate
 `fixedrc.h`'s banner already says the host runs at. That is a coherent design
 with two unusable options bolted on, not three supported rates.
 
-`src/core/fixedrc.c` tolerates a NULL handle where the object does not, which
+`src/core/FixedRC.c` tolerates a NULL handle where the object does not, which
 is a pre-existing and documented tolerance in that file and is why the 8 kHz
 case cannot be compared differentially at all. t_voiceproc asserts the
 PRECONDITION on both sides instead -- that an 8 kHz object has both converter
@@ -102260,7 +102260,7 @@ into a measurement: it calls both sides through an `int`-taking function pointer
 with 0x10000, whose low half is zero. The narrowing reading writes 0; a 32-bit
 reading writes nothing. The blob writes 0.
 
-`src/fax/v29.c` spells it `V29TX(modem)->smc.cfg.direct`, which reaches through
+`src/fax/v29.c` spells it `V29TX(modem)->Smc.cfg.direct`, which reaches through
 `v29data.h`'s existing struct rather than adding a fourth statement of the same
 layout, and `v29.c` carries an offset assertion tying the two together.
 
@@ -103032,7 +103032,7 @@ them, not by comparing sizes:
 
 Not "the same shape" and not "the same instructions" -- the same bytes, in the
 same order, at two addresses. So the source is `src/dsp/fpm_sdm.c` and
-`src/dsp/fpm_smc.c`'s, and `src/fax/sdm.c` and `src/fax/smc.c` are the same
+`src/dsp/fpm_smc.c`'s, and `src/fax/SDM.c` and `src/fax/Smc.c` are the same
 text with the names shortened.
 
 **Two consequences worth having written down.** The first is that the STRUCTS
@@ -103413,7 +103413,7 @@ that means nothing, and each a deviation in its own right:
   (D1060), and `n <= hist_len`, or the window base wraps (D1063);
 - `1 <= sym_bits <= 15`, or `SGD_pattern_det` never terminates (D1062).
 
-**Seventeen hand injections into `src/fax/sgd.c`, 16 caught.** Run by hand
+**Seventeen hand injections into `src/fax/Sgd.c`, 16 caught.** Run by hand
 rather than registered, because a suite that cannot be recorded reads MISSING
 to `mutsnap.py --check` and fails the gate, and the snapshot is 0 current /
 228 stale (F8846). Caught: both `SGD_correlate` mutants, four of five in
@@ -103448,7 +103448,7 @@ The rest of it: `sym_bits` 8, `hist_len` 50, `hist_extra` 1, `seq_len` 1,
 `ref_margin` 0x2000, and all three pattern words 0. `hist_extra == ref_len`,
 which is D1061's invariant held by hand.
 
-Reconstructed in `src/fax/sgd.c` pointing at OUR `FPM_xor_table`, so the two
+Reconstructed in `src/fax/Sgd.c` pointing at OUR `FPM_xor_table`, so the two
 instances hold two legitimately different addresses. `t_faxsgd` compares them
 by what they POINT AT -- ours against `FPM_xor_table`, the blob's against
 `ref_FPM_xor_table` -- and compares the other nineteen fields one at a time,
@@ -103561,7 +103561,7 @@ ignored.
 **The bit order HDLC wants is arranged OUTSIDE this function**, by
 `faxvmi_byte_reverse`, which is why an unreflected 0x1021 is the right
 polynomial here and not the reflected 0x8408 that a bare "HDLC FCS" would
-suggest. `getbit` in `src/pump/v34/v34hshak.c` computes the same polynomial
+suggest. `getbit` in `src/pump/v34/V34hshak.c` computes the same polynomial
 the same way for V.34's CRC, and `v8_crc` for V.8's.
 
 **Checked rather than asserted.** `t_faxframing` carries `crc_bitwise`, a
@@ -108952,7 +108952,7 @@ from `src/fax/v17.c`:
 
 - **The name carries no protocol prefix.** Every other config `SetTxModeV17`
   reads is prefixed for its own module -- `SMCv17_CFG`, `V17TX_SYM_SIZE` -- the
-  way `smc.c`'s header records `V29TX_SMC_*` are V.29's own instantiations of
+  way `Smc.c`'s header records `V29TX_SMC_*` are V.29's own instantiations of
   a shared shape. A bare `SGD_CTL` reads as shared infrastructure, not a V.17
   table.
 - **`closure.py --missing` on V.27ter's and V.29's own transmit families
@@ -108963,7 +108963,7 @@ from `src/fax/v17.c`:
   exactly**, and `dis.py` on `TxNextStateV17` shows it read as a VALUE at
   `SGD_CTL+4` (`mov 0x4,%edx <== R_386_32 SGD_CTL`) and copied into a
   locally-built request passed to `SGD_control` -- so it is very likely a
-  shared scratch/template `struct sgd_control_req`, and `sgd.c` -- which
+  shared scratch/template `struct sgd_control_req`, and `Sgd.c` -- which
   already carries `SGD_CFG`, the object's other shared SGD default -- is the
   best-supported guess for its home. `class1tx.c` cannot be ruled out from
   the evidence gathered here; nothing traced settles it.
@@ -109261,14 +109261,14 @@ re-prove. `V??TXP_INT_0008`/`INT_0004` is set to 1 in the same fixtures so
 after confirming the FAIL, per CLAUDE.md's F134 rule -- a detector shown only
 passing is indistinguishable from a dead one. (2026-09-01)
 
-## F9700. `SGD_CTL` lands under `sgd.c`, unambiguous unlike `FIFO_CFG` -- and it is the wave's real chokepoint, unblocking V.17/V.27ter/V.29's transmit families at once
+## F9700. `SGD_CTL` lands under `Sgd.c`, unambiguous unlike `FIFO_CFG` -- and it is the wave's real chokepoint, unblocking V.17/V.27ter/V.29's transmit families at once
 
 F9600 measured `SGD_CTL` (.bss 0x0008c8, 8 bytes) as the sole remaining
 external blocker on V.17's ten-symbol transmit half-duplex unit and declined
 to write it under `v17.c`'s name, on the ground that a bare, unprefixed name
 read symmetrically by all three TX modulation families is shared
 infrastructure and not any one protocol's table -- but left the home
-unconfirmed between `sgd.c` and `class1tx.c`.
+unconfirmed between `Sgd.c` and `class1tx.c`.
 
 **FIRST, THE F9500 CHECK THIS BRIEF ASKED FOR.** F9500 corrected three prior
 findings that had wrongly declined `FIFO_CFG` as unwritably ambiguous, when
@@ -109284,11 +109284,11 @@ It was never actually ambiguous; F9600 declined it on OWNERSHIP grounds (no
 file to put it in was this wave's to write), not on a duplicate-definition
 hazard, and that reading holds up.
 
-**THE HOME IS `sgd.c`, CONFIRMED BY THE OBJECT AND NOT JUST THE OLD
+**THE HOME IS `Sgd.c`, CONFIRMED BY THE OBJECT AND NOT JUST THE OLD
 BEST GUESS.** `tools/relocscan.py --at .bss:0x8c8` finds exactly 13
 referring instructions in the whole 1.2 MB, all in `TxNextStateV17` (7),
 `TxNextStateV27` (4) and `TxNextStateV29` (2) -- confirmed by address
-against `nm`'s ranges for those three symbols, none elsewhere. `sgd.c`
+against `nm`'s ranges for those three symbols, none elsewhere. `Sgd.c`
 already holds `SGD_CFG`, the object's other shared SGD default, and no
 V.17/V.27/V.29-specific file is a referrer at all.
 
@@ -109317,7 +109317,7 @@ relocation should re-derive it from `dis.py`'s raw bytes first.
 
 **ALL 13 SITES ARE A LOAD OF `SGD_CTL+4` (the `det` half of
 `struct sgd_control_req`), NEVER A STORE, AND `SGD_CTL+0` (`gen`) HAS NO
-REFERRER ANYWHERE IN THE OBJECT.** So `SGD_CTL` is written into `sgd.c` as
+REFERRER ANYWHERE IN THE OBJECT.** So `SGD_CTL` is written into `Sgd.c` as
 a plain zero-initialised `struct sgd_control_req SGD_CTL;` in `.bss` --
 matching the object exactly, since nothing ever stores into it and there is
 no other value it could hold. Every one of the three TX families' calls
@@ -110187,7 +110187,7 @@ swapping `V21RXCTL_SET_HDX_INT0000` for `V21RXCTL_REINIT` in
 ## F9910. V.17's transmit half-duplex machine lands whole, all twelve symbols in one commit: `TxNextStateV17`, its nine `TxHdx*V17` states, `V17TX_create` and `V17TX_CFG`
 
 F9600 measured the shape last wave and left it blocked on `SGD_CTL`
-(sgd.c/sgd.h), the last external dependency; that landed separately in the
+(Sgd.c/sgd.h), the last external dependency; that landed separately in the
 interim (F9700), so `tools/closure.py --missing` over all twelve names now
 returns exactly the twelve, 4,145 bytes, with nothing else unwritten:
 `TxNextStateV17` (1,439 bytes), `V17TX_create` (1,043), the nine
@@ -111291,25 +111291,25 @@ observable the same way.** The `class1` field gets the full allocation-log
 treatment (`t_class1delete.c`'s own technique -- both sides build an
 identically shaped `fax_ctx` inside one `harness_alloc_reset()` window and
 the test compares `frees`/`live`/`bad_free`), across presence x three debug
-levels. `rc_a`/`rc_b` do NOT: `src/core/fixedrc.c`'s `RcFixed_Create`/
+levels. `rc_a`/`rc_b` do NOT: `src/core/FixedRC.c`'s `RcFixed_Create`/
 `RcFixed_Delete` call plain `calloc`/`free`, not `sysdep_malloc`/
 `sysdep_free`, so neither side's traffic through them shows up in
 `harness_alloc` at all when `ours` calls them -- but `ref_RcFixed_Create`/
 `_Delete`, the BLOB's own compiled code, DOES route through the tracked
 `sysdep_malloc`/`sysdep_free`, so an `ours`-vs-`blob` frees comparison
 across a real handle shows 0 vs 2 for reasons entirely internal to
-`fixedrc.c`, already-merged code this pass does not touch. **THIS IS AN
-EXISTING PROPERTY OF `fixedrc.c`, REPORTED HERE AND NOT FIXED** -- it is
+`FixedRC.c`, already-merged code this pass does not touch. **THIS IS AN
+EXISTING PROPERTY OF `FixedRC.c`, REPORTED HERE AND NOT FIXED** -- it is
 outside this wave's three files, and CLAUDE.md's own register (`docs/
 method/compilers.md`) is the right place for whoever owns that TU to weigh
 whether it is a deviation worth recording. The `rc_a`/`rc_b` half of
 `t_faxdelete.c` therefore uses REAL `RcFixed_Create` handles (a fabricated
 pointer is unsafe: `RcFixed_Delete` dereferences `h->state` unconditionally
-on a non-NULL `h`, and `struct rc` is opaque outside `fixedrc.c`) and only
+on a non-NULL `h`, and `struct rc` is opaque outside `FixedRC.c`) and only
 proves the run completes with no bad free and no TRACKED leak (`ctx`
 itself) across all four presence combinations -- which still catches a
 skipped call, an early return, or a wrong pointer crash; it does not, and
-cannot without touching `fixedrc.c`, cross-check the exact free count for
+cannot without touching `FixedRC.c`, cross-check the exact free count for
 this half.
 
 **NOTHING HERE CONTRADICTS THE BRIEF'S OWN HYPOTHESIS ABOUT ORDERING** --
@@ -112604,7 +112604,7 @@ explicitly at each site:**
 
 **The blocker every one of these recorded was the SAME shape and not new
 uncertainty**: `t_v90leaves.cpp`, `t_v90conneval.cpp`, `t_v90p4ddec.cpp`,
-`VPcmFloModem.cpp` and this class's own offset-assert macros all spelled the
+`VpcmFloModem.cpp` and this class's own offset-assert macros all spelled the
 field by its old name, so a rename in the header alone would not compile.
 This pass carried the rename through every one of those referrers (checked by
 grep, scoped to member-access sites on a `V90ConnectionEvaluator *`/object, not
@@ -112651,13 +112651,13 @@ this pass -- a rename cannot add or remove a check -- and `tools/onedef.py`,
 ## F10123. Naming the V.34 receive cluster: 37 fields promoted in `struct v34_receiver`, and the mutation-test blast radius that stopped the rest
 
 *2026-09-03.* A naming-only pass over `include/dsplib/v34recv.h` and
-`src/pump/v34/v34rx.c` -- the heaviest concentration of bare `fNNN` fields in
+`src/pump/v34/V34RX.c` -- the heaviest concentration of bare `fNNN` fields in
 the tree, all already fully reconstructed and differentially green. The
 struct's own comments already carried most of the derivations (format
 strings, callers, direct usage); what was missing was the rename itself.
 
 **The rename is not local.** `struct v34_receiver` is shared with
-`v34hshak.c`, `v34hstx1.cpp`, `v34pcmif.c`, `v34diag.cpp`, `v34pcmcreate.cpp`
+`V34hshak.c`, `v34hstx1.cpp`, `v34pcmif.c`, `v34diag.cpp`, `v34pcmcreate.cpp`
 and eleven `test/mutations/*.json` fixtures whose `"find"`/`"replace"` strings
 match those files' source TEXT byte for byte. Renaming a field used by any of
 them requires updating every one of those references too, and getting a
@@ -112666,11 +112666,11 @@ stops that mutation from ever being injected, which is the exact silent-loss
 failure mode findings F2157 and F3002 already measured for this project's
 mutation suites. So before touching a single field, every one of them was
 grepped across the whole tree (excluding `re/`) for real code references
-outside `{v34recv.h, v34rx.c, t_v34rx.c, t_v34demod.c,
+outside `{v34recv.h, V34RX.c, t_v34rx.c, t_v34demod.c,
 test/mutations/v34rx.json}` -- the set this pass could safely fix by hand.
 
 **37 fields renamed**, all verified zero-blast-radius outside that set (one,
-`rms_idx`/f19c, needed three lines fixed in `v34hshak.c` -- direct code, no
+`rms_idx`/f19c, needed three lines fixed in `V34hshak.c` -- direct code, no
 mutation fixture depends on its text, so still safe):
 `vectpp_idx`, `agc_pair_count`, `rms_idx`, `trn_ref_sr`, `prev_quadrant`,
 `mix_carrier_step`, `mix_carrier_phase`, `slow_ramp`, `ppm_acc`, `ppm_count`,
@@ -112682,7 +112682,7 @@ mutation fixture depends on its text, so still safe):
 `eq_out_i1`, `eq_out_q1`, `eq_out_i2`, `eq_out_q2`, `rtncount`. All were pure
 identifier substitutions over the struct declaration, its offset comments,
 the `V34RX_ASSERT` table, and every `rx->`/`d->`/`s->`/`a->` site in
-`v34rx.c` plus the matching test/fixture sites -- no type, no offset and no
+`V34RX.c` plus the matching test/fixture sites -- no type, no offset and no
 byte of generated code moves, confirmed by `make one T=t_v34rx` (`offsets:
 1980 annotations, all match __builtin_offsetof`, and the period differential
 unchanged) after fixing one transcription slip: `f1c8`/`slow_ramp` is `int`
@@ -112692,7 +112692,7 @@ after it as mismatched -- exactly the class of self-inflicted regression the
 "pure rename must not move a byte" rule exists to catch.
 
 **~20 fields have an equally solid derivation and were left bare**, because
-every one of them has at least one real-code reference in `v34hshak.c`,
+every one of them has at least one real-code reference in `V34hshak.c`,
 `v34hstx1.cpp`, `v34pcmif.c`, `v34diag.cpp`, `v34pcmcreate.cpp` or a mutation
 fixture for one of those files: `rxsymcnt` (f124), `pulls_per_call` (f128),
 `interp_phase`/`interp_step`/`interp_wrap`/`interp_step_base`
@@ -112702,13 +112702,13 @@ fixture for one of those files: `rxsymcnt` (f124), `pulls_per_call` (f128),
 (f224), `sig_energy` (f248), `agc_gain_init` (f262), `subframe_count`
 (f266), `fir_coeffs` (f2a4), and `retrain_gate` (f19e, see below). Their
 derived names are recorded in `v34recv.h`'s comments as `-- derived: NAME,
-withheld (F10123)` so a future pass that also touches `v34hshak.c` (and its
+withheld (F10123)` so a future pass that also touches `V34hshak.c` (and its
 mutation fixtures) does not have to re-derive them -- only apply them.
 
 **One correction, not just a rename-in-waiting.** `f19e`'s comment claimed
 "cleared alongside f19c by `dpskinit`, which is the only thing in the object
 that touches it -- so it is the RMS window's second scalar and nothing yet
-reads it back." That was wrong: `v34hshak.c`'s `RX_PHASE2_CALL` step reads it
+reads it back." That was wrong: `V34hshak.c`'s `RX_PHASE2_CALL` step reads it
 as a one-shot latch gating the retrain tone-detector after the phase-2
 symbol counter passes 0x125f (six references, plus a mutation fixture that
 mutates two of them). Left bare for the same blast-radius reason as the
@@ -112727,7 +112727,7 @@ with both roles spelled out in the comment instead of a single guessed name.
 
 **Zero evidence, left bare:** `f1d4`, `f1e4`, `f1e8`, `f1f0`, `f22e` (each
 written once, by `rxtiminginit`, and never read anywhere in the tree) and the
-eight-short run `f252`..`f260` (never referenced by `v34rx.c` at all; the
+eight-short run `f252`..`f260` (never referenced by `V34RX.c` at all; the
 only other touches are unconditional zeroing on hang-up/renegotiation in
 `v34pcmif.c`, with no reader found anywhere). `pad_*` regions are unchanged.
 
@@ -112855,7 +112855,7 @@ naming pass should make unilaterally. `byte_7f5c`, `pad_*`, `block_6c0c` and
 the three undifferentiated `array_7dd8`/`array_7e2c`/`array_7ed4` stay
 exactly as the header already, correctly, says: no evidence read touches
 them beyond a clearing store. Scope for the six renamed fields: `VPcmFloModem.h`,
-`VPcmFloModem.cpp`, `VPcmFloModemCtor.cpp`, `VPcmXfCreate.cpp`,
+`VpcmFloModem.cpp`, `VPcmFloModemCtor.cpp`, `VPcmXfCreate.cpp`,
 `t_v90rundemod.cpp`, `t_vpcmrunpcm.cpp`, `t_vpcmep3.cpp`, `t_vpcmqcline.cpp`,
 `t_vpcmflomodem.cpp`, `t_v34info1a.cpp` (one assignment site; the test's OWN
 unrelated `ta->flag173d` local field, no underscore, was left as it is) and
@@ -112900,7 +112900,7 @@ left alone. (2026-09-04)
 
 ### F9341. Naming pass over the V.34 handshake/FSK cluster: 84 declared fields plus 8 carved out of four pad regions, none left as a bare `fNNNN`
 
-Scope was `include/dsplib/v34fsk.h`, `src/pump/v34/v34hshak.c`,
+Scope was `include/dsplib/v34fsk.h`, `src/pump/v34/V34hshak.c`,
 `src/pump/v34/v34hstx1.cpp` and `src/pump/v34/v34shell.c` -- the four files
 whose bare `fNNNN` identifiers this pass was asked to resolve -- and the
 identifiers turned out to name fields in THREE shared structs, only one of
@@ -112911,7 +112911,7 @@ rule puts the field's name at its declaration, not at its use site -- so both
 headers were edited too, plus every OTHER file in the tree that names the
 same field, tree-wide, or the build would not link. That turned out to be 39
 more files (`v34diag.cpp`, `v34digital.c`, `v34pcmif.c`, `v34pcmmain.cpp`,
-`v34rx.c`, `VPcmFloModem.cpp`, `TAG_DiagnosticResults.h` and 24 `test/unit/`
+`V34RX.c`, `VpcmFloModem.cpp`, `TAG_DiagnosticResults.h` and 24 `test/unit/`
 files that construct `struct v34_object`/`struct v34_receiver` directly), plus
 25 `test/mutations/*.json` files whose `find`/`replace` anchors are literal
 source text and went stale the moment the identifiers under them changed --
@@ -112927,7 +112927,7 @@ separately, keyed on the `rx->`/`obj->` prefix at each use site, because a
 blind tree-wide substitution would have put the object's names on the
 receiver's fields or vice versa) and 15 in `struct v34_shell`. A further 8
 fields were carved out of four regions that were previously `unmapped_*`
-padding, because the accessor macros in `v34hshak.c` and `v34hstx1.cpp`
+padding, because the accessor macros in `V34hshak.c` and `v34hstx1.cpp`
 (`DP_MODE`, `TX1_SEGLEN`, `TX1_FABE4`/`FABE6`/`FABE8`, `TX1_FABF8`/`FABF9`,
 `T41_FAA7A`) were already reaching into those spans by raw offset without a
 struct member to show for it -- `hs_mode` (+0x2218, was 4 of
@@ -112964,7 +112964,7 @@ bucket into the 73 real names, as `retrain_gate`.** This branch's own copy of
 concurrently-merged V.34 receive-cluster branch (F10123) had independently
 derived a real, corrected role for the SAME field -- a one-shot retrain-gate
 latch, not "the RMS window's second scalar and nothing reads it back" as this
-branch's own header comment had it -- from exactly the `v34hshak.c`
+branch's own header comment had it -- from exactly the `V34hshak.c`
 RX_PHASE2_CALL logic this pass had just reconstructed. The merge kept the
 corrected name and re-threaded it through every `short_19e` site this pass
 had created (two zero-inits, the two-site retrain check, and the
@@ -112973,7 +112973,7 @@ had created (two zero-inits, the two-site retrain check, and the
 
 **ONE FIELD'S EVIDENCE OVERTURNED ITS OWN HEADER'S CLAIM.** `v34fsk.h` had
 `f359c` down as "0x65 here selects `setTimingStateParameters`' second
-parameter table" -- true, but not the field's primary role. `v34hshak.c`
+parameter table" -- true, but not the field's primary role. `V34hshak.c`
 reads it once into a local variable it names `originate`
 (`originate = (obj->f359c == 0x65)`), and forty-odd sites elsewhere compare
 it against 0x65/0x66 directly for everything from the scrambler polynomial to
@@ -112999,7 +112999,7 @@ modulatevector's non-linear encoder" -- bit 13 of the INFO word lands at bit
 THREE (bits 2, 4 and 9) already had names this pass nearly duplicated before
 a tree-wide grep for the bit values turned up `V34_EC_FROZEN` and
 `V34_EC_FEED` in `v34rx.h` and `PROG_TXBIT_DATA` in `v34pcmmain.cpp`, all
-three already in active use in `v34rx.c`, `v34pcmmain.cpp` and two test
+three already in active use in `V34RX.c`, `v34pcmmain.cpp` and two test
 files. The near-duplicates were deleted rather than kept; the field's own
 comment in `v34fsk.h` now cites all seven by name and says which header owns
 each. This is the same lesson F604 states for names generally, applied to
@@ -113032,15 +113032,15 @@ banners and reports 47 agreeing.  (2026-09-03)
 ## F10131. Reconciling two field-naming branches that independently renamed the same shared struct: `struct v34_receiver`, F10123 vs F9341/F10123
 
 Two wave-1 field-naming agents worked disjoint FILE assignments (the V.34
-receive cluster: `v34recv.h`/`v34rx.c`; the V.34 handshake/FSK cluster:
-`v34fsk.h`/`v34hshak.c`/`v34hstx1.cpp`/`v34shell.c`) that both reached into
+receive cluster: `v34recv.h`/`V34RX.c`; the V.34 handshake/FSK cluster:
+`v34fsk.h`/`V34hshak.c`/`v34hstx1.cpp`/`v34shell.c`) that both reached into
 the SAME struct, `struct v34_receiver`, because it is shared infrastructure
 neither pass could avoid touching. Unlike every prior finding-number
 collision this project has hit (two branches independently choosing the
 same NUMBER), this was a content collision: two branches choosing different
 NAMES for the same FIELD, at real volume -- 7 conflicting files, ~35
-individual field-name disagreements across `v34recv.h`, `v34hshak.c`,
-`v34rx.c`, two test files and one mutation fixture.
+individual field-name disagreements across `v34recv.h`, `V34hshak.c`,
+`V34RX.c`, two test files and one mutation fixture.
 
 **The resolution rule, applied uniformly:** for each disputed field, check
 which side actually THREADED its name through the full cross-file blast
@@ -113054,13 +113054,13 @@ scope: the receive-cluster branch's names won for fields ONLY it touched
 (`agc_pair_count`, `mix_carrier_step`/`_phase`, `slow_ramp`, `ppm_acc`/
 `_count`, `pred_err_re`/`_im`, `trn_ref_sr`, `cloop_integrator`/`_phase_err`,
 timing_idx_a`/`_b`); the handshake-cluster branch's names won for fields it
-had threaded through `v34hshak.c` (`out_count`, `phase_frac`/`_inc`/`_wrap`,
+had threaded through `V34hshak.c` (`out_count`, `phase_frac`/`_inc`/`_wrap`,
 `half_len`, `symbol_period`, `timing_offset`, `equ_step`, `err_symcount`,
 `equerr_accum`, `subframe_idx`, `fir_coeff`).
 
 **One field needed a real decision rather than a mechanical pick.** `+0x19e`
 (`f19e`/`short_19e`) had the receive-cluster branch's WITHHELD derivation
-(`retrain_gate`, with a full trace through `v34hshak.c`'s RX_PHASE2_CALL
+(`retrain_gate`, with a full trace through `V34hshak.c`'s RX_PHASE2_CALL
 logic showing a prior header comment on this field was flatly wrong) against
 the handshake-cluster branch's APPLIED but weaker name (`short_19e`, a bare
 type promotion carrying the same wrong prior claim forward). The
@@ -113074,7 +113074,7 @@ being kept unmodified. See F9341's own merge-time correction note.
 
 **A leftover inconsistency in the ALREADY-MERGED receive-cluster branch was
 also caught and fixed during this reconciliation**, not introduced by it:
-several call sites in `v34rx.c` used the bare `f124`/`f1c0` for `rx_blocks`/
+several call sites in `V34RX.c` used the bare `f124`/`f1c0` for `rx_blocks`/
 `pllcnt` even though both fields had been correctly named everywhere else in
 the same file by an earlier pass, predating both of this wave's branches.
 Fixed to the established names rather than left as a wrong "HEAD is always
@@ -113095,7 +113095,7 @@ gate, per this wave's own standing instruction. (2026-09-04)
 
 ## F10132. V.34 receive cluster, second pass: three more fields close, one of them not actually where F10131 said it was
 
-Wave 2's second pass over `include/dsplib/v34recv.h`/`src/pump/v34/v34rx.c`,
+Wave 2's second pass over `include/dsplib/v34recv.h`/`src/pump/v34/V34RX.c`,
 using the two methods wave 1 did not have -- reading the whole enclosing
 algorithm (`rxtiminginit`, `rxtiming`, `TimingV34`, `setTimingStateParameters`,
 `setInitialPhase`, `receiver`) as one step rather than field-by-field, and
@@ -113111,13 +113111,13 @@ dual-role grounds -- but `f248` has no dual role and no ambiguity; it is
 ("sig_energy (f248)") when it catalogued what a future pass with the
 handshake files in scope should apply. Neither F9341 nor F10131 actually
 touched it, because it appears in none of the four files F9341's scope
-covered (`v34fsk.h`/`v34hshak.c`/`v34hstx1.cpp`/`v34shell.c`) -- its readers
+covered (`v34fsk.h`/`V34hshak.c`/`v34hstx1.cpp`/`v34shell.c`) -- its readers
 are `v34pcmif.c` and `v34diag.cpp`, two files outside every prior pass's
 scope, so the derived name sat unrecorded in neither header comment nor
 finding, and it fell through both branches' blast-radius bookkeeping rather
 than being deliberately declined. Verified with a tree-wide grep before
 touching anything: **zero mutation-fixture text references `f248` anywhere**,
-so its full blast radius is `v34rx.c` (sets it), `v34pcmif.c`/`v34diag.cpp`
+so its full blast radius is `V34RX.c` (sets it), `v34pcmif.c`/`v34diag.cpp`
 (read it as `VPcmV34GetSNR`'s numerator, dividing it by `equerr`),
 `TAG_DiagnosticResults.h` (a comment), and `t_v34diag.cpp`/`t_v34pcmif.c`
 (comments plus a local parameter and a test macro, `OB_RX_F248`, renamed for
@@ -113139,7 +113139,7 @@ priced but did not spend.
 
 **`short_25e` (in `struct v34_receiver`, not the `v34_object` field F9341
 independently named the same by coincidence of spelling) is new evidence,
-from `v34hstx1.cpp`'s TRNSEG4A rate step, not from `v34rx.c` at all** --
+from `v34hstx1.cpp`'s TRNSEG4A rate step, not from `V34RX.c` at all** --
 outside the receive DSP algorithm proper, in the handshake's transmit-rate
 negotiation, but reached from `v34recv.h`'s own struct so it is this pass's
 to name or leave. Read alongside its two guard branches: value 2 forces the
@@ -113149,16 +113149,16 @@ this "returning from local rrn down" / "... up" -- this tree's own RRN (Rate
 ReNegotiation) vocabulary, already established by `rrn_local`/`rrn_remote`
 (`v34fsk.h`) and `V34_RX_FLAG_RENEG` (this header). Named `rrn_local_dir`.
 **Caveat stated in the header comment, not smoothed over**: nothing written
-in this tree ever sets it to a nonzero value -- `v34hshak.c` only clears it --
+in this tree ever sets it to a nonzero value -- `V34hshak.c` only clears it --
 so the name is derived entirely from the read side, and which values besides
 2 actually occur is not established, only that "not 2" reads as "up" per the
-else arm. Blast radius verified by grep before touching anything: `v34hshak.c`
+else arm. Blast radius verified by grep before touching anything: `V34hshak.c`
 (one clear), `v34hstx1.cpp` (two reads) and `test/mutations/v34hstx1.json`
 (four `find`/`replace` strings containing `rx->short_25e`, all literal-text
 substituted and the JSON re-validated with `json.load`).
 
 **`f1d4`, `f1e4`, `f1e8`, `f1f0`, `f22e` re-verified, still zero evidence.**
-Grepped tree-wide (not just `v34rx.c`) rather than trusting F10123's count:
+Grepped tree-wide (not just `V34RX.c`) rather than trusting F10123's count:
 each is written exactly once, by `rxtiminginit`, to zero, and read by
 nothing anywhere in `src/`, `include/` or `test/`. `TimingV34` and `rxtiming`
 were both read in full for this pass looking for an indirect reader (an
@@ -113172,7 +113172,7 @@ derotation) before the next symbol, which is not the same fact as
 `rxtiming`'s separate IIR-history use of the same bytes; left bare, matching
 F10123's own call.
 
-**One stale comment fixed, not a field name.** `v34rx.c`'s carrier-loop
+**One stale comment fixed, not a field name.** `V34RX.c`'s carrier-loop
 comment inside `receiver` still read "f210/f212 STOP being the received
 point" from before those fields became `target_re`/`target_im`; corrected in
 place (comment only, no rename).
@@ -113330,7 +113330,7 @@ names in the same pass, since a partial rename does not compile. Confirmed
 with `grep -rln "struct fax_class1\b"` before touching anything, so the file
 list is measured rather than guessed; a second grep for every retired bare
 name across `include/`, `src/` and `test/` after the rename returned only
-`dtmf_rx.h`/`dtmf_rx.c`/`t_dtmfrx.c`'s own, UNRELATED `struct dtmf_rx::f000`
+`dtmf_rx.h`/`Dtmf_Rx.c`/`t_dtmfrx.c`'s own, UNRELATED `struct dtmf_rx::f000`
 -- same bare spelling, different struct, correctly left alone.
 
 **Verification**: `python3 tools/onedef.py` (301 types, 1 known duplicate,
@@ -113378,7 +113378,7 @@ word_70`/`->word_74`) "belonged to other work". It is this pass's own file,
 so the rename was carried through it (plus `t_v90conneval.cpp` and the
 `v90conneval.json`/`v90demod.json`/`v90demprog.json` mutation fixtures).
 **One stale claim caught in passing**: the old comment also named
-`VPcmFloModem.cpp` as a referrer of this pair; a tree-wide grep (excluding
+`VpcmFloModem.cpp` as a referrer of this pair; a tree-wide grep (excluding
 `re/`) finds no `word_70`/`word_74` there at all -- that file's real reference
 is to the DIFFERENT +0x78/+0x7c pair (`delayedRetrainRequest`/
 `delayedRetrainArmed`), and the two pairs' write-ups had been conflated.
@@ -113599,16 +113599,16 @@ shape.  (2026-09-04)
 
 ### F10137. Wave 3 field naming, DTMF-CID/cadence cluster: every remaining bare field in this cluster is write-only or untouched -- promoted to `type_NNNN`/`pad_NNNN`, none to a real name
 
-Scope: `include/dsplib/dtmf_rx.h`/`src/service/dtmf_rx.c` (5 bare `fNNNN`) and
-`include/dsplib/cadence.h`/`src/callprog/cadence.c` (8 bare `fNNNN`) --
+Scope: `include/dsplib/dtmf_rx.h`/`src/service/Dtmf_Rx.c` (5 bare `fNNNN`) and
+`include/dsplib/cadence.h`/`src/callprog/Cadence.c` (8 bare `fNNNN`) --
 `docs/fieldnaming.md`'s wave 3, the DTMF/cadence cluster (distinct from every
 other wave-3 cluster, which is all V.90/V.34/fax/V.8). Counts re-verified by
 fresh grep before starting, matching `docs/fieldnaming.md`'s tally exactly.
 
 **Method, and why it ended in reclassification rather than names.** For each
 field: read the whole enclosing algorithm (both TUs are short and this
-object's closure over them is complete -- `dtmf_rx.c`, `dtmf_detector.c`,
-`cadence.c` are the WHOLE of `Dtmf_Rx.c`/`Dtmf_Detector.c`/`Cadence.c`), then
+object's closure over them is complete -- `Dtmf_Rx.c`, `Dtmf_Detector.c`,
+`Cadence.c` are the WHOLE of `Dtmf_Rx.c`/`Dtmf_Detector.c`/`Cadence.c`), then
 grep-verified whole-tree for every reader, and cross-checked with `dis.py`
 against the object directly (not just our own already-passing reconstruction)
 for `band_pass`, `dtmf_modem`, `DTMF_MTD_detect` and `create_cid_dtmf`, since a
@@ -113655,14 +113655,14 @@ each written once by `cadence_create` and read by nothing in
     updated in `src/service/detector.c`, `test/unit/t_detector.c`,
     `test/unit/t_voicesvc.c` and `docs/deviations.md` itself.
   - `int_2a4` is `cadence_setup.w6`. The two real callers (`detector.c`,
-    `callprog.c`) disagree on what they pass it (0 vs 1), which would be
+    `Callprog.c`) disagree on what they pass it (0 vs 1), which would be
     suspicious for a field that mattered -- but confirms rather than
     contradicts dead-ness, since nothing branches on the difference.
   - `int_274`/`int_278` get the SAME toneiir-interval conversion as the real
     timing windows (`max_on`/`min_on`/`max_off`/`min_off`) just above them in
     the struct, so their shape (an `int`, in toneiir intervals like their
     neighbours) is known, but nothing ever assigns them a nonzero input --
-    `cadence.c`'s own comment already said so before this pass ("nothing ever
+    `Cadence.c`'s own comment already said so before this pass ("nothing ever
     assigns them ... zero going in and zero coming out").
 
   `f2c0`/`f2c4`/`f2c8`/`f2cc`, sixteen bytes between `pattern[4]` and
@@ -114184,7 +114184,7 @@ anchor could have gone stale. (2026-09-04)
 ## F10143. Wave 4 field naming, the diagnostic/session-flag cluster: `fdsp_kernel::status`, `mtk_phasor::cosine`/`sine`; `TAG_DiagnosticResults.h` and `V90SessionFlag.h` re-verified exhausted
 
 Wave 4 of the field-naming phase (`docs/fieldnaming.md`), scoped to
-`TAG_DiagnosticResults.h` (6 `pad_NNNN`), `fdspkrnl.h`/`src/service/fdspkrnl.c`
+`TAG_DiagnosticResults.h` (6 `pad_NNNN`), `fdspkrnl.h`/`src/service/Fdspkrnl.c`
 (6 `pad_NNNN`, 19 `type_NNNN`) and `V90SessionFlag.h` (5 `pad_NNNN` by a naive
 grep). Read all three fully before touching anything, per the brief's own
 question of whether the three are related: they are not. `TAG_DiagnosticResults`
@@ -114197,7 +114197,7 @@ mutually-recursive V.90 session classes and now declares one partial model of
 **`fdsp_kernel::status` (was `int_00`), rank 2 -- a typed callee, reached via
 a cross-file chain rather than a direct one.** `voice.h`'s own comment on
 `voice::dp` (+0x034) already stated the field's TRUE type is
-`struct fdsp_kernel *`, and that `FDSP_DP_Run` (`beepgen.h`/`beepgen.c`,
+`struct fdsp_kernel *`, and that `FDSP_DP_Run` (`beepgen.h`/`Beepgen.c`,
 finding F8786) declares the SAME pointer `int *status` off a sibling
 signature and does nothing with it but `*status = 2;` -- which is exactly
 `fdsp_kernel`'s own first member, set to 2 by both `FDSP_Kernel_InitObj` and
@@ -114213,7 +114213,7 @@ callee, and the object's own table names.** `src/service/mtk.c`'s
 `MTK_phasor` builds +0x04 from `MTK_cos_table`/`MTK_cos_sign` and +0x08 from
 `MTK_sin_table`/`MTK_sin_sign` (`mtk.h`, `mtk_tables.c`); both table names are
 the object's own per finding F8772, not invented here. Corroborated from the
-other direction by `fdspkrnl.c`'s own use of +0x04: `TONE_create` builds a
+other direction by `Fdspkrnl.c`'s own use of +0x04: `TONE_create` builds a
 resonator's coefficients from it with `-2.0f * osc.cosine` in exactly the
 `1 - 2*r*cos(w) z^-1 + r^2 z^-2` shape its own comment already named, and the
 60 Hz notch section a few lines later does the same with `hum.cosine`. `sine`
@@ -114225,7 +114225,7 @@ role elsewhere (`fpm_smc.h`, `v34filt.h` both have `const short *cosine`/
 `*sine` members).
 
 **Everything else in `fdspkrnl.h` stays exactly as it was, reconfirmed rather
-than assumed.** A full read of `src/service/fdspkrnl.c` (868 lines, all
+than assumed.** A full read of `src/service/Fdspkrnl.c` (868 lines, all
 fourteen functions of the span) plus a whole-tree grep for every remaining
 `type_NNNN`/`pad_NNNN` identifier in the header found no new reader or writer
 anywhere: `fdsp_channel::short_168a`/`short_1692` (InitObj zeroes
@@ -114288,11 +114288,11 @@ the work was promoting three of them to real names and confirming the rest
 have no fresh evidence, not correcting a mismodelled shape.
 
 **Verification.** `status` reached `include/dsplib/fdspkrnl.h`,
-`src/service/fdspkrnl.c`, `test/unit/t_fdspdp.c`, `test/unit/t_fdspkrnl.c`,
+`src/service/Fdspkrnl.c`, `test/unit/t_fdspdp.c`, `test/unit/t_fdspkrnl.c`,
 `test/mutations/fdspkrnl.json` and `test/mutations/fdspdp.json`, plus one
 cross-reference comment in `include/dsplib/voice.h` (unchanged code, comment
 only). `cosine`/`sine` reached `include/dsplib/fdspkrnl.h`,
-`src/service/fdspkrnl.c`, `src/service/mtk.c`, `test/unit/t_mtkphasor.c`,
+`src/service/Fdspkrnl.c`, `src/service/mtk.c`, `test/unit/t_mtkphasor.c`,
 `test/mutations/mtkphasor.json` and `test/mutations/tonecreate.json` --
 found by `grep -rln` for the old spellings tree-wide, not assumed confined to
 the nominally in-scope files, the same discipline F10133/F10139 record. Four
@@ -114692,7 +114692,7 @@ memory access -- not a struct field.
 
 **The `0x21e` search caught a real trap and is recorded as the worked
 example.** `objdump -d` on the whole object turned up `0x21e(%edi)` inside
-`probeselect` (`v34hshak.c`) and two more hits far outside V.34 territory
+`probeselect` (`V34hshak.c`) and two more hits far outside V.34 territory
 entirely (near 0xd268, an unrelated struct). Tracing `probeselect`'s own
 prologue (`mov 0x90(%esp),%edi; add $0xa320,%edi`) showed `%edi` there is a
 completely different base pointer, +0xa320 from something that is not a
@@ -114709,7 +114709,7 @@ proven read -- absence of alignment-justification is the only claim):**
 
 - `pad_000[0x120]` -- the struct's opening 288 bytes, with no preceding field
   to derive an alignment requirement from, and independently PROVEN to hold
-  real data, not filler: `src/pump/v34/v34hshak.c` (`T3C_RX` macro's own long
+  real data, not filler: `src/pump/v34/V34hshak.c` (`T3C_RX` macro's own long
   comment, around line 3207) establishes that `v34_receiver` is embedded at
   `v34_object+0x264` and that its `pad_000` is the SAME BYTES as
   `v34_object`'s own `rxq`, `rxq_ring_tail[63]`, `unmapped_0370` and
@@ -114850,7 +114850,7 @@ caveat as F10146. (2026-09-04)
 Same workstream, closing out the rest of the V.34 cluster's file list.
 `src/pump/v34/v34pcmmain.cpp` (2 matches) and `src/pump/v34/v34hstx1.cpp` (2
 matches, one of them the `pad_250` cross-reference cited under F10146) and
-`src/pump/v34/v34hshak.c` (1 match, the `pad_000` cross-reference cited
+`src/pump/v34/V34hshak.c` (1 match, the `pad_000` cross-reference cited
 under F10146) were all re-checked and confirmed to declare no structs and no
 pad members of their own -- every hit in those three files is a COMMENT
 referencing a pad declared elsewhere (`v34recv.h`, already covered by
@@ -114861,7 +114861,7 @@ Zero removable pads in those three files; nothing edited in them.
 **`include/dsplib/v34filt.h`, `pad_16[2]` in `struct v34_echo` removed.**
 Between `adapt_count` (short, ends 0x16, a 2-mod-4 offset) and `dlen`
 (unsigned, needs align 4): exactly a 2-byte gap. This struct is embedded at
-`v34_object+0x80b8` (`echo0`, confirmed by `src/pump/v34/dpsk.c`'s own
+`v34_object+0x80b8` (`echo0`, confirmed by `src/pump/v34/DPSK.c`'s own
 combined offsetof assertion on `echo0.coeff_frac` == 0x80c4). Positive
 check: `dlen` still at 0x18 and `sizeof(struct v34_echo)` still 0x20 --
 which the file's OWN pre-existing assertion in `src/pump/v34/v34filters.c`
@@ -115069,7 +115069,7 @@ compare still needs it poisoned identically on both sides for the check to
 mean anything. The file's own header comment listing untouched fields was
 updated to match. `grep -rln` for every one of the other 21 removed names
 across `test/` and `src/` found no other hit; the three unrelated `pad_1d`
-hits in `V92BitsToSymbol.cpp`/`t_v92p4gen.cpp`/`t_v92btosproc.cpp` are a
+hits in `V92bitsToSymbol.cpp`/`t_v92p4gen.cpp`/`t_v92btosproc.cpp` are a
 DIFFERENT class's field at the same coincidental offset-derived name, out of
 this scope, untouched.
 
@@ -115113,7 +115113,7 @@ every function of the owning class/struct, not just the ones already
 reconstructed. Both must hold; either failing keeps the pad explicit. An
 `offsetof`-based compile-time assertion is added at the point of removal,
 following this tree's own existing idiom (`TONE_ASSERT_OFF` in
-`src/service/fdspkrnl.c`, the same shape as `onedef.py`'s own macros
+`src/service/Fdspkrnl.c`, the same shape as `onedef.py`'s own macros
 elsewhere) rather than inventing a new one.
 
 **Scope: the long tail.** Four sibling agents this session are covering the
@@ -115128,17 +115128,17 @@ that grep counted 44 files; **15 of the 44 have no actual live `pad_NNNN`
 struct member at all** -- the grep hit is a `V9*_OFF`/`V92TX_OFF`-style
 offset-assertion macro invocation whose first argument reuses an
 already-renamed field's old `pad_` label (`V92Transmitter.cpp`,
-`V92Phase3Modulator.cpp`, `V92Mapper.cpp`, `V92BitsToSymbol.cpp`), or a
+`V92Phase3Modulator.cpp`, `V92Mapper.cpp`, `V92bitsToSymbol.cpp`), or a
 comment mentioning a `pad_` name for a field that has since been named
 elsewhere (`V92Precoder.cpp`, `V90Modulator.h`, `V90Modem.h`,
 `V90MappingParams.h`, `V92EchoCanceller.h`, `V92Phase2Info.cpp`,
 `V92ModulusEncoder.cpp`, `V90MappingParamsInt.cpp`, `detector.c`,
-`cid_mtd.c`, `beepgen.c`) -- the same over-count `docs/fieldnaming.md`'s own
+`Cidmtd.c`, `Beepgen.c`) -- the same over-count `docs/fieldnaming.md`'s own
 header already warns about and F10142 already hit once for `VPcmFloModem.h`/
 `V92CP.h`. Confirmed by grep for the exact declaration pattern
 (`^\s*(unsigned char|...) pad_[0-9a-f]+`), not assumed.
 
-### `fdspkrnl.h` / `src/service/fdspkrnl.c`: 4 of 7 removed
+### `fdspkrnl.h` / `src/service/Fdspkrnl.c`: 4 of 7 removed
 
 `struct fdsp_buffers::pad_1f40[0x7d0]` and `struct fdsp_tone::pad_10[4]`/
 `pad_22[0xe]` fail the arithmetic test outright -- their width is far larger
@@ -115330,7 +115330,7 @@ anything this sweep would need to add:
   or either `V90Modulator`/`V90Demodulator` constructor.
 - `dtmf::pad_96[2]`: `easy` ends at +0x96, alignment forced to 4 by the
   leading `float` arrays rounds `sizeof` to +0x98. Here the proof is
-  stronger still -- `src/service/dtmf.c` already has `dtmf_size_check
+  stronger still -- `src/service/Dtmf.c` already has `dtmf_size_check
   [sizeof(struct dtmf) == 0x98 ? 1 : -1]`, and 0x98 is also the literal
   `sysdep_malloc(sizeof(struct dtmf))` allocation size in `create_dtmf`,
   not adjacency. `dis.py` over all nine `dtmf`-touching functions finds no
@@ -115345,7 +115345,7 @@ anything this sweep would need to add:
   and needs 4-byte alignment -- exact 2-byte match, already commented
   "alignment; never written". `pad_15e[2]` is the struct's LAST member,
   trailing padding after `pack_len` (ends +0x15e) to the struct's own
-  4-byte alignment; `src/service/cid_mtd.c` already has `cid_size_check
+  4-byte alignment; `src/service/Cidmtd.c` already has `cid_size_check
   [sizeof(struct cid) == 0x160 ? 1 : -1]`, and 0x160 is `create_cid`'s
   literal allocation size. `dis.py` over `cid_modem`/`create_cid`/
   `reset_cid`/`pack_next_bit` (the only four reconstructed functions
@@ -115389,7 +115389,7 @@ removed offset.
 **A second instance of the exact positional-initializer bug F10151's first
 entry (fdspkrnl.h) already found and fixed, caught before it could reach a
 test.** `src/service/detector.c` has its OWN static `struct fdsp_tone_cfg
-TONEamode_CFG` initializer, separate from `fdspkrnl.c`'s `TONE_CFG`, and it
+TONEamode_CFG` initializer, separate from `Fdspkrnl.c`'s `TONE_CFG`, and it
 still had the same `{ 0, 0 }, /* pad_22 */` positional slot for the member
 this sweep's very first removal deleted from the struct declaration --
 found by grepping every removed pad name across the whole tree for live
@@ -115491,7 +115491,7 @@ unexamined.
 **Files touched (18 headers + 5 `.cpp`/`.c` + 3 test files):**
 
     include/dsplib/fdspkrnl.h              4 removed
-    src/service/fdspkrnl.c                 (assertions + initializer fix)
+    src/service/Fdspkrnl.c                 (assertions + initializer fix)
     include/dsplib/V90SignBitsExtractor.h  2 removed, 1 declined (pad_14)
     include/dsplib/V90Phase2Info.h         1 removed
     include/dsplib/V90Mapper.h             2 removed
@@ -115506,7 +115506,7 @@ unexamined.
     include/dsplib/V92Modulator.h          1 removed
     include/dsplib/V92Jd.h                 1 removed
     include/dsplib/V92BitsToSymbol.h       1 removed
-    src/pump/v90/V92BitsToSymbol.cpp       (assertion removed)
+    src/pump/v90/V92bitsToSymbol.cpp       (assertion removed)
     include/dsplib/V90RDetector.h          1 removed
     include/dsplib/V90Jd.h                 1 removed
     include/dsplib/V90BitsToSymbol.h       1 removed
@@ -115539,12 +115539,12 @@ exclusion list named (`V90Equalizer.h`, `V90ConstellationDesigner.h`,
 `V90ConnectionEvaluator.h`/`.cpp`; `VPcmFloModem.h`, `V92CP.h`, `V90CP.h`,
 `V90AutoDigitalImpDetector.h`, `V90SessionFlag.h`, `V90Phase3Modulator.h`,
 `V90Phase4Modulator.h`/`.cpp`, `V92Phase4Modulator.h`/`.cpp`; `v34recv.h`,
-`v34shell.h`, `v34fsk.h`, `v34pcmmain.cpp`, `v34hstx1.cpp`, `v34hshak.c`,
+`v34shell.h`, `v34fsk.h`, `v34pcmmain.cpp`, `v34hstx1.cpp`, `V34hshak.c`,
 `v34filt.h`, `v34rx.h`; `faxvmi.h`/`.c`, `class1.h`, `fax.h`, `class1tx.c`,
 `class1rx.c`, `v29fax.h`, `v17fax.h`, `v29data.h`, `faxfifo.h`) was left
 strictly alone -- not read, not grepped into a candidate list, not touched.
 Two borderline files were skipped on the "if in doubt, skip" instruction
-rather than the letter of the exclusion list: `VPcmFloModem.cpp` and
+rather than the letter of the exclusion list: `VpcmFloModem.cpp` and
 `V90Demodulator.cpp` (their headers are excluded and each is clearly the
 same class's own implementation file, even though the `.cpp` spelling
 itself was not named).
@@ -116128,7 +116128,7 @@ by omission.
 
 **Out of scope, correctly not attempted**: the `void *objp`/`obj`/`shellp`
 "self" parameter pattern in `src/pump/v34/` (~110 more sites across
-`v34hshak.c`, `v34rx.c`, `v34shell.c`, `v34pcmif.c`, `v34hstx1.cpp`,
+`V34hshak.c`, `V34RX.c`, `v34shell.c`, `v34pcmif.c`, `v34hstx1.cpp`,
 `v34info.c`, `v34scram.c`, `v34k56.cpp`, `v34pcmmain.cpp`). Spot-checking
 `v34shell.c` found the same shape as bucket 3 above (a real union at
 `v34shell.h:189-191` that `scrambleGPA`/`scrambleGPC`/`descrambleGPA`/
@@ -116209,7 +116209,7 @@ v34fsk.h` -- `V34_RX_FLAG_DET_PENDING`, `V34_RX_FLAG_FIR`,
 `V34_EC_FROZEN`, `V34_TXFLAG_CALLER`, `V34_SCR_ANSWERER`,
 `V34_RX_FLAG_PREDICT`, `V34_RX_FLAG_RETRAIN`, `V34_RX_FLAG_TRAINED`,
 `V34_RX_FLAG_DATA`, `V34_TXFLAG_PPSEG`, `V34_CAPS_ASYMMETRIC` and
-others -- across `v34hshak.c`, `v34hstx1.cpp`, `v34rx.c` and
+others -- across `V34hshak.c`, `v34hstx1.cpp`, `V34RX.c` and
 `v34shell.c`. Pure macro substitution per CLAUDE.md's naming rule
 ("name by bit value and keep 1:1 with the object"), cannot move
 codegen. Updated the mutation anchors in seven `test/mutations/*.json`
@@ -116264,9 +116264,9 @@ issues). (2026-09-05)
 
 Tier 2 item 10 group B, closing out F10155/F10157/F10160's
 conversion of the whole `asm("_ZN...")`-label device. Converts the
-remaining 14 sites -- `V90BitsToSymbol.cpp`, `V90Phase3Demodulator.cpp`,
+remaining 14 sites -- `V90bitsToSymbol.cpp`, `V90Phase3Demodulator.cpp`,
 `V90Phase4Modulator.cpp`, `V90SpectralVerifier.cpp`,
-`V92BitsToSymbol.cpp`, `V92EchoCanceller.cpp`, `V92Modem.cpp`,
+`V92bitsToSymbol.cpp`, `V92EchoCanceller.cpp`, `V92Modem.cpp`,
 `V92Phase4Modulator.cpp`, `V92PreFilter.cpp`, `V92Precoder.cpp` and
 `V92Transmitter.cpp` -- to genuine placement `new`/explicit destructor
 calls against `sysdep.h`'s shared operator pair, the same mechanism
@@ -116289,7 +116289,7 @@ byteident-ratchet` unchanged at 736/1852 EXACT (39.7%), 796/1852 grade
 0-or-1 (43.0%), ratchet OK; `make check64`, `tools/onedef.py`,
 `tools/refcheck.py`, `tools/anchorcheck.py` all clean. (2026-09-05)
 
-## F10176. Field-naming wave 6, `v34recv.h`/`v34rx.c`/`v34hstx1.cpp` bare-`f` cluster -- four `struct v34_object` macros renamed on a typed-sibling match, seven `struct v34_receiver` fields re-confirmed bare against the blob itself
+## F10176. Field-naming wave 6, `v34recv.h`/`V34RX.c`/`v34hstx1.cpp` bare-`f` cluster -- four `struct v34_object` macros renamed on a typed-sibling match, seven `struct v34_receiver` fields re-confirmed bare against the blob itself
 
 Scope: `docs/fieldnaming.md`'s wave 6, the densest remaining bare-`fNNNN`
 concentration by a naive tree-wide grep. Re-deriving the count (this
@@ -116298,7 +116298,7 @@ hint) found the naive figure was the same over-count trap F10142/F10152
 already documented for `pad_NNNN` regions, applied here to bare `f`
 names: `v34recv.h`'s 46 raw hits are mostly the file's own deliberate
 `(was fXXXX)` historical breadcrumbs on already-named fields, and the
-live bare-member count is 7, matching `v34rx.c`'s 8 raw hits exactly
+live bare-member count is 7, matching `V34RX.c`'s 8 raw hits exactly
 (the eighth, `feed`, is an English word inside a comment, not an
 offset). `v34hstx1.cpp`'s 6 hits were a third shape again -- see below.
 
@@ -116328,7 +116328,7 @@ directly, for a function taking `struct v34_receiver *` (`agcadapt`,
 `V34agc`, `V34demodulate`), or +0x264 more, for one taking the full
 `struct v34_object *` and computing the receiver pointer internally
 (every other name on the list, confirmed per-function by reading each
-one's own signature and body in `v34rx.c`). Across all eighteen
+one's own signature and body in `V34RX.c`). Across all eighteen
 functions and both offset conventions, each of the five fields'
 displacement appears EXACTLY ONCE: the one zero-store each already has
 in `rxtiminginit`. Zero readers anywhere in the object that this
@@ -116360,7 +116360,7 @@ defines. Both were comment-only fixes (one deliberate historical
 sibling struct declaring the identical offset within the identical
 object, corroborated per site by reading the arm that uses it: 70
 `DATAXMIT` sets `hs_mode` (+0x2218) to 1 as "handshake above 1", exactly
-`v34hshak.c`'s own `DP_MODE`/`T3C_MODE` reading of the same int; 65
+`V34hshak.c`'s own `DP_MODE`/`T3C_MODE` reading of the same int; 65
 `XMIT0`'s retrain restart tests `moh_active` (+0xabe8) exactly as
 `v34handshakinit`'s own Modem-on-Hold bring-up comment describes; the
 message-dispatch one-shot at `moh_msg_pending` (+0xabf8) matches
@@ -116390,7 +116390,7 @@ produced an 8,420-line diff for a 34-line change -- reverted in favour of
 the plain-text substitution actually landed).
 
 **Net effect.** `v34hstx1.cpp`'s bare-`f` count: 6 unique names -> 1 (a
-deliberate historical breadcrumb). `v34recv.h`/`v34rx.c`'s live bare
+deliberate historical breadcrumb). `v34recv.h`/`V34RX.c`'s live bare
 count: unchanged at 7, correctly -- both prior passes' "leave bare"
 verdict is now CONFIRMED by a strictly stronger check, which is a
 different and useful outcome from either finding something new or
@@ -116538,10 +116538,10 @@ in the same file. Corrected to say so, since a doc comment that is
 provably false is worse than one that says less.
 
 **Propagation.** `byte_280`/`word_258` also renamed in
-`src/pump/v90/VPcmFloModem.cpp` (`getConstellation`, `n = dem->
+`src/pump/v90/VpcmFloModem.cpp` (`getConstellation`, `n = dem->
 word_258`) and `test/unit/t_v34diag.cpp`, found by a tree-wide grep
 after the first `make one` run caught a stale reference `grep` inside
-`test/`+`src/pump/v90/` alone had missed -- `VPcmFloModem.cpp` is
+`test/`+`src/pump/v90/` alone had missed -- `VpcmFloModem.cpp` is
 outside both of those and is a real external reader. Renamed in five
 mutation-anchor JSON files (`v90demctor`, `v90demod`, `v90demprog`,
 `v90dataph`, `v90getbitrate`, `v34diagflo`) by parsing each as JSON and
@@ -116953,7 +116953,7 @@ top-up loop `VPcmV34Progress`, `datapumpv34` and the handshake's
 writers agree on exactly this one role.
 
 `short_3552` -> `far_echo_alpha` (rank 1, a format string -- the object's
-own debug tag). `src/pump/v34/v34rx.c`'s two `updateAlpha` call sites for
+own debug tag). `src/pump/v34/V34RX.c`'s two `updateAlpha` call sites for
 the near-echo LMS step (`echo_alpha`, already named) both pass `"NE"` as
 `updateAlpha`'s own `tag` argument, printed verbatim in
 `"updateAlpha%s: updated %d => %d\n"`; the one call site for this field
@@ -116962,7 +116962,7 @@ other far-echo-only quantity in this struct already uses. `echo_alpha`'s
 own comment (which called it "the only short here") is corrected to note
 it no longer is.
 
-Renames propagated to `src/pump/v34/{v34hshak.c,v34rx.c,v34pcmmain.cpp,
+Renames propagated to `src/pump/v34/{V34hshak.c,V34RX.c,v34pcmmain.cpp,
 v34hstx1.cpp}`, `test/unit/t_v34call.c`/`t_v34rx.c`, and the five mutation
 fixtures that reference either field by name (`v34datapump.json`,
 `v34hstb1.json`, `v34hst3core.json`, `v34hst3mid.json`, `v34hstx1.json`,
@@ -117074,7 +117074,7 @@ Field-naming wave 6, over `VPcmFloModem.h`/`.cpp` (with the fresh grep
 against the wave's whole brief -- see `docs/fieldnaming.md`'s wave 6
 section for why the other seven files in the brief needed no change).
 
-F7583 already read `VPcmFloModem.cpp`'s own format string --
+F7583 already read `VpcmFloModem.cpp`'s own format string --
 `"... Jd Detected: trainConstel = %d, rrnConstel =%d\r\n"`, printed from
 `flags_173a[0]` and `flags_173a[1]` in that order in the V.92 arm of
 `v90RunDemodulator` -- and named the two bytes in its own text. A second,
@@ -117106,7 +117106,7 @@ split was made:
 **Why the split is safe.** Three `unsigned char` members in declaration
 order lay out identically to `unsigned char[3]` -- no alignment padding is
 possible between single-byte members, so no offset moves. Every access
-site in the tree (`VPcmFloModem.cpp`'s `enterPhase3`/`internalReset`/the
+site in the tree (`VpcmFloModem.cpp`'s `enterPhase3`/`internalReset`/the
 V.90 and V.92 Jd-detected arms/the two rate-renegotiation arms, and
 `VPcmXfCreate.cpp`'s constructor path) already indexed the array with a
 literal `0`/`1`/`2`, never a variable or a loop, so every site converts to
@@ -117116,7 +117116,7 @@ opening paragraph on this whole workstream describes as unable to move
 generated code.
 
 **Propagation.** `include/dsplib/VPcmFloModem.h` (the declaration and its
-comment), `src/pump/v90/VPcmFloModem.cpp` (the `VPCM_OFF` offset-assertion
+comment), `src/pump/v90/VpcmFloModem.cpp` (the `VPCM_OFF` offset-assertion
 macro, now three lines instead of one, and eleven call/assignment sites),
 `src/pump/v90/VPcmXfCreate.cpp` (the constructor's three clearing stores
 and one comment mention -- outside the wave's nominal file list but
@@ -117282,7 +117282,7 @@ Closes the two candidates F10177 left open rather than forced.
 REJECTED, cleanly.** The type agreement (`unsigned int` is consistent with
 an enum's backing storage) suggested checking the value; the actual
 source of the value settles it instead. `word_38`'s only external writer
-is `VPcmFloModem.cpp`'s `case 0x31`/`case 0x33` arms:
+is `VpcmFloModem.cpp`'s `case 0x31`/`case 0x33` arms:
 `v92modem.modulator->phase4Modulator->word_38 =
 modem.demodulator->cp->word_ca0;` -- and that file's own pre-existing
 comment already identifies `word_ca0` as "how long the received CP's
@@ -117765,7 +117765,7 @@ has 6 (`word_00`, `word_04`, `float_08`, `word_0c`, `word_10`, `short_14`)
 **`cid.h`: one real name, `f02c` -> `mark_conf_step` (rank 3, unanimous
 usage inference).** No format string or typed caller names it -- the
 header already said as much -- but every writer and the one reader agree
-on a single, unambiguous role. `create_cid` (`src/service/rxcid.c`) seeds
+on a single, unambiguous role. `create_cid` (`src/service/Rxcid.c`) seeds
 it at 9; `src/service/cid.c`'s three `mov $0x9` stores (now under
 `CID_MARK_CONF_STEP`, renamed alongside the field for the same reason
 wave 6 renamed `TX1_F2218`'s family) put it back to the identical value on
@@ -117773,9 +117773,9 @@ every mode transition that touches the FSK receiver; nothing this tree has
 reconstructed ever writes a different value. The one reader, `cid_modem`,
 adds it to `mark_conf` for every block `CID_MTD_detect` answers 0 for
 (tone detected) -- the step that drives `mark_conf` toward the two time
-thresholds `rxcid.c`'s own header comment already derives (F8712). Named
+thresholds `Rxcid.c`'s own header comment already derives (F8712). Named
 by the role, matching the object's own `mark_conf` field it steps.
-Propagated to `src/service/cid.c`, `src/service/rxcid.c`,
+Propagated to `src/service/cid.c`, `src/service/Rxcid.c`,
 `test/unit/t_rxcid.c` and `test/unit/t_cidsvc.c` (including three local
 counter variables, `seen_f02c_9600`/`_8000`/`_mode`, renamed for
 consistency since they specifically track this field's stores). No
@@ -117788,8 +117788,8 @@ unrelated) -- checked and confirmed, so no anchor file needed touching.
 `short_08a`, `short_08c`, `short_150` and `short_152` are each cleared by
 `reset_cid` and read by nothing else -- confirmed against ALL SIX
 functions that ever touch `struct cid` (`reset_cid`, `create_cid`,
-`pack_next_bit`, `cid_modem` in `rxcid.c`; `CID_MTD_detect` in
-`cid_mtd.c`; `CID_FSD_demodulate` in `cid_fsd.c`), every one of which is
+`pack_next_bit`, `cid_modem` in `Rxcid.c`; `CID_MTD_detect` in
+`Cidmtd.c`; `CID_FSD_demodulate` in `Cidfsd.c`), every one of which is
 already fully reconstructed, so this is the object's own complete closure
 over the struct and not a sample. No format string, no typed caller, and
 zero readers anywhere this tree can see -- left as `type_NNNN`, the
@@ -117800,7 +117800,7 @@ at.
 already investigated all 5 fields and found every one write-only,
 promoting them from bare `fNNNN` to shaped `type_NNNN` with no name
 possible. A fresh check against the current tree (`grep` over
-`src/service/dtmf_rx.c`, the only file with all four functions
+`src/service/Dtmf_Rx.c`, the only file with all four functions
 (`reset_dtmf`, `create_cid_dtmf`, `band_pass`, `dtmf_modem`) that touch
 `struct dtmf_rx`) finds the identical shape: all 5 appear only inside
 `reset_dtmf`'s own clearing code, no reads anywhere. Nothing has changed
@@ -117895,7 +117895,7 @@ order, not just the naming pattern.
 
 `ptr_49b4` was also reached, unprefixed, from three call sites outside
 `V90Modem` itself -- `V90ModemReset.cpp`'s `V90Modem::reset` (as
-`ptr_49b4->PROBING_MODE` and friends), `VPcmFloModem.cpp` (as
+`ptr_49b4->PROBING_MODE` and friends), `VpcmFloModem.cpp` (as
 `modem.ptr_49b4->...`, a dozen sites), and `v34pcmmain.cpp` (as
 `sess->modem.ptr_49b4->init()`) -- so the rename is a plain,
 non-colliding substring replace across all of `include/`, `src/` and
@@ -117924,7 +117924,7 @@ Tier Zero floor unchanged. (2026-09-06)
 four confirmed forced, the rest evidence-free either way, none retyped
 
 F10159 explicitly declined to verify this cluster -- `void *objp`/`obj`/
-`shellp` self parameters across `src/pump/v34/{v34hshak.c,v34rx.c,
+`shellp` self parameters across `src/pump/v34/{V34hshak.c,V34RX.c,
 v34shell.c,v34pcmif.c,v34hstx1.cpp,v34info.c,v34scram.c,v34k56.cpp,
 v34pcmmain.cpp}` -- noting only that `v34shell.c` showed the same
 confirmed-dispatch shape as its own bucket 3 (F10154's real union at
@@ -117985,7 +117985,7 @@ That is exactly the shape CLAUDE.md's naming rule warns about: a change
 no test can fail on is a change believed on faith, not evidence, and
 "naming (or here, typing) something wrongly is worse than leaving it
 alone" applies the same way to a parameter's declared type as it does to
-a field's name. Compounding it, nine of `v34hshak.c`'s twelve
+a field's name. Compounding it, nine of `V34hshak.c`'s twelve
 self-parameter functions have no caller anywhere in the object at all
 (the file's own header comment: reachable only from the still-
 unreconstructed `v34handshak`), so there is not even an indirect,
@@ -118626,7 +118626,7 @@ needed the TOOL to stop claiming they were missing.
 trusting F8490's citation: `nm ref/slmodemd/dsplibs.o` shows a real,
 nonzero-size local (`t`) symbol at 0x07abb0; `nm build/src/dialer/dialer.o`
 shows none at all, because `GetNextDigitAndReturnNextState`'s call site
-(`src/dialer/dialer.c:619`, inside `DialerProgress`) is fully inlined by
+(`src/dialer/Dialer.c:619`, inside `DialerProgress`) is fully inlined by
 every modern compiler tried here. `nm build/dsplibs_ref.o` shows
 `ref_GetNextDigitAndReturnNextState` exists -- symmap.py's two-pass
 globalize-and-rename gave it a `ref_` alias despite the modern build never
@@ -118820,7 +118820,7 @@ all three call sites as `*txcount = FPM_TONE_generate(...)`. `FPM_TONE_generate`
 itself is not grade 0 either before or after (a pre-existing, unrelated
 4-instruction excess; SIZE, 68 blob / 72 ours before and after) so this is
 not a regression there. Every other caller (`fpm_fsm.c`, `class1.c`,
-`class1tx.c`, `v23modem.c`, `v32anstone.c`, `v32txhdx.c`) discards the
+`class1tx.c`, `v23modem.c`, `v32anstone.c`, `V32TXHDX.c`) discards the
 return already and needed no change -- C permits ignoring a non-void return.
 
 **2. The hysteresis if/else in three of the four functions is laid out
@@ -119240,7 +119240,7 @@ not already named and explained from `dis.py`.
 
 **THE ONE CLOSED: `v34hst3core`'s "the receiver-count guard excludes 5".**
 `v34handshak`'s prologue is `if (*(short *)frame.rx <= 5) { t3c_txblock(obj);
-return; }` (`src/pump/v34/v34hshak.c:9500`, 0x629f1's `cmpw $0x5,(%ebx);
+return; }` (`src/pump/v34/V34hshak.c:9500`, 0x629f1's `cmpw $0x5,(%ebx);
 jle`), and the mutation flips it to `< 5`. `test/unit/t_v34hst3core.c`
 already drove the boundary -- its "txblock route, MOH_SILENCE" case (tag 800)
 sets the receiver count to exactly 5 via `v34hs_route(V34HS_ROUTE_TXBLOCK,
@@ -119474,9 +119474,9 @@ two improved and declined further, one decoded and declined, aimed at
 their whole translation units (2026-09-06)
 
 `byteident.py --near 80` named three V.34 near-misses at `+0`
-instruction-count delta, one per file: `datapumpv34` (`v34hshak.c:9963`,
+instruction-count delta, one per file: `datapumpv34` (`V34hshak.c:9963`,
 1028 bytes), `initV34` (`v34shell.c:1310`, 805 bytes) and `rxinit`
-(`v34rx.c:516`, 454 bytes). No other unclaimed V.34 near-miss existed in
+(`V34RX.c:516`, 454 bytes). No other unclaimed V.34 near-miss existed in
 the same scan (`V34EchoHistoryBackwardClean`, the other V.34 name in the
 list, is defined in `v34filters.c`, out of scope for this pass).
 Baseline: grade 0 EXACT 737 of 1852. Per docs/method/refinement.md's own
@@ -119485,7 +119485,7 @@ strongest instruction, each file was worked as a whole translation unit
 single-symbol worklist. Final: grade 0 EXACT **741 of 1852** (+4, 0
 regressions, 0 bystanders lost).
 
-**`v34hshak.c`: `dftnlinitSignalBins` and `dftnlinitNoiseBins` CLOSED to
+**`V34hshak.c`: `dftnlinitSignalBins` and `dftnlinitNoiseBins` CLOSED to
 grade 0.** A full-file `instrcount.py` sweep of the file's ~41 symbols
 (prompted by `datapumpv34`'s own near-miss) found both at 18 instructions
 against the object's 18 but 87 bytes against 83 -- lever 0's warning that
@@ -119506,7 +119506,7 @@ header were updated in lockstep (same semantic mutation, `<=3` -> `<=2`
 loop bound, preserved); `anchorcheck.py` clean, 0 issues over 228 suites /
 9767 mutations.
 
-**`v34hshak.c`: `datapumpv34` DECLINED, unchanged (SIZE, 40 differing
+**`V34hshak.c`: `datapumpv34` DECLINED, unchanged (SIZE, 40 differing
 bytes) -- extends F8044/F8045 with two new negatives.** F8045's own
 14-cell enumeration (local `rx`/`tx` pointers, `if`/`else` `dp_run`,
 `unsigned short err` compared via `(short)err`) reached SIZE 34 and
@@ -119589,7 +119589,7 @@ up from -6) and was reverted; declined without a full exhaustive
 callee-set enumeration under this pass's budget, same residual family as
 `initV34`.
 
-**`v34rx.c`: `rxinit`'s `if`/`else` layout DECODED (unique 2-cell
+**`V34RX.c`: `rxinit`'s `if`/`else` layout DECODED (unique 2-cell
 preimage); whole-symbol closure DECLINED, a separate register-allocation
 residual is the blocker.** Source read (before this pass):
 `if (rx->flags & V34_RX_FLAG_LATE_TRN) { p_shift=2; i_shift=10; } else {
@@ -119628,7 +119628,7 @@ domain-scoping rule; the difference is purely which hardware register the
 allocator assigns and how many times it re-zeroes one, which
 CLAUDE.md's own framework holds is not determined by the statement being
 looked at. `rxinit` additionally sits at emission index 0 of its own
-translation unit (the lowest blob address among all of `v34rx.c`'s
+translation unit (the lowest blob address among all of `V34RX.c`'s
 symbols, confirmed via `nm -n` against the blob's own address order),
 which is lever 3's own stated boundary: nothing in this file precedes it
 that could be reordered to change its register allocation. Before this
@@ -119700,7 +119700,7 @@ Against current `master`, grade-0 EXACT moves **741 -> 749**, grade 0-or-1
 **801 -> 809**, BYTES **146 -> 138**, with SIZE unchanged at 904 and REGALLOC
 unchanged at 53. The exact-set diff contains eight additions and no losses.
 
-**`v32rxhdx.c`: four direct closures from the same two-spelling domain.**
+**`V32rxhdx.c`: four direct closures from the same two-spelling domain.**
 `RxHdxRateSequence`, `RxHdxSequence`, `RxHdxData` and `RxHdxToneData` each
 contained the same pair of consecutive statements:
 
@@ -119881,7 +119881,7 @@ did find two independent pieces of test integration drift. First,
 renamed that recovered field to `rate`; replacing that one stale member name
 does not change the scenario or its value. Second, `runtime64.c` still defined
 an aborting `FDSP_Kernel_InitObj` placeholder after the real implementation
-landed in `src/service/fdspkrnl.c`, while it lacked the TTY callbacks imported
+landed in `src/service/Fdspkrnl.c`, while it lacked the TTY callbacks imported
 by the now-reconstructed voice and caller-ID services. Because every 64-bit
 interop binary intentionally links all of `$(SRC)`, the result was one
 duplicate definition and two undefined symbols before any interop test ran.
@@ -120750,7 +120750,7 @@ subtraction, accumulation order, nor the final divide changes.
 
 All six candidates compile the complete translation unit at the unchanged
 GCC 3.4.2 flags, and are scored by `byteident.py`'s own `body`, `verdict`,
-and `alpha_equal`.  Comparing all **23 shared `beepgen.c` symbols** in both
+and `alpha_equal`.  Comparing all **23 shared `Beepgen.c` symbols** in both
 directions finds only `fComputeRMSValueShortBuf` changing its grade or
 differing-byte count: BYTES 29 to EXACT, with no bystander loss.  The
 generated domain and objects live under this worktree's ignored
@@ -121580,7 +121580,7 @@ full-tree ratchet were not rerun or claimed as new validation.
 
 ## F10236. `FDSP_DP_Delete`'s final cleanup helper is a constant map over 12 ordinary C cells
 
-A fresh repository-default GCC 3.4.2 compile of `src/service/fdspkrnl.c`
+A fresh repository-default GCC 3.4.2 compile of `src/service/Fdspkrnl.c`
 confirms **BYTES 10/157** for `FDSP_DP_Delete`.  The blob clears EBX before
 the final `sysdep_free`, preserves that zero across the call, and stores it
 to `pGlobalFDSPObj`.  The reconstruction calls first, clears EAX afterwards,

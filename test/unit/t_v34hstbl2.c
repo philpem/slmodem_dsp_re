@@ -3,7 +3,7 @@
  * against the blob.
  *
  * This is the first tier-1 differential test of any part of `v34handshak`.
- * Side A runs `v34handshak_txblock` from src/pump/v34/v34hshak.c and side
+ * Side A runs `v34handshak_txblock` from src/pump/v34/V34hshak.c and side
  * B runs `ref_v34handshak`, the whole 61,541-byte blob function, on an
  * object the fixture has steered into this dispatch and no other.  Over that
  * domain the two are the same function: the guards read three halfwords and

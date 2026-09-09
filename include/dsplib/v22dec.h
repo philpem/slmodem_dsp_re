@@ -43,7 +43,7 @@ extern const short DECv22_ANGL12[4];
 extern const short DECv22_QMAP12[4];
 extern const short DECv22_IMAP12[4];
 
-/* The sixteen-point set, laid out quadrant-major: see the note in v22dec.c. */
+/* The sixteen-point set, laid out quadrant-major: see the note in V22Dec.c. */
 extern const short DECv22_ANGL24[16];
 extern const short DECv22_QMAP24[16];
 extern const short DECv22_IMAP24[16];
@@ -69,7 +69,7 @@ extern const short DECv22_MAG24[3];
  *     the other way.  So bits 3:2 of an index are the quadrant, and the shift
  *     that turns the field into 0..3 is two.
  *   - `DECv22_IMAP24` and `DECv22_QMAP24` change sign exactly with bits 3 and
- *     2 of their own index -- see the layout note in v22dec.c -- which is the
+ *     2 of their own index -- see the layout note in V22Dec.c -- which is the
  *     same statement read off the tables.
  *   - bits 1:0 survive `FSEv22_decision24`'s return untouched, ORed in after
  *     the differential step, which is what makes them the amplitude pair

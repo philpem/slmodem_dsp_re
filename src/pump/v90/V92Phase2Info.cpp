@@ -8,7 +8,7 @@
  * carries the object map and says where each field came from.
  *
  * THIS FILE DID NOT EXIST UNTIL THE CONSTRUCTOR DID, and that is why the
- * offset assertions below moved here from src/pump/v90/VPcmFloModem.cpp.
+ * offset assertions below moved here from src/pump/v90/VpcmFloModem.cpp.
  * They were parked there because it was "the only translation unit that uses
  * the class and it has no .cpp of its own", which stopped being true with
  * this file.  The set is unchanged apart from the four entries the

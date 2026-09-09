@@ -1,6 +1,6 @@
 [
  {
-  "note": "src/service/fdspkrnl.c against build/test/t_fdspkrnl.  The claims: the sliding window's origin and direction, the error path, the half-peak double-talk gate, the LMS update, the energy gate's scale/threshold/ring, the countdown length, the block reversal, and the TONE trio's exact arithmetic."
+  "note": "src/service/Fdspkrnl.c against build/test/t_fdspkrnl.  The claims: the sliding window's origin and direction, the error path, the half-peak double-talk gate, the LMS update, the energy gate's scale/threshold/ring, the countdown length, the block reversal, and the TONE trio's exact arithmetic."
  },
  {
   "label": "the reference window starts one sample later",

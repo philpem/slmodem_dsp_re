@@ -30,7 +30,7 @@
  * WHY THE HOST RATE IS THE DATAPUMP'S OWN 8000 AND NOT SOMETHING THE WRAPPER
  * HAS TO CONVERT.  At 9600 `dp_wrapper_create` builds two rate converters and
  * the ledger goes four blocks short -- not because `v22_delete` misses them,
- * but because `src/core/fixedrc.c` releases them through libc `free` where
+ * but because `src/core/FixedRC.c` releases them through libc `free` where
  * the object calls `sysdep_free`, so the harness's counters never see the
  * calls.  That is finding F8530, it is a real divergence in a file outside
  * this one's scope, and it is not this test's to paper over.  At 8000 the

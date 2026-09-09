@@ -166,7 +166,7 @@ struct cadence {
 	/*
 	 * `cadence_setup.w6`, copied straight through.  Never read back by
 	 * anything reconstructed: the only two callers pass 0 (detector.c,
-	 * busy/dial) or 1 (callprog.c, both), so the value the field ends up
+	 * busy/dial) or 1 (Callprog.c, both), so the value the field ends up
 	 * holding differs by caller, but nothing downstream branches on it.
 	 */
 	int	int_2a4;				/* +0x2a4 */
@@ -183,7 +183,7 @@ struct cadence {
 	 * Selects between two spellings of the same windowed match: a loop
 	 * over `cycles` periods when set, and a hand-unrolled check of the
 	 * last two and last three when clear.  They are not equivalent -- see
-	 * src/callprog/cadence.c.
+	 * src/callprog/Cadence.c.
 	 */
 	int	looped_match;				/* +0x2ac */
 

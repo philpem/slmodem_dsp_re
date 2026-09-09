@@ -339,7 +339,7 @@ public:
 	 * `connectionEvaluator->` (four sites, all in `enterPhase3`) and
 	 * belonged to other work at the time; the second naming pass carried
 	 * the rename through that file, which this batch does own.  (The
-	 * earlier claim that `VPcmFloModem.cpp` also names these two was
+	 * earlier claim that `VpcmFloModem.cpp` also names these two was
 	 * stale -- that file's own reference is to +0x78/+0x7c, the
 	 * DIFFERENT pair below, and grep over the whole tree outside `re/`
 	 * finds no `word_70`/`word_74` there at all.)  `avePdsnr` is rule 1:
@@ -388,7 +388,7 @@ public:
 	 * `word_78`, was spelled 45 times across nine files and
 	 * `V90Equalizer` has a DIFFERENT member of the same name at its own
 	 * +0x78 -- so this rename touched every referrer of THIS class's
-	 * +0x78 (`VPcmFloModem.cpp`, this file's own offset asserts, and the
+	 * +0x78 (`VpcmFloModem.cpp`, this file's own offset asserts, and the
 	 * unit tests) and left `V90Equalizer::word_78` alone, being a
 	 * different field of a different class at a coincident offset.
 	 *

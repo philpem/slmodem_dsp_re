@@ -481,7 +481,7 @@ V90ConnectionEvaluator::evaluateMeanErrorStdPhase4(float, float)
  * not a no-op -- it is what makes the subtraction yield a fraction.
  *
  * `(frac < 0) ? -frac : frac` rather than `abs()`, for the reason
- * `VPcmFloModem.cpp` gives: `cltd; xor %edx,%eax; sub %edx,%eax` returns
+ * `VpcmFloModem.cpp` gives: `cltd; xor %edx,%eax; sub %edx,%eax` returns
  * INT_MIN at INT_MIN and C's `abs()` is undefined there.
  *
  * 1000 IS A `.rodata.cst4` CONSTANT, four bytes, so it cannot have been a

@@ -18,12 +18,12 @@ exactly why they have been skipped, and why 731 of them have accumulated.
 
 Restore them, highest count first:
 
-    261  v34handshak         src/pump/v34/v34hshak.c
-     28  probeselect         src/pump/v34/v34hshak.c
-     15  CALLPROG_Progress   src/callprog/callprog.c
-     12  DialerProgress      src/dialer/dialer.c
+    261  v34handshak         src/pump/v34/V34hshak.c
+     28  probeselect         src/pump/v34/V34hshak.c
+     15  CALLPROG_Progress   src/callprog/Callprog.c
+     12  DialerProgress      src/dialer/Dialer.c
      10  v8handshak          src/v8/v8handshak.c
-      9  v34handshakinit     src/pump/v34/v34hshak.c
+      9  v34handshakinit     src/pump/v34/V34hshak.c
 
 ## Do `probeselect` FIRST, out of count order
 

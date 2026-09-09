@@ -1,6 +1,6 @@
 [
  {
-  "note": "src/service/fdspkrnl.c against build/test/t_fdspdp.  The claims: the six allocation sizes and that all six happen, which delay lands on which channel and that both only land on the allocating path, the status decision and which argument it reads, the two globals, that InitObj runs, which blocks FDSP_DP_Delete frees, and that a NULL kernel leaves the global alone."
+  "note": "src/service/Fdspkrnl.c against build/test/t_fdspdp.  The claims: the six allocation sizes and that all six happen, which delay lands on which channel and that both only land on the allocating path, the status decision and which argument it reads, the two globals, that InitObj runs, which blocks FDSP_DP_Delete frees, and that a NULL kernel leaves the global alone."
  },
  {
   "label": "FDSP_DP_Delete leaves the buffer block",

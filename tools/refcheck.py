@@ -60,7 +60,7 @@ with the tree.  A bare `\\d+[a-z]` matches `1u`, `0f`, `02x`, `400s` and every
 printf width in the test suite -- 111 hits on `0x` alone -- and this runs in
 `make test`, where a false positive is worse than a miss.  Even restricted to
 three digits and a letter it takes `837k` out of `P(k) = -21k^2 + 837k - 354`
-in v34rx.c.  So: write "finding F158" and it is covered; write "158" and it is
+in V34RX.c.  So: write "finding F158" and it is covered; write "158" and it is
 not.
 
 THE `--since` WINDOW IS 48 CHARACTERS EITHER SIDE, with numbers blanked.  Two

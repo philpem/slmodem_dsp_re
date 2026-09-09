@@ -1025,7 +1025,7 @@ run_preempindex_traced(short limit, short meas, short baud, long tag)
 /* --- v34handshakinit ------------------------------------------------------ */
 
 /*
- * The three state words.  Named here as well as in v34hshak.c so that this
+ * The three state words.  Named here as well as in V34hshak.c so that this
  * file does not silently agree with a transposition it is meant to detect:
  * every case below seeds all three to DIFFERENT values, and the transcript
  * sweep drives them on three offset cycles for the same reason.
@@ -1449,7 +1449,7 @@ main(void)
 		/*
 		 * The clear runs seven shorts past the low-pass.  Assert the
 		 * fourteen bytes after +0xaba0 really were written, or the
-		 * comment in v34hshak.c is describing something the test
+		 * comment in V34hshak.c is describing something the test
 		 * cannot see.
 		 */
 		diff_eq_int("the clear passes the low-pass",
@@ -1654,7 +1654,7 @@ main(void)
 	 * neither announcement had ever run.  Everything above drives
 	 * `preempindex` at level 0, where every gate is false, so both of
 	 * its live sites executed zero times over the whole suite and
-	 * `tools/debugcov.py` named v34hshak.c:823 and :834 as the file's
+	 * `tools/debugcov.py` named V34hshak.c:823 and :834 as the file's
 	 * last two dead sites.  The function being under test is not the
 	 * same thing as its diagnostics being driven.
 	 *

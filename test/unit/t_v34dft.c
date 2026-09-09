@@ -6,7 +6,7 @@
  * The TABLE is data, so it is compared entry for entry against the object's
  * own copy.  That is the only check in this file that could catch a
  * transcription slip, and it is worth having on its own because 255 of the
- * 256 entries are derivable and one is not (see dftc.c).
+ * 256 entries are derivable and one is not (see DFTC.c).
  *
  * The INTEGER path is ordinary fixed point and compares as bytes.
  *

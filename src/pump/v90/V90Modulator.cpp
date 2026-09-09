@@ -611,7 +611,7 @@ V90Modulator::exitDIL()
  *
  * THE BLOCK SIZE GOES TO ONE AND THE ANSWER IS ASKED FOR TWICE.
  * `setSymbolsBlockSize` RETURNS `nofBitsForNextTime()` -- the blob inlines
- * the whole of the second into the first (V90BitsToSymbol.cpp) -- and this
+ * the whole of the second into the first (V90bitsToSymbol.cpp) -- and this
  * function then calls `nofBitsForNextTime` separately anyway, at 0x1a2fd and
  * 0x1a308.  Two calls, two `call` relocations, and the first one's result is
  * dropped on the floor.  That is the object's and it is written that way.

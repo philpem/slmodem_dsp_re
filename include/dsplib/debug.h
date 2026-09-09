@@ -52,7 +52,7 @@ extern unsigned int dsplibs_debug_level;
  * `dsplib_v34_blob_preemp` is DIFFERENT and deliberately stays -- it is not an
  * instrument.  It selects between the object's pre-emphasis counter and the
  * shape matcher that replaced it, defaults to the object's under
- * DSPLIB_REPRODUCE_BUGS, and is declared in `v34hshak.c` beside the code it
+ * DSPLIB_REPRODUCE_BUGS, and is declared in `V34hshak.c` beside the code it
  * governs.  See docs/deviations.md.
  */
 

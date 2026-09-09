@@ -29,7 +29,7 @@ That makes 162 archived logs a complete experiment with no bench time at all.
 
 WHICH HANDSHAKE EACH ONE WAS.  `V34HSINIT` logs the `mode` argument to
 `v34handshakinit`, and `datapumpv34` sets `DP_MODE` from that call immediately
-afterwards (v34hshak.c:10010/10024/10042/10058):
+afterwards (V34hshak.c:10010/10024/10042/10058):
 
     HSINIT mode 0  cold start           DP_MODE 0 (memset)   <=3  ARMED
     HSINIT mode 1  our own retrain      DP_MODE 2 or 3       <=3  ARMED

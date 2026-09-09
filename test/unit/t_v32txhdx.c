@@ -127,7 +127,7 @@ extern void ref_FPM_PPS_init(struct fpm_pps *state,
 /* --------------------------------------------------------------- offsets */
 
 /*
- * The two fields `src/pump/v32/v32txhdx.c` derives; spelled again here rather
+ * The two fields `src/pump/v32/V32TXHDX.c` derives; spelled again here rather
  * than exported, and guarded in case a sibling header grows them.
  */
 #ifndef V32HDX_STATE_LEFT

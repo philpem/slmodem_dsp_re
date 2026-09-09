@@ -719,7 +719,7 @@ Task numbers are not safe across sessions either: two task stores exist whose
   under `src/`, no C++ -- so such a call compiled, linked 32-bit, passed `make
   one`, and failed `make phase` at `t_spandsp_v23` with an undefined
   reference. They now also link `$(CXXOBJ64)`, a 64-bit build of the C++ half,
-  and `src/pump/v34/v34hshak.c` already calls `V34SetINFO1aBits` and
+  and `src/pump/v34/V34hshak.c` already calls `V34SetINFO1aBits` and
   `V34SetINFO0aBits` across that boundary with `make phase` green. So the call
   is allowed; what is NOT allowed is adding a link target that omits
   `$(CXXOBJ64)`, which brings the whole failure straight back. `make test` and

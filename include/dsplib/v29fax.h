@@ -1354,7 +1354,7 @@ void ScrambleDataV29(void *modem, unsigned short *data, unsigned short count);
  * A pointer bump onto the receive block's `struct fpm_sdm` at
  * `V29RX_SDM`, then a tail jump to `SDM_descrambler`. The pairing with
  * `ScrambleDataV29` is confirmed by which block each reaches, not by the
- * names -- both jump to `src/fax/sdm.c`'s copies, byte for byte the same
+ * names -- both jump to `src/fax/SDM.c`'s copies, byte for byte the same
  * code as the `FPM_SDM_*` pair, and not to the `FPM_` ones themselves.
  *
  * @param modem  The V.29 receive handle.

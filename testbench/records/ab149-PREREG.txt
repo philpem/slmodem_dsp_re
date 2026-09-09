@@ -8,7 +8,7 @@ a metric chosen after seeing the data turned out to be p=0.05 post-hoc on n=9
 the data exists, so that cannot happen again.
 
 THE CHANGE UNDER TEST
-  v34hshak.c:10096, gated on DSPLIB_V34_RRN_ON_BADBLOCK:
+  V34hshak.c:10096, gated on DSPLIB_V34_RRN_ON_BADBLOCK:
 
       if (dsplib_v34_rrn_on_badblock
           && !(T3C_RX(obj)->flags & 0x40)

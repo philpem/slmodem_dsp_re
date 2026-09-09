@@ -25,7 +25,7 @@
  * double nearest pi.  `.rodata.cst4` 0x57c is the FLOAT 2*pi, and the float
  * nearest 6.28318530718 and the float nearest 2*pi are the same float, so
  * that one says nothing about which the author wrote.  `TONE_generate` in
- * `fdspkrnl.c` carries the same truncated double, which is why it is kept
+ * `Fdspkrnl.c` carries the same truncated double, which is why it is kept
  * rather than corrected.
  *
  * `fprem` IS THE ONE IN THE WHOLE OBJECT, and no `fmod` symbol is defined

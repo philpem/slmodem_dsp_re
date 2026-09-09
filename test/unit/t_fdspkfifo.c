@@ -1,6 +1,6 @@
 /*
  * t_fdspkfifo.c -- differential tests for the FIFO8 byte ring
- * (src/service/fifo8.c, blob 0xaef30..0xaf150).
+ * (src/service/Fifo8.c, blob 0xaef30..0xaf150).
  *
  * The two sides never share a ring: each gets its own `struct fifo8` and its
  * own backing buffer, and every field of both is compared afterwards.  Where

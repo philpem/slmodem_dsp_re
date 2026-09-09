@@ -1,6 +1,6 @@
 [
  {
-  "note": "src/service/beepgen.c against build/test/t_beepgen.  Every claim here is behavioural: the DTMF table, the validity predicates' exact window shape, the truncating casts, the integer-vs-float mean, the reciprocal tail, the hardwired scales and thresholds, and GetGain's dB arithmetic."
+  "note": "src/service/Beepgen.c against build/test/t_beepgen.  Every claim here is behavioural: the DTMF table, the validity predicates' exact window shape, the truncating casts, the integer-vs-float mean, the reciprocal tail, the hardwired scales and thresholds, and GetGain's dB arithmetic."
  },
  {
   "label": "the frequency outputs are swapped",

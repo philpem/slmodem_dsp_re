@@ -393,7 +393,7 @@ Stage 2 of task #113, all of it gated on the period differential. Finding F1354.
 
 `src/` and `include/` contain **no `volatile` outside a comment**. Every
 remaining `(double)` is an integer conversion, a `sizeof`, a libm argument or
-`dftc.c`'s deliberate widening.
+`DFTC.c`'s deliberate widening.
 
 **What one removal cost the modern build**, and it is the only one:
 `tools/gccdiverge.json` declares `t_fft`'s four checks, 47,955 of 476,100

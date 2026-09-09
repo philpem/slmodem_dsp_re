@@ -10,7 +10,7 @@ seven. This file is the operating manual.
 
 ## The guards, and what each covers TODAY
 
-Read this from the tree, not from here: `grep -n 't3m_notwritten(\|t3c_unwritten(' src/pump/v34/v34hshak.c`.
+Read this from the tree, not from here: `grep -n 't3m_notwritten(\|t3c_unwritten(' src/pump/v34/V34hshak.c`.
 As of the session that landed rxstate 53's arm:
 
 | guard | still covers | bytes |
@@ -358,7 +358,7 @@ each got it wrong in its own way -- 46 was marked `open` because it was not in
 the file that batch happened to be editing. Task #25 unified the two
 (findings F546-551) and `src/pump/v34/v34hshak_t3mid.c` no longer exists, so
 there is one file, one `v34handshak`, and nothing left for the column to say.
-Check a row with `grep -n 'case V34HS_' src/pump/v34/v34hshak.c`, or with
+Check a row with `grep -n 'case V34HS_' src/pump/v34/V34hshak.c`, or with
 `tools/anchorcheck.py`'s `arm_map`, which prints all forty microstates and the
 function each dispatches to.
 
@@ -448,7 +448,7 @@ case.
 
 ## Table 2, the transmit supervisor -- DONE
 
-`src/pump/v34/v34hshak.c` and `test/unit/t_v34hstbl2.c`, 11,009 checks. The
+`src/pump/v34/V34hshak.c` and `test/unit/t_v34hstbl2.c`, 11,009 checks. The
 first tier-1 differential test of any part of `v34handshak`. Findings F360-366,
 and 591 for the collapse of the last of its three reconstructions onto
 `t3m_txblock`/`t3m_tail` -- the dispatch now lives in `v34handshak`'s own file
@@ -543,7 +543,7 @@ happened in this file (microstate 46 was the first). Write it from the tree.
 before they could be written at all**: `probe`, 64 signed shorts at
 `.rodata+0x2c00`, which 51 reads and which this tree did not have (finding
 F421); and `vectpp`, 96 shorts at `.rodata+0x2c80`, which 20 reads as forty-eight
-FOUR-byte points and which was `static` in v34rx.c (finding F422). 21 needed
+FOUR-byte points and which was `static` in V34RX.c (finding F422). 21 needed
 neither, because the eight `hsine*` tables it reaches are reached through
 `setupreceiver` and are already global in `v34filters.c`. Read both
 before estimating what is left -- an arm that reads a table this tree does
@@ -566,7 +566,7 @@ table before they could be written at all, and the third needed its VALUES**:
 `probe`, 64 signed shorts at `.rodata+0x2c00`, which 51 reads and which this
 tree did not have (finding F421); `vectpp`, 96 shorts at `.rodata+0x2c80`,
 which 20 reads as forty-eight FOUR-byte points and which was `static` in
-v34rx.c (finding F422); and `cfg->rx_divtab` at +0xaaac, which 66's rate ladder
+V34RX.c (finding F422); and `cfg->rx_divtab` at +0xaaac, which 66's rate ladder
 walks and which the fixture aims at its shared `dummy` block -- whose entries
 are so nearly equal that `entry >> 5` is 600 at every index the ladder
 reaches, and nine of 66's claims could not fail against it (finding F429). Read

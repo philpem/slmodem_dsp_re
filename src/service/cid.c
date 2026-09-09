@@ -15,8 +15,8 @@
  * so the signatures here are quoted, not inferred.  The object underneath is
  * eight bytes: the modem handle, for `modem_send_to_tty`, and the real CID
  * receiver `cid_create` hands back.  Everything that demodulates lives below
- * this file, in `src/service/rxcid.c`, `cid_fsd.c`, `cid_mtd.c` and
- * `dtmf_rx.c`, and all of it is written -- an unwritten callee would not
+ * this file, in `src/service/Rxcid.c`, `Cidfsd.c`, `Cidmtd.c` and
+ * `Dtmf_Rx.c`, and all of it is written -- an unwritten callee would not
  * "resolve to the blob's copy at link time" but fail to link at all (F8492).
  *
  * THE SPAN NAME IS NOT THE MODULE NAME (the CLAUDE.md rule): the blob's

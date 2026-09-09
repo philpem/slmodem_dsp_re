@@ -86,7 +86,7 @@
   "find": "vect4[q];",
   "replace": "vect4[q & 3];",
   "equivalent": true,
-  "why": "V34scrambler with nbits == 2 returns (reg >> 29) & 3, so the index is already 0..3 and `& 3` cannot change it.  HELD FIXED: that return contract, which is v34rx.c's and not this function's -- the object indexes unmasked, so the mask is written here as a mutation and not as code.  This is an equivalence over the whole range V34scrambler can produce, not over the sample the sweep happens to hit."
+  "why": "V34scrambler with nbits == 2 returns (reg >> 29) & 3, so the index is already 0..3 and `& 3` cannot change it.  HELD FIXED: that return contract, which is V34RX.c's and not this function's -- the object indexes unmasked, so the mask is written here as a mutation and not as code.  This is an equivalence over the whole range V34scrambler can produce, not over the sample the sweep happens to hit."
  },
  {
   "label": "the Ja arm does not consult the bit source at all",

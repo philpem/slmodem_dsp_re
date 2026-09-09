@@ -82,7 +82,7 @@
 /* The three getters below take one; include/dsplib/int_complex.h defines it. */
 struct int_complex;
 
-/* A pointer only; src/pump/v90/VPcmFloModem.cpp includes the definition. */
+/* A pointer only; src/pump/v90/VpcmFloModem.cpp includes the definition. */
 class V92Parameters;
 
 /** @brief Entries in each of the four float arrays getUinfoValue() clears
@@ -263,7 +263,7 @@ public:
 	/*
 	 * --- The four VPcmV34Progress entry points ----------------------------
 	 *
-	 * All four are written, in src/pump/v90/VPcmFloModem.cpp.
+	 * All four are written, in src/pump/v90/VpcmFloModem.cpp.
 	 * `VPcmV34Progress` (src/pump/v34/v34pcmmain.cpp) calls all four and
 	 * nothing else does. Each is declared weak via
 	 * `DSPLIB_VPCMFLO_UNWRITTEN`, defined empty just below: a weak
@@ -275,7 +275,7 @@ public:
 	 * `include/dsplib/vpcm.h` carries the same arrangement for the five
 	 * `VPcmV34*` entry points and explains it at length. A TU that
 	 * DEFINES one of these must not itself define the macro, or the
-	 * definition becomes weak too -- `VPcmFloModem.cpp`, which defines
+	 * definition becomes weak too -- `VpcmFloModem.cpp`, which defines
 	 * all four, does not. Return types are not mangled: `int` is what
 	 * `VPcmV34Progress` switches on for the first three, and
 	 * `vPcmResetPhase3Modem`'s result is discarded, so it is `void`.
@@ -363,7 +363,7 @@ public:
 	 * +0x21d and `bitVector` below is `short[]`, so the compiler's own
 	 * 2-byte alignment inserts exactly this one byte with the member
 	 * deleted -- VPCM_OFF's existing `bitVector` assertion at +0x21e
-	 * (VPcmFloModem.cpp) is what proves it; confirmed zero readers/writers
+	 * (VpcmFloModem.cpp) is what proves it; confirmed zero readers/writers
 	 * anywhere in the object under finding F10142, removed under F10150.
 	 */
 
@@ -461,7 +461,7 @@ public:
 	 * +0x173f was `pad_173f[1]`: `clr` ends at +0x173f and `sweepCounter`
 	 * below is a 4-byte-aligned `int` at +0x1740, so natural alignment
 	 * inserts exactly this one byte with the member deleted -- proved by
-	 * adding `VPCM_OFF(sweepCounter, 0x1740, sweep)` to VPcmFloModem.cpp.
+	 * adding `VPCM_OFF(sweepCounter, 0x1740, sweep)` to VpcmFloModem.cpp.
 	 * Zero readers/writers anywhere in the object (F10142); removed F10150.
 	 */
 
@@ -550,7 +550,7 @@ public:
 	 * and `pcmSessionType` below is a 4-byte-aligned `int` at +0x611c, so
 	 * natural alignment inserts exactly these two bytes with the member
 	 * deleted -- the existing `VPCM_OFF(pcmSessionType, 0x611c, sesstype)`
-	 * (VPcmFloModem.cpp) is what proves it. Zero readers/writers anywhere
+	 * (VpcmFloModem.cpp) is what proves it. Zero readers/writers anywhere
 	 * in the object (F10142); removed F10150.
 	 */
 
@@ -596,7 +596,7 @@ public:
 	unsigned char block_6c0c[0x6f5c - 0x6c0c];	/* +0x6c0c         */
 
 	/* +0x6f5c  The ANSamToneDetector, embedded, 0x3c bytes
-	 * (src/pump/v90/ANSamToneDetector.cpp asserts it); 0x6f5c + 0x3c is
+	 * (src/pump/v90/AnsamToneDetector.cpp asserts it); 0x6f5c + 0x3c is
 	 * 0x6f98, the next field, so the two bound each other. */
 	ANSamToneDetector ansam;
 
@@ -695,7 +695,7 @@ public:
 	 * `nofTransmitSequences` below is a 2-byte-aligned `unsigned short` at
 	 * +0x7dd4, so natural alignment inserts exactly this one byte with the
 	 * member deleted -- the existing `VPCM_OFF(nofTransmitSequences,
-	 * 0x7dd4, nseq)` (VPcmFloModem.cpp) is what proves it. Zero
+	 * 0x7dd4, nseq)` (VpcmFloModem.cpp) is what proves it. Zero
 	 * readers/writers anywhere in the object (F10142); removed F10150.
 	 */
 
@@ -754,7 +754,7 @@ public:
 	 * `ecMode` below is a 4-byte-aligned `unsigned int` at +0x7f60, so
 	 * natural alignment inserts exactly these three bytes with the member
 	 * deleted -- proved by adding `VPCM_OFF(ecMode, 0x7f60, ecmode)` to
-	 * VPcmFloModem.cpp. Zero readers/writers anywhere in the object
+	 * VpcmFloModem.cpp. Zero readers/writers anywhere in the object
 	 * (F10142); removed F10150.
 	 */
 	unsigned int ecMode;				/* +0x7f60         */

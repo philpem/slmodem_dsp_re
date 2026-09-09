@@ -19,7 +19,7 @@
  * that its bytes are unread, only that they are not yet modelled as fields.
  *
  * A naming pass (F10123) gave most `fNNN` fields solid names, but a field
- * shared with `v34hshak.c`, `v34hstx1.cpp`, `v34pcmif.c`, `v34diag.cpp` or
+ * shared with `V34hshak.c`, `v34hstx1.cpp`, `v34pcmif.c`, `v34diag.cpp` or
  * a mutation fixture keeps its old bare name here where renaming it would
  * reach outside this file's own blast radius (F2157/F3002); such fields
  * carry their derived name in a `-- derived: NAME, withheld (F10123)` note
@@ -46,7 +46,7 @@ struct v34_receiver {
 	 * `rxsymcnt` ("S-S1 is detected,rxsymcnt= %d,pllcnt= %d,gain= 0x%x").
 	 *
 	 * -- derived: rxsymcnt, withheld (F10123): eleven references in
-	 * `v34hshak.c` and two mutation fixtures (`v34hsrx4.json`,
+	 * `V34hshak.c` and two mutation fixtures (`v34hsrx4.json`,
 	 * `v34hsrx72.json`) match this field's text verbatim.
 	 */
 	short           rx_blocks;            /* +0x124 */
@@ -89,7 +89,7 @@ struct v34_receiver {
 					  wrapping at 36 (F10123) */
 	/*
 	 * +0x19e.  A one-shot latch, not an RMS scalar: `dpskinit` and its
-	 * re-arm clear it alongside `rms_idx`, but `v34hshak.c`'s
+	 * re-arm clear it alongside `rms_idx`, but `V34hshak.c`'s
 	 * `RX_PHASE2_CALL` step reads it as "have we already passed this gate
 	 * once" -- the first time the phase-2 symbol counter passes 0x125f it
 	 * is still zero, so the retrain tone-detector is skipped and the
@@ -172,7 +172,7 @@ struct v34_receiver {
 	 * which turned out to be a plausible-looking coincidence.)
 	 *
 	 * -- derived: ppm_period, withheld (F10123): two references in
-	 * `v34hshak.c` and three mutation fixtures.
+	 * `V34hshak.c` and three mutation fixtures.
 	 */
 	short           report_interval;            /* +0x1d2 */
 	short           f1d4;            /* +0x1d4 write-once-to-zero
@@ -363,7 +363,7 @@ struct v34_receiver {
 	 * local rrn down" / "... up".
 	 *
 	 * Named from the read side alone: nothing written so far in this
-	 * tree ever sets it to a nonzero value (`v34hshak.c` only clears it),
+	 * tree ever sets it to a nonzero value (`V34hshak.c` only clears it),
 	 * so which exact nonzero values besides 2 occur is not established --
 	 * only that "not 2" means "up", per the else arm.  Usage inference,
 	 * strongly supported by the two branches' own debug text (F10132).
@@ -379,7 +379,7 @@ struct v34_receiver {
 	 * instead of copying it from here.
 	 *
 	 * -- derived: agc_gain_init, withheld (F10123): nineteen references in
-	 * `v34hshak.c`, two more each in `v34hstx1.cpp`/`v34pcmcreate.cpp`,
+	 * `V34hshak.c`, two more each in `v34hstx1.cpp`/`v34pcmcreate.cpp`,
 	 * and four mutation fixtures.
 	 */
 	short           agc_start_gain;            /* +0x262 */

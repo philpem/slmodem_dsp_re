@@ -100,7 +100,7 @@ static const short prevs[] = { 0, 4, 8, 12, 2, 15, -4, (short)0x8000 };
 /*
  * The counting models.  These exist ONLY to decide whether a trial separates
  * two readings; nothing here decides whether the reconstruction is right --
- * the blob does that.  They are written from the tables, not from v22dec.c.
+ * the blob does that.  They are written from the tables, not from V22Dec.c.
  */
 static int
 best12(short si, short sq, int truncate, int swap)

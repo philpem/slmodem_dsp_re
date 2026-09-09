@@ -113,7 +113,7 @@ typedef char v90m_dem_size[(sizeof(V90Demodulator) == 0x298) ? 1 : -1];
  * differently -- the layout the blob has is a 32-bit layout, and asserting it
  * on a host that cannot have it is asserting the wrong thing.
  *
- * `sizeof(V90Modem)` is NOT asserted here: src/pump/v90/VPcmFloModem.cpp
+ * `sizeof(V90Modem)` is NOT asserted here: src/pump/v90/VpcmFloModem.cpp
  * already asserts it, and it settled the number before any of these fields
  * existed.  A second copy would look like a second measurement.
  */

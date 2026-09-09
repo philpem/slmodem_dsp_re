@@ -5,7 +5,7 @@
  * (0x09f150) and immediately after `cTOOLS_handle_hdlc_output` (0x09ef10..
  * 0x09f0a3, class1tx.c): `null_create`, `null_delete`, `null_process`,
  * `null_status`, `null_control`.  Not V.17/21/27/29-specific and not
- * `sdm.c`'s, so they get a file of their own.
+ * `SDM.c`'s, so they get a file of their own.
  *
  * WHAT THEY ARE.  `relocscan.py` finds every one of the five referenced ONLY
  * from `.rodata`, five consecutive pointers at the head of a 13-slot table --

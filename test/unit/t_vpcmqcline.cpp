@@ -30,7 +30,7 @@
  * where the argument for each of those lives.
  *
  * A BINARY OF ITS OWN, not more trials in one of those two.  All four entry
- * points share `VPcmFloModem.cpp`, so a mutation set over that file scored by
+ * points share `VpcmFloModem.cpp`, so a mutation set over that file scored by
  * ONE binary could not tell which function a row belongs to;
  * `test/mutations/suites.json` already maps five sets over this file to five
  * binaries for exactly that reason and `vpcmqcline` is the sixth.

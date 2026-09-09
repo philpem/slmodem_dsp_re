@@ -26,7 +26,7 @@
  * whole block can be processed between compactions.
  *
  * (FixedRC uses the same trick in the opposite direction -- see
- * src/core/fixedrc.c.  Both trade one memmove per block for an inner loop
+ * src/core/FixedRC.c.  Both trade one memmove per block for an inner loop
  * with no index wrapping.)
  */
 

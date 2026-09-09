@@ -137,7 +137,7 @@
 #define V32HDX_LONG_7C		0x7c
 /* hdx + 0x44, zeroed on the ring-response arm.  Modelled, unnamed. */
 #define V32HDX_SHORT_44		0x44
-/* hdx + 0x84, the transmit block charge; v32txhdx.c names it. */
+/* hdx + 0x84, the transmit block charge; V32TXHDX.c names it. */
 #define V32HDX_BLOCK_CHARGE	0x84
 
 /*

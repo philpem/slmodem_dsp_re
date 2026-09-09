@@ -679,7 +679,7 @@
   "find": "\tobj->seg_symcount = 0;\n\tobj->tx_flags",
   "replace": "\tobj->tx_flags",
   "equivalent": true,
-  "why": "`txinit`, which this tail-calls, sets `seg_symcount` to 0 itself (v34rx.c) -- so the store here is dead however it is written.  It is reproduced because the object performs it; a mutation of it being CAUGHT would mean txinit had stopped clearing the field.",
+  "why": "`txinit`, which this tail-calls, sets `seg_symcount` to 0 itself (V34RX.c) -- so the store here is dead however it is written.  It is reproduced because the object performs it; a mutation of it being CAUGHT would mean txinit had stopped clearing the field.",
   "fn": "v34setuptxmit"
  },
  {

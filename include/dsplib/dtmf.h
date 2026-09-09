@@ -61,7 +61,7 @@ struct dtmf {
 	 * (finding F10151).  Trailing padding: `easy` ends at +0x96 and the
 	 * struct's own alignment (forced to 4 by the leading `float`
 	 * members) rounds `sizeof` up to +0x98 on its own.  Stronger proof
-	 * than usual here -- `src/service/dtmf.c`'s existing
+	 * than usual here -- `src/service/Dtmf.c`'s existing
 	 * `dtmf_size_check[sizeof(struct dtmf) == 0x98 ? 1 : -1]` is a hard
 	 * compile-time assertion, and 0x98 is also the literal
 	 * `sysdep_malloc(sizeof(struct dtmf))` allocation size in
@@ -127,7 +127,7 @@ void dtmf_set_easy(struct dtmf *d);
  * @brief Allocate (when @p d is NULL) and initialise one notch-bank receiver.
  *
  * Every state word zero, `hist` all -1, `digit` -1. Reconstructed in
- * src/service/beepgen.c, which is the file this tree gives the
+ * src/service/Beepgen.c, which is the file this tree gives the
  * `Beepgen.c` span's leftovers and where 0xadef0 falls in address order;
  * the prototype belongs here.
  *

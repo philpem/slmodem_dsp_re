@@ -337,7 +337,7 @@ int VOICE_process(void *obj, void *in, void *out, int count);
  *
  * The mode numbers are the object's immediates; what they MEAN comes from
  * this tree's own `fixedRc_UpFact` / `fixedRc_DownFact` tables in
- * src/core/fixedrc.c, and every one of them checks out as the conversion the
+ * src/core/FixedRC.c, and every one of them checks out as the conversion the
  * rate needs: mode 3 is 5/6 (9600 -> 8000), mode 2 is 6/5 (8000 -> 9600),
  * mode 5 is 1/6 (48000 -> 8000) and mode 4 is 6/1 (8000 -> 48000).  So the
  * two members are unambiguously the line-in and line-out converters.

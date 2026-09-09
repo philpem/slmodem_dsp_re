@@ -98,7 +98,7 @@ STATE_DEF = re.compile(r"^#define\s+(V34HS_\w+)\s+(\d+)\s*$", re.M)
 #   2. It stopped at `[A-Za-z_0-9]*`, which does not include `::`, so every
 #      QUALIFIED C++ METHOD was invisible too -- and because a bare
 #      `^NAME(` also matches a MACRO INVOCATION at column 0, what it found
-#      instead was noise.  `VPcmFloModem.cpp` reported 45 "definitions", all
+#      instead was noise.  `VpcmFloModem.cpp` reported 45 "definitions", all
 #      45 of them `VPCM_OFF(...)` and not one of them a function.  Rule 1's
 #      `enclosing()` therefore returned a macro name for every anchor in
 #      every C++ file, and Rule 2's `"fn"` could only ever report BAD fn.

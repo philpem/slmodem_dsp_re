@@ -59,7 +59,7 @@ The receiver reaches high rates repeatedly and never holds one.
 | Renegotiate **down** | `DP_RX_BAD_LONG` | `> 2 * baud_rate` | 2–3 s, keeps the equaliser |
 | Renegotiate **up** | `DP_RX_GOOD` | `> 8 * baud_rate` | 2–3 s |
 
-The retrain fires at `v34hshak.c:10017`, on either the far end's explicit
+The retrain fires at `V34hshak.c:10017`, on either the far end's explicit
 request (flag `0x40`) or our own bad-block run.
 
 ### F3.2 Why that ordering is wrong
@@ -147,7 +147,7 @@ again.
 
 ### F5.1 The fix
 
-`src/pump/v34/v34hshak.c`, immediately ahead of the retrain arm:
+`src/pump/v34/V34hshak.c`, immediately ahead of the retrain arm:
 
 ```c
 if (dsplib_v34_rrn_on_badblock

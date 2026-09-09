@@ -179,7 +179,7 @@ makes the input impossible; otherwise reproduce.
 
 ## D3 — `FixedRC` modes 0 and 1 not implemented ⚠
 
-**Module** `src/core/fixedrc.c` · original `FixedRC.c`, `.text 0x0b0fd0`
+**Module** `src/core/FixedRC.c` · original `FixedRC.c`, `.text 0x0b0fd0`
 
 `RcFixed_Create(0)` and `RcFixed_Create(1)` build a converter in the original,
 using a **different state layout** from every other mode: a 40-byte block with
@@ -1036,7 +1036,7 @@ had been silently skipping.
 
 ## D18 — `RcFixed_Reset` checks for null and the original does not ⚠
 
-**Module** `src/core/fixedrc.c` · original `FixedRC.c`, `.text 0x0b0e10`
+**Module** `src/core/FixedRC.c` · original `FixedRC.c`, `.text 0x0b0e10`
 
 The original dereferences its argument on the first instruction:
 
@@ -1642,7 +1642,7 @@ value is dead before it is used.
 
 ## D33 🐛 `updateAlpha` divides by zero for `energy = -1`
 
-**Where:** `src/pump/v34/v34rx.c`.
+**Where:** `src/pump/v34/V34RX.c`.
 
 **What the original does:** normalises `energy` upward until bit 30 is set,
 then divides `1 << (shift + 21)` by `(energy + 0x8000) >> 16`.
@@ -1702,7 +1702,7 @@ on a reading rather than a measurement.
 
 ## D35 ⚠ `setupreceiver` has a 2743-baud arm nothing can select
 
-**Where:** `src/pump/v34/v34hshak.c`, `setupreceiver`'s symbol-rate switch.
+**Where:** `src/pump/v34/V34hshak.c`, `setupreceiver`'s symbol-rate switch.
 
 **What the original does:** the switch has six arms — 2400, 2743, 2800, 3000,
 3200 and 3429 — reading the rate from +0xaa96 and installing four timing
@@ -1729,7 +1729,7 @@ noticing the switches did not have the same arms.
 
 ## D36 🐛 `preempindex`'s "index is 0" branch cannot be taken
 
-**Where:** `src/pump/v34/v34hshak.c`, `preempindex`.
+**Where:** `src/pump/v34/V34hshak.c`, `preempindex`.
 
 **What the original does:** the search counter starts at 5 and is incremented
 at the TOP of the loop, before the multiply and before the limit test:
@@ -1773,7 +1773,7 @@ hold at each exit, which is the sort of question the three debug strings —
 
 ## D37 ⚠ `preempindex` reads two uninitialised registers for an unknown rate
 
-**Where:** `src/pump/v34/v34hshak.c`, `preempindex`'s symbol-rate switch.
+**Where:** `src/pump/v34/V34hshak.c`, `preempindex`'s symbol-rate switch.
 
 **What the original does:** five arms — 2400, 2800, 3000, 3200, 3429 — each
 loading a starting measurement into `%edx` and a Q14 ratio into `%esi`.
@@ -1948,7 +1948,7 @@ disassembly that anything had changed.
 
 ## D42 ⚠ `StateName` is indexed with nothing bounding the index
 
-**Where:** `src/pump/v34/v34hshak.c`, `hs_setstate`, and every one of
+**Where:** `src/pump/v34/V34hshak.c`, `hs_setstate`, and every one of
 `v34handshak`'s 533 uses of the same table.
 
 **What the original does:** loads `StateName[state]` with `mov
@@ -1979,7 +1979,7 @@ nothing. So the sweep proves the 87 entries and says nothing about the
 
 ## D43 ⚠ `v34handshakinit`'s timer stride, 431,488, is not a round interval
 
-**Where:** `src/pump/v34/v34hshak.c`, `v34handshakinit`'s opening block.
+**Where:** `src/pump/v34/V34hshak.c`, `v34handshakinit`'s opening block.
 
 **What the original does:** four `int` fields reached through `obj + 4` —
 +0x238, +0x23c, +0x244 and +0x248 of the object. A positive +0x248 is
@@ -2212,7 +2212,7 @@ seven used `%edx` (the masked copy) where five used `%ax`.
 
 ## D51 ⚠ `settxlevel`'s two dB loops accumulate at different widths
 
-**Where:** `src/pump/v34/v34hshak.c`, `settxlevel`.
+**Where:** `src/pump/v34/V34hshak.c`, `settxlevel`.
 
 **What the original does:** applies the power reduction one dB at a time, with
 one loop per direction. Reducing:
@@ -2253,7 +2253,7 @@ them; the asymmetry is one instruction and neither loop is wrong on its own.
 
 ## D52 ⚠ `probeselect`'s two flat power requests also say they are not asking
 
-**Where:** `src/pump/v34/v34hshak.c`, `probeselect`'s sensitive-ISP arms.
+**Where:** `src/pump/v34/V34hshak.c`, `probeselect`'s sensitive-ISP arms.
 
 **What the original does:** the two arms that a very small `snr_l1` selects —
 0x60fd3 asking for 7 dB and 0x613ba asking for 9 — each print "V34PROBE,
@@ -2286,7 +2286,7 @@ the ordinary path uses.
 
 ## D53 ⚠ `probeselect`'s "index is 0" is unreachable in all five rate arms
 
-**Where:** `src/pump/v34/v34hshak.c`, `probe_preemph`.
+**Where:** `src/pump/v34/V34hshak.c`, `probe_preemph`.
 
 **What the original does:** each rate's pre-emphasis search keeps its counter
 in `%ebx`, preset to 5, and advances it BEFORE the comparison that can leave
@@ -2336,7 +2336,7 @@ request arrives: our received copy of that transmitter runs 1.5 dB hotter at
 eleven templates replaces the counter in every build that does not define
 `DSPLIB_REPRODUCE_BUGS` — so the differential tier still proves bit-exactness
 against the blob, and the interop tier, the bench and anyone linking this
-library for real get the fix. `probe_preemp_shape` in `v34hshak.c`.
+library for real get the fix. `probe_preemp_shape` in `V34hshak.c`.
 `DSPLIB_V34_BLOB_PREEMP=1` forces the counter at runtime for A/B work; that is
 a bench convenience and not part of the contract.
 
@@ -2402,7 +2402,7 @@ increment sits above the exit test rather than below it.
 
 ## D54 ⚠ `probeselect` finds the minimum shift signed and keeps it unsigned
 
-**Where:** `src/pump/v34/v34hshak.c`, `probeselect`'s band normalisation.
+**Where:** `src/pump/v34/V34hshak.c`, `probeselect`'s band normalisation.
 
 **What the original does:**
 
@@ -2628,7 +2628,7 @@ allocation and that is also the original's, proved by a mutation. These three
 are the exceptions. Separately, all 33 null-ish guards outside
 create/init/delete were examined: most are integer value tests rather than
 pointer guards (`FPM_sqrt`'s `x == 0`, `FPM_div`'s `denom == 0`), and every one
-that really is a pointer guard — the six in `dialer.c` and `pulse.c`, and
+that really is a pointer guard — the six in `Dialer.c` and `pulse.c`, and
 `V90Phase3Modulator::resetDILGenerator` — is the original's, each with a
 matching `test`/`je` in the first dozen instructions.
 
@@ -2840,7 +2840,7 @@ its function is.
 **D35** says of the 2743-baud arm that "whether either can put 2743 there has
 not been measured", and names its own trigger: "`unmeasured` — task #47, or
 whenever `probeselect` lands". `probeselect` has landed. All three writers of
-`+0xaa96` now exist in `src/pump/v34/v34hshak.c`, and none can write 2743 —
+`+0xaa96` now exist in `src/pump/v34/V34hshak.c`, and none can write 2743 —
 see finding F1063. The entry is no longer resting on the absence of a writer.
 
 
@@ -5860,7 +5860,7 @@ byte the loop cleared -- and then a consumer that reads it as a C string.
 Neither half is produced by anything in this tree, which is why the status is
 `unmeasured` rather than a defect with a measured effect.
 
-Reproduced as found: `src/service/dtmf_rx.c` clears `digits[0..15]`, and
+Reproduced as found: `src/service/Dtmf_Rx.c` clears `digits[0..15]`, and
 `test/unit/t_dtmfrx.c` stamps a known pattern into `digits[16..19]` before
 every reset and asserts it comes through. Without that assertion the loop
 bound would be pinned only while a random seed happened to leave those four
@@ -5917,7 +5917,7 @@ class: host-side, by not passing one.*
 The same idiom appears at both ends of the loop and the counter is truncated
 to a short on every pass, so a count of -1 runs 65535 further iterations
 before the value comes back to zero. It is reproduced as `while (count-- !=
-0)` in `src/service/cid_fsd.c` with the count declared `short`, and the test
+0)` in `src/service/Cidfsd.c` with the count declared `short`, and the test
 does not drive it: both sides would agree while scribbling over the harness.
 
 ======================================================================
@@ -9260,7 +9260,7 @@ trial does -- `n == 0`, or every distance saturating to 0xffff -- and the
 acceptance test still passes (0xffff reads as -1 through `movswl`, so any
 non-negative threshold accepts it), the object stores `buf + base +
 GARBAGE` into its status block and returns the garbage as the match index.
-The reconstruction initialises the slot to 0 (`src/fax/sgd.c`), which is
+The reconstruction initialises the slot to 0 (`src/fax/Sgd.c`), which is
 observable only on exactly that degenerate path; `t_faxsgd` does not drive
 it, because there is nothing defined to compare there.
 
@@ -9276,7 +9276,7 @@ so the first byte after seizure collects only bits f028..7 and keeps zeros
 below (the accumulator was cleared entering state 3, and is NOT cleared on
 the 3->2 transition -- only the 1->2 transition clears it). With
 `create_cid`'s seed of 2 the first byte holds six live bits. Reproduced in
-`src/service/rxcid.c` and exercised by `t_cidleaves`' streams.
+`src/service/Rxcid.c` and exercised by `t_cidleaves`' streams.
 
 **Status:** unmeasured. Whether the first post-seizure byte ever reaches
 `cid_get_strings` is `cid_modem`'s question, and it is not reconstructed.
@@ -9453,7 +9453,7 @@ tag-2 and tag-7 positions ARE guarded, each by a `cmpw $0x0 ... jle` on the
 short holding them, so this is one field pair the author did not guard rather
 than a uniform omission.
 
-`src/service/data.c` reproduces it, unguarded, and `t_datafmt`'s
+`src/service/Data.c` reproduces it, unguarded, and `t_datafmt`'s
 `mdmf no date` case asserts the rendered DATE and TIME against
 `mdmf_nodate[1..8]` directly -- an oracle over the message, so the check would
 fail if either side started guarding.
@@ -9483,7 +9483,7 @@ dump.  A message with two such entries renders
 first digit -- and every earlier MESG field is lost.  Only the last one
 survives intact.
 
-Reproduced in `src/service/data.c`; `t_datafmt`'s `mdmf two mesg` case
+Reproduced in `src/service/Data.c`; `t_datafmt`'s `mdmf two mesg` case
 asserts that exact byte sequence against the reference, so the quirk is
 pinned rather than merely tolerated.
 
@@ -9509,7 +9509,7 @@ real:
   Past 600 the writes land on `cid_modem->mode` at +0x260 and onwards.
 
 Both caps are the object's own and both are reproduced in
-`src/service/data.c`.  What is NOT reachable here is `data_raw`'s 245-byte
+`src/service/Data.c`.  What is NOT reachable here is `data_raw`'s 245-byte
 cap, which needs a length above 243 read as a signed char: see finding F8704.
 
 `test/unit/t_datafmt.c` is sized from these bounds rather than from comfort
@@ -9559,7 +9559,7 @@ and 121 past the allocation.  It is a READ, so the effect is a wrong checksum
 verdict rather than corruption, and the clamp at 115 does not help because it is
 applied to `msglen` and not to `data[1]`.
 
-**Status:** reproduced exactly in `src/service/rxcid.c`.  `test/unit/t_rxcid.c`
+**Status:** reproduced exactly in `src/service/Rxcid.c`.  `test/unit/t_rxcid.c`
 keeps every block at or below 160 samples and sweeps declared lengths only up to
 115, deliberately: firing the overrun at a stack object would be testing the
 harness's luck rather than the reconstruction.  A caller-side clamp is
@@ -9602,7 +9602,7 @@ author carried the dead pair across when this driver was written from that one.
 `cid_modem` has no IIR at all; the filtering it does is `CID_MTD_detect`'s and
 `CID_FSD_demodulate`'s, and both keep their coefficients elsewhere.
 
-**Status:** reproduced in `src/service/rxcid.c` with `(void)` casts, following
+**Status:** reproduced in `src/service/Rxcid.c` with `(void)` casts, following
 `band_pass`'s own treatment.  A modern compiler deletes the stores again, which
 changes nothing observable; the period compiler emits them, and they are part of
 the frame layout `buf`'s offset depends on.
@@ -9780,7 +9780,7 @@ arms is proved even though the return values agree.
 ## D980 ⚠ `FIFO8_create` dereferences its allocation without checking it, and clears a ring it did not allocate
 
 Two things in one function, both the object's (0xaef30) and both reproduced
-in `src/service/fifo8.c`:
+in `src/service/Fifo8.c`:
 
 - On the `f == NULL` path it calls `sysdep_malloc` for the 0x14-byte object
   and stores the ring pointer into it at once (`mov %eax,%ebx` then
@@ -10125,7 +10125,7 @@ address twice:
 
 `+0x1c` (`w3`) and `+0x24` (`w5`) are never written, at either call. `w5` is
 read by nothing, but `cadence_create` does `c->int_27c = s->w3`
-(`src/callprog/cadence.c`), so **both cadence objects take an uninitialised
+(`src/callprog/Cadence.c`), so **both cadence objects take an uninitialised
 stack word into `+0x27c`** -- and the two calls share the block, so the second
 inherits whatever the first left there.
 
@@ -10268,7 +10268,7 @@ which is the 160th sample. The rate is the one slmodemd is most likely to hand
 it: `VOICE_create(m, m->srate)`.
 
 **Status:** the object's behaviour is reproduced up to the point where the two
-implementations differ, and they differ in `src/core/fixedrc.c`, not here:
+implementations differ, and they differ in `src/core/FixedRC.c`, not here:
 that file's `RcFixed_Resample` carries a NULL guard the object does not have,
 which is a pre-existing tolerance recorded in its own comments. So OUR
 `VOICE_process` at 8 kHz returns having moved no audio -- `rlen` is 0, both
@@ -10893,7 +10893,7 @@ to hold zero in that build, and every value is plausible. Only a second build
 makes it visible.
 
 **Status:** reproduced. `int best_i;` is left uninitialised in
-`src/fax/sgd.c` because the object leaves it uninitialised, and GCC's
+`src/fax/Sgd.c` because the object leaves it uninitialised, and GCC's
 `-Wmaybe-uninitialized` fires on it, correctly. Initialising it would be a
 behavioural change on a path the object reaches, and it is not clear what
 value would be right: 0 and -1 are both defensible and the object commits to
@@ -11086,7 +11086,7 @@ _idle_state` finds nothing at all. Only `_idle_state_init` of the four is
 global.
 
 Our copies are global. That is the same divergence `getbit` and
-`ApplyBulkDelay` carry in `src/pump/v34/v34hshak.c` and for the same reason:
+`ApplyBulkDelay` carry in `src/pump/v34/V34hshak.c` and for the same reason:
 `symmap.py`'s two-pass objcopy promotes a local before renaming it, so
 `ref__idle_state` exists and the handler can be driven directly instead of
 through `fax_class1_progress`, which is 1,145 unwritten bytes (F221, F227).
@@ -12738,7 +12738,7 @@ byte-for-byte across two different compilations of two different sources.
 
 **REPRODUCED AS AN UNINITIALISED LOCAL, NOT ZERO-FILLED**, for the identical
 reason D1291 gives. `test/unit/t_v17txcreate.c`'s `compare_tree` does not
-assert on `sgd.cfg.gen.seq`/`seq_len`/`short_0006`/`seq_enable` at all,
+assert on `Sgd.cfg.gen.seq`/`seq_len`/`short_0006`/`seq_enable` at all,
 only on `sym_bits` and `hist_len`, which nothing here touches.
 
 **Status:** ✅ reproduced faithfully, by the same argument and the same

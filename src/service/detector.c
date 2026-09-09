@@ -14,7 +14,7 @@
  * THE SPAN IS `Beepgen.c` AND THAT IS A LAYOUT LABEL, NOT A MODULE NAME.
  * These two functions sit inside the blob span this tree calls `Beepgen.c`,
  * between `GetGain` (0xac960) and `zfFLTUTL_GetMaxAbsValue` (0xae850), and
- * the tree gives that span's leftovers to src/service/beepgen.c -- which is
+ * the tree gives that span's leftovers to src/service/Beepgen.c -- which is
  * where `detector_delete`, the three setters and `create_dtmf` already live.
  * This is VOICE-SERVICE code: `voice_create` is the only caller of
  * `detector_create` in the object, and `struct detector` is `struct voice`'s

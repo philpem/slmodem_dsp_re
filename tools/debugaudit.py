@@ -571,7 +571,7 @@ def main():
     # was too big to read in one piece -- our sites sit in functions the blob
     # has no symbol for.  They are then counted against neither side: they
     # vanish from `ours`, and the blob's function shows the whole difference as
-    # missing.  `callprog.c` is the worked example: `CALLPROG_Progress` reads
+    # missing.  `Callprog.c` is the worked example: `CALLPROG_Progress` reads
     # as 15 sites short, and every one of them is present a few lines away in
     # `request_state`, `detect`, `apply_event` or `run_timeouts`.  See finding
     # 605.

@@ -5,7 +5,7 @@
 
 WHAT THE DATAPUMP DOES NOW, and why it is questionable on two counts.
 
-`probe_preemp` (v34hshak.c) walks a counter from 5, multiplying the band-edge
+`probe_preemp` (V34hshak.c) walks a counter from 5, multiplying the band-edge
 bin's energy by ~1.596 each step until it exceeds a reference bin, and returns
 the counter.  Two consequences, both verified rather than argued:
 

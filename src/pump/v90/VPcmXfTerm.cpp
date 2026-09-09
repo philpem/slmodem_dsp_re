@@ -13,7 +13,7 @@
  * +0x175c IS `modem.demodulator`, and that is not a new measurement: a
  * V90Modem is embedded in a VPcmFloModem at +0x1758 and `demodulator` is its
  * +0x04 (include/dsplib/VPcmFloModem.h's three-way argument, and
- * `VPcmFloModem.cpp`'s `VPCM_OFF(modem.demodulator, 0x175c, ...)`).  So the
+ * `VpcmFloModem.cpp`'s `VPCM_OFF(modem.demodulator, 0x175c, ...)`).  So the
  * handle the V.PCM interface passes around is a `VPcmFloModem *`; the ONE
  * thing this function adds to that map is that the offset is reached from
  * outside the class, by a C entry point, and the test pins it by putting a
@@ -33,7 +33,7 @@
  * between `VPCMXF_Delete` (0xf6c0) and `VPcmFloModem::qcLineVerification`
  * (0xf750), so the original compiled it beside the class.  The split here is
  * finding F1264's rule -- one source file is one mutation suite's namespace --
- * applied ahead of the collision rather than after it: `VPcmFloModem.cpp`
+ * applied ahead of the collision rather than after it: `VpcmFloModem.cpp`
  * already carries two suites (`vpcmflomodem`, `vpcmep3`), and the rest of the
  * `VPCMXF_` family is unwritten and will want its own anchors.  The reason is
  * about the tier and not about the object, which is why it is stated.

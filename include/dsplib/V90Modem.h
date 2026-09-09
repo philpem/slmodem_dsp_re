@@ -18,7 +18,7 @@
  * WHERE THE LAYOUT COMES FROM
  * ===========================================================================
  *
- * `sizeof(V90Modem) == 0x49c0` is asserted in src/pump/v90/VPcmFloModem.cpp
+ * `sizeof(V90Modem) == 0x49c0` is asserted in src/pump/v90/VpcmFloModem.cpp
  * and is not asserted again here; it was settled by the VPcmFloModem batch
  * before any of the fields below were read. Every field between +0x0c and
  * +0x49b4 -- the span that header called `pad_0c[0x49a8]` -- is named by the

@@ -3,7 +3,7 @@
  *
  * Reconstructed from dsplibs.o Callprog.c, .text 0x079540.
  *
- * Split out of callprog.c because it is pure data and reconstructing it
+ * Split out of Callprog.c because it is pure data and reconstructing it
  * needed nothing but the object's own string table; the rest of Callprog.c
  * is a 5.2 kB state machine.
  */

@@ -164,7 +164,7 @@ typedef char v90cd_size[(sizeof(V90ConstellationDesigner) == 0x54) ? 1 : -1];
  * which this tree does not build with, and glibc's `log10()` is a polynomial
  * that differs from it in the last place.
  *
- * THIS IS THE THIRD COPY -- `src/pump/v90/VPcmFloModem.cpp` and
+ * THIS IS THE THIRD COPY -- `src/pump/v90/VpcmFloModem.cpp` and
  * `src/pump/v90/V90Equalizer.cpp` carry the same eight lines, and that one is
  * deliberate for the same reason theirs is: hoisting it into a shared header
  * from this worktree would touch a file another batch owns for no

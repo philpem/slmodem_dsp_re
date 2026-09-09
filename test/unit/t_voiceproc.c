@@ -415,7 +415,7 @@ static long cov_report_bytes;
  *            `RcFixed_Resample` dereferences its handle on its fourth
  *            instruction (`mov (%edx),%ecx` at 0xb12bf, with no NULL test
  *            anywhere before it).  So the blob FAULTS on the first complete
- *            block.  Our src/core/fixedrc.c tolerates a NULL handle -- a
+ *            block.  Our src/core/FixedRC.c tolerates a NULL handle -- a
  *            pre-existing, documented tolerance in that file -- so the two
  *            sides genuinely cannot be compared here.  Deviation D1022.
  *   48000 -- `block` is 960, the cursors wrap modulo 1920, and the ring's

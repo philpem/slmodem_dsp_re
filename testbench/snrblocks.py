@@ -15,7 +15,7 @@ call-level pairing is ambiguous, which is the trap abextract's comment
 describes and works around.
 
 THE SNR ITSELF.  `V34EQUPOW` prints `f248` beside `f21a` from the same
-1024-symbol block of v34rx.c's error accumulator:
+1024-symbol block of V34RX.c's error accumulator:
 
     equerr = f21a = (SUM |decision - equaliser out|^2) >> 16
     sigpow = f248 = (SUM (|decision|^2 >> 8)) >> 8

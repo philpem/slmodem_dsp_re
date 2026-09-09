@@ -17,7 +17,7 @@
  * dispatch.
  *
  * WHY A BINARY OF ITS OWN AND NOT MORE TRIALS IN `t_vpcmrunpcm`.  The two
- * functions share a source file, so a mutation set over `VPcmFloModem.cpp`
+ * functions share a source file, so a mutation set over `VpcmFloModem.cpp`
  * that is scored by ONE binary cannot tell which function a row belongs to;
  * `test/mutations/suites.json` already maps four sets over this file to four
  * binaries for that reason, and `v90rundemod` is the fifth.

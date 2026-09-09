@@ -72,11 +72,11 @@ OURS = os.environ.get("TC_OUT", "")
 # against the symbol.
 #
 OWNED = {
-    "src/pump/v34/v34hshak.c": "agent-debugsites",
+    "src/pump/v34/V34hshak.c": "agent-debugsites",
     "src/callprog/": "agent-debugsites",
     "src/dialer/": "agent-debugsites",
     "src/v8/": "agent-debugsites",
-    "src/core/fixedrc.c": "agent-rcfixed",
+    "src/core/FixedRC.c": "agent-rcfixed",
 }
 OWNED_SYMS = {
     "V34scrambler": "agent-mirror",

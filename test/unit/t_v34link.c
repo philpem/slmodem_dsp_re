@@ -72,7 +72,7 @@ extern unsigned int dsplibs_debug_level;
 /*
  * The three words arm 47 `TX_PHASE2_ANS` reads, so a run that aborts there
  * can say WHICH guard fired rather than only that one did.  `T3M_COUNTER`,
- * `T3M_FILTDELAY` and `T3M_F3588` in `src/pump/v34/v34hshak.c`.
+ * `T3M_FILTDELAY` and `T3M_F3588` in `src/pump/v34/V34hshak.c`.
  */
 #define O_COUNTER	0xaa78
 #define O_FILTDELAY	0xaa7c

@@ -28,7 +28,7 @@ WHAT THE KEY COVERS, AND WHY IT IS COARSE ON PURPOSE
 A first design keyed each suite on its own mutated source plus its mutation
 JSON.  That is UNSOUND.  A suite's verdicts depend on everything linked into
 its test binary, and `OBJ` in the Makefile is `find src -name '*.c'` -- every
-test binary links ALL of `src/`.  So editing `v34rx.c` can change
+test binary links ALL of `src/`.  So editing `V34RX.c` can change
 `v34hshak`'s verdicts while both of those hashes still match, and the snapshot
 would read valid while being wrong.  That is the failure mode this file exists
 to kill, reintroduced one level down.
@@ -48,7 +48,7 @@ only job is detecting staleness.
 WHAT IT DOES NOT DO
 
 It does not make the AFTER pass free, and nothing can: a batch that changes
-`v34hshak.c` still has to run all six suites pinned to it before it can claim
+`V34hshak.c` still has to run all six suites pinned to it before it can claim
 anything.  What it removes is the BEFORE pass, for suites whose key still
 matched at the fork point.  "Baselines are committed now" does not mean "skip
 the before" -- it means the before was already run, by whoever last touched

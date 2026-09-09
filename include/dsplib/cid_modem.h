@@ -295,7 +295,7 @@ void data_unformatted_output(struct cid *cid, char *out);
  *
  * Writes `LABEL = value` fields -- DATE, TIME, NMBR and, for a
  * multiple-data-message frame, NAME and one MESG per leftover tag.
- * Writes NOTHING when `pack_len` is zero. See src/service/data.c for the
+ * Writes NOTHING when `pack_len` is zero. See src/service/Data.c for the
  * four places it runs past what a careful reading would allow, all of
  * them reproduced.
  *

@@ -8,7 +8,7 @@ fixtures.
 ## Evidence and proposed names
 
 `receiver()` writes the following six fields as one 1024-symbol measurement
-transaction (`src/pump/v34/v34rx.c:2694-2719`): it accumulates the squared
+transaction (`src/pump/v34/V34RX.c:2694-2719`): it accumulates the squared
 decision error and predictor error, increments a modulo-1024 counter, then
 publishes their scaled values and the accumulated target-point energy.
 
@@ -23,7 +23,7 @@ publishes their scaled values and the accumulated target-point energy.
 | `+0x24c` | `f24c` | `target_signal_power_accum` | `int` | Accumulates `target_re² + target_im²` until the counter wrap. |
 
 The recovery supervisor in `datapumpv34()` accesses the next seven receiver
-words by offset (`src/pump/v34/v34hshak.c:10252-10260`), but their behaviours
+words by offset (`src/pump/v34/V34hshak.c:10252-10260`), but their behaviours
 are fully determined there and can be named without inference:
 
 | offset | current member | proposed name | type | evidence |
@@ -40,7 +40,7 @@ are fully determined there and can be named without inference:
 ## Refactor constraints
 
 1. Keep offsets and types exactly as above; the public layout is pinned by
-   `V34RX_ASSERT` checks in `src/pump/v34/v34rx.c`.
+   `V34RX_ASSERT` checks in `src/pump/v34/V34RX.c`.
 2. Rename accumulator/publication pairs together.  Calling `f248` merely
    “signal power” without its window would hide that it is coherent with
    `equerr`, but not an instantaneous power reading.

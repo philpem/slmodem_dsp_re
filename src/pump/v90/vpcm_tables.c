@@ -27,7 +27,7 @@
  * WHOEVER RECONSTRUCTS `VPcmFloModem`, `ANSamToneDetector`, `V92EchoCanceller`
  * OR `V92Modulator` SHOULD DELETE THAT CLASS'S TABLES FROM HERE and put them
  * back in the file as `static`.  Nothing will complain if they do not: a new
- * `static double entFiltNum[5]` in `VPcmFloModem.cpp` links perfectly beside
+ * `static double entFiltNum[5]` in `VpcmFloModem.cpp` links perfectly beside
  * this one, the two copies diverge silently, and the test here keeps passing
  * against the copy nobody uses.
  *

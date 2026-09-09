@@ -69,7 +69,7 @@ struct fdsp_kernel {
 	 * +0x00  `status`, AND THE NAME IS A TYPED CALLEE'S.  `voicedp.c`'s
 	 * `voice_tx` passes `v->dp` -- `voice.h`'s own comment on that field
 	 * says its TRUE type is `struct fdsp_kernel *` -- straight into
-	 * `FDSP_DP_Run`'s FIRST argument, which `beepgen.h`/`beepgen.c`
+	 * `FDSP_DP_Run`'s FIRST argument, which `beepgen.h`/`Beepgen.c`
 	 * (finding F8786) already name `int *status` off a sibling
 	 * signature; `FDSP_DP_Run` does nothing with it but
 	 * `*status = 2;`, which is this field's own InitObj/Create value.
@@ -98,7 +98,7 @@ struct fdsp_kernel {
  * `MTK_cos_table`/`MTK_cos_sign` and +0x08 from `MTK_sin_table`/
  * `MTK_sin_sign` (see mtk.h), and both table names are the object's own
  * (`mtk_tables.c`, finding F8772) rather than an invention here.
- * `fdspkrnl.c`'s own use of +0x04 corroborates it: `TONE_create` builds a
+ * `Fdspkrnl.c`'s own use of +0x04 corroborates it: `TONE_create` builds a
  * resonator's denominator coefficients out of it with `-2.0f * osc.cosine`
  * and the standard `1 - 2*r*cos(w) z^-1 + ...` shape, and the 60 Hz notch
  * a section later does the same with `hum.cosine`.
@@ -287,7 +287,7 @@ void MTK_phasor(struct mtk_phasor *p);
  * `.data` and not 0x1c8 -- `rep movsl` with `$0xc` in `%ecx` at 0xaf6c5 --
  * so the author cannot have declared them as whole tone objects.  The
  * layout is `struct fdsp_tone`'s first twelve words and is checked against
- * it by offset assertion in `src/service/fdspkrnl.c`.
+ * it by offset assertion in `src/service/Fdspkrnl.c`.
  */
 struct fdsp_tone_cfg {
 	float	freq;			/* +0x000 */

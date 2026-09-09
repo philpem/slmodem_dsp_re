@@ -496,7 +496,7 @@ preprocessor risk. They are kept because the order reached is a durable
 measured fact that stops the next wave re-deriving it, which is 7796's
 kept-neutral precedent. What follows is the case where the price was real.
 
-**A NULL RESULT CAN COST TOO MUCH TO KEEP.** `VPcmFloModem.cpp` reached 16 of
+**A NULL RESULT CAN COST TOO MUCH TO KEEP.** `VpcmFloModem.cpp` reached 16 of
 16 and gained nothing, and reverting it left the tree at 474 -- but reaching it
 had taken twelve macro blocks hoisted on top of the permutation. 7796's kept
 neutral files were reorder-only. The measurement is the deliverable: record
@@ -673,7 +673,7 @@ the certificate BROKEN on the first run of the check:
 cursor is threaded in emission order and advances past whichever register each
 split found free, so **changing what scratch a function consumes changes the
 state that arrives at its SUCCESSOR** -- with no definition moving anywhere.
-`dtmf_rx.c` was already 4 of 4 in the blob's `nm -n` order, so lever 3 had
+`Dtmf_Rx.c` was already 4 of 4 in the blob's `nm -n` order, so lever 3 had
 nothing positional to offer; `reset_dtmf` (index 0, EXPOSED on `ecx`/`edx`)
 was closed on its statement order alone and `create_cid_dtmf` (index 1,
 EXPOSED on `ecx`/`edi`), which was not edited at all, went exact with it. The

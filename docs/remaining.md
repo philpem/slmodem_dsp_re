@@ -132,6 +132,13 @@ the generic bit recurrence and constructor tap checks do not close that issue.
    versus 51,072, 266 and 175 respectively. It leaves 57 exact sections and
    changes the NOBITS shortfall from 484 to 488 bytes; the report keeps that
    trade-off visible rather than hiding it behind a scalar score.
+   The later canonical-filename sweep renamed every reconstructed source with
+   a unique blob FILE spelling, and resolves the two `voice.c` occurrences by
+   their reference symbol ownership. Its census is 53,075/943,398 positioned
+   bytes, 892/18,317 relocations and 219/2,907 symbols exact; NOBITS is
+   2,380 versus 2,836 bytes. The first remaining symbol-order mismatch is not
+   a filename: the blob has local `vce_hook_on` after `voice.c`, where the
+   candidate proceeds to FILE `call.c`.
 2. **Audit behavioural confidence before buying more byte matches.** Separate
    functions with no direct differential observable, shallow dispatcher-arm
    coverage, stale or absent mutation evidence, or a missing independent
@@ -647,7 +654,7 @@ period` alone, then the merged tree. Merged master **293 passed, 0 failed**.
   ~40 blocks; the probe to run is a stack poison), F8537 (`FPM_TONE_generate`
   returns its count while `fpm_tone.h` declares it `void`; `v22_originate`'s
   NODE_3 divides by `hdx->r32` unguarded and faults in the blob), F8530
-  (`fixedrc.c` uses `calloc`/`free` where the object uses
+  (`FixedRC.c` uses `calloc`/`free` where the object uses
   `sysdep_malloc`/`sysdep_free` — left alone because `calloc` also zeroes).
   Eleven `v22fp.h` field renames are queued with evidence across F8526, F8531,
   F8534 and F8538, deliberately held back while five branches were live.
@@ -787,7 +794,7 @@ carries no CID bridge at all.
 
 **Mutation suites were deliberately NOT registered** for the four new binaries,
 because a registered suite that cannot be recorded reads MISSING and fails the
-gate. The injection ritual was run by hand instead — 8 mutants on `data.c`, 11
+gate. The injection ritual was run by hand instead — 8 mutants on `Data.c`, 11
 on `cid.c`, 37 on `cid_progress` (33 caught, 3 equivalent, **1 real gap found
 and closed**). That is the right trade while the snapshot is stale, but it
 makes the mutation debt larger: `mutsnap.py --check` is 0 current / 216 stale /
@@ -911,7 +918,7 @@ object's bytes rather than re-derived from the finding alone.
 - **D1022 — the blob's `VOICE_process` FAULTS at 8 kHz.** No converters are
   built and `RcFixed_Resample` dereferences NULL four instructions in; it was
   found by running it, when the first `t_voiceproc` segfaulted inside
-  `ref_VOICE_process`. Our `fixedrc.c` carries a pre-existing NULL guard the
+  `ref_VOICE_process`. Our `FixedRC.c` carries a pre-existing NULL guard the
   object lacks, **so 8 kHz cannot be compared differentially at all** — the
   tests assert the precondition on both sides and drive 9,600 Hz only, which
   F8838 shows is the only rate that rate can actually run.
@@ -1498,7 +1505,7 @@ gate — this session has no docker.
 
 `GetNextDigitAndReturnNextState` is NOT remaining work — F8490 already
 established it as an inlining-boundary artefact: it has been in
-`src/dialer/dialer.c` since the dialer pass, fully tested through
+`src/dialer/Dialer.c` since the dialer pass, fully tested through
 `DialerProgress` (`t_dialerprog`), and the modern compiler simply inlines it
 away so no standalone symbol exists to count against it. So the no-entry-point
 bucket, and with it the object's remaining REAL reconstruction work, is
@@ -1571,7 +1578,7 @@ F1990 for the second — but `coverage.py`'s own numbers never caught up,
 and this document's own top-of-file snapshot spent three days citing the
 gap as "DELIBERATE, not a defect" rather than as something to fix.
 
-**`GetNextDigitAndReturnNextState`** is written, in `src/dialer/dialer.c`,
+**`GetNextDigitAndReturnNextState`** is written, in `src/dialer/Dialer.c`,
 and tested through `t_dialerprog` — the modern host compiler inlines it
 into `DialerProgress` entirely, so no amount of scanning our own build's
 `nm` output can find a standalone symbol for it, while the object's own

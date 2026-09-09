@@ -177,27 +177,27 @@
  * THE HALF-DUPLEX CONTEXT'S FIELDS, and where each name comes from.
  *
  * SIX OF THE EIGHT ARE ALREADY NAMED BY THE STATES THEMSELVES, in
- * `v32txhdx.c` and `v32rxhdx.c`, and are spelled the same here behind
+ * `V32TXHDX.c` and `V32rxhdx.c`, and are spelled the same here behind
  * `#ifndef` -- one offset under two names in two files is worse than either
  * name, and the states saw the evidence this function cannot.
  *
- *   +0x78  V32HDX_STATE_LEFT, `v32txhdx.c`'s: the TRANSMIT states subtract
+ *   +0x78  V32HDX_STATE_LEFT, `V32TXHDX.c`'s: the TRANSMIT states subtract
  *          from it and transition at zero.  Every step here reloads it, from
  *          a literal (8, 0x10, 0x80, 0x100, 0x400, 0x500, 0x1b00, 0x4d0),
  *          from +0x80, from +0x9e, from +0x7c, or computed.  32 bits.
  *   +0x7c  V32HDX_TIMER and
- *   +0x80  V32HDX_LIMIT, `v32rxhdx.c`'s pair: eleven receive states add
+ *   +0x80  V32HDX_LIMIT, `V32rxhdx.c`'s pair: eleven receive states add
  *          `V32HDX_SYMBOL_LEN` to the first and post a fault once it reaches
  *          the second, and all ten of their comparisons are `jb`/`jbe`.  THIS
  *          FUNCTION CORROBORATES THE SIGNEDNESS INDEPENDENTLY: the
  *          V32_STATE_B arm's `cmpl $0x95f,0x7c(%esi)` branches `jbe`, so the
  *          counter is unsigned here too.  Nearly every step clears the
  *          counter, and eight reload the countdown from the bound.
- *   +0x84  V32HDX_BLOCK_CHARGE, `v32txhdx.c`'s.  The V32_STATE_B2 arm here
+ *   +0x84  V32HDX_BLOCK_CHARGE, `V32TXHDX.c`'s.  The V32_STATE_B2 arm here
  *          loads +0x9e into it and the A and C arms clear it.
- *   +0x90  V32HDX_INT_90, `v32rxhdx.c`'s latch inside `RxHdxPhsReversal`.
+ *   +0x90  V32HDX_INT_90, `V32rxhdx.c`'s latch inside `RxHdxPhsReversal`.
  *          The V32_STATE_B arm is one of its two writers and writes zero.
- *   +0x96  V32HDX_RTD, and THE NAME IS THE AUTHOR'S OWN -- `v32rxhdx.c`
+ *   +0x96  V32HDX_RTD, and THE NAME IS THE AUTHOR'S OWN -- `V32rxhdx.c`
  *          records the value being printed through "v32 RTD = %d\n".  The
  *          V32_STATE_D2 arm here parks it in `StoreReg`'s register 0, which
  *          is where V32_STATE_I reads a delay back out of.
@@ -208,7 +208,7 @@
  *          read once, in V32_STATE_R, back into that same difference.  A
  *          16-bit snapshot of how much of a step was actually used.
  *   +0xa8  cleared in the V32_STATE_C arm and compared `> 0x48` with a SIGNED
- *          16-bit branch in V32_STATE_D.  `v32rxhdx.c` has
+ *          16-bit branch in V32_STATE_D.  `V32rxhdx.c` has
  *          `RxHdxPhsReversal` charging `V32HDX_SYMBOL_LEN` into it once per
  *          block, so D waits a fixed number of blocks; what the 0x48 MEANS is
  *          not established and the name stays neutral.

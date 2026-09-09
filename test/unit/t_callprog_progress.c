@@ -718,7 +718,7 @@ main(void)
 	 * THE OVERSIZED BUFFER, which nothing else here can reach.
 	 *
 	 * `CALLPROG_Progress` refuses a count above CALLPROG_MAX_SAMPLES --
-	 * 160, a private define in callprog.c -- and returns CALLPROG_ERROR
+	 * 160, a private define in Callprog.c -- and returns CALLPROG_ERROR
 	 * before touching anything.  Every other case in this file passes
 	 * BUFSAMP, which IS 160, so the guard has never been entered and its
 	 * announcement was one of the file's seventeen dead sites.

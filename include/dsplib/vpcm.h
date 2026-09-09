@@ -206,7 +206,7 @@ struct vpcm_root {
  * (which would make `debugaudit.py --missing` and `compare.py` count 7,278
  * bytes of the object as reconstructed when they are not).  `vpcm_run` tests
  * each pointer before it calls through it and takes `vpcm_notwritten` when it
- * is null, on `v34hshak.c`'s `t3m_notwritten` rule: record the code, and
+ * is null, on `V34hshak.c`'s `t3m_notwritten` rule: record the code, and
  * abort unless a test has said by name that it intends to read the code
  * afterwards.
  *
@@ -256,7 +256,7 @@ int VPcmV34GetCurrentTxBitRate(void *obj) DSPLIB_VPCM_UNWRITTEN;
 
 /*
  * ---------------------------------------------------------------------------
- * The unwritten-path record, `v34hshak.c`'s `v34handshak_unwritten` verbatim
+ * The unwritten-path record, `V34hshak.c`'s `v34handshak_unwritten` verbatim
  * in shape.  See the comment on the five declarations above.
  */
 #define VPCM_WRITTEN			0

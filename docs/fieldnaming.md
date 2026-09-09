@@ -37,8 +37,8 @@ Heaviest concentrations, by file (unique names):
     type_NNNN:  V90Demodulator.cpp (56), V90CP.h (27), V92CP.h (25),
                 V90AutoDigitalImpDetector.cpp (25), V90CP.cpp (24),
                 V90ConnectionEvaluator.{h,cpp} (24 each)
-    bare f:     v34rx.c (87), v34recv.h (74), v34fsk.h (48),
-                v34hshak.c (47), v34hstx1.cpp (40), v8.h (37)
+    bare f:     V34RX.c (87), v34recv.h (74), v34fsk.h (48),
+                V34hshak.c (47), v34hstx1.cpp (40), v8.h (37)
 
 ## Wave 1 — four parallel agents, highest-concentration clusters
 
@@ -48,8 +48,8 @@ Launched 2026-09-03, immediately after the fax closure:
 |---|---|---|
 | V.90 CP/Demodulator | `V90Demodulator.{h,cpp}`, `V90CP.{h,cpp}`, `V90ConnectionEvaluator.{h,cpp}` | running |
 | V.90 AutoDigitalImp/V92CP/VPcmFloModem | `V90AutoDigitalImpDetector.{h,cpp}`, `V92CP.{h,cpp}`, `VPcmFloModem.{h,cpp}` | running |
-| V.34 receive | `v34recv.h`, `v34rx.c` (single heaviest concentration, 161 combined) | running |
-| V.34 handshake/FSK | `v34fsk.h`, `v34hshak.c`, `v34hstx1.cpp`, `v34shell.c` | running |
+| V.34 receive | `v34recv.h`, `V34RX.c` (single heaviest concentration, 161 combined) | running |
+| V.34 handshake/FSK | `v34fsk.h`, `V34hshak.c`, `v34hstx1.cpp`, `v34shell.c` | running |
 
 Not yet scheduled: fax cluster (`class1.h`/`class1tx.c`/`class1.c`/`v17fax.h`
 /`v17.c`, ~130 combined — lower risk given this session's deep fax context,
@@ -114,7 +114,7 @@ using two additional evidence-gathering methods the user asked for:
 | Fax cluster | `class1.h`/`class1tx.{c,h}`/`class1.c`/`faxvmi.h`/`fax.h`/`v17fax.h`/`v17.c` | done |
 | V.8 cluster | `v8.h`/`v8hs.c`/`v8hsrx.c`/`v8util.c`/`v8handshak.c`/`v8sig.c`/`v8proc.c`/`v8jm.c` | done, merging |
 | V.90 CP/Demod/ConnEval, second pass | Same three classes as wave 1's first agent, focused on what wave 1 left unnamed | done, merging |
-| V.34 receive, second pass | `v34recv.h`/`v34rx.c`, focused on what wave 1 left bare/padded | merged |
+| V.34 receive, second pass | `v34recv.h`/`V34RX.c`, focused on what wave 1 left bare/padded | merged |
 | Fax cluster | `class1.h`/`class1tx.{c,h}`/`class1.c`, `faxvmi.h`/`fax.h`/`v17fax.h`/`v17.c` reviewed | merged |
 
 ### Results, V.34 receive second pass
@@ -197,8 +197,8 @@ phase started, from 676 unique unnamed identifiers at the outset.
     bare f:     v34recv.h (47 -- still the heaviest single file despite two
                 passes; largely fields with genuinely no reader/writer to
                 bound a meaning, not fields nobody looked at), v8.h (12),
-                v34rx.c (8), cadence.h (8), v34hstx1.cpp (6), v8hsrx.c (5),
-                dtmf_rx.c (5), dtmf_rx.h (5), class1.h (5), v8util.c (4)
+                V34RX.c (8), cadence.h (8), v34hstx1.cpp (6), v8hsrx.c (5),
+                Dtmf_Rx.c (5), dtmf_rx.h (5), class1.h (5), v8util.c (4)
 
 `V90Equalizer`/`V90ConstellationDesigner`/`V90Phase3/4Modulator/Demodulator`
 (the `pad_NNNN` list) and `dtmf_rx`/`cadence` (new to the bare-`f` list,
@@ -206,8 +206,8 @@ not yet worked this phase) are the clearest wave-3 candidates.
 
 ## Wave 3 -- DTMF-CID/cadence cluster (F10137)
 
-Launched 2026-09-04, small and self-contained: `dtmf_rx.c`/`.h` (5 bare
-`fNNNN`) and `cadence.h`/`cadence.c` (8 bare `fNNNN`), separate from the
+Launched 2026-09-04, small and self-contained: `Dtmf_Rx.c`/`.h` (5 bare
+`fNNNN`) and `cadence.h`/`Cadence.c` (8 bare `fNNNN`), separate from the
 V.90/V.34/fax/V.8 territory every other wave-3 agent covers.
 
 **Result: every field in both files is write-only or completely untouched --
@@ -490,12 +490,12 @@ per-region evidence.
 
 Three real names landed, all rank 2 (typed caller/callee): `fdsp_kernel::
 status` (was `int_00`), reached through a cross-file chain --
-`beepgen.h`/`beepgen.c`'s `FDSP_DP_Run` already declared this same pointer
+`beepgen.h`/`Beepgen.c`'s `FDSP_DP_Run` already declared this same pointer
 `int *status` off a sibling signature, and `voice.h`'s own comment already
 said the pointer `voicedp.c` passes it is `struct fdsp_kernel *` -- and
 `mtk_phasor::cosine`/`sine` (were `out_04`/`out_08`), from `MTK_phasor`'s own
 use of the object's own `MTK_cos_table`/`MTK_sin_table` (finding F8772),
-corroborated by `fdspkrnl.c`'s own resonator-coefficient and oscillator-output
+corroborated by `Fdspkrnl.c`'s own resonator-coefficient and oscillator-output
 call sites and by this tree's existing `cosine`/`sine` naming convention
 (`fpm_smc.h`, `v34filt.h`).
 
@@ -763,7 +763,7 @@ nothing provably-safe remains unremoved.
 
 ## Wave 6 -- v34recv.h bare-f cluster (F10176)
 
-Scope: `include/dsplib/v34recv.h`, `src/pump/v34/v34rx.c`,
+Scope: `include/dsplib/v34recv.h`, `src/pump/v34/V34RX.c`,
 `src/pump/v34/v34hstx1.cpp` -- briefed as the single densest remaining
 bare-`f` concentration in the tree, per a naive `grep -oE
 '\bf[0-9a-f]{3,6}\b'` count of 46/8/6. **Re-deriving the count first (per
@@ -774,7 +774,7 @@ grep to actual `type fNNNN;` member declarations (not the file's own
 `(was fXXXX)` historical breadcrumbs, which the file uses extensively and
 deliberately as a derivation trail) finds **7** live bare fields, not 46:
 `f1d4`, `f1e4`, `f1e8`, `f1f0`, `f208`, `f20a`, `f22e` -- and these are
-EXACTLY the 8 raw hits `v34rx.c` itself shows (the eighth, `feed`, is an
+EXACTLY the 8 raw hits `V34RX.c` itself shows (the eighth, `feed`, is an
 English word inside a comment, not an offset). This confirms the brief's
 own framing: it is one struct's fields threaded through two files, not
 three separate naming problems.
@@ -835,7 +835,7 @@ caught up:
   typed sibling struct declaration at the identical offset within the
   same object, corroborated in every case by reading the arm that uses
   it (70 `DATAXMIT` setting `hs_mode` to 1 as "handshake above 1", per
-  `v34hshak.c`'s own `DP_MODE`/`T3C_MODE` names for the same int; 65
+  `V34hshak.c`'s own `DP_MODE`/`T3C_MODE` names for the same int; 65
   `XMIT0`'s retrain restart testing `moh_active` exactly as
   `v34handshakinit`'s own Modem-on-Hold bring-up comment describes; the
   MOH message-dispatch one-shot at `moh_msg_pending`). **This wave went
@@ -859,7 +859,7 @@ caught up:
   F10134 trap -- and re-validated with `json.load`).
 
 Net effect: `v34hstx1.cpp`'s bare-`f` count drops from 6 unique names to 1
-(the deliberate historical breadcrumb). `v34recv.h`/`v34rx.c`'s live bare
+(the deliberate historical breadcrumb). `v34recv.h`/`V34RX.c`'s live bare
 count is unchanged at 7 -- correctly, since both prior passes' "left bare"
 verdict is now confirmed by a strictly stronger check, not merely
 repeated. No field was renamed in `struct v34_receiver`, and no type or
@@ -1040,12 +1040,12 @@ left alone.
 ### Propagation and verification
 
 Both classes' renames reached outside their nominal four files:
-`byte_280`/`word_258` into `src/pump/v90/VPcmFloModem.cpp`
+`byte_280`/`word_258` into `src/pump/v90/VpcmFloModem.cpp`
 (`getConstellation`) and `test/unit/t_v34diag.cpp`, and the
 `V90ConnectionEvaluator` four into `V90Demodulator.cpp`
 (`connectionEvaluator->word_84` etc.) and `test/unit/t_v90conneval.cpp` --
 found each time by a tree-wide grep AFTER a first `make one` build caught a
-stale reference the nominal-scope grep had missed (`VPcmFloModem.cpp`
+stale reference the nominal-scope grep had missed (`VpcmFloModem.cpp`
 reaches `V90Demodulator` fields but is outside every file this wave started
 from), matching CLAUDE.md's own warning that evidence and references don't
 automatically reach every file that needs them. Eight mutation-anchor JSON
@@ -1340,7 +1340,7 @@ image already built.
 ## Wave 6 -- V.90 Phase4/session cluster: mostly already exhausted, one real find
 
 Scope: `V90Phase4Modulator.{h,cpp}`, `V90Phase4Demodulator.{h,cpp}`,
-`V92Phase4Modulator.{h,cpp}`, `VPcmFloModem.cpp` and
+`V92Phase4Modulator.{h,cpp}`, `VpcmFloModem.cpp` and
 `V90MappingParamsInt.cpp` -- the cluster named in the brief as ~105
 combined `type_NNNN`-family names by an earlier, uncorrected grep.
 
@@ -1353,7 +1353,7 @@ artefacts explain most of the gap from the brief's ~105:
   "`word_7f6x`" as a two-field shorthand) matches the regex without being a
   live struct member, the same shape F10142 already documented for
   `pad_NNNN`.
-- **The larger effect: `VPcmFloModem.cpp` and `V90MappingParamsInt.cpp`
+- **The larger effect: `VpcmFloModem.cpp` and `V90MappingParamsInt.cpp`
   are almost entirely free functions and glue code over OTHER classes'
   objects** (`V90CP`/`V92CP`, `V90MP`, `V90MappingParams`,
   `tagV90AdditionalCPinfo`, `V90Demodulator`, `V92Modulator`,
@@ -1400,7 +1400,7 @@ by three different callers (`enterPhase3`, `externalReset`,
 `VPcmXfCreate`) was "not this batch's change". This wave's charter is
 exactly that batch, so it was made: `trainConstel` and `rrnConstel` (rank
 1, the format string "trainConstel = %d, rrnConstel =%d" in
-`VPcmFloModem.cpp`'s V.92 Jd-detected arm, corroborated by a second,
+`VpcmFloModem.cpp`'s V.92 Jd-detected arm, corroborated by a second,
 independently-worded format string in the V.90 arm, "Train constellation
 : %d  RRN constellation : %d", naming the same two bytes) are now real
 `unsigned char` members; the third byte keeps a neutral offset name,
@@ -1819,12 +1819,12 @@ writer (`create_cid`'s seed of 9, `src/service/cid.c`'s three mode-driven
 resets to the same 9) and the one reader (`cid_modem`, which adds it to
 `mark_conf` on every tone-detected block) agree on a single role with no
 competing reading anywhere this tree has reconstructed -- the step size
-`mark_conf` advances by, corroborated by `rxcid.c`'s own pre-existing
+`mark_conf` advances by, corroborated by `Rxcid.c`'s own pre-existing
 header derivation of the two time thresholds `mark_conf` is compared
 against (F8712). The reset-value macro was renamed alongside it
 (`CID_F02C_RESET` -> `CID_MARK_CONF_STEP`), the same move wave 6 made for
 `v34fsk.h`'s `TX1_F2218` family when a macro and the field it seeds share
-one derivation. Propagated to `src/service/cid.c`, `src/service/rxcid.c`
+one derivation. Propagated to `src/service/cid.c`, `src/service/Rxcid.c`
 and both `test/unit/t_rxcid.c`/`t_cidsvc.c` (including three local test
 counters renamed for consistency). No mutation-anchor JSON references the
 field (checked directly; the one grep hit was an unrelated hex address,
@@ -1835,8 +1835,8 @@ field (checked directly; the one grep hit was an unrelated hex address,
 `short_08a`, `short_08c`, `short_150`, `short_152`): each is cleared by
 `reset_cid` and read by nothing else, checked against ALL SIX functions
 that ever touch `struct cid` -- `reset_cid`/`create_cid`/`pack_next_bit`/
-`cid_modem` in `rxcid.c`, `CID_MTD_detect` in `cid_mtd.c`,
-`CID_FSD_demodulate` in `cid_fsd.c` -- every one of which is already
+`cid_modem` in `Rxcid.c`, `CID_MTD_detect` in `Cidmtd.c`,
+`CID_FSD_demodulate` in `Cidfsd.c` -- every one of which is already
 fully reconstructed, so this is the object's complete closure over the
 struct rather than a sample of it. Left as `type_NNNN`, the correct
 CLAUDE.md outcome for zero evidence rather than a guess.

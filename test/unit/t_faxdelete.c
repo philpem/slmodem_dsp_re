@@ -14,7 +14,7 @@
  *     `fax_class1_delete` itself contribute exactly one tracked free (the
  *     session object), proven separately by `t_class1delete.c`.
  *
- *   - `rc_a`/`rc_b` are NOT: `src/core/fixedrc.c`'s own `RcFixed_Create`/
+ *   - `rc_a`/`rc_b` are NOT: `src/core/FixedRC.c`'s own `RcFixed_Create`/
  *     `RcFixed_Delete` call plain `calloc`/`free`, not `sysdep_malloc`/
  *     `sysdep_free`, so neither side's traffic through them is TRACKED by
  *     `harness_alloc` at all -- an existing property of already-merged
@@ -23,11 +23,11 @@
  *     `RcFixed_Create`/`_Delete` pair shows 0 tracked frees on `ours` and 2
  *     on `blob`, since `ref_RcFixed_Create`/`_Delete` -- the blob's own
  *     compiled code -- DOES call the tracked `sysdep_malloc`/`sysdep_free`;
- *     that gap is `fixedrc.c`'s, not `FAX_delete`'s, and is reported
+ *     that gap is `FixedRC.c`'s, not `FAX_delete`'s, and is reported
  *     separately rather than fixed here).  So the `rc_a`/`rc_b` half uses
  *     REAL `RcFixed_Create` handles (a fabricated pointer is unsafe:
  *     `RcFixed_Delete` dereferences `h->state` unconditionally on a non-NULL
- *     `h`, and `struct rc`'s layout is opaque outside `fixedrc.c`) and only
+ *     `h`, and `struct rc`'s layout is opaque outside `FixedRC.c`) and only
  *     asserts the run completes with no bad free and no TRACKED leak
  *     (`ctx` itself, which is on the tracked path either way) -- proving
  *     `FAX_delete` reaches its final `sysdep_free(ctx)` on every presence

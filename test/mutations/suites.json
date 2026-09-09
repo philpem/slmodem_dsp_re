@@ -9,19 +9,19 @@
   "Use it:  tools/mutate.py --suite v8jm"
  ],
  "ansamtone": [
-  "src/dsp/ANSamToneDetector.cpp",
+  "src/dsp/AnsamToneDetector.cpp",
   "build/test/t_gtonedet"
  ],
  "beepgen": [
-  "src/service/beepgen.c",
+  "src/service/Beepgen.c",
   "build/test/t_beepgen"
  ],
  "cadence": [
-  "src/callprog/cadence.c",
+  "src/callprog/Cadence.c",
   "build/test/t_cadence"
  ],
  "callprog": [
-  "src/callprog/callprog.c",
+  "src/callprog/Callprog.c",
   "build/test/t_callprog_progress"
  ],
  "dcr": [
@@ -29,11 +29,11 @@
   "build/test/t_dcr"
  ],
  "dialer": [
-  "src/dialer/dialer.c",
+  "src/dialer/Dialer.c",
   "build/test/t_dialerprog"
  ],
  "dialer_grading": [
-  "src/dialer/dialer.c",
+  "src/dialer/Dialer.c",
   "build/test/t_dialer"
  ],
  "dilpack": [
@@ -45,15 +45,15 @@
   "build/test/t_dilpack"
  ],
  "dtmf": [
-  "src/service/dtmf.c",
+  "src/service/Dtmf.c",
   "build/test/t_dtmf"
  ],
  "dtmfmtd": [
-  "src/service/dtmf_detector.c",
+  "src/service/Dtmf_Detector.c",
   "build/test/t_dtmfrx"
  ],
  "dtmfrx": [
-  "src/service/dtmf_rx.c",
+  "src/service/Dtmf_Rx.c",
   "build/test/t_dtmfrx"
  ],
  "faxadaptcreate": [
@@ -85,11 +85,11 @@
   "build/test/t_fpm_mtd"
  ],
  "fdspkfifo": [
-  "src/service/fifo8.c",
+  "src/service/Fifo8.c",
   "build/test/t_fdspkfifo"
  ],
  "fdspkrnl": [
-  "src/service/fdspkrnl.c",
+  "src/service/Fdspkrnl.c",
   "build/test/t_fdspkrnl"
  ],
  "fdspksil": [
@@ -153,11 +153,11 @@
   "build/test/t_moduluscoder"
  ],
  "notch": [
-  "src/dsp/notch.c",
+  "src/dsp/Notch.c",
   "build/test/t_notch"
  ],
  "psd": [
-  "src/dsp/Psd.cpp",
+  "src/dsp/psd.cpp",
   "build/test/t_psd"
  ],
  "pulse": [
@@ -193,7 +193,7 @@
   "build/test/t_v17data"
  ],
  "v22dec": [
-  "src/pump/v22/v22dec.c",
+  "src/pump/v22/V22Dec.c",
   "build/test/t_v22dec"
  ],
  "v22fp": [
@@ -249,7 +249,7 @@
   "build/test/t_v32seq"
  ],
  "v34datapump": [
-  "src/pump/v34/v34hshak.c",
+  "src/pump/v34/V34hshak.c",
   "build/test/t_v34datapump"
  ],
  "v34datapump_rrn": [
@@ -261,7 +261,7 @@
   "build/test/t_v34diag"
  ],
  "v34diagflo": [
-  "src/pump/v90/VPcmFloModem.cpp",
+  "src/pump/v90/VpcmFloModem.cpp",
   "build/test/t_v34diag"
  ],
  "v34diagk56": [
@@ -273,51 +273,51 @@
   "build/test/t_v34ec"
  ],
  "v34hsfsk": [
-  "src/pump/v34/v34hshak.c",
+  "src/pump/v34/V34hshak.c",
   "build/test/t_v34hsfsk"
  ],
  "v34hshak": [
-  "src/pump/v34/v34hshak.c",
+  "src/pump/v34/V34hshak.c",
   "build/test/t_v34hshak"
  ],
  "v34hsmst44": [
-  "src/pump/v34/v34hshak.c",
+  "src/pump/v34/V34hshak.c",
   "build/test/t_v34hsmst44"
  ],
  "v34hsrx4": [
-  "src/pump/v34/v34hshak.c",
+  "src/pump/v34/V34hshak.c",
   "build/test/t_v34hsrx4"
  ],
  "v34hsrx53": [
-  "src/pump/v34/v34hshak.c",
+  "src/pump/v34/V34hshak.c",
   "build/test/t_v34hsrx53"
  ],
  "v34hsrx72": [
-  "src/pump/v34/v34hshak.c",
+  "src/pump/v34/V34hshak.c",
   "build/test/t_v34hsrx72"
  ],
  "v34hsrxch": [
-  "src/pump/v34/v34hshak.c",
+  "src/pump/v34/V34hshak.c",
   "build/test/t_v34hsrxch"
  ],
  "v34hst346": [
-  "src/pump/v34/v34hshak.c",
+  "src/pump/v34/V34hshak.c",
   "build/test/t_v34hst346"
  ],
  "v34hst3core": [
-  "src/pump/v34/v34hshak.c",
+  "src/pump/v34/V34hshak.c",
   "build/test/t_v34hst3core"
  ],
  "v34hst3m41": [
-  "src/pump/v34/v34hshak.c",
+  "src/pump/v34/V34hshak.c",
   "build/test/t_v34hst3m41"
  ],
  "v34hst3mid": [
-  "src/pump/v34/v34hshak.c",
+  "src/pump/v34/V34hshak.c",
   "build/test/t_v34hst3mid"
  ],
  "v34hstb1": [
-  "src/pump/v34/v34hshak.c",
+  "src/pump/v34/V34hshak.c",
   "build/test/t_v34hstb1"
  ],
  "v34hstx1": [
@@ -325,7 +325,7 @@
   "build/test/t_v34hstx1"
  ],
  "v34hstxblock": [
-  "src/pump/v34/v34hshak.c",
+  "src/pump/v34/V34hshak.c",
   "build/test/t_v34hstbl2"
  ],
  "v34info": [
@@ -361,7 +361,7 @@
   "build/test/t_v34retrain"
  ],
  "v34rx": [
-  "src/pump/v34/v34rx.c",
+  "src/pump/v34/V34RX.c",
   "build/test/t_v34rx"
  ],
  "v34scrampair": [
@@ -441,11 +441,11 @@
   "build/test/t_v90designers"
  ],
  "v90bits": [
-  "src/pump/v90/V90BitsToSymbol.cpp",
+  "src/pump/v90/V90bitsToSymbol.cpp",
   "build/test/t_v90modchain"
  ],
  "v90btsproc": [
-  "src/pump/v90/V90BitsToSymbol.cpp",
+  "src/pump/v90/V90bitsToSymbol.cpp",
   "build/test/t_v90btsproc"
  ],
  "v90cd": [
@@ -601,7 +601,7 @@
   "build/test/t_v90modprog"
  ],
  "v90modprogbts": [
-  "src/pump/v90/V90BitsToSymbol.cpp",
+  "src/pump/v90/V90bitsToSymbol.cpp",
   "build/test/t_v90modprog"
  ],
  "v90modprogmodem": [
@@ -729,7 +729,7 @@
   "build/test/t_v90leaves"
  ],
  "v90rundemod": [
-  "src/pump/v90/VPcmFloModem.cpp",
+  "src/pump/v90/VpcmFloModem.cpp",
   "build/test/t_v90rundemod"
  ],
  "v90sbe": [
@@ -789,11 +789,11 @@
   "build/test/t_v92alloc"
  ],
  "v92btos": [
-  "src/pump/v90/V92BitsToSymbol.cpp",
+  "src/pump/v90/V92bitsToSymbol.cpp",
   "build/test/t_v92tx"
  ],
  "v92btosproc": [
-  "src/pump/v90/V92BitsToSymbol.cpp",
+  "src/pump/v90/V92bitsToSymbol.cpp",
   "build/test/t_v92btosproc"
  ],
  "v92btosprochdr": [
@@ -965,11 +965,11 @@
   "build/test/t_vpcmdp"
  ],
  "vpcmep3": [
-  "src/pump/v90/VPcmFloModem.cpp",
+  "src/pump/v90/VpcmFloModem.cpp",
   "build/test/t_vpcmep3"
  ],
  "vpcmflomodem": [
-  "src/pump/v90/VPcmFloModem.cpp",
+  "src/pump/v90/VpcmFloModem.cpp",
   "build/test/t_vpcmflomodem"
  ],
  "vpcmguard": [
@@ -977,7 +977,7 @@
   "build/test/t_vpcmguard"
  ],
  "vpcmqcline": [
-  "src/pump/v90/VPcmFloModem.cpp",
+  "src/pump/v90/VpcmFloModem.cpp",
   "build/test/t_vpcmqcline"
  ],
  "vpcmrun": [
@@ -985,7 +985,7 @@
   "build/test/t_vpcmrun"
  ],
  "vpcmrunpcm": [
-  "src/pump/v90/VPcmFloModem.cpp",
+  "src/pump/v90/VpcmFloModem.cpp",
   "build/test/t_vpcmrunpcm"
  ],
  "vpcmtabs": [
@@ -1033,11 +1033,11 @@
   "build/test/t_mtkphasor"
  ],
  "tonecreate": [
-  "src/service/fdspkrnl.c",
+  "src/service/Fdspkrnl.c",
   "build/test/t_tonecreate"
  ],
  "fdspdp": [
-  "src/service/fdspkrnl.c",
+  "src/service/Fdspkrnl.c",
   "build/test/t_fdspdp"
  ],
  "voicedp": [
@@ -1049,7 +1049,7 @@
   "build/test/t_voicedptx"
  ],
  "voicedpdel": [
-  "src/service/beepgen.c",
+  "src/service/Beepgen.c",
   "build/test/t_voicedpdel"
  ],
  "voicedprx": [

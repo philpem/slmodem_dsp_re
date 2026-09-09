@@ -27,7 +27,7 @@ Each section is marked:
 ## F1. The shape of the whole thing
 
 Four phases. The microstate names are the object's own, recovered from its
-debug strings (`v34hshak.c`) **[CODE]**:
+debug strings (`V34hshak.c`) **[CODE]**:
 
 | phase | microstates | what happens |
 |---|---|---|
@@ -55,7 +55,7 @@ over-corrects — is left for the equaliser to undo with finite taps.
 from 150 Hz to 3750 Hz, and the tones at **900, 1200, 1800 and 2400 Hz are
 omitted**. The receiver measures the noise floor in those four slots.
 
-**[CODE]** `v34hshak.c:956` — `#define DFT_BIN(n) ((short)((n) << 8))`, and
+**[CODE]** `V34hshak.c:956` — `#define DFT_BIN(n) ((short)((n) << 8))`, and
 `dftfreqinit` (968) writes bins 1..25 with increments `n<<8`, a phase step of
 n*256 in a 14-bit accumulator. At the 9600 Hz rate the datapump runs at, bin
 `n` is **n × 150 Hz**. `V34_PROBE_BINS` is 25 (`v34fsk.h:47`), stored at
@@ -102,7 +102,7 @@ not notch correctors for one frequency.
 
 ### F3.2 What the object does
 
-**[CODE]** `probe_preemp` in `v34hshak.c`. It is a **two-point tilt meter**:
+**[CODE]** `probe_preemp` in `V34hshak.c`. It is a **two-point tilt meter**:
 
     ref = bins[4].energy            /* 750 Hz  */
     x   = bins[edge].energy         /* the band edge for this baud rate */
@@ -183,7 +183,7 @@ spelled out as: the real part loses `dre*ere + dim*eim`; the imaginary part
 loses `dre*eim` and gains `dim*ere`. The tap is reassembled from its hi/lo
 pair each time, so the fractional half genuinely accumulates.
 
-The error fed in is scaled first, in `v34rx.c:2635`:
+The error fed in is scaled first, in `V34RX.c:2635`:
 
     er = (dr * f218) >> 16
     ei = (di * f218) >> 16
@@ -197,19 +197,19 @@ by how converged the equaliser actually is:
 
 | value | ≈ fraction of error | where set |
 |---|---|---|
-| 0x400 | 0.016 | `v34hshak.c:1532` |
-| 0x2000 | 0.125 | `v34rx.c:1603`, `1641` — end of frame |
-| 0x4000 | 0.25 | `v34rx.c:551` (init), `1639` — half way through the frame |
-| 0x7000 | 0.44 | `v34rx.c:2453` — acquisition |
+| 0x400 | 0.016 | `V34hshak.c:1532` |
+| 0x2000 | 0.125 | `V34RX.c:1603`, `1641` — end of frame |
+| 0x4000 | 0.25 | `V34RX.c:551` (init), `1639` — half way through the frame |
+| 0x7000 | 0.44 | `V34RX.c:2453` — acquisition |
 
 `decoderv34` steps it down at `f124 == baud_rate/2` and again at `f124 == baud_rate`
-(`v34rx.c:1639-1641`) — a progress signal for whoever is counting symbols, not
+(`V34RX.c:1639-1641`) — a progress signal for whoever is counting symbols, not
 a convergence measure.
 
 ### F4.4 The centre taps are updated twice, by two different arithmetics **[CODE]**
 
 `V34EqualizerCenterAdapt` applies the same gradient to the 8 centre taps, at
-**twice the error** (`v34rx.c:2675`), but:
+**twice the error** (`V34RX.c:2675`), but:
 
 * it assembles the tap **from its high half alone**, so whatever
   `V34EqualizerAdapt` accumulated in the fractional half is discarded on the
@@ -234,7 +234,7 @@ drift on a long hold. Not yet measured.
 
 ## F5. The error metric, and what the rate is decided from
 
-**[CODE]** `v34rx.c:2630-2660`. `equerr` is **not** an instantaneous reading:
+**[CODE]** `V34RX.c:2630-2660`. `equerr` is **not** an instantaneous reading:
 
     mag = dr*dr + di*di + previous          accumulates into rx->f220
     n   = (f21c + 1) & 0x3ff                counter wraps at 1024
@@ -273,11 +273,11 @@ Three different things get called "retraining" and they are not the same
 **[CODE]**:
 
 1. **Full retrain** — back through phase 1/2. `rxinit` runs, and it calls
-   `V34EqualizerCleanUp` (`v34rx.c:525`): **taps cleared, back to the centre
+   `V34EqualizerCleanUp` (`V34RX.c:525`): **taps cleared, back to the centre
    spike**. The probe is re-measured and the pre-emphasis re-chosen. Nothing
    is carried forward. This is what a `V34PROBEBINS` block counts, one per
    handshake attempt.
-2. **Partial re-acquire** — `V34EqualizerClearCenterTaps` (`v34rx.c:2493`)
+2. **Partial re-acquire** — `V34EqualizerClearCenterTaps` (`V34RX.c:2493`)
    clears only the centre taps and drops the `TRAINED` flag.
 3. **Rate renegotiation** — touches no taps at all; it re-runs the rate
    decision. Finding F1900's ~+11 s rate climb, which the DTE is never told
@@ -285,7 +285,7 @@ Three different things get called "retraining" and they are not the same
 
 There is also a shortcut: `is_short` (a retry requesting "short phase 2") skips
 the round-trip measurement and reuses `prev_bulk_delay` from the previous
-session (`v34hshak.c:4116`).
+session (`V34hshak.c:4116`).
 
 **[MEASURED]** Successive probes within one call read slightly lower than the
 first: first probe 0.72–0.84 dB, later probes ~0.63 mean, across 11 calls.

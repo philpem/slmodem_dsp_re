@@ -167,7 +167,7 @@ struct voice_ctx {
 	 *
 	 * IT IS SPELLED `void *` BECAUSE ONE DECLARATION IN ANOTHER FILE IS
 	 * STILL BEHIND.  `FDSP_DP_Run` (beepgen.h, defined in
-	 * src/service/beepgen.c) declares the same object `int *status`,
+	 * src/service/Beepgen.c) declares the same object `int *status`,
 	 * because that function's only use of it is to store 2 into the
 	 * kernel's `status` (named from this very cross-reference, finding
 	 * F10143), and `voicedp.c` passes this field straight into it.

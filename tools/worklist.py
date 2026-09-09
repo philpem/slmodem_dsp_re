@@ -59,7 +59,7 @@ import coverage                                          # noqa: E402
 # recording function to grep for and the header its codes are spelled in, so
 # a new pump adopting the convention is one line here.
 STUBS = [
-    ("src/pump/v34/v34hshak.c",     r"t3c_unwritten\(\)",   "T3M_"),
+    ("src/pump/v34/V34hshak.c",     r"t3c_unwritten\(\)",   "T3M_"),
     ("src/pump/v34/v34pcmmain.cpp", r"v34pcm_notwritten\(", "V34PCM_"),
     ("src/pump/v90/vpcm.c",         r"vpcm_notwritten\(",   "VPCM_"),
 ]

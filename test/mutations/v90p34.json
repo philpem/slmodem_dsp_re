@@ -3,7 +3,7 @@
   "_": [
    "v90Phase34, in src/pump/v34/v34pcmmain.cpp.  A SECOND suite over that",
    "file: `v34pcmmain` would be getMPrecvdBits's, and suites.json already",
-   "carries two sets over src/dialer/dialer.c for the same reason -- one",
+   "carries two sets over src/dialer/Dialer.c for the same reason -- one",
    "source, two claims, two binaries.  Every `find` below is inside",
    "v90Phase34 and every one is unique in the file, which mutate.py",
    "checks for.",
@@ -244,7 +244,7 @@
  {
   "label": "case 5's quadbit arm uses the first read of cur_quadrant",
   "equivalent": true,
-  "why": "`q` was just stored into cur_quadrant and the only thing between the store and the re-read is V34scrambler, which is handed &o->tx_scr_sr and a mode, a bit count and a bit width -- it cannot reach cur_quadrant.  So the re-read returns the value stored, and (short)q for a q that came from a (short) cast is q.  Held fixed: V34scrambler's argument list, which is v34rx.c's and not this function's.  The re-read is transcribed because the object performs it, a call sitting between the two accesses.",
+  "why": "`q` was just stored into cur_quadrant and the only thing between the store and the re-read is V34scrambler, which is handed &o->tx_scr_sr and a mode, a bit count and a bit width -- it cannot reach cur_quadrant.  So the re-read returns the value stored, and (short)q for a q that came from a (short) cast is q.  Held fixed: V34scrambler's argument list, which is V34RX.c's and not this function's.  The re-read is transcribed because the object performs it, a call sitting between the two accesses.",
   "find": "\t\tif (c == OB_CONSTEL_16) {\n\t\t\tint d;\n\n\t\t\tq = (short)V34scrambler((unsigned *)&o->tx_scr_sr,\n\t\t\t\t\t\t0, 3, 2);\n\t\t\to->cur_quadrant = (short)q;\n\t\t\td = (short)V34scrambler((unsigned *)&o->tx_scr_sr,\n\t\t\t\t\t\t0, 3, 2);\n\t\t\tq = o->cur_quadrant;\n\t\t\to->txpoint.word = vect16[d + q * 4];",
   "replace": "\t\tif (c == OB_CONSTEL_16) {\n\t\t\tint d;\n\n\t\t\tq = (short)V34scrambler((unsigned *)&o->tx_scr_sr,\n\t\t\t\t\t\t0, 3, 2);\n\t\t\to->cur_quadrant = (short)q;\n\t\t\td = (short)V34scrambler((unsigned *)&o->tx_scr_sr,\n\t\t\t\t\t\t0, 3, 2);\n\t\t\to->txpoint.word = vect16[d + q * 4];"
  },
@@ -362,7 +362,7 @@
  {
   "label": "the bit sources' return is not truncated to a short",
   "equivalent": true,
-  "why": "Both members return 0 or 1 -- `done` is an int initialised to 0 and set only to the literal 1 in either body -- so truncating to short and sign-extending is the identity on every value they produce.  Held fixed: those two bodies, which are VPcmFloModem.cpp's claim and t_vpcmflomodem's; the cast is transcribed because the object does `movswl %ax` and `cwtl` rather than using %eax whole.",
+  "why": "Both members return 0 or 1 -- `done` is an int initialised to 0 and set only to the literal 1 in either body -- so truncating to short and sign-extending is the identity on every value they produce.  Held fixed: those two bodies, which are VpcmFloModem.cpp's claim and t_vpcmflomodem's; the cast is transcribed because the object does `movswl %ax` and `cwtl` rather than using %eax whole.",
   "find": "\t\tint done = (short)vp->getV90JaBits(&o->cur_quadrant);",
   "replace": "\t\tint done = vp->getV90JaBits(&o->cur_quadrant);"
  },

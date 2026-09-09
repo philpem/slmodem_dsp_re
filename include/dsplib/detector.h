@@ -4,7 +4,7 @@
  *
  * The object is 0x38 bytes and its whole surface is now reconstructed:
  * `detector_create` and `detector_progress` in src/service/detector.c, the
- * three setters and `detector_delete` in src/service/beepgen.c.
+ * three setters and `detector_delete` in src/service/Beepgen.c.
  *
  * WHAT IT IS.  One `detector` watches an 8 kHz receive stream for six things
  * at once, and `enable` is a mask of which:

@@ -364,7 +364,7 @@ void receiver(void *obj);
  * blob, and is `extern` (rather than file-local) because it has two
  * readers with two different element widths: receiver() slices it as
  * ninety-six shorts, while `v34hstx1.cpp`'s table 1 `PPSEG` transmits it
- * as forty-eight four-byte points. Defined in v34rx.c.
+ * as forty-eight four-byte points. Defined in V34RX.c.
  */
 #define V34_VECTPP_POINTS	48
 extern const short vectpp[2 * V34_VECTPP_POINTS];

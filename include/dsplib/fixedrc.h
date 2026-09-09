@@ -55,7 +55,7 @@ int RcFixed_DownFactor(int mode);
 /*
  * History depth.  The original allocates a flat 200-sample int16 window and
  * compacts it when the write position reaches the end, rather than using a
- * circular buffer -- see rc_resample() in src/core/fixedrc.c.
+ * circular buffer -- see rc_resample() in src/core/FixedRC.c.
  */
 #define RCFIXED_HISTORY 200
 

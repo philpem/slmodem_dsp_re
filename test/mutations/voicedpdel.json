@@ -1,6 +1,6 @@
 [
  {
-  "note": "src/service/beepgen.c against build/test/t_voicedpdel.  Only detector_delete is mutated here; the rest of that file's claims are in beepgen.json, whose binary is t_beepgen.  Every claim is about WHICH allocations survive, which is the only observable a destructor has."
+  "note": "src/service/Beepgen.c against build/test/t_voicedpdel.  Only detector_delete is mutated here; the rest of that file's claims are in beepgen.json, whose binary is t_beepgen.  Every claim is about WHICH allocations survive, which is the only observable a destructor has."
  },
  {
   "label": "the +0x04 block is leaked",

@@ -29,7 +29,7 @@ says WHICH comments are load-bearing before anything is edited, and where a
 new line may be inserted without splitting an anchor, so a comment pass over a
 file with 3,611 anchors against it does not have to proceed by trial.
 
-    tools/cmtsites.py src/pump/v34/v34hshak.c --json /tmp/sites.json
+    tools/cmtsites.py src/pump/v34/V34hshak.c --json /tmp/sites.json
 """
 
 import argparse

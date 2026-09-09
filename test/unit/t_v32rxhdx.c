@@ -1,6 +1,6 @@
 /*
  * t_v32rxhdx.c -- differential test of V.32's twelve half-duplex RECEIVE
- *                 states, `src/pump/v32/v32rxhdx.c`.
+ *                 states, `src/pump/v32/V32rxhdx.c`.
  *
  * Every one of the twelve is a plumber: it charges a counter, asks one or two
  * already-reconstructed detectors a question, maybe dispatches through
@@ -173,7 +173,7 @@ extern struct fpm_fse_cfg ref_FSEv32_CFG;
 
 /* --------------------------------------------------------------------- */
 /*
- * THE OFFSETS `src/pump/v32/v32rxhdx.c` DEFINES PRIVATELY.
+ * THE OFFSETS `src/pump/v32/V32rxhdx.c` DEFINES PRIVATELY.
  *
  * They are deliberately not in a shared header -- the file that owns them
  * says why -- so this test spells them again.  Nothing checks the two copies

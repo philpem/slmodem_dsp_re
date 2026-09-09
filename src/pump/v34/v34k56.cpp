@@ -90,12 +90,12 @@
  * 0x8990 and the Ja completion arm below replaces it with 0x899f; both are
  * whole-word stores of a constant, and nothing in the tree reads it as
  * anything but this shift register.  Reached by offset because the region is
- * `unmapped_25d6` in `struct v34_object` -- v34hshak.c:424 writes it the same
+ * `unmapped_25d6` in `struct v34_object` -- V34hshak.c:424 writes it the same
  * way.
  */
 #define OB_TXBITS	0x25d6
 
-/* The handshake's transmit state machine; see v34hshak.c. */
+/* The handshake's transmit state machine; see V34hshak.c. */
 #define OB_TXSTATE	0x3596
 
 /*

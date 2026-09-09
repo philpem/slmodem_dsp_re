@@ -26,7 +26,7 @@ short GetFP_Value(short a, short b);
  *
  * Computes 1 + x + x^2/2! + ... up to seven terms, stopping early once a
  * term rounds to zero. Not a general power function -- see the table's own
- * comment in fp_math.c for why the coefficients pin this down to exp().
+ * comment in FP_math.c for why the coefficients pin this down to exp().
  *
  * @param x  Argument in Q14.
  * @return e^x in Q14.
@@ -46,7 +46,7 @@ short FP_Pow_coefficient(int i);
  *
  * Compared against FP_Pow_coefficient() within a tolerance of 1, not for
  * exact equality -- the object's own rounding of the seven stored constants
- * is not fully consistent (see fp_math.c), so this recovers the design
+ * is not fully consistent (see FP_math.c), so this recovers the design
  * without claiming to reproduce the exact rounding.
  *
  * @param i  Term index, 0..6.

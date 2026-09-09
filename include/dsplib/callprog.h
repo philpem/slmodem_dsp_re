@@ -5,7 +5,7 @@
  * modem on the other end": listen to the line, decide whether it heard dial
  * tone, ringback, busy, congestion or a person, and drive the dialler through
  * the number.  Everything in this header is about reporting that decision
- * upward; the deciding itself lives in cadence.c and dualtone.c.
+ * upward; the deciding itself lives in Cadence.c and dualtone.c.
  *
  * The status names are not guesses.  The original carries the whole table as
  * string literals for its own debug output -- code and spelling both -- at

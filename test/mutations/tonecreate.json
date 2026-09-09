@@ -1,6 +1,6 @@
 [
  {
-  "note": "src/service/fdspkrnl.c against build/test/t_tonecreate.  The claims: the object's size, the default configuration and its 48-byte copy, the allocation gate's two conditions and the four block sizes behind it, the 2*pi/8000 scale, what the oscillator leaves in `step` and `phase`, the three resonator coefficients and their signs, the FIR's modulation and doubling, the cleared block's bounds, where iir_coef points, the 60 Hz notch's five coefficients, and TONE_CFG's own words."
+  "note": "src/service/Fdspkrnl.c against build/test/t_tonecreate.  The claims: the object's size, the default configuration and its 48-byte copy, the allocation gate's two conditions and the four block sizes behind it, the 2*pi/8000 scale, what the oscillator leaves in `step` and `phase`, the three resonator coefficients and their signs, the FIR's modulation and doubling, the cleared block's bounds, where iir_coef points, the 60 Hz notch's five coefficients, and TONE_CFG's own words."
  },
  {
   "label": "the object is allocated four bytes short",

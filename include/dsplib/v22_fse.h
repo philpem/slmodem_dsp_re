@@ -12,7 +12,7 @@
  *   V22_FSE_init     .text 0x08cd00   372 bytes
  *   V22_FSE_free     .text 0x08ce80    90 bytes
  *   V22_FSE_getdiag  .text 0x08c590     3 bytes
- *   FSEv22_decision12 and FSEv22_decision24 -- see v22dec.c
+ *   FSEv22_decision12 and FSEv22_decision24 -- see V22Dec.c
  *   V22_FSE_receive  .text 0x08c5a0 1885 bytes
  *
  * WHAT THE BLOCK DOES, from `V22_FSE_receive`, which is the only thing in the
