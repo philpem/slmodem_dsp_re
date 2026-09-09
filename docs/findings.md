@@ -120349,6 +120349,24 @@ by its immediate assignment does the same.  No source spelling from that
 domain is a unique preimage, so none is retained.  The remaining DCR gap is
 not licensed for a flag change or a byte-count hill climb. (2026-09-09)
 
+## F10215. The `-O2` near-size arm is uniform across DCR's declaration domain, not evidence for a per-file flag
+
+An exact-GCC-3.4.2, reproduction-defined `-O2` compile of the complete DCR
+translation unit makes `dcr_process` 564 bytes against the blob's 568, while
+all three preceding DCR functions remain byte-exact.  It is closer by size
+than the period `-O3` output but still has a different instruction sequence.
+The relevant allocation-pass cross-product does not close it: turning off
+register renaming leaves the same four-byte gap, while turning off peephole2
+widens it to 27 bytes.
+
+The full 120-order local-declaration enumeration was repeated under `-O2`.
+Every candidate produced the same 564-byte body, so no source declaration
+form combines with `-O2` to explain the reference.  The opaque host-facing
+signature (`void *, void *, int`) with typed local casts, the ordinary `abs()`
+spelling, and grouping the five `int` declarations each compile to the normal
+`-O3` body as well.  The blob-wide evidence still selects `-O3`; a closer size
+alone cannot license an unproven per-translation-unit exception. (2026-09-09)
+
 ## F10214. Store scheduling and allocation spelling recover four V90 constructor clones; the Phase 4 constructor remains bounded at 40 bytes
 
 Both 338-byte `V90Modulator` constructor clones began as `BYTES 18` near
