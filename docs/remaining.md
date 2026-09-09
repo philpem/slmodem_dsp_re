@@ -112,7 +112,11 @@ the generic bit recurrence and constructor tap checks do not close that issue.
    planted `make partial-compare-selftest` proves that code, data, relocation
    target and symbol-order changes all fire. The report is diagnostic while
    the objects differ; JSON snapshots from `partialcmp.py --json` are the
-   before/after record for an ordering experiment. The first faithful census
+   before/after record for an ordering experiment. **The completion gate is
+   `partialcmp.py --require-exact` over `ref/slmodemd/dsplibs.o` and
+   `build/partial/dsplibs.o`; a result other than exact is a hard failure.**
+   The ordinary census remains non-failing only while the object is known not
+   to have converged. The first faithful census
    compares 92 reference sections with 120 candidate sections: 57 sections
    already have exact contents, 51,072 of 943,398 allocated reference bytes
    agree at the same position, 266 of 18,317 relocation records are exact,
