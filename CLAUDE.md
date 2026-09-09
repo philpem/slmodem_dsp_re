@@ -297,19 +297,23 @@ its `docker run` child alive and compiling; and never end the wrapper with
 `echo`/`tail`, which reports THAT command's exit status and turned a red gate
 into an exit 0 in the wave above.
 
-**IT IS GCC 3.4.2 ITSELF SINCE FINDING F2200**, bootstrapped from the GNU
-tarball by `tools/toolchain/Dockerfile.exact`, and until then it was Debian
-sarge's `3.4.4` prerelease while every comment in the tree said 3.4.2. Build
-the image once:
+**IT IS THE GENTOO-PATCHED GCC 3.4.2-r2 NAMED BY THE BLOB.** The default
+period image is `dsplibs-tc342-gentoo`, built by
+`tools/toolchain/build-gentoo-image.sh` from Gentoo's 2005.0 stage3 and the
+verified GCC recovery inputs. On this workspace they live in
+`/home/philpem/gentoo-gcc-3.4.2-r2-recovery`; pass those paths explicitly if
+the script's default location does not find them:
 
 ```
-docker build --platform linux/386 -f tools/toolchain/Dockerfile.exact \
-             -t dsplibs-tc342 tools/toolchain      # about a minute
+STAGE3=/home/philpem/gentoo-gcc-3.4.2-r2-recovery/stage3/stage3-x86-2005.0.tar.bz2 \
+DISTFILES=/home/philpem/gentoo-gcc-3.4.2-r2-recovery/distfiles \
+tools/toolchain/build-gentoo-image.sh
 ```
 
-The old 3.4.4 image is still built by `tools/toolchain/Dockerfile` and still
-selectable -- `PERIOD_IMG=dsplibs-tc`, `TC_IMAGE=dsplibs-tc` -- because it is
-the other arm of every A/B in 2200. Both are green at 183 passed / 0 failed.
+Stock GNU 3.4.2 (`dsplibs-tc342`) and Debian's 3.4.4 (`dsplibs-tc`) remain
+available only for explicit compiler A/B measurements. Modern compilers are
+portability apparatus (including newer compiler and x86_64 work), never an
+authority for reconstruction source or code-generation decisions.
 
 **`make phase` RUNS IT**, so `make phase` needs docker and the
 `tools/toolchain` image. It is incremental and sound -- an object is reused
@@ -447,14 +451,12 @@ PERIOD_IMG=dsplibs-tc342-gentoo make period
 
 It needs the stage3 and the six `SRC_URI` tarballs, neither in git;
 `tools/toolchain/gentoo-3.4.2-r2/fetch-distfiles.sh` pulls and verifies the
-latter. **What it changes is nothing**: 182 of 183 objects come out
-byte-identical to stock 3.4.2's, the symbol match is 334 either way with none
-gained and none lost, and the single difference is a schedule permutation in
-`DTMF_MTD_detect` that flips no symbol. So 2201's residual is now measured
-rather than bounded, and the default stays `dsplibs-tc342` -- which anyone can
-build from the network alone. `-O3` (2155) and `-mno-ieee-fp` (1990) were
-re-measured on the real compiler and both survive symbol for symbol. Findings
-F2320, F2500 and F2501.
+latter. **Use it by default even where a stock 3.4.2 comparison happens to
+agree.** The blob's own compiler banner is stronger provenance than a
+tree-wide aggregate, and a locally exposed stack-layout variance in
+`dcr_process` established that the vendor bundle can matter. `-O3` (2155) and
+`-mno-ieee-fp` (1990) were re-measured on the real compiler and both survive
+symbol for symbol. Findings F2320, F2500, F2501 and F10217.
 
 The flags were derived from the object, not guessed, and are in
 `tools/toolchain/period.mk` with the evidence beside each:

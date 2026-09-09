@@ -58,9 +58,8 @@ TC_OUT   ?= $(CURDIR)/build/tc_out
 
 # TWO KNOBS, BOTH FOR A/B MEASUREMENT AND NEITHER A WAY TO CHANGE THE BUILD.
 #
-#   TC_IMAGE=dsplibs-tc      the OLD image, Debian sarge's GCC 3.4.4; the
-#                            default is `dsplibs-tc342`, GCC 3.4.2 itself
-#                            (Dockerfile.exact).  Finding F2200
+#   TC_IMAGE=dsplibs-tc      the OLD image, Debian sarge's GCC 3.4.4, kept
+#                            only for explicit A/B measurement.  Finding F2200
 #   TC_IMAGE=dsplibs-tc342
 #                            stock GCC 3.4.2, retained as an A/B arm.
 #   TC_IMAGE=dsplibs-tc342-gentoo
@@ -68,11 +67,9 @@ TC_OUT   ?= $(CURDIR)/build/tc_out
 #                            gcc-3.4.2-r2, built from the ebuild inside
 #                            stage3-x86-2005.0, printing the blob's .comment
 #                            back byte for byte (Dockerfile.gentoo).  It is
-#                            NOT the default because it needs a stage3 and
-#                            28 MB of distfiles that are not in git -- and it
-#                            costs nothing to skip: 182 of 183 objects come
-#                            out byte-identical to the default's, and the
-#                            symbol match is 334 either way.  Finding F2500
+#                            the reconstruction authority: its compiler and
+#                            binutils provenance match the recovered build
+#                            environment.  Finding F2500
 #   TC_EXTRA="-O2"           APPENDED after the flags, so a repeat of an option
 #                            overrides the one above -- `-O2` beats the `-O3`,
 #                            `-mieee-fp` beats the `-mno-ieee-fp`.  That is how
@@ -250,8 +247,7 @@ $(TC_OUT) $(TC_DEPDIR):
 tc-image:
 	@docker image inspect '$(TC_IMAGE)' >/dev/null 2>&1 || { \
 	   echo "tools/toolchain: no docker image '$(TC_IMAGE)'.  Build it with" >&2; \
-	   echo "  docker build --platform linux/386 \\" >&2; \
-	   echo "    -f tools/toolchain/Dockerfile.exact -t dsplibs-tc342 tools/toolchain" >&2; \
+	   echo "  tools/toolchain/build-gentoo-image.sh" >&2; \
 	   echo "(the older 3.4.4 image is Dockerfile, -t dsplibs-tc.  Finding F2200.)" >&2; \
 	   exit 1; }
 
