@@ -12,11 +12,13 @@ It is deliberately explicit: a result can say exactly which compiler domain
 was enumerated, and the same file can be rerun against another period image.
 """
 import argparse
-import os
 import pathlib
 import re
 import shlex
 import subprocess
+
+from experiment_toolchain import (DEFAULT_IMAGE, compiler_path, docker_prefix,
+                                  native_user, print_identity, compile_shell)
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -25,7 +27,6 @@ BASE_FLAGS = (
     "-mno-ieee-fp -fomit-frame-pointer -maccumulate-outgoing-args "
     "-I/src/include -D__SIZEOF_POINTER__=4 "
     "-include /src/tools/toolchain/period_compat.h "
-    "-DDSPLIB_REPRODUCE_BUGS"
 )
 
 
@@ -73,11 +74,16 @@ def main():
     ap.add_argument("--symbol", required=True)
     ap.add_argument("--matrix", required=True, type=pathlib.Path)
     ap.add_argument("--work", required=True, type=pathlib.Path)
-    ap.add_argument("--image", default="dsplibs-tc342")
-    ap.add_argument("--compiler-path", default="/opt/gcc342/bin",
-                    help="directory prepended to PATH inside the image")
-    ap.add_argument("--native-user", action="store_true",
-                    help="do not force the host UID (needed by the Gentoo image)")
+    ap.add_argument("--image", default=DEFAULT_IMAGE)
+    ap.add_argument("--compiler-path", default=None,
+                    help="directory prepended to PATH inside the image (defaults "
+                         "to the selected image's compiler)")
+    users = ap.add_mutually_exclusive_group()
+    users.add_argument("--native-user", dest="native_user", action="store_true",
+                       help="run as the image's native user")
+    users.add_argument("--host-user", dest="native_user", action="store_false",
+                       help="run as the host UID (for an alternate image)")
+    ap.set_defaults(native_user=None)
     ap.add_argument("--base-flags", default=BASE_FLAGS)
     ap.add_argument("--blob", type=pathlib.Path,
                     default=ROOT / "ref/slmodemd/dsplibs.o")
@@ -85,23 +91,22 @@ def main():
     source = a.source.resolve()
     a.work = a.work.resolve()
     a.work.mkdir(parents=True, exist_ok=True)
+    image_path = compiler_path(a.image, a.compiler_path)
+    run_native = native_user(a.image, a.native_user)
+    print_identity(a.image, image_path, run_native)
     ref_size, ref_insns = symbol_metrics(a.blob, a.symbol)
     rows = list(variants(a.matrix.resolve()))
     if not rows:
         ap.error("the matrix has no variants")
     print("flag matrix: %d variants; blob %d bytes, %d instructions; image %s"
-          % (len(rows), ref_size, ref_insns, a.image))
+          % (len(rows), ref_size, ref_insns, a.image), flush=True)
     for name, extra in rows:
         output = a.work / (name + ".o")
-        cmd = ["docker", "run", "--rm"]
-        if not a.native_user:
-            cmd += ["--user", "%d:%d" % (os.getuid(), os.getgid())]
-        cmd += ["--platform", "linux/386",
-               "-v", "%s:/src" % ROOT, "-v", "%s:/out" % a.work,
-               "-w", "/src", a.image, "/bin/sh", "-c",
-               "export PATH=%s:$PATH; exec gcc -c %s %s -o /out/%s %s" %
-               (a.compiler_path, shlex.join(shlex.split(a.base_flags)),
-                shlex.join(extra), output.name, "/src/" + str(source.relative_to(ROOT)))]
+        flags = shlex.split(a.base_flags) + extra
+        cmd = docker_prefix(a.image, ROOT, a.work, run_native, output=a.work)
+        cmd += ["/bin/sh", "-c", compile_shell(
+            image_path, flags, "/out/" + output.name,
+            "/src/" + str(source.relative_to(ROOT)))]
         subprocess.check_call(cmd)
         size, insns = symbol_metrics(output, a.symbol)
         print("  %-20s %4d bytes (%+d), %3d instructions (%+d)  %s" %

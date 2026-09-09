@@ -9,18 +9,20 @@ other text retain their original positions because they cannot affect codegen.
 import argparse
 import hashlib
 import itertools
-import os
 import pathlib
 import re
+import shlex
 import subprocess
+
+from experiment_toolchain import (DEFAULT_IMAGE, compiler_path, docker_prefix,
+                                  native_user, print_identity, compile_shell)
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 FLAGS = ("-O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387 "
          "-mno-ieee-fp -fomit-frame-pointer -maccumulate-outgoing-args "
          "-I/src/include -D__SIZEOF_POINTER__=4 "
-         "-include /src/tools/toolchain/period_compat.h "
-         "-DDSPLIB_REPRODUCE_BUGS").split()
+         "-include /src/tools/toolchain/period_compat.h").split()
 
 
 def definitions(text, names):
@@ -80,6 +82,16 @@ def main():
     ap.add_argument("--names", required=True, help="comma-separated definitions")
     ap.add_argument("--work", required=True, type=pathlib.Path)
     ap.add_argument("--extra", default="", help="extra period GCC flags")
+    ap.add_argument("--image", default=DEFAULT_IMAGE)
+    ap.add_argument("--compiler-path", default=None,
+                    help="directory prepended to PATH inside the image (defaults "
+                         "to the selected image's compiler)")
+    users = ap.add_mutually_exclusive_group()
+    users.add_argument("--native-user", dest="native_user", action="store_true",
+                       help="run as the image's native user")
+    users.add_argument("--host-user", dest="native_user", action="store_false",
+                       help="run as the host UID (for an alternate image)")
+    ap.set_defaults(native_user=None)
     a = ap.parse_args()
     source = a.source.resolve()
     names = [x.strip() for x in a.names.split(",") if x.strip()]
@@ -89,17 +101,19 @@ def main():
     spans = definitions(text, names)
     a.work = a.work.resolve()
     a.work.mkdir(parents=True, exist_ok=True)
+    image_path = compiler_path(a.image, a.compiler_path)
+    run_native = native_user(a.image, a.native_user)
+    print_identity(a.image, image_path, run_native)
     rows = []
     for n, perm in enumerate(itertools.permutations(spans)):
         candidate = a.work / source.name
         candidate.write_text(substitute(text, spans, [x[2] for x in perm]))
         output = a.work / ("%03d.o" % n)
-        cmd = ["docker", "run", "--rm", "--user", "%d:%d" %
-               (os.getuid(), os.getgid()), "--platform", "linux/386",
-               "-v", "%s:/src" % ROOT, "-v", "%s:/variant" % a.work,
-               "-v", "%s:/out" % a.work, "-w", "/src", "dsplibs-tc342",
-               "gcc", "-c"] + FLAGS + a.extra.split() + ["-o", "/out/%03d.o" % n,
-               "/variant/%s" % source.name]
+        flags = FLAGS + shlex.split(a.extra)
+        cmd = docker_prefix(a.image, ROOT, a.work, run_native, output=a.work,
+                            work_target="/variant")
+        cmd += ["/bin/sh", "-c", compile_shell(
+            image_path, flags, "/out/%03d.o" % n, "/variant/" + source.name)]
         subprocess.check_call(cmd)
         rows.append((metrics(output, a.symbol), hashlib.sha256(output.read_bytes()).hexdigest(),
                      n, tuple(x[3] for x in perm)))

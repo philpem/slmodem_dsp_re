@@ -9,12 +9,13 @@ caller supplies the complete list of independent declaration names.
 import argparse
 import hashlib
 import itertools
-import os
 import pathlib
 import re
 import shlex
-import shutil
 import subprocess
+
+from experiment_toolchain import (DEFAULT_IMAGE, compiler_path, docker_prefix,
+                                  native_user, print_identity, compile_shell)
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 DEFAULT_FLAGS = (
@@ -22,7 +23,6 @@ DEFAULT_FLAGS = (
     "-mno-ieee-fp -fomit-frame-pointer -maccumulate-outgoing-args "
     "-I/src/include -D__SIZEOF_POINTER__=4 "
     "-include /src/tools/toolchain/period_compat.h "
-    "-DDSPLIB_REPRODUCE_BUGS"
 ).split()
 
 
@@ -74,10 +74,16 @@ def main():
                     default=pathlib.Path("/tmp/declorder"))
     ap.add_argument("--extra", default="",
                     help="extra period GCC flags, e.g. '-O2'")
-    ap.add_argument("--image", default="dsplibs-tc342")
-    ap.add_argument("--compiler-path", default="/opt/gcc342/bin")
-    ap.add_argument("--native-user", action="store_true",
-                    help="do not force the host UID (needed by the Gentoo image)")
+    ap.add_argument("--image", default=DEFAULT_IMAGE)
+    ap.add_argument("--compiler-path", default=None,
+                    help="directory prepended to PATH inside the image (defaults "
+                         "to the selected image's compiler)")
+    users = ap.add_mutually_exclusive_group()
+    users.add_argument("--native-user", dest="native_user", action="store_true",
+                       help="run as the image's native user")
+    users.add_argument("--host-user", dest="native_user", action="store_false",
+                       help="run as the host UID (for an alternate image)")
+    ap.set_defaults(native_user=None)
     a = ap.parse_args()
     source = a.source.resolve()
     names = [x.strip() for x in a.names.split(",") if x.strip()]
@@ -87,8 +93,24 @@ def main():
     start, block = declaration_block(text, names)
     a.work = a.work.resolve()
     out = a.work / "out"
-    shutil.rmtree(a.work, ignore_errors=True)
-    out.mkdir(parents=True)
+    if a.work.exists():
+        if not a.work.is_dir():
+            ap.error("--work is not a directory: %s" % a.work)
+        try:
+            occupied = next(a.work.iterdir())
+        except StopIteration:
+            occupied = None
+        if occupied is not None:
+            ap.error("--work must be a new or empty directory: %s "
+                     "(found %s); choose another --work" % (a.work, occupied))
+    try:
+        a.work.mkdir(parents=True, exist_ok=True)
+        out.mkdir()
+    except OSError as exc:
+        ap.error("cannot prepare empty --work directory %s: %s" % (a.work, exc))
+    image_path = compiler_path(a.image, a.compiler_path)
+    run_native = native_user(a.image, a.native_user)
+    print_identity(a.image, image_path, run_native)
     ref_size = body_size(a.blob, a.symbol)
     ref_insns = instruction_count(a.blob, a.symbol)
     rows = []
@@ -98,16 +120,11 @@ def main():
         lines[start:start + len(block)] = perm
         candidate.write_text("".join(lines))
         obj = out / ("%03d.o" % n)
-        cmd = ["docker", "run", "--rm"]
-        if not a.native_user:
-            cmd += ["--user", "%d:%d" % (os.getuid(), os.getgid())]
-        cmd += ["--platform", "linux/386",
-               "-v", "%s:/src" % ROOT, "-v", "%s:/variant" % a.work,
-               "-v", "%s:/out" % out, "-w", "/src", a.image,
-               "/bin/sh", "-c",
-               "export PATH=%s:$PATH; exec gcc -c %s %s -o /out/%03d.o /variant/%s" %
-               (a.compiler_path, shlex.join(DEFAULT_FLAGS), shlex.join(a.extra.split()),
-                n, source.name)]
+        flags = DEFAULT_FLAGS + shlex.split(a.extra)
+        cmd = docker_prefix(a.image, ROOT, a.work, run_native, output=out,
+                            work_target="/variant")
+        cmd += ["/bin/sh", "-c", compile_shell(
+            image_path, flags, "/out/%03d.o" % n, "/variant/" + source.name)]
         subprocess.check_call(cmd)
         rows.append((body_size(obj, a.symbol), instruction_count(obj, a.symbol),
                      hashlib.sha256(obj.read_bytes()).hexdigest(), n))
