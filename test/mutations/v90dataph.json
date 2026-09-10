@@ -184,8 +184,8 @@
  },
  {
   "label": "getAT_UD: the dB scale is twenty",
-  "find": "\tresults->float_070 = (float)(10.0f * dem_x87_log10(",
-  "replace": "\tresults->float_070 = (float)(20.0f * dem_x87_log10("
+  "find": "\tresults->float_070 = (float)(10.0f * log10l(",
+  "replace": "\tresults->float_070 = (float)(20.0f * log10l("
  },
  {
   "label": "getAT_UD: the round trip delay is divided signed",

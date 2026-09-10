@@ -578,12 +578,6 @@ v90equ_narrow(float x)
 	return t;
 }
 
-static inline double
-v90equ_x87_fsqrt(double x)
-{
-	return __builtin_sqrt(x);
-}
-
 /*
  * The destructor frees the fifteen blocks the constructor took, each under
  * its own null test, and does nothing else: it does not clear the pointers,
@@ -2663,7 +2657,7 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 		 * which is what a literal `blockErrorEnergyRms` in the second expression
 		 * would do -- is one rounding too many.
 		 */
-		double rms = v90equ_x87_fsqrt((double)blockErrorEnergySum
+		double rms = __builtin_sqrt((double)blockErrorEnergySum
 						   / (double)blockSampleCount);
 
 		blockErrorEnergyRms = (float)rms;

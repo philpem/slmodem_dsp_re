@@ -166,12 +166,6 @@ V90TRN2Designer::setTrn2DummyConstel(V90MappingParams *mappingParams)
  * original flags; modern portability is a separate, forthcoming issue.
  * See docs/issue19-inline-asm.md.
  */
-static inline long double
-trn2_x87_log10(long double x)
-{
-	return log10l(x);
-}
-
 /*
  * How many bits one frame of the six constellations carries: log2 of the
  * product of their lengths, truncated.
@@ -215,8 +209,8 @@ V90TRN2Designer::maxK(V90MappingParams *mappingParams)
 	int k = 0;
 
 	if (product != 0.0f) {
-		long double logProduct = trn2_x87_log10((long double)product);
-		float logTwo = (float)trn2_x87_log10((long double)2.0f);
+		long double logProduct = log10l((long double)product);
+		float logTwo = (float)log10l((long double)2.0f);
 
 		k = (int)(unsigned int)(logProduct / logTwo + 1e-6f);
 	}

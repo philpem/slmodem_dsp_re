@@ -965,12 +965,6 @@ V90Demodulator::enterDataSteadyState()
  * original flags; modern portability is a separate, forthcoming issue.
  * See docs/issue19-inline-asm.md.
  */
-static inline long double
-dem_x87_log10(long double x)
-{
-	return log10l(x);
-}
-
 /*
  * getRbsPattern -- 51 bytes, and the whole of it is one loop.
  *
@@ -1106,9 +1100,9 @@ V90Demodulator::getAT_UD(TAG_DiagnosticResults *results) const
 	results->rxBaudRate = 8000;
 
 	results->float_074 = equalizer->meanErrorEnergyCurrent;
-	results->float_070 = (float)(10.0f * dem_x87_log10(
+	results->float_070 = (float)(10.0f * log10l(
 	    (long double)equalizer->meanErrorEnergyCurrent));
-	results->float_068 = (float)(10.0f * dem_x87_log10(
+	results->float_068 = (float)(10.0f * log10l(
 	    (long double)agc.level));
 
 	results->roundTripDelay = (unsigned int)phase2Info->rtd * 10u / 96u;

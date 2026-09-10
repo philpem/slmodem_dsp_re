@@ -110,16 +110,16 @@
   "replace": "\t\t\tif (out[i] < peak)\n\t\t\t\tpeak = out[i];"},
 
  {"label": "the peak arm loses its floor",
-  "find": "\t\t\tfloat l = (float)psd_x87_log10((long double)out[i]\n\t\t\t\t\t\t       * scale + 1e-25);\n\n\t\t\tout[i] = (float)(l * 10.0f);\n\t\t}\n\t} else if (option == OUTPUT_LINEAR) {",
-  "replace": "\t\t\tfloat l = (float)psd_x87_log10((long double)out[i]\n\t\t\t\t\t\t       * scale);\n\n\t\t\tout[i] = (float)(l * 10.0f);\n\t\t}\n\t} else if (option == OUTPUT_LINEAR) {"},
+  "find": "\t\t\tfloat l = (float)log10l((long double)out[i]\n\t\t\t\t\t\t       * scale + 1e-25);\n\n\t\t\tout[i] = (float)(l * 10.0f);\n\t\t}\n\t} else if (option == OUTPUT_LINEAR) {",
+  "replace": "\t\t\tfloat l = (float)log10l((long double)out[i]\n\t\t\t\t\t\t       * scale);\n\n\t\t\tout[i] = (float)(l * 10.0f);\n\t\t}\n\t} else if (option == OUTPUT_LINEAR) {"},
 
  {"label": "the decibel arm is an amplitude one",
   "find": "\t\t\tout[i] = (float)(l * 10.0f);\n\t\t}\n\t}\n}",
   "replace": "\t\t\tout[i] = (float)(l * 20.0f);\n\t\t}\n\t}\n}"},
 
  {"label": "the logarithm is not rounded to float before the multiply",
-  "find": "\t\t\tfloat l = (float)psd_x87_log10((long double)out[i]\n\t\t\t\t\t\t       * scale + 1e-25);\n\n\t\t\tout[i] = (float)(l * 10.0f);\n\t\t}\n\t}\n}",
-  "replace": "\t\t\tlong double l = psd_x87_log10((long double)out[i]\n\t\t\t\t\t\t      * scale + 1e-25);\n\n\t\t\tout[i] = (float)(l * 10.0f);\n\t\t}\n\t}\n}"},
+  "find": "\t\t\tfloat l = (float)log10l((long double)out[i]\n\t\t\t\t\t\t       * scale + 1e-25);\n\n\t\t\tout[i] = (float)(l * 10.0f);\n\t\t}\n\t}\n}",
+  "replace": "\t\t\tlong double l = log10l((long double)out[i]\n\t\t\t\t\t\t      * scale + 1e-25);\n\n\t\t\tout[i] = (float)(l * 10.0f);\n\t\t}\n\t}\n}"},
 
  {"label": "the linear arm does not scale by the frame count",
   "find": "\t\t\tout[i] = (float)((long double)out[i] * scale);",
