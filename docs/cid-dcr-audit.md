@@ -822,6 +822,36 @@ artifacts `build/issue20-followup/queue-attributes-*`. Full phase completion
 is tracked separately: its baseline also exposed an unused duplicate CID
 wrapper type left in the core TU, now tracked as #27.
 
+### No-unit Resampler losses: full-family review
+
+Parent independently rescored **102 verdicts** across both profiles for all
+**51 shared functions** in `Resampler`, `ResamplerTiming`,
+`ResamplerTimingOffset`, and `V90Resampler`. Retained O3 is **40/51 EXACT**,
+no-unit **27/51**, with zero gains and thirteen losses. All eleven previously
+nonexact functions retain their bodies and canonical relocations. Per-TU
+EXACT counts are 9/14 -> 9/14, 11/14 -> 6/14, 11/11 -> 7/11, and
+9/12 -> 5/12 respectively. FUNC/OBJECT inventories and bindings are unchanged.
+
+These account for **13 of the global no-unit profile's 36 losses**: twelve
+constructor ABI symbols (six overloads, C1/C2) and `ResamplerTiming::reset`.
+Reference/O3 expand later-defined reset or timing-offset helpers; no-unit
+retains their calls. In particular the four TimingOffset constructors remain
+91 bytes but become BYTES(18), replacing x87 instructions with calls to
+`setTimingOffset`; equal size is not equal code. Timing reset gains a call to
+`resetSdHalfBaudDft`; derived constructors replace expanded reset work with
+calls to their own reset methods. These are actual reference call-boundary
+constraints, not an inference from lengths.
+
+The profile also changes TU emission order and section sizes: Timing `.text`
+2281 -> 1945, V90Resampler `.text` 2486 -> 2134, and TimingOffset's constant
+pool 24 -> 8 bytes. Therefore repairing caller instructions alone would not
+settle partial-link layout. No new matrix or source change is justified by
+this read-only batch; a future source/visibility explanation must preserve
+these expansions, exports and layout, not merely recover thirteen names.
+This does not rule out all no-unit/source combinations. Pinned objects and
+complete provenance are in `build/issue22-resampler-no-unit/REPORT.md` and
+`build/issue22-no-unit-queue-plain/provenance.json`.
+
 ## Reproducibility gap
 
 The main build defaults had been updated to Gentoo, but `flagsweep.py` and
