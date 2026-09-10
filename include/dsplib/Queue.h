@@ -115,14 +115,15 @@ public:
 	/**
 	 * @brief Number of items currently queued.
 	 *
-	 * `always_inline` because the object has NO `count` symbol: both call
-	 * sites open-code it, and an out-of-line weak copy here would be a
-	 * symbol we define and the object does not. GCC emits one for an
-	 * ordinary in-class definition even when every call is inlined.
+	 * The object has no standalone `count` symbol. With the retained
+	 * Gentoo O3 profile and member-wise instantiation in Queue.cpp, this
+	 * ordinary in-class definition needs no forced-inline attribute:
+	 * removing it leaves both consumer objects byte-identical. See #22
+	 * and docs/cid-dcr-audit.md for the crossed source/profile controls.
 	 *
 	 * @return Number of items currently in the queue.
 	 */
-	__attribute__((always_inline)) unsigned count() const
+	unsigned count() const
 	{
 		return (unsigned)((wr + size) - rd) % size;
 	}
@@ -130,15 +131,15 @@ public:
 	/**
 	 * @brief Whether the queue holds nothing.
 	 *
-	 * `always_inline` for count()'s reason. The only call site of either
-	 * this or isFull() is `V92Modulator::progress`'s closing test; both
+	 * The only call site of either this or isFull() is
+	 * `V92Modulator::progress`'s closing test; both
 	 * spellings here are the object's own forced codegen, not a tidier
 	 * equivalent (`rd == wr` rather than `count() == 0`, which would
 	 * emit a division).
 	 *
 	 * @return Non-zero if the queue is empty.
 	 */
-	__attribute__((always_inline)) int isEmpty() const
+	int isEmpty() const
 	{
 		return rd == wr;
 	}
@@ -147,7 +148,7 @@ public:
 	 * @brief Whether the queue is at capacity.
 	 * @return Non-zero if the queue is full.
 	 */
-	__attribute__((always_inline)) int isFull() const
+	int isFull() const
 	{
 		return size - count() - 1 == 0;
 	}
