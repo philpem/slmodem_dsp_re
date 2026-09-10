@@ -2657,7 +2657,7 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 		 * which is what a literal `blockErrorEnergyRms` in the second expression
 		 * would do -- is one rounding too many.
 		 */
-		double rms = __builtin_sqrt((double)blockErrorEnergySum
+		double rms = sqrt((double)blockErrorEnergySum
 						   / (double)blockSampleCount);
 
 		blockErrorEnergyRms = (float)rms;

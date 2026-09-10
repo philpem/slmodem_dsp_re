@@ -694,7 +694,9 @@ not hidden by the relocation gain. Strict object completion remains open.
 
 ## Six square roots
 
-All six `fsqrt` asm helpers now use `__builtin_sqrt`. C++ compilation uses
+All six `fsqrt` asm helpers were first replaced with `__builtin_sqrt`; issue
+#34 subsequently proved the standard `sqrt` spelling byte-identical where the
+wrapper boundary is not itself required. C++ compilation uses
 `-fno-math-errno` in the modern Makefile and both period build paths. This is
 independent of unsafe/finite-math optimization: the reference uses bare fsqrt
 without an errno-setting fallback, even where negative values are reachable.

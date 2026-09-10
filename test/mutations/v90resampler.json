@@ -111,13 +111,13 @@
  },
  {
   "label": "getTimingHistoryStd forgets the square root",
-  "find": "\treturn __builtin_sqrt(var * (var < 0.0f ? -1.0f : 1.0f));",
+  "find": "\treturn sqrt(var * (var < 0.0f ? -1.0f : 1.0f));",
   "replace": "\treturn var * (var < 0.0f ? -1.0f : 1.0f);"
  },
  {
   "label": "getTimingHistoryStd does not take the magnitude",
-  "find": "\treturn __builtin_sqrt(var * (var < 0.0f ? -1.0f : 1.0f));",
-  "replace": "\treturn __builtin_sqrt(var);"
+  "find": "\treturn sqrt(var * (var < 0.0f ? -1.0f : 1.0f));",
+  "replace": "\treturn sqrt(var);"
  },
  {
   "label": "getTimingHistoryStd reads the wrong length",

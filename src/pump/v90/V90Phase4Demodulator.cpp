@@ -854,9 +854,9 @@ V90Phase4Demodulator::getV90Decision(short sample)
 			edprintf("V90Phase4Demodulator: error energy before "
 				 "echo cancellation  = %c%d.%04d\r\n",
 				 p4d_sign_of(errorEnergyBeforeEC),
-				 p4d_whole_of(__builtin_sqrt(
+				 p4d_whole_of(sqrt(
 					 (long double)errorEnergyBeforeEC)),
-				 p4d_frac4_of(__builtin_sqrt(
+				 p4d_frac4_of(sqrt(
 					 (long double)errorEnergyBeforeEC)));
 			state = P4D_STATE_WAIT_FOR_ECHO_CANCEL;
 			countInState = 0;
@@ -901,9 +901,9 @@ V90Phase4Demodulator::getV90Decision(short sample)
 			edprintf("V90Phase4Demodulator: error energy after "
 				 "echo cancellation  = %c%d.%04d\r\n",
 				 p4d_sign_of(errorEnergyAfterEC),
-				 p4d_whole_of(__builtin_sqrt(
+				 p4d_whole_of(sqrt(
 					 (long double)errorEnergyAfterEC)),
-				 p4d_frac4_of(__builtin_sqrt(
+				 p4d_frac4_of(sqrt(
 					 (long double)errorEnergyAfterEC)));
 			ratio = 1.0f / errorEnergyAfterEC * errorEnergyBeforeEC;
 			dB = (float)(10.0f *
@@ -1267,9 +1267,9 @@ V90Phase4Demodulator::getV92Decision(short sample)
 			edprintf("V90Phase4Demodulator: error energy before "
 				 "echo cancellation  = %c%d.%04d\r\n",
 				 p4d_sign_of(errorEnergyBeforeEC),
-				 p4d_whole_of(__builtin_sqrt(
+				 p4d_whole_of(sqrt(
 					 (long double)errorEnergyBeforeEC)),
-				 p4d_frac4_of(__builtin_sqrt(
+				 p4d_frac4_of(sqrt(
 					 (long double)errorEnergyBeforeEC)));
 			state = P4D_STATE_WAIT_FOR_ECHO_CANCEL;
 			countInState = 0;
@@ -1314,9 +1314,9 @@ V90Phase4Demodulator::getV92Decision(short sample)
 			edprintf("V90Phase4Demodulator: error energy after "
 				 "echo cancellation  = %c%d.%04d\r\n",
 				 p4d_sign_of(errorEnergyAfterEC),
-				 p4d_whole_of(__builtin_sqrt(
+				 p4d_whole_of(sqrt(
 					 (long double)errorEnergyAfterEC)),
-				 p4d_frac4_of(__builtin_sqrt(
+				 p4d_frac4_of(sqrt(
 					 (long double)errorEnergyAfterEC)));
 			ratio = 1.0f / errorEnergyAfterEC * errorEnergyBeforeEC;
 			dB = (float)(10.0f *

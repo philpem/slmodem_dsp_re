@@ -49,7 +49,7 @@
  },
  {
   "label": "the power is not rooted at all",
-  "find": "\treturn __builtin_sqrt(x);",
+  "find": "\treturn sqrt(x);",
   "replace": "\treturn x + 0.0;"
  },
  {

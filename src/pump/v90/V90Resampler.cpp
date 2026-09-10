@@ -49,6 +49,7 @@
  */
 
 #include <stddef.h>
+#include <math.h>
 
 #include "dsplib/DspMath.h"
 #include "dsplib/encode.h"
@@ -331,5 +332,5 @@ V90Resampler::getTimingHistoryStd()
 {
 	float var = Var(timingHistory, timingHistoryLen);
 
-	return __builtin_sqrt(var * (var < 0.0f ? -1.0f : 1.0f));
+	return sqrt(var * (var < 0.0f ? -1.0f : 1.0f));
 }

@@ -15,6 +15,7 @@
  */
 
 #include <stddef.h>
+#include <math.h>
 
 #include "dsplib/V92Mapper.h"
 
@@ -28,7 +29,7 @@
 static inline double
 v92mapper_fsqrt(double x)
 {
-	return __builtin_sqrt(x);
+	return sqrt(x);
 }
 
 #if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
