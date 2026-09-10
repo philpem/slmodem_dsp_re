@@ -157,8 +157,8 @@ static unsigned char before[sizeof(struct v34_object)];
 
 /*
  * A per-case fixup that runs after the bring-up and outside the object.
- * Only 54's completion needs one; it is NULL for every other case and the
- * ten arms that landed before this one never see it.  See `aim_session`.
+ * Cases needing owned callee tables install one temporarily and restore
+ * NULL afterwards.  See `aim_session` and `aim_xmitmp_initdigital`.
  */
 static void (*fixup)(void);
 
@@ -2144,6 +2144,54 @@ xm_reset(void)
 	xmitmp[XM_C6].val = 2;
 }
 
+/*
+ * `initdigital` indexes the receive divisor table before it tests a zero
+ * rate.  Its zero-rate, use-max-zero input therefore deliberately reads
+ * table[-1].  The general handshake fixture aims +0xaaac at the first entry
+ * of its dummy block; leaving the other rate inputs at the varied object fill
+ * made case 6739 read hundreds of kilobytes before that block instead.
+ *
+ * Keep the intentional predecessor read, but put it in owned storage.  Each
+ * side already has its own congruent dummy block, so advancing the pointer by
+ * sixteen entries leaves a real predecessor and preserves the fixture's
+ * address-independence check.  `xm_rx_predecessor` is zero for the ZERODIV
+ * case and non-zero for the companion that proves the lookup is observed.
+ */
+#define XM_RXDIVTAB	(TX1_RATECFG + 0x28)
+#define XM_RXUSEMAX	(TX1_RATECFG + 0x22)
+#define XM_RXBITS	(TX1_RATECFG + 0x14)
+#define XM_RXBAUD	(TX1_RATECFG + 0x12)
+#define XM_RXDIVISOR	0x0a42
+#define XM_RXCOSTSHIFT	0x0a44
+
+static short xm_rx_predecessor;
+
+static void
+aim_xmitmp_initdigital(void)
+{
+	int side;
+
+	/* Calling role: tx rate 3, offered rx rate 0, depth/use-max zero. */
+	v34hs_poke_short(TX1_F359C, 0x65);
+	v34hs_poke_short(0xaa0c, 3 << 2);	/* info_rates */
+	v34hs_poke_short(0xaa0e, (short)0x8004); /* rate_mask: asymmetric, rate 3 */
+	v34hs_poke_short(0xaa3c, 0x3001); /* info_caps: exit bit and tx limit 3 */
+	v34hs_poke_short(0xaa3e, 1);	/* caps_flags: permit asymmetric rates */
+	v34hs_poke_short(XM_RXBAUD, 2400);
+	v34hs_poke_short(XM_RXBITS, 0);
+	v34hs_poke_short(XM_RXUSEMAX, 0);
+
+	for (side = 0; side < 2; side++) {
+		char *o = (char *)v34hs_object(side);
+		short *tab;
+
+		memcpy(&tab, o + XM_RXDIVTAB, sizeof(tab));
+		tab += 16;
+		tab[-1] = xm_rx_predecessor;
+		memcpy(o + XM_RXDIVTAB, &tab, sizeof(tab));
+	}
+}
+
 static void
 run_xmitmp(const char *what, long tag)
 {
@@ -2407,9 +2455,32 @@ case_xmitmp(void)
 	xmitmp[XM_AA3C].val = 0x5a5b;
 	xmitmp[XM_359E].val = 4;
 	xmitmp[XM_3598].val = 0;
+	xm_rx_predecessor = 0;
+	fixup = aim_xmitmp_initdigital;
 	run_xmitmp("67 XMITMP, the sequence ends, initdigital runs once", 6739);
+	fixup = NULL;
 	diff_eq_int("67 XMITMP, initdigital is recorded as done",
 		    v34hs_peek_short(0, TX1_F3598), 1, 6739);
+	diff_eq_int("67 XMITMP, zero divisor takes the fallback",
+		    v34hs_peek_short(0, XM_RXDIVISOR), 1, 6739);
+	diff_eq_int("67 XMITMP, fallback divisor has width eight",
+		    v34hs_peek_short(0, XM_RXCOSTSHIFT), 8, 6739);
+
+	/* Same legal zero-rate index, with a non-zero predecessor: 512/2. */
+	xm_reset();
+	xmitmp[XM_FLAGS].val = 0x01f1;
+	xmitmp[XM_IDX].val = 0x56;
+	xmitmp[XM_AA3C].val = 0x5a5b;
+	xmitmp[XM_359E].val = 4;
+	xmitmp[XM_3598].val = 0;
+	xm_rx_predecessor = 512;
+	fixup = aim_xmitmp_initdigital;
+	run_xmitmp("67 XMITMP, initdigital reads the zero-rate predecessor", 6740);
+	fixup = NULL;
+	diff_eq_int("67 XMITMP, predecessor supplies the divisor",
+		    v34hs_peek_short(0, XM_RXDIVISOR), 256, 6740);
+	diff_eq_int("67 XMITMP, predecessor divisor has width nine",
+		    v34hs_peek_short(0, XM_RXCOSTSHIFT), 9, 6740);
 
 	/*
 	 * The three ways of NOT taking that exit, one guard at a time.  Each

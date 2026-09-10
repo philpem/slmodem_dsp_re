@@ -715,6 +715,70 @@ after-gates are not claimed: there is no applied source candidate. Baseline
 logs and partial-link JSON are under
 `build/issue20-followup/queue-attributes-*`.
 
+### The baseline failure was an unowned fixture lookup (#26)
+
+A fresh `PERIOD_OUT=build/issue26-fresh-period make period J=2
+T=t_v34hstx1` repeated the same seven failures, excluding stale objects.
+The working branch and master had identical tracked source, headers, tests,
+tools and Makefile. Tracing the first differing fields established an
+apparatus defect, not evidence for changing `initdigital` or its flags:
+
+- The varied fixture left `rxbits = -30181` and `rx_use_max = -21730`.
+  Rate reconciliation reaches zero, then both implementations read
+  `rx_divtab[0 + 14 * (-21730) - 1]`, or entry **-304221**.
+- This is 608,442 bytes before the dummy table, outside its owned arena and
+  padding. Equal nominal table contents do not make those reads congruent.
+  The existing diagnostic table probe skips dummy pointers, hiding this input.
+- Ours read a value halving to 1038; the reference read zero and took its
+  existing fallback to one. This explains divisor +0xa42, width +0xa44,
+  and the extra ZERODIV diagnostic without changing the source or comparator.
+
+The fixture repair bounds the negotiated inputs and aims each side's receive
+table sixteen shorts into its own dummy block. It retains the original's
+zero-rate `table[-1]` read in owned storage: case 6739 uses predecessor zero
+and asserts divisor 1/width 8 plus the once-only latch; companion 6740 uses
+512 and asserts divisor 256/width 9. Whole-object, signature, transcript and
+address-independence checks remain intact. Focused Gentoo validation passes
+**25,940 checks**, versus seven failures out of 25,850 before (+90 checks,
+not a removed failure or relaxed tolerance). The full Gentoo gate now passes
+**375 suites, zero failed** (before: 374/1). An isolated negative-control test
+changes only side B's zero-case predecessor to 512: the existing detector
+reports eight failed checks out of 25,943 and exits 1, all in case 6739,
+including the expected divisor/width, arena, signature and transcript changes.
+The nonzero companion remains green. Its additional three checks are existing
+per-differing-byte reports, not a different test selection. Commands and output
+are in master worktree `build/issue26-negative/run.{py,log}`; the full gate is
+`build/issue26-full-period.log`. No production source, flags or partial-link
+bytes change in this fix.
+
+### Independent review of the no-unit ring gains
+
+The complete `voice.c` TU has **21 shared function definitions** with unchanged
+binding/visibility. Independent `byteident.py` rescoring confirms **7 -> 10
+EXACT**, gaining `RD_delete`, `RD_process`, and `RD_ring_details`, losing none.
+No-unit retains the reference calls to `RingDetector_Delete` and
+`RingDetector_GetLastRing`; retained O3 substitutes those callees. Existing
+plain-O2 and no-inline controls already discriminate this mechanism, so the
+116-cell literal-`-O` source domain was not repeated.
+
+The nonexact `RD_create` needs a more careful reading than its length gap
+**3 -> 12 bytes** suggests. Parent review found that the reference DOES call
+`RingDetector_Create`, as no-unit does; retained O3 substitutes allocation and
+reset there. No-unit restores the reference call boundaries and offsets through
+the diagnostic call at +239. Its twelve-byte deficit instead comes from three
+switch arms sharing one EAX-to-stack store where the reference emits a separate
+four-byte store per arm; the local config-address register also differs.
+Thus the larger size gap is not evidence of a worse call reconstruction.
+Do not confuse this wrapper with `RingDetector_Create`, whose reference body
+contains reset work. Neither constructor nor reset
+is recovered; `RingDetector_Process` remains SIZE(88) under both current
+profiles (an older audit's SIZE(98) is not the current result). Therefore the
+three wrapper gains establish call preservation, not original source order
+or a justified production profile. Artifacts: `build/issue22-ring-no-unit/`,
+`build/tc_repro/src_service_voice.c.o`, and the complete diagnostic profile's
+`build/issue22-no-unit-queue-plain/src_service_voice.c.o`. Follow-up is #21;
+global source/profile acceptance remains #22.
+
 ## Reproducibility gap
 
 The main build defaults had been updated to Gentoo, but `flagsweep.py` and
