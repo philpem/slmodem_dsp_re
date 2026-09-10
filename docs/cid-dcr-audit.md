@@ -822,6 +822,68 @@ artifacts `build/issue20-followup/queue-attributes-*`. Full phase completion
 is tracked separately: its baseline also exposed an unused duplicate CID
 wrapper type left in the core TU, now tracked as #27.
 
+### Crossjumping explains the merged stores; source group order does not explain block placement
+
+The next control tested a distinct compiler mechanism, not more source
+synonyms: break/goto x unit/no-unit x crossjumping enabled/disabled, **eight
+full-TU cells and 168 independently rescored verdicts**. Four existing controls
+reproduce their previous objects byte-for-byte. The compiler accepts and
+executes `-fno-crossjumping`: eight nonexact TU bodies change, with no exact-set
+gain/loss or binding change.
+
+The direct/break source with **both no-unit and no-crossjumping** restores
+`RD_create`'s 293-byte size, separate arm stores, config-address register and
+reference call offsets, including constructor +193 and final free +285.
+It remains BYTES(11): physical arms are 650,850,1000 rather than the reference's
+1000,650,850. No-unit alone leaves SIZE(12), no-crossjumping alone SIZE(9), and
+the goto combination SIZE(18). The interaction is established; the flag is
+not adopted. Other nonexact bodies and section layout also change.
+
+That new observation justified a complete **six case-group permutations x
+four flag profiles**, **24 full-TU cells / 504 independently rescored
+verdicts**, with the default arm fixed last and each group's labels unchanged.
+All four unchanged-order controls reproduce their predecessor bodies,
+relocations and bindings; generated STT_FILE names explain the confined raw
+symbol/string-table differences. The domain has fourteen distinct normalized
+emissions. Every unit cell remains 7/21 EXACT and every no-unit cell 10/21.
+
+With crossjumping enabled, all permutations collapse. With it disabled,
+source order changes registers but **the physical order remains 650,850,1000
+in all six cases**. No-unit/no-crossjumping's six results are BYTES(11,9,9,5,11,9),
+not an exact preimage. The five-byte result matches registers by physical
+position, NOT by threshold value. Parent decoding of all twelve jump-table
+entries verifies the same codec-to-threshold meaning, but case 4/12 reaches
+function offset +270 rather than +248, case 13/15 +248 rather than +259, and
+case 14 +259 rather than +270. Both instruction placement and table targets
+remain different, so that near-match is not retained or relabelled.
+
+This completes and stops the case-group permutation line under these profiles.
+The next distinct question in #21 is compiler block placement, not another
+permutation: any future block-order/pass control must preserve the recovered
+store separation and call offsets and report all other changed TU bodies.
+No global/per-file flag change is justified by these diagnostic cells.
+Artifacts: `build/issue22-rd-create-crossjump/` and
+`build/issue22-rd-create-arm-order/`.
+
+### Cleanup checkpoint: full phase green, PR #28
+
+The unused `struct CID` copy in the core TU has no users; its used definition
+belongs to `src/service/cid.c`. Removing only that duplicate in `5e6d70ae`
+clears #27's gate: **301 types / 168 files / one existing registered duplicate,
+OK**. All 273 object hashes, the complete partial link and strict-comparison
+JSON remain identical to both the pre-cleanup and Queue-only outputs. The
+full Gentoo period suite again passes **375/0**.
+
+Finally `make phase J=3 -j3` on the combined cleanup branch passes, **exit 0**:
+differential, 64-bit, interop, structural, coverage and debug tiers all OK,
+with **49,031/51,416 source lines across 233 files, 1,425 debug sites and 35
+anchored deviation sites**. The modern tier uses its existing compiler
+divergence register; the deciding period tier has no allow-list. Log:
+`build/issue20-followup/queue-cid-phase-after.log`. PR **#28** contains only the
+Queue attribute cleanup and unused CID type removal; apparatus/guidelines
+landed on master and were merged into that branch. Strict completion remains
+DIFFERENT, and #22 remains open.
+
 ### No-unit Resampler losses: full-family review
 
 Parent independently rescored **102 verdicts** across both profiles for all
