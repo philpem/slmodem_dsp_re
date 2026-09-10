@@ -14,12 +14,11 @@ long-double expression type.  A recovered-Gentoo `make tc-repro` comparison
 against a clean master worktree found all 273 translation-unit objects
 byte-identical, including exports and every wrapper boundary.
 
-Two builtin expressions remain: `x87_fsqrt` in
+Two wrapper boundaries remained for separate investigation: `x87_fsqrt` in
 `V90ConstellationDesigner.cpp` and `trn2_x87_fsqrt` in
-`V90TRN2Designer.cpp`.  Replacing either wrapper call boundary with a direct
-builtin changed its complete recovered-Gentoo translation unit during issue
-#37, so their source form and boundary require separate investigation in #40.
-They are intentionally outside this change.
+`V90TRN2Designer.cpp`.  Issue #40 established that each must remain a
+`static inline double` boundary, while its body can use standard `sqrt` with
+full recovered-Gentoo translation-unit identity.
 
 `fpm_sqrt_table_generate` already calls ordinary double `sqrt` and includes
 `<math.h>`; it is a reviewed fixed-point table generator, not a builtin
