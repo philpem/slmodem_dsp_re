@@ -140,6 +140,13 @@ UNRESOLVED remains unresolved even when raw bytes agree. Instruction identity
 does not prove exported-symbol binding. Treat export loss/weakening as a failed
 replacement constraint, even when caller matches improve.
 
+Do not call a larger SIZE gap a regression without reading its cause.
+`RD_create` moved from SIZE(3) to SIZE(12) under no-unit while restoring the
+reference's constructor call and its offset. The twelve-byte deficit belonged
+to three switch-arm stores sharing one tail, a separate source/pass question.
+The smaller gap had hidden the wrong inline boundary. Conversely, a restored
+call does not settle the switch or recover the complete function.
+
 Broaden promising flags to representative TUs and then the full object before
 proposing global adoption. Phase4's gains hid pump inlining losses under O2.
 Limits 81–82 fixed that local combination but had global losses and new calls
