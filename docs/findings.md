@@ -120322,7 +120322,10 @@ BYTES -3 from checkpoint `aeb4a533`, with no other bucket change. The shared
 ratchet remains at the published checkpoint pending aggregate integration.
 (2026-09-07)
 
-## F10214. `dcr_process` is peephole2-exposed, but its predecessor cursor and its local-declaration domain are already exhausted
+## F10266. `dcr_process` is peephole2-exposed, but its predecessor cursor and its local-declaration domain are already exhausted
+
+Renumbered from the DCR entry formerly numbered 10214 on 2026-09-10 to
+resolve a collision with the earlier V90 constructor finding. Content unchanged.
 
 The 22-byte `dcr_process` size gap is not grounds to change the period flags.
 Compiling the complete `src/service/dcr.c` translation unit under the exact
@@ -120349,7 +120352,10 @@ by its immediate assignment does the same.  No source spelling from that
 domain is a unique preimage, so none is retained.  The remaining DCR gap is
 not licensed for a flag change or a byte-count hill climb. (2026-09-09)
 
-## F10215. The `-O2` near-size arm is uniform across DCR's declaration domain, not evidence for a per-file flag
+## F10267. The `-O2` near-size arm is uniform across DCR's declaration domain, not evidence for a per-file flag
+
+Renumbered from the DCR entry formerly numbered 10215 on 2026-09-10 to
+resolve a collision with the earlier Jd finding. Content unchanged.
 
 An exact-GCC-3.4.2, reproduction-defined `-O2` compile of the complete DCR
 translation unit makes `dcr_process` 564 bytes against the blob's 568, while
@@ -120367,7 +120373,10 @@ spelling, and grouping the five `int` declarations each compile to the normal
 `-O3` body as well.  The blob-wide evidence still selects `-O3`; a closer size
 alone cannot license an unproven per-translation-unit exception. (2026-09-09)
 
-## F10216. DCR's count-first source order narrows the `-O2` near arm, but no order/control combination closes it
+## F10268. DCR's count-first source order narrows the `-O2` near arm, but no order/control combination closes it
+
+Renumbered from the DCR entry formerly numbered 10216 on 2026-09-10 to
+resolve a collision with the earlier V.29 finding. Content unchanged.
 
 The reference evaluates each measuring phase's count before its sum.  Our
 source originally writes the two independent assignments in the other order,
@@ -122069,7 +122078,11 @@ self-test; the deliberately isolated modern-compiler NaN mismatch remains an
 allowed diagnostic while `make period` is authoritative for that case.
 (2026-09-08)
 
-## F10217. DCR's recovered compiler preimage is accepted through stack-layout variance, not a source rewrite
+## F10269. DCR's recovered compiler preimage is accepted through stack-layout variance, not a source rewrite
+
+Renumbered from the DCR entry formerly numbered 10217 on 2026-09-10 to
+resolve a collision with the earlier fax-adapter finding. The later audit
+correction below still withdraws this entry's stack-only interpretation.
 
 The reference object identifies Gentoo's patched GCC 3.4.2-r2.  With that
 compiler, `DSPLIB_REPRODUCE_BUGS`, and DCR alone compiled as
@@ -123016,7 +123029,7 @@ self-test and every structural check. Suite line coverage remains
 
 (2026-09-08)
 
-## CID/DCR audit correction: the stack-only interpretation in the DCR F10217 is withdrawn
+## CID/DCR audit correction: the stack-only interpretation in F10269 is withdrawn
 
 The DCR finding above misread `SIZE (1)` as one differing byte and the first
 `alpha_why` rejection as the only disagreement. `SIZE` measures the length

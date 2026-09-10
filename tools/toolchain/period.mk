@@ -117,7 +117,7 @@ TC_FLAGS += $(TC_EXTRA)
 # Provisional DCR candidate: O2 without the post-loop CSE rerun. The earlier
 # claim that only its frame differed was incorrect: SIZE measures length,
 # and --why reports only the first rejection. See docs/cid-dcr-audit.md and
-# the correction to F10217. This audit leaves the existing setting in place;
+# the correction to F10269. This audit leaves the existing setting in place;
 # it is not evidence that the original file used these options.
 TC_DCR_FLAGS := -O2 -fno-rerun-cse-after-loop
 

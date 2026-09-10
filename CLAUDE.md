@@ -457,7 +457,7 @@ tree-wide aggregate. DCR's earlier "stack-only" interpretation was retracted:
 the first rejection from `byteident.py --why` does not establish that it is
 the only difference (see `docs/cid-dcr-audit.md`). `-O3` (2155) and
 `-mno-ieee-fp` (1990) were re-measured on the real compiler and both survive
-symbol for symbol. Findings F2320, F2500, F2501 and F10217.
+symbol for symbol. Findings F2320, F2500, F2501 and F10269.
 
 The flags were derived from the object, not guessed, and are in
 `tools/toolchain/period.mk` with the evidence beside each:
