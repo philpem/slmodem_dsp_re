@@ -9859,7 +9859,7 @@
    }
   },
   "v92mapper": {
-   "key": "802ead4ee0bd89a23c391c6bf7204752b9e07ce664d242e22f91c19d947e0711",
+   "key": "4111acdb05f9ba9a7ace313c7a8bd82b3a930b36d35f857dae5a497fbb970a35",
    "summary": "12 mutations: 12 caught (12 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "reset installs mode 0's power for mode 1 as well": "caught",
@@ -9877,8 +9877,8 @@
    }
   },
   "v92mod": {
-   "key": "5cea3cb60a1ab20ac4dd8fab3b0baf52062003e35268d5861d54a5602753c4ec",
-   "summary": "40 mutations: 38 caught (38 by test, 0 by strings), 0 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
+   "key": "9f4c306e33a398daf8ca19357529bfcffbe6341b3654e186f64645587301d262",
+   "summary": "40 mutations: 37 caught (37 by test, 0 by strings), 0 NOT caught, 1 unusable, 2 equivalent, 0 MIScounted",
    "verdicts": {
     "reset does not copy the block size into +0x08": "caught",
     "reset does not put the scrambler back at all": "equivalent",
@@ -9886,6 +9886,7 @@
     "reset leaves +0x38 alone": "caught",
     "reset seeds the scrambler with ones": "caught",
     "reset writes a one into the float at +0x28": "caught",
+    "reset's diagnostic loses its carriage return": "caught",
     "the bit-to-symbol stage is given three times the argument": "caught",
     "the bit-to-symbol stage is given twice the block": "caught",
     "the bit-to-symbol stage's null test is dropped": "caught",
@@ -9898,11 +9899,10 @@
     "the first buffer is a buffer of ints": "caught",
     "the fourth buffer is released twice and the fifth never": "caught",
     "the fourth buffer is sized from the block rather than from the argument": "caught",
-    "the inlined reset's diagnostic loses its carriage return": "caught",
     "the last buffer is never released": "caught",
     "the phase 3 modulator is freed without being destroyed": "caught",
     "the phase 3 modulator's null test is dropped": "caught",
-    "the phase 4 modulator is handed the mapping parameters as its CP": "caught",
+    "the phase 4 modulator is handed the mapping parameters as its CP": "unusable",
     "the priming loop does not run at all": "caught",
     "the priming loop runs one extra time": "caught",
     "the queue is freed without being destroyed": "caught",

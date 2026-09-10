@@ -123,7 +123,11 @@ TC_DCR_FLAGS := -O2 -fno-rerun-cse-after-loop
 
 # Appended AFTER $(TC_EXTRA), exactly as `build.sh` ordered them, so the
 # override semantics above are unchanged.
-TC_CXXONLY := -fno-exceptions -fno-rtti
+# The object's C++ square roots are bare fsqrt, with no errno fallback.
+# Issue #19's recovered C++ source profile also uses fast math for ordinary
+# transcendental calls. period_inner.sh applies it to source, not fixtures;
+# this comparison build contains source objects only. See docs/issue19-inline-asm.md.
+TC_CXXONLY := -fno-exceptions -fno-rtti -fno-math-errno -ffast-math
 
 #
 # THE SOURCE LIST HAS ONE HOME AND IT IS THE TOP-LEVEL MAKEFILE.  Re-deriving

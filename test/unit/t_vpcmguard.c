@@ -23,13 +23,12 @@
  * WEAK declaration so that the comparison is a comparison; and the soft path
  * is still driven end to end, with `v34pcm_unwritten()` required to report
  * `V34PCM_WRITTEN` afterwards.  That second assertion is the whole of the old
- * watch turned the right way up: if any of the seven ever stops being linked,
- * its guard fires, the recorder takes its code, and this reads non-WRITTEN.
+ * watch turned the right way up.  The member calls now use strong references,
+ * so omitting any of their definitions fails at link time.
  *
- * `v34pcmmain.cpp` keeps the machinery -- four `v34pcm_notwritten` call sites,
- * the recorder and the abort -- and it is now dead code.  Retiring it is a
- * separate change to a file this batch had no other reason to touch, and it
- * would take the recorder with it; finding F7606.
+ * Issue #19 retires the obsolete member guards described in F7606.
+ * `v34pcmmain.cpp` retains the recorder API for this test's compatibility;
+ * no call path can record an unwritten member now.
  *
  * ===========================================================================
  * THE SESSION HAS TO SURVIVE A REAL CALL NOW

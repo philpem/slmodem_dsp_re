@@ -29,6 +29,7 @@
  */
 
 #include <stddef.h>
+#include <math.h>
 
 extern "C" {
 #include "dsplib/debug.h"
@@ -955,26 +956,19 @@ V90Demodulator::enterDataSteadyState()
  *
  * `fldlg2` pushes log10(2) at the register's full 64-bit mantissa and `fyl2x`
  * computes st(1) * log2(st(0)) and pops, so the sequence takes one value and
- * leaves one -- net stack effect zero, which is what makes the "=t"/"0" tie
- * legal.  glibc's log10() is a polynomial and differs from this in the last
+ * leaves one -- net stack effect zero.  Library-call rounding can differ in the last
  * place often enough to matter once the result is scaled by ten, which is
  * exactly what `getAT_UD` does to both of its results.
  *
- * THIS IS THE THIRD COPY of the same four-line helper -- `x87_log10` in
- * V90Equalizer.cpp, `psd_x87_log10` in psd.cpp, `trn2_x87_log10` in
- * V90TRN2Designer.cpp and the one in VpcmFloModem.cpp -- and it is a copy
- * deliberately, on the reasoning VpcmFloModem.cpp already wrote down:
- * hoisting it into a shared header from a worktree touches files other
- * batches own for no behavioural gain.  Recorded so a later cleanup can
- * collapse them all at once.
+ * The ordinary log10l call expands through the period compiler/math header
+ * under the C++ source fast-math flags.  These do not uniquely recover the
+ * original flags; modern portability is a separate, forthcoming issue.
+ * See docs/issue19-inline-asm.md.
  */
 static inline long double
 dem_x87_log10(long double x)
 {
-	long double r;
-
-	__asm__ ("fldlg2\n\tfxch %%st(1)\n\tfyl2x" : "=t" (r) : "0" (x));
-	return r;
+	return log10l(x);
 }
 
 /*

@@ -10,6 +10,7 @@
  */
 
 #include <stddef.h>
+#include <math.h>
 
 #include "dsplib/V90TRN2Designer.h"
 
@@ -149,9 +150,8 @@ V90TRN2Designer::setTrn2DummyConstel(V90MappingParams *mappingParams)
  * log10(2) at the register's full 64-bit mantissa and `fyl2x` computes
  * st(1) * log2(st(0)) and pops, so the pair takes one value and leaves one.
  *
- * GCC DOES NOT EMIT THAT SEQUENCE FOR `log10()` AT THIS TREE'S FLAGS, and the
- * flag that would is not the one finding F876 names.  Measured on the period
- * compiler in `tools/toolchain/`, at `build.sh`'s exact flag list plus one:
+ * Historical control following finding F876, measured on the period compiler
+ * in `tools/toolchain/`, at the then-current `build.sh` flag list plus one:
  *
  *     (nothing)                                       call log10
  *     -funsafe-math-optimizations                     call log10
@@ -159,27 +159,17 @@ V90TRN2Designer::setTrn2DummyConstel(V90MappingParams *mappingParams)
  *     -funsafe-math-optimizations -fno-trapping-math  call log10
  *     -ffast-math                                     fldlg2 / fxch / fyl2x
  *
- * so `-funsafe-math-optimizations` is necessary and NOT sufficient for a
- * `double` argument, and nothing narrower than `-ffast-math` reproduces it.
- * That flag is not in this tree's derived set and must not be: it withdraws
- * NaN semantics from the whole translation unit, which CLAUDE.md records
- * breaking eleven other sites.  A call to libm's `log10` is not the same
- * function either -- it is correctly rounded where `fyl2x` is not -- so the
- * sequence is written out.
+ * Only the fast-math cell emitted the sequence in that tested domain.
  *
- * THE COPY IS DELIBERATE AND IT IS THE FOURTH.  `psd.cpp`, `V90Equalizer.cpp`
- * and `VpcmFloModem.cpp` each carry the same eight lines, and psd.cpp says why
- * a shared header is a separate concern: a new C++ header has to be added to
- * `offcheck.py`'s SKIP_HEADERS or the `offsets` gate breaks files nobody
- * touched.  Finding F876.
+ * The ordinary log10l call now expands through the period compiler/math header
+ * under the C++ source fast-math flags.  These do not uniquely recover the
+ * original flags; modern portability is a separate, forthcoming issue.
+ * See docs/issue19-inline-asm.md.
  */
 static inline long double
 trn2_x87_log10(long double x)
 {
-	long double r;
-
-	__asm__ ("fldlg2\n\tfxch %%st(1)\n\tfyl2x" : "=t" (r) : "0" (x));
-	return r;
+	return log10l(x);
 }
 
 /*
@@ -234,25 +224,14 @@ V90TRN2Designer::maxK(V90MappingParams *mappingParams)
 }
 
 /*
- * FSQRT on the value already in st(0), for the "sqrt(power)" diagnostic.
- *
- * The object's is a bare `fsqrt` with no branch and no call.  `sqrt()` at
- * this tree's flags is a libm call with an inline `fsqrt`/`fcom`/`jp` fast
- * path in front of it -- measured on the period compiler -- so it is neither
- * the same instructions nor the same value on a negative input, where
- * `fsqrt` returns the indefinite NaN and libm sets errno.
- *
- * SAME ASM, SAME REASON, as `x87_fsqrt` in V90ConstellationDesigner.cpp,
- * `v92mapper_fsqrt` in V92Mapper.cpp and `agc_fsqrt` in dsplib/Agc.h.  Fourth
- * copy, deliberate, for the reason `trn2_x87_log10`'s fourth copy is.
+ * The reference's sqrt(power) diagnostic uses bare fsqrt.  The C++ build
+ * disables math errno so the builtin has the same negative-input behavior;
+ * no unsafe-math profile or explicit instruction is needed.
  */
-static inline long double
-trn2_x87_fsqrt(long double x)
+static inline double
+trn2_x87_fsqrt(double x)
 {
-	long double r;
-
-	__asm__ ("fsqrt" : "=t" (r) : "0" (x));
-	return r;
+	return __builtin_sqrt(x);
 }
 
 /*

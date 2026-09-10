@@ -297,7 +297,7 @@ V92Modulator::V92Modulator(unsigned int nSamples, V92Phase2Info *p2,
 	 * Findings F8064 and F8065.
 	 */
 	blockSize = (unsigned int)(nSamples
-				   * (V92MOD_RATE_NUM / V92MOD_RATE_DEN)
+				   * V92MOD_RATE_RATIO
 				   + 0.5f);
 	phase2Info = p2;
 	ja = j;
@@ -1154,7 +1154,7 @@ V92Modulator::progress(int *bits, unsigned int &nbits, float *out,
 	unsigned int nOut;
 	unsigned int i;
 
-	n = (unsigned int)(nSamples * (V92MOD_RATE_NUM / V92MOD_RATE_DEN)
+	n = (unsigned int)(nSamples * V92MOD_RATE_RATIO
 			   + 0.5f);
 
 	eventCode = 0;

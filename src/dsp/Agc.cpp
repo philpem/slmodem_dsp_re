@@ -143,7 +143,7 @@ void Agc<T>::process(const T *in, T *out, unsigned nSamples)
 			 * respectively -- tiny, and only reachable by the cases
 			 * built for them, which is the point of finding F608.
 			 */
-			long double lvl = (1.0L / blockLen) * acc;
+			double lvl = (1.0 / blockLen) * acc;
 
 			acc = T(0);
 			level = (T)lvl;	/* stored rounded; lvl stays 80-bit */
@@ -166,11 +166,11 @@ void Agc<T>::process(const T *in, T *out, unsigned nSamples)
 			 */
 			if (alpha != T(1)) {
 				if (lvl > minLevel) {
-					long double t =
-					    agc_fsqrt((1.0L / lvl) * ref);
+					double t =
+					    agc_fsqrt((1.0 / lvl) * ref);
 
 					gain = (T)(alpha * gain
-						   + (1.0L - alpha) * t);
+						   + (1.0 - alpha) * t);
 				}
 			}
 		}

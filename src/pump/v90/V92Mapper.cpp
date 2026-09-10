@@ -19,27 +19,16 @@
 #include "dsplib/V92Mapper.h"
 
 /*
- * FSQRT on the value already in st(0), and NOT `__builtin_sqrt`.
- *
- * GCC inlines the builtin to the bare instruction only where it can prove the
- * argument is not negative -- which is why `ResamplerTiming::SdHalfBaudDft`
- * and `V90Resampler::getTimingHistoryStd` get away with it and this does not:
- * `power` is a field, any float can be in it, and what the builtin emits here
- * is a compare against zero and a call to libm for the negative arm.  The
- * blob is one `fsqrt` with no branch, and a libm fallback would return a
- * different NaN.  Same asm, same reason, as `agc_fsqrt` in dsplib/Agc.h.
- *
- * `long double` rather than `double` so the intermediate cannot be rounded to
- * 53 bits on its way to the divide: the object keeps the whole computation on
- * the x87 stack at extended precision and rounds once, at the `fistps`.
+ * The reference uses bare fsqrt even for a negative power.  The C++ build's
+ * -fno-math-errno suppresses the library fallback without enabling unsafe
+ * arithmetic.  `power` is a float; the period compiler keeps the double
+ * square-root result in its extended-precision register through the divide
+ * and rounds at fistps.  See docs/issue19-inline-asm.md.
  */
-static inline long double
-v92mapper_fsqrt(long double x)
+static inline double
+v92mapper_fsqrt(double x)
 {
-	long double r;
-
-	__asm__("fsqrt" : "=t" (r) : "0" (x));
-	return r;
+	return __builtin_sqrt(x);
 }
 
 #if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4

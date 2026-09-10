@@ -183,11 +183,10 @@
   "replace": "\t\t\tdecade = (float)x87_log10((long double)probe[i]\n\t\t\t\t\t\t  * 6.103515625e-05L);"
  },
  {
-  "label": "Uinfo: log10 comes from libm rather than the coprocessor",
-  "find": "\t__asm__ (\"fldlg2\\n\\tfxch %%st(1)\\n\\tfyl2x\" : \"=t\" (r) : \"0\" (x));\n\treturn r;",
-  "replace": "\tr = (long double)__builtin_log10((double)x);\n\treturn r;",
-  "equivalent": true,
-  "why": "MEASURED, not argued.  The coprocessor result and glibc's are both rounded to a float before anything else happens to them, and a float ulp near this magnitude is about 6e-8 while the two logarithms differ by about 1e-16.  Swept over EVERY float magnitude in 2^-20..2^21 at 3.3e-7 relative spacing -- 123 million values, 41 binades, which is the whole domain the chain can present -- the two give bit-identical results: 0 differences.  So the inline asm is what the object does and not what the arithmetic needs, and it stays because it is what the object does.  HELD FIXED: the float rounding on BOTH sides of the logarithm.  Remove either and this equivalence goes away, which is why the mutation that removes the one before it IS caught."
+  "label": "Uinfo: natural logarithm instead of log10",
+  "find": "\treturn log10l(x);",
+  "replace": "\treturn logl(x);",
+  "note": "Issue #19 retires the formerly equivalent asm-to-libm mutation: the source now uses an ordinary math call. The historical float-rounded libm equivalence measurement does not count as a caught fault. Replace it with a wrong-base logarithm, preserving the suite's mutation count but removing this equivalent classification; see docs/issue19-inline-asm.md for the new measured verdict."
  },
  {
   "label": "Uinfo: the offset is 60 dB in the wrong direction",

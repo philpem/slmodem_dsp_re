@@ -47,17 +47,15 @@
 #define DSPLIB_AGC_H
 
 /*
- * FSQRT on the 80-bit value already in st(0).  Inline asm rather than
- * `sqrtl()` because GCC only inlines that to the instruction under
- * `-fno-math-errno`, and a libm fallback would return a different NaN for a
- * negative argument -- reachable here, since `ref` is caller-supplied.
+ * The period compiler keeps the double expression in its x87 register.
+ * -fno-math-errno supplies the bare square root, including the instruction's
+ * negative-input NaN.  The caller must not first convert a long-double
+ * expression to double: that introduces a narrowing absent from the object.
+ * See docs/issue19-inline-asm.md for the crossed full-TU controls.
  */
-static inline long double agc_fsqrt(long double x)
+static inline double agc_fsqrt(double x)
 {
-	long double r;
-
-	__asm__("fsqrt" : "=t" (r) : "0" (x));
-	return r;
+	return __builtin_sqrt(x);
 }
 
 template <class T>

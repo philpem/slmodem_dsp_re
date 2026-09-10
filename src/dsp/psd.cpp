@@ -12,6 +12,7 @@
  * two independent implementations and not a hybrid.
  */
 
+#include <math.h>
 #include "dsplib/Psd.h"
 #include "dsplib/fft.h"		/* process() calls realfft (finding F1325) */
 
@@ -114,28 +115,16 @@ Psd::getFrequencies(float *freq, float sampleRate) const
  * log10(2) at the register's full 64-bit mantissa and `fyl2x` computes
  * st(1) * log2(st(0)) and pops, so the pair takes one value and leaves one.
  *
- * GCC EMITS THAT SEQUENCE FOR `log10()` ONLY UNDER
- * `-funsafe-math-optimizations` (finding F876), which this tree does not build
- * with and must not: the flag changes every other floating-point expression
- * in the translation unit as well.  A call to libm's `log10` is not the same
- * function -- it is correctly rounded where `fyl2x` is not -- and the
- * difference lands in the last place of the result, which is exactly what the
- * arms below then round to a float and store.
- *
- * THE COPY IS DELIBERATE AND IT IS THE THIRD.  `V90Equalizer.cpp` and
- * `VpcmFloModem.cpp` each carry the same eight lines.  A shared header would
- * be better and is a separate concern: a NEW C++ header has to be added to
- * `offcheck.py`'s SKIP_HEADERS or the `offsets` gate breaks tree-wide naming
- * files nobody touched, and that is not a change to make from inside one
- * class's batch.
+ * The ordinary log10l call expands through the period compiler/math header
+ * under the C++ source fast-math flags.  Library-call rounding can differ in
+ * the last place before the arms below round to float.  The original flags
+ * are not uniquely recovered; modern portability is tracked separately in a
+ * forthcoming issue.  See docs/issue19-inline-asm.md; F876 is historical.
  */
 static inline long double
 psd_x87_log10(long double x)
 {
-	long double r;
-
-	__asm__ ("fldlg2\n\tfxch %%st(1)\n\tfyl2x" : "=t" (r) : "0" (x));
-	return r;
+	return log10l(x);
 }
 
 /*

@@ -22,12 +22,15 @@
  * `#if` is not hedging -- the two branches were each run against the object.
  *
  * ---------------------------------------------------------------------------
- * Why `__builtin_memcpy` alone is not enough
+ * Why an out-of-line byte copy is needed on the modern compiler
  *
  * GCC folds a memcpy between two same-typed pointers straight back into an
- * assignment and emits the x87 pair again.  The empty `asm` makes the value
- * opaque and pins it in a general register.  It generates no instruction of its
- * own; it only denies the compiler the knowledge that the bytes are a float.
+ * assignment and emits the x87 pair again.  The modern build uses ordinary
+ * `memcpy` with `-fno-builtin-memcpy`, so the library copies the representation
+ * without evaluating it as a floating-point value.  Copying through an unsigned
+ * temporary also permits source and destination to overlap.  Issue #19's
+ * crossed full-TU checks reject the builtin form on signalling NaNs and pass
+ * the library-call form; see docs/issue19-inline-asm.md.
  *
  * The `__GNUC__ >= 4` test is on the MAJOR version because that is the boundary
  * that matters here: 3.4 is the original's compiler and everything since
@@ -38,12 +41,16 @@
 #ifndef DSPLIB_X87COPY_H
 #define DSPLIB_X87COPY_H
 
+#if defined(__GNUC__) && __GNUC__ >= 4
+#include <string.h>
+#endif
+
 /**
  * @brief Copy `*src` to `*dst` without letting the value pass through an
  * x87 register.
  *
  * Under GCC >= 4 with `T` the same size as `unsigned` (the `float` case this
- * exists for), the bytes are moved through an opaque general-register
+ * exists for), the bytes are moved through an unsigned
  * temporary instead of a plain assignment, which is what stops a modern
  * compiler's `flds`/`fstps` lowering from quietening a signalling NaN -- see
  * the file comment for the object's own GCC 3.4.2 behavior and the three
@@ -61,9 +68,8 @@ static inline void dsplib_assign(T *dst, const T *src)
 	if (sizeof(T) == sizeof(unsigned)) {
 		unsigned tmp;
 
-		__builtin_memcpy(&tmp, src, sizeof(unsigned));
-		__asm__("" : "+r" (tmp));
-		__builtin_memcpy(dst, &tmp, sizeof(unsigned));
+		memcpy(&tmp, src, sizeof(unsigned));
+		memcpy(dst, &tmp, sizeof(unsigned));
 		return;
 	}
 #endif

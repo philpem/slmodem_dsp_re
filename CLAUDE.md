@@ -281,6 +281,20 @@ in the 2026-08-30 leaf wave (findings F8410-F8497, `docs/remaining.md`):
   session believed it for several turns. **Attribute a verdict to a compiler
   by running that compiler alone.**
 
+**Compiler-portability failures get their own GitHub issue as standard
+procedure.** When the deciding period differential passes but a modern
+compiler fails, check existing issues and create or update a dedicated
+follow-up linked to the reconstruction issue. Record the branch/commit,
+compiler versions and complete flags, reproduction commands, failing checks
+and denominators, tested controls, and closure criteria. Distinguish measured
+compiler behavior from an unproven root cause. Do not hold a period-validated
+reconstruction commit open solely to finish that separate investigation;
+record and link the failed portability gate when committing. Keep the modern
+failure visible: no tolerance widening, source workaround, or declaration
+change merely to make the gate green. Issue #19's GCC 14 follow-up, #30, is
+the precedent. Shared working-instruction changes belong on master; carry
+this procedure forward when the investigation branch is integrated.
+
 `make phase` is still what proves portability, 64-bit cleanliness and the
 structural checks, and still has to pass before a branch is called finished.
 What it is not is the thing that decides whether a function matches the blob.

@@ -29,7 +29,8 @@ FLAGS="-O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387
 # GCC 3.4 defaults to gnu89, where a declaration in a `for` initialiser is an
 # error.  Nothing else in the C half needs a newer dialect.
 CFLAGS="$FLAGS -std=gnu99"
-CXXFLAGS="$FLAGS -fno-exceptions -fno-rtti"
+CXXFLAGS="$FLAGS -fno-exceptions -fno-rtti -fno-math-errno"
+SOURCE_CXXFLAGS="$CXXFLAGS -ffast-math"
 
 # Keep the provisional DCR candidate local to its translation unit.
 # See TC_DCR_FLAGS in period.mk and the corrected finding F10269: the earlier
@@ -67,6 +68,7 @@ compile_one() {
 		&& { [ -z "$NEWEST_HDR" ] || [ "$o" -nt "$NEWEST_HDR" ]; } \
 		&& return 0
 	case $f in
+	src/*.cpp) g++ -c $SOURCE_CXXFLAGS -o "$o" "$f" 2>"$o.log" ;;
 	*.cpp)	g++ -c $CXXFLAGS -o "$o" "$f" 2>"$o.log" ;;
 	*)	case $f in src/service/dcr.c) cflags="$CFLAGS $DCR_FLAGS" ;; *) cflags="$CFLAGS" ;; esac
 		gcc -c $cflags -o "$o" "$f" 2>"$o.log" ;;
@@ -75,6 +77,8 @@ compile_one() {
 
 echo "period: compiling $(echo $SRC $CXXSRC $HARNESS | wc -w) objects with $(gcc -dumpversion)"
 echo "period: flags $(echo $FLAGS)"
+echo "period: C++ source flags $(echo $SOURCE_CXXFLAGS)"
+echo "period: C++ fixture flags $(echo $CXXFLAGS)"
 for f in $SRC $CXXSRC $HARNESS; do
 	compile_one "$f" &
 	while [ "$(jobs -p | wc -l)" -ge "$J" ]; do wait -n 2>/dev/null || wait; done
