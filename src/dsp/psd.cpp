@@ -121,12 +121,6 @@ Psd::getFrequencies(float *freq, float sampleRate) const
  * are not uniquely recovered; modern portability is tracked separately in a
  * forthcoming issue.  See docs/issue19-inline-asm.md; F876 is historical.
  */
-static inline long double
-psd_x87_log10(long double x)
-{
-	return log10l(x);
-}
-
 /*
  * Welch's method: overlapping windowed frames, each transformed, the squared
  * magnitudes summed across frames, and then one of three scalings.
@@ -205,7 +199,7 @@ Psd::process(float *in, unsigned int count, float *out, OutputOption option)
 
 		scale = 1.0L / peak;
 		for (i = 0; i < bins; i++) {
-			float l = (float)psd_x87_log10((long double)out[i]
+			float l = (float)log10l((long double)out[i]
 						       * scale + 1e-25);
 
 			out[i] = (float)(l * 10.0f);
@@ -219,7 +213,7 @@ Psd::process(float *in, unsigned int count, float *out, OutputOption option)
 		long double scale = 1.0L / (long double)frames;
 
 		for (i = 0; i < bins; i++) {
-			float l = (float)psd_x87_log10((long double)out[i]
+			float l = (float)log10l((long double)out[i]
 						       * scale + 1e-25);
 
 			out[i] = (float)(l * 10.0f);

@@ -179,8 +179,8 @@
  },
  {
   "label": "Uinfo: log10 sees the unrounded product",
-  "find": "\t\t\tdecade = (float)x87_log10((long double)scaled);",
-  "replace": "\t\t\tdecade = (float)x87_log10((long double)probe[i]\n\t\t\t\t\t\t  * 6.103515625e-05L);"
+  "find": "\t\t\tdecade = (float)log10l((long double)scaled);",
+  "replace": "\t\t\tdecade = (float)log10l((long double)probe[i]\n\t\t\t\t\t\t  * 6.103515625e-05L);"
  },
  {
   "label": "Uinfo: natural logarithm instead of log10",

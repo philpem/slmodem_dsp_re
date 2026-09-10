@@ -186,12 +186,6 @@ typedef char vpcm_dil_size[(sizeof(tagV90DILdescriptor) == 0x213) ? 1 : -1];
  * original flags; modern portability is a separate, forthcoming issue.
  * See docs/issue19-inline-asm.md.
  */
-static inline long double
-x87_log10(long double x)
-{
-	return log10l(x);
-}
-
 /*
  * `cltd; xor %edx,%eax; sub %edx,%eax`, which is what GCC emits for abs() and
  * what the object has.  Written out rather than called, because C's abs() is
@@ -550,7 +544,7 @@ VPcmFloModem::getUinfoValue(short skipProbe)
 
 			scaled = (float)((long double)probe[i]
 					 * 6.103515625e-05L);
-			decade = (float)x87_log10((long double)scaled);
+			decade = (float)log10l((long double)scaled);
 
 			if (use[i])
 				L2[j++] = (float)((long double)decade * 10.0L

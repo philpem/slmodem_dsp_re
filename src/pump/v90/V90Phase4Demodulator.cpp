@@ -506,18 +506,6 @@ V90Phase4Demodulator::detectFPE(short sample)
  * These do not uniquely recover the original flags; modern portability is a
  * separate, forthcoming issue.  See docs/issue19-inline-asm.md.
  */
-static inline double
-p4d_x87_fsqrt(double x)
-{
-	return __builtin_sqrt(x);
-}
-
-static inline long double
-p4d_x87_log10(long double x)
-{
-	return log10l(x);
-}
-
 /*
  * THE FLOAT-AS-`%c%d.%0Nd` TRIPLE, the same three helpers `V92Transmitter`
  * and `V90ConstellationDesigner` carry, and for the same reason: the object
@@ -866,9 +854,9 @@ V90Phase4Demodulator::getV90Decision(short sample)
 			edprintf("V90Phase4Demodulator: error energy before "
 				 "echo cancellation  = %c%d.%04d\r\n",
 				 p4d_sign_of(errorEnergyBeforeEC),
-				 p4d_whole_of(p4d_x87_fsqrt(
+				 p4d_whole_of(__builtin_sqrt(
 					 (long double)errorEnergyBeforeEC)),
-				 p4d_frac4_of(p4d_x87_fsqrt(
+				 p4d_frac4_of(__builtin_sqrt(
 					 (long double)errorEnergyBeforeEC)));
 			state = P4D_STATE_WAIT_FOR_ECHO_CANCEL;
 			countInState = 0;
@@ -913,13 +901,13 @@ V90Phase4Demodulator::getV90Decision(short sample)
 			edprintf("V90Phase4Demodulator: error energy after "
 				 "echo cancellation  = %c%d.%04d\r\n",
 				 p4d_sign_of(errorEnergyAfterEC),
-				 p4d_whole_of(p4d_x87_fsqrt(
+				 p4d_whole_of(__builtin_sqrt(
 					 (long double)errorEnergyAfterEC)),
-				 p4d_frac4_of(p4d_x87_fsqrt(
+				 p4d_frac4_of(__builtin_sqrt(
 					 (long double)errorEnergyAfterEC)));
 			ratio = 1.0f / errorEnergyAfterEC * errorEnergyBeforeEC;
 			dB = (float)(10.0f *
-				     p4d_x87_log10((long double)ratio));
+				     log10l((long double)ratio));
 			edprintf("V90Phase4Demodulator: silence SCR echo "
 				 "energy [dB]  = %c%d.%04d\r\n",
 				 p4d_sign_of(dB), p4d_whole_of(dB),
@@ -1279,9 +1267,9 @@ V90Phase4Demodulator::getV92Decision(short sample)
 			edprintf("V90Phase4Demodulator: error energy before "
 				 "echo cancellation  = %c%d.%04d\r\n",
 				 p4d_sign_of(errorEnergyBeforeEC),
-				 p4d_whole_of(p4d_x87_fsqrt(
+				 p4d_whole_of(__builtin_sqrt(
 					 (long double)errorEnergyBeforeEC)),
-				 p4d_frac4_of(p4d_x87_fsqrt(
+				 p4d_frac4_of(__builtin_sqrt(
 					 (long double)errorEnergyBeforeEC)));
 			state = P4D_STATE_WAIT_FOR_ECHO_CANCEL;
 			countInState = 0;
@@ -1326,13 +1314,13 @@ V90Phase4Demodulator::getV92Decision(short sample)
 			edprintf("V90Phase4Demodulator: error energy after "
 				 "echo cancellation  = %c%d.%04d\r\n",
 				 p4d_sign_of(errorEnergyAfterEC),
-				 p4d_whole_of(p4d_x87_fsqrt(
+				 p4d_whole_of(__builtin_sqrt(
 					 (long double)errorEnergyAfterEC)),
-				 p4d_frac4_of(p4d_x87_fsqrt(
+				 p4d_frac4_of(__builtin_sqrt(
 					 (long double)errorEnergyAfterEC)));
 			ratio = 1.0f / errorEnergyAfterEC * errorEnergyBeforeEC;
 			dB = (float)(10.0f *
-				     p4d_x87_log10((long double)ratio));
+				     log10l((long double)ratio));
 			edprintf("V90Phase4Demodulator: silence SCR echo "
 				 "energy [dB]  = %c%d.%04d\r\n",
 				 p4d_sign_of(dB), p4d_whole_of(dB),

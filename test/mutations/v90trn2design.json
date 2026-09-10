@@ -45,8 +45,8 @@
  },
  {
   "label": "maxK changes base to 10 rather than to 2",
-  "find": "\t\tfloat logTwo = (float)trn2_x87_log10((long double)2.0f);",
-  "replace": "\t\tfloat logTwo = (float)trn2_x87_log10((long double)10.0f);"
+  "find": "\t\tfloat logTwo = (float)log10l((long double)2.0f);",
+  "replace": "\t\tfloat logTwo = (float)log10l((long double)10.0f);"
  },
  {
   "label": "V90TRN2Design's dMin seed divides instead of multiplying by the reciprocal",

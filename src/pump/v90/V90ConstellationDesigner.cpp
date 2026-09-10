@@ -168,12 +168,6 @@ typedef char v90cd_size[(sizeof(V90ConstellationDesigner) == 0x54) ? 1 : -1];
  * original flags; modern portability is a separate, forthcoming issue.
  * See docs/issue19-inline-asm.md.
  */
-static inline long double
-x87_log10(long double x)
-{
-	return log10l(x);
-}
-
 /*
  * The three sqrt(power) diagnostics use bare fsqrt in the reference.
  * -fno-math-errno lets the ordinary builtin keep that behavior, including
@@ -410,8 +404,8 @@ V90ConstellationDesigner::maxK(V90MappingParams *p)
 	if (prod == 0.0f)
 		return 0;
 
-	lp = x87_log10((long double)prod);
-	l2 = (float)x87_log10((long double)2.0f);
+	lp = log10l((long double)prod);
+	l2 = (float)log10l((long double)2.0f);
 	return (int)(unsigned int)(lp / l2 + 1e-6f);
 }
 
@@ -439,8 +433,8 @@ V90ConstellationDesigner::calcK(unsigned int m, float *f)
 	for (i = 0; i < 6; i++)
 		k *= m * f[i];
 
-	l2 = (float)x87_log10((long double)2.0f);
-	return (float)x87_log10((long double)k) * (1.0f / l2);
+	l2 = (float)log10l((long double)2.0f);
+	return (float)log10l((long double)k) * (1.0f / l2);
 }
 
 
@@ -511,8 +505,8 @@ V90ConstellationDesigner::constelBuild(short step, short which)
 int
 V90ConstellationDesigner::calcMtoMatchKtarget(float kTarget, float m)
 {
-	float lm = (float)x87_log10((long double)m);
-	float l2 = (float)x87_log10((long double)2.0f);
+	float lm = (float)log10l((long double)m);
+	float l2 = (float)log10l((long double)2.0f);
 	long double x = ((long double)kTarget - lm / l2) * (1.0f / 6.0f);
 	unsigned int n = (unsigned int)x;
 	unsigned int frac = (unsigned int)((x - n) * 100.0f);
@@ -638,8 +632,8 @@ V90ConstellationDesigner::determineDminForRrn(unsigned int rrn)
 	 * multiplies by the reciprocal and its twin below divides.
 	 */
 	{
-		float lm = (float)x87_log10((long double)m);
-		float l2 = (float)x87_log10((long double)2.0f);
+		float lm = (float)log10l((long double)m);
+		float l2 = (float)log10l((long double)2.0f);
 		long double x = ((long double)(rrn - 0.75f)
 				 - lm * (1.0f / l2)) * (1.0f / 6.0f);
 		unsigned int n = (unsigned int)x;
@@ -729,8 +723,8 @@ V90ConstellationDesigner::determineDminForRrn(unsigned int rrn)
 
 	/* And the rate-up target, which divides where its twin multiplied. */
 	{
-		float lm = (float)x87_log10((long double)m);
-		float l2 = (float)x87_log10((long double)2.0f);
+		float lm = (float)log10l((long double)m);
+		float l2 = (float)log10l((long double)2.0f);
 		long double x = ((long double)(rrn + 1.05f) - lm / l2)
 			      * (1.0f / 6.0f);
 		unsigned int n = (unsigned int)x;
@@ -1732,8 +1726,8 @@ V90ConstellationDesigner::realK(V90MappingParams *p)
 	if (prod == 0.0f)
 		return 0.0f;
 
-	lp = (float)x87_log10((long double)prod);
-	l2 = (float)x87_log10((long double)2.0f);
+	lp = (float)log10l((long double)prod);
+	l2 = (float)log10l((long double)2.0f);
 	return lp / l2 + 1e-9f;
 }
 
@@ -2516,9 +2510,8 @@ reduce:
 	 * shapes are the object's -- 0x4bc5c recomputes the product and the
 	 * logarithm four times over and 0x4ba96 reloads `0x68(%esp)` -- and
 	 * they are written as they were measured rather than unified.  GCC is
-	 * free to fold these four back into one, since `x87_log10` is a
-	 * non-volatile `asm`; that is a codegen difference and not a
-	 * behavioural one.
+	 * free to fold these four back into one; that is a codegen difference,
+	 * not a behavioural one.
 	 */
 	edprintf("V90ConnectionDesigner: real K after optimization  "
 		 "= %c%d.%05d\r\n",
