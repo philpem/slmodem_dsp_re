@@ -917,7 +917,8 @@ complete provenance are in `build/issue22-resampler-no-unit/REPORT.md` and
 ## Original O2 losses: direct Resampler inlining control
 
 The [symbol-by-symbol ledger](issue22-loss-ledger.json) partitions the original
-91 losses into **41 controlled recoveries and 50 unresolved**. Parent review
+91 losses into **91 controlled recoveries and 0 without a recovery route**.
+This closes the name-set accounting, not whole-profile validation. Parent review
 checked its 91 names against the original exact-set subtraction and verified
 the recovery groups are disjoint:
 
@@ -930,10 +931,17 @@ the recovery groups are disjoint:
 | O2 plus automatic inlining: the two TUs below | 8 |
 | O2 plus automatic inlining: V92 follow-up below | 5 |
 | O2 plus web: Beepgen detector_delete (earlier omission corrected) | 1 |
+| O2 plus web: V22/V32 crossed follow-up | 6 |
+| V34 helper inline source or O2 automatic inlining | 1 |
+| O2 plus automatic inlining and web: V92 crossed follow-up | 4 |
+| Full-build O2 + automatic inlining + web: additional combination recoveries | 31 |
+| Add unswitching to that combination: remaining isolated owner controls | 8 |
 
-This is **not 41 proven source mistakes**. Four have a demonstrated plausible
+This is **not 91 proven source mistakes**. Five have a demonstrated plausible
 source-inline recovery; the others have compiler-profile recovery controls.
-Neither proves the author's source spelling. All 91 have owners (51 owner
+All 91 now also have flag-only routes on unchanged source: the full combined
+build recovers 82 together, and the residual nine owner controls below recover
+the rest. Neither proves the author's source spelling. All 91 have owners (51 owner
 groups), but ownership is not an explanation. Later auto81 and no-unit
 experiments are overlapping, different-profile evidence, not extra completed
 members. The missing `GetNextDigitAndReturnNextState` definition is a separate
@@ -1035,6 +1043,142 @@ rewriting their statements. Changes elsewhere in a TU can affect them.
 
 The detailed read-only artifact is `build/issue22-c-loss-triage/REPORT.md`.
 Remaining experiments are tracked in #22, separate from this measured record.
+
+## Crossed follow-up: inline source versus passes, then web versus unswitch
+
+Three bounded experiments add eleven local recovery routes to the preceding
+41-count checkpoint. Parent review independently rescored **234 verdicts**
+across 17 complete-TU compilations and checked the unchanged controls against
+the retained object bytes. All use Gentoo GCC 3.4.2-r2, its selected period
+assembler and the complete bug-reproduction flags. None changes production
+source or flags.
+
+`build/issue22-v34-inline-cross/` crosses retained source / explicit GNU-C
+inline `V34Filter2` with plain O2 / O2 plus automatic inlining, plus one O3
+control: five cells, 130 verdicts. Either explicit inline at plain O2 or
+automatic inlining recovers the 139-byte `V34EchoPreFilter` caller (O2 alone
+is 107 bytes with a helper call). The explicit source-only change affects
+**only that caller** among 26 shared bodies/relocation maps; its other 25
+are unchanged. The exact 61-byte helper remains strongly exported. This is
+another plausible source/profile interaction, not proof of an original
+keyword. All O2 cells still lose the two delay-line exact matches relative
+to O3 and retain the unrelated `V34EqualizerCleanUp` gain. Source-only
+collateral must not be confused with profile-wide collateral.
+
+`build/issue22-c-web-control/` crosses two unchanged C TUs with plain O2 /
+O2 plus web: four cells, 32 verdicts. `v22rate` rises 0/4 -> 3/4 EXACT,
+recovering `ResetRx`, `SetRxRate`, `SetTxRate`; `V32rxhdx` rises 5/12 -> 8/12,
+recovering `RxHdxEpoch`, `RxHdxRateSequence`, `RxHdxSequence`. Both O2+web
+**complete objects are byte-identical to retained O3**, including the
+remaining nonexact bodies, data, relocations and exports. Enabled-option
+reports verify web off/on. No missing helper call was involved in these six
+losses; source statement rewriting was not needed for their recovery.
+
+`build/issue22-v92-pass-cross/` holds O2 plus automatic inlining and crosses
+web off/on with unswitching off/on for two TUs: eight cells, 72 verdicts.
+Web recovers both pending V92BitsToSymbol reference-taking `process`
+overloads and both V92Precoder constructors. BitsToSymbol rises 7/10 -> 9/10
+EXACT and both web cells reproduce its complete O3 object. Precoder rises
+4/8 -> 6/8 with web, but **web without unswitching still changes the
+already-nonexact `process` body**. Only web plus unswitching reproduces its
+whole O3 object. Unswitching changes that nonexact body without moving the
+EXACT count: it is not an inert option. No symbol/binding changes occur.
+
+These results separate a source-inline hypothesis from web-driven operand
+choices, and demonstrate why the global combination must inspect nonexact
+bodies too. The local domains are complete; no threshold search was added.
+
+## Complete combined-profile control: 82 losses recover together
+
+After the local controls, the unchanged tree was built uniformly at
+`-O2 -finline-functions -fweb`, including DCR (no retained no-rerun exception),
+with the full reproduction flags. The isolated build completed **273/273
+translation units, zero failures**. It is not a mixture of candidate objects
+and baseline fallbacks. Reproduction commands:
+
+```sh
+make -f tools/toolchain/period.mk -j2 \
+  TC_OUT="$PWD/build/issue22-global-o2-inline-web/objects" \
+  TC_EXTRA='-O2 -finline-functions -fweb -DDSPLIB_REPRODUCE_BUGS' \
+  TC_DCR_FLAGS='-O2 -finline-functions -fweb'
+TC_OUT="$PWD/build/issue22-global-o2-inline-web/objects" \
+  python3 tools/toolchain/byteident.py --list-exact
+```
+
+The authoritative whole-tree census is **804/1852 EXACT**, versus baseline
+813/1852: **zero gains, nine losses**. All nine belong to the original91;
+therefore **82/91 recover together on unchanged source**. PCM's ninth loss
+already has a separate unswitching combination recovery, bringing the union
+of demonstrated routes to 83 at this stage, not a hypothetical globally exact profile.
+Thirty-one of those routes were not in the 52-member local ledger. They are
+labelled *combined-profile controls*, not individually isolated mechanisms.
+
+The remaining nine losses in this complete profile are `SetAdaptEqV22`,
+`SetAdaptEqV32`, `SetEncoderV17`, `VPCMXF_Create`,
+`VPcmV34GetCurrentSessionDP`, `V90SpectralShaper::applyFrameAction`,
+`V90SignBitsExtractor::applyFrameAction`, `FloatIIR::reset`, and
+`alaw2linear`. The missing Dialer definition is restored; no function-name
+inventory or FUNC/OBJECT binding/visibility change remains versus baseline.
+
+**236/273 whole objects reproduce baseline bytes; 37 differ**, carrying 56
+changed common function body/relocation occurrences, not merely the nine exact
+losses. Seven objects also change non-executable PROGBITS contents, including
+switch tables, one string section and V34hshak's 8-byte constant pool. The
+complete hash/inventory comparison is
+`build/issue22-global-o2-inline-web/comparison.json`; ambiguous COMDAT/section
+targets keep the existing comparator treatment.
+
+Both partially linked objects were measured with `partialcmp.py
+--require-exact`; both return **DIFFERENT, exit 1**:
+
+| Strict census | Retained baseline | Combined profile |
+| --- | ---: | ---: |
+| Positioned bytes equal / 943398 | 54109 | 53675 |
+| Exact relocation records / 18317 | 905 | 897 |
+| Exact defined-symbol records / 2907 | 222 | 220 |
+| Exact content sections | 57 | 57 |
+
+The candidate was linked from its complete recovered-order manifest using
+period binutils, without replacing `build/partial/dsplibs.o`. Reports and
+JSON are `before-partial.*` and `after-partial.*` in the experiment directory.
+No source or profile is adopted, and no differential acceptance is claimed.
+This answers coexistence for 82 recovery routes; it does not establish the
+author's command line or certify the changed nonexact bodies.
+
+## Residual unswitch isolation: the original91 ledger is accounted for
+
+The nine exact losses from the complete combined profile have nine distinct
+owner TUs. A fixed 18-cell experiment compiles each unchanged owner at that
+profile and with `-funswitch-loops` added; PCM is the existing positive
+control. All nine fresh controls reproduce the complete global-build objects.
+All nine unswitch variants reproduce their **complete retained O3 objects**,
+including nonexact functions, data, relocations and bindings. The parent
+recomputed all **304 shared-function verdicts** and independently checked
+all 18 whole-object comparisons.
+
+Artifacts are `build/issue22-unswitch-verified/{run.py,results.json,REPORT.md}`
+and its command/option logs. Earlier preliminary delegated attempts failed
+control/domain requirements and are excluded; only this fresh fail-closed
+parent-run experiment supports the result. Every accepted control uses the
+source-build flags, not the test harness dialect/flags, and Gentoo with the
+final bug-reproduction define.
+
+Eight newly accounted-for losses plus the already-known PCM control close
+the original91 recovery ledger. **None requires a source change to recover
+its exact reference function under the measured option combinations.** This
+does not prove that the source is uniquely original, that O2 was the original
+level, or that all91 are source defects. It establishes that the original
+15-gain/91-loss observation alone cannot adjudicate those claims: source
+changes and named passes must be separated.
+
+The remaining #22 validation is now specific: build **all273** TUs with
+O2 + automatic inlining + web + unswitching together, compare all functions
+and nonexact residue, then validate that actual profile rather than a mixture
+of objects. Nine isolated matching owners cannot certify its other264 TUs.
+No global setting has been adopted; the existing O3 baseline and provisional
+DCR exception remain in production. The last measured combined partial link
+is still DIFFERENT, and the unchanged-source differential suite has not been
+run at the proposed final combination.
 
 ## Dialer: missing-definition control, not an exact recovery
 

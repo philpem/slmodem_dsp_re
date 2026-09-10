@@ -1,5 +1,5 @@
 {
-  "controlled_recovery_total": 41,
+  "controlled_recovery_total": 91,
   "denominators": {
     "o2_no_rerun_exact": 737,
     "o2_no_rerun_shared": 1851,
@@ -11,15 +11,19 @@
   "question": "retained O3 EXACT symbols lost by global O2 plus -fno-rerun-cse-after-loop",
   "schema": 1,
   "status_counts": {
+    "global_o2_inline_web_combination": 31,
     "o2_inline_functions_resampler_derived_ctors": 8,
     "o2_inline_functions_resampler_timing": 5,
     "o2_inline_functions_v90_bits_to_symbol": 3,
     "o2_inline_functions_v92_controls": 5,
+    "o2_inline_web_unswitch_residual": 8,
+    "o2_inline_web_v92_cross": 4,
     "o2_web_beepgen": 1,
     "o2_web_inline_unswitch_pcm": 1,
+    "o2_web_v22_v32": 6,
     "plain_o2_removes_no_rerun_cse": 14,
-    "unresolved_named": 50,
-    "v32_static_inline_at_o2_no_rerun": 4
+    "v32_static_inline_at_o2_no_rerun": 4,
+    "v34_inline_source_or_o2_inline_functions": 1
   },
   "symbols": [
     {
@@ -63,27 +67,27 @@
       "symbol": "DecodeRateSeq"
     },
     {
-      "evidence": "build/issue20-followup/profile-map.txt",
+      "evidence": "build/issue22-global-o2-inline-web/comparison.json",
       "owners": [
         "src_fax_fifo.c.o"
       ],
-      "status": "unresolved_named",
+      "status": "global_o2_inline_web_combination",
       "symbol": "FIFO_full_test"
     },
     {
-      "evidence": "build/issue20-followup/profile-map.txt",
+      "evidence": "build/issue22-global-o2-inline-web/comparison.json",
       "owners": [
         "src_dsp_fpm_pps.c.o"
       ],
-      "status": "unresolved_named",
+      "status": "global_o2_inline_web_combination",
       "symbol": "FPM_PPS_init"
     },
     {
-      "evidence": "build/issue20-followup/profile-map.txt",
+      "evidence": "build/issue22-global-o2-inline-web/comparison.json",
       "owners": [
         "src_call_pulse.c.o"
       ],
-      "status": "unresolved_named",
+      "status": "global_o2_inline_web_combination",
       "symbol": "LastPulseDigitDialed"
     },
     {
@@ -95,35 +99,35 @@
       "symbol": "RcFixed_Check_Combination"
     },
     {
-      "evidence": "build/issue20-followup/profile-map.txt",
+      "evidence": "build/issue22-c-web-control/results.json",
       "owners": [
         "src_pump_v22_v22rate.c.o"
       ],
-      "status": "unresolved_named",
+      "status": "o2_web_v22_v32",
       "symbol": "ResetRx"
     },
     {
-      "evidence": "build/issue20-followup/profile-map.txt",
+      "evidence": "build/issue22-c-web-control/results.json",
       "owners": [
         "src_pump_v32_V32rxhdx.c.o"
       ],
-      "status": "unresolved_named",
+      "status": "o2_web_v22_v32",
       "symbol": "RxHdxEpoch"
     },
     {
-      "evidence": "build/issue20-followup/profile-map.txt",
+      "evidence": "build/issue22-c-web-control/results.json",
       "owners": [
         "src_pump_v32_V32rxhdx.c.o"
       ],
-      "status": "unresolved_named",
+      "status": "o2_web_v22_v32",
       "symbol": "RxHdxRateSequence"
     },
     {
-      "evidence": "build/issue20-followup/profile-map.txt",
+      "evidence": "build/issue22-c-web-control/results.json",
       "owners": [
         "src_pump_v32_V32rxhdx.c.o"
       ],
-      "status": "unresolved_named",
+      "status": "o2_web_v22_v32",
       "symbol": "RxHdxSequence"
     },
     {
@@ -135,27 +139,27 @@
       "symbol": "SeqToRate"
     },
     {
-      "evidence": "build/issue20-followup/profile-map.txt",
+      "evidence": "build/issue22-unswitch-verified/results.json",
       "owners": [
         "src_pump_v22_v22prc.c.o"
       ],
-      "status": "unresolved_named",
+      "status": "o2_inline_web_unswitch_residual",
       "symbol": "SetAdaptEqV22"
     },
     {
-      "evidence": "build/issue20-followup/profile-map.txt",
+      "evidence": "build/issue22-unswitch-verified/results.json",
       "owners": [
         "src_pump_v32_v32fpctl.c.o"
       ],
-      "status": "unresolved_named",
+      "status": "o2_inline_web_unswitch_residual",
       "symbol": "SetAdaptEqV32"
     },
     {
-      "evidence": "build/issue20-followup/profile-map.txt",
+      "evidence": "build/issue22-unswitch-verified/results.json",
       "owners": [
         "src_fax_v17.c.o"
       ],
-      "status": "unresolved_named",
+      "status": "o2_inline_web_unswitch_residual",
       "symbol": "SetEncoderV17"
     },
     {
@@ -167,75 +171,75 @@
       "symbol": "SetRxLoopsV32"
     },
     {
-      "evidence": "build/issue20-followup/profile-map.txt",
+      "evidence": "build/issue22-c-web-control/results.json",
       "owners": [
         "src_pump_v22_v22rate.c.o"
       ],
-      "status": "unresolved_named",
+      "status": "o2_web_v22_v32",
       "symbol": "SetRxRate"
     },
     {
-      "evidence": "build/issue20-followup/profile-map.txt",
+      "evidence": "build/issue22-c-web-control/results.json",
       "owners": [
         "src_pump_v22_v22rate.c.o"
       ],
-      "status": "unresolved_named",
+      "status": "o2_web_v22_v32",
       "symbol": "SetTxRate"
     },
     {
-      "evidence": "build/issue20-followup/profile-map.txt",
+      "evidence": "build/issue22-global-o2-inline-web/comparison.json",
       "owners": [
         "src_pump_v32_V32TXHDX.c.o"
       ],
-      "status": "unresolved_named",
+      "status": "global_o2_inline_web_combination",
       "symbol": "TxHdxFinishFrame"
     },
     {
-      "evidence": "build/issue20-followup/profile-map.txt",
+      "evidence": "build/issue22-global-o2-inline-web/comparison.json",
       "owners": [
         "src_pump_v22_v22_iir.c.o"
       ],
-      "status": "unresolved_named",
+      "status": "global_o2_inline_web_combination",
       "symbol": "V22IIRFilterInit"
     },
     {
-      "evidence": "build/issue20-followup/profile-map.txt",
+      "evidence": "build/issue22-v34-inline-cross/results.json",
       "owners": [
         "src_pump_v34_v34filters.c.o"
       ],
-      "status": "unresolved_named",
+      "status": "v34_inline_source_or_o2_inline_functions",
       "symbol": "V34EchoPreFilter"
     },
     {
-      "evidence": "build/issue20-followup/profile-map.txt",
+      "evidence": "build/issue22-global-o2-inline-web/comparison.json",
       "owners": [
         "src_pump_v34_v34filters.c.o"
       ],
-      "status": "unresolved_named",
+      "status": "global_o2_inline_web_combination",
       "symbol": "V34EchoUpdateDelayLine"
     },
     {
-      "evidence": "build/issue20-followup/profile-map.txt",
+      "evidence": "build/issue22-global-o2-inline-web/comparison.json",
       "owners": [
         "src_pump_v34_v34filters.c.o"
       ],
-      "status": "unresolved_named",
+      "status": "global_o2_inline_web_combination",
       "symbol": "V34EqualizerUpdateDelayLine"
     },
     {
-      "evidence": "build/issue20-followup/profile-map.txt",
+      "evidence": "build/issue22-global-o2-inline-web/comparison.json",
       "owners": [
         "src_v8_v8hs.c.o"
       ],
-      "status": "unresolved_named",
+      "status": "global_o2_inline_web_combination",
       "symbol": "V8Create"
     },
     {
-      "evidence": "build/issue20-followup/profile-map.txt",
+      "evidence": "build/issue22-unswitch-verified/results.json",
       "owners": [
         "src_pump_v90_VPcmXfCreate.cpp.o"
       ],
-      "status": "unresolved_named",
+      "status": "o2_inline_web_unswitch_residual",
       "symbol": "VPCMXF_Create"
     },
     {
@@ -247,35 +251,35 @@
       "symbol": "VPcmV34GetCleanedSamples"
     },
     {
-      "evidence": "build/issue20-followup/profile-map.txt",
+      "evidence": "build/issue22-unswitch-verified/results.json",
       "owners": [
         "src_pump_v34_v34pcmif.c.o"
       ],
-      "status": "unresolved_named",
+      "status": "o2_inline_web_unswitch_residual",
       "symbol": "VPcmV34GetCurrentSessionDP"
     },
     {
-      "evidence": "build/issue20-followup/profile-map.txt",
+      "evidence": "build/issue22-v92-pass-cross/results.json",
       "owners": [
         "src_pump_v90_V92Precoder.cpp.o"
       ],
-      "status": "unresolved_named",
+      "status": "o2_inline_web_v92_cross",
       "symbol": "_ZN11V92PrecoderC1Ej"
     },
     {
-      "evidence": "build/issue20-followup/profile-map.txt",
+      "evidence": "build/issue22-v92-pass-cross/results.json",
       "owners": [
         "src_pump_v90_V92Precoder.cpp.o"
       ],
-      "status": "unresolved_named",
+      "status": "o2_inline_web_v92_cross",
       "symbol": "_ZN11V92PrecoderC2Ej"
     },
     {
-      "evidence": "build/issue20-followup/profile-map.txt",
+      "evidence": "build/issue22-global-o2-inline-web/comparison.json",
       "owners": [
         "src_pump_v90_V90PreFilter.cpp.o"
       ],
-      "status": "unresolved_named",
+      "status": "global_o2_inline_web_combination",
       "symbol": "_ZN12V90PreFilter16getFilterPointerEj"
     },
     {
@@ -327,27 +331,27 @@
       "symbol": "_ZN12V92ModulatorC2EjP13V92Phase2InfoP5V92JaP19tagV90DILdescriptorP5V92CPP16V92MappingParamsP13V92Parameters"
     },
     {
-      "evidence": "build/issue20-followup/profile-map.txt",
+      "evidence": "build/issue22-global-o2-inline-web/comparison.json",
       "owners": [
         "src_pump_v90_VpcmFloModem.cpp.o"
       ],
-      "status": "unresolved_named",
+      "status": "global_o2_inline_web_combination",
       "symbol": "_ZN12VPcmFloModem16setNofBitsPhase4Ej"
     },
     {
-      "evidence": "build/issue20-followup/profile-map.txt",
+      "evidence": "build/issue22-global-o2-inline-web/comparison.json",
       "owners": [
         "src_pump_v90_V90Parameters.cpp.o"
       ],
-      "status": "unresolved_named",
+      "status": "global_o2_inline_web_combination",
       "symbol": "_ZN13V90ParametersC1EP19_tagModemParameters"
     },
     {
-      "evidence": "build/issue20-followup/profile-map.txt",
+      "evidence": "build/issue22-global-o2-inline-web/comparison.json",
       "owners": [
         "src_pump_v90_V90Parameters.cpp.o"
       ],
-      "status": "unresolved_named",
+      "status": "global_o2_inline_web_combination",
       "symbol": "_ZN13V90ParametersC2EP19_tagModemParameters"
     },
     {
@@ -367,11 +371,11 @@
       "symbol": "_ZN13V92ParametersC2EP19_tagModemParameters"
     },
     {
-      "evidence": "build/issue20-followup/profile-map.txt",
+      "evidence": "build/issue22-global-o2-inline-web/comparison.json",
       "owners": [
         "src_pump_v90_ModulusCoder.cpp.o"
       ],
-      "status": "unresolved_named",
+      "status": "global_o2_inline_web_combination",
       "symbol": "_ZN14ModulusEncoder8progressEPhPj"
     },
     {
@@ -463,11 +467,11 @@
       "symbol": "_ZN15V90BitsToSymbol7processERjPs"
     },
     {
-      "evidence": "build/issue20-followup/profile-map.txt",
+      "evidence": "build/issue22-v92-pass-cross/results.json",
       "owners": [
         "src_pump_v90_V92bitsToSymbol.cpp.o"
       ],
-      "status": "unresolved_named",
+      "status": "o2_inline_web_v92_cross",
       "symbol": "_ZN15V92BitsToSymbol7processEPhRjPs"
     },
     {
@@ -479,51 +483,51 @@
       "symbol": "_ZN15V92BitsToSymbol7processEPhj"
     },
     {
-      "evidence": "build/issue20-followup/profile-map.txt",
+      "evidence": "build/issue22-v92-pass-cross/results.json",
       "owners": [
         "src_pump_v90_V92bitsToSymbol.cpp.o"
       ],
-      "status": "unresolved_named",
+      "status": "o2_inline_web_v92_cross",
       "symbol": "_ZN15V92BitsToSymbol7processERjPs"
     },
     {
-      "evidence": "build/issue20-followup/profile-map.txt",
+      "evidence": "build/issue22-global-o2-inline-web/comparison.json",
       "owners": [
         "src_dsp_AnsamToneDetector.cpp.o"
       ],
-      "status": "unresolved_named",
+      "status": "global_o2_inline_web_combination",
       "symbol": "_ZN17ANSamToneDetectorC1Ejjfjfjjj"
     },
     {
-      "evidence": "build/issue20-followup/profile-map.txt",
+      "evidence": "build/issue22-global-o2-inline-web/comparison.json",
       "owners": [
         "src_dsp_AnsamToneDetector.cpp.o"
       ],
-      "status": "unresolved_named",
+      "status": "global_o2_inline_web_combination",
       "symbol": "_ZN17ANSamToneDetectorC2Ejjfjfjjj"
     },
     {
-      "evidence": "build/issue20-followup/profile-map.txt",
+      "evidence": "build/issue22-unswitch-verified/results.json",
       "owners": [
         "src_pump_v90_V90SpectralShaper.cpp.o"
       ],
-      "status": "unresolved_named",
+      "status": "o2_inline_web_unswitch_residual",
       "symbol": "_ZN17V90SpectralShaper16applyFrameActionENS_7ACTIONSEPsi"
     },
     {
-      "evidence": "build/issue20-followup/profile-map.txt",
+      "evidence": "build/issue22-global-o2-inline-web/comparison.json",
       "owners": [
         "src_pump_v90_V90Phase3Modulator.cpp.o"
       ],
-      "status": "unresolved_named",
+      "status": "global_o2_inline_web_combination",
       "symbol": "_ZN18V90Phase3Modulator13generateJdNotEv"
     },
     {
-      "evidence": "build/issue20-followup/profile-map.txt",
+      "evidence": "build/issue22-global-o2-inline-web/comparison.json",
       "owners": [
         "src_pump_v90_V90Phase3Modulator.cpp.o"
       ],
-      "status": "unresolved_named",
+      "status": "global_o2_inline_web_combination",
       "symbol": "_ZN18V90Phase3ModulatorC1EP13V90Parametersj"
     },
     {
@@ -543,11 +547,11 @@
       "symbol": "_ZN18V92Phase4Modulator13recivedSUVtagEv"
     },
     {
-      "evidence": "build/issue20-followup/profile-map.txt",
+      "evidence": "build/issue22-unswitch-verified/results.json",
       "owners": [
         "src_pump_v90_V90SignBitsExtractor.cpp.o"
       ],
-      "status": "unresolved_named",
+      "status": "o2_inline_web_unswitch_residual",
       "symbol": "_ZN20V90SignBitsExtractor16applyFrameActionENS_7ACTIONSEPhS1_"
     },
     {
@@ -599,83 +603,83 @@
       "symbol": "_ZN24V90ConstellationDesigner24findConstelMaxValueIndexEP16V90MappingParams"
     },
     {
-      "evidence": "build/issue20-followup/profile-map.txt",
+      "evidence": "build/issue22-global-o2-inline-web/comparison.json",
       "owners": [
         "src_pump_v90_V90CP.cpp.o"
       ],
-      "status": "unresolved_named",
+      "status": "global_o2_inline_web_combination",
       "symbol": "_ZN5V90CP5resetEv"
     },
     {
-      "evidence": "build/issue20-followup/profile-map.txt",
+      "evidence": "build/issue22-global-o2-inline-web/comparison.json",
       "owners": [
         "src_pump_v90_V90Jd.cpp.o"
       ],
-      "status": "unresolved_named",
+      "status": "global_o2_inline_web_combination",
       "symbol": "_ZN5V90Jd11unPackResetEv"
     },
     {
-      "evidence": "build/issue20-followup/profile-map.txt",
+      "evidence": "build/issue22-global-o2-inline-web/comparison.json",
       "owners": [
         "src_pump_v90_V90Jd.cpp.o"
       ],
-      "status": "unresolved_named",
+      "status": "global_o2_inline_web_combination",
       "symbol": "_ZN5V90Jd12getRatesMaskEv"
     },
     {
-      "evidence": "build/issue20-followup/profile-map.txt",
+      "evidence": "build/issue22-global-o2-inline-web/comparison.json",
       "owners": [
         "src_pump_v90_V90Jd.cpp.o"
       ],
-      "status": "unresolved_named",
+      "status": "global_o2_inline_web_combination",
       "symbol": "_ZN5V90Jd12setRatesMaskEi"
     },
     {
-      "evidence": "build/issue20-followup/profile-map.txt",
+      "evidence": "build/issue22-global-o2-inline-web/comparison.json",
       "owners": [
         "src_pump_v90_V92CP.cpp.o"
       ],
-      "status": "unresolved_named",
+      "status": "global_o2_inline_web_combination",
       "symbol": "_ZN5V92CP5resetEv"
     },
     {
-      "evidence": "build/issue20-followup/profile-map.txt",
+      "evidence": "build/issue22-global-o2-inline-web/comparison.json",
       "owners": [
         "src_pump_v90_V92CP.cpp.o"
       ],
-      "status": "unresolved_named",
+      "status": "global_o2_inline_web_combination",
       "symbol": "_ZN5V92CP7calcCRCEv"
     },
     {
-      "evidence": "build/issue20-followup/profile-map.txt",
+      "evidence": "build/issue22-global-o2-inline-web/comparison.json",
       "owners": [
         "src_pump_v90_V92Jd.cpp.o"
       ],
-      "status": "unresolved_named",
+      "status": "global_o2_inline_web_combination",
       "symbol": "_ZN5V92Jd12getRatesMaskEv"
     },
     {
-      "evidence": "build/issue20-followup/profile-map.txt",
+      "evidence": "build/issue22-global-o2-inline-web/comparison.json",
       "owners": [
         "src_pump_v90_V92Jd.cpp.o"
       ],
-      "status": "unresolved_named",
+      "status": "global_o2_inline_web_combination",
       "symbol": "_ZN5V92Jd12setRatesMaskEi"
     },
     {
-      "evidence": "build/issue20-followup/profile-map.txt",
+      "evidence": "build/issue22-unswitch-verified/results.json",
       "owners": [
         "src_dsp_FloatIIR.cpp.o"
       ],
-      "status": "unresolved_named",
+      "status": "o2_inline_web_unswitch_residual",
       "symbol": "_ZN8FloatIIR5resetEv"
     },
     {
-      "evidence": "build/issue20-followup/profile-map.txt",
+      "evidence": "build/issue22-global-o2-inline-web/comparison.json",
       "owners": [
         "src_dsp_FloatARMA.cpp.o"
       ],
-      "status": "unresolved_named",
+      "status": "global_o2_inline_web_combination",
       "symbol": "_ZN9FloatARMA5resetEv"
     },
     {
@@ -687,11 +691,11 @@
       "symbol": "_ZN9Resampler15copyHistoryTailEv"
     },
     {
-      "evidence": "build/issue20-followup/profile-map.txt",
+      "evidence": "build/issue22-global-o2-inline-web/comparison.json",
       "owners": [
         "src_pump_v90_V90Mapper.cpp.o"
       ],
-      "status": "unresolved_named",
+      "status": "global_o2_inline_web_combination",
       "symbol": "_ZN9V90Mapper7processEPhjPsRj"
     },
     {
@@ -711,11 +715,11 @@
       "symbol": "cid_freq_sampl"
     },
     {
-      "evidence": "build/issue20-followup/profile-map.txt",
+      "evidence": "build/issue22-global-o2-inline-web/comparison.json",
       "owners": [
         "src_service_Dtmf_Rx.c.o"
       ],
-      "status": "unresolved_named",
+      "status": "global_o2_inline_web_combination",
       "symbol": "create_cid_dtmf"
     },
     {
@@ -727,29 +731,29 @@
       "symbol": "detector_delete"
     },
     {
-      "evidence": "build/issue20-followup/profile-map.txt",
+      "evidence": "build/issue22-global-o2-inline-web/comparison.json",
       "owners": [
         "src_pump_v34_v34shell.c.o"
       ],
-      "status": "unresolved_named",
+      "status": "global_o2_inline_web_combination",
       "symbol": "preinitV34"
     },
     {
-      "evidence": "build/issue20-followup/profile-map.txt",
+      "evidence": "build/issue22-global-o2-inline-web/comparison.json",
       "owners": [
         "src_pump_v90_V90MappingParamsInt.cpp.o"
       ],
-      "status": "unresolved_named",
+      "status": "global_o2_inline_web_combination",
       "symbol": "setDataBitRate"
     },
     {
-      "evidence": "build/issue20-followup/profile-map.txt",
+      "evidence": "build/issue22-global-o2-inline-web/comparison.json",
       "owners": [
         "src_pump_v34_v34shell.c.o"
       ],
-      "status": "unresolved_named",
+      "status": "global_o2_inline_web_combination",
       "symbol": "setScramble"
     }
   ],
-  "unresolved_named_total": 50
+  "unresolved_named_total": 0
 }

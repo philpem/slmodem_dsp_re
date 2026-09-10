@@ -153,6 +153,23 @@ Limits 81–82 fixed that local combination but had global losses and new calls
 inside already-nonexact functions. V92Modulator inline recovered constructors
 but removed the strong reset export. A scalar score concealed each problem.
 
+When several local controls point to the same pass combination, test that
+combination on the complete object before continuing file-by-file. #22's
+O2 + automatic inlining + web control recovered 82 of the original 91 losses
+together, but still lost nine baseline exact symbols and changed nonexact
+bodies and partial-link layout. A local recovery ledger and a compatible
+global candidate are different results; report both, with disjoint symbol
+sets. A combined-pass recovery is not an individually isolated mechanism or
+proof of a source mistake.
+
+Check the prose against the machine records. Retain full mangled names for
+overloads and constructor variants; a shortened display name is not a symbol
+identity. Label whether a difference is against the reference, retained O3,
+or the previous experimental cell. Compare actual body/relocation values,
+not their differently formatted serializations. In a source/profile cross,
+source-only collateral must be measured at the same profile; do not attribute
+all O2-versus-O3 changes to one inline keyword.
+
 ## 6. Separate diagnosis, acceptance and completion
 
 Label outcomes: invalid experiment, negative result, mechanism control, source
