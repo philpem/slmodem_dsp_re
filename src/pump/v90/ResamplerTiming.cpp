@@ -44,6 +44,7 @@
  */
 
 #include <stddef.h>
+#include <math.h>
 
 #include "dsplib/debug.h"
 #include "dsplib/ResamplerTiming.h"
@@ -183,7 +184,7 @@ ResamplerTiming::resetSdHalfBaudDft()
  * `cmp $0x100` is on the INCREMENTED value, so the magnitude lands after the
  * 256th sample and `dftDone` latches there.  The object squares and adds on
  * the x87 stack and rounds once, at the `fstps`; no local and no
- * -ffloat-store.  `__builtin_sqrt` compiles to a bare `fsqrt` here exactly as
+ * -ffloat-store.  `sqrt` compiles to a bare `fsqrt` here exactly as
  * it does in `V90Resampler::getTimingHistoryStd`.
  */
 void
@@ -211,7 +212,7 @@ ResamplerTiming::SdHalfBaudDft(float v)
 
 	if (dftCount == 256) {
 		dftDone = 1;
-		dftMag = __builtin_sqrt(dftRe * dftRe + dftIm * dftIm);
+		dftMag = sqrt(dftRe * dftRe + dftIm * dftIm);
 	}
 }
 

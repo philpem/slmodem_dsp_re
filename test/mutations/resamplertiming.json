@@ -181,13 +181,13 @@
  },
  {
   "label": "the magnitude forgets the square root",
-  "find": "\t\tdftMag = __builtin_sqrt(dftRe * dftRe + dftIm * dftIm);",
+  "find": "\t\tdftMag = sqrt(dftRe * dftRe + dftIm * dftIm);",
   "replace": "\t\tdftMag = dftRe * dftRe + dftIm * dftIm;"
  },
  {
   "label": "the magnitude uses only the real part",
-  "find": "\t\tdftMag = __builtin_sqrt(dftRe * dftRe + dftIm * dftIm);",
-  "replace": "\t\tdftMag = __builtin_sqrt(dftRe * dftRe);"
+  "find": "\t\tdftMag = sqrt(dftRe * dftRe + dftIm * dftIm);",
+  "replace": "\t\tdftMag = sqrt(dftRe * dftRe);"
  },
  {
   "label": "the gain adjustment ignores the completion latch",

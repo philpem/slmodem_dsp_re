@@ -122,7 +122,7 @@ DSPMATH_STEP T Var(T *x, unsigned n)
 template <typename T>
 DSPMATH_STEP T Std(T *x, unsigned n)
 {
-	return __builtin_sqrt(Var(x, n));
+	return sqrt(Var(x, n));
 }
 
 /*

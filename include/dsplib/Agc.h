@@ -46,6 +46,8 @@
 #ifndef DSPLIB_AGC_H
 #define DSPLIB_AGC_H
 
+#include <math.h>
+
 /*
  * The period compiler keeps the double expression in its x87 register.
  * -fno-math-errno supplies the bare square root, including the instruction's
@@ -55,7 +57,7 @@
  */
 static inline double agc_fsqrt(double x)
 {
-	return __builtin_sqrt(x);
+	return sqrt(x);
 }
 
 template <class T>
