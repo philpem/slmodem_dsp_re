@@ -142,7 +142,7 @@ def main():
         for size, n in sorted(((syms[n][0], n) for n in groups[args.list]),
                               reverse=True):
             print("%7d  %-56s %s"
-                  % (size, n[:56],
+                  % (size, n,
                      coverage.area_of(addr.get(n, -1), tus, syms[n][1])))
         return
 

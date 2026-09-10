@@ -12970,3 +12970,103 @@ departure, finding F10264. Documentation only in the blob-faithful path. The
 focused mutation suite proves sensitivity to the mask index, warning and two
 plausible enforcement consequences; it does not itself prove the standard's
 required behavior.
+
+## D1500 ⚠ Zero scale leaves both float/linear converter destinations untouched
+
+Selectively imported from archive D/962 (old ID at the tag identified in
+F11200), with archived runtime and caller claims excluded.
+`zFLTUTL_Float2Linear` compares scale with `.rodata.cst4+0x528` at
+0xae084 and jumps to its epilogue at 0xae08d. `zFLTUTL_Linear2Float`
+does the same against `+0x52c` at 0xae0f1/0xae0fa. Both four-byte constants
+were read with `tabdump.py` and are positive zero. The branches skip every
+destination store: zero gain is a no-write operation, not a silence fill.
+
+**Status:** binary-confirmed, reproduced in `src/service/Beepgen.c`.
+Current `t_beepgen.c` includes zero gain with nonzero destination prefills and
+compares both sides, but the archive's separate seed assertions and mutation
+results are not claimed here. Production reachability/impact: **unmeasured**.
+Skipping work may be an intended API convention; the symbol name alone does
+not settle that contract.
+
+## D1501 ⚠ The maximum-absolute-value scan reads element zero before testing count
+
+Selectively imported from archive D/963 and supporting F/8422, F/8426;
+mapping and reproduction commands are in F11200 and `docs/method/evidence.md`.
+`zfFLTUTL_GetMaxAbsValue` loads `buf[0]` at 0xae85e, before the first count
+test at 0xae86e/0xae870. A zero count still requires a readable first element
+and returns its sign-conditioned value. An empty allocation does not satisfy
+that requirement.
+
+The initial `ja` at 0xae865 skips `fchs` only for a value strictly greater
+than zero. Thus a **positive-zero** first element with count zero or one
+returns negative zero; a negative-zero element takes the same negating arm
+and returns positive zero. This is not `fabsf` semantics. Current F8460 already
+records the repeated strict-sign magnitude expression.
+
+**Status:** binary-confirmed, reproduced in `src/service/Beepgen.c`.
+Current `t_beepgen.c` tests an all-positive-zero buffer with `diff_eq_float`,
+but `test/harness/harness.c`'s `float_ulps` maps both zero signs to zero;
+that assertion does not distinguish this behavior. Its scan-size sweep starts
+at one. No current zero-count or bit-pattern runtime result is claimed here.
+Production reachability/impact: **unmeasured**.
+
+## D1502 ⚠ The functions named RMS omit the square root and remove a mean
+
+Selectively imported from archive D/964; the missing-root observation is
+already recorded in F8464, and the distinct endings in F8460. Full bodies
+at 0xae120 and 0xae180 contain neither `fsqrt` nor a call. The float routine
+subtracts its computed mean, sums squared differences, and multiplies by
+`1/n`: a floating-point variance computation, not RMS amplitude. The short
+routine uses the integer quotient described in D1503, so it is **not generally
+mathematical variance either**. It divides the residual-square sum by `n`.
+For `{2,-2}`, both instruction sequences yield 4 rather than RMS amplitude 2.
+This example is derived from the instructions, not a new executed fixture.
+
+**Status:** binary-confirmed, reproduced in `src/service/Beepgen.c`; existing
+`t_beepgen.c` compares both routines for positive counts. The archive's literal
+oracle and mutation results are not imported. Whether consumers expect power
+or amplitude, and any resulting production defect: **unmeasured** in this
+review. The misleading names alone do not establish a broken caller.
+
+## D1503 ⚠ The short-buffer power routine divides the sum as unsigned and subtracts in 32 bits
+
+Selectively imported from archive D/965 and supporting F/8424; F8460 already
+records the unsigned integer mean. Signed 16-bit loads at 0xae192 accumulate
+with 32-bit `add`. At 0xae19f/0xae1a3, `xor %edx,%edx; div %ebx`
+divides the sum's unsigned bit pattern by the count. At 0xae1b5, a 32-bit
+`sub` forms each residual, then `fildl` interprets that residual as signed.
+
+For `{1,2}`, the quotient is 1, giving residual power 0.5 rather than variance
+0.25. For `{-1,-1}`, the unsigned quotient is `0x7fffffff`, each machine
+residual is `0x80000000`, and the result is 2^62 rather than zero. For
+`{32767,-32768}`, the quotient is also `0x7fffffff`; the second subtraction
+wraps at machine width. These are instruction-derived examples, not newly
+run tests. Zero-sum input does not itself trigger a negative-sum problem.
+
+The instructions do **not** prove that the original accumulator was signed,
+or that the author omitted a cast: signedness is not encoded in `add`.
+Current `src/service/Beepgen.c` uses an unsigned accumulator and an `int`
+mean; its `buf[i] - mean` expression has a signed-overflow case for the last
+example. This source-language observation is not a claim that current compiler
+behavior was measured here, nor a justification to alter the reconstruction.
+
+**Status:** binary-confirmed arithmetic, already reproduced in the current
+source and exercised generally by `t_beepgen.c`. Archived exact fixtures,
+compiler agreement and mutation verdicts are not imported. Production sign
+distribution and impact: **unmeasured**.
+
+## D1504 ⚠ A zero count reaches integer divide-by-zero in the short-buffer power routine
+
+Selectively imported from archive D/966. `fComputeRMSValueShortBuf` loads
+the caller's count into `%ebx` at 0xae186. Zero skips the accumulation loop
+but still reaches `div %ebx` at 0xae1a3. The x86 instruction raises #DE;
+under the usual Linux handling this delivers SIGFPE. The float sibling uses
+x87 division and, with floating-point exceptions masked, reaches a NaN result
+instead. Unmasked exception behavior must not be inferred from that default.
+
+**Status:** binary-confirmed, reproduced without a count guard in
+`src/service/Beepgen.c`; current `t_beepgen.c`'s power sweep starts at one.
+No trap or floating-exception experiment was run for this documentation review.
+The archive's “undrivable” conclusion is declined: a parent can inspect a
+child process's signal termination without losing the test runner. Production
+reachability/impact: **unmeasured**. See F11200 for historical mapping.

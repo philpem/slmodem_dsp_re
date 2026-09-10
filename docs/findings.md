@@ -123285,3 +123285,85 @@ self-test and every structural check. Suite line coverage remains
 **49,019/51,416** (`95.3%`).
 
 (2026-09-08)
+
+## F11200. Issue 14 archive review: binary behavior survives; grade-1 proof and historical test claims do not
+
+Reviewed on 2026-09-10 at `bcc86c61` on
+`tools/issue-14-equivalence-evidence`, against archive tag
+`archive/branches/2026-09-08/land-2026-09-01`
+(`a1c2f9bc58007e805a62437211bfbc22746aac91`).
+`docs/method/evidence.md` contains the complete old/archive-to-current mapping,
+record-by-record dispositions, current CLI, and reproduction commands. Archive
+IDs there use a slash after their prefix to distinguish historical identities
+from live ledger citations.
+
+Archive deviations numbered 962 through 966 become **D1500–D1504**,
+selectively rewritten after inspecting all five relevant bodies with
+`tools/dis.py`. The two converter constants at `.rodata.cst4+0x528/+0x52c`
+are both four zero bytes, independently read with `tools/tabdump.py`.
+Reference SHA-256:
+`1f3e56d0dfae1a6aaf4eb6fcc4875a4524905e010d5758114cde288b3cf0b379`.
+The new records retain no archived execution counts, mutation results,
+production-reachability assertions or unique-source-spelling claims.
+
+Current F8460 already records the strict-sign magnitude expression and
+unsigned integer mean; F8464 records the missing square root. The new
+deviations index those known behaviors and add the verified edge conditions
+without inventing independent discoveries. Supporting archive findings
+numbered 8420 through 8427 are reviewed rather than copied: current source is
+in `src/service/Beepgen.c` and `src/service/Fdspkrnl.c`, not the archive's
+float-utility translation unit. Current `t_beepgen.c` includes zero-gain
+prefilled conversions and positive-count power/maximum scans. Its all-zero
+maximum check uses a comparator that equates signed zeros, so it cannot be
+cited as a bit-pattern witness. Empty-count trapping remains testable in an
+isolated process, despite the archive's claim to the contrary.
+
+Archive findings numbered 9490 through 9496 are handled in the method document.
+In particular, the old 9490 conclusion that grade 1 is a proof for its census
+is **declined**. A finite list of cleared hazard probes is not a completeness
+argument, and a compiled `ref_` reference does not prove execution or a boundary
+comparison. The old headline also counts unresolved relocations as exact,
+contrary to its own later reconciliation. Neither historical census nor
+exhaustiveness classes are promoted to present evidence. Current `eqtriage.py`
+already covers difference-shape triage; new `eqproof.py` adds reference and
+binary-outcome provenance, with grade 1 explicitly remaining triage.
+
+Before allocation, both ledgers were inspected through git at **44 local,
+remote-tracking and archived branch refs, 80 available ledger versions**;
+F11200 and D1500–D1504 had no ID occurrences. This is an allocation check,
+not a code/test census. Tool controls run in this review: eqproof **23/23
+passed**, eqtriage **11/11 classification controls passed**, with x87, branch
+and relocation probes also reporting expected results. The latter reports
+relocation markers from both normalizers, so its historical missing-marker
+paragraph is not imported as a live defect. No full build gates or live
+equivalence census were run here; commands and claim boundaries are documented
+for the parent issue's evidence packet.
+
+**Parent validation follow-up (same date):** the current tooling now passes
+32/32 controls, including known-difference precedence over unresolved copies
+and legitimately empty selections. The completed census covers 273 source
+objects, 375 test objects and all 1,852 blob function symbols: 813 exact,
+52 register-renaming candidates, 4 unresolved and 983 other. With the optional
+SpanDSP capture generated, all 375 period binaries recorded positive check
+denominators (642,353,296 checks, zero failures). Modern collection preserves
+eight declared failing binaries rather than masking them. `make phase` and
+the byte-identity ratchet passed. Configuration, command lines, all-copy
+aggregation rules, modern counts and the initial zero-check refusal are
+recorded in the dated snapshot in `docs/method/evidence.md`; none of these
+counts upgrades a triage classification into proof.
+
+**A gate failure found in current apparatus:** the initial full phase failed
+only its instrumented `t_v27txcreate` real-modem cycle, with 787/3,257 checks
+disagreeing. Before modification the test matched HEAD (git blob
+`20e32d66661edaeddd5bb402add6663b37dcb236`). GDB located the first difference
+at block 15, output sample 159: 6140 versus 6131. The conditioning call used
+24 words, but the next scratch word was 0 on one side and 49068 (`0xbfac`)
+on the other. `TxHdxEQCondV27` at 0xa3c2e tests mask `0x04` in the following
+word (`testb $0x4,0x2(%edx)`), including the last iteration's `in[taken]`.
+The fixture had enough allocated space but initialized only its queued
+prefix. Prefilling both complete arrays with the same nonzero byte before
+queuing bits supplies defined, identical inputs without changing the compared
+surface or reconstruction. Normal, instrumented and focused period runs
+then passed, followed by the full phase (375 period binaries, zero failures;
+49,083/51,479 covered source lines, 1,425 debug sites, 35 anchored deviations).
+This is a harness input correction, not a modern-compiler source workaround.

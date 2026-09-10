@@ -720,6 +720,10 @@ test_modem_cycle(void)
 		short sta, stb;
 		int qn = (int)(rnd(&seed) % 9);
 
+		/* EQ conditioning reads in[taken] beyond the words it fills.
+		 * Give both sides identical, defined scratch, including that word. */
+		memset(qbuf_a, 0xa5, sizeof qbuf_a);
+		memset(qbuf_b, 0xa5, sizeof qbuf_b);
 		for (i = 0; i < qn; i++)
 			qbuf_a[i] = qbuf_b[i] =
 				(unsigned short)(rnd(&seed) & 1);
