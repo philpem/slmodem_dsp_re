@@ -1,5 +1,5 @@
 {
-  "controlled_recovery_total": 35,
+  "controlled_recovery_total": 41,
   "denominators": {
     "o2_no_rerun_exact": 737,
     "o2_no_rerun_shared": 1851,
@@ -14,9 +14,11 @@
     "o2_inline_functions_resampler_derived_ctors": 8,
     "o2_inline_functions_resampler_timing": 5,
     "o2_inline_functions_v90_bits_to_symbol": 3,
+    "o2_inline_functions_v92_controls": 5,
+    "o2_web_beepgen": 1,
     "o2_web_inline_unswitch_pcm": 1,
     "plain_o2_removes_no_rerun_cse": 14,
-    "unresolved_named": 56,
+    "unresolved_named": 50,
     "v32_static_inline_at_o2_no_rerun": 4
   },
   "symbols": [
@@ -309,19 +311,19 @@
       "symbol": "_ZN12V90ResamplerC2EjfjfP13V90Parametersfj"
     },
     {
-      "evidence": "build/issue20-followup/profile-map.txt",
+      "evidence": "build/issue22-v92-o2-inline/results.json",
       "owners": [
         "src_pump_v90_V92Modulator.cpp.o"
       ],
-      "status": "unresolved_named",
+      "status": "o2_inline_functions_v92_controls",
       "symbol": "_ZN12V92ModulatorC1EjP13V92Phase2InfoP5V92JaP19tagV90DILdescriptorP5V92CPP16V92MappingParamsP13V92Parameters"
     },
     {
-      "evidence": "build/issue20-followup/profile-map.txt",
+      "evidence": "build/issue22-v92-o2-inline/results.json",
       "owners": [
         "src_pump_v90_V92Modulator.cpp.o"
       ],
-      "status": "unresolved_named",
+      "status": "o2_inline_functions_v92_controls",
       "symbol": "_ZN12V92ModulatorC2EjP13V92Phase2InfoP5V92JaP19tagV90DILdescriptorP5V92CPP16V92MappingParamsP13V92Parameters"
     },
     {
@@ -349,19 +351,19 @@
       "symbol": "_ZN13V90ParametersC2EP19_tagModemParameters"
     },
     {
-      "evidence": "build/issue20-followup/profile-map.txt",
+      "evidence": "build/issue22-v92-o2-inline/results.json",
       "owners": [
         "src_pump_v90_V92Parameters.cpp.o"
       ],
-      "status": "unresolved_named",
+      "status": "o2_inline_functions_v92_controls",
       "symbol": "_ZN13V92ParametersC1EP19_tagModemParameters"
     },
     {
-      "evidence": "build/issue20-followup/profile-map.txt",
+      "evidence": "build/issue22-v92-o2-inline/results.json",
       "owners": [
         "src_pump_v90_V92Parameters.cpp.o"
       ],
-      "status": "unresolved_named",
+      "status": "o2_inline_functions_v92_controls",
       "symbol": "_ZN13V92ParametersC2EP19_tagModemParameters"
     },
     {
@@ -469,11 +471,11 @@
       "symbol": "_ZN15V92BitsToSymbol7processEPhRjPs"
     },
     {
-      "evidence": "build/issue20-followup/profile-map.txt",
+      "evidence": "build/issue22-v92-o2-inline/results.json",
       "owners": [
         "src_pump_v90_V92bitsToSymbol.cpp.o"
       ],
-      "status": "unresolved_named",
+      "status": "o2_inline_functions_v92_controls",
       "symbol": "_ZN15V92BitsToSymbol7processEPhj"
     },
     {
@@ -717,11 +719,11 @@
       "symbol": "create_cid_dtmf"
     },
     {
-      "evidence": "build/issue20-followup/profile-map.txt",
+      "evidence": "build/issue22-rms/o2_web-rename/src_service_Beepgen.c.o",
       "owners": [
         "src_service_Beepgen.c.o"
       ],
-      "status": "unresolved_named",
+      "status": "o2_web_beepgen",
       "symbol": "detector_delete"
     },
     {
@@ -749,5 +751,5 @@
       "symbol": "setScramble"
     }
   ],
-  "unresolved_named_total": 56
+  "unresolved_named_total": 50
 }

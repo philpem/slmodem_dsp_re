@@ -917,7 +917,7 @@ complete provenance are in `build/issue22-resampler-no-unit/REPORT.md` and
 ## Original O2 losses: direct Resampler inlining control
 
 The [symbol-by-symbol ledger](issue22-loss-ledger.json) partitions the original
-91 losses into **35 controlled recoveries and 56 unresolved**. Parent review
+91 losses into **41 controlled recoveries and 50 unresolved**. Parent review
 checked its 91 names against the original exact-set subtraction and verified
 the recovery groups are disjoint:
 
@@ -928,8 +928,10 @@ the recovery groups are disjoint:
 | O2 plus automatic inlining: ResamplerTiming / V90BitsToSymbol | 5 + 3 |
 | O2 plus web, automatic inlining and unswitching: PCM | 1 |
 | O2 plus automatic inlining: the two TUs below | 8 |
+| O2 plus automatic inlining: V92 follow-up below | 5 |
+| O2 plus web: Beepgen detector_delete (earlier omission corrected) | 1 |
 
-This is **not 35 proven source mistakes**. Four have a demonstrated plausible
+This is **not 41 proven source mistakes**. Four have a demonstrated plausible
 source-inline recovery; the others have compiler-profile recovery controls.
 Neither proves the author's source spelling. All 91 have owners (51 owner
 groups), but ownership is not an explanation. Later auto81 and no-unit
@@ -967,6 +969,95 @@ Parent review independently rescored all 69 function verdicts and verified
 all six complete objects against their claimed retained controls. This
 establishes an automatic-inlining mechanism for eight original losses; it
 neither proves the original source spelling nor justifies global flag adoption.
+
+## V92 original-loss controls and ledger correction
+
+The bounded `build/issue22-v92-o2-inline/` experiment ran four unchanged
+complete TUs at O3, O2 and O2 plus `-finline-functions`: 12 cells and 147
+shared-symbol verdicts. All eight fresh O3/O2 control objects reproduce their
+respective retained objects byte-for-byte. Parent review independently
+rescored all 147 verdicts, checked control hashes and compared every shared
+body/relocation map. Gentoo, period binutils and complete reproduction flags
+were used throughout.
+
+| TU | O3 EXACT | O2 EXACT | O2 + automatic inlining EXACT |
+| --- | ---: | ---: | ---: |
+| V92BitsToSymbol | 9/10 | 6/10 | 7/10 |
+| V92Modulator | 16/24 | 14/24 | 16/24 |
+| V92Parameters | 7/7 | 5/7 | 7/7 |
+| V92Precoder | 6/8 | 4/8 | 4/8 |
+
+Five original losses recover. The V92Modulator constructors expand `reset`
+again (581 -> 734 bytes); V92Parameters constructors expand `init`, exposing
+the reference's `setToDefault` and `loadParams` calls (15 -> 53 bytes).
+V92Parameters' entire object reproduces retained O3. V92Modulator does not:
+the already-nonexact `progress` body/relocations change; its other shared
+bodies/relocations match O3. Exact-set equality alone would hide this.
+
+The fifth recovery is precisely
+`V92BitsToSymbol::process(unsigned char *, unsigned)` (`...processEPhj`),
+not either overload taking `unsigned &`. Its length and call-target list
+already agreed under O2; the pass restores its instruction/register choices
+through the TU. The other two overloads lose the extra `nofBitsForNextTime`
+call, but remain nonexact (468/reference468 bytes and 363/reference359).
+Those are the only two shared bodies/relocation maps still different from O3.
+
+V92Precoder's O2 and O2-plus-inlining objects are byte-identical. Its two
+constructor losses retain the same four calls and 127-byte lengths as O3;
+automatic inlining does not explain their remaining operand differences.
+The already-nonexact `process` body also differs from O3. These controls stop
+after 12 cells; they do not justify guessing inline thresholds for a mismatch
+whose relevant helper call is already gone.
+
+Separately, the 35-count checkpoint omitted an existing controlled recovery:
+`detector_delete` is EXACT under the corrected O2+web Beepgen experiment
+(`build/issue22-rms/o2_web-rename/src_service_Beepgen.c.o`). Parent rescoring
+confirmed 133/133 bytes, zero differences. This adds one ledger member, not
+new experimental progress. The invalid earlier non-rename controls remain
+excluded. Five new recoveries plus this correction make **41/91**, with
+**50 pending**. The original name set and measurement model have not changed.
+
+## C-loss triage: one inline boundary, eight other differences
+
+A read-only pass over the three complete owner objects examined nine pending
+names: `ResetRx`, `SetRxRate`, `SetTxRate`; `RxHdxEpoch`,
+`RxHdxRateSequence`, `RxHdxSequence`; `V34EchoPreFilter`,
+`V34EchoUpdateDelayLine`, `V34EqualizerUpdateDelayLine`. Parent rescoring
+confirmed all nine EXACT at O3 and nonexact at **plain O2** (not the bundled
+no-rerun-CSE profile). No name is promoted to recovered by this inspection.
+
+O2's `V34EchoPreFilter` calls exported `V34Filter2` where the reference and
+O3 expand its 42-tap loop. This identifies a specific inline-boundary
+discriminator. The other eight keep their call boundaries; observed changes
+are instruction/register choices, store ordering, and LEA versus ADD/INC
+forms. These are not evidence of eight source defects or justification for
+rewriting their statements. Changes elsewhere in a TU can affect them.
+
+The detailed read-only artifact is `build/issue22-c-loss-triage/REPORT.md`.
+Remaining experiments are tracked in #22, separate from this measured record.
+
+## Dialer: missing-definition control, not an exact recovery
+
+Three unchanged full-TU controls in `build/issue22-dialer-o2-inline/` test
+O3, O2 and O2 plus automatic inlining, with both fresh controls reproducing
+their retained objects. Shared reference definitions are 6 -> 5 -> 6;
+all 17 scored function verdicts are nonexact.
+
+Plain O2 expands `GetNextDigitAndReturnNextState` into `begin_next` and
+emits seven helpers absent from O3. Adding automatic inlining removes those
+helper definitions, restores the LOCAL parser definition and two calls to
+it from `DialerProgress`. This is an inline-graph interaction, not missing
+source behavior. The restored parser body/relocation map equals retained
+O3, but remains 777 versus reference895 bytes; ambiguous section targets
+are not upgraded to EXACT. `AnalyseDialString` and `DialerProgress` still
+differ from O3, so restoring the symbol inventory does not restore the TU.
+This result adds **zero** to the original91 ledger.
+
+No production source or flags changed in this batch. Differential and strict
+partial-link gates were not rerun for these diagnostic-only objects; no
+acceptance is claimed, and the last strict completion verdict stays DIFFERENT.
+The common-profile/source question and global combination validation remain
+open in #22.
 
 ## Ring block-placement control: stop after four cells
 
