@@ -1,0 +1,753 @@
+{
+  "controlled_recovery_total": 35,
+  "denominators": {
+    "o2_no_rerun_exact": 737,
+    "o2_no_rerun_shared": 1851,
+    "o3_exact": 813,
+    "o3_shared": 1852,
+    "original_loss_set": 91,
+    "owner_groups": 51
+  },
+  "question": "retained O3 EXACT symbols lost by global O2 plus -fno-rerun-cse-after-loop",
+  "schema": 1,
+  "status_counts": {
+    "o2_inline_functions_resampler_derived_ctors": 8,
+    "o2_inline_functions_resampler_timing": 5,
+    "o2_inline_functions_v90_bits_to_symbol": 3,
+    "o2_web_inline_unswitch_pcm": 1,
+    "plain_o2_removes_no_rerun_cse": 14,
+    "unresolved_named": 56,
+    "v32_static_inline_at_o2_no_rerun": 4
+  },
+  "symbols": [
+    {
+      "evidence": "build/issue20-followup/three-profile-summary.txt",
+      "owners": [
+        "src_pump_b103_b103fp.c.o"
+      ],
+      "status": "plain_o2_removes_no_rerun_cse",
+      "symbol": "B103LocLoopNextState"
+    },
+    {
+      "evidence": "build/issue20-followup/three-profile-summary.txt",
+      "owners": [
+        "src_pump_v32_v32fpctl.c.o"
+      ],
+      "status": "plain_o2_removes_no_rerun_cse",
+      "symbol": "CalcTurnAroundDelay"
+    },
+    {
+      "evidence": "build/lost-exact-audit/REPORT.md",
+      "owners": [
+        "src_pump_v32_v32seq.c.o"
+      ],
+      "status": "v32_static_inline_at_o2_no_rerun",
+      "symbol": "CodeFinalRateSeq"
+    },
+    {
+      "evidence": "build/lost-exact-audit/REPORT.md",
+      "owners": [
+        "src_pump_v32_v32seq.c.o"
+      ],
+      "status": "v32_static_inline_at_o2_no_rerun",
+      "symbol": "CodeRateSeq"
+    },
+    {
+      "evidence": "build/lost-exact-audit/REPORT.md",
+      "owners": [
+        "src_pump_v32_v32seq.c.o"
+      ],
+      "status": "v32_static_inline_at_o2_no_rerun",
+      "symbol": "DecodeRateSeq"
+    },
+    {
+      "evidence": "build/issue20-followup/profile-map.txt",
+      "owners": [
+        "src_fax_fifo.c.o"
+      ],
+      "status": "unresolved_named",
+      "symbol": "FIFO_full_test"
+    },
+    {
+      "evidence": "build/issue20-followup/profile-map.txt",
+      "owners": [
+        "src_dsp_fpm_pps.c.o"
+      ],
+      "status": "unresolved_named",
+      "symbol": "FPM_PPS_init"
+    },
+    {
+      "evidence": "build/issue20-followup/profile-map.txt",
+      "owners": [
+        "src_call_pulse.c.o"
+      ],
+      "status": "unresolved_named",
+      "symbol": "LastPulseDigitDialed"
+    },
+    {
+      "evidence": "build/issue20-followup/three-profile-summary.txt",
+      "owners": [
+        "src_core_FixedRC.c.o"
+      ],
+      "status": "plain_o2_removes_no_rerun_cse",
+      "symbol": "RcFixed_Check_Combination"
+    },
+    {
+      "evidence": "build/issue20-followup/profile-map.txt",
+      "owners": [
+        "src_pump_v22_v22rate.c.o"
+      ],
+      "status": "unresolved_named",
+      "symbol": "ResetRx"
+    },
+    {
+      "evidence": "build/issue20-followup/profile-map.txt",
+      "owners": [
+        "src_pump_v32_V32rxhdx.c.o"
+      ],
+      "status": "unresolved_named",
+      "symbol": "RxHdxEpoch"
+    },
+    {
+      "evidence": "build/issue20-followup/profile-map.txt",
+      "owners": [
+        "src_pump_v32_V32rxhdx.c.o"
+      ],
+      "status": "unresolved_named",
+      "symbol": "RxHdxRateSequence"
+    },
+    {
+      "evidence": "build/issue20-followup/profile-map.txt",
+      "owners": [
+        "src_pump_v32_V32rxhdx.c.o"
+      ],
+      "status": "unresolved_named",
+      "symbol": "RxHdxSequence"
+    },
+    {
+      "evidence": "build/lost-exact-audit/REPORT.md",
+      "owners": [
+        "src_pump_v32_v32seq.c.o"
+      ],
+      "status": "v32_static_inline_at_o2_no_rerun",
+      "symbol": "SeqToRate"
+    },
+    {
+      "evidence": "build/issue20-followup/profile-map.txt",
+      "owners": [
+        "src_pump_v22_v22prc.c.o"
+      ],
+      "status": "unresolved_named",
+      "symbol": "SetAdaptEqV22"
+    },
+    {
+      "evidence": "build/issue20-followup/profile-map.txt",
+      "owners": [
+        "src_pump_v32_v32fpctl.c.o"
+      ],
+      "status": "unresolved_named",
+      "symbol": "SetAdaptEqV32"
+    },
+    {
+      "evidence": "build/issue20-followup/profile-map.txt",
+      "owners": [
+        "src_fax_v17.c.o"
+      ],
+      "status": "unresolved_named",
+      "symbol": "SetEncoderV17"
+    },
+    {
+      "evidence": "build/issue20-followup/three-profile-summary.txt",
+      "owners": [
+        "src_pump_v32_v32fpctl.c.o"
+      ],
+      "status": "plain_o2_removes_no_rerun_cse",
+      "symbol": "SetRxLoopsV32"
+    },
+    {
+      "evidence": "build/issue20-followup/profile-map.txt",
+      "owners": [
+        "src_pump_v22_v22rate.c.o"
+      ],
+      "status": "unresolved_named",
+      "symbol": "SetRxRate"
+    },
+    {
+      "evidence": "build/issue20-followup/profile-map.txt",
+      "owners": [
+        "src_pump_v22_v22rate.c.o"
+      ],
+      "status": "unresolved_named",
+      "symbol": "SetTxRate"
+    },
+    {
+      "evidence": "build/issue20-followup/profile-map.txt",
+      "owners": [
+        "src_pump_v32_V32TXHDX.c.o"
+      ],
+      "status": "unresolved_named",
+      "symbol": "TxHdxFinishFrame"
+    },
+    {
+      "evidence": "build/issue20-followup/profile-map.txt",
+      "owners": [
+        "src_pump_v22_v22_iir.c.o"
+      ],
+      "status": "unresolved_named",
+      "symbol": "V22IIRFilterInit"
+    },
+    {
+      "evidence": "build/issue20-followup/profile-map.txt",
+      "owners": [
+        "src_pump_v34_v34filters.c.o"
+      ],
+      "status": "unresolved_named",
+      "symbol": "V34EchoPreFilter"
+    },
+    {
+      "evidence": "build/issue20-followup/profile-map.txt",
+      "owners": [
+        "src_pump_v34_v34filters.c.o"
+      ],
+      "status": "unresolved_named",
+      "symbol": "V34EchoUpdateDelayLine"
+    },
+    {
+      "evidence": "build/issue20-followup/profile-map.txt",
+      "owners": [
+        "src_pump_v34_v34filters.c.o"
+      ],
+      "status": "unresolved_named",
+      "symbol": "V34EqualizerUpdateDelayLine"
+    },
+    {
+      "evidence": "build/issue20-followup/profile-map.txt",
+      "owners": [
+        "src_v8_v8hs.c.o"
+      ],
+      "status": "unresolved_named",
+      "symbol": "V8Create"
+    },
+    {
+      "evidence": "build/issue20-followup/profile-map.txt",
+      "owners": [
+        "src_pump_v90_VPcmXfCreate.cpp.o"
+      ],
+      "status": "unresolved_named",
+      "symbol": "VPCMXF_Create"
+    },
+    {
+      "evidence": "build/issue20-followup/three-profile-summary.txt",
+      "owners": [
+        "src_pump_v34_v34pcmif.c.o"
+      ],
+      "status": "plain_o2_removes_no_rerun_cse",
+      "symbol": "VPcmV34GetCleanedSamples"
+    },
+    {
+      "evidence": "build/issue20-followup/profile-map.txt",
+      "owners": [
+        "src_pump_v34_v34pcmif.c.o"
+      ],
+      "status": "unresolved_named",
+      "symbol": "VPcmV34GetCurrentSessionDP"
+    },
+    {
+      "evidence": "build/issue20-followup/profile-map.txt",
+      "owners": [
+        "src_pump_v90_V92Precoder.cpp.o"
+      ],
+      "status": "unresolved_named",
+      "symbol": "_ZN11V92PrecoderC1Ej"
+    },
+    {
+      "evidence": "build/issue20-followup/profile-map.txt",
+      "owners": [
+        "src_pump_v90_V92Precoder.cpp.o"
+      ],
+      "status": "unresolved_named",
+      "symbol": "_ZN11V92PrecoderC2Ej"
+    },
+    {
+      "evidence": "build/issue20-followup/profile-map.txt",
+      "owners": [
+        "src_pump_v90_V90PreFilter.cpp.o"
+      ],
+      "status": "unresolved_named",
+      "symbol": "_ZN12V90PreFilter16getFilterPointerEj"
+    },
+    {
+      "evidence": "build/issue22-resampler-o2-inline/REPORT.md",
+      "owners": [
+        "src_pump_v90_V90Resampler.cpp.o"
+      ],
+      "status": "o2_inline_functions_resampler_derived_ctors",
+      "symbol": "_ZN12V90ResamplerC1EjfjPfP13V90Parametersfj"
+    },
+    {
+      "evidence": "build/issue22-resampler-o2-inline/REPORT.md",
+      "owners": [
+        "src_pump_v90_V90Resampler.cpp.o"
+      ],
+      "status": "o2_inline_functions_resampler_derived_ctors",
+      "symbol": "_ZN12V90ResamplerC1EjfjfP13V90Parametersfj"
+    },
+    {
+      "evidence": "build/issue22-resampler-o2-inline/REPORT.md",
+      "owners": [
+        "src_pump_v90_V90Resampler.cpp.o"
+      ],
+      "status": "o2_inline_functions_resampler_derived_ctors",
+      "symbol": "_ZN12V90ResamplerC2EjfjPfP13V90Parametersfj"
+    },
+    {
+      "evidence": "build/issue22-resampler-o2-inline/REPORT.md",
+      "owners": [
+        "src_pump_v90_V90Resampler.cpp.o"
+      ],
+      "status": "o2_inline_functions_resampler_derived_ctors",
+      "symbol": "_ZN12V90ResamplerC2EjfjfP13V90Parametersfj"
+    },
+    {
+      "evidence": "build/issue20-followup/profile-map.txt",
+      "owners": [
+        "src_pump_v90_V92Modulator.cpp.o"
+      ],
+      "status": "unresolved_named",
+      "symbol": "_ZN12V92ModulatorC1EjP13V92Phase2InfoP5V92JaP19tagV90DILdescriptorP5V92CPP16V92MappingParamsP13V92Parameters"
+    },
+    {
+      "evidence": "build/issue20-followup/profile-map.txt",
+      "owners": [
+        "src_pump_v90_V92Modulator.cpp.o"
+      ],
+      "status": "unresolved_named",
+      "symbol": "_ZN12V92ModulatorC2EjP13V92Phase2InfoP5V92JaP19tagV90DILdescriptorP5V92CPP16V92MappingParamsP13V92Parameters"
+    },
+    {
+      "evidence": "build/issue20-followup/profile-map.txt",
+      "owners": [
+        "src_pump_v90_VpcmFloModem.cpp.o"
+      ],
+      "status": "unresolved_named",
+      "symbol": "_ZN12VPcmFloModem16setNofBitsPhase4Ej"
+    },
+    {
+      "evidence": "build/issue20-followup/profile-map.txt",
+      "owners": [
+        "src_pump_v90_V90Parameters.cpp.o"
+      ],
+      "status": "unresolved_named",
+      "symbol": "_ZN13V90ParametersC1EP19_tagModemParameters"
+    },
+    {
+      "evidence": "build/issue20-followup/profile-map.txt",
+      "owners": [
+        "src_pump_v90_V90Parameters.cpp.o"
+      ],
+      "status": "unresolved_named",
+      "symbol": "_ZN13V90ParametersC2EP19_tagModemParameters"
+    },
+    {
+      "evidence": "build/issue20-followup/profile-map.txt",
+      "owners": [
+        "src_pump_v90_V92Parameters.cpp.o"
+      ],
+      "status": "unresolved_named",
+      "symbol": "_ZN13V92ParametersC1EP19_tagModemParameters"
+    },
+    {
+      "evidence": "build/issue20-followup/profile-map.txt",
+      "owners": [
+        "src_pump_v90_V92Parameters.cpp.o"
+      ],
+      "status": "unresolved_named",
+      "symbol": "_ZN13V92ParametersC2EP19_tagModemParameters"
+    },
+    {
+      "evidence": "build/issue20-followup/profile-map.txt",
+      "owners": [
+        "src_pump_v90_ModulusCoder.cpp.o"
+      ],
+      "status": "unresolved_named",
+      "symbol": "_ZN14ModulusEncoder8progressEPhPj"
+    },
+    {
+      "evidence": "build/issue20-followup/three-profile-summary.txt",
+      "owners": [
+        "src_pump_v90_V92Transmitter.cpp.o"
+      ],
+      "status": "plain_o2_removes_no_rerun_cse",
+      "symbol": "_ZN14V92Transmitter7processEPhjPsRj"
+    },
+    {
+      "evidence": "build/issue20-followup/three-profile-summary.txt",
+      "owners": [
+        "src_pump_v90_ResamplerTiming.cpp.o"
+      ],
+      "status": "plain_o2_removes_no_rerun_cse",
+      "symbol": "_ZN15ResamplerTiming11invertPhaseEv"
+    },
+    {
+      "evidence": "build/issue20-followup/three-profile-summary.txt",
+      "owners": [
+        "src_pump_v90_ResamplerTiming.cpp.o"
+      ],
+      "status": "plain_o2_removes_no_rerun_cse",
+      "symbol": "_ZN15ResamplerTiming13SdHalfBaudDftEf"
+    },
+    {
+      "evidence": "build/o-cpp-losses/README.txt",
+      "owners": [
+        "src_pump_v90_ResamplerTiming.cpp.o"
+      ],
+      "status": "o2_inline_functions_resampler_timing",
+      "symbol": "_ZN15ResamplerTiming5resetEj"
+    },
+    {
+      "evidence": "build/o-cpp-losses/README.txt",
+      "owners": [
+        "src_pump_v90_ResamplerTiming.cpp.o"
+      ],
+      "status": "o2_inline_functions_resampler_timing",
+      "symbol": "_ZN15ResamplerTimingC1EjfjPffj"
+    },
+    {
+      "evidence": "build/o-cpp-losses/README.txt",
+      "owners": [
+        "src_pump_v90_ResamplerTiming.cpp.o"
+      ],
+      "status": "o2_inline_functions_resampler_timing",
+      "symbol": "_ZN15ResamplerTimingC1Ejfjffj"
+    },
+    {
+      "evidence": "build/o-cpp-losses/README.txt",
+      "owners": [
+        "src_pump_v90_ResamplerTiming.cpp.o"
+      ],
+      "status": "o2_inline_functions_resampler_timing",
+      "symbol": "_ZN15ResamplerTimingC2EjfjPffj"
+    },
+    {
+      "evidence": "build/o-cpp-losses/README.txt",
+      "owners": [
+        "src_pump_v90_ResamplerTiming.cpp.o"
+      ],
+      "status": "o2_inline_functions_resampler_timing",
+      "symbol": "_ZN15ResamplerTimingC2Ejfjffj"
+    },
+    {
+      "evidence": "build/o-cpp-losses/README.txt",
+      "owners": [
+        "src_pump_v90_V90bitsToSymbol.cpp.o"
+      ],
+      "status": "o2_inline_functions_v90_bits_to_symbol",
+      "symbol": "_ZN15V90BitsToSymbol19setSymbolsBlockSizeEj"
+    },
+    {
+      "evidence": "build/o-cpp-losses/README.txt",
+      "owners": [
+        "src_pump_v90_V90bitsToSymbol.cpp.o"
+      ],
+      "status": "o2_inline_functions_v90_bits_to_symbol",
+      "symbol": "_ZN15V90BitsToSymbol7processEPhRjPs"
+    },
+    {
+      "evidence": "build/o-cpp-losses/README.txt",
+      "owners": [
+        "src_pump_v90_V90bitsToSymbol.cpp.o"
+      ],
+      "status": "o2_inline_functions_v90_bits_to_symbol",
+      "symbol": "_ZN15V90BitsToSymbol7processERjPs"
+    },
+    {
+      "evidence": "build/issue20-followup/profile-map.txt",
+      "owners": [
+        "src_pump_v90_V92bitsToSymbol.cpp.o"
+      ],
+      "status": "unresolved_named",
+      "symbol": "_ZN15V92BitsToSymbol7processEPhRjPs"
+    },
+    {
+      "evidence": "build/issue20-followup/profile-map.txt",
+      "owners": [
+        "src_pump_v90_V92bitsToSymbol.cpp.o"
+      ],
+      "status": "unresolved_named",
+      "symbol": "_ZN15V92BitsToSymbol7processEPhj"
+    },
+    {
+      "evidence": "build/issue20-followup/profile-map.txt",
+      "owners": [
+        "src_pump_v90_V92bitsToSymbol.cpp.o"
+      ],
+      "status": "unresolved_named",
+      "symbol": "_ZN15V92BitsToSymbol7processERjPs"
+    },
+    {
+      "evidence": "build/issue20-followup/profile-map.txt",
+      "owners": [
+        "src_dsp_AnsamToneDetector.cpp.o"
+      ],
+      "status": "unresolved_named",
+      "symbol": "_ZN17ANSamToneDetectorC1Ejjfjfjjj"
+    },
+    {
+      "evidence": "build/issue20-followup/profile-map.txt",
+      "owners": [
+        "src_dsp_AnsamToneDetector.cpp.o"
+      ],
+      "status": "unresolved_named",
+      "symbol": "_ZN17ANSamToneDetectorC2Ejjfjfjjj"
+    },
+    {
+      "evidence": "build/issue20-followup/profile-map.txt",
+      "owners": [
+        "src_pump_v90_V90SpectralShaper.cpp.o"
+      ],
+      "status": "unresolved_named",
+      "symbol": "_ZN17V90SpectralShaper16applyFrameActionENS_7ACTIONSEPsi"
+    },
+    {
+      "evidence": "build/issue20-followup/profile-map.txt",
+      "owners": [
+        "src_pump_v90_V90Phase3Modulator.cpp.o"
+      ],
+      "status": "unresolved_named",
+      "symbol": "_ZN18V90Phase3Modulator13generateJdNotEv"
+    },
+    {
+      "evidence": "build/issue20-followup/profile-map.txt",
+      "owners": [
+        "src_pump_v90_V90Phase3Modulator.cpp.o"
+      ],
+      "status": "unresolved_named",
+      "symbol": "_ZN18V90Phase3ModulatorC1EP13V90Parametersj"
+    },
+    {
+      "evidence": "build/issue20-followup/three-profile-summary.txt",
+      "owners": [
+        "src_pump_v90_V90Phase4Modulator.cpp.o"
+      ],
+      "status": "plain_o2_removes_no_rerun_cse",
+      "symbol": "_ZN18V90Phase4Modulator13recivedSUVtagEv"
+    },
+    {
+      "evidence": "build/issue20-followup/three-profile-summary.txt",
+      "owners": [
+        "src_pump_v90_V92Phase4Modulator.cpp.o"
+      ],
+      "status": "plain_o2_removes_no_rerun_cse",
+      "symbol": "_ZN18V92Phase4Modulator13recivedSUVtagEv"
+    },
+    {
+      "evidence": "build/issue20-followup/profile-map.txt",
+      "owners": [
+        "src_pump_v90_V90SignBitsExtractor.cpp.o"
+      ],
+      "status": "unresolved_named",
+      "symbol": "_ZN20V90SignBitsExtractor16applyFrameActionENS_7ACTIONSEPhS1_"
+    },
+    {
+      "evidence": "build/issue22-resampler-o2-inline/REPORT.md",
+      "owners": [
+        "src_pump_v90_ResamplerTimingOffset.cpp.o"
+      ],
+      "status": "o2_inline_functions_resampler_derived_ctors",
+      "symbol": "_ZN21ResamplerTimingOffsetC1EjfjPffj"
+    },
+    {
+      "evidence": "build/issue22-resampler-o2-inline/REPORT.md",
+      "owners": [
+        "src_pump_v90_ResamplerTimingOffset.cpp.o"
+      ],
+      "status": "o2_inline_functions_resampler_derived_ctors",
+      "symbol": "_ZN21ResamplerTimingOffsetC1Ejfjffj"
+    },
+    {
+      "evidence": "build/issue22-resampler-o2-inline/REPORT.md",
+      "owners": [
+        "src_pump_v90_ResamplerTimingOffset.cpp.o"
+      ],
+      "status": "o2_inline_functions_resampler_derived_ctors",
+      "symbol": "_ZN21ResamplerTimingOffsetC2EjfjPffj"
+    },
+    {
+      "evidence": "build/issue22-resampler-o2-inline/REPORT.md",
+      "owners": [
+        "src_pump_v90_ResamplerTimingOffset.cpp.o"
+      ],
+      "status": "o2_inline_functions_resampler_derived_ctors",
+      "symbol": "_ZN21ResamplerTimingOffsetC2Ejfjffj"
+    },
+    {
+      "evidence": "build/issue20-followup/three-profile-summary.txt",
+      "owners": [
+        "src_pump_v90_V90ConstellationDesigner.cpp.o"
+      ],
+      "status": "plain_o2_removes_no_rerun_cse",
+      "symbol": "_ZN24V90ConstellationDesigner17findMinValueIndexEP16V90MappingParams"
+    },
+    {
+      "evidence": "build/issue20-followup/three-profile-summary.txt",
+      "owners": [
+        "src_pump_v90_V90ConstellationDesigner.cpp.o"
+      ],
+      "status": "plain_o2_removes_no_rerun_cse",
+      "symbol": "_ZN24V90ConstellationDesigner24findConstelMaxValueIndexEP16V90MappingParams"
+    },
+    {
+      "evidence": "build/issue20-followup/profile-map.txt",
+      "owners": [
+        "src_pump_v90_V90CP.cpp.o"
+      ],
+      "status": "unresolved_named",
+      "symbol": "_ZN5V90CP5resetEv"
+    },
+    {
+      "evidence": "build/issue20-followup/profile-map.txt",
+      "owners": [
+        "src_pump_v90_V90Jd.cpp.o"
+      ],
+      "status": "unresolved_named",
+      "symbol": "_ZN5V90Jd11unPackResetEv"
+    },
+    {
+      "evidence": "build/issue20-followup/profile-map.txt",
+      "owners": [
+        "src_pump_v90_V90Jd.cpp.o"
+      ],
+      "status": "unresolved_named",
+      "symbol": "_ZN5V90Jd12getRatesMaskEv"
+    },
+    {
+      "evidence": "build/issue20-followup/profile-map.txt",
+      "owners": [
+        "src_pump_v90_V90Jd.cpp.o"
+      ],
+      "status": "unresolved_named",
+      "symbol": "_ZN5V90Jd12setRatesMaskEi"
+    },
+    {
+      "evidence": "build/issue20-followup/profile-map.txt",
+      "owners": [
+        "src_pump_v90_V92CP.cpp.o"
+      ],
+      "status": "unresolved_named",
+      "symbol": "_ZN5V92CP5resetEv"
+    },
+    {
+      "evidence": "build/issue20-followup/profile-map.txt",
+      "owners": [
+        "src_pump_v90_V92CP.cpp.o"
+      ],
+      "status": "unresolved_named",
+      "symbol": "_ZN5V92CP7calcCRCEv"
+    },
+    {
+      "evidence": "build/issue20-followup/profile-map.txt",
+      "owners": [
+        "src_pump_v90_V92Jd.cpp.o"
+      ],
+      "status": "unresolved_named",
+      "symbol": "_ZN5V92Jd12getRatesMaskEv"
+    },
+    {
+      "evidence": "build/issue20-followup/profile-map.txt",
+      "owners": [
+        "src_pump_v90_V92Jd.cpp.o"
+      ],
+      "status": "unresolved_named",
+      "symbol": "_ZN5V92Jd12setRatesMaskEi"
+    },
+    {
+      "evidence": "build/issue20-followup/profile-map.txt",
+      "owners": [
+        "src_dsp_FloatIIR.cpp.o"
+      ],
+      "status": "unresolved_named",
+      "symbol": "_ZN8FloatIIR5resetEv"
+    },
+    {
+      "evidence": "build/issue20-followup/profile-map.txt",
+      "owners": [
+        "src_dsp_FloatARMA.cpp.o"
+      ],
+      "status": "unresolved_named",
+      "symbol": "_ZN9FloatARMA5resetEv"
+    },
+    {
+      "evidence": "build/issue20-followup/three-profile-summary.txt",
+      "owners": [
+        "src_pump_v90_Resampler.cpp.o"
+      ],
+      "status": "plain_o2_removes_no_rerun_cse",
+      "symbol": "_ZN9Resampler15copyHistoryTailEv"
+    },
+    {
+      "evidence": "build/issue20-followup/profile-map.txt",
+      "owners": [
+        "src_pump_v90_V90Mapper.cpp.o"
+      ],
+      "status": "unresolved_named",
+      "symbol": "_ZN9V90Mapper7processEPhjPsRj"
+    },
+    {
+      "evidence": "build/o-small-controls/O2-web-inline-funswitch/result.log",
+      "owners": [
+        "src_service_pcm.c.o"
+      ],
+      "status": "o2_web_inline_unswitch_pcm",
+      "symbol": "alaw2linear"
+    },
+    {
+      "evidence": "build/issue20-followup/three-profile-summary.txt",
+      "owners": [
+        "src_service_cidcore_cid.c.o"
+      ],
+      "status": "plain_o2_removes_no_rerun_cse",
+      "symbol": "cid_freq_sampl"
+    },
+    {
+      "evidence": "build/issue20-followup/profile-map.txt",
+      "owners": [
+        "src_service_Dtmf_Rx.c.o"
+      ],
+      "status": "unresolved_named",
+      "symbol": "create_cid_dtmf"
+    },
+    {
+      "evidence": "build/issue20-followup/profile-map.txt",
+      "owners": [
+        "src_service_Beepgen.c.o"
+      ],
+      "status": "unresolved_named",
+      "symbol": "detector_delete"
+    },
+    {
+      "evidence": "build/issue20-followup/profile-map.txt",
+      "owners": [
+        "src_pump_v34_v34shell.c.o"
+      ],
+      "status": "unresolved_named",
+      "symbol": "preinitV34"
+    },
+    {
+      "evidence": "build/issue20-followup/profile-map.txt",
+      "owners": [
+        "src_pump_v90_V90MappingParamsInt.cpp.o"
+      ],
+      "status": "unresolved_named",
+      "symbol": "setDataBitRate"
+    },
+    {
+      "evidence": "build/issue20-followup/profile-map.txt",
+      "owners": [
+        "src_pump_v34_v34shell.c.o"
+      ],
+      "status": "unresolved_named",
+      "symbol": "setScramble"
+    }
+  ],
+  "unresolved_named_total": 56
+}

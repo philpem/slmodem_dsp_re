@@ -914,6 +914,83 @@ This does not rule out all no-unit/source combinations. Pinned objects and
 complete provenance are in `build/issue22-resampler-no-unit/REPORT.md` and
 `build/issue22-no-unit-queue-plain/provenance.json`.
 
+## Original O2 losses: direct Resampler inlining control
+
+The [symbol-by-symbol ledger](issue22-loss-ledger.json) partitions the original
+91 losses into **35 controlled recoveries and 56 unresolved**. Parent review
+checked its 91 names against the original exact-set subtraction and verified
+the recovery groups are disjoint:
+
+| Recovery control | Original losses accounted for |
+| --- | ---: |
+| Plain O2, undoing the bundled no-rerun-CSE option | 14 |
+| V32 static-helper inline source variant under O2 | 4 |
+| O2 plus automatic inlining: ResamplerTiming / V90BitsToSymbol | 5 + 3 |
+| O2 plus web, automatic inlining and unswitching: PCM | 1 |
+| O2 plus automatic inlining: the two TUs below | 8 |
+
+This is **not 35 proven source mistakes**. Four have a demonstrated plausible
+source-inline recovery; the others have compiler-profile recovery controls.
+Neither proves the author's source spelling. All 91 have owners (51 owner
+groups), but ownership is not an explanation. Later auto81 and no-unit
+experiments are overlapping, different-profile evidence, not extra completed
+members. The missing `GetNextDigitAndReturnNextState` definition is a separate
+coverage regression: alternative profiles compare 1851 symbols, versus 1852
+at baseline. Plain O2 also introduces a new loss, `fComputeRMSValueShortBuf`,
+outside these original 91. #22 remains open.
+
+The six-cell unchanged-source screen in
+`build/issue22-resampler-o2-inline/` crosses retained O3, plain O2 and
+O2 plus `-finline-functions` for `ResamplerTimingOffset.cpp` and
+`V90Resampler.cpp`. These are controls on the **original 91-loss question**,
+not additional counts borrowed from the later no-unit profile.
+
+All compilations used Gentoo GCC 3.4.2-r2, its selected period assembler,
+the complete retained flags and `DSPLIB_REPRODUCE_BUGS`. Fresh O3 and O2
+objects reproduce their respective retained controls byte-for-byte.
+
+| Complete TU | O3 EXACT | O2 EXACT | O2 + automatic inlining EXACT |
+| --- | ---: | ---: | ---: |
+| ResamplerTimingOffset | 11/11 | 7/11 | 11/11 |
+| V90Resampler | 9/12 | 5/12 | 9/12 |
+
+All eight lost C1/C2 constructor symbols recover. More strongly, both
+O2-plus-inlining **complete objects are byte-identical to retained O3**:
+no bystander, relocation, data, binding or export difference remains.
+TimingOffset expands `setTimingOffset` while retaining the qualified
+`Resampler::reset` call. V90Resampler expands its own reset, exposing the
+`ResamplerTiming::reset` and `setBllState` calls found in the reference.
+Its three pre-existing non-exact symbols remain non-exact, including the
+UNRESOLVED `setBllState`; this result does not upgrade them.
+
+Parent review independently rescored all 69 function verdicts and verified
+all six complete objects against their claimed retained controls. This
+establishes an automatic-inlining mechanism for eight original losses; it
+neither proves the original source spelling nor justifies global flag adoption.
+
+## Ring block-placement control: stop after four cells
+
+The predeclared screen in `build/issue21-block-placement/` crossed source
+case-group orders `abc` and `bca` with default block reordering and
+`-fno-reorder-blocks`, holding O3, no-unit and no-crossjumping. Here `a`,
+`b`, `c` select thresholds 1000, 650, 850 respectively. Both default controls
+reproduce the preceding arm-order experiment's whole objects exactly.
+
+Disabling block reordering makes physical arm order follow source: `abc`
+now emits the reference order. However, the constructor call moves from
+instruction +192 (relocation +193) to +248, and `RD_create` shrinks from
+293 to 290 bytes. The full-TU exact set falls from 10/21 to 3/21, with
+seven losses and no gains; 17/21 bodies change. All twelve switch entries
+retain the correct semantic mapping, but their physical targets and other
+sections move. A SIZE(3) result is a length gap, not three differing bytes.
+
+Parent review independently rescored all 84 verdicts. The required call
+placement was not preserved, so the conditional four-permutation extension
+was **not run**. This identifies block reordering as the cause of the
+invariant arm placement, but rules out simply disabling it as a recovery
+in this domain. No production source or flags were adopted. Outstanding
+questions remain in #21 and #22; the strict completion check is unchanged.
+
 ## Reproducibility gap
 
 The main build defaults had been updated to Gentoo, but `flagsweep.py` and
