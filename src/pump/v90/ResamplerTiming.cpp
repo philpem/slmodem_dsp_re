@@ -100,7 +100,7 @@ frac_of(float v, float scale)
 {
 	long double x = (long double)v;
 	long double d = (long double)(int)v - x;
-	int n = (int)(d * (long double)scale);
+	int n = d * (long double)scale;
 
 	return (n < 0) ? -n : n;
 }

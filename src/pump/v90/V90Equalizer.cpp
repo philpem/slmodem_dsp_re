@@ -690,9 +690,9 @@ V90Equalizer::setLinearEquBeta(float beta)
 	 * what `!= 0.0f` gives.  Finding F2300.
 	 */
 	if (beta != 0.0f) {
-		int shift = (int)(log10(__builtin_fabsf(
+		int shift = log10(__builtin_fabsf(
 					maxLeCoefValue / (beta * 16777216.0f)))
-				  / log10(2.0f));
+				  / log10(2.0f);
 
 		linearEquMmxShift = shift;
 		linearEquMmxBeta = (int)((long double)beta
@@ -732,9 +732,9 @@ V90Equalizer::setDfeBeta(float beta)
 
 	/* `!= 0.0f`, one FCOM and a `je` -- see setLinearEquBeta. */
 	if (beta != 0.0f) {
-		int shift = (int)(log10(__builtin_fabsf(
+		int shift = log10(__builtin_fabsf(
 					maxDfeCoefValue / (beta * 1048576.0f)))
-				  / log10(2.0f));
+				  / log10(2.0f);
 
 		dfeMmxShift = shift;
 		dfeMmxBeta = (int)((long double)beta
@@ -1149,10 +1149,10 @@ V90Equalizer::convertEqualizerToMmx()
 	 * Finding F2300.
 	 */
 	if (linearEquBeta != 0.0f) {
-		int shift = (int)(log10(__builtin_fabsf(
+		int shift = log10(__builtin_fabsf(
 					(1.0f / (linearEquBeta * 16777216.0f))
 					* maxLeCoefValue))
-				  / log10(2.0f));
+				  / log10(2.0f);
 
 		linearEquMmxShift = shift;
 		linearEquMmxBeta = (int)((long double)linearEquBeta * conv
@@ -1264,10 +1264,10 @@ V90Equalizer::convertEqualizerToMmx()
 
 	/* `!= 0.0f`, one FCOM and a `je` -- see linearEquBeta above. */
 	if (dfeBeta != 0.0f) {
-		int shift = (int)(log10(__builtin_fabsf(
+		int shift = log10(__builtin_fabsf(
 					(1.0f / (dfeBeta * 1048576.0f))
 					* maxDfeCoefValue))
-				  / log10(2.0f));
+				  / log10(2.0f);
 
 		dfeMmxShift = shift;
 		dfeMmxBeta = (int)((long double)dfeBeta * conv
