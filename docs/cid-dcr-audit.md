@@ -779,6 +779,49 @@ or a justified production profile. Artifacts: `build/issue22-ring-no-unit/`,
 `build/issue22-no-unit-queue-plain/src_service_voice.c.o`. Follow-up is #21;
 global source/profile acceptance remains #22.
 
+### RD_create switch domain: eight cells, no recovered body
+
+The preceding switch residual was not covered by the 116-cell Reset domain.
+A newly declared four-form by two-profile cross compiled the full `voice.c`:
+direct assignment/break, direct assignment/goto, arm-local temporary/break,
+and arm-local temporary/goto, each at retained O3 and O3/no-unit. All eight
+compiled under Gentoo with reproduction enabled. Parent independently
+rescored **168 function verdicts** and checked every body/relocation against
+the appropriate profile control. Baseline controls reproduce all 21 functions
+and bindings; their raw-file differences are confined to the generated
+STT_FILE name in `.symtab`/`.strtab`, with every other section byte-identical.
+
+Locals erase, leaving four distinct normalized emissions across both profiles.
+Every O3 cell stays **7/21 EXACT**, every no-unit cell **10/21**: no source-form
+gain or loss. Only `RD_create` changes between break and goto; all other
+functions retain their full bodies/relocations. Goto reaches SIZE(2), 291 bytes
+against 293, but still shares the EAX store and moves no-unit's constructor
+call from the correct +193 to +209. The closer size is not accepted.
+The codec-to-threshold map is preserved in every cell, but physical switch
+targets differ. This excludes these four spellings under these two profiles,
+not source/flag combinations generally. Do not repeat local/goto synonyms;
+reopening needs a mechanism that separates the stores without sacrificing
+known call positions. Artifacts: `build/issue22-rd-create-switch/`.
+
+### Queue forcing removed without an object change
+
+With the #26 fixture fixed, the unchanged-header master period baseline is
+**375/0**. The actual working-branch removal of `always_inline` on `count`,
+`isEmpty`, and `isFull` also passes the full Gentoo period gate **375/0**.
+The reset attribute, function bodies and optimization flags are unchanged.
+The header's earlier assertion that ordinary definitions necessarily emit an
+extra helper was corrected to the measured source/profile scope.
+
+A real `make partial-link` after the edit leaves **all 273 object SHA-256s**
+and the entire partially linked file unchanged. The strict comparator's JSON
+is identical before/after: 54,109/943,398 positioned bytes, 905/18,317 exact
+relocations, 222/2,907 exact symbols, 57 exact content sections, and
+**DIFFERENT**, exit 1 with `--require-exact`. This is maintainability cleanup,
+not an accuracy increase or adoption of no-unit. Source commit `4504e0ba`;
+artifacts `build/issue20-followup/queue-attributes-*`. Full phase completion
+is tracked separately: its baseline also exposed an unused duplicate CID
+wrapper type left in the core TU, now tracked as #27.
+
 ## Reproducibility gap
 
 The main build defaults had been updated to Gentoo, but `flagsweep.py` and
