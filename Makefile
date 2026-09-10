@@ -209,6 +209,16 @@ OBJ_REPRO  := $(patsubst src/%.c,$(BUILD)/repro/%.o,$(SRC)) \
 CXXFLAGS   := $(CFLAGS) -fno-exceptions -fno-rtti -nostdinc++ \
               -Wno-invalid-offsetof -fno-lifetime-dse -fno-sized-deallocation
 
+# Preserve signalling-NaN representations in dsplib_assign's byte copies.
+# Modern GCC otherwise folds memcpy back into an x87 float assignment, which
+# quietens them.  This portability flag replaces the empty-asm barrier; the
+# period compiler still receives the original plain assignment (issue #19).
+CXXFLAGS += -fno-builtin-memcpy -fno-math-errno
+
+# The period math.h supplies the x87 logarithm inline bodies under this
+# source profile. Keep fixture/oracle C++ code on the ordinary flags.
+CXXMATHFLAGS := -ffast-math
+
 # v34hsstep.c is the per-dispatch-case fixture for `v34handshak`.  It lives
 # here rather than inside one test file because #56-#58 are sixteen tests over
 # the same object, and a fixture each of them copies is a fixture sixteen of
@@ -316,9 +326,9 @@ $(BUILD)/%.o: %.c
 	@mkdir -p $(dir $@)
 	$(CC) $(ARCH32) $(FPFLAGS) $(CFLAGS) -c $< -o $@
 
-$(BUILD)/%.o: %.cpp
+$(BUILD)/%.o: %.cpp Makefile
 	@mkdir -p $(dir $@)
-	$(CXX) $(ARCH32) $(FPFLAGS) $(CXXFLAGS) -c $< -o $@
+	$(CXX) $(ARCH32) $(FPFLAGS) $(CXXFLAGS) $(if $(filter src/%,$<),$(CXXMATHFLAGS)) -c $< -o $@
 
 # The faithful-original tree.  Same sources, same flags, plus $(REPRODUCE).
 # Pattern-matched on src/ specifically so it cannot collide with $(BUILD)/%.o
@@ -327,9 +337,9 @@ $(BUILD)/repro/%.o: src/%.c
 	@mkdir -p $(dir $@)
 	$(CC) $(ARCH32) $(FPFLAGS) $(CFLAGS) $(REPRODUCE) -c $< -o $@
 
-$(BUILD)/repro/%.o: src/%.cpp
+$(BUILD)/repro/%.o: src/%.cpp Makefile
 	@mkdir -p $(dir $@)
-	$(CXX) $(ARCH32) $(FPFLAGS) $(CXXFLAGS) $(REPRODUCE) -c $< -o $@
+	$(CXX) $(ARCH32) $(FPFLAGS) $(CXXFLAGS) $(CXXMATHFLAGS) $(REPRODUCE) -c $< -o $@
 
 # Linked with $(CC), not $(CXX): the C++ WE have written is -fno-exceptions
 # -fno-rtti with no virtuals and no new/delete, so nothing needs libstdc++ --
@@ -382,7 +392,7 @@ $(BUILD)/test/unit/%.o: test/unit/%.c
 	@mkdir -p $(dir $@)
 	$(CC) $(ARCH32) $(FPFLAGS) $(CFLAGS) $(REPRODUCE) -Itest/harness -c $< -o $@
 
-$(BUILD)/test/unit/%.o: test/unit/%.cpp
+$(BUILD)/test/unit/%.o: test/unit/%.cpp Makefile
 	@mkdir -p $(dir $@)
 	$(CXX) $(ARCH32) $(FPFLAGS) $(CXXFLAGS) $(REPRODUCE) -Itest/harness -c $< -o $@
 
@@ -762,9 +772,9 @@ phase: prereq
 # -nostdinc++ and the reconstruction uses no runtime.
 CXXOBJ64   := $(patsubst src/%.cpp,$(BUILD)/64/%.o,$(CXXSRC))
 
-$(BUILD)/64/%.o: src/%.cpp
+$(BUILD)/64/%.o: src/%.cpp Makefile
 	@mkdir -p $(dir $@)
-	$(CXX) $(CXXFLAGS) -c $< -o $@
+	$(CXX) $(CXXFLAGS) $(CXXMATHFLAGS) -c $< -o $@
 
 INTEROP_SRC := test/interop/t_spandsp_b103.c test/interop/runtime64.c
 SPANDSP     := third_party/spandsp
@@ -981,6 +991,7 @@ similarity: tc
 # report until convergence, so partial-compare is a census rather than a phase
 # gate.  partialcmp.py --require-exact supplies the strict final-object gate.
 partial-link: tc-repro
+	@mkdir -p '$(BUILD)/partial'
 	@$(PYTHON) tools/toolchain/recoverorder.py --blob $(BLOB) \
 		--manifest $(BUILD)/tc_repro/tc_manifest.txt \
 		--output $(BUILD)/tc_repro/tc_link_manifest.txt \

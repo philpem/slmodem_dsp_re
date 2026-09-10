@@ -9,6 +9,7 @@
  * object bytes and the whole output buffer as bit patterns.
  */
 
+#include <math.h>
 #include "dsplib/SineWave.h"
 #include "dsplib/x87copy.h"
 
@@ -84,9 +85,9 @@ void SineWave<Tout, Tparam>::generate(Tout *out, unsigned long n)
 			bool more;
 
 			/*
-			 * `fsin` by inline asm, not `sin()`.  GCC only emits
-			 * the instruction under -funsafe-math-optimizations,
-			 * and the argument is the UNROUNDED 80-bit register
+			 * The period compiler/header expands sinl under the C++ source
+			 * fast-math flags to `fsin`.  In the object its argument is
+			 * the UNROUNDED 80-bit register
 			 * value -- the `fsts` below rounds a copy for memory
 			 * and the sine is taken of what is still in st(0).
 			 * Feeding `fsin` the float-rounded phase instead is a
@@ -96,7 +97,7 @@ void SineWave<Tout, Tparam>::generate(Tout *out, unsigned long n)
 			 * st(0) alone, so the "sine" comes back as the angle.
 			 * The object does not test C2 and neither does this.
 			 */
-			__asm__ ("fsin" : "=t" (s) : "0" (x));
+			s = sinl(x);
 			out[i] = (Tout)(s * (long double)amplitude);
 			++i;
 			more = (i < n);

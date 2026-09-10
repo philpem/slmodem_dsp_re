@@ -178,18 +178,13 @@ public:
 	 *
 	 * The only caller in the object is `VPcmV34Progress`, running the
 	 * `ANSamToneDetector` embedded in `VPcmFloModem` on the modem-on-hold
-	 * arm. `DSPLIB_GTD_UNWRITTEN` used to mark this overload's reference
-	 * weak in that caller while it was undefined; it is defined here as
-	 * nothing and kept only because `v34pcmmain.cpp` still spells it.
+	 * arm.
 	 *
 	 * @param samples  Input samples.
 	 * @param n        Number of samples in @p samples.
 	 * @return The detector's current answer (1 tone detected, 0 not).
 	 */
-#ifndef DSPLIB_GTD_UNWRITTEN
-#define DSPLIB_GTD_UNWRITTEN
-#endif
-	int process(float *samples, unsigned int n) DSPLIB_GTD_UNWRITTEN;
+	int process(float *samples, unsigned int n);
 
 	/*
 	 * Public for `offsetof`; the original's access specifiers are not

@@ -16,6 +16,7 @@
  * `boxcar` are leaves.
  */
 
+#include <math.h>
 #include "dsplib/DspMath.h"
 
 /*
@@ -147,7 +148,7 @@ T sinc(T x)
 		double s;
 
 		/*
-		 * `fsin`, not `sin()`.  The object computes the sine with the
+		 * The object computes the sine with `fsin`, the
 		 * x87 instruction, and libm's is a different function -- they
 		 * agree to well within a float almost everywhere and disagree
 		 * exactly where it matters here, at integer `x`, where
@@ -155,12 +156,12 @@ T sinc(T x)
 		 * is.  49 of 4019 swept points differed, every one of them at
 		 * or beside an integer.
 		 *
-		 * GCC emits `fsin` for `__builtin_sin` only under
-		 * -funsafe-math-optimizations, which would change every other
-		 * float in this file.  One instruction of asm is the smaller
-		 * and more honest change.
+		 * Ordinary sin/cos calls expand through the period compiler and
+		 * math header under the C++ source fast-math flags.  This does not
+		 * uniquely recover the original flags.  Modern portability failures
+		 * are a separate, forthcoming issue; see docs/issue19-inline-asm.md.
 		 */
-		__asm__ ("fsin" : "=t" (s) : "0" (y));
+		s = sin(y);
 
 		return (T)(s / y);
 	}
@@ -228,7 +229,7 @@ DSPMATH_STEP void hanning(T *w, unsigned n)
 			 */
 			x = x * 6.283185307179586;	/* .rodata.cst8+0x38 */
 			x = x * inv;
-			__asm__ ("fcos" : "=t" (c) : "0" (x));
+			c = cosl(x);
 
 			/* .rodata.cst4+0x1dc is 0.5f, a FLOAT here. */
 			w[i - 1] = (T)((1.0L - c) * (long double)0.5f);
@@ -285,7 +286,7 @@ DSPMATH_STEP void hamming(T *w, unsigned n)
 
 		x = x * 6.283185307179586;	/* .rodata.cst8+0x40 */
 		x = x * d;			/* a reciprocal MULTIPLY */
-		__asm__ ("fcos" : "=t" (c) : "0" (x));
+		c = cosl(x);
 
 		/* 0.54 and 0.46, .rodata.cst8+0x50 and +0x48. */
 		w[i] = (T)(0.54 - c * 0.46);
@@ -344,8 +345,8 @@ DSPMATH_STEP void blackman(T *w, unsigned n)
 			long double a2 = x * 12.566370614359172 * d;
 			long double c1, c2;
 
-			__asm__ ("fcos" : "=t" (c1) : "0" (a1));
-			__asm__ ("fcos" : "=t" (c2) : "0" (a2));
+			c1 = cosl(a1);
+			c2 = cosl(a2);
 
 			w[i] = (T)(0.42 - c1 * 0.5f + c2 * 0.08);
 		}

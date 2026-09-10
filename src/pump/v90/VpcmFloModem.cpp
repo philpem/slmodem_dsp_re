@@ -40,6 +40,7 @@
  * exactly why they are written down rather than left to be rediscovered.
  */
 
+#include <math.h>
 #include "dsplib/debug.h"
 #include "dsplib/DILdescriptorPacker.h"
 #include "dsplib/encode.h"
@@ -177,22 +178,18 @@ typedef char vpcm_dil_size[(sizeof(tagV90DILdescriptor) == 0x213) ? 1 : -1];
  *
  * `fldlg2` pushes log10(2) at the register's full 64-bit mantissa and `fyl2x`
  * computes st(1) * log2(st(0)) and pops, so the sequence takes one value and
- * leaves one -- net stack effect zero, which is what makes the "=t"/"0" tie
- * legal.  glibc's log10() is a polynomial and differs from this in the last
+ * leaves one -- net stack effect zero.  Library-call rounding can differ in the last
  * place often enough to matter once the result is scaled by ten.
  *
- * THIS IS A COPY of x87_log10 in src/pump/v90/V90Equalizer.cpp, deliberately:
- * hoisting it into a shared header from this worktree would touch a file
- * another batch owns for no behavioural gain.  Recorded so that a later
- * cleanup can collapse the two.
+ * The ordinary log10l call expands through the period compiler/math header
+ * under the C++ source fast-math flags.  These do not uniquely recover the
+ * original flags; modern portability is a separate, forthcoming issue.
+ * See docs/issue19-inline-asm.md.
  */
 static inline long double
 x87_log10(long double x)
 {
-	long double r;
-
-	__asm__ ("fldlg2\n\tfxch %%st(1)\n\tfyl2x" : "=t" (r) : "0" (x));
-	return r;
+	return log10l(x);
 }
 
 /*

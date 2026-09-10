@@ -29,6 +29,7 @@
  */
 
 #include <stddef.h>
+#include <math.h>
 
 #include "dsplib/debug.h"
 #include "dsplib/encode.h"
@@ -497,35 +498,24 @@ V90Phase4Demodulator::detectFPE(short sample)
  */
 
 /*
- * `fsqrt` and log10 on the coprocessor.  Both are copies rather than a shared
- * header, for the reason `V90TRN2Designer.cpp` gives at length (finding F876):
- * a new C++ header has to be added to `offcheck.py`'s SKIP_HEADERS or the
- * `offsets` gate breaks files nobody touched.  This is the fifth copy of the
- * log10 pair and the third of `fsqrt`.
+ * `fsqrt` and log10 on the coprocessor, as in the reference.
  *
- * GCC EMITS NEITHER FROM THE LIBRARY CALL at this tree's flags -- `sqrt()`
- * and `log10()` both compile to a call, and only `-ffast-math` turns them
- * into `fsqrt` and `fldlg2`/`fyl2x`.  The object has no relocation against
- * either name anywhere in these two functions, so the sequences are written
- * out.  `fyl2x` is not correctly rounded and `log10` is, so they are not the
- * same function and the choice is not cosmetic.
+ * The square root uses the ordinary builtin with -fno-math-errno, retaining
+ * the instruction's negative-input behavior.  The ordinary log10l call expands
+ * through the period compiler/math header under the C++ source fast-math flags.
+ * These do not uniquely recover the original flags; modern portability is a
+ * separate, forthcoming issue.  See docs/issue19-inline-asm.md.
  */
-static inline long double
-p4d_x87_fsqrt(long double x)
+static inline double
+p4d_x87_fsqrt(double x)
 {
-	long double r;
-
-	__asm__ ("fsqrt" : "=t" (r) : "0" (x));
-	return r;
+	return __builtin_sqrt(x);
 }
 
 static inline long double
 p4d_x87_log10(long double x)
 {
-	long double r;
-
-	__asm__ ("fldlg2\n\tfxch %%st(1)\n\tfyl2x" : "=t" (r) : "0" (x));
-	return r;
+	return log10l(x);
 }
 
 /*

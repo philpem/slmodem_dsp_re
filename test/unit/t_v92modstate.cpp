@@ -2316,6 +2316,71 @@ run_progress(void)
 	return diff_end();
 }
 
+/* .text+0x14c41 multiplies by binary32 0x3f555555, then adds 0.5
+ * without narrowing the x87 intermediate. At 15 samples that is just below
+ * 13, so truncation gives 12. The adjacent float 0x3f555556 gives 13.
+ * Keep this oracle independent of the production rate expression.
+ * build() allocates for 120 samples (100 symbols); either count fits, and
+ * the 240-entry queue starts with 120 samples, enough for this 15-sample read.
+ */
+static int
+run_progress_boundary(void)
+{
+	int filter, trials = 0;
+
+	diff_begin("V92Modulator::progress 15-sample boundary");
+	queue_len_override = PROG_QUEUE_LEN;
+	for (filter = 0; filter < 2; filter++, trials++) {
+		float out[2][17];
+		unsigned nbits[2] = { 96u, 96u };
+		int bits[1] = { 1 };
+		unsigned i;
+		int s;
+
+		filter_override = filter;
+		build(filter);
+		for (s = 0; s < 2; s++) {
+			for (i = 0; i < 17u; i++)
+				out[s][i] = PROG_WIPE;
+			for (i = 0; i < M(s)->blockSize + V92MOD_BUF_SLACK; i++)
+				M(s)->buf_7c[i] = (short)(0x100 + i);
+			diff_eq_int("boundary starts in phase zero (side %ld)",
+				    M(s)->phase, V92MOD_PHASE_RESET, s);
+			diff_eq_int("boundary allocation holds 100 symbols (side %ld)",
+				    (int)M(s)->blockSize, 100, s);
+		}
+		our_progress(ours, bits, &nbits[0], out[0] + 1, 15u);
+		ref_progress(theirs, bits, &nbits[1], out[1] + 1, 15u);
+		diff_eq_int("boundary symbol count agrees (filter %ld)",
+			    (int)M(0)->symbolCount, (int)M(1)->symbolCount, filter);
+		for (s = 0; s < 2; s++) {
+			diff_eq_int("15 samples advance exactly 12 symbols (side %ld)",
+				    (int)M(s)->symbolCount, 12, s);
+			for (i = 0; i < 12u && M(s)->buf_7c[i] == 0; i++)
+				;
+			diff_eq_int("boundary generated 12 silent symbols (side %ld)",
+				    (int)i, 12, s);
+			diff_eq_int("boundary leaves symbol 12 untouched (side %ld)",
+				    M(s)->buf_7c[12], 0x10c, s);
+			diff_eq_int("boundary reports no input bits (side %ld)",
+				    (int)nbits[s], 0, s);
+			diff_eq_int("boundary output guards intact (side %ld)",
+				    out[s][0] == PROG_WIPE && out[s][16] == PROG_WIPE,
+				    1, s);
+			for (i = 1; i <= 15u && out[s][i] == 0.0f; i++)
+				;
+			diff_eq_int("boundary wrote all 15 output samples (side %ld)",
+				    (int)i, 16, s);
+		}
+		compare_all("after 15-sample progress", filter);
+		teardown();
+	}
+	queue_len_override = 0;
+	filter_override = -1;
+	diff_eq_int("boundary filter trials run", trials, 2, 0);
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -2329,6 +2394,7 @@ main(void)
 	rc |= run_mkres();
 	rc |= run_initiate();
 	rc |= run_progress();
+	rc |= run_progress_boundary();
 	rc |= run_debug();
 
 	return rc;

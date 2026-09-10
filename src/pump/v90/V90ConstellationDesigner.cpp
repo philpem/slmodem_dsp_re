@@ -25,6 +25,7 @@
  */
 
 #include <stddef.h>
+#include <math.h>
 
 #include "dsplib/debug.h"
 /*
@@ -159,48 +160,30 @@ typedef char v90cd_size[(sizeof(V90ConstellationDesigner) == 0x54) ? 1 : -1];
  *
  * `fldlg2` pushes log10(2) at the register's full 64-bit mantissa and `fyl2x`
  * computes st(1) * log2(st(0)) and pops, so the sequence takes one value and
- * leaves one -- net stack effect zero, which is what makes the "=t"/"0" tie
- * legal.  GCC emits it for `log10()` only under -funsafe-math-optimizations,
- * which this tree does not build with, and glibc's `log10()` is a polynomial
- * that differs from it in the last place.
+ * leaves one -- net stack effect zero.  Library-call rounding can differ in
+ * the last place.
  *
- * THIS IS THE THIRD COPY -- `src/pump/v90/VpcmFloModem.cpp` and
- * `src/pump/v90/V90Equalizer.cpp` carry the same eight lines, and that one is
- * deliberate for the same reason theirs is: hoisting it into a shared header
- * from this worktree would touch a file another batch owns for no
- * behavioural gain.  Recorded so that a later cleanup can collapse the three.
+ * The ordinary log10l call expands through the period compiler/math header
+ * under the C++ source fast-math flags.  These do not uniquely recover the
+ * original flags; modern portability is a separate, forthcoming issue.
+ * See docs/issue19-inline-asm.md.
  */
 static inline long double
 x87_log10(long double x)
 {
-	long double r;
-
-	__asm__ ("fldlg2\n\tfxch %%st(1)\n\tfyl2x" : "=t" (r) : "0" (x));
-	return r;
+	return log10l(x);
 }
 
 /*
- * FSQRT on the value already in st(0), for the three "sqrt(power)"
- * diagnostics, and NOT `__builtin_sqrt`.
- *
- * The object's is a bare `fsqrt` with no branch and no call: one instruction
- * between the `flds` of the power and the `fld %st(0)` that duplicates the
- * root.  `sqrtf()` under `-fmath-errno` -- which these flags are -- is a libm
- * call that has to test for a negative argument first, so it would be a
- * different instruction sequence AND a different value on a negative input,
- * where `fsqrt` returns the indefinite NaN and libm sets errno.
- *
- * SAME ASM, SAME REASON, as `v92mapper_fsqrt` in src/pump/v90/V92Mapper.cpp
- * and `agc_fsqrt` in include/dsplib/Agc.h; this is the third copy and it is
- * deliberate for the reason `x87_log10`'s third copy is.
+ * The three sqrt(power) diagnostics use bare fsqrt in the reference.
+ * -fno-math-errno lets the ordinary builtin keep that behavior, including
+ * negative inputs, without enabling unsafe arithmetic.  The float power
+ * promotes exactly and the root remains in the period compiler's x87 register.
  */
-static inline long double
-x87_fsqrt(long double x)
+static inline double
+x87_fsqrt(double x)
 {
-	long double r;
-
-	__asm__ ("fsqrt" : "=t" (r) : "0" (x));
-	return r;
+	return __builtin_sqrt(x);
 }
 
 /*

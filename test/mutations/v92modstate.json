@@ -440,13 +440,13 @@
  },
  {
   "label": "progress derives the symbol count from six fifths, not five sixths",
-  "find": "\tn = (unsigned int)(nSamples * (V92MOD_RATE_NUM / V92MOD_RATE_DEN)\n\t\t\t   + 0.5f);",
+  "find": "\tn = (unsigned int)(nSamples * V92MOD_RATE_RATIO\n\t\t\t   + 0.5f);",
   "replace": "\tn = (unsigned int)(nSamples * (V92MOD_RATE_DEN / V92MOD_RATE_NUM)\n\t\t\t   + 0.5f);"
  },
  {
   "label": "progress rounds the symbol count down",
-  "find": "\tn = (unsigned int)(nSamples * (V92MOD_RATE_NUM / V92MOD_RATE_DEN)\n\t\t\t   + 0.5f);\n",
-  "replace": "\tn = (unsigned int)(nSamples * (V92MOD_RATE_NUM / V92MOD_RATE_DEN));\n"
+  "find": "\tn = (unsigned int)(nSamples * V92MOD_RATE_RATIO\n\t\t\t   + 0.5f);\n",
+  "replace": "\tn = (unsigned int)(nSamples * V92MOD_RATE_RATIO);\n"
  },
  {
   "label": "progress accumulates the sample count rather than the symbol count",

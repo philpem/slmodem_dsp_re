@@ -49,8 +49,8 @@
  },
  {
   "label": "the power is not rooted at all",
-  "find": "\t__asm__(\"fsqrt\" : \"=t\" (r) : \"0\" (x));",
-  "replace": "\tr = x + 0.0L;"
+  "find": "\treturn __builtin_sqrt(x);",
+  "replace": "\treturn x + 0.0;"
  },
  {
   "label": "the result is not truncated to a short",

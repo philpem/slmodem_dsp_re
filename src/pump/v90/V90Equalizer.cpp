@@ -39,7 +39,7 @@
  * measured -- so the two agree on the format the coefficients are held in.
  *
  *
- * THE X87 IS THE SPECIFICATION, AND GCC 13 WILL NOT EMIT IT
+ * THE OBJECT'S X87 LOGARITHMS
  *
  * The object computes both logarithms on the coprocessor:
  *
@@ -47,28 +47,26 @@
  *      d9 c9       fxch   %st(1)
  *      d9 f1       fyl2x                   ; -> log10(2) * log2(x)
  *
- * GCC gates that expansion on -funsafe-math-optimizations, which this tree
- * does not build with, so a literal `log10()` here compiles to a call into
- * libm returning a double.  That is not a style difference: the quotient is
+ * Ordinary log10 calls expand through the period compiler/math header under
+ * the C++ source fast-math flags.  Library-call rounding matters: the quotient is
  * truncated to an int, so one ulp between libm's answer and the
  * coprocessor's is one step in `shift` and a factor of two in `scaledBeta` --
  * and it is worst exactly where the input is a power of two, which is where
- * a renormalisation lands most often.  So the three instructions are
- * transcribed.  Finding F233's conclusion, one class further on: where the
- * object uses the coprocessor, transcribing the coprocessor is both
- * necessary and sufficient.
+ * a renormalisation lands most often.  F233 records the historical asm
+ * rationale.  The current profile does not uniquely recover the original
+ * flags; modern portability failures belong to a separate, forthcoming issue.
+ * See docs/issue19-inline-asm.md.
  *
- * Everything else stays ordinary C++.  The intermediates are `long double`
- * because the object keeps them in x87 registers and never rounds them to
+ * The object keeps intermediates in x87 registers and never rounds them to
  * 32 bits: it stores the argument to a 4-byte stack slot only to survive the
  * `edprintf` call, and reloads the same bits.  Finding F256 measured that a
- * `float` spelling would have agreed here anyway under -mfpmath=387; the
- * explicit `long double` does not depend on that measurement holding.
+ * `float` spelling would have agreed here anyway under -mfpmath=387.
  *
  * Built -fno-exceptions -fno-rtti -nostdinc++ like the rest of the C++ here.
  */
 
 #include <stddef.h>
+#include <math.h>
 
 #include "dsplib/debug.h"
 #include "dsplib/DspMath.h"
@@ -242,24 +240,6 @@ typedef char v90equ_size[(sizeof(V90Equalizer) == 0x150) ? 1 : -1];
 #define V90EQU_ERRFRAC(v) \
 	__builtin_abs((int)(((long double)(v) - (long double)(int)(v)) \
 			    * 1000.0f))
-
-/*
- * log10() on the coprocessor, as the object computes it.
- *
- * `fldlg2` pushes log10(2) at the register's full 64-bit mantissa and
- * `fyl2x` computes st(1) * log2(st(0)) and pops, so the sequence takes one
- * value and leaves one -- net stack effect zero, which is what makes the
- * "=t"/"0" tie below legal.  See the file comment for why this is not
- * written as a call to log10().
- */
-static inline long double
-x87_log10(long double x)
-{
-	long double r;
-
-	__asm__ ("fldlg2\n\tfxch %%st(1)\n\tfyl2x" : "=t" (r) : "0" (x));
-	return r;
-}
 
 /*
  * `shl %cl,%edx` with %edx holding 1.  The count is masked to five bits by
@@ -571,14 +551,11 @@ sar_by(int v, int n)
 /* ============================================================= coefficients */
 
 /*
- * `fsqrt`, as the object computes it: the block's mean square arrives on the
- * x87 stack from a `fildll`/`FDIVRP` pair and leaves it through a single
- * `d9 fa`, with no round trip through memory and no library call.  GCC will
- * not emit that from `sqrt()` at this tree's flags -- it emits a call
- * returning a double, and the result is then rounded to float, so the
- * intermediate loses the extended precision the object keeps.  The same
- * argument, and the same remedy, as `p4d_x87_fsqrt` in
- * src/pump/v90/V90Phase4Demodulator.cpp and `x87_log10` above.
+ * The block's mean square reaches fsqrt from a fildll/divide pair, with
+ * no intervening narrowing.  Keep the quotient a double expression so the
+ * period compiler can retain its x87 excess precision across the builtin;
+ * converting a long-double quotient to the builtin's double argument would
+ * insert a store/reload.  -fno-math-errno removes the library fallback.
  */
 /*
  * NARROW TO `float`, AND MAKE THE COMPILER DO IT.  The object rounds both
@@ -601,13 +578,10 @@ v90equ_narrow(float x)
 	return t;
 }
 
-static inline long double
-v90equ_x87_fsqrt(long double x)
+static inline double
+v90equ_x87_fsqrt(double x)
 {
-	long double r;
-
-	__asm__ ("fsqrt" : "=t" (r) : "0" (x));
-	return r;
+	return __builtin_sqrt(x);
 }
 
 /*
@@ -722,10 +696,9 @@ V90Equalizer::setLinearEquBeta(float beta)
 	 * what `!= 0.0f` gives.  Finding F2300.
 	 */
 	if (beta != 0.0f) {
-		int shift = (int)(x87_log10(__builtin_fabsl(
-					(long double)maxLeCoefValue
-					/ ((long double)beta * 16777216.0f)))
-				  / x87_log10((long double)2.0f));
+		int shift = (int)(log10(__builtin_fabsf(
+					maxLeCoefValue / (beta * 16777216.0f)))
+				  / log10(2.0f));
 
 		linearEquMmxShift = shift;
 		linearEquMmxBeta = (int)((long double)beta
@@ -765,10 +738,9 @@ V90Equalizer::setDfeBeta(float beta)
 
 	/* `!= 0.0f`, one FCOM and a `je` -- see setLinearEquBeta. */
 	if (beta != 0.0f) {
-		int shift = (int)(x87_log10(__builtin_fabsl(
-					(long double)maxDfeCoefValue
-					/ ((long double)beta * 1048576.0f)))
-				  / x87_log10((long double)2.0f));
+		int shift = (int)(log10(__builtin_fabsf(
+					maxDfeCoefValue / (beta * 1048576.0f)))
+				  / log10(2.0f));
 
 		dfeMmxShift = shift;
 		dfeMmxBeta = (int)((long double)beta
@@ -1183,11 +1155,10 @@ V90Equalizer::convertEqualizerToMmx()
 	 * Finding F2300.
 	 */
 	if (linearEquBeta != 0.0f) {
-		int shift = (int)(x87_log10(__builtin_fabsl(
-					(1.0f / ((long double)linearEquBeta
-						 * 16777216.0f))
-					* (long double)maxLeCoefValue))
-				  / x87_log10((long double)2.0f));
+		int shift = (int)(log10(__builtin_fabsf(
+					(1.0f / (linearEquBeta * 16777216.0f))
+					* maxLeCoefValue))
+				  / log10(2.0f));
 
 		linearEquMmxShift = shift;
 		linearEquMmxBeta = (int)((long double)linearEquBeta * conv
@@ -1299,11 +1270,10 @@ V90Equalizer::convertEqualizerToMmx()
 
 	/* `!= 0.0f`, one FCOM and a `je` -- see linearEquBeta above. */
 	if (dfeBeta != 0.0f) {
-		int shift = (int)(x87_log10(__builtin_fabsl(
-					(1.0f / ((long double)dfeBeta
-						 * 1048576.0f))
-					* (long double)maxDfeCoefValue))
-				  / x87_log10((long double)2.0f));
+		int shift = (int)(log10(__builtin_fabsf(
+					(1.0f / (dfeBeta * 1048576.0f))
+					* maxDfeCoefValue))
+				  / log10(2.0f));
 
 		dfeMmxShift = shift;
 		dfeMmxBeta = (int)((long double)dfeBeta * conv
@@ -2693,8 +2663,8 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 		 * which is what a literal `blockErrorEnergyRms` in the second expression
 		 * would do -- is one rounding too many.
 		 */
-		long double rms = v90equ_x87_fsqrt((long double)blockErrorEnergySum
-						   / (long double)blockSampleCount);
+		double rms = v90equ_x87_fsqrt((double)blockErrorEnergySum
+						   / (double)blockSampleCount);
 
 		blockErrorEnergyRms = (float)rms;
 		meanErrorEnergyCurrent = errorEnergyMeanK

@@ -38,18 +38,15 @@
  * `VPCMXF_` family is unwritten and will want its own anchors.  The reason is
  * about the tier and not about the object, which is why it is stated.
  *
- * `sessionTermination` IS NAMED BY ITS MANGLED SYMBOL rather than called as a
- * member, for `V90Demodulator.cpp`'s reason at its own `v90resampler_reset`:
- * `V90Demodulator.h` drags in `V90PreFilter.h` and with it the OTHER
- * definition of `V90Parameters` (finding F1112), which this file cannot have
- * beside `VPcmFloModem.h`.  A forward-declared pointer type and the symbol
- * are enough, and the call is direct in the object too -- there is no vptr in
- * either class.
+ * The former mangled-symbol alias avoided the duplicate `V90Parameters`
+ * definition recorded in F1112.  That type now has one home, so the member's
+ * header can be included and the tail call written directly.
  */
 
 #include <stddef.h>
 
 #include "dsplib/VPcmFloModem.h"
+#include "dsplib/V90Demodulator.h"
 
 /* See V90ConstellationDesigner.cpp for why these are here and why guarded. */
 #if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
@@ -57,14 +54,6 @@ typedef char vpcmxfterm_off_dem[
     ((int)__builtin_offsetof(VPcmFloModem, modem.demodulator) == 0x175c)
     ? 1 : -1];
 #endif
-
-/*
- * `V90Demodulator::sessionTermination`, by the name the ABI gives it.  It
- * takes `this` as its first stack argument like every other member here
- * (finding F215), so no attribute is involved.
- */
-extern int v90dem_sessionTermination(V90Demodulator *self)
-	asm("_ZN14V90Demodulator18sessionTerminationEv");
 
 /*
  * No header carries this prototype yet: the only caller in the object is
@@ -77,5 +66,5 @@ extern "C" void VPCMXF_SessionTermination(VPcmFloModem *self);
 extern "C" void
 VPCMXF_SessionTermination(VPcmFloModem *self)
 {
-	v90dem_sessionTermination(self->modem.demodulator);
+	self->modem.demodulator->sessionTermination();
 }

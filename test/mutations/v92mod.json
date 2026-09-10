@@ -20,7 +20,7 @@
  },
  {
   "label": "the block size is six fifths of the argument",
-  "find": "\t\t\t\t   * (V92MOD_RATE_NUM / V92MOD_RATE_DEN)",
+  "find": "\t\t\t\t   * V92MOD_RATE_RATIO",
   "replace": "\t\t\t\t   * (V92MOD_RATE_DEN / V92MOD_RATE_NUM)"
  },
  {

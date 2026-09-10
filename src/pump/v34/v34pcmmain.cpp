@@ -24,30 +24,6 @@
  * allocates, which is what lets the test binaries link with $(CC).
  */
 
-/*
- * THE UNWRITTEN-CALLEE MACROS, AND THEY MUST COME BEFORE THE INCLUDES.
- *
- * `VPcmV34Progress` at the bottom of this file calls five symbols nobody has
- * reconstructed -- four `VPcmFloModem` members and
- * `GenericToneDetector::process`.  Their declarations wear these macros, so
- * THIS translation unit makes a weak undefined reference to each: it resolves
- * to zero instead of leaving every test binary with an undefined symbol, and
- * each call site tests the pointer before using it.
- * `include/dsplib/vpcm.h` sets the arrangement out at length for the five
- * `VPcmV34*` entry points; this is the same one, one level further down.
- *
- * A translation unit that DEFINES any of them must not define these --
- * a definition compiled under the macro would itself be weak.
- *
- * `DSPLIB_V34HSHAK_UNWRITTEN` USED TO BE HERE AND IS DELIBERATELY GONE.  It
- * covered `v90RateReneg` and `v90RateRenegSilence`, which this file now
- * DEFINES; defining the macro would make both definitions weak.  The two call
- * sites in `VPcmV34Progress` lost their null tests with it, which is what the
- * object does -- it calls both unconditionally.
- */
-#define DSPLIB_VPCMFLO_UNWRITTEN	__attribute__((weak))
-#define DSPLIB_GTD_UNWRITTEN		__attribute__((weak))
-
 #include <stdlib.h>
 
 #include "dsplib/K56FlexFloModem.h"
@@ -1868,66 +1844,11 @@ VPcmV34GetCurrentTxBitRate(void *objp)
  * only when the debug level is up, which changes what the function returns;
  * see D296.
  *
- * WHAT IS NOT WRITTEN, and how it is kept from breaking the link.  Seven
- * symbols this function calls are unreconstructed -- four `VPcmFloModem`
- * members, `GenericToneDetector::process`, and the two rate-renegotiation
- * transmitters -- 7,922 bytes belonging to the V.90 and V.92 arms.  Each is
- * declared WEAK by the three macros defined at the top of this file, so the
- * reference resolves to zero rather than leaving 78 test binaries with an
- * undefined symbol, and each call site tests the pointer first and records
- * `v34pcm_notwritten` when it is null.  That is `vpcm.h`'s arrangement for
- * the five `VPcmV34*` entry points, one level further down; the boundary
- * moved, it did not go away.  `t_vpcmguard.c` is the binary that watches it
- * stop.
- *
- * NONE OF THE SEVEN IS ON A V.34 CALL.  Finding F1454's trace is what says so
- * and it is the reason this function could be written at all; a V.90 or V.92
- * connect enters arms no test in this tree can yet drive.
+ * The weak-call scaffolding described in F1454/F1460 is no longer needed:
+ * all seven formerly missing callees are reconstructed.  The five member
+ * calls below are direct, as at .text+0xb84f, +0xba41, +0xbc2b, +0xc7f7
+ * and +0xcfef in the reference; none of those sites tests a callee address.
  */
-
-/*
- * ---------------------------------------------------------------------------
- * FIVE ALIASES THAT EXIST ONLY TO BE COMPARED WITH ZERO, and finding F1460 is
- * why they have to.
- *
- * The five C++ members below are declared WEAK, `nm` shows all five as `w`,
- * and the free functions beside them (`v90RateReneg`, `v90RateRenegSilence`)
- * are weak in exactly the same way.  Test a free one for null and GCC leaves
- * the comparison alone.  Test a MEMBER -- `&VPcmFloModem::runPcmModem == 0`
- * -- and GCC 13 folds it to false and says so:
- *
- *     warning: the address 'VPcmFloModem::runPcmModem' will never be NULL
- *
- * which is finding F985's trap in a form the `weak` attribute does not fix:
- * the guard would compile away and the call would go to address zero.  A
- * pointer-to-member is not an address as far as that optimisation is
- * concerned, and no spelling of the member reference avoids it.
- *
- * So the TEST is made through an ordinary function pointer wearing the
- * member's mangled name -- `this` is a member's first stack argument on this
- * ABI, so the declaration is the same function seen the other way round --
- * and the CALL is still written as a call.  Nothing here is an alias for
- * anything but the null test.
- */
-extern int alias_runPcmModem(VPcmFloModem *, float *, float *, unsigned int,
-			     int *, int *, int *, int *)
-	__asm__("_ZN12VPcmFloModem11runPcmModemEPfS0_jPiS1_S1_S1_")
-	__attribute__((weak));
-extern int alias_v90RunDemodulator(VPcmFloModem *, float *, unsigned int,
-				   int *, int *)
-	__asm__("_ZN12VPcmFloModem17v90RunDemodulatorEPfjPiS1_")
-	__attribute__((weak));
-extern int alias_qcLineVerification(VPcmFloModem *, float *, float *,
-				    unsigned int, int *, int *, int *, int *)
-	__asm__("_ZN12VPcmFloModem18qcLineVerificationEPfS0_jPiS1_S1_S1_")
-	__attribute__((weak));
-extern void alias_vPcmResetPhase3Modem(VPcmFloModem *)
-	__asm__("_ZN12VPcmFloModem20vPcmResetPhase3ModemEv")
-	__attribute__((weak));
-extern int alias_toneDetectorProcess(GenericToneDetector *, float *,
-				      unsigned int)
-	__asm__("_ZN19GenericToneDetector7processEPfj")
-	__attribute__((weak));
 
 /* `mov 0x...(%esi)` sites in regions v34fsk.h models as `unmapped_*`. */
 #define PROG_S16(o, off)	(*(short *)((unsigned char *)(o) + (off)))
@@ -2044,14 +1965,10 @@ extern int alias_toneDetectorProcess(GenericToneDetector *, float *,
 
 /*
  * ---------------------------------------------------------------------------
- * The unwritten-path record.  `vpcm.c`'s `vpcm_notwritten` verbatim in shape,
- * and for the reason `V34hshak.c`'s `t3m_notwritten` gives: an arm that
- * returns quietly is indistinguishable from an arm that correctly did
- * nothing, so the default is to STOP, and a test opts out of the stop BY NAME
- * before it reads the code.
+ * Compatibility entry points for the old unwritten-path test apparatus.
+ * All callees now link directly, so no path sets an unwritten code.
  */
 static int v34pcm_unwritten_code;
-static int v34pcm_unwritten_soft;
 
 extern "C" int
 v34pcm_unwritten(void)
@@ -2063,16 +1980,6 @@ extern "C" void
 v34pcm_unwritten_reset(void)
 {
 	v34pcm_unwritten_code = V34PCM_WRITTEN;
-	v34pcm_unwritten_soft = 1;
-}
-
-static void
-v34pcm_notwritten(int what)
-{
-	if (v34pcm_unwritten_code == V34PCM_WRITTEN)
-		v34pcm_unwritten_code = what;
-	if (!v34pcm_unwritten_soft)
-		abort();
 }
 
 extern "C" int
@@ -2288,11 +2195,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 					 " = %d symbols (baud %d)\r\n",
 					 len, baud);
 				if (obj->v90_receiver > 1) {
-					if (alias_vPcmResetPhase3Modem == 0)
-						v34pcm_notwritten(
-						    V34PCM_UNWRITTEN_RESETP3);
-					else
-						sess->vPcmResetPhase3Modem();
+					sess->vPcmResetPhase3Modem();
 				} else if (obj->k56flex_receiver > 1) {
 					k56->k56FlexEnterPhase3();
 				}
@@ -2529,13 +2432,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 			} while (--left != 0);
 		}
 		in -= n;
-		if (alias_v90RunDemodulator == 0) {
-			v34pcm_notwritten(V34PCM_UNWRITTEN_V90RUN);
-			r = 0;
-		} else {
-			r = sess->v90RunDemodulator(in, (unsigned int)n,
-						    rxbits, nrx);
-		}
+		r = sess->v90RunDemodulator(in, (unsigned int)n, rxbits, nrx);
 		switch ((unsigned int)r) {
 		case 1:
 			obj->progress = 3;
@@ -2602,13 +2499,8 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 
 	/* --- 2: V.92 -------------------------------------------------- */
 	case 2:
-		if (alias_runPcmModem == 0) {
-			v34pcm_notwritten(V34PCM_UNWRITTEN_RUNPCM);
-			r = 0;
-		} else {
-			r = sess->runPcmModem(in, out, (unsigned int)n, rxbits,
-					      nrx, txbits, nbits);
-		}
+		r = sess->runPcmModem(in, out, (unsigned int)n, rxbits,
+				      nrx, txbits, nbits);
 		switch ((unsigned int)r) {
 		case 1:
 			obj->progress = 3;
@@ -2775,14 +2667,8 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 
 	/* --- 4: line verification ------------------------------------- */
 	case 4:
-		if (alias_qcLineVerification == 0) {
-			v34pcm_notwritten(V34PCM_UNWRITTEN_QCLINE);
-			r = 0;
-		} else {
-			r = sess->qcLineVerification(in, out, (unsigned int)n,
-						     rxbits, nrx, txbits,
-						     nbits);
-		}
+		r = sess->qcLineVerification(in, out, (unsigned int)n,
+					     rxbits, nrx, txbits, nbits);
 		if (r == 0) {
 			obj->progress = 10;
 		} else {
@@ -2880,12 +2766,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 				obj->status = 0xa;
 			}
 		}
-		if (alias_toneDetectorProcess == 0) {
-			v34pcm_notwritten(V34PCM_UNWRITTEN_TONEPROC);
-			r = 0;
-		} else {
-			r = sess->ansam.process(in, (unsigned int)n);
-		}
+		r = sess->ansam.process(in, (unsigned int)n);
 		if (r != 0) {
 			if (obj->status == 7) {
 				int held = PROG_S32(obj, O_MOHCOUNT);

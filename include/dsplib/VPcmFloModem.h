@@ -264,25 +264,11 @@ public:
 	 * --- The four VPcmV34Progress entry points ----------------------------
 	 *
 	 * All four are written, in src/pump/v90/VpcmFloModem.cpp.
-	 * `VPcmV34Progress` (src/pump/v34/v34pcmmain.cpp) calls all four and
-	 * nothing else does. Each is declared weak via
-	 * `DSPLIB_VPCMFLO_UNWRITTEN`, defined empty just below: a weak
-	 * DECLARATION whose symbol is defined at link time resolves to the
-	 * definition, so `v34pcmmain.cpp`'s guard passes at every call site
-	 * and the calls happen unconditionally, matching the blob. The macro
-	 * stays rather than being removed because `v34pcmmain.cpp` has to
-	 * keep working if a future split ever takes a member back out;
-	 * `include/dsplib/vpcm.h` carries the same arrangement for the five
-	 * `VPcmV34*` entry points and explains it at length. A TU that
-	 * DEFINES one of these must not itself define the macro, or the
-	 * definition becomes weak too -- `VpcmFloModem.cpp`, which defines
-	 * all four, does not. Return types are not mangled: `int` is what
+	 * `VPcmV34Progress` (src/pump/v34/v34pcmmain.cpp) calls all four
+	 * directly. Return types are not mangled: `int` is what
 	 * `VPcmV34Progress` switches on for the first three, and
 	 * `vPcmResetPhase3Modem`'s result is discarded, so it is `void`.
 	 */
-#ifndef DSPLIB_VPCMFLO_UNWRITTEN
-#define DSPLIB_VPCMFLO_UNWRITTEN
-#endif
 	/**
 	 * @brief Run one block of the full V.90/V.92 PCM modem: transmit and
 	 *        receive together. `VPcmV34Progress`'s main entry point.
@@ -296,8 +282,7 @@ public:
 	 * @return The progress code `VPcmV34Progress` switches on.
 	 */
 	int runPcmModem(float *in, float *out, unsigned int n, int *rxbits,
-			int *nrx, int *txbits, int *nbits)
-		DSPLIB_VPCMFLO_UNWRITTEN;
+			int *nrx, int *txbits, int *nbits);
 	/**
 	 * @brief Run one block of the V.90/V.92 demodulator alone (no
 	 *        transmit side), used while the receive-only phases run.
@@ -307,8 +292,7 @@ public:
 	 * @param nrx     Number of bits written to `rxbits`.
 	 * @return The progress code `VPcmV34Progress` switches on.
 	 */
-	int v90RunDemodulator(float *in, unsigned int n, int *rxbits, int *nrx)
-		DSPLIB_VPCMFLO_UNWRITTEN;
+	int v90RunDemodulator(float *in, unsigned int n, int *rxbits, int *nrx);
 	/**
 	 * @brief Run one block of the quick-connect line-verification period
 	 *        (see `qcVerifyState` and friends).
@@ -322,10 +306,9 @@ public:
 	 * @return 1 once line verification's period ends, 0 otherwise.
 	 */
 	int qcLineVerification(float *in, float *out, unsigned int n,
-			       int *rxbits, int *nrx, int *txbits, int *nbits)
-		DSPLIB_VPCMFLO_UNWRITTEN;
+			       int *rxbits, int *nrx, int *txbits, int *nbits);
 	/** @brief Reset the modem back to its phase-3 entry state. */
-	void vPcmResetPhase3Modem() DSPLIB_VPCMFLO_UNWRITTEN;
+	void vPcmResetPhase3Modem();
 
 	/* --- data members; see the file comment on the naming --- */
 

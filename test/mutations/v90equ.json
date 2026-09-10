@@ -1,8 +1,9 @@
 [
   {
-    "label": "log10 via libm rather than the coprocessor",
-    "find": "\t__asm__ (\"fldlg2\\n\\tfxch %%st(1)\\n\\tfyl2x\" : \"=t\" (r) : \"0\" (x));\n\treturn r;",
-    "replace": "\t(void)r;\n\treturn (long double)log10((double)x);"
+    "label": "the linear beta shift omits the numerator logarithm",
+    "find": "log10(__builtin_fabsf(\n\t\t\t\t\tmaxLeCoefValue / (beta * 16777216.0f)))",
+    "replace": "__builtin_fabsf(\n\t\t\t\t\tmaxLeCoefValue / (beta * 16777216.0f))",
+    "note": "Issue #19 retires the asm-to-double-libm mutation: the source now already calls double log10. Its replacement tests omission of the numerator logarithm at the linear beta setter; this is a new math fault, not a claimed catch of the retired implementation change."
   },
   {
     "label": "the shift count is not masked to five bits",
@@ -10,14 +11,16 @@
     "replace": "\treturn (int)(1u << (unsigned int)n);"
   },
   {
-    "label": "log2 instead of log10 (drop the fldlg2 scale)",
-    "find": "\t__asm__ (\"fldlg2\\n\\tfxch %%st(1)\\n\\tfyl2x\" : \"=t\" (r) : \"0\" (x));",
-    "replace": "\t__asm__ (\"fld1\\n\\tfxch %%st(1)\\n\\tfyl2x\" : \"=t\" (r) : \"0\" (x));"
+    "label": "log2 instead of log10 in the linear beta numerator",
+    "find": "log10(__builtin_fabsf(\n\t\t\t\t\tmaxLeCoefValue / (beta * 16777216.0f)))",
+    "replace": "(log(__builtin_fabsf(\n\t\t\t\t\tmaxLeCoefValue / (beta * 16777216.0f))) / log(2.0))",
+    "note": "The former shared helper is gone. Retain the wrong-base fault at the linear setter numerator, leaving the denominator log10(2) intact so the base change cannot cancel."
   },
   {
-    "label": "the intermediate is double, not long double",
-    "find": "static inline long double\nx87_log10(long double x)\n{\n\tlong double r;",
-    "replace": "static inline long double\nx87_log10(long double x)\n{\n\tdouble r;"
+    "label": "the linear beta logarithm is narrowed to float",
+    "find": "log10(__builtin_fabsf(\n\t\t\t\t\tmaxLeCoefValue / (beta * 16777216.0f)))",
+    "replace": "(float)log10(__builtin_fabsf(\n\t\t\t\t\tmaxLeCoefValue / (beta * 16777216.0f)))",
+    "note": "Issue #19 removed the long-double helper intermediate. Replace the old double-local fault with explicit binary32 narrowing of the current logarithm result; do not claim this is the same precision boundary."
   },
   {
     "label": "the linear equaliser's length is not masked to a multiple of four",
@@ -78,8 +81,8 @@
   },
   {
     "label": "the reference level is divided rather than multiplied by its reciprocal",
-    "find": "\t\tint shift = (int)(x87_log10(__builtin_fabsl(\n\t\t\t\t\t(1.0f / ((long double)linearEquBeta\n\t\t\t\t\t\t * 16777216.0f))\n\t\t\t\t\t* (long double)maxLeCoefValue))\n\t\t\t\t  / x87_log10((long double)2.0f));",
-    "replace": "\t\tint shift = (int)(x87_log10(__builtin_fabsl(\n\t\t\t\t\t(long double)maxLeCoefValue\n\t\t\t\t\t/ ((long double)linearEquBeta\n\t\t\t\t\t   * 16777216.0f)))\n\t\t\t\t  / x87_log10((long double)2.0f));"
+    "find": "(1.0f / (linearEquBeta * 16777216.0f))\n\t\t\t\t\t* maxLeCoefValue",
+    "replace": "maxLeCoefValue / (linearEquBeta * 16777216.0f)"
   },
   {
     "label": "the coefficients are scaled by the stored member, not the register",
