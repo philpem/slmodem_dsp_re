@@ -170,14 +170,14 @@ typedef char v90cd_size[(sizeof(V90ConstellationDesigner) == 0x54) ? 1 : -1];
  */
 /*
  * The three sqrt(power) diagnostics use bare fsqrt in the reference.
- * -fno-math-errno lets the ordinary builtin keep that behavior, including
+ * -fno-math-errno lets the ordinary `sqrt` call keep that behavior, including
  * negative inputs, without enabling unsafe arithmetic.  The float power
  * promotes exactly and the root remains in the period compiler's x87 register.
  */
 static inline double
 x87_fsqrt(double x)
 {
-	return __builtin_sqrt(x);
+	return sqrt(x);
 }
 
 /*

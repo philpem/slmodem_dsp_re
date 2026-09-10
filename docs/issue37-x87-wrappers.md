@@ -11,11 +11,12 @@ square-root helpers in `V90Equalizer.cpp` and `V90Phase4Demodulator.cpp`.
 Their callers now name the underlying operation directly. Repeated calls
 remain repeated; no arithmetic, casts or evaluation order changed.
 
-Two are retained: `x87_fsqrt` in `V90ConstellationDesigner.cpp` and
-`trn2_x87_fsqrt` in `V90TRN2Designer.cpp`. Replacing either with the same
-`__builtin_sqrt` expression changes its complete recovered-Gentoo object.
-The wrapper is therefore load-bearing source shape, not a cosmetic alias, and
-is left in place rather than fitting source to a cleanup preference.
+Two boundaries are retained: `x87_fsqrt` in `V90ConstellationDesigner.cpp`
+and `trn2_x87_fsqrt` in `V90TRN2Designer.cpp`. Replacing either with a direct
+or macro-expanded `__builtin_sqrt` expression changes its complete
+recovered-Gentoo object. Issue #40 established that the wrapper is
+load-bearing source shape, not a cosmetic alias; it retains the wrapper while
+using standard `sqrt` in its body.
 
 The two non-`x87_` square-root wrappers, `agc_fsqrt` and `v92mapper_fsqrt`,
 are out of this issue's name audit and remain for issue #34's type-specific

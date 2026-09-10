@@ -219,13 +219,13 @@ V90TRN2Designer::maxK(V90MappingParams *mappingParams)
 
 /*
  * The reference's sqrt(power) diagnostic uses bare fsqrt.  The C++ build
- * disables math errno so the builtin has the same negative-input behavior;
+ * disables math errno so `sqrt` has the same negative-input behavior;
  * no unsafe-math profile or explicit instruction is needed.
  */
 static inline double
 trn2_x87_fsqrt(double x)
 {
-	return __builtin_sqrt(x);
+	return sqrt(x);
 }
 
 /*
