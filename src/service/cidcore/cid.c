@@ -85,11 +85,6 @@ extern int modem_send_to_tty(void *m, const void *buf, int n);
  * three more of them than this file used to.
  */
 
-struct CID {
-	void *modem;		/* +0x0 slmodemd's struct modem       */
-	void *cid;		/* +0x4 what `cid_create` handed back */
-};
-
 /*
  * Reset both receivers in place, without freeing or reallocating anything.
  *
