@@ -135,10 +135,15 @@ template <class T> class Queue;
 #define V92MOD_RATE_DEN		6.0f
 
 /* Exact binary32 multiplier loaded by the constructor (+0xc8 above) and
- * progress (.rodata.cst4+0xc0). Spell the rounded value directly: the period
- * compiler's fast-math folding of 5.0f / 6.0f instead produces 0x3f555556.
- * This records the binary value, not the original author's source spelling. */
+ * progress (.rodata.cst4+0xc0). The blob-compatible build needs the literal:
+ * the period compiler's fast-math folding of 5.0f / 6.0f produces
+ * 0x3f555556 instead of the blob's 0x3f555555. The normal build expresses the
+ * intended V.92 ratio rather than preserving that compiler-folding detail. */
+#ifdef DSPLIB_REPRODUCE_BUGS
 #define V92MOD_RATE_RATIO	0.833333313465118408203125f
+#else
+#define V92MOD_RATE_RATIO	(V92MOD_RATE_NUM / V92MOD_RATE_DEN)
+#endif
 
 /* ResamplerTimingOffset(120, 100.0f, 16, 0.98f, 0.0f, 0): six literals, from
  * .text+0x1525f..+0x1528d. 0x42c80000 is 100.0f and 0x3f7ae148 is 0.98f. */
