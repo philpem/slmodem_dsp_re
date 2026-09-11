@@ -1093,16 +1093,16 @@ V29TX_create(void *modem, const struct v29tx_cfg *params)
 	 * and the pulse shaper ---------------------------------------------- */
 
 	if (V29TX(modem) == 0) {
-		struct v29tx *tx = (struct v29tx *)sysdep_malloc(0x9c);
+		struct v29tx *tx = sysdep_malloc(0x9c);
 
 		V29TX(modem) = tx;
-		tx->ring.i = (short *)sysdep_malloc(0x64);
-		tx->ring.q = (short *)sysdep_malloc(0x64);
+		tx->ring.i = sysdep_malloc(0x64);
+		tx->ring.q = sysdep_malloc(0x64);
 	}
 
 	V29TX(modem)->ring.ridx = 0;
 	V29TX(modem)->ring.widx = 0;
-	V29TX(modem)->ring.sym = (short *)sysdep_malloc(0x64);
+	V29TX(modem)->ring.sym = sysdep_malloc(0x64);
 	V29TX(modem)->ring.len = 0x32;
 
 	{

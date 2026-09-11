@@ -326,7 +326,7 @@ V32FP_recreate(void *modem, const struct v32fp_params *param, void *arg2)
 	if (modem == 0) {
 		modem = sysdep_malloc(V32_OBJ_SIZE);
 		FIELD_PTR(modem, V32_OBJ_FP) = sysdep_malloc(V32FP_SIZE);
-		hdx = (unsigned char *)sysdep_malloc(V32_HDX_SIZE);
+		hdx = sysdep_malloc(V32_HDX_SIZE);
 		FIELD_PTR(modem, V32_OBJ_HDX) = hdx;
 		FIELD_PTR(hdx, V32_HDX_TONE0) = 0;
 		FIELD_PTR(hdx, V32_HDX_MTD) = 0;

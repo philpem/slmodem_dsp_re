@@ -144,7 +144,7 @@ v32_create(void *modem, int id, int caller, int srate, int max_frag,
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("v32: create...\n");
 
-	self = (struct v32_dp *)sysdep_malloc(sizeof(*self));
+	self = sysdep_malloc(sizeof(*self));
 	if (self == 0)
 		return 0;
 	sysdep_memset(self, 0, sizeof(*self));

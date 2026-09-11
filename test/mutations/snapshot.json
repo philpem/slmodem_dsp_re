@@ -456,7 +456,7 @@
    }
   },
   "fdspkfifo": {
-   "key": "ac9d978cc309d1a488aecb627c290c2a1de9676931247b8453e903fd36814afb",
+   "key": "65031d914e030aff91a659fcbec89fef0d83d792248b38d5a8de90baa3659c9e",
    "summary": "16 mutations: 16 caught (16 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "a short read pads with zero rather than cfg.fill": "caught",
@@ -611,7 +611,7 @@
    }
   },
   "fpmcircdotp": {
-   "key": "231d1f41f25cf32d213fab89e4d29f792e244e721c3690cca6995bf0d2f3032c",
+   "key": "2c902e587164b6954dc0dfc44bf54063a5c0ad71be42a380903dbd2ab70868e1",
    "summary": "6 mutations: 6 caught (6 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "the coefficient pointer restarts at the base for the second half": "caught",
@@ -623,7 +623,7 @@
    }
   },
   "fpmfserecv": {
-   "key": "1de8d5608fd76384895d4feae2180d47481768593bb8a13662daf36ffce84bdf",
+   "key": "7a88972c85dca27cf31a6a43076503395de21c1936c8828492a78e1674171a62",
    "summary": "45 mutations: 43 caught (43 by test, 0 by strings), 0 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
    "verdicts": {
     "a one-sample tail is dropped rather than stashed": "caught",
@@ -881,7 +881,7 @@
    }
   },
   "fpmtonecfgstd": {
-   "key": "aef39d88e8607aba55b90340172f120eddd458c30f45bad564d094c8578d2d9b",
+   "key": "939e3dbd43a21e551d64097d7e7e9789b2f0cff741ef5b2c374c418df2f7413f",
    "summary": "4 mutations: 4 caught (4 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "FPM_TONE_CFG frequency is one hertz above V.25's 2115-Hz upper boundary": "caught",
@@ -891,7 +891,7 @@
    }
   },
   "fpmtonekill": {
-   "key": "89082ab26303390791bd9feba61b21f3fdde3797c534759956e34f02049e52df",
+   "key": "126f8072ec4f89f5d5ded8c9185ef076f3242f49f0a06a9437ec1d6d68610cbc",
    "summary": "6 mutations: 6 caught (6 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "one sample short: an off-by-one in the count": "caught",
@@ -903,7 +903,7 @@
    }
   },
   "fpmtonerev": {
-   "key": "db5dd55da5c3890c630c190e0081091d54a76c745ef32a60278afacbb7ea6561",
+   "key": "1cab63107849ca3d9bd1d19c19c37b7d82fab40e40ab4c4a22a97b3a3c96cb4f",
    "summary": "29 mutations: 29 caught (29 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "count is counted down through 16 bits, as the rest of the module does": "caught",
@@ -938,7 +938,7 @@
    }
   },
   "fpmtonetickstd": {
-   "key": "bbf9936391b157ccbbcdf6e17e9a6d847e0e63377bf414309c114cdfe28b6189",
+   "key": "d8287f75ac95ecfa16112ed28dc67d85a1e485ed32046ec5fcf7792c811e9d51",
    "summary": "2 mutations: 2 caught (2 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "reversal accounting uses four-sample ticks, making the 450 setting reverse too early": "caught",
@@ -946,7 +946,7 @@
    }
   },
   "fsegetdiag": {
-   "key": "92fcd6c0e827fb207755164c72c3e5f9d07db2a96377e80d28caaa50e47f2ce1",
+   "key": "0fdd848b4b58c836e425f2e77f4b00048d5152e42261de50821dad0bb646e809",
    "summary": "15 mutations: 15 caught (15 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "a negative count is clamped rather than passed straight back": "caught",
@@ -1421,7 +1421,7 @@
    }
   },
   "tonecreate": {
-   "key": "66640eec1c86c3b21eb56fa1dd736792be4f2cb1fbdded26cc226436df50abc6",
+   "key": "e510dac03123efb7a1ad5fe7429550b6c2f4b1157445068a59d9cde7ac5cd514",
    "summary": "33 mutations: 33 caught (33 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "TONE_CFG claims 52 taps": "caught",
@@ -1519,7 +1519,7 @@
    }
   },
   "v22fse": {
-   "key": "ba3168c717fc4ae041bbc705f7148bf8202e619de6bd66e28744d585c44bf2b6",
+   "key": "193effc3111735f73eb2cb946787cc713e73ef24f790ee0bf928725bf23e17e7",
    "summary": "10 mutations: 10 caught (10 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "I and Q are swapped": "caught",

@@ -273,7 +273,7 @@ VOICE_create(void *modem, unsigned int rate)
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("voice: VOICE_create...\n");
 
-	v = (struct vce *)sysdep_malloc(sizeof *v);
+	v = sysdep_malloc(sizeof *v);
 	if (!v)
 		return 0;
 	sysdep_memset(v, 0, sizeof *v);
@@ -895,7 +895,7 @@ RD_create(void *modem, unsigned int rate)
 	if (rate != RD_RATE_8000 && rate != RD_RATE_9600)
 		return 0;
 
-	rd = (struct rd *)sysdep_malloc(sizeof *rd);
+	rd = sysdep_malloc(sizeof *rd);
 	if (!rd)
 		return 0;
 	sysdep_memset(rd, 0, sizeof *rd);
@@ -1068,7 +1068,7 @@ RingDetector_Create(struct ring_detector_cfg *c)
 {
 	struct ring_detector *s;
 
-	s = (struct ring_detector *)sysdep_malloc(sizeof *s);
+	s = sysdep_malloc(sizeof *s);
 	RingDetector_Reset(s, c);
 	return s;
 }

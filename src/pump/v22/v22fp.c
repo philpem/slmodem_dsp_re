@@ -146,25 +146,25 @@ V22FP_create(struct v22fp *fp, const struct v22fp_cfg *cfg)
 		 * below use to decide whether to allocate their own buffers,
 		 * so a re-initialisation reuses everything.
 		 */
-		fp = (struct v22fp *)sysdep_malloc(sizeof(*fp));
-		fp->dsp = (struct v22fp_dsp *)sysdep_malloc(sizeof(*fp->dsp));
-		fp->hdx = (struct v22fp_hdx *)sysdep_malloc(sizeof(*fp->hdx));
+		fp = sysdep_malloc(sizeof(*fp));
+		fp->dsp = sysdep_malloc(sizeof(*fp->dsp));
+		fp->hdx = sysdep_malloc(sizeof(*fp->hdx));
 
 		hdx = fp->hdx;
 		hdx->tone = NULL;
 		hdx->mtd = NULL;
 		hdx->mtd_s1 = NULL;
 		hdx->mtd2 = NULL;
-		hdx->iir = (short *)sysdep_malloc(0x20);
+		hdx->iir = sysdep_malloc(0x20);
 
 		dsp = fp->dsp;
 		dsp->rx_scratch = sysdep_malloc(0x154);
 		dsp->ra8 = sysdep_malloc(0x18);
-		dsp->pps_coff_i = (short *)sysdep_malloc(V22_PPS_COEFFS * 2);
-		dsp->pps_coff_q = (short *)sysdep_malloc(V22_PPS_COEFFS * 2);
-		dsp->mrf_coeff = (short *)sysdep_malloc(V22_MRF_COEFFS * 2);
-		dsp->fse_coff_i = (short *)sysdep_malloc(V22_FSE_TAPS * 2);
-		dsp->fse_coff_q = (short *)sysdep_malloc(V22_FSE_TAPS * 2);
+		dsp->pps_coff_i = sysdep_malloc(V22_PPS_COEFFS * 2);
+		dsp->pps_coff_q = sysdep_malloc(V22_PPS_COEFFS * 2);
+		dsp->mrf_coeff = sysdep_malloc(V22_MRF_COEFFS * 2);
+		dsp->fse_coff_i = sysdep_malloc(V22_FSE_TAPS * 2);
+		dsp->fse_coff_q = sysdep_malloc(V22_FSE_TAPS * 2);
 
 		fresh = 1;
 	}

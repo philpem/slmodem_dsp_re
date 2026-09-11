@@ -404,13 +404,13 @@ V22_FSE_init(struct v22_fse *state, const struct v22_fse_cfg *cfg, int fresh)
 	 * 0x28, 0x1c, 0x1c -- and none of them is derived from `cfg`.
 	 */
 	if (fresh) {
-		state->icoeff = (short *)sysdep_malloc(2 * V22_FSE_TAPS);
-		state->qcoeff = (short *)sysdep_malloc(2 * V22_FSE_TAPS);
-		state->hist = (short *)sysdep_malloc(2 * V22_FSE_HIST);
-		state->r44 = (short *)sysdep_malloc(2 * V22_FSE_AUX);
-		state->r48 = (short *)sysdep_malloc(2 * V22_FSE_AUX);
-		state->out_i = (short *)sysdep_malloc(2 * V22_FSE_OUT);
-		state->out_q = (short *)sysdep_malloc(2 * V22_FSE_OUT);
+		state->icoeff = sysdep_malloc(2 * V22_FSE_TAPS);
+		state->qcoeff = sysdep_malloc(2 * V22_FSE_TAPS);
+		state->hist = sysdep_malloc(2 * V22_FSE_HIST);
+		state->r44 = sysdep_malloc(2 * V22_FSE_AUX);
+		state->r48 = sysdep_malloc(2 * V22_FSE_AUX);
+		state->out_i = sysdep_malloc(2 * V22_FSE_OUT);
+		state->out_q = sysdep_malloc(2 * V22_FSE_OUT);
 	}
 
 	/*

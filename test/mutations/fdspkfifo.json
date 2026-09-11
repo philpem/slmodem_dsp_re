@@ -14,8 +14,8 @@
  },
  {
   "label": "create allocates one byte too many for the ring",
-  "find": "\t\tf->buf = (unsigned char *)sysdep_malloc(c.size);",
-  "replace": "\t\tf->buf = (unsigned char *)sysdep_malloc(c.size + 1);"
+  "find": "\t\tf->buf = sysdep_malloc(c.size);",
+  "replace": "\t\tf->buf = sysdep_malloc(c.size + 1);"
  },
  {
   "label": "create's clearing loop stops one byte short",

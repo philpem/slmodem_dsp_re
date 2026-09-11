@@ -47,9 +47,9 @@ V22_PPS_init(struct v22_pps *state, const struct v22_pps_cfg *cfg, int fresh)
 	 * `history_len * 4` for the second.  Kept as written.
 	 */
 	if (fresh) {
-		state->hist_i = (short *)sysdep_malloc(V22_PPS_HISTORY *
+		state->hist_i = sysdep_malloc(V22_PPS_HISTORY *
 						       sizeof(short));
-		state->hist_q = (short *)sysdep_malloc(
+		state->hist_q = sysdep_malloc(
 			(unsigned int)(state->history_len * 4));
 	}
 

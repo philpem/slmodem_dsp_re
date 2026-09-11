@@ -482,7 +482,7 @@ cadence_create(struct cadence *c, struct cadence_setup *s, int extra,
 	toneiir_get_default_configuration(&cfg);
 
 	if (c == 0) {
-		c = (struct cadence *)sysdep_malloc(sizeof(*c));
+		c = sysdep_malloc(sizeof(*c));
 		if (c == 0)
 			return 0;
 		sysdep_memset(c, 0, sizeof(*c));

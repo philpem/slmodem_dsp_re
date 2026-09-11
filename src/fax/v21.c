@@ -468,7 +468,7 @@ V21TX_create(void *modem, const struct v21tx_cfg *params)
 			sysdep_malloc(sizeof(struct v21_tx_dsp));
 		sysdep_memset(dsp, 0, sizeof(struct v21_tx_dsp));
 		V21TX_DSP(modem) = dsp;
-		dsp->scratch = (short *)sysdep_malloc(V21TX_SCRATCH_BYTES);
+		dsp->scratch = sysdep_malloc(V21TX_SCRATCH_BYTES);
 		sysdep_memset(dsp->scratch, 0, V21TX_SCRATCH_BYTES);
 	}
 

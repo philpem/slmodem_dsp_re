@@ -184,11 +184,11 @@ V22_SRE_init(struct v22_sre *sre, int fresh)
 		 * the same contract, and the same leak on a second `fresh`
 		 * call, as FPM_MRF_init.
 		 */
-		sre->coeff = (short *)sysdep_malloc(V22_SRE_COEFFS
+		sre->coeff = sysdep_malloc(V22_SRE_COEFFS
 						    * sizeof(short));
-		sre->hist = (short *)sysdep_malloc((short)(sre->taps * 2)
+		sre->hist = sysdep_malloc((short)(sre->taps * 2)
 						   * sizeof(short));
-		sre->clk = (short *)sysdep_malloc(V22_SRE_CLOCK
+		sre->clk = sysdep_malloc(V22_SRE_CLOCK
 						  * sizeof(short));
 	}
 

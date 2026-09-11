@@ -30,11 +30,11 @@ FPM_FSD_init(struct fpm_fsd *state, const struct fpm_fsd_cfg *cfg, int fresh)
 	 * the lengths between calls.
 	 */
 	if (fresh) {
-		state->fir_hist = (short *)sysdep_malloc(
+		state->fir_hist = sysdep_malloc(
 			(unsigned)state->cfg.fir_taps * sizeof(short));
-		state->iir_hist = (short *)sysdep_malloc(
+		state->iir_hist = sysdep_malloc(
 			(unsigned)state->cfg.iir_len * 2 * sizeof(short));
-		state->trace = (short *)sysdep_malloc(
+		state->trace = sysdep_malloc(
 			(unsigned)state->cfg.trace_len * sizeof(short));
 	}
 

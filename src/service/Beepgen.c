@@ -430,7 +430,7 @@ create_dtmf(struct dtmf *d)
 	short i;
 
 	if (d == NULL) {
-		d = (struct dtmf *)sysdep_malloc(sizeof(struct dtmf));
+		d = sysdep_malloc(sizeof(struct dtmf));
 		if (d == NULL) {
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(

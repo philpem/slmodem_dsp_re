@@ -947,7 +947,7 @@ B103FP_create(struct b103fp *fp, const struct b103_cfg *cfg)
 	int i;
 
 	if (fp == NULL) {
-		fp = (struct b103fp *)sysdep_malloc(sizeof(*fp));
+		fp = sysdep_malloc(sizeof(*fp));
 		if (fp == NULL)
 			return NULL;
 		fp->hdx = NULL;
@@ -960,7 +960,7 @@ B103FP_create(struct b103fp *fp, const struct b103_cfg *cfg)
 	fp->cfg = *cfg;
 
 	if (fp->hdx == NULL)
-		fp->hdx = (struct b103_hdx *)sysdep_malloc(sizeof(*fp->hdx));
+		fp->hdx = sysdep_malloc(sizeof(*fp->hdx));
 	hdx = fp->hdx;
 
 	/*
@@ -1040,18 +1040,18 @@ B103FP_create(struct b103fp *fp, const struct b103_cfg *cfg)
 
 	/* The DSP block and its buffers. */
 	if (fp->dsp == NULL) {
-		dsp = (struct b103_dsp *)sysdep_malloc(sizeof(*dsp));
+		dsp = sysdep_malloc(sizeof(*dsp));
 		fp->dsp = dsp;
 		sysdep_memset(dsp, 0, sizeof(*dsp));
-		dsp->scratch = (short *)sysdep_malloc(0x144);
-		dsp->rx_scratch = (short *)sysdep_malloc(0x144);
+		dsp->scratch = sysdep_malloc(0x144);
+		dsp->rx_scratch = sysdep_malloc(0x144);
 		/*
 		 * The channel filter's history.  The answer side's filter is
 		 * 50 taps to the caller's 40, so it gets a bigger buffer --
 		 * 104 bytes rather than 84.  Both are cleared to exactly the
 		 * filter's length by the switch below, not here.
 		 */
-		dsp->bpf_hist = (short *)sysdep_malloc(
+		dsp->bpf_hist = sysdep_malloc(
 			fp->cfg.call_type == B103_CALL_ANSWER ? 0x68 : 0x54);
 		/* Only the transmit staging buffer is cleared, not both. */
 		sysdep_memset(dsp->scratch, 0, 0x144);

@@ -65,7 +65,7 @@ FIFO_create(struct fax_fifo *f, const struct fifo_cfg *cfg)
 	}
 
 	if (f == NULL) {
-		f = (struct fax_fifo *)sysdep_malloc(sizeof(struct fax_fifo));
+		f = sysdep_malloc(sizeof(struct fax_fifo));
 		f->buf = (unsigned short *)
 			sysdep_malloc((unsigned)(unsigned short)size * 2);
 	}

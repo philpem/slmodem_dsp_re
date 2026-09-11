@@ -125,7 +125,7 @@ b103_create(void *modem, int id, int caller, int srate, int max_frag,
 
 	(void)max_frag;
 
-	dp = (struct b103_dp *)sysdep_malloc(sizeof(*dp));
+	dp = sysdep_malloc(sizeof(*dp));
 	if (dp == NULL)
 		return NULL;
 	sysdep_memset(dp, 0, sizeof(*dp));

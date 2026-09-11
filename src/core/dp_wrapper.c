@@ -77,7 +77,7 @@ dp_wrapper_create(void *dp_data, dp_process_fn process, int dp_frag,
 	if (dp_srate == 0 || dp_frag > DPW_MAX_FRAG)
 		return NULL;
 
-	w = (struct dp_wrapper *)sysdep_malloc(sizeof(*w));
+	w = sysdep_malloc(sizeof(*w));
 	if (w == NULL)
 		return NULL;
 	sysdep_memset(w, 0, sizeof(*w));

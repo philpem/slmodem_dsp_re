@@ -164,7 +164,7 @@ toneiir_create(struct toneiir *st, const struct toneiir_cfg *cfg)
 	int i;
 
 	if (st == 0)
-		st = (struct toneiir *)sysdep_malloc(sizeof(*st));
+		st = sysdep_malloc(sizeof(*st));
 	if (cfg == 0)
 		cfg = &toneiir_configuration_default;
 
@@ -351,7 +351,7 @@ _iir_filter_create(struct iir_filter *f, int n_a, int n_b, const short *a,
 	 * address.  Its callers pass NULL, so the original never does.
 	 */
 	if (f == 0)
-		f = (struct iir_filter *)sysdep_malloc(sizeof(*f));
+		f = sysdep_malloc(sizeof(*f));
 
 	/* All 25 words of each, not just the 12 and 8 the four sections use. */
 	for (i = 0; i < IIR_FILTER_MAX_COEFF; i++) {

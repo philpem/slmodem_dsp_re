@@ -61,7 +61,7 @@ typedef int dcr_size_is_32[sizeof(struct dcr) == 32 ? 1 : -1];
 struct dcr *
 dcr_create(void)
 {
-	struct dcr *dcr = (struct dcr *)sysdep_malloc(sizeof(struct dcr));
+	struct dcr *dcr = sysdep_malloc(sizeof(struct dcr));
 
 	if (dcr) {
 		sysdep_memset(dcr, 0, sizeof(struct dcr));

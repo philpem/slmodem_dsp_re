@@ -564,7 +564,7 @@ V17RX_create(void *modem, const struct v17rx_cfg *params)
 	 */
 	v = (struct vtb *)(void *)RXS_DEC(RXS(modem))->vtb;
 	if (owned)
-		v->paths = (struct vtb_path *)sysdep_malloc(
+		v->paths = sysdep_malloc(
 			16 * 8 * sizeof(struct vtb_path));
 	for (i = 0; (short)i <= 0x7f; i++) {
 		v->paths[i].surv = 0;

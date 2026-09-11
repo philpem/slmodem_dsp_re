@@ -549,9 +549,9 @@ FPM_FSE_init(struct fpm_fse *state, const struct fpm_fse_cfg *cfg, int fresh)
 	 * is the object's arithmetic, reproduced rather than corrected.
 	 */
 	coeff_bytes = (short)(2 * state->cfg.taps);
-	state->icoeff = (short *)sysdep_malloc(coeff_bytes);
-	state->qcoeff = (short *)sysdep_malloc(coeff_bytes);
-	state->hist = (short *)sysdep_malloc(coeff_bytes);
+	state->icoeff = sysdep_malloc(coeff_bytes);
+	state->qcoeff = sysdep_malloc(coeff_bytes);
+	state->hist = sysdep_malloc(coeff_bytes);
 
 	/*
 	 * `block / interp` symbols fit in one call's worth of input; the two
@@ -559,8 +559,8 @@ FPM_FSE_init(struct fpm_fse *state, const struct fpm_fse_cfg *cfg, int fresh)
 	 * n_out has been advanced.
 	 */
 	sym_bytes = (short)(2 * (state->cfg.block / state->cfg.interp) + 4);
-	state->out_i = (short *)sysdep_malloc(sym_bytes);
-	state->out_q = (short *)sysdep_malloc(sym_bytes);
+	state->out_i = sysdep_malloc(sym_bytes);
+	state->out_q = sysdep_malloc(sym_bytes);
 
 	for (i = 0; i < state->cfg.taps; i++) {
 		state->icoeff[i] = state->cfg.icoff[i];
