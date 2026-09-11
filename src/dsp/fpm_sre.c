@@ -90,10 +90,10 @@ FPM_SRE_init(struct fpm_sre *sre, const struct fpm_sre_cfg *cfg, int fresh)
 		 * the object's arithmetic, reproduced rather than corrected --
 		 * the same note is on FPM_FSE_init.
 		 */
-		sre->coeff = (short *)sysdep_malloc((short)(2 * sre->cfg.coeffs));
-		sre->hist = (short *)sysdep_malloc((short)(2 * sre->taps));
-		sre->clk = (short *)sysdep_malloc(FPM_SRE_CLOCK * 2);
-		sre->rms_buf = (short *)sysdep_malloc((short)(2 * sre->cfg.rms_len));
+		sre->coeff = sysdep_malloc((short)(2 * sre->cfg.coeffs));
+		sre->hist = sysdep_malloc((short)(2 * sre->taps));
+		sre->clk = sysdep_malloc(FPM_SRE_CLOCK * 2);
+		sre->rms_buf = sysdep_malloc((short)(2 * sre->cfg.rms_len));
 	}
 
 	/*

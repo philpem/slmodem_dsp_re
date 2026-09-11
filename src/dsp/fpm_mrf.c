@@ -53,7 +53,7 @@ FPM_MRF_init(struct fpm_mrf *state, const struct fpm_mrf_cfg *cfg, int fresh)
 	}
 
 	if (allocate)
-		state->history = (short *)sysdep_malloc(
+		state->history = sysdep_malloc(
 			(unsigned)per_phase * sizeof(short));
 
 	for (i = 0; i < state->history_len; i++)

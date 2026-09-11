@@ -79,7 +79,7 @@ FPM_MTD_create(struct fpm_mtd *state, const struct fpm_mtd_cfg *cfg)
 
 	/* As elsewhere in fpm_*, buffers follow the object's ownership. */
 	if (owned)
-		state->acc = (short *)sysdep_malloc(
+		state->acc = sysdep_malloc(
 			(unsigned)state->cfg.tones * 2 * sizeof(short));
 
 	/* Two accumulators per tone. */
