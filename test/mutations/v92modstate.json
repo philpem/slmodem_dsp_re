@@ -335,7 +335,7 @@
  },
  {
   "label": "the diagnostic's whole part keeps the sign",
-  "find": "\treturn (int)__builtin_fabsf(v);",
+  "find": "\treturn (int)fabsf(v);",
   "replace": "\treturn (int)v;"
  },
  {

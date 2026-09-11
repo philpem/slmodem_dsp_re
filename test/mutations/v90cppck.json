@@ -37,7 +37,7 @@
  },
  {
   "label": "Q3.13 keeps the sign instead of taking fabs",
-  "find": "\t\tx = __builtin_fabsf(f);\n\n\t\tfor (i = 0; i <= 15; i++) {",
+  "find": "\t\tx = fabsf(f);\n\n\t\tfor (i = 0; i <= 15; i++) {",
   "replace": "\t\tx = f;\n\n\t\tfor (i = 0; i <= 15; i++) {"
  },
  {
@@ -57,8 +57,8 @@
  },
  {
   "label": "the sign is taken after the fabs, so it is never set",
-  "find": "\t\tbits[7] = (short)(f < 0.0f);\n\t\tx = __builtin_fabsf(f);",
-  "replace": "\t\tx = __builtin_fabsf(f);\n\t\tbits[7] = (short)(x < 0.0f);"
+  "find": "\t\tbits[7] = (short)(f < 0.0f);\n\t\tx = fabsf(f);",
+  "replace": "\t\tx = fabsf(f);\n\t\tbits[7] = (short)(x < 0.0f);"
  },
  {
   "label": "the sign entry treats -0.0f as negative",

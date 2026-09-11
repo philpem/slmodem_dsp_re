@@ -183,12 +183,6 @@
   "replace": "\t\t\tdecade = (float)log10l((long double)probe[i]\n\t\t\t\t\t\t  * 6.103515625e-05L);"
  },
  {
-  "label": "Uinfo: natural logarithm instead of log10",
-  "find": "\treturn log10l(x);",
-  "replace": "\treturn logl(x);",
-  "note": "Issue #19 retires the formerly equivalent asm-to-libm mutation: the source now uses an ordinary math call. The historical float-rounded libm equivalence measurement does not count as a caught fault. Replace it with a wrong-base logarithm, preserving the suite's mutation count but removing this equivalent classification; see docs/issue19-inline-asm.md for the new measured verdict."
- },
- {
   "label": "Uinfo: the offset is 60 dB in the wrong direction",
   "find": "(float)((long double)decade * 10.0L\n\t\t\t\t\t\t  + 60.0L);",
   "replace": "(float)((long double)decade * 10.0L\n\t\t\t\t\t\t  - 60.0L);"

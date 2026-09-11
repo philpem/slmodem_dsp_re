@@ -172,18 +172,18 @@
  },
  {
   "label": "adjustConstellationsPower prints the sqrt fraction in hundredths (only the loud group can see this)",
-  "find": "\tedprintf(\"V90ConstellationDesigner: initial sqrt(power)  = %c%d.%03d\\r\\n\",\n\t\t !(0.0f >= first) ? '+' : '-',\n\t\t (int)__builtin_fabsl(__builtin_sqrt((long double)first)),\n\t\t __builtin_abs((int)((__builtin_sqrt((long double)first)\n\t\t\t\t      - (long double)(int)__builtin_sqrt(\n\t\t\t\t\t\t(long double)first))\n\t\t\t\t     * 1000.0f)));",
-  "replace": "\tedprintf(\"V90ConstellationDesigner: initial sqrt(power)  = %c%d.%03d\\r\\n\",\n\t\t !(0.0f >= first) ? '+' : '-',\n\t\t (int)__builtin_fabsl(__builtin_sqrt((long double)first)),\n\t\t __builtin_abs((int)((__builtin_sqrt((long double)first)\n\t\t\t\t      - (long double)(int)__builtin_sqrt(\n\t\t\t\t\t\t(long double)first))\n\t\t\t\t     * 100.0f)));"
+  "find": "\tedprintf(\"V90ConstellationDesigner: initial sqrt(power)  = %c%d.%03d\\r\\n\",\n\t\t !(0.0f >= first) ? '+' : '-',\n\t\t (int)fabsl(x87_fsqrt((long double)first)),\n\t\t __builtin_abs((int)((x87_fsqrt((long double)first)\n\t\t\t\t      - (long double)(int)x87_fsqrt(\n\t\t\t\t\t\t(long double)first))\n\t\t\t\t     * 1000.0f)));",
+  "replace": "\tedprintf(\"V90ConstellationDesigner: initial sqrt(power)  = %c%d.%03d\\r\\n\",\n\t\t !(0.0f >= first) ? '+' : '-',\n\t\t (int)fabsl(x87_fsqrt((long double)first)),\n\t\t __builtin_abs((int)((x87_fsqrt((long double)first)\n\t\t\t\t      - (long double)(int)x87_fsqrt(\n\t\t\t\t\t\t(long double)first))\n\t\t\t\t     * 100.0f)));"
  },
  {
   "label": "adjustConstellationsPower takes the sqrt line's sign from the ROOT and not from the power (only the loud group can see this)",
   "find": "\t\t removed,\n\t\t !(0.0f >= p) ? '+' : '-',",
-  "replace": "\t\t removed,\n\t\t !(0.0f >= (float)__builtin_sqrt((long double)p)) ? '+' : '-',",
+  "replace": "\t\t removed,\n\t\t !(0.0f >= (float)sqrt((long double)p)) ? '+' : '-',",
   "note": "Recorded NOT CAUGHT.  The two differ only for a negative power, where the root is the indefinite NaN and an ordered compare against it takes the other arm; every power this sweep produces is a sum of squares times non-negative fractions.  The reading is from `fcomps 0x38(%esp)` at 0x4ae74, which compares against the STORED POWER and not the root -- the disassembly is the evidence, and this entry records that no input adds to it."
  },
  {
   "label": "adjustConstellationsPower prints the final dBm0 without the ladder's +1 (only the loud group can see this)",
-  "find": "\tdBm0 = (index + 1) * -0.5f;\n\tedprintf(\"V90ConstellationDesigner: final index %d, \"\n\t\t \"final power in dBm0  = %c%d.%01d\\r\\n\",\n\t\t index,\n\t\t !(0.0f >= dBm0) ? '+' : '-',\n\t\t (int)__builtin_fabsf(dBm0),\n\t\t __builtin_abs((int)((dBm0 - (float)(int)dBm0) * 10.0f)));\n\n\tedprintf(\"--------------------------------------\\r\\n\");",
-  "replace": "\tdBm0 = index * -0.5f;\n\tedprintf(\"V90ConstellationDesigner: final index %d, \"\n\t\t \"final power in dBm0  = %c%d.%01d\\r\\n\",\n\t\t index,\n\t\t !(0.0f >= dBm0) ? '+' : '-',\n\t\t (int)__builtin_fabsf(dBm0),\n\t\t __builtin_abs((int)((dBm0 - (float)(int)dBm0) * 10.0f)));\n\n\tedprintf(\"--------------------------------------\\r\\n\");"
+  "find": "\tdBm0 = (index + 1) * -0.5f;\n\tedprintf(\"V90ConstellationDesigner: final index %d, \"\n\t\t \"final power in dBm0  = %c%d.%01d\\r\\n\",\n\t\t index,\n\t\t !(0.0f >= dBm0) ? '+' : '-',\n\t\t (int)fabsf(dBm0),\n\t\t __builtin_abs((int)((dBm0 - (float)(int)dBm0) * 10.0f)));\n\n\tedprintf(\"--------------------------------------\\r\\n\");",
+  "replace": "\tdBm0 = index * -0.5f;\n\tedprintf(\"V90ConstellationDesigner: final index %d, \"\n\t\t \"final power in dBm0  = %c%d.%01d\\r\\n\",\n\t\t index,\n\t\t !(0.0f >= dBm0) ? '+' : '-',\n\t\t (int)fabsf(dBm0),\n\t\t __builtin_abs((int)((dBm0 - (float)(int)dBm0) * 10.0f)));\n\n\tedprintf(\"--------------------------------------\\r\\n\");"
  }
 ]

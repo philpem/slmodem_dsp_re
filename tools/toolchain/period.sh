@@ -5,23 +5,22 @@
 #   make period                 everything
 #   make period T=t_resampler   one binary, or a list
 #
-# WHY THIS IS THE GOLD STANDARD AND `make phase` IS NOT.
+# WHY THIS IS THE GOLD STANDARD.
 #
-# `make phase` builds with GCC 13.  The object was built with GCC 3.4.2.  So
-# every place the two compilers disagree, the disagreement had to be absorbed
-# SOMEWHERE, and the only place available was the reconstruction's own source:
-# `round32`'s `volatile` in Resampler.cpp forces GCC 13 to emit a store the
-# object has and modern GCC otherwise optimises away (finding F1352).  The
-# tests then pass and the source has drifted away from what the author wrote,
-# with every gate green.  That is the failure mode this target closes.
+# When the default gate built with modern GCC, every place the two compilers
+# disagreed had to be absorbed SOMEWHERE, and the only place available was the
+# reconstruction's own source: `round32`'s `volatile` in Resampler.cpp forces
+# GCC 13 to emit a store the object has and modern GCC otherwise optimises away
+# (finding F1352).  The tests then passed and the source drifted away from what
+# the author wrote, with every gate green.  That is the failure mode this target
+# closes.
 #
 # Here, our source and the object are compiled by the SAME compiler and
 # compared at runtime.  A difference is then a difference in the code, not in
 # the toolchain, which is the only reading that supports the project's claim.
 #
-# The modern build stays, and stays required to compile and pass -- it is a
-# portability check and a much faster inner loop.  It is no longer the thing
-# that decides.
+# The modern build stays as an explicit opt-in portability check and a much
+# faster inner loop.  It is not the thing that decides.
 #
 # THREE JOINS HAD TO BE PROVEN BEFORE ANY OF THIS WAS WORTH WRITING, and the
 # third is the one that looked least likely:

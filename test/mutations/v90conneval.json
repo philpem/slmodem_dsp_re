@@ -245,8 +245,8 @@
   "replace": "\t\t\t}\n\t\t}\n\t} else if (phase3EvalEnabled != 0) {"},
 
  {"label": "the end-of-TRN1d fall-back does not restart the counter",
-  "find": "\t\t\t\t\t \"%c%d.%03d\\r\\n\",\n\t\t\t\t\t !(0.0f >= avePdsnr) ? '+' : '-',\n\t\t\t\t\t (int)__builtin_fabsf(avePdsnr),\n\t\t\t\t\t ce_frac3(avePdsnr));\n\t\t\t\tnofV90Retrains = 0;",
-  "replace": "\t\t\t\t\t \"%c%d.%03d\\r\\n\",\n\t\t\t\t\t !(0.0f >= avePdsnr) ? '+' : '-',\n\t\t\t\t\t (int)__builtin_fabsf(avePdsnr),\n\t\t\t\t\t ce_frac3(avePdsnr));"},
+  "find": "\t\t\t\t\t \"%c%d.%03d\\r\\n\",\n\t\t\t\t\t !(0.0f >= avePdsnr) ? '+' : '-',\n\t\t\t\t\t (int)fabsf(avePdsnr),\n\t\t\t\t\t ce_frac3(avePdsnr));\n\t\t\t\tnofV90Retrains = 0;",
+  "replace": "\t\t\t\t\t \"%c%d.%03d\\r\\n\",\n\t\t\t\t\t !(0.0f >= avePdsnr) ? '+' : '-',\n\t\t\t\t\t (int)fabsf(avePdsnr),\n\t\t\t\t\t ce_frac3(avePdsnr));"},
 
  {"label": "the printed sign is '+' at zero",
   "why": "`sbb %edx,%edx; and $0xfffffffe,%edx; add $0x2d,%edx` after `fldz; fcompp` is '+' on carry and carry means 0.0 < v STRICTLY, so both zeros print '-'.  Caught only because the print sweep puts the threshold at -FLT_MAX, which is the only way a zero average can reach a diagnostic at all.",
@@ -254,7 +254,7 @@
   "replace": "\t\t\t\t\t \"%c%d.%03d\\r\\n\",\n\t\t\t\t\t (0.0f <= avePdsnr) ? '+' : '-',"},
 
  {"label": "the printed magnitude keeps its sign",
-  "find": "\t\t\t\t\t (int)__builtin_fabsf(avePdsnr),\n\t\t\t\t\t ce_frac3(avePdsnr));\n\t\t\t\tnofV90Retrains = 0;\n\t\t\t\tword_1c = 0;\n\t\t\t\tword_90 = 0;\n\t\t\t}\n\t\t} else {\n\t\t\tword_10 = 0;\n\t\t}\n\t} else if (phase3EvalEnabled != 0) {",
+  "find": "\t\t\t\t\t (int)fabsf(avePdsnr),\n\t\t\t\t\t ce_frac3(avePdsnr));\n\t\t\t\tnofV90Retrains = 0;\n\t\t\t\tword_1c = 0;\n\t\t\t\tword_90 = 0;\n\t\t\t}\n\t\t} else {\n\t\t\tword_10 = 0;\n\t\t}\n\t} else if (phase3EvalEnabled != 0) {",
   "replace": "\t\t\t\t\t (int)avePdsnr,\n\t\t\t\t\t ce_frac3(avePdsnr));\n\t\t\t\tnofV90Retrains = 0;\n\t\t\t\tword_1c = 0;\n\t\t\t\tword_90 = 0;\n\t\t\t}\n\t\t} else {\n\t\t\tword_10 = 0;\n\t\t}\n\t} else if (phase3EvalEnabled != 0) {"},
 
  {"label": "the ordinary phase-3 arm uses the EIA6 threshold",
@@ -764,8 +764,8 @@
 
  {"label": "the threshold diagnostic prints the average",
   "why": "0x3f0e3 is `flds 0xa4(%edi)`, the raw threshold, against the SCALED average the line before it prints.",
-  "find": "\t\t    (int)__builtin_fabsf(ce->threshDown),",
-  "replace": "\t\t    (int)__builtin_fabsf(ce->avePdsnr),"},
+  "find": "\t\t    (int)fabsf(ce->threshDown),",
+  "replace": "\t\t    (int)fabsf(ce->avePdsnr),"},
 
  {"label": "the product's sign is inverted",
   "find": "\t\t    !(0.0f >= ce->avePdsnr * ce->word_b8) ? '+' : '-',",
@@ -857,8 +857,8 @@
   "replace": "\t\t\t nofV90Retrains, nofRemoteRateReneg);"},
 
  {"label": "the rate up does not clear +0x90 on its way out",
-  "find": "\t\t\t (int)__builtin_fabsf(avePdsnr), ce_frac2(avePdsnr));\n\t\tword_90 = 0;",
-  "replace": "\t\t\t (int)__builtin_fabsf(avePdsnr), ce_frac2(avePdsnr));"},
+  "find": "\t\t\t (int)fabsf(avePdsnr), ce_frac2(avePdsnr));\n\t\tword_90 = 0;",
+  "replace": "\t\t\t (int)fabsf(avePdsnr), ce_frac2(avePdsnr));"},
 
  {"label": "the rate-down arm compares against initDmin, not twice it",
   "why": "0x3f1ca is `add %esi,%esi`.  The anchor carries the diagnostic above it because the V42 arm has the same test three tabs deeper and `find` is a substring search.",

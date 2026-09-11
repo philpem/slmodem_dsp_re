@@ -119,7 +119,7 @@
  },
  {
   "label": "the printed magnitude is the value, not its absolute value",
-  "find": "#define SV_PRINT_WHOLE(v)\t((int)__builtin_fabsf(v))",
+  "find": "#define SV_PRINT_WHOLE(v)\t((int)fabsf(v))",
   "replace": "#define SV_PRINT_WHOLE(v)\t((int)(v))"
  },
  {

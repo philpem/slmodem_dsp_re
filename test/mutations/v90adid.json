@@ -586,7 +586,7 @@
  },
  {
   "label": "drop the magnitude from the printed whole part",
-  "find": "#define ADID_PRINT_WHOLE(v)\t((int)__builtin_fabsf(v))",
+  "find": "#define ADID_PRINT_WHOLE(v)\t((int)fabsf(v))",
   "replace": "#define ADID_PRINT_WHOLE(v)\t((int)(v))"
  },
  {
@@ -1308,13 +1308,13 @@
  },
  {
   "label": "start the second-nearest distance at zero rather than at a NaN",
-  "find": "\tfloat second = __builtin_nanf(\"\");",
+  "find": "\tfloat second = nanf(\"\");",
   "replace": "\tfloat second = 0.0f;"
  },
  {
   "label": "reinitialise the second-nearest distance per code and phase",
   "find": "\t\t\t\tfloat nearest = 32256.0f;\n\t\t\t\tshort from;",
-  "replace": "\t\t\t\tfloat nearest = 32256.0f;\n\t\t\t\tshort from;\n\t\t\t\tsecond = __builtin_nanf(\"\");"
+  "replace": "\t\t\t\tfloat nearest = 32256.0f;\n\t\t\t\tshort from;\n\t\t\t\tsecond = nanf(\"\");"
  },
  {
   "label": "take the second-nearest with an ordered compare",
@@ -1477,12 +1477,12 @@
  },
  {
   "label": "dmu: sum window ends at 58",
-  "find": "i <= 59; i++)\n\t\t\tsum += __builtin_fabsf(",
-  "replace": "i <= 58; i++)\n\t\t\tsum += __builtin_fabsf("
+  "find": "i <= 59; i++)\n\t\t\tsum += fabsf(",
+  "replace": "i <= 58; i++)\n\t\t\tsum += fabsf("
  },
  {
   "label": "dmu: sum without the magnitude",
-  "find": "sum += __builtin_fabsf(\n\t\t\t    linearMappingVar[unSuspectedPhase][i]);",
+  "find": "sum += fabsf(\n\t\t\t    linearMappingVar[unSuspectedPhase][i]);",
   "replace": "sum += linearMappingVar[unSuspectedPhase][i];"
  },
  {
@@ -1669,12 +1669,12 @@
  },
  {
   "label": "dmu: the mask variance test is strict",
-  "find": "else if (__builtin_fabsf(linearMappingVar[phase][code])\n\t\t\t\t\t >= lim)",
-  "replace": "else if (__builtin_fabsf(linearMappingVar[phase][code])\n\t\t\t\t\t > lim)"
+  "find": "else if (fabsf(linearMappingVar[phase][code])\n\t\t\t\t\t >= lim)",
+  "replace": "else if (fabsf(linearMappingVar[phase][code])\n\t\t\t\t\t > lim)"
  },
  {
   "label": "dmu: the mask variance test loses its magnitude",
-  "find": "else if (__builtin_fabsf(linearMappingVar[phase][code])\n\t\t\t\t\t >= lim)",
+  "find": "else if (fabsf(linearMappingVar[phase][code])\n\t\t\t\t\t >= lim)",
   "replace": "else if (linearMappingVar[phase][code] >= lim)"
  },
  {

@@ -123367,3 +123367,85 @@ surface or reconstruction. Normal, instrumented and focused period runs
 then passed, followed by the full phase (375 period binaries, zero failures;
 49,083/51,479 covered source lines, 1,425 debug sites, 35 anchored deviations).
 This is a harness input correction, not a modern-compiler source workaround.
+
+## F11201. Issue 45: direct math names retired one modern divergence and invalidated mutation anchors
+
+After the direct-math refactor landed on `master` (`58805f1c`), two apparatus
+registers were stale rather than reporting reconstruction failures.
+
+First, `t_agc` no longer belongs in `tools/gccdiverge.json`. A clean master
+`make phase J=$(nproc)` run stopped at the modern tier with:
+
+```
+STALE  t_agc is allow-listed in tools/gccdiverge.json and now PASSES.
+```
+
+The same run still reported `period differential: 375 passed, 0 failed`, so
+the deciding period compiler was not in question. The direct-name math cleanup
+changed the modern compiler's expansion enough that this portability exception
+expired; the other `gccdiverge.json` entries remain live. The stale `t_agc`
+entry was removed rather than tolerated, preserving the register's rule that an
+allow-list entry must fail when its named modern check stops failing.
+
+Second, `tools/anchorcheck.py` reported 29 mutation anchors matching zero
+times. Each failing anchor contained the old `__builtin_fabsf`,
+`__builtin_fabsl`, `__builtin_nanf` or `__builtin_sqrt` text, while source now
+uses the direct math names. Refreshing those mutation records to the current
+source spelling reduced the anchor failure to two records. One was
+`v90cdadjust`'s initial square-root diagnostic, whose current source uses the
+measured `x87_fsqrt` wrapper rather than a bare `sqrt`; its mutation was
+updated to the wrapper spelling without changing the tested fault. The other
+was `vpcmflomodem`'s historical helper-level `return log10l(x);` mutation; that
+helper no longer exists, and the direct `log10l` call is already covered by the
+neighboring Uinfo mutations. That dead entry was removed rather than re-anchored
+to a different claim.
+
+Focused controls after the repairs:
+
+```
+python3 tools/anchorcheck.py
+  262 suite(s) checked, 10041 mutation(s), 0 skipped
+  0 anchor(s) match other than exactly once
+  0 mutation(s) whose replace equals their find
+  0 anchor(s) land in an arm their label does not name
+
+python3 tools/refcheck.py
+  13906 references checked, 0 resolve to nothing, 0 held pending an unmerged branch, 0 stale entr(y/ies)
+  2546 finding heading(s) checked for their number's period
+```
+
+The remaining red default gate was then measured as a policy problem rather
+than a reconstruction problem. After the stale allow-list and anchor defects
+were repaired, a clean `make phase J=$(nproc)` still passed the deciding period
+tier (`period differential: 375 passed, 0 failed`) and failed later in the
+modern/instrumented diagnostic tiers, with 29 binaries reporting transcript
+differences introduced by the direct math spelling change. Adding all of those
+to `tools/gccdiverge.json` would keep GCC 14 as the default authority for a
+tree whose object names Gentoo GCC 3.4.2-r2.
+
+The gate boundary was therefore split. Default `make phase` now runs the period
+differential and structural/provenance checks: `firewall`, `strings`,
+`offsets`, `refs`, `period`, `params`, `onedef`, `vendor`, `banners` and
+`partial-compare-selftest`. The modern GCC, 64-bit, SpanDSP interop and
+coverage/debug-site tiers move to explicit `make portability`; `make phase-full`
+runs both. This does not bless modern disagreements, widen tolerances or change
+any `src/` reconstruction source. It records that modern portability is a
+separate opt-in gate, while `make period` remains the reconstruction authority.
+
+Final controls for the split:
+
+```
+make phase J=$(nproc)
+  period differential: 375 passed, 0 failed
+  phase boundary: period differential and structural checks all OK
+
+make portability J=$(nproc)
+  FAIL dspmath: the cosine windows 2/462336 checks failed
+  29 instrumented test(s) disagree with the blob: t_dspmath ... t_vpcmrunpcm
+  make: *** [Makefile:762: portability] Error 2
+```
+
+The second run proves the modern failures were moved to the named portability
+gate, not hidden by the default phase boundary.
+
+(2026-09-11)

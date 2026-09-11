@@ -1,8 +1,8 @@
 [
   {
     "label": "the linear beta shift omits the numerator logarithm",
-    "find": "log10(__builtin_fabsf(\n\t\t\t\t\tmaxLeCoefValue / (beta * 16777216.0f)))",
-    "replace": "__builtin_fabsf(\n\t\t\t\t\tmaxLeCoefValue / (beta * 16777216.0f))",
+    "find": "log10(fabsf(\n\t\t\t\t\tmaxLeCoefValue / (beta * 16777216.0f)))",
+    "replace": "fabsf(\n\t\t\t\t\tmaxLeCoefValue / (beta * 16777216.0f))",
     "note": "Issue #19 retires the asm-to-double-libm mutation: the source now already calls double log10. Its replacement tests omission of the numerator logarithm at the linear beta setter; this is a new math fault, not a claimed catch of the retired implementation change."
   },
   {
@@ -12,14 +12,14 @@
   },
   {
     "label": "log2 instead of log10 in the linear beta numerator",
-    "find": "log10(__builtin_fabsf(\n\t\t\t\t\tmaxLeCoefValue / (beta * 16777216.0f)))",
-    "replace": "(log(__builtin_fabsf(\n\t\t\t\t\tmaxLeCoefValue / (beta * 16777216.0f))) / log(2.0))",
+    "find": "log10(fabsf(\n\t\t\t\t\tmaxLeCoefValue / (beta * 16777216.0f)))",
+    "replace": "(log(fabsf(\n\t\t\t\t\tmaxLeCoefValue / (beta * 16777216.0f))) / log(2.0))",
     "note": "The former shared helper is gone. Retain the wrong-base fault at the linear setter numerator, leaving the denominator log10(2) intact so the base change cannot cancel."
   },
   {
     "label": "the linear beta logarithm is narrowed to float",
-    "find": "log10(__builtin_fabsf(\n\t\t\t\t\tmaxLeCoefValue / (beta * 16777216.0f)))",
-    "replace": "(float)log10(__builtin_fabsf(\n\t\t\t\t\tmaxLeCoefValue / (beta * 16777216.0f)))",
+    "find": "log10(fabsf(\n\t\t\t\t\tmaxLeCoefValue / (beta * 16777216.0f)))",
+    "replace": "(float)log10(fabsf(\n\t\t\t\t\tmaxLeCoefValue / (beta * 16777216.0f)))",
     "note": "Issue #19 removed the long-double helper intermediate. Replace the old double-local fault with explicit binary32 narrowing of the current logarithm result; do not claim this is the same precision boundary."
   },
   {

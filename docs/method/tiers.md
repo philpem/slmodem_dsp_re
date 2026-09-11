@@ -40,12 +40,14 @@ once the period build could adjudicate; one of them had changed `float`
 arithmetic to `double`, which is an alteration of the program and not of its
 compilation (findings F1352, F1354; `docs/method/compilers.md`).
 
-The modern build still compiles and still runs, as a portability check and a
-faster inner loop. Where GCC 13 provably cannot reproduce the object from
-correct source, the site is declared in `tools/gccdiverge.json` — one entry
-today — rather than papered over in `src/`. **`make period` has no allow-list
-and is not getting one:** the period compiler has no excuse, being the one the
-object was built with.
+The modern build still compiles and still runs when asked, as a portability
+check and a faster inner loop. It is deliberately not part of default
+`make phase`; use `make portability` or `make phase-full` for the modern GCC,
+64-bit, interop and coverage/debug-site tiers. Where modern GCC provably cannot
+reproduce the object from correct source, the site is declared in
+`tools/gccdiverge.json` rather than papered over in `src/`. **`make period` has
+no allow-list and is not getting one:** the period compiler has no excuse,
+being the one the object was built with.
 
 **A rejection in `src/` under GCC 3.4.2 is a finding.** The author wrote this
 code for that compiler, so anything it refuses is something the author cannot

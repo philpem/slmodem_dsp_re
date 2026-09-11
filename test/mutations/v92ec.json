@@ -246,7 +246,7 @@
  },
  {
   "label": "the printed integer part keeps its sign",
-  "find": "\treturn (int)__builtin_fabsf(v);",
+  "find": "\treturn (int)fabsf(v);",
   "replace": "\treturn (int)v;"
  },
  {

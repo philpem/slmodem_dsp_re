@@ -209,12 +209,12 @@
  },
  {
   "label": "sessionTermination: the fraction keeps its sign",
-  "find": "\t\t\t\t (int)__builtin_fabsf(mean),\n\t\t\t\t (frac < 0) ? -frac : frac);",
-  "replace": "\t\t\t\t (int)__builtin_fabsf(mean),\n\t\t\t\t frac);"
+  "find": "\t\t\t\t (int)fabsf(mean),\n\t\t\t\t (frac < 0) ? -frac : frac);",
+  "replace": "\t\t\t\t (int)fabsf(mean),\n\t\t\t\t frac);"
  },
  {
   "label": "sessionTermination: the magnitude keeps its sign",
-  "find": "\t\t\t\t (int)__builtin_fabsf(mean),",
+  "find": "\t\t\t\t (int)fabsf(mean),",
   "replace": "\t\t\t\t (int)mean,"
  },
  {
