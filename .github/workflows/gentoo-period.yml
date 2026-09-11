@@ -54,6 +54,7 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/gentoo-period-base"
           make tc J=2
+          printf '%s\n' "$PWD/build/tc_out" > "$PWD/build/tc_out/.cache-origin"
           mv "$PWD/build/tc_out" "$RUNNER_TEMP/gentoo-period-base/tc_out"
 
       - name: Measure PR base codegen
@@ -78,6 +79,9 @@ jobs:
           fi
           mkdir -p build
           cp -a "$RUNNER_TEMP/gentoo-period-base/tc_out" build/tc_out
+          origin=$(cat build/tc_out/.cache-origin)
+          find build/tc_out/.deps -type f -exec \
+            sed -i "s|$origin|$PWD/build/tc_out|g" {} +
           find build/tc_out -type f -exec touch {} +
           sleep 1
           git diff --name-only "$BASE_SHA" HEAD -- src include \
