@@ -51,6 +51,18 @@ FUNC = re.compile(r"^([0-9a-f]+) <([^>]+)>:")
 def load_spans(path):
     with open(path, encoding="utf-8") as fh:
         data = json.load(fh)
+    # tumap emits a complete address partition in `spans` (issue #67); fall
+    # back to deriving it from per-TU extents for older JSON.
+    if "spans" in data:
+        out = []
+        for sp in data["spans"]:
+            members = list(sp.get("members", []))
+            label = members[0] if members else "?"
+            if len(members) > 1:
+                label += " +%d" % (len(members) - 1)
+            out.append((sp["lo"], sp["hi"], label, members))
+        out.sort()
+        return out
     spans = {}
     for name, t in data["tus"].items():
         spans.setdefault((t["lo"], t["hi"]), []).append((t["seq"], name))

@@ -761,7 +761,7 @@ COVCOUNTS  := build-cov/measured.txt
 # Modern GCC, 64-bit cleanliness, SpanDSP interop and coverage remain valuable,
 # but are portability/analysis tiers and deliberately opt-in.  See F11201.
 PHASE_TIERS := firewall strings offsets refs period params onedef vendor \
-               banners partial-compare-selftest
+               banners partial-compare-selftest tumap-selftest
 
 PORTABILITY_TIERS := test check64 interop coverage debugcov
 
@@ -1032,6 +1032,9 @@ partial-compare: partial-link
 partial-compare-selftest:
 	@$(PYTHON) tools/toolchain/partialcmp.py --self-test
 	@$(PYTHON) tools/toolchain/recoverorder.py --self-test
+
+tumap-selftest:
+	@$(PYTHON) tools/tumap.py $(BLOB) --self-test
 
 coverage: $(BUILD)/tumap.json $(OBJ) $(REF) $(TESTOBJ) $(HARNESS_OBJ)
 	@$(PYTHON) tools/coverage.py --md docs/coverage.md

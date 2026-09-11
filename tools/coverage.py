@@ -432,6 +432,19 @@ def load_tus(path):
             data = json.load(fh)
     except OSError:
         return []
+    # tumap emits a complete address partition in `spans` (issue #67), so
+    # bracket gaps bounded only by two anchors are still covered.  Fall back
+    # to the per-TU extents for older JSON.
+    if "spans" in data:
+        out = []
+        for sp in data["spans"]:
+            members = list(sp.get("members", []))
+            label = members[0] if members else "?"
+            if len(members) > 1:
+                label += " +%d" % (len(members) - 1)
+            out.append((sp["lo"], sp["hi"], label))
+        out.sort()
+        return out
     spans = {}
     for name, t in data["tus"].items():
         spans.setdefault((t["lo"], t["hi"]), []).append((t["seq"], name))
