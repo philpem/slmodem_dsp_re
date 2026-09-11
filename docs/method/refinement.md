@@ -1395,6 +1395,49 @@ mutation suite with it: `anchorcheck` reports the detached anchors as "matches 0
 time(s)" and a suite whose anchors now live in two files has to become two
 suites. The same question for the rest of the object is #6/#20.
 
+### Lever 15. A header-only template has NO translation unit — the user instantiates it
+
+Lever 14's FILE records answer "was this two files?"; they also answer "was
+this a file AT ALL?". A class template whose members are defined in the header
+has no `.cpp` of its own — its weak `.gnu.linkonce.t` symbols are emitted by
+whichever TU instantiates them. Reconstructing it as an out-of-line `X.cpp`
+with member-wise explicit instantiation is a plausible-looking file the object
+never had, and it is detectable two ways.
+
+**The absence of the FILE record is evidence, not an artefact.** `ld -r`
+preserves a `FILE` record for an object with NO symbols at all (measured: a
+partial link of our own emptied stubs still carries one), so if there is no
+`X.cpp` in `readelf -sW`'s `FILE` records, there was no `X.cpp`.
+
+**The second tell is C2/D2.** Explicit member instantiation of a constructor
+and destructor emits the base-object variants C2/D2; an implicitly
+instantiated class in the blob has only the referenced C1/D1 (F601). The two
+spellings emit the SAME function bodies, so the exact-byte metric cannot see
+the difference — the partial object's symbol set can.
+
+**The mechanism.** Move the definitions into the header and DELETE the
+invented `.cpp`. Do NOT add `inline`: with it GCC inlines five of the six away
+and their out-of-line symbols vanish; without it they are emitted exactly as
+the object has them. Keep the body out of the class (in-class is Lever 10 and
+inlines nearly everywhere) and keep `__attribute__((noinline))` only where the
+object already forces it (`Queue::reset` is called by the constructor).
+
+**Measured (Queue, F11353).** `Queue<float>` had been a `src/dsp/Queue.cpp`
+with explicit instantiation. There is no `Queue.cpp` FILE record; the only
+references anywhere are `V92Modulator`'s `reset`, `progress` and
+ctor/dtor. Moving the definitions into `Queue.h` without `inline` and deleting
+`Queue.cpp` gives a partial object with no `Queue.cpp` FILE record and exactly
+the blob's six Queue symbols, no C2/D2, where the `.cpp` form added two
+sections and a FILE record. `make phase` green. The function bytes are
+unchanged by the move — `Queue.cpp` and `V92Modulator.cpp` emit identical
+counts — so this lever fixes WHICH TU owns a symbol and the symbol SET, not
+the residual bytes.
+
+**Run it over the family before chasing bytes.** `Agc.cpp`, `DiffCoder.cpp`,
+`DspMath.cpp`, `LowPassFIR.cpp`, `Scrambler.cpp` and `SineWave.cpp` also lack
+a FILE record; each is a header-only template reconstructed as a `.cpp` and
+will carry the same spurious FILE record and C2/D2. #74 tracks the audit.
+
 ## What does not work
 
 - **Renaming a variable.** Free for the compiler (7002). It changes nothing.
