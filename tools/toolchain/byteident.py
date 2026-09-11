@@ -1257,6 +1257,7 @@ def main():
         print("  NODATA  -- could not be disassembled     : %4d" % len(buckets["NODATA"]))
 
     now = {"exact": ex, "regalloc": ra, "compared": n,
+           "reference_functions": len(blob),
            RATCHET_EXACT_SYMBOLS: sorted(k for _, _, k in buckets["EXACT"])}
     if a.json_out:
         with open(a.json_out, "w") as f:

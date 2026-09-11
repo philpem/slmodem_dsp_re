@@ -6,7 +6,7 @@ import json
 import sys
 
 
-METRICS = ("exact", "regalloc", "compared")
+METRICS = ("exact", "regalloc", "compared", "reference_functions")
 MARKER = "<!-- gentoo-period-metrics -->"
 
 
@@ -27,11 +27,22 @@ def load(path):
             any(not isinstance(symbol, str) for symbol in symbols) or
             len(set(symbols)) != len(symbols) or len(symbols) != metrics["exact"]):
         raise ValueError("%s has an invalid exact-symbol set" % path)
+    if metrics["reference_functions"] == 0:
+        raise ValueError("%s has no reference functions" % path)
+    if metrics["compared"] > metrics["reference_functions"]:
+        raise ValueError("%s compares more functions than the reference contains" % path)
     return metrics
 
 
 def delta(value):
     return "%+d" % value
+
+
+def coverage(metrics):
+    return "%d / %d (%.1f%%)" % (metrics["compared"],
+                                  metrics["reference_functions"],
+                                  100.0 * metrics["compared"] /
+                                  metrics["reference_functions"])
 
 
 def main():
@@ -63,10 +74,13 @@ def main():
           (base["exact"], head["exact"], delta(exact_delta),
            exact_status))
     for name, label in (("regalloc", "Same code, different register allocation"),
-                        ("compared", "Functions compared")):
+                        ("reference_functions", "Reference functions")):
         change = head[name] - base[name]
         print("| %s | %d | %d | %s | informational |" %
               (label, base[name], head[name], delta(change)))
+    compared_delta = head["compared"] - base["compared"]
+    print("| Functions compared | %s | %s | %s | informational |" %
+          (coverage(base), coverage(head), delta(compared_delta)))
     print()
     if lost:
         print("**Lost byte-identical functions:** " + ", ".join("`%s`" % symbol
@@ -80,7 +94,8 @@ def main():
           "displacements/scales, relocation targets, branch targets and operand "
           "order must already match. It can decrease when a function becomes "
           "byte-identical, and the comparison denominator can legitimately change "
-          "with source coverage.")
+          "with source coverage. Functions compared are reference functions that "
+          "the reconstructed source also emits.")
 
     return 1 if args.check and lost else 0
 
