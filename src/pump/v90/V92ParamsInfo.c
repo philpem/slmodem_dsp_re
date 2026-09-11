@@ -30,6 +30,8 @@
  * the source below is the six statements in the order the tests run them.
  */
 
+#include <math.h>
+
 #include "dsplib/V92ParamsInfo.h"
 
 #include "dsplib/V92CPUnPck.h"
@@ -76,7 +78,7 @@ sign_of(float v)
 static int
 whole_of(float v)
 {
-	return (int)__builtin_fabsf(v);
+	return (int)fabsf(v);
 }
 
 static int

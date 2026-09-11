@@ -565,7 +565,7 @@ VPcmFloModem::getUinfoValue(short skipProbe)
 				dsplibs_debug_printf(
 				    "L2[%d]    = %c%d.%05d\r\n", i,
 				    d > 0.0L ? '+' : '-',
-				    (int)__builtin_fabsl(d),
+				    (int)fabsl(d),
 				    x86_abs((int)(frac * 100000.0L)));
 			}
 		}

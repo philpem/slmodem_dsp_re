@@ -115,6 +115,8 @@
  * derivation is there rather than repeated here.
  */
 
+#include <math.h>
+
 #include "dsplib/debug.h"
 #include "dsplib/encode.h"
 #include "dsplib/V90CPpck.h"
@@ -201,7 +203,7 @@ float2Bits(float f, short *bits, int mode)
 					"Q3.13 format violation!!\r\n");
 		}
 
-		x = __builtin_fabsf(f);
+		x = fabsf(f);
 
 		for (i = 0; i <= 15; i++) {
 			if (fltTable2[i] > x) {
@@ -219,7 +221,7 @@ float2Bits(float f, short *bits, int mode)
 		}
 
 		bits[7] = (short)(f < 0.0f);
-		x = __builtin_fabsf(f);
+		x = fabsf(f);
 
 		for (i = 0; i <= 6; i++) {
 			if (fltTable1[i] > x) {

@@ -528,7 +528,7 @@ p4d_sign_of(float v)
 static int
 p4d_whole_of(long double v)
 {
-	return (int)__builtin_fabsl(v);
+	return (int)fabsl(v);
 }
 
 static int

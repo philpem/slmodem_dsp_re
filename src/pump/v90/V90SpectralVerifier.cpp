@@ -20,6 +20,7 @@
  */
 
 #include <stddef.h>
+#include <math.h>
 
 #include "dsplib/debug.h"
 #include "dsplib/encode.h"
@@ -363,7 +364,7 @@ sv_abs(int v)
 #define SV_PRINT_SIGN(v)	(!(0.0f >= (v)) ? '+' : '-')
 
 /* `fabs` then a truncating `fistpl`. */
-#define SV_PRINT_WHOLE(v)	((int)__builtin_fabsf(v))
+#define SV_PRINT_WHOLE(v)	((int)fabsf(v))
 
 /*
  * THE HUNDREDTHS ARE SPELLED TWO WAYS IN THE OBJECT AND NO TEST CAN TELL

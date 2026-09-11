@@ -61,6 +61,7 @@
  */
 
 #include <stddef.h>
+#include <math.h>
 
 #include "dsplib/debug.h"
 #include "dsplib/encode.h"
@@ -1125,7 +1126,7 @@ V90Demapper::linearMappingStudy(short sample, short level)
 		}
 	}
 
-	if (__builtin_fabsf(diff) < 0.4F * (high - low)) {
+	if (fabsf(diff) < 0.4F * (high - low)) {
 		adiDetector->magnitudeSum[decisionFramePosition][decisionCode] +=
 		    __builtin_abs(sample);
 		adiDetector->magnitudeCount[decisionFramePosition][decisionCode]++;

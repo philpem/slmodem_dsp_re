@@ -556,7 +556,7 @@ V90TRN2Designer::V90TRN2Design(V90MappingParams *mappingParams,
 	edprintf("V90TRN2Design:\r\n");
 	edprintf("V90TRN2Design: sqrt(power)  = %c%d.%03d\r\n",
 		 !(0.0f >= p) ? '+' : '-',
-		 (int)__builtin_fabsl(trn2_x87_fsqrt((long double)p)),
+		 (int)fabsl(trn2_x87_fsqrt((long double)p)),
 		 __builtin_abs((int)((trn2_x87_fsqrt((long double)p)
 				      - (long double)(int)trn2_x87_fsqrt(
 						(long double)p))
@@ -566,7 +566,7 @@ V90TRN2Designer::V90TRN2Design(V90MappingParams *mappingParams,
 	edprintf("V90TRN2Design: index %d, power in dBm0  = %c%d.%01d\r\n",
 		 index,
 		 !(0.0f >= dBm0) ? '+' : '-',
-		 (int)__builtin_fabsf(dBm0),
+		 (int)fabsf(dBm0),
 		 __builtin_abs((int)((dBm0 - (float)(int)dBm0) * 10.0f)));
 
 	/*

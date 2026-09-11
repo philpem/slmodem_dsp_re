@@ -24,6 +24,7 @@
  */
 
 #include <stddef.h>
+#include <math.h>
 
 #include "dsplib/V92Parameters.h"
 #include "dsplib/V92Phase2Info.h"
@@ -197,7 +198,7 @@ sign_of(float v)
 static int
 whole_of(float v)
 {
-	return (int)__builtin_fabsf(v);
+	return (int)fabsf(v);
 }
 
 /* The scaled fraction, absolute; V90Phase2Info.cpp's derivation (F256). */

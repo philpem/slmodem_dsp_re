@@ -26,6 +26,8 @@
  * clamp entirely when no reference loop was selected.  Reproduced literally.
  */
 
+#include <math.h>
+
 #include "dsplib/debug.h"
 #include "dsplib/encode.h"
 #include "dsplib/V90PreFilter.h"
@@ -619,7 +621,7 @@ V90PreFilter::setParamEia6()
 	xf = (float)x;
 
 	edprintf("V90PreFilter: prev params ClockDeviation is = %c%d.%04d\r\n",
-		 (x > 0.0L) ? '+' : '-', (int)__builtin_fabsl(x),
+		 (x > 0.0L) ? '+' : '-', (int)fabsl(x),
 		 (frac < 0) ? -frac : frac);
 
 	/*
