@@ -11,7 +11,6 @@
  */
 
 #include "dsplib/Queue.h"
-#include "dsplib/x87copy.h"
 
 extern "C" void *sysdep_malloc(unsigned size);
 extern "C" void sysdep_free(void *p);
@@ -43,15 +42,12 @@ extern "C" void sysdep_free(void *p);
 inline void operator delete[](void *p) { sysdep_free(p); }
 
 /*
- * The element copy.  `dsplib_assign` is the plain assignment the original's
- * source said, plus the one thing a modern compiler needs to be held to it --
- * see dsplib/x87copy.h, and finding F600 for what a signalling NaN does to the
- * x87 form.  t_queue's third block is the case that tells them apart.
+ * The element copy.
  */
 template <class T>
 static inline void copy1(T *dst, const T *src)
 {
-	dsplib_assign(dst, src);
+	*dst = *src;
 }
 
 /*
