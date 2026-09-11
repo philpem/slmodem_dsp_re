@@ -60,7 +60,7 @@ FPM_MTD_create(struct fpm_mtd *state, const struct fpm_mtd_cfg *cfg)
 	int i;
 
 	if (state == NULL) {
-		state = (struct fpm_mtd *)sysdep_malloc(sizeof(*state));
+		state = sysdep_malloc(sizeof(*state));
 		if (state == NULL)
 			return NULL;
 		owned = 1;

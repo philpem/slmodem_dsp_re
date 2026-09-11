@@ -194,7 +194,7 @@ struct cid *
 create_cid(struct cid *cid)
 {
 	if (cid == NULL)
-		cid = (struct cid *)sysdep_malloc(sizeof(*cid));
+		cid = sysdep_malloc(sizeof(*cid));
 
 	cid->mrf.history = NULL;
 

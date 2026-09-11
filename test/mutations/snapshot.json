@@ -428,7 +428,7 @@
    }
   },
   "fdspdp": {
-   "key": "bd115f48a35c234d3f4ccd3eb835325154bc2e0aefdf1b769a6ef98799ce4ecb",
+   "key": "0476c40638eec86c7e5d1ca1fb5865fdeb1085a46d8e2564bd4740e6cc93156a",
    "summary": "22 mutations: 22 caught (22 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "FDSP_DP_Delete clears the global for a NULL kernel too": "caught",
@@ -1421,7 +1421,7 @@
    }
   },
   "tonecreate": {
-   "key": "a8cd8b6a6a0816ef500129530db6861e8fc117d53a811ff07ea7a3d3a8258057",
+   "key": "66640eec1c86c3b21eb56fa1dd736792be4f2cb1fbdded26cc226436df50abc6",
    "summary": "33 mutations: 33 caught (33 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "TONE_CFG claims 52 taps": "caught",

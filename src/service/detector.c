@@ -142,7 +142,7 @@ detector_create(struct detector *d, void *modem, detector_sreg_fn get_sreg)
 	int i;
 
 	if (d == 0) {
-		d = (struct detector *)sysdep_malloc(sizeof(*d));
+		d = sysdep_malloc(sizeof(*d));
 		if (d == 0)
 			return 0;
 		d->dtmf = 0;

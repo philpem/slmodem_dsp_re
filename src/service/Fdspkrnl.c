@@ -135,7 +135,7 @@ FDSP_DP_Create(struct fdsp_kernel *k, short sRxSamplesDelay,
 	if (k == 0) {
 		int ok;
 
-		k = (struct fdsp_kernel *)sysdep_malloc(sizeof(*k));
+		k = sysdep_malloc(sizeof(*k));
 		ok = k != 0;
 		if (ok) {
 			k->chan_b = 0;
@@ -546,7 +546,7 @@ TONE_create(struct fdsp_tone *t, const struct fdsp_tone_cfg *cfg)
 	short i;
 
 	if (t == 0) {
-		t = (struct fdsp_tone *)sysdep_malloc(sizeof(*t));
+		t = sysdep_malloc(sizeof(*t));
 		allocated = 1;
 	}
 	if (cfg == 0)

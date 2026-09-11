@@ -163,7 +163,7 @@ FPM_TONE_create(struct fpm_tone *state, const struct fpm_tone_cfg *cfg)
 		 * under-allocate by twenty-odd bytes.  That is a heap overrun
 		 * that `make check64` cannot see, because it only compiles.
 		 */
-		state = (struct fpm_tone *)sysdep_malloc(sizeof(*state));
+		state = sysdep_malloc(sizeof(*state));
 		if (state == NULL)
 			return NULL;
 		owned = 1;
