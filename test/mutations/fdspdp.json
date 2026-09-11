@@ -34,8 +34,8 @@
  },
  {
   "label": "the kernel is allocated four bytes short",
-  "find": "\t\tk = (struct fdsp_kernel *)sysdep_malloc(sizeof(*k));",
-  "replace": "\t\tk = (struct fdsp_kernel *)sysdep_malloc(sizeof(*k) - 4);"
+  "find": "\t\tk = sysdep_malloc(sizeof(*k));",
+  "replace": "\t\tk = sysdep_malloc(sizeof(*k) - 4);"
  },
  {
   "label": "the buffer block is allocated as a channel",

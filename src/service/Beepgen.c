@@ -122,7 +122,7 @@ beepgen_create(struct beepgen *bg, const struct beepgen_config *cfg)
 		dsplibs_debug_printf("beepgen_create\n");
 
 	if (bg == NULL) {
-		bg = (struct beepgen *)sysdep_malloc(sizeof(struct beepgen));
+		bg = sysdep_malloc(sizeof(struct beepgen));
 		if (bg == NULL)
 			return NULL;
 	}

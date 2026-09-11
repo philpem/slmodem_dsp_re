@@ -4,8 +4,8 @@
  },
  {
   "label": "the object is allocated four bytes short",
-  "find": "\t\tt = (struct fdsp_tone *)sysdep_malloc(sizeof(*t));",
-  "replace": "\t\tt = (struct fdsp_tone *)sysdep_malloc(sizeof(*t) - 4);"
+  "find": "\t\tt = sysdep_malloc(sizeof(*t));",
+  "replace": "\t\tt = sysdep_malloc(sizeof(*t) - 4);"
  },
  {
   "label": "the gate opens whenever the length is positive, allocated or not",

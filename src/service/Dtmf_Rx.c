@@ -134,7 +134,7 @@ struct dtmf_rx *
 create_cid_dtmf(struct dtmf_rx *rx)
 {
 	if (rx == NULL)
-		rx = (struct dtmf_rx *)sysdep_malloc(sizeof(*rx));
+		rx = sysdep_malloc(sizeof(*rx));
 
 	rx->rate = DTMF_RX_RATE_8000;
 	rx->sens = 0;

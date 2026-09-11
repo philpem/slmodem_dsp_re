@@ -53,7 +53,7 @@ silence_create(struct silence *s, void *obj,
 	       unsigned int (*query)(void *obj, int what))
 {
 	if (s == 0) {
-		s = (struct silence *)sysdep_malloc(sizeof(*s));
+		s = sysdep_malloc(sizeof(*s));
 		if (s == 0)
 			return 0;
 	}
