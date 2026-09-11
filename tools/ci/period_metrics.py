@@ -7,7 +7,8 @@ import sys
 
 
 METRICS = ("exact", "regalloc", "unresolved", "reloc", "bytes", "size",
-           "nodata", "compared", "reference_functions")
+           "nodata", "compared", "reference_functions", "exact_bytes",
+           "compared_bytes")
 MARKER = "<!-- gentoo-period-metrics -->"
 
 
@@ -32,6 +33,11 @@ def load(path):
         raise ValueError("%s has no reference functions" % path)
     if metrics["compared"] > metrics["reference_functions"]:
         raise ValueError("%s compares more functions than the reference contains" % path)
+    if metrics["compared_bytes"] == 0:
+        raise ValueError("%s has no compared reference bytes" % path)
+    if metrics["exact_bytes"] > metrics["compared_bytes"]:
+        raise ValueError("%s has more exact bytes than compared reference bytes" %
+                         path)
     buckets = ("exact", "regalloc", "unresolved", "reloc", "bytes", "size",
                "nodata")
     if sum(metrics[name] for name in buckets) != metrics["compared"]:
@@ -49,6 +55,13 @@ def coverage(metrics):
                                   metrics["reference_functions"],
                                   100.0 * metrics["compared"] /
                                   metrics["reference_functions"])
+
+
+def byte_coverage(metrics):
+    return "%d / %d (%.1f%%)" % (metrics["exact_bytes"],
+                                  metrics["compared_bytes"],
+                                  100.0 * metrics["exact_bytes"] /
+                                  metrics["compared_bytes"])
 
 
 def main():
@@ -79,6 +92,9 @@ def main():
     print("| Byte-identical functions | %d | %d | %s | %s |" %
           (base["exact"], head["exact"], delta(exact_delta),
            exact_status))
+    exact_byte_delta = head["exact_bytes"] - base["exact_bytes"]
+    print("| Byte-identical reference code | %s | %s | %s bytes | informational |" %
+          (byte_coverage(base), byte_coverage(head), delta(exact_byte_delta)))
     compared_delta = head["compared"] - base["compared"]
     print("| Functions compared | %s | %s | %s | informational |" %
           (coverage(base), coverage(head), delta(compared_delta)))
