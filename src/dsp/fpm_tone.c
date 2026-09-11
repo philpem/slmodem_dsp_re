@@ -182,11 +182,11 @@ FPM_TONE_create(struct fpm_tone *state, const struct fpm_tone_cfg *cfg)
 	 * the ownership contract in docs/findings.md.
 	 */
 	if (owned && len > 0) {
-		state->kernel = (short *)sysdep_malloc((unsigned)len * 2);
-		state->history = (short *)sysdep_malloc(
+		state->kernel = sysdep_malloc((unsigned)len * 2);
+		state->history = sysdep_malloc(
 			(unsigned)(len + state->cfg.extra) * 2);
-		state->rev_block = (short *)sysdep_malloc(10);
-		state->rev_acc = (short *)sysdep_malloc(8);
+		state->rev_block = sysdep_malloc(10);
+		state->rev_acc = sysdep_malloc(8);
 	}
 
 	/*

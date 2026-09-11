@@ -305,18 +305,18 @@ FPM_ECC_init(struct fpm_ecc *state, const struct fpm_ecc_cfg *cfg, int fresh)
 		 * inspected and none is freed, so calling init twice with
 		 * `fresh` set leaks.  That is the original's behaviour.
 		 */
-		state->near_i = (short *)sysdep_malloc(
+		state->near_i = sysdep_malloc(
 			(unsigned)state->cfg.near_taps * sizeof(short));
-		state->near_q = (short *)sysdep_malloc(
+		state->near_q = sysdep_malloc(
 			(unsigned)state->cfg.near_taps * sizeof(short));
-		state->far_i = (short *)sysdep_malloc(
+		state->far_i = sysdep_malloc(
 			(unsigned)state->cfg.far_taps * sizeof(short));
-		state->far_q = (short *)sysdep_malloc(
+		state->far_q = sysdep_malloc(
 			(unsigned)state->cfg.far_taps * sizeof(short));
-		state->line = (short *)sysdep_malloc(
+		state->line = sysdep_malloc(
 			(unsigned)line_len * sizeof(short));
 		for (j = 0; j <= 2; j++)
-			state->coef[j] = (short *)sysdep_malloc(
+			state->coef[j] = sysdep_malloc(
 				(unsigned)(2 * taps) * sizeof(short));
 	}
 
