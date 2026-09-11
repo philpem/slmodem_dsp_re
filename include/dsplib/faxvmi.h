@@ -75,6 +75,8 @@
 #ifndef DSPLIB_FAXVMI_H
 #define DSPLIB_FAXVMI_H
 
+#include "faxcfg.h"
+
 /* --------------------------------------------------------------------- */
 
 /*

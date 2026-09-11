@@ -886,7 +886,7 @@ main(void)
 		diff_eq_int("setScramble object", shell_bytes_eq("setScramble",
 			    &a, &b, 0), 0, 0);
 		diff_eq_int("setScramble stored ours",
-			    a.put_bits == descrambleGPC, 1, 0);
+			    (void *)a.put_bits == (void *)descrambleGPC, 1, 0);
 		diff_eq_int("setScramble stored theirs",
 			    b.put_bits == (v34_putbits_fn)ref_descrambleGPC,
 			    1, 0);
@@ -924,7 +924,7 @@ main(void)
 			diff_eq_int("preinitV34 conv theirs",
 				    b.conv == ref_Convolve16, 1, pass);
 			diff_eq_int("preinitV34 callback ours",
-				    a.get_bits == scrambleGPC, 1, pass);
+				    (void *)a.get_bits == (void *)scrambleGPC, 1, pass);
 			diff_eq_int("preinitV34 callback theirs",
 				    b.get_bits ==
 				    (v34_getbits_fn)ref_scrambleGPC, 1, pass);
@@ -1169,12 +1169,12 @@ main(void)
 				    rb->conv == ref_Convolve16, 1, role);
 
 			diff_eq_int("preinitdigital scrambler",
-				    ta->get_bits == (role ? scrambleGPC
-							  : scrambleGPA),
-				    1, role);
-			diff_eq_int("preinitdigital descrambler",
-				    ra->put_bits == (role ? descrambleGPA
-							  : descrambleGPC),
+			    (void *)ta->get_bits == (void *)(role ? (v34_getbits_fn)scrambleGPC
+					   : (v34_getbits_fn)scrambleGPA),
+			    1, role);
+		diff_eq_int("preinitdigital descrambler",
+			    (void *)ra->put_bits == (void *)(role ? (v34_putbits_fn)descrambleGPA
+					   : (v34_putbits_fn)descrambleGPC),
 				    1, role);
 			diff_eq_int("preinitdigital scrambler theirs",
 				    tb->get_bits ==

@@ -29,7 +29,7 @@ FLAGS="-O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387
 # GCC 3.4 defaults to gnu89, where a declaration in a `for` initialiser is an
 # error.  Nothing else in the C half needs a newer dialect.
 CFLAGS="$FLAGS -std=gnu99"
-CXXFLAGS="$FLAGS -fno-exceptions -fno-rtti -fno-math-errno"
+CXXFLAGS="$FLAGS -fno-exceptions -fno-rtti -fno-math-errno -Wno-invalid-offsetof"
 SOURCE_CXXFLAGS="$CXXFLAGS -ffast-math"
 
 # Keep the provisional DCR candidate local to its translation unit.
