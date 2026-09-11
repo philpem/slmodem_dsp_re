@@ -177,17 +177,17 @@
  },
  {
   "label": "the histories are sized in ENTRIES rather than in bytes, so each is half the size it must be",
-  "find": "\t\tstate->hist_i = (short *)sysdep_malloc(2 * state->taps);",
-  "replace": "\t\tstate->hist_i = (short *)sysdep_malloc(state->taps);"
+  "find": "\t\tstate->hist_i = sysdep_malloc(2 * state->taps);",
+  "replace": "\t\tstate->hist_i = sysdep_malloc(state->taps);"
  },
  {
   "label": "the histories are V.22's 2 * taps entries rather than this block's taps",
-  "find": "\t\tstate->hist_q = (short *)sysdep_malloc(2 * state->taps);",
-  "replace": "\t\tstate->hist_q = (short *)sysdep_malloc(4 * state->taps);"
+  "find": "\t\tstate->hist_q = sysdep_malloc(2 * state->taps);",
+  "replace": "\t\tstate->hist_q = sysdep_malloc(4 * state->taps);"
  },
  {
   "label": "only one history is allocated",
-  "find": "\t\tstate->hist_q = (short *)sysdep_malloc(2 * state->taps);\n",
+  "find": "\t\tstate->hist_q = sysdep_malloc(2 * state->taps);\n",
   "replace": ""
  },
  {
@@ -250,8 +250,8 @@
  },
  {
   "label": "the two byte counts are truncated to sixteen bits, as FPM_SRE_init's are.  SURVIVOR by arithmetic: it can only change a value when `2 * taps` exceeds 32767, i.e. above 16384 taps, which needs `cfg.coeffs` above 163840 with ten phases -- and `cfg.coeffs` is a short. UNREACHABLE THROUGH THE FIELD'S OWN TYPE. The object does not encode the truncation (`lea (%esi,%esi,1)` and `add %esi,%esi` on a sign-extended 32-bit tap count, no `cwtl`, no 16-bit store), which is a measured difference from the sibling and is why the plain form is written.",
-  "find": "\t\tstate->hist_i = (short *)sysdep_malloc(2 * state->taps);\n\t\tstate->hist_q = (short *)sysdep_malloc(2 * state->taps);",
-  "replace": "\t\tstate->hist_i = (short *)sysdep_malloc((short)(2 * state->taps));\n\t\tstate->hist_q = (short *)sysdep_malloc((short)(2 * state->taps));",
+  "find": "\t\tstate->hist_i = sysdep_malloc(2 * state->taps);\n\t\tstate->hist_q = sysdep_malloc(2 * state->taps);",
+  "replace": "\t\tstate->hist_i = sysdep_malloc((short)(2 * state->taps));\n\t\tstate->hist_q = sysdep_malloc((short)(2 * state->taps));",
   "equivalent": true
  }
 ]

@@ -110,8 +110,8 @@ FPM_PPS_init(struct fpm_pps *state, const struct fpm_pps_cfg *cfg, int fresh)
 	state->taps = taps;
 
 	if (fresh) {
-		state->hist_i = (short *)sysdep_malloc(2 * state->taps);
-		state->hist_q = (short *)sysdep_malloc(2 * state->taps);
+		state->hist_i = sysdep_malloc(2 * state->taps);
+		state->hist_q = sysdep_malloc(2 * state->taps);
 	}
 
 	/*
