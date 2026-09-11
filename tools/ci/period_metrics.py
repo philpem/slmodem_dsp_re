@@ -87,14 +87,10 @@ def main():
     elif gained:
         print("**New byte-identical functions:** " + ", ".join("`%s`" % symbol
                                                            for symbol in gained))
-    print("The ratchet gates the byte-identical symbol set, not only its count. "
-          "The register-allocation "
-          "category permits only a consistent register rename: immediates, memory "
-          "displacements/scales, relocation targets, branch targets and operand "
-          "order must already match. It can decrease when a function becomes "
-          "byte-identical, and the comparison denominator can legitimately change "
-          "with source coverage. Functions compared are reference functions that "
-          "the reconstructed source also emits.")
+    print("Byte-identical functions are the gate. \"Same code\" permits only "
+          "consistent register renaming; constants, memory operands, call/data "
+          "targets, branches and operand order must still match. Other rows are "
+          "informational.")
 
     return 1 if args.check and lost else 0
 
