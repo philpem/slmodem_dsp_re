@@ -1377,11 +1377,14 @@ several input files into one `bracket` extent whenever the inner TUs have no
 local symbol to anchor them, which is exactly the silent case. `ld -r` keeps
 the `FILE` records in input order, so they answer both "was this two files?" and
 "in what order?".
-**The map generator has this wrong today by a bug of its own**: an anchored
-TU's `exact` extent is extended to the next anchor and the intervening TUs'
-globals are reassigned to it, which is how `voice.c` came to own
-`rd.c`/`ringDetector.c`. Tracked in #67; until it is fixed, read `readelf`
-directly for any TU boundary.
+**The map generator had this wrong by a bug of its own, now fixed** (F11352,
+#67): an anchored TU's `exact` extent was extended to the next anchor and the
+intervening TUs' globals were reassigned to it, which is how `voice.c` came to
+own `rd.c`/`ringDetector.c`. `tools/tumap.py` now reports the anchored TU's
+own local-symbol envelope as `exact`, the gap as a shared `bracket` with its
+candidate TUs named, and globals in that gap as ambiguous. `readelf`'s FILE
+records remain the authority, but `docs/modules.md` no longer contradicts
+them.
 
 **The tell is a call boundary, not a byte count.** A wrapper that `SIZE`s small
 because it inlined a helper, or a constructor that `SIZE`s large because it did

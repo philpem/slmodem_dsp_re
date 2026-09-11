@@ -123584,3 +123584,54 @@ next anchor and reassigns `fax.c`/`rd.c`/`ringDetector.c`'s globals to it, so
 `docs/modules.md` disagreed with the FILE records all along.
 
 (2026-09-11)
+
+## F11352. `tumap.py` no longer extends an anchored TU over the gap to the next anchor
+
+Issue #67. The map's `exact` extent for an anchored TU ran from its first local
+symbol to the NEXT ANCHOR's first local (`tools/tumap.py`, old line 80), so any
+unanchored TUs between the two were swallowed and their globals reassigned to
+the anchored predecessor by Pass 3. That is how `voice.c` came to own the whole
+`0x600-0x2b60` span and `fax.c`/`rd.c`/`ringDetector.c`'s exports (F11351).
+The `monotonic` sanity check only walked anchored TUs, so it saw nothing wrong.
+
+**Fix.** An `exact` extent is now the envelope of the TU's own local symbols,
+`[min anchor, max(anchor + size)]`, and is never extended. The bytes between
+one TU's last local and the next anchor are a shared `bracket` whose candidate
+TUs are named: the trailing anchor (its globals can run past its last local),
+every unanchored TU in FILE order, and the leading anchor (a TU's globals can
+PRECEDE its first local -- F78). A global that lands in such a gap is reported
+ambiguous ("1 of N TUs"), not dropped and not handed to the predecessor.
+`tumap.py` now emits a complete `spans` partition of `.text` (exact extents and
+brackets, no gaps, no overlaps); `coverage.load_tus` and `deps.load_spans`
+prefer it, so the addresses with no TU row are still covered.
+
+**Measured, on the blob.** 19 exact extents (unchanged in count), 20 shared
+spans, 1,727 `.text` globals: **16 attributed to an exact owner and 1,711
+reported ambiguous** where the old rule attributed almost all of them. The
+correct outcome is small, not large: address alone proves a global's TU only
+when its byte sits inside another symbol's envelope. `voice.c` is now
+`0x000600-0x00071c` exact, with `fax.c`/`rd.c`/`ringDetector.c` sharing
+`0x00071c-0x002b60` and `VOICE_*` no longer attributed to it.
+
+**Detector, with its denominator.** `validate()` checks six invariants --
+exact extent equals its local envelope; no exact overlap; no exact contains
+another FILE's local; every attributed global lies in its owner; extents and
+spans tile `[0, text_size)`; and FILE-order `lo` is non-decreasing. On the blob
+it reports **0 problems over 281 TUs, 55 locals and 1,727 globals**. To prove
+it fires, `--self-test` builds a synthetic two-anchor-one-unanchored input and
+asserts the validator flags the pre-#67 rule (2 problems) while the current
+rule is clean (0), then runs the pre-#67 rule on the blob itself: **19
+problems**, the fixed map 0, over the same 281 TUs / 55 locals / 1,727 globals.
+`make tumap-selftest` is in `PHASE_TIERS`. Findings 134 and 2401: a detector
+that prints nothing is indistinguishable from a broken one.
+
+**Attribution consumer diff.** `make docs` regenerates `docs/attribution.md` /
+`.json`; the symbol set is unchanged (1,764 both before and after), 22 rows
+move, and 13 of those drop from `prefix` to `ambiguous` because tuattrib's
+address filter now sees the narrowed exact extent. No attribution is lost and
+ground-truth agreement is unchanged at 22/31.
+
+`make phase` is unaffected: none of these tools is in the differential or
+structural tiers except the new self-test, and no `src/` file changed.
+
+(2026-09-11)

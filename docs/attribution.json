@@ -2,7 +2,7 @@
  "attrib": {
   "AnalyseDialString": {
    "how": "ambiguous",
-   "tu": "Callprog.c|Dialer.c"
+   "tu": "Callprog.c|toneiir.c"
   },
   "ApplyBulkDelay": {
    "how": "fill",
@@ -233,16 +233,16 @@
    "tu": "Rx.c|Tx.c"
   },
   "DialerAbort": {
-   "how": "prefix",
-   "tu": "Dialer.c"
+   "how": "ambiguous",
+   "tu": "Callprog.c|toneiir.c"
   },
   "DialerCreate": {
-   "how": "prefix",
-   "tu": "Dialer.c"
+   "how": "ambiguous",
+   "tu": "Callprog.c|toneiir.c"
   },
   "DialerProgress": {
-   "how": "prefix",
-   "tu": "Dialer.c"
+   "how": "ambiguous",
+   "tu": "Callprog.c|toneiir.c"
   },
   "Dialer_IsDialStringInvalid": {
    "how": "ambiguous",
@@ -730,7 +730,7 @@
   },
   "GetDialerConfig": {
    "how": "ambiguous",
-   "tu": "Dialer.c|toneiir.c"
+   "tu": "Callprog.c|toneiir.c"
   },
   "GetFP_Value": {
    "how": "ambiguous",
@@ -738,11 +738,11 @@
   },
   "GetGain": {
    "how": "ambiguous",
-   "tu": "voice.c|Beepgen.c"
+   "tu": "voice.c|detector.c"
   },
   "GetNextDigitAndReturnNextState": {
    "how": "ambiguous",
-   "tu": "Callprog.c|Dialer.c"
+   "tu": "Callprog.c|toneiir.c"
   },
   "GetRateV32": {
    "how": "fill",
@@ -798,7 +798,7 @@
   },
   "IsDialStringInvalid": {
    "how": "ambiguous",
-   "tu": "Callprog.c|Dialer.c"
+   "tu": "Callprog.c|toneiir.c"
   },
   "IsPulseDialerReady": {
    "how": "ambiguous",
@@ -1238,7 +1238,7 @@
   },
   "STRM_VCE_GetFDSPEnvironmentalParams": {
    "how": "ambiguous",
-   "tu": "voice.c|fax.c"
+   "tu": "cid.c|fax.c"
   },
   "ScrambleDataV17": {
    "how": "ambiguous",
@@ -2181,20 +2181,20 @@
    "tu": "V92Jd.cpp|V92Modem.cpp"
   },
   "VOICE_command": {
-   "how": "prefix",
-   "tu": "voice.c"
+   "how": "ambiguous",
+   "tu": "cid.c|fax.c"
   },
   "VOICE_create": {
-   "how": "prefix",
-   "tu": "voice.c"
+   "how": "ambiguous",
+   "tu": "cid.c|fax.c"
   },
   "VOICE_delete": {
-   "how": "prefix",
-   "tu": "voice.c"
+   "how": "ambiguous",
+   "tu": "cid.c|fax.c"
   },
   "VOICE_process": {
-   "how": "prefix",
-   "tu": "voice.c"
+   "how": "ambiguous",
+   "tu": "cid.c|fax.c"
   },
   "VPCMXF_Create": {
    "how": "ambiguous",
@@ -5713,28 +5713,28 @@
    "tu": "Data.c|Dtmf.c"
   },
   "beepgen_create": {
-   "how": "prefix",
-   "tu": "Beepgen.c"
+   "how": "ambiguous",
+   "tu": "voice.c|detector.c"
   },
   "beepgen_delete": {
-   "how": "prefix",
-   "tu": "Beepgen.c"
+   "how": "ambiguous",
+   "tu": "voice.c|detector.c"
   },
   "beepgen_get_freqs": {
-   "how": "prefix",
-   "tu": "Beepgen.c"
+   "how": "ambiguous",
+   "tu": "voice.c|detector.c"
   },
   "beepgen_sample": {
-   "how": "prefix",
-   "tu": "Beepgen.c"
+   "how": "ambiguous",
+   "tu": "voice.c|detector.c"
   },
   "beepgen_start_beep": {
-   "how": "prefix",
-   "tu": "Beepgen.c"
+   "how": "ambiguous",
+   "tu": "voice.c|detector.c"
   },
   "beepgen_start_dtmf": {
-   "how": "prefix",
-   "tu": "Beepgen.c"
+   "how": "ambiguous",
+   "tu": "voice.c|detector.c"
   },
   "biquad_filter": {
    "how": "ambiguous",
@@ -6073,7 +6073,7 @@
    "tu": "dp_wrapper.c"
   },
   "dpskDetectInfo1Init": {
-   "how": "prefix",
+   "how": "name-only",
    "tu": "DPSK.c"
   },
   "dpskinit": {
@@ -6966,15 +6966,15 @@
   },
   "vce_get_sreg": {
    "how": "ambiguous",
-   "tu": "cid.c|voice.c"
+   "tu": "cid.c|fax.c"
   },
   "vce_hook_off": {
    "how": "ambiguous",
-   "tu": "cid.c|voice.c"
+   "tu": "cid.c|fax.c"
   },
   "vce_hook_on": {
    "how": "ambiguous",
-   "tu": "cid.c|voice.c"
+   "tu": "cid.c|fax.c"
   },
   "voice_command": {
    "how": "prefix",
