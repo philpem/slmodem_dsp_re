@@ -146,7 +146,7 @@
  },
  {
   "label": "the whole part keeps its sign",
-  "find": "\treturn (int)__builtin_fabsf(v);",
+  "find": "\treturn (int)fabsf(v);",
   "replace": "\treturn (int)v;",
   "equivalent": true,
   "why": "EQUIVALENT BY PROOF, and the proof is the type of the source field. `gain` is `cp->prefilterGain * 2^-18 * 4000`; `prefilterGain` is UNSIGNED -- the object loads it with an explicitly zeroed high half and `fildll`, which is the unsigned conversion and not the signed one -- and both constants are positive. So `gain` is never negative, `(int)gain` and `(int)fabsf(gain)` agree over every value it can hold, and no fixture can separate them through THIS function. The sibling in V92Transmitter::reset is a different matter and is killed there, because the coefficients it prints are signed. Its two neighbours here -- the sign character and `sign_of`'s boundary -- ARE killable and are killed, by a case that forces prefilterGain to zero: zero is the one non-positive value gain can take, and the object prints it as '-'."

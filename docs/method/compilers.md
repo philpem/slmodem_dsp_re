@@ -374,11 +374,12 @@ applies.
 |---|---|
 | `src/` under GCC 3.4.2 | **152 of 152** compile (was 132 of 152) |
 | period differential | **155 of 155 pass** |
-| `make phase` (GCC 13) | green, and still required |
+| `make phase` | period/structural reconstruction gate |
+| `make portability` | modern GCC, 64-bit, interop and coverage/debug-site gate |
 
-The modern build stays. It compiles in seconds against minutes, it is the
-portability check, and `make check64` still proves the tree is 64-bit clean.
-It is no longer the thing that decides.
+The modern build stays as an explicit opt-in. It compiles in seconds against
+minutes, it is the portability check, and `make check64` still proves the tree
+is 64-bit clean. It is not the default gate and not the thing that decides.
 
 ## The shims are gone
 

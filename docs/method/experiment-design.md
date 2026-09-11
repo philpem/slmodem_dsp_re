@@ -179,9 +179,10 @@ successful diagnostic needs independent source evidence before retention.
 
 Retained reconstruction changes must pass Gentoo `make period`, with its test
 denominator and the actual candidate source/profile, not a stale default build.
-Run `make phase` before calling a branch finished; interpret its modern tier
-according to AGENTS.md. Record full-TU and strict partial-link before/after,
-including new losses. Differential equivalence alone does not establish codegen.
+Run `make phase` before calling a reconstruction branch finished; run and report
+`make portability` or `make phase-full` for a portability/release claim. Record
+full-TU and strict partial-link before/after, including new losses.
+Differential equivalence alone does not establish codegen.
 
 Project completion is the original partially linked object under
 `partialcmp.py --require-exact`. A failing gate remains DIFFERENT; intermediate

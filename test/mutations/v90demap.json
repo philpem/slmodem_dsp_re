@@ -348,17 +348,17 @@
  },
  {
   "label": "the gate opens on equality as well -- `<=` and not `<`",
-  "find": "\tif (__builtin_fabsf(diff) < 0.4F * (high - low)) {",
-  "replace": "\tif (__builtin_fabsf(diff) <= 0.4F * (high - low)) {"
+  "find": "\tif (fabsf(diff) < 0.4F * (high - low)) {",
+  "replace": "\tif (fabsf(diff) <= 0.4F * (high - low)) {"
  },
  {
   "label": "the gate is half the gap, not four tenths of it",
-  "find": "\tif (__builtin_fabsf(diff) < 0.4F * (high - low)) {",
-  "replace": "\tif (__builtin_fabsf(diff) < 0.5F * (high - low)) {"
+  "find": "\tif (fabsf(diff) < 0.4F * (high - low)) {",
+  "replace": "\tif (fabsf(diff) < 0.5F * (high - low)) {"
  },
  {
   "label": "the sign of the difference is kept, so half the samples never gate in",
-  "find": "\tif (__builtin_fabsf(diff) < 0.4F * (high - low)) {",
+  "find": "\tif (fabsf(diff) < 0.4F * (high - low)) {",
   "replace": "\tif (diff < 0.4F * (high - low)) {"
  },
  {

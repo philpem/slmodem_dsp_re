@@ -88,9 +88,10 @@ pass, leave it out and record the attempt. The goal is a replacement that
 behaves *identically* to the blob, so any test disagreeing with the blob is a
 hard failure whatever build it came from — never a tolerance to widen.
 
-Run `make phase`, not `make test`. **But the tier that DECIDES is
-`make period`, and where the two disagree the period compiler wins** — see
-"Gate on `make period`" below before reading a red modern tier as a defect.
+Run `make phase`, not `make test`. `make phase` is now the period/compiler and
+structural reconstruction gate by default. Modern GCC, 64-bit, interop and
+coverage tiers are explicit portability checks (`make portability` or
+`make phase-full`) rather than the default reconstruction authority.
 
 **IT IS A RULE ABOUT `src/`, AND `testbench/` IS NOT `src/`.** The harness is
 measurement apparatus -- it places calls, records both ends, and analyses what
@@ -274,12 +275,12 @@ in the 2026-08-30 leaf wave (findings F8410-F8497, `docs/remaining.md`):
   keeps passing, so no test can ever report it. A construct the modern build
   demands is apparatus (see the flag/shim rule above), never source. **Never
   edit `src/` to make the modern tier green.**
-- **`make phase`'s log CANNOT be read by position.** At `J>1` it runs the
-  period, modern-`test` and coverage tiers CONCURRENTLY into one stream --
-  three copies of `t_v90cdesign` at once on a 3-core box. "The PASS lines
-  before the first `gcc -m32` line are the period tier's" is WRONG, and that
-  session believed it for several turns. **Attribute a verdict to a compiler
-  by running that compiler alone.**
+- **A combined gate log CANNOT be read by position.** The old `make phase`, and
+  current `make phase-full`, run period, modern-`test` and coverage tiers into
+  one stream at `J>1` -- three copies of `t_v90cdesign` at once on a 3-core box.
+  "The PASS lines before the first `gcc -m32` line are the period tier's" is
+  WRONG, and that session believed it for several turns. **Attribute a verdict
+  to a compiler by running that compiler alone.**
 
 **Compiler-portability failures get their own GitHub issue as standard
 procedure.** When the deciding period differential passes but a modern
@@ -295,9 +296,12 @@ change merely to make the gate green. Issue #19's GCC 14 follow-up, #30, is
 the precedent. Shared working-instruction changes belong on master; carry
 this procedure forward when the investigation branch is integrated.
 
-`make phase` is still what proves portability, 64-bit cleanliness and the
-structural checks, and still has to pass before a branch is called finished.
-What it is not is the thing that decides whether a function matches the blob.
+`make phase` is the default reconstruction gate: period differential plus the
+structural/provenance checks that do not require a modern compiler to reproduce
+period x87 behaviour. `make portability` is the opt-in modern GCC, 64-bit,
+interop and coverage/debug-site gate. `make phase-full` runs both. A branch can
+be reconstruction-finished with `make phase`; a portability branch or release
+claim should run and report `make portability` too.
 
 **And the gate must report its denominator like everything else here.** The
 run prints `period differential: N passed, M failed`; N is the TEST COUNT, so
@@ -335,8 +339,9 @@ only if it is newer than its source and than every header -- so an unchanged
 tree relinks rather than rebuilding: about 34 s of the run. `make one T=...`
 is still the fast loop between commits.
 
-The modern build runs in the same `phase` and still has to pass. It is the
-portability check, and `make check64` proves the tree is 64-bit clean. Where
+The modern build no longer runs in default `phase`; use `make portability` or
+`make phase-full` for it. It is the portability check, and `make check64`
+proves the tree is 64-bit clean. Where
 GCC 13 provably cannot reproduce the object from correct source, the site is
 declared in `tools/gccdiverge.json` -- eight entries today, thirteen checks --
 rather than papered over in `src/`. That register names CHECKS, not tests, and
@@ -679,9 +684,10 @@ src/ 0.0% (0/0)` and `0 of 0` deviation sites — which the phase boundary
 aggregated into "differential, 64-bit, interop, coverage and debug sites all
 OK", exit 0. Two of five tiers had measured nothing and the gate could not
 tell. It now probes both layouts, **exits non-zero on a zero denominator**, and
-prints the count on every line carrying a verdict; `make phase`'s closing line
-quotes those denominators and refuses to be printed without them. Finding F3100,
-and it is the same defect as 2400 with the gate rather than an aid behind it.
+prints the count on every line carrying a verdict; the opt-in portability
+boundary quotes those denominators and refuses to be printed without them.
+Finding F3100, and it is the same defect as 2400 with the gate rather than an
+aid behind it.
 
 **AND A THIRD TIME, TO SEVEN TOOLS AT ONCE — SAME COMMIT, OTHER HALF OF THE
 TREE.** #164 also stopped a plain `make` filling `build/src`; those objects now

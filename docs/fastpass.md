@@ -52,7 +52,9 @@ is committed that is wrong-but-plausible. If a function cannot be made to
 pass, it is left out and the attempt is recorded. Two functions were reverted
 under exactly this rule during the first V.34 pass.
 
-Run `make phase`, not `make test`.
+Run `make phase`, not `make test`. `make phase` is the period/structural
+reconstruction gate; `make portability` is the opt-in modern/64-bit/interop and
+coverage gate.
 
 ## What the task numbers refer to
 

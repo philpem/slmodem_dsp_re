@@ -85,9 +85,10 @@ each run; the dated measurement below is a snapshot, not a live baseline.
 Period differential results decide reconstruction fidelity. Modern compiler
 failures remain failures in this collector, including declared divergences;
 consult `tools/gccdiverge.json` and the separately run period tier rather than
-converting them into passes. Branch completion still requires `make phase`
-and `make byteident-ratchet`. Function-level comparisons do not replace the
-strict partial-link completion gate documented in the README.
+converting them into passes. Reconstruction branch completion still requires
+`make phase` and `make byteident-ratchet`; portability/release claims should
+also run `make portability` or `make phase-full`. Function-level comparisons do
+not replace the strict partial-link completion gate documented in the README.
 
 ### CLI and output contract
 

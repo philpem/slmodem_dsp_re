@@ -246,7 +246,7 @@ SYMMAP     := $(BUILD)/symmap.txt
 # them for test binaries only.
 LDFLAGS    := -no-pie -Wl,-z,noexecstack,-z,notext
 
-.PHONY: firewall strings offsets refs all test check64 docs clean interop capture coverage worklist debugcov phase blobfix blobfix-check onedef vendor banners period
+.PHONY: firewall strings offsets refs all test check64 docs clean interop capture coverage worklist debugcov phase portability phase-full blobfix blobfix-check onedef vendor banners period
 
 # Keep intermediates: chained implicit rules otherwise delete them, forcing a
 # full rebuild on every invocation.
@@ -402,9 +402,9 @@ $(BUILD):
 # --- targets --------------------------------------------------------------
 
 #
-# THE INNER LOOP.  `make phase` builds and runs 92 binaries; a batch that
-# touches three or four of them pays for the other 88 on every iteration, ten
-# to twenty times per function.  This builds and runs only what you name:
+# THE INNER LOOP.  A named function batch usually touches only a few binaries,
+# while the phase boundary runs the whole period differential.  This builds and
+# runs only what you name:
 #
 #     make one T=t_v90jd
 #     make one T="t_v90jd t_v92jd"
@@ -568,7 +568,7 @@ params: | $(BUILD)
 # and a RISE means a batch of sites was placed without anything to drive them.
 #
 # It builds a second, instrumented tree in build-cov/ and runs all 62 binaries
-# there, which is why it is last: it doubles the wall clock of `make phase`.
+# there, which is why it is last in the opt-in portability gate.
 # The one thing it does fail on is an instrumented test disagreeing with the
 # blob -- for the ordinary reason, since the goal is a replacement that behaves
 # identically and any disagreement is a hard failure whatever build it came
@@ -611,7 +611,9 @@ refs:
 #
 	@$(PYTHON) tools/mutsnap.py --check
 
-# Everything a phase boundary is supposed to check, in one target.
+# Everything the historical full boundary checked, split into the default
+# reconstruction gate (`make phase`) and the explicit portability gate
+# (`make portability`).
 #
 # This exists because `make test` and `make interop` link DIFFERENT runtimes,
 # so a module added to $(SRC) can build and pass every differential test while
@@ -619,7 +621,7 @@ refs:
 # v34filters.c became the first module to import the debug hooks: 546 tests
 # passed and `make interop` had been broken for two commits.
 #
-# Run this at every phase boundary, not `make test`.
+# Run `make phase` at every reconstruction boundary, not `make test`.
 #
 # PREREQUISITES, CHECKED BEFORE ANYTHING RUNS.  Finding 1563: `make phase`
 # exited 2 in every agent worktree since the baseline and nobody noticed for
@@ -743,19 +745,33 @@ COVCOUNTS  := build-cov/measured.txt
 # `$(MAKE)` is what marks that line recursive, which is what carries -jN into
 # the sub-make through the jobserver, so the eight still run in parallel with
 # each other.  Findings 1563, 3215 and 3521.
-PHASE_TIERS := period test check64 interop params coverage debugcov onedef \
-               vendor banners partial-compare-selftest
+# The default gate is the reconstruction gate: compare against the blob with
+# the recovered Gentoo period compiler, plus the structural/provenance checks
+# that do not depend on a modern compiler reproducing period x87 behaviour.
+# Modern GCC, 64-bit cleanliness, SpanDSP interop and coverage remain valuable,
+# but are portability/analysis tiers and deliberately opt-in.  See F11201.
+PHASE_TIERS := firewall strings offsets refs period params onedef vendor \
+               banners partial-compare-selftest
+
+PORTABILITY_TIERS := test check64 interop coverage debugcov
 
 phase: prereq
 	@$(MAKE) --no-print-directory $(PHASE_TIERS)
 	@echo
+	@echo "phase boundary: period differential and structural checks all OK"
+
+portability: prereq
+	@$(MAKE) --no-print-directory $(PORTABILITY_TIERS)
+	@echo
 	@test -s $(COVCOUNTS) || { \
-	    echo "phase boundary: REFUSING to say OK -- $(COVCOUNTS) is missing,"; \
+	    echo "portability boundary: REFUSING to say OK -- $(COVCOUNTS) is missing,"; \
 	    echo "  so the coverage and deviation tiers measured nothing and there"; \
 	    echo "  is no denominator to stand behind.  Findings 134, 2401."; \
 	    exit 1; }
-	@echo "phase boundary: differential, 64-bit, interop, coverage and debug sites all OK"
+	@echo "portability boundary: modern, 64-bit, interop, coverage and debug sites all OK"
 	@printf '                '; cat $(COVCOUNTS)
+
+phase-full: phase portability
 
 # SpanDSP interop.  A SEPARATE 64-bit binary: the system SpanDSP is amd64 and
 # the blob is i386, so the two tiers cannot share a build.  That is a feature --
