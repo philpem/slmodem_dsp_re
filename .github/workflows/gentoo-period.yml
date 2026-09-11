@@ -23,6 +23,9 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Self-test metric status logic
+        run: python3 tools/ci/period_metrics.py --self-test
+
       - name: Pull recovered Gentoo compiler
         run: docker pull --platform linux/386 "$GENTOO_IMAGE"
 
