@@ -17,6 +17,16 @@
 
 #include "harness.h"
 #include "dsplib/Queue.h"
+#include "dsplib/sysdep.h"
+
+/*
+ * Queue is header-only, so this TU instantiates its constructor/destructor
+ * and therefore needs the same replacement `operator delete[]` every source
+ * TU that reaches a `delete[]`-using destructor carries.  In src/ TUs this
+ * arrives through Scrambler.h; the test harness reaches no such header, so
+ * the definition lives here.  This is apparatus, not reconstruction.
+ */
+inline void operator delete[](void *p) { sysdep_free(p); }
 
 extern "C" {
 void ref_qctor(void *self, unsigned n)              asm("ref__ZN5QueueIfEC1Ej");
