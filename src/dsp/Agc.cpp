@@ -9,7 +9,6 @@
  */
 
 #include "dsplib/Agc.h"
-#include "dsplib/x87copy.h"
 
 /*
  * `blockLen` is set BEFORE the tail call to `reset`, so `count` comes out of
@@ -49,16 +48,12 @@ void Agc<T>::reset()
 }
 
 /*
- * `savedAlpha = alpha` -- see dsplib/x87copy.h for why it is spelled through
- * `dsplib_assign` and why that is the natural form rather than a workaround.
- * 51,200 mismatches before it was there.
- *
  * The read comes FIRST: reordering the two statements costs 563,258.
  */
 template <class T>
 void Agc<T>::freeze()
 {
-	dsplib_assign(&savedAlpha, &alpha);
+	savedAlpha = alpha;
 	alpha = T(1);
 }
 

@@ -11,7 +11,6 @@
 
 #include <math.h>
 #include "dsplib/SineWave.h"
-#include "dsplib/x87copy.h"
 
 /*
  * The two constants, from `.rodata.cst4` at +0x4c and +0x50.  They are the
@@ -25,9 +24,8 @@
 
 /*
  * The four constructor stores.  The object's constructor is nine `mov`s and
- * nothing else, so a signalling NaN handed to it lands in the member intact;
- * `dsplib_assign` is the natural assignment plus what a modern compiler needs
- * to produce that.  See dsplib/x87copy.h.  The const qualifiers on all four
+ * nothing else, so a signalling NaN handed to it lands in the member intact.
+ * The const qualifiers on all four
  * by-value parameters recover the period compiler's interleaved load/store
  * schedule: the other fifteen qualifier masks do not match (finding F10220).
  */
@@ -35,10 +33,10 @@ template <class Tout, class Tparam>
 SineWave<Tout, Tparam>::SineWave(const Tparam a, const Tparam f,
 			      const Tparam p, const Tparam sr)
 {
-	dsplib_assign(&amplitude, &a);
-	dsplib_assign(&frequency, &f);
-	dsplib_assign(&phase, &p);
-	dsplib_assign(&sampleRate, &sr);
+	amplitude = a;
+	frequency = f;
+	phase = p;
+	sampleRate = sr;
 }
 
 /*

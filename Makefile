@@ -209,11 +209,8 @@ OBJ_REPRO  := $(patsubst src/%.c,$(BUILD)/repro/%.o,$(SRC)) \
 CXXFLAGS   := $(CFLAGS) -fno-exceptions -fno-rtti -nostdinc++ \
               -Wno-invalid-offsetof -fno-lifetime-dse -fno-sized-deallocation
 
-# Preserve signalling-NaN representations in dsplib_assign's byte copies.
-# Modern GCC otherwise folds memcpy back into an x87 float assignment, which
-# quietens them.  This portability flag replaces the empty-asm barrier; the
-# period compiler still receives the original plain assignment (issue #19).
-CXXFLAGS += -fno-builtin-memcpy -fno-math-errno
+# Preserve bare-libm behavior used by reconstruction sources for certain math paths.
+CXXFLAGS += -fno-math-errno
 
 # The period math.h supplies the x87 logarithm inline bodies under this
 # source profile. Keep fixture/oracle C++ code on the ordinary flags.
