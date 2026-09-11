@@ -540,6 +540,26 @@ came from getting that backwards.
   used. `movzwl` where we emit `movswl` on a value that indexes a table means
   the declared type differs. That found a real defect no test could see
   (613), because the two readings agree over every value the field holds.
+
+  **Before removing a narrowing cast, or changing a field to make one go
+  away, answer all three questions.** (1) Does the object actually narrow the
+  *computed value* before the call or store? A `cwtl`, `movswl` or narrow
+  stack argument at that point is evidence for an explicit narrow
+  intermediate, not a cleanup opportunity. (2) Could that intermediate come
+  from a correctly-declared `short` local or field instead? Trace the load to
+  a use: a live `movswl`/`movzwl`, signed division, or signed comparison is
+  evidence for the declaration; do not infer an unsigned field merely from a
+  cast at a call site. (3) Is the extension's upper half discarded before it
+  is used? If so it is the LOCAL's code-generation carrier, not evidence for
+  the field's type (7803).
+
+  **For a confirmed narrowing bug, split reproduction from repair.** Keep the
+  blob's narrow arithmetic under `DSPLIB_REPRODUCE_BUGS`; in the normal arm,
+  widen the signed source values to an actually wide allocation/count type
+  before arithmetic. An `unsigned short` temporary merely moves the 16-bit
+  boundary and is neither evidence that the source field is unsigned nor a
+  full-width fix. Prove the reproduction arm with the period compiler and
+  prove the repaired arm at the boundary where the original count wrapped.
 - **NOT FREE, ONLY FREE OF THE THING YOU FIRST BLAMED.** This bullet used to
   read "free, so ignore it: register allocation, instruction scheduling, the
   extension on a load whose upper half is discarded (614)", and two of those

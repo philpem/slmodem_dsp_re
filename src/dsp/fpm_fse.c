@@ -503,8 +503,10 @@ FPM_FSE_receive(struct fpm_fse *state, const short *in, unsigned short *out,
 void
 FPM_FSE_init(struct fpm_fse *state, const struct fpm_fse_cfg *cfg, int fresh)
 {
+#ifdef DSPLIB_REPRODUCE_BUGS
 	short coeff_bytes;
 	short sym_bytes;
+#endif
 	short i;
 
 	state->cfg = *cfg;
@@ -543,12 +545,10 @@ FPM_FSE_init(struct fpm_fse *state, const struct fpm_fse_cfg *cfg, int fresh)
 		sysdep_free(state->icoeff);
 	}
 
-	/*
-	 * Both sizes are computed in 16 bits and only then widened, so a
-	 * `taps` above 16383 or a `block / interp` above 16381 wraps.  That
-	 * is the object's arithmetic, reproduced rather than corrected.
-	 */
-	coeff_bytes = (short)(2 * state->cfg.taps);
+	/* The blob narrows both allocation sizes; preserve that only on the
+	 * differential reconstruction path. */
+#ifdef DSPLIB_REPRODUCE_BUGS
+	coeff_bytes = 2 * state->cfg.taps;
 	state->icoeff = sysdep_malloc(coeff_bytes);
 	state->qcoeff = sysdep_malloc(coeff_bytes);
 	state->hist = sysdep_malloc(coeff_bytes);
@@ -558,9 +558,20 @@ FPM_FSE_init(struct fpm_fse *state, const struct fpm_fse_cfg *cfg, int fresh)
 	 * spare entries are what lets a slicer look at out_i[n_out] before
 	 * n_out has been advanced.
 	 */
-	sym_bytes = (short)(2 * (state->cfg.block / state->cfg.interp) + 4);
+	sym_bytes = 2 * (state->cfg.block / state->cfg.interp) + 4;
 	state->out_i = sysdep_malloc(sym_bytes);
 	state->out_q = sysdep_malloc(sym_bytes);
+#else
+	unsigned taps = state->cfg.taps;
+	unsigned symbols = state->cfg.block / state->cfg.interp;
+
+	state->icoeff = sysdep_malloc(2U * taps);
+	state->qcoeff = sysdep_malloc(2U * taps);
+	state->hist = sysdep_malloc(2U * taps);
+
+	state->out_i = sysdep_malloc(2U * symbols + 4U);
+	state->out_q = sysdep_malloc(2U * symbols + 4U);
+#endif
 
 	for (i = 0; i < state->cfg.taps; i++) {
 		state->icoeff[i] = state->cfg.icoff[i];

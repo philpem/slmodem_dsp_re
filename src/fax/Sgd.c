@@ -116,9 +116,10 @@ struct sgd_control_req SGD_CTL;
  * hist_len+hist_extra-1 symbols; the span zeroed here, and the span
  * `SGD_sequence_det` slides over, is hist_len+ref_len-1 symbols.  Any
  * configuration with ref_len > hist_extra overruns its own buffer inside the
- * constructor.  Reproduced, not repaired -- the blob's own SGD_CFG has
- * hist_extra == ref_len == 1, which is the only relation that makes the two
- * agree, and it is presumably what every real configuration keeps.
+ * constructor.  `DSPLIB_REPRODUCE_BUGS` retains that object behavior for the
+ * differential tier; the normal build allocates the larger span.  The blob's
+ * own SGD_CFG has hist_extra == ref_len == 1, which is the only relation that
+ * makes the two agree.
  */
 struct sgd *
 SGD_create(struct sgd *s, const struct sgd_cfg *cfg)
@@ -138,10 +139,21 @@ SGD_create(struct sgd *s, const struct sgd_cfg *cfg)
 	s->status.seq_reps = 0;
 	s->word_left = (short)(s->cfg.gen.word_syms - 1);
 
-	if (fresh)
+	if (fresh) {
+#ifdef DSPLIB_REPRODUCE_BUGS
 		s->hist = sysdep_malloc(
 		    (unsigned short)(2 * (s->cfg.hist_len + s->cfg.hist_extra)
 				     - 2));
+#else
+		unsigned short hist_len = s->cfg.hist_len;
+		unsigned short extra = s->cfg.hist_extra;
+
+		/* The constructor clears through ref_len, not hist_extra. */
+		if (extra < s->cfg.det.ref_len)
+			extra = s->cfg.det.ref_len;
+		s->hist = sysdep_malloc(2U * (hist_len + extra - 1U));
+#endif
+	}
 
 	s->hist_span = (short)(s->cfg.hist_len + s->cfg.det.ref_len - 1);
 	for (i = 0; i < s->hist_span; i++)

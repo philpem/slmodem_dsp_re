@@ -227,6 +227,9 @@ HARNESS    := test/harness/harness.c test/harness/runtime.c \
               test/harness/fakedp.c test/harness/v34hsstep.c \
               test/harness/unwritten.c
 HARNESS_OBJ:= $(patsubst %.c,$(BUILD)/%.o,$(HARNESS))
+# `v34hsstep.o` calls ref_* symbols, so standalone safety probes link only the
+# allocator and comparison support they actually use.
+SAFETY_HARNESS := $(BUILD)/test/harness/harness.o $(BUILD)/test/harness/runtime.o
 
 TESTS      := $(basename $(notdir $(wildcard test/unit/t_*.c)))
 CXXTESTS   := $(basename $(notdir $(wildcard test/unit/t_*.cpp)))
@@ -246,7 +249,7 @@ SYMMAP     := $(BUILD)/symmap.txt
 # them for test binaries only.
 LDFLAGS    := -no-pie -Wl,-z,noexecstack,-z,notext
 
-.PHONY: firewall strings offsets refs all test check64 docs clean interop capture coverage worklist debugcov phase portability phase-full blobfix blobfix-check onedef vendor banners period
+.PHONY: firewall strings offsets refs all test safety check64 docs clean interop capture coverage worklist debugcov phase portability phase-full blobfix blobfix-check onedef vendor banners period
 
 # Keep intermediates: chained implicit rules otherwise delete them, forcing a
 # full rebuild on every invocation.
@@ -395,6 +398,16 @@ $(BUILD)/test/unit/%.o: test/unit/%.c
 $(BUILD)/test/unit/%.o: test/unit/%.cpp Makefile
 	@mkdir -p $(dir $@)
 	$(CXX) $(ARCH32) $(FPFLAGS) $(CXXFLAGS) $(REPRODUCE) -Itest/harness -c $< -o $@
+
+# Safety checks exercise deliberately fixed paths without linking the blob or
+# defining DSPLIB_REPRODUCE_BUGS.  Their expected values are source contracts,
+# not differential claims.
+$(BUILD)/safety/t_alloc_sizes: test/safety/t_alloc_sizes.c $(OBJ) $(SAFETY_HARNESS)
+	@mkdir -p $(dir $@)
+	$(CC) $(ARCH32) $(LDFLAGS) -Iinclude -Itest/harness -o $@ $^ -lm
+
+safety: firewall strings offsets refs $(BUILD)/safety/t_alloc_sizes
+	@./$(BUILD)/safety/t_alloc_sizes
 
 $(BUILD):
 	@mkdir -p $(BUILD)

@@ -85,15 +85,26 @@ FPM_SRE_init(struct fpm_sre *sre, const struct fpm_sre_cfg *cfg, int fresh)
 
 	if (fresh) {
 		/*
-		 * Both byte counts are formed in 16 bits and only then
-		 * widened, so a coefficient count above 16383 wraps.  That is
-		 * the object's arithmetic, reproduced rather than corrected --
-		 * the same note is on FPM_FSE_init.
+		 * The object narrows the coefficient and RMS byte counts before
+		 * allocation.  Keep that arithmetic for differential reconstruction;
+		 * the normal build must allocate the full configured ranges.
 		 */
+#ifdef DSPLIB_REPRODUCE_BUGS
 		sre->coeff = sysdep_malloc((short)(2 * sre->cfg.coeffs));
 		sre->hist = sysdep_malloc((short)(2 * sre->taps));
 		sre->clk = sysdep_malloc(FPM_SRE_CLOCK * 2);
 		sre->rms_buf = sysdep_malloc((short)(2 * sre->cfg.rms_len));
+#else
+		unsigned coeffs = sre->cfg.coeffs;
+		unsigned taps = sre->taps;
+		unsigned rms_len = sre->cfg.rms_len;
+
+		sre->coeff = sysdep_malloc(2U * coeffs);
+		/* `taps` is bounded by signed `coeffs / FPM_SRE_BRANCHES`. */
+		sre->hist = sysdep_malloc(2U * taps);
+		sre->clk = sysdep_malloc(FPM_SRE_CLOCK * 2);
+		sre->rms_buf = sysdep_malloc(2U * rms_len);
+#endif
 	}
 
 	/*
