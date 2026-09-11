@@ -249,8 +249,6 @@ def main():
                     help="fail if fewer functions match than last time")
     ap.add_argument("--update", action="store_true",
                     help="record the current counts as the new floor")
-    ap.add_argument("--json-out", metavar="PATH",
-                    help="write the final metric counts as JSON")
     args = ap.parse_args()
 
     blob = sizes(BLOB)
@@ -386,10 +384,6 @@ def main():
 
     now = {"identical": len(identical), "same_size": len(samesize),
            "compared": len(common)}
-    if args.json_out:
-        with open(args.json_out, "w") as f:
-            json.dump(now, f, indent=2, sort_keys=True)
-            f.write("\n")
     if args.update:
         with open(RATCHET, "w") as f:
             json.dump(now, f, indent=2, sort_keys=True)

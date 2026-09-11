@@ -1068,6 +1068,8 @@ def main():
                     help="fail if any previously grade-0 EXACT symbol regresses")
     ap.add_argument("--update", action="store_true",
                     help="record the current exact-symbol set as the new floor")
+    ap.add_argument("--json-out", metavar="PATH",
+                    help="write the final exact/regalloc counts as JSON")
     a = ap.parse_args()
 
     if a.self_test:
@@ -1255,6 +1257,10 @@ def main():
 
     now = {"exact": ex, "regalloc": ra, "compared": n,
            RATCHET_EXACT_SYMBOLS: sorted(k for _, _, k in buckets["EXACT"])}
+    if a.json_out:
+        with open(a.json_out, "w") as f:
+            json.dump(now, f, indent=2, sort_keys=True)
+            f.write("\n")
     if a.update:
         with open(RATCHET, "w") as f:
             json.dump(now, f, indent=2, sort_keys=True)

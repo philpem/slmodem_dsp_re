@@ -30,7 +30,7 @@ jobs:
         working-directory: ${{ runner.temp }}/dsplibs-base
         run: |
           make tc J=2
-          TC_OUT="$PWD/build/tc_out" python3 "$GITHUB_WORKSPACE/tools/toolchain/compare.py" \
+          TC_OUT="$PWD/build/tc_out" python3 "$GITHUB_WORKSPACE/tools/toolchain/byteident.py" \
             --json-out "$RUNNER_TEMP/base-metrics.json"
 
       - name: Gentoo differential smoke build
@@ -39,7 +39,7 @@ jobs:
       - name: Build and measure PR head
         run: |
           make tc J=2
-          python3 tools/toolchain/compare.py --json-out "$RUNNER_TEMP/head-metrics.json"
+          python3 tools/toolchain/byteident.py --json-out "$RUNNER_TEMP/head-metrics.json"
 
       - name: Summarise and ratchet metrics
         id: metrics

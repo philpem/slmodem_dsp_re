@@ -6,7 +6,7 @@ import json
 import sys
 
 
-METRICS = ("identical", "same_size", "compared")
+METRICS = ("exact", "regalloc", "compared")
 MARKER = "<!-- gentoo-period-metrics -->"
 
 
@@ -34,7 +34,7 @@ def main():
     ap.add_argument("--base", required=True, help="base metrics JSON")
     ap.add_argument("--head", required=True, help="head metrics JSON")
     ap.add_argument("--check", action="store_true",
-                    help="fail when identical mnemonic sequences decrease")
+                    help="fail when byte-identical functions decrease")
     args = ap.parse_args()
 
     try:
@@ -43,7 +43,7 @@ def main():
     except ValueError as exc:
         ap.error(str(exc))
 
-    exact_delta = head["identical"] - base["identical"]
+    exact_delta = head["exact"] - base["exact"]
     exact_status = ":green_circle: pass" if exact_delta >= 0 else ":red_circle: regression"
 
     print(MARKER)
@@ -51,18 +51,21 @@ def main():
     print()
     print("| Metric | Base | Head | Delta | Status |")
     print("| --- | ---: | ---: | ---: | --- |")
-    print("| Identical mnemonic sequences | %d | %d | %s | %s |" %
-          (base["identical"], head["identical"], delta(exact_delta),
+    print("| Byte-identical functions | %d | %d | %s | %s |" %
+          (base["exact"], head["exact"], delta(exact_delta),
            exact_status))
-    for name, label in (("same_size", "Same-size functions"),
+    for name, label in (("regalloc", "Same code, different register allocation"),
                         ("compared", "Functions compared")):
         change = head[name] - base[name]
         print("| %s | %d | %d | %s | informational |" %
               (label, base[name], head[name], delta(change)))
     print()
-    print("The ratchet gates only identical mnemonic sequences. Same-size functions "
-          "can decrease when a function enters that category, and the "
-          "comparison denominator can legitimately change with source coverage.")
+    print("The ratchet gates only byte-identical functions. The register-allocation "
+          "category permits only a consistent register rename: immediates, memory "
+          "displacements/scales, relocation targets, branch targets and operand "
+          "order must already match. It can decrease when a function becomes "
+          "byte-identical, and the comparison denominator can legitimately change "
+          "with source coverage.")
 
     return 1 if args.check and exact_delta < 0 else 0
 
