@@ -72,7 +72,7 @@ def main():
                     ":green_circle: pass")
 
     print(MARKER)
-    print("## Gentoo period metrics")
+    print("## Reconstruction Metrics (GCC 3.4.2 Gentoo)")
     print()
     print("| Metric | Base | Head | Delta | Status |")
     print("| --- | ---: | ---: | ---: | --- |")
