@@ -85,11 +85,9 @@ ADD --checksum=sha256:ccd30a0a9cf8530940663e799d51a243c60059a57142727920503eaaab
 # with CFLAGS="-O2 -mcpu=i686 -fomit-frame-pointer", so i686 was not THE x86
 # CHOST.  Gentoo also shipped i686 stages and profiles, and gcc-3.4.2-r2 was
 # ~x86, so the object's builder may well have run one -- the point is that
-# neither is established and this line was never evidence.  Nothing here
-# changes --
-# the triplet cannot reach codegen when -march and -mtune are always spelled
-# out -- but do not cite this line as evidence.  Dockerfile.gentoo uses the
-# stage3's own CHOST.  Finding 2502.
+# neither is established and this line was never evidence. Nothing here
+# changes -- the triplet cannot reach codegen when -march and -mtune are
+# always spelled out -- but do not cite this line as evidence. Finding 2502.
 #
 # CC is Debian's gcc-3.4: the base image installs no unversioned `cc`.
 RUN set -e; cd /build \

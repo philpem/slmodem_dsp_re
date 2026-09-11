@@ -62,11 +62,12 @@ TC_OUT   ?= $(CURDIR)/build/tc_out
 #                            only for explicit A/B measurement.  Finding F2200
 #   TC_IMAGE=dsplibs-tc342
 #                            stock GCC 3.4.2, retained as an A/B arm.
-#   TC_IMAGE=dsplibs-tc342-gentoo
+#   TC_IMAGE=ghcr.io/philpem/gcc-3.4.2-gentoo2005-docker:latest
 #                            the default and only exact arm: Gentoo's
 #                            gcc-3.4.2-r2, built from the ebuild inside
 #                            stage3-x86-2005.0, printing the blob's .comment
-#                            back byte for byte (Dockerfile.gentoo).  It is
+#                            back byte for byte. It is pulled automatically
+#                            from GHCR when absent.  It is
 #                            the reconstruction authority: its compiler and
 #                            binutils provenance match the recovered build
 #                            environment.  Finding F2500
@@ -84,7 +85,8 @@ TC_OUT   ?= $(CURDIR)/build/tc_out
 # object rebuilds.  Findings F2155 and F1990 are the flag record; this is still
 # not a supported way to build the tree differently from what they say.
 #
-TC_IMAGE ?= dsplibs-tc342-gentoo
+GENTOO_IMAGE ?= ghcr.io/philpem/gcc-3.4.2-gentoo2005-docker:latest
+TC_IMAGE ?= $(GENTOO_IMAGE)
 TC_EXTRA ?=
 
 # `-mno-ieee-fp` IS IN `make period` TOO NOW, so the two sets are identical
@@ -184,7 +186,7 @@ TC_STALE_D := $(filter-out $(patsubst $(TC_OUT)/%,$(TC_DEPDIR)/%.d,$(TC_OBJ)), \
 # The recovered Gentoo driver calls `whoami`, so it cannot run as this host's
 # unrecorded bind-mount UID.  Build outputs are ignored and their directory is
 # user-writable, so root-owned objects remain removable between configurations.
-ifeq ($(TC_IMAGE),dsplibs-tc342-gentoo)
+ifeq ($(TC_IMAGE),$(GENTOO_IMAGE))
 TC_RUN := docker run --rm --label dsplibs-tc --platform linux/386 \
 	  -v '$(CURDIR):/src' -v '$(TC_OUT):/out' -w /src $(TC_IMAGE)
 else
@@ -250,10 +252,14 @@ $(TC_OUT) $(TC_DEPDIR):
 
 tc-image:
 	@docker image inspect '$(TC_IMAGE)' >/dev/null 2>&1 || { \
-	   echo "tools/toolchain: no docker image '$(TC_IMAGE)'.  Build it with" >&2; \
-	   echo "  tools/toolchain/build-gentoo-image.sh" >&2; \
-	   echo "(the older 3.4.4 image is Dockerfile, -t dsplibs-tc.  Finding F2200.)" >&2; \
-	   exit 1; }
+	   if [ '$(TC_IMAGE)' = '$(GENTOO_IMAGE)' ]; then \
+	       echo "tools/toolchain: pulling recovered Gentoo image '$(TC_IMAGE)'" >&2; \
+	       docker pull --platform linux/386 '$(TC_IMAGE)'; \
+	   else \
+	       echo "tools/toolchain: no docker image '$(TC_IMAGE)'." >&2; \
+	       echo "The recovered Gentoo image is published at '$(GENTOO_IMAGE)'." >&2; \
+	       exit 1; \
+	   fi; }
 
 #
 # `-MT '$@'` IS LOAD-BEARING AND ITS ABSENCE IS SILENT.  GCC names the rule in

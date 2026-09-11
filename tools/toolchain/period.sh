@@ -55,20 +55,25 @@
 set -e
 cd "$(dirname "$0")/../.."
 
-# THE DEFAULT IMAGE IS THE GENTOO-PATCHED GCC 3.4.2-r2 NAMED BY THE BLOB
-# (Dockerfile.gentoo, finding F2500).  Its compiler and binutils are the
-# reconstruction authority.  `PERIOD_IMG=dsplibs-tc342` and
+# THE DEFAULT IMAGE IS THE PUBLISHED GENTOO-PATCHED GCC 3.4.2-r2 NAMED BY THE
+# BLOB.  Its compiler and binutils are the reconstruction authority.
+# `PERIOD_IMG=dsplibs-tc342` and
 # `PERIOD_IMG=dsplibs-tc` select the stock 3.4.2 and Debian 3.4.4 arms only
 # for explicit A/B measurements.
 # Set PERIOD_OUT with it: build/period is incremental on SOURCE mtime and
 # does not notice that the compiler changed.
-IMG=${PERIOD_IMG:-dsplibs-tc342-gentoo}
+GENTOO_IMG=ghcr.io/philpem/gcc-3.4.2-gentoo2005-docker:latest
+IMG=${PERIOD_IMG:-$GENTOO_IMG}
 
 if ! docker image inspect "$IMG" >/dev/null 2>&1; then
-    echo "tools/toolchain: no docker image '$IMG'.  Build it with" >&2
-    echo "  tools/toolchain/build-gentoo-image.sh" >&2
-    echo "(the older 3.4.4 image is Dockerfile, -t dsplibs-tc.  Finding F2200.)" >&2
-    exit 1
+    if [ "$IMG" = "$GENTOO_IMG" ]; then
+        echo "tools/toolchain: pulling recovered Gentoo image '$IMG'" >&2
+        docker pull --platform linux/386 "$IMG"
+    else
+        echo "tools/toolchain: no docker image '$IMG'." >&2
+        echo "The recovered Gentoo image is published at '$GENTOO_IMG'." >&2
+        exit 1
+    fi
 fi
 REF=${REF:-build/dsplibs_ref.o}
 #
@@ -144,7 +149,7 @@ trap cleanup EXIT INT TERM
 # from that stage3's passwd file and makes the driver select its bootstrap
 # compiler.  Run that one image as root, then restore the bind mount's
 # ownership before returning.  The stock images keep the ordinary host UID.
-if [ "$IMG" = dsplibs-tc342-gentoo ]; then
+if [ "$IMG" = "$GENTOO_IMG" ]; then
     docker run --rm --name "$NAME" --platform linux/386 \
         -v "$PWD:/src" -v "$PWD/$OUT:/out" -w /src \
         -e "SRC=$SRC" -e "CXXSRC=$CXXSRC" -e "TESTS=$TESTS" -e "J=$J" -e "REF=$REF" \
