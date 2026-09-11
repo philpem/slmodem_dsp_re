@@ -34,27 +34,56 @@ jobs:
       - name: Check out PR base
         run: git worktree add --detach "$RUNNER_TEMP/dsplibs-base" "$BASE_SHA"
 
-      - name: Restore PR base codegen measurement
-        id: base-cache
+      - name: Restore PR base compiler objects
+        id: base-objects-cache
         uses: actions/cache@v4
         with:
-          path: ${{ runner.temp }}/gentoo-period-base
-          key: gentoo-period-base-${{ env.BASE_SHA }}-${{ steps.gentoo-image-id.outputs.digest }}-${{ hashFiles('tools/toolchain/byteident.py') }}
+          path: ${{ runner.temp }}/gentoo-period-base/tc_out
+          key: gentoo-period-base-objects-${{ env.BASE_SHA }}-${{ steps.gentoo-image-id.outputs.digest }}
 
-      - name: Build and measure PR base
-        if: steps.base-cache.outputs.cache-hit != 'true'
+      - name: Restore PR base codegen measurement
+        id: base-metrics-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/gentoo-period-base/base-metrics.json
+          key: gentoo-period-base-metrics-${{ env.BASE_SHA }}-${{ steps.gentoo-image-id.outputs.digest }}-${{ hashFiles('tools/toolchain/byteident.py') }}
+
+      - name: Build PR base compiler objects
+        if: steps.base-objects-cache.outputs.cache-hit != 'true'
         working-directory: ${{ runner.temp }}/dsplibs-base
         run: |
           mkdir -p "$RUNNER_TEMP/gentoo-period-base"
           make tc J=2
-          TC_OUT="$PWD/build/tc_out" python3 "$GITHUB_WORKSPACE/tools/toolchain/byteident.py" \
-            --json-out "$RUNNER_TEMP/gentoo-period-base/base-metrics.json"
+          mv "$PWD/build/tc_out" "$RUNNER_TEMP/gentoo-period-base/tc_out"
+
+      - name: Measure PR base codegen
+        if: steps.base-metrics-cache.outputs.cache-hit != 'true'
+        run: |
+          TC_OUT="$RUNNER_TEMP/gentoo-period-base/tc_out" \
+            python3 tools/toolchain/byteident.py \
+              --json-out "$RUNNER_TEMP/gentoo-period-base/base-metrics.json"
 
       - name: Materialise PR base metrics
         run: cp "$RUNNER_TEMP/gentoo-period-base/base-metrics.json" "$RUNNER_TEMP/base-metrics.json"
 
       - name: Gentoo differential smoke build
         run: make period J=2 T="t_fpm_sre t_fpm_fse t_resampler"
+
+      - name: Seed incremental PR head build
+        if: steps.base-objects-cache.outputs.cache-hit == 'true'
+        run: |
+          if ! git diff --quiet "$BASE_SHA" HEAD -- Makefile tools/toolchain/period.mk; then
+            echo "period build rules changed; compiling PR head from scratch"
+            exit 0
+          fi
+          mkdir -p build
+          cp -a "$RUNNER_TEMP/gentoo-period-base/tc_out" build/tc_out
+          find build/tc_out -type f -exec touch {} +
+          sleep 1
+          git diff --name-only "$BASE_SHA" HEAD -- src include \
+            tools/toolchain/period_compat.h | while IFS= read -r path; do
+              test -e "$path" && touch "$path"
+            done
 
       - name: Build and measure PR head
         run: |
