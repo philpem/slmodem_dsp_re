@@ -1,0 +1,88 @@
+name: Gentoo Period
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  smoke-and-ratchet:
+    name: Gentoo smoke and codegen ratchet
+    runs-on: ubuntu-latest
+    env:
+      GENTOO_IMAGE: ghcr.io/philpem/gcc-3.4.2-gentoo2005-docker:latest
+      BASE_SHA: ${{ github.event.pull_request.base.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Pull recovered Gentoo compiler
+        run: docker pull --platform linux/386 "$GENTOO_IMAGE"
+
+      - name: Check out PR base
+        run: git worktree add --detach "$RUNNER_TEMP/dsplibs-base" "$BASE_SHA"
+
+      - name: Build and measure PR base
+        working-directory: ${{ runner.temp }}/dsplibs-base
+        run: |
+          make tc J=2
+          python3 tools/toolchain/compare.py --json-out "$RUNNER_TEMP/base-metrics.json"
+
+      - name: Gentoo differential smoke build
+        run: make period J=2 T="t_fpm_sre t_fpm_fse t_resampler"
+
+      - name: Build and measure PR head
+        run: |
+          make tc J=2
+          python3 tools/toolchain/compare.py --json-out "$RUNNER_TEMP/head-metrics.json"
+
+      - name: Summarise and ratchet metrics
+        id: metrics
+        run: |
+          set +e
+          python3 tools/ci/period_metrics.py \
+            --base "$RUNNER_TEMP/base-metrics.json" \
+            --head "$RUNNER_TEMP/head-metrics.json" --check > "$RUNNER_TEMP/metrics.md"
+          status=$?
+          cat "$RUNNER_TEMP/metrics.md" >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo 'markdown<<EOF'
+            cat "$RUNNER_TEMP/metrics.md"
+            echo EOF
+          } >> "$GITHUB_OUTPUT"
+          exit "$status"
+
+      - name: Update PR metric summary
+        if: ${{ always() && steps.metrics.outputs.markdown != '' && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
+        uses: actions/github-script@v7
+        env:
+          METRICS: ${{ steps.metrics.outputs.markdown }}
+        with:
+          script: |
+            const marker = '<!-- gentoo-period-metrics -->';
+            const body = process.env.METRICS;
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const prior = comments.find((comment) => comment.body.includes(marker));
+            if (prior) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: prior.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
