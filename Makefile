@@ -992,7 +992,7 @@ period: $(REF)
 # read by something that did not come through make.
 #
 .PHONY: tc tc-repro byteident byteident-ratchet similarity partial-link \
-	partial-compare partial-compare-selftest
+	partial-compare partial-compare-selftest castscan castscan-selftest
 tc:
 	@$(MAKE) -f tools/toolchain/period.mk -j$(J)
 
@@ -1012,6 +1012,15 @@ byteident-ratchet: tc
 
 similarity: tc
 	@$(PYTHON) tools/toolchain/compare.py --ratchet
+
+# Cast audit: explicit numeric casts the context already performs (issue #69,
+# finding F11353).  clang is analysis apparatus, not a reconstruction
+# authority, so this is deliberately NOT a phase tier.
+castscan:
+	@$(PYTHON) tools/castscan.py --by-file
+
+castscan-selftest:
+	@$(PYTHON) tools/castscan.py --self-test
 
 # Link with binutils 2.15 in the period image.  DIFFERENT is the expected
 # report until convergence, so partial-compare is a census rather than a phase
