@@ -1,0 +1,22 @@
+Subject: [PATCH] fpm_sre.c: move the adapt store after mag_avg (issue 58 SRE candidate)
+
+Recovered experimental representative sre-order-004 from the issue 58 FPM
+store-order domain. See docs/issue58-fpm.md. NOT a validated change:
+EXACT iff mag_avg precedes adapt, which distinguishes an ordering fact,
+not a unique total source order. Apply from the repo root with git apply.
+
+--- a/src/dsp/fpm_sre.c
++++ b/src/dsp/fpm_sre.c
+@@ -64,11 +64,11 @@
+ 
+ 	sre->active = 0;
+ 	sre->acquiring = 1;
+-	sre->adapt = 1;
+ 	sre->mode = 0;
+ 	sre->pll_acc = 0;
+ 	sre->err_avg = 0;
+ 	sre->mag_avg = 0;
++	sre->adapt = 1;
+ 	sre->taps = (short)(sre->cfg.coeffs / FPM_SRE_BRANCHES);
+ 	sre->fill = 0;
+ 	sre->acc_x = 0;
