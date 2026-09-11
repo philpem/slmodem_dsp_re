@@ -42,15 +42,6 @@ extern "C" void sysdep_free(void *p);
 inline void operator delete[](void *p) { sysdep_free(p); }
 
 /*
- * The element copy.
- */
-template <class T>
-static inline void copy1(T *dst, const T *src)
-{
-	*dst = *src;
-}
-
-/*
  * `reset` is called rather than inlined -- the constructor tail-jumps to it --
  * so the attribute keeps the shape.  It does no arithmetic, so nothing here
  * depends on that; it is reproduced because the object does it.
@@ -94,7 +85,7 @@ int Queue<T>::write(T v)
 	if (size - count() - 1 == 0)
 		return -1;
 
-	copy1(wr, &v);
+	*wr = v;
 	wr = (wr == last) ? buf : wr + 1;
 	return 0;
 }
@@ -112,14 +103,14 @@ int Queue<T>::write(T *p, unsigned num)
 		T *q = wr;
 
 		for (i = 0; i < room; i++)
-			copy1(q++, p++);
+			*q++ = *p++;
 		q = buf;
 		for (; i < (int)num; i++)
-			copy1(q++, p++);
+			*q++ = *p++;
 		wr = q;
 	} else {
 		for (i = 0; i < (int)num; i++)
-			copy1(wr++, p++);
+			*wr++ = *p++;
 		if (wr == last + 1)
 			wr = buf;
 	}
@@ -139,14 +130,14 @@ int Queue<T>::read(T *p, unsigned num)
 		T *q = rd;
 
 		for (i = 0; i < avail; i++)
-			copy1(p++, q++);
+			*p++ = *q++;
 		q = buf;
 		for (; i < (int)num; i++)
-			copy1(p++, q++);
+			*p++ = *q++;
 		rd = q;
 	} else {
 		for (i = 0; i < (int)num; i++)
-			copy1(p++, rd++);
+			*p++ = *rd++;
 		if (rd == last + 1)
 			rd = buf;
 	}
