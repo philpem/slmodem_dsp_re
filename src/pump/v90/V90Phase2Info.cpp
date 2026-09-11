@@ -40,6 +40,7 @@
  */
 
 #include <stddef.h>
+#include <math.h>
 
 #include "dsplib/V90Phase2Info.h"
 #include "dsplib/V90Parameters.h"	/* the constructor's five fields  */
@@ -178,7 +179,7 @@ sign_of(float v)
 static int
 whole_of(float v)
 {
-	return (int)__builtin_fabsf(v);
+	return (int)fabsf(v);
 }
 
 /*

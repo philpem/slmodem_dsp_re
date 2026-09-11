@@ -87,6 +87,8 @@
  * for what is measured about it.
  */
 
+#include <math.h>
+
 #include "dsplib/V90MappingParams.h"
 
 #include "dsplib/V90CPUnPck.h"
@@ -910,7 +912,7 @@ sign_of(long double v)
 static int
 whole_of(float v)
 {
-	return (int)__builtin_fabsf(v);
+	return (int)fabsf(v);
 }
 
 static int

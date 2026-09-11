@@ -280,7 +280,7 @@ static inline void
 edprint_stat(const char *fmt, float v, long double scale)
 {
 	edprintf(fmt, !(v <= 0.0f) ? '+' : '-',
-		 (int)__builtin_fabsl((long double)v),
+		 (int)fabsl((long double)v),
 		 __builtin_abs((int)(((long double)v
 				      - (long double)(int)v) * scale)));
 }
@@ -392,7 +392,7 @@ edprint_scaled_stat(const char *fmt, float v, long double scaled,
 		    long double scale)
 {
 	edprintf(fmt, !(v <= 0.0f) ? '+' : '-',
-		 (int)__builtin_fabsl(scaled),
+		 (int)fabsl(scaled),
 		 __builtin_abs((int)((scaled - (long double)(int)scaled)
 				     * scale)));
 }
@@ -417,7 +417,7 @@ static inline void
 edprint_int_stat(const char *fmt, int v)
 {
 	edprintf(fmt, !(v <= 0.0f) ? '+' : '-',
-		 (int)__builtin_fabsl((long double)v),
+		 (int)fabsl((long double)v),
 		 __builtin_abs((int)((v - (int)v) * 1.0e3f)));
 }
 
@@ -451,12 +451,12 @@ summarise_coefs(const float *coefs, unsigned int len, float *maxOut,
 	sum = 0;
 	absSum = 0;
 
-	mx = mn = __builtin_fabsf(coefs[0]);
+	mx = mn = fabsf(coefs[0]);
 	*maxOut = mx;
 	*minOut = mn;
 
 	for (i = 1; i < len; i++) {
-		float a = __builtin_fabsf(coefs[i]);
+		float a = fabsf(coefs[i]);
 
 		if (a > mx) {
 			mx = a;
@@ -467,7 +467,7 @@ summarise_coefs(const float *coefs, unsigned int len, float *maxOut,
 			*minOut = mn;
 		}
 		sum += coefs[i];
-		absSum += __builtin_fabsf(coefs[i]);
+		absSum += fabsf(coefs[i]);
 	}
 
 	*sumOut = sum;
@@ -673,7 +673,7 @@ V90Equalizer::setLinearEquBeta(float beta)
 		 */
 		edprintf("V90Equalizer: LE Beta = %c%d.%05de-10\r\n",
 			 !(beta <= 0.0f) ? '+' : '-',
-			 (int)__builtin_fabsl(scaled),
+			 (int)fabsl(scaled),
 			 __builtin_abs((int)(((long double)(int)scaled - scaled)
 					     * 1.0e5f)));
 	}
@@ -690,7 +690,7 @@ V90Equalizer::setLinearEquBeta(float beta)
 	 * what `!= 0.0f` gives.  Finding F2300.
 	 */
 	if (beta != 0.0f) {
-		int shift = log10(__builtin_fabsf(
+		int shift = log10(fabsf(
 					maxLeCoefValue / (beta * 16777216.0f)))
 				  / log10(2.0f);
 
@@ -720,7 +720,7 @@ V90Equalizer::setDfeBeta(float beta)
 
 		edprintf("V90Equalizer: DFE Beta = %c%d.%05de-7\r\n",
 			 !(beta <= 0.0f) ? '+' : '-',
-			 (int)__builtin_fabsl(scaled),
+			 (int)fabsl(scaled),
 			 __builtin_abs((int)(((long double)(int)scaled - scaled)
 					     * 1.0e5f)));
 	}
@@ -732,7 +732,7 @@ V90Equalizer::setDfeBeta(float beta)
 
 	/* `!= 0.0f`, one FCOM and a `je` -- see setLinearEquBeta. */
 	if (beta != 0.0f) {
-		int shift = log10(__builtin_fabsf(
+		int shift = log10(fabsf(
 					maxDfeCoefValue / (beta * 1048576.0f)))
 				  / log10(2.0f);
 
@@ -1021,7 +1021,7 @@ V90Equalizer::enterPhase4()
 
 	edprintf("V90Equalizer: timing offset on freeze (phase4) = " "%c%d.%04d\r\n",
 		 !(resampler->getTimingOffsetPPM() <= 0.0f) ? '+' : '-',
-		 (int)__builtin_fabsl((long double)
+		 (int)fabsl((long double)
 				      resampler->getTimingOffsetPPM()),
 		 __builtin_abs((int)(1.0e4f * ppmFrac)));
 
@@ -1149,7 +1149,7 @@ V90Equalizer::convertEqualizerToMmx()
 	 * Finding F2300.
 	 */
 	if (linearEquBeta != 0.0f) {
-		int shift = log10(__builtin_fabsf(
+		int shift = log10(fabsf(
 					(1.0f / (linearEquBeta * 16777216.0f))
 					* maxLeCoefValue))
 				  / log10(2.0f);
@@ -1199,7 +1199,7 @@ V90Equalizer::convertEqualizerToMmx()
 			minHi = a;
 		absSumHi += a;
 		fsum += linearEquCoefs[i];
-		fabsSum += __builtin_fabsf(linearEquCoefs[i]);
+		fabsSum += fabsf(linearEquCoefs[i]);
 	}
 
 	edprintf("========================================"
@@ -1264,7 +1264,7 @@ V90Equalizer::convertEqualizerToMmx()
 
 	/* `!= 0.0f`, one FCOM and a `je` -- see linearEquBeta above. */
 	if (dfeBeta != 0.0f) {
-		int shift = log10(__builtin_fabsf(
+		int shift = log10(fabsf(
 					(1.0f / (dfeBeta * 1048576.0f))
 					* maxDfeCoefValue))
 				  / log10(2.0f);
@@ -1302,7 +1302,7 @@ V90Equalizer::convertEqualizerToMmx()
 			minHi = a;
 		absSumHi += a;
 		fsum += dfeCoefs[i];
-		fabsSum += __builtin_fabsf(dfeCoefs[i]);
+		fabsSum += fabsf(dfeCoefs[i]);
 	}
 
 	edprintf("========================================"
@@ -2222,7 +2222,7 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 					if (dsplibs_debug_level > 1)
 						dsplibs_debug_printf("V90Equalizer: ph4MeanErrorEnergyBeforeToAfterUpdateRatio = %c%d.%03d\r\n",
 						    V90EQU_ERRSIGN(ph4MeanErrorEnergyBeforeToAfterUpdateRatio),
-						    (int)__builtin_fabsl((long double)ph4MeanErrorEnergyBeforeToAfterUpdateRatio),
+						    (int)fabsl((long double)ph4MeanErrorEnergyBeforeToAfterUpdateRatio),
 						    V90EQU_ERRFRAC(ph4MeanErrorEnergyBeforeToAfterUpdateRatio));
 				}
 			}
@@ -2564,7 +2564,7 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 			 * emits the object's `fld %st(0); fabs; flds;
 			 * fcomp %st(1); jae`.  Finding F5701.
 			 */
-			aerr = __builtin_fabsl((long double)err);
+			aerr = fabsl((long double)err);
 			if (aerr > 300.0 && state > 1) {
 				if (highErrorCount <= 1)
 					edprintf("V90Equalizer: High momentary error, symbol#%d, error = %c%d.%03d,   soft Decision = %c%d.%03d\r\n",
@@ -2573,7 +2573,7 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 						 (int)aerr,
 						 V90EQU_ERRFRAC(err),
 						 V90EQU_ERRSIGN(soft),
-						 (int)__builtin_fabsl((long double)soft),
+						 (int)fabsl((long double)soft),
 						 V90EQU_ERRFRAC(soft));
 				highErrorCount++;
 				updateCoefs = 0;

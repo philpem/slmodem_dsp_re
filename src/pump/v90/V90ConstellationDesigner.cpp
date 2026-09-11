@@ -870,8 +870,8 @@ V90ConstellationDesigner::setConstellationToNoise(float noiseEnergy,
 						  unsigned char *lastUcode,
 						  unsigned char (*allow)[128])
 {
-	float dMinHighRates = __builtin_nanf("");
-	float dMinLowRates = __builtin_nanf("");
+	float dMinHighRates = nanf("");
+	float dMinLowRates = nanf("");
 	float retrainFactor;
 	short keptDmin = dMin;
 	unsigned char picked[128];
@@ -920,7 +920,7 @@ V90ConstellationDesigner::setConstellationToNoise(float noiseEnergy,
 		dsplibs_debug_printf(
 		    "V90ConstellationDesigner: noiseEnergy = %c%d.%02d\r\n",
 		    !(0.0f >= noiseEnergy) ? '+' : '-',
-		    (int)__builtin_fabsf(noiseEnergy),
+		    (int)fabsf(noiseEnergy),
 		    __builtin_abs((int)((noiseEnergy
 					 - (float)(int)noiseEnergy) * 100.0f)));
 	if (DSPLIB_DEBUG_ON())
@@ -1055,18 +1055,18 @@ V90ConstellationDesigner::setConstellationToNoise(float noiseEnergy,
 		 params->USE_RESTRICED_DMIN);
 	edprintf("V90ConstellationDesigner: pdSnrThreshForRateUp =" " %c%d.%02d\r\n",
 		 !(0.0f >= pdSnrThreshForRateUp) ? '+' : '-',
-		 (int)__builtin_fabsf(pdSnrThreshForRateUp),
+		 (int)fabsf(pdSnrThreshForRateUp),
 		 __builtin_abs((int)((pdSnrThreshForRateUp - (float)(int)pdSnrThreshForRateUp)
 				     * 100.0)));
 	edprintf("V90ConstellationDesigner: pdSnrThreshForRateDown ="
 		 " %c%d.%02d\r\n",
 		 !(0.0f >= pdSnrThreshForRateDown) ? '+' : '-',
-		 (int)__builtin_fabsf(pdSnrThreshForRateDown),
+		 (int)fabsf(pdSnrThreshForRateDown),
 		 __builtin_abs((int)((pdSnrThreshForRateDown - (float)(int)pdSnrThreshForRateDown)
 				     * 100.0)));
 	edprintf("V90ConstellationDesigner: pdSnrThreshForRetrain =" " %c%d.%02d\r\n",
 		 !(0.0f >= pdSnrThreshForRetrain) ? '+' : '-',
-		 (int)__builtin_fabsf(pdSnrThreshForRetrain),
+		 (int)fabsf(pdSnrThreshForRetrain),
 		 __builtin_abs((int)((pdSnrThreshForRetrain - (float)(int)pdSnrThreshForRetrain)
 				     * 100.0)));
 
@@ -1850,7 +1850,7 @@ V90ConstellationDesigner::adjustConstellationsPower()
 	edprintf("V90ConstellationDesigner:\r\n");
 	edprintf("V90ConstellationDesigner: initial sqrt(power)  = %c%d.%03d\r\n",
 		 !(0.0f >= first) ? '+' : '-',
-		 (int)__builtin_fabsl(x87_fsqrt((long double)first)),
+		 (int)fabsl(x87_fsqrt((long double)first)),
 		 __builtin_abs((int)((x87_fsqrt((long double)first)
 				      - (long double)(int)x87_fsqrt(
 						(long double)first))
@@ -1861,7 +1861,7 @@ V90ConstellationDesigner::adjustConstellationsPower()
 		 "power in dBm0  = %c%d.%01d\r\n",
 		 index,
 		 !(0.0f >= dBm0) ? '+' : '-',
-		 (int)__builtin_fabsf(dBm0),
+		 (int)fabsf(dBm0),
 		 __builtin_abs((int)((dBm0 - (float)(int)dBm0) * 10.0f)));
 
 	/*
@@ -1980,7 +1980,7 @@ V90ConstellationDesigner::adjustConstellationsPower()
 		 "new sqrt(power)  = %c%d.%03d\r\n",
 		 removed,
 		 !(0.0f >= p) ? '+' : '-',
-		 (int)__builtin_fabsl(x87_fsqrt((long double)p)),
+		 (int)fabsl(x87_fsqrt((long double)p)),
 		 __builtin_abs((int)((x87_fsqrt((long double)p)
 				      - (long double)(int)x87_fsqrt(
 						(long double)p))
@@ -1991,7 +1991,7 @@ V90ConstellationDesigner::adjustConstellationsPower()
 		 "final power in dBm0  = %c%d.%01d\r\n",
 		 index,
 		 !(0.0f >= dBm0) ? '+' : '-',
-		 (int)__builtin_fabsf(dBm0),
+		 (int)fabsf(dBm0),
 		 __builtin_abs((int)((dBm0 - (float)(int)dBm0) * 10.0f)));
 
 	edprintf("--------------------------------------\r\n");
@@ -2336,7 +2336,7 @@ V90ConstellationDesigner::adjustConstellationsToNewK(short (*ucode)[128],
 	edprintf("V90ConnectionDesigner: real K before optimization  "
 		 "= %c%d.%05d\r\n",
 		 !(0.0f >= beforeK) ? '+' : '-',
-		 (int)__builtin_fabsf(beforeK),
+		 (int)fabsf(beforeK),
 		 __builtin_abs((int)((beforeK - (float)(int)beforeK)
 				     * 100000.0f)));
 
@@ -2516,7 +2516,7 @@ reduce:
 	edprintf("V90ConnectionDesigner: real K after optimization  "
 		 "= %c%d.%05d\r\n",
 		 !(0.0f >= realK(mappingParams)) ? '+' : '-',
-		 (int)__builtin_fabsf(realK(mappingParams)),
+		 (int)fabsf(realK(mappingParams)),
 		 __builtin_abs((int)((realK(mappingParams)
 				      - (float)(int)realK(mappingParams))
 				     * 100000.0f)));
@@ -2541,7 +2541,7 @@ reduce:
 	edprintf("V90ConnectionDesigner: Optimizing new K: "
 		 "new sqrt(power)  = %c%d.%03d\r\n",
 		 !(0.0f >= p) ? '+' : '-',
-		 (int)__builtin_fabsl(x87_fsqrt((long double)p)),
+		 (int)fabsl(x87_fsqrt((long double)p)),
 		 __builtin_abs((int)((x87_fsqrt((long double)p)
 				      - (long double)(int)x87_fsqrt(
 						(long double)p))
@@ -2559,7 +2559,7 @@ reduce:
 		 "final power in dBm0  = %c%d.%01d\r\n",
 		 index,
 		 !(0.0f >= dBm0) ? '+' : '-',
-		 (int)__builtin_fabsf(dBm0),
+		 (int)fabsf(dBm0),
 		 __builtin_abs((int)((dBm0 - (float)(int)dBm0) * 10.0f)));
 
 	edprintf("--------------------------------------------------"

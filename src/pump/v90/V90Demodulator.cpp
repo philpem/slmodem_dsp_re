@@ -435,14 +435,14 @@ V90Demodulator::sessionTermination()
 			edprintf("V90Demodulator on sessionTermination: mean "
 				 "of timing offset History  = %c%d.%04d\r\n",
 				 !(0.0f >= mean) ? '+' : '-',
-				 (int)__builtin_fabsf(mean),
+				 (int)fabsf(mean),
 				 (frac < 0) ? -frac : frac);
 
 			frac = (int)((std - (float)(int)std) * 10000.0f);
 			edprintf("V90Demodulator on sessionTermination: std "
 				 "of timing offset History  = %c%d.%04d\r\n",
 				 !(0.0f >= std) ? '+' : '-',
-				 (int)__builtin_fabsf(std),
+				 (int)fabsf(std),
 				 (frac < 0) ? -frac : frac);
 
 			edprintf("V90Demodulator on sessionTermination: "
@@ -772,7 +772,7 @@ V90Demodulator::exitPhase3()
 	frac = (int)((ratio - (float)whole) * 1.0e8f);
 	edprintf("V90Demodulator: TRN1d RMS Ratio = %c%d.%08d\r\n",
 		 !(0.0f >= additionalCPinfo->float_08) ? '+' : '-',
-		 (int)__builtin_fabsf(ratio),
+		 (int)fabsf(ratio),
 		 (frac < 0) ? -frac : frac);
 
 	additionalCPinfo->word_0c = autoDigitalImpDetector->detectedPcmType;
@@ -916,13 +916,13 @@ V90Demodulator::enterDataSteadyState()
 		frac = (int)((mean - (float)(int)mean) * 10000.0f);
 		edprintf("V90Demodulator: mean of timing offset History  = " "%c%d.%04d\r\n",
 			 !(0.0f >= mean) ? '+' : '-',
-			 (int)__builtin_fabsf(mean),
+			 (int)fabsf(mean),
 			 (frac < 0) ? -frac : frac);
 
 		frac = (int)((std - (float)(int)std) * 10000.0f);
 		edprintf("V90Demodulator: std of timing offset History  = " "%c%d.%04d\r\n",
 			 !(0.0f >= std) ? '+' : '-',
-			 (int)__builtin_fabsf(std),
+			 (int)fabsf(std),
 			 (frac < 0) ? -frac : frac);
 
 		edprintf("V90Demodulator: 1000* std = %d\r\n",
@@ -1397,7 +1397,7 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 			frac = (int)((agc.gain - (float)whole) * 1.0e6f);
 			edprintf("V90Demodulator: Agc Gain = %c%d.%06d\r\n",
 				 !(0.0f >= agc.gain) ? '+' : '-',
-				 (int)__builtin_fabsf(agc.gain),
+				 (int)fabsf(agc.gain),
 				 (frac < 0) ? -frac : frac);
 
 			phase3Demodulator->byte_3f9 = 1;
@@ -1491,14 +1491,14 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 			frac = (int)((agc.level - (float)whole) * 1.0e2f);
 			edprintf("V90Demodulator: Agc Energy = %c%d.%02d\r\n",
 				 !(0.0f >= agc.level) ? '+' : '-',
-				 (int)__builtin_fabsf(agc.level),
+				 (int)fabsf(agc.level),
 				 (frac < 0) ? -frac : frac);
 
 			whole = (int)agc.gain;
 			frac = (int)((agc.gain - (float)whole) * 1.0e6f);
 			edprintf("V90Demodulator: Agc Gain = %c%d.%06d\r\n",
 				 !(0.0f >= agc.gain) ? '+' : '-',
-				 (int)__builtin_fabsf(agc.gain),
+				 (int)fabsf(agc.gain),
 				 (frac < 0) ? -frac : frac);
 
 			if (quickConnect == 0) {
@@ -1715,10 +1715,10 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 					 "Silence RRN... current Mean Error = "
 					 "%c%d.%04d,    average Mean Error = " "%c%d.%04d\r\n",
 					 !(0.0f >= cur) ? '+' : '-',
-					 (int)__builtin_fabsf(cur),
+					 (int)fabsf(cur),
 					 (frac < 0) ? -frac : frac,
 					 !(0.0f >= avg) ? '+' : '-',
-					 (int)__builtin_fabsf(avg),
+					 (int)fabsf(avg),
 					 (frac2 < 0) ? -frac2 : frac2);
 
 				float_274 = equalizer->meanErrorEnergyMean;
@@ -1773,10 +1773,10 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 			edprintf("V90Demodulator: about to redesign... current "
 				 "Mean Error = %c%d.%04d,    average Mean " "Error = %c%d.%04d\r\n",
 				 !(0.0f >= cur) ? '+' : '-',
-				 (int)__builtin_fabsf(cur),
+				 (int)fabsf(cur),
 				 (frac < 0) ? -frac : frac,
 				 !(0.0f >= avg) ? '+' : '-',
-				 (int)__builtin_fabsf(avg),
+				 (int)fabsf(avg),
 				 (frac2 < 0) ? -frac2 : frac2);
 
 			verdict = constellationDesigner->process(
@@ -1944,7 +1944,7 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 			frac = (int)((cur - (float)whole) * 1.0e3f);
 			dsplibs_debug_printf("V90Demodulator: Error Energy = " "%c%d.%03d\r\n",
 					     !(0.0f >= cur) ? '+' : '-',
-					     (int)__builtin_fabsf(cur),
+					     (int)fabsf(cur),
 					     (frac < 0) ? -frac : frac);
 		}
 	}
@@ -1961,7 +1961,7 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 			    "[ppm]  = %c%d.%03d\r\n",
 			    !(0.0f >= resampler.getTimingOffsetPPM()) ? '+'
 								     : '-',
-			    (int)__builtin_fabsf(resampler.getTimingOffsetPPM()),
+			    (int)fabsf(resampler.getTimingOffsetPPM()),
 			    (frac < 0) ? -frac : frac);
 		}
 	}
@@ -2049,7 +2049,7 @@ V90Demodulator::reset(unsigned int quickConnectArg)
 	frac = (int)((offset - (float)whole) * 1000.0f);
 	edprintf("V90Demodulator reset: Baud Offset = %c%d.%03d\r\n",
 		 !(0.0f >= offset) ? '+' : '-',
-		 (int)__builtin_fabsf(offset),
+		 (int)fabsf(offset),
 		 (frac < 0) ? -frac : frac);
 
 	resampler.V90Resampler::reset();

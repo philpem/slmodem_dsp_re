@@ -19,6 +19,7 @@
  */
 
 #include <stddef.h>
+#include <math.h>
 
 extern "C" {
 #include "dsplib/pcm.h"
@@ -229,7 +230,7 @@ typedef char adid_size[(sizeof(V90AutoDigitalImpDetector) == 0xa9b0) ? 1 : -1];
 #define ADID_PRINT_SIGN(v)	(!(0.0f >= (v)) ? '+' : '-')
 
 /* `fabs` then a truncating `fistpl`. */
-#define ADID_PRINT_WHOLE(v)	((int)__builtin_fabsf(v))
+#define ADID_PRINT_WHOLE(v)	((int)fabsf(v))
 
 /*
  * The hundredths: the fractional part scaled and truncated, then made
@@ -851,7 +852,7 @@ V90AutoDigitalImpDetector::unitePhasesInfoOfUref(short at)
 	 * allocation, and no spelling of this declaration reaches it.
 	 * Finding F7848.
 	 */
-	float bestVar = __builtin_nanf("");
+	float bestVar = nanf("");
 	float bestValue;
 
 	do {
@@ -1675,7 +1676,7 @@ V90AutoDigitalImpDetector::porcessSecondStudy()
 	 * leave the nearest at its sentinel -- and it is a deterministic zero
 	 * rather than an uninitialised read.
 	 */
-	float second = __builtin_nanf("");
+	float second = nanf("");
 	short bestAt = 0;
 	unsigned char at;
 
@@ -2666,7 +2667,7 @@ V90AutoDigitalImpDetector::determineMaxUcode(short maxCode)
 		short i;
 
 		for (i = 40; i <= 59; i++)
-			sum += __builtin_fabsf(
+			sum += fabsf(
 			    linearMappingVar[unSuspectedPhase][i]);
 
 		/*
@@ -2812,7 +2813,7 @@ V90AutoDigitalImpDetector::determineMaxUcode(short maxCode)
 
 				if ((int)code > (int)maxCode)
 					usableMask[phase][code] = 0;
-				else if (__builtin_fabsf(linearMappingVar[phase][code])
+				else if (fabsf(linearMappingVar[phase][code])
 					 >= lim)
 					usableMask[phase][code] = 0;
 				else

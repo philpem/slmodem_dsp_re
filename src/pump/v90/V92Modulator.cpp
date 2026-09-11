@@ -91,6 +91,7 @@
  */
 
 #include <stddef.h>
+#include <math.h>
 
 extern "C" {
 #include "dsplib/debug.h"
@@ -843,7 +844,7 @@ sign_of(float v)
 static int
 whole_of(float v)
 {
-	return (int)__builtin_fabsf(v);
+	return (int)fabsf(v);
 }
 
 static int

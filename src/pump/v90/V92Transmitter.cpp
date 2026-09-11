@@ -44,6 +44,7 @@
  */
 
 #include <stddef.h>
+#include <math.h>
 
 #include "dsplib/V92Transmitter.h"
 #include "dsplib/sysdep.h"
@@ -285,7 +286,7 @@ sign_of(float v)
 static int
 whole_of(float v)
 {
-	return (int)__builtin_fabsf(v);
+	return (int)fabsf(v);
 }
 
 static int
