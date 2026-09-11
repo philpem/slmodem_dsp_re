@@ -225,6 +225,8 @@ def render_relocation(target):
                       for item in target)).replace("%", r"\x25")
 
 
+# Grade 1 reuses the canonical grade-0 body for every non-exact candidate.
+@functools.lru_cache(maxsize=None)
 def body(path, sym):
     """(bytes, {offset: (type, canonical target)}), offsets relative."""
     out = subprocess.run(
@@ -1068,6 +1070,8 @@ def main():
                     help="fail if any previously grade-0 EXACT symbol regresses")
     ap.add_argument("--update", action="store_true",
                     help="record the current exact-symbol set as the new floor")
+    ap.add_argument("--json-out", metavar="PATH",
+                    help="write the final exact/regalloc counts as JSON")
     a = ap.parse_args()
 
     if a.self_test:
@@ -1196,7 +1200,6 @@ def main():
             comdat_split.append((k, sorted({s[0][0] for s in scored})))
         (v, n), worst_obj = max(scored, key=lambda s: RANK.get(s[0][0], 9))
         ours[k] = worst_obj
-        bb, br = body(worst_obj, k)
         #
         # GRADE 1 IS CHECKED ONLY WHERE GRADE 0 FAILED.  A byte-identical
         # function is trivially alpha-equal and asking again costs two
@@ -1254,7 +1257,17 @@ def main():
         print("  NODATA  -- could not be disassembled     : %4d" % len(buckets["NODATA"]))
 
     now = {"exact": ex, "regalloc": ra, "compared": n,
+           "reference_functions": len(blob),
+           "unresolved": len(buckets["UNRESOLVED"]),
+           "reloc": len(buckets["RELOC"]),
+           "bytes": len(buckets["BYTES"]),
+           "size": len(buckets["SIZE"]),
+           "nodata": len(buckets["NODATA"]),
            RATCHET_EXACT_SYMBOLS: sorted(k for _, _, k in buckets["EXACT"])}
+    if a.json_out:
+        with open(a.json_out, "w") as f:
+            json.dump(now, f, indent=2, sort_keys=True)
+            f.write("\n")
     if a.update:
         with open(RATCHET, "w") as f:
             json.dump(now, f, indent=2, sort_keys=True)
