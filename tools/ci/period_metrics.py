@@ -73,8 +73,7 @@ def main():
     print("| Byte-identical functions | %d | %d | %s | %s |" %
           (base["exact"], head["exact"], delta(exact_delta),
            exact_status))
-    for name, label in (("regalloc", "Same code, different register allocation"),
-                        ("reference_functions", "Reference functions")):
+    for name, label in (("regalloc", "Same code, different register allocation"),):
         change = head[name] - base[name]
         print("| %s | %d | %d | %s | informational |" %
               (label, base[name], head[name], delta(change)))
