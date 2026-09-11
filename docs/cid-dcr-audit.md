@@ -1253,3 +1253,26 @@ unchanged; the period-build edits only correct explanatory comments.
 
 Full-object completion still requires the strict partial-link comparison.
 None of the exploratory results changes what that check accepts.
+
+## Ring-detector resolution: the split was the source, not a flag (F11351)
+
+The #21 ring inquiry in this audit treated `RingDetector_Reset`/`Create` as a
+source-plus-flags question inside one `voice.c`, and recorded the three wrapper
+gains only under the diagnostic global `-fno-unit-at-a-time` profile. The
+object's `STT_FILE` records settle it structurally: `voice.c`, `fax.c`, `rd.c`
+and `ringDetector.c` are four input files, in that order, and the wrappers
+(`rd.c`) and the detector (`ringDetector.c`) are two of them. Compiling them as
+two TUs, bodies unchanged and no flag touched, restores the reference's call
+boundaries and closes `RD_delete`, `RD_process` and `RD_ring_details` exactly
+under retained `-O3`: `voice.c`'s shared symbols go 7 -> 10 EXACT, whole-tree
+grade-0 822 -> 825/1852, no losses.
+
+The prior cells in this section remain valid as *negative* results about the
+merged TU: no Reset/Create source or order form closed while the two groups sat
+in one file, and the crossjumping/arm-order controls still describe `RD_create`'s
+remaining `BYTES(11)` arm-order residual. What changed is the frame: the next
+discriminator for `Reset` is its live-range/spill structure (blob 121
+instructions against our 117, with three reference spills we do not carry), not
+another store permutation or optimizer profile. Finding F11351; open work stays
+on #21, and the general "which merged files are really several TUs" audit is
+#6/#20.

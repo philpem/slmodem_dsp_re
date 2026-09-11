@@ -88,6 +88,7 @@ model against the full-TU controls before relying on it.
 | Observation | Next discriminating check |
 | --- | --- |
 | Missing/extra helper calls | Inline status, definition placement, cost estimates and passes; inspect exported binding too |
+| A wrapper CALLS a helper the reference calls, but ours INLINES it (or the reverse), with no flag change | Check the FILE: the two may be separate TUs in the object that this tree merged into one. `-O3` cannot inline across a TU. Move the helper to the FILE symbol's own file and re-measure before trying a flag; the global `-fno-unit-at-a-time` profile buys the same result at tree-wide cost (F11351) |
 | Register-only/dead-pop difference | Preceding TU emission and inlining; inspect live ranges before rewriting stores/types |
 | Load width/signedness or arithmetic differs | Reference operands, field/local types, constants and uses |
 | Stack-size difference | Actual spills, outgoing-call area and alignment; frame size alone does not establish a guarding patch |

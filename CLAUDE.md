@@ -823,6 +823,22 @@ Task numbers are not safe across sessions either: two task stores exist whose
   ABSENCE does.** A resolved PC-relative displacement with no relocation means
   the target is `LOCAL` and in the same TU. A relocation being present only
   means the symbol is `GLOBAL`. Findings F306 and F333.
+- **A SPAN NAME IS NOT A TU NAME, AND MERGING TWO TUs INTO ONE MOVES CALL
+  BOUNDARIES.** `docs/modules.md`'s `bracket` extents and the prefix matching in
+  `docs/attribution.md`/`tools/service.py` can put several of the object's input
+  files into one span; the `STT_FILE` records in `.symtab` are the authority on
+  which files existed and in what order, and `ld -r` preserves them. If a
+  function is non-exact because ours CALLS a helper the reference kept
+  out-of-line, or because ours INLINES one the reference calls, suspect that what
+  is one file here was two files in the object -- `-O3` can only inline within a
+  TU. Move the function into the FILE symbol's own TU and re-measure before
+  touching flags: the split recovers the boundary with NO flag change, where the
+  global `-fno-unit-at-a-time` workaround buys it by changing the whole tree.
+  Finding F11351 (`rd.c` and `ringDetector.c` split out of `voice.c`, +3 exact);
+  the same question for the rest of the object is #6/#20. **A new TU means its
+  `t_*` mutation suite must move with it** -- `anchorcheck` reports the detached
+  anchors as "matches 0 time(s)", and a suite covering two new files has to be
+  split so each anchor is searched in the file that now holds it.
 - `tools/dis.py` shadows the standard library's `dis`, which `inspect`
   imports. A tool in `tools/` that reaches for pyelftools dies with
   `AttributeError: module 'dis' has no attribute 'COMPILER_FLAG_NAMES'`,

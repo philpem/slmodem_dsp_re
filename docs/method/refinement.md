@@ -1352,6 +1352,41 @@ information the compiler needed and then hands back what it would have derived.
 Finding F7941, and it is lever 9's rule -- act on what the compiler was forced
 to encode -- applied to an induction variable.
 
+### Lever 14. The TRANSLATION-UNIT PARTITION is a source property the object records
+
+`src/service/voice.c` held the whole ring detector, and `RD_delete`,
+`RD_process` and `RD_ring_details` could not be made exact at `-O3`: ours
+inlined `RingDetector_Delete`/`RingDetector_Process`/`RingDetector_GetLastRing`
+into the wrappers, while the object CALLS all three. The tempting answer was a
+flag -- the global `-fno-unit-at-a-time` profile does recover those three -- but
+the object says something structural. Its `STT_FILE` records are
+
+    voice.c, fax.c, rd.c, ringDetector.c
+
+in that input order, and the wrappers are in `rd.c` while the detector is in
+`ringDetector.c`. `-O3` cannot inline across a TU, so the reference's calls are
+not a compiler choice at all; they are the file split. Moving the two groups
+into their own files, bodies unchanged and no flag touched, is **7 -> 10 EXACT**
+in that TU and **822 -> 825** over the tree, denominator unchanged. Finding
+F11351.
+
+**What to look at, and why the usual maps will not show it.** The authority is
+`readelf -sW`'s `FILE` records (or `docs/modules.md`'s source, `tools/tumap.py`),
+NOT a span name and NOT `docs/attribution.md`'s prefix matching -- those merge
+several input files into one `bracket` extent whenever the inner TUs have no
+local symbol to anchor them, which is exactly the silent case. `ld -r` keeps
+the `FILE` records in input order, so they answer both "was this two files?" and
+"in what order?".
+
+**The tell is a call boundary, not a byte count.** A wrapper that `SIZE`s small
+because it inlined a helper, or a constructor that `SIZE`s large because it did
+not inline one the reference contains, is the signal; so is an exact function
+that gains or loses a helper call under an unrelated change. Reach for this
+lever before the flags, and when you do move a function, split its `t_*`
+mutation suite with it: `anchorcheck` reports the detached anchors as "matches 0
+time(s)" and a suite whose anchors now live in two files has to become two
+suites. The same question for the rest of the object is #6/#20.
+
 ## What does not work
 
 - **Renaming a variable.** Free for the compiler (7002). It changes nothing.

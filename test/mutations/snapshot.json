@@ -1203,6 +1203,19 @@
     "swap the entry message's two arguments": "caught"
    }
   },
+  "rd": {
+   "key": "b68c1819d54b1ab00c9f250242843f513ce5db7511f8031f7e39a1193b8656b4",
+   "summary": "7 mutations: 7 caught (7 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "RD_create accepts 9601 rather than 9600": "caught",
+    "RD_create's max_freq is 81": "caught",
+    "RD_create's minOnDur is 121": "caught",
+    "RD_create's min_freq is 16": "caught",
+    "codec 12 falls to the default": "caught",
+    "codec 14 gets the 650 threshold": "caught",
+    "the default threshold is positive": "caught"
+   }
+  },
   "resampler": {
    "key": "4a36d4ff8cc8ab1b06b17eac39a15ae2d1a2aa61c135d324ecb430797c7b0bef",
    "summary": "26 mutations: 26 caught (26 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
@@ -1312,22 +1325,16 @@
    }
   },
   "ringdet": {
-   "key": "4c13eaf39caca28b84c4ce9fb57a5e074be9833609251edbfa7854c4a4b94332",
-   "summary": "41 mutations: 41 caught (41 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "key": "6b1f6d2a065239a5bb8e120d21332e7d24d9fd55329dae3d1ee538e652aba222",
+   "summary": "34 mutations: 34 caught (34 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "GetLastRing returns the two values swapped": "caught",
     "HIGH's full-amplitude test admits the guard band": "caught",
-    "RD_create accepts 9601 rather than 9600": "caught",
-    "RD_create's max_freq is 81": "caught",
-    "RD_create's minOnDur is 121": "caught",
-    "RD_create's min_freq is 16": "caught",
     "SEARCH latches on a sample equal to the threshold": "caught",
     "SEARCH's positive debounce admits equality": "caught",
     "a crossing does not clear the guard run": "caught",
     "a measured cycle does not restart the half-cycle counter": "caught",
     "a start edge reports the measured frequency": "caught",
-    "codec 12 falls to the default": "caught",
-    "codec 14 gets the 650 threshold": "caught",
     "entering HIGH leaves the idle debounce in place": "caught",
     "entering LOW forgets the sign of its crossing level": "caught",
     "short_38's denominator halves": "caught",
@@ -1336,7 +1343,6 @@
     "the closing edge is not held at minOnDur": "caught",
     "the closing edge's correction is 21 ms": "caught",
     "the cycle marker is the lock debounce, not the idle one": "caught",
-    "the default threshold is positive": "caught",
     "the edge does not restart the report counter": "caught",
     "the first min_off clamp floor drops": "caught",
     "the frequency band excludes its top value": "caught",
