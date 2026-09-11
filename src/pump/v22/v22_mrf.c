@@ -53,7 +53,7 @@ V22_MRF_init(struct v22_mrf *state, const struct v22_mrf_cfg *cfg, int fresh)
 	 */
 	if (fresh)
 		state->history =
-			(short *)sysdep_malloc(V22_MRF_HISTORY *
+			sysdep_malloc(V22_MRF_HISTORY *
 					       sizeof(short));
 
 	for (i = 0; i < state->history_len; i++)

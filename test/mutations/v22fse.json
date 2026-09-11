@@ -38,13 +38,13 @@
  },
  {
   "label": "the history buffer is allocated at the tap count, not twice it",
-  "find": "state->hist = (short *)sysdep_malloc(2 * V22_FSE_HIST);",
-  "replace": "state->hist = (short *)sysdep_malloc(2 * V22_FSE_TAPS);"
+  "find": "state->hist = sysdep_malloc(2 * V22_FSE_HIST);",
+  "replace": "state->hist = sysdep_malloc(2 * V22_FSE_TAPS);"
  },
  {
   "label": "the two output buffers are allocated at the auxiliary size",
-  "find": "state->out_i = (short *)sysdep_malloc(2 * V22_FSE_OUT);",
-  "replace": "state->out_i = (short *)sysdep_malloc(2 * V22_FSE_AUX);"
+  "find": "state->out_i = sysdep_malloc(2 * V22_FSE_OUT);",
+  "replace": "state->out_i = sysdep_malloc(2 * V22_FSE_AUX);"
  },
  {
   "label": "free releases six of the seven buffers",

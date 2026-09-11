@@ -211,7 +211,7 @@ Dual_TONE_create(void)
 	 * 32-bit differential target; on a 64-bit host they would not, and
 	 * the literal would under-allocate.
 	 */
-	st = (struct dual_tone *)sysdep_malloc(sizeof(*st));
+	st = sysdep_malloc(sizeof(*st));
 	if (st == 0)
 		return 0;
 

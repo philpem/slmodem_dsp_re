@@ -17,18 +17,18 @@
  },
  {
   "label": "the FIR blocks are allocated in shorts rather than floats",
-  "find": "\t\tt->fir_coef = (float *)sysdep_malloc(t->fir_len * 4);",
-  "replace": "\t\tt->fir_coef = (float *)sysdep_malloc(t->fir_len * 2);"
+  "find": "\t\tt->fir_coef = sysdep_malloc(t->fir_len * 4);",
+  "replace": "\t\tt->fir_coef = sysdep_malloc(t->fir_len * 2);"
  },
  {
   "label": "the biquad block is 16 bytes rather than 20",
-  "find": "\t\tt->ptr_01b4 = (float *)sysdep_malloc(20);",
-  "replace": "\t\tt->ptr_01b4 = (float *)sysdep_malloc(16);"
+  "find": "\t\tt->ptr_01b4 = sysdep_malloc(20);",
+  "replace": "\t\tt->ptr_01b4 = sysdep_malloc(16);"
  },
  {
   "label": "the biquad state block is 4 bytes rather than 8",
-  "find": "\t\tt->ptr_01b8 = (float *)sysdep_malloc(8);",
-  "replace": "\t\tt->ptr_01b8 = (float *)sysdep_malloc(4);"
+  "find": "\t\tt->ptr_01b8 = sysdep_malloc(8);",
+  "replace": "\t\tt->ptr_01b8 = sysdep_malloc(4);"
  },
  {
   "label": "a NULL configuration is not replaced by the default",

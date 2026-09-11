@@ -37,7 +37,7 @@ VTBv32_init(struct vtb *state, short mode, int alloc)
 	int i;
 
 	if (alloc)
-		state->paths = (struct vtb_path *)sysdep_malloc(
+		state->paths = sysdep_malloc(
 			16 * 8 * sizeof(struct vtb_path));
 	paths = state->paths;
 

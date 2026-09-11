@@ -59,7 +59,7 @@ dp_runtime_create(void *modem)
 	struct _tagModemParameters *rt;
 	struct dsp_info *info;
 
-	rt = (struct _tagModemParameters *)sysdep_malloc(sizeof(*rt));
+	rt = sysdep_malloc(sizeof(*rt));
 	if (!rt)
 		return 0;
 

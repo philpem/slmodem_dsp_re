@@ -554,10 +554,10 @@ TONE_create(struct fdsp_tone *t, const struct fdsp_tone_cfg *cfg)
 	memcpy(t, cfg, sizeof(*cfg));
 
 	if (allocated && t->fir_len > 0) {
-		t->fir_coef = (float *)sysdep_malloc(t->fir_len * 4);
-		t->fir_dly = (float *)sysdep_malloc(t->fir_len * 4);
-		t->ptr_01b4 = (float *)sysdep_malloc(20);
-		t->ptr_01b8 = (float *)sysdep_malloc(8);
+		t->fir_coef = sysdep_malloc(t->fir_len * 4);
+		t->fir_dly = sysdep_malloc(t->fir_len * 4);
+		t->ptr_01b4 = sysdep_malloc(20);
+		t->ptr_01b8 = sysdep_malloc(8);
 	}
 
 	/*

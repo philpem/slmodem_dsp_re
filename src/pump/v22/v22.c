@@ -171,7 +171,7 @@ v22_create(void *modem, int id, int caller, int srate, int max_frag,
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("v22: create...\n");
 
-	dp = (struct v22_dp *)sysdep_malloc(sizeof(*dp));
+	dp = sysdep_malloc(sizeof(*dp));
 	if (dp == NULL)
 		return NULL;
 	sysdep_memset(dp, 0, sizeof(*dp));

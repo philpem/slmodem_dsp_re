@@ -127,7 +127,7 @@ SGD_create(struct sgd *s, const struct sgd_cfg *cfg)
 	unsigned short i;
 
 	if (s == NULL) {
-		s = (struct sgd *)sysdep_malloc(sizeof(struct sgd));
+		s = sysdep_malloc(sizeof(struct sgd));
 		fresh = 1;
 	}
 	if (cfg == NULL)
@@ -139,7 +139,7 @@ SGD_create(struct sgd *s, const struct sgd_cfg *cfg)
 	s->word_left = (short)(s->cfg.gen.word_syms - 1);
 
 	if (fresh)
-		s->hist = (unsigned short *)sysdep_malloc(
+		s->hist = sysdep_malloc(
 		    (unsigned short)(2 * (s->cfg.hist_len + s->cfg.hist_extra)
 				     - 2));
 

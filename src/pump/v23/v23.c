@@ -116,7 +116,7 @@ v23_create(void *modem, int id, int caller, int srate, int max_frag,
 
 	/* The original prints "v23: create...\n" here at debug level 2. */
 
-	dp = (struct v23_dp *)sysdep_malloc(sizeof(*dp));
+	dp = sysdep_malloc(sizeof(*dp));
 	if (dp == NULL)
 		return NULL;
 	sysdep_memset(dp, 0, sizeof(*dp));

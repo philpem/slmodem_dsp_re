@@ -45,7 +45,7 @@ FIFO8_create(struct fifo8 *f, const struct fifo8_cfg *cfg)
 
 	if (f == 0) {
 		f = sysdep_malloc(sizeof(*f));
-		f->buf = (unsigned char *)sysdep_malloc(c.size);
+		f->buf = sysdep_malloc(c.size);
 	}
 
 	f->cfg = c;

@@ -640,7 +640,7 @@ vpcm_create(void *modem, int id, int caller, int srate, int max_frag,
 	if (max_frag > VPCM_MAX_FRAG)
 		return 0;
 
-	s = (struct vpcm_root *)sysdep_malloc(sizeof(struct vpcm_root));
+	s = sysdep_malloc(sizeof(struct vpcm_root));
 	if (s == 0)
 		return 0;
 

@@ -132,7 +132,7 @@ voice_create(const struct voice_config *cfg)
 	bcfg.fn_08 = cfg->fn_0c;
 	bcfg.fn_0c = (int (*)(void *, int))cfg->fn_04;
 
-	v = (struct voice_ctx *)sysdep_malloc(sizeof(*v));
+	v = sysdep_malloc(sizeof(*v));
 	if (v == 0)
 		return 0;
 	sysdep_memset(v, 0, sizeof(*v));
