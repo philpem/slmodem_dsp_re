@@ -123635,3 +123635,49 @@ ground-truth agreement is unchanged at 22/31.
 structural tiers except the new self-test, and no `src/` file changed.
 
 (2026-09-11)
+
+## F11353. Audit of explicit `(long double)` casts: 15 no-ops removed, 4 retained for a reason
+
+Issue #69. `src/` carries 160 explicit `(long double)` casts before this
+audit; 15 were removed and 145 remain. An explicit cast is
+*redundant* only when removing it cannot change the expression's type in the C
+abstract machine; where it does change the type, the period object can still
+be byte-identical and the cast must be judged on the source, not on `cmp`.
+
+**Removed, 15 casts in four files, whole-object byte-identical.** The nine
+`frac_of` casts (three each in `ResamplerTiming.cpp`, `V90Phase2Info.cpp`,
+`V92Phase2Info.cpp`) are pure no-ops: `x` and `d` are declared `long double`,
+so `long double x = v`, `(int)v - x` and `d * scale` are already long double
+without the casts. In `V90Equalizer.cpp`, `(long double)(int)scaled` at the
+three `scaled` print sites and the two casts in `convertEqualizerToMmx`'s beta
+assignment (`conv` is already `long double`) are no-ops; so is
+`(long double)(int)d` in `VpcmFloModem.cpp`. Each was recompiled with the
+Gentoo period compiler: `cmp` is byte-identical for all five whole translation
+units, and their `objdump -d` instruction bodies are identical (the only
+diff is the input filename in the header). `make phase J=12`: 375 passed,
+0 failed.
+
+**Retained, the four field-based beta casts.** In `setLinearEquBeta` and
+`setDfeBeta`,
+
+    linearEquMmxBeta = (int)((long double)beta
+                             * linearEquMmxConversionFactor
+                             * (long double)one_shifted_by(shift));
+
+`linearEquMmxConversionFactor` is a **float** and `one_shifted_by` returns
+**int**, so the casts are NOT redundant: without them the product is float
+arithmetic, not long double. Removing them is byte-identical *on this
+compiler* only because `-mfpmath=387` excess precision keeps the float chain
+in an 80-bit register until the `(int)` truncation -- exactly the dependency
+F256 declines to rely on. They are kept to pin the intermediate; a note at
+each site says so. This is the case the issue flagged as needing inspection,
+and inspection answers "not redundant".
+
+**Residual.** The remaining `(long double)` casts either force a type where no
+operand is long double (`(long double)v - (long double)(int)v` on a float, the
+fixed-point conversions in `V90Phase4Demodulator.cpp`), or coerce a call
+argument to `log10l`/`fabsl`. Both are meaningful in the abstract machine and
+were left alone; a tree-wide sweep of call-argument coercions was not
+attempted.
+
+(2026-09-11)
