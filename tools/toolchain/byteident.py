@@ -1256,8 +1256,13 @@ def main():
     if buckets["NODATA"]:
         print("  NODATA  -- could not be disassembled     : %4d" % len(buckets["NODATA"]))
 
+    exact_bytes = sum(blob[k] for _, _, k in buckets["EXACT"])
+    compared_bytes = sum(blob[k] for k in common)
+    if exact_bytes > compared_bytes:
+        raise AssertionError("exact reference bytes exceed compared reference bytes")
     now = {"exact": ex, "regalloc": ra, "compared": n,
            "reference_functions": len(blob),
+           "exact_bytes": exact_bytes, "compared_bytes": compared_bytes,
            "unresolved": len(buckets["UNRESOLVED"]),
            "reloc": len(buckets["RELOC"]),
            "bytes": len(buckets["BYTES"]),
