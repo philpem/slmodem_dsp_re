@@ -207,8 +207,7 @@ struct v34hs_arena {
  * skew that destroys the alignment agreement and has to give the same answer.
  * Finding F322 is what that measured.
  */
-static unsigned char arena_mem[2 * ARENA_STRIDE + 0x10000]
-	__attribute__((aligned(0x10000)));
+static unsigned char arena_mem[2 * ARENA_STRIDE + 0x10000 + 0xffffu];
 static struct v34hs_arena *pa_arena, *pb_arena;
 
 #define arena_a		(*pa_arena)
@@ -515,9 +514,10 @@ v34hs_setup(int mode)
 		unsigned long skew = s ? strtoul(s, NULL, 0) : 0;
 
 		skew &= 0xfffcu;	/* the object wants four-byte alignment */
-		pa_arena = (struct v34hs_arena *)arena_mem;
-		pb_arena = (struct v34hs_arena *)(arena_mem + ARENA_STRIDE
-						  + skew);
+		pa_arena = (struct v34hs_arena *)
+			(((unsigned long)arena_mem + 0xffffu) & ~0xffffu);
+		pb_arena = (struct v34hs_arena *)
+			((unsigned char *)pa_arena + ARENA_STRIDE + skew);
 
 		s = getenv("V34HS_OBJSKEW");
 		objskew = (unsigned)(s ? strtoul(s, NULL, 0) : 0) & 0x7ffcu;

@@ -2636,7 +2636,6 @@ case_xmitmp_entry(void)
 #define TX1_FABE2	0xabe2		/* short: the clear-down's stamp    */
 #define TX1_FABE4	0xabe4		/* short: raised by the clear-down  */
 #define TX1_FABE6	0xabe6		/* short: raised by the retrain     */
-#define TX1_MOHMSG	0xabf0		/* int: moh_message                 */
 #define TX1_MOHRCV	0xabf4		/* int: moh_recvd                   */
 /* +0xabf8 and +0xabf9 are at the head of this file; `run_case_ex` reads one. */
 

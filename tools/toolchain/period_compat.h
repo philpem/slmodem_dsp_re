@@ -36,12 +36,9 @@
  * this position -- verified on both a POD and a polymorphic class, where it
  * correctly reports the vptr's four bytes.
  *
- * It warns twice per polymorphic use ("invalid access to non-static data
- * member of NULL object").  That is the same complaint modern GCC makes as
- * -Winvalid-offsetof, which this tree already suppresses for the same reason:
- * the four Resampler classes are polymorphic because THE OBJECT HAS FOUR
- * VTABLES, so offsetof on them is conditionally-supported rather than wrong,
- * and these assertions are the only thing checking the maps.
+ * Using a non-zero sentinel base (0xDEADBEEF) avoids GCC 3.4.2's C++ warning
+ * "invalid access to non-static data member of NULL object" while producing
+ * the same compile-time offset.
  *
  * TWO ARGUMENTS OR THREE, because one site is
  *
@@ -57,8 +54,10 @@
  * That is the whole trick, and it is why the three-argument form spells the
  * type `Ta, Tb` rather than trying to rejoin it any more cleverly.
  */
-#define DSPLIB_OFF2(T, m)		((unsigned long)&(((T *)0)->m))
-#define DSPLIB_OFF3(Ta, Tb, m)		((unsigned long)&(((Ta, Tb *)0)->m))
+#define DSPLIB_OFF2(T, m) \
+	((unsigned long)&(((T *)0xDEADBEEF)->m) - 0xDEADBEEF)
+#define DSPLIB_OFF3(Ta, Tb, m) \
+	((unsigned long)&(((Ta, Tb *)0xDEADBEEF)->m) - 0xDEADBEEF)
 #define DSPLIB_OFF_PICK(_1, _2, _3, NAME, ...)	NAME
 #define __builtin_offsetof(...) \
 	DSPLIB_OFF_PICK(__VA_ARGS__, DSPLIB_OFF3, DSPLIB_OFF2, )(__VA_ARGS__)
