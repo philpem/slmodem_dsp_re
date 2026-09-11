@@ -30,7 +30,8 @@ jobs:
         working-directory: ${{ runner.temp }}/dsplibs-base
         run: |
           make tc J=2
-          python3 tools/toolchain/compare.py --json-out "$RUNNER_TEMP/base-metrics.json"
+          TC_OUT="$PWD/build/tc_out" python3 "$GITHUB_WORKSPACE/tools/toolchain/compare.py" \
+            --json-out "$RUNNER_TEMP/base-metrics.json"
 
       - name: Gentoo differential smoke build
         run: make period J=2 T="t_fpm_sre t_fpm_fse t_resampler"
