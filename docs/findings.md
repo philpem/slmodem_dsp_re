@@ -123577,6 +123577,10 @@ why the suites had to move with it.
 
 The broader question -- which other merged files are really several TUs, and in
 what input order -- is #6/#20, not #21. `fax.c` is the next obvious member of
-this region (the `FAX_*` dispatcher is still in `voice.c` here).
+this region (the `FAX_*` dispatcher is still in `voice.c` here). The map
+generator that hid the split is itself defective and is tracked in #67: with
+`voice.c` as the only anchor, `tools/tumap.py` extends its `exact` extent to the
+next anchor and reassigns `fax.c`/`rd.c`/`ringDetector.c`'s globals to it, so
+`docs/modules.md` disagreed with the FILE records all along.
 
 (2026-09-11)

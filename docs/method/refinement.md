@@ -1377,6 +1377,11 @@ several input files into one `bracket` extent whenever the inner TUs have no
 local symbol to anchor them, which is exactly the silent case. `ld -r` keeps
 the `FILE` records in input order, so they answer both "was this two files?" and
 "in what order?".
+**The map generator has this wrong today by a bug of its own**: an anchored
+TU's `exact` extent is extended to the next anchor and the intervening TUs'
+globals are reassigned to it, which is how `voice.c` came to own
+`rd.c`/`ringDetector.c`. Tracked in #67; until it is fixed, read `readelf`
+directly for any TU boundary.
 
 **The tell is a call boundary, not a byte count.** A wrapper that `SIZE`s small
 because it inlined a helper, or a constructor that `SIZE`s large because it did
