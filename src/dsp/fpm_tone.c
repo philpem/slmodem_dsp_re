@@ -49,13 +49,13 @@ FPM_TONE_generate(struct fpm_tone *state, short *out, short count)
 	int elapsed;
 	int i;
 
-	p.phase = (unsigned short)state->phase;
-	p.inc = (unsigned short)state->inc;
+	p.phase = state->phase;
+	p.inc = state->inc;
 	p.cos = p.sin = 0;
 
 	for (i = 0; i < count; i++) {
 		FPM_phasor(&p);
-		out[i] = (short)((scale * p.sin) >> 14);
+		out[i] = ((scale * p.sin) >> 14);
 	}
 
 	/*
@@ -63,7 +63,7 @@ FPM_TONE_generate(struct fpm_tone *state, short *out, short count)
 	 * samples, so at 8 kHz it ticks in milliseconds and the default period
 	 * of 450 is the ITU-T V.25 figure directly.
 	 */
-	elapsed = (unsigned short)state->rev_count
+	elapsed = state->rev_count
 		  + (count >> 3);
 
 	if (period > 0 && period <= elapsed) {
@@ -82,6 +82,7 @@ FPM_TONE_generate(struct fpm_tone *state, short *out, short count)
 		else
 			phase = phase + 0x4000;
 
+		/* Explicit int -> unsigned short; the sign conversion is the point. */
 		p.phase = (unsigned short)phase;
 	} else {
 		state->rev_count = (short)elapsed;
@@ -133,8 +134,8 @@ FPM_TONE_generate2(struct fpm_tone *state, short *cos_out, short *sin_out,
 
 	for (i = (short)(count - 1); i != -1; i = (short)(i - 1)) {
 		FPM_phasor(&p);
-		*cos_out++ = (short)((state->cfg.scale * p.cos) >> 14);
-		*sin_out++ = (short)((state->cfg.scale * p.sin) >> 14);
+		*cos_out++ = ((state->cfg.scale * p.cos) >> 14);
+		*sin_out++ = ((state->cfg.scale * p.sin) >> 14);
 	}
 
 	state->phase = p.phase;
@@ -195,6 +196,7 @@ FPM_TONE_create(struct fpm_tone *state, const struct fpm_tone_cfg *cfg)
 	 * omega = 2*pi*f/8000, which is what the Goertzel coefficient needs.
 	 */
 	increment = ((int)state->cfg.freq * 0x8312 + 0x1000) >> 13;
+	/* Explicit int -> unsigned short; the sign conversion is the point. */
 	p.phase = (unsigned short)increment;
 	p.inc = 0;
 	p.cos = p.sin = 0;
@@ -209,9 +211,9 @@ FPM_TONE_create(struct fpm_tone *state, const struct fpm_tone_cfg *cfg)
 	/* Exact-frequency Goertzel section. */
 	state->iir_coeff[0] = 0x4000;
 	state->iir_coeff[1] = 0x4000;
-	state->iir_coeff[2] = (short)-(2 * p.cos);
-	state->iir_coeff[3] = (short)((damp * damp) >> 16);
-	state->iir_coeff[4] = (short)((-(p.cos * damp)) >> 14);
+	state->iir_coeff[2] = -(2 * p.cos);
+	state->iir_coeff[3] = ((damp * damp) >> 16);
+	state->iir_coeff[4] = ((-(p.cos * damp)) >> 14);
 	/*
 	 * Clear the running state: the notch's history, both energy
 	 * estimates, and the whole of the phase-reversal search's working set.
@@ -249,14 +251,14 @@ FPM_TONE_create(struct fpm_tone *state, const struct fpm_tone_cfg *cfg)
 	 */
 	p.inc = p.phase;
 	{
-		const short *src = (const short *)state->cfg.src;
-		short *ref = (short *)state->kernel;
-		short *zero = (short *)state->history;
+		const short *src = state->cfg.src;
+		short *ref = state->kernel;
+		short *zero = state->history;
 
 		for (i = 0; i < len; i++) {
 			FPM_phasor(&p);
 			zero[i] = 0;
-			ref[i] = (short)((2 * src[i] * p.cos) >> 14);
+			ref[i] = ((2 * src[i] * p.cos) >> 14);
 		}
 	}
 
@@ -274,14 +276,14 @@ FPM_TONE_create(struct fpm_tone *state, const struct fpm_tone_cfg *cfg)
 	p.inc = 0;
 	FPM_phasor(&p);
 	{
-		short *blk = (short *)state->rev_block;
-		short *acc = (short *)state->rev_acc;
+		short *blk = state->rev_block;
+		short *acc = state->rev_acc;
 
 		blk[0] = 0x4000;
 		blk[1] = 0x4000;
-		blk[2] = (short)-(2 * p.cos);
+		blk[2] = -(2 * p.cos);
 		blk[3] = 0x3afb;			/* 0.96^2       */
-		blk[4] = (short)((p.cos * -31457) >> 14);	/* -2 * 0.96 */
+		blk[4] = ((p.cos * -31457) >> 14);	/* -2 * 0.96 */
 
 		acc[0] = acc[1] = acc[2] = acc[3] = 0;
 	}
@@ -355,8 +357,8 @@ FPM_TONE_delete(struct fpm_tone *state)
 short
 FPM_TONE_detect(struct fpm_tone *state, const short *samples, short count)
 {
-	const short *kernel = (const short *)state->kernel;
-	short *hist = (short *)state->history;
+	const short *kernel = state->kernel;
+	short *hist = state->history;
 	short *iir_coeff = state->iir_coeff;
 	short *iir_state = state->iir_state;
 	int taps = state->cfg.len;
@@ -400,7 +402,7 @@ FPM_TONE_detect(struct fpm_tone *state, const short *samples, short count)
 		for (k = taps - 1; k > idx; k--)
 			acc += *p-- * *c++;
 
-		sample = (short)(acc >> 15);
+		sample = (acc >> 15);
 
 		/*
 		 * Total energy.  Note this can come out as -32768: a sample of
@@ -412,12 +414,12 @@ FPM_TONE_detect(struct fpm_tone *state, const short *samples, short count)
 		/* In-band energy: the same sample through the resonator. */
 		filtered = sample;
 		{
-			short one = (short)filtered;
+			short one = filtered;
 
 			FPM_iir_filt_II(&one, iir_coeff, iir_state, 1, 1);
 			filtered = one;
 		}
-		in_band = ((int)filtered * filtered) >> 15;
+		in_band = (filtered * filtered) >> 15;
 
 		/*
 		 * `filtered` has the tone notched OUT, so this difference is
@@ -439,9 +441,9 @@ FPM_TONE_detect(struct fpm_tone *state, const short *samples, short count)
 	if (out_of_band < 0)
 		out_of_band = 0;
 
-	state->hist_idx = (short)idx;
-	state->e_total = (short)total;
-	state->e_tone = (short)out_of_band;
+	state->hist_idx = idx;
+	state->e_total = total;
+	state->e_tone = out_of_band;
 
 	if ((short)total < min_level)
 		return FPM_TONE_NOSIGNAL;
@@ -474,13 +476,13 @@ FPM_TONE_generate_demod(struct fpm_tone *state, short *out, short count)
 	int scale = state->cfg.scale;
 	int i;
 
-	p.phase = (unsigned short)state->phase;
-	p.inc = (unsigned short)state->inc;
+	p.phase = state->phase;
+	p.inc = state->inc;
 	p.cos = p.sin = 0;
 
 	for (i = (short)(count - 1); i != -1; i = (short)(i - 1)) {
 		FPM_phasor_demod(&p);
-		*out++ = (short)((scale * p.cos) >> 14);
+		*out++ = ((scale * p.cos) >> 14);
 	}
 
 	state->phase = (short)p.phase;
@@ -575,9 +577,9 @@ FPM_TONE_find_rev(struct fpm_tone *state, short *samples, short count)
 		 * add rather than a modulo because it can only underflow once.
 		 */
 		idx = ((short)(idx + 1) < 2 * lag) ? (short)(idx + 1) : 0;
-		j = (short)(idx - lag);
+		j = (idx - lag);
 		if (j < 0)
-			j = (short)(j + 2 * lag);
+			j = (j + 2 * lag);
 
 		/*
 		 * hist[idx] is the sample from 2*lag ago and is read before it
@@ -590,7 +592,7 @@ FPM_TONE_find_rev(struct fpm_tone *state, short *samples, short count)
 		else if (corr < -32768)
 			corr_s = -32768;
 		else
-			corr_s = (short)corr;
+			corr_s = corr;
 
 		energy += ((samples[n] * samples[n]) >> 15)
 			  - ((hist[idx] * hist[idx]) >> 15);
@@ -599,11 +601,11 @@ FPM_TONE_find_rev(struct fpm_tone *state, short *samples, short count)
 		else if (energy < -32768)
 			energy_s = -32768;
 		else
-			energy_s = (short)energy;
+			energy_s = energy;
 
 		if (2 * corr_s < (state->cfg.rev_thresh * energy_s) >> 15) {
 			if (state->rev_age > 160) {
-				period = (short)(state->rev_age >> 3);
+				period = (state->rev_age >> 3);
 				state->rev_age = 0;
 			}
 		}
@@ -612,7 +614,7 @@ FPM_TONE_find_rev(struct fpm_tone *state, short *samples, short count)
 		hist[idx] = samples[n];
 	}
 
-	state->rev_idx = (short)idx;
+	state->rev_idx = idx;
 	state->rev_corr = corr_s;
 	state->rev_energy = energy_s;
 
@@ -644,8 +646,8 @@ FPM_TONE_find_rev(struct fpm_tone *state, short *samples, short count)
 void
 FPM_TONE_filter(struct fpm_tone *state, short *samples, short count)
 {
-	const short *kernel = (const short *)state->kernel;
-	short *hist = (short *)state->history;
+	const short *kernel = state->kernel;
+	short *hist = state->history;
 	int taps = state->cfg.len;
 	int idx = state->hist_idx;
 	int i;
@@ -666,10 +668,10 @@ FPM_TONE_filter(struct fpm_tone *state, short *samples, short count)
 		for (k = taps - 1; k > idx; k--)
 			acc += *p-- * *c++;
 
-		*samples++ = (short)(acc >> 15);
+		*samples++ = (acc >> 15);
 	}
 
-	state->hist_idx = (short)idx;
+	state->hist_idx = idx;
 }
 
 /*

@@ -10,13 +10,13 @@
  },
  {
   "label": "the delayed tap is taken ahead of the write position, not behind it",
-  "find": "\t\tj = (short)(idx - lag);",
-  "replace": "\t\tj = (short)(idx + lag);"
+  "find": "\t\tj = (idx - lag);",
+  "replace": "\t\tj = (idx + lag);"
  },
  {
   "label": "the negative delayed index wraps by one lag instead of two",
-  "find": "\t\t\tj = (short)(j + 2 * lag);",
-  "replace": "\t\t\tj = (short)(j + lag);"
+  "find": "\t\t\tj = (j + 2 * lag);",
+  "replace": "\t\t\tj = (j + lag);"
  },
  {
   "label": "the correlation term truncates instead of rounding",
@@ -75,7 +75,7 @@
  },
  {
   "label": "the interval is reported in samples rather than eight-sample ticks",
-  "find": "\t\t\t\tperiod = (short)(state->rev_age >> 3);",
+  "find": "\t\t\t\tperiod = (state->rev_age >> 3);",
   "replace": "\t\t\t\tperiod = state->rev_age;"
  },
  {
@@ -130,18 +130,18 @@
  },
  {
   "label": "filter: the second loop covers the write position a second time",
-  "find": "\t\tfor (k = taps - 1; k > idx; k--)\n\t\t\tacc += *p-- * *c++;\n\n\t\t*samples++ = (short)(acc >> 15);",
-  "replace": "\t\tfor (k = taps - 1; k >= idx; k--)\n\t\t\tacc += *p-- * *c++;\n\n\t\t*samples++ = (short)(acc >> 15);"
+  "find": "\t\tfor (k = taps - 1; k > idx; k--)\n\t\t\tacc += *p-- * *c++;\n\n\t\t*samples++ = (acc >> 15);",
+  "replace": "\t\tfor (k = taps - 1; k >= idx; k--)\n\t\t\tacc += *p-- * *c++;\n\n\t\t*samples++ = (acc >> 15);"
  },
  {
   "label": "filter: the output keeps one bit too many",
-  "find": "\t\t*samples++ = (short)(acc >> 15);",
-  "replace": "\t\t*samples++ = (short)(acc >> 14);"
+  "find": "\t\t*samples++ = (acc >> 15);",
+  "replace": "\t\t*samples++ = (acc >> 14);"
  },
  {
   "label": "filter: the write position is not carried between calls",
-  "find": "\t\t*samples++ = (short)(acc >> 15);\n\t}\n\n\tstate->hist_idx = (short)idx;",
-  "replace": "\t\t*samples++ = (short)(acc >> 15);\n\t}\n"
+  "find": "\t\t*samples++ = (acc >> 15);\n\t}\n\n\tstate->hist_idx = idx;",
+  "replace": "\t\t*samples++ = (acc >> 15);\n\t}\n"
  },
  {
   "label": "filter: a negative count does nothing, as FPM_TONE_find_rev's does",
