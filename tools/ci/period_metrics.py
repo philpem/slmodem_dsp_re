@@ -6,7 +6,8 @@ import json
 import sys
 
 
-METRICS = ("exact", "regalloc", "compared", "reference_functions")
+METRICS = ("exact", "regalloc", "unresolved", "reloc", "bytes", "size",
+           "nodata", "compared", "reference_functions")
 MARKER = "<!-- gentoo-period-metrics -->"
 
 
@@ -31,6 +32,11 @@ def load(path):
         raise ValueError("%s has no reference functions" % path)
     if metrics["compared"] > metrics["reference_functions"]:
         raise ValueError("%s compares more functions than the reference contains" % path)
+    buckets = ("exact", "regalloc", "unresolved", "reloc", "bytes", "size",
+               "nodata")
+    if sum(metrics[name] for name in buckets) != metrics["compared"]:
+        raise ValueError("%s has a bucket total different from functions compared" %
+                         path)
     return metrics
 
 
@@ -73,13 +79,23 @@ def main():
     print("| Byte-identical functions | %d | %d | %s | %s |" %
           (base["exact"], head["exact"], delta(exact_delta),
            exact_status))
-    for name, label in (("regalloc", "Same code, different register allocation"),):
-        change = head[name] - base[name]
-        print("| %s | %d | %d | %s | informational |" %
-              (label, base[name], head[name], delta(change)))
     compared_delta = head["compared"] - base["compared"]
     print("| Functions compared | %s | %s | %s | informational |" %
           (coverage(base), coverage(head), delta(compared_delta)))
+    print("| Not yet byte-identical | %d | %d | %s | informational |" %
+          (base["compared"] - base["exact"],
+           head["compared"] - head["exact"],
+           delta((head["compared"] - head["exact"]) -
+                 (base["compared"] - base["exact"]))))
+    for name, label in (("regalloc", "Same code, different register allocation"),
+                        ("reloc", "Bytes match, but call/data target differs"),
+                        ("bytes", "Different bytes, same size"),
+                        ("size", "Different size"),
+                        ("unresolved", "Bytes match, target cannot be checked"),
+                        ("nodata", "Could not be disassembled")):
+        change = head[name] - base[name]
+        print("| %s | %d | %d | %s | informational |" %
+              (label, base[name], head[name], delta(change)))
     print()
     if lost:
         print("**Lost byte-identical functions:** " + ", ".join("`%s`" % symbol

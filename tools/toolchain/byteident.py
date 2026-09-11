@@ -1258,6 +1258,11 @@ def main():
 
     now = {"exact": ex, "regalloc": ra, "compared": n,
            "reference_functions": len(blob),
+           "unresolved": len(buckets["UNRESOLVED"]),
+           "reloc": len(buckets["RELOC"]),
+           "bytes": len(buckets["BYTES"]),
+           "size": len(buckets["SIZE"]),
+           "nodata": len(buckets["NODATA"]),
            RATCHET_EXACT_SYMBOLS: sorted(k for _, _, k in buckets["EXACT"])}
     if a.json_out:
         with open(a.json_out, "w") as f:

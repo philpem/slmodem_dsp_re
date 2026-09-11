@@ -39,7 +39,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ runner.temp }}/gentoo-period-base/tc_out
-          key: gentoo-period-base-objects-${{ env.BASE_SHA }}-${{ steps.gentoo-image-id.outputs.digest }}
+          key: gentoo-period-base-objects-v2-${{ env.BASE_SHA }}-${{ steps.gentoo-image-id.outputs.digest }}
 
       - name: Restore PR base codegen measurement
         id: base-metrics-cache
