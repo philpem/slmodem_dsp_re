@@ -1,0 +1,40 @@
+[
+ {
+  "note": "src/service/rd.c against build/test/t_ringdet.  The four slmodemd wrappers are their own translation unit in the object (blob FILE symbol rd.c); these mutations move the threshold selection and the wrapper's call/propagate behaviour."
+ },
+ {
+  "label": "RD_create accepts 9601 rather than 9600",
+  "find": "\tif (rate != RD_RATE_8000 && rate != RD_RATE_9600)",
+  "replace": "\tif (rate != RD_RATE_8000 && rate != 9601)"
+ },
+ {
+  "label": "RD_create's min_freq is 16",
+  "find": "\tcfg.min_freq = 15;",
+  "replace": "\tcfg.min_freq = 16;"
+ },
+ {
+  "label": "RD_create's max_freq is 81",
+  "find": "\tcfg.max_freq = 80;",
+  "replace": "\tcfg.max_freq = 81;"
+ },
+ {
+  "label": "RD_create's minOnDur is 121",
+  "find": "\tcfg.min_on_dur = 120;",
+  "replace": "\tcfg.min_on_dur = 121;"
+ },
+ {
+  "label": "codec 14 gets the 650 threshold",
+  "find": "\tcase 14:\n\t\tcfg.threshold = 850;",
+  "replace": "\tcase 14:\n\t\tcfg.threshold = 650;"
+ },
+ {
+  "label": "codec 12 falls to the default",
+  "find": "\tcase 4:\n\tcase 12:",
+  "replace": "\tcase 4:"
+ },
+ {
+  "label": "the default threshold is positive",
+  "find": "#define RD_THRESHOLD_DEFAULT\t(-3000)",
+  "replace": "#define RD_THRESHOLD_DEFAULT\t(3000)"
+ }
+]

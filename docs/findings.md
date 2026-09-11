@@ -123495,3 +123495,92 @@ and uses an unsigned-short receiving local in the threshold expression,
 converting at the use site rather than at the declaration.
 
 (2026-09-11)
+
+## F11351. The ring detector is THREE translation units, not one: splitting `rd.c` and `ringDetector.c` out of `voice.c` recovers three exact wrappers
+
+Issue #21 had been treating `RingDetector_Reset`/`Create` as a source-plus-flags
+question inside `src/service/voice.c`, and the audit had reached for the global
+`-fno-unit-at-a-time` profile to get its three wrapper gains. The object says
+something simpler and structural: those symbols are not in `voice.c` at all.
+
+**Reference evidence, and it is the FILE symbols, not a span name.** The blob's
+local symbol table carries four STT_FILE records in this region, in this order:
+
+    voice.c  0x0600-0x13b0   vce_*, VOICE_*, STRM_VCE_GetFDSPEnvironmentalParams
+    fax.c    0x1450-0x2121   FAX_delete/create/class1_command/process
+    rd.c     0x2130-0x2350   RD_create, RD_delete, RD_process, RD_ring_details
+    ringDetector.c 0x2360-0x2740  RingDetector_Delete/Reset/Create/GetLastRing/Process
+
+`docs/attribution.md` already attributed the nine symbols to `rd.c` (4) and
+`ringDetector.c` (5) by prefix, but the tree had merged all of them into
+`voice.c`, and `docs/modules.md` renders the whole `0x0600-0x2b60` bracket as
+`voice.c` because the two inner TUs have no local symbols to anchor them. The
+FILE records are the authority: a compiler cannot emit a FILE symbol for an
+input file it was not given, and `ld -r` preserves them in input order.
+
+**Hypothesis and prediction.** If the wrappers are inlined because `voice.c` is
+one TU, then compiling them in their own TUs must restore the reference's CALL
+boundaries and make `RD_delete`, `RD_process` and `RD_ring_details` exact under
+the retained `-O3` profile, with no flag change. Falsifier: the wrappers stay
+non-exact, or other TUs lose exact functions.
+
+**Domain and controls.** One source split, no flag or order axis. `RD_*` moved
+verbatim to `src/service/rd.c` with the `RD_RATE_*`/`RD_THRESHOLD_DEFAULT`
+defines; `RingDetector_*` and the two static helpers `rd_measure`/`rd_guard`
+moved verbatim to `src/service/ringDetector.c`. The function bodies are
+unchanged text. Both TUs compiled with the recovered Gentoo GCC 3.4.2-r2 and
+`DSPLIB_REPRODUCE_BUGS`; the split `voice.c` object reproduces the baseline
+object for the `vce_*`/`VOICE_*`/`FAX_*` symbols byte for byte.
+
+**Result.** `voice.c`'s 21 shared symbols go **7 -> 10 EXACT**, gaining
+`RD_delete`, `RD_process` and `RD_ring_details` and losing none. Whole-tree
+grade-0 moves **822/1852 -> 825/1852**, denominator unchanged at 1852. This is
+the same +3 the global `-fno-unit-at-a-time` profile produced, but reached
+structurally and with no global flag: `-fno-unit-at-a-time` is a diagnostic,
+the TU split is the recovered source layout.
+
+`RD_create` improves from `SIZE(1)` to `BYTES(11)` (293 bytes, matching) --
+the residual is the switch arm order below. `RingDetector_Process` is
+unchanged at `SIZE(20)`.
+
+**What the split does not close, and the new framing for it.**
+`RingDetector_Create` still calls `RingDetector_Reset` instead of inlining it,
+so it is `SIZE(112)`; declaring `Reset` `inline` (GNU C, out-of-line copy still
+emitted because the header prototype is a non-inline declaration) brings it to
+`SIZE(4)`, matching the audit's earlier 451-vs-452 observation, but neither
+form is exact and no source change is retained for it. `RingDetector_Reset`
+itself stays `SIZE(4)` (121 blob instructions against 117): the object spills
+`c->fs/80` to `0x34(%esp)` and spills/reloads `3*c->fs` through `0x2c(%esp)`
+and the threshold sign through `0x20(%esp)`, where our copy keeps all three in
+registers. That is a register-pressure/scheduling property of the recovered
+body, and the 116-cell reset-order domain did not move it; the next probe must
+change the live-range structure (a genuinely different temporary), not another
+store permutation. `RD_create`'s `BYTES(11)` is the physical arm order
+`650,850,1000` against the reference's `1000,650,850`, which the six
+case-group permutations did not move either.
+
+**Gates.** `make period J=12`: 280 objects, **375 passed, 0 failed**.
+`make phase J=12`: exit 0, structural checks OK. Strict partial link
+(`partialcmp.py`, `--require-exact` still DIFFERENT as expected): positioned
+bytes **54,392 -> 54,960**/943,398, exact symbols **222 -> 225**/2,907, exact
+relocations 905 -> 903/18,317. The two-relocation movement is input-order
+collateral from adding two TUs; no function-level loss accompanies it.
+
+**Harness.** `t_ringdet`'s mutation suite covered both halves in one file. It
+is split to match the source: `test/mutations/rd.json` (7 mutations, source
+`src/service/rd.c`) and `test/mutations/ringdet.json` (34, source
+`src/service/ringDetector.c`), with the `rd` entry added to
+`test/mutations/suites.json` and both re-recorded in
+`test/mutations/snapshot.json` -- **41 mutations, 41 caught, 0 uncaught**.
+`anchorcheck` is what caught the detached anchors when the code moved, and is
+why the suites had to move with it.
+
+The broader question -- which other merged files are really several TUs, and in
+what input order -- is #6/#20, not #21. `fax.c` is the next obvious member of
+this region (the `FAX_*` dispatcher is still in `voice.c` here). The map
+generator that hid the split is itself defective and is tracked in #67: with
+`voice.c` as the only anchor, `tools/tumap.py` extends its `exact` extent to the
+next anchor and reassigns `fax.c`/`rd.c`/`ringDetector.c`'s globals to it, so
+`docs/modules.md` disagreed with the FILE records all along.
+
+(2026-09-11)

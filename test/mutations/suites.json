@@ -176,8 +176,12 @@
   "src/pump/v90/ResamplerTimingOffset.cpp",
   "build/test/t_resampler"
  ],
+ "rd": [
+  "src/service/rd.c",
+  "build/test/t_ringdet"
+ ],
  "ringdet": [
-  "src/service/voice.c",
+  "src/service/ringDetector.c",
   "build/test/t_ringdet"
  ],
  "scrambler": [
