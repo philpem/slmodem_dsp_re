@@ -22,6 +22,11 @@ def load(path):
     if missing:
         raise ValueError("%s lacks non-negative integer metric(s): %s" %
                          (path, ", ".join(missing)))
+    symbols = metrics.get("exact_symbols")
+    if (not isinstance(symbols, list) or
+            any(not isinstance(symbol, str) for symbol in symbols) or
+            len(set(symbols)) != len(symbols) or len(symbols) != metrics["exact"]):
+        raise ValueError("%s has an invalid exact-symbol set" % path)
     return metrics
 
 
@@ -34,7 +39,7 @@ def main():
     ap.add_argument("--base", required=True, help="base metrics JSON")
     ap.add_argument("--head", required=True, help="head metrics JSON")
     ap.add_argument("--check", action="store_true",
-                    help="fail when byte-identical functions decrease")
+                    help="fail when any byte-identical function regresses")
     args = ap.parse_args()
 
     try:
@@ -44,7 +49,10 @@ def main():
         ap.error(str(exc))
 
     exact_delta = head["exact"] - base["exact"]
-    exact_status = ":green_circle: pass" if exact_delta >= 0 else ":red_circle: regression"
+    lost = sorted(set(base["exact_symbols"]) - set(head["exact_symbols"]))
+    gained = sorted(set(head["exact_symbols"]) - set(base["exact_symbols"]))
+    exact_status = (":red_circle: regression" if lost else
+                    ":green_circle: pass")
 
     print(MARKER)
     print("## Gentoo period metrics")
@@ -60,14 +68,21 @@ def main():
         print("| %s | %d | %d | %s | informational |" %
               (label, base[name], head[name], delta(change)))
     print()
-    print("The ratchet gates only byte-identical functions. The register-allocation "
+    if lost:
+        print("**Lost byte-identical functions:** " + ", ".join("`%s`" % symbol
+                                                            for symbol in lost))
+    elif gained:
+        print("**New byte-identical functions:** " + ", ".join("`%s`" % symbol
+                                                           for symbol in gained))
+    print("The ratchet gates the byte-identical symbol set, not only its count. "
+          "The register-allocation "
           "category permits only a consistent register rename: immediates, memory "
           "displacements/scales, relocation targets, branch targets and operand "
           "order must already match. It can decrease when a function becomes "
           "byte-identical, and the comparison denominator can legitimately change "
           "with source coverage.")
 
-    return 1 if args.check and exact_delta < 0 else 0
+    return 1 if args.check and lost else 0
 
 
 if __name__ == "__main__":

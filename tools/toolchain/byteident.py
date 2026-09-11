@@ -225,6 +225,8 @@ def render_relocation(target):
                       for item in target)).replace("%", r"\x25")
 
 
+# Grade 1 reuses the canonical grade-0 body for every non-exact candidate.
+@functools.lru_cache(maxsize=None)
 def body(path, sym):
     """(bytes, {offset: (type, canonical target)}), offsets relative."""
     out = subprocess.run(
@@ -1198,7 +1200,6 @@ def main():
             comdat_split.append((k, sorted({s[0][0] for s in scored})))
         (v, n), worst_obj = max(scored, key=lambda s: RANK.get(s[0][0], 9))
         ours[k] = worst_obj
-        bb, br = body(worst_obj, k)
         #
         # GRADE 1 IS CHECKED ONLY WHERE GRADE 0 FAILED.  A byte-identical
         # function is trivially alpha-equal and asking again costs two
