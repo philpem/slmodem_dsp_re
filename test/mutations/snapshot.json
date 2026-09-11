@@ -456,7 +456,7 @@
    }
   },
   "fdspkfifo": {
-   "key": "ac9d978cc309d1a488aecb627c290c2a1de9676931247b8453e903fd36814afb",
+   "key": "65031d914e030aff91a659fcbec89fef0d83d792248b38d5a8de90baa3659c9e",
    "summary": "16 mutations: 16 caught (16 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "a short read pads with zero rather than cfg.fill": "caught",
@@ -1421,7 +1421,7 @@
    }
   },
   "tonecreate": {
-   "key": "66640eec1c86c3b21eb56fa1dd736792be4f2cb1fbdded26cc226436df50abc6",
+   "key": "e510dac03123efb7a1ad5fe7429550b6c2f4b1157445068a59d9cde7ac5cd514",
    "summary": "33 mutations: 33 caught (33 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "TONE_CFG claims 52 taps": "caught",
@@ -1519,7 +1519,7 @@
    }
   },
   "v22fse": {
-   "key": "ba3168c717fc4ae041bbc705f7148bf8202e619de6bd66e28744d585c44bf2b6",
+   "key": "193effc3111735f73eb2cb946787cc713e73ef24f790ee0bf928725bf23e17e7",
    "summary": "10 mutations: 10 caught (10 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "I and Q are swapped": "caught",
