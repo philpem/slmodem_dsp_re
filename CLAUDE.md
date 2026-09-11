@@ -316,17 +316,10 @@ its `docker run` child alive and compiling; and never end the wrapper with
 into an exit 0 in the wave above.
 
 **IT IS THE GENTOO-PATCHED GCC 3.4.2-r2 NAMED BY THE BLOB.** The default
-period image is `dsplibs-tc342-gentoo`, built by
-`tools/toolchain/build-gentoo-image.sh` from Gentoo's 2005.0 stage3 and the
-verified GCC recovery inputs. On this workspace they live in
-`/home/philpem/gentoo-gcc-3.4.2-r2-recovery`; pass those paths explicitly if
-the script's default location does not find them:
-
-```
-STAGE3=/home/philpem/gentoo-gcc-3.4.2-r2-recovery/stage3/stage3-x86-2005.0.tar.bz2 \
-DISTFILES=/home/philpem/gentoo-gcc-3.4.2-r2-recovery/distfiles \
-tools/toolchain/build-gentoo-image.sh
-```
+period image is `ghcr.io/philpem/gcc-3.4.2-gentoo2005-docker:latest`, pulled
+automatically from its dedicated reproducible-toolchain repository. That
+repository owns the Gentoo 2005 stage3, recovered inputs and Docker build;
+this tree is an image consumer.
 
 Stock GNU 3.4.2 (`dsplibs-tc342`) and Debian's 3.4.4 (`dsplibs-tc`) remain
 available only for explicit compiler A/B measurements. Modern compilers are
@@ -457,22 +450,20 @@ which is why `compare.py` now prints the blob's `.comment` and ours on every
 run. Finding F2200, and 2201 for what the blob's Gentoo patch stack means:
 stock 3.4.2 is the exact POINT RELEASE, never the exact compiler.
 
-**AND THE GENTOO COMPILER ITSELF IS NOW BUILT.** `dsplibs-tc342-gentoo` is
+**AND THE GENTOO COMPILER ITSELF IS PUBLISHED.**
+`ghcr.io/philpem/gcc-3.4.2-gentoo2005-docker:latest` is
 `sys-devel/gcc-3.4.2-r2` built from Gentoo's own ebuild inside Gentoo's own
-stage3-x86-2005.0 -- glibc 2.3.4, binutils 2.15.92.0.2-r1 -- and it prints
-the blob's `.comment` back byte for byte, double space and all:
+stage3-x86-2005.0 -- glibc 2.3.4, binutils 2.15.92.0.2-r1 -- and it prints the
+blob's `.comment` back byte for byte, double space and all:
 
 ```
-tools/toolchain/build-gentoo-image.sh              # about a minute
-TC_IMAGE=dsplibs-tc342-gentoo make tc
-PERIOD_IMG=dsplibs-tc342-gentoo make period
+make tc
+make period
 ```
 
-It needs the stage3 and the six `SRC_URI` tarballs, neither in git;
-`tools/toolchain/gentoo-3.4.2-r2/fetch-distfiles.sh` pulls and verifies the
-latter. **Use it by default even where a stock 3.4.2 comparison happens to
-agree.** The blob's own compiler banner is stronger provenance than a
-tree-wide aggregate. DCR's earlier "stack-only" interpretation was retracted:
+**Use it by default even where a stock 3.4.2 comparison happens to agree.**
+The blob's own compiler banner is stronger provenance than a tree-wide
+aggregate. DCR's earlier "stack-only" interpretation was retracted:
 the first rejection from `byteident.py --why` does not establish that it is
 the only difference (see `docs/cid-dcr-audit.md`). `-O3` (2155) and
 `-mno-ieee-fp` (1990) were re-measured on the real compiler and both survive
