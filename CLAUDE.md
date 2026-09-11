@@ -649,6 +649,14 @@ maintained; this section is the summary.
   16-bit test, a sum truncated by a cast, and a value masked to two bits, and
   no lookahead rule separates those from the real thing. 619 ruled that needs
   real dataflow and the ruling stands.
+
+  **A field the blob loads with both extensions is evidence the field type
+  is correct** — the extension varies by use site, not by declaration.
+  `sym_bits` in `Sgd.c` (F11350) produces `movzwl` in four functions and
+  `movswl` in another; retyping it unsigned would recover the former but
+  lose the latter. A use-site conversion or narrow intermediate is the
+  right fix where a particular site mismatches; retype a field only when
+  every single load of it agrees.
 - `samesize.py` — the SAME SIZE, DIFFERENT INSTRUCTIONS bucket, which
   `compare.py` counts and does not print. `--all` dumps every aligned diff in
   one pass; `--identical` prints the identical SET, because a count can gain

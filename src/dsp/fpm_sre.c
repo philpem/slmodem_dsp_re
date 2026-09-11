@@ -64,11 +64,11 @@ FPM_SRE_init(struct fpm_sre *sre, const struct fpm_sre_cfg *cfg, int fresh)
 
 	sre->active = 0;
 	sre->acquiring = 1;
-	sre->adapt = 1;
 	sre->mode = 0;
 	sre->pll_acc = 0;
 	sre->err_avg = 0;
 	sre->mag_avg = 0;
+	sre->adapt = 1;
 	sre->taps = (short)(sre->cfg.coeffs / FPM_SRE_BRANCHES);
 	sre->fill = 0;
 	sre->acc_x = 0;

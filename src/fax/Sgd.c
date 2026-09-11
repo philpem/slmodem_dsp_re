@@ -165,8 +165,11 @@ SGD_create(struct sgd *s, const struct sgd_cfg *cfg)
 	s->status.quality = 0;
 	s->status.pat_found = 0;
 	s->status.pat_data = 0;
-	s->thresh = (short)(s->cfg.sym_bits * s->cfg.det.ref_len
-			    * (0x4000 - s->cfg.det.ref_margin));
+	{
+		unsigned short bits = s->cfg.sym_bits;
+		short product = bits * s->cfg.det.ref_len;
+		s->thresh = product * (0x4000 - s->cfg.det.ref_margin);
+	}
 	return s;
 }
 

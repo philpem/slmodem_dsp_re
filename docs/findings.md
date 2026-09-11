@@ -123449,3 +123449,49 @@ The second run proves the modern failures were moved to the named portability
 gate, not hidden by the default phase boundary.
 
 (2026-09-11)
+
+## F11350. Issue 58: exact SRE and SGD initializer representatives; FSE remains unresolved
+
+At base `591e9940`, the recovered Gentoo GCC 3.4.2-r2 reproduction profile
+emits FPM_SRE_init with 44 differing bytes and SGD_create with a three-byte
+length excess (264 versus 261), not three differing bytes. Bounded full-TU
+experiments recover two source facts: SRE's `mag_avg` reset precedes its
+`adapt` store within the declared interleaving family, and SGD's threshold
+expression uses an unsigned-short receiving local and a 16-bit product
+intermediate within the declared type family. Neither result uniquely recovers
+the complete source spelling. The minimal SRE order representative and a signed
+short SGD product representative are retained with those limits stated.
+
+The final threshold cast is redundant because its field is already short.
+Removing it produces the identical complete period-built Sgd.c object. This
+does not apply to the product temporary's narrowing, which changes codegen.
+
+Independent parent builds compare all 273 translation units: 271 objects are
+whole-file unchanged. Across the changed TUs' 12 functions, only the two named
+initializers change, both to EXACT; no bystander body, binding, allocated data
+or data relocation changes. Grade-0 count moves 820/1852 to 822/1852, no losses.
+`make phase J=4` passes 375/375 period differential tests and structural checks;
+`make safety -j4` passes all ten issue 51 allocation checks.
+
+FPM_FSE_init remains BYTES(56). Copy, scheduling, store-order and argument-type
+experiments produced no exact body, and type probes with different dependency
+graphs can emit the same nonexact object. None is adopted. Issue 58 remains
+open with bounded exclusions and the evidence needed to reopen that inquiry.
+
+The strict partial-link gate remains DIFFERENT before and after: positioned
+reference-byte agreement moves 54,392/943,398 to 54,394/943,398, with exact
+relocation and symbol counts unchanged. This is not final-object completion.
+Domains, ambiguous preimages, controls, invalid/interrupted runs, artifacts and
+reproduction commands are recorded on the issue.
+
+PR review investigated whether `cfg.sym_bits` should be declared unsigned.
+Changing the header loses byte identity in three functions (SGD_pattern_det
+BYTES(1), SGD_control BYTES(1), SGD_symbol_gen BYTES(1)), because the blob
+sign-extends the field in pattern_det but zero-extends it in the four other
+functions. A field the object loads with both extensions is evidence the
+field is correctly typed — the extension varies by use site, not by
+declaration. The retained source therefore keeps the signed `short` field
+and uses an unsigned-short receiving local in the threshold expression,
+converting at the use site rather than at the declaration.
+
+(2026-09-11)
