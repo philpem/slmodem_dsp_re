@@ -77,6 +77,8 @@
 #ifndef DSPLIB_QUEUE_H
 #define DSPLIB_QUEUE_H
 
+#include "dsplib/sysdep.h"
+
 template <class T>
 class Queue {
 public:
@@ -178,9 +180,6 @@ private:
 	T	*wr;		/* +0x0c                                    */
 	unsigned size;		/* +0x10 slots, which is the ctor's n + 1   */
 };
-
-extern "C" void *sysdep_malloc(unsigned size);
-extern "C" void sysdep_free(void *p);
 
 template <class T>
 __attribute__((noinline)) void Queue<T>::reset()
