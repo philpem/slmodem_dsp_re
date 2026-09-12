@@ -27,6 +27,14 @@
  * not move, in either order.  Deleting `Queue.cpp` also removes the one FILE
  * record the object does not have.
  *
+ * `(int)num` IS LOAD-BEARING.  `num` is `unsigned` -- the `j` in the mangled
+ * name says so -- and the object compares with the SIGNED `jl`/`jle`, so the
+ * cast is what selects the signed compare: removing it changes the object
+ * (measured, first difference at byte 4003 of V92Modulator.o).  The `(int)`
+ * on `(last - wr) + 1` and `(last - rd) + 1` is redundant -- i386's
+ * `ptrdiff_t` is already `int`, and removing it is byte-identical -- so those
+ * two are gone.
+ *
  * `sizeof` is pinned from two sides: the 4-byte `size` at +0x10 puts a floor
  * under it, and the caller at 0x152ee does `movl $0x14,(%esp); call
  * sysdep_malloc` and hands the result straight to the constructor.
@@ -220,7 +228,7 @@ Queue<T>::Queue(unsigned n)
 template <class T>
 int Queue<T>::read(T *p, unsigned num)
 {
-	int avail = (int)((last - rd) + 1);
+	int avail = (last - rd) + 1;
 	int i;
 
 	if (count() < num)
@@ -246,7 +254,7 @@ int Queue<T>::read(T *p, unsigned num)
 template <class T>
 int Queue<T>::write(T *p, unsigned num)
 {
-	int room = (int)((last - wr) + 1);	/* to the end of the store */
+	int room = (last - wr) + 1;	/* to the end of the store */
 	int i;
 
 	if (size - count() - 1 < num)
