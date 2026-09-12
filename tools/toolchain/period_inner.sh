@@ -58,7 +58,7 @@ obj() { echo "$OUT/$(echo "$1" | tr / _ | sed 's/\.[^.]*$//').o"; }
 # every build, so its own mtime is always fresher than any header and the test
 # would never fire.  An object is reusable only if it is newer than BOTH its
 # source and this.
-NEWEST_HDR=$(ls -t $(find include src test/harness -name '*.h') 2>/dev/null | head -1)
+NEWEST_HDR=$(ls -t $(find include src test/harness -name '*.h') test/unit/*.cxxflags 2>/dev/null | head -1)
 
 # --- compile ---------------------------------------------------------------
 : > "$OUT/failed"
@@ -69,7 +69,8 @@ compile_one() {
 		&& return 0
 	case $f in
 	src/*.cpp) g++ -c $SOURCE_CXXFLAGS -o "$o" "$f" 2>"$o.log" ;;
-	*.cpp)	g++ -c $CXXFLAGS -o "$o" "$f" 2>"$o.log" ;;
+	*.cpp)	extra=""; [ -f "${f%.*}.cxxflags" ] && extra=$(cat "${f%.*}.cxxflags")
+		g++ -c $CXXFLAGS $extra -o "$o" "$f" 2>"$o.log" ;;
 	*)	case $f in src/service/dcr.c) cflags="$CFLAGS $DCR_FLAGS" ;; *) cflags="$CFLAGS" ;; esac
 		gcc -c $cflags -o "$o" "$f" 2>"$o.log" ;;
 	esac || { echo "$f" >> "$OUT/failed"; sed -n '1,4p' "$o.log" >&2; }

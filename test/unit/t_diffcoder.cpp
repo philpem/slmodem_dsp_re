@@ -17,6 +17,15 @@
 
 #include "harness.h"
 #include "dsplib/DiffCoder.h"
+#include "dsplib/sysdep.h"
+
+/*
+ * DiffCoder is header-only, so this TU instantiates the parallel coders'
+ * destructors and therefore needs the replacement `operator delete[]` every
+ * source TU that reaches a `delete[]`-using destructor carries.  One copy per
+ * .cpp is the F7815 arrangement.  This is apparatus, not reconstruction.
+ */
+inline void operator delete[](void *p) { sysdep_free(p); }
 
 extern "C" {
 /* Parallel encoder. */

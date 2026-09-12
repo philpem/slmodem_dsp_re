@@ -383,6 +383,17 @@ $(BUILD)/repro/%.o: src/%.cpp Makefile
 # can disagree is the shape of defect this tree keeps finding, so there is one
 # source of the flags and both tiers take it from there.
 TESTLDFLAGS = $(shell cat test/unit/$(notdir $@).ldflags 2>/dev/null)
+#
+# Per-test C++ compile flags, the same idea one step earlier.  A fixture that
+# instantiates a source-profile template must be compiled under the source's
+# math flags or it builds a different function from the one it is testing:
+# `t_dspmath` calls `sinc`, whose body depends on `-ffast-math`.
+#
+TESTCXXFLAGS = $(shell cat test/unit/$(basename $(notdir $@)).cxxflags 2>/dev/null)
+# An optional per-test flags file is not a pattern prerequisite (make cannot
+# name a file that need not exist), so the one that does gets an explicit
+# prerequisite-only rule.
+$(BUILD)/test/unit/t_dspmath.o: test/unit/t_dspmath.cxxflags
 
 $(BUILD)/test/%: $(BUILD)/test/unit/%.o $(OBJ_REPRO) $(HARNESS_OBJ) $(REF)
 	@mkdir -p $(dir $@)
@@ -394,7 +405,7 @@ $(BUILD)/test/unit/%.o: test/unit/%.c
 
 $(BUILD)/test/unit/%.o: test/unit/%.cpp Makefile
 	@mkdir -p $(dir $@)
-	$(CXX) $(ARCH32) $(FPFLAGS) $(CXXFLAGS) $(REPRODUCE) -Itest/harness -c $< -o $@
+	$(CXX) $(ARCH32) $(FPFLAGS) $(CXXFLAGS) $(TESTCXXFLAGS) $(REPRODUCE) -Itest/harness -c $< -o $@
 
 # Safety checks exercise deliberately fixed paths without linking the blob or
 # defining DSPLIB_REPRODUCE_BUGS.  Their expected values are source contracts,

@@ -20,6 +20,15 @@
 
 #include "harness.h"
 #include "dsplib/LowPassFIR.h"
+#include "dsplib/sysdep.h"
+
+/*
+ * LowPassFIR is header-only, so this TU instantiates its destructor and
+ * therefore needs the replacement `operator delete[]` every source TU that
+ * reaches a `delete[]`-using destructor carries.  One copy per .cpp is the
+ * F7815 arrangement.  This is apparatus, not reconstruction.
+ */
+inline void operator delete[](void *p) { sysdep_free(p); }
 
 extern "C" {
 void *sysdep_malloc(unsigned int size);
