@@ -79,6 +79,14 @@
 #include "dsplib/sysdep.h"
 
 /*
+ * LowPassFIR is header-only now, so this TU instantiates its `delete[]`-using
+ * destructor and needs the replacement `operator delete[]`.  One copy per
+ * .cpp is the F7815 arrangement; Scrambler.h already owns the one for TUs
+ * that reach it.
+ */
+inline void operator delete[](void *p) { sysdep_free(p); }
+
+/*
  * See V90ConstellationDesigner.cpp for why these are here and why guarded.
  * `vptr` is not a field, so it cannot be asserted with `offsetof`; the size
  * assertion below is what pins it, since 0x48 only comes out right if the

@@ -123785,3 +123785,55 @@ carries; the src TUs get it through `Scrambler.h`, the test harness reaches
 no such header, so the definition is local to the test.
 
 (2026-09-11)
+
+## F11356. The header-only template audit: six more invented `.cpp` TUs removed
+
+Issue #74, the family F11355 opened. The six remaining candidates with no
+`STT_FILE` record -- `Agc.cpp`, `DiffCoder.cpp`, `DspMath.cpp`,
+`LowPassFIR.cpp`, `Scrambler.cpp` and `SineWave.cpp` -- were all
+reconstructed as out-of-line `.cpp` TUs. Their definitions now live in the
+matching headers, outside the class and WITHOUT `inline`, and all six `.cpp`
+files are deleted. `Scrambler.cpp` held no bodies (they were already in
+`Scrambler.h`); what went with it was its explicit member-by-member
+instantiation and its offset assertions. Symbol ownership now follows the
+user TUs, as the object's own `.symtab` does.
+
+**Measured.** `make phase J=$(nproc)`: period differential **375 passed, 0
+failed**, structural checks OK. Strict partial link on the base
+(`66a20a48`, Queue done) was 274 inputs, positioned bytes 54,975, exact
+sections 58, exact symbols 225/2,907, exact relocations 903/18,317, candidate
+symbols 2,980; after the six moves it is 268 inputs, positioned bytes 54,957,
+exact sections 60, exact symbols 225/2,907, exact relocations 903/18,317,
+candidate symbols 2,955. The removed 25 candidate symbols are the invented
+`FILE` records and the C2/D2 pair each explicit instantiation added; the
+blob's own symbol set for every one of the six families is now matched
+exactly, with no invented FILE record and no C2/D2 anywhere in the candidate.
+
+**`operator delete[]` is still one copy per `.cpp`, F7815's arrangement.**
+`DiffCoder`'s parallel coders and `LowPassFIR` both free with `delete[]`, so
+the TUs that now instantiate those destructors need the replacement visible:
+`Resampler.cpp`, `V90SignBitsExtractor.cpp` and `V90SpectralShaper.cpp` each
+gained a local definition, and the two direct tests (`t_diffcoder.cpp`,
+`t_lowpassfir.cpp`) gained theirs as apparatus. `Scrambler.h` keeps the one it
+already owned. Nothing was consolidated into `sysdep.h`.
+
+**A function template's codegen can depend on the flags of the TU that
+instantiates it, so the fixture is part of the fix.** `DspMath`'s `sinc`
+expands `sin()` to the x87 `fsin` only under `-ffast-math`, which the source
+profile carries and the period fixture profile does not. A test that includes
+`DspMath.h` and calls the functions therefore instantiated its own
+non-fast-math `sinc`, and 14 of 4,019 checks failed. The answer is not to
+reach the source TU's symbol around the compiler: `test/unit/t_dspmath.cpp`
+now carries `test/unit/t_dspmath.cxxflags` (`-ffast-math`), read by both the
+Makefile's per-test object rule and `period_inner.sh`, so the fixture is
+compiled under the same math profile as the code it exercises. This is the
+same apparatus idea as the existing per-test `.ldflags` file.
+
+**Portability note, not part of the period verdict.** Modern GCC at `-O2`
+inlines these header definitions hard enough that some out-of-line weak
+copies are not emitted, so `make test` still links unresolved symbols for
+`Agc`, `DiffCoder`, `LowPassFIR` and `SineWave`; the period compiler, which
+is the reconstruction authority, emits them. That is issue #77 and no source
+was changed to hide it.
+
+(2026-09-11)

@@ -1422,7 +1422,7 @@ the object has them. Keep the body out of the class (in-class is Lever 10 and
 inlines nearly everywhere) and keep `__attribute__((noinline))` only where the
 object already forces it (`Queue::reset` is called by the constructor).
 
-**Measured (Queue, F11353).** `Queue<float>` had been a `src/dsp/Queue.cpp`
+**Measured (Queue, F11355).** `Queue<float>` had been a `src/dsp/Queue.cpp`
 with explicit instantiation. There is no `Queue.cpp` FILE record; the only
 references anywhere are `V92Modulator`'s `reset`, `progress` and
 ctor/dtor. Moving the definitions into `Queue.h` without `inline` and deleting
@@ -1433,10 +1433,27 @@ unchanged by the move — `Queue.cpp` and `V92Modulator.cpp` emit identical
 counts — so this lever fixes WHICH TU owns a symbol and the symbol SET, not
 the residual bytes.
 
-**Run it over the family before chasing bytes.** `Agc.cpp`, `DiffCoder.cpp`,
-`DspMath.cpp`, `LowPassFIR.cpp`, `Scrambler.cpp` and `SineWave.cpp` also lack
-a FILE record; each is a header-only template reconstructed as a `.cpp` and
-will carry the same spurious FILE record and C2/D2. #74 tracks the audit.
+**The family audit is DONE (F11356, issue #74).** `Agc.cpp`, `DiffCoder.cpp`,
+`DspMath.cpp`, `LowPassFIR.cpp`, `Scrambler.cpp` and `SineWave.cpp` all lacked
+a FILE record and all six were the same invented TU; their definitions now
+live in the matching headers without `inline` and the `.cpp` files are gone.
+`make phase` is green and the partial object carries no invented FILE record
+and no C2/D2 for any of them. Two consequences worth carrying to the next
+family:
+
+- `operator delete[]` stays one copy per `.cpp` (F7815). `DiffCoder`'s
+  parallel coders and `LowPassFIR` free with `delete[]`, so the TUs that now
+  instantiate those destructors -- `Resampler.cpp`, `V90SignBitsExtractor.cpp`,
+  `V90SpectralShaper.cpp` -- needed a local definition, and the direct tests
+  needed theirs as apparatus.
+- **A function template's codegen can depend on the instantiating TU's
+  flags.** `DspMath`'s `sinc` expands `sin()` to `fsin` only under
+  `-ffast-math`; a fixture that includes the header and calls the function
+  instantiates it under the fixture profile and disagrees with the blob.
+  `t_dspmath` therefore carries `test/unit/t_dspmath.cxxflags`, read by both
+  build systems, rather than calling the source TU's symbol from the test.
+  Check the flag dependency before moving a function template whose body uses
+  a transcendental. See #74's F11356.
 
 ## What does not work
 

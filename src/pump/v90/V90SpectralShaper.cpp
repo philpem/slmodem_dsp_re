@@ -29,6 +29,13 @@
 #include "dsplib/sysdep.h"
 #include "dsplib/V90SpectralShaper.h"
 
+/*
+ * DiffCoder is header-only now, so this TU instantiates the parallel
+ * encoder's `delete[]`-using destructor and needs the replacement
+ * `operator delete[]`.  One copy per .cpp is the F7815 arrangement.
+ */
+inline void operator delete[](void *p) { sysdep_free(p); }
+
 /* See V90ConstellationDesigner.cpp for why these are here and why guarded. */
 #if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
 #define V90SS_OFF(field, off, tag) \

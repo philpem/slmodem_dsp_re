@@ -27,6 +27,7 @@
 #define DSPLIB_LOWPASSFIR_H
 
 #include "dsplib/DspMath.h"
+#include "dsplib/sysdep.h"
 
 /*
  * The original instantiates this at `float` and at nothing else.
@@ -119,5 +120,171 @@ public:
 	T *coefficients;	/* +0x00 sysdep_malloc'd or adopted, `taps` long */
 	unsigned int taps;	/* +0x04 compared with ja/setbe, so unsigned    */
 };
+
+/*
+ * Hold the compiler to the map in the header.
+ */
+#if __SIZEOF_POINTER__ == 4
+typedef char lowpassfir_off_coefficients[
+    ((int)__builtin_offsetof(LowPassFIR<float>, coefficients) == 0x00) ? 1 : -1];
+typedef char lowpassfir_off_taps[
+    ((int)__builtin_offsetof(LowPassFIR<float>, taps) == 0x04) ? 1 : -1];
+typedef char lowpassfir_size[(sizeof(LowPassFIR<float>) == 0x08) ? 1 : -1];
+#endif
+
+/*
+ * The primitive.  `window` may be null, in which case a Hamming window is
+ * built in place of one.
+ *
+ * Returns 1 without touching a thing if the cutoff is out of range or fewer
+ * than two taps were asked for, and 0 otherwise.  There is no other failure
+ * path: NEITHER `sysdep_malloc` HERE IS CHECKED, so an allocation failure
+ * calls `hamming(0, n)` or copies into a null pointer.  The four-argument
+ * form below does check its own.
+ */
+template <typename T>
+int LowPassFIR<T>::design(unsigned int nTaps, T cutoff, T gain,
+			  const T *window, int adopt)
+{
+	unsigned int i;
+
+	/*
+	 * `fcoms 0.0f` + `jb`, so an unordered compare fails too: a NaN
+	 * cutoff is rejected here and never reaches the second test.  Written
+	 * as `!(cutoff >= 0)` because `cutoff < 0` would let the NaN through.
+	 *
+	 * -0.0f compares equal and is ACCEPTED.
+	 */
+	if (!(cutoff >= (T)0.0f))
+		return 1;
+
+	/*
+	 * `seta` after `fcomps 1.0f`, or'd with `setbe` on `cmp $1,%ecx`.  So
+	 * the cutoff is normalised to Nyquist -- 1.0 is fs/2, not fs -- and
+	 * one tap is not a filter.
+	 */
+	if (cutoff > (T)1.0f || nTaps <= 1)
+		return 1;
+
+	taps = nTaps;
+
+	/* The old array goes before the new one is decided on. */
+	if (coefficients != 0)
+		sysdep_free(coefficients);
+
+	if (window == 0) {
+		coefficients = (T *)sysdep_malloc(nTaps * sizeof(T));
+		hamming(coefficients, nTaps);
+	} else if (adopt == 0) {
+		coefficients = (T *)sysdep_malloc(nTaps * sizeof(T));
+		for (i = 0; i < taps; i++)
+			coefficients[i] = window[i];
+	} else {
+		/* THE CONST IS CAST AWAY AND THE BUFFER IS ADOPTED. */
+		coefficients = (T *)window;
+	}
+
+	{
+		/*
+		 * x = -(nTaps - 1) * cutoff / 2, at extended precision, and
+		 * the count comes in through `fildll` with the high word
+		 * zeroed -- x87 has no unsigned integer load.
+		 *
+		 * The association is the object's: (nTaps-1) * (-cutoff)
+		 * first, then * 0.5f.  0.5 is `.rodata.cst4+0x1f0`, a float.
+		 */
+		long double x = (long double)(unsigned long long)(nTaps - 1)
+			      * (long double)(-cutoff)
+			      * (long double)0.5f;
+
+		for (i = 0; i < taps; i++) {
+			/*
+			 * ROUNDED TO float EVERY ITERATION.  `fsts (%esp)`
+			 * puts it in sinc's argument slot and `fstps
+			 * 0x10(%esp)` in the slot the recurrence reloads --
+			 * two 4-byte stores of the same register.  A `long
+			 * double` running total would be a different filter.
+			 */
+			T xf = (T)x;
+			long double t;
+
+			t = (long double)sinc(xf) * (long double)cutoff;
+
+			/* flds 0x10(%esp) ; fadds cutoff -- from the FLOAT. */
+			x = (long double)xf + (long double)cutoff;
+
+			/* One rounding, here, on (sinc*cutoff)*w[i]. */
+			coefficients[i] =
+			    (T)(t * (long double)coefficients[i]);
+		}
+	}
+
+	{
+		/*
+		 * Normalise to the requested gain.  `sum` is the DspMath
+		 * template and it is a real call, so its result arrives in
+		 * st(0) unrounded; nothing stores it before the divide, so
+		 * the quotient is taken at extended precision and stays there
+		 * for the whole scaling loop.
+		 *
+		 * A zero cutoff makes every tap zero, so `sum` is zero and
+		 * this is gain/0 = inf; the loop then writes 0*inf, the x87
+		 * indefinite, into every tap.  That is what the blob does.
+		 */
+		long double scale = (long double)gain / sum(coefficients, taps);
+
+		for (i = 0; i < taps; i++)
+			coefficients[i] =
+			    (T)((long double)coefficients[i] * scale);
+	}
+
+	return 0;
+}
+
+/*
+ * The convenient form: build the window here and hand it over.
+ *
+ * THIS is the caller of `designWindow`, with the arguments in the object's
+ * order -- (type, buffer, count) -- and it passes `adopt == 1` so the
+ * primitive takes the buffer rather than copying it.
+ *
+ * IT LEAKS THE WINDOW WHENEVER THE PRIMITIVE REJECTS ITS ARGUMENTS: a bad
+ * cutoff or `nTaps <= 1` returns 1 before the adopt, and nothing frees the
+ * buffer.  `nTaps == 0` still calls `sysdep_malloc(0)` first.  No guard here
+ * either; that is the original's shape.
+ */
+template <typename T>
+int LowPassFIR<T>::design(unsigned int nTaps, T cutoff, WindowType type, T gain)
+{
+	T *window = (T *)sysdep_malloc(nTaps * sizeof(T));
+
+	if (window == 0)
+		return 1;
+
+	designWindow(type, window, nTaps);
+
+	return design(nTaps, cutoff, gain, window, 1);
+}
+
+/*
+ * The whole constructor is a null store and a tail call.  It initialises
+ * `coefficients` ONLY -- so if `design` rejects its arguments, `taps` is left
+ * uninitialised, and the return value is discarded, so a caller cannot tell.
+ */
+template <typename T>
+LowPassFIR<T>::LowPassFIR(unsigned int nTaps, T cutoff, WindowType type, T gain)
+{
+	coefficients = 0;
+	design(nTaps, cutoff, type, gain);
+}
+
+/*
+ * `sysdep_free`, and the pointer is NOT nulled afterwards.
+ */
+template <typename T>
+LowPassFIR<T>::~LowPassFIR()
+{
+	delete[] coefficients;
+}
 
 #endif /* DSPLIB_LOWPASSFIR_H */

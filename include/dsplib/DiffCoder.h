@@ -36,6 +36,8 @@
 #ifndef DSPLIB_DIFFCODER_H
 #define DSPLIB_DIFFCODER_H
 
+#include "dsplib/sysdep.h"
+
 template <class T>
 class SerialDifferentialEncoder {
 public:
@@ -156,5 +158,134 @@ public:
 	unsigned	 capacity_;
 	unsigned	 size_;
 };
+
+template <class T>
+T SerialDifferentialEncoder<T>::process(T in)
+{
+	prev_ = prev_ ^ in;
+	return prev_;
+}
+
+template <class T>
+T SerialDifferentialDecoder<T>::process(T in)
+{
+	T out = prev_ ^ in;
+
+	prev_ = in;
+	return out;
+}
+
+/*
+ * THE CONSTRUCTOR DOES NOT CALL `reset`, and `size_` is left at 0.  A freshly
+ * constructed coder therefore processes NOTHING -- `process` runs zero
+ * iterations and writes no output at all until the owner has called `reset`.
+ * Writing the constructor as `{ reset(size, 0); }` is the obvious tidy form and
+ * is wrong by 43,755 comparison points.
+ *
+ * The allocation is not checked before the zero-fill, so a NULL return faults
+ * on the first store for any non-zero `size`.  The object does not check
+ * either.
+ */
+template <class T>
+ParallelDifferentialEncoder<T>::ParallelDifferentialEncoder(unsigned size)
+	: state_(0), capacity_(size), size_(0)
+{
+	unsigned i;
+
+	state_ = (T *)sysdep_malloc(size);
+	for (i = 0; i < size; i++)
+		state_[i] = 0;
+}
+
+template <class T>
+ParallelDifferentialEncoder<T>::~ParallelDifferentialEncoder()
+{
+	/* `state_` is NOT nulled, so a second destruction double-frees. */
+	delete[] state_;
+}
+
+/*
+ * `reset` fills only the NEW width, not the capacity: elements at and above
+ * `size` keep whatever they held from before.  That is observable whenever a
+ * caller resets to a narrower width and then back to a wider one, and it costs
+ * 12,520 comparison points to "fix".
+ */
+template <class T>
+int ParallelDifferentialEncoder<T>::reset(unsigned size, T init)
+{
+	unsigned i;
+
+	if (capacity_ < size)
+		return 1;
+	for (i = 0; i < size; i++)
+		state_[i] = init;
+	size_ = size;
+	return 0;
+}
+
+template <class T>
+void ParallelDifferentialEncoder<T>::process(T *in, T *out)
+{
+	unsigned i;
+
+	for (i = 0; i < size_; i++) {
+		state_[i] = state_[i] ^ in[i];
+		out[i] = state_[i];
+	}
+}
+
+/*
+ * The decoder's constructor is the encoder's WITHOUT the `state_(0)`.
+ *
+ * The object really does differ here: the encoder emits `movl $0x0,(%ebx)`
+ * before calling `sysdep_malloc` and the decoder emits nothing.  The store is
+ * dead -- the malloc result overwrites it immediately -- so no test can see
+ * it, but it is a real asymmetry between two otherwise identical classes in
+ * the original's source and it is reproduced rather than tidied into
+ * agreement.  Adding or removing the initialiser makes the store appear or
+ * vanish in our build too, which is how it was confirmed.
+ */
+template <class T>
+ParallelDifferentialDecoder<T>::ParallelDifferentialDecoder(unsigned size)
+	: capacity_(size), size_(0)
+{
+	unsigned i;
+
+	state_ = (T *)sysdep_malloc(size);
+	for (i = 0; i < size; i++)
+		state_[i] = 0;
+}
+
+template <class T>
+ParallelDifferentialDecoder<T>::~ParallelDifferentialDecoder()
+{
+	delete[] state_;
+}
+
+template <class T>
+int ParallelDifferentialDecoder<T>::reset(unsigned size, T init)
+{
+	unsigned i;
+
+	if (capacity_ < size)
+		return 1;
+	for (i = 0; i < size; i++)
+		state_[i] = init;
+	size_ = size;
+	return 0;
+}
+
+template <class T>
+void ParallelDifferentialDecoder<T>::process(T *in, T *out)
+{
+	unsigned i;
+
+	for (i = 0; i < size_; i++) {
+		T x = in[i];
+
+		out[i] = x ^ state_[i];
+		state_[i] = x;
+	}
+}
 
 #endif /* DSPLIB_DIFFCODER_H */

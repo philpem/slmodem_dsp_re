@@ -45,6 +45,13 @@
 #include "dsplib/V90SignBitsExtractor.h"
 
 /*
+ * DiffCoder is header-only now, so this TU instantiates the parallel
+ * decoder's `delete[]`-using destructor and needs the replacement
+ * `operator delete[]`.  One copy per .cpp is the F7815 arrangement.
+ */
+inline void operator delete[](void *p) { sysdep_free(p); }
+
+/*
  * Hold the compiler to the map in the header.  `tools/offcheck.py` does this
  * for the C structs but parses only `struct name {`, so a C++ class asserts
  * its own.  Skipped on the 64-bit `check64` pass, where a 32-bit layout is
