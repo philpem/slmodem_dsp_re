@@ -283,56 +283,17 @@ void vpcm_unwritten_reset(void);
 
 /*
  * ---------------------------------------------------------------------------
- * The datapump's `.process`: one buffer in, one buffer out, a DPSTAT_* back.
+ * THE FOUR ENTRY POINTS ARE FILE-STATIC IN THE OBJECT.
  *
- * File-static in the object and reached only through `vpcm_op` at .data+0x30;
- * it loses the `static` here for the same reason `v8_create` and `v8_delete`
- * do -- a test calls it by name.  `count` is `m->frag`, which for this
- * datapump the host contract fixes at 48 (finding F964).
+ * Every one of `vpcm_run`, `vpcm_create`, `vpcm_delete` and `vpcm_op` is
+ * recorded LOCAL by `nm`, so all four are static in `src/pump/v90/vpcm.c` and
+ * have no declarations here.  `vpcm_op` is reached the way the modem core
+ * reaches it -- out of what `dp_vpcm_init` registered -- and its `.process`
+ * IS `vpcm_run` directly (there is no `dp_wrapper` in front of this
+ * datapump), so `harness_reg_ours.ops[0]->process` calls `vpcm_run` and
+ * `->create`/`->destroy` call `vpcm_create`/`vpcm_delete`.  Finding F964 for
+ * `count`, and `v22.h` for the same move on another datapump.
  */
-/**
- * @brief The datapump's `.process`: one buffer in, one buffer out.
- *
- * @param dp    The datapump handle; `dp->dp_data` is this same `vpcm_root`.
- * @param in    One block of input samples.
- * @param out   One block of output samples.
- * @param count Samples per block; the host contract fixes this at 48 for
- *              this datapump (finding F964).
- * @return A `DPSTAT_*` status code.
- */
-int vpcm_run(struct dp *dp, void *in, void *out, int count);
-
-/*
- * ---------------------------------------------------------------------------
- * The rest of the datapump: `vpcm_create` (0x3a00, 969 B), `vpcm_delete`
- * (0x3dd0, 110 B), the operations table at .data+0x30, and the registration.
- *
- * The first two are file-static in the object and reached only through
- * `vpcm_op`; they lose the `static` here for `vpcm_run`'s reason, which is
- * that a test calls them by name.
- */
-/**
- * @brief Allocate and initialise the V.PCM root object.
- *
- * @param modem    The host handle.
- * @param id       The datapump id to register under.
- * @param caller   The calling-side flag `vpcm_run`'s connect arm reads.
- * @param srate    Sample rate; the object tests this against ::VPCM_SRATE.
- * @param max_frag The host's fragment size cap.
- * @param op       Out: the datapump's operations table (`vpcm_op`).
- * @return The new `struct dp *` (the embedded `dp.dp_data` points back at
- *         the whole `vpcm_root`).
- */
-struct dp *vpcm_create(void *modem, int id, int caller, int srate,
-		       int max_frag, struct dp_operations *op);
-
-/** @brief Tear the V.PCM root object down. @param dp The handle from
- *  vpcm_create(). @return A `DPSTAT_*` status code. */
-int vpcm_delete(struct dp *dp);
-
-/** @brief The datapump's operations table; `dp_vpcm_init` registers it under
- *  three ids. */
-extern struct dp_operations vpcm_op;
 
 /** @brief Register the V.PCM datapump under its three ids (V.34, V.90,
  *  V.92) with `modem_dp_register`. @return 0. */

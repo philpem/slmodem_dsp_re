@@ -65,6 +65,16 @@ ref_process_of(struct dp *dp)
 	return ((struct dp_wrapper *)dp->dp_data)->process;
 }
 
+/*
+ * Our side is file-static now, so `v23_process` has no name to call either.
+ * It is reached the same way: out of the wrapper `v23_create` built.
+ */
+static dp_process_fn
+our_process_of(struct dp *dp)
+{
+	return ((struct dp_wrapper *)dp->dp_data)->process;
+}
+
 /* A maximal-length sequence, so the transmitted data is not all one value. */
 static unsigned char pattern[511];
 
@@ -192,7 +202,8 @@ drive(const char *what, int caller, const short *signal, int frames)
 	harness_modem_reset(pattern, (int)sizeof(pattern));
 	db = ref_v23_create((void *)0x1234, DP_V23, caller, 8000, 160,
 			    ref_ops);
-	da = v23_create((void *)0x1234, DP_V23, caller, 8000, 160, our_ops);
+	da = our_ops->create((void *)0x1234, DP_V23, caller, 8000, 160,
+					     our_ops);
 	diff_eq_int("both built (%ld)", da != 0 && db != 0, 1, caller);
 	if (da == 0 || db == 0)
 		return;
@@ -206,7 +217,7 @@ drive(const char *what, int caller, const short *signal, int frames)
 		memset(out_b, 0x33, sizeof(out_b));
 
 		rb = ref_process_of(db)(db, in_b, out_b, 160);
-		ra = v23_process(da, in_a, out_a, 160);
+		ra = our_process_of(da)(da, in_a, out_a, 160);
 
 		diff_eq_int("block %ld: status", ra, rb, f);
 		for (i = 0; i < 160; i++)
@@ -260,7 +271,7 @@ drive(const char *what, int caller, const short *signal, int frames)
 			    caller == 0 ? V23_RATE_BACKWARD
 					: V23_RATE_FORWARD, i);
 
-	v23_delete(da);
+	our_ops->destroy(da);
 	ref_v23_delete(db);
 }
 
@@ -370,8 +381,8 @@ main(void)
 			db = ref_v23_create((void *)0x1234, DP_V23,
 					    cases[k].caller, 8000, 160,
 					    ref_ops);
-			da = v23_create((void *)0x1234, DP_V23,
-					cases[k].caller, 8000, 160, our_ops);
+			da = our_ops->create((void *)0x1234, DP_V23,
+					     cases[k].caller, 8000, 160, our_ops);
 			diff_eq_int("both built (%ld)", da != 0 && db != 0, 1,
 				    (long)k);
 			if (da == 0 || db == 0)
@@ -395,7 +406,7 @@ main(void)
 				    ((struct v23_dp *)db)->modem->tx->period[0],
 				    cases[k].expect_period0, (long)k);
 
-			v23_delete(da);
+			our_ops->destroy(da);
 			ref_v23_delete(db);
 		}
 	}
@@ -436,10 +447,10 @@ main(void)
 		rf = harness_alloc.frees;
 
 		harness_alloc_reset();
-		dp = v23_create((void *)0x1234, DP_V23, 1, 8000, 160,
-				our_ops);
+		dp = our_ops->create((void *)0x1234, DP_V23, 1, 8000, 160,
+				     our_ops);
 		aa = harness_alloc.allocs;
-		v23_delete(dp);
+		our_ops->destroy(dp);
 		af = harness_alloc.frees;
 
 		diff_eq_int("same number of allocations (%ld)", aa, ra, 0);

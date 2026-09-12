@@ -91,6 +91,17 @@ extern int modem_get_bits(void *modem, int nbits, unsigned char *buf, int n);
 extern int modem_put_bits(void *modem, int nbits, unsigned char *buf, int n);
 
 /*
+ * The three entry points are FILE-STATIC in the object -- `nm` shows a
+ * lower-case `t` for each -- so they are static here too and `v32.h` no
+ * longer declares them.  The operations table and `v32_create`'s call to
+ * `v32_process` come before the definitions, so they are forward-declared.
+ */
+static struct dp *v32_create(void *modem, int id, int caller, int srate,
+			     int max_frag, struct dp_operations *op);
+static int v32_delete(struct dp *dp);
+static int v32_process(void *dp_arg, void *in, void *out, int count);
+
+/*
  * FILE-LOCAL, on the same evidence as `b103.c`'s `b103_ops` and `v23.c`'s
  * `v23_ops`: `nm` gives it as `d`, and `dp_v32_init` is the only referrer.
  * Finding F8121.
@@ -129,7 +140,7 @@ static struct dp_operations v32_ops = {
  * The rate is `MDMPRM_MAX_RATE` clamped to 14400 by an UNSIGNED comparison,
  * so a negative maximum reads as enormous and comes back as 14400.
  */
-struct dp *
+static struct dp *
 v32_create(void *modem, int id, int caller, int srate, int max_frag,
 	   struct dp_operations *op)
 {
@@ -217,7 +228,7 @@ v32_create(void *modem, int id, int caller, int srate, int max_frag,
  * back-pointer, landing exactly where it started.  Same as `v23_delete` and
  * `b103_delete`, and reproduced for the same reason.
  */
-int
+static int
 v32_delete(struct dp *dp)
 {
 	struct v32_dp *self = (struct v32_dp *)
@@ -260,7 +271,7 @@ v32_delete(struct dp *dp)
  * consumer's side, and it is why the arms are not renamed here: the codes are
  * the author's and this table is what they mean to the host.  Finding F8646.
  */
-int
+static int
 v32_process(void *dp_arg, void *in, void *out, int count)
 {
 	struct dp *dp = (struct dp *)dp_arg;

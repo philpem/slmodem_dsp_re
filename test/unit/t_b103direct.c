@@ -51,8 +51,11 @@
 #include "dsplib/b103.h"
 
 /*
- * By name.  These three are file-static in the object; --globalize-symbols
- * promotes them and --redefine-syms then aliases them.  See finding F221.
+ * By name, for the REFERENCE side: --globalize-symbols promotes the blob's
+ * file-local symbols before --redefine-syms aliases them, so `ref_b103_*`
+ * link.  Our three are file-static and have no name to call; they are reached
+ * through the table `dp_b103_init` registers and, for `b103_process`, out of
+ * the wrapper `b103_create` built.  See finding F221 and `v22.c`.
  */
 extern struct dp *ref_b103_create(void *modem, int id, int caller, int srate,
 				  int max_frag, struct dp_operations *op);
@@ -129,6 +132,13 @@ normalise(struct b103_dp *dst, const struct b103_dp *src,
 	dst->wrapper = 0;
 }
 
+/* Our `b103_process`, out of the wrapper our `b103_create` built. */
+static dp_process_fn
+our_process_of(struct dp *dp)
+{
+	return ((struct dp_wrapper *)dp->dp_data)->process;
+}
+
 int
 main(void)
 {
@@ -171,8 +181,8 @@ main(void)
 
 		db = ref_b103_create((void *)0x1234, cases[k].id,
 				     cases[k].caller, 8000, 160, ref_ops);
-		da = b103_create((void *)0x1234, cases[k].id, cases[k].caller,
-				 8000, 160, our_ops);
+		da = our_ops->create((void *)0x1234, cases[k].id,
+				     cases[k].caller, 8000, 160, our_ops);
 		diff_eq_int("both built (%ld)", da != 0 && db != 0, 1, (long)k);
 		if (da == 0 || db == 0)
 			continue;
@@ -182,13 +192,13 @@ main(void)
 		normalise(&nb, (struct b103_dp *)db, ref_ops, "ref", (long)k);
 		diff_eq_obj(cases[k].name, struct b103_dp, &na, &nb, (long)k);
 
-		b103_delete(da);
+		our_ops->destroy(da);
 		ref_b103_delete(db);
 	}
 	rc |= diff_end();
 
 	/*
-	 * b103_process, called by name, block by block, with the state
+	 * b103_process, out of the wrapper, block by block, with the state
 	 * compared after each one.
 	 *
 	 * 2225 Hz -- the answer channel's MARK, which is what an originating
@@ -205,8 +215,8 @@ main(void)
 		harness_modem_reset(pattern, (int)sizeof(pattern));
 		db = ref_b103_create((void *)0x1234, DP_B103, 1, 8000, 160,
 				     ref_ops);
-		da = b103_create((void *)0x1234, DP_B103, 1, 8000, 160,
-				 our_ops);
+		da = our_ops->create((void *)0x1234, DP_B103, 1, 8000, 160,
+				     our_ops);
 		diff_eq_int("both built (%ld)", da != 0 && db != 0, 1, 0);
 
 		if (da != 0 && db != 0) {
@@ -227,7 +237,7 @@ main(void)
 				memset(out_b, 0x33, sizeof(out_b));
 
 				rb = ref_b103_process(db, in_b, out_b, 160);
-				ra = b103_process(da, in_a, out_a, 160);
+				ra = our_process_of(da)(da, in_a, out_a, 160);
 
 				diff_eq_int("block %ld: status", ra, rb, f);
 				for (i = 0; i < 160; i++)
@@ -258,14 +268,14 @@ main(void)
 				    harness_modem_ref.rx_len > 0, 1,
 				    harness_modem_ref.rx_len);
 
-			b103_delete(da);
+			our_ops->destroy(da);
 			ref_b103_delete(db);
 		}
 	}
 	rc |= diff_end();
 
 	/*
-	 * b103_delete by name: what it returns, and that it balances.  Driven
+	 * b103_delete through the registered table: what it returns and whether it balances.  Driven
 	 * separately per side because the allocator log is shared.
 	 */
 	diff_begin("b103_delete: return and balance");
@@ -281,10 +291,10 @@ main(void)
 		rf = harness_alloc.frees;
 
 		harness_alloc_reset();
-		dp = b103_create((void *)0x1234, DP_B103, 1, 8000, 160,
-				 our_ops);
+		dp = our_ops->create((void *)0x1234, DP_B103, 1, 8000, 160,
+				     our_ops);
 		aa = harness_alloc.allocs;
-		arc = b103_delete(dp);
+		arc = our_ops->destroy(dp);
 		af = harness_alloc.frees;
 
 		diff_eq_int("b103_delete returns (%ld)", arc, rrc, 0);

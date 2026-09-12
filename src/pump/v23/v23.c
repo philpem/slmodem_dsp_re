@@ -67,6 +67,17 @@ extern int modem_get_bits(void *modem, int chan, unsigned char *bits,
 extern int modem_put_bits(void *modem, int chan, const unsigned char *bits,
 			  unsigned short count);
 
+/*
+ * The three entry points are FILE-STATIC in the object -- `nm` shows a
+ * lower-case `t` for each -- so they are static here too and `v23.h` no
+ * longer declares them.  The operations table and `v23_create`'s call to
+ * `v23_process` come before the definitions, so they are forward-declared.
+ */
+static struct dp *v23_create(void *modem, int id, int caller, int srate,
+			     int max_frag, struct dp_operations *op);
+static int v23_delete(struct dp *dp);
+static int v23_process(void *dp_arg, void *in, void *out, int count);
+
 /* FILE-LOCAL, on the same evidence as b103.c's `b103_ops`.  Finding F8121. */
 static struct dp_operations v23_ops = {
 	.name = "v23",
@@ -105,7 +116,7 @@ dp_v23_exit(void)
  * carrier-loss timeout in milliseconds, which both receivers charge at 20 per
  * block -- 35 blocks, 700 ms of dead line before the call is dropped.
  */
-struct dp *
+static struct dp *
 v23_create(void *modem, int id, int caller, int srate, int max_frag,
 	   struct dp_operations *op)
 {
@@ -160,7 +171,7 @@ v23_create(void *modem, int id, int caller, int srate, int max_frag,
  * back-pointer, landing exactly where it started.  Same as b103_delete, and
  * reproduced for the same reason.
  */
-int
+static int
 v23_delete(struct dp *dp)
 {
 	struct v23_dp *self = (struct v23_dp *)
@@ -195,7 +206,7 @@ v23_delete(struct dp *dp)
  * sets the line rates again -- which is harmless, and is not how b103.c does
  * it (there the edge is taken against `dp->status`).
  */
-int
+static int
 v23_process(void *dp_arg, void *in, void *out, int count)
 {
 	struct dp *dp = (struct dp *)dp_arg;

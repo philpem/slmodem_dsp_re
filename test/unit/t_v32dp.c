@@ -66,6 +66,32 @@ extern int ref_v32_process(void *dp_arg, void *in, void *out, int count);
 extern int ref_dp_wrapper_run(struct dp *dp, void *in, void *out, int count);
 extern int ref_Control_Flag;
 
+/*
+ * Our three entry points are file-static in the object, so the table
+ * `dp_v32_init` registers is the only handle on them.  Call `find_ops` once
+ * and keep the pointer; every "ours" call below goes through it.
+ */
+static struct dp_operations *our_ops;
+
+static int
+find_ops(void)
+{
+	harness_reg_reset();
+	dp_v32_init();
+	if (harness_reg_ours.count < 1)
+		return 0;
+	our_ops = (struct dp_operations *)harness_reg_ours.ops[0];
+	return our_ops != 0 && our_ops->create != 0 && our_ops->destroy != 0
+	    && our_ops->process != 0;
+}
+
+/* Our `v32_process`, out of the wrapper our `v32_create` built. */
+static dp_process_fn
+our_process_of(struct dp *dp)
+{
+	return ((struct dp_wrapper *)dp->dp_data)->process;
+}
+
 #define FIELD(o, off)		((unsigned char *)(void *)(o) + (off))
 #define F_PTR(o, off)		(*(void **)(void *)FIELD((o), (off)))
 #define F_U16(o, off)		(*(unsigned short *)(void *)FIELD((o), (off)))
@@ -125,18 +151,24 @@ test_registration(void)
 			    r->name != 0 && strcmp(r->name, "v32") == 0, 1, 1);
 		diff_eq_int("ops.use_count (%ld)", o->use_count, r->use_count,
 			    2);
-		diff_eq_int("ops.create is v32_create (%ld)",
-			    o->create == v32_create, 1, 3);
-		diff_eq_int("ops.destroy is v32_delete (%ld)",
-			    o->destroy == v32_delete, 1, 4);
 		/*
-		 * `process` is `dp_wrapper_run` and NOT `v32_process`.  Both
-		 * halves are asserted: the first would pass on a null.
+		 * `create`/`destroy`/`process` are file-static now, so the
+		 * table's slots are the only handles on them and there is no
+		 * symbol left to compare a slot against -- comparing it with
+		 * `our_ops` would be the table against itself.  That the
+		 * slots hold the real functions is established behaviourally
+		 * by test_create/test_process, which call them through this
+		 * table and compare the whole object with the blob's; here
+		 * they are only required to be three distinct entries, and
+		 * `process` is checked against `dp_wrapper_run` directly.
 		 */
+		diff_eq_int("ops slots are populated and distinct (%ld)",
+			    o->create != 0 && o->destroy != 0 && o->process != 0
+			    && (void *)o->create != (void *)o->destroy
+			    && (void *)o->create != (void *)o->process
+			    && (void *)o->destroy != (void *)o->process, 1, 3);
 		diff_eq_int("ops.process is dp_wrapper_run (%ld)",
 			    (void *)o->process == (void *)dp_wrapper_run, 1, 5);
-		diff_eq_int("ops.process is NOT v32_process (%ld)",
-			    (void *)o->process != (void *)v32_process, 1, 6);
 		diff_eq_int("the blob's process is ref_dp_wrapper_run (%ld)",
 			    (void *)r->process == (void *)ref_dp_wrapper_run,
 			    1, 7);
@@ -222,8 +254,8 @@ test_create(void)
 			memset(&opb, 0, sizeof(opb));
 
 			nset_before = harness_modem_ref.nparams;
-			a = v32_create((void *)0x1234, DP_V32, caller, 8000,
-				       160, &opa);
+			a = our_ops->create((void *)0x1234, DP_V32, caller, 8000,
+					   160, &opa);
 			b = ref_v32_create((void *)0x1234, DP_V32, caller, 8000,
 					   160, &opb);
 			diff_eq_int("ours built (%ld)", a != 0, 1, d);
@@ -258,7 +290,7 @@ test_create(void)
 			       != *(short *)((struct v32_dp *)a)->fp)
 				moved_caller = 1;
 
-			v32_delete(a);
+			our_ops->destroy(a);
 			ref_v32_delete(b);
 		}
 
@@ -326,7 +358,7 @@ test_process_status(void)
 		Control_Flag = 0;
 		ref_Control_Flag = 0;
 
-		a = v32_create((void *)0x2222, DP_V32, 0, 8000, 160, &opa);
+		a = our_ops->create((void *)0x2222, DP_V32, 0, 8000, 160, &opa);
 		b = ref_v32_create((void *)0x2222, DP_V32, 0, 8000, 160, &opb);
 		if (a == 0 || b == 0) {
 			diff_eq_int("both built (%ld)", 0, 1, code);
@@ -350,7 +382,7 @@ test_process_status(void)
 
 		memset(outa, 0, sizeof(outa));
 		memset(outb, 0, sizeof(outb));
-		ra = v32_process(a, in, outa, 40);
+		ra = our_process_of(a)(a, in, outa, 40);
 		rb = ref_v32_process(b, in, outb, 40);
 
 		diff_eq_int("status for code %ld", ra, rb, code);
@@ -369,7 +401,7 @@ test_process_status(void)
 		if (rb == DPSTAT_ERROR && code > 28)
 			arm_unknown = 1;
 
-		v32_delete(a);
+		our_ops->destroy(a);
 		ref_v32_delete(b);
 	}
 
@@ -420,7 +452,7 @@ test_error_latch(void)
 		outb[i] = (short)0x7fff;
 	}
 
-	a = v32_create((void *)0x3333, DP_V32, 1, 8000, 160, &opa);
+	a = our_ops->create((void *)0x3333, DP_V32, 1, 8000, 160, &opa);
 	b = ref_v32_create((void *)0x3333, DP_V32, 1, 8000, 160, &opb);
 	if (a == 0 || b == 0) {
 		diff_eq_int("both built (%ld)", 0, 1, 0);
@@ -429,7 +461,8 @@ test_error_latch(void)
 
 	a->status = DPSTAT_ERROR;
 	b->status = DPSTAT_ERROR;
-	diff_eq_int("returns DPSTAT_ERROR (%ld)", v32_process(a, in, outa, 40),
+	diff_eq_int("returns DPSTAT_ERROR (%ld)",
+		    our_process_of(a)(a, in, outa, 40),
 		    ref_v32_process(b, in, outb, 40), 0);
 	for (i = 0; i < 40; i++) {
 		diff_eq_int("silenced sample %ld", outa[i], outb[i], i);
@@ -438,7 +471,7 @@ test_error_latch(void)
 	}
 	diff_eq_int("the output really was silenced (%ld)", silent, 1, 0);
 
-	v32_delete(a);
+	our_ops->destroy(a);
 	ref_v32_delete(b);
 	return diff_end();
 }
@@ -447,6 +480,12 @@ int
 main(void)
 {
 	int rc = 0;
+
+	diff_begin("v32: the registered table is reachable");
+	diff_eq_int("dp_v32_init registered our ops (%ld)", find_ops(), 1, 0);
+	rc |= diff_end();
+	if (our_ops == 0)
+		return rc;
 
 	rc |= test_registration();
 	rc |= test_create();

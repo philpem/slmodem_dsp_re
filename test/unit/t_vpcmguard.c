@@ -143,6 +143,25 @@ extern int v90RateRenegSilence(void *obj) __attribute__((weak));
 #define FRAG	48
 
 /*
+ * `vpcm_run` is file-static in the object, so the table `dp_vpcm_init`
+ * registers is the only handle on it.  Its `.process` IS `vpcm_run` directly
+ * -- there is no `dp_wrapper` in front of this datapump -- so `->process` is
+ * the function this file drives.
+ */
+static struct dp_operations *our_ops;
+
+static int
+find_ops(void)
+{
+	harness_reg_reset();
+	dp_vpcm_init();
+	if (harness_reg_ours.count < 1)
+		return 0;
+	our_ops = (struct dp_operations *)harness_reg_ours.ops[0];
+	return our_ops != 0 && our_ops->process != 0;
+}
+
+/*
  * A root object built by hand rather than by `ref_vpcm_create`, because the
  * point of this binary is that NOTHING of the blob's V.PCM side runs in it.
  * Zeroed is a valid starting state for everything `vpcm_run` reads before it
@@ -224,6 +243,13 @@ main(void)
 
 	for (i = 0; i < FRAG; i++)
 		in[i] = (short)(i * 37 - 500);
+
+	diff_begin("vpcm: the registered table is reachable");
+	diff_eq_int("dp_vpcm_init registered our process (%ld)", find_ops(), 1,
+		    0);
+	rc |= diff_end();
+	if (our_ops == 0)
+		return rc;
 
 	diff_begin("all five VPcmV34* entry points are WRITTEN, and so are "
 		   "all seven below them");
@@ -344,7 +370,7 @@ main(void)
 
 	memset(out, 0x5a, sizeof(out));
 	diff_eq_int("vpcm_run returns DPSTAT_OK in soft mode",
-		    vpcm_run(&root.dp, in, out, FRAG), DPSTAT_OK, 0);
+		    our_ops->process(&root.dp, in, out, FRAG), DPSTAT_OK, 0);
 	/*
 	 * AND NOTHING WAS RECORDED, WHICH IS THE WHOLE WATCH TURNED THE RIGHT
 	 * WAY UP.  State 4 used to be the one arm of the seventeen whose only
