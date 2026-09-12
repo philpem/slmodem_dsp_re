@@ -393,7 +393,7 @@ edprint_scaled_stat(const char *fmt, float v, long double scaled,
 {
 	edprintf(fmt, !(v <= 0.0f) ? '+' : '-',
 		 (int)fabsl(scaled),
-		 __builtin_abs((int)((scaled - (long double)(int)scaled)
+		 __builtin_abs((int)((scaled - (int)scaled)
 				     * scale)));
 }
 
@@ -674,7 +674,7 @@ V90Equalizer::setLinearEquBeta(float beta)
 		edprintf("V90Equalizer: LE Beta = %c%d.%05de-10\r\n",
 			 !(beta <= 0.0f) ? '+' : '-',
 			 (int)fabsl(scaled),
-			 __builtin_abs((int)(((long double)(int)scaled - scaled)
+			 __builtin_abs((int)(((int)scaled - scaled)
 					     * 1.0e5f)));
 	}
 
@@ -695,6 +695,14 @@ V90Equalizer::setLinearEquBeta(float beta)
 				  / log10(2.0f));
 
 		linearEquMmxShift = shift;
+		/*
+		 * The (long double) casts are NOT redundant: the conversion
+		 * factor is a float, so without them the product is float
+		 * arithmetic.  The period object is identical either way only
+		 * because x87 excess precision keeps the float chain in an
+		 * 80-bit register; they are kept to pin the intermediate
+		 * rather than depend on that.  Issue #69, finding F11353.
+		 */
 		linearEquMmxBeta = (int)((long double)beta
 					 * linearEquMmxConversionFactor
 					 * (long double)one_shifted_by(shift));
@@ -721,7 +729,7 @@ V90Equalizer::setDfeBeta(float beta)
 		edprintf("V90Equalizer: DFE Beta = %c%d.%05de-7\r\n",
 			 !(beta <= 0.0f) ? '+' : '-',
 			 (int)fabsl(scaled),
-			 __builtin_abs((int)(((long double)(int)scaled - scaled)
+			 __builtin_abs((int)(((int)scaled - scaled)
 					     * 1.0e5f)));
 	}
 
@@ -737,6 +745,7 @@ V90Equalizer::setDfeBeta(float beta)
 				  / log10(2.0f));
 
 		dfeMmxShift = shift;
+		/* (long double) casts are not redundant -- see setLinearEquBeta. */
 		dfeMmxBeta = (int)((long double)beta
 				   * dfeMmxConversionFactor
 				   * (long double)one_shifted_by(shift));
@@ -1155,8 +1164,8 @@ V90Equalizer::convertEqualizerToMmx()
 				  / log10(2.0f));
 
 		linearEquMmxShift = shift;
-		linearEquMmxBeta = (int)((long double)linearEquBeta * conv
-					 * (long double)one_shifted_by(shift));
+		linearEquMmxBeta = (int)(linearEquBeta * conv
+					 * one_shifted_by(shift));
 	} else {
 		linearEquMmxShift = 0;
 		linearEquMmxBeta = 0;

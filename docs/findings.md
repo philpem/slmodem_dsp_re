@@ -123635,3 +123635,113 @@ ground-truth agreement is unchanged at 22/31.
 structural tiers except the new self-test, and no `src/` file changed.
 
 (2026-09-11)
+
+## F11353. Audit of explicit `(long double)` casts: 15 no-ops removed, 4 retained for a reason
+
+Issue #69. `src/` carries 160 explicit `(long double)` casts before this
+audit; 15 were removed and 145 remain. An explicit cast is
+*redundant* only when removing it cannot change the expression's type in the C
+abstract machine; where it does change the type, the period object can still
+be byte-identical and the cast must be judged on the source, not on `cmp`.
+
+**Removed, 15 casts in four files, whole-object byte-identical.** The nine
+`frac_of` casts (three each in `ResamplerTiming.cpp`, `V90Phase2Info.cpp`,
+`V92Phase2Info.cpp`) are pure no-ops: `x` and `d` are declared `long double`,
+so `long double x = v`, `(int)v - x` and `d * scale` are already long double
+without the casts. In `V90Equalizer.cpp`, `(long double)(int)scaled` at the
+three `scaled` print sites and the two casts in `convertEqualizerToMmx`'s beta
+assignment (`conv` is already `long double`) are no-ops; so is
+`(long double)(int)d` in `VpcmFloModem.cpp`. Each was recompiled with the
+Gentoo period compiler: `cmp` is byte-identical for all five whole translation
+units, and their `objdump -d` instruction bodies are identical (the only
+diff is the input filename in the header). `make phase J=12`: 375 passed,
+0 failed.
+
+**Retained, the four field-based beta casts.** In `setLinearEquBeta` and
+`setDfeBeta`,
+
+    linearEquMmxBeta = (int)((long double)beta
+                             * linearEquMmxConversionFactor
+                             * (long double)one_shifted_by(shift));
+
+`linearEquMmxConversionFactor` is a **float** and `one_shifted_by` returns
+**int**, so the casts are NOT redundant: without them the product is float
+arithmetic, not long double. Removing them is byte-identical *on this
+compiler* only because `-mfpmath=387` excess precision keeps the float chain
+in an 80-bit register until the `(int)` truncation -- exactly the dependency
+F256 declines to rely on. They are kept to pin the intermediate; a note at
+each site says so. This is the case the issue flagged as needing inspection,
+and inspection answers "not redundant".
+
+**Residual.** The remaining `(long double)` casts either force a type where no
+operand is long double (`(long double)v - (long double)(int)v` on a float, the
+fixed-point conversions in `V90Phase4Demodulator.cpp`), or coerce a call
+argument to `log10l`/`fabsl`. Both are meaningful in the abstract machine and
+were left alone; a tree-wide sweep of call-argument coercions was not
+attempted.
+
+(2026-09-11)
+
+## F11354. The context-redundant cast audit: tool, the `fpm_tone.c` pass, signedness, and the remainder
+
+Issue #69 follow-up, after F11353's `(long double)` group. `tools/castscan.py`
+is a clang-AST audit for two classes of explicit cast that the C abstract
+machine would perform anyway: **identity** (the operand already has the cast's
+type) and **contextual** (the cast target equals the initializer / assignment
+destination / return type, or the peer of a floating binary or conditional
+expression). `--self-test` plants two identity and seven contextual casts plus
+two conversion traps (a `T != D` cast and an integer-promotion cast) and
+asserts the exact split before any tree run -- findings F134 and F2401.
+
+**The sound rules, because each one was a false positive first.** Arithmetic to
+arithmetic only (a pointer cast can be what makes the code legal at all);
+`binary-peer` only for floating targets (C's integer promotions mean
+`(short)a * b` still truncates `a` even when `b` is `short`); init/assign only
+when the cast target EQUALS the destination, which is why
+`int x = (short)u;` is not flagged. Macro-body and header casts are reported
+separately -- the 992 `(void *)` and 360 `(unsigned char *)` from the `FIELD`
+and `*_OF` pointer macros are the macro's design, not defects.
+
+**The bounded pass: `src/dsp/fpm_tone.c`.** `castscan` flags 40 casts there,
+15 identity and 25 contextual. **38 were removed and the whole translation unit
+is byte-identical** (`cmp`, then `objdump -d` bodies identical). **2 were
+retained** -- `p.phase = (unsigned short)phase;` and `... increment;`, both
+`int -> unsigned short` -- because they are the only statement that a signed
+value is being reinterpreted as unsigned. Removing the casts detached eight
+`fpmtonerev`/`fpmtonetickstd` mutation anchors, whose `find`/`replace` strings
+are updated to the cast-removed text; **`make phase J=12` 375 passed, 0
+failed**, and `mutsnap --check` stays exit 0.
+
+**DOES SIGNEDNESS MATTER? No for behaviour; yes for what the cast records.**
+For every class the tool reports the target equals the destination, so the
+conversion is the identical C conversion whether the cast is written or not:
+removing it cannot change the value, and the object proves it. What a cast can
+hide is the compiler's *diagnostic*. Measured on `fpm_tone.c` with clang
+`-Wsign-conversion`: **5 warnings before and 5 after, unchanged**; with
+`-Wconversion`: 5 -> 22, i.e. the removed casts were hiding **narrowing**
+warnings, which is exactly the documentation-only class F10163 added. Of the
+3,585 contextual casts on the tree, **1,271 cross signedness** (operand and
+target differ); those are reported by `castscan --crossing` and are the ones
+whose declaration should be re-checked against the blob's own sign/zero
+extensions (F11350's both-extensions rule) before any retype. **They are
+retained by policy: removal is byte-safe, but the cast is the evidence that a
+sign reinterpretation is intended, and a warning is not a reason to change a
+declaration.**
+
+**The remainder, measured.** 3,782 direct casts tree-wide before the pass --
+197 identity (108 `short`, 23 `int`, 19 `short *`, 11 `float`, ...) and 3,585
+contextual (3,094 assign, 287 init, 201 binary-peer, 3 cond-peer) -- over
+275 translation units. After `fpm_tone.c`: 3,744 across **195 files with at
+least one hit**; 80 files are clean. Distribution: 6 files at 100+, 12 at
+50-99, 36 at 20-49, 79 at 5-19, 62 at 1-4. The concentration is
+`V34hshak.c` 195, `V34RX.c` 162, `v34shell.c` 146, `v17.c` 107, `v27.c` 104.
+
+**Method for the rest, and it is a bounded mechanical pass, one file at a
+time:** run `castscan.py` on the file; remove the same-signedness identity and
+contextual casts; leave the signedness-crossing ones in place; `make tc` and
+`cmp` that TU's object (bisect and retain the load-bearing cast if it moves);
+fix any detached mutation anchors; and gate the batch with `make phase`. The
+`cmp` decides every time; a size or score change is not acceptance. This is
+tracked as its own issue rather than folded into #69.
+
+(2026-09-11)

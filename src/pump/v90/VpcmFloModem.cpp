@@ -560,7 +560,7 @@ VPcmFloModem::getUinfoValue(short skipProbe)
 				long double frac;
 
 				d = (long double)L2[14] - (long double)L2[i];
-				frac = d - (long double)(int)d;
+				frac = d - (int)d;
 
 				dsplibs_debug_printf(
 				    "L2[%d]    = %c%d.%05d\r\n", i,

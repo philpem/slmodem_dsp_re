@@ -205,9 +205,9 @@ whole_of(float v)
 static int
 frac_of(float v, float scale)
 {
-	long double x = (long double)v;
-	long double d = (long double)(int)v - x;
-	int n = (int)(d * (long double)scale);
+	long double x = v;
+	long double d = (int)v - x;
+	int n = (int)(d * scale);
 
 	return (n < 0) ? -n : n;
 }
