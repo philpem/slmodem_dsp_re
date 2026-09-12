@@ -123743,5 +123743,45 @@ contextual casts; leave the signedness-crossing ones in place; `make tc` and
 fix any detached mutation anchors; and gate the batch with `make phase`. The
 `cmp` decides every time; a size or score change is not acceptance. This is
 tracked as its own issue rather than folded into #69.
+## F11355. Queue is header-only; `Queue.cpp` was an invented TU that added C2/D2
+
+(Renumbered from F11353: master's #73 landed first and holds that
+number; the two branches collided, as the task-number note in AGENTS.md
+warns.)
+
+`Queue<float>` had been reconstructed as an out-of-line `src/dsp/Queue.cpp`
+with member-wise explicit instantiation. The object has no `Queue.cpp`: its
+`.symtab` carries no `STT_FILE` record for one, and `ld -r` DOES preserve a
+FILE record for an object with no symbols (measured -- a partial link of our
+own emptied stubs still emits one), so the absence is evidence and not a
+linker artefact.
+
+The six Queue functions are weak `.gnu.linkonce.t` instantiations emitted by
+the ONE TU that reaches their definitions, `V92Modulator.cpp`:
+`V92Modulator::reset`, `progress`, `C1`/`C2` and `D1`/`D2` are the only
+references to them anywhere in the object. Explicit member instantiation in a
+separate TU produces the same six bodies but ALSO C2/D2, the base-object
+ctor/dtor the blob does not have; implicit instantiation of a header
+definition emits only the referenced C1/D1.
+
+**Fix.** The member definitions move from `Queue.cpp` into `Queue.h`, WITHOUT
+the `inline` keyword, and `Queue.cpp` is deleted. With `inline` GCC inlines
+five of the six away and their out-of-line symbols disappear; without it all
+six are emitted exactly as the object has them. `reset` keeps its
+`__attribute__((noinline))` so the constructor still tail-jumps to it.
+
+**Measured.** The partial-linked object now carries no `Queue.cpp` FILE record
+and exactly the blob's six `Queue` symbols -- no C2/D2 -- where the
+`Queue.cpp` form added two sections and a FILE record. `make phase`: period
+differential **375 passed, 0 failed**, structural checks OK. The function
+BODIES are unchanged by the move (`write` 2 B off, `read` 18 B off,
+`write(float)` 14 B off, `reset`/`C1`/`D1` exact): compiling the same source
+from `Queue.cpp` and from `V92Modulator.cpp` emits identical byte counts, so
+the residual is register allocation and schedule, not TU context.
+
+**Apparatus.** `t_queue.cpp` instantiates `~Queue` and therefore needs the
+replacement `operator delete[]` every `delete[]`-using destructor's TU
+carries; the src TUs get it through `Scrambler.h`, the test harness reaches
+no such header, so the definition is local to the test.
 
 (2026-09-11)

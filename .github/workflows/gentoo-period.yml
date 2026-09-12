@@ -76,8 +76,9 @@ jobs:
       - name: Seed incremental PR head build
         if: steps.base-objects-cache.outputs.cache-hit == 'true'
         run: |
-          if ! git diff --quiet "$BASE_SHA" HEAD -- Makefile tools/toolchain/period.mk; then
-            echo "period build rules changed; compiling PR head from scratch"
+          deleted=$(git diff --name-only --diff-filter=D "$BASE_SHA" HEAD -- src include)
+          if ! git diff --quiet "$BASE_SHA" HEAD -- Makefile tools/toolchain/period.mk || [ -n "$deleted" ]; then
+            echo "period build rules changed or a source was deleted; compiling PR head from scratch"
             exit 0
           fi
           mkdir -p build
@@ -89,7 +90,7 @@ jobs:
           sleep 1
           git diff --name-only "$BASE_SHA" HEAD -- src include \
             tools/toolchain/period_compat.h | while IFS= read -r path; do
-              test -e "$path" && touch "$path"
+              if [ -e "$path" ]; then touch "$path"; fi
             done
 
       - name: Build and measure PR head

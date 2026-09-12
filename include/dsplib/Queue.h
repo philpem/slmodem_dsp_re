@@ -5,6 +5,36 @@
  * `float` and nothing else.  20 bytes, no virtuals -- every call site is a
  * direct relocation and there is no vtable slot at +0.
  *
+ * ---------------------------------------------------------------------------
+ * HEADER-ONLY, AND THE BLOB PROVES IT
+ *
+ * There is no `Queue.cpp` in the object: `.symtab` has no `STT_FILE` record
+ * for one, and `ld -r` preserves a FILE record for an object with no symbols
+ * at all (a partial link of our own empty stubs still carries them).  The six
+ * Queue functions are weak `.gnu.linkonce.t` instantiations emitted by the ONE
+ * TU that reaches the definitions -- `V92Modulator.cpp`, whose `reset`,
+ * `progress`, constructor and destructor are the only callers.  Defining the
+ * members out of line in a `Queue.cpp` and explicitly instantiating them
+ * produces the same six bodies but ALSO C2/D2, the base-object ctor/dtor the
+ * blob does not have; under implicit instantiation GCC emits only the
+ * referenced C1/D1.  So the members are defined here, and WITHOUT the `inline`
+ * keyword: with it GCC inlines five of the six away and their out-of-line
+ * symbols disappear, while without it they are emitted, exactly as the object
+ * has them.  NO `noinline` IS NEEDED, and a human would not have written one:
+ * `reset` is a 13-byte body called from the constructor and from
+ * `V92Modulator`, and GCC 3.4.2 emits it out of line and calls it anyway.
+ * Measured by deleting the attribute -- the six sections and their sizes do
+ * not move, in either order.  Deleting `Queue.cpp` also removes the one FILE
+ * record the object does not have.
+ *
+ * `(int)num` IS LOAD-BEARING.  `num` is `unsigned` -- the `j` in the mangled
+ * name says so -- and the object compares with the SIGNED `jl`/`jle`, so the
+ * cast is what selects the signed compare: removing it changes the object
+ * (measured, first difference at byte 4003 of V92Modulator.o).  The `(int)`
+ * on `(last - wr) + 1` and `(last - rd) + 1` is redundant -- i386's
+ * `ptrdiff_t` is already `int`, and removing it is byte-identical -- so those
+ * two are gone.
+ *
  * `sizeof` is pinned from two sides: the 4-byte `size` at +0x10 puts a floor
  * under it, and the caller at 0x152ee does `movl $0x14,(%esp); call
  * sysdep_malloc` and hands the result straight to the constructor.
@@ -57,6 +87,8 @@
 
 #ifndef DSPLIB_QUEUE_H
 #define DSPLIB_QUEUE_H
+
+#include "dsplib/sysdep.h"
 
 template <class T>
 class Queue {
@@ -115,10 +147,9 @@ public:
 	/**
 	 * @brief Number of items currently queued.
 	 *
-	 * The object has no standalone `count` symbol. With the retained
-	 * Gentoo O3 profile and member-wise instantiation in Queue.cpp, this
-	 * ordinary in-class definition needs no forced-inline attribute:
-	 * removing it leaves both consumer objects byte-identical. See #22
+	 * The object has no standalone `count` symbol.  The member functions
+	 * are header-inline here, and this in-class definition needs no
+	 * forced-inline attribute: every call site open-codes it.  See #22
 	 * and docs/cid-dcr-audit.md for the crossed source/profile controls.
 	 *
 	 * @return Number of items currently in the queue.
@@ -160,5 +191,102 @@ private:
 	T	*wr;		/* +0x0c                                    */
 	unsigned size;		/* +0x10 slots, which is the ctor's n + 1   */
 };
+
+template <class T>
+Queue<T>::~Queue()
+{
+	/* `buf` is NOT nulled, so a second destruction double-frees. */
+	delete[] buf;
+}
+
+template <class T>
+void Queue<T>::reset()
+{
+	/*
+	 * `rd = wr = buf`, not `wr = rd = buf`: the object stores `wr` first,
+	 * and written this way the function comes out full-text identical to
+	 * it, operands and all.  The two spellings are equivalent -- both set
+	 * both -- so this is the author's, recovered.  Finding F617.
+	 */
+	rd = wr = buf;
+}
+
+template <class T>
+Queue<T>::Queue(unsigned n)
+{
+	/*
+	 * n + 1 SLOTS.  No check on the allocation: a NULL return makes `last`
+	 * the address -4, `reset` points both cursors at NULL, and the first
+	 * write stores through it.  The object does not check either.
+	 */
+	size = n + 1;
+	buf = (T *)sysdep_malloc(size * sizeof(T));
+	last = buf + size - 1;
+	reset();
+}
+
+template <class T>
+int Queue<T>::read(T *p, unsigned num)
+{
+	int avail = (last - rd) + 1;
+	int i;
+
+	if (count() < num)
+		return -1;
+
+	if (avail < (int)num) {
+		T *q = rd;
+
+		for (i = 0; i < avail; i++)
+			*p++ = *q++;
+		q = buf;
+		for (; i < (int)num; i++)
+			*p++ = *q++;
+		rd = q;
+	} else {
+		for (i = 0; i < (int)num; i++)
+			*p++ = *rd++;
+		if (rd == last + 1)
+			rd = buf;
+	}
+	return 0;
+}
+template <class T>
+int Queue<T>::write(T *p, unsigned num)
+{
+	int room = (last - wr) + 1;	/* to the end of the store */
+	int i;
+
+	if (size - count() - 1 < num)
+		return -1;
+
+	if (room < (int)num) {
+		T *q = wr;
+
+		for (i = 0; i < room; i++)
+			*q++ = *p++;
+		q = buf;
+		for (; i < (int)num; i++)
+			*q++ = *p++;
+		wr = q;
+	} else {
+		for (i = 0; i < (int)num; i++)
+			*wr++ = *p++;
+		if (wr == last + 1)
+			wr = buf;
+	}
+	return 0;
+}
+
+template <class T>
+int Queue<T>::write(T v)
+{
+	if (size - count() - 1 == 0)
+		return -1;
+
+	*wr = v;
+	wr = (wr == last) ? buf : wr + 1;
+	return 0;
+}
 
 #endif /* DSPLIB_QUEUE_H */
