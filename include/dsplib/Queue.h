@@ -20,9 +20,12 @@
  * referenced C1/D1.  So the members are defined here, and WITHOUT the `inline`
  * keyword: with it GCC inlines five of the six away and their out-of-line
  * symbols disappear, while without it they are emitted, exactly as the object
- * has them.  `reset` keeps its noinline attribute so the constructor
- * tail-jumps to it.  Deleting `Queue.cpp` also removes the one FILE record the
- * object does not have.
+ * has them.  NO `noinline` IS NEEDED, and a human would not have written one:
+ * `reset` is a 13-byte body called from the constructor and from
+ * `V92Modulator`, and GCC 3.4.2 emits it out of line and calls it anyway.
+ * Measured by deleting the attribute -- the six sections and their sizes do
+ * not move, in either order.  Deleting `Queue.cpp` also removes the one FILE
+ * record the object does not have.
  *
  * `sizeof` is pinned from two sides: the 4-byte `size` at +0x10 puts a floor
  * under it, and the caller at 0x152ee does `movl $0x14,(%esp); call
@@ -182,62 +185,36 @@ private:
 };
 
 template <class T>
-__attribute__((noinline)) void Queue<T>::reset()
+Queue<T>::~Queue()
 {
+	/* `buf` is NOT nulled, so a second destruction double-frees. */
+	delete[] buf;
+}
+
+template <class T>
+void Queue<T>::reset()
+{
+	/*
+	 * `rd = wr = buf`, not `wr = rd = buf`: the object stores `wr` first,
+	 * and written this way the function comes out full-text identical to
+	 * it, operands and all.  The two spellings are equivalent -- both set
+	 * both -- so this is the author's, recovered.  Finding F617.
+	 */
 	rd = wr = buf;
 }
 
 template <class T>
 Queue<T>::Queue(unsigned n)
 {
+	/*
+	 * n + 1 SLOTS.  No check on the allocation: a NULL return makes `last`
+	 * the address -4, `reset` points both cursors at NULL, and the first
+	 * write stores through it.  The object does not check either.
+	 */
 	size = n + 1;
 	buf = (T *)sysdep_malloc(size * sizeof(T));
 	last = buf + size - 1;
 	reset();
-}
-
-template <class T>
-Queue<T>::~Queue()
-{
-	delete[] buf;
-}
-
-template <class T>
-int Queue<T>::write(T v)
-{
-	if (size - count() - 1 == 0)
-		return -1;
-
-	*wr = v;
-	wr = (wr == last) ? buf : wr + 1;
-	return 0;
-}
-
-template <class T>
-int Queue<T>::write(T *p, unsigned num)
-{
-	int room = (int)((last - wr) + 1);
-	int i;
-
-	if (size - count() - 1 < num)
-		return -1;
-
-	if (room < (int)num) {
-		T *q = wr;
-
-		for (i = 0; i < room; i++)
-			*q++ = *p++;
-		q = buf;
-		for (; i < (int)num; i++)
-			*q++ = *p++;
-		wr = q;
-	} else {
-		for (i = 0; i < (int)num; i++)
-			*wr++ = *p++;
-		if (wr == last + 1)
-			wr = buf;
-	}
-	return 0;
 }
 
 template <class T>
@@ -264,6 +241,43 @@ int Queue<T>::read(T *p, unsigned num)
 		if (rd == last + 1)
 			rd = buf;
 	}
+	return 0;
+}
+template <class T>
+int Queue<T>::write(T *p, unsigned num)
+{
+	int room = (int)((last - wr) + 1);	/* to the end of the store */
+	int i;
+
+	if (size - count() - 1 < num)
+		return -1;
+
+	if (room < (int)num) {
+		T *q = wr;
+
+		for (i = 0; i < room; i++)
+			*q++ = *p++;
+		q = buf;
+		for (; i < (int)num; i++)
+			*q++ = *p++;
+		wr = q;
+	} else {
+		for (i = 0; i < (int)num; i++)
+			*wr++ = *p++;
+		if (wr == last + 1)
+			wr = buf;
+	}
+	return 0;
+}
+
+template <class T>
+int Queue<T>::write(T v)
+{
+	if (size - count() - 1 == 0)
+		return -1;
+
+	*wr = v;
+	wr = (wr == last) ? buf : wr + 1;
 	return 0;
 }
 
