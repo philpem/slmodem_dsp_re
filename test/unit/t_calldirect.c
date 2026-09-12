@@ -192,10 +192,38 @@ struct side {
 	int			rc[MAXCALLS];
 	struct call_dp		snap[MAXCALLS];
 	struct call		csnap[MAXCALLS];
+	const void		*getsreg;	/* this side's own callback */
 	int			calls;
 };
 
 static struct side side_a, side_b;
+static const void *our_getsreg;
+
+/*
+ * The S-register adaptor is file-static now, so the test cannot name it.  It
+ * is still reachable the way the supervisor holds it: build one call-setup
+ * object through the registered table, take the callback create planted in
+ * its configuration, and tear the object down again.
+ */
+static const void *
+capture_getsreg(void)
+{
+	struct call dummy;
+	struct dp *dp;
+	const void *p;
+
+	memset(&dummy, 0, sizeof(dummy));
+	dummy.self = &dummy;
+	dummy.modem = (void *)0xD1A1u;
+	params("5551234");
+	harness_param_set(MDMPRM_DP_ADDR, (long)(intptr_t)&dummy);
+	dp = ops_ours->create((void *)0xD1A1u, DP_CALL, 1, 8000, 160, ops_ours);
+	if (dp == 0)
+		return 0;
+	p = ((struct call_dp *)dp)->callprog.get_sreg;
+	ops_ours->destroy(dp);
+	return p;
+}
 
 static void
 normalise_dp(struct call_dp *dst, const struct call_dp *src,
@@ -279,18 +307,19 @@ drive(struct side *s, int ref, const char *dialstr, int srate, int samples,
 
 	s->dp = ref
 		? ref_call_create((void *)0xD1A1u, DP_CALL, 1, srate, 160, op)
-		: call_create((void *)0xD1A1u, DP_CALL, 1, srate, 160, op);
+		: op->create((void *)0xD1A1u, DP_CALL, 1, srate, 160, op);
 	if (s->dp == 0)
 		return;
+
+	s->getsreg = ref ? (const void *)ref_call_GetSRegister
+			 : ((const struct call_dp *)s->dp)->callprog.get_sreg;
 
 	for (n = 0; n < calls && n < MAXCALLS; n++) {
 		s->rc[n] = ref
 			   ? ref_call_run(s->dp, input[n], s->out[n], samples)
-			   : call_run(s->dp, input[n], s->out[n], samples);
+			   : op->process(s->dp, input[n], s->out[n], samples);
 		normalise_dp(&s->snap[n], (struct call_dp *)s->dp, op,
-			     ref ? (const void *)ref_call_GetSRegister
-				 : (const void *)call_GetSRegister,
-			     ref ? "ref" : "ours", n);
+			     s->getsreg, ref ? "ref" : "ours", n);
 		normalise_call(&s->csnap[n], &s->call, ref ? "ref" : "ours", n);
 		s->calls = n + 1;
 	}
@@ -345,7 +374,8 @@ run(const char *label, const char *dialstr, int signal, int srate, int samples,
 	}
 
 	if (side_a.dp != 0 && side_b.dp != 0)
-		diff_eq_int("call_delete returns (%ld)", call_delete(side_b.dp),
+		diff_eq_int("call_delete returns (%ld)",
+			    ops_ours->destroy(side_b.dp),
 			    ref_call_delete(side_a.dp), 0);
 	side_a.dp = side_b.dp = 0;
 
@@ -372,13 +402,14 @@ main(void)
 	diff_eq_int("ref_call_GetSRegister resolves (%ld)",
 		    (void *)ref_call_GetSRegister != 0, 1, 0);
 	/*
-	 * And that `process` really is `call_run` -- this datapump has no
-	 * dp_wrapper between it and the core, so the two must be the same
-	 * function, and if they were not this file would be testing something
-	 * other than what the core calls.
+	 * Our side's four entry points are file-static now, so what a caller
+	 * can name is the table `dp_call_init` registered.  `create`,
+	 * `destroy` and `process` must all be present; `call_GetSRegister`
+	 * is reached below through the callback `create` plants.
 	 */
-	diff_eq_int("ours: process is call_run (%ld)",
-		    (void *)ops_ours->process == (void *)call_run, 1, 0);
+	diff_eq_int("ours: create/destroy/process registered (%ld)",
+		    ops_ours->create != 0 && ops_ours->destroy != 0
+		    && ops_ours->process != 0, 1, 0);
 	diff_eq_int("ref: process is ref_call_run (%ld)",
 		    (void *)ops_ref->process == (void *)ref_call_run, 1, 0);
 	if (ops_ref == 0 || ops_ours == 0)
@@ -386,27 +417,37 @@ main(void)
 	rc |= diff_end();
 
 	/*
-	 * call_GetSRegister, which nothing has ever reached: it is not in the
-	 * operations table and the supervisor holds it only as a callback.
-	 * Every register, and the two ends of the range.
+	 * call_GetSRegister is not in the operations table; the supervisor
+	 * holds it only as the callback `call_create` planted, so that is
+	 * how the test reaches our side too.  Every register, and the two
+	 * ends of the range.
 	 */
+	our_getsreg = capture_getsreg();
 	diff_begin("call_GetSRegister");
 	{
+		long (*our_get)(void *, unsigned short) =
+			(long (*)(void *, unsigned short))our_getsreg;
 		unsigned n;
 
+		diff_eq_int("the callback was planted (%ld)",
+			    our_getsreg != 0, 1, 0);
+		if (our_getsreg == 0) {
+			rc |= diff_end();
+			return rc;
+		}
 		harness_sreg_reset();
 		for (n = 0; n < 256; n++)
 			harness_sreg_set(n, (long)(n * 7919u) & 0xffff);
 		for (n = 0; n < 300; n++)
 			diff_eq_int("S%ld",
-				    call_GetSRegister((void *)0xD1A1u,
-						      (unsigned short)n),
+				    our_get((void *)0xD1A1u,
+					    (unsigned short)n),
 				    ref_call_GetSRegister((void *)0xD1A1u,
 							  (unsigned short)n),
 				    (long)n);
 		diff_eq_int("and it is not returning a constant (%ld)",
-			    call_GetSRegister((void *)0xD1A1u, 7)
-			    != call_GetSRegister((void *)0xD1A1u, 8), 1, 0);
+			    our_get((void *)0xD1A1u, 7)
+			    != our_get((void *)0xD1A1u, 8), 1, 0);
 	}
 	rc |= diff_end();
 

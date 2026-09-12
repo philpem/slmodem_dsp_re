@@ -88,58 +88,13 @@ struct call_dp {
 };
 
 /*
- * The three dp_operations entry points, and the S-register adaptor.
- *
- * File-static in the object -- the ops table is the only thing in call.c with
- * external linkage there -- and static here too until finding F221 gave the
- * object's copies `ref_` aliases.  Declared so a test can call both sides by
- * name instead of reaching them through what `dp_call_init` registers.
- * `call_run` is `.process`, with no dp_wrapper in between: this datapump does
- * its own rate conversion.
+ * The four entry points behind the operations table are FILE-STATIC in the
+ * object, as the blob's local symbols say, so they are static in the source
+ * too and have no declarations here.  A test reaches `create`, `destroy` and
+ * `process` through the table `dp_call_init` registers, and reaches the
+ * S-register adaptor through the `get_sreg` callback `call_create` plants in
+ * the supervisor.
  */
-
-/**
- * @brief Construct the call-setup datapump.
- *
- * Builds `rc_in`/`rc_out` only when @p srate is not 8 kHz -- this
- * datapump does its own rate conversion rather than using dp_wrapper.
- *
- * @param modem     The host's modem object.
- * @param id        Should be #DP_CALL.
- * @param caller    Nonzero if this side originated the call.
- * @param srate     Host sample rate.
- * @param max_frag  Host fragment size.
- * @param op        The registered `dp_operations` table.
- * @return A new `struct dp *` (the `struct call_dp` it heads).
- */
-struct dp *call_create(void *modem, int id, int caller, int srate,
-		       int max_frag, struct dp_operations *op);
-
-/**
- * @brief Tear down the call-setup datapump.
- * @param dp  The datapump to free.
- * @return 0.
- */
-int call_delete(struct dp *dp);
-
-/**
- * @brief Run one block through the call-setup datapump: drive
- * `CALLPROG_Progress` and report what it decided.
- * @param dp     The datapump.
- * @param in     Host-rate input samples.
- * @param out    Host-rate output samples.
- * @param count  Number of samples.
- * @return A `DPSTAT_*` status code.
- */
-int call_run(struct dp *dp, void *in, void *out, int count);
-
-/**
- * @brief Read a modem S-register during call setup.
- * @param modem  The host's modem object.
- * @param num    The S-register number.
- * @return The register's value.
- */
-long call_GetSRegister(void *modem, unsigned short num);
 
 /**
  * @brief Register the call-setup datapump's `dp_operations` table with
