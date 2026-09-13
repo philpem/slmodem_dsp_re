@@ -123919,7 +123919,12 @@ records; the call-progress tables, several fax state and vmi symbols, and a
 handful of module-internal functions and tables are LOCAL too.  Our source
 declared many of them, so the candidate carried GLOBAL records and a different
 relocation target for every reference to them.  **Binding mismatches against
-the reference fall from 78 to 27.**
+the reference fall from 78 to 27**, counted by the new `tools/bindcmp.py`,
+which reports the LOCAL/GLOBAL agreement of every name both objects define and
+refuses on an empty symbol table; run against the pre-pass object it reports
+the 78.  A binding-only tool is needed because `partialcmp.py`'s symbol record
+includes the `.text` VALUE, so a symbol whose binding is now right but whose
+offset still differs is invisible in that census.
 
 **A test tier that can name a static reconstruction symbol (commit
 `781be95d`).**  Making a symbol static is trivial until a differential test
