@@ -212,5 +212,28 @@
   "label": "the three tail fields after the entrance filter are not cleared",
   "find": "\tbyte_7f5c = 0;\n\tecMode = 0;\n\tecRampCounter = 0;",
   "replace": "\t(void)0;"
+ },
+
+ {
+  "label": "lose the last digit of an entFiltNum coefficient",
+  "find": "\t0.96284330984918198, -3.8513500390114781, 5.777013458394471,",
+  "replace": "\t0.96284330984918198, -3.8513500390114780, 5.777013458394471,",
+  "equivalent": true,
+  "why": "-3.8513500390114781 and -3.8513500390114780 are the SAME double, 0xc00ecf909bf8055f both.  Seventeen significant digits already exceeds what a double distinguishes here, so the last one carries no bit.  Kept because it is the natural first mutation to write and the answer -- that these literals sit at the round-trip boundary and a one-digit edit cannot move them -- is what the next person needs."
+ },
+ {
+  "label": "make entFiltNum exactly symmetric, which it is not",
+  "find": "\t-3.8513500390114772, 0.96284330984918154,",
+  "replace": "\t-3.8513500390114781, 0.96284330984918198,"
+ },
+ {
+  "label": "round entFiltDen to six decimals",
+  "find": "\t1.0, -3.9242514351703268, 5.7756331881310974, -3.7784482934930401,",
+  "replace": "\t1.0, -3.924251, 5.775633, -3.778448,"
+ },
+ {
+  "label": "move an entFiltNum coefficient past the round-trip boundary",
+  "find": "\t-3.8513500390114772, 0.96284330984918154,",
+  "replace": "\t-3.8513500390114672, 0.96284330984918154,"
  }
 ]

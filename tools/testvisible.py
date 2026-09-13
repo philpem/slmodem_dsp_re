@@ -42,8 +42,37 @@ import subprocess
 import sys
 
 
+# A C++ internal-linkage DATA symbol under GCC 4+, `_ZL<len><name>`.  GCC
+# 3.4.2 -- the object's own compiler -- emits the plain name instead, so the
+# period tier already has it right; only the host tier needs the translation.
+INTERNAL = re.compile(r"^_ZL(\d+)(.+)$")
+
+
+def internal_plain(name, kind):
+    """The plain name a GCC 4+ `_ZL` internal-linkage DATA symbol stands for.
+
+    A test names the author's plain name, and the reconstruction defines the
+    table `static` in a C++ consumer to match the blob's own LOCAL binding.
+    Under GCC 3.4.2 that definition's symbol IS the plain name; under GCC 4+ it
+    becomes `_ZL10entFiltNum`.  This maps the latter back, so the one name in
+    test/ reaches both tiers.
+
+    FUNCTIONS ARE LEFT ALONE.  A static function's `_ZL` form carries a
+    parameter-type suffix (`_ZL3foov`), which a bare length slice would eat,
+    and no test reaches a C++ static function here anyway.
+    """
+    if kind not in "drb":
+        return name
+    m = INTERNAL.match(name)
+    return m.group(2)[:int(m.group(1))] if m else name
+
+
 def defined_locals(obj):
-    """Names this object defines, split into its LOCAL and GLOBAL sets."""
+    """Names this object defines, split into its LOCAL and GLOBAL sets.
+
+    LOCAL entries are `(name, kind)`: the kind keeps a C++ `_ZL` DATA symbol
+    distinguishable from a function whose mangling has no length prefix.
+    """
     out = subprocess.run(["nm", "--defined-only", obj], capture_output=True,
                          text=True)
     if out.returncode != 0:
@@ -55,7 +84,7 @@ def defined_locals(obj):
             continue
         name = parts[-1]
         if parts[-2] in "tdrb":
-            local.append(name)
+            local.append((name, parts[-2]))
         elif parts[-2] in "TDRBC":
             global_.append(name)
     return local, global_
@@ -93,6 +122,10 @@ def main():
                      help="a file listing object paths, one per line")
     ap.add_argument("--tests", default="test",
                     help="directory tree whose source tokens count as a use")
+    ap.add_argument("--redefine", metavar="FILE",
+                    help="also write `raw plain` pairs for objcopy "
+                         "--redefine-syms, mapping a GCC 4+ `_ZL` internal "
+                         "name to the plain name a test uses")
     ap.add_argument("-o", "--output", required=True)
     args = ap.parse_args()
 
@@ -110,11 +143,15 @@ def main():
 
     seen = {}
     globals_ = set()
+    redefine = {}
     for obj in objs:
         local, global_ = defined_locals(obj)
         globals_.update(global_)
-        for name in local:
-            seen[name] = seen.get(name, 0) + 1
+        for name, kind in local:
+            plain = internal_plain(name, kind)
+            seen[plain] = seen.get(plain, 0) + 1
+            if plain != name:
+                redefine[name] = plain
     if not seen:
         sys.exit("error: no file-local symbols found in %d object(s) -- "
                  "refusing to write an empty list" % len(objs))
@@ -131,6 +168,16 @@ def main():
     with open(args.output, "w") as f:
         f.write("".join(n + "\n" for n in visible))
 
+    # Only the renames whose plain name ended up visible: renaming a symbol
+    # that is not globalized would still change the test-host object for
+    # nothing, and a name that is ambiguous is deliberately left local.
+    if args.redefine:
+        vis = set(visible)
+        with open(args.redefine, "w") as f:
+            for raw in sorted(redefine):
+                if redefine[raw] in vis:
+                    f.write("%s %s\n" % (raw, redefine[raw]))
+
     print("test-visible: %d of %d local names (%d unique, %d ambiguous) from "
           "%d objects; %d names in the list"
           % (len(visible), len(seen), sum(1 for c in seen.values() if c == 1),
@@ -138,6 +185,9 @@ def main():
     if dup:
         print("  left local, name used by more than one TU: %s"
               % " ".join(dup))
+    if redefine:
+        print("  %d C++ internal name(s) redefined to their plain name"
+              % sum(1 for r in redefine if redefine[r] in set(visible)))
 
 
 if __name__ == "__main__":

@@ -35,6 +35,15 @@ extern const short ref_CRRv22_PLL_K1[];
 extern const short ref_CRRv22_PLL_K2[];
 extern short ref_V22DiconnectThreshTable[];
 
+/*
+ * Ours: FILE-LOCAL in the object, so they are `static` in v22fp.c and
+ * v22tab.h no longer declares them.  The test tier links a globalized copy
+ * (tools/testvisible.py), so the plain names resolve.
+ */
+extern const struct fpm_tone_cfg TONEv22_CFG;
+extern const struct fpm_tone_cfg TONEv22INIT_CFG;
+extern short V22DiconnectThreshTable[V22_DISCONNECT_THRESHOLDS];
+
 static int
 cmp_words(const char *label, const short *ours, const short *ref, int n)
 {

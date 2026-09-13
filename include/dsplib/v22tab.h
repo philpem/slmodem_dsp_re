@@ -77,22 +77,25 @@ extern const short CRRv22_CLK[V22_CRR_CLK_STEPS];
 extern const short CRRv22_PLL_K1[V22_CRR_PLL_SETS];
 extern const short CRRv22_PLL_K2[V22_CRR_PLL_SETS];
 
-/* Eight rising thresholds; in .data, not .rodata, and nothing writes them. */
+/* Eight rising thresholds; in .data, not .rodata, and nothing writes them.
+ *
+ * FILE-LOCAL in the object, so it is `static` in `src/pump/v22/v22fp.c`, its
+ * only consumer, and has no declaration here.  A test names it and reaches it
+ * through the globalized test copy (tools/testvisible.py). */
 #define V22_DISCONNECT_THRESHOLDS 8
-extern short V22DiconnectThreshTable[V22_DISCONNECT_THRESHOLDS];
 
 /*
  * The tone configurations.  36 bytes each and BYTE-IDENTICAL to each other --
- * see the note in src/pump/v22/v22rxtab.c, and note that the identity means
+ * see the note in src/pump/v22/v22fp.c, and note that the identity means
  * no differential test can tell which of the two feeds which tone object.
+ * Both are FILE-LOCAL in the object and `static` in v22fp.c; no declaration
+ * here.
  *
  * The word count is kept because t_v22tab.c compares them word for word
  * against the object's copies, which is a check on the bytes rather than on
  * the field mapping.
  */
 #define V22_TONE_CFG_WORDS	18
-extern const struct fpm_tone_cfg TONEv22_CFG;
-extern const struct fpm_tone_cfg TONEv22INIT_CFG;
 
 /*
  * The datapump's own parameter block: the template `V22FP_create` copies to

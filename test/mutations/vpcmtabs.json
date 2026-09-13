@@ -1,52 +1,5 @@
 [
  {
-  "label": "lose the last digit of an entFiltNum coefficient",
-  "find": "\t0.96284330984918198, -3.8513500390114781, 5.777013458394471,",
-  "replace": "\t0.96284330984918198, -3.8513500390114780, 5.777013458394471,",
-  "equivalent": true,
-  "why": "-3.8513500390114781 and -3.8513500390114780 are the SAME double, 0xc00ecf909bf8055f both.  Seventeen significant digits already exceeds what a double distinguishes here, so the last one carries no bit.  Kept because it is the natural first mutation to write and the answer -- that these literals sit at the round-trip boundary and a one-digit edit cannot move them -- is what the next person needs."
- },
- {
-  "label": "make entFiltNum exactly symmetric, which it is not",
-  "find": "\t-3.8513500390114772, 0.96284330984918154,",
-  "replace": "\t-3.8513500390114781, 0.96284330984918198,"
- },
- {
-  "label": "round entFiltDen to six decimals",
-  "find": "\t1.0, -3.9242514351703268, 5.7756331881310974, -3.7784482934930401,",
-  "replace": "\t1.0, -3.924251, 5.775633, -3.778448,"
- },
- {
-  "label": "unnormalise the 8000 Hz denominator's leading coefficient",
-  "find": "\t1.0, 0.89541491035646703, 6.0172148546971167, 4.3198953361432411,",
-  "replace": "\t1.0000001, 0.89541491035646703, 6.0172148546971167, 4.3198953361432411,"
- },
- {
-  "label": "drop the last tap of IIR2100_Coef_A_8000",
-  "find": "\t5.1123037260126232, 0.73105659448409177, 0.78247411963482927,\n};",
-  "replace": "\t5.1123037260126232, 0.73105659448409177,\n};"
- },
- {
-  "label": "negate one tap of IIR2100_Coef_B_8000",
-  "find": "\t0.025043121085192872, 0.0096040039766794698, 0.01492339147837984,",
-  "replace": "\t0.025043121085192872, -0.0096040039766794698, 0.01492339147837984,"
- },
- {
-  "label": "fill in an odd tap of the 9600 Hz numerator",
-  "find": "\t2.312202029234315e-09, 0.0, -1.1561010146171571e-08, 0.0,",
-  "replace": "\t2.312202029234315e-09, 1e-12, -1.1561010146171571e-08, 0.0,"
- },
- {
-  "label": "get the 9600 Hz binomial sign pattern wrong",
-  "find": "\t2.3122020292343141e-08, 0.0, -2.3122020292343141e-08, 0.0,",
-  "replace": "\t2.3122020292343141e-08, 0.0, 2.3122020292343141e-08, 0.0,"
- },
- {
-  "label": "transpose two taps of IIR2100_Coef_A_9600",
-  "find": "\t-8.1733225465473112, 6.3239307716147168, -1.8859534703639531,",
-  "replace": "\t6.3239307716147168, -8.1733225465473112, -1.8859534703639531,"
- },
- {
   "label": "swap the two echo pre-filter halves",
   "find": "float v92echoPreFilter_a[V92_ECHO_PREFILTER_TAPS] = {\n\t1.0f,",
   "replace": "float v92echoPreFilter_a[V92_ECHO_PREFILTER_TAPS] = {\n\t1.49860001f,"
@@ -64,28 +17,6 @@
   "replace": "\t0.221100003f, 0.0f,"
  },
  {
-  "label": "break v92TxPreFilter's mirror on one side only",
-  "find": "\t-0.0616387613f, 0.937895119f, -0.0616387613f, -0.0590389259f,",
-  "replace": "\t-0.0616387613f, 0.937895119f, -0.0616387614f, -0.0590389259f,",
-  "equivalent": true,
-  "why": "-0.0616387613f and -0.0616387614f are the SAME float, 0xbd7c78ed both, so the mirror is not broken and the table is unchanged.  The mirror check in t_vpcmtabs.c compares BITS, and there is no bit here to differ."
- },
- {
-  "label": "flatten v92TxPreFilter's near-zero taps to zero",
-  "find": "\t0.000292354584f, -3.63938128e-18f, -0.000459987583f, -0.00129610382f,",
-  "replace": "\t0.000292354584f, 0.0f, -0.000459987583f, -0.00129610382f,"
- },
- {
-  "label": "shift v92TxPreFilter by one tap, putting the pad first",
-  "find": "float v92TxPreFilter[V92_TXPREFILTER_TAPS] = {\n\t0.000292354584f,",
-  "replace": "float v92TxPreFilter[V92_TXPREFILTER_TAPS] = {\n\t0.0f, 0.000292354584f,"
- },
- {
-  "label": "make v92TxPreFilter's pad slot -0.0f instead of +0.0f",
-  "find": "\t-0.000459987583f, -3.63938128e-18f, 0.000292354584f, 0.0f,\n};",
-  "replace": "\t-0.000459987583f, -3.63938128e-18f, 0.000292354584f, -0.0f,\n};"
- },
- {
   "label": "clear one of v34initialbauds' six allowances",
   "find": "\t1, 1, 1, 1, 1, 1,",
   "replace": "\t1, 1, 1, 0, 1, 1,"
@@ -96,18 +27,8 @@
   "replace": "const unsigned char v34initialbauds[V34_INITIAL_BAUDS] = {\n\t1, 1, 1, 1, 1,"
  },
  {
-  "label": "move an entFiltNum coefficient past the round-trip boundary",
-  "find": "\t-3.8513500390114772, 0.96284330984918154,",
-  "replace": "\t-3.8513500390114672, 0.96284330984918154,"
- },
- {
   "label": "round an echo pre-filter tap to four decimals, which does move it",
   "find": "\t3.62899995f, 0.467999995f, -2.13840008f, -1.00730002f, 0.423099995f,",
   "replace": "\t3.62899995f, 0.4679f, -2.13840008f, -1.00730002f, 0.423099995f,"
- },
- {
-  "label": "break v92TxPreFilter's mirror for real, on the high side only",
-  "find": "\t-0.0616387613f, 0.937895119f, -0.0616387613f, -0.0590389259f,",
-  "replace": "\t-0.0616387613f, 0.937895119f, -0.0616387f, -0.0590389259f,"
  }
 ]
