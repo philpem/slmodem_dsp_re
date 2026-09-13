@@ -68,44 +68,17 @@ struct v8_dp {
 	struct v8			*v8;	/* +0x30 */
 };
 
-/**
- * @brief Create the V.8 datapump wrapper.
+/*
+ * `v8_op` is NOT declared here -- file-local in v8.c, on the same evidence as
+ * b103.h's note.  Take it from `harness_reg_ours.ops[0]` after `dp_v8_init()`.
  *
- * The three dp_operations entry points (this, v8_delete(), v8_process())
- * are all file-static in the object; they are declared here so a test can
- * call each side by name (finding F221's `ref_` aliases) rather than
- * pulling `create`/`destroy` out of what dp_v8_init() registers. Nothing
- * in `make phase` asserts that our linkage matches the original's, and
- * three of this tree's four datapumps already export what the blob keeps
- * local.
- *
- * @param modem     The owning modem object.
- * @param id        Requested datapump id (expected #DP_V8).
- * @param caller    Non-zero if this end originated the call.
- * @param srate     Sample rate; anything but 9600 is refused.
- * @param max_frag  Maximum fragment size.
- * @param op        Operations table to install into the wrapper.
- * @return The new `struct dp *`, or NULL on a refused sample rate.
+ * `v8_create`, `v8_delete` and `v8_process` are file-local in the object too:
+ * `nm` shows the object's FILE `v8.c` unit holding a lower-case `t` for all
+ * three, with `v8_process` in the SAME unit as `v8_op`, so they are `static`
+ * in v8.c and have no declarations here.  A test reaches `create` and
+ * `destroy` through the table `dp_v8_init` registers, and `v8_process` out of
+ * it as well, exactly as `v22.h` and `v23.h` record.
  */
-struct dp *v8_create(void *modem, int id, int caller, int srate, int max_frag,
-		     struct dp_operations *op);
-
-/** @brief Destroy a V.8 datapump wrapper created by v8_create(). */
-int v8_delete(struct dp *dp);
-
-/**
- * @brief One buffer through the handshake.
- *
- * Returns a DPSTAT_* code, and when the negotiation finishes it publishes
- * the result and asks the modem to change datapump.
- *
- * @param dp     The wrapper.
- * @param in     Input samples.
- * @param out    Output samples.
- * @param count  Sample count.
- * @return A DPSTAT_* status code.
- */
-int v8_process(struct dp *dp, void *in, void *out, int count);
 
 /**
  * @brief Register the V.8 datapump.

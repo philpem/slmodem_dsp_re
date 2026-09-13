@@ -1,11 +1,16 @@
 /*
- * v8dp.c -- the V.8 datapump wrapper.
+ * v8.c -- the V.8 datapump wrapper.
  *
  * Owns the handshake object, builds the call menu from the modem's own
  * parameter block, and hands both to `V8Create`.  The menu is not copied:
  * the pointer the modem keeps is what the handshake reads and writes, which
  * is how the negotiated result gets back to the caller without an explicit
  * step.
+ *
+ * All three dp_operations entry points -- create, delete and process -- live
+ * here, as the object's FILE `v8.c` unit holds them, and are file-static:
+ * `v8_op` is the only thing that names them.  `V8Process`, the per-sample
+ * loop `v8_process` sits on, stays in `v8proc.c`.
  */
 
 #include <stdint.h>
@@ -20,7 +25,7 @@ extern int modem_dp_register(int id, void *op);
 extern void modem_dp_deregister(int id, void *op);
 
 
-struct dp *
+static struct dp *
 v8_create(void *modem, int id, int caller, int srate, int max_frag,
 	  struct dp_operations *op)
 {
@@ -95,7 +100,7 @@ v8_create(void *modem, int id, int caller, int srate, int max_frag,
 	return (struct dp *)st;
 }
 
-int
+static int
 v8_delete(struct dp *dp)
 {
 	struct v8_dp *st = ((struct v8_dp *)dp)->self;
@@ -106,6 +111,119 @@ v8_delete(struct dp *dp)
 	V8Delete(st->v8);
 	sysdep_free(st);
 	return 0;
+}
+
+static int
+v8_process(struct dp *dp, void *in, void *out, int count)
+{
+	struct v8_dp *st = ((struct v8_dp *)dp)->self;
+	int rc = V8Process(st->v8, in, out, count);
+	int ret = 0;
+	int arg = -1;
+
+	switch (rc) {
+	/* Every status whose name ends TIME_OUT_WAITING_FOR_something. */
+	case V8_ANS_TIME_OUT_WAITING_FOR_CM:
+	case V8_ANS_TIME_OUT_WAITING_FOR_CJ:
+	case V8_ORG_TIME_OUT_WAITING_FOR_ANSAM:
+	case V8_ORG_TIME_OUT_WAITING_FOR_JM:
+	case V8_ORG_TIME_OUT_WAITING_FOR_QCA1d:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("v8: process: timeout.\n");
+		ret = DPSTAT_ERROR;
+		break;
+
+	case V8_OK:
+		/* Publish what was agreed, then ask for the change. */
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("v8: process: OK.\n");
+		/*
+		 * ...but only while the idle timer is not already running.
+		 * Once a change has been asked for, `f20` is counting down to
+		 * it and a second V8_OK must not start over.
+		 */
+		if (st->f20 != 0)
+			break;
+		V8UpdateModemParameters(st->v8, st->cm);
+
+		/*
+		 * Which datapump comes next.  Quick connect keeps whatever the
+		 * call asked for; otherwise it is whichever modulation
+		 * survived the negotiation, most capable first -- the same
+		 * three bits of `b0` that V8Create prints as V90, V34 and V32
+		 * (finding F164), and the datapump ids are the standard
+		 * numbers.  Nothing left means nothing to change to.
+		 */
+		if (st->cm->b2 & 0x10) {
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf("v8: process: QC.\n");
+			arg = st->want;
+		} else if (st->cm->b0 & 0x08) {
+			arg = DP_V90;
+		} else if (st->cm->b0 & 0x20) {
+			arg = DP_V34;
+		} else if (st->cm->b0 & 0x80) {
+			arg = DP_V32;
+		} else {
+			ret = DPSTAT_ERROR;
+			break;
+		}
+
+		/* Common to all four: what was agreed goes to the modem. */
+		st->dspinfo->qc_lapm = (st->cm->b2 >> 6) & 1;
+		st->dspinfo->qc_index = st->cm->menu;
+		break;
+
+	case V8_ORG_BAD_QCA1d_MESSAGE:
+		/*
+		 * The far end offered PCM.  Only take it if this call asked
+		 * for V.90 or V.92, and only once.  Nothing reaches it: the
+		 * object's OWN V8Process has no arm that produces 15, 16 or
+		 * 17 either -- its status chain at 0x74680 is the one above,
+		 * arm for arm -- so the three QCA1d statuses exist in the
+		 * table and in this switch and nowhere else.  Reproduced.
+		 */
+		if (st->want != 92 && st->want != 90) {
+			ret = DPSTAT_ERROR;
+		} else if (st->f20 == 0) {
+			st->dspinfo->qc_lapm &= 1;
+			arg = 92;
+		}
+		break;
+
+	default:
+		break;
+	}
+
+	if (arg >= 0) {
+		modem_set_param(dp->modem, 9, arg);
+		ret = DPSTAT_CHANGEDP;
+		st->f20 = (int)modem_get_param(dp->modem, 5) + 0x2a0;
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "v8: Link established. Idle timer %d.\n",
+			    st->f20);
+	}
+
+	/* The same change detector as V8Process's, one layer up. */
+	if (st->f2c != rc) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("v8: status (%d) %s\n", rc,
+					     v8StatusName[rc]);
+		st->f2c = rc;
+	}
+
+	if (st->f20 > 0) {
+		st->f20 -= count;
+		if (st->f20 <= 0) {
+			/* The window closed: give up and change anyway. */
+			st->f20 = -1;
+			st->f1c = 0;
+			modem_set_param(dp->modem, 9, 0);
+			ret = DPSTAT_CHANGEDP;
+		}
+	}
+	return ret;
 }
 
 static struct dp_operations v8_op = {
