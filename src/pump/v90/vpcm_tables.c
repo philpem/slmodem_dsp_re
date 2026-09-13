@@ -26,21 +26,18 @@
  * `AnsamToneDetector.cpp`, entFilt* under `VpcmFloModem.cpp`, and
  * v92TxPreFilter under `V92Modulator.cpp`.
  *
- * THE TWO THAT REMAIN CANNOT MOVE YET.
+ * THE ONE THAT REMAINS CANNOT MOVE YET.
  *
  *     `v92echoPreFilter_{a,b}` belong to V92EchoCanceller.cpp, but that
  *     constructor is not reconstructed, so a `static` copy here has no
  *     referrer and -O3 DROPS it.  The record stays global so the differential
  *     test can reach it.
  *
- *     `v34initialbauds` belongs to VpcmFloModem.cpp, and the reference's
- *     consumer is the V.PCM constructor -- but the reconstruction of that
- *     constructor does not read it here: the six flags it copies live in
- *     `vpcm_ctor_flags_0217` in VPcmFloModemCtor.cpp, which is the
- *     `.rodata+0x3e0` source the object shows.  A `static` copy here would be
- *     dropped for the same reason.
+ * `v34initialbauds` has moved: its consumer is the V.PCM constructor, which
+ * now reads it instead of the duplicate `vpcm_ctor_flags_0217`, so it is
+ * `static` in `VPcmFloModemCtor.cpp`.
  *
- * WHEN THOSE CONSUMERS LAND, MOVE THE REMAINING TABLES IN AS `static` too.
+ * WHEN THE REMAINING CONSUMER LANDS, MOVE THAT TABLE IN AS `static` too.
  * A new `static` beside this one links perfectly, the two copies diverge
  * silently, and the test here keeps passing against the copy nobody uses.
  *
@@ -107,21 +104,8 @@ float v92echoPreFilter_b[V92_ECHO_PREFILTER_TAPS] = {
  * `v34initialbauds`, .rodata+0x3e0 -- six bytes, all 1, copied wholesale into
  * the modem object at +0x217 by VPcmFloModem's constructor (.text+0xfbf5).
  *
- * INDEXED BY V.34 SYMBOL RATE, of which there are six: 2400, 2743, 2800, 3000,
- * 3200 and 3429 baud.  Every entry is 1, so as shipped the table permits all
- * six.
- *
- * THE ELEMENT TYPE IS SETTLED BY THE DESTINATION OFFSETS AND NOT BY THE LOAD.
- * The constructor copies it as a 4-byte load plus a 2-byte load, which is just
- * how GCC moves six bytes and says nothing about the element size.  What says
- * it is where the six bytes LAND: +0x217 and +0x21b, both odd, so the
- * destination is byte-aligned and the array cannot be `short[3]`.
- *
- * IT BELONGS TO `VpcmFloModem.cpp` IN THE REFERENCE, but that constructor's
- * reconstruction does not read it -- it copies `vpcm_ctor_flags_0217` instead,
- * which is the same `.rodata+0x3e0` bytes.  So it stays global here until that
- * read is resolved.
+ * MOVED.  Its reference consumer is that constructor, which now reads this
+ * array rather than a duplicate (`vpcm_ctor_flags_0217`), and it is `static`
+ * in `VPcmFloModemCtor.cpp` with the rest of the constructor.  The derivation
+ * that was here is in that file now.
  */
-const unsigned char v34initialbauds[V34_INITIAL_BAUDS] = {
-	1, 1, 1, 1, 1, 1,
-};

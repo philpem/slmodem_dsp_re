@@ -176,11 +176,17 @@ typedef char vpcmc_size[(sizeof(VPcmFloModem) == 0x7f68) ? 1 : -1];
 #endif
 
 /*
- * .rodata+0x3e0, six bytes.  See the file comment: this is one initialisation
- * and not six stores, and the compiler is what turns it into a four-byte move
- * and a two-byte one.
+ * `v34initialbauds`, .rodata+0x3e0 in the object -- six bytes, all 1.  It is
+ * the array this constructor copies into `v34BaudAllow` (+0x217); the note
+ * above is the initialisation and not six stores, and the compiler is what
+ * turns it into a four-byte move and a two-byte one.  FILE-LOCAL in the
+ * object, and this constructor is its only consumer, so it is `static` here;
+ * a test names it through the test tier's globalized copies
+ * (tools/testvisible.py).
  */
-static const unsigned char vpcm_ctor_flags_0217[6] = { 1, 1, 1, 1, 1, 1 };
+static const unsigned char v34initialbauds[V34_INITIAL_BAUDS] = {
+	1, 1, 1, 1, 1, 1,
+};
 
 /*
  * ---------------------------------------------------------------------------
@@ -260,7 +266,7 @@ VPcmFloModem::VPcmFloModem(void *v34Obj, V90ModemSide side,
 	nofBits = 0;
 
 	for (i = 0; i < sizeof(v34BaudAllow); i++)
-		v34BaudAllow[i] = vpcm_ctor_flags_0217[i];
+		v34BaudAllow[i] = v34initialbauds[i];
 
 	sweepCounter = 0;
 

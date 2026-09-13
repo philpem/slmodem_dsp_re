@@ -73,12 +73,12 @@ extern float v92echoPreFilter_a[V92_ECHO_PREFILTER_TAPS];
 extern float v92echoPreFilter_b[V92_ECHO_PREFILTER_TAPS];
 
 /*
- * `v34initialbauds` is still defined in vpcm_tables.c: its reference
- * consumer is VpcmFloModem's constructor, which is reconstructed in
- * VPcmFloModemCtor.cpp but reads `vpcm_ctor_flags_0217` rather than this
- * array there, so a `static` copy would have no referrer.
+ * `v34initialbauds` has moved: its reference consumer is VpcmFloModem's
+ * constructor, which now reads it rather than the duplicate
+ * `vpcm_ctor_flags_0217`, so it is `static` in
+ * `src/pump/v90/VPcmFloModemCtor.cpp`.  A test names it through the test
+ * tier's globalized copies (tools/testvisible.py).
  */
-extern const unsigned char v34initialbauds[V34_INITIAL_BAUDS];
 
 #ifdef __cplusplus
 }

@@ -59,6 +59,13 @@ extern const unsigned char ref_v34initialbauds[V34_INITIAL_BAUDS]
 	asm("ref_v34initialbauds");
 
 /*
+ * Ours: FILE-LOCAL in the object, so it is `static` in
+ * VPcmFloModemCtor.cpp, its only consumer, and vpcm_tables.h no longer
+ * declares it.  The test tier links a globalized copy (tools/testvisible.py).
+ */
+extern const unsigned char v34initialbauds[V34_INITIAL_BAUDS];
+
+/*
  * The seven moved tables are FILE-LOCAL `static` in their reconstructed
  * consumer now, so vpcm_tables.h no longer declares them.  A differential
  * test can still name the plain symbol because the test tier links a
