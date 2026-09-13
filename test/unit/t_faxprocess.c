@@ -59,6 +59,17 @@ extern int ref__idle_state(struct fax_class1 *ctx, const short *rx,
 	int word7, int *word8);
 extern class1_state_fn ref_class1_state_functions[19];
 
+/*
+ * FILE-LOCAL in the object, so class1.c defines it `static` and class1.h no
+ * longer declares it.  Its address is taken (class1.c installs it into
+ * `class1_state_functions`, and this test does too), so the ordinary calling
+ * convention is unchanged; the test tier links a globalized copy
+ * (tools/testvisible.py).
+ */
+extern int _idle_state(struct fax_class1 *ctx, const short *rx, short *tx,
+		       int word3, int word4, int *rx_count, int *tx_count,
+		       int word7, int *word8);
+
 extern struct rc *ref_RcFixed_Create(int mode);
 extern void ref_RcFixed_Delete(struct rc *h);
 

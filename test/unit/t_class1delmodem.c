@@ -47,6 +47,25 @@ extern int ref_init_vmi_v27tx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
 			      int arg_2, void *arg_3);
 extern int ref_init_vmi_v29tx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
 			      int arg_2, void *arg_3);
+
+/*
+ * FILE-LOCAL in the object, so class1rx.c/class1tx.c define them `static`
+ * and the headers no longer declare them.  Their addresses are taken (stored
+ * in the RX/TX dispatch tables), so the ordinary calling convention is
+ * unchanged; the test tier links a globalized copy (tools/testvisible.py).
+ */
+extern void init_vmi_v17rx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
+			   int arg_2, void *arg_3);
+extern void init_vmi_v27rx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
+			   int arg_2, void *arg_3);
+extern void init_vmi_v29rx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
+			   int arg_2, void *arg_3);
+extern int init_vmi_v17tx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
+			  int arg_2, void *arg_3);
+extern int init_vmi_v27tx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
+			  int arg_2, void *arg_3);
+extern int init_vmi_v29tx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
+			  int arg_2, void *arg_3);
 extern struct fax_fifo *ref_FIFO_create(struct fax_fifo *f,
 					const struct fifo_cfg *cfg);
 

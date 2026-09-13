@@ -101,7 +101,7 @@
  * `struct class1_name` is declared in class1.h, not here, so a test can
  * reach it without a reader in `src/` yet.
  */
-struct class1_name states_names[20] = {
+static struct class1_name states_names[20] = {
 	{ CLASS1_T30_SILENCE_BEFORE_PREAMBLE_STATE,
 	  "T30_SILENCE_BEFORE_PREAMBLE_STATE" },
 	{ CLASS1_T30_PREAMBLE_STATE,		"T30_PREAMBLE_STATE" },
@@ -128,7 +128,7 @@ struct class1_name states_names[20] = {
 	{ CLASS1_MAX_STATES,			"MAX_STATES" },
 };
 
-struct class1_name status_names[11] = {
+static struct class1_name status_names[11] = {
 	{ FAX_CLASS1_NO_MESSAGE,		"FAX_CLASS1_NO_MESSAGE" },
 	{ FAX_CLASS1_OK,			"FAX_CLASS1_OK" },
 	{ FAX_CLASS1_ERROR,			"FAX_CLASS1_ERROR" },
@@ -150,7 +150,7 @@ struct class1_name status_names[11] = {
  * RM/RH/TS/RS transmit-HDLC, transmit-modem(data), receive-modem, receive-
  * HDLC, transmit-silence, receive-silence.
  */
-struct class1_name command_names[6] = {
+static struct class1_name command_names[6] = {
 	{ FAX_CLASS1_TH_COMMAND, "FAX_CLASS1_TH_COMMAND" },
 	{ FAX_CLASS1_TM_COMMAND, "FAX_CLASS1_TM_COMMAND" },
 	{ FAX_CLASS1_RM_COMMAND, "FAX_CLASS1_RM_COMMAND" },
@@ -162,9 +162,8 @@ struct class1_name command_names[6] = {
 /*
  * `.bss`/COMMON, 0x4c bytes, all-NULL until `fax_class1_create` (unwritten)
  * installs the nineteen handler addresses.  Declared here, not `static`,
- * for the same reason `_send_silence_state` and its siblings are global
- * (D1053's shape): a test needs to reach it directly, since the writer is
- * still hundreds of symbols away.
+ * so a test needs to reach it directly, since the writer is still hundreds
+ * of symbols away.
  */
 class1_state_fn class1_state_functions[19];
 
@@ -321,15 +320,14 @@ _set_modem_rate(int code, int *mod, int *rate)
  *   _idle_state               .text 0x092dd0    72
  *   _idle_state_init          .text 0x092dc0     3
  *
- * THE FIRST THREE ARE FILE-LOCAL IN THE OBJECT and are global here.  Nothing
- * calls them by name: `fax_class1_create` stores their addresses into
+ * THE FIRST THREE ARE FILE-LOCAL IN THE OBJECT and are `static` here now.
+ * Nothing calls them by name: `fax_class1_create` stores their addresses into
  * `class1_state_functions`, which shows up as an `R_386_32` against the
  * SECTION symbol with the address as an inline addend
  * (`.text+0x092ef4 -> .text:0x092dd0`) and so appears in no call graph and
- * under no name.  `getbit` and `ApplyBulkDelay` in `src/pump/v34/V34hshak.c`
- * are the precedent for writing a file-local as a global so that its
- * `ref_` alias can be driven directly (F221, F227); the storage class is a
- * knowing divergence and is recorded as D1053.
+ * under no name.  A differential test that names one declares it itself and
+ * reaches it through the globalized test copy (tools/testvisible.py).
+ * D1053 recorded the earlier `extern` spelling (F221, F227's precedent).
  *
  * The handler contract is nine arguments -- see class1.h, which says which
  * of them are established and which are only established as WIDTHS.
@@ -347,7 +345,7 @@ _idle_state_init(struct fax_class1 *ctx)
  * is what jump threading makes of one loop over a variable the compiler has
  * just pinned to 160 on that path.  Written as the one loop.
  */
-int
+static int
 _idle_state(struct fax_class1 *ctx, const short *rx, short *tx,
 	    int word3, int word4, int *rx_count, int *tx_count,
 	    int word7, int *word8)
@@ -380,7 +378,7 @@ _idle_state(struct fax_class1 *ctx, const short *rx, short *tx,
  * generating another block.  Otherwise generate one block of the session's
  * own tone (`ctx->tone`) and report a full block transmitted.
  */
-int
+static int
 _answer_tone_state(struct fax_class1 *ctx, const short *rx, short *tx,
 		   int word3, int word4, int *rx_count, int *tx_count,
 		   int word7, int *word8)
@@ -403,7 +401,7 @@ _answer_tone_state(struct fax_class1 *ctx, const short *rx, short *tx,
 	return 0;
 }
 
-int
+static int
 _send_silence_state(struct fax_class1 *ctx, const short *rx, short *tx,
 		    int word3, int word4, int *rx_count, int *tx_count,
 		    int word7, int *word8)
@@ -440,7 +438,7 @@ _send_silence_state(struct fax_class1 *ctx, const short *rx, short *tx,
  * against `countdown` is UNSIGNED (`jae`), which is why `silence_blocks` is
  * an `unsigned int` in class1.h and the cast below is written out.
  */
-int
+static int
 _recieve_silence_state(struct fax_class1 *ctx, const short *rx, short *tx,
 		       int word3, int word4, int *rx_count, int *tx_count,
 		       int word7, int *word8)
@@ -492,7 +490,7 @@ _recieve_silence_state(struct fax_class1 *ctx, const short *rx, short *tx,
  * (`ctx->iir_coeff`); nothing establishes what the filter is FOR beyond "high
  * pass", the object's own initials.
  */
-const short FAX_HP_COEFF[10] = {
+static const short FAX_HP_COEFF[10] = {
 	(short)0x39c0, (short)0x39c0, (short)0x8c7f, (short)0x2fd6,
 	(short)0x918a, (short)0x39c0, (short)0x39c0, (short)0x8c7f,
 	(short)0x38c5, (short)0x88b7,

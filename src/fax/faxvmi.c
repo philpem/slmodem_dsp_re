@@ -154,24 +154,24 @@ typedef char faxvmi_link_size[(sizeof(struct faxvmi_link) == 0x18) ? 1 : -1];
  * `vxx_message` at 0x94e0.  Every entry is read from the relocation at its
  * address; none is inferred from the function names.
  *
- * THEY ARE FILE-LOCAL IN THE OBJECT (`r`, not `R`) AND GLOBAL HERE -- D1122.
- * The only reader is `FAXVMI_process`, which this tree has not written, so a
- * `static` copy would have no referent and the compiler would discard it,
- * taking the comparison against the blob with it.  Same shape as D1081.
+ * THEY ARE FILE-LOCAL IN THE OBJECT (`r`, not `R`), so all three are
+ * `static` here now -- `FAXVMI_process` is the reader, so the referent is
+ * in this TU and the compiler keeps them.  D1122 recorded the earlier
+ * `extern` spelling while `FAXVMI_process` was still unwritten.
  */
-faxvmi_frame_fn const vmi_unpack[3] = {
+static faxvmi_frame_fn const vmi_unpack[3] = {
 	faxvmi_simp_unpack,
 	faxvmi_asyc_unpack,
 	faxvmi_hdlc_unframe,
 };
 
-faxvmi_frame_fn const vmi_pack[3] = {
+static faxvmi_frame_fn const vmi_pack[3] = {
 	faxvmi_simp_pack,
 	faxvmi_asyc_pack,
 	faxvmi_hdlc_frame,
 };
 
-faxvmi_reverse_fn const vmi_reverse[3] = {
+static faxvmi_reverse_fn const vmi_reverse[3] = {
 	faxvmi_byte_reverse,
 	faxvmi_byte_reverse,
 	faxvmi_frame_reverse,

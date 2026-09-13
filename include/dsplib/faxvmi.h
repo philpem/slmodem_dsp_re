@@ -1133,8 +1133,10 @@ void faxvmi_frame_reverse(unsigned short *buf, short count);
  * .rodata 0x94a8, `vmi_pack` at 0x94b4, `vmi_reverse` at 0x94c0, three
  * entries each -- and their contents are read from the relocations at
  * those addresses, not guessed. They are `const` because the object puts
- * them in `.rodata`, and file-local there; `symmap.py` globalises them, so
- * they are comparable against the blob entry by entry.
+ * them in `.rodata`, and FILE-LOCAL there (`r`, not `R`), so they are
+ * `static` in faxvmi.c now and declare nothing here; a differential test
+ * that names one declares it itself and reaches it through the globalized
+ * test copy (tools/testvisible.py).
  *
  * The pack and unpack forms take a `struct faxvmi *`; the reverse form
  * takes a bare buffer. Two different shapes, so two typedefs.
@@ -1142,9 +1144,5 @@ void faxvmi_frame_reverse(unsigned short *buf, short count);
 typedef int (*faxvmi_frame_fn)(struct faxvmi *vmi, unsigned short *buf,
 			       short count);
 typedef void (*faxvmi_reverse_fn)(unsigned short *buf, short count);
-
-extern faxvmi_frame_fn const vmi_pack[3];
-extern faxvmi_frame_fn const vmi_unpack[3];
-extern faxvmi_reverse_fn const vmi_reverse[3];
 
 #endif /* DSPLIB_FAXVMI_H */

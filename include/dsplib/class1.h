@@ -608,26 +608,24 @@ struct fax_class1_cfg {
 
 /*
  * `states_names` (twenty entries), `status_names` (eleven) and
- * `command_names` (six) -- see class1.c for the derivation and deviation
- * D1330 for why they are global here where the object has them file-local.
- * Declared here so a test can compare them against the blob's own copy
- * without a reader in `src/` yet.
+ * `command_names` (six) -- see class1.c for the derivation.  FILE-LOCAL in
+ * the object (`r`, `nm`), so all three are `static` in class1.c and declare
+ * nothing here; a differential test that names one declares it itself and
+ * reaches it through the globalized test copy (tools/testvisible.py), which
+ * the partial-link candidate keeps LOCAL.
  */
 struct class1_name {
 	int id;
 	char *name;
 };
 
-extern struct class1_name states_names[20];
-extern struct class1_name status_names[11];
-extern struct class1_name command_names[6];
-
 /**
  * The high-pass filter `fax_class1_progress`'s IIR tick runs (`iir_coeff`,
  * above) -- ten shorts, the object's own symbol name (`nm`: `r
- * FAX_HP_COEFF`). `fax_class1_create` is its only writer.
+ * FAX_HP_COEFF`). `fax_class1_create` is its only writer.  FILE-LOCAL in the
+ * object, so `static` in class1.c; it is a data symbol, so no test can name
+ * it directly except through the globalized test copy (tools/testvisible.py).
  */
-extern const short FAX_HP_COEFF[10];
 
 /*
  * `fax_class1_command`'s own `cmd` argument -- `command_names`'s six ids,
@@ -764,11 +762,11 @@ extern class1_state_fn class1_state_functions[19];
  *
  * Zero `*rx_count` samples of `tx` and report that many -- or, when
  * `*rx_count` is not positive, a whole block of 160. Reads no field of the
- * session at all.
+ * session at all.  FILE-LOCAL in the object (`t`), so it is `static` in
+ * class1.c and declares nothing here; the tests that name it declare it
+ * themselves and reach it through the globalized test copy
+ * (tools/testvisible.py).
  */
-int _idle_state(struct fax_class1 *ctx, const short *rx, short *tx,
-		int word3, int word4, int *rx_count, int *tx_count,
-		int word7, int *word8);
 
 /**
  * @brief SEND_SILENCE_STATE (15).
@@ -776,11 +774,11 @@ int _idle_state(struct fax_class1 *ctx, const short *rx, short *tx,
  * Counts one block off `countdown`, transmits a block of silence, and
  * reports #FAX_CLASS1_OK_NO_CARRIER once the countdown reaches zero. The
  * state does not leave itself -- it is `fax_class1_progress` that acts on
- * the status.
+ * the status.  FILE-LOCAL in the object (`t`), so it is `static` in
+ * class1.c and declares nothing here; the tests that name it declare it
+ * themselves and reach it through the globalized test copy
+ * (tools/testvisible.py).
  */
-int _send_silence_state(struct fax_class1 *ctx, const short *rx, short *tx,
-			int word3, int word4, int *rx_count, int *tx_count,
-			int word7, int *word8);
 
 /**
  * @brief RECIEVE_SILENCE_STATE (16) -- the author's spelling.
@@ -795,10 +793,10 @@ int _send_silence_state(struct fax_class1 *ctx, const short *rx, short *tx,
  * The threshold test is `> 100` on a signed short, so a negative energy
  * counts as silence -- `FPM_rms` cannot return one, and the test is written
  * as the object has it rather than as it would have to be if it could.
+ * FILE-LOCAL in the object (`t`), so it is `static` in class1.c and declares
+ * nothing here; the tests that name it declare it themselves and reach it
+ * through the globalized test copy (tools/testvisible.py).
  */
-int _recieve_silence_state(struct fax_class1 *ctx, const short *rx, short *tx,
-			   int word3, int word4, int *rx_count, int *tx_count,
-			   int word7, int *word8);
 
 /**
  * @brief Zero `count` elements of `buf`.
@@ -963,10 +961,10 @@ int fax_class1_progress(struct fax_class1 *ctx, short *rx, short *tx,
  * instead of generating another block. Otherwise generates one block of
  * the session's tone (`ctx->tone`, `FPM_TONE_generate`) and reports
  * `*tx_count = CLASS1_BLOCK_SAMPLES`. Returns 0 on both paths.
+ * FILE-LOCAL in the object (`t`), so it is `static` in class1.c and declares
+ * nothing here; the tests that name it declare it themselves and reach it
+ * through the globalized test copy (tools/testvisible.py).
  */
-int _answer_tone_state(struct fax_class1 *ctx, const short *rx, short *tx,
-		       int word3, int word4, int *rx_count, int *tx_count,
-		       int word7, int *word8);
 
 /**
  * @brief The session dispatcher (control side).

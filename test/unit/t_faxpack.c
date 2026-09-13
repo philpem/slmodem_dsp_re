@@ -76,6 +76,16 @@ extern char *ref_GetT30FrameNameByID(int id);
 extern const unsigned char ref_aReversedCharsArray[256];
 extern void *ref_vmi_pack[3], *ref_vmi_unpack[3], *ref_vmi_reverse[3];
 
+/*
+ * The three dispatch tables are FILE-LOCAL in the object, so faxvmi.c defines
+ * them `static` and faxvmi.h no longer declares them.  They are data, so no
+ * calling-convention question arises; the test tier links a globalized copy
+ * (tools/testvisible.py).
+ */
+extern faxvmi_frame_fn const vmi_pack[3];
+extern faxvmi_frame_fn const vmi_unpack[3];
+extern faxvmi_reverse_fn const vmi_reverse[3];
+
 /* ------------------------------------------------------------------ */
 
 #define FIFOCAP		48	/* framer->fifo_size                   */

@@ -328,12 +328,11 @@ int cTOOLS_handle_hdlc_output(struct fax_class1 *ctx, const unsigned short *src,
  * See class1tx.c for the derivation.
  *
  * All three are `t` in the object (file-local, only called from
- * `_init_transmitter`, in the same translation unit) and are declared
- * `extern` here, for the identical reason `class1rx.h`'s RX trio already
- * gives (D1081): a `static` spelling would be three functions this tree
- * could neither reach nor test. D1450 records it for this trio; now that
- * `_init_transmitter` is written (class1tx.c) but still in the same file,
- * taking all three back to `static` remains follow-up work, not done here.
+ * `_init_transmitter`, in the same translation unit).  `_init_transmitter`
+ * is written (class1tx.c) and in the same file, so all three are `static`
+ * there now and declare nothing here; a differential test that names one
+ * declares it itself and reaches it through the globalized test copy
+ * (tools/testvisible.py).  D1081/D1450 record the earlier `extern` spelling.
  *
  * Same shape as the RX trio, with three differences. `init_vmi_v29tx`'s
  * config is `struct v29tx_cfg`, whose `int_0018` the table's own default (0)
@@ -361,9 +360,12 @@ int cTOOLS_handle_hdlc_output(struct fax_class1 *ctx, const unsigned short *src,
  * @param arg_2     Unread.
  * @param arg_3     Stored into both the modem config and the VMI block.
  * @return `(int)cfg->bitrate` of the freshly built config.
+ *
+ * FILE-LOCAL in the object (`t`), so it is `static` in class1tx.c and
+ * declares nothing here; a differential test that names it declares it
+ * itself and reaches it through the globalized test copy
+ * (tools/testvisible.py).
  */
-int init_vmi_v17tx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
-		   int arg_2, void *arg_3);
 
 /**
  * @brief Build a "No ECM (Simple Packing)" V.27ter transmit VMI/config pair.
@@ -374,9 +376,12 @@ int init_vmi_v17tx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
  * @param arg_2     Unread.
  * @param arg_3     Stored into both the modem config and the VMI block.
  * @return `(int)cfg->bitrate` of the freshly built config.
+ *
+ * FILE-LOCAL in the object (`t`), so it is `static` in class1tx.c and
+ * declares nothing here; a differential test that names it declares it
+ * itself and reaches it through the globalized test copy
+ * (tools/testvisible.py).
  */
-int init_vmi_v27tx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
-		   int arg_2, void *arg_3);
 
 /**
  * @brief Build a "No ECM (Simple Packing)" V.29 transmit VMI/config pair.
@@ -387,9 +392,12 @@ int init_vmi_v27tx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
  * @param arg_2     Unread.
  * @param arg_3     Stored into both the modem config and the VMI block.
  * @return `(int)cfg->bitrate` of the freshly built config.
+ *
+ * FILE-LOCAL in the object (`t`), so it is `static` in class1tx.c and
+ * declares nothing here; a differential test that names it declares it
+ * itself and reaches it through the globalized test copy
+ * (tools/testvisible.py).
  */
-int init_vmi_v29tx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
-		   int arg_2, void *arg_3);
 
 /** The `slot` each of the three constructors above plants, from `faxvmi.h`'s slot map. */
 #define VMI_SLOT_V21TX		5
