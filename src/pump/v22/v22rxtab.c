@@ -199,53 +199,6 @@ const short CRRv22_PLL_K1[V22_CRR_PLL_SETS] = { 2928, 5856, 5856 };
 const short CRRv22_PLL_K2[V22_CRR_PLL_SETS] = { 0, 262, 262 };
 
 /*
- * Eight rising thresholds, in .data rather than .rodata -- so the original
- * declared them without `const` -- and nothing in the object writes them.
- */
-short V22DiconnectThreshTable[V22_DISCONNECT_THRESHOLDS] = {
-	75, 95, 119, 150, 168, 174, 212, 238,
-};
-
-/*
- * The tone configurations.  Byte-identical to each other, and NOT because
- * one is derived from the other: both are file-static in the original and
- * the author wrote the same 36 bytes twice under two names.
- *
- * `src` is NULL in both, which would have `FPM_TONE_create` read 53 words
- * from address zero.  `V22FP_create` is what closes that: it copies one of
- * these to the stack and assigns `FPM_TONE_CFG.src` -- the library's
- * shared 53-tap prototype -- into the copy before creating anything.  That
- * assignment is what types these as `struct fpm_tone_cfg`; it reads the
- * dword at the library config's +0x10, and the only thing there is `src`.
- *
- * `rev_thresh` and `rev_lag` HOLD 40 AND 0 HERE, not the library config's
- * 16384 and 40, and that is the object's -- `.rodata:0x84e0` words 14 and 15,
- * dumped and checked.  A lag of zero means `FPM_TONE_find_rev` would divide
- * its history modulo zero, so these two copies are not configured for the
- * reversal detector and nothing in V.22 calls it.  The pair was named from the
- * arithmetic in that function (finding F8171) and renamed here in F8321; the
- * values are carried unexplained because they are the object's and no reader
- * of them exists on this path.
- */
-const struct fpm_tone_cfg TONEv22_CFG = {
-	2100, 11587, 0, 2981,		/* freq, scale, rev_period, ratio    */
-	328, 1, 31457, 0,		/* f08, min_level, damp, pad0e       */
-	0,				/* src -- patched by V22FP_create    */
-	53, { 0, 0, 0 },		/* len, r16                          */
-	40, 0,				/* rev_thresh, rev_lag -- see below  */
-	0, 0				/* extra, pad22                      */
-};
-
-const struct fpm_tone_cfg TONEv22INIT_CFG = {
-	2100, 11587, 0, 2981,
-	328, 1, 31457, 0,
-	0,
-	53, { 0, 0, 0 },
-	40, 0,
-	0, 0
-};
-
-/*
  * The datapump's own parameter block: the template `V22FP_create` copies to
  * the stack, patches six fields of from the caller's configuration, and
  * installs as the object's first 28 bytes.  Six of the eleven fields never
