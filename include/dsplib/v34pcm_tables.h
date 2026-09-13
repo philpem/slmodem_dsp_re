@@ -18,11 +18,12 @@ extern "C" {
  * Indexed 0..7 by a biased, clamped signal level; an out-of-range index
  * (including any negative one, via an unsigned compare) falls back to
  * entry 3. Read by `VPcmV34SetMinimumSigLevel`, `VPcmV34InitiateRetrain`
- * and `VPcmV34Create`. File-local in the blob; exposed here only because
- * the build globalizes file-local symbols for comparison (see
- * `tools/symmap.py`).
+ * and `VPcmV34Create`, all of them now file-local in one translation unit,
+ * `src/pump/v34/v34pcmmain.cpp`, so `V34DisconnectThreshTable` is `static`
+ * there and the reference records it LOCAL for the same reason.  A test
+ * that names it declares it itself and resolves against the test tier's
+ * globalized copy of that object (`tools/testvisible.py`).
  */
-extern const int V34DisconnectThreshTable[V34_DISCONNECT_THRESH_ENTRIES];
 
 #ifdef __cplusplus
 }

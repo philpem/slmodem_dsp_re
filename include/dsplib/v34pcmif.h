@@ -501,21 +501,15 @@ void VPcmV34SetIndicationOfRemoteRetrain(void *obj);
  * Declared here, rather than in a private header, because `VPcmV34Main.cpp`
  * is split across a `.c` and a `.cpp` in this tree and this is the header
  * both halves already include.
+ *
+ * `getMPrecvdBits` is deliberately NOT among them any more: the reference
+ * records it LOCAL, so it is `static` in `v34pcmmain.cpp`, where its one
+ * consumer was merged in, and a test that names it declares it itself and
+ * resolves against the test tier's globalized copy of that object
+ * (`tools/testvisible.py`).
  */
 #ifdef __cplusplus
 struct tagV34Object;
-
-/**
- * @brief Copy a received V.90 MP sequence into the V.34 object's INFO fields.
- *
- * Rebuilds the capability word around the maximum upstream rate the
- * configuration allows, and announces the rate it chose through `edprintf`
- * (one of two messages, depending on whether the PCM receiver's
- * "sensitive ISP" setting has a say).
- *
- * @param obj  The V.34 modem object.
- */
-void getMPrecvdBits(struct tagV34Object *obj);
 
 /**
  * @brief Push upstream modulation information to the running modem.
@@ -541,8 +535,8 @@ void VPcmV34SetMinMaxBitRates(struct tagV34Object *obj);
 /**
  * @brief Set the receive energy floor from the configured signal level.
  *
- * Looks up `V34DisconnectThreshTable` (v34pcm_tables.h) by the
- * configuration's signal-level setting and writes the result to
+ * Looks up `V34DisconnectThreshTable` (file-local in `v34pcmmain.cpp`) by
+ * the configuration's signal-level setting and writes the result to
  * `rx_energy_floor`.
  *
  * @param obj  The V.34 modem object.

@@ -23,8 +23,9 @@
  },
  {
   "label": "the V.90 arm is or-ed rather than and-ed",
-  "find": "\tif (obj->v90_receiver != 0 && *(const int *)(sess + SESS_GATE) != 0) {",
-  "replace": "\tif (obj->v90_receiver != 0 || *(const int *)(sess + SESS_GATE) != 0) {"
+  "find": "\t\t\t\t     \"requested DP is %d\\r\\n\", (int)dp);\n\n\tif (obj->v90_receiver != 0 && *(const int *)(sess + SESS_GATE) != 0) {",
+  "replace": "\t\t\t\t     \"requested DP is %d\\r\\n\", (int)dp);\n\n\tif (obj->v90_receiver != 0 || *(const int *)(sess + SESS_GATE) != 0) {",
+  "note": "Anchor carries 2 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
   "label": "the K56flex arm is or-ed rather than and-ed",
@@ -38,18 +39,21 @@
  },
  {
   "label": "the designer is not told",
-  "find": "\t\tcd->setMinMaxRates(*(const unsigned int *)(cfg + CFG_MIN_RATE),\n\t\t\t\t   *(const unsigned int *)(cfg + CFG_MAX_RATE));",
-  "replace": "\t\t(void)cd;"
+  "find": "\t\t\t\t     \"requested DP is %d\\r\\n\", (int)dp);\n\n\tif (obj->v90_receiver != 0 && *(const int *)(sess + SESS_GATE) != 0) {\n\t\tV90ConstellationDesigner *cd;\n\n\t\tcfg = (unsigned char *)obj->pac3c;\n\t\tcd = *(V90ConstellationDesigner **)\n\t\t     (*(unsigned char **)(sess + SESS_DEMOD) + DEMOD_DESIGNER);\n\t\tcd->setMinMaxRates(*(const unsigned int *)(cfg + CFG_MIN_RATE),\n\t\t\t\t   *(const unsigned int *)(cfg + CFG_MAX_RATE));",
+  "replace": "\t\t\t\t     \"requested DP is %d\\r\\n\", (int)dp);\n\n\tif (obj->v90_receiver != 0 && *(const int *)(sess + SESS_GATE) != 0) {\n\t\tV90ConstellationDesigner *cd;\n\n\t\tcfg = (unsigned char *)obj->pac3c;\n\t\tcd = *(V90ConstellationDesigner **)\n\t\t     (*(unsigned char **)(sess + SESS_DEMOD) + DEMOD_DESIGNER);\n\t\t(void)cd;",
+  "note": "Anchor carries 8 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
   "label": "the two rates reach the designer the other way round",
-  "find": "\t\tcd->setMinMaxRates(*(const unsigned int *)(cfg + CFG_MIN_RATE),\n\t\t\t\t   *(const unsigned int *)(cfg + CFG_MAX_RATE));",
-  "replace": "\t\tcd->setMinMaxRates(*(const unsigned int *)(cfg + CFG_MAX_RATE),\n\t\t\t\t   *(const unsigned int *)(cfg + CFG_MIN_RATE));"
+  "find": "\t\t\t\t     \"requested DP is %d\\r\\n\", (int)dp);\n\n\tif (obj->v90_receiver != 0 && *(const int *)(sess + SESS_GATE) != 0) {\n\t\tV90ConstellationDesigner *cd;\n\n\t\tcfg = (unsigned char *)obj->pac3c;\n\t\tcd = *(V90ConstellationDesigner **)\n\t\t     (*(unsigned char **)(sess + SESS_DEMOD) + DEMOD_DESIGNER);\n\t\tcd->setMinMaxRates(*(const unsigned int *)(cfg + CFG_MIN_RATE),\n\t\t\t\t   *(const unsigned int *)(cfg + CFG_MAX_RATE));",
+  "replace": "\t\t\t\t     \"requested DP is %d\\r\\n\", (int)dp);\n\n\tif (obj->v90_receiver != 0 && *(const int *)(sess + SESS_GATE) != 0) {\n\t\tV90ConstellationDesigner *cd;\n\n\t\tcfg = (unsigned char *)obj->pac3c;\n\t\tcd = *(V90ConstellationDesigner **)\n\t\t     (*(unsigned char **)(sess + SESS_DEMOD) + DEMOD_DESIGNER);\n\t\tcd->setMinMaxRates(*(const unsigned int *)(cfg + CFG_MAX_RATE),\n\t\t\t\t   *(const unsigned int *)(cfg + CFG_MIN_RATE));",
+  "note": "Anchor carries 8 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
   "label": "the designer is reached at +0x20c rather than +0x208",
-  "find": "\t\t     (*(unsigned char **)(sess + SESS_DEMOD) + DEMOD_DESIGNER);",
-  "replace": "\t\t     (*(unsigned char **)(sess + SESS_DEMOD) + 0x20c);"
+  "find": "\t\t\t\t     \"requested DP is %d\\r\\n\", (int)dp);\n\n\tif (obj->v90_receiver != 0 && *(const int *)(sess + SESS_GATE) != 0) {\n\t\tV90ConstellationDesigner *cd;\n\n\t\tcfg = (unsigned char *)obj->pac3c;\n\t\tcd = *(V90ConstellationDesigner **)\n\t\t     (*(unsigned char **)(sess + SESS_DEMOD) + DEMOD_DESIGNER);",
+  "replace": "\t\t\t\t     \"requested DP is %d\\r\\n\", (int)dp);\n\n\tif (obj->v90_receiver != 0 && *(const int *)(sess + SESS_GATE) != 0) {\n\t\tV90ConstellationDesigner *cd;\n\n\t\tcfg = (unsigned char *)obj->pac3c;\n\t\tcd = *(V90ConstellationDesigner **)\n\t\t     (*(unsigned char **)(sess + SESS_DEMOD) + 0x20c);",
+  "note": "Anchor carries 7 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
   "label": "the K56flex modem is not told",
@@ -60,139 +64,165 @@
  },
  {
   "label": "the rate division is signed",
-  "find": "\t\tobj->rate_min = (int)(*(const unsigned int *)\n\t\t\t\t      (cfg + CFG_MIN_RATE) / RATE_STEP);",
-  "replace": "\t\tobj->rate_min = *(const int *)(cfg + CFG_MIN_RATE) / 2400;"
+  "find": "\t\t((K56FlexFloModem *)obj->pac18)->setMinMaxRates(\n\t\t\t*(const int *)(cfg + CFG_MIN_RATE),\n\t\t\t*(const int *)(cfg + CFG_MAX_RATE));\n\t} else {\n\t\tcfg = (unsigned char *)obj->pac3c;\n\n\t\tobj->rate_min = (int)(*(const unsigned int *)\n\t\t\t\t      (cfg + CFG_MIN_RATE) / RATE_STEP);",
+  "replace": "\t\t((K56FlexFloModem *)obj->pac18)->setMinMaxRates(\n\t\t\t*(const int *)(cfg + CFG_MIN_RATE),\n\t\t\t*(const int *)(cfg + CFG_MAX_RATE));\n\t} else {\n\t\tcfg = (unsigned char *)obj->pac3c;\n\n\t\tobj->rate_min = *(const int *)(cfg + CFG_MIN_RATE) / 2400;",
+  "note": "Anchor carries 6 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
   "label": "the rate step is 2340",
-  "find": "\t\tobj->rate_max = (int)(*(const unsigned int *)\n\t\t\t\t      (cfg + CFG_MAX_RATE) / RATE_STEP);",
-  "replace": "\t\tobj->rate_max = (int)(*(const unsigned int *)\n\t\t\t\t      (cfg + CFG_MAX_RATE) / 2340u);"
+  "find": "\t\t((K56FlexFloModem *)obj->pac18)->setMinMaxRates(\n\t\t\t*(const int *)(cfg + CFG_MIN_RATE),\n\t\t\t*(const int *)(cfg + CFG_MAX_RATE));\n\t} else {\n\t\tcfg = (unsigned char *)obj->pac3c;\n\n\t\tobj->rate_min = (int)(*(const unsigned int *)\n\t\t\t\t      (cfg + CFG_MIN_RATE) / RATE_STEP);\n\t\tobj->rate_max = (int)(*(const unsigned int *)\n\t\t\t\t      (cfg + CFG_MAX_RATE) / RATE_STEP);",
+  "replace": "\t\t((K56FlexFloModem *)obj->pac18)->setMinMaxRates(\n\t\t\t*(const int *)(cfg + CFG_MIN_RATE),\n\t\t\t*(const int *)(cfg + CFG_MAX_RATE));\n\t} else {\n\t\tcfg = (unsigned char *)obj->pac3c;\n\n\t\tobj->rate_min = (int)(*(const unsigned int *)\n\t\t\t\t      (cfg + CFG_MIN_RATE) / RATE_STEP);\n\t\tobj->rate_max = (int)(*(const unsigned int *)\n\t\t\t\t      (cfg + CFG_MAX_RATE) / 2340u);",
+  "note": "Anchor carries 8 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
   "label": "the min clamp is >= rather than >",
-  "find": "\t\tif (obj->rate_min > RATE_INDEX_MAX)",
-  "replace": "\t\tif (obj->rate_min >= RATE_INDEX_MAX)",
+  "find": "\t\t((K56FlexFloModem *)obj->pac18)->setMinMaxRates(\n\t\t\t*(const int *)(cfg + CFG_MIN_RATE),\n\t\t\t*(const int *)(cfg + CFG_MAX_RATE));\n\t} else {\n\t\tcfg = (unsigned char *)obj->pac3c;\n\n\t\tobj->rate_min = (int)(*(const unsigned int *)\n\t\t\t\t      (cfg + CFG_MIN_RATE) / RATE_STEP);\n\t\tobj->rate_max = (int)(*(const unsigned int *)\n\t\t\t\t      (cfg + CFG_MAX_RATE) / RATE_STEP);\n\n\t\tif (obj->rate_min > RATE_INDEX_MAX)",
+  "replace": "\t\t((K56FlexFloModem *)obj->pac18)->setMinMaxRates(\n\t\t\t*(const int *)(cfg + CFG_MIN_RATE),\n\t\t\t*(const int *)(cfg + CFG_MAX_RATE));\n\t} else {\n\t\tcfg = (unsigned char *)obj->pac3c;\n\n\t\tobj->rate_min = (int)(*(const unsigned int *)\n\t\t\t\t      (cfg + CFG_MIN_RATE) / RATE_STEP);\n\t\tobj->rate_max = (int)(*(const unsigned int *)\n\t\t\t\t      (cfg + CFG_MAX_RATE) / RATE_STEP);\n\n\t\tif (obj->rate_min >= RATE_INDEX_MAX)",
   "equivalent": true,
-  "why": "`>` and `>=` differ only at rate_min == 14 exactly, and there the assignment they guard writes 14 over 14.  The guarded statement is IDEMPOTENT at the boundary, so no input can separate the two spellings -- this is a property of the code and not of the sweep, which drives 33600 (index 14) on both sides of it.  The object's own instruction is `cmp $0xe,%ebx; jle`, and that is what is written."
+  "why": "`>` and `>=` differ only at rate_min == 14 exactly, and there the assignment they guard writes 14 over 14.  The guarded statement is IDEMPOTENT at the boundary, so no input can separate the two spellings -- this is a property of the code and not of the sweep, which drives 33600 (index 14) on both sides of it.  The object's own instruction is `cmp $0xe,%ebx; jle`, and that is what is written.",
+  "note": "Anchor carries 11 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
   "label": "the two clamps run in the other order",
-  "find": "\t\tif (obj->rate_min > RATE_INDEX_MAX)\n\t\t\tobj->rate_min = RATE_INDEX_MAX;\n\t\tif (obj->rate_max < obj->rate_min)\n\t\t\tobj->rate_max = obj->rate_min;",
-  "replace": "\t\tif (obj->rate_max < obj->rate_min)\n\t\t\tobj->rate_max = obj->rate_min;\n\t\tif (obj->rate_min > RATE_INDEX_MAX)\n\t\t\tobj->rate_min = RATE_INDEX_MAX;",
+  "find": "\t\t((K56FlexFloModem *)obj->pac18)->setMinMaxRates(\n\t\t\t*(const int *)(cfg + CFG_MIN_RATE),\n\t\t\t*(const int *)(cfg + CFG_MAX_RATE));\n\t} else {\n\t\tcfg = (unsigned char *)obj->pac3c;\n\n\t\tobj->rate_min = (int)(*(const unsigned int *)\n\t\t\t\t      (cfg + CFG_MIN_RATE) / RATE_STEP);\n\t\tobj->rate_max = (int)(*(const unsigned int *)\n\t\t\t\t      (cfg + CFG_MAX_RATE) / RATE_STEP);\n\n\t\tif (obj->rate_min > RATE_INDEX_MAX)\n\t\t\tobj->rate_min = RATE_INDEX_MAX;\n\t\tif (obj->rate_max < obj->rate_min)\n\t\t\tobj->rate_max = obj->rate_min;",
+  "replace": "\t\t((K56FlexFloModem *)obj->pac18)->setMinMaxRates(\n\t\t\t*(const int *)(cfg + CFG_MIN_RATE),\n\t\t\t*(const int *)(cfg + CFG_MAX_RATE));\n\t} else {\n\t\tcfg = (unsigned char *)obj->pac3c;\n\n\t\tobj->rate_min = (int)(*(const unsigned int *)\n\t\t\t\t      (cfg + CFG_MIN_RATE) / RATE_STEP);\n\t\tobj->rate_max = (int)(*(const unsigned int *)\n\t\t\t\t      (cfg + CFG_MAX_RATE) / RATE_STEP);\n\n\t\tif (obj->rate_max < obj->rate_min)\n\t\t\tobj->rate_max = obj->rate_min;\n\t\tif (obj->rate_min > RATE_INDEX_MAX)\n\t\t\tobj->rate_min = RATE_INDEX_MAX;",
   "equivalent": true,
-  "why": "Provably equivalent BECAUSE THE MAX IS CAPPED AFTERWARDS.  Write a = min/2400 and b = max/2400.  The object computes M1 = max(b, min(a,14)) and the mutant M2 = max(b, a); both then go through `if (M > 14) M = 14`.  For a <= 14 the two are the same expression.  For a > 14, M1 >= 14 and M2 > 14, so both cap to exactly 14 -- and the `else if (M == 1)` arm cannot fire on either, since a capped value is 14.  rate_min is min(a,14) in both orders.  The intermediate store the mutant makes is never read: there is no call between the two clamps.  Written in the object's order all the same."
+  "why": "Provably equivalent BECAUSE THE MAX IS CAPPED AFTERWARDS.  Write a = min/2400 and b = max/2400.  The object computes M1 = max(b, min(a,14)) and the mutant M2 = max(b, a); both then go through `if (M > 14) M = 14`.  For a <= 14 the two are the same expression.  For a > 14, M1 >= 14 and M2 > 14, so both cap to exactly 14 -- and the `else if (M == 1)` arm cannot fire on either, since a capped value is 14.  rate_min is min(a,14) in both orders.  The intermediate store the mutant makes is never read: there is no call between the two clamps.  Written in the object's order all the same.",
+  "note": "Anchor carries 11 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
   "label": "the max is pulled down to the min rather than up",
-  "find": "\t\tif (obj->rate_max < obj->rate_min)\n\t\t\tobj->rate_max = obj->rate_min;",
-  "replace": "\t\tif (obj->rate_max < obj->rate_min)\n\t\t\tobj->rate_min = obj->rate_max;"
+  "find": "\t\t((K56FlexFloModem *)obj->pac18)->setMinMaxRates(\n\t\t\t*(const int *)(cfg + CFG_MIN_RATE),\n\t\t\t*(const int *)(cfg + CFG_MAX_RATE));\n\t} else {\n\t\tcfg = (unsigned char *)obj->pac3c;\n\n\t\tobj->rate_min = (int)(*(const unsigned int *)\n\t\t\t\t      (cfg + CFG_MIN_RATE) / RATE_STEP);\n\t\tobj->rate_max = (int)(*(const unsigned int *)\n\t\t\t\t      (cfg + CFG_MAX_RATE) / RATE_STEP);\n\n\t\tif (obj->rate_min > RATE_INDEX_MAX)\n\t\t\tobj->rate_min = RATE_INDEX_MAX;\n\t\tif (obj->rate_max < obj->rate_min)\n\t\t\tobj->rate_max = obj->rate_min;",
+  "replace": "\t\t((K56FlexFloModem *)obj->pac18)->setMinMaxRates(\n\t\t\t*(const int *)(cfg + CFG_MIN_RATE),\n\t\t\t*(const int *)(cfg + CFG_MAX_RATE));\n\t} else {\n\t\tcfg = (unsigned char *)obj->pac3c;\n\n\t\tobj->rate_min = (int)(*(const unsigned int *)\n\t\t\t\t      (cfg + CFG_MIN_RATE) / RATE_STEP);\n\t\tobj->rate_max = (int)(*(const unsigned int *)\n\t\t\t\t      (cfg + CFG_MAX_RATE) / RATE_STEP);\n\n\t\tif (obj->rate_min > RATE_INDEX_MAX)\n\t\t\tobj->rate_min = RATE_INDEX_MAX;\n\t\tif (obj->rate_max < obj->rate_min)\n\t\t\tobj->rate_min = obj->rate_max;",
+  "note": "Anchor carries 13 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
   "label": "the low-baud flag is not set",
-  "find": "\t\t\t*(short *)(m + OB_FORCE_LOW_BAUD) = 1;",
-  "replace": "\t\t\t(void)0;"
+  "find": "\t\t((K56FlexFloModem *)obj->pac18)->setMinMaxRates(\n\t\t\t*(const int *)(cfg + CFG_MIN_RATE),\n\t\t\t*(const int *)(cfg + CFG_MAX_RATE));\n\t} else {\n\t\tcfg = (unsigned char *)obj->pac3c;\n\n\t\tobj->rate_min = (int)(*(const unsigned int *)\n\t\t\t\t      (cfg + CFG_MIN_RATE) / RATE_STEP);\n\t\tobj->rate_max = (int)(*(const unsigned int *)\n\t\t\t\t      (cfg + CFG_MAX_RATE) / RATE_STEP);\n\n\t\tif (obj->rate_min > RATE_INDEX_MAX)\n\t\t\tobj->rate_min = RATE_INDEX_MAX;\n\t\tif (obj->rate_max < obj->rate_min)\n\t\t\tobj->rate_max = obj->rate_min;\n\t\tif (obj->rate_max > RATE_INDEX_MAX)\n\t\t\tobj->rate_max = RATE_INDEX_MAX;\n\t\telse if (obj->rate_max == 1)\n\t\t\t*(short *)(m + OB_FORCE_LOW_BAUD) = 1;",
+  "replace": "\t\t((K56FlexFloModem *)obj->pac18)->setMinMaxRates(\n\t\t\t*(const int *)(cfg + CFG_MIN_RATE),\n\t\t\t*(const int *)(cfg + CFG_MAX_RATE));\n\t} else {\n\t\tcfg = (unsigned char *)obj->pac3c;\n\n\t\tobj->rate_min = (int)(*(const unsigned int *)\n\t\t\t\t      (cfg + CFG_MIN_RATE) / RATE_STEP);\n\t\tobj->rate_max = (int)(*(const unsigned int *)\n\t\t\t\t      (cfg + CFG_MAX_RATE) / RATE_STEP);\n\n\t\tif (obj->rate_min > RATE_INDEX_MAX)\n\t\t\tobj->rate_min = RATE_INDEX_MAX;\n\t\tif (obj->rate_max < obj->rate_min)\n\t\t\tobj->rate_max = obj->rate_min;\n\t\tif (obj->rate_max > RATE_INDEX_MAX)\n\t\t\tobj->rate_max = RATE_INDEX_MAX;\n\t\telse if (obj->rate_max == 1)\n\t\t\t(void)0;",
+  "note": "Anchor carries 18 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
   "label": "the low-baud flag is set at index 2",
-  "find": "\t\telse if (obj->rate_max == 1)",
-  "replace": "\t\telse if (obj->rate_max == 2)"
+  "find": "\t\t((K56FlexFloModem *)obj->pac18)->setMinMaxRates(\n\t\t\t*(const int *)(cfg + CFG_MIN_RATE),\n\t\t\t*(const int *)(cfg + CFG_MAX_RATE));\n\t} else {\n\t\tcfg = (unsigned char *)obj->pac3c;\n\n\t\tobj->rate_min = (int)(*(const unsigned int *)\n\t\t\t\t      (cfg + CFG_MIN_RATE) / RATE_STEP);\n\t\tobj->rate_max = (int)(*(const unsigned int *)\n\t\t\t\t      (cfg + CFG_MAX_RATE) / RATE_STEP);\n\n\t\tif (obj->rate_min > RATE_INDEX_MAX)\n\t\t\tobj->rate_min = RATE_INDEX_MAX;\n\t\tif (obj->rate_max < obj->rate_min)\n\t\t\tobj->rate_max = obj->rate_min;\n\t\tif (obj->rate_max > RATE_INDEX_MAX)\n\t\t\tobj->rate_max = RATE_INDEX_MAX;\n\t\telse if (obj->rate_max == 1)",
+  "replace": "\t\t((K56FlexFloModem *)obj->pac18)->setMinMaxRates(\n\t\t\t*(const int *)(cfg + CFG_MIN_RATE),\n\t\t\t*(const int *)(cfg + CFG_MAX_RATE));\n\t} else {\n\t\tcfg = (unsigned char *)obj->pac3c;\n\n\t\tobj->rate_min = (int)(*(const unsigned int *)\n\t\t\t\t      (cfg + CFG_MIN_RATE) / RATE_STEP);\n\t\tobj->rate_max = (int)(*(const unsigned int *)\n\t\t\t\t      (cfg + CFG_MAX_RATE) / RATE_STEP);\n\n\t\tif (obj->rate_min > RATE_INDEX_MAX)\n\t\t\tobj->rate_min = RATE_INDEX_MAX;\n\t\tif (obj->rate_max < obj->rate_min)\n\t\t\tobj->rate_max = obj->rate_min;\n\t\tif (obj->rate_max > RATE_INDEX_MAX)\n\t\t\tobj->rate_max = RATE_INDEX_MAX;\n\t\telse if (obj->rate_max == 2)",
+  "note": "Anchor carries 17 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
   "label": "the low-baud flag is set whatever the cap did",
-  "find": "\t\tif (obj->rate_max > RATE_INDEX_MAX)\n\t\t\tobj->rate_max = RATE_INDEX_MAX;\n\t\telse if (obj->rate_max == 1)",
-  "replace": "\t\tif (obj->rate_max > RATE_INDEX_MAX)\n\t\t\tobj->rate_max = RATE_INDEX_MAX;\n\t\tif (obj->rate_max == 1)",
+  "find": "\t\t((K56FlexFloModem *)obj->pac18)->setMinMaxRates(\n\t\t\t*(const int *)(cfg + CFG_MIN_RATE),\n\t\t\t*(const int *)(cfg + CFG_MAX_RATE));\n\t} else {\n\t\tcfg = (unsigned char *)obj->pac3c;\n\n\t\tobj->rate_min = (int)(*(const unsigned int *)\n\t\t\t\t      (cfg + CFG_MIN_RATE) / RATE_STEP);\n\t\tobj->rate_max = (int)(*(const unsigned int *)\n\t\t\t\t      (cfg + CFG_MAX_RATE) / RATE_STEP);\n\n\t\tif (obj->rate_min > RATE_INDEX_MAX)\n\t\t\tobj->rate_min = RATE_INDEX_MAX;\n\t\tif (obj->rate_max < obj->rate_min)\n\t\t\tobj->rate_max = obj->rate_min;\n\t\tif (obj->rate_max > RATE_INDEX_MAX)\n\t\t\tobj->rate_max = RATE_INDEX_MAX;\n\t\telse if (obj->rate_max == 1)",
+  "replace": "\t\t((K56FlexFloModem *)obj->pac18)->setMinMaxRates(\n\t\t\t*(const int *)(cfg + CFG_MIN_RATE),\n\t\t\t*(const int *)(cfg + CFG_MAX_RATE));\n\t} else {\n\t\tcfg = (unsigned char *)obj->pac3c;\n\n\t\tobj->rate_min = (int)(*(const unsigned int *)\n\t\t\t\t      (cfg + CFG_MIN_RATE) / RATE_STEP);\n\t\tobj->rate_max = (int)(*(const unsigned int *)\n\t\t\t\t      (cfg + CFG_MAX_RATE) / RATE_STEP);\n\n\t\tif (obj->rate_min > RATE_INDEX_MAX)\n\t\t\tobj->rate_min = RATE_INDEX_MAX;\n\t\tif (obj->rate_max < obj->rate_min)\n\t\t\tobj->rate_max = obj->rate_min;\n\t\tif (obj->rate_max > RATE_INDEX_MAX)\n\t\t\tobj->rate_max = RATE_INDEX_MAX;\n\t\tif (obj->rate_max == 1)",
   "equivalent": true,
-  "why": "The cap immediately above writes 14, never 1, so after it `rate_max == 1` implies the cap did not fire.  `else if` and `if` therefore select the same inputs.  The object's `jle` around the pair is what is written; the sweep drives rate_max at 0, 1 and above the cap, and the mutation that moves the flag to index 2 IS caught, so the arm itself is tested."
+  "why": "The cap immediately above writes 14, never 1, so after it `rate_max == 1` implies the cap did not fire.  `else if` and `if` therefore select the same inputs.  The object's `jle` around the pair is what is written; the sweep drives rate_max at 0, 1 and above the cap, and the mutation that moves the flag to index 2 IS caught, so the arm itself is tested.",
+  "note": "Anchor carries 15 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
   "label": "the threshold is not stored",
-  "find": "\t\tobj->rx_energy_floor = thresh;",
-  "replace": "\t\t(void)thresh;"
+  "find": "\t */\n\t{\n\t\tint level = *(const int *)(cfg + CFG_MIN_LEVEL);\n\t\tunsigned idx = (unsigned)level + 0x30u;\n\t\tint thresh;\n\n\t\tif (idx > 7u)\n\t\t\tidx = 3u;\n\t\tthresh = V34DisconnectThreshTable[idx];\n\t\tobj->rx_energy_floor = thresh;",
+  "replace": "\t */\n\t{\n\t\tint level = *(const int *)(cfg + CFG_MIN_LEVEL);\n\t\tunsigned idx = (unsigned)level + 0x30u;\n\t\tint thresh;\n\n\t\tif (idx > 7u)\n\t\t\tidx = 3u;\n\t\tthresh = V34DisconnectThreshTable[idx];\n\t\t(void)thresh;",
+  "note": "Anchor carries 9 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
   "label": "the out-of-range fallback is entry 0",
-  "find": "\t\t\tidx = 3u;",
-  "replace": "\t\t\tidx = 0u;"
+  "find": "\t */\n\t{\n\t\tint level = *(const int *)(cfg + CFG_MIN_LEVEL);\n\t\tunsigned idx = (unsigned)level + 0x30u;\n\t\tint thresh;\n\n\t\tif (idx > 7u)\n\t\t\tidx = 3u;",
+  "replace": "\t */\n\t{\n\t\tint level = *(const int *)(cfg + CFG_MIN_LEVEL);\n\t\tunsigned idx = (unsigned)level + 0x30u;\n\t\tint thresh;\n\n\t\tif (idx > 7u)\n\t\t\tidx = 0u;",
+  "note": "Anchor carries 7 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
   "label": "the out-of-range fallback saturates at 7",
-  "find": "\t\t\tidx = 3u;",
-  "replace": "\t\t\tidx = 7u;"
+  "find": "\t */\n\t{\n\t\tint level = *(const int *)(cfg + CFG_MIN_LEVEL);\n\t\tunsigned idx = (unsigned)level + 0x30u;\n\t\tint thresh;\n\n\t\tif (idx > 7u)\n\t\t\tidx = 3u;",
+  "replace": "\t */\n\t{\n\t\tint level = *(const int *)(cfg + CFG_MIN_LEVEL);\n\t\tunsigned idx = (unsigned)level + 0x30u;\n\t\tint thresh;\n\n\t\tif (idx > 7u)\n\t\t\tidx = 7u;",
+  "note": "Anchor carries 7 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
   "label": "the range test is signed, so a negative level indexes below the table",
-  "find": "\t\tif (idx > 7u)",
-  "replace": "\t\tif ((int)idx > 7)"
+  "find": "\t */\n\t{\n\t\tint level = *(const int *)(cfg + CFG_MIN_LEVEL);\n\t\tunsigned idx = (unsigned)level + 0x30u;\n\t\tint thresh;\n\n\t\tif (idx > 7u)",
+  "replace": "\t */\n\t{\n\t\tint level = *(const int *)(cfg + CFG_MIN_LEVEL);\n\t\tunsigned idx = (unsigned)level + 0x30u;\n\t\tint thresh;\n\n\t\tif ((int)idx > 7)",
+  "note": "Anchor carries 6 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
   "label": "the bias is 0x2f",
-  "find": "\t\tunsigned idx = (unsigned)level + 0x30u;",
-  "replace": "\t\tunsigned idx = (unsigned)level + 0x2fu;"
+  "find": "\t */\n\t{\n\t\tint level = *(const int *)(cfg + CFG_MIN_LEVEL);\n\t\tunsigned idx = (unsigned)level + 0x30u;",
+  "replace": "\t */\n\t{\n\t\tint level = *(const int *)(cfg + CFG_MIN_LEVEL);\n\t\tunsigned idx = (unsigned)level + 0x2fu;",
+  "note": "Anchor carries 3 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
   "label": "the minLevel diagnostic is dropped",
-  "find": "\t\t\tdsplibs_debug_printf(\"VPcmV34Main: minLevel given is \"\n\t\t\t\t\t     \"%d , minSigLevel set to %d\\n\",\n\t\t\t\t\t     level, thresh);",
-  "replace": "\t\t\t(void)0;"
+  "find": "\t */\n\t{\n\t\tint level = *(const int *)(cfg + CFG_MIN_LEVEL);\n\t\tunsigned idx = (unsigned)level + 0x30u;\n\t\tint thresh;\n\n\t\tif (idx > 7u)\n\t\t\tidx = 3u;\n\t\tthresh = V34DisconnectThreshTable[idx];\n\t\tobj->rx_energy_floor = thresh;\n\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"VPcmV34Main: minLevel given is \"\n\t\t\t\t\t     \"%d , minSigLevel set to %d\\n\",\n\t\t\t\t\t     level, thresh);",
+  "replace": "\t */\n\t{\n\t\tint level = *(const int *)(cfg + CFG_MIN_LEVEL);\n\t\tunsigned idx = (unsigned)level + 0x30u;\n\t\tint thresh;\n\n\t\tif (idx > 7u)\n\t\t\tidx = 3u;\n\t\tthresh = V34DisconnectThreshTable[idx];\n\t\tobj->rx_energy_floor = thresh;\n\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t(void)0;",
+  "note": "Anchor carries 12 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
   "label": "+0x234 is left alone",
-  "find": "\t}\n\n\t*(int *)(m + OB_F0234) = 0;",
-  "replace": "\t}\n\n\t(void)0;"
+  "find": "\t */\n\t{\n\t\tint level = *(const int *)(cfg + CFG_MIN_LEVEL);\n\t\tunsigned idx = (unsigned)level + 0x30u;\n\t\tint thresh;\n\n\t\tif (idx > 7u)\n\t\t\tidx = 3u;\n\t\tthresh = V34DisconnectThreshTable[idx];\n\t\tobj->rx_energy_floor = thresh;\n\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"VPcmV34Main: minLevel given is \"\n\t\t\t\t\t     \"%d , minSigLevel set to %d\\n\",\n\t\t\t\t\t     level, thresh);\n\t}\n\n\t*(int *)(m + OB_F0234) = 0;",
+  "replace": "\t */\n\t{\n\t\tint level = *(const int *)(cfg + CFG_MIN_LEVEL);\n\t\tunsigned idx = (unsigned)level + 0x30u;\n\t\tint thresh;\n\n\t\tif (idx > 7u)\n\t\t\tidx = 3u;\n\t\tthresh = V34DisconnectThreshTable[idx];\n\t\tobj->rx_energy_floor = thresh;\n\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"VPcmV34Main: minLevel given is \"\n\t\t\t\t\t     \"%d , minSigLevel set to %d\\n\",\n\t\t\t\t\t     level, thresh);\n\t}\n\n\t(void)0;",
+  "note": "Anchor carries 15 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
   "label": "the filt delay offset is 0x21",
-  "find": "\t{\n\t\tint delay = *(const int *)(cfg + CFG_FILT_DELAY);\n\t\tint biased = (int)((unsigned)delay + 2u);\n\n\t\t*(short *)(m + OB_FILT_DELAY) = (short)((biased >> 2) + 0x22);",
-  "replace": "\t{\n\t\tint delay = *(const int *)(cfg + CFG_FILT_DELAY);\n\t\tint biased = (int)((unsigned)delay + 2u);\n\n\t\t*(short *)(m + OB_FILT_DELAY) = (short)((biased >> 2) + 0x21);"
+  "find": "\t */\n\t{\n\t\tint delay = *(const int *)(cfg + CFG_FILT_DELAY);\n\t\tint biased = (int)((unsigned)delay + 2u);\n\n\t\t*(short *)(m + OB_FILT_DELAY) = (short)((biased >> 2) + 0x22);",
+  "replace": "\t */\n\t{\n\t\tint delay = *(const int *)(cfg + CFG_FILT_DELAY);\n\t\tint biased = (int)((unsigned)delay + 2u);\n\n\t\t*(short *)(m + OB_FILT_DELAY) = (short)((biased >> 2) + 0x21);",
+  "note": "Anchor carries 1 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
   "label": "the filt delay divides instead of shifting",
-  "find": "\t{\n\t\tint delay = *(const int *)(cfg + CFG_FILT_DELAY);\n\t\tint biased = (int)((unsigned)delay + 2u);\n\n\t\t*(short *)(m + OB_FILT_DELAY) = (short)((biased >> 2) + 0x22);",
-  "replace": "\t{\n\t\tint delay = *(const int *)(cfg + CFG_FILT_DELAY);\n\t\tint biased = (int)((unsigned)delay + 2u);\n\n\t\t*(short *)(m + OB_FILT_DELAY) = (short)((biased / 4) + 0x22);"
+  "find": "\t */\n\t{\n\t\tint delay = *(const int *)(cfg + CFG_FILT_DELAY);\n\t\tint biased = (int)((unsigned)delay + 2u);\n\n\t\t*(short *)(m + OB_FILT_DELAY) = (short)((biased >> 2) + 0x22);",
+  "replace": "\t */\n\t{\n\t\tint delay = *(const int *)(cfg + CFG_FILT_DELAY);\n\t\tint biased = (int)((unsigned)delay + 2u);\n\n\t\t*(short *)(m + OB_FILT_DELAY) = (short)((biased / 4) + 0x22);",
+  "note": "Anchor carries 1 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
   "label": "the filt delay is not biased by 2",
-  "find": "\t{\n\t\tint delay = *(const int *)(cfg + CFG_FILT_DELAY);\n\t\tint biased = (int)((unsigned)delay + 2u);",
-  "replace": "\t{\n\t\tint delay = *(const int *)(cfg + CFG_FILT_DELAY);\n\t\tint biased = delay;"
+  "find": "\t */\n\t{\n\t\tint delay = *(const int *)(cfg + CFG_FILT_DELAY);\n\t\tint biased = (int)((unsigned)delay + 2u);",
+  "replace": "\t */\n\t{\n\t\tint delay = *(const int *)(cfg + CFG_FILT_DELAY);\n\t\tint biased = delay;",
+  "note": "Anchor carries 1 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
   "label": "the filtdelay diagnostic prints the arithmetic, not the field",
-  "find": "\t\t\t\t\t     (int)*(short *)(m + OB_FILT_DELAY),\n\t\t\t\t\t     delay);\n\t}\n\n\t{\n\t\tint ext = *(const int *)(cfg + CFG_EXT_DELAY);",
-  "replace": "\t\t\t\t\t     (biased >> 2) + 0x22,\n\t\t\t\t\t     delay);\n\t}\n\n\t{\n\t\tint ext = *(const int *)(cfg + CFG_EXT_DELAY);"
+  "find": "\t */\n\t{\n\t\tint delay = *(const int *)(cfg + CFG_FILT_DELAY);\n\t\tint biased = (int)((unsigned)delay + 2u);\n\n\t\t*(short *)(m + OB_FILT_DELAY) = (short)((biased >> 2) + 0x22);\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V34 filtdelay set to %d \"\n\t\t\t\t\t     \"(params initial delay = %d)\\n\",\n\t\t\t\t\t     (int)*(short *)(m + OB_FILT_DELAY),\n\t\t\t\t\t     delay);\n\t}\n\n\t{\n\t\tint ext = *(const int *)(cfg + CFG_EXT_DELAY);",
+  "replace": "\t */\n\t{\n\t\tint delay = *(const int *)(cfg + CFG_FILT_DELAY);\n\t\tint biased = (int)((unsigned)delay + 2u);\n\n\t\t*(short *)(m + OB_FILT_DELAY) = (short)((biased >> 2) + 0x22);\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V34 filtdelay set to %d \"\n\t\t\t\t\t     \"(params initial delay = %d)\\n\",\n\t\t\t\t\t     (biased >> 2) + 0x22,\n\t\t\t\t\t     delay);\n\t}\n\n\t{\n\t\tint ext = *(const int *)(cfg + CFG_EXT_DELAY);",
+  "note": "Anchor carries 9 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
   "label": "the filtdelay diagnostic is dropped",
-  "find": "\t\t\tdsplibs_debug_printf(\"V34 filtdelay set to %d \"\n\t\t\t\t\t     \"(params initial delay = %d)\\n\",\n\t\t\t\t\t     (int)*(short *)(m + OB_FILT_DELAY),\n\t\t\t\t\t     delay);\n\t}\n\n\t{\n\t\tint ext = *(const int *)(cfg + CFG_EXT_DELAY);",
-  "replace": "\t\t\t(void)0;\n\t}\n\n\t{\n\t\tint ext = *(const int *)(cfg + CFG_EXT_DELAY);"
+  "find": "\t */\n\t{\n\t\tint delay = *(const int *)(cfg + CFG_FILT_DELAY);\n\t\tint biased = (int)((unsigned)delay + 2u);\n\n\t\t*(short *)(m + OB_FILT_DELAY) = (short)((biased >> 2) + 0x22);\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V34 filtdelay set to %d \"\n\t\t\t\t\t     \"(params initial delay = %d)\\n\",\n\t\t\t\t\t     (int)*(short *)(m + OB_FILT_DELAY),\n\t\t\t\t\t     delay);\n\t}\n\n\t{\n\t\tint ext = *(const int *)(cfg + CFG_EXT_DELAY);",
+  "replace": "\t */\n\t{\n\t\tint delay = *(const int *)(cfg + CFG_FILT_DELAY);\n\t\tint biased = (int)((unsigned)delay + 2u);\n\n\t\t*(short *)(m + OB_FILT_DELAY) = (short)((biased >> 2) + 0x22);\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t(void)0;\n\t}\n\n\t{\n\t\tint ext = *(const int *)(cfg + CFG_EXT_DELAY);",
+  "note": "Anchor carries 7 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
   "label": "the dma delay base is 0x600",
-  "find": "\t{\n\t\tint ext = *(const int *)(cfg + CFG_EXT_DELAY);\n\n\t\tobj->dmadelay = (short)(0x610u - (unsigned)ext);",
-  "replace": "\t{\n\t\tint ext = *(const int *)(cfg + CFG_EXT_DELAY);\n\n\t\tobj->dmadelay = (short)(0x600u - (unsigned)ext);"
+  "find": "\t */\n\t{\n\t\tint delay = *(const int *)(cfg + CFG_FILT_DELAY);\n\t\tint biased = (int)((unsigned)delay + 2u);\n\n\t\t*(short *)(m + OB_FILT_DELAY) = (short)((biased >> 2) + 0x22);\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V34 filtdelay set to %d \"\n\t\t\t\t\t     \"(params initial delay = %d)\\n\",\n\t\t\t\t\t     (int)*(short *)(m + OB_FILT_DELAY),\n\t\t\t\t\t     delay);\n\t}\n\n\t{\n\t\tint ext = *(const int *)(cfg + CFG_EXT_DELAY);\n\n\t\tobj->dmadelay = (short)(0x610u - (unsigned)ext);",
+  "replace": "\t */\n\t{\n\t\tint delay = *(const int *)(cfg + CFG_FILT_DELAY);\n\t\tint biased = (int)((unsigned)delay + 2u);\n\n\t\t*(short *)(m + OB_FILT_DELAY) = (short)((biased >> 2) + 0x22);\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V34 filtdelay set to %d \"\n\t\t\t\t\t     \"(params initial delay = %d)\\n\",\n\t\t\t\t\t     (int)*(short *)(m + OB_FILT_DELAY),\n\t\t\t\t\t     delay);\n\t}\n\n\t{\n\t\tint ext = *(const int *)(cfg + CFG_EXT_DELAY);\n\n\t\tobj->dmadelay = (short)(0x600u - (unsigned)ext);",
+  "note": "Anchor carries 13 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
   "label": "the dma delay is not stored",
-  "find": "\t{\n\t\tint ext = *(const int *)(cfg + CFG_EXT_DELAY);\n\n\t\tobj->dmadelay = (short)(0x610u - (unsigned)ext);",
-  "replace": "\t{\n\t\tint ext = *(const int *)(cfg + CFG_EXT_DELAY);\n\n\t\t(void)ext;"
+  "find": "\t */\n\t{\n\t\tint delay = *(const int *)(cfg + CFG_FILT_DELAY);\n\t\tint biased = (int)((unsigned)delay + 2u);\n\n\t\t*(short *)(m + OB_FILT_DELAY) = (short)((biased >> 2) + 0x22);\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V34 filtdelay set to %d \"\n\t\t\t\t\t     \"(params initial delay = %d)\\n\",\n\t\t\t\t\t     (int)*(short *)(m + OB_FILT_DELAY),\n\t\t\t\t\t     delay);\n\t}\n\n\t{\n\t\tint ext = *(const int *)(cfg + CFG_EXT_DELAY);\n\n\t\tobj->dmadelay = (short)(0x610u - (unsigned)ext);",
+  "replace": "\t */\n\t{\n\t\tint delay = *(const int *)(cfg + CFG_FILT_DELAY);\n\t\tint biased = (int)((unsigned)delay + 2u);\n\n\t\t*(short *)(m + OB_FILT_DELAY) = (short)((biased >> 2) + 0x22);\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V34 filtdelay set to %d \"\n\t\t\t\t\t     \"(params initial delay = %d)\\n\",\n\t\t\t\t\t     (int)*(short *)(m + OB_FILT_DELAY),\n\t\t\t\t\t     delay);\n\t}\n\n\t{\n\t\tint ext = *(const int *)(cfg + CFG_EXT_DELAY);\n\n\t\t(void)ext;",
+  "note": "Anchor carries 13 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
   "label": "the dmadelay diagnostic prints the arithmetic, not the field",
-  "find": "\t\t\t\t\t     (int)obj->dmadelay, ext);\n\t}\n\n\t((V92EchoCanceller *)(sess + SESS_ECHO))->setEchoDelay(\n\t\t(unsigned)*(const int *)(cfg + CFG_EXT_DELAY) + 0x68u);",
-  "replace": "\t\t\t\t\t     0x610 - ext, ext);\n\t}\n\n\t((V92EchoCanceller *)(sess + SESS_ECHO))->setEchoDelay(\n\t\t(unsigned)*(const int *)(cfg + CFG_EXT_DELAY) + 0x68u);"
+  "find": "\t */\n\t{\n\t\tint delay = *(const int *)(cfg + CFG_FILT_DELAY);\n\t\tint biased = (int)((unsigned)delay + 2u);\n\n\t\t*(short *)(m + OB_FILT_DELAY) = (short)((biased >> 2) + 0x22);\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V34 filtdelay set to %d \"\n\t\t\t\t\t     \"(params initial delay = %d)\\n\",\n\t\t\t\t\t     (int)*(short *)(m + OB_FILT_DELAY),\n\t\t\t\t\t     delay);\n\t}\n\n\t{\n\t\tint ext = *(const int *)(cfg + CFG_EXT_DELAY);\n\n\t\tobj->dmadelay = (short)(0x610u - (unsigned)ext);\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V34FEC, V34dmadelay set to %d, \" \"(ext delay=%d)\\n\",\n\t\t\t\t\t     (int)obj->dmadelay, ext);\n\t}\n\n\t((V92EchoCanceller *)(sess + SESS_ECHO))->setEchoDelay(\n\t\t(unsigned)*(const int *)(cfg + CFG_EXT_DELAY) + 0x68u);",
+  "replace": "\t */\n\t{\n\t\tint delay = *(const int *)(cfg + CFG_FILT_DELAY);\n\t\tint biased = (int)((unsigned)delay + 2u);\n\n\t\t*(short *)(m + OB_FILT_DELAY) = (short)((biased >> 2) + 0x22);\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V34 filtdelay set to %d \"\n\t\t\t\t\t     \"(params initial delay = %d)\\n\",\n\t\t\t\t\t     (int)*(short *)(m + OB_FILT_DELAY),\n\t\t\t\t\t     delay);\n\t}\n\n\t{\n\t\tint ext = *(const int *)(cfg + CFG_EXT_DELAY);\n\n\t\tobj->dmadelay = (short)(0x610u - (unsigned)ext);\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V34FEC, V34dmadelay set to %d, \" \"(ext delay=%d)\\n\",\n\t\t\t\t\t     0x610 - ext, ext);\n\t}\n\n\t((V92EchoCanceller *)(sess + SESS_ECHO))->setEchoDelay(\n\t\t(unsigned)*(const int *)(cfg + CFG_EXT_DELAY) + 0x68u);",
+  "note": "Anchor carries 19 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
   "label": "the echo delay is not offset by 0x68",
-  "find": "\t\t(unsigned)*(const int *)(cfg + CFG_EXT_DELAY) + 0x68u);",
-  "replace": "\t\t(unsigned)*(const int *)(cfg + CFG_EXT_DELAY));"
+  "find": "\t */\n\t{\n\t\tint delay = *(const int *)(cfg + CFG_FILT_DELAY);\n\t\tint biased = (int)((unsigned)delay + 2u);\n\n\t\t*(short *)(m + OB_FILT_DELAY) = (short)((biased >> 2) + 0x22);\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V34 filtdelay set to %d \"\n\t\t\t\t\t     \"(params initial delay = %d)\\n\",\n\t\t\t\t\t     (int)*(short *)(m + OB_FILT_DELAY),\n\t\t\t\t\t     delay);\n\t}\n\n\t{\n\t\tint ext = *(const int *)(cfg + CFG_EXT_DELAY);\n\n\t\tobj->dmadelay = (short)(0x610u - (unsigned)ext);\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V34FEC, V34dmadelay set to %d, \" \"(ext delay=%d)\\n\",\n\t\t\t\t\t     (int)obj->dmadelay, ext);\n\t}\n\n\t((V92EchoCanceller *)(sess + SESS_ECHO))->setEchoDelay(\n\t\t(unsigned)*(const int *)(cfg + CFG_EXT_DELAY) + 0x68u);",
+  "replace": "\t */\n\t{\n\t\tint delay = *(const int *)(cfg + CFG_FILT_DELAY);\n\t\tint biased = (int)((unsigned)delay + 2u);\n\n\t\t*(short *)(m + OB_FILT_DELAY) = (short)((biased >> 2) + 0x22);\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V34 filtdelay set to %d \"\n\t\t\t\t\t     \"(params initial delay = %d)\\n\",\n\t\t\t\t\t     (int)*(short *)(m + OB_FILT_DELAY),\n\t\t\t\t\t     delay);\n\t}\n\n\t{\n\t\tint ext = *(const int *)(cfg + CFG_EXT_DELAY);\n\n\t\tobj->dmadelay = (short)(0x610u - (unsigned)ext);\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V34FEC, V34dmadelay set to %d, \" \"(ext delay=%d)\\n\",\n\t\t\t\t\t     (int)obj->dmadelay, ext);\n\t}\n\n\t((V92EchoCanceller *)(sess + SESS_ECHO))->setEchoDelay(\n\t\t(unsigned)*(const int *)(cfg + CFG_EXT_DELAY));",
+  "note": "Anchor carries 23 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
   "label": "the echo canceller is not told",
-  "find": "\t((V92EchoCanceller *)(sess + SESS_ECHO))->setEchoDelay(\n\t\t(unsigned)*(const int *)(cfg + CFG_EXT_DELAY) + 0x68u);",
-  "replace": "\t(void)0;"
+  "find": "\t */\n\t{\n\t\tint delay = *(const int *)(cfg + CFG_FILT_DELAY);\n\t\tint biased = (int)((unsigned)delay + 2u);\n\n\t\t*(short *)(m + OB_FILT_DELAY) = (short)((biased >> 2) + 0x22);\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V34 filtdelay set to %d \"\n\t\t\t\t\t     \"(params initial delay = %d)\\n\",\n\t\t\t\t\t     (int)*(short *)(m + OB_FILT_DELAY),\n\t\t\t\t\t     delay);\n\t}\n\n\t{\n\t\tint ext = *(const int *)(cfg + CFG_EXT_DELAY);\n\n\t\tobj->dmadelay = (short)(0x610u - (unsigned)ext);\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V34FEC, V34dmadelay set to %d, \" \"(ext delay=%d)\\n\",\n\t\t\t\t\t     (int)obj->dmadelay, ext);\n\t}\n\n\t((V92EchoCanceller *)(sess + SESS_ECHO))->setEchoDelay(\n\t\t(unsigned)*(const int *)(cfg + CFG_EXT_DELAY) + 0x68u);",
+  "replace": "\t */\n\t{\n\t\tint delay = *(const int *)(cfg + CFG_FILT_DELAY);\n\t\tint biased = (int)((unsigned)delay + 2u);\n\n\t\t*(short *)(m + OB_FILT_DELAY) = (short)((biased >> 2) + 0x22);\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V34 filtdelay set to %d \"\n\t\t\t\t\t     \"(params initial delay = %d)\\n\",\n\t\t\t\t\t     (int)*(short *)(m + OB_FILT_DELAY),\n\t\t\t\t\t     delay);\n\t}\n\n\t{\n\t\tint ext = *(const int *)(cfg + CFG_EXT_DELAY);\n\n\t\tobj->dmadelay = (short)(0x610u - (unsigned)ext);\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V34FEC, V34dmadelay set to %d, \" \"(ext delay=%d)\\n\",\n\t\t\t\t\t     (int)obj->dmadelay, ext);\n\t}\n\n\t(void)0;",
+  "note": "Anchor carries 22 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
   "label": "the echo canceller is at +0x6bd4",
-  "find": "\t((V92EchoCanceller *)(sess + SESS_ECHO))->setEchoDelay(\n\t\t(unsigned)*(const int *)(cfg + CFG_EXT_DELAY) + 0x68u);",
-  "replace": "\t((V92EchoCanceller *)(sess + 0x6bd4))->setEchoDelay(\n\t\t(unsigned)*(const int *)(cfg + CFG_EXT_DELAY) + 0x68u);"
+  "find": "\t */\n\t{\n\t\tint delay = *(const int *)(cfg + CFG_FILT_DELAY);\n\t\tint biased = (int)((unsigned)delay + 2u);\n\n\t\t*(short *)(m + OB_FILT_DELAY) = (short)((biased >> 2) + 0x22);\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V34 filtdelay set to %d \"\n\t\t\t\t\t     \"(params initial delay = %d)\\n\",\n\t\t\t\t\t     (int)*(short *)(m + OB_FILT_DELAY),\n\t\t\t\t\t     delay);\n\t}\n\n\t{\n\t\tint ext = *(const int *)(cfg + CFG_EXT_DELAY);\n\n\t\tobj->dmadelay = (short)(0x610u - (unsigned)ext);\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V34FEC, V34dmadelay set to %d, \" \"(ext delay=%d)\\n\",\n\t\t\t\t\t     (int)obj->dmadelay, ext);\n\t}\n\n\t((V92EchoCanceller *)(sess + SESS_ECHO))->setEchoDelay(\n\t\t(unsigned)*(const int *)(cfg + CFG_EXT_DELAY) + 0x68u);",
+  "replace": "\t */\n\t{\n\t\tint delay = *(const int *)(cfg + CFG_FILT_DELAY);\n\t\tint biased = (int)((unsigned)delay + 2u);\n\n\t\t*(short *)(m + OB_FILT_DELAY) = (short)((biased >> 2) + 0x22);\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V34 filtdelay set to %d \"\n\t\t\t\t\t     \"(params initial delay = %d)\\n\",\n\t\t\t\t\t     (int)*(short *)(m + OB_FILT_DELAY),\n\t\t\t\t\t     delay);\n\t}\n\n\t{\n\t\tint ext = *(const int *)(cfg + CFG_EXT_DELAY);\n\n\t\tobj->dmadelay = (short)(0x610u - (unsigned)ext);\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V34FEC, V34dmadelay set to %d, \" \"(ext delay=%d)\\n\",\n\t\t\t\t\t     (int)obj->dmadelay, ext);\n\t}\n\n\t((V92EchoCanceller *)(sess + 0x6bd4))->setEchoDelay(\n\t\t(unsigned)*(const int *)(cfg + CFG_EXT_DELAY) + 0x68u);",
+  "note": "Anchor carries 22 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
   "label": "the sensitive-ISP notice is dropped",
@@ -338,61 +368,72 @@
  },
  {
   "label": "+0x254's scale is 335",
-  "find": "\t\t(short)(336 * (int)*(const short *)(m + OB_F35A4) + 10000);",
-  "replace": "\t\t(short)(335 * (int)*(const short *)(m + OB_F35A4) + 10000);"
+  "find": "\t * below 10000.\n\t */\n\t*(short *)(m + OB_F0254) =\n\t\t(short)(336 * (int)*(const short *)(m + OB_F35A4) + 10000);",
+  "replace": "\t * below 10000.\n\t */\n\t*(short *)(m + OB_F0254) =\n\t\t(short)(335 * (int)*(const short *)(m + OB_F35A4) + 10000);",
+  "note": "Anchor carries 3 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
   "label": "+0x254's offset is 10001",
-  "find": "\t\t(short)(336 * (int)*(const short *)(m + OB_F35A4) + 10000);",
-  "replace": "\t\t(short)(336 * (int)*(const short *)(m + OB_F35A4) + 10001);"
+  "find": "\t * below 10000.\n\t */\n\t*(short *)(m + OB_F0254) =\n\t\t(short)(336 * (int)*(const short *)(m + OB_F35A4) + 10000);",
+  "replace": "\t * below 10000.\n\t */\n\t*(short *)(m + OB_F0254) =\n\t\t(short)(336 * (int)*(const short *)(m + OB_F35A4) + 10001);",
+  "note": "Anchor carries 3 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
   "label": "+0x254's scale short is read unsigned",
-  "find": "\t\t(short)(336 * (int)*(const short *)(m + OB_F35A4) + 10000);",
-  "replace": "\t\t(short)(336 * (int)*(const unsigned short *)(m + OB_F35A4)\n\t\t\t+ 10000);",
+  "find": "\t * below 10000.\n\t */\n\t*(short *)(m + OB_F0254) =\n\t\t(short)(336 * (int)*(const short *)(m + OB_F35A4) + 10000);",
+  "replace": "\t * below 10000.\n\t */\n\t*(short *)(m + OB_F0254) =\n\t\t(short)(336 * (int)*(const unsigned short *)(m + OB_F35A4)\n\t\t\t+ 10000);",
   "equivalent": true,
-  "why": "336 * 65536 = 22,020,096, which is exactly 336 * 2^16 and therefore zero modulo 2^16.  A signed and an unsigned reading of the same short differ by 65536, so the two products differ by a multiple of 2^16 and the `(short)` the result is stored through discards it.  No input can separate them -- the sweep drives -1, -100 and 0x8000, and the mutations that change the multiplier to 335 and the offset to 10001 are both caught, so the arithmetic itself is tested.  `movswl` is what the object writes and so is this."
+  "why": "336 * 65536 = 22,020,096, which is exactly 336 * 2^16 and therefore zero modulo 2^16.  A signed and an unsigned reading of the same short differ by 65536, so the two products differ by a multiple of 2^16 and the `(short)` the result is stored through discards it.  No input can separate them -- the sweep drives -1, -100 and 0x8000, and the mutations that change the multiplier to 335 and the offset to 10001 are both caught, so the arithmetic itself is tested.  `movswl` is what the object writes and so is this.",
+  "note": "Anchor carries 3 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
   "label": "+0x258 is cleared as a short rather than an int",
-  "find": "\t*(int *)(m + OB_F0254 + 4) = 0;",
-  "replace": "\t*(short *)(m + OB_F0254 + 4) = 0;"
+  "find": "\t\t(short)(336 * (int)*(const short *)(m + OB_F35A4) + 10000);\n\t*(short *)(m + OB_F0254 + 2) = 0;\n\t*(int *)(m + OB_F0254 + 4) = 0;",
+  "replace": "\t\t(short)(336 * (int)*(const short *)(m + OB_F35A4) + 10000);\n\t*(short *)(m + OB_F0254 + 2) = 0;\n\t*(short *)(m + OB_F0254 + 4) = 0;",
+  "note": "Anchor carries 2 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
   "label": "+0xac24 is cleared as a short rather than an int",
-  "find": "\t */\n\t{\n\t\tunsigned char *st = m + OB_FAC1C;\n\t\tshort role = obj->role;\n\n\t\t*(short *)(st + 0x00) = 0;\n\t\t*(short *)(st + 0x02) = 0;\n\t\t*(short *)(st + 0x04) = 0;\n\t\t*(short *)(st + 0x06) = 0;\n\t\t*(int *)(st + 0x08) = 0;",
-  "replace": "\t */\n\t{\n\t\tunsigned char *st = m + OB_FAC1C;\n\t\tshort role = obj->role;\n\n\t\t*(short *)(st + 0x00) = 0;\n\t\t*(short *)(st + 0x02) = 0;\n\t\t*(short *)(st + 0x04) = 0;\n\t\t*(short *)(st + 0x06) = 0;\n\t\t*(short *)(st + 0x08) = 0;"
+  "find": "\t * a name.\n\t */\n\t{\n\t\tunsigned char *st = m + OB_FAC1C;\n\t\tshort role = obj->role;\n\n\t\t*(short *)(st + 0x00) = 0;\n\t\t*(short *)(st + 0x02) = 0;\n\t\t*(short *)(st + 0x04) = 0;\n\t\t*(short *)(st + 0x06) = 0;\n\t\t*(int *)(st + 0x08) = 0;",
+  "replace": "\t * a name.\n\t */\n\t{\n\t\tunsigned char *st = m + OB_FAC1C;\n\t\tshort role = obj->role;\n\n\t\t*(short *)(st + 0x00) = 0;\n\t\t*(short *)(st + 0x02) = 0;\n\t\t*(short *)(st + 0x04) = 0;\n\t\t*(short *)(st + 0x06) = 0;\n\t\t*(short *)(st + 0x08) = 0;",
+  "note": "Anchor carries 1 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
   "label": "+0xac2e is cleared as well",
-  "find": "\t */\n\t{\n\t\tunsigned char *st = m + OB_FAC1C;\n\t\tshort role = obj->role;\n\n\t\t*(short *)(st + 0x00) = 0;\n\t\t*(short *)(st + 0x02) = 0;\n\t\t*(short *)(st + 0x04) = 0;\n\t\t*(short *)(st + 0x06) = 0;\n\t\t*(int *)(st + 0x08) = 0;\n\t\t*(int *)(st + 0x14) = 0;\n\t\t*(int *)(st + 0x18) = 0;\n\t\t*(int *)(st + 0x1c) = 0;",
-  "replace": "\t */\n\t{\n\t\tunsigned char *st = m + OB_FAC1C;\n\t\tshort role = obj->role;\n\n\t\t*(short *)(st + 0x00) = 0;\n\t\t*(short *)(st + 0x02) = 0;\n\t\t*(short *)(st + 0x04) = 0;\n\t\t*(short *)(st + 0x06) = 0;\n\t\t*(int *)(st + 0x08) = 0;\n\t\t*(int *)(st + 0x14) = 0;\n\t\t*(int *)(st + 0x18) = 0;\n\t\t*(int *)(st + 0x1c) = 0;\n\t\t*(short *)(st + 0x12) = 0;"
+  "find": "\t * a name.\n\t */\n\t{\n\t\tunsigned char *st = m + OB_FAC1C;\n\t\tshort role = obj->role;\n\n\t\t*(short *)(st + 0x00) = 0;\n\t\t*(short *)(st + 0x02) = 0;\n\t\t*(short *)(st + 0x04) = 0;\n\t\t*(short *)(st + 0x06) = 0;\n\t\t*(int *)(st + 0x08) = 0;\n\t\t*(int *)(st + 0x14) = 0;\n\t\t*(int *)(st + 0x18) = 0;\n\t\t*(int *)(st + 0x1c) = 0;",
+  "replace": "\t * a name.\n\t */\n\t{\n\t\tunsigned char *st = m + OB_FAC1C;\n\t\tshort role = obj->role;\n\n\t\t*(short *)(st + 0x00) = 0;\n\t\t*(short *)(st + 0x02) = 0;\n\t\t*(short *)(st + 0x04) = 0;\n\t\t*(short *)(st + 0x06) = 0;\n\t\t*(int *)(st + 0x08) = 0;\n\t\t*(int *)(st + 0x14) = 0;\n\t\t*(int *)(st + 0x18) = 0;\n\t\t*(int *)(st + 0x1c) = 0;\n\t\t*(short *)(st + 0x12) = 0;",
+  "note": "Anchor carries 1 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
   "label": "+0xac30 is left alone",
-  "find": "\t */\n\t{\n\t\tunsigned char *st = m + OB_FAC1C;\n\t\tshort role = obj->role;\n\n\t\t*(short *)(st + 0x00) = 0;\n\t\t*(short *)(st + 0x02) = 0;\n\t\t*(short *)(st + 0x04) = 0;\n\t\t*(short *)(st + 0x06) = 0;\n\t\t*(int *)(st + 0x08) = 0;\n\t\t*(int *)(st + 0x14) = 0;",
-  "replace": "\t */\n\t{\n\t\tunsigned char *st = m + OB_FAC1C;\n\t\tshort role = obj->role;\n\n\t\t*(short *)(st + 0x00) = 0;\n\t\t*(short *)(st + 0x02) = 0;\n\t\t*(short *)(st + 0x04) = 0;\n\t\t*(short *)(st + 0x06) = 0;\n\t\t*(int *)(st + 0x08) = 0;\n\t\t(void)0;"
+  "find": "\t * a name.\n\t */\n\t{\n\t\tunsigned char *st = m + OB_FAC1C;\n\t\tshort role = obj->role;\n\n\t\t*(short *)(st + 0x00) = 0;\n\t\t*(short *)(st + 0x02) = 0;\n\t\t*(short *)(st + 0x04) = 0;\n\t\t*(short *)(st + 0x06) = 0;\n\t\t*(int *)(st + 0x08) = 0;\n\t\t*(int *)(st + 0x14) = 0;",
+  "replace": "\t * a name.\n\t */\n\t{\n\t\tunsigned char *st = m + OB_FAC1C;\n\t\tshort role = obj->role;\n\n\t\t*(short *)(st + 0x00) = 0;\n\t\t*(short *)(st + 0x02) = 0;\n\t\t*(short *)(st + 0x04) = 0;\n\t\t*(short *)(st + 0x06) = 0;\n\t\t*(int *)(st + 0x08) = 0;\n\t\t(void)0;",
+  "note": "Anchor carries 1 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
   "label": "the two roles are swapped",
-  "find": "\t */\n\t{\n\t\tunsigned char *st = m + OB_FAC1C;\n\t\tshort role = obj->role;\n\n\t\t*(short *)(st + 0x00) = 0;\n\t\t*(short *)(st + 0x02) = 0;\n\t\t*(short *)(st + 0x04) = 0;\n\t\t*(short *)(st + 0x06) = 0;\n\t\t*(int *)(st + 0x08) = 0;\n\t\t*(int *)(st + 0x14) = 0;\n\t\t*(int *)(st + 0x18) = 0;\n\t\t*(int *)(st + 0x1c) = 0;\n\n\t\tif (role == 0x65) {\n\t\t\t*(short *)(st + 0x0c) = 0;\n\t\t\t*(short *)(st + 0x0e) = 0;\n\t\t\t*(short *)(st + 0x10) = (short)0x39c3;\n\t\t} else if (role == 0x66) {",
-  "replace": "\t */\n\t{\n\t\tunsigned char *st = m + OB_FAC1C;\n\t\tshort role = obj->role;\n\n\t\t*(short *)(st + 0x00) = 0;\n\t\t*(short *)(st + 0x02) = 0;\n\t\t*(short *)(st + 0x04) = 0;\n\t\t*(short *)(st + 0x06) = 0;\n\t\t*(int *)(st + 0x08) = 0;\n\t\t*(int *)(st + 0x14) = 0;\n\t\t*(int *)(st + 0x18) = 0;\n\t\t*(int *)(st + 0x1c) = 0;\n\n\t\tif (role == 0x66) {\n\t\t\t*(short *)(st + 0x0c) = 0;\n\t\t\t*(short *)(st + 0x0e) = 0;\n\t\t\t*(short *)(st + 0x10) = (short)0x39c3;\n\t\t} else if (role == 0x65) {"
+  "find": "\t * a name.\n\t */\n\t{\n\t\tunsigned char *st = m + OB_FAC1C;\n\t\tshort role = obj->role;\n\n\t\t*(short *)(st + 0x00) = 0;\n\t\t*(short *)(st + 0x02) = 0;\n\t\t*(short *)(st + 0x04) = 0;\n\t\t*(short *)(st + 0x06) = 0;\n\t\t*(int *)(st + 0x08) = 0;\n\t\t*(int *)(st + 0x14) = 0;\n\t\t*(int *)(st + 0x18) = 0;\n\t\t*(int *)(st + 0x1c) = 0;\n\n\t\tif (role == 0x65) {\n\t\t\t*(short *)(st + 0x0c) = 0;\n\t\t\t*(short *)(st + 0x0e) = 0;\n\t\t\t*(short *)(st + 0x10) = (short)0x39c3;\n\t\t} else if (role == 0x66) {",
+  "replace": "\t * a name.\n\t */\n\t{\n\t\tunsigned char *st = m + OB_FAC1C;\n\t\tshort role = obj->role;\n\n\t\t*(short *)(st + 0x00) = 0;\n\t\t*(short *)(st + 0x02) = 0;\n\t\t*(short *)(st + 0x04) = 0;\n\t\t*(short *)(st + 0x06) = 0;\n\t\t*(int *)(st + 0x08) = 0;\n\t\t*(int *)(st + 0x14) = 0;\n\t\t*(int *)(st + 0x18) = 0;\n\t\t*(int *)(st + 0x1c) = 0;\n\n\t\tif (role == 0x66) {\n\t\t\t*(short *)(st + 0x0c) = 0;\n\t\t\t*(short *)(st + 0x0e) = 0;\n\t\t\t*(short *)(st + 0x10) = (short)0x39c3;\n\t\t} else if (role == 0x65) {",
+  "note": "Anchor carries 1 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
   "label": "0x39c3 goes in on the answering role only",
-  "find": "\t */\n\t{\n\t\tunsigned char *st = m + OB_FAC1C;\n\t\tshort role = obj->role;\n\n\t\t*(short *)(st + 0x00) = 0;\n\t\t*(short *)(st + 0x02) = 0;\n\t\t*(short *)(st + 0x04) = 0;\n\t\t*(short *)(st + 0x06) = 0;\n\t\t*(int *)(st + 0x08) = 0;\n\t\t*(int *)(st + 0x14) = 0;\n\t\t*(int *)(st + 0x18) = 0;\n\t\t*(int *)(st + 0x1c) = 0;\n\n\t\tif (role == 0x65) {\n\t\t\t*(short *)(st + 0x0c) = 0;\n\t\t\t*(short *)(st + 0x0e) = 0;\n\t\t\t*(short *)(st + 0x10) = (short)0x39c3;\n\t\t} else if (role == 0x66) {",
-  "replace": "\t */\n\t{\n\t\tunsigned char *st = m + OB_FAC1C;\n\t\tshort role = obj->role;\n\n\t\t*(short *)(st + 0x00) = 0;\n\t\t*(short *)(st + 0x02) = 0;\n\t\t*(short *)(st + 0x04) = 0;\n\t\t*(short *)(st + 0x06) = 0;\n\t\t*(int *)(st + 0x08) = 0;\n\t\t*(int *)(st + 0x14) = 0;\n\t\t*(int *)(st + 0x18) = 0;\n\t\t*(int *)(st + 0x1c) = 0;\n\n\t\tif (role == 0x65) {\n\t\t\t*(short *)(st + 0x0c) = 0;\n\t\t\t*(short *)(st + 0x0e) = 0;\n\t\t} else if (role == 0x66) {"
+  "find": "\t * a name.\n\t */\n\t{\n\t\tunsigned char *st = m + OB_FAC1C;\n\t\tshort role = obj->role;\n\n\t\t*(short *)(st + 0x00) = 0;\n\t\t*(short *)(st + 0x02) = 0;\n\t\t*(short *)(st + 0x04) = 0;\n\t\t*(short *)(st + 0x06) = 0;\n\t\t*(int *)(st + 0x08) = 0;\n\t\t*(int *)(st + 0x14) = 0;\n\t\t*(int *)(st + 0x18) = 0;\n\t\t*(int *)(st + 0x1c) = 0;\n\n\t\tif (role == 0x65) {\n\t\t\t*(short *)(st + 0x0c) = 0;\n\t\t\t*(short *)(st + 0x0e) = 0;\n\t\t\t*(short *)(st + 0x10) = (short)0x39c3;\n\t\t} else if (role == 0x66) {",
+  "replace": "\t * a name.\n\t */\n\t{\n\t\tunsigned char *st = m + OB_FAC1C;\n\t\tshort role = obj->role;\n\n\t\t*(short *)(st + 0x00) = 0;\n\t\t*(short *)(st + 0x02) = 0;\n\t\t*(short *)(st + 0x04) = 0;\n\t\t*(short *)(st + 0x06) = 0;\n\t\t*(int *)(st + 0x08) = 0;\n\t\t*(int *)(st + 0x14) = 0;\n\t\t*(int *)(st + 0x18) = 0;\n\t\t*(int *)(st + 0x1c) = 0;\n\n\t\tif (role == 0x65) {\n\t\t\t*(short *)(st + 0x0c) = 0;\n\t\t\t*(short *)(st + 0x0e) = 0;\n\t\t} else if (role == 0x66) {",
+  "note": "Anchor carries 1 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
   "label": "the quadrature pair is swapped",
-  "find": "\t */\n\t{\n\t\tunsigned char *st = m + OB_FAC1C;\n\t\tshort role = obj->role;\n\n\t\t*(short *)(st + 0x00) = 0;\n\t\t*(short *)(st + 0x02) = 0;\n\t\t*(short *)(st + 0x04) = 0;\n\t\t*(short *)(st + 0x06) = 0;\n\t\t*(int *)(st + 0x08) = 0;\n\t\t*(int *)(st + 0x14) = 0;\n\t\t*(int *)(st + 0x18) = 0;\n\t\t*(int *)(st + 0x1c) = 0;\n\n\t\tif (role == 0x65) {\n\t\t\t*(short *)(st + 0x0c) = 0;\n\t\t\t*(short *)(st + 0x0e) = 0;\n\t\t\t*(short *)(st + 0x10) = (short)0x39c3;\n\t\t} else if (role == 0x66) {\n\t\t\t*(short *)(st + 0x0c) = (short)0x5a82;\n\t\t\t*(short *)(st + 0x0e) = (short)0x55fc;",
-  "replace": "\t */\n\t{\n\t\tunsigned char *st = m + OB_FAC1C;\n\t\tshort role = obj->role;\n\n\t\t*(short *)(st + 0x00) = 0;\n\t\t*(short *)(st + 0x02) = 0;\n\t\t*(short *)(st + 0x04) = 0;\n\t\t*(short *)(st + 0x06) = 0;\n\t\t*(int *)(st + 0x08) = 0;\n\t\t*(int *)(st + 0x14) = 0;\n\t\t*(int *)(st + 0x18) = 0;\n\t\t*(int *)(st + 0x1c) = 0;\n\n\t\tif (role == 0x65) {\n\t\t\t*(short *)(st + 0x0c) = 0;\n\t\t\t*(short *)(st + 0x0e) = 0;\n\t\t\t*(short *)(st + 0x10) = (short)0x39c3;\n\t\t} else if (role == 0x66) {\n\t\t\t*(short *)(st + 0x0c) = (short)0x55fc;\n\t\t\t*(short *)(st + 0x0e) = (short)0x5a82;"
+  "find": "\t * a name.\n\t */\n\t{\n\t\tunsigned char *st = m + OB_FAC1C;\n\t\tshort role = obj->role;\n\n\t\t*(short *)(st + 0x00) = 0;\n\t\t*(short *)(st + 0x02) = 0;\n\t\t*(short *)(st + 0x04) = 0;\n\t\t*(short *)(st + 0x06) = 0;\n\t\t*(int *)(st + 0x08) = 0;\n\t\t*(int *)(st + 0x14) = 0;\n\t\t*(int *)(st + 0x18) = 0;\n\t\t*(int *)(st + 0x1c) = 0;\n\n\t\tif (role == 0x65) {\n\t\t\t*(short *)(st + 0x0c) = 0;\n\t\t\t*(short *)(st + 0x0e) = 0;\n\t\t\t*(short *)(st + 0x10) = (short)0x39c3;\n\t\t} else if (role == 0x66) {\n\t\t\t*(short *)(st + 0x0c) = (short)0x5a82;\n\t\t\t*(short *)(st + 0x0e) = (short)0x55fc;",
+  "replace": "\t * a name.\n\t */\n\t{\n\t\tunsigned char *st = m + OB_FAC1C;\n\t\tshort role = obj->role;\n\n\t\t*(short *)(st + 0x00) = 0;\n\t\t*(short *)(st + 0x02) = 0;\n\t\t*(short *)(st + 0x04) = 0;\n\t\t*(short *)(st + 0x06) = 0;\n\t\t*(int *)(st + 0x08) = 0;\n\t\t*(int *)(st + 0x14) = 0;\n\t\t*(int *)(st + 0x18) = 0;\n\t\t*(int *)(st + 0x1c) = 0;\n\n\t\tif (role == 0x65) {\n\t\t\t*(short *)(st + 0x0c) = 0;\n\t\t\t*(short *)(st + 0x0e) = 0;\n\t\t\t*(short *)(st + 0x10) = (short)0x39c3;\n\t\t} else if (role == 0x66) {\n\t\t\t*(short *)(st + 0x0c) = (short)0x55fc;\n\t\t\t*(short *)(st + 0x0e) = (short)0x5a82;",
+  "note": "Anchor carries 1 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
   "label": "the role is read unsigned",
-  "find": "\t */\n\t{\n\t\tunsigned char *st = m + OB_FAC1C;\n\t\tshort role = obj->role;",
-  "replace": "\t */\n\t{\n\t\tunsigned char *st = m + OB_FAC1C;\n\t\tint role = (unsigned short)obj->role;",
+  "find": "\t * a name.\n\t */\n\t{\n\t\tunsigned char *st = m + OB_FAC1C;\n\t\tshort role = obj->role;",
+  "replace": "\t * a name.\n\t */\n\t{\n\t\tunsigned char *st = m + OB_FAC1C;\n\t\tint role = (unsigned short)obj->role;",
   "equivalent": true,
-  "why": "`role` is used for nothing but equality with 0x65 and 0x66, both of which are in [0, 0x7fff].  A signed short equals 0x65 exactly when its low sixteen bits do, so the sign of the load cannot change either answer.  The sweep drives -1 and 0x7fff as well as the two live values.  Written signed because `movswl` is what the object emits, and because V34hshak.c reads the same field signed."
+  "why": "`role` is used for nothing but equality with 0x65 and 0x66, both of which are in [0, 0x7fff].  A signed short equals 0x65 exactly when its low sixteen bits do, so the sign of the load cannot change either answer.  The sweep drives -1 and 0x7fff as well as the two live values.  Written signed because `movswl` is what the object emits, and because V34hshak.c reads the same field signed.",
+  "note": "Anchor carries 1 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  }
 ]

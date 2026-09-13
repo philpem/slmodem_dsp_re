@@ -49,7 +49,7 @@ INTERNAL = re.compile(r"^_ZL(\d+)(.+)$")
 
 
 def internal_plain(name, kind):
-    """The plain name a GCC 4+ `_ZL` internal-linkage DATA symbol stands for.
+    """The plain name a GCC 4+ `_ZL` internal-linkage symbol stands for.
 
     A test names the author's plain name, and the reconstruction defines the
     table `static` in a C++ consumer to match the blob's own LOCAL binding.
@@ -57,10 +57,16 @@ def internal_plain(name, kind):
     becomes `_ZL10entFiltNum`.  This maps the latter back, so the one name in
     test/ reaches both tiers.
 
-    FUNCTIONS ARE LEFT ALONE.  A static function's `_ZL` form carries a
-    parameter-type suffix (`_ZL3foov`), which a bare length slice would eat,
-    and no test reaches a C++ static function here anyway.
+    FUNCTIONS GO THE OTHER WAY.  A static C++ function's name is a normal
+    MANGLED name with `L` inserted after `_Z`
+    (`_ZL14getMPrecvdBitsP12tagV34Object`), so the global name a C++ test's
+    declaration refers to is that spelling minus the `L`.  The length-slice
+    used for data would eat the parameter list and produce the bare source
+    name, which no C++ reference spells.  So a FUNCTION keeps `_Z` + the
+    mangled body unchanged apart from that one `L`.
     """
+    if kind == "t":
+        return "_Z" + name[3:] if name.startswith("_ZL") else name
     if kind not in "drb":
         return name
     m = INTERNAL.match(name)

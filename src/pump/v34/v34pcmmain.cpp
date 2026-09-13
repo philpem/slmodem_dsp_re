@@ -40,6 +40,10 @@
 #include "dsplib/v34recv.h"
 #include "dsplib/v34rx.h"
 #include "dsplib/v34shell.h"
+#include "dsplib/GenericIIR.h"
+#include "dsplib/V90Demodulator.h"
+#include "dsplib/sysdep.h"
+#include "dsplib/v34filt.h"
 #include "dsplib/VPcmFloModem.h"
 /*
  * For `VPcmV34GetCurrentRxBitRate` and `VPcmV34GetCurrentTxBitRate` at the
@@ -223,7 +227,39 @@ typedef char ob4_k56_check[(OB4_ANCHOR + OB4_K56_RECEIVER ==
 #define RATE_STEP		2400u
 #define RATE_INDEX_MAX		14
 
-void
+/*
+ * The minimum-signal-level ladder, eight 32-bit entries at `.data + 0xc0`.
+ *
+ * Three functions read it, all of them VPcmV34*:
+ * `VPcmV34SetMinimumSigLevel`, `VPcmV34InitiateRetrain` and `VPcmV34Create`.
+ * The first indexes it with a value that is CLAMPED, not masked:
+ *
+ *     mov  0x60(%edx),%eax        ; a signed level from the parameter block
+ *     add  $0x30,%eax             ; bias it to an index
+ *     cmp  $0x7,%eax
+ *     jbe  ok
+ *     mov  $0x3,%eax              ; out of range -> entry 3, which is 101
+ *  ok: mov  0xc0(,%eax,4),%eax
+ *
+ * `jbe` is unsigned, so the single compare rejects negatives too: an index
+ * below zero wraps large and takes the same default.  The default is entry 3
+ * and not entry 0, which is why the clamp is worth writing down -- it is a
+ * chosen fallback level rather than a saturation.
+ *
+ * THE VALUES ARE REFERENCE BYTES AND NOT A GENERATOR, and that is a failure
+ * rather than a choice; finding F270 records what was tried.
+ */
+/*
+ * NOT `const`, and that is the object's: the reference records the symbol in
+ * `.data` (`d` at .data+0xc0), so the author declared it writable even though
+ * nothing writes it.  A `const` here would put it in `.rodata` and the
+ * defined-symbol record's section would differ from the object's.
+ */
+static int V34DisconnectThreshTable[V34_DISCONNECT_THRESH_ENTRIES] = {
+	71, 80, 90, 101, 113, 127, 142, 160,
+};
+
+static void
 getMPrecvdBits(struct tagV34Object *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
@@ -3372,5 +3408,841 @@ V34PCMMAIN_RXASSERT(good_run, good_run, 0x4c0);
 typedef char v34pcmmain_echo_fits[
 	(SESS_ECHO + (int)sizeof(V92EchoCanceller)
 	 <= (int)sizeof(VPcmFloModem)) ? 1 : -1];
+
+#endif /* 32-bit */
+
+/*
+ * ---------------------------------------------------------------------------
+ * MOVED HERE from the file it shared this translation unit with.  The reference
+ * records `getMPrecvdBits` (`_Z14getMPrecvdBitsP12tagV34Object`) and
+ * `V34DisconnectThreshTable` as LOCAL in ONE unit, `VPcmV34Main.cpp`; the
+ * reconstruction had spread that unit over `v34k56.cpp` and
+ * `v34pcmcreate.cpp`, so neither could be `static`.  Both are back in the unit
+ * and both are file-local now.  The bodies below are otherwise verbatim.
+ */
+
+/*
+ * v34k56.cpp -- `k56FlexPhase34`, the K56flex handshake's phase 3/4
+ * transmitter.
+ *
+ * WHY THIS IS A .cpp AND WHY THE SYMBOL IS UNMANGLED.  The object exports
+ * `k56FlexPhase34` with no mangling, so it was declared `extern "C"`; but two
+ * of its calls are relocations against
+ *
+ *     _ZN15K56FlexFloModem16getK56FlexJaBitsEPs
+ *     _ZN15K56FlexFloModem16getK56FlexMpBitsEPs
+ *
+ * which a C translation unit cannot name.  So the translation unit is C++ and
+ * the declaration lives inside `v34hshak.h`'s `extern "C"` block -- the same
+ * arrangement `v34pcmmain.cpp` uses from the other side, and for the mirror
+ * reason.  The stem is `v34k56` rather than a per-object name because
+ * `docs/attribution.md` puts .text+0xa790 in the `V34.c|GenericToneDetector.cpp`
+ * block and marks it AMBIGUOUS: the object does not say which file this came
+ * from, so neither does the file name.
+ *
+ * WHAT IT DOES.  One call emits one handshake symbol, and which symbol
+ * depends on where the K56flex phase-3/4 sequence has got to.  Two things
+ * select the arm: `V34_RX_FLAG_DATA` in the receiver's flags word, and the
+ * int at +0x250 that `v34fsk.h` calls `k56flex_receiver`.
+ *
+ *     flag clear          transmit the next Ja dibit
+ *     flag set, +0x250=3  shift the word at +0x25d6 out, two bits at a time
+ *     flag set, +0x250=4  transmit a scrambled idle symbol
+ *     flag set, +0x250=5  transmit the next MP dibit or quadbit
+ *     flag set, anything  do nothing
+ *     else
+ *
+ * and the object advances +0x250 3 -> 4 itself.  Nothing here moves it to 5;
+ * whatever does is outside the 721 bytes.
+ *
+ * ---------------------------------------------------------------------------
+ * THE IDLE SYMBOL IS NOT `txmitdibit`, AND THAT IS THE WHOLE POINT OF THE
+ * FUNCTION'S MIDDLE.
+ *
+ * Case 4 looks exactly like a `txmitdibit(obj, 3)` and is not one, in three
+ * ways that all move the constellation point:
+ *
+ *   - `V34scrambler`'s mode argument is the LITERAL 1.  `txmitdibit` passes
+ *     `tx_scrambler_mode(o)`, which reads bit 0 of `tx_flags`; nothing in these
+ *     721 bytes loads +0x25c2 at all, so the generator here does not follow
+ *     the calling/answering flag the rest of the transmitter obeys.
+ *   - there is NO differential encoding.  `txmitdibit` forms
+ *     `(d + prev_quadrant) & 3`; this stores the scrambler's two bits straight into
+ *     `cur_quadrant` and indexes `vect4` with them.
+ *   - `prev_quadrant` is not written, so the quadrant the rest of the handshake
+ *     carries does not advance.
+ *
+ * The quadbit arm differs the same way: two two-bit scrambler requests, the
+ * first into `cur_quadrant` and the second selecting within it, with the sum
+ * `d2 + q * 4` -- which is `txmitquadbit`'s index expression -- but again
+ * with no differential add and no `prev_quadrant` write.  A reconstruction that
+ * called the two published emitters would compile, link, and be wrong; the
+ * mutation suite's first two entries are exactly that substitution.
+ *
+ * `vect4[q]` and `vect16[d2 + q * 4]` are indexed UNMASKED, as the object
+ * does.  `V34scrambler` with `nbits == 2` returns 0..3, so a `& 3` would be
+ * unobservable -- but only while that contract holds, which is why it is not
+ * written here.
+ *
+ * ---------------------------------------------------------------------------
+ * TWO BLOCKS OF THIS FUNCTION ARE DEAD IN THIS OBJECT, and they are marked
+ * below.  Both are reached only when a `K56FlexFloModem` bit source reports
+ * that its sequence has finished, and both of those members are three bytes
+ * of `xor %eax,%eax; ret` -- see `include/dsplib/K56FlexFloModem.h`, which
+ * measured them.  So the completion arms cannot be entered from either side
+ * of a differential test, by construction and not by omission.  They are
+ * transcribed from the disassembly and are NOT covered by the test; finding
+ * F281 gives the measurement and lists the mutations that go uncaught as a
+ * result.
+ */
+
+/*
+ * +0x25d6.  A sixteen-bit pattern shifted out as eight dibits, LSB first,
+ * and the ONLY thing case 3 transmits.  `v34handshakinit` seeds it with
+ * 0x8990 and the Ja completion arm below replaces it with 0x899f; both are
+ * whole-word stores of a constant, and nothing in the tree reads it as
+ * anything but this shift register.  Reached by offset because the region is
+ * `unmapped_25d6` in `struct v34_object` -- V34hshak.c:424 writes it the same
+ * way.
+ */
+#define OB_TXBITS	0x25d6
+
+int
+k56FlexPhase34(void *objp)
+{
+	struct v34_object *o = (struct v34_object *)objp;
+	unsigned char *m = (unsigned char *)objp;
+	struct v34_receiver *rx = (struct v34_receiver *)(m + OB_RECEIVER);
+	K56FlexFloModem *k56 = (K56FlexFloModem *)o->pac18;
+
+	if (!(rx->flags & V34_RX_FLAG_DATA)) {
+		/*
+		 * Ja.  The bit source writes the dibit into `cur_quadrant` -- the
+		 * same field the emitters use as their quadrant register --
+		 * and returns non-zero on the symbol that ends the sequence.
+		 * The dibit is transmitted either way, so the last one is
+		 * sent and then acted on.
+		 */
+		int done = (short)k56->getK56FlexJaBits(&o->cur_quadrant);
+
+		txmitdibit(o, o->cur_quadrant);
+		if (done == 0)
+			return 0;
+
+		/* DEAD: `getK56FlexJaBits` is a stub returning 0. */
+		rx->flags |= V34_RX_FLAG_DATA;
+		*(short *)(m + OB_TXBITS) = (short)0x899f;
+		o->vect_idx = 0;
+		o->k56flex_receiver = 3;
+		return 0;
+	}
+
+	switch (o->k56flex_receiver) {
+	case 3: {
+		/*
+		 * Eight dibits out of one word, `vect_idx` counting them.
+		 *
+		 * The index is read TWICE and the second read is after
+		 * `txmitdibit`, because the object reads it twice: a call
+		 * sits between, and no compiler may assume a field survives
+		 * one.  It is written that way here for the same reason and
+		 * NOT because the value can change -- `modulatevector` is the
+		 * only other writer of +0x2aa2 in the tree and it CALLS
+		 * `txmit` rather than being reachable from it.  Using the
+		 * first read is therefore an equivalent mutation, and it is
+		 * recorded as one with that call chain named as what is held
+		 * fixed.
+		 *
+		 * The shift count comes from a SIGN-extended `vect_idx` and
+		 * the increment from a zero-extended one.  `& 31` is the x86
+		 * shift-count mask made explicit, so that an out-of-range
+		 * index -- which only the caller can produce, since the store
+		 * below masks to 0..7 -- shifts by the same amount here as in
+		 * the object instead of being undefined.
+		 */
+		int idx = o->vect_idx;
+		unsigned short w = (unsigned short)*(short *)(m + OB_TXBITS);
+		unsigned nidx;
+
+		txmitdibit(o, (short)(w >> ((2 * idx) & 31)));
+
+		nidx = ((unsigned)(unsigned short)o->vect_idx + 1) & 7;
+		o->vect_idx = (short)nidx;
+		if (nidx != 0)
+			return 0;
+
+		/* The word is spent: reset the transmitter and advance. */
+		o->prev_quadrant = 0;
+		o->seg_symcount = 0;
+		o->tx_scr_sr = 0;
+		o->k56flex_receiver = 4;
+		return 0;
+	}
+
+	case 4: {
+		/* The idle symbol.  See the note at the top of this file. */
+		int q;
+
+		if (o->short_382 == OB_CONSTEL_16) {
+			int d;
+
+			q = (short)V34scrambler((unsigned *)&o->tx_scr_sr,
+						1, 3, 2);
+			o->cur_quadrant = (short)q;
+			d = (short)V34scrambler((unsigned *)&o->tx_scr_sr,
+						1, 3, 2);
+			q = o->cur_quadrant;
+			o->txpoint.word = vect16[d + q * 4];
+		} else {
+			q = (short)V34scrambler((unsigned *)&o->tx_scr_sr,
+						1, 3, 2);
+			o->cur_quadrant = (short)q;
+			o->txpoint.word = vect4[q];
+		}
+
+		txmit(o);
+		/* Re-read: `txmit` is between the load and the store. */
+		o->seg_symcount = (short)((unsigned)(unsigned short)o->seg_symcount + 1);
+		return 0;
+	}
+
+	case 5: {
+		/*
+		 * MP, and the only arm that uses the full emitters: the bits
+		 * are the far end's message rather than a fixed pattern, so
+		 * they are scrambled and differentially encoded the way the
+		 * rest of the handshake is.
+		 */
+		int done = (short)k56->getK56FlexMpBits(&o->cur_quadrant);
+
+		if (o->short_382 == OB_CONSTEL_16)
+			txmitquadbit(o, o->cur_quadrant);
+		else
+			txmitdibit(o, o->cur_quadrant);
+
+		if (done == 0)
+			return 0;
+
+		/*
+		 * DEAD: `getK56FlexMpBits` is a stub returning 0.
+		 *
+		 * The state store is a compare-then-store in the object and
+		 * is written as one here.  It is indistinguishable from a
+		 * plain store by any test -- the value written is the value
+		 * compared against -- and the mutation that removes the
+		 * compare is listed as equivalent rather than as a gap.
+		 */
+		getMPrecvdBits((struct tagV34Object *)objp);
+		initdigital(o);
+		if (*(short *)(m + OB_TXSTATE) != V34HS_EXMIT)
+			*(short *)(m + OB_TXSTATE) = V34HS_EXMIT;
+		o->k56flex_receiver = 2;
+		return 0;
+	}
+	}
+
+	return 0;
+}
+
+
+/*
+ * ---------------------------------------------------------------------------
+ * VPcmV34Create, moved in from `v34pcmcreate.cpp`.  Its file-local maps that
+ * v34pcmmain.cpp already defines are dropped; the rest move with it.
+ */
+
+/*
+ * ---------------------------------------------------------------------------
+ * The maps, all of them repeated from `v34pcmmain.cpp` except the block this
+ * function adds.  See that file for the derivations of the shared ones.
+ */
+
+/*
+ * ---------------------------------------------------------------------------
+ * And what `VPcmV34Create` adds to the three maps above.  Same rule as the
+ * rest of the file: offset-named unless the object names the field itself.
+ *
+ * CFG_ANSPCM_LEVEL and CFG_UQTS ARE THE OBJECT'S OWN NAMES -- "VPcmV34Create:
+ * ANSpcm level index is %d" and "VPcmV34Create: Uqts index is %d" are printed
+ * out of exactly these two words.  Both are loaded as `int` (a plain 32-bit
+ * `mov`, not a `movswl`) and both are TRUNCATED TO SHORT at the one place
+ * they are used for anything, which is `enterChannelVerification`.
+ *
+ * CFG_QUICKCONNECT is bit 4 of the byte v34pcmmain already calls CFG_V92LITE
+ * for its sign bit and `VPcmV34Progress` reads bit 5 of: a third unrelated
+ * reader of one byte, which is why that byte still has no name as a whole.
+ */
+#define CFG_ANSPCM_LEVEL	0x0c
+#define CFG_UQTS		0x10
+#define CFG_TXMD		0x14		/* scaled by 2.4 into +0xabfc */
+#define CFG_F54			0x54		/* == 14 turns the filter on  */
+#define CFG_ENTRANCE		0x70		/* -1 HW, 1 on, anything off  */
+
+#define CFG_QUICKCONNECT	0x10		/* bit 4 of CFG_V92LITE       */
+
+/*
+ * The session object again.  SESS_PCMTYPE is the same `int` VPcmFloModem.h
+ * describes at +0x611c and `setPcmSessionType` writes; SESS_PCMV92 is the
+ * V.92 Phase 2 record POINTER at +0x612c, which is not SESS_PCM at +0x610c.
+ * SESS_ENTRANCE is the byte the three-way fork at the bottom of the function
+ * sets and the last diagnostic reads back -- "entrance filter applied".
+ */
+#define SESS_PCMTYPE		0x611c
+#define SESS_PCMV92		0x612c
+#define SESS_IIR		0x7f28		/* a GenericIIR<float,double> */
+#define SESS_ENTRANCE		0x7f5c
+
+/* Inside the V.92 Phase 2 record. */
+#define PCMV92_QUICK		0x10
+#define PCMV92_FLAG11		0x11
+#define PCMV92_COPIED		0x14		/* four bytes, +0x14..+0x17   */
+
+/*
+ * The K56flex object's A-law/mu-law selector at +0xc.  THE OBJECT NAMES IT:
+ * the one ungated `edprintf` in `VPcmV34Create` is "VPcmV34Main: it is
+ * K56Flex session type, (AorMu = %d)" and it prints this word back after
+ * storing it.  v34info.c reads `pac18 + 0xc` as an offset for the same reason
+ * K56_ENABLED is one -- K56FlexFloModem.h bounds the class at no members.
+ */
+#define K56_AORMU		0x0c
+
+/* The V.34 object's own, for the regions v34fsk.h leaves unmapped. */
+#define OB_F000C		0x000c
+#define OB_F0238		0x0238
+#define OB_F0248		0x0248		/* = 0xfffe8900               */
+#define OB_F0262		0x0262
+#define OB_BULK_RING		0x35b8		/* what `bulk_ring` points at */
+#define OB_FA248		0xa248
+#define OB_FAA80		0xaa80
+#define OB_FABC4		0xabc4
+#define OB_FABD4		0xabd4		/* three ints, then two shorts */
+#define OB_FABD8		0xabd8
+#define OB_FABDC		0xabdc
+#define OB_FABE4		0xabe4
+#define OB_FABE6		0xabe6
+#define OB_FABFC		0xabfc
+#define OB_FAC12		0xac12
+#define OB_FAC14		0xac14
+#define OB_FAC17		0xac17
+
+/* Inside `struct v34_receiver`, which v34fsk.h leaves as padding at +0x238. */
+#define RX_F238			0x0238
+
+/*
+ * ---------------------------------------------------------------------------
+ * VPcmV34Create -- wipe the V.34 object, decide which of five session types it
+ * is going to be, and hand it to the handshake.
+ *
+ * WHY IT IS IN THIS FILE AND NOT IN v34pcmif.c BESIDE THE OTHER `VPcmV34*`
+ * EXPORTS.  It calls FIVE C++ MEMBER functions -- `VPcmFloModem::externalReset`,
+ * `K56FlexFloModem::externalReset` and `::setMinMaxRates`,
+ * `V90ConstellationDesigner::setMinMaxRates`,
+ * `V90Demodulator::enterChannelVerification`, `V92EchoCanceller::setEchoDelay`
+ * and `GenericIIR<float,double>::reset` -- and a member has a `this` and no
+ * unmangled form to name, so a C translation unit cannot reach one whatever
+ * the link line says (CLAUDE.md's trap, and finding F711's three conditions).
+ * `VPcmV34InitiateRetrain` above is here for the weaker version of the same
+ * reason and this is the strong one.  `tools/tuattrib.py` has nothing to say
+ * about this symbol; the placement rests on that constraint plus the
+ * interleaving v34pcmif.c already records, not on an attribution.
+ *
+ * FIVE ARGUMENTS (finding F1119, correcting 1117's prologue read).  `0x50(%esp)`
+ * is read at five sites and `vpcm_create` pushes five slots; the fifth is the
+ * session type and it is the function's primary dispatch.
+ *
+ *     obj          the V.34 object, at root +0x2c
+ *     side         0 or 1; becomes +0x359c's 0x65 / 0x66, but see below
+ *     ptc          straight into +0x8, and read by nothing here
+ *     runtime      the negotiated configuration, kept at +0xac3c
+ *     sessionType  0..4, and `vpcm_create` can only pass 0, 1 or 2
+ *
+ * IT ALWAYS RETURNS 0.  Both `ret`s are reached by `xor %eax,%eax`, so
+ * `vpcm_create`'s `test %eax,%eax / jne` failure path is dead.
+ *
+ * THE SIDE-TO-0x359C POLARITY IS NOT ONE RULE.  Session types 1 and 2 invert
+ * the flag before the common store, so they map side 0 to 0x66 where types 0,
+ * 3 and 4 map it to 0x65.  A single rule would be wrong for three of the five.
+ *
+ * THE TWO POINTERS THE MEMSET WOULD DESTROY are read out first and put back:
+ * +0x3548 (the `VPcmFloModem`) and +0xac18 (the `K56FlexFloModem`).  +0xac3c
+ * is not one of them -- it is the argument, and is stored fresh.
+ *
+ * THE SECOND MEMSET IS REDUNDANT AND IS THE OBJECT'S.  0x264 + 0x79c is
+ * 0xa00, entirely inside the 0xac4c the first one already cleared.  It is
+ * transcribed because it is there; `sizeof(struct v34_receiver)` IS 0x79c,
+ * which is what says the second one is the receiver rather than a run of
+ * bytes that happens to start there.
+ *
+ * ARMS 3 AND 4 ARE UNREACHABLE FROM WITHIN THIS OBJECT -- deviation D149, and
+ * finding F1119 reaches it a third way: `objdump -r` finds exactly one
+ * relocation against this symbol, and `vpcm_create` computes its session type
+ * as `(x == 0x5c) ? 2 : (x == 0x5a) ? 1 : 0`.  They are written out because a
+ * reconstruction has to agree on them, and `t_vpcmcreate.c` sweeps them.
+ *
+ * A NEGATIVE SESSION TYPE TAKES THE SAME ARM AS 0: the dispatch's second test
+ * is a signed `jle`, so `switch` with 0 in the default arm is the wrong shape
+ * and 0 has to share the default's body.
+ *
+ * +0x2218 IS LEFT AT 0.  `v34handshakinit` clears it and nothing here puts it
+ * back; `VPcmV34InitiateRetrain` is what writes 2.  Finding F806 names that as
+ * a cost for a downstream handshake fixture, not a defect here.
+ */
+extern "C" int
+VPcmV34Create(void *objp, int side, int ptc, void *runtime, int sessionType)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	unsigned char *m = (unsigned char *)obj;
+	unsigned char *cfg = (unsigned char *)runtime;
+	unsigned char *sess = (unsigned char *)obj->p3548;
+	unsigned char *k56 = (unsigned char *)obj->pac18;
+	struct v34_receiver *rx = (struct v34_receiver *)(m + OB_RECEIVER);
+	unsigned char *v92;
+	/*
+	 * All three are read BEFORE the memset, out of `runtime` rather than
+	 * out of the object, so the memset cannot reach them -- but the object
+	 * still keeps them in stack slots across it, and the two `int`s are
+	 * re-read as SHORTS at the one place they are used.
+	 */
+	int quick = (cfg[CFG_V92LITE] & CFG_QUICKCONNECT) != 0;
+	int ansLevel = *(const int *)(cfg + CFG_ANSPCM_LEVEL);
+	int uqts = *(const int *)(cfg + CFG_UQTS);
+
+	/*
+	 * FIVE SEPARATE GATES AND NOT ONE.  Each re-loads `dsplibs_debug_level`
+	 * because the call between them could have changed it, which is what
+	 * the object does; a single `if` round all five would be one test.
+	 */
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("VPcmV34Create: quick connect indication"
+				     " from phase1 = %d\r\n", quick);
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("VPcmV34Create: Uqts index is %d\r\n",
+				     uqts);
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("VPcmV34Create: ANSpcm level index is"
+				     " %d\r\n", ansLevel);
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("VPcmV34Create, initial Session Type ="
+				     " %d\n", sessionType);
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("RX at %lX\n", (unsigned long)rx);
+
+	sysdep_memset(obj, 0, VPCM_V34_BYTES);
+	sysdep_memset(rx, 0, sizeof(struct v34_receiver));
+
+	obj->pac18 = k56;
+	*(short *)(m + OB_FAA80) = 1;
+	obj->pac3c = runtime;
+	obj->p3548 = sess;
+
+	V34InitializeImplementationSpecific(obj);
+
+	obj->far_echo_enable = 1;
+	obj->bulk_tail = 0;
+	obj->bulk_head = 0;
+	obj->bulk_ring = (short *)(m + OB_BULK_RING);
+	obj->bulk_len = 0x2580;
+
+	*(int *)(m + OB_FABD8) = 0;
+	*(int *)(m + OB_FABDC) = 0;
+	obj->moh_holdtime_code = 0;
+	obj->short_abe2 = 0;
+	*(short *)(m + OB_FABE4) = 0;
+	*(short *)(m + OB_FABE6) = 0;
+	obj->short_35a4 = 0;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("On Create: Setting desired TX MD"
+				     " (%d mSec)!\n", (int)obj->short_35a4);
+
+	/*
+	 * `x * 2.4`, and the object spells it as an unsigned divide of `x * 24`
+	 * by ten -- `mul $0xcccccccd` with `shr $3` on the high half, which is
+	 * GCC's divide-by-ten and not a fixed-point scale.  Verified
+	 * numerically rather than read off.
+	 */
+	*(short *)(m + OB_FABFC) =
+		(short)((*(const unsigned int *)(cfg + CFG_TXMD) * 24u) / 10u);
+
+	/*
+	 * The V.92 record is re-loaded between the two byte stores, which is
+	 * what the object does and is not an optimisation this file may fold:
+	 * nothing says the two loads have to give the same pointer.
+	 */
+	v92 = *(unsigned char **)(sess + SESS_PCMV92);
+	v92[PCMV92_QUICK] = 0;
+	v92 = *(unsigned char **)(sess + SESS_PCMV92);
+	v92[PCMV92_FLAG11] = 0;
+	*(int *)(sess + SESS_PCMTYPE) = 0;
+
+	*(short *)(m + OB_FABC4) = 0;
+	obj->local_v92 = 0;
+	obj->remote_v92 = 0;
+	obj->local_short = 0;
+	obj->is_short = 0;
+	obj->short_abce = 0;
+	obj->short_abd0 = 0;
+	obj->short_abd2 = 0;
+	*(short *)(m + OB_FABD4) = 0;
+
+	obj->status = 0;
+	obj->progress = 0;
+	obj->k56flex_receiver = 0;
+
+	/*
+	 * THE DISPATCH.  Not a `switch` with 0 in `default`: the object tests
+	 * `== 2`, then a SIGNED `jle`, then `== 3` and `== 4`, so 0, every
+	 * negative value and everything above 4 share one body.
+	 */
+	if (sessionType == 2) {
+		*(int *)(k56 + K56_AORMU) = 0;
+		obj->v90_receiver = 1;
+		((VPcmFloModem *)sess)->externalReset();
+
+		obj->local_v92 = 1;
+		obj->local_short = (short)quick;
+
+		/*
+		 * The four bytes `V34GiveINFO1aBits` copied INTO the session
+		 * object at +0x14..+0x16, read back out of it -- and a fourth
+		 * at +0x17 that no writer reconstructed here accounts for.
+		 */
+		v92 = *(unsigned char **)(sess + SESS_PCMV92);
+		*(short *)(m + OB_FABD4) = v92[PCMV92_COPIED + 3];
+		obj->short_abd2 = v92[PCMV92_COPIED + 2];
+		obj->short_abd0 = v92[PCMV92_COPIED + 1];
+		obj->short_abce = v92[PCMV92_COPIED + 0];
+		v92[PCMV92_FLAG11] = 1;
+
+		v92 = *(unsigned char **)(sess + SESS_PCMV92);
+		v92[PCMV92_QUICK] = (unsigned char)quick;
+
+		/*
+		 * Channel verification only when the far end asked for a quick
+		 * connect AND we are the side that was passed 0.  The two
+		 * `int`s captured at the top go in as SHORTS here, which is
+		 * the only place either is used for anything.
+		 */
+		if (quick != 0 && side == 0) {
+			obj->status = 4;
+			(*(V90Demodulator **)(sess + SESS_DEMOD))
+				->enterChannelVerification((short)uqts,
+							   (short)ansLevel);
+			obj->progress = 10;
+		}
+
+		if (side == 0) {
+			side = 1;
+		} else {
+			*(int *)(sess + SESS_PCMTYPE) = 1;
+			side = 0;
+		}
+	} else if (sessionType == 1) {
+		*(int *)(k56 + K56_AORMU) = 0;
+		obj->v90_receiver = 1;
+		side = (side == 0);
+		((VPcmFloModem *)sess)->externalReset();
+	} else if (sessionType == 3 || sessionType == 4) {
+		*(int *)(k56 + K56_AORMU) = (sessionType == 4);
+		obj->v90_receiver = 0;
+
+		/*
+		 * THE ONE UNGATED PRINT IN THE FUNCTION.  Through `edprintf`
+		 * and behind no level test at all, where the other thirteen
+		 * are `dsplibs_debug_printf` behind `DSPLIB_DEBUG_ON()`.  The
+		 * same inconsistency v34pcmif.c records for
+		 * `VPcmV34SetTxScale`, and the original's.
+		 */
+		edprintf("VPcmV34Main: it is K56Flex session type,"
+			 " (AorMu = %d)\r\n", *(const int *)(k56 + K56_AORMU));
+
+		obj->k56flex_receiver = 1;
+		((K56FlexFloModem *)k56)->externalReset();
+	} else {
+		*(int *)(k56 + K56_AORMU) = 0;
+		obj->v90_receiver = 0;
+	}
+
+	obj->role = (short)(side != 0 ? 0x66 : 0x65);
+
+	obj->ptc = ptc;
+	obj->rx_n = 0;
+	obj->tx_n = 0;
+	obj->tx_rd = 0;
+	obj->rate_min = 0;
+	obj->rate_max = RATE_INDEX_MAX;
+	obj->rate_now = 0;
+	obj->rate_want = -1;
+	obj->rx_energy_floor = 0;
+	*(int *)(m + OB_F0234) = 0;
+	*(int *)(m + OB_F0238) = 0;
+	*(int *)(m + OB_F0248) = (int)0xfffe8900;
+	*(short *)(m + OB_FORCE_LOW_BAUD) = 0;
+	rx->agc_start_gain = 0x600;
+	*(int *)((unsigned char *)rx + RX_F238) = 0;
+	*(int *)(m + OB_F000C) = 0;
+	obj->nof_tx_bits = 0;
+
+	v34handshakinit(obj, 0);
+
+	/*
+	 * +0x35a4 IS RE-READ HERE, AFTER THE HANDSHAKE INITIALISER, so this is
+	 * not the zero stored above: the object emits a `movswl` immediately
+	 * after the call and carries whatever `v34handshakinit` left.  336 is
+	 * `x * 21 * 16`, two `lea`s and a shift, and the source short is
+	 * signed, so a negative one gives a result below 10000.
+	 */
+	*(short *)(m + OB_F0254) =
+		(short)(336 * (int)*(const short *)(m + OB_F35A4) + 10000);
+	obj->hist2_idx = 0;
+	*(short *)(m + OB_F0254 + 2) = 0;
+	*(int *)(m + OB_F0254 + 4) = 0;
+
+	/*
+	 * The 32 bytes at +0xac1c, byte for byte the same block
+	 * `VPcmV34InitiateRetrain` writes; its comment is the derivation and
+	 * is not repeated.  +0xac2e is again the one short left alone.
+	 */
+	{
+		unsigned char *st = m + OB_FAC1C;
+		short role = obj->role;
+
+		*(short *)(st + 0x00) = 0;
+		*(short *)(st + 0x02) = 0;
+		*(short *)(st + 0x04) = 0;
+		*(short *)(st + 0x06) = 0;
+		*(int *)(st + 0x08) = 0;
+		*(int *)(st + 0x14) = 0;
+		*(int *)(st + 0x18) = 0;
+		*(int *)(st + 0x1c) = 0;
+
+		if (role == 0x65) {
+			*(short *)(st + 0x0c) = 0;
+			*(short *)(st + 0x0e) = 0;
+			*(short *)(st + 0x10) = (short)0x39c3;
+		} else if (role == 0x66) {
+			*(short *)(st + 0x0c) = (short)0x5a82;
+			*(short *)(st + 0x0e) = (short)0x55fc;
+			*(short *)(st + 0x10) = (short)0x39c3;
+		}
+	}
+
+	obj->rates_latched = 0;
+	obj->v90_timing_offset = 0;
+	m[OB_FAC17] = 0;
+	*(short *)(m + OB_F0262) = 1;
+	obj->tx_bps = 0;
+	obj->rx_bps = 0;
+	obj->rrn_local = 0;
+	obj->rrn_remote = 0;
+	*(short *)(m + OB_FAC12) = 0;
+	*(short *)(m + OB_FAC14) = 0;
+	obj->echo_decay_start = 0x7d0;
+	*(short *)(m + OB_FA248) = 0;
+	obj->echo_decay_fact = 0x7fdf;
+	obj->echo_beta = 2;
+
+	/*
+	 * THE RATE BLOCK, and it is `VPcmV34InitiateRetrain`'s to the
+	 * instruction -- same three arms in the same order, same unsigned
+	 * divide by 2400, same clamp ladder with `rate_max == 1` falling out
+	 * of the `else` rather than being tested separately.  Two functions,
+	 * one block; see that one for why each step is the shape it is.
+	 */
+	if (obj->v90_receiver != 0 && *(const int *)(sess + SESS_GATE) != 0) {
+		V90ConstellationDesigner *cd;
+
+		cfg = (unsigned char *)obj->pac3c;
+		cd = *(V90ConstellationDesigner **)
+		     (*(unsigned char **)(sess + SESS_DEMOD) + DEMOD_DESIGNER);
+		cd->setMinMaxRates(*(const unsigned int *)(cfg + CFG_MIN_RATE),
+				   *(const unsigned int *)(cfg + CFG_MAX_RATE));
+	} else if (obj->k56flex_receiver != 0 && k56[K56_ENABLED] != 0) {
+		cfg = (unsigned char *)obj->pac3c;
+		((K56FlexFloModem *)k56)->setMinMaxRates(
+			*(const int *)(cfg + CFG_MIN_RATE),
+			*(const int *)(cfg + CFG_MAX_RATE));
+	} else {
+		cfg = (unsigned char *)obj->pac3c;
+
+		obj->rate_min = (int)(*(const unsigned int *)
+				      (cfg + CFG_MIN_RATE) / RATE_STEP);
+		obj->rate_max = (int)(*(const unsigned int *)
+				      (cfg + CFG_MAX_RATE) / RATE_STEP);
+
+		if (obj->rate_min > RATE_INDEX_MAX)
+			obj->rate_min = RATE_INDEX_MAX;
+		if (obj->rate_max < obj->rate_min)
+			obj->rate_max = obj->rate_min;
+		if (obj->rate_max > RATE_INDEX_MAX)
+			obj->rate_max = RATE_INDEX_MAX;
+		else if (obj->rate_max == 1)
+			*(short *)(m + OB_FORCE_LOW_BAUD) = 1;
+	}
+
+	cfg = (unsigned char *)obj->pac3c;
+
+	/* The disconnect threshold, indexed as `VPcmV34InitiateRetrain`. */
+	{
+		int level = *(const int *)(cfg + CFG_MIN_LEVEL);
+		unsigned idx = (unsigned)level + 0x30u;
+		int thresh;
+
+		if (idx > 7u)
+			idx = 3u;
+		thresh = V34DisconnectThreshTable[idx];
+		obj->rx_energy_floor = thresh;
+
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("VPcmV34Main: minLevel given is "
+					     "%d , minSigLevel set to %d\n",
+					     level, thresh);
+	}
+
+	*(int *)(m + OB_F0234) = 0;
+
+	{
+		int delay = *(const int *)(cfg + CFG_FILT_DELAY);
+		int biased = (int)((unsigned)delay + 2u);
+
+		*(short *)(m + OB_FILT_DELAY) = (short)((biased >> 2) + 0x22);
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V34 filtdelay set to %d "
+					     "(params initial delay = %d)\n",
+					     (int)*(short *)(m + OB_FILT_DELAY),
+					     delay);
+	}
+
+	{
+		int ext = *(const int *)(cfg + CFG_EXT_DELAY);
+
+		obj->dmadelay = (short)(0x610u - (unsigned)ext);
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V34FEC, V34dmadelay set to %d, " "(ext delay=%d)\n",
+					     (int)obj->dmadelay, ext);
+	}
+
+	((V92EchoCanceller *)(sess + SESS_ECHO))->setEchoDelay(
+		(unsigned)*(const int *)(cfg + CFG_EXT_DELAY) + 0x68u);
+
+	/*
+	 * THE ENTRANCE FILTER, three ways, and only the first two are named by
+	 * their own diagnostics.  -1 means "ask the hardware", which here is
+	 * one `int` of the configuration compared against 14; 1 forces it on;
+	 * ANYTHING ELSE forces it off, which is why this is not a `switch` --
+	 * the object decrements and tests, so 0 and 7 take the same arm.
+	 */
+	cfg = (unsigned char *)obj->pac3c;
+	{
+		int stream = *(const int *)(cfg + CFG_ENTRANCE);
+
+		if (stream == -1) {
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf("VPcmFlo: From Stream - " "Entrance Filter according"
+						     " to HW...\r\n");
+			cfg = (unsigned char *)obj->pac3c;
+			sess[SESS_ENTRANCE] = (unsigned char)
+				(*(const int *)(cfg + CFG_F54) == 14);
+		} else if (stream == 1) {
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf("VPcmFlo: From Stream - " "Entrance Filter forced "
+						     "enabled...\r\n");
+			sess[SESS_ENTRANCE] = 1;
+		} else {
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf("VPcmFlo: From Stream - " "Entrance Filter forced "
+						     "disabled...\r\n");
+			sess[SESS_ENTRANCE] = 0;
+		}
+	}
+
+	((GenericIIR<float, double> *)(sess + SESS_IIR))->reset();
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("VPcmFlo: YES! entrance filter applied ="
+				     " %d\r\n", (int)sess[SESS_ENTRANCE]);
+
+	return 0;
+}
+
+
+/*
+ * ---------------------------------------------------------------------------
+ * Layout, pinned.  Same argument as v34pcmmain.cpp's block: the fields this
+ * file reaches by offset sit in regions that are otherwise padding, so a field
+ * that drifted would compile silently.  This function writes forty-odd NAMED
+ * fields as well, and every one of them is asserted here -- a rename that
+ * moved one would still compile and would be caught only by the differential
+ * sweep, which is the wrong place to find out.  The offsets are the
+ * disassembly's, not v34fsk.h's, so this is a check and not a restatement.
+ */
+#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+
+#define V34PCMCREATE_ASSERT(name, field, off) \
+	typedef char v34pcmcreate_off_##name[ \
+		(__builtin_offsetof(struct v34_object, field) == (off)) \
+		? 1 : -1]
+
+V34PCMCREATE_ASSERT(status,   status,           0x0000);
+V34PCMCREATE_ASSERT(progress,    progress,            0x0004);
+V34PCMCREATE_ASSERT(ptc,      ptc,              0x0008);
+V34PCMCREATE_ASSERT(nofbits,  nof_tx_bits,      0x0010);
+V34PCMCREATE_ASSERT(rxn,      rx_n,             0x0114);
+V34PCMCREATE_ASSERT(txn,      tx_n,             0x0218);
+V34PCMCREATE_ASSERT(txrd,     tx_rd,            0x021c);
+V34PCMCREATE_ASSERT(rmin,     rate_min,         0x0220);
+V34PCMCREATE_ASSERT(rmax,     rate_max,         0x0224);
+V34PCMCREATE_ASSERT(rnow,     rate_now,         0x0228);
+V34PCMCREATE_ASSERT(rwant,    rate_want,        0x022c);
+V34PCMCREATE_ASSERT(floor,    rx_energy_floor,  0x0230);
+V34PCMCREATE_ASSERT(v90rx,    v90_receiver,     0x024c);
+V34PCMCREATE_ASSERT(k56rx,    k56flex_receiver, 0x0250);
+V34PCMCREATE_ASSERT(dmadly,   dmadelay,             0x025c);
+V34PCMCREATE_ASSERT(hist2_idx,    hist2_idx,            0x2aa6);
+V34PCMCREATE_ASSERT(p3548,    p3548,            0x3548);
+V34PCMCREATE_ASSERT(echo_decay_start,    echo_decay_start,            0x3554);
+V34PCMCREATE_ASSERT(echo_decay_fact,    echo_decay_fact,            0x3558);
+V34PCMCREATE_ASSERT(echo_beta,    echo_beta,            0x355c);
+V34PCMCREATE_ASSERT(role,    role,            0x359c);
+V34PCMCREATE_ASSERT(short_35a4,    short_35a4,            0x35a4);
+V34PCMCREATE_ASSERT(bhead,    bulk_head,        0x35a8);
+V34PCMCREATE_ASSERT(btail,    bulk_tail,        0x35ac);
+V34PCMCREATE_ASSERT(bring,    bulk_ring,        0x35b0);
+V34PCMCREATE_ASSERT(blen,     bulk_len,         0x35b4);
+V34PCMCREATE_ASSERT(far_echo_enable,    far_echo_enable,            0xa23c);
+V34PCMCREATE_ASSERT(filtdly,  filtdelay,        0xaa7c);
+V34PCMCREATE_ASSERT(lv92,     local_v92,        0xabc6);
+V34PCMCREATE_ASSERT(rv92,     remote_v92,       0xabc8);
+V34PCMCREATE_ASSERT(lshort,   local_short,      0xabca);
+V34PCMCREATE_ASSERT(isshort,  is_short,         0xabcc);
+V34PCMCREATE_ASSERT(short_abce,    short_abce,            0xabce);
+V34PCMCREATE_ASSERT(short_abd0,    short_abd0,            0xabd0);
+V34PCMCREATE_ASSERT(short_abd2,    short_abd2,            0xabd2);
+V34PCMCREATE_ASSERT(moh_holdtime_code,    moh_holdtime_code,            0xabe0);
+V34PCMCREATE_ASSERT(short_abe2,    short_abe2,            0xabe2);
+V34PCMCREATE_ASSERT(txbps,    tx_bps,           0xac04);
+V34PCMCREATE_ASSERT(rxbps,    rx_bps,           0xac08);
+V34PCMCREATE_ASSERT(v90_timing_offset,    v90_timing_offset,            0xac0c);
+V34PCMCREATE_ASSERT(rrnl,     rrn_local,        0xac0e);
+V34PCMCREATE_ASSERT(rrnr,     rrn_remote,       0xac10);
+V34PCMCREATE_ASSERT(latched,  rates_latched,    0xac16);
+V34PCMCREATE_ASSERT(pac18,    pac18,            0xac18);
+V34PCMCREATE_ASSERT(pac3c,    pac3c,            0xac3c);
+
+/*
+ * The receiver, reached as `obj + OB_RECEIVER`, and the one field of it this
+ * function names.  `sizeof` is asserted too: it IS the second memset's length,
+ * and if it stopped being 0x79c the memset would silently clear a different
+ * span (D195).
+ */
+typedef char v34pcmcreate_rxsize[
+	((int)sizeof(struct v34_receiver) == 0x79c) ? 1 : -1];
+typedef char v34pcmcreate_rxf262[
+	((int)__builtin_offsetof(struct v34_receiver, agc_start_gain) == 0x262)
+	? 1 : -1];
+
+/* And the V.34 object's own extent, which is the first memset's length. */
+typedef char v34pcmcreate_objlen[
+	((int)VPCM_V34_BYTES == 0xac4c) ? 1 : -1];
 
 #endif /* 32-bit */

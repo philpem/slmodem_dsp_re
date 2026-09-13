@@ -16,6 +16,13 @@
 extern const int ref_V34DisconnectThreshTable[V34_DISCONNECT_THRESH_ENTRIES]
 	asm("ref_V34DisconnectThreshTable");
 
+/*
+ * `V34DisconnectThreshTable` is FILE-LOCAL in the object, so v34pcmmain.cpp
+ * defines it `static` and v34pcm_tables.h no longer declares it; the test
+ * tier links a globalized copy (tools/testvisible.py).
+ */
+extern const int V34DisconnectThreshTable[V34_DISCONNECT_THRESH_ENTRIES];
+
 int
 main(void)
 {

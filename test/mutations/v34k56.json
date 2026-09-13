@@ -11,18 +11,21 @@
  },
  {
   "label": "the idle symbol encodes differentially against prev_quadrant",
-  "find": "\t\t\to->txpoint.word = vect4[q];",
-  "replace": "\t\t\to->txpoint.word =\n\t\t\t\tvect4[(q + (unsigned short)o->prev_quadrant) & 3];"
+  "find": "\t\t\t\t\t\t1, 3, 2);\n\t\t\to->cur_quadrant = (short)q;\n\t\t\to->txpoint.word = vect4[q];",
+  "replace": "\t\t\t\t\t\t1, 3, 2);\n\t\t\to->cur_quadrant = (short)q;\n\t\t\to->txpoint.word =\n\t\t\t\tvect4[(q + (unsigned short)o->prev_quadrant) & 3];",
+  "note": "Anchor carries 2 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
   "label": "the idle symbol writes the quadrant back to prev_quadrant",
-  "find": "\t\t\to->cur_quadrant = (short)q;\n\t\t\to->txpoint.word = vect4[q];",
-  "replace": "\t\t\to->cur_quadrant = (short)q;\n\t\t\to->prev_quadrant = (short)q;\n\t\t\to->txpoint.word = vect4[q];"
+  "find": "\t\t\t\t\t\t1, 3, 2);\n\t\t\to->cur_quadrant = (short)q;\n\t\t\to->txpoint.word = vect4[q];",
+  "replace": "\t\t\t\t\t\t1, 3, 2);\n\t\t\to->cur_quadrant = (short)q;\n\t\t\to->prev_quadrant = (short)q;\n\t\t\to->txpoint.word = vect4[q];",
+  "note": "Anchor carries 1 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
   "label": "the quadbit index is q + d * 4 rather than d + q * 4",
-  "find": "vect16[d + q * 4]",
-  "replace": "vect16[q + d * 4]"
+  "find": "\t\t\t\t\t\t1, 3, 2);\n\t\t\tq = o->cur_quadrant;\n\t\t\to->txpoint.word = vect16[d + q * 4]",
+  "replace": "\t\t\t\t\t\t1, 3, 2);\n\t\t\tq = o->cur_quadrant;\n\t\t\to->txpoint.word = vect16[q + d * 4]",
+  "note": "Anchor carries 2 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
   "label": "the data flag test is inverted",
@@ -46,8 +49,9 @@
  },
  {
   "label": "case 3's wrap leaves prev_quadrant alone",
-  "find": "\t\to->prev_quadrant = 0;\n\t\to->seg_symcount = 0;",
-  "replace": "\t\to->seg_symcount = 0;"
+  "find": "\t\t/* The word is spent: reset the transmitter and advance. */\n\t\to->prev_quadrant = 0;\n\t\to->seg_symcount = 0;",
+  "replace": "\t\t/* The word is spent: reset the transmitter and advance. */\n\t\to->seg_symcount = 0;",
+  "note": "Anchor carries 1 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
   "label": "the word at +0x25d6 is read signed",
@@ -61,18 +65,21 @@
  },
  {
   "label": "case 5 picks the emitter the other way round",
-  "find": "\t\tif (o->short_382 == OB_CONSTEL_16)\n\t\t\ttxmitquadbit(o, o->cur_quadrant);\n\t\telse\n\t\t\ttxmitdibit(o, o->cur_quadrant);",
-  "replace": "\t\tif (o->short_382 == OB_CONSTEL_16)\n\t\t\ttxmitdibit(o, o->cur_quadrant);\n\t\telse\n\t\t\ttxmitquadbit(o, o->cur_quadrant);"
+  "find": "\t\tint done = (short)k56->getK56FlexMpBits(&o->cur_quadrant);\n\n\t\tif (o->short_382 == OB_CONSTEL_16)\n\t\t\ttxmitquadbit(o, o->cur_quadrant);\n\t\telse\n\t\t\ttxmitdibit(o, o->cur_quadrant);",
+  "replace": "\t\tint done = (short)k56->getK56FlexMpBits(&o->cur_quadrant);\n\n\t\tif (o->short_382 == OB_CONSTEL_16)\n\t\t\ttxmitdibit(o, o->cur_quadrant);\n\t\telse\n\t\t\ttxmitquadbit(o, o->cur_quadrant);",
+  "note": "Anchor carries 2 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
   "label": "the Ja dibit comes from prev_quadrant rather than cur_quadrant",
-  "find": "\t\ttxmitdibit(o, o->cur_quadrant);\n\t\tif (done == 0)",
-  "replace": "\t\ttxmitdibit(o, o->prev_quadrant);\n\t\tif (done == 0)"
+  "find": "\t\tint done = (short)k56->getK56FlexJaBits(&o->cur_quadrant);\n\n\t\ttxmitdibit(o, o->cur_quadrant);\n\t\tif (done == 0)",
+  "replace": "\t\tint done = (short)k56->getK56FlexJaBits(&o->cur_quadrant);\n\n\t\ttxmitdibit(o, o->prev_quadrant);\n\t\tif (done == 0)",
+  "note": "Anchor carries 2 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
   "label": "case 4's constellation test is inverted",
-  "find": "\t\tif (o->short_382 == OB_CONSTEL_16) {\n\t\t\tint d;",
-  "replace": "\t\tif (o->short_382 != OB_CONSTEL_16) {\n\t\t\tint d;"
+  "find": "\t\t/* The idle symbol.  See the note at the top of this file. */\n\t\tint q;\n\n\t\tif (o->short_382 == OB_CONSTEL_16) {\n\t\t\tint d;",
+  "replace": "\t\t/* The idle symbol.  See the note at the top of this file. */\n\t\tint q;\n\n\t\tif (o->short_382 != OB_CONSTEL_16) {\n\t\t\tint d;",
+  "note": "Anchor carries 3 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
   "label": "the shift count is not masked to five bits",
@@ -83,10 +90,11 @@
  },
  {
   "label": "vect4 is indexed masked",
-  "find": "vect4[q];",
-  "replace": "vect4[q & 3];",
+  "find": "\t\t\t\t\t\t1, 3, 2);\n\t\t\to->cur_quadrant = (short)q;\n\t\t\to->txpoint.word = vect4[q];",
+  "replace": "\t\t\t\t\t\t1, 3, 2);\n\t\t\to->cur_quadrant = (short)q;\n\t\t\to->txpoint.word = vect4[q & 3];",
   "equivalent": true,
-  "why": "V34scrambler with nbits == 2 returns (reg >> 29) & 3, so the index is already 0..3 and `& 3` cannot change it.  HELD FIXED: that return contract, which is V34RX.c's and not this function's -- the object indexes unmasked, so the mask is written here as a mutation and not as code.  This is an equivalence over the whole range V34scrambler can produce, not over the sample the sweep happens to hit."
+  "why": "V34scrambler with nbits == 2 returns (reg >> 29) & 3, so the index is already 0..3 and `& 3` cannot change it.  HELD FIXED: that return contract, which is V34RX.c's and not this function's -- the object indexes unmasked, so the mask is written here as a mutation and not as code.  This is an equivalence over the whole range V34scrambler can produce, not over the sample the sweep happens to hit.",
+  "note": "Anchor carries 2 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
   "label": "the Ja arm does not consult the bit source at all",
@@ -146,23 +154,26 @@
  },
  {
   "label": "DEAD: the MP completion arm writes the wrong txstate",
-  "find": "\t\t\t*(short *)(m + OB_TXSTATE) = V34HS_EXMIT;",
-  "replace": "\t\t\t*(short *)(m + OB_TXSTATE) = V34HS_DATAXMIT;",
+  "find": "\t\t * compare is listed as equivalent rather than as a gap.\n\t\t */\n\t\tgetMPrecvdBits((struct tagV34Object *)objp);\n\t\tinitdigital(o);\n\t\tif (*(short *)(m + OB_TXSTATE) != V34HS_EXMIT)\n\t\t\t*(short *)(m + OB_TXSTATE) = V34HS_EXMIT;",
+  "replace": "\t\t * compare is listed as equivalent rather than as a gap.\n\t\t */\n\t\tgetMPrecvdBits((struct tagV34Object *)objp);\n\t\tinitdigital(o);\n\t\tif (*(short *)(m + OB_TXSTATE) != V34HS_EXMIT)\n\t\t\t*(short *)(m + OB_TXSTATE) = V34HS_DATAXMIT;",
   "equivalent": true,
-  "why": "The MP completion arm is dominated by a nonzero return from getK56FlexMpBits, whose exact body always returns zero without side effects.  Consequently neither transmit-state value is written in any execution of the fixed linked blob."
+  "why": "The MP completion arm is dominated by a nonzero return from getK56FlexMpBits, whose exact body always returns zero without side effects.  Consequently neither transmit-state value is written in any execution of the fixed linked blob.",
+  "note": "Anchor carries 5 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
   "label": "DEAD AND EQUIVALENT: the MP arm's compare-then-store is a store",
-  "find": "\t\tif (*(short *)(m + OB_TXSTATE) != V34HS_EXMIT)\n\t\t\t*(short *)(m + OB_TXSTATE) = V34HS_EXMIT;",
-  "replace": "\t\t*(short *)(m + OB_TXSTATE) = V34HS_EXMIT;",
+  "find": "\t\t * compare is listed as equivalent rather than as a gap.\n\t\t */\n\t\tgetMPrecvdBits((struct tagV34Object *)objp);\n\t\tinitdigital(o);\n\t\tif (*(short *)(m + OB_TXSTATE) != V34HS_EXMIT)\n\t\t\t*(short *)(m + OB_TXSTATE) = V34HS_EXMIT;",
+  "replace": "\t\t * compare is listed as equivalent rather than as a gap.\n\t\t */\n\t\tgetMPrecvdBits((struct tagV34Object *)objp);\n\t\tinitdigital(o);\n\t\t*(short *)(m + OB_TXSTATE) = V34HS_EXMIT;",
   "equivalent": true,
-  "why": "Independently of reachability, both forms leave ordinary writable nonvolatile storage equal to V34HS_EXMIT.  In this blob the containing MP completion arm is also unreachable because getK56FlexMpBits always returns zero.  The compare-then-store spelling remains because it is the object's spelling."
+  "why": "Independently of reachability, both forms leave ordinary writable nonvolatile storage equal to V34HS_EXMIT.  In this blob the containing MP completion arm is also unreachable because getK56FlexMpBits always returns zero.  The compare-then-store spelling remains because it is the object's spelling.",
+  "note": "Anchor carries 4 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
   "label": "DEAD: the MP completion arm skips initdigital",
-  "find": "\t\tinitdigital(o);",
-  "replace": "\t\t(void)0;",
+  "find": "\t\t * compare is listed as equivalent rather than as a gap.\n\t\t */\n\t\tgetMPrecvdBits((struct tagV34Object *)objp);\n\t\tinitdigital(o);",
+  "replace": "\t\t * compare is listed as equivalent rather than as a gap.\n\t\t */\n\t\tgetMPrecvdBits((struct tagV34Object *)objp);\n\t\t(void)0;",
   "equivalent": true,
-  "why": "The call sits only in the MP completion arm, dominated by getK56FlexMpBits returning nonzero.  That getter's exact three-byte body always returns zero, so neither initdigital nor its omission is reachable in the fixed linked blob."
+  "why": "The call sits only in the MP completion arm, dominated by getK56FlexMpBits returning nonzero.  That getter's exact three-byte body always returns zero, so neither initdigital nor its omission is reachable in the fixed linked blob.",
+  "note": "Anchor carries 3 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  }
 ]

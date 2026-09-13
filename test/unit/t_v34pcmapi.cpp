@@ -99,6 +99,13 @@ void ref_V34InitializeImplementationSpecific(void *obj);
  */
 void VPcmV34InitMOH(void *obj, int message, unsigned char late,
 		    unsigned char flag);
+
+/*
+ * `V34DisconnectThreshTable` is FILE-LOCAL in the object, so v34pcmmain.cpp
+ * defines it `static` and v34pcm_tables.h no longer declares it; the test
+ * tier links a globalized copy (tools/testvisible.py).
+ */
+extern const int V34DisconnectThreshTable[V34_DISCONNECT_THRESH_ENTRIES];
 }
 
 /* --- object offsets ------------------------------------------------------- */
