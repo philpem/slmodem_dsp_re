@@ -31,17 +31,17 @@
  * CALLPROG_Create -- so two supervisors share one machine, which is fine only
  * because the tables are constant and every Create writes the same values.
  */
-unsigned char next_state_due_cptd[CALLPROG_STATES][CALLPROG_CPTD_EVENTS];
-unsigned char message_due_cptd[CALLPROG_STATES][CALLPROG_CPTD_EVENTS];
-unsigned char next_state_due_timeout[CALLPROG_STATES];
-unsigned char message_due_timeout[CALLPROG_STATES];
-unsigned char next_state_due_line_clear_timeout[CALLPROG_STATES];
-unsigned char message_due_line_clear_timeout[CALLPROG_STATES];
-int timeout_table[CALLPROG_STATES];
-int enable_line_clear_timeout[CALLPROG_STATES];
-unsigned char automode_table[CALLPROG_STATES];
-unsigned char toneiir_dialtone_table[CALLPROG_STATES];
-unsigned char toneiir_busy_table[CALLPROG_STATES];
+static unsigned char next_state_due_cptd[CALLPROG_STATES][CALLPROG_CPTD_EVENTS];
+static unsigned char message_due_cptd[CALLPROG_STATES][CALLPROG_CPTD_EVENTS];
+static unsigned char next_state_due_timeout[CALLPROG_STATES];
+static unsigned char message_due_timeout[CALLPROG_STATES];
+static unsigned char next_state_due_line_clear_timeout[CALLPROG_STATES];
+static unsigned char message_due_line_clear_timeout[CALLPROG_STATES];
+static int timeout_table[CALLPROG_STATES];
+static int enable_line_clear_timeout[CALLPROG_STATES];
+static unsigned char automode_table[CALLPROG_STATES];
+static unsigned char toneiir_dialtone_table[CALLPROG_STATES];
+static unsigned char toneiir_busy_table[CALLPROG_STATES];
 
 /*
  * Default timeouts, in seconds, .rodata+0x5d68.  Copied into the object and

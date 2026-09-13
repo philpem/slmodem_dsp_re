@@ -50,18 +50,13 @@
 /*
  * Three ways to leave a state, each with its own next-state and message:
  * the call-progress tone detector, a timeout, and a line-clear timeout.
+ *
+ * FILE-LOCAL IN THE OBJECT (`nm` gives each a lower-case `b`, the loader's
+ * BSS, or `d`), so all ten state tables below are `static` in Callprog.c and
+ * have no declarations here.  A differential test names them and reaches them
+ * because the test tier links a globalized copy of the reconstructed objects
+ * (tools/testvisible.py); the partial-link candidate keeps the LOCAL binding.
  */
-extern unsigned char next_state_due_cptd[CALLPROG_STATES][CALLPROG_CPTD_EVENTS];
-extern unsigned char message_due_cptd[CALLPROG_STATES][CALLPROG_CPTD_EVENTS];
-extern unsigned char next_state_due_timeout[CALLPROG_STATES];
-extern unsigned char message_due_timeout[CALLPROG_STATES];
-extern unsigned char next_state_due_line_clear_timeout[CALLPROG_STATES];
-extern unsigned char message_due_line_clear_timeout[CALLPROG_STATES];
-
-extern int timeout_table[CALLPROG_STATES];
-extern int enable_line_clear_timeout[CALLPROG_STATES];
-
-extern unsigned char automode_table[CALLPROG_STATES];
 
 /*
  * Which cadence detector each state listens to.  Both tables depend on
@@ -74,8 +69,6 @@ extern unsigned char automode_table[CALLPROG_STATES];
  * Either way only these two detectors are ever named, which is why
  * CALLPROG_Create builds two and never a ringback or congestion one.
  */
-extern unsigned char toneiir_dialtone_table[CALLPROG_STATES];
-extern unsigned char toneiir_busy_table[CALLPROG_STATES];
 
 /*
  * The supervisor's configuration: four words the caller builds on its stack.
