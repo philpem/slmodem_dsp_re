@@ -240,6 +240,28 @@ REF        := $(BUILD)/dsplibs_ref.o
 GLOBALS    := $(BUILD)/globals.txt
 SYMMAP     := $(BUILD)/symmap.txt
 
+#
+# THE MIRROR OF $(GLOBALS) FOR OUR OWN TREE.
+#
+# The reference keeps many tables and datapump entry points file-LOCAL, so the
+# reconstruction defines them `static` to match its defined-symbol records.  A
+# differential test that names one -- a table it compares element by element,
+# a `create`/`process` it drives directly -- then cannot link against the plain
+# object: a static definition in one object cannot satisfy another object's
+# undefined reference.  This is exactly the problem `symmap.py` solves for the
+# blob by globalizing its locals, and the solution here is the same: the test
+# binaries link a globalized COPY of each reconstructed object.  The partial
+# link is untouched -- it consumes $(OBJ_REPRO) itself, so the candidate keeps
+# the LOCAL binding the object has -- and `src/` carries no test-only text.
+#
+# The name list is generated, not hand-maintained: `testvisible.py` takes the
+# LOCAL symbols our objects define, keeps the ones unique across the whole tree
+# (a name in two translation units cannot be globalized), and keeps those a
+# test source mentions.  A miss would be an undefined reference at link time,
+# which is loud.
+TESTVISIBLE  := $(BUILD)/test_visible.txt
+TESTHOST_OBJ := $(patsubst $(BUILD)/repro/%.o,$(BUILD)/testhost/%.o,$(OBJ_REPRO))
+
 # dsplibs.o predates modern hardening defaults: it wants an executable stack
 # and has relocations in .rodata, which a PIE link cannot satisfy.  Both are
 # properties of the 2003 reference object, not of anything we build, so relax
@@ -341,6 +363,17 @@ $(BUILD)/repro/%.o: src/%.cpp Makefile
 	@mkdir -p $(dir $@)
 	$(CXX) $(ARCH32) $(FPFLAGS) $(CXXFLAGS) $(CXXMATHFLAGS) $(REPRODUCE) -c $< -o $@
 
+# The test-only globalized copies.  See the $(TESTVISIBLE) note above: the
+# partial link reads $(BUILD)/repro directly, so nothing here reaches the
+# candidate.  `objcopy` ignores a listed name an object does not define, so the
+# one tree-wide list applies to every object.
+$(TESTVISIBLE): tools/testvisible.py $(OBJ_REPRO)
+	@$(PYTHON) tools/testvisible.py --objects $(BUILD)/repro --tests test -o $@
+
+$(BUILD)/testhost/%.o: $(BUILD)/repro/%.o $(TESTVISIBLE) Makefile
+	@mkdir -p $(dir $@)
+	objcopy --globalize-symbols=$(TESTVISIBLE) $< $@
+
 # Linked with $(CC), not $(CXX): the C++ WE have written is -fno-exceptions
 # -fno-rtti with no virtuals and no new/delete, so nothing needs libstdc++ --
 # which is just as well, since the 32-bit one is often not installed alongside
@@ -395,7 +428,7 @@ TESTCXXFLAGS = $(shell cat test/unit/$(basename $(notdir $@)).cxxflags 2>/dev/nu
 # prerequisite-only rule.
 $(BUILD)/test/unit/t_dspmath.o: test/unit/t_dspmath.cxxflags
 
-$(BUILD)/test/%: $(BUILD)/test/unit/%.o $(OBJ_REPRO) $(HARNESS_OBJ) $(REF)
+$(BUILD)/test/%: $(BUILD)/test/unit/%.o $(TESTHOST_OBJ) $(HARNESS_OBJ) $(REF)
 	@mkdir -p $(dir $@)
 	$(CC) $(ARCH32) $(LDFLAGS) $(TESTLDFLAGS) -o $@ $^ -lm
 
@@ -982,8 +1015,8 @@ vendor:
 # its source and than every header -- so an unchanged tree relinks rather than
 # rebuilding.  `make period T=t_resampler` for one binary.
 #
-period: $(REF)
-	@REF=$(REF) tools/toolchain/period.sh
+period: $(REF) $(TESTVISIBLE)
+	@REF=$(REF) VISIBLE=$(TESTVISIBLE) tools/toolchain/period.sh
 
 # The period-toolchain build and the similarity ratchet.  NOT part of `phase`:
 #

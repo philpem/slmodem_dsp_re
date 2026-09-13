@@ -149,21 +149,45 @@ trap cleanup EXIT INT TERM
 # from that stage3's passwd file and makes the driver select its bootstrap
 # compiler.  Run that one image as root, then restore the bind mount's
 # ownership before returning.  The stock images keep the ordinary host UID.
-if [ "$IMG" = "$GENTOO_IMG" ]; then
-    docker run --rm --name "$NAME" --platform linux/386 \
-        -v "$PWD:/src" -v "$PWD/$OUT:/out" -w /src \
-        -e "SRC=$SRC" -e "CXXSRC=$CXXSRC" -e "TESTS=$TESTS" -e "J=$J" -e "REF=$REF" \
-        -e "KEEP=${KEEP:-}" -e "OUT_UID=$(id -u)" -e "OUT_GID=$(id -g)" \
-        "$IMG" sh -c '
-            sh /src/tools/toolchain/period_inner.sh
-            status=$?
-            chown -R "$OUT_UID:$OUT_GID" /out
-            exit "$status"
-        '
-else
-    docker run --rm --name "$NAME" --user "$(id -u):$(id -g)" \
-        --platform linux/386 -v "$PWD:/src" -v "$PWD/$OUT:/out" -w /src \
-        -e "SRC=$SRC" -e "CXXSRC=$CXXSRC" -e "TESTS=$TESTS" -e "J=$J" -e "REF=$REF" \
-        -e "KEEP=${KEEP:-}" \
-        "$IMG" sh /src/tools/toolchain/period_inner.sh
+run_stage() {
+    stage=$1
+    if [ "$IMG" = "$GENTOO_IMG" ]; then
+        docker run --rm --name "$NAME" --platform linux/386 \
+            -v "$PWD:/src" -v "$PWD/$OUT:/out" -w /src \
+            -e "SRC=$SRC" -e "CXXSRC=$CXXSRC" -e "TESTS=$TESTS" -e "J=$J" -e "REF=$REF" \
+            -e "KEEP=${KEEP:-}" -e "OUT_UID=$(id -u)" -e "OUT_GID=$(id -g)" \
+            -e "VISIBLE=${VISIBLE:-}" -e "STAGE=$stage" \
+            "$IMG" sh -c '
+                sh /src/tools/toolchain/period_inner.sh
+                status=$?
+                chown -R "$OUT_UID:$OUT_GID" /out
+                exit "$status"
+            '
+    else
+        docker run --rm --name "$NAME" --user "$(id -u):$(id -g)" \
+            --platform linux/386 -v "$PWD:/src" -v "$PWD/$OUT:/out" -w /src \
+            -e "SRC=$SRC" -e "CXXSRC=$CXXSRC" -e "TESTS=$TESTS" -e "J=$J" -e "REF=$REF" \
+            -e "KEEP=${KEEP:-}" -e "VISIBLE=${VISIBLE:-}" -e "STAGE=$stage" \
+            "$IMG" sh /src/tools/toolchain/period_inner.sh
+    fi
+}
+
+# COMPILE, then globalize on the HOST, then LINK.  Two container passes because
+# binutils 2.15 -- the period linker -- predates `objcopy --globalize-symbols`;
+# the modern host objcopy performs that step on the compiled objects, in a copy
+# under $OUT/testhost.  The mtime is preserved so the link stage's incremental
+# check (`KEEP`) still knows what moved.
+run_stage compile
+
+if [ -n "${VISIBLE:-}" ] && [ -s "$VISIBLE" ] && [ -s "$OUT/objs.list" ]; then
+    mkdir -p "$OUT/testhost"
+    while read -r o; do
+        [ -n "$o" ] || continue
+        o="${o#/out/}"			# the container sees /out, we see $OUT
+        g="$OUT/testhost/$(basename "$o")"
+        objcopy --globalize-symbols="$VISIBLE" "$OUT/$o" "$g"
+        touch -r "$OUT/$o" "$g"
+    done < "$OUT/objs.list"
 fi
+
+run_stage link
