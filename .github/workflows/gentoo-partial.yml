@@ -45,7 +45,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ runner.temp }}/gentoo-partial-base
-          key: gentoo-partial-base-v1-${{ env.BASE_SHA }}-${{ steps.gentoo-image-id.outputs.digest }}-${{ hashFiles('tools/toolchain/partialcmp.py', 'tools/toolchain/partiallink.sh', 'tools/toolchain/recoverorder.py', 'tools/ci/partial_metrics.py') }}
+          key: gentoo-partial-base-v3-${{ env.BASE_SHA }}-${{ steps.gentoo-image-id.outputs.digest }}-${{ hashFiles('tools/toolchain/partialcmp.py', 'tools/toolchain/partiallink.sh', 'tools/toolchain/recoverorder.py', 'tools/ci/partial_metrics.py', 'tools/bindcmp.py') }}
 
       - name: Build PR base partial link and census
         if: steps.base-cache.outputs.cache-hit != 'true'
@@ -56,12 +56,21 @@ jobs:
           python3 tools/toolchain/partialcmp.py ref/slmodemd/dsplibs.o \
             build/partial/dsplibs.o \
             --json "$RUNNER_TEMP/gentoo-partial-base/base.json"
+          # The MEASURING tool comes from the head checkout, not the base:
+          # `--count` is this PR's addition and the base commit predates it.
+          python3 "$GITHUB_WORKSPACE/tools/bindcmp.py" \
+            "$RUNNER_TEMP/dsplibs-base/ref/slmodemd/dsplibs.o" \
+            "$RUNNER_TEMP/dsplibs-base/build/partial/dsplibs.o" --count \
+            > "$RUNNER_TEMP/gentoo-partial-base/base.bindings"
 
       - name: Build PR head partial link and census
         run: |
           make partial-link J=4
           python3 tools/toolchain/partialcmp.py ref/slmodemd/dsplibs.o \
             build/partial/dsplibs.o --json "$RUNNER_TEMP/head-partial.json"
+          python3 tools/bindcmp.py ref/slmodemd/dsplibs.o \
+            build/partial/dsplibs.o --count \
+            > "$RUNNER_TEMP/head-partial.bindings"
 
       - name: Compare and ratchet partial-link metrics
         id: metrics
@@ -69,8 +78,10 @@ jobs:
           set +e
           python3 tools/ci/partial_metrics.py \
             --base "$RUNNER_TEMP/gentoo-partial-base/base.json" \
-            --head "$RUNNER_TEMP/head-partial.json" --check \
-            > "$RUNNER_TEMP/partial-metrics.md"
+            --head "$RUNNER_TEMP/head-partial.json" \
+            --base-bindings "$(cat "$RUNNER_TEMP/gentoo-partial-base/base.bindings")" \
+            --head-bindings "$(cat "$RUNNER_TEMP/head-partial.bindings")" \
+            --check > "$RUNNER_TEMP/partial-metrics.md"
           status=$?
           cat "$RUNNER_TEMP/partial-metrics.md" >> "$GITHUB_STEP_SUMMARY"
           {
