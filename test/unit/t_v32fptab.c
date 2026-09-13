@@ -78,6 +78,16 @@ extern const struct v32fp_ctl ref_V32_CTL;
 extern const short ref_V32DiconnectThreshTable[8];
 extern short ref_RATEv32[6];
 extern short ref_SnrToRetrainTable[6];
+
+/*
+ * Ours: FILE-LOCAL in the object now, so they are `static` in their consumers
+ * and v32fp.h no longer declares them.  The test tier links a globalized copy
+ * (tools/testvisible.py), so the plain names resolve.
+ */
+extern const short V32DiconnectThreshTable[8];
+extern short RATEv32[6];
+extern short SnrToRetrainTable[6];
+
 extern short ref_V32_SYMBOL_LEN[2];
 extern short ref_V32_SAMPLE_LEN[2];
 extern short ref_V32_TURNAROUND_DLY[2];

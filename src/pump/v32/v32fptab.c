@@ -4,24 +4,19 @@
  * Reconstructed from dsplibs.o:
  *
  *   V32_CFG                  .rodata 0x006da0   48   GLOBAL
- *   V32DiconnectThreshTable  .rodata 0x006dd0   16   file-local
- *   SnrToRetrainTable        .data   0x007750   12   file-local
- *   RATEv32                  .data   0x00775c   12   file-local
  *   V32_CTL                  .rodata 0x007f20   32   GLOBAL
  *   SMCv32_CFG               .bss    0x000188    4   GLOBAL
  *   Control_Flag             .bss    0x0001a0    4   GLOBAL
  *
- * SECTION PLACEMENT IS THE OBJECT'S AND IS NOT A PREFERENCE.  `V32_CFG`,
- * `V32DiconnectThreshTable` and `V32_CTL` are `.rodata`, so `const`; the two
- * rate-indexed tables are `.data`, so not, even though nothing writes either.
- * `v32hdx_tables.c` makes the same point about the four tables it owns and
- * for the same reason.
+ * The three file-local tables this file used to hold -- `V32DiconnectThreshTable`
+ * (`.rodata`), `SnrToRetrainTable` and `RATEv32` (`.data`) -- have moved to
+ * their sole consumers, `v32fprecr.c` and `v32fpdisp.c`, where they are
+ * `static`.  Their reference units are `V32.c` and `V32stc.c`; this file is
+ * neither, which is why they do not stay here.
  *
- * The two file-local ones are written WITHOUT `static` here.  That is the
- * tree's convention for a blob-local data symbol -- `symmap.py` globalises
- * them on the reference side so the differential test can name `ref_RATEv32`,
- * and a `static` on ours would leave the test comparing one side only.
- * `V22DiconnectThreshTable` is the precedent.
+ * SECTION PLACEMENT IS THE OBJECT'S AND IS NOT A PREFERENCE.  `V32_CFG` and
+ * `V32_CTL` are `.rodata`, so `const`.  `v32hdx_tables.c` makes the same point
+ * about the four tables it owns and for the same reason.
  *
  * ---------------------------------------------------------------------------
  * WHAT THE TWO STRUCT TEMPLATES ARE, IN ONE PLACE
@@ -151,30 +146,12 @@ const struct v32fp_params V32_CFG = {
 	0			/* r2e                                       */
 };
 
-const short V32DiconnectThreshTable[8] = {
-	75, 95, 119, 150, 168, 174, 212, 238
-};
-
-/* --------------------------------------------------------------------- */
-/* .data.                                                                */
-
-short SnrToRetrainTable[6] = {
-	9,			/* 0   4800                                  */
-	13,			/* 1   9600, no trellis                      */
-	13,			/* 2   9600, trellis                         */
-	11,			/* 3   7200                                  */
-	20,			/* 4  12000                                  */
-	24			/* 5  14400                                  */
-};
-
-short RATEv32[6] = {
-	4800,			/* 0                                         */
-	9600,			/* 1   no trellis                            */
-	9600,			/* 2   trellis                               */
-	7200,			/* 3                                         */
-	12000,			/* 4                                         */
-	14400			/* 5                                         */
-};
+/*
+ * `V32DiconnectThreshTable`, `SnrToRetrainTable` and `RATEv32` are
+ * file-local in the object and have moved to their sole consumers,
+ * `v32fprecr.c` and `v32fpdisp.c`, where they are `static`.  The test tier's
+ * globalized copies (tools/testvisible.py) are how a test names them now.
+ */
 
 /* --------------------------------------------------------------------- */
 /* .rodata again -- V32_CTL is 0x1180 above V32_CFG in the object.        */

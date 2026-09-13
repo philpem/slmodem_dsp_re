@@ -85,6 +85,33 @@
 #include "dsplib/v32state.h"
 #include "dsplib/fpm.h"
 
+/*
+ * THE TWO RATE-INDEXED TABLES ARE FILE-LOCAL IN THE OBJECT and this file is
+ * their only consumer -- `V32FP_create` reads `RATEv32` and `V32FP_status`
+ * reads `SnrToRetrainTable` -- so they are `static` here, which is what the
+ * reference's LOCAL `d` records say.  They moved out of `v32fptab.c`, which
+ * used to hold them with external linkage so a test could name them; the test
+ * tier's globalized copies (tools/testvisible.py) are what replaces that now.
+ * Both are `.data` and not `const`, even though nothing writes either.
+ */
+static short SnrToRetrainTable[6] = {
+	9,			/* 0   4800                                  */
+	13,			/* 1   9600, no trellis                      */
+	13,			/* 2   9600, trellis                         */
+	11,			/* 3   7200                                  */
+	20,			/* 4  12000                                  */
+	24			/* 5  14400                                  */
+};
+
+static short RATEv32[6] = {
+	4800,			/* 0                                         */
+	9600,			/* 1   no trellis                            */
+	9600,			/* 2   trellis                               */
+	7200,			/* 3                                         */
+	12000,			/* 4                                         */
+	14400			/* 5                                         */
+};
+
 /* The instance is not modelled; see v32fpctl.h.  These are its accessors. */
 #define FIELD(obj, off)		((unsigned char *)(void *)(obj) + (off))
 #define FIELD_PTR(obj, off)	(*(void **)(void *)FIELD((obj), (off)))

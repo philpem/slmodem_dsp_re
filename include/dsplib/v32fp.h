@@ -255,14 +255,17 @@ extern const struct v32fp_ctl V32_CTL;		/* .rodata 0x007f20  32      */
 /*
  * Eight disconnect thresholds; `V32FP_recreate` reads index 3 -- 150 -- and
  * nothing in the object reads any other entry or the symbol by name.  It is
- * `.rodata` and file-local in the blob, so `const` here and not `static`,
- * which is what makes it reachable from its differential test.
+ * `.rodata` and file-local in the object, so it is `static` in
+ * `src/pump/v32/v32fprecr.c`, its only consumer, and has no declaration here.
+ * A test names it through the test tier's globalized copies
+ * (tools/testvisible.py).
  */
-extern const short V32DiconnectThreshTable[8];
 
 /*
  * Two six-entry tables indexed by the V.32bis RATE INDEX, v32seq.h's 0..5.
- * Both are `.data` in the object -- so not `const` -- and file-local.
+ * Both are `.data` in the object -- so not `const` -- and file-local, so they
+ * are `static` in `src/pump/v32/v32fpdisp.c`, their only consumer, and have no
+ * declaration here.
  *
  * `RATEv32` is the line rate in bit/s and it SETTLES v32seq.h's one open
  * inference: index 0 is 4800.  That header derived indices 1..5 from
@@ -270,8 +273,6 @@ extern const short V32DiconnectThreshTable[8];
  * Recommendation, because the object's ladder only says "none of the other
  * four".  This table says 4800 in the author's own bytes.  Finding F8640.
  */
-extern short RATEv32[6];
-extern short SnrToRetrainTable[6];
 
 /*
  * `.bss`, GLOBAL, one int.  `v32_data` is the only referrer: it builds a
