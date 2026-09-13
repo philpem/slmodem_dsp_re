@@ -66,6 +66,15 @@ extern void ref_v32_handshake(void *modem, unsigned short *txdata,
 			      short *txout, short *rxin, unsigned short *rxout,
 			      short *nsamples, unsigned short *rxcount);
 
+/*
+ * Ours: FILE-LOCAL in the object, so v32_handshake is `static` in
+ * v32fpdisp.c (which used to be v32hshake.c) and v32hdx.h no longer declares
+ * it.  The test tier links a globalized copy (tools/testvisible.py).
+ */
+extern void v32_handshake(void *modem, unsigned short *txdata,
+			  short *txout, short *rxin, unsigned short *rxout,
+			  short *nsamples, unsigned short *rxcount);
+
 #define OBJ_SIZE	0x80
 #define HDX_SIZE	0x100
 #define NBUF		64

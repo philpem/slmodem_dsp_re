@@ -88,6 +88,8 @@ extern unsigned short ref_RxClampV32(void *modem, short *in, short *out,
 extern short ref_CalcTurnAroundDelay(void *modem);
 extern short *ref_V32FP_GetCleanedSamples(void *modem, int *n);
 extern void ref_v32_null_protocol(void);
+/* FILE-LOCAL in the object; `static` in v32fpdisp.c, declared here for the test. */
+extern void v32_null_protocol(void);
 
 extern short ref_V32_SYMBOL_LEN[2];
 

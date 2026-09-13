@@ -102,6 +102,15 @@ extern void v32_data(void *modem, unsigned short *txdata, short *txout,
 		     short *rxin, unsigned short *rxout, short *nsamples,
 		     unsigned short *rxcount);
 
+/*
+ * `v32_handshake` and `v32_null_protocol` are likewise FILE-LOCAL and
+ * `static` in v32fpdisp.c, whose `V32_PROTOCOL` table names both.
+ */
+extern void v32_handshake(void *modem, unsigned short *txdata, short *txout,
+			  short *rxin, unsigned short *rxout,
+			  short *nsamples, unsigned short *rxcount);
+extern void v32_null_protocol(void);
+
 /* ------------------------------------------------------------------------ */
 
 #define FIELD(o, off)		((unsigned char *)(void *)(o) + (off))
