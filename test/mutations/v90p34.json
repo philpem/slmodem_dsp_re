@@ -295,18 +295,21 @@
  },
  {
   "label": "case 10 skips getMPrecvdBits",
-  "find": "\t\t */\n\t\tgetMPrecvdBits((struct tagV34Object *)objp);\n\t\tinitdigital(o);",
-  "replace": "\t\t */\n\t\tinitdigital(o);"
+  "find": "\t\t * value compared against.\n\t\t */\n\t\tgetMPrecvdBits((struct tagV34Object *)objp);\n\t\tinitdigital(o);",
+  "replace": "\t\t * value compared against.\n\t\t */\n\t\tinitdigital(o);",
+  "note": "Anchor carries 1 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
   "label": "case 10 skips initdigital",
-  "find": "\t\t */\n\t\tgetMPrecvdBits((struct tagV34Object *)objp);\n\t\tinitdigital(o);",
-  "replace": "\t\t */\n\t\tgetMPrecvdBits((struct tagV34Object *)objp);"
+  "find": "\t\t * value compared against.\n\t\t */\n\t\tgetMPrecvdBits((struct tagV34Object *)objp);\n\t\tinitdigital(o);",
+  "replace": "\t\t * value compared against.\n\t\t */\n\t\tgetMPrecvdBits((struct tagV34Object *)objp);",
+  "note": "Anchor carries 1 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
   "label": "case 10 writes V34HS_DATAXMIT",
-  "find": "\t\t */\n\t\tgetMPrecvdBits((struct tagV34Object *)objp);\n\t\tinitdigital(o);\n\t\tif (*(short *)(m + OB_TXSTATE) != V34HS_EXMIT)\n\t\t\t*(short *)(m + OB_TXSTATE) = V34HS_EXMIT;",
-  "replace": "\t\t */\n\t\tgetMPrecvdBits((struct tagV34Object *)objp);\n\t\tinitdigital(o);\n\t\tif (*(short *)(m + OB_TXSTATE) != V34HS_DATAXMIT)\n\t\t\t*(short *)(m + OB_TXSTATE) = V34HS_DATAXMIT;"
+  "find": "\t\t * value compared against.\n\t\t */\n\t\tgetMPrecvdBits((struct tagV34Object *)objp);\n\t\tinitdigital(o);\n\t\tif (*(short *)(m + OB_TXSTATE) != V34HS_EXMIT)\n\t\t\t*(short *)(m + OB_TXSTATE) = V34HS_EXMIT;",
+  "replace": "\t\t * value compared against.\n\t\t */\n\t\tgetMPrecvdBits((struct tagV34Object *)objp);\n\t\tinitdigital(o);\n\t\tif (*(short *)(m + OB_TXSTATE) != V34HS_DATAXMIT)\n\t\t\t*(short *)(m + OB_TXSTATE) = V34HS_DATAXMIT;",
+  "note": "Anchor carries 1 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
   "label": "case 10's transmit state is at +0x3594",
@@ -317,8 +320,9 @@
   "label": "case 10's compare-then-store becomes a plain store",
   "equivalent": true,
   "why": "The value written is the value compared against, so the branch decides only whether a store of X happens where X is already there.  No test can separate them and no ordering can: nothing runs between the compare and the store.  Held fixed: that OB_TXSTATE is ordinary memory rather than a device register, which is true of every other access to it in the tree.  The compare is transcribed because the object performs it.",
-  "find": "\t\t */\n\t\tgetMPrecvdBits((struct tagV34Object *)objp);\n\t\tinitdigital(o);\n\t\tif (*(short *)(m + OB_TXSTATE) != V34HS_EXMIT)\n\t\t\t*(short *)(m + OB_TXSTATE) = V34HS_EXMIT;",
-  "replace": "\t\t */\n\t\tgetMPrecvdBits((struct tagV34Object *)objp);\n\t\tinitdigital(o);\n\t\t*(short *)(m + OB_TXSTATE) = V34HS_EXMIT;"
+  "find": "\t\t * value compared against.\n\t\t */\n\t\tgetMPrecvdBits((struct tagV34Object *)objp);\n\t\tinitdigital(o);\n\t\tif (*(short *)(m + OB_TXSTATE) != V34HS_EXMIT)\n\t\t\t*(short *)(m + OB_TXSTATE) = V34HS_EXMIT;",
+  "replace": "\t\t * value compared against.\n\t\t */\n\t\tgetMPrecvdBits((struct tagV34Object *)objp);\n\t\tinitdigital(o);\n\t\t*(short *)(m + OB_TXSTATE) = V34HS_EXMIT;",
+  "note": "Anchor carries 1 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
   "label": "the two CP arms use two different bit sources",
@@ -383,7 +387,8 @@
  },
  {
   "label": "the function returns 1 rather than 0 from its default arm",
-  "find": "\t}\n\t}\n\n\treturn 0;\n}",
-  "replace": "\t}\n\t}\n\n\treturn 1;\n}"
+  "find": "\t\to->v90_receiver = 2;\n\t\treturn 0;\n\t}\n\t}\n\n\treturn 0;\n}",
+  "replace": "\t\to->v90_receiver = 2;\n\t\treturn 0;\n\t}\n\t}\n\n\treturn 1;\n}",
+  "note": "Anchor carries 2 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  }
 ]

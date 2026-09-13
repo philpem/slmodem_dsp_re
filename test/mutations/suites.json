@@ -349,7 +349,7 @@
   "build/test/t_v34ja"
  ],
  "v34k56": [
-  "src/pump/v34/v34k56.cpp",
+  "src/pump/v34/v34pcmmain.cpp",
   "build/test/t_v34k56"
  ],
  "v34pcmif": [
@@ -957,7 +957,7 @@
   "build/test/t_vparser"
  ],
  "vpcmcreate": [
-  "src/pump/v34/v34pcmcreate.cpp",
+  "src/pump/v34/v34pcmmain.cpp",
   "build/test/t_vpcmcreate"
  ],
  "vpcmctor": [

@@ -68,6 +68,13 @@ extern void ref_VPcmV34InitiateRetrain(void *obj, unsigned char requestedDp);
 extern void ref_V34InitializeImplementationSpecific(void *obj);
 
 /*
+ * `V34DisconnectThreshTable` is FILE-LOCAL in the object, so v34pcmmain.cpp
+ * defines it `static` and v34pcm_tables.h no longer declares it; the test
+ * tier links a globalized copy (tools/testvisible.py).
+ */
+extern const int V34DisconnectThreshTable[V34_DISCONNECT_THRESH_ENTRIES];
+
+/*
  * The three state words, seeded in range on every case.  `v34handshakinit`
  * mode 1 runs two transitions and each indexes `StateName` with the value it
  * finds; nothing bounds the index (D42), so a fill pattern there is an

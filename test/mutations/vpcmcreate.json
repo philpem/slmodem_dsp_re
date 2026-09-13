@@ -91,8 +91,9 @@
  },
  {
   "label": "the channel-verification progress code is 9",
-  "find": "\t\t\tobj->progress = 10;",
-  "replace": "\t\t\tobj->progress = 9;"
+  "find": "\t\t\t\t\t\t\t   (short)ansLevel);\n\t\t\tobj->progress = 10;",
+  "replace": "\t\t\t\t\t\t\t   (short)ansLevel);\n\t\t\tobj->progress = 9;",
+  "note": "Anchor carries 1 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
   "label": "session type 0 and the negatives join arm 1",
@@ -166,8 +167,9 @@
  },
  {
   "label": "+0xa23c is left at zero",
-  "find": "\tobj->far_echo_enable = 1;",
-  "replace": "\tobj->far_echo_enable = 0;"
+  "find": "\n\tobj->far_echo_enable = 1;",
+  "replace": "\n\tobj->far_echo_enable = 0;",
+  "note": "Anchor carries 1 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
   "label": "the channel-verification status is 3 rather than 4",
@@ -181,10 +183,11 @@
  },
  {
   "label": "+0x254's scale short is read unsigned",
-  "find": "\t\t(short)(336 * (int)*(const short *)(m + OB_F35A4) + 10000);",
-  "replace": "\t\t(short)(336 * (int)*(const unsigned short *)(m + OB_F35A4)\n\t\t\t+ 10000);",
+  "find": "\t * signed, so a negative one gives a result below 10000.\n\t */\n\t*(short *)(m + OB_F0254) =\n\t\t(short)(336 * (int)*(const short *)(m + OB_F35A4) + 10000);",
+  "replace": "\t * signed, so a negative one gives a result below 10000.\n\t */\n\t*(short *)(m + OB_F0254) =\n\t\t(short)(336 * (int)*(const unsigned short *)(m + OB_F35A4)\n\t\t\t+ 10000);",
   "equivalent": true,
-  "why": "336 * 65536 is exactly 336 * 2^16 and so zero modulo 2^16, and a signed and an unsigned reading of the same short differ by 65536, so the two products differ by a multiple of 2^16 and the `(short)` the result is stored through discards it.  No input can separate them at any entry point; `v34retrain` records the identical mutation on the identical block as equivalent for the same reason.  `movswl` is what the object writes and so is this."
+  "why": "336 * 65536 is exactly 336 * 2^16 and so zero modulo 2^16, and a signed and an unsigned reading of the same short differ by 65536, so the two products differ by a multiple of 2^16 and the `(short)` the result is stored through discards it.  No input can separate them at any entry point; `v34retrain` records the identical mutation on the identical block as equivalent for the same reason.  `movswl` is what the object writes and so is this.",
+  "note": "Anchor carries 3 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
   "label": "+0x262 is left at zero",
@@ -210,7 +213,8 @@
  },
  {
   "label": "+0x254's offset is 10001 rather than 10000",
-  "find": "\t\t(short)(336 * (int)*(const short *)(m + OB_F35A4) + 10000);",
-  "replace": "\t\t(short)(336 * (int)*(const short *)(m + OB_F35A4) + 10001);"
+  "find": "\t * signed, so a negative one gives a result below 10000.\n\t */\n\t*(short *)(m + OB_F0254) =\n\t\t(short)(336 * (int)*(const short *)(m + OB_F35A4) + 10000);",
+  "replace": "\t * signed, so a negative one gives a result below 10000.\n\t */\n\t*(short *)(m + OB_F0254) =\n\t\t(short)(336 * (int)*(const short *)(m + OB_F35A4) + 10001);",
+  "note": "Anchor carries 3 line(s) above it: the same statement is spelled in VPcmV34Create/VPcmV34InitiateRetrain or elsewhere in the merged translation unit, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  }
 ]

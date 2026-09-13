@@ -55,6 +55,16 @@
 #include "dsplib/v34fsk.h"
 #include "dsplib/v34pcmif.h"
 
+/*
+ * `getMPrecvdBits` is FILE-LOCAL in the object, so `v34pcmmain.cpp` defines it
+ * `static` and `v34pcmif.h` no longer declares it; the test tier links a
+ * globalized copy (tools/testvisible.py).  It takes one pointer and has no
+ * taken address, so each compiler gives it its static calling convention --
+ * regparm(1), the same `%eax` argument the object's own prologue reads.
+ */
+extern void getMPrecvdBits(struct tagV34Object *obj)
+	__attribute__((regparm(1)));
+
 extern "C" {
 
 extern unsigned int ref_dsplibs_debug_level;
