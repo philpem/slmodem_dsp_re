@@ -38,11 +38,12 @@
  * the object's names for the two outputs.  0.05 is dB-to-log10 at 20dB per
  * decade; 0.276 is an unexplained base scale, kept as the literal.
  *
- * LOCAL in the blob (so regparm(2) there); external linkage and the
- * ordinary convention here -- each side is called as its own compiler
- * built it.
+ * LOCAL in the blob (so regparm(2) there); `static` here so the building
+ * compiler gives our copy its own static convention.  The differential test
+ * declares that convention and reaches the function through the globalized
+ * test copy (tools/testvisible.py).
  */
-void
+static void
 GetGain(struct beepgen *bg, float *gain1, float *gain2)
 {
 	int high = (int)modem_get_param(bg->modem, GetDTMFHighToneLevel);

@@ -796,10 +796,14 @@ short getbit(struct v34_bitsource *b);
  * tree has reconstructed is known to write a negative `bulk_len`, so no
  * call site is known to reach it.
  *
+ * FILE-LOCAL IN THE OBJECT (`nm` gives it a lower-case `t`), so it is
+ * `static` in V34hshak.c and declares nothing here; the differential test
+ * declares it itself and reaches it through the globalized test copy
+ * (tools/testvisible.py).
+ *
  * @param obj    The V.34 modem object.
  * @param delay  The requested bulk delay, in samples.
  */
-void ApplyBulkDelay(void *obj, short delay);
 
 #ifdef __cplusplus
 }

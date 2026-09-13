@@ -188,6 +188,11 @@ double IIR2100_Coef_B_9600[IIR2100_TAPS_9600] = {
  * `v92echoPreFilter_a`, .data+0x360 -- the AR (recursive) half, third argument
  * of `FloatARMA(n, 12, a, b, 99)` at .text+0x1119b.  Twelve floats indexed by
  * tap, a[0] exactly 1.0.
+ *
+ * LOCAL (`d`) in the object, but a `static` copy here has no referrer yet
+ * (V92EchoCanceller's constructor is unwritten) and -O3 DROPS it, so the
+ * record stays global.  When that constructor lands, move it back in as
+ * `static`.
  */
 float v92echoPreFilter_a[V92_ECHO_PREFILTER_TAPS] = {
 	1.0f, 0.708999991f, -2.30019999f, -2.67490005f, 1.53729999f,
@@ -199,6 +204,9 @@ float v92echoPreFilter_a[V92_ECHO_PREFILTER_TAPS] = {
  * `v92echoPreFilter_b`, .data+0x320 -- the MA (feed-forward) half, fourth
  * argument of the same call.  Twelve floats, and b[0] is 1.4986 rather than 1,
  * so this pair is not normalised the way the two IIR pairs above are.
+ *
+ * LOCAL (`d`) in the object; global here for the same reason as the `_a`
+ * half above -- a `static` copy is dropped by -O3 with no referrer.
  */
 float v92echoPreFilter_b[V92_ECHO_PREFILTER_TAPS] = {
 	1.49860001f, 0.621999979f, -2.73329997f, -2.60159993f, 1.71739995f,

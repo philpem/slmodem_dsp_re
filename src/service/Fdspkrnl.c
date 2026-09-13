@@ -42,10 +42,12 @@
 /*
  * Set by the beep path while a locally generated beep is in progress (its
  * writer, at 0xaea27, is not reconstructed yet); read here to suppress the
- * energy gate.  LOCAL in the blob; external here so the differential tests
- * can drive it, the same trade the functions themselves make.
+ * energy gate.  LOCAL in the blob, so `static` here; the differential tests
+ * declare it themselves and reach it through the globalized test copy
+ * (tools/testvisible.py), which is the arrangement t_callprog_create
+ * documents.
  */
-int bInternalBeepInProgress;
+static int bInternalBeepInProgress;
 
 /*
  * The one kernel FDSP_DP_Create hands out, and a counter that is written
@@ -215,10 +217,12 @@ FDSP_DP_Create(struct fdsp_kernel *k, short sRxSamplesDelay,
  * current window -- a sample quieter than that is counted, and the taps
  * only adapt on such samples (LMS with a crude double-talk detector).
  *
- * LOCAL in the blob, so regparm(2) there; external linkage and the
- * ordinary convention here (see t_dialstring.c for the precedent).
+ * LOCAL in the blob, so regparm(2) there; `static` here so the building
+ * compiler gives our copy its own static convention.  The differential test
+ * declares that convention and reaches the function through the globalized
+ * test copy (tools/testvisible.py).
  */
-void
+static void
 EchoCanceler(float *hist, int offset, float *coef, unsigned int ntaps,
 	     float *in, float *out, float *out2, int *verdict,
 	     float mu, int update)
@@ -358,7 +362,9 @@ FDSP_Kernel_InitObj(struct fdsp_kernel *k)
  * invocation due to saturation".  Only a quiet average with no countdown
  * pending returns 1, which is what licenses tap adaptation.
  *
- * LOCAL in the blob (regparm(2) there); ordinary convention here.
+ * LOCAL in the blob (regparm(2) there); ordinary convention here -- a
+ * `static` copy is dropped by -O3 (the plain name becomes
+ * `bValidateEnergyValue.constprop.0`), so the record stays external.
  */
 int
 bValidateEnergyValue(float *buf, unsigned int n, int *hist,

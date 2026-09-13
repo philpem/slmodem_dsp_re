@@ -3070,7 +3070,7 @@ emit:
  * The ring is cleared at the LITERAL offset +0x35b8, not through `bulk_ring`
  * at +0x35b0.  That is the object's: the pointer is never loaded here.
  */
-void
+static void
 ApplyBulkDelay(void *objp, short delay)
 {
 	struct v34_object *obj = (struct v34_object *)objp;

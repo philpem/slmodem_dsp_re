@@ -217,13 +217,22 @@ void V34agc(struct v34_receiver *rx);
  * @brief One half-baud receive step: gain a sample pair, adapt, and mix it
  * down to baseband.
  *
- * Called only by rxtiming(); declared here (rather than kept file-static,
- * as it is in the object) so both sides of it can be driven directly in
- * tests, rather than only through the interpolator.
+ * Called only by rxtiming(). FILE-LOCAL in the object (`t`), so it is
+ * `static` in V34RX.c and declares nothing here; the differential test
+ * declares it `regparm(1)` and reaches it through the globalized test copy
+ * (tools/testvisible.py).
  *
  * @param rx  The V.34 receiver.
  */
-void V34demodulate(struct v34_receiver *rx);
+
+/*
+ * The four-point constellation the non-trellis receive path slices against,
+ * GLOBAL (`R`) in the object, so it is not `static` in V34RX.c.  Finding
+ * F2802 records that the object defines it in the handshake unit and the
+ * receive unit sees a declaration only; matching that placement is a
+ * separate recorded change.
+ */
+extern const int rxvect4[4];
 
 /**
  * @brief Build a twelve-short complex-multiply coefficient block.

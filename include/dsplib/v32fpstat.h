@@ -192,11 +192,12 @@ int V32FP_status(void *modem, struct v32_status *st);
 /**
  * @brief `V32_PROTOCOL`'s data-mode handler: one block of steady-state V.32 traffic.
  *
- * File-local in the object and global here, the arrangement
- * `v32_null_protocol` already uses: a `static` has no symbol for the
- * differential harness to compare against, and the blob's copy is reached
- * as `ref_v32_data` through `symmap.py --globals`. Its argument list is
- * `v32_handshake`'s, because one table dispatches to both.
+ * File-local in the object, so it is `static` in v32fpdisp.c and declares
+ * nothing here; the differential test declares it the ordinary way (its
+ * address is taken by `V32_PROTOCOL`, so the convention does not change)
+ * and reaches it through the globalized test copy (tools/testvisible.py).
+ * Its argument list is `v32_handshake`'s, because one table dispatches to
+ * both.
  *
  * @param modem     The V.32 datapump instance.
  * @param txdata    Transmit symbols.
@@ -206,8 +207,6 @@ int V32FP_status(void *modem, struct v32_status *st);
  * @param nsamples  Sample count.
  * @param rxcount   Receive count.
  */
-void v32_data(void *modem, unsigned short *txdata, short *txout, short *rxin,
-	      unsigned short *rxout, short *nsamples, unsigned short *rxcount);
 
 /*
  * `V32_PROTOCOL`: nine function pointers indexed by `V32HDX_MODE`, GLOBAL in

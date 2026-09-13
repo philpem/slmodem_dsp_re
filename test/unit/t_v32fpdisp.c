@@ -92,6 +92,16 @@ extern void ref_v32_data(void *modem, unsigned short *txdata, short *txout,
 			 short *rxin, unsigned short *rxout, short *nsamples,
 			 unsigned short *rxcount);
 
+/*
+ * v32_data is FILE-LOCAL in the object, so v32fpdisp.c defines it `static`
+ * and v32fpstat.h no longer declares it.  Its address is taken by
+ * `V32_PROTOCOL`, so the convention is the ordinary one; the test tier
+ * links a globalized copy (tools/testvisible.py).
+ */
+extern void v32_data(void *modem, unsigned short *txdata, short *txout,
+		     short *rxin, unsigned short *rxout, short *nsamples,
+		     unsigned short *rxcount);
+
 /* ------------------------------------------------------------------------ */
 
 #define FIELD(o, off)		((unsigned char *)(void *)(o) + (off))

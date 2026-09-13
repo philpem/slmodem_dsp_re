@@ -110,6 +110,10 @@ struct dialer {
  * differential test must say `__attribute__((regparm(2)))` or it will
  * pass arguments the callee never reads. See finding F51.
  *
+ * LOCAL (`t`) in the blob, but a `static` copy is partially inlined by
+ * -O3 and the plain name becomes `AnalyseDialString.part.0`, so the
+ * record stays external here.
+ *
  * @param d      The dialler, whose `cfg` governs what is legal.
  * @param s      The string to grade.
  * @param store  Nonzero asks for `d->last_digit` to be updated.

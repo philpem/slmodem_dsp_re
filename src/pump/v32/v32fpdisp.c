@@ -392,8 +392,12 @@ V32FP_modem(void *modem, const int *txbits, short *out, const short *in,
  * `carrier_loss_time %d of %d ms` -- so the unit is MILLISECONDS and five of
  * them is one block, which is exactly `v32.c`'s 40 samples at 8000 Hz.  It is
  * also what makes `energy_drop_time`'s 700 a duration.  Finding F8648.
+ *
+ * LOCAL in the blob (`t`), so `static` here; `V32_PROTOCOL` holds its
+ * address, so the convention stays the ordinary one and the differential
+ * test declares it the ordinary way.
  */
-void
+static void
 v32_data(void *modem, unsigned short *txdata, short *txout, short *rxin,
 	 unsigned short *rxout, short *nsamples, unsigned short *rxcount)
 {

@@ -190,15 +190,15 @@ void beepgen_get_freqs(unsigned char code, int *colp, int *rowp);
  *
  * `gain1`/`gain2` are the object's own words: its debug lines print
  * "BeepGen: GAIN1*1000" for @p gain1 and "GAIN2*1000" for @p gain2.
- * LOCAL in the blob, so GCC 3.4 gave it `regparm(2)` there; our copy has
- * external linkage and the ordinary convention, the same trade
- * t_dialstring.c documents for AnalyseDialString.
+ * LOCAL in the blob, so GCC 3.4 gave it `regparm(2)` there; it is `static`
+ * in Beepgen.c now so our copy takes the building compiler's static
+ * convention, and the differential test declares that convention and
+ * reaches it through the globalized test copy (tools/testvisible.py).
  *
  * @param bg     The generator, for its `modem` handle.
  * @param gain1  Set to `pow(10, -GetDTMFHighAndLowToneLevelDifference * 0.05) * *gain2`.
  * @param gain2  Set to `pow(10, (6 - GetDTMFHighToneLevel) * 0.05 - GetAdditAttenToBeepgenVoice * 0.05) * 0.276`.
  */
-void GetGain(struct beepgen *bg, float *gain1, float *gain2);
 
 /**
  * @brief Majority check over a window of shorts, against detector history.

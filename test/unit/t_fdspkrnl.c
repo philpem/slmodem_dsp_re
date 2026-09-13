@@ -35,6 +35,33 @@
 extern unsigned int ref_dsplibs_debug_level;
 extern int ref_bInternalBeepInProgress;
 
+/*
+ * EchoCanceler and bInternalBeepInProgress are FILE-LOCAL in the object, so
+ * Fdspkrnl.c defines them `static` and fdspkrnl.h no longer declares them.
+ * The test tier links a globalized copy of the reconstructed objects
+ * (tools/testvisible.py), so these plain declarations resolve; the partial
+ * link keeps the LOCAL binding.
+ *
+ * EchoCanceler takes ten arguments and has no taken address, so each
+ * compiler gives it its static calling convention -- and the two compilers
+ * this tree builds with DISAGREE on how many arguments that covers.  GCC
+ * 3.4.2 caps it at regparm(2), which is the object's own; GCC 4 and later
+ * use regparm(3).  Declaring the convention the building compiler actually
+ * chose is what lets both tiers call their own copy correctly.
+ */
+#if __GNUC__ >= 4
+extern void EchoCanceler(float *hist, int offset, float *coef,
+			 unsigned int ntaps, float *in, float *out,
+			 float *out2, int *verdict, float mu, int update)
+	__attribute__((regparm(3)));
+#else
+extern void EchoCanceler(float *hist, int offset, float *coef,
+			 unsigned int ntaps, float *in, float *out,
+			 float *out2, int *verdict, float mu, int update)
+	__attribute__((regparm(2)));
+#endif
+extern int bInternalBeepInProgress;
+
 /* Per-side debug transcripts; see test/harness/runtime.c. */
 extern int dsplib_debug_capture_on;
 void dsplib_debug_capture_reset(void);

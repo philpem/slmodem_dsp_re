@@ -55,6 +55,8 @@
 
 extern unsigned int ref_dsplibs_debug_level;
 extern int ref_bInternalBeepInProgress;
+/* FILE-LOCAL in the object; static in Fdspkrnl.c, declared here for the test. */
+extern int bInternalBeepInProgress;
 /* The object's own tone table -- the four frequencies, in `tone[]`'s order. */
 extern float ref_tone[4];
 
