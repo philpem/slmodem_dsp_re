@@ -143,11 +143,17 @@ main(void)
 			    && harness_reg_ours.id[n - 2] == VPCM_DP_V90
 			    && harness_reg_ours.id[n - 1] == VPCM_DP_V92,
 			    1, 0);
-		diff_eq_int("ours: VPCM ids share one ops table (%ld)",
+		diff_eq_int("ours: VPCM ids share the VPCM table (%ld)",
 			    n >= 3
-			    && harness_reg_ours.ops[n - 3] == &vpcm_op
-			    && harness_reg_ours.ops[n - 2] == &vpcm_op
-			    && harness_reg_ours.ops[n - 1] == &vpcm_op,
+			    && harness_reg_ours.ops[n - 3]
+			       == harness_reg_ours.ops[n - 2]
+			    && harness_reg_ours.ops[n - 2]
+			       == harness_reg_ours.ops[n - 1]
+			    && ((struct dp_operations *)
+				harness_reg_ours.ops[n - 1])->name != 0
+			    && strcmp(((struct dp_operations *)
+				       harness_reg_ours.ops[n - 1])->name,
+				      "VPCM") == 0,
 			    1, 0);
 		diff_eq_int("ref: last three ids are VPCM's (%ld)",
 			    ref_ids[nref - 3] == VPCM_DP_V34

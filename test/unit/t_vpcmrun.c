@@ -261,6 +261,25 @@ ops_for(int id)
 	return 0;
 }
 
+/*
+ * And OURS out of our own log: `vpcm_run` is file-static in the object, so
+ * the table `dp_vpcm_init` registers is the only handle on it.  `->process`
+ * IS `vpcm_run` directly -- this datapump has no `dp_wrapper` -- so the mixed
+ * runs below call our side through it.
+ */
+static struct dp_operations *
+our_ops_for(int id)
+{
+	int i;
+
+	for (i = 0; i < harness_reg_ours.count; i++)
+		if (harness_reg_ours.id[i] == id)
+			return harness_reg_ours.ops[i];
+	return 0;
+}
+
+static struct dp_operations *g_our34;	/* ours, for run_v34 and run_stall */
+
 static int ep_route[NEP];
 
 static void
@@ -520,13 +539,15 @@ run_v34(struct dp_operations *ops, int run)
 			dsplib_debug_capture_reset();
 			alarm(30);
 			/*
-			 * THE ONE LINE THIS FILE EXISTS FOR.  `ops->process`
-			 * is the blob's `vpcm_run` through the registered
-			 * operations table; the other arm is ours, on the same
+			 * THE ONE LINE THIS FILE EXISTS FOR.  `g_our34->process`
+			 * is ours -- the registered table's `.process` IS
+			 * `vpcm_run` directly -- and the other arm is the
+			 * blob's, through its own registered table, on the same
 			 * blob-built object.
 			 */
 			if ((run >> ep) & 1)
-				rc = vpcm_run(dp[ep], in[ep], out[ep], FRAG);
+				rc = g_our34->process(dp[ep], in[ep], out[ep],
+						      FRAG);
 			else
 				rc = ref_vpcm_run(dp[ep], in[ep], out[ep],
 						  FRAG);
@@ -645,8 +666,8 @@ run_stall(void)
 	int rc = 0;
 
 	harness_modem_reset(0, 0);
-	da = vpcm_create(modem, VPCM_DP_V34, 1, VPCM_SRATE, VPCM_MAX_FRAG,
-			 &vpcm_op);
+	da = g_our34->create(modem, VPCM_DP_V34, 1, VPCM_SRATE,
+				     VPCM_MAX_FRAG, g_our34);
 	db = ref_vpcm_create(modem, VPCM_DP_V34, 1, VPCM_SRATE, VPCM_MAX_FRAG,
 			     &ref_vpcm_op);
 
@@ -673,7 +694,7 @@ run_stall(void)
 
 		memset(out_a, 0x5a, sizeof(out_a));
 		memset(out_b, 0x5a, sizeof(out_b));
-		sa = vpcm_run(da, in, out_a, FRAG);
+		sa = g_our34->process(da, in, out_a, FRAG);
 		sb = ref_vpcm_run(db, in, out_b, FRAG);
 
 		snprintf(msg, sizeof(msg), "block %d: return code (%%ld)", blk);
@@ -697,7 +718,7 @@ run_stall(void)
 	rb->status = 99;
 	memset(out_a, 0x5a, sizeof(out_a));
 	memset(out_b, 0x5a, sizeof(out_b));
-	vpcm_run(da, in, out_a, FRAG);
+	g_our34->process(da, in, out_a, FRAG);
 	ref_vpcm_run(db, in, out_b, FRAG);
 	diff_eq_int("the reset ran on the blob's side (stall back to 0)",
 		    rb->stall, 0, 0);
@@ -718,7 +739,7 @@ run_stall(void)
 	rb->stall = VPCM_TRAIN_TIMEOUT - 1;
 	memset(out_a, 0x5a, sizeof(out_a));
 	memset(out_b, 0x5a, sizeof(out_b));
-	vpcm_run(da, in, out_a, FRAG);
+	g_our34->process(da, in, out_a, FRAG);
 	ref_vpcm_run(db, in, out_b, FRAG);
 	diff_eq_int("at stall == TIMEOUT exactly, the blob has NOT given up",
 		    rb->mode, VPCM_MODE_IDLE, 0);
@@ -728,7 +749,7 @@ run_stall(void)
 
 	memset(out_a, 0x5a, sizeof(out_a));
 	memset(out_b, 0x5a, sizeof(out_b));
-	vpcm_run(da, in, out_a, FRAG);
+	g_our34->process(da, in, out_a, FRAG);
 	ref_vpcm_run(db, in, out_b, FRAG);
 	diff_eq_int("one block later, past TIMEOUT, the blob HAS given up",
 		    rb->mode, VPCM_MODE_ERROR, 0);
@@ -756,15 +777,19 @@ main(void)
 	harness_reg_reset();
 	ref_dp_v8_init();
 	ref_dp_vpcm_init();
+	dp_vpcm_init();
 	ops8 = ops_for(DP_V8);
 	ops34 = ops_for(34);
+	g_our34 = our_ops_for(34);
 
 	diff_begin("the fixture: two datapumps, two routes, and the "
 		   "unwritten boundary supplied");
 	diff_eq_int("dp_v8_init registered id 8", ops8 != 0, 1, 0);
 	diff_eq_int("dp_vpcm_init registered id 34", ops34 != 0, 1, 0);
+	diff_eq_int("our dp_vpcm_init registered id 34", g_our34 != 0, 1, 0);
 	if (ops8 == 0 || ops34 == 0 || ops8->create == 0 || ops34->create == 0
-	    || ops8->process == 0 || ops34->process == 0)
+	    || ops8->process == 0 || ops34->process == 0
+	    || g_our34 == 0 || g_our34->process == 0)
 		return diff_end();
 	/*
 	 * THAT THE FIVE ENTRY POINTS ARE PRESENT IN THIS BINARY IS NOT

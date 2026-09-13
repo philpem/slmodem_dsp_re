@@ -709,8 +709,12 @@ V34agc(struct v34_receiver *rx)
  * correction always lands one pair late.  Writing it the other way round is
  * self-consistent, passes a smoke test, and diverges from the object on the
  * first sample that trips the loop.
+ *
+ * LOCAL in the blob, so `static` here; the differential test declares it
+ * `regparm(1)` and reaches it through the globalized test copy
+ * (tools/testvisible.py).
  */
-void
+static void
 V34demodulate(struct v34_receiver *rx)
 {
 	struct v34_queue *q = (struct v34_queue *)rx;
@@ -1529,8 +1533,13 @@ modem_serrint(void *objp)
  * Note 2289 against -2290: the points are not symmetric about zero but about
  * -0.5, which is what rounding a symmetric constellation to integers gives
  * when the rounding is toward negative infinity.
+ *
+ * GLOBAL (`R`) in the object, so it is not `static` here.  Finding F2802
+ * shows the object's own definition is in the handshake unit and this unit
+ * sees a declaration only; matching that placement is a separate, recorded
+ * change, and this one is the binding alone.
  */
-static const int rxvect4[4] = {
+const int rxvect4[4] = {
 	(int)((unsigned short)2289  | ((unsigned)(unsigned short)2289  << 16)),
 	(int)((unsigned short)2289  | ((unsigned)(unsigned short)-2290 << 16)),
 	(int)((unsigned short)-2290 | ((unsigned)(unsigned short)-2290 << 16)),

@@ -388,12 +388,12 @@
   "src/v8/v8agc.c",
   "build/test/t_v8sig"
  ],
- "v8dp": [
-  "src/v8/v8dp.c",
-  "build/test/t_v8dp"
- ],
- "v8dpstd": [
-  "src/v8/v8dp.c",
+  "v8dp": [
+   "src/v8/v8.c",
+   "build/test/t_v8dp"
+  ],
+  "v8dpstd": [
+   "src/v8/v8.c",
   "build/test/t_v8dp"
  ],
  "v8handshak": [

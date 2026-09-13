@@ -49,6 +49,24 @@ extern int ref__recieve_silence_state(void *ctx, const short *rx, short *tx,
 				      int w3, int w4, int *rx_count,
 				      int *tx_count, int w7, int *w8);
 
+/*
+ * FILE-LOCAL in the object, so class1.c defines them `static` and class1.h
+ * no longer declares them.  Their addresses are taken (class1.c installs
+ * each into `class1_state_functions`), so the ordinary calling convention is
+ * unchanged; the test tier links a globalized copy (tools/testvisible.py).
+ */
+extern int _idle_state(struct fax_class1 *ctx, const short *rx, short *tx,
+		       int word3, int word4, int *rx_count, int *tx_count,
+		       int word7, int *word8);
+extern int _send_silence_state(struct fax_class1 *ctx, const short *rx,
+			       short *tx, int word3, int word4,
+			       int *rx_count, int *tx_count, int word7,
+			       int *word8);
+extern int _recieve_silence_state(struct fax_class1 *ctx, const short *rx,
+				  short *tx, int word3, int word4,
+				  int *rx_count, int *tx_count, int word7,
+				  int *word8);
+
 #define TX_MAX	256
 #define GUARD	16
 

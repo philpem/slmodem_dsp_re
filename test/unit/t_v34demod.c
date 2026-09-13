@@ -63,6 +63,14 @@
 extern void ref_V34demodulate(struct v34_receiver *rx)
 	__attribute__((regparm(1)));
 
+/*
+ * V34demodulate is FILE-LOCAL in the object, so V34RX.c defines it `static`
+ * and v34rx.h no longer declares it.  The test tier links a globalized copy
+ * (tools/testvisible.py), and our copy takes the same regparm(1).
+ */
+extern void V34demodulate(struct v34_receiver *rx)
+	__attribute__((regparm(1)));
+
 extern void ref_rxinit(void *obj);
 
 /* The receiver's offset inside the object, as t_v34rx spells it. */

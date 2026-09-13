@@ -56,11 +56,25 @@
 #include "dsplib/dp_param.h"
 #include "dsplib/modem_params.h"
 
-/* By name.  File-static in the object; see finding F221. */
+/*
+ * By name, for the REFERENCE side.  File-static in the object; see finding
+ * F221.
+ */
 extern struct dp *ref_v8_create(void *modem, int id, int caller, int srate,
 				int max_frag, struct dp_operations *op);
 extern int ref_v8_delete(struct dp *dp);
 extern int ref_v8_process(struct dp *dp, void *in, void *out, int count);
+
+/*
+ * Ours are file-local in v8.c as they are in the object, so `v8dp.h` no
+ * longer declares them.  The test tier links a globalized copy of the
+ * reconstructed objects (tools/testvisible.py), so these plain declarations
+ * resolve; the partial link keeps the LOCAL binding.
+ */
+extern struct dp *v8_create(void *modem, int id, int caller, int srate,
+			    int max_frag, struct dp_operations *op);
+extern int v8_delete(struct dp *dp);
+extern int v8_process(struct dp *dp, void *in, void *out, int count);
 
 /* Only so `op` can be checked against the table that side was passed. */
 extern void ref_dp_v8_init(void);

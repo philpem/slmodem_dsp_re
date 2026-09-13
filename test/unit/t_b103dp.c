@@ -75,6 +75,13 @@ ref_process_of(struct dp *dp)
 	return ((struct dp_wrapper *)dp->dp_data)->process;
 }
 
+/* And OURS the same way: `b103_process` is file-static too. */
+static dp_process_fn
+our_process_of(struct dp *dp)
+{
+	return ((struct dp_wrapper *)dp->dp_data)->process;
+}
+
 /* A maximal-length sequence, so the transmitted data is not all one value. */
 static unsigned char pattern[511];
 
@@ -154,8 +161,8 @@ main(void)
 
 		db = ref_b103_create((void *)0x1234, cases[k].id,
 				     cases[k].caller, 8000, 160, ref_ops);
-		da = b103_create((void *)0x1234, cases[k].id, cases[k].caller,
-				 8000, 160, our_ops);
+		da = our_ops->create((void *)0x1234, cases[k].id,
+				     cases[k].caller, 8000, 160, our_ops);
 		diff_eq_int("both built (%ld)", da != 0 && db != 0, 1, (long)k);
 		if (da == 0 || db == 0)
 			continue;
@@ -175,13 +182,13 @@ main(void)
 		diff_eq_int("%ld: v21 as documented", b->fp->cfg.v21,
 			    cases[k].expect_v21, (long)k);
 
-		b103_delete(da);
+		our_ops->destroy(da);
 		ref_b103_delete(db);
 	}
 	rc |= diff_end();
 
 	/*
-	 * b103_process, driven block by block.  The two sides get identical
+	 * b103_process, driven block by block through the wrapper.  The two sides get identical
 	 * input -- the same scripted bits and the same samples -- and every
 	 * observable is compared: the returned DPSTAT_*, the transmitted
 	 * samples, the bits handed back, and the line rate reported on
@@ -196,8 +203,8 @@ main(void)
 		harness_modem_reset(pattern, (int)sizeof(pattern));
 		db = ref_b103_create((void *)0x1234, DP_B103, 1, 8000, 160,
 				     ref_ops);
-		da = b103_create((void *)0x1234, DP_B103, 1, 8000, 160,
-				 our_ops);
+		da = our_ops->create((void *)0x1234, DP_B103, 1, 8000, 160,
+				     our_ops);
 
 		if (da && db) {
 			for (f = 0; f < 200; f++) {
@@ -225,7 +232,7 @@ main(void)
 				memset(out_b, 0x33, sizeof(out_b));
 
 				rb = ref_process_of(db)(db, in_b, out_b, 160);
-				ra = b103_process(da, in_a, out_a, 160);
+				ra = our_process_of(da)(da, in_a, out_a, 160);
 
 				diff_eq_int("block %ld: status", ra, rb, f);
 				for (i = 0; i < 160; i++)
@@ -283,7 +290,7 @@ main(void)
 					    harness_modem_ref.param_value[i],
 					    300, i);
 
-			b103_delete(da);
+			our_ops->destroy(da);
 			ref_b103_delete(db);
 		}
 	}
@@ -303,10 +310,10 @@ main(void)
 		rf = harness_alloc.frees;
 
 		harness_alloc_reset();
-		dp = b103_create((void *)0x1234, DP_B103, 1, 8000, 160,
-				 our_ops);
+		dp = our_ops->create((void *)0x1234, DP_B103, 1, 8000, 160,
+				     our_ops);
 		aa = harness_alloc.allocs;
-		b103_delete(dp);
+		our_ops->destroy(dp);
 		af = harness_alloc.frees;
 
 		printf("  ref %d allocs / %d frees, ours %d / %d\n",

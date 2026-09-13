@@ -71,9 +71,12 @@ struct faxvmi_cfg;
  *                  the spelling that matches the encoding chosen (F614).
  * @param arg_2     Unread.
  * @param arg_3     Stored into both the modem config and the VMI block.
+ *
+ * FILE-LOCAL in the object (`t`), so it is `static` in class1rx.c and
+ * declares nothing here; a differential test that names it declares it
+ * itself and reaches it through the globalized test copy
+ * (tools/testvisible.py).
  */
-void init_vmi_v17rx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
-		    int arg_2, void *arg_3);
 
 /**
  * @brief Build a "No ECM (Simple Packing)" V.27ter receive VMI/config pair.
@@ -87,9 +90,12 @@ void init_vmi_v17rx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
  * @param bit_rate  See init_vmi_v17rx()'s note on this parameter's width.
  * @param arg_2     Unread.
  * @param arg_3     Stored into both the modem config and the VMI block.
+ *
+ * FILE-LOCAL in the object (`t`), so it is `static` in class1rx.c and
+ * declares nothing here; a differential test that names it declares it
+ * itself and reaches it through the globalized test copy
+ * (tools/testvisible.py).
  */
-void init_vmi_v27rx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
-		    int arg_2, void *arg_3);
 
 /**
  * @brief Build a "No ECM (Simple Packing)" V.29 receive VMI/config pair.
@@ -103,9 +109,12 @@ void init_vmi_v27rx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
  * @param bit_rate  See init_vmi_v17rx()'s note on this parameter's width.
  * @param arg_2     Unread.
  * @param arg_3     Stored into both the modem config and the VMI block.
+ *
+ * FILE-LOCAL in the object (`t`), so it is `static` in class1rx.c and
+ * declares nothing here; a differential test that names it declares it
+ * itself and reaches it through the globalized test copy
+ * (tools/testvisible.py).
  */
-void init_vmi_v29rx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
-		    int arg_2, void *arg_3);
 
 /** The `slot` each of the three constructors above plants, from `faxvmi.h`'s slot map. */
 #define VMI_SLOT_V27RX		8

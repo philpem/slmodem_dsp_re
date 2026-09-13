@@ -123837,3 +123837,167 @@ is the reconstruction authority, emits them. That is issue #77 and no source
 was changed to hide it.
 
 (2026-09-11)
+
+## F11357. The datapump entry points are file-local in the blob, and four families now say so in source
+
+Issue #6, partial-link symbol binding. The reference object's first defined
+symbols are not an arbitrary sequence: `dp_init.c`, `dcr.c`, `cid.c`,
+`voice.c`, `fax.c`, `rd.c`, `ringDetector.c`, `call.c`, `v8.c`, `vpcm.c`,
+`v32.c`, `v23.c`, `v22.c`, `b103.c` -- each datapump family introducing a
+LOCAL `*_ops` table followed by LOCAL `create`/`delete`/`process` records.
+`nm ref/slmodemd/dsplibs.o` gives every one of those entry points a lower-case
+`t`, so the original author compiled them file-static. Our source declared
+them, so the candidate carried `T`/`D` records where the reference has `t`/`d`
+and a different relocation target for every reference to them.
+
+`v22.c` was already correct and is the template. The preceding commit
+(`f9552e39`) converted `call.c`. This pass converts the four families whose
+operations table and entry points already sit in ONE translation unit, so the
+change is linkage-only:
+
+- `v23_create`, `v23_delete`, `v23_process` in `src/pump/v23/v23.c`;
+- `v32_create`, `v32_delete`, `v32_process` in `src/pump/v32/v32.c`;
+- `vpcm_create`, `vpcm_delete`, `vpcm_run` and `vpcm_op` in
+  `src/pump/v90/vpcm.c`;
+- `b103_create`, `b103_delete`, `b103_process` in `src/pump/b103/b103.c`.
+
+Each header loses the now-impossible declaration. `vpcm_op` was the only
+operations table still `extern` in a header. No body, literal, store or call
+site changed -- only the storage class and the declarations.
+
+**The tests are apparatus and reach the static entries through the
+registration.** `t_v23direct`/`t_v23dp`, `t_v32dp`, `t_vpcmdp`,
+`t_vpcmguard`/`t_vpcmrun`, `t_b103direct`/`t_b103dp` and `t_dpinit` now take
+`create`/`destroy`/`process` out of the table `dp_*_init` registered (the
+`t_v22dp.c` pattern), and `*_process` out of the `dp_wrapper` its own
+`create` built. Every differential comparison, expected value and check count
+is unchanged; group counts held or rose. `t_dpinit`'s "the three VPCM ids
+share one table" check, which used to name `vpcm_op`, now also requires that
+shared table's `.name` to be `"VPCM"`, so it still fails if a different table
+is registered under the three ids.
+
+**Measured.** `make period J=12`: **375 passed, 0 failed**. `make similarity`:
+ratchet OK, and the exact-function tally is byte-for-byte the same as before
+the pass (`identical 629`, `same_size 73`, no symbol gained or lost), so no
+function-level identity was traded for the aggregate. `make partial-compare`
+on the faithful tree:
+
+| dimension | before | after |
+| --- | ---: | ---: |
+| positioned reference bytes | 54,957 | 54,953 |
+| exact relocations | 906 / 18,317 | 915 / 18,317 |
+| exact defined symbols | 225 / 2,907 | 226 / 2,907 |
+| exact section descriptors | 60 contents | 60 contents |
+| candidate defined symbols | 2,955 | 2,955 |
+
+The positioned-byte count moves by four bytes *within sections that were
+already non-exact*: the section whose contents are fully equal stays at 60
+both before and after, so no section crossed the exact boundary. The gains
+are in the relocation and symbol records, which is where the binding lives --
++9 exact relocations and +1 exact symbol, the latter limited because an exact
+symbol record carries the VALUE too, and the candidate's `.text` offsets for
+this family still differ from the reference's by the accumulated layout
+deficit. Binding is necessary but not sufficient for a symbol record to
+match.
+
+**`v8` is deliberately not in this pass.** The reference's `v8.c` is ONE
+translation unit holding `v8_op`, `v8_create`, `v8_delete` and `v8_process`,
+but here `v8_op`/`v8_create`/`v8_delete` live in `v8dp.c` and `v8_process` in
+`v8proc.c`, so the process function cannot be made static without first
+merging the two files and recovering the `v8.c` FILE spelling. That is the
+translation-unit-split lever (finding F11351) and belongs in its own pass.
+
+(2026-09-12)
+
+## F11358. The datapump and call-progress families now carry the reference's LOCAL binding, and a test-tier globalizer makes static symbols testable
+
+Issue #6, continuation of F11357.  The reference object's early `.symtab` is
+the datapump sequence `dp_init.c, dcr.c, cid.c, voice.c, fax.c, rd.c,
+ringDetector.c, call.c, v8.c, vpcm.c, v32.c, v23.c, v22.c, b103.c`, and each
+family introduces a LOCAL `*_ops` followed by LOCAL create/delete/process
+records; the call-progress tables, several fax state and vmi symbols, and a
+handful of module-internal functions and tables are LOCAL too.  Our source
+declared many of them, so the candidate carried GLOBAL records and a different
+relocation target for every reference to them.  **Binding mismatches against
+the reference fall from 78 to 27**, counted by the new `tools/bindcmp.py`,
+which reports the LOCAL/GLOBAL agreement of every name both objects define and
+refuses on an empty symbol table; run against the pre-pass object it reports
+the 78.  A binding-only tool is needed because `partialcmp.py`'s symbol record
+includes the `.text` VALUE, so a symbol whose binding is now right but whose
+offset still differs is invisible in that census.
+
+**A test tier that can name a static reconstruction symbol (commit
+`781be95d`).**  Making a symbol static is trivial until a differential test
+names it -- `return RATEv32[i]`, a datapump `create` called directly -- and
+then no symbol links.  This is the mirror of what `tools/symmap.py` does for
+the blob: `tools/testvisible.py` lists the LOCAL symbols our objects define
+exactly once across the tree that a test source mentions, and the test
+binaries link a globalized COPY of each object (`objcopy
+--globalize-symbols`, build/testhost).  The partial-link candidate consumes
+the plain tree and keeps the LOCAL binding, and `src/` carries no test-only
+text.  The period image's binutils 2.15 predates `--globalize-symbols`, so
+`period.sh` now runs compile, promotes on the host, then links.
+
+**The families converted (commits `f9552e39`, `e58d085d`, `635c6d0a`,
+`e4a1a21b`, `daf91eba`, `0fb949dd`):**
+
+- `call.c`: call_GetSRegister, call_create, call_delete, call_run.
+- `v23.c`, `v32.c`, `vpcm.c` (including `vpcm_op`) and `b103.c`: the entry
+  points and, where still external, the operations table.  `v22.c` was
+  already correct and is the template.
+- `Callprog.c`: all ten call-progress state tables.  A tentative global array
+  is a COMMON symbol the linker merges; a static one is a fixed local object
+  as in the reference, so candidate NOBITS moves 2,376 -> 2,760 against the
+  reference's 2,836 (shortfall 460 -> 76).
+- `Fdspkrnl.c`/`Beepgen.c`/`V34hshak.c`/`V34RX.c`/`v32fpdisp.c`: EchoCanceler,
+  bInternalBeepInProgress, GetGain, ApplyBulkDelay, V34demodulate, v32_data.
+  Where the function has no taken address the static calling convention
+  applies and the per-symbol size moves onto the object's: GetGain 432/432
+  bytes exact, v32_data 859/860, EchoCanceler 359/363.  `rxvect4` is the
+  reverse case (reference GLOBAL, ours static) and is made external.
+- `v8dp.c` -> `v8.c`: `v8_process` moves out of `v8proc.c` into the datapump
+  unit, which is then named the reference's own `v8.c`, and all three entry
+  points become static.  The twelve mutation anchors whose `find` text is
+  inside `v8_process` move with it to the `v8dp` suite; anchorcheck reports 0
+  non-unique and 0 re-pointed.
+- `class1.c`/`class1rx.c`/`class1tx.c`/`faxvmi.c`: the state functions,
+  `init_vmi_*` handlers and `vmi_*` tables.  Each function's address is taken
+  inside its own unit, so no calling convention changes.
+
+**Six symbols are deliberately not converted, and each is a real obstacle
+rather than a missed edit.**  A static that GCC drops or renames is worse
+than a binding mismatch, because the symbol then does not exist at all:
+`bValidateEnergyValue` becomes `bValidateEnergyValue.constprop.0` and
+`AnalyseDialString` becomes `AnalyseDialString.part.0` under -O3;
+`pGlobalFDSPObj` and `uCorrelationReportsNo` are written but never read in the
+reconstructed unit so the compiler deletes them; `v92echoPreFilter_a`/`_b`
+have no referrer until V92EchoCanceller's constructor lands; and
+`FPM_div_table`'s `static` is load-bearing for the D4 reproduction (finding
+F1506).  Each site carries the reason in a comment.
+
+**The remaining 27 are cross-translation-unit and need a merge, not a storage
+class.**  `RATEv32`/`SnrToRetrainTable` belong to `V32stc.c` here and are named
+by `v32fpdisp.c`; `V32DiconnectThreshTable` to `V32.c`; `v32_handshake`/
+`v32_null_protocol` to `V32mod.c`; `TONEv22_CFG`/`TONEv22INIT_CFG`/
+`V22DiconnectThreshTable` to `V22.c`; `IIR2100_Coef_*` to `AnsamToneDetector.cpp`;
+`entFiltNum`/`entFiltDen`/`v34initialbauds` to `VpcmFloModem.cpp`;
+`v92TxPreFilter` to `V92Modulator.cpp`; `V92EchoCanceller.cpp` owns the
+`v92echoPreFilter_*` pair; `V34DisconnectThreshTable` and
+`getMPrecvdBits` to `VPcmV34Main.cpp`; `ToneLPF` has one copy in `TONE.c` and
+one in `fpm_tone.c`; and `getbit` is LOCAL to `V34hshak.c`.  In each case the
+definition sits in one of our files and its user in another, so the fix is to
+recover the reference's translation-unit boundary (finding F11351's lever),
+which moves mutation anchors with the code and is its own pass.
+
+**Measured.**  Each commit's `make period` is 375 passed, 0 failed and the
+`make similarity` ratchet stays `identical 887` with no symbol gained or
+lost.  Cumulative partial-link census over the pass: positioned bytes
+54,957 -> 54,981 (the coarse count moves by tens of bytes within
+already-inexact sections each time a layout shifts, and no section ever
+crossed the exact boundary), exact relocations 906 -> 919, exact defined
+symbols 225 -> 231, candidate NOBITS 2,376 -> 2,760 against 2,836.  The exact
+symbol count moves slowly because an exact record carries the `.text` VALUE as
+well as the binding, and the gross layout deficit is unchanged; the binding is
+necessary and not sufficient.
+
+(2026-09-12)

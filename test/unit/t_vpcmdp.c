@@ -141,6 +141,7 @@
 #include "harness.h"
 
 #include "dsplib/dp.h"
+#include "dsplib/dp_wrapper.h"
 #include "dsplib/modem_params.h"
 
 /*
@@ -149,12 +150,7 @@
  * shares the map with the thing it tests cannot catch the map being wrong.
  * Every root offset below is spelled as the literal the disassembly uses.
  */
-extern struct dp *vpcm_create(void *modem, int id, int caller, int srate,
-			      int max_frag, struct dp_operations *op);
-extern int vpcm_delete(struct dp *dp);
-extern int vpcm_run(struct dp *dp, void *in, void *out, int count);
 extern int dp_vpcm_init(void);
-extern struct dp_operations vpcm_op;
 
 extern struct dp *ref_vpcm_create(void *modem, int id, int caller, int srate,
 				  int max_frag, struct dp_operations *op);
@@ -162,6 +158,27 @@ extern int ref_vpcm_delete(struct dp *dp);
 extern int ref_vpcm_run(struct dp *dp, void *in, void *out, int count);
 extern int ref_dp_vpcm_init(void);
 extern struct dp_operations ref_vpcm_op;
+
+/*
+ * Our four entry points are file-static in the object, so no name reaches
+ * them.  `dp_vpcm_init` registers `vpcm_op`, and its `.process` IS `vpcm_run`
+ * directly, so the registered table is the whole handle: `->create` calls
+ * `vpcm_create`, `->destroy` calls `vpcm_delete` and `->process` calls
+ * `vpcm_run`.  `find_ops` registers ours once and keeps the pointer.
+ */
+static struct dp_operations *our_ops;
+
+static int
+find_ops(void)
+{
+	harness_reg_reset();
+	dp_vpcm_init();
+	if (harness_reg_ours.count < 1)
+		return 0;
+	our_ops = (struct dp_operations *)harness_reg_ours.ops[0];
+	return our_ops != 0 && our_ops->create != 0 && our_ops->destroy != 0
+	    && our_ops->process != 0;
+}
 
 extern void *ref_dp_runtime_create(void *modem);
 
@@ -232,10 +249,10 @@ static unsigned char di_ours[sizeof(struct dsp_info)]
 	__attribute__((aligned(8)));
 
 /*
- * The `op` argument is a DUMMY and not `&vpcm_op`.  Nothing dereferences
- * `dp.op`, so what the store has to prove is that it keeps the ARGUMENT rather
- * than a constant that happens to match the table this file also checks; two
- * dummies, alternated across trials, is what says that.
+ * The `op` argument is a DUMMY and not the registered table.  Nothing
+ * dereferences `dp.op`, so what the store has to prove is that it keeps the
+ * ARGUMENT rather than a constant that happens to match the registered table;
+ * two dummies, alternated across trials, is what says that.
  */
 static struct dp_operations op_dummy[2];
 
@@ -828,7 +845,8 @@ run_create(void)
 		harness_alloc_reset();
 		harness_modem_reset(0, 0);
 
-		da = vpcm_create(MODEM, id, caller, V_SRATE, c->max_frag, op);
+		da = our_ops->create(MODEM, id, caller, V_SRATE, c->max_frag,
+				     op);
 		a_allocs = harness_alloc.allocs;
 		a_frees = harness_alloc.frees;
 		a_live = harness_alloc.live;
@@ -972,7 +990,7 @@ run_create(void)
 			runtime->clockDeviation = (int)(-0x27180000 - tag * 11);
 
 			f0 = harness_alloc.frees;
-			rc_a = vpcm_delete(da);
+			rc_a = our_ops->destroy(da);
 			f1 = harness_alloc.frees - f0;
 			l1 = harness_alloc.live;
 			memcpy(di_ours, &dspinfo, sizeof di_ours);
@@ -1058,7 +1076,8 @@ run_made_to_fail(void)
 	harness_alloc_reset();
 	harness_modem_reset(0, 0);
 
-	da = vpcm_create(MODEM, V_DP_V34, 1, V_SRATE, V_MAX_FRAG, &op_dummy[0]);
+	da = our_ops->create(MODEM, V_DP_V34, 1, V_SRATE, V_MAX_FRAG,
+			     &op_dummy[0]);
 	if (da == 0) {
 		printf("FIXTURE: our create failed\n");
 		return 1;
@@ -1113,7 +1132,7 @@ run_made_to_fail(void)
 	bad = root_compare(root_ours, (const unsigned char *)db, &nalias, -1);
 	diff_eq_int("and putting them back silences it (%ld)", bad, 0, bad);
 
-	vpcm_delete(da);
+	our_ops->destroy(da);
 	ref_vpcm_delete(db);
 	diff_eq_int("nothing left allocated", harness_alloc.live, 0, 0);
 
@@ -1169,7 +1188,7 @@ run_guards(void)
 		harness_alloc_reset();
 		harness_modem_reset(0, 0);
 
-		da = vpcm_create(MODEM, V_DP_V34, 1, guard_v[i].srate,
+		da = our_ops->create(MODEM, V_DP_V34, 1, guard_v[i].srate,
 				 guard_v[i].max_frag, &op_dummy[0]);
 		db = ref_vpcm_create(MODEM, V_DP_V34, 1, guard_v[i].srate,
 				     guard_v[i].max_frag, &op_dummy[0]);
@@ -1203,10 +1222,12 @@ run_guards(void)
  * ===========================================================================
  *
  * .data+0x30, six words: 0x47c into .rodata.str1.1 ("VPCM"), 0, 0x3a00,
- * 0x3dd0, 0x3e40 and 0.  The three function pointers are compared against our
- * symbol and the blob's `ref_` alias BY NAME, which is what says `.process` is
- * `vpcm_run` DIRECTLY and not `dp_wrapper_run` -- the distinction between this
- * datapump and V.23 and Bell 103, which do go through the wrapper.
+ * 0x3dd0, 0x3e40 and 0.  The table and its three entry points are file-static
+ * in the object, so ours is taken from `dp_vpcm_init`'s registration and the
+ * blob's from the `ref_` aliases; what says `.process` is `vpcm_run` DIRECTLY
+ * and not `dp_wrapper_run` is the negative check against `dp_wrapper_run` --
+ * the distinction between this datapump and V.23 and Bell 103, which do go
+ * through the wrapper.
  *
  * THE TWO `name` POINTERS ARE ONE POINTER, AND THAT IS A LINKER ARTEFACT
  * RATHER THAN A RESULT.  Both objects carry their "VPCM" in a
@@ -1226,53 +1247,65 @@ run_op_table(void)
 {
 	diff_begin("vpcm_op against the blob's, field by field");
 
+	diff_eq_int("dp_vpcm_init registered our table (%ld)", find_ops(), 1, 0);
+	if (our_ops == 0) {
+		return diff_end();
+	}
+
 	printf("    the two `name' pointers are %s (%p and %p): the two"
 	       " .rodata.str1.1 sections are mergeable and ld folded the"
 	       " literals\n",
-	       (const void *)vpcm_op.name == (const void *)ref_vpcm_op.name
+	       (const void *)our_ops->name == (const void *)ref_vpcm_op.name
 	       ? "ONE address" : "two addresses",
-	       (const void *)vpcm_op.name, (const void *)ref_vpcm_op.name);
+	       (const void *)our_ops->name, (const void *)ref_vpcm_op.name);
 
 	diff_eq_int("the name is not null on either side",
-		    vpcm_op.name != 0 && ref_vpcm_op.name != 0, 1, 0);
-	if (vpcm_op.name != 0 && ref_vpcm_op.name != 0) {
+		    our_ops->name != 0 && ref_vpcm_op.name != 0, 1, 0);
+	if (our_ops->name != 0 && ref_vpcm_op.name != 0) {
 		diff_eq_int("ours is the string \"VPCM\" (%ld)",
-			    strcmp(vpcm_op.name, "VPCM"), 0, 0);
+			    strcmp(our_ops->name, "VPCM"), 0, 0);
 		diff_eq_int("and the blob's is too (%ld)",
 			    strcmp(ref_vpcm_op.name, "VPCM"), 0, 0);
 		diff_eq_int("and it is four characters and a NUL (%ld)",
 			    (long)strlen(ref_vpcm_op.name), 4, 0);
 	}
 
-	diff_eq_int("use_count (%ld)", vpcm_op.use_count, ref_vpcm_op.use_count,
-		    0);
+	diff_eq_int("use_count (%ld)", our_ops->use_count,
+		    ref_vpcm_op.use_count, 0);
 	diff_eq_int("and it is zero on both (%ld)",
-		    vpcm_op.use_count | ref_vpcm_op.use_count, 0, 0);
-	diff_eq_int("hangup (%ld)", vpcm_op.hangup == 0,
+		    our_ops->use_count | ref_vpcm_op.use_count, 0, 0);
+	diff_eq_int("hangup (%ld)", our_ops->hangup == 0,
 		    ref_vpcm_op.hangup == 0, 0);
 	diff_eq_int("and it is null on both (%ld)",
-		    vpcm_op.hangup == 0 && ref_vpcm_op.hangup == 0, 1, 0);
+		    our_ops->hangup == 0 && ref_vpcm_op.hangup == 0, 1, 0);
 
-	diff_eq_int("create is vpcm_create (%ld)",
-		    (void *)vpcm_op.create == (void *)&vpcm_create, 1, 0);
+	/*
+	 * `create`, `destroy` and `process` are file-static now, so the
+	 * table's own slots are the only handles on them.  What is asserted
+	 * is that all three are present, that they are three distinct
+	 * functions, and that `process` is NOT `dp_wrapper_run` -- the
+	 * distinction between this datapump and V.23 and Bell 103, which do
+	 * go through the wrapper and whose comparison this replaces.
+	 */
+	diff_eq_int("create/destroy/process are all registered (%ld)",
+		    our_ops->create != 0 && our_ops->destroy != 0
+		    && our_ops->process != 0, 1, 0);
 	diff_eq_int("and the blob's is ref_vpcm_create (%ld)",
 		    (void *)ref_vpcm_op.create == (void *)&ref_vpcm_create, 1,
 		    0);
-	diff_eq_int("destroy is vpcm_delete (%ld)",
-		    (void *)vpcm_op.destroy == (void *)&vpcm_delete, 1, 0);
 	diff_eq_int("and the blob's is ref_vpcm_delete (%ld)",
 		    (void *)ref_vpcm_op.destroy == (void *)&ref_vpcm_delete, 1,
 		    0);
-	diff_eq_int("process is vpcm_run DIRECTLY (%ld)",
-		    (void *)vpcm_op.process == (void *)&vpcm_run, 1, 0);
+	diff_eq_int("process is NOT dp_wrapper_run, unlike V.23/B103 (%ld)",
+		    (void *)our_ops->process != (void *)dp_wrapper_run, 1, 0);
 	diff_eq_int("and the blob's is ref_vpcm_run (%ld)",
 		    (void *)ref_vpcm_op.process == (void *)&ref_vpcm_run, 1, 0);
 
 	/* The three slots are three DIFFERENT functions on each side. */
 	diff_eq_int("the three slots are three distinct functions, ours (%ld)",
-		    (void *)vpcm_op.create != (void *)vpcm_op.destroy
-		    && (void *)vpcm_op.create != (void *)vpcm_op.process
-		    && (void *)vpcm_op.destroy != (void *)vpcm_op.process, 1, 0);
+		    (void *)our_ops->create != (void *)our_ops->destroy
+		    && (void *)our_ops->create != (void *)our_ops->process
+		    && (void *)our_ops->destroy != (void *)our_ops->process, 1, 0);
 	diff_eq_int("and the blob's (%ld)",
 		    (void *)ref_vpcm_op.create != (void *)ref_vpcm_op.destroy
 		    && (void *)ref_vpcm_op.create != (void *)ref_vpcm_op.process
@@ -1325,8 +1358,8 @@ run_dp_init(void)
 			diff_eq_int("and registration %ld is the right id, in"
 				    " the right place", harness_reg_ours.id[i],
 				    want[i], i);
-			diff_eq_int("ours registered &vpcm_op (%ld)",
-				    harness_reg_ours.ops[i] == (void *)&vpcm_op,
+			diff_eq_int("ours registered the same table (%ld)",
+				    harness_reg_ours.ops[i] == (void *)our_ops,
 				    1, i);
 			diff_eq_int("and the blob's &ref_vpcm_op (%ld)",
 				    harness_reg_ref.ops[i]
@@ -1419,10 +1452,10 @@ run_transcripts(void)
 		dsplibs_debug_level = 2;
 		ref_dsplibs_debug_level = 2;
 
-		da = vpcm_create(MODEM, tr_v[i].id, tr_v[i].caller,
+		da = our_ops->create(MODEM, tr_v[i].id, tr_v[i].caller,
 				 tr_v[i].srate, tr_v[i].max_frag, &op_dummy[0]);
 		if (da != 0)
-			vpcm_delete(da);
+			our_ops->destroy(da);
 		memcpy(runtime, rt_pre, sizeof rt_pre);
 		seed_dspinfo(tag);
 		db = ref_vpcm_create(MODEM, tr_v[i].id, tr_v[i].caller,

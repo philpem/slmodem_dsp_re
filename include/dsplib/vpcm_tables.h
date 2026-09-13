@@ -60,6 +60,14 @@ extern double IIR2100_Coef_B_8000[IIR2100_TAPS_8000];
 extern double IIR2100_Coef_A_9600[IIR2100_TAPS_9600];
 extern double IIR2100_Coef_B_9600[IIR2100_TAPS_9600];
 
+/*
+ * v92echoPreFilter_a/b are FILE-LOCAL in the object (`d`), but a `static`
+ * copy in vpcm_tables.c is dropped by -O3: nothing in this tree references
+ * them yet (V92EchoCanceller's constructor, their only consumer, is not
+ * reconstructed).  The record stays global so the differential test can
+ * reach it.  When that constructor lands, move them into its file as
+ * `static`, as the note at the top of vpcm_tables.c says.
+ */
 extern float v92echoPreFilter_a[V92_ECHO_PREFILTER_TAPS];
 extern float v92echoPreFilter_b[V92_ECHO_PREFILTER_TAPS];
 

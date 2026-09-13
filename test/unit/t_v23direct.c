@@ -31,7 +31,13 @@
 #include "harness.h"
 #include "dsplib/v23.h"
 
-/* By name.  File-static in the object; see finding F221. */
+/*
+ * By name, for the REFERENCE side: `symmap.py --globals` promotes the blob's
+ * file-local symbols before renaming them, so `ref_v23_*` link.  Our three
+ * are file-static and have no name to call; they are reached through the
+ * table `dp_v23_init` registers and, for `v23_process`, out of the wrapper
+ * `v23_create` built.  See finding F221 and `v22.c`.
+ */
 extern struct dp *ref_v23_create(void *modem, int id, int caller, int srate,
 				 int max_frag, struct dp_operations *op);
 extern int ref_v23_delete(struct dp *dp);
@@ -56,6 +62,13 @@ find_ref_ops(void)
 	ref_ops = (struct dp_operations *)harness_reg_ref.ops[0];
 	our_ops = (struct dp_operations *)harness_reg_ours.ops[0];
 	return ref_ops != 0 && our_ops != 0;
+}
+
+/* Our `v23_process`, out of the wrapper our `v23_create` built. */
+static dp_process_fn
+our_process_of(struct dp *dp)
+{
+	return ((struct dp_wrapper *)dp->dp_data)->process;
 }
 
 static unsigned char pattern[511];
@@ -146,7 +159,8 @@ drive(const char *what, int caller, const short *signal, int frames)
 	harness_modem_reset(pattern, (int)sizeof(pattern));
 	db = ref_v23_create((void *)0x1234, DP_V23, caller, 8000, 160,
 			    ref_ops);
-	da = v23_create((void *)0x1234, DP_V23, caller, 8000, 160, our_ops);
+	da = our_ops->create((void *)0x1234, DP_V23, caller, 8000, 160,
+				     our_ops);
 	diff_eq_int("both built (%ld)", da != 0 && db != 0, 1, caller);
 	if (da == 0 || db == 0)
 		return diff_end();
@@ -166,7 +180,7 @@ drive(const char *what, int caller, const short *signal, int frames)
 		memset(out_b, 0x33, sizeof(out_b));
 
 		rb = ref_v23_process(db, in_b, out_b, 160);
-		ra = v23_process(da, in_a, out_a, 160);
+		ra = our_process_of(da)(da, in_a, out_a, 160);
 
 		diff_eq_int("block %ld: status", ra, rb, f);
 		for (i = 0; i < 160; i++)
@@ -190,7 +204,7 @@ drive(const char *what, int caller, const short *signal, int frames)
 	diff_eq_int("bits were handed back (%ld)",
 		    harness_modem_ref.rx_len > 0, 1, harness_modem_ref.rx_len);
 
-	diff_eq_int("v23_delete returns (%ld)", v23_delete(da),
+	diff_eq_int("v23_delete returns (%ld)", our_ops->destroy(da),
 		    ref_v23_delete(db), 0);
 
 	return diff_end();
@@ -231,7 +245,7 @@ main(void)
 	rc |= drive("v23 terminal: whole object", 1, fw_signal, NFRAME);
 	rc |= drive("v23 host: whole object", 0, bw_signal, HOST_FRAME);
 
-	/* v23_delete by name: that it balances as well as returns. */
+	/* v23_delete through the registered table: that it balances as well as returns. */
 	diff_begin("v23_delete: balance");
 	{
 		struct dp *dp;
@@ -245,9 +259,10 @@ main(void)
 		rf = harness_alloc.frees;
 
 		harness_alloc_reset();
-		dp = v23_create((void *)0x1234, DP_V23, 1, 8000, 160, our_ops);
+		dp = our_ops->create((void *)0x1234, DP_V23, 1, 8000, 160,
+				     our_ops);
 		aa = harness_alloc.allocs;
-		v23_delete(dp);
+		our_ops->destroy(dp);
 		af = harness_alloc.frees;
 
 		diff_eq_int("allocation count (%ld)", aa, ra, 0);

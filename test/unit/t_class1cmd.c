@@ -27,6 +27,18 @@ extern int ref_fax_class1_command(struct fax_class1 *ctx, int cmd, int arg3,
 extern int ref__answer_tone_state(void *ctx, const short *rx, short *tx,
 				  int word3, int word4, int *rx_count,
 				  int *tx_count, int word7, int *word8);
+
+/*
+ * FILE-LOCAL in the object, so class1.c defines it `static` and class1.h no
+ * longer declares it.  Its address is taken (class1.c installs it into
+ * `class1_state_functions`), so the ordinary calling convention is
+ * unchanged; the test tier links a globalized copy (tools/testvisible.py).
+ */
+extern int _answer_tone_state(struct fax_class1 *ctx, const short *rx,
+			      short *tx, int word3, int word4,
+			      int *rx_count, int *tx_count, int word7,
+			      int *word8);
+
 extern unsigned int ref_dsplibs_debug_level;
 
 static struct fax_class1 *

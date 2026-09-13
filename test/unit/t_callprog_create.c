@@ -25,6 +25,25 @@
 #include "dsplib/modem_params.h"
 #include "dsplib/debug.h"
 
+/*
+ * The ten call-progress state tables are FILE-LOCAL in the object, so
+ * Callprog.c defines them `static` and callprog_state.h no longer declares
+ * them.  The test tier links a globalized copy of the reconstructed objects
+ * (tools/testvisible.py), so these plain declarations resolve; the partial
+ * link keeps the LOCAL binding.
+ */
+extern unsigned char next_state_due_cptd[CALLPROG_STATES][CALLPROG_CPTD_EVENTS];
+extern unsigned char message_due_cptd[CALLPROG_STATES][CALLPROG_CPTD_EVENTS];
+extern unsigned char next_state_due_timeout[CALLPROG_STATES];
+extern unsigned char message_due_timeout[CALLPROG_STATES];
+extern unsigned char next_state_due_line_clear_timeout[CALLPROG_STATES];
+extern unsigned char message_due_line_clear_timeout[CALLPROG_STATES];
+extern int timeout_table[CALLPROG_STATES];
+extern int enable_line_clear_timeout[CALLPROG_STATES];
+extern unsigned char automode_table[CALLPROG_STATES];
+extern unsigned char toneiir_dialtone_table[CALLPROG_STATES];
+extern unsigned char toneiir_busy_table[CALLPROG_STATES];
+
 extern void ref_CALLPROG_Create(struct callprog *cp, struct callprog_cfg *cfg);
 extern void ref_CALLPROG_Delete(struct callprog *cp);
 extern void ref_CALLPROG_Dial(struct callprog *cp, const char *s);

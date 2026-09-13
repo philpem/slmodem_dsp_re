@@ -29,6 +29,24 @@
 
 extern unsigned int ref_dsplibs_debug_level;
 
+/*
+ * GetGain is FILE-LOCAL in the object, so Beepgen.c defines it `static` and
+ * beepgen.h no longer declares it; the test tier links a globalized copy
+ * (tools/testvisible.py).
+ *
+ * It takes three arguments and has no taken address, so each compiler gives
+ * it its static calling convention, and the two compilers DISAGREE: GCC
+ * 3.4.2 caps at regparm(2) (the object's own), GCC 4 and later use
+ * regparm(3).  The declaration follows the building compiler.
+ */
+#if __GNUC__ >= 4
+extern void GetGain(struct beepgen *bg, float *gain1, float *gain2)
+	__attribute__((regparm(3)));
+#else
+extern void GetGain(struct beepgen *bg, float *gain1, float *gain2)
+	__attribute__((regparm(2)));
+#endif
+
 /* Per-side debug transcripts; see test/harness/runtime.c. */
 extern int dsplib_debug_capture_on;
 void dsplib_debug_capture_reset(void);

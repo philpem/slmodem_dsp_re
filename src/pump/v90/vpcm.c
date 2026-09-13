@@ -147,7 +147,7 @@ vpcm_notwritten(int what)
  * ---------------------------------------------------------------------------
  * One buffer through the V.PCM datapump.
  */
-int
+static int
 vpcm_run(struct dp *dp, void *in_v, void *out_v, int count)
 {
 	struct vpcm_root *s = (struct vpcm_root *)dp->dp_data;
@@ -619,7 +619,7 @@ typedef char vpcm_bits_size[
  * 0x3c03 with `%edx` = 0xf4 is what says the second pass uses the cap and not
  * the original.
  */
-struct dp *
+static struct dp *
 vpcm_create(void *modem, int id, int caller, int srate, int max_frag,
 	    struct dp_operations *op)
 {
@@ -782,7 +782,7 @@ vpcm_create(void *modem, int id, int caller, int srate, int max_frag,
  * dereferenced unguarded, which is why a harness that leaves `MDMPRM_DSPINFO`
  * at a default faults here and not in `vpcm_create` (docs/configuration.md).
  */
-int
+static int
 vpcm_delete(struct dp *dp)
 {
 	struct vpcm_root *s = (struct vpcm_root *)dp->dp_data;
@@ -819,7 +819,7 @@ vpcm_delete(struct dp *dp)
  * them a session is going to be is `vpcm_create`'s `id` argument and then
  * `vpcm_run`'s to change.  It returns 0 unconditionally.
  */
-struct dp_operations vpcm_op = {
+static struct dp_operations vpcm_op = {
 	.name = "VPCM",
 	.create = vpcm_create,
 	.destroy = vpcm_delete,

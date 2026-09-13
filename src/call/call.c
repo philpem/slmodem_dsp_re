@@ -44,7 +44,7 @@ extern void modem_dp_deregister(int id, void *op);
  * `modem_get_sreg` itself, because it has no idea what a modem is.  This is
  * the whole of the adaptor: widen the register number and tail-call.
  */
-long
+static long
 call_GetSRegister(void *modem, unsigned short num)
 {
 	return modem_get_sreg(modem, num);
@@ -83,7 +83,7 @@ call_dial_string(struct call_dp *st, char *buf, size_t buflen)
 	return buf;
 }
 
-struct dp *
+static struct dp *
 call_create(void *modem, int id, int caller, int srate, int max_frag,
 	    struct dp_operations *op)
 {
@@ -154,7 +154,7 @@ call_create(void *modem, int id, int caller, int srate, int max_frag,
 	return (struct dp *)st;
 }
 
-int
+static int
 call_delete(struct dp *dp)
 {
 	struct call_dp *st = ((struct call_dp *)dp)->self;
@@ -255,7 +255,7 @@ call_block(struct call_dp *st)
 	return rc;
 }
 
-int
+static int
 call_run(struct dp *dp, void *in, void *out, int count)
 {
 	struct call_dp *st = ((struct call_dp *)dp)->self;

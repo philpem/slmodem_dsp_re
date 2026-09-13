@@ -75,6 +75,20 @@ extern void ref_init_vmi_v27rx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
 extern void ref_init_vmi_v29rx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
 			       int arg_2, void *arg_3);
 
+/*
+ * FILE-LOCAL in the object, so class1rx.c defines them `static` and
+ * class1rx.h no longer declares them.  Their addresses are taken (class1rx.c
+ * stores all three in `init_vmi_data_rx_modem`), so the ordinary calling
+ * convention is unchanged; the test tier links a globalized copy
+ * (tools/testvisible.py).
+ */
+extern void init_vmi_v17rx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
+			   int arg_2, void *arg_3);
+extern void init_vmi_v27rx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
+			   int arg_2, void *arg_3);
+extern void init_vmi_v29rx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
+			   int arg_2, void *arg_3);
+
 /* ------------------------------------------------------------------------- */
 
 /*

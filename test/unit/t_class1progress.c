@@ -42,6 +42,25 @@
 extern unsigned int ref_dsplibs_debug_level;
 extern class1_state_fn ref_class1_state_functions[19];
 
+/*
+ * FILE-LOCAL in the object, so class1.c defines them `static` and class1.h
+ * no longer declares them.  Their addresses are taken (class1.c installs
+ * each into `class1_state_functions`, and this test does too), so the
+ * ordinary calling convention is unchanged; the test tier links a globalized
+ * copy (tools/testvisible.py).
+ */
+extern int _idle_state(struct fax_class1 *ctx, const short *rx, short *tx,
+		       int word3, int word4, int *rx_count, int *tx_count,
+		       int word7, int *word8);
+extern int _send_silence_state(struct fax_class1 *ctx, const short *rx,
+			       short *tx, int word3, int word4,
+			       int *rx_count, int *tx_count, int word7,
+			       int *word8);
+extern int _recieve_silence_state(struct fax_class1 *ctx, const short *rx,
+				  short *tx, int word3, int word4,
+				  int *rx_count, int *tx_count, int word7,
+				  int *word8);
+
 extern int ref_fax_class1_progress(struct fax_class1 *ctx, short *rx,
 	short *tx, int word3, int word4, int *rx_count, int *tx_count,
 	int *word7, int *word8);

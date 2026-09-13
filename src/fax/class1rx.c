@@ -54,7 +54,7 @@
 #include "dsplib/v27fax.h"
 #include "dsplib/v29fax.h"
 
-void
+static void
 init_vmi_v17rx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
 	       int arg_2, void *arg_3)
 {
@@ -85,7 +85,7 @@ init_vmi_v17rx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
 	vmi->modem_cfg = cfg;
 }
 
-void
+static void
 init_vmi_v29rx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
 	       int arg_2, void *arg_3)
 {
@@ -112,7 +112,7 @@ init_vmi_v29rx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
 	vmi->modem_cfg = cfg;
 }
 
-void
+static void
 init_vmi_v27rx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
 	       int arg_2, void *arg_3)
 {

@@ -873,7 +873,7 @@ cTOOLS_handle_hdlc_output(struct fax_class1 *ctx, const unsigned short *src,
  * zero from the dword copy, so no encoding trick is needed for behavioural
  * fidelity.
  */
-int
+static int
 init_vmi_v17tx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
 	       int arg_2, void *arg_3)
 {
@@ -904,7 +904,7 @@ init_vmi_v17tx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
 	return cfg->bitrate;
 }
 
-int
+static int
 init_vmi_v29tx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
 	       int arg_2, void *arg_3)
 {
@@ -934,7 +934,7 @@ init_vmi_v29tx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
 	return cfg->bitrate;
 }
 
-int
+static int
 init_vmi_v27tx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
 	       int arg_2, void *arg_3)
 {

@@ -203,10 +203,12 @@ struct fdsp_tone {
 
 /*
  * Set while a locally generated beep is playing; bValidateEnergyValue
- * returns 0 outright when it is up.  LOCAL (`b`) in the blob; the second
- * referent there is the unwritten function at 0xaea27, same span.
+ * returns 0 outright when it is up.  LOCAL (`b`) in the blob, so it is
+ * `static` in Fdspkrnl.c and declares nothing here; the differential tests
+ * declare it themselves and reach it through the globalized test copy
+ * (tools/testvisible.py).  The second referent there is the unwritten
+ * function at 0xaea27, same span.
  */
-extern int bInternalBeepInProgress;
 
 /*
  * The kernel FDSP_DP_Create last handed out, and a counter written by that
@@ -381,10 +383,12 @@ int FDSP_Kernel_Loop(struct fdsp_kernel *k, float *in_a, float *out_b,
  * @param mu       LMS step size; taps adapt only when nonzero.
  * @param update   Nonzero enables tap adaptation (also gated on @p mu
  *                 and the near sample being below half the window peak).
+ *
+ * FILE-LOCAL in the blob (`t`), so it is `static` in Fdspkrnl.c and
+ * declares nothing here; the differential tests declare the building
+ * compiler's static convention and reach it through the globalized test
+ * copy (tools/testvisible.py).
  */
-void EchoCanceler(float *hist, int offset, float *coef, unsigned int ntaps,
-		  float *in, float *out, float *out2, int *verdict,
-		  float mu, int update);
 
 /**
  * @brief Block-energy gate, and the trigger for a delayed kernel re-init.
@@ -403,6 +407,10 @@ void EchoCanceler(float *hist, int offset, float *coef, unsigned int ntaps,
  *                to zero and re-init.
  * @return 1 only when the average is quiet and no countdown is pending,
  *         0 otherwise.
+ *
+ * LOCAL in the blob (`regparm(2)` there); a `static` copy is dropped by
+ * -O3, so this record stays external and the differential test reaches it
+ * through the header.
  */
 int bValidateEnergyValue(float *buf, unsigned int n, int *hist,
 			 unsigned int *idxp, unsigned int histlen,

@@ -1281,12 +1281,16 @@ extern void ref_V34SetupModulator(void *m, short baud, short carrier,
  *
  *     movswl 0xaa7e(%edi),%edx ; call 5dd10
  *
- * -- so regparm(1) and regparm(2).  The attribute goes on the REFERENCE
- * declaration only: our own copies have external linkage and the ordinary
- * convention, which is the same split t_v34demod.c documents.
+ * -- so regparm(1) and regparm(2).  `getbit` is still external, so its
+ * attribute goes on the REFERENCE declaration only; `ApplyBulkDelay` is
+ * FILE-LOCAL in the object, so V34hshak.c defines it `static` and this test
+ * declares the plain name too, carrying the same regparm(2) the object's own
+ * copy uses.  The test tier links a globalized copy (tools/testvisible.py).
  */
 extern short ref_getbit(struct v34_bitsource *b) __attribute__((regparm(1)));
 extern void ref_ApplyBulkDelay(void *obj, short delay)
+	__attribute__((regparm(2)));
+extern void ApplyBulkDelay(void *obj, short delay)
 	__attribute__((regparm(2)));
 
 /*

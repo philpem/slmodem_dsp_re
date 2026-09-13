@@ -49,6 +49,11 @@ dialer_grade_name(int grade)
 	return (unsigned)grade > 3 ? "ILLEGAL!" : dialer_grade_names[grade];
 }
 
+/*
+ * LOCAL (`t`) in the blob, but a `static` copy here is partially inlined by
+ * -O3 and the plain name becomes `AnalyseDialString.part.0`, so the record
+ * stays external and the differential tests reach it through the header.
+ */
 int
 AnalyseDialString(struct dialer *d, const char *s, int store)
 {

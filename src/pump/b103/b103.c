@@ -46,6 +46,17 @@ extern int modem_put_bits(void *modem, int chan, const unsigned char *bits,
 extern void modem_dp_deregister(int id, void *op);
 
 /*
+ * The three entry points are FILE-STATIC in the object -- `nm` shows a
+ * lower-case `t` for each -- so they are static here too and `b103.h` no
+ * longer declares them.  The operations table below names two of them before
+ * their definitions, so they are forward-declared.
+ */
+static struct dp *b103_create(void *modem, int id, int caller, int srate,
+			      int max_frag, struct dp_operations *op);
+static int b103_delete(struct dp *dp);
+static int b103_process(void *dp, void *in, void *out, int count);
+
+/*
  * Bell 103 and V.21 share one implementation: same 300 bit/s FSK, differing
  * only in tone frequencies, which b103_create selects from the DP_ID.  That
  * is why one ops table is registered under both.
@@ -116,7 +127,7 @@ dp_b103_exit(void)
  * than 14000 -- 3000 blocks rather than 700 -- and the transmit scale is 6200
  * rather than 3200.
  */
-struct dp *
+static struct dp *
 b103_create(void *modem, int id, int caller, int srate, int max_frag,
 	    struct dp_operations *op)
 {
@@ -172,7 +183,7 @@ b103_create(void *modem, int id, int caller, int srate, int max_frag,
  * Reproduced as written: it is how the original documents the relationship,
  * and it is what would still work if the two were ever separated.
  */
-int
+static int
 b103_delete(struct dp *dp)
 {
 	struct b103_dp *self = (struct b103_dp *)
@@ -219,7 +230,7 @@ b103_delete(struct dp *dp)
  * on the transition is what makes `dp->status` the edge trigger the core
  * expects.
  */
-int
+static int
 b103_process(void *dp_arg, void *in, void *out, int count)
 {
 	struct dp *dp = (struct dp *)dp_arg;

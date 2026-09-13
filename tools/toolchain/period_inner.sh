@@ -60,6 +60,12 @@ obj() { echo "$OUT/$(echo "$1" | tr / _ | sed 's/\.[^.]*$//').o"; }
 # source and this.
 NEWEST_HDR=$(ls -t $(find include src test/harness -name '*.h') test/unit/*.cxxflags 2>/dev/null | head -1)
 
+# COMPILE AND LINK ARE SPLIT, because binutils 2.15 (the period linker) has no
+# `objcopy --globalize-symbols`.  The host does that step between the two
+# stages.  `STAGE=all` (the default) keeps the old one-pass behaviour for a
+# hand-run of this script; period.sh drives compile then link.
+STAGE=${STAGE:-all}
+
 # --- compile ---------------------------------------------------------------
 : > "$OUT/failed"
 compile_one() {
@@ -76,6 +82,7 @@ compile_one() {
 	esac || { echo "$f" >> "$OUT/failed"; sed -n '1,4p' "$o.log" >&2; }
 }
 
+if [ "$STAGE" != "link" ]; then
 echo "period: compiling $(echo $SRC $CXXSRC $HARNESS | wc -w) objects with $(gcc -dumpversion)"
 echo "period: flags $(echo $FLAGS)"
 echo "period: C++ source flags $(echo $SOURCE_CXXFLAGS)"
@@ -91,9 +98,41 @@ if [ -s "$OUT/failed" ]; then
 	echo "  a rejection here is a finding: the author's compiler was this one." >&2
 	exit 1
 fi
+fi
 
 OBJS=""
 for f in $SRC $CXXSRC $HARNESS; do OBJS="$OBJS $(obj "$f")"; done
+
+# COMPILE-ONLY stage: record the object list so the HOST can run the
+# `objcopy --globalize-symbols` the period binutils 2.15 does not have, then
+# re-enter for the link stage.
+if [ "$STAGE" = "compile" ]; then
+	for o in $OBJS; do echo "$o"; done > "$OUT/objs.list"
+	# The reconstructed objects only -- the harness is not ours to globalize,
+	# and a harness name must not make a reconstruction name look ambiguous.
+	: > "$OUT/srcobjs.list"
+	for f in $SRC $CXXSRC; do echo "$(obj "$f")" >> "$OUT/srcobjs.list"; done
+	exit 0
+fi
+
+#
+# THE FILE-LOCAL SYMBOLS A TEST NAMES, globalized by the host between the two
+# stages.  The reference keeps many tables and datapump entry points LOCAL, so
+# `src/` defines them `static`; a test that names one would otherwise have no
+# symbol to link against.  The copies in $OUT/testhost are linked into the test
+# binaries only -- the partial-link candidate is built elsewhere and keeps the
+# LOCAL binding.
+#
+if [ -n "${VISIBLE:-}" ] && [ -s "$VISIBLE" ] && [ -d "$OUT/testhost" ]; then
+	GLOB=""
+	for o in $OBJS; do
+		g="$OUT/testhost/$(basename "$o")"
+		# Only the reconstructed objects were globalized; the harness keeps
+		# its own copy.
+		if [ -f "$g" ]; then GLOB="$GLOB $g"; else GLOB="$GLOB $o"; fi
+	done
+	OBJS="$GLOB"
+fi
 
 # The newest input any test binary has, so a relink can be skipped when
 # nothing it depends on moved.  The LINK is the expensive half here -- 155

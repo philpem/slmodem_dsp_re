@@ -22,6 +22,15 @@ extern struct class1_name ref_states_names[20];
 extern struct class1_name ref_status_names[11];
 
 /*
+ * Both tables are FILE-LOCAL in the object, so class1.c defines them `static`
+ * and class1.h no longer declares them.  The test tier links a globalized
+ * copy (tools/testvisible.py), so these plain declarations resolve; the
+ * partial-link candidate keeps the LOCAL binding.
+ */
+extern struct class1_name states_names[20];
+extern struct class1_name status_names[11];
+
+/*
  * `char *` in both tables points at a `.rodata.str1.1`/`.rodata.str1.4`
  * string; two different link units place those strings at different
  * addresses, so the pointers themselves can never match -- only what they
