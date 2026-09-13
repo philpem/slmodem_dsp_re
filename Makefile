@@ -267,6 +267,11 @@ SYMMAP     := $(BUILD)/symmap.txt
 # same list from the PERIOD objects after its compile stage and globalizes from
 # that; this target serves `make test`/`make one` only.
 TESTVISIBLE  := $(BUILD)/test_visible.txt
+# GCC 4+ mangles an INTERNAL-LINKAGE C++ variable (`_ZL10entFiltNum`) where
+# GCC 3.4.2 -- the object's own compiler -- emits the plain name.  A test names
+# the author's plain name, so the host test-host copy is renamed first.  The
+# period objects already carry the plain name, so this file is empty there.
+TESTREDEFINE := $(BUILD)/test_redefine.txt
 TESTHOST_OBJ := $(patsubst $(BUILD)/repro/%.o,$(BUILD)/testhost/%.o,$(OBJ_REPRO))
 
 # dsplibs.o predates modern hardening defaults: it wants an executable stack
@@ -374,12 +379,15 @@ $(BUILD)/repro/%.o: src/%.cpp Makefile
 # partial link reads $(BUILD)/repro directly, so nothing here reaches the
 # candidate.  `objcopy` ignores a listed name an object does not define, so the
 # one tree-wide list applies to every object.
-$(TESTVISIBLE): tools/testvisible.py $(OBJ_REPRO)
-	@$(PYTHON) tools/testvisible.py --objects $(BUILD)/repro --tests test -o $@
+$(TESTVISIBLE) $(TESTREDEFINE) &: tools/testvisible.py $(OBJ_REPRO)
+	@$(PYTHON) tools/testvisible.py --objects $(BUILD)/repro --tests test \
+		-o $(TESTVISIBLE) --redefine $(TESTREDEFINE)
 
-$(BUILD)/testhost/%.o: $(BUILD)/repro/%.o $(TESTVISIBLE) Makefile
+$(BUILD)/testhost/%.o: $(BUILD)/repro/%.o $(TESTVISIBLE) $(TESTREDEFINE) Makefile
 	@mkdir -p $(dir $@)
-	objcopy --globalize-symbols=$(TESTVISIBLE) $< $@
+	objcopy --redefine-syms=$(TESTREDEFINE) $< $@.redef
+	objcopy --globalize-symbols=$(TESTVISIBLE) $@.redef $@
+	rm -f $@.redef
 
 # Linked with $(CC), not $(CXX): the C++ WE have written is -fno-exceptions
 # -fno-rtti with no virtuals and no new/delete, so nothing needs libstdc++ --

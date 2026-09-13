@@ -194,13 +194,18 @@ if [ -s "$OUT/srcobjs.list" ]; then
         echo "$OUT/${o#/out/}" >> "$OUT/srcobjs_host.list"
     done < "$OUT/srcobjs.list"
     python3 tools/testvisible.py --from-list "$OUT/srcobjs_host.list" \
-        --tests test -o "$VISIBLE"
+        --tests test -o "$VISIBLE" --redefine "$OUT/test_redefine.txt"
     mkdir -p "$OUT/testhost"
     while read -r o; do
         [ -n "$o" ] || continue
         o="${o#/out/}"			# the container sees /out, we see $OUT
         g="$OUT/testhost/$(basename "$o")"
-        objcopy --globalize-symbols="$VISIBLE" "$OUT/$o" "$g"
+        # GCC 4+ renames an internal-linkage C++ variable; GCC 3.4.2, the
+        # period compiler, already emits the plain name so the redefine list
+        # is empty here and this pass is a no-op.
+        objcopy --redefine-syms="$OUT/test_redefine.txt" "$OUT/$o" "$g.redef"
+        objcopy --globalize-symbols="$VISIBLE" "$g.redef" "$g"
+        rm -f "$g.redef"
         touch -r "$OUT/$o" "$g"
     done < "$OUT/srcobjs.list"
 fi
