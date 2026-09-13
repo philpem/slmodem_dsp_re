@@ -123908,3 +123908,91 @@ merging the two files and recovering the `v8.c` FILE spelling. That is the
 translation-unit-split lever (finding F11351) and belongs in its own pass.
 
 (2026-09-12)
+
+## F11358. The datapump and call-progress families now carry the reference's LOCAL binding, and a test-tier globalizer makes static symbols testable
+
+Issue #6, continuation of F11357.  The reference object's early `.symtab` is
+the datapump sequence `dp_init.c, dcr.c, cid.c, voice.c, fax.c, rd.c,
+ringDetector.c, call.c, v8.c, vpcm.c, v32.c, v23.c, v22.c, b103.c`, and each
+family introduces a LOCAL `*_ops` followed by LOCAL create/delete/process
+records; the call-progress tables, several fax state and vmi symbols, and a
+handful of module-internal functions and tables are LOCAL too.  Our source
+declared many of them, so the candidate carried GLOBAL records and a different
+relocation target for every reference to them.  **Binding mismatches against
+the reference fall from 78 to 27.**
+
+**A test tier that can name a static reconstruction symbol (commit
+`781be95d`).**  Making a symbol static is trivial until a differential test
+names it -- `return RATEv32[i]`, a datapump `create` called directly -- and
+then no symbol links.  This is the mirror of what `tools/symmap.py` does for
+the blob: `tools/testvisible.py` lists the LOCAL symbols our objects define
+exactly once across the tree that a test source mentions, and the test
+binaries link a globalized COPY of each object (`objcopy
+--globalize-symbols`, build/testhost).  The partial-link candidate consumes
+the plain tree and keeps the LOCAL binding, and `src/` carries no test-only
+text.  The period image's binutils 2.15 predates `--globalize-symbols`, so
+`period.sh` now runs compile, promotes on the host, then links.
+
+**The families converted (commits `f9552e39`, `e58d085d`, `635c6d0a`,
+`e4a1a21b`, `daf91eba`, `0fb949dd`):**
+
+- `call.c`: call_GetSRegister, call_create, call_delete, call_run.
+- `v23.c`, `v32.c`, `vpcm.c` (including `vpcm_op`) and `b103.c`: the entry
+  points and, where still external, the operations table.  `v22.c` was
+  already correct and is the template.
+- `Callprog.c`: all ten call-progress state tables.  A tentative global array
+  is a COMMON symbol the linker merges; a static one is a fixed local object
+  as in the reference, so candidate NOBITS moves 2,376 -> 2,760 against the
+  reference's 2,836 (shortfall 460 -> 76).
+- `Fdspkrnl.c`/`Beepgen.c`/`V34hshak.c`/`V34RX.c`/`v32fpdisp.c`: EchoCanceler,
+  bInternalBeepInProgress, GetGain, ApplyBulkDelay, V34demodulate, v32_data.
+  Where the function has no taken address the static calling convention
+  applies and the per-symbol size moves onto the object's: GetGain 432/432
+  bytes exact, v32_data 859/860, EchoCanceler 359/363.  `rxvect4` is the
+  reverse case (reference GLOBAL, ours static) and is made external.
+- `v8dp.c` -> `v8.c`: `v8_process` moves out of `v8proc.c` into the datapump
+  unit, which is then named the reference's own `v8.c`, and all three entry
+  points become static.  The twelve mutation anchors whose `find` text is
+  inside `v8_process` move with it to the `v8dp` suite; anchorcheck reports 0
+  non-unique and 0 re-pointed.
+- `class1.c`/`class1rx.c`/`class1tx.c`/`faxvmi.c`: the state functions,
+  `init_vmi_*` handlers and `vmi_*` tables.  Each function's address is taken
+  inside its own unit, so no calling convention changes.
+
+**Six symbols are deliberately not converted, and each is a real obstacle
+rather than a missed edit.**  A static that GCC drops or renames is worse
+than a binding mismatch, because the symbol then does not exist at all:
+`bValidateEnergyValue` becomes `bValidateEnergyValue.constprop.0` and
+`AnalyseDialString` becomes `AnalyseDialString.part.0` under -O3;
+`pGlobalFDSPObj` and `uCorrelationReportsNo` are written but never read in the
+reconstructed unit so the compiler deletes them; `v92echoPreFilter_a`/`_b`
+have no referrer until V92EchoCanceller's constructor lands; and
+`FPM_div_table`'s `static` is load-bearing for the D4 reproduction (finding
+F1506).  Each site carries the reason in a comment.
+
+**The remaining 27 are cross-translation-unit and need a merge, not a storage
+class.**  `RATEv32`/`SnrToRetrainTable` belong to `V32stc.c` here and are named
+by `v32fpdisp.c`; `V32DiconnectThreshTable` to `V32.c`; `v32_handshake`/
+`v32_null_protocol` to `V32mod.c`; `TONEv22_CFG`/`TONEv22INIT_CFG`/
+`V22DiconnectThreshTable` to `V22.c`; `IIR2100_Coef_*` to `AnsamToneDetector.cpp`;
+`entFiltNum`/`entFiltDen`/`v34initialbauds` to `VpcmFloModem.cpp`;
+`v92TxPreFilter` to `V92Modulator.cpp`; `V92EchoCanceller.cpp` owns the
+`v92echoPreFilter_*` pair; `V34DisconnectThreshTable` and
+`getMPrecvdBits` to `VPcmV34Main.cpp`; `ToneLPF` has one copy in `TONE.c` and
+one in `fpm_tone.c`; and `getbit` is LOCAL to `V34hshak.c`.  In each case the
+definition sits in one of our files and its user in another, so the fix is to
+recover the reference's translation-unit boundary (finding F11351's lever),
+which moves mutation anchors with the code and is its own pass.
+
+**Measured.**  Each commit's `make period` is 375 passed, 0 failed and the
+`make similarity` ratchet stays `identical 887` with no symbol gained or
+lost.  Cumulative partial-link census over the pass: positioned bytes
+54,957 -> 54,981 (the coarse count moves by tens of bytes within
+already-inexact sections each time a layout shifts, and no section ever
+crossed the exact boundary), exact relocations 906 -> 919, exact defined
+symbols 225 -> 231, candidate NOBITS 2,376 -> 2,760 against 2,836.  The exact
+symbol count moves slowly because an exact record carries the `.text` VALUE as
+well as the binding, and the gross layout deficit is unchanged; the binding is
+necessary and not sufficient.
+
+(2026-09-12)
