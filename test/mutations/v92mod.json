@@ -207,5 +207,32 @@
   "label": "the destructor nulls the transmit filter after freeing it",
   "find": "\t\ttxFilter->~FloatFIR();\n\t\tsysdep_free(txFilter);\n\t}",
   "replace": "\t\ttxFilter->~FloatFIR();\n\t\tsysdep_free(txFilter);\n\t\ttxFilter = 0;\n\t}"
+ },
+ {
+  "label": "break v92TxPreFilter's mirror on one side only",
+  "find": "\t-0.0616387613f, 0.937895119f, -0.0616387613f, -0.0590389259f,",
+  "replace": "\t-0.0616387613f, 0.937895119f, -0.0616387614f, -0.0590389259f,",
+  "equivalent": true,
+  "why": "-0.0616387613f and -0.0616387614f are the SAME float, 0xbd7c78ed both, so the mirror is not broken and the table is unchanged.  The mirror check in t_vpcmtabs.c compares BITS, and there is no bit here to differ."
+ },
+ {
+  "label": "flatten v92TxPreFilter's near-zero taps to zero",
+  "find": "\t0.000292354584f, -3.63938128e-18f, -0.000459987583f, -0.00129610382f,",
+  "replace": "\t0.000292354584f, 0.0f, -0.000459987583f, -0.00129610382f,"
+ },
+ {
+  "label": "shift v92TxPreFilter by one tap, putting the pad first",
+  "find": "static float v92TxPreFilter[V92_TXPREFILTER_TAPS] = {\n\t0.000292354584f,",
+  "replace": "static float v92TxPreFilter[V92_TXPREFILTER_TAPS] = {\n\t0.0f, 0.000292354584f,"
+ },
+ {
+  "label": "make v92TxPreFilter's pad slot -0.0f instead of +0.0f",
+  "find": "\t-0.000459987583f, -3.63938128e-18f, 0.000292354584f, 0.0f,\n};",
+  "replace": "\t-0.000459987583f, -3.63938128e-18f, 0.000292354584f, -0.0f,\n};"
+ },
+ {
+  "label": "break v92TxPreFilter's mirror for real, on the high side only",
+  "find": "\t-0.0616387613f, 0.937895119f, -0.0616387613f, -0.0590389259f,",
+  "replace": "\t-0.0616387613f, 0.937895119f, -0.0616387f, -0.0590389259f,"
  }
 ]

@@ -142,6 +142,7 @@ void *ref_VPCMXF_Create(int digitalSide, void *v34Object,
 void ref_VPCMXF_Delete(void *self);
 
 /* The two entrance-filter tables, ours and the blob's; see the header. */
+extern double entFiltNum[], entFiltDen[];
 extern double ref_entFiltNum[], ref_entFiltDen[];
 
 extern unsigned int ref_dsplibs_debug_level;

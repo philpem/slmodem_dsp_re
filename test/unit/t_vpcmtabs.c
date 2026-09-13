@@ -58,6 +58,21 @@ extern float ref_v92TxPreFilter[V92_TXPREFILTER_TAPS]
 extern const unsigned char ref_v34initialbauds[V34_INITIAL_BAUDS]
 	asm("ref_v34initialbauds");
 
+/*
+ * The seven moved tables are FILE-LOCAL `static` in their reconstructed
+ * consumer now, so vpcm_tables.h no longer declares them.  A differential
+ * test can still name the plain symbol because the test tier links a
+ * globalized copy of each reconstructed object (tools/testvisible.py); the
+ * declarations are supplied here.
+ */
+extern double entFiltNum[VPCM_ENTFILT_TAPS];
+extern double entFiltDen[VPCM_ENTFILT_TAPS];
+extern double IIR2100_Coef_A_8000[IIR2100_TAPS_8000];
+extern double IIR2100_Coef_B_8000[IIR2100_TAPS_8000];
+extern double IIR2100_Coef_A_9600[IIR2100_TAPS_9600];
+extern double IIR2100_Coef_B_9600[IIR2100_TAPS_9600];
+extern float v92TxPreFilter[V92_TXPREFILTER_TAPS];
+
 /* Wrappers, so `diff_eq_obj` coalesces a differing run into one report. */
 struct tab_d5 { double v[5]; };
 struct tab_d11 { double v[11]; };

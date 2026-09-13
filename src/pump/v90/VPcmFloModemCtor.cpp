@@ -183,6 +183,44 @@ typedef char vpcmc_size[(sizeof(VPcmFloModem) == 0x7f68) ? 1 : -1];
 static const unsigned char vpcm_ctor_flags_0217[6] = { 1, 1, 1, 1, 1, 1 };
 
 /*
+ * ---------------------------------------------------------------------------
+ * VPcmFloModem's constructor: an entry filter, the fourth and third arguments
+ * of `GenericIIR<float,double>(5, 5, entFiltDen, entFiltNum, 99)`.
+ * ---------------------------------------------------------------------------
+ */
+
+/*
+ * `entFiltNum`, .data+0xe0 -- the NUMERATOR, fourth argument of
+ * `GenericIIR<float,double>(5, 5, entFiltDen, entFiltNum, 99)` at
+ * .text+0xfbcb.  Indexed by tap, 0 the most recent; five doubles.
+ *
+ * The five are NEARLY symmetric and NEARLY binomial, and neither is exact.
+ * b[0] and b[4] agree to fifteen significant figures and differ in the
+ * sixteenth; but b[1]/b[0] is -3.9999759042982252 and b[2]/b[0] is
+ * 5.999951808669026, which miss -4 and 6 in the SIXTH significant figure --
+ * relative errors of 6.0e-06 and 8.0e-06, a hundred million times coarser than
+ * the sixteenth-figure disagreement above and far too coarse to be rounding.
+ * So this is a computed design that came out close to (1 - z^-1)^4 rather than
+ * that polynomial with rounded coefficients, and it is recorded as an
+ * observation about the numbers and not as a derivation.  Contrast
+ * `IIR2100_Coef_B_9600` below, where the ratios ARE exact to an ulp and the
+ * derivation holds.
+ */
+static double entFiltNum[VPCM_ENTFILT_TAPS] = {
+	0.96284330984918198, -3.8513500390114781, 5.777013458394471,
+	-3.8513500390114772, 0.96284330984918154,
+};
+
+/*
+ * `entFiltDen`, .data+0x120 -- the DENOMINATOR, third argument of the same
+ * call.  Five doubles, a[0] exactly 1.0 so the caller need not normalise.
+ */
+static double entFiltDen[VPCM_ENTFILT_TAPS] = {
+	1.0, -3.9242514351703268, 5.7756331881310974, -3.7784482934930401,
+	0.92706723932132973,
+};
+
+/*
  * THE MEMBER-INITIALISER LIST IS THE OBJECT'S OWN ORDER, and that it can be
  * is the interesting part.
  *

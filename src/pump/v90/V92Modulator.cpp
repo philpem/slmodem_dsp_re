@@ -171,6 +171,40 @@ typedef char v92mod_scram_size[
 #endif /* 32-bit */
 
 /*
+ * ---------------------------------------------------------------------------
+ * `v92TxPreFilter`, .data+0x3a0 -- V92Modulator's transmit shaping FIR.
+ *
+ * Thirty-six floats indexed by tap, second argument of `FloatFIR(36,
+ * v92TxPreFilter, 99)` at .text+0x15340.  The order is the tap count exactly,
+ * so all thirty-six are used.
+ *
+ * THE SHAPE IS A 35-TAP SYMMETRIC FIR WITH A 36TH SLOT THAT IS ZERO.  Taps 0
+ * to 34 mirror about tap 17 -- v[17-k] == v[17+k] to the bit for every k --
+ * and tap 35 is +0.0.  So the design is odd-length and linear phase, and the
+ * trailing zero is padding to an even count and not a coefficient; a
+ * differential test that stopped at 35 would never see it, which is why the
+ * one here compares all 144 bytes.
+ *
+ * Tap 17 is 0.9379 and every other tap is negative or (taps 0, 34) barely
+ * positive: a highpass-ish shaper, one big centre tap with a shallow negative
+ * skirt.  Taps 1 and 33 are -3.639e-18, which is zero as designed and a
+ * rounding residue as stored -- exactly the kind of value a decimal round trip
+ * loses, so it is the one the test's mantissa check watches.
+ * ---------------------------------------------------------------------------
+ */
+static float v92TxPreFilter[V92_TXPREFILTER_TAPS] = {
+	0.000292354584f, -3.63938128e-18f, -0.000459987583f, -0.00129610382f,
+	-0.00272257649f, -0.00493108528f, -0.00806269515f, -0.0121834269f,
+	-0.0172666069f, -0.0231844559f, -0.0297103822f, -0.0365322642f,
+	-0.0432757102f, -0.0495351218f, -0.0549094528f, -0.0590389259f,
+	-0.0616387613f, 0.937895119f, -0.0616387613f, -0.0590389259f,
+	-0.0549094528f, -0.0495351218f, -0.0432757102f, -0.0365322642f,
+	-0.0297103822f, -0.0231844559f, -0.0172666069f, -0.0121834269f,
+	-0.00806269515f, -0.00493108528f, -0.00272257649f, -0.00129610382f,
+	-0.000459987583f, -3.63938128e-18f, 0.000292354584f, 0.0f,
+};
+
+/*
  * ===========================================================================
  * V92Modulator::reset (.text+0x15060, 186 bytes), which the constructor
  * inlines and which is also its own symbol.

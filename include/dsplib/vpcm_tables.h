@@ -1,9 +1,19 @@
 /*
  * vpcm_tables.h -- the coefficient tables of the V.PCM construction path.
  *
- * Ten tables, 710 bytes, and every one of them is a FILE-LOCAL symbol in the
- * object.  src/pump/v90/vpcm_tables.c says where each one really lives and why
- * they are gathered here anyway.
+ * The reference distributes these definitions across the translation units
+ * that use them, and each is FILE-LOCAL there.  The reconstructed consumers
+ * are written, so each table is now `static` in its own file and has no
+ * declaration here:
+ *
+ *     entFiltNum, entFiltDen       src/pump/v90/VPcmFloModemCtor.cpp
+ *     IIR2100_Coef_{A,B}_{8000,9600} src/dsp/AnsamToneDetector.cpp
+ *     v92TxPreFilter               src/pump/v90/V92Modulator.cpp
+ *
+ * Two tables still have no reconstructed consumer and remain defined in
+ * src/pump/v90/vpcm_tables.c, so their declarations stay below:
+ * `v92echoPreFilter_{a,b}` (V92EchoCanceller) and `v34initialbauds`
+ * (VpcmFloModem).  See that file's comment for why neither can move yet.
  *
  * The element types are not read off the bytes.  Every table is handed to a
  * constructor whose mangled name states the pointer type, so `double` and
@@ -52,27 +62,22 @@
 extern "C" {
 #endif
 
-extern double entFiltNum[VPCM_ENTFILT_TAPS];
-extern double entFiltDen[VPCM_ENTFILT_TAPS];
-
-extern double IIR2100_Coef_A_8000[IIR2100_TAPS_8000];
-extern double IIR2100_Coef_B_8000[IIR2100_TAPS_8000];
-extern double IIR2100_Coef_A_9600[IIR2100_TAPS_9600];
-extern double IIR2100_Coef_B_9600[IIR2100_TAPS_9600];
-
 /*
  * v92echoPreFilter_a/b are FILE-LOCAL in the object (`d`), but a `static`
  * copy in vpcm_tables.c is dropped by -O3: nothing in this tree references
  * them yet (V92EchoCanceller's constructor, their only consumer, is not
  * reconstructed).  The record stays global so the differential test can
- * reach it.  When that constructor lands, move them into its file as
- * `static`, as the note at the top of vpcm_tables.c says.
+ * reach it; their reference home is V92EchoCanceller.cpp.
  */
 extern float v92echoPreFilter_a[V92_ECHO_PREFILTER_TAPS];
 extern float v92echoPreFilter_b[V92_ECHO_PREFILTER_TAPS];
 
-extern float v92TxPreFilter[V92_TXPREFILTER_TAPS];
-
+/*
+ * `v34initialbauds` is still defined in vpcm_tables.c: its reference
+ * consumer is VpcmFloModem's constructor, which is reconstructed in
+ * VPcmFloModemCtor.cpp but reads `vpcm_ctor_flags_0217` rather than this
+ * array there, so a `static` copy would have no referrer.
+ */
 extern const unsigned char v34initialbauds[V34_INITIAL_BAUDS];
 
 #ifdef __cplusplus
