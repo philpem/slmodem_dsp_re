@@ -507,14 +507,13 @@ unsigned short RxClampV32(void *modem, short *in, short *out,
 /**
  * @brief Placeholder for a file-local, byte-sized `ret` stub in `V32_PROTOCOL`'s table.
  *
- * File-local in the object, global here -- the same arrangement
- * `v32_null_protocol`'s sibling `getbit` has, and for the same reason: a
- * `static` has no symbol for the differential harness to compare against.
- * Nothing in `.text` calls it; the reference is from a table this batch
- * does not write. It is one byte of `ret`, so its signature is not
- * recoverable and `void (void)` is a placeholder rather than a reading.
+ * FILE-LOCAL IN THE OBJECT, so it is `static` in `src/pump/v32/v32fpdisp.c`,
+ * the unit that holds `V32_PROTOCOL`, and has no declaration here.  Nothing in
+ * `.text` calls it; the reference is from the table.  It is one byte of `ret`,
+ * so its signature is not recoverable and `void (void)` is a placeholder
+ * rather than a reading.  A test names it through the test tier's globalized
+ * copies (tools/testvisible.py).
  */
-void v32_null_protocol(void);
 
 /**
  * @brief Retune the V.32 half-duplex context's first tone detector.

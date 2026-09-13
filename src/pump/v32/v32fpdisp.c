@@ -85,6 +85,33 @@
 #include "dsplib/v32state.h"
 #include "dsplib/fpm.h"
 
+/*
+ * THE TWO RATE-INDEXED TABLES ARE FILE-LOCAL IN THE OBJECT and this file is
+ * their only consumer -- `V32FP_create` reads `RATEv32` and `V32FP_status`
+ * reads `SnrToRetrainTable` -- so they are `static` here, which is what the
+ * reference's LOCAL `d` records say.  They moved out of `v32fptab.c`, which
+ * used to hold them with external linkage so a test could name them; the test
+ * tier's globalized copies (tools/testvisible.py) are what replaces that now.
+ * Both are `.data` and not `const`, even though nothing writes either.
+ */
+static short SnrToRetrainTable[6] = {
+	9,			/* 0   4800                                  */
+	13,			/* 1   9600, no trellis                      */
+	13,			/* 2   9600, trellis                         */
+	11,			/* 3   7200                                  */
+	20,			/* 4  12000                                  */
+	24			/* 5  14400                                  */
+};
+
+static short RATEv32[6] = {
+	4800,			/* 0                                         */
+	9600,			/* 1   no trellis                            */
+	9600,			/* 2   trellis                               */
+	7200,			/* 3                                         */
+	12000,			/* 4                                         */
+	14400			/* 5                                         */
+};
+
 /* The instance is not modelled; see v32fpctl.h.  These are its accessors. */
 #define FIELD(obj, off)		((unsigned char *)(void *)(obj) + (off))
 #define FIELD_PTR(obj, off)	(*(void **)(void *)FIELD((obj), (off)))
@@ -496,6 +523,76 @@ v32_data(void *modem, unsigned short *txdata, short *txout, short *rxin,
 	 */
 	FIELD_U8(modem, V32_OBJ_FLAGS) |= (unsigned char)0x0c;
 	FIELD_U8(modem, V32_OBJ_STATUS) = (unsigned char)code;
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * `v32_handshake` AND `v32_null_protocol`: the two protocol handlers that were
+ * their own files (`v32hshake.c`, and a tail of `v32fpctl.c`).
+ *
+ * FILE-LOCAL IN THE OBJECT.  The reference groups both with `v32_data` and the
+ * `V32_PROTOCOL` table in one unit (`V32mod.c`); the three are the table's
+ * slots 0..8, so they are `static` here where the table is.  A test names them
+ * through the test tier's globalized copies (tools/testvisible.py); their
+ * addresses are taken by the table, so the calling convention is unchanged.
+ *
+ * `v32_handshake` -- .text 0x082b00, 203 bytes.  Seven interleaved arguments
+ * whose names come from the two callees (grade 2, finding F8201): it clears
+ * bit 0x01 of `obj + 0x31`, clears 0x04/0x08 as well only when `hdx->mode` is
+ * `V32_MODE_RING_INIT`, copies the caller's transmit words into the context's
+ * own buffer at hdx + 0xa4 (`symbol_len` words, a SIGNED 16-bit count whose
+ * index wraps), runs the receive state, then RE-READS the context and
+ * tail-calls the transmit driver -- so a receive state that replaced the whole
+ * context sends the NEW context's buffer.  Findings F8239, F614 and F7803.
+ *
+ * `v32_null_protocol` -- one byte of `ret`.  Nothing in `.text` references it;
+ * its one reference is `V32_PROTOCOL` slot 3, 7 and 8, and `void (void)` is a
+ * placeholder for a signature that is not recoverable.
+ */
+#define V32_FLAG_01		0x01
+#define V32_FLAG_04		0x04
+#define V32_FLAG_08		0x08
+
+static void
+v32_handshake(void *modem, unsigned short *txdata, short *txout, short *rxin,
+	      unsigned short *rxout, short *nsamples, unsigned short *rxcount)
+{
+	unsigned char *hdx;
+	unsigned char flags;
+	short i;
+
+	hdx = (unsigned char *)FIELD_PTR(modem, V32_OBJ_HDX);
+
+	flags = FIELD_U8(modem, V32_OBJ_FLAGS);
+	if (FIELD_S16(hdx, V32HDX_MODE) == V32_MODE_RING_INIT)
+		flags = (unsigned char)(flags & ~(V32_FLAG_04 | V32_FLAG_08));
+	FIELD_U8(modem, V32_OBJ_FLAGS) = (unsigned char)(flags & ~V32_FLAG_01);
+
+	if (FIELD_S16(hdx, V32HDX_SYMBOL_LEN) > 0) {
+		unsigned short *buf;
+
+		buf = (unsigned short *)FIELD_PTR(hdx, V32_HDX_BUF_A4);
+		i = 0;
+		do {
+			buf[i] = txdata[i];
+			i = (short)(i + 1);
+		} while (FIELD_S16(hdx, V32HDX_SYMBOL_LEN) > i);
+	}
+
+	V32RxHdxModem(modem, rxin, rxout, rxcount);
+
+	/*
+	 * RE-READ, and it matters: the receive state may have replaced the
+	 * whole context, exactly as `V32TxHdxModem`'s own loop allows.
+	 */
+	hdx = (unsigned char *)FIELD_PTR(modem, V32_OBJ_HDX);
+	V32TxHdxModem(modem, (short *)FIELD_PTR(hdx, V32_HDX_BUF_A4), txout,
+		      nsamples);
+}
+
+static void
+v32_null_protocol(void)
+{
 }
 
 /*

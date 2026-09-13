@@ -21,7 +21,7 @@
  *   RetrainDetectV32         .text 0x082170   53
  *   RenegotiateDetectV32     .text 0x0821b0   44
  *   RxClampV32               .text 0x0825f0   49
- *   v32_null_protocol        .text 0x082bd0    1   (file-local there)
+ *   v32_null_protocol        .text 0x082bd0    1   (moved to v32fpdisp.c)
  *   SetToneDetect            .text 0x083600  110
  *   CalcTurnAroundDelay      .text 0x083ae0   53
  *   V32_TURNAROUND_DLY       .data 0x0076c0    4
@@ -780,21 +780,6 @@ RxClampV32(void *modem, short *in, short *out, unsigned short count)
 		*out++ = 0xff;
 
 	return FIELD_U16(hdx, V32_HDX_SHORT_9E);
-}
-
-/*
- * FILE-LOCAL IN THE OBJECT and global here, which is the arrangement
- * `src/pump/v34/V34hshak.c` already uses for `getbit`: a `static` has no
- * symbol for the differential harness to compare against, and the blob's copy
- * is reached as `ref_v32_null_protocol` through `symmap.py --globals`.
- *
- * One byte of `ret`.  Nothing in `.text` references it, so its one reference is
- * from a table this batch does not write, and `void (void)` is a placeholder
- * for a signature that is not recoverable.
- */
-void
-v32_null_protocol(void)
-{
 }
 
 /*

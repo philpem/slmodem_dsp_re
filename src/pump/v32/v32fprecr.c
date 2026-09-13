@@ -135,6 +135,16 @@
 #include "dsplib/fpm_tone.h"
 #include "dsplib/sysdep.h"
 
+/*
+ * FILE-LOCAL IN THE OBJECT (`r`), and this file is its only consumer --
+ * `V32FP_recreate` copies `[3]` into `params.disconnect_thresh`.  It moved out
+ * of `v32fptab.c` and is `static` here; a test names it through the test
+ * tier's globalized copies (tools/testvisible.py).
+ */
+static const short V32DiconnectThreshTable[8] = {
+	75, 95, 119, 150, 168, 174, 212, 238
+};
+
 /* The instance is not modelled; these are v32fpctl.c's accessors. */
 #define FIELD(obj, off)		((unsigned char *)(void *)(obj) + (off))
 #define FIELD_PTR(obj, off)	(*(void **)(void *)FIELD((obj), (off)))

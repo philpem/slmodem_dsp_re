@@ -215,10 +215,12 @@ void V32RxHdxModem(void *modem, short *in, unsigned short *out,
  * @param rxout     Output for the demodulated receive data.
  * @param nsamples  Output: transmit sample count (from V32TxHdxModem()).
  * @param rxcount   In/out: receive sample/symbol count (the current receive state's contract).
+ *
+ * FILE-LOCAL IN THE OBJECT, so it is `static` in `src/pump/v32/v32fpdisp.c`,
+ * the unit that holds the `V32_PROTOCOL` table which names it, and has no
+ * declaration here.  A test names it through the test tier's globalized copies
+ * (tools/testvisible.py).
  */
-void v32_handshake(void *modem, unsigned short *txdata, short *txout,
-		   short *rxin, unsigned short *rxout, short *nsamples,
-		   unsigned short *rxcount);
 
 #ifdef __cplusplus
 }
