@@ -79,6 +79,8 @@ extern double IIR2100_Coef_B_8000[IIR2100_TAPS_8000];
 extern double IIR2100_Coef_A_9600[IIR2100_TAPS_9600];
 extern double IIR2100_Coef_B_9600[IIR2100_TAPS_9600];
 extern float v92TxPreFilter[V92_TXPREFILTER_TAPS];
+extern float v92echoPreFilter_a[V92_ECHO_PREFILTER_TAPS];
+extern float v92echoPreFilter_b[V92_ECHO_PREFILTER_TAPS];
 
 /* Wrappers, so `diff_eq_obj` coalesces a differing run into one report. */
 struct tab_d5 { double v[5]; };

@@ -49,6 +49,7 @@ extern "C" {
 #include "dsplib/FloatARMA.h"
 #include "dsplib/V92EchoCanceller.h"
 #include "dsplib/V92Parameters.h"
+#include "dsplib/vpcm_tables.h"
 
 /* See V90ConstellationDesigner.cpp for why these are here and why guarded. */
 #if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
@@ -107,14 +108,17 @@ typedef char v92ec_off_slowdur[
 #endif
 
 /*
- * The ARMA behind the canceller, and its two coefficient arrays.
+ * The ARMA behind the canceller, and its two coefficient arrays.  These ARE
+ * the reference's `v92echoPreFilter_b` (.data+0x320) and `v92echoPreFilter_a`
+ * (.data+0x360), LOCAL in the object and moved in here from the invented
+ * `vpcm_tables.c`; this constructor is their only consumer, so they are
+ * `static`.
  *
- * .data+0x320 AND .data+0x360, in that order and NOT in .rodata: the
- * constructor hands both to `FloatARMA::FloatARMA`, whose coefficient
- * parameters are `float *`, so a `const` here would be neither the object's
- * type nor a thing that compiles.  Twelve entries each, and the relocations
- * are against the .data SECTION symbol with the offset as an inline addend,
- * which is what makes them file-local (finding F604).
+ * .data and NOT .rodata: the constructor hands both to `FloatARMA::FloatARMA`,
+ * whose coefficient parameters are `float *`, so a `const` here would be
+ * neither the object's type nor a thing that compiles.  Twelve entries each,
+ * and the relocations are against the .data SECTION symbol with the offset as
+ * an inline addend, which is what makes them file-local (finding F604).
  *
  * `den[0]` IS EXACTLY 1.0f, which decides an arm inside `FloatARMA`:
  * its constructor rescales both arrays by `1.0f / den[0]` only when
@@ -126,14 +130,16 @@ typedef char v92ec_off_slowdur[
  * bytes, and the test compares the arrays `FloatARMA` copied them into
  * against the blob's, in full, on every trial.
  */
-static float v92EchoArmaNum[12] = {
-	1.4986f, 0.622f, -2.7333f, -2.6016f, 1.7174f, 3.3788f,
-	0.135f, -1.7541f, -0.6828f, 0.3508f, 0.2211f, 0.0058f
+static float v92echoPreFilter_b[V92_ECHO_PREFILTER_TAPS] = {
+	1.49860001f, 0.621999979f, -2.73329997f, -2.60159993f, 1.71739995f,
+	3.37879992f, 0.135000005f, -1.75409997f, -0.682799995f, 0.350800008f,
+	0.221100003f, 0.00579999993f,
 };
 
-static float v92EchoArmaDen[12] = {
-	1.0f, 0.709f, -2.3002f, -2.6749f, 1.5373f, 3.629f,
-	0.468f, -2.1384f, -1.0073f, 0.4231f, 0.3449f, 0.0285f
+static float v92echoPreFilter_a[V92_ECHO_PREFILTER_TAPS] = {
+	1.0f, 0.708999991f, -2.30019999f, -2.67490005f, 1.53729999f,
+	3.62899995f, 0.467999995f, -2.13840008f, -1.00730002f, 0.423099995f,
+	0.344900012f, 0.0285f,
 };
 
 /*
@@ -217,7 +223,7 @@ V92EchoCanceller::V92EchoCanceller(V92Parameters *parameters,
 	echoHistory = (float *)sysdep_malloc(historyAlloc * sizeof(float));
 
 	m = (FloatARMA *)sysdep_malloc(sizeof(FloatARMA));
-	new (m) FloatARMA(12u, 12u, v92EchoArmaDen, v92EchoArmaNum, 99u);
+	new (m) FloatARMA(12u, 12u, v92echoPreFilter_a, v92echoPreFilter_b, 99u);
 	arma = m;
 
 	reset();
