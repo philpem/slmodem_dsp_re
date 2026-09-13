@@ -108,6 +108,10 @@ for f in $SRC $CXXSRC $HARNESS; do OBJS="$OBJS $(obj "$f")"; done
 # re-enter for the link stage.
 if [ "$STAGE" = "compile" ]; then
 	for o in $OBJS; do echo "$o"; done > "$OUT/objs.list"
+	# The reconstructed objects only -- the harness is not ours to globalize,
+	# and a harness name must not make a reconstruction name look ambiguous.
+	: > "$OUT/srcobjs.list"
+	for f in $SRC $CXXSRC; do echo "$(obj "$f")" >> "$OUT/srcobjs.list"; done
 	exit 0
 fi
 
@@ -123,8 +127,9 @@ if [ -n "${VISIBLE:-}" ] && [ -s "$VISIBLE" ] && [ -d "$OUT/testhost" ]; then
 	GLOB=""
 	for o in $OBJS; do
 		g="$OUT/testhost/$(basename "$o")"
-		[ -f "$g" ] || { echo "period: no globalized $g" >&2; exit 1; }
-		GLOB="$GLOB $g"
+		# Only the reconstructed objects were globalized; the harness keeps
+		# its own copy.
+		if [ -f "$g" ]; then GLOB="$GLOB $g"; else GLOB="$GLOB $o"; fi
 	done
 	OBJS="$GLOB"
 fi

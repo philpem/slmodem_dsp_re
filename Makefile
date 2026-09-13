@@ -259,6 +259,13 @@ SYMMAP     := $(BUILD)/symmap.txt
 # (a name in two translation units cannot be globalized), and keeps those a
 # test source mentions.  A miss would be an undefined reference at link time,
 # which is loud.
+#
+# `make period` MUST NOT DEPEND ON THIS TARGET.  This list is derived from
+# $(OBJ_REPRO), the HOST tree, and the period tier exists precisely so that the
+# deciding build is done by the container's GCC 3.4.2 -- the CI period job has
+# no host 32-bit development headers at all.  period.sh therefore generates the
+# same list from the PERIOD objects after its compile stage and globalizes from
+# that; this target serves `make test`/`make one` only.
 TESTVISIBLE  := $(BUILD)/test_visible.txt
 TESTHOST_OBJ := $(patsubst $(BUILD)/repro/%.o,$(BUILD)/testhost/%.o,$(OBJ_REPRO))
 
@@ -1015,8 +1022,8 @@ vendor:
 # its source and than every header -- so an unchanged tree relinks rather than
 # rebuilding.  `make period T=t_resampler` for one binary.
 #
-period: $(REF) $(TESTVISIBLE)
-	@REF=$(REF) VISIBLE=$(TESTVISIBLE) tools/toolchain/period.sh
+period: $(REF)
+	@REF=$(REF) tools/toolchain/period.sh
 
 # The period-toolchain build and the similarity ratchet.  NOT part of `phase`:
 #

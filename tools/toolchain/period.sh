@@ -177,9 +177,24 @@ run_stage() {
 # the modern host objcopy performs that step on the compiled objects, in a copy
 # under $OUT/testhost.  The mtime is preserved so the link stage's incremental
 # check (`KEEP`) still knows what moved.
+#
+# THE NAME LIST COMES FROM THE PERIOD OBJECTS, NOT THE HOST TREE.  `make period`
+# must not build $(OBJ_REPRO) with the host compiler -- the deciding build is
+# the container's, and the CI period job has no host 32-bit headers.  The
+# compile stage writes srcobjs.list; testvisible.py reads those objects.
 run_stage compile
 
-if [ -n "${VISIBLE:-}" ] && [ -s "$VISIBLE" ] && [ -s "$OUT/objs.list" ]; then
+if [ -s "$OUT/srcobjs.list" ]; then
+    VISIBLE="$OUT/test_visible.txt"
+    # The compile stage recorded container paths (/out/...); translate them to
+    # this host's view before the tool opens them.
+    : > "$OUT/srcobjs_host.list"
+    while read -r o; do
+        [ -n "$o" ] || continue
+        echo "$OUT/${o#/out/}" >> "$OUT/srcobjs_host.list"
+    done < "$OUT/srcobjs.list"
+    python3 tools/testvisible.py --from-list "$OUT/srcobjs_host.list" \
+        --tests test -o "$VISIBLE"
     mkdir -p "$OUT/testhost"
     while read -r o; do
         [ -n "$o" ] || continue
@@ -187,7 +202,7 @@ if [ -n "${VISIBLE:-}" ] && [ -s "$VISIBLE" ] && [ -s "$OUT/objs.list" ]; then
         g="$OUT/testhost/$(basename "$o")"
         objcopy --globalize-symbols="$VISIBLE" "$OUT/$o" "$g"
         touch -r "$OUT/$o" "$g"
-    done < "$OUT/objs.list"
+    done < "$OUT/srcobjs.list"
 fi
 
 run_stage link

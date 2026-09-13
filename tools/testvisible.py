@@ -87,16 +87,27 @@ def referenced_tokens(test_root):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--objects", required=True,
-                    help="directory tree of reconstructed objects")
+    src = ap.add_mutually_exclusive_group(required=True)
+    src.add_argument("--objects", help="directory tree of reconstructed objects")
+    src.add_argument("--from-list", metavar="FILE",
+                     help="a file listing object paths, one per line")
     ap.add_argument("--tests", default="test",
                     help="directory tree whose source tokens count as a use")
-    ap.add_argument("--extra", action="append", default=[],
-                    help="object file to include in addition to --objects")
     ap.add_argument("-o", "--output", required=True)
     args = ap.parse_args()
 
-    objs = objects_under(args.objects) + [e for e in args.extra if e]
+    if args.from_list:
+        with open(args.from_list) as f:
+            objs = [line.strip() for line in f if line.strip()]
+    else:
+        objs = objects_under(args.objects)
+    if not objs:
+        sys.exit("error: no objects given (empty list) -- refusing to write an "
+                 "empty list")
+    for obj in objs:
+        if not os.path.exists(obj):
+            sys.exit("error: object %s does not exist" % obj)
+
     seen = {}
     globals_ = set()
     for obj in objs:
@@ -105,8 +116,8 @@ def main():
         for name in local:
             seen[name] = seen.get(name, 0) + 1
     if not seen:
-        sys.exit("error: no file-local symbols found under %s -- refusing to "
-                 "write an empty list" % args.objects)
+        sys.exit("error: no file-local symbols found in %d object(s) -- "
+                 "refusing to write an empty list" % len(objs))
 
     # A name is globalizable only if it is defined local exactly once AND is
     # not also defined GLOBAL anywhere.  A name that is global in one object
