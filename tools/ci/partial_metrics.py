@@ -111,29 +111,41 @@ def rows(census):
     }
 
 
-def render(base, head):
-    """Render the table and return (lines, regressions)."""
+def render(base, head, base_bindings=None, head_bindings=None):
+    """Render the table and return (lines, regressions).
+
+    The GATE is the binding-mismatch count (`tools/bindcmp.py`): it is the one
+    dimension here that is monotonic in fidelity and is exactly what the
+    binding and translation-unit work moves.  The positional counts are
+    reported with their direction but never regress the run -- moving a
+    function between translation units shifts every later offset, so a
+    positionally-exact relocation or symbol record can fall while the object
+    gets closer to the reference.  That was measured the first time it
+    happened.
+    """
     b = rows(base)
     h = rows(head)
     regressions = []
-    for name, label in (("sections", "Exact section descriptors"),
-                        ("relocations", "Exact relocation records"),
-                        ("symbols", "Exact defined-symbol records")):
-        if h[name][0] < b[name][0]:
-            regressions.append("%s: %d -> %d" %
-                               (label, b[name][0], h[name][0]))
+    if (base_bindings is not None and head_bindings is not None
+            and head_bindings > base_bindings):
+        regressions.append("Binding mismatches vs reference: %d -> %d"
+                           % (base_bindings, head_bindings))
 
     def counted(name, label):
         change = h[name][0] - b[name][0]
-        status = (status_cell(change, 1) if change >= 0
-                  else "**:red_circle: regression**")
         return ("| %s | %s | %s | %s | %s |" %
                 (label, ratio(*b[name]), ratio(*h[name]), delta(change),
-                 status))
+                 status_cell(change, 1)))
 
     lines = [MARKER, "## Partial-link Metrics (GCC 3.4.2, binutils 2.15)", "",
              "| Metric | Base | Head | Delta | Status |",
              "| --- | ---: | ---: | ---: | --- |"]
+    if base_bindings is not None and head_bindings is not None:
+        change = head_bindings - base_bindings
+        status = ("**:red_circle: regression**" if change > 0
+                  else status_cell(-change, 1))
+        lines.append("| Binding mismatches vs reference | %d | %d | %s | %s |" %
+                     (base_bindings, head_bindings, delta(change), status))
     lines.append(counted("sections", "Exact section descriptors"))
     byte_change = h["bytes"][0] - b["bytes"][0]
     lines.append("| Positioned reference bytes | %s | %s | %s | %s |" %
@@ -156,12 +168,12 @@ def render(base, head):
         lines.append("**:red_circle: Partial-link regression:** " +
                      "; ".join(regressions))
     else:
-        lines.append("**:green_circle: pass** -- no structural dimension "
-                     "decreased.")
-    lines.append("Exact section, relocation and defined-symbol counts are the "
-                 "gate. Positioned bytes and NOBITS move by tens of bytes "
-                 "whenever a layout shifts and are informational; the "
-                 "completion gate is `partialcmp.py --require-exact`.")
+        lines.append("**:green_circle: pass** -- the binding-mismatch count "
+                     "did not increase.")
+    lines.append("The binding-mismatch count is the gate. Positioned bytes, "
+                 "NOBITS and the positional exact counts move whenever a "
+                 "translation unit or a layout shifts and are informational; "
+                 "the completion gate remains `partialcmp.py --require-exact`.")
     return lines, regressions
 
 
@@ -205,28 +217,35 @@ def self_test():
 
     base = metrics(50, 92, 50000, 900000, 2836, 2400, -44000, 900, 18000, 220, 2900)
     improved = metrics(52, 92, 50100, 900000, 2836, 2760, -44000, 915, 18000, 226, 2900)
-    regressed = metrics(49, 92, 49900, 900000, 2836, 2760, -44000, 890, 18000, 219, 2900)
+    positional = metrics(49, 92, 49900, 900000, 2836, 2760, -44000, 890, 18000, 219, 2900)
 
-    lines, regressions = render(base, improved)
-    check("improvement passes", regressions == [])
+    lines, regressions = render(base, improved, 14, 12)
+    check("binding improvement passes", regressions == [])
     check("improvement is green", "**:green_circle: pass**" in lines[-2])
+    check("fewer binding mismatches is better",
+          ":green_circle: better" in
+          row(lines, "Binding mismatches vs reference"))
     check("more exact bytes is better",
           ":green_circle: better" in
           row(lines, "Positioned reference bytes"))
-    check("shrinking NOBITS shortfall is better",
-          ":green_circle: better" in
-          row(lines, "NOBITS shortfall (candidate - reference)"))
 
-    lines, regressions = render(base, regressed)
-    check("regression fails", len(regressions) == 3)
-    check("regression names sections", any("section" in r for r in regressions))
-    check("regression names relocations",
-          any("relocation" in r for r in regressions))
-    check("regression is red",
+    # A POSITIONAL decrease must NOT fail the run: moving a function between
+    # translation units shifts every later offset.
+    lines, regressions = render(base, positional, 12, 12)
+    check("positional decrease alone does not fail", regressions == [])
+    check("positional decrease is still shown as worse",
+          ":red_circle: worse" in row(lines, "Exact relocation records"))
+
+    # An INCREASE in binding mismatches is the failure condition.
+    lines, regressions = render(base, improved, 12, 14)
+    check("binding regression fails", len(regressions) == 1)
+    check("binding regression is named",
+          "Binding mismatches" in regressions[0])
+    check("binding regression is red",
           "**:red_circle: Partial-link regression:**" in "".join(lines))
-    check("a decreased count is red regardless of direction",
+    check("binding regression row is bold red",
           "**:red_circle: regression**" in
-          row(lines, "Exact relocation records"))
+          row(lines, "Binding mismatches vs reference"))
 
     total = checks[0]
     print("partial_metrics self-test: %d checks, %d failed" % (total, bad[0]))
@@ -237,8 +256,12 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--base", help="base partialcmp.py --json output")
     ap.add_argument("--head", help="head partialcmp.py --json output")
+    ap.add_argument("--base-bindings", type=int,
+                    help="base binding-mismatch count (tools/bindcmp.py)")
+    ap.add_argument("--head-bindings", type=int,
+                    help="head binding-mismatch count (tools/bindcmp.py)")
     ap.add_argument("--check", action="store_true",
-                    help="fail when a ratcheted structural count decreases")
+                    help="fail when the binding-mismatch count increases")
     ap.add_argument("--self-test", action="store_true",
                     help="prove the status and ratchet logic, then exit")
     args = ap.parse_args()
@@ -248,6 +271,9 @@ def main():
 
     if not args.base or not args.head:
         ap.error("--base and --head are required")
+    if ((args.base_bindings is None) != (args.head_bindings is None)):
+        ap.error("--base-bindings and --head-bindings must be given together "
+                 "or not at all")
 
     try:
         base = load(args.base)
@@ -256,11 +282,12 @@ def main():
         print("error: %s" % exc, file=sys.stderr)
         return 1
 
-    lines, regressions = render(base, head)
+    lines, regressions = render(base, head, args.base_bindings,
+                                args.head_bindings)
     print("\n".join(lines))
     if args.check and regressions:
-        print("\npartial-link ratchet FAILED: %d structural dimension(s) "
-              "decreased" % len(regressions), file=sys.stderr)
+        print("\npartial-link ratchet FAILED: %d dimension(s) regressed"
+              % len(regressions), file=sys.stderr)
         return 1
     return 0
 

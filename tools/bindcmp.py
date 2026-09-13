@@ -50,6 +50,8 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("reference")
     ap.add_argument("candidate")
+    ap.add_argument("--count", action="store_true",
+                    help="print only the number of binding mismatches")
     args = ap.parse_args()
 
     ref = defined(args.reference)
@@ -60,6 +62,9 @@ def main():
 
     shared = sorted(set(ref) & set(cand))
     mismatch = [(n, ref[n], cand[n]) for n in shared if ref[n] != cand[n]]
+    if args.count:
+        print(len(mismatch))
+        return 0
     agree = len(shared) - len(mismatch)
     print("defined-symbol binding: %d/%d shared names agree; %d differ"
           % (agree, len(shared), len(mismatch)))
