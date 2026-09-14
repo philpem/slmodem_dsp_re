@@ -1084,9 +1084,14 @@ castscan-selftest:
 # Link with binutils 2.15 in the period image.  DIFFERENT is the expected
 # report until convergence, so partial-compare is a census rather than a phase
 # gate.  partialcmp.py --require-exact supplies the strict final-object gate.
-partial-link: tc-repro
+$(BUILD)/partial/attribution.json: tools/tuattrib.py tools/tumap.py tools/elfinfo.py $(BLOB)
+	@mkdir -p '$(BUILD)/partial'
+	@$(PYTHON) tools/tuattrib.py $(BLOB) --verify --json $@
+
+partial-link: tc-repro $(BUILD)/partial/attribution.json
 	@mkdir -p '$(BUILD)/partial'
 	@$(PYTHON) tools/toolchain/recoverorder.py --blob $(BLOB) \
+		--attribution $(BUILD)/partial/attribution.json \
 		--manifest $(BUILD)/tc_repro/tc_manifest.txt \
 		--output $(BUILD)/tc_repro/tc_link_manifest.txt \
 		--json $(BUILD)/partial/link-order.json

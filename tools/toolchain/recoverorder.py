@@ -12,7 +12,9 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools"))
 import tumap
 
-FIRM = set(("class", "prefix", "ambig-stem"))
+# These are naming heuristics, not proof of provenance.  In particular old
+# attribution reports called an arbitrary same-stem choice "ambig-stem".
+FIRM = set(("class", "prefix"))
 # The blob contains two inputs named voice.c.  These reconstructed sources
 # each contain symbols whose reference locations identify which occurrence
 # they represent; a basename alone cannot do that.
@@ -89,27 +91,33 @@ def recover(rows, directory, names, attribution):
         for symbol in defined_symbols(path):
             item = attribution.get(symbol)
             if item and item.get("how") in FIRM and "|" not in item["tu"]:
-                for seq, tu in names.get(item["tu"], []):
+                choices = names.get(item["tu"], [])
+                if not choices:
+                    choices = [(seq, tu) for group in names.values()
+                               for seq, tu in group if tu == item["tu"]]
+                # A legacy basename naming several FILE occurrences is not
+                # an occurrence identity.  Never select its earliest copy.
+                if len(choices) != 1:
+                    continue
+                for seq, tu in choices:
                     evidence.append((seq, "attributed-symbol", tu, symbol))
-        # The blob's unique FILE spelling is direct provenance for the input
-        # object.  A reconstructed source can contain material from other
-        # original TUs, so a symbol-attribution vote must not move that input
-        # ahead of its own surviving filename.
-        chosen = filename_choice or (min(evidence) if evidence else None)
-        # One reconstructed input can represent several original TUs.  Its
-        # earliest proven constituent is the only placement that ld can model.
+        # Filename correspondence supplies a stable ordering policy, not proof
+        # that the reconstructed TU has the original contents.  Conflicting
+        # symbol candidates alone do not identify an earliest constituent.
+        candidates = {e[0] for e in evidence}
+        chosen = filename_choice or (min(evidence) if len(candidates) == 1 else None)
         key = (0, chosen[0], ordinal) if chosen else (1, ordinal, ordinal)
         ordered.append({"object": obj, "source": source, "input_index": ordinal,
                         "chosen": chosen, "evidence": sorted(set(evidence)),
+                        "classification": ("ordering-candidate" if chosen else
+                                           "ambiguous" if evidence else "unknown"),
                         "key": key})
     return sorted(ordered, key=lambda row: row["key"])
 
 
 def self_test():
-    assert sorted([(0, 7, 0, "late"), (1, 1, 1, "unknown")])[0][-1] == "late"
-    assert min([(4, "filename"), (9, "attributed-symbol")])[0] == 4
-    assert SOURCE_FILE_OCCURRENCE["src/service/voice.c"] == ("voice.c", 0)
-    print("recoverorder self-test: 3 ordering cases, 3 passed")
+    from tu_selftest import run
+    run()
 
 
 def main():
@@ -138,8 +146,9 @@ def main():
               "unanchored": sum(x["chosen"] is None for x in order),
               "order": [{k: v for k, v in x.items() if k != "key"} for x in order]}
     args.report.write_text(json.dumps(report, indent=1, sort_keys=True) + "\n")
-    print("partial-link order: %d inputs; %d anchored, %d retained by source order" %
+    print("partial-link order: %d inputs; %d ordering candidates, %d retained by source order" %
           (report["inputs"], report["anchored"], report["unanchored"]))
+    print("  ordering candidates do not establish original TU provenance")
     print("  wrote %s and %s" % (args.output, args.report))
 
 

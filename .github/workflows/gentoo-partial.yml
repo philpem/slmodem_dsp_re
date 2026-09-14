@@ -45,7 +45,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ runner.temp }}/gentoo-partial-base
-          key: gentoo-partial-base-v3-${{ env.BASE_SHA }}-${{ steps.gentoo-image-id.outputs.digest }}-${{ hashFiles('tools/toolchain/partialcmp.py', 'tools/toolchain/partiallink.sh', 'tools/toolchain/recoverorder.py', 'tools/ci/partial_metrics.py', 'tools/bindcmp.py') }}
+          key: gentoo-partial-base-v4-${{ env.BASE_SHA }}-${{ steps.gentoo-image-id.outputs.digest }}-${{ hashFiles('Makefile', 'tools/tuattrib.py', 'tools/tumap.py', 'tools/elfinfo.py', 'docs/attribution.json', 'tools/toolchain/partialcmp.py', 'tools/toolchain/partiallink.sh', 'tools/toolchain/recoverorder.py', 'tools/ci/partial_metrics.py', 'tools/bindcmp.py') }}
 
       - name: Build PR base partial link and census
         if: steps.base-cache.outputs.cache-hit != 'true'

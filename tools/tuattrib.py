@@ -41,12 +41,14 @@ gap:
     TU belongs to that TU.  Runs bounded by two *different* TUs are left
     ambiguous and reported as `A|B` rather than guessed.
 
-Confidence is reported per function so downstream work can tell a certainty
-from an inference.  Ground truth (the TUs with surviving local .text symbols)
-is held out and checked; `--verify` prints the score.
+Evidence class is reported per function; name matches remain inferences.
+Ground truth (the TUs with surviving local .text symbols) is held out and
+checked; `--verify` prints the score and its coverage.  Duplicate symbol names
+use occurrence keys with symtab index/type/section/size metadata in JSON.
 
 Usage:
     tuattrib.py <dsplibs.o> [--verify] [--json out.json] [--md out.md]
+    tuattrib.py --self-test
 """
 
 import argparse
@@ -87,19 +89,37 @@ def build(obj):
     text_size = next(s.size for s in sections.values() if s.name == ".text")
 
     tumeta = tumap.build_map(obj)["tus"]
-    # stem -> [TU record]; several TUs can share a stem only across languages
+    # stem -> [TU record]; repeated FILE spellings retain separate occurrences
     stems = collections.defaultdict(list)
     for key, v in tumeta.items():
         stems[v["file"].rsplit(".", 1)[0]].append(v)
 
-    funcs = sorted({(s.value, s.size, s.name) for s in syms
-                    if elfinfo.section_name(sections, s.ndx) == ".text"
-                    and s.type == "FUNC" and s.size > 0})
-    dem = demangle([n for _a, _s, n in funcs])
+    # Symbol names are not identities: separate FILE occurrences routinely
+    # contain identically named static functions (even identical-sized ones).
+    # Preserve each symtab occurrence and its type/section/size in the report.
+    symbols = sorted((s for s in syms
+                      if elfinfo.section_name(sections, s.ndx) == ".text"
+                      and s.type == "FUNC" and s.size > 0),
+                     key=lambda s: (s.value, s.num))
+    counts = collections.Counter(s.name for s in symbols)
+    reserved = {s.name for s in symbols}
+    records, key_by_num, funcs = {}, {}, []
+    for s in symbols:
+        key = s.name
+        if counts[s.name] > 1:
+            key = "%s#sym%d" % (s.name, s.num)
+            while key in reserved:
+                key += "#"
+        reserved.add(key)
+        key_by_num[s.num] = key
+        records[key] = dict(s._asdict(), section=elfinfo.section_name(sections, s.ndx))
+        funcs.append((s.value, s.size, key))
+    dem = demangle([s.name for s in symbols])
 
     # --- pass 1: name match, filtered by the address bracket -------------
-    attrib = {}            # name -> (tu_file, confidence)
-    for (addr, _size, raw), d in zip(funcs, dem):
+    attrib = {}            # symbol occurrence key -> (TU key, confidence)
+    for (addr, _size, key), d in zip(funcs, dem):
+        raw = records[key]["name"]
         cands = []
         cls = cpp_class(d) if raw.startswith("_Z") else None
         if cls and cls in stems:
@@ -118,12 +138,9 @@ def build(obj):
         # Keep only candidates whose bracket actually contains this address.
         inside = [(t, how) for t, how in cands if t["lo"] <= addr < t["hi"]]
         if len(inside) == 1:
-            attrib[raw] = (inside[0][0]["file"], inside[0][1])
+            attrib[key] = (inside[0][0]["key"], inside[0][1])
         elif inside:
-            # Same stem, several TUs, all bracket-consistent - prefer an
-            # exact-extent TU if one of them has hard anchors.
-            ex = [t for t, _h in inside if t["kind"] == "exact"]
-            attrib[raw] = ((ex[0] if ex else inside[0][0])["file"], "ambig-stem")
+            attrib[key] = ("|".join(t["key"] for t, _h in inside), "ambig-stem")
         elif len(cands) == 1 and cands[0][0]["kind"] != "exact":
             # Name is unambiguous but falls outside the interpolated bracket.
             # For an unanchored TU the bracket is only an approximation, so
@@ -132,12 +149,12 @@ def build(obj):
             # outside it is simply wrong - e.g. `v32_data` prefix-matches the
             # wrapper `v32.c`, whose real extent is 0x4560-0x4c30, while the
             # function lives at 0x82xxx in `V32mod.c`.  Reject those.
-            attrib[raw] = (cands[0][0]["file"], "name-only")
+            attrib[key] = (cands[0][0]["key"], "name-only")
 
     # --- pass 2: contiguity fill ------------------------------------------
     ordered = [(a, n) for a, _s, n in funcs]
     known = [(i, attrib[n][0]) for i, (_a, n) in enumerate(ordered)
-             if n in attrib]
+             if n in attrib and attrib[n][1] in ("class", "prefix")]
     filled = 0
     for (i1, tu1), (i2, tu2) in zip(known, known[1:]):
         if i2 - i1 <= 1:
@@ -145,48 +162,63 @@ def build(obj):
         gap = ordered[i1 + 1:i2]
         if tu1 == tu2:
             for _a, n in gap:
+                if n in attrib:
+                    continue
                 attrib[n] = (tu1, "fill")
                 filled += 1
         else:
             for _a, n in gap:
+                if n in attrib:
+                    continue
                 attrib[n] = ("%s|%s" % (tu1, tu2), "ambiguous")
 
     # --- ground truth -----------------------------------------------------
-    truth, cur = {}, None
+    truth, cur, seq = {}, None, 0
+    tu_by_seq = {v["seq"]: k for k, v in tumeta.items()}
     for s in syms:
         if s.type == "FILE":
-            cur = s.name if elfinfo.is_source_file(s.name) else None
+            cur = None
+            if elfinfo.is_source_file(s.name):
+                cur = tu_by_seq[seq]
+                seq += 1
         elif (cur and s.bind == "LOCAL" and s.type == "FUNC"
-              and elfinfo.section_name(sections, s.ndx) == ".text"):
-            truth[s.name] = cur
+              and s.num in key_by_num):
+            truth[key_by_num[s.num]] = cur
 
     return {"funcs": funcs, "attrib": attrib, "truth": truth,
-            "text_size": text_size, "filled": filled}
+            "text_size": text_size, "filled": filled, "symbols": records}
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("obj")
+    ap.add_argument("obj", nargs="?")
+    ap.add_argument("--self-test", action="store_true")
     ap.add_argument("--verify", action="store_true")
     ap.add_argument("--json")
     ap.add_argument("--md")
     args = ap.parse_args()
 
+    if args.self_test:
+        from tu_selftest import run
+        run()
+        return
+    if not args.obj:
+        ap.error("obj is required unless --self-test is given")
+
     b = build(args.obj)
     funcs, attrib, truth = b["funcs"], b["attrib"], b["truth"]
 
     conf = collections.Counter(c for _tu, c in attrib.values())
-    resolved = {k: v for k, v in attrib.items() if v[1] != "ambiguous"}
-    # Name-derived attributions verify at 100% against ground truth; the
-    # inferred ones do not.  Keep the two populations apart everywhere, so a
-    # guess is never mistaken for a fact downstream.
+    resolved = {k: v for k, v in attrib.items()
+                if v[1] not in ("ambiguous", "ambig-stem")}
+    # Naming is evidence for a candidate, not proof of original ownership.
     firm = {k: v for k, v in attrib.items()
-            if v[1] in ("class", "prefix", "ambig-stem")}
+             if v[1] in ("class", "prefix")}
 
     print("functions with size : %d" % len(funcs))
-    print("AUTHORITATIVE       : %d  (%.1f%%)  - name-derived, verified"
-          % (len(firm), 100.0 * len(firm) / len(funcs)))
-    for how in ("class", "prefix", "ambig-stem"):
+    print("name-derived        : %d/%d  (%.1f%%)  - inferred candidates"
+          % (len(firm), len(funcs), 100.0 * len(firm) / len(funcs) if funcs else 0))
+    for how in ("class", "prefix"):
         if conf[how]:
             print("    %-12s %d" % (how, conf[how]))
     print("provisional         : %d  - inference only, do not rely on"
@@ -194,17 +226,17 @@ def main():
     for how in ("name-only", "fill"):
         if conf[how]:
             print("    %-12s %d" % (how, conf[how]))
-    print("ambiguous (A|B)     : %d" % conf["ambiguous"])
+    print("ambiguous (A|B)     : %d" % (conf["ambiguous"] + conf["ambig-stem"]))
     print("unattributed        : %d" % (len(funcs) - len(attrib)))
 
     checked = {k: v for k, v in truth.items() if k in resolved}
     agree = sum(1 for k, v in checked.items() if resolved[k][0] == v)
+    print("verification coverage: %d/%d local occurrences; %d/%d functions"
+          % (len(checked), len(truth), len(checked), len(funcs)))
     if checked:
         print("verify vs ground truth: %d/%d agree (%.0f%%)"
               % (agree, len(checked), 100.0 * agree / len(checked)))
-        # Break the score down by evidence class.  This is the number that
-        # matters: name-derived attributions are authoritative, contiguity
-        # fills are inferences, and downstream work must not treat them alike.
+        # Agreement on the held-out locals does not prove global ownership.
         per = collections.defaultdict(lambda: [0, 0])
         for k, v in checked.items():
             how = resolved[k][1]
@@ -226,7 +258,10 @@ def main():
     if args.json:
         with open(args.json, "w") as f:
             json.dump({"attrib": {k: {"tu": v[0], "how": v[1]}
-                                  for k, v in attrib.items()}},
+                                  for k, v in attrib.items()},
+                       "symbols": b["symbols"],
+                       "functions": len(funcs), "local_truth": len(truth),
+                       "verified": len(checked), "agree": agree},
                       f, indent=1, sort_keys=True)
         print("wrote %s" % args.json)
 
@@ -241,10 +276,15 @@ def main():
             f.write("%d of %d sized functions attributed to %d translation "
                     "units; %d ambiguous, %d unattributed.\n"
                     % (len(resolved), len(funcs), len(tus),
-                       conf["ambiguous"], len(funcs) - len(attrib)))
+                       conf["ambiguous"] + conf["ambig-stem"], len(funcs) - len(attrib)))
             f.write("Ground-truth agreement: %d/%d.\n\n" % (agree, len(checked)))
+            f.write("Verification coverage: %d/%d local occurrences; %d/%d "
+                    "sized functions.\n\n" %
+                    (len(checked), len(truth), len(checked), len(funcs)))
             f.write("`how` values: `class` / `prefix` = symbol name matched "
-                    "the TU filename;\n`fill` = inferred from contiguity "
+                    "the TU filename (inference, not proof);\n"
+                    "`ambig-stem` = multiple FILE occurrences match;\n"
+                    "`fill` = inferred from contiguity "
                     "between two confident neighbours;\n`name-only` = name "
                     "matched but address fell outside the interpolated "
                     "bracket.\n\n")
