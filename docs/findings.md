@@ -124048,3 +124048,114 @@ worked around in the reconstruction.  `v34initialbauds` and the tables
 `RATEv32`/`V32DiconnectThreshTable` are the same class.
 
 (2026-09-14)
+
+## F11360. The object's `fax.c` is an empty translation unit, and the FILE order is now exact through `vpcm.c`
+
+Issue #6, the file/order dimension.  `dsplibs.o` carries a FILE record
+`fax.c` immediately after `voice.c`, and **nothing is attributed to it**:
+zero file-local symbols follow it, and no global's symtab run lands on it
+either.  Whatever the original `fax.c` defined produced no symbol of its
+own.  Our tree had no unit emitting that name, so the candidate's FILE
+sequence went `voice.c -> rd.c` and every later FILE record was off by one
+against the reference.
+
+`src/fax/fax.c` is added as a deliberately empty translation unit.  It
+compiles to an object whose only contribution is the `fax.c` FILE record,
+and `recoverorder` then anchors it at the reference's own position.  The
+candidate's FILE order now matches the reference's first ten records
+exactly: `dp_init.c dcr.c cid.c voice.c fax.c rd.c ringDetector.c call.c
+v8.c vpcm.c`.  Exact defined-symbol records move 232 -> 233.
+
+THIS IS NOT AN INVENTED SYMBOL.  The record it emits is the object's own,
+and the check that it is empty is the symtab run above, not a guess about
+the original source.  Moving the FAX public entries into it would be the
+opposite of faithful: they are at high `.text` addresses in the object
+(under the catch-all `FixedRC.c` record), and placing them at `fax.c`'s
+early position would move them away from it.
+
+Measured.  make phase: period differential 375 passed, 0 failed,
+structural checks OK.  make similarity: ratchet OK, identical unchanged at
+887.  Positioned bytes unchanged at 59,857/943,398.
+
+(2026-09-14)
+
+## F11361. The systematic source-to-FILE map: exact LOCAL-symbol sets, and ten canonical renames
+
+Issue #6, file/order dimension.  Recoverorder anchors a unit by ONE symbol
+or by its filename, and the two disagree when a unit was reconstructed
+under a different name than the object's.  The repair needs the whole map,
+and the map needs a rule that cannot be fooled.
+
+**A MAJORITY VOTE OVER ALL SYMBOLS IS WRONG, and measurably so.**  Taking
+each reconstructed object's defined symbols and asking which reference
+FILE owns the most of them collapses almost everything onto `FixedRC.c`,
+because the object's `.symtab` is locals-first and every global's
+preceding FILE is whatever local record happens to precede it in that
+region.  Restricting to LOCAL symbols fixes that, but a single matching
+local name still votes: `PROTOCOL`, `statenames` and the B103/V22/V27/V29
+configuration tables share local names across units, so a one-name vote
+"renamed" four unrelated files onto `v22rxtab.c`.
+
+**THE SAFE RULE IS THE WHOLE LOCAL SET.**  A pure rename changes no
+symbol, so the object's set of LOCAL names must equal the reference FILE's
+set exactly.  Comparing `frozenset(locals)` finds 12 units; of those, two
+targets already exist in the tree (`fpm_mtd.c`, `fpm_tone.c`) and are
+MERGE candidates, not renames.  The other ten are renames:
+
+    t30frame.c -> T30frames.c        b103fp.c      -> B103prc.c
+    v17cfg.c   -> V17rxtab.c         b103_agc_cfg.c-> B103tab.c
+    v27cfg.c   -> V27rxtab.c         v22status.c   -> v22stc.c
+    v29cfg.c   -> V29rxtab.c         v32state.c    -> V32states.c
+    detector.c -> Detector.c         v8v21.c       -> V8Fsk.c
+
+Each is a `git mv` plus its `suites.json` source path; no symbol changes.
+
+**Measured, and the trade-off is real.**  Exact defined-symbol records
+234 -> 243 and ordered matches 233 -> 242.  Positioned reference bytes
+fall 60,805 -> 55,730, because a renamed unit now anchors where the
+object's FILE of that name sits and the `.text` layout shifts with it.
+The two dimensions move in opposite directions here; the byte figure is
+expected to recover as the remaining anchors are corrected, and it is the
+binding-mismatch count (unchanged at 1) that the CI ratchets.  `make
+phase` 375/0, `make similarity` identical unchanged at 887, refs clean.
+
+(2026-09-14)
+
+## F11362. `fax.c` and `NoK56Flex.cpp` are NOT empty: a FILE record with no locals can still hold globals
+
+F11360 concluded from the symbol table that `fax.c` and `NoK56Flex.cpp`
+were empty translation units and reproduced them with empty files.  **That
+was wrong, and the error is worth recording as a method.**
+
+The check was "no symbols are attributed to this FILE".  Attribution was
+done by the FILE record preceding a symbol in `.symtab`, and **`.symtab` is
+locals-first**: every FILE record sits in the local region, and every
+GLOBAL symbol follows in the global region, so *every* global's preceding
+FILE is whichever FILE record happens to be last before the globals --
+which is why a naive majority vote over all symbols collapses onto
+`FixedRC.c`.  A FILE record with no *locals* after it therefore says
+nothing about whether the unit had *globals*.
+
+**Measured against the object.**  `.text` is laid out in input order, and
+the two units' globals are plain to see once you look at addresses:
+
+    FAX_delete            0x1450     NoK56Flex.cpp is a FILE record and
+    FAX_create            0x1500     `K56FlexFloModem.cpp` is NOT in the
+    FAX_class1_command    0x1740     object at all -- the K56FlexFloModem
+    FAX_process           0x1a10     methods and K56FLEX_* live in it
+
+`voice.c` ends at 0x1820 and `call.c` begins at 11104, so the four FAX
+globals sit exactly in `fax.c`'s input slot.  In this tree they had been
+written into `src/service/voice.c`, whose FILE record then carried them at
+`voice.c`'s position.
+
+**The repair is a move, not an empty file.**  The `FAX_*` block moved to
+`src/fax/fax.c` and now sits 128 bytes from the object's own offsets
+(5248 vs 5376); `src/pump/v90/K56FlexFloModem.cpp` is renamed to
+`NoK56Flex.cpp`, and both empty files are gone.  `make phase` 375/0,
+ratchet unchanged at 887, refs clean.  Reading the FILE list is not
+enough; a unit's globals have to be placed by their `.text` address, and
+the empty-TU conclusion is only valid when no global lands in the unit's
+slot.
+
+(2026-09-14)

@@ -1,7 +1,7 @@
 [
  {
   "_": [
-   "v90Phase34, in src/pump/v34/v34pcmmain.cpp.  A SECOND suite over that",
+   "v90Phase34, in src/pump/v34/VPcmV34Main.cpp.  A SECOND suite over that",
    "file: `v34pcmmain` would be getMPrecvdBits's, and suites.json already",
    "carries two sets over src/dialer/Dialer.c for the same reason -- one",
    "source, two claims, two binaries.  Every `find` below is inside",

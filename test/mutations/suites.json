@@ -141,7 +141,7 @@
   "build/test/t_gtonedet"
  ],
  "k56flexalloc": [
-  "src/pump/v90/K56FlexFloModem.cpp",
+  "src/pump/v90/NoK56Flex.cpp",
   "build/test/t_v92alloc"
  ],
  "moduluscoder": [
@@ -269,7 +269,7 @@
   "build/test/t_v34diag"
  ],
  "v34diagk56": [
-  "src/pump/v90/K56FlexFloModem.cpp",
+  "src/pump/v90/NoK56Flex.cpp",
   "build/test/t_v34diag"
  ],
  "v34filters": [
@@ -341,15 +341,15 @@
   "build/test/t_v34info1a"
  ],
  "v34info1d": [
-  "src/pump/v34/v34pcmmain.cpp",
+  "src/pump/v34/VPcmV34Main.cpp",
   "build/test/t_v34info1d"
  ],
  "v34ja": [
-  "src/pump/v34/v34pcmmain.cpp",
+  "src/pump/v34/VPcmV34Main.cpp",
   "build/test/t_v34ja"
  ],
  "v34k56": [
-  "src/pump/v34/v34pcmmain.cpp",
+  "src/pump/v34/VPcmV34Main.cpp",
   "build/test/t_v34k56"
  ],
  "v34pcmif": [
@@ -357,11 +357,11 @@
   "build/test/t_v34pcmif"
  ],
  "v34pcmrates": [
-  "src/pump/v34/v34pcmmain.cpp",
+  "src/pump/v34/VPcmV34Main.cpp",
   "build/test/t_v34pcmif"
  ],
  "v34retrain": [
-  "src/pump/v34/v34pcmmain.cpp",
+  "src/pump/v34/VPcmV34Main.cpp",
   "build/test/t_v34retrain"
  ],
  "v34rx": [
@@ -637,7 +637,7 @@
   "build/test/t_v90p2info"
  ],
  "v90p34": [
-  "src/pump/v34/v34pcmmain.cpp",
+  "src/pump/v34/VPcmV34Main.cpp",
   "build/test/t_v90p34"
  ],
  "v90p3dctor": [
@@ -957,7 +957,7 @@
   "build/test/t_vparser"
  ],
  "vpcmcreate": [
-  "src/pump/v34/v34pcmmain.cpp",
+  "src/pump/v34/VPcmV34Main.cpp",
   "build/test/t_vpcmcreate"
  ],
  "vpcmctor": [
