@@ -17,8 +17,13 @@
 
 #include "dsplib/fpm_tone.h"
 
-/* 53 taps; the count is mirrored in FPM_TONE_CFG at +0x14. */
-const short ToneLPF[53] = {
+/* 53 taps; the count is mirrored in FPM_TONE_CFG at +0x14.
+ *
+ * FILE-LOCAL IN THE OBJECT, and reached only through FPM_TONE_CFG.src, so it
+ * is `static` here.  The reference has a SECOND local `ToneLPF` -- a float
+ * array in `TONE.c` -- which is why the name is deliberately ambiguous and a
+ * test reads this one through the config pointer rather than by name. */
+static const short ToneLPF[53] = {
 	-56, -45, -27, -3, 26, 64, 109, 161,
 	220, 286, 357, 434, 516, 600, 687, 773,
 	860, 943, 1023, 1098, 1166, 1226, 1276, 1317,

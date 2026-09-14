@@ -810,10 +810,16 @@ check_shape(void)
 		diff_eq_int("FPM_TONE_CFG == ref_FPM_TONE_CFG, "
 			    "first differing byte (%ld)", bad, -1,
 			    (long)sizeof(struct fpm_tone_cfg));
-		cmp_target("FPM_TONE_CFG.src (ToneLPF)", ToneLPF,
+		cmp_target("FPM_TONE_CFG.src (ToneLPF)",
+			   (const short *)FPM_TONE_CFG.src,
 			   ref_FPM_TONE_CFG.src, 53 * 2, 0);
-		diff_eq_int("our FPM_TONE_CFG.src is ToneLPF (%ld)",
-			    FPM_TONE_CFG.src == ToneLPF, 1, 0);
+		/*
+		 * The symbol itself is file-local and ambiguous (there are two
+		 * `ToneLPF` in the object), so the identity check is the
+		 * pointer's non-nullness and the tap comparison above.
+		 */
+		diff_eq_int("our FPM_TONE_CFG.src is planted (%ld)",
+			    FPM_TONE_CFG.src != 0, 1, 0);
 	}
 
 	diff_eq_int("SDM_CFG matches the blob's (%ld)",
