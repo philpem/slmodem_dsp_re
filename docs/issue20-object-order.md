@@ -56,6 +56,7 @@ arms. They isolate an ordering-policy change from a source/codegen change.
 | PR #92 `b82cc2e7`, original | 55450 | 943 | 243 | 2804 |
 | PR #92 `b82cc2e7`, corrected | 55123 | 954 | 243 | 2804 |
 | DSP ownership batch, corrected | 55313 | 954 | 244 | 2804 |
+| DSP definition order, corrected | 55321 | 954 | 244 | 2804 |
 
 All rows have 67/92 exact section descriptors. The two baseline source
 revisions have the same 828/1852 strict exact functions, covering
@@ -105,7 +106,7 @@ records across the three affected units. All 259 other unchanged-path
 objects remain byte-identical to the clean PR #92 build. It removes two
 invented FILE records and keeps the 828 exact-function set unchanged.
 
-## Next definition-order control
+## Definition-order result
 
 The ownership-only cell exposes an MTD `.data` ordering mismatch:
 reference `FPM_MTD_CFG`, `DEF_COEFS`, `COEF_DC`; candidate `COEF_DC`,
@@ -115,9 +116,40 @@ emission order.
 
 The reference tone function order is create, delete, generate, generate2,
 generate_demod, set_freq, set_scale, detect, find_rev, filter, kill. The
-candidate emits setters and generators before create. A separate cell will
-reorder complete definitions without changing their bodies, then inspect
-every emitted body and relocation and re-run the exact-set and period gates.
+candidate previously emitted setters and generators before create. The second
+cell reorders complete definitions without changing their bodies. All eleven
+now emit in reference order.
+
+Moving the MTD configuration declarations after the `COEF_DC` declaration
+produces the reference data order under the period compiler. All 42 bytes
+from `FPM_MTD_CFG` through `COEF_DC` agree with the reference after rebasing
+the single pointer to the start of that region: offsets 0, 12 and 32,
+respectively. The three MTD function bodies and code relocations are unchanged.
+
+Nine tone function bodies and their relative relocations are unchanged.
+`FPM_TONE_create` and `FPM_TONE_detect` retain sizes 669 and 512, with 169 and
+159 non-padding instructions respectively, but their instruction streams
+change. Review identifies scheduling, register and stack-slot allocation
+changes. They do not qualify as pure register renaming under `alpha_equal`.
+The parent independently checked canonical relocation target sequences with
+`byteident.body`; both sequences are unchanged. The `.rel.rodata` target is
+also unchanged. Neither function is claimed exact against the reference.
+
+Both ownership and definition-order cells pass `make phase`: 375 passed,
+0 failed, structural checks passed. The final strict exact set is identical
+to the baseline: 828/1852 functions, 79916/720125 code bytes, zero gains and
+zero losses. The exact-set ratchet passes. The mutation-snapshot report marks
+263 historical suites stale; this pass does not claim new mutation coverage.
+
+The final partial link contains 262 inputs, with 179 ordering candidates and
+83 unresolved inputs retained by source-list order. Binding remains
+2440/2441 shared names correct, with `getbit` the remaining mismatch; there
+are also 77 reference-only and 132 candidate-only names. The strict completion
+command exits 1, `DIFFERENT`, as expected for this unfinished object.
+
+The ownership-only cell is commit `c1a960aa`. The source revisions and full
+build logs preserve the definition-order control separately. Two failed
+editing-script attempts left source unchanged and are not experimental cells.
 
 ## Deferred ownership questions
 

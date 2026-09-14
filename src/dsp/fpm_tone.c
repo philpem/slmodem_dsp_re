@@ -80,128 +80,6 @@ const struct fpm_tone_cfg FPM_TONE_CFG = {
 
 #define NELEMS(a) (sizeof(a) / sizeof((a)[0]))
 
-/*
- * Hz to phase increment.  A cycle is FPM_PHASOR_CYCLE (0x8000) units, so the
- * increment is hz * 32768 / fs -- and the original hard-codes fs = 8000 as
- * the constant 0x8312 in Q13 (33554 / 8192 = 4.096 = 32768 / 8000).
- *
- * Reproduced exactly, including the +0x1000 rounding bias.  Recorded as R-9
- * in docs/rate_assumptions.md; do not "fix" it without reading that entry.
- */
-void
-FPM_TONE_set_freq(struct fpm_tone *state, short hz)
-{
-	state->inc = (short)(((int)hz * 0x8312 + 0x1000) >> 13);
-}
-
-void
-FPM_TONE_set_scale(struct fpm_tone *state, short scale)
-{
-	state->cfg.scale = scale;
-}
-
-short
-FPM_TONE_generate(struct fpm_tone *state, short *out, short count)
-{
-	struct fpm_phasor p;
-	int scale = state->cfg.scale;
-	int period = state->cfg.rev_period;
-	int elapsed;
-	int i;
-
-	p.phase = state->phase;
-	p.inc = state->inc;
-	p.cos = p.sin = 0;
-
-	for (i = 0; i < count; i++) {
-		FPM_phasor(&p);
-		out[i] = ((scale * p.sin) >> 14);
-	}
-
-	/*
-	 * Phase-reversal bookkeeping.  The counter advances in units of eight
-	 * samples, so at 8 kHz it ticks in milliseconds and the default period
-	 * of 450 is the ITU-T V.25 figure directly.
-	 */
-	elapsed = state->rev_count
-		  + (count >> 3);
-
-	if (period > 0 && period <= elapsed) {
-		int phase = (short)p.phase;
-
-		state->rev_count = 0;
-
-		/*
-		 * Half of a 0x8000 cycle is 180 degrees.  The original adds
-		 * 0x4000 and, if that overflows the positive range, subtracts
-		 * 0x4000 from the *original* phase instead -- which is the same
-		 * rotation the other way, not a wrap.
-		 */
-		if (phase + 0x4000 > 0x7fff)
-			phase = phase - 0x4000;
-		else
-			phase = phase + 0x4000;
-
-		/* Explicit int -> unsigned short; the sign conversion is the point. */
-		p.phase = (unsigned short)phase;
-	} else {
-		state->rev_count = (short)elapsed;
-	}
-
-	state->phase = (short)p.phase;
-
-	return count;
-}
-
-/*
- * FPM_TONE_generate2 -- .text 0x0aae30, 148 bytes.
- *
- * The QUADRATURE pair, not a second tone: one call fills two buffers with the
- * cosine and the sine of the same oscillator at the same instant.  Named
- * "generate2" for the two outputs; the object still carries one frequency and
- * one phase, and only `phase` is written back.
- *
- * So it sits between the other two generators rather than beside them --
- * FPM_TONE_generate takes the sine, FPM_TONE_generate_demod takes the cosine,
- * this one takes both.  Like _generate_demod and unlike _generate it does no
- * phase-reversal bookkeeping at all, and it returns `count`.
- *
- * `state->cfg.scale` is re-read from the object on each of the two multiplies,
- * which is what the original does (two `movswl 0x2(%ebp)` in one iteration,
- * around a 16-bit store the compiler had to assume might alias).  Written the
- * same way, so a caller whose output buffer overlaps the object sees the same
- * thing we do.
- *
- * The counter is 16-bit and the loop tests for -1 rather than for zero, so a
- * count of 0 writes nothing and a NEGATIVE count runs about 65536 times --
- * the same shape, and the same hazard, as FPM_TONE_detect and
- * FPM_TONE_generate_demod.
- *
- * The original leaves the phasor's cos and sin uninitialised on the stack;
- * they are cleared here so the reconstruction has no indeterminate reads.
- * FPM_phasor writes both before either is read, so this cannot differ.
- */
-short
-FPM_TONE_generate2(struct fpm_tone *state, short *cos_out, short *sin_out,
-		   short count)
-{
-	struct fpm_phasor p;
-	int i;
-
-	p.phase = state->phase;
-	p.inc = state->inc;
-	p.cos = p.sin = 0;
-
-	for (i = (short)(count - 1); i != -1; i = (short)(i - 1)) {
-		FPM_phasor(&p);
-		*cos_out++ = ((state->cfg.scale * p.cos) >> 14);
-		*sin_out++ = ((state->cfg.scale * p.sin) >> 14);
-	}
-
-	state->phase = p.phase;
-	return count;
-}
-
 /* Pointer-sized field access, for the slots that hold buffers. */
 /* The built-in configuration: the ITU-T V.25 answer tone. */
 
@@ -378,6 +256,166 @@ FPM_TONE_delete(struct fpm_tone *state)
 	sysdep_free(state);
 }
 
+short
+FPM_TONE_generate(struct fpm_tone *state, short *out, short count)
+{
+	struct fpm_phasor p;
+	int scale = state->cfg.scale;
+	int period = state->cfg.rev_period;
+	int elapsed;
+	int i;
+
+	p.phase = state->phase;
+	p.inc = state->inc;
+	p.cos = p.sin = 0;
+
+	for (i = 0; i < count; i++) {
+		FPM_phasor(&p);
+		out[i] = ((scale * p.sin) >> 14);
+	}
+
+	/*
+	 * Phase-reversal bookkeeping.  The counter advances in units of eight
+	 * samples, so at 8 kHz it ticks in milliseconds and the default period
+	 * of 450 is the ITU-T V.25 figure directly.
+	 */
+	elapsed = state->rev_count
+		  + (count >> 3);
+
+	if (period > 0 && period <= elapsed) {
+		int phase = (short)p.phase;
+
+		state->rev_count = 0;
+
+		/*
+		 * Half of a 0x8000 cycle is 180 degrees.  The original adds
+		 * 0x4000 and, if that overflows the positive range, subtracts
+		 * 0x4000 from the *original* phase instead -- which is the same
+		 * rotation the other way, not a wrap.
+		 */
+		if (phase + 0x4000 > 0x7fff)
+			phase = phase - 0x4000;
+		else
+			phase = phase + 0x4000;
+
+		/* Explicit int -> unsigned short; the sign conversion is the point. */
+		p.phase = (unsigned short)phase;
+	} else {
+		state->rev_count = (short)elapsed;
+	}
+
+	state->phase = (short)p.phase;
+
+	return count;
+}
+
+/*
+ * FPM_TONE_generate2 -- .text 0x0aae30, 148 bytes.
+ *
+ * The QUADRATURE pair, not a second tone: one call fills two buffers with the
+ * cosine and the sine of the same oscillator at the same instant.  Named
+ * "generate2" for the two outputs; the object still carries one frequency and
+ * one phase, and only `phase` is written back.
+ *
+ * So it sits between the other two generators rather than beside them --
+ * FPM_TONE_generate takes the sine, FPM_TONE_generate_demod takes the cosine,
+ * this one takes both.  Like _generate_demod and unlike _generate it does no
+ * phase-reversal bookkeeping at all, and it returns `count`.
+ *
+ * `state->cfg.scale` is re-read from the object on each of the two multiplies,
+ * which is what the original does (two `movswl 0x2(%ebp)` in one iteration,
+ * around a 16-bit store the compiler had to assume might alias).  Written the
+ * same way, so a caller whose output buffer overlaps the object sees the same
+ * thing we do.
+ *
+ * The counter is 16-bit and the loop tests for -1 rather than for zero, so a
+ * count of 0 writes nothing and a NEGATIVE count runs about 65536 times --
+ * the same shape, and the same hazard, as FPM_TONE_detect and
+ * FPM_TONE_generate_demod.
+ *
+ * The original leaves the phasor's cos and sin uninitialised on the stack;
+ * they are cleared here so the reconstruction has no indeterminate reads.
+ * FPM_phasor writes both before either is read, so this cannot differ.
+ */
+short
+FPM_TONE_generate2(struct fpm_tone *state, short *cos_out, short *sin_out,
+		   short count)
+{
+	struct fpm_phasor p;
+	int i;
+
+	p.phase = state->phase;
+	p.inc = state->inc;
+	p.cos = p.sin = 0;
+
+	for (i = (short)(count - 1); i != -1; i = (short)(i - 1)) {
+		FPM_phasor(&p);
+		*cos_out++ = ((state->cfg.scale * p.cos) >> 14);
+		*sin_out++ = ((state->cfg.scale * p.sin) >> 14);
+	}
+
+	state->phase = p.phase;
+	return count;
+}
+
+/*
+ * FPM_TONE_generate_demod -- .text 0x0aaed0, 125 bytes.
+ *
+ * The reference oscillator the demodulator correlates against: the same
+ * generator as FPM_TONE_generate, minus two things.
+ *
+ *   - it uses the COSINE, via FPM_phasor_demod, where the modulator uses the
+ *     sine.  Same tone, ninety degrees apart.
+ *   - there is no phase-reversal bookkeeping at all.  This is a plain
+ *     oscillator; the reversals belong to the ANSam transmitter.
+ *
+ * It also returns `count`, which FPM_TONE_generate does not.
+ *
+ * The original leaves the phasor's cos and sin fields uninitialised on the
+ * stack.  Harmless -- FPM_phasor_demod writes cos before anything reads it,
+ * and sin is never touched -- but they are cleared here so the reconstruction
+ * has no indeterminate reads.
+ */
+short
+FPM_TONE_generate_demod(struct fpm_tone *state, short *out, short count)
+{
+	struct fpm_phasor p;
+	int scale = state->cfg.scale;
+	int i;
+
+	p.phase = state->phase;
+	p.inc = state->inc;
+	p.cos = p.sin = 0;
+
+	for (i = (short)(count - 1); i != -1; i = (short)(i - 1)) {
+		FPM_phasor_demod(&p);
+		*out++ = ((scale * p.cos) >> 14);
+	}
+
+	state->phase = (short)p.phase;
+	return count;
+}
+
+/*
+ * Hz to phase increment.  A cycle is FPM_PHASOR_CYCLE (0x8000) units, so the
+ * increment is hz * 32768 / fs -- and the original hard-codes fs = 8000 as
+ * the constant 0x8312 in Q13 (33554 / 8192 = 4.096 = 32768 / 8000).
+ *
+ * Reproduced exactly, including the +0x1000 rounding bias.  Recorded as R-9
+ * in docs/rate_assumptions.md; do not "fix" it without reading that entry.
+ */
+void
+FPM_TONE_set_freq(struct fpm_tone *state, short hz)
+{
+	state->inc = (short)(((int)hz * 0x8312 + 0x1000) >> 13);
+}
+
+void
+FPM_TONE_set_scale(struct fpm_tone *state, short scale)
+{
+	state->cfg.scale = scale;
+}
+
 /*
  * ---------------------------------------------------------------------------
  * FPM_TONE_detect -- .text 0x0aaf80, 488 bytes.
@@ -509,44 +547,6 @@ FPM_TONE_detect(struct fpm_tone *state, const short *samples, short count)
 		return FPM_TONE_NOSIGNAL;
 	return (out_of_band <= ((ratio * (short)total) >> 15))
 		? FPM_TONE_OTHER : FPM_TONE_PRESENT;
-}
-
-/*
- * FPM_TONE_generate_demod -- .text 0x0aaed0, 125 bytes.
- *
- * The reference oscillator the demodulator correlates against: the same
- * generator as FPM_TONE_generate, minus two things.
- *
- *   - it uses the COSINE, via FPM_phasor_demod, where the modulator uses the
- *     sine.  Same tone, ninety degrees apart.
- *   - there is no phase-reversal bookkeeping at all.  This is a plain
- *     oscillator; the reversals belong to the ANSam transmitter.
- *
- * It also returns `count`, which FPM_TONE_generate does not.
- *
- * The original leaves the phasor's cos and sin fields uninitialised on the
- * stack.  Harmless -- FPM_phasor_demod writes cos before anything reads it,
- * and sin is never touched -- but they are cleared here so the reconstruction
- * has no indeterminate reads.
- */
-short
-FPM_TONE_generate_demod(struct fpm_tone *state, short *out, short count)
-{
-	struct fpm_phasor p;
-	int scale = state->cfg.scale;
-	int i;
-
-	p.phase = state->phase;
-	p.inc = state->inc;
-	p.cos = p.sin = 0;
-
-	for (i = (short)(count - 1); i != -1; i = (short)(i - 1)) {
-		FPM_phasor_demod(&p);
-		*out++ = ((scale * p.cos) >> 14);
-	}
-
-	state->phase = (short)p.phase;
-	return count;
 }
 
 /*
