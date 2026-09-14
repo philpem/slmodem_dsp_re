@@ -1,5 +1,5 @@
 /*
- * v32fprecr.c -- ITU-T V.32 / V.32bis: the datapump's constructor.
+ * V32.c -- ITU-T V.32 / V.32bis: constructor and datapump recreation.
  *
  *   V32FP_recreate  .text 0x07e870  3733
  *
@@ -144,6 +144,7 @@
 static const short V32DiconnectThreshTable[8] = {
 	75, 95, 119, 150, 168, 174, 212, 238
 };
+
 
 /* The instance is not modelled; these are v32fpctl.c's accessors. */
 #define FIELD(obj, off)		((unsigned char *)(void *)(obj) + (off))
@@ -788,4 +789,23 @@ V32FP_recreate(void *modem, const struct v32fp_params *param, void *arg2)
 			param->tx_scale, param->options, param->trellis);
 
 	return modem;
+}
+void *
+V32FP_create(const struct v32fp_cfg *cfg, void *arg1)
+{
+	struct v32fp_params params;
+
+	params = V32_CFG;
+
+	params.protocol = (short)(cfg->protocol != 0);
+	params.tx_rate = (short)cfg->rate;
+	params.rx_rate = (short)cfg->rate;
+	params.timeout = cfg->timeout;
+	params.options = (params.options & ~0x400u)
+		| (unsigned int)((cfg->r10 & 1) << 10);
+	params.ec_near_delay = (unsigned short)cfg->phys_delay;
+	params.trellis = (cfg->rate > 0x1c1f);
+	params.energy_drop_time = (short)cfg->energy_drop_time;
+
+	return V32FP_recreate(0, &params, arg1);
 }

@@ -7,7 +7,10 @@
  *   FPM_block_update  .text 0x0abd20  244
  *
  * The three are contiguous in `.text` and `voice_dle_command` follows at
- * 0x0abe20, so the translation unit is these three and nothing else.
+ * 0x0abe20.  This does not establish a translation-unit boundary.  The blob
+ * has no `fpm_lmsupd.c` FILE record; nearby `fpm_adeq.c` and `voice.c` remain
+ * ownership candidates, with no local-symbol evidence selecting either.
+ * This file is a reconstruction grouping, not a recovered original TU.
  *
  * NOTHING IN THE OBJECT CALLS THE LAST TWO.  `FPM_lmsupd` has two callers,
  * both inside `FPM_FSE_receive`; `readelf -r` finds no relocation naming

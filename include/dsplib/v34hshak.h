@@ -766,19 +766,6 @@ struct v34_bitsource {
 };
 
 /**
- * @brief Read the next bit of a bitsource.
- *
- * Recursive: the restart arm reloads the whole reader and calls itself for
- * the first bit of the repeat. Returns `short`, not `int` -- every one of
- * the four call sites (the recursion, plus `v34handshak`'s three) follows
- * the call with a sign-extension of a 16-bit value.
- *
- * @param b  The bitsource to read from.
- * @return 0 or 1, or -1 once the message is exhausted and `repeat` is clear.
- */
-short getbit(struct v34_bitsource *b);
-
-/**
  * @brief Set the far-end echo canceller's bulk delay, and decide whether it
  * can run at that delay.
  *

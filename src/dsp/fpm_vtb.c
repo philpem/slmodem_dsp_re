@@ -1,9 +1,13 @@
 /*
- * vtb.c -- the eight-state Viterbi trellis decoder.
+ * fpm_vtb.c -- the eight-state Viterbi trellis decoder.
  *
  * Reconstructed from dsplibs.o:
  *   VTB_decoder   .text   0xab4d0  1773
  *   VTB_DIFF_TBL  .rodata 0x0ed60    32   (file-local in the object)
+ *
+ * The reference FILE record associates VTB_DIFF_TBL with fpm_vtb.c.
+ * Its name, size and complete contents distinguish this input from the
+ * other reference translation units; vtb.c was a reconstruction filename.
  *
  * PROTOCOL-INDEPENDENT.  Everything specific to a modulation reaches this
  * through the state: the constellation, the region and boundary tables, the
