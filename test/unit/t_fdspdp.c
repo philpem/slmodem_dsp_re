@@ -38,6 +38,15 @@
 extern unsigned int ref_dsplibs_debug_level;
 extern struct fdsp_kernel *ref_pGlobalFDSPObj;
 extern unsigned int ref_uCorrelationReportsNo;
+
+/*
+ * Ours: FILE-LOCAL in the object, so both are `static` in Fdspkrnl.c and
+ * fdspkrnl.h no longer declares them.  The test tier links a globalized copy
+ * (tools/testvisible.py).
+ */
+extern struct fdsp_kernel *pGlobalFDSPObj;
+extern unsigned int uCorrelationReportsNo;
+
 extern struct fdsp_kernel *ref_FDSP_DP_Create(struct fdsp_kernel *k,
 					      short rx, short tx);
 extern void ref_FDSP_DP_Delete(struct fdsp_kernel *k);

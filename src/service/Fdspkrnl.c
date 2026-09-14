@@ -53,18 +53,18 @@ static int bInternalBeepInProgress;
  * The one kernel FDSP_DP_Create hands out, and a counter that is written
  * and never read.
  *
- * Both are `b` in the blob and both are external here, which is the trade
- * `bInternalBeepInProgress` above already makes: a `static` cannot be
- * compared against the blob's, and the blob's copy is globalized and
- * renamed by `symmap.py` so the two sides keep their own.
+ * Both are `b` (LOCAL) in the blob, so both are `static` here, the same move
+ * `bInternalBeepInProgress` above already makes.  A test names them and
+ * reaches them through the test tier's globalized copies
+ * (tools/testvisible.py).
  *
  * `uCorrelationReportsNo` has exactly ONE relocation against it in the
  * whole 1.2 MB -- the store at 0xae61d, below -- so nothing in the object
  * ever reads it back.  Its name is the author's and its purpose is not
  * established by anything here.
  */
-struct fdsp_kernel *pGlobalFDSPObj;
-unsigned int uCorrelationReportsNo;
+static struct fdsp_kernel *pGlobalFDSPObj;
+static unsigned int uCorrelationReportsNo;
 
 /*
  * Tear the kernel down: the buffer block, then each channel's taps and the
