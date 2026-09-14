@@ -101,7 +101,8 @@ struct sgd_cfg SGD_CFG = {
  * It is zero-initialised .bss, not .data: the object never stores a value
  * into it, so there is nothing to give it but zero.
  */
-struct sgd_control_req SGD_CTL;
+/* Explicit initialization preserves allocated .bss rather than COMMON. */
+struct sgd_control_req SGD_CTL = { 0 };
 
 /*
  * Construct, or re-arm a caller-supplied object.

@@ -180,6 +180,7 @@ const struct v32fp_ctl V32_CTL = {
  * So this is that struct's first two shorts and nothing else, and the whole
  * of it is a template that only ever contributes `pad02`.
  */
-struct v32_smc_cfg SMCv32_CFG;
+/* Explicit initialization preserves the object's .bss, not COMMON. */
+struct v32_smc_cfg SMCv32_CFG = { 0 };
 
-int Control_Flag;
+int Control_Flag = 0;
