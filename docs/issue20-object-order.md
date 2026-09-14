@@ -57,6 +57,7 @@ arms. They isolate an ordering-policy change from a source/codegen change.
 | PR #92 `b82cc2e7`, corrected | 55123 | 954 | 243 | 2804 |
 | DSP ownership batch, corrected | 55313 | 954 | 244 | 2804 |
 | DSP definition order, corrected | 55321 | 954 | 244 | 2804 |
+| V32 ownership/order, corrected | 55341 | 954 | 247 | 2804 |
 
 All rows have 67/92 exact section descriptors. The two baseline source
 revisions have the same 828/1852 strict exact functions, covering
@@ -151,6 +152,58 @@ The ownership-only cell is commit `c1a960aa`. The source revisions and full
 build logs preserve the definition-order control separately. Two failed
 editing-script attempts left source unchanged and are not experimental cells.
 
+## V32 ownership and emission-order result
+
+The former `v32fpdisp.c` combined three original ownership groups. Its
+contents are now physically partitioned, not relabelled with `#line`:
+
+- `V32.c` contains `V32FP_recreate` and `V32FP_create`. Its local
+  `V32DiconnectThreshTable` matches reference FILE occurrence 116, with
+  16 bytes at `.rodata + 0x6dd0`.
+- `V32mod.c` contains `V32FP_modem`, `v32_data`, `v32_handshake`, and
+  `v32_null_protocol`, emitted in that reference order. The three local
+  handlers and the two local scratch buffers identify FILE occurrence 124.
+  `V32_PROTOCOL` retains global binding.
+- `V32stc.c` contains `V32FP_control` and `V32FP_status`. Their local
+  `SnrToRetrainTable`, `RATEv32`, and `PROTOCOL` identify FILE occurrence
+  129. Status directly references these tables and prints the original
+  `V32STC` diagnostic prefix. The tables emit at relative offsets 0, 12,
+  and 24, preserving their original order and local binding.
+
+The old constructor input `v32fprecr.c` is replaced by `V32.c`; the combined
+dispatch input is replaced by the other two units. The shared local header
+contains includes and unchanged accessor/constant macros, not definitions of
+functions or types. These are partial reconstructions of the original units,
+not a claim that all their original contents have now been recovered.
+
+A source-preservation audit covers all eight moved function bodies and 99
+baseline macros, with no body or macro changes. All 261 registered V32
+mutation anchors still occur once in their registered files; this is an
+anchor check, not a fresh mutation run.
+
+Seven functions retain identical bytes and relative relocations against the
+pre-split build. `V32FP_control` changes from 780 to 769 bytes and from 194
+to 193 non-padding instructions. Full disassembly review identifies removal
+of the redundant `mov %eax,%ebp` in the ratio/table update: the quotient now
+stays in `%eax`. The other nine bytes are padding; remaining changes are
+register allocation and layout. All 15 relocation targets remain in the same
+sequence. Neither control implementation is claimed exact against the blob.
+
+The complete exact-function set remains 828/1852, covering 79916/720125
+reference bytes, with zero gains or losses; the ratchet passes. `make phase`
+passes with 375 differential tests passed, zero failed, and structural checks
+OK. Positioned matching bytes rise 55321 -> 55341 / 943398 and exact symbol
+records rise 244 -> 247 / 2907; relocations remain 954 / 18317. Shared-name
+binding remains 2440/2441, with `getbit` still different. The strict object
+comparison remains `DIFFERENT`.
+
+The first extraction attempt contained duplicate definitions and an
+incomplete header function; its repair also left comment/declaration syntax
+artifacts. These were rejected and corrected before measurement or commit.
+The failed build is preserved as an invalid artifact, not a comparison cell.
+Detailed controls, JSON metrics, the disassembly review, and the gate log are
+under `/tmp/issue20-v32-evidence/`.
+
 ## Deferred ownership questions
 
 - `getbit` is LOCAL under the reference `V34hshak.c`. Its three nonrecursive
@@ -158,9 +211,9 @@ editing-script attempts left source unchanged and are not experimental cells.
   carries those regions in helpers in `v34hstx1.cpp`. Restoring the local
   binding requires addressing that source split, not moving `getbit` or
   treating a globalized test object as a faithful production object.
-- `v32fpdisp.c` mixes functions inferred into `V32.c` with local data whose
-  actual reference owner is `V32stc.c`. Moving the whole file would not
-  resolve the conflict; partition its contents first.
+- The V32 split above resolves the measured dispatcher conflict, not every
+  V32 ownership question. In particular, the constructor's recorded
+  `VTBv32_init` inlining/factoring difference remains outside this batch.
 - There is no reference `fpm_lmsupd.c`. The contiguous LMS group follows
   `VTB_decoder`, but the intervening FILE sequence includes `fpm_adeq.c`.
   At least `fpm_vtb.c`, `fpm_adeq.c`, and `voice.c` must be considered;
