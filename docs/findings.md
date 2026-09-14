@@ -124001,3 +124001,50 @@ well as the binding, and the gross layout deficit is unchanged; the binding is
 necessary and not sufficient.
 
 (2026-09-12)
+
+## F11359. GCC 13 drops or renames the file-local symbols the object keeps, and only the renames have a flag
+
+Issue #82.  The binding pass made seven symbols match the reference's LOCAL
+binding by defining them `static` in their consumer.  GCC 3.4.2 -- the
+object's own compiler -- emits every one of them exactly as the object does;
+GCC 13 either DROPS the symbol or RENAMES it, so a differential fixture that
+names it cannot link in the modern tier.  `make period` never sees this
+because the period compiler has no such transformations.
+
+**Two mechanisms, measured on the static source with the tree's modern flags
+plus one candidate option each.**
+
+RENAMED, and closable with a flag:
+
+- `AnalyseDialString` (Dialer.c) -- GCC 13 partially inlines it and emits
+  `AnalyseDialString.part.0`.  `-fno-partial-inlining` restores the plain
+  name.
+- `bValidateEnergyValue` (Fdspkrnl.c) -- GCC 13 clones it for constant
+  arguments and emits `bValidateEnergyValue.constprop.0`.  `-fno-ipa-cp`
+  restores the plain name; **`-fno-ipa-cp-clone` alone does NOT**, which is
+  the trap -- the clone is made by the earlier propagation, not by the clone
+  pass.
+
+DROPPED, and NOT closable with a flag:
+
+- `pGlobalFDSPObj` and `uCorrelationReportsNo` (Fdspkrnl.c) are written and
+  never read, so GCC 13 eliminates the static outright.  They survive `-O0`
+  and survive no option tried at `-O2` (`-fno-tree-dce`, `-fno-dce`) -- the
+  elimination is not a dead-store pass.
+- `v34initialbauds` (VPcmFloModemCtor.cpp) is a `static const` array the
+  constructor copies six bytes out of; GCC 13 folds the copy to constants and
+  drops the array.  `-fkeep-static-consts` and `-fno-tree-dce` do not keep
+  it.
+
+**The consequence for the apparatus.**  The rename cases can be closed by
+building the test-host copies with `-fno-partial-inlining -fno-ipa-cp`; both
+are codegen-suppressing flags on the APPARATUS tree and belong in the
+Makefile, not `src/`.  The drop cases cannot be closed the same way; they
+need either a per-translation-unit `-O0` test-host compile -- which is a
+second compile tree and risks x87 precision divergences of its own -- or a
+declared modern-tier link exception with `tools/gccdiverge.json`'s standing.
+That is a decision, and it is why the seven are recorded here rather than
+worked around in the reconstruction.  `v34initialbauds` and the tables
+`RATEv32`/`V32DiconnectThreshTable` are the same class.
+
+(2026-09-14)
