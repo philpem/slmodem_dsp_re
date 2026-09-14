@@ -348,7 +348,7 @@ or MH must be written against the amendment, not against V.92 (11/2000).
 | 3.5, 8.2.2, 8.2.3/V.8 | CJ is three all-zero octets; ANSam runs 5 ± 1 s; JM stops after all three CJ octets | `src/v8/v8hs.c`, `v8hsrx.c`, `v8handshak.c` | yes |
 | 3.4, 3.6/V.8 | CM on V.21(L), JM on V.21(H) | `v8_V21_Init` call sites | yes |
 | Tables 1–7/V.8 | the preamble patterns and every category and option-bit code | `include/dsplib/v8.h`, `src/v8/v8seq.c`, `v8jm.c` | yes |
-| 2.1, 2.2, 2.3, 4.4/V.25 | 1300 ± 15 Hz on 0.5–0.7 s / off 1.5–2.0 s; 2100 ± 15 Hz for 3.3 ± 0.7 s; reversals 425–475 ms; silence 75 ± 20 ms | `src/dsp/fpm_tone_cfg.c`, `src/pump/v23/v23modem.c`, `src/callprog/CallingTone.c` | yes |
+| 2.1, 2.2, 2.3, 4.4/V.25 | 1300 ± 15 Hz on 0.5–0.7 s / off 1.5–2.0 s; 2100 ± 15 Hz for 3.3 ± 0.7 s; reversals 425–475 ms; silence 75 ± 20 ms | `src/dsp/fpm_tone.c`, `src/pump/v23/v23modem.c`, `src/callprog/CallingTone.c` | yes |
 | Table 8, Table 9/V.34 | SWP and AMP | — | **no** |
 | Tables 7–10/V.92 | the ANSpcm sequences | — | **no** |
 | Table 33/V.92, Tables 25/28/29 | T1 timeout encoding, RM symbol pattern | — | **no** |

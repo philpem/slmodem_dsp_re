@@ -129,7 +129,7 @@
   "build/test/t_fpm_tone"
  ],
  "fpmtonecfgstd": [
-  "src/dsp/fpm_tone_cfg.c",
+  "src/dsp/fpm_tone.c",
   "build/test/t_fpm_tone"
  ],
  "fsegetdiag": [
