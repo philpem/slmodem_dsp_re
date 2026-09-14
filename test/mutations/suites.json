@@ -141,7 +141,7 @@
   "build/test/t_gtonedet"
  ],
  "k56flexalloc": [
-  "src/pump/v90/K56FlexFloModem.cpp",
+  "src/pump/v90/NoK56Flex.cpp",
   "build/test/t_v92alloc"
  ],
  "moduluscoder": [
@@ -269,7 +269,7 @@
   "build/test/t_v34diag"
  ],
  "v34diagk56": [
-  "src/pump/v90/K56FlexFloModem.cpp",
+  "src/pump/v90/NoK56Flex.cpp",
   "build/test/t_v34diag"
  ],
  "v34filters": [

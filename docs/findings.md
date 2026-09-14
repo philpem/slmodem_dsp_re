@@ -124120,3 +124120,42 @@ binding-mismatch count (unchanged at 1) that the CI ratchets.  `make
 phase` 375/0, `make similarity` identical unchanged at 887, refs clean.
 
 (2026-09-14)
+
+## F11362. `fax.c` and `NoK56Flex.cpp` are NOT empty: a FILE record with no locals can still hold globals
+
+F11360 concluded from the symbol table that `fax.c` and `NoK56Flex.cpp`
+were empty translation units and reproduced them with empty files.  **That
+was wrong, and the error is worth recording as a method.**
+
+The check was "no symbols are attributed to this FILE".  Attribution was
+done by the FILE record preceding a symbol in `.symtab`, and **`.symtab` is
+locals-first**: every FILE record sits in the local region, and every
+GLOBAL symbol follows in the global region, so *every* global's preceding
+FILE is whichever FILE record happens to be last before the globals --
+which is why a naive majority vote over all symbols collapses onto
+`FixedRC.c`.  A FILE record with no *locals* after it therefore says
+nothing about whether the unit had *globals*.
+
+**Measured against the object.**  `.text` is laid out in input order, and
+the two units' globals are plain to see once you look at addresses:
+
+    FAX_delete            0x1450     NoK56Flex.cpp is a FILE record and
+    FAX_create            0x1500     `K56FlexFloModem.cpp` is NOT in the
+    FAX_class1_command    0x1740     object at all -- the K56FlexFloModem
+    FAX_process           0x1a10     methods and K56FLEX_* live in it
+
+`voice.c` ends at 0x1820 and `call.c` begins at 11104, so the four FAX
+globals sit exactly in `fax.c`'s input slot.  In this tree they had been
+written into `src/service/voice.c`, whose FILE record then carried them at
+`voice.c`'s position.
+
+**The repair is a move, not an empty file.**  The `FAX_*` block moved to
+`src/fax/fax.c` and now sits 128 bytes from the object's own offsets
+(5248 vs 5376); `src/pump/v90/K56FlexFloModem.cpp` is renamed to
+`NoK56Flex.cpp`, and both empty files are gone.  `make phase` 375/0,
+ratchet unchanged at 887, refs clean.  Reading the FILE list is not
+enough; a unit's globals have to be placed by their `.text` address, and
+the empty-TU conclusion is only valid when no global lands in the unit's
+slot.
+
+(2026-09-14)
