@@ -68,6 +68,16 @@ unsigned short FPM_div_table_entry(int i);
 /** @brief Recompute one entry of FPM_div()'s reciprocal table from its ideal formula. */
 unsigned short FPM_div_table_generate(int i);
 
+/*
+ * `FPM_div_table` is GLOBAL (`R`) in the object, so it is not file-static;
+ * the declaration is completed by the definition in `fpm_div.c`.  The
+ * definition is 129 entries -- the object's 128 plus the D4 over-read's
+ * value, which is 0 in the bug build and the generated 16384 in the fixed
+ * one.  Dropping the 129th in the bug build is not equivalent: our `.rodata`
+ * does not reproduce the object's FPM_xor_table adjacency.
+ */
+extern const unsigned short FPM_div_table[];
+
 /**
  * @brief Four-quadrant arctangent, built on FPM_div().
  *
