@@ -212,11 +212,10 @@ struct fdsp_tone {
 
 /*
  * The kernel FDSP_DP_Create last handed out, and a counter written by that
- * function and read by nothing in the whole object.  Both are `b` in the
- * blob and external here, the same trade `bInternalBeepInProgress` makes.
+ * function and read by nothing in the whole object.  Both are `b` (LOCAL) in
+ * the blob, so both are `static` in `Fdspkrnl.c` and declared there; a test
+ * names them through the test tier's globalized copies (tools/testvisible.py).
  */
-extern struct fdsp_kernel *pGlobalFDSPObj;
-extern unsigned int uCorrelationReportsNo;
 
 /**
  * @brief Create the kernel, or re-initialise one the caller already has,
