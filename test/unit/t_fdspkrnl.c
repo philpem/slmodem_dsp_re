@@ -80,6 +80,16 @@ extern int ref_bValidateEnergyValue(float *buf, unsigned int n, int *hist,
 				    unsigned int *idxp, unsigned int histlen,
 				    struct fdsp_kernel *k)
 	__attribute__((regparm(2)));
+
+/*
+ * Ours: FILE-LOCAL in the object, so it is `static` in Fdspkrnl.c and
+ * fdspkrnl.h no longer declares it.  The test tier links a globalized copy
+ * (tools/testvisible.py).
+ */
+extern int bValidateEnergyValue(float *buf, unsigned int n, int *hist,
+				unsigned int *idxp, unsigned int histlen,
+				struct fdsp_kernel *k)
+	__attribute__((regparm(2)));
 extern int ref_FDSP_Kernel_Loop(struct fdsp_kernel *k, float *in_a,
 				float *out_b, float *in_b, float *out_a);
 extern void ref_FDSP_Kernel_InitObj(struct fdsp_kernel *k);

@@ -118,8 +118,10 @@ struct dialer {
  * @param s      The string to grade.
  * @param store  Nonzero asks for `d->last_digit` to be updated.
  * @return One of the `DIALER_*` grade constants, returned either way.
+ *
+ * (EXPERIMENT: declared static in Dialer.c now; see whether GCC 3.4.2 keeps
+ * the plain name rather than `.part.0`.)
  */
-int AnalyseDialString(struct dialer *d, const char *s, int store);
 
 /**
  * @brief True when a string is too poor to dial.

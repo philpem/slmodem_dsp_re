@@ -54,7 +54,7 @@ dialer_grade_name(int grade)
  * -O3 and the plain name becomes `AnalyseDialString.part.0`, so the record
  * stays external and the differential tests reach it through the header.
  */
-int
+static int
 AnalyseDialString(struct dialer *d, const char *s, int store)
 {
 	int grade = DIALER_VALID;

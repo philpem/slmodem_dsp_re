@@ -33,6 +33,10 @@
 
 extern unsigned int ref_dsplibs_debug_level;
 
+/* Ours: FILE-LOCAL, `static` in Dialer.c, reached via the globalized copy. */
+extern int AnalyseDialString(struct dialer *d, const char *s, int store)
+	__attribute__((regparm(2)));
+
 extern int ref_IsDialStringInvalid(struct dialer *d, const char *s);
 extern int ref_Dialer_IsDialStringInvalid(struct callprog *cp,
 					  const char *s);
