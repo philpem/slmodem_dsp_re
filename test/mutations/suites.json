@@ -328,6 +328,10 @@
   "src/pump/v34/v34hstx1.cpp",
   "build/test/t_v34hstx1"
  ],
+ "v34hstx1_moved": [
+  "src/pump/v34/V34hshak.c",
+  "build/test/t_v34hstx1"
+ ],
  "v34hstxblock": [
   "src/pump/v34/V34hshak.c",
   "build/test/t_v34hstbl2"
@@ -388,12 +392,12 @@
   "src/v8/v8agc.c",
   "build/test/t_v8sig"
  ],
-  "v8dp": [
-   "src/v8/v8.c",
-   "build/test/t_v8dp"
-  ],
-  "v8dpstd": [
-   "src/v8/v8.c",
+ "v8dp": [
+  "src/v8/v8.c",
+  "build/test/t_v8dp"
+ ],
+ "v8dpstd": [
+  "src/v8/v8.c",
   "build/test/t_v8dp"
  ],
  "v8handshak": [

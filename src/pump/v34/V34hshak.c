@@ -68,6 +68,7 @@
 #include "dsplib/v34fsk.h"
 #include "dsplib/v34hshak.h"
 #include "dsplib/v34hstx1.h"	/* table 1's nineteen arms, for the loop  */
+
 #include "dsplib/v34info.h"
 #include "dsplib/v34pcmif.h"
 #include "dsplib/v34recv.h"
@@ -2934,7 +2935,7 @@ v34setuptxmit(void *objp)
  * a 32-bit add, so the carry out of bit 15 is dropped.  Hence the
  * `unsigned short` here.
  */
-short
+static short
 getbit(struct v34_bitsource *b)
 {
 	unsigned int acc;
@@ -3036,6 +3037,462 @@ emit:
 	b->avail = (short)n;
 	return (short)((acc >> (n & 31)) & 1);
 }
+
+/* These two exported arms are physically reunited with their LOCAL getbit. */
+
+/* Unchanged offsets from the original reconstruction's TX1 helper group. */
+#define TX1_RECEIVER        0x264
+#define TX1_F382            0x382
+#define TX1_F358C           0x358c
+#define TX1_F3590           0x3590
+#define TX1_F3598           0x3598
+#define TX1_F359E           0x359e
+#define TX1_TXSTATE         0x3596
+#define TX1_RXSTATE         0x3594
+#define TX1_FAA3C           0xaa3c
+#define TX1_PTR_AA6C        0xaa6c
+#define TX1_BLK_A94C        0xa94c
+#define TX1_COUNT           0xaa78
+#define TX1_FABE4           0xabe4
+#define TX1_FABE6           0xabe6
+#define TX1_MOH_MSG_PENDING 0xabf8
+#define TX1_MOH_PATH_SEL    0xabf9
+#define TX1_MOH_ACTIVE      0xabe8
+#define MOH_ILLEGAL "MOH: Illegal MH sequence under MHreq," \
+                    " initiating retrain\r\n"
+
+static short
+tx1_get(const void *objp, unsigned off)
+{
+	return *(const short *)((const char *)objp + off);
+}
+
+static struct v34_bitsource *
+tx1_bitsource(struct v34_object *o)
+{
+	return *(struct v34_bitsource **)((char *)o + TX1_PTR_AA6C);
+}
+
+static void
+tx1_put(void *objp, unsigned off, short v)
+{
+	*(short *)((char *)objp + off) = v;
+}
+
+static void
+tx1_mp_reload(struct v34_object *o, struct v34_bitsource *b,
+	      unsigned short flags)
+{
+	b->crc = (short)0xffff;
+	b->pos = 0;
+	b->idx = 0;
+	b->repeats = 0;
+	b->wordbits = 0x10;
+	b->nbits = (short)((flags & 0x20u) ? 0x30 : 0x90);
+	b->crc_on = 1;
+	b->avail = 0x12;
+	b->avail0 = 0x12;
+	b->repeat = 0;
+	b->acc = 0x3fffe;
+	b->acc0 = 0x3fffe;
+
+	/* 0x646a1 */
+	o->vect_idx = 0;
+	tx1_put(o, TX1_F3590, 0x22);
+
+	/*
+	 * 0x646b5.  `flags` IS the receiver's word and the object re-reads
+	 * it here rather than using the copy it was handed; nothing between
+	 * the two writes it, so the argument is the parameter.
+	 */
+	if (dsplibs_debug_level > 1)
+		dsplibs_debug_printf(
+			"V34MP, Starting txmit MP again(%d)," " rxflgs=0x%x,txflags=0x%x\n",
+			tx1_get(o, TX1_F359E), flags, o->tx_flags);
+}
+
+static int
+tx1_mp_sequence_end(struct v34_object *o, struct v34_receiver *rx)
+{
+	unsigned short flags;
+	short seq;
+	int stamp;
+
+	seq = (short)((unsigned short)tx1_get(o, TX1_F359E) + 1);
+	tx1_put(o, TX1_F359E, seq);
+
+	if ((*((unsigned char *)o + TX1_FAA3C) & 1) != 0) {
+		flags = rx->flags;			/* 0x645f9 */
+		if ((flags & 0x90u) == 0x90u && seq > 3) {
+			/* 0x648b1 */
+			if (tx1_get(o, TX1_F3598) == 0) {
+				initdigital(o);
+				tx1_put(o, TX1_F3598, 1);
+			}
+			/* 0x648bf */
+			hs_setstate(o, TX1_TXSTATE, V34HS_EXMIT);
+			o->vect_idx = 0;
+			rx->flags = (unsigned short)(rx->flags & ~V34_RX_FLAG_RENEG);
+			return 1;
+		}
+		stamp = (flags & (V34_RX_FLAG_TRN_WATCH | V34_RX_FLAG_LATE_TRN))
+			== V34_RX_FLAG_TRN_WATCH;		/* 0x64614 */
+	} else {
+		flags = rx->flags;			/* 0x647a9 */
+		stamp = (flags & 0x18u) == 0x10u;	/* 0x647b0 */
+	}
+
+	/*
+	 * 0x647c5 RE-READS +0x359e rather than using the value just stored.
+	 * Nothing between the two writes it, so the two are the same number;
+	 * it is written as the object writes it.
+	 */
+	if (stamp && tx1_get(o, TX1_F359E) > 1) {
+		/* 0x647d3 */
+		struct v34_bitsource *b = tx1_bitsource(o);
+
+		if ((b->word[0] & 1) == 0)
+			tx1_put(o, TX1_F359E, 0);
+		b->word[0] = (short)((unsigned short)b->word[0] | 1u);
+		if (dsplibs_debug_level > 1)		/* 0x67254 */
+			dsplibs_debug_printf(
+				"V34MP, MP detected, starting MP' txmit");
+		flags = rx->flags;			/* 0x64805 */
+	}
+
+	tx1_mp_reload(o, tx1_bitsource(o), flags);
+	return 0;
+}
+
+static void
+tx1_put_point(struct v34_object *o, int point)
+{
+	o->txpoint.word = point;
+}
+
+static void
+tx1_mp16(struct v34_object *o, short src)
+{
+	short pick = (short)((o->tx_flags & V34_TXFLAG_CALLER) == 0);
+	short k, q;
+	int point;
+
+	q = (short)V34scrambler((unsigned *)&o->tx_scr_sr, pick, src, 2);
+	o->cur_quadrant = (short)((q + (unsigned short)o->prev_quadrant) & 3);
+
+	q = (short)V34scrambler((unsigned *)&o->tx_scr_sr, pick,
+				(short)(src >> 2), 2);
+	k = o->cur_quadrant;					/* re-read, 0x63c72 */
+	o->prev_quadrant = k;
+	point = vect16[q + 4 * k];
+	tx1_put_point(o, point);
+}
+
+static short
+tx1_dpsk4(struct v34_object *o, short q)
+{
+	short k = (short)((q + (unsigned short)o->prev_quadrant) & 3);
+	int point = vect4[k];
+
+	o->cur_quadrant = k;
+	o->prev_quadrant = k;
+	tx1_put_point(o, point);
+	return k;
+}
+
+static void
+tx1_mp4(struct v34_object *o, short src)
+{
+	short pick = (short)((o->tx_flags & V34_TXFLAG_CALLER) == 0);
+	short q = (short)V34scrambler((unsigned *)&o->tx_scr_sr, pick, src, 2);
+
+	(void)tx1_dpsk4(o, q);
+}
+
+static void
+tx1_dpsk_tone(struct v34_object *o, short bit)
+{
+	short sel = (short)((unsigned short)tx1_get(o, TX1_F358C)
+			    ^ (unsigned short)bit);
+
+	tx1_put(o, TX1_F358C, sel);
+	tx1_put_point(o, vect4[2 * (sel & 1)]);
+}
+
+static void
+tx1_moh_cleardown(struct v34_object *o)
+{
+	hs_setstate(o, TX1_TXSTATE, V34HS_MOH_CLEARDOWN);
+	hs_setstate(o, TX1_RXSTATE, V34HS_WAIT);
+	tx1_put(o, TX1_FABE4, 1);
+}
+
+static void
+tx1_moh_reinit(struct v34_object *o, const char *msg)
+{
+	if (dsplibs_debug_level > 1)
+		dsplibs_debug_printf(msg);
+	v34handshakinit(o, 1);
+	tx1_put(o, TX1_FABE6, 1);
+}
+
+static int
+tx1_moh_hold(struct v34_object *o)
+{
+	if ((int)o->vect_idx < ((int)o->rtd >> 4) + 0x4b0)
+		return V34TX1_LOOP;			/* 0x6431f */
+
+	if (*((unsigned char *)o + TX1_MOH_PATH_SEL) != 0) {
+		if (dsplibs_debug_level > 1)		/* 0x6889f */
+			dsplibs_debug_printf(
+				"MOH: Timeout waiting for MH sequence under"
+				" MHreq, disconnecting...\r\n");
+		/* 0x688b4 */
+		tx1_moh_cleardown(o);
+		o->short_abe2 = 1;
+		return V34TX1_LOOP;			/* 0x629cf */
+	}
+
+	if ((unsigned)(o->moh_message - 2) > 1u) {
+		/* 0x6923d */
+		tx1_moh_reinit(o,
+			       "MOH: Timeout waiting for MH sequence under"
+			       " MHreq, initiating retrain\r\n");
+		return V34TX1_LOOP;			/* 0x629cf */
+	}
+
+	if (dsplibs_debug_level > 1)			/* 0x65031 */
+		dsplibs_debug_printf(
+			"MOH: Timeout waiting for MH sequence under"
+			" cleardown, terminating connection without" " acknowledge\r\n");
+
+	/* 0x65046 */
+	tx1_moh_cleardown(o);
+	return V34TX1_LOOP;				/* 0x64326 */
+}
+
+static void
+tx1_moh_on_hold(struct v34_object *o)
+{
+	hs_setstate(o, TX1_TXSTATE, V34HS_MOH_SILENCE);
+	hs_setstate(o, TX1_RXSTATE, V34HS_WAIT);
+	tx1_put(o, TX1_COUNT, 0);
+	o->vect_idx = 0;
+}
+
+static void
+tx1_moh_send(struct v34_object *o)
+{
+	struct v34_bitsource *b;
+
+	if (o->short_abe2 != 3)
+		o->short_abe2 = 1;
+	if (*((unsigned char *)o + TX1_MOH_PATH_SEL) == 0) {
+		if (dsplibs_debug_level > 1)	/* 0x7041b */
+			dsplibs_debug_printf(
+				"MOH: MHnack received for MHreq," " sending MHfrr\r\n");
+		o->moh_message = 1;		/* 0x70430 */
+	} else {
+		if (dsplibs_debug_level > 1)	/* 0x6a400 */
+			dsplibs_debug_printf(
+				"MOH: MHnack received for MHreq," " sending MHcda\r\n");
+		o->moh_message = 3;		/* 0x6a415 */
+	}
+
+	/* 0x6a427 */
+	VPcmV34SetMohMessageBits(o, (short *)tx1_bitsource(o));
+	*(short **)((char *)o + TX1_PTR_AA6C) =
+		(short *)((char *)o + TX1_BLK_A94C);
+
+	/* 0x6a44e */
+	b = (struct v34_bitsource *)((char *)o + TX1_BLK_A94C);
+	b->crc = (short)0xffff;
+	b->pos = 0;
+	b->idx = 0;
+	b->repeats = 0;
+	b->nbits = 8;
+	b->wordbits = 8;
+	b->crc_on = 1;
+	b->acc = 0xf72;
+	b->acc0 = 0xf72;
+	b->avail = 0xc;
+	b->avail0 = 0xc;
+	b->repeat = 0;
+}
+
+int
+v34tx1_xmitmp(void *objp)
+{
+	struct v34_object *o = (struct v34_object *)objp;
+	struct v34_receiver *rx =
+		(struct v34_receiver *)((char *)objp + TX1_RECEIVER);
+	int wide = 0;
+	int n = 0;
+
+	o->cur_quadrant = 0;					/* 0x639ab */
+
+	for (;;) {
+		struct v34_bitsource *b;
+		unsigned short flags;
+		short bit, idx;
+
+		wide = (unsigned short)tx1_get(o, TX1_F382) == 0x89b0u;
+		if (n > (wide ? 3 : 1))
+			break;
+
+		/* 0x639db, and 0x6484c where it does not inline */
+		b = tx1_bitsource(o);
+		bit = getbit(b);
+
+		/*
+		 * 0x63ab1.  `n` reaches the shift through `movzbl`, and the
+		 * bit reaches it sign-extended -- so the reader's -1 fills
+		 * `cur_quadrant` from bit `n` up rather than setting one bit.
+		 */
+		o->cur_quadrant = (short)((unsigned short)o->cur_quadrant
+				   | (unsigned short)
+				     ((unsigned)(int)bit
+				      << ((unsigned)(unsigned char)n & 31u)));
+
+		/* 0x63ad8 */
+		o->vect_idx = (short)((unsigned short)o->vect_idx + 1);
+		idx = o->vect_idx;
+		flags = rx->flags;
+
+		if (idx == ((flags & 0x20u) ? 0x55 : 0xbb)) {
+			/* 0x6459b */
+			b = tx1_bitsource(o);
+			if (flags & 0x20u) {
+				b->acc = (int)((unsigned)b->acc << 3);
+				b->avail = (short)
+					   ((unsigned short)b->avail + 3);
+			} else {
+				b->acc = (int)((unsigned)b->acc << 1);
+				b->avail = (short)
+					   ((unsigned short)b->avail + 1);
+			}
+		} else if (idx == ((flags & 0x20u) ? 0x58 : 0xbc)) {
+			if (tx1_mp_sequence_end(o, rx)) {
+				/* 0x6490e */
+				wide = (unsigned short)
+				       tx1_get(o, TX1_F382) == 0x89b0u;
+				break;
+			}
+		} else if ((unsigned short)o->vect_idx
+			   == (unsigned short)tx1_get(o, TX1_F3590)) {
+			/* 0x64727 */
+			b = tx1_bitsource(o);
+			b->acc = (int)((unsigned)b->acc << 1);
+			b->avail = (short)((unsigned short)b->avail + 1);
+			tx1_put(o, TX1_F3590,
+				(short)((unsigned short)
+					tx1_get(o, TX1_F3590) + 0x11));
+		}
+
+		n = (short)(n + 1);			/* 0x63b38 */
+	}
+
+	if (wide)
+		tx1_mp16(o, o->cur_quadrant);
+	else
+		tx1_mp4(o, o->cur_quadrant);
+
+	txmit(o);				/* 0x62d5f and 0x64a42 */
+	return V34TX1_LOOP;			/* 0x62d70 and 0x640a1 */
+}
+
+int
+v34tx1_tx_dpsk(void *objp)
+{
+	struct v34_object *o = (struct v34_object *)objp;
+	short bit;
+
+	/* 0x62b9d */
+	if (*((unsigned char *)o + TX1_MOH_ACTIVE) != 0)
+		o->vect_idx = (short)((unsigned short)o->vect_idx + 1);
+
+	/* 0x62bb5, and 0x684bb where it does not inline */
+	bit = getbit(tx1_bitsource(o));
+	if (bit >= 0) {
+		/* 0x64a13 */
+		tx1_dpsk_tone(o, bit);
+		txmit(o);				/* 0x64a42 */
+		return V34TX1_LOOP;			/* 0x640a1 */
+	}
+
+	/* 0x64e5c: the message is over.  The flag is RE-READ (0x64e63) */
+	if (*((unsigned char *)o + TX1_MOH_ACTIVE) == 0) {
+		/*
+		 * 0x654dd.  The compare against TONE_AB cannot be false, for
+		 * finding F342's reason at 65: the arm is reached only through
+		 * table 1 at `txstate == 24` and nothing between the dispatch
+		 * and here writes +0x3596 -- `getbit` does not.  It is
+		 * written as the object writes it.
+		 */
+		hs_setstate(o, TX1_TXSTATE, V34HS_TONE_AB);
+		return V34TX1_LOOP;			/* 0x63948 */
+	}
+
+	if (dsplibs_debug_level > 1)			/* 0x68704 */
+		dsplibs_debug_printf(
+			"End of current MOH msg: isterm=%d, count1(%d)," " pktcount(%d)...\r\n",
+			*((signed char *)o + TX1_MOH_MSG_PENDING), o->vect_idx,
+			tx1_bitsource(o)->repeats);
+
+	if (*((unsigned char *)o + TX1_MOH_MSG_PENDING) == 0) {
+		/*
+		 * 0x67c4e.  The reader is re-armed BY HAND and read again --
+		 * `getbit`'s own restart arm with the `repeat` test taken out,
+		 * so a reader that declines to repeat is restarted anyway.
+		 * The stores are the object's, in the object's order; the
+		 * compiler sank the rest of them into the successors, which is
+		 * why 0x6a855 and 0x6c9c8 store 0xffff into `crc` again.
+		 */
+		struct v34_bitsource *b = tx1_bitsource(o);
+
+		b->repeats = (short)((unsigned short)b->repeats + 1);
+		b->crc = (short)0xffff;
+		b->pos = 0;
+		b->idx = 0;
+		b->acc = b->acc0;
+		b->avail = b->avail0;
+
+		tx1_dpsk_tone(o, getbit(b));
+		txmit(o);				/* 0x67d3e */
+		return tx1_moh_hold(o);			/* 0x64fec */
+	}
+
+	/*
+	 * 0x64e91.  Both selectors are read as ints and compared UNSIGNED --
+	 * `cmp $0x1 ; je ; jb` picks zero alone and `cmp $0x3 ; ja` sends a
+	 * negative one to the same place a large one goes.
+	 */
+	if (o->moh_message == 1) {
+		tx1_moh_on_hold(o);			/* 0x689f6 */
+	} else if (o->moh_message == 0) {
+		int got = o->moh_recvd;			/* 0x6901d */
+
+		if (got == 4)
+			tx1_moh_on_hold(o);
+		else if ((unsigned)got > 4u) {
+			/* 0x6a3c6 */
+			if (got != 5)
+				tx1_moh_reinit(o, MOH_ILLEGAL);	/* 0x69041 */
+			else
+				tx1_moh_send(o);	/* 0x6a3cf */
+		} else if (got == 0)
+			tx1_moh_on_hold(o);
+		else
+			tx1_moh_reinit(o, MOH_ILLEGAL);	/* 0x69041 */
+	} else if ((unsigned)o->moh_message <= 3u) {
+		tx1_moh_cleardown(o);			/* 0x64eaf */
+	}
+
+	/* 0x64fde */
+	*((unsigned char *)o + TX1_MOH_MSG_PENDING) = 0;
+	return tx1_moh_hold(o);				/* 0x64fec */
+}
+
 
 /*
  * ---------------------------------------------------------------------------

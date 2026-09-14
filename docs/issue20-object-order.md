@@ -58,6 +58,7 @@ arms. They isolate an ordering-policy change from a source/codegen change.
 | DSP ownership batch, corrected | 55313 | 954 | 244 | 2804 |
 | DSP definition order, corrected | 55321 | 954 | 244 | 2804 |
 | V32 ownership/order, corrected | 55341 | 954 | 247 | 2804 |
+| getbit physical closure, corrected | 55398 | 952 | 247 | 2804 |
 
 All rows have 67/92 exact section descriptors. The two baseline source
 revisions have the same 828/1852 strict exact functions, covering
@@ -204,6 +205,76 @@ The failed build is preserved as an invalid artifact, not a comparison cell.
 Detailed controls, JSON metrics, the disassembly review, and the gate log are
 under `/tmp/issue20-v32-evidence/`.
 
+## getbit binding milestone
+
+The reference's last measured shared-name binding disagreement is resolved:
+`getbit` is now LOCAL in `V34hshak.c`. Its three nonrecursive call sites
+belong to two reconstructed transmit arms, `v34tx1_xmitmp` and
+`v34tx1_tx_dpsk`. Those two definitions and their eleven private helper
+dependencies now physically reside in the C translation unit. Unrelated
+C++ arms remain in `v34hstx1.cpp`; the compiler profile is unchanged.
+
+The four utilities shared with remaining arms stay static in both units.
+There is no production visibility wrapper and no included `.cpp` or `#line`
+substitute for source placement. The temporary private helper header was
+removed: the private definitions live directly beside their moved callers.
+The public `getbit` prototype is removed; its direct unit test declares the
+test-only globalized copy supplied by the existing `testvisible.py` mechanism.
+
+The preservation audit checked 126 original C function bodies, 41 unmoved
+C++ bodies, both moved arm bodies (2069 and 2780 source bytes), and 15 copied
+helper bodies, with no body differences. Source presence alone was not
+accepted as mutation coverage: 157 entries initially still targeted dead C++
+helper copies. Removing those private copies and rerouting their entries
+preserves the original 776-entry mutation inventory against live definitions.
+
+The complete object review contains 62 function occurrences before and after,
+with no added helper occurrence. Of 61 shared names, 51 have identical bodies
+and relative relocations. Four initially unresolved comparisons have identical
+normalized disassembly; `v34handshak` differs only in 18 string-relocation
+immediates selecting identical strings after section rebasing. The remaining
+out-of-line MOH helper changes from `_Z12tx1_moh_holdP10v34_object` to
+`tx1_moh_hold`, preserving its instructions and relocation targets.
+
+Genuine code-generation collateral is retained and reviewed, not called
+neutral: `ApplyBulkDelay` has 22 changed bytes, `getbit` shrinks 452 -> 447,
+`v34handshak_unwritten_reset` has four register-encoding byte changes,
+`v34tx1_xmitmp` retains size 1060 with 344 differing bytes, and
+`v34tx1_tx_dpsk` shrinks 858 -> 838. The moved arms are not claimed exact.
+The full exact-function set remains 828/1852, with zero gains or losses,
+covering 79916/720125 reference code bytes; the ratchet passes.
+
+Shared-name binding improves 2440 -> 2441 / 2441. Positioned matching bytes
+rise 55341 -> 55398 / 943398, but exact relocation records fall
+954 -> 952 / 18317. Exact symbol records remain 247/2907. Candidate `.text`
+shrinks 685400 -> 685368 versus reference 728304, so the size deficit grows
+by 32 bytes. This is an evidence-supported ownership/binding improvement,
+not monotonic progress on every metric. Strict partial-link comparison still
+reports `DIFFERENT`; 77 reference-only and 132 candidate-only names remain.
+
+Both affected mutation suites were fully rerun and genuinely recorded:
+
+| Suite | Entries | Caught by tests | Equivalent | Uncaught | Unusable |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `v34hstx1` | 535 | 513 | 22 | 0 | 0 |
+| `v34hstx1_moved` | 241 | 240 | 1 | 0 | 0 |
+| Total | 776 | 753 | 23 | 0 | 0 |
+
+No miscounted equivalents or string-only catches occurred. Final `make phase`
+passes: 375 period differential tests passed, zero failed, structural checks
+OK. Its mutation snapshot reports two current, 262 stale, and zero never
+recorded suites out of 264; no fresh coverage is claimed for the other suites.
+
+Rejected intermediate apparatus states are preserved as invalid artifacts:
+the initial 84-entry routing omitted the 157 private-helper entries; sandboxed
+32-bit test execution failed with a bad-system-call error; and a duplicated
+macro block tripped the string-provenance gate before mutation scoring.
+After correcting these, the full rerun above passed. Removing the duplicate
+macro block rebuilt to a byte-identical handshake object and partial-link
+object, preserving the measured candidate. Detailed reports, controls, JSON,
+mutation output, and the final gate log are under
+`/tmp/issue20-getbit-evidence/`.
+
 ## Deferred ownership questions
 
 The follow-up audit rejects two attractive but unproven moves. The LMS
@@ -224,22 +295,10 @@ passed, zero failed, structural checks OK. It claims no binary-match gain.
 The detailed audits are `/tmp/issue20-lms-ownership.txt` and
 `/tmp/issue20-getbit-plan.txt`; the checkpoint is also on PR #94.
 
-The next bounded `getbit` experiment is physical, not a linkage shim:
-move `v34tx1_xmitmp` and `v34tx1_tx_dpsk` plus their private dependency
-closure into `V34hshak.c`, remove the public `getbit` declaration, and make
-its definition static. Shared `tx1_*` accessors must remain internal rather
-than becoming invented globals. The moved closure is C-compatible; unrelated
-`v34tx1_jatxmit` and `v34tx1_k56jatxmit` have C++ tail calls and stay in their
-C++ TU. Before retaining the experiment, measure duplicate emitted local
-helpers, complete-TU collateral, exported bindings, differential results,
-and the split mutation anchors. Recompiling the whole handshake as C++ is
-not part of this correction.
-
-- `getbit` is LOCAL under the reference `V34hshak.c`. Its three nonrecursive
-  calls are inside the reference's single `v34handshak`; the reconstruction
-  carries those regions in helpers in `v34hstx1.cpp`. Restoring the local
-  binding requires addressing that source split, not moving `getbit` or
-  treating a globalized test object as a faithful production object.
+- Restoring `getbit` binding does not complete the original `v34handshak`
+  reconstruction: its factored helper surface and remaining ownership/layout
+  differences are separate work. The correction above does not reinterpret
+  test-globalized objects as faithful production objects.
 - The V32 split above resolves the measured dispatcher conflict, not every
   V32 ownership question. In particular, the constructor's recorded
   `VTBv32_init` inlining/factoring difference remains outside this batch.

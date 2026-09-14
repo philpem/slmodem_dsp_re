@@ -52,6 +52,9 @@
 
 extern unsigned int ref_dsplibs_debug_level;
 
+/* tools/testvisible.py globalizes a test-only copy of this LOCAL function. */
+extern short getbit(struct v34_bitsource *b);
+
 extern void ref_dpskDetectInfo1Init(void *obj);
 extern void ref_dpskinit(void *obj, short mode, short high);
 extern void ref_setfinalrate(void *obj);
