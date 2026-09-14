@@ -408,13 +408,10 @@ int FDSP_Kernel_Loop(struct fdsp_kernel *k, float *in_a, float *out_b,
  * @return 1 only when the average is quiet and no countdown is pending,
  *         0 otherwise.
  *
- * LOCAL in the blob (`regparm(2)` there); a `static` copy is dropped by
- * -O3, so this record stays external and the differential test reaches it
- * through the header.
+ * LOCAL in the blob (`regparm(2)` there); (EXPERIMENT: declared static in
+ * Fdspkrnl.c now; see whether GCC 3.4.2 keeps the plain name rather than
+ * `.constprop.0`.)
  */
-int bValidateEnergyValue(float *buf, unsigned int n, int *hist,
-			 unsigned int *idxp, unsigned int histlen,
-			 struct fdsp_kernel *k);
 
 /**
  * @brief Free a tone object.

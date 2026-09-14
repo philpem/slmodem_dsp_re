@@ -62,6 +62,14 @@ extern unsigned int ref_dsplibs_debug_level;
 extern int ref_AnalyseDialString(struct dialer *d, const char *s, int store)
 	__attribute__((regparm(2)));
 
+/*
+ * Ours: FILE-LOCAL in the object, so it is `static` in Dialer.c and
+ * dialer.h no longer declares it.  The test tier links a globalized copy
+ * (tools/testvisible.py).
+ */
+extern int AnalyseDialString(struct dialer *d, const char *s, int store)
+	__attribute__((regparm(2)));
+
 static int grade_seen[4];
 static long stored_something;
 

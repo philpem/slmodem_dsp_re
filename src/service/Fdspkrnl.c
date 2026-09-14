@@ -366,7 +366,7 @@ FDSP_Kernel_InitObj(struct fdsp_kernel *k)
  * `static` copy is dropped by -O3 (the plain name becomes
  * `bValidateEnergyValue.constprop.0`), so the record stays external.
  */
-int
+static int
 bValidateEnergyValue(float *buf, unsigned int n, int *hist,
 		     unsigned int *idxp, unsigned int histlen,
 		     struct fdsp_kernel *k)
