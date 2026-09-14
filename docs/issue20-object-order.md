@@ -206,6 +206,35 @@ under `/tmp/issue20-v32-evidence/`.
 
 ## Deferred ownership questions
 
+The follow-up audit rejects two attractive but unproven moves. The LMS
+source banner's claim that adjacency proves a complete TU is corrected:
+there is no reference `fpm_lmsupd.c`, but neither nearby `fpm_adeq.c` nor
+`voice.c` has a local-symbol link selecting it. Current/reference sizes of
+the three bodies are 128/150, 169/182, and 217/244; these differences do not
+identify their owner. No LMS code or placement changes are retained.
+
+Likewise, the five helpers in `V92ParamsInfo.c` fit the code interval between
+`V92Jd.cpp` and `V92Modem.cpp`, with `V92MappingParamsInt.cpp` between those
+FILE records. That is a candidate, not ownership proof. Cross-TU calls from
+the modem establish global visibility, not the defining FILE. A gain in
+positioned matching bytes would not, by itself, strengthen that attribution.
+
+The comment-only LMS correction passes `make phase`: 375 period tests
+passed, zero failed, structural checks OK. It claims no binary-match gain.
+The detailed audits are `/tmp/issue20-lms-ownership.txt` and
+`/tmp/issue20-getbit-plan.txt`; the checkpoint is also on PR #94.
+
+The next bounded `getbit` experiment is physical, not a linkage shim:
+move `v34tx1_xmitmp` and `v34tx1_tx_dpsk` plus their private dependency
+closure into `V34hshak.c`, remove the public `getbit` declaration, and make
+its definition static. Shared `tx1_*` accessors must remain internal rather
+than becoming invented globals. The moved closure is C-compatible; unrelated
+`v34tx1_jatxmit` and `v34tx1_k56jatxmit` have C++ tail calls and stay in their
+C++ TU. Before retaining the experiment, measure duplicate emitted local
+helpers, complete-TU collateral, exported bindings, differential results,
+and the split mutation anchors. Recompiling the whole handshake as C++ is
+not part of this correction.
+
 - `getbit` is LOCAL under the reference `V34hshak.c`. Its three nonrecursive
   calls are inside the reference's single `v34handshak`; the reconstruction
   carries those regions in helpers in `v34hstx1.cpp`. Restoring the local
