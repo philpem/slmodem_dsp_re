@@ -183,7 +183,14 @@ struct fpm_tone {
 };
 
 extern const struct fpm_tone_cfg FPM_TONE_CFG;
-extern const short ToneLPF[53];
+
+/*
+ * `ToneLPF` is FILE-LOCAL in the object and there are TWO of them (a `short`
+ * prototype in `fpm_tone.c` and a `float` one in `TONE.c`), so the name is
+ * ambiguous and neither is declared here.  A test reaches the `short`
+ * prototype through `FPM_TONE_CFG.src`, its address being taken by that
+ * initializer.
+ */
 
 /**
  * @brief Build a tone object.
