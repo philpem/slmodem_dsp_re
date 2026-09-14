@@ -124048,3 +124048,33 @@ worked around in the reconstruction.  `v34initialbauds` and the tables
 `RATEv32`/`V32DiconnectThreshTable` are the same class.
 
 (2026-09-14)
+
+## F11360. The object's `fax.c` is an empty translation unit, and the FILE order is now exact through `vpcm.c`
+
+Issue #6, the file/order dimension.  `dsplibs.o` carries a FILE record
+`fax.c` immediately after `voice.c`, and **nothing is attributed to it**:
+zero file-local symbols follow it, and no global's symtab run lands on it
+either.  Whatever the original `fax.c` defined produced no symbol of its
+own.  Our tree had no unit emitting that name, so the candidate's FILE
+sequence went `voice.c -> rd.c` and every later FILE record was off by one
+against the reference.
+
+`src/fax/fax.c` is added as a deliberately empty translation unit.  It
+compiles to an object whose only contribution is the `fax.c` FILE record,
+and `recoverorder` then anchors it at the reference's own position.  The
+candidate's FILE order now matches the reference's first ten records
+exactly: `dp_init.c dcr.c cid.c voice.c fax.c rd.c ringDetector.c call.c
+v8.c vpcm.c`.  Exact defined-symbol records move 232 -> 233.
+
+THIS IS NOT AN INVENTED SYMBOL.  The record it emits is the object's own,
+and the check that it is empty is the symtab run above, not a guess about
+the original source.  Moving the FAX public entries into it would be the
+opposite of faithful: they are at high `.text` addresses in the object
+(under the catch-all `FixedRC.c` record), and placing them at `fax.c`'s
+early position would move them away from it.
+
+Measured.  make phase: period differential 375 passed, 0 failed,
+structural checks OK.  make similarity: ratchet OK, identical unchanged at
+887.  Positioned bytes unchanged at 59,857/943,398.
+
+(2026-09-14)
