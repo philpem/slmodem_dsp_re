@@ -63,22 +63,15 @@ extern "C" {
 #endif
 
 /*
- * v92echoPreFilter_a/b are FILE-LOCAL in the object (`d`), but a `static`
- * copy in vpcm_tables.c is dropped by -O3: nothing in this tree references
- * them yet (V92EchoCanceller's constructor, their only consumer, is not
- * reconstructed).  The record stays global so the differential test can
- * reach it; their reference home is V92EchoCanceller.cpp.
+ * `v92echoPreFilter_a`/`_b` have moved to `V92EchoCanceller.cpp`: their only
+ * consumer is that class's constructor, which now reads them rather than the
+ * duplicate `v92EchoArmaDen`/`v92EchoArmaNum`, so they are `static` there.
+ * `v34initialbauds` likewise moved to `VPcmFloModemCtor.cpp`.  A test names
+ * either through the test tier's globalized copies (tools/testvisible.py).
+ *
+ * This header is now the macros and offset assertions only; every table it
+ * once declared lives in its reference consumer.
  */
-extern float v92echoPreFilter_a[V92_ECHO_PREFILTER_TAPS];
-extern float v92echoPreFilter_b[V92_ECHO_PREFILTER_TAPS];
-
-/*
- * `v34initialbauds` is still defined in vpcm_tables.c: its reference
- * consumer is VpcmFloModem's constructor, which is reconstructed in
- * VPcmFloModemCtor.cpp but reads `vpcm_ctor_flags_0217` rather than this
- * array there, so a `static` copy would have no referrer.
- */
-extern const unsigned char v34initialbauds[V34_INITIAL_BAUDS];
 
 #ifdef __cplusplus
 }

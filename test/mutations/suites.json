@@ -993,7 +993,7 @@
   "build/test/t_vpcmrunpcm"
  ],
  "vpcmtabs": [
-  "src/pump/v90/vpcm_tables.c",
+  "src/pump/v90/V92EchoCanceller.cpp",
   "build/test/t_vpcmtabs"
  ],
  "vpcmweak": [

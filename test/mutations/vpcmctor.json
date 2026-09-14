@@ -30,7 +30,6 @@
    "never has the constructor's values for them."
   ]
  },
-
  {
   "label": "the entrance filter's coefficients are the other way round",
   "find": "\t  entFilt(5, 5, entFiltDen, entFiltNum, 99)",
@@ -46,7 +45,6 @@
   "find": "\t  entFilt(5, 5, entFiltDen, entFiltNum, 99)",
   "replace": "\t  entFilt(5, 5, entFiltDen, entFiltNum, 98)"
  },
-
  {
   "label": "the V90Modem is given a DIL descriptor that is not this object's",
   "find": "\t  modem(side, modemParams, &dil, nSamples, v90Mode, 1),",
@@ -94,7 +92,6 @@
   "find": "\t\t   nSamples, &dil, v92Mode),",
   "replace": "\t\t   nSamples, &dil, (V92ComputationalMode)v90Mode),"
  },
-
  {
   "label": "the echo canceller's tail is 198 and not 199",
   "find": "\t  echoCanceller(v92modem.parameters, nSamples, 199),",
@@ -135,7 +132,6 @@
   "find": "\t: v34Object(v34Obj),",
   "replace": "\t: v34Object(0),"
  },
-
  {
   "label": "the bit vector is cleared four bytes short",
   "find": "\tsysdep_memset(bitVector, 0, sizeof(bitVector));",
@@ -153,15 +149,14 @@
  },
  {
   "label": "the six flags are set to zero and not to one",
-  "find": "static const unsigned char vpcm_ctor_flags_0217[6] = { 1, 1, 1, 1, 1, 1 };",
-  "replace": "static const unsigned char vpcm_ctor_flags_0217[6] = { 0, 0, 0, 0, 0, 0 };"
+  "find": "static const unsigned char v34initialbauds[V34_INITIAL_BAUDS] = {\n\t1, 1, 1, 1, 1, 1,\n};",
+  "replace": "static const unsigned char v34initialbauds[V34_INITIAL_BAUDS] = {\n\t0, 0, 0, 0, 0, 0,\n};"
  },
  {
   "label": "only five of the six flags are written",
   "find": "\tfor (i = 0; i < sizeof(v34BaudAllow); i++)",
   "replace": "\tfor (i = 0; i + 1 < sizeof(v34BaudAllow); i++)"
  },
-
  {
   "label": "the layout flag is the digital test and not the analog one",
   "find": "\tinfo0Layout = (side == V90_MODEM_SIDE_ANALOG);",
@@ -182,7 +177,6 @@
   "find": "\tmodemParams->unnamed_0003 &= (unsigned char)~0x04u;",
   "replace": "\t(void)modemParams;"
  },
-
  {
   "label": "nofBitsPerSymbol starts at VPCMXF_Create's 2 and not at 0",
   "find": "\tnofBitsPerSymbol = 0;",
@@ -213,7 +207,6 @@
   "find": "\tbyte_7f5c = 0;\n\tecMode = 0;\n\tecRampCounter = 0;",
   "replace": "\t(void)0;"
  },
-
  {
   "label": "lose the last digit of an entFiltNum coefficient",
   "find": "\t0.96284330984918198, -3.8513500390114781, 5.777013458394471,",
@@ -235,5 +228,15 @@
   "label": "move an entFiltNum coefficient past the round-trip boundary",
   "find": "\t-3.8513500390114772, 0.96284330984918154,",
   "replace": "\t-3.8513500390114672, 0.96284330984918154,"
+ },
+ {
+  "label": "clear one of v34initialbauds' six allowances",
+  "find": "\t1, 1, 1, 1, 1, 1,",
+  "replace": "\t1, 1, 1, 0, 1, 1,"
+ },
+ {
+  "label": "make v34initialbauds one entry short",
+  "find": "static const unsigned char v34initialbauds[V34_INITIAL_BAUDS] = {\n\t1, 1, 1, 1, 1, 1,",
+  "replace": "static const unsigned char v34initialbauds[V34_INITIAL_BAUDS] = {\n\t1, 1, 1, 1, 1,"
  }
 ]

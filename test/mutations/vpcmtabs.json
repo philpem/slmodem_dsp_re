@@ -17,16 +17,6 @@
   "replace": "\t0.221100003f, 0.0f,"
  },
  {
-  "label": "clear one of v34initialbauds' six allowances",
-  "find": "\t1, 1, 1, 1, 1, 1,",
-  "replace": "\t1, 1, 1, 0, 1, 1,"
- },
- {
-  "label": "make v34initialbauds one entry short",
-  "find": "const unsigned char v34initialbauds[V34_INITIAL_BAUDS] = {\n\t1, 1, 1, 1, 1, 1,",
-  "replace": "const unsigned char v34initialbauds[V34_INITIAL_BAUDS] = {\n\t1, 1, 1, 1, 1,"
- },
- {
   "label": "round an echo pre-filter tap to four decimals, which does move it",
   "find": "\t3.62899995f, 0.467999995f, -2.13840008f, -1.00730002f, 0.423099995f,",
   "replace": "\t3.62899995f, 0.4679f, -2.13840008f, -1.00730002f, 0.423099995f,"

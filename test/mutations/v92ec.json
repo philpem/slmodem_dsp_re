@@ -206,28 +206,28 @@
  },
  {
   "label": "the ARMA gets the numerator where it wanted the denominator",
-  "find": "\tnew (m) FloatARMA(12u, 12u, v92EchoArmaDen, v92EchoArmaNum, 99u);",
-  "replace": "\tnew (m) FloatARMA(12u, 12u, v92EchoArmaNum, v92EchoArmaDen, 99u);"
+  "find": "\tnew (m) FloatARMA(12u, 12u, v92echoPreFilter_a, v92echoPreFilter_b, 99u);",
+  "replace": "\tnew (m) FloatARMA(12u, 12u, v92echoPreFilter_b, v92echoPreFilter_a, 99u);"
  },
  {
   "label": "the ARMA gets a different block size",
-  "find": "\tnew (m) FloatARMA(12u, 12u, v92EchoArmaDen, v92EchoArmaNum, 99u);",
-  "replace": "\tnew (m) FloatARMA(12u, 12u, v92EchoArmaDen, v92EchoArmaNum, 98u);"
+  "find": "\tnew (m) FloatARMA(12u, 12u, v92echoPreFilter_a, v92echoPreFilter_b, 99u);",
+  "replace": "\tnew (m) FloatARMA(12u, 12u, v92echoPreFilter_a, v92echoPreFilter_b, 98u);"
  },
  {
   "label": "the ARMA gets eight denominator taps",
-  "find": "\tnew (m) FloatARMA(12u, 12u, v92EchoArmaDen, v92EchoArmaNum, 99u);",
-  "replace": "\tnew (m) FloatARMA(8u, 12u, v92EchoArmaDen, v92EchoArmaNum, 99u);"
+  "find": "\tnew (m) FloatARMA(12u, 12u, v92echoPreFilter_a, v92echoPreFilter_b, 99u);",
+  "replace": "\tnew (m) FloatARMA(8u, 12u, v92echoPreFilter_a, v92echoPreFilter_b, 99u);"
  },
  {
   "label": "one coefficient of the ARMA denominator is mistyped",
-  "find": "\t1.0f, 0.709f, -2.3002f,",
-  "replace": "\t1.0f, 0.7091f, -2.3002f,"
+  "find": "\t1.0f, 0.708999991f, -2.30019999f,",
+  "replace": "\t1.0f, 0.7091f, -2.30019999f,"
  },
  {
   "label": "one coefficient of the ARMA numerator is mistyped",
-  "find": "\t1.4986f, 0.622f, -2.7333f,",
-  "replace": "\t1.4986f, 0.6221f, -2.7333f,"
+  "find": "\t1.49860001f, 0.621999979f, -2.73329997f,",
+  "replace": "\t1.49860001f, 0.6221f, -2.73329997f,"
  },
  {
   "label": "the constructor does not reset what it built",

@@ -59,6 +59,13 @@ extern const unsigned char ref_v34initialbauds[V34_INITIAL_BAUDS]
 	asm("ref_v34initialbauds");
 
 /*
+ * Ours: FILE-LOCAL in the object, so it is `static` in
+ * VPcmFloModemCtor.cpp, its only consumer, and vpcm_tables.h no longer
+ * declares it.  The test tier links a globalized copy (tools/testvisible.py).
+ */
+extern const unsigned char v34initialbauds[V34_INITIAL_BAUDS];
+
+/*
  * The seven moved tables are FILE-LOCAL `static` in their reconstructed
  * consumer now, so vpcm_tables.h no longer declares them.  A differential
  * test can still name the plain symbol because the test tier links a
@@ -72,6 +79,8 @@ extern double IIR2100_Coef_B_8000[IIR2100_TAPS_8000];
 extern double IIR2100_Coef_A_9600[IIR2100_TAPS_9600];
 extern double IIR2100_Coef_B_9600[IIR2100_TAPS_9600];
 extern float v92TxPreFilter[V92_TXPREFILTER_TAPS];
+extern float v92echoPreFilter_a[V92_ECHO_PREFILTER_TAPS];
+extern float v92echoPreFilter_b[V92_ECHO_PREFILTER_TAPS];
 
 /* Wrappers, so `diff_eq_obj` coalesces a differing run into one report. */
 struct tab_d5 { double v[5]; };
