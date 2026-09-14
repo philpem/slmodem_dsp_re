@@ -318,7 +318,7 @@ _rx_look_carrier_init(struct fax_class1 *ctx, int rate_code)
 }
 
 /*
- * Forward tentative definition of `DATAtx_counter` -- its full comment and
+ * Forward tentative definition of `cDATAtx_counter` -- its full comment and
  * the OTHER two readers/writers sharing it (`_tx_scrambled_ones_state`,
  * `_tx_data_state`) sit much further down this file, near where the object
  * itself is address-contiguous with them.  `_tx_scrambled_ones_init` needs
@@ -326,7 +326,7 @@ _rx_look_carrier_init(struct fax_class1 *ctx, int rate_code)
  * leaves; a second file-scope tentative definition of the same static is
  * ordinary C and resolves to the one object either way.
  */
-static int DATAtx_counter;
+static int cDATAtx_counter;
 
 /*
  * `_tx_scrambled_ones_init`, 0x9cf70, 193 bytes.  Reinit the data-mode
@@ -339,7 +339,7 @@ static int DATAtx_counter;
  * `imul $0x51eb851f` / `sar $7` / sign-correct reciprocal for exactly that
  * divisor, independently re-derived rather than guessed).  Clears `tx_connect_countdown`
  * (one-shot connect countdown), `tx_connect_latch`, `transmit_enabled`, `tx_fifo_ready`,
- * `data_input_closed` and the file-static `DATAtx_counter`
+ * `data_input_closed` and the file-static `cDATAtx_counter`
  * (`_tx_scrambled_ones_state`'s own counter, above).
  */
 int
@@ -362,7 +362,7 @@ _tx_scrambled_ones_init(struct fax_class1 *ctx, int rate_code)
 	ctx->tx_fifo_ready = 0;
 	ctx->tx_bytes_per_block = ctx->tx_rate / 400;
 	ctx->data_input_closed = 0;
-	DATAtx_counter = 0;
+	cDATAtx_counter = 0;
 	return 0;
 }
 
@@ -1404,7 +1404,7 @@ _hdlc_emulate_receive_state(struct fax_class1 *ctx, const short *rx,
  * the insertion point that disturbs the least of what is already here.
  * Internally the twelve are grouped by RELATED FUNCTION rather than strict
  * ascending address (`_tx_scrambled_ones_state` and `_tx_data_state` in
- * particular share the `DATAtx_counter` static and sit together for that
+ * particular share the `cDATAtx_counter` static and sit together for that
  * reason, out of strict order) -- each function's own `.text` address and
  * size is stated in its own comment below and is what is authoritative, not
  * its position in the file.  Every one of the twelve is a `class1_state_fn`
@@ -1785,7 +1785,7 @@ _tx_nulls_state(struct fax_class1 *ctx, const short *rx, short *tx,
  * the object, which only ever writes `*word8`.
  *
  * FORMAT STRINGS, verified against `.rodata.str1.1`/`.rodata.str1.4`:
- *   0x48c2 (.str1.1)  "cDATAtx_counter %d\n" (shares `DATAtx_counter` above)
+ *   0x48c2 (.str1.1)  "cDATAtx_counter %d\n" (shares `cDATAtx_counter` above)
  *   0x12504  "At %2d.%02d[sec] Fifo is full in _tx_data_state(%d=>%d>%d)\n"
  *   0x12540  "At %2d.%02d[sec] Queue is full in _tx_data_state\n"
  *   0x12574  "At %2d.%02d[sec] fifo underrun in _tx_data_state, "
@@ -1803,7 +1803,7 @@ _tx_nulls_state(struct fax_class1 *ctx, const short *rx, short *tx,
  * reads it back to fire a one-time CONNECT on the session's first call
  * into this pair; `_tx_data_state` only increments it.
  */
-static int DATAtx_counter;
+static int cDATAtx_counter;
 
 int
 _tx_data_state(struct fax_class1 *ctx, const short *rx, short *tx,
@@ -1821,8 +1821,8 @@ _tx_data_state(struct fax_class1 *ctx, const short *rx, short *tx,
 	(void)word7;
 
 	if (dsplibs_debug_level > 2)
-		dsplibs_debug_printf("cDATAtx_counter %d\n", DATAtx_counter);
-	DATAtx_counter++;
+		dsplibs_debug_printf("cDATAtx_counter %d\n", cDATAtx_counter);
+	cDATAtx_counter++;
 
 	if (*word8 > 0) {
 		int n;
@@ -2382,7 +2382,7 @@ _hdlc_receive_look_carrier_state(struct fax_class1 *ctx, const short *rx,
  * the same offset -- see that field's own comment) and the crash is gone;
  * this function itself was correctly decoded from the start.
  *
- * `DATAtx_counter` (above, shared with `_tx_data_state`) gates a ONE-TIME
+ * `cDATAtx_counter` (above, shared with `_tx_data_state`) gates a ONE-TIME
  * `ctx->status = FAX_CLASS1_CONNECT` on the session's very first call into
  * this pair.
  *
@@ -2429,7 +2429,7 @@ _hdlc_receive_look_carrier_state(struct fax_class1 *ctx, const short *rx,
  * end with.
  *
  * FORMAT STRINGS, verified against `.rodata.str1.1`/`.rodata.str1.4`:
- *   0x48c2 (.str1.1)  "cDATAtx_counter %d\n" (shares `DATAtx_counter`)
+ *   0x48c2 (.str1.1)  "cDATAtx_counter %d\n" (shares `cDATAtx_counter`)
  *   0x48d6 (.str1.1)  "At %2d.%02d[sec] Tx connect\n"
  *   0x12448  "class1 object fifo under run in _tx_scrambled_ones_state !!!\n"
  *   0x12488  "At %2d.%02d[sec] ENABLE_TRANSMIT in _tx_scrambled_ones_state\n"
@@ -2453,9 +2453,9 @@ _tx_scrambled_ones_state(struct fax_class1 *ctx, const short *rx, short *tx,
 	(void)unused_out_count;
 
 	if (dsplibs_debug_level > 2)
-		dsplibs_debug_printf("cDATAtx_counter %d\n", DATAtx_counter);
-	DATAtx_counter++;
-	if (DATAtx_counter == 1)
+		dsplibs_debug_printf("cDATAtx_counter %d\n", cDATAtx_counter);
+	cDATAtx_counter++;
+	if (cDATAtx_counter == 1)
 		ctx->status = FAX_CLASS1_CONNECT;
 
 	if (ctx->tx_connect_countdown > 0) {
