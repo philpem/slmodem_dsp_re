@@ -53,12 +53,17 @@
 #include "dsplib/fpm.h"
 
 /*
- * 129 entries: 128 real ones plus the value the original reads past the end.
- * See the note above before "correcting" the last element.
+ * 129 entries: the object's 128 real ones plus a 129th that carries the value
+ * the D4 over-read finds.  In the bug-reproducing build it is 0 -- what the
+ * object's neighbouring `FPM_xor_table[0]` holds -- so the differential sees
+ * the object's own behaviour; the fixed build puts the generated 16384 there
+ * so the read is corrected.  The entry cannot simply be dropped in the bug
+ * build: our `.rodata` does not reproduce the object's FPM_xor_table
+ * adjacency, and 255 denominators then read a nonzero word instead of 0.
  */
 #define FPM_DIV_TABLE_REAL 128
 
-static const unsigned short FPM_div_table[FPM_DIV_TABLE_REAL + 1] = {
+const unsigned short FPM_div_table[FPM_DIV_TABLE_REAL + 1] = {
 	32768, 32513, 32263, 32017, 31775, 31536, 31300, 31068,
 	30840, 30615, 30393, 30174, 29959, 29746, 29537, 29330,
 	29127, 28926, 28728, 28532, 28339, 28149, 27962, 27776,
@@ -77,14 +82,14 @@ static const unsigned short FPM_div_table[FPM_DIV_TABLE_REAL + 1] = {
 	16912, 16844, 16777, 16710, 16644, 16578, 16513, 16448,
 
 	/*
-	 * Index 128 -- one past the original's table.  See D4.
+	 * Index 128 -- one past the original's 128 entries.  See D4.
 	 *
-	 * The original reads FPM_xor_table[0] here, which is 0, so every
-	 * denominator that normalises to a mantissa of 0xff80 or above gets a
-	 * reciprocal of ZERO.  That is not theoretical: it silences an AGC
-	 * block and drops a Bell 103 connection (finding F40).
-	 *
-	 * 16384 is the value the table's own generator produces:
+	 * In the BUG build this is 0, because the original reads
+	 * `FPM_xor_table[0]` here, which is 0: every denominator that
+	 * normalises to a mantissa of 0xff80 or above gets a reciprocal of
+	 * ZERO, which silences an AGC block and drops a Bell 103 connection
+	 * (finding F40).  In the FIXED build it is 16384, the value the
+	 * table's own generator produces:
 	 *     trunc(2^30 / ((128 + 0x80) * 0x100)) = 2^30 / 65536 = 16384
 	 */
 #ifdef DSPLIB_REPRODUCE_BUGS
