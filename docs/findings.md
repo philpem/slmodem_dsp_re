@@ -124078,3 +124078,45 @@ structural checks OK.  make similarity: ratchet OK, identical unchanged at
 887.  Positioned bytes unchanged at 59,857/943,398.
 
 (2026-09-14)
+
+## F11361. The systematic source-to-FILE map: exact LOCAL-symbol sets, and ten canonical renames
+
+Issue #6, file/order dimension.  Recoverorder anchors a unit by ONE symbol
+or by its filename, and the two disagree when a unit was reconstructed
+under a different name than the object's.  The repair needs the whole map,
+and the map needs a rule that cannot be fooled.
+
+**A MAJORITY VOTE OVER ALL SYMBOLS IS WRONG, and measurably so.**  Taking
+each reconstructed object's defined symbols and asking which reference
+FILE owns the most of them collapses almost everything onto `FixedRC.c`,
+because the object's `.symtab` is locals-first and every global's
+preceding FILE is whatever local record happens to precede it in that
+region.  Restricting to LOCAL symbols fixes that, but a single matching
+local name still votes: `PROTOCOL`, `statenames` and the B103/V22/V27/V29
+configuration tables share local names across units, so a one-name vote
+"renamed" four unrelated files onto `v22rxtab.c`.
+
+**THE SAFE RULE IS THE WHOLE LOCAL SET.**  A pure rename changes no
+symbol, so the object's set of LOCAL names must equal the reference FILE's
+set exactly.  Comparing `frozenset(locals)` finds 12 units; of those, two
+targets already exist in the tree (`fpm_mtd.c`, `fpm_tone.c`) and are
+MERGE candidates, not renames.  The other ten are renames:
+
+    t30frame.c -> T30frames.c        b103fp.c      -> B103prc.c
+    v17cfg.c   -> V17rxtab.c         b103_agc_cfg.c-> B103tab.c
+    v27cfg.c   -> V27rxtab.c         v22status.c   -> v22stc.c
+    v29cfg.c   -> V29rxtab.c         v32state.c    -> V32states.c
+    detector.c -> Detector.c         v8v21.c       -> V8Fsk.c
+
+Each is a `git mv` plus its `suites.json` source path; no symbol changes.
+
+**Measured, and the trade-off is real.**  Exact defined-symbol records
+234 -> 243 and ordered matches 233 -> 242.  Positioned reference bytes
+fall 60,805 -> 55,730, because a renamed unit now anchors where the
+object's FILE of that name sits and the `.text` layout shifts with it.
+The two dimensions move in opposite directions here; the byte figure is
+expected to recover as the remaining anchors are corrected, and it is the
+binding-mismatch count (unchanged at 1) that the CI ratchets.  `make
+phase` 375/0, `make similarity` identical unchanged at 887, refs clean.
+
+(2026-09-14)
