@@ -663,7 +663,11 @@ template <class T, class I>
 Scrambler<T, I>::Scrambler(unsigned int a, unsigned int b, unsigned int c)
 {
 	tailLength = b;
-	pLimit = (T *)sysdep_malloc((1 + b + c) * sizeof(T));
+	/* Keep the element count separate from the byte-size conversion.
+	 * The period object adds the guard element before scaling; see
+	 * docs/scrambler-allocation-retained-result.md for the full-TU controls. */
+	unsigned int count = b + c + 1;
+	pLimit = (T *)sysdep_malloc(count * sizeof(T));
 	pInitOut = pLimit + c;
 	pInitTap1 = pInitOut + a;
 	pInitTap2 = pInitOut + b;

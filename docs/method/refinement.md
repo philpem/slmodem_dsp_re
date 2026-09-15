@@ -1455,6 +1455,24 @@ family:
   Check the flag dependency before moving a function template whose body uses
   a transcendental. See #74's F11356.
 
+## Separate an element count from its byte-size conversion
+
+The `Scrambler<int, unsigned char>` constructor showed a three-byte
+allocation-arithmetic difference: the reference adds the guard element and
+then shifts, while the reconstruction uses a scaled address with a byte
+displacement. Reassociating the sum did not alter the output. An ordinary
+`unsigned int count = b + c + 1` followed by `count * sizeof(T)` reproduced
+the reference constructor exactly, without changing the allocation amount.
+
+This is evidence for a source intermediate, not permission to add casts,
+volatile objects, barriers or arbitrary locals to force a score. The finite
+domain establishes one supported spelling, not a uniquely recovered original.
+All 30 header-consumer controls reproduced their baselines; only the two
+`Scrambler<int, unsigned char>` constructor copies changed. Other
+specializations, including every `Descrambler` copy, remained unchanged.
+See [the retained result](../scrambler-allocation-retained-result.md) for
+the shared-header scope, period gates and full-object exact-set comparison.
+
 ## Distinguish a cached pointer from repeated member loads
 
 The parallel decoder independently exhibits the same distinction: its
