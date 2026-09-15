@@ -9,11 +9,11 @@
  * from the same neighbourhood -- so the counts in this header's history
  * below are of the original nine-then-ten, not of the file today.)
  *
- * THE OBJECT IS NOT MODELLED HERE, DELIBERATELY.  Four of these reach fields
- * of the V.22 datapump instance and the receiver hanging off it, and the
- * offsets were derived one function at a time, before anything knew where the
- * instance's sub-blocks began.  So the parameters are `void *` and the offsets
- * are named constants with the evidence beside each.
+ * These offsets were derived one function at a time before the V.22 datapump
+ * instance was modelled.  They now resolve to fields of `struct v22fp` and
+ * its nested blocks; the implementation uses those typed owners directly.
+ * The public `void *` parameters and these constants remain API and
+ * differential-fixture anchors.
  *
  * The offsets are not guesses; each is a load or a store in the object, and
  * the function's own name is what licenses the reading of it.
@@ -34,9 +34,9 @@
  *   V22FP_SIGNAL    -> dsp->agc.signal
  *   V22FP_BAUD      -> dsp->sre.pll_acc
  *   V22FP_CARRIER   -> dsp->sre.active
- *   V22FP_EQ_MODE   -> dsp->fse.r08           init 0
- *   V22FP_EQ_EXTRA  -> dsp->fse.r1c           init 1
- *   V22FP_QUALITY   -> dsp->fse.r22           init 0
+ *   V22FP_EQ_MODE   -> dsp->fse.mu_sel        init 0
+ *   V22FP_EQ_EXTRA  -> dsp->fse.lms_on        init 1
+ *   V22FP_QUALITY   -> dsp->fse.mse           init 0
  *
  * THE CONSTANTS STAY ANYWAY, and the reason is not inertia.  Four of the ten
  * resolve INSIDE another module's struct -- three into `struct v22_fse` and

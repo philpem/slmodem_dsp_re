@@ -36,7 +36,7 @@
 #ifndef DSPLIB_V32DATA_H
 #define DSPLIB_V32DATA_H
 
-#include "dsplib/v32smc.h"
+#include "dsplib/v32struct.h"
 
 struct fpm_smc_ring;
 
@@ -70,8 +70,6 @@ struct fpm_smc_ring;
  * `v32smc.h` declares the other two `const short *` from their own reading and
  * both are true -- the table's element type is what a caller must satisfy.
  */
-typedef void (*v32_encoder_fn)(struct v32_smc *smc, struct v32_symout *out,
-			       short *data, unsigned short count);
 
 /**
  * @brief Modulate `count` V.32 data words into `out`.

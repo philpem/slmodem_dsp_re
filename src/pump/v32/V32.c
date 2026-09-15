@@ -116,6 +116,7 @@
 #include "dsplib/v32dec.h"
 #include "dsplib/v32fp.h"
 #include "dsplib/v32fpstat.h"		/* V32FP_recreate's own prototype    */
+#include "dsplib/v32struct.h"
 #include "dsplib/v32fse.h"
 #include "dsplib/v32hdx.h"
 #include "dsplib/v32hdxst.h"
@@ -147,25 +148,19 @@ static const short V32DiconnectThreshTable[8] = {
 
 
 /* The instance is not modelled; these are v32fpctl.c's accessors. */
-#define FIELD(obj, off)		((unsigned char *)(void *)(obj) + (off))
-#define FIELD_PTR(obj, off)	(*(void **)(void *)FIELD((obj), (off)))
-#define FIELD_INT(obj, off)	(*(int *)(void *)FIELD((obj), (off)))
-#define FIELD_S16(obj, off)	(*(short *)(void *)FIELD((obj), (off)))
-#define FIELD_U16(obj, off)	(*(unsigned short *)(void *)FIELD((obj), (off)))
-#define FIELD_U8(obj, off)	(*(unsigned char *)FIELD((obj), (off)))
 
-#define HDX(m)			FIELD_PTR((m), V32_OBJ_HDX)
-#define FP(m)			FIELD_PTR((m), V32_OBJ_FP)
+#define HDX(m)			(((struct v32_modem *)(m))->hdx)
+#define FP(m)			(((struct v32_modem *)(m))->fp)
 
-#define SDM_TX(fp)	((struct v32_sdm *)(void *)FIELD((fp), V32FP_SCRAMBLER))
-#define SDM_RX(fp)	((struct v32_sdm *)(void *)FIELD((fp), V32FP_DESCRAMBLER))
-#define SMC_TX(fp)	((struct v32_smc *)(void *)FIELD((fp), V32FP_SMC))
-#define PPS(fp)		((struct fpm_pps *)(void *)FIELD((fp), V32FP_PPS))
-#define RING(fp)	((struct v32_symout *)(void *)FIELD((fp), V32FP_SYMOUT))
-#define MRF(fp)		((struct fpm_mrf *)(void *)FIELD((fp), V32FP_MRF))
-#define ECC(fp)		((struct fpm_ecc *)(void *)FIELD((fp), V32FP_ECC))
-#define SRE(fp)		((struct fpm_sre *)(void *)FIELD((fp), V32FP_SRE))
-#define FSE(fp)		((struct fpm_fse *)(void *)FIELD((fp), V32FP_FSE))
+#define SDM_TX(fp)	(&((struct v32_fp *)(fp))->scrambler)
+#define SDM_RX(fp)	(&((struct v32_fp *)(fp))->descrambler)
+#define SMC_TX(fp)	(&((struct v32_fp *)(fp))->tx_smc)
+#define PPS(fp)		(&((struct v32_fp *)(fp))->pps)
+#define RING(fp)	(&((struct v32_fp *)(fp))->symout)
+#define MRF(fp)		(&((struct v32_fp *)(fp))->mrf)
+#define ECC(fp)		(&((struct v32_fp *)(fp))->ecc)
+#define SRE(fp)		(&((struct v32_fp *)(fp))->sre)
+#define FSE(fp)		(&((struct v32_fp *)(fp))->fse)
 
 /*
  * Sizes, all three from a `sysdep_malloc` immediate in this function and
@@ -195,11 +190,11 @@ static const short V32DiconnectThreshTable[8] = {
  * and `shift`.  Finding F8652.
  */
 #define V32FP_SMC_RX		0x5098
-#define SMC_RX(fp)	((struct v32_smc *)(void *)FIELD((fp), V32FP_SMC_RX))
+#define SMC_RX(fp)	(&((struct v32_fp *)(fp))->rx_smc)
 
 /* The decoder, which is also what `fpm_fse_cfg::owner` is pointed at. */
 #define V32FP_DEC		0x5020
-#define DEC(fp)		((struct v32_dec *)(void *)FIELD((fp), V32FP_DEC))
+#define DEC(fp)		(&((struct v32_fp *)(fp))->decoder)
 
 /* The second AGC, the one AGCv32_CFG configures; hdx + 0x00 is the other. */
 #define V32FP_AGC		0x1d8
@@ -335,17 +330,18 @@ V32FP_recreate(void *modem, const struct v32fp_params *param, void *arg2)
 
 	fresh = 0;
 	if (modem == 0) {
-		modem = sysdep_malloc(V32_OBJ_SIZE);
-		FIELD_PTR(modem, V32_OBJ_FP) = sysdep_malloc(V32FP_SIZE);
-		hdx = sysdep_malloc(V32_HDX_SIZE);
-		FIELD_PTR(modem, V32_OBJ_HDX) = hdx;
-		FIELD_PTR(hdx, V32_HDX_TONE0) = 0;
-		FIELD_PTR(hdx, V32_HDX_MTD) = 0;
-		FIELD_PTR(hdx, V32_HDX_BUF_A4) =
+		modem = sysdep_malloc(sizeof(struct v32_modem));
+		((struct v32_modem *)modem)->fp =
+			sysdep_malloc(sizeof(struct v32_fp));
+		hdx = sysdep_malloc(sizeof(struct v32_hdx));
+		((struct v32_modem *)modem)->hdx = (struct v32_hdx *)hdx;
+		((struct v32_hdx *)hdx)->tone0 = 0;
+		((struct v32_hdx *)hdx)->mtd = 0;
+		((struct v32_hdx *)hdx)->buffer =
 			sysdep_malloc(V32_HDX_BUF_A4_SIZE);
-		FIELD_PTR(FP(modem), V32FP_BUF_50CC) =
+		FP(modem)->rx_buf =
 			sysdep_malloc(V32FP_CLEAN_SIZE);
-		FIELD_PTR(FP(modem), V32FP_CLEAN_BUF) =
+		FP(modem)->clean_buf =
 			sysdep_malloc(V32FP_CLEAN_SIZE);
 		fresh = 1;
 	}
@@ -370,16 +366,16 @@ V32FP_recreate(void *modem, const struct v32fp_params *param, void *arg2)
 	fp = (unsigned char *)FP(modem);
 
 	/* Three switches out of `options`, then seven more forced to 1. */
-	FIELD_INT(fp, V32FP_R1C) = (int)(p->options & 1);
-	FIELD_INT(fp, V32FP_R20) = (int)((p->options >> 1) & 1);
-	FIELD_INT(fp, V32FP_R00) = 1;
-	FIELD_INT(fp, V32FP_R04) = 1;
-	FIELD_INT(fp, V32FP_R08) = 1;
-	FIELD_INT(fp, V32FP_R24) = (int)((p->options >> 2) & 1);
-	FIELD_INT(fp, V32FP_R0C) = 1;
-	FIELD_INT(fp, V32FP_EQ_ADAPT) = 1;
-	FIELD_INT(fp, V32FP_R14) = 1;
-	FIELD_INT(fp, V32FP_R18) = 1;
+	((struct v32_fp *)fp)->int_1c = (int)(p->options & 1);
+	((struct v32_fp *)fp)->int_20 = (int)((p->options >> 1) & 1);
+	((struct v32_fp *)fp)->int_00 = 1;
+	((struct v32_fp *)fp)->int_04 = 1;
+	((struct v32_fp *)fp)->int_08 = 1;
+	((struct v32_fp *)fp)->int_24 = (int)((p->options >> 2) & 1);
+	((struct v32_fp *)fp)->int_0c = 1;
+	((struct v32_fp *)fp)->eq_adapt = 1;
+	((struct v32_fp *)fp)->int_14 = 1;
+	((struct v32_fp *)fp)->int_18 = 1;
 
 	/*
 	 * The two rate ladders.  Identical but for which field they read and
@@ -388,39 +384,39 @@ V32FP_recreate(void *modem, const struct v32fp_params *param, void *arg2)
 	 */
 	rate = (unsigned short)p->tx_rate;
 	if (rate == V32_BPS_14400)
-		FIELD_S16(fp, V32FP_TX_RATE_INDEX) = V32_RATE_14400;
+		((struct v32_fp *)fp)->tx_rate_index = V32_RATE_14400;
 	else if (rate == V32_BPS_12000)
-		FIELD_S16(fp, V32FP_TX_RATE_INDEX) = V32_RATE_12000;
+		((struct v32_fp *)fp)->tx_rate_index = V32_RATE_12000;
 	else if (rate == V32_BPS_9600)
-		FIELD_S16(fp, V32FP_TX_RATE_INDEX) =
+		((struct v32_fp *)fp)->tx_rate_index =
 			(short)(V32_RATE_9600 - (p->trellis == 0));
 	else if (rate == V32_BPS_7200)
-		FIELD_S16(fp, V32FP_TX_RATE_INDEX) = V32_RATE_7200;
+		((struct v32_fp *)fp)->tx_rate_index = V32_RATE_7200;
 	else
-		FIELD_S16(fp, V32FP_TX_RATE_INDEX) = V32_RATE_4800;
+		((struct v32_fp *)fp)->tx_rate_index = V32_RATE_4800;
 
 	rate = (unsigned short)p->rx_rate;
 	if (rate == V32_BPS_14400)
-		FIELD_S16(fp, V32FP_RX_RATE_INDEX) = V32_RATE_14400;
+		((struct v32_fp *)fp)->rx_rate_index = V32_RATE_14400;
 	else if (rate == V32_BPS_12000)
-		FIELD_S16(fp, V32FP_RX_RATE_INDEX) = V32_RATE_12000;
+		((struct v32_fp *)fp)->rx_rate_index = V32_RATE_12000;
 	else if (rate == V32_BPS_9600)
-		FIELD_S16(fp, V32FP_RX_RATE_INDEX) =
+		((struct v32_fp *)fp)->rx_rate_index =
 			(short)(V32_RATE_9600 - (p->trellis == 0));
 	else if (rate == V32_BPS_7200)
-		FIELD_S16(fp, V32FP_RX_RATE_INDEX) = V32_RATE_7200;
+		((struct v32_fp *)fp)->rx_rate_index = V32_RATE_7200;
 	else
-		FIELD_S16(fp, V32FP_RX_RATE_INDEX) = V32_RATE_4800;
+		((struct v32_fp *)fp)->rx_rate_index = V32_RATE_4800;
 
 	/* Protocol 0, 1, or anything else -- three half-duplex modes. */
 	hdx = (unsigned char *)HDX(modem);
 	prot = (unsigned short)p->protocol;
 	if (prot == V32_PROTOCOL_0)
-		FIELD_S16(hdx, V32HDX_MODE) = 0;
+		((struct v32_hdx *)hdx)->mode = 0;
 	else if (prot == V32_PROTOCOL_1)
-		FIELD_S16(hdx, V32HDX_MODE) = 1;
+		((struct v32_hdx *)hdx)->mode = 1;
 	else
-		FIELD_S16(hdx, V32HDX_MODE) = 2;
+		((struct v32_hdx *)hdx)->mode = 2;
 
 	/*
 	 * The two scrambler configurations are ONE local, patched twice: the
@@ -431,19 +427,19 @@ V32FP_recreate(void *modem, const struct v32fp_params *param, void *arg2)
 	sdmcfg[0] = SDMv32_CFG[0];
 	sdmcfg[1] = SDMv32_CFG[1];
 	sdmcfg[2] = SDMv32_CFG[2];
-	sdmcfg[0] = (short)(FIELD_S16(fp, V32FP_TX_RATE_INDEX) != 0 ? 4 : 2);
+	sdmcfg[0] = (short)(((struct v32_fp *)fp)->tx_rate_index != 0 ? 4 : 2);
 	smccfg = SMCv32_CFG;
-	sdmcfg[1] = SDMv32_GPC[FIELD_S16(hdx, V32HDX_MODE)];
-	smccfg.mode = (short)(FIELD_S16(fp, V32FP_TX_RATE_INDEX) != 0);
+	sdmcfg[1] = SDMv32_GPC[((struct v32_hdx *)hdx)->mode];
+	smccfg.mode = (short)(((struct v32_fp *)fp)->tx_rate_index != 0);
 
 	sdm = SDM_TX(fp);
 	sdm->group = sdmcfg[0];
-	FIELD_U16(sdm, V32_SDM_TAP1_POS) = (unsigned short)sdmcfg[1];
+	sdm->tap1_pos = (unsigned short)sdmcfg[1];
 	sdm->reg = 0;
-	FIELD_U16(sdm, V32_SDM_TAP2_POS) = (unsigned short)sdmcfg[2];
+	sdm->tap2_pos = (unsigned short)sdmcfg[2];
 	shift = sdm->group;
-	sdm->tap1 = (short)(FIELD_U16(sdm, V32_SDM_TAP1_POS) - shift);
-	sdm->tap2 = (short)(FIELD_U16(sdm, V32_SDM_TAP2_POS) - shift);
+	sdm->tap1 = (short)(sdm->tap1_pos - shift);
+	sdm->tap2 = (short)(sdm->tap2_pos - shift);
 	mask = (unsigned int)((1 << shift) - 1);
 	sdm->outmask = mask;
 	sdm->regmask = ~mask;
@@ -466,7 +462,7 @@ V32FP_recreate(void *modem, const struct v32fp_params *param, void *arg2)
 
 	/* The resampler; the descrambler's tap comes out of the same load. */
 	mrfcfg = MRFv32_CFG;
-	sdmcfg[1] = SDMv32_GPA[FIELD_S16(HDX(modem), V32HDX_MODE)];
+	sdmcfg[1] = SDMv32_GPA[HDX(modem)->mode];
 	mrfcfg.aux = (void *)(long)p->r24;
 	FPM_MRF_init(MRF(FP(modem)), &mrfcfg, fresh);
 
@@ -490,7 +486,7 @@ V32FP_recreate(void *modem, const struct v32fp_params *param, void *arg2)
 	ECC(fp)->near_rd = 0;
 	ECC(fp)->far_rd = 0;
 
-	FPM_AGC_init((struct fpm_agc *)(void *)FIELD(FP(modem), V32FP_AGC),
+	FPM_AGC_init(&FP(modem)->agc,
 		     &AGCv32_CFG, fresh);
 
 	/* The timing recovery. */
@@ -521,12 +517,12 @@ V32FP_recreate(void *modem, const struct v32fp_params *param, void *arg2)
 	fsecfg = FSEv32_CFG;
 	fsecfg.decision = FSE_decision_AB;
 	fsecfg.reserved34 = (void *)(long)p->r24;
-	fsecfg.owner = (void *)FIELD(FP(modem), V32FP_DEC);
+	fsecfg.owner = &FP(modem)->decoder;
 	FPM_FSE_init(FSE(FP(modem)), &fsecfg, fresh);
 
 	/* The decoder, cleared field by field, and its Viterbi state. */
 	fp = (unsigned char *)FP(modem);
-	sel = FIELD_S16(fp, V32FP_RX_RATE_INDEX);
+	sel = ((struct v32_fp *)fp)->rx_rate_index;
 	DEC(fp)->scram = 0;
 	DEC(fp)->count = 0;
 	DEC(fp)->ang_prev = 0;
@@ -534,16 +530,16 @@ V32FP_recreate(void *modem, const struct v32fp_params *param, void *arg2)
 	DEC(fp)->eqm_b = 0;
 	DEC(fp)->rate_change = 0;
 	DEC(fp)->retrain = 0;
-	*(int *)(void *)DEC(fp)->pad68 = 0;
-	FIELD_S16(DEC(fp), V32_DEC_RETRAIN_N) = 0;
+	DEC(fp)->int_68 = 0;
+	((struct v32_dec *)FSE(fp)->cfg.owner)->short_74 = 0;
 	for (i = 0; (short)i <= 5; i++)
-		FIELD_S16(DEC(fp), 0x52 + 2 * i) = 0;
+		DEC(fp)->sym[i] = 0;
 	for (i = 0; (short)i <= 1; i++)
 		DEC(fp)->prev_sym[i] = 0;
 	DEC(fp)->chan = 0;
-	FIELD_S16(DEC(fp), V32_DEC_SHORT_04) = 0;
-	FIELD_S16(DEC(fp), 0x06) = 0;
-	VTBv32_init((struct vtb *)(void *)DEC(fp)->vtb, sel, fresh);
+	DEC(fp)->short_04 = 0;
+	DEC(fp)->short_06 = 0;
+	VTBv32_init(&DEC(fp)->vtb, sel, fresh);
 
 	/* The receive symbol coder, from the same template as the transmit. */
 	SMC_RX(fp)->mode = smccfg.mode;
@@ -560,11 +556,11 @@ V32FP_recreate(void *modem, const struct v32fp_params *param, void *arg2)
 	sdm = SDM_RX(fp);
 	sdm->reg = 0;
 	sdm->group = sdmcfg[0];
-	FIELD_U16(sdm, V32_SDM_TAP1_POS) = (unsigned short)sdmcfg[1];
-	FIELD_U16(sdm, V32_SDM_TAP2_POS) = (unsigned short)sdmcfg[2];
+	sdm->tap1_pos = (unsigned short)sdmcfg[1];
+	sdm->tap2_pos = (unsigned short)sdmcfg[2];
 	shift = sdm->group;
-	sdm->tap1 = (short)(FIELD_U16(sdm, V32_SDM_TAP1_POS) - shift);
-	sdm->tap2 = (short)(FIELD_U16(sdm, V32_SDM_TAP2_POS) - shift);
+	sdm->tap1 = (short)(sdm->tap1_pos - shift);
+	sdm->tap2 = (short)(sdm->tap2_pos - shift);
 	mask = (unsigned int)((1 << shift) - 1);
 	sdm->outmask = mask;
 	sdm->regmask = ~mask;
@@ -579,15 +575,15 @@ V32FP_recreate(void *modem, const struct v32fp_params *param, void *arg2)
 	RING(fp)->pad0e = 0;
 	RING(fp)->widx = 0;
 	RING(fp)->buf = ECC(fp)->line;
-	((v32_encoder_fn *)(void *)FIELD(fp, V32FP_ENCODERS))[0] =
+	((struct v32_fp *)fp)->encoders[0] =
 		(v32_encoder_fn)SMCv32_encoder_dif;
-	((v32_encoder_fn *)(void *)FIELD(fp, V32FP_ENCODERS))[1] =
+	((struct v32_fp *)fp)->encoders[1] =
 		(v32_encoder_fn)SMCv32_encoder_abs;
-	((v32_encoder_fn *)(void *)FIELD(fp, V32FP_ENCODERS))[2] =
+	((struct v32_fp *)fp)->encoders[2] =
 		(v32_encoder_fn)SMCv32_encoder_tcm;
-	FIELD_S16(fp, V32FP_ENCODER_SEL) = 0;
-	FIELD_PTR(fp, V32FP_IMAP) = (void *)SMCv32_IMAP16;
-	FIELD_PTR(fp, V32FP_QMAP) = (void *)SMCv32_QMAP16;
+	((struct v32_fp *)fp)->encoder_sel = 0;
+	((struct v32_fp *)fp)->imap = (void *)SMCv32_IMAP16;
+	((struct v32_fp *)fp)->qmap = (void *)SMCv32_QMAP16;
 	symlen = V32_SYMBOL_LEN[p->symlen_sel];
 	RING(fp)->limit = symlen;
 	ECC(fp)->line_len = symlen;
@@ -612,26 +608,26 @@ V32FP_recreate(void *modem, const struct v32fp_params *param, void *arg2)
 	tonecfg.rev_lag = 40;
 
 	if (fresh)
-		FIELD_PTR(HDX(modem), V32_HDX_TONE0) = 0;
+		HDX(modem)->tone0 = 0;
 	hdx = (unsigned char *)HDX(modem);
-	FIELD_PTR(hdx, V32_HDX_TONE0) = FPM_TONE_create(
-		(struct fpm_tone *)FIELD_PTR(HDX(modem), V32_HDX_TONE0),
+	((struct v32_hdx *)hdx)->tone0 = FPM_TONE_create(
+		(struct fpm_tone *)HDX(modem)->tone0,
 		&tonecfg);
 
 	hdx = (unsigned char *)HDX(modem);
-	tonecfg.freq = (short)(FIELD_S16(hdx, V32HDX_MODE) != 0 ? 600 : 1800);
+	tonecfg.freq = (short)(((struct v32_hdx *)hdx)->mode != 0 ? 600 : 1800);
 	if (fresh)
-		FIELD_PTR(hdx, V32_HDX_TONE1) = 0;
-	FIELD_PTR(hdx, V32_HDX_TONE1) = FPM_TONE_create(
-		(struct fpm_tone *)FIELD_PTR(HDX(modem), V32_HDX_TONE1),
+		((struct v32_hdx *)hdx)->tone1 = 0;
+	((struct v32_hdx *)hdx)->tone1 = FPM_TONE_create(
+		(struct fpm_tone *)HDX(modem)->tone1,
 		&tonecfg);
 
 	tonecfg.freq = 3000;
 	if (fresh)
-		FIELD_PTR(HDX(modem), V32_HDX_TONE2) = 0;
+		HDX(modem)->tone2 = 0;
 	hdx = (unsigned char *)HDX(modem);
-	FIELD_PTR(hdx, V32_HDX_TONE2) = FPM_TONE_create(
-		(struct fpm_tone *)FIELD_PTR(HDX(modem), V32_HDX_TONE2),
+	((struct v32_hdx *)hdx)->tone2 = FPM_TONE_create(
+		(struct fpm_tone *)HDX(modem)->tone2,
 		&tonecfg);
 
 	/*
@@ -641,31 +637,31 @@ V32FP_recreate(void *modem, const struct v32fp_params *param, void *arg2)
 	 */
 	hdx = (unsigned char *)HDX(modem);
 	timeout = (short)((p->timeout * V32_TIMEOUT_SCALE) >> 13);
-	FIELD_S16(hdx, V32HDX_STATE) = 0;
-	FIELD_INT(hdx, V32HDX_ELAPSED) = 0;
-	FIELD_INT(hdx, V32HDX_TIMEOUT_MAX) = timeout;
-	FIELD_PTR(hdx, V32HDX_RXSTATE) = (void *)RxHdxTone;
-	FIELD_S16(hdx, V32HDX_SYMBOL_LEN2) = V32_SYMBOL_LEN[p->r16];
-	FIELD_S16(hdx, V32HDX_SYMBOL_LEN) = V32_SYMBOL_LEN[p->r16];
-	FIELD_S16(hdx, V32HDX_SAMPLE_LEN) = V32_SAMPLE_LEN[p->r16];
-	FIELD_S16(hdx, V32_HDX_SHORT_94) = V32_TURNAROUND_DLY[p->r16];
-	FIELD_S16(hdx, V32_HDX_SHORT_9A) = 0;
-	FIELD_S16(hdx, V32_HDX_SHORT_98) =
+	((struct v32_hdx *)hdx)->state = 0;
+	((struct v32_hdx *)hdx)->timer = 0;
+	((struct v32_hdx *)hdx)->limit = timeout;
+	((struct v32_hdx *)hdx)->rx_state = (void *)RxHdxTone;
+	((struct v32_hdx *)hdx)->block_charge = V32_SYMBOL_LEN[p->r16];
+	((struct v32_hdx *)hdx)->symbol_len = V32_SYMBOL_LEN[p->r16];
+	((struct v32_hdx *)hdx)->sample_len = V32_SAMPLE_LEN[p->r16];
+	((struct v32_hdx *)hdx)->turnaround = V32_TURNAROUND_DLY[p->r16];
+	((struct v32_hdx *)hdx)->short_9a = 0;
+	((struct v32_hdx *)hdx)->short_98 =
 		(short)(V32_SYMBOL_LEN[p->r16] + 5);
-	FIELD_S16(hdx, V32_HDX_SHORT_9A) =
+	((struct v32_hdx *)hdx)->short_9a =
 		(short)((tonecfg.rev_lag * V32_DELAY_SCALE + 0x4000) >> 15);
-	FIELD_S16(hdx, V32_HDX_SHORT_9C) =
+	((struct v32_hdx *)hdx)->short_9c =
 		(short)(((int)(short)p->ec_near_delay * V32_DELAY_SCALE
 			 + 0x4000) >> 15);
-	if (FIELD_S16(hdx, V32HDX_MODE) != 0) {
-		FIELD_PTR(hdx, V32HDX_TXSTATE) = (void *)TxHdxTone;
-		FIELD_INT(hdx, V32HDX_TIMEOUT) = 0x1ef0;
+	if (((struct v32_hdx *)hdx)->mode != 0) {
+		((struct v32_hdx *)hdx)->tx_state = (void *)TxHdxTone;
+		((struct v32_hdx *)hdx)->state_left = 0x1ef0;
 	} else {
-		FIELD_PTR(hdx, V32HDX_TXSTATE) = (void *)TxHdxNull;
-		FIELD_INT(hdx, V32HDX_TIMEOUT) = timeout;
+		((struct v32_hdx *)hdx)->tx_state = (void *)TxHdxNull;
+		((struct v32_hdx *)hdx)->state_left = timeout;
 	}
-	FIELD_S16(hdx, V32HDX_SHORT_AE) = 0;
-	FIELD_S16(hdx, V32HDX_SHORT_AC) = 0;
+	((struct v32_hdx *)hdx)->loss_blocks = 0;
+	((struct v32_hdx *)hdx)->short_ac = 0;
 
 	/* The five control-surface calls, in the object's order. */
 	SetAdaptEcV32(modem, V32_ADAPTEC_OFF);
@@ -686,8 +682,8 @@ V32FP_recreate(void *modem, const struct v32fp_params *param, void *arg2)
 	/* The scratch register bank, and the multi-tone detector. */
 	hdx = (unsigned char *)HDX(modem);
 	for (i = 0; i < V32HDX_REGS_CLEARED; i++)
-		FIELD_S16(hdx, V32HDX_REGS + 2 * i) = 0;
-	FIELD_INT(hdx, V32HDX_INT_88) = 0;
+		((struct v32_hdx *)hdx)->regs[i] = 0;
+	((struct v32_hdx *)hdx)->int_88 = 0;
 
 	/*
 	 * FOUR FIELDS OF FIVE.  `mtdcfg.f0a` is left as whatever the stack
@@ -701,38 +697,38 @@ V32FP_recreate(void *modem, const struct v32fp_params *param, void *arg2)
 	mtdcfg.tones = 3;
 	mtdcfg.ratio = 0x747a;
 	mtdcfg.min_level = 1;
-	FIELD_PTR(hdx, V32_HDX_MTD) = FPM_MTD_create(
-		(struct fpm_mtd *)FIELD_PTR(HDX(modem), V32_HDX_MTD),
+	((struct v32_hdx *)hdx)->mtd = FPM_MTD_create(
+		(struct fpm_mtd *)HDX(modem)->mtd,
 		&mtdcfg);
 
 	FPM_AGC_init((struct fpm_agc *)HDX(modem), &AGCv32Prc_CFG, fresh);
 
 	fp = (unsigned char *)FP(modem);
-	FIELD_U16(fp, V32FP_CLEAN_N) = 0;
-	FIELD_S16(fp, 0x50d6) = 0;
-	FIELD_S16(fp, 0x50d8) = 0;
+	((struct v32_fp *)fp)->clean_n = 0;
+	((struct v32_fp *)fp)->decision_error = 0;
+	((struct v32_fp *)fp)->rate_fallback = 0;
 
 	/* The instance's own status byte, its flag, and the window. */
-	FIELD_INT(modem, V32_OBJ_STATUS) = 0;
-	FIELD_U8(modem, V32_OBJ_FLAGS) |= V32_FLAG_BIT6;
-	FIELD_U8(modem, V32_OBJ_STATUS) = 1;
+	((struct v32_modem *)modem)->status_word = 0;
+	((struct v32_modem *)modem)->flags |= V32_FLAG_BIT6;
+	((struct v32_modem *)modem)->status = 1;
 
-	FIELD_PTR(modem, V32_OBJ_DIAG_OUT_I) = FSE(fp)->out_i;
-	FIELD_PTR(modem, V32_OBJ_DIAG_OUT_Q) = FSE(fp)->out_q;
-	FIELD_PTR(modem, V32_OBJ_DIAG_ICOEFF) = FSE(fp)->icoeff;
-	FIELD_PTR(modem, V32_OBJ_DIAG_QCOEFF) = FSE(fp)->qcoeff;
+	((struct v32_modem *)modem)->diag_out_i = FSE(fp)->out_i;
+	((struct v32_modem *)modem)->diag_out_q = FSE(fp)->out_q;
+	((struct v32_modem *)modem)->diag_icoeff = FSE(fp)->icoeff;
+	((struct v32_modem *)modem)->diag_qcoeff = FSE(fp)->qcoeff;
 	near_n = ECC(fp)->cfg.near_taps;
 	far_n = ECC(fp)->cfg.far_taps;
 	coef = ECC(fp)->coef[0];
-	FIELD_PTR(modem, V32_OBJ_DIAG_NEAR_I) = coef;
-	FIELD_PTR(modem, V32_OBJ_DIAG_NEAR_Q) = coef + near_n;
-	FIELD_S16(modem, V32_OBJ_DIAG_FSE_TAPS) = 0x31;
-	FIELD_PTR(modem, V32_OBJ_DIAG_FAR_I) = coef + 2 * near_n;
-	FIELD_PTR(modem, V32_OBJ_DIAG_N_OUT) = &FSE(fp)->n_out;
-	FIELD_U16(modem, V32_OBJ_DIAG_NEAR_N) =
+	((struct v32_modem *)modem)->diag_near_i = coef;
+	((struct v32_modem *)modem)->diag_near_q = coef + near_n;
+	((struct v32_modem *)modem)->diag_fse_taps = 0x31;
+	((struct v32_modem *)modem)->diag_far_i = coef + 2 * near_n;
+	((struct v32_modem *)modem)->diag_n_out = &FSE(fp)->n_out;
+	((struct v32_modem *)modem)->diag_near_n =
 		(unsigned short)ECC(fp)->cfg.near_taps;
-	FIELD_PTR(modem, V32_OBJ_DIAG_FAR_Q) = coef + 2 * near_n + far_n;
-	FIELD_U16(modem, V32_OBJ_DIAG_FAR_N) =
+	((struct v32_modem *)modem)->diag_far_q = coef + 2 * near_n + far_n;
+	((struct v32_modem *)modem)->diag_far_n =
 		(unsigned short)ECC(fp)->cfg.far_taps;
 
 	/*
@@ -743,23 +739,22 @@ V32FP_recreate(void *modem, const struct v32fp_params *param, void *arg2)
 	if ((unsigned short)p->protocol == V32_PROTOCOL_0
 	    && !(p->options & V32_OPT_BIT10)) {
 		hdx = (unsigned char *)HDX(modem);
-		FIELD_S16(hdx, V32HDX_STATE) = 2;
+		((struct v32_hdx *)hdx)->state = 2;
 		InitGenSequence(modem, 0, 4, 2);
-		((struct fpm_tone *)FIELD_PTR(HDX(modem),
-					      V32_HDX_TONE0))->cfg.f08 = 0x4000;
+		((struct fpm_tone *)HDX(modem)->tone0)->cfg.f08 = 0x4000;
 		SetToneDetect(modem, 600);
 		hdx = (unsigned char *)HDX(modem);
-		FIELD_INT(hdx, V32HDX_INT_90) = 0;
-		FIELD_PTR(hdx, V32HDX_TXSTATE) = (void *)TxHdxCarrierState;
-		FIELD_PTR(hdx, V32HDX_RXSTATE) = (void *)RxHdxPhsReversal;
-		FIELD_INT(hdx, V32HDX_TIMEOUT) =
-			FIELD_INT(hdx, V32HDX_TIMEOUT_MAX);
-		FIELD_INT(hdx, V32HDX_ELAPSED) = 0;
+		((struct v32_hdx *)hdx)->int_90 = 0;
+		((struct v32_hdx *)hdx)->tx_state = (void *)TxHdxCarrierState;
+		((struct v32_hdx *)hdx)->rx_state = (void *)RxHdxPhsReversal;
+		((struct v32_hdx *)hdx)->state_left =
+			((struct v32_hdx *)hdx)->limit;
+		((struct v32_hdx *)hdx)->timer = 0;
 	}
 	if ((unsigned short)p->protocol == V32_PROTOCOL_1
 	    && !(p->options & V32_OPT_BIT10)) {
 		hdx = (unsigned char *)HDX(modem);
-		FIELD_S16(hdx, V32HDX_STATE) = 1;
+		((struct v32_hdx *)hdx)->state = 1;
 		/*
 		 * The object computes both arms of this even though the `if`
 		 * above has already settled the bit -- `sbb`/`and $-40`/`add
@@ -767,7 +762,7 @@ V32FP_recreate(void *modem, const struct v32fp_params *param, void *arg2)
 		 * not.  Written as the conditional it encodes rather than as
 		 * the 140 it can only produce.
 		 */
-		FIELD_INT(hdx, V32HDX_TIMEOUT) =
+		((struct v32_hdx *)hdx)->state_left =
 			((p->options >> 10) & 1) ? 180 : 140;
 		SetToneDetect(modem, 0);
 	}

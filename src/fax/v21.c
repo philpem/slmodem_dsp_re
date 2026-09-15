@@ -92,11 +92,6 @@
  * keeps its typed accessors from `v21fax.h`; the two halves are different
  * objects (see the header) and are spelled differently on purpose.
  */
-#define FIELD(obj, off)		((unsigned char *)(obj) + (off))
-#define FIELD_PTR(obj, off)	(*(void **)(void *)FIELD((obj), (off)))
-#define AT_I(p, off)		(*(int *)(void *)FIELD((p), (off)))
-#define AT_S(p, off)		(*(short *)(void *)FIELD((p), (off)))
-
 /*
  * V21RX_create -- .text 0x098e70, 1,011 bytes.
  *
@@ -137,6 +132,7 @@
 void *
 V21RX_create(void *modem, const struct v21rx_cfg *params)
 {
+	struct v21_rx *rx;
 	struct fpm_mrf_cfg mrf;
 	struct fpm_fsd_cfg fsd;
 	struct fpm_mtd_cfg mtd;
@@ -153,20 +149,22 @@ V21RX_create(void *modem, const struct v21rx_cfg *params)
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("New allocation\n");
 		modem = sysdep_malloc(V21RX_OBJ_SIZE);
-		V21RX_HDX(modem) = NULL;
+		rx = (struct v21_rx *)modem;
+		rx->hdx = NULL;
 		fresh = 1;
-		V21RX_DSP(modem) = NULL;
+		rx->dsp = NULL;
 	}
+	rx = (struct v21_rx *)modem;
 
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("\n");
 
 	/* The configuration IS the handle's first twenty-four bytes. */
 	if (params != NULL)
-		*(struct v21rx_cfg *)modem = *params;
+		rx->cfg = *params;
 	else
-		*(struct v21rx_cfg *)modem = V21RX_CFG;
-	cfg = (const struct v21rx_cfg *)modem;
+		rx->cfg = V21RX_CFG;
+	cfg = &rx->cfg;
 
 	/*
 	 * `cfg->aux` reaches TWO configurations from here -- the resampler's
@@ -175,9 +173,9 @@ V21RX_create(void *modem, const struct v21rx_cfg *params)
 	 */
 	aux = (unsigned long)cfg->aux;
 
-	if (V21RX_HDX(modem) == NULL)
-		V21RX_HDX(modem) = sysdep_malloc(sizeof(struct v21_rx_hdx));
-	hdx = V21RX_HDX(modem);
+	if (rx->hdx == NULL)
+		rx->hdx = sysdep_malloc(sizeof(struct v21_rx_hdx));
+	hdx = rx->hdx;
 
 	hdx->int_0000 = 0;
 	hdx->handler = RxHdxStartV21;
@@ -193,14 +191,14 @@ V21RX_create(void *modem, const struct v21rx_cfg *params)
 	 * that trace into `mag`, so the two buffers are the same length and
 	 * the count is written down twice in the object.
 	 */
-	if (V21RX_DSP(modem) == NULL) {
-		V21RX_DSP(modem) =
+	if (rx->dsp == NULL) {
+		rx->dsp =
 			sysdep_malloc(sizeof(struct v21_rx_dsp));
-		sysdep_memset(V21RX_DSP(modem), 0,
+		sysdep_memset(rx->dsp, 0,
 			      sizeof(struct v21_rx_dsp));
-		V21RX_DSP(modem)->mag = sysdep_malloc(V21RX_MAG_BYTES);
-		sysdep_memset(V21RX_DSP(modem)->mag, 0, V21RX_MAG_BYTES);
-		V21RX_DSP(modem)->mtd = NULL;
+		rx->dsp->mag = sysdep_malloc(V21RX_MAG_BYTES);
+		sysdep_memset(rx->dsp->mag, 0, V21RX_MAG_BYTES);
+		rx->dsp->mtd = NULL;
 	}
 
 	/*
@@ -214,11 +212,11 @@ V21RX_create(void *modem, const struct v21rx_cfg *params)
 	mrf.coeff = V21_MRF_FILT;
 	mrf.taps = 360;
 	mrf.aux = (void *)aux;
-	FPM_MRF_init(&V21RX_DSP(modem)->mrf, &mrf, fresh);
+	FPM_MRF_init(&rx->dsp->mrf, &mrf, fresh);
 
-	FPM_AGC_init(&V21RX_DSP(modem)->agc, &AGCv21_CFG, fresh);
+	FPM_AGC_init(&rx->dsp->agc, &AGCv21_CFG, fresh);
 
-	dsp = V21RX_DSP(modem);
+	dsp = rx->dsp;
 	dsp->int_0000 = 1;
 	dsp->int_0004 = 0;
 	dsp->int_0008 = 0;
@@ -264,7 +262,7 @@ V21RX_create(void *modem, const struct v21rx_cfg *params)
 	 */
 	fsd.f18 = (short)(unsigned short)aux;
 	fsd.pad1a = (short)(unsigned short)(aux >> 16);
-	FPM_FSD_init(&V21RX_DSP(modem)->fsd, &fsd, fresh);
+	FPM_FSD_init(&rx->dsp->fsd, &fsd, fresh);
 
 	/*
 	 * The tone detector, listening for the mark and space of whichever
@@ -276,8 +274,7 @@ V21RX_create(void *modem, const struct v21rx_cfg *params)
 	mtd.tones = 2;
 	mtd.ratio = 0x4ccd;
 	mtd.min_level = 300;
-	V21RX_DSP(modem)->mtd =
-		FPM_MTD_create(V21RX_DSP(modem)->mtd, &mtd);
+	rx->dsp->mtd = FPM_MTD_create(rx->dsp->mtd, &mtd);
 
 	/*
 	 * The status word is zeroed as one 32-bit unit and then two of its
@@ -289,30 +286,30 @@ V21RX_create(void *modem, const struct v21rx_cfg *params)
 	{
 		int zero = 0;
 
-		memcpy(FIELD(modem, V21RX_OBJ_STATUS), &zero, sizeof zero);
+		memcpy(&rx->status, &zero, sizeof zero);
 	}
-	V21RX_FLAGS(modem) |= (unsigned char)(V21RX_FLAG_BIT4
+	rx->status.byte.flags |= (unsigned char)(V21RX_FLAG_BIT4
 					      | V21RX_FLAG_BIT6);
-	V21RX_STATUS(modem) = V21RX_STATUS_START;
+	rx->status.byte.status = V21RX_STATUS_START;
 
 	/*
 	 * The trace export and the three unmodelled groups.  See `v21fax.h`
 	 * for what is known about each and what is not; the DSP pointer is
 	 * re-read here because the object re-reads it at 0x099089.
 	 */
-	dsp = V21RX_DSP(modem);
-	FIELD_PTR(modem, V21RX_OBJ_TRACE) = dsp->fsd.trace;
-	AT_I(modem, V21RX_OBJ_INT_0020) = 0;
-	FIELD_PTR(modem, V21RX_OBJ_COUNT_AT) = &dsp->fsd.last_count;
-	AT_I(modem, V21RX_OBJ_INT_0028) = 0;
-	AT_I(modem, V21RX_OBJ_INT_002C) = 0;
-	AT_S(modem, V21RX_OBJ_SHORT_0030) = 0;
-	AT_I(modem, V21RX_OBJ_INT_0034) = 0;
-	AT_I(modem, V21RX_OBJ_INT_0038) = 0;
-	AT_S(modem, V21RX_OBJ_SHORT_003C) = 0;
-	AT_I(modem, V21RX_OBJ_INT_0040) = 0;
-	AT_I(modem, V21RX_OBJ_INT_0044) = 0;
-	AT_S(modem, V21RX_OBJ_SHORT_0048) = 0;
+	dsp = rx->dsp;
+	rx->ptr_001c = dsp->fsd.trace;
+	rx->int_0020 = 0;
+	rx->ptr_0024 = &dsp->fsd.last_count;
+	rx->int_0028 = 0;
+	rx->int_002c = 0;
+	rx->short_0030 = 0;
+	rx->int_0034 = 0;
+	rx->int_0038 = 0;
+	rx->short_003c = 0;
+	rx->int_0040 = 0;
+	rx->int_0044 = 0;
+	rx->short_0048 = 0;
 
 	return modem;
 }
@@ -337,13 +334,15 @@ V21RX_create(void *modem, const struct v21rx_cfg *params)
 void
 V21RX_delete(void *modem)
 {
-	FPM_MTD_delete(V21RX_DSP(modem)->mtd);
-	FPM_FSD_free(&V21RX_DSP(modem)->fsd);
-	FPM_MRF_free(&V21RX_DSP(modem)->mrf);
+	struct v21_rx *rx = (struct v21_rx *)modem;
 
-	sysdep_free(V21RX_DSP(modem)->mag);
-	sysdep_free(V21RX_DSP(modem));
-	sysdep_free(V21RX_HDX(modem));
+	FPM_MTD_delete(rx->dsp->mtd);
+	FPM_FSD_free(&rx->dsp->fsd);
+	FPM_MRF_free(&rx->dsp->mrf);
+
+	sysdep_free(rx->dsp->mag);
+	sysdep_free(rx->dsp);
+	sysdep_free(rx->hdx);
 	sysdep_free(modem);
 }
 
@@ -403,11 +402,12 @@ V21RX_delete(void *modem)
 void *
 V21TX_create(void *modem, const struct v21tx_cfg *params)
 {
+	struct v21_tx *tx;
 	struct fpm_fsm_cfg fsm;
 	struct fpm_mrf_cfg mrf;
 	struct fifo_cfg fc;
 	struct v21_tx_dsp *dsp;
-	void *prm;
+	struct v21_tx_hdx *hdx;
 	void *existing_fifo;
 	short short_0000;
 	int fresh = 0;
@@ -420,28 +420,30 @@ V21TX_create(void *modem, const struct v21tx_cfg *params)
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("New allocation\n");
 		modem = sysdep_malloc(V21TX_OBJ_SIZE);
-		FIELD_PTR(modem, V21TX_OBJ_PARAMS) = NULL;
+		tx = (struct v21_tx *)modem;
+		tx->hdx = NULL;
 		fresh = 1;
-		FIELD_PTR(modem, V21TX_OBJ_DSP) = NULL;
+		tx->dsp = NULL;
 	} else {
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("\n");
 	}
+	tx = (struct v21_tx *)modem;
 
 	/* The configuration IS the handle's first twenty-eight bytes. */
 	if (params != NULL)
-		*(struct v21tx_cfg *)modem = *params;
+		tx->cfg = *params;
 	else
-		*(struct v21tx_cfg *)modem = V21TX_CFG;
+		tx->cfg = V21TX_CFG;
 
-	memcpy(FIELD(modem, V21TX_OBJ_RESULT), &zero, sizeof zero);
-	*FIELD(modem, V21TX_OBJ_RESULT_B1) |= 0x58;
+	memcpy(&tx->result, &zero, sizeof zero);
+	tx->result.byte.flags1 |= 0x58;
 
-	prm = FIELD_PTR(modem, V21TX_OBJ_PARAMS);
-	if (prm == NULL) {
-		prm = sysdep_malloc(0x10);
-		FIELD_PTR(modem, V21TX_OBJ_PARAMS) = prm;
-		FIELD_PTR(prm, V21TXP_FIFO) = NULL;
+	hdx = tx->hdx;
+	if (hdx == NULL) {
+		hdx = sysdep_malloc(sizeof(struct v21_tx_hdx));
+		tx->hdx = hdx;
+		hdx->fifo = NULL;
 	}
 
 	/*
@@ -452,22 +454,21 @@ V21TX_create(void *modem, const struct v21tx_cfg *params)
 	fc.word0 = FIFO_CFG.word0;
 	fc.size = 6;
 	fc.fill = 1;
-	existing_fifo = FIELD_PTR(prm, V21TXP_FIFO);
-	FIELD_PTR(prm, V21TXP_FIFO) =
+	existing_fifo = hdx->fifo;
+	hdx->fifo =
 		FIFO_create((struct fax_fifo *)existing_fifo, &fc);
 
-	AT_I(prm, V21TXP_INT_0004) = 0;
-	*(v21tx_process_fn *)(void *)FIELD(prm, V21TXP_PROCESS) =
-		TxHdxStartV21;
-	AT_S(prm, V21TXP_STATE) = V21TX_STATE_START;
-	AT_S(prm, V21TXP_SHORT_000E) = 0;
+	hdx->int_0004 = 0;
+	hdx->handler = TxHdxStartV21;
+	hdx->state = V21TX_STATE_START;
+	hdx->short_000e = 0;
 
-	dsp = V21TX_DSP(modem);
+	dsp = tx->dsp;
 	if (dsp == NULL) {
 		dsp = (struct v21_tx_dsp *)
 			sysdep_malloc(sizeof(struct v21_tx_dsp));
 		sysdep_memset(dsp, 0, sizeof(struct v21_tx_dsp));
-		V21TX_DSP(modem) = dsp;
+		tx->dsp = dsp;
 		dsp->scratch = sysdep_malloc(V21TX_SCRATCH_BYTES);
 		sysdep_memset(dsp->scratch, 0, V21TX_SCRATCH_BYTES);
 	}
@@ -480,20 +481,20 @@ V21TX_create(void *modem, const struct v21tx_cfg *params)
 	if (short_0000 == 0 || short_0000 == 1) {
 		/* No observable effect; see the function comment and D1241. */
 	} else {
-		*FIELD(modem, V21TX_OBJ_RESULT_B1) |= V21TX_RESULT_B1_BIT1;
-		*FIELD(modem, V21TX_OBJ_RESULT) = V21TX_STATUS_DEFAULT;
+		tx->result.byte.flags1 |= V21TX_RESULT_B1_BIT1;
+		tx->result.byte.status = V21TX_STATUS_DEFAULT;
 	}
 
 	fsm = FPM_FSM_CFG;
 	fsm.scale = 0x1900;
-	FPM_FSM_init(&V21TX_DSP(modem)->fsm, &fsm);
+	FPM_FSM_init(&tx->dsp->fsm, &fsm);
 
 	mrf = FPM_MRF_CFG;
 	mrf.branches = 10;
 	mrf.decimate = 9;
 	mrf.coeff = V21_MRF_FILT;
 	mrf.taps = 360;
-	FPM_MRF_init(&V21TX_DSP(modem)->mrf, &mrf, fresh);
+	FPM_MRF_init(&tx->dsp->mrf, &mrf, fresh);
 
 	return modem;
 }
@@ -521,15 +522,15 @@ V21TX_create(void *modem, const struct v21tx_cfg *params)
 void
 V21TX_delete(void *modem)
 {
-	FPM_FSM_delete(&V21TX_DSP(modem)->fsm);
-	FPM_MRF_free(&V21TX_DSP(modem)->mrf);
-	sysdep_free(V21TX_DSP(modem)->scratch);
-	sysdep_free(V21TX_DSP(modem));
+	struct v21_tx *tx = (struct v21_tx *)modem;
 
-	FIFO_delete((struct fax_fifo *)
-			FIELD_PTR(FIELD_PTR(modem, V21TX_OBJ_PARAMS),
-				  V21TXP_FIFO));
-	sysdep_free(FIELD_PTR(modem, V21TX_OBJ_PARAMS));
+	FPM_FSM_delete(&tx->dsp->fsm);
+	FPM_MRF_free(&tx->dsp->mrf);
+	sysdep_free(tx->dsp->scratch);
+	sysdep_free(tx->dsp);
+
+	FIFO_delete(tx->hdx->fifo);
+	sysdep_free(tx->hdx);
 
 	sysdep_free(modem);
 }
@@ -554,18 +555,19 @@ V21TX_delete(void *modem)
 int
 V21RX_modem(void *modem, short *in, short *out, short *count)
 {
+	struct v21_rx *rx = (struct v21_rx *)modem;
 	unsigned short remaining;
 	short total = 0;
 	int word;
 
-	V21RX_FLAGS(modem) &= (unsigned char)~V21RX_FLAG_ERROR;
+	rx->status.byte.flags &= (unsigned char)~V21RX_FLAG_ERROR;
 
 	remaining = (unsigned short)*count;
 	do {
 		short before = (short)remaining;
 		short n;
 
-		n = V21RX_HDX(modem)->handler(modem, in, out, count);
+		n = rx->hdx->handler(modem, in, out, count);
 		remaining = (unsigned short)*count;
 
 		out += n;
@@ -575,7 +577,7 @@ V21RX_modem(void *modem, short *in, short *out, short *count)
 
 	*count = total;
 
-	memcpy(&word, V21RX_STATUS_AT(modem), sizeof word);
+	memcpy(&word, &rx->status, sizeof word);
 	return word;
 }
 
@@ -592,7 +594,8 @@ V21RX_modem(void *modem, short *in, short *out, short *count)
 short
 RxHdxErrorV21(void *modem, short *in, short *out, short *count)
 {
-	V21RX_FLAGS(modem) |= V21RX_FLAG_ERROR;
+	struct v21_rx *rx = (struct v21_rx *)modem;
+	rx->status.byte.flags |= V21RX_FLAG_ERROR;
 
 	DemodDataV21(modem, in, out, (unsigned short)*count);
 	*count = 0;
@@ -612,14 +615,15 @@ RxHdxErrorV21(void *modem, short *in, short *out, short *count)
 short
 RxHdxIdleV21(void *modem, short *in, short *out, short *count)
 {
+	struct v21_rx *rx = (struct v21_rx *)modem;
 	DemodDataV21(modem, in, out, (unsigned short)*count);
 	*count = 0;
 
-	V21RX_FLAGS(modem) &= (unsigned char)~V21RX_FLAG_CARRIER;
-	V21RX_STATUS(modem) = V21RX_STATUS_IDLE;
+	rx->status.byte.flags &= (unsigned char)~V21RX_FLAG_CARRIER;
+	rx->status.byte.status = V21RX_STATUS_IDLE;
 
 	if (CarrierDetectV21(modem))
-		V21RX_FLAGS(modem) |= V21RX_FLAG_CARRIER;
+		rx->status.byte.flags |= V21RX_FLAG_CARRIER;
 
 	return 0;
 }
@@ -650,7 +654,8 @@ RxHdxIdleV21(void *modem, short *in, short *out, short *count)
 void
 RxNextStateV21(void *modem)
 {
-	struct v21_rx_hdx *hdx = V21RX_HDX(modem);
+	struct v21_rx *rx = (struct v21_rx *)modem;
+	struct v21_rx_hdx *hdx = rx->hdx;
 
 	switch (hdx->state) {
 	case V21RX_STATE_START:
@@ -667,7 +672,7 @@ RxNextStateV21(void *modem)
 		hdx->countdown = 0;
 		hdx->handler = RxHdxDataV21;
 		hdx->state = V21RX_STATE_DATA;
-		V21RX_FLAGS(modem) |= V21RX_FLAG_DATA;
+		rx->status.byte.flags |= V21RX_FLAG_DATA;
 		break;
 
 	case V21RX_STATE_DATA:
@@ -677,17 +682,17 @@ RxNextStateV21(void *modem)
 		hdx->state = V21RX_STATE_IDLE;
 		hdx->countdown = 0;
 		hdx->int_0000 = 0;
-		V21RX_FLAGS1(modem) |= V21RX_FLAG1_IDLE;
-		V21RX_FLAGS(modem) &= (unsigned char)~V21RX_FLAG_DATA;
+		rx->status.byte.flags1 |= V21RX_FLAG1_IDLE;
+		rx->status.byte.flags &= (unsigned char)~V21RX_FLAG_DATA;
 		break;
 
 	default:
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V21RX_DEFAULT, %d\n", hdx->state);
-		V21RX_FLAGS1(modem) &= (unsigned char)~V21RX_FLAG1_IDLE;
-		V21RX_STATUS(modem) = V21RX_STATUS_DEFAULT;
-		V21RX_FLAGS(modem) = (unsigned char)
-			((V21RX_FLAGS(modem) | V21RX_FLAG_ERROR)
+		rx->status.byte.flags1 &= (unsigned char)~V21RX_FLAG1_IDLE;
+		rx->status.byte.status = V21RX_STATUS_DEFAULT;
+		rx->status.byte.flags = (unsigned char)
+			((rx->status.byte.flags | V21RX_FLAG_ERROR)
 			 & ~(V21RX_FLAG_DATA | V21RX_FLAG_CARRIER));
 		break;
 	}
@@ -727,16 +732,17 @@ RxNextStateV21(void *modem)
 short
 RxHdxStartV21(void *modem, short *in, short *out, short *count)
 {
+	struct v21_rx *rx = (struct v21_rx *)modem;
 	struct v21_rx_hdx *hdx;
 	unsigned short nbits;
 	unsigned short i;
 
-	V21RX_STATUS(modem) = V21RX_STATUS_START;
+	rx->status.byte.status = V21RX_STATUS_START;
 
 	nbits = DemodDataV21(modem, in, out, (unsigned short)*count);
 	*count = 0;
 
-	hdx = V21RX_HDX(modem);
+	hdx = rx->hdx;
 
 	i = 0;
 	while (nbits != 0) {
@@ -750,16 +756,16 @@ RxHdxStartV21(void *modem, short *in, short *out, short *count)
 		i = (unsigned short)(i + 1);
 	}
 
-	V21RX_FLAGS(modem) &= (unsigned char)~V21RX_FLAG_CARRIER;
+	rx->status.byte.flags &= (unsigned char)~V21RX_FLAG_CARRIER;
 
 	if (!CarrierDetectV21(modem))
 		return 0;
 
-	hdx = V21RX_HDX(modem);
+	hdx = rx->hdx;
 	if ((short)hdx->mark_seq <= V21RX_MARK_SEQ_THRESHOLD)
 		return 0;
 
-	V21RX_FLAGS(modem) |= V21RX_FLAG_CARRIER;
+	rx->status.byte.flags |= V21RX_FLAG_CARRIER;
 	RxNextStateV21(modem);
 
 	return 0;
@@ -782,30 +788,30 @@ RxHdxStartV21(void *modem, short *in, short *out, short *count)
 short
 RxHdxWaitV21(void *modem, short *in, short *out, short *count)
 {
+	struct v21_rx *rx = (struct v21_rx *)modem;
 	unsigned short nbits;
 
 	nbits = DemodDataV21(modem, in, out, (unsigned short)*count);
 	*count = 0;
 
 	if (!CarrierDetectV21(modem)) {
-		V21RX_HDX(modem)->handler = RxHdxErrorV21;
-		V21RX_HDX(modem)->state = V21RX_STATE_ERROR;
-		V21RX_STATUS(modem) = V21RX_STATUS_ERROR;
-		V21RX_FLAGS(modem) = (unsigned char)
-			((V21RX_FLAGS(modem) | V21RX_FLAG_ERROR)
+		rx->hdx->handler = RxHdxErrorV21;
+		rx->hdx->state = V21RX_STATE_ERROR;
+		rx->status.byte.status = V21RX_STATUS_ERROR;
+		rx->status.byte.flags = (unsigned char)
+			((rx->status.byte.flags | V21RX_FLAG_ERROR)
 			 & ~V21RX_FLAG_CARRIER);
 		return 0;
 	}
 
-	V21RX_FLAGS(modem) |= V21RX_FLAG_CARRIER;
-	V21RX_STATUS(modem) = V21RX_STATUS_WAIT;
+	rx->status.byte.flags |= V21RX_FLAG_CARRIER;
+	rx->status.byte.status = V21RX_STATUS_WAIT;
 
-	V21RX_HDX(modem)->countdown =
-		(unsigned short)(V21RX_HDX(modem)->countdown - 1);
-	if ((short)V21RX_HDX(modem)->countdown > 0)
+	rx->hdx->countdown = (unsigned short)(rx->hdx->countdown - 1);
+	if ((short)rx->hdx->countdown > 0)
 		return 0;
 
-	V21RX_STATUS(modem) = V21RX_STATUS_TIMEOUT;
+	rx->status.byte.status = V21RX_STATUS_TIMEOUT;
 	RxNextStateV21(modem);
 
 	return (short)nbits;
@@ -831,23 +837,24 @@ RxHdxWaitV21(void *modem, short *in, short *out, short *count)
 short
 RxHdxDataV21(void *modem, short *in, short *out, short *count)
 {
+	struct v21_rx *rx = (struct v21_rx *)modem;
 	unsigned short nbits;
 
-	V21RX_FLAGS(modem) |= V21RX_FLAG_CARRIER;
-	V21RX_STATUS(modem) = V21RX_STATUS_DATA;
+	rx->status.byte.flags |= V21RX_FLAG_CARRIER;
+	rx->status.byte.status = V21RX_STATUS_DATA;
 
-	if (CarrierDetectV21(modem) && V21RX_HDX(modem)->int_0000 == 0) {
+	if (CarrierDetectV21(modem) && rx->hdx->int_0000 == 0) {
 		nbits = DemodDataV21(modem, in, out, (unsigned short)*count);
 		*count = 0;
 
-		V21RX_FLAGS(modem) &= (unsigned char)~V21RX_FLAG_LOW_SNR;
+		rx->status.byte.flags &= (unsigned char)~V21RX_FLAG_LOW_SNR;
 		if ((short)GetSNRV21(modem) <= V21RX_SNR_THRESHOLD)
-			V21RX_FLAGS(modem) |= V21RX_FLAG_LOW_SNR;
+			rx->status.byte.flags |= V21RX_FLAG_LOW_SNR;
 
 		return (short)nbits;
 	}
 
-	V21RX_FLAGS(modem) &= (unsigned char)~V21RX_FLAG_CARRIER;
+	rx->status.byte.flags &= (unsigned char)~V21RX_FLAG_CARRIER;
 	RxNextStateV21(modem);
 
 	return 0;
@@ -876,14 +883,15 @@ RxHdxDataV21(void *modem, short *in, short *out, short *count)
 int
 V21RX_control(void *modem, const struct v21rx_ctl *arg)
 {
-	struct v21rx_cfg *cfg = (struct v21rx_cfg *)modem;
+	struct v21_rx *rx = (struct v21_rx *)modem;
+	struct v21rx_cfg *cfg = &rx->cfg;
 
 	if (arg == NULL)
 		return 0;
 
 	cfg->int_0008 = arg->int_0004;
 
-	V21RX_HDX(modem)->int_0000 =
+	rx->hdx->int_0000 =
 		(arg->flags & V21RXCTL_SET_HDX_INT0000) != 0;
 
 	if (arg->flags & V21RXCTL_REINIT)
@@ -918,17 +926,17 @@ V21RX_control(void *modem, const struct v21rx_ctl *arg)
 int
 V21RX_status(void *modem, struct v21_status *st)
 {
+	struct v21_rx *rx = (struct v21_rx *)modem;
 	short f22, bit_samples;
 
 	if (st == NULL)
 		return 0;
 
-	st->protocol = (short)*(unsigned short *)(void *)
-		((char *)modem + V21RX_OBJ_PROTOCOL);
+	st->protocol = (short)(unsigned short)rx->cfg.chan2;
 	st->tx_bps = 0;
 	st->rx_bps = V21_STATUS_BPS;
 	st->quality = (short)
-		((V21RX_FLAGS(modem) & V21RX_FLAG_LOW_SNR) == 0);
+		((rx->status.byte.flags & V21RX_FLAG_LOW_SNR) == 0);
 	st->snr = (short)GetSNRV21(modem);
 	st->short_0a = 0;
 	st->short_0e = 0;
@@ -936,8 +944,8 @@ V21RX_status(void *modem, struct v21_status *st)
 	st->flags1 &= (unsigned char)~V21_STATUS1_BIT0;
 	st->flags = 0;
 
-	f22 = V21RX_DSP(modem)->fsd.f22;
-	bit_samples = V21RX_DSP(modem)->fsd.cfg.bit_samples;
+	f22 = rx->dsp->fsd.f22;
+	bit_samples = rx->dsp->fsd.cfg.bit_samples;
 	st->short_12 = (short)((2 - 2 * (int)f22 / (int)bit_samples)
 			       * V21_STATUS_BPS);
 
@@ -962,20 +970,20 @@ V21RX_status(void *modem, struct v21_status *st)
 int
 V21TX_modem(void *modem, unsigned short *in, short *out, unsigned short *count)
 {
-	void *prm;
+	struct v21_tx *tx = (struct v21_tx *)modem;
+	struct v21_tx_hdx *hdx;
 	unsigned short taken;
 	short budget;
 	short total;
 
-	prm = FIELD_PTR(modem, V21TX_OBJ_PARAMS);
+	hdx = tx->hdx;
 
-	*FIELD(modem, V21TX_OBJ_RESULT_B1) &=
+	tx->result.byte.flags1 &=
 		(unsigned char)~V21TX_RESULT_B1_BIT1;
 
-	if (AT_I(prm, V21TXP_INT_0004) == 0)
+	if (hdx->int_0004 == 0)
 		taken = (unsigned short)FIFO_write(
-				(struct fax_fifo *)
-					FIELD_PTR(prm, V21TXP_FIFO),
+				hdx->fifo,
 				in, *count);
 	else
 		taken = *count;
@@ -985,28 +993,26 @@ V21TX_modem(void *modem, unsigned short *in, short *out, unsigned short *count)
 	do {
 		short got;
 
-		prm = FIELD_PTR(modem, V21TX_OBJ_PARAMS);
-		got = (*(v21tx_process_fn *)(void *)
-				FIELD(prm, V21TXP_PROCESS))
-					(modem, in, out, &budget);
+		hdx = tx->hdx;
+		got = hdx->handler(modem, in, out, &budget);
 
 		out += got;
 		total = (short)(total + got);
 	} while (budget > 0);
 
 	if (*count != taken) {
-		*FIELD(modem, V21TX_OBJ_RESULT_B1) |= V21TX_RESULT_B1_BIT1;
+		tx->result.byte.flags1 |= V21TX_RESULT_B1_BIT1;
 		/*
 		 * A BYTE store into the low byte of the int this function
 		 * returns -- `movb $0x4,0x1c(%edi)` at 0x0a2564 -- which is
 		 * why it cannot be written through `AT_I`.
 		 */
-		*FIELD(modem, V21TX_OBJ_RESULT) = V21TX_RESULT_BYTE_04;
+		tx->result.byte.status = V21TX_RESULT_BYTE_04;
 	}
 
 	*count = (unsigned short)total;
 
-	return AT_I(modem, V21TX_OBJ_RESULT);
+	return tx->result.word;
 }
 
 /*
@@ -1034,53 +1040,51 @@ V21TX_modem(void *modem, unsigned short *in, short *out, unsigned short *count)
 void
 TxNextStateV21(void *modem)
 {
-	void *prm = FIELD_PTR(modem, V21TX_OBJ_PARAMS);
-	short state = AT_S(prm, V21TXP_STATE);
+	struct v21_tx *tx = (struct v21_tx *)modem;
+	struct v21_tx_hdx *hdx = tx->hdx;
+	short state = hdx->state;
 
 	switch (state) {
 	case V21TX_STATE_DATA:
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V21TX_STATE_DATA\n");
-		*(v21tx_process_fn *)(void *)FIELD(prm, V21TXP_PROCESS) =
-			TxHdxIdleV21;
-		AT_S(prm, V21TXP_STATE) = V21TX_STATE_IDLE;
-		*FIELD(modem, V21TX_OBJ_RESULT_B2) |= V21TX_RESULT_B2_BIT0;
-		*FIELD(modem, V21TX_OBJ_RESULT_B1) &=
+		hdx->handler = TxHdxIdleV21;
+		hdx->state = V21TX_STATE_IDLE;
+		tx->result.byte.flags2 |= V21TX_RESULT_B2_BIT0;
+		tx->result.byte.flags1 &=
 			(unsigned char)~V21TX_RESULT_B1_BIT0;
 		break;
 
 	case V21TX_STATE_IDLE:
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V21TX_STATE_IDLE\n");
-		AT_S(prm, V21TXP_SHORT_000E) = 0;
-		*(v21tx_process_fn *)(void *)FIELD(prm, V21TXP_PROCESS) =
-			TxHdxStartV21;
-		AT_S(prm, V21TXP_STATE) = V21TX_STATE_START;
-		*FIELD(modem, V21TX_OBJ_RESULT_B2) &=
+		hdx->short_000e = 0;
+		hdx->handler = TxHdxStartV21;
+		hdx->state = V21TX_STATE_START;
+		tx->result.byte.flags2 &=
 			(unsigned char)~V21TX_RESULT_B2_BIT0;
-		*FIELD(modem, V21TX_OBJ_RESULT_B1) |= V21TX_RESULT_B1_BIT0;
+		tx->result.byte.flags1 |= V21TX_RESULT_B1_BIT0;
 		break;
 
 	case V21TX_STATE_START:
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V21TX_STATE_START\n");
-		AT_S(prm, V21TXP_SHORT_000E) = 0;
-		*(v21tx_process_fn *)(void *)FIELD(prm, V21TXP_PROCESS) =
-			TxHdxDataV21;
-		AT_S(prm, V21TXP_STATE) = V21TX_STATE_DATA;
-		*FIELD(modem, V21TX_OBJ_RESULT_B2) &=
+		hdx->short_000e = 0;
+		hdx->handler = TxHdxDataV21;
+		hdx->state = V21TX_STATE_DATA;
+		tx->result.byte.flags2 &=
 			(unsigned char)~V21TX_RESULT_B2_BIT0;
-		*FIELD(modem, V21TX_OBJ_RESULT_B1) |= V21TX_RESULT_B1_BIT0;
+		tx->result.byte.flags1 |= V21TX_RESULT_B1_BIT0;
 		break;
 
 	default:
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V21TX_DEFAULT, %d\n", state);
-		*FIELD(modem, V21TX_OBJ_RESULT_B2) &=
+		tx->result.byte.flags2 &=
 			(unsigned char)~V21TX_RESULT_B2_BIT0;
-		*FIELD(modem, V21TX_OBJ_RESULT) = V21TX_STATUS_DEFAULT;
-		*FIELD(modem, V21TX_OBJ_RESULT_B1) = (unsigned char)
-			((*FIELD(modem, V21TX_OBJ_RESULT_B1)
+		tx->result.byte.status = V21TX_STATUS_DEFAULT;
+		tx->result.byte.flags1 = (unsigned char)
+			((tx->result.byte.flags1
 			  | V21TX_RESULT_B1_BIT1)
 			 & ~V21TX_RESULT_B1_BIT0);
 		break;
@@ -1100,19 +1104,20 @@ TxNextStateV21(void *modem)
 short
 TxHdxStartV21(void *modem, unsigned short *in, short *out, short *budget)
 {
-	void *prm = FIELD_PTR(modem, V21TX_OBJ_PARAMS);
+	struct v21_tx *tx = (struct v21_tx *)modem;
+	struct v21_tx_hdx *hdx = tx->hdx;
 	unsigned short taken;
 	short nsamples;
 
 	taken = (unsigned short)
-		FIFO_read((struct fax_fifo *)FIELD_PTR(prm, V21TXP_FIFO),
+		FIFO_read(hdx->fifo,
 			  in, (unsigned short)*budget);
 	*budget = (short)((unsigned short)*budget - taken);
 
 	nsamples = (short)ModDataV21(modem, in, out, taken);
 
 	TxNextStateV21(modem);
-	*FIELD(modem, V21TX_OBJ_RESULT) = V21TX_STATUS_START;
+	tx->result.byte.status = V21TX_STATUS_START;
 
 	return nsamples;
 }
@@ -1131,16 +1136,15 @@ TxHdxStartV21(void *modem, unsigned short *in, short *out, short *budget)
 short
 TxHdxIdleV21(void *modem, unsigned short *in, short *out, short *budget)
 {
-	void *prm = FIELD_PTR(modem, V21TX_OBJ_PARAMS);
-	struct fax_fifo *fifo = (struct fax_fifo *)
-		FIELD_PTR(prm, V21TXP_FIFO);
+	struct v21_tx *tx = (struct v21_tx *)modem;
+	struct fax_fifo *fifo = tx->hdx->fifo;
 
 	if (fifo->count == 0) {
 		unsigned short b = (unsigned short)*budget;
 		short nsamples = (short)TxNoCarrierV21(modem, in, out, b);
 
 		*budget = (short)((unsigned short)*budget - b);
-		*FIELD(modem, V21TX_OBJ_RESULT) = V21TX_STATUS_IDLE;
+		tx->result.byte.status = V21TX_STATUS_IDLE;
 		return nsamples;
 	}
 
@@ -1170,25 +1174,26 @@ TxHdxIdleV21(void *modem, unsigned short *in, short *out, short *budget)
 short
 TxHdxDataV21(void *modem, unsigned short *in, short *out, short *budget)
 {
-	void *prm = FIELD_PTR(modem, V21TX_OBJ_PARAMS);
+	struct v21_tx *tx = (struct v21_tx *)modem;
+	struct v21_tx_hdx *hdx = tx->hdx;
 	unsigned short req = (unsigned short)*budget;
 	unsigned short taken;
 	unsigned short nbits;
 	short nsamples;
 
 	taken = (unsigned short)
-		FIFO_read((struct fax_fifo *)FIELD_PTR(prm, V21TXP_FIFO),
+		FIFO_read(hdx->fifo,
 			  in, req);
 
 	if (req <= taken) {
 		nbits = taken;
 		nsamples = (short)ModDataV21(modem, in, out, nbits);
 		*budget = (short)((unsigned short)*budget - nbits);
-		*FIELD(modem, V21TX_OBJ_RESULT) = V21TX_STATUS_DATA;
+		tx->result.byte.status = V21TX_STATUS_DATA;
 		return nsamples;
 	}
 
-	if (AT_I(prm, V21TXP_INT_0004) != 0) {
+	if (hdx->int_0004 != 0) {
 		nbits = taken;
 		nsamples = (short)ModDataV21(modem, in, out, nbits);
 		*budget = (short)((unsigned short)*budget - taken);
@@ -1196,12 +1201,12 @@ TxHdxDataV21(void *modem, unsigned short *in, short *out, short *budget)
 		return nsamples;
 	}
 
-	*FIELD(modem, V21TX_OBJ_RESULT_B1) |= V21TX_RESULT_B1_BIT1;
+	tx->result.byte.flags1 |= V21TX_RESULT_B1_BIT1;
 	nbits = req;
-	*FIELD(modem, V21TX_OBJ_RESULT) = V21TX_STATUS_UNDERRUN;
+	tx->result.byte.status = V21TX_STATUS_UNDERRUN;
 	nsamples = (short)ModDataV21(modem, in, out, nbits);
 	*budget = (short)((unsigned short)*budget - nbits);
-	*FIELD(modem, V21TX_OBJ_RESULT) = V21TX_STATUS_DATA;
+	tx->result.byte.status = V21TX_STATUS_DATA;
 
 	return nsamples;
 }
@@ -1224,19 +1229,21 @@ TxHdxDataV21(void *modem, unsigned short *in, short *out, short *budget)
 int
 V21TX_control(void *modem, const struct v21tx_ctl *arg)
 {
-	struct v21tx_cfg *cfg = (struct v21tx_cfg *)modem;
-	void *prm = FIELD_PTR(modem, V21TX_OBJ_PARAMS);
+	struct v21_tx *tx = (struct v21_tx *)modem;
+	struct v21tx_cfg *cfg = &tx->cfg;
+	struct v21_tx_hdx *hdx = tx->hdx;
 
 	if (arg == NULL)
 		return 0;
 
-	V21TX_DSP(modem)->fsm.cfg.scale = (short)arg->scale;
+	tx->dsp->fsm.cfg.scale = (short)arg->scale;
 	cfg->int_0008 = arg->int_0004;
 
 	if (arg->mask & V21TXCTL_SET_TXFLAGS_BIT2)
-		V21TX_FLAGS(modem) |= V21TXCTL_SET_TXFLAGS_BIT2;
+		((unsigned char *)(void *)&tx->cfg)[V21TX_OBJ_FLAGS] |=
+			V21TXCTL_SET_TXFLAGS_BIT2;
 
-	AT_I(prm, V21TXP_INT_0004) =
+	hdx->int_0004 =
 		(arg->flags & V21TXCTL_SET_PARAMS_INT0004) != 0;
 
 	if (arg->flags & V21TXCTL_REINIT)
@@ -1255,10 +1262,14 @@ V21TX_control(void *modem, const struct v21tx_ctl *arg)
 int
 V21TX_status(void *modem, struct v21_status *st)
 {
+	struct v21_tx *tx = (struct v21_tx *)modem;
+	unsigned char tx_flags;
+
 	if (st == NULL)
 		return 0;
 
-	st->protocol = (short)V21TX_PROTOCOL(modem);
+	tx_flags = ((unsigned char *)(void *)&tx->cfg)[V21TX_OBJ_FLAGS];
+	st->protocol = tx->cfg.short_0000;
 	st->tx_bps = V21_STATUS_BPS;
 	st->rx_bps = 0;
 	st->quality = 0;
@@ -1269,7 +1280,7 @@ V21TX_status(void *modem, struct v21_status *st)
 	st->short_10 = 0;
 	st->short_12 = 0;
 	st->flags1 &= (unsigned char)~V21_STATUS1_BIT0;
-	st->flags = (unsigned char)(V21TX_FLAGS(modem) & V21_STATUS_BIT2);
+	st->flags = (unsigned char)(tx_flags & V21_STATUS_BIT2);
 
 	return 1;
 }
@@ -1298,18 +1309,19 @@ V21TX_status(void *modem, struct v21_status *st)
 unsigned short
 DemodDataV21(void *modem, short *in, short *bits, unsigned short count)
 {
+	struct v21_rx *rx = (struct v21_rx *)modem;
 	short nsamples;
 
-	FPM_AGC_agc(&V21RX_DSP(modem)->agc, in, count);
+	FPM_AGC_agc(&rx->dsp->agc, in, count);
 
-	V21RX_DSP(modem)->int_0004 = V21RX_DSP(modem)->agc.signal;
-	V21RX_DSP(modem)->int_0008 = 1;
+	rx->dsp->int_0004 = rx->dsp->agc.signal;
+	rx->dsp->int_0008 = 1;
 
-	if (FPM_MTD_detect(V21RX_DSP(modem)->mtd, in, (short)count)
+	if (FPM_MTD_detect(rx->dsp->mtd, in, (short)count)
 	    != FPM_MTD_ABSENT) {
-		V21RX_DSP(modem)->int_0008 = 0;
+		rx->dsp->int_0008 = 0;
 
-		if (V21RX_HDX(modem)->handler != RxHdxDataV21) {
+		if (rx->hdx->handler != RxHdxDataV21) {
 			unsigned short i;
 
 			for (i = 0; i < count; i++)
@@ -1317,12 +1329,12 @@ DemodDataV21(void *modem, short *in, short *bits, unsigned short count)
 		}
 	}
 
-	nsamples = FPM_MRF_filter(&V21RX_DSP(modem)->mrf, in,
-				  V21RX_DSP(modem)->mag, (short)count);
+	nsamples = FPM_MRF_filter(&rx->dsp->mrf, in,
+				  rx->dsp->mag, (short)count);
 
 	return (unsigned short)
-		FPM_FSD_demodulate(&V21RX_DSP(modem)->fsd,
-				   V21RX_DSP(modem)->mag,
+		FPM_FSD_demodulate(&rx->dsp->fsd,
+				   rx->dsp->mag,
 				   (unsigned short *)(void *)bits,
 				   (unsigned short)nsamples);
 }
@@ -1331,7 +1343,7 @@ DemodDataV21(void *modem, short *in, short *bits, unsigned short count)
 int
 CarrierDetectV21(void *modem)
 {
-	struct v21_rx_dsp *dsp = V21RX_DSP(modem);
+	struct v21_rx_dsp *dsp = ((struct v21_rx *)modem)->dsp;
 
 	return dsp->int_0004 & dsp->int_0008;
 }
@@ -1359,7 +1371,7 @@ CarrierDetectV21(void *modem)
 int
 GetSNRV21(void *modem)
 {
-	struct v21_rx_dsp *dsp = V21RX_DSP(modem);
+	struct v21_rx_dsp *dsp = ((struct v21_rx *)modem)->dsp;
 	short n = dsp->fsd.last_count;
 	const short *trace = dsp->fsd.trace;
 	short *mag = dsp->mag;
@@ -1385,15 +1397,16 @@ unsigned short
 ModDataV21(void *modem, const unsigned short *bits, short *out,
 	   unsigned short nbits)
 {
+	struct v21_tx *tx = (struct v21_tx *)modem;
 	unsigned short nsamples;
 
-	nsamples = (unsigned short)FPM_FSM_modulate(&V21TX_DSP(modem)->fsm,
+	nsamples = (unsigned short)FPM_FSM_modulate(&tx->dsp->fsm,
 						    bits,
-						    V21TX_DSP(modem)->scratch,
+						    tx->dsp->scratch,
 						    nbits);
 
-	return (unsigned short)FPM_MRF_filter(&V21TX_DSP(modem)->mrf,
-					      V21TX_DSP(modem)->scratch, out,
+	return (unsigned short)FPM_MRF_filter(&tx->dsp->mrf,
+					      tx->dsp->scratch, out,
 					      (short)nsamples);
 }
 
@@ -1407,18 +1420,19 @@ unsigned short
 TxNoCarrierV21(void *modem, const unsigned short *bits, short *out,
 	       unsigned short nbits)
 {
-	short saved_scale = V21TX_DSP(modem)->fsm.cfg.scale;
+	struct v21_tx *tx = (struct v21_tx *)modem;
+	short saved_scale = tx->dsp->fsm.cfg.scale;
 	unsigned short nsamples;
 
-	V21TX_DSP(modem)->fsm.cfg.scale = 0;
-	nsamples = (unsigned short)FPM_FSM_modulate(&V21TX_DSP(modem)->fsm,
+	tx->dsp->fsm.cfg.scale = 0;
+	nsamples = (unsigned short)FPM_FSM_modulate(&tx->dsp->fsm,
 						    bits,
-						    V21TX_DSP(modem)->scratch,
+						    tx->dsp->scratch,
 						    nbits);
-	V21TX_DSP(modem)->fsm.cfg.scale = saved_scale;
+	tx->dsp->fsm.cfg.scale = saved_scale;
 
-	return (unsigned short)FPM_MRF_filter(&V21TX_DSP(modem)->mrf,
-					      V21TX_DSP(modem)->scratch, out,
+	return (unsigned short)FPM_MRF_filter(&tx->dsp->mrf,
+					      tx->dsp->scratch, out,
 					      (short)nsamples);
 }
 
@@ -1448,6 +1462,14 @@ TxNoCarrierV21(void *modem, const unsigned short *bits, short *out,
 V21_ASSERT_OFF(struct v21_tx_dsp, fsm, 0x00);
 V21_ASSERT_OFF(struct v21_tx_dsp, mrf, 0x10);
 V21_ASSERT_OFF(struct v21_tx_dsp, scratch, 0x2c);
+V21_ASSERT_OFF(struct v21_tx_hdx, fifo, 0x00);
+V21_ASSERT_OFF(struct v21_tx_hdx, int_0004, 0x04);
+V21_ASSERT_OFF(struct v21_tx_hdx, handler, 0x08);
+V21_ASSERT_OFF(struct v21_tx_hdx, state, 0x0c);
+V21_ASSERT_OFF(struct v21_tx_hdx, short_000e, 0x0e);
+V21_ASSERT_OFF(struct v21_tx, result, 0x1c);
+V21_ASSERT_OFF(struct v21_tx, hdx, 0x20);
+V21_ASSERT_OFF(struct v21_tx, dsp, 0x24);
 
 V21_ASSERT_OFF(struct v21_rx_dsp, int_0004, 0x04);
 V21_ASSERT_OFF(struct v21_rx_dsp, int_0008, 0x08);
@@ -1462,6 +1484,11 @@ V21_ASSERT_OFF(struct v21_rx_hdx, state, 0x08);
 V21_ASSERT_OFF(struct v21_rx_hdx, countdown, 0x0a);
 V21_ASSERT_OFF(struct v21_rx_hdx, ones_run, 0x0c);
 V21_ASSERT_OFF(struct v21_rx_hdx, mark_seq, 0x0e);
+V21_ASSERT_OFF(struct v21_rx, status, 0x18);
+V21_ASSERT_OFF(struct v21_rx, ptr_001c, 0x1c);
+V21_ASSERT_OFF(struct v21_rx, ptr_0024, 0x24);
+V21_ASSERT_OFF(struct v21_rx, hdx, 0x4c);
+V21_ASSERT_OFF(struct v21_rx, dsp, 0x50);
 
 V21_ASSERT_OFF(struct v21_status, tx_bps, 0x02);
 V21_ASSERT_OFF(struct v21_status, rx_bps, 0x04);
@@ -1484,6 +1511,12 @@ V21_ASSERT_OFF(struct v21_status, int_18, 0x18);
  */
 typedef char v21_tx_dsp_size[(sizeof(struct v21_tx_dsp) == 0x30) ? 1 : -1];
 typedef char v21_rx_dsp_size[(sizeof(struct v21_rx_dsp) == 0x94) ? 1 : -1];
+typedef char v21_tx_hdx_size[(sizeof(struct v21_tx_hdx) == 0x10) ? 1 : -1];
+typedef char v21_tx_result_size[(sizeof(union v21_tx_result) == 4) ? 1 : -1];
+typedef char v21_rx_status_word_size[
+	(sizeof(union v21_rx_status_word) == 4) ? 1 : -1];
+typedef char v21_tx_size[(sizeof(struct v21_tx) == 0x28) ? 1 : -1];
+typedef char v21_rx_size[(sizeof(struct v21_rx) == 0x54) ? 1 : -1];
 
 /*
  * The transmit config table is what `V21TX_create` copies onto the handle's

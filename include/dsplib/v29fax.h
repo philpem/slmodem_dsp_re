@@ -1,3 +1,4 @@
+#include "dsplib/period_byte_layout.h"
 /**
  * @file v29fax.h
  * @brief ITU-T V.29 (fax): the receiver's entry points and the two
@@ -95,6 +96,126 @@
 
 #ifndef DSPLIB_V29FAX_H
 #define DSPLIB_V29FAX_H
+
+#include "dsplib/faxcfg.h"
+#include "dsplib/faxfifo.h"
+#include "dsplib/fpm_agc.h"
+#include "dsplib/fpm_fse.h"
+#include "dsplib/fpm_mrf.h"
+#include "dsplib/fpm_sre.h"
+#include "dsplib/fpm_sdm.h"
+#include "dsplib/sgd.h"
+#include "dsplib/v29data.h"
+
+struct fpm_mtd;
+struct fpm_tone;
+
+union v29_result_word {
+	int word;
+	struct { unsigned char status, flags, flags2, byte3; } byte;
+};
+
+/* Observed caller-owned status prefix; this does not bound the allocation. */
+struct v29_status_prefix {
+	short protocol, tx_bps, short_04, quality, short_08, short_0a, short_0c;
+	short short_0e, short_10, short_12;
+	unsigned char flags, flags2;
+};
+/* This bounds the observed report prefix, not the caller's allocation. */
+typedef char v29_status_prefix_flags_at_14[
+	__builtin_offsetof(struct v29_status_prefix, flags) == 0x14 ? 1 : -1];
+typedef char v29_status_prefix_end_16[
+	sizeof(struct v29_status_prefix) == 0x16 ? 1 : -1];
+
+struct v29_rx_decoder {
+	short mag_avg_far, mag_avg_near;
+	unsigned short i0, q0, i1, q1, i2, q2;
+	int sixteen_point;
+	unsigned short last;
+	short train_lfsr;
+	unsigned short train_count;
+	short short_001a;
+	unsigned short angle_prev;
+	unsigned short sym_count;
+};
+
+struct v29_rx_block {
+	int int_0000, int_0004, int_0008, int_000c;
+	int int_0010, int_0014;
+	union {
+		struct {
+			unsigned char flags_0018;
+			unsigned char pad_0019[3];
+		};
+		int flags_word_0018;
+	};
+	int int_001c, int_0020, int_0024;
+	struct v29_rx_decoder dec;
+	struct fpm_mrf mrf;
+	struct fpm_agc agc;
+	struct fpm_sre sre;
+	struct fpm_fse fse;
+	unsigned char pad_4f38[4];
+	struct fpm_sdm sdm;
+	short *buf_mrf, *buf_sre;
+	short dec_error_avg, dec_error_n, dec_error_limit, short_4f62;
+	short short_4f64, rms_ref, rms_n;
+	unsigned char pad_4f6a[2];
+};
+
+struct v29_rx_detector {
+	struct fpm_mtd *mtd;
+	struct fpm_tone *tone;
+	int int_0008;
+	short rate;
+	unsigned char pad_000e[2];
+	short (*handler)(void *, short *, short *, unsigned short *);
+	short state, state_count;
+	short *buf;
+	short gate_1c;
+	unsigned char pad_001e[2];
+	struct fpm_mtd *v21_mtd;
+	short *v21_buf;
+	short v21_samples, v21_enable;
+	struct fpm_agc v21_agc;
+};
+
+struct v29_rx {
+	struct v29rx_cfg cfg;
+	union v29_result_word result;
+	short *eq_out_i, *eq_out_q;
+	unsigned short *eq_n_out;
+	short *eq_icoeff, *eq_qcoeff;
+	short eq_taps;
+	unsigned char pad_0032[2];
+	int int_0034, int_0038;
+	short short_003c;
+	unsigned char pad_003e[2];
+	int int_0040, int_0044;
+	short short_0048;
+	unsigned char pad_004a[2];
+	struct v29_rx_detector *det;
+	struct v29_rx_block *rx;
+};
+
+struct v29_tx_params {
+	struct fax_fifo *fifo;
+	struct sgd *sgd;
+	int int_0008;
+	short rate;
+	unsigned char pad_000e[2];
+	short (*handler)(void *, unsigned short *, short *, short *);
+	short state, short_0016;
+	short scram_sr;
+	unsigned char pad_001a[2];
+};
+
+struct v29_tx_root {
+	struct v29tx_cfg cfg;
+	union v29_result_word result;
+	struct v29_tx_params *params;
+	struct v29tx *tx;
+};
 
 struct fpm_agc;
 struct fpm_fse;

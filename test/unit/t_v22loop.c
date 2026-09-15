@@ -174,7 +174,7 @@ regions_of(struct v22fp *fp, struct region *r)
 #define REGION(nm, ptr, bytes) \
 	do { r[n].name = (nm); r[n].p = (ptr); r[n].n = (bytes); n++; } while (0)
 
-	REGION("dsp->ra8", d->ra8, 0x18);
+	REGION("dsp->smc_ring.sym", d->smc_ring.sym, 0x18);
 	REGION("dsp->rx_scratch", d->rx_scratch, 0x154);
 	REGION("hdx->iir", h->iir, 0x20);
 	REGION("dsp->pps_coff_i", d->pps_coff_i, V22_PPS_COEFFS * 2);
@@ -246,7 +246,7 @@ blank_dsp(const struct v22fp_dsp *d)
 {
 	struct v22fp_dsp c = *d;
 
-	c.ra8 = NULL;
+	c.smc_ring.sym = NULL;
 	c.rx_scratch = NULL;
 	c.pps_coff_i = NULL;
 	c.pps_coff_q = NULL;

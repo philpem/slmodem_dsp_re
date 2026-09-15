@@ -22,6 +22,7 @@
  */
 
 #include "dsplib/v29data.h"
+#include "dsplib/v29fax.h"
 
 #include <stddef.h>
 
@@ -64,7 +65,7 @@ TxNoCarrierV29(void *modem, const unsigned short *data, short *out,
 
 	(void)data;			/* never read; see v29data.h */
 
-	fp = V29TX(modem);
+	fp = ((struct v29_tx_root *)modem)->tx;
 	ring = &fp->ring;
 	widx = ring->widx;
 	len = ring->len;
@@ -81,7 +82,7 @@ TxNoCarrierV29(void *modem, const unsigned short *data, short *out,
 	produced = FPM_PPS_filter(&fp->pps, ring, out, count);
 
 	/* Back through a FRESH read of the instance pointer, after the shaper. */
-	fp = V29TX(modem);
+	fp = ((struct v29_tx_root *)modem)->tx;
 	fp->ring.widx = widx;
 
 	return produced;

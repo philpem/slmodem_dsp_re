@@ -42,6 +42,9 @@
 #define DSPLIB_V17DEC_H
 
 #include "dsplib/fpm_fse.h"
+#include "dsplib/vtb.h"
+
+struct sgd;
 
 #ifdef __cplusplus
 extern "C" {
@@ -107,20 +110,18 @@ extern const short DECv17_MAG14400[128];
  * so the named ones land where the disassembly puts them.
  *
  * The two offsets `v17fax.h` already names line up and do not contradict
- * this: `V17RXS_SGD` is 0x2c, which is `ptr_0000` here, and
+ * this: `V17RXS_SGD` is 0x2c, which is `sgd` here, and
  * `V17RXS_PTR_0030` is 0x30, `struct vtb`'s first member `paths`.  A
  * `struct vtb` is 0x38 bytes (finding F3210), so it runs 0x30..0x67 and
  * `ang_prev` at 0x68 is the next thing the object writes -- an exact fit at
  * both ends, which corroborates the whole layout.
  *
- * `vtb` is a byte array and the four rate slicers cast it, for the reason
- * `v32dec.h` gives: `struct vtb` holds four pointers, so naming it as the
- * struct would make this type a different size in the 64-bit build and
- * every offset after +0x04 in this comment false.
+ * `vtb` is the existing decoder type in `vtb.h`; on the period i386 ABI its
+ * measured 0x38-byte extent preserves the receiver-state layout exactly.
  */
 struct v17_dec {
-	unsigned char ptr_0000[4];	/* +0x00 rx state + 0x2c; V17RXS_SGD */
-	unsigned char vtb[0x38];	/* +0x04 VTB_decoder's state, F3210  */
+	struct sgd *sgd;			/* +0x00 rx state + 0x2c; V17RXS_SGD */
+	struct vtb vtb;			/* +0x04 VTB_decoder's state, F3210  */
 	short ang_prev;			/* +0x3c previous angle (AB only)    */
 	short sym_i;			/* +0x3e the symbol just decided     */
 	short sym_q;			/* +0x40                             */

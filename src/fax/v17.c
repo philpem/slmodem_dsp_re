@@ -118,30 +118,28 @@
 				 * coder tables, see v17data.h              */
 #include "dsplib/vtb.h"
 
-/* The instances are not modelled; see v17fax.h.  These are the only accessors. */
-#define FIELD(obj, off)		((unsigned char *)(obj) + (off))
-#define FIELD_PTR(obj, off)	(*(void **)(void *)FIELD((obj), (off)))
-
-#define AT_S(p, off)		(*(short *)(void *)FIELD((p), (off)))
-#define AT_US(p, off)		(*(unsigned short *)(void *)FIELD((p), (off)))
-#define AT_I(p, off)		(*(int *)(void *)FIELD((p), (off)))
-#define AT_B(p, off)		(*(unsigned char *)FIELD((p), (off)))
-#define AT_SB(p, off)		(*(signed char *)(void *)FIELD((p), (off)))
-
 /*
  * The SMCv17 coder's fields, offset from `smc` (== `V17FP_SMC`) rather than
  * from `fp` -- `V17FP_SMC_SHORT_NN - V17FP_SMC`, tied to those constants
  * rather than restated.  See v17data.h for the derivation.
  */
-#define SMC_MODE(smc)		AT_SB((smc), 0x00 - 0x00)
-#define SMC_QUAD(smc)		AT_S((smc), V17FP_SMC_SHORT_06 - V17FP_SMC)
-#define SMC_STATE(smc)		AT_S((smc), V17FP_SMC_SHORT_08 - V17FP_SMC)
-#define SMC_TRELLIS(smc)	AT_S((smc), V17FP_SMC_SHORT_0C - V17FP_SMC)
-#define SMC_PREV(smc)		AT_S((smc), V17FP_SMC_SHORT_0E - V17FP_SMC)
-#define SMC_NBITS(smc)		AT_US((smc), V17FP_SMC_SHORT_12 - V17FP_SMC)
+#define SMC_MODE(smc)		(((struct v17_smc *)(smc))->mode.byte.value)
+#define SMC_QUAD(smc)		(((struct v17_smc *)(smc))->quad)
+#define SMC_STATE(smc)		(((struct v17_smc *)(smc))->state)
+#define SMC_TRELLIS(smc)	(((struct v17_smc *)(smc))->trellis)
+#define SMC_PREV(smc)		(((struct v17_smc *)(smc))->prev)
+#define SMC_NBITS(smc)		(((struct v17_smc *)(smc))->nbits)
 
-#define CTL(modem)		FIELD_PTR((modem), V17RX_OBJ_CTL)
-#define RXS(modem)		FIELD_PTR((modem), V17RX_OBJ_STATE)
+#define RXROOT(modem)		((struct v17rx *)(modem))
+#define TXROOT(modem)		((struct v17tx *)(modem))
+#define RXCTL(modem)		(RXROOT(modem)->ctl)
+#define RXSTATE(modem)		(RXROOT(modem)->state)
+#define TXPRIV(modem)		(TXROOT(modem)->priv)
+#define TXBLOCK(modem)		(TXROOT(modem)->fp)
+#define CTL(modem)		RXCTL(modem)
+#define RXS(modem)		RXSTATE(modem)
+#define TXP(modem)		TXPRIV(modem)
+#define TXFP(modem)		TXBLOCK(modem)
 
 /*
  * The dispatch slot as an lvalue.  `V17RX_modem` already spells the CALL this
@@ -149,17 +147,17 @@
  * a link-time reference exactly as a call is (CLAUDE.md, finding F8493).
  */
 #define CTL_PROCESS(modem)	\
-	(*(v17rx_process_fn *)(void *)FIELD(CTL(modem), V17RXC_PROCESS))
+	(((struct v17rx_priv *)CTL(modem))->process)
 
 /*
  * The four FPM objects the receive chain runs, reached the long way round
  * because the block they tile is not modelled.  See F8854 for the tiling and
  * v17fax.h for each offset's evidence.
  */
-#define RXS_MRF(rxs)	((struct fpm_mrf *)(void *)FIELD((rxs), V17RXS_MRF))
-#define RXS_AGC(rxs)	((struct fpm_agc *)(void *)FIELD((rxs), V17RXS_AGC))
-#define RXS_SRE(rxs)	((struct fpm_sre *)(void *)FIELD((rxs), V17RXS_SRE))
-#define RXS_FSE(rxs)	((struct fpm_fse *)(void *)FIELD((rxs), V17RXS_FSE))
+#define RXS_MRF(rxs)	(&((struct v17rx_state *)(rxs))->mrf)
+#define RXS_AGC(rxs)	(&((struct v17rx_state *)(rxs))->agc.value)
+#define RXS_SRE(rxs)	(&((struct v17rx_state *)(rxs))->sre)
+#define RXS_FSE(rxs)	(&((struct v17rx_state *)(rxs))->fse)
 
 /*
  * The slicers' view of the receiver state, `fpm_fse_cfg::owner`.  `v17dec.h`
@@ -167,7 +165,7 @@
  * `lea 0x2c(%ebp)` at 0x0974a1, and `V17RXS_SGD` is that struct's first
  * member -- so the two names are one address and this is the writer of both.
  */
-#define RXS_DEC(rxs)	((struct v17_dec *)(void *)FIELD((rxs), V17RXS_SGD))
+#define RXS_DEC(rxs)	(&((struct v17rx_state *)(rxs))->dec)
 
 /* --------------------------------------------------------------------- */
 
@@ -285,8 +283,8 @@ V17RX_create(void *modem, const struct v17rx_cfg *params)
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("New allocation\n");
 		modem = sysdep_malloc(0x64);
-		FIELD_PTR(modem, V17RX_OBJ_CTL) = NULL;
-		FIELD_PTR(modem, V17RX_OBJ_STATE) = NULL;
+		RXROOT(modem)->ctl = NULL;
+		RXROOT(modem)->state = NULL;
 		owned = 1;
 	}
 
@@ -295,26 +293,26 @@ V17RX_create(void *modem, const struct v17rx_cfg *params)
 
 	/* See the head of this function: 40 bytes, one struct assignment. */
 	if (params != NULL)
-		*(struct v17rx_cfg *)modem = *params;
+		RXROOT(modem)->cfg = *params;
 	else
-		*(struct v17rx_cfg *)modem = V17RX_CFG;
+		RXROOT(modem)->cfg = V17RX_CFG;
 
 	/* ---- the control block ---------------------------------------- */
 
 	ctl_fresh = 0;
 	if (CTL(modem) == NULL) {
-		FIELD_PTR(modem, V17RX_OBJ_CTL) = sysdep_malloc(0x5c);
+		RXROOT(modem)->ctl = (struct v17rx_priv *)sysdep_malloc(0x5c);
 		/*
 		 * Three handles and nothing else.  The other 0x4c bytes of the
 		 * block keep whatever the allocator left until the code below
 		 * writes them, which is why `t_v17rxcreate.c` compares the
 		 * whole 0x5c under the harness's 0xa5 fill.
 		 */
-		FIELD_PTR(CTL(modem), V17RXC_MTD) = NULL;
-		FIELD_PTR(CTL(modem), V17RXC_TONE) = NULL;
-		FIELD_PTR(CTL(modem), V17RXC_SCRATCH) = sysdep_malloc(0x140);
-		FIELD_PTR(CTL(modem), V17RXC_BUF2) = sysdep_malloc(0x140);
-		FIELD_PTR(CTL(modem), V17RXC_MTD2) = NULL;
+		RXCTL(modem)->mtd = NULL;
+		RXCTL(modem)->tone = NULL;
+		RXCTL(modem)->scratch = (short *)sysdep_malloc(0x140);
+		RXCTL(modem)->buf2 = (short *)sysdep_malloc(0x140);
+		RXCTL(modem)->mtd2 = NULL;
 		ctl_fresh = 1;
 	}
 
@@ -328,8 +326,7 @@ V17RX_create(void *modem, const struct v17rx_cfg *params)
 	mtdcfg.tones = 2;
 	mtdcfg.ratio = 0x4ccd;
 	mtdcfg.min_level = 100;
-	FIELD_PTR(CTL(modem), V17RXC_MTD) = FPM_MTD_create(
-		(struct fpm_mtd *)FIELD_PTR(CTL(modem), V17RXC_MTD), &mtdcfg);
+	RXCTL(modem)->mtd = FPM_MTD_create(RXCTL(modem)->mtd, &mtdcfg);
 
 	/*
 	 * The notch the demodulator's pre-pass runs, retuned from the built-in
@@ -338,16 +335,14 @@ V17RX_create(void *modem, const struct v17rx_cfg *params)
 	 */
 	tonecfg = FPM_TONE_CFG;
 	tonecfg.freq = 1800;
-	FIELD_PTR(CTL(modem), V17RXC_TONE) = FPM_TONE_create(
-		(struct fpm_tone *)FIELD_PTR(CTL(modem), V17RXC_TONE),
-		&tonecfg);
+	RXCTL(modem)->tone = FPM_TONE_create(RXCTL(modem)->tone, &tonecfg);
 
-	AT_S(CTL(modem), V17RXC_STATE) = V17RX_STATE_START;
-	AT_S(CTL(modem), V17RXC_COUNTDOWN) = 0;
-	AT_I(CTL(modem), V17RXC_INT_0008) = 0;
+	RXCTL(modem)->state = V17RX_STATE_START;
+	RXCTL(modem)->countdown = 0;
+	RXCTL(modem)->r08 = 0;
 	CTL_PROCESS(modem) = RxHdxStartV17;
-	AT_I(CTL(modem), V17RXC_INT_0010) =
-		((const struct v17rx_cfg *)modem)->int_0014;
+	RXCTL(modem)->r10 =
+		RXROOT(modem)->cfg.int_0014;
 
 	/*
 	 * The SECOND detector, and its band is V.21 CHANNEL 2 -- not V.17's.
@@ -361,15 +356,13 @@ V17RX_create(void *modem, const struct v17rx_cfg *params)
 	mtdcfg.tones = 2;
 	mtdcfg.ratio = 0x4ccd;
 	mtdcfg.min_level = 300;
-	FIELD_PTR(CTL(modem), V17RXC_MTD2) = FPM_MTD_create(
-		(struct fpm_mtd *)FIELD_PTR(CTL(modem), V17RXC_MTD2), &mtdcfg);
+	RXCTL(modem)->mtd2 = FPM_MTD_create(RXCTL(modem)->mtd2, &mtdcfg);
 
 	/* The only init in the function given the flag that is about it. */
-	FPM_AGC_init((struct fpm_agc *)(void *)FIELD(CTL(modem), V17RXC_AGC),
-		     &AGCv17_CFG, ctl_fresh);
+	FPM_AGC_init(&RXCTL(modem)->agc, &AGCv17_CFG, ctl_fresh);
 
-	AT_S(CTL(modem), V17RXC_OFFBAND) = 0;
-	AT_S(CTL(modem), V17RXC_SHORT_002E) = 0;
+	RXCTL(modem)->offband = 0;
+	RXCTL(modem)->r2e = 0;
 
 	/*
 	 * The bit rate to the four-value code, and the two DEAD STORES on the
@@ -378,23 +371,23 @@ V17RX_create(void *modem, const struct v17rx_cfg *params)
 	 * this same function clears all four bytes of that word before any
 	 * caller can see it.  Deviation D1220, reproduced.
 	 */
-	switch (AT_S(modem, V17RX_OBJ_RX_BPS)) {
+	switch (RXROOT(modem)->cfg.bit_rate) {
 	case 7200:
-		AT_US(CTL(modem), V17RXC_RATE_CODE) = V17RX_RATE_7200;
+		RXCTL(modem)->rate_code = V17RX_RATE_7200;
 		break;
 	case 9600:
-		AT_US(CTL(modem), V17RXC_RATE_CODE) = V17RX_RATE_9600;
+		RXCTL(modem)->rate_code = V17RX_RATE_9600;
 		break;
 	case 12000:
-		AT_US(CTL(modem), V17RXC_RATE_CODE) = V17RX_RATE_12000;
+		RXCTL(modem)->rate_code = V17RX_RATE_12000;
 		break;
 	case 14400:
-		AT_US(CTL(modem), V17RXC_RATE_CODE) = V17RX_RATE_14400;
+		RXCTL(modem)->rate_code = V17RX_RATE_14400;
 		break;
 	default:
-		AT_US(CTL(modem), V17RXC_RATE_CODE) = V17RX_RATE_14400;
-		AT_B(modem, V17RX_OBJ_RESULT_B1) |= V17RX_FLAG_ERROR;
-		AT_B(modem, V17RX_OBJ_RESULT) = V17RX_STATUS_DEFAULT;
+		RXCTL(modem)->rate_code = V17RX_RATE_14400;
+		RXROOT(modem)->result.byte.flags |= V17RX_FLAG_ERROR;
+		RXROOT(modem)->result.byte.status = V17RX_STATUS_DEFAULT;
 		break;
 	}
 
@@ -406,17 +399,18 @@ V17RX_create(void *modem, const struct v17rx_cfg *params)
 	 * and `fpm_fse_cfg::reserved34`.  What it MEANS is not established
 	 * here either.
 	 */
-	aux = ((const struct v17rx_cfg *)modem)->ptr_0024;
+	aux = RXROOT(modem)->cfg.ptr_0024;
 
 	if (RXS(modem) == NULL) {
-		FIELD_PTR(modem, V17RX_OBJ_STATE) = sysdep_malloc(0x4fbc);
+		RXROOT(modem)->state =
+			(struct v17rx_state *)sysdep_malloc(0x4fbc);
 		/*
 		 * NOTHING IS CLEARED HERE.  20,412 bytes of allocator fill,
 		 * and the writes below do not cover all of it -- see the
 		 * tiling note in v17fax.h for which spans stay untouched.
 		 */
-		FIELD_PTR(RXS(modem), V17RXS_BUF_MRF) = sysdep_malloc(0x140);
-		FIELD_PTR(RXS(modem), V17RXS_BUF_SRE) =
+		RXSTATE(modem)->buf_mrf = (short *)sysdep_malloc(0x140);
+		RXSTATE(modem)->buf_sre = (short *)
 			sysdep_malloc(V17RXS_SRE_MAX * (int)sizeof(short));
 	}
 
@@ -448,7 +442,7 @@ V17RX_create(void *modem, const struct v17rx_cfg *params)
 	srecfg.xclock = SREv17_xCLOCK;
 	srecfg.yclock = SREv17_yCLOCK;
 	srecfg.pll_k2 = SREv17_PLL_K2;
-	if (AT_I(CTL(modem), V17RXC_INT_0010) != 0) {
+	if (RXCTL(modem)->r10 != 0) {
 		srecfg.settle = 0x30;
 		srecfg.pll_k1 = SREv17_PLL_K1_S;
 	} else {
@@ -490,11 +484,11 @@ V17RX_create(void *modem, const struct v17rx_cfg *params)
 	fsecfg = FPM_FSE_CFG;
 	fsecfg.block = 0x90;
 	fsecfg.interp = 3;
-	if (AT_I(CTL(modem), V17RXC_INT_0010) != 0) {
+	if (RXCTL(modem)->r10 != 0) {
 		fsecfg.icoff = (const short *)
-			FIELD_PTR(modem, V17RX_OBJ_COEFSAVE0);
+			RXROOT(modem)->cfg.coefsave0;
 		fsecfg.qcoff = (const short *)
-			FIELD_PTR(modem, V17RX_OBJ_COEFSAVE1);
+			RXROOT(modem)->cfg.coefsave1;
 		fsecfg.pll_k1 = CRRv17_PLL_K1_S;
 		fsecfg.train_sym = 0x100;
 	} else {
@@ -527,11 +521,11 @@ V17RX_create(void *modem, const struct v17rx_cfg *params)
 
 	/* ---- the slicers' own state ----------------------------------- */
 
-	rate = AT_S(CTL(modem), V17RXC_RATE_CODE);
+	rate = (short)RXCTL(modem)->rate_code;
 	RXS_DEC(RXS(modem))->sym_count = 0;
 	RXS_DEC(RXS(modem))->short_0066 = 3;
 	RXS_DEC(RXS(modem))->rate = rate;
-	RXS_DEC(RXS(modem))->short_train = AT_I(CTL(modem), V17RXC_INT_0010);
+	RXS_DEC(RXS(modem))->short_train = RXCTL(modem)->r10;
 	RXS_DEC(RXS(modem))->count = 0;
 	RXS_DEC(RXS(modem))->scram = 0;
 	RXS_DEC(RXS(modem))->ang_prev = 0;
@@ -562,7 +556,7 @@ V17RX_create(void *modem, const struct v17rx_cfg *params)
 	 * the reason the zeroing loop below can walk an uninitialised pointer.
 	 * D1222.
 	 */
-	v = (struct vtb *)(void *)RXS_DEC(RXS(modem))->vtb;
+	v = &RXS_DEC(RXS(modem))->vtb;
 	if (owned)
 		v->paths = sysdep_malloc(
 			16 * 8 * sizeof(struct vtb_path));
@@ -623,15 +617,15 @@ V17RX_create(void *modem, const struct v17rx_cfg *params)
 	/* ---- the training-sequence engine ----------------------------- */
 
 	if (owned)
-		FIELD_PTR(RXS(modem), V17RXS_SGD) = NULL;
+		RXSTATE(modem)->dec.sgd = NULL;
 
 	sgdcfg = SGD_CFG;
 	sgdcfg.sym_bits = 2;
 	sgdcfg.det.ref_margin = 0x2000;
 	sgdcfg.det.pat_match = 0x111;
 	sgdcfg.det.pat_mask = 0xffff;
-	FIELD_PTR(RXS(modem), V17RXS_SGD) = SGD_create(
-		(struct sgd *)FIELD_PTR(RXS(modem), V17RXS_SGD), &sgdcfg);
+	RXSTATE(modem)->dec.sgd = SGD_create(RXSTATE(modem)->dec.sgd,
+						       &sgdcfg);
 
 	/*
 	 * The descrambler: V.17's own 1 + x^-18 + x^-23, over a word carrying
@@ -640,27 +634,26 @@ V17RX_create(void *modem, const struct v17rx_cfg *params)
 	 * source's shape as a copy plus three assignments.
 	 */
 	sdmcfg = SDM_CFG;
-	sdmcfg.nbits = (short)(AT_US(CTL(modem), V17RXC_RATE_CODE) + 3);
+	sdmcfg.nbits = (short)(RXCTL(modem)->rate_code + 3);
 	sdmcfg.tap1 = 0x12;
 	sdmcfg.tap2 = 0x17;
-	SDM_init((struct fpm_sdm *)(void *)FIELD(RXS(modem), V17RXS_SDM),
-		 &sdmcfg);
+	SDM_init(&RXSTATE(modem)->sdm, &sdmcfg);
 
 	/*
 	 * 160 entries of each chained buffer.  `V17RXS_BUF_MRF` is exactly
 	 * that long; `V17RXS_BUF_SRE` is `V17RXS_SRE_MAX` = 164, so its top
 	 * four entries keep the allocator's fill.  Deviation D1225.
 	 */
-	mrfbuf = (short *)FIELD_PTR(RXS(modem), V17RXS_BUF_MRF);
-	srebuf = (short *)FIELD_PTR(RXS(modem), V17RXS_BUF_SRE);
+	mrfbuf = RXSTATE(modem)->buf_mrf;
+	srebuf = RXSTATE(modem)->buf_sre;
 	for (i = 0; (short)i <= 0x9f; i++) {
 		mrfbuf[i] = 0;
 		srebuf[i] = 0;
 	}
 
-	AT_S(RXS(modem), V17RXS_QCOUNT) = 0;
-	AT_S(RXS(modem), V17RXS_QAVG) = 0;
-	AT_S(RXS(modem), V17RXS_SHORT_4FB2) = 0;
+	RXSTATE(modem)->qcount = 0;
+	RXSTATE(modem)->qavg = 0;
+	RXSTATE(modem)->r4fb2 = 0;
 
 	/*
 	 * The quality threshold `QualityDetectV17` judges its smoothed
@@ -669,41 +662,40 @@ V17RX_create(void *modem, const struct v17rx_cfg *params)
 	 * allocator left it, which `V17RXC_RATE_CODE`'s own writer above
 	 * makes unreachable.
 	 */
-	switch (AT_S(CTL(modem), V17RXC_RATE_CODE)) {
+	switch ((short)RXCTL(modem)->rate_code) {
 	case V17RX_RATE_7200:
-		AT_S(RXS(modem), V17RXS_SHORT_4FB0) = 0xa28;
+		RXSTATE(modem)->r4fb0 = 0xa28;
 		break;
 	case V17RX_RATE_9600:
-		AT_S(RXS(modem), V17RXS_SHORT_4FB0) = 0x514;
+		RXSTATE(modem)->r4fb0 = 0x514;
 		break;
 	case V17RX_RATE_12000:
-		AT_S(RXS(modem), V17RXS_SHORT_4FB0) = 0x341;
+		RXSTATE(modem)->r4fb0 = 0x341;
 		break;
 	case V17RX_RATE_14400:
-		AT_S(RXS(modem), V17RXS_SHORT_4FB0) = 0x1c2;
+		RXSTATE(modem)->r4fb0 = 0x1c2;
 		break;
 	}
 
-	AT_I(RXS(modem), V17RXS_INT_0000) = 1;
-	AT_I(RXS(modem), V17RXS_INT_0004) = 1;
-	AT_I(RXS(modem), V17RXS_INT_0008) = 1;
-	AT_I(RXS(modem), V17RXS_INT_000C) = 0;
-	AT_I(RXS(modem), V17RXS_INT_0010) = 1;
-	AT_I(RXS(modem), V17RXS_INT_0014) = 0;
-	AT_I(RXS(modem), V17RXS_INT_0018) = 1;
+	RXSTATE(modem)->r00 = 1;
+	RXSTATE(modem)->r04 = 1;
+	RXSTATE(modem)->r08 = 1;
+	RXSTATE(modem)->r0c = 0;
+	RXSTATE(modem)->r10 = 1;
+	RXSTATE(modem)->r14 = 0;
+	RXSTATE(modem)->r18 = 1;
 	/*
 	 * A FULL `int`, and that is what settles the width `v17fax.h` had to
 	 * guess: `V17RX_status` reads bit 0 of the byte and this writes
 	 * `movl $0x1` over all four.  Finding F9474.
 	 */
-	AT_I(RXS(modem), V17RXS_INT_001C) = 1;
-	AT_I(RXS(modem), V17RXS_INT_0020) = 0;
-	AT_US(RXS(modem), V17RXS_RATE_CODE) =
-		AT_US(CTL(modem), V17RXC_RATE_CODE);
-	AT_I(RXS(modem), V17RXS_INT_0028) = 0;
-	AT_S(RXS(modem), V17RXS_SHORT_4FB4) = 1;
-	AT_S(RXS(modem), V17RXS_RMS_REF) = 0;
-	AT_S(RXS(modem), V17RXS_RMS_PHASE) = 0;
+	RXSTATE(modem)->r1c = 1;
+	RXSTATE(modem)->r20 = 0;
+	RXSTATE(modem)->rate_code = RXCTL(modem)->rate_code;
+	RXSTATE(modem)->r28 = 0;
+	RXSTATE(modem)->energy_watch = 1;
+	RXSTATE(modem)->rms_ref = 0;
+	RXSTATE(modem)->rms_phase = 0;
 
 	/* ---- what the instance hands back to its caller --------------- */
 
@@ -713,9 +705,9 @@ V17RX_create(void *modem, const struct v17rx_cfg *params)
 	 * of `V17RX_OBJ_RESULT_B1` -- which nothing else in the object writes
 	 * and nothing at all reads -- are set.  Finding F9473.
 	 */
-	AT_I(modem, V17RX_OBJ_RESULT) = 0;
-	AT_B(modem, V17RX_OBJ_RESULT_B1) |= V17RX_FLAG_BIT4 | V17RX_FLAG_BIT6;
-	AT_B(modem, V17RX_OBJ_RESULT) = V17RX_STATUS_START;
+	RXROOT(modem)->result.word = 0;
+	RXROOT(modem)->result.byte.flags |= V17RX_FLAG_BIT4 | V17RX_FLAG_BIT6;
+	RXROOT(modem)->result.byte.status = V17RX_STATUS_START;
 
 	/*
 	 * Six handles copied out of the equaliser the call above has just
@@ -724,20 +716,20 @@ V17RX_create(void *modem, const struct v17rx_cfg *params)
 	 * inference.  The six zeroed at +0x44..+0x58 have no evidence of role
 	 * anywhere and are left unnamed.  Finding F9476.
 	 */
-	FIELD_PTR(modem, V17RX_OBJ_OUT_I) = RXS_FSE(RXS(modem))->out_i;
-	FIELD_PTR(modem, V17RX_OBJ_OUT_Q) = RXS_FSE(RXS(modem))->out_q;
-	FIELD_PTR(modem, V17RX_OBJ_N_OUT) = &RXS_FSE(RXS(modem))->n_out;
-	FIELD_PTR(modem, V17RX_OBJ_ICOEFF) = RXS_FSE(RXS(modem))->icoeff;
-	FIELD_PTR(modem, V17RX_OBJ_QCOEFF) = RXS_FSE(RXS(modem))->qcoeff;
-	AT_US(modem, V17RX_OBJ_TAPS) = (unsigned short)
+	RXROOT(modem)->out_i = RXS_FSE(RXS(modem))->out_i;
+	RXROOT(modem)->out_q = RXS_FSE(RXS(modem))->out_q;
+	RXROOT(modem)->n_out = &RXS_FSE(RXS(modem))->n_out;
+	RXROOT(modem)->icoeff = RXS_FSE(RXS(modem))->icoeff;
+	RXROOT(modem)->qcoeff = RXS_FSE(RXS(modem))->qcoeff;
+	RXROOT(modem)->taps = (unsigned short)
 		RXS_FSE(RXS(modem))->cfg.taps;
 
-	AT_I(modem, V17RX_OBJ_INT_0044) = 0;
-	AT_I(modem, V17RX_OBJ_INT_0048) = 0;
-	AT_S(modem, V17RX_OBJ_SHORT_004C) = 0;
-	AT_I(modem, V17RX_OBJ_INT_0050) = 0;
-	AT_I(modem, V17RX_OBJ_INT_0054) = 0;
-	AT_S(modem, V17RX_OBJ_SHORT_0058) = 0;
+	RXROOT(modem)->r44 = 0;
+	RXROOT(modem)->r48 = 0;
+	RXROOT(modem)->r4c = 0;
+	RXROOT(modem)->r50 = 0;
+	RXROOT(modem)->r54 = 0;
+	RXROOT(modem)->r58 = 0;
 
 	return modem;
 }
@@ -751,22 +743,22 @@ V17RX_create(void *modem, const struct v17rx_cfg *params)
 void
 V17RX_delete(void *modem)
 {
-	SGD_delete((struct sgd *)FIELD_PTR(RXS(modem), V17RXS_SGD));
-	sysdep_free(FIELD_PTR(RXS(modem), V17RXS_PTR_0030));
+	SGD_delete(RXSTATE(modem)->dec.sgd);
+	sysdep_free(RXSTATE(modem)->dec.vtb.paths);
 
 	FPM_FSE_free(RXS_FSE(RXS(modem)));
 	FPM_SRE_free(RXS_SRE(RXS(modem)));
 	FPM_MRF_free(RXS_MRF(RXS(modem)));
 
-	sysdep_free(FIELD_PTR(RXS(modem), V17RXS_BUF_SRE));
-	sysdep_free(FIELD_PTR(RXS(modem), V17RXS_BUF_MRF));
+	sysdep_free(RXSTATE(modem)->buf_sre);
+	sysdep_free(RXSTATE(modem)->buf_mrf);
 	sysdep_free(RXS(modem));
 
-	FPM_MTD_delete((struct fpm_mtd *)FIELD_PTR(CTL(modem), V17RXC_MTD));
-	FPM_TONE_delete((struct fpm_tone *)FIELD_PTR(CTL(modem), V17RXC_TONE));
-	sysdep_free(FIELD_PTR(CTL(modem), V17RXC_SCRATCH));
-	sysdep_free(FIELD_PTR(CTL(modem), V17RXC_BUF2));
-	FPM_MTD_delete((struct fpm_mtd *)FIELD_PTR(CTL(modem), V17RXC_MTD2));
+	FPM_MTD_delete(RXCTL(modem)->mtd);
+	FPM_TONE_delete(RXCTL(modem)->tone);
+	sysdep_free(RXCTL(modem)->scratch);
+	sysdep_free(RXCTL(modem)->buf2);
+	FPM_MTD_delete(RXCTL(modem)->mtd2);
 	sysdep_free(CTL(modem));
 
 	sysdep_free(modem);
@@ -868,8 +860,8 @@ struct v17tx_cfg V17TX_CFG = {
 void *
 V17TX_create(void *modem, const struct v17tx_cfg *params)
 {
-	void *prm;
-	void *fp;
+	struct v17tx_priv *prm;
+	struct v17tx_fp *fp;
 	void *existing;
 	int fresh = 0;
 
@@ -878,8 +870,8 @@ V17TX_create(void *modem, const struct v17tx_cfg *params)
 
 	if (modem == 0) {
 		modem = sysdep_malloc(0x2c);
-		FIELD_PTR(modem, V17TX_OBJ_PARAMS) = 0;
-		FIELD_PTR(modem, V17TX_OBJ_FP) = 0;
+		TXROOT(modem)->priv = 0;
+		TXROOT(modem)->fp = 0;
 		fresh = 1;
 
 		if (DSPLIB_DEBUG_ON())
@@ -890,35 +882,35 @@ V17TX_create(void *modem, const struct v17tx_cfg *params)
 	}
 
 	if (params != 0)
-		*(struct v17tx_cfg *)modem = *params;
+		TXROOT(modem)->cfg = *params;
 	else
-		*(struct v17tx_cfg *)modem = V17TX_CFG;
+		TXROOT(modem)->cfg = V17TX_CFG;
 
-	AT_I(modem, V17TX_OBJ_RESULT) = 0;
-	*FIELD(modem, V17TX_OBJ_RESULT_B1) |= 0x58;
-	AT_B(modem, V17TX_OBJ_RESULT) = 1;
+	TXROOT(modem)->result.word = 0;
+	TXROOT(modem)->result.byte.flags |= 0x58;
+	TXROOT(modem)->result.byte.status = 1;
 
 	/* ---- the parameter/half-duplex block, the FIFO and the SGD ------- */
 
-	prm = FIELD_PTR(modem, V17TX_OBJ_PARAMS);
+	prm = TXP(modem);
 	if (prm == 0) {
 		prm = sysdep_malloc(0x20);
-		FIELD_PTR(modem, V17TX_OBJ_PARAMS) = prm;
-		FIELD_PTR(prm, V17TXP_FIFO) = 0;
-		FIELD_PTR(prm, V17TXP_SGD) = 0;
+		TXROOT(modem)->priv = (struct v17tx_priv *)prm;
+		TXPRIV(modem)->fifo = 0;
+		TXPRIV(modem)->sgd = 0;
 	}
 
 	{
 		struct fifo_cfg fc;
 		unsigned short n = (unsigned short)
-			((struct v17tx_cfg *)modem)->fifo_size_factor;
+			TXROOT(modem)->cfg.fifo_size_factor;
 
 		fc.word0 = FIFO_CFG.word0;
 		fc.size = (short)(n * 3 * 16);
 		fc.fill = 0;
 
-		existing = FIELD_PTR(prm, V17TXP_FIFO);
-		FIELD_PTR(prm, V17TXP_FIFO) =
+		existing = TXPRIV(modem)->fifo;
+		TXPRIV(modem)->fifo =
 			FIFO_create((struct fax_fifo *)existing, &fc);
 	}
 
@@ -927,48 +919,46 @@ V17TX_create(void *modem, const struct v17tx_cfg *params)
 
 		gcfg.sym_bits = 2;
 
-		existing = FIELD_PTR(prm, V17TXP_SGD);
-		FIELD_PTR(prm, V17TXP_SGD) =
-			SGD_create((struct sgd *)existing, &gcfg);
+		existing = TXPRIV(modem)->sgd;
+		TXPRIV(modem)->sgd = SGD_create((struct sgd *)existing, &gcfg);
 	}
 
 	/* ---- the half-duplex machine's own state ------------------------- */
 
-	prm = FIELD_PTR(modem, V17TX_OBJ_PARAMS);
-	AT_S(prm, V17TXP_STATE) = V17TX_STATE_START;
-	AT_S(prm, V17TXP_SHORT_001A) = 0;
-	AT_S(prm, V17TXP_NOCARRIER_SYM) = 4;
-	AT_I(prm, V17TXP_INT_0008) = 0;
-	*(v17tx_process_fn *)(void *)FIELD(prm, V17TXP_PROCESS) = TxHdxStartV17;
-	AT_I(prm, V17TXP_INT_000C) = ((struct v17tx_cfg *)modem)->int_0018;
+	prm = TXP(modem);
+	TXPRIV(modem)->state = V17TX_STATE_START;
+	TXPRIV(modem)->countdown = 0;
+	TXPRIV(modem)->no_carrier_sym = 4;
+	TXPRIV(modem)->r08 = 0;
+	TXPRIV(modem)->process = TxHdxStartV17;
+	((struct v17tx_priv *)prm)->r0c = TXROOT(modem)->cfg.int_0018;
 
-	if (((struct v17tx_cfg *)modem)->bitrate == 9600) {
-		AT_S(prm, V17TXP_MODE) = 1;
-	} else if (((struct v17tx_cfg *)modem)->bitrate == 12000) {
-		AT_S(prm, V17TXP_MODE) = 2;
-	} else if (((struct v17tx_cfg *)modem)->bitrate == 7200) {
-		AT_S(prm, V17TXP_MODE) = 0;
-	} else if (((struct v17tx_cfg *)modem)->bitrate == 14400) {
-		AT_S(prm, V17TXP_MODE) = 3;
+	if (TXROOT(modem)->cfg.bitrate == 9600) {
+		TXPRIV(modem)->mode = 1;
+	} else if (TXROOT(modem)->cfg.bitrate == 12000) {
+		TXPRIV(modem)->mode = 2;
+	} else if (TXROOT(modem)->cfg.bitrate == 7200) {
+		TXPRIV(modem)->mode = 0;
+	} else if (TXROOT(modem)->cfg.bitrate == 14400) {
+		TXPRIV(modem)->mode = 3;
 	} else {
-		AT_S(prm, V17TXP_MODE) = 3;
-		*FIELD(modem, V17TX_OBJ_RESULT_B1) |= V17TX_RESULT_B1_BIT1;
-		AT_B(modem, V17TX_OBJ_RESULT) = V17TX_RESULT_BYTE_07;
+		TXPRIV(modem)->mode = 3;
+		TXROOT(modem)->result.byte.flags |= V17TX_RESULT_B1_BIT1;
+		TXROOT(modem)->result.byte.status = V17TX_RESULT_BYTE_07;
 	}
 
 	/* ---- the private block: the ring, the scrambler, the symbol coder
 	 * and the pulse shaper ---------------------------------------------- */
 
-	fp = FIELD_PTR(modem, V17TX_OBJ_FP);
+	fp = TXFP(modem);
 	if (fp == 0) {
 		fp = sysdep_malloc(0x90);
-		FIELD_PTR(modem, V17TX_OBJ_FP) = fp;
-		FIELD_PTR(fp, V17FP_PTR_0010) = sysdep_malloc(0x64);
+		TXROOT(modem)->fp = (struct v17tx_fp *)fp;
+		TXBLOCK(modem)->ring.sym = (short *)sysdep_malloc(0x64);
 	}
 
 	{
-		struct fpm_smc_ring *ring = (struct fpm_smc_ring *)(void *)
-			FIELD(fp, V17FP_SMC_RING);
+		struct fpm_smc_ring *ring = &TXBLOCK(modem)->ring;
 		short i;
 
 		ring->i = 0;
@@ -977,7 +967,6 @@ V17TX_create(void *modem, const struct v17tx_cfg *params)
 		ring->ridx = 0;
 		ring->len = 0x32;
 
-		ring->sym = (short *)FIELD_PTR(fp, V17FP_PTR_0010);
 		for (i = 0; i <= 0x31; i++)
 			ring->sym[i] = 0;
 	}
@@ -989,7 +978,7 @@ V17TX_create(void *modem, const struct v17tx_cfg *params)
 		dcfg.tap1 = 0x12;
 		dcfg.tap2 = 0x17;
 
-		SDM_init((struct fpm_sdm *)(void *)FIELD(fp, V17FP_SDM), &dcfg);
+		SDM_init(&TXBLOCK(modem)->sdm, &dcfg);
 	}
 
 	{
@@ -997,7 +986,7 @@ V17TX_create(void *modem, const struct v17tx_cfg *params)
 
 		scfg[0] = SMCv17_CFG[0];
 		scfg[1] = SMCv17_CFG[1];
-		SMCv17_init(FIELD(fp, V17FP_SMC), scfg);
+		SMCv17_init(&TXBLOCK(modem)->smc, scfg);
 	}
 
 	{
@@ -1006,22 +995,21 @@ V17TX_create(void *modem, const struct v17tx_cfg *params)
 		pcfg.phases = 10;
 		pcfg.step = 3;
 		pcfg.mapped = 1;
-		pcfg.scale = V17TX_PPS_SCALE[AT_S(prm, V17TXP_MODE)];
+		pcfg.scale = V17TX_PPS_SCALE[TXPRIV(modem)->mode];
 		pcfg.step_adj = 0;
 		pcfg.imap = SMCv17_IMAP4;
 		pcfg.qmap = SMCv17_QMAP4;
 		pcfg.coeff_i = PPSv17_ICOFFS;
 		pcfg.coeff_q = PPSv17_QCOFFS;
 		pcfg.coeffs = 120;
-		pcfg.aux = (void *)(long)((struct v17tx_cfg *)modem)->int_001c;
+		pcfg.aux = (void *)(long)TXROOT(modem)->cfg.int_001c;
 
-		FPM_PPS_init((struct fpm_pps *)(void *)FIELD(fp, V17FP_PPS),
-			     &pcfg, fresh);
+		FPM_PPS_init(&TXBLOCK(modem)->pps, &pcfg, fresh);
 	}
 
-	FIELD_PTR(fp, V17FP_ENCODERS) = (void *)SMCv17_encoder_dif;
-	FIELD_PTR(fp, V17FP_ENCODERS + 4) = (void *)SMCv17_encoder_abs;
-	FIELD_PTR(fp, V17FP_ENCODERS + 8) = (void *)SMCv17_encoder_tcm;
+	TXBLOCK(modem)->encoders[0] = SMCv17_encoder_dif;
+	TXBLOCK(modem)->encoders[1] = SMCv17_encoder_abs;
+	TXBLOCK(modem)->encoders[2] = (v17_encoder_fn)SMCv17_encoder_tcm;
 
 	return modem;
 }
@@ -1034,18 +1022,13 @@ V17TX_create(void *modem, const struct v17tx_cfg *params)
 void
 V17TX_delete(void *modem)
 {
-	FPM_PPS_free((struct fpm_pps *)(void *)
-			FIELD(FIELD_PTR(modem, V17TX_OBJ_FP), V17FP_PPS));
-	sysdep_free(FIELD_PTR(FIELD_PTR(modem, V17TX_OBJ_FP), V17FP_PTR_0010));
-	sysdep_free(FIELD_PTR(modem, V17TX_OBJ_FP));
+	FPM_PPS_free(&TXBLOCK(modem)->pps);
+	sysdep_free(TXBLOCK(modem)->ring.sym);
+	sysdep_free(TXBLOCK(modem));
 
-	SGD_delete((struct sgd *)
-			FIELD_PTR(FIELD_PTR(modem, V17TX_OBJ_PARAMS),
-				  V17TXP_SGD));
-	FIFO_delete((struct fax_fifo *)
-			FIELD_PTR(FIELD_PTR(modem, V17TX_OBJ_PARAMS),
-				  V17TXP_FIFO));
-	sysdep_free(FIELD_PTR(modem, V17TX_OBJ_PARAMS));
+	SGD_delete(TXPRIV(modem)->sgd);
+	FIFO_delete(TXPRIV(modem)->fifo);
+	sysdep_free(TXPRIV(modem));
 
 	sysdep_free(modem);
 }
@@ -1149,12 +1132,12 @@ V17RX_modem(void *modem, short *in, short *out, unsigned short *count)
 	short before;
 	unsigned short left;
 
-	*FIELD(modem, V17RX_OBJ_RESULT_B1) &=
+	RXROOT(modem)->result.byte.flags &=
 		(unsigned char)~V17RX_FLAG_ERROR;
 
 	total = 0;
 	do {
-		void *ctl;
+		struct v17rx_priv *ctl;
 		short got;
 
 		/*
@@ -1165,8 +1148,8 @@ V17RX_modem(void *modem, short *in, short *out, unsigned short *count)
 		 */
 		before = (short)*count;
 
-		ctl = FIELD_PTR(modem, V17RX_OBJ_CTL);
-		got = (*(v17rx_process_fn *)(void *)FIELD(ctl, V17RXC_PROCESS))
+		ctl = RXCTL(modem);
+		got = ctl->process
 				(modem, in, out, count);
 
 		left = *count;
@@ -1177,7 +1160,7 @@ V17RX_modem(void *modem, short *in, short *out, unsigned short *count)
 
 	*count = (unsigned short)total;
 
-	return AT_I(modem, V17RX_OBJ_RESULT);
+	return RXROOT(modem)->result.word;
 }
 
 /* --------------------------------------------------------------------- */
@@ -1217,12 +1200,12 @@ RxHdxDataV17(void *modem, short *in, short *out, unsigned short *count)
 	unsigned short n;
 	short r;
 
-	AT_B(modem, V17RX_OBJ_RESULT_B1) |= V17RX_FLAG_CARRIER;
-	AT_B(modem, V17RX_OBJ_RESULT) = V17RX_STATUS_DATA;
+	RXROOT(modem)->result.byte.flags |= V17RX_FLAG_CARRIER;
+	RXROOT(modem)->result.byte.status = V17RX_STATUS_DATA;
 
 	if (DataCarrierDetectV17(modem, in, *count) == 0
-	    || AT_I(CTL(modem), V17RXC_INT_0008) != 0) {
-		AT_B(modem, V17RX_OBJ_RESULT_B1) &=
+	    || RXCTL(modem)->r08 != 0) {
+		RXROOT(modem)->result.byte.flags &=
 			(unsigned char)~V17RX_FLAG_CARRIER;
 		*count = 0;
 		return 0;
@@ -1234,10 +1217,10 @@ RxHdxDataV17(void *modem, short *in, short *out, unsigned short *count)
 
 	r = (short)(QualityDetectV17(modem) != V17_QUALITY_UNRELIABLE ? n : 0);
 
-	AT_B(modem, V17RX_OBJ_RESULT_B1) &=
+	RXROOT(modem)->result.byte.flags &=
 		(unsigned char)~V17RX_FLAG_LOW_SNR;
 	if (GetSNRV17(modem) <= V17RX_SNR_THRESHOLD)
-		AT_B(modem, V17RX_OBJ_RESULT_B1) |= V17RX_FLAG_LOW_SNR;
+		RXROOT(modem)->result.byte.flags |= V17RX_FLAG_LOW_SNR;
 
 	return r;
 }
@@ -1254,7 +1237,7 @@ RxHdxDataV17(void *modem, short *in, short *out, unsigned short *count)
 short
 RxHdxErrorV17(void *modem, short *in, short *out, unsigned short *count)
 {
-	AT_B(modem, V17RX_OBJ_RESULT_B1) |= V17RX_FLAG_ERROR;
+	RXROOT(modem)->result.byte.flags |= V17RX_FLAG_ERROR;
 
 	DemodDataV17(modem, in, (unsigned short *)(void *)out, *count);
 	*count = 0;
@@ -1298,31 +1281,31 @@ RxHdxErrorV17(void *modem, short *in, short *out, unsigned short *count)
 void
 RxNextStateV17(void *modem)
 {
-	switch (AT_S(CTL(modem), V17RXC_STATE)) {
+	switch (RXCTL(modem)->state) {
 	case V17RX_STATE_START:
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V17RX_STATE_START\n");
-		AT_S(CTL(modem), V17RXC_COUNTDOWN) = 5;
+		RXCTL(modem)->countdown = 5;
 		CTL_PROCESS(modem) = RxHdxEpochDetV17;
-		AT_S(CTL(modem), V17RXC_STATE) = V17RX_STATE_EPOCH_DET;
-		AT_B(modem, V17RX_OBJ_RESULT_B2) &=
+		RXCTL(modem)->state = V17RX_STATE_EPOCH_DET;
+		RXROOT(modem)->result.byte.flags2 &=
 			(unsigned char)~V17RX_RESULT_B2_BIT0;
-		AT_B(modem, V17RX_OBJ_RESULT_B1) &=
+		RXROOT(modem)->result.byte.flags &=
 			(unsigned char)~V17RX_FLAG_DATA;
 		break;
 
 	case V17RX_STATE_EPOCH_DET:
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V17RX_STATE_EPOCH_DET\n");
-		if (AT_I(CTL(modem), V17RXC_INT_0010) != 0)
+		if (RXCTL(modem)->r10 != 0)
 			Restore_rateV17(modem);
-		AT_S(CTL(modem), V17RXC_COUNTDOWN) = (short)
-			(AT_I(CTL(modem), V17RXC_INT_0010) != 0 ? 1 : 62);
+		RXCTL(modem)->countdown = (short)
+			(RXCTL(modem)->r10 != 0 ? 1 : 62);
 		CTL_PROCESS(modem) = RxHdxPrtcolV17;
-		AT_S(CTL(modem), V17RXC_STATE) = V17RX_STATE_PROTOCOL;
-		AT_B(modem, V17RX_OBJ_RESULT_B2) &=
+		RXCTL(modem)->state = V17RX_STATE_PROTOCOL;
+		RXROOT(modem)->result.byte.flags2 &=
 			(unsigned char)~V17RX_RESULT_B2_BIT0;
-		AT_B(modem, V17RX_OBJ_RESULT_B1) &=
+		RXROOT(modem)->result.byte.flags &=
 			(unsigned char)~V17RX_FLAG_DATA;
 		/*
 		 * Acquisition to tracking: one `short` along each of the two
@@ -1337,21 +1320,21 @@ RxNextStateV17(void *modem)
 	case V17RX_STATE_PROTOCOL:
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V17RX_STATE_PROTOCOL\n");
-		if (AT_I(CTL(modem), V17RXC_INT_0010) != 0) {
-			AT_S(CTL(modem), V17RXC_COUNTDOWN) = 1;
+		if (RXCTL(modem)->r10 != 0) {
+			RXCTL(modem)->countdown = 1;
 			CTL_PROCESS(modem) = RxHdxScramV17;
-			AT_S(CTL(modem), V17RXC_STATE) = V17RX_STATE_SCRAM;
-			AT_B(modem, V17RX_OBJ_RESULT_B1) &=
+			RXCTL(modem)->state = V17RX_STATE_SCRAM;
+			RXROOT(modem)->result.byte.flags &=
 				(unsigned char)~V17RX_FLAG_DATA;
 			/* No write to V17RX_OBJ_RESULT_B2 here.  D1213. */
 		} else {
-			AT_S(CTL(modem), V17RXC_COUNTDOWN) = 1;
+			RXCTL(modem)->countdown = 1;
 			CTL_PROCESS(modem) = RxHdxBridgeV17;
-			AT_S(CTL(modem), V17RXC_STATE) = V17RX_STATE_BRIDGE;
-			AT_B(modem, V17RX_OBJ_RESULT_B1) &=
+			RXCTL(modem)->state = V17RX_STATE_BRIDGE;
+			RXROOT(modem)->result.byte.flags &=
 				(unsigned char)~V17RX_FLAG_DATA;
 			StoreCoefV17(modem);
-			AT_B(modem, V17RX_OBJ_RESULT_B2) &=
+			RXROOT(modem)->result.byte.flags2 &=
 				(unsigned char)~V17RX_RESULT_B2_BIT0;
 		}
 		break;
@@ -1359,12 +1342,12 @@ RxNextStateV17(void *modem)
 	case V17RX_STATE_BRIDGE:
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V17RX_STATE_BRIDGE\n");
-		AT_S(CTL(modem), V17RXC_COUNTDOWN) = 1;
+		RXCTL(modem)->countdown = 1;
 		CTL_PROCESS(modem) = RxHdxScramV17;
-		AT_S(CTL(modem), V17RXC_STATE) = V17RX_STATE_SCRAM;
-		AT_B(modem, V17RX_OBJ_RESULT_B2) &=
+		RXCTL(modem)->state = V17RX_STATE_SCRAM;
+		RXROOT(modem)->result.byte.flags2 &=
 			(unsigned char)~V17RX_RESULT_B2_BIT0;
-		AT_B(modem, V17RX_OBJ_RESULT_B1) &=
+		RXROOT(modem)->result.byte.flags &=
 			(unsigned char)~V17RX_FLAG_DATA;
 		break;
 
@@ -1372,12 +1355,12 @@ RxNextStateV17(void *modem)
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V17RX_STATE_SCRAM\n");
 		FPM_AGC_Freeze(RXS_AGC(RXS(modem)));
-		AT_S(CTL(modem), V17RXC_COUNTDOWN) = 0;
+		RXCTL(modem)->countdown = 0;
 		CTL_PROCESS(modem) = RxHdxDataV17;
-		AT_S(CTL(modem), V17RXC_STATE) = V17RX_STATE_DATA;
-		AT_B(modem, V17RX_OBJ_RESULT_B2) &=
+		RXCTL(modem)->state = V17RX_STATE_DATA;
+		RXROOT(modem)->result.byte.flags2 &=
 			(unsigned char)~V17RX_RESULT_B2_BIT0;
-		AT_B(modem, V17RX_OBJ_RESULT_B1) |= V17RX_FLAG_DATA;
+		RXROOT(modem)->result.byte.flags |= V17RX_FLAG_DATA;
 		break;
 
 	case V17RX_STATE_DATA:
@@ -1393,11 +1376,11 @@ RxNextStateV17(void *modem)
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V17RX_STATE_DATA\n");
 		CTL_PROCESS(modem) = RxHdxIdleV17;
-		AT_S(CTL(modem), V17RXC_STATE) = V17RX_STATE_IDLE;
-		AT_S(CTL(modem), V17RXC_COUNTDOWN) = 0;
-		AT_I(CTL(modem), V17RXC_INT_0008) = 0;
-		AT_B(modem, V17RX_OBJ_RESULT_B2) |= V17RX_RESULT_B2_BIT0;
-		AT_B(modem, V17RX_OBJ_RESULT_B1) &=
+		RXCTL(modem)->state = V17RX_STATE_IDLE;
+		RXCTL(modem)->countdown = 0;
+		RXCTL(modem)->r08 = 0;
+		RXROOT(modem)->result.byte.flags2 |= V17RX_RESULT_B2_BIT0;
+		RXROOT(modem)->result.byte.flags &=
 			(unsigned char)~V17RX_FLAG_DATA;
 		break;
 
@@ -1405,26 +1388,26 @@ RxNextStateV17(void *modem)
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V17RX_STATE_IDLE\n");
 		CTL_PROCESS(modem) = RxHdxDataV17;
-		AT_S(CTL(modem), V17RXC_STATE) = V17RX_STATE_DATA;
-		AT_B(modem, V17RX_OBJ_RESULT_B2) &=
+		RXCTL(modem)->state = V17RX_STATE_DATA;
+		RXROOT(modem)->result.byte.flags2 &=
 			(unsigned char)~V17RX_RESULT_B2_BIT0;
-		AT_B(modem, V17RX_OBJ_RESULT_B1) |= V17RX_FLAG_DATA;
+		RXROOT(modem)->result.byte.flags |= V17RX_FLAG_DATA;
 		/* The one arm that does not seed the countdown.  D1215. */
-		switch (AT_US(CTL(modem), V17RXC_RATE_CODE)) {
+		switch (RXCTL(modem)->rate_code) {
 		case V17RX_RATE_7200:
-			AT_B(modem, V17RX_OBJ_RESULT) =
+			RXROOT(modem)->result.byte.status =
 				V17RX_STATUS_RATE_7200;
 			break;
 		case V17RX_RATE_9600:
-			AT_B(modem, V17RX_OBJ_RESULT) =
+			RXROOT(modem)->result.byte.status =
 				V17RX_STATUS_RATE_9600;
 			break;
 		case V17RX_RATE_12000:
-			AT_B(modem, V17RX_OBJ_RESULT) =
+			RXROOT(modem)->result.byte.status =
 				V17RX_STATUS_RATE_12000;
 			break;
 		default:
-			AT_B(modem, V17RX_OBJ_RESULT) =
+			RXROOT(modem)->result.byte.status =
 				V17RX_STATUS_RATE_14400;
 			break;
 		}
@@ -1437,10 +1420,10 @@ RxNextStateV17(void *modem)
 		 */
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V17RX_DEFAULT: %d\n",
-					     AT_S(CTL(modem), V17RXC_STATE));
-		AT_B(modem, V17RX_OBJ_RESULT_B2) &=
+					     RXCTL(modem)->state);
+		RXROOT(modem)->result.byte.flags2 &=
 			(unsigned char)~V17RX_RESULT_B2_BIT0;
-		AT_B(modem, V17RX_OBJ_RESULT) = V17RX_STATUS_DEFAULT;
+		RXROOT(modem)->result.byte.status = V17RX_STATUS_DEFAULT;
 		/*
 		 * THE MASK IS 0xde AND NOT 0xdf: this arm clears CARRIER *and*
 		 * `V17RX_FLAG_DATA`, where the four handlers' error arms clear
@@ -1450,8 +1433,8 @@ RxNextStateV17(void *modem)
 		 * one of the two places the two masks differ by exactly that
 		 * bit.  Read the bytes at 0x0a0168 and 0x0a0192.
 		 */
-		AT_B(modem, V17RX_OBJ_RESULT_B1) = (unsigned char)
-			((AT_B(modem, V17RX_OBJ_RESULT_B1) | V17RX_FLAG_ERROR)
+		RXROOT(modem)->result.byte.flags = (unsigned char)
+			((RXROOT(modem)->result.byte.flags | V17RX_FLAG_ERROR)
 			 & ~(V17RX_FLAG_CARRIER | V17RX_FLAG_DATA));
 		break;
 	}
@@ -1473,15 +1456,15 @@ RxHdxIdleV17(void *modem, short *in, short *out, unsigned short *count)
 	DemodDataV17(modem, in, (unsigned short *)(void *)out, *count);
 	*count = 0;
 
-	AT_B(modem, V17RX_OBJ_RESULT_B1) &=
+	RXROOT(modem)->result.byte.flags &=
 		(unsigned char)~V17RX_FLAG_CARRIER;
-	AT_B(modem, V17RX_OBJ_RESULT) = V17RX_STATUS_IDLE;
+	RXROOT(modem)->result.byte.status = V17RX_STATUS_IDLE;
 
 	if (CarrierDetectV17(modem) != 0)
-		AT_B(modem, V17RX_OBJ_RESULT_B1) |= V17RX_FLAG_CARRIER;
+		RXROOT(modem)->result.byte.flags |= V17RX_FLAG_CARRIER;
 
-	if ((AT_B(modem, V17RX_OBJ_RESULT_B1) & V17RX_FLAG_CARRIER) != 0
-	    && AT_S(RXS(modem), V17RXS_DEC_ERROR) <= V17RXS_DEC_ERROR_SMALL) {
+	if ((RXROOT(modem)->result.byte.flags & V17RX_FLAG_CARRIER) != 0
+	    && RXSTATE(modem)->fse.mse <= V17RXS_DEC_ERROR_SMALL) {
 		RxNextStateV17(modem);
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf(
@@ -1515,40 +1498,40 @@ RxHdxScramV17(void *modem, short *in, short *out, unsigned short *count)
 
 	if (CarrierDetectV17(modem) == 0) {
 		CTL_PROCESS(modem) = RxHdxErrorV17;
-		AT_S(CTL(modem), V17RXC_STATE) = V17RX_STATE_ERROR;
-		AT_B(modem, V17RX_OBJ_RESULT) = V17RX_STATUS_ERROR;
-		AT_B(modem, V17RX_OBJ_RESULT_B1) = (unsigned char)
-			((AT_B(modem, V17RX_OBJ_RESULT_B1) | V17RX_FLAG_ERROR)
+		RXCTL(modem)->state = V17RX_STATE_ERROR;
+		RXROOT(modem)->result.byte.status = V17RX_STATUS_ERROR;
+		RXROOT(modem)->result.byte.flags = (unsigned char)
+			((RXROOT(modem)->result.byte.flags | V17RX_FLAG_ERROR)
 			 & ~V17RX_FLAG_CARRIER);
 		return 0;
 	}
 
-	AT_B(modem, V17RX_OBJ_RESULT_B1) |= V17RX_FLAG_CARRIER;
-	AT_B(modem, V17RX_OBJ_RESULT) = V17RX_STATUS_CARRIER;
+	RXROOT(modem)->result.byte.flags |= V17RX_FLAG_CARRIER;
+	RXROOT(modem)->result.byte.status = V17RX_STATUS_CARRIER;
 
-	left = (short)(AT_US(CTL(modem), V17RXC_COUNTDOWN) - 1);
-	AT_S(CTL(modem), V17RXC_COUNTDOWN) = left;
+	left = (short)((unsigned short)RXCTL(modem)->countdown - 1);
+	RXCTL(modem)->countdown = left;
 	if (left > 0)
 		return 0;
 
-	switch (AT_US(CTL(modem), V17RXC_RATE_CODE)) {
+	switch (RXCTL(modem)->rate_code) {
 	case V17RX_RATE_7200:
-		AT_B(modem, V17RX_OBJ_RESULT) = V17RX_STATUS_RATE_7200;
+		RXROOT(modem)->result.byte.status = V17RX_STATUS_RATE_7200;
 		break;
 	case V17RX_RATE_9600:
-		AT_B(modem, V17RX_OBJ_RESULT) = V17RX_STATUS_RATE_9600;
+		RXROOT(modem)->result.byte.status = V17RX_STATUS_RATE_9600;
 		break;
 	case V17RX_RATE_12000:
-		AT_B(modem, V17RX_OBJ_RESULT) = V17RX_STATUS_RATE_12000;
+		RXROOT(modem)->result.byte.status = V17RX_STATUS_RATE_12000;
 		break;
 	default:
-		AT_B(modem, V17RX_OBJ_RESULT) = V17RX_STATUS_RATE_14400;
+		RXROOT(modem)->result.byte.status = V17RX_STATUS_RATE_14400;
 		break;
 	}
 
 	/* SET and never cleared; only RxHdxDataV17 clears it.  D1217. */
 	if (GetSNRV17(modem) <= V17RX_SNR_THRESHOLD)
-		AT_B(modem, V17RX_OBJ_RESULT_B1) |= V17RX_FLAG_LOW_SNR;
+		RXROOT(modem)->result.byte.flags |= V17RX_FLAG_LOW_SNR;
 
 	RxNextStateV17(modem);
 
@@ -1577,24 +1560,24 @@ RxHdxBridgeV17(void *modem, short *in, short *out, unsigned short *count)
 
 	if (CarrierDetectV17(modem) == 0) {
 		CTL_PROCESS(modem) = RxHdxErrorV17;
-		AT_S(CTL(modem), V17RXC_STATE) = V17RX_STATE_ERROR;
-		AT_B(modem, V17RX_OBJ_RESULT) = V17RX_STATUS_ERROR;
-		AT_B(modem, V17RX_OBJ_RESULT_B1) = (unsigned char)
-			((AT_B(modem, V17RX_OBJ_RESULT_B1) | V17RX_FLAG_ERROR)
+		RXCTL(modem)->state = V17RX_STATE_ERROR;
+		RXROOT(modem)->result.byte.status = V17RX_STATUS_ERROR;
+		RXROOT(modem)->result.byte.flags = (unsigned char)
+			((RXROOT(modem)->result.byte.flags | V17RX_FLAG_ERROR)
 			 & ~V17RX_FLAG_CARRIER);
 		return 0;
 	}
 
-	AT_B(modem, V17RX_OBJ_RESULT_B1) |= V17RX_FLAG_CARRIER;
-	AT_B(modem, V17RX_OBJ_RESULT) = V17RX_STATUS_CARRIER;
+	RXROOT(modem)->result.byte.flags |= V17RX_FLAG_CARRIER;
+	RXROOT(modem)->result.byte.status = V17RX_STATUS_CARRIER;
 
-	left = (short)(AT_US(CTL(modem), V17RXC_COUNTDOWN) - 1);
-	AT_S(CTL(modem), V17RXC_COUNTDOWN) = left;
+	left = (short)((unsigned short)RXCTL(modem)->countdown - 1);
+	RXCTL(modem)->countdown = left;
 	if (left > 0)
 		return 0;
 
 	if (GetSNRV17(modem) <= V17RX_SNR_THRESHOLD)
-		AT_B(modem, V17RX_OBJ_RESULT_B1) |= V17RX_FLAG_LOW_SNR;
+		RXROOT(modem)->result.byte.flags |= V17RX_FLAG_LOW_SNR;
 
 	RxNextStateV17(modem);
 
@@ -1618,24 +1601,24 @@ RxHdxPrtcolV17(void *modem, short *in, short *out, unsigned short *count)
 
 	if (CarrierDetectV17(modem) == 0) {
 		CTL_PROCESS(modem) = RxHdxErrorV17;
-		AT_S(CTL(modem), V17RXC_STATE) = V17RX_STATE_ERROR;
-		AT_B(modem, V17RX_OBJ_RESULT) = V17RX_STATUS_ERROR;
-		AT_B(modem, V17RX_OBJ_RESULT_B1) = (unsigned char)
-			((AT_B(modem, V17RX_OBJ_RESULT_B1) | V17RX_FLAG_ERROR)
+		RXCTL(modem)->state = V17RX_STATE_ERROR;
+		RXROOT(modem)->result.byte.status = V17RX_STATUS_ERROR;
+		RXROOT(modem)->result.byte.flags = (unsigned char)
+			((RXROOT(modem)->result.byte.flags | V17RX_FLAG_ERROR)
 			 & ~V17RX_FLAG_CARRIER);
 		return 0;
 	}
 
-	AT_B(modem, V17RX_OBJ_RESULT_B1) |= V17RX_FLAG_CARRIER;
-	AT_B(modem, V17RX_OBJ_RESULT) = V17RX_STATUS_CARRIER;
+	RXROOT(modem)->result.byte.flags |= V17RX_FLAG_CARRIER;
+	RXROOT(modem)->result.byte.status = V17RX_STATUS_CARRIER;
 
-	left = (short)(AT_US(CTL(modem), V17RXC_COUNTDOWN) - 1);
-	AT_S(CTL(modem), V17RXC_COUNTDOWN) = left;
+	left = (short)((unsigned short)RXCTL(modem)->countdown - 1);
+	RXCTL(modem)->countdown = left;
 	if (left > 0)
 		return 0;
 
 	if (GetSNRV17(modem) <= V17RX_SNR_THRESHOLD)
-		AT_B(modem, V17RX_OBJ_RESULT_B1) |= V17RX_FLAG_LOW_SNR;
+		RXROOT(modem)->result.byte.flags |= V17RX_FLAG_LOW_SNR;
 
 	RxNextStateV17(modem);
 
@@ -1663,19 +1646,19 @@ RxHdxEpochDetV17(void *modem, short *in, short *out, unsigned short *count)
 
 	if (CarrierDetectV17(modem) == 0) {
 		CTL_PROCESS(modem) = RxHdxErrorV17;
-		AT_S(CTL(modem), V17RXC_STATE) = V17RX_STATE_ERROR;
-		AT_B(modem, V17RX_OBJ_RESULT) = V17RX_STATUS_ERROR;
-		AT_B(modem, V17RX_OBJ_RESULT_B1) = (unsigned char)
-			((AT_B(modem, V17RX_OBJ_RESULT_B1) | V17RX_FLAG_ERROR)
+		RXCTL(modem)->state = V17RX_STATE_ERROR;
+		RXROOT(modem)->result.byte.status = V17RX_STATUS_ERROR;
+		RXROOT(modem)->result.byte.flags = (unsigned char)
+			((RXROOT(modem)->result.byte.flags | V17RX_FLAG_ERROR)
 			 & ~V17RX_FLAG_CARRIER);
 		return 0;
 	}
 
-	AT_B(modem, V17RX_OBJ_RESULT_B1) |= V17RX_FLAG_CARRIER;
-	AT_B(modem, V17RX_OBJ_RESULT) = V17RX_STATUS_CARRIER;
+	RXROOT(modem)->result.byte.flags |= V17RX_FLAG_CARRIER;
+	RXROOT(modem)->result.byte.status = V17RX_STATUS_CARRIER;
 
-	left = (short)(AT_US(CTL(modem), V17RXC_COUNTDOWN) - 1);
-	AT_S(CTL(modem), V17RXC_COUNTDOWN) = left;
+	left = (short)((unsigned short)RXCTL(modem)->countdown - 1);
+	RXCTL(modem)->countdown = left;
 	if (left <= 0 || EpochDetectV17(modem) != 0)
 		RxNextStateV17(modem);
 
@@ -1694,14 +1677,14 @@ RxHdxEpochDetV17(void *modem, short *in, short *out, unsigned short *count)
 short
 RxHdxStartV17(void *modem, short *in, short *out, unsigned short *count)
 {
-	AT_B(modem, V17RX_OBJ_RESULT_B1) &=
+	RXROOT(modem)->result.byte.flags &=
 		(unsigned char)~V17RX_FLAG_CARRIER;
-	AT_B(modem, V17RX_OBJ_RESULT) = V17RX_STATUS_START;
+	RXROOT(modem)->result.byte.status = V17RX_STATUS_START;
 
 	DemodDataV17(modem, in, (unsigned short *)(void *)out, *count);
 
 	if (CarrierDetectV17(modem) != 0) {
-		AT_B(modem, V17RX_OBJ_RESULT_B1) |= V17RX_FLAG_CARRIER;
+		RXROOT(modem)->result.byte.flags |= V17RX_FLAG_CARRIER;
 		RxNextStateV17(modem);
 	}
 
@@ -1738,7 +1721,7 @@ V17RX_control(void *modem, const struct v17rx_ctl *arg)
 
 	cfg->int_0008 = arg->int_0004;
 
-	AT_I(CTL(modem), V17RXC_INT_0008) =
+	RXCTL(modem)->r08 =
 		(arg->flags_0d & V17RXCTL_SET_CTL_INT_0008) != 0;
 
 	if (arg->flags_0d & V17RXCTL_REINIT) {
@@ -1747,10 +1730,10 @@ V17RX_control(void *modem, const struct v17rx_ctl *arg)
 	}
 
 	if (arg->flags_0c & V17RXCTL_CLEAR_STATE0)
-		AT_I(RXS(modem), V17RXS_INT_0000) = 0;
+		RXSTATE(modem)->r00 = 0;
 
 	if (arg->flags_0c & V17RXCTL_CLEAR_STATE10)
-		AT_I(RXS(modem), V17RXS_INT_0010) = 0;
+		RXSTATE(modem)->r10 = 0;
 
 	return 1;
 }
@@ -1794,31 +1777,31 @@ V17RX_status(void *modem, struct v17_status *status)
 	 */
 	rx = (unsigned char *)modem;
 
-	status->protocol = (short)AT_US(rx, V17RX_OBJ_PROTOCOL);
+	status->protocol = (short)RXROOT(modem)->cfg.int_0000;
 	status->tx_bps = 0;
-	status->rx_bps = (short)AT_US(rx, V17RX_OBJ_RX_BPS);
+	status->rx_bps = RXROOT(modem)->cfg.bit_rate;
 	status->snr_ok = (short)
 		((rx[V17RX_OBJ_RESULT_B1] & V17RX_FLAG_LOW_SNR) == 0);
 	status->snr = GetSNRV17(modem);
 	status->short_0a = 0;
 	status->short_0e = 0;
 	status->short_10 = 0;
-	status->short_12 = (short)AT_US(rx, V17RX_OBJ_RX_BPS);
+	status->short_12 = RXROOT(modem)->cfg.bit_rate;
 
 	status->flags &= (unsigned char)~V17_STATUS_FLAG_01;
 	status->flags = (unsigned char)
 		((status->flags & ~V17_STATUS_FLAG_02)
-		 | ((AT_B(RXS(modem), V17RXS_BYTE_001C) & V17RXS_001C_BIT0)
+		 | ((RXSTATE(modem)->r1c & V17RXS_001C_BIT0)
 		    << 1));
 	status->flags &= (unsigned char)~V17_STATUS_FLAG_04;
 	status->flags = (unsigned char)
 		((status->flags & ~V17_STATUS_FLAG_08)
-		 | ((AT_I(RXS(modem), V17RXS_INT_0000) == 0) << 3));
+		 | ((RXSTATE(modem)->r00 == 0) << 3));
 	status->flags |= V17_STATUS_FLAG_10;
 	status->flags1 &= (unsigned char)~V17_STATUS_FLAGS1_CLEAR;
 	status->flags = (unsigned char)
 		((status->flags & ~V17_STATUS_FLAG_20)
-		 | ((AT_I(RXS(modem), V17RXS_INT_0010) == 0) << 5));
+		 | ((RXSTATE(modem)->r10 == 0) << 5));
 	status->flags |= V17_STATUS_FLAG_40;
 	status->flags &= (unsigned char)~V17_STATUS_FLAG_80;
 
@@ -1830,9 +1813,7 @@ V17RX_status(void *modem, struct v17_status *status)
 void
 ScrambleDataV17(void *modem, unsigned short *data, unsigned short count)
 {
-	SDM_scrambler((struct fpm_sdm *)(void *)
-		      FIELD(FIELD_PTR(modem, V17TX_OBJ_FP), V17FP_SDM),
-		      data, count);
+	SDM_scrambler(&TXBLOCK(modem)->sdm, data, count);
 }
 
 /* --------------------------------------------------------------------- */
@@ -1840,10 +1821,7 @@ ScrambleDataV17(void *modem, unsigned short *data, unsigned short count)
 void
 SeedScramblerV17(void *modem, unsigned int seed)
 {
-	void *fp;
-
-	fp = FIELD_PTR(modem, V17TX_OBJ_FP);
-	((struct fpm_sdm *)(void *)FIELD(fp, V17FP_SDM))->reg = seed;
+	TXBLOCK(modem)->sdm.reg = seed;
 }
 
 /* --------------------------------------------------------------------- */
@@ -1851,23 +1829,20 @@ SeedScramblerV17(void *modem, unsigned int seed)
 void
 SetEncoderV17(void *modem, short which, short arg)
 {
-	void *fp;
+	struct v17tx_fp *fp;
 
 	switch (which) {
 	case V17_ENCODER_DIF:
-		fp = FIELD_PTR(modem, V17TX_OBJ_FP);
-		AT_S(fp, V17FP_ENCODER_SEL) = V17_ENCODER_DIF;
-		AT_S(fp, V17FP_SMC_SHORT_06) = arg;
+		TXBLOCK(modem)->encoder_sel = V17_ENCODER_DIF;
+		TXBLOCK(modem)->smc.quad = arg;
 		break;
 	case V17_ENCODER_ABS:
 		/* No second value on this arm; see v17fax.h. */
-		fp = FIELD_PTR(modem, V17TX_OBJ_FP);
-		AT_S(fp, V17FP_ENCODER_SEL) = V17_ENCODER_ABS;
+		TXBLOCK(modem)->encoder_sel = V17_ENCODER_ABS;
 		break;
 	case V17_ENCODER_TCM:
-		fp = FIELD_PTR(modem, V17TX_OBJ_FP);
-		AT_S(fp, V17FP_ENCODER_SEL) = V17_ENCODER_TCM;
-		AT_S(fp, V17FP_SMC_SHORT_06) = arg;
+		TXBLOCK(modem)->encoder_sel = V17_ENCODER_TCM;
+		TXBLOCK(modem)->smc.quad = arg;
 		break;
 	default:
 		break;
@@ -1917,8 +1892,8 @@ SetTxModeV17(void *modem, short mode)
 	struct sgd_cfg sgdcfg;
 	struct fpm_sdm_cfg sdmcfg;
 	struct fpm_sdm *sdm;
-	void *fp;
-	void *prm;
+	struct v17tx_fp *fp;
+	struct v17tx_priv *prm;
 	short sym_size;
 	unsigned int saved_reg;
 
@@ -1926,68 +1901,68 @@ SetTxModeV17(void *modem, short mode)
 
 	sgdcfg = SGD_CFG;
 	sgdcfg.sym_bits = sym_size;
-	prm = FIELD_PTR(modem, V17TX_OBJ_PARAMS);
-	FIELD_PTR(prm, V17TXP_SGD) =
-		SGD_create((struct sgd *)FIELD_PTR(prm, V17TXP_SGD), &sgdcfg);
+	prm = TXPRIV(modem);
+	prm->sgd =
+		SGD_create((struct sgd *)prm->sgd, &sgdcfg);
 
 	sdmcfg = SDM_CFG;
 	sdmcfg.nbits = sym_size;
 	sdmcfg.tap1 = 0x12;
 	sdmcfg.tap2 = 0x17;
 
-	fp = FIELD_PTR(modem, V17TX_OBJ_FP);
-	sdm = (struct fpm_sdm *)(void *)FIELD(fp, V17FP_SDM);
+	fp = TXBLOCK(modem);
+	sdm = &fp->sdm;
 	saved_reg = sdm->reg;
 	SDM_init(sdm, &sdmcfg);
 	sdm->reg = saved_reg;
 
-	fp = FIELD_PTR(modem, V17TX_OBJ_FP);
-	memcpy(FIELD(fp, V17FP_SMC), SMCv17_CFG, sizeof(SMCv17_CFG));
-	AT_S(fp, V17FP_SMC_SHORT_08) = 0;
-	AT_S(fp, V17FP_SMC_SHORT_06) = 0;
-	AT_S(fp, V17FP_SMC_SHORT_0E) = 0;
-	AT_S(fp, V17FP_SMC_SHORT_0C) = 0;
-	AT_S(fp, V17FP_SMC_SHORT_10) = 0;
-	AT_S(fp, V17FP_SMC_SHORT_02) = 2;
-	AT_S(fp, V17FP_ENCODER_SEL) = 2;
+	fp = TXBLOCK(modem);
+	memcpy(&fp->smc, SMCv17_CFG, sizeof(SMCv17_CFG));
+	fp->smc.state = 0;
+	fp->smc.quad = 0;
+	fp->smc.prev = 0;
+	fp->smc.trellis = 0;
+	fp->smc.r10 = 0;
+	fp->smc.r02 = 2;
+	fp->encoder_sel = 2;
 
 	switch (mode) {
 	case 0:
-		AT_S(fp, V17FP_SMC_SHORT_12) = 1;
-		AT_S(fp, V17FP_SMC) = 3;
-		FIELD_PTR(fp, V17FP_SMC_IMAP) = (void *)VTBv17_IMAP16T;
-		FIELD_PTR(fp, V17FP_SMC_QMAP) = (void *)VTBv17_QMAP16T;
-		prm = FIELD_PTR(modem, V17TX_OBJ_PARAMS);
-		AT_US(prm, V17TXP_NOCARRIER_SYM) = 0x10;
+		fp->smc.nbits = 1;
+		fp->smc.mode.word = 3;
+		fp->pps.cfg.imap = VTBv17_IMAP16T;
+		fp->pps.cfg.qmap = VTBv17_QMAP16T;
+		prm = TXPRIV(modem);
+		prm->no_carrier_sym = 0x10;
 		break;
 	case 1:
-		AT_S(fp, V17FP_SMC_SHORT_12) = 2;
-		AT_S(fp, V17FP_SMC) = 2;
-		FIELD_PTR(fp, V17FP_SMC_IMAP) = (void *)VTBv17_IMAP32;
-		FIELD_PTR(fp, V17FP_SMC_QMAP) = (void *)VTBv17_QMAP32;
-		prm = FIELD_PTR(modem, V17TX_OBJ_PARAMS);
-		AT_US(prm, V17TXP_NOCARRIER_SYM) = 0x20;
+		fp->smc.nbits = 2;
+		fp->smc.mode.word = 2;
+		fp->pps.cfg.imap = VTBv17_IMAP32;
+		fp->pps.cfg.qmap = VTBv17_QMAP32;
+		prm = TXPRIV(modem);
+		prm->no_carrier_sym = 0x20;
 		break;
 	case 2:
-		AT_S(fp, V17FP_SMC_SHORT_12) = 3;
-		AT_S(fp, V17FP_SMC) = 4;
-		FIELD_PTR(fp, V17FP_SMC_IMAP) = (void *)VTBv17_IMAP64;
-		FIELD_PTR(fp, V17FP_SMC_QMAP) = (void *)VTBv17_QMAP64;
-		prm = FIELD_PTR(modem, V17TX_OBJ_PARAMS);
-		AT_US(prm, V17TXP_NOCARRIER_SYM) = 0x40;
+		fp->smc.nbits = 3;
+		fp->smc.mode.word = 4;
+		fp->pps.cfg.imap = VTBv17_IMAP64;
+		fp->pps.cfg.qmap = VTBv17_QMAP64;
+		prm = TXPRIV(modem);
+		prm->no_carrier_sym = 0x40;
 		break;
 	case 3:
-		AT_S(fp, V17FP_SMC_SHORT_12) = 4;
-		AT_S(fp, V17FP_SMC) = 5;
-		FIELD_PTR(fp, V17FP_SMC_IMAP) = (void *)VTBv17_IMAP128;
-		FIELD_PTR(fp, V17FP_SMC_QMAP) = (void *)VTBv17_QMAP128;
-		prm = FIELD_PTR(modem, V17TX_OBJ_PARAMS);
-		AT_US(prm, V17TXP_NOCARRIER_SYM) = 0x80;
+		fp->smc.nbits = 4;
+		fp->smc.mode.word = 5;
+		fp->pps.cfg.imap = VTBv17_IMAP128;
+		fp->pps.cfg.qmap = VTBv17_QMAP128;
+		prm = TXPRIV(modem);
+		prm->no_carrier_sym = 0x80;
 		break;
 	default:
-		AT_B(modem, V17TX_OBJ_RESULT) = V17TX_RESULT_BYTE_07;
-		AT_B(modem, V17TX_OBJ_RESULT_B1) = (unsigned char)
-			((AT_B(modem, V17TX_OBJ_RESULT_B1)
+		TXROOT(modem)->result.byte.status = V17TX_RESULT_BYTE_07;
+		TXROOT(modem)->result.byte.flags = (unsigned char)
+			((TXROOT(modem)->result.byte.flags
 			  | V17TX_RESULT_B1_BIT1) & ~1);
 		break;
 	}
@@ -2002,20 +1977,20 @@ SetTxModeV17(void *modem, short mode)
 int
 V17TX_modem(void *modem, unsigned short *in, short *out, unsigned short *count)
 {
-	void *prm;
+	struct v17tx_priv *prm;
 	unsigned short taken;
 	short budget;
 	short total;
 
-	prm = FIELD_PTR(modem, V17TX_OBJ_PARAMS);
+	prm = TXPRIV(modem);
 
-	*FIELD(modem, V17TX_OBJ_RESULT_B1) &=
+	TXROOT(modem)->result.byte.flags &=
 		(unsigned char)~V17TX_RESULT_B1_BIT1;
 
-	if (AT_I(prm, V17TXP_INT_0008) == 0)
+	if (prm->r08 == 0)
 		taken = (unsigned short)FIFO_write(
 				(struct fax_fifo *)
-					FIELD_PTR(prm, V17TXP_FIFO),
+					prm->fifo,
 				in, *count);
 	else
 		taken = *count;
@@ -2025,29 +2000,27 @@ V17TX_modem(void *modem, unsigned short *in, short *out, unsigned short *count)
 	do {
 		short got;
 
-		prm = FIELD_PTR(modem, V17TX_OBJ_PARAMS);
-		got = (*(v17tx_process_fn *)(void *)
-				FIELD(prm, V17TXP_PROCESS))
-					(modem, in, out, &budget);
+		prm = TXPRIV(modem);
+		got = prm->process(modem, in, out, &budget);
 
 		out += got;
 		total = (short)(total + got);
 	} while (budget > 0);
 
 	if (*count != taken) {
-		*FIELD(modem, V17TX_OBJ_RESULT_B1) |= V17TX_RESULT_B1_BIT1;
+		TXROOT(modem)->result.byte.flags |= V17TX_RESULT_B1_BIT1;
 		/*
 		 * A BYTE store into the low byte of the int this function
 		 * returns, which is what the object encodes
 		 * (`movb $0x9,0x20(%edi)`) and is why it cannot be written
 		 * through `AT_I`.
 		 */
-		*FIELD(modem, V17TX_OBJ_RESULT) = V17TX_RESULT_BYTE_09;
+		TXROOT(modem)->result.byte.status = V17TX_RESULT_BYTE_09;
 	}
 
 	*count = (unsigned short)total;
 
-	return AT_I(modem, V17TX_OBJ_RESULT);
+	return TXROOT(modem)->result.word;
 }
 
 /*
@@ -2095,18 +2068,18 @@ V17TX_modem(void *modem, unsigned short *in, short *out, unsigned short *count)
 void
 TxNextStateV17(void *modem)
 {
-	void *prm = FIELD_PTR(modem, V17TX_OBJ_PARAMS);
-	short state = AT_S(prm, V17TXP_STATE);
+	struct v17tx_priv *prm = TXPRIV(modem);
+	short state = prm->state;
 
 	switch (state) {
 	case V17TX_STATE_START:
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V17TX_STATE_START\n");
-		AT_S(prm, V17TXP_SHORT_001A) = 0x30;
-		*(v17tx_process_fn *)(void *)FIELD(prm, V17TXP_PROCESS) =
+		prm->countdown = 0x30;
+		prm->process =
 			TxHdxSilenceV17;
-		AT_S(prm, V17TXP_STATE) = V17TX_STATE_SILENCE;
-		*FIELD(modem, V17TX_OBJ_RESULT_B2) &=
+		prm->state = V17TX_STATE_SILENCE;
+		TXROOT(modem)->result.byte.flags2 &=
 			(unsigned char)~V17TX_RESULT_B2_BIT0;
 		break;
 
@@ -2122,26 +2095,26 @@ TxNextStateV17(void *modem)
 			req.gen = &gen;
 			req.det = SGD_CTL.det;
 			SGD_control((struct sgd *)
-					FIELD_PTR(prm, V17TXP_SGD), &req);
+					prm->sgd, &req);
 		}
 		SetEncoderV17(modem, 1, 0);
-		prm = FIELD_PTR(modem, V17TX_OBJ_PARAMS);
-		AT_S(prm, V17TXP_SHORT_001A) = 0x1e0;
-		*(v17tx_process_fn *)(void *)FIELD(prm, V17TXP_PROCESS) =
+		prm = TXPRIV(modem);
+		prm->countdown = 0x1e0;
+		prm->process =
 			TxHdxTEP_V17;
-		AT_S(prm, V17TXP_STATE) = V17TX_STATE_TEP;
-		*FIELD(modem, V17TX_OBJ_RESULT_B2) &=
+		prm->state = V17TX_STATE_TEP;
+		TXROOT(modem)->result.byte.flags2 &=
 			(unsigned char)~V17TX_RESULT_B2_BIT0;
 		break;
 
 	case V17TX_STATE_TEP:
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V17TX_STATE_TEP\n");
-		AT_S(prm, V17TXP_SHORT_001A) = 0x30;
-		*(v17tx_process_fn *)(void *)FIELD(prm, V17TXP_PROCESS) =
+		prm->countdown = 0x30;
+		prm->process =
 			TxHdxSilenceV17;
-		AT_S(prm, V17TXP_STATE) = V17TX_STATE_QUIET;
-		*FIELD(modem, V17TX_OBJ_RESULT_B2) &=
+		prm->state = V17TX_STATE_QUIET;
+		TXROOT(modem)->result.byte.flags2 &=
 			(unsigned char)~V17TX_RESULT_B2_BIT0;
 		break;
 
@@ -2157,15 +2130,15 @@ TxNextStateV17(void *modem)
 			req.gen = &gen;
 			req.det = SGD_CTL.det;
 			SGD_control((struct sgd *)
-					FIELD_PTR(prm, V17TXP_SGD), &req);
+					prm->sgd, &req);
 		}
 		SetEncoderV17(modem, 1, 0);
-		prm = FIELD_PTR(modem, V17TX_OBJ_PARAMS);
-		AT_S(prm, V17TXP_SHORT_001A) = 0x100;
-		*(v17tx_process_fn *)(void *)FIELD(prm, V17TXP_PROCESS) =
+		prm = TXPRIV(modem);
+		prm->countdown = 0x100;
+		prm->process =
 			TxHdxABV17;
-		AT_S(prm, V17TXP_STATE) = V17TX_STATE_ALT;
-		*FIELD(modem, V17TX_OBJ_RESULT_B2) &=
+		prm->state = V17TX_STATE_ALT;
+		TXROOT(modem)->result.byte.flags2 &=
 			(unsigned char)~V17TX_RESULT_B2_BIT0;
 		break;
 
@@ -2181,46 +2154,45 @@ TxNextStateV17(void *modem)
 			req.gen = &gen;
 			req.det = SGD_CTL.det;
 			SGD_control((struct sgd *)
-					FIELD_PTR(prm, V17TXP_SGD), &req);
+					prm->sgd, &req);
 		}
-		prm = FIELD_PTR(modem, V17TX_OBJ_PARAMS);
-		AT_S(prm, V17TXP_SHORT_001A) = (short)
-			((AT_I(prm, V17TXP_INT_000C) != 0) ? 0x26 : 0xba0);
-		*(v17tx_process_fn *)(void *)FIELD(prm, V17TXP_PROCESS) =
+		prm = TXPRIV(modem);
+		prm->countdown = (short)
+			((prm->r0c != 0) ? 0x26 : 0xba0);
+		prm->process =
 			TxHdxEQCondV17;
-		AT_S(prm, V17TXP_STATE) = V17TX_STATE_EQCOND;
-		AT_S(prm, V17TXP_SHORT_001C) = 0;
+		prm->state = V17TX_STATE_EQCOND;
+		prm->r1c = 0;
 		SeedScramblerV17(modem, 0x2ecdd5);
-		*FIELD(modem, V17TX_OBJ_RESULT_B2) &=
+		TXROOT(modem)->result.byte.flags2 &=
 			(unsigned char)~V17TX_RESULT_B2_BIT0;
 		break;
 
 	case V17TX_STATE_EQCOND:
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V17TX_STATE_EQCOND\n");
-		if (AT_I(prm, V17TXP_INT_000C) != 0) {
-			short mode = AT_S(prm, V17TXP_MODE);
+		if (prm->r0c != 0) {
+			short mode = prm->mode;
 			struct sgd_gen_cfg gen;
 			struct sgd_control_req req;
 
 			SetTxModeV17(modem, mode);
 
-			prm = FIELD_PTR(modem, V17TX_OBJ_PARAMS);
-			mode = AT_S(prm, V17TXP_MODE);
+			prm = TXPRIV(modem);
+			mode = prm->mode;
 			gen.data_word =
 				(unsigned short)V17TX_PATTERN_SCR1[mode];
 			gen.word_syms = 1;
 			req.gen = &gen;
 			req.det = SGD_CTL.det;
 			SGD_control((struct sgd *)
-					FIELD_PTR(prm, V17TXP_SGD), &req);
+					prm->sgd, &req);
 
 			SetEncoderV17(modem, 2, 3);
-			prm = FIELD_PTR(modem, V17TX_OBJ_PARAMS);
-			AT_S(prm, V17TXP_SHORT_001A) = 0x30;
-			*(v17tx_process_fn *)(void *)
-				FIELD(prm, V17TXP_PROCESS) = TxHdxSCR1V17;
-			AT_S(prm, V17TXP_STATE) = V17TX_STATE_SCR1;
+			prm = TXPRIV(modem);
+			prm->countdown = 0x30;
+			prm->process = TxHdxSCR1V17;
+			prm->state = V17TX_STATE_SCR1;
 		} else {
 			struct sgd_gen_cfg gen;
 			struct sgd_control_req req;
@@ -2230,16 +2202,15 @@ TxNextStateV17(void *modem)
 			req.gen = &gen;
 			req.det = SGD_CTL.det;
 			SGD_control((struct sgd *)
-					FIELD_PTR(prm, V17TXP_SGD), &req);
+					prm->sgd, &req);
 
 			SetEncoderV17(modem, 0, 3);
-			prm = FIELD_PTR(modem, V17TX_OBJ_PARAMS);
-			AT_S(prm, V17TXP_SHORT_001A) = 0x40;
-			*(v17tx_process_fn *)(void *)
-				FIELD(prm, V17TXP_PROCESS) = TxHdxBridgeV17;
-			AT_S(prm, V17TXP_STATE) = V17TX_STATE_BRIDGE;
+			prm = TXPRIV(modem);
+			prm->countdown = 0x40;
+			prm->process = TxHdxBridgeV17;
+			prm->state = V17TX_STATE_BRIDGE;
 		}
-		*FIELD(modem, V17TX_OBJ_RESULT_B2) &=
+		TXROOT(modem)->result.byte.flags2 &=
 			(unsigned char)~V17TX_RESULT_B2_BIT0;
 		break;
 
@@ -2247,49 +2218,49 @@ TxNextStateV17(void *modem)
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V17TX_STATE_BRIDGE\n");
 		{
-			short mode = AT_S(prm, V17TXP_MODE);
+			short mode = prm->mode;
 			struct sgd_gen_cfg gen;
 			struct sgd_control_req req;
 
 			SetTxModeV17(modem, mode);
 
-			prm = FIELD_PTR(modem, V17TX_OBJ_PARAMS);
-			mode = AT_S(prm, V17TXP_MODE);
+			prm = TXPRIV(modem);
+			mode = prm->mode;
 			gen.data_word =
 				(unsigned short)V17TX_PATTERN_SCR1[mode];
 			gen.word_syms = 1;
 			req.gen = &gen;
 			req.det = SGD_CTL.det;
 			SGD_control((struct sgd *)
-					FIELD_PTR(prm, V17TXP_SGD), &req);
+					prm->sgd, &req);
 		}
 		SetEncoderV17(modem, 2, 0);
-		prm = FIELD_PTR(modem, V17TX_OBJ_PARAMS);
-		AT_S(prm, V17TXP_SHORT_001A) = 0x30;
-		*(v17tx_process_fn *)(void *)FIELD(prm, V17TXP_PROCESS) =
+		prm = TXPRIV(modem);
+		prm->countdown = 0x30;
+		prm->process =
 			TxHdxSCR1V17;
-		AT_S(prm, V17TXP_STATE) = V17TX_STATE_SCR1;
-		*FIELD(modem, V17TX_OBJ_RESULT_B2) &=
+		prm->state = V17TX_STATE_SCR1;
+		TXROOT(modem)->result.byte.flags2 &=
 			(unsigned char)~V17TX_RESULT_B2_BIT0;
 		break;
 
 	case V17TX_STATE_SCR1:
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V17TX_STATE_SCR1\n");
-		AT_S(prm, V17TXP_SHORT_001A) = 1;
-		*(v17tx_process_fn *)(void *)FIELD(prm, V17TXP_PROCESS) =
+		prm->countdown = 1;
+		prm->process =
 			TxHdxDataV17;
-		AT_S(prm, V17TXP_STATE) = V17TX_STATE_DATA;
-		*FIELD(modem, V17TX_OBJ_RESULT_B2) &=
+		prm->state = V17TX_STATE_DATA;
+		TXROOT(modem)->result.byte.flags2 &=
 			(unsigned char)~V17TX_RESULT_B2_BIT0;
-		*FIELD(modem, V17TX_OBJ_RESULT_B1) |= V17TX_RESULT_B1_BIT0;
+		TXROOT(modem)->result.byte.flags |= V17TX_RESULT_B1_BIT0;
 		return;
 
 	case V17TX_STATE_DATA:
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V17TX_STATE_DATA\n");
 		{
-			short mode = AT_S(prm, V17TXP_MODE);
+			short mode = prm->mode;
 			struct sgd_gen_cfg gen;
 			struct sgd_control_req req;
 
@@ -2299,66 +2270,66 @@ TxNextStateV17(void *modem)
 			req.gen = &gen;
 			req.det = SGD_CTL.det;
 			SGD_control((struct sgd *)
-					FIELD_PTR(prm, V17TXP_SGD), &req);
+					prm->sgd, &req);
 		}
-		prm = FIELD_PTR(modem, V17TX_OBJ_PARAMS);
-		AT_S(prm, V17TXP_SHORT_001A) = 0x20;
-		*(v17tx_process_fn *)(void *)FIELD(prm, V17TXP_PROCESS) =
+		prm = TXPRIV(modem);
+		prm->countdown = 0x20;
+		prm->process =
 			TxHdxSCR1V17;
-		AT_S(prm, V17TXP_STATE) = V17TX_STATE_SCR1_END;
-		*FIELD(modem, V17TX_OBJ_RESULT_B2) &=
+		prm->state = V17TX_STATE_SCR1_END;
+		TXROOT(modem)->result.byte.flags2 &=
 			(unsigned char)~V17TX_RESULT_B2_BIT0;
-		*FIELD(modem, V17TX_OBJ_RESULT_B1) |= V17TX_RESULT_B1_BIT0;
+		TXROOT(modem)->result.byte.flags |= V17TX_RESULT_B1_BIT0;
 		return;
 
 	case V17TX_STATE_SCR1_END:
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V17TX_STATE_SCR1_END\n");
-		AT_S(prm, V17TXP_SHORT_001A) = 0x30;
-		*(v17tx_process_fn *)(void *)FIELD(prm, V17TXP_PROCESS) =
+		prm->countdown = 0x30;
+		prm->process =
 			TxHdxSilenceV17;
-		AT_S(prm, V17TXP_STATE) = V17TX_STATE_QUIET_END;
-		*FIELD(modem, V17TX_OBJ_RESULT_B2) &=
+		prm->state = V17TX_STATE_QUIET_END;
+		TXROOT(modem)->result.byte.flags2 &=
 			(unsigned char)~V17TX_RESULT_B2_BIT0;
-		*FIELD(modem, V17TX_OBJ_RESULT_B1) |= V17TX_RESULT_B1_BIT0;
+		TXROOT(modem)->result.byte.flags |= V17TX_RESULT_B1_BIT0;
 		return;
 
 	case V17TX_STATE_QUIET_END:
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V17TX_STATE_QUIET_END\n");
-		AT_S(prm, V17TXP_SHORT_001A) = 0;
-		*(v17tx_process_fn *)(void *)FIELD(prm, V17TXP_PROCESS) =
+		prm->countdown = 0;
+		prm->process =
 			TxHdxIdleV17;
-		AT_S(prm, V17TXP_STATE) = V17TX_STATE_IDLE;
-		AT_I(prm, V17TXP_INT_0008) = 1;
-		*FIELD(modem, V17TX_OBJ_RESULT_B2) |= V17TX_RESULT_B2_BIT0;
+		prm->state = V17TX_STATE_IDLE;
+		prm->r08 = 1;
+		TXROOT(modem)->result.byte.flags2 |= V17TX_RESULT_B2_BIT0;
 		break;
 
 	case V17TX_STATE_IDLE:
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V17TX_STATE_IDLE\n");
-		AT_S(prm, V17TXP_SHORT_001A) = 0;
-		*(v17tx_process_fn *)(void *)FIELD(prm, V17TXP_PROCESS) =
+		prm->countdown = 0;
+		prm->process =
 			TxHdxStartV17;
-		AT_S(prm, V17TXP_STATE) = V17TX_STATE_START;
-		*FIELD(modem, V17TX_OBJ_RESULT_B2) &=
+		prm->state = V17TX_STATE_START;
+		TXROOT(modem)->result.byte.flags2 &=
 			(unsigned char)~V17TX_RESULT_B2_BIT0;
 		break;
 
 	default:
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V17TX_DEFAULT, %d\n", state);
-		*FIELD(modem, V17TX_OBJ_RESULT_B2) &=
+		TXROOT(modem)->result.byte.flags2 &=
 			(unsigned char)~V17TX_RESULT_B2_BIT0;
-		AT_B(modem, V17TX_OBJ_RESULT) = V17TX_RESULT_BYTE_07;
-		*FIELD(modem, V17TX_OBJ_RESULT_B1) = (unsigned char)
-			((*FIELD(modem, V17TX_OBJ_RESULT_B1)
+		TXROOT(modem)->result.byte.status = V17TX_RESULT_BYTE_07;
+		TXROOT(modem)->result.byte.flags = (unsigned char)
+			((TXROOT(modem)->result.byte.flags
 			  | V17TX_RESULT_B1_BIT1)
 			 & ~V17TX_RESULT_B1_BIT0);
 		break;
 	}
 
-	*FIELD(modem, V17TX_OBJ_RESULT_B1) &=
+	TXROOT(modem)->result.byte.flags &=
 		(unsigned char)~V17TX_RESULT_B1_BIT0;
 }
 
@@ -2381,11 +2352,11 @@ TxHdxStartV17(void *modem, unsigned short *in, short *out, short *budget)
 short
 TxHdxIdleV17(void *modem, unsigned short *in, short *out, short *budget)
 {
-	void *prm = FIELD_PTR(modem, V17TX_OBJ_PARAMS);
+	struct v17tx_priv *prm = TXPRIV(modem);
 	struct fax_fifo *fifo =
-		(struct fax_fifo *)FIELD_PTR(prm, V17TXP_FIFO);
+		(struct fax_fifo *)prm->fifo;
 
-	AT_B(modem, V17TX_OBJ_RESULT) = V17TX_STATUS_IDLE;
+	TXROOT(modem)->result.byte.status = V17TX_STATUS_IDLE;
 
 	if (fifo->count == 0) {
 		unsigned short b = (unsigned short)*budget;
@@ -2417,12 +2388,12 @@ TxHdxIdleV17(void *modem, unsigned short *in, short *out, short *budget)
 short
 TxHdxSilenceV17(void *modem, unsigned short *in, short *out, short *budget)
 {
-	void *prm = FIELD_PTR(modem, V17TX_OBJ_PARAMS);
+	struct v17tx_priv *prm = TXPRIV(modem);
 	short remaining;
 	unsigned short n;
 	short nsamples;
 
-	remaining = AT_S(prm, V17TXP_SHORT_001A);
+	remaining = prm->countdown;
 	if (remaining <= 0) {
 		TxNextStateV17(modem);
 		return 0;
@@ -2430,7 +2401,7 @@ TxHdxSilenceV17(void *modem, unsigned short *in, short *out, short *budget)
 
 	n = (remaining <= (short)*budget) ? (unsigned short)remaining
 					   : (unsigned short)*budget;
-	AT_S(prm, V17TXP_SHORT_001A) = (short)(remaining - n);
+	prm->countdown = (short)(remaining - n);
 
 	nsamples = (short)TxNoCarrierV17(modem, in, out, n);
 	*budget = (short)((unsigned short)*budget - n);
@@ -2447,12 +2418,12 @@ TxHdxSilenceV17(void *modem, unsigned short *in, short *out, short *budget)
 short
 TxHdxTEP_V17(void *modem, unsigned short *in, short *out, short *budget)
 {
-	void *prm = FIELD_PTR(modem, V17TX_OBJ_PARAMS);
+	struct v17tx_priv *prm = TXPRIV(modem);
 	short remaining;
 	unsigned short n;
 	short nsamples;
 
-	remaining = AT_S(prm, V17TXP_SHORT_001A);
+	remaining = prm->countdown;
 	if (remaining <= 0) {
 		TxNextStateV17(modem);
 		return 0;
@@ -2460,9 +2431,9 @@ TxHdxTEP_V17(void *modem, unsigned short *in, short *out, short *budget)
 
 	n = (remaining <= (short)*budget) ? (unsigned short)remaining
 					   : (unsigned short)*budget;
-	AT_S(prm, V17TXP_SHORT_001A) = (short)(remaining - n);
+	prm->countdown = (short)(remaining - n);
 
-	SGD_symbol_gen((struct sgd *)FIELD_PTR(prm, V17TXP_SGD), in, (short)n);
+	SGD_symbol_gen((struct sgd *)prm->sgd, in, (short)n);
 	nsamples = (short)ModDataV17(modem, in, out, n);
 	*budget = (short)((unsigned short)*budget - n);
 
@@ -2480,14 +2451,14 @@ TxHdxTEP_V17(void *modem, unsigned short *in, short *out, short *budget)
 short
 TxHdxABV17(void *modem, unsigned short *in, short *out, short *budget)
 {
-	void *prm = FIELD_PTR(modem, V17TX_OBJ_PARAMS);
+	struct v17tx_priv *prm = TXPRIV(modem);
 	short remaining;
 	unsigned short n;
 	short nsamples;
 
-	AT_B(modem, V17TX_OBJ_RESULT) = V17TX_STATUS_TRAINING;
+	TXROOT(modem)->result.byte.status = V17TX_STATUS_TRAINING;
 
-	remaining = AT_S(prm, V17TXP_SHORT_001A);
+	remaining = prm->countdown;
 	if (remaining <= 0) {
 		TxNextStateV17(modem);
 		return 0;
@@ -2495,9 +2466,9 @@ TxHdxABV17(void *modem, unsigned short *in, short *out, short *budget)
 
 	n = (remaining <= (short)*budget) ? (unsigned short)remaining
 					   : (unsigned short)*budget;
-	AT_S(prm, V17TXP_SHORT_001A) = (short)(remaining - n);
+	prm->countdown = (short)(remaining - n);
 
-	SGD_symbol_gen((struct sgd *)FIELD_PTR(prm, V17TXP_SGD), in, (short)n);
+	SGD_symbol_gen((struct sgd *)prm->sgd, in, (short)n);
 	nsamples = (short)ModDataV17(modem, in, out, n);
 	*budget = (short)((unsigned short)*budget - n);
 
@@ -2521,14 +2492,14 @@ TxHdxABV17(void *modem, unsigned short *in, short *out, short *budget)
 short
 TxHdxEQCondV17(void *modem, unsigned short *in, short *out, short *budget)
 {
-	void *prm = FIELD_PTR(modem, V17TX_OBJ_PARAMS);
+	struct v17tx_priv *prm = TXPRIV(modem);
 	short remaining;
 	unsigned short n;
 	short nsamples;
 
-	AT_B(modem, V17TX_OBJ_RESULT) = V17TX_STATUS_TRAINING;
+	TXROOT(modem)->result.byte.status = V17TX_STATUS_TRAINING;
 
-	remaining = AT_S(prm, V17TXP_SHORT_001A);
+	remaining = prm->countdown;
 	if (remaining <= 0) {
 		TxNextStateV17(modem);
 		return 0;
@@ -2536,9 +2507,9 @@ TxHdxEQCondV17(void *modem, unsigned short *in, short *out, short *budget)
 
 	n = (remaining <= (short)*budget) ? (unsigned short)remaining
 					   : (unsigned short)*budget;
-	AT_S(prm, V17TXP_SHORT_001A) = (short)(remaining - n);
+	prm->countdown = (short)(remaining - n);
 
-	SGD_symbol_gen((struct sgd *)FIELD_PTR(prm, V17TXP_SGD), in, (short)n);
+	SGD_symbol_gen((struct sgd *)prm->sgd, in, (short)n);
 	ScrambleDataV17(modem, in, n);
 	nsamples = (short)ModDataV17(modem, in, out, n);
 	*budget = (short)((unsigned short)*budget - n);
@@ -2550,14 +2521,14 @@ TxHdxEQCondV17(void *modem, unsigned short *in, short *out, short *budget)
 short
 TxHdxBridgeV17(void *modem, unsigned short *in, short *out, short *budget)
 {
-	void *prm = FIELD_PTR(modem, V17TX_OBJ_PARAMS);
+	struct v17tx_priv *prm = TXPRIV(modem);
 	short remaining;
 	unsigned short n;
 	short nsamples;
 
-	AT_B(modem, V17TX_OBJ_RESULT) = V17TX_STATUS_TRAINING;
+	TXROOT(modem)->result.byte.status = V17TX_STATUS_TRAINING;
 
-	remaining = AT_S(prm, V17TXP_SHORT_001A);
+	remaining = prm->countdown;
 	if (remaining <= 0) {
 		TxNextStateV17(modem);
 		return 0;
@@ -2565,9 +2536,9 @@ TxHdxBridgeV17(void *modem, unsigned short *in, short *out, short *budget)
 
 	n = (remaining <= (short)*budget) ? (unsigned short)remaining
 					   : (unsigned short)*budget;
-	AT_S(prm, V17TXP_SHORT_001A) = (short)(remaining - n);
+	prm->countdown = (short)(remaining - n);
 
-	SGD_symbol_gen((struct sgd *)FIELD_PTR(prm, V17TXP_SGD), in, (short)n);
+	SGD_symbol_gen((struct sgd *)prm->sgd, in, (short)n);
 	ScrambleDataV17(modem, in, n);
 	nsamples = (short)ModDataV17(modem, in, out, n);
 	*budget = (short)((unsigned short)*budget - n);
@@ -2583,14 +2554,14 @@ TxHdxBridgeV17(void *modem, unsigned short *in, short *out, short *budget)
 short
 TxHdxSCR1V17(void *modem, unsigned short *in, short *out, short *budget)
 {
-	void *prm = FIELD_PTR(modem, V17TX_OBJ_PARAMS);
+	struct v17tx_priv *prm = TXPRIV(modem);
 	short remaining;
 	unsigned short n;
 	short nsamples;
 
-	AT_B(modem, V17TX_OBJ_RESULT) = V17TX_STATUS_TRAINING;
+	TXROOT(modem)->result.byte.status = V17TX_STATUS_TRAINING;
 
-	remaining = AT_S(prm, V17TXP_SHORT_001A);
+	remaining = prm->countdown;
 	if (remaining <= 0) {
 		TxNextStateV17(modem);
 		return 0;
@@ -2598,9 +2569,9 @@ TxHdxSCR1V17(void *modem, unsigned short *in, short *out, short *budget)
 
 	n = (remaining <= (short)*budget) ? (unsigned short)remaining
 					   : (unsigned short)*budget;
-	AT_S(prm, V17TXP_SHORT_001A) = (short)(remaining - n);
+	prm->countdown = (short)(remaining - n);
 
-	SGD_symbol_gen((struct sgd *)FIELD_PTR(prm, V17TXP_SGD), in, (short)n);
+	SGD_symbol_gen((struct sgd *)prm->sgd, in, (short)n);
 	ScrambleDataV17(modem, in, n);
 	nsamples = (short)ModDataV17(modem, in, out, n);
 	*budget = (short)((unsigned short)*budget - n);
@@ -2623,37 +2594,37 @@ TxHdxSCR1V17(void *modem, unsigned short *in, short *out, short *budget)
 short
 TxHdxDataV17(void *modem, unsigned short *in, short *out, short *budget)
 {
-	void *prm = FIELD_PTR(modem, V17TX_OBJ_PARAMS);
+	struct v17tx_priv *prm = TXPRIV(modem);
 	unsigned short req;
 	unsigned short taken;
 	short nsamples;
 
-	AT_B(modem, V17TX_OBJ_RESULT) = V17TX_STATUS_DATA;
+	TXROOT(modem)->result.byte.status = V17TX_STATUS_DATA;
 
-	if (AT_S(prm, V17TXP_SHORT_001A) != 0) {
-		short mode = AT_S(prm, V17TXP_MODE);
+	if (prm->countdown != 0) {
+		short mode = prm->mode;
 
-		AT_S(prm, V17TXP_SHORT_001A) = 0;
+		prm->countdown = 0;
 
 		if (mode == 1)
-			AT_B(modem, V17TX_OBJ_RESULT) =
+			TXROOT(modem)->result.byte.status =
 				V17TX_STATUS_DATA_RATE_9600;
 		else if (mode == 0)
-			AT_B(modem, V17TX_OBJ_RESULT) =
+			TXROOT(modem)->result.byte.status =
 				V17TX_STATUS_DATA_RATE_7200;
 		else if (mode == 2)
-			AT_B(modem, V17TX_OBJ_RESULT) =
+			TXROOT(modem)->result.byte.status =
 				V17TX_STATUS_DATA_RATE_12000;
 		else if (mode == 3)
-			AT_B(modem, V17TX_OBJ_RESULT) =
+			TXROOT(modem)->result.byte.status =
 				V17TX_STATUS_DATA_RATE_14400;
 		else
-			AT_B(modem, V17TX_OBJ_RESULT) = V17TX_RESULT_BYTE_07;
+			TXROOT(modem)->result.byte.status = V17TX_RESULT_BYTE_07;
 	}
 
 	req = (unsigned short)*budget;
 	taken = (unsigned short)
-		FIFO_read((struct fax_fifo *)FIELD_PTR(prm, V17TXP_FIFO),
+		FIFO_read((struct fax_fifo *)prm->fifo,
 			  in, req);
 
 	if (req <= taken) {
@@ -2663,7 +2634,7 @@ TxHdxDataV17(void *modem, unsigned short *in, short *out, short *budget)
 		return nsamples;
 	}
 
-	if (AT_I(prm, V17TXP_INT_0008) != 0) {
+	if (prm->r08 != 0) {
 		*budget = (short)(req - taken);
 		ScrambleDataV17(modem, in, taken);
 		nsamples = (short)ModDataV17(modem, in, out, taken);
@@ -2671,8 +2642,8 @@ TxHdxDataV17(void *modem, unsigned short *in, short *out, short *budget)
 		return nsamples;
 	}
 
-	*FIELD(modem, V17TX_OBJ_RESULT_B1) |= V17TX_RESULT_B1_BIT1;
-	AT_B(modem, V17TX_OBJ_RESULT) = V17TX_STATUS_UNDERRUN;
+	TXROOT(modem)->result.byte.flags |= V17TX_RESULT_B1_BIT1;
+	TXROOT(modem)->result.byte.status = V17TX_STATUS_UNDERRUN;
 	ScrambleDataV17(modem, in, req);
 	nsamples = (short)ModDataV17(modem, in, out, req);
 	*budget = (short)((unsigned short)*budget - req);
@@ -2689,19 +2660,19 @@ TxHdxDataV17(void *modem, unsigned short *in, short *out, short *budget)
 int
 V17TX_control(void *fp, const struct v17tx_control_req *req)
 {
-	void *priv;
-	void *block;
+	struct v17tx_priv *priv;
+	struct v17tx_fp *block;
 	struct fpm_pps *pps;
 	short mode;
 
 	if (req == 0)
 		return 0;
 
-	priv = FIELD_PTR(fp, V17TX_OBJ_PARAMS);
-	block = FIELD_PTR(fp, V17TX_OBJ_FP);
-	mode = AT_S(priv, V17TXP_MODE);
+	priv = TXPRIV(fp);
+	block = TXBLOCK(fp);
+	mode = priv->mode;
 
-	pps = (struct fpm_pps *)(void *)FIELD(block, V17FP_PPS);
+	pps = &block->pps;
 	pps->cfg.scale = req->scale_mul;
 	pps->cfg.scale = V17TX_PPS_SCALE[mode] * req->scale_mul;
 
@@ -2709,12 +2680,13 @@ V17TX_control(void *fp, const struct v17tx_control_req *req)
 	((struct v17tx_cfg *)fp)->int_0008 = req->int_0004;
 
 	if (req->ctl0 & V17TXCTL_CTL0_BIT2)
-		AT_B(fp, 0x10) |= V17_STATUS_FLAG_04;	/* struct v17tx_cfg::
+		*(unsigned char *)(void *)&TXROOT(fp)->cfg.int_0010
+			|= V17_STATUS_FLAG_04;	/* struct v17tx_cfg::
 							 * int_0010's low byte */
 
-	AT_I(priv, V17TXP_INT_0008) = 0;
+	priv->r08 = 0;
 	if (req->ctl1 & V17TXCTL_CTL1_BIT4)
-		AT_I(priv, V17TXP_INT_0008) = 1;
+		priv->r08 = 1;
 
 	if (req->ctl1 & V17TXCTL_CTL1_BIT1) {
 		V17TX_create(fp, fp);
@@ -2734,21 +2706,16 @@ V17TX_status(void *params, struct v17_status *status)
 	if (status == 0)
 		return 0;
 
-	/*
-	 * `params` stays a byte pointer: it is an unidentified block (see
-	 * v17fax.h), and it is also what keeps the dead store below alive,
-	 * since a character type may alias anything.
-	 */
 	p = (unsigned char *)params;
 
-	status->protocol = (short)AT_US(p, 0x00);
-	status->tx_bps = (short)AT_US(p, 0x02);
+	status->protocol = TXROOT(params)->cfg.protocol;
+	status->tx_bps = TXROOT(params)->cfg.bitrate;
 	status->rx_bps = 0;
 	status->snr_ok = 0;
 	status->snr = 0;
 	status->short_0a = 0;
 	status->short_0c = 0;
-	status->short_10 = (short)AT_US(p, 0x02);
+	status->short_10 = TXROOT(params)->cfg.bitrate;
 	status->short_12 = 0;
 
 	/*
@@ -2760,7 +2727,7 @@ V17TX_status(void *params, struct v17_status *status)
 	status->flags1 &= (unsigned char)~V17_STATUS_FLAGS1_CLEAR;
 	status->flags = (unsigned char)(p[0x10] & V17_STATUS_FLAG_04);
 
-	status->int_18 = AT_I(p, 0x18);
+	status->int_18 = TXROOT(params)->cfg.int_0018;
 
 	return 1;
 }
@@ -2787,8 +2754,8 @@ DemodDataV17(void *modem, short *in, unsigned short *bits, unsigned short count)
 	/* Not the object's `%eax`; the same value.  D1091. */
 	signal = RXS_AGC(RXS(modem))->signal;
 
-	if (AT_S(CTL(modem), V17RXC_STATE) == V17RX_STATE_START) {
-		short *buf = (short *)FIELD_PTR(CTL(modem), V17RXC_SCRATCH);
+	if (RXCTL(modem)->state == V17RX_STATE_START) {
+		short *buf = (short *)RXCTL(modem)->scratch;
 		unsigned short i;
 
 		/* No `>> 1` here.  F9103. */
@@ -2796,14 +2763,14 @@ DemodDataV17(void *modem, short *in, unsigned short *bits, unsigned short count)
 			buf[i] = in[i];
 
 		FPM_TONE_kill((struct fpm_tone *)
-				FIELD_PTR(CTL(modem), V17RXC_TONE),
-			      (short *)FIELD_PTR(CTL(modem), V17RXC_SCRATCH),
+				RXCTL(modem)->tone,
+			      (short *)RXCTL(modem)->scratch,
 			      (short)count);
 
 		if (FPM_MTD_detect((struct fpm_mtd *)
-					FIELD_PTR(CTL(modem), V17RXC_MTD),
+					RXCTL(modem)->mtd,
 				   (const short *)
-					FIELD_PTR(CTL(modem), V17RXC_SCRATCH),
+					RXCTL(modem)->scratch,
 				   (short)count) != 0)
 			return 0;
 	}
@@ -2811,16 +2778,16 @@ DemodDataV17(void *modem, short *in, unsigned short *bits, unsigned short count)
 	n = (unsigned short)FPM_MRF_filter(
 			RXS_MRF(RXS(modem)),
 			in,
-			(short *)FIELD_PTR(RXS(modem), V17RXS_BUF_MRF),
+			(short *)RXSTATE(modem)->buf_mrf,
 			(short)count);
 
 	rxs = RXS(modem);
-	RXS_SRE(rxs)->adapt = signal & AT_I(rxs, V17RXS_INT_0004);
+	RXS_SRE(rxs)->adapt = signal & ((struct v17rx_state *)rxs)->r04;
 
 	n = FPM_SRE_recover(RXS_SRE(RXS(modem)),
 			    (const short *)
-				FIELD_PTR(RXS(modem), V17RXS_BUF_MRF),
-			    (short *)FIELD_PTR(RXS(modem), V17RXS_BUF_SRE),
+				RXSTATE(modem)->buf_mrf,
+			    (short *)RXSTATE(modem)->buf_sre,
 			    (short)n);
 
 	if (n > V17RXS_SRE_MAX && DSPLIB_DEBUG_ON())
@@ -2828,12 +2795,12 @@ DemodDataV17(void *modem, short *in, unsigned short *bits, unsigned short count)
 
 	rxs = RXS(modem);
 	RXS_FSE(rxs)->tilt_on = 0;
-	RXS_FSE(rxs)->pll_on = signal & AT_I(rxs, V17RXS_INT_0008);
-	RXS_FSE(rxs)->lms_on = signal & AT_I(rxs, V17RXS_INT_0010);
+	RXS_FSE(rxs)->pll_on = signal & ((struct v17rx_state *)rxs)->r08;
+	RXS_FSE(rxs)->lms_on = signal & ((struct v17rx_state *)rxs)->r10;
 
 	return FPM_FSE_receive(RXS_FSE(RXS(modem)),
 			       (const short *)
-				FIELD_PTR(RXS(modem), V17RXS_BUF_SRE),
+				RXSTATE(modem)->buf_sre,
 			       bits, n);
 }
 
@@ -2843,7 +2810,7 @@ void
 DescrambleDataV17(void *modem, unsigned short *data, unsigned short count)
 {
 	SDM_descrambler((struct fpm_sdm *)(void *)
-				FIELD(RXS(modem), V17RXS_SDM),
+				&RXSTATE(modem)->sdm,
 			data, count);
 }
 
@@ -2852,20 +2819,20 @@ DescrambleDataV17(void *modem, unsigned short *data, unsigned short count)
 int
 CarrierDetectV17(void *modem)
 {
-	unsigned char *rx;
-	unsigned char *ctl;
+	struct v17rx_state *rx;
+	struct v17rx_priv *ctl;
 	int r;
 
-	rx = (unsigned char *)FIELD_PTR(modem, V17RX_OBJ_STATE);
-	ctl = (unsigned char *)FIELD_PTR(modem, V17RX_OBJ_CTL);
+	rx = RXSTATE(modem);
+	ctl = RXCTL(modem);
 
 	/* +0xd0 is read 32-bit HERE and 16-bit in QualityDetectV17. */
-	r = AT_I(rx, V17RXS_AGC_SIGNAL) & AT_I(rx, V17RXS_INT_0120);
+	r = rx->agc.value.signal & rx->sre.active;
 
-	if (AT_I(ctl, V17RXC_INT_0010) != 0
-	    && AT_I(rx, V17RXS_EPOCH) != 0
-	    && AT_S(rx, V17RXS_SHORT_0094) > V17RXS_0094_MIN) {
-		if (AT_S(rx, V17RXS_DEC_ERROR) > V17RXS_DEC_ERROR_MAX)
+	if (ctl->r10 != 0
+	    && rx->fse.lms_force != 0
+	    && (short)rx->dec.sym_count > V17RXS_0094_MIN) {
+		if (rx->fse.mse > V17RXS_DEC_ERROR_MAX)
 			r = 0;
 		else
 			r &= 1;
@@ -2874,7 +2841,7 @@ CarrierDetectV17(void *modem)
 		 * merged in between; it is two `if`s in the source and not
 		 * one, or the compare would have been shared.
 		 */
-		if (AT_S(rx, V17RXS_DEC_ERROR) > V17RXS_DEC_ERROR_MAX) {
+		if (rx->fse.mse > V17RXS_DEC_ERROR_MAX) {
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
 					"V17 Decoder error too big..." " no carrier\n");
@@ -2889,46 +2856,46 @@ CarrierDetectV17(void *modem)
 short
 DataCarrierDetectV17(void *modem, const short *in, unsigned short count)
 {
-	unsigned char *rx;
-	unsigned char *ctl;
+	struct v17rx_state *rx;
+	struct v17rx_priv *ctl;
 	short r;
 
-	rx = (unsigned char *)FIELD_PTR(modem, V17RX_OBJ_STATE);
-	ctl = (unsigned char *)FIELD_PTR(modem, V17RX_OBJ_CTL);
+	rx = RXSTATE(modem);
+	ctl = RXCTL(modem);
 
 	/* +0xd0 is read 16-bit HERE and 32-bit in CarrierDetectV17. */
-	r = (short)(AT_S(rx, V17RXS_AGC_SIGNAL) & AT_I(rx, V17RXS_INT_0120));
+	r = (short)(rx->agc.narrow.signal & rx->sre.active);
 
-	if (AT_S(ctl, V17RXC_SHORT_0020) == 0) {
+	if (ctl->r20 == 0) {
 		/*
 		 * The same three gates and the same two arms as
 		 * `CarrierDetectV17`, including its doubled test of the
 		 * decoder error and its format string.
 		 */
-		if (AT_I(ctl, V17RXC_INT_0010) != 0
-		    && AT_I(rx, V17RXS_EPOCH) != 0
-		    && AT_S(rx, V17RXS_SHORT_0094) > V17RXS_0094_MIN) {
-			if (AT_S(rx, V17RXS_DEC_ERROR) > V17RXS_DEC_ERROR_MAX)
+		if (ctl->r10 != 0
+		    && rx->fse.lms_force != 0
+		    && (short)rx->dec.sym_count > V17RXS_0094_MIN) {
+			if (rx->fse.mse > V17RXS_DEC_ERROR_MAX)
 				r = 0;
 			else
 				r &= 1;
-			if (AT_S(rx, V17RXS_DEC_ERROR) > V17RXS_DEC_ERROR_MAX) {
+			if (rx->fse.mse > V17RXS_DEC_ERROR_MAX) {
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
 						"V17 Decoder error too big..." " no carrier\n");
 			}
 		}
 	} else {
-		if (AT_S(rx, V17RXS_DEC_ERROR) > V17RXS_DEC_ERROR_MAX
+		if (rx->fse.mse > V17RXS_DEC_ERROR_MAX
 		    || (r & 1) == 0)
-			AT_S(ctl, V17RXC_SHORT_002E) = 1;
+			ctl->r2e = 1;
 
 		r = 1;
-		if (AT_S(ctl, V17RXC_SHORT_002E) != 0) {
+		if (ctl->r2e != 0) {
 			short *buf;
 			short i;
 
-			buf = (short *)FIELD_PTR(ctl, V17RXC_BUF2);
+			buf = (short *)ctl->buf2;
 			for (i = 0; i < (int)count; i++)
 				buf[i] = (short)(unsigned short)in[i];
 
@@ -2937,21 +2904,21 @@ DataCarrierDetectV17(void *modem, const short *in, unsigned short count)
 			 * constant 1 the callee never reads; see D1031.
 			 */
 			FPM_AGC_agc((struct fpm_agc *)(void *)
-					FIELD(ctl, V17RXC_AGC),
-				    (short *)FIELD_PTR(ctl, V17RXC_BUF2),
+					&ctl->agc,
+				    (short *)ctl->buf2,
 				    count);
 
 			if (FPM_MTD_detect((struct fpm_mtd *)
-						FIELD_PTR(ctl, V17RXC_MTD2),
+						ctl->mtd2,
 					   (const short *)
-						FIELD_PTR(ctl, V17RXC_BUF2),
+						ctl->buf2,
 					   (short)count) != 0)
-				AT_S(ctl, V17RXC_OFFBAND) = 0;
+				ctl->offband = 0;
 			else
-				AT_S(ctl, V17RXC_OFFBAND) = (short)
-					(AT_US(ctl, V17RXC_OFFBAND) + count);
+				ctl->offband = (short)
+					((unsigned short)ctl->offband + count);
 
-			if (AT_S(ctl, V17RXC_OFFBAND) > V17RXC_OFFBAND_MAX) {
+			if (ctl->offband > V17RXC_OFFBAND_MAX) {
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
 						"V17: V21 Carrier detected\n");
@@ -2960,7 +2927,7 @@ DataCarrierDetectV17(void *modem, const short *in, unsigned short count)
 		}
 	}
 
-	if (AT_S(rx, V17RXS_SHORT_4FB4) != 0) {
+	if (rx->energy_watch != 0) {
 		short rms;
 		unsigned short phase;
 
@@ -2971,7 +2938,7 @@ DataCarrierDetectV17(void *modem, const short *in, unsigned short count)
 		 * smoothing: the object is `imul $0x32fe ; sar $0xf` and
 		 * nothing else.
 		 */
-		if ((int)rms < ((int)AT_S(rx, V17RXS_RMS_REF)
+		if ((int)rms < ((int)rx->rms_ref
 				* V17RXS_RMS_DROP_Q15) >> 15) {
 			r = 0;
 			if (DSPLIB_DEBUG_ON())
@@ -2979,12 +2946,12 @@ DataCarrierDetectV17(void *modem, const short *in, unsigned short count)
 					"sudden energy drop > 8[dB]," " no carrier");
 		}
 
-		phase = (unsigned short)(AT_US(rx, V17RXS_RMS_PHASE) + 1);
+		phase = (unsigned short)((unsigned short)rx->rms_phase + 1);
 		if ((short)phase == V17RXS_RMS_PERIOD) {
-			AT_S(rx, V17RXS_RMS_REF) = rms;
-			AT_S(rx, V17RXS_RMS_PHASE) = 0;
+			rx->rms_ref = rms;
+			rx->rms_phase = 0;
 		} else {
-			AT_S(rx, V17RXS_RMS_PHASE) = (short)phase;
+			rx->rms_phase = (short)phase;
 		}
 	}
 
@@ -2996,21 +2963,21 @@ DataCarrierDetectV17(void *modem, const short *in, unsigned short count)
 short
 QualityDetectV17(void *modem)
 {
-	unsigned char *rx;
+	struct v17rx_state *rx;
 	short r;
 	short err;
 	short n;
 
-	rx = (unsigned char *)FIELD_PTR(modem, V17RX_OBJ_STATE);
+	rx = RXSTATE(modem);
 
 	/* +0xd0 is read 16-bit HERE and 32-bit in CarrierDetectV17. */
-	r = (short)(AT_S(rx, V17RXS_AGC_SIGNAL) & AT_I(rx, V17RXS_INT_0120));
+	r = (short)(rx->agc.narrow.signal & rx->sre.active);
 
 	/*
 	 * Read BEFORE the diagnostic, because the object reads it before the
 	 * call and no compiler may hoist a load across one.
 	 */
-	err = AT_S(rx, V17RXS_DEC_ERROR);
+	err = rx->fse.mse;
 
 	if (r == 0) {
 		if (DSPLIB_DEBUG_ON())
@@ -3019,27 +2986,27 @@ QualityDetectV17(void *modem)
 		r = V17_QUALITY_UNRELIABLE;
 	}
 
-	n = (short)AT_US(rx, V17RXS_QCOUNT);
+	n = (short)(unsigned short)rx->qcount;
 	if (n == 0) {
-		AT_S(rx, V17RXS_QAVG) = err;
-		AT_S(rx, V17RXS_QCOUNT) = 1;
+		rx->qavg = err;
+		rx->qcount = 1;
 		return r;
 	}
 
 	if (n > V17RXS_QCOUNT_SETTLE) {
 		if (n != V17RXS_QCOUNT_JUDGE)
 			return r;
-		if (AT_S(rx, V17RXS_QAVG)
-		    <= (short)AT_US(rx, V17RXS_SHORT_4FB0))
-			AT_S(rx, V17RXS_SHORT_4FB2) = 1;
+		if (rx->qavg
+		    <= (short)(unsigned short)rx->r4fb0)
+			rx->r4fb2 = 1;
 	} else {
-		AT_S(rx, V17RXS_QAVG) = (short)
+		rx->qavg = (short)
 			(((err * V17RXS_QWEIGHT_NEW + V17RXS_QROUND) >> 15)
-			 + ((AT_S(rx, V17RXS_QAVG) * V17RXS_QWEIGHT_OLD
+			 + ((rx->qavg * V17RXS_QWEIGHT_OLD
 			     + V17RXS_QROUND) >> 15));
 	}
 
-	AT_S(rx, V17RXS_QCOUNT) = (short)(n + 1);
+	rx->qcount = (short)(n + 1);
 	return r;
 }
 
@@ -3048,10 +3015,10 @@ QualityDetectV17(void *modem)
 int
 EpochDetectV17(void *modem)
 {
-	unsigned char *rx;
+	struct v17rx_state *rx;
 
-	rx = (unsigned char *)FIELD_PTR(modem, V17RX_OBJ_STATE);
-	return AT_I(rx, V17RXS_EPOCH) != 0;
+	rx = RXSTATE(modem);
+	return rx->fse.lms_force != 0;
 }
 
 /* --------------------------------------------------------------------- */
@@ -3059,10 +3026,10 @@ EpochDetectV17(void *modem)
 short
 GetSNRV17(void *modem)
 {
-	unsigned char *rx;
+	struct v17rx_state *rx;
 
-	rx = (unsigned char *)FIELD_PTR(modem, V17RX_OBJ_STATE);
-	return (short)(13 - AT_US(rx, V17RXS_DEC_ERROR));
+	rx = RXSTATE(modem);
+	return (short)(13 - (unsigned short)rx->fse.mse);
 }
 
 /* --------------------------------------------------------------------- */
@@ -3070,26 +3037,26 @@ GetSNRV17(void *modem)
 void
 StoreCoefV17(void *modem)
 {
-	unsigned char *rx;
+	struct v17rx_state *rx;
 	short *d0;
 	short *d1;
 	const unsigned short *s0;
 	const unsigned short *s1;
 	unsigned short i;
 
-	rx = (unsigned char *)FIELD_PTR(modem, V17RX_OBJ_STATE);
-	d0 = (short *)FIELD_PTR(modem, V17RX_OBJ_COEFSAVE0);
-	d1 = (short *)FIELD_PTR(modem, V17RX_OBJ_COEFSAVE1);
-	s0 = (const unsigned short *)FIELD_PTR(rx, V17RXS_COEF0);
-	s1 = (const unsigned short *)FIELD_PTR(rx, V17RXS_COEF1);
+	rx = RXSTATE(modem);
+	d0 = (short *)RXROOT(modem)->cfg.coefsave0;
+	d1 = (short *)RXROOT(modem)->cfg.coefsave1;
+	s0 = (const unsigned short *)rx->fse.icoeff;
+	s1 = (const unsigned short *)rx->fse.qcoeff;
 
 	for (i = 0; i < V17_COEF_N; i++) {
 		d0[i] = (short)s0[i];
 		d1[i] = (short)s1[i];
 	}
 
-	*(short *)FIELD_PTR(modem, V17RX_OBJ_RATESAVE) =
-		(short)AT_I(rx, V17RXS_RATE);
+	*(short *)RXROOT(modem)->cfg.ratesave =
+		(short)rx->fse.freq;
 }
 
 /* --------------------------------------------------------------------- */
@@ -3097,13 +3064,13 @@ StoreCoefV17(void *modem)
 void
 Restore_rateV17(void *modem)
 {
-	unsigned char *rx;
+	struct v17rx_state *rx;
 	const short *saved;
 
-	rx = (unsigned char *)FIELD_PTR(modem, V17RX_OBJ_STATE);
-	saved = (const short *)FIELD_PTR(modem, V17RX_OBJ_RATESAVE);
+	rx = RXSTATE(modem);
+	saved = (const short *)RXROOT(modem)->cfg.ratesave;
 
-	AT_I(rx, V17RXS_RATE) = *saved;
-	AT_S(rx, V17RXS_SHORT_01F8) =
-		(short)(AT_US(rx, V17RXS_USHORT_018C) + 5);
+	rx->fse.freq = *saved;
+	rx->fse.sym_count =
+		(short)(rx->fse.cfg.train_sym + 5);
 }

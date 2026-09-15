@@ -4,43 +4,43 @@
  },
  {
   "label": "the encoder is dispatched from the slot above the one the selector names",
-  "find": "\ttbl[sel]((struct v32_smc *)(void *)FIELD(fp, V32FP_SMC),",
-  "replace": "\ttbl[sel + 1]((struct v32_smc *)(void *)FIELD(fp, V32FP_SMC),"
+  "find": "\ttbl[sel](&fp->tx_smc, &fp->symout, data, count);",
+  "replace": "\ttbl[sel + 1](&fp->tx_smc, &fp->symout, data, count);"
  },
  {
   "label": "the encoder table is read one slot high, which is abs where V32FP_recreate laid dif",
-  "find": "\ttbl = (const v32_encoder_fn *)(void *)FIELD(fp, V32FP_ENCODERS);",
-  "replace": "\ttbl = (const v32_encoder_fn *)(void *)FIELD(fp, V32FP_ENCODERS + 4);"
+  "find": "\ttbl = fp->encoders;",
+  "replace": "\ttbl = (const v32_encoder_fn *)(void *)((unsigned char *)fp + V32FP_ENCODERS + 4);"
  },
  {
   "label": "the selector is read from the two bytes above it",
-  "find": "\tsel = *(short *)(void *)FIELD(fp, V32FP_ENCODER_SEL);",
-  "replace": "\tsel = *(short *)(void *)FIELD(fp, V32FP_ENCODER_SEL + 2);"
+  "find": "\tsel = fp->encoder_sel;",
+  "replace": "\tsel = *(short *)(void *)((unsigned char *)fp + V32FP_ENCODER_SEL + 2);"
  },
  {
   "label": "the selector indexes the table unsigned, which agrees over every value V32FP_recreate can leave and not over a negative one",
-  "find": "\ttbl[sel]((struct v32_smc *)(void *)FIELD(fp, V32FP_SMC),",
-  "replace": "\ttbl[(unsigned short)sel]((struct v32_smc *)(void *)FIELD(fp, V32FP_SMC),"
+  "find": "\ttbl[sel](&fp->tx_smc, &fp->symout, data, count);",
+  "replace": "\ttbl[(unsigned short)sel](&fp->tx_smc, &fp->symout, data, count);"
  },
  {
   "label": "the coder and the ring are handed to the encoder the other way round",
-  "find": "\ttbl[sel]((struct v32_smc *)(void *)FIELD(fp, V32FP_SMC),\n\t\t (struct v32_symout *)(void *)FIELD(fp, V32FP_SYMOUT),\n\t\t data, count);",
-  "replace": "\ttbl[sel]((struct v32_smc *)(void *)FIELD(fp, V32FP_SYMOUT),\n\t\t (struct v32_symout *)(void *)FIELD(fp, V32FP_SMC),\n\t\t data, count);"
+  "find": "\ttbl[sel](&fp->tx_smc, &fp->symout, data, count);",
+  "replace": "\ttbl[sel]((struct v32_smc *)(void *)&fp->symout,\n\t\t (struct v32_symout *)(void *)&fp->tx_smc, data, count);"
  },
  {
   "label": "the coder is taken from V.22's offset rather than V.32's",
-  "find": "\ttbl[sel]((struct v32_smc *)(void *)FIELD(fp, V32FP_SMC),",
-  "replace": "\ttbl[sel]((struct v32_smc *)(void *)FIELD(fp, 0x30),"
+  "find": "\ttbl[sel](&fp->tx_smc, &fp->symout, data, count);",
+  "replace": "\ttbl[sel]((struct v32_smc *)(void *)((unsigned char *)fp + 0x30),\n\t\t &fp->symout, data, count);"
  },
  {
   "label": "the shaper is filtered from a ring the encoder did not write",
-  "find": "\t\t\t      (struct fpm_smc_ring *)(void *)\n\t\t\t\t\tFIELD(fp, V32FP_SYMOUT),\n\t\t\t      out, count);\n}\n\nunsigned short\nTxNoCarrierV32",
-  "replace": "\t\t\t      (struct fpm_smc_ring *)(void *)\n\t\t\t\t\tFIELD(fp, V32FP_SYMOUT + 4),\n\t\t\t      out, count);\n}\n\nunsigned short\nTxNoCarrierV32"
+  "find": "\t\t\t      (struct fpm_smc_ring *)(void *)\n\t\t\t\t\t&fp->symout,\n\t\t\t      out, count);\n}\n\nunsigned short\nTxNoCarrierV32",
+  "replace": "\t\t\t      (struct fpm_smc_ring *)(void *)\n\t\t\t\t\t((unsigned char *)&fp->symout + 4),\n\t\t\t      out, count);\n}\n\nunsigned short\nTxNoCarrierV32"
  },
  {
   "label": "the encoder's count is one short, so the last data word never reaches the ring",
-  "find": "\t\t data, count);",
-  "replace": "\t\t data, (unsigned short)(count ? count - 1 : 0));"
+  "find": "\ttbl[sel](&fp->tx_smc, &fp->symout, data, count);",
+  "replace": "\ttbl[sel](&fp->tx_smc, &fp->symout, data,\n\t\t (unsigned short)(count ? count - 1 : 0));"
  },
  {
   "label": "the shaper's count is the sample count rather than the symbol count",
@@ -124,17 +124,17 @@
  },
  {
   "label": "the coder is taken from the shaper's offset",
-  "find": "\tsmc = (struct v32_smc *)(void *)FIELD(fp, V32FP_SMC);",
-  "replace": "\tsmc = (struct v32_smc *)(void *)FIELD(fp, V32FP_PPS);"
+  "find": "\tsmc = &fp->tx_smc;",
+  "replace": "\tsmc = (struct v32_smc *)(void *)&fp->pps;"
  },
  {
   "label": "the shaper is taken from the coder's offset",
-  "find": "\treturn FPM_PPS_filter((struct fpm_pps *)(void *)FIELD(fp, V32FP_PPS),\n\t\t\t      /* D431 again */",
-  "replace": "\treturn FPM_PPS_filter((struct fpm_pps *)(void *)FIELD(fp, V32FP_SMC),\n\t\t\t      /* D431 again */"
+  "find": "\treturn FPM_PPS_filter(&fp->pps,\n\t\t\t      /* D431 again */",
+  "replace": "\treturn FPM_PPS_filter((struct fpm_pps *)(void *)&fp->tx_smc,\n\t\t\t      /* D431 again */"
  },
  {
   "label": "the transmitter's block is taken from V.17's instance offset",
-  "find": "\tfp = FIELD_PTR(modem, V32_OBJ_FP);\n\tring = (struct v32_symout *)",
-  "replace": "\tfp = FIELD_PTR(modem, 0x28);\n\tring = (struct v32_symout *)"
+  "find": "\tfp = ((struct v32_modem *)modem)->fp;\n\tring = &fp->symout;",
+  "replace": "\tfp = *(struct v32_fp **)(void *)((unsigned char *)modem + 0x28);\n\tring = &fp->symout;"
  }
 ]

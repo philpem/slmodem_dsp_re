@@ -114,6 +114,7 @@
 
 #ifndef DSPLIB_V32HDX_H
 #define DSPLIB_V32HDX_H
+#include "dsplib/v32struct.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -145,8 +146,6 @@ extern "C" {
  * established by either driver, and `short *` here is the shape the output
  * pointer forces on its sibling rather than a reading of the states.
  */
-typedef short (*v32_txhdx_fn)(void *modem, short *data, short *out,
-			      unsigned short *left);
 
 /*
  * A receive state.  The argument list is `DemodDataV32`'s with the count
@@ -157,8 +156,6 @@ typedef short (*v32_txhdx_fn)(void *modem, short *data, short *out,
  * object claims a value.  `RxHdxNull` leaves `RxClampV32`'s return in %eax
  * incidentally, which is not a promise.
  */
-typedef void (*v32_rxhdx_fn)(void *modem, short *in, unsigned short *out,
-			     unsigned short *count);
 
 /**
  * @brief Drive the V.32 half-duplex TRANSMIT machine for one block.

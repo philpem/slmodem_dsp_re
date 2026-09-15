@@ -1,3 +1,4 @@
+#include "dsplib/period_byte_layout.h"
 /**
  * @file v27fax.h
  * @brief ITU-T V.27ter (fax): the receiver's primitives, the two
@@ -82,8 +83,18 @@
 #ifndef DSPLIB_V27FAX_H
 #define DSPLIB_V27FAX_H
 
-struct fpm_fse;
-struct v27rx_cfg;
+#include "dsplib/faxcfg.h"
+#include "dsplib/faxfifo.h"
+#include "dsplib/fpm_agc.h"
+#include "dsplib/fpm_fse.h"
+#include "dsplib/fpm_mrf.h"
+#include "dsplib/fpm_pps.h"
+#include "dsplib/fpm_smc.h"
+#include "dsplib/fpm_sre.h"
+#include "dsplib/sdmv27.h"
+#include "dsplib/sgd.h"
+
+struct fpm_mtd;
 
 /*
  * The transmit handle's first 32 bytes, `V27TX_create` copies wholesale from
@@ -149,6 +160,139 @@ struct v27tx_cfg {
 					established sibling stays unnamed   */
 	int	int_001c;	/* +0x1c  `FPM_PPS_CFG`'s `aux`, across the
 					`(void *)(long)` idiom D1250 names   */
+};
+
+union v27_status_word {
+	int word;
+	struct {
+		unsigned char status;
+		unsigned char flags;
+		unsigned char flags2;
+		unsigned char byte3;
+	} byte;
+};
+
+/* Observed caller-owned status prefix; this does not bound the allocation. */
+struct v27_status_prefix {
+	unsigned short protocol, tx_bps, rx_bps, quality;
+	unsigned short zero_08, zero_0a, zero_0c, short_0e;
+	unsigned short word_10, zero_12;
+	unsigned char flags, flags2;
+	short short_16;
+	int word_18;
+};
+
+struct v27_rx_decoder {
+	unsigned short epoch_i0;
+	unsigned short epoch_q0;
+	unsigned short epoch_i1;
+	unsigned short epoch_q1;
+	unsigned short epoch_i2;
+	unsigned short epoch_q2;
+	int eight_phase;
+	int train_short;
+	unsigned short phase_mask;
+	short last;
+	const short *pmap;
+	unsigned short train_count;
+	short epoch_avg;
+	const short *angles;
+	short angle_prev;
+	unsigned short sym_count;
+};
+
+struct v27_rx_block {
+	int int_0000;
+	int en_sre_adapt;
+	int en_fse_pll;
+	int int_000c;
+	int en_fse_lms;
+	struct v27_rx_decoder dec;
+	struct sdmv27 sdm;
+	unsigned char pad_004a[2];
+	struct fpm_mrf mrf;
+	struct fpm_agc agc;
+	struct fpm_sre sre;
+	struct fpm_fse fse;
+	unsigned char pad_4f3c[4];
+	short *buf_a;
+	short *buf_b;
+	short q_acc;
+	unsigned short q_count;
+	unsigned short q_limit;
+	short q_flag;
+	short rms_on;
+	short rms_ref;
+	unsigned short rms_count;
+	unsigned char pad_4f56[2];
+};
+
+struct v27_rx_shared {
+	struct fpm_mtd *mtd;
+	int int_0004;
+	short rate;
+	short train_long;
+	short (*handler)(void *modem, short *in, short *out,
+			 unsigned short *count);
+	short rx_state;
+	unsigned short countdown;
+	unsigned short v21_watch;
+	unsigned char pad_0016[2];
+	struct fpm_mtd *mtd_v21;
+	short *buf;
+	unsigned short v21_samples;
+	short v21_armed;
+	struct fpm_agc agc;
+};
+
+struct v27_rx {
+	struct v27rx_cfg cfg;
+	union v27_status_word result;
+	short *eq_out_i;
+	short *eq_out_q;
+	unsigned short *eq_n_out;
+	short *eq_icoeff;
+	short *eq_qcoeff;
+	unsigned short eq_taps;
+	unsigned char pad_0036[2];
+	int int_0038;
+	int int_003c;
+	short short_0040;
+	unsigned char pad_0042[2];
+	int int_0044;
+	int int_0048;
+	short short_004c;
+	unsigned char pad_004e[2];
+	struct v27_rx_shared *shared;
+	struct v27_rx_block *rx;
+};
+
+struct v27_tx_source {
+	struct fax_fifo *fifo;
+	struct sgd *sgd;
+	int int_0008;
+	short rate;
+	short train_long;
+	short (*handler)(void *modem, unsigned short *in, short *out,
+			 short *budget);
+	short state;
+	short countdown;
+};
+
+struct v27_tx_block {
+	unsigned char pad_0000[8];
+	struct fpm_smc_ring ring;
+	struct sdmv27 sdm;
+	unsigned char pad_002a[2];
+	struct fpm_smc smc;
+	struct fpm_pps pps;
+};
+
+struct v27_tx {
+	struct v27tx_cfg cfg;
+	union v27_status_word result;
+	struct v27_tx_source *source;
+	struct v27_tx_block *tx;
 };
 
 extern struct v27tx_cfg V27TX_CFG;
@@ -1974,5 +2118,36 @@ void SetScramblerV27(void *modem);
  */
 void GenEQTrnSequenceV27(void *modem, unsigned short *buf,
 			 unsigned short count);
+
+#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+#define V27_LAYOUT_ASSERT(name, expr) typedef char name[(expr) ? 1 : -1]
+V27_LAYOUT_ASSERT(v27_rx_decoder_size, sizeof(struct v27_rx_decoder) == 0x28);
+V27_LAYOUT_ASSERT(v27_rx_block_size, sizeof(struct v27_rx_block) == 0x4f58);
+V27_LAYOUT_ASSERT(v27_rx_shared_size, sizeof(struct v27_rx_shared) == 0x50);
+V27_LAYOUT_ASSERT(v27_rx_size, sizeof(struct v27_rx) == 0x58);
+V27_LAYOUT_ASSERT(v27_tx_source_size, sizeof(struct v27_tx_source) == 0x18);
+V27_LAYOUT_ASSERT(v27_tx_block_size, sizeof(struct v27_tx_block) == 0x94);
+V27_LAYOUT_ASSERT(v27_tx_size, sizeof(struct v27_tx) == 0x2c);
+V27_LAYOUT_ASSERT(v27_status_word_size, sizeof(union v27_status_word) == 4);
+V27_LAYOUT_ASSERT(v27_rx_shared_handler_off,
+	__builtin_offsetof(struct v27_rx_shared, handler) == 0x0c);
+V27_LAYOUT_ASSERT(v27_rx_block_fse_off,
+	__builtin_offsetof(struct v27_rx_block, fse) == 0x124);
+V27_LAYOUT_ASSERT(v27_rx_block_buf_a_off,
+	__builtin_offsetof(struct v27_rx_block, buf_a) == 0x4f40);
+V27_LAYOUT_ASSERT(v27_rx_shared_off,
+	__builtin_offsetof(struct v27_rx, shared) == 0x50);
+V27_LAYOUT_ASSERT(v27_rx_block_off,
+	__builtin_offsetof(struct v27_rx, rx) == 0x54);
+V27_LAYOUT_ASSERT(v27_tx_source_handler_off,
+	__builtin_offsetof(struct v27_tx_source, handler) == 0x10);
+V27_LAYOUT_ASSERT(v27_tx_private_pps_off,
+	__builtin_offsetof(struct v27_tx_block, pps) == 0x5c);
+V27_LAYOUT_ASSERT(v27_tx_source_off,
+	__builtin_offsetof(struct v27_tx, source) == 0x24);
+V27_LAYOUT_ASSERT(v27_tx_private_off,
+	__builtin_offsetof(struct v27_tx, tx) == 0x28);
+#undef V27_LAYOUT_ASSERT
+#endif
 
 #endif /* DSPLIB_V27FAX_H */

@@ -8,9 +8,10 @@
  * pattern to arrive.  Nothing here touches the signal path.
  *
  * ---------------------------------------------------------------------------
- * THE INSTANCE IS NOT MODELLED, following `include/dsplib/v32data.h`'s ruling
- * and `include/dsplib/v22data.h`'s before it: the parameter is `void *` and
- * the offsets are named constants.  Two pointers hang off the modem object --
+ * The sequence code uses the incremental, pointer-free object views in
+ * `v32struct.h`.  They deliberately stop before either object's pointer-
+ * bearing remainder; the modem root remains offset-addressed.  Two pointers
+ * hang off that root --
  *
  *     obj + 0x64   the half-duplex / handshake context, `V32_OBJ_HDX`
  *     obj + 0x68   the DSP block, `V32_OBJ_FP`, v32data.h's
@@ -55,6 +56,8 @@
 #ifndef DSPLIB_V32SEQ_H
 #define DSPLIB_V32SEQ_H
 
+#include "dsplib/v32struct.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -76,7 +79,7 @@ extern "C" {
  * and the array has five entries.
  */
 #define V32HDX_REGS		0x3c
-#define V32HDX_NREGS		5
+#define V32HDX_NREGS		V32_SEQ_REGS
 
 /*
  * The sequence GENERATOR's state.  `InitGenSequence` sets all five and

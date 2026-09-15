@@ -63,6 +63,7 @@
 
 #include "dsplib/debug.h"
 #include "dsplib/v32.h"
+#include "dsplib/v32struct.h"
 #include "dsplib/v32data.h"
 #include "dsplib/v32demod.h"
 #include "dsplib/v32cfg.h"
@@ -84,22 +85,16 @@
  * tier's globalized copies (tools/testvisible.py) are what replaces that now.
  * Both are `.data` and not `const`, even though nothing writes either.
  */
-/* The instance is not modelled; see v32fpctl.h.  These are its accessors. */
-#define FIELD(obj, off)		((unsigned char *)(void *)(obj) + (off))
-#define FIELD_PTR(obj, off)	(*(void **)(void *)FIELD((obj), (off)))
-#define FIELD_INT(obj, off)	(*(int *)(void *)FIELD((obj), (off)))
-#define FIELD_S16(obj, off)	(*(short *)(void *)FIELD((obj), (off)))
-#define FIELD_U16(obj, off)	(*(unsigned short *)(void *)FIELD((obj), (off)))
-#define FIELD_U8(obj, off)	(*(unsigned char *)FIELD((obj), (off)))
+/* Remaining byte aliases are for fields not yet named by the owner model. */
 
-#define HDX(m)			FIELD_PTR((m), V32_OBJ_HDX)
-#define FP(m)			FIELD_PTR((m), V32_OBJ_FP)
+#define HDX(m)			(((struct v32_modem *)(m))->hdx)
+#define FP(m)			(((struct v32_modem *)(m))->fp)
 
 /*
  * The parameter block IS the object's first 48 bytes -- v32fp.h derives that
  * from the three `rep movsl` sites -- so this cast is not a reinterpretation.
  */
-#define PARAMS(m)		((struct v32fp_params *)(void *)(m))
+#define PARAMS(m)		(&((struct v32_modem *)(m))->params)
 
 /*
  * The six `int` switches `struct v32fp_ctl::ctl0` drives, at fp + 0x00 ..

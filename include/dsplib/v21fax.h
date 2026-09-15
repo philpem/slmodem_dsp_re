@@ -1,3 +1,4 @@
+#include "dsplib/period_byte_layout.h"
 /*
  * v21fax.h -- ITU-T V.21 (the fax control channel): the receive and transmit
  * primitives.
@@ -125,6 +126,7 @@
 #include "dsplib/v21cfg.h"
 
 struct fpm_mtd;
+struct fax_fifo;
 
 /* ------------------------------------------------------------------------ */
 /* The transmitter                                                          */
@@ -142,6 +144,32 @@ struct v21_tx_dsp {
 	short		*scratch;	/* +0x2c the shared intermediate    */
 };
 
+struct v21_tx_hdx {
+	struct fax_fifo	*fifo;
+	int		int_0004;
+	short		(*handler)(void *modem, unsigned short *in,
+				   short *out, short *budget);
+	short		state;
+	short		short_000e;
+};
+
+union v21_tx_result {
+	int word;
+	struct {
+		unsigned char status;
+		unsigned char flags1;
+		unsigned char flags2;
+		unsigned char byte3;
+	} byte;
+};
+
+struct v21_tx {
+	struct v21tx_cfg		cfg;
+	union v21_tx_result	result;
+	struct v21_tx_hdx	*hdx;
+	struct v21_tx_dsp	*dsp;
+};
+
 /*
  * `V21TX_create`'s literal at 0x0994c3: 320 bytes, 160 shorts.  Established
  * by F9500; unlike the receiver's `V21RX_MAG_BYTES` this one has no second
@@ -154,8 +182,7 @@ struct v21_tx_dsp {
 /* The transmit DSP block's home in the transmitter handle. */
 #define V21TX_OBJ_DSP		0x24
 
-#define V21TX_DSP(m) \
-	(*(struct v21_tx_dsp **)(void *)((char *)(m) + V21TX_OBJ_DSP))
+#define V21TX_DSP(m) (((struct v21_tx *)(m))->dsp)
 
 /*
  * The whole transmit handle, which `V21TX_create` (0x0992f0) fixes at 0x28
@@ -311,6 +338,38 @@ struct v21_rx_hdx {
 					 *       is measured and what is not. */
 };
 
+union v21_rx_status_word {
+	int word;
+	struct {
+		unsigned char status;
+		unsigned char flags;
+		unsigned char flags1;
+		unsigned char byte3;
+	} byte;
+};
+
+struct v21_rx {
+	struct v21rx_cfg		cfg;
+	union v21_rx_status_word status;
+	short			*ptr_001c;
+	int			int_0020;
+	short			*ptr_0024;
+	int			int_0028;
+	int			int_002c;
+	short			short_0030;
+	unsigned char		pad_0032[2];
+	int			int_0034;
+	int			int_0038;
+	short			short_003c;
+	unsigned char		pad_003e[2];
+	int			int_0040;
+	int			int_0044;
+	short			short_0048;
+	unsigned char		pad_004a[2];
+	struct v21_rx_hdx	*hdx;
+	struct v21_rx_dsp	*dsp;
+};
+
 /*
  * `V21RX_control`'s second argument, at 0x0a2410.  Reads two fields and
  * nothing past +0x0d, the same "read what the loads force" rule
@@ -436,18 +495,12 @@ struct v21rx_ctl {
 #define V21RX_OBJ_INT_0044	0x44
 #define V21RX_OBJ_SHORT_0048	0x48
 
-#define V21RX_DSP(m) \
-	(*(struct v21_rx_dsp **)(void *)((char *)(m) + V21RX_OBJ_DSP))
-#define V21RX_HDX(m) \
-	(*(struct v21_rx_hdx **)(void *)((char *)(m) + V21RX_OBJ_HDX))
-#define V21RX_STATUS(m) \
-	(*(unsigned char *)((char *)(m) + V21RX_OBJ_STATUS))
-#define V21RX_FLAGS(m) \
-	(*(unsigned char *)((char *)(m) + V21RX_OBJ_FLAGS))
-#define V21RX_FLAGS1(m) \
-	(*(unsigned char *)((char *)(m) + V21RX_OBJ_FLAGS1))
-#define V21RX_STATUS_AT(m) \
-	((const void *)((const char *)(m) + V21RX_OBJ_STATUS))
+#define V21RX_DSP(m) (((struct v21_rx *)(m))->dsp)
+#define V21RX_HDX(m) (((struct v21_rx *)(m))->hdx)
+#define V21RX_STATUS(m) (((struct v21_rx *)(m))->status.byte.status)
+#define V21RX_FLAGS(m) (((struct v21_rx *)(m))->status.byte.flags)
+#define V21RX_FLAGS1(m) (((struct v21_rx *)(m))->status.byte.flags1)
+#define V21RX_STATUS_AT(m) ((const void *)&((struct v21_rx *)(m))->status)
 
 /*
  * The receiver's flags byte, rx + 0x19.
@@ -633,10 +686,8 @@ struct v21_status {
 #define V21TX_OBJ_PROTOCOL	0x00	/* unsigned short */
 #define V21TX_OBJ_FLAGS		0x10	/* unsigned char  */
 
-#define V21TX_PROTOCOL(m) \
-	(*(unsigned short *)(void *)((char *)(m) + V21TX_OBJ_PROTOCOL))
-#define V21TX_FLAGS(m) \
-	(*(unsigned char *)((char *)(m) + V21TX_OBJ_FLAGS))
+#define V21TX_PROTOCOL(m) ((unsigned short)((struct v21_tx *)(m))->cfg.short_0000)
+#define V21TX_FLAGS(m) (((unsigned char *)(void *)&((struct v21_tx *)(m))->cfg)[V21TX_OBJ_FLAGS])
 
 /* ------------------------------------------------------------------------ */
 /* The rest of the TRANSMITTER handle, from V21TX_modem and V21TX_delete    */

@@ -179,7 +179,7 @@ V22FP_create(struct v22fp *fp, const struct v22fp_cfg *cfg)
 
 		dsp = fp->dsp;
 		dsp->rx_scratch = sysdep_malloc(0x154);
-		dsp->ra8 = sysdep_malloc(0x18);
+		dsp->smc_ring.sym = sysdep_malloc(0x18);
 		dsp->pps_coff_i = sysdep_malloc(V22_PPS_COEFFS * 2);
 		dsp->pps_coff_q = sysdep_malloc(V22_PPS_COEFFS * 2);
 		dsp->mrf_coeff = sysdep_malloc(V22_MRF_COEFFS * 2);
@@ -304,9 +304,9 @@ V22FP_create(struct v22fp *fp, const struct v22fp_cfg *cfg)
 	dsp->pps.qmap = SMCv22_QMAP_1200BPS;
 	V22_PPS_init(&dsp->pps, &pps, fresh);
 
-	dsp->rac = 0;
-	dsp->rae = 0;
-	dsp->rb0 = 12;
+	dsp->smc_ring.widx = 0;
+	dsp->smc_ring.ridx = 0;
+	dsp->smc_ring.len = 12;
 
 	/*
 	 * The channel filter, and the ONLY thing in this constructor that the
@@ -418,7 +418,7 @@ V22FP_delete(struct v22fp *fp)
 	FPM_MTD_delete(fp->hdx->mtd2);
 	sysdep_free(fp->hdx->iir);
 
-	sysdep_free(fp->dsp->ra8);
+	sysdep_free(fp->dsp->smc_ring.sym);
 	sysdep_free(fp->dsp->pps_coff_i);
 	sysdep_free(fp->dsp->pps_coff_q);
 	sysdep_free(fp->dsp->mrf_coeff);
@@ -475,8 +475,13 @@ V22FP_ASSERT_OFF(d_r2e, struct v22fp_dsp, r2e, 0x2e);
 V22FP_ASSERT_OFF(d_sdm, struct v22fp_dsp, sdm, 0x30);
 V22FP_ASSERT_OFF(d_smc, struct v22fp_dsp, smc, 0x48);
 V22FP_ASSERT_OFF(d_pps, struct v22fp_dsp, pps, 0x78);
-V22FP_ASSERT_OFF(d_ra8, struct v22fp_dsp, ra8, 0xa8);
-V22FP_ASSERT_OFF(d_rb0, struct v22fp_dsp, rb0, 0xb0);
+V22FP_ASSERT_OFF(d_ring, struct v22fp_dsp, smc_ring, 0xa0);
+typedef char v22fp_d_ring_sym[
+	((int)__builtin_offsetof(struct v22fp_dsp, smc_ring)
+	 + (int)__builtin_offsetof(struct fpm_smc_ring, sym) == 0xa8) ? 1 : -1];
+typedef char v22fp_d_ring_len[
+	((int)__builtin_offsetof(struct v22fp_dsp, smc_ring)
+	 + (int)__builtin_offsetof(struct fpm_smc_ring, len) == 0xb0) ? 1 : -1];
 V22FP_ASSERT_OFF(d_ppsi, struct v22fp_dsp, pps_coff_i, 0xb4);
 V22FP_ASSERT_OFF(d_ppsq, struct v22fp_dsp, pps_coff_q, 0xb8);
 V22FP_ASSERT_OFF(d_mrf, struct v22fp_dsp, mrf, 0xbc);

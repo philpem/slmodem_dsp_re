@@ -7,6 +7,47 @@ successful lever from becoming an untested global assumption. A unique
 preimage below is unique within its declared domain, not a claim that all
 possible source/flag combinations have been excluded.
 
+## Reconstruct the owner before tuning its generated code
+
+`FIELD`, `FIELD_PTR`, and width-specific offset macros are useful during
+initial recovery, but they are not a completed instance model. Before
+searching for a scheduling or register-allocation spelling, recover the
+containing structures and their actual member types. Equal byte offsets do
+not establish equivalent aliasing information for the compiler.
+
+First distinguish missing types from unfinished migrations. V.32's sequence
+code used genuinely unmodelled owners; V.22 still used raw offsets into an
+owner whose constructor and shared structure had already been reconstructed.
+Comments saying an instance is deliberately unmodelled can outlive that
+decision. Check the current constructor and type home, not just the comment.
+
+1. Establish allocation extent, initialization, call-site types and
+   destruction together. Reuse existing embedded types and keep each owner
+   definition in one shared home.
+2. Preserve independently addressed aliases, pointer ownership and observed
+   reloads. Replacing an offset expression with a member does not justify
+   caching a pointer across a call or combining stores.
+3. Name only what the evidence supports. Keep unmodelled gaps as pads and
+   known-width, unknown-role fields neutral. Five accessor-visible registers
+   and seven constructor clears do not prove a seven-element register bank.
+4. Assert the period layout with checks that GCC 3.4.2 actually sees. Wider
+   native pointers are a portability matter, not evidence against the
+   original four-byte pointer layout.
+5. Update mutation anchors without dropping their fault cases and run the
+   period differential and structural gates before committing. An incremental
+   prefix view is a migration step, not completion of the owner model.
+
+Initializer cleanup is a separate question from arithmetic narrowing. A
+cast on a hexadecimal constant assigned to a `short` array can be redundant
+under the period compiler; the destination already performs that conversion.
+That does not license deleting a cast that narrows a computed intermediate
+before a call or store. Preserve the declared table type and validate the
+cleanup with the deciding compiler.
+
+See [the V.32 reconstruction checkpoint](../v32-structure-reconstruction.md)
+for the first layout migration and its remaining owner work. This method
+does not claim that modelling an owner alone guarantees byte identity.
+
 Every lever here was measured in this tree, and every one carries its
 counterexample. A lever without a known failure is a lever nobody has pushed
 hard enough yet.
@@ -1622,3 +1663,19 @@ them as unreachable either.
 a zeroing idiom that failed exactly when a register was renamed (7762), and a
 padding guard that matched no padding (7769). If `--why` reports something that
 looks like a tool artefact, it may be one; say so and check.
+
+### Byte/word aliases require an explicit endian boundary
+
+A recovered union of named bytes and a word can faithfully model i386 partial
+stores while still being nonportable. Record whether each use means a physical
+object byte or a numeric slice of a word. Do not reverse members speculatively:
+external byte-layout consumers may require the original offsets. Until both
+kinds of consumers are audited, reject unsupported endianness rather than
+silently changing flags. The modem owner headers use `period_byte_layout.h`
+for this boundary; this is a restriction, not a completed big-endian port.
+
+The owner migration also demonstrated why typed replacements must retain the
+actual pointer path: an equalizer's decoder owner can be external, not the
+adjacent embedded decoder. Likewise, a callback slot is not the callback's code
+address, and a signed comparison cannot be inferred from an unsigned shared
+member declaration. Preserve these distinctions when replacing offset macros.

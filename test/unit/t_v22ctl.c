@@ -83,7 +83,7 @@ blank_dsp(const struct v22fp_dsp *d)
 {
 	struct v22fp_dsp c = *d;
 
-	c.ra8 = NULL;
+	c.smc_ring.sym = NULL;
 	c.rx_scratch = NULL;
 	c.pps_coff_i = NULL;
 	c.pps_coff_q = NULL;

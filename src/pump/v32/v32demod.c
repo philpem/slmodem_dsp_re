@@ -63,21 +63,13 @@
 #include "dsplib/v32data.h"
 #include "dsplib/v32hdx.h"
 
-/* The instance is not modelled; see v32demod.h.  These are the only accessors. */
-#define FIELD(obj, off)		((unsigned char *)(obj) + (off))
-#define FIELD_PTR(obj, off)	(*(void **)(void *)FIELD((obj), (off)))
-#define FIELD_INT(obj, off)	(*(int *)(void *)FIELD((obj), (off)))
-#define FIELD_SHORT(obj, off)	(*(short *)(void *)FIELD((obj), (off)))
-#define FIELD_BYTE(obj, off)	(*(unsigned char *)FIELD((obj), (off)))
-
-#define AGC_OF(fp)	((struct fpm_agc *)(void *)FIELD((fp), V32FP_AGC))
-#define ECC_OF(fp)	((struct fpm_ecc *)(void *)FIELD((fp), V32FP_ECC))
-#define FSE_OF(fp)	((struct fpm_fse *)(void *)FIELD((fp), V32FP_FSE))
-#define MRF_OF(fp)	((struct fpm_mrf *)(void *)FIELD((fp), V32FP_MRF))
-#define SRE_OF(fp)	((struct fpm_sre *)(void *)FIELD((fp), V32FP_SRE))
-
-#define RXBUF_OF(fp)	(*(short **)(void *)FIELD((fp), V32FP_RXBUF))
-#define CLEAN_OF(fp)	(*(short **)(void *)FIELD((fp), V32FP_CLEAN))
+#define AGC_OF(fp)	(&(fp)->agc)
+#define ECC_OF(fp)	(&(fp)->ecc)
+#define FSE_OF(fp)	(&(fp)->fse)
+#define MRF_OF(fp)	(&(fp)->mrf)
+#define SRE_OF(fp)	(&(fp)->sre)
+#define RXBUF_OF(fp)	((fp)->rx_buf)
+#define CLEAN_OF(fp)	((fp)->clean_buf)
 
 unsigned short
 DemodDataV32(void *modem, short *in, unsigned short *out, unsigned short count)
@@ -85,82 +77,83 @@ DemodDataV32(void *modem, short *in, unsigned short *out, unsigned short count)
 	int ec_training = 0;
 	unsigned short n, m;
 	int enables;
-	void *hdx;
-	void *fp;
+	struct v32_modem *owner = (struct v32_modem *)modem;
+	struct v32_hdx *hdx;
+	struct v32_fp *fp;
 	int i;
 
-	fp = FIELD_PTR(modem, V32_OBJ_FP);
+	fp = owner->fp;
 	n = (unsigned short)FPM_MRF_filter(MRF_OF(fp), in, RXBUF_OF(fp),
 					   (short)count);
 
-	fp = FIELD_PTR(modem, V32_OBJ_FP);
+	fp = owner->fp;
 	if (ECC_OF(fp)->adapt_near != 0 || ECC_OF(fp)->adapt_far != 0)
 		ec_training = 1;
 	FPM_ECC_cancel(ECC_OF(fp), RXBUF_OF(fp), n);
 
 	/* Keep a copy of the cancelled block for V32FP_GetCleanedSamples. */
-	fp = FIELD_PTR(modem, V32_OBJ_FP);
+	fp = owner->fp;
 	for (i = 0; i < (int)n; i++)
 		CLEAN_OF(fp)[i] = RXBUF_OF(fp)[i];
-	FIELD_SHORT(fp, V32FP_CLEANLEN) = (short)n;
-	FIELD_SHORT(fp, V32FP_RXLEN) = (short)n;
+	fp->clean_n = (unsigned short)n;
+	fp->rx_len = (unsigned short)n;
 
 	if (ec_training != 0)
 		return 0;
 
-	hdx = FIELD_PTR(modem, V32_OBJ_HDX);
-	if (FIELD_SHORT(hdx, V32HDX_MODE) == V32_MODE_6) {
-		if (FIELD_SHORT(modem, V32_OBJ_RMS_MIN)
+	hdx = owner->hdx;
+	if (hdx->mode == V32_MODE_6) {
+		if (owner->params.disconnect_thresh
 		    > FPM_rms(RXBUF_OF(fp), n)) {
-			FIELD_BYTE(modem, V32_OBJ_FLAGS) &=
+			owner->flags &=
 				(unsigned char)~V32_FLAG_CARRIER;
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf("v32 low sig energy\n");
 			return 0;
 		}
-		fp = FIELD_PTR(modem, V32_OBJ_FP);
+		fp = owner->fp;
 	}
 
 	/* The object passes a fourth argument here; see the header. */
 	FPM_AGC_agc(AGC_OF(fp), RXBUF_OF(fp), n);
 
-	fp = FIELD_PTR(modem, V32_OBJ_FP);
-	FIELD_BYTE(modem, V32_OBJ_FLAGS) =
-		(unsigned char)((FIELD_BYTE(modem, V32_OBJ_FLAGS)
+	fp = owner->fp;
+	owner->flags =
+		(unsigned char)((owner->flags
 				 & (unsigned char)~V32_FLAG_SILENCE)
 				| (AGC_OF(fp)->signal == 0
 				   ? V32_FLAG_SILENCE : 0));
 
 	enables = AGC_OF(fp)->f18;
-	SRE_OF(fp)->adapt = FIELD_INT(fp, V32FP_SRE_ADAPT_EN) & enables;
+	SRE_OF(fp)->adapt = fp->int_04 & enables;
 	m = FPM_SRE_recover(SRE_OF(fp), RXBUF_OF(fp), in, (short)n);
 
-	fp = FIELD_PTR(modem, V32_OBJ_FP);
+	fp = owner->fp;
 	if (SRE_OF(fp)->active == 0) {
 		if (DSPLIB_DEBUG_VERBOSE())
 			dsplibs_debug_printf("sre no carrier\n");
-		FIELD_BYTE(modem, V32_OBJ_FLAGS) &=
+		owner->flags &=
 			(unsigned char)~V32_FLAG_CARRIER;
 		return 0;
 	}
-	FIELD_BYTE(modem, V32_OBJ_FLAGS) |= V32_FLAG_CARRIER;
+	owner->flags |= V32_FLAG_CARRIER;
 
-	hdx = FIELD_PTR(modem, V32_OBJ_HDX);
-	FSE_OF(fp)->pll_on = FIELD_INT(fp, V32FP_FSE_PLL_EN) & enables;
-	if (FIELD_SHORT(hdx, V32HDX_MODE) == V32_MODE_6) {
+	hdx = owner->hdx;
+	FSE_OF(fp)->pll_on = fp->int_08 & enables;
+	if (hdx->mode == V32_MODE_6) {
 		if (SRE_OF(fp)->mode == 0) {
 			FSE_OF(fp)->tilt_on = 0;
 			FSE_OF(fp)->lms_on = 0;
 		} else {
 			FSE_OF(fp)->tilt_on =
-				FIELD_INT(fp, V32FP_FSE_TILT_EN) & enables;
+				fp->int_0c & enables;
 			FSE_OF(fp)->lms_on =
-				FIELD_INT(fp, V32FP_FSE_LMS_EN) & enables;
+				fp->eq_adapt & enables;
 		}
 	} else {
 		FSE_OF(fp)->tilt_on = 1;
 		/* NOT masked with `enables`, unlike its three siblings: D491. */
-		FSE_OF(fp)->lms_on = FIELD_INT(fp, V32FP_FSE_LMS_EN);
+		FSE_OF(fp)->lms_on = fp->eq_adapt;
 	}
 
 	return FPM_FSE_receive(FSE_OF(fp), in, out, m);

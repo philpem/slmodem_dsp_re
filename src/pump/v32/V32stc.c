@@ -30,11 +30,11 @@ static short PROTOCOL[9] = {
 int
 V32FP_control(void *modem, struct v32fp_ctl *ctl)
 {
-	void *fp;
-	void *hdx;
+	struct v32_fp *fp;
+	struct v32_hdx *hdx;
 	int rate;
 
-	if (FIELD_U8(modem, V32_OBJ_STATUS) == V32_MSG_RETRAIN_REQ) {
+	if (((struct v32_modem *)(modem))->status == V32_MSG_RETRAIN_REQ) {
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("Patch: set ctl_ptr->vxx_ctl."
 					     "options.retrain = TRUE\n");
@@ -42,25 +42,25 @@ V32FP_control(void *modem, struct v32fp_ctl *ctl)
 	}
 
 	fp = FP(modem);
-	FIELD_INT(fp, V32FP_R1C) = ctl->ctl0 & 1;
-	FIELD_INT(fp, V32FP_R20) = (ctl->ctl0 >> 1) & 1;
-	FIELD_INT(fp, V32FP_R24) = (ctl->ctl0 >> 2) & 1;
-	FIELD_INT(fp, V32FP_R00) = ((ctl->ctl0 & 0x08) == 0);
-	FIELD_INT(fp, V32FP_R0C) = ((ctl->ctl0 & 0x10) == 0);
-	FIELD_INT(fp, V32FP_EQ_ADAPT) = ((ctl->ctl0 & 0x20) == 0);
-	FIELD_INT(fp, V32FP_R14) = ctl->r18;
-	FIELD_INT(fp, V32FP_R18) = ctl->r1c;
-	FIELD_U8(modem, V32_OBJ_OPTIONS_HI) =
-		(unsigned char)((FIELD_U8(modem, V32_OBJ_OPTIONS_HI)
+	fp->int_1c = ctl->ctl0 & 1;
+	fp->int_20 = (ctl->ctl0 >> 1) & 1;
+	fp->int_24 = (ctl->ctl0 >> 2) & 1;
+	fp->int_00 = ((ctl->ctl0 & 0x08) == 0);
+	fp->int_0c = ((ctl->ctl0 & 0x10) == 0);
+	fp->eq_adapt = ((ctl->ctl0 & 0x20) == 0);
+	fp->int_14 = ctl->r18;
+	fp->int_18 = ctl->r1c;
+	((unsigned char *)&((struct v32_modem *)(modem))->params.options)[1] =
+		(unsigned char)((((unsigned char *)&((struct v32_modem *)(modem))->params.options)[1]
 				 & (unsigned char)~V32_OPTIONS_HI_CTL)
 				| (unsigned char)((ctl->ctl0 >> 7) << 1));
 
 	if (ctl->r14 != 0) {
 		int ratio;
 
-		if (FIELD_U8(modem, V32_OBJ_STATUS) != V32_MSG_RESIZE_DONE) {
-			FIELD_U8(modem, V32_OBJ_FLAGS) |= V32_FLAG_FAULT;
-			FIELD_U8(modem, V32_OBJ_STATUS) = V32_MSG_RESIZED;
+		if (((struct v32_modem *)(modem))->status != V32_MSG_RESIZE_DONE) {
+			((struct v32_modem *)(modem))->flags |= V32_FLAG_FAULT;
+			((struct v32_modem *)(modem))->status = V32_MSG_RESIZED;
 		}
 		/*
 		 * BOTH TABLE READS ARE `movswl` HERE and `movzwl` twenty
@@ -73,21 +73,21 @@ V32FP_control(void *modem, struct v32fp_ctl *ctl)
 		ratio = V32_SAMPLE_LEN[PARAMS(modem)->symlen_sel]
 			/ V32_SAMPLE_LEN[PARAMS(modem)->r16];
 		hdx = HDX(modem);
-		FIELD_U16(hdx, V32_HDX_SHORT_9C) =
+		hdx->short_9c =
 			(unsigned short)(ratio
-					 * FIELD_U16(hdx, V32_HDX_SHORT_9C));
-		FIELD_U16(hdx, V32HDX_BLOCK_CHARGE) =
+					 * hdx->short_9c);
+		hdx->block_charge =
 			(unsigned short)V32_SYMBOL_LEN[PARAMS(modem)->symlen_sel];
-		FIELD_U16(hdx, V32HDX_SYMBOL_LEN) =
+		hdx->symbol_len =
 			(unsigned short)V32_SYMBOL_LEN[PARAMS(modem)->symlen_sel];
-		FIELD_U16(hdx, V32HDX_SAMPLE_LEN) =
+		hdx->sample_len =
 			(unsigned short)V32_SAMPLE_LEN[PARAMS(modem)->symlen_sel];
-		FIELD_U8(modem, V32_OBJ_STATUS) = V32_MSG_OK;
+		((struct v32_modem *)(modem))->status = V32_MSG_OK;
 	}
 
 	if ((ctl->ctl1 & V32_CTL1_RETRAIN) != 0) {
-		if (FIELD_U16(fp, V32FP_RATE_FALLBACK) != 0) {
-			switch (FIELD_S16(fp, V32FP_SHORT_2E)) {
+		if (fp->rate_fallback != 0) {
+			switch (fp->short_2e) {
 			case V32_RATE_14400:
 				PARAMS(modem)->rx_rate = 12000;
 				PARAMS(modem)->tx_rate = 12000;
@@ -121,33 +121,33 @@ V32FP_control(void *modem, struct v32fp_ctl *ctl)
 		if (PARAMS(modem)->protocol == 0) {
 			V32FP_recreate(modem, PARAMS(modem), 0);
 			hdx = HDX(modem);
-			FIELD_U16(hdx, V32HDX_STATE) = 1;
-			FIELD_INT(hdx, V32HDX_LONG_7C) = 0x960;
+			hdx->state = 1;
+			hdx->timer = 0x960;
 			V32OrgNextState(modem);
 		}
 		if (PARAMS(modem)->protocol == 1) {
 			V32FP_recreate(modem, PARAMS(modem), 0);
 			hdx = HDX(modem);
-			FIELD_U16(hdx, V32HDX_STATE) = 1;
+			hdx->state = 1;
 			V32AnsNextState(modem);
 		}
-		FIELD_U8(modem, V32_OBJ_FLAGS) |= V32_FLAG_RETRAIN;
-		FIELD_U8(modem, V32_OBJ_STATUS) = V32_MSG_RETRAINING;
+		((struct v32_modem *)(modem))->flags |= V32_FLAG_RETRAIN;
+		((struct v32_modem *)(modem))->status = V32_MSG_RETRAINING;
 		ctl->ctl1 &= (unsigned char)~V32_CTL1_RETRAIN;
 		return 1;
 	}
 
 	if ((ctl->ctl1 & V32_CTL1_RENEG) != 0) {
 		hdx = HDX(modem);
-		FIELD_U16(hdx, V32HDX_STATE) = 0;
-		FIELD_U8(modem, V32_OBJ_FLAGS) &= (unsigned char)~V32_FLAG_DATA;
-		if (FIELD_S16(hdx, V32HDX_MODE) == V32_MODE_RING_RESP) {
-			FIELD_U16(hdx, V32HDX_SHORT_44) = 0;
+		hdx->state = 0;
+		((struct v32_modem *)(modem))->flags &= (unsigned char)~V32_FLAG_DATA;
+		if (hdx->mode == V32_MODE_RING_RESP) {
+			hdx->short_46 = 0;
 			V32RngRespNextState(modem);
 			ctl->ctl1 &= (unsigned char)~V32_CTL1_RENEG;
 			return 1;
 		}
-		FIELD_U16(hdx, V32HDX_MODE) = V32_MODE_RING_INIT;
+		hdx->mode = V32_MODE_RING_INIT;
 
 		PARAMS(modem)->trellis = ctl->trellis;
 		rate = ctl->bps;
@@ -155,10 +155,10 @@ V32FP_control(void *modem, struct v32fp_ctl *ctl)
 		PARAMS(modem)->rx_rate = (short)rate;
 		switch (rate) {
 		case 14400:
-			FIELD_U16(fp, V32FP_TX_RATE_IDX) = V32_RATE_14400;
+			fp->tx_rate_index = V32_RATE_14400;
 			break;
 		case 12000:
-			FIELD_U16(fp, V32FP_TX_RATE_IDX) = V32_RATE_12000;
+			fp->tx_rate_index = V32_RATE_12000;
 			break;
 		case 9600:
 			/*
@@ -166,18 +166,18 @@ V32FP_control(void *modem, struct v32fp_ctl *ctl)
 			 * instructions `V32FP_recreate` uses at 7f40b and
 			 * 7f60f -- v32seq.h records both.
 			 */
-			FIELD_U16(fp, V32FP_TX_RATE_IDX) = (unsigned short)
+			fp->tx_rate_index = (unsigned short)
 				(2 - (PARAMS(modem)->trellis == 0));
 			break;
 		case 7200:
-			FIELD_U16(fp, V32FP_TX_RATE_IDX) = V32_RATE_7200;
+			fp->tx_rate_index = V32_RATE_7200;
 			break;
 		default:
-			FIELD_U16(fp, V32FP_TX_RATE_IDX) = V32_RATE_4800;
+			fp->tx_rate_index = V32_RATE_4800;
 			break;
 		}
-		FIELD_U16(fp, V32FP_RX_RATE_IDX) =
-			FIELD_U16(fp, V32FP_TX_RATE_IDX);
+		fp->rx_rate_index =
+			fp->tx_rate_index;
 		V32RngInitNextState(modem);
 		ctl->ctl1 &= (unsigned char)~V32_CTL1_RENEG;
 		return 1;
@@ -230,8 +230,8 @@ int
 V32FP_status(void *modem, struct v32_status *st)
 {
 	struct v32fp_ctl ctl;
-	void *fp;
-	void *hdx;
+	struct v32_fp *fp;
+	struct v32_hdx *hdx;
 	unsigned short recip;
 	unsigned short shift;
 	int rate_idx;
@@ -243,22 +243,22 @@ V32FP_status(void *modem, struct v32_status *st)
 	int t;
 
 	fp = FP(modem);
-	rate_idx = FIELD_S16(fp, V32FP_SHORT_2E);
+	rate_idx = fp->short_2e;
 	if ((unsigned int)rate_idx > 5)
 		rate_idx = 5;
 
-	err = ((FIELD_S16(fp, V32FP_DEC_ERROR) * 0x7333 + 0x4000) >> 15)
-		+ (((int)(unsigned short)(FIELD_S16(fp, V32FP_SHORT_256) >> 2)
+	err = ((fp->decision_error * 0x7333 + 0x4000) >> 15)
+		+ (((int)(unsigned short)(fp->fse.mse >> 2)
 		    * 0xccd + 0x4000) >> 15);
 	snr = V32_SNR_SETTLED_VALUE;
 	r0a = 0;
-	FIELD_S16(fp, V32FP_DEC_ERROR) = (short)err;
+	fp->decision_error = (short)err;
 
 	if ((short)err != 0) {
 		k = (short)((((unsigned short)
-			      (FIELD_U16(fp, V32FP_SHORT_2E) - 4) < 2)
+			      (fp->short_2e - 4) < 2)
 			     ? 0x4000 : 0) + 0x1400 - err);
-		FPM_div(FIELD_U16(fp, V32FP_DEC_ERROR), &recip, &shift);
+		FPM_div(fp->decision_error, &recip, &shift);
 		m = (k * (int)recip) >> 16;
 		snr = V32_SNR_FLOOR;
 		if ((short)m > 0) {
@@ -267,11 +267,10 @@ V32FP_status(void *modem, struct v32_status *st)
 			snr = ((int)(short)(t * 10) + 0x100) >> 9;
 		}
 		fp = FP(modem);
-		if (FIELD_S16(fp, V32FP_SHORT_102) != 0
-		    && FIELD_S16(fp, V32FP_SHORT_100) != 0) {
-			FPM_div(FIELD_U16(fp, V32FP_SHORT_102), &recip, &shift);
+		if (fp->mrf.phase != 0 && fp->mrf.need != 0) {
+			FPM_div((unsigned short)fp->mrf.phase, &recip, &shift);
 			fp = FP(modem);
-			m = (FIELD_S16(fp, V32FP_SHORT_100) * (int)recip) >> 15;
+			m = (fp->mrf.need * (int)recip) >> 15;
 			t = (int)FPM_log10((unsigned short)m,
 					   (short)-(short)shift) >> 3;
 			r0a = (short)(t * 10) >> 9;
@@ -279,24 +278,24 @@ V32FP_status(void *modem, struct v32_status *st)
 		}
 	}
 
-	if ((short)FIELD_U16(modem, V32_OBJ_SHORT_2C)
+	if ((short)((unsigned short *)&((struct v32_modem *)(modem))->params.r2c)[0]
 	    <= V32_SNR_SETTLE_BLOCKS) {
-		FIELD_U16(modem, V32_OBJ_SHORT_2C) = (unsigned short)
-			(FIELD_U16(modem, V32_OBJ_SHORT_2C) + 1);
+		((unsigned short *)&((struct v32_modem *)(modem))->params.r2c)[0] = (unsigned short)
+			(((unsigned short *)&((struct v32_modem *)(modem))->params.r2c)[0] + 1);
 		snr = V32_SNR_SETTLED_VALUE;
 	}
 
 	hdx = HDX(modem);
-	st->protocol = PROTOCOL[FIELD_S16(hdx, V32HDX_MODE)];
-	st->tx_rate = RATEv32[FIELD_S16(fp, V32FP_SHORT_2C)];
-	st->rx_rate = RATEv32[FIELD_S16(fp, V32FP_SHORT_2E)];
+	st->protocol = PROTOCOL[hdx->mode];
+	st->tx_rate = RATEv32[fp->short_2c];
+	st->rx_rate = RATEv32[fp->short_2e];
 	st->r0a = (short)r0a;
 	st->snr = (short)snr;
-	st->r06 = (short)(1 - (FIELD_S16(fp, V32FP_SHORT_256) >> 1));
+	st->r06 = (short)(1 - (fp->fse.mse >> 1));
 	st->r0e = 0;
-	st->r0c = (short)FIELD_U16(fp, V32FP_SHORT_1F8);
-	st->r10 = (short)FIELD_U16(fp, V32FP_SHORT_6C);
-	st->r12 = (short)FIELD_U16(fp, V32FP_SHORT_182);
+	st->r0c = (short)(unsigned short)fp->agc.level;
+	st->r10 = (short)fp->pps.cfg.step_adj;
+	st->r12 = (short)(unsigned short)fp->ecc.pwr_out;
 
 	/*
 	 * Eight read-modify-writes of the caller's byte, in the object's own
@@ -306,38 +305,38 @@ V32FP_status(void *modem, struct v32_status *st)
 	 * `struct v32fp_ctl::ctl0`.
 	 */
 	st->flags = (unsigned char)((st->flags & 0xfe)
-				    | (FIELD_U8(fp, V32FP_R1C) & 1));
+				    | (((unsigned char *)&fp->int_1c)[0] & 1));
 	fp = FP(modem);
 	st->flags = (unsigned char)((st->flags & 0xfd)
-				    | ((FIELD_U8(fp, V32FP_R20) & 1) << 1));
+				    | ((((unsigned char *)&fp->int_20)[0] & 1) << 1));
 	fp = FP(modem);
 	st->flags = (unsigned char)((st->flags & 0xfb)
-				    | ((FIELD_U8(fp, V32FP_R24) & 1) << 2));
+				    | ((((unsigned char *)&fp->int_24)[0] & 1) << 2));
 	fp = FP(modem);
 	st->flags = (unsigned char)((st->flags & 0xf7)
-				    | ((FIELD_INT(fp, V32FP_R00) == 0) << 3));
+				    | ((fp->int_00 == 0) << 3));
 	fp = FP(modem);
 	st->flags = (unsigned char)((st->flags & 0xef)
-				    | ((FIELD_INT(fp, V32FP_R0C) == 0) << 4));
+				    | ((fp->int_0c == 0) << 4));
 	fp = FP(modem);
 	st->flags = (unsigned char)((st->flags & 0xdf)
-				    | ((FIELD_INT(fp, V32FP_EQ_ADAPT) == 0) << 5));
+				    | ((fp->eq_adapt == 0) << 5));
 	st->flags = (unsigned char)(st->flags & 0xbf);
 	st->flags = (unsigned char)((st->flags & 0x7f)
-				    | (((FIELD_U8(modem, V32_OBJ_OPTIONS_HI)
+				    | (((((unsigned char *)&((struct v32_modem *)(modem))->params.options)[1]
 					 >> 1) & 1) << 7));
 	st->r20 = 0;
 	st->r24 = 0;
 	st->flags1 = (unsigned char)((st->flags1 & 0xfe)
-				     | ((FIELD_U8(modem, V32_OBJ_OPTIONS_HI)
+				     | ((((unsigned char *)&((struct v32_modem *)(modem))->params.options)[1]
 					 >> 2) & 1));
 
 	fp = FP(modem);
-	st->r18 = FIELD_INT(fp, V32FP_INT_188);
-	st->r1c = (FIELD_INT(fp, V32FP_INT_1F4) != 1);
+	st->r18 = fp->ecc.adapt_near;
+	st->r1c = (fp->agc.signal != 1);
 
 	if (SnrToRetrainTable[rate_idx] <= (short)snr) {
-		FIELD_U16(modem, V32_OBJ_SNR_DROPS) = 0;
+		((unsigned short *)&((struct v32_modem *)(modem))->params.r20)[0] = 0;
 		return 1;
 	}
 
@@ -348,22 +347,21 @@ V32FP_status(void *modem, struct v32_status *st)
 				     snr, SnrToRetrainTable[rate_idx]);
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("Dec error = %d (*64)\n",
-					     FIELD_S16(FP(modem),
-						       V32FP_DEC_ERROR));
+					     FP(modem)->decision_error);
 	}
 
-	if ((short)FIELD_U16(modem, V32_OBJ_SNR_DROPS) > V32_SNR_DROPS_LIMIT) {
+	if ((short)((unsigned short *)&((struct v32_modem *)(modem))->params.r20)[0] > V32_SNR_DROPS_LIMIT) {
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("%d coseq SNR drops detected "
 					     "local retrain is initiated\n",
 					     V32_SNR_DROPS_LIMIT);
 		ctl.ctl1 |= V32_CTL1_RETRAIN;
-		FIELD_U16(modem, V32_OBJ_SNR_DROPS) = 0;
-		FIELD_U16(modem, V32_OBJ_SHORT_2C) = 0;
-		FIELD_U16(FP(modem), V32FP_RATE_FALLBACK) = 1;
+		((unsigned short *)&((struct v32_modem *)(modem))->params.r20)[0] = 0;
+		((unsigned short *)&((struct v32_modem *)(modem))->params.r2c)[0] = 0;
+		FP(modem)->rate_fallback = 1;
 	} else {
-		FIELD_U16(modem, V32_OBJ_SNR_DROPS) = (unsigned short)
-			(FIELD_U16(modem, V32_OBJ_SNR_DROPS) + 1);
+		((unsigned short *)&((struct v32_modem *)(modem))->params.r20)[0] = (unsigned short)
+			(((unsigned short *)&((struct v32_modem *)(modem))->params.r20)[0] + 1);
 	}
 
 	ctl.ctl0 = (unsigned char)

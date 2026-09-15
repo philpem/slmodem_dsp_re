@@ -21,8 +21,8 @@ int
 V32FP_modem(void *modem, const int *txbits, short *out, const short *in,
 	    int *rxbits, int *nout, int *nin)
 {
-	void *fp;
-	void *hdx;
+	struct v32_fp *fp;
+	struct v32_hdx *hdx;
 	short nsamples;
 	unsigned short rxcount;
 	int scale;
@@ -34,19 +34,19 @@ V32FP_modem(void *modem, const int *txbits, short *out, const short *in,
 
 	fp = FP(modem);
 	if (*nin > 0) {
-		short *clean = (short *)FIELD_PTR(fp, V32FP_CLEAN_BUF);
+		short *clean = (short *)fp->clean_buf;
 
 		for (i = 0; i < *nin; i++)
 			clean[i] = in[i];
 	}
-	FIELD_U16(fp, V32FP_CLEAN_N) = (unsigned short)*nin;
+	fp->clean_n = (unsigned short)*nin;
 
 	for (i = 0; i < *nout; i++)
 		tx_in_internal[i] = (unsigned short)txbits[i];
 
-	FIELD_U8(modem, V32_OBJ_FLAGS) &= (unsigned char)~V32_FLAG_FAULT;
+	((struct v32_modem *)(modem))->flags &= (unsigned char)~V32_FLAG_FAULT;
 	hdx = HDX(modem);
-	V32_PROTOCOL[FIELD_S16(hdx, V32HDX_MODE)](modem, tx_in_internal, out,
+	V32_PROTOCOL[hdx->mode](modem, tx_in_internal, out,
 						  (short *)in, rx_out_internal,
 						  &nsamples, &rxcount);
 
@@ -56,10 +56,10 @@ V32FP_modem(void *modem, const int *txbits, short *out, const short *in,
 	for (i = 0; i < *nin; i++)
 		rxbits[i] = (int)rx_out_internal[i];
 
-	if ((FIELD_U8(modem, V32_OBJ_FLAGS) & V32_FLAG_DATA) != 0) {
+	if ((((struct v32_modem *)(modem))->flags & V32_FLAG_DATA) != 0) {
 		hdx = HDX(modem);
-		FIELD_U16(hdx, V32HDX_MODE) = V32_PROTO_DATA;
-		FIELD_U16(hdx, V32HDX_STATE) = V32_STATE_DONT_CARE;
+		hdx->mode = V32_PROTO_DATA;
+		hdx->state = V32_STATE_DONT_CARE;
 	}
 
 	n = *nout;
@@ -69,7 +69,7 @@ V32FP_modem(void *modem, const int *txbits, short *out, const short *in,
 			out[i] = (short)((out[i] * scale) >> 15);
 	}
 
-	return FIELD_INT(modem, V32_OBJ_STATUS);
+	return ((struct v32_modem *)(modem))->status_word;
 }
 
 /* ------------------------------------------------------------------------ */
@@ -112,7 +112,7 @@ v32_data(void *modem, unsigned short *txdata, short *txout, short *rxin,
 {
 	struct v32_status st;
 	struct v32fp_ctl ctl;
-	void *hdx;
+	struct v32_hdx *hdx;
 	int code;
 	int i;
 
@@ -127,21 +127,20 @@ v32_data(void *modem, unsigned short *txdata, short *txout, short *rxin,
 	}
 
 	hdx = HDX(modem);
-	if (FIELD_S16(hdx, V32HDX_SYMBOL_LEN) > 0) {
-		short *buf = (short *)FIELD_PTR(hdx, V32_HDX_BUF_A4);
+	if (hdx->symbol_len > 0) {
+		short *buf = (short *)hdx->buffer;
 
-		for (i = 0; i < FIELD_S16(hdx, V32HDX_SYMBOL_LEN); i++)
+		for (i = 0; i < hdx->symbol_len; i++)
 			buf[i] = (short)txdata[i];
 	}
 
 	if ((st.flags & V32_STFLAG_SCRAMBLE) != 0)
-		ScrambleDataV32(modem, (short *)FIELD_PTR(hdx, V32_HDX_BUF_A4),
+		ScrambleDataV32(modem, (short *)hdx->buffer,
 				(unsigned short)*nsamples);
 
 	*rxcount = DemodDataV32(modem, rxin, rxout, *rxcount);
 	*nsamples = (short)ModDataV32(modem,
-				      (short *)FIELD_PTR(HDX(modem),
-							 V32_HDX_BUF_A4),
+				      (short *)HDX(modem)->buffer,
 				      txout, (unsigned short)*nsamples);
 
 	if ((st.flags & V32_STFLAG_DESCRAMBLE) != 0)
@@ -150,7 +149,7 @@ v32_data(void *modem, unsigned short *txdata, short *txout, short *rxin,
 		TxClockSyncV32(modem);
 	if ((st.flags & V32_STFLAG_RETRAIN_DET) != 0
 	    && RetrainDetectV32(modem) != 0) {
-		FIELD_U8(modem, V32_OBJ_FLAGS) &= (unsigned char)~V32_FLAG_DATA;
+		((struct v32_modem *)(modem))->flags &= (unsigned char)~V32_FLAG_DATA;
 		ctl = V32_CTL;
 		ctl.ctl0 = (unsigned char)
 			(((((ctl.ctl0 & 0xfc) | (st.flags & 1)
@@ -168,20 +167,20 @@ v32_data(void *modem, unsigned short *txdata, short *txout, short *rxin,
 		ctl.ctl1 |= V32_CTL1_RENEG;
 		ctl.r18 = 0;
 		ctl.r1c = 0;
-		FIELD_U16(HDX(modem), V32HDX_MODE) = V32_MODE_RING_RESP;
+		HDX(modem)->mode = V32_MODE_RING_RESP;
 		V32FP_control(modem, &ctl);
 		code = V32_MSG_RENEG;
 	}
 
-	if ((FIELD_U8(modem, V32_OBJ_FLAGS) & V32_FLAG_RETRAIN) != 0) {
-		FIELD_U16(HDX(modem), V32HDX_LOSS_BLOCKS) = 0;
+	if ((((struct v32_modem *)(modem))->flags & V32_FLAG_RETRAIN) != 0) {
+		HDX(modem)->loss_blocks = 0;
 	} else {
 		short elapsed;
 
 		hdx = HDX(modem);
-		FIELD_U16(hdx, V32HDX_LOSS_BLOCKS) = (unsigned short)
-			(FIELD_U16(hdx, V32HDX_LOSS_BLOCKS) + 1);
-		elapsed = (short)((short)FIELD_U16(hdx, V32HDX_LOSS_BLOCKS)
+		hdx->loss_blocks = (unsigned short)
+			(hdx->loss_blocks + 1);
+		elapsed = (short)((short)hdx->loss_blocks
 				  * V32_BLOCK_MS);
 		if (PARAMS(modem)->energy_drop_time >= elapsed) {
 			if (DSPLIB_DEBUG_ON())
@@ -203,8 +202,8 @@ v32_data(void *modem, unsigned short *txdata, short *txout, short *rxin,
 	 * name here would be an offset in disguise.  Recorded as the object's
 	 * own constant.
 	 */
-	FIELD_U8(modem, V32_OBJ_FLAGS) |= (unsigned char)0x0c;
-	FIELD_U8(modem, V32_OBJ_STATUS) = (unsigned char)code;
+	((struct v32_modem *)(modem))->flags |= (unsigned char)0x0c;
+	((struct v32_modem *)(modem))->status = (unsigned char)code;
 }
 
 /*
@@ -239,26 +238,26 @@ static void
 v32_handshake(void *modem, unsigned short *txdata, short *txout, short *rxin,
 	      unsigned short *rxout, short *nsamples, unsigned short *rxcount)
 {
-	unsigned char *hdx;
+	struct v32_hdx *hdx;
 	unsigned char flags;
 	short i;
 
-	hdx = (unsigned char *)FIELD_PTR(modem, V32_OBJ_HDX);
+	hdx = ((struct v32_modem *)(modem))->hdx;
 
-	flags = FIELD_U8(modem, V32_OBJ_FLAGS);
-	if (FIELD_S16(hdx, V32HDX_MODE) == V32_MODE_RING_INIT)
+	flags = ((struct v32_modem *)(modem))->flags;
+	if (hdx->mode == V32_MODE_RING_INIT)
 		flags = (unsigned char)(flags & ~(V32_FLAG_04 | V32_FLAG_08));
-	FIELD_U8(modem, V32_OBJ_FLAGS) = (unsigned char)(flags & ~V32_FLAG_01);
+	((struct v32_modem *)(modem))->flags = (unsigned char)(flags & ~V32_FLAG_01);
 
-	if (FIELD_S16(hdx, V32HDX_SYMBOL_LEN) > 0) {
+	if (hdx->symbol_len > 0) {
 		unsigned short *buf;
 
-		buf = (unsigned short *)FIELD_PTR(hdx, V32_HDX_BUF_A4);
+		buf = (unsigned short *)hdx->buffer;
 		i = 0;
 		do {
 			buf[i] = txdata[i];
 			i = (short)(i + 1);
-		} while (FIELD_S16(hdx, V32HDX_SYMBOL_LEN) > i);
+		} while (hdx->symbol_len > i);
 	}
 
 	V32RxHdxModem(modem, rxin, rxout, rxcount);
@@ -267,8 +266,8 @@ v32_handshake(void *modem, unsigned short *txdata, short *txout, short *rxin,
 	 * RE-READ, and it matters: the receive state may have replaced the
 	 * whole context, exactly as `V32TxHdxModem`'s own loop allows.
 	 */
-	hdx = (unsigned char *)FIELD_PTR(modem, V32_OBJ_HDX);
-	V32TxHdxModem(modem, (short *)FIELD_PTR(hdx, V32_HDX_BUF_A4), txout,
+	hdx = ((struct v32_modem *)(modem))->hdx;
+	V32TxHdxModem(modem, (short *)hdx->buffer, txout,
 		      nsamples);
 }
 
@@ -297,4 +296,3 @@ v32_protocol_fn V32_PROTOCOL[9] = {
 	(v32_protocol_fn)v32_null_protocol,	/* 7                        */
 	(v32_protocol_fn)v32_null_protocol	/* 8                        */
 };
-

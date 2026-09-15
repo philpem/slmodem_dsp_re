@@ -101,6 +101,7 @@
  */
 
 #include "dsplib/v32hdxst.h"
+#include "dsplib/v32struct.h"
 
 #include "dsplib/debug.h"
 #include "dsplib/fpm_agc.h"
@@ -113,23 +114,10 @@
 #include "dsplib/v32state.h"
 
 /* The instance is not modelled; see v32hdx.h.  These are the only accessors. */
-#define FIELD(obj, off)		((unsigned char *)(void *)(obj) + (off))
-#define FIELD_PTR(obj, off)	(*(void **)(void *)FIELD((obj), (off)))
-#define FIELD_INT(obj, off)	(*(int *)(void *)FIELD((obj), (off)))
-#define FIELD_U32(obj, off)	(*(unsigned int *)(void *)FIELD((obj), (off)))
-#define FIELD_S16(obj, off)	(*(short *)(void *)FIELD((obj), (off)))
-#define FIELD_U16(obj, off)	(*(unsigned short *)(void *)FIELD((obj), (off)))
-#define FIELD_U8(obj, off)	(*(unsigned char *)FIELD((obj), (off)))
 
-#define HDX(m)		FIELD_PTR((m), V32_OBJ_HDX)
-#define FP(m)		FIELD_PTR((m), V32_OBJ_FP)
+#define HDX(m)		(((struct v32_modem *)(m))->hdx)
+#define FP(m)		(((struct v32_modem *)(m))->fp)
 
-#define AGC_OF(hdx)	((struct fpm_agc *)(void *)FIELD((hdx), V32HDX_AGC))
-#define TONE_OF(hdx, off) ((struct fpm_tone *)FIELD_PTR((hdx), (off)))
-#define MTD_OF(hdx)	((struct fpm_mtd *)FIELD_PTR((hdx), V32_HDX_MTD))
-
-#define TXSTATE(hdx)	(*(v32_txhdx_fn *)(void *)FIELD((hdx), V32HDX_TXSTATE))
-#define RXSTATE(hdx)	(*(v32_rxhdx_fn *)(void *)FIELD((hdx), V32HDX_RXSTATE))
 
 /* ------------------------------------------------------------------------ */
 /* The instance.                                                            */
@@ -304,34 +292,33 @@
 void
 RxHdxTone(void *modem, short *in, unsigned short *out, unsigned short *count)
 {
-	void *hdx = HDX(modem);
+	struct v32_hdx *hdx = HDX(modem);
 
-	FIELD_U32(hdx, V32HDX_TIMER) +=
-		(unsigned int)FIELD_S16(hdx, V32HDX_SYMBOL_LEN);
+	hdx->timer +=
+		(unsigned int)hdx->symbol_len;
 
 	/*
 	 * Three terms, and the object tests them in this order with two early
 	 * exits into the body: any one of them runs the detector.
 	 */
-	if (FIELD_S16(modem, V32_OBJ_PROTOCOL) != 1
-	    || (FIELD_INT(modem, V32_OBJ_OPTIONS) & V32_OPT_0400) != 0
-	    || FIELD_INT(hdx, V32HDX_INT_78) > 180) {
+	if (((struct v32_modem *)(modem))->params.protocol != 1
+	    || (((struct v32_modem *)(modem))->params.options & V32_OPT_0400) != 0
+	    || hdx->state_left > 180) {
 		/* The object passes a fourth argument here; see the header. */
-		FPM_AGC_agc(AGC_OF(hdx), in, *count);
+		FPM_AGC_agc((&hdx->agc), in, *count);
 
-		if (FPM_TONE_detect(TONE_OF(HDX(modem), V32_HDX_TONE0), in,
+		if (FPM_TONE_detect(HDX(modem)->tone0, in,
 				    (short)*count) == 0)
-			(*V32NextState[FIELD_S16(HDX(modem),
-						 V32HDX_MODE)])(modem);
+			(*V32NextState[HDX(modem)->mode])(modem);
 	}
 
 	hdx = HDX(modem);
-	if (FIELD_U32(hdx, V32HDX_TIMER) >= FIELD_U32(hdx, V32HDX_LIMIT)) {
-		FIELD_U8(modem, V32_OBJ_FLAGS) |= V32_FLAG_FAULT;
-		FIELD_U8(modem, V32_OBJ_STATUS) = V32_STATUS_10;
-		TXSTATE(hdx) = TxHdxNoCarrier;
-		RXSTATE(hdx) = RxHdxError;
-		FIELD_S16(hdx, V32HDX_STATE) = V32_STATE_ERROR;
+	if (hdx->timer >= hdx->limit) {
+		((struct v32_modem *)(modem))->flags |= V32_FLAG_FAULT;
+		((struct v32_modem *)(modem))->status = V32_STATUS_10;
+		hdx->tx_state = TxHdxNoCarrier;
+		hdx->rx_state = RxHdxError;
+		hdx->state = V32_STATE_ERROR;
 	}
 
 	*count = RxClampV32(modem, in, (short *)out, *count);
@@ -341,31 +328,31 @@ void
 RxHdxNoSignal(void *modem, short *in, unsigned short *out,
 	      unsigned short *count)
 {
-	void *hdx = HDX(modem);
+	struct v32_hdx *hdx = HDX(modem);
 
-	FIELD_U32(hdx, V32HDX_TIMER) +=
-		(unsigned int)FIELD_S16(hdx, V32HDX_SYMBOL_LEN);
-	FIELD_U16(hdx, V32HDX_SHORT_AA) = (unsigned short)
-		(FIELD_U16(hdx, V32HDX_SHORT_AA)
-		 + FIELD_U16(hdx, V32HDX_SYMBOL_LEN));
+	hdx->timer +=
+		(unsigned int)hdx->symbol_len;
+	hdx->short_aa = (unsigned short)
+		(hdx->short_aa
+		 + hdx->symbol_len);
 
 	/* The object passes a fourth argument here; see the header. */
-	FPM_AGC_agc(AGC_OF(hdx), in, *count);
+	FPM_AGC_agc((&hdx->agc), in, *count);
 
-	if (FPM_TONE_detect(TONE_OF(HDX(modem), V32_HDX_TONE0), in,
+	if (FPM_TONE_detect(HDX(modem)->tone0, in,
 			    (short)*count) != 0) {
 		hdx = HDX(modem);
-		if (FIELD_U32(hdx, V32HDX_TIMER) > 60)
-			(*V32NextState[FIELD_S16(hdx, V32HDX_MODE)])(modem);
+		if (hdx->timer > 60)
+			(*V32NextState[hdx->mode])(modem);
 	}
 
 	hdx = HDX(modem);
-	if (FIELD_U32(hdx, V32HDX_TIMER) >= FIELD_U32(hdx, V32HDX_LIMIT)) {
-		FIELD_U8(modem, V32_OBJ_FLAGS) |= V32_FLAG_FAULT;
-		FIELD_U8(modem, V32_OBJ_STATUS) = V32_STATUS_11;
-		TXSTATE(hdx) = TxHdxNoCarrier;
-		RXSTATE(hdx) = RxHdxError;
-		FIELD_S16(hdx, V32HDX_STATE) = V32_STATE_ERROR;
+	if (hdx->timer >= hdx->limit) {
+		((struct v32_modem *)(modem))->flags |= V32_FLAG_FAULT;
+		((struct v32_modem *)(modem))->status = V32_STATUS_11;
+		hdx->tx_state = TxHdxNoCarrier;
+		hdx->rx_state = RxHdxError;
+		hdx->state = V32_STATE_ERROR;
 	}
 
 	*count = RxClampV32(modem, in, (short *)out, *count);
@@ -375,32 +362,32 @@ void
 RxHdxPhsReversal(void *modem, short *in, unsigned short *out,
 		 unsigned short *count)
 {
-	void *hdx;
+	struct v32_hdx *hdx;
 	short rev;
 	short miss;
 
 	/* The object passes a fourth argument here; see the header. */
-	FPM_AGC_agc(AGC_OF(HDX(modem)), in, *count);
-	FPM_TONE_kill(TONE_OF(HDX(modem), V32_HDX_TONE1), in, (short)*count);
-	FPM_TONE_kill(TONE_OF(HDX(modem), V32_HDX_TONE2), in, (short)*count);
+	FPM_AGC_agc(&HDX(modem)->agc, in, *count);
+	FPM_TONE_kill(HDX(modem)->tone1, in, (short)*count);
+	FPM_TONE_kill(HDX(modem)->tone2, in, (short)*count);
 
 	hdx = HDX(modem);
-	FIELD_U32(hdx, V32HDX_TIMER) +=
-		(unsigned int)FIELD_S16(hdx, V32HDX_SYMBOL_LEN);
-	FIELD_U16(hdx, V32HDX_SHORT_A8) = (unsigned short)
-		(FIELD_U16(hdx, V32HDX_SHORT_A8)
-		 + FIELD_S16(hdx, V32HDX_SYMBOL_LEN));
+	hdx->timer +=
+		(unsigned int)hdx->symbol_len;
+	hdx->short_a8 = (unsigned short)
+		(hdx->short_a8
+		 + hdx->symbol_len);
 
-	if (FIELD_INT(hdx, V32HDX_INT_90) != 0) {
+	if (hdx->int_90 != 0) {
 		int scaled;
 
-		rev = FPM_TONE_find_rev(TONE_OF(hdx, V32_HDX_TONE0), in,
+		rev = FPM_TONE_find_rev(hdx->tone0, in,
 					(short)*count);
 		if (rev > 0) {
 			short tad = CalcTurnAroundDelay(modem);
 
 			hdx = HDX(modem);
-			FIELD_U32(hdx, V32HDX_TIMER) = (unsigned int)(int)tad;
+			hdx->timer = (unsigned int)(int)tad;
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
 					"v32 Turn Around Delay = %d\n",
@@ -410,29 +397,27 @@ RxHdxPhsReversal(void *modem, short *in, unsigned short *out,
 			scaled = ((int)rev * V32_REV_SCALE + V32_REV_ROUND)
 				 >> V32_REV_SHIFT;
 
-			if (FIELD_S16(hdx, V32HDX_MODE) == V32_MODE_ORIGINATE) {
-				FIELD_S16(hdx, V32HDX_RTD) = (short)
-					(scaled - 2 * FIELD_S16(hdx,
-							V32_HDX_SHORT_94));
+			if (hdx->mode == V32_MODE_ORIGINATE) {
+				hdx->rtd = (short)
+					(scaled - 2 * hdx->turnaround);
 			} else {
-				FIELD_S16(hdx, V32HDX_RTD) = (short)
+				hdx->rtd = (short)
 					(scaled
-					 + FIELD_U16(hdx, V32HDX_SYMBOL_LEN)
-					 - FIELD_U16(hdx, V32_HDX_SHORT_94)
-					 - FIELD_U16(hdx, V32_HDX_SHORT_9C)
-					 - FIELD_U16(hdx, V32_HDX_SHORT_98)
-					 - FIELD_U16(hdx, V32_HDX_SHORT_9A));
+					 + hdx->symbol_len
+					 - hdx->turnaround
+					 - hdx->short_9c
+					 - hdx->short_98
+					 - hdx->short_9a);
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf("v32 RTD = %d\n",
-						(int)FIELD_S16(hdx,
-							       V32HDX_RTD));
+						(int)hdx->rtd);
 				hdx = HDX(modem);
 			}
 
-			if (FIELD_S16(hdx, V32HDX_RTD) < 0)
-				FIELD_S16(hdx, V32HDX_RTD) = 0;
+			if (hdx->rtd < 0)
+				hdx->rtd = 0;
 
-			(*V32NextState[FIELD_S16(hdx, V32HDX_MODE)])(modem);
+			(*V32NextState[hdx->mode])(modem);
 		}
 		hdx = HDX(modem);
 	}
@@ -443,28 +428,28 @@ RxHdxPhsReversal(void *modem, short *in, unsigned short *out,
 	 * in the SAME call (the `je 83bac` at 83cb4 is a backward branch into
 	 * the other arm).
 	 */
-	if (FIELD_INT(hdx, V32HDX_INT_90) == 0) {
-		if (FPM_TONE_detect(TONE_OF(hdx, V32_HDX_TONE0), in,
+	if (hdx->int_90 == 0) {
+		if (FPM_TONE_detect(hdx->tone0, in,
 				    (short)*count) == 0)
-			miss = (short)(FIELD_U16(HDX(modem), V32HDX_SHORT_AC)
+			miss = (short)(HDX(modem)->short_ac
 				       + 1);
 		else
 			miss = 0;
 
 		hdx = HDX(modem);
-		FIELD_S16(hdx, V32HDX_SHORT_AC) = miss;
-		if (FIELD_S16(hdx, V32HDX_SHORT_AC) > 3) {
-			FIELD_INT(hdx, V32HDX_INT_90) = 1;
-			FIELD_S16(hdx, V32HDX_SHORT_AC) = 0;
+		hdx->short_ac = miss;
+		if (hdx->short_ac > 3) {
+			hdx->int_90 = 1;
+			hdx->short_ac = 0;
 		}
 	}
 
-	if (FIELD_U32(hdx, V32HDX_TIMER) >= FIELD_U32(hdx, V32HDX_LIMIT)) {
-		FIELD_U8(modem, V32_OBJ_FLAGS) |= V32_FLAG_FAULT;
-		FIELD_U8(modem, V32_OBJ_STATUS) = V32_STATUS_12;
-		TXSTATE(hdx) = TxHdxNoCarrier;
-		RXSTATE(hdx) = RxHdxError;
-		FIELD_S16(hdx, V32HDX_STATE) = V32_STATE_ERROR;
+	if (hdx->timer >= hdx->limit) {
+		((struct v32_modem *)(modem))->flags |= V32_FLAG_FAULT;
+		((struct v32_modem *)(modem))->status = V32_STATUS_12;
+		hdx->tx_state = TxHdxNoCarrier;
+		hdx->rx_state = RxHdxError;
+		hdx->state = V32_STATE_ERROR;
 	}
 
 	*count = RxClampV32(modem, in, (short *)out, *count);
@@ -474,11 +459,11 @@ void
 RxHdxRateSequence(void *modem, short *in, unsigned short *out,
 		  unsigned short *count)
 {
-	void *hdx = HDX(modem);
+	struct v32_hdx *hdx = HDX(modem);
 	unsigned short n;
 
-	FIELD_U32(hdx, V32HDX_TIMER) +=
-		(unsigned int)FIELD_S16(hdx, V32HDX_SYMBOL_LEN);
+	hdx->timer +=
+		(unsigned int)hdx->symbol_len;
 
 	*count = n = DemodDataV32(modem, in, out, *count);
 	DescrambleDataV32(modem, (short *)out, n);
@@ -492,15 +477,15 @@ RxHdxRateSequence(void *modem, short *in, unsigned short *out,
 	if (DetSequence(modem, (const short *)out, *count) >= 0
 	    && ((unsigned int)GetSequence(modem) >> 16)
 		== (unsigned int)(GetSequence(modem) & 0xffff))
-		(*V32NextState[FIELD_S16(HDX(modem), V32HDX_MODE)])(modem);
+		(*V32NextState[HDX(modem)->mode])(modem);
 
 	hdx = HDX(modem);
-	if (FIELD_U32(hdx, V32HDX_TIMER) >= FIELD_U32(hdx, V32HDX_LIMIT)) {
-		FIELD_U8(modem, V32_OBJ_FLAGS) |= V32_FLAG_FAULT;
-		FIELD_U8(modem, V32_OBJ_STATUS) = V32_STATUS_13;
-		TXSTATE(hdx) = TxHdxNoCarrier;
-		RXSTATE(hdx) = RxHdxError;
-		FIELD_S16(hdx, V32HDX_STATE) = V32_STATE_ERROR;
+	if (hdx->timer >= hdx->limit) {
+		((struct v32_modem *)(modem))->flags |= V32_FLAG_FAULT;
+		((struct v32_modem *)(modem))->status = V32_STATUS_13;
+		hdx->tx_state = TxHdxNoCarrier;
+		hdx->rx_state = RxHdxError;
+		hdx->state = V32_STATE_ERROR;
 	}
 
 	*count = RxClampV32(modem, in, (short *)out, *count);
@@ -510,25 +495,25 @@ void
 RxHdxSequence(void *modem, short *in, unsigned short *out,
 	      unsigned short *count)
 {
-	void *hdx = HDX(modem);
+	struct v32_hdx *hdx = HDX(modem);
 	unsigned short n;
 
-	FIELD_U32(hdx, V32HDX_TIMER) +=
-		(unsigned int)FIELD_S16(hdx, V32HDX_SYMBOL_LEN);
+	hdx->timer +=
+		(unsigned int)hdx->symbol_len;
 
 	*count = n = DemodDataV32(modem, in, out, *count);
 	DescrambleDataV32(modem, (short *)out, n);
 
 	if (DetSequence(modem, (const short *)out, *count) >= 0)
-		(*V32NextState[FIELD_S16(HDX(modem), V32HDX_MODE)])(modem);
+		(*V32NextState[HDX(modem)->mode])(modem);
 
 	hdx = HDX(modem);
-	if (FIELD_U32(hdx, V32HDX_TIMER) >= FIELD_U32(hdx, V32HDX_LIMIT)) {
-		FIELD_U8(modem, V32_OBJ_FLAGS) |= V32_FLAG_FAULT;
-		FIELD_U8(modem, V32_OBJ_STATUS) = V32_STATUS_13;
-		TXSTATE(hdx) = TxHdxNoCarrier;
-		RXSTATE(hdx) = RxHdxError;
-		FIELD_S16(hdx, V32HDX_STATE) = V32_STATE_ERROR;
+	if (hdx->timer >= hdx->limit) {
+		((struct v32_modem *)(modem))->flags |= V32_FLAG_FAULT;
+		((struct v32_modem *)(modem))->status = V32_STATUS_13;
+		hdx->tx_state = TxHdxNoCarrier;
+		hdx->rx_state = RxHdxError;
+		hdx->state = V32_STATE_ERROR;
 	}
 
 	*count = RxClampV32(modem, in, (short *)out, *count);
@@ -538,49 +523,49 @@ void
 RxHdxSequenceE(void *modem, short *in, unsigned short *out,
 	       unsigned short *count)
 {
-	void *hdx = HDX(modem);
+	struct v32_hdx *hdx = HDX(modem);
 	unsigned short n;
 
-	FIELD_U32(hdx, V32HDX_TIMER) +=
-		(unsigned int)FIELD_S16(hdx, V32HDX_SYMBOL_LEN);
+	hdx->timer +=
+		(unsigned int)hdx->symbol_len;
 
 	n = DemodDataV32(modem, in, out, *count);
 	*count = n;
 	DescrambleDataV32(modem, (short *)out, n);
 
 	hdx = HDX(modem);
-	if (FIELD_U16(hdx, V32HDX_SHORT_48) != 0) {
-		FIELD_U16(hdx, V32HDX_SHORT_48) = (unsigned short)
-			(FIELD_U16(hdx, V32HDX_SHORT_48)
-			 + FIELD_U16(hdx, V32HDX_SYMBOL_LEN));
-		if (FIELD_S16(hdx, V32HDX_SHORT_48) > 0x17)
-			FIELD_U8(modem, V32_OBJ_FLAGS) |= V32_FLAG_04;
+	if (hdx->short_48 != 0) {
+		hdx->short_48 = (unsigned short)
+			(hdx->short_48
+			 + hdx->symbol_len);
+		if (hdx->short_48 > 0x17)
+			((struct v32_modem *)(modem))->flags |= V32_FLAG_04;
 	} else if (DetSequence(modem, (const short *)out, *count) >= 0) {
 		short *regs;
 
 		hdx = HDX(modem);
-		regs = (short *)(void *)FIELD(hdx, V32HDX_REGS);
+		regs = hdx->regs;
 		regs[V32HDX_REG_RATE_SEQ] = (short)GetSequence(modem);
 
 		hdx = HDX(modem);
-		regs = (short *)(void *)FIELD(hdx, V32HDX_REGS);
-		RXSTATE(hdx) = RxHdxData;
+		regs = hdx->regs;
+		hdx->rx_state = RxHdxData;
 		SetRxModeV32(modem,
 			     V32_RX_MODE[DecodeRateSeq(modem,
 				(unsigned short)regs[V32HDX_REG_RATE_SEQ])]);
 
 		hdx = HDX(modem);
-		FIELD_U16(hdx, V32HDX_SHORT_48) = (unsigned short)
-			(FIELD_U16(hdx, V32HDX_SHORT_48) + 1);
+		hdx->short_48 = (unsigned short)
+			(hdx->short_48 + 1);
 	} else {
 		hdx = HDX(modem);
-		if (FIELD_U32(hdx, V32HDX_TIMER)
-		    >= FIELD_U32(hdx, V32HDX_LIMIT)) {
-			FIELD_U8(modem, V32_OBJ_FLAGS) |= V32_FLAG_FAULT;
-			FIELD_U8(modem, V32_OBJ_STATUS) = V32_STATUS_13;
-			TXSTATE(hdx) = TxHdxNoCarrier;
-			RXSTATE(hdx) = RxHdxError;
-			FIELD_S16(hdx, V32HDX_STATE) = V32_STATE_ERROR;
+		if (hdx->timer
+		    >= hdx->limit) {
+			((struct v32_modem *)(modem))->flags |= V32_FLAG_FAULT;
+			((struct v32_modem *)(modem))->status = V32_STATUS_13;
+			hdx->tx_state = TxHdxNoCarrier;
+			hdx->rx_state = RxHdxError;
+			hdx->state = V32_STATE_ERROR;
 		}
 	}
 
@@ -590,11 +575,11 @@ RxHdxSequenceE(void *modem, short *in, unsigned short *out,
 void
 RxHdxData(void *modem, short *in, unsigned short *out, unsigned short *count)
 {
-	void *hdx = HDX(modem);
+	struct v32_hdx *hdx = HDX(modem);
 	unsigned short n;
 
-	FIELD_U32(hdx, V32HDX_TIMER) +=
-		(unsigned int)FIELD_S16(hdx, V32HDX_SYMBOL_LEN);
+	hdx->timer +=
+		(unsigned int)hdx->symbol_len;
 
 	*count = n = DemodDataV32(modem, in, out, *count);
 	DescrambleDataV32(modem, (short *)out, n);
@@ -606,23 +591,23 @@ void
 RxHdxToneData(void *modem, short *in, unsigned short *out,
 	      unsigned short *count)
 {
-	void *hdx = HDX(modem);
+	struct v32_hdx *hdx = HDX(modem);
 	unsigned short n;
 
-	FIELD_U32(hdx, V32HDX_TIMER) +=
-		(unsigned int)FIELD_S16(hdx, V32HDX_SYMBOL_LEN);
+	hdx->timer +=
+		(unsigned int)hdx->symbol_len;
 
-	if (FPM_TONE_detect(TONE_OF(hdx, V32_HDX_TONE0), in,
+	if (FPM_TONE_detect(hdx->tone0, in,
 			    (short)*count) == 0)
-		(*V32NextState[FIELD_S16(HDX(modem), V32HDX_MODE)])(modem);
+		(*V32NextState[HDX(modem)->mode])(modem);
 
 	hdx = HDX(modem);
-	if (FIELD_U32(hdx, V32HDX_TIMER) >= FIELD_U32(hdx, V32HDX_LIMIT)) {
-		FIELD_U8(modem, V32_OBJ_FLAGS) |= V32_FLAG_FAULT;
-		FIELD_U8(modem, V32_OBJ_STATUS) = V32_STATUS_14;
-		TXSTATE(hdx) = TxHdxNoCarrier;
-		RXSTATE(hdx) = RxHdxError;
-		FIELD_S16(hdx, V32HDX_STATE) = V32_STATE_ERROR;
+	if (hdx->timer >= hdx->limit) {
+		((struct v32_modem *)(modem))->flags |= V32_FLAG_FAULT;
+		((struct v32_modem *)(modem))->status = V32_STATUS_14;
+		hdx->tx_state = TxHdxNoCarrier;
+		hdx->rx_state = RxHdxError;
+		hdx->state = V32_STATE_ERROR;
 	}
 
 	/* The demodulation comes AFTER the timeout check, not before it. */
@@ -635,11 +620,11 @@ RxHdxToneData(void *modem, short *in, unsigned short *out,
 void
 RxHdxSTone(void *modem, short *in, unsigned short *out, unsigned short *count)
 {
-	void *hdx = HDX(modem);
+	struct v32_hdx *hdx = HDX(modem);
 	short det;
 
-	FIELD_U32(hdx, V32HDX_TIMER) +=
-		(unsigned int)FIELD_S16(hdx, V32HDX_SYMBOL_LEN);
+	hdx->timer +=
+		(unsigned int)hdx->symbol_len;
 
 	/*
 	 * WHICH BANK THE MULTI-TONE DETECTOR IS CARRYING decides which buffer
@@ -648,29 +633,29 @@ RxHdxSTone(void *modem, short *in, unsigned short *out, unsigned short *count)
 	 * working buffer; configured with the other bank it detects over the
 	 * caller's raw input and does not demodulate at all.
 	 */
-	if (MTD_OF(hdx)->cfg.coeff == V32_S_DATA_COEF) {
-		void *fp;
+	if (hdx->mtd->cfg.coeff == V32_S_DATA_COEF) {
+		struct v32_fp *fp;
 
 		*count = DemodDataV32(modem, in, out, *count);
 
 		fp = FP(modem);
-		det = FPM_MTD_detect(MTD_OF(HDX(modem)),
-				     (const short *)FIELD_PTR(fp, V32FP_RXBUF),
-				     FIELD_S16(fp, V32FP_RXLEN));
+		det = FPM_MTD_detect(HDX(modem)->mtd,
+				     (const short *)fp->rx_buf,
+				     fp->rx_len);
 	} else {
-		det = FPM_MTD_detect(MTD_OF(hdx), in, (short)*count);
+		det = FPM_MTD_detect(hdx->mtd, in, (short)*count);
 	}
 
 	if (det == 0)
-		(*V32NextState[FIELD_S16(HDX(modem), V32HDX_MODE)])(modem);
+		(*V32NextState[HDX(modem)->mode])(modem);
 
 	hdx = HDX(modem);
-	if (FIELD_U32(hdx, V32HDX_TIMER) >= FIELD_U32(hdx, V32HDX_LIMIT)) {
-		FIELD_U8(modem, V32_OBJ_FLAGS) |= V32_FLAG_FAULT;
-		FIELD_U8(modem, V32_OBJ_STATUS) = V32_STATUS_14;
-		TXSTATE(hdx) = TxHdxNoCarrier;
-		RXSTATE(hdx) = RxHdxError;
-		FIELD_S16(hdx, V32HDX_STATE) = V32_STATE_ERROR;
+	if (hdx->timer >= hdx->limit) {
+		((struct v32_modem *)(modem))->flags |= V32_FLAG_FAULT;
+		((struct v32_modem *)(modem))->status = V32_STATUS_14;
+		hdx->tx_state = TxHdxNoCarrier;
+		hdx->rx_state = RxHdxError;
+		hdx->state = V32_STATE_ERROR;
 	}
 
 	*count = RxClampV32(modem, in, (short *)out, *count);
@@ -679,23 +664,23 @@ RxHdxSTone(void *modem, short *in, unsigned short *out, unsigned short *count)
 void
 RxHdxEpoch(void *modem, short *in, unsigned short *out, unsigned short *count)
 {
-	void *hdx = HDX(modem);
+	struct v32_hdx *hdx = HDX(modem);
 
-	FIELD_U32(hdx, V32HDX_TIMER) +=
-		(unsigned int)FIELD_S16(hdx, V32HDX_SYMBOL_LEN);
+	hdx->timer +=
+		(unsigned int)hdx->symbol_len;
 
 	*count = DemodDataV32(modem, in, out, *count);
 
 	if (EpochDetectV32(modem) != 0)
-		(*V32NextState[FIELD_S16(HDX(modem), V32HDX_MODE)])(modem);
+		(*V32NextState[HDX(modem)->mode])(modem);
 
 	hdx = HDX(modem);
-	if (FIELD_U32(hdx, V32HDX_TIMER) >= FIELD_U32(hdx, V32HDX_LIMIT)) {
-		FIELD_U8(modem, V32_OBJ_FLAGS) |= V32_FLAG_FAULT;
-		FIELD_U8(modem, V32_OBJ_STATUS) = V32_STATUS_15;
-		TXSTATE(hdx) = TxHdxNoCarrier;
-		RXSTATE(hdx) = RxHdxError;
-		FIELD_S16(hdx, V32HDX_STATE) = V32_STATE_ERROR;
+	if (hdx->timer >= hdx->limit) {
+		((struct v32_modem *)(modem))->flags |= V32_FLAG_FAULT;
+		((struct v32_modem *)(modem))->status = V32_STATUS_15;
+		hdx->tx_state = TxHdxNoCarrier;
+		hdx->rx_state = RxHdxError;
+		hdx->state = V32_STATE_ERROR;
 	}
 
 	*count = RxClampV32(modem, in, (short *)out, *count);
@@ -710,7 +695,7 @@ RxHdxEpoch(void *modem, short *in, unsigned short *out, unsigned short *count)
 void
 RxHdxError(void *modem, short *in, unsigned short *out, unsigned short *count)
 {
-	FIELD_U8(modem, V32_OBJ_FLAGS) |= V32_FLAG_FAULT;
+	((struct v32_modem *)(modem))->flags |= V32_FLAG_FAULT;
 	DemodDataV32(modem, in, out, *count);
 	*count = 0;
 }
@@ -718,17 +703,17 @@ RxHdxError(void *modem, short *in, unsigned short *out, unsigned short *count)
 void
 RxHdxNull(void *modem, short *in, unsigned short *out, unsigned short *count)
 {
-	void *hdx = HDX(modem);
+	struct v32_hdx *hdx = HDX(modem);
 
-	FIELD_U32(hdx, V32HDX_TIMER) +=
-		(unsigned int)FIELD_S16(hdx, V32HDX_SYMBOL_LEN);
+	hdx->timer +=
+		(unsigned int)hdx->symbol_len;
 
-	if (FIELD_U32(hdx, V32HDX_TIMER) >= FIELD_U32(hdx, V32HDX_LIMIT)) {
-		FIELD_U8(modem, V32_OBJ_FLAGS) |= V32_FLAG_FAULT;
-		FIELD_U8(modem, V32_OBJ_STATUS) = V32_STATUS_10;
-		TXSTATE(hdx) = TxHdxNoCarrier;
-		RXSTATE(hdx) = RxHdxError;
-		FIELD_S16(hdx, V32HDX_STATE) = V32_STATE_ERROR;
+	if (hdx->timer >= hdx->limit) {
+		((struct v32_modem *)(modem))->flags |= V32_FLAG_FAULT;
+		((struct v32_modem *)(modem))->status = V32_STATUS_10;
+		hdx->tx_state = TxHdxNoCarrier;
+		hdx->rx_state = RxHdxError;
+		hdx->state = V32_STATE_ERROR;
 	}
 
 	*count = RxClampV32(modem, in, (short *)out, *count);

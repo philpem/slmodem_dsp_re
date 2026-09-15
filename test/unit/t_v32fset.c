@@ -123,16 +123,16 @@ setup(fpm_fse_decision ours, fpm_fse_decision theirs, int mode)
 	installed_a = ours;
 	installed_b = theirs;
 
-	VTBv32_init((struct vtb *)dec_a.vtb, (short)mode, 1);
-	ref_VTBv32_init((struct vtb *)dec_b.vtb, (short)mode, 1);
+	VTBv32_init(&dec_a.vtb, (short)mode, 1);
+	ref_VTBv32_init(&dec_b.vtb, (short)mode, 1);
 }
 
 static void
 compare(long n)
 {
 	struct v32_dec ca, cb;
-	struct vtb *va = (struct vtb *)dec_a.vtb;
-	struct vtb *vb = (struct vtb *)dec_b.vtb;
+	struct vtb *va = &dec_a.vtb;
+	struct vtb *vb = &dec_b.vtb;
 	int j;
 
 	/*
@@ -144,8 +144,8 @@ compare(long n)
 	 */
 	memcpy(&ca, &dec_a, sizeof(ca));
 	memcpy(&cb, &dec_b, sizeof(cb));
-	memset(ca.vtb, 0, sizeof(ca.vtb));
-	memset(cb.vtb, 0, sizeof(cb.vtb));
+	memset(&ca.vtb, 0, sizeof(ca.vtb));
+	memset(&cb.vtb, 0, sizeof(cb.vtb));
 	diff_eq_obj("decoder object, Viterbi window blanked", struct v32_dec,
 		    &ca, &cb, n);
 
@@ -819,7 +819,7 @@ main(void)
 
 	diff_begin("v32_dec: where the Viterbi state sits");
 	diff_eq_int("vtb (%ld)",
-		    (long)((char *)dec_a.vtb - (char *)&dec_a), 0x18, 0);
+		    (long)((char *)&dec_a.vtb - (char *)&dec_a), 0x18, 0);
 	diff_eq_int("vtb size (%ld)", (long)sizeof(dec_a.vtb), 0x38, 0);
 	diff_eq_int("it is exactly struct vtb (%ld)",
 		    (long)sizeof(struct vtb), 0x38, 0);

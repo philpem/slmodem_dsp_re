@@ -39,33 +39,33 @@
  },
  {
   "label": "the transmit tail's mask is a power of two rather than one less",
-  "find": "\tmask = (unsigned int)((1 << shift) - 1);\n\tsdm->outmask = mask;\n\tsdm->regmask = ~mask;\n\tsdm->tap1 = (short)(FIELD_U16(sdm, V32_SDM_TAP1_POS) - shift);\n\tsdm->tap2 = (short)(FIELD_U16(sdm, V32_SDM_TAP2_POS) - shift);\n}\n\n/*\n * Configure the receiver",
-  "replace": "\tmask = (unsigned int)(1 << shift);\n\tsdm->outmask = mask;\n\tsdm->regmask = ~mask;\n\tsdm->tap1 = (short)(FIELD_U16(sdm, V32_SDM_TAP1_POS) - shift);\n\tsdm->tap2 = (short)(FIELD_U16(sdm, V32_SDM_TAP2_POS) - shift);\n}\n\n/*\n * Configure the receiver"
+  "find": "\tmask = (unsigned int)((1 << shift) - 1);\n\tsdm->outmask = mask;\n\tsdm->regmask = ~mask;\n\tsdm->tap1 = (short)(sdm->tap1_pos - shift);\n\tsdm->tap2 = (short)(sdm->tap2_pos - shift);\n}\n\n/*\n * Configure the receiver",
+  "replace": "\tmask = (unsigned int)(1 << shift);\n\tsdm->outmask = mask;\n\tsdm->regmask = ~mask;\n\tsdm->tap1 = (short)(sdm->tap1_pos - shift);\n\tsdm->tap2 = (short)(sdm->tap2_pos - shift);\n}\n\n/*\n * Configure the receiver"
  },
  {
   "label": "the transmit register mask is the output mask rather than its complement",
-  "find": "\tsdm->regmask = ~mask;\n\tsdm->tap1 = (short)(FIELD_U16(sdm, V32_SDM_TAP1_POS) - shift);\n\tsdm->tap2 = (short)(FIELD_U16(sdm, V32_SDM_TAP2_POS) - shift);\n}\n\n/*\n * Configure the receiver",
-  "replace": "\tsdm->regmask = mask;\n\tsdm->tap1 = (short)(FIELD_U16(sdm, V32_SDM_TAP1_POS) - shift);\n\tsdm->tap2 = (short)(FIELD_U16(sdm, V32_SDM_TAP2_POS) - shift);\n}\n\n/*\n * Configure the receiver"
+  "find": "\tsdm->regmask = ~mask;\n\tsdm->tap1 = (short)(sdm->tap1_pos - shift);\n\tsdm->tap2 = (short)(sdm->tap2_pos - shift);\n}\n\n/*\n * Configure the receiver",
+  "replace": "\tsdm->regmask = mask;\n\tsdm->tap1 = (short)(sdm->tap1_pos - shift);\n\tsdm->tap2 = (short)(sdm->tap2_pos - shift);\n}\n\n/*\n * Configure the receiver"
  },
  {
   "label": "both transmit taps are derived from the first tap's position",
-  "find": "\tsdm->tap2 = (short)(FIELD_U16(sdm, V32_SDM_TAP2_POS) - shift);\n}\n\n/*\n * Configure the receiver",
-  "replace": "\tsdm->tap2 = (short)(FIELD_U16(sdm, V32_SDM_TAP1_POS) - shift);\n}\n\n/*\n * Configure the receiver"
+  "find": "\tsdm->tap2 = (short)(sdm->tap2_pos - shift);\n}\n\n/*\n * Configure the receiver",
+  "replace": "\tsdm->tap2 = (short)(sdm->tap1_pos - shift);\n}\n\n/*\n * Configure the receiver"
  },
  {
   "label": "the transmit taps are not reduced by the group shift",
-  "find": "\tsdm->tap1 = (short)(FIELD_U16(sdm, V32_SDM_TAP1_POS) - shift);\n\tsdm->tap2 = (short)(FIELD_U16(sdm, V32_SDM_TAP2_POS) - shift);\n}\n\n/*\n * Configure the receiver",
-  "replace": "\tsdm->tap1 = (short)FIELD_U16(sdm, V32_SDM_TAP1_POS);\n\tsdm->tap2 = (short)FIELD_U16(sdm, V32_SDM_TAP2_POS);\n}\n\n/*\n * Configure the receiver"
+  "find": "\tsdm->tap1 = (short)(sdm->tap1_pos - shift);\n\tsdm->tap2 = (short)(sdm->tap2_pos - shift);\n}\n\n/*\n * Configure the receiver",
+  "replace": "\tsdm->tap1 = (short)sdm->tap1_pos;\n\tsdm->tap2 = (short)sdm->tap2_pos;\n}\n\n/*\n * Configure the receiver"
  },
  {
   "label": "an out-of-range transmit mode replaces the fault flags instead of setting one bit",
-  "find": "\t\tFIELD_U8(modem, V32_OBJ_FLAGS) |= V32_FLAG_FAULT;\n\t\tfp = FP(modem);",
-  "replace": "\t\tFIELD_U8(modem, V32_OBJ_FLAGS) = V32_FLAG_FAULT;\n\t\tfp = FP(modem);"
+  "find": "\t\t((struct v32_modem *)modem)->flags |= V32_FLAG_FAULT;\n\t\tfp = (unsigned char *)FP(modem);",
+  "replace": "\t\t((struct v32_modem *)modem)->flags = V32_FLAG_FAULT;\n\t\tfp = (unsigned char *)FP(modem);"
  },
  {
   "label": "an out-of-range transmit mode leaves the scrambler at one bit per symbol rather than none",
-  "find": "\t\tfp = FP(modem);\n\t\tshift = 0;\n\t\tbreak;",
-  "replace": "\t\tfp = FP(modem);\n\t\tshift = 1;\n\t\tbreak;"
+  "find": "\t\tfp = (unsigned char *)FP(modem);\n\t\tshift = 0;\n\t\tbreak;",
+  "replace": "\t\tfp = (unsigned char *)FP(modem);\n\t\tshift = 1;\n\t\tbreak;"
  },
  {
   "label": "the receive four-point arms install the absolute slicer where the object installs the differential one",
@@ -79,18 +79,18 @@
  },
  {
   "label": "the receive four-point arms do not clear the decoder's phase counter",
-  "find": "\t\tFIELD_S16(fp, V32FP_SHORT_2E) = 0;\n\t\tdec->count = 0;",
-  "replace": "\t\tFIELD_S16(fp, V32FP_SHORT_2E) = 0;"
+  "find": "\t\t((struct v32_fp *)fp)->short_2e = 0;\n\t\tdec->count = 0;",
+  "replace": "\t\t((struct v32_fp *)fp)->short_2e = 0;"
  },
  {
   "label": "12000 initialises the Viterbi decoder for 14400",
-  "find": "\t\tVTBv32_init((struct vtb *)(void *)DEC(fp)->vtb, 4, 0);",
-  "replace": "\t\tVTBv32_init((struct vtb *)(void *)DEC(fp)->vtb, 5, 0);"
+  "find": "\t\tVTBv32_init(&DEC(fp)->vtb, 4, 0);",
+  "replace": "\t\tVTBv32_init(&DEC(fp)->vtb, 5, 0);"
  },
  {
   "label": "14400 asks VTBv32_init to allocate a second survivor ring",
-  "find": "\t\tVTBv32_init((struct vtb *)(void *)DEC(fp)->vtb, 5, 0);",
-  "replace": "\t\tVTBv32_init((struct vtb *)(void *)DEC(fp)->vtb, 5, 1);"
+  "find": "\t\tVTBv32_init(&DEC(fp)->vtb, 5, 0);",
+  "replace": "\t\tVTBv32_init(&DEC(fp)->vtb, 5, 1);"
  },
  {
   "label": "the receive tail configures the transmit scrambler",
@@ -99,8 +99,8 @@
  },
  {
   "label": "9600 with no trellis sets the decoder channel the 4800 arms clear",
-  "find": "\t\tdec->chan = 1;\n\t\tFIELD_S16(dec, V32_DEC_SHORT_04) = 2;\n\t\tFSE(fp)->cfg.decision = FSE_decision_16pt;",
-  "replace": "\t\tdec->chan = 0;\n\t\tFIELD_S16(dec, V32_DEC_SHORT_04) = 2;\n\t\tFSE(fp)->cfg.decision = FSE_decision_16pt;"
+  "find": "\t\tdec->chan = 1;\n\t\tdec->short_04 = 2;\n\t\tFSE(fp)->cfg.decision = FSE_decision_16pt;",
+  "replace": "\t\tdec->chan = 0;\n\t\tdec->short_04 = 2;\n\t\tFSE(fp)->cfg.decision = FSE_decision_16pt;"
  },
  {
   "label": "the scrambler seed lands on the descrambler's register",
@@ -119,18 +119,18 @@
  },
  {
   "label": "9600 always reports the trellis rate, never the uncoded one",
-  "find": "\t\treturn FIELD_INT(modem, V32_OBJ_TRELLIS) ? V32_RATE_9600\n\t\t\t\t\t\t\t : V32_RATE_9600_NT;",
+  "find": "\t\treturn ((struct v32_modem *)modem)->params.trellis ? V32_RATE_9600\n\t\t\t\t\t\t\t : V32_RATE_9600_NT;",
   "replace": "\t\treturn V32_RATE_9600;"
  },
  {
   "label": "the 9600 trellis test is inverted",
-  "find": "\t\treturn FIELD_INT(modem, V32_OBJ_TRELLIS) ? V32_RATE_9600\n\t\t\t\t\t\t\t : V32_RATE_9600_NT;\n\tif (bps == 7200)",
-  "replace": "\t\treturn FIELD_INT(modem, V32_OBJ_TRELLIS) ? V32_RATE_9600_NT\n\t\t\t\t\t\t\t : V32_RATE_9600;\n\tif (bps == 7200)"
+  "find": "\t\treturn ((struct v32_modem *)modem)->params.trellis ? V32_RATE_9600\n\t\t\t\t\t\t\t : V32_RATE_9600_NT;\n\tif (bps == 7200)",
+  "replace": "\t\treturn ((struct v32_modem *)modem)->params.trellis ? V32_RATE_9600_NT\n\t\t\t\t\t\t\t : V32_RATE_9600;\n\tif (bps == 7200)"
  },
  {
   "label": "the rate is read from the instance's symbol-length selector rather than its bit rate",
-  "find": "\tunsigned short bps = FIELD_U16(modem, V32_OBJ_BPS);",
-  "replace": "\tunsigned short bps = FIELD_U16(modem, V32_OBJ_SYMLEN_SEL);"
+  "find": "\tunsigned short bps = ((struct v32_modem *)modem)->params.rx_rate;",
+  "replace": "\tunsigned short bps = ((struct v32_modem *)modem)->params.symlen_sel;"
  },
  {
   "label": "an unrecognised bit rate reports 4800 rather than the invalid code",
@@ -139,33 +139,33 @@
  },
  {
   "label": "the equaliser's two step sizes are transposed",
-  "find": "\tcase V32_ADAPTEQ_MU0:\n\t\tfp = FP(modem);\n\t\tFIELD_INT(fp, V32FP_EQ_ADAPT) = 1;\n\t\tFSE(fp)->mu_sel = 0;",
-  "replace": "\tcase V32_ADAPTEQ_MU0:\n\t\tfp = FP(modem);\n\t\tFIELD_INT(fp, V32FP_EQ_ADAPT) = 1;\n\t\tFSE(fp)->mu_sel = 1;"
+  "find": "\tcase V32_ADAPTEQ_MU0:\n\t\tfp = (unsigned char *)FP(modem);\n\t\t((struct v32_fp *)fp)->eq_adapt = 1;\n\t\tFSE(fp)->mu_sel = 0;",
+  "replace": "\tcase V32_ADAPTEQ_MU0:\n\t\tfp = (unsigned char *)FP(modem);\n\t\t((struct v32_fp *)fp)->eq_adapt = 1;\n\t\tFSE(fp)->mu_sel = 1;"
  },
  {
   "label": "switching the equaliser off leaves it adapting",
-  "find": "\tcase V32_ADAPTEQ_OFF:\n\t\tfp = FP(modem);\n\t\tFIELD_INT(fp, V32FP_EQ_ADAPT) = 0;",
-  "replace": "\tcase V32_ADAPTEQ_OFF:\n\t\tfp = FP(modem);\n\t\tFIELD_INT(fp, V32FP_EQ_ADAPT) = 1;"
+  "find": "\tcase V32_ADAPTEQ_OFF:\n\t\tfp = (unsigned char *)FP(modem);\n\t\t((struct v32_fp *)fp)->eq_adapt = 0;",
+  "replace": "\tcase V32_ADAPTEQ_OFF:\n\t\tfp = (unsigned char *)FP(modem);\n\t\t((struct v32_fp *)fp)->eq_adapt = 1;"
  },
  {
   "label": "the equaliser's step selector is one field above mu_sel",
-  "find": "\tcase V32_ADAPTEQ_MU1:\n\t\tfp = FP(modem);\n\t\tFIELD_INT(fp, V32FP_EQ_ADAPT) = 1;\n\t\tFSE(fp)->mu_sel = 1;",
-  "replace": "\tcase V32_ADAPTEQ_MU1:\n\t\tfp = FP(modem);\n\t\tFIELD_INT(fp, V32FP_EQ_ADAPT) = 1;\n\t\tFSE(fp)->pll_sel = 1;"
+  "find": "\tcase V32_ADAPTEQ_MU1:\n\t\tfp = (unsigned char *)FP(modem);\n\t\t((struct v32_fp *)fp)->eq_adapt = 1;\n\t\tFSE(fp)->mu_sel = 1;",
+  "replace": "\tcase V32_ADAPTEQ_MU1:\n\t\tfp = (unsigned char *)FP(modem);\n\t\t((struct v32_fp *)fp)->eq_adapt = 1;\n\t\tFSE(fp)->pll_sel = 1;"
  },
  {
   "label": "the receive loops are switched on where the object switches them off",
-  "find": "\tcase 1:\n\t\tfp = FP(modem);\n\t\tFIELD_INT(fp, V32FP_R08) = 0;",
-  "replace": "\tcase 1:\n\t\tfp = FP(modem);\n\t\tFIELD_INT(fp, V32FP_R08) = 1;"
+  "find": "\tcase 1:\n\t\tfp = (unsigned char *)FP(modem);\n\t\t((struct v32_fp *)fp)->int_08 = 0;",
+  "replace": "\tcase 1:\n\t\tfp = (unsigned char *)FP(modem);\n\t\t((struct v32_fp *)fp)->int_08 = 1;"
  },
  {
   "label": "only three of the four receive loops are switched on",
-  "find": "\t\tFIELD_INT(fp, V32FP_R08) = 1;\n\t\tFIELD_INT(fp, V32FP_R0C) = 1;\n\t\tFIELD_INT(fp, V32FP_R00) = 1;\n\t\tFIELD_INT(fp, V32FP_R04) = 1;",
-  "replace": "\t\tFIELD_INT(fp, V32FP_R08) = 1;\n\t\tFIELD_INT(fp, V32FP_R0C) = 1;\n\t\tFIELD_INT(fp, V32FP_R00) = 1;"
+  "find": "\t\t((struct v32_fp *)fp)->int_08 = 1;\n\t\t((struct v32_fp *)fp)->int_0c = 1;\n\t\t((struct v32_fp *)fp)->int_00 = 1;\n\t\t((struct v32_fp *)fp)->int_04 = 1;",
+  "replace": "\t\t((struct v32_fp *)fp)->int_08 = 1;\n\t\t((struct v32_fp *)fp)->int_0c = 1;\n\t\t((struct v32_fp *)fp)->int_00 = 1;"
  },
  {
   "label": "mode 3 is not one of the receive loop switch's arms",
-  "find": "\tcase 2:\n\tcase 3:\n\t\tfp = FP(modem);\n\t\tFIELD_INT(fp, V32FP_R08) = 1;",
-  "replace": "\tcase 2:\n\t\tfp = FP(modem);\n\t\tFIELD_INT(fp, V32FP_R08) = 1;"
+  "find": "\tcase 2:\n\tcase 3:\n\t\tfp = (unsigned char *)FP(modem);\n\t\t((struct v32_fp *)fp)->int_08 = 1;",
+  "replace": "\tcase 2:\n\t\tfp = (unsigned char *)FP(modem);\n\t\t((struct v32_fp *)fp)->int_08 = 1;"
  },
  {
   "label": "the round-trip delay is held DOWN to the far section's length instead of raised to it",
@@ -219,8 +219,8 @@
  },
  {
   "label": "the symbol period is read from the other entry of V32_SYMBOL_LEN",
-  "find": "\tsymlen = V32_SYMBOL_LEN[FIELD_S16(modem, V32_OBJ_SYMLEN_SEL)];",
-  "replace": "\tsymlen = V32_SYMBOL_LEN[1 - FIELD_S16(modem, V32_OBJ_SYMLEN_SEL)];"
+  "find": "\tsymlen = V32_SYMBOL_LEN[((struct v32_modem *)modem)->params.symlen_sel];",
+  "replace": "\tsymlen = V32_SYMBOL_LEN[1 - ((struct v32_modem *)modem)->params.symlen_sel];"
  },
  {
   "label": "the symbol ring holds 40 symbols at the long setting rather than 48",
@@ -239,13 +239,13 @@
  },
  {
   "label": "the retrain counter is not stepped",
-  "find": "\tFIELD_U16(dec, V32_DEC_RETRAIN_N) =\n\t\t(unsigned short)(FIELD_U16(dec, V32_DEC_RETRAIN_N) + 1);",
+  "find": "\tdec->short_74 =\n\t\t(unsigned short)(dec->short_74 + 1);",
   "replace": "\t(void)0;"
  },
  {
   "label": "the renegotiation poller also steps the retrain counter",
   "find": "\tdec->count = 0;\n\tdec->retrain = (short)(req & ~(unsigned short)V32_DEC_RENEG_REQ);\n\treturn 1;",
-  "replace": "\tdec->count = 0;\n\tdec->retrain = (short)(req & ~(unsigned short)V32_DEC_RENEG_REQ);\n\tFIELD_U16(dec, V32_DEC_RETRAIN_N) =\n\t\t(unsigned short)(FIELD_U16(dec, V32_DEC_RETRAIN_N) + 1);\n\treturn 1;"
+  "replace": "\tdec->count = 0;\n\tdec->retrain = (short)(req & ~(unsigned short)V32_DEC_RENEG_REQ);\n\tdec->short_74 =\n\t\t(unsigned short)(dec->short_74 + 1);\n\treturn 1;"
  },
  {
   "label": "the epoch poller returns the phase counter rather than the rate-change report",
@@ -254,8 +254,8 @@
  },
  {
   "label": "the clamp writes one word too few",
-  "find": "\tfor (i = (short)(FIELD_S16(hdx, V32_HDX_SHORT_9E) - 1); i != -1; i--)",
-  "replace": "\tfor (i = (short)(FIELD_S16(hdx, V32_HDX_SHORT_9E) - 2); i != -1; i--)"
+  "find": "\tfor (i = (short)(((struct v32_hdx *)hdx)->symbol_len - 1); i != -1; i--)",
+  "replace": "\tfor (i = (short)(((struct v32_hdx *)hdx)->symbol_len - 2); i != -1; i--)"
  },
  {
   "label": "the clamp writes a value one below the object's",
@@ -269,13 +269,13 @@
  },
  {
   "label": "the clamp reports the count it was passed rather than the block length",
-  "find": "\treturn FIELD_U16(hdx, V32_HDX_SHORT_9E);\n}",
+  "find": "\treturn ((struct v32_hdx *)hdx)->symbol_len;\n}",
   "replace": "\treturn count;\n}"
  },
  {
   "label": "the turnaround budget is charged only twice",
-  "find": "\t\t       - (FIELD_U16(hdx, V32_HDX_SHORT_9C)\n\t\t\t  + FIELD_U16(hdx, V32_HDX_SHORT_98)\n\t\t\t  + FIELD_U16(hdx, V32_HDX_SHORT_9A)));",
-  "replace": "\t\t       - (FIELD_U16(hdx, V32_HDX_SHORT_9C)\n\t\t\t  + FIELD_U16(hdx, V32_HDX_SHORT_98)));"
+  "find": "\t\t       - (((struct v32_hdx *)hdx)->short_9c\n\t\t\t  + ((struct v32_hdx *)hdx)->short_98\n\t\t\t  + ((struct v32_hdx *)hdx)->short_9a));",
+  "replace": "\t\t       - (((struct v32_hdx *)hdx)->short_9c\n\t\t\t  + ((struct v32_hdx *)hdx)->short_98));"
  },
  {
   "label": "the turnaround surplus is not clamped at zero",
@@ -284,8 +284,8 @@
  },
  {
   "label": "the turnaround subtraction is done at 32 bits, so it does not wrap",
-  "find": "\tshort left;\n\n\tleft = (short)(FIELD_U16(hdx, V32_HDX_SHORT_94)",
-  "replace": "\tint left;\n\n\tleft = (int)(FIELD_U16(hdx, V32_HDX_SHORT_94)"
+  "find": "\tshort left;\n\n\tleft = (short)(((struct v32_hdx *)hdx)->turnaround",
+  "replace": "\tint left;\n\n\tleft = (int)(((struct v32_hdx *)hdx)->turnaround"
  },
  {
   "label": "the cleaned-sample count is capped one sample high",
@@ -299,7 +299,7 @@
  },
  {
   "label": "the cleaned-sample buffer comes from the slot above the object's",
-  "find": "\treturn (short *)FIELD_PTR(FP(modem), V32FP_CLEAN_BUF);",
-  "replace": "\treturn (short *)FIELD_PTR(FP(modem), V32FP_BUF_50CC);"
+  "find": "\treturn (short *)FP(modem)->clean_buf;",
+  "replace": "\treturn (short *)FP(modem)->rx_buf;"
  }
 ]

@@ -104,7 +104,7 @@
  },
  {
   "label": "the transmitter's block is taken from the instance offset V.17 uses",
-  "find": "\tfp = V29TX(modem);\n\tring =",
+  "find": "\tfp = ((struct v29_tx_root *)modem)->tx;\n\tring =",
   "replace": "\tfp = *(struct v29tx **)(void *)((unsigned char *)(modem) + 0x28);\n\tring ="
  },
  {

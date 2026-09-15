@@ -287,8 +287,8 @@ setup(int nsub, short rate, int short_train)
 	dec_b.short_train = short_train;
 
 	if (nsub) {
-		vtb_setup((struct vtb *)(void *)dec_a.vtb, paths_a, nsub, 0);
-		vtb_setup((struct vtb *)(void *)dec_b.vtb, paths_b, nsub, 1);
+		vtb_setup(&dec_a.vtb, paths_a, nsub, 0);
+		vtb_setup(&dec_b.vtb, paths_b, nsub, 1);
 	}
 }
 
@@ -327,14 +327,14 @@ static void
 compare(int nsub, long n)
 {
 	struct v17_dec ca, cb;
-	struct vtb *va = (struct vtb *)(void *)dec_a.vtb;
-	struct vtb *vb = (struct vtb *)(void *)dec_b.vtb;
+	struct vtb *va = &dec_a.vtb;
+	struct vtb *vb = &dec_b.vtb;
 	int j;
 
 	memcpy(&ca, &dec_a, sizeof(ca));
 	memcpy(&cb, &dec_b, sizeof(cb));
-	memset(ca.vtb, 0, sizeof(ca.vtb));
-	memset(cb.vtb, 0, sizeof(cb.vtb));
+	memset(&ca.vtb, 0, sizeof(ca.vtb));
+	memset(&cb.vtb, 0, sizeof(cb.vtb));
 	diff_eq_obj("receiver object, Viterbi window blanked", struct v17_dec,
 		    &ca, &cb, n);
 

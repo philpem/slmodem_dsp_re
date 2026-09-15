@@ -4,30 +4,30 @@
  },
  {
   "label": "the context is read once before the loop instead of at every iteration, so a state that swaps it is not seen",
-  "find": "\t\t/* Re-read: a state may have swapped the context. */\n\t\thdx = FIELD_PTR(modem, V32_OBJ_HDX);\n\t\tn = (*(v32_txhdx_fn *)(void *)FIELD(hdx, V32HDX_TXSTATE))",
-  "replace": "\t\tn = (*(v32_txhdx_fn *)(void *)FIELD(hdx, V32HDX_TXSTATE))"
+  "find": "\t\t/* Re-read: a state may have swapped the context. */\n\t\thdx = ((struct v32_modem *)modem)->hdx;\n\t\tn = hdx->tx_state",
+  "replace": "\t\tn = hdx->tx_state"
  },
  {
   "label": "the transmit driver dispatches from the RECEIVE slot",
-  "find": "\t\tn = (*(v32_txhdx_fn *)(void *)FIELD(hdx, V32HDX_TXSTATE))",
-  "replace": "\t\tn = (*(v32_txhdx_fn *)(void *)FIELD(hdx, V32HDX_RXSTATE))"
+  "find": "\t\tn = hdx->tx_state(modem, data, out, &left);",
+  "replace": "\t\tn = (v32_txhdx_fn)hdx->rx_state(modem, data, out, &left);"
  },
  {
   "label": "the budget is seeded from V32_SAMPLE_LEN instead of V32_SYMBOL_LEN",
-  "find": "\tleft = (unsigned short)*(short *)(void *)FIELD(hdx, V32HDX_SYMBOL_LEN);",
-  "replace": "\tleft = (unsigned short)*(short *)(void *)FIELD(hdx, V32HDX_SAMPLE_LEN);"
+  "find": "\tleft = (unsigned short)hdx->symbol_len;",
+  "replace": "\tleft = (unsigned short)hdx->sample_len;"
  },
  {
   "label": "the budget is seeded from the instance rather than from the context",
-  "find": "\thdx = FIELD_PTR(modem, V32_OBJ_HDX);\n\tleft = (unsigned short)",
-  "replace": "\thdx = FIELD_PTR(modem, V32_OBJ_HDX + 4);\n\tleft = (unsigned short)"
+  "find": "\thdx = ((struct v32_modem *)modem)->hdx;\n\tleft = (unsigned short)",
+  "replace": "\thdx = *(struct v32_hdx **)(void *)((unsigned char *)modem + V32_OBJ_HDX + 4);\n\tleft = (unsigned short)"
  },
  {
   "label": "the running total is accumulated at full width instead of being truncated to a short every iteration",
   "equivalent": true,
   "why": "EQUIVALENT AT TIER 1 AND ONLY AT TIER 1, and the argument is arithmetic rather than a claim about this fixture.  `total` reaches exactly one observable -- `*nsamples`, a `short *` -- so whatever width it is accumulated at, what is stored is the sum mod 2**16.  Addition mod 2**16 is associative, so truncating after every term and truncating once at the end give the same sixteen bits for EVERY sequence of returns, not merely for the ones a real V32_SYMBOL_LEN can produce.  `out` advances by `n` and not by `total`, and the loop exits on `left`, so no other path can see the difference.  The claim is therefore a CODEGEN-tier one: the object encodes `lea (%esi,%eax,1),%edx` followed by `movswl %dx,%esi` on every iteration, which tier 3 reads directly and tier 1 provably never can.  Finding F8231.",
-  "find": "\tunsigned short left;\n\tshort total = 0;\n\tvoid *hdx;\n\n\thdx = FIELD_PTR(modem, V32_OBJ_HDX);\n\tleft = (unsigned short)*(short *)(void *)FIELD(hdx, V32HDX_SYMBOL_LEN);\n\n\tdo {\n\t\tshort n;\n\n\t\t/* Re-read: a state may have swapped the context. */\n\t\thdx = FIELD_PTR(modem, V32_OBJ_HDX);\n\t\tn = (*(v32_txhdx_fn *)(void *)FIELD(hdx, V32HDX_TXSTATE))\n\t\t\t(modem, data, out, &left);\n\t\tout += n;\n\t\ttotal = (short)(total + n);",
-  "replace": "\tunsigned short left;\n\tint total = 0;\n\tvoid *hdx;\n\n\thdx = FIELD_PTR(modem, V32_OBJ_HDX);\n\tleft = (unsigned short)*(short *)(void *)FIELD(hdx, V32HDX_SYMBOL_LEN);\n\n\tdo {\n\t\tshort n;\n\n\t\t/* Re-read: a state may have swapped the context. */\n\t\thdx = FIELD_PTR(modem, V32_OBJ_HDX);\n\t\tn = (*(v32_txhdx_fn *)(void *)FIELD(hdx, V32HDX_TXSTATE))\n\t\t\t(modem, data, out, &left);\n\t\tout += n;\n\t\ttotal = total + n;"
+  "find": "\tshort total = 0;",
+  "replace": "\tint total = 0;"
  },
  {
   "label": "the state's return is subtracted from the running total",
@@ -61,38 +61,38 @@
  },
  {
   "label": "the states are handed the context instead of the instance",
-  "find": "\t\t\t(modem, data, out, &left);",
-  "replace": "\t\t\t(hdx, data, out, &left);"
+  "find": "\t\tn = hdx->tx_state(modem, data, out, &left);",
+  "replace": "\t\tn = hdx->tx_state(hdx, data, out, &left);"
  },
  {
   "label": "the states are handed the output buffer as their data argument",
-  "find": "\t\t\t(modem, data, out, &left);",
-  "replace": "\t\t\t(modem, out, out, &left);"
+  "find": "\t\tn = hdx->tx_state(modem, data, out, &left);",
+  "replace": "\t\tn = hdx->tx_state(modem, out, out, &left);"
  },
  {
   "label": "the states are handed the block's start every time instead of the advancing cursor",
-  "find": "\t\tn = (*(v32_txhdx_fn *)(void *)FIELD(hdx, V32HDX_TXSTATE))\n\t\t\t(modem, data, out, &left);",
-  "replace": "\t\tn = (*(v32_txhdx_fn *)(void *)FIELD(hdx, V32HDX_TXSTATE))\n\t\t\t(modem, data, out - total, &left);"
+  "find": "\t\tn = hdx->tx_state(modem, data, out, &left);",
+  "replace": "\t\tn = hdx->tx_state(modem, data, out - total, &left);"
  },
  {
   "label": "the receive driver dispatches from the TRANSMIT slot",
-  "find": "\t(*(v32_rxhdx_fn *)(void *)FIELD(hdx, V32HDX_RXSTATE))",
-  "replace": "\t(*(v32_rxhdx_fn *)(void *)FIELD(hdx, V32HDX_TXSTATE))"
+  "find": "\thdx->rx_state(modem, in, out, count);",
+  "replace": "\t((v32_rxhdx_fn)hdx->tx_state)(modem, in, out, count);"
  },
  {
   "label": "the receive driver reads its state pointer out of the instance rather than the context",
-  "find": "\tvoid *hdx;\n\n\thdx = FIELD_PTR(modem, V32_OBJ_HDX);\n\t(*(v32_rxhdx_fn *)(void *)FIELD(hdx, V32HDX_RXSTATE))",
-  "replace": "\tvoid *hdx;\n\n\thdx = (void *)modem;\n\t(*(v32_rxhdx_fn *)(void *)FIELD(hdx, V32HDX_RXSTATE))"
+  "find": "\tstruct v32_hdx *hdx;\n\n\thdx = ((struct v32_modem *)modem)->hdx;\n\thdx->rx_state",
+  "replace": "\tstruct v32_hdx *hdx;\n\n\thdx = (struct v32_hdx *)modem;\n\thdx->rx_state"
  },
  {
   "label": "the receive state is handed the count by value's worth of nothing -- the two buffers are transposed",
-  "find": "\t\t(modem, in, out, count);",
-  "replace": "\t\t(modem, in, (unsigned short *)(void *)in, count);"
+  "find": "\thdx->rx_state(modem, in, out, count);",
+  "replace": "\thdx->rx_state(modem, in, (unsigned short *)(void *)in, count);"
  },
  {
   "label": "the receive state is called twice",
-  "find": "\t\t(modem, in, out, count);\n}",
-  "replace": "\t\t(modem, in, out, count);\n\t(*(v32_rxhdx_fn *)(void *)FIELD(hdx, V32HDX_RXSTATE))\n\t\t(modem, in, out, count);\n}"
+  "find": "\thdx->rx_state(modem, in, out, count);\n}",
+  "replace": "\thdx->rx_state(modem, in, out, count);\n\thdx->rx_state(modem, in, out, count);\n}"
  },
  {
   "label": "the loop stops as soon as the running total returns to zero",
