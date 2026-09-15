@@ -450,8 +450,8 @@ V32FP_recreate(void *modem, const struct v32fp_params *param, void *arg2)
 	for (i = 0; (short)i <= 1; i++)
 		SMC_TX(fp)->state[i] = 0;
 	SMC_TX(fp)->quad = 0;
-	SMC_TX(fp)->f10 = 0;
-	SMC_TX(fp)->f0e = 0;
+	SMC_TX(fp)->trellis_state = 0;
+	SMC_TX(fp)->trellis_diff_state = 0;
 	SMC_TX(fp)->pad12 = 0;
 	SMC_TX(fp)->shift = (short)(2 * (SMC_TX(fp)->mode != 0));
 
@@ -547,8 +547,8 @@ V32FP_recreate(void *modem, const struct v32fp_params *param, void *arg2)
 	for (i = 0; (short)i <= 1; i++)
 		SMC_RX(fp)->state[i] = 0;
 	SMC_RX(fp)->quad = 0;
-	SMC_RX(fp)->f10 = 0;
-	SMC_RX(fp)->f0e = 0;
+	SMC_RX(fp)->trellis_state = 0;
+	SMC_RX(fp)->trellis_diff_state = 0;
 	SMC_RX(fp)->shift = (short)(2 * (SMC_RX(fp)->mode != 0));
 	SMC_RX(fp)->pad12 = 0;
 

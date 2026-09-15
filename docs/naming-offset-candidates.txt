@@ -1,0 +1,178 @@
+include/dsplib/v8.h:40:	short	f0e;			/* +0x0e */
+include/dsplib/v8.h:98:	short	f0c;		/* 1                     +0x0c */
+include/dsplib/v8.h:159:	short	f0c;		/* 4 or 7          +0xc2c */
+include/dsplib/v8.h:160:	short	f0e;		/* -100 or 0       +0xc2e */
+include/dsplib/v8.h:167:	short	f14;		/* 0x18            +0xc34 */
+include/dsplib/v8.h:175:	short	f1c;				/* +0xc3c */
+include/dsplib/v8.h:214:	short	f0c;				/* +0x0c */
+include/dsplib/v8.h:244:	short	f2e;				/* +0x2e */
+include/dsplib/v8.h:247:	short	f36;				/* +0x36 */
+include/dsplib/v8.h:250:	short	f3e;				/* +0x3e */
+include/dsplib/v8.h:419:	short		fc2;		/* 0x50      +0xc2 */
+include/dsplib/v8.h:421:	short		fc6;			/* +0xc6 */
+include/dsplib/v8.h:422:	short		fc8;			/* +0xc8 */
+include/dsplib/v8.h:424:	short		fd8;			/* +0xd8 */
+include/dsplib/v8.h:425:	short		fda;			/* +0xda */
+include/dsplib/b103fp.h:74:	int f10;		/* +0x10 gates a branch in B103FP_create --
+include/dsplib/b103fp.h:79:	int f14;		/* +0x14 no observed effect                  */
+include/dsplib/b103fp.h:145:	int r00;		/* +0x00 copied into agc.f18 before each
+include/dsplib/b103fp.h:167:	short rfe;		/* +0xfe                                   */
+include/dsplib/b103fp.h:198:	int r18;		/* +0x18                                   */
+include/dsplib/b103fp.h:216:	unsigned char r1e[2];	/* +0x1e .. +0x1f                           */
+include/dsplib/b103fp.h:218:	unsigned char r24[4];	/* +0x24 .. +0x27                           */
+include/dsplib/b103fp.h:220:	unsigned char r2c[0x24];/* +0x2c .. +0x4f                           */
+include/dsplib/v22_fse.h:171:	short r0e;		/* +0x0e                                    */
+include/dsplib/v22_fse.h:182:	int r10;		/* +0x10 init 0                             */
+include/dsplib/v22_fse.h:186:	int r18;		/* +0x18 init 1                             */
+include/dsplib/v22_fse.h:253:	short r42;		/* +0x42 init 0                             */
+include/dsplib/v22_fse.h:260:	short *r44;		/* +0x44 V22_FSE_AUX entries                */
+include/dsplib/v22_fse.h:261:	short *r48;		/* +0x48 V22_FSE_AUX entries                */
+include/dsplib/v22_fse.h:267:	unsigned char r4c[10];	/* +0x4c .. +0x55                           */
+include/dsplib/v22_fse.h:281:	short r5a;		/* +0x5a not written by init                */
+include/dsplib/call.h:57:	int			f08;		/* +0x008 */
+include/dsplib/call.h:86:	int			f5bc;		/* +0x5bc */
+include/dsplib/sgd.h:53:	const unsigned short *ref;	/* +0x00 reference sequence         */
+include/dsplib/v17fax.h:537:	int r08;		/* +0x08 */
+include/dsplib/v17fax.h:538:	int r0c;		/* +0x0c */
+include/dsplib/v17fax.h:540:	short r12;		/* +0x12 unmodelled */
+include/dsplib/v17fax.h:544:	short r1c;		/* +0x1c */
+include/dsplib/v17fax.h:558:	int r08;		/* +0x08 */
+include/dsplib/v17fax.h:560:	short r0e;		/* +0x0e unmodelled */
+include/dsplib/v17fax.h:561:	int r10;		/* +0x10 */
+include/dsplib/v17fax.h:566:	short r20;		/* +0x20 */
+include/dsplib/v17fax.h:567:	short r22;		/* +0x22 unmodelled */
+include/dsplib/v17fax.h:571:	short r2e;		/* +0x2e */
+include/dsplib/v17fax.h:578:		unsigned char r00[0x1c];
+include/dsplib/v17fax.h:580:		short r1e;
+include/dsplib/v17fax.h:586:	int r00;
+include/dsplib/v17fax.h:587:	int r04;
+include/dsplib/v17fax.h:588:	int r08;
+include/dsplib/v17fax.h:589:	int r0c;
+include/dsplib/v17fax.h:590:	int r10;
+include/dsplib/v17fax.h:591:	int r14;
+include/dsplib/v17fax.h:592:	int r18;
+include/dsplib/v17fax.h:593:	int r1c;
+include/dsplib/v17fax.h:594:	int r20;
+include/dsplib/v17fax.h:596:	short r26;
+include/dsplib/v17fax.h:597:	int r28;
+include/dsplib/v17fax.h:603:	unsigned char r4f88[4];
+include/dsplib/v17fax.h:609:	short r4fb0;
+include/dsplib/v17fax.h:610:	short r4fb2;
+include/dsplib/v17fax.h:614:	short r4fba;			/* allocation tail, unmodelled */
+include/dsplib/v17fax.h:626:	short r42;
+include/dsplib/v17fax.h:627:	int r44;
+include/dsplib/v17fax.h:628:	int r48;
+include/dsplib/v17fax.h:629:	short r4c;
+include/dsplib/v17fax.h:630:	short r4e;
+include/dsplib/v17fax.h:631:	int r50;
+include/dsplib/v17fax.h:632:	int r54;
+include/dsplib/v17fax.h:633:	short r58;
+include/dsplib/v17fax.h:634:	short r5a;
+include/dsplib/callprog_state.h:97:	int	f1c;					/* +0x1c */
+include/dsplib/callprog_state.h:100:	int	f28;					/* +0x28 */
+include/dsplib/callprog_state.h:140:	int		f68;				/* +0x68 */
+include/dsplib/fpm_smc.h:57:	int f00;		/* +0x00                                     */
+include/dsplib/fpm_smc.h:93:	int f28;		/* +0x28 zero in SMCv22_CFG, never read here */
+include/dsplib/v32smc.h:68:	short f0e;		/* +0x0e tcm only                            */
+include/dsplib/v32smc.h:69:	short f10;		/* +0x10 tcm only                            */
+include/dsplib/v32smc.h:71:	unsigned short f14;	/* +0x14 tcm only; a shift count             */
+include/dsplib/fpm_agc.h:48:	short f06;		/* +0x06 not read by any fpm_agc function     */
+include/dsplib/fpm_agc.h:49:	short f08;		/* +0x08 not read by any fpm_agc function     */
+include/dsplib/fpm_agc.h:53:	short f14;		/* +0x14 not read by any fpm_agc function     */
+include/dsplib/fpm_agc.h:54:	short f16;		/* +0x16 not read by any fpm_agc function; NOT padding --
+include/dsplib/fpm_agc.h:62:	int f18;		/* +0x18 set to 1 by init on reset; agc() never
+include/dsplib/class1.h:119:	int f1230;			/* +0x1230 written once by
+include/dsplib/class1.h:134:	int f1234;			/* +0x1234 the same function's other
+include/dsplib/class1.h:291:	int f127c;			/* +0x127c a nonzero-sample counter
+include/dsplib/class1.h:438:	int f12d4;			/* +0x12d4 read (32-bit `mov`) by
+include/dsplib/class1.h:528:	int f08;			/* +0x08 -> ctx->f12d4, unconditional.  No
+include/dsplib/v34recv.h:178:	short           f1d4;            /* +0x1d4 write-once-to-zero
+include/dsplib/v34recv.h:199:	int             f1e4;            /* +0x1e4 write-once-to-zero, never
+include/dsplib/v34recv.h:202:	int             f1e8;            /* +0x1e8   likewise */
+include/dsplib/v34recv.h:210:	short           f1f0;            /* +0x1f0 write-once-to-zero, never
+include/dsplib/v34recv.h:236:	short           f208;            /* +0x208 rxtiming IIR state, I(-1) --
+include/dsplib/v34recv.h:247:	short           f20a;            /* +0x20a   Q(-1), same overlay */
+include/dsplib/v34recv.h:313:	short           f22e;            /* +0x22e write-once-to-zero, never
+include/dsplib/fpm_fsd.h:31:	short f18;		/* +0x18 not read by demodulate          */
+include/dsplib/fpm_fsd.h:42:	short f22;		/* +0x22 bit_samples / 2, set by init and
+include/dsplib/v8dp.h:54:	int			f08;		/* +0x08 */
+include/dsplib/v8dp.h:59:	int			f1c;		/* +0x1c */
+include/dsplib/v8dp.h:60:	int			f20;		/* +0x20 */
+include/dsplib/v8dp.h:67:	int			f2c;		/* +0x2c */
+include/dsplib/v23fp.h:50:	unsigned char	r01[3];
+include/dsplib/v23fp.h:293:	short		r0c;		/* +0x0c zeroed by create, read by
+include/dsplib/v32fp.h:108:	short r06;		/* +0x06 template 0                          */
+include/dsplib/v32fp.h:148:	short r16;		/* +0x16 template 0                          */
+include/dsplib/v32fp.h:150:	short r1a;		/* +0x1a template 0                          */
+include/dsplib/v32fp.h:158:	int r20;		/* +0x20 template 0                          */
+include/dsplib/v32fp.h:159:	int r24;		/* +0x24 template 0; read at 7e8bc           */
+include/dsplib/v32fp.h:174:	short r2c;		/* +0x2c template 0; zeroed at 7e8b6         */
+include/dsplib/v32fp.h:175:	short r2e;		/* +0x2e template 0                          */
+include/dsplib/v32fp.h:234:	short r02;		/* +0x02 template 9600; no reader written    */
+include/dsplib/v32fp.h:235:	int r04;		/* +0x04 template 120000                     */
+include/dsplib/v32fp.h:236:	int r08;		/* +0x08 template 1                          */
+include/dsplib/v32fp.h:239:	short r0e;		/* +0x0e template 0                          */
+include/dsplib/v32fp.h:241:	int r14;		/* +0x14 template 0; non-zero re-seeds the
+include/dsplib/v32fp.h:243:	int r18;		/* +0x18 template 1                          */
+include/dsplib/v32fp.h:244:	int r1c;		/* +0x1c template 1                          */
+include/dsplib/v32fpstat.h:57:	int r10;		/* +0x10 A; 1 from v32_create                */
+include/dsplib/v32fpstat.h:68:	unsigned short r16;	/* +0x16                                     */
+include/dsplib/v32fpstat.h:91:	short r06;		/* +0x06 <- 1 - (fp + 0x256 >> 1)            */
+include/dsplib/v32fpstat.h:93:	short r0a;		/* +0x0a                                     */
+include/dsplib/v32fpstat.h:94:	short r0c;		/* +0x0c <- fp + 0x1f8                       */
+include/dsplib/v32fpstat.h:95:	short r0e;		/* +0x0e always 0                            */
+include/dsplib/v32fpstat.h:96:	short r10;		/* +0x10 <- fp + 0x6c                        */
+include/dsplib/v32fpstat.h:97:	short r12;		/* +0x12 <- fp + 0x182                       */
+include/dsplib/v32fpstat.h:117:	short r16;		/* +0x16 not written                         */
+include/dsplib/v32fpstat.h:118:	int r18;		/* +0x18 <- fp + 0x188                       */
+include/dsplib/v32fpstat.h:119:	int r1c;		/* +0x1c <- (fp + 0x1f4 != 1)                */
+include/dsplib/v32fpstat.h:120:	int r20;		/* +0x20 always 0                            */
+include/dsplib/v32fpstat.h:121:	int r24;		/* +0x24 always 0                            */
+include/dsplib/v34filt.h:442:	int f04;		/* +0x04                                 */
+include/dsplib/v34filt.h:453:	int fc8c;		/* +0xc8c  an integer, 14 or 15          */
+include/dsplib/fpm_tone.h:36:	short f08;		/* +0x08                                     */
+include/dsplib/fpm_tone.h:44:	short r16[3];		/* +0x16 .. +0x1a                            */
+include/dsplib/v17data.h:219:			unsigned char r01;
+include/dsplib/v17data.h:222:	short r02;		/* +0x02 copied from SMCv17_CFG            */
+include/dsplib/v17data.h:223:	short r04;		/* +0x04 unmodelled                        */
+include/dsplib/v17data.h:226:	short r0a;		/* +0x0a unmodelled                        */
+include/dsplib/v17data.h:229:	short r10;		/* +0x10 neutral, cleared by init           */
+include/dsplib/v17data.h:235:	unsigned char r00[8];		/* +0x00 unmodelled                   */
+include/dsplib/v17data.h:242:	short r8e;			/* +0x8e unmodelled                   */
+include/dsplib/fpm_mtd.h:21:	short f0a;		/* +0x0a                                 */
+include/dsplib/v22fp.h:108:	int f08;		/* +0x08 copied to params.r08 and thence to
+include/dsplib/v22fp.h:111:	int f0c;		/* +0x0c bit 0 -> params.flags bit 10        */
+include/dsplib/v22fp.h:112:	int f10;		/* +0x10 low 16 bits -> the object's
+include/dsplib/v22fp.h:114:	int f14;		/* +0x14 bit 0 -> params.flags bit 11, which
+include/dsplib/v22fp.h:117:	int f18;		/* +0x18 bit 0 -> params.flags bit 9         */
+include/dsplib/v22fp.h:146:	short r06;		/* +0x06 template 0                         */
+include/dsplib/v22fp.h:147:	int r08;		/* +0x08 <- cfg.f08; template 120000        */
+include/dsplib/v22fp.h:167:	unsigned short r14;	/* +0x14 template 1; set to 1 again when the
+include/dsplib/v22fp.h:183:	short r1a;		/* +0x1a template 0                         */
+include/dsplib/v22fp.h:204:	short r08;		/* +0x08 init 0                             */
+include/dsplib/v22fp.h:205:	short r0a;		/* +0x0a init 0                             */
+include/dsplib/v22fp.h:244:	short r28;		/* +0x28 init 0                             */
+include/dsplib/v22fp.h:246:	int r2c;		/* +0x2c init 0                             */
+include/dsplib/v22fp.h:247:	short r30;		/* +0x30 init 0x2454                        */
+include/dsplib/v22fp.h:248:	short r32;		/* +0x32 init 0                             */
+include/dsplib/v22fp.h:259:	unsigned char r36[6];	/* +0x36 .. +0x3b                           */
+include/dsplib/v22fp.h:279:	int r00;		/* +0x00 init 1                             */
+include/dsplib/v22fp.h:280:	int r04;		/* +0x04 init 1                             */
+include/dsplib/v22fp.h:281:	int r08;		/* +0x08 init 1                             */
+include/dsplib/v22fp.h:282:	int r0c;		/* +0x0c init 1                             */
+include/dsplib/v22fp.h:290:	int r14;		/* +0x14 init 0                             */
+include/dsplib/v22fp.h:302:	int r20;		/* +0x20 <- params.flags bit 2              */
+include/dsplib/v22fp.h:303:	unsigned char r24[4];	/* +0x24 not written by create              */
+include/dsplib/v22fp.h:310:	short r28;		/* +0x28                                    */
+include/dsplib/v22fp.h:311:	short r2a;		/* +0x2a                                    */
+include/dsplib/v22fp.h:318:	short r2c;		/* +0x2c                                    */
+include/dsplib/v22fp.h:319:	short r2e;		/* +0x2e                                    */
+include/dsplib/v22fp.h:418:	unsigned char r1e[2];		/* +0x1e cleared with the above     */
+include/dsplib/v22fp.h:424:	short r34;			/* +0x34 init 0x31                  */
+include/dsplib/v22fp.h:426:	int r38;			/* +0x38 init 0                     */
+include/dsplib/v22fp.h:427:	int r3c;			/* +0x3c init 0                     */
+include/dsplib/v22fp.h:428:	short r40;			/* +0x40 init 0                     */
+include/dsplib/v22fp.h:430:	int r44;			/* +0x44 init 0                     */
+include/dsplib/v22fp.h:431:	int r48;			/* +0x48 init 0                     */
+include/dsplib/v22fp.h:432:	short r4c;			/* +0x4c init 0                     */
+include/dsplib/v22fp.h:436:	unsigned char r58[4];		/* +0x58 never written              */

@@ -90,7 +90,7 @@
  *   - a rate signal with no rate in common, so V32_STATE_S posts its fault,
  *     and one with a common rate, so it does not;
  *   - a negotiated rate above 2 and one at or below it, which are the two
- *     arms of V32_STATE_T's `smc->f10` store;
+ *     arms of V32_STATE_T's `smc->trellis_state` store;
  *   - both AGC coefficient pairs, [0] from V32_STATE_N and [1] from F and P,
  *     which a single shared pointer would confuse;
  *   - `dsplibs_debug_level` at 0 and at 2, so the trace is compared as text

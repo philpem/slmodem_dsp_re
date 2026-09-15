@@ -551,9 +551,9 @@ fixture(struct fix *f, const struct trial *t)
 	smc.state[0] = (short)((t->seed >> 5) % 4u);
 	smc.state[1] = (short)((t->seed >> 7) % 4u);
 	smc.state[2] = (short)((t->seed >> 9) % 4u);
-	smc.f0e = (short)((t->seed >> 11) % 8u);
-	smc.f10 = (short)((t->seed >> 13) % 8u);
-	smc.f14 = (unsigned short)((t->seed >> 15) % 4u);
+	smc.trellis_diff_state = (short)((t->seed >> 11) % 8u);
+	smc.trellis_state = (short)((t->seed >> 13) % 8u);
+	smc.uncoded_bits = (unsigned short)((t->seed >> 15) % 4u);
 	memcpy(f->fp + V32FP_SMC, &smc, sizeof(smc));
 
 	/* The transmit scrambler at fp + 0x30, as t_v32scram.c drives it. */

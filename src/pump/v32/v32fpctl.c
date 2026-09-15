@@ -268,7 +268,7 @@ SetTxModeV32(void *modem, short mode)
 	case V32_MODE_32T:
 		fp = (unsigned char *)FP(modem);
 		SDM_TX(fp)->group = 4;
-		SMC(fp)->f14 = 2;
+		SMC(fp)->uncoded_bits = 2;
 		SMC(fp)->mode = 2;
 		SMC(fp)->pad02 = 2;
 		((struct v32_fp *)fp)->encoder_sel = 2;
@@ -282,7 +282,7 @@ SetTxModeV32(void *modem, short mode)
 	case V32_MODE_16T:
 		fp = (unsigned char *)FP(modem);
 		SDM_TX(fp)->group = 3;
-		SMC(fp)->f14 = 1;
+		SMC(fp)->uncoded_bits = 1;
 		SMC(fp)->mode = 3;
 		((struct v32_fp *)fp)->encoder_sel = 2;
 		PPS(fp)->cfg.imap = VTBv32_IMAP16T;
@@ -294,7 +294,7 @@ SetTxModeV32(void *modem, short mode)
 	case V32_MODE_64T:
 		fp = (unsigned char *)FP(modem);
 		SDM_TX(fp)->group = 5;
-		SMC(fp)->f14 = 3;
+		SMC(fp)->uncoded_bits = 3;
 		SMC(fp)->mode = 4;
 		((struct v32_fp *)fp)->encoder_sel = 2;
 		PPS(fp)->cfg.imap = VTBv32_IMAP64;
@@ -306,7 +306,7 @@ SetTxModeV32(void *modem, short mode)
 	case V32_MODE_128T:
 		fp = (unsigned char *)FP(modem);
 		SDM_TX(fp)->group = 6;
-		SMC(fp)->f14 = 4;
+		SMC(fp)->uncoded_bits = 4;
 		SMC(fp)->mode = 5;
 		SMC(fp)->pad02 = 2;
 		((struct v32_fp *)fp)->encoder_sel = 2;

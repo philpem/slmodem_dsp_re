@@ -269,9 +269,9 @@ fixture(struct fix *f, unsigned seed, short widx, short ridx, short sel,
 	smc.state[0] = (short)((seed >> 5) % 4u);
 	smc.state[1] = (short)((seed >> 7) % 4u);
 	smc.state[2] = (short)((seed >> 9) % 4u);
-	smc.f0e = (short)((seed >> 11) % 8u);
-	smc.f10 = (short)((seed >> 13) % 8u);
-	smc.f14 = (unsigned short)((seed >> 15) % 4u);
+	smc.trellis_diff_state = (short)((seed >> 11) % 8u);
+	smc.trellis_state = (short)((seed >> 13) % 8u);
+	smc.uncoded_bits = (unsigned short)((seed >> 15) % 4u);
 	memcpy(f->fp + V32FP_SMC, &smc, sizeof(smc));
 
 	make_cfg(&cfg);
