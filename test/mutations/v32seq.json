@@ -91,8 +91,8 @@
  },
  {
   "label": "the generator's field count is not decremented, so the index starts one field past the top",
-  "find": "\tunsigned short top = (unsigned short)(total / width - 1);\t/* D401 */",
-  "replace": "\tunsigned short top = (unsigned short)(total / width);\t/* D401 */"
+  "find": "\tint top = total / width - 1;\t/* D401 */",
+  "replace": "\tint top = total / width;\t/* D401 */"
  },
  {
   "label": "the generator's wrap mask and its starting index are set from different values",
@@ -111,8 +111,8 @@
  },
  {
   "label": "InitGenSequence divides the other way round",
-  "find": "\tunsigned short top = (unsigned short)(total / width - 1);\t/* D401 */",
-  "replace": "\tunsigned short top = (unsigned short)(width / total - 1);\t/* D401 */"
+  "find": "\tint top = total / width - 1;\t/* D401 */",
+  "replace": "\tint top = width / total - 1;\t/* D401 */"
  },
  {
   "label": "the pattern and the width are written to each other's offsets",

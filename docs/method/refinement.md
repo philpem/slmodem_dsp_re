@@ -1455,6 +1455,24 @@ family:
   Check the flag dependency before moving a function template whose body uses
   a transcendental. See #74's F11356.
 
+## Narrow where the object narrows, not earlier
+
+`InitGenSequence` provides a small, exact discriminator. Its reconstruction
+used an `unsigned short` local for `total / width - 1`, introducing a
+three-byte `movzwl %ax,%eax` absent from the reference. The reference instead
+keeps the promoted result full-width until two 16-bit stores.
+
+Both `int` and `unsigned int` locals reproduce the complete reference body.
+Plain `int` follows the expression's integer promotions without an extra
+conversion, and is the retained spelling. The destination fields remain
+unsigned shorts; this is not evidence to widen or retype them. When
+`total < width`, the result is still stored as `0xffff` in both fields.
+Division-by-zero and oversized-shift behavior are not repaired by this edit.
+
+The full-TU controls gain one exact function with no other body changes.
+See [the retained V.32 result](../v32seq-top-retained-result.md) for gates
+and the separate, unretained floating-absolute-value investigation.
+
 ## Separate an element count from its byte-size conversion
 
 The `Scrambler<int, unsigned char>` constructor showed a three-byte

@@ -193,7 +193,9 @@ InitGenSequence(void *modem, unsigned short pattern, unsigned short total,
 		unsigned short width)
 {
 	void *hdx = FIELD_PTR(modem, V32_OBJ_HDX);
-	unsigned short top = (unsigned short)(total / width - 1);	/* D401 */
+	/* The object retains the promoted quotient until the two short stores.
+	 * A short local adds an unsupported movzwl after the decrement. */
+	int top = total / width - 1;	/* D401 */
 
 	FIELD_US(hdx, V32HDX_GEN_WIDTH) = width;
 	FIELD_US(hdx, V32HDX_GEN_PATTERN) = pattern;
