@@ -267,15 +267,20 @@ struct _tagModemParameters {
  * and +0x0c, all four bytes wide, and they are the whole structure --
  * slmodemd declares exactly those four members in that order
  * (`slmodemd/modem_defs.h:366`), so the NAMES are the host's and the OFFSETS
- * and WIDTHS are this object's.  `long clock_deviation` there is `int` here
- * for the reason given above.
+ * and WIDTHS are this object's.  Keep the host's `long clock_deviation`:
+ * replacing it with an equally wide `int` changes alias analysis under the
+ * period compiler and delays the load in dp_runtime_create.  The crossed
+ * type/aliasing experiment is recorded in docs/dp-param-alias-experiment.md.
+ * This is the host ABI, unlike the library-internal runtime record above.
  *
- * It is 16 bytes and it is the host's storage, not the library's: nothing in
- * this object allocates one.  A test that constructs V.PCM must own one.
+ * It is 16 bytes on the object's i386 ABI and it is the host's storage, not
+ * the library's: nothing in this object allocates one.  A test that constructs
+ * V.PCM must own one.  Native LP64 has different offsets and size; host and
+ * library must agree on that boundary (the vendored-ABI follow-up is #15).
  */
 struct dsp_info {
 	unsigned int	connection_type;	/* +0x000 */
-	int		clock_deviation;	/* +0x004 */
+	long		clock_deviation;	/* +0x004 on i386 */
 	unsigned int	qc_lapm;		/* +0x008 */
 	unsigned int	qc_index;		/* +0x00c */
 };
