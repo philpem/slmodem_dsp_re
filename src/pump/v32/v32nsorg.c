@@ -137,6 +137,7 @@
  */
 
 #include "dsplib/v32hdxst.h"
+#include "dsplib/v32struct.h"
 
 #include "dsplib/debug.h"
 #include "dsplib/fpm_agc.h"
@@ -154,24 +155,12 @@
 #include "dsplib/v32state.h"
 
 /* The instance is not modelled; see v32hdx.h.  These are the only accessors. */
-#define FIELD(obj, off)		((unsigned char *)(void *)(obj) + (off))
-#define FIELD_PTR(obj, off)	(*(void **)(void *)FIELD((obj), (off)))
-#define FIELD_S16(obj, off)	(*(short *)(void *)FIELD((obj), (off)))
-#define FIELD_U16(obj, off)	(*(unsigned short *)(void *)FIELD((obj), (off)))
-#define FIELD_INT(obj, off)	(*(int *)(void *)FIELD((obj), (off)))
 
-#define FIELD_UINT(obj, off)	(*(unsigned int *)(void *)FIELD((obj), (off)))
-#define FIELD_U8(obj, off)	(*(unsigned char *)FIELD((obj), (off)))
 
 /* Re-dereferenced at every use, on purpose -- see the header comment. */
-#define HDX(m)			FIELD_PTR((m), V32_OBJ_HDX)
-#define FP(m)			FIELD_PTR((m), V32_OBJ_FP)
+#define HDX(m) (((struct v32_modem *)(m))->hdx)
+#define FP(m) (((struct v32_modem *)(m))->fp)
 
-#define AGC(fp)		((struct fpm_agc *)(void *)FIELD((fp), V32FP_AGC))
-#define FSE(fp)		((struct fpm_fse *)(void *)FIELD((fp), V32FP_FSE))
-#define SMC(fp)		((struct v32_smc *)(void *)FIELD((fp), V32FP_SMC))
-#define SRE(fp)		((struct fpm_sre *)(void *)FIELD((fp), V32FP_SRE))
-#define DEC(fp)			((struct v32_dec *)FSE(fp)->cfg.owner)
 
 /*
  * THE HALF-DUPLEX CONTEXT'S FIELDS, and where each name comes from.
@@ -313,114 +302,113 @@
 void
 V32OrgNextState(void *modem)
 {
-	switch (FIELD_S16(HDX(modem), V32HDX_STATE)) {
+	switch (HDX(modem)->state) {
 
 	case V32_STATE_A:
-		FIELD_S16(HDX(modem), V32HDX_STATE) = V32_STATE_B;
-		FIELD_INT(HDX(modem), V32HDX_STATE_LEFT) =
-			(int)FIELD_UINT(HDX(modem), V32HDX_LIMIT);
-		FIELD_UINT(HDX(modem), V32HDX_TIMER) = 0;
-		FIELD_U16(HDX(modem), V32HDX_BLOCK_CHARGE) = 0;
+		HDX(modem)->state = V32_STATE_B;
+		HDX(modem)->state_left =
+			(int)HDX(modem)->limit;
+		HDX(modem)->timer = 0;
+		HDX(modem)->block_charge = 0;
 		break;
 
 	case V32_STATE_B:
 		/* UNSIGNED: the object branches `jbe`, not `jle`. */
-		if (FIELD_UINT(HDX(modem), V32HDX_TIMER) > 0x95fu) {
+		if (HDX(modem)->timer > 0x95fu) {
 			struct fpm_tone *tone;
 
-			FIELD_S16(HDX(modem), V32HDX_STATE) = V32_STATE_B2;
+			HDX(modem)->state = V32_STATE_B2;
 			InitGenSequence(modem, 0, 4, 2);
 
 			tone = (struct fpm_tone *)
-				FIELD_PTR(HDX(modem), V32_HDX_TONE0);
+				HDX(modem)->tone0;
 			tone->cfg.f08 = 0x4000;
 			tone->cfg.ratio = 0x6666;
 			tone->cfg.min_level = (short)(tone->cfg.min_level >> 1);
 			SetToneDetect(modem, V32_TONE_AA_HZ);
 
-			FIELD_INT(HDX(modem), V32HDX_INT_90) = 0;
-			FIELD_PTR(HDX(modem), V32HDX_TXSTATE) =
+			HDX(modem)->int_90 = 0;
+			HDX(modem)->tx_state =
 				(void *)TxHdxCarrierState;
-			FIELD_PTR(HDX(modem), V32HDX_RXSTATE) =
+			HDX(modem)->rx_state =
 				(void *)RxHdxPhsReversal;
-			FIELD_INT(HDX(modem), V32HDX_STATE_LEFT) =
-				(int)FIELD_UINT(HDX(modem), V32HDX_LIMIT);
-			FIELD_UINT(HDX(modem), V32HDX_TIMER) = 0;
+			HDX(modem)->state_left =
+				(int)HDX(modem)->limit;
+			HDX(modem)->timer = 0;
 		}
 		break;
 
 	case V32_STATE_B2:
-		FIELD_S16(HDX(modem), V32HDX_STATE) = V32_STATE_C;
-		FIELD_INT(HDX(modem), V32HDX_STATE_LEFT) =
-			(int)FIELD_UINT(HDX(modem), V32HDX_TIMER);
+		HDX(modem)->state = V32_STATE_C;
+		HDX(modem)->state_left =
+			(int)HDX(modem)->timer;
 		/*
 		 * `movzwl` and not `movswl`: the extension is dead -- the value
 		 * is stored straight back as sixteen bits -- so per finding
 		 * F7803 it follows the LOCAL's type and not the field's, and
 		 * `v32hdx.h` keeps +0x9e a `short`.
 		 */
-		FIELD_U16(HDX(modem), V32HDX_BLOCK_CHARGE) =
-			(unsigned short)FIELD_S16(HDX(modem),
-						  V32HDX_SYMBOL_LEN);
+		HDX(modem)->block_charge =
+			(unsigned short)HDX(modem)->symbol_len;
 		break;
 
 	case V32_STATE_C:
 		/* The call comes FIRST here; the state store is at 834fa. */
 		InitGenSequence(modem, 0xf, 4, 2);
-		FIELD_S16(HDX(modem), V32HDX_STATE) = V32_STATE_D;
-		FIELD_INT(HDX(modem), V32HDX_STATE_LEFT) =
-			(int)FIELD_UINT(HDX(modem), V32HDX_LIMIT);
-		FIELD_UINT(HDX(modem), V32HDX_TIMER) = 0;
-		FIELD_U16(HDX(modem), V32HDX_BLOCK_CHARGE) = 0;
-		FIELD_S16(HDX(modem), V32HDX_SHORT_A8) = 0;
+		HDX(modem)->state = V32_STATE_D;
+		HDX(modem)->state_left =
+			(int)HDX(modem)->limit;
+		HDX(modem)->timer = 0;
+		HDX(modem)->block_charge = 0;
+		HDX(modem)->short_a8 = 0;
 		break;
 
 	case V32_STATE_D:
 		/* SIGNED, and 16-bit: `cmpw $0x48` then `jle`. */
-		if (FIELD_S16(HDX(modem), V32HDX_SHORT_A8) > 0x48) {
-			FIELD_S16(HDX(modem), V32HDX_STATE) = V32_STATE_D2;
-			FIELD_PTR(HDX(modem), V32HDX_TXSTATE) =
+		if (HDX(modem)->short_a8 > 0x48) {
+			HDX(modem)->state = V32_STATE_D2;
+			HDX(modem)->tx_state =
 				(void *)TxHdxNoCarrier;
-			FIELD_PTR(HDX(modem), V32HDX_RXSTATE) =
+			HDX(modem)->rx_state =
 				(void *)RxHdxNoSignal;
-			FIELD_INT(HDX(modem), V32HDX_STATE_LEFT) =
-				(int)FIELD_UINT(HDX(modem), V32HDX_LIMIT);
+			HDX(modem)->state_left =
+				(int)HDX(modem)->limit;
 		}
 		break;
 
 	case V32_STATE_D2: {
 		struct fpm_tone *tone;
 
-		FIELD_U8(modem, V32_OBJ_U8_32) |= 0x08;
-		FIELD_U8(modem, V32_OBJ_STATUS) = V32_STATUS_0F;
-		FIELD_U8(modem, V32_OBJ_FLAGS) = (unsigned char)
-			((FIELD_U8(modem, V32_OBJ_FLAGS)
+		((struct v32_modem *)modem)->byte_32 |= 0x08;
+		((struct v32_modem *)modem)->status = V32_STATUS_0F;
+		((struct v32_modem *)modem)->flags = (unsigned char)
+			((((struct v32_modem *)modem)->flags
 			  & ~(unsigned)V32_FLAG_SILENCE)
 			 | V32_FLAG_CARRIER);
 
-		StoreReg(modem, FIELD_S16(HDX(modem), V32HDX_RTD), 0);
+		StoreReg(modem, HDX(modem)->rtd, 0);
 
-		FIELD_S16(HDX(modem), V32HDX_STATE) = V32_STATE_E;
-		FIELD_INT(HDX(modem), V32HDX_STATE_LEFT) =
-			(int)FIELD_UINT(HDX(modem), V32HDX_LIMIT);
-		FIELD_UINT(HDX(modem), V32HDX_TIMER) = 0;
-		FIELD_PTR(HDX(modem), V32HDX_TXSTATE) =
+		HDX(modem)->state = V32_STATE_E;
+		HDX(modem)->state_left =
+			(int)HDX(modem)->limit;
+		HDX(modem)->timer = 0;
+		HDX(modem)->tx_state =
 			(void *)TxHdxNoCarrier;
-		FIELD_PTR(HDX(modem), V32HDX_RXSTATE) = (void *)RxHdxSTone;
+		HDX(modem)->rx_state = (void *)RxHdxSTone;
 
-		tone = (struct fpm_tone *)FIELD_PTR(HDX(modem), V32_HDX_TONE0);
+		tone = (struct fpm_tone *)HDX(modem)->tone0;
 		tone->cfg.min_level = (short)(tone->cfg.min_level >> 1);
 		break;
 	}
 
 	case V32_STATE_E:
-		FIELD_S16(HDX(modem), V32HDX_STATE) = V32_STATE_F;
-		FIELD_INT(HDX(modem), V32HDX_STATE_LEFT) =
-			(int)FIELD_UINT(HDX(modem), V32HDX_LIMIT);
-		FIELD_UINT(HDX(modem), V32HDX_TIMER) = 0;
-		FIELD_PTR(HDX(modem), V32HDX_TXSTATE) =
+		HDX(modem)->state = V32_STATE_F;
+		HDX(modem)->state_left =
+			(int)HDX(modem)->limit;
+		HDX(modem)->timer = 0;
+		HDX(modem)->tx_state =
 			(void *)TxHdxNoCarrier;
-		FIELD_PTR(HDX(modem), V32HDX_RXSTATE) = (void *)RxHdxEpoch;
+		HDX(modem)->rx_state = (void *)RxHdxEpoch;
 		SetRxModeV32(modem, V32_MODE_ABS4);
 		SetRxLoopsV32(modem, 2);
 		InitDetSequence(modem, V32_DET_TARGET_AC, V32_DET_MASK_AC,
@@ -428,26 +416,26 @@ V32OrgNextState(void *modem)
 		break;
 
 	case V32_STATE_F:
-		FIELD_S16(HDX(modem), V32HDX_STATE) = V32_STATE_G;
-		FIELD_INT(HDX(modem), V32HDX_STATE_LEFT) = 0x500;
-		FIELD_UINT(HDX(modem), V32HDX_TIMER) = 0;
-		FIELD_PTR(HDX(modem), V32HDX_TXSTATE) =
+		HDX(modem)->state = V32_STATE_G;
+		HDX(modem)->state_left = 0x500;
+		HDX(modem)->timer = 0;
+		HDX(modem)->tx_state =
 			(void *)TxHdxNoCarrier;
-		FIELD_PTR(HDX(modem), V32HDX_RXSTATE) = (void *)RxHdxData;
+		HDX(modem)->rx_state = (void *)RxHdxData;
 		SetAdaptEqV32(modem, V32_ADAPTEQ_MU0);
 		/* The TRACKING pair; the V32_STATE_N step installs [0]. */
-		AGC(FP(modem))->cfg.alpha = &AGC_DEF_ALPHA[1];
-		AGC(FP(modem))->cfg.beta = &AGC_DEF_BETA[1];
+		FP(modem)->agc.cfg.alpha = &AGC_DEF_ALPHA[1];
+		FP(modem)->agc.cfg.beta = &AGC_DEF_BETA[1];
 		break;
 
 	case V32_STATE_G:
-		FIELD_S16(HDX(modem), V32HDX_STATE) = V32_STATE_H;
-		FIELD_INT(HDX(modem), V32HDX_STATE_LEFT) =
-			(int)FIELD_UINT(HDX(modem), V32HDX_LIMIT);
-		FIELD_UINT(HDX(modem), V32HDX_TIMER) = 0;
-		FIELD_PTR(HDX(modem), V32HDX_TXSTATE) =
+		HDX(modem)->state = V32_STATE_H;
+		HDX(modem)->state_left =
+			(int)HDX(modem)->limit;
+		HDX(modem)->timer = 0;
+		HDX(modem)->tx_state =
 			(void *)TxHdxNoCarrier;
-		FIELD_PTR(HDX(modem), V32HDX_RXSTATE) =
+		HDX(modem)->rx_state =
 			(void *)RxHdxRateSequence;
 		SetRxModeV32(modem, V32_MODE_DIF4);
 		SetAdaptEqV32(modem, V32_ADAPTEQ_MU1);
@@ -459,33 +447,33 @@ V32OrgNextState(void *modem)
 		 * follows as well as the detector arming.  The two arms differ
 		 * only in the detector's out_mask, -1 here and 0xffff there.
 		 */
-		FPM_AGC_Freeze(AGC(FP(modem)));
+		FPM_AGC_Freeze(&FP(modem)->agc);
 		break;
 
 	case V32_STATE_H:
-		FIELD_S16(HDX(modem), V32HDX_STATE) = V32_STATE_I;
-		FIELD_INT(HDX(modem), V32HDX_STATE_LEFT) =
-			FIELD_S16(HDX(modem), V32HDX_SYMBOL_LEN);
-		FIELD_UINT(HDX(modem), V32HDX_TIMER) = 0;
-		FIELD_PTR(HDX(modem), V32HDX_TXSTATE) =
+		HDX(modem)->state = V32_STATE_I;
+		HDX(modem)->state_left =
+			HDX(modem)->symbol_len;
+		HDX(modem)->timer = 0;
+		HDX(modem)->tx_state =
 			(void *)TxHdxNoCarrier;
-		FIELD_PTR(HDX(modem), V32HDX_RXSTATE) = (void *)RxHdxNull;
+		HDX(modem)->rx_state = (void *)RxHdxNull;
 		break;
 
 	case V32_STATE_I:
-		FIELD_S16(HDX(modem), V32HDX_STATE) = V32_STATE_J;
-		FIELD_INT(HDX(modem), V32HDX_STATE_LEFT) =
-			0x100 + FIELD_S16(HDX(modem), V32_HDX_SHORT_94)
+		HDX(modem)->state = V32_STATE_J;
+		HDX(modem)->state_left =
+			0x100 + HDX(modem)->turnaround
 			+ LoadReg(modem, 0);
 		/* Rounded UP to even. */
-		if (FIELD_INT(HDX(modem), V32HDX_STATE_LEFT) & 1)
-			FIELD_INT(HDX(modem), V32HDX_STATE_LEFT)++;
-		FIELD_UINT(HDX(modem), V32HDX_TIMER) = 0;
+		if (HDX(modem)->state_left & 1)
+			HDX(modem)->state_left++;
+		HDX(modem)->timer = 0;
 		/* Result dead in the object; see the header comment. */
 		LoadReg(modem, 0);
-		FIELD_PTR(HDX(modem), V32HDX_TXSTATE) =
+		HDX(modem)->tx_state =
 			(void *)TxHdxCarrierState;
-		FIELD_PTR(HDX(modem), V32HDX_RXSTATE) = (void *)RxHdxData;
+		HDX(modem)->rx_state = (void *)RxHdxData;
 		SetAdaptEqV32(modem, V32_ADAPTEQ_OFF);
 		SetRxLoopsV32(modem, 1);
 		StoreReg(modem, (short)GetSequence(modem), 1);
@@ -494,40 +482,40 @@ V32OrgNextState(void *modem)
 		break;
 
 	case V32_STATE_J:
-		FIELD_S16(HDX(modem), V32HDX_STATE) = V32_STATE_K;
-		FIELD_INT(HDX(modem), V32HDX_STATE_LEFT) = 0x10;
-		FIELD_UINT(HDX(modem), V32HDX_TIMER) = 0;
-		FIELD_PTR(HDX(modem), V32HDX_TXSTATE) =
+		HDX(modem)->state = V32_STATE_K;
+		HDX(modem)->state_left = 0x10;
+		HDX(modem)->timer = 0;
+		HDX(modem)->tx_state =
 			(void *)TxHdxCarrierState;
-		FIELD_PTR(HDX(modem), V32HDX_RXSTATE) = (void *)RxHdxData;
+		HDX(modem)->rx_state = (void *)RxHdxData;
 		InitGenSequence(modem, 0xe, 4, 2);
 		SetECRndTripDelayV32(modem, LoadReg(modem, 0));
 		break;
 
 	case V32_STATE_K:
-		FIELD_S16(HDX(modem), V32HDX_STATE) = V32_STATE_L;
-		FIELD_INT(HDX(modem), V32HDX_STATE_LEFT) = 0x100;
-		FIELD_UINT(HDX(modem), V32HDX_TIMER) = 0;
-		FIELD_PTR(HDX(modem), V32HDX_TXSTATE) =
+		HDX(modem)->state = V32_STATE_L;
+		HDX(modem)->state_left = 0x100;
+		HDX(modem)->timer = 0;
+		HDX(modem)->tx_state =
 			(void *)TxHdxTRN;
 		InitGenSequence(modem, 0xf, 4, 2);
 		SeedScramblerV32(modem, 0);
 		break;
 
 	case V32_STATE_L:
-		FIELD_S16(HDX(modem), V32HDX_STATE) = V32_STATE_M;
-		FIELD_INT(HDX(modem), V32HDX_STATE_LEFT) = 0x400;
-		FIELD_UINT(HDX(modem), V32HDX_TIMER) = 0;
-		FIELD_PTR(HDX(modem), V32HDX_TXSTATE) =
+		HDX(modem)->state = V32_STATE_M;
+		HDX(modem)->state_left = 0x400;
+		HDX(modem)->timer = 0;
+		HDX(modem)->tx_state =
 			(void *)TxHdxScrSequence;
 		SetAdaptEcV32(modem, V32_ADAPTEC_ON);
 		break;
 
 	case V32_STATE_M:
-		FIELD_S16(HDX(modem), V32HDX_STATE) = V32_STATE_N;
-		FIELD_INT(HDX(modem), V32HDX_STATE_LEFT) = 0x1b00;
-		FIELD_UINT(HDX(modem), V32HDX_TIMER) = 0;
-		FIELD_PTR(HDX(modem), V32HDX_TXSTATE) =
+		HDX(modem)->state = V32_STATE_N;
+		HDX(modem)->state_left = 0x1b00;
+		HDX(modem)->timer = 0;
+		HDX(modem)->tx_state =
 			(void *)TxHdxScrSequence;
 		SetAdaptEcV32(modem, V32_ADAPTEC_SLOW);
 		break;
@@ -536,18 +524,18 @@ V32OrgNextState(void *modem)
 		unsigned short seq;
 		struct fpm_mtd *mtd;
 
-		FIELD_S16(HDX(modem), V32HDX_STATE) = V32_STATE_O;
-		FIELD_INT(HDX(modem), V32HDX_STATE_LEFT) =
-			(int)FIELD_UINT(HDX(modem), V32HDX_LIMIT);
-		FIELD_UINT(HDX(modem), V32HDX_TIMER) = 0;
-		FIELD_PTR(HDX(modem), V32HDX_TXSTATE) =
+		HDX(modem)->state = V32_STATE_O;
+		HDX(modem)->state_left =
+			(int)HDX(modem)->limit;
+		HDX(modem)->timer = 0;
+		HDX(modem)->tx_state =
 			(void *)TxHdxScrSequence;
 		SetAdaptEcV32(modem, V32_ADAPTEC_OFF);
 
 		seq = CodeRateSeq(modem, (unsigned short)LoadReg(modem, 1));
 		StoreReg(modem, (short)seq, 2);
 
-		FIELD_PTR(HDX(modem), V32HDX_RXSTATE) = (void *)RxHdxSTone;
+		HDX(modem)->rx_state = (void *)RxHdxSTone;
 
 		/*
 		 * The detector is re-created FROM ITS OWN CONFIGURATION, which
@@ -559,86 +547,85 @@ V32OrgNextState(void *modem)
 		 * that store is through a pointer that might alias the field
 		 * it came from; both loads are kept.
 		 */
-		mtd = (struct fpm_mtd *)FIELD_PTR(HDX(modem), V32_HDX_MTD);
+		mtd = (struct fpm_mtd *)HDX(modem)->mtd;
 		mtd->cfg.coeff = V32_S_DATA_COEF;
 		FPM_MTD_create((struct fpm_mtd *)
-			       FIELD_PTR(HDX(modem), V32_HDX_MTD), &mtd->cfg);
+			       HDX(modem)->mtd, &mtd->cfg);
 
 		InitGenSequence(modem, seq, 0x10, 2);
 		InitDetSequence(modem, V32_DET_SEQ, V32_DET_MASK,
 				0xffff, 2);
 		SetTxModeV32(modem, V32_MODE_DIF4);
-		FPM_AGC_Release(AGC(FP(modem)));
+		FPM_AGC_Release(&FP(modem)->agc);
 		/* The ACQUISITION pair; V32_STATE_F and P install [1]. */
-		AGC(FP(modem))->cfg.alpha = &AGC_DEF_ALPHA[0];
-		AGC(FP(modem))->cfg.beta = &AGC_DEF_BETA[0];
+		FP(modem)->agc.cfg.alpha = &AGC_DEF_ALPHA[0];
+		FP(modem)->agc.cfg.beta = &AGC_DEF_BETA[0];
 		break;
 	}
 
 	case V32_STATE_O:
 		/* The only step that does not touch +0x78. */
-		FIELD_S16(HDX(modem), V32HDX_STATE) = V32_STATE_P;
-		FIELD_UINT(HDX(modem), V32HDX_TIMER) = 0;
-		FIELD_PTR(HDX(modem), V32HDX_TXSTATE) =
+		HDX(modem)->state = V32_STATE_P;
+		HDX(modem)->timer = 0;
+		HDX(modem)->tx_state =
 			(void *)TxHdxScrSequence;
-		FIELD_PTR(HDX(modem), V32HDX_RXSTATE) = (void *)RxHdxEpoch;
+		HDX(modem)->rx_state = (void *)RxHdxEpoch;
 		SetRxModeV32(modem, V32_MODE_ABS4);
 		SetRxLoopsV32(modem, 2);
-		FPM_SRE_init(SRE(FP(modem)), &SREv32_CFG, 0);
-		FSE(FP(modem))->sym_count = 0;
+		FPM_SRE_init(&FP(modem)->sre, &SREv32_CFG, 0);
+		FP(modem)->fse.sym_count = 0;
 		break;
 
 	case V32_STATE_P:
-		FIELD_S16(HDX(modem), V32HDX_STATE) = V32_STATE_Q;
+		HDX(modem)->state = V32_STATE_Q;
 		/* Reads +0x78 before the reload below overwrites it. */
-		FIELD_S16(HDX(modem), V32HDX_SHORT_46) = (short)
-			((int)FIELD_UINT(HDX(modem), V32HDX_LIMIT)
-			 - FIELD_INT(HDX(modem), V32HDX_STATE_LEFT));
-		FIELD_INT(HDX(modem), V32HDX_STATE_LEFT) = 0x4d0;
-		FIELD_UINT(HDX(modem), V32HDX_TIMER) = 0;
-		FIELD_PTR(HDX(modem), V32HDX_TXSTATE) =
+		HDX(modem)->short_46 = (short)
+			((int)HDX(modem)->limit
+			 - HDX(modem)->state_left);
+		HDX(modem)->state_left = 0x4d0;
+		HDX(modem)->timer = 0;
+		HDX(modem)->tx_state =
 			(void *)TxHdxScrSequence;
-		FIELD_PTR(HDX(modem), V32HDX_RXSTATE) = (void *)RxHdxData;
+		HDX(modem)->rx_state = (void *)RxHdxData;
 		SetAdaptEqV32(modem, V32_ADAPTEQ_MU0);
-		AGC(FP(modem))->cfg.alpha = &AGC_DEF_ALPHA[1];
-		AGC(FP(modem))->cfg.beta = &AGC_DEF_BETA[1];
+		FP(modem)->agc.cfg.alpha = &AGC_DEF_ALPHA[1];
+		FP(modem)->agc.cfg.beta = &AGC_DEF_BETA[1];
 		break;
 
 	case V32_STATE_Q:
-		FIELD_S16(HDX(modem), V32HDX_STATE) = V32_STATE_R;
-		FIELD_INT(HDX(modem), V32HDX_STATE_LEFT) =
-			(int)FIELD_UINT(HDX(modem), V32HDX_LIMIT);
-		FIELD_UINT(HDX(modem), V32HDX_TIMER) = 0;
-		FIELD_PTR(HDX(modem), V32HDX_TXSTATE) =
+		HDX(modem)->state = V32_STATE_R;
+		HDX(modem)->state_left =
+			(int)HDX(modem)->limit;
+		HDX(modem)->timer = 0;
+		HDX(modem)->tx_state =
 			(void *)TxHdxScrSequence;
-		FIELD_PTR(HDX(modem), V32HDX_RXSTATE) = (void *)RxHdxSequence;
+		HDX(modem)->rx_state = (void *)RxHdxSequence;
 		SetAdaptEqV32(modem, V32_ADAPTEQ_MU1);
 		InitDetSequence(modem, V32_DET_SEQ, V32_DET_MASK,
 				0xffff, 2);
-		FPM_AGC_Freeze(AGC(FP(modem)));
+		FPM_AGC_Freeze(&FP(modem)->agc);
 		break;
 
 	case V32_STATE_R:
-		FIELD_S16(HDX(modem), V32HDX_STATE) = V32_STATE_S;
+		HDX(modem)->state = V32_STATE_S;
 		/*
 		 * Align what is left of the step onto an eight-symbol
 		 * boundary: `8 - (x & 7)`, never zero and never above eight.
 		 */
-		FIELD_INT(HDX(modem), V32HDX_STATE_LEFT) = 8 -
-			((0x4d0 + ((int)FIELD_UINT(HDX(modem), V32HDX_LIMIT)
-				   - FIELD_INT(HDX(modem),
-						V32HDX_STATE_LEFT))
-			  + FIELD_S16(HDX(modem), V32HDX_SHORT_46)) & 7);
+		HDX(modem)->state_left = 8 -
+			((0x4d0 + ((int)HDX(modem)->limit
+				   - HDX(modem)->state_left)
+			  + HDX(modem)->short_46) & 7);
 		StoreReg(modem, (short)GetSequence(modem), 3);
 		break;
 
 	case V32_STATE_S:
-		FIELD_S16(HDX(modem), V32HDX_STATE) = V32_STATE_T;
-		FIELD_INT(HDX(modem), V32HDX_STATE_LEFT) = 8;
-		FIELD_UINT(HDX(modem), V32HDX_TIMER) = 0;
-		FIELD_PTR(HDX(modem), V32HDX_TXSTATE) =
+		HDX(modem)->state = V32_STATE_T;
+		HDX(modem)->state_left = 8;
+		HDX(modem)->timer = 0;
+		HDX(modem)->tx_state =
 			(void *)TxHdxScrSequence;
-		FIELD_PTR(HDX(modem), V32HDX_RXSTATE) = (void *)RxHdxSequence;
+		HDX(modem)->rx_state = (void *)RxHdxSequence;
 		/*
 		 * NO RATE IN COMMON, and the step CONTINUES either way: the
 		 * object posts the two bytes at 835e7 and jumps BACK into the
@@ -647,8 +634,8 @@ V32OrgNextState(void *modem)
 		 */
 		if (DecodeRateSeq(modem, (unsigned short)LoadReg(modem, 3))
 		    == V32_RATE_NONE) {
-			FIELD_U8(modem, V32_OBJ_FLAGS) |= V32_FLAG_FAULT;
-			FIELD_U8(modem, V32_OBJ_STATUS) = V32_STATUS_17;
+			((struct v32_modem *)modem)->flags |= V32_FLAG_FAULT;
+			((struct v32_modem *)modem)->status = V32_STATUS_17;
 		}
 		SetAdaptEcV32(modem, V32_ADAPTEC_OFF);
 		InitGenSequence(modem,
@@ -661,10 +648,10 @@ V32OrgNextState(void *modem)
 	case V32_STATE_T: {
 		unsigned short rate;
 
-		FIELD_S16(HDX(modem), V32HDX_STATE) = V32_STATE_U;
-		FIELD_INT(HDX(modem), V32HDX_STATE_LEFT) =
-			(int)FIELD_UINT(HDX(modem), V32HDX_LIMIT);
-		FIELD_UINT(HDX(modem), V32HDX_TIMER) = 0;
+		HDX(modem)->state = V32_STATE_U;
+		HDX(modem)->state_left =
+			(int)HDX(modem)->limit;
+		HDX(modem)->timer = 0;
 
 		rate = (unsigned short)
 			DecodeRateSeq(modem,
@@ -673,17 +660,17 @@ V32OrgNextState(void *modem)
 		InitGenSequence(modem, 0xffff, 0x10, 8);
 		/* UNSIGNED 16-bit: `cmp $0x2,%si` then `jbe`. */
 		if (rate > 2)
-			SMC(FP(modem))->f10 = 0;
+			FP(modem)->tx_smc.f10 = 0;
 		break;
 	}
 
 	case V32_STATE_U: {
 		short seq;
 
-		FIELD_S16(HDX(modem), V32HDX_STATE) = V32_STATE_V;
-		FIELD_INT(HDX(modem), V32HDX_STATE_LEFT) = 0x80;
-		FIELD_UINT(HDX(modem), V32HDX_TIMER) = 0;
-		FIELD_PTR(HDX(modem), V32HDX_RXSTATE) = (void *)RxHdxData;
+		HDX(modem)->state = V32_STATE_V;
+		HDX(modem)->state_left = 0x80;
+		HDX(modem)->timer = 0;
+		HDX(modem)->rx_state = (void *)RxHdxData;
 
 		seq = (short)GetSequence(modem);
 		StoreReg(modem, seq, 4);
@@ -697,12 +684,12 @@ V32OrgNextState(void *modem)
 		unsigned short rate;
 
 		/* The CONNECT step, and it stays in V32_STATE_V. */
-		FIELD_S16(HDX(modem), V32HDX_STATE) = V32_STATE_V;
-		FIELD_INT(HDX(modem), V32HDX_STATE_LEFT) =
-			(int)FIELD_UINT(HDX(modem), V32HDX_LIMIT);
-		FIELD_UINT(HDX(modem), V32HDX_TIMER) = 0;
-		FIELD_PTR(HDX(modem), V32HDX_RXSTATE) = (void *)RxHdxData;
-		FIELD_U8(modem, V32_OBJ_FLAGS) |=
+		HDX(modem)->state = V32_STATE_V;
+		HDX(modem)->state_left =
+			(int)HDX(modem)->limit;
+		HDX(modem)->timer = 0;
+		HDX(modem)->rx_state = (void *)RxHdxData;
+		((struct v32_modem *)modem)->flags |=
 			(V32_FLAG_01 | V32_FLAG_08 | V32_FLAG_10);
 
 		rate = (unsigned short)
@@ -713,9 +700,9 @@ V32OrgNextState(void *modem)
 		 * F7803 it is the LOCAL that is `unsigned short` and not
 		 * `V32_CONNECT`, which `v32hdxst.h` keeps as `short`.
 		 */
-		FIELD_U8(modem, V32_OBJ_STATUS) =
+		((struct v32_modem *)modem)->status =
 			(unsigned char)(unsigned short)V32_CONNECT[rate];
-		DEC(FP(modem))->retrain = 0;
+		((struct v32_dec *)FP(modem)->fse.cfg.owner)->retrain = 0;
 		SetAdaptEqV32(modem, V32_ADAPTEQ_MU1);
 		SetAdaptEcV32(modem, V32_ADAPTEC_OFF);
 		break;
@@ -723,8 +710,8 @@ V32OrgNextState(void *modem)
 
 	case V32_STATE_ERROR:
 		/* The one arm that does not advance the state. */
-		FIELD_INT(HDX(modem), V32HDX_STATE_LEFT) =
-			(int)FIELD_UINT(HDX(modem), V32HDX_LIMIT);
+		HDX(modem)->state_left =
+			(int)HDX(modem)->limit;
 		break;
 
 	default:
@@ -733,7 +720,6 @@ V32OrgNextState(void *modem)
 
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("state %s(%d)\n",
-				     V32StateName(FIELD_S16(HDX(modem),
-							    V32HDX_STATE)),
-				     FIELD_S16(HDX(modem), V32HDX_STATE));
+				     V32StateName(HDX(modem)->state),
+				     HDX(modem)->state);
 }

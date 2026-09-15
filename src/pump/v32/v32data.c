@@ -61,29 +61,23 @@
 #include "dsplib/fpm_pps.h"
 #include "dsplib/fpm_smc.h"
 
-/* The instance is not modelled; see v32data.h.  These are the only accessors. */
-#define FIELD(obj, off)		((unsigned char *)(obj) + (off))
-#define FIELD_PTR(obj, off)	(*(void **)(void *)FIELD((obj), (off)))
-
 unsigned short
 ModDataV32(void *modem, short *data, short *out, unsigned short count)
 {
 	const v32_encoder_fn *tbl;
-	void *fp;
+	struct v32_fp *fp;
 	short sel;
 
-	fp = FIELD_PTR(modem, V32_OBJ_FP);
-	tbl = (const v32_encoder_fn *)(void *)FIELD(fp, V32FP_ENCODERS);
-	sel = *(short *)(void *)FIELD(fp, V32FP_ENCODER_SEL);
-	tbl[sel]((struct v32_smc *)(void *)FIELD(fp, V32FP_SMC),
-		 (struct v32_symout *)(void *)FIELD(fp, V32FP_SYMOUT),
-		 data, count);
+	fp = ((struct v32_modem *)modem)->fp;
+	tbl = fp->encoders;
+	sel = fp->encoder_sel;
+	tbl[sel](&fp->tx_smc, &fp->symout, data, count);
 
-	fp = FIELD_PTR(modem, V32_OBJ_FP);
-	return FPM_PPS_filter((struct fpm_pps *)(void *)FIELD(fp, V32FP_PPS),
+	fp = ((struct v32_modem *)modem)->fp;
+	return FPM_PPS_filter(&fp->pps,
 			      /* D431: the same bytes as the v32_symout above */
 			      (struct fpm_smc_ring *)(void *)
-					FIELD(fp, V32FP_SYMOUT),
+					&fp->symout,
 			      out, count);
 }
 
@@ -95,13 +89,13 @@ TxNoCarrierV32(void *modem, const short *data, short *out,
 	struct v32_smc *smc;
 	unsigned short i;
 	short widx, limit, quad;
-	void *fp;
+	struct v32_fp *fp;
 
 	(void)data;			/* never read; see v32data.h */
 
-	fp = FIELD_PTR(modem, V32_OBJ_FP);
-	ring = (struct v32_symout *)(void *)FIELD(fp, V32FP_SYMOUT);
-	smc = (struct v32_smc *)(void *)FIELD(fp, V32FP_SMC);
+	fp = ((struct v32_modem *)modem)->fp;
+	ring = &fp->symout;
+	smc = &fp->tx_smc;
 	quad = smc->quad;
 	widx = ring->widx;
 	limit = ring->limit;
@@ -119,9 +113,9 @@ TxNoCarrierV32(void *modem, const short *data, short *out,
 	smc->quad = quad;
 	ring->widx = widx;
 
-	return FPM_PPS_filter((struct fpm_pps *)(void *)FIELD(fp, V32FP_PPS),
+	return FPM_PPS_filter(&fp->pps,
 			      /* D431 again */
 			      (struct fpm_smc_ring *)(void *)
-					FIELD(fp, V32FP_SYMOUT),
+					&fp->symout,
 			      out, count);
 }

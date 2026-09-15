@@ -110,28 +110,15 @@
 #include "dsplib/v29cfg.h"
 #include "dsplib/v29data.h"
 
-/* The instance is not modelled; see v29fax.h.  These are the only accessors. */
-#define FIELD(obj, off)		((unsigned char *)(obj) + (off))
-#define FIELD_PTR(obj, off)	(*(void **)(void *)FIELD((obj), (off)))
-#define FIELD_INT(obj, off)	(*(int *)(void *)FIELD((obj), (off)))
-#define FIELD_SHORT(obj, off)	(*(short *)(void *)FIELD((obj), (off)))
-#define FIELD_USHORT(obj, off)	(*(unsigned short *)(void *)FIELD((obj), (off)))
-#define FIELD_BYTE(obj, off)	(*(unsigned char *)FIELD((obj), (off)))
+/* Shared period owner layouts and the observed report prefix live in v29fax.h. */
 
-#define RX(modem)		FIELD_PTR((modem), V29_OBJ_RX)
-#define DET(modem)		FIELD_PTR((modem), V29_OBJ_DET)
 
-#define RX_AGC(rx)	((struct fpm_agc *)(void *)FIELD((rx), V29RX_AGC))
-#define RX_SRE(rx)	((struct fpm_sre *)(void *)FIELD((rx), V29RX_SRE))
-#define RX_FSE(rx)	((struct fpm_fse *)(void *)FIELD((rx), V29RX_FSE))
-#define RX_MRF(rx)	((struct fpm_mrf *)(void *)FIELD((rx), V29RX_MRF))
 
 /* The decoder block, `fse->cfg.owner`, and the receive block's rx + 0x28. */
-#define DEC(rx)		((void *)FIELD((rx), V29RX_DEC))
 
 /* Install a receive state handler.  See `V29DET_HANDLER` in v29fax.h. */
-#define SET_HANDLER(det, fn)						\
-	(*(v29_rx_state_fn *)(void *)FIELD((det), V29DET_HANDLER) = (fn))
+#define SET_HANDLER(det, fn) \
+	(((struct v29_rx_detector *)(det))->handler = (fn))
 
 /*
  * ---------------------------------------------------------------------------
@@ -208,8 +195,8 @@ V29RX_create(void *modem, const struct v29rx_cfg *params)
 			dsplibs_debug_printf("New allocation\n");
 
 		modem = sysdep_malloc(V29_OBJ_SIZE);
-		FIELD_PTR(modem, V29_OBJ_DET) = 0;
-		FIELD_PTR(modem, V29_OBJ_RX) = 0;
+		((struct v29_rx *)modem)->det = 0;
+		((struct v29_rx *)modem)->rx = 0;
 		new_handle = 1;
 	}
 
@@ -223,23 +210,23 @@ V29RX_create(void *modem, const struct v29rx_cfg *params)
 	 * `?:` over one destination.
 	 */
 	if (params != 0)
-		*(struct v29rx_cfg *)modem = *params;
+		*&((struct v29_rx *)modem)->cfg = *params;
 	else
-		*(struct v29rx_cfg *)modem = V29RX_CFG;
+		*&((struct v29_rx *)modem)->cfg = V29RX_CFG;
 
 	/* ---- the detection block ---------------------------------------- */
 
-	det = FIELD_PTR(modem, V29_OBJ_DET);
+	det = ((struct v29_rx *)modem)->det;
 	if (det == 0) {
 		det = sysdep_malloc(V29DET_SIZE);
-		FIELD_PTR(modem, V29_OBJ_DET) = det;
+		((struct v29_rx *)modem)->det = det;
 
-		FIELD_PTR(det, V29DET_MTD) = 0;
-		FIELD_PTR(det, V29DET_TONE) = 0;
-		FIELD_PTR(det, V29DET_BUF) = sysdep_malloc(V29DET_BUF_BYTES);
-		FIELD_PTR(DET(modem), V29DET_V21_BUF) =
+		((struct v29_rx_detector *)det)->mtd = 0;
+		((struct v29_rx_detector *)det)->tone = 0;
+		((struct v29_rx_detector *)det)->buf = sysdep_malloc(V29DET_BUF_BYTES);
+		((struct v29_rx *)modem)->det->v21_buf =
 			sysdep_malloc(V29DET_V21_BUF_BYTES);
-		FIELD_PTR(DET(modem), V29DET_V21_MTD) = 0;
+		((struct v29_rx *)modem)->det->v21_mtd = 0;
 		new_det = 1;
 	}
 
@@ -249,8 +236,8 @@ V29RX_create(void *modem, const struct v29rx_cfg *params)
 	mcfg.tones = V29RX_MTD_TONES;
 	mcfg.ratio = V29RX_MTD_RATIO;
 	mcfg.min_level = V29RX_MTD_MIN_LEVEL;
-	FIELD_PTR(det, V29DET_MTD) = FPM_MTD_create(
-		(struct fpm_mtd *)FIELD_PTR(DET(modem), V29DET_MTD), &mcfg);
+	((struct v29_rx_detector *)det)->mtd = FPM_MTD_create(
+		(struct fpm_mtd *)((struct v29_rx *)modem)->det->mtd, &mcfg);
 
 	/*
 	 * The notch and tone detector.  Everything but `freq` survives, and
@@ -259,14 +246,14 @@ V29RX_create(void *modem, const struct v29rx_cfg *params)
 	 */
 	tcfg = FPM_TONE_CFG;
 	tcfg.freq = V29RX_TONE_HZ;
-	FIELD_PTR(det, V29DET_TONE) = FPM_TONE_create(
-		(struct fpm_tone *)FIELD_PTR(DET(modem), V29DET_TONE), &tcfg);
+	((struct v29_rx_detector *)det)->tone = FPM_TONE_create(
+		(struct fpm_tone *)((struct v29_rx *)modem)->det->tone, &tcfg);
 
 	/* The receive machine starts in START, with START's handler. */
-	det = FIELD_PTR(modem, V29_OBJ_DET);
-	FIELD_SHORT(det, V29DET_STATE) = V29RX_STATE_START;
-	FIELD_SHORT(det, V29DET_STATE_COUNT) = 0;
-	FIELD_INT(det, V29DET_INT_0008) = 0;
+	det = ((struct v29_rx *)modem)->det;
+	((struct v29_rx_detector *)det)->state = V29RX_STATE_START;
+	((struct v29_rx_detector *)det)->state_count = 0;
+	((struct v29_rx_detector *)det)->int_0008 = 0;
 	SET_HANDLER(det, RxHdxStartV29);
 
 	/* The V.21 channel-2 detector, from the same template again. */
@@ -275,17 +262,16 @@ V29RX_create(void *modem, const struct v29rx_cfg *params)
 	mcfg.tones = V29RX_V21_MTD_TONES;
 	mcfg.ratio = V29RX_V21_MTD_RATIO;
 	mcfg.min_level = V29RX_V21_MTD_MIN_LEVEL;
-	FIELD_PTR(det, V29DET_V21_MTD) = FPM_MTD_create(
-		(struct fpm_mtd *)FIELD_PTR(DET(modem), V29DET_V21_MTD),
+	((struct v29_rx_detector *)det)->v21_mtd = FPM_MTD_create(
+		(struct fpm_mtd *)((struct v29_rx *)modem)->det->v21_mtd,
 		&mcfg);
 
-	FPM_AGC_init((struct fpm_agc *)(void *)FIELD(DET(modem),
-						     V29DET_V21_AGC),
+	FPM_AGC_init((struct fpm_agc *)(void *)&((struct v29_rx *)modem)->det->v21_agc,
 		     &AGCv29_CFG, new_det);
 
-	det = FIELD_PTR(modem, V29_OBJ_DET);
-	FIELD_SHORT(det, V29DET_V21_SAMPLES) = 0;
-	FIELD_SHORT(det, V29DET_V21_ENABLE) = 0;
+	det = ((struct v29_rx *)modem)->det;
+	((struct v29_rx_detector *)det)->v21_samples = 0;
+	((struct v29_rx_detector *)det)->v21_enable = 0;
 
 	/*
 	 * The rate, as an index.  The DEFAULT arm and the 9600 arm write the
@@ -293,38 +279,38 @@ V29RX_create(void *modem, const struct v29rx_cfg *params)
 	 * 0x9af7d), which is what says this was a `switch` and not an
 	 * `== 7200` test.
 	 */
-	switch (((struct v29rx_cfg *)modem)->bit_rate) {
+	switch ((&((struct v29_rx *)modem)->cfg)->bit_rate) {
 	case V29_BPS_7200:
-		FIELD_SHORT(det, V29DET_RATE) = V29_RATE_7200;
+		((struct v29_rx_detector *)det)->rate = V29_RATE_7200;
 		break;
 	case V29_BPS_9600:
-		FIELD_SHORT(det, V29DET_RATE) = V29_RATE_9600;
+		((struct v29_rx_detector *)det)->rate = V29_RATE_9600;
 		break;
 	default:
-		FIELD_SHORT(det, V29DET_RATE) = V29_RATE_9600;
+		((struct v29_rx_detector *)det)->rate = V29_RATE_9600;
 		break;
 	}
 
 	/* ---- the receive block ------------------------------------------ */
 
-	aux = ((struct v29rx_cfg *)modem)->ptr_0014;
+	aux = (&((struct v29_rx *)modem)->cfg)->ptr_0014;
 
 	/*
 	 * Raised here and overwritten at the end of the function.  Both stores
 	 * are real and a caller cannot see either, because nothing else runs
 	 * in between.
 	 */
-	FIELD_INT(modem, V29_OBJ_STATUS) |= V29_STATUS_ERROR;
-	FIELD_BYTE(modem, V29_OBJ_STATUS_B0) = V29RX_STATUS_DEFAULT;
+	((struct v29_rx *)modem)->result.word |= V29_STATUS_ERROR;
+	((struct v29_rx *)modem)->result.byte.status = V29RX_STATUS_DEFAULT;
 
-	rx = FIELD_PTR(modem, V29_OBJ_RX);
+	rx = ((struct v29_rx *)modem)->rx;
 	if (rx == 0) {
 		rx = sysdep_malloc(V29RX_SIZE);
-		FIELD_PTR(modem, V29_OBJ_RX) = rx;
+		((struct v29_rx *)modem)->rx = rx;
 
-		FIELD_PTR(rx, V29RX_BUF_MRF) =
+		((struct v29_rx_block *)rx)->buf_mrf =
 			sysdep_malloc(V29RX_BUF_MRF_BYTES);
-		FIELD_PTR(RX(modem), V29RX_BUF_SRE) =
+		((struct v29_rx *)modem)->rx->buf_sre =
 			sysdep_malloc(V29RX_BUF_SRE_BYTES);
 	}
 
@@ -335,9 +321,9 @@ V29RX_create(void *modem, const struct v29rx_cfg *params)
 	rcfg.coeff = V29RX_MRF_FILT;
 	rcfg.taps = 0x10e;
 	rcfg.aux = aux;
-	FPM_MRF_init(RX_MRF(RX(modem)), &rcfg, new_handle);
+	FPM_MRF_init(&((struct v29_rx *)modem)->rx->mrf, &rcfg, new_handle);
 
-	FPM_AGC_init(RX_AGC(RX(modem)), &AGCv29_CFG, new_handle);
+	FPM_AGC_init(&((struct v29_rx *)modem)->rx->agc, &AGCv29_CFG, new_handle);
 
 	/*
 	 * The symbol recoverer.  `pad0e` and `pad36` survive; everything else
@@ -367,16 +353,16 @@ V29RX_create(void *modem, const struct v29rx_cfg *params)
 	scfg.mag_lo = 1;
 	scfg.err_hi = 0x2666;
 	scfg.err_lo = 0xc8;
-	scfg.rms_min = (short)(RX_AGC(RX(modem))->cfg.ref_level / 6);
+	scfg.rms_min = (short)(((struct v29_rx *)modem)->rx->agc.cfg.ref_level / 6);
 	scfg.rms_len = 9;
 	memcpy(&scfg.pad34, &aux, sizeof aux);
-	FPM_SRE_init(RX_SRE(RX(modem)), &scfg, new_handle);
+	FPM_SRE_init(&((struct v29_rx *)modem)->rx->sre, &scfg, new_handle);
 
 	/* The four timing-meter fields `FPM_SRE_init` leaves to its caller. */
-	RX_SRE(RX(modem))->ppm_step = 0x30;
-	RX_SRE(RX(modem))->ppm_period = V29_BPS_9600;
-	RX_SRE(RX(modem))->ppm_n_max = 0x68;
-	RX_SRE(RX(modem))->ppm_scale =
+	((struct v29_rx *)modem)->rx->sre.ppm_step = 0x30;
+	((struct v29_rx *)modem)->rx->sre.ppm_period = V29_BPS_9600;
+	((struct v29_rx *)modem)->rx->sre.ppm_n_max = 0x68;
+	((struct v29_rx *)modem)->rx->sre.ppm_scale =
 		(short)(1000000 / (scfg.clock_len * V29_BPS_9600));
 
 	/*
@@ -399,10 +385,10 @@ V29RX_create(void *modem, const struct v29rx_cfg *params)
 	fcfg.err_lo = 0xccd;
 	fcfg.pll_k1 = V29RX_FSE_PLLK1;
 	fcfg.pll_k2 = V29RX_FSE_PLLK2;
-	fcfg.owner = FIELD(RX(modem), V29RX_DEC);
+	fcfg.owner = &((struct v29_rx *)modem)->rx->dec;
 	fcfg.decision = V29RX_epoch_det;
 	fcfg.reserved34 = aux;
-	FPM_FSE_init(RX_FSE(RX(modem)), &fcfg, new_handle);
+	FPM_FSE_init(&((struct v29_rx *)modem)->rx->fse, &fcfg, new_handle);
 
 	/*
 	 * The descrambler.  Three bits a symbol at 7200 and four at 9600, over
@@ -410,15 +396,15 @@ V29RX_create(void *modem, const struct v29rx_cfg *params)
 	 * `V29DET_RATE` is the bit rate and which value is which.
 	 */
 	dcfg = SDM_CFG;
-	dcfg.nbits = (short)(4 - (FIELD_SHORT(DET(modem), V29DET_RATE)
+	dcfg.nbits = (short)(4 - (((struct v29_rx *)modem)->det->rate
 				  == V29_RATE_7200));
 	dcfg.tap1 = V29RX_SDM_TAP1;
 	dcfg.tap2 = V29RX_SDM_TAP2;
-	SDM_init((struct fpm_sdm *)(void *)FIELD(RX(modem), V29RX_SDM), &dcfg);
+	SDM_init((struct fpm_sdm *)(void *)&((struct v29_rx *)modem)->rx->sdm, &dcfg);
 
 	/* ---- the seeds --------------------------------------------------- */
 
-	rx = FIELD_PTR(modem, V29_OBJ_RX);
+	rx = ((struct v29_rx *)modem)->rx;
 
 	/*
 	 * Only the FIRST V29RX_BUF_ZEROED entries, which is all of the MRF's
@@ -426,81 +412,81 @@ V29RX_create(void *modem, const struct v29rx_cfg *params)
 	 * is a `short` -- `inc %eax` then `cwtl` -- which is the object's.
 	 */
 	for (i = 0; i < V29RX_BUF_ZEROED; i = (short)(i + 1)) {
-		((short *)FIELD_PTR(rx, V29RX_BUF_MRF))[i] = 0;
-		((short *)FIELD_PTR(rx, V29RX_BUF_SRE))[i] = 0;
+		((short *)((struct v29_rx_block *)rx)->buf_mrf)[i] = 0;
+		((short *)((struct v29_rx_block *)rx)->buf_sre)[i] = 0;
 	}
 
-	det = FIELD_PTR(modem, V29_OBJ_DET);
-	FIELD_SHORT(rx, V29RX_DEC_ERROR_AVG) = 0;
-	FIELD_SHORT(rx, V29RX_DEC_ERROR_N) = 0;
-	FIELD_SHORT(rx, V29RX_SHORT_4F62) = 0;
+	det = ((struct v29_rx *)modem)->det;
+	((struct v29_rx_block *)rx)->dec_error_avg = 0;
+	((struct v29_rx_block *)rx)->dec_error_n = 0;
+	((struct v29_rx_block *)rx)->short_4f62 = 0;
 
 	/* NO DEFAULT ARM.  See the note above and D1173. */
-	switch (FIELD_SHORT(det, V29DET_RATE)) {
+	switch (((struct v29_rx_detector *)det)->rate) {
 	case V29_RATE_7200:
-		FIELD_SHORT(rx, V29RX_DEC_ERROR_LIMIT) =
+		((struct v29_rx_block *)rx)->dec_error_limit =
 			V29RX_DEC_ERROR_LIMIT_7200;
 		break;
 	case V29_RATE_9600:
-		FIELD_SHORT(rx, V29RX_DEC_ERROR_LIMIT) =
+		((struct v29_rx_block *)rx)->dec_error_limit =
 			V29RX_DEC_ERROR_LIMIT_9600;
 		break;
 	default:
 		break;
 	}
 
-	dec = DEC(rx);
-	FIELD_SHORT(dec, V29DEC_MAG_AVG_FAR) = 0;
-	FIELD_SHORT(rx, V29RX_SHORT_4F64) = 1;
-	FIELD_SHORT(rx, V29RX_RMS_N) = 0;
-	FIELD_SHORT(rx, V29RX_RMS_REF) = 0;
-	FIELD_SHORT(dec, V29DEC_MAG_AVG_NEAR) = 0;
-	FIELD_SHORT(dec, V29DEC_I0) = 0;
-	FIELD_SHORT(dec, V29DEC_Q0) = 0;
-	FIELD_SHORT(dec, V29DEC_I1) = 0;
-	FIELD_SHORT(dec, V29DEC_Q1) = 0;
-	FIELD_SHORT(dec, V29DEC_I2) = 0;
-	FIELD_SHORT(dec, V29DEC_Q2) = 0;
+	dec = &((struct v29_rx_block *)rx)->dec;
+	((struct v29_rx_decoder *)dec)->mag_avg_far = 0;
+	((struct v29_rx_block *)rx)->short_4f64 = 1;
+	((struct v29_rx_block *)rx)->rms_n = 0;
+	((struct v29_rx_block *)rx)->rms_ref = 0;
+	((struct v29_rx_decoder *)dec)->mag_avg_near = 0;
+	((struct v29_rx_decoder *)dec)->i0 = 0;
+	((struct v29_rx_decoder *)dec)->q0 = 0;
+	((struct v29_rx_decoder *)dec)->i1 = 0;
+	((struct v29_rx_decoder *)dec)->q1 = 0;
+	((struct v29_rx_decoder *)dec)->i2 = 0;
+	((struct v29_rx_decoder *)dec)->q2 = 0;
 
-	FIELD_INT(rx, V29RX_INT_0000) = 1;
-	FIELD_SHORT(dec, V29DEC_LAST) = 0;
-	FIELD_SHORT(dec, V29DEC_TRAIN_LFSR) = V29RX_TRAIN_LFSR_INIT;
-	FIELD_INT(dec, V29DEC_SIXTEEN_POINT) = FIELD_SHORT(det, V29DET_RATE);
-	FIELD_SHORT(dec, V29DEC_TRAIN_COUNT) = 0;
-	FIELD_SHORT(dec, V29DEC_SHORT_001A) = 0;
-	FIELD_SHORT(dec, V29DEC_ANGLE_PREV) = 0;
-	FIELD_SHORT(dec, V29DEC_SYM_COUNT) = 0;
-	FIELD_INT(rx, V29RX_INT_0004) = 1;
-	FIELD_INT(rx, V29RX_INT_0008) = 1;
-	FIELD_INT(rx, V29RX_INT_000C) = 0;
-	FIELD_INT(rx, V29RX_INT_0010) = 0;
-	FIELD_INT(rx, V29RX_INT_0014) = 1;
-	FIELD_INT(rx, V29RX_FLAGS_0018) = 1;
-	FIELD_INT(rx, V29RX_INT_001C) = 0;
-	FIELD_INT(rx, V29RX_INT_0020) = 1;
-	FIELD_INT(rx, V29RX_INT_0024) = 0;
+	((struct v29_rx_block *)rx)->int_0000 = 1;
+	((struct v29_rx_decoder *)dec)->last = 0;
+	((struct v29_rx_decoder *)dec)->train_lfsr = V29RX_TRAIN_LFSR_INIT;
+	((struct v29_rx_decoder *)dec)->sixteen_point = ((struct v29_rx_detector *)det)->rate;
+	((struct v29_rx_decoder *)dec)->train_count = 0;
+	((struct v29_rx_decoder *)dec)->short_001a = 0;
+	((struct v29_rx_decoder *)dec)->angle_prev = 0;
+	((struct v29_rx_decoder *)dec)->sym_count = 0;
+	((struct v29_rx_block *)rx)->int_0004 = 1;
+	((struct v29_rx_block *)rx)->int_0008 = 1;
+	((struct v29_rx_block *)rx)->int_000c = 0;
+	((struct v29_rx_block *)rx)->int_0010 = 0;
+	((struct v29_rx_block *)rx)->int_0014 = 1;
+	((struct v29_rx_block *)rx)->flags_word_0018 = 1;
+	((struct v29_rx_block *)rx)->int_001c = 0;
+	((struct v29_rx_block *)rx)->int_0020 = 1;
+	((struct v29_rx_block *)rx)->int_0024 = 0;
 
 	/* ---- the handle -------------------------------------------------- */
 
-	rx = FIELD_PTR(modem, V29_OBJ_RX);
+	rx = ((struct v29_rx *)modem)->rx;
 
-	FIELD_INT(modem, V29_OBJ_STATUS) = 0;
-	FIELD_INT(modem, V29_OBJ_STATUS) |= V29_STATUS_CREATE_BITS;
-	FIELD_BYTE(modem, V29_OBJ_STATUS_B0) = V29RX_STATUS_START;
+	((struct v29_rx *)modem)->result.word = 0;
+	((struct v29_rx *)modem)->result.word |= V29_STATUS_CREATE_BITS;
+	((struct v29_rx *)modem)->result.byte.status = V29RX_STATUS_START;
 
-	FIELD_PTR(modem, V29_OBJ_EQ_OUT_I) = RX_FSE(rx)->out_i;
-	FIELD_PTR(modem, V29_OBJ_EQ_OUT_Q) = RX_FSE(rx)->out_q;
-	FIELD_PTR(modem, V29_OBJ_EQ_NOUT) = &RX_FSE(rx)->n_out;
-	FIELD_PTR(modem, V29_OBJ_EQ_ICOEFF) = RX_FSE(rx)->icoeff;
-	FIELD_PTR(modem, V29_OBJ_EQ_QCOEFF) = RX_FSE(rx)->qcoeff;
-	FIELD_SHORT(modem, V29_OBJ_EQ_TAPS) = RX_FSE(rx)->cfg.taps;
+	((struct v29_rx *)modem)->eq_out_i = ((struct v29_rx_block *)rx)->fse.out_i;
+	((struct v29_rx *)modem)->eq_out_q = ((struct v29_rx_block *)rx)->fse.out_q;
+	((struct v29_rx *)modem)->eq_n_out = &((struct v29_rx_block *)rx)->fse.n_out;
+	((struct v29_rx *)modem)->eq_icoeff = ((struct v29_rx_block *)rx)->fse.icoeff;
+	((struct v29_rx *)modem)->eq_qcoeff = ((struct v29_rx_block *)rx)->fse.qcoeff;
+	((struct v29_rx *)modem)->eq_taps = ((struct v29_rx_block *)rx)->fse.cfg.taps;
 
-	FIELD_SHORT(modem, V29_OBJ_SHORT_003C) = 0;
-	FIELD_SHORT(modem, V29_OBJ_SHORT_0048) = 0;
-	FIELD_INT(modem, V29_OBJ_INT_0034) = 0;
-	FIELD_INT(modem, V29_OBJ_INT_0038) = 0;
-	FIELD_INT(modem, V29_OBJ_INT_0040) = 0;
-	FIELD_INT(modem, V29_OBJ_INT_0044) = 0;
+	((struct v29_rx *)modem)->short_003c = 0;
+	((struct v29_rx *)modem)->short_0048 = 0;
+	((struct v29_rx *)modem)->int_0034 = 0;
+	((struct v29_rx *)modem)->int_0038 = 0;
+	((struct v29_rx *)modem)->int_0040 = 0;
+	((struct v29_rx *)modem)->int_0044 = 0;
 
 	return modem;
 }
@@ -522,20 +508,20 @@ V29RX_create(void *modem, const struct v29rx_cfg *params)
 void
 V29RX_delete(void *modem)
 {
-	FPM_FSE_free(RX_FSE(RX(modem)));
-	FPM_SRE_free(RX_SRE(RX(modem)));
-	FPM_MRF_free(RX_MRF(RX(modem)));
+	FPM_FSE_free(&((struct v29_rx *)modem)->rx->fse);
+	FPM_SRE_free(&((struct v29_rx *)modem)->rx->sre);
+	FPM_MRF_free(&((struct v29_rx *)modem)->rx->mrf);
 
-	sysdep_free(FIELD_PTR(RX(modem), V29RX_BUF_SRE));
-	sysdep_free(FIELD_PTR(RX(modem), V29RX_BUF_MRF));
-	sysdep_free(RX(modem));
+	sysdep_free(((struct v29_rx *)modem)->rx->buf_sre);
+	sysdep_free(((struct v29_rx *)modem)->rx->buf_mrf);
+	sysdep_free(((struct v29_rx *)modem)->rx);
 
-	FPM_MTD_delete((struct fpm_mtd *)FIELD_PTR(DET(modem), V29DET_MTD));
-	FPM_TONE_delete((struct fpm_tone *)FIELD_PTR(DET(modem), V29DET_TONE));
-	sysdep_free(FIELD_PTR(DET(modem), V29DET_BUF));
-	sysdep_free(FIELD_PTR(DET(modem), V29DET_V21_BUF));
-	FPM_MTD_delete((struct fpm_mtd *)FIELD_PTR(DET(modem), V29DET_V21_MTD));
-	sysdep_free(DET(modem));
+	FPM_MTD_delete((struct fpm_mtd *)((struct v29_rx *)modem)->det->mtd);
+	FPM_TONE_delete((struct fpm_tone *)((struct v29_rx *)modem)->det->tone);
+	sysdep_free(((struct v29_rx *)modem)->det->buf);
+	sysdep_free(((struct v29_rx *)modem)->det->v21_buf);
+	FPM_MTD_delete((struct fpm_mtd *)((struct v29_rx *)modem)->det->v21_mtd);
+	sysdep_free(((struct v29_rx *)modem)->det);
 
 	sysdep_free(modem);
 }
@@ -598,26 +584,26 @@ V29RX_epoch_det(struct fpm_fse *state, short *angle, short *mag)
 	short diff;
 
 	state->lms_on = 0;
-	FIELD_USHORT(dec, V29DEC_SYM_COUNT) =
-		(unsigned short)(FIELD_USHORT(dec, V29DEC_SYM_COUNT) + 1);
+	((struct v29_rx_decoder *)dec)->sym_count =
+		(unsigned short)(((struct v29_rx_decoder *)dec)->sym_count + 1);
 
 	i = state->out_i[n];
 	q = state->out_q[n];
 
-	di = (short)(FIELD_USHORT(dec, V29DEC_I1) - i);
-	dq = (short)(FIELD_USHORT(dec, V29DEC_Q1) - q);
-	ei = (short)(FIELD_USHORT(dec, V29DEC_I2) - FIELD_USHORT(dec, V29DEC_I0));
-	eq = (short)(FIELD_USHORT(dec, V29DEC_Q2) - FIELD_USHORT(dec, V29DEC_Q0));
+	di = (short)(((struct v29_rx_decoder *)dec)->i1 - i);
+	dq = (short)(((struct v29_rx_decoder *)dec)->q1 - q);
+	ei = (short)(((struct v29_rx_decoder *)dec)->i2 - ((struct v29_rx_decoder *)dec)->i0);
+	eq = (short)(((struct v29_rx_decoder *)dec)->q2 - ((struct v29_rx_decoder *)dec)->q0);
 
 	d = (short)(((di * di + dq * dq) >> 15)
 		    + ((ei * ei + eq * eq) >> 15));
 
-	FIELD_USHORT(dec, V29DEC_I2) = FIELD_USHORT(dec, V29DEC_I1);
-	FIELD_USHORT(dec, V29DEC_Q2) = FIELD_USHORT(dec, V29DEC_Q1);
-	FIELD_USHORT(dec, V29DEC_I1) = FIELD_USHORT(dec, V29DEC_I0);
-	FIELD_USHORT(dec, V29DEC_Q1) = FIELD_USHORT(dec, V29DEC_Q0);
-	FIELD_USHORT(dec, V29DEC_I0) = (unsigned short)i;
-	FIELD_USHORT(dec, V29DEC_Q0) = (unsigned short)q;
+	((struct v29_rx_decoder *)dec)->i2 = ((struct v29_rx_decoder *)dec)->i1;
+	((struct v29_rx_decoder *)dec)->q2 = ((struct v29_rx_decoder *)dec)->q1;
+	((struct v29_rx_decoder *)dec)->i1 = ((struct v29_rx_decoder *)dec)->i0;
+	((struct v29_rx_decoder *)dec)->q1 = ((struct v29_rx_decoder *)dec)->q0;
+	((struct v29_rx_decoder *)dec)->i0 = (unsigned short)i;
+	((struct v29_rx_decoder *)dec)->q0 = (unsigned short)q;
 
 	/*
 	 * The phase advance, folded into [0, V29DEC_PHASE_FULL) by SUBTRACTING
@@ -626,8 +612,8 @@ V29RX_epoch_det(struct fpm_fse *state, short *angle, short *mag)
 	 * `short` immediately.
 	 */
 	a = (unsigned short)*angle;
-	diff = (short)(a - FIELD_USHORT(dec, V29DEC_ANGLE_PREV));
-	FIELD_USHORT(dec, V29DEC_ANGLE_PREV) = a;
+	diff = (short)(a - ((struct v29_rx_decoder *)dec)->angle_prev);
+	((struct v29_rx_decoder *)dec)->angle_prev = a;
 	if (diff < 0)
 		diff = (short)(diff - V29DEC_PHASE_FULL);
 
@@ -637,26 +623,26 @@ V29RX_epoch_det(struct fpm_fse *state, short *angle, short *mag)
 	 * compiler has to flush the intermediate before it loads `*mag`.
 	 */
 	if (diff > V29DEC_HALF_TURN) {
-		FIELD_SHORT(dec, V29DEC_MAG_AVG_FAR) =
-			(short)((FIELD_SHORT(dec, V29DEC_MAG_AVG_FAR)
+		((struct v29_rx_decoder *)dec)->mag_avg_far =
+			(short)((((struct v29_rx_decoder *)dec)->mag_avg_far
 				 * V29EPOCH_AVG_WEIGHT) >> V29EPOCH_AVG_SHIFT);
-		FIELD_SHORT(dec, V29DEC_MAG_AVG_FAR) =
-			(short)(FIELD_SHORT(dec, V29DEC_MAG_AVG_FAR)
+		((struct v29_rx_decoder *)dec)->mag_avg_far =
+			(short)(((struct v29_rx_decoder *)dec)->mag_avg_far
 				+ (*mag >> V29EPOCH_AVG_SHIFT));
 		*angle = V29RX_DEC_ANGLE[V29_EPOCH_POINT_FAR];
 	} else {
-		FIELD_SHORT(dec, V29DEC_MAG_AVG_NEAR) =
-			(short)((FIELD_SHORT(dec, V29DEC_MAG_AVG_NEAR)
+		((struct v29_rx_decoder *)dec)->mag_avg_near =
+			(short)((((struct v29_rx_decoder *)dec)->mag_avg_near
 				 * V29EPOCH_AVG_WEIGHT) >> V29EPOCH_AVG_SHIFT);
-		FIELD_SHORT(dec, V29DEC_MAG_AVG_NEAR) =
-			(short)(FIELD_SHORT(dec, V29DEC_MAG_AVG_NEAR)
+		((struct v29_rx_decoder *)dec)->mag_avg_near =
+			(short)(((struct v29_rx_decoder *)dec)->mag_avg_near
 				+ (*mag >> V29EPOCH_AVG_SHIFT));
 		*angle = V29RX_DEC_ANGLE[V29_EPOCH_POINT_NEAR];
 	}
 
-	if (FIELD_SHORT(dec, V29DEC_TRAIN_COUNT) > V29_EPOCH_SETTLE) {
-		short af = FIELD_SHORT(dec, V29DEC_MAG_AVG_FAR);
-		short an = FIELD_SHORT(dec, V29DEC_MAG_AVG_NEAR);
+	if ((short)((struct v29_rx_decoder *)dec)->train_count > V29_EPOCH_SETTLE) {
+		short af = ((struct v29_rx_decoder *)dec)->mag_avg_far;
+		short an = ((struct v29_rx_decoder *)dec)->mag_avg_near;
 		short avg = (short)((af * af + an * an) >> 15);
 
 		if (d > avg * V29EPOCH_TRIGGER) {
@@ -664,15 +650,15 @@ V29RX_epoch_det(struct fpm_fse *state, short *angle, short *mag)
 			state->lms_force = 1;
 			state->cfg.decision = V29RX_eq_train;
 
-			FIELD_SHORT(dec, V29DEC_TRAIN_LFSR) =
+			((struct v29_rx_decoder *)dec)->train_lfsr =
 					V29_TRAIN_LFSR_SEED;
-			FIELD_USHORT(dec, V29DEC_LAST) = 0;
-			FIELD_USHORT(dec, V29DEC_TRAIN_COUNT) = 0xffff;
+			((struct v29_rx_decoder *)dec)->last = 0;
+			((struct v29_rx_decoder *)dec)->train_count = 0xffff;
 		}
 	}
 
-	FIELD_USHORT(dec, V29DEC_TRAIN_COUNT) =
-		(unsigned short)(FIELD_USHORT(dec, V29DEC_TRAIN_COUNT) + 1);
+	((struct v29_rx_decoder *)dec)->train_count =
+		(unsigned short)(((struct v29_rx_decoder *)dec)->train_count + 1);
 
 	return 0xffff;
 }
@@ -711,18 +697,18 @@ unsigned short
 V29RX_eq_train(struct fpm_fse *state, short *angle, short *mag)
 {
 	void *dec = state->cfg.owner;
-	short st = FIELD_SHORT(dec, V29DEC_TRAIN_LFSR);
+	short st = ((struct v29_rx_decoder *)dec)->train_lfsr;
 	unsigned int x = (unsigned int)st;
 	unsigned int odd = x & 1u;
 	unsigned short count;
 	unsigned short tc;
 	short idx;
 
-	count = (unsigned short)(FIELD_USHORT(dec, V29DEC_SYM_COUNT) + 1);
+	count = (unsigned short)(((struct v29_rx_decoder *)dec)->sym_count + 1);
 	if (count == V29DEC_SYM_COUNT_WRAP)
-		FIELD_USHORT(dec, V29DEC_SYM_COUNT) = V29DEC_SYM_COUNT_RESTART;
+		((struct v29_rx_decoder *)dec)->sym_count = V29DEC_SYM_COUNT_RESTART;
 	else
-		FIELD_USHORT(dec, V29DEC_SYM_COUNT) = count;
+		((struct v29_rx_decoder *)dec)->sym_count = count;
 
 	state->lms_on = 1;
 	state->mu_sel = 0;
@@ -733,15 +719,15 @@ V29RX_eq_train(struct fpm_fse *state, short *angle, short *mag)
 
 	idx = 0;
 	if (odd != 0)
-		idx = FIELD_INT(dec, V29DEC_SIXTEEN_POINT)
+		idx = ((struct v29_rx_decoder *)dec)->sixteen_point
 		    ? V29_TRAIN_POINT_16 : V29_TRAIN_POINT_8;
 
 	*mag = V29RX_DEC_MAG[idx];
 	*angle = V29RX_DEC_ANGLE[idx];
-	FIELD_SHORT(dec, V29DEC_TRAIN_LFSR) = (short)x;
+	((struct v29_rx_decoder *)dec)->train_lfsr = (short)x;
 
-	tc = (unsigned short)(FIELD_USHORT(dec, V29DEC_TRAIN_COUNT) + 1);
-	FIELD_USHORT(dec, V29DEC_TRAIN_COUNT) = tc;
+	tc = (unsigned short)(((struct v29_rx_decoder *)dec)->train_count + 1);
+	((struct v29_rx_decoder *)dec)->train_count = tc;
 	if (tc == V29_TRAIN_SYMS) {
 		state->cfg.mu[1] = V29RX_MU_DATA;
 		state->mu_sel = 1;
@@ -749,7 +735,7 @@ V29RX_eq_train(struct fpm_fse *state, short *angle, short *mag)
 		state->cfg.decision = V29RX_decision;
 	}
 
-	FIELD_USHORT(dec, V29DEC_LAST) = (unsigned short)(idx & 7);
+	((struct v29_rx_decoder *)dec)->last = (unsigned short)(idx & 7);
 
 	return 0xffff;
 }
@@ -802,14 +788,14 @@ V29RX_decision(struct fpm_fse *state, short *angle, short *mag)
 	short cur;
 	unsigned short sym;
 
-	count = (unsigned short)(FIELD_USHORT(dec, V29DEC_SYM_COUNT) + 1);
+	count = (unsigned short)(((struct v29_rx_decoder *)dec)->sym_count + 1);
 	if (count == V29DEC_SYM_COUNT_WRAP)
-		FIELD_USHORT(dec, V29DEC_SYM_COUNT) = V29DEC_SYM_COUNT_RESTART;
+		((struct v29_rx_decoder *)dec)->sym_count = V29DEC_SYM_COUNT_RESTART;
 	else
-		FIELD_USHORT(dec, V29DEC_SYM_COUNT) = count;
+		((struct v29_rx_decoder *)dec)->sym_count = count;
 
 	n = (short)state->n_out;
-	points = FIELD_INT(dec, V29DEC_SIXTEEN_POINT) ? 16 : 8;
+	points = ((struct v29_rx_decoder *)dec)->sixteen_point ? 16 : 8;
 	i = state->out_i[n];
 	q = state->out_q[n];
 
@@ -830,11 +816,11 @@ V29RX_decision(struct fpm_fse *state, short *angle, short *mag)
 	cur = (short)(bi & 7);
 	*angle = V29RX_DEC_ANGLE[bi];
 
-	prev = FIELD_USHORT(dec, V29DEC_LAST);
-	FIELD_USHORT(dec, V29DEC_LAST) = (unsigned short)cur;
+	prev = ((struct v29_rx_decoder *)dec)->last;
+	((struct v29_rx_decoder *)dec)->last = (unsigned short)cur;
 
 	sym = (unsigned short)V29RX_DEC_PMAP[(cur - prev) & 7];
-	if (FIELD_INT(dec, V29DEC_SIXTEEN_POINT) != 0)
+	if (((struct v29_rx_decoder *)dec)->sixteen_point != 0)
 		sym = (unsigned short)(sym | (bi & 8));
 
 	return sym;
@@ -1018,8 +1004,8 @@ V29TX_create(void *modem, const struct v29tx_cfg *params)
 			dsplibs_debug_printf("New allocation\n");
 
 		modem = sysdep_malloc(0x28);
-		FIELD_PTR(modem, V29TX_OBJ_PARAMS) = 0;
-		V29TX(modem) = 0;
+		((struct v29_tx_root *)modem)->params = 0;
+		((struct v29_tx_root *)modem)->tx = 0;
 		fresh = 1;
 	} else {
 		if (DSPLIB_DEBUG_ON())
@@ -1027,35 +1013,35 @@ V29TX_create(void *modem, const struct v29tx_cfg *params)
 	}
 
 	if (params != 0)
-		*(struct v29tx_cfg *)modem = *params;
+		*&((struct v29_tx_root *)modem)->cfg = *params;
 	else
-		*(struct v29tx_cfg *)modem = V29TX_CFG;
+		*&((struct v29_tx_root *)modem)->cfg = V29TX_CFG;
 
-	FIELD_INT(modem, V29TX_OBJ_RESULT) = 0;
-	*FIELD(modem, V29TX_OBJ_RESULT_B1) |= 0x58;
-	FIELD_BYTE(modem, V29TX_OBJ_RESULT) = 1;
+	((struct v29_tx_root *)modem)->result.word = 0;
+	((struct v29_tx_root *)modem)->result.byte.flags |= 0x58;
+	((struct v29_tx_root *)modem)->result.byte.status = 1;
 
 	/* ---- the parameter/half-duplex block, the FIFO and the SGD ------- */
 
-	prm = FIELD_PTR(modem, V29TX_OBJ_PARAMS);
+	prm = ((struct v29_tx_root *)modem)->params;
 	if (prm == 0) {
 		prm = sysdep_malloc(0x1c);
-		FIELD_PTR(modem, V29TX_OBJ_PARAMS) = prm;
-		FIELD_PTR(prm, V29TXP_FIFO) = 0;
-		FIELD_PTR(prm, V29TXP_SGD) = 0;
+		((struct v29_tx_root *)modem)->params = prm;
+		((struct v29_tx_params *)prm)->fifo = 0;
+		((struct v29_tx_params *)prm)->sgd = 0;
 	}
 
 	{
 		struct fifo_cfg fc;
 		unsigned short n = (unsigned short)
-			((struct v29tx_cfg *)modem)->fifo_size_factor;
+			(&((struct v29_tx_root *)modem)->cfg)->fifo_size_factor;
 
 		fc.word0 = FIFO_CFG.word0;
 		fc.size = (short)(n * 3 * 16);
 		fc.fill = FIFO_CFG.fill;
 
-		existing = FIELD_PTR(prm, V29TXP_FIFO);
-		FIELD_PTR(prm, V29TXP_FIFO) =
+		existing = ((struct v29_tx_params *)prm)->fifo;
+		((struct v29_tx_params *)prm)->fifo =
 			FIFO_create((struct fax_fifo *)existing, &fc);
 	}
 
@@ -1064,65 +1050,65 @@ V29TX_create(void *modem, const struct v29tx_cfg *params)
 
 		gcfg.sym_bits = 4;
 
-		existing = FIELD_PTR(prm, V29TXP_SGD);
-		FIELD_PTR(prm, V29TXP_SGD) =
+		existing = ((struct v29_tx_params *)prm)->sgd;
+		((struct v29_tx_params *)prm)->sgd =
 			SGD_create((struct sgd *)existing, &gcfg);
 	}
 
 	/* ---- the half-duplex machine's own state ------------------------- */
 
-	prm = FIELD_PTR(modem, V29TX_OBJ_PARAMS);
-	FIELD_SHORT(prm, V29TXP_STATE) = V29TX_STATE_START;
-	FIELD_SHORT(prm, V29TXP_SHORT_0016) = 0;
-	FIELD_SHORT(prm, V29SCRAM_SR) = 0x2a;
+	prm = ((struct v29_tx_root *)modem)->params;
+	((struct v29_tx_params *)prm)->state = V29TX_STATE_START;
+	((struct v29_tx_params *)prm)->short_0016 = 0;
+	((struct v29_tx_params *)prm)->scram_sr = 0x2a;
 
-	FIELD_INT(prm, V29TXP_INT_0008) = 0;
-	*(v29tx_process_fn *)(void *)FIELD(prm, V29TXP_PROCESS) = TxHdxStartV29;
+	((struct v29_tx_params *)prm)->int_0008 = 0;
+	((struct v29_tx_params *)prm)->handler = TxHdxStartV29;
 
-	if (((struct v29tx_cfg *)modem)->bitrate == V29_BPS_7200) {
-		FIELD_SHORT(prm, V29TXP_RATE) = V29_RATE_7200;
-	} else if (((struct v29tx_cfg *)modem)->bitrate == V29_BPS_9600) {
-		FIELD_SHORT(prm, V29TXP_RATE) = V29_RATE_9600;
+	if ((&((struct v29_tx_root *)modem)->cfg)->bitrate == V29_BPS_7200) {
+		((struct v29_tx_params *)prm)->rate = V29_RATE_7200;
+	} else if ((&((struct v29_tx_root *)modem)->cfg)->bitrate == V29_BPS_9600) {
+		((struct v29_tx_params *)prm)->rate = V29_RATE_9600;
 	} else {
-		FIELD_SHORT(prm, V29TXP_RATE) = V29_RATE_9600;
-		*FIELD(modem, V29TX_OBJ_RESULT_B1) |= V29TX_RESULT_B1_BIT1;
-		FIELD_BYTE(modem, V29TX_OBJ_RESULT) = V29TX_STATUS_DEFAULT;
+		((struct v29_tx_params *)prm)->rate = V29_RATE_9600;
+		((struct v29_tx_root *)modem)->result.byte.flags |= V29TX_RESULT_B1_BIT1;
+		((struct v29_tx_root *)modem)->result.byte.status = V29TX_STATUS_DEFAULT;
 	}
 
 	/* ---- the private block: the ring, the scrambler, the symbol coder
 	 * and the pulse shaper ---------------------------------------------- */
 
-	if (V29TX(modem) == 0) {
+	if (((struct v29_tx_root *)modem)->tx == 0) {
 		struct v29tx *tx = sysdep_malloc(0x9c);
 
-		V29TX(modem) = tx;
+		((struct v29_tx_root *)modem)->tx = tx;
 		tx->ring.i = sysdep_malloc(0x64);
 		tx->ring.q = sysdep_malloc(0x64);
 	}
 
-	V29TX(modem)->ring.ridx = 0;
-	V29TX(modem)->ring.widx = 0;
-	V29TX(modem)->ring.sym = sysdep_malloc(0x64);
-	V29TX(modem)->ring.len = 0x32;
+	((struct v29_tx_root *)modem)->tx->ring.ridx = 0;
+	((struct v29_tx_root *)modem)->tx->ring.widx = 0;
+	((struct v29_tx_root *)modem)->tx->ring.sym = sysdep_malloc(0x64);
+	((struct v29_tx_root *)modem)->tx->ring.len = 0x32;
 
 	{
 		short i;
 
 		for (i = 0; i <= 0x31; i++) {
-			V29TX(modem)->ring.i[i] = 0;
-			V29TX(modem)->ring.q[i] = 0;
+			((struct v29_tx_root *)modem)->tx->ring.i[i] = 0;
+			((struct v29_tx_root *)modem)->tx->ring.q[i] = 0;
 		}
 	}
 
 	{
 		struct fpm_sdm_cfg dcfg = SDM_CFG;
 
-		dcfg.nbits = (short)((FIELD_SHORT(prm, V29TXP_RATE) != 0)
+		dcfg.nbits = (short)((((struct v29_tx_params *)prm)->rate != 0)
 				     ? 4 : 3);
 		dcfg.tap1 = 0x12;
 		dcfg.tap2 = 0x17;
 
-		SDM_init(&V29TX(modem)->sdm, &dcfg);
+		SDM_init(&((struct v29_tx_root *)modem)->tx->sdm, &dcfg);
 	}
 
 	{
@@ -1135,7 +1121,7 @@ V29TX_create(void *modem, const struct v29tx_cfg *params)
 		scfg.qshift = 0;
 		scfg.qmask = 7;
 		scfg.amask = (unsigned short)
-			((FIELD_SHORT(prm, V29TXP_RATE) != 0) ? 8 : 0);
+			((((struct v29_tx_params *)prm)->rate != 0) ? 8 : 0);
 		scfg.pmask = 7;
 		scfg.pmap = V29TX_SMC_PMAP;
 		scfg.imap = V29TX_SMC_IMAP;
@@ -1143,7 +1129,7 @@ V29TX_create(void *modem, const struct v29tx_cfg *params)
 		scfg.cosine = V29TX_SMC_COSINE;
 		scfg.sine = V29TX_SMC_SINE;
 
-		SMC_init(&V29TX(modem)->smc, &scfg);
+		SMC_init(&((struct v29_tx_root *)modem)->tx->smc, &scfg);
 	}
 
 	{
@@ -1152,12 +1138,12 @@ V29TX_create(void *modem, const struct v29tx_cfg *params)
 		pcfg.phases = 10;
 		pcfg.step = 3;
 		pcfg.mapped = 0;
-		pcfg.scale = V29TX_PPS_SCALE[FIELD_SHORT(prm, V29TXP_RATE)];
+		pcfg.scale = V29TX_PPS_SCALE[((struct v29_tx_params *)prm)->rate];
 		pcfg.coeff_i = V29TX_PPS_IFILT;
 		pcfg.coeff_q = V29TX_PPS_QFILT;
-		pcfg.aux = (void *)(long)((struct v29tx_cfg *)modem)->int_0018;
+		pcfg.aux = (void *)(long)(&((struct v29_tx_root *)modem)->cfg)->int_0018;
 
-		FPM_PPS_init(&V29TX(modem)->pps, &pcfg, fresh);
+		FPM_PPS_init(&((struct v29_tx_root *)modem)->tx->pps, &pcfg, fresh);
 	}
 
 	return modem;
@@ -1169,7 +1155,7 @@ V29TX_create(void *modem, const struct v29tx_cfg *params)
  *
  * The transmitter's nine releases.  The private block is re-read from the
  * handle before every one -- five separate `mov 0x24(%ebx),%e?x` between
- * 0x09bea1 and 0x09bed9, then three of `0x20(%ebx)` -- so `V29TX(modem)`
+ * 0x09bea1 and 0x09bed9, then three of `0x20(%ebx)` -- so `((struct v29_tx_root *)modem)->tx`
  * expands at each use here as `RX()` and `DET()` do above.
  *
  * The object places a literal 1 in the second argument slot before
@@ -1183,20 +1169,18 @@ V29TX_create(void *modem, const struct v29tx_cfg *params)
 void
 V29TX_delete(void *modem)
 {
-	FPM_PPS_free(&V29TX(modem)->pps);
+	FPM_PPS_free(&((struct v29_tx_root *)modem)->tx->pps);
 
-	sysdep_free(V29TX(modem)->ring.sym);
-	sysdep_free(V29TX(modem)->ring.q);
-	sysdep_free(V29TX(modem)->ring.i);
-	sysdep_free(V29TX(modem));
+	sysdep_free(((struct v29_tx_root *)modem)->tx->ring.sym);
+	sysdep_free(((struct v29_tx_root *)modem)->tx->ring.q);
+	sysdep_free(((struct v29_tx_root *)modem)->tx->ring.i);
+	sysdep_free(((struct v29_tx_root *)modem)->tx);
 
 	SGD_delete((struct sgd *)
-			FIELD_PTR(FIELD_PTR(modem, V29TX_OBJ_PARAMS),
-				  V29TXP_SGD));
+			((struct v29_tx_root *)modem)->params->sgd);
 	FIFO_delete((struct fax_fifo *)
-			FIELD_PTR(FIELD_PTR(modem, V29TX_OBJ_PARAMS),
-				  V29TXP_FIFO));
-	sysdep_free(FIELD_PTR(modem, V29TX_OBJ_PARAMS));
+			((struct v29_tx_root *)modem)->params->fifo);
+	sysdep_free(((struct v29_tx_root *)modem)->params);
 
 	sysdep_free(modem);
 }
@@ -1229,7 +1213,7 @@ V29RX_modem(void *modem, short *in, short *out, unsigned short *count)
 {
 	short produced = 0;
 
-	FIELD_BYTE(modem, V29_OBJ_STATUS + 1) &=
+	((struct v29_rx *)modem)->result.byte.flags &=
 		(unsigned char)~(V29_STATUS_ERROR >> 8);
 
 	/*
@@ -1241,8 +1225,7 @@ V29RX_modem(void *modem, short *in, short *out, unsigned short *count)
 		short avail = (short)*count;
 		short n;
 
-		n = (*(v29_rx_state_fn *)(void *)
-			FIELD(DET(modem), V29DET_HANDLER))(modem, in, out, count);
+		n = ((struct v29_rx *)modem)->det->handler(modem, in, out, count);
 
 		in += avail - *count;
 		out += n;
@@ -1251,7 +1234,7 @@ V29RX_modem(void *modem, short *in, short *out, unsigned short *count)
 
 	*count = (unsigned short)produced;
 
-	return FIELD_INT(modem, V29_OBJ_STATUS);
+	return ((struct v29_rx *)modem)->result.word;
 }
 
 /*
@@ -1292,12 +1275,12 @@ RxHdxDataV29(void *modem, short *in, short *out, unsigned short *count)
 	unsigned short n;
 	short units;
 
-	FIELD_INT(modem, V29_OBJ_STATUS) |= V29_STATUS_CARRIER;
-	FIELD_BYTE(modem, V29_OBJ_STATUS_B0) = V29RX_STATUS_DATA;
+	((struct v29_rx *)modem)->result.word |= V29_STATUS_CARRIER;
+	((struct v29_rx *)modem)->result.byte.status = V29RX_STATUS_DATA;
 
 	if ((short)DataCarrierDetectV29(modem, in, *count) == 0
-	    || FIELD_INT(DET(modem), V29DET_INT_0008) != 0) {
-		FIELD_INT(modem, V29_OBJ_STATUS) &= ~V29_STATUS_CARRIER;
+	    || ((struct v29_rx *)modem)->det->int_0008 != 0) {
+		((struct v29_rx *)modem)->result.word &= ~V29_STATUS_CARRIER;
 		*count = 0;
 		return 0;
 	}
@@ -1309,9 +1292,9 @@ RxHdxDataV29(void *modem, short *in, short *out, unsigned short *count)
 	units = (short)((short)QualityDetectV29(modem) != V29Q_NO_CARRIER
 			? (short)n : 0);
 
-	FIELD_INT(modem, V29_OBJ_STATUS) &= ~V29_STATUS_LOW_SNR;
+	((struct v29_rx *)modem)->result.word &= ~V29_STATUS_LOW_SNR;
 	if (GetSNRV29(modem) <= V29RX_SNR_THRESHOLD)
-		FIELD_INT(modem, V29_OBJ_STATUS) |= V29_STATUS_LOW_SNR;
+		((struct v29_rx *)modem)->result.word |= V29_STATUS_LOW_SNR;
 
 	return units;
 }
@@ -1332,7 +1315,7 @@ RxHdxDataV29(void *modem, short *in, short *out, unsigned short *count)
 short
 RxHdxErrorV29(void *modem, short *in, short *out, unsigned short *count)
 {
-	FIELD_INT(modem, V29_OBJ_STATUS) |= V29_STATUS_ERROR;
+	((struct v29_rx *)modem)->result.word |= V29_STATUS_ERROR;
 
 	DemodDataV29(modem, in, (unsigned short *)(void *)out, *count);
 	*count = 0;
@@ -1363,7 +1346,7 @@ RxHdxErrorV29(void *modem, short *in, short *out, unsigned short *count)
  * THE DETECTION BLOCK IS RE-READ AFTER EVERY `dsplibs_debug_printf`, which the
  * object does at 0x0a4281, 0x0a4295, 0x0a42a6 and 0x0a42cb and is forced: the
  * printf could write through `modem`.  It is spelled here as the same
- * `DET(modem)` the rest of this file uses, which produces the reload at each
+ * `((struct v29_rx *)modem)->det` the rest of this file uses, which produces the reload at each
  * of those points and one load in the arms that do not print.
  *
  * THE DEFAULT ARM TOUCHES NO STATE AT ALL.  It raises `V29_STATUS_ERROR`,
@@ -1377,31 +1360,31 @@ RxHdxErrorV29(void *modem, short *in, short *out, unsigned short *count)
 void
 RxNextStateV29(void *modem)
 {
-	switch (FIELD_SHORT(DET(modem), V29DET_STATE)) {
+	switch (((struct v29_rx *)modem)->det->state) {
 	case V29RX_STATE_START:
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V29RX_STATE_START\n");
 
-		FIELD_SHORT(DET(modem), V29DET_STATE_COUNT) =
+		((struct v29_rx *)modem)->det->state_count =
 					V29DET_COUNT_EPOCH_DET;
-		SET_HANDLER(DET(modem), RxHdxEpochDetV29);
-		FIELD_SHORT(DET(modem), V29DET_STATE) = V29RX_STATE_EPOCH_DET;
+		SET_HANDLER(((struct v29_rx *)modem)->det, RxHdxEpochDetV29);
+		((struct v29_rx *)modem)->det->state = V29RX_STATE_EPOCH_DET;
 
-		FIELD_INT(modem, V29_OBJ_STATUS) &= ~V29_STATUS_IDLE;
-		FIELD_INT(modem, V29_OBJ_STATUS) &= ~V29_STATUS_DATA;
+		((struct v29_rx *)modem)->result.word &= ~V29_STATUS_IDLE;
+		((struct v29_rx *)modem)->result.word &= ~V29_STATUS_DATA;
 		break;
 
 	case V29RX_STATE_EPOCH_DET:
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V29RX_STATE_EPOCH_DET\n");
 
-		FIELD_SHORT(DET(modem), V29DET_STATE_COUNT) =
+		((struct v29_rx *)modem)->det->state_count =
 					V29DET_COUNT_PROTOCOL;
-		SET_HANDLER(DET(modem), RxHdxPrtcolV29);
-		FIELD_SHORT(DET(modem), V29DET_STATE) = V29RX_STATE_PROTOCOL;
+		SET_HANDLER(((struct v29_rx *)modem)->det, RxHdxPrtcolV29);
+		((struct v29_rx *)modem)->det->state = V29RX_STATE_PROTOCOL;
 
-		FIELD_INT(modem, V29_OBJ_STATUS) &= ~V29_STATUS_IDLE;
-		FIELD_INT(modem, V29_OBJ_STATUS) &= ~V29_STATUS_DATA;
+		((struct v29_rx *)modem)->result.word &= ~V29_STATUS_IDLE;
+		((struct v29_rx *)modem)->result.word &= ~V29_STATUS_DATA;
 
 		/*
 		 * THE ONLY DSP THIS FUNCTION DOES, and it is a POINTER STEP
@@ -1414,46 +1397,46 @@ RxNextStateV29(void *modem)
 		 * feedback", a plausible sentence and a completely different
 		 * modem.  The declared type is what rules that out.
 		 */
-		RX_AGC(RX(modem))->cfg.alpha += 1;
-		RX_AGC(RX(modem))->cfg.beta += 1;
+		((struct v29_rx *)modem)->rx->agc.cfg.alpha += 1;
+		((struct v29_rx *)modem)->rx->agc.cfg.beta += 1;
 		break;
 
 	case V29RX_STATE_PROTOCOL:
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V29RX_STATE_PROTOCOL\n");
 
-		FPM_AGC_Freeze(RX_AGC(RX(modem)));
+		FPM_AGC_Freeze(&((struct v29_rx *)modem)->rx->agc);
 
-		FIELD_SHORT(DET(modem), V29DET_STATE_COUNT) = 0;
-		SET_HANDLER(DET(modem), RxHdxDataV29);
-		FIELD_SHORT(DET(modem), V29DET_STATE) = V29RX_STATE_DATA;
+		((struct v29_rx *)modem)->det->state_count = 0;
+		SET_HANDLER(((struct v29_rx *)modem)->det, RxHdxDataV29);
+		((struct v29_rx *)modem)->det->state = V29RX_STATE_DATA;
 
-		FIELD_INT(modem, V29_OBJ_STATUS) &= ~V29_STATUS_IDLE;
-		FIELD_INT(modem, V29_OBJ_STATUS) |= V29_STATUS_DATA;
+		((struct v29_rx *)modem)->result.word &= ~V29_STATUS_IDLE;
+		((struct v29_rx *)modem)->result.word |= V29_STATUS_DATA;
 		break;
 
 	case V29RX_STATE_DATA:
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V29RX_STATE_DATA\n");
 
-		SET_HANDLER(DET(modem), RxHdxIdleV29);
-		FIELD_SHORT(DET(modem), V29DET_STATE) = V29RX_STATE_IDLE;
-		FIELD_SHORT(DET(modem), V29DET_STATE_COUNT) = 0;
-		FIELD_INT(DET(modem), V29DET_INT_0008) = 0;
+		SET_HANDLER(((struct v29_rx *)modem)->det, RxHdxIdleV29);
+		((struct v29_rx *)modem)->det->state = V29RX_STATE_IDLE;
+		((struct v29_rx *)modem)->det->state_count = 0;
+		((struct v29_rx *)modem)->det->int_0008 = 0;
 
-		FIELD_INT(modem, V29_OBJ_STATUS) |= V29_STATUS_IDLE;
-		FIELD_INT(modem, V29_OBJ_STATUS) &= ~V29_STATUS_DATA;
+		((struct v29_rx *)modem)->result.word |= V29_STATUS_IDLE;
+		((struct v29_rx *)modem)->result.word &= ~V29_STATUS_DATA;
 		break;
 
 	case V29RX_STATE_IDLE:
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V29RX_STATE_IDLE\n");
 
-		SET_HANDLER(DET(modem), RxHdxDataV29);
-		FIELD_SHORT(DET(modem), V29DET_STATE) = V29RX_STATE_DATA;
+		SET_HANDLER(((struct v29_rx *)modem)->det, RxHdxDataV29);
+		((struct v29_rx *)modem)->det->state = V29RX_STATE_DATA;
 
-		FIELD_INT(modem, V29_OBJ_STATUS) &= ~V29_STATUS_IDLE;
-		FIELD_INT(modem, V29_OBJ_STATUS) |= V29_STATUS_DATA;
+		((struct v29_rx *)modem)->result.word &= ~V29_STATUS_IDLE;
+		((struct v29_rx *)modem)->result.word |= V29_STATUS_DATA;
 
 		/*
 		 * The IDLE arm alone does NOT seed the block budget, so the
@@ -1462,8 +1445,8 @@ RxNextStateV29(void *modem)
 		 * observable -- but it is the object's, and the four other
 		 * arms all write it.
 		 */
-		FIELD_BYTE(modem, V29_OBJ_STATUS_B0) =
-			FIELD_USHORT(DET(modem), V29DET_RATE) != V29_RATE_7200
+		((struct v29_rx *)modem)->result.byte.status =
+			((unsigned short)((struct v29_rx *)modem)->det->rate) != V29_RATE_7200
 				? V29RX_STATUS_DATA_9600
 				: V29RX_STATUS_DATA_7200;
 		break;
@@ -1471,14 +1454,13 @@ RxNextStateV29(void *modem)
 	default:
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V29RX_DEFAULT, %d\n",
-					     FIELD_SHORT(DET(modem),
-							 V29DET_STATE));
+					     ((struct v29_rx *)modem)->det->state);
 
-		FIELD_INT(modem, V29_OBJ_STATUS) &= ~V29_STATUS_IDLE;
-		FIELD_BYTE(modem, V29_OBJ_STATUS_B0) = V29RX_STATUS_DEFAULT;
-		FIELD_INT(modem, V29_OBJ_STATUS) |= V29_STATUS_ERROR;
-		FIELD_INT(modem, V29_OBJ_STATUS) &= ~V29_STATUS_DATA;
-		FIELD_INT(modem, V29_OBJ_STATUS) &= ~V29_STATUS_CARRIER;
+		((struct v29_rx *)modem)->result.word &= ~V29_STATUS_IDLE;
+		((struct v29_rx *)modem)->result.byte.status = V29RX_STATUS_DEFAULT;
+		((struct v29_rx *)modem)->result.word |= V29_STATUS_ERROR;
+		((struct v29_rx *)modem)->result.word &= ~V29_STATUS_DATA;
+		((struct v29_rx *)modem)->result.word &= ~V29_STATUS_CARRIER;
 		break;
 	}
 }
@@ -1514,14 +1496,14 @@ RxHdxIdleV29(void *modem, short *in, short *out, unsigned short *count)
 	DemodDataV29(modem, in, (unsigned short *)(void *)out, *count);
 	*count = 0;
 
-	FIELD_INT(modem, V29_OBJ_STATUS) &= ~V29_STATUS_CARRIER;
-	FIELD_BYTE(modem, V29_OBJ_STATUS_B0) = V29RX_STATUS_IDLE;
+	((struct v29_rx *)modem)->result.word &= ~V29_STATUS_CARRIER;
+	((struct v29_rx *)modem)->result.byte.status = V29RX_STATUS_IDLE;
 
 	if (CarrierDetectV29(modem))
-		FIELD_INT(modem, V29_OBJ_STATUS) |= V29_STATUS_CARRIER;
+		((struct v29_rx *)modem)->result.word |= V29_STATUS_CARRIER;
 
-	if ((FIELD_INT(modem, V29_OBJ_STATUS) & V29_STATUS_CARRIER) != 0
-	    && RX_FSE(RX(modem))->mse <= V29RX_MSE_RECOVERED) {
+	if ((((struct v29_rx *)modem)->result.word & V29_STATUS_CARRIER) != 0
+	    && ((struct v29_rx *)modem)->rx->fse.mse <= V29RX_MSE_RECOVERED) {
 		RxNextStateV29(modem);
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf(
@@ -1570,28 +1552,28 @@ RxHdxPrtcolV29(void *modem, short *in, short *out, unsigned short *count)
 	*count = 0;
 
 	if (!CarrierDetectV29(modem)) {
-		SET_HANDLER(DET(modem), RxHdxErrorV29);
-		FIELD_SHORT(DET(modem), V29DET_STATE) = V29RX_STATE_ERROR;
-		FIELD_INT(modem, V29_OBJ_STATUS) |= V29_STATUS_ERROR;
-		FIELD_BYTE(modem, V29_OBJ_STATUS_B0) = V29RX_STATUS_LOST;
-		FIELD_INT(modem, V29_OBJ_STATUS) &= ~V29_STATUS_CARRIER;
+		SET_HANDLER(((struct v29_rx *)modem)->det, RxHdxErrorV29);
+		((struct v29_rx *)modem)->det->state = V29RX_STATE_ERROR;
+		((struct v29_rx *)modem)->result.word |= V29_STATUS_ERROR;
+		((struct v29_rx *)modem)->result.byte.status = V29RX_STATUS_LOST;
+		((struct v29_rx *)modem)->result.word &= ~V29_STATUS_CARRIER;
 		return 0;
 	}
 
-	FIELD_INT(modem, V29_OBJ_STATUS) |= V29_STATUS_CARRIER;
-	FIELD_BYTE(modem, V29_OBJ_STATUS_B0) = V29RX_STATUS_TRAIN;
+	((struct v29_rx *)modem)->result.word |= V29_STATUS_CARRIER;
+	((struct v29_rx *)modem)->result.byte.status = V29RX_STATUS_TRAIN;
 
-	FIELD_SHORT(DET(modem), V29DET_STATE_COUNT) =
-		(short)(FIELD_SHORT(DET(modem), V29DET_STATE_COUNT) - 1);
-	if (FIELD_SHORT(DET(modem), V29DET_STATE_COUNT) > 0)
+	((struct v29_rx *)modem)->det->state_count =
+		(short)(((struct v29_rx *)modem)->det->state_count - 1);
+	if (((struct v29_rx *)modem)->det->state_count > 0)
 		return 0;
 
-	FIELD_BYTE(modem, V29_OBJ_STATUS_B0) =
-		FIELD_USHORT(DET(modem), V29DET_RATE) != V29_RATE_7200
+	((struct v29_rx *)modem)->result.byte.status =
+		((unsigned short)((struct v29_rx *)modem)->det->rate) != V29_RATE_7200
 			? V29RX_STATUS_DATA_9600 : V29RX_STATUS_DATA_7200;
 
 	if (GetSNRV29(modem) <= V29RX_SNR_THRESHOLD)
-		FIELD_INT(modem, V29_OBJ_STATUS) |= V29_STATUS_LOW_SNR;
+		((struct v29_rx *)modem)->result.word |= V29_STATUS_LOW_SNR;
 
 	RxNextStateV29(modem);
 
@@ -1628,20 +1610,20 @@ RxHdxEpochDetV29(void *modem, short *in, short *out, unsigned short *count)
 	*count = 0;
 
 	if (!CarrierDetectV29(modem)) {
-		SET_HANDLER(DET(modem), RxHdxErrorV29);
-		FIELD_SHORT(DET(modem), V29DET_STATE) = V29RX_STATE_ERROR;
-		FIELD_INT(modem, V29_OBJ_STATUS) |= V29_STATUS_ERROR;
-		FIELD_BYTE(modem, V29_OBJ_STATUS_B0) = V29RX_STATUS_LOST;
-		FIELD_INT(modem, V29_OBJ_STATUS) &= ~V29_STATUS_CARRIER;
+		SET_HANDLER(((struct v29_rx *)modem)->det, RxHdxErrorV29);
+		((struct v29_rx *)modem)->det->state = V29RX_STATE_ERROR;
+		((struct v29_rx *)modem)->result.word |= V29_STATUS_ERROR;
+		((struct v29_rx *)modem)->result.byte.status = V29RX_STATUS_LOST;
+		((struct v29_rx *)modem)->result.word &= ~V29_STATUS_CARRIER;
 		return 0;
 	}
 
-	FIELD_INT(modem, V29_OBJ_STATUS) |= V29_STATUS_CARRIER;
-	FIELD_BYTE(modem, V29_OBJ_STATUS_B0) = V29RX_STATUS_TRAIN;
+	((struct v29_rx *)modem)->result.word |= V29_STATUS_CARRIER;
+	((struct v29_rx *)modem)->result.byte.status = V29RX_STATUS_TRAIN;
 
-	FIELD_SHORT(DET(modem), V29DET_STATE_COUNT) =
-		(short)(FIELD_SHORT(DET(modem), V29DET_STATE_COUNT) - 1);
-	if (FIELD_SHORT(DET(modem), V29DET_STATE_COUNT) > 0
+	((struct v29_rx *)modem)->det->state_count =
+		(short)(((struct v29_rx *)modem)->det->state_count - 1);
+	if (((struct v29_rx *)modem)->det->state_count > 0
 	    && (short)EpochDetectV29(modem) == 0)
 		return 0;
 
@@ -1669,13 +1651,13 @@ RxHdxEpochDetV29(void *modem, short *in, short *out, unsigned short *count)
 short
 RxHdxStartV29(void *modem, short *in, short *out, unsigned short *count)
 {
-	FIELD_INT(modem, V29_OBJ_STATUS) &= ~V29_STATUS_CARRIER;
-	FIELD_BYTE(modem, V29_OBJ_STATUS_B0) = V29RX_STATUS_START;
+	((struct v29_rx *)modem)->result.word &= ~V29_STATUS_CARRIER;
+	((struct v29_rx *)modem)->result.byte.status = V29RX_STATUS_START;
 
 	DemodDataV29(modem, in, (unsigned short *)(void *)out, *count);
 
 	if (CarrierDetectV29(modem)) {
-		FIELD_INT(modem, V29_OBJ_STATUS) |= V29_STATUS_CARRIER;
+		((struct v29_rx *)modem)->result.word |= V29_STATUS_CARRIER;
 		RxNextStateV29(modem);
 	}
 
@@ -1728,37 +1710,37 @@ V29RX_status(void *modem, void *status)
 	if (status == 0)
 		return 0;
 
-	FIELD_SHORT(status, V29STAT_PROTOCOL) =
-		(short)FIELD_USHORT(modem, V29_OBJ_PROTOCOL);
-	FIELD_SHORT(status, V29STAT_TX_BPS) = 0;
-	FIELD_SHORT(status, V29STAT_ZERO_LO) =
-		(short)FIELD_USHORT(modem, V29_OBJ_BITRATE);
-	FIELD_SHORT(status, 0x06) = (short)
-		((FIELD_INT(modem, V29_OBJ_STATUS) & V29_STATUS_LOW_SNR) == 0);
-	FIELD_SHORT(status, 0x08) = GetSNRV29(modem);
-	FIELD_SHORT(status, 0x0a) = 0;
-	FIELD_SHORT(status, V29STAT_SHORT_0E) = 0;
-	FIELD_SHORT(status, V29STAT_SHORT_10) = 0;
-	FIELD_SHORT(status, V29STAT_SHORT_12) =
-		(short)FIELD_USHORT(modem, V29_OBJ_BITRATE);
+	((struct v29_status_prefix *)status)->protocol =
+		(short)((unsigned short)((struct v29_rx *)modem)->cfg.int_0000);
+	((struct v29_status_prefix *)status)->tx_bps = 0;
+	((struct v29_status_prefix *)status)->short_04 =
+		(short)((unsigned short)((struct v29_rx *)modem)->cfg.bit_rate);
+	((struct v29_status_prefix *)status)->quality = (short)
+		((((struct v29_rx *)modem)->result.word & V29_STATUS_LOW_SNR) == 0);
+	((struct v29_status_prefix *)status)->short_08 = GetSNRV29(modem);
+	((struct v29_status_prefix *)status)->short_0a = 0;
+	((struct v29_status_prefix *)status)->short_0e = 0;
+	((struct v29_status_prefix *)status)->short_10 = 0;
+	((struct v29_status_prefix *)status)->short_12 =
+		(short)((unsigned short)((struct v29_rx *)modem)->cfg.bit_rate);
 
-	FIELD_BYTE(status, V29STAT_FLAGS) &= (unsigned char)~V29STAT_BIT0;
-	FIELD_BYTE(status, V29STAT_FLAGS) = (unsigned char)
-		((FIELD_BYTE(status, V29STAT_FLAGS) & ~V29STAT_BIT1)
-		 | ((FIELD_BYTE(RX(modem), V29RX_FLAGS_0018)
+	((struct v29_status_prefix *)status)->flags &= (unsigned char)~V29STAT_BIT0;
+	((struct v29_status_prefix *)status)->flags = (unsigned char)
+		((((struct v29_status_prefix *)status)->flags & ~V29STAT_BIT1)
+		 | ((((struct v29_rx *)modem)->rx->flags_0018
 		     & V29RX_0018_BIT0) << 1));
-	FIELD_BYTE(status, V29STAT_FLAGS) &= (unsigned char)~V29STAT_BIT2;
-	FIELD_BYTE(status, V29STAT_FLAGS) = (unsigned char)
-		((FIELD_BYTE(status, V29STAT_FLAGS) & ~V29STAT_BIT3)
-		 | ((FIELD_INT(RX(modem), V29RX_INT_0000) == 0) << 3));
-	FIELD_BYTE(status, V29STAT_FLAGS) |= V29STAT_BIT4;
-	FIELD_BYTE(status, V29STAT_FLAGS2) &=
+	((struct v29_status_prefix *)status)->flags &= (unsigned char)~V29STAT_BIT2;
+	((struct v29_status_prefix *)status)->flags = (unsigned char)
+		((((struct v29_status_prefix *)status)->flags & ~V29STAT_BIT3)
+		 | ((((struct v29_rx *)modem)->rx->int_0000 == 0) << 3));
+	((struct v29_status_prefix *)status)->flags |= V29STAT_BIT4;
+	((struct v29_status_prefix *)status)->flags2 &=
 		(unsigned char)~V29STAT_FLAGS2_BIT0;
-	FIELD_BYTE(status, V29STAT_FLAGS) = (unsigned char)
-		((FIELD_BYTE(status, V29STAT_FLAGS) & ~V29STAT_BIT5)
-		 | ((FIELD_INT(RX(modem), V29RX_INT_0020) == 0) << 5));
-	FIELD_BYTE(status, V29STAT_FLAGS) |= V29STAT_BIT6;
-	FIELD_BYTE(status, V29STAT_FLAGS) &= (unsigned char)~V29STAT_BIT7;
+	((struct v29_status_prefix *)status)->flags = (unsigned char)
+		((((struct v29_status_prefix *)status)->flags & ~V29STAT_BIT5)
+		 | ((((struct v29_rx *)modem)->rx->int_0020 == 0) << 5));
+	((struct v29_status_prefix *)status)->flags |= V29STAT_BIT6;
+	((struct v29_status_prefix *)status)->flags &= (unsigned char)~V29STAT_BIT7;
 
 	return 1;
 }
@@ -1775,17 +1757,17 @@ V29RX_control(void *modem, const struct v29rx_control_req *req)
 	if (req == 0)
 		return 0;
 
-	FIELD_INT(modem, V29_OBJ_INT_0008) = req->int_0004;
-	FIELD_INT(DET(modem), V29DET_INT_0008) =
+	((struct v29_rx *)modem)->cfg.int_0008 = req->int_0004;
+	((struct v29_rx *)modem)->det->int_0008 =
 		(req->ctl1 & V29RXCTL_CTL1_BIT4) != 0;
 
 	if (req->ctl1 & V29RXCTL_CTL1_BIT1)
 		V29RX_create(modem, modem);
 
 	if (req->ctl0 & V29RXCTL_CTL0_BIT3)
-		FIELD_INT(RX(modem), V29RX_INT_0000) = 0;
+		((struct v29_rx *)modem)->rx->int_0000 = 0;
 	if (req->ctl0 & V29RXCTL_CTL0_BIT5)
-		FIELD_INT(RX(modem), V29RX_INT_0020) = 0;
+		((struct v29_rx *)modem)->rx->int_0020 = 0;
 
 	return 1;
 }
@@ -1816,15 +1798,15 @@ V29TX_modem(void *modem, unsigned short *in, short *out, unsigned short *count)
 	short budget;
 	short total;
 
-	prm = FIELD_PTR(modem, V29TX_OBJ_PARAMS);
+	prm = ((struct v29_tx_root *)modem)->params;
 
-	FIELD_BYTE(modem, V29TX_OBJ_RESULT_B1) &=
+	((struct v29_tx_root *)modem)->result.byte.flags &=
 		(unsigned char)~V29TX_RESULT_B1_BIT1;
 
-	if (FIELD_INT(prm, V29TXP_INT_0008) == 0)
+	if (((struct v29_tx_params *)prm)->int_0008 == 0)
 		taken = (unsigned short)FIFO_write(
 				(struct fax_fifo *)
-					FIELD_PTR(prm, V29TXP_FIFO),
+					((struct v29_tx_params *)prm)->fifo,
 				in, *count);
 	else
 		taken = *count;
@@ -1834,9 +1816,8 @@ V29TX_modem(void *modem, unsigned short *in, short *out, unsigned short *count)
 	do {
 		short got;
 
-		prm = FIELD_PTR(modem, V29TX_OBJ_PARAMS);
-		got = (*(v29tx_process_fn *)(void *)
-				FIELD(prm, V29TXP_PROCESS))
+		prm = ((struct v29_tx_root *)modem)->params;
+		got = ((struct v29_tx_params *)prm)->handler
 					(modem, in, out, &budget);
 
 		out += got;
@@ -1844,14 +1825,14 @@ V29TX_modem(void *modem, unsigned short *in, short *out, unsigned short *count)
 	} while (budget > 0);
 
 	if (*count != taken) {
-		FIELD_BYTE(modem, V29TX_OBJ_RESULT_B1) |=
+		((struct v29_tx_root *)modem)->result.byte.flags |=
 			V29TX_RESULT_B1_BIT1;
 		/*
 		 * A BYTE store into the low byte of the int this function
 		 * returns -- `movb $0x7,0x1c(%edi)` at 0x0a4724 -- which is
 		 * why it cannot be written through `FIELD_INT`.
 		 */
-		FIELD_BYTE(modem, V29TX_OBJ_RESULT) = V29TX_RESULT_BYTE_07;
+		((struct v29_tx_root *)modem)->result.byte.status = V29TX_RESULT_BYTE_07;
 	}
 
 	*count = (unsigned short)total;
@@ -1860,7 +1841,7 @@ V29TX_modem(void *modem, unsigned short *in, short *out, unsigned short *count)
 	 * representation avoids a typed-alias read and keeps the count store
 	 * ahead of the result load, as in the original object.
 	 */
-	memcpy(&result, FIELD(modem, V29TX_OBJ_RESULT), sizeof result);
+	memcpy(&result, &((struct v29_tx_root *)modem)->result.word, sizeof result);
 
 	return result;
 }
@@ -1926,18 +1907,18 @@ V29TX_modem(void *modem, unsigned short *in, short *out, unsigned short *count)
 void
 TxNextStateV29(void *modem)
 {
-	void *prm = FIELD_PTR(modem, V29TX_OBJ_PARAMS);
-	short state = FIELD_SHORT(prm, V29TXP_STATE);
+	void *prm = ((struct v29_tx_root *)modem)->params;
+	short state = ((struct v29_tx_params *)prm)->state;
 
 	switch (state) {
 	case V29TX_STATE_START:
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V29TX_STATE_START\n");
-		FIELD_SHORT(prm, V29TXP_SHORT_0016) = 0x30;
-		*(v29tx_process_fn *)(void *)FIELD(prm, V29TXP_PROCESS) =
+		((struct v29_tx_params *)prm)->short_0016 = 0x30;
+		((struct v29_tx_params *)prm)->handler =
 			TxHdxQuietV29;
-		FIELD_SHORT(prm, V29TXP_STATE) = V29TX_STATE_QUIET;
-		*FIELD(modem, V29TX_OBJ_RESULT_B2) &=
+		((struct v29_tx_params *)prm)->state = V29TX_STATE_QUIET;
+		((struct v29_tx_root *)modem)->result.byte.flags2 &=
 			(unsigned char)~V29TX_RESULT_B2_BIT0;
 		break;
 
@@ -1953,27 +1934,27 @@ TxNextStateV29(void *modem)
 			req.gen = &gen;
 			req.det = SGD_CTL.det;
 			SGD_control((struct sgd *)
-					FIELD_PTR(prm, V29TXP_SGD), &req);
+					((struct v29_tx_params *)prm)->sgd, &req);
 		}
 		SetEncoderV29(modem, 1);
-		prm = FIELD_PTR(modem, V29TX_OBJ_PARAMS);
-		FIELD_SHORT(prm, V29TXP_SHORT_0016) = 0x80;
-		*(v29tx_process_fn *)(void *)FIELD(prm, V29TXP_PROCESS) =
+		prm = ((struct v29_tx_root *)modem)->params;
+		((struct v29_tx_params *)prm)->short_0016 = 0x80;
+		((struct v29_tx_params *)prm)->handler =
 			TxHdxABV29;
-		FIELD_SHORT(prm, V29TXP_STATE) = V29TX_STATE_ALT;
-		*FIELD(modem, V29TX_OBJ_RESULT_B2) &=
+		((struct v29_tx_params *)prm)->state = V29TX_STATE_ALT;
+		((struct v29_tx_root *)modem)->result.byte.flags2 &=
 			(unsigned char)~V29TX_RESULT_B2_BIT0;
 		break;
 
 	case V29TX_STATE_ALT:
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V29TX_STATE_ALT\n");
-		FIELD_SHORT(prm, V29TXP_SHORT_0016) = 0x180;
-		*(v29tx_process_fn *)(void *)FIELD(prm, V29TXP_PROCESS) =
+		((struct v29_tx_params *)prm)->short_0016 = 0x180;
+		((struct v29_tx_params *)prm)->handler =
 			TxHdxEQCondV29;
-		FIELD_SHORT(prm, V29TXP_STATE) = V29TX_STATE_EQCOND;
-		FIELD_SHORT(prm, V29SCRAM_SR) = 0x2a;
-		*FIELD(modem, V29TX_OBJ_RESULT_B2) &=
+		((struct v29_tx_params *)prm)->state = V29TX_STATE_EQCOND;
+		((struct v29_tx_params *)prm)->scram_sr = 0x2a;
+		((struct v29_tx_root *)modem)->result.byte.flags2 &=
 			(unsigned char)~V29TX_RESULT_B2_BIT0;
 		break;
 
@@ -1985,74 +1966,73 @@ TxNextStateV29(void *modem)
 			struct sgd_control_req req;
 
 			gen.data_word = (unsigned short)
-				V29TX_PATTERN_SCR1[FIELD_SHORT(prm,
-								V29TXP_RATE)];
+				V29TX_PATTERN_SCR1[((struct v29_tx_params *)prm)->rate];
 			gen.word_syms = 1;
 			req.gen = &gen;
 			req.det = SGD_CTL.det;
 			SGD_control((struct sgd *)
-					FIELD_PTR(prm, V29TXP_SGD), &req);
+					((struct v29_tx_params *)prm)->sgd, &req);
 		}
 		SeedScramblerV29(modem, 0);
 		SetEncoderV29(modem, 0);
-		prm = FIELD_PTR(modem, V29TX_OBJ_PARAMS);
-		FIELD_SHORT(prm, V29TXP_SHORT_0016) = 0x30;
-		*(v29tx_process_fn *)(void *)FIELD(prm, V29TXP_PROCESS) =
+		prm = ((struct v29_tx_root *)modem)->params;
+		((struct v29_tx_params *)prm)->short_0016 = 0x30;
+		((struct v29_tx_params *)prm)->handler =
 			TxHdxSCR1V29;
-		FIELD_SHORT(prm, V29TXP_STATE) = V29TX_STATE_SCR1;
-		*FIELD(modem, V29TX_OBJ_RESULT_B2) &=
+		((struct v29_tx_params *)prm)->state = V29TX_STATE_SCR1;
+		((struct v29_tx_root *)modem)->result.byte.flags2 &=
 			(unsigned char)~V29TX_RESULT_B2_BIT0;
 		break;
 
 	case V29TX_STATE_SCR1:
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V29TX_STATE_SCR1\n");
-		FIELD_SHORT(prm, V29TXP_SHORT_0016) = 1;
-		*(v29tx_process_fn *)(void *)FIELD(prm, V29TXP_PROCESS) =
+		((struct v29_tx_params *)prm)->short_0016 = 1;
+		((struct v29_tx_params *)prm)->handler =
 			TxHdxDataV29;
-		FIELD_SHORT(prm, V29TXP_STATE) = V29TX_STATE_DATA;
-		*FIELD(modem, V29TX_OBJ_RESULT_B2) &=
+		((struct v29_tx_params *)prm)->state = V29TX_STATE_DATA;
+		((struct v29_tx_root *)modem)->result.byte.flags2 &=
 			(unsigned char)~V29TX_RESULT_B2_BIT0;
-		*FIELD(modem, V29TX_OBJ_RESULT_B1) |= V29TX_RESULT_B1_BIT0;
+		((struct v29_tx_root *)modem)->result.byte.flags |= V29TX_RESULT_B1_BIT0;
 		return;
 
 	case V29TX_STATE_DATA:
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V29TX_STATE_DATA\n");
-		FIELD_SHORT(prm, V29TXP_SHORT_0016) = 0;
-		*(v29tx_process_fn *)(void *)FIELD(prm, V29TXP_PROCESS) =
+		((struct v29_tx_params *)prm)->short_0016 = 0;
+		((struct v29_tx_params *)prm)->handler =
 			TxHdxIdleV29;
-		FIELD_SHORT(prm, V29TXP_STATE) = V29TX_STATE_IDLE;
-		*FIELD(modem, V29TX_OBJ_RESULT_B2) |= V29TX_RESULT_B2_BIT0;
-		*FIELD(modem, V29TX_OBJ_RESULT_B1) &=
+		((struct v29_tx_params *)prm)->state = V29TX_STATE_IDLE;
+		((struct v29_tx_root *)modem)->result.byte.flags2 |= V29TX_RESULT_B2_BIT0;
+		((struct v29_tx_root *)modem)->result.byte.flags &=
 			(unsigned char)~V29TX_RESULT_B1_BIT0;
 		return;
 
 	case V29TX_STATE_IDLE:
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V29TX_STATE_IDLE\n");
-		FIELD_SHORT(prm, V29TXP_SHORT_0016) = 0;
-		*(v29tx_process_fn *)(void *)FIELD(prm, V29TXP_PROCESS) =
+		((struct v29_tx_params *)prm)->short_0016 = 0;
+		((struct v29_tx_params *)prm)->handler =
 			TxHdxStartV29;
-		FIELD_SHORT(prm, V29TXP_STATE) = V29TX_STATE_START;
-		*FIELD(modem, V29TX_OBJ_RESULT_B2) &=
+		((struct v29_tx_params *)prm)->state = V29TX_STATE_START;
+		((struct v29_tx_root *)modem)->result.byte.flags2 &=
 			(unsigned char)~V29TX_RESULT_B2_BIT0;
 		break;
 
 	default:
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V29TX_DEFAULT, %d\n", state);
-		*FIELD(modem, V29TX_OBJ_RESULT_B2) &=
+		((struct v29_tx_root *)modem)->result.byte.flags2 &=
 			(unsigned char)~V29TX_RESULT_B2_BIT0;
-		FIELD_BYTE(modem, V29TX_OBJ_RESULT) = V29TX_STATUS_DEFAULT;
-		*FIELD(modem, V29TX_OBJ_RESULT_B1) = (unsigned char)
-			((*FIELD(modem, V29TX_OBJ_RESULT_B1)
+		((struct v29_tx_root *)modem)->result.byte.status = V29TX_STATUS_DEFAULT;
+		((struct v29_tx_root *)modem)->result.byte.flags = (unsigned char)
+			((((struct v29_tx_root *)modem)->result.byte.flags
 			  | V29TX_RESULT_B1_BIT1)
 			 & ~V29TX_RESULT_B1_BIT0);
 		break;
 	}
 
-	*FIELD(modem, V29TX_OBJ_RESULT_B1) &=
+	((struct v29_tx_root *)modem)->result.byte.flags &=
 		(unsigned char)~V29TX_RESULT_B1_BIT0;
 }
 
@@ -2081,11 +2061,11 @@ TxHdxStartV29(void *modem, unsigned short *in, short *out, short *budget)
 short
 TxHdxIdleV29(void *modem, unsigned short *in, short *out, short *budget)
 {
-	void *prm = FIELD_PTR(modem, V29TX_OBJ_PARAMS);
+	void *prm = ((struct v29_tx_root *)modem)->params;
 	struct fax_fifo *fifo =
-		(struct fax_fifo *)FIELD_PTR(prm, V29TXP_FIFO);
+		(struct fax_fifo *)((struct v29_tx_params *)prm)->fifo;
 
-	FIELD_BYTE(modem, V29TX_OBJ_RESULT) = V29TX_STATUS_IDLE;
+	((struct v29_tx_root *)modem)->result.byte.status = V29TX_STATUS_IDLE;
 
 	if (fifo->count == 0) {
 		unsigned short b = (unsigned short)*budget;
@@ -2110,14 +2090,14 @@ TxHdxIdleV29(void *modem, unsigned short *in, short *out, short *budget)
 short
 TxHdxQuietV29(void *modem, unsigned short *in, short *out, short *budget)
 {
-	void *prm = FIELD_PTR(modem, V29TX_OBJ_PARAMS);
+	void *prm = ((struct v29_tx_root *)modem)->params;
 	short remaining;
 	unsigned short n;
 	short nsamples;
 
-	FIELD_BYTE(modem, V29TX_OBJ_RESULT) = 1;
+	((struct v29_tx_root *)modem)->result.byte.status = 1;
 
-	remaining = FIELD_SHORT(prm, V29TXP_SHORT_0016);
+	remaining = ((struct v29_tx_params *)prm)->short_0016;
 	if (remaining <= 0) {
 		TxNextStateV29(modem);
 		return 0;
@@ -2125,7 +2105,7 @@ TxHdxQuietV29(void *modem, unsigned short *in, short *out, short *budget)
 
 	n = (remaining <= (short)*budget) ? (unsigned short)remaining
 					   : (unsigned short)*budget;
-	FIELD_SHORT(prm, V29TXP_SHORT_0016) = (short)(remaining - n);
+	((struct v29_tx_params *)prm)->short_0016 = (short)(remaining - n);
 
 	nsamples = (short)TxNoCarrierV29(modem, in, out, n);
 	*budget = (short)((unsigned short)*budget - n);
@@ -2146,14 +2126,14 @@ TxHdxQuietV29(void *modem, unsigned short *in, short *out, short *budget)
 short
 TxHdxABV29(void *modem, unsigned short *in, short *out, short *budget)
 {
-	void *prm = FIELD_PTR(modem, V29TX_OBJ_PARAMS);
+	void *prm = ((struct v29_tx_root *)modem)->params;
 	short remaining;
 	unsigned short n;
 	short nsamples;
 
-	FIELD_BYTE(modem, V29TX_OBJ_RESULT) = 1;
+	((struct v29_tx_root *)modem)->result.byte.status = 1;
 
-	remaining = FIELD_SHORT(prm, V29TXP_SHORT_0016);
+	remaining = ((struct v29_tx_params *)prm)->short_0016;
 	if (remaining <= 0) {
 		TxNextStateV29(modem);
 		return 0;
@@ -2161,9 +2141,9 @@ TxHdxABV29(void *modem, unsigned short *in, short *out, short *budget)
 
 	n = (remaining <= (short)*budget) ? (unsigned short)remaining
 					   : (unsigned short)*budget;
-	FIELD_SHORT(prm, V29TXP_SHORT_0016) = (short)(remaining - n);
+	((struct v29_tx_params *)prm)->short_0016 = (short)(remaining - n);
 
-	SGD_symbol_gen((struct sgd *)FIELD_PTR(prm, V29TXP_SGD), in, (short)n);
+	SGD_symbol_gen((struct sgd *)((struct v29_tx_params *)prm)->sgd, in, (short)n);
 	nsamples = (short)ModDataV29(modem, in, out, n);
 	*budget = (short)((unsigned short)*budget - n);
 
@@ -2190,16 +2170,16 @@ TxHdxABV29(void *modem, unsigned short *in, short *out, short *budget)
 short
 TxHdxEQCondV29(void *modem, unsigned short *in, short *out, short *budget)
 {
-	void *prm = FIELD_PTR(modem, V29TX_OBJ_PARAMS);
+	void *prm = ((struct v29_tx_root *)modem)->params;
 	short remaining;
 	unsigned short n;
 	short reg;
 	unsigned short i;
 	short nsamples;
 
-	FIELD_BYTE(modem, V29TX_OBJ_RESULT) = 1;
+	((struct v29_tx_root *)modem)->result.byte.status = 1;
 
-	remaining = FIELD_SHORT(prm, V29TXP_SHORT_0016);
+	remaining = ((struct v29_tx_params *)prm)->short_0016;
 	if (remaining <= 0) {
 		TxNextStateV29(modem);
 		return 0;
@@ -2207,9 +2187,9 @@ TxHdxEQCondV29(void *modem, unsigned short *in, short *out, short *budget)
 
 	n = (remaining <= (short)*budget) ? (unsigned short)remaining
 					   : (unsigned short)*budget;
-	FIELD_SHORT(prm, V29TXP_SHORT_0016) = (short)(remaining - n);
+	((struct v29_tx_params *)prm)->short_0016 = (short)(remaining - n);
 
-	reg = FIELD_SHORT(prm, V29SCRAM_SR);
+	reg = ((struct v29_tx_params *)prm)->scram_sr;
 	for (i = 0; i < n; i++) {
 		unsigned short x = (unsigned short)reg;
 		int bit0 = x & 1;
@@ -2219,7 +2199,7 @@ TxHdxEQCondV29(void *modem, unsigned short *in, short *out, short *budget)
 
 		in[i] = (unsigned short)(bit0 ? V29_TRAIN_POINT_16 : 0);
 	}
-	FIELD_SHORT(prm, V29SCRAM_SR) = reg;
+	((struct v29_tx_params *)prm)->scram_sr = reg;
 
 	nsamples = (short)ModDataV29(modem, in, out, n);
 	*budget = (short)((unsigned short)*budget - n);
@@ -2238,14 +2218,14 @@ TxHdxEQCondV29(void *modem, unsigned short *in, short *out, short *budget)
 short
 TxHdxSCR1V29(void *modem, unsigned short *in, short *out, short *budget)
 {
-	void *prm = FIELD_PTR(modem, V29TX_OBJ_PARAMS);
+	void *prm = ((struct v29_tx_root *)modem)->params;
 	short remaining;
 	unsigned short n;
 	short nsamples;
 
-	FIELD_BYTE(modem, V29TX_OBJ_RESULT) = 1;
+	((struct v29_tx_root *)modem)->result.byte.status = 1;
 
-	remaining = FIELD_SHORT(prm, V29TXP_SHORT_0016);
+	remaining = ((struct v29_tx_params *)prm)->short_0016;
 	if (remaining <= 0) {
 		TxNextStateV29(modem);
 		return 0;
@@ -2253,9 +2233,9 @@ TxHdxSCR1V29(void *modem, unsigned short *in, short *out, short *budget)
 
 	n = (remaining <= (short)*budget) ? (unsigned short)remaining
 					   : (unsigned short)*budget;
-	FIELD_SHORT(prm, V29TXP_SHORT_0016) = (short)(remaining - n);
+	((struct v29_tx_params *)prm)->short_0016 = (short)(remaining - n);
 
-	SGD_symbol_gen((struct sgd *)FIELD_PTR(prm, V29TXP_SGD), in, (short)n);
+	SGD_symbol_gen((struct sgd *)((struct v29_tx_params *)prm)->sgd, in, (short)n);
 	ScrambleDataV29(modem, in, n);
 	nsamples = (short)ModDataV29(modem, in, out, n);
 	*budget = (short)((unsigned short)*budget - n);
@@ -2284,32 +2264,32 @@ TxHdxSCR1V29(void *modem, unsigned short *in, short *out, short *budget)
 short
 TxHdxDataV29(void *modem, unsigned short *in, short *out, short *budget)
 {
-	void *prm = FIELD_PTR(modem, V29TX_OBJ_PARAMS);
+	void *prm = ((struct v29_tx_root *)modem)->params;
 	unsigned short req;
 	unsigned short taken;
 	short nsamples;
 
-	FIELD_BYTE(modem, V29TX_OBJ_RESULT) = 0;
+	((struct v29_tx_root *)modem)->result.byte.status = 0;
 
-	if (FIELD_SHORT(prm, V29TXP_SHORT_0016) != 0) {
-		short which = FIELD_SHORT(prm, V29TXP_RATE);
+	if (((struct v29_tx_params *)prm)->short_0016 != 0) {
+		short which = ((struct v29_tx_params *)prm)->rate;
 
-		FIELD_SHORT(prm, V29TXP_SHORT_0016) = 0;
+		((struct v29_tx_params *)prm)->short_0016 = 0;
 
 		if (which == V29_RATE_7200)
-			FIELD_BYTE(modem, V29TX_OBJ_RESULT) =
+			((struct v29_tx_root *)modem)->result.byte.status =
 				V29TX_STATUS_DATA_RATE_7200;
 		else if (which == V29_RATE_9600)
-			FIELD_BYTE(modem, V29TX_OBJ_RESULT) =
+			((struct v29_tx_root *)modem)->result.byte.status =
 				V29TX_STATUS_DATA_RATE_9600;
 		else
-			FIELD_BYTE(modem, V29TX_OBJ_RESULT) =
+			((struct v29_tx_root *)modem)->result.byte.status =
 				V29TX_STATUS_DEFAULT;
 	}
 
 	req = (unsigned short)*budget;
 	taken = (unsigned short)
-		FIFO_read((struct fax_fifo *)FIELD_PTR(prm, V29TXP_FIFO),
+		FIFO_read((struct fax_fifo *)((struct v29_tx_params *)prm)->fifo,
 			  in, req);
 
 	if (req <= taken) {
@@ -2319,7 +2299,7 @@ TxHdxDataV29(void *modem, unsigned short *in, short *out, short *budget)
 		return nsamples;
 	}
 
-	if (FIELD_INT(prm, V29TXP_INT_0008) != 0) {
+	if (((struct v29_tx_params *)prm)->int_0008 != 0) {
 		*budget = (short)(req - taken);
 		ScrambleDataV29(modem, in, taken);
 		nsamples = (short)ModDataV29(modem, in, out, taken);
@@ -2327,8 +2307,8 @@ TxHdxDataV29(void *modem, unsigned short *in, short *out, short *budget)
 		return nsamples;
 	}
 
-	*FIELD(modem, V29TX_OBJ_RESULT_B1) |= V29TX_RESULT_B1_BIT1;
-	FIELD_BYTE(modem, V29TX_OBJ_RESULT) = V29TX_STATUS_UNDERRUN;
+	((struct v29_tx_root *)modem)->result.byte.flags |= V29TX_RESULT_B1_BIT1;
+	((struct v29_tx_root *)modem)->result.byte.status = V29TX_STATUS_UNDERRUN;
 	ScrambleDataV29(modem, in, req);
 	nsamples = (short)ModDataV29(modem, in, out, req);
 	*budget = (short)((unsigned short)*budget - req);
@@ -2350,18 +2330,18 @@ V29TX_control(void *fp, const struct v29tx_control_req *req)
 	if (req == 0)
 		return 0;
 
-	prm = FIELD_PTR(fp, V29TX_OBJ_PARAMS);
-	rate = FIELD_SHORT(prm, V29TXP_RATE);
+	prm = ((struct v29_tx_root *)fp)->params;
+	rate = ((struct v29_tx_params *)prm)->rate;
 
-	V29TX(fp)->pps.cfg.scale = req->int_0008;
-	V29TX(fp)->pps.cfg.scale = V29TX_PPS_SCALE[rate] * req->int_0008;
+	((struct v29_tx_root *)fp)->tx->pps.cfg.scale = req->int_0008;
+	((struct v29_tx_root *)fp)->tx->pps.cfg.scale = V29TX_PPS_SCALE[rate] * req->int_0008;
 
 	((struct v29tx_cfg *)fp)->int_0008 = req->int_0004;
 
 	if (req->ctl0 & V29TXCTL_CTL0_BIT2)
-		FIELD_BYTE(fp, V29TXS_FLAGS_10) |= V29TXS_10_BIT2;
+		(*(unsigned char *)(void *)&((struct v29_tx_root *)fp)->cfg.flags) |= V29TXS_10_BIT2;
 
-	FIELD_INT(prm, V29TXP_INT_0008) =
+	((struct v29_tx_params *)prm)->int_0008 =
 		(req->ctl1 & V29TXCTL_CTL1_BIT4) != 0;
 
 	if (req->ctl1 & V29TXCTL_CTL1_BIT1)
@@ -2400,13 +2380,13 @@ V29TX_status(void *tx, void *status)
 	if (status == 0)
 		return 0;
 
-	FIELD_SHORT(status, V29STAT_PROTOCOL) = FIELD_SHORT(tx, V29TXS_PROTOCOL);
-	FIELD_SHORT(status, V29STAT_TX_BPS) = FIELD_SHORT(tx, V29TXS_BITRATE);
-	FIELD_SHORT(status, 0x04) = 0;
-	FIELD_SHORT(status, 0x06) = 0;
-	FIELD_SHORT(status, 0x08) = 0;
-	FIELD_SHORT(status, 0x0a) = 0;
-	FIELD_SHORT(status, 0x0c) = 0;
+	((struct v29_status_prefix *)status)->protocol = ((struct v29_tx_root *)tx)->cfg.protocol;
+	((struct v29_status_prefix *)status)->tx_bps = ((struct v29_tx_root *)tx)->cfg.bitrate;
+	((struct v29_status_prefix *)status)->short_04 = 0;
+	((struct v29_status_prefix *)status)->quality = 0;
+	((struct v29_status_prefix *)status)->short_08 = 0;
+	((struct v29_status_prefix *)status)->short_0a = 0;
+	((struct v29_status_prefix *)status)->short_0c = 0;
 	/*
 	 * `tx + 0x02` IS READ TWICE.  The object loads it again at 0xa506a
 	 * rather than reusing the copy it made at 0xa5044, which it could only
@@ -2414,13 +2394,13 @@ V29TX_status(void *tx, void *status)
 	 * unrelated parameters and may overlap.  Two statements, therefore, and
 	 * not one value used twice.
 	 */
-	FIELD_SHORT(status, V29STAT_SHORT_10) = FIELD_SHORT(tx, V29TXS_BITRATE);
-	FIELD_SHORT(status, V29STAT_SHORT_12) = 0;
+	((struct v29_status_prefix *)status)->short_10 = ((struct v29_tx_root *)tx)->cfg.bitrate;
+	((struct v29_status_prefix *)status)->short_12 = 0;
 
-	FIELD_BYTE(status, V29STAT_FLAGS) &= (unsigned char)~V29STAT_FLAGS_LOW2;
-	FIELD_BYTE(status, V29STAT_FLAGS2) &= (unsigned char)~V29STAT_FLAGS2_BIT0;
-	FIELD_BYTE(status, V29STAT_FLAGS) =
-		(unsigned char)(FIELD_BYTE(tx, V29TXS_FLAGS_10) & V29TXS_10_BIT2);
+	((struct v29_status_prefix *)status)->flags &= (unsigned char)~V29STAT_FLAGS_LOW2;
+	((struct v29_status_prefix *)status)->flags2 &= (unsigned char)~V29STAT_FLAGS2_BIT0;
+	((struct v29_status_prefix *)status)->flags =
+		(unsigned char)((*(unsigned char *)(void *)&((struct v29_tx_root *)tx)->cfg.flags) & V29TXS_10_BIT2);
 
 	return 1;
 }
@@ -2456,55 +2436,55 @@ DemodDataV29(void *modem, short *in, unsigned short *out, unsigned short count)
 	unsigned short n;
 	void *rx;
 
-	FPM_AGC_agc(RX_AGC(RX(modem)), in, count);
+	FPM_AGC_agc(&((struct v29_rx *)modem)->rx->agc, in, count);
 	/* Not the object's `%eax`; the same value.  D1036. */
-	signal = RX_AGC(RX(modem))->signal;
+	signal = ((struct v29_rx *)modem)->rx->agc.signal;
 
-	if (FIELD_SHORT(DET(modem), V29DET_STATE) == 0) {
-		short *buf = (short *)FIELD_PTR(DET(modem), V29DET_BUF);
+	if (((struct v29_rx *)modem)->det->state == 0) {
+		short *buf = (short *)((struct v29_rx *)modem)->det->buf;
 		unsigned short i;
 
 		for (i = 0; i < count; i++)
 			buf[i] = (short)(in[i] >> 1);
 
 		FPM_TONE_kill((struct fpm_tone *)
-				FIELD_PTR(DET(modem), V29DET_TONE),
-			      (short *)FIELD_PTR(DET(modem), V29DET_BUF),
+				((struct v29_rx *)modem)->det->tone,
+			      (short *)((struct v29_rx *)modem)->det->buf,
 			      (short)count);
 
 		if (FPM_MTD_detect((struct fpm_mtd *)
-					FIELD_PTR(DET(modem), V29DET_MTD),
+					((struct v29_rx *)modem)->det->mtd,
 				   (const short *)
-					FIELD_PTR(DET(modem), V29DET_BUF),
+					((struct v29_rx *)modem)->det->buf,
 				   (short)count) != 0)
 			return 0;
 	}
 
 	n = (unsigned short)FPM_MRF_filter(
-			RX_MRF(RX(modem)),
+			&((struct v29_rx *)modem)->rx->mrf,
 			in,
-			(short *)FIELD_PTR(RX(modem), V29RX_BUF_MRF),
+			(short *)((struct v29_rx *)modem)->rx->buf_mrf,
 			(short)count);
 
-	rx = RX(modem);
-	RX_SRE(rx)->adapt = signal & FIELD_INT(rx, V29RX_INT_0004);
+	rx = ((struct v29_rx *)modem)->rx;
+	((struct v29_rx_block *)rx)->sre.adapt = signal & ((struct v29_rx_block *)rx)->int_0004;
 
-	n = FPM_SRE_recover(RX_SRE(RX(modem)),
-			    (const short *)FIELD_PTR(RX(modem), V29RX_BUF_MRF),
-			    (short *)FIELD_PTR(RX(modem), V29RX_BUF_SRE),
+	n = FPM_SRE_recover(&((struct v29_rx *)modem)->rx->sre,
+			    (const short *)((struct v29_rx *)modem)->rx->buf_mrf,
+			    (short *)((struct v29_rx *)modem)->rx->buf_sre,
 			    (short)n);
 
 	if (n > V29RX_SRE_MAX && DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("ERROR: SRE buffer violation(%d)", n);
 
-	rx = RX(modem);
-	RX_FSE(rx)->tilt_on = 0;
-	RX_FSE(rx)->pll_on = signal & FIELD_INT(rx, V29RX_INT_0008);
-	RX_FSE(rx)->lms_on = signal & FIELD_INT(rx, V29RX_INT_0020);
+	rx = ((struct v29_rx *)modem)->rx;
+	((struct v29_rx_block *)rx)->fse.tilt_on = 0;
+	((struct v29_rx_block *)rx)->fse.pll_on = signal & ((struct v29_rx_block *)rx)->int_0008;
+	((struct v29_rx_block *)rx)->fse.lms_on = signal & ((struct v29_rx_block *)rx)->int_0020;
 
-	return FPM_FSE_receive(RX_FSE(RX(modem)),
+	return FPM_FSE_receive(&((struct v29_rx *)modem)->rx->fse,
 			       (const short *)
-				FIELD_PTR(RX(modem), V29RX_BUF_SRE),
+				((struct v29_rx *)modem)->rx->buf_sre,
 			       out, n);
 }
 
@@ -2532,7 +2512,7 @@ void
 DescrambleDataV29(void *modem, unsigned short *data, unsigned short count)
 {
 	SDM_descrambler((struct fpm_sdm *)(void *)
-			FIELD(FIELD_PTR(modem, V29_OBJ_RX), V29RX_SDM),
+			&((struct v29_rx *)modem)->rx->sdm,
 			data, count);
 }
 
@@ -2548,9 +2528,9 @@ DescrambleDataV29(void *modem, unsigned short *data, unsigned short count)
 int
 CarrierDetectV29(void *modem)
 {
-	void *rx = RX(modem);
+	void *rx = ((struct v29_rx *)modem)->rx;
 
-	return RX_AGC(rx)->signal & RX_SRE(rx)->active;
+	return ((struct v29_rx_block *)rx)->agc.signal & ((struct v29_rx_block *)rx)->sre.active;
 }
 
 /*
@@ -2580,52 +2560,51 @@ CarrierDetectV29(void *modem)
 int
 DataCarrierDetectV29(void *modem, short *in, unsigned short count)
 {
-	void *rx = RX(modem);
-	void *det = DET(modem);
-	int detected = (short)(RX_SRE(rx)->active & RX_AGC(rx)->signal);
+	void *rx = ((struct v29_rx *)modem)->rx;
+	void *det = ((struct v29_rx *)modem)->det;
+	int detected = (short)(((struct v29_rx_block *)rx)->sre.active & ((struct v29_rx_block *)rx)->agc.signal);
 	short rms;
 
-	if (FIELD_SHORT(det, V29DET_GATE_1C) == 0) {
-		if (FIELD_SHORT(rx, V29RX_SHORT_0046) > 999)
-			detected &= RX_FSE(rx)->mse
+	if (((struct v29_rx_detector *)det)->gate_1c == 0) {
+		if ((short)((struct v29_rx_block *)rx)->dec.sym_count > 999)
+			detected &= ((struct v29_rx_block *)rx)->fse.mse
 					<= V29RX_DEC_ERROR_MAX;
 
-		if (RX_FSE(rx)->mse > V29RX_DEC_ERROR_MAX
+		if (((struct v29_rx_block *)rx)->fse.mse > V29RX_DEC_ERROR_MAX
 		    && DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf(
 				"V29 Decoder error too big... no carrier\n");
 	} else {
-		if ((detected & (RX_FSE(rx)->mse
+		if ((detected & (((struct v29_rx_block *)rx)->fse.mse
 				 <= V29RX_DEC_ERROR_MAX)) == 0)
-			FIELD_SHORT(det, V29DET_V21_ENABLE) = 1;
+			((struct v29_rx_detector *)det)->v21_enable = 1;
 
 		detected = 1;
 
-		if (FIELD_SHORT(det, V29DET_V21_ENABLE) != 0) {
-			short *buf = (short *)FIELD_PTR(det, V29DET_V21_BUF);
+		if (((struct v29_rx_detector *)det)->v21_enable != 0) {
+			short *buf = (short *)((struct v29_rx_detector *)det)->v21_buf;
 			short i;
 
 			for (i = 0; i < (int)count; i++)
 				buf[i] = in[i];
 
 			FPM_AGC_agc((struct fpm_agc *)(void *)
-					FIELD(det, V29DET_V21_AGC),
-				    (short *)FIELD_PTR(det, V29DET_V21_BUF),
+					&((struct v29_rx_detector *)det)->v21_agc,
+				    (short *)((struct v29_rx_detector *)det)->v21_buf,
 				    count);
 
-			det = DET(modem);
+			det = ((struct v29_rx *)modem)->det;
 			if (FPM_MTD_detect((struct fpm_mtd *)
-						FIELD_PTR(det, V29DET_V21_MTD),
+						((struct v29_rx_detector *)det)->v21_mtd,
 					   (const short *)
-						FIELD_PTR(det, V29DET_V21_BUF),
+						((struct v29_rx_detector *)det)->v21_buf,
 					   (short)count) != 0)
-				FIELD_SHORT(DET(modem), V29DET_V21_SAMPLES) = 0;
+				((struct v29_rx *)modem)->det->v21_samples = 0;
 			else
-				FIELD_SHORT(det, V29DET_V21_SAMPLES) =
-					(short)(FIELD_SHORT(det,
-						V29DET_V21_SAMPLES) + count);
+				((struct v29_rx_detector *)det)->v21_samples =
+					(short)(((struct v29_rx_detector *)det)->v21_samples + count);
 
-			if (FIELD_SHORT(det, V29DET_V21_SAMPLES)
+			if (((struct v29_rx_detector *)det)->v21_samples
 			    > V29DET_V21_THRESHOLD) {
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
@@ -2633,32 +2612,32 @@ DataCarrierDetectV29(void *modem, short *in, unsigned short count)
 				detected = 0;
 			}
 
-			rx = RX(modem);
+			rx = ((struct v29_rx *)modem)->rx;
 		}
 	}
 
-	if (FIELD_SHORT(rx, V29RX_SHORT_4F64) == 0)
+	if (((struct v29_rx_block *)rx)->short_4f64 == 0)
 		return detected;
 
 	rms = FPM_rms(in, count);
-	rx = RX(modem);
+	rx = ((struct v29_rx *)modem)->rx;
 
-	if (rms < ((FIELD_SHORT(rx, V29RX_RMS_REF) * V29RX_RMS_DROP_Q15)
+	if (rms < ((((struct v29_rx_block *)rx)->rms_ref * V29RX_RMS_DROP_Q15)
 		   >> V29RX_RMS_SHIFT)) {
 		detected = 0;
 		if (DSPLIB_DEBUG_ON()) {
 			dsplibs_debug_printf(
 				"sudden energy drop > 8[dB], no carrier");
-			rx = RX(modem);
+			rx = ((struct v29_rx *)modem)->rx;
 		}
 	}
 
-	if ((short)(FIELD_SHORT(rx, V29RX_RMS_N) + 1) == 2) {
-		FIELD_SHORT(rx, V29RX_RMS_REF) = rms;
-		FIELD_SHORT(rx, V29RX_RMS_N) = 0;
+	if ((short)(((struct v29_rx_block *)rx)->rms_n + 1) == 2) {
+		((struct v29_rx_block *)rx)->rms_ref = rms;
+		((struct v29_rx_block *)rx)->rms_n = 0;
 	} else {
-		FIELD_SHORT(rx, V29RX_RMS_N) =
-			(short)(FIELD_SHORT(rx, V29RX_RMS_N) + 1);
+		((struct v29_rx_block *)rx)->rms_n =
+			(short)(((struct v29_rx_block *)rx)->rms_n + 1);
 	}
 
 	return detected;
@@ -2684,43 +2663,43 @@ DataCarrierDetectV29(void *modem, short *in, unsigned short count)
 int
 QualityDetectV29(void *modem)
 {
-	void *rx = RX(modem);
-	int err = RX_FSE(rx)->mse;
-	int verdict = (short)(RX_SRE(rx)->active & RX_AGC(rx)->signal);
+	void *rx = ((struct v29_rx *)modem)->rx;
+	int err = ((struct v29_rx_block *)rx)->fse.mse;
+	int verdict = (short)(((struct v29_rx_block *)rx)->sre.active & ((struct v29_rx_block *)rx)->agc.signal);
 	short n;
 
 	if (verdict == 0) {
 		if (DSPLIB_DEBUG_ON()) {
 			dsplibs_debug_printf(
 				"V29 Dec error too big... unreliable data\n");
-			rx = RX(modem);
+			rx = ((struct v29_rx *)modem)->rx;
 		}
 		verdict = V29Q_NO_CARRIER;
 	}
 
-	n = FIELD_SHORT(rx, V29RX_DEC_ERROR_N);
+	n = ((struct v29_rx_block *)rx)->dec_error_n;
 	if (n == 0) {
-		FIELD_SHORT(rx, V29RX_DEC_ERROR_AVG) = (short)err;
-		FIELD_SHORT(rx, V29RX_DEC_ERROR_N) = 1;
+		((struct v29_rx_block *)rx)->dec_error_avg = (short)err;
+		((struct v29_rx_block *)rx)->dec_error_n = 1;
 		return verdict;
 	}
 
 	if (n > V29Q_AVG_BLOCKS) {
 		if (n != V29Q_VERDICT_BLOCK)
 			return verdict;
-		if (!(FIELD_SHORT(rx, V29RX_DEC_ERROR_AVG)
-		      > FIELD_SHORT(rx, V29RX_DEC_ERROR_LIMIT)))
-			FIELD_SHORT(rx, V29RX_SHORT_4F62) = 1;
+		if (!(((struct v29_rx_block *)rx)->dec_error_avg
+		      > ((struct v29_rx_block *)rx)->dec_error_limit))
+			((struct v29_rx_block *)rx)->short_4f62 = 1;
 	} else {
-		FIELD_SHORT(rx, V29RX_DEC_ERROR_AVG) = (short)
-			(((FIELD_SHORT(rx, V29RX_DEC_ERROR_AVG) * V29Q_AVG_KEEP
+		((struct v29_rx_block *)rx)->dec_error_avg = (short)
+			(((((struct v29_rx_block *)rx)->dec_error_avg * V29Q_AVG_KEEP
 			   + V29Q_AVG_ROUND) >> V29Q_AVG_SHIFT)
 			 + ((err * V29Q_AVG_NEW + V29Q_AVG_ROUND)
 			    >> V29Q_AVG_SHIFT));
 	}
 
-	FIELD_SHORT(rx, V29RX_DEC_ERROR_N) =
-		(short)(FIELD_SHORT(rx, V29RX_DEC_ERROR_N) + 1);
+	((struct v29_rx_block *)rx)->dec_error_n =
+		(short)(((struct v29_rx_block *)rx)->dec_error_n + 1);
 
 	return verdict;
 }
@@ -2732,7 +2711,7 @@ QualityDetectV29(void *modem)
 int
 EpochDetectV29(void *modem)
 {
-	return RX_FSE(RX(modem))->lms_force != 0;
+	return ((struct v29_rx *)modem)->rx->fse.lms_force != 0;
 }
 
 /*
@@ -2749,7 +2728,7 @@ EpochDetectV29(void *modem)
 short
 GetSNRV29(void *modem)
 {
-	return (short)(14 - RX_FSE(RX(modem))->mse);
+	return (short)(14 - ((struct v29_rx *)modem)->rx->fse.mse);
 }
 
 /*
@@ -2768,7 +2747,7 @@ void
 ScrambleDataV29(void *modem, unsigned short *data, unsigned short count)
 {
 	SDM_scrambler((struct fpm_sdm *)(void *)
-		      FIELD(FIELD_PTR(modem, V29_OBJ_TX), V29TX_SDM),
+		      &((struct v29_tx_root *)modem)->tx->sdm,
 		      data, count);
 }
 
@@ -2779,7 +2758,7 @@ ScrambleDataV29(void *modem, unsigned short *data, unsigned short count)
 void
 SeedScramblerV29(void *modem, int seed)
 {
-	FIELD_INT(V29TX(modem), V29TXFP_SCRAMBLER_SEED) = seed;
+	((struct v29_tx_root *)modem)->tx->sdm.reg = seed;
 }
 
 /*
@@ -2804,10 +2783,10 @@ SetEncoderV29(void *modem, short which)
 {
 	switch (which) {
 	case 0:
-		V29TX(modem)->smc.cfg.direct = 0;
+		((struct v29_tx_root *)modem)->tx->smc.cfg.direct = 0;
 		break;
 	case 1:
-		V29TX(modem)->smc.cfg.direct = 1;
+		((struct v29_tx_root *)modem)->tx->smc.cfg.direct = 1;
 		break;
 	}
 }
@@ -2842,10 +2821,10 @@ ModDataV29(void *modem, const unsigned short *bits, short *samples,
 {
 	struct v29tx *tx;
 
-	tx = V29TX(modem);
+	tx = ((struct v29_tx_root *)modem)->tx;
 	SMC_encoder(&tx->smc, &tx->ring, bits, count);
 
-	tx = V29TX(modem);
+	tx = ((struct v29_tx_root *)modem)->tx;
 	return FPM_PPS_filter(&tx->pps, &tx->ring, samples, count);
 }
 

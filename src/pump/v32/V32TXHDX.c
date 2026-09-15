@@ -108,19 +108,14 @@
  */
 
 #include "dsplib/v32hdxst.h"
+#include "dsplib/v32struct.h"
 
 #include "dsplib/v32data.h"
 #include "dsplib/v32fpctl.h"
 #include "dsplib/v32seq.h"
 #include "dsplib/fpm_tone.h"
 
-/* The instance is not modelled; see v32hdx.h.  These are the only accessors. */
-#define FIELD(obj, off)		((unsigned char *)(void *)(obj) + (off))
-#define FIELD_PTR(obj, off)	(*(void **)(void *)FIELD((obj), (off)))
-#define FIELD_INT(obj, off)	(*(int *)(void *)FIELD((obj), (off)))
-#define FIELD_S16(obj, off)	(*(short *)(void *)FIELD((obj), (off)))
-
-#define HDX(m)			FIELD_PTR((m), V32_OBJ_HDX)
+#define HDX(m)			(((struct v32_modem *)(m))->hdx)
 
 /*
  * The handshake state's countdown, in symbols, and the charge a whole-block
@@ -154,21 +149,19 @@
 short
 TxHdxTone(void *modem, short *data, short *out, unsigned short *left)
 {
-	void *hdx = HDX(modem);
+	struct v32_hdx *hdx = HDX(modem);
 
-	FPM_TONE_generate((struct fpm_tone *)FIELD_PTR(hdx, V32_HDX_TONE0),
-			  out, FIELD_S16(hdx, V32HDX_SAMPLE_LEN));
+	FPM_TONE_generate(hdx->tone0, out, hdx->sample_len);
 	*left = 0;
 
 	hdx = HDX(modem);
-	FIELD_INT(hdx, V32HDX_STATE_LEFT) -=
-		FIELD_S16(hdx, V32HDX_BLOCK_CHARGE);
-	if (FIELD_INT(hdx, V32HDX_STATE_LEFT) <= 0) {
-		V32NextState[FIELD_S16(hdx, V32HDX_MODE)](modem);
+	hdx->state_left -= hdx->block_charge;
+	if (hdx->state_left <= 0) {
+		V32NextState[hdx->mode](modem);
 		hdx = HDX(modem);
 	}
 
-	return FIELD_S16(hdx, V32HDX_SAMPLE_LEN);
+	return hdx->sample_len;
 }
 
 /*
@@ -180,23 +173,23 @@ TxHdxTone(void *modem, short *data, short *out, unsigned short *left)
 short
 TxHdxCarrierState(void *modem, short *data, short *out, unsigned short *left)
 {
-	void *hdx = HDX(modem);
+	struct v32_hdx *hdx = HDX(modem);
 	unsigned short count;
 	short n;
 
-	if (FIELD_INT(hdx, V32HDX_STATE_LEFT) > *left)
+	if (hdx->state_left > *left)
 		count = *left;
 	else
-		count = (unsigned short)FIELD_INT(hdx, V32HDX_STATE_LEFT);
+		count = (unsigned short)hdx->state_left;
 
-	FIELD_INT(hdx, V32HDX_STATE_LEFT) -= *left;
+	hdx->state_left -= *left;
 
 	GenSequence(modem, data, count);
 	n = (short)ModDataV32(modem, data, out, count);
 
 	hdx = HDX(modem);
-	if (FIELD_INT(hdx, V32HDX_STATE_LEFT) <= 0)
-		V32NextState[FIELD_S16(hdx, V32HDX_MODE)](modem);
+	if (hdx->state_left <= 0)
+		V32NextState[hdx->mode](modem);
 
 	*left = (unsigned short)(*left - count);
 	return n;
@@ -206,24 +199,24 @@ TxHdxCarrierState(void *modem, short *data, short *out, unsigned short *left)
 short
 TxHdxScrSequence(void *modem, short *data, short *out, unsigned short *left)
 {
-	void *hdx = HDX(modem);
+	struct v32_hdx *hdx = HDX(modem);
 	unsigned short count;
 	short n;
 
-	if (FIELD_INT(hdx, V32HDX_STATE_LEFT) > *left)
+	if (hdx->state_left > *left)
 		count = *left;
 	else
-		count = (unsigned short)FIELD_INT(hdx, V32HDX_STATE_LEFT);
+		count = (unsigned short)hdx->state_left;
 
-	FIELD_INT(hdx, V32HDX_STATE_LEFT) -= *left;
+	hdx->state_left -= *left;
 
 	GenSequence(modem, data, count);
 	ScrambleDataV32(modem, data, count);
 	n = (short)ModDataV32(modem, data, out, count);
 
 	hdx = HDX(modem);
-	if (FIELD_INT(hdx, V32HDX_STATE_LEFT) <= 0)
-		V32NextState[FIELD_S16(hdx, V32HDX_MODE)](modem);
+	if (hdx->state_left <= 0)
+		V32NextState[hdx->mode](modem);
 
 	*left = (unsigned short)(*left - count);
 	return n;
@@ -244,7 +237,7 @@ short
 TxHdxTRN(void *modem, short *data, short *out, unsigned short *left)
 {
 	short trn[4];
-	void *hdx;
+	struct v32_hdx *hdx;
 	unsigned short count;
 	short i;
 	short n;
@@ -256,12 +249,12 @@ TxHdxTRN(void *modem, short *data, short *out, unsigned short *left)
 
 	hdx = HDX(modem);
 
-	if (FIELD_INT(hdx, V32HDX_STATE_LEFT) > *left)
+	if (hdx->state_left > *left)
 		count = *left;
 	else
-		count = (unsigned short)FIELD_INT(hdx, V32HDX_STATE_LEFT);
+		count = (unsigned short)hdx->state_left;
 
-	FIELD_INT(hdx, V32HDX_STATE_LEFT) -= *left;
+	hdx->state_left -= *left;
 
 	GenSequence(modem, data, count);
 	ScrambleDataV32(modem, data, count);
@@ -272,8 +265,8 @@ TxHdxTRN(void *modem, short *data, short *out, unsigned short *left)
 	n = (short)ModDataV32(modem, data, out, count);
 
 	hdx = HDX(modem);
-	if (FIELD_INT(hdx, V32HDX_STATE_LEFT) <= 0)
-		V32NextState[FIELD_S16(hdx, V32HDX_MODE)](modem);
+	if (hdx->state_left <= 0)
+		V32NextState[hdx->mode](modem);
 
 	*left = (unsigned short)(*left - count);
 	return n;
@@ -286,23 +279,23 @@ TxHdxTRN(void *modem, short *data, short *out, unsigned short *left)
 short
 TxHdxData(void *modem, short *data, short *out, unsigned short *left)
 {
-	void *hdx = HDX(modem);
+	struct v32_hdx *hdx = HDX(modem);
 	unsigned short count;
 	short n;
 
-	if (FIELD_INT(hdx, V32HDX_STATE_LEFT) > *left)
+	if (hdx->state_left > *left)
 		count = *left;
 	else
-		count = (unsigned short)FIELD_INT(hdx, V32HDX_STATE_LEFT);
+		count = (unsigned short)hdx->state_left;
 
-	FIELD_INT(hdx, V32HDX_STATE_LEFT) -= *left;
+	hdx->state_left -= *left;
 
 	ScrambleDataV32(modem, data, count);
 	n = (short)ModDataV32(modem, data, out, count);
 
 	hdx = HDX(modem);
-	if (FIELD_INT(hdx, V32HDX_STATE_LEFT) <= 0)
-		V32NextState[FIELD_S16(hdx, V32HDX_MODE)](modem);
+	if (hdx->state_left <= 0)
+		V32NextState[hdx->mode](modem);
 
 	*left = (unsigned short)(*left - count);
 	return n;
@@ -321,26 +314,26 @@ TxHdxData(void *modem, short *data, short *out, unsigned short *left)
 short
 TxHdxNoCarrier(void *modem, short *data, short *out, unsigned short *left)
 {
-	void *hdx = HDX(modem);
+	struct v32_hdx *hdx = HDX(modem);
 	unsigned short count;
 	short n;
 
-	if (FIELD_INT(hdx, V32HDX_STATE_LEFT) > *left)
+	if (hdx->state_left > *left)
 		count = *left;
 	else
-		count = (unsigned short)FIELD_INT(hdx, V32HDX_STATE_LEFT);
+		count = (unsigned short)hdx->state_left;
 
-	if (FIELD_INT(hdx, V32HDX_STATE_LEFT) <= 0)
+	if (hdx->state_left <= 0)
 		count = 0;
 
-	FIELD_INT(hdx, V32HDX_STATE_LEFT) -= *left;
+	hdx->state_left -= *left;
 
 	ScrambleDataV32(modem, data, count);
 	n = (short)TxNoCarrierV32(modem, data, out, count);
 
 	hdx = HDX(modem);
-	if (FIELD_INT(hdx, V32HDX_STATE_LEFT) <= 0)
-		V32NextState[FIELD_S16(hdx, V32HDX_MODE)](modem);
+	if (hdx->state_left <= 0)
+		V32NextState[hdx->mode](modem);
 
 	*left = (unsigned short)(*left - count);
 	return n;
@@ -357,17 +350,17 @@ TxHdxNoCarrier(void *modem, short *data, short *out, unsigned short *left)
 short
 TxHdxFinishFrame(void *modem, short *data, short *out, unsigned short *left)
 {
-	void *hdx = HDX(modem);
+	struct v32_hdx *hdx = HDX(modem);
 	short n;
 
-	FIELD_INT(hdx, V32HDX_STATE_LEFT) -= *left;
+	hdx->state_left -= *left;
 
 	ScrambleDataV32(modem, data, *left);
 	n = (short)TxNoCarrierV32(modem, data, out, *left);
 
 	hdx = HDX(modem);
-	if (FIELD_INT(hdx, V32HDX_STATE_LEFT) <= 0)
-		V32NextState[FIELD_S16(hdx, V32HDX_MODE)](modem);
+	if (hdx->state_left <= 0)
+		V32NextState[hdx->mode](modem);
 
 	*left = 0;
 	return n;
@@ -394,19 +387,19 @@ TxHdxFinishFrame(void *modem, short *data, short *out, unsigned short *left)
 short
 TxHdxNull(void *modem, short *data, short *out, unsigned short *left)
 {
-	void *hdx = HDX(modem);
-	int i = FIELD_S16(hdx, V32HDX_SAMPLE_LEN);
+	struct v32_hdx *hdx = HDX(modem);
+	int i = hdx->sample_len;
 
 	while (i-- != 0)
 		*out++ = 0;
 
-	FIELD_INT(hdx, V32HDX_STATE_LEFT) -=
-		FIELD_S16(hdx, V32HDX_BLOCK_CHARGE);
-	if (FIELD_INT(hdx, V32HDX_STATE_LEFT) <= 0) {
-		V32NextState[FIELD_S16(hdx, V32HDX_MODE)](modem);
+	hdx->state_left -=
+		hdx->block_charge;
+	if (hdx->state_left <= 0) {
+		V32NextState[hdx->mode](modem);
 		hdx = HDX(modem);
 	}
 
 	*left = 0;
-	return FIELD_S16(hdx, V32HDX_SAMPLE_LEN);
+	return hdx->sample_len;
 }

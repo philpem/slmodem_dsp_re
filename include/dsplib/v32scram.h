@@ -36,8 +36,9 @@ extern "C" {
  */
 struct v32_sdm {
 	short group;		/* +0x00 bits per symbol; 6 means 3 + 3     */
-	short pad02;		/* +0x02 not read here                      */
-	int pad04;		/* +0x04 not read here                      */
+	short tap1_pos;	/* +0x02 absolute first tap position         */
+	short tap2_pos;	/* +0x04 absolute second tap position        */
+	short pad06;		/* +0x06                                    */
 	unsigned int outmask;	/* +0x08 applied to every scrambled group   */
 	unsigned int regmask;	/* +0x0c register length, as a bit mask     */
 	unsigned int reg;	/* +0x10 the shift register                 */

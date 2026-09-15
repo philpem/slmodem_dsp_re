@@ -106,7 +106,7 @@ regions_of(struct v22fp *fp, struct region *r)
 #define REGION(nm, ptr, bytes) \
 	do { r[n].name = (nm); r[n].p = (ptr); r[n].n = (bytes); n++; } while (0)
 
-	REGION("dsp->ra8", d->ra8, 0x18);
+	REGION("dsp->smc_ring.sym", d->smc_ring.sym, 0x18);
 	REGION("dsp->rx_scratch", d->rx_scratch, 0x154);
 	REGION("hdx->iir", h->iir, 0x20);
 	REGION("dsp->pps_coff_i", d->pps_coff_i, V22_PPS_COEFFS * 2);
@@ -168,7 +168,7 @@ directs_of(struct v22fp *fp, struct direct *d)
 	DIRECT("hdx", fp->hdx, 0x40);
 	DIRECT("hdx->iir", fp->hdx->iir, 0x20);
 	DIRECT("dsp->rx_scratch", fp->dsp->rx_scratch, 0x154);
-	DIRECT("dsp->ra8", fp->dsp->ra8, 0x18);
+	DIRECT("dsp->smc_ring.sym", fp->dsp->smc_ring.sym, 0x18);
 	DIRECT("dsp->pps_coff_i", fp->dsp->pps_coff_i, 0xf0);
 	DIRECT("dsp->pps_coff_q", fp->dsp->pps_coff_q, 0xf0);
 	DIRECT("dsp->mrf_coeff", fp->dsp->mrf_coeff, 0x21c);
@@ -214,7 +214,7 @@ blank_dsp(const struct v22fp_dsp *d)
 {
 	struct v22fp_dsp c = *d;
 
-	c.ra8 = NULL;
+	c.smc_ring.sym = NULL;
 	c.rx_scratch = NULL;
 	c.pps_coff_i = NULL;
 	c.pps_coff_q = NULL;

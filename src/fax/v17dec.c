@@ -320,7 +320,7 @@ FAX_FSE_decision_128pt(struct fpm_fse *state, short *angle, short *mag)
 	*mag = DECv17_MAG14400[n];
 	*angle = DECv17_ANGL14400[n];
 
-	VTB_decoder((struct vtb *)(void *)m->vtb, (short)i, (short)q, &sym);
+	VTB_decoder(&m->vtb, (short)i, (short)q, &sym);
 	return (unsigned short)sym;
 }
 
@@ -395,7 +395,7 @@ FAX_FSE_decision_64pt(struct fpm_fse *state, short *angle, short *mag)
 	*mag = DECv17_MAG12000[best];
 	*angle = DECv17_ANGL12000[best];
 
-	VTB_decoder((struct vtb *)(void *)m->vtb, (short)i, (short)q, &sym);
+	VTB_decoder(&m->vtb, (short)i, (short)q, &sym);
 	return (unsigned short)sym;
 }
 
@@ -477,7 +477,7 @@ FAX_FSE_decision_32pt(struct fpm_fse *state, short *angle, short *mag)
 	*mag = DECv17_MAG9600T[n];
 	*angle = DECv17_ANGL9600T[n];
 
-	VTB_decoder((struct vtb *)(void *)m->vtb, (short)i, (short)q, &sym);
+	VTB_decoder(&m->vtb, (short)i, (short)q, &sym);
 	return (unsigned short)sym;
 }
 
@@ -532,7 +532,7 @@ FAX_FSE_decision_16pt(struct fpm_fse *state, short *angle, short *mag)
 	*mag = DECv17_MAG7200[n - 1];
 	*angle = DECv17_ANGL7200[best];
 
-	VTB_decoder((struct vtb *)(void *)m->vtb, (short)i, (short)q, &sym);
+	VTB_decoder(&m->vtb, (short)i, (short)q, &sym);
 	return (unsigned short)sym;
 }
 

@@ -28,6 +28,8 @@
 #ifndef DSPLIB_V32ANSTONE_H
 #define DSPLIB_V32ANSTONE_H
 
+struct fpm_tone;
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -49,6 +51,18 @@ extern "C" {
 #define V32ANS_PHASE_TONE	0
 #define V32ANS_PHASE_SILENCE	1
 #define V32ANS_PHASE_DONE	2
+
+/* Incremental view: no caller exists to establish an extent past +0x20. */
+struct v32_ans_tone {
+	unsigned char pad_00[4];
+	int phase;
+	unsigned char pad_08[4];
+	int elapsed;
+	int tone_len;
+	int silence_len;
+	unsigned char pad_18[4];
+	struct fpm_tone *tone;
+};
 
 /**
  * @brief Emit one block of the V.32 answer-tone cadence (tone, then silence, then nothing) and advance it.

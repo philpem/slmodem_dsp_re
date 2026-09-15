@@ -320,12 +320,14 @@ struct v22fp_dsp {
 	struct fpm_sdm sdm;	/* +0x30 the scrambler                      */
 	struct fpm_smc smc;	/* +0x48 the symbol mapper                  */
 	struct v22_pps pps;	/* +0x78 the pulse-shaping interpolator     */
-	unsigned char ra0[8];	/* +0xa0 not written by create              */
-	void *ra8;		/* +0xa8 24 bytes, never written by create  */
-	short rac;		/* +0xac init 0                             */
-	short rae;		/* +0xae init 0                             */
-	short rb0;		/* +0xb0 init 12                            */
-	short padb2;		/* +0xb2                                    */
+	/*
+	 * The symbol ring shared by the embedded mapper and pulse shaper.
+	 * V22FP_create allocates its `sym` array and seeds both cursors and
+	 * the length; ModDataV22 hands this same object to both consumers.
+	 * The direct-form I/Q pointers are deliberately not initialised here,
+	 * because V.22 uses the mapped form.
+	 */
+	struct fpm_smc_ring smc_ring; /* +0xa0 .. +0xb3                  */
 	/*
 	 * The pulse shaper's two coefficient arrays: `PPSv22_COFFS` mixed up
 	 * to the transmit carrier, cosine into I and sine into Q.  create

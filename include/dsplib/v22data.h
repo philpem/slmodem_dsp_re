@@ -10,11 +10,10 @@
  *   ModDataV22          -> FPM_SMC_encoder then V22_PPS_filter
  *   Detect_v22          -> FPM_AGC_agc then FPM_MTD_detect, four times over
  *
- * THE OBJECT IS NOT MODELLED, DELIBERATELY, and this header follows the
- * ruling `include/dsplib/v22prc.h` sets out in full: `V22FP_create` -- the
- * 2,449-byte function that lays the instance out -- is not reconstructed, so
- * naming fields now would mean guessing.  The parameters are `void *` and the
- * offsets are named constants with the evidence beside each.
+ * The object is now modelled by `struct v22fp`.  The public parameters remain
+ * `void *` for compatibility with the original API, while the implementation
+ * reaches the established owner and nested-object fields directly.  The
+ * offset constants remain as differential-fixture anchors.
  *
  * `V22_OBJ_FP` and `V22_OBJ_GTIMER` are v22prc.h's and are used from there
  * rather than spelled a second time, which is why this header includes it.

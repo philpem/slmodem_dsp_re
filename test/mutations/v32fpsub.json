@@ -14,8 +14,8 @@
  },
  {
   "label": "the delay line is cleared one entry short",
-  "find": "\t\tfor (i = 0; i < ecc->line_len; i++)\n\t\t\tecc->line[i] = 0;\n\t\tFIELD_INT(fp, V32FP_R14) = 1;",
-  "replace": "\t\tfor (i = 0; i < ecc->line_len - 1; i++)\n\t\t\tecc->line[i] = 0;\n\t\tFIELD_INT(fp, V32FP_R14) = 1;"
+  "find": "\t\tfor (i = 0; i < ecc->line_len; i++)\n\t\t\tecc->line[i] = 0;\n\t\t((struct v32_fp *)fp)->int_14 = 1;",
+  "replace": "\t\tfor (i = 0; i < ecc->line_len - 1; i++)\n\t\t\tecc->line[i] = 0;\n\t\t((struct v32_fp *)fp)->int_14 = 1;"
  },
  {
   "label": "the near update loop is left off when the canceller is switched on",
@@ -34,8 +34,8 @@
  },
  {
   "label": "the re-init takes the near delay from the instance's echo-delay field's neighbour",
-  "find": "\t\tecc->near_delay = (short)FIELD_U16(modem,\n\t\t\t\t\t\t   V32_OBJ_EC_NEAR_DELAY);",
-  "replace": "\t\tecc->near_delay = (short)FIELD_U16(modem,\n\t\t\t\t\t\t   V32_OBJ_EC_NEAR_DELAY + 2);"
+  "find": "\t\tecc->near_delay = (short)((struct v32_modem *)(modem))->params.ec_near_delay;",
+  "replace": "\t\tecc->near_delay = (short)((unsigned short *)&((struct v32_modem *)(modem))->params.ec_near_delay)[1];"
  },
  {
   "label": "the re-init sets a far delay one short of the object's",
@@ -64,13 +64,13 @@
  },
  {
   "label": "the tone setter retunes the second detector",
-  "find": "\tcfg = ((struct fpm_tone *)FIELD_PTR(hdx, V32_HDX_TONE0))->cfg;",
-  "replace": "\tcfg = ((struct fpm_tone *)FIELD_PTR(hdx, V32_HDX_TONE1))->cfg;"
+  "find": "\tcfg = ((struct fpm_tone *)((struct v32_hdx *)hdx)->tone0)->cfg;",
+  "replace": "\tcfg = ((struct fpm_tone *)((struct v32_hdx *)hdx)->tone1)->cfg;"
  },
  {
   "label": "the tone setter rebuilds the first detector from the second's configuration",
-  "find": "\tFPM_TONE_create((struct fpm_tone *)FIELD_PTR(hdx, V32_HDX_TONE0), &cfg);",
-  "replace": "\tFPM_TONE_create((struct fpm_tone *)FIELD_PTR(hdx, V32_HDX_TONE1), &cfg);"
+  "find": "\tFPM_TONE_create((struct fpm_tone *)((struct v32_hdx *)hdx)->tone0, &cfg);",
+  "replace": "\tFPM_TONE_create((struct fpm_tone *)((struct v32_hdx *)hdx)->tone1, &cfg);"
  },
  {
   "label": "the requested frequency never reaches the copied configuration",
@@ -84,27 +84,27 @@
  },
  {
   "label": "the tone setter hands FPM_TONE_create the library default configuration",
-  "find": "FIELD_PTR(hdx, V32_HDX_TONE0), &cfg);\n}",
-  "replace": "FIELD_PTR(hdx, V32_HDX_TONE0), 0);\n}"
+  "find": "((struct v32_hdx *)hdx)->tone0, &cfg);\n}",
+  "replace": "((struct v32_hdx *)hdx)->tone0, 0);\n}"
  },
  {
   "label": "the multi-tone detector is deleted from the tone slot above it",
-  "find": "\tFPM_MTD_delete((struct fpm_mtd *)FIELD_PTR(HDX(modem), V32_HDX_MTD));",
-  "replace": "\tFPM_MTD_delete((struct fpm_mtd *)FIELD_PTR(HDX(modem), V32_HDX_TONE2));"
+  "find": "\tFPM_MTD_delete((struct fpm_mtd *)HDX(modem)->mtd);",
+  "replace": "\tFPM_MTD_delete((struct fpm_mtd *)HDX(modem)->tone2);"
  },
  {
   "label": "only two of the three tone objects are released",
-  "find": "\tFPM_TONE_delete((struct fpm_tone *)FIELD_PTR(HDX(modem),\n\t\t\t\t\t\t     V32_HDX_TONE0));",
+  "find": "\tFPM_TONE_delete((struct fpm_tone *)HDX(modem)->tone0);",
   "replace": "\t(void)0;"
  },
  {
   "label": "the first heap buffer is released from the slot four bytes above the object's",
-  "find": "\tsysdep_free(FIELD_PTR(FP(modem), V32FP_BUF_5038));",
-  "replace": "\tsysdep_free(FIELD_PTR(FP(modem), V32FP_BUF_5038 + 4));"
+  "find": "\tsysdep_free(FP(modem)->decoder.vtb.paths);",
+  "replace": "\tsysdep_free(*(void **)(void *)&FP(modem)->decoder.vtb.metric[0]);"
  },
  {
   "label": "the cleaned-sample buffer is not released",
-  "find": "\tsysdep_free(FIELD_PTR(FP(modem), V32FP_CLEAN_BUF));",
+  "find": "\tsysdep_free(FP(modem)->clean_buf);",
   "replace": "\t(void)0;"
  },
  {
@@ -114,17 +114,17 @@
  },
  {
   "label": "the half-duplex context's buffer is released but the context is not",
-  "find": "\tsysdep_free(FIELD_PTR(HDX(modem), V32_HDX_BUF_A4));\n\tsysdep_free(HDX(modem));",
-  "replace": "\tsysdep_free(FIELD_PTR(HDX(modem), V32_HDX_BUF_A4));"
+  "find": "\tsysdep_free(HDX(modem)->buffer);\n\tsysdep_free(HDX(modem));",
+  "replace": "\tsysdep_free(HDX(modem)->buffer);"
  },
  {
   "label": "the instance itself is left allocated",
-  "find": "\tsysdep_free(FP(modem));\n\tsysdep_free(modem);",
+  "find": "\tsysdep_free(FP(modem));\n\tsysdep_free((struct v32_modem *)modem);",
   "replace": "\tsysdep_free(FP(modem));"
  },
  {
   "label": "the datapump block is released twice and the instance not at all",
-  "find": "\tsysdep_free(FP(modem));\n\tsysdep_free(modem);\n}",
+  "find": "\tsysdep_free(FP(modem));\n\tsysdep_free((struct v32_modem *)modem);\n}",
   "replace": "\tsysdep_free(FP(modem));\n\tsysdep_free(FP(modem));\n}"
  },
  {

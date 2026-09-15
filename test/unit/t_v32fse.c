@@ -839,7 +839,9 @@ main(void)
 		    (long)((char *)&dec_a.count - (char *)&dec_a), 0x6e, 0);
 	diff_eq_int("scram (%ld)",
 		    (long)((char *)&dec_a.scram - (char *)&dec_a), 0x70, 0);
-	diff_eq_int("sizeof (%ld)", (long)sizeof(struct v32_dec), 0x74, 0);
+	diff_eq_int("short_74 (%ld)",
+		    (long)((char *)&dec_a.short_74 - (char *)&dec_a), 0x74, 0);
+	diff_eq_int("sizeof (%ld)", (long)sizeof(struct v32_dec), 0x78, 0);
 	rc |= diff_end();
 
 	seed = 20250812u;

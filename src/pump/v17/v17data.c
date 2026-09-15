@@ -38,35 +38,24 @@
  * which is observable only if the parameter block overlaps the ring.
  */
 
-#include "dsplib/v17data.h"
+#include "dsplib/v17fax.h"
 
 #include "dsplib/fpm_pps.h"
 #include "dsplib/fpm_smc.h"
-
-/* The instance is not modelled; see v17data.h.  These are the only accessors. */
-#define FIELD(obj, off)		((unsigned char *)(obj) + (off))
-#define FIELD_PTR(obj, off)	(*(void **)(void *)FIELD((obj), (off)))
 
 unsigned short
 ModDataV17(void *modem, const unsigned short *data, short *out,
 	   unsigned short count)
 {
-	void *fp;
-	const v17_encoder_fn *tbl;
+	struct v17tx *tx = (struct v17tx *)modem;
+	struct v17tx_fp *fp;
 	short sel;
 
-	fp = FIELD_PTR(modem, V17TX_OBJ_FP);
-	tbl = (const v17_encoder_fn *)(void *)FIELD(fp, V17FP_ENCODERS);
-	sel = *(short *)(void *)FIELD(fp, V17FP_ENCODER_SEL);
-	tbl[sel](FIELD(fp, V17FP_SMC),
-		 (struct fpm_smc_ring *)(void *)FIELD(fp, V17FP_SMC_RING),
-		 data, count);
+	fp = tx->fp;
+	sel = fp->encoder_sel;
+	fp->encoders[sel](&fp->smc, &fp->ring, data, count);
 
-	return FPM_PPS_filter((struct fpm_pps *)(void *)
-				FIELD(FIELD_PTR(modem, V17TX_OBJ_FP), V17FP_PPS),
-			      (struct fpm_smc_ring *)(void *)
-					FIELD(FIELD_PTR(modem, V17TX_OBJ_FP),
-					      V17FP_SMC_RING),
+	return FPM_PPS_filter(&tx->fp->pps, &tx->fp->ring,
 			      out, count);
 }
 
@@ -74,21 +63,21 @@ unsigned short
 TxNoCarrierV17(void *modem, const unsigned short *data, short *out,
 	       unsigned short count)
 {
+	struct v17tx *tx = (struct v17tx *)modem;
 	struct fpm_smc_ring *ring;
 	unsigned short i;
 	short widx, len;
-	void *fp;
+	struct v17tx_fp *fp;
 
 	(void)data;			/* never read; see v17data.h */
 
-	fp = FIELD_PTR(modem, V17TX_OBJ_FP);
-	ring = (struct fpm_smc_ring *)(void *)FIELD(fp, V17FP_SMC_RING);
+	fp = tx->fp;
+	ring = &fp->ring;
 	widx = ring->widx;
 	len = ring->len;
 
 	if (count != 0) {
-		const unsigned char *prm = (const unsigned char *)
-					FIELD_PTR(modem, V17TX_OBJ_PARAMS);
+		struct v17tx_priv *prm = tx->priv;
 
 		for (i = 0; i < count; i++) {
 			short next;
@@ -98,23 +87,20 @@ TxNoCarrierV17(void *modem, const unsigned short *data, short *out,
 			 * `%ax` alone is used, so the extension is free and
 			 * the type follows the ring's element being an index.
 			 */
-			ring->sym[widx] = (short)*(const unsigned short *)
-					(const void *)(prm +
-						       V17TXP_NOCARRIER_SYM);
+			ring->sym[widx] = (short)prm->no_carrier_sym;
 			next = (short)(widx + 1);
 			widx = (short)(next < len ? next : 0);
 		}
 	}
 
-	i = FPM_PPS_filter((struct fpm_pps *)(void *)FIELD(fp, V17FP_PPS),
-			   ring, out, count);
+	i = FPM_PPS_filter(&fp->pps, ring, out, count);
 
 	/*
 	 * The cursor goes back through a FRESH read of the instance pointer,
 	 * after the shaper has run.  Both are what the object encodes.
 	 */
-	fp = FIELD_PTR(modem, V17TX_OBJ_FP);
-	((struct fpm_smc_ring *)(void *)FIELD(fp, V17FP_SMC_RING))->widx = widx;
+	fp = tx->fp;
+	fp->ring.widx = widx;
 
 	return i;
 }

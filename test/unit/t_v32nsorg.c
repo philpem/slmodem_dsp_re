@@ -455,7 +455,7 @@ fixture(struct fix *f, const struct trial *t)
 	fse->mu_sel = 0x55;
 	fse->sym_count = 0x66;
 
-	vtb = (struct vtb *)(void *)f->dec.vtb;
+	vtb = &f->dec.vtb;
 	vtb->paths = f->vtb_paths;
 
 	/* --------------------------------------------- the tone objects */

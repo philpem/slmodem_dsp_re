@@ -33,7 +33,9 @@
 #ifndef DSPLIB_V17DATA_H
 #define DSPLIB_V17DATA_H
 
-struct fpm_smc_ring;
+#include "dsplib/fpm_pps.h"
+#include "dsplib/fpm_sdm.h"
+#include "dsplib/fpm_smc.h"
 
 /*
  * Offsets in the V.17 transmitter instance.
@@ -207,6 +209,38 @@ void SetTxModeV17(void *modem, short mode);
 typedef void (*v17_encoder_fn)(void *smc, struct fpm_smc_ring *ring,
 			       const unsigned short *data,
 			       unsigned short count);
+
+/* The V.17-specific symbol coder.  This is not `struct fpm_smc`. */
+struct v17_smc {
+	union {
+		short word;
+		struct {
+			signed char value;
+			unsigned char r01;
+		} byte;
+	} mode;			/* +0x00 whole-word stores, low-byte reads */
+	short r02;		/* +0x02 copied from SMCv17_CFG            */
+	short r04;		/* +0x04 unmodelled                        */
+	short quad;		/* +0x06                                   */
+	short state;		/* +0x08 differential state                */
+	short r0a;		/* +0x0a unmodelled                        */
+	short trellis;		/* +0x0c                                   */
+	short prev;		/* +0x0e previous trellis state            */
+	short r10;		/* +0x10 neutral, cleared by init           */
+	unsigned short nbits;	/* +0x12                                   */
+};
+
+/* V17TX_create's 0x90-byte fixed-point block. */
+struct v17tx_fp {
+	unsigned char r00[8];		/* +0x00 unmodelled                   */
+	struct fpm_smc_ring ring;	/* +0x08 shared mapper/shaper ring    */
+	struct fpm_sdm sdm;		/* +0x1c transmit scrambler           */
+	struct v17_smc smc;		/* +0x34 V.17-specific symbol coder   */
+	struct fpm_pps pps;		/* +0x48 pulse shaper                 */
+	v17_encoder_fn encoders[V17FP_ENCODERS_N]; /* +0x80              */
+	short encoder_sel;		/* +0x8c                              */
+	short r8e;			/* +0x8e unmodelled                   */
+};
 
 /**
  * @brief Initialise one SMCv17 coder state.

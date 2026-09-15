@@ -449,7 +449,7 @@ build(struct fix *f, unsigned seed, const struct prof *pr, int state)
 		f->tone[t].rev_block = f->revb[t];
 		f->tone[t].rev_acc = f->reva[t];
 	}
-	((struct vtb *)(void *)f->dec.vtb)->paths = f->vpath;
+	(&f->dec.vtb)->paths = f->vpath;
 
 	put_ptr(hdx, V32_HDX_TONE0, &f->tone[0]);
 	put_ptr(hdx, V32_HDX_TONE1, &f->tone[1]);
@@ -593,23 +593,23 @@ run_one(const char *what, void (*ours)(void *), void (*theirs)(void *),
 
 		/* The four tables VTBv32_init aims the trellis decoder at. */
 		diff_eq_int("the trellis I map (trial %ld)",
-			    pid(get_ptr(fa.dec.vtb, 0x18), 0),
-			    pid(get_ptr(fb.dec.vtb, 0x18), 1), tag);
+			    pid(get_ptr(&fa.dec.vtb, 0x18), 0),
+			    pid(get_ptr(&fb.dec.vtb, 0x18), 1), tag);
 		diff_eq_int("the trellis Q map (trial %ld)",
-			    pid(get_ptr(fa.dec.vtb, 0x1c), 0),
-			    pid(get_ptr(fb.dec.vtb, 0x1c), 1), tag);
+			    pid(get_ptr(&fa.dec.vtb, 0x1c), 0),
+			    pid(get_ptr(&fb.dec.vtb, 0x1c), 1), tag);
 		diff_eq_int("the trellis boundary table (trial %ld)",
-			    pid(get_ptr(fa.dec.vtb, 0x20), 0),
-			    pid(get_ptr(fb.dec.vtb, 0x20), 1), tag);
+			    pid(get_ptr(&fa.dec.vtb, 0x20), 0),
+			    pid(get_ptr(&fb.dec.vtb, 0x20), 1), tag);
 		diff_eq_int("the trellis region table (trial %ld)",
-			    pid(get_ptr(fa.dec.vtb, 0x28), 0),
-			    pid(get_ptr(fb.dec.vtb, 0x28), 1), tag);
+			    pid(get_ptr(&fa.dec.vtb, 0x28), 0),
+			    pid(get_ptr(&fb.dec.vtb, 0x28), 1), tag);
 
 		diff_eq_int("ours left the survivor ring at its own (%ld)",
-			    get_ptr(fa.dec.vtb, 0) == (void *)fa.vpath, 1,
+			    get_ptr(&fa.dec.vtb, 0) == (void *)fa.vpath, 1,
 			    tag);
 		diff_eq_int("the blob left its own survivor ring (%ld)",
-			    get_ptr(fb.dec.vtb, 0) == (void *)fb.vpath, 1,
+			    get_ptr(&fb.dec.vtb, 0) == (void *)fb.vpath, 1,
 			    tag);
 	}
 

@@ -4,38 +4,38 @@
  },
  {
   "label": "the encoder is dispatched from the slot above the one the selector names",
-  "find": "\ttbl[sel](FIELD(fp, V17FP_SMC),",
-  "replace": "\ttbl[sel + 1](FIELD(fp, V17FP_SMC),"
+  "find": "\tfp->encoders[sel](&fp->smc, &fp->ring, data, count);",
+  "replace": "\tfp->encoders[sel + 1](&fp->smc, &fp->ring, data, count);"
  },
  {
   "label": "the encoder table is read one slot high, which is V17TX_create's abs where it laid dif",
-  "find": "\ttbl = (const v17_encoder_fn *)(void *)FIELD(fp, V17FP_ENCODERS);",
-  "replace": "\ttbl = (const v17_encoder_fn *)(void *)FIELD(fp, V17FP_ENCODERS + 4);"
+  "find": "\tfp->encoders[sel](&fp->smc, &fp->ring, data, count);",
+  "replace": "\t(fp->encoders + 1)[sel](&fp->smc, &fp->ring, data, count);"
  },
  {
   "label": "the selector is read from the two bytes above it",
-  "find": "\tsel = *(short *)(void *)FIELD(fp, V17FP_ENCODER_SEL);",
-  "replace": "\tsel = *(short *)(void *)FIELD(fp, V17FP_ENCODER_SEL + 2);"
+  "find": "\tsel = fp->encoder_sel;",
+  "replace": "\tsel = *(short *)(void *)((unsigned char *)&fp->encoder_sel + 2);"
  },
  {
   "label": "the selector indexes the table unsigned, which agrees over every value V17TX_create can leave and not over a negative one",
-  "find": "\ttbl[sel](FIELD(fp, V17FP_SMC),",
-  "replace": "\ttbl[(unsigned short)sel](FIELD(fp, V17FP_SMC),"
+  "find": "\tfp->encoders[sel](&fp->smc, &fp->ring, data, count);",
+  "replace": "\tfp->encoders[(unsigned short)sel](&fp->smc, &fp->ring, data, count);"
  },
  {
   "label": "the coder and the ring are handed to the encoder the other way round",
-  "find": "\ttbl[sel](FIELD(fp, V17FP_SMC),\n\t\t (struct fpm_smc_ring *)(void *)FIELD(fp, V17FP_SMC_RING),\n\t\t data, count);",
-  "replace": "\ttbl[sel]((struct fpm_smc_ring *)(void *)FIELD(fp, V17FP_SMC_RING),\n\t\t (struct fpm_smc_ring *)(void *)FIELD(fp, V17FP_SMC),\n\t\t data, count);"
+  "find": "\tfp->encoders[sel](&fp->smc, &fp->ring, data, count);",
+  "replace": "\tfp->encoders[sel](&fp->ring, (struct fpm_smc_ring *)&fp->smc, data, count);"
  },
  {
   "label": "the coder is taken from the ring's offset, so the encoder is handed the ring twice",
-  "find": "\ttbl[sel](FIELD(fp, V17FP_SMC),",
-  "replace": "\ttbl[sel](FIELD(fp, V17FP_SMC_RING),"
+  "find": "\tfp->encoders[sel](&fp->smc, &fp->ring, data, count);",
+  "replace": "\tfp->encoders[sel](&fp->ring, &fp->ring, data, count);"
  },
  {
   "label": "the shaper is filtered from a ring that is not the one the encoder wrote",
-  "find": "\treturn FPM_PPS_filter((struct fpm_pps *)(void *)\n\t\t\t\tFIELD(FIELD_PTR(modem, V17TX_OBJ_FP), V17FP_PPS),\n\t\t\t      (struct fpm_smc_ring *)(void *)\n\t\t\t\t\tFIELD(FIELD_PTR(modem, V17TX_OBJ_FP),\n\t\t\t\t\t      V17FP_SMC_RING),\n\t\t\t      out, count);",
-  "replace": "\treturn FPM_PPS_filter((struct fpm_pps *)(void *)\n\t\t\t\tFIELD(FIELD_PTR(modem, V17TX_OBJ_FP), V17FP_PPS),\n\t\t\t      (struct fpm_smc_ring *)(void *)\n\t\t\t\t\tFIELD(FIELD_PTR(modem, V17TX_OBJ_FP),\n\t\t\t\t\t      V17FP_SMC),\n\t\t\t      out, count);"
+  "find": "\treturn FPM_PPS_filter(&tx->fp->pps, &tx->fp->ring,\n\t\t\t      out, count);",
+  "replace": "\treturn FPM_PPS_filter(&tx->fp->pps,\n\t\t\t      (struct fpm_smc_ring *)&tx->fp->smc, out, count);"
  },
  {
   "label": "the shaper's count is the number of samples it may write rather than the number of symbols offered",
@@ -44,38 +44,38 @@
  },
  {
   "label": "the encoder's count is one short, so the last data word never reaches the ring",
-  "find": "\t\t data, count);",
-  "replace": "\t\t data, (unsigned short)(count ? count - 1 : 0));"
+  "find": "\tfp->encoders[sel](&fp->smc, &fp->ring, data, count);",
+  "replace": "\tfp->encoders[sel](&fp->smc, &fp->ring, data,\n\t\t\t  (unsigned short)(count ? count - 1 : 0));"
  },
  {
   "label": "the no-carrier symbol comes from two bytes below the field the object reads",
-  "find": "\t\t\t\t\t(const void *)(prm +\n\t\t\t\t\t\t       V17TXP_NOCARRIER_SYM);",
-  "replace": "\t\t\t\t\t(const void *)(prm +\n\t\t\t\t\t\t       V17TXP_NOCARRIER_SYM - 2);"
+  "find": "\t\t\tring->sym[widx] = (short)prm->no_carrier_sym;",
+  "replace": "\t\t\tring->sym[widx] = (short)*(unsigned short *)(void *)\n\t\t\t\t((unsigned char *)&prm->no_carrier_sym - 2);"
  },
  {
   "label": "the no-carrier symbol comes from two bytes above it",
-  "find": "\t\t\t\t\t(const void *)(prm +\n\t\t\t\t\t\t       V17TXP_NOCARRIER_SYM);",
-  "replace": "\t\t\t\t\t(const void *)(prm +\n\t\t\t\t\t\t       V17TXP_NOCARRIER_SYM + 2);"
+  "find": "\t\t\tring->sym[widx] = (short)prm->no_carrier_sym;",
+  "replace": "\t\t\tring->sym[widx] = (short)*(unsigned short *)(void *)\n\t\t\t\t((unsigned char *)&prm->no_carrier_sym + 2);"
  },
  {
   "label": "the parameter block is taken from the instance's FP pointer instead of its own",
-  "find": "\t\tconst unsigned char *prm = (const unsigned char *)\n\t\t\t\t\tFIELD_PTR(modem, V17TX_OBJ_PARAMS);",
-  "replace": "\t\tconst unsigned char *prm = (const unsigned char *)\n\t\t\t\t\tFIELD_PTR(modem, V17TX_OBJ_FP);"
+  "find": "\t\tstruct v17tx_priv *prm = tx->priv;",
+  "replace": "\t\tstruct v17tx_priv *prm = (struct v17tx_priv *)tx->fp;"
  },
  {
   "label": "the no-carrier symbol is written to the ring's rails, which is V.29's form of this function",
-  "find": "\t\t\tring->sym[widx] = (short)*(const unsigned short *)",
-  "replace": "\t\t\tring->i[widx] = ring->q[widx] = (short)*(const unsigned short *)"
+  "find": "\t\t\tring->sym[widx] = (short)prm->no_carrier_sym;",
+  "replace": "\t\t\tring->i[widx] = ring->q[widx] =\n\t\t\t\t(short)prm->no_carrier_sym;"
  },
  {
   "label": "the second argument is used as the symbol source rather than ignored",
-  "find": "\t\t\tring->sym[widx] = (short)*(const unsigned short *)\n\t\t\t\t\t(const void *)(prm +\n\t\t\t\t\t\t       V17TXP_NOCARRIER_SYM);",
+  "find": "\t\t\tring->sym[widx] = (short)prm->no_carrier_sym;",
   "replace": "\t\t\tring->sym[widx] = (short)data[i];"
  },
  {
   "label": "the cursor advances before the store rather than after it",
-  "find": "\t\t\tring->sym[widx] = (short)*(const unsigned short *)\n\t\t\t\t\t(const void *)(prm +\n\t\t\t\t\t\t       V17TXP_NOCARRIER_SYM);\n\t\t\tnext = (short)(widx + 1);\n\t\t\twidx = (short)(next < len ? next : 0);",
-  "replace": "\t\t\tnext = (short)(widx + 1);\n\t\t\twidx = (short)(next < len ? next : 0);\n\t\t\tring->sym[widx] = (short)*(const unsigned short *)\n\t\t\t\t\t(const void *)(prm +\n\t\t\t\t\t\t       V17TXP_NOCARRIER_SYM);"
+  "find": "\t\t\tring->sym[widx] = (short)prm->no_carrier_sym;\n\t\t\tnext = (short)(widx + 1);\n\t\t\twidx = (short)(next < len ? next : 0);",
+  "replace": "\t\t\tnext = (short)(widx + 1);\n\t\t\twidx = (short)(next < len ? next : 0);\n\t\t\tring->sym[widx] = (short)prm->no_carrier_sym;"
  },
  {
   "label": "the cursor wraps one short of the ring length",
@@ -109,27 +109,27 @@
  },
  {
   "label": "the write cursor is not written back, so a caller filling the ring across calls overwrites the same slots",
-  "find": "\t((struct fpm_smc_ring *)(void *)FIELD(fp, V17FP_SMC_RING))->widx = widx;",
+  "find": "\tfp->ring.widx = widx;",
   "replace": "\t(void)widx;"
  },
  {
   "label": "the write cursor is written back into the read cursor",
-  "find": "\t((struct fpm_smc_ring *)(void *)FIELD(fp, V17FP_SMC_RING))->widx = widx;",
-  "replace": "\t((struct fpm_smc_ring *)(void *)FIELD(fp, V17FP_SMC_RING))->ridx = widx;"
+  "find": "\tfp->ring.widx = widx;",
+  "replace": "\tfp->ring.ridx = widx;"
  },
  {
   "label": "the shaper runs before the ring is filled rather than after",
-  "find": "\tif (count != 0) {\n\t\tconst unsigned char *prm",
-  "replace": "\ti = FPM_PPS_filter((struct fpm_pps *)(void *)FIELD(fp, V17FP_PPS),\n\t\t\t   ring, out, count);\n\tif (count != 0) {\n\t\tconst unsigned char *prm"
+  "find": "\tif (count != 0) {\n\t\tstruct v17tx_priv *prm",
+  "replace": "\ti = FPM_PPS_filter(&fp->pps, ring, out, count);\n\tif (count != 0) {\n\t\tstruct v17tx_priv *prm"
  },
  {
   "label": "the shaper is taken from the coder's offset",
-  "find": "\ti = FPM_PPS_filter((struct fpm_pps *)(void *)FIELD(fp, V17FP_PPS),\n\t\t\t   ring, out, count);",
-  "replace": "\ti = FPM_PPS_filter((struct fpm_pps *)(void *)FIELD(fp, V17FP_SMC),\n\t\t\t   ring, out, count);"
+  "find": "\ti = FPM_PPS_filter(&fp->pps, ring, out, count);",
+  "replace": "\ti = FPM_PPS_filter((struct fpm_pps *)&fp->smc, ring, out, count);"
  },
  {
   "label": "the ring is taken from the instance rather than from the transmitter's block",
-  "find": "\tring = (struct fpm_smc_ring *)(void *)FIELD(fp, V17FP_SMC_RING);",
-  "replace": "\tring = (struct fpm_smc_ring *)(void *)FIELD(fp, V17FP_SMC_RING + 4);"
+  "find": "\tring = &fp->ring;",
+  "replace": "\tring = (struct fpm_smc_ring *)(void *)\n\t\t((unsigned char *)&fp->ring + 4);"
  }
 ]

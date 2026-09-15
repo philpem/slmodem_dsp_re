@@ -67,27 +67,22 @@
 
 #include "dsplib/v32hdx.h"
 
-/* The instance is not modelled; see v32hdx.h.  These are the only accessors. */
-#define FIELD(obj, off)		((unsigned char *)(obj) + (off))
-#define FIELD_PTR(obj, off)	(*(void **)(void *)FIELD((obj), (off)))
-
 void
 V32TxHdxModem(void *modem, short *data, short *out, short *nsamples)
 {
 	unsigned short left;
 	short total = 0;
-	void *hdx;
+	struct v32_hdx *hdx;
 
-	hdx = FIELD_PTR(modem, V32_OBJ_HDX);
-	left = (unsigned short)*(short *)(void *)FIELD(hdx, V32HDX_SYMBOL_LEN);
+	hdx = ((struct v32_modem *)modem)->hdx;
+	left = (unsigned short)hdx->symbol_len;
 
 	do {
 		short n;
 
 		/* Re-read: a state may have swapped the context. */
-		hdx = FIELD_PTR(modem, V32_OBJ_HDX);
-		n = (*(v32_txhdx_fn *)(void *)FIELD(hdx, V32HDX_TXSTATE))
-			(modem, data, out, &left);
+		hdx = ((struct v32_modem *)modem)->hdx;
+		n = hdx->tx_state(modem, data, out, &left);
 		out += n;
 		total = (short)(total + n);
 	} while (left != 0);
@@ -99,9 +94,8 @@ void
 V32RxHdxModem(void *modem, short *in, unsigned short *out,
 	      unsigned short *count)
 {
-	void *hdx;
+	struct v32_hdx *hdx;
 
-	hdx = FIELD_PTR(modem, V32_OBJ_HDX);
-	(*(v32_rxhdx_fn *)(void *)FIELD(hdx, V32HDX_RXSTATE))
-		(modem, in, out, count);
+	hdx = ((struct v32_modem *)modem)->hdx;
+	hdx->rx_state(modem, in, out, count);
 }

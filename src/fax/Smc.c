@@ -37,17 +37,6 @@
 #include "dsplib/v17fax.h"
 #include "dsplib/v32smc.h"
 
-#define FIELD(obj, off) ((unsigned char *)(obj) + (off))
-#define AT_S(p, off) (*(short *)(void *)FIELD((p), (off)))
-#define AT_US(p, off) (*(unsigned short *)(void *)FIELD((p), (off)))
-#define AT_SB(p, off) (*(signed char *)(void *)FIELD((p), (off)))
-#define SMC_MODE(smc) AT_SB((smc), 0x00 - 0x00)
-#define SMC_QUAD(smc) AT_S((smc), V17FP_SMC_SHORT_06 - V17FP_SMC)
-#define SMC_STATE(smc) AT_S((smc), V17FP_SMC_SHORT_08 - V17FP_SMC)
-#define SMC_TRELLIS(smc) AT_S((smc), V17FP_SMC_SHORT_0C - V17FP_SMC)
-#define SMC_PREV(smc) AT_S((smc), V17FP_SMC_SHORT_0E - V17FP_SMC)
-#define SMC_NBITS(smc) AT_US((smc), V17FP_SMC_SHORT_12 - V17FP_SMC)
-
 extern const unsigned short SMCv17_PMAP4[4];
 extern const unsigned short SMCv17_ABS4[4];
 extern const unsigned short SMCv17_MOD[8];
@@ -191,11 +180,12 @@ void
 SMCv17_encoder_dif(void *smc, struct fpm_smc_ring *ring,
 		   const unsigned short *data, unsigned short count)
 {
+	struct v17_smc *statep = (struct v17_smc *)smc;
 	short *const sym = ring->sym;
 	const short len = ring->len;
 	short widx = ring->widx;
-	int quad = SMC_QUAD(smc);
-	int state = SMC_STATE(smc);
+	int quad = statep->quad;
+	int state = statep->state;
 	unsigned int i;
 
 	for (i = 0; i < count; i++) {
@@ -209,8 +199,8 @@ SMCv17_encoder_dif(void *smc, struct fpm_smc_ring *ring,
 		widx = smc_ring_advance(widx, len);
 	}
 
-	SMC_STATE(smc) = (short)state;
-	SMC_QUAD(smc) = (short)quad;
+	statep->state = (short)state;
+	statep->quad = (short)quad;
 	ring->widx = widx;
 }
 
@@ -224,10 +214,11 @@ void
 SMCv17_encoder_abs(void *smc, struct fpm_smc_ring *ring,
 		   const unsigned short *data, unsigned short count)
 {
+	struct v17_smc *statep = (struct v17_smc *)smc;
 	short *const sym = ring->sym;
 	const short len = ring->len;
 	short widx = ring->widx;
-	int quad = SMC_QUAD(smc);
+	int quad = statep->quad;
 	unsigned int i;
 
 	for (i = 0; i < count; i++) {
@@ -240,7 +231,7 @@ SMCv17_encoder_abs(void *smc, struct fpm_smc_ring *ring,
 		widx = smc_ring_advance(widx, len);
 	}
 
-	SMC_QUAD(smc) = (short)quad;
+	statep->quad = (short)quad;
 	ring->widx = widx;
 }
 
@@ -273,17 +264,18 @@ void
 SMCv17_encoder_tcm(void *smc, struct fpm_smc_ring *ring,
 		   unsigned short *data, unsigned short count)
 {
+	struct v17_smc *statep = (struct v17_smc *)smc;
 	short *const sym = ring->sym;
 	const short len = ring->len;
-	const int nbits = SMC_NBITS(smc);
+	const int nbits = statep->nbits;
 	const unsigned short mask_low = (unsigned short)((1 << nbits) - 1);
 	const unsigned short bit_hi = (unsigned short)(1 << (nbits + 2));
 	const unsigned short mask_all = (unsigned short)(bit_hi - 1);
-	const int tag = SMC_MODE(smc) << 8;
+	const int tag = statep->mode.byte.value << 8;
 	short widx = ring->widx;
-	int quad = SMC_QUAD(smc);
-	int trellis = SMC_TRELLIS(smc);
-	int prev = SMC_PREV(smc);
+	int quad = statep->quad;
+	int trellis = statep->trellis;
+	int prev = statep->prev;
 	unsigned int i;
 
 	for (i = 0; i < count; i++) {
@@ -311,9 +303,9 @@ SMCv17_encoder_tcm(void *smc, struct fpm_smc_ring *ring,
 		widx = smc_ring_advance(widx, len);
 	}
 
-	SMC_QUAD(smc) = (short)quad;
-	SMC_TRELLIS(smc) = (short)trellis;
-	SMC_PREV(smc) = (short)prev;
+	statep->quad = (short)quad;
+	statep->trellis = (short)trellis;
+	statep->prev = (short)prev;
 	ring->widx = widx;
 }
 
@@ -324,13 +316,15 @@ SMCv17_encoder_tcm(void *smc, struct fpm_smc_ring *ring,
 void
 SMCv17_init(void *smc, const short *cfg)
 {
+	struct v17_smc *statep = (struct v17_smc *)smc;
+
 	if (cfg == NULL)
 		cfg = SMCv17_CFG;
 
-	memcpy(FIELD(smc, 0x00), cfg, sizeof(short[2]));
-	SMC_QUAD(smc) = 0;
-	SMC_STATE(smc) = 0;
-	SMC_TRELLIS(smc) = 0;
-	SMC_PREV(smc) = 0;
-	AT_S(smc, V17FP_SMC_SHORT_10 - V17FP_SMC) = 0;
+	memcpy(&statep->mode, cfg, sizeof(short[2]));
+	statep->quad = 0;
+	statep->state = 0;
+	statep->trellis = 0;
+	statep->prev = 0;
+	statep->r10 = 0;
 }

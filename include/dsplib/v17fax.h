@@ -1,3 +1,4 @@
+#include "dsplib/period_byte_layout.h"
 /**
  * @file v17fax.h
  * @brief ITU-T V.17 (fax): the receiver's primitives, and three
@@ -47,10 +48,18 @@
 #define DSPLIB_V17FAX_H
 
 #include "dsplib/v17data.h"	/* V17TX_OBJ_FP, V17FP_SMC, V17FP_ENCODER_SEL */
+#include "dsplib/faxcfg.h"
+#include "dsplib/fpm_agc.h"
+#include "dsplib/fpm_fse.h"
+#include "dsplib/fpm_mrf.h"
+#include "dsplib/fpm_sre.h"
+#include "dsplib/v17dec.h"
 
 struct fax_fifo;
+struct fpm_mtd;
 struct fpm_pps;
 struct fpm_sdm;
+struct fpm_tone;
 struct sgd;
 struct v17rx_cfg;	/* faxcfg.h -- and the receive instance's own head */
 
@@ -510,6 +519,121 @@ struct v17tx_cfg {
 	int		fifo_size_factor; /* +0x14 -> capacity, * 3 * 16     */
 	int		int_0018;	/* +0x18 -> V17TXP_INT_000C          */
 	int		int_001c;	/* +0x1c -> FPM_PPS_CFG.aux          */
+};
+
+union v17_result {
+	int word;
+	struct {
+		unsigned char status;
+		unsigned char flags;
+		unsigned char flags2;
+		unsigned char r3;
+	} byte;
+};
+
+struct v17tx_priv {
+	struct fax_fifo *fifo;	/* +0x00 */
+	struct sgd *sgd;	/* +0x04 */
+	int r08;		/* +0x08 */
+	int r0c;		/* +0x0c */
+	short mode;		/* +0x10 */
+	short r12;		/* +0x12 unmodelled */
+	short (*process)(void *, unsigned short *, short *, short *); /* +0x14 */
+	short state;		/* +0x18 */
+	short countdown;	/* +0x1a */
+	short r1c;		/* +0x1c */
+	unsigned short no_carrier_sym; /* +0x1e */
+};
+
+struct v17tx {
+	struct v17tx_cfg cfg;	/* +0x00 .. +0x1f */
+	union v17_result result; /* +0x20 */
+	struct v17tx_priv *priv; /* +0x24 */
+	struct v17tx_fp *fp;	/* +0x28 */
+};
+
+struct v17rx_priv {
+	struct fpm_mtd *mtd;	/* +0x00 */
+	struct fpm_tone *tone;	/* +0x04 */
+	int r08;		/* +0x08 */
+	unsigned short rate_code; /* +0x0c */
+	short r0e;		/* +0x0e unmodelled */
+	int r10;		/* +0x10 */
+	short (*process)(void *, short *, short *, unsigned short *); /* +0x14 */
+	short state;		/* +0x18 */
+	short countdown;	/* +0x1a */
+	short *scratch;		/* +0x1c */
+	short r20;		/* +0x20 */
+	short r22;		/* +0x22 unmodelled */
+	struct fpm_mtd *mtd2;	/* +0x24 */
+	short *buf2;		/* +0x28 */
+	short offband;		/* +0x2c */
+	short r2e;		/* +0x2e */
+	struct fpm_agc agc;	/* +0x30 */
+};
+
+union v17rx_agc {
+	struct fpm_agc value;
+	struct {
+		unsigned char r00[0x1c];
+		short signal;
+		short r1e;
+		unsigned char tail[0x0c];
+	} narrow;
+};
+
+struct v17rx_state {
+	int r00;
+	int r04;
+	int r08;
+	int r0c;
+	int r10;
+	int r14;
+	int r18;
+	int r1c;
+	int r20;
+	unsigned short rate_code;
+	short r26;
+	int r28;
+	struct v17_dec dec;		/* +0x2c */
+	struct fpm_mrf mrf;		/* +0x98 */
+	union v17rx_agc agc;		/* +0xb4 */
+	struct fpm_sre sre;		/* +0xe0 */
+	struct fpm_fse fse;		/* +0x170 */
+	unsigned char r4f88[4];
+	struct fpm_sdm sdm;		/* +0x4f8c */
+	short *buf_mrf;			/* +0x4fa4 */
+	short *buf_sre;			/* +0x4fa8 */
+	short qavg;			/* +0x4fac */
+	short qcount;			/* +0x4fae */
+	short r4fb0;
+	short r4fb2;
+	short energy_watch;		/* +0x4fb4 */
+	short rms_ref;			/* +0x4fb6 */
+	short rms_phase;			/* +0x4fb8 */
+	short r4fba;			/* allocation tail, unmodelled */
+};
+
+struct v17rx {
+	struct v17rx_cfg cfg;		/* +0x00 .. +0x27 */
+	union v17_result result;	/* +0x28 */
+	short *out_i;			/* +0x2c */
+	short *out_q;			/* +0x30 */
+	unsigned short *n_out;		/* +0x34 */
+	short *icoeff;			/* +0x38 */
+	short *qcoeff;			/* +0x3c */
+	unsigned short taps;		/* +0x40 */
+	short r42;
+	int r44;
+	int r48;
+	short r4c;
+	short r4e;
+	int r50;
+	int r54;
+	short r58;
+	short r5a;
+	struct v17rx_priv *ctl;		/* +0x5c */
+	struct v17rx_state *state;	/* +0x60 */
 };
 
 extern struct v17tx_cfg V17TX_CFG;

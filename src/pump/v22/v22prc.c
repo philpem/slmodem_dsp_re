@@ -51,14 +51,7 @@
  */
 
 #include "dsplib/v22prc.h"
-
-/* The object is not modelled; see v22prc.h.  These are the only accessors. */
-#define FIELD(obj, off)		((unsigned char *)(obj) + (off))
-#define FIELD_INT(obj, off)	(*(int *)(void *)FIELD((obj), (off)))
-#define FIELD_PTR(obj, off)	(*(void **)(void *)FIELD((obj), (off)))
-#define FIELD_SHORT(obj, off)	(*(short *)(void *)FIELD((obj), (off)))
-#define FIELD_USHORT(obj, off)	(*(unsigned short *)(void *)FIELD((obj), (off)))
-#define FIELD_BYTE(obj, off)	(*(unsigned char *)FIELD((obj), (off)))
+#include "dsplib/v22fp.h"
 
 /*
  * True when every one of `*count` symbols is 3.
@@ -153,7 +146,8 @@ RxClampV22(void *modem, void *arg1, short *out, short *count)
 int
 ReadGTimer(void *modem)
 {
-	int *timer = (int *)FIELD_PTR(modem, V22_OBJ_GTIMER);
+	struct v22fp *v22 = (struct v22fp *)modem;
+	int *timer = &v22->hdx->gtimer;
 
 	*timer += 20;
 	return *timer;
@@ -166,24 +160,25 @@ ReadGTimer(void *modem)
 void
 SetAdaptEqV22(void *modem, unsigned short mode)
 {
-	void *fp;
+	struct v22fp *v22 = (struct v22fp *)modem;
+	struct v22fp_dsp *dsp;
 
 	switch (mode) {
 	case 1:
-		fp = FIELD_PTR(modem, V22_OBJ_FP);
-		FIELD_INT(fp, V22FP_EQ_ADAPT) = 0;
+		dsp = v22->dsp;
+		dsp->eq_adapt = 0;
 		break;
 	case 2:
-		fp = FIELD_PTR(modem, V22_OBJ_FP);
-		FIELD_INT(fp, V22FP_EQ_ADAPT) = 1;
-		FIELD_SHORT(fp, V22FP_EQ_MODE) = 0;
+		dsp = v22->dsp;
+		dsp->eq_adapt = 1;
+		dsp->fse.mu_sel = 0;
 		break;
 	case 3:
-		fp = FIELD_PTR(modem, V22_OBJ_FP);
-		FIELD_INT(fp, V22FP_EQ_ADAPT) = 1;
-		FIELD_SHORT(fp, V22FP_EQ_MODE) = 1;
+		dsp = v22->dsp;
+		dsp->eq_adapt = 1;
+		dsp->fse.mu_sel = 1;
 		/* Set here and cleared by nothing -- mode 2 leaves it alone. */
-		FIELD_INT(fp, V22FP_EQ_EXTRA) = 1;
+		dsp->fse.lms_on = 1;
 		break;
 	default:
 		break;
@@ -193,26 +188,27 @@ SetAdaptEqV22(void *modem, unsigned short mode)
 void
 TxClockSync(void *modem)
 {
-	void *fp = FIELD_PTR(modem, V22_OBJ_FP);
-	short baud = FIELD_SHORT(fp, V22FP_BAUD);
+	struct v22fp *v22 = (struct v22fp *)modem;
+	struct v22fp_dsp *dsp = v22->dsp;
+	short baud = dsp->sre.pll_acc;
 
-	FIELD_SHORT(fp, V22FP_TX_CLOCK) = (short)(baud * 3);
+	dsp->pps.cfg.step = (unsigned short)(short)(baud * 3);
 }
 
 int
 CarrierDetect(void *modem)
 {
-	void *fp = FIELD_PTR(modem, V22_OBJ_FP);
+	struct v22fp *v22 = (struct v22fp *)modem;
 
-	return FIELD_INT(fp, V22FP_CARRIER);
+	return v22->dsp->sre.active;
 }
 
 int
 SignalDetect(void *modem)
 {
-	void *fp = FIELD_PTR(modem, V22_OBJ_FP);
+	struct v22fp *v22 = (struct v22fp *)modem;
 
-	return FIELD_INT(fp, V22FP_SIGNAL);
+	return v22->dsp->agc.signal;
 }
 /*
  * Quality as a distance from the rail: 0x8000 minus the stored figure,
@@ -228,9 +224,10 @@ SignalDetect(void *modem)
 unsigned short
 GetSignalQuality(void *modem)
 {
-	void *fp = FIELD_PTR(modem, V22_OBJ_FP);
+	struct v22fp *v22 = (struct v22fp *)modem;
 
-	return (unsigned short)(-32768 - (int)FIELD_USHORT(fp, V22FP_QUALITY));
+	return (unsigned short)(-32768
+		- (int)(unsigned short)v22->dsp->fse.mse);
 }
 
 

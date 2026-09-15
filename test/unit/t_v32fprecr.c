@@ -432,9 +432,9 @@ compare_tree(const char *what, void *a, void *b, long tag)
 	snprintf(buf, sizeof(buf), "%.50s vtb paths", what);
 	compare_shorts(buf,
 		       (const short *)(const void *)
-		       ((struct vtb *)(void *)DEC(fa)->vtb)->paths,
+		       (&DEC(fa)->vtb)->paths,
 		       (const short *)(const void *)
-		       ((struct vtb *)(void *)DEC(fb)->vtb)->paths,
+		       (&DEC(fb)->vtb)->paths,
 		       128 * 2, tag);
 	snprintf(buf, sizeof(buf), "%.50s ecc line", what);
 	compare_shorts(buf, ECC(fa)->line, ECC(fb)->line,

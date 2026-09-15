@@ -24,6 +24,7 @@
 #define DSPLIB_V32DEC_H
 
 #include "dsplib/fpm_fse.h"
+#include "dsplib/vtb.h"
 
 /*
  * THE DATAPUMP OBJECT, AS SEEN THROUGH THE SLICERS.
@@ -38,35 +39,53 @@
  * passes `owner + 0x18` to `VTB_decoder`, and `owner + 0x50` is in use here,
  * so whatever the decoder keeps there is at most 56 bytes.  Finding F3210
  * measured `sizeof(struct vtb)` at exactly 0x38, so the bound is now met
- * exactly -- but the field stays a byte array and the four trellis slicers
- * cast it, because `struct vtb` holds four POINTERS: declaring it as the
- * struct would make `struct v32_dec` a different size in the 64-bit build and
- * every offset after +0x18 in this comment false.  The 32-bit layout is the
- * one the object fixes, and the cast is where the two meet.
+ * exactly.  The period-i386 ABI is the one the object fixes, so the embedded
+ * field is the existing shared decoder state rather than an untyped byte
+ * reservation.
  */
 struct v32_dec {
 	unsigned short chan;		/* +0x00 selects prev_sym[]          */
-	unsigned char pad02[6];		/* +0x02                             */
+	short pad02;			/* +0x02                             */
+	short short_04;		/* +0x04                             */
+	short short_06;		/* +0x06                             */
 	short prev_sym[8];		/* +0x08 last absolute quadrant pair */
-	unsigned char vtb[0x38];	/* +0x18 VTB_decoder's state         */
+	struct vtb vtb;		/* +0x18 VTB_decoder's state         */
 	short ang_prev;			/* +0x50 previous angle (AB only)    */
-	short sym_i;			/* +0x52 the symbol just decided     */
-	short sym_q;			/* +0x54                             */
-	short sym_i1;			/* +0x56 one symbol back             */
-	short sym_q1;			/* +0x58                             */
-	short sym_i2;			/* +0x5a two back (AB only)          */
-	short sym_q2;			/* +0x5c                             */
+	union {
+		struct {
+			short sym_i;		/* +0x52 the symbol just decided */
+			short sym_q;		/* +0x54                         */
+			short sym_i1;		/* +0x56 one symbol back         */
+			short sym_q1;		/* +0x58                         */
+			short sym_i2;		/* +0x5a two back (AB only)      */
+			short sym_q2;		/* +0x5c                         */
+		};
+		short sym[6];
+	};
 	short eqm;			/* +0x5e leaky decision-error measure*/
 	short eqm_b;			/* +0x60 AB's second accumulator     */
 	short retrain;			/* +0x62 1 or 2; a request, not a
 					 *       state -- nothing here reads
 					 *       it back                     */
 	int rate_change;		/* +0x64 set by trn and by AB        */
-	unsigned char pad68[4];		/* +0x68                             */
+	int int_68;			/* +0x68                             */
 	short scram_tap;		/* +0x6c shift for the TRN generator */
 	unsigned short count;		/* +0x6e symbols in the current phase*/
 	unsigned int scram;		/* +0x70 TRN generator's register    */
+	unsigned short short_74;	/* +0x74                             */
+	short pad76;			/* +0x76                             */
 };
+
+#if !defined(__SIZEOF_POINTER__) || __SIZEOF_POINTER__ == 4
+typedef char v32_dec_vtb_size[(sizeof(struct vtb) == 0x38) ? 1 : -1];
+typedef char v32_dec_vtb_offset[
+	(__builtin_offsetof(struct v32_dec, vtb) == 0x18) ? 1 : -1];
+typedef char v32_dec_post_vtb_offset[
+	(__builtin_offsetof(struct v32_dec, ang_prev) == 0x50) ? 1 : -1];
+typedef char v32_dec_short74_offset[
+	(__builtin_offsetof(struct v32_dec, short_74) == 0x74) ? 1 : -1];
+typedef char v32_dec_size[(sizeof(struct v32_dec) == 0x78) ? 1 : -1];
+#endif
 
 /**
  * @brief V.32 slicer for the 4-point (1200 baud training) constellation.

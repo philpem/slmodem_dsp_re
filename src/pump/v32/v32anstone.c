@@ -32,24 +32,20 @@
 
 #include "dsplib/fpm_tone.h"
 
-/* The context is not modelled; see v32anstone.h.  These are the accessors. */
-#define FIELD(obj, off)		((unsigned char *)(obj) + (off))
-#define FIELD_I(obj, off)	(*(int *)(void *)FIELD((obj), (off)))
-#define FIELD_TONE(obj, off)	(*(struct fpm_tone **)(void *)FIELD((obj), (off)))
-
 int
 GenerateAnsTone(void *ctx, short *out, int count)
 {
-	int phase = FIELD_I(ctx, V32ANS_PHASE);
+	struct v32_ans_tone *ans = (struct v32_ans_tone *)ctx;
+	int phase = ans->phase;
 	int elapsed;
 
 	if (phase == V32ANS_PHASE_TONE) {
-		FPM_TONE_generate(FIELD_TONE(ctx, V32ANS_TONE), out, (short)count);
+		FPM_TONE_generate(ans->tone, out, (short)count);
 
-		elapsed = FIELD_I(ctx, V32ANS_ELAPSED) + count;
-		if (elapsed >= FIELD_I(ctx, V32ANS_TONE_LEN)) {
-			FIELD_I(ctx, V32ANS_ELAPSED) = 0;	/* D406 */
-			FIELD_I(ctx, V32ANS_PHASE) = V32ANS_PHASE_SILENCE;
+		elapsed = ans->elapsed + count;
+		if (elapsed >= ans->tone_len) {
+			ans->elapsed = 0;	/* D406 */
+			ans->phase = V32ANS_PHASE_SILENCE;
 			return 1;
 		}
 	} else if (phase == V32ANS_PHASE_SILENCE) {
@@ -58,17 +54,17 @@ GenerateAnsTone(void *ctx, short *out, int count)
 		for (i = 0; i < count; i++)
 			out[i] = 0;
 
-		elapsed = FIELD_I(ctx, V32ANS_ELAPSED) + count;
-		if (elapsed > FIELD_I(ctx, V32ANS_SILENCE_LEN)) {   /* D405 */
-			FIELD_I(ctx, V32ANS_ELAPSED) = 0;	/* D406 */
-			FIELD_I(ctx, V32ANS_PHASE) = V32ANS_PHASE_DONE;
+		elapsed = ans->elapsed + count;
+		if (elapsed > ans->silence_len) {   /* D405 */
+			ans->elapsed = 0;	/* D406 */
+			ans->phase = V32ANS_PHASE_DONE;
 			return 1;
 		}
 	} else {
 		return 1;
 	}
 
-	FIELD_I(ctx, V32ANS_ELAPSED) = elapsed;
+	ans->elapsed = elapsed;
 
 	return 1;
 }

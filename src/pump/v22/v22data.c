@@ -31,6 +31,7 @@
  */
 
 #include "dsplib/v22data.h"
+#include "dsplib/v22fp.h"
 
 #include "dsplib/debug.h"
 #include "dsplib/fpm_agc.h"
@@ -38,10 +39,6 @@
 #include "dsplib/fpm_sdm.h"
 #include "dsplib/fpm_smc.h"
 #include "dsplib/v22_pps.h"
-
-/* The object is not modelled; see v22data.h.  These are the only accessors. */
-#define FIELD(obj, off)		((unsigned char *)(obj) + (off))
-#define FIELD_PTR(obj, off)	(*(void **)(void *)FIELD((obj), (off)))
 
 /*
  * One block of the receive path's front end: gain-control 160 samples, then
@@ -89,6 +86,7 @@
 int
 Detect_v22(void *modem, short *data)
 {
+	struct v22fp *v22 = (struct v22fp *)modem;
 	short run_a = 0;	/* consecutive sub-blocks A returned zero on */
 	short run_b = 0;	/* the same for B                            */
 	short i, j;
@@ -100,21 +98,15 @@ Detect_v22(void *modem, short *data)
 	 * ignored in the same way.  Unlike bwchdem this caller discards the
 	 * return as well, so there is nothing to read back out of the state.
 	 */
-	FPM_AGC_agc((struct fpm_agc *)FIELD(FIELD_PTR(modem, V22_OBJ_FP),
-					    V22FP_DET_AGC),
-		    data, V22_DETECT_BLOCK);
+	FPM_AGC_agc(&v22->dsp->agc2, data, V22_DETECT_BLOCK);
 
 	for (i = 0; i < V22_DETECT_SUBBLOCKS; i++) {
 		short *chunk = data + (int)i * V22_DETECT_SUBBLOCK;
 		short va, vb;
 
-		va = FPM_MTD_detect((struct fpm_mtd *)
-				    FIELD_PTR(FIELD_PTR(modem, V22_OBJ_GTIMER),
-					      V22SHR_MTD_A),
+		va = FPM_MTD_detect(v22->hdx->mtd,
 				    chunk, V22_DETECT_SUBBLOCK);
-		vb = FPM_MTD_detect((struct fpm_mtd *)
-				    FIELD_PTR(FIELD_PTR(modem, V22_OBJ_GTIMER),
-					      V22SHR_MTD_B),
+		vb = FPM_MTD_detect(v22->hdx->mtd2,
 				    chunk, V22_DETECT_SUBBLOCK);
 
 		if (vb != 0)
@@ -149,6 +141,7 @@ Detect_v22(void *modem, short *data)
 void
 ScrambleDataV22(void *modem, unsigned short *data, unsigned short count)
 {
+	struct v22fp *v22 = (struct v22fp *)modem;
 	/*
 	 * NO INTERMEDIATE LOCAL, and that is measured rather than a style
 	 * choice.  Seven spellings of these two wrappers were compiled --
@@ -164,16 +157,16 @@ ScrambleDataV22(void *modem, unsigned short *data, unsigned short count)
 	 * `add $imm32,%eax` short form the object uses.  In DescrambleDataV22
 	 * that one byte is the whole size difference.  Finding F8120.
 	 */
-	FPM_SDM_scrambler((struct fpm_sdm *)FIELD(FIELD_PTR(modem, V22_OBJ_FP), V22FP_SDM_TX),
-			  data, count);
+	FPM_SDM_scrambler(&v22->dsp->sdm, data, count);
 }
 
 void
 DescrambleDataV22(void *modem, unsigned short *data, unsigned short count)
 {
+	struct v22fp *v22 = (struct v22fp *)modem;
+
 	/* No intermediate local, for the reason ScrambleDataV22 records. */
-	FPM_SDM_descrambler((struct fpm_sdm *)FIELD(FIELD_PTR(modem, V22_OBJ_FP), V22FP_SDM_RX),
-			    data, count);
+	FPM_SDM_descrambler(&v22->dsp->sdm2, data, count);
 }
 /*
  * Bits to samples, in two stages that share one ring.
@@ -193,16 +186,13 @@ unsigned short
 ModDataV22(void *modem, const unsigned short *data, short *out,
 	   unsigned short count)
 {
-	void *fp;
+	struct v22fp *v22 = (struct v22fp *)modem;
+	struct v22fp_dsp *dsp;
 
-	fp = FIELD_PTR(modem, V22_OBJ_FP);
-	FPM_SMC_encoder((struct fpm_smc *)FIELD(fp, V22FP_SMC),
-			(struct fpm_smc_ring *)FIELD(fp, V22FP_SMC_RING),
-			data, count);
+	dsp = v22->dsp;
+	FPM_SMC_encoder(&dsp->smc, &dsp->smc_ring, data, count);
 
-	fp = FIELD_PTR(modem, V22_OBJ_FP);
+	dsp = v22->dsp;
 	return (unsigned short)V22_PPS_filter(
-			(struct v22_pps *)FIELD(fp, V22FP_PPS),
-			(struct fpm_smc_ring *)FIELD(fp, V22FP_SMC_RING),
-			out, count);
+			&dsp->pps, &dsp->smc_ring, out, count);
 }

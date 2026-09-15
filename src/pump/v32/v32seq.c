@@ -69,12 +69,9 @@
 
 #include "dsplib/v32data.h"		/* V32_OBJ_FP, and only for that */
 
-/* The instance is not modelled; see v32seq.h.  These are the only accessors. */
+/* The modem root remains unmodelled; see v32struct.h. */
 #define FIELD(obj, off)		((unsigned char *)(obj) + (off))
 #define FIELD_PTR(obj, off)	(*(void **)(void *)FIELD((obj), (off)))
-#define FIELD_S(obj, off)	(*(short *)(void *)FIELD((obj), (off)))
-#define FIELD_US(obj, off)	(*(unsigned short *)(void *)FIELD((obj), (off)))
-#define FIELD_I(obj, off)	(*(int *)(void *)FIELD((obj), (off)))
 
 short V32_RATE_SEQ[V32_RATE_COUNT] = {
 	0x0d11, 0x0b11, 0x0b91, 0x09d1, 0x09b1, 0x0ff9, 0x0997
@@ -95,8 +92,7 @@ short V32_FINAL_RATE_SEQ[V32_RATE_COUNT] = {
  * so does this file.
  */
 short V32_ESEQ[V32_RATE_COUNT] = {
-	(short)0xfd11, (short)0xfb11, (short)0xfb91, (short)0xf9d1,
-	(short)0xf9b1, (short)0xf999, (short)0xf997
+	0xfd11, 0xfb11, 0xfb91, 0xf9d1, 0xf9b1, 0xf999, 0xf997
 };
 
 /*
@@ -109,8 +105,9 @@ static int
 v32_common_rate(void *modem, unsigned short seq)
 {
 	int rate = V32_RATE_NONE;
-	void *fp = FIELD_PTR(modem, V32_OBJ_FP);
-	short local = V32_RATE_SEQ[FIELD_S(fp, V32FP_RX_RATE_INDEX)];
+	struct v32_fp *fp = (struct v32_fp *)
+		((struct v32_modem *)modem)->fp;
+	short local = V32_RATE_SEQ[fp->rx_rate_index];
 
 	if ((seq & 0x0008) && (local & 0x0008))
 		rate = 5;
@@ -192,16 +189,17 @@ void
 InitGenSequence(void *modem, unsigned short pattern, unsigned short total,
 		unsigned short width)
 {
-	void *hdx = FIELD_PTR(modem, V32_OBJ_HDX);
+	struct v32_hdx *hdx = (struct v32_hdx *)
+		((struct v32_modem *)modem)->hdx;
 	/* The object retains the promoted quotient until the two short stores.
 	 * A short local adds an unsupported movzwl after the decrement. */
 	int top = total / width - 1;	/* D401 */
 
-	FIELD_US(hdx, V32HDX_GEN_WIDTH) = width;
-	FIELD_US(hdx, V32HDX_GEN_PATTERN) = pattern;
-	FIELD_US(hdx, V32HDX_GEN_INDEX_MASK) = top;
-	FIELD_US(hdx, V32HDX_GEN_INDEX) = top;
-	FIELD_US(hdx, V32HDX_GEN_MASK) =
+	hdx->gen_width = width;
+	hdx->gen_pattern = pattern;
+	hdx->gen_index_mask = top;
+	hdx->gen_index = top;
+	hdx->gen_mask =
 		(unsigned short)((1u << width) - 1u);		/* D402 */
 }
 
@@ -218,34 +216,36 @@ InitGenSequence(void *modem, unsigned short pattern, unsigned short total,
 void
 GenSequence(void *modem, short *out, unsigned short count)
 {
-	void *hdx = FIELD_PTR(modem, V32_OBJ_HDX);
-	int width = FIELD_US(hdx, V32HDX_GEN_WIDTH);
-	int pattern = FIELD_US(hdx, V32HDX_GEN_PATTERN);
-	unsigned short index = FIELD_US(hdx, V32HDX_GEN_INDEX);
+	struct v32_hdx *hdx = (struct v32_hdx *)
+		((struct v32_modem *)modem)->hdx;
+	int width = hdx->gen_width;
+	int pattern = hdx->gen_pattern;
+	unsigned short index = hdx->gen_index;
 	unsigned short i;
 
 	for (i = 0; i < count; i++) {
 		*out++ = (short)((pattern >> (index * width)) &
-				 FIELD_US(hdx, V32HDX_GEN_MASK));	/* D402 */
+				 hdx->gen_mask);	/* D402 */
 		index = (unsigned short)((index - 1) &
-					 FIELD_US(hdx, V32HDX_GEN_INDEX_MASK));
+					 hdx->gen_index_mask);
 	}
 
-	FIELD_US(hdx, V32HDX_GEN_INDEX) = index;
+	hdx->gen_index = index;
 }
 
 void
 InitDetSequence(void *modem, int target, int mask, int out_mask,
 		unsigned short width)
 {
-	void *hdx = FIELD_PTR(modem, V32_OBJ_HDX);
+	struct v32_hdx *hdx = (struct v32_hdx *)
+		((struct v32_modem *)modem)->hdx;
 
-	FIELD_US(hdx, V32HDX_DET_WIDTH) = width;
-	FIELD_I(hdx, V32HDX_DET_OUT_MASK) = out_mask;
-	FIELD_I(hdx, V32HDX_DET_TARGET) = target;
-	FIELD_I(hdx, V32HDX_DET_MASK) = mask;
-	FIELD_I(hdx, V32HDX_DET_REG) = 0;
-	FIELD_I(hdx, V32HDX_DET_MATCH) = 0;
+	hdx->det_width = width;
+	hdx->det_out_mask = out_mask;
+	hdx->det_target = target;
+	hdx->det_mask = mask;
+	hdx->det_reg = 0;
+	hdx->det_match = 0;
 }
 
 /*
@@ -267,11 +267,12 @@ InitDetSequence(void *modem, int target, int mask, int out_mask,
 short
 DetSequence(void *modem, const short *data, unsigned short count)
 {
-	void *hdx = FIELD_PTR(modem, V32_OBJ_HDX);
-	int nbits = FIELD_US(hdx, V32HDX_DET_WIDTH);
-	int reg = FIELD_I(hdx, V32HDX_DET_REG);
-	int mask = FIELD_I(hdx, V32HDX_DET_MASK);
-	int target = FIELD_I(hdx, V32HDX_DET_TARGET);
+	struct v32_hdx *hdx = (struct v32_hdx *)
+		((struct v32_modem *)modem)->hdx;
+	int nbits = hdx->det_width;
+	int reg = hdx->det_reg;
+	int mask = hdx->det_mask;
+	int target = hdx->det_target;
 	short nread = 0;
 	unsigned short i;
 
@@ -295,9 +296,8 @@ DetSequence(void *modem, const short *data, unsigned short count)
 			 * CarrierDetectB103.
 			 */
 			if (((reg & mask) == target) & (reg != -1)) {
-				FIELD_I(hdx, V32HDX_DET_MATCH) =
-					reg & FIELD_I(hdx, V32HDX_DET_OUT_MASK);
-				FIELD_I(hdx, V32HDX_DET_REG) = reg;
+				hdx->det_match = reg & hdx->det_out_mask;
+				hdx->det_reg = reg;
 				found = 1;
 			}
 		}
@@ -306,7 +306,7 @@ DetSequence(void *modem, const short *data, unsigned short count)
 			return nread;
 	}
 
-	FIELD_I(hdx, V32HDX_DET_REG) = reg;
+	hdx->det_reg = reg;
 
 	return -1;
 }
@@ -314,9 +314,10 @@ DetSequence(void *modem, const short *data, unsigned short count)
 int
 GetSequence(void *modem)
 {
-	void *hdx = FIELD_PTR(modem, V32_OBJ_HDX);
+	struct v32_hdx *hdx = (struct v32_hdx *)
+		((struct v32_modem *)modem)->hdx;
 
-	return FIELD_I(hdx, V32HDX_DET_MATCH);
+	return hdx->det_match;
 }
 
 short
@@ -325,9 +326,10 @@ LoadReg(void *modem, short reg)
 	short value = 0;
 
 	if (reg >= 0 && reg <= V32HDX_NREGS - 1) {
-		void *hdx = FIELD_PTR(modem, V32_OBJ_HDX);
+		struct v32_hdx *hdx = (struct v32_hdx *)
+			((struct v32_modem *)modem)->hdx;
 
-		value = *((short *)(void *)FIELD(hdx, V32HDX_REGS) + reg);
+		value = hdx->regs[reg];
 	}
 
 	return value;
@@ -337,8 +339,9 @@ void
 StoreReg(void *modem, short value, short reg)
 {
 	if (reg >= 0 && reg <= V32HDX_NREGS - 1) {
-		void *hdx = FIELD_PTR(modem, V32_OBJ_HDX);
+		struct v32_hdx *hdx = (struct v32_hdx *)
+			((struct v32_modem *)modem)->hdx;
 
-		*((short *)(void *)FIELD(hdx, V32HDX_REGS) + reg) = value;
+		hdx->regs[reg] = value;
 	}
 }
