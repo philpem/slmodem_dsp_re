@@ -757,7 +757,7 @@
   "build/test/t_v90spectral"
  ],
  "v90sessionflag": [
-  "src/pump/v90/V90SessionFlag.cpp",
+  "src/pump/v90/V90Phase3Demodulator.cpp",
   "build/test/t_v90sessionflag"
  ],
  "v90specialcond": [
@@ -1041,11 +1041,11 @@
   "build/test/t_mtkphasor"
  ],
  "tonecreate": [
-  "src/service/Fdspkrnl.c",
+  "src/service/TONE.c",
   "build/test/t_tonecreate"
  ],
  "fdspdp": [
-  "src/service/Fdspkrnl.c",
+  "src/service/Fdsp.c",
   "build/test/t_fdspdp"
  ],
  "voicedp": [
@@ -1071,5 +1071,25 @@
  "moduluscoderstd_encoder": [
   "src/pump/v90/V90ModulusEncoder.cpp",
   "build/test/t_moduluscoder"
+ ],
+ "fdspkrnl_tone": [
+  "src/service/TONE.c",
+  "build/test/t_fdspkrnl"
+ ],
+ "v90sessionflag_p4d": [
+  "src/pump/v90/V90Phase4Demodulator.cpp",
+  "build/test/t_v90sessionflag"
+ ],
+ "v90sessionflag_modulator": [
+  "src/pump/v90/V90Modulator.cpp",
+  "build/test/t_v90sessionflag"
+ ],
+ "v90sessionflag_demodulator": [
+  "src/pump/v90/V90Demodulator.cpp",
+  "build/test/t_v90sessionflag"
+ ],
+ "v90sessionflag_modem": [
+  "src/pump/v90/V90Modem.cpp",
+  "build/test/t_v90sessionflag"
  ]
 }

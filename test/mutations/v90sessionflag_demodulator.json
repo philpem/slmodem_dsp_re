@@ -1,0 +1,19 @@
+[
+ {
+  "label": "demodulator prints after storing the flag",
+  "find": "\tedprintf(\"V90Demodulator: setSessionFlag, flag = %d\\r\\n\", flag);\n\n\tsessionFlag = flag;",
+  "replace": "\tsessionFlag = flag;\n\n\tedprintf(\"V90Demodulator: setSessionFlag, flag = %d\\r\\n\", flag);",
+  "equivalent": true,
+  "why": "The two statements are independent: edprintf's format only reads `flag` (the parameter, a local copy `sessionFlag = flag` cannot change), and `sessionFlag = flag` does not read anything edprintf could have modified -- edprintf has no side effect on this object's state at all. Swapping them changes neither what is printed nor what is stored for any input. The object's own order is documented in the comment immediately above this function ('THE DIAGNOSTIC COMES FIRST') and is worth keeping for codegen/similarity reasons, but no differential input can fail on the swap."
+ },
+ {
+  "label": "demodulator prints the field rather than the argument",
+  "find": "\tedprintf(\"V90Demodulator: setSessionFlag, flag = %d\\r\\n\", flag);",
+  "replace": "\tedprintf(\"V90Demodulator: setSessionFlag, flag = %d\\r\\n\", sessionFlag);"
+ },
+ {
+  "label": "the demodulator's flag goes to +0x2c",
+  "find": "\tsessionFlag = flag;\n\tphase3Demodulator->setSessionFlag(flag);",
+  "replace": "\t*(unsigned int *)((char *)this + 0x2c) = flag;\n\tphase3Demodulator->setSessionFlag(flag);"
+ }
+]

@@ -123,8 +123,8 @@
  },
  {
   "label": "ctor: +0x30 takes argument 13 rather than argument 14",
-  "find": "\tsessionFlag = flag;",
-  "replace": "\tsessionFlag = (unsigned int)compMode;"
+  "find": "\tadditionalCPinfo = cpInfo;\n\tsessionFlag = flag;",
+  "replace": "\tadditionalCPinfo = cpInfo;\n\tsessionFlag = (unsigned int)compMode;"
  },
  {
   "label": "ctor: the codec type is not stored at +0x00",

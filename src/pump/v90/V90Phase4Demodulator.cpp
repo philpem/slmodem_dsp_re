@@ -245,6 +245,22 @@ V90Phase4Demodulator::~V90Phase4Demodulator()
  * 0x24(%ebx) into %eax ahead of the call and stores the zero after it -- so
  * the value that reaches the log is how long the outgoing state lasted.
  */
+#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+#define SF_OFF_P4D(cls, field, off, tag) \
+	typedef char sf_off_p4d_##tag[ \
+	    ((int)__builtin_offsetof(cls, field) == (off)) ? 1 : -1]
+SF_OFF_P4D(V90Phase4Demodulator, sessionFlag, 0x0000, p4d_flag);
+SF_OFF_P4D(V90Phase4Demodulator, phase4Modulator, 0x0050, p4d_mod);
+#undef SF_OFF_P4D
+#endif
+
+void
+V90Phase4Demodulator::setSessionFlag(unsigned int flag)
+{
+	sessionFlag = flag;
+	phase4Modulator.setSessionFlag(flag);
+}
+
 void
 V90Phase4Demodulator::enterWaitForCP()
 {

@@ -211,6 +211,9 @@ enum Phase4DemodulatorState {
 
 class V90Phase4Demodulator {
 public:
+	/* Store the session flag and forward it to the embedded modulator. */
+	void setSessionFlag(unsigned int flag);
+
 	/**
 	 * @brief Construct the phase 4 demodulator: store the eleven
 	 *        constructor arguments and build the embedded modulator and
@@ -319,8 +322,7 @@ public:
 	 * that widens is one whose own result is `int`, so `getDecision`
 	 * does. Nothing else in the object separates the three.
 	 *
-	 * `setSessionFlag` and the remainder are declared nowhere yet and
-	 * belong to whichever batch writes them. `trn2dKnownDemod` headed
+	 * `setSessionFlag` is declared above. `trn2dKnownDemod` headed
 	 * that list -- with a stale note blaming `V90SpectralShaper`, which
 	 * was never its dependency -- and is written now (the VPcmV34Main
 	 * leaf pass); `reset` moved below earlier.

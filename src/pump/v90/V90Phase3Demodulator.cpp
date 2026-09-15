@@ -2324,6 +2324,22 @@ V90Phase3Demodulator::clearVerificationStatus()
  * the modulator's `exitDIL` may set `eventCode` to 6, and this is one of the
  * places that notices.
  */
+#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+#define SF_OFF_P3D(cls, field, off, tag) \
+	typedef char sf_off_p3d_##tag[ \
+	    ((int)__builtin_offsetof(cls, field) == (off)) ? 1 : -1]
+SF_OFF_P3D(V90Phase3Demodulator, sessionFlag, 0x0008, p3d_flag);
+SF_OFF_P3D(V90Phase3Demodulator, phase3Modulator, 0x0034, p3d_mod);
+#undef SF_OFF_P3D
+#endif
+
+void
+V90Phase3Demodulator::setSessionFlag(unsigned int flag)
+{
+	sessionFlag = flag;
+	phase3Modulator.setSessionFlag(flag);
+}
+
 void
 V90Phase3Demodulator::exitDIL()
 {

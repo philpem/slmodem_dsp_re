@@ -1439,7 +1439,7 @@
    }
   },
   "tonecreate": {
-   "key": "e510dac03123efb7a1ad5fe7429550b6c2f4b1157445068a59d9cde7ac5cd514",
+   "key": "44665c2d019554527aae1f8e084d35c0eb4eda2aa5db6fd7a6863edc09cfae90",
    "summary": "33 mutations: 33 caught (33 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "TONE_CFG claims 52 taps": "caught",
@@ -9017,25 +9017,49 @@
    }
   },
   "v90sessionflag": {
-   "key": "5059324850afbf75b7754fa8bc3ed94a423208952799f8e36695469456d58c16",
-   "summary": "16 mutations: 14 caught (14 by test, 0 by strings), 0 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
+   "key": "69b84f995bf3d05816817e67ebcca7207155bb7212550cc41d37a64380e9cda4",
+   "summary": "3 mutations: 3 caught (3 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "phase 3 demodulator reaches the modulator through a pointer": "caught",
+    "phase 3 demodulator stores at +0x00, not +0x08": "caught",
+    "phase 3 demodulator's subobject sits at +0x30": "caught"
+   }
+  },
+  "v90sessionflag_demodulator": {
+   "key": "8290eb0a05417b1648a95f19c32e63dd4242f7df987cb6ed17d0b9a661b41bf3",
+   "summary": "3 mutations: 2 caught (2 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "demodulator prints after storing the flag": "equivalent",
     "demodulator prints the field rather than the argument": "caught",
+    "the demodulator's flag goes to +0x2c": "caught"
+   }
+  },
+  "v90sessionflag_modem": {
+   "key": "e0209fc8d3b9fc58034c3ab705b87df5b15f51714e13e6c2e5f4a0ba3e5b5d35",
+   "summary": "6 mutations: 5 caught (5 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
+   "verdicts": {
     "modem falls through to the modulator": "caught",
     "modem reads the side after storing the flag": "equivalent",
     "modem stores the flag only when it calls something": "caught",
     "modem's two sides are swapped": "caught",
+    "the modem takes its two halves from the wrong offsets": "caught",
+    "the modem's flag goes to +0x49bc, where the side is": "caught"
+   }
+  },
+  "v90sessionflag_modulator": {
+   "key": "6c7fc5a4e501f269360613897ecc1eef5de478d3da8cf2d4c6f4c12b3bd9ae8f",
+   "summary": "3 mutations: 3 caught (3 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
     "modulator calls only the phase 3 half": "caught",
     "modulator embeds rather than dereferences": "caught",
-    "phase 3 demodulator reaches the modulator through a pointer": "caught",
-    "phase 3 demodulator stores at +0x00, not +0x08": "caught",
-    "phase 3 demodulator's subobject sits at +0x30": "caught",
-    "phase 4 demodulator's subobject sits at +0x4c": "caught",
-    "the demodulator's flag goes to +0x2c": "caught",
-    "the modem takes its two halves from the wrong offsets": "caught",
-    "the modem's flag goes to +0x49bc, where the side is": "caught",
     "the modulator's flag goes to +0x2c": "caught"
+   }
+  },
+  "v90sessionflag_p4d": {
+   "key": "5fd465fa8f8e9e5524ab3104236f46e936d6035cb1f7eefc4c064982aacd0402",
+   "summary": "1 mutations: 1 caught (1 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "phase 4 demodulator's subobject sits at +0x4c": "caught"
    }
   },
   "v90specgeomstd": {
