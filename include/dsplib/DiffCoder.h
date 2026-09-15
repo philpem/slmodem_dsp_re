@@ -288,12 +288,20 @@ template <class T>
 void ParallelDifferentialDecoder<T>::process(T *in, T *out)
 {
 	unsigned i;
+	T *state = state_;
 
+	/* Cache state_ and advance all three pointers, as in the object.
+	 * Preserve the input byte before writing output, including in-place
+	 * decoding.  The loop bound remains a member read.  See
+	 * docs/parallel-decoder-retained-result.md for controls and residual. */
 	for (i = 0; i < size_; i++) {
-		T x = in[i];
+		T x = *in;
 
-		out[i] = x ^ state_[i];
-		state_[i] = x;
+		*out = x ^ *state;
+		*state = x;
+		state++;
+		in++;
+		out++;
 	}
 }
 

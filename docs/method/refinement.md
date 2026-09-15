@@ -1457,6 +1457,17 @@ family:
 
 ## Distinguish a cached pointer from repeated member loads
 
+The parallel decoder independently exhibits the same distinction: its
+reference body caches `state_`, advances input/output/state pointers, saves
+the input byte before writing output, then updates state. Applying that
+observed structure reduces its 62-byte reconstruction to 58 bytes against
+the original 57. The residual is an extra byte in the load/XOR sequence,
+not evidence to add a cast, barrier, or aliasing promise. All 18 header
+consumer controls reproduce their baselines; only the decoder helper changes.
+See [the decoder result](../parallel-decoder-retained-result.md) for the
+period gates, whole-object comparison, and explicitly rejected invalid run.
+
+
 An unchanged address calculation is not the same evidence as an unchanged
 memory access pattern. In `ParallelDifferentialEncoder<unsigned char>::process`,
 the object reads `state_` once before the loop, advances state/input/output
