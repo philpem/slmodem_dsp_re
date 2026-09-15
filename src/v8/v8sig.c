@@ -120,38 +120,6 @@ v8_fsktxfilter(struct v8 *v, short sample)
 }
 
 /*
- * Advance a sliding DFT.  One oscillator per bin rather than a transform over
- * a block: each bin steps its own phase, reads cosine and sine out of the one
- * table a quarter cycle apart, and adds the products into its running sums.
- */
-void
-v8_dftupdate(struct v8_dft_bin *bins, short nbins, const short *samples,
-	     short nsamples)
-{
-	short j;
-
-	for (j = 0; j < nsamples; j++) {
-		short i;
-
-		for (i = 0; i < nbins; i++) {
-			struct v8_dft_bin *b = &bins[i];
-			unsigned phase;
-			unsigned idx;
-			int x = samples[j];
-
-			phase = ((unsigned)(unsigned short)b->phase
-				 + (unsigned short)b->step) & 0x3fff;
-			b->phase = (short)phase;
-
-			idx = phase >> 6;
-			b->re += (v8_cosread((unsigned char)idx) * x) >> 6;
-			b->im += (v8_cosread((unsigned char)(idx + 0x40)) * x)
-				 >> 6;
-		}
-	}
-}
-
-/*
  * Four samples of FSK.  The two carriers differ only in which increment is
  * added to the shared phase, so the branch is one field apart; everything
  * after -- table lookup, amplitude, shaping filter -- is common.

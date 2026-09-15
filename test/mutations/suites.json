@@ -145,11 +145,11 @@
   "build/test/t_v92alloc"
  ],
  "moduluscoder": [
-  "src/pump/v90/ModulusCoder.cpp",
+  "src/pump/v90/V90ModulusDecoder.cpp",
   "build/test/t_moduluscoder"
  ],
  "moduluscoderstd": [
-  "src/pump/v90/ModulusCoder.cpp",
+  "src/pump/v90/V90ModulusDecoder.cpp",
   "build/test/t_moduluscoder"
  ],
  "notch": [
@@ -1063,5 +1063,13 @@
  "voicedprx": [
   "src/service/voicedp.c",
   "build/test/t_voicedprx"
+ ],
+ "moduluscoder_encoder": [
+  "src/pump/v90/V90ModulusEncoder.cpp",
+  "build/test/t_moduluscoder"
+ ],
+ "moduluscoderstd_encoder": [
+  "src/pump/v90/V90ModulusEncoder.cpp",
+  "build/test/t_moduluscoder"
  ]
 }
