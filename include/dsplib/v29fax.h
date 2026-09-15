@@ -169,7 +169,15 @@ struct v29_rx_detector {
 	int int_0008;
 	short rate;
 	unsigned char pad_000e[2];
-	short (*handler)(void *, short *, short *, unsigned short *);
+	/*
+	 * Active receive-state handler. modem is the owning v29_rx, NOT
+	 * this detector. count is the input count on entry and the unconsumed
+	 * count on return. Return the number of output words written: the
+	 * V29RX_modem dispatcher advances in by the consumed count and out by
+	 * the return value. A transition can return zero without producing data.
+	 */
+	short (*handler)(void *modem, short *in, short *out,
+			 unsigned short *count);
 	short state, state_count;
 	short *buf;
 	short gate_1c;
@@ -204,7 +212,16 @@ struct v29_tx_params {
 	int int_0008;
 	short rate;
 	unsigned char pad_000e[2];
-	short (*handler)(void *, unsigned short *, short *, short *);
+	/*
+	 * Active transmit-state handler. modem is the owning v29_tx_root,
+	 * NOT this parameter block. in is the dispatcher's input-word pointer;
+	 * individual states may ignore it. budget is the remaining output
+	 * sample budget, updated by the handler, NOT an input-word count.
+	 * Return the number of samples written to out. V29TX_modem advances
+	 * out by that result and dispatches again while budget remains positive.
+	 */
+	short (*handler)(void *modem, unsigned short *in, short *out,
+			 short *budget);
 	short state, short_0016;
 	short scram_sr;
 	unsigned char pad_001a[2];
