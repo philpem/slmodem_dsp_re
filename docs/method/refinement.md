@@ -1455,6 +1455,50 @@ family:
   Check the flag dependency before moving a function template whose body uses
   a transcendental. See #74's F11356.
 
+## Equal-width field types still carry aliasing information
+
+Do not normalize an original `long` to `int` merely because both occupy four
+bytes in the period build. Equal size, signedness and offsets do not establish
+the same source type: GCC's alias analysis can distinguish the declarations
+and consequently move loads, stores and register lifetimes differently.
+
+The worked case is `dsp_info.clock_deviation`. Smart Link's vendored host
+header declares it `long`; the reconstruction had deliberately substituted
+`int` to retain a four-word layout on LP64. Under Gentoo GCC 3.4.2-r2 that
+substitution delayed a load in `dp_runtime_create` past several integer
+stores. Restoring the independently evidenced host type reduced the function's
+byte mismatch from 53 to 28 without changing its 298-byte size. All 830
+baseline exact functions survived the complete-object census; among 26
+header consumers, only `dp_param.c` changed.
+
+The discriminator was a crossed experiment, not a nearest-score search:
+source and destination `int`/`long` types were tested with retained flags
+and `-fno-strict-aliasing`. All four no-strict-aliasing cells reproduced the
+original reconstruction object. Thus the type substitution's effect was
+measured as an alias-analysis interaction. The destination-type controls
+lacked independent provenance and were not retained.
+
+Use this workflow when widths and call targets agree but load/store placement
+does not:
+
+1. Check original host headers, mangled argument types and other independent
+   declaration evidence before rewriting statements to match the schedule.
+2. Reproduce the unchanged full TU through the experiment path, then cross
+   the evidenced type alternative with an alias-analysis control. Treat the
+   control flag as a diagnostic, not a proposed global exception.
+3. Measure every consumer of a shared declaration, including exact-member
+   losses, nonexact bodies, bindings and the correctly ordered partial link.
+4. Validate retention with the period differential gate. Track a native
+   64-bit ABI-layout consequence separately; do not silently normalize the
+   original type for portability inside the reconstruction.
+
+This solves an identifiable reconstruction mistake, not every remaining
+scheduling difference: `dp_runtime_create` is still non-exact. A byte-distance
+gain alone is not evidence for a declaration, and a function-level gain need
+not improve the whole-section positional metric when other layout differences
+remain. See [the experiment](../dp-param-alias-experiment.md),
+[the shared-header audit](../dp-param-shared-header.md), and issues #15/#22.
+
 ## What does not work
 
 - **Renaming a variable.** Free for the compiler (7002). It changes nothing.
