@@ -401,7 +401,7 @@ V32RngInitNextState(void *modem)
 		SetTxModeV32(modem, V32_TX_MODE[rate]);
 		InitGenSequence(modem, 0xffff, 0x10, 8);
 		if (rate > 2)
-			FP(modem)->tx_smc.f10 = 0;
+			FP(modem)->tx_smc.trellis_state = 0;
 		break;
 
 	case V32_STATE_F:
@@ -605,7 +605,7 @@ V32RngRespNextState(void *modem)
 		hdx->state_left = 0x18;
 		hdx->tx_state = (void *)TxHdxScrSequence;
 		if (rate > 2)
-			FP(modem)->tx_smc.f10 = 0;
+			FP(modem)->tx_smc.trellis_state = 0;
 		break;
 
 	case V32_STATE_G:

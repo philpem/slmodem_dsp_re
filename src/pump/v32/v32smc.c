@@ -1,5 +1,5 @@
 /*
- * v32smc.c -- ITU-T V.32/V.32bis: the absolute and differential encoders.
+ * v32smc.c -- ITU-T V.32/V.32bis: absolute, differential and trellis encoders.
  *
  * Reconstructed from dsplibs.o:
  *   SMCv32_encoder_dif  .text   0x07f950   357
@@ -7,11 +7,9 @@
  *   SMCv32_PMAP16       .rodata 0x007daa     8
  *   SMCv32_PMAP_ABS16   .rodata 0x007da2     8
  *
- * NOT here: `SMCv32_encoder_tcm` (0x7fb60, 374 bytes), the trellis coder.
- * It shares this state object and this output ring, reads three more fields
- * of the first (+0x0e, +0x10, +0x14) and indexes `TrellisEncodeDifTable`;
- * those fields are declared in v32smc.h so that the struct is not reshaped
- * when it lands.  See finding F1625.
+ * `SMCv32_encoder_tcm` (0x7fb60, 374 bytes), below, shares this state object
+ * and output ring and uses three additional fields (+0x0e, +0x10, +0x14).
+ * See finding F1625 for the initial recovery and v32smc.h for their roles.
  *
  * ---------------------------------------------------------------------------
  * What both encoders do
@@ -209,7 +207,7 @@ SMCv32_encoder_abs(struct v32_smc *smc, struct v32_symout *out,
  *     rot     = (SMCv32_MOD[word >> nbits] >> (quad * 4)) & 7
  *     out     = ((rot << nbits) + (word & mask_low)) | (mode << 8)
  *
- * `nbits` is `smc->f14` and the three masks are derived from it once, before
+ * `nbits` is `smc->uncoded_bits` and the three masks are derived from it once, before
  * the loop: `mask_low` is `(1 << nbits) - 1`, `mask_all` is
  * `(1 << (nbits + 2)) - 1`, and the constant added on the `prev > 3` arm is
  * `1 << (nbits + 2)`.  All three are truncated to 16 bits where they are
@@ -231,15 +229,15 @@ SMCv32_encoder_tcm(struct v32_smc *smc, struct v32_symout *out, short *in,
 {
 	short *const buf = out->buf;
 	const short limit = out->limit;
-	const int nbits = smc->f14;
+	const int nbits = smc->uncoded_bits;
 	const unsigned short mask_low = (unsigned short)((1 << nbits) - 1);
 	const unsigned short bit_hi = (unsigned short)(1 << (nbits + 2));
 	const unsigned short mask_all = (unsigned short)(bit_hi - 1);
 	const int tag = smc->mode << 8;
 	short widx = out->widx;
 	int quad = smc->quad;
-	int trellis = smc->f0e;
-	int prev = smc->f10;
+	int trellis = smc->trellis_diff_state;
+	int prev = smc->trellis_state;
 	unsigned int i;
 
 	for (i = 0; i < count; i++) {
@@ -269,7 +267,7 @@ SMCv32_encoder_tcm(struct v32_smc *smc, struct v32_symout *out, short *in,
 	}
 
 	smc->quad = (short)quad;
-	smc->f0e = (short)trellis;
-	smc->f10 = (short)prev;
+	smc->trellis_diff_state = (short)trellis;
+	smc->trellis_state = (short)prev;
 	out->widx = widx;
 }

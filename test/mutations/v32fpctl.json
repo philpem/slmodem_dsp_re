@@ -29,8 +29,8 @@
  },
  {
   "label": "9600 trellis carries one uncoded bit rather than two",
-  "find": "\t\tSMC(fp)->f14 = 2;\n\t\tSMC(fp)->mode = 2;",
-  "replace": "\t\tSMC(fp)->f14 = 1;\n\t\tSMC(fp)->mode = 2;"
+  "find": "\t\tSMC(fp)->uncoded_bits = 2;\n\t\tSMC(fp)->mode = 2;",
+  "replace": "\t\tSMC(fp)->uncoded_bits = 1;\n\t\tSMC(fp)->mode = 2;"
  },
  {
   "label": "the transmit scrambler's group width is the coder's mode rather than the bits per symbol",

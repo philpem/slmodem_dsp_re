@@ -140,9 +140,9 @@ run_tcm(const char *label, short nbits, short trellis, short prev, short quad,
 	memset(&sa, 0, sizeof(sa));
 	sa.mode = 1;
 	sa.quad = quad;
-	sa.f0e = trellis;
-	sa.f10 = prev;
-	sa.f14 = (unsigned short)nbits;
+	sa.trellis_diff_state = trellis;
+	sa.trellis_state = prev;
+	sa.uncoded_bits = (unsigned short)nbits;
 	sb = sa;
 
 	memset(ring_a, 0x5a, sizeof(ring_a));
@@ -165,8 +165,8 @@ run_tcm(const char *label, short nbits, short trellis, short prev, short quad,
 		SMCv32_encoder_tcm(&sb, &ob, in_b + fed,
 				   (unsigned short)chunk);
 		diff_eq_int("quad at %ld", sb.quad, sa.quad, fed);
-		diff_eq_int("trellis at %ld", sb.f0e, sa.f0e, fed);
-		diff_eq_int("prev at %ld", sb.f10, sa.f10, fed);
+		diff_eq_int("trellis at %ld", sb.trellis_diff_state, sa.trellis_diff_state, fed);
+		diff_eq_int("prev at %ld", sb.trellis_state, sa.trellis_state, fed);
 		diff_eq_int("widx at %ld", ob.widx, oa.widx, fed);
 		fed += chunk;
 	}
@@ -188,7 +188,7 @@ run_tcm(const char *label, short nbits, short trellis, short prev, short quad,
 		diff_eq_int("the input was masked in place (%ld)",
 			    changed > 0, 1, changed);
 	}
-	diff_eq_int("nbits untouched (%ld)", sb.f14, sa.f14, 0);
+	diff_eq_int("nbits untouched (%ld)", sb.uncoded_bits, sa.uncoded_bits, 0);
 
 	return diff_end();
 }

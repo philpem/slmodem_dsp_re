@@ -660,7 +660,7 @@ V32OrgNextState(void *modem)
 		InitGenSequence(modem, 0xffff, 0x10, 8);
 		/* UNSIGNED 16-bit: `cmp $0x2,%si` then `jbe`. */
 		if (rate > 2)
-			FP(modem)->tx_smc.f10 = 0;
+			FP(modem)->tx_smc.trellis_state = 0;
 		break;
 	}
 

@@ -7,10 +7,9 @@
  * (the trellis coder).  Each turns a stream of input words into a stream of
  * constellation indices in the low four bits, with the mode in the high byte.
  *
- * NEITHER STRUCT IS COMPLETE, and both say where they stop.  Nothing that
- * constructs either is reconstructed yet, so the fields below are the ones
- * the encoders READ, at the offsets they read them from, and the gaps are
- * named padding rather than guesses.
+ * The owner reconstruction also models initialization of these objects.
+ * Field meanings below are bounded by their encoder uses; untouched gaps
+ * remain padding rather than guessed fields.
  */
 
 #ifndef DSPLIB_V32SMC_H
@@ -47,9 +46,11 @@ extern struct v32_smc_cfg SMCv32_CFG;	/* .bss 0x000188, 4 bytes, GLOBAL   */
  * in the high byte of every symbol; `state` is indexed BY it, so the three
  * modes carry independent differential accumulators.
  *
- * +0x0e through +0x15 are read by `SMCv32_encoder_tcm`, which is not
- * reconstructed here; they are named from its loads and nothing more is
- * claimed about them.
+ * +0x0e through +0x15 are used by `SMCv32_encoder_tcm`. Their names are
+ * usage-derived, not recovered original identifiers: +0x0e feeds and retains
+ * TrellisEncodeDifTable's differential result; +0x10 feeds and retains the
+ * TrellisTransitionTable state; +0x14 counts the low input bits that bypass
+ * those encoders and are appended unchanged to the encoded symbol.
  */
 struct v32_smc {
 	short mode;		/* +0x00 arm selector, and the high byte tag */
@@ -65,10 +66,10 @@ struct v32_smc {
 	 * range over which the layout is established.
 	 */
 	short state[3];
-	short f0e;		/* +0x0e tcm only                            */
-	short f10;		/* +0x10 tcm only                            */
+	short trellis_diff_state;	/* +0x0e differential table state          */
+	short trellis_state;	/* +0x10 trellis transition state          */
 	short pad12;		/* +0x12                                     */
-	unsigned short f14;	/* +0x14 tcm only; a shift count             */
+	unsigned short uncoded_bits; /* +0x14 low bits bypassing trellis coding */
 };
 
 /*
