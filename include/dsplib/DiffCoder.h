@@ -227,10 +227,19 @@ template <class T>
 void ParallelDifferentialEncoder<T>::process(T *in, T *out)
 {
 	unsigned i;
+	T *state = state_;
 
+	/* The object caches state_ before the loop, advances all three
+	 * pointers, and stores the computed byte to output before state.
+	 * Keep size_ as a member read at the loop bound.  See
+	 * docs/spectral-encoder-experiment.md for the crossed controls. */
 	for (i = 0; i < size_; i++) {
-		state_[i] = state_[i] ^ in[i];
-		out[i] = state_[i];
+		T x = *state ^ *in;
+		*out = x;
+		*state = x;
+		state++;
+		in++;
+		out++;
 	}
 }
 
