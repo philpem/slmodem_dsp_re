@@ -324,6 +324,22 @@ V90Phase4Modulator::setSessionFlag(unsigned int flag)
  * since it never reached the order it was aimed at.
  * ===========================================================================
  */
+
+short
+V90Phase4Modulator::generateTRN2d()
+{
+	unsigned int nofBits;
+	short symbol;
+
+	nofBits = bitsToSymbol->nofBitsForNextTime();
+	if (nofBits != 0) {
+		scrambler.processAllOnes(scrambledBits, nofBits);
+		bitsToSymbol->process(scrambledBits, nofBits);
+	}
+	bitsToSymbol->process(nofBits, &symbol);
+	return symbol;
+}
+
 void
 V90Phase4Modulator::reset(PcmType law, unsigned char code,
 			  Phase4ModulatorState st, unsigned int nofSymbols,
@@ -1266,22 +1282,6 @@ V90Phase4Modulator::generateB1d()
 	bitsToSymbol->process(nofBits, &symbol);
 	return symbol;
 }
-
-short
-V90Phase4Modulator::generateTRN2d()
-{
-	unsigned int nofBits;
-	short symbol;
-
-	nofBits = bitsToSymbol->nofBitsForNextTime();
-	if (nofBits != 0) {
-		scrambler.processAllOnes(scrambledBits, nofBits);
-		bitsToSymbol->process(scrambledBits, nofBits);
-	}
-	bitsToSymbol->process(nofBits, &symbol);
-	return symbol;
-}
-
 short
 V90Phase4Modulator::generateEd()
 {

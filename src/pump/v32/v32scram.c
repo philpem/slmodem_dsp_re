@@ -44,6 +44,46 @@
 #define SDM_SPLIT_GROUP		6
 #define SDM_SPLIT_SHIFT		3
 
+void
+SDMv32_descrambler(struct v32_sdm *sdm, short *buf, unsigned short count)
+{
+	const unsigned int outmask = sdm->outmask;
+	const unsigned int regmask = sdm->regmask;
+	unsigned int reg = sdm->reg;
+	int shift = sdm->group;
+	short *p = buf;
+
+	if (sdm->group == SDM_SPLIT_GROUP)
+		shift = SDM_SPLIT_SHIFT;
+
+	while (count--) {
+		unsigned int in = (unsigned short)p[0];
+		unsigned int low = in & 7;
+		unsigned int out;
+
+		if (sdm->group == SDM_SPLIT_GROUP)
+			in = (in & 0x38) >> 3;
+
+		out = (in ^ (reg >> sdm->tap1) ^ (reg >> sdm->tap2)) & 0xffffu;
+		out &= outmask;
+		reg = ((reg << shift) & regmask) | in;
+
+		if (sdm->group == SDM_SPLIT_GROUP) {
+			unsigned int out2;
+
+			out2 = (low ^ (reg >> sdm->tap1)
+				^ (reg >> sdm->tap2)) & 0xffffu;
+			out2 &= outmask;
+			reg = ((reg << shift) & regmask) | low;
+			p[0] = (short)((out << 3) | out2);
+		} else {
+			p[0] = (short)out;
+		}
+		p++;
+	}
+
+	sdm->reg = reg;
+}
 /*
  * THE LOOP COUNTER IS A SIXTEEN-BIT COUNTDOWN, and that is read off the
  * object rather than chosen.  Both functions open
@@ -119,47 +159,6 @@ SDMv32_scrambler(struct v32_sdm *sdm, short *buf, unsigned short count)
 				^ (reg >> sdm->tap2)) & 0xffffu;
 			out2 &= outmask;
 			reg = ((reg << shift) & regmask) | out2;
-			p[0] = (short)((out << 3) | out2);
-		} else {
-			p[0] = (short)out;
-		}
-		p++;
-	}
-
-	sdm->reg = reg;
-}
-
-void
-SDMv32_descrambler(struct v32_sdm *sdm, short *buf, unsigned short count)
-{
-	const unsigned int outmask = sdm->outmask;
-	const unsigned int regmask = sdm->regmask;
-	unsigned int reg = sdm->reg;
-	int shift = sdm->group;
-	short *p = buf;
-
-	if (sdm->group == SDM_SPLIT_GROUP)
-		shift = SDM_SPLIT_SHIFT;
-
-	while (count--) {
-		unsigned int in = (unsigned short)p[0];
-		unsigned int low = in & 7;
-		unsigned int out;
-
-		if (sdm->group == SDM_SPLIT_GROUP)
-			in = (in & 0x38) >> 3;
-
-		out = (in ^ (reg >> sdm->tap1) ^ (reg >> sdm->tap2)) & 0xffffu;
-		out &= outmask;
-		reg = ((reg << shift) & regmask) | in;
-
-		if (sdm->group == SDM_SPLIT_GROUP) {
-			unsigned int out2;
-
-			out2 = (low ^ (reg >> sdm->tap1)
-				^ (reg >> sdm->tap2)) & 0xffffu;
-			out2 &= outmask;
-			reg = ((reg << shift) & regmask) | low;
 			p[0] = (short)((out << 3) | out2);
 		} else {
 			p[0] = (short)out;

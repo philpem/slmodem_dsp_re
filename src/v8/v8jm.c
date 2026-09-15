@@ -59,112 +59,6 @@ match_extension(struct v8 *v, const unsigned char *ext, int *at, short *keep,
 	return 0;
 }
 
-void
-evaluateRxJMSequence(struct v8 *v)
-{
-	struct v8_tx_sequence *seq = &v->seq[2];
-	struct v8_cm *cm = v->cm;
-	int matched;
-	int i;
-
-	v->fn_matched = 0;
-
-	/* The call function, and the first extension if one was declared. */
-	for (i = 0; i < (short)seq->wordidx; i++) {
-		unsigned short w = (unsigned short)seq->word[i];
-
-		if ((w & V8_JM_FN_MASK) != V8_JM_FN_MARK)
-			continue;
-
-		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf(
-			    "V8: on CALLER: remote call function is: %X\r\n", w);
-
-		if (cm->b2 & V8_CM_EXT1_PRESENT) {
-			matched = 0;
-			if (match_extension(v, cm->ext1, &i, &v->fn_word,
-					    &matched)) {
-				v->fn_matched = 1;
-				break;
-			}
-			v->fn_word = 0;
-			v->fn_matched = 0;
-		} else {
-			/*
-			 * No extension: the function word itself has to be
-			 * one the menu asked for.  Each of the four announces
-			 * itself; V.80 shares the data announcement, which is
-			 * why the object has four tests and three strings.
-			 */
-			if (w == 0x107 && (cm->b1 & 0x40)) {
-				if (DSPLIB_DEBUG_ON())
-					dsplibs_debug_printf(
-					    "V8: call function DATA " "indication...\r\n");
-				v->fn_matched = 1;
-			} else if (w == 0x103 && (cm->b2 & 0x01)) {
-				if (DSPLIB_DEBUG_ON())
-					dsplibs_debug_printf(
-					    "V8: call function FAX TX from " "caller indication...\r\n");
-				v->fn_matched = 1;
-			} else if (w == 0x10b && (cm->b1 & 0x80)) {
-				if (DSPLIB_DEBUG_ON())
-					dsplibs_debug_printf(
-					    "V8: call function FAX RX to " "caller indication...\r\n");
-				v->fn_matched = 1;
-			} else if (w == 0x109 && (cm->b2 & 0x02)) {
-				if (DSPLIB_DEBUG_ON())
-					dsplibs_debug_printf(
-					    "V8: call function DATA " "indication...\r\n");
-				v->fn_matched = 1;
-			}
-
-			if (v->fn_matched != 0)
-				v->fn_word = (short)w;
-		}
-	}
-
-	/*
-	 * The second extension, against its own marker.  `ext2_matched` is
-	 * only ever set here, never cleared: whatever the caller left in it
-	 * stands if nothing matches.
-	 */
-	matched = 0;
-	for (i = 0; i < (short)seq->wordidx; i++) {
-		unsigned short w = (unsigned short)seq->word[i];
-
-		if ((w & V8_JM_FN_MASK) != V8_JM_EXT2_MARK)
-			continue;
-
-		if ((cm->b2 & V8_CM_EXT2_PRESENT) == 0) {
-			v->ext2_word = (short)w;
-			v->ext2_matched = 1;
-			continue;
-		}
-		if (match_extension(v, cm->ext2, &i, &v->ext2_word, &matched)) {
-			v->ext2_matched = 1;
-			break;
-		}
-		v->ext2_word = 0;
-	}
-
-	/*
-	 * The verdict, and the only place the whole function is summarised.
-	 * It reports the FIRST field only: `ext2_matched` does not appear, so
-	 * a JM whose protocol matched but whose call function did not still
-	 * reads as a failure here.  The parenthesis is the author's own gloss on
-	 * what a failure costs -- see V8UpdateModemParameters, which does
-	 * exactly that.
-	 *
-	 * This is why the loop above breaks rather than returning: the
-	 * announcement has to be reached on the matched path too.
-	 */
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("V8: %s Call Function Match%s!\n",
-				     v->fn_matched != 0 ? "Got" : "Didn't get",
-				     v->fn_matched != 0 ? ""
-				      : " (not indicating modulation " "capabilities)!!");
-}
-
 /*
  * Turn a received sequence into a call menu.
  *
@@ -330,6 +224,112 @@ V8UpdateModemParameters(struct v8 *v, struct v8_cm *out)
 		    (out->b1 >> 5) & 1);
 
 	return 0;
+}
+
+void
+evaluateRxJMSequence(struct v8 *v)
+{
+	struct v8_tx_sequence *seq = &v->seq[2];
+	struct v8_cm *cm = v->cm;
+	int matched;
+	int i;
+
+	v->fn_matched = 0;
+
+	/* The call function, and the first extension if one was declared. */
+	for (i = 0; i < (short)seq->wordidx; i++) {
+		unsigned short w = (unsigned short)seq->word[i];
+
+		if ((w & V8_JM_FN_MASK) != V8_JM_FN_MARK)
+			continue;
+
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "V8: on CALLER: remote call function is: %X\r\n", w);
+
+		if (cm->b2 & V8_CM_EXT1_PRESENT) {
+			matched = 0;
+			if (match_extension(v, cm->ext1, &i, &v->fn_word,
+					    &matched)) {
+				v->fn_matched = 1;
+				break;
+			}
+			v->fn_word = 0;
+			v->fn_matched = 0;
+		} else {
+			/*
+			 * No extension: the function word itself has to be
+			 * one the menu asked for.  Each of the four announces
+			 * itself; V.80 shares the data announcement, which is
+			 * why the object has four tests and three strings.
+			 */
+			if (w == 0x107 && (cm->b1 & 0x40)) {
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf(
+					    "V8: call function DATA " "indication...\r\n");
+				v->fn_matched = 1;
+			} else if (w == 0x103 && (cm->b2 & 0x01)) {
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf(
+					    "V8: call function FAX TX from " "caller indication...\r\n");
+				v->fn_matched = 1;
+			} else if (w == 0x10b && (cm->b1 & 0x80)) {
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf(
+					    "V8: call function FAX RX to " "caller indication...\r\n");
+				v->fn_matched = 1;
+			} else if (w == 0x109 && (cm->b2 & 0x02)) {
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf(
+					    "V8: call function DATA " "indication...\r\n");
+				v->fn_matched = 1;
+			}
+
+			if (v->fn_matched != 0)
+				v->fn_word = (short)w;
+		}
+	}
+
+	/*
+	 * The second extension, against its own marker.  `ext2_matched` is
+	 * only ever set here, never cleared: whatever the caller left in it
+	 * stands if nothing matches.
+	 */
+	matched = 0;
+	for (i = 0; i < (short)seq->wordidx; i++) {
+		unsigned short w = (unsigned short)seq->word[i];
+
+		if ((w & V8_JM_FN_MASK) != V8_JM_EXT2_MARK)
+			continue;
+
+		if ((cm->b2 & V8_CM_EXT2_PRESENT) == 0) {
+			v->ext2_word = (short)w;
+			v->ext2_matched = 1;
+			continue;
+		}
+		if (match_extension(v, cm->ext2, &i, &v->ext2_word, &matched)) {
+			v->ext2_matched = 1;
+			break;
+		}
+		v->ext2_word = 0;
+	}
+
+	/*
+	 * The verdict, and the only place the whole function is summarised.
+	 * It reports the FIRST field only: `ext2_matched` does not appear, so
+	 * a JM whose protocol matched but whose call function did not still
+	 * reads as a failure here.  The parenthesis is the author's own gloss on
+	 * what a failure costs -- see V8UpdateModemParameters, which does
+	 * exactly that.
+	 *
+	 * This is why the loop above breaks rather than returning: the
+	 * announcement has to be reached on the matched path too.
+	 */
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V8: %s Call Function Match%s!\n",
+				     v->fn_matched != 0 ? "Got" : "Didn't get",
+				     v->fn_matched != 0 ? ""
+				      : " (not indicating modulation " "capabilities)!!");
 }
 
 /* Up to eight entries in each acceptance list. */

@@ -88,6 +88,9 @@
 #include "dsplib/V92Phase4Modulator.h"
 #include "dsplib/VPcmFloModem.h"
 
+#define CFG_FLAG3_PHASE2	0x02
+#define CFG_FLAG3_RETRAIN	0x04
+
 /*
  * Hold the compiler to the map in the header.  tools/offcheck.py parses only
  * `struct name {` out of include/dsplib, so a C++ class asserts its own.
@@ -226,912 +229,7 @@ x86_abs(int v)
  * the register difference is a consequence of the order rather than a second
  * defect.  Both members of the family were compiled; the other is EXACT.
  */
-int
-VPcmFloModem::getV90JaBits(short *bits)
-{
-	int done = 0;
 
-	if (nofBits != 0) {
-		*bits = bitVector[bitPointer++];
-		*bits |= (short)(bitVector[bitPointer++] << 1);
-
-		if (bitPointer == nofBits)
-			bitPointer = 0;
-	}
-
-	if (terminateJa != 0) {
-		done = 1;
-		bitPointer = 0;
-	}
-
-	return done;
-}
-
-/*
- * ===========================================================================
- * getV90CpBits -- nofBitsPerSymbol bits per call, and the CP -> CPnot switch
- * ===========================================================================
- *
- * THE SHIFT COUNT IS MASKED TO FIVE BITS BY THE HARDWARE.  `nofBitsPerSymbol`
- * is a byte, so the loop can reach 255 while `shl %cl,%eax` only ever shifts
- * by `n & 31`; C leaves `x << n` undefined outside 0..31, so the mask is
- * written out rather than left to chance.  Same reasoning as the shift in
- * V90Equalizer.cpp.
- *
- * THE SWITCH IS A ONE-SHOT.  `cpNotLoaded` is both the guard and the flag:
- * CP gives way to CPnot only when `terminateCp` is set, `cpNotLoaded` is
- * clear and the sequence counter has reached its minimum -- and the first
- * thing the switch does is set `cpNotLoaded`.
- *
- * `terminateCpNot` outranks all of that: it returns 1 without loading
- * anything, and it is the only path that reports termination.
- */
-int
-VPcmFloModem::getV90CpBits(short *bits)
-{
-	V90ConnectionEvaluator *seen;
-	unsigned short n;
-	int done = 0;
-
-	if (cpNofBits == 0)
-		return done;
-
-	*bits = 0;
-	n = 0;
-	while (n < nofBitsPerSymbol) {
-		*bits |= (short)(cpBitVector[bitPointer++] << (n & 31));
-		n = (unsigned short)(n + 1);
-	}
-
-	if (bitPointer != cpNofBits)
-		return done;
-
-	nofTransmitSequences++;
-
-	seen = modem.demodulator->connectionEvaluator;
-	seen->delayedRetrainArmed = seen->delayedRetrainRequest;
-
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("End of CP #%d tx.... (terminateCp=%d, "
-				     "terminateCpNot=%d)\n",
-				     nofTransmitSequences, terminateCp,
-				     terminateCpNot);
-
-	if (terminateCpNot != 0) {
-		done = 1;
-		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("GetV90CpBits: Indicating CP " "termination !!!!\r\n");
-		bitPointer = 0;
-		return done;
-	}
-
-	if (terminateCp != 0 && cpNotLoaded == 0 &&
-	    nofTransmitSequences >= minNofTransmitSequences) {
-		short live = nofBits;
-		int i;
-
-		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("OK Time to move to CPNot " "TX...\r\n");
-
-		for (i = 0; i < live; i++)
-			cpBitVector[i] = bitVector[i];
-
-		cpNofBits = live;
-		cpNotLoaded = 1;
-		nofTransmitSequences = 0;
-	}
-
-	bitPointer = 0;
-	return done;
-}
-
-/*
- * ===========================================================================
- * setPcmSessionType -- V.90 or V.92, and tell the modem
- * ===========================================================================
- *
- * The diagnostic goes through `edprintf`, which gates itself, so there is no
- * `dsplibs_debug_level` test here; and it prints 92 or 90 as a NUMBER, from
- * `cmp $0x1; sbb; and $0xfffffffe; add $0x5c` -- an unsigned comparison, so
- * every non-zero argument including a negative one prints 92.
- *
- * THE FIELD AND THE ARGUMENT ARE NOT THE SAME VALUE.  +0x611c gets `(arg !=
- * 0)` and the V.92 record's byte gets the argument's low byte, so
- * setPcmSessionType(5) leaves 1 in one and 5 in the other.  The tail call
- * passes the argument, not the field.
- */
-void
-VPcmFloModem::setPcmSessionType(int sessionType)
-{
-	V92Phase2Info *p92;
-
-	edprintf("VPcmFloModem: setting PCM session to V.%d\n",
-		 sessionType != 0 ? 92 : 90);
-
-	/*
-	 * THE FLAG IS SET BEFORE THE POINTER IS FETCHED, and that order is
-	 * decoded rather than transcribed.  Nothing in the emission says it:
-	 * the object stores +0x611c and +0x11 in the order this reads and the
-	 * two are independent, so the only trace the choice leaves is which
-	 * register the allocator hands each -- `%eax` for the flag's `setne`
-	 * and `%edx` for the fetched pointer, where writing the fetch first
-	 * gets them the other way round.  That is five bytes of a 98-byte
-	 * function and `alpha_equal` ACCEPTS it as a renaming, which is
-	 * exactly why it needed enumerating rather than reading.
-	 *
-	 * The domain is every order of these three (the two that dereference
-	 * `p92` before assigning it are not orders, so six become four)
-	 * crossed with the four positions of the diagnostic: 12 cells, 10
-	 * distinct emissions, ONE reaching the object.  A unique preimage.
-	 * The arrangement written before this was 5 differing bytes and the
-	 * next nearest cell is 8.  Finding F8066.
-	 */
-	pcmSessionType = (sessionType != 0);
-	p92 = v92modem.phase2Info;
-	p92->v92CapabilitiesLocal = (unsigned char)sessionType;
-
-	modem.setSessionFlag((unsigned int)sessionType);
-}
-
-/*
- * ===========================================================================
- * setPhaseIIinfo -- the Phase 2 record, out of the INFO0 bits
- * ===========================================================================
- *
- * `info0` is the 41-int bit vector `V34XF_GetInfo0BitsPtr` hands out, one bit
- * per int.  Bits 33..37 are the transmit power code, weighted 1, 2, 4, 8, 16.
- * The weights come out of a SEVEN-entry table of which the object uses five;
- * that is the original's shape and it is kept, because a seven-bit table
- * summed over five entries says something a `<< i` would not.
- *
- * `info0Layout` gates two separate things and nothing else: whether bits 38
- * and 39 are stored at all, and whether bit 26 or bit 27 is the short-phase-2
- * remote byte.  The second is a SWAP, not a skip -- both bytes are written
- * either way.
- *
- * THE LAST THING IT DOES IS setPcmSessionType.  The object has that inlined
- * -- the same `edprintf`, the same two stores, the same tail call -- and it
- * feeds it the field it is about to overwrite, so the value that reaches the
- * modem is the OLD +0x611c and the field ends up holding `(old != 0)`.
- * Calling the method reproduces that exactly and says where the code came
- * from; writing it out again would not.
- */
-void
-VPcmFloModem::setPhaseIIinfo(int *info0, int rtd)
-{
-	const int weight[7] = { 1, 2, 4, 8, 16, 32, 64 };
-	V90Phase2Info *p90;
-	V92Phase2Info *p92;
-	int i, power;
-
-	power = 0;
-	for (i = 0; i <= 4; i++)
-		power += info0[33 + i] * weight[i];
-
-	p90 = modem.phase2Info;
-	p90->maxTxPower = (unsigned char)power;
-
-	if (info0Layout != 0) {
-		p90->txPowerMeasurementPoint = (info0[38] != 0);
-		p90->pcmType = (info0[39] != 0);
-	}
-
-	p92 = v92modem.phase2Info;
-	p92->maxTxPower = p90->maxTxPower;
-	p92->txPowerMeasurementPoint = p90->txPowerMeasurementPoint;
-	p92->pcmType = p90->pcmType;
-
-	if (info0Layout != 0) {
-		p92->shortPhase2Remote = (unsigned char)info0[26];
-		p92->v92CapabilitiesRemote = (unsigned char)info0[27];
-	} else {
-		p92->shortPhase2Remote = (unsigned char)info0[27];
-		p92->v92CapabilitiesRemote = (unsigned char)info0[26];
-	}
-
-	/*
-	 * Five separate gates, each re-reading the level, exactly as the
-	 * object has them.  The second prints the RAW bit, not the 0/1 the
-	 * field above got.
-	 */
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("P2 REPORT : A_LAW or MU_LAW %d "
-				     "( 0 = Mu, 1 = A)\r\n",
-				     p90->pcmType == 1);
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("P2 REPORT : Tx power measurment point "
-				     "= %d ( 0 = digital modem terminal, "
-				     "1 = codec output)\r\n", info0[38]);
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("P2 REPORT : Max tx power = %d\r\n",
-				     p90->maxTxPower);
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("P2 REPORT : short phase2: local=%d , "
-				     "remote=%d\r\n", p92->shortPhase2Local,
-				     p92->shortPhase2Remote);
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("P2 REPORT : V92 capabilities: local=%d , "
-				     "remote=%d , selected=%d\r\n",
-				     p92->v92CapabilitiesLocal,
-				     p92->v92CapabilitiesRemote,
-				     pcmSessionType != 0 ? 92 : 90);
-
-	/*
-	 * The four arrays go into the V.90 record first and are read back out
-	 * of it into the V.92 one -- which is what the object does, and the
-	 * reason it matters is that it makes the V.92 record's three later
-	 * pointers depend on the V.90 record's having been written.
-	 */
-	p90->array_10 = array_7dd8;
-	p90->array_14 = array_7e2c;
-	p90->L2 = L2;
-	p90->array_1c = array_7ed4;
-
-	p92->array_18 = array_7dd8;
-
-	p90->rtd = rtd;
-	p92->rtd = rtd;
-
-	p92->array_1c = p90->array_14;
-	p92->L2 = p90->L2;
-	p92->array_24 = p90->array_1c;
-
-	setPcmSessionType(pcmSessionType);
-}
-
-/*
- * ===========================================================================
- * getUinfoValue -- the probe becomes L2, and the Phase 2 record follows
- * ===========================================================================
- *
- * L2[j] = 60 + 10 * log10(probe[i] / 16384), over the 21 of the 25 probe
- * tones the mask selects, and the four arrays are cleared first whether or
- * not the computation runs.  2^-14, 10 and 60 are all exact in a float, so
- * how they are spelled cannot change a result; where the ROUNDINGS fall can,
- * and there are exactly three:
- *
- *     probe[i] * 2^-14   ->  float   (fstps/flds)
- *     log10 of that      ->  float   (fstps/flds)
- *     10 * that + 60     ->  float   (fsts into the array)
- *
- * The multiply-and-add in the third happens at the register's own precision
- * with no float in the middle, which is why it is one expression in a
- * `long double` and not two assignments to a `float`.
- *
- * THE MASK'S POSITIONS ARE LOAD-BEARING, NOT JUST ITS COUNT.  Twenty-one ones
- * for twenty-one destination slots is a consistency check and not much more;
- * what pins the four zeros to indices 5, 7, 11 and 15 is that the probe
- * magnitudes differ per index, so the test seeds them all differently.
- *
- * THE DIAGNOSTIC LOOP RUNS WHATEVER THE LEVEL IS.  15..20 is stepped every
- * time and the body is gated inside it, so at level 0 or 1 this is six turns
- * of an empty loop; the object is built that way and it costs nothing.  The
- * value printed is L2[14] - L2[i], and it never reaches memory: it stays in a
- * register at extended precision through the sign test, the truncation and
- * the fractional part, so it is a `long double` here.
- */
-int
-VPcmFloModem::getUinfoValue(short skipProbe)
-{
-	/*
-	 * Which of the 25 probe tones contributes an L2 entry.  Twenty-one
-	 * ones, and VPCM_L2 is 21.
-	 */
-	unsigned char use[VPCM_PROBE_TONES] = {
-		1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1,
-		1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1
-	};
-	double *probe;
-	int *info0;
-	short rtd;
-	int i, j;
-	int uinfo;
-
-	probe = V34XF_GetProbeResultsPtr(v34Object);
-
-	for (i = 0; i < VPCM_L2; i++) {
-		array_7dd8[i] = 0.0f;
-		array_7e2c[i] = 0.0f;
-		L2[i] = 0.0f;
-		array_7ed4[i] = 0.0f;
-	}
-
-	if (skipProbe == 0) {
-		j = 0;
-		for (i = 0; i < VPCM_PROBE_TONES; i++) {
-			float scaled;
-			float decade;
-
-			scaled = (float)((long double)probe[i]
-					 * 6.103515625e-05L);
-			decade = (float)log10l((long double)scaled);
-
-			if (use[i])
-				L2[j++] = (float)((long double)decade * 10.0L
-						  + 60.0L);
-		}
-
-		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("Final L2 Probing signal:\r\n");
-
-		for (i = 15; i <= 20; i++) {
-			if (DSPLIB_DEBUG_ON()) {
-				long double d;
-				long double frac;
-
-				d = (long double)L2[14] - (long double)L2[i];
-				frac = d - (int)d;
-
-				dsplibs_debug_printf(
-				    "L2[%d]    = %c%d.%05d\r\n", i,
-				    d > 0.0L ? '+' : '-',
-				    (int)fabsl(d),
-				    x86_abs((int)(frac * 100000.0L)));
-			}
-		}
-	}
-
-	rtd = V34XF_GetRTD(v34Object);
-	info0 = V34XF_GetInfo0BitsPtr(v34Object);
-	setPhaseIIinfo(info0, rtd);
-
-	/*
-	 * The value, if the modem has one.  `droppedToV34` short-circuits the
-	 * lookup entirely; so does a zero coming back from it, and both fall
-	 * into the same six default flags.
-	 */
-	uinfo = 0;
-	if (droppedToV34 == 0) {
-		uinfo = *(short *)((unsigned char *)modem.params + 0x20);
-		if (uinfo != 0)
-			return uinfo;
-	}
-
-	v34BaudAllow[0] = 1;
-	v34BaudAllow[1] = 0;
-	v34BaudAllow[2] = 1;
-	v34BaudAllow[3] = 1;
-	v34BaudAllow[4] = 1;
-	v34BaudAllow[5] = 1;
-
-	return uinfo;
-}
-
-/*
- * ===========================================================================
- * enterPhase3 -- clear the transmit side, then build the JA vector
- * ===========================================================================
- *
- * Twenty-one stores, every one of a CONSTANT, then two calls and two
- * diagnostics.  Nothing it stores depends on anything it reads, so the only
- * things a differential test can be about are which constant lands at which
- * offset, which object the demodulator call gets, and what the packer is
- * handed.
- *
- * THE SIX FLAGS ARE NOT getUinfoValue's SIX.  Both write +0x217..+0x21c;
- * getUinfoValue writes 1, 0, 1, 1, 1, 1 and this writes 1, 0, 1, 1, 1, 0.
- * The two agreeing about the first five and differing about the last is the
- * evidence that the run really is six bytes and not five -- one function
- * alone could not distinguish "six flags" from "five flags and a neighbour".
- *
- * THE PACKER IS HANDED THE OBJECT'S OWN DESCRIPTOR.  `lea 0x4(%ebx),%eax`
- * before the call is an ADD, not a load, so +0x004 is a `tagV90DILdescriptor`
- * inside this object rather than a pointer to one elsewhere; see the header.
- * `nofBits` is passed by address and comes back holding the packed length,
- * which is what the closing diagnostic prints -- so the read at the end is of
- * the callee's output, not of the zero stored at the top.
- *
- * THE DIAGNOSTICS SIT AT TWO DIFFERENT LEVELS, deliberately: the opening one
- * is `cmpl $0x1,dsplibs_debug_level; ja`, so level 2 and above, and the
- * closing one goes through `edprintf`, which gates itself.  A test that only
- * ran at one level could not tell them apart.
- *
- * ORDER.  The object interleaves the `cmpl` and the branch with the last four
- * stores -- the compare is at 0xf327, between two of them, and the `ja` at
- * 0xf34f after all of them.  That is scheduling, not semantics: the stores
- * are to memory the gate does not read, and the branch is taken once they are
- * all done.  Written here in the order the object performs them.
- */
-/*
- * `_tagModemParameters::unnamed_0003`, and the two bits BOTH entry points
- * touch.  The names are `src/pump/v34/v34pcmmain.cpp`'s, for the same byte
- * reached the other way round -- that file gets there as `obj->pac3c + 3` and
- * these two as `modem.params->modemParams->unnamed_0003`, and they are the
- * same storage.  Bit 2 is the one `VPcmFloModemCtor.cpp` clears at 0xfca5 and
- * `v90RateRenegSilence` clears again after printing "disabling SAS detector
- * on silence".
- *
- * `v90RunDemodulator` sets the retrain bit at three sites (arms 0x03, 0x17
- * and 0x1e), clears it at one (arm 0x08, under the phase-2 guard), and
- * `runPcmModem` does the same two things once each.  `vPcmResetPhase3Modem`
- * below is a FOURTH clearer, and the reason the block moved up the file from
- * beside `v90RunDemodulator` is that it is now the first user.
- */
-#define CFG_FLAG3_PHASE2	0x02
-#define CFG_FLAG3_RETRAIN	0x04
-
-/*
- * ===========================================================================
- * `vPcmResetPhase3Modem` -- .text+0xf200, 0x95 = 149 bytes
- * ===========================================================================
- *
- * ONE OF THE FOUR MEMBERS `VPcmV34Progress` CALLS AND NOTHING ELSE DOES, and
- * the only one of the four that returns nothing -- VPcmFloModem.h's note on
- * the group has the argument.  It puts the V.90 half back to the state a
- * phase 3 can start from, and it is a straight line: no branch, no loop, one
- * `V90Parameters::init`, four `reset`s and six stores.
- *
- * IT RESETS THE MODEM WITH `qcFlag` ZERO, UNCONDITIONALLY.  `xor %eax,%eax`
- * at 0xf23a into the second argument slot -- there is no test of
- * `pcmSessionType`, of `qcFlags` or of anything else, and this is the ONLY
- * caller of `V90Modem::reset` in the whole object.  So the quick-connect DIL
- * descriptor is never selected from here; `V90Modem::reset`'s `qcFlag` arm
- * is reachable only from the blob's own callers of that member.
- *
- * BUT `setSessionFlag` IS CALLED WITH `pcmSessionType`, which is not
- * constant, and it is called BEFORE `reset`.  The two argument shapes are
- * next to each other in the disassembly (0xf22e and 0xf242) and are easy to
- * read as one; a reconstruction that passed the session type to both, or
- * zero to both, agrees with the object on every store either makes and
- * differs on the modulator/demodulator the reset reaches.
- *
- * `V90Parameters::init` REBUILDS THE WHOLE PARAMETER BLOCK -- `setToDefault`,
- * then the parameter file if there is one, then `loadModemParamsData` -- so
- * every V.90 tunable goes back to its default here and not just the phase 3
- * ones.  It is called on `modem.params`, the block the V90Modem owns.
- *
- * THE LAST TWO STORES ARE THE HAND-BACK TO THE V.34 SIDE.  `CFG_FLAG3_RETRAIN`
- * is cleared out of `_tagModemParameters::unnamed_0003` -- `andb $0xfb,0x3
- * (%edx)` at 0xf27e, through TWO pointers, `modem.params->modemParams` --
- * which withdraws any retrain this session had asked for, and `progressState` is
- * set to 1, which is the dispatch value `runPcmModem` and `v90RunDemodulator`
- * both read first and both turn into a return of 1.
- *
- * AND `+0x6fa4` IS NOT A WORD OF ITS OWN -- it is `sineWave.phase`, the third
- * of the four `Tparam`s of the `SineWave<float, float>` embedded at +0x6f9c,
- * and 0x6f9c + 8 is 0x6fa4.  The store is an integer `mov $0x0`, which is
- * what GCC emits for `= 0.0f` because the bit pattern is zero, so nothing in
- * the instruction says "float" and only the field map does.  It restarts the
- * TONEq oscillator, which `qcLineVerification` is the only caller of.
- *
- * ORDER.  0xf277's `mov $0x0,%eax` is a second zero register, not a store,
- * and 0xf271 and 0xf282 write `ecMode` and `sineWave.phase` from two
- * different registers holding the same zero.
- *
- * AND THE ORDER OF THE TWO `word_7f6x` STORES IS DECODED, NOT TRANSCRIBED --
- * 7770's argument, with the map measured in this function.  The object emits
- * `0x7f64` then `0x7f60`, and writing that order in the source does NOT
- * reproduce it: GCC transposes the pair.  Both members of the two-element
- * family were compiled and the map is a bijection, so the object's emission
- * has a unique preimage:
- *
- *     source (7f64, 7f60)  ->  emitted (7f60, 7f64)   -- 2 bytes wrong
- *     source (7f60, 7f64)  ->  emitted (7f64, 7f60)   -- EXACT
- *
- * The order below is therefore the author's, within the family of texts that
- * differ from this one only in that transposition.  Nothing here reads
- * anything else here, so it is not forced by semantics; it is forced by the
- * bytes.
- */
-void
-VPcmFloModem::vPcmResetPhase3Modem()
-{
-	sweepCounter = 0;			/* +0x1740 */
-
-	modem.params->init();
-	modem.setSessionFlag((unsigned int)pcmSessionType);
-	modem.reset(0);
-	v92modem.reset();
-	echoCanceller.reset();
-
-	ecMode = 0;
-	ecRampCounter = 0;
-	modem.params->modemParams->unnamed_0003 &=
-	    (unsigned char)~CFG_FLAG3_RETRAIN;
-	sineWave.phase = 0.0f;
-	progressState = 1;
-}
-
-void
-VPcmFloModem::enterPhase3()
-{
-	trainConstel = 0;
-	rrnConstel = 0;
-	byte_173c = 0;
-	droppedToV34 = 0;
-	clr = 0;
-
-	v34BaudAllow[0] = 1;
-	v34BaudAllow[1] = 0;
-	v34BaudAllow[2] = 1;
-	v34BaudAllow[3] = 1;
-	v34BaudAllow[4] = 1;
-	v34BaudAllow[5] = 0;
-
-	terminateJa = 0;
-	terminateCp = 0;
-	terminateCpNot = 0;
-	cpNotLoaded = 0;
-	nofBitsPerSymbol = 2;
-
-	nofBits = 0;
-	cpNofBits = 0;
-	bitPointer = 0;
-	nofTransmitSequences = 0;
-	minNofTransmitSequences = 1;
-
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("VPcmFloModem: enterPhase3 called.\r\n");
-
-	modem.demodulator->enterPhase3();
-
-	DILdescriptorPacker(&dil, bitVector, &nofBits);
-
-	edprintf("VPcmFloModem: enterPhase3: Ja length = %d\r\n", nofBits);
-}
-
-/*
- * externalReset -- `VPcmV34Create`'s way of putting a constructed modem back
- * to its starting state.
- *
- * THE SIX FLAGS AT +0x217 ARE WRITTEN TWICE, with the same six values, once
- * before the three parameter-block calls and once after.  That is what the
- * object does -- 0xd6d8..0xd701 and 0xd786..0xd7a9, two runs of six `movb`
- * with nothing between them that could touch the fields -- and it is left as
- * two runs here rather than folded into one.  The most likely reading is that
- * the source calls a small helper twice and GCC inlined both, but nothing in
- * the object names it, so the duplication is transcribed and not explained.
- *
- * THE V.90 DEMODULATOR IS REINITIALISED ONLY WHEN `info0Layout` IS NON-ZERO,
- * which is the one branch in the function.  `info0Layout` is otherwise a
- * `setPhaseIIinfo` selector, so this couples the INFO0 layout to whether
- * there is a demodulator worth re-initialising; that reading is not
- * established, and the field keeps the name the earlier batch gave it.
- *
- * THE LAST DIAGNOSTIC IS A TAIL CALL and the first is not, which is why they
- * are in this order: "reinitializing parameters" is printed at the TOP of the
- * flag work and "external reset called" at the very end.
- *
- * THE ORDER OF THE THREE SHORT STORES IS DECODED AND IS NOT THE OBJECT'S
- * EMITTED ORDER.  7770's argument, over a three-element family rather than a
- * two-element one.  The object emits `0x1738, 0x1736, 0x7dcc`, and writing
- * THAT in the source emits `0x7dcc, 0x1738, 0x1736` -- GCC rotates it.  All
- * six orders were compiled, holding the surrounding `movb`s fixed (which is
- * what licenses the family bound: those already match position for position
- * on both sides).  Differing bytes of 387:
- *
- *     bitPointer, nofBits,    cpNofBits    5      <- the object's own order
- *     bitPointer, cpNofBits,  nofBits      2
- *     nofBits,    bitPointer, cpNofBits    4
- *     nofBits,    cpNofBits,  bitPointer   0      <- written below
- *     cpNofBits,  bitPointer, nofBits      5
- *     cpNofBits,  nofBits,    bitPointer   4
- *
- * The six emissions are SIX DISTINCT texts, so the map is injective and the
- * preimage is unique -- 7771 found a pair of cells that collided and warns
- * that injectivity is checked, not assumed.
- */
-void
-VPcmFloModem::externalReset()
-{
-	v34BaudAllow[0] = 1;		/* +0x217 */
-	v34BaudAllow[1] = 0;		/* +0x218 */
-	v34BaudAllow[2] = 1;		/* +0x219 */
-	v34BaudAllow[3] = 1;		/* +0x21a */
-	v34BaudAllow[4] = 1;		/* +0x21b */
-	v34BaudAllow[5] = 0;		/* +0x21c */
-
-	modem.params->initSession();
-	modem.params->init();
-	v92modem.parameters->init();
-
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf(
-		    "V90_V34_Main: reinitializing parameters.\r\n");
-
-	trainConstel = 0;		/* +0x173a */
-	nofBits = 0;			/* +0x1736 */
-	cpNofBits = 0;			/* +0x7dcc */
-	bitPointer = 0;			/* +0x1738 */
-	rrnConstel = 0;		/* +0x173b */
-	byte_173c = 0;		/* +0x173c */
-	droppedToV34 = 0;			/* +0x173d */
-	clr = 0;			/* +0x173e */
-
-	/* The second of the two runs; the same six values as above. */
-	v34BaudAllow[0] = 1;		/* +0x217 again */
-	v34BaudAllow[1] = 0;		/* +0x218 again */
-	v34BaudAllow[2] = 1;		/* +0x219 again */
-	v34BaudAllow[3] = 1;		/* +0x21a again */
-	v34BaudAllow[4] = 1;		/* +0x21b again */
-	v34BaudAllow[5] = 0;		/* +0x21c again */
-
-	terminateJa = 0;		/* +0x7dce */
-	terminateCp = 0;		/* +0x7dcf */
-	terminateCpNot = 0;		/* +0x7dd0 */
-	cpNotLoaded = 0;		/* +0x7dd1 */
-	nofBitsPerSymbol = 2;		/* +0x7dd2 */
-	nofTransmitSequences = 0;	/* +0x7dd4 */
-	minNofTransmitSequences = 1;	/* +0x7dd6 */
-
-	if (info0Layout != 0)
-		modem.demodulator->reInit();
-
-	progressState = 0;
-	retrainLatch = 0;
-	qcVerifyState = 0;
-	qcTerminateRequested = 0;
-	qcSampleCount = 0;
-	verificationStatus = 0;
-
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf(
-		    "V90_V34_Main: external reset called.\r\n");
-}
-
-/*
- * ---------------------------------------------------------------------------
- * setV34BaudForV90, setV34BaudForV34 -- which V.34 symbol rates the next
- * phase 2 is allowed to settle on.
- *
- * SIX STORES EACH AND NOTHING ELSE.  No load, no call, no register left in
- * %eax; the two are byte-identical bar the last store, so the pair exists to
- * say "and the fastest rate is/is not on the table".
- *
- *     d494  movb $0x1,0x217(%eax)      d4c4  movb $0x1,0x217(%eax)
- *     d49b  movb $0x0,0x218(%eax)      d4cb  movb $0x0,0x218(%eax)
- *     d4a2  movb $0x1,0x219(%eax)      d4d2  movb $0x1,0x219(%eax)
- *     d4a9  movb $0x1,0x21a(%eax)      d4d9  movb $0x1,0x21a(%eax)
- *     d4b0  movb $0x1,0x21b(%eax)      d4e0  movb $0x1,0x21b(%eax)
- *     d4b7  movb $0x0,0x21c(%eax)      d4e7  movb $0x1,0x21c(%eax)
- *              (for V.90)                       (for V.34)
- *
- * ENTRY 1 IS ZERO ON BOTH, and on every other site in this tree that writes
- * the array -- `getUinfoValue`, `enterPhase3` and `externalReset`.  Five
- * writers and not one of them ever sets it, so whatever index 1 selects is
- * barred unconditionally by this build; that is an observation about the
- * writers and not a claim about which rate it is.
- *
- * NOBODY IN THE OBJECT CALLS EITHER.  Both are `T` and neither has an
- * incoming relocation, so they are the out-of-line copies of something whose
- * every call site was inlined, or of an interface the build does not use.
- * `setScramble` and `scaleVector` in v34shell.h are the same situation.
- */
-void
-VPcmFloModem::setV34BaudForV90()
-{
-	v34BaudAllow[0] = 1;		/* +0x217 */
-	v34BaudAllow[1] = 0;		/* +0x218 */
-	v34BaudAllow[2] = 1;		/* +0x219 */
-	v34BaudAllow[3] = 1;		/* +0x21a */
-	v34BaudAllow[4] = 1;		/* +0x21b */
-	v34BaudAllow[5] = 0;		/* +0x21c */
-}
-
-void
-VPcmFloModem::setV34BaudForV34()
-{
-	v34BaudAllow[0] = 1;		/* +0x217 */
-	v34BaudAllow[1] = 0;		/* +0x218 */
-	v34BaudAllow[2] = 1;		/* +0x219 */
-	v34BaudAllow[3] = 1;		/* +0x21a */
-	v34BaudAllow[4] = 1;		/* +0x21b */
-	v34BaudAllow[5] = 1;		/* +0x21c */
-}
-
-/*
- * ===========================================================================
- * THE THREE VISUAL DIAGNOSTICS
- * ===========================================================================
- *
- * `VPcmV34GetVisualDiagnostics` (src/pump/v34/v34diag.cpp) dispatches to these
- * three when a PCM receiver is running; the V.34 and K56flex arms of that
- * function answer the same three selectors from elsewhere.  Each fills an
- * array of `int_complex` and returns how many it filled.
- *
- * THE GUARD IS THE SAME IN ALL THREE and it is the object's, not a copy of
- * one written here: `if (pcmSessionType != 0 && info0Layout == 0) return 0`.
- * Read it as "a V.92 session that is not the analog end has nothing to show":
- * the demodulator these read through exists only on the analog side, and a
- * V.90 session (`pcmSessionType == 0`) skips the second test entirely.
- *
- * WHAT IS FORCED IN THEM
- *
- * 1. THE TWO EQUALISER SCALES ARE FLOATS AND THE CONSTELLATION SCALE IS A
- *    DOUBLE.  `flds` against .rodata.cst4 in the first two, `fldl` against
- *    .rodata.cst8+0x8 in the third; a `1.7f` would have been a `flds` and a
- *    `10000.0` a `fldl`.  Under `-mfpmath=387` the whole product stays on the
- *    x87 stack at 80 bits either way, so the difference is in the CONSTANT
- *    and not in the precision of the multiply.
- *
- * 2. EVERY CONVERSION TO int ROUNDS TOWARD ZERO.  `fnstcw`, `or $0xc00`,
- *    `fldcw`, `fistpl`, `fldcw` is what a C cast compiles to, and there is no
- *    rounding term added anywhere: a coefficient of 1.99999 reports 19999 and
- *    not 20000.
- *
- * 3. THE COUNT IS CLAMPED UNSIGNED.  `cmp; ja` against `maxCount`, so a length
- *    field is compared as the `unsigned int` it is declared to be.
- *
- * 4. `sweepCounter` IS DIVIDED SIGNED, which is what retyped it; see
- *    include/dsplib/VPcmFloModem.h.
- */
-
-/*
- * The two equaliser getters scale their coefficients by ten thousand, and the
- * object has the constant TWICE in .rodata.cst4 (+0x44 and +0x48) -- one slot
- * per function, which is what says the literal is written out in each rather
- * than shared through a variable.  Spelled once here; a macro is a
- * compile-time substitution and cannot move code generation.
- */
-#define VPCM_EQU_SCALE		10000.0f
-
-/*
- * The constellation getter's scale, and it is a `double`: `fldl` against
- * .rodata.cst8+0x8, which holds 1.7 exactly.
- */
-#define VPCM_CONSTEL_SCALE	1.7
-
-/*
- * ---------------------------------------------------------------------------
- * THE HORIZONTAL AXIS OF THE CONSTELLATION TRACE
- *
- * `getConstellation` does not return the constellation POINT the demodulator
- * decided; it returns a strip-chart.  The imaginary half of each point is the
- * sample, and the real half is a horizontal coordinate synthesised from
- * `sweepCounter`, which advances once per point and never resets.  Two
- * geometries, chosen by `inPhase3`:
- *
- *   phase 3    x = 35 * ((n / 5) % 750) - 14000
- *              one sweep of 750 positions, 35 units apart, advancing every
- *              fifth point: a span of 26,215 units starting at -14,000.
- *
- *   otherwise  x = 35 * ((n / 15) % 100 + 140 * ((word_260 + i) % 6)) - 14000
- *              SIX LANES, one per value of `(word_260 + i) % 6`, 140 * 35 =
- *              4,900 units apart, each carrying 100 positions (3,465 units)
- *              that advance every fifteenth point.
- *
- * The six lanes are why the data-phase trace is not one line: the V.90 frame
- * has six phases and the sample's phase picks its lane, so the display shows
- * each frame phase separately.  That is what `word_260` is being used FOR
- * here; it stays offset-named because being a phase counter's base is not the
- * same as being established as one, and this is its only reconstructed
- * reader.
- *
- * The constants are the object's, at 0xf471/0xf4a1/0xf4ad and
- * 0xf555/0xf560.  Named because a bare 0x8c and a bare 0x36b0 state a number
- * and hide a geometry.
- */
-#define VPCM_TRACE_X_STEP	35	/* horizontal units per position    */
-#define VPCM_TRACE_X_ORIGIN	14000	/* subtracted: the left-hand edge   */
-#define VPCM_TRACE_P3_POSITIONS	750	/* positions in the phase-3 sweep   */
-#define VPCM_TRACE_P3_DIVISOR	5	/* points per phase-3 position      */
-#define VPCM_TRACE_POSITIONS	100	/* positions in one data-phase lane */
-#define VPCM_TRACE_DIVISOR	15	/* points per data-phase position   */
-#define VPCM_TRACE_LANE_PITCH	140	/* positions between lanes          */
-
-/*
- * The number of lanes, and the divisor of the `% 6` at 0xf48a.  It is the
- * unsigned reciprocal `0xaaaaaaab >> 2`, so both the modulus and its
- * signedness are read off the instruction rather than assumed.
- */
-#define VPCM_TRACE_LANES	6u
-
-/* `inPhase3`'s value for phase 3, as `cmpl $0x1,0x34(%eax)` tests it. */
-#define VPCM_IN_PHASE3		1u
-
-unsigned long
-VPcmFloModem::getConstellation(int_complex *points, unsigned long maxCount)
-{
-	V90Demodulator *dem;
-	const float *values;
-	unsigned int lane;
-	unsigned long n, i;
-
-	if (pcmSessionType != 0 && info0Layout == 0)
-		return 0;
-
-	dem = modem.demodulator;
-
-	n = dem->nofSymbols;
-	if (n > maxCount)
-		n = maxCount;
-
-	/*
-	 * `array_254` is a `void *` in V90Demodulator.h because the code that
-	 * ALLOCATES it sizes it at eight bytes an element, and this reader
-	 * steps it by four.  The two are not in contradiction -- `nofSymbols` is
-	 * a running fill level and not the allocated length -- but nothing
-	 * settles which of the two strides is the element, so the declaration
-	 * stays neutral and the cast is here with the reason on it.
-	 */
-	values = (const float *)dem->array_254;
-	lane = dem->word_260;
-
-	if (dem->inPhase3 == VPCM_IN_PHASE3) {
-		for (i = 0; i < n; i++) {
-			int t = sweepCounter++;
-
-			points[i].re = VPCM_TRACE_X_STEP *
-			    (t / VPCM_TRACE_P3_DIVISOR % VPCM_TRACE_P3_POSITIONS)
-			    - VPCM_TRACE_X_ORIGIN;
-			points[i].im = (int)(VPCM_CONSTEL_SCALE * values[i]);
-		}
-	} else {
-		for (i = 0; i < n; i++) {
-			int t = sweepCounter++;
-
-			points[i].re = VPCM_TRACE_X_STEP *
-			    (t / VPCM_TRACE_DIVISOR % VPCM_TRACE_POSITIONS +
-			     VPCM_TRACE_LANE_PITCH * (int)((lane +
-			      (unsigned int)i) % VPCM_TRACE_LANES))
-			    - VPCM_TRACE_X_ORIGIN;
-			points[i].im = (int)(VPCM_CONSTEL_SCALE * values[i]);
-		}
-	}
-
-	return n;
-}
-
-/*
- * The linear equaliser's taps and the decision-feedback filter's, and the two
- * functions are the same fifteen lines against two different pairs of
- * `V90Equalizer` fields.  They are written out twice because the object has
- * them twice, with a scale constant each.
- *
- * BOTH PUT THE COEFFICIENT IN THE IMAGINARY HALF and zero in the real one.
- * V.90's downstream signal is real, so the taps have no imaginary part and the
- * author had a slot to spare; which slot he used is recorded rather than
- * explained (include/dsplib/int_complex.h).
- */
-unsigned long
-VPcmFloModem::getLinearEqualizer(int_complex *points, unsigned long maxCount)
-{
-	V90Equalizer *eq;
-	const float *coefs;
-	unsigned long n, i;
-
-	if (pcmSessionType != 0 && info0Layout == 0)
-		return 0;
-
-	eq = modem.demodulator->equalizer;
-
-	n = eq->linearEquLength;
-	if (n > maxCount)
-		n = maxCount;
-	coefs = eq->linearEquCoefs;
-
-	for (i = 0; i < n; i++) {
-		points[i].re = 0;
-		points[i].im = (int)(coefs[i] * VPCM_EQU_SCALE);
-	}
-
-	return n;
-}
-
-unsigned long
-VPcmFloModem::getDFE(int_complex *points, unsigned long maxCount)
-{
-	V90Equalizer *eq;
-	const float *coefs;
-	unsigned long n, i;
-
-	if (pcmSessionType != 0 && info0Layout == 0)
-		return 0;
-
-	eq = modem.demodulator->equalizer;
-
-	n = eq->dfeLength;
-	if (n > maxCount)
-		n = maxCount;
-	coefs = eq->dfeCoefs;
-
-	for (i = 0; i < n; i++) {
-		points[i].re = 0;
-		points[i].im = (int)(coefs[i] * VPCM_EQU_SCALE);
-	}
-
-	return n;
-}
 
 /*
  * ===========================================================================
@@ -1244,6 +342,302 @@ VPcmFloModem::resetBitPointer()
 	nofTransmitSequences = 0;		/* +0x7dd4 */
 }
 
+#include "dsplib/sysdep.h"
+#include "dsplib/vpcm_tables.h"
+
+/*
+ * `v34initialbauds`, .rodata+0x3e0 in the object -- six bytes, all 1.  It is
+ * the array this constructor copies into `v34BaudAllow` (+0x217); the note
+ * above is the initialisation and not six stores, and the compiler is what
+ * turns it into a four-byte move and a two-byte one.  FILE-LOCAL in the
+ * object, and this constructor is its only consumer, so it is `static` here;
+ * a test names it through the test tier's globalized copies
+ * (tools/testvisible.py).
+ */
+static const unsigned char v34initialbauds[V34_INITIAL_BAUDS] = {
+	1, 1, 1, 1, 1, 1,
+};
+
+/*
+ * ---------------------------------------------------------------------------
+ * VPcmFloModem's constructor: an entry filter, the fourth and third arguments
+ * of `GenericIIR<float,double>(5, 5, entFiltDen, entFiltNum, 99)`.
+ * ---------------------------------------------------------------------------
+ */
+
+/*
+ * `entFiltNum`, .data+0xe0 -- the NUMERATOR, fourth argument of
+ * `GenericIIR<float,double>(5, 5, entFiltDen, entFiltNum, 99)` at
+ * .text+0xfbcb.  Indexed by tap, 0 the most recent; five doubles.
+ *
+ * The five are NEARLY symmetric and NEARLY binomial, and neither is exact.
+ * b[0] and b[4] agree to fifteen significant figures and differ in the
+ * sixteenth; but b[1]/b[0] is -3.9999759042982252 and b[2]/b[0] is
+ * 5.999951808669026, which miss -4 and 6 in the SIXTH significant figure --
+ * relative errors of 6.0e-06 and 8.0e-06, a hundred million times coarser than
+ * the sixteenth-figure disagreement above and far too coarse to be rounding.
+ * So this is a computed design that came out close to (1 - z^-1)^4 rather than
+ * that polynomial with rounded coefficients, and it is recorded as an
+ * observation about the numbers and not as a derivation.  Contrast
+ * `IIR2100_Coef_B_9600` below, where the ratios ARE exact to an ulp and the
+ * derivation holds.
+ */
+static double entFiltNum[VPCM_ENTFILT_TAPS] = {
+	0.96284330984918198, -3.8513500390114781, 5.777013458394471,
+	-3.8513500390114772, 0.96284330984918154,
+};
+
+/*
+ * `entFiltDen`, .data+0x120 -- the DENOMINATOR, third argument of the same
+ * call.  Five doubles, a[0] exactly 1.0 so the caller need not normalise.
+ */
+static double entFiltDen[VPCM_ENTFILT_TAPS] = {
+	1.0, -3.9242514351703268, 5.7756331881310974, -3.7784482934930401,
+	0.92706723932132973,
+};
+
+/*
+ * THE MEMBER-INITIALISER LIST IS THE OBJECT'S OWN ORDER, and that it can be
+ * is the interesting part.
+ *
+ * 0xfa7c stores `v34Obj` into +0x0000 BEFORE the call to
+ * `_ZN8V90ModemC1E...` at 0xfaaa, and a mem-initialiser list runs before the
+ * body entire -- so a `v34Object = v34Obj;` statement in the body would put
+ * the store AFTER all six constructions.  Initialising `v34Object` in the
+ * list instead gives exactly the object's sequence, because a list is ordered
+ * by DECLARATION and `v34Object` is +0x0000, the first member of the class.
+ * The result is store, V90Modem, V92Modem, V92EchoCanceller,
+ * ANSamToneDetector, SineWave, GenericIIR, body -- which is the disassembly
+ * read straight down.
+ *
+ * `echoCanceller(v92modem.parameters, ...)` READS A MEMBER THAT WAS
+ * INITIALISED TWO ENTRIES EARLIER, and that is the object's `mov
+ * 0x6128(%ebx),%ecx` at 0xfaf8: it loads the V92Modem's own `parameters`
+ * rather than reusing anything the construction left in a register.  It is
+ * well defined here for the same reason it is correct there -- `v92modem`
+ * precedes `echoCanceller` in the class, so it is fully constructed.
+ */
+VPcmFloModem::VPcmFloModem(void *v34Obj, V90ModemSide side,
+			   _tagModemParameters *modemParams,
+			   unsigned int nSamples, V90ComputationalMode v90Mode,
+			   V92ComputationalMode v92Mode)
+	: v34Object(v34Obj),
+	  modem(side, modemParams, &dil, nSamples, v90Mode, 1),
+	  v92modem((V92ModemSide)(side == V90_MODEM_SIDE_ANALOG), modemParams,
+		   nSamples, &dil, v92Mode),
+	  echoCanceller(v92modem.parameters, nSamples, 199),
+	  ansam(6000, 450, 250000.0f, 1, 0.58f, 9600, 50, 99),
+	  sineWave(4800.0f, 980.0f, 0.0f, 9600.0f),
+	  entFilt(5, 5, entFiltDen, entFiltNum, 99)
+{
+	unsigned int i;
+
+	sysdep_memset(bitVector, 0, sizeof(bitVector));
+	nofBits = 0;
+
+	for (i = 0; i < sizeof(v34BaudAllow); i++)
+		v34BaudAllow[i] = v34initialbauds[i];
+
+	sweepCounter = 0;
+
+	sysdep_memset(cpBitVector, 0, sizeof(cpBitVector));
+
+	terminateJa = 0;
+	terminateCp = 0;
+	terminateCpNot = 0;
+	cpNotLoaded = 0;
+
+	/*
+	 * ZERO HERE AND TWO IN `VPCMXF_Create`, which re-writes five of these
+	 * same fields immediately after this constructor returns.  The two
+	 * functions disagree on this one byte and on `minNofTransmitSequences`
+	 * (0 here, 1 there), so the caller's values are what a constructed
+	 * modem actually starts with.  Both are reproduced as found.
+	 */
+	nofBitsPerSymbol = 0;
+
+	retrainLatch = 0;
+	minNofTransmitSequences = 0;
+	cpNofBits = 0;
+	nofTransmitSequences = 0;
+
+	qcVerifyState = 0;
+	qcTerminateRequested = 0;
+	qcSampleCount = 0;
+	verificationStatus = 0;
+
+	/*
+	 * `andb $0xfb,0x3(%edi)` at 0xfca5 -- bit 2 of `unnamed_0003`, and
+	 * the ONLY thing this constructor writes outside its own object.
+	 * modem_params.h's comment on that byte says "low 3 bits cleared",
+	 * which is `dp_runtime_create`'s doing; this clears one of the three
+	 * again.
+	 */
+	modemParams->unnamed_0003 &= (unsigned char)~0x04u;
+
+	sysdep_memset(block_6c0c, 0, sizeof(block_6c0c));
+
+	/*
+	 * The SAME `(side == analog)` the V92Modem got as its first argument,
+	 * computed once at 0xfab7 and kept in %esi across five calls.
+	 */
+	info0Layout = (side == V90_MODEM_SIDE_ANALOG);
+	pcmSessionType = 0;
+	progressState = 0;
+
+	byte_7f5c = 0;
+	ecMode = 0;
+	ecRampCounter = 0;
+}
+int
+VPcmFloModem::getV90JaBits(short *bits)
+{
+	int done = 0;
+
+	if (nofBits != 0) {
+		*bits = bitVector[bitPointer++];
+		*bits |= (short)(bitVector[bitPointer++] << 1);
+
+		if (bitPointer == nofBits)
+			bitPointer = 0;
+	}
+
+	if (terminateJa != 0) {
+		done = 1;
+		bitPointer = 0;
+	}
+
+	return done;
+}
+
+/*
+ * ===========================================================================
+ * getV90CpBits -- nofBitsPerSymbol bits per call, and the CP -> CPnot switch
+ * ===========================================================================
+ *
+ * THE SHIFT COUNT IS MASKED TO FIVE BITS BY THE HARDWARE.  `nofBitsPerSymbol`
+ * is a byte, so the loop can reach 255 while `shl %cl,%eax` only ever shifts
+ * by `n & 31`; C leaves `x << n` undefined outside 0..31, so the mask is
+ * written out rather than left to chance.  Same reasoning as the shift in
+ * V90Equalizer.cpp.
+ *
+ * THE SWITCH IS A ONE-SHOT.  `cpNotLoaded` is both the guard and the flag:
+ * CP gives way to CPnot only when `terminateCp` is set, `cpNotLoaded` is
+ * clear and the sequence counter has reached its minimum -- and the first
+ * thing the switch does is set `cpNotLoaded`.
+ *
+ * `terminateCpNot` outranks all of that: it returns 1 without loading
+ * anything, and it is the only path that reports termination.
+ */
+int
+VPcmFloModem::getV90CpBits(short *bits)
+{
+	V90ConnectionEvaluator *seen;
+	unsigned short n;
+	int done = 0;
+
+	if (cpNofBits == 0)
+		return done;
+
+	*bits = 0;
+	n = 0;
+	while (n < nofBitsPerSymbol) {
+		*bits |= (short)(cpBitVector[bitPointer++] << (n & 31));
+		n = (unsigned short)(n + 1);
+	}
+
+	if (bitPointer != cpNofBits)
+		return done;
+
+	nofTransmitSequences++;
+
+	seen = modem.demodulator->connectionEvaluator;
+	seen->delayedRetrainArmed = seen->delayedRetrainRequest;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("End of CP #%d tx.... (terminateCp=%d, "
+				     "terminateCpNot=%d)\n",
+				     nofTransmitSequences, terminateCp,
+				     terminateCpNot);
+
+	if (terminateCpNot != 0) {
+		done = 1;
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("GetV90CpBits: Indicating CP " "termination !!!!\r\n");
+		bitPointer = 0;
+		return done;
+	}
+
+	if (terminateCp != 0 && cpNotLoaded == 0 &&
+	    nofTransmitSequences >= minNofTransmitSequences) {
+		short live = nofBits;
+		int i;
+
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("OK Time to move to CPNot " "TX...\r\n");
+
+		for (i = 0; i < live; i++)
+			cpBitVector[i] = bitVector[i];
+
+		cpNofBits = live;
+		cpNotLoaded = 1;
+		nofTransmitSequences = 0;
+	}
+
+	bitPointer = 0;
+	return done;
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * setV34BaudForV90, setV34BaudForV34 -- which V.34 symbol rates the next
+ * phase 2 is allowed to settle on.
+ *
+ * SIX STORES EACH AND NOTHING ELSE.  No load, no call, no register left in
+ * %eax; the two are byte-identical bar the last store, so the pair exists to
+ * say "and the fastest rate is/is not on the table".
+ *
+ *     d494  movb $0x1,0x217(%eax)      d4c4  movb $0x1,0x217(%eax)
+ *     d49b  movb $0x0,0x218(%eax)      d4cb  movb $0x0,0x218(%eax)
+ *     d4a2  movb $0x1,0x219(%eax)      d4d2  movb $0x1,0x219(%eax)
+ *     d4a9  movb $0x1,0x21a(%eax)      d4d9  movb $0x1,0x21a(%eax)
+ *     d4b0  movb $0x1,0x21b(%eax)      d4e0  movb $0x1,0x21b(%eax)
+ *     d4b7  movb $0x0,0x21c(%eax)      d4e7  movb $0x1,0x21c(%eax)
+ *              (for V.90)                       (for V.34)
+ *
+ * ENTRY 1 IS ZERO ON BOTH, and on every other site in this tree that writes
+ * the array -- `getUinfoValue`, `enterPhase3` and `externalReset`.  Five
+ * writers and not one of them ever sets it, so whatever index 1 selects is
+ * barred unconditionally by this build; that is an observation about the
+ * writers and not a claim about which rate it is.
+ *
+ * NOBODY IN THE OBJECT CALLS EITHER.  Both are `T` and neither has an
+ * incoming relocation, so they are the out-of-line copies of something whose
+ * every call site was inlined, or of an interface the build does not use.
+ * `setScramble` and `scaleVector` in v34shell.h are the same situation.
+ */
+void
+VPcmFloModem::setV34BaudForV90()
+{
+	v34BaudAllow[0] = 1;		/* +0x217 */
+	v34BaudAllow[1] = 0;		/* +0x218 */
+	v34BaudAllow[2] = 1;		/* +0x219 */
+	v34BaudAllow[3] = 1;		/* +0x21a */
+	v34BaudAllow[4] = 1;		/* +0x21b */
+	v34BaudAllow[5] = 0;		/* +0x21c */
+}
+
+void
+VPcmFloModem::setV34BaudForV34()
+{
+	v34BaudAllow[0] = 1;		/* +0x217 */
+	v34BaudAllow[1] = 0;		/* +0x218 */
+	v34BaudAllow[2] = 1;		/* +0x219 */
+	v34BaudAllow[3] = 1;		/* +0x21a */
+	v34BaudAllow[4] = 1;		/* +0x21b */
+	v34BaudAllow[5] = 1;		/* +0x21c */
+}
+
 /*
  * d4f0, 165 bytes, between `setV34BaudForV34` (d4c0) and
  * `copyMpInfoForInterface` (d5a0) in the blob.  The transmit-side subset of
@@ -1317,6 +711,153 @@ VPcmFloModem::copyMpInfoForInterface()
 	mpH2Imag = modem.mp.h2Imag;
 	mpH3Real = modem.mp.h3Real;
 	mpH3Imag = modem.mp.h3Imag;
+}
+
+/*
+ * ===========================================================================
+ * setPcmSessionType -- V.90 or V.92, and tell the modem
+ * ===========================================================================
+ *
+ * The diagnostic goes through `edprintf`, which gates itself, so there is no
+ * `dsplibs_debug_level` test here; and it prints 92 or 90 as a NUMBER, from
+ * `cmp $0x1; sbb; and $0xfffffffe; add $0x5c` -- an unsigned comparison, so
+ * every non-zero argument including a negative one prints 92.
+ *
+ * THE FIELD AND THE ARGUMENT ARE NOT THE SAME VALUE.  +0x611c gets `(arg !=
+ * 0)` and the V.92 record's byte gets the argument's low byte, so
+ * setPcmSessionType(5) leaves 1 in one and 5 in the other.  The tail call
+ * passes the argument, not the field.
+ */
+void
+VPcmFloModem::setPcmSessionType(int sessionType)
+{
+	V92Phase2Info *p92;
+
+	edprintf("VPcmFloModem: setting PCM session to V.%d\n",
+		 sessionType != 0 ? 92 : 90);
+
+	/*
+	 * THE FLAG IS SET BEFORE THE POINTER IS FETCHED, and that order is
+	 * decoded rather than transcribed.  Nothing in the emission says it:
+	 * the object stores +0x611c and +0x11 in the order this reads and the
+	 * two are independent, so the only trace the choice leaves is which
+	 * register the allocator hands each -- `%eax` for the flag's `setne`
+	 * and `%edx` for the fetched pointer, where writing the fetch first
+	 * gets them the other way round.  That is five bytes of a 98-byte
+	 * function and `alpha_equal` ACCEPTS it as a renaming, which is
+	 * exactly why it needed enumerating rather than reading.
+	 *
+	 * The domain is every order of these three (the two that dereference
+	 * `p92` before assigning it are not orders, so six become four)
+	 * crossed with the four positions of the diagnostic: 12 cells, 10
+	 * distinct emissions, ONE reaching the object.  A unique preimage.
+	 * The arrangement written before this was 5 differing bytes and the
+	 * next nearest cell is 8.  Finding F8066.
+	 */
+	pcmSessionType = (sessionType != 0);
+	p92 = v92modem.phase2Info;
+	p92->v92CapabilitiesLocal = (unsigned char)sessionType;
+
+	modem.setSessionFlag((unsigned int)sessionType);
+}
+
+/*
+ * externalReset -- `VPcmV34Create`'s way of putting a constructed modem back
+ * to its starting state.
+ *
+ * THE SIX FLAGS AT +0x217 ARE WRITTEN TWICE, with the same six values, once
+ * before the three parameter-block calls and once after.  That is what the
+ * object does -- 0xd6d8..0xd701 and 0xd786..0xd7a9, two runs of six `movb`
+ * with nothing between them that could touch the fields -- and it is left as
+ * two runs here rather than folded into one.  The most likely reading is that
+ * the source calls a small helper twice and GCC inlined both, but nothing in
+ * the object names it, so the duplication is transcribed and not explained.
+ *
+ * THE V.90 DEMODULATOR IS REINITIALISED ONLY WHEN `info0Layout` IS NON-ZERO,
+ * which is the one branch in the function.  `info0Layout` is otherwise a
+ * `setPhaseIIinfo` selector, so this couples the INFO0 layout to whether
+ * there is a demodulator worth re-initialising; that reading is not
+ * established, and the field keeps the name the earlier batch gave it.
+ *
+ * THE LAST DIAGNOSTIC IS A TAIL CALL and the first is not, which is why they
+ * are in this order: "reinitializing parameters" is printed at the TOP of the
+ * flag work and "external reset called" at the very end.
+ *
+ * THE ORDER OF THE THREE SHORT STORES IS DECODED AND IS NOT THE OBJECT'S
+ * EMITTED ORDER.  7770's argument, over a three-element family rather than a
+ * two-element one.  The object emits `0x1738, 0x1736, 0x7dcc`, and writing
+ * THAT in the source emits `0x7dcc, 0x1738, 0x1736` -- GCC rotates it.  All
+ * six orders were compiled, holding the surrounding `movb`s fixed (which is
+ * what licenses the family bound: those already match position for position
+ * on both sides).  Differing bytes of 387:
+ *
+ *     bitPointer, nofBits,    cpNofBits    5      <- the object's own order
+ *     bitPointer, cpNofBits,  nofBits      2
+ *     nofBits,    bitPointer, cpNofBits    4
+ *     nofBits,    cpNofBits,  bitPointer   0      <- written below
+ *     cpNofBits,  bitPointer, nofBits      5
+ *     cpNofBits,  nofBits,    bitPointer   4
+ *
+ * The six emissions are SIX DISTINCT texts, so the map is injective and the
+ * preimage is unique -- 7771 found a pair of cells that collided and warns
+ * that injectivity is checked, not assumed.
+ */
+void
+VPcmFloModem::externalReset()
+{
+	v34BaudAllow[0] = 1;		/* +0x217 */
+	v34BaudAllow[1] = 0;		/* +0x218 */
+	v34BaudAllow[2] = 1;		/* +0x219 */
+	v34BaudAllow[3] = 1;		/* +0x21a */
+	v34BaudAllow[4] = 1;		/* +0x21b */
+	v34BaudAllow[5] = 0;		/* +0x21c */
+
+	modem.params->initSession();
+	modem.params->init();
+	v92modem.parameters->init();
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(
+		    "V90_V34_Main: reinitializing parameters.\r\n");
+
+	trainConstel = 0;		/* +0x173a */
+	nofBits = 0;			/* +0x1736 */
+	cpNofBits = 0;			/* +0x7dcc */
+	bitPointer = 0;			/* +0x1738 */
+	rrnConstel = 0;		/* +0x173b */
+	byte_173c = 0;		/* +0x173c */
+	droppedToV34 = 0;			/* +0x173d */
+	clr = 0;			/* +0x173e */
+
+	/* The second of the two runs; the same six values as above. */
+	v34BaudAllow[0] = 1;		/* +0x217 again */
+	v34BaudAllow[1] = 0;		/* +0x218 again */
+	v34BaudAllow[2] = 1;		/* +0x219 again */
+	v34BaudAllow[3] = 1;		/* +0x21a again */
+	v34BaudAllow[4] = 1;		/* +0x21b again */
+	v34BaudAllow[5] = 0;		/* +0x21c again */
+
+	terminateJa = 0;		/* +0x7dce */
+	terminateCp = 0;		/* +0x7dcf */
+	terminateCpNot = 0;		/* +0x7dd0 */
+	cpNotLoaded = 0;		/* +0x7dd1 */
+	nofBitsPerSymbol = 2;		/* +0x7dd2 */
+	nofTransmitSequences = 0;	/* +0x7dd4 */
+	minNofTransmitSequences = 1;	/* +0x7dd6 */
+
+	if (info0Layout != 0)
+		modem.demodulator->reInit();
+
+	progressState = 0;
+	retrainLatch = 0;
+	qcVerifyState = 0;
+	qcTerminateRequested = 0;
+	qcSampleCount = 0;
+	verificationStatus = 0;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(
+		    "V90_V34_Main: external reset called.\r\n");
 }
 
 /*
@@ -2362,6 +1903,615 @@ VPcmFloModem::runPcmModem(float *in, float *out, unsigned int n, int *rxbits,
 	}
 
 	return ret;			/* 0xe530 */
+}
+
+/*
+ * ===========================================================================
+ * setPhaseIIinfo -- the Phase 2 record, out of the INFO0 bits
+ * ===========================================================================
+ *
+ * `info0` is the 41-int bit vector `V34XF_GetInfo0BitsPtr` hands out, one bit
+ * per int.  Bits 33..37 are the transmit power code, weighted 1, 2, 4, 8, 16.
+ * The weights come out of a SEVEN-entry table of which the object uses five;
+ * that is the original's shape and it is kept, because a seven-bit table
+ * summed over five entries says something a `<< i` would not.
+ *
+ * `info0Layout` gates two separate things and nothing else: whether bits 38
+ * and 39 are stored at all, and whether bit 26 or bit 27 is the short-phase-2
+ * remote byte.  The second is a SWAP, not a skip -- both bytes are written
+ * either way.
+ *
+ * THE LAST THING IT DOES IS setPcmSessionType.  The object has that inlined
+ * -- the same `edprintf`, the same two stores, the same tail call -- and it
+ * feeds it the field it is about to overwrite, so the value that reaches the
+ * modem is the OLD +0x611c and the field ends up holding `(old != 0)`.
+ * Calling the method reproduces that exactly and says where the code came
+ * from; writing it out again would not.
+ */
+void
+VPcmFloModem::setPhaseIIinfo(int *info0, int rtd)
+{
+	const int weight[7] = { 1, 2, 4, 8, 16, 32, 64 };
+	V90Phase2Info *p90;
+	V92Phase2Info *p92;
+	int i, power;
+
+	power = 0;
+	for (i = 0; i <= 4; i++)
+		power += info0[33 + i] * weight[i];
+
+	p90 = modem.phase2Info;
+	p90->maxTxPower = (unsigned char)power;
+
+	if (info0Layout != 0) {
+		p90->txPowerMeasurementPoint = (info0[38] != 0);
+		p90->pcmType = (info0[39] != 0);
+	}
+
+	p92 = v92modem.phase2Info;
+	p92->maxTxPower = p90->maxTxPower;
+	p92->txPowerMeasurementPoint = p90->txPowerMeasurementPoint;
+	p92->pcmType = p90->pcmType;
+
+	if (info0Layout != 0) {
+		p92->shortPhase2Remote = (unsigned char)info0[26];
+		p92->v92CapabilitiesRemote = (unsigned char)info0[27];
+	} else {
+		p92->shortPhase2Remote = (unsigned char)info0[27];
+		p92->v92CapabilitiesRemote = (unsigned char)info0[26];
+	}
+
+	/*
+	 * Five separate gates, each re-reading the level, exactly as the
+	 * object has them.  The second prints the RAW bit, not the 0/1 the
+	 * field above got.
+	 */
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("P2 REPORT : A_LAW or MU_LAW %d "
+				     "( 0 = Mu, 1 = A)\r\n",
+				     p90->pcmType == 1);
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("P2 REPORT : Tx power measurment point "
+				     "= %d ( 0 = digital modem terminal, "
+				     "1 = codec output)\r\n", info0[38]);
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("P2 REPORT : Max tx power = %d\r\n",
+				     p90->maxTxPower);
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("P2 REPORT : short phase2: local=%d , "
+				     "remote=%d\r\n", p92->shortPhase2Local,
+				     p92->shortPhase2Remote);
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("P2 REPORT : V92 capabilities: local=%d , "
+				     "remote=%d , selected=%d\r\n",
+				     p92->v92CapabilitiesLocal,
+				     p92->v92CapabilitiesRemote,
+				     pcmSessionType != 0 ? 92 : 90);
+
+	/*
+	 * The four arrays go into the V.90 record first and are read back out
+	 * of it into the V.92 one -- which is what the object does, and the
+	 * reason it matters is that it makes the V.92 record's three later
+	 * pointers depend on the V.90 record's having been written.
+	 */
+	p90->array_10 = array_7dd8;
+	p90->array_14 = array_7e2c;
+	p90->L2 = L2;
+	p90->array_1c = array_7ed4;
+
+	p92->array_18 = array_7dd8;
+
+	p90->rtd = rtd;
+	p92->rtd = rtd;
+
+	p92->array_1c = p90->array_14;
+	p92->L2 = p90->L2;
+	p92->array_24 = p90->array_1c;
+
+	setPcmSessionType(pcmSessionType);
+}
+
+/*
+ * ===========================================================================
+ * getUinfoValue -- the probe becomes L2, and the Phase 2 record follows
+ * ===========================================================================
+ *
+ * L2[j] = 60 + 10 * log10(probe[i] / 16384), over the 21 of the 25 probe
+ * tones the mask selects, and the four arrays are cleared first whether or
+ * not the computation runs.  2^-14, 10 and 60 are all exact in a float, so
+ * how they are spelled cannot change a result; where the ROUNDINGS fall can,
+ * and there are exactly three:
+ *
+ *     probe[i] * 2^-14   ->  float   (fstps/flds)
+ *     log10 of that      ->  float   (fstps/flds)
+ *     10 * that + 60     ->  float   (fsts into the array)
+ *
+ * The multiply-and-add in the third happens at the register's own precision
+ * with no float in the middle, which is why it is one expression in a
+ * `long double` and not two assignments to a `float`.
+ *
+ * THE MASK'S POSITIONS ARE LOAD-BEARING, NOT JUST ITS COUNT.  Twenty-one ones
+ * for twenty-one destination slots is a consistency check and not much more;
+ * what pins the four zeros to indices 5, 7, 11 and 15 is that the probe
+ * magnitudes differ per index, so the test seeds them all differently.
+ *
+ * THE DIAGNOSTIC LOOP RUNS WHATEVER THE LEVEL IS.  15..20 is stepped every
+ * time and the body is gated inside it, so at level 0 or 1 this is six turns
+ * of an empty loop; the object is built that way and it costs nothing.  The
+ * value printed is L2[14] - L2[i], and it never reaches memory: it stays in a
+ * register at extended precision through the sign test, the truncation and
+ * the fractional part, so it is a `long double` here.
+ */
+int
+VPcmFloModem::getUinfoValue(short skipProbe)
+{
+	/*
+	 * Which of the 25 probe tones contributes an L2 entry.  Twenty-one
+	 * ones, and VPCM_L2 is 21.
+	 */
+	unsigned char use[VPCM_PROBE_TONES] = {
+		1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1,
+		1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1
+	};
+	double *probe;
+	int *info0;
+	short rtd;
+	int i, j;
+	int uinfo;
+
+	probe = V34XF_GetProbeResultsPtr(v34Object);
+
+	for (i = 0; i < VPCM_L2; i++) {
+		array_7dd8[i] = 0.0f;
+		array_7e2c[i] = 0.0f;
+		L2[i] = 0.0f;
+		array_7ed4[i] = 0.0f;
+	}
+
+	if (skipProbe == 0) {
+		j = 0;
+		for (i = 0; i < VPCM_PROBE_TONES; i++) {
+			float scaled;
+			float decade;
+
+			scaled = (float)((long double)probe[i]
+					 * 6.103515625e-05L);
+			decade = (float)log10l((long double)scaled);
+
+			if (use[i])
+				L2[j++] = (float)((long double)decade * 10.0L
+						  + 60.0L);
+		}
+
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("Final L2 Probing signal:\r\n");
+
+		for (i = 15; i <= 20; i++) {
+			if (DSPLIB_DEBUG_ON()) {
+				long double d;
+				long double frac;
+
+				d = (long double)L2[14] - (long double)L2[i];
+				frac = d - (int)d;
+
+				dsplibs_debug_printf(
+				    "L2[%d]    = %c%d.%05d\r\n", i,
+				    d > 0.0L ? '+' : '-',
+				    (int)fabsl(d),
+				    x86_abs((int)(frac * 100000.0L)));
+			}
+		}
+	}
+
+	rtd = V34XF_GetRTD(v34Object);
+	info0 = V34XF_GetInfo0BitsPtr(v34Object);
+	setPhaseIIinfo(info0, rtd);
+
+	/*
+	 * The value, if the modem has one.  `droppedToV34` short-circuits the
+	 * lookup entirely; so does a zero coming back from it, and both fall
+	 * into the same six default flags.
+	 */
+	uinfo = 0;
+	if (droppedToV34 == 0) {
+		uinfo = *(short *)((unsigned char *)modem.params + 0x20);
+		if (uinfo != 0)
+			return uinfo;
+	}
+
+	v34BaudAllow[0] = 1;
+	v34BaudAllow[1] = 0;
+	v34BaudAllow[2] = 1;
+	v34BaudAllow[3] = 1;
+	v34BaudAllow[4] = 1;
+	v34BaudAllow[5] = 1;
+
+	return uinfo;
+}
+
+/*
+ * ===========================================================================
+ * enterPhase3 -- clear the transmit side, then build the JA vector
+ * ===========================================================================
+ *
+ * Twenty-one stores, every one of a CONSTANT, then two calls and two
+ * diagnostics.  Nothing it stores depends on anything it reads, so the only
+ * things a differential test can be about are which constant lands at which
+ * offset, which object the demodulator call gets, and what the packer is
+ * handed.
+ *
+ * THE SIX FLAGS ARE NOT getUinfoValue's SIX.  Both write +0x217..+0x21c;
+ * getUinfoValue writes 1, 0, 1, 1, 1, 1 and this writes 1, 0, 1, 1, 1, 0.
+ * The two agreeing about the first five and differing about the last is the
+ * evidence that the run really is six bytes and not five -- one function
+ * alone could not distinguish "six flags" from "five flags and a neighbour".
+ *
+ * THE PACKER IS HANDED THE OBJECT'S OWN DESCRIPTOR.  `lea 0x4(%ebx),%eax`
+ * before the call is an ADD, not a load, so +0x004 is a `tagV90DILdescriptor`
+ * inside this object rather than a pointer to one elsewhere; see the header.
+ * `nofBits` is passed by address and comes back holding the packed length,
+ * which is what the closing diagnostic prints -- so the read at the end is of
+ * the callee's output, not of the zero stored at the top.
+ *
+ * THE DIAGNOSTICS SIT AT TWO DIFFERENT LEVELS, deliberately: the opening one
+ * is `cmpl $0x1,dsplibs_debug_level; ja`, so level 2 and above, and the
+ * closing one goes through `edprintf`, which gates itself.  A test that only
+ * ran at one level could not tell them apart.
+ *
+ * ORDER.  The object interleaves the `cmpl` and the branch with the last four
+ * stores -- the compare is at 0xf327, between two of them, and the `ja` at
+ * 0xf34f after all of them.  That is scheduling, not semantics: the stores
+ * are to memory the gate does not read, and the branch is taken once they are
+ * all done.  Written here in the order the object performs them.
+ */
+/*
+ * `_tagModemParameters::unnamed_0003`, and the two bits BOTH entry points
+ * touch.  The names are `src/pump/v34/v34pcmmain.cpp`'s, for the same byte
+ * reached the other way round -- that file gets there as `obj->pac3c + 3` and
+ * these two as `modem.params->modemParams->unnamed_0003`, and they are the
+ * same storage.  Bit 2 is the one `VPcmFloModemCtor.cpp` clears at 0xfca5 and
+ * `v90RateRenegSilence` clears again after printing "disabling SAS detector
+ * on silence".
+ *
+ * `v90RunDemodulator` sets the retrain bit at three sites (arms 0x03, 0x17
+ * and 0x1e), clears it at one (arm 0x08, under the phase-2 guard), and
+ * `runPcmModem` does the same two things once each.  `vPcmResetPhase3Modem`
+ * below is a FOURTH clearer, and the reason the block moved up the file from
+ * beside `v90RunDemodulator` is that it is now the first user.
+ */
+
+/*
+ * ===========================================================================
+ * `vPcmResetPhase3Modem` -- .text+0xf200, 0x95 = 149 bytes
+ * ===========================================================================
+ *
+ * ONE OF THE FOUR MEMBERS `VPcmV34Progress` CALLS AND NOTHING ELSE DOES, and
+ * the only one of the four that returns nothing -- VPcmFloModem.h's note on
+ * the group has the argument.  It puts the V.90 half back to the state a
+ * phase 3 can start from, and it is a straight line: no branch, no loop, one
+ * `V90Parameters::init`, four `reset`s and six stores.
+ *
+ * IT RESETS THE MODEM WITH `qcFlag` ZERO, UNCONDITIONALLY.  `xor %eax,%eax`
+ * at 0xf23a into the second argument slot -- there is no test of
+ * `pcmSessionType`, of `qcFlags` or of anything else, and this is the ONLY
+ * caller of `V90Modem::reset` in the whole object.  So the quick-connect DIL
+ * descriptor is never selected from here; `V90Modem::reset`'s `qcFlag` arm
+ * is reachable only from the blob's own callers of that member.
+ *
+ * BUT `setSessionFlag` IS CALLED WITH `pcmSessionType`, which is not
+ * constant, and it is called BEFORE `reset`.  The two argument shapes are
+ * next to each other in the disassembly (0xf22e and 0xf242) and are easy to
+ * read as one; a reconstruction that passed the session type to both, or
+ * zero to both, agrees with the object on every store either makes and
+ * differs on the modulator/demodulator the reset reaches.
+ *
+ * `V90Parameters::init` REBUILDS THE WHOLE PARAMETER BLOCK -- `setToDefault`,
+ * then the parameter file if there is one, then `loadModemParamsData` -- so
+ * every V.90 tunable goes back to its default here and not just the phase 3
+ * ones.  It is called on `modem.params`, the block the V90Modem owns.
+ *
+ * THE LAST TWO STORES ARE THE HAND-BACK TO THE V.34 SIDE.  `CFG_FLAG3_RETRAIN`
+ * is cleared out of `_tagModemParameters::unnamed_0003` -- `andb $0xfb,0x3
+ * (%edx)` at 0xf27e, through TWO pointers, `modem.params->modemParams` --
+ * which withdraws any retrain this session had asked for, and `progressState` is
+ * set to 1, which is the dispatch value `runPcmModem` and `v90RunDemodulator`
+ * both read first and both turn into a return of 1.
+ *
+ * AND `+0x6fa4` IS NOT A WORD OF ITS OWN -- it is `sineWave.phase`, the third
+ * of the four `Tparam`s of the `SineWave<float, float>` embedded at +0x6f9c,
+ * and 0x6f9c + 8 is 0x6fa4.  The store is an integer `mov $0x0`, which is
+ * what GCC emits for `= 0.0f` because the bit pattern is zero, so nothing in
+ * the instruction says "float" and only the field map does.  It restarts the
+ * TONEq oscillator, which `qcLineVerification` is the only caller of.
+ *
+ * ORDER.  0xf277's `mov $0x0,%eax` is a second zero register, not a store,
+ * and 0xf271 and 0xf282 write `ecMode` and `sineWave.phase` from two
+ * different registers holding the same zero.
+ *
+ * AND THE ORDER OF THE TWO `word_7f6x` STORES IS DECODED, NOT TRANSCRIBED --
+ * 7770's argument, with the map measured in this function.  The object emits
+ * `0x7f64` then `0x7f60`, and writing that order in the source does NOT
+ * reproduce it: GCC transposes the pair.  Both members of the two-element
+ * family were compiled and the map is a bijection, so the object's emission
+ * has a unique preimage:
+ *
+ *     source (7f64, 7f60)  ->  emitted (7f60, 7f64)   -- 2 bytes wrong
+ *     source (7f60, 7f64)  ->  emitted (7f64, 7f60)   -- EXACT
+ *
+ * The order below is therefore the author's, within the family of texts that
+ * differ from this one only in that transposition.  Nothing here reads
+ * anything else here, so it is not forced by semantics; it is forced by the
+ * bytes.
+ */
+void
+VPcmFloModem::vPcmResetPhase3Modem()
+{
+	sweepCounter = 0;			/* +0x1740 */
+
+	modem.params->init();
+	modem.setSessionFlag((unsigned int)pcmSessionType);
+	modem.reset(0);
+	v92modem.reset();
+	echoCanceller.reset();
+
+	ecMode = 0;
+	ecRampCounter = 0;
+	modem.params->modemParams->unnamed_0003 &=
+	    (unsigned char)~CFG_FLAG3_RETRAIN;
+	sineWave.phase = 0.0f;
+	progressState = 1;
+}
+
+void
+VPcmFloModem::enterPhase3()
+{
+	trainConstel = 0;
+	rrnConstel = 0;
+	byte_173c = 0;
+	droppedToV34 = 0;
+	clr = 0;
+
+	v34BaudAllow[0] = 1;
+	v34BaudAllow[1] = 0;
+	v34BaudAllow[2] = 1;
+	v34BaudAllow[3] = 1;
+	v34BaudAllow[4] = 1;
+	v34BaudAllow[5] = 0;
+
+	terminateJa = 0;
+	terminateCp = 0;
+	terminateCpNot = 0;
+	cpNotLoaded = 0;
+	nofBitsPerSymbol = 2;
+
+	nofBits = 0;
+	cpNofBits = 0;
+	bitPointer = 0;
+	nofTransmitSequences = 0;
+	minNofTransmitSequences = 1;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("VPcmFloModem: enterPhase3 called.\r\n");
+
+	modem.demodulator->enterPhase3();
+
+	DILdescriptorPacker(&dil, bitVector, &nofBits);
+
+	edprintf("VPcmFloModem: enterPhase3: Ja length = %d\r\n", nofBits);
+}
+
+/*
+ * ===========================================================================
+ * THE THREE VISUAL DIAGNOSTICS
+ * ===========================================================================
+ *
+ * `VPcmV34GetVisualDiagnostics` (src/pump/v34/v34diag.cpp) dispatches to these
+ * three when a PCM receiver is running; the V.34 and K56flex arms of that
+ * function answer the same three selectors from elsewhere.  Each fills an
+ * array of `int_complex` and returns how many it filled.
+ *
+ * THE GUARD IS THE SAME IN ALL THREE and it is the object's, not a copy of
+ * one written here: `if (pcmSessionType != 0 && info0Layout == 0) return 0`.
+ * Read it as "a V.92 session that is not the analog end has nothing to show":
+ * the demodulator these read through exists only on the analog side, and a
+ * V.90 session (`pcmSessionType == 0`) skips the second test entirely.
+ *
+ * WHAT IS FORCED IN THEM
+ *
+ * 1. THE TWO EQUALISER SCALES ARE FLOATS AND THE CONSTELLATION SCALE IS A
+ *    DOUBLE.  `flds` against .rodata.cst4 in the first two, `fldl` against
+ *    .rodata.cst8+0x8 in the third; a `1.7f` would have been a `flds` and a
+ *    `10000.0` a `fldl`.  Under `-mfpmath=387` the whole product stays on the
+ *    x87 stack at 80 bits either way, so the difference is in the CONSTANT
+ *    and not in the precision of the multiply.
+ *
+ * 2. EVERY CONVERSION TO int ROUNDS TOWARD ZERO.  `fnstcw`, `or $0xc00`,
+ *    `fldcw`, `fistpl`, `fldcw` is what a C cast compiles to, and there is no
+ *    rounding term added anywhere: a coefficient of 1.99999 reports 19999 and
+ *    not 20000.
+ *
+ * 3. THE COUNT IS CLAMPED UNSIGNED.  `cmp; ja` against `maxCount`, so a length
+ *    field is compared as the `unsigned int` it is declared to be.
+ *
+ * 4. `sweepCounter` IS DIVIDED SIGNED, which is what retyped it; see
+ *    include/dsplib/VPcmFloModem.h.
+ */
+
+/*
+ * The two equaliser getters scale their coefficients by ten thousand, and the
+ * object has the constant TWICE in .rodata.cst4 (+0x44 and +0x48) -- one slot
+ * per function, which is what says the literal is written out in each rather
+ * than shared through a variable.  Spelled once here; a macro is a
+ * compile-time substitution and cannot move code generation.
+ */
+#define VPCM_EQU_SCALE		10000.0f
+
+/*
+ * The constellation getter's scale, and it is a `double`: `fldl` against
+ * .rodata.cst8+0x8, which holds 1.7 exactly.
+ */
+#define VPCM_CONSTEL_SCALE	1.7
+
+/*
+ * ---------------------------------------------------------------------------
+ * THE HORIZONTAL AXIS OF THE CONSTELLATION TRACE
+ *
+ * `getConstellation` does not return the constellation POINT the demodulator
+ * decided; it returns a strip-chart.  The imaginary half of each point is the
+ * sample, and the real half is a horizontal coordinate synthesised from
+ * `sweepCounter`, which advances once per point and never resets.  Two
+ * geometries, chosen by `inPhase3`:
+ *
+ *   phase 3    x = 35 * ((n / 5) % 750) - 14000
+ *              one sweep of 750 positions, 35 units apart, advancing every
+ *              fifth point: a span of 26,215 units starting at -14,000.
+ *
+ *   otherwise  x = 35 * ((n / 15) % 100 + 140 * ((word_260 + i) % 6)) - 14000
+ *              SIX LANES, one per value of `(word_260 + i) % 6`, 140 * 35 =
+ *              4,900 units apart, each carrying 100 positions (3,465 units)
+ *              that advance every fifteenth point.
+ *
+ * The six lanes are why the data-phase trace is not one line: the V.90 frame
+ * has six phases and the sample's phase picks its lane, so the display shows
+ * each frame phase separately.  That is what `word_260` is being used FOR
+ * here; it stays offset-named because being a phase counter's base is not the
+ * same as being established as one, and this is its only reconstructed
+ * reader.
+ *
+ * The constants are the object's, at 0xf471/0xf4a1/0xf4ad and
+ * 0xf555/0xf560.  Named because a bare 0x8c and a bare 0x36b0 state a number
+ * and hide a geometry.
+ */
+#define VPCM_TRACE_X_STEP	35	/* horizontal units per position    */
+#define VPCM_TRACE_X_ORIGIN	14000	/* subtracted: the left-hand edge   */
+#define VPCM_TRACE_P3_POSITIONS	750	/* positions in the phase-3 sweep   */
+#define VPCM_TRACE_P3_DIVISOR	5	/* points per phase-3 position      */
+#define VPCM_TRACE_POSITIONS	100	/* positions in one data-phase lane */
+#define VPCM_TRACE_DIVISOR	15	/* points per data-phase position   */
+#define VPCM_TRACE_LANE_PITCH	140	/* positions between lanes          */
+
+/*
+ * The number of lanes, and the divisor of the `% 6` at 0xf48a.  It is the
+ * unsigned reciprocal `0xaaaaaaab >> 2`, so both the modulus and its
+ * signedness are read off the instruction rather than assumed.
+ */
+#define VPCM_TRACE_LANES	6u
+
+/* `inPhase3`'s value for phase 3, as `cmpl $0x1,0x34(%eax)` tests it. */
+#define VPCM_IN_PHASE3		1u
+
+unsigned long
+VPcmFloModem::getConstellation(int_complex *points, unsigned long maxCount)
+{
+	V90Demodulator *dem;
+	const float *values;
+	unsigned int lane;
+	unsigned long n, i;
+
+	if (pcmSessionType != 0 && info0Layout == 0)
+		return 0;
+
+	dem = modem.demodulator;
+
+	n = dem->nofSymbols;
+	if (n > maxCount)
+		n = maxCount;
+
+	/*
+	 * `array_254` is a `void *` in V90Demodulator.h because the code that
+	 * ALLOCATES it sizes it at eight bytes an element, and this reader
+	 * steps it by four.  The two are not in contradiction -- `nofSymbols` is
+	 * a running fill level and not the allocated length -- but nothing
+	 * settles which of the two strides is the element, so the declaration
+	 * stays neutral and the cast is here with the reason on it.
+	 */
+	values = (const float *)dem->array_254;
+	lane = dem->word_260;
+
+	if (dem->inPhase3 == VPCM_IN_PHASE3) {
+		for (i = 0; i < n; i++) {
+			int t = sweepCounter++;
+
+			points[i].re = VPCM_TRACE_X_STEP *
+			    (t / VPCM_TRACE_P3_DIVISOR % VPCM_TRACE_P3_POSITIONS)
+			    - VPCM_TRACE_X_ORIGIN;
+			points[i].im = (int)(VPCM_CONSTEL_SCALE * values[i]);
+		}
+	} else {
+		for (i = 0; i < n; i++) {
+			int t = sweepCounter++;
+
+			points[i].re = VPCM_TRACE_X_STEP *
+			    (t / VPCM_TRACE_DIVISOR % VPCM_TRACE_POSITIONS +
+			     VPCM_TRACE_LANE_PITCH * (int)((lane +
+			      (unsigned int)i) % VPCM_TRACE_LANES))
+			    - VPCM_TRACE_X_ORIGIN;
+			points[i].im = (int)(VPCM_CONSTEL_SCALE * values[i]);
+		}
+	}
+
+	return n;
+}
+
+/*
+ * The linear equaliser's taps and the decision-feedback filter's, and the two
+ * functions are the same fifteen lines against two different pairs of
+ * `V90Equalizer` fields.  They are written out twice because the object has
+ * them twice, with a scale constant each.
+ *
+ * BOTH PUT THE COEFFICIENT IN THE IMAGINARY HALF and zero in the real one.
+ * V.90's downstream signal is real, so the taps have no imaginary part and the
+ * author had a slot to spare; which slot he used is recorded rather than
+ * explained (include/dsplib/int_complex.h).
+ */
+unsigned long
+VPcmFloModem::getLinearEqualizer(int_complex *points, unsigned long maxCount)
+{
+	V90Equalizer *eq;
+	const float *coefs;
+	unsigned long n, i;
+
+	if (pcmSessionType != 0 && info0Layout == 0)
+		return 0;
+
+	eq = modem.demodulator->equalizer;
+
+	n = eq->linearEquLength;
+	if (n > maxCount)
+		n = maxCount;
+	coefs = eq->linearEquCoefs;
+
+	for (i = 0; i < n; i++) {
+		points[i].re = 0;
+		points[i].im = (int)(coefs[i] * VPCM_EQU_SCALE);
+	}
+
+	return n;
+}
+
+unsigned long
+VPcmFloModem::getDFE(int_complex *points, unsigned long maxCount)
+{
+	V90Equalizer *eq;
+	const float *coefs;
+	unsigned long n, i;
+
+	if (pcmSessionType != 0 && info0Layout == 0)
+		return 0;
+
+	eq = modem.demodulator->equalizer;
+
+	n = eq->dfeLength;
+	if (n > maxCount)
+		n = maxCount;
+	coefs = eq->dfeCoefs;
+
+	for (i = 0; i < n; i++) {
+		points[i].re = 0;
+		points[i].im = (int)(coefs[i] * VPCM_EQU_SCALE);
+	}
+
+	return n;
 }
 
 /*

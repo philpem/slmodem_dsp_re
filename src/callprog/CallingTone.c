@@ -29,15 +29,6 @@
 #define CALLING_TONE_LEVEL_SCALE	0x25ca7
 
 void
-ResetCallingTone(struct calling_tone *ct, char level)
-{
-	ct->phase = 0;
-	ct->on = 1;
-	ct->remaining = CALLING_TONE_ON;
-	ct->amplitude = (short)FP_Pow((level * CALLING_TONE_LEVEL_SCALE) >> 14);
-}
-
-void
 GenerateCallingTone(struct calling_tone *ct, short *buf, int count)
 {
 	int i = 0;
@@ -104,4 +95,13 @@ GenerateCallingTone(struct calling_tone *ct, short *buf, int count)
 			ct->remaining = CALLING_TONE_ON;
 		}
 	}
+}
+
+void
+ResetCallingTone(struct calling_tone *ct, char level)
+{
+	ct->phase = 0;
+	ct->on = 1;
+	ct->remaining = CALLING_TONE_ON;
+	ct->amplitude = (short)FP_Pow((level * CALLING_TONE_LEVEL_SCALE) >> 14);
 }

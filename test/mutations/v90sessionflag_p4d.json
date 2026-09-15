@@ -1,0 +1,7 @@
+[
+ {
+  "label": "phase 4 demodulator's subobject sits at +0x4c",
+  "find": "\tsessionFlag = flag;\n\tphase4Modulator.setSessionFlag(flag);",
+  "replace": "\tsessionFlag = flag;\n\t((V90Phase4Modulator *)((char *)this + 0x4c))->setSessionFlag(flag);"
+ }
+]

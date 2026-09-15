@@ -27,66 +27,6 @@
 #include "dsplib/sysdep.h"
 #include "dsplib/v22_pps.h"
 
-void
-V22_PPS_init(struct v22_pps *state, const struct v22_pps_cfg *cfg, int fresh)
-{
-	short work_q[V22_PPS_COEFFS];
-	short work_i[V22_PPS_COEFFS];
-	short *ci, *cq;
-	short i, j, k;
-
-	state->cfg = *cfg;
-	state->need = 0;
-	state->phase = V22_PPS_STEP;
-	state->widx = 0;
-	state->history_len = V22_PPS_TAPS;
-
-	/*
-	 * Two allocations of the same twelve bytes, spelled two different
-	 * ways in the object -- a folded constant for the first and
-	 * `history_len * 4` for the second.  Kept as written.
-	 */
-	if (fresh) {
-		state->hist_i = sysdep_malloc(V22_PPS_HISTORY *
-						       sizeof(short));
-		state->hist_q = sysdep_malloc(
-			(unsigned int)(state->history_len * 4));
-	}
-
-	for (i = 0; i < state->history_len; i++) {
-		state->hist_i[i] = 0;
-		state->hist_q[i] = 0;
-	}
-
-	/*
-	 * Both coefficient arrays, in place, from natural order into forty
-	 * contiguous phases of three taps reversed in time:
-	 *
-	 *      after[p * 3 + t] = before[40 * (2 - t) + p]
-	 */
-	ci = state->cfg.coeff_i;
-	cq = state->cfg.coeff_q;
-	k = 0;
-	for (j = V22_PPS_COEFFS - V22_PPS_PHASES; j < V22_PPS_COEFFS; j++)
-		for (i = j; i >= 0; i -= V22_PPS_PHASES) {
-			work_i[k] = ci[i];
-			work_q[k] = cq[i];
-			k++;
-		}
-	for (i = 0; i < V22_PPS_COEFFS; i++) {
-		ci[i] = work_i[i];
-		cq[i] = work_q[i];
-	}
-}
-
-void
-V22_PPS_free(struct v22_pps *state)
-{
-	/* Q first, which is the reverse of the order init allocates them. */
-	sysdep_free(state->hist_q);
-	sysdep_free(state->hist_i);
-}
-
 short
 V22_PPS_filter(struct v22_pps *state, struct fpm_smc_ring *src, short *out,
 	       unsigned short count)
@@ -178,6 +118,66 @@ V22_PPS_filter(struct v22_pps *state, struct fpm_smc_ring *src, short *out,
 	state->widx = widx;
 	src->ridx = rd;
 	return (short)produced;
+}
+
+void
+V22_PPS_init(struct v22_pps *state, const struct v22_pps_cfg *cfg, int fresh)
+{
+	short work_q[V22_PPS_COEFFS];
+	short work_i[V22_PPS_COEFFS];
+	short *ci, *cq;
+	short i, j, k;
+
+	state->cfg = *cfg;
+	state->need = 0;
+	state->phase = V22_PPS_STEP;
+	state->widx = 0;
+	state->history_len = V22_PPS_TAPS;
+
+	/*
+	 * Two allocations of the same twelve bytes, spelled two different
+	 * ways in the object -- a folded constant for the first and
+	 * `history_len * 4` for the second.  Kept as written.
+	 */
+	if (fresh) {
+		state->hist_i = sysdep_malloc(V22_PPS_HISTORY *
+						       sizeof(short));
+		state->hist_q = sysdep_malloc(
+			(unsigned int)(state->history_len * 4));
+	}
+
+	for (i = 0; i < state->history_len; i++) {
+		state->hist_i[i] = 0;
+		state->hist_q[i] = 0;
+	}
+
+	/*
+	 * Both coefficient arrays, in place, from natural order into forty
+	 * contiguous phases of three taps reversed in time:
+	 *
+	 *      after[p * 3 + t] = before[40 * (2 - t) + p]
+	 */
+	ci = state->cfg.coeff_i;
+	cq = state->cfg.coeff_q;
+	k = 0;
+	for (j = V22_PPS_COEFFS - V22_PPS_PHASES; j < V22_PPS_COEFFS; j++)
+		for (i = j; i >= 0; i -= V22_PPS_PHASES) {
+			work_i[k] = ci[i];
+			work_q[k] = cq[i];
+			k++;
+		}
+	for (i = 0; i < V22_PPS_COEFFS; i++) {
+		ci[i] = work_i[i];
+		cq[i] = work_q[i];
+	}
+}
+
+void
+V22_PPS_free(struct v22_pps *state)
+{
+	/* Q first, which is the reverse of the order init allocates them. */
+	sysdep_free(state->hist_q);
+	sysdep_free(state->hist_i);
 }
 
 /*

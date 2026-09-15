@@ -122,6 +122,37 @@ V90Phase3Modulator::setSessionFlag(unsigned int flag)
 }
 
 /*
+ * One symbol of the six-symbol Sd pattern, chosen by `(symbolCount - 1) % 6`
+ * through a jump table.  The six entries are the ones at .rodata:0x9f4;
+ * `generateSd`'s own table at 0x984 holds the identical sequence, which is
+ * what names the state.  The modulus is unsigned -- the object divides by six
+ * with the 0xaaaaaaab reciprocal and an unsigned shift.
+ */
+static short
+sdSymbol(const V90Phase3Modulator *m)
+{
+	switch ((m->symbolCount - 1u) % 6u) {
+	case 0:
+	case 2:
+		return m->codeLevelAlt;
+	case 1:
+		return m->idleLevel;
+	case 3:
+	case 5:
+		return (short)-m->codeLevelAlt;
+	case 4:
+		return (short)-m->idleLevel;
+	}
+	return 0;		/* unreachable: a remainder mod 6 is < 6 */
+}
+
+int
+V90Phase3Modulator::generateSd()
+{
+	return sdSymbol(this);
+}
+
+/*
  * Take a DIL descriptor and expand it into the generator's own state: the two
  * byte sequences copied verbatim, the eight segment lengths as 6 * size + 6,
  * and every PCM code turned into a linear level by the companding law in
@@ -229,31 +260,6 @@ V90Phase3Modulator::resetDILGenerator(const tagV90DILdescriptor *d)
  * ===========================================================================
  */
 
-/*
- * One symbol of the six-symbol Sd pattern, chosen by `(symbolCount - 1) % 6`
- * through a jump table.  The six entries are the ones at .rodata:0x9f4;
- * `generateSd`'s own table at 0x984 holds the identical sequence, which is
- * what names the state.  The modulus is unsigned -- the object divides by six
- * with the 0xaaaaaaab reciprocal and an unsigned shift.
- */
-static short
-sdSymbol(const V90Phase3Modulator *m)
-{
-	switch ((m->symbolCount - 1u) % 6u) {
-	case 0:
-	case 2:
-		return m->codeLevelAlt;
-	case 1:
-		return m->idleLevel;
-	case 3:
-	case 5:
-		return (short)-m->codeLevelAlt;
-	case 4:
-		return (short)-m->idleLevel;
-	}
-	return 0;		/* unreachable: a remainder mod 6 is < 6 */
-}
-
 /* Its inversion, .rodata:0xa0c, matching `generateSdNot`'s table at 0x99c. */
 static short
 sdNotSymbol(const V90Phase3Modulator *m)
@@ -346,12 +352,6 @@ updateCodeSegment(V90Phase3Modulator *m)
  * helpers return 0, and no input reaches either.
  * ===========================================================================
  */
-int
-V90Phase3Modulator::generateSd()
-{
-	return sdSymbol(this);
-}
-
 int
 V90Phase3Modulator::generateSdNot()
 {

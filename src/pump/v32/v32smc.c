@@ -131,36 +131,6 @@ ring_advance(short widx, short limit)
 }
 
 void
-SMCv32_encoder_abs(struct v32_smc *smc, struct v32_symout *out,
-		   const short *in, unsigned short count)
-{
-	short *const buf = out->buf;
-	const short limit = out->limit;
-	short widx = out->widx;
-	int quad = smc->quad;
-	/*
-	 * The high-byte tag.  `smc->mode` is loaded as a signed char here in
-	 * the object; only its low eight bits reach the 16-bit store, so the
-	 * width of the load is not observable.
-	 */
-	const int tag = smc->mode << 8;
-	unsigned int i;
-
-	for (i = 0; i < count; i++) {
-		unsigned int sel = (unsigned int)(unsigned short)in[i] & 3u;
-		int point;
-
-		quad = (quad + 3) & 3;
-		point = (int)(SMCv32_PMAP_ABS16[sel] + quad * 4) & 0xf;
-		buf[widx] = (short)(point | tag);
-		widx = ring_advance(widx, limit);
-	}
-
-	smc->quad = (short)quad;
-	out->widx = widx;
-}
-
-void
 SMCv32_encoder_dif(struct v32_smc *smc, struct v32_symout *out,
 		   const short *in, unsigned short count)
 {
@@ -193,6 +163,36 @@ SMCv32_encoder_dif(struct v32_smc *smc, struct v32_symout *out,
 
 	smc->quad = (short)quad;
 	smc->state[mode] = (short)state;
+	out->widx = widx;
+}
+
+void
+SMCv32_encoder_abs(struct v32_smc *smc, struct v32_symout *out,
+		   const short *in, unsigned short count)
+{
+	short *const buf = out->buf;
+	const short limit = out->limit;
+	short widx = out->widx;
+	int quad = smc->quad;
+	/*
+	 * The high-byte tag.  `smc->mode` is loaded as a signed char here in
+	 * the object; only its low eight bits reach the 16-bit store, so the
+	 * width of the load is not observable.
+	 */
+	const int tag = smc->mode << 8;
+	unsigned int i;
+
+	for (i = 0; i < count; i++) {
+		unsigned int sel = (unsigned int)(unsigned short)in[i] & 3u;
+		int point;
+
+		quad = (quad + 3) & 3;
+		point = (int)(SMCv32_PMAP_ABS16[sel] + quad * 4) & 0xf;
+		buf[widx] = (short)(point | tag);
+		widx = ring_advance(widx, limit);
+	}
+
+	smc->quad = (short)quad;
 	out->widx = widx;
 }
 

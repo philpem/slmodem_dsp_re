@@ -245,6 +245,22 @@ V90Phase4Demodulator::~V90Phase4Demodulator()
  * 0x24(%ebx) into %eax ahead of the call and stores the zero after it -- so
  * the value that reaches the log is how long the outgoing state lasted.
  */
+#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+#define SF_OFF_P4D(cls, field, off, tag) \
+	typedef char sf_off_p4d_##tag[ \
+	    ((int)__builtin_offsetof(cls, field) == (off)) ? 1 : -1]
+SF_OFF_P4D(V90Phase4Demodulator, sessionFlag, 0x0000, p4d_flag);
+SF_OFF_P4D(V90Phase4Demodulator, phase4Modulator, 0x0050, p4d_mod);
+#undef SF_OFF_P4D
+#endif
+
+void
+V90Phase4Demodulator::setSessionFlag(unsigned int flag)
+{
+	sessionFlag = flag;
+	phase4Modulator.setSessionFlag(flag);
+}
+
 void
 V90Phase4Demodulator::enterWaitForCP()
 {
@@ -404,6 +420,21 @@ V90Phase4Demodulator::resetBeforRRN()
  *     (`movswl %di,%eax`), which is what makes the return `int`.
  */
 int
+V90Phase4Demodulator::detectFPE(short sample)
+{
+	if (!rDetector2.detectRf(sample))
+		return 0;
+
+	edprintf("V90Phase4Demodulator: Rf detected, polarity = %d\r\n",
+		 rDetector1.polarity);
+	edprintf("V90Phase4Demodulator: enter FPE !");
+	state = P4D_STATE_FPE;
+	countInState = 0;
+	int_0028 = 0;
+	return 1;
+}
+
+int
 V90Phase4Demodulator::trn2dKnownDemod(short)
 {
 	short gen = (short)phase4Modulator.generateSymbol();
@@ -444,21 +475,6 @@ V90Phase4Demodulator::trn2dKnownDemod(short)
  * THE SECOND MESSAGE TAKES NO ARGUMENT and has no "\r\n".  Two separate
  * `edprintf` calls, not one string: 0x65e4 then 0x6618.
  */
-int
-V90Phase4Demodulator::detectFPE(short sample)
-{
-	if (!rDetector2.detectRf(sample))
-		return 0;
-
-	edprintf("V90Phase4Demodulator: Rf detected, polarity = %d\r\n",
-		 rDetector1.polarity);
-	edprintf("V90Phase4Demodulator: enter FPE !");
-	state = P4D_STATE_FPE;
-	countInState = 0;
-	int_0028 = 0;
-	return 1;
-}
-
 /*
  * ===========================================================================
  * THE THREE DECISION MEMBERS.

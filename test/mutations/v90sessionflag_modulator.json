@@ -1,0 +1,17 @@
+[
+ {
+  "label": "modulator calls only the phase 3 half",
+  "find": "\tphase3Modulator->setSessionFlag(flag);\n\tphase4Modulator->setSessionFlag(flag);",
+  "replace": "\tphase3Modulator->setSessionFlag(flag);"
+ },
+ {
+  "label": "modulator embeds rather than dereferences",
+  "find": "\tphase3Modulator->setSessionFlag(flag);",
+  "replace": "\t((V90Phase3Modulator *)&phase3Modulator)->setSessionFlag(flag);"
+ },
+ {
+  "label": "the modulator's flag goes to +0x2c",
+  "find": "\tsessionFlag = flag;\n\tphase3Modulator->setSessionFlag(flag);",
+  "replace": "\t*(unsigned int *)((char *)this + 0x2c) = flag;\n\tphase3Modulator->setSessionFlag(flag);"
+ }
+]

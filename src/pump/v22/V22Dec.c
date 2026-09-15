@@ -99,65 +99,6 @@ const short DECv22_IMAP24[16] = {
 #define V22_DEC24_THRESH	2
 
 /*
- * The 1200 bit/s slicer: four candidates, full squared-distance search.
- *
- * The distance is accumulated in SIXTEEN bits -- each squared axis error is
- * shifted down sixteen before the two are added, and the sum is truncated back
- * to a short before the comparison -- so a point far enough from every
- * candidate can wrap.  That is the object's arithmetic.
- */
-unsigned short
-FSEv22_decision12(struct v22_fse *state, short *angle, short *mag)
-{
-	short si = state->out_i[state->n_out];
-	short sq = state->out_q[state->n_out];
-	short bestd = 0x7fff;
-	short best = 0;
-	short sym = 0;
-	short ci, cq, quad, prev;
-	short k, j;
-
-	for (k = 0; k <= 3; k++) {
-		short di = (short)(si - DECv22_IMAP12[k]);
-		short dq = (short)(sq - DECv22_QMAP12[k]);
-		short d = (short)(((di * di) >> 16) + ((dq * dq) >> 16));
-
-		if (d < bestd) {
-			best = k;
-			bestd = d;
-		}
-	}
-
-	ci = DECv22_IMAP12[best];
-	cq = DECv22_QMAP12[best];
-	*angle = DECv22_ANGL12[best];
-	*mag = V22_DEC12_MAG;
-
-	/*
-	 * Back from a decision to the transmit numbering.  The transmit tables
-	 * are at half this scale, so they are shifted rather than these being
-	 * doubled; no match leaves `sym` at zero.
-	 */
-	for (j = 0; j <= 15; j++) {
-		if ((short)(SMCv22_IMAP_1200BPS[j] >> 1) != ci)
-			continue;
-		if ((short)(SMCv22_QMAP_1200BPS[j] >> 1) != cq)
-			continue;
-		sym = j;
-		break;
-	}
-
-	quad = (short)(sym & V22_SYM_QUAD);
-	prev = *state->prev_quad;
-	*state->prev_quad = quad;
-
-	return (unsigned short)
-	    (SMCv22_PMAP[(((unsigned short)quad - (unsigned short)prev)
-			  & V22_SYM_MODULO) >> V22_SYM_QUAD_SHIFT]
-	     >> V22_SYM_QUAD_SHIFT);
-}
-
-/*
  * The 2400 bit/s slicer: sixteen candidates, but only two of them are ever
  * measured.  Three sign and magnitude comparisons pick the pair; see the
  * layout note on `DECv22_ANGL24`.
@@ -256,4 +197,62 @@ FSEv22_decision24(struct v22_fse *state, short *angle, short *mag)
 	    (SMCv22_PMAP[(((unsigned short)quad - (unsigned short)prev)
 			  & V22_SYM_MODULO) >> V22_SYM_QUAD_SHIFT]
 	     | (sym & V22_SYM_AMP));
+}
+/*
+ * The 1200 bit/s slicer: four candidates, full squared-distance search.
+ *
+ * The distance is accumulated in SIXTEEN bits -- each squared axis error is
+ * shifted down sixteen before the two are added, and the sum is truncated back
+ * to a short before the comparison -- so a point far enough from every
+ * candidate can wrap.  That is the object's arithmetic.
+ */
+unsigned short
+FSEv22_decision12(struct v22_fse *state, short *angle, short *mag)
+{
+	short si = state->out_i[state->n_out];
+	short sq = state->out_q[state->n_out];
+	short bestd = 0x7fff;
+	short best = 0;
+	short sym = 0;
+	short ci, cq, quad, prev;
+	short k, j;
+
+	for (k = 0; k <= 3; k++) {
+		short di = (short)(si - DECv22_IMAP12[k]);
+		short dq = (short)(sq - DECv22_QMAP12[k]);
+		short d = (short)(((di * di) >> 16) + ((dq * dq) >> 16));
+
+		if (d < bestd) {
+			best = k;
+			bestd = d;
+		}
+	}
+
+	ci = DECv22_IMAP12[best];
+	cq = DECv22_QMAP12[best];
+	*angle = DECv22_ANGL12[best];
+	*mag = V22_DEC12_MAG;
+
+	/*
+	 * Back from a decision to the transmit numbering.  The transmit tables
+	 * are at half this scale, so they are shifted rather than these being
+	 * doubled; no match leaves `sym` at zero.
+	 */
+	for (j = 0; j <= 15; j++) {
+		if ((short)(SMCv22_IMAP_1200BPS[j] >> 1) != ci)
+			continue;
+		if ((short)(SMCv22_QMAP_1200BPS[j] >> 1) != cq)
+			continue;
+		sym = j;
+		break;
+	}
+
+	quad = (short)(sym & V22_SYM_QUAD);
+	prev = *state->prev_quad;
+	*state->prev_quad = quad;
+
+	return (unsigned short)
+	    (SMCv22_PMAP[(((unsigned short)quad - (unsigned short)prev)
+			  & V22_SYM_MODULO) >> V22_SYM_QUAD_SHIFT]
+	     >> V22_SYM_QUAD_SHIFT);
 }

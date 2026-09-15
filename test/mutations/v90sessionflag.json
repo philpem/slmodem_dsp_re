@@ -10,77 +10,8 @@
   "replace": "\t(*(V90Phase3Modulator **)&phase3Modulator)->setSessionFlag(flag);"
  },
  {
-  "label": "modulator calls only the phase 3 half",
-  "find": "\tphase3Modulator->setSessionFlag(flag);\n\tphase4Modulator->setSessionFlag(flag);",
-  "replace": "\tphase3Modulator->setSessionFlag(flag);"
- },
- {
-  "label": "modulator embeds rather than dereferences",
-  "find": "\tphase3Modulator->setSessionFlag(flag);",
-  "replace": "\t((V90Phase3Modulator *)&phase3Modulator)->setSessionFlag(flag);"
- },
- {
-  "label": "demodulator prints after storing the flag",
-  "find": "\tedprintf(\"V90Demodulator: setSessionFlag, flag = %d\\r\\n\", flag);\n\n\tsessionFlag = flag;",
-  "replace": "\tsessionFlag = flag;\n\n\tedprintf(\"V90Demodulator: setSessionFlag, flag = %d\\r\\n\", flag);",
-  "equivalent": true,
-  "why": "The two statements are independent: edprintf's format only reads `flag` (the parameter, a local copy `sessionFlag = flag` cannot change), and `sessionFlag = flag` does not read anything edprintf could have modified -- edprintf has no side effect on this object's state at all. Swapping them changes neither what is printed nor what is stored for any input. The object's own order is documented in the comment immediately above this function ('THE DIAGNOSTIC COMES FIRST') and is worth keeping for codegen/similarity reasons, but no differential input can fail on the swap."
- },
- {
-  "label": "demodulator prints the field rather than the argument",
-  "find": "\tedprintf(\"V90Demodulator: setSessionFlag, flag = %d\\r\\n\", flag);",
-  "replace": "\tedprintf(\"V90Demodulator: setSessionFlag, flag = %d\\r\\n\", sessionFlag);"
- },
- {
-  "label": "modem's two sides are swapped",
-  "find": "\tif (which == 0)\n\t\tmodulator->setSessionFlag(flag);\n\telse if (which == 1)\n\t\tdemodulator->setSessionFlag(flag);",
-  "replace": "\tif (which == 1)\n\t\tmodulator->setSessionFlag(flag);\n\telse if (which == 0)\n\t\tdemodulator->setSessionFlag(flag);"
- },
- {
-  "label": "modem falls through to the modulator",
-  "find": "\tif (which == 0)\n\t\tmodulator->setSessionFlag(flag);\n\telse if (which == 1)\n\t\tdemodulator->setSessionFlag(flag);",
-  "replace": "\tif (which == 1)\n\t\tdemodulator->setSessionFlag(flag);\n\telse\n\t\tmodulator->setSessionFlag(flag);"
- },
- {
-  "label": "modem stores the flag only when it calls something",
-  "find": "\tsessionFlag = flag;\n\n\tif (which == 0)",
-  "replace": "\tif (which == 0 || which == 1)\n\t\tsessionFlag = flag;\n\n\tif (which == 0)"
- },
- {
-  "label": "modem reads the side after storing the flag",
-  "find": "\tint which = side;\n\n\tsessionFlag = flag;",
-  "replace": "\tint which;\n\n\tsessionFlag = flag;\n\twhich = side;",
-  "equivalent": true,
-  "why": "This file's own comment immediately above V90Modem::setSessionFlag already makes the argument: reading `side` before or after storing `sessionFlag` 'matters only if the two could alias and they cannot -- they are distinct members of one object.' So moving the read of `side` after the store to `sessionFlag` cannot change the value `which` ends up holding, for any input. Formalizing that comment's conclusion as the mutation's expected verdict."
- },
- {
-  "label": "phase 4 demodulator's subobject sits at +0x4c",
-  "find": "\tsessionFlag = flag;\n\tphase4Modulator.setSessionFlag(flag);",
-  "replace": "\tsessionFlag = flag;\n\t((V90Phase4Modulator *)((char *)this + 0x4c))->setSessionFlag(flag);"
- },
- {
   "label": "phase 3 demodulator's subobject sits at +0x30",
   "find": "\tsessionFlag = flag;\n\tphase3Modulator.setSessionFlag(flag);",
   "replace": "\tsessionFlag = flag;\n\t((V90Phase3Modulator *)((char *)this + 0x30))->setSessionFlag(flag);"
- },
- {
-  "label": "the modulator's flag goes to +0x2c",
-  "find": "\tsessionFlag = flag;\n\tphase3Modulator->setSessionFlag(flag);",
-  "replace": "\t*(unsigned int *)((char *)this + 0x2c) = flag;\n\tphase3Modulator->setSessionFlag(flag);"
- },
- {
-  "label": "the demodulator's flag goes to +0x2c",
-  "find": "\tsessionFlag = flag;\n\tphase3Demodulator->setSessionFlag(flag);",
-  "replace": "\t*(unsigned int *)((char *)this + 0x2c) = flag;\n\tphase3Demodulator->setSessionFlag(flag);"
- },
- {
-  "label": "the modem's flag goes to +0x49bc, where the side is",
-  "find": "\tsessionFlag = flag;\n\n\tif (which == 0)",
-  "replace": "\t*(unsigned int *)((char *)this + 0x49bc) = flag;\n\n\tif (which == 0)"
- },
- {
-  "label": "the modem takes its two halves from the wrong offsets",
-  "find": "\t\tmodulator->setSessionFlag(flag);\n\telse if (which == 1)\n\t\tdemodulator->setSessionFlag(flag);",
-  "replace": "\t\t(*(V90Modulator **)((char *)this + 4))->setSessionFlag(flag);\n\telse if (which == 1)\n\t\t(*(V90Demodulator **)this)->setSessionFlag(flag);"
  }
 ]

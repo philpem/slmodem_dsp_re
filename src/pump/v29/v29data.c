@@ -28,6 +28,31 @@
 #include "dsplib/fpm_pps.h"
 #include "dsplib/fpm_smc.h"
 
+
+
+/*
+ * The block's own allocation is the only thing that fixes its length, so
+ * assert it rather than trusting the layout to add up by eye.  These are what
+ * would have caught a wrong `pad_` run before it silently under-allocated
+ * anything -- `V90Parameters`' 0x504-against-0x558 is the case that argument
+ * comes from.
+ *
+ * GUARDED ON THE POINTER SIZE, because `struct fpm_smc_ring` is three pointers
+ * and is 0x14 bytes only where a pointer is four.  The 64-bit portability
+ * build makes it 0x20 and the block 0xb0, and an unguarded assertion fails
+ * there -- which is how this one first announced itself.  81 files in `src/`
+ * carry the same guard for the same reason.  Read the note in
+ * `src/pump/v90/V90Mapper.cpp` before trusting it too far: `__SIZEOF_POINTER__`
+ * is a GCC 4.6+ predefine, so under the PERIOD compiler this whole block reads
+ * `#if 0` and asserts nothing at all.  What actually protects these offsets is
+ * the differential test.
+ */
+#if __SIZEOF_POINTER__ == 4
+typedef char v29tx_size[(sizeof(struct v29tx) == 0x9c) ? 1 : -1];
+typedef char v29tx_ring_at[(offsetof(struct v29tx, ring) == V29FP_SMC_RING) ? 1 : -1];
+typedef char v29tx_smc_at[(offsetof(struct v29tx, smc) == V29FP_SMC) ? 1 : -1];
+typedef char v29tx_pps_at[(offsetof(struct v29tx, pps) == V29FP_PPS) ? 1 : -1];
+#endif
 unsigned short
 TxNoCarrierV29(void *modem, const unsigned short *data, short *out,
 	       unsigned short count)
@@ -93,27 +118,3 @@ GenEQTrnSequenceV29(void *modem, unsigned short *out, unsigned short n)
 	}
 	*srp = (short)sr;
 }
-
-/*
- * The block's own allocation is the only thing that fixes its length, so
- * assert it rather than trusting the layout to add up by eye.  These are what
- * would have caught a wrong `pad_` run before it silently under-allocated
- * anything -- `V90Parameters`' 0x504-against-0x558 is the case that argument
- * comes from.
- *
- * GUARDED ON THE POINTER SIZE, because `struct fpm_smc_ring` is three pointers
- * and is 0x14 bytes only where a pointer is four.  The 64-bit portability
- * build makes it 0x20 and the block 0xb0, and an unguarded assertion fails
- * there -- which is how this one first announced itself.  81 files in `src/`
- * carry the same guard for the same reason.  Read the note in
- * `src/pump/v90/V90Mapper.cpp` before trusting it too far: `__SIZEOF_POINTER__`
- * is a GCC 4.6+ predefine, so under the PERIOD compiler this whole block reads
- * `#if 0` and asserts nothing at all.  What actually protects these offsets is
- * the differential test.
- */
-#if __SIZEOF_POINTER__ == 4
-typedef char v29tx_size[(sizeof(struct v29tx) == 0x9c) ? 1 : -1];
-typedef char v29tx_ring_at[(offsetof(struct v29tx, ring) == V29FP_SMC_RING) ? 1 : -1];
-typedef char v29tx_smc_at[(offsetof(struct v29tx, smc) == V29FP_SMC) ? 1 : -1];
-typedef char v29tx_pps_at[(offsetof(struct v29tx, pps) == V29FP_PPS) ? 1 : -1];
-#endif

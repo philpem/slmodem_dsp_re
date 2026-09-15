@@ -4,19 +4,8 @@
   "why": "ModulusCoder.cpp and t_moduluscoder.cpp were written together from one reading of 0x31ff0-0x323c5, so a green run says they agree. The claims are: seven words and not six or eight, all of them cleared, the clear starting at +0x00, and the decoder being the encoder's twin rather than a copy that drifted. The fixture seeds every byte non-zero and reseeds each trial, which is the only reason a dropped initialiser is visible at all -- over a zero-filled slot every entry below would survive."
  },
  {
-  "label": "the encoder leaves its last word alone",
-  "find": "ModulusEncoder::ModulusEncoder()\n{\n\tfield_00 = field_04 = field_08 = field_0c = field_10 = field_14 =\n\t\tfield_18 = 0;\n}",
-  "replace": "ModulusEncoder::ModulusEncoder()\n{\n\tfield_00 = field_04 = field_08 = field_0c = field_10 = field_14 = 0;\n}"
- },
- {
-  "label": "the encoder leaves its first word alone",
-  "find": "ModulusEncoder::ModulusEncoder()\n{\n\tfield_00 = field_04 = field_08 = field_0c = field_10 = field_14 =\n\t\tfield_18 = 0;\n}",
-  "replace": "ModulusEncoder::ModulusEncoder()\n{\n\tfield_04 = field_08 = field_0c = field_10 = field_14 = field_18 = 0;\n}"
- },
- {
-  "label": "the encoder's middle word is set to one, not zero",
-  "find": "ModulusEncoder::ModulusEncoder()\n{\n\tfield_00 = field_04 = field_08 = field_0c = field_10 = field_14 =\n\t\tfield_18 = 0;\n}",
-  "replace": "ModulusEncoder::ModulusEncoder()\n{\n\tfield_00 = field_04 = field_08 = field_10 = field_14 = field_18 = 0;\n\tfield_0c = 1;\n}"
+  "label": "NOTE: the two progress members",
+  "why": "Modulus conversion in both directions, and the entries below cover the three things that are easy to get wrong and invisible to a narrow sweep: the SIGNEDNESS of the 64-bit accumulator (__divdi3/__moddi3 and sar, not their unsigned twins), the direction the bit string is read in, and which modulus belongs to which digit.  The signedness entries are only catchable because the test drives lengths of 64 and above, where the top bit becomes the sign; the modulus-order entries only because the five moduli in a set are distinct.  What is NOT here: a zero modulus, which is a division by zero and a signal rather than a difference, and the redundant subtraction of the remainder before the division, which cannot change a quotient that is exact either way -- the object does it, the source says so, and no input separates the two."
  },
  {
   "label": "the decoder leaves its last word alone",
@@ -28,79 +17,44 @@
   "find": "ModulusDecoder::ModulusDecoder()\n{\n\tfield_00 = field_04 = field_08 = field_0c = field_10 = field_14 =\n\t\tfield_18 = 0;\n}",
   "replace": "ModulusDecoder::ModulusDecoder()\n{\n\tfield_00 = field_04 = field_08 = field_0c = field_10 = field_14 =\n\t\tfield_18 = 0;\n\t((unsigned int *)this)[7] = 0;\n}"
  },
-
- {"label": "NOTE: the two progress members",
-  "why": "Modulus conversion in both directions, and the entries below cover the three things that are easy to get wrong and invisible to a narrow sweep: the SIGNEDNESS of the 64-bit accumulator (__divdi3/__moddi3 and sar, not their unsigned twins), the direction the bit string is read in, and which modulus belongs to which digit.  The signedness entries are only catchable because the test drives lengths of 64 and above, where the top bit becomes the sign; the modulus-order entries only because the five moduli in a set are distinct.  What is NOT here: a zero modulus, which is a division by zero and a signal rather than a difference, and the redundant subtraction of the remainder before the division, which cannot change a quotient that is exact either way -- the object does it, the source says so, and no input separates the two."},
-
- {"label": "the encoder reads the bit string the other way up",
-  "find": "\tfor (i = (int)field_18 - 1; i >= 0; i--)\n\t\tacc = (acc + acc) | (bytes[i] & 1);",
-  "replace": "\tfor (i = 0; i < (int)field_18; i++)\n\t\tacc = (acc + acc) | (bytes[i] & 1);"},
-
- {"label": "the encoder takes the whole byte rather than its low bit",
-  "find": "\t\tacc = (acc + acc) | (bytes[i] & 1);",
-  "replace": "\t\tacc = (acc + acc) | bytes[i];"},
-
- {"label": "the encoder tests the byte for zero rather than masking it",
-  "find": "\t\tacc = (acc + acc) | (bytes[i] & 1);",
-  "replace": "\t\tacc = (acc + acc) | (bytes[i] != 0);"},
-
- {"label": "the encoder stops one bit short",
-  "find": "\tfor (i = (int)field_18 - 1; i >= 0; i--)",
-  "replace": "\tfor (i = (int)field_18 - 1; i > 0; i--)"},
-
- {"label": "the encoder's accumulator is unsigned",
-  "find": "\tlong long acc = 0;",
-  "replace": "\tunsigned long long acc = 0;"},
-
- {"label": "the second digit takes the third modulus",
-  "find": "\tout[1] = (unsigned int)(acc % (long long)field_04);",
-  "replace": "\tout[1] = (unsigned int)(acc % (long long)field_08);"},
-
- {"label": "the second digit is divided out by the first modulus",
-  "find": "\tacc = (acc - out[1]) / (long long)field_04;",
-  "replace": "\tacc = (acc - out[1]) / (long long)field_00;"},
-
- {"label": "the fourth digit is not divided out at all",
-  "find": "\tacc = (acc - out[3]) / (long long)field_0c;",
-  "replace": "\tacc = acc / (long long)field_0c;\n\tacc = acc;"},
-
- {"label": "the fifth modulus is sign-extended",
-  "find": "\tout[4] = (unsigned int)(acc % (long long)field_10);",
-  "replace": "\tout[4] = (unsigned int)(acc % (long long)(int)field_10);"},
-
- {"label": "the sixth word is the fifth quotient's remainder instead",
-  "find": "\tout[5] = (unsigned int)acc;",
-  "replace": "\tout[5] = (unsigned int)(acc % (long long)field_10);"},
-
- {"label": "the decoder's Horner starts at the wrong end",
+ {
+  "label": "the decoder's Horner starts at the wrong end",
   "find": "\tacc = (long long)in[5] * field_10 + in[4];",
-  "replace": "\tacc = (long long)in[0] * field_00 + in[1];"},
-
- {"label": "the decoder's second stage takes the wrong modulus",
+  "replace": "\tacc = (long long)in[0] * field_00 + in[1];"
+ },
+ {
+  "label": "the decoder's second stage takes the wrong modulus",
   "find": "\tacc = acc * field_0c + in[3];",
-  "replace": "\tacc = acc * field_10 + in[3];"},
-
- {"label": "the decoder's second stage takes the wrong digit",
+  "replace": "\tacc = acc * field_10 + in[3];"
+ },
+ {
+  "label": "the decoder's second stage takes the wrong digit",
   "find": "\tacc = acc * field_0c + in[3];",
-  "replace": "\tacc = acc * field_0c + in[2];"},
-
- {"label": "the decoder loses its last stage",
+  "replace": "\tacc = acc * field_0c + in[2];"
+ },
+ {
+  "label": "the decoder loses its last stage",
   "find": "\tacc = acc * field_00 + in[0];",
-  "replace": "\tacc = acc + in[0];"},
-
- {"label": "the decoder's accumulator is unsigned, so the shift is logical",
+  "replace": "\tacc = acc + in[0];"
+ },
+ {
+  "label": "the decoder's accumulator is unsigned, so the shift is logical",
   "find": "\tlong long acc;",
-  "replace": "\tunsigned long long acc;"},
-
- {"label": "the decoder writes the whole low byte",
+  "replace": "\tunsigned long long acc;"
+ },
+ {
+  "label": "the decoder writes the whole low byte",
   "find": "\t\tbytes[i] = (unsigned char)(acc & 1);",
-  "replace": "\t\tbytes[i] = (unsigned char)acc;"},
-
- {"label": "the decoder shifts by one too many",
+  "replace": "\t\tbytes[i] = (unsigned char)acc;"
+ },
+ {
+  "label": "the decoder shifts by one too many",
   "find": "\t\tbytes[i] = (unsigned char)(acc & 1);\n\t\tacc >>= 1;",
-  "replace": "\t\tbytes[i] = (unsigned char)(acc & 1);\n\t\tacc >>= 2;"},
-
- {"label": "the decoder writes one bit too many",
+  "replace": "\t\tbytes[i] = (unsigned char)(acc & 1);\n\t\tacc >>= 2;"
+ },
+ {
+  "label": "the decoder writes one bit too many",
   "find": "\tfor (i = 0; i < field_18; i++) {",
-  "replace": "\tfor (i = 0; i <= field_18; i++) {"}
+  "replace": "\tfor (i = 0; i <= field_18; i++) {"
+ }
 ]

@@ -21,13 +21,13 @@
  },
  {
   "label": "calcCRC moves the x12 feedback tap one stage",
-  "find": "\t\tcrc[9] = crc[10];\n\t\tcrc[10] = (unsigned char)((crc[11] + a) & 1);\n\t\tcrc[11] = crc[12];\n\t\tcrc[12] = crc[13];\n\t\tcrc[13] = crc[14];\n\t\tcrc[14] = crc[15];\n\t\tcrc[15] = a;\n\t}\n}\n\n/*\n * resetCRC",
-  "replace": "\t\tcrc[9] = crc[10];\n\t\tcrc[10] = (unsigned char)((crc[12] + a) & 1);\n\t\tcrc[11] = crc[12];\n\t\tcrc[12] = crc[13];\n\t\tcrc[13] = crc[14];\n\t\tcrc[14] = crc[15];\n\t\tcrc[15] = a;\n\t}\n}\n\n/*\n * resetCRC"
+  "find": "V90CP::calcCRC()\n{\n\tunsigned int i, end;\n\tunsigned char a;\n\n\tend = word_3bb0 - 0x11;\n\tfor (i = 0x12; i < end; ) {\n\t\tif (i % 17 == 0)\n\t\t\ti++;\n\t\ta = (unsigned char)((crc[0] + bits[i]) & 1);\n\t\ti++;\n\n\t\tcrc[0] = crc[1];\n\t\tcrc[1] = crc[2];\n\t\tcrc[2] = crc[3];\n\t\tcrc[3] = (unsigned char)((crc[4] + a) & 1);\n\t\tcrc[4] = crc[5];\n\t\tcrc[5] = crc[6];\n\t\tcrc[6] = crc[7];\n\t\tcrc[7] = crc[8];\n\t\tcrc[8] = crc[9];\n\t\tcrc[9] = crc[10];\n\t\tcrc[10] = (unsigned char)((crc[11] + a) & 1);\n\t\tcrc[11] = crc[12];\n\t\tcrc[12] = crc[13];\n\t\tcrc[13] = crc[14];\n\t\tcrc[14] = crc[15];\n\t\tcrc[15] = a;",
+  "replace": "V90CP::calcCRC()\n{\n\tunsigned int i, end;\n\tunsigned char a;\n\n\tend = word_3bb0 - 0x11;\n\tfor (i = 0x12; i < end; ) {\n\t\tif (i % 17 == 0)\n\t\t\ti++;\n\t\ta = (unsigned char)((crc[0] + bits[i]) & 1);\n\t\ti++;\n\n\t\tcrc[0] = crc[1];\n\t\tcrc[1] = crc[2];\n\t\tcrc[2] = crc[3];\n\t\tcrc[3] = (unsigned char)((crc[4] + a) & 1);\n\t\tcrc[4] = crc[5];\n\t\tcrc[5] = crc[6];\n\t\tcrc[6] = crc[7];\n\t\tcrc[7] = crc[8];\n\t\tcrc[8] = crc[9];\n\t\tcrc[9] = crc[10];\n\t\tcrc[10] = (unsigned char)((crc[12] + a) & 1);\n\t\tcrc[11] = crc[12];\n\t\tcrc[12] = crc[13];\n\t\tcrc[13] = crc[14];\n\t\tcrc[14] = crc[15];\n\t\tcrc[15] = a;"
  },
  {
   "label": "calcCRC drops the feedback bit instead of stage 15",
-  "find": "\t\tcrc[14] = crc[15];\n\t\tcrc[15] = a;\n\t}\n}\n\n/*\n * resetCRC",
-  "replace": "\t\tcrc[14] = crc[15];\n\t\tcrc[15] = 0;\n\t}\n}\n\n/*\n * resetCRC"
+  "find": "V90CP::calcCRC()\n{\n\tunsigned int i, end;\n\tunsigned char a;\n\n\tend = word_3bb0 - 0x11;\n\tfor (i = 0x12; i < end; ) {\n\t\tif (i % 17 == 0)\n\t\t\ti++;\n\t\ta = (unsigned char)((crc[0] + bits[i]) & 1);\n\t\ti++;\n\n\t\tcrc[0] = crc[1];\n\t\tcrc[1] = crc[2];\n\t\tcrc[2] = crc[3];\n\t\tcrc[3] = (unsigned char)((crc[4] + a) & 1);\n\t\tcrc[4] = crc[5];\n\t\tcrc[5] = crc[6];\n\t\tcrc[6] = crc[7];\n\t\tcrc[7] = crc[8];\n\t\tcrc[8] = crc[9];\n\t\tcrc[9] = crc[10];\n\t\tcrc[10] = (unsigned char)((crc[11] + a) & 1);\n\t\tcrc[11] = crc[12];\n\t\tcrc[12] = crc[13];\n\t\tcrc[13] = crc[14];\n\t\tcrc[14] = crc[15];\n\t\tcrc[15] = a;",
+  "replace": "V90CP::calcCRC()\n{\n\tunsigned int i, end;\n\tunsigned char a;\n\n\tend = word_3bb0 - 0x11;\n\tfor (i = 0x12; i < end; ) {\n\t\tif (i % 17 == 0)\n\t\t\ti++;\n\t\ta = (unsigned char)((crc[0] + bits[i]) & 1);\n\t\ti++;\n\n\t\tcrc[0] = crc[1];\n\t\tcrc[1] = crc[2];\n\t\tcrc[2] = crc[3];\n\t\tcrc[3] = (unsigned char)((crc[4] + a) & 1);\n\t\tcrc[4] = crc[5];\n\t\tcrc[5] = crc[6];\n\t\tcrc[6] = crc[7];\n\t\tcrc[7] = crc[8];\n\t\tcrc[8] = crc[9];\n\t\tcrc[9] = crc[10];\n\t\tcrc[10] = (unsigned char)((crc[11] + a) & 1);\n\t\tcrc[11] = crc[12];\n\t\tcrc[12] = crc[13];\n\t\tcrc[13] = crc[14];\n\t\tcrc[14] = crc[15];\n\t\tcrc[15] = 0;"
  },
  {
   "label": "evaluateCRC preloads zero rather than the required all-ones register",

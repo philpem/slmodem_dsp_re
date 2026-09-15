@@ -179,6 +179,16 @@ V90CP::~V90CP()
  * `calcSequenceLength` computed, not the array's own extent -- see the
  * comment on V90CP_BITS in the header for why those are different questions.
  */
+void
+V90CP::resetDetector()
+{
+	word_cac = 18;
+	word_cb0 = 0;
+	word_ca4 = 0;
+	byte_ca9 = 0;
+	byte_caa = 0;
+}
+
 unsigned char *
 V90CP::getBitVector(unsigned int &length)
 {
@@ -195,16 +205,6 @@ V90CP::getBitVector(unsigned int &length)
  * 18 is the write cursor's home: one preamble frame of seventeen bits, then
  * the next frame's framing bit at 17 and its first data bit at 18.
  */
-void
-V90CP::resetDetector()
-{
-	word_cac = 18;
-	word_cb0 = 0;
-	word_ca4 = 0;
-	byte_ca9 = 0;
-	byte_caa = 0;
-}
-
 /*
  * reset -- 0x51540, 73 bytes.  `resetDetector`'s five stores, then the two
  * frame counters and -1 at +0x3bbc.
@@ -297,36 +297,7 @@ V90CP::calcSequenceLength()
  * directly rather than through the encoder, so below the gate it says nothing
  * at all.
  */
-void
-V90CP::printNofRecievedMpMpNot()
-{
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("V90MP: received %d MP, %d MPNot\r\n",
-				     nofRecievedMp, nofRecievedMpNot);
-}
 
-/*
- * calcCRC -- 0x512d0, 570 bytes.  The WRITE side of the CRC register, and the
- * same CCITT shift register `evaluateCRC` runs on the read side: taps out of
- * positions 4 and 11 into 3 and 10, and the feedback bit into 15.
- *
- * TWO THINGS SEPARATE IT FROM `evaluateCRC`, and both are absences.  It does
- * not seed the register -- there is no store of 1 anywhere in it, so it
- * continues from whatever `resetCRC` (or the previous call) left -- and it
- * does not compare anything afterwards, so it returns nothing.  The extent
- * and the frame skip are identical: information bits run from 0x12 up to
- * `word_3bb0 - 0x11`, and every index that is a multiple of seventeen is a
- * framing bit and is stepped over.
- *
- * The whole register lives in the sixteen bytes of the object's stack frame
- * for the duration of the loop and is written back at the end.  That is
- * register promotion the compiler is free to do and we do not encode: our
- * source touches `crc[]` directly, exactly as `evaluateCRC`'s does.
- *
- * The `if (i % 17 == 0) i++` is `mul $0xf0f0f0f1` / `shr $4` for the divide
- * and `cmp $1` / `adc $0` for the branchless increment.  Unsigned throughout:
- * `jae` and `jb` on the bounds.
- */
 void
 V90CP::calcCRC()
 {
@@ -359,11 +330,35 @@ V90CP::calcCRC()
 	}
 }
 
+void
+V90CP::printNofRecievedMpMpNot()
+{
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V90MP: received %d MP, %d MPNot\r\n",
+				     nofRecievedMp, nofRecievedMpNot);
+}
+
 /*
- * resetCRC -- 0x512b0, 32 bytes.  Sixteen ones, one per bit of the register,
- * written by a counted loop the object leaves rolled: `mov $0x1,%cl` hoisted
- * out, `inc %eax`, `cmp $0xf,%eax`, `jle`.  The `<= 0xf` is the object's own
- * bound and is why this is written that way rather than `< 16`.
+ * calcCRC -- 0x512d0, 570 bytes.  The WRITE side of the CRC register, and the
+ * same CCITT shift register `evaluateCRC` runs on the read side: taps out of
+ * positions 4 and 11 into 3 and 10, and the feedback bit into 15.
+ *
+ * TWO THINGS SEPARATE IT FROM `evaluateCRC`, and both are absences.  It does
+ * not seed the register -- there is no store of 1 anywhere in it, so it
+ * continues from whatever `resetCRC` (or the previous call) left -- and it
+ * does not compare anything afterwards, so it returns nothing.  The extent
+ * and the frame skip are identical: information bits run from 0x12 up to
+ * `word_3bb0 - 0x11`, and every index that is a multiple of seventeen is a
+ * framing bit and is stepped over.
+ *
+ * The whole register lives in the sixteen bytes of the object's stack frame
+ * for the duration of the loop and is written back at the end.  That is
+ * register promotion the compiler is free to do and we do not encode: our
+ * source touches `crc[]` directly, exactly as `evaluateCRC`'s does.
+ *
+ * The `if (i % 17 == 0) i++` is `mul $0xf0f0f0f1` / `shr $4` for the divide
+ * and `cmp $1` / `adc $0` for the branchless increment.  Unsigned throughout:
+ * `jae` and `jb` on the bounds.
  */
 void
 V90CP::resetCRC()
@@ -373,7 +368,12 @@ V90CP::resetCRC()
 	for (i = 0; i <= 0xf; i++)
 		crc[i] = 1;
 }
-
+/*
+ * resetCRC -- 0x512b0, 32 bytes.  Sixteen ones, one per bit of the register,
+ * written by a counted loop the object leaves rolled: `mov $0x1,%cl` hoisted
+ * out, `inc %eax`, `cmp $0xf,%eax`, `jle`.  The `<= 0xf` is the object's own
+ * bound and is why this is written that way rather than `< 16`.
+ */
 /*
  * evaluateInfo -- 0x519f0, 1986 bytes.  ONE SWITCH OVER `word_ca4` and
  * nothing else: `sub $0x3` / `cmp $0x8` / `jmp *0xe50(,%eax,4)`, so the arms
@@ -582,6 +582,55 @@ V90CP::evaluateInfo()
  * carries an `if (i % 17 == 0) i++`, which the object encodes as the
  * 0xf0f0f0f1 reciprocal followed by `cmp $1` / `adc $0`.
  */
+int
+V90CP::evaluateCRC()
+{
+	unsigned int i, end;
+	int c;
+	unsigned char a;
+	unsigned char diff;
+
+	/* SIGNED: the object's bound is `cmp $0xf` / `jle`, as in `resetCRC`. */
+	for (c = 0; c <= 0xf; c++)
+		crc[c] = 1;
+
+	end = word_3bb0 - 0x11;
+	for (i = 0x12; i < end; ) {
+		if (i % 17 == 0)
+			i++;
+		a = (unsigned char)((crc[0] + bits[i]) & 1);
+		i++;
+
+		crc[0] = crc[1];
+		crc[1] = crc[2];
+		crc[2] = crc[3];
+		crc[3] = (unsigned char)((crc[4] + a) & 1);
+		crc[4] = crc[5];
+		crc[5] = crc[6];
+		crc[6] = crc[7];
+		crc[7] = crc[8];
+		crc[8] = crc[9];
+		crc[9] = crc[10];
+		crc[10] = (unsigned char)((crc[11] + a) & 1);
+		crc[11] = crc[12];
+		crc[12] = crc[13];
+		crc[13] = crc[14];
+		crc[14] = crc[15];
+		crc[15] = a;
+	}
+
+	diff = 0;
+	for (i = 0; i <= 0xf; i++) {
+		int d = (int)crc[i] - (int)bits[word_3bb0 - 0x10 + i];
+
+		if (d < 0)
+			d = -d;
+		diff = (unsigned char)(diff + d);
+	}
+
+	return diff == 0;
+}
+
 void
 V90CP::infoToBits()
 {
@@ -876,55 +925,6 @@ V90CP::infoToBits()
  * single byte -- `cltd` / `xor %edx,%eax` / `sub %edx,%eax` is the object's
  * inlined `abs`, and the accumulator wraps at 256 exactly as ours does.
  */
-int
-V90CP::evaluateCRC()
-{
-	unsigned int i, end;
-	int c;
-	unsigned char a;
-	unsigned char diff;
-
-	/* SIGNED: the object's bound is `cmp $0xf` / `jle`, as in `resetCRC`. */
-	for (c = 0; c <= 0xf; c++)
-		crc[c] = 1;
-
-	end = word_3bb0 - 0x11;
-	for (i = 0x12; i < end; ) {
-		if (i % 17 == 0)
-			i++;
-		a = (unsigned char)((crc[0] + bits[i]) & 1);
-		i++;
-
-		crc[0] = crc[1];
-		crc[1] = crc[2];
-		crc[2] = crc[3];
-		crc[3] = (unsigned char)((crc[4] + a) & 1);
-		crc[4] = crc[5];
-		crc[5] = crc[6];
-		crc[6] = crc[7];
-		crc[7] = crc[8];
-		crc[8] = crc[9];
-		crc[9] = crc[10];
-		crc[10] = (unsigned char)((crc[11] + a) & 1);
-		crc[11] = crc[12];
-		crc[12] = crc[13];
-		crc[13] = crc[14];
-		crc[14] = crc[15];
-		crc[15] = a;
-	}
-
-	diff = 0;
-	for (i = 0; i <= 0xf; i++) {
-		int d = (int)crc[i] - (int)bits[word_3bb0 - 0x10 + i];
-
-		if (d < 0)
-			d = -d;
-		diff = (unsigned char)(diff + d);
-	}
-
-	return diff == 0;
-}
-
 /*
  * bitsToInfo -- 0x52d20, 2391 bytes, and the RECEIVE-SIDE DRIVER of the class:
  * take one arriving bit, drive `word_ca4` (the decoder state), `word_cac` (the

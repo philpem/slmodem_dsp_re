@@ -61,47 +61,6 @@
 #define FIELD_BYTE(obj, off)	(*(unsigned char *)FIELD((obj), (off)))
 
 /*
- * One block of the datapump is 20 ms, so the shared clock is in
- * milliseconds.  The new value is returned, not the old one.
- */
-int
-ReadGTimer(void *modem)
-{
-	int *timer = (int *)FIELD_PTR(modem, V22_OBJ_GTIMER);
-
-	*timer += 20;
-	return *timer;
-}
-
-void
-TxNOP(void *modem, void *arg1, short *out, short *count)
-{
-	short i;
-
-	(void)modem;
-	(void)arg1;
-
-	for (i = 0; i <= V22_TX_BLOCK - 1; i++)
-		out[i] = 0;
-
-	*count = V22_TX_BLOCK;
-}
-
-void
-RxClampV22(void *modem, void *arg1, short *out, short *count)
-{
-	short i;
-
-	(void)modem;
-	(void)arg1;
-
-	for (i = 0; i <= V22_CLAMP_BLOCK - 1; i++)
-		out[i] = V22_CLAMP_VALUE;
-
-	*count = V22_CLAMP_BLOCK;
-}
-
-/*
  * True when every one of `*count` symbols is 3.
  *
  * An empty array is trained: the object's first comparison is `0 >= n`, which
@@ -125,7 +84,6 @@ RxTrained1200(const short *symbols, const unsigned short *count)
 
 	return i == (int)n;
 }
-
 /*
  * True when MORE THAN seven symbols at the END of the array are 15.
  *
@@ -161,41 +119,45 @@ RxTrained2400(const short *symbols, const unsigned short *count)
 	return run > V22_TRAINED_2400_RUN;
 }
 
-int
-CarrierDetect(void *modem)
+void
+TxNOP(void *modem, void *arg1, short *out, short *count)
 {
-	void *fp = FIELD_PTR(modem, V22_OBJ_FP);
+	short i;
 
-	return FIELD_INT(fp, V22FP_CARRIER);
+	(void)modem;
+	(void)arg1;
+
+	for (i = 0; i <= V22_TX_BLOCK - 1; i++)
+		out[i] = 0;
+
+	*count = V22_TX_BLOCK;
 }
 
-int
-SignalDetect(void *modem)
+void
+RxClampV22(void *modem, void *arg1, short *out, short *count)
 {
-	void *fp = FIELD_PTR(modem, V22_OBJ_FP);
+	short i;
 
-	return FIELD_INT(fp, V22FP_SIGNAL);
+	(void)modem;
+	(void)arg1;
+
+	for (i = 0; i <= V22_CLAMP_BLOCK - 1; i++)
+		out[i] = V22_CLAMP_VALUE;
+
+	*count = V22_CLAMP_BLOCK;
 }
-
 /*
- * Quality as a distance from the rail: 0x8000 minus the stored figure,
- * truncated to sixteen bits and returned unsigned.
- *
- * The object loads the constant as 0xffff8000 -- that is, -32768 in a 32-bit
- * register -- subtracts, and then zero-extends the low half.  So a stored
- * figure of 0 gives 32768 and one of 0x8000 gives 0.  The wraparound is real
- * and reachable: any stored figure above 0x8000 gives a LARGE answer, not a
- * negative one.  Preserved, and the differential test sweeps the whole
- * sixteen-bit domain rather than sampling it.
+ * One block of the datapump is 20 ms, so the shared clock is in
+ * milliseconds.  The new value is returned, not the old one.
  */
-unsigned short
-GetSignalQuality(void *modem)
+int
+ReadGTimer(void *modem)
 {
-	void *fp = FIELD_PTR(modem, V22_OBJ_FP);
+	int *timer = (int *)FIELD_PTR(modem, V22_OBJ_GTIMER);
 
-	return (unsigned short)(-32768 - (int)FIELD_USHORT(fp, V22FP_QUALITY));
+	*timer += 20;
+	return *timer;
 }
-
 /*
  * Three modes, a `switch` in the object (compare, jg, dec, je -- GCC's shape
  * for a dense switch of three), and no default action.  Written as a switch
@@ -236,6 +198,44 @@ TxClockSync(void *modem)
 
 	FIELD_SHORT(fp, V22FP_TX_CLOCK) = (short)(baud * 3);
 }
+
+int
+CarrierDetect(void *modem)
+{
+	void *fp = FIELD_PTR(modem, V22_OBJ_FP);
+
+	return FIELD_INT(fp, V22FP_CARRIER);
+}
+
+int
+SignalDetect(void *modem)
+{
+	void *fp = FIELD_PTR(modem, V22_OBJ_FP);
+
+	return FIELD_INT(fp, V22FP_SIGNAL);
+}
+/*
+ * Quality as a distance from the rail: 0x8000 minus the stored figure,
+ * truncated to sixteen bits and returned unsigned.
+ *
+ * The object loads the constant as 0xffff8000 -- that is, -32768 in a 32-bit
+ * register -- subtracts, and then zero-extends the low half.  So a stored
+ * figure of 0 gives 32768 and one of 0x8000 gives 0.  The wraparound is real
+ * and reachable: any stored figure above 0x8000 gives a LARGE answer, not a
+ * negative one.  Preserved, and the differential test sweeps the whole
+ * sixteen-bit domain rather than sampling it.
+ */
+unsigned short
+GetSignalQuality(void *modem)
+{
+	void *fp = FIELD_PTR(modem, V22_OBJ_FP);
+
+	return (unsigned short)(-32768 - (int)FIELD_USHORT(fp, V22FP_QUALITY));
+}
+
+
+
+
 
 /*
  * V22FP_control, ScramblerOn and DescramblerOn were reconstructed here first,

@@ -1,0 +1,109 @@
+[
+ {
+  "label": "the expiry test admits the exact boundary",
+  "find": "\tif (t->duration > tm || 0.0f >= t->duration) {",
+  "replace": "\tif (t->duration >= tm || 0.0f >= t->duration) {",
+  "note": "the {0.125, n=1} case lands duration == tm exactly."
+ },
+ {
+  "label": "a zero duration counts as finite",
+  "find": "\tif (t->duration > tm || 0.0f >= t->duration) {\n\t\tt->elapsed = tm;",
+  "replace": "\tif (t->duration > tm || 0.0f > t->duration) {\n\t\tt->elapsed = tm;"
+ },
+ {
+  "label": "the FIR ring wraps to slot 1, not slot 0",
+  "find": "\t\tidx = (short)((short)(idx + 1) < len ? (short)(idx + 1) : 0);\n\t\tdly[idx] = *buf;",
+  "replace": "\t\tidx = (short)(idx + 1) < len ? (short)(idx + 1) : 1;\n\t\tdly[idx] = *buf;",
+  "note": "wrapping past the end instead (<=) would write dly[len], outside the ring, so the off-by-one is probed from the safe side."
+ },
+ {
+  "label": "the FIR's wrapped half double-counts the newest tap",
+  "find": "\t\tfor (j = len - 1; j > idx; j--)\n\t\t\tacc += *c++ * dly[j];\n\t\t*buf++ = acc;",
+  "replace": "\t\tfor (j = len - 1; j >= idx; j--)\n\t\t\tacc += *c++ * dly[j];\n\t\t*buf++ = acc;"
+ },
+ {
+  "label": "the biquad loses its unit delay",
+  "find": "\t\told2 = t->iir_z2;\n\t\tt->iir_z2 = w;\n\t\tt->iir_z1 = old2;",
+  "replace": "\t\told2 = t->iir_z2;\n\t\tt->iir_z2 = w;\n\t\tt->iir_z1 = w;\n\t\t(void)old2;"
+ },
+ {
+  "label": "TONE_delete frees the hanging blocks on a zero-length filter too",
+  "find": "\tif (t->fir_len > 0) {",
+  "replace": "\tif (t->fir_len >= 0) {"
+ },
+ {
+  "label": "TONE_delete leaks the FIR delay line",
+  "find": "\t\tsysdep_free(t->fir_dly);\n\t\tsysdep_free(t->fir_coef);",
+  "replace": "\t\tsysdep_free(t->fir_coef);"
+ },
+ {
+  "label": "TONE_delete leaks the object itself",
+  "find": "\t}\n\tsysdep_free(t);\n}",
+  "replace": "\t}\n}"
+ },
+ {
+  "label": "TONE_detect's ring wraps to slot 1, not slot 0",
+  "find": "\t\tidx = (short)((short)(idx + 1) < len ? (short)(idx + 1) : 0);\n\t\tdly[idx] = *buf++;",
+  "replace": "\t\tidx = (short)(idx + 1) < len ? (short)(idx + 1) : 1;\n\t\tdly[idx] = *buf++;"
+ },
+ {
+  "label": "TONE_detect's wrapped half double-counts the newest tap",
+  "find": "\t\tfor (j = len - 1; j > idx; j--)\n\t\t\tacc += *c++ * dly[j];\n\n\t\tw =",
+  "replace": "\t\tfor (j = len - 1; j >= idx; j--)\n\t\t\tacc += *c++ * dly[j];\n\n\t\tw ="
+ },
+ {
+  "label": "TONE_detect restarts the coefficient walk mid-block",
+  "find": "\t\tconst float *c = coef;\n\t\tfloat acc = 0.0f;",
+  "replace": "\t\tconst float *c = coef + 1;\n\t\tfloat acc = 0.0f;"
+ },
+ {
+  "label": "TONE_detect's biquad loses its unit delay",
+  "find": "\t\tt->det_z1 = t->det_z2;\n\t\tt->det_z2 = w;",
+  "replace": "\t\tt->det_z1 = w;\n\t\tt->det_z2 = w;"
+ },
+ {
+  "label": "TONE_detect's output tap uses the feedback coefficient",
+  "find": "\t\ty = t->det_coef[0] * t->det_z2 + w + t->det_z1;",
+  "replace": "\t\ty = t->det_coef[1] * t->det_z2 + w + t->det_z1;"
+ },
+ {
+  "label": "TONE_detect's biquad feeds back the wrong state",
+  "find": "\t\tw = t->det_coef[1] * t->det_z2 + acc +\n\t\t    t->det_coef[2] * t->det_z1;",
+  "replace": "\t\tw = t->det_coef[1] * t->det_z1 + acc +\n\t\t    t->det_coef[2] * t->det_z2;"
+ },
+ {
+  "label": "the residual power is the sum of the squares, not the difference",
+  "find": "\t\t\t(acc * acc - y * y) * (1 - TONE_DETECT_POLE));",
+  "replace": "\t\t\t(acc * acc + y * y) * (1 - TONE_DETECT_POLE);"
+ },
+ {
+  "label": "the total power follows the biquad rather than the FIR",
+  "find": "\t\t\tacc * acc * (1 - TONE_DETECT_POLE));",
+  "replace": "\t\t\ty * y * (1 - TONE_DETECT_POLE);"
+ },
+ {
+  "label": "the smoothing pole is 0.9",
+  "find": "#define TONE_DETECT_POLE\t0.95",
+  "replace": "#define TONE_DETECT_POLE\t0.9"
+ },
+ {
+  "label": "the residual clamp keeps the negative half instead",
+  "find": "\tif (0.0f > e_res)\n\t\te_res = 0.0f;",
+  "replace": "\tif (0.0f < e_res)\n\t\te_res = 0.0f;"
+ },
+ {
+  "label": "the quiet verdict is returned above the floor rather than below it",
+  "find": "\tif (e_tot < t->float_0014)\n\t\treturn 2;",
+  "replace": "\tif (e_tot > t->float_0014)\n\t\treturn 2;"
+ },
+ {
+  "label": "the ratio scales the residual rather than the total",
+  "find": "\treturn e_tot * t->float_000c >= e_res;",
+  "replace": "\treturn e_res * t->float_000c >= e_tot;"
+ },
+ {
+  "label": "TONE_detect does not write the ring index back",
+  "find": "\tt->fir_idx = idx;\n\n\tif (0.0f > e_res)",
+  "replace": "\tif (0.0f > e_res)"
+ }
+]

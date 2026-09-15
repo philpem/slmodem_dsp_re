@@ -167,6 +167,19 @@ V90Modem::printTitle()
  * called at 0x199bf before `side` is loaded at 0x199c4.
  * ===========================================================================
  */
+#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+#define SF_OFF_MODEM(cls, field, off, tag) \
+	typedef char sf_off_modem_##tag[ \
+	    ((int)__builtin_offsetof(cls, field) == (off)) ? 1 : -1]
+SF_OFF_MODEM(V90Modem, modulator, 0x0000, mdm_mod);
+SF_OFF_MODEM(V90Modem, demodulator, 0x0004, mdm_dem);
+SF_OFF_MODEM(V90Modem, phase2Info, 0x0008, mdm_p2i);
+SF_OFF_MODEM(V90Modem, params, 0x49b4, mdm_49b4);
+SF_OFF_MODEM(V90Modem, sessionFlag, 0x49b8, mdm_flag);
+SF_OFF_MODEM(V90Modem, side, 0x49bc, mdm_side);
+#undef SF_OFF_MODEM
+#endif
+
 void
 V90Modem::reset(unsigned int qcFlag)
 {
@@ -240,6 +253,26 @@ V90Modem::reset(unsigned int qcFlag)
  * `V90Modulator::enterPhase3`, also not written.  Finding F7520.
  * ===========================================================================
  */
+/*
+ * `mov 0x49bc(%eax),%edx` is read BEFORE the store to +0x49b8, which matters
+ * only if the two could alias and they cannot -- they are distinct members of
+ * one object.  Written in the order the object reads them anyway.
+ *
+ * The flag is stored on every path, including the one that calls nothing.
+ */
+void
+V90Modem::setSessionFlag(unsigned int flag)
+{
+	int which = side;
+
+	sessionFlag = flag;
+
+	if (which == 0)
+		modulator->setSessionFlag(flag);
+	else if (which == 1)
+		demodulator->setSessionFlag(flag);
+}
+
 void
 V90Modem::progress(int *bits, unsigned int &nofBits, float *samples,
 		   unsigned int nofSymbols)

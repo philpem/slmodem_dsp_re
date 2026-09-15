@@ -189,18 +189,18 @@
  },
  {
   "label": "the CP-not-loaded flag is left holding the storage's bytes",
-  "find": "\tcpNotLoaded = 0;",
-  "replace": "\t(void)0;"
+  "find": "\tfor (i = 0; i < sizeof(v34BaudAllow); i++)\n\t\tv34BaudAllow[i] = v34initialbauds[i];\n\n\tsweepCounter = 0;\n\n\tsysdep_memset(cpBitVector, 0, sizeof(cpBitVector));\n\n\tterminateJa = 0;\n\tterminateCp = 0;\n\tterminateCpNot = 0;\n\tcpNotLoaded = 0;",
+  "replace": "\tfor (i = 0; i < sizeof(v34BaudAllow); i++)\n\t\tv34BaudAllow[i] = v34initialbauds[i];\n\n\tsweepCounter = 0;\n\n\tsysdep_memset(cpBitVector, 0, sizeof(cpBitVector));\n\n\tterminateJa = 0;\n\tterminateCp = 0;\n\tterminateCpNot = 0;\n\t(void)0;"
  },
  {
   "label": "sweepCounter is left holding the storage's bytes",
-  "find": "\tsweepCounter = 0;",
-  "replace": "\t(void)0;"
+  "find": "\tsysdep_memset(bitVector, 0, sizeof(bitVector));\n\tnofBits = 0;\n\n\tfor (i = 0; i < sizeof(v34BaudAllow); i++)\n\t\tv34BaudAllow[i] = v34initialbauds[i];\n\n\tsweepCounter = 0;\n\n\tsysdep_memset(cpBitVector, 0, sizeof(cpBitVector));",
+  "replace": "\tsysdep_memset(bitVector, 0, sizeof(bitVector));\n\tnofBits = 0;\n\n\tfor (i = 0; i < sizeof(v34BaudAllow); i++)\n\t\tv34BaudAllow[i] = v34initialbauds[i];\n\n\t(void)0;\n\n\tsysdep_memset(cpBitVector, 0, sizeof(cpBitVector));"
  },
  {
   "label": "the last of the four words after the sine wave is not cleared",
-  "find": "\tverificationStatus = 0;",
-  "replace": "\t(void)0;"
+  "find": "\tretrainLatch = 0;\n\tminNofTransmitSequences = 0;\n\tcpNofBits = 0;\n\tnofTransmitSequences = 0;\n\n\tqcVerifyState = 0;\n\tqcTerminateRequested = 0;\n\tqcSampleCount = 0;\n\tverificationStatus = 0;\n\n\t/*\n\t * `andb $0xfb,0x3(%edi)`",
+  "replace": "\tretrainLatch = 0;\n\tminNofTransmitSequences = 0;\n\tcpNofBits = 0;\n\tnofTransmitSequences = 0;\n\n\tqcVerifyState = 0;\n\tqcTerminateRequested = 0;\n\tqcSampleCount = 0;\n\t(void)0;\n\n\t/*\n\t * `andb $0xfb,0x3(%edi)`"
  },
  {
   "label": "the three tail fields after the entrance filter are not cleared",

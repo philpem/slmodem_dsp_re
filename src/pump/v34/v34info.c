@@ -33,6 +33,12 @@
 #include "dsplib/v34info.h"
 #include "dsplib/v34rx.h"	/* bitreverse */
 
+static const char *
+pcm_name(const struct v34_object *obj)
+{
+	return obj->k56flex_receiver != 0 ? "K.56Flex (same as V.34)" : "V.34";
+}
+
 /*
  * ---------------------------------------------------------------------------
  * The session object at +0x3548.
@@ -97,32 +103,7 @@ session_ptr(const void *s, unsigned off)
  *
  * Returns 0, on both paths.  There is no error code to invent.
  */
-int
-V34GiveProbeResults(void *objp, const void *src)
-{
-	struct v34_object *obj = (struct v34_object *)objp;
-	const unsigned char *p;
-	int i, k;
 
-	/* Neither PCM receiver running: nothing to record. */
-	if (obj->v90_receiver == 0 && obj->k56flex_receiver == 0)
-		return 0;
-
-	p = (const unsigned char *)src + V34_PROBE_OFFSET;
-	for (i = 0; i < V34_PROBE_RESULTS; i++) {
-		union {
-			double d;
-			unsigned char b[sizeof(double)];
-		} u;
-
-		for (k = 0; k < (int)sizeof(double); k++)
-			u.b[k] = p[k];
-		obj->probe_results[i] = u.d;
-		p += V34_PROBE_STRIDE;
-	}
-
-	return 0;
-}
 
 /*
  * ---------------------------------------------------------------------------
@@ -136,73 +117,6 @@ V34GiveProbeResults(void *objp, const void *src)
  * parenthesis in the first is the original author's: K.56Flex and V.34 send
  * the same INFO0, so there is nothing to choose between them here and the
  * string says so.
- */
-static const char *
-pcm_name(const struct v34_object *obj)
-{
-	return obj->k56flex_receiver != 0 ? "K.56Flex (same as V.34)" : "V.34";
-}
-
-/*
- * Set the one INFO0d bit the V.90 receiver cares about.
- *
- * Does nothing at all unless a V.90 receiver is running, and then writes a
- * constant into index 12 of the message.  The smallest function in the file
- * and the only one that touches that index.
- */
-void
-V34SetINFO0dBits(void *objp, short *bits)
-{
-	struct v34_object *obj = (struct v34_object *)objp;
-
-	if (obj->v90_receiver == 0)
-		return;
-
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("V90, setINFO0dBits\n");
-
-	bits[12] = 30;
-}
-
-/*
- * Assemble the outbound INFO0.
- *
- * FOUR CASES, ON TWO INDEPENDENT TESTS -- the session variant at +0x6120 and
- * whether a V.90 receiver is running -- and each has its own string:
- *
- *     variant  v90_receiver
- *      != 0      != 0        "setting info0a for V.PCM"
- *      != 0      == 0        "setting info0a for %s"
- *      == 0      != 0        "setting info0d (Digital) for V.PCM"
- *      == 0      == 0        "setting info0 (Caller) for %s"
- *
- * BOTH AXES ARE CLEAN, which is what makes the table worth having: the
- * variant picks `info0a` against `info0d`, matching the letter
- * `V34GiveINFO0dBits` prints, and `v90_receiver` picks "for V.PCM" against
- * "for <whatever pcm_name says>".
- *
- * The two V.PCM strings were transcribed the wrong way round on the first
- * attempt and the transcript comparison caught it.  Nothing else could have:
- * they are on branches whose stores are identical, so every byte of state
- * agreed.  Finding F171.
- *
- * THE TWO NON-TRIVIAL CASES ARE NEAR-DUPLICATES AND ARE NOT THE SAME.  Both
- * set the same two leading shorts and both then test two flags and set two
- * bits, but:
- *
- *   - the SHORT-PHASE-2 request sets bit 0 when the variant is non-zero and
- *     bit 1 when it is zero;
- *   - the V.92 indication sets bit 1 and bit 0 respectively -- the other way
- *     round again;
- *   - and its SOURCE differs.  Non-zero variant reads a byte at +0x11 of the
- *     session's capability block; zero variant reads the object's own
- *     `local_v92`.
- *
- * Two swapped bits and two different sources between two blocks that print
- * the same two strings.  Transcribed separately rather than factored for
- * exactly that reason -- finding F130 is about the helper that looked shared
- * and was not.  Only the non-zero-variant case sets `prev_bulk_delay`, and
- * only the zero-variant case fills indices 2 and 3 with rate information.
  */
 void
 V34SetINFO0aBits(void *objp, short *bits)
@@ -308,6 +222,97 @@ V34SetINFO0aBits(void *objp, short *bits)
 		bits[3] = (short)(bits[3] | 8);
 	}
 }
+void
+V34SetINFO0dBits(void *objp, short *bits)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+
+	if (obj->v90_receiver == 0)
+		return;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V90, setINFO0dBits\n");
+
+	bits[12] = 30;
+}
+int
+V34GiveProbeResults(void *objp, const void *src)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	const unsigned char *p;
+	int i, k;
+
+	/* Neither PCM receiver running: nothing to record. */
+	if (obj->v90_receiver == 0 && obj->k56flex_receiver == 0)
+		return 0;
+
+	p = (const unsigned char *)src + V34_PROBE_OFFSET;
+	for (i = 0; i < V34_PROBE_RESULTS; i++) {
+		union {
+			double d;
+			unsigned char b[sizeof(double)];
+		} u;
+
+		for (k = 0; k < (int)sizeof(double); k++)
+			u.b[k] = p[k];
+		obj->probe_results[i] = u.d;
+		p += V34_PROBE_STRIDE;
+	}
+
+	return 0;
+}
+
+
+/*
+ * Set the one INFO0d bit the V.90 receiver cares about.
+ *
+ * Does nothing at all unless a V.90 receiver is running, and then writes a
+ * constant into index 12 of the message.  The smallest function in the file
+ * and the only one that touches that index.
+ */
+
+
+/*
+ * Assemble the outbound INFO0.
+ *
+ * FOUR CASES, ON TWO INDEPENDENT TESTS -- the session variant at +0x6120 and
+ * whether a V.90 receiver is running -- and each has its own string:
+ *
+ *     variant  v90_receiver
+ *      != 0      != 0        "setting info0a for V.PCM"
+ *      != 0      == 0        "setting info0a for %s"
+ *      == 0      != 0        "setting info0d (Digital) for V.PCM"
+ *      == 0      == 0        "setting info0 (Caller) for %s"
+ *
+ * BOTH AXES ARE CLEAN, which is what makes the table worth having: the
+ * variant picks `info0a` against `info0d`, matching the letter
+ * `V34GiveINFO0dBits` prints, and `v90_receiver` picks "for V.PCM" against
+ * "for <whatever pcm_name says>".
+ *
+ * The two V.PCM strings were transcribed the wrong way round on the first
+ * attempt and the transcript comparison caught it.  Nothing else could have:
+ * they are on branches whose stores are identical, so every byte of state
+ * agreed.  Finding F171.
+ *
+ * THE TWO NON-TRIVIAL CASES ARE NEAR-DUPLICATES AND ARE NOT THE SAME.  Both
+ * set the same two leading shorts and both then test two flags and set two
+ * bits, but:
+ *
+ *   - the SHORT-PHASE-2 request sets bit 0 when the variant is non-zero and
+ *     bit 1 when it is zero;
+ *   - the V.92 indication sets bit 1 and bit 0 respectively -- the other way
+ *     round again;
+ *   - and its SOURCE differs.  Non-zero variant reads a byte at +0x11 of the
+ *     session's capability block; zero variant reads the object's own
+ *     `local_v92`.
+ *
+ * Two swapped bits and two different sources between two blocks that print
+ * the same two strings.  Transcribed separately rather than factored for
+ * exactly that reason -- finding F130 is about the helper that looked shared
+ * and was not.  Only the non-zero-variant case sets `prev_bulk_delay`, and
+ * only the zero-variant case fills indices 2 and 3 with rate information.
+ */
+
 
 /*
  * ---------------------------------------------------------------------------

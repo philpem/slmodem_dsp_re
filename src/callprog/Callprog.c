@@ -7,7 +7,7 @@
  *   CALLPROG_Delete   .text 0x079440
  *   CALLPROG_Dial     .text 0x07a5a0
  *
- * CALLPROG_Progress is not reconstructed yet.
+ * Includes the original message table and status accessor.
  *
  * Most of Create is not object initialisation at all -- it is the state
  * machine, assembled a byte at a time into eleven module-scope tables.  The
@@ -23,6 +23,71 @@
 #include "dsplib/callprog_cfg.h"
 #include "dsplib/modem_params.h"
 #include "dsplib/sysdep.h"
+
+
+/*
+ * .rodata+0x5d40.  The STATE names -- a different table from the message
+ * names below, and a different shape: a plain array of ten pointers, indexed
+ * by the state itself, with no code field and no search.
+ *
+ * `CALLPROG_Progress` indexes it raw, `mov 0x5d40(,%esi,4),%edx`, eleven times
+ * -- once per transition it reports.  There is no bounds check in the object
+ * and there is none here; the states are 0..9 and every write to the field is
+ * a constant in that range, so the check would be unreachable.
+ *
+ * Two things worth noticing.  State 2 is spelled `CALLPROG_DIALING`, exactly
+ * the same string as MESSAGE 3 in the table below, which is why callprog.h
+ * calls the state `CALLPROG_DIALING_STATE` -- the collision is the original's,
+ * not ours.  And the table stops at ten: finding F142 recorded it as running on
+ * into the sixteen message names, and that was wrong.  Only ten relocations
+ * apply to it, and what follows is unrelated data that merely disassembles as
+ * plausible pointers.
+ */
+const char *const callprog_state_names[CALLPROG_STATES_NAMED] = {
+	"CALLPROG_NO_LEGAL_STATE",		/* 0 */
+	"CALLPROG_WAIT_DIAL",			/* 1 */
+	"CALLPROG_DIALING",			/* 2 */
+	"CALLPROG_WAIT_RING",			/* 3 */
+	"CALLPROG_WAIT_TO_ANSWER",		/* 4 */
+	"CALLPROG_ANSWER_STATE",		/* 5 */
+	"CALLPROG_END",				/* 6 */
+	"CALLPROG_END_PARTIALLY_STATE",		/* 7 */
+	"CALLPROG_WFS_STATE",			/* 8 */
+	"CALLPROG_BONGTONE_STATE"		/* 9 */
+};
+
+struct callprog_status_name {
+	int		status;
+	const char	*name;
+};
+
+/*
+ * .rodata+0x5dc0.  Seventeen entries, {code, name}, in code order -- so a
+ * direct index would have worked for all but the last, and the original
+ * searches anyway.
+ */
+static const struct callprog_status_name message_names[] = {
+	{ CALLPROG_NO_MESSAGE,		"CALLPROG_NO_MESSAGE"		},
+	{ CALLPROG_NO_RING,		"CALLPROG_NO_RING"		},
+	{ CALLPROG_NO_DIAL_TONE,	"CALLPROG_NO_DIAL_TONE"		},
+	{ CALLPROG_DIALING,		"CALLPROG_DIALING"		},
+	{ CALLPROG_END_DIALING,		"CALLPROG_END_DIALING"		},
+	{ CALLPROG_RINGBACK,		"CALLPROG_RINGBACK"		},
+	{ CALLPROG_NO_ANSWER,		"CALLPROG_NO_ANSWER"		},
+	{ CALLPROG_ANSWER,		"CALLPROG_ANSWER"		},
+	{ CALLPROG_MODEM_ANSWER,	"CALLPROG_MODEM_ANSWER"		},
+	{ CALLPROG_VOICE_ANSWER,	"CALLPROG_VOICE_ANSWER"		},
+	{ CALLPROG_BUSY,		"CALLPROG_BUSY"			},
+	{ CALLPROG_CONGESTION,		"CALLPROG_CONGESTION"		},
+	{ CALLPROG_ERROR,		"CALLPROG_ERROR"		},
+	{ CALLPROG_ANSWER_STATE_TIMEOUT, "CALLPROG_ANSWER_STATE_TIMEOUT" },
+	{ CALLPROG_END_DIALING_PARTIALLY, "CALLPROG_END_DIALING_PARTIALLY" },
+	{ CALLPROG_V8BIS_MODEM_ANSWER,	"CALLPROG_V8BIS_MODEM_ANSWER"	},
+	{ CALLPROG_MAX_MESSAGES,	"CALLPROG_MAX_MESSAGES"		}
+};
+
+#define MESSAGE_NAMES \
+	((int)(sizeof(message_names) / sizeof(message_names[0])))
 
 
 /*
@@ -203,294 +268,8 @@ build_state_machine(struct callprog *cp)
 		enable_line_clear_timeout[s] = 0;
 }
 
-void
-CALLPROG_Create(struct callprog *cp, struct callprog_cfg *cfg)
-{
-	struct cadence_setup setup;
-	int i;
 
-	/*
-	 * The cadence detectors' descriptor, built once and reused for both.
-	 * cadence_create writes the tone back into it, so it must be reset
-	 * between the two calls -- which the original does by setting the
-	 * field explicitly each time rather than relying on what is left.
-	 */
-	setup.w0 = 50;
-	setup.w1 = 50;
-	setup.w2 = 3;
-	setup.w3 = 0;
-	setup.tone = 0;
-	setup.w5 = 0;
-	setup.w6 = 1;
 
-	cp->f1c = cfg->w0;
-	cp->get_sreg = cfg->get_sreg;
-	cp->modem = cfg->modem;
-	cp->f28 = cfg->w3;
-	cp->band = 0;
-
-	/*
-	 * Whether to band-limit at all.  `MustNoiseFilterBeApplied` is exactly
-	 * what this filter is for -- the elliptic bandpass in callprog_cfg.h
-	 * keeps everything but the call-progress band out of the detectors --
-	 * so the country can turn it off on a line clean enough not to need
-	 * it.
-	 */
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("CallProgFP_Create >>\n");
-
-	cp->band_wanted = modem_get_param(cfg->modem,
-					  MustNoiseFilterBeApplied);
-
-	/*
-	 * After the parameter read, which the argument pins: it IS the read's
-	 * result.  The gate sits late in the body (0x79982), later than the
-	 * statement below would suggest, so the exact line is not certain --
-	 * the data dependency is, and so is the order against the get_param,
-	 * which the harness now marks.
-	 */
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("APPLY_FILTER = %d\n", cp->band_wanted);
-
-	if (cp->band_wanted != 0)
-		cp->band = _iir_filter_create(cp->band,
-					      IIR_FILTER_COEFF, IIR_FILTER_COEFF,
-					      CALLPROG_BandFilter_a,
-					      CALLPROG_BandFilter_b,
-					      CALLPROG_BandFilter_shift);
-
-	cp->dialtone_seen = 0;
-
-	setup.tone = CADENCE_TONE_BUSY;
-	cp->busy = cadence_create(0, &setup, 0, cp->modem);
-	setup.tone = CADENCE_TONE_DIAL;
-	cp->dial = cadence_create(0, &setup, 0, cp->modem);
-
-	cp->dtmf = Dual_TONE_create();
-
-	for (i = 0; i < 7; i++)
-		cp->timeout[i] = callprog_default_timeout[i];
-
-	build_state_machine(cp);
-
-	cp->state = CALLPROG_STATE_START;
-	enter_state(cp);
-
-	cp->line_clear_limit = cp->timeout[4] * 8000;
-
-	/*
-	 * "<<" MARKS THE EXIT, not the entry, and the arrows mean what they
-	 * say after all: ">>" going in to the nested create at the top, "<<"
-	 * coming back out of this one at the bottom.  An earlier reading put
-	 * this first, on the ground that its gate is at 0x79588 and the other
-	 * at 0x795e6 -- but GCC moves these blocks out of line, so the order
-	 * of the GATES is not the order they run in, and the transcript says
-	 * the object prints this immediately before `CALLPROG Dialing`.
-	 * Finding F194.
-	 */
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("CALLPROG Create <<\n");
-}
-
-void
-CALLPROG_Delete(struct callprog *cp)
-{
-	DialerAbort(&cp->dialer);
-
-	/*
-	 * AFTER the abort, not before it, which is the opposite of what
-	 * "is entered" suggests -- the transcript shows the object printing
-	 * "Dialer was aborted." first.  A store cannot cross a call, but a
-	 * gated print can sit either side of one and nothing but the trace can
-	 * say which.  Finding F194.
-	 */
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("CALLPROG_Delete is entered\n");
-
-	/*
-	 * Which name goes with which object is read from the return targets,
-	 * not from the order they are written here: DIAL_OBJ's block returns
-	 * to 0x79493 and CADENCE_OBJ's to 0x7949a, so the dial detector is
-	 * announced first -- as it is deleted first.
-	 */
-	if (cp->dial != 0) {
-		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("cadence_delete with "
-					     "CADENCE_DIAL_OBJ is invoked\n");
-
-		cadence_delete(cp->dial);
-	}
-	if (cp->busy != 0) {
-		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("cadence_delete with " "CADENCE_OBJ is invoked\n");
-
-		cadence_delete(cp->busy);
-	}
-	if (cp->band_wanted != 0)
-		_iir_filter_delete(cp->band);
-
-	/*
-	 * Two of the five pointers are cleared and three are not, so a second
-	 * Delete on the same object would free `busy`, `band` and `dtmf`
-	 * again.  call_delete calls this once.  See finding F55.
-	 */
-	cp->f70 = 0;
-	cp->dial = 0;
-
-	if (cp->dtmf != 0)
-		Dual_TONE_delete(cp->dtmf);
-
-	/* A tail call in the object -- `jmp`, not `call`, at 0x794cd. */
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("CALLPROG_Delete is exited\n");
-}
-
-/*
- * ---------------------------------------------------------------------------
- * CALLPROG_Dial  .text 0x07a5a0
- *
- * Everything the supervisor needs that could have changed since it was built:
- * the calling-tone setting, the dial string, and the timeouts.  Then it either
- * waits for dial tone or does not, which is the one real decision here.
- */
-void
-CALLPROG_Dial(struct callprog *cp, const char *s)
-{
-	long level;
-	int flag;
-
-	/*
-	 * ANNOUNCED BEFORE THE REFUSAL, not after.
-	 *
-	 * The object checks the debug level at function entry (0x7a5ab) and
-	 * jumps to an out-of-line block at 0x7a86d that prints this and
-	 * returns to 0x7a5bc -- which is the load of `get_sreg`.  So the
-	 * dial string is announced first and the refusal below second, and
-	 * a caller with no accessor sees both lines.
-	 *
-	 * This was the other way round here until the refusal path was
-	 * driven with the level raised, and the transcripts disagreed by
-	 * exactly this line.  Finding F240.  It is finding F194's warning
-	 * again: the cold block sits 0x2b0 bytes past the gate, so gate
-	 * ADDRESS order is not execution order and reading the two in
-	 * address order puts this print second.
-	 */
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("CALLPROG Dialing %s\n", s);
-
-	/*
-	 * No S-register accessor means no way to find the calling tone's
-	 * level, and the function gives up rather than calling through null.
-	 */
-	if (cp->get_sreg == 0) {
-		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf(
-				"sreg function is not defined!\n");
-
-		return;
-	}
-
-	flag = modem_get_param(cp->modem, GetCallingToneFlag);
-	cp->calling_tone_mode = flag;
-	if (flag == 0)
-		cp->calling_tone_armed = 0;
-	else if (flag == 1)
-		cp->calling_tone_armed = 1;
-	else
-		cp->calling_tone_armed = (flag == 2);
-
-	/*
-	 * S221, through the accessor call.c installed.  Narrowed to a signed
-	 * char, so an S-register of 128 or more arrives negative -- see D13,
-	 * where it makes almost no difference because the level control barely
-	 * works.
-	 */
-	level = cp->get_sreg(cp->modem, 221);
-	ResetCallingTone(&cp->calling_tone, (char)level);
-
-	cp->fatal = DialerCreate(&cp->dialer, s, cp->modem);
-
-	/*
-	 * Five timeouts, all from the same parameter.  Whatever they were
-	 * meant to be individually, the host is asked the same question five
-	 * times and gives the same answer.
-	 */
-	cp->timeout[1] = modem_get_param(cp->modem, GetNoAnswerTimeOut);
-	cp->timeout[2] = modem_get_param(cp->modem, GetNoAnswerTimeOut);
-	cp->timeout[3] = modem_get_param(cp->modem, GetNoAnswerTimeOut);
-	cp->timeout[4] = modem_get_param(cp->modem, GetNoAnswerTimeOut);
-	cp->timeout[5] = modem_get_param(cp->modem, GetNoAnswerTimeOut);
-
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("GetNoAnswerTimeOut. %d\n",
-				     cp->timeout[5]);
-
-	build_timeouts(cp);
-
-	if (cp->f1c != 0) {
-		/*
-		 * Blind dialling: do not wait for dial tone.  State 1 times
-		 * out straight into dialling rather than into an error, and
-		 * both detectors are switched off for the two states that
-		 * would otherwise be listening.
-		 */
-		timeout_table[1] = modem_get_param(cp->modem,
-						   GetBlindDialPause);
-
-		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf(
-				"BlindCall: GetBlindDialPause = %d .\n",
-				timeout_table[1]);
-
-		next_state_due_timeout[1] = 2;
-		message_due_timeout[1] = CALLPROG_DIALING;
-		toneiir_dialtone_table[1] = 0;
-		toneiir_busy_table[1] = 0;
-		toneiir_dialtone_table[2] = 0;
-		toneiir_busy_table[2] = 0;
-	} else {
-		int wait = modem_get_param(cp->modem, GetDialToneWaitTime);
-		int validate = modem_get_param(cp->modem,
-					       GetDialToneValidationTime);
-		int extra = (validate + 9) / 10;
-
-		/*
-		 * Long enough to hear dial tone, plus long enough to be sure
-		 * of it -- the validation time in whole seconds, rounded up,
-		 * and never less than two.
-		 */
-		if (extra <= 2)
-			extra = 2;
-		timeout_table[1] = wait + extra;
-
-		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("WAIT DIAL TIMEOUT = %d\n",
-					     timeout_table[1]);
-
-		next_state_due_timeout[1] = CALLPROG_STATE_END;
-		message_due_timeout[1] = CALLPROG_NO_DIAL_TONE;
-		toneiir_dialtone_table[1] = 1;
-		toneiir_busy_table[1] = 1;
-		toneiir_dialtone_table[2] = 1;
-		toneiir_busy_table[2] = 1;
-	}
-
-	/* State 7 dials again without going back to waiting. */
-	if (cp->state == 7) {
-		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf(
-				"Set state to CALLPROG_DIALING_STATE\n");
-
-		cp->state = 2;
-	} else
-		cp->state = CALLPROG_STATE_START;
-
-	enter_state(cp);
-
-	/* A tail call in the object -- `jmp`, not `call`, at 0x7a868. */
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("CALLPROG_Dial was exited.\n");
-}
 
 /*
  * The supervisor's per-buffer step.  Everything above builds the machine;
@@ -687,6 +466,181 @@ run_timeouts(struct callprog *cp, int *message)
 	*message = message_due_line_clear_timeout[cp->state];
 	request_state(cp, next_state_due_line_clear_timeout[cp->state]);
 	cp->line_clear_active = 0;
+}
+
+/*
+ * Grade a dial string on behalf of the supervisor.
+ *
+ * A thunk, and nothing but: the object's version adds 0x98 to its first
+ * argument and tail-jumps.  0x98 is where the dialler sits inside the
+ * supervisor, so this is the same question asked of the one the supervisor
+ * owns rather than of a dialler the caller has to reach into.
+ */
+int
+Dialer_IsDialStringInvalid(struct callprog *cp, const char *s)
+{
+	return IsDialStringInvalid(&cp->dialer, s);
+}
+
+void
+CALLPROG_Delete(struct callprog *cp)
+{
+	DialerAbort(&cp->dialer);
+
+	/*
+	 * AFTER the abort, not before it, which is the opposite of what
+	 * "is entered" suggests -- the transcript shows the object printing
+	 * "Dialer was aborted." first.  A store cannot cross a call, but a
+	 * gated print can sit either side of one and nothing but the trace can
+	 * say which.  Finding F194.
+	 */
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("CALLPROG_Delete is entered\n");
+
+	/*
+	 * Which name goes with which object is read from the return targets,
+	 * not from the order they are written here: DIAL_OBJ's block returns
+	 * to 0x79493 and CADENCE_OBJ's to 0x7949a, so the dial detector is
+	 * announced first -- as it is deleted first.
+	 */
+	if (cp->dial != 0) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("cadence_delete with "
+					     "CADENCE_DIAL_OBJ is invoked\n");
+
+		cadence_delete(cp->dial);
+	}
+	if (cp->busy != 0) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("cadence_delete with " "CADENCE_OBJ is invoked\n");
+
+		cadence_delete(cp->busy);
+	}
+	if (cp->band_wanted != 0)
+		_iir_filter_delete(cp->band);
+
+	/*
+	 * Two of the five pointers are cleared and three are not, so a second
+	 * Delete on the same object would free `busy`, `band` and `dtmf`
+	 * again.  call_delete calls this once.  See finding F55.
+	 */
+	cp->f70 = 0;
+	cp->dial = 0;
+
+	if (cp->dtmf != 0)
+		Dual_TONE_delete(cp->dtmf);
+
+	/* A tail call in the object -- `jmp`, not `call`, at 0x794cd. */
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("CALLPROG_Delete is exited\n");
+}
+
+/*
+ * The scan does not stop at the first hit -- it runs the whole table and
+ * keeps the last match.  With this table that is indistinguishable from
+ * stopping early, since no code appears twice, and it is reproduced only
+ * because a duplicate added later would change the answer.
+ */
+const char *
+CALLPROG_Status_string(int status)
+{
+	const char *name = "";
+	int i;
+
+	for (i = 0; i < MESSAGE_NAMES; i++)
+		if (message_names[i].status == status)
+			name = message_names[i].name;
+
+	return name;
+}
+
+void
+CALLPROG_Create(struct callprog *cp, struct callprog_cfg *cfg)
+{
+	struct cadence_setup setup;
+	int i;
+
+	/*
+	 * The cadence detectors' descriptor, built once and reused for both.
+	 * cadence_create writes the tone back into it, so it must be reset
+	 * between the two calls -- which the original does by setting the
+	 * field explicitly each time rather than relying on what is left.
+	 */
+	setup.w0 = 50;
+	setup.w1 = 50;
+	setup.w2 = 3;
+	setup.w3 = 0;
+	setup.tone = 0;
+	setup.w5 = 0;
+	setup.w6 = 1;
+
+	cp->f1c = cfg->w0;
+	cp->get_sreg = cfg->get_sreg;
+	cp->modem = cfg->modem;
+	cp->f28 = cfg->w3;
+	cp->band = 0;
+
+	/*
+	 * Whether to band-limit at all.  `MustNoiseFilterBeApplied` is exactly
+	 * what this filter is for -- the elliptic bandpass in callprog_cfg.h
+	 * keeps everything but the call-progress band out of the detectors --
+	 * so the country can turn it off on a line clean enough not to need
+	 * it.
+	 */
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("CallProgFP_Create >>\n");
+
+	cp->band_wanted = modem_get_param(cfg->modem,
+					  MustNoiseFilterBeApplied);
+
+	/*
+	 * After the parameter read, which the argument pins: it IS the read's
+	 * result.  The gate sits late in the body (0x79982), later than the
+	 * statement below would suggest, so the exact line is not certain --
+	 * the data dependency is, and so is the order against the get_param,
+	 * which the harness now marks.
+	 */
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("APPLY_FILTER = %d\n", cp->band_wanted);
+
+	if (cp->band_wanted != 0)
+		cp->band = _iir_filter_create(cp->band,
+					      IIR_FILTER_COEFF, IIR_FILTER_COEFF,
+					      CALLPROG_BandFilter_a,
+					      CALLPROG_BandFilter_b,
+					      CALLPROG_BandFilter_shift);
+
+	cp->dialtone_seen = 0;
+
+	setup.tone = CADENCE_TONE_BUSY;
+	cp->busy = cadence_create(0, &setup, 0, cp->modem);
+	setup.tone = CADENCE_TONE_DIAL;
+	cp->dial = cadence_create(0, &setup, 0, cp->modem);
+
+	cp->dtmf = Dual_TONE_create();
+
+	for (i = 0; i < 7; i++)
+		cp->timeout[i] = callprog_default_timeout[i];
+
+	build_state_machine(cp);
+
+	cp->state = CALLPROG_STATE_START;
+	enter_state(cp);
+
+	cp->line_clear_limit = cp->timeout[4] * 8000;
+
+	/*
+	 * "<<" MARKS THE EXIT, not the entry, and the arrows mean what they
+	 * say after all: ">>" going in to the nested create at the top, "<<"
+	 * coming back out of this one at the bottom.  An earlier reading put
+	 * this first, on the ground that its gate is at 0x79588 and the other
+	 * at 0x795e6 -- but GCC moves these blocks out of line, so the order
+	 * of the GATES is not the order they run in, and the transcript says
+	 * the object prints this immediately before `CALLPROG Dialing`.
+	 * Finding F194.
+	 */
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("CALLPROG Create <<\n");
 }
 
 int
@@ -943,15 +897,148 @@ CALLPROG_Progress(struct callprog *cp, const short *in, short *out, int count)
 }
 
 /*
- * Grade a dial string on behalf of the supervisor.
+ * ---------------------------------------------------------------------------
+ * CALLPROG_Dial  .text 0x07a5a0
  *
- * A thunk, and nothing but: the object's version adds 0x98 to its first
- * argument and tail-jumps.  0x98 is where the dialler sits inside the
- * supervisor, so this is the same question asked of the one the supervisor
- * owns rather than of a dialler the caller has to reach into.
+ * Everything the supervisor needs that could have changed since it was built:
+ * the calling-tone setting, the dial string, and the timeouts.  Then it either
+ * waits for dial tone or does not, which is the one real decision here.
  */
-int
-Dialer_IsDialStringInvalid(struct callprog *cp, const char *s)
+void
+CALLPROG_Dial(struct callprog *cp, const char *s)
 {
-	return IsDialStringInvalid(&cp->dialer, s);
+	long level;
+	int flag;
+
+	/*
+	 * ANNOUNCED BEFORE THE REFUSAL, not after.
+	 *
+	 * The object checks the debug level at function entry (0x7a5ab) and
+	 * jumps to an out-of-line block at 0x7a86d that prints this and
+	 * returns to 0x7a5bc -- which is the load of `get_sreg`.  So the
+	 * dial string is announced first and the refusal below second, and
+	 * a caller with no accessor sees both lines.
+	 *
+	 * This was the other way round here until the refusal path was
+	 * driven with the level raised, and the transcripts disagreed by
+	 * exactly this line.  Finding F240.  It is finding F194's warning
+	 * again: the cold block sits 0x2b0 bytes past the gate, so gate
+	 * ADDRESS order is not execution order and reading the two in
+	 * address order puts this print second.
+	 */
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("CALLPROG Dialing %s\n", s);
+
+	/*
+	 * No S-register accessor means no way to find the calling tone's
+	 * level, and the function gives up rather than calling through null.
+	 */
+	if (cp->get_sreg == 0) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+				"sreg function is not defined!\n");
+
+		return;
+	}
+
+	flag = modem_get_param(cp->modem, GetCallingToneFlag);
+	cp->calling_tone_mode = flag;
+	if (flag == 0)
+		cp->calling_tone_armed = 0;
+	else if (flag == 1)
+		cp->calling_tone_armed = 1;
+	else
+		cp->calling_tone_armed = (flag == 2);
+
+	/*
+	 * S221, through the accessor call.c installed.  Narrowed to a signed
+	 * char, so an S-register of 128 or more arrives negative -- see D13,
+	 * where it makes almost no difference because the level control barely
+	 * works.
+	 */
+	level = cp->get_sreg(cp->modem, 221);
+	ResetCallingTone(&cp->calling_tone, (char)level);
+
+	cp->fatal = DialerCreate(&cp->dialer, s, cp->modem);
+
+	/*
+	 * Five timeouts, all from the same parameter.  Whatever they were
+	 * meant to be individually, the host is asked the same question five
+	 * times and gives the same answer.
+	 */
+	cp->timeout[1] = modem_get_param(cp->modem, GetNoAnswerTimeOut);
+	cp->timeout[2] = modem_get_param(cp->modem, GetNoAnswerTimeOut);
+	cp->timeout[3] = modem_get_param(cp->modem, GetNoAnswerTimeOut);
+	cp->timeout[4] = modem_get_param(cp->modem, GetNoAnswerTimeOut);
+	cp->timeout[5] = modem_get_param(cp->modem, GetNoAnswerTimeOut);
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("GetNoAnswerTimeOut. %d\n",
+				     cp->timeout[5]);
+
+	build_timeouts(cp);
+
+	if (cp->f1c != 0) {
+		/*
+		 * Blind dialling: do not wait for dial tone.  State 1 times
+		 * out straight into dialling rather than into an error, and
+		 * both detectors are switched off for the two states that
+		 * would otherwise be listening.
+		 */
+		timeout_table[1] = modem_get_param(cp->modem,
+						   GetBlindDialPause);
+
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+				"BlindCall: GetBlindDialPause = %d .\n",
+				timeout_table[1]);
+
+		next_state_due_timeout[1] = 2;
+		message_due_timeout[1] = CALLPROG_DIALING;
+		toneiir_dialtone_table[1] = 0;
+		toneiir_busy_table[1] = 0;
+		toneiir_dialtone_table[2] = 0;
+		toneiir_busy_table[2] = 0;
+	} else {
+		int wait = modem_get_param(cp->modem, GetDialToneWaitTime);
+		int validate = modem_get_param(cp->modem,
+					       GetDialToneValidationTime);
+		int extra = (validate + 9) / 10;
+
+		/*
+		 * Long enough to hear dial tone, plus long enough to be sure
+		 * of it -- the validation time in whole seconds, rounded up,
+		 * and never less than two.
+		 */
+		if (extra <= 2)
+			extra = 2;
+		timeout_table[1] = wait + extra;
+
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("WAIT DIAL TIMEOUT = %d\n",
+					     timeout_table[1]);
+
+		next_state_due_timeout[1] = CALLPROG_STATE_END;
+		message_due_timeout[1] = CALLPROG_NO_DIAL_TONE;
+		toneiir_dialtone_table[1] = 1;
+		toneiir_busy_table[1] = 1;
+		toneiir_dialtone_table[2] = 1;
+		toneiir_busy_table[2] = 1;
+	}
+
+	/* State 7 dials again without going back to waiting. */
+	if (cp->state == 7) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+				"Set state to CALLPROG_DIALING_STATE\n");
+
+		cp->state = 2;
+	} else
+		cp->state = CALLPROG_STATE_START;
+
+	enter_state(cp);
+
+	/* A tail call in the object -- `jmp`, not `call`, at 0x7a868. */
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("CALLPROG_Dial was exited.\n");
 }

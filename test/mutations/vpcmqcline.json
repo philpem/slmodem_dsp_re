@@ -267,13 +267,13 @@
  },
  {
   "label": "ecRampCounter is not cleared",
-  "find": "\tecMode = 0;\n\tecRampCounter = 0;",
-  "replace": "\tecMode = 0;"
+  "find": "\tmodem.params->init();\n\tmodem.setSessionFlag((unsigned int)pcmSessionType);\n\tmodem.reset(0);\n\tv92modem.reset();\n\techoCanceller.reset();\n\n\tecMode = 0;\n\tecRampCounter = 0;",
+  "replace": "\tmodem.params->init();\n\tmodem.setSessionFlag((unsigned int)pcmSessionType);\n\tmodem.reset(0);\n\tv92modem.reset();\n\techoCanceller.reset();\n\n\tecMode = 0;"
  },
  {
   "label": "ecMode is not cleared",
-  "find": "\tecMode = 0;\n\tecRampCounter = 0;",
-  "replace": "\tecRampCounter = 0;"
+  "find": "\tmodem.params->init();\n\tmodem.setSessionFlag((unsigned int)pcmSessionType);\n\tmodem.reset(0);\n\tv92modem.reset();\n\techoCanceller.reset();\n\n\tecMode = 0;\n\tecRampCounter = 0;",
+  "replace": "\tmodem.params->init();\n\tmodem.setSessionFlag((unsigned int)pcmSessionType);\n\tmodem.reset(0);\n\tv92modem.reset();\n\techoCanceller.reset();\n\n\tecRampCounter = 0;"
  },
  {
   "label": "the phase-2 bit is withdrawn instead of the retrain one",

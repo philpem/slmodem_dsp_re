@@ -37,11 +37,11 @@
   "build/test/t_dialer"
  ],
  "dilpack": [
-  "src/pump/v90/DILdescriptorPacker.cpp",
+  "src/pump/v90/V90DILdesPCK.cpp",
   "build/test/t_dilpack"
  ],
  "dilpackstd": [
-  "src/pump/v90/DILdescriptorPacker.cpp",
+  "src/pump/v90/V90DILdesPCK.cpp",
   "build/test/t_dilpack"
  ],
  "dtmf": [
@@ -57,7 +57,7 @@
   "build/test/t_dtmfrx"
  ],
  "faxadaptcreate": [
-  "src/fax/faxadapt.c",
+  "src/fax/V27rx.c",
   "build/test/t_faxadapt"
  ],
  "floatarma": [
@@ -145,11 +145,11 @@
   "build/test/t_v92alloc"
  ],
  "moduluscoder": [
-  "src/pump/v90/ModulusCoder.cpp",
+  "src/pump/v90/V90ModulusDecoder.cpp",
   "build/test/t_moduluscoder"
  ],
  "moduluscoderstd": [
-  "src/pump/v90/ModulusCoder.cpp",
+  "src/pump/v90/V90ModulusDecoder.cpp",
   "build/test/t_moduluscoder"
  ],
  "notch": [
@@ -201,7 +201,7 @@
   "build/test/t_v22dec"
  ],
  "v22fp": [
-  "src/pump/v22/v22fp.c",
+  "src/pump/v22/V22.c",
   "build/test/t_v22fpcreate"
  ],
  "v22fse": [
@@ -757,7 +757,7 @@
   "build/test/t_v90spectral"
  ],
  "v90sessionflag": [
-  "src/pump/v90/V90SessionFlag.cpp",
+  "src/pump/v90/V90Phase3Demodulator.cpp",
   "build/test/t_v90sessionflag"
  ],
  "v90specialcond": [
@@ -781,11 +781,11 @@
   "build/test/t_v90spectral"
  ],
  "v90trn2": [
-  "src/pump/v90/V90TRN2Designer.cpp",
+  "src/pump/v90/V90TRN2dDesigner.cpp",
   "build/test/t_v90designers"
  ],
  "v90trn2design": [
-  "src/pump/v90/V90TRN2Designer.cpp",
+  "src/pump/v90/V90TRN2dDesigner.cpp",
   "build/test/t_v90trn2design"
  ],
  "v90unpck": [
@@ -809,7 +809,7 @@
   "build/test/t_v92btosproc"
  ],
  "v92convenc": [
-  "src/pump/v90/V92ConvolutionEncoder.cpp",
+  "src/pump/v90/V92ConvEncoder.cpp",
   "build/test/t_v92convmapper"
  ],
  "v92cp": [
@@ -833,7 +833,7 @@
   "build/test/t_v92cpeval"
  ],
  "v92dilpackstd": [
-  "src/pump/v90/V92DILdescriptorPacker.cpp",
+  "src/pump/v90/V92DILdesPCK.cpp",
   "build/test/t_v92dilpack"
  ],
  "v92ec": [
@@ -965,7 +965,7 @@
   "build/test/t_vpcmcreate"
  ],
  "vpcmctor": [
-  "src/pump/v90/VPcmFloModemCtor.cpp",
+  "src/pump/v90/VpcmFloModem.cpp",
   "build/test/t_vpcmctor"
  ],
  "vpcmdp": [
@@ -1041,11 +1041,11 @@
   "build/test/t_mtkphasor"
  ],
  "tonecreate": [
-  "src/service/Fdspkrnl.c",
+  "src/service/TONE.c",
   "build/test/t_tonecreate"
  ],
  "fdspdp": [
-  "src/service/Fdspkrnl.c",
+  "src/service/Fdsp.c",
   "build/test/t_fdspdp"
  ],
  "voicedp": [
@@ -1063,5 +1063,37 @@
  "voicedprx": [
   "src/service/voicedp.c",
   "build/test/t_voicedprx"
+ ],
+ "moduluscoder_encoder": [
+  "src/pump/v90/V90ModulusEncoder.cpp",
+  "build/test/t_moduluscoder"
+ ],
+ "moduluscoderstd_encoder": [
+  "src/pump/v90/V90ModulusEncoder.cpp",
+  "build/test/t_moduluscoder"
+ ],
+ "fdspkrnl_tone": [
+  "src/service/TONE.c",
+  "build/test/t_fdspkrnl"
+ ],
+ "v90sessionflag_p4d": [
+  "src/pump/v90/V90Phase4Demodulator.cpp",
+  "build/test/t_v90sessionflag"
+ ],
+ "v90sessionflag_modulator": [
+  "src/pump/v90/V90Modulator.cpp",
+  "build/test/t_v90sessionflag"
+ ],
+ "v90sessionflag_demodulator": [
+  "src/pump/v90/V90Demodulator.cpp",
+  "build/test/t_v90sessionflag"
+ ],
+ "v90sessionflag_modem": [
+  "src/pump/v90/V90Modem.cpp",
+  "build/test/t_v90sessionflag"
+ ],
+ "faxadaptcreate_v29tx": [
+  "src/fax/V29tx.c",
+  "build/test/t_faxadapt"
  ]
 }

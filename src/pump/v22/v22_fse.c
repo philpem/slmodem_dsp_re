@@ -86,6 +86,16 @@ static const short v22_fse_mu[V22_FSE_MU] = { 2620, 393 };
 #define V22_FSE_UPD_SHIFT	19
 
 /*
+ * Three bytes: `xor %eax,%eax; ret`.  It does not touch `state`; the parameter
+ * is declared because `V22FP_GetDiagnostics` is seen to pass one.
+ */
+int
+V22_FSE_getdiag(struct v22_fse *state)
+{
+	(void)state;
+	return 0;
+}
+/*
  * One block in, one symbol per `V22_FSE_INTERP` samples out.  See the header
  * for the shape of the loop and for what the caller must not do.
  *
@@ -442,15 +452,4 @@ V22_FSE_free(struct v22_fse *state)
 	sysdep_free(state->hist);
 	sysdep_free(state->qcoeff);
 	sysdep_free(state->icoeff);
-}
-
-/*
- * Three bytes: `xor %eax,%eax; ret`.  It does not touch `state`; the parameter
- * is declared because `V22FP_GetDiagnostics` is seen to pass one.
- */
-int
-V22_FSE_getdiag(struct v22_fse *state)
-{
-	(void)state;
-	return 0;
 }

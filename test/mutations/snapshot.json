@@ -108,7 +108,7 @@
    }
   },
   "callprog": {
-   "key": "fa11b90bfee429f47a515b3fdde3bab96332aec636b6c5a9be857438251657eb",
+   "key": "458b5fa6d87bbc64be7a86258197564467b53fa66d13689a35c9d84ff3ec6f36",
    "summary": "17 mutations: 17 caught (17 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "corrupt 'CALLPROG: $ encountered.\\\\n'": "caught",
@@ -1045,8 +1045,8 @@
    }
   },
   "moduluscoder": {
-   "key": "8c76b9876c9f148c7f2920d51013ecf5883cb56e0de812f928e971c8c59ac399",
-   "summary": "23 mutations: 23 caught (23 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "key": "2d73fb2b58555865f1f0bc338464672e0d220d1787d5c5a51b4f722fba5deb76",
+   "summary": "10 mutations: 10 caught (10 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "the decoder clears one word that is not its own": "caught",
     "the decoder leaves its last word alone": "caught",
@@ -1057,7 +1057,13 @@
     "the decoder's Horner starts at the wrong end": "caught",
     "the decoder's accumulator is unsigned, so the shift is logical": "caught",
     "the decoder's second stage takes the wrong digit": "caught",
-    "the decoder's second stage takes the wrong modulus": "caught",
+    "the decoder's second stage takes the wrong modulus": "caught"
+   }
+  },
+  "moduluscoder_encoder": {
+   "key": "048a126ba1b0a6dafcf69a4da229f2d0c8541d0eab0a20a6a7f88bfb1dfabe3a",
+   "summary": "13 mutations: 13 caught (13 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
     "the encoder leaves its first word alone": "caught",
     "the encoder leaves its last word alone": "caught",
     "the encoder reads the bit string the other way up": "caught",
@@ -1074,14 +1080,20 @@
    }
   },
   "moduluscoderstd": {
-   "key": "45bd50894859c78f22eaded032db2acda222fd834a355dcfc4bb32e6d993e826",
-   "summary": "9 mutations: 9 caught (9 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "key": "cd4721becd893d033ba7e7324442a04ee3885282200d828de438061ce12c3ce8",
+   "summary": "4 mutations: 4 caught (4 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
-    "bit one is given weight two instead of one": "caught",
     "the decoder emits the high accumulator bit": "caught",
     "the decoder reverses every reconstructed bit": "caught",
     "the decoder's final Horner stage uses the second digit": "caught",
-    "the decoder's final Horner stage uses the second modulus": "caught",
+    "the decoder's final Horner stage uses the second modulus": "caught"
+   }
+  },
+  "moduluscoderstd_encoder": {
+   "key": "b3730830094d2e74df825fe6973a9664e2291884d08a1d00d7a7f7b920e5387c",
+   "summary": "5 mutations: 5 caught (5 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "bit one is given weight two instead of one": "caught",
     "the encoder ignores the input low bit": "caught",
     "the first digit uses the second modulus": "caught",
     "the first remainder is added before division": "caught",
@@ -1427,7 +1439,7 @@
    }
   },
   "tonecreate": {
-   "key": "e510dac03123efb7a1ad5fe7429550b6c2f4b1157445068a59d9cde7ac5cd514",
+   "key": "44665c2d019554527aae1f8e084d35c0eb4eda2aa5db6fd7a6863edc09cfae90",
    "summary": "33 mutations: 33 caught (33 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "TONE_CFG claims 52 taps": "caught",
@@ -5343,7 +5355,7 @@
    }
   },
   "v8sig": {
-   "key": "4de93f466db8678e84f3744b5bf3998f21bf99b18a48ef613bdd8ab2677c1cf3",
+   "key": "9bd6b51dde80e89b87d409b930e2e7535c1d05698ed9f0e87e7cc7d7444c24f5",
    "summary": "8 mutations: 8 caught (8 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "drop the phase-reversal announcement": "caught",
@@ -9005,25 +9017,49 @@
    }
   },
   "v90sessionflag": {
-   "key": "5059324850afbf75b7754fa8bc3ed94a423208952799f8e36695469456d58c16",
-   "summary": "16 mutations: 14 caught (14 by test, 0 by strings), 0 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
+   "key": "69b84f995bf3d05816817e67ebcca7207155bb7212550cc41d37a64380e9cda4",
+   "summary": "3 mutations: 3 caught (3 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "phase 3 demodulator reaches the modulator through a pointer": "caught",
+    "phase 3 demodulator stores at +0x00, not +0x08": "caught",
+    "phase 3 demodulator's subobject sits at +0x30": "caught"
+   }
+  },
+  "v90sessionflag_demodulator": {
+   "key": "8290eb0a05417b1648a95f19c32e63dd4242f7df987cb6ed17d0b9a661b41bf3",
+   "summary": "3 mutations: 2 caught (2 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "demodulator prints after storing the flag": "equivalent",
     "demodulator prints the field rather than the argument": "caught",
+    "the demodulator's flag goes to +0x2c": "caught"
+   }
+  },
+  "v90sessionflag_modem": {
+   "key": "e0209fc8d3b9fc58034c3ab705b87df5b15f51714e13e6c2e5f4a0ba3e5b5d35",
+   "summary": "6 mutations: 5 caught (5 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
+   "verdicts": {
     "modem falls through to the modulator": "caught",
     "modem reads the side after storing the flag": "equivalent",
     "modem stores the flag only when it calls something": "caught",
     "modem's two sides are swapped": "caught",
+    "the modem takes its two halves from the wrong offsets": "caught",
+    "the modem's flag goes to +0x49bc, where the side is": "caught"
+   }
+  },
+  "v90sessionflag_modulator": {
+   "key": "6c7fc5a4e501f269360613897ecc1eef5de478d3da8cf2d4c6f4c12b3bd9ae8f",
+   "summary": "3 mutations: 3 caught (3 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
     "modulator calls only the phase 3 half": "caught",
     "modulator embeds rather than dereferences": "caught",
-    "phase 3 demodulator reaches the modulator through a pointer": "caught",
-    "phase 3 demodulator stores at +0x00, not +0x08": "caught",
-    "phase 3 demodulator's subobject sits at +0x30": "caught",
-    "phase 4 demodulator's subobject sits at +0x4c": "caught",
-    "the demodulator's flag goes to +0x2c": "caught",
-    "the modem takes its two halves from the wrong offsets": "caught",
-    "the modem's flag goes to +0x49bc, where the side is": "caught",
     "the modulator's flag goes to +0x2c": "caught"
+   }
+  },
+  "v90sessionflag_p4d": {
+   "key": "5fd465fa8f8e9e5524ab3104236f46e936d6035cb1f7eefc4c064982aacd0402",
+   "summary": "1 mutations: 1 caught (1 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "phase 4 demodulator's subobject sits at +0x4c": "caught"
    }
   },
   "v90specgeomstd": {

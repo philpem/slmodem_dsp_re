@@ -1,0 +1,67 @@
+[
+ {
+  "label": "the encoder leaves its last word alone",
+  "find": "ModulusEncoder::ModulusEncoder()\n{\n\tfield_00 = field_04 = field_08 = field_0c = field_10 = field_14 =\n\t\tfield_18 = 0;\n}",
+  "replace": "ModulusEncoder::ModulusEncoder()\n{\n\tfield_00 = field_04 = field_08 = field_0c = field_10 = field_14 = 0;\n}"
+ },
+ {
+  "label": "the encoder leaves its first word alone",
+  "find": "ModulusEncoder::ModulusEncoder()\n{\n\tfield_00 = field_04 = field_08 = field_0c = field_10 = field_14 =\n\t\tfield_18 = 0;\n}",
+  "replace": "ModulusEncoder::ModulusEncoder()\n{\n\tfield_04 = field_08 = field_0c = field_10 = field_14 = field_18 = 0;\n}"
+ },
+ {
+  "label": "the encoder's middle word is set to one, not zero",
+  "find": "ModulusEncoder::ModulusEncoder()\n{\n\tfield_00 = field_04 = field_08 = field_0c = field_10 = field_14 =\n\t\tfield_18 = 0;\n}",
+  "replace": "ModulusEncoder::ModulusEncoder()\n{\n\tfield_00 = field_04 = field_08 = field_10 = field_14 = field_18 = 0;\n\tfield_0c = 1;\n}"
+ },
+ {
+  "label": "the encoder reads the bit string the other way up",
+  "find": "\tfor (i = (int)field_18 - 1; i >= 0; i--)\n\t\tacc = (acc + acc) | (bytes[i] & 1);",
+  "replace": "\tfor (i = 0; i < (int)field_18; i++)\n\t\tacc = (acc + acc) | (bytes[i] & 1);"
+ },
+ {
+  "label": "the encoder takes the whole byte rather than its low bit",
+  "find": "\t\tacc = (acc + acc) | (bytes[i] & 1);",
+  "replace": "\t\tacc = (acc + acc) | bytes[i];"
+ },
+ {
+  "label": "the encoder tests the byte for zero rather than masking it",
+  "find": "\t\tacc = (acc + acc) | (bytes[i] & 1);",
+  "replace": "\t\tacc = (acc + acc) | (bytes[i] != 0);"
+ },
+ {
+  "label": "the encoder stops one bit short",
+  "find": "\tfor (i = (int)field_18 - 1; i >= 0; i--)",
+  "replace": "\tfor (i = (int)field_18 - 1; i > 0; i--)"
+ },
+ {
+  "label": "the encoder's accumulator is unsigned",
+  "find": "\tlong long acc = 0;",
+  "replace": "\tunsigned long long acc = 0;"
+ },
+ {
+  "label": "the second digit takes the third modulus",
+  "find": "\tout[1] = (unsigned int)(acc % (long long)field_04);",
+  "replace": "\tout[1] = (unsigned int)(acc % (long long)field_08);"
+ },
+ {
+  "label": "the second digit is divided out by the first modulus",
+  "find": "\tacc = (acc - out[1]) / (long long)field_04;",
+  "replace": "\tacc = (acc - out[1]) / (long long)field_00;"
+ },
+ {
+  "label": "the fourth digit is not divided out at all",
+  "find": "\tacc = (acc - out[3]) / (long long)field_0c;",
+  "replace": "\tacc = acc / (long long)field_0c;\n\tacc = acc;"
+ },
+ {
+  "label": "the fifth modulus is sign-extended",
+  "find": "\tout[4] = (unsigned int)(acc % (long long)field_10);",
+  "replace": "\tout[4] = (unsigned int)(acc % (long long)(int)field_10);"
+ },
+ {
+  "label": "the sixth word is the fifth quotient's remainder instead",
+  "find": "\tout[5] = (unsigned int)acc;",
+  "replace": "\tout[5] = (unsigned int)(acc % (long long)field_10);"
+ }
+]

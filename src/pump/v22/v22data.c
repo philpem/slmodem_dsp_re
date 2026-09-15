@@ -44,76 +44,6 @@
 #define FIELD_PTR(obj, off)	(*(void **)(void *)FIELD((obj), (off)))
 
 /*
- * Both scramblers are a two-instruction wrapper and a tail jump.  The only
- * thing that distinguishes them is the offset -- +0x30 for the transmit
- * scrambler, +0x1cc for the receive descrambler -- and which of the two
- * FPM_SDM entry points they jump to.  `V22FP_create` initialises an
- * `fpm_sdm` at each of those two offsets, so the pairing is confirmed
- * independently of these functions' names.
- */
-void
-ScrambleDataV22(void *modem, unsigned short *data, unsigned short count)
-{
-	/*
-	 * NO INTERMEDIATE LOCAL, and that is measured rather than a style
-	 * choice.  Seven spellings of these two wrappers were compiled --
-	 * `void *` local, no local, a typed sub-object local, both locals,
-	 * an `unsigned char *` local, a `const` local, and the sub-object
-	 * computed through a char pointer -- and this is the ONLY one that
-	 * reproduces either function.  It is a unique preimage over an
-	 * exhausted domain and it closes BOTH.
-	 *
-	 * What the local costs is the register: with it, GCC puts the
-	 * sub-object pointer in %edx and pays the 6-byte `add $imm32,%edx`;
-	 * without it the pointer lands in %eax and takes the 5-byte
-	 * `add $imm32,%eax` short form the object uses.  In DescrambleDataV22
-	 * that one byte is the whole size difference.  Finding F8120.
-	 */
-	FPM_SDM_scrambler((struct fpm_sdm *)FIELD(FIELD_PTR(modem, V22_OBJ_FP), V22FP_SDM_TX),
-			  data, count);
-}
-
-void
-DescrambleDataV22(void *modem, unsigned short *data, unsigned short count)
-{
-	/* No intermediate local, for the reason ScrambleDataV22 records. */
-	FPM_SDM_descrambler((struct fpm_sdm *)FIELD(FIELD_PTR(modem, V22_OBJ_FP), V22FP_SDM_RX),
-			    data, count);
-}
-
-/*
- * Bits to samples, in two stages that share one ring.
- *
- * THE RING IS THE POINT.  Both calls are handed `fp + 0xa0` as their second
- * argument -- the object computes `lea 0xa0(%eax),%edx` twice, once before
- * each -- so the symbol indices `FPM_SMC_encoder` writes are exactly the ones
- * `V22_PPS_filter` reads back.  `fpm_smc.h` records that two sessions
- * modelled half of that ring each, the producer's cursor and the consumer's;
- * this function is where the two halves meet.
- *
- * `count` is in DATA WORDS for the encoder and in SYMBOLS for the filter, and
- * the object passes the same value to both because the encoder makes exactly
- * one symbol per word.
- */
-unsigned short
-ModDataV22(void *modem, const unsigned short *data, short *out,
-	   unsigned short count)
-{
-	void *fp;
-
-	fp = FIELD_PTR(modem, V22_OBJ_FP);
-	FPM_SMC_encoder((struct fpm_smc *)FIELD(fp, V22FP_SMC),
-			(struct fpm_smc_ring *)FIELD(fp, V22FP_SMC_RING),
-			data, count);
-
-	fp = FIELD_PTR(modem, V22_OBJ_FP);
-	return (unsigned short)V22_PPS_filter(
-			(struct v22_pps *)FIELD(fp, V22FP_PPS),
-			(struct fpm_smc_ring *)FIELD(fp, V22FP_SMC_RING),
-			out, count);
-}
-
-/*
  * One block of the receive path's front end: gain-control 160 samples, then
  * run two tone detectors over four consecutive 40-sample sub-blocks of the
  * same buffer, and report on how long either has been quiet.
@@ -207,4 +137,72 @@ Detect_v22(void *modem, short *data)
 		dsplibs_debug_printf("V22: Detect_V22 OK!!!\n");
 
 	return (run_a > V22_DETECT_THRESHOLD) | (run_b > V22_DETECT_THRESHOLD);
+}
+/*
+ * Both scramblers are a two-instruction wrapper and a tail jump.  The only
+ * thing that distinguishes them is the offset -- +0x30 for the transmit
+ * scrambler, +0x1cc for the receive descrambler -- and which of the two
+ * FPM_SDM entry points they jump to.  `V22FP_create` initialises an
+ * `fpm_sdm` at each of those two offsets, so the pairing is confirmed
+ * independently of these functions' names.
+ */
+void
+ScrambleDataV22(void *modem, unsigned short *data, unsigned short count)
+{
+	/*
+	 * NO INTERMEDIATE LOCAL, and that is measured rather than a style
+	 * choice.  Seven spellings of these two wrappers were compiled --
+	 * `void *` local, no local, a typed sub-object local, both locals,
+	 * an `unsigned char *` local, a `const` local, and the sub-object
+	 * computed through a char pointer -- and this is the ONLY one that
+	 * reproduces either function.  It is a unique preimage over an
+	 * exhausted domain and it closes BOTH.
+	 *
+	 * What the local costs is the register: with it, GCC puts the
+	 * sub-object pointer in %edx and pays the 6-byte `add $imm32,%edx`;
+	 * without it the pointer lands in %eax and takes the 5-byte
+	 * `add $imm32,%eax` short form the object uses.  In DescrambleDataV22
+	 * that one byte is the whole size difference.  Finding F8120.
+	 */
+	FPM_SDM_scrambler((struct fpm_sdm *)FIELD(FIELD_PTR(modem, V22_OBJ_FP), V22FP_SDM_TX),
+			  data, count);
+}
+
+void
+DescrambleDataV22(void *modem, unsigned short *data, unsigned short count)
+{
+	/* No intermediate local, for the reason ScrambleDataV22 records. */
+	FPM_SDM_descrambler((struct fpm_sdm *)FIELD(FIELD_PTR(modem, V22_OBJ_FP), V22FP_SDM_RX),
+			    data, count);
+}
+/*
+ * Bits to samples, in two stages that share one ring.
+ *
+ * THE RING IS THE POINT.  Both calls are handed `fp + 0xa0` as their second
+ * argument -- the object computes `lea 0xa0(%eax),%edx` twice, once before
+ * each -- so the symbol indices `FPM_SMC_encoder` writes are exactly the ones
+ * `V22_PPS_filter` reads back.  `fpm_smc.h` records that two sessions
+ * modelled half of that ring each, the producer's cursor and the consumer's;
+ * this function is where the two halves meet.
+ *
+ * `count` is in DATA WORDS for the encoder and in SYMBOLS for the filter, and
+ * the object passes the same value to both because the encoder makes exactly
+ * one symbol per word.
+ */
+unsigned short
+ModDataV22(void *modem, const unsigned short *data, short *out,
+	   unsigned short count)
+{
+	void *fp;
+
+	fp = FIELD_PTR(modem, V22_OBJ_FP);
+	FPM_SMC_encoder((struct fpm_smc *)FIELD(fp, V22FP_SMC),
+			(struct fpm_smc_ring *)FIELD(fp, V22FP_SMC_RING),
+			data, count);
+
+	fp = FIELD_PTR(modem, V22_OBJ_FP);
+	return (unsigned short)V22_PPS_filter(
+			(struct v22_pps *)FIELD(fp, V22FP_PPS),
+			(struct fpm_smc_ring *)FIELD(fp, V22FP_SMC_RING),
+			out, count);
 }

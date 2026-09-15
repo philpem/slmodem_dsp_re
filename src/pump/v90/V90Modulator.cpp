@@ -270,6 +270,24 @@ V90Modulator::reset()
  * object holds; the object still passes it explicitly (`xor %ecx,%ecx` into
  * 0xc(%esp) at 0x19dab).
  */
+#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+#define SF_OFF_MOD(cls, field, off, tag) \
+	typedef char sf_off_mod_##tag[ \
+	    ((int)__builtin_offsetof(cls, field) == (off)) ? 1 : -1]
+SF_OFF_MOD(V90Modulator, sessionFlag, 0x0028, mod_flag);
+SF_OFF_MOD(V90Modulator, phase3Modulator, 0x0038, mod_p3);
+SF_OFF_MOD(V90Modulator, phase4Modulator, 0x003c, mod_p4);
+#undef SF_OFF_MOD
+#endif
+
+void
+V90Modulator::setSessionFlag(unsigned int flag)
+{
+	sessionFlag = flag;
+	phase3Modulator->setSessionFlag(flag);
+	phase4Modulator->setSessionFlag(flag);
+}
+
 void
 V90Modulator::enterPhase3()
 {

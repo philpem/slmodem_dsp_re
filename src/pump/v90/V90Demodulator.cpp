@@ -255,6 +255,33 @@ typedef char v90dem_size[(sizeof(V90Demodulator) == 0x298) ? 1 : -1];
  * same direct call the mangled-name device was reaching for.
  */
 
+#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+#define SF_OFF_DEM(cls, field, off, tag) \
+	typedef char sf_off_dem_##tag[ \
+	    ((int)__builtin_offsetof(cls, field) == (off)) ? 1 : -1]
+SF_OFF_DEM(V90Demodulator, sessionFlag, 0x0030, dem_flag);
+SF_OFF_DEM(V90Demodulator, phase3Demodulator, 0x01dc, dem_p3);
+SF_OFF_DEM(V90Demodulator, phase4Demodulator, 0x01e0, dem_p4);
+SF_OFF_DEM(V90Demodulator, connectionEvaluator, 0x020c, dem_20c);
+#undef SF_OFF_DEM
+#endif
+
+/*
+ * THE DIAGNOSTIC COMES FIRST.  `call edprintf` is at +0x17 and the store to
+ * +0x30 at +0x23, so the value printed is the argument and the field still
+ * holds the previous flag while it is printed.  Not gated here: `edprintf`
+ * gates itself, the same as V90Phase2Info::printInfo's Uinfo line.
+ */
+void
+V90Demodulator::setSessionFlag(unsigned int flag)
+{
+	edprintf("V90Demodulator: setSessionFlag, flag = %d\r\n", flag);
+
+	sessionFlag = flag;
+	phase3Demodulator->setSessionFlag(flag);
+	phase4Demodulator->setSessionFlag(flag);
+}
+
 void
 V90Demodulator::enterPhase3()
 {

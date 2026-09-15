@@ -56,10 +56,66 @@ K56FlexFloModem::~K56FlexFloModem()
 {
 }
 
-int
-K56FlexFloModem::getK56FlexMpBits(short *)
+/*
+ * externalReset -- one byte, `c3`, and `VPcmV34Create` calls it.
+ *
+ * It is the K56flex half of the pair `VPcmFloModem::externalReset` completes,
+ * and the contrast between the two is the whole of finding F1090's point about
+ * this build: the V.90 side reinitialises three parameter blocks, twenty-odd
+ * flags and a demodulator, and the K56flex side does nothing whatever.
+ */
+void
+K56FlexFloModem::externalReset()
 {
-	return 0;
+}
+
+void
+K56FlexFloModem::k56FlexEnterPhase3()
+{
+}
+
+void
+K56FlexFloModem::enterPhase3FullDuplex()
+{
+}
+
+/*
+ * The other reset and the phase-3 entry, .text+0x101e0 and +0x101c0.  One byte
+ * of `c3` each, like `externalReset` above and for the same reason: this class
+ * is a name list.  D154.
+ */
+void
+K56FlexFloModem::internalReset()
+{
+}
+
+void
+K56FlexFloModem::setMinMaxRates(int, int)
+{
+}
+
+/*
+ * `k56FlexRunDemodulator` -- SIX BYTES, `b8 05 00 00 00 c3`, and the five that
+ * are not the `ret` are the whole of what this build's K56flex receiver does:
+ * it returns the constant 5 and reads none of its four arguments.
+ *
+ * THE RETURN TYPE IS MEASURED THE SAME WAY THE TWO BIT GETTERS' ARE.  A
+ * function that leaves `%eax` alone returns void and one that sets it returns
+ * a value; this sets it to a value that is neither zero nor derived from
+ * anything, so the type is as far as `int` and no further -- `short`, `long`
+ * or an enum would compile to the same five bytes.
+ *
+ * WHAT 5 MEANS IS NOT SETTLED HERE and is not guessed.  D155 is the entry that
+ * matters: `k56FlexPhase34`'s completion arms test the values these stubs
+ * return, so the constant is load-bearing for a caller even though nothing in
+ * this class computes it.  The two `int *` outputs are NOT written, which is
+ * the interesting claim about a stub and is what the differential test checks
+ * -- both sides get a seeded pair and neither may touch it.
+ */
+int
+K56FlexFloModem::k56FlexRunDemodulator(float *, unsigned int, int *, int *)
+{
+	return 5;
 }
 
 /*
@@ -124,66 +180,10 @@ K56FlexFloModem::getK56FlexJaBits(short *)
 	return 0;
 }
 
-void
-K56FlexFloModem::setMinMaxRates(int, int)
-{
-}
-
-void
-K56FlexFloModem::enterPhase3FullDuplex()
-{
-}
-
-/*
- * externalReset -- one byte, `c3`, and `VPcmV34Create` calls it.
- *
- * It is the K56flex half of the pair `VPcmFloModem::externalReset` completes,
- * and the contrast between the two is the whole of finding F1090's point about
- * this build: the V.90 side reinitialises three parameter blocks, twenty-odd
- * flags and a demodulator, and the K56flex side does nothing whatever.
- */
-void
-K56FlexFloModem::externalReset()
-{
-}
-
-/*
- * The other reset and the phase-3 entry, .text+0x101e0 and +0x101c0.  One byte
- * of `c3` each, like `externalReset` above and for the same reason: this class
- * is a name list.  D154.
- */
-void
-K56FlexFloModem::internalReset()
-{
-}
-
-void
-K56FlexFloModem::k56FlexEnterPhase3()
-{
-}
-
-/*
- * `k56FlexRunDemodulator` -- SIX BYTES, `b8 05 00 00 00 c3`, and the five that
- * are not the `ret` are the whole of what this build's K56flex receiver does:
- * it returns the constant 5 and reads none of its four arguments.
- *
- * THE RETURN TYPE IS MEASURED THE SAME WAY THE TWO BIT GETTERS' ARE.  A
- * function that leaves `%eax` alone returns void and one that sets it returns
- * a value; this sets it to a value that is neither zero nor derived from
- * anything, so the type is as far as `int` and no further -- `short`, `long`
- * or an enum would compile to the same five bytes.
- *
- * WHAT 5 MEANS IS NOT SETTLED HERE and is not guessed.  D155 is the entry that
- * matters: `k56FlexPhase34`'s completion arms test the values these stubs
- * return, so the constant is load-bearing for a caller even though nothing in
- * this class computes it.  The two `int *` outputs are NOT written, which is
- * the interesting claim about a stub and is what the differential test checks
- * -- both sides get a seeded pair and neither may touch it.
- */
 int
-K56FlexFloModem::k56FlexRunDemodulator(float *, unsigned int, int *, int *)
+K56FlexFloModem::getK56FlexMpBits(short *)
 {
-	return 5;
+	return 0;
 }
 
 /*

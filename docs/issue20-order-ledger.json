@@ -1,0 +1,2402 @@
+{
+  "schema": "issue20-order-ledger-doc-v1",
+  "source_artifact": "/tmp/issue20-closure-batch/order-dispositions.json",
+  "scope": {
+    "baseline_inputs": 268,
+    "baseline_edges": 277,
+    "inputs_with_descents": 88
+  },
+  "totals": {
+    "per_input_outcomes": {
+      "no-descent": 180,
+      "retained-dependency-constraint": 5,
+      "applied-worker-order": 38,
+      "baseline-retained": 37,
+      "parent-applied-control-validated": 1,
+      "rejected-restored": 1,
+      "parent-applied-symbol-order": 1,
+      "restored-private-helper-constraints": 1,
+      "unchanged-no-retained-source-delta": 1,
+      "parent-applied-exact-comment-block-order": 1,
+      "parent-applied-helper-and-public-order": 1,
+      "in-progress-unresolved": 1
+    },
+    "per_edge_dispositions": {
+      "retained-helper-dependency": 19,
+      "applied-worker-order": 68,
+      "ambiguous-mapping-retained": 42,
+      "abi-clone-retained": 18,
+      "compiler-emission-retained": 98,
+      "rejected-restored": 4,
+      "restored-private-helper-constraints": 3,
+      "rejected-unsafe-extraction": 14,
+      "measured-negative-control-retained": 10,
+      "unchanged-no-retained-source-delta": 1
+    },
+    "documented_inputs": 268,
+    "documented_edges": 277
+  },
+  "global_constraints": [
+    "This is an ownership/order review, not proof that all reference emission order is recovered.",
+    "Do not infer original source ownership from address order alone.",
+    "Current source is frozen for the parent phase; no final gate claim is made here.",
+    "Large-C helper constraints and measured negative controls remain retained.",
+    "Fax uppercase-API co-location is rejected as the cause of 20 tail-call losses; lower eight canonical files and SMC move remain.",
+    "Original uppercase fax owner remains unknown; retained flags cannot prove historical single-TU/source placement.",
+    "V90Demodulator ordinary reorder was rejected and two exact constructor bodies restored.",
+    "V90ConnectionEvaluator reorder was restored due private-helper constraints.",
+    "Vpcm constructor-before-getV90JaBits is a valid non-first control; signature/CFG placement repaired and qc exact recovered.",
+    "V90Phase3Modulator generateSd placement and fpm_pps/v34info helper/public ordering are parent-applied and await final gate.",
+    "SMC naming policy and any constructor profile follow-up remain separate work."
+  ],
+  "inputs": [
+    {
+      "input_index": 12,
+      "source": "src/core/dp_init.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 165,
+      "source": "src/service/dcr.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 163,
+      "source": "src/service/cid.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 174,
+      "source": "src/service/voice.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 59,
+      "source": "src/fax/fax.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 171,
+      "source": "src/service/rd.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 172,
+      "source": "src/service/ringDetector.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 0,
+      "source": "src/call/call.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 180,
+      "source": "src/v8/v8.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 149,
+      "source": "src/pump/v90/vpcm.c",
+      "baseline_descent_count": 1,
+      "outcome": "retained-dependency-constraint",
+      "edge_dispositions": {
+        "retained-helper-dependency": 1
+      },
+      "remaining_constraint": "Session review: static callback definition must precede initializer; reference emission is not original source proof. See vpcm-order-decision.json."
+    },
+    {
+      "input_index": 113,
+      "source": "src/pump/v32/v32.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 102,
+      "source": "src/pump/v23/v23.c",
+      "baseline_descent_count": 1,
+      "outcome": "applied-worker-order",
+      "edge_dispositions": {
+        "applied-worker-order": 1
+      },
+      "remaining_constraint": "applied artifact/provenance exists; current emitted order awaits parent build"
+    },
+    {
+      "input_index": 80,
+      "source": "src/pump/v22/v22.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 75,
+      "source": "src/pump/b103/b103.c",
+      "baseline_descent_count": 1,
+      "outcome": "applied-worker-order",
+      "edge_dispositions": {
+        "applied-worker-order": 1
+      },
+      "remaining_constraint": "applied artifact/provenance exists; current emitted order awaits parent build"
+    },
+    {
+      "input_index": 13,
+      "source": "src/core/dp_param.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 14,
+      "source": "src/core/dp_wrapper.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 198,
+      "source": "src/pump/v34/VPcmV34Main.cpp",
+      "baseline_descent_count": 6,
+      "outcome": "baseline-retained",
+      "edge_dispositions": {
+        "ambiguous-mapping-retained": 6
+      },
+      "remaining_constraint": "retained baseline classification; no current source edit"
+    },
+    {
+      "input_index": 266,
+      "source": "src/pump/v90/VpcmFloModem.cpp",
+      "baseline_descent_count": 3,
+      "outcome": "parent-applied-control-validated",
+      "edge_dispositions": {
+        "applied-worker-order": 3
+      },
+      "remaining_constraint": "Constructor-before-getV90JaBits control is valid but not first; ordinary definitions precede it, signature/CFG flags repaired, qc exact recovered."
+    },
+    {
+      "input_index": 202,
+      "source": "src/pump/v90/NoK56Flex.cpp",
+      "baseline_descent_count": 5,
+      "outcome": "applied-worker-order",
+      "edge_dispositions": {
+        "applied-worker-order": 5
+      },
+      "remaining_constraint": "applied artifact/provenance exists; current emitted order awaits parent build"
+    },
+    {
+      "input_index": 195,
+      "source": "src/dsp/GenericToneDetector.cpp",
+      "baseline_descent_count": 3,
+      "outcome": "baseline-retained",
+      "edge_dispositions": {
+        "ambiguous-mapping-retained": 2,
+        "abi-clone-retained": 1
+      },
+      "remaining_constraint": "retained baseline classification; no current source edit"
+    },
+    {
+      "input_index": 191,
+      "source": "src/dsp/AnsamToneDetector.cpp",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 249,
+      "source": "src/pump/v90/V92EchoCanceller.cpp",
+      "baseline_descent_count": 2,
+      "outcome": "baseline-retained",
+      "edge_dispositions": {
+        "ambiguous-mapping-retained": 2
+      },
+      "remaining_constraint": "retained baseline classification; no current source edit"
+    },
+    {
+      "input_index": 250,
+      "source": "src/pump/v90/V92Jd.cpp",
+      "baseline_descent_count": 3,
+      "outcome": "baseline-retained",
+      "edge_dispositions": {
+        "compiler-emission-retained": 3
+      },
+      "remaining_constraint": "retained baseline classification; no current source edit"
+    },
+    {
+      "input_index": 252,
+      "source": "src/pump/v90/V92Modem.cpp",
+      "baseline_descent_count": 1,
+      "outcome": "baseline-retained",
+      "edge_dispositions": {
+        "abi-clone-retained": 1
+      },
+      "remaining_constraint": "retained baseline classification; no current source edit"
+    },
+    {
+      "input_index": 253,
+      "source": "src/pump/v90/V92Modulator.cpp",
+      "baseline_descent_count": 1,
+      "outcome": "applied-worker-order",
+      "edge_dispositions": {
+        "applied-worker-order": 1
+      },
+      "remaining_constraint": "applied artifact/provenance exists; current emitted order awaits parent build"
+    },
+    {
+      "input_index": 255,
+      "source": "src/pump/v90/V92Parameters.cpp",
+      "baseline_descent_count": 2,
+      "outcome": "baseline-retained",
+      "edge_dispositions": {
+        "abi-clone-retained": 1,
+        "ambiguous-mapping-retained": 1
+      },
+      "remaining_constraint": "retained baseline classification; no current source edit"
+    },
+    {
+      "input_index": 256,
+      "source": "src/pump/v90/V92Phase2Info.cpp",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 257,
+      "source": "src/pump/v90/V92Phase3Modulator.cpp",
+      "baseline_descent_count": 2,
+      "outcome": "baseline-retained",
+      "edge_dispositions": {
+        "ambiguous-mapping-retained": 1,
+        "compiler-emission-retained": 1
+      },
+      "remaining_constraint": "retained baseline classification; no current source edit"
+    },
+    {
+      "input_index": 258,
+      "source": "src/pump/v90/V92Phase4Modulator.cpp",
+      "baseline_descent_count": 2,
+      "outcome": "baseline-retained",
+      "edge_dispositions": {
+        "compiler-emission-retained": 2
+      },
+      "remaining_constraint": "retained baseline classification; no current source edit"
+    },
+    {
+      "input_index": 221,
+      "source": "src/pump/v90/V90Modem.cpp",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 222,
+      "source": "src/pump/v90/V90ModemCtor.cpp",
+      "baseline_descent_count": 2,
+      "outcome": "baseline-retained",
+      "edge_dispositions": {
+        "abi-clone-retained": 1,
+        "ambiguous-mapping-retained": 1
+      },
+      "remaining_constraint": "retained baseline classification; no current source edit"
+    },
+    {
+      "input_index": 223,
+      "source": "src/pump/v90/V90Modulator.cpp",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 214,
+      "source": "src/pump/v90/V90Demodulator.cpp",
+      "baseline_descent_count": 8,
+      "outcome": "rejected-restored",
+      "edge_dispositions": {
+        "ambiguous-mapping-retained": 3,
+        "abi-clone-retained": 1,
+        "rejected-restored": 4
+      },
+      "remaining_constraint": "Ordinary reorder rejected; two exact constructor bodies restored. Ambiguous and ABI-clone edges remain retained."
+    },
+    {
+      "input_index": 217,
+      "source": "src/pump/v90/V90Jd.cpp",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 218,
+      "source": "src/pump/v90/V90MP.cpp",
+      "baseline_descent_count": 4,
+      "outcome": "applied-worker-order",
+      "edge_dispositions": {
+        "abi-clone-retained": 1,
+        "ambiguous-mapping-retained": 1,
+        "applied-worker-order": 2
+      },
+      "remaining_constraint": "applied artifact/provenance exists; current emitted order awaits parent build"
+    },
+    {
+      "input_index": 228,
+      "source": "src/pump/v90/V90Phase3Demodulator.cpp",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 230,
+      "source": "src/pump/v90/V90Phase4Demodulator.cpp",
+      "baseline_descent_count": 3,
+      "outcome": "applied-worker-order",
+      "edge_dispositions": {
+        "applied-worker-order": 1,
+        "compiler-emission-retained": 2
+      },
+      "remaining_constraint": "applied artifact/provenance exists; current emitted order awaits parent build"
+    },
+    {
+      "input_index": 226,
+      "source": "src/pump/v90/V90Parameters.cpp",
+      "baseline_descent_count": 1,
+      "outcome": "baseline-retained",
+      "edge_dispositions": {
+        "abi-clone-retained": 1
+      },
+      "remaining_constraint": "retained baseline classification; no current source edit"
+    },
+    {
+      "input_index": 227,
+      "source": "src/pump/v90/V90Phase2Info.cpp",
+      "baseline_descent_count": 1,
+      "outcome": "applied-worker-order",
+      "edge_dispositions": {
+        "applied-worker-order": 1
+      },
+      "remaining_constraint": "applied artifact/provenance exists; current emitted order awaits parent build"
+    },
+    {
+      "input_index": 229,
+      "source": "src/pump/v90/V90Phase3Modulator.cpp",
+      "baseline_descent_count": 7,
+      "outcome": "parent-applied-symbol-order",
+      "edge_dispositions": {
+        "applied-worker-order": 1,
+        "ambiguous-mapping-retained": 1,
+        "compiler-emission-retained": 5
+      },
+      "remaining_constraint": "Parent moved generateSd before generateSdNot/generate symbol path; other compiler/ambiguous edges retained."
+    },
+    {
+      "input_index": 231,
+      "source": "src/pump/v90/V90Phase4Modulator.cpp",
+      "baseline_descent_count": 6,
+      "outcome": "applied-worker-order",
+      "edge_dispositions": {
+        "compiler-emission-retained": 5,
+        "applied-worker-order": 1
+      },
+      "remaining_constraint": "applied artifact/provenance exists; current emitted order awaits parent build"
+    },
+    {
+      "input_index": 245,
+      "source": "src/pump/v90/V90bitsToSymbol.cpp",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 219,
+      "source": "src/pump/v90/V90Mapper.cpp",
+      "baseline_descent_count": 3,
+      "outcome": "applied-worker-order",
+      "edge_dispositions": {
+        "abi-clone-retained": 1,
+        "ambiguous-mapping-retained": 1,
+        "applied-worker-order": 1
+      },
+      "remaining_constraint": "applied artifact/provenance exists; current emitted order awaits parent build"
+    },
+    {
+      "input_index": 213,
+      "source": "src/pump/v90/V90Demapper.cpp",
+      "baseline_descent_count": 5,
+      "outcome": "applied-worker-order",
+      "edge_dispositions": {
+        "abi-clone-retained": 1,
+        "ambiguous-mapping-retained": 1,
+        "applied-worker-order": 3
+      },
+      "remaining_constraint": "applied artifact/provenance exists; current emitted order awaits parent build"
+    },
+    {
+      "input_index": 240,
+      "source": "src/pump/v90/V90SignBitsExtractor.cpp",
+      "baseline_descent_count": 1,
+      "outcome": "baseline-retained",
+      "edge_dispositions": {
+        "ambiguous-mapping-retained": 1
+      },
+      "remaining_constraint": "retained baseline classification; no current source edit"
+    },
+    {
+      "input_index": 215,
+      "source": "src/pump/v90/V90DilDescriptorSettings.cpp",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 224,
+      "source": "src/pump/v90/V90ModulusDecoder.cpp",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 225,
+      "source": "src/pump/v90/V90ModulusEncoder.cpp",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 241,
+      "source": "src/pump/v90/V90SpectralShaper.cpp",
+      "baseline_descent_count": 1,
+      "outcome": "baseline-retained",
+      "edge_dispositions": {
+        "abi-clone-retained": 1
+      },
+      "remaining_constraint": "retained baseline classification; no current source edit"
+    },
+    {
+      "input_index": 242,
+      "source": "src/pump/v90/V90SpectralShapingFilter.cpp",
+      "baseline_descent_count": 2,
+      "outcome": "baseline-retained",
+      "edge_dispositions": {
+        "compiler-emission-retained": 2
+      },
+      "remaining_constraint": "retained baseline classification; no current source edit"
+    },
+    {
+      "input_index": 220,
+      "source": "src/pump/v90/V90MappingParamsInt.cpp",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 238,
+      "source": "src/pump/v90/V90Resampler.cpp",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 203,
+      "source": "src/pump/v90/Resampler.cpp",
+      "baseline_descent_count": 1,
+      "outcome": "baseline-retained",
+      "edge_dispositions": {
+        "abi-clone-retained": 1
+      },
+      "remaining_constraint": "retained baseline classification; no current source edit"
+    },
+    {
+      "input_index": 205,
+      "source": "src/pump/v90/ResamplerTimingOffset.cpp",
+      "baseline_descent_count": 4,
+      "outcome": "baseline-retained",
+      "edge_dispositions": {
+        "abi-clone-retained": 2,
+        "compiler-emission-retained": 2
+      },
+      "remaining_constraint": "retained baseline classification; no current source edit"
+    },
+    {
+      "input_index": 204,
+      "source": "src/pump/v90/ResamplerTiming.cpp",
+      "baseline_descent_count": 3,
+      "outcome": "applied-worker-order",
+      "edge_dispositions": {
+        "ambiguous-mapping-retained": 2,
+        "applied-worker-order": 1
+      },
+      "remaining_constraint": "applied artifact/provenance exists; current emitted order awaits parent build"
+    },
+    {
+      "input_index": 216,
+      "source": "src/pump/v90/V90Equalizer.cpp",
+      "baseline_descent_count": 1,
+      "outcome": "baseline-retained",
+      "edge_dispositions": {
+        "ambiguous-mapping-retained": 1
+      },
+      "remaining_constraint": "retained baseline classification; no current source edit"
+    },
+    {
+      "input_index": 239,
+      "source": "src/pump/v90/V90SdDetector.cpp",
+      "baseline_descent_count": 1,
+      "outcome": "baseline-retained",
+      "edge_dispositions": {
+        "ambiguous-mapping-retained": 1
+      },
+      "remaining_constraint": "retained baseline classification; no current source edit"
+    },
+    {
+      "input_index": 208,
+      "source": "src/pump/v90/V90CPpck.cpp",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 244,
+      "source": "src/pump/v90/V90TRN2dDesigner.cpp",
+      "baseline_descent_count": 1,
+      "outcome": "baseline-retained",
+      "edge_dispositions": {
+        "compiler-emission-retained": 1
+      },
+      "remaining_constraint": "retained baseline classification; no current source edit"
+    },
+    {
+      "input_index": 237,
+      "source": "src/pump/v90/V90RDetector.cpp",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 211,
+      "source": "src/pump/v90/V90ConstellationPower.cpp",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 209,
+      "source": "src/pump/v90/V90ConnectionEvaluator.cpp",
+      "baseline_descent_count": 4,
+      "outcome": "restored-private-helper-constraints",
+      "edge_dispositions": {
+        "abi-clone-retained": 1,
+        "restored-private-helper-constraints": 3
+      },
+      "remaining_constraint": "Worker reorder restored; private-helper constraints prevent treating reference emission as source order."
+    },
+    {
+      "input_index": 206,
+      "source": "src/pump/v90/V90AutoDigitalImpDetector.cpp",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 232,
+      "source": "src/pump/v90/V90PreFilter.cpp",
+      "baseline_descent_count": 8,
+      "outcome": "applied-worker-order",
+      "edge_dispositions": {
+        "ambiguous-mapping-retained": 4,
+        "applied-worker-order": 3,
+        "abi-clone-retained": 1
+      },
+      "remaining_constraint": "applied artifact/provenance exists; current emitted order awaits parent build"
+    },
+    {
+      "input_index": 233,
+      "source": "src/pump/v90/V90PreFilterCoeffType1.cpp",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 234,
+      "source": "src/pump/v90/V90PreFilterCoeffType2.cpp",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 235,
+      "source": "src/pump/v90/V90PreFilterCoeffType3.cpp",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 236,
+      "source": "src/pump/v90/V90PreFilterRefLoops.cpp",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 243,
+      "source": "src/pump/v90/V90SpectralVerifier.cpp",
+      "baseline_descent_count": 2,
+      "outcome": "baseline-retained",
+      "edge_dispositions": {
+        "ambiguous-mapping-retained": 2
+      },
+      "remaining_constraint": "retained baseline classification; no current source edit"
+    },
+    {
+      "input_index": 197,
+      "source": "src/dsp/psd.cpp",
+      "baseline_descent_count": 2,
+      "outcome": "baseline-retained",
+      "edge_dispositions": {
+        "ambiguous-mapping-retained": 2
+      },
+      "remaining_constraint": "retained baseline classification; no current source edit"
+    },
+    {
+      "input_index": 193,
+      "source": "src/dsp/FloatFIR.cpp",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 192,
+      "source": "src/dsp/FloatARMA.cpp",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 210,
+      "source": "src/pump/v90/V90ConstellationDesigner.cpp",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 212,
+      "source": "src/pump/v90/V90DILdesPCK.cpp",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 262,
+      "source": "src/pump/v90/V92bitsToSymbol.cpp",
+      "baseline_descent_count": 1,
+      "outcome": "baseline-retained",
+      "edge_dispositions": {
+        "compiler-emission-retained": 1
+      },
+      "remaining_constraint": "retained baseline classification; no current source edit"
+    },
+    {
+      "input_index": 246,
+      "source": "src/pump/v90/V92CP.cpp",
+      "baseline_descent_count": 5,
+      "outcome": "applied-worker-order",
+      "edge_dispositions": {
+        "abi-clone-retained": 1,
+        "ambiguous-mapping-retained": 3,
+        "applied-worker-order": 1
+      },
+      "remaining_constraint": "applied artifact/provenance exists; current emitted order awaits parent build"
+    },
+    {
+      "input_index": 248,
+      "source": "src/pump/v90/V92DILdesPCK.cpp",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 251,
+      "source": "src/pump/v90/V92Mapper.cpp",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 207,
+      "source": "src/pump/v90/V90CP.cpp",
+      "baseline_descent_count": 6,
+      "outcome": "applied-worker-order",
+      "edge_dispositions": {
+        "abi-clone-retained": 1,
+        "ambiguous-mapping-retained": 1,
+        "applied-worker-order": 4
+      },
+      "remaining_constraint": "applied artifact/provenance exists; current emitted order awaits parent build"
+    },
+    {
+      "input_index": 196,
+      "source": "src/dsp/fft.cpp",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 261,
+      "source": "src/pump/v90/V92Transmitter.cpp",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 247,
+      "source": "src/pump/v90/V92ConvEncoder.cpp",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 254,
+      "source": "src/pump/v90/V92ModulusEncoder.cpp",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 260,
+      "source": "src/pump/v90/V92Precoder.cpp",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 259,
+      "source": "src/pump/v90/V92PreFilter.cpp",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 194,
+      "source": "src/dsp/FloatIIR.cpp",
+      "baseline_descent_count": 1,
+      "outcome": "baseline-retained",
+      "edge_dispositions": {
+        "ambiguous-mapping-retained": 1
+      },
+      "remaining_constraint": "retained baseline classification; no current source edit"
+    },
+    {
+      "input_index": 145,
+      "source": "src/pump/v34/v34pcmif.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 139,
+      "source": "src/pump/v34/V34RX.c",
+      "baseline_descent_count": 14,
+      "outcome": "retained-dependency-constraint",
+      "edge_dispositions": {
+        "rejected-unsafe-extraction": 14
+      },
+      "remaining_constraint": "retained baseline classification; no current source edit"
+    },
+    {
+      "input_index": 140,
+      "source": "src/pump/v34/V34hshak.c",
+      "baseline_descent_count": 7,
+      "outcome": "retained-dependency-constraint",
+      "edge_dispositions": {
+        "measured-negative-control-retained": 6,
+        "ambiguous-mapping-retained": 1
+      },
+      "remaining_constraint": "retained baseline classification; no current source edit"
+    },
+    {
+      "input_index": 143,
+      "source": "src/pump/v34/v34filters.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 141,
+      "source": "src/pump/v34/detector.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 137,
+      "source": "src/pump/v34/DFTC.c",
+      "baseline_descent_count": 1,
+      "outcome": "applied-worker-order",
+      "edge_dispositions": {
+        "compiler-emission-retained": 1
+      },
+      "remaining_constraint": "applied artifact/provenance exists; current emitted order awaits parent build"
+    },
+    {
+      "input_index": 138,
+      "source": "src/pump/v34/DPSK.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 181,
+      "source": "src/v8/v8agc.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 183,
+      "source": "src/v8/v8hs.c",
+      "baseline_descent_count": 1,
+      "outcome": "applied-worker-order",
+      "edge_dispositions": {
+        "applied-worker-order": 1
+      },
+      "remaining_constraint": "applied artifact/provenance exists; current emitted order awaits parent build"
+    },
+    {
+      "input_index": 185,
+      "source": "src/v8/v8jm.c",
+      "baseline_descent_count": 1,
+      "outcome": "applied-worker-order",
+      "edge_dispositions": {
+        "applied-worker-order": 1
+      },
+      "remaining_constraint": "applied artifact/provenance exists; current emitted order awaits parent build"
+    },
+    {
+      "input_index": 186,
+      "source": "src/v8/v8proc.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 187,
+      "source": "src/v8/v8seq.c",
+      "baseline_descent_count": 2,
+      "outcome": "applied-worker-order",
+      "edge_dispositions": {
+        "applied-worker-order": 2
+      },
+      "remaining_constraint": "applied artifact/provenance exists; current emitted order awaits parent build"
+    },
+    {
+      "input_index": 188,
+      "source": "src/v8/v8sig.c",
+      "baseline_descent_count": 4,
+      "outcome": "applied-worker-order",
+      "edge_dispositions": {
+        "applied-worker-order": 4
+      },
+      "remaining_constraint": "applied artifact/provenance exists; current emitted order awaits parent build"
+    },
+    {
+      "input_index": 189,
+      "source": "src/v8/v8util.c",
+      "baseline_descent_count": 4,
+      "outcome": "applied-worker-order",
+      "edge_dispositions": {
+        "applied-worker-order": 4
+      },
+      "remaining_constraint": "applied artifact/provenance exists; current emitted order awaits parent build"
+    },
+    {
+      "input_index": 178,
+      "source": "src/v8/V8Dftc.c",
+      "baseline_descent_count": 1,
+      "outcome": "baseline-retained",
+      "edge_dispositions": {
+        "compiler-emission-retained": 1
+      },
+      "remaining_constraint": "retained baseline classification; no current source edit"
+    },
+    {
+      "input_index": 179,
+      "source": "src/v8/V8Fsk.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 5,
+      "source": "src/callprog/Callprog.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 17,
+      "source": "src/dialer/Dialer.c",
+      "baseline_descent_count": 1,
+      "outcome": "applied-worker-order",
+      "edge_dispositions": {
+        "compiler-emission-retained": 1
+      },
+      "remaining_constraint": "applied artifact/provenance exists; current emitted order awaits parent build"
+    },
+    {
+      "input_index": 9,
+      "source": "src/callprog/toneiir.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 3,
+      "source": "src/callprog/Cadence.c",
+      "baseline_descent_count": 1,
+      "outcome": "unchanged-no-retained-source-delta",
+      "edge_dispositions": {
+        "unchanged-no-retained-source-delta": 1
+      },
+      "remaining_constraint": "No retained source delta; git status confirmed unchanged."
+    },
+    {
+      "input_index": 2,
+      "source": "src/callprog/CPfiltrs.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 4,
+      "source": "src/callprog/CallingTone.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 19,
+      "source": "src/dsp/FP_math.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 6,
+      "source": "src/callprog/DualTone_Detector.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 107,
+      "source": "src/pump/v32/V32.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 120,
+      "source": "src/pump/v32/v32fpctl.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 124,
+      "source": "src/pump/v32/v32hdx.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 108,
+      "source": "src/pump/v32/V32TXHDX.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 109,
+      "source": "src/pump/v32/V32mod.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 110,
+      "source": "src/pump/v32/V32rxhdx.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 111,
+      "source": "src/pump/v32/V32states.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 112,
+      "source": "src/pump/v32/V32stc.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 103,
+      "source": "src/pump/v23/v23modem.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 104,
+      "source": "src/pump/v23/v23rx.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 105,
+      "source": "src/pump/v23/v23tx.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 100,
+      "source": "src/pump/v23/V23filt.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 101,
+      "source": "src/pump/v23/bwchdem.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 88,
+      "source": "src/pump/v22/v22ctl.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 91,
+      "source": "src/pump/v22/v22fp.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 79,
+      "source": "src/pump/v22/V22Dec.c",
+      "baseline_descent_count": 1,
+      "outcome": "applied-worker-order",
+      "edge_dispositions": {
+        "applied-worker-order": 1
+      },
+      "remaining_constraint": "applied artifact/provenance exists; current emitted order awaits parent build"
+    },
+    {
+      "input_index": 95,
+      "source": "src/pump/v22/v22prc.c",
+      "baseline_descent_count": 3,
+      "outcome": "applied-worker-order",
+      "edge_dispositions": {
+        "applied-worker-order": 3
+      },
+      "remaining_constraint": "applied artifact/provenance exists; current emitted order awaits parent build"
+    },
+    {
+      "input_index": 97,
+      "source": "src/pump/v22/v22rxtab.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 98,
+      "source": "src/pump/v22/v22stc.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 99,
+      "source": "src/pump/v22/v22txtab.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 81,
+      "source": "src/pump/v22/v22_fse.c",
+      "baseline_descent_count": 1,
+      "outcome": "applied-worker-order",
+      "edge_dispositions": {
+        "applied-worker-order": 1
+      },
+      "remaining_constraint": "applied artifact/provenance exists; current emitted order awaits parent build"
+    },
+    {
+      "input_index": 82,
+      "source": "src/pump/v22/v22_iir.c",
+      "baseline_descent_count": 1,
+      "outcome": "applied-worker-order",
+      "edge_dispositions": {
+        "applied-worker-order": 1
+      },
+      "remaining_constraint": "applied artifact/provenance exists; current emitted order awaits parent build"
+    },
+    {
+      "input_index": 83,
+      "source": "src/pump/v22/v22_mrf.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 84,
+      "source": "src/pump/v22/v22_pps.c",
+      "baseline_descent_count": 1,
+      "outcome": "applied-worker-order",
+      "edge_dispositions": {
+        "applied-worker-order": 1
+      },
+      "remaining_constraint": "applied artifact/provenance exists; current emitted order awaits parent build"
+    },
+    {
+      "input_index": 85,
+      "source": "src/pump/v22/v22_sre.c",
+      "baseline_descent_count": 1,
+      "outcome": "applied-worker-order",
+      "edge_dispositions": {
+        "applied-worker-order": 1
+      },
+      "remaining_constraint": "applied artifact/provenance exists; current emitted order awaits parent build"
+    },
+    {
+      "input_index": 73,
+      "source": "src/pump/b103/B103prc.c",
+      "baseline_descent_count": 6,
+      "outcome": "baseline-retained",
+      "edge_dispositions": {
+        "ambiguous-mapping-retained": 1,
+        "retained-helper-dependency": 5
+      },
+      "remaining_constraint": "retained baseline classification; no current source edit"
+    },
+    {
+      "input_index": 74,
+      "source": "src/pump/b103/B103tab.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 164,
+      "source": "src/service/cidcore/cid.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 153,
+      "source": "src/service/Data.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 157,
+      "source": "src/service/Dtmf_Rx.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 161,
+      "source": "src/service/Rxcid.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 151,
+      "source": "src/service/Cidfsd.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 152,
+      "source": "src/service/Cidmtd.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 156,
+      "source": "src/service/Dtmf_Detector.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 56,
+      "source": "src/fax/class1.c",
+      "baseline_descent_count": 4,
+      "outcome": "baseline-retained",
+      "edge_dispositions": {
+        "measured-negative-control-retained": 4
+      },
+      "remaining_constraint": "retained baseline classification; no current source edit"
+    },
+    {
+      "input_index": 57,
+      "source": "src/fax/class1rx.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 58,
+      "source": "src/fax/class1tx.c",
+      "baseline_descent_count": 7,
+      "outcome": "baseline-retained",
+      "edge_dispositions": {
+        "retained-helper-dependency": 5,
+        "compiler-emission-retained": 2
+      },
+      "remaining_constraint": "retained baseline classification; no current source edit"
+    },
+    {
+      "input_index": 62,
+      "source": "src/fax/faxvmi.c",
+      "baseline_descent_count": 2,
+      "outcome": "baseline-retained",
+      "edge_dispositions": {
+        "compiler-emission-retained": 2
+      },
+      "remaining_constraint": "retained baseline classification; no current source edit"
+    },
+    {
+      "input_index": 51,
+      "source": "src/fax/T30frames.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 52,
+      "source": "src/fax/V17rxtab.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 53,
+      "source": "src/fax/V27rxtab.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 54,
+      "source": "src/fax/V29rxtab.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 55,
+      "source": "src/fax/cDATAtx.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 48,
+      "source": "src/fax/SDM.c",
+      "baseline_descent_count": 1,
+      "outcome": "applied-worker-order",
+      "edge_dispositions": {
+        "applied-worker-order": 1
+      },
+      "remaining_constraint": "applied artifact/provenance exists; current emitted order awaits parent build"
+    },
+    {
+      "input_index": 65,
+      "source": "src/fax/sdmv27.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 49,
+      "source": "src/fax/Sgd.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 50,
+      "source": "src/fax/Smc.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 21,
+      "source": "src/dsp/fpm_agc.c",
+      "baseline_descent_count": 1,
+      "outcome": "baseline-retained",
+      "edge_dispositions": {
+        "compiler-emission-retained": 1
+      },
+      "remaining_constraint": "retained baseline classification; no current source edit"
+    },
+    {
+      "input_index": 22,
+      "source": "src/dsp/fpm_atan.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 23,
+      "source": "src/dsp/fpm_div.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 24,
+      "source": "src/dsp/fpm_ecc.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 25,
+      "source": "src/dsp/fpm_fsd.c",
+      "baseline_descent_count": 1,
+      "outcome": "baseline-retained",
+      "edge_dispositions": {
+        "compiler-emission-retained": 1
+      },
+      "remaining_constraint": "retained baseline classification; no current source edit"
+    },
+    {
+      "input_index": 27,
+      "source": "src/dsp/fpm_fse.c",
+      "baseline_descent_count": 1,
+      "outcome": "baseline-retained",
+      "edge_dispositions": {
+        "compiler-emission-retained": 1
+      },
+      "remaining_constraint": "retained baseline classification; no current source edit"
+    },
+    {
+      "input_index": 29,
+      "source": "src/dsp/fpm_fsm.c",
+      "baseline_descent_count": 1,
+      "outcome": "applied-worker-order",
+      "edge_dispositions": {
+        "applied-worker-order": 1
+      },
+      "remaining_constraint": "applied artifact/provenance exists; current emitted order awaits parent build"
+    },
+    {
+      "input_index": 31,
+      "source": "src/dsp/fpm_iir.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 34,
+      "source": "src/dsp/fpm_log10.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 35,
+      "source": "src/dsp/fpm_mrf.c",
+      "baseline_descent_count": 1,
+      "outcome": "applied-worker-order",
+      "edge_dispositions": {
+        "applied-worker-order": 1
+      },
+      "remaining_constraint": "applied artifact/provenance exists; current emitted order awaits parent build"
+    },
+    {
+      "input_index": 36,
+      "source": "src/dsp/fpm_mtd.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 37,
+      "source": "src/dsp/fpm_phasor.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 38,
+      "source": "src/dsp/fpm_pps.c",
+      "baseline_descent_count": 2,
+      "outcome": "parent-applied-exact-comment-block-order",
+      "edge_dispositions": {
+        "applied-worker-order": 2
+      },
+      "remaining_constraint": "Parent applied exact comment-block order for filter/free/init; awaiting final gate."
+    },
+    {
+      "input_index": 39,
+      "source": "src/dsp/fpm_rms.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 40,
+      "source": "src/dsp/fpm_sdm.c",
+      "baseline_descent_count": 1,
+      "outcome": "applied-worker-order",
+      "edge_dispositions": {
+        "applied-worker-order": 1
+      },
+      "remaining_constraint": "applied artifact/provenance exists; current emitted order awaits parent build"
+    },
+    {
+      "input_index": 41,
+      "source": "src/dsp/fpm_smc.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 42,
+      "source": "src/dsp/fpm_sqrt.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 43,
+      "source": "src/dsp/fpm_sre.c",
+      "baseline_descent_count": 2,
+      "outcome": "baseline-retained",
+      "edge_dispositions": {
+        "compiler-emission-retained": 2
+      },
+      "remaining_constraint": "retained baseline classification; no current source edit"
+    },
+    {
+      "input_index": 45,
+      "source": "src/dsp/fpm_tone.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 46,
+      "source": "src/dsp/fpm_vtb.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 175,
+      "source": "src/service/voicecmd.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 176,
+      "source": "src/service/voicedp.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 177,
+      "source": "src/service/voicesvc.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 190,
+      "source": "src/voice/voice.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 150,
+      "source": "src/service/Beepgen.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 154,
+      "source": "src/service/Detector.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 155,
+      "source": "src/service/Dtmf.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 158,
+      "source": "src/service/Fdsp.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 159,
+      "source": "src/service/Fdspkrnl.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 160,
+      "source": "src/service/Fifo8.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 20,
+      "source": "src/dsp/Notch.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 162,
+      "source": "src/service/TONE.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 173,
+      "source": "src/service/silence.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 170,
+      "source": "src/service/pcm.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 11,
+      "source": "src/core/Vparser.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 15,
+      "source": "src/core/encode.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 10,
+      "source": "src/core/FixedRC.c",
+      "baseline_descent_count": 3,
+      "outcome": "applied-worker-order",
+      "edge_dispositions": {
+        "applied-worker-order": 3
+      },
+      "remaining_constraint": "applied artifact/provenance exists; current emitted order awaits parent build"
+    },
+    {
+      "input_index": 1,
+      "source": "src/call/pulse.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 7,
+      "source": "src/callprog/callprog_cfg.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 8,
+      "source": "src/callprog/elliptic.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 16,
+      "source": "src/core/rc_coeffs.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 18,
+      "source": "src/dialer/dialercfg.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 26,
+      "source": "src/dsp/fpm_fsd_cfg.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 28,
+      "source": "src/dsp/fpm_fse_cfg.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 30,
+      "source": "src/dsp/fpm_fsm_cfg.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 32,
+      "source": "src/dsp/fpm_iir_coeffs.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 33,
+      "source": "src/dsp/fpm_lmsupd.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 44,
+      "source": "src/dsp/fpm_sre_cfg.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 47,
+      "source": "src/dsp/fpm_xor.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 60,
+      "source": "src/fax/faxadapt.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 61,
+      "source": "src/fax/faxcfg.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 63,
+      "source": "src/fax/fifo.c",
+      "baseline_descent_count": 1,
+      "outcome": "applied-worker-order",
+      "edge_dispositions": {
+        "applied-worker-order": 1
+      },
+      "remaining_constraint": "applied artifact/provenance exists; current emitted order awaits parent build"
+    },
+    {
+      "input_index": 64,
+      "source": "src/fax/nulldp.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 66,
+      "source": "src/fax/v17.c",
+      "baseline_descent_count": 19,
+      "outcome": "baseline-retained",
+      "edge_dispositions": {
+        "compiler-emission-retained": 19
+      },
+      "remaining_constraint": "retained baseline classification; no current source edit"
+    },
+    {
+      "input_index": 67,
+      "source": "src/fax/v17dec.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 68,
+      "source": "src/fax/v17dec_tables.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 69,
+      "source": "src/fax/v21.c",
+      "baseline_descent_count": 10,
+      "outcome": "baseline-retained",
+      "edge_dispositions": {
+        "compiler-emission-retained": 10
+      },
+      "remaining_constraint": "retained baseline classification; no current source edit"
+    },
+    {
+      "input_index": 70,
+      "source": "src/fax/v21cfg.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 71,
+      "source": "src/fax/v27.c",
+      "baseline_descent_count": 20,
+      "outcome": "baseline-retained",
+      "edge_dispositions": {
+        "compiler-emission-retained": 20
+      },
+      "remaining_constraint": "retained baseline classification; no current source edit"
+    },
+    {
+      "input_index": 72,
+      "source": "src/fax/v29.c",
+      "baseline_descent_count": 13,
+      "outcome": "baseline-retained",
+      "edge_dispositions": {
+        "compiler-emission-retained": 13
+      },
+      "remaining_constraint": "retained baseline classification; no current source edit"
+    },
+    {
+      "input_index": 76,
+      "source": "src/pump/b103/b103_cfg.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 77,
+      "source": "src/pump/b103/b103_tables.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 78,
+      "source": "src/pump/v17/v17data.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 86,
+      "source": "src/pump/v22/v22ans.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 87,
+      "source": "src/pump/v22/v22conn.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 89,
+      "source": "src/pump/v22/v22data.c",
+      "baseline_descent_count": 1,
+      "outcome": "applied-worker-order",
+      "edge_dispositions": {
+        "applied-worker-order": 1
+      },
+      "remaining_constraint": "applied artifact/provenance exists; current emitted order awaits parent build"
+    },
+    {
+      "input_index": 90,
+      "source": "src/pump/v22/v22det.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 92,
+      "source": "src/pump/v22/v22hdx.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 93,
+      "source": "src/pump/v22/v22loop.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 94,
+      "source": "src/pump/v22/v22org.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 96,
+      "source": "src/pump/v22/v22rate.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 106,
+      "source": "src/pump/v29/v29data.c",
+      "baseline_descent_count": 1,
+      "outcome": "applied-worker-order",
+      "edge_dispositions": {
+        "applied-worker-order": 1
+      },
+      "remaining_constraint": "applied artifact/provenance exists; current emitted order awaits parent build"
+    },
+    {
+      "input_index": 114,
+      "source": "src/pump/v32/v32anstone.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 115,
+      "source": "src/pump/v32/v32cfg.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 116,
+      "source": "src/pump/v32/v32data.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 117,
+      "source": "src/pump/v32/v32dec_tables.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 118,
+      "source": "src/pump/v32/v32demod.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 119,
+      "source": "src/pump/v32/v32ecc_tables.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 121,
+      "source": "src/pump/v32/v32fptab.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 122,
+      "source": "src/pump/v32/v32fse.c",
+      "baseline_descent_count": 5,
+      "outcome": "retained-dependency-constraint",
+      "edge_dispositions": {
+        "retained-helper-dependency": 5
+      },
+      "remaining_constraint": "retained baseline classification; no current source edit"
+    },
+    {
+      "input_index": 123,
+      "source": "src/pump/v32/v32fse_tables.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 125,
+      "source": "src/pump/v32/v32hdx_tables.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 126,
+      "source": "src/pump/v32/v32nsans.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 127,
+      "source": "src/pump/v32/v32nsloop.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 128,
+      "source": "src/pump/v32/v32nsorg.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 129,
+      "source": "src/pump/v32/v32nsrng.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 130,
+      "source": "src/pump/v32/v32scram.c",
+      "baseline_descent_count": 1,
+      "outcome": "applied-worker-order",
+      "edge_dispositions": {
+        "applied-worker-order": 1
+      },
+      "remaining_constraint": "applied artifact/provenance exists; current emitted order awaits parent build"
+    },
+    {
+      "input_index": 131,
+      "source": "src/pump/v32/v32scram_tables.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 132,
+      "source": "src/pump/v32/v32seq.c",
+      "baseline_descent_count": 2,
+      "outcome": "applied-worker-order",
+      "edge_dispositions": {
+        "applied-worker-order": 2
+      },
+      "remaining_constraint": "applied artifact/provenance exists; current emitted order awaits parent build"
+    },
+    {
+      "input_index": 133,
+      "source": "src/pump/v32/v32smc.c",
+      "baseline_descent_count": 1,
+      "outcome": "applied-worker-order",
+      "edge_dispositions": {
+        "applied-worker-order": 1
+      },
+      "remaining_constraint": "applied artifact/provenance exists; current emitted order awaits parent build"
+    },
+    {
+      "input_index": 134,
+      "source": "src/pump/v32/v32sre_tables.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 135,
+      "source": "src/pump/v32/v32vtb.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 136,
+      "source": "src/pump/v32/v32vtb_tables.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 142,
+      "source": "src/pump/v34/v34digital.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 144,
+      "source": "src/pump/v34/v34info.c",
+      "baseline_descent_count": 2,
+      "outcome": "parent-applied-helper-and-public-order",
+      "edge_dispositions": {
+        "applied-worker-order": 2
+      },
+      "remaining_constraint": "Parent placed pcm_name helper before public methods and retained the public order."
+    },
+    {
+      "input_index": 146,
+      "source": "src/pump/v34/v34scram.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 147,
+      "source": "src/pump/v34/v34shell.c",
+      "baseline_descent_count": 3,
+      "outcome": "retained-dependency-constraint",
+      "edge_dispositions": {
+        "retained-helper-dependency": 3
+      },
+      "remaining_constraint": "retained baseline classification; no current source edit"
+    },
+    {
+      "input_index": 148,
+      "source": "src/pump/v90/V92ParamsInfo.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 166,
+      "source": "src/service/dtmf_coeffs.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 167,
+      "source": "src/service/dtmf_mtd_coeffs.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 168,
+      "source": "src/service/mtk.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 169,
+      "source": "src/service/mtk_tables.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 182,
+      "source": "src/v8/v8handshak.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 184,
+      "source": "src/v8/v8hsrx.c",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 199,
+      "source": "src/pump/v34/v34diag.cpp",
+      "baseline_descent_count": 1,
+      "outcome": "baseline-retained",
+      "edge_dispositions": {
+        "ambiguous-mapping-retained": 1
+      },
+      "remaining_constraint": "retained baseline classification; no current source edit"
+    },
+    {
+      "input_index": 200,
+      "source": "src/pump/v34/v34hstx1.cpp",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 201,
+      "source": "src/pump/v34/v34info1a.cpp",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 263,
+      "source": "src/pump/v90/VPcmFloModemCtor.cpp",
+      "baseline_descent_count": 1,
+      "outcome": "in-progress-unresolved",
+      "edge_dispositions": {
+        "abi-clone-retained": 1
+      },
+      "remaining_constraint": "constructor-FIRST/LAST control in progress; exact membership and qcLineVerification loss remain unresolved"
+    },
+    {
+      "input_index": 264,
+      "source": "src/pump/v90/VPcmXfCreate.cpp",
+      "baseline_descent_count": 1,
+      "outcome": "baseline-retained",
+      "edge_dispositions": {
+        "ambiguous-mapping-retained": 1
+      },
+      "remaining_constraint": "retained baseline classification; no current source edit"
+    },
+    {
+      "input_index": 265,
+      "source": "src/pump/v90/VPcmXfTerm.cpp",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    },
+    {
+      "input_index": 267,
+      "source": "src/pump/v90/mohdet.cpp",
+      "baseline_descent_count": 0,
+      "outcome": "no-descent",
+      "edge_dispositions": {},
+      "remaining_constraint": "no emitted reference-address descent"
+    }
+  ]
+}

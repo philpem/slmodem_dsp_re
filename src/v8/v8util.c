@@ -75,53 +75,6 @@ typedef char v8_pr_window[V8_OFFSET_OK == 0 || offsetof(struct v8_phase_rev, win
 			  ? 1 : -1];
 
 
-/*
- * A Q14 cosine table, one full cycle in 256 steps.  Every entry but one is
- * exactly `(short)(16384.0 * cos(2 * PI * i / 256))` with C truncation
- * towards zero.
- *
- * The exception is index 128, half a cycle, where this holds -16383 and the
- * arithmetic says -16384.  That is the floating point showing through: their
- * cosine returned slightly more than -1, so truncation dropped a unit.  Kept
- * verbatim -- it is one LSB and reproducing it costs nothing, whereas
- * regenerating the table would silently change one sample of every tone V.8
- * emits.
- */
-static const short v8_costbl[V8_COSTAB_SIZE] = {
-	 16384,  16379,  16364,  16339,  16305,  16260,  16206,  16142,
-	 16069,  15985,  15892,  15790,  15678,  15557,  15426,  15286,
-	 15136,  14978,  14810,  14634,  14449,  14255,  14053,  13842,
-	 13622,  13395,  13159,  12916,  12665,  12406,  12139,  11866,
-	 11585,  11297,  11002,  10701,  10393,  10079,   9759,   9434,
-	  9102,   8765,   8423,   8075,   7723,   7366,   7005,   6639,
-	  6269,   5896,   5519,   5139,   4756,   4369,   3980,   3589,
-	  3196,   2801,   2404,   2005,   1605,   1205,    803,    402,
-	     0,   -402,   -803,  -1205,  -1605,  -2005,  -2404,  -2801,
-	 -3196,  -3589,  -3980,  -4369,  -4756,  -5139,  -5519,  -5896,
-	 -6269,  -6639,  -7005,  -7366,  -7723,  -8075,  -8423,  -8765,
-	 -9102,  -9434,  -9759, -10079, -10393, -10701, -11002, -11297,
-	-11585, -11866, -12139, -12406, -12665, -12916, -13159, -13395,
-	-13622, -13842, -14053, -14255, -14449, -14634, -14810, -14978,
-	-15136, -15286, -15426, -15557, -15678, -15790, -15892, -15985,
-	-16069, -16142, -16206, -16260, -16305, -16339, -16364, -16379,
-	-16383, -16379, -16364, -16339, -16305, -16260, -16206, -16142,
-	-16069, -15985, -15892, -15790, -15678, -15557, -15426, -15286,
-	-15136, -14978, -14810, -14634, -14449, -14255, -14053, -13842,
-	-13622, -13395, -13159, -12916, -12665, -12406, -12139, -11866,
-	-11585, -11297, -11002, -10701, -10393, -10079,  -9759,  -9434,
-	 -9102,  -8765,  -8423,  -8075,  -7723,  -7366,  -7005,  -6639,
-	 -6269,  -5896,  -5519,  -5139,  -4756,  -4369,  -3980,  -3589,
-	 -3196,  -2801,  -2404,  -2005,  -1605,  -1205,   -803,   -402,
-	     0,    402,    803,   1205,   1605,   2005,   2404,   2801,
-	  3196,   3589,   3980,   4369,   4756,   5139,   5519,   5896,
-	  6269,   6639,   7005,   7366,   7723,   8075,   8423,   8765,
-	  9102,   9434,   9759,  10079,  10393,  10701,  11002,  11297,
-	 11585,  11866,  12139,  12406,  12665,  12916,  13159,  13395,
-	 13622,  13842,  14053,  14255,  14449,  14634,  14810,  14978,
-	 15136,  15286,  15426,  15557,  15678,  15790,  15892,  15985,
-	 16069,  16142,  16206,  16260,  16305,  16339,  16364,  16379
-};
-
 /* Q14 multiply: the product of two Q14 values, back in Q14. */
 short
 v8_mpyint(short a, short b)
@@ -141,13 +94,6 @@ v8_absfn(short x)
 	if (x < 0)
 		return (short)(-x);
 	return x;
-}
-
-/* One entry of the cosine table.  The index is a byte, so it wraps freely. */
-short
-v8_cosread(unsigned char phase)
-{
-	return v8_costbl[phase];
 }
 
 /*
@@ -202,19 +148,12 @@ v8_dftenergy(struct v8_dft_bin *bin, short n, short shift)
 	}
 }
 
-/*
- * Point the V.21 modem at a set of filter designs.  The four are swapped
- * together, which is how one modem serves both channels of V.21: the
- * handshake calls this again whenever it changes direction.
- */
+/* Arm the tone queue: nothing pending, and the period set to 0x688. */
 void
-V8_setFilters(struct v8 *v, const short *a, const short *b, const short *c,
-	      const short *d)
+v8_TONEq_init(struct v8 *v)
 {
-	v->v21.a = a;
-	v->v21.b = b;
-	v->v21.c = c;
-	v->v21.d = d;
+	v->toneq_pending = 0;
+	v->toneq_period = 0x688;
 }
 
 /*
@@ -240,34 +179,19 @@ V8_V21_reset(struct v8 *v)
 	v->v21.mark_run = 0;
 }
 
-/* Arm the tone queue: nothing pending, and the period set to 0x688. */
-void
-v8_TONEq_init(struct v8 *v)
-{
-	v->toneq_pending = 0;
-	v->toneq_period = 0x688;
-}
-
 /*
- * Arm the ANSam phase-reversal detector.  The window is cleared and the
- * countdown at +0x0e set to 32 -- half the window, which is how long it
- * waits before its first verdict.
+ * Point the V.21 modem at a set of filter designs.  The four are swapped
+ * together, which is how one modem serves both channels of V.21: the
+ * handshake calls this again whenever it changes direction.
  */
 void
-v8_phase_rev_init(struct v8_phase_rev *pr)
+V8_setFilters(struct v8 *v, const short *a, const short *b, const short *c,
+	      const short *d)
 {
-	int i;
-
-	pr->detected = 0;
-	pr->corr = 0;
-	pr->energy = 0;
-	pr->smoothed = 0;
-	pr->run = 0;
-	pr->reversals = 0;
-	pr->half = 0x20;
-	pr->widx = 0;
-	for (i = 0; i < 64; i++)
-		pr->window[i] = 0;
+	v->v21.a = a;
+	v->v21.b = b;
+	v->v21.c = c;
+	v->v21.d = d;
 }
 
 /*
@@ -304,6 +228,28 @@ v8_txinit(struct v8 *v)
 		v->tx_symbols[i] = 0;
 
 	return 0;
+}
+
+/*
+ * Arm the ANSam phase-reversal detector.  The window is cleared and the
+ * countdown at +0x0e set to 32 -- half the window, which is how long it
+ * waits before its first verdict.
+ */
+void
+v8_phase_rev_init(struct v8_phase_rev *pr)
+{
+	int i;
+
+	pr->detected = 0;
+	pr->corr = 0;
+	pr->energy = 0;
+	pr->smoothed = 0;
+	pr->run = 0;
+	pr->reversals = 0;
+	pr->half = 0x20;
+	pr->widx = 0;
+	for (i = 0; i < 64; i++)
+		pr->window[i] = 0;
 }
 
 /*
@@ -353,6 +299,20 @@ v8_rxinit(struct v8 *v)
 }
 
 /*
+ * Reverse the bits of a nibble.  The original stores this rather than
+ * computing it, and `charFlip` uses it twice.
+ */
+static const unsigned char nibble_reverse[16] = {
+	0, 8, 4, 12, 2, 10, 6, 14, 1, 9, 5, 13, 3, 11, 7, 15
+};
+
+unsigned char
+charFlip(unsigned char b)
+{
+	return (unsigned char)((nibble_reverse[b & 0x0f] << 4)
+			       | nibble_reverse[b >> 4]);
+}
+/*
  * Arm the tone detector.
  *
  * The original has an empty inner loop here -- three iterations that do
@@ -386,19 +346,4 @@ v8_detectorinit(struct v8 *v, struct v8_detector *d, const short *table,
 	d->warmup = 0;
 
 	v->rx.flags |= V8_RX_DETECTOR_ARMED;
-}
-
-/*
- * Reverse the bits of a nibble.  The original stores this rather than
- * computing it, and `charFlip` uses it twice.
- */
-static const unsigned char nibble_reverse[16] = {
-	0, 8, 4, 12, 2, 10, 6, 14, 1, 9, 5, 13, 3, 11, 7, 15
-};
-
-unsigned char
-charFlip(unsigned char b)
-{
-	return (unsigned char)((nibble_reverse[b & 0x0f] << 4)
-			       | nibble_reverse[b >> 4]);
 }

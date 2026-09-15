@@ -1,0 +1,27 @@
+[
+ {
+  "label": "bit one is given weight two instead of one",
+  "find": "\t\tacc = (acc + acc) | (bytes[i] & 1);",
+  "replace": "\t\tacc = (acc + acc) | ((bytes[i] & 1) << 1);"
+ },
+ {
+  "label": "the encoder ignores the input low bit",
+  "find": "\t\tacc = (acc + acc) | (bytes[i] & 1);",
+  "replace": "\t\tacc = (acc + acc) | (bytes[i] & 0);"
+ },
+ {
+  "label": "the first digit uses the second modulus",
+  "find": "\tout[0] = (unsigned int)(acc % (long long)field_00);",
+  "replace": "\tout[0] = (unsigned int)(acc % (long long)field_04);"
+ },
+ {
+  "label": "the first remainder is added before division",
+  "find": "\tacc = (acc - out[0]) / (long long)field_00;",
+  "replace": "\tacc = (acc + out[0]) / (long long)field_00;"
+ },
+ {
+  "label": "the sixth digit is offset upward by M5",
+  "find": "\tout[5] = (unsigned int)acc;",
+  "replace": "\tout[5] = (unsigned int)(acc + (long long)field_14);"
+ }
+]
