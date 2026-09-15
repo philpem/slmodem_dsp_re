@@ -1455,6 +1455,82 @@ family:
   Check the flag dependency before moving a function template whose body uses
   a transcendental. See #74's F11356.
 
+## Narrow where the object narrows, not earlier
+
+`InitGenSequence` provides a small, exact discriminator. Its reconstruction
+used an `unsigned short` local for `total / width - 1`, introducing a
+three-byte `movzwl %ax,%eax` absent from the reference. The reference instead
+keeps the promoted result full-width until two 16-bit stores.
+
+Both `int` and `unsigned int` locals reproduce the complete reference body.
+Plain `int` follows the expression's integer promotions without an extra
+conversion, and is the retained spelling. The destination fields remain
+unsigned shorts; this is not evidence to widen or retype them. When
+`total < width`, the result is still stored as `0xffff` in both fields.
+Division-by-zero and oversized-shift behavior are not repaired by this edit.
+
+The full-TU controls gain one exact function with no other body changes.
+See [the retained V.32 result](../v32seq-top-retained-result.md) for gates
+and the separate, unretained floating-absolute-value investigation.
+
+## Separate an element count from its byte-size conversion
+
+The `Scrambler<int, unsigned char>` constructor showed a three-byte
+allocation-arithmetic difference: the reference adds the guard element and
+then shifts, while the reconstruction uses a scaled address with a byte
+displacement. Reassociating the sum did not alter the output. An ordinary
+`unsigned int count = b + c + 1` followed by `count * sizeof(T)` reproduced
+the reference constructor exactly, without changing the allocation amount.
+
+This is evidence for a source intermediate, not permission to add casts,
+volatile objects, barriers or arbitrary locals to force a score. The finite
+domain establishes one supported spelling, not a uniquely recovered original.
+All 30 header-consumer controls reproduced their baselines; only the two
+`Scrambler<int, unsigned char>` constructor copies changed. Other
+specializations, including every `Descrambler` copy, remained unchanged.
+See [the retained result](../scrambler-allocation-retained-result.md) for
+the shared-header scope, period gates and full-object exact-set comparison.
+
+## Distinguish a cached pointer from repeated member loads
+
+The parallel decoder independently exhibits the same distinction: its
+reference body caches `state_`, advances input/output/state pointers, saves
+the input byte before writing output, then updates state. Applying that
+observed structure reduces its 62-byte reconstruction to 58 bytes against
+the original 57. The residual is an extra byte in the load/XOR sequence,
+not evidence to add a cast, barrier, or aliasing promise. All 18 header
+consumer controls reproduce their baselines; only the decoder helper changes.
+See [the decoder result](../parallel-decoder-retained-result.md) for the
+period gates, whole-object comparison, and explicitly rejected invalid run.
+
+
+An unchanged address calculation is not the same evidence as an unchanged
+memory access pattern. In `ParallelDifferentialEncoder<unsigned char>::process`,
+the object reads `state_` once before the loop, advances state/input/output
+pointers, and stores a local XOR result to output before state. The former
+indexed reconstruction reloaded `state_` twice per iteration, mutated state
+first and then reloaded it for output. Its loop bound, unlike the state pointer,
+is a member read on every iteration in the reference and must remain one.
+
+A cached state cursor and local result recover that evidenced structure.
+This is not the same justification as inventing a pointer merely to keep a
+preferred base register live across calls. The latter had already been rejected
+for `V90SpectralShaper::reset`; do not apply that rejection indiscriminately
+to a loop with demonstrably different memory accesses.
+
+Cross source structure with a narrowly chosen pass control. Here six source
+forms with and without loop strength reduction showed that explicit cursors,
+not a pass toggle, explained the structure. A second staged-read experiment
+did not steer the remaining load/XOR order. Stop there rather than add
+`volatile`, barriers or attributes: the helper still differs in four bytes,
+despite recovering the reference's 54-byte size and memory-access structure.
+
+The full shared-header scope matters: 18 unchanged controls reproduced their
+objects, and only the shaper TU changed under the retained candidate. All 830
+exact names were preserved. See [the experiment](../spectral-encoder-experiment.md),
+[the read-order control](../spectral-encoder-read-order.md) and
+[the retained result](../spectral-encoder-retained-result.md).
+
 ## Equal-width field types still carry aliasing information
 
 Do not normalize an original `long` to `int` merely because both occupy four
