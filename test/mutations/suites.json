@@ -37,11 +37,11 @@
   "build/test/t_dialer"
  ],
  "dilpack": [
-  "src/pump/v90/DILdescriptorPacker.cpp",
+  "src/pump/v90/V90DILdesPCK.cpp",
   "build/test/t_dilpack"
  ],
  "dilpackstd": [
-  "src/pump/v90/DILdescriptorPacker.cpp",
+  "src/pump/v90/V90DILdesPCK.cpp",
   "build/test/t_dilpack"
  ],
  "dtmf": [
@@ -781,11 +781,11 @@
   "build/test/t_v90spectral"
  ],
  "v90trn2": [
-  "src/pump/v90/V90TRN2Designer.cpp",
+  "src/pump/v90/V90TRN2dDesigner.cpp",
   "build/test/t_v90designers"
  ],
  "v90trn2design": [
-  "src/pump/v90/V90TRN2Designer.cpp",
+  "src/pump/v90/V90TRN2dDesigner.cpp",
   "build/test/t_v90trn2design"
  ],
  "v90unpck": [
@@ -809,7 +809,7 @@
   "build/test/t_v92btosproc"
  ],
  "v92convenc": [
-  "src/pump/v90/V92ConvolutionEncoder.cpp",
+  "src/pump/v90/V92ConvEncoder.cpp",
   "build/test/t_v92convmapper"
  ],
  "v92cp": [
@@ -833,7 +833,7 @@
   "build/test/t_v92cpeval"
  ],
  "v92dilpackstd": [
-  "src/pump/v90/V92DILdescriptorPacker.cpp",
+  "src/pump/v90/V92DILdesPCK.cpp",
   "build/test/t_v92dilpack"
  ],
  "v92ec": [

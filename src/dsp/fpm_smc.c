@@ -27,14 +27,6 @@
 #include "dsplib/fpm_smc.h"
 
 void
-FPM_SMC_init(struct fpm_smc *smc, const struct fpm_smc_cfg *cfg)
-{
-	smc->cfg = *cfg;
-	smc->quad = 0;
-	smc->acc = 0;
-}
-
-void
 FPM_SMC_encoder(struct fpm_smc *smc, struct fpm_smc_ring *ring,
 		const unsigned short *data, unsigned short count)
 {
@@ -89,4 +81,12 @@ FPM_SMC_encoder(struct fpm_smc *smc, struct fpm_smc_ring *ring,
 	smc->acc = acc;
 	smc->quad = quad;
 	ring->widx = (short)widx;
+}
+
+void
+FPM_SMC_init(struct fpm_smc *smc, const struct fpm_smc_cfg *cfg)
+{
+	smc->cfg = *cfg;
+	smc->quad = 0;
+	smc->acc = 0;
 }
