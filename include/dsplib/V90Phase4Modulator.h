@@ -212,7 +212,7 @@ public:
 	~V90Phase4Modulator();
 
 	/** @brief Set `sessionFlag` (nonzero selects V.92). */
-	void setSessionFlag(unsigned int);
+	void setSessionFlag(unsigned int flag);
 
 	/**
 	 * @brief Reinitialise the modulator for a new session: store the
@@ -335,15 +335,15 @@ public:
 	 * @brief Fill the six Rd/Rt symbols from a constellation's six
 	 *        levels (last three negated), companded by `pcmType`.
 	 */
-	void setRdRtSymbols(V90MappingParams *);
+	void setRdRtSymbols(V90MappingParams *mapping);
 	/**
 	 * @brief Fill the twelve Rf symbols by cycling the same six sources
 	 *        twice with a different negation pattern, companded by
 	 *        `pcmType`.
 	 */
-	void setRfSymbols(V90MappingParams *);
+	void setRfSymbols(V90MappingParams *mapping);
 	/** @brief Set `nextStateAfterTRN2d`. */
-	void setNextStateAfterTRN2d(Phase4ModulatorState);
+	void setNextStateAfterTRN2d(Phase4ModulatorState next);
 
 	/**
 	 * @brief Hand a constellation block to the bits-to-symbol converter
@@ -355,7 +355,7 @@ public:
 	 *         to a bare `ret` on the null path, so whatever is left in
 	 *         the return register is incidental, not a designed value.
 	 */
-	void setMappingParams(V90MappingParams *);
+	void setMappingParams(V90MappingParams *mapping);
 
 	/** @brief Clear the RRN-related latches ahead of an RRN sequence. */
 	void resetBeforRRN();

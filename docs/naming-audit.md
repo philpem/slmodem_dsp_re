@@ -67,3 +67,32 @@ identity comparison after rebuilding, with zero differences. This includes
 source and fixture objects and establishes that these renames did not change
 those period object bytes. Logs: `build/structure-naming-v32-trellis/gates.log`
 and `build/structure-naming-v32-trellis/object-identity.log`.
+
+## Batch 2: C++ parameter declarations
+
+Six previously unnamed declaration parameters reviewed and named, none
+unresolved in this batch. Signatures, types and calling conventions stay
+unchanged. Existing definition names are reused for `delay`, `flag` and
+`next`; the abbreviated mapping parameters become `mapping` in declarations
+and definitions together.
+
+| Method | Parameter | Evidence |
+|---|---|---|
+| `V92EchoCanceller::setEchoDelay` | `delay` | Stored in `echoDelay`, adjusts `echoLength` by the delay delta, and printed as echoDelay. |
+| `V90Phase4Modulator::setSessionFlag` | `flag` | Direct assignment to `sessionFlag`; also the caller chain's name. |
+| `V90Phase4Modulator::setRdRtSymbols` | `mapping` | `V90MappingParams` source of the six constellation levels used to build Rd/Rt symbols. |
+| `V90Phase4Modulator::setRfSymbols` | `mapping` | Same typed constellation source used to build the twelve Rf symbols. |
+| `V90Phase4Modulator::setNextStateAfterTRN2d` | `next` | Typed state stored directly in `nextStateAfterTRN2d`. |
+| `V90Phase4Modulator::setMappingParams` | `mapping` | Null-checked constellation passed to `bitsToSymbol->reset`; diagnostic names mappingParams. |
+
+The mapping names replace `m`/`mp` without renaming the unrelated `V90MP`
+member called `mp`. Mutation anchors retain their original injected faults.
+The initial candidate lists remain historical snapshots, not live counts;
+these six parameters are the first completed parameter batch, not a claim
+that either header or the tree has been exhaustively audited.
+
+Batch 2 validation: Gentoo GCC 3.4.2-r2 `make phase` passed 375 tests,
+zero failures, with all structural checks OK. All 655 baseline top-level
+period object files remained byte-identical by SHA-256 after rebuilding.
+Artifacts: `build/structure-naming-cpp-parameters/gates.log` and
+`build/structure-naming-cpp-parameters/object-identity.log`.

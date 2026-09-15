@@ -107,7 +107,7 @@ public:
 	 *        in step with it, by the same delta rather than a recompute.
 	 * @param delay  The new delay, in samples.
 	 */
-	void setEchoDelay(unsigned int);
+	void setEchoDelay(unsigned int delay);
 	/**
 	 * @brief Clear the canceller to its post-construction state: zero
 	 *        both buffers, rewind the cursors, zero the adaption betas
