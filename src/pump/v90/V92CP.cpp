@@ -116,6 +116,15 @@ V92CP::getBitVector(unsigned int &length)
  * ===========================================================================
  */
 void
+V92CP::resetCRC()
+{
+	int i;
+
+	for (i = 0; i <= V92CP_CRC - 1; i++)
+		crc[i] = 1;
+}
+
+void
 V92CP::setSUV(unsigned int v)
 {
 	word_104 = 16;
@@ -136,15 +145,6 @@ V92CP::setSUV(unsigned int v)
  * a codegen mismatch in a function that has one to spare.
  * ===========================================================================
  */
-void
-V92CP::resetCRC()
-{
-	int i;
-
-	for (i = 0; i <= V92CP_CRC - 1; i++)
-		crc[i] = 1;
-}
-
 /*
  * ===========================================================================
  * V92CP::resetDetector (.text+0x4e830, 46 bytes)

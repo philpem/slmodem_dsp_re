@@ -103,12 +103,6 @@ const short costbl[256] = {
  * a fact about the original's interface, not dead weight this reconstruction
  * gets to remove.
  */
-short
-cosread(unsigned char idx)
-{
-	return costbl[idx];
-}
-
 void
 dftupdate(struct v34_dftbin *bins, short nbins, const short *samples,
 	  short nsamples)
@@ -173,6 +167,12 @@ dftupdate(struct v34_dftbin *bins, short nbins, const short *samples,
 			b->sum_im += (double)im;
 		}
 	}
+}
+
+short
+cosread(unsigned char idx)
+{
+	return costbl[idx];
 }
 
 void

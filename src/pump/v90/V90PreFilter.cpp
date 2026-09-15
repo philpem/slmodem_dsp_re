@@ -394,34 +394,100 @@ V90PreFilter::autoSelection()
  * +0x500 is not 6; a trial that arranges it is testing our undefined
  * behaviour (D670).
  */
-int
-V90PreFilter::getV90Capability()
+void
+V90PreFilter::reset()
 {
-	if (refLoop < 0)
-		autoSelection();
+	FloatFIR::reset();
 
-	if (isV90WithEia6())
-		return 1;
+	refLoop = -1;
+	gain = 0;
 
-	return dataBase[codecType].loops[refLoop].capability;
+	setCoefficients(&V90PreFilter::preFilterCoefType1[0][0], 20);
 }
 
-/*
- * Load the FIR with the coefficients this connection wants.
- *
- * Five ways in, and they differ in where the bank and the row come from:
- *
- *   registry +0x0c == 1   ISDN NT1: row from +0x54, bank from the codec's
- *                         FIRST reference loop, row unclamped
- *   registry +0x0c == 2   PBX ISDN: the same with the row from +0x58
- *   registry +0x4c == -1  automatic: autoSelection() picks the loop, and the
- *                         bank and row follow from it
- *   registry +0x50        1, 2 or 3 force the bank; -1 takes it from the
- *                         codec's first loop; anything else is bank 1
- *
- * The row clamp depends on the bank and not on how it was chosen: 30 for the
- * 20-tap banks, and 20..50 for the 40-tap one, whose rows start at index 20.
- */
+void
+V90PreFilter::setParamEia6()
+{
+	V90Parameters *p;
+	const int *blk;
+	long double x;
+	float xf;
+	int whole, frac, i;
+
+	edprintf("V90PreFilter: setParamEIA6 called\r\n");
+
+	p = params;
+	V90PW(p)[0x010 / 4] = V90PW(p)[0x014 / 4];
+	V90PW(p)[0x2a4 / 4] = V90PW(p)[0x2a8 / 4];
+	V90PW(p)[0x374 / 4] = V90PW(p)[0x388 / 4];
+	V90PW(p)[0x3a8 / 4] = V90PW(p)[0x3d8 / 4];
+	V90PW(p)[0x3ac / 4] = V90PW(p)[0x3dc / 4];
+	V90PW(p)[0x3b0 / 4] = V90PW(p)[0x3e0 / 4];
+	V90PW(p)[0x3b4 / 4] = V90PW(p)[0x3e4 / 4];
+	V90PW(p)[0x3b8 / 4] = V90PW(p)[0x3e8 / 4];
+	V90PW(p)[0x3bc / 4] = V90PW(p)[0x3ec / 4];
+	V90PW(p)[0x188 / 4] = V90PW(p)[0x1d4 / 4];
+	V90PW(p)[0x18c / 4] = V90PW(p)[0x1d8 / 4];
+	V90PW(p)[0x1c0 / 4] = V90PW(p)[0x1e4 / 4];
+	V90PW(p)[0x1c4 / 4] = V90PW(p)[0x1dc / 4];
+	V90PW(p)[0x1c8 / 4] = V90PW(p)[0x1e0 / 4];
+	V90PW(p)[0x190 / 4] = V90PW(p)[0x198 / 4];
+	V90PW(p)[0x194 / 4] = V90PW(p)[0x19c / 4];
+	V90PW(p)[0x210 / 4] = V90PW(p)[0x218 / 4];
+	V90PW(p)[0x214 / 4] = V90PW(p)[0x21c / 4];
+	V90PW(p)[0x078 / 4] = V90PW(p)[0x07c / 4];
+	V90PW(p)[0x1bc / 4] = V90PW(p)[0x1a0 / 4];
+	V90PW(p)[0x230 / 4] = V90PW(p)[0x220 / 4];
+	V90PW(p)[0x178 / 4] = V90PW(p)[0x1e8 / 4];
+	V90PW(p)[0x17c / 4] = V90PW(p)[0x1ec / 4];
+	V90PW(p)[0x180 / 4] = V90PW(p)[0x1f0 / 4];
+	V90PW(p)[0x204 / 4] = V90PW(p)[0x244 / 4];
+	V90PW(p)[0x20c / 4] = V90PW(p)[0x24c / 4];
+
+	/* The block +0x00 points at; the deviation is the int at its +0x4c. */
+	blk = *(const int *const *)&V90PB(p)[0];
+	x = (long double)blk[0x4c / 4] * 0.001f;
+	whole = (int)x;
+	frac = (int)(10000.0f * (x - (long double)whole));
+	xf = (float)x;
+
+	edprintf("V90PreFilter: prev params ClockDeviation is = %c%d.%04d\r\n",
+		 (x > 0.0L) ? '+' : '-', (int)fabsl(x),
+		 (frac < 0) ? -frac : frac);
+
+	/*
+	 * `fcompp; sahf; jne`, and the zero flag comes from C3, which is set
+	 * for equal AND for unordered -- so the object treats a NaN deviation
+	 * as zero where C's `!=` would not.
+	 *
+	 * THE ARGUMENT FOR THIS SPELLING IS NOW THE ARGUMENT AGAINST IT, and
+	 * the code is left alone anyway.  It was written as two relational
+	 * tests because C's `!=` acquires a parity test under `-mieee-fp`;
+	 * `period_inner.sh` now carries `-mno-ieee-fp`, where `!=` IS the
+	 * object's single `fcompp`/`jne` and this pair is one compare too many
+	 * (finding F2300, which corrected nine such sites).  This is the tenth.
+	 * It is not one of the nine because its suite is green either way --
+	 * `x` is an int times 0.001f and cannot be a NaN, so the two tests
+	 * agree over every value that reaches them -- so there was no
+	 * differential failure to drive the change and nothing to prove it
+	 * with beyond the codegen tier.  Whoever measures that next should
+	 * take it.
+	 */
+	if (xf < 0.0f || xf > 0.0f) {
+		edprintf("V90PreFilter: Setting timing parameters " "(registry)...\r\n");
+		p = params;
+		V90PF(p)[0x84 / 4] = xf;
+		for (i = 0; i < 18; i++)
+			V90PW(p)[0x88 / 4 + i] = V90PW(p)[0x110 / 4 + i];
+	}
+
+	p = params;
+	V90PW(p)[0x460 / 4] = V90PW(p)[0x490 / 4];
+	V90PW(p)[0x40c / 4] = V90PW(p)[0x488 / 4];
+	V90PW(p)[0x410 / 4] = V90PW(p)[0x484 / 4];
+	V90PW(p)[0x414 / 4] = V90PW(p)[0x48c / 4];
+}
+
 void
 V90PreFilter::selectFilter()
 {
@@ -552,6 +618,34 @@ V90PreFilter::selectFilter()
 	edprintf("V90PreFilter: Filter Gain = %d\r\n", g);
 }
 
+int
+V90PreFilter::getV90Capability()
+{
+	if (refLoop < 0)
+		autoSelection();
+
+	if (isV90WithEia6())
+		return 1;
+
+	return dataBase[codecType].loops[refLoop].capability;
+}
+
+/*
+ * Load the FIR with the coefficients this connection wants.
+ *
+ * Five ways in, and they differ in where the bank and the row come from:
+ *
+ *   registry +0x0c == 1   ISDN NT1: row from +0x54, bank from the codec's
+ *                         FIRST reference loop, row unclamped
+ *   registry +0x0c == 2   PBX ISDN: the same with the row from +0x58
+ *   registry +0x4c == -1  automatic: autoSelection() picks the loop, and the
+ *                         bank and row follow from it
+ *   registry +0x50        1, 2 or 3 force the bank; -1 takes it from the
+ *                         codec's first loop; anything else is bank 1
+ *
+ * The row clamp depends on the bank and not on how it was chosen: 30 for the
+ * 20-tap banks, and 20..50 for the 40-tap one, whose rows start at index 20.
+ */
 /*
  * Move the EIA-6 timing parameters into place.
  *
@@ -574,89 +668,6 @@ V90PreFilter::selectFilter()
  * value rather than the rounded one.  Finding F233 is the precedent for taking
  * that literally.
  */
-void
-V90PreFilter::setParamEia6()
-{
-	V90Parameters *p;
-	const int *blk;
-	long double x;
-	float xf;
-	int whole, frac, i;
-
-	edprintf("V90PreFilter: setParamEIA6 called\r\n");
-
-	p = params;
-	V90PW(p)[0x010 / 4] = V90PW(p)[0x014 / 4];
-	V90PW(p)[0x2a4 / 4] = V90PW(p)[0x2a8 / 4];
-	V90PW(p)[0x374 / 4] = V90PW(p)[0x388 / 4];
-	V90PW(p)[0x3a8 / 4] = V90PW(p)[0x3d8 / 4];
-	V90PW(p)[0x3ac / 4] = V90PW(p)[0x3dc / 4];
-	V90PW(p)[0x3b0 / 4] = V90PW(p)[0x3e0 / 4];
-	V90PW(p)[0x3b4 / 4] = V90PW(p)[0x3e4 / 4];
-	V90PW(p)[0x3b8 / 4] = V90PW(p)[0x3e8 / 4];
-	V90PW(p)[0x3bc / 4] = V90PW(p)[0x3ec / 4];
-	V90PW(p)[0x188 / 4] = V90PW(p)[0x1d4 / 4];
-	V90PW(p)[0x18c / 4] = V90PW(p)[0x1d8 / 4];
-	V90PW(p)[0x1c0 / 4] = V90PW(p)[0x1e4 / 4];
-	V90PW(p)[0x1c4 / 4] = V90PW(p)[0x1dc / 4];
-	V90PW(p)[0x1c8 / 4] = V90PW(p)[0x1e0 / 4];
-	V90PW(p)[0x190 / 4] = V90PW(p)[0x198 / 4];
-	V90PW(p)[0x194 / 4] = V90PW(p)[0x19c / 4];
-	V90PW(p)[0x210 / 4] = V90PW(p)[0x218 / 4];
-	V90PW(p)[0x214 / 4] = V90PW(p)[0x21c / 4];
-	V90PW(p)[0x078 / 4] = V90PW(p)[0x07c / 4];
-	V90PW(p)[0x1bc / 4] = V90PW(p)[0x1a0 / 4];
-	V90PW(p)[0x230 / 4] = V90PW(p)[0x220 / 4];
-	V90PW(p)[0x178 / 4] = V90PW(p)[0x1e8 / 4];
-	V90PW(p)[0x17c / 4] = V90PW(p)[0x1ec / 4];
-	V90PW(p)[0x180 / 4] = V90PW(p)[0x1f0 / 4];
-	V90PW(p)[0x204 / 4] = V90PW(p)[0x244 / 4];
-	V90PW(p)[0x20c / 4] = V90PW(p)[0x24c / 4];
-
-	/* The block +0x00 points at; the deviation is the int at its +0x4c. */
-	blk = *(const int *const *)&V90PB(p)[0];
-	x = (long double)blk[0x4c / 4] * 0.001f;
-	whole = (int)x;
-	frac = (int)(10000.0f * (x - (long double)whole));
-	xf = (float)x;
-
-	edprintf("V90PreFilter: prev params ClockDeviation is = %c%d.%04d\r\n",
-		 (x > 0.0L) ? '+' : '-', (int)fabsl(x),
-		 (frac < 0) ? -frac : frac);
-
-	/*
-	 * `fcompp; sahf; jne`, and the zero flag comes from C3, which is set
-	 * for equal AND for unordered -- so the object treats a NaN deviation
-	 * as zero where C's `!=` would not.
-	 *
-	 * THE ARGUMENT FOR THIS SPELLING IS NOW THE ARGUMENT AGAINST IT, and
-	 * the code is left alone anyway.  It was written as two relational
-	 * tests because C's `!=` acquires a parity test under `-mieee-fp`;
-	 * `period_inner.sh` now carries `-mno-ieee-fp`, where `!=` IS the
-	 * object's single `fcompp`/`jne` and this pair is one compare too many
-	 * (finding F2300, which corrected nine such sites).  This is the tenth.
-	 * It is not one of the nine because its suite is green either way --
-	 * `x` is an int times 0.001f and cannot be a NaN, so the two tests
-	 * agree over every value that reaches them -- so there was no
-	 * differential failure to drive the change and nothing to prove it
-	 * with beyond the codegen tier.  Whoever measures that next should
-	 * take it.
-	 */
-	if (xf < 0.0f || xf > 0.0f) {
-		edprintf("V90PreFilter: Setting timing parameters " "(registry)...\r\n");
-		p = params;
-		V90PF(p)[0x84 / 4] = xf;
-		for (i = 0; i < 18; i++)
-			V90PW(p)[0x88 / 4 + i] = V90PW(p)[0x110 / 4 + i];
-	}
-
-	p = params;
-	V90PW(p)[0x460 / 4] = V90PW(p)[0x490 / 4];
-	V90PW(p)[0x40c / 4] = V90PW(p)[0x488 / 4];
-	V90PW(p)[0x410 / 4] = V90PW(p)[0x484 / 4];
-	V90PW(p)[0x414 / 4] = V90PW(p)[0x48c / 4];
-}
-
 /*
  * reset -- the FIR's own reset, then the type 1 bank at gain 0.
  *
@@ -674,17 +685,6 @@ V90PreFilter::setParamEia6()
  * would have shown as a plain zero.  CLAUDE.md's tools/dis.py rule, in the
  * smallest possible instance.
  */
-void
-V90PreFilter::reset()
-{
-	FloatFIR::reset();
-
-	refLoop = -1;
-	gain = 0;
-
-	setCoefficients(&V90PreFilter::preFilterCoefType1[0][0], 20);
-}
-
 /* ================================================================ lifecycle */
 
 /*

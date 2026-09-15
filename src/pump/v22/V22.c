@@ -1,39 +1,4 @@
-/*
- * v22fp.c -- V.22 / V.22bis: the datapump object's constructor, destructor
- * and per-block entry point.
- *
- *   V22FP_create   .text 0x087990  2,449 bytes
- *   V22FP_delete   .text 0x088330    332 bytes
- *   V22FP_modem    .text 0x0887b0    346 bytes
- *   V22_PROTOCOL   .rodata 0x008544   28 bytes, LOCAL
- *
- * See include/dsplib/v22fp.h for the layout and where each field's name comes
- * from.  What is worth saying beside the code:
- *
- * THE SECOND ARGUMENT TO THE FOUR `*_free` CALLS IS DROPPED.  `V22FP_delete`
- * pushes a literal 1 as a second argument to `V22_PPS_free`, `V22_MRF_free`,
- * `V22_SRE_free` and `V22_FSE_free`, four times over with a fresh `mov $0x1`
- * each time, so the author declared those four with a second parameter.  None
- * of the four reads it -- each touches only `0x4(%esp)` or `0x10(%esp)`, which
- * is the first -- and this tree reconstructed all four from their own bodies
- * with one parameter apiece.  Adding a second would mean changing four
- * headers, one of which (v22_fse.h) another effort owns.  cdecl is
- * caller-cleaned and the callee never looks, so nothing observable turns on
- * it; recorded here so that a later reader finding the push is not left
- * thinking an argument went missing.
- *
- * CREATE DOES NOT CHECK ANY ALLOCATION.  Eleven `sysdep_malloc` calls, no
- * NULL test on any of them, and the very next instruction after the first
- * dereferences it.  `B103FP_create` in the same object does check.  Faithful,
- * and it is why `V22FP_create` cannot be handed a zeroed buffer either: the
- * `fp != NULL` path reads `fp->dsp` immediately.
- *
- * THE THROWAWAY OSCILLATOR.  Three of the object's coefficient sets are not
- * stored tables at all -- they are a stored PROTOTYPE multiplied sample by
- * sample by a carrier that create synthesises with an `fpm_tone` object built
- * for the purpose, retuned three times, and deleted before create returns.
- * That is why `FPM_TONE_generate2` appears in a constructor.
- */
+/* V22.c -- V.22 datapump construction and its V22-family helpers. */
 
 #include <string.h>
 
@@ -61,10 +26,9 @@
 
 /*
  * FILE-LOCAL IN THE OBJECT.  `nm ref/slmodemd/dsplibs.o` gives all three a
- * lower-case `d`/`r`, and the reference's FILE structure puts them in a
- * data-only unit; the three have exactly one consumer here (this file), so
- * they live here and are `static`, which is also what the note the tables
- * carried on the reference side always said.  Tests reach them through the
+ * lower-case `d`/`r`, and the reference's LOCAL records belong to V22.c.
+ * Their consumer, V22FP_create, shares that owner.  They remain `static`;
+ * tests reach them through the
  * globalized test copy (tools/testvisible.py).
  */
 
@@ -97,15 +61,6 @@ static short V22DiconnectThreshTable[V22_DISCONNECT_THRESHOLDS] = {
  * values are carried unexplained because they are the object's and no reader
  * of them exists on this path.
  */
-static const struct fpm_tone_cfg TONEv22_CFG = {
-	2100, 11587, 0, 2981,		/* freq, scale, rev_period, ratio    */
-	328, 1, 31457, 0,		/* f08, min_level, damp, pad0e       */
-	0,				/* src -- patched by V22FP_create    */
-	53, { 0, 0, 0 },		/* len, r16                          */
-	40, 0,				/* rev_thresh, rev_lag -- see below  */
-	0, 0				/* extra, pad22                      */
-};
-
 static const struct fpm_tone_cfg TONEv22INIT_CFG = {
 	2100, 11587, 0, 2981,
 	328, 1, 31457, 0,
@@ -113,6 +68,15 @@ static const struct fpm_tone_cfg TONEv22INIT_CFG = {
 	53, { 0, 0, 0 },
 	40, 0,
 	0, 0
+};
+
+static const struct fpm_tone_cfg TONEv22_CFG = {
+	2100, 11587, 0, 2981,		/* freq, scale, rev_period, ratio    */
+	328, 1, 31457, 0,		/* f08, min_level, damp, pad0e       */
+	0,				/* src -- patched by V22FP_create    */
+	53, { 0, 0, 0 },		/* len, r16                          */
+	40, 0,				/* rev_thresh, rev_lag -- see below  */
+	0, 0				/* extra, pad22                      */
 };
 
 /*
@@ -466,181 +430,6 @@ V22FP_delete(struct v22fp *fp)
 	sysdep_free(fp->dsp);
 	sysdep_free(fp);
 }
-
-/*
- * V22FP_GetDiagnostics lives in `v22ctl.c`.  It was reconstructed twice, in
- * two waves, with identical bodies and identical signatures; the banner here
- * also had its size wrong (33 against the object's 0x15 = 21), which is what
- * `tools/bannercheck.py` exists to catch.
- */
-
-/*
- * ---------------------------------------------------------------------------
- * V22FP_modem -- .text 0x0887b0, 346 bytes.
- *
- * One block of the modulation, and the only caller of the seven-state
- * machine.  It is a marshalling layer with one piece of policy in it:
- *
- *   1. stage the caller's transmit words, int to short, into
- *      `tx_in_internal`;
- *   2. stage the caller's input samples, right-shifted by `hdx->rx_shift`, into
- *      `rx_in_internal`;
- *   3. dispatch through `V22_PROTOCOL[hdx->protocol]`;
- *   4. take the symbol count back, and -- THE POLICY -- move the machine to
- *      state 0 for five values of `fp->status`;
- *   5. copy `rx_out_internal` out to the caller's int array;
- *   6. scale exactly V22_TX_BLOCK transmit samples by `params.tx_gain` in Q15;
- *   7. report no symbols at all unless `fp->status` is zero.
- *
- * THE COUNTS CHANGE WIDTH ACROSS THE CALL.  The caller's are `int`; the
- * handlers' are `unsigned short` (finding F8534), and the two 16-bit slots
- * live side by side on this function's own stack.  Only the RECEIVE count is
- * written back -- the transmit count the handler leaves is dropped on the
- * floor, which is the object's and not an omission here.
- *
- * THE RETURN IS THE WHOLE 32-BIT WORD AT fp+0x1c, not `fp->status`: the
- * object emits `mov 0x1c(%ebp),%eax` where a byte field would force a
- * `movzbl`, and the same four bytes are read as a BYTE three times in the
- * lines above it.  `B103FP_modem` does exactly this, and this file follows
- * its spelling.  A draft argued that no test could separate the two readings
- * because `v22_process` only looks at the low byte; the test separated them
- * on the first call, 0 against 17664 (finding F8538).  Measure, do not argue.
- */
-
-/*
- * The three staging buffers, with the original's own names, from .bss:0x3a0,
- * 0x480 and 0x560.  All three are file-static in the object, so two V.22
- * datapumps in one process share them -- reproduced as-is, exactly as
- * b103fp.c reproduces its pair.  The names COLLIDE across modules: `nm` finds
- * three `tx_in_internal` and three `rx_out_internal` in the 1.2 MB, so
- * `tools/symmap.py` can only alias the unique one, `rx_in_internal`.
- *
- * The element types are the handler signature's, which is what forces them:
- * the two the handler sees as symbols are `unsigned short` -- the copy-out
- * below is a `movzwl` -- and the sample buffer is `short`.
- */
-#define V22FP_TX_IN_ENTRIES	100	/* .bss 0x3a0, 0xc8 bytes */
-#define V22FP_RX_OUT_ENTRIES	100	/* .bss 0x480, 0xc8 bytes */
-#define V22FP_RX_IN_ENTRIES	160	/* .bss 0x560, 0x140 bytes */
-
-static unsigned short tx_in_internal[V22FP_TX_IN_ENTRIES];
-static unsigned short rx_out_internal[V22FP_RX_OUT_ENTRIES];
-static short rx_in_internal[V22FP_RX_IN_ENTRIES];
-
-/*
- * The seven protocol states, in the object's own order -- `.rodata` + 0x8544,
- * 28 bytes, LOCAL (`nm` shows a lower-case `r`, so `static const`).  Each
- * entry carries a RELOCATION naming its handler, so the order below is read
- * off the object rather than inferred; `include/dsplib/v22status.h` records
- * the same seven against `V22_status`'s own parallel table.
- *
- * `hdx->protocol` indexes it, sign-extended and WITH NO BOUNDS CHECK.
- */
-static void (* const V22_PROTOCOL[7])(struct v22fp *fp, unsigned short *txsym,
-				      short *txout, short *rxin,
-				      unsigned short *rxsym,
-				      unsigned short *txcount,
-				      unsigned short *rxcount) = {
-	v22_data,		/* 0 */
-	v22_originate,		/* 1 */
-	v22_answer,		/* 2 */
-	v22_local_loop,		/* 3 */
-	v22_org_rmloop2,	/* 4 */
-	v22_ans_rmloop2,	/* 5 */
-	v22_retrain		/* 6 */
-};
-
-int
-V22FP_modem(struct v22fp *fp, const int *tx_bits, short *tx_out,
-	    const short *rx_in, int *rx_bits, int *n_tx, int *n_rx)
-{
-	/*
-	 * The handler's own pair, sixteen bits wide and adjacent on the
-	 * stack.  Both are seeded from the caller's before anything else
-	 * happens, which matters: the second staging loop below reads
-	 * `*n_rx` and the handler is handed the copy, not the original.
-	 */
-	unsigned short tx_syms = (unsigned short)*n_tx;
-	unsigned short rx_syms = (unsigned short)*n_rx;
-	int i;
-
-	/*
-	 * Three flag bits and one more in the next byte, cleared on entry to
-	 * every block.  What they indicate is NOT established -- nothing
-	 * reconstructed reads either byte -- so they stay masks with the
-	 * instruction beside them rather than becoming names that would be
-	 * believed.  `andb $0xf8,0x1d` and `andb $0xfd,0x1e`.
-	 */
-	fp->flags &= (unsigned char)~0x07;
-	fp->r1e[0] &= (unsigned char)~0x02;
-
-	/* Stage the transmit words, narrowing int to short. */
-	for (i = 0; i < *n_tx; i++)
-		tx_in_internal[i] = (unsigned short)tx_bits[i];
-
-	/*
-	 * Stage the input samples, right-shifted by the receive input shift.
-	 * The load is `movswl` and the shift `sar`, so the arithmetic is
-	 * signed; the shift count is `movzwl`, so `hdx->rx_shift` is read as an
-	 * unsigned sixteen-bit field.
-	 */
-	for (i = 0; i < *n_rx; i++)
-		rx_in_internal[i] =
-			(short)((int)rx_in[i] >> fp->hdx->rx_shift);
-
-	V22_PROTOCOL[fp->hdx->protocol](fp, tx_in_internal, tx_out, rx_in_internal,
-				   rx_out_internal, &tx_syms, &rx_syms);
-
-	*n_rx = rx_syms;
-
-	/*
-	 * THE STATE TRANSITION, which no handler carries: five status values
-	 * put the machine back into state 0 -- `v22_data` -- with its
-	 * sub-state cleared.  3 is V22_MSG_CONNECT_2400 and 4 is the 1200
-	 * connect (finding F8538, from `v22_process`'s own jump table), so
-	 * this reads as "any connect code enters the data state"; 6, 7 and 8
-	 * are named by nothing and stay values.  Two separate range tests in
-	 * the object, in this order, with the status byte re-read between
-	 * them.
-	 */
-	if (fp->status == 3 || fp->status == 4) {
-		fp->hdx->protocol = 0;
-		fp->hdx->connect_substate = 0;
-	}
-	if (fp->status >= 6 && fp->status <= 8) {
-		fp->hdx->protocol = 0;
-		fp->hdx->connect_substate = 0;
-	}
-
-	/* Widen the recovered symbols back out to int. */
-	for (i = 0; i < *n_rx; i++)
-		rx_bits[i] = rx_out_internal[i];
-
-	/*
-	 * The transmit output gain, Q15, over exactly V22_TX_BLOCK samples --
-	 * a literal 160 in the object and not `*n_tx` or a parameter, which is
-	 * the same block length `TxNOP` emits.  `params.tx_gain` is 13014 in the
-	 * template, which is 0.397.
-	 */
-	for (i = 0; i < V22_TX_BLOCK; i++)
-		tx_out[i] = (short)(((int)tx_out[i] * fp->params.tx_gain) >> 15);
-
-	/*
-	 * Anything but status 0 reports NO received symbols, whatever the
-	 * handler said -- and this happens AFTER the copy-out above, so the
-	 * caller's array is still written and only the count is suppressed.
-	 */
-	if (fp->status != 0)
-		*n_rx = 0;
-
-	{
-		int word;
-
-		memcpy(&word, &fp->status, sizeof word);
-		return word;
-	}
-}
-
 /*
  * ---------------------------------------------------------------------------
  * The layout, held to the compiler.

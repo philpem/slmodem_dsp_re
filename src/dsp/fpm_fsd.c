@@ -52,19 +52,6 @@ FPM_FSD_init(struct fpm_fsd *state, const struct fpm_fsd_cfg *cfg, int fresh)
 }
 
 /*
- * Frees all three buffers unconditionally but *not* the state, which is the
- * opposite of FPM_TONE_delete.  The caller owns the state -- B103FP_create
- * embeds it in a larger block rather than allocating it separately.
- */
-void
-FPM_FSD_free(struct fpm_fsd *state)
-{
-	sysdep_free(state->trace);
-	sysdep_free(state->iir_hist);
-	sysdep_free(state->fir_hist);
-}
-
-/*
  * ---------------------------------------------------------------------------
  * The demodulator.
  *
@@ -226,6 +213,19 @@ FPM_FSD_demodulate(struct fpm_fsd *state, const short *samples,
 	state->hist_idx = (short)idx;
 	state->last_count = (short)count;
 	return (short)(unsigned short)nbits;
+}
+
+/*
+ * Frees all three buffers unconditionally but *not* the state, which is the
+ * opposite of FPM_TONE_delete.  The caller owns the state -- B103FP_create
+ * embeds it in a larger block rather than allocating it separately.
+ */
+void
+FPM_FSD_free(struct fpm_fsd *state)
+{
+	sysdep_free(state->trace);
+	sysdep_free(state->iir_hist);
+	sysdep_free(state->fir_hist);
 }
 
 /*

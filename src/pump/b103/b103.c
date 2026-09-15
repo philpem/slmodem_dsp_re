@@ -95,38 +95,6 @@ dp_b103_init(void)
 	return 0;
 }
 
-void
-dp_b103_exit(void)
-{
-	modem_dp_deregister(DP_B103, &b103_ops);
-	modem_dp_deregister(DP_V21, &b103_ops);
-}
-
-/*
- * ---------------------------------------------------------------------------
- * b103_create -- .text 0x005400, 406 bytes.
- *
- * The glue: allocate the datapump's own state, wire a dp_wrapper in front of
- * b103_process, and build the B103FP configuration from the two arguments
- * that actually carry information.
- *
- * THE CONFIGURATION IS BUILT HERE, not taken from B103_CFG.  That is what
- * makes a link possible -- `B103_CFG` is the loopback template and would
- * never complete a call (docs/configuration.md).  Only two of its seven words
- * depend on the caller:
- *
- *     call_type = (caller == 0)     0 originate, 1 answer
- *     v21       = (id == DP_V21)
- *
- * Note the polarity of the first: `caller` non-zero means this station placed
- * the call, which is `B103_CALL_ORIGINATE`, which is **zero**.  The two
- * senses are opposite and the `sete` is what flips them.
- *
- * The remaining five are constants, and two of them differ from the built-in
- * template in ways that matter: the answer-tone timeout is 60000 ticks rather
- * than 14000 -- 3000 blocks rather than 700 -- and the transmit scale is 6200
- * rather than 3200.
- */
 static struct dp *
 b103_create(void *modem, int id, int caller, int srate, int max_frag,
 	    struct dp_operations *op)
@@ -173,6 +141,40 @@ b103_create(void *modem, int id, int caller, int srate, int max_frag,
 
 	return &dp->dp;
 }
+void
+dp_b103_exit(void)
+{
+	modem_dp_deregister(DP_B103, &b103_ops);
+	modem_dp_deregister(DP_V21, &b103_ops);
+}
+
+
+/*
+ * ---------------------------------------------------------------------------
+ * b103_create -- .text 0x005400, 406 bytes.
+ *
+ * The glue: allocate the datapump's own state, wire a dp_wrapper in front of
+ * b103_process, and build the B103FP configuration from the two arguments
+ * that actually carry information.
+ *
+ * THE CONFIGURATION IS BUILT HERE, not taken from B103_CFG.  That is what
+ * makes a link possible -- `B103_CFG` is the loopback template and would
+ * never complete a call (docs/configuration.md).  Only two of its seven words
+ * depend on the caller:
+ *
+ *     call_type = (caller == 0)     0 originate, 1 answer
+ *     v21       = (id == DP_V21)
+ *
+ * Note the polarity of the first: `caller` non-zero means this station placed
+ * the call, which is `B103_CALL_ORIGINATE`, which is **zero**.  The two
+ * senses are opposite and the `sete` is what flips them.
+ *
+ * The remaining five are constants, and two of them differ from the built-in
+ * template in ways that matter: the answer-tone timeout is 60000 ticks rather
+ * than 14000 -- 3000 blocks rather than 700 -- and the transmit scale is 6200
+ * rather than 3200.
+ */
+
 
 /*
  * b103_delete -- .text 0x0055a0, 72 bytes.

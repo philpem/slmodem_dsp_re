@@ -31,17 +31,6 @@
 struct fpm_sdm_cfg SDM_CFG = { 4, 5, 23 };
 
 void
-SDM_init(struct fpm_sdm *sdm, const struct fpm_sdm_cfg *cfg)
-{
-	sdm->reg = 0;
-	sdm->cfg = *cfg;
-	sdm->mask = (1 << sdm->cfg.nbits) - 1;
-	sdm->notmask = ~sdm->mask;
-	sdm->shift1 = (short)(sdm->cfg.tap1 - sdm->cfg.nbits);
-	sdm->shift2 = (short)(sdm->cfg.tap2 - sdm->cfg.nbits);
-}
-
-void
 SDM_scrambler(struct fpm_sdm *sdm, unsigned short *data, unsigned short count)
 {
 	const int nbits = sdm->cfg.nbits;
@@ -63,6 +52,19 @@ SDM_scrambler(struct fpm_sdm *sdm, unsigned short *data, unsigned short count)
 
 	sdm->reg = reg;
 }
+void
+SDM_init(struct fpm_sdm *sdm, const struct fpm_sdm_cfg *cfg)
+{
+	sdm->reg = 0;
+	sdm->cfg = *cfg;
+	sdm->mask = (1 << sdm->cfg.nbits) - 1;
+	sdm->notmask = ~sdm->mask;
+	sdm->shift1 = (short)(sdm->cfg.tap1 - sdm->cfg.nbits);
+	sdm->shift2 = (short)(sdm->cfg.tap2 - sdm->cfg.nbits);
+}
+
+
+
 
 void
 SDM_descrambler(struct fpm_sdm *sdm, unsigned short *data, unsigned short count)

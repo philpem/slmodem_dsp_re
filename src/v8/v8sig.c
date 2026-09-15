@@ -33,26 +33,6 @@ v8_ansaminit(struct v8 *v)
 }
 
 /*
- * Four samples of the queued tone.  A 14-bit phase accumulator stepped by
- * the period, read out of the cosine table with the usual rounding -- the
- * same idiom as the dialler's DTMF, at a different width.
- */
-void
-v8_TONEq_generate(struct v8 *v, short *out)
-{
-	int i;
-
-	for (i = 0; i < V8_QUEUE_BLOCK; i++) {
-		unsigned phase = (unsigned)(unsigned short)v->toneq_pending
-				 + (unsigned short)v->toneq_period;
-
-		phase &= 0x3fff;
-		v->toneq_pending = (short)phase;
-		out[i] = v8_cosread((unsigned char)((phase + 0x20) >> 6));
-	}
-}
-
-/*
  * Take four samples out of the symbol buffer and into the receive staging
  * buffer, stepping four bytes at a time -- every other short, so the real
  * half of each complex pair.  The buffer is a ring and wraps at its end.
@@ -74,6 +54,26 @@ v8_rxreadqueue(struct v8 *v)
 	}
 	v->tx_sym_a = src;
 	return 0;
+}
+
+/*
+ * Four samples of the queued tone.  A 14-bit phase accumulator stepped by
+ * the period, read out of the cosine table with the usual rounding -- the
+ * same idiom as the dialler's DTMF, at a different width.
+ */
+void
+v8_TONEq_generate(struct v8 *v, short *out)
+{
+	int i;
+
+	for (i = 0; i < V8_QUEUE_BLOCK; i++) {
+		unsigned phase = (unsigned)(unsigned short)v->toneq_pending
+				 + (unsigned short)v->toneq_period;
+
+		phase &= 0x3fff;
+		v->toneq_pending = (short)phase;
+		out[i] = v8_cosread((unsigned char)((phase + 0x20) >> 6));
+	}
 }
 
 /* The other direction: staging buffer into the transmit ring. */
@@ -117,33 +117,6 @@ v8_fsktxfilter(struct v8 *v, short sample)
 	}
 
 	return (short)(acc >> 16);
-}
-
-/*
- * Four samples of FSK.  The two carriers differ only in which increment is
- * added to the shared phase, so the branch is one field apart; everything
- * after -- table lookup, amplitude, shaping filter -- is common.
- */
-int
-v8_fskmodulate(struct v8 *v, short which)
-{
-	struct v8_v21_params *p = &v->v21_params;
-	short step = (short)(which != 0 ? p->carrier_b : p->carrier_a);
-	int i;
-
-	for (i = 0; i < V8_QUEUE_BLOCK; i++) {
-		unsigned phase;
-		short c;
-
-		phase = ((unsigned)(unsigned short)p->carrier_phase
-			 + (unsigned short)step) & 0x1fff;
-		p->carrier_phase = (short)phase;
-
-		c = v8_cosread((unsigned char)(phase >> 5));
-		v->tx_stage[i] = v8_fsktxfilter(v, v8_mpyint(c, p->tx_level));
-	}
-
-	return v8_txwritequeue(v);
 }
 
 /*
@@ -226,55 +199,30 @@ v8_agcadapt(struct v8 *v)
 }
 
 /*
- * Four samples of ANSam.
- *
- * Two phase accumulators: the carrier, and a slower one that modulates its
- * amplitude by twenty percent either way.  The amplitude itself is negated
- * every 1080 blocks, and that inversion is the whole point -- it is what
- * tells a listening modem this is ANSam and not a bare answer tone.
- *
- * The reversal counter only runs while the enable at +0x0e is set, so a
- * caller can have the tone without the reversals.
+ * Four samples of FSK.  The two carriers differ only in which increment is
+ * added to the shared phase, so the branch is one field apart; everything
+ * after -- table lookup, amplitude, shaping filter -- is common.
  */
-void
-v8_ansamgenerate(struct v8 *v, short *out)
+int
+v8_fskmodulate(struct v8 *v, short which)
 {
-	struct v8_tone *t = &v->tone;
+	struct v8_v21_params *p = &v->v21_params;
+	short step = (short)(which != 0 ? p->carrier_b : p->carrier_a);
 	int i;
 
 	for (i = 0; i < V8_QUEUE_BLOCK; i++) {
-		unsigned envelope;
-		unsigned carrier;
-		short depth;
-		short level;
+		unsigned phase;
+		short c;
 
-		envelope = ((unsigned)(unsigned short)t->envelope_phase
-			    + (unsigned short)t->envelope_step) & 0x3fff;
-		t->envelope_phase = (short)envelope;
+		phase = ((unsigned)(unsigned short)p->carrier_phase
+			 + (unsigned short)step) & 0x1fff;
+		p->carrier_phase = (short)phase;
 
-		carrier = ((unsigned)(unsigned short)t->carrier_phase
-			   + (unsigned short)t->carrier_step) & 0x3fff;
-		t->carrier_phase = (short)carrier;
-
-		depth = v8_mpyint(V8_ANSAM_DEPTH,
-				  v8_cosread((unsigned char)((envelope + 0x20)
-							     >> 6)));
-		level = v8_mpyint((short)(depth + V8_ANSAM_UNITY), t->amplitude);
-
-		out[i] = v8_fsktxfilter(v,
-			v8_mpyint(v8_cosread((unsigned char)((t->carrier_phase + 0x20)
-							     >> 6)), level));
+		c = v8_cosread((unsigned char)(phase >> 5));
+		v->tx_stage[i] = v8_fsktxfilter(v, v8_mpyint(c, p->tx_level));
 	}
 
-	if (t->reversal_enable == 0)
-		return;
-
-	if ((unsigned short)(t->reversal_count + 1) == V8_ANSAM_REVERSAL) {
-		t->reversal_count = 0;
-		t->amplitude = (short)-t->amplitude;
-	} else {
-		t->reversal_count = (short)(t->reversal_count + 1);
-	}
+	return v8_txwritequeue(v);
 }
 
 /*
@@ -341,6 +289,125 @@ V8Control(struct v8 *v, int what)
 		    "V8: V8Control called - control type is %s\n",
 		    v8ControlName[what]);
 	return rc;
+}
+
+/*
+ * Four samples of ANSam.
+ *
+ * Two phase accumulators: the carrier, and a slower one that modulates its
+ * amplitude by twenty percent either way.  The amplitude itself is negated
+ * every 1080 blocks, and that inversion is the whole point -- it is what
+ * tells a listening modem this is ANSam and not a bare answer tone.
+ *
+ * The reversal counter only runs while the enable at +0x0e is set, so a
+ * caller can have the tone without the reversals.
+ */
+void
+v8_ansamgenerate(struct v8 *v, short *out)
+{
+	struct v8_tone *t = &v->tone;
+	int i;
+
+	for (i = 0; i < V8_QUEUE_BLOCK; i++) {
+		unsigned envelope;
+		unsigned carrier;
+		short depth;
+		short level;
+
+		envelope = ((unsigned)(unsigned short)t->envelope_phase
+			    + (unsigned short)t->envelope_step) & 0x3fff;
+		t->envelope_phase = (short)envelope;
+
+		carrier = ((unsigned)(unsigned short)t->carrier_phase
+			   + (unsigned short)t->carrier_step) & 0x3fff;
+		t->carrier_phase = (short)carrier;
+
+		depth = v8_mpyint(V8_ANSAM_DEPTH,
+				  v8_cosread((unsigned char)((envelope + 0x20)
+							     >> 6)));
+		level = v8_mpyint((short)(depth + V8_ANSAM_UNITY), t->amplitude);
+
+		out[i] = v8_fsktxfilter(v,
+			v8_mpyint(v8_cosread((unsigned char)((t->carrier_phase + 0x20)
+							     >> 6)), level));
+	}
+
+	if (t->reversal_enable == 0)
+		return;
+
+	if ((unsigned short)(t->reversal_count + 1) == V8_ANSAM_REVERSAL) {
+		t->reversal_count = 0;
+		t->amplitude = (short)-t->amplitude;
+	} else {
+		t->reversal_count = (short)(t->reversal_count + 1);
+	}
+}
+
+static const short tone_in_a[2] = { -8057, 14787 };
+
+/*
+ * One biquad, direct form I, with the histories kept as four shorts: x1, x2
+ * then y1, y2.  The original writes them back in a fixed order that matters,
+ * because x2 takes the old x1 and y2 the old y1.
+ */
+static int
+biquad(short *x, short *y, const short *b, const short *a, int in)
+{
+	int acc = in;
+
+	acc += v8_mpyint(x[0], b[0]);
+	acc += v8_mpyint(x[1], b[1]);
+	acc -= v8_mpyint(y[0], a[0]);
+	acc -= v8_mpyint(y[1], a[1]);
+
+	x[1] = x[0];
+	y[1] = y[0];
+	x[0] = (short)in;
+	y[0] = (short)acc;
+
+	return acc;
+}
+
+/*
+ * The fixed input biquad every tone detector shares, in Q14.  The originals
+ * are called `a` and `b` -- local symbols of V8Detector.c, at .rodata+0x5724
+ * and +0x572a -- and both are three entries: `a[0]` is 0x4000, the implicit
+ * 1.0, and every reader skips it.  Kept two entries here because that is
+ * what the code uses.
+ */
+static const short tone_in_b[3] = { 15565, -8057, 15565 };
+/*
+ * The same two sections again, standing on their own.
+ *
+ * Nothing in the object calls either of them.  The compiler inlined copies
+ * into `v8_tone_detect` -- the same coefficients at .rodata+0x5726, the same
+ * histories -- and left the out-of-line originals behind, so these are what
+ * that code was written from.  Reconstructed because they are in the
+ * translation unit, not because anything reaches them.
+ *
+ * They are not quite the inlined code, either: each product is truncated to
+ * a short before it is accumulated here, and `v8_tone_detect` accumulates
+ * the full result.  That is visible in the object as a `cwtl` after every
+ * call, and it is why these cannot just call the helpers above.
+ */
+short
+notch_filter(const short *in, struct v8_detector *d)
+{
+	int acc = 0;
+	int i;
+
+	d->acc_c[0] = *in;
+	for (i = 0; i < 3; i++)
+		acc += (short)v8_mpyint(d->acc_c[i], tone_in_b[i]);
+	for (i = 0; i < 2; i++)
+		acc -= (short)v8_mpyint(d->acc_d[i], tone_in_a[i]);
+
+	d->acc_c[2] = d->acc_c[1];
+	d->acc_d[2] = d->acc_d[1];
+	d->acc_c[1] = d->acc_c[0];
+	d->acc_d[1] = d->acc_d[0];
+	d->acc_d[0] = (short)acc;
+	return (short)acc;
 }
 
 /*
@@ -425,73 +492,6 @@ v8_phase_rev_detect(struct v8_phase_rev *pr, const short *in, short count)
 	pr->corr = corr;
 	pr->energy = energy;
 	pr->smoothed = smoothed;
-}
-
-/*
- * The fixed input biquad every tone detector shares, in Q14.  The originals
- * are called `a` and `b` -- local symbols of V8Detector.c, at .rodata+0x5724
- * and +0x572a -- and both are three entries: `a[0]` is 0x4000, the implicit
- * 1.0, and every reader skips it.  Kept two entries here because that is
- * what the code uses.
- */
-static const short tone_in_b[3] = { 15565, -8057, 15565 };
-static const short tone_in_a[2] = { -8057, 14787 };
-
-/*
- * One biquad, direct form I, with the histories kept as four shorts: x1, x2
- * then y1, y2.  The original writes them back in a fixed order that matters,
- * because x2 takes the old x1 and y2 the old y1.
- */
-static int
-biquad(short *x, short *y, const short *b, const short *a, int in)
-{
-	int acc = in;
-
-	acc += v8_mpyint(x[0], b[0]);
-	acc += v8_mpyint(x[1], b[1]);
-	acc -= v8_mpyint(y[0], a[0]);
-	acc -= v8_mpyint(y[1], a[1]);
-
-	x[1] = x[0];
-	y[1] = y[0];
-	x[0] = (short)in;
-	y[0] = (short)acc;
-
-	return acc;
-}
-
-/*
- * The same two sections again, standing on their own.
- *
- * Nothing in the object calls either of them.  The compiler inlined copies
- * into `v8_tone_detect` -- the same coefficients at .rodata+0x5726, the same
- * histories -- and left the out-of-line originals behind, so these are what
- * that code was written from.  Reconstructed because they are in the
- * translation unit, not because anything reaches them.
- *
- * They are not quite the inlined code, either: each product is truncated to
- * a short before it is accumulated here, and `v8_tone_detect` accumulates
- * the full result.  That is visible in the object as a `cwtl` after every
- * call, and it is why these cannot just call the helpers above.
- */
-short
-notch_filter(const short *in, struct v8_detector *d)
-{
-	int acc = 0;
-	int i;
-
-	d->acc_c[0] = *in;
-	for (i = 0; i < 3; i++)
-		acc += (short)v8_mpyint(d->acc_c[i], tone_in_b[i]);
-	for (i = 0; i < 2; i++)
-		acc -= (short)v8_mpyint(d->acc_d[i], tone_in_a[i]);
-
-	d->acc_c[2] = d->acc_c[1];
-	d->acc_d[2] = d->acc_d[1];
-	d->acc_c[1] = d->acc_c[0];
-	d->acc_d[1] = d->acc_d[0];
-	d->acc_d[0] = (short)acc;
-	return (short)acc;
 }
 
 short

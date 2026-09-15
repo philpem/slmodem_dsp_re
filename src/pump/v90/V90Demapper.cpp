@@ -598,6 +598,12 @@ V90Demapper::hardDecision(short in)
  * with zero (`movl $0x0,0x28(%esi)`); a version that walked the member would
  * have to store it every iteration.
  */
+void
+V90Demapper::incrementRBSFramePosition()
+{
+	rbsFramePosition = (rbsFramePosition + 1) % V90DEMAPPER_CONSTELLATIONS;
+}
+
 int
 V90Demapper::process(unsigned char *out, unsigned int &nbits)
 {
@@ -660,12 +666,6 @@ V90Demapper::process(unsigned char *out, unsigned int &nbits)
  * it, it repeats it.  So the class advances the position two ways and only
  * this one is reachable from outside.
  */
-void
-V90Demapper::incrementRBSFramePosition()
-{
-	rbsFramePosition = (rbsFramePosition + 1) % V90DEMAPPER_CONSTELLATIONS;
-}
-
 /*
  * `updateConstelation` -- 286 bytes at 0x312f0, and the author's spelling of
  * the name, with one `l`, is the blob's and is kept.
@@ -727,210 +727,6 @@ V90Demapper::incrementRBSFramePosition()
  * an explicit `cmpl $0x1,dsplibs_debug_level; ja`, which is `DSPLIB_DEBUG_ON()`
  * written out.  Every `edprintf` site in this file is unconditional because
  * the level gate lives inside `edprintf` instead.
- */
-void
-V90Demapper::updateConstelation()
-{
-	unsigned short i, j;
-
-	for (i = 0; i < V90DEMAPPER_CONSTELLATIONS; i++) {
-		unsigned short n;
-
-		if (adiDetector->altRbsFlag[i] != 0)
-			n = 2 * constellationSize[i];
-		else
-			n = constellationSize[i];
-
-		for (j = 0; j < n; j++)
-			if (adiDetector->magnitudeCount[i][j] != 0)
-				constellation[i][j] = (short)
-				    (1.0F / adiDetector->magnitudeCount[i][j] *
-				     adiDetector->magnitudeSum[i][j] + 0.5F);
-	}
-
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("V90Demapper: constelation update !!!\n");
-}
-
-/*
- * `resetNoSpectral` -- 605 bytes at 0x30cf0.  Rebuild the whole demapper from
- * a `V90MappingParams` and the detector's two measured mapping tables, with
- * no spectral shaping involved; `reset` is the other half of the pair and is
- * not written here.
- *
- * WHAT THE ARGUMENT SUPPLIES: the frame's bit count at its +0x00, the six row
- * lengths at its +0x604, and the six 128-byte tables of CODES at its +0x004.
- * `V90MappingParams.h` names all three from the three unmangled functions that
- * read them, and this is a second reader agreeing with that map.
- *
- * A CODE IS AN `unsigned char` AND IS NOT BOUNDED BY 128.  The object loads it
- * with `movzbl 0x4(%ecx,%ebp,1)` and adds it to `i * 128` before scaling by
- * two, so a byte of 128 or more indexes past its own row of `linMapp` and into
- * the next one.  That is the object's arithmetic and is reproduced rather than
- * clamped; `t_v90demap.cpp` counts the trials that reach it.
- *
- * THE DOUBLED ARM LAYS THE PAIR DOWN LARGER FIRST, and the comparison is
- * SIGNED and 16-BIT: `cmp %cx,%bx` with `jle` at 0x30dab, the two values
- * loaded `movzwl` from `linMapp` and `linMappAlt` and never widened.  On the
- * `jle` arm -- so on EQUAL as well as smaller -- `linMappAlt` is written
- * first, which is what a `>` and not a `>=` puts there.
- *
- * `k` IS A `short` AND IT LIVES ONLY IN THE DOUBLED ARM.  Its two increments
- * per iteration are truncated to 16 bits every time (`inc %edx; movswl %dx,%edx`
- * at 0x30dc0 and `lea 0x1(%edx),%eax; cwtl` at 0x30dc9), while the plain arm
- * indexes with `j` itself -- `inc %ecx` with no truncation and a 32-bit
- * unsigned `ja`.  Hoisting one counter out of the `if` would give the plain
- * arm truncations the object does not have, and no differential test could
- * see the difference, so this one is settled by the encoding alone.
- *
- * THE SEVEN WORDS AT +0x648 ARE THE EMBEDDED `ModulusDecoder`, and they are
- * written as seven field assignments rather than as the seven-argument
- * constructor the mangling advertises.  That constructor is DECLARED AND NOT
- * DEFINED in this tree -- the blob has it out of line at 0x320b0 and 0x32070
- * and nobody has reconstructed it -- so spelling it here would add a symbol
- * outside this batch's closure.  The object inlines whatever the original
- * wrote: seven plain `mov`s in the scheduler's order, 0, 3, 4, 1, 2, 5, 6,
- * which is not a source order and is not chased (finding F617).
- *
- * `histogramIntegration` BEFORE `histogramDelay` is the object's order and
- * costs nothing to adopt; both are plain stores after the call, so it is a
- * hint and not evidence.
- */
-void
-V90Demapper::resetNoSpectral(V90MappingParams *mapp)
-{
-	unsigned int i, j;
-
-	bitsPerFrame = mapp->word_0;
-	word_08 = bitsPerFrame - signBitsPerFrame;
-
-	if (params->DEBUG_DEMAPPER_ERROR_HISTOGRAM) {
-		printErrorHistogramAndReset();
-		histogramIntegration = 0;
-		histogramDelay = params->DEMAPPER_DELAY_BEFORE_ERROR_HISTOGRAM;
-	}
-
-	for (i = 0; i < V90DEMAPPER_CONSTELLATIONS; i++) {
-		constellationSize[i] = mapp->constellationSize[i];
-
-		if (adiDetector->altRbsFlag[i] != 0) {
-			short k = 0;
-
-			for (j = 0; j < constellationSize[i]; j++) {
-				unsigned char c = mapp->constellation[i][j];
-
-				if (adiDetector->linMapp[i][c] >
-				    adiDetector->linMappAlt[i][c]) {
-					constellation[i][k] =
-					    adiDetector->linMapp[i][c];
-					k++;
-					constellation[i][k] =
-					    adiDetector->linMappAlt[i][c];
-					k++;
-				} else {
-					constellation[i][k] =
-					    adiDetector->linMappAlt[i][c];
-					k++;
-					constellation[i][k] =
-					    adiDetector->linMapp[i][c];
-					k++;
-				}
-			}
-		} else {
-			for (j = 0; j < constellationSize[i]; j++)
-				constellation[i][j] = adiDetector->linMapp[i]
-				    [mapp->constellation[i][j]];
-		}
-	}
-
-	modulusDecoder.field_00 = constellationSize[0];
-	modulusDecoder.field_04 = constellationSize[1];
-	modulusDecoder.field_08 = constellationSize[2];
-	modulusDecoder.field_0c = constellationSize[3];
-	modulusDecoder.field_10 = constellationSize[4];
-	modulusDecoder.field_14 = constellationSize[5];
-	modulusDecoder.field_18 = word_08;
-	signDecoder.prev_ = 0;
-}
-
-/*
- * `reset` -- 723 bytes at 0x30870, and `resetNoSpectral`'s other half: the
- * same rebuild of the six constellations, with the SIGN-BIT geometry taken
- * from the mapping block, the sign-bit extractor re-armed, the histogram
- * emptied and the detector's cumulative cells cleared.
- *
- * WHAT `resetNoSpectral` DOES NOT DO, in the order the object does it:
- *
- *   - the four sign-bit words at +0x0c .. +0x14 from `mapp->shaperSR`;
- *   - `V90SignBitsExtractor::reset(shaperSR, 0)` on the embedded extractor;
- *   - the cursor, the frame start and the RBS position back to zero;
- *   - both 3,072-byte histogram arrays cleared IN FULL, 6 x 128 and not
- *     `constellationSize[i]` (`cmp $0x7f,%edx; jbe` at 0x30a8f -- a constant);
- *   - the histogram delay reseeded, and `clearCamulativeVal` over all 768
- *     cells of the detector;
- *   - the linear-mapping study's six words zeroed.
- *
- * And what it does NOT have that `resetNoSpectral` does: there is no
- * `DEBUG_DEMAPPER_ERROR_HISTOGRAM` arm and no call to
- * `printErrorHistogramAndReset`.  The histogram is emptied here rather than
- * printed.
- *
- * THE SIGN-BIT GEOMETRY IS ALL ONE FIELD.  `mapp->shaperSR` (+0x620) becomes
- * `signBitGroups` unchanged, `6 - it` becomes `signBitsPerFrame` and `6 / it`
- * becomes `signBitGroupSize`; `groups * groupSize == 6` and `groups *
- * (groupSize - 1) == 6 - groups` are the two identities the header derives
- * those names from, and both hold.  The same word is the extractor's
- * `spacing`.
- *
- * THE DIVIDE IS UNSIGNED AND IT IS GUARDED, and both halves are forced.
- * `f7 74 24 20  divl 0x20(%esp)` at 0x308b6 is `div` and not `idiv`, which is
- * what makes `V90DEMAPPER_FRAME`'s `6u` the right spelling of the numerator
- * -- `6 / (int)` would be a signed division.  And `test %esi,%esi; je` at
- * 0x308a7 skips it, so a zero `shaperSR` LEAVES `signBitGroupSize` UNWRITTEN:
- * that is a real early-out and not a fold, the field keeps whatever it held,
- * and `t_v90demap.cpp` plants a recognisable value in it to see that happen.
- * The callee guards its own divide the same way, so a zero spacing is a
- * runnable input on both sides and not a #DE.
- *
- * THE LOOP BOUND IS A COPY OF THE MAPPING BLOCK'S LENGTH AND NOT THE MEMBER
- * JUST WRITTEN FROM IT.  The object loads `mapp->constellationSize[i]` into
- * `%eax`, spills it to `0x18(%esp)`, stores it to `constellationSize[i]`, and
- * every loop compare reads the SPILL.  The two readings are the same number
- * except when the doubled arm's overrun reaches `constellationSize` itself --
- * which it can, for the sixth row, exactly as the header documents -- so the
- * local below is what the object encodes and re-reading the member would not
- * be.  `resetNoSpectral` is spelled the other way and its object does not
- * decide between them.
- *
- * EVERYTHING ELSE IN THE TWO CONSTELLATION LOOPS IS `resetNoSpectral`'S, down
- * to the `short k` that lives only in the doubled arm and is truncated to 16
- * bits on every step (`inc %edx; movswl %dx,%edx` at 0x3091d, `lea 0x1(%edx),
- * %eax; cwtl` at 0x30929) while the plain arm indexes with `j` itself.  The
- * larger of the two mapping tables is laid down first and the comparison is
- * SIGNED and 16-BIT -- `cmp %cx,%bx` with `jg` at 0x30977, so EQUAL puts
- * `linMappAlt` first, which is what a `>` and not a `>=` gives.
- *
- * THE HISTOGRAM DELAY IS BOUNDED BY A LENGTH FROM THE OTHER END OF THE
- * PARAMETER BLOCK, and this is what the object says rather than something
- * that reads naturally:
- *
- *     30aa4:  8b 83 30 05 00 00  mov  0x530(%ebx),%eax   ; DEMAPPER_DELAY_...
- *     30aaa:  3b 83 6c 03 00 00  cmp  0x36c(%ebx),%eax   ; TRN2D_DD_LENGTH
- *     30ab0:  7c 02              jl   30ab4
- *     30ab2:  31 c0              xor  %eax,%eax
- *     30ab4:  89 85 94 1e 00 00  mov  %eax,0x1e94(%ebp)
- *
- * so a delay that is not SHORTER than `TRN2D_DD_LENGTH` is taken as zero,
- * which starts the histogram immediately.  `jl` is the signed branch and both
- * parameters are `int`.  No rationale is offered here for why those two
- * quantities are compared; the instructions are.
- *
- * `decisionCode` (+0x1eac) IS NOT WRITTEN, and its neighbour +0x1eae is.  The
- * store block at 0x30b04..0x30b34 covers +0x1eb0, +0x1eae, +0x1ea4, +0x1ea6,
- * +0x1e9c, +0x1ea8 and +0x1eb4 and skips the one between the first two;
- * `resetLinearMappStudy` leaves it alone in the same way.  Their order is the
- * scheduler's -- seven plain stores with no call between them, finding F617 --
- * and what is in the object is their WIDTHS, which the header declares.
  */
 void
 V90Demapper::reset(V90MappingParams *mapp)
@@ -1022,6 +818,210 @@ V90Demapper::reset(V90MappingParams *mapp)
 	linearMappStudyEnabled = 0;
 }
 
+void
+V90Demapper::resetNoSpectral(V90MappingParams *mapp)
+{
+	unsigned int i, j;
+
+	bitsPerFrame = mapp->word_0;
+	word_08 = bitsPerFrame - signBitsPerFrame;
+
+	if (params->DEBUG_DEMAPPER_ERROR_HISTOGRAM) {
+		printErrorHistogramAndReset();
+		histogramIntegration = 0;
+		histogramDelay = params->DEMAPPER_DELAY_BEFORE_ERROR_HISTOGRAM;
+	}
+
+	for (i = 0; i < V90DEMAPPER_CONSTELLATIONS; i++) {
+		constellationSize[i] = mapp->constellationSize[i];
+
+		if (adiDetector->altRbsFlag[i] != 0) {
+			short k = 0;
+
+			for (j = 0; j < constellationSize[i]; j++) {
+				unsigned char c = mapp->constellation[i][j];
+
+				if (adiDetector->linMapp[i][c] >
+				    adiDetector->linMappAlt[i][c]) {
+					constellation[i][k] =
+					    adiDetector->linMapp[i][c];
+					k++;
+					constellation[i][k] =
+					    adiDetector->linMappAlt[i][c];
+					k++;
+				} else {
+					constellation[i][k] =
+					    adiDetector->linMappAlt[i][c];
+					k++;
+					constellation[i][k] =
+					    adiDetector->linMapp[i][c];
+					k++;
+				}
+			}
+		} else {
+			for (j = 0; j < constellationSize[i]; j++)
+				constellation[i][j] = adiDetector->linMapp[i]
+				    [mapp->constellation[i][j]];
+		}
+	}
+
+	modulusDecoder.field_00 = constellationSize[0];
+	modulusDecoder.field_04 = constellationSize[1];
+	modulusDecoder.field_08 = constellationSize[2];
+	modulusDecoder.field_0c = constellationSize[3];
+	modulusDecoder.field_10 = constellationSize[4];
+	modulusDecoder.field_14 = constellationSize[5];
+	modulusDecoder.field_18 = word_08;
+	signDecoder.prev_ = 0;
+}
+
+void
+V90Demapper::updateConstelation()
+{
+	unsigned short i, j;
+
+	for (i = 0; i < V90DEMAPPER_CONSTELLATIONS; i++) {
+		unsigned short n;
+
+		if (adiDetector->altRbsFlag[i] != 0)
+			n = 2 * constellationSize[i];
+		else
+			n = constellationSize[i];
+
+		for (j = 0; j < n; j++)
+			if (adiDetector->magnitudeCount[i][j] != 0)
+				constellation[i][j] = (short)
+				    (1.0F / adiDetector->magnitudeCount[i][j] *
+				     adiDetector->magnitudeSum[i][j] + 0.5F);
+	}
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V90Demapper: constelation update !!!\n");
+}
+
+/*
+ * `resetNoSpectral` -- 605 bytes at 0x30cf0.  Rebuild the whole demapper from
+ * a `V90MappingParams` and the detector's two measured mapping tables, with
+ * no spectral shaping involved; `reset` is the other half of the pair and is
+ * not written here.
+ *
+ * WHAT THE ARGUMENT SUPPLIES: the frame's bit count at its +0x00, the six row
+ * lengths at its +0x604, and the six 128-byte tables of CODES at its +0x004.
+ * `V90MappingParams.h` names all three from the three unmangled functions that
+ * read them, and this is a second reader agreeing with that map.
+ *
+ * A CODE IS AN `unsigned char` AND IS NOT BOUNDED BY 128.  The object loads it
+ * with `movzbl 0x4(%ecx,%ebp,1)` and adds it to `i * 128` before scaling by
+ * two, so a byte of 128 or more indexes past its own row of `linMapp` and into
+ * the next one.  That is the object's arithmetic and is reproduced rather than
+ * clamped; `t_v90demap.cpp` counts the trials that reach it.
+ *
+ * THE DOUBLED ARM LAYS THE PAIR DOWN LARGER FIRST, and the comparison is
+ * SIGNED and 16-BIT: `cmp %cx,%bx` with `jle` at 0x30dab, the two values
+ * loaded `movzwl` from `linMapp` and `linMappAlt` and never widened.  On the
+ * `jle` arm -- so on EQUAL as well as smaller -- `linMappAlt` is written
+ * first, which is what a `>` and not a `>=` puts there.
+ *
+ * `k` IS A `short` AND IT LIVES ONLY IN THE DOUBLED ARM.  Its two increments
+ * per iteration are truncated to 16 bits every time (`inc %edx; movswl %dx,%edx`
+ * at 0x30dc0 and `lea 0x1(%edx),%eax; cwtl` at 0x30dc9), while the plain arm
+ * indexes with `j` itself -- `inc %ecx` with no truncation and a 32-bit
+ * unsigned `ja`.  Hoisting one counter out of the `if` would give the plain
+ * arm truncations the object does not have, and no differential test could
+ * see the difference, so this one is settled by the encoding alone.
+ *
+ * THE SEVEN WORDS AT +0x648 ARE THE EMBEDDED `ModulusDecoder`, and they are
+ * written as seven field assignments rather than as the seven-argument
+ * constructor the mangling advertises.  That constructor is DECLARED AND NOT
+ * DEFINED in this tree -- the blob has it out of line at 0x320b0 and 0x32070
+ * and nobody has reconstructed it -- so spelling it here would add a symbol
+ * outside this batch's closure.  The object inlines whatever the original
+ * wrote: seven plain `mov`s in the scheduler's order, 0, 3, 4, 1, 2, 5, 6,
+ * which is not a source order and is not chased (finding F617).
+ *
+ * `histogramIntegration` BEFORE `histogramDelay` is the object's order and
+ * costs nothing to adopt; both are plain stores after the call, so it is a
+ * hint and not evidence.
+ */
+/*
+ * `reset` -- 723 bytes at 0x30870, and `resetNoSpectral`'s other half: the
+ * same rebuild of the six constellations, with the SIGN-BIT geometry taken
+ * from the mapping block, the sign-bit extractor re-armed, the histogram
+ * emptied and the detector's cumulative cells cleared.
+ *
+ * WHAT `resetNoSpectral` DOES NOT DO, in the order the object does it:
+ *
+ *   - the four sign-bit words at +0x0c .. +0x14 from `mapp->shaperSR`;
+ *   - `V90SignBitsExtractor::reset(shaperSR, 0)` on the embedded extractor;
+ *   - the cursor, the frame start and the RBS position back to zero;
+ *   - both 3,072-byte histogram arrays cleared IN FULL, 6 x 128 and not
+ *     `constellationSize[i]` (`cmp $0x7f,%edx; jbe` at 0x30a8f -- a constant);
+ *   - the histogram delay reseeded, and `clearCamulativeVal` over all 768
+ *     cells of the detector;
+ *   - the linear-mapping study's six words zeroed.
+ *
+ * And what it does NOT have that `resetNoSpectral` does: there is no
+ * `DEBUG_DEMAPPER_ERROR_HISTOGRAM` arm and no call to
+ * `printErrorHistogramAndReset`.  The histogram is emptied here rather than
+ * printed.
+ *
+ * THE SIGN-BIT GEOMETRY IS ALL ONE FIELD.  `mapp->shaperSR` (+0x620) becomes
+ * `signBitGroups` unchanged, `6 - it` becomes `signBitsPerFrame` and `6 / it`
+ * becomes `signBitGroupSize`; `groups * groupSize == 6` and `groups *
+ * (groupSize - 1) == 6 - groups` are the two identities the header derives
+ * those names from, and both hold.  The same word is the extractor's
+ * `spacing`.
+ *
+ * THE DIVIDE IS UNSIGNED AND IT IS GUARDED, and both halves are forced.
+ * `f7 74 24 20  divl 0x20(%esp)` at 0x308b6 is `div` and not `idiv`, which is
+ * what makes `V90DEMAPPER_FRAME`'s `6u` the right spelling of the numerator
+ * -- `6 / (int)` would be a signed division.  And `test %esi,%esi; je` at
+ * 0x308a7 skips it, so a zero `shaperSR` LEAVES `signBitGroupSize` UNWRITTEN:
+ * that is a real early-out and not a fold, the field keeps whatever it held,
+ * and `t_v90demap.cpp` plants a recognisable value in it to see that happen.
+ * The callee guards its own divide the same way, so a zero spacing is a
+ * runnable input on both sides and not a #DE.
+ *
+ * THE LOOP BOUND IS A COPY OF THE MAPPING BLOCK'S LENGTH AND NOT THE MEMBER
+ * JUST WRITTEN FROM IT.  The object loads `mapp->constellationSize[i]` into
+ * `%eax`, spills it to `0x18(%esp)`, stores it to `constellationSize[i]`, and
+ * every loop compare reads the SPILL.  The two readings are the same number
+ * except when the doubled arm's overrun reaches `constellationSize` itself --
+ * which it can, for the sixth row, exactly as the header documents -- so the
+ * local below is what the object encodes and re-reading the member would not
+ * be.  `resetNoSpectral` is spelled the other way and its object does not
+ * decide between them.
+ *
+ * EVERYTHING ELSE IN THE TWO CONSTELLATION LOOPS IS `resetNoSpectral`'S, down
+ * to the `short k` that lives only in the doubled arm and is truncated to 16
+ * bits on every step (`inc %edx; movswl %dx,%edx` at 0x3091d, `lea 0x1(%edx),
+ * %eax; cwtl` at 0x30929) while the plain arm indexes with `j` itself.  The
+ * larger of the two mapping tables is laid down first and the comparison is
+ * SIGNED and 16-BIT -- `cmp %cx,%bx` with `jg` at 0x30977, so EQUAL puts
+ * `linMappAlt` first, which is what a `>` and not a `>=` gives.
+ *
+ * THE HISTOGRAM DELAY IS BOUNDED BY A LENGTH FROM THE OTHER END OF THE
+ * PARAMETER BLOCK, and this is what the object says rather than something
+ * that reads naturally:
+ *
+ *     30aa4:  8b 83 30 05 00 00  mov  0x530(%ebx),%eax   ; DEMAPPER_DELAY_...
+ *     30aaa:  3b 83 6c 03 00 00  cmp  0x36c(%ebx),%eax   ; TRN2D_DD_LENGTH
+ *     30ab0:  7c 02              jl   30ab4
+ *     30ab2:  31 c0              xor  %eax,%eax
+ *     30ab4:  89 85 94 1e 00 00  mov  %eax,0x1e94(%ebp)
+ *
+ * so a delay that is not SHORTER than `TRN2D_DD_LENGTH` is taken as zero,
+ * which starts the histogram immediately.  `jl` is the signed branch and both
+ * parameters are `int`.  No rationale is offered here for why those two
+ * quantities are compared; the instructions are.
+ *
+ * `decisionCode` (+0x1eac) IS NOT WRITTEN, and its neighbour +0x1eae is.  The
+ * store block at 0x30b04..0x30b34 covers +0x1eb0, +0x1eae, +0x1ea4, +0x1ea6,
+ * +0x1e9c, +0x1ea8 and +0x1eb4 and skips the one between the first two;
+ * `resetLinearMappStudy` leaves it alone in the same way.  Their order is the
+ * scheduler's -- seven plain stores with no call between them, finding F617 --
+ * and what is in the object is their WIDTHS, which the header declares.
+ */
 /*
  * `linearMappingStudy` -- 779 bytes at 0x31410, and the largest member of the
  * class after `hardDecision`.  One decided sample in, one cell of the

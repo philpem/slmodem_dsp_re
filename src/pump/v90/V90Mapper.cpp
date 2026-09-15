@@ -208,6 +208,62 @@ V90Mapper::~V90Mapper()
  * ===========================================================================
  */
 void
+V90Mapper::reset(V90MappingParams *mp, PcmType pcm)
+{
+	unsigned int i, j;
+
+	bitsPerFrame = mp->word_0;
+	signBitGroups = mp->shaperSR;
+
+	if (mp->shaperSR != 0)
+		signBitGroupSize = V90MAPPER_FRAME / mp->shaperSR;
+	else
+		signBitGroupSize = 0;
+
+	signBitsPerFrame = V90MAPPER_FRAME - mp->shaperSR;
+	word_08 = bitsPerFrame - signBitsPerFrame;
+
+	for (i = 0; i < V90MAPPER_CONSTELLATIONS; i++) {
+		constellationSize[i] = mp->constellationSize[i];
+
+		for (j = 0; j < constellationSize[i]; j++) {
+			unsigned char b = mp->constellation[i][j];
+
+			if (pcm)
+				constellation[i][j] = (short)alaw2linear(
+				    (unsigned char)((b & 0x7f) ^ 0xd5));
+			else
+				constellation[i][j] = (short)ulaw2linear(
+				    (unsigned char)~(b & 0x7f));
+		}
+
+		for (j = constellationSize[i]; j < V90MAPPER_LEVELS; j++)
+			constellation[i][j] = 0;
+	}
+
+	if (signBitGroups != 0) {
+		spectralShaper.reset(mp->shaperId, (unsigned int)mp->shaperSR,
+				     mp->shaperA1, mp->shaperA2,
+				     mp->shaperB1, mp->shaperB2);
+		uint_6f8 = mp->shaperId;
+	} else {
+		uint_6f8 = 0;
+	}
+
+	modulusEncoder.field_00 = constellationSize[0];
+	modulusEncoder.field_04 = constellationSize[1];
+	modulusEncoder.field_08 = constellationSize[2];
+	modulusEncoder.field_0c = constellationSize[3];
+	modulusEncoder.field_10 = constellationSize[4];
+	modulusEncoder.field_14 = constellationSize[5];
+	modulusEncoder.field_18 = word_08;
+	signEncoder.prev_ = 0;
+
+	word_700 = 0;
+	bitsBuffered = 0;
+}
+
+void
 V90Mapper::resetNoSpectral(V90MappingParams *mp, PcmType pcm)
 {
 	unsigned int i, j;
@@ -285,62 +341,6 @@ V90Mapper::resetNoSpectral(V90MappingParams *mp, PcmType pcm)
  * mangling's `Ejjffff` with the shaper's own body agreeing.
  * ===========================================================================
  */
-void
-V90Mapper::reset(V90MappingParams *mp, PcmType pcm)
-{
-	unsigned int i, j;
-
-	bitsPerFrame = mp->word_0;
-	signBitGroups = mp->shaperSR;
-
-	if (mp->shaperSR != 0)
-		signBitGroupSize = V90MAPPER_FRAME / mp->shaperSR;
-	else
-		signBitGroupSize = 0;
-
-	signBitsPerFrame = V90MAPPER_FRAME - mp->shaperSR;
-	word_08 = bitsPerFrame - signBitsPerFrame;
-
-	for (i = 0; i < V90MAPPER_CONSTELLATIONS; i++) {
-		constellationSize[i] = mp->constellationSize[i];
-
-		for (j = 0; j < constellationSize[i]; j++) {
-			unsigned char b = mp->constellation[i][j];
-
-			if (pcm)
-				constellation[i][j] = (short)alaw2linear(
-				    (unsigned char)((b & 0x7f) ^ 0xd5));
-			else
-				constellation[i][j] = (short)ulaw2linear(
-				    (unsigned char)~(b & 0x7f));
-		}
-
-		for (j = constellationSize[i]; j < V90MAPPER_LEVELS; j++)
-			constellation[i][j] = 0;
-	}
-
-	if (signBitGroups != 0) {
-		spectralShaper.reset(mp->shaperId, (unsigned int)mp->shaperSR,
-				     mp->shaperA1, mp->shaperA2,
-				     mp->shaperB1, mp->shaperB2);
-		uint_6f8 = mp->shaperId;
-	} else {
-		uint_6f8 = 0;
-	}
-
-	modulusEncoder.field_00 = constellationSize[0];
-	modulusEncoder.field_04 = constellationSize[1];
-	modulusEncoder.field_08 = constellationSize[2];
-	modulusEncoder.field_0c = constellationSize[3];
-	modulusEncoder.field_10 = constellationSize[4];
-	modulusEncoder.field_14 = constellationSize[5];
-	modulusEncoder.field_18 = word_08;
-	signEncoder.prev_ = 0;
-
-	word_700 = 0;
-	bitsBuffered = 0;
-}
-
 /*
  * ===========================================================================
  * V90Mapper::process -- .text+0x30420, 530 bytes

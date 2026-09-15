@@ -140,12 +140,6 @@ SeqToRate(void *modem, unsigned short seq)
 	return v32_common_rate(modem, seq);
 }
 
-short
-DecodeRateSeq(void *modem, unsigned short seq)
-{
-	return (short)v32_common_rate(modem, seq);
-}
-
 unsigned short
 CodeRateSeq(void *modem, unsigned short seq)
 {
@@ -158,16 +152,10 @@ CodeRateSeq(void *modem, unsigned short seq)
 	return out;
 }
 
-unsigned short
-CodeFinalRateSeq(void *modem, unsigned short seq)
+short
+DecodeRateSeq(void *modem, unsigned short seq)
 {
-	short rate = (short)v32_common_rate(modem, seq);
-	unsigned short out = V32_RATE_SEQ_NONE;
-
-	if (rate != V32_RATE_NONE)
-		out = (unsigned short)V32_FINAL_RATE_SEQ[rate];
-
-	return out;
+	return (short)v32_common_rate(modem, seq);
 }
 
 /*
@@ -186,6 +174,18 @@ CodeESeq(void *modem, unsigned short seq)
 
 	return rate == V32_RATE_NONE ? V32_ESEQ_NONE
 				     : (unsigned short)V32_ESEQ[rate];
+}
+
+unsigned short
+CodeFinalRateSeq(void *modem, unsigned short seq)
+{
+	short rate = (short)v32_common_rate(modem, seq);
+	unsigned short out = V32_RATE_SEQ_NONE;
+
+	if (rate != V32_RATE_NONE)
+		out = (unsigned short)V32_FINAL_RATE_SEQ[rate];
+
+	return out;
 }
 
 void

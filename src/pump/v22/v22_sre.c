@@ -148,89 +148,6 @@ const short SREv22_PLL_K2[V22_SRE_MODES] = {
 	0, 4, 4,
 };
 
-void
-V22_SRE_init(struct v22_sre *sre, int fresh)
-{
-	/*
-	 * The permutation is not in place: the original builds the reordered
-	 * filter on the stack and copies it back, which is why the frame is
-	 * 0x23c bytes for a function with no other locals.
-	 */
-	short scratch[V22_SRE_COEFFS];
-	short i, j, k;
-
-	sre->active = 0;
-	sre->acquiring = 1;
-	sre->adapt = 1;
-	sre->mode = 0;
-	sre->pll_acc = 0;
-	sre->err_avg = 0;
-	sre->mag_avg = 0;
-	sre->taps = V22_SRE_TAPS;
-	sre->fill = 0;
-	sre->acc_x = 0;
-	sre->acc_y = 0;
-	sre->frac = 0;
-	sre->branch = 0;
-	sre->groups = 3;
-	sre->settle = 0;
-	sre->group = 0;
-	sre->tick = 0;
-	sre->need = 1;
-
-	if (fresh) {
-		/*
-		 * No inspection and no free of what may already be there --
-		 * the same contract, and the same leak on a second `fresh`
-		 * call, as FPM_MRF_init.
-		 */
-		sre->coeff = sysdep_malloc(V22_SRE_COEFFS
-						    * sizeof(short));
-		sre->hist = sysdep_malloc((short)(sre->taps * 2)
-						   * sizeof(short));
-		sre->clk = sysdep_malloc(V22_SRE_CLOCK
-						  * sizeof(short));
-	}
-
-	/* The prototype, in design order, minus its final tap. */
-	for (i = 0; i <= V22_SRE_COEFFS - 1; i++)
-		sre->coeff[i] = SREv22_COFFS[i];
-
-	/*
-	 * Polyphase de-interleave.  Branch b holds the taps whose prototype
-	 * index is congruent to 260 + b modulo 10, walked DOWNWARDS -- so
-	 * each branch is time-reversed, which is what lets recover's dot
-	 * product read the history forwards.
-	 */
-	k = 0;
-	for (i = V22_SRE_COEFFS - V22_SRE_BRANCHES;
-	     i <= V22_SRE_COEFFS - 1; i++)
-		for (j = i; j >= 0; j = (short)(j - V22_SRE_BRANCHES))
-			scratch[k++] = sre->coeff[j];
-
-	for (i = 0; i <= V22_SRE_COEFFS - 1; i++)
-		sre->coeff[i] = scratch[i];
-
-	/*
-	 * `taps` entries, not the 2 * taps that were allocated.  See the
-	 * header: the upper half is written by recover before it is read.
-	 */
-	for (i = 0; i < sre->taps; i++)
-		sre->hist[i] = 0;
-
-	for (i = 0; i <= V22_SRE_CLOCK - 1; i++)
-		sre->clk[i] = 0;
-}
-
-void
-V22_SRE_free(struct v22_sre *sre)
-{
-	/* Reverse allocation order, and the pointers are left dangling. */
-	sysdep_free(sre->clk);
-	sysdep_free(sre->hist);
-	sysdep_free(sre->coeff);
-}
-
 static int
 iabs(int v)
 {
@@ -604,4 +521,87 @@ V22_SRE_recover(struct v22_sre *sre, const short *in, short *out, short count)
 	sre->need = need;
 	sre->fill = fill;
 	return produced;
+}
+
+void
+V22_SRE_init(struct v22_sre *sre, int fresh)
+{
+	/*
+	 * The permutation is not in place: the original builds the reordered
+	 * filter on the stack and copies it back, which is why the frame is
+	 * 0x23c bytes for a function with no other locals.
+	 */
+	short scratch[V22_SRE_COEFFS];
+	short i, j, k;
+
+	sre->active = 0;
+	sre->acquiring = 1;
+	sre->adapt = 1;
+	sre->mode = 0;
+	sre->pll_acc = 0;
+	sre->err_avg = 0;
+	sre->mag_avg = 0;
+	sre->taps = V22_SRE_TAPS;
+	sre->fill = 0;
+	sre->acc_x = 0;
+	sre->acc_y = 0;
+	sre->frac = 0;
+	sre->branch = 0;
+	sre->groups = 3;
+	sre->settle = 0;
+	sre->group = 0;
+	sre->tick = 0;
+	sre->need = 1;
+
+	if (fresh) {
+		/*
+		 * No inspection and no free of what may already be there --
+		 * the same contract, and the same leak on a second `fresh`
+		 * call, as FPM_MRF_init.
+		 */
+		sre->coeff = sysdep_malloc(V22_SRE_COEFFS
+						    * sizeof(short));
+		sre->hist = sysdep_malloc((short)(sre->taps * 2)
+						   * sizeof(short));
+		sre->clk = sysdep_malloc(V22_SRE_CLOCK
+						  * sizeof(short));
+	}
+
+	/* The prototype, in design order, minus its final tap. */
+	for (i = 0; i <= V22_SRE_COEFFS - 1; i++)
+		sre->coeff[i] = SREv22_COFFS[i];
+
+	/*
+	 * Polyphase de-interleave.  Branch b holds the taps whose prototype
+	 * index is congruent to 260 + b modulo 10, walked DOWNWARDS -- so
+	 * each branch is time-reversed, which is what lets recover's dot
+	 * product read the history forwards.
+	 */
+	k = 0;
+	for (i = V22_SRE_COEFFS - V22_SRE_BRANCHES;
+	     i <= V22_SRE_COEFFS - 1; i++)
+		for (j = i; j >= 0; j = (short)(j - V22_SRE_BRANCHES))
+			scratch[k++] = sre->coeff[j];
+
+	for (i = 0; i <= V22_SRE_COEFFS - 1; i++)
+		sre->coeff[i] = scratch[i];
+
+	/*
+	 * `taps` entries, not the 2 * taps that were allocated.  See the
+	 * header: the upper half is written by recover before it is read.
+	 */
+	for (i = 0; i < sre->taps; i++)
+		sre->hist[i] = 0;
+
+	for (i = 0; i <= V22_SRE_CLOCK - 1; i++)
+		sre->clk[i] = 0;
+}
+
+void
+V22_SRE_free(struct v22_sre *sre)
+{
+	/* Reverse allocation order, and the pointers are left dangling. */
+	sysdep_free(sre->clk);
+	sysdep_free(sre->hist);
+	sysdep_free(sre->coeff);
 }

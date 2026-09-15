@@ -280,7 +280,7 @@ TESTHOST_OBJ := $(patsubst $(BUILD)/repro/%.o,$(BUILD)/testhost/%.o,$(OBJ_REPRO)
 # them for test binaries only.
 LDFLAGS    := -no-pie -Wl,-z,noexecstack,-z,notext
 
-.PHONY: firewall strings offsets refs all test safety check64 docs clean interop capture coverage worklist debugcov phase portability phase-full blobfix blobfix-check onedef vendor banners period
+.PHONY: firewall strings offsets refs mutation-snapshot all test safety check64 docs clean interop capture coverage worklist debugcov phase portability phase-full blobfix blobfix-check onedef vendor banners period
 
 # Keep intermediates: chained implicit rules otherwise delete them, forcing a
 # full rebuild on every invocation.
@@ -678,7 +678,13 @@ refs:
 # it (`--update`) would manufacture a baseline nobody examined.  `--strict`
 # adds staleness and is what a MERGE passes, where refreshing is honest.
 #
+# Mutation execution uses the modern host compiler. Keep its snapshot gate
+# mandatory for host tests/portability, not a prerequisite for the period
+# reconstruction gate. Source-anchor validation above remains in both tiers.
+mutation-snapshot:
 	@$(PYTHON) tools/mutsnap.py --check
+
+test: mutation-snapshot
 
 # Everything the historical full boundary checked, split into the default
 # reconstruction gate (`make phase`) and the explicit portability gate
@@ -822,7 +828,7 @@ COVCOUNTS  := build-cov/measured.txt
 PHASE_TIERS := firewall strings offsets refs period params onedef vendor \
                banners partial-compare-selftest tumap-selftest
 
-PORTABILITY_TIERS := test check64 interop coverage debugcov
+PORTABILITY_TIERS := test check64 interop coverage debugcov mutation-snapshot
 
 phase: prereq
 	@$(MAKE) --no-print-directory $(PHASE_TIERS)

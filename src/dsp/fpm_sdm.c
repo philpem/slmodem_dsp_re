@@ -18,17 +18,6 @@
 #include "dsplib/fpm_sdm.h"
 
 void
-FPM_SDM_init(struct fpm_sdm *sdm, const struct fpm_sdm_cfg *cfg)
-{
-	sdm->reg = 0;
-	sdm->cfg = *cfg;
-	sdm->mask = (1 << sdm->cfg.nbits) - 1;
-	sdm->notmask = ~sdm->mask;
-	sdm->shift1 = (short)(sdm->cfg.tap1 - sdm->cfg.nbits);
-	sdm->shift2 = (short)(sdm->cfg.tap2 - sdm->cfg.nbits);
-}
-
-void
 FPM_SDM_scrambler(struct fpm_sdm *sdm, unsigned short *data,
 		  unsigned short count)
 {
@@ -60,6 +49,19 @@ FPM_SDM_scrambler(struct fpm_sdm *sdm, unsigned short *data,
 
 	sdm->reg = reg;
 }
+void
+FPM_SDM_init(struct fpm_sdm *sdm, const struct fpm_sdm_cfg *cfg)
+{
+	sdm->reg = 0;
+	sdm->cfg = *cfg;
+	sdm->mask = (1 << sdm->cfg.nbits) - 1;
+	sdm->notmask = ~sdm->mask;
+	sdm->shift1 = (short)(sdm->cfg.tap1 - sdm->cfg.nbits);
+	sdm->shift2 = (short)(sdm->cfg.tap2 - sdm->cfg.nbits);
+}
+
+
+
 
 void
 FPM_SDM_descrambler(struct fpm_sdm *sdm, unsigned short *data,

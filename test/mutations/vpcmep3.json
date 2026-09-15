@@ -28,8 +28,8 @@
  },
  {
   "label": "the Ja termination request is not cleared",
-  "find": "\tterminateJa = 0;\n\tterminateCp = 0;",
-  "replace": "\tterminateCp = 0;"
+  "find": "\tv34BaudAllow[4] = 1;\n\tv34BaudAllow[5] = 0;\n\n\tterminateJa = 0;\n\tterminateCp = 0;\n\tterminateCpNot = 0;\n\tcpNotLoaded = 0;\n\tnofBitsPerSymbol = 2;\n\n\tnofBits = 0;",
+  "replace": "\tv34BaudAllow[4] = 1;\n\tv34BaudAllow[5] = 0;\n\n\t(void)0;\n\tterminateCp = 0;\n\tterminateCpNot = 0;\n\tcpNotLoaded = 0;\n\tnofBitsPerSymbol = 2;\n\n\tnofBits = 0;"
  },
  {
   "label": "the CPnot one-shot latch is left as it was",

@@ -420,6 +420,21 @@ V90Phase4Demodulator::resetBeforRRN()
  *     (`movswl %di,%eax`), which is what makes the return `int`.
  */
 int
+V90Phase4Demodulator::detectFPE(short sample)
+{
+	if (!rDetector2.detectRf(sample))
+		return 0;
+
+	edprintf("V90Phase4Demodulator: Rf detected, polarity = %d\r\n",
+		 rDetector1.polarity);
+	edprintf("V90Phase4Demodulator: enter FPE !");
+	state = P4D_STATE_FPE;
+	countInState = 0;
+	int_0028 = 0;
+	return 1;
+}
+
+int
 V90Phase4Demodulator::trn2dKnownDemod(short)
 {
 	short gen = (short)phase4Modulator.generateSymbol();
@@ -460,21 +475,6 @@ V90Phase4Demodulator::trn2dKnownDemod(short)
  * THE SECOND MESSAGE TAKES NO ARGUMENT and has no "\r\n".  Two separate
  * `edprintf` calls, not one string: 0x65e4 then 0x6618.
  */
-int
-V90Phase4Demodulator::detectFPE(short sample)
-{
-	if (!rDetector2.detectRf(sample))
-		return 0;
-
-	edprintf("V90Phase4Demodulator: Rf detected, polarity = %d\r\n",
-		 rDetector1.polarity);
-	edprintf("V90Phase4Demodulator: enter FPE !");
-	state = P4D_STATE_FPE;
-	countInState = 0;
-	int_0028 = 0;
-	return 1;
-}
-
 /*
  * ===========================================================================
  * THE THREE DECISION MEMBERS.

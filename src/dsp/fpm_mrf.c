@@ -16,6 +16,11 @@
 #include "dsplib/sysdep.h"
 
 void
+FPM_MRF_free(struct fpm_mrf *state)
+{
+	sysdep_free(state->history);
+}
+void
 FPM_MRF_init(struct fpm_mrf *state, const struct fpm_mrf_cfg *cfg, int fresh)
 {
 	short per_phase;
@@ -60,11 +65,8 @@ FPM_MRF_init(struct fpm_mrf *state, const struct fpm_mrf_cfg *cfg, int fresh)
 		state->history[i] = 0;
 }
 
-void
-FPM_MRF_free(struct fpm_mrf *state)
-{
-	sysdep_free(state->history);
-}
+
+
 
 /* Branchless circular increment, as the original writes it. */
 static int

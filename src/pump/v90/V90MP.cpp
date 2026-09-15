@@ -205,37 +205,6 @@ V90MP::getBitVector(unsigned int &length)
  * the second, which is what names the two fields.
  */
 void
-V90MP::printNofRecievedMpMpNot()
-{
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("V90MP: received %d MP, %d MPNot\r\n",
-				     nofRecievedMp, nofRecievedMpNot);
-}
-
-/*
- * evaluateInfo -- read the thirteen fields at +0x00 back out of `bits`.
- *
- * 482 bytes at 0x1f720, and the exact inverse of `infoToBits` field for field,
- * which is what makes the round trip a test rather than a restatement.
- *
- * TWO SHAPES OF UNPACK, and the object keeps them apart.  The four-bit `Rate`
- * and the six sixteen-bit h-values are accumulated MOST SIGNIFICANT BIT FIRST
- * by counting DOWN -- `bits[0x1b]` ends up weighing eight, `bits[0x43]` weighs
- * 0x8000 -- while the fourteen-bit rate mask is built by counting UP with a
- * variable shift, `1 << (i - 0x24)`, out of a running read-modify-write of the
- * field itself (`movzwl 0x6(%ebx)`, `or`, `mov %cx`).  Both orderings put bit
- * zero at the LOW index, so the two agree; only the code differs.
- *
- * `Type` IS THE GATE.  The six h-values are zeroed unconditionally and then
- * filled only when +0x18 is non-zero (`cmpb $0x0,0x3(%esp)` against the copy
- * saved on entry, `je` to the epilogue), because a type-zero message is five
- * frames long and stops before them.
- *
- * VOID, and measured: the two `ret` paths leave different leftovers in %eax --
- * a shifted mask on one, the last accumulator on the other -- and nothing
- * arranges it on either.
- */
-void
 V90MP::evaluateInfo()
 {
 	unsigned int i;
@@ -340,6 +309,37 @@ V90MP::evaluateInfo()
 		h3Imag = (short)((h3Imag << 1) | (bits[i] & 1));
 }
 
+void
+V90MP::printNofRecievedMpMpNot()
+{
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V90MP: received %d MP, %d MPNot\r\n",
+				     nofRecievedMp, nofRecievedMpNot);
+}
+
+/*
+ * evaluateInfo -- read the thirteen fields at +0x00 back out of `bits`.
+ *
+ * 482 bytes at 0x1f720, and the exact inverse of `infoToBits` field for field,
+ * which is what makes the round trip a test rather than a restatement.
+ *
+ * TWO SHAPES OF UNPACK, and the object keeps them apart.  The four-bit `Rate`
+ * and the six sixteen-bit h-values are accumulated MOST SIGNIFICANT BIT FIRST
+ * by counting DOWN -- `bits[0x1b]` ends up weighing eight, `bits[0x43]` weighs
+ * 0x8000 -- while the fourteen-bit rate mask is built by counting UP with a
+ * variable shift, `1 << (i - 0x24)`, out of a running read-modify-write of the
+ * field itself (`movzwl 0x6(%ebx)`, `or`, `mov %cx`).  Both orderings put bit
+ * zero at the LOW index, so the two agree; only the code differs.
+ *
+ * `Type` IS THE GATE.  The six h-values are zeroed unconditionally and then
+ * filled only when +0x18 is non-zero (`cmpb $0x0,0x3(%esp)` against the copy
+ * saved on entry, `je` to the epilogue), because a type-zero message is five
+ * frames long and stops before them.
+ *
+ * VOID, and measured: the two `ret` paths leave different leftovers in %eax --
+ * a shifted mask on one, the last accumulator on the other -- and nothing
+ * arranges it on either.
+ */
 /*
  * calcSequenceLength -- 0x1f910, 116 bytes, between `evaluateInfo` and
  * `infoToBits` in the blob as here.
@@ -394,6 +394,39 @@ V90MP::calcSequenceLength()
  *     here is that register: writing `i < seqLength` instead would re-read the
  *     field and stop early.
  */
+void
+V90MP::calcCRC()
+{
+	unsigned int i, end;
+	unsigned char a;
+
+	end = type ? 0xaa : 0x44;
+
+	for (i = 0x12; i < end; ) {
+		if (i % 17 == 0)
+			i++;
+		a = (unsigned char)(crc[0] + bits[i]);
+		i++;
+
+		crc[0] = crc[1];
+		crc[1] = crc[2];
+		crc[2] = crc[3];
+		crc[3] = (unsigned char)((crc[4] + a) & 1);
+		crc[4] = crc[5];
+		crc[5] = crc[6];
+		crc[6] = crc[7];
+		crc[7] = crc[8];
+		crc[8] = crc[9];
+		crc[9] = crc[10];
+		crc[10] = (unsigned char)((crc[11] + a) & 1);
+		crc[11] = crc[12];
+		crc[12] = crc[13];
+		crc[13] = crc[14];
+		crc[14] = crc[15];
+		crc[15] = (unsigned char)(a & 1);
+	}
+}
+
 void
 V90MP::infoToBits()
 {
@@ -618,39 +651,6 @@ V90MP::infoToBits()
  * See the note above `evaluateCRC` for the derivation and for the extent
  * clause, which is the part this member decides.
  */
-void
-V90MP::calcCRC()
-{
-	unsigned int i, end;
-	unsigned char a;
-
-	end = type ? 0xaa : 0x44;
-
-	for (i = 0x12; i < end; ) {
-		if (i % 17 == 0)
-			i++;
-		a = (unsigned char)(crc[0] + bits[i]);
-		i++;
-
-		crc[0] = crc[1];
-		crc[1] = crc[2];
-		crc[2] = crc[3];
-		crc[3] = (unsigned char)((crc[4] + a) & 1);
-		crc[4] = crc[5];
-		crc[5] = crc[6];
-		crc[6] = crc[7];
-		crc[7] = crc[8];
-		crc[8] = crc[9];
-		crc[9] = crc[10];
-		crc[10] = (unsigned char)((crc[11] + a) & 1);
-		crc[11] = crc[12];
-		crc[12] = crc[13];
-		crc[13] = crc[14];
-		crc[14] = crc[15];
-		crc[15] = (unsigned char)(a & 1);
-	}
-}
-
 /*
  * evaluateCRC -- 0x1f470, 651 bytes.  The read side: seed the register,
  * recompute the CRC over the information bits of a RECEIVED sequence, and

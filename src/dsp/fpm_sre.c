@@ -39,119 +39,6 @@
 #include "dsplib/fpm_sre.h"
 #include "dsplib/sysdep.h"
 
-void
-FPM_SRE_init(struct fpm_sre *sre, const struct fpm_sre_cfg *cfg, int fresh)
-{
-	short i;
-
-	/*
-	 * The reuse path, and it is the opposite way round from FPM_FSE_init:
-	 * a re-init whose existing buffers are already big enough keeps them.
-	 * `fresh` is then set so the single allocation block below covers both
-	 * "never initialised" and "just released".
-	 */
-	if (!fresh && sre->cfg.coeffs < cfg->coeffs) {
-		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("Reallocating FPM_SRE buffers");
-		sysdep_free(sre->clk);
-		sysdep_free(sre->hist);
-		sysdep_free(sre->coeff);
-		sysdep_free(sre->rms_buf);
-		fresh = 1;
-	}
-
-	sre->cfg = *cfg;
-
-	sre->active = 0;
-	sre->acquiring = 1;
-	sre->mode = 0;
-	sre->pll_acc = 0;
-	sre->err_avg = 0;
-	sre->mag_avg = 0;
-	sre->adapt = 1;
-	sre->taps = (short)(sre->cfg.coeffs / FPM_SRE_BRANCHES);
-	sre->fill = 0;
-	sre->acc_x = 0;
-	sre->acc_y = 0;
-	sre->frac = 0;
-	sre->branch = 0;
-	sre->groups = sre->cfg.groups_acq;
-	sre->settle = 0;
-	sre->group = 0;
-	sre->tick = 0;
-	sre->need = 1;
-	sre->rms_on = 1;
-	sre->rms_idx = 0;
-
-	if (fresh) {
-		/*
-		 * The object narrows the coefficient and RMS byte counts before
-		 * allocation.  Keep that arithmetic for differential reconstruction;
-		 * the normal build must allocate the full configured ranges.
-		 */
-#ifdef DSPLIB_REPRODUCE_BUGS
-		sre->coeff = sysdep_malloc((short)(2 * sre->cfg.coeffs));
-		sre->hist = sysdep_malloc((short)(2 * sre->taps));
-		sre->clk = sysdep_malloc(FPM_SRE_CLOCK * 2);
-		sre->rms_buf = sysdep_malloc((short)(2 * sre->cfg.rms_len));
-#else
-		unsigned coeffs = sre->cfg.coeffs;
-		unsigned taps = sre->taps;
-		unsigned rms_len = sre->cfg.rms_len;
-
-		sre->coeff = sysdep_malloc(2U * coeffs);
-		/* `taps` is bounded by signed `coeffs / FPM_SRE_BRANCHES`. */
-		sre->hist = sysdep_malloc(2U * taps);
-		sre->clk = sysdep_malloc(FPM_SRE_CLOCK * 2);
-		sre->rms_buf = sysdep_malloc(2U * rms_len);
-#endif
-	}
-
-	/*
-	 * The prototype goes in unpermuted: branch selection is a stride of
-	 * FPM_SRE_BRANCHES in the dot product, not a layout.
-	 */
-	for (i = 0; i < sre->cfg.coeffs; i++)
-		sre->coeff[i] = sre->cfg.proto[i];
-
-	for (i = 0; i < sre->taps; i++)
-		sre->hist[i] = 0;
-
-	for (i = 0; i <= FPM_SRE_CLOCK - 1; i++)
-		sre->clk[i] = 0;
-
-	for (i = 0; i < sre->cfg.rms_len; i++)
-		sre->rms_buf[i] = 0;
-
-	sre->ppm_count = 0;
-	sre->ppm_acc = 0;
-	sre->ppm_offset = 0;
-	sre->ppm_n = 1;
-	sre->ppm_slip = 0;
-	sre->ppm_first = 1;
-}
-
-/*
- * Release the four buffers, in the SAME ORDER init's realloc path releases
- * them -- clk, hist, coeff, rms_buf, which is neither the order they are
- * allocated in nor the order they are declared in.  It is reproduced because
- * the object encodes it and not because anything can see it: no allocation
- * follows, so a permutation of these four is unobservable.  Recorded as a
- * surviving mutation with that derivation.
- *
- * The pointers are NOT cleared afterwards, so a second call is a double free
- * and a re-init with `fresh` zero reads four dangling pointers.  The object
- * leaves both to the caller.
- */
-void
-FPM_SRE_free(struct fpm_sre *sre)
-{
-	sysdep_free(sre->clk);
-	sysdep_free(sre->hist);
-	sysdep_free(sre->coeff);
-	sysdep_free(sre->rms_buf);
-}
-
 static int
 iabs(int v)
 {
@@ -619,6 +506,119 @@ FPM_SRE_recover(struct fpm_sre *sre, const short *in, short *out, short count)
 	sre->fill = fill;
 	sre->need = need;
 	return (unsigned short)produced;
+}
+
+/*
+ * Release the four buffers, in the SAME ORDER init's realloc path releases
+ * them -- clk, hist, coeff, rms_buf, which is neither the order they are
+ * allocated in nor the order they are declared in.  It is reproduced because
+ * the object encodes it and not because anything can see it: no allocation
+ * follows, so a permutation of these four is unobservable.  Recorded as a
+ * surviving mutation with that derivation.
+ *
+ * The pointers are NOT cleared afterwards, so a second call is a double free
+ * and a re-init with `fresh` zero reads four dangling pointers.  The object
+ * leaves both to the caller.
+ */
+void
+FPM_SRE_free(struct fpm_sre *sre)
+{
+	sysdep_free(sre->clk);
+	sysdep_free(sre->hist);
+	sysdep_free(sre->coeff);
+	sysdep_free(sre->rms_buf);
+}
+
+void
+FPM_SRE_init(struct fpm_sre *sre, const struct fpm_sre_cfg *cfg, int fresh)
+{
+	short i;
+
+	/*
+	 * The reuse path, and it is the opposite way round from FPM_FSE_init:
+	 * a re-init whose existing buffers are already big enough keeps them.
+	 * `fresh` is then set so the single allocation block below covers both
+	 * "never initialised" and "just released".
+	 */
+	if (!fresh && sre->cfg.coeffs < cfg->coeffs) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("Reallocating FPM_SRE buffers");
+		sysdep_free(sre->clk);
+		sysdep_free(sre->hist);
+		sysdep_free(sre->coeff);
+		sysdep_free(sre->rms_buf);
+		fresh = 1;
+	}
+
+	sre->cfg = *cfg;
+
+	sre->active = 0;
+	sre->acquiring = 1;
+	sre->mode = 0;
+	sre->pll_acc = 0;
+	sre->err_avg = 0;
+	sre->mag_avg = 0;
+	sre->adapt = 1;
+	sre->taps = (short)(sre->cfg.coeffs / FPM_SRE_BRANCHES);
+	sre->fill = 0;
+	sre->acc_x = 0;
+	sre->acc_y = 0;
+	sre->frac = 0;
+	sre->branch = 0;
+	sre->groups = sre->cfg.groups_acq;
+	sre->settle = 0;
+	sre->group = 0;
+	sre->tick = 0;
+	sre->need = 1;
+	sre->rms_on = 1;
+	sre->rms_idx = 0;
+
+	if (fresh) {
+		/*
+		 * The object narrows the coefficient and RMS byte counts before
+		 * allocation.  Keep that arithmetic for differential reconstruction;
+		 * the normal build must allocate the full configured ranges.
+		 */
+#ifdef DSPLIB_REPRODUCE_BUGS
+		sre->coeff = sysdep_malloc((short)(2 * sre->cfg.coeffs));
+		sre->hist = sysdep_malloc((short)(2 * sre->taps));
+		sre->clk = sysdep_malloc(FPM_SRE_CLOCK * 2);
+		sre->rms_buf = sysdep_malloc((short)(2 * sre->cfg.rms_len));
+#else
+		unsigned coeffs = sre->cfg.coeffs;
+		unsigned taps = sre->taps;
+		unsigned rms_len = sre->cfg.rms_len;
+
+		sre->coeff = sysdep_malloc(2U * coeffs);
+		/* `taps` is bounded by signed `coeffs / FPM_SRE_BRANCHES`. */
+		sre->hist = sysdep_malloc(2U * taps);
+		sre->clk = sysdep_malloc(FPM_SRE_CLOCK * 2);
+		sre->rms_buf = sysdep_malloc(2U * rms_len);
+#endif
+	}
+
+	/*
+	 * The prototype goes in unpermuted: branch selection is a stride of
+	 * FPM_SRE_BRANCHES in the dot product, not a layout.
+	 */
+	for (i = 0; i < sre->cfg.coeffs; i++)
+		sre->coeff[i] = sre->cfg.proto[i];
+
+	for (i = 0; i < sre->taps; i++)
+		sre->hist[i] = 0;
+
+	for (i = 0; i <= FPM_SRE_CLOCK - 1; i++)
+		sre->clk[i] = 0;
+
+	for (i = 0; i < sre->cfg.rms_len; i++)
+		sre->rms_buf[i] = 0;
+
+	sre->ppm_count = 0;
+	sre->ppm_acc = 0;
+	sre->ppm_offset = 0;
+	sre->ppm_n = 1;
+	sre->ppm_slip = 0;
+	sre->ppm_first = 1;
 }
 
 /*

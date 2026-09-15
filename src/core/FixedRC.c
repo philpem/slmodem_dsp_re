@@ -102,29 +102,7 @@ gcd(int a, int b)
 	return a;
 }
 
-int
-RcFixed_Check_Combination(int in_rate, int out_rate)
-{
-	int g, down, up, mode;
 
-	g = gcd(in_rate, out_rate);
-
-	up = out_rate / g;
-	down = in_rate / g;
-
-	/*
-	 * Start at 2, skipping the explicit-only x4 and /4 entries, and stop
-	 * at the {0,0} terminator.  Returning the terminator's index on no
-	 * match is deliberate: RcFixed_Create() treats any mode above the
-	 * table as "no conversion required".
-	 */
-	for (mode = 2; fixedRc_UpFact[mode] != 0; mode++) {
-		if (fixedRc_UpFact[mode] == up && fixedRc_DownFact[mode] == down)
-			break;
-	}
-
-	return mode;
-}
 
 /*
  * ---------------------------------------------------------------------------
@@ -176,7 +154,20 @@ rc_reset_state(struct rc_state *s)
 	if (s->phase < 0)
 		s->phase = (short)(s->phase + s->up);
 }
-
+void
+RcFixed_Delete(struct rc *h)
+{
+	if (h == NULL)
+		return;
+	free(h->state);
+	free(h);
+}
+void
+RcFixed_Reset(struct rc *h)
+{
+	if (h != NULL && h->kind == 0 && h->state != NULL)
+		rc_reset_state(h->state);
+}
 struct rc *
 RcFixed_Create(int mode)
 {
@@ -212,6 +203,32 @@ RcFixed_Create(int mode)
 	rc_reset_state(s);
 	return h;
 }
+int
+RcFixed_Check_Combination(int in_rate, int out_rate)
+{
+	int g, down, up, mode;
+
+	g = gcd(in_rate, out_rate);
+
+	up = out_rate / g;
+	down = in_rate / g;
+
+	/*
+	 * Start at 2, skipping the explicit-only x4 and /4 entries, and stop
+	 * at the {0,0} terminator.  Returning the terminator's index on no
+	 * match is deliberate: RcFixed_Create() treats any mode above the
+	 * table as "no conversion required".
+	 */
+	for (mode = 2; fixedRc_UpFact[mode] != 0; mode++) {
+		if (fixedRc_UpFact[mode] == up && fixedRc_DownFact[mode] == down)
+			break;
+	}
+
+	return mode;
+}
+
+
+
 
 /*
  * Put a converter back to the state Create left it in.
@@ -223,21 +240,9 @@ RcFixed_Create(int mode)
  * apart crashes the reference.  Noted so it is not mistaken for something the
  * object does.
  */
-void
-RcFixed_Reset(struct rc *h)
-{
-	if (h != NULL && h->kind == 0 && h->state != NULL)
-		rc_reset_state(h->state);
-}
 
-void
-RcFixed_Delete(struct rc *h)
-{
-	if (h == NULL)
-		return;
-	free(h->state);
-	free(h);
-}
+
+
 
 /*
  * Append one sample to the sliding window.

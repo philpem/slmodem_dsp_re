@@ -34,46 +34,9 @@
   "replace": "\tdp->unpack_width = (local.bit_rate == 2400) ? 2 : 3;\n\tdp->pack_width = 1;"
  },
  {
-  "label": "v29tx_create ignores a caller-provided configuration",
-  "find": "\tlocal = (cfg != NULL) ? *cfg : V29TX_CFG;\n\n\thandle = V29TX_create",
-  "replace": "\tlocal = V29TX_CFG;\n\n\thandle = V29TX_create"
- },
- {
-  "label": "v29tx_create always hands the constructor the default configuration",
-  "find": "\thandle = V29TX_create((void *)(long)dp->int_0014, &local);",
-  "replace": "\thandle = V29TX_create((void *)(long)dp->int_0014, &V29TX_CFG);"
- },
- {
-  "label": "v29tx_create compares the transmit rate against 9600 rather than 7200",
-  "find": "\tdp->pack_width = (local.bitrate == 7200) ? 3 : 4;",
-  "replace": "\tdp->pack_width = (local.bitrate == 9600) ? 3 : 4;"
- },
- {
-  "label": "v29tx_create reverses the two pack widths",
-  "find": "\tdp->pack_width = (local.bitrate == 7200) ? 3 : 4;",
-  "replace": "\tdp->pack_width = (local.bitrate == 7200) ? 4 : 3;"
- },
- {
-  "label": "v29tx_create uses the V27 transmit budget",
-  "find": "\thandle = V29TX_create((void *)(long)dp->int_0014, &local);\n\tdp->pack_count = 0x30;",
-  "replace": "\thandle = V29TX_create((void *)(long)dp->int_0014, &local);\n\tdp->pack_count = 0x20;"
- },
- {
-  "label": "v29tx_create leaves a nonzero transmit unpack width",
-  "find": "\tdp->pack_width = (local.bitrate == 7200) ? 3 : 4;\n\tdp->unpack_width = 0;",
-  "replace": "\tdp->pack_width = (local.bitrate == 7200) ? 3 : 4;\n\tdp->unpack_width = 1;"
- },
- {
   "label": "v27rx_create clears pack_width before calculating unpack_width",
   "find": "\tdp->pack_count = 0;\n\tdp->unpack_width = (local.bit_rate == 2400) ? 2 : 3;\n\tdp->pack_width = 0;",
   "replace": "\tdp->pack_count = 0;\n\tdp->pack_width = 0;\n\tdp->unpack_width = (local.bit_rate == 2400) ? 2 : 3;",
-  "equivalent": true,
-  "why": "The two assignments write distinct fields and the rate expression reads only the local configuration. Their values and all constructor side effects are identical; only GCC 3.4.2 scheduling distinguishes the forms."
- },
- {
-  "label": "v29tx_create clears unpack_width before calculating pack_width",
-  "find": "\tdp->int_0014 = (int)(long)handle;\n\tdp->pack_width = (local.bitrate == 7200) ? 3 : 4;\n\tdp->unpack_width = 0;",
-  "replace": "\tdp->int_0014 = (int)(long)handle;\n\tdp->unpack_width = 0;\n\tdp->pack_width = (local.bitrate == 7200) ? 3 : 4;",
   "equivalent": true,
   "why": "The two assignments write distinct fields and the rate expression reads only the local configuration. Their values and all constructor side effects are identical; only GCC 3.4.2 scheduling distinguishes the forms."
  }

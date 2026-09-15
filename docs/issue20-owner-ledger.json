@@ -1,0 +1,1410 @@
+{
+  "document": "Issue 20 owner ledger",
+  "purpose": "Closure-ready ownership accounting; this document is not a final gate result.",
+  "baseline": {
+    "id": "cf7af92e",
+    "inputs": 275,
+    "candidates": 203,
+    "unanchored_inputs": 72
+  },
+  "historical_unanchored_accounting": {
+    "baseline_artifact": "/tmp/issue20-closure-batch/owner-dispositions.json",
+    "rows": 74,
+    "meaning": "These are the 74 inputs from the earlier unanchored-input census; the current partial manifest reports 72 unanchored inputs."
+  },
+  "evidence_classes": {
+    "direct-local": "Surviving ELF LOCAL owner evidence; strongest ownership evidence.",
+    "name-policy": "Filename/prefix or attributed-symbol policy candidate; not proof of original TU ownership.",
+    "unidentified": "Available evidence does not identify the original owner; this is not a claim that ownership is impossible."
+  },
+  "current_disposition_summary": [
+    "40 lowercase fax wrappers are retained in eight canonical RX/TX files as naming-policy dispositions.",
+    "46 uppercase fax API definitions remain in the four aggregate files after co-location lost period exactness; original owners are not proven by family names.",
+    "Four SMCv17 functions and smc_ring_advance are retained in Smc.c as a naming-policy candidate, without raw LOCAL proof; V17 tables remain in v17.c.",
+    "VPcmFloModemCtor constructor and LOCAL-backed tables are merged into VpcmFloModem.cpp.",
+    "Mixed V22 direct-LOCAL ownership decisions are recorded as resolved."
+  ],
+  "rows": [
+    {
+      "baseline_row": 0,
+      "source": "src/call/pulse.c",
+      "baseline_classification": "unknown",
+      "shared_functions": 5,
+      "baseline_local_matches": [],
+      "baseline_descents": [],
+      "baseline_decision": "Shared function names but no surviving matching LOCAL owner or unambiguous filename/family candidate. Original owner remains unidentified; preserve current grouping, not a provenance claim.",
+      "evidence_class": "unidentified",
+      "current_disposition": "Unidentified: available evidence does not identify the original owner; current grouping is retained without a provenance claim."
+    },
+    {
+      "baseline_row": 1,
+      "source": "src/callprog/callprog_cfg.c",
+      "baseline_classification": "unknown",
+      "shared_functions": 0,
+      "baseline_local_matches": [],
+      "baseline_descents": [],
+      "baseline_decision": "No shared FUNC evidence and no surviving matching LOCAL owner. Do not assign generated/global data to a FILE by address adjacency.",
+      "evidence_class": "unidentified",
+      "current_disposition": "Unidentified: available evidence does not identify the original owner; current grouping is retained without a provenance claim."
+    },
+    {
+      "baseline_row": 2,
+      "source": "src/callprog/elliptic.c",
+      "baseline_classification": "unknown",
+      "shared_functions": 0,
+      "baseline_local_matches": [],
+      "baseline_descents": [],
+      "baseline_decision": "No shared FUNC evidence and no surviving matching LOCAL owner. Do not assign generated/global data to a FILE by address adjacency.",
+      "evidence_class": "unidentified",
+      "current_disposition": "Unidentified: available evidence does not identify the original owner; current grouping is retained without a provenance claim."
+    },
+    {
+      "baseline_row": 3,
+      "source": "src/core/rc_coeffs.c",
+      "baseline_classification": "unknown",
+      "shared_functions": 0,
+      "baseline_local_matches": [],
+      "baseline_descents": [],
+      "baseline_decision": "No shared FUNC evidence and no surviving matching LOCAL owner. Do not assign generated/global data to a FILE by address adjacency.",
+      "evidence_class": "unidentified",
+      "current_disposition": "Unidentified: available evidence does not identify the original owner; current grouping is retained without a provenance claim."
+    },
+    {
+      "baseline_row": 4,
+      "source": "src/dialer/dialercfg.c",
+      "baseline_classification": "unknown",
+      "shared_functions": 1,
+      "baseline_local_matches": [],
+      "baseline_descents": [],
+      "baseline_decision": "Shared function names but no surviving matching LOCAL owner or unambiguous filename/family candidate. Original owner remains unidentified; preserve current grouping, not a provenance claim.",
+      "evidence_class": "unidentified",
+      "current_disposition": "Unidentified: available evidence does not identify the original owner; current grouping is retained without a provenance claim."
+    },
+    {
+      "baseline_row": 5,
+      "source": "src/dsp/fpm_fsd_cfg.c",
+      "baseline_classification": "unknown",
+      "shared_functions": 0,
+      "baseline_local_matches": [],
+      "baseline_descents": [],
+      "baseline_decision": "No shared FUNC evidence and no surviving matching LOCAL owner. Do not assign generated/global data to a FILE by address adjacency.",
+      "evidence_class": "unidentified",
+      "current_disposition": "Unidentified: available evidence does not identify the original owner; current grouping is retained without a provenance claim."
+    },
+    {
+      "baseline_row": 6,
+      "source": "src/dsp/fpm_fse_cfg.c",
+      "baseline_classification": "unknown",
+      "shared_functions": 0,
+      "baseline_local_matches": [],
+      "baseline_descents": [],
+      "baseline_decision": "No shared FUNC evidence and no surviving matching LOCAL owner. Do not assign generated/global data to a FILE by address adjacency.",
+      "evidence_class": "unidentified",
+      "current_disposition": "Unidentified: available evidence does not identify the original owner; current grouping is retained without a provenance claim."
+    },
+    {
+      "baseline_row": 7,
+      "source": "src/dsp/fpm_fsm_cfg.c",
+      "baseline_classification": "unknown",
+      "shared_functions": 0,
+      "baseline_local_matches": [],
+      "baseline_descents": [],
+      "baseline_decision": "No shared FUNC evidence and no surviving matching LOCAL owner. Do not assign generated/global data to a FILE by address adjacency.",
+      "evidence_class": "unidentified",
+      "current_disposition": "Unidentified: available evidence does not identify the original owner; current grouping is retained without a provenance claim."
+    },
+    {
+      "baseline_row": 8,
+      "source": "src/dsp/fpm_iir_coeffs.c",
+      "baseline_classification": "unknown",
+      "shared_functions": 0,
+      "baseline_local_matches": [],
+      "baseline_descents": [],
+      "baseline_decision": "No shared FUNC evidence and no surviving matching LOCAL owner. Do not assign generated/global data to a FILE by address adjacency.",
+      "evidence_class": "unidentified",
+      "current_disposition": "Unidentified: available evidence does not identify the original owner; current grouping is retained without a provenance claim."
+    },
+    {
+      "baseline_row": 9,
+      "source": "src/dsp/fpm_lmsupd.c",
+      "baseline_classification": "unknown",
+      "shared_functions": 3,
+      "baseline_local_matches": [],
+      "baseline_descents": [],
+      "baseline_decision": "Shared function names but no surviving matching LOCAL owner or unambiguous filename/family candidate. Original owner remains unidentified; preserve current grouping, not a provenance claim.",
+      "evidence_class": "unidentified",
+      "current_disposition": "Unidentified: available evidence does not identify the original owner; current grouping is retained without a provenance claim."
+    },
+    {
+      "baseline_row": 10,
+      "source": "src/dsp/fpm_sre_cfg.c",
+      "baseline_classification": "unknown",
+      "shared_functions": 0,
+      "baseline_local_matches": [],
+      "baseline_descents": [],
+      "baseline_decision": "No shared FUNC evidence and no surviving matching LOCAL owner. Do not assign generated/global data to a FILE by address adjacency.",
+      "evidence_class": "unidentified",
+      "current_disposition": "Unidentified: available evidence does not identify the original owner; current grouping is retained without a provenance claim."
+    },
+    {
+      "baseline_row": 11,
+      "source": "src/dsp/fpm_xor.c",
+      "baseline_classification": "unknown",
+      "shared_functions": 0,
+      "baseline_local_matches": [],
+      "baseline_descents": [],
+      "baseline_decision": "No shared FUNC evidence and no surviving matching LOCAL owner. Do not assign generated/global data to a FILE by address adjacency.",
+      "evidence_class": "unidentified",
+      "current_disposition": "Unidentified: available evidence does not identify the original owner; current grouping is retained without a provenance claim."
+    },
+    {
+      "baseline_row": 12,
+      "source": "src/fax/faxadapt.c",
+      "baseline_classification": "ambiguous",
+      "shared_functions": 40,
+      "baseline_local_matches": [],
+      "baseline_descents": [],
+      "baseline_decision": "Multiple named original FILE candidates. Split supported API families; retain unsupported helpers/data explicitly unassigned.",
+      "evidence_class": "name-policy",
+      "current_disposition": "40 lowercase wrappers retained across eight canonical RX/TX files; naming-policy disposition, not direct LOCAL proof."
+    },
+    {
+      "baseline_row": 13,
+      "source": "src/fax/faxcfg.c",
+      "baseline_classification": "unknown",
+      "shared_functions": 0,
+      "baseline_local_matches": [],
+      "baseline_descents": [],
+      "baseline_decision": "No shared FUNC evidence and no surviving matching LOCAL owner. Do not assign generated/global data to a FILE by address adjacency.",
+      "evidence_class": "unidentified",
+      "current_disposition": "Unidentified: available evidence does not identify the original owner; current grouping is retained without a provenance claim."
+    },
+    {
+      "baseline_row": 14,
+      "source": "src/fax/fifo.c",
+      "baseline_classification": "unknown",
+      "shared_functions": 5,
+      "baseline_local_matches": [],
+      "baseline_descents": [
+        [
+          "FIFO_full_test",
+          "FIFO_read",
+          617936,
+          617568
+        ]
+      ],
+      "baseline_decision": "Shared function names but no surviving matching LOCAL owner or unambiguous filename/family candidate. Original owner remains unidentified; preserve current grouping, not a provenance claim.",
+      "evidence_class": "unidentified",
+      "current_disposition": "Unidentified: available evidence does not identify the original owner; current grouping is retained without a provenance claim."
+    },
+    {
+      "baseline_row": 15,
+      "source": "src/fax/nulldp.c",
+      "baseline_classification": "unknown",
+      "shared_functions": 5,
+      "baseline_local_matches": [],
+      "baseline_descents": [],
+      "baseline_decision": "Shared function names but no surviving matching LOCAL owner or unambiguous filename/family candidate. Original owner remains unidentified; preserve current grouping, not a provenance claim.",
+      "evidence_class": "unidentified",
+      "current_disposition": "Unidentified: available evidence does not identify the original owner; current grouping is retained without a provenance claim."
+    },
+    {
+      "baseline_row": 16,
+      "source": "src/fax/v17.c",
+      "baseline_classification": "ambiguous",
+      "shared_functions": 46,
+      "baseline_local_matches": [],
+      "baseline_descents": [
+        [
+          "SMCv17_init",
+          "V17TX_create",
+          658016,
+          625120
+        ],
+        [
+          "Restore_rateV17",
+          "StoreCoefV17",
+          677648,
+          677552
+        ],
+        [
+          "StoreCoefV17",
+          "RxNextStateV17",
+          677552,
+          655664
+        ],
+        [
+          "EpochDetectV17",
+          "V17RX_control",
+          677488,
+          657536
+        ],
+        [
+          "TxHdxStartV17",
+          "TxHdxIdleV17",
+          662288,
+          660640
+        ],
+        [
+          "TxHdxSilenceV17",
+          "TxHdxTEP_V17",
+          662128,
+          661936
+        ],
+        [
+          "TxHdxTEP_V17",
+          "TxHdxABV17",
+          661936,
+          661744
+        ],
+        [
+          "TxHdxABV17",
+          "TxHdxEQCondV17",
+          661744,
+          661536
+        ],
+        [
+          "TxHdxEQCondV17",
+          "TxHdxBridgeV17",
+          661536,
+          661328
+        ],
+        [
+          "TxHdxBridgeV17",
+          "TxHdxSCR1V17",
+          661328,
+          661120
+        ],
+        [
+          "TxHdxSCR1V17",
+          "TxHdxDataV17",
+          661120,
+          660768
+        ],
+        [
+          "DemodDataV17",
+          "RxHdxStartV17",
+          676000,
+          657424
+        ],
+        [
+          "RxHdxStartV17",
+          "RxHdxEpochDetV17",
+          657424,
+          657264
+        ],
+        [
+          "RxHdxEpochDetV17",
+          "RxHdxIdleV17",
+          657264,
+          656400
+        ],
+        [
+          "RxHdxIdleV17",
+          "RxHdxErrorV17",
+          656400,
+          655600
+        ],
+        [
+          "DescrambleDataV17",
+          "RxHdxPrtcolV17",
+          676416,
+          657040
+        ],
+        [
+          "RxHdxPrtcolV17",
+          "RxHdxBridgeV17",
+          657040,
+          656816
+        ],
+        [
+          "RxHdxBridgeV17",
+          "RxHdxScramV17",
+          656816,
+          656544
+        ],
+        [
+          "DataCarrierDetectV17",
+          "RxHdxDataV17",
+          676576,
+          655360
+        ]
+      ],
+      "baseline_decision": "Multiple named original FILE candidates. Split supported API families; retain unsupported helpers/data explicitly unassigned.",
+      "evidence_class": "name-policy",
+      "current_disposition": "Uppercase API co-location rejected by period exact-loss evidence; aggregate placement restored. Family-name ownership remains unproven. Four SMCv17 functions plus helper are in Smc.c as a naming-policy candidate; V17 tables remain in v17.c."
+    },
+    {
+      "baseline_row": 17,
+      "source": "src/fax/v17dec.c",
+      "baseline_classification": "unknown",
+      "shared_functions": 7,
+      "baseline_local_matches": [],
+      "baseline_descents": [],
+      "baseline_decision": "Shared function names but no surviving matching LOCAL owner or unambiguous filename/family candidate. Original owner remains unidentified; preserve current grouping, not a provenance claim.",
+      "evidence_class": "unidentified",
+      "current_disposition": "Unidentified: available evidence does not identify the original owner; current grouping is retained without a provenance claim."
+    },
+    {
+      "baseline_row": 18,
+      "source": "src/fax/v17dec_tables.c",
+      "baseline_classification": "unknown",
+      "shared_functions": 0,
+      "baseline_local_matches": [],
+      "baseline_descents": [],
+      "baseline_decision": "No shared FUNC evidence and no surviving matching LOCAL owner. Do not assign generated/global data to a FILE by address adjacency.",
+      "evidence_class": "unidentified",
+      "current_disposition": "Unidentified: available evidence does not identify the original owner; current grouping is retained without a provenance claim."
+    },
+    {
+      "baseline_row": 19,
+      "source": "src/fax/v21.c",
+      "baseline_classification": "ambiguous",
+      "shared_functions": 25,
+      "baseline_local_matches": [],
+      "baseline_descents": [
+        [
+          "CarrierDetectV21",
+          "RxNextStateV21",
+          677920,
+          662880
+        ],
+        [
+          "GetSNRV21",
+          "V21RX_control",
+          677936,
+          664592
+        ],
+        [
+          "DemodDataV21",
+          "RxHdxDataV21",
+          677696,
+          664160
+        ],
+        [
+          "RxHdxDataV21",
+          "RxHdxWaitV21",
+          664160,
+          663712
+        ],
+        [
+          "RxHdxWaitV21",
+          "RxHdxStartV21",
+          663712,
+          663184
+        ],
+        [
+          "RxHdxStartV21",
+          "RxHdxIdleV21",
+          663184,
+          662784
+        ],
+        [
+          "RxHdxIdleV21",
+          "RxHdxErrorV21",
+          662784,
+          662720
+        ],
+        [
+          "TxNoCarrierV21",
+          "TxHdxIdleV21",
+          678112,
+          665680
+        ],
+        [
+          "ModDataV21",
+          "TxHdxDataV21",
+          678016,
+          666064
+        ],
+        [
+          "TxHdxDataV21",
+          "TxHdxStartV21",
+          666064,
+          665296
+        ]
+      ],
+      "baseline_decision": "Multiple named original FILE candidates. Split supported API families; retain unsupported helpers/data explicitly unassigned.",
+      "evidence_class": "name-policy",
+      "current_disposition": "Uppercase API co-location rejected by period exact-loss evidence; aggregate placement restored. Family-name ownership remains unproven."
+    },
+    {
+      "baseline_row": 20,
+      "source": "src/fax/v21cfg.c",
+      "baseline_classification": "unknown",
+      "shared_functions": 0,
+      "baseline_local_matches": [],
+      "baseline_descents": [],
+      "baseline_decision": "No shared FUNC evidence and no surviving matching LOCAL owner. Do not assign generated/global data to a FILE by address adjacency.",
+      "evidence_class": "unidentified",
+      "current_disposition": "Unidentified: available evidence does not identify the original owner; current grouping is retained without a provenance claim."
+    },
+    {
+      "baseline_row": 21,
+      "source": "src/fax/v27.c",
+      "baseline_classification": "ambiguous",
+      "shared_functions": 40,
+      "baseline_local_matches": [],
+      "baseline_descents": [
+        [
+          "V27TX_delete",
+          "V27RX_eq_train",
+          632768,
+          631056
+        ],
+        [
+          "GetSNRV27",
+          "RxNextStateV27",
+          679520,
+          667152
+        ],
+        [
+          "EpochDetectV27",
+          "V27RX_status",
+          679488,
+          668448
+        ],
+        [
+          "V27RX_status",
+          "V27RX_control",
+          668448,
+          668320
+        ],
+        [
+          "DemodDataV27",
+          "RxHdxStartV27",
+          678224,
+          668208
+        ],
+        [
+          "RxHdxStartV27",
+          "RxHdxEpochDetV27",
+          668208,
+          668048
+        ],
+        [
+          "RxHdxEpochDetV27",
+          "RxHdxIdleV27",
+          668048,
+          667680
+        ],
+        [
+          "RxHdxIdleV27",
+          "RxHdxErrorV27",
+          667680,
+          667088
+        ],
+        [
+          "DescrambleDataV27",
+          "RxHdxPrtcolV27",
+          678560,
+          667824
+        ],
+        [
+          "DataCarrierDetectV27",
+          "RxHdxDataV27",
+          678624,
+          666848
+        ],
+        [
+          "ModDataV27",
+          "ScrambleDataV27",
+          679664,
+          679536
+        ],
+        [
+          "SetScramblerV27",
+          "V27TX_create",
+          679568,
+          631600
+        ],
+        [
+          "V27TX_control",
+          "V27TX_modem",
+          671280,
+          668464
+        ],
+        [
+          "TxNoCarrierV27",
+          "TxHdxQuietV27",
+          679760,
+          671072
+        ],
+        [
+          "TxHdxQuietV27",
+          "TxHdxAltV27",
+          671072,
+          670880
+        ],
+        [
+          "TxHdxAltV27",
+          "TxHdxEQCondV27",
+          670880,
+          670608
+        ],
+        [
+          "TxHdxEQCondV27",
+          "TxHdxSCR1V27",
+          670608,
+          670400
+        ],
+        [
+          "TxHdxSCR1V27",
+          "TxHdxDataV27",
+          670400,
+          670080
+        ],
+        [
+          "TxHdxDataV27",
+          "TxHdxIdleV27",
+          670080,
+          669952
+        ],
+        [
+          "TxHdxIdleV27",
+          "GenEQTrnSequenceV27",
+          669952,
+          668656
+        ]
+      ],
+      "baseline_decision": "Multiple named original FILE candidates. Split supported API families; retain unsupported helpers/data explicitly unassigned.",
+      "evidence_class": "name-policy",
+      "current_disposition": "Uppercase API co-location rejected by period exact-loss evidence; aggregate placement restored. Family-name ownership remains unproven."
+    },
+    {
+      "baseline_row": 22,
+      "source": "src/fax/v29.c",
+      "baseline_classification": "ambiguous",
+      "shared_functions": 39,
+      "baseline_local_matches": [],
+      "baseline_descents": [
+        [
+          "GetSNRV29",
+          "RxNextStateV29",
+          681280,
+          672000
+        ],
+        [
+          "EpochDetectV29",
+          "V29RX_status",
+          681248,
+          673264
+        ],
+        [
+          "V29RX_status",
+          "V29RX_control",
+          673264,
+          673152
+        ],
+        [
+          "SetEncoderV29",
+          "SeedScramblerV29",
+          681360,
+          681344
+        ],
+        [
+          "SeedScramblerV29",
+          "TxNextStateV29",
+          681344,
+          673760
+        ],
+        [
+          "TxHdxStartV29",
+          "TxHdxIdleV29",
+          675728,
+          674464
+        ],
+        [
+          "DemodDataV29",
+          "RxHdxStartV29",
+          679920,
+          673040
+        ],
+        [
+          "RxHdxStartV29",
+          "RxHdxEpochDetV29",
+          673040,
+          672880
+        ],
+        [
+          "RxHdxEpochDetV29",
+          "RxHdxIdleV29",
+          672880,
+          672480
+        ],
+        [
+          "RxHdxIdleV29",
+          "RxHdxErrorV29",
+          672480,
+          671936
+        ],
+        [
+          "DescrambleDataV29",
+          "RxHdxPrtcolV29",
+          680320,
+          672624
+        ],
+        [
+          "DataCarrierDetectV29",
+          "RxHdxDataV29",
+          680384,
+          671696
+        ],
+        [
+          "ModDataV29",
+          "TxHdxDataV29",
+          681408,
+          674592
+        ]
+      ],
+      "baseline_decision": "Multiple named original FILE candidates. Split supported API families; retain unsupported helpers/data explicitly unassigned.",
+      "evidence_class": "name-policy",
+      "current_disposition": "Uppercase API co-location rejected by period exact-loss evidence; aggregate placement restored. Family-name ownership remains unproven."
+    },
+    {
+      "baseline_row": 23,
+      "source": "src/pump/b103/b103_cfg.c",
+      "baseline_classification": "unknown",
+      "shared_functions": 0,
+      "baseline_local_matches": [],
+      "baseline_descents": [],
+      "baseline_decision": "No shared FUNC evidence and no surviving matching LOCAL owner. Do not assign generated/global data to a FILE by address adjacency.",
+      "evidence_class": "unidentified",
+      "current_disposition": "Unidentified: available evidence does not identify the original owner; current grouping is retained without a provenance claim."
+    },
+    {
+      "baseline_row": 24,
+      "source": "src/pump/b103/b103_tables.c",
+      "baseline_classification": "unknown",
+      "shared_functions": 0,
+      "baseline_local_matches": [],
+      "baseline_descents": [],
+      "baseline_decision": "No shared FUNC evidence and no surviving matching LOCAL owner. Do not assign generated/global data to a FILE by address adjacency.",
+      "evidence_class": "unidentified",
+      "current_disposition": "Unidentified: available evidence does not identify the original owner; current grouping is retained without a provenance claim."
+    },
+    {
+      "baseline_row": 25,
+      "source": "src/pump/v17/v17data.c",
+      "baseline_classification": "unknown",
+      "shared_functions": 2,
+      "baseline_local_matches": [],
+      "baseline_descents": [],
+      "baseline_decision": "Shared function names but no surviving matching LOCAL owner or unambiguous filename/family candidate. Original owner remains unidentified; preserve current grouping, not a provenance claim.",
+      "evidence_class": "unidentified",
+      "current_disposition": "Unidentified: available evidence does not identify the original owner; current grouping is retained without a provenance claim."
+    },
+    {
+      "baseline_row": 26,
+      "source": "src/pump/v22/v22ans.c",
+      "baseline_classification": "unknown",
+      "shared_functions": 2,
+      "baseline_local_matches": [],
+      "baseline_descents": [],
+      "baseline_decision": "Shared function names but no surviving matching LOCAL owner or unambiguous filename/family candidate. Original owner remains unidentified; preserve current grouping, not a provenance claim.",
+      "evidence_class": "unidentified",
+      "current_disposition": "Unidentified: available evidence does not identify the original owner; current grouping is retained without a provenance claim."
+    },
+    {
+      "baseline_row": 27,
+      "source": "src/pump/v22/v22conn.c",
+      "baseline_classification": "unknown",
+      "shared_functions": 2,
+      "baseline_local_matches": [],
+      "baseline_descents": [],
+      "baseline_decision": "Shared function names but no surviving matching LOCAL owner or unambiguous filename/family candidate. Original owner remains unidentified; preserve current grouping, not a provenance claim.",
+      "evidence_class": "unidentified",
+      "current_disposition": "Unidentified: available evidence does not identify the original owner; current grouping is retained without a provenance claim."
+    },
+    {
+      "baseline_row": 28,
+      "source": "src/pump/v22/v22data.c",
+      "baseline_classification": "unknown",
+      "shared_functions": 4,
+      "baseline_local_matches": [],
+      "baseline_descents": [
+        [
+          "ModDataV22",
+          "Detect_v22",
+          582416,
+          573888
+        ]
+      ],
+      "baseline_decision": "Shared function names but no surviving matching LOCAL owner or unambiguous filename/family candidate. Original owner remains unidentified; preserve current grouping, not a provenance claim.",
+      "evidence_class": "unidentified",
+      "current_disposition": "Unidentified: available evidence does not identify the original owner; current grouping is retained without a provenance claim."
+    },
+    {
+      "baseline_row": 29,
+      "source": "src/pump/v22/v22det.c",
+      "baseline_classification": "unknown",
+      "shared_functions": 4,
+      "baseline_local_matches": [],
+      "baseline_descents": [],
+      "baseline_decision": "Shared function names but no surviving matching LOCAL owner or unambiguous filename/family candidate. Original owner remains unidentified; preserve current grouping, not a provenance claim.",
+      "evidence_class": "unidentified",
+      "current_disposition": "Unidentified: available evidence does not identify the original owner; current grouping is retained without a provenance claim."
+    },
+    {
+      "baseline_row": 30,
+      "source": "src/pump/v22/v22hdx.c",
+      "baseline_classification": "unknown",
+      "shared_functions": 2,
+      "baseline_local_matches": [],
+      "baseline_descents": [],
+      "baseline_decision": "Shared function names but no surviving matching LOCAL owner or unambiguous filename/family candidate. Original owner remains unidentified; preserve current grouping, not a provenance claim.",
+      "evidence_class": "unidentified",
+      "current_disposition": "Unidentified: available evidence does not identify the original owner; current grouping is retained without a provenance claim."
+    },
+    {
+      "baseline_row": 31,
+      "source": "src/pump/v22/v22loop.c",
+      "baseline_classification": "unknown",
+      "shared_functions": 1,
+      "baseline_local_matches": [],
+      "baseline_descents": [],
+      "baseline_decision": "Shared function names but no surviving matching LOCAL owner or unambiguous filename/family candidate. Original owner remains unidentified; preserve current grouping, not a provenance claim.",
+      "evidence_class": "unidentified",
+      "current_disposition": "Unidentified: available evidence does not identify the original owner; current grouping is retained without a provenance claim."
+    },
+    {
+      "baseline_row": 32,
+      "source": "src/pump/v22/v22org.c",
+      "baseline_classification": "unknown",
+      "shared_functions": 2,
+      "baseline_local_matches": [
+        {
+          "name": "iSilenceAfter2100",
+          "size": 2,
+          "reference": [
+            {
+              "owner": "v22mod.c",
+              "size": 2,
+              "type": "OBJECT",
+              "value": 896
+            }
+          ]
+        }
+      ],
+      "baseline_descents": [],
+      "baseline_decision": "Direct surviving LOCAL-owner evidence: handled by the constructor/V22 ownership batch.",
+      "evidence_class": "direct-local",
+      "current_disposition": "Direct LOCAL-backed ownership resolved by the mixed V22 ownership batch."
+    },
+    {
+      "baseline_row": 33,
+      "source": "src/pump/v22/v22rate.c",
+      "baseline_classification": "unknown",
+      "shared_functions": 4,
+      "baseline_local_matches": [],
+      "baseline_descents": [],
+      "baseline_decision": "Shared function names but no surviving matching LOCAL owner or unambiguous filename/family candidate. Original owner remains unidentified; preserve current grouping, not a provenance claim.",
+      "evidence_class": "unidentified",
+      "current_disposition": "Unidentified: available evidence does not identify the original owner; current grouping is retained without a provenance claim."
+    },
+    {
+      "baseline_row": 34,
+      "source": "src/pump/v29/v29data.c",
+      "baseline_classification": "unknown",
+      "shared_functions": 2,
+      "baseline_local_matches": [],
+      "baseline_descents": [
+        [
+          "TxNoCarrierV29",
+          "GenEQTrnSequenceV29",
+          681504,
+          673648
+        ]
+      ],
+      "baseline_decision": "Shared function names but no surviving matching LOCAL owner or unambiguous filename/family candidate. Original owner remains unidentified; preserve current grouping, not a provenance claim.",
+      "evidence_class": "unidentified",
+      "current_disposition": "Unidentified: available evidence does not identify the original owner; current grouping is retained without a provenance claim."
+    },
+    {
+      "baseline_row": 35,
+      "source": "src/pump/v32/v32anstone.c",
+      "baseline_classification": "unknown",
+      "shared_functions": 1,
+      "baseline_local_matches": [],
+      "baseline_descents": [],
+      "baseline_decision": "Shared function names but no surviving matching LOCAL owner or unambiguous filename/family candidate. Original owner remains unidentified; preserve current grouping, not a provenance claim.",
+      "evidence_class": "unidentified",
+      "current_disposition": "Unidentified: available evidence does not identify the original owner; current grouping is retained without a provenance claim."
+    },
+    {
+      "baseline_row": 36,
+      "source": "src/pump/v32/v32cfg.c",
+      "baseline_classification": "unknown",
+      "shared_functions": 0,
+      "baseline_local_matches": [],
+      "baseline_descents": [],
+      "baseline_decision": "No shared FUNC evidence and no surviving matching LOCAL owner. Do not assign generated/global data to a FILE by address adjacency.",
+      "evidence_class": "unidentified",
+      "current_disposition": "Unidentified: available evidence does not identify the original owner; current grouping is retained without a provenance claim."
+    },
+    {
+      "baseline_row": 37,
+      "source": "src/pump/v32/v32data.c",
+      "baseline_classification": "unknown",
+      "shared_functions": 2,
+      "baseline_local_matches": [],
+      "baseline_descents": [],
+      "baseline_decision": "Shared function names but no surviving matching LOCAL owner or unambiguous filename/family candidate. Original owner remains unidentified; preserve current grouping, not a provenance claim.",
+      "evidence_class": "unidentified",
+      "current_disposition": "Unidentified: available evidence does not identify the original owner; current grouping is retained without a provenance claim."
+    },
+    {
+      "baseline_row": 38,
+      "source": "src/pump/v32/v32dec_tables.c",
+      "baseline_classification": "unknown",
+      "shared_functions": 0,
+      "baseline_local_matches": [],
+      "baseline_descents": [],
+      "baseline_decision": "No shared FUNC evidence and no surviving matching LOCAL owner. Do not assign generated/global data to a FILE by address adjacency.",
+      "evidence_class": "unidentified",
+      "current_disposition": "Unidentified: available evidence does not identify the original owner; current grouping is retained without a provenance claim."
+    },
+    {
+      "baseline_row": 39,
+      "source": "src/pump/v32/v32demod.c",
+      "baseline_classification": "unknown",
+      "shared_functions": 1,
+      "baseline_local_matches": [],
+      "baseline_descents": [],
+      "baseline_decision": "Shared function names but no surviving matching LOCAL owner or unambiguous filename/family candidate. Original owner remains unidentified; preserve current grouping, not a provenance claim.",
+      "evidence_class": "unidentified",
+      "current_disposition": "Unidentified: available evidence does not identify the original owner; current grouping is retained without a provenance claim."
+    },
+    {
+      "baseline_row": 40,
+      "source": "src/pump/v32/v32ecc_tables.c",
+      "baseline_classification": "unknown",
+      "shared_functions": 0,
+      "baseline_local_matches": [],
+      "baseline_descents": [],
+      "baseline_decision": "No shared FUNC evidence and no surviving matching LOCAL owner. Do not assign generated/global data to a FILE by address adjacency.",
+      "evidence_class": "unidentified",
+      "current_disposition": "Unidentified: available evidence does not identify the original owner; current grouping is retained without a provenance claim."
+    },
+    {
+      "baseline_row": 41,
+      "source": "src/pump/v32/v32fptab.c",
+      "baseline_classification": "unknown",
+      "shared_functions": 0,
+      "baseline_local_matches": [],
+      "baseline_descents": [],
+      "baseline_decision": "No shared FUNC evidence and no surviving matching LOCAL owner. Do not assign generated/global data to a FILE by address adjacency.",
+      "evidence_class": "unidentified",
+      "current_disposition": "Unidentified: available evidence does not identify the original owner; current grouping is retained without a provenance claim."
+    },
+    {
+      "baseline_row": 42,
+      "source": "src/pump/v32/v32fse.c",
+      "baseline_classification": "unknown",
+      "shared_functions": 9,
+      "baseline_local_matches": [],
+      "baseline_descents": [
+        [
+          "FSE_decision_trn",
+          "FSE_decision_CD",
+          529808,
+          529680
+        ],
+        [
+          "FSE_decision_CD",
+          "FSE_decision_AB",
+          529680,
+          528992
+        ],
+        [
+          "FSE_decision_AB",
+          "FSE_decision_16pt",
+          528992,
+          528016
+        ],
+        [
+          "FSE_decision_16pt",
+          "FSE_decision_16Tpt",
+          528016,
+          525104
+        ],
+        [
+          "FSE_decision_32pt",
+          "FSE_decision_128pt",
+          527280,
+          525536
+        ]
+      ],
+      "baseline_decision": "Shared function names but no surviving matching LOCAL owner or unambiguous filename/family candidate. Original owner remains unidentified; preserve current grouping, not a provenance claim.",
+      "evidence_class": "unidentified",
+      "current_disposition": "Unidentified: available evidence does not identify the original owner; current grouping is retained without a provenance claim."
+    },
+    {
+      "baseline_row": 43,
+      "source": "src/pump/v32/v32fse_tables.c",
+      "baseline_classification": "unknown",
+      "shared_functions": 0,
+      "baseline_local_matches": [],
+      "baseline_descents": [],
+      "baseline_decision": "No shared FUNC evidence and no surviving matching LOCAL owner. Do not assign generated/global data to a FILE by address adjacency.",
+      "evidence_class": "unidentified",
+      "current_disposition": "Unidentified: available evidence does not identify the original owner; current grouping is retained without a provenance claim."
+    },
+    {
+      "baseline_row": 44,
+      "source": "src/pump/v32/v32hdx_tables.c",
+      "baseline_classification": "unknown",
+      "shared_functions": 0,
+      "baseline_local_matches": [],
+      "baseline_descents": [],
+      "baseline_decision": "No shared FUNC evidence and no surviving matching LOCAL owner. Do not assign generated/global data to a FILE by address adjacency.",
+      "evidence_class": "unidentified",
+      "current_disposition": "Unidentified: available evidence does not identify the original owner; current grouping is retained without a provenance claim."
+    },
+    {
+      "baseline_row": 45,
+      "source": "src/pump/v32/v32nsans.c",
+      "baseline_classification": "unknown",
+      "shared_functions": 1,
+      "baseline_local_matches": [],
+      "baseline_descents": [],
+      "baseline_decision": "Shared function names but no surviving matching LOCAL owner or unambiguous filename/family candidate. Original owner remains unidentified; preserve current grouping, not a provenance claim.",
+      "evidence_class": "unidentified",
+      "current_disposition": "Unidentified: available evidence does not identify the original owner; current grouping is retained without a provenance claim."
+    },
+    {
+      "baseline_row": 46,
+      "source": "src/pump/v32/v32nsloop.c",
+      "baseline_classification": "unknown",
+      "shared_functions": 1,
+      "baseline_local_matches": [],
+      "baseline_descents": [],
+      "baseline_decision": "Shared function names but no surviving matching LOCAL owner or unambiguous filename/family candidate. Original owner remains unidentified; preserve current grouping, not a provenance claim.",
+      "evidence_class": "unidentified",
+      "current_disposition": "Unidentified: available evidence does not identify the original owner; current grouping is retained without a provenance claim."
+    },
+    {
+      "baseline_row": 47,
+      "source": "src/pump/v32/v32nsorg.c",
+      "baseline_classification": "unknown",
+      "shared_functions": 1,
+      "baseline_local_matches": [],
+      "baseline_descents": [],
+      "baseline_decision": "Shared function names but no surviving matching LOCAL owner or unambiguous filename/family candidate. Original owner remains unidentified; preserve current grouping, not a provenance claim.",
+      "evidence_class": "unidentified",
+      "current_disposition": "Unidentified: available evidence does not identify the original owner; current grouping is retained without a provenance claim."
+    },
+    {
+      "baseline_row": 48,
+      "source": "src/pump/v32/v32nsrng.c",
+      "baseline_classification": "unknown",
+      "shared_functions": 2,
+      "baseline_local_matches": [],
+      "baseline_descents": [],
+      "baseline_decision": "Shared function names but no surviving matching LOCAL owner or unambiguous filename/family candidate. Original owner remains unidentified; preserve current grouping, not a provenance claim.",
+      "evidence_class": "unidentified",
+      "current_disposition": "Unidentified: available evidence does not identify the original owner; current grouping is retained without a provenance claim."
+    },
+    {
+      "baseline_row": 49,
+      "source": "src/pump/v32/v32scram.c",
+      "baseline_classification": "unknown",
+      "shared_functions": 2,
+      "baseline_local_matches": [],
+      "baseline_descents": [
+        [
+          "SDMv32_scrambler",
+          "SDMv32_descrambler",
+          547152,
+          546800
+        ]
+      ],
+      "baseline_decision": "Shared function names but no surviving matching LOCAL owner or unambiguous filename/family candidate. Original owner remains unidentified; preserve current grouping, not a provenance claim.",
+      "evidence_class": "unidentified",
+      "current_disposition": "Unidentified: available evidence does not identify the original owner; current grouping is retained without a provenance claim."
+    },
+    {
+      "baseline_row": 50,
+      "source": "src/pump/v32/v32scram_tables.c",
+      "baseline_classification": "unknown",
+      "shared_functions": 0,
+      "baseline_local_matches": [],
+      "baseline_descents": [],
+      "baseline_decision": "No shared FUNC evidence and no surviving matching LOCAL owner. Do not assign generated/global data to a FILE by address adjacency.",
+      "evidence_class": "unidentified",
+      "current_disposition": "Unidentified: available evidence does not identify the original owner; current grouping is retained without a provenance claim."
+    },
+    {
+      "baseline_row": 51,
+      "source": "src/pump/v32/v32seq.c",
+      "baseline_classification": "unknown",
+      "shared_functions": 13,
+      "baseline_local_matches": [],
+      "baseline_descents": [
+        [
+          "DecodeRateSeq",
+          "CodeRateSeq",
+          533680,
+          533328
+        ],
+        [
+          "CodeFinalRateSeq",
+          "CodeESeq",
+          533504,
+          533136
+        ]
+      ],
+      "baseline_decision": "Shared function names but no surviving matching LOCAL owner or unambiguous filename/family candidate. Original owner remains unidentified; preserve current grouping, not a provenance claim.",
+      "evidence_class": "unidentified",
+      "current_disposition": "Unidentified: available evidence does not identify the original owner; current grouping is retained without a provenance claim."
+    },
+    {
+      "baseline_row": 52,
+      "source": "src/pump/v32/v32smc.c",
+      "baseline_classification": "unknown",
+      "shared_functions": 3,
+      "baseline_local_matches": [],
+      "baseline_descents": [
+        [
+          "SMCv32_encoder_abs",
+          "SMCv32_encoder_dif",
+          522944,
+          522576
+        ]
+      ],
+      "baseline_decision": "Shared function names but no surviving matching LOCAL owner or unambiguous filename/family candidate. Original owner remains unidentified; preserve current grouping, not a provenance claim.",
+      "evidence_class": "unidentified",
+      "current_disposition": "Unidentified: available evidence does not identify the original owner; current grouping is retained without a provenance claim."
+    },
+    {
+      "baseline_row": 53,
+      "source": "src/pump/v32/v32sre_tables.c",
+      "baseline_classification": "unknown",
+      "shared_functions": 0,
+      "baseline_local_matches": [],
+      "baseline_descents": [],
+      "baseline_decision": "No shared FUNC evidence and no surviving matching LOCAL owner. Do not assign generated/global data to a FILE by address adjacency.",
+      "evidence_class": "unidentified",
+      "current_disposition": "Unidentified: available evidence does not identify the original owner; current grouping is retained without a provenance claim."
+    },
+    {
+      "baseline_row": 54,
+      "source": "src/pump/v32/v32vtb.c",
+      "baseline_classification": "unknown",
+      "shared_functions": 1,
+      "baseline_local_matches": [],
+      "baseline_descents": [],
+      "baseline_decision": "Shared function names but no surviving matching LOCAL owner or unambiguous filename/family candidate. Original owner remains unidentified; preserve current grouping, not a provenance claim.",
+      "evidence_class": "unidentified",
+      "current_disposition": "Unidentified: available evidence does not identify the original owner; current grouping is retained without a provenance claim."
+    },
+    {
+      "baseline_row": 55,
+      "source": "src/pump/v32/v32vtb_tables.c",
+      "baseline_classification": "unknown",
+      "shared_functions": 0,
+      "baseline_local_matches": [],
+      "baseline_descents": [],
+      "baseline_decision": "No shared FUNC evidence and no surviving matching LOCAL owner. Do not assign generated/global data to a FILE by address adjacency.",
+      "evidence_class": "unidentified",
+      "current_disposition": "Unidentified: available evidence does not identify the original owner; current grouping is retained without a provenance claim."
+    },
+    {
+      "baseline_row": 56,
+      "source": "src/pump/v34/v34digital.c",
+      "baseline_classification": "unknown",
+      "shared_functions": 1,
+      "baseline_local_matches": [],
+      "baseline_descents": [],
+      "baseline_decision": "Shared function names but no surviving matching LOCAL owner or unambiguous filename/family candidate. Original owner remains unidentified; preserve current grouping, not a provenance claim.",
+      "evidence_class": "unidentified",
+      "current_disposition": "Unidentified: available evidence does not identify the original owner; current grouping is retained without a provenance claim."
+    },
+    {
+      "baseline_row": 57,
+      "source": "src/pump/v34/v34info.c",
+      "baseline_classification": "unknown",
+      "shared_functions": 7,
+      "baseline_local_matches": [],
+      "baseline_descents": [
+        [
+          "V34GiveProbeResults",
+          "V34SetINFO0dBits",
+          35936,
+          32800
+        ],
+        [
+          "V34SetINFO0dBits",
+          "V34SetINFO0aBits",
+          32800,
+          32016
+        ]
+      ],
+      "baseline_decision": "Shared function names but no surviving matching LOCAL owner or unambiguous filename/family candidate. Original owner remains unidentified; preserve current grouping, not a provenance claim.",
+      "evidence_class": "unidentified",
+      "current_disposition": "Unidentified: available evidence does not identify the original owner; current grouping is retained without a provenance claim."
+    },
+    {
+      "baseline_row": 58,
+      "source": "src/pump/v34/v34scram.c",
+      "baseline_classification": "unknown",
+      "shared_functions": 4,
+      "baseline_local_matches": [],
+      "baseline_descents": [],
+      "baseline_decision": "Shared function names but no surviving matching LOCAL owner or unambiguous filename/family candidate. Original owner remains unidentified; preserve current grouping, not a provenance claim.",
+      "evidence_class": "unidentified",
+      "current_disposition": "Unidentified: available evidence does not identify the original owner; current grouping is retained without a provenance claim."
+    },
+    {
+      "baseline_row": 59,
+      "source": "src/pump/v34/v34shell.c",
+      "baseline_classification": "unknown",
+      "shared_functions": 12,
+      "baseline_local_matches": [],
+      "baseline_descents": [
+        [
+          "shellDemapper",
+          "putFrame",
+          362272,
+          360368
+        ],
+        [
+          "demapFrame",
+          "getFrame",
+          364848,
+          358848
+        ],
+        [
+          "scaleVector",
+          "preinitV34",
+          361120,
+          360960
+        ]
+      ],
+      "baseline_decision": "Shared function names but no surviving matching LOCAL owner or unambiguous filename/family candidate. Original owner remains unidentified; preserve current grouping, not a provenance claim.",
+      "evidence_class": "unidentified",
+      "current_disposition": "Unidentified: available evidence does not identify the original owner; current grouping is retained without a provenance claim."
+    },
+    {
+      "baseline_row": 60,
+      "source": "src/pump/v90/V92ParamsInfo.c",
+      "baseline_classification": "unknown",
+      "shared_functions": 5,
+      "baseline_local_matches": [],
+      "baseline_descents": [],
+      "baseline_decision": "Shared function names but no surviving matching LOCAL owner or unambiguous filename/family candidate. Original owner remains unidentified; preserve current grouping, not a provenance claim.",
+      "evidence_class": "unidentified",
+      "current_disposition": "Unidentified: available evidence does not identify the original owner; current grouping is retained without a provenance claim."
+    },
+    {
+      "baseline_row": 61,
+      "source": "src/service/dtmf_coeffs.c",
+      "baseline_classification": "unknown",
+      "shared_functions": 0,
+      "baseline_local_matches": [],
+      "baseline_descents": [],
+      "baseline_decision": "No shared FUNC evidence and no surviving matching LOCAL owner. Do not assign generated/global data to a FILE by address adjacency.",
+      "evidence_class": "unidentified",
+      "current_disposition": "Unidentified: available evidence does not identify the original owner; current grouping is retained without a provenance claim."
+    },
+    {
+      "baseline_row": 62,
+      "source": "src/service/dtmf_mtd_coeffs.c",
+      "baseline_classification": "unknown",
+      "shared_functions": 0,
+      "baseline_local_matches": [],
+      "baseline_descents": [],
+      "baseline_decision": "No shared FUNC evidence and no surviving matching LOCAL owner. Do not assign generated/global data to a FILE by address adjacency.",
+      "evidence_class": "unidentified",
+      "current_disposition": "Unidentified: available evidence does not identify the original owner; current grouping is retained without a provenance claim."
+    },
+    {
+      "baseline_row": 63,
+      "source": "src/service/mtk.c",
+      "baseline_classification": "unknown",
+      "shared_functions": 1,
+      "baseline_local_matches": [],
+      "baseline_descents": [],
+      "baseline_decision": "Shared function names but no surviving matching LOCAL owner or unambiguous filename/family candidate. Original owner remains unidentified; preserve current grouping, not a provenance claim.",
+      "evidence_class": "unidentified",
+      "current_disposition": "Unidentified: available evidence does not identify the original owner; current grouping is retained without a provenance claim."
+    },
+    {
+      "baseline_row": 64,
+      "source": "src/service/mtk_tables.c",
+      "baseline_classification": "unknown",
+      "shared_functions": 0,
+      "baseline_local_matches": [],
+      "baseline_descents": [],
+      "baseline_decision": "No shared FUNC evidence and no surviving matching LOCAL owner. Do not assign generated/global data to a FILE by address adjacency.",
+      "evidence_class": "unidentified",
+      "current_disposition": "Unidentified: available evidence does not identify the original owner; current grouping is retained without a provenance claim."
+    },
+    {
+      "baseline_row": 65,
+      "source": "src/v8/v8handshak.c",
+      "baseline_classification": "unknown",
+      "shared_functions": 1,
+      "baseline_local_matches": [],
+      "baseline_descents": [],
+      "baseline_decision": "Shared function names but no surviving matching LOCAL owner or unambiguous filename/family candidate. Original owner remains unidentified; preserve current grouping, not a provenance claim.",
+      "evidence_class": "unidentified",
+      "current_disposition": "Unidentified: available evidence does not identify the original owner; current grouping is retained without a provenance claim."
+    },
+    {
+      "baseline_row": 66,
+      "source": "src/v8/v8hsrx.c",
+      "baseline_classification": "unknown",
+      "shared_functions": 0,
+      "baseline_local_matches": [],
+      "baseline_descents": [],
+      "baseline_decision": "No shared FUNC evidence and no surviving matching LOCAL owner. Do not assign generated/global data to a FILE by address adjacency.",
+      "evidence_class": "unidentified",
+      "current_disposition": "Unidentified: available evidence does not identify the original owner; current grouping is retained without a provenance claim."
+    },
+    {
+      "baseline_row": 67,
+      "source": "src/pump/v34/v34diag.cpp",
+      "baseline_classification": "unknown",
+      "shared_functions": 2,
+      "baseline_local_matches": [],
+      "baseline_descents": [
+        [
+          "VPcmV34GetDiagnostics",
+          "VPcmV34GetVisualDiagnostics",
+          30192,
+          29168
+        ]
+      ],
+      "baseline_decision": "Shared function names but no surviving matching LOCAL owner or unambiguous filename/family candidate. Original owner remains unidentified; preserve current grouping, not a provenance claim.",
+      "evidence_class": "unidentified",
+      "current_disposition": "Unidentified: available evidence does not identify the original owner; current grouping is retained without a provenance claim."
+    },
+    {
+      "baseline_row": 68,
+      "source": "src/pump/v34/v34hstx1.cpp",
+      "baseline_classification": "unknown",
+      "shared_functions": 0,
+      "baseline_local_matches": [],
+      "baseline_descents": [],
+      "baseline_decision": "No shared FUNC evidence and no surviving matching LOCAL owner. Do not assign generated/global data to a FILE by address adjacency.",
+      "evidence_class": "unidentified",
+      "current_disposition": "Unidentified: available evidence does not identify the original owner; current grouping is retained without a provenance claim."
+    },
+    {
+      "baseline_row": 69,
+      "source": "src/pump/v34/v34info1a.cpp",
+      "baseline_classification": "unknown",
+      "shared_functions": 1,
+      "baseline_local_matches": [],
+      "baseline_descents": [],
+      "baseline_decision": "Shared function names but no surviving matching LOCAL owner or unambiguous filename/family candidate. Original owner remains unidentified; preserve current grouping, not a provenance claim.",
+      "evidence_class": "unidentified",
+      "current_disposition": "Unidentified: available evidence does not identify the original owner; current grouping is retained without a provenance claim."
+    },
+    {
+      "baseline_row": 70,
+      "source": "src/pump/v90/VPcmFloModemCtor.cpp",
+      "baseline_classification": "unknown",
+      "shared_functions": 4,
+      "baseline_local_matches": [
+        {
+          "name": "v34initialbauds",
+          "size": 6,
+          "reference": [
+            {
+              "owner": "VpcmFloModem.cpp",
+              "size": 6,
+              "type": "OBJECT",
+              "value": 992
+            }
+          ]
+        },
+        {
+          "name": "entFiltNum",
+          "size": 40,
+          "reference": [
+            {
+              "owner": "VpcmFloModem.cpp",
+              "size": 40,
+              "type": "OBJECT",
+              "value": 224
+            }
+          ]
+        },
+        {
+          "name": "entFiltDen",
+          "size": 40,
+          "reference": [
+            {
+              "owner": "VpcmFloModem.cpp",
+              "size": 40,
+              "type": "OBJECT",
+              "value": 288
+            }
+          ]
+        }
+      ],
+      "baseline_descents": [
+        [
+          "_ZN12VPcmFloModemC2EPv12V90ModemSideP19_tagModemParametersj20V90ComputationalMode20V92ComputationalMode",
+          "_ZN12VPcmFloModemC1EPv12V90ModemSideP19_tagModemParametersj20V90ComputationalMode20V92ComputationalMode",
+          65248,
+          64096
+        ]
+      ],
+      "baseline_decision": "Direct surviving LOCAL-owner evidence: handled by the constructor/V22 ownership batch.",
+      "evidence_class": "direct-local",
+      "current_disposition": "Constructor and three LOCAL-backed tables merged into VpcmFloModem.cpp."
+    },
+    {
+      "baseline_row": 71,
+      "source": "src/pump/v90/VPcmXfCreate.cpp",
+      "baseline_classification": "unknown",
+      "shared_functions": 5,
+      "baseline_local_matches": [],
+      "baseline_descents": [
+        [
+          "VPCMXF_Create",
+          "_ZN12VPcmFloModemD2Ev",
+          64752,
+          53296
+        ]
+      ],
+      "baseline_decision": "Shared function names but no surviving matching LOCAL owner or unambiguous filename/family candidate. Original owner remains unidentified; preserve current grouping, not a provenance claim.",
+      "evidence_class": "unidentified",
+      "current_disposition": "Unidentified: available evidence does not identify the original owner; current grouping is retained without a provenance claim."
+    },
+    {
+      "baseline_row": 72,
+      "source": "src/pump/v90/VPcmXfTerm.cpp",
+      "baseline_classification": "unknown",
+      "shared_functions": 1,
+      "baseline_local_matches": [],
+      "baseline_descents": [],
+      "baseline_decision": "Shared function names but no surviving matching LOCAL owner or unambiguous filename/family candidate. Original owner remains unidentified; preserve current grouping, not a provenance claim.",
+      "evidence_class": "unidentified",
+      "current_disposition": "Unidentified: available evidence does not identify the original owner; current grouping is retained without a provenance claim."
+    },
+    {
+      "baseline_row": 73,
+      "source": "src/pump/v90/mohdet.cpp",
+      "baseline_classification": "unknown",
+      "shared_functions": 3,
+      "baseline_local_matches": [],
+      "baseline_descents": [],
+      "baseline_decision": "Shared function names but no surviving matching LOCAL owner or unambiguous filename/family candidate. Original owner remains unidentified; preserve current grouping, not a provenance claim.",
+      "evidence_class": "unidentified",
+      "current_disposition": "Unidentified: available evidence does not identify the original owner; current grouping is retained without a provenance claim."
+    }
+  ],
+  "gate_status": {
+    "report": "docs/issue20-closure.md",
+    "period_passed": 375,
+    "period_failed": 0,
+    "phase": "passed after fresh rebuild",
+    "exact_functions": 830,
+    "baseline_exact_members_lost": 0,
+    "modern_portability": "deferred to issue #96"
+  }
+}

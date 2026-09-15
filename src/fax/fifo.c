@@ -88,21 +88,6 @@ FIFO_create(struct fax_fifo *f, const struct fifo_cfg *cfg)
 }
 
 int
-FIFO_full_test(struct fax_fifo *f)
-{
-	short num = (short)(f->count << 14);
-	short threshold = FIFO_FULL_Q14;
-
-	num = (short)(num / f->size);
-	return num >= threshold;
-}
-
-/*
- * `take` is min(occupancy, count); the balance is padded from `f->fill`, so
- * `count` elements are ALWAYS written.  The fill is re-read inside its loop
- * because the object re-reads it there (dst may alias the object).
- */
-int
 FIFO_read(struct fax_fifo *f, unsigned short *dst, unsigned short count)
 {
 	unsigned short size = f->size;
@@ -131,6 +116,23 @@ FIFO_read(struct fax_fifo *f, unsigned short *dst, unsigned short count)
 	f->count -= take;
 	return take;
 }
+int
+FIFO_full_test(struct fax_fifo *f)
+{
+	short num = (short)(f->count << 14);
+	short threshold = FIFO_FULL_Q14;
+
+	num = (short)(num / f->size);
+	return num >= threshold;
+}
+
+
+/*
+ * `take` is min(occupancy, count); the balance is padded from `f->fill`, so
+ * `count` elements are ALWAYS written.  The fill is re-read inside its loop
+ * because the object re-reads it there (dst may alias the object).
+ */
+
 
 /*
  * `put` is min(count, free), where free is the 16-bit difference of `size`

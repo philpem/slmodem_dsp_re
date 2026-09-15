@@ -99,23 +99,6 @@ dp_v23_init(void)
 	return 0;
 }
 
-void
-dp_v23_exit(void)
-{
-	modem_dp_deregister(DP_V23, &v23_ops);
-}
-
-/*
- * ---------------------------------------------------------------------------
- * v23_create -- .text 0x004c30.
- *
- * The configuration is three fields and every one of them is a constant here
- * except the answer-tone flag.  8000 is the datapump's own rate, so the
- * answer-tone sequence is timed against the rate the modulation actually
- * runs at rather than against whatever the host asked for; 700 is the
- * carrier-loss timeout in milliseconds, which both receivers charge at 20 per
- * block -- 35 blocks, 700 ms of dead line before the call is dropped.
- */
 static struct dp *
 v23_create(void *modem, int id, int caller, int srate, int max_frag,
 	   struct dp_operations *op)
@@ -163,6 +146,25 @@ v23_create(void *modem, int id, int caller, int srate, int max_frag,
 
 	return &dp->dp;
 }
+void
+dp_v23_exit(void)
+{
+	modem_dp_deregister(DP_V23, &v23_ops);
+}
+
+
+/*
+ * ---------------------------------------------------------------------------
+ * v23_create -- .text 0x004c30.
+ *
+ * The configuration is three fields and every one of them is a constant here
+ * except the answer-tone flag.  8000 is the datapump's own rate, so the
+ * answer-tone sequence is timed against the rate the modulation actually
+ * runs at rather than against whatever the host asked for; 700 is the
+ * carrier-loss timeout in milliseconds, which both receivers charge at 20 per
+ * block -- 35 blocks, 700 ms of dead line before the call is dropped.
+ */
+
 
 /*
  * v23_delete -- .text 0x004d50.

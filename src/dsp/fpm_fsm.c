@@ -19,6 +19,33 @@
  */
 #define FPM_FSM_RATE_SCALE 0x471c
 
+void
+FPM_FSM_init(struct fpm_fsm *state, const struct fpm_fsm_cfg *cfg)
+{
+	struct fpm_tone_cfg tone;
+
+	/* The first four shorts: both frequencies, symbol length and scale. */
+	state->cfg = *cfg;
+
+	state->scaled[0] =
+		(short)(((int)state->cfg.freq[0] * FPM_FSM_RATE_SCALE) >> 14);
+	state->scaled[1] =
+		(short)(((int)state->cfg.freq[1] * FPM_FSM_RATE_SCALE) >> 14);
+
+	/*
+	 * Start from the built-in tone configuration and override only the
+	 * output scale.  The frequency is not set here -- modulate retunes per
+	 * bit, so whatever the default carries is immediately replaced.
+	 */
+	tone = FPM_TONE_CFG;
+	tone.scale = state->cfg.scale;
+
+	/*
+	 * Passing the existing pointer means a re-init reuses the object;
+	 * on a zeroed state it is NULL and FPM_TONE_create allocates.
+	 */
+	state->tone = FPM_TONE_create(state->tone, &tone);
+}
 short
 FPM_FSM_modulate(struct fpm_fsm *state, const unsigned short *bits,
 		 short *out, unsigned short nbits)
@@ -55,33 +82,8 @@ FPM_FSM_modulate(struct fpm_fsm *state, const unsigned short *bits,
 	return (short)total;
 }
 
-void
-FPM_FSM_init(struct fpm_fsm *state, const struct fpm_fsm_cfg *cfg)
-{
-	struct fpm_tone_cfg tone;
 
-	/* The first four shorts: both frequencies, symbol length and scale. */
-	state->cfg = *cfg;
 
-	state->scaled[0] =
-		(short)(((int)state->cfg.freq[0] * FPM_FSM_RATE_SCALE) >> 14);
-	state->scaled[1] =
-		(short)(((int)state->cfg.freq[1] * FPM_FSM_RATE_SCALE) >> 14);
-
-	/*
-	 * Start from the built-in tone configuration and override only the
-	 * output scale.  The frequency is not set here -- modulate retunes per
-	 * bit, so whatever the default carries is immediately replaced.
-	 */
-	tone = FPM_TONE_CFG;
-	tone.scale = state->cfg.scale;
-
-	/*
-	 * Passing the existing pointer means a re-init reuses the object;
-	 * on a zeroed state it is NULL and FPM_TONE_create allocates.
-	 */
-	state->tone = FPM_TONE_create(state->tone, &tone);
-}
 
 void
 FPM_FSM_delete(struct fpm_fsm *state)

@@ -243,157 +243,7 @@ static float v92TxPreFilter[V92_TXPREFILTER_TAPS] = {
  * closing 152 bytes are the same statements in the same order (finding F1283).
  * ===========================================================================
  */
-void
-V92Modulator::reset()
-{
-	unsigned int i;
 
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("V92Modulator reset\r\n");
-
-	scrambler.reset(0);
-	/*
-	 * `blockRemaining` IS ASSIGNED LAST IN THE SOURCE AND THIRD IN THE
-	 * OBJECT, and the two copies of this function are what prove it.
-	 * The comment above lists the STANDALONE symbol's emission order,
-	 * +0x2c +0x30 +0x08 +0x34 +0x38, which is what a disassembly gives
-	 * you; the constructor inlines the same statements and emits +0x08
-	 * LAST, after +0x38.  One source cannot be both emissions unless the
-	 * source order is neither, so it was enumerated: all 5! orders of
-	 * these five, 120 cells, 72 distinct emissions, scoring `reset` and
-	 * the constructor together.  Exactly ONE keeps `reset` byte-identical
-	 * AND closes the constructor -- a unique preimage over the pair --
-	 * and it is this one.  Finding F8065.
-	 */
-	phase = 0;
-	symbolCount = 0;
-	eventCode = 0;
-	resamplerPhaseChange = V92MOD_PHASECHG_NONE;
-	blockRemaining = blockSize;
-	queue->reset();
-	byte_0c = 0;
-	byte_0d = 0;
-	float_28 = 0.0f;
-	queuePrime = (unsigned int)(params->MODULATOR_QUEUE_LENGTH >> 1);
-
-	for (i = 0; i < queuePrime; i++)
-		queue->write(0.0f);
-
-	txFilter->reset();
-}
-
-/*
- * ===========================================================================
- * V92Modulator::V92Modulator (.text+0x15120 / +0x15400, 734 bytes)
- *
- * The scrambler in the member-initialiser list, then a debug line, then the
- * seven arguments filed away, then eleven allocations, then the inlined
- * `reset`.
- *
- * `blockSize` IS COMPUTED IN FLOATING POINT AND TRUNCATED.  The object does
- * `fildll` over a zero-extended 64-bit push of the argument -- the unsigned
- * to float conversion -- then `fmuls 0x3f555555`, `fadds 0.5f`, and a
- * `fistpll` with the x87 control word forced to round-toward-zero whose low
- * half is kept.  That last pair is GCC's float-to-UNSIGNED sequence, so both
- * ends of the conversion are unsigned and neither is a guess.  There is no
- * intermediate store, so the multiply and the add happen in the x87's
- * extended precision and the `f` suffixes on the two constants control only
- * which values are loaded.
- *
- * `3 * blockSize` for the bit-to-symbol stage is `lea (%eax,%eax,2)` over the
- * value RE-READ from +0x00, and the two buffers at +0x84 and +0x8c are sized
- * from the ARGUMENT rather than from `blockSize`.  Getting those two the same
- * way round is the difference between a graph that is right and one that is
- * plausible.
- *
- * NOT ONE OF THE ELEVEN ALLOCATIONS IS CHECKED, the blob's included.
- * ===========================================================================
- */
-V92Modulator::V92Modulator(unsigned int nSamples, V92Phase2Info *p2,
-			   V92Ja *j, tagV90DILdescriptor *d, V92CP *c,
-			   V92MappingParams *mp, V92Parameters *pp)
-	: scrambler(V92MOD_SCRAM_TAP1, V92MOD_SCRAM_TAP2, V92MOD_SCRAM_SLACK)
-{
-	void *p;
-
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("V92Modulator constraction\r\n");
-
-	/*
-	 * THE ORDER OF THESE SEVEN IS DECODED AND IT IS NOT THE ORDER THE
-	 * STORES COME OUT IN.  All 5,040 orderings were compiled twice --
-	 * once with the `resampleIn` size written as a multiply and once as
-	 * the shift below -- and every one of the 10,080 cells gave a
-	 * DISTINCT object, so the generator is not the thing being measured.
-	 * Against the multiply, no cell reached the object at all and the
-	 * best was 354 differing bytes of 734: lever 1's killing branch, and
-	 * the reason the size expression was looked at next.  Against the
-	 * shift the same domain has a floor of 14 and this cell is it.
-	 * Findings F8064 and F8065.
-	 */
-	blockSize = (unsigned int)(nSamples
-				   * V92MOD_RATE_RATIO
-				   + 0.5f);
-	phase2Info = p2;
-	ja = j;
-	cp = c;
-	dil = d;
-	mappingParams = mp;
-	params = pp;
-
-	buf_7c = (short *)sysdep_malloc((blockSize + V92MOD_BUF_SLACK)
-					* sizeof(short));
-	/*
-	 * THE SECOND SIZE IS A SHIFT AND THE FIRST IS NOT, and the object is
-	 * what says so.  Both are `blockSize + V92MOD_BUF_SLACK` scaled, and
-	 * the blob scales them differently: `lea 0x14(%ebp,%ebp,1)` for the
-	 * `short` buffer above, and `add $0xa,%eax ; shl $0x2,%eax` -- the
-	 * addition kept, then the scale applied to it -- for this one.  Eight
-	 * spellings were compiled at each of the seven positions of the
-	 * `blockSize` statement, 56 cells and 14 distinct emissions, and the
-	 * SEVEN multiplicative ones all fold to a single `lea 0x28(,%reg,4)`:
-	 * `* sizeof(float)`, `sizeof(float) *`, `* 4`, `4u *`, a local for
-	 * the sum, `* sizeof(*resampleIn)` and an `(int)` cast.  Only `<< 2`
-	 * leaves the pair, because GCC 3.4.2 distributes a constant multiply
-	 * over the addition and does not distribute a shift.  That took the
-	 * constructor from 408 differing bytes to 18.  Finding F8064.
-	 */
-	resampleIn = (float *)sysdep_malloc((blockSize + V92MOD_BUF_SLACK)
-					    << 2);
-	buf_88 = (unsigned char *)sysdep_malloc(blockSize * 8);
-	resampleOut = (float *)sysdep_malloc((nSamples + V92MOD_BUF_SLACK)
-					     * sizeof(float));
-	resampleTail = (float *)sysdep_malloc((nSamples + V92MOD_BUF_SLACK)
-					      * sizeof(float));
-
-	p = sysdep_malloc(sizeof(V92BitsToSymbol));
-	new (p) V92BitsToSymbol(3 * blockSize, params);
-	bitsToSymbol = (V92BitsToSymbol *)p;
-
-	p = sysdep_malloc(sizeof(ResamplerTimingOffset));
-	new (p) ResamplerTimingOffset(V92MOD_RS_PHASES, V92MOD_RS_PPMSCALE,
-				       V92MOD_RS_TAPS, V92MOD_RS_CUTOFF,
-				       V92MOD_RS_PPM, V92MOD_RS_MINHISTORY);
-	resampler = (ResamplerTimingOffset *)p;
-
-	p = sysdep_malloc(sizeof(V92Phase3Modulator));
-	new (p) V92Phase3Modulator(params);
-	phase3Modulator = (V92Phase3Modulator *)p;
-
-	p = sysdep_malloc(sizeof(V92Phase4Modulator));
-	new (p) V92Phase4Modulator(params, bitsToSymbol, cp, mappingParams);
-	phase4Modulator = (V92Phase4Modulator *)p;
-
-	p = sysdep_malloc(sizeof(Queue<float>));
-	new (p) Queue<float>((unsigned int)params->MODULATOR_QUEUE_LENGTH);
-	queue = (Queue<float> *)p;
-
-	p = sysdep_malloc(sizeof(FloatFIR));
-	new (p) FloatFIR(V92_TXPREFILTER_TAPS, v92TxPreFilter, V92MOD_FIR_BLOCK);
-	txFilter = (FloatFIR *)p;
-
-	reset();
-}
 
 /*
  * ===========================================================================
@@ -1295,4 +1145,154 @@ V92Modulator::progress(int *bits, unsigned int &nbits, float *out,
 			    "V92Modulator: Queue is Empty/Full !!!\r\n");
 		eventCode = V92MOD_STATUS_QUEUE_LIMIT;
 	}
+}void
+V92Modulator::reset()
+{
+	unsigned int i;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V92Modulator reset\r\n");
+
+	scrambler.reset(0);
+	/*
+	 * `blockRemaining` IS ASSIGNED LAST IN THE SOURCE AND THIRD IN THE
+	 * OBJECT, and the two copies of this function are what prove it.
+	 * The comment above lists the STANDALONE symbol's emission order,
+	 * +0x2c +0x30 +0x08 +0x34 +0x38, which is what a disassembly gives
+	 * you; the constructor inlines the same statements and emits +0x08
+	 * LAST, after +0x38.  One source cannot be both emissions unless the
+	 * source order is neither, so it was enumerated: all 5! orders of
+	 * these five, 120 cells, 72 distinct emissions, scoring `reset` and
+	 * the constructor together.  Exactly ONE keeps `reset` byte-identical
+	 * AND closes the constructor -- a unique preimage over the pair --
+	 * and it is this one.  Finding F8065.
+	 */
+	phase = 0;
+	symbolCount = 0;
+	eventCode = 0;
+	resamplerPhaseChange = V92MOD_PHASECHG_NONE;
+	blockRemaining = blockSize;
+	queue->reset();
+	byte_0c = 0;
+	byte_0d = 0;
+	float_28 = 0.0f;
+	queuePrime = (unsigned int)(params->MODULATOR_QUEUE_LENGTH >> 1);
+
+	for (i = 0; i < queuePrime; i++)
+		queue->write(0.0f);
+
+	txFilter->reset();
+}
+
+/*
+ * ===========================================================================
+ * V92Modulator::V92Modulator (.text+0x15120 / +0x15400, 734 bytes)
+ *
+ * The scrambler in the member-initialiser list, then a debug line, then the
+ * seven arguments filed away, then eleven allocations, then the inlined
+ * `reset`.
+ *
+ * `blockSize` IS COMPUTED IN FLOATING POINT AND TRUNCATED.  The object does
+ * `fildll` over a zero-extended 64-bit push of the argument -- the unsigned
+ * to float conversion -- then `fmuls 0x3f555555`, `fadds 0.5f`, and a
+ * `fistpll` with the x87 control word forced to round-toward-zero whose low
+ * half is kept.  That last pair is GCC's float-to-UNSIGNED sequence, so both
+ * ends of the conversion are unsigned and neither is a guess.  There is no
+ * intermediate store, so the multiply and the add happen in the x87's
+ * extended precision and the `f` suffixes on the two constants control only
+ * which values are loaded.
+ *
+ * `3 * blockSize` for the bit-to-symbol stage is `lea (%eax,%eax,2)` over the
+ * value RE-READ from +0x00, and the two buffers at +0x84 and +0x8c are sized
+ * from the ARGUMENT rather than from `blockSize`.  Getting those two the same
+ * way round is the difference between a graph that is right and one that is
+ * plausible.
+ *
+ * NOT ONE OF THE ELEVEN ALLOCATIONS IS CHECKED, the blob's included.
+ * ===========================================================================
+ */
+V92Modulator::V92Modulator(unsigned int nSamples, V92Phase2Info *p2,
+			   V92Ja *j, tagV90DILdescriptor *d, V92CP *c,
+			   V92MappingParams *mp, V92Parameters *pp)
+	: scrambler(V92MOD_SCRAM_TAP1, V92MOD_SCRAM_TAP2, V92MOD_SCRAM_SLACK)
+{
+	void *p;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V92Modulator constraction\r\n");
+
+	/*
+	 * THE ORDER OF THESE SEVEN IS DECODED AND IT IS NOT THE ORDER THE
+	 * STORES COME OUT IN.  All 5,040 orderings were compiled twice --
+	 * once with the `resampleIn` size written as a multiply and once as
+	 * the shift below -- and every one of the 10,080 cells gave a
+	 * DISTINCT object, so the generator is not the thing being measured.
+	 * Against the multiply, no cell reached the object at all and the
+	 * best was 354 differing bytes of 734: lever 1's killing branch, and
+	 * the reason the size expression was looked at next.  Against the
+	 * shift the same domain has a floor of 14 and this cell is it.
+	 * Findings F8064 and F8065.
+	 */
+	blockSize = (unsigned int)(nSamples
+				   * V92MOD_RATE_RATIO
+				   + 0.5f);
+	phase2Info = p2;
+	ja = j;
+	cp = c;
+	dil = d;
+	mappingParams = mp;
+	params = pp;
+
+	buf_7c = (short *)sysdep_malloc((blockSize + V92MOD_BUF_SLACK)
+					* sizeof(short));
+	/*
+	 * THE SECOND SIZE IS A SHIFT AND THE FIRST IS NOT, and the object is
+	 * what says so.  Both are `blockSize + V92MOD_BUF_SLACK` scaled, and
+	 * the blob scales them differently: `lea 0x14(%ebp,%ebp,1)` for the
+	 * `short` buffer above, and `add $0xa,%eax ; shl $0x2,%eax` -- the
+	 * addition kept, then the scale applied to it -- for this one.  Eight
+	 * spellings were compiled at each of the seven positions of the
+	 * `blockSize` statement, 56 cells and 14 distinct emissions, and the
+	 * SEVEN multiplicative ones all fold to a single `lea 0x28(,%reg,4)`:
+	 * `* sizeof(float)`, `sizeof(float) *`, `* 4`, `4u *`, a local for
+	 * the sum, `* sizeof(*resampleIn)` and an `(int)` cast.  Only `<< 2`
+	 * leaves the pair, because GCC 3.4.2 distributes a constant multiply
+	 * over the addition and does not distribute a shift.  That took the
+	 * constructor from 408 differing bytes to 18.  Finding F8064.
+	 */
+	resampleIn = (float *)sysdep_malloc((blockSize + V92MOD_BUF_SLACK)
+					    << 2);
+	buf_88 = (unsigned char *)sysdep_malloc(blockSize * 8);
+	resampleOut = (float *)sysdep_malloc((nSamples + V92MOD_BUF_SLACK)
+					     * sizeof(float));
+	resampleTail = (float *)sysdep_malloc((nSamples + V92MOD_BUF_SLACK)
+					      * sizeof(float));
+
+	p = sysdep_malloc(sizeof(V92BitsToSymbol));
+	new (p) V92BitsToSymbol(3 * blockSize, params);
+	bitsToSymbol = (V92BitsToSymbol *)p;
+
+	p = sysdep_malloc(sizeof(ResamplerTimingOffset));
+	new (p) ResamplerTimingOffset(V92MOD_RS_PHASES, V92MOD_RS_PPMSCALE,
+				       V92MOD_RS_TAPS, V92MOD_RS_CUTOFF,
+				       V92MOD_RS_PPM, V92MOD_RS_MINHISTORY);
+	resampler = (ResamplerTimingOffset *)p;
+
+	p = sysdep_malloc(sizeof(V92Phase3Modulator));
+	new (p) V92Phase3Modulator(params);
+	phase3Modulator = (V92Phase3Modulator *)p;
+
+	p = sysdep_malloc(sizeof(V92Phase4Modulator));
+	new (p) V92Phase4Modulator(params, bitsToSymbol, cp, mappingParams);
+	phase4Modulator = (V92Phase4Modulator *)p;
+
+	p = sysdep_malloc(sizeof(Queue<float>));
+	new (p) Queue<float>((unsigned int)params->MODULATOR_QUEUE_LENGTH);
+	queue = (Queue<float> *)p;
+
+	p = sysdep_malloc(sizeof(FloatFIR));
+	new (p) FloatFIR(V92_TXPREFILTER_TAPS, v92TxPreFilter, V92MOD_FIR_BLOCK);
+	txFilter = (FloatFIR *)p;
+
+	reset();
 }

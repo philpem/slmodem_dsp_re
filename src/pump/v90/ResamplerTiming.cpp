@@ -188,45 +188,6 @@ ResamplerTiming::resetSdHalfBaudDft()
  * it does in `V90Resampler::getTimingHistoryStd`.
  */
 void
-ResamplerTiming::SdHalfBaudDft(float v)
-{
-	if (dftDone)
-		return;
-
-	switch (dftCount % 4) {
-	case 0:
-		dftRe += v;
-		break;
-	case 1:
-		dftIm -= v;
-		break;
-	case 2:
-		dftRe -= v;
-		break;
-	case 3:
-		dftIm += v;
-		break;
-	}
-
-	dftCount++;
-
-	if (dftCount == 256) {
-		dftDone = 1;
-		dftMag = sqrt(dftRe * dftRe + dftIm * dftIm);
-	}
-}
-
-/*
- * The base's per-output-sample hook, vtable slot +0x14.
- *
- * PRECISION.  There is no `fstps`/`flds` to a stack slot anywhere in this
- * function: every store is to a member, and each of `y`, `sq` and `e` is used
- * again from the 80-bit register AFTER its member store has rounded it.  The
- * `float` locals below are therefore the right spelling -- with -mfpmath=387
- * and no -ffloat-store GCC keeps them in x87 registers, which is what the
- * object does.  -ffloat-store would break this function.
- */
-void
 ResamplerTiming::timingCorrection(float v)
 {
 	float y, sq, e;
@@ -295,6 +256,45 @@ ResamplerTiming::timingCorrection(float v)
 	}
 }
 
+void
+ResamplerTiming::SdHalfBaudDft(float v)
+{
+	if (dftDone)
+		return;
+
+	switch (dftCount % 4) {
+	case 0:
+		dftRe += v;
+		break;
+	case 1:
+		dftIm -= v;
+		break;
+	case 2:
+		dftRe -= v;
+		break;
+	case 3:
+		dftIm += v;
+		break;
+	}
+
+	dftCount++;
+
+	if (dftCount == 256) {
+		dftDone = 1;
+		dftMag = sqrt(dftRe * dftRe + dftIm * dftIm);
+	}
+}
+
+/*
+ * The base's per-output-sample hook, vtable slot +0x14.
+ *
+ * PRECISION.  There is no `fstps`/`flds` to a stack slot anywhere in this
+ * function: every store is to a member, and each of `y`, `sq` and `e` is used
+ * again from the 80-bit register AFTER its member store has rounded it.  The
+ * `float` locals below are therefore the right spelling -- with -mfpmath=387
+ * and no -ffloat-store GCC keeps them in x87 registers, which is what the
+ * object does.  -ffloat-store would break this function.
+ */
 /*
  * Renormalise the resonator's b0 from the measured baud/2 DFT bin.
  *

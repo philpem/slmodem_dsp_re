@@ -105,15 +105,7 @@ typedef char v90p2i_size[(sizeof(V90Phase2Info) == 0x24) ? 1 : -1];
  * `L2` before that runs reads whatever was in the storage.
  * ===========================================================================
  */
-V90Phase2Info::V90Phase2Info(V90Parameters *p)
-{
-	params = p;
-	pcmType = (p->PHASE2_INFO_A_OR_MU != 0);
-	rtd = p->PHASE2_INFO_RTD;
-	Uinfo = (unsigned char)p->PHASE2_INFO_UINFO;
-	maxTxPower = (unsigned char)p->PHASE2_INFO_MAX_TX_POWER;
-	txPowerMeasurementPoint = (p->PHASE2_INFO_TX_POWER_MEASURE_POINT != 0);
-}
+
 
 /*
  * setToDefault -- 0x2a950, 49 bytes: the constructor's five copies again,
@@ -135,6 +127,14 @@ V90Phase2Info::setToDefault()
 	maxTxPower = (unsigned char)blk->PHASE2_INFO_MAX_TX_POWER;
 	txPowerMeasurementPoint =
 	    (blk->PHASE2_INFO_TX_POWER_MEASURE_POINT != 0);
+}V90Phase2Info::V90Phase2Info(V90Parameters *p)
+{
+	params = p;
+	pcmType = (p->PHASE2_INFO_A_OR_MU != 0);
+	rtd = p->PHASE2_INFO_RTD;
+	Uinfo = (unsigned char)p->PHASE2_INFO_UINFO;
+	maxTxPower = (unsigned char)p->PHASE2_INFO_MAX_TX_POWER;
+	txPowerMeasurementPoint = (p->PHASE2_INFO_TX_POWER_MEASURE_POINT != 0);
 }
 
 /*

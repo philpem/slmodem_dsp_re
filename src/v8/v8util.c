@@ -148,19 +148,12 @@ v8_dftenergy(struct v8_dft_bin *bin, short n, short shift)
 	}
 }
 
-/*
- * Point the V.21 modem at a set of filter designs.  The four are swapped
- * together, which is how one modem serves both channels of V.21: the
- * handshake calls this again whenever it changes direction.
- */
+/* Arm the tone queue: nothing pending, and the period set to 0x688. */
 void
-V8_setFilters(struct v8 *v, const short *a, const short *b, const short *c,
-	      const short *d)
+v8_TONEq_init(struct v8 *v)
 {
-	v->v21.a = a;
-	v->v21.b = b;
-	v->v21.c = c;
-	v->v21.d = d;
+	v->toneq_pending = 0;
+	v->toneq_period = 0x688;
 }
 
 /*
@@ -186,34 +179,19 @@ V8_V21_reset(struct v8 *v)
 	v->v21.mark_run = 0;
 }
 
-/* Arm the tone queue: nothing pending, and the period set to 0x688. */
-void
-v8_TONEq_init(struct v8 *v)
-{
-	v->toneq_pending = 0;
-	v->toneq_period = 0x688;
-}
-
 /*
- * Arm the ANSam phase-reversal detector.  The window is cleared and the
- * countdown at +0x0e set to 32 -- half the window, which is how long it
- * waits before its first verdict.
+ * Point the V.21 modem at a set of filter designs.  The four are swapped
+ * together, which is how one modem serves both channels of V.21: the
+ * handshake calls this again whenever it changes direction.
  */
 void
-v8_phase_rev_init(struct v8_phase_rev *pr)
+V8_setFilters(struct v8 *v, const short *a, const short *b, const short *c,
+	      const short *d)
 {
-	int i;
-
-	pr->detected = 0;
-	pr->corr = 0;
-	pr->energy = 0;
-	pr->smoothed = 0;
-	pr->run = 0;
-	pr->reversals = 0;
-	pr->half = 0x20;
-	pr->widx = 0;
-	for (i = 0; i < 64; i++)
-		pr->window[i] = 0;
+	v->v21.a = a;
+	v->v21.b = b;
+	v->v21.c = c;
+	v->v21.d = d;
 }
 
 /*
@@ -250,6 +228,28 @@ v8_txinit(struct v8 *v)
 		v->tx_symbols[i] = 0;
 
 	return 0;
+}
+
+/*
+ * Arm the ANSam phase-reversal detector.  The window is cleared and the
+ * countdown at +0x0e set to 32 -- half the window, which is how long it
+ * waits before its first verdict.
+ */
+void
+v8_phase_rev_init(struct v8_phase_rev *pr)
+{
+	int i;
+
+	pr->detected = 0;
+	pr->corr = 0;
+	pr->energy = 0;
+	pr->smoothed = 0;
+	pr->run = 0;
+	pr->reversals = 0;
+	pr->half = 0x20;
+	pr->widx = 0;
+	for (i = 0; i < 64; i++)
+		pr->window[i] = 0;
 }
 
 /*
@@ -299,6 +299,20 @@ v8_rxinit(struct v8 *v)
 }
 
 /*
+ * Reverse the bits of a nibble.  The original stores this rather than
+ * computing it, and `charFlip` uses it twice.
+ */
+static const unsigned char nibble_reverse[16] = {
+	0, 8, 4, 12, 2, 10, 6, 14, 1, 9, 5, 13, 3, 11, 7, 15
+};
+
+unsigned char
+charFlip(unsigned char b)
+{
+	return (unsigned char)((nibble_reverse[b & 0x0f] << 4)
+			       | nibble_reverse[b >> 4]);
+}
+/*
  * Arm the tone detector.
  *
  * The original has an empty inner loop here -- three iterations that do
@@ -332,19 +346,4 @@ v8_detectorinit(struct v8 *v, struct v8_detector *d, const short *table,
 	d->warmup = 0;
 
 	v->rx.flags |= V8_RX_DETECTOR_ARMED;
-}
-
-/*
- * Reverse the bits of a nibble.  The original stores this rather than
- * computing it, and `charFlip` uses it twice.
- */
-static const unsigned char nibble_reverse[16] = {
-	0, 8, 4, 12, 2, 10, 6, 14, 1, 9, 5, 13, 3, 11, 7, 15
-};
-
-unsigned char
-charFlip(unsigned char b)
-{
-	return (unsigned char)((nibble_reverse[b & 0x0f] << 4)
-			       | nibble_reverse[b >> 4]);
 }

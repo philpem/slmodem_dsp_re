@@ -57,7 +57,7 @@
   "build/test/t_dtmfrx"
  ],
  "faxadaptcreate": [
-  "src/fax/faxadapt.c",
+  "src/fax/V27rx.c",
   "build/test/t_faxadapt"
  ],
  "floatarma": [
@@ -201,7 +201,7 @@
   "build/test/t_v22dec"
  ],
  "v22fp": [
-  "src/pump/v22/v22fp.c",
+  "src/pump/v22/V22.c",
   "build/test/t_v22fpcreate"
  ],
  "v22fse": [
@@ -965,7 +965,7 @@
   "build/test/t_vpcmcreate"
  ],
  "vpcmctor": [
-  "src/pump/v90/VPcmFloModemCtor.cpp",
+  "src/pump/v90/VpcmFloModem.cpp",
   "build/test/t_vpcmctor"
  ],
  "vpcmdp": [
@@ -1091,5 +1091,9 @@
  "v90sessionflag_modem": [
   "src/pump/v90/V90Modem.cpp",
   "build/test/t_v90sessionflag"
+ ],
+ "faxadaptcreate_v29tx": [
+  "src/fax/V29tx.c",
+  "build/test/t_faxadapt"
  ]
 }

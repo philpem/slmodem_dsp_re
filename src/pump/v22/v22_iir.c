@@ -66,24 +66,6 @@ short IIR_a_coeff[V22_IIR_A_TAPS] = {
 };
 
 void
-V22IIRFilterInit(short *state, const short *b, const short *a)
-{
-	short i;
-
-	for (i = 0; i <= V22_IIR_B_TAPS - 1; i++)
-		state[V22_IIR_OFF_B + i] = b[i];
-
-	for (i = 0; i <= V22_IIR_A_TAPS - 1; i++)
-		state[V22_IIR_OFF_A + i] = a[i];
-
-	for (i = 0; i <= V22_IIR_X_HIST - 1; i++)
-		state[V22_IIR_OFF_X + i] = 0;
-
-	for (i = 0; i <= V22_IIR_Y_HIST - 1; i++)
-		state[V22_IIR_OFF_Y + i] = 0;
-}
-
-void
 V22_iir_filt_demod(short *samples, const short *b, const short *a,
 		   short *xhist, short *yhist, const short *mix)
 {
@@ -120,4 +102,22 @@ V22_iir_filt_demod(short *samples, const short *b, const short *a,
 
 		samples[i] = (short)((y * mix[i]) >> 12);
 	}
+}
+
+void
+V22IIRFilterInit(short *state, const short *b, const short *a)
+{
+	short i;
+
+	for (i = 0; i <= V22_IIR_B_TAPS - 1; i++)
+		state[V22_IIR_OFF_B + i] = b[i];
+
+	for (i = 0; i <= V22_IIR_A_TAPS - 1; i++)
+		state[V22_IIR_OFF_A + i] = a[i];
+
+	for (i = 0; i <= V22_IIR_X_HIST - 1; i++)
+		state[V22_IIR_OFF_X + i] = 0;
+
+	for (i = 0; i <= V22_IIR_Y_HIST - 1; i++)
+		state[V22_IIR_OFF_Y + i] = 0;
 }
