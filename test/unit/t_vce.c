@@ -107,37 +107,37 @@ callbacks_init(void)
 static int
 ours_sreg(void *modem, unsigned int num)
 {
-	return (int)ours_vce->voice->cfg.fn_04(modem, (int)num);
+	return (int)ours_vce->voice->cfg.get_sreg(modem, (int)num);
 }
 
 static void
 ours_hook_on(void *modem)
 {
-	ours_vce->voice->cfg.fn_08(modem);
+	ours_vce->voice->cfg.hook_on(modem);
 }
 
 static void
 ours_hook_off(void *modem)
 {
-	ours_vce->voice->cfg.fn_0c(modem);
+	ours_vce->voice->cfg.hook_off(modem);
 }
 
 static int
 ref_sreg(void *modem, unsigned int num)
 {
-	return (int)ref_vce->voice->cfg.fn_04(modem, (int)num);
+	return (int)ref_vce->voice->cfg.get_sreg(modem, (int)num);
 }
 
 static void
 ref_hook_on(void *modem)
 {
-	ref_vce->voice->cfg.fn_08(modem);
+	ref_vce->voice->cfg.hook_on(modem);
 }
 
 static void
 ref_hook_off(void *modem)
 {
-	ref_vce->voice->cfg.fn_0c(modem);
+	ref_vce->voice->cfg.hook_off(modem);
 }
 
 static void

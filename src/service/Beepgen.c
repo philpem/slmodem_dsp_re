@@ -142,13 +142,13 @@ beepgen_create(struct beepgen *bg, const struct beepgen_config *cfg)
 	GetGain(bg, &bg->gain1, &bg->gain2);
 	bg->queued = 0;
 	bg->playing = 0;
-	bg->fn_011c = cfg->fn_04;
-	bg->hook_on_proc = cfg->fn_08;
-	bg->fn_0124 = cfg->fn_0c;
+	bg->hook_on = cfg->hook_on;
+	bg->hook_off = cfg->hook_off;
+	bg->get_sreg = cfg->get_sreg;
 
 	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("%X  %X\n", bg->fn_011c,
-				     bg->hook_on_proc);
+		dsplibs_debug_printf("%X  %X\n", bg->hook_on,
+				     bg->hook_off);
 	return bg;
 }
 
@@ -195,8 +195,8 @@ beepgen_start_beep(struct beepgen *bg, int freq1, int freq2, int duration)
 		} else if (freq1 == -1) {
 			bg->dur_units_per_sec = 100;
 			bg->gain1 = 0.0f;
-			if (bg->fn_011c != NULL)
-				bg->fn_011c(bg->modem);
+			if (bg->hook_on != NULL)
+				bg->hook_on(bg->modem);
 		}
 		if (freq2 == 0)
 			bg->gain2 = 0.0f;
@@ -228,7 +228,7 @@ beepgen_start_dtmf(struct beepgen *bg, int code, int duration)
 	int col, row;
 
 	if (code == '!')
-		duration = bg->fn_0124(bg->modem, 24);
+		duration = bg->get_sreg(bg->modem, 24);
 
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("beepgen start dtmf %d %d\n", code,
@@ -287,8 +287,8 @@ beepgen_sample(struct beepgen *bg, float *out)
 	if (bg->freq1 == -1.0f) {
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("Hook on proc\n");
-		if (bg->hook_on_proc != NULL)
-			bg->hook_on_proc(bg->modem);
+		if (bg->hook_off != NULL)
+			bg->hook_off(bg->modem);
 	}
 
 	bg->playing++;
@@ -312,8 +312,8 @@ beepgen_sample(struct beepgen *bg, float *out)
 	} else if (t->freq1 == -1.0f) {
 		bg->gain1 = 0.0f;
 		bg->dur_units_per_sec = 100;
-		if (bg->fn_011c != NULL)
-			bg->fn_011c(bg->modem);
+		if (bg->hook_on != NULL)
+			bg->hook_on(bg->modem);
 	}
 	if (bg->tone[bg->playing].freq2 == 0.0f)
 		bg->gain2 = 0.0f;

@@ -329,7 +329,7 @@ voice_online(struct voice_ctx *v, short *rx_lin, float *rx_flt, float *tx_flt,
  * harmless while that pointer is non-NULL, since the callee initialises in
  * place and returns its argument, and a leak if it ever is.  Deviation D988.
  *
- * `cfg.fn_04` IS THE HOST'S SETTINGS CALLBACK, and this function is what
+ * `cfg.get_sreg` IS THE HOST'S SETTINGS CALLBACK, and this function is what
  * shows it.  `beepgen.h` types that slot `void (*)(void *modem)` from the one
  * place `beepgen_start_beep` calls it; here it is called with TWO arguments
  * and its unsigned answer converted to float, and it is also what
@@ -340,7 +340,7 @@ void
 voice_set_rx(struct voice_ctx *v)
 {
 	unsigned int (*query)(void *obj, int what) =
-	    (unsigned int (*)(void *, int))v->cfg.fn_04;
+	    (unsigned int (*)(void *, int))v->cfg.get_sreg;
 
 	v->rx_armed = 1;
 	v->mode = 0;

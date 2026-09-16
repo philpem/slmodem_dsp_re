@@ -259,31 +259,31 @@ normalise_ctx(struct voice_ctx *c)
 	 * verifies each table is populated and that its getter propagates to
 	 * beepgen, rather than naming a non-public function.
 	 */
-	c->cfg.fn_04 = 0;
-	c->cfg.fn_08 = 0;
-	c->cfg.fn_0c = 0;
+	c->cfg.get_sreg = 0;
+	c->cfg.hook_on = 0;
+	c->cfg.hook_off = 0;
 }
 
 static void
 check_callbacks(struct vce *ours, struct vce *ref, long tag)
 {
 	diff_eq_int("our callback table is populated",
-		    ours->voice->cfg.fn_04 != 0 && ours->voice->cfg.fn_08 != 0 &&
-		    ours->voice->cfg.fn_0c != 0, 1, tag);
+		    ours->voice->cfg.get_sreg != 0 && ours->voice->cfg.hook_on != 0 &&
+		    ours->voice->cfg.hook_off != 0, 1, tag);
 	diff_eq_int("ref callback table is populated",
-		    ref->voice->cfg.fn_04 != 0 && ref->voice->cfg.fn_08 != 0 &&
-		    ref->voice->cfg.fn_0c != 0, 1, tag);
+		    ref->voice->cfg.get_sreg != 0 && ref->voice->cfg.hook_on != 0 &&
+		    ref->voice->cfg.hook_off != 0, 1, tag);
 	/*
 	 * And the rotation still holds through this layer: the S-register
-	 * getter is what reaches beepgen's `fn_0124`, the slot beepgen calls
+ 	 * getter is what reaches beepgen's `get_sreg`, the slot beepgen calls
 	 * as f(modem, 24).  F8813, seen from one level further out.
 	 */
-	diff_eq_int("our beepgen fn_0124 is the configured getter",
-		    (void *)ours->voice->beepgen->fn_0124 ==
-			(void *)ours->voice->cfg.fn_04, 1, tag);
-	diff_eq_int("ref beepgen fn_0124 is the configured getter",
-		    (void *)ref->voice->beepgen->fn_0124 ==
-			(void *)ref->voice->cfg.fn_04, 1, tag);
+	diff_eq_int("our beepgen get_sreg is the configured getter",
+		    (void *)ours->voice->beepgen->get_sreg ==
+			(void *)ours->voice->cfg.get_sreg, 1, tag);
+	diff_eq_int("ref beepgen get_sreg is the configured getter",
+		    (void *)ref->voice->beepgen->get_sreg ==
+			(void *)ref->voice->cfg.get_sreg, 1, tag);
 }
 
 static void

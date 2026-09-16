@@ -247,9 +247,9 @@ normalise_ctx(struct voice_ctx *c)
 	c->silence = 0;
 	c->dp = 0;
 	c->handler = 0;
-	c->cfg.fn_04 = 0;
-	c->cfg.fn_08 = 0;
-	c->cfg.fn_0c = 0;
+	c->cfg.get_sreg = 0;
+	c->cfg.hook_on = 0;
+	c->cfg.hook_off = 0;
 }
 
 static void

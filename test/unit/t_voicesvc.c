@@ -116,14 +116,14 @@ host_get_sreg(void *modem, int num)
 }
 
 static void
-host_fn_08(void *modem)
+host_hook_on(void *modem)
 {
 	(void)modem;
 	hook08_calls++;
 }
 
 static void
-host_fn_0c(void *modem)
+host_hook_off(void *modem)
 {
 	(void)modem;
 	hook0c_calls++;
@@ -133,9 +133,9 @@ static void
 fill_cfg(struct voice_config *c)
 {
 	c->modem = &host_modem;
-	c->fn_04 = host_get_sreg;
-	c->fn_08 = host_fn_08;
-	c->fn_0c = host_fn_0c;
+	c->get_sreg = host_get_sreg;
+	c->hook_on = host_hook_on;
+	c->hook_off = host_hook_off;
 }
 
 static void
@@ -402,20 +402,20 @@ t_create(void)
 		 * THE ROTATION (F8813).  The beep generator's three callback
 		 * slots must hold the voice config's words in the rotated
 		 * order, and the S-register getter must be the one that
-		 * reached `fn_0124` -- the slot beepgen calls as f(modem, 24).
+ 		 * reached `get_sreg` -- the slot beepgen calls as f(modem, 24).
 		 */
-		diff_eq_int("beepgen fn_011c is cfg.fn_08",
-			    a->beepgen->fn_011c == host_fn_08, 1, (long)lvl);
-		diff_eq_int("beepgen hook_on_proc is cfg.fn_0c",
-			    a->beepgen->hook_on_proc == host_fn_0c, 1,
+		diff_eq_int("beepgen hook_on is cfg.hook_on",
+			    a->beepgen->hook_on == host_hook_on, 1, (long)lvl);
+		diff_eq_int("beepgen hook_off is cfg.hook_off",
+			    a->beepgen->hook_off == host_hook_off, 1,
 			    (long)lvl);
-		diff_eq_int("beepgen fn_0124 is cfg.fn_04",
-			    (void *)a->beepgen->fn_0124 ==
+		diff_eq_int("beepgen get_sreg is cfg.get_sreg",
+			    (void *)a->beepgen->get_sreg ==
 				(void *)host_get_sreg, 1, (long)lvl);
 		diff_eq_int("the blob rotates identically",
-			    b->beepgen->fn_011c == host_fn_08 &&
-				b->beepgen->hook_on_proc == host_fn_0c &&
-				(void *)b->beepgen->fn_0124 ==
+			    b->beepgen->hook_on == host_hook_on &&
+				b->beepgen->hook_off == host_hook_off &&
+				(void *)b->beepgen->get_sreg ==
 				    (void *)host_get_sreg,
 			    1, (long)lvl);
 		diff_eq_int("beepgen modem is the host handle",

@@ -113,8 +113,8 @@
  },
  {
   "label": "beepgen_create copies the wrong config callback into fn_011c",
-  "find": "\tbg->fn_011c = cfg->fn_04;",
-  "replace": "\tbg->fn_011c = cfg->fn_08;"
+  "find": "\tbg->hook_on = cfg->hook_on;",
+  "replace": "\tbg->hook_on = cfg->hook_off;"
  },
  {
   "label": "beepgen_create does not clear the queue length",
@@ -193,13 +193,13 @@
  },
  {
   "label": "start_dtmf: the start marker is '\"'",
-  "find": "\tif (code == '!')\n\t\tduration = bg->fn_0124",
-  "replace": "\tif (code == '\"')\n\t\tduration = bg->fn_0124"
+  "find": "\tif (code == '!')\n\t\tduration = bg->get_sreg",
+  "replace": "\tif (code == '\"')\n\t\tduration = bg->get_sreg"
  },
  {
   "label": "start_dtmf: the marker callback is asked for 25",
-  "find": "bg->fn_0124(bg->modem, 24);",
-  "replace": "bg->fn_0124(bg->modem, 25);"
+  "find": "bg->get_sreg(bg->modem, 24);",
+  "replace": "bg->get_sreg(bg->modem, 25);"
  },
  {
   "label": "start_dtmf: a pause is twice the duration",

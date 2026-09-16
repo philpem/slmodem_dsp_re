@@ -118,8 +118,8 @@ voice_create(const struct voice_config *cfg)
 		return 0;
 
 	/*
-	 * The rotation.  `fn_04` is the S-register getter and it lands in
-	 * beepgen's `fn_0124` slot, which beepgen calls as `f(modem, 24)` --
+ * The rotation.  `get_sreg` is the S-register getter and it lands in
+ * beepgen's `get_sreg` slot, which beepgen calls as `f(modem, 24)` --
 	 * SREG_FLASH_TIMER.  The cast is the one place the two readings of
 	 * that callback's RESULT meet: `detector_create` and `silence_create`
 	 * take it `unsigned int` (F8803's `shr`), `beepgen_config` takes it
@@ -128,9 +128,9 @@ voice_create(const struct voice_config *cfg)
 	 * and the odd site casts.  Finding F8814.
 	 */
 	bcfg.modem = cfg->modem;
-	bcfg.fn_04 = cfg->fn_08;
-	bcfg.fn_08 = cfg->fn_0c;
-	bcfg.fn_0c = (int (*)(void *, int))cfg->fn_04;
+	bcfg.hook_on = cfg->hook_on;
+	bcfg.hook_off = cfg->hook_off;
+	bcfg.get_sreg = (int (*)(void *, int))cfg->get_sreg;
 
 	v = sysdep_malloc(sizeof(*v));
 	if (v == 0)
@@ -146,7 +146,7 @@ voice_create(const struct voice_config *cfg)
 	if (v->beepgen == 0)
 		goto fail;
 
-	v->detector = detector_create(0, v->cfg.modem, v->cfg.fn_04);
+	v->detector = detector_create(0, v->cfg.modem, v->cfg.get_sreg);
 	if (v->detector == 0)
 		goto fail;
 
@@ -154,7 +154,7 @@ voice_create(const struct voice_config *cfg)
 	if (v->fifo == 0)
 		goto fail;
 
-	v->silence = silence_create(v->silence, v->cfg.modem, v->cfg.fn_04);
+	v->silence = silence_create(v->silence, v->cfg.modem, v->cfg.get_sreg);
 	if (v->silence == 0)
 		goto fail;
 
