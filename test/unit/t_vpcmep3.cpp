@@ -714,7 +714,7 @@ run_externalreset(void)
 					diff_eq_int("the evaluator was reset "
 						    "(%ld)",
 						    ((V90ConnectionEvaluator *)
-						     ce[1])->word_64, 1600,
+						     ce[1])->phase3FallbackDuration, 1600,
 						    tag);
 					sawReInit = 1;
 				} else {

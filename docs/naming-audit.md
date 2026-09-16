@@ -377,8 +377,8 @@ and the structural gate is green.
 Next bounded owner audit: V90ConnectionEvaluator has ten proposed semantic
 names and one neutral disposition. The object's status text directly supports
 rateUpCounter, rateDownCounter, retrainCounter and fadeCounter. Access patterns
-support dataDurationCounter, debugPeriodCounter, phase3RateUpCheckPeriod,
-phase4RateUpCheckPeriod and silenceRrnRequested. The diagnostic "FORCED rate
+support dataDurationCounter, debugPeriodCounter, phase3FallbackDuration,
+phase4FallbackDuration and silenceRrnRequested. The diagnostic "FORCED rate
 down on silence rrn" supports forceRateDownOnSilenceRrn. These proposals are
 not yet applied. Keep word_b8 neutral: its observed multiplication of avePdsnr
 and assignment from a local scale do not establish its full semantic role.
@@ -389,3 +389,51 @@ and labels. The corrected Gentoo `make phase` exited 0: **375 passed, 0 failed**
 with all structural checks green. The repeated hash comparison found **655/655
 period objects byte-identical** to the pre-edit baseline. The initial failed
 run is retained above rather than represented as a successful gate.
+
+## Batch 11: V90ConnectionEvaluator field names
+
+Audited eleven remaining neutral field candidates in this owner: ten received
+semantic names; one remains explicitly unresolved. This is an owner-scoped
+candidate denominator, not a claim that the project-wide inventory is complete.
+
+| Previous name | Disposition | Evidence |
+| --- | --- | --- |
+| word_10 | rateUpCounter | Original status diagnostic |
+| word_14 | rateDownCounter | Original status diagnostic |
+| word_18 | retrainCounter | Original status diagnostic |
+| word_1c | dataDurationCounter | Accumulates symbol counts against both minimum data-duration thresholds; usage inference |
+| word_20 | fadeCounter | Original status diagnostic |
+| word_24 | debugPeriodCounter | Accumulates symbols and resets at the debug-period comparison; usage inference |
+| word_64 | phase3FallbackDuration | Phase-3 counter comparison; distinct from the Phase-4 control |
+| word_68 | phase4FallbackDuration | Phase-4 counter comparison; mutation controls exercise the distinction |
+| word_90 | silenceRrnRequest | Parameter request value and external silence-RRN consumers; not assumed Boolean |
+| word_98 | forceRateDownOnSilenceRrn | External demand code 5 and original forced-rate-down diagnostic |
+| word_b8 | Retain neutral | Multiplies avePdsnr after assignment from a local scale; full semantic scope remains unknown |
+
+Production consumers, offset assertions, fixtures and mutation find/replacement
+identifiers follow the owner names. Diagnostic strings, mutation labels and
+injected faults are retained. Header Doxygen records bounded interpretations.
+Validation pending the Gentoo period gate and pre-edit object hash comparison.
+
+Batch 11 final validation: Gentoo `make phase` exited 0, **375 passed, 0 failed**,
+all structural checks green, and **655/655 baseline period objects byte-identical**.
+The final names at +0x64/+0x68 are `phase3FallbackDuration` and
+`phase4FallbackDuration`: their thresholds cause fallback, even though the
+counter they compare is printed as `rateUpCounter` by the original diagnostic.
+
+The first two gate attempts failed on missed consumers and damaged mutation
+JSON. The two affected manifests were rebuilt independently from their
+committed originals, transforming decoded find/replacement strings only.
+Independent boundary-aware inverse comparison established that both retain
+exactly their original content apart from the intended identifier renames.
+The first successful gate left one test object different because assertion
+labels had changed; restoring those labels and rerunning the full gate produced
+the 655/655 final result. No failed run is counted as a successful gate.
+
+Method note: retain owner scope when renaming common offset names; a matching
+offset in another class is not the same field. Transform JSON property values,
+not surrounding syntax, and preserve mutation labels and deliberate faults.
+Decode escaped strings before identifier matching, and use identifier boundaries
+for inverse comparisons so `retrainCounter` does not alter
+`retrainCounterFadeCount`. A green anchor-count check does not validate identifiers
+introduced only by a mutant replacement; review those independently.

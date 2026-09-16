@@ -734,7 +734,7 @@ V90Phase4Demodulator::getV90Decision(short sample)
 					   state == P4D_STATE_WAIT_FOR_ED) {
 					int_0028 = 0x1c;
 					mp->printNofRecievedMpMpNot();
-					if (connectionEvaluator->word_90 != 0 &&
+					if (connectionEvaluator->silenceRrnRequest != 0 &&
 					    int_003c != 0 && int_0038 != 0) {
 						edprintf("V90Phase4Demodulator:" " Ed detected @ %d, "
 							 "enter wait for Rt " "state\r\n",

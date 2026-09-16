@@ -17,8 +17,8 @@
  {
   "label": "enterRRN: the conjunction loses its second term",
   "fn": "enterRRN",
-  "find": "\t    (connectionEvaluator->word_90 != 0 &&\n\t     phase4Demodulator->int_003c != 0 &&\n\t     phase4Demodulator->int_0038 != 0) ? 1 : 0;",
-  "replace": "\t    (connectionEvaluator->word_90 != 0 &&\n\t     phase4Demodulator->int_0038 != 0) ? 1 : 0;"
+  "find": "\t    (connectionEvaluator->silenceRrnRequest != 0 &&\n\t     phase4Demodulator->int_003c != 0 &&\n\t     phase4Demodulator->int_0038 != 0) ? 1 : 0;",
+  "replace": "\t    (connectionEvaluator->silenceRrnRequest != 0 &&\n\t     phase4Demodulator->int_0038 != 0) ? 1 : 0;"
  },
  {
   "label": "enterRRN: the conjunction loses its third term",
@@ -29,8 +29,8 @@
  {
   "label": "enterRRN: the conjunction becomes a disjunction",
   "fn": "enterRRN",
-  "find": "\t    (connectionEvaluator->word_90 != 0 &&\n\t     phase4Demodulator->int_003c != 0 &&",
-  "replace": "\t    (connectionEvaluator->word_90 != 0 ||\n\t     phase4Demodulator->int_003c != 0 &&"
+  "find": "\t    (connectionEvaluator->silenceRrnRequest != 0 &&\n\t     phase4Demodulator->int_003c != 0 &&",
+  "replace": "\t    (connectionEvaluator->silenceRrnRequest != 0 ||\n\t     phase4Demodulator->int_003c != 0 &&"
  },
  {
   "label": "enterRRN: the rate gate is not cleared",

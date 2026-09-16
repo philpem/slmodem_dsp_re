@@ -36,8 +36,8 @@
  * parameter block, and every one of those nineteen slots has the original
  * author's own name (findings F860-862, `tools/vparse.py`) -- the field
  * names below are taken from the parameter each field receives. The other
- * twenty-nine are zeroes, two -1s and two 1600s, and those are
- * offset-named because a zero says nothing about what a field holds.
+ * twenty-nine are zeroes, two -1s and two 1600s; their names are recovered
+ * from diagnostics and consumers, not from the initial values alone.
  *
  * The constructor is a fifteen-byte tail call into `reset`, after storing
  * the parameter block pointer: "store the parameter block, then reset".
@@ -190,8 +190,8 @@ int evaluateMeanErrorStdPhase4(float unused0, float unused1);
 	 * +0x04 .. +0x24  Nine consecutive counters `reset` zeroes. Three of
 	 * them have the original author's own names, from the strings the
 	 * three `indicate*` members print and the parameters they compare
-	 * against (finding F1381); the other six are still offset-named
-	 * because a zero says nothing about what a field holds. All three
+	 * against (finding F1381); the others are named from status diagnostics
+	 * and the duration comparisons described below. All three
 	 * named ones are `unsigned`, forced by the branch on the comparison
 	 * against their ceiling (finding F1381).
 	 */
@@ -228,12 +228,13 @@ int evaluateMeanErrorStdPhase4(float unused0, float unused1);
 	 * error has been too large, in symbols, and the two 1600s are the two
 	 * patiences. Unsigned: `cmp 0x64(%ebx),%eax; jb` at 0x3f6a0.
 	 *
-	 * It keeps its offset name: "how long the error has been large" is a
-	 * reading of what the arithmetic does, not the author's word for it,
-	 * and finding F226's rule is that a reading does not earn a name.
+	 * `printStatus` names this slot "rateUpCounter". The phase evaluators
+	 * reuse the same counter for the fall-back duration described above.
 	 */
-	unsigned int word_10;
-	unsigned int word_14;
+	/** Symbol counter printed as "rateUpCounter"; also times phase fallback. */
+	unsigned int rateUpCounter;
+	/** Symbol counter printed as "rateDownCounter". */
+	unsigned int rateDownCounter;
 	/*
 	 * +0x18 and +0x1c  Zeroed by both `indicateLocalRetrain` and
 	 * `indicateRemoteRetrain`, on both of their paths, and by nothing
@@ -262,27 +263,30 @@ int evaluateMeanErrorStdPhase4(float unused0, float unused1);
 	 * `minDurationInDataBeforeRrnUp` (0x3e949), against
 	 * `minDurationInDataBeforeRrnDown` (0x3ebec) and against a 2.3x, 1.3x
 	 * and 0.6x of the same slot on the echo-RRN path -- and all three
-	 * block a rate change that has otherwise been earned. It keeps its
-	 * offset name; "how long since the last decision" is a reading of the
-	 * arithmetic rather than a derivation.
+	 * block a rate change that has otherwise been earned. The name
+	 * `dataDurationCounter` is inferred from these dwell-time comparisons.
 	 *
 	 * +0x20 is the fade clock, read only at 0x3e706..0x3e754: the three
-	 * retrain/reneg counters each lose one whenever `word_20 / fadeCount`
+	 * retrain/reneg counters each lose one whenever `fadeCounter / fadeCount`
 	 * crosses an integer, and +0x20 then advances by the symbol count.
 	 *
 	 * +0x24 is `int` and not `unsigned`, the one place in these eight
 	 * where the two readings part. All five debug arms of
-	 * `evaluateConnection` do `word_24 += avePdsnrNofSymbols; cmp 0x6c(%edi),%eax;
+	 * `evaluateConnection` do `debugPeriodCounter += avePdsnrNofSymbols; cmp 0x6c(%edi),%eax;
 	 * jl` (0x3ec92, 0x3ed39, 0x3ef02, 0x3efda, 0x3f3ba) -- a signed branch
 	 * against `debugPeriod`, which the map calls `int`. An `unsigned int`
 	 * +0x24 would have made the sum unsigned and the branch `jb`; the
 	 * signed compare needs the sum stored back into an `int` first, which
 	 * is exactly the `+=` the object emits before the compare.
 	 */
-	unsigned int word_18;
-	unsigned int word_1c;
-	unsigned int word_20;
-	int word_24;
+	/** Symbol counter printed as "retrainCounter". */
+	unsigned int retrainCounter;
+	/** Symbols accumulated toward the minimum data dwell before rate changes. */
+	unsigned int dataDurationCounter;
+	/** Symbol clock printed as "fadeCounter"; ages retrain/renegotiation counts. */
+	unsigned int fadeCounter;
+	/** Symbols accumulated between debug actions; inferred from debugPeriod use. */
+	int debugPeriodCounter;
 
 	/*
 	 * +0x28 .. +0x6c  The configuration, copied out of the parameter
@@ -314,8 +318,10 @@ int evaluateMeanErrorStdPhase4(float unused0, float unused1);
 	 * reconstruction that read the wrong one of the pair would pass every
 	 * test that left them at 1600.
 	 */
-	unsigned int word_64;			/* +0x64 reset plants 1600   */
-	unsigned int word_68;			/* +0x68 reset plants 1600   */
+	/** Phase-3 fallback duration in symbols; reset to CONNEVAL_INITIAL_PERIOD. */
+	unsigned int phase3FallbackDuration;			/* +0x64 reset plants 1600   */
+	/** Phase-4 fallback duration in symbols; reset to CONNEVAL_INITIAL_PERIOD. */
+	unsigned int phase4FallbackDuration;			/* +0x68 reset plants 1600   */
 	int debugPeriod;			/* +0x6c                     */
 
 	/*
@@ -473,11 +479,12 @@ int evaluateMeanErrorStdPhase4(float unused0, float unused1);
 	 * the evaluator something changed -- `indicateLocalRetrain`,
 	 * `indicateRemoteRetrain`, `indicateRemoteRateReneg` and
 	 * `updateCurrentConstellationData`. Four functions, one store each,
-	 * and it is the first thing three of them do. A "how long since the
-	 * picture last moved" counter is the obvious reading and it is a
-	 * reading, not a derivation, so the field keeps its offset name.
+	 * and it is the first thing three of them do. Rate-change paths set
+	 * it from RRN_SILENCE_REQUESTED; consumers forward its low 16 bits as
+	 * a request value, so it must not be reduced to a Boolean.
 	 */
-	unsigned int word_90;		/* +0x90 zeroed by reset and by four */
+	/** Current silence-RRN request value, copied from RRN_SILENCE_REQUESTED. */
+	unsigned int silenceRrnRequest;		/* +0x90 zeroed by reset and by four */
 
 	/*
 	 * +0x94  Wave 6 (F10174): CLAUDE.md rule 1, a format string matched
@@ -506,13 +513,12 @@ int evaluateMeanErrorStdPhase4(float unused0, float unused1);
 	 *
 	 * Every store is beside a store to +0x90, and the four zeroes are on
 	 * exactly the paths that also set +0x90 -- so the two travel together
-	 * and +0x98 is a second flag of whatever +0x90 is the first of.
-	 * Nothing reconstructed so far reads it, which is why it keeps an
-	 * offset name: a store with no reader says how wide the slot is and
-	 * nothing about what it means. Four bytes, `movl`, so `unsigned int`
-	 * -- and the width is what retires the pad.
+	 * and +0x98 selects forced rate-down in the silence-RRN consumer,
+	 * which prints "FORCED rate down on silence rrn". Its four-byte
+	 * stores remain unsigned; naming the flag does not narrow its storage.
 	 */
-	unsigned int word_98;
+	/** Nonzero requests forced rate-down during silence RRN. */
+	unsigned int forceRateDownOnSilenceRrn;
 
 	/*
 	 * +0x9c, +0x9e  A 16-bit pair, -1 and 0.  The store widths are the
@@ -679,6 +685,10 @@ int evaluateMeanErrorStdPhase4(float unused0, float unused1);
 	 *
 	 * +0xb8..+0xbb is the last four bytes of the 0xbc object, so the
 	 * class now has no unmodelled region at all.
+	 */
+	/**
+	 * Applied only as a scale in avePdsnr * word_b8; assigned from a local
+	 * named scale. Its wider semantic role is not established.
 	 */
 	float word_b8;
 };

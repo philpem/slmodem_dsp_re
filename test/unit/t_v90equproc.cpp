@@ -1419,8 +1419,8 @@ run_p4_arms(void)
 				    (short)((tag >> 1) & 1);
 				ARENA_PARAMS->LOOP_TYPE = (opt & 1) ? 6 : 2;
 				SPECVER->word_28 = (opt & 2) ? 2u : 1u;
-				((V90ConnectionEvaluator *)ce_[0])->word_90 =
-				    ((V90ConnectionEvaluator *)ce_[1])->word_90
+				((V90ConnectionEvaluator *)ce_[0])->silenceRrnRequest =
+				    ((V90ConnectionEvaluator *)ce_[1])->silenceRrnRequest
 				    = (unsigned)((tag >> 2) & 1);
 
 				for (k = 0; k < 2; k++) {

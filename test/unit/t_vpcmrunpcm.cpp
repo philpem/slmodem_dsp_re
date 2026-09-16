@@ -992,7 +992,7 @@ poke(int s, const struct trial *t)
 		 * would be a store of 0 over 0 and deleting it would be
 		 * invisible; the mutation set said exactly that.
 		 */
-		d->connectionEvaluator->word_90 = 0x5a3c1;
+		d->connectionEvaluator->silenceRrnRequest = 0x5a3c1;
 
 		p4->state = t->p4state;
 		p4->symbolCount = t->p4symbolCount;

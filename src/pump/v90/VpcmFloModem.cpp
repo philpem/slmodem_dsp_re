@@ -1246,7 +1246,7 @@ VPcmFloModem::v90RunDemodulator(float *in, unsigned int n, int *rxbits,
 			}
 		} else {
 			if (cpNotLoaded != 0 && terminateCpNot == 0
-			    && (modem.demodulator->connectionEvaluator->word_90
+			    && (modem.demodulator->connectionEvaluator->silenceRrnRequest
 				    == 0
 				|| modem.demodulator->phase4Demodulator
 				       ->int_003c == 0
@@ -1359,7 +1359,7 @@ VPcmFloModem::v90RunDemodulator(float *in, unsigned int n, int *rxbits,
 			dsplibs_debug_printf("VPcmFloModem (V90): rate "
 			    "renegotiation requested !!\r\n");
 		VPcmV34SetV90RateReneg(v34Object,
-		    (short)modem.demodulator->connectionEvaluator->word_90,
+		    (short)modem.demodulator->connectionEvaluator->silenceRrnRequest,
 		    rrnConstel);
 		setNofBitsPhase4(rrnConstel);
 		byte_173c = 1;
@@ -1377,7 +1377,7 @@ VPcmFloModem::v90RunDemodulator(float *in, unsigned int n, int *rxbits,
 				    "rate renegotiation detected !!\r\n");
 			VPcmV34SetV90RateReneg(v34Object,
 			    (short)modem.demodulator->connectionEvaluator
-				       ->word_90,
+				       ->silenceRrnRequest,
 			    rrnConstel);
 			setNofBitsPhase4(rrnConstel);
 			VPcmV34IndicateRemoteRRN(v34Object);
@@ -1733,7 +1733,7 @@ VPcmFloModem::runPcmModem(float *in, float *out, unsigned int n, int *rxbits,
 		if (v92modem.modulator->phase == V92MOD_PHASE_DATA) {
 			v92modem.modulator->initiateRRN();
 			v92modem.modulator->phase4Modulator->word_2c =
-			    modem.demodulator->connectionEvaluator->word_90;
+			    modem.demodulator->connectionEvaluator->silenceRrnRequest;
 		}
 		VPcmV34IndicateLocalRRN(v34Object);
 		break;
@@ -1744,7 +1744,7 @@ VPcmFloModem::runPcmModem(float *in, float *out, unsigned int n, int *rxbits,
 		if (v92modem.modulator->phase == V92MOD_PHASE_DATA) {
 			v92modem.modulator->initiateRRN();
 			v92modem.modulator->phase4Modulator->word_2c =
-			    modem.demodulator->connectionEvaluator->word_90;
+			    modem.demodulator->connectionEvaluator->silenceRrnRequest;
 		}
 		VPcmV34IndicateRemoteRRN(v34Object);
 		break;

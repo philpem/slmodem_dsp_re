@@ -132,8 +132,8 @@ run_evalstd3(void)
 					    tag);
 				diff_eq_int("and cleared the counters (%ld)",
 					    CE(0)->nofV90Retrains == 0
-					    && CE(0)->word_1c == 0
-					    && CE(0)->word_90 == 0, 1, tag);
+					    && CE(0)->dataDurationCounter == 0
+					    && CE(0)->silenceRrnRequest == 0, 1, tag);
 				fired++;
 			} else {
 				diff_eq_int("the verdict did not fire (%ld)",
