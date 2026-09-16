@@ -109,8 +109,8 @@ named, zero unresolved parameters in this bounded batch:
 - `v29_tx_params::handler(modem, in, out, budget)` receives the owning
   `v29_tx_root`, not its parameter block. The caller passes its input-word
   pointer unchanged, advances output by the callback return, and repeats
-  while the signed output-sample budget remains positive. The budget is not
-  an input count. Some state handlers only transition and return zero.
+  while the signed symbol budget remains positive. The data state consumes
+  one FIFO word per symbol. Some state handlers only transition and return zero.
 
 Names match the assigned `RxHdx*V29` and `TxHdx*V29` definitions. Contract
 comments come from `V29RX_modem`/`V29TX_modem` dispatch and handler assignments,
@@ -180,8 +180,14 @@ Batch 5 validation: Gentoo GCC 3.4.2-r2 `make phase` passed 375 tests,
 zero failures, with structural checks OK. All 655 baseline period objects
 remain SHA-256-identical. Logs: `build/structure-naming-v17-v27-callbacks/`.
 
-Follow-up caution: batch 3 described the V.29 TX budget as output samples
-based on dispatcher observations, without tracing its leaf generator's input
-units. The V.17/V.27 evidence demonstrates why that inference is insufficient.
-V.29's budget-unit wording must be audited before relying on it. This is a
-pending documentation concern, not a measured V.29 behavioral failure.
+Correction to batch 3: the V.29 TX budget counts symbols, NOT output samples.
+The earlier description inferred units from dispatcher observations without
+tracing the leaf generator and was wrong. TxHdxQuietV29 passes n to
+TxNoCarrierV29 and subtracts that same n from budget. TxNoCarrierV29 writes
+exactly n symbol-ring slots before FPM_PPS_filter returns the shaped sample
+count. TxHdxDataV29 likewise subtracts the FIFO words passed to ModDataV29,
+not the sample count returned by it. The header comment and batch 3 ledger
+now reflect this evidence. This correction changes comments/documentation
+only; no executable expression, callback type or layout changed. The existing
+375/375 period gate and 655-object identity results precede this documentation
+correction; they are not a new test run or proof of comment semantics.
