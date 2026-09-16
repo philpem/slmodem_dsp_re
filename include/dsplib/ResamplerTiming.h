@@ -154,8 +154,9 @@ public:
 	 * calls resetSdHalfBaudDft(), clears `dftDone`, and sets
 	 * `normBPFhBaudB0coef` to its nominal 0.03981f. The argument is
 	 * unobservable -- nothing in the object reads it.
+	 * @param unused Ignored; retained to preserve the original signature.
 	 */
-	virtual void reset(unsigned int);
+	virtual void reset(unsigned int unused);
 #pragma GCC diagnostic pop
 
 	/**

@@ -15,7 +15,7 @@
  },
  {
   "label": "timingCorrection scales by its argument",
-  "find": "ResamplerTimingOffset::timingCorrection(float)\n{\n\tphase = phase + timingOffset;",
+  "find": "ResamplerTimingOffset::timingCorrection(float unusedSample)\n{\n\tphase = phase + timingOffset;",
   "replace": "ResamplerTimingOffset::timingCorrection(float e)\n{\n\tphase = phase + timingOffset * e;"
  },
  {
