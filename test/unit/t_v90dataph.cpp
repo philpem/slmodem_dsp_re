@@ -630,7 +630,7 @@ run_state2(void)
 			setup(ci * 4 + ri, &t);
 
 			for (side = 0; side < 2; side++) {
-				((V90ConnectionEvaluator *)ce[side])->word_90 =
+				((V90ConnectionEvaluator *)ce[side])->silenceRrnRequest =
 				    (ci & 1) ? 1u : 0u;
 				((V90Phase4Demodulator *)p4d[side])->int_003c =
 				    (ci & 2) ? 1 : 0;

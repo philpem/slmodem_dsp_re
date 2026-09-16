@@ -328,7 +328,7 @@ setup(int trial, int mode)
 	}
 
 	/* Both settings of the gate the WaitForEd arm reads. */
-	CEV->word_90 = (mode & 2) ? 1u : 0u;
+	CEV->silenceRrnRequest = (mode & 2) ? 1u : 0u;
 
 	fill(p4d_s[0], P4D_SLOT, lf);
 	memcpy(p4d_s[1], p4d_s[0], P4D_SLOT);

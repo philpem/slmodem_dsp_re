@@ -561,7 +561,7 @@ run_reinit(void)
 			 * else.
 			 */
 			diff_eq_int("the evaluator was reset (%ld)",
-				    ((V90ConnectionEvaluator *)ce[1])->word_64,
+				    ((V90ConnectionEvaluator *)ce[1])->phase3FallbackDuration,
 				    1600, tag);
 			diff_eq_int("verificationStatus cleared (%ld)",
 				    (long)P3(1)->verificationStatus, 0, tag);

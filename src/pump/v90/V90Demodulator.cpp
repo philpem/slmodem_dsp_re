@@ -569,7 +569,7 @@ V90Demodulator::reInit()
  *    condition mentions.  The load is hoisted ABOVE the tests because it is
  *    needed on every path.
  *
- *    The object loads `connectionEvaluator->word_90`, and only if that is
+ *    The object loads `connectionEvaluator->silenceRrnRequest`, and only if that is
  *    non-zero loads `phase4Demodulator`'s +0x3c and +0x38 -- and then stores
  *    ZERO whichever way every one of those tests went:
  *
@@ -608,7 +608,7 @@ V90Demodulator::enterRRN()
 	timingOffsetPrintPeriod = V90PW(params)[PARAMS_WORD_27C];
 
 	additionalCPinfo->word_10 =
-	    (connectionEvaluator->word_90 != 0 &&
+	    (connectionEvaluator->silenceRrnRequest != 0 &&
 	     phase4Demodulator->int_003c != 0 &&
 	     phase4Demodulator->int_0038 != 0) ? 1 : 0;
 
@@ -1584,7 +1584,7 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf("V90Demodulator: Phase4 " "TimeOut\r\n");
 
-			if (connectionEvaluator->word_90 != 0 &&
+			if (connectionEvaluator->silenceRrnRequest != 0 &&
 			    phase4Demodulator->int_003c != 0 &&
 			    codecType != (__tHardwareCodecTypes__)4) {
 				edprintf("V90Demodulator: Silence rrn not "
@@ -1608,7 +1608,7 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 		case 0x19:
 			pdSnr = equalizer->calcMeanErrorStatistics();
 
-			if (connectionEvaluator->word_90 != 0 &&
+			if (connectionEvaluator->silenceRrnRequest != 0 &&
 			    phase4Demodulator->int_003c != 0) {
 				edprintf("V90Demodulator: Constellation design " "on silence rrn...\r\n");
 				additionalCPinfo->word_04 = 1;
@@ -1725,7 +1725,7 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 			break;
 
 		case 0x1c:
-			if (connectionEvaluator->word_90 != 0 &&
+			if (connectionEvaluator->silenceRrnRequest != 0 &&
 			    phase4Demodulator->int_003c != 0 &&
 			    phase4Demodulator->int_0038 != 0) {
 				edprintf("V90Demodulator: freezing timing on " "silence rrn...\r\n");
@@ -1773,7 +1773,7 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 			edprintf("V90Demodulator: on silence RRN redesign, "
 				 "prevRate = %d\r\n", prevRate);
 
-			if (connectionEvaluator->word_98 != 0) {
+			if (connectionEvaluator->forceRateDownOnSilenceRrn != 0) {
 				constellationDesigner->rateAction = 3;
 				edprintf("V90Demodulator: FORCED rate down on " "silence rrn\r\n");
 			} else if (phase4Demodulator->int_3510 != 0 &&
@@ -1920,7 +1920,7 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 		if (sessionFlag != 0 && (word_3c == 0x22 || word_3c == 0x23)) {
 			phase4Demodulator->resetBeforRRN();
 			phase4Demodulator->int_0040 =
-			    connectionEvaluator->word_90;
+			    connectionEvaluator->silenceRrnRequest;
 			demapper->linearMappStudyEnabled = 0;
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf("V90Demodulator: disable "

@@ -275,8 +275,8 @@ ce_check_values(V90ConnectionEvaluator *o, V90Parameters *p, long tag)
 		    memcmp(&o->phase4ErrorForV34Fallback,
 			   &p->PHASE4_ERROR_FOR_V34_FALLBACK, 4) == 0, 1, tag);
 
-	diff_eq_int("word_64 (%ld)", (long)o->word_64, 1600, tag);
-	diff_eq_int("word_68 (%ld)", (long)o->word_68, 1600, tag);
+	diff_eq_int("word_64 (%ld)", (long)o->phase3FallbackDuration, 1600, tag);
+	diff_eq_int("word_68 (%ld)", (long)o->phase4FallbackDuration, 1600, tag);
 	diff_eq_int("externalDemandCode (%ld)", (long)o->externalDemandCode, -1, tag);
 	diff_eq_int("initDmin (%ld)", (long)o->initDmin, -1, tag);
 	diff_eq_int("curDmin (%ld)", (long)o->curDmin, 0, tag);
@@ -288,7 +288,7 @@ ce_check_values(V90ConnectionEvaluator *o, V90Parameters *p, long tag)
 		    tag);
 	diff_eq_int("nofRemoteRetrains (%ld)", (long)o->nofRemoteRetrains, 0,
 		    tag);
-	diff_eq_int("word_24 (%ld)", (long)o->word_24, 0, tag);
+	diff_eq_int("word_24 (%ld)", (long)o->debugPeriodCounter, 0, tag);
 
 	/* The three thresholds are floats now: the bit pattern, not the value. */
 	diff_eq_int("threshUp (%ld)", memcmp(&o->threshUp, &zero, 4) == 0, 1,
@@ -663,7 +663,7 @@ run_ce_constdata(void)
 			diff_eq_int("curDmin (%ld)", (long)CEB->curDmin,
 				    (long)d, tag);
 			diff_eq_int("word_90 was cleared (%ld)",
-				    (long)CEB->word_90, 0, tag);
+				    (long)CEB->silenceRrnRequest, 0, tag);
 			diff_eq_int("it changed the object (%ld)",
 				    memcmp(before, ce_b,
 					   sizeof(V90ConnectionEvaluator)) != 0,
@@ -747,7 +747,7 @@ run_ce_rrn(void)
 					    (CEB->nofRemoteRateReneg - before),
 					    1, tag);
 				diff_eq_int("word_90 was cleared (%ld)",
-					    (long)CEB->word_90, 0, tag);
+					    (long)CEB->silenceRrnRequest, 0, tag);
 				if (CEB->nofRemoteRateReneg < before)
 					wrapped = 1;
 
@@ -890,11 +890,11 @@ run_ce_retrain(int remote)
 				diff_eq_int("the verdict is 4 or 5 (%ld)",
 					    vb == 4 || vb == 5, 1, tag);
 				diff_eq_int("word_90 was cleared (%ld)",
-					    (long)CEB->word_90, 0, tag);
+					    (long)CEB->silenceRrnRequest, 0, tag);
 				diff_eq_int("word_18 was cleared (%ld)",
-					    (long)CEB->word_18, 0, tag);
+					    (long)CEB->retrainCounter, 0, tag);
 				diff_eq_int("word_1c was cleared (%ld)",
-					    (long)CEB->word_1c, 0, tag);
+					    (long)CEB->dataDurationCounter, 0, tag);
 				if (vb == 4 || vb == 5)
 					seen[vb - 4] = 1;
 
@@ -1299,16 +1299,16 @@ run_ce_phase3(void)
 			SET_CE(nofV90Retrains, limits[c].start);
 			SET_CE(trn1dEvalEnabled, 1u);
 			SET_CE(phase3EvalEnabled, 1u);
-			SET_CE(word_10, 0u);
-			SET_CE(word_18, 0u);
-			SET_CE(word_64, 1u);	/* would trip at once */
+			SET_CE(rateUpCounter, 0u);
+			SET_CE(retrainCounter, 0u);
+			SET_CE(phase3FallbackDuration, 1u);	/* would trip at once */
 			SET_CE(retrainDetectDuration, 1);
 
 			for (call = 0; call < limits[c].calls; call++) {
 				long tag = (long)lvl * 100000 + 200
 					   + (long)c * 100 + call;
-				unsigned int b10 = CEB->word_10;
-				unsigned int b18 = CEB->word_18;
+				unsigned int b10 = CEB->rateUpCounter;
+				unsigned int b18 = CEB->retrainCounter;
 				int vb;
 
 				SET_CE(avePdsnrNofSymbols, 11u + (unsigned)call);
@@ -1322,15 +1322,15 @@ run_ce_phase3(void)
 				diff_eq_int("altRbs was cleared (%ld)",
 					    (long)CEB->altRbsDetectedOnQc, 0, tag);
 				diff_eq_int("word_1c was cleared (%ld)",
-					    (long)CEB->word_1c, 0, tag);
+					    (long)CEB->dataDurationCounter, 0, tag);
 				diff_eq_int("word_90 was cleared (%ld)",
-					    (long)CEB->word_90, 0, tag);
+					    (long)CEB->silenceRrnRequest, 0, tag);
 				diff_eq_int("the arm did not accumulate +0x10 "
 					    "(%ld)",
-					    (long)CEB->word_10, (long)b10, tag);
+					    (long)CEB->rateUpCounter, (long)b10, tag);
 				diff_eq_int("the arm did not accumulate +0x18 "
 					    "(%ld)",
-					    (long)CEB->word_18, (long)b18, tag);
+					    (long)CEB->retrainCounter, (long)b18, tag);
 				consumed(tag);
 				if (vb == V90CE_VERDICT_FALLBACK_V34)
 					diff_eq_int("the counter restarted "
@@ -1367,10 +1367,10 @@ run_ce_phase3(void)
 			SET_CE(altRbsDetectedOnQc, (short)0);
 			SET_CE(trn1dEvalEnabled, 1u);
 			SET_CE(phase3EvalEnabled, 1u);
-			SET_CE(word_10, 0u);
-			SET_CE(word_18, 0u);
-			SET_CE(word_64, 500u);
-			SET_CE(word_68, 999u);
+			SET_CE(rateUpCounter, 0u);
+			SET_CE(retrainCounter, 0u);
+			SET_CE(phase3FallbackDuration, 500u);
+			SET_CE(phase4FallbackDuration, 999u);
 			SET_CE(retrainDetectDuration, 7);
 
 			for (block = 0; block < 60; block++) {
@@ -1402,10 +1402,10 @@ run_ce_phase3(void)
 				}
 				diff_eq_int("+0x10 is the running duration "
 					    "(%ld)",
-					    (long)CEB->word_10, (long)want10,
+					    (long)CEB->rateUpCounter, (long)want10,
 					    tag);
 				diff_eq_int("+0x18 never moved (%ld)",
-					    (long)CEB->word_18, 0, tag);
+					    (long)CEB->retrainCounter, 0, tag);
 				consumed(tag);
 				if (vb == 5)
 					p3_trn1d = 1;
@@ -1436,10 +1436,10 @@ run_ce_phase3(void)
 			SET_CE(altRbsDetectedOnQc, (short)0);
 			SET_CE(trn1dEvalEnabled, 0u);
 			SET_CE(phase3EvalEnabled, 1u);
-			SET_CE(word_10, 0u);
-			SET_CE(word_18, 0u);
-			SET_CE(word_64, 300u);
-			SET_CE(word_68, 999u);
+			SET_CE(rateUpCounter, 0u);
+			SET_CE(retrainCounter, 0u);
+			SET_CE(phase3FallbackDuration, 300u);
+			SET_CE(phase4FallbackDuration, 999u);
 			SET_CE(retrainDetectDuration, 120);
 
 			for (block = 0; block < 60; block++) {
@@ -1458,10 +1458,10 @@ run_ce_phase3(void)
 				if (want18 >= 120u)
 					want18 = 0;
 				diff_eq_int("+0x10 accumulated (%ld)",
-					    (long)CEB->word_10, (long)want10,
+					    (long)CEB->rateUpCounter, (long)want10,
 					    tag);
 				diff_eq_int("+0x18 accumulated (%ld)",
-					    (long)CEB->word_18, (long)want18,
+					    (long)CEB->retrainCounter, (long)want18,
 					    tag);
 				consumed(tag);
 				/*
@@ -1498,9 +1498,9 @@ run_ce_phase3(void)
 			SET_CE(altRbsDetectedOnQc, (short)0);
 			SET_CE(trn1dEvalEnabled, 0u);
 			SET_CE(phase3EvalEnabled, 1u);
-			SET_CE(word_10, 0u);
-			SET_CE(word_18, 4444u);
-			SET_CE(word_64, 100000u);
+			SET_CE(rateUpCounter, 0u);
+			SET_CE(retrainCounter, 4444u);
+			SET_CE(phase3FallbackDuration, 100000u);
 			SET_CE(retrainDetectDuration, 3);
 			SET_CE(avePdsnrNofSymbols, 17u);
 			SET_CEF(avePdsnr, avg_bits[(unsigned)trial % NAVG]);
@@ -1515,7 +1515,7 @@ run_ce_phase3(void)
 			else {
 				diff_eq_int("not above it (%ld)", vb, 0, tag);
 				diff_eq_int("+0x18 was cleared (%ld)",
-					    (long)CEB->word_18, 0, tag);
+					    (long)CEB->retrainCounter, 0, tag);
 				p3_cleared_18 = 1;
 			}
 			consumed(tag);
@@ -1545,10 +1545,10 @@ run_ce_phase3(void)
 			SET_CE(altRbsDetectedOnQc, (short)0);
 			SET_CE(trn1dEvalEnabled, 1u);
 			SET_CE(phase3EvalEnabled, 0u);
-			SET_CE(word_10, 0u);
-			SET_CE(word_18, 0u);
-			SET_CE(word_64, 1u);
-			SET_CE(word_68, 100000u);
+			SET_CE(rateUpCounter, 0u);
+			SET_CE(retrainCounter, 0u);
+			SET_CE(phase3FallbackDuration, 1u);
+			SET_CE(phase4FallbackDuration, 100000u);
 			SET_CE(avePdsnrNofSymbols, 1u);
 			SET_CEF(avePdsnr, avg_bits[(unsigned)trial % NAVG]);
 
@@ -1557,7 +1557,7 @@ run_ce_phase3(void)
 				diff_eq_int("a NaN is not above anything (%ld)",
 					    vb, 0, tag);
 				diff_eq_int("and +0x10 was cleared (%ld)",
-					    (long)CEB->word_10, 0, tag);
+					    (long)CEB->rateUpCounter, 0, tag);
 			} else {
 				diff_eq_int("everything else printed (%ld)", vb,
 					    5, tag);
@@ -1591,10 +1591,10 @@ run_ce_phase3(void)
 			SET_CE(altRbsDetectedOnQc, (short)0);
 			SET_CE(trn1dEvalEnabled, 0u);
 			SET_CE(phase3EvalEnabled, 1u);
-			SET_CE(word_10, 0u);
-			SET_CE(word_18, 0u);
-			SET_CE(word_64, 100000u);
-			SET_CE(word_68, 100000u);
+			SET_CE(rateUpCounter, 0u);
+			SET_CE(retrainCounter, 0u);
+			SET_CE(phase3FallbackDuration, 100000u);
+			SET_CE(phase4FallbackDuration, 100000u);
 			/*
 			 * -1 as UNSIGNED is 0xffffffff, which nothing reaches;
 			 * as SIGNED it is below every count and the retrain
@@ -1611,7 +1611,7 @@ run_ce_phase3(void)
 				diff_eq_int("a negative duration is never "
 					    "reached (%ld)", vb, 0, tag + call);
 				diff_eq_int("and +0x18 kept accumulating (%ld)",
-					    (long)CEB->word_18,
+					    (long)CEB->retrainCounter,
 					    (long)(100 * (call + 1)),
 					    tag + call);
 				consumed(tag + call);
@@ -1634,9 +1634,9 @@ run_ce_phase3(void)
 			SET_CE(altRbsDetectedOnQc, (short)0);
 			SET_CE(trn1dEvalEnabled, 0u);
 			SET_CE(phase3EvalEnabled, 1u);
-			SET_CE(word_10, 0u);
-			SET_CE(word_18, 0u);
-			SET_CE(word_64, 100000u);
+			SET_CE(rateUpCounter, 0u);
+			SET_CE(retrainCounter, 0u);
+			SET_CE(phase3FallbackDuration, 100000u);
 			SET_CE(retrainDetectDuration, 10);
 			SET_CE(avePdsnrNofSymbols, 20u);
 			SET_CEF(avePdsnr, 0x41a00000u);		/* 20.0f */
@@ -1741,10 +1741,10 @@ run_ce_phase4(void)
 			SET_CE(meanErrorCheckArmed, (short)1);
 			SET_CE(delayedRetrainRequest, 0u);
 			SET_CE(delayedRetrainArmed, 0u);
-			SET_CE(word_10, 990u);
-			SET_CE(word_18, 777u);
-			SET_CE(word_64, 12345u);
-			SET_CE(word_68, 1000u);
+			SET_CE(rateUpCounter, 990u);
+			SET_CE(retrainCounter, 777u);
+			SET_CE(phase3FallbackDuration, 12345u);
+			SET_CE(phase4FallbackDuration, 1000u);
 			SET_CE(retrainDetectDuration, 100000);
 			SET_CE(avePdsnrNofSymbols, 20u);
 			SET_CEF(avePdsnr, 0x42c80000u);		/* 100.0f */
@@ -1765,9 +1765,9 @@ run_ce_phase4(void)
 					    (long)CEB->meanErrorCheckArmed, 0, tag);
 				diff_eq_int("and skipped the rest: +0x10 stood "
 					    "still (%ld)",
-					    (long)CEB->word_10, 990, tag);
+					    (long)CEB->rateUpCounter, 990, tag);
 				diff_eq_int("and it cleared +0x18 (%ld)",
-					    (long)CEB->word_18, 0, tag);
+					    (long)CEB->retrainCounter, 0, tag);
 				p4_mean_arm = 1;
 			} else {
 				/*
@@ -1781,9 +1781,9 @@ run_ce_phase4(void)
 				diff_eq_int("and +0xb0 still stands (%ld)",
 					    (long)CEB->meanErrorCheckArmed, 1, tag);
 				diff_eq_int("and +0x10 accumulated (%ld)",
-					    (long)CEB->word_10, 1010, tag);
+					    (long)CEB->rateUpCounter, 1010, tag);
 				diff_eq_int("and +0x18 was never reached (%ld)",
-					    (long)CEB->word_18, 777, tag);
+					    (long)CEB->retrainCounter, 777, tag);
 				p4_mean_skipped = 1;
 				p4_guard_ratio = 1;
 			}
@@ -1811,10 +1811,10 @@ run_ce_phase4(void)
 			SET_CE(meanErrorCheckArmed, (short)(b0 ? 1 : 0));
 			SET_CE(delayedRetrainRequest, 0u);
 			SET_CE(delayedRetrainArmed, 0u);
-			SET_CE(word_10, 0u);
-			SET_CE(word_18, 0u);
-			SET_CE(word_64, 100000u);
-			SET_CE(word_68, 100000u);
+			SET_CE(rateUpCounter, 0u);
+			SET_CE(retrainCounter, 0u);
+			SET_CE(phase3FallbackDuration, 100000u);
+			SET_CE(phase4FallbackDuration, 100000u);
 			SET_CE(retrainDetectDuration, 100000);
 			SET_CE(avePdsnrNofSymbols, 20u);
 			SET_CEF(avePdsnr, 0x40000000u);		/* 2.0f */
@@ -1857,10 +1857,10 @@ run_ce_phase4(void)
 			SET_CE(meanErrorCheckArmed, (short)0);
 			SET_CE(delayedRetrainRequest, 0u);
 			SET_CE(delayedRetrainArmed, 0u);
-			SET_CE(word_10, 0u);
-			SET_CE(word_18, 8888u);
-			SET_CE(word_64, 3u);		/* would trip at once */
-			SET_CE(word_68, 400u);
+			SET_CE(rateUpCounter, 0u);
+			SET_CE(retrainCounter, 8888u);
+			SET_CE(phase3FallbackDuration, 3u);		/* would trip at once */
+			SET_CE(phase4FallbackDuration, 400u);
 			SET_CE(retrainDetectDuration, 100000);
 			SET_CEF(phase4ErrorForV34Fallback, 0x41200000u);
 
@@ -1904,11 +1904,11 @@ run_ce_phase4(void)
 					p4_cleared_10 = 1;
 				}
 				diff_eq_int("+0x10 is the running duration "
-					    "(%ld)", (long)CEB->word_10,
+					    "(%ld)", (long)CEB->rateUpCounter,
 					    (long)want10, tag);
 				diff_eq_int("+0x18 moves only when the early "
 					    "return does not (%ld)",
-					    (long)CEB->word_18, (long)want18,
+					    (long)CEB->retrainCounter, (long)want18,
 					    tag);
 				consumed(tag);
 			}
@@ -1937,10 +1937,10 @@ run_ce_phase4(void)
 			SET_CE(meanErrorCheckArmed, (short)0);
 			SET_CE(delayedRetrainRequest, 0u);
 			SET_CE(delayedRetrainArmed, 0u);
-			SET_CE(word_10, 0u);
-			SET_CE(word_18, 0u);
-			SET_CE(word_64, 7u);
-			SET_CE(word_68, 100000u);
+			SET_CE(rateUpCounter, 0u);
+			SET_CE(retrainCounter, 0u);
+			SET_CE(phase3FallbackDuration, 7u);
+			SET_CE(phase4FallbackDuration, 100000u);
 			SET_CE(retrainDetectDuration, 90);
 			SET_CEF(phase4ErrorForV34Fallback, 0x7f7fffffu);
 
@@ -1998,7 +1998,7 @@ run_ce_phase4(void)
 						    0, tag);
 				}
 				diff_eq_int("+0x18 is the running duration "
-					    "(%ld)", (long)CEB->word_18,
+					    "(%ld)", (long)CEB->retrainCounter,
 					    (long)want18, tag);
 				consumed(tag);
 
@@ -2009,7 +2009,7 @@ run_ce_phase4(void)
 				 */
 				if (replaced)
 					diff_eq_int("+0x10 stays clear (%ld)",
-						    (long)CEB->word_10, 0, tag);
+						    (long)CEB->rateUpCounter, 0, tag);
 			}
 		}
 
@@ -2053,10 +2053,10 @@ run_ce_phase4(void)
 			SET_CE(meanErrorCheckArmed, (short)0);
 			SET_CE(delayedRetrainRequest, 0u);
 			SET_CE(delayedRetrainArmed, 0u);
-			SET_CE(word_10, 0u);
-			SET_CE(word_18, 0u);
-			SET_CE(word_64, 7u);
-			SET_CE(word_68, 100000u);
+			SET_CE(rateUpCounter, 0u);
+			SET_CE(retrainCounter, 0u);
+			SET_CE(phase3FallbackDuration, 7u);
+			SET_CE(phase4FallbackDuration, 100000u);
 			SET_CE(retrainDetectDuration, 90);
 			SET_CEF(phase4ErrorForV34Fallback, 0x7f7fffffu);
 			SET_CE(avePdsnrNofSymbols, 100u);
@@ -2093,10 +2093,10 @@ run_ce_phase4(void)
 			SET_CE(meanErrorCheckArmed, (short)0);
 			SET_CE(delayedRetrainRequest, w78);
 			SET_CE(delayedRetrainArmed, w7c);
-			SET_CE(word_10, 0u);
-			SET_CE(word_18, 0u);
-			SET_CE(word_64, 100000u);
-			SET_CE(word_68, 100000u);
+			SET_CE(rateUpCounter, 0u);
+			SET_CE(retrainCounter, 0u);
+			SET_CE(phase3FallbackDuration, 100000u);
+			SET_CE(phase4FallbackDuration, 100000u);
 			SET_CE(retrainDetectDuration, 100000);
 			SET_CE(avePdsnrNofSymbols, 5u);
 			SET_CEF(avePdsnr, 0x3f800000u);
@@ -2146,10 +2146,10 @@ run_ce_phase4(void)
 			SET_CE(meanErrorCheckArmed, (short)0);
 			SET_CE(delayedRetrainRequest, 1u);
 			SET_CE(delayedRetrainArmed, 1u);
-			SET_CE(word_10, 0u);
-			SET_CE(word_18, 0u);
-			SET_CE(word_64, 100000u);
-			SET_CE(word_68, 100000u);
+			SET_CE(rateUpCounter, 0u);
+			SET_CE(retrainCounter, 0u);
+			SET_CE(phase3FallbackDuration, 100000u);
+			SET_CE(phase4FallbackDuration, 100000u);
 			SET_CE(retrainDetectDuration, 100000);
 			SET_CE(avePdsnrNofSymbols, 5u);
 			SET_CEF(avePdsnr, 0x3f800000u);
@@ -2203,10 +2203,10 @@ run_ce_phase4(void)
 			SET_CE(meanErrorCheckArmed, (short)0);
 			SET_CE(delayedRetrainRequest, 1u);
 			SET_CE(delayedRetrainArmed, 1u);
-			SET_CE(word_10, 0u);
-			SET_CE(word_18, 0u);
-			SET_CE(word_64, 100000u);
-			SET_CE(word_68, 100000u);
+			SET_CE(rateUpCounter, 0u);
+			SET_CE(retrainCounter, 0u);
+			SET_CE(phase3FallbackDuration, 100000u);
+			SET_CE(phase4FallbackDuration, 100000u);
 			SET_CE(retrainDetectDuration, 10);
 			SET_CE(avePdsnrNofSymbols, 50u);
 			SET_CEF(avePdsnr, 0x42c80000u);		/* 100.0f */
@@ -2237,10 +2237,10 @@ run_ce_phase4(void)
 			SET_CE(meanErrorCheckArmed, (short)0);
 			SET_CE(delayedRetrainRequest, 0u);
 			SET_CE(delayedRetrainArmed, 0u);
-			SET_CE(word_10, 0u);
-			SET_CE(word_18, 0u);
-			SET_CE(word_64, 100000u);
-			SET_CE(word_68, 100000u);
+			SET_CE(rateUpCounter, 0u);
+			SET_CE(retrainCounter, 0u);
+			SET_CE(phase3FallbackDuration, 100000u);
+			SET_CE(phase4FallbackDuration, 100000u);
 			SET_CE(retrainDetectDuration, 100000);
 			SET_CE(avePdsnrNofSymbols, 13u);
 			SET_CEF(avePdsnr, avg_bits[(unsigned)trial % NAVG]);
@@ -2272,10 +2272,10 @@ run_ce_phase4(void)
 			SET_CE(meanErrorCheckArmed, (short)0);
 			SET_CE(delayedRetrainRequest, 0u);
 			SET_CE(delayedRetrainArmed, 0u);
-			SET_CE(word_10, 0u);
-			SET_CE(word_18, 0u);
-			SET_CE(word_64, 100000u);
-			SET_CE(word_68, 100000u);
+			SET_CE(rateUpCounter, 0u);
+			SET_CE(retrainCounter, 0u);
+			SET_CE(phase3FallbackDuration, 100000u);
+			SET_CE(phase4FallbackDuration, 100000u);
 			SET_CE(retrainDetectDuration, -1);
 			SET_CEF(phase4ErrorForV34Fallback, 0x7f7fffffu);
 
@@ -2288,7 +2288,7 @@ run_ce_phase4(void)
 				diff_eq_int("a negative duration is never "
 					    "reached (%ld)", vb, 0, tag + call);
 				diff_eq_int("and +0x18 kept accumulating (%ld)",
-					    (long)CEB->word_18,
+					    (long)CEB->retrainCounter,
 					    (long)(100 * (call + 1)),
 					    tag + call);
 				consumed(tag + call);
@@ -2309,10 +2309,10 @@ run_ce_phase4(void)
 			SET_CE(meanErrorCheckArmed, (short)0);
 			SET_CE(delayedRetrainRequest, 0u);
 			SET_CE(delayedRetrainArmed, 0u);
-			SET_CE(word_10, 0u);
-			SET_CE(word_18, 0u);
-			SET_CE(word_64, 100000u);
-			SET_CE(word_68, 100000u);
+			SET_CE(rateUpCounter, 0u);
+			SET_CE(retrainCounter, 0u);
+			SET_CE(phase3FallbackDuration, 100000u);
+			SET_CE(phase4FallbackDuration, 100000u);
 			SET_CE(retrainDetectDuration, 10);
 			SET_CEF(phase4ErrorForV34Fallback, 0x7f7fffffu);
 			SET_CE(avePdsnrNofSymbols, 20u);
@@ -2350,10 +2350,10 @@ run_ce_phase4(void)
 			SET_CE(meanErrorCheckArmed, (short)1);
 			SET_CE(delayedRetrainRequest, 0u);
 			SET_CE(delayedRetrainArmed, 0u);
-			SET_CE(word_10, 0u);
-			SET_CE(word_18, 0u);
-			SET_CE(word_64, 100000u);
-			SET_CE(word_68, 100000u);
+			SET_CE(rateUpCounter, 0u);
+			SET_CE(retrainCounter, 0u);
+			SET_CE(phase3FallbackDuration, 100000u);
+			SET_CE(phase4FallbackDuration, 100000u);
 			SET_CE(retrainDetectDuration, 100000);
 			SET_CE(avePdsnrNofSymbols, 20u);
 			SET_CEF(avePdsnr, 0x40000000u);		/* 2.0f */
@@ -2382,10 +2382,10 @@ run_ce_phase4(void)
 			SET_CE(meanErrorCheckArmed, (short)0);
 			SET_CE(delayedRetrainRequest, 3u);
 			SET_CE(delayedRetrainArmed, 4u);
-			SET_CE(word_10, 0u);
-			SET_CE(word_18, 0u);
-			SET_CE(word_64, 100000u);
-			SET_CE(word_68, 100000u);
+			SET_CE(rateUpCounter, 0u);
+			SET_CE(retrainCounter, 0u);
+			SET_CE(phase3FallbackDuration, 100000u);
+			SET_CE(phase4FallbackDuration, 100000u);
 			SET_CE(retrainDetectDuration, 100000);
 			SET_CE(avePdsnrNofSymbols, 5u);
 			SET_CEF(avePdsnr, 0x3f800000u);		/* 1.0f */
@@ -2594,16 +2594,16 @@ ec_base(int trial)
 	SET_CE(nofV90Retrains, 0);
 	SET_CE(nofRemoteRetrains, 0);
 	SET_CE(nofRemoteRateReneg, 0);
-	SET_CE(word_10, 0);
-	SET_CE(word_14, 0);
-	SET_CE(word_18, 0);
-	SET_CE(word_1c, 0);
-	SET_CE(word_20, 0);
-	SET_CE(word_24, 0);
+	SET_CE(rateUpCounter, 0);
+	SET_CE(rateDownCounter, 0);
+	SET_CE(retrainCounter, 0);
+	SET_CE(dataDurationCounter, 0);
+	SET_CE(fadeCounter, 0);
+	SET_CE(debugPeriodCounter, 0);
 	SET_CE(debugAlternateState, 0);
-	SET_CE(word_90, 0);
+	SET_CE(silenceRrnRequest, 0);
 	SET_CE(retrainInsteadOfRateDown, 0);
-	SET_CE(word_98, 0);
+	SET_CE(forceRateDownOnSilenceRrn, 0);
 	SET_CE(echoRrnState, 0);
 
 	SET_CE(enableRrnDown, 0);
@@ -2690,9 +2690,9 @@ ec_scenarios(int lvl)
 	ec_is("a quiet call answers 0 (%ld)", v, 0, b + 3);
 	ec_is("the average was consumed (%ld)", (long)CEB->avePdsnrNofSymbols, 0, b + 3);
 	ec_bits("the average was cleared (%ld)", &CEB->avePdsnr, 0u, b + 3);
-	ec_is("+0x1c counted the symbols (%ld)", (long)CEB->word_1c, 100,
+	ec_is("+0x1c counted the symbols (%ld)", (long)CEB->dataDurationCounter, 100,
 	      b + 3);
-	ec_is("+0x20 advanced (%ld)", (long)CEB->word_20, 100, b + 3);
+	ec_is("+0x20 advanced (%ld)", (long)CEB->fadeCounter, 100, b + 3);
 	ec_quiet = 1;
 	ec_epilogue_ebp = 1;		/* it ran to 0x3ed18 */
 
@@ -2705,7 +2705,7 @@ ec_scenarios(int lvl)
 	SET_CE(nofRemoteRateReneg, 3);
 	for (i = 0; i < 12; i++)
 		ec_step(b + 40 + i, 60, EC_5);
-	ec_is("the fade clock ran (%ld)", (long)CEB->word_20, 720, b + 60);
+	ec_is("the fade clock ran (%ld)", (long)CEB->fadeCounter, 720, b + 60);
 	ec_is("+0x04 faded out (%ld)", (long)CEB->nofV90Retrains, 0, b + 60);
 	ec_is("+0x0c faded on the SAME count (%ld)",
 	      (long)CEB->nofRemoteRetrains, 0, b + 60);
@@ -2716,7 +2716,7 @@ ec_scenarios(int lvl)
 	/* the quotient comparison is SIGNED: at 2^31 it says "no advance" */
 	ec_base(5);
 	SET_CE(retrainCounterFadeCount, 1);
-	SET_CE(word_20, 0x7fffffffu);
+	SET_CE(fadeCounter, 0x7fffffffu);
 	SET_CE(nofV90Retrains, 3);
 	ec_step(b + 61, 100, EC_5);
 	ec_is("the fade quotient is compared signed (%ld)",
@@ -2731,7 +2731,7 @@ ec_scenarios(int lvl)
 	 */
 	ec_base(66);
 	SET_CE(retrainCounterFadeCount, 0x40000000);
-	SET_CE(word_20, 0x80000000u);
+	SET_CE(fadeCounter, 0x80000000u);
 	SET_CE(nofV90Retrains, 3);
 	ec_step(b + 62, 100, EC_5);
 	ec_is("the fade division is unsigned (%ld)",
@@ -2774,21 +2774,21 @@ ec_scenarios(int lvl)
 		SET_CE(initDmin, 10);
 		SET_CE(curDmin, 5);
 		ec_step(b + 80, 100, EC_5);
-		ec_is("+0x90 is (externalDemandCode > 3) (%ld)", (long)CEB->word_90, 1,
+		ec_is("+0x90 is (externalDemandCode > 3) (%ld)", (long)CEB->silenceRrnRequest, 1,
 		      b + 80);
-		ec_is("+0x98 is (externalDemandCode == 5) (%ld)", (long)CEB->word_98, 1,
+		ec_is("+0x98 is (externalDemandCode == 5) (%ld)", (long)CEB->forceRateDownOnSilenceRrn, 1,
 		      b + 80);
 		ec_base(21);
 		SET_CE(externalDemandCode, 4);
 		ec_step(b + 81, 100, EC_5);
-		ec_is("+0x90 is 1 for code 4 (%ld)", (long)CEB->word_90, 1,
+		ec_is("+0x90 is 1 for code 4 (%ld)", (long)CEB->silenceRrnRequest, 1,
 		      b + 81);
-		ec_is("+0x98 is 0 for code 4 (%ld)", (long)CEB->word_98, 0,
+		ec_is("+0x98 is 0 for code 4 (%ld)", (long)CEB->forceRateDownOnSilenceRrn, 0,
 		      b + 81);
 		ec_base(22);
 		SET_CE(externalDemandCode, 1);
 		ec_step(b + 82, 100, EC_5);
-		ec_is("+0x90 is 0 for code 1 (%ld)", (long)CEB->word_90, 0,
+		ec_is("+0x90 is 0 for code 1 (%ld)", (long)CEB->silenceRrnRequest, 0,
 		      b + 82);
 	}
 
@@ -2815,8 +2815,8 @@ ec_scenarios(int lvl)
 	SET_CE(debugPeriod, 1);
 	v = ec_step(b + 91, 100, EC_5);
 	ec_is("the EC rate down answers 2 (%ld)", v, 2, b + 91);
-	ec_is("and stage 5 did not run (%ld)", (long)CEB->word_24, 0, b + 91);
-	ec_is("+0x90 took RRN_SILENCE_REQUESTED (%ld)", (long)CEB->word_90,
+	ec_is("and stage 5 did not run (%ld)", (long)CEB->debugPeriodCounter, 0, b + 91);
+	ec_is("+0x90 took RRN_SILENCE_REQUESTED (%ld)", (long)CEB->silenceRrnRequest,
 	      0x00abcdef, b + 91);
 	ec_is("+0x8c was acknowledged (%ld)", (long)CEB->externalDemandCode, -1, b + 91);
 	ec_ext_down = 1;
@@ -2836,7 +2836,7 @@ ec_scenarios(int lvl)
 	v = ec_step(b + 96, 300, EC_25);
 	ec_is("a code 3 that becomes a fall-back (%ld)", v, 5, b + 96);
 	ec_is("and +0x90 is what the code 3 arm left (%ld)",
-	      (long)CEB->word_90, 0, b + 96);
+	      (long)CEB->silenceRrnRequest, 0, b + 96);
 	ec_verdict5_no_case = 1;
 
 	/* the V42 override needs verdict 2, not merely +0x94 */
@@ -2859,7 +2859,7 @@ ec_scenarios(int lvl)
 	SET_CE(retrainInsteadOfRateDown, 1);
 	v = ec_step(b + 92, 100, EC_5);
 	ec_is("+0x94 turns the rate down into a retrain (%ld)", v, 4, b + 92);
-	ec_is("and clears +0x90 (%ld)", (long)CEB->word_90, 0, b + 92);
+	ec_is("and clears +0x90 (%ld)", (long)CEB->silenceRrnRequest, 0, b + 92);
 	ec_ext_override = 1;
 
 	/* the distance doubled: a retrain instead */
@@ -2914,17 +2914,17 @@ ec_scenarios(int lvl)
 		v = ec_step(t, 100, EC_M125);
 		if (i < 2) {
 			ec_is("the rate up is still waiting (%ld)", v, 0, t);
-			ec_is("and +0x10 accumulated (%ld)", (long)CEB->word_10,
+			ec_is("and +0x10 accumulated (%ld)", (long)CEB->rateUpCounter,
 			      100 * (i + 1), t);
 			ec_rateup_wait = 1;
 		} else if (i == 2) {
 			ec_is("the rate up fired (%ld)", v, 1, t);
-			ec_is("and +0x10 restarted (%ld)", (long)CEB->word_10,
+			ec_is("and +0x10 restarted (%ld)", (long)CEB->rateUpCounter,
 			      0, t);
-			ec_is("and +0x1c restarted (%ld)", (long)CEB->word_1c,
+			ec_is("and +0x1c restarted (%ld)", (long)CEB->dataDurationCounter,
 			      0, t);
 			ec_is("and +0x90 was cleared (%ld)",
-			      (long)CEB->word_90, 0, t);
+			      (long)CEB->silenceRrnRequest, 0, t);
 			ec_rateup = 1;
 		}
 	}
@@ -2932,16 +2932,16 @@ ec_scenarios(int lvl)
 	/* the average at or above threshUp clears +0x10 instead */
 	ec_base(31);
 	SET_CE(enableRrnUp, 1);
-	SET_CE(word_10, 250);
+	SET_CE(rateUpCounter, 250);
 	ec_step(b + 110, 100, EC_18);
 	ec_is("an average over threshUp clears +0x10 (%ld)",
-	      (long)CEB->word_10, 0, b + 110);
+	      (long)CEB->rateUpCounter, 0, b + 110);
 
 	/* both rate-up limits are unsigned */
 	ec_base(32);
 	SET_CE(enableRrnUp, 1);
 	SET_CE(rateUpDetectDuration, -1);
-	SET_CE(word_1c, 5000);
+	SET_CE(dataDurationCounter, 5000);
 	v = ec_step(b + 111, 100, EC_5);
 	ec_is("a negative rate-up duration never fires (%ld)", v, 0, b + 111);
 	ec_neg_rateup_dur = 1;
@@ -2949,7 +2949,7 @@ ec_scenarios(int lvl)
 	ec_base(33);
 	SET_CE(enableRrnUp, 1);
 	SET_CE(minDurationInDataBeforeRrnUp, -1);
-	SET_CE(word_10, 5000);
+	SET_CE(rateUpCounter, 5000);
 	v = ec_step(b + 112, 100, EC_5);
 	ec_is("a negative rate-up dwell never fires (%ld)", v, 0, b + 112);
 	ec_neg_rateup_min = 1;
@@ -2962,8 +2962,8 @@ ec_scenarios(int lvl)
 	ec_base(73);
 	SET_CE(enableRrnUp, 1);
 	SET_CE(minDurationInDataBeforeRrnUp, 400);
-	SET_CE(word_10, 250);
-	SET_CE(word_1c, 500);
+	SET_CE(rateUpCounter, 250);
+	SET_CE(dataDurationCounter, 500);
 	v = ec_step(b + 113, 100, EC_5);
 	ec_is("the two rate-up counters are different counters (%ld)", v, 1,
 	      b + 113);
@@ -2984,8 +2984,8 @@ ec_scenarios(int lvl)
 		} else if (i == 2) {
 			ec_is("the rate down fired (%ld)", v, 2, t);
 			ec_is("+0x90 took the parameter (%ld)",
-			      (long)CEB->word_90, 0x00abcdef, t);
-			ec_is("+0x98 was cleared (%ld)", (long)CEB->word_98, 0,
+			      (long)CEB->silenceRrnRequest, 0x00abcdef, t);
+			ec_is("+0x98 was cleared (%ld)", (long)CEB->forceRateDownOnSilenceRrn, 0,
 			      t);
 			ec_ratedown = 1;
 			ec_case2_down = 1;
@@ -2995,18 +2995,18 @@ ec_scenarios(int lvl)
 	/* an average at or below threshDown clears +0x14 */
 	ec_base(35);
 	SET_CE(enableRrnDown, 1);
-	SET_CE(word_14, 500);
+	SET_CE(rateDownCounter, 500);
 	ec_step(b + 130, 100, EC_5);
 	ec_is("an average under threshDown clears +0x14 (%ld)",
-	      (long)CEB->word_14, 0, b + 130);
+	      (long)CEB->rateDownCounter, 0, b + 130);
 
 	/* the rate down turning into a retrain, and then a fall-back */
 	ec_base(36);
 	SET_CE(enableRrnDown, 1);
 	SET_CE(initDmin, 10);
 	SET_CE(curDmin, 25);
-	SET_CE(word_14, 500);
-	SET_CE(word_1c, 500);
+	SET_CE(rateDownCounter, 500);
+	SET_CE(dataDurationCounter, 500);
 	v = ec_step(b + 131, 200, EC_18);
 	ec_is("the rate down retrains when the distance doubled (%ld)", v, 4,
 	      b + 131);
@@ -3017,8 +3017,8 @@ ec_scenarios(int lvl)
 	SET_CE(enableRrnDown, 1);
 	SET_CE(initDmin, 10);
 	SET_CE(curDmin, 25);
-	SET_CE(word_14, 500);
-	SET_CE(word_1c, 500);
+	SET_CE(rateDownCounter, 500);
+	SET_CE(dataDurationCounter, 500);
 	SET_CE(nofV90Retrains, 4);
 	v = ec_step(b + 132, 200, EC_18);
 	ec_is("and falls back once too often (%ld)", v, 5, b + 132);
@@ -3029,8 +3029,8 @@ ec_scenarios(int lvl)
 	SET_CE(enableRrnDown, 1);
 	SET_CE(initDmin, 10);
 	SET_CE(curDmin, 25);
-	SET_CE(word_14, 500);
-	SET_CE(word_1c, 500);
+	SET_CE(rateDownCounter, 500);
+	SET_CE(dataDurationCounter, 500);
 	SET_CE(nofV90Retrains, 4);
 	SET_P(MAX_NOF_V90_RETRAINS, -1);
 	v = ec_step(b + 135, 200, EC_18);
@@ -3042,7 +3042,7 @@ ec_scenarios(int lvl)
 	ec_base(38);
 	SET_CE(enableRrnDown, 1);
 	SET_CE(rateDownDetectDuration, -1);
-	SET_CE(word_1c, 5000);
+	SET_CE(dataDurationCounter, 5000);
 	v = ec_step(b + 133, 200, EC_18);
 	ec_is("a negative rate-down duration never fires (%ld)", v, 0,
 	      b + 133);
@@ -3051,7 +3051,7 @@ ec_scenarios(int lvl)
 	ec_base(39);
 	SET_CE(enableRrnDown, 1);
 	SET_CE(minDurationInDataBeforeRrnDown, -1);
-	SET_CE(word_14, 5000);
+	SET_CE(rateDownCounter, 5000);
 	v = ec_step(b + 134, 200, EC_18);
 	ec_is("a negative rate-down dwell never fires (%ld)", v, 0, b + 134);
 	ec_neg_ratedown_min = 1;
@@ -3103,7 +3103,7 @@ ec_scenarios(int lvl)
 	 */
 	ec_base(64);
 	SET_P(HIGH_LEVEL_TX_ACTIVE, 1);
-	SET_CE(word_1c, 850);
+	SET_CE(dataDurationCounter, 850);
 	ec_step(b + 153, 50, EC_18);
 	ec_bits("the 2.3 guard kept state 0 (%ld)", &CEB->word_b8,
 		0x3fc28f5cu, b + 153);
@@ -3118,7 +3118,7 @@ ec_scenarios(int lvl)
 	 */
 	ec_base(65);
 	SET_P(HIGH_LEVEL_TX_ACTIVE, 1);
-	SET_CE(word_1c, 400);
+	SET_CE(dataDurationCounter, 400);
 	SET_CE(initDmin, 10);
 	SET_CE(curDmin, 5);
 	v = ec_step(b + 154, 210, EC_18);
@@ -3130,7 +3130,7 @@ ec_scenarios(int lvl)
 	ec_base(41);
 	SET_P(HIGH_LEVEL_TX_ACTIVE, 1);
 	SET_CE(echoRrnState, 1);
-	SET_CE(word_1c, 250);
+	SET_CE(dataDurationCounter, 250);
 	SET_CE(initDmin, 10);
 	SET_CE(curDmin, 5);
 	v = ec_step(b + 150, 130, EC_18);
@@ -3153,8 +3153,8 @@ ec_scenarios(int lvl)
 	SET_P(HIGH_LEVEL_TX_ACTIVE, 1);
 	SET_CE(echoRrnState, 1);
 	SET_CE(minDurationInDataBeforeRrnDown, 16777217);
-	SET_CE(word_1c, 16777116);
-	SET_CE(word_14, 0);
+	SET_CE(dataDurationCounter, 16777116);
+	SET_CE(rateDownCounter, 0);
 	ec_step(b + 151, 100, EC_18);
 	ec_bits("+0x5c is not rounded through float (%ld)", &CEB->word_b8,
 		0x3fb1eb85u, b + 151);
@@ -3193,7 +3193,7 @@ ec_scenarios(int lvl)
 	SET_P(HIGH_LEVEL_TX_ACTIVE, 1);
 	ec_step(b + 156, 100, EC_12);
 	ec_is("the scaled average is what is compared (%ld)",
-	      (long)CEB->word_14, 100, b + 156);
+	      (long)CEB->rateDownCounter, 100, b + 156);
 	ec_echo_scaled_cmp = 1;
 
 	/*
@@ -3204,7 +3204,7 @@ ec_scenarios(int lvl)
 	ec_base(69);
 	SET_P(HIGH_LEVEL_TX_ACTIVE, 1);
 	SET_CE(rateDownDetectDuration, -1);
-	SET_CE(word_1c, 600);
+	SET_CE(dataDurationCounter, 600);
 	v = ec_step(b + 157, 50, EC_18);
 	ec_is("a negative echo duration never fires (%ld)", v, 0, b + 157);
 	ec_echo_neg_dur = 1;
@@ -3220,14 +3220,14 @@ ec_scenarios(int lvl)
 		v = ec_step(t, 300, EC_25);
 		if (i < 2) {
 			ec_is("the retrain is still waiting (%ld)", v, 0, t);
-			ec_is("and +0x18 accumulated (%ld)", (long)CEB->word_18,
+			ec_is("and +0x18 accumulated (%ld)", (long)CEB->retrainCounter,
 			      300 * (i + 1), t);
 			ec_retrain_wait = 1;
 		} else {
 			ec_is("the retrain fired (%ld)", v, 4, t);
 			ec_is("and counted one (%ld)",
 			      (long)CEB->nofV90Retrains, 1, t);
-			ec_is("and +0x18 restarted (%ld)", (long)CEB->word_18,
+			ec_is("and +0x18 restarted (%ld)", (long)CEB->retrainCounter,
 			      0, t);
 			ec_is("and initDmin was re-armed (%ld)",
 			      (long)CEB->initDmin, -1, t);
@@ -3237,7 +3237,7 @@ ec_scenarios(int lvl)
 
 	ec_base(45);
 	SET_CE(nofV90Retrains, 4);
-	SET_CE(word_18, 600);
+	SET_CE(retrainCounter, 600);
 	v = ec_step(b + 170, 300, EC_25);
 	ec_is("the retrain falls back once too often (%ld)", v, 5, b + 170);
 	ec_retrain_fallback = 1;
@@ -3245,7 +3245,7 @@ ec_scenarios(int lvl)
 	/* the limit is `>` and not `>=`: a count that reaches it is allowed */
 	ec_base(63);
 	SET_CE(nofV90Retrains, 3);
-	SET_CE(word_18, 600);
+	SET_CE(retrainCounter, 600);
 	v = ec_step(b + 173, 300, EC_25);
 	ec_is("reaching the limit is not exceeding it (%ld)", v, 4, b + 173);
 	ec_is("and the count stands (%ld)", (long)CEB->nofV90Retrains, 4,
@@ -3254,7 +3254,7 @@ ec_scenarios(int lvl)
 
 	ec_base(46);
 	SET_CE(retrainDetectDuration, -1);
-	SET_CE(word_18, 600);
+	SET_CE(retrainCounter, 600);
 	v = ec_step(b + 171, 300, EC_25);
 	ec_is("a negative retrain duration never fires (%ld)", v, 0, b + 171);
 	ec_neg_retrain_dur = 1;
@@ -3270,18 +3270,18 @@ ec_scenarios(int lvl)
 
 	/* +0x14 is cleared when neither rate-down arm is armed */
 	ec_base(75);
-	SET_CE(word_14, 500);
+	SET_CE(rateDownCounter, 500);
 	ec_step(b + 175, 100, EC_5);
 	ec_is("+0x14 is cleared with no rate down armed (%ld)",
-	      (long)CEB->word_14, 0, b + 175);
+	      (long)CEB->rateDownCounter, 0, b + 175);
 	ec_no_ratedown_clears = 1;
 
 	/* an average at or below threshRetrain clears +0x18 */
 	ec_base(47);
-	SET_CE(word_18, 600);
+	SET_CE(retrainCounter, 600);
 	ec_step(b + 172, 300, EC_18);
 	ec_is("an average under threshRetrain clears +0x18 (%ld)",
-	      (long)CEB->word_18, 0, b + 172);
+	      (long)CEB->retrainCounter, 0, b + 172);
 
 	/* ------------------------------- 4c: too many renegotiations */
 	ec_base(48);
@@ -3311,11 +3311,11 @@ ec_scenarios(int lvl)
 	SET_CE(retrainInsteadOfRateDown, 1);
 	SET_CE(initDmin, 10);
 	SET_CE(curDmin, 5);
-	SET_CE(word_14, 500);
-	SET_CE(word_1c, 500);
+	SET_CE(rateDownCounter, 500);
+	SET_CE(dataDurationCounter, 500);
 	v = ec_step(b + 190, 200, EC_18);
 	ec_is("+0x94 overrides a rate down (%ld)", v, 4, b + 190);
-	ec_is("and clears +0x90 (%ld)", (long)CEB->word_90, 0, b + 190);
+	ec_is("and clears +0x90 (%ld)", (long)CEB->silenceRrnRequest, 0, b + 190);
 	ec_override = 1;
 
 	/* ---------------------------------------------- 5: the debug arms */
@@ -3339,10 +3339,10 @@ ec_scenarios(int lvl)
 			if (i == 7) {
 				ec_alt[3] = 1;
 				ec_is("the RRN down arm took the parameter "
-				      "(%ld)", (long)CEB->word_90, 0x00abcdef,
+				      "(%ld)", (long)CEB->silenceRrnRequest, 0x00abcdef,
 				      t);
 				ec_is("and cleared +0x98 (%ld)",
-				      (long)CEB->word_98, 0, t);
+				      (long)CEB->forceRateDownOnSilenceRrn, 0, t);
 			}
 			if (i == 0)
 				ec_dbg_wait = 1;
@@ -3352,45 +3352,45 @@ ec_scenarios(int lvl)
 		ec_base(52);
 		SET_CE(debugAlternateDebug, 1);
 		SET_CE(debugAlternateState, 4);
-		SET_CE(word_24, 400);
+		SET_CE(debugPeriodCounter, 400);
 		v = ec_step(b + 210, 300, EC_5);
 		ec_is("an out-of-range +0x80 decides nothing (%ld)", v, 0,
 		      b + 210);
 		ec_is("and does not even restart +0x24 (%ld)",
-		      (long)CEB->word_24, 700, b + 210);
+		      (long)CEB->debugPeriodCounter, 700, b + 210);
 		ec_alt[4] = 1;
 	}
 
 	ec_base(53);
 	SET_CE(debugFallBack, 1);
-	SET_CE(word_24, 400);
+	SET_CE(debugPeriodCounter, 400);
 	SET_CE(debugPeriod, 600);	/* reached exactly: `>=` fires, `>`
 					 * does not */
 	v = ec_step(b + 211, 200, EC_5);
 	ec_is("the debug fall back (%ld)", v, 5, b + 211);
-	ec_is("and restarted +0x24 (%ld)", (long)CEB->word_24, 0, b + 211);
+	ec_is("and restarted +0x24 (%ld)", (long)CEB->debugPeriodCounter, 0, b + 211);
 	ec_dbg_fallback = 1;
 
 	ec_base(54);
 	SET_CE(debugRetrain, 1);
-	SET_CE(word_24, 400);
+	SET_CE(debugPeriodCounter, 400);
 	v = ec_step(b + 212, 300, EC_5);
 	ec_is("the debug retrain (%ld)", v, 4, b + 212);
 	ec_dbg_retrain = 1;
 
 	ec_base(55);
 	SET_CE(debugRateUp, 1);
-	SET_CE(word_24, 400);
+	SET_CE(debugPeriodCounter, 400);
 	v = ec_step(b + 213, 300, EC_5);
 	ec_is("the debug rate up (%ld)", v, 1, b + 213);
 	ec_dbg_up = 1;
 
 	ec_base(56);
 	SET_CE(debugRateDown, 1);
-	SET_CE(word_24, 400);
+	SET_CE(debugPeriodCounter, 400);
 	v = ec_step(b + 214, 300, EC_5);
 	ec_is("the debug rate down (%ld)", v, 2, b + 214);
-	ec_is("and took the parameter (%ld)", (long)CEB->word_90, 0x00abcdef,
+	ec_is("and took the parameter (%ld)", (long)CEB->silenceRrnRequest, 0x00abcdef,
 	      b + 214);
 	ec_dbg_down = 1;
 
@@ -3400,7 +3400,7 @@ ec_scenarios(int lvl)
 	SET_CE(debugRetrain, 1);
 	SET_CE(debugRateUp, 1);
 	SET_CE(debugRateDown, 1);
-	SET_CE(word_24, 400);
+	SET_CE(debugPeriodCounter, 400);
 	v = ec_step(b + 215, 300, EC_5);
 	ec_is("the debug arms are an else-if chain (%ld)", v, 5, b + 215);
 	ec_dbg_chain = 1;
@@ -3420,10 +3420,10 @@ ec_scenarios(int lvl)
 	ec_base(59);
 	SET_CE(debugRetrain, 1);
 	SET_CE(debugPeriod, 100);
-	SET_CE(word_24, -1000);
+	SET_CE(debugPeriodCounter, -1000);
 	v = ec_step(b + 217, 100, EC_5);
 	ec_is("a negative +0x24 does not (%ld)", v, 0, b + 217);
-	ec_is("and it stayed negative (%ld)", (long)CEB->word_24, -900,
+	ec_is("and it stayed negative (%ld)", (long)CEB->debugPeriodCounter, -900,
 	      b + 217);
 	ec_neg_word24 = 1;
 }

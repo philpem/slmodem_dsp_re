@@ -1990,7 +1990,7 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 				switch (st) {
 
 				case 0x1c:
-					if (connEval->word_90
+					if (connEval->silenceRrnRequest
 					    && phase4Demod->int_0038) {
 						edprintf("V90Equalizer: Freezing equ & dfe on silence between Ed and Rt\r\n");
 						setLinearEquBeta(0.0f);

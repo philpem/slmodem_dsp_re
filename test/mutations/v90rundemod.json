@@ -213,8 +213,8 @@
  },
  {
   "label": "MPnot: the else arm's conjunction is an AND rather than an OR",
-  "find": "\t\t\t    && (modem.demodulator->connectionEvaluator->word_90\n\t\t\t\t    == 0\n\t\t\t\t|| modem.demodulator->phase4Demodulator\n\t\t\t\t       ->int_003c == 0\n\t\t\t\t|| modem.demodulator->phase4Demodulator\n\t\t\t\t       ->int_0038 == 0)) {",
-  "replace": "\t\t\t    && (modem.demodulator->connectionEvaluator->word_90\n\t\t\t\t    == 0\n\t\t\t\t&& modem.demodulator->phase4Demodulator\n\t\t\t\t       ->int_003c == 0\n\t\t\t\t&& modem.demodulator->phase4Demodulator\n\t\t\t\t       ->int_0038 == 0)) {"
+  "find": "\t\t\t    && (modem.demodulator->connectionEvaluator->silenceRrnRequest\n\t\t\t\t    == 0\n\t\t\t\t|| modem.demodulator->phase4Demodulator\n\t\t\t\t       ->int_003c == 0\n\t\t\t\t|| modem.demodulator->phase4Demodulator\n\t\t\t\t       ->int_0038 == 0)) {",
+  "replace": "\t\t\t    && (modem.demodulator->connectionEvaluator->silenceRrnRequest\n\t\t\t\t    == 0\n\t\t\t\t&& modem.demodulator->phase4Demodulator\n\t\t\t\t       ->int_003c == 0\n\t\t\t\t&& modem.demodulator->phase4Demodulator\n\t\t\t\t       ->int_0038 == 0)) {"
  },
  {
   "label": "MPnot: the else arm reads +0x38 twice rather than +0x3c and +0x38",
@@ -283,8 +283,8 @@
  },
  {
   "label": "the local rate-reneg arm takes the evaluator's counter WHOLE",
-  "find": "\t\tVPcmV34SetV90RateReneg(v34Object,\n\t\t    (short)modem.demodulator->connectionEvaluator->word_90,\n\t\t    rrnConstel);\n\t\tsetNofBitsPhase4(rrnConstel);\n\t\tbyte_173c = 1;",
-  "replace": "\t\tVPcmV34SetV90RateReneg(v34Object,\n\t\t    modem.demodulator->connectionEvaluator->word_90,\n\t\t    rrnConstel);\n\t\tsetNofBitsPhase4(rrnConstel);\n\t\tbyte_173c = 1;",
+  "find": "\t\tVPcmV34SetV90RateReneg(v34Object,\n\t\t    (short)modem.demodulator->connectionEvaluator->silenceRrnRequest,\n\t\t    rrnConstel);\n\t\tsetNofBitsPhase4(rrnConstel);\n\t\tbyte_173c = 1;",
+  "replace": "\t\tVPcmV34SetV90RateReneg(v34Object,\n\t\t    modem.demodulator->connectionEvaluator->silenceRrnRequest,\n\t\t    rrnConstel);\n\t\tsetNofBitsPhase4(rrnConstel);\n\t\tbyte_173c = 1;",
   "equivalent": true,
   "why": "EQUIVALENT, and it says something about the source rather than about the fixture.  `VPcmV34SetV90RateReneg`'s second parameter is declared `short` in include/dsplib/v34pcmif.h, so the prototype performs the narrowing whether or not the call site spells it -- removing the `(short)` changes no instruction.  What IS driven, by the trial `0x22, word_90 low half zero`, is that the narrowing happens at all: 0x10000 is non-zero and its low sixteen bits are not, and the callee assigns `v90_receiver` 11 or 15 on exactly that test."
  },

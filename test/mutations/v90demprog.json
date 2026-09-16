@@ -169,7 +169,7 @@
  },
  {
   "label": "the phase 4 half takes the evaluator's +0x90",
-  "find": "\t\t\tphase4Demodulator->int_0040 =\n\t\t\t    connectionEvaluator->word_90;",
+  "find": "\t\t\tphase4Demodulator->int_0040 =\n\t\t\t    connectionEvaluator->silenceRrnRequest;",
   "replace": "\t\t\tphase4Demodulator->int_0040 =\n\t\t\t    connectionEvaluator->retrainInsteadOfRateDown;"
  },
  {
@@ -429,8 +429,8 @@
  },
  {
   "label": "the silence-RRN Ed arm needs all three flags",
-  "find": "\t\t\tif (connectionEvaluator->word_90 != 0 &&\n\t\t\t    phase4Demodulator->int_003c != 0 &&\n\t\t\t    phase4Demodulator->int_0038 != 0) {",
-  "replace": "\t\t\tif (connectionEvaluator->word_90 != 0 &&\n\t\t\t    phase4Demodulator->int_003c != 0) {"
+  "find": "\t\t\tif (connectionEvaluator->silenceRrnRequest != 0 &&\n\t\t\t    phase4Demodulator->int_003c != 0 &&\n\t\t\t    phase4Demodulator->int_0038 != 0) {",
+  "replace": "\t\t\tif (connectionEvaluator->silenceRrnRequest != 0 &&\n\t\t\t    phase4Demodulator->int_003c != 0) {"
  },
  {
   "label": "the silence-RRN Ed arm freezes the timing loop",

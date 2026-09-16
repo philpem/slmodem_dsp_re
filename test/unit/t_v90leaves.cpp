@@ -1971,8 +1971,8 @@ ce_check_values(V90ConnectionEvaluator *o, V90Parameters *p, long tag)
 			   &p->PHASE4_ERROR_FOR_V34_FALLBACK, 4) == 0, 1, tag);
 
 	/* The constants, and the widths that make two of them different. */
-	diff_eq_int("word_64 (%ld)", (long)o->word_64, 1600, tag);
-	diff_eq_int("word_68 (%ld)", (long)o->word_68, 1600, tag);
+	diff_eq_int("word_64 (%ld)", (long)o->phase3FallbackDuration, 1600, tag);
+	diff_eq_int("word_68 (%ld)", (long)o->phase4FallbackDuration, 1600, tag);
 	diff_eq_int("externalDemandCode (%ld)", (long)o->externalDemandCode, -1, tag);
 	diff_eq_int("initDmin (%ld)", (long)o->initDmin, -1, tag);
 	diff_eq_int("curDmin (%ld)", (long)o->curDmin, 0, tag);
@@ -1980,7 +1980,7 @@ ce_check_values(V90ConnectionEvaluator *o, V90Parameters *p, long tag)
 	diff_eq_int("altRbsDetectedOnQc (%ld)", (long)o->altRbsDetectedOnQc, 0, tag);
 	diff_eq_int("echoRrnState (%ld)", (long)o->echoRrnState, 0, tag);
 	diff_eq_int("nofV90Retrains (%ld)", (long)o->nofV90Retrains, 0, tag);
-	diff_eq_int("word_24 (%ld)", (long)o->word_24, 0, tag);
+	diff_eq_int("word_24 (%ld)", (long)o->debugPeriodCounter, 0, tag);
 	/* A float now, so the bit pattern and not the value: -0.0f is not 0. */
 	{
 		static const unsigned int zero = 0;

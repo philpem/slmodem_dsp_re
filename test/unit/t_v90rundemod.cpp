@@ -952,7 +952,7 @@ poke(int s, const struct trial *t)
 		V90Phase4Demodulator *p4 = d->phase4Demodulator;
 
 		d->resampler.timingOffset = t->timingOffset;
-		d->connectionEvaluator->word_90 = t->ceWord90;
+		d->connectionEvaluator->silenceRrnRequest = t->ceWord90;
 		p4->int_003c = t->p4d3c;
 		p4->int_0038 = t->p4d38;
 	}

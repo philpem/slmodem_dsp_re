@@ -262,12 +262,12 @@
  },
  {
   "label": "the local rate-reneg arm starts RRN whatever phase it is in",
-  "find": "\t\tif (v92modem.modulator->phase == V92MOD_PHASE_DATA) {\n\t\t\tv92modem.modulator->initiateRRN();\n\t\t\tv92modem.modulator->phase4Modulator->word_2c =\n\t\t\t    modem.demodulator->connectionEvaluator->word_90;\n\t\t}\n\t\tVPcmV34IndicateLocalRRN(v34Object);",
-  "replace": "\t\tv92modem.modulator->initiateRRN();\n\t\tv92modem.modulator->phase4Modulator->word_2c =\n\t\t    modem.demodulator->connectionEvaluator->word_90;\n\t\tVPcmV34IndicateLocalRRN(v34Object);"
+  "find": "\t\tif (v92modem.modulator->phase == V92MOD_PHASE_DATA) {\n\t\t\tv92modem.modulator->initiateRRN();\n\t\t\tv92modem.modulator->phase4Modulator->word_2c =\n\t\t\t    modem.demodulator->connectionEvaluator->silenceRrnRequest;\n\t\t}\n\t\tVPcmV34IndicateLocalRRN(v34Object);",
+  "replace": "\t\tv92modem.modulator->initiateRRN();\n\t\tv92modem.modulator->phase4Modulator->word_2c =\n\t\t    modem.demodulator->connectionEvaluator->silenceRrnRequest;\n\t\tVPcmV34IndicateLocalRRN(v34Object);"
  },
  {
   "label": "the rate-reneg threshold does not reach the phase 4 modulator",
-  "find": "\t\t\tv92modem.modulator->phase4Modulator->word_2c =\n\t\t\t    modem.demodulator->connectionEvaluator->word_90;\n\t\t}\n\t\tVPcmV34IndicateLocalRRN(v34Object);",
+  "find": "\t\t\tv92modem.modulator->phase4Modulator->word_2c =\n\t\t\t    modem.demodulator->connectionEvaluator->silenceRrnRequest;\n\t\t}\n\t\tVPcmV34IndicateLocalRRN(v34Object);",
   "replace": "\t\t}\n\t\tVPcmV34IndicateLocalRRN(v34Object);"
  },
  {

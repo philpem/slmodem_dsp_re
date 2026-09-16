@@ -68,10 +68,10 @@ CE_OFF(params,				0x00, params);
 CE_OFF(nofV90Retrains,			0x04, nofv90retr);
 CE_OFF(nofRemoteRateReneg,		0x08, nofrrn);
 CE_OFF(nofRemoteRetrains,		0x0c, nofremretr);
-CE_OFF(word_10,				0x10, word10);
-CE_OFF(word_18,				0x18, word18);
-CE_OFF(word_1c,				0x1c, word1c);
-CE_OFF(word_24,				0x24, word24);
+CE_OFF(rateUpCounter,				0x10, word10);
+CE_OFF(retrainCounter,				0x18, word18);
+CE_OFF(dataDurationCounter,				0x1c, word1c);
+CE_OFF(debugPeriodCounter,				0x24, word24);
 CE_OFF(enableRrnDown,			0x28, enrrndown);
 CE_OFF(enableRrnUp,			0x2c, enrrnup);
 CE_OFF(nofRemoteRateRenegBeforeRetrain,	0x30, nofremrrn);
@@ -80,8 +80,8 @@ CE_OFF(debugRateDown,			0x44, dbgratedown);
 CE_OFF(retrainCounterFadeCount,		0x48, retrfade);
 CE_OFF(rateUpDetectDuration,		0x50, rateupdur);
 CE_OFF(retrainDetectDuration,		0x60, retrdur);
-CE_OFF(word_64,				0x64, word64);
-CE_OFF(word_68,				0x68, word68);
+CE_OFF(phase3FallbackDuration,				0x64, word64);
+CE_OFF(phase4FallbackDuration,				0x68, word68);
 CE_OFF(debugPeriod,			0x6c, dbgperiod);
 CE_OFF(avePdsnr,				0x70, word70);
 CE_OFF(avePdsnrNofSymbols,				0x74, word74);
@@ -91,13 +91,13 @@ CE_OFF(debugAlternateState,				0x80, word80);
 CE_OFF(phase3EvalEnabled,				0x84, word84);
 CE_OFF(trn1dEvalEnabled,				0x88, word88);
 CE_OFF(externalDemandCode,				0x8c, word8c);
-CE_OFF(word_90,				0x90, word90);
+CE_OFF(silenceRrnRequest,				0x90, word90);
 /*
  * +0x98 and +0xb8 were `pad_98[4]` and the middle of `pad_b6[6]` until
  * `evaluateConnection` was read; the header carries the store that proves
  * each.  With them the class has no unmodelled region left.
  */
-CE_OFF(word_98,				0x98, word98);
+CE_OFF(forceRateDownOnSilenceRrn,				0x98, word98);
 CE_OFF(initDmin,			0x9c, short9c);
 CE_OFF(curDmin,				0x9e, curdmin);
 CE_OFF(threshUp,			0xa0, threshup);
@@ -161,7 +161,7 @@ V90ConnectionEvaluator::reset()
 
 	edprintf(" *********** Echo Rrn Mechanism *********** \n");
 
-	word_10 = 0;
+	rateUpCounter = 0;
 	echoRrnState = 0;
 	meanErrorCheckArmed = 1;
 	debugAlternateState = 0;
@@ -169,17 +169,17 @@ V90ConnectionEvaluator::reset()
 	altRbsDetectedOnQc = 0;
 	phase3EvalEnabled = 0;
 	initDmin = -1;
-	word_90 = 0;
+	silenceRrnRequest = 0;
 	externalDemandCode = -1;
 
-	word_14 = 0;
-	word_18 = 0;
+	rateDownCounter = 0;
+	retrainCounter = 0;
 	nofV90Retrains = 0;
 	nofRemoteRetrains = 0;
 	nofRemoteRateReneg = 0;
-	word_24 = 0;
-	word_1c = 0;
-	word_20 = 0;
+	debugPeriodCounter = 0;
+	dataDurationCounter = 0;
+	fadeCounter = 0;
 
 	retrainInsteadOfRateDown = 0;
 	delayedRetrainRequest = 0;
@@ -212,8 +212,8 @@ V90ConnectionEvaluator::reset()
 	    params->MINIMUM_DURATION_IN_DATA_BEFORE_RRN_DOWN;
 	retrainDetectDuration = params->RETRAIN_DETECT_DURATION;
 
-	word_64 = CONNEVAL_INITIAL_PERIOD;
-	word_68 = CONNEVAL_INITIAL_PERIOD;
+	phase3FallbackDuration = CONNEVAL_INITIAL_PERIOD;
+	phase4FallbackDuration = CONNEVAL_INITIAL_PERIOD;
 	debugPeriod = params->DEBUG_CONNECTION_EVALUATOR_PERIOD;
 }
 
@@ -309,7 +309,7 @@ V90ConnectionEvaluator::updateCurrentConstellationData(short dmin,
 	threshDown = down;
 	threshRetrain = retrain;
 	curDmin = dmin;
-	word_90 = 0;
+	silenceRrnRequest = 0;
 
 	edprintf("V90ConnectionEvaluator UPDATE: curDmin = %d, "
 		 "10*threshUp = %d, 10*threshDown = %d, " "10*threshRetrain = %d\r\n",
@@ -328,7 +328,7 @@ V90ConnectionEvaluator::updateCurrentConstellationData(short dmin,
 void
 V90ConnectionEvaluator::indicateRemoteRateReneg()
 {
-	word_90 = 0;
+	silenceRrnRequest = 0;
 	nofRemoteRateReneg++;
 
 	edprintf("V90ConnectionEvaluator: remote rrn indicated. "
@@ -354,20 +354,20 @@ V90ConnectionEvaluator::indicateRemoteRateReneg()
 int
 V90ConnectionEvaluator::indicateLocalRetrain()
 {
-	word_90 = 0;
+	silenceRrnRequest = 0;
 	nofV90Retrains++;
 
 	if (nofV90Retrains > (unsigned int)params->MAX_NOF_V90_RETRAINS) {
 		edprintf("V90ConnectionEvaluator: initiating fall back to V34 "
 			 "due to %d V90 retrains\r\n", nofV90Retrains);
 		nofV90Retrains = 0;
-		word_1c = 0;
-		word_18 = 0;
+		dataDurationCounter = 0;
+		retrainCounter = 0;
 		return V90CE_VERDICT_FALLBACK_V34;
 	}
 
-	word_1c = 0;
-	word_18 = 0;
+	dataDurationCounter = 0;
+	retrainCounter = 0;
 	return V90CE_VERDICT_RETRAIN;
 }
 
@@ -383,20 +383,20 @@ V90ConnectionEvaluator::indicateLocalRetrain()
 int
 V90ConnectionEvaluator::indicateRemoteRetrain()
 {
-	word_90 = 0;
+	silenceRrnRequest = 0;
 	nofRemoteRetrains++;
 
 	if (nofRemoteRetrains > (unsigned int)params->MAX_NOF_REMOTE_RETRAINS) {
 		edprintf("V90ConnectionEvaluator: initiating fall back to V34 "
 			 "due to %d remote retrains\r\n", nofRemoteRetrains);
 		nofRemoteRetrains = 0;
-		word_1c = 0;
-		word_18 = 0;
+		dataDurationCounter = 0;
+		retrainCounter = 0;
 		return V90CE_VERDICT_FALLBACK_V34;
 	}
 
-	word_1c = 0;
-	word_18 = 0;
+	dataDurationCounter = 0;
+	retrainCounter = 0;
 	return V90CE_VERDICT_RETRAIN;
 }
 
@@ -579,7 +579,7 @@ ce_param_float(int bits)
  * "fall back to V34 due to large error" with %esi = 5 and then overwrite %esi
  * with 4 at 0x3f93f and RETURN 4.  The test drives that.
  *
- * `word_10 >= word_64` AND `word_18 >= retrainDetectDuration` ARE UNSIGNED
+ * `rateUpCounter >= phase3FallbackDuration` AND `retrainCounter >= retrainDetectDuration` ARE UNSIGNED
  * (`jb` both, 0x3f6a0 and 0x3f797).  The first is unsigned on both sides
  * already; the second compares against the +0x60 COPY of
  * `RETRAIN_DETECT_DURATION`, which the map calls `int`, and an `unsigned int`
@@ -621,12 +621,12 @@ V90ConnectionEvaluator::evaluatePhase3()
 				 "altRbsDetectedOnQc => initiating Retrain "
 				 "(retrain no %d)\r\n", nofV90Retrains);
 		}
-		word_1c = 0;
-		word_90 = 0;
+		dataDurationCounter = 0;
+		silenceRrnRequest = 0;
 	} else if (trn1dEvalEnabled != 0) {
 		if (avePdsnr > params->TRN1D_ERROR_FOR_V34_FALLBACK) {
-			word_10 += nofSymbols;
-			if (word_10 >= word_64) {
+			rateUpCounter += nofSymbols;
+			if (rateUpCounter >= phase3FallbackDuration) {
 				verdict = V90CE_VERDICT_FALLBACK_V34;
 				edprintf("V90ConnectionEvaluator (end of "
 					 "TRN1d): initiating fall back to V34 " "due to large error, avePdsnr = "
@@ -635,16 +635,16 @@ V90ConnectionEvaluator::evaluatePhase3()
 					 (int)fabsf(avePdsnr),
 					 ce_frac3(avePdsnr));
 				nofV90Retrains = 0;
-				word_1c = 0;
-				word_90 = 0;
+				dataDurationCounter = 0;
+				silenceRrnRequest = 0;
 			}
 		} else {
-			word_10 = 0;
+			rateUpCounter = 0;
 		}
 	} else if (phase3EvalEnabled != 0) {
 		if (avePdsnr > params->PHASE3_ERROR_FOR_V34_FALLBACK) {
-			word_10 += nofSymbols;
-			if (word_10 >= word_64) {
+			rateUpCounter += nofSymbols;
+			if (rateUpCounter >= phase3FallbackDuration) {
 				verdict = V90CE_VERDICT_FALLBACK_V34;
 				edprintf("V90ConnectionEvaluator (phase3): "
 					 "initiating fall back to V34 due to "
@@ -653,16 +653,16 @@ V90ConnectionEvaluator::evaluatePhase3()
 					 (int)fabsf(avePdsnr),
 					 ce_frac3(avePdsnr));
 				nofV90Retrains = 0;
-				word_1c = 0;
-				word_90 = 0;
+				dataDurationCounter = 0;
+				silenceRrnRequest = 0;
 			}
 		} else {
-			word_10 = 0;
+			rateUpCounter = 0;
 		}
 
 		if (avePdsnr > params->PDSNR_THRESHOLD_IN_PHASE3) {
-			word_18 += nofSymbols;
-			if (word_18 >= (unsigned int)retrainDetectDuration) {
+			retrainCounter += nofSymbols;
+			if (retrainCounter >= (unsigned int)retrainDetectDuration) {
 				nofV90Retrains++;
 				if (nofV90Retrains
 				    > (unsigned int)params->MAX_NOF_V90_RETRAINS) {
@@ -683,12 +683,12 @@ V90ConnectionEvaluator::evaluatePhase3()
 						 (int)fabsf(avePdsnr),
 						 ce_frac3(avePdsnr));
 				}
-				word_1c = 0;
-				word_90 = 0;
-				word_18 = 0;
+				dataDurationCounter = 0;
+				silenceRrnRequest = 0;
+				retrainCounter = 0;
 			}
 		} else {
-			word_18 = 0;
+			retrainCounter = 0;
 		}
 	}
 
@@ -730,7 +730,7 @@ V90ConnectionEvaluator::evaluatePhase3()
  * ceiling than `MAX_NOF_V90_RETRAINS`, read from a different slot, and
  * `setToDefault` plants 2 in it.  +0xb0 is cleared only when all three pass.
  *
- * `word_10` IS COMPARED AGAINST +0x68 HERE AND AGAINST +0x64 IN PHASE 3.
+ * `rateUpCounter` IS COMPARED AGAINST +0x68 HERE AND AGAINST +0x64 IN PHASE 3.
  * `reset` plants 1600 in both, so nothing but the disassembly separates them:
  * 0x3fb13 is `cmp 0x68(%ebx),%ecx` and 0x3f69a is `cmp 0x64(%ebx),%eax`.  The
  * test gives them different values for exactly that reason.
@@ -766,7 +766,7 @@ V90ConnectionEvaluator::evaluatePhase3()
  * One comparison and one verdict: with `TRN1D_MEAN_ERROR_STD_EVALUATION_
  * ENABLE` set and the standard deviation at or above `TRN1D_MAX_MEAN_ERROR_
  * STD_IN_PHASE3`, announce the fall-back, zero the retrain counter, the
- * evaluator counter and `word_90`, and return 5 -- the same verdict code
+ * evaluator counter and `silenceRrnRequest`, and return 5 -- the same verdict code
  * `evaluatePhase3`'s own fall-back arm returns.  Otherwise return 0.
  *
  * `int` IS MEASURED: `%esi` is zeroed at entry, set to 5 only on the verdict
@@ -792,8 +792,8 @@ V90ConnectionEvaluator::evaluateMeanErrorStdPhase3(float std)
 			 (int)fabsf(std),
 			 (frac < 0) ? -frac : frac);
 		nofV90Retrains = 0;	/* +0x04 */
-		word_1c = 0;		/* +0x1c */
-		word_90 = 0;		/* +0x90 */
+		dataDurationCounter = 0;		/* +0x1c */
+		silenceRrnRequest = 0;		/* +0x90 */
 		ret = 5;
 	}
 	return ret;
@@ -839,13 +839,13 @@ V90ConnectionEvaluator::evaluatePhase4(float meanErrBefToAftUpdateRatio)
 				     meanErrBefToAftUpdateRatio),
 				 ce_frac3(meanErrBefToAftUpdateRatio));
 		}
-		word_1c = 0;
-		word_90 = 0;
-		word_18 = 0;
+		dataDurationCounter = 0;
+		silenceRrnRequest = 0;
+		retrainCounter = 0;
 	} else {
 		if (avePdsnr > phase4ErrorForV34Fallback) {
-			word_10 += nofSymbols;
-			if (word_10 >= word_68) {
+			rateUpCounter += nofSymbols;
+			if (rateUpCounter >= phase4FallbackDuration) {
 				edprintf("V90ConnectionEvaluator (phase4): "
 					 "initiating fall back to V34 due to "
 					 "large error, avePdsnr = %c%d.%03d\r\n",
@@ -853,19 +853,19 @@ V90ConnectionEvaluator::evaluatePhase4(float meanErrBefToAftUpdateRatio)
 					 (int)fabsf(avePdsnr),
 					 ce_frac3(avePdsnr));
 				nofV90Retrains = 0;
-				word_1c = 0;
-				word_90 = 0;
+				dataDurationCounter = 0;
+				silenceRrnRequest = 0;
 				avePdsnrNofSymbols = 0;
 				avePdsnr = 0;
 				return V90CE_VERDICT_FALLBACK_V34;
 			}
 		} else {
-			word_10 = 0;
+			rateUpCounter = 0;
 		}
 
 		if (avePdsnr > params->PDSNR_THRESHOLD_IN_PHASE4) {
-			word_18 += nofSymbols;
-			if (word_18 >= (unsigned int)retrainDetectDuration) {
+			retrainCounter += nofSymbols;
+			if (retrainCounter >= (unsigned int)retrainDetectDuration) {
 				nofV90Retrains++;
 				if (nofV90Retrains
 				    > (unsigned int)params->MAX_NOF_V90_RETRAINS) {
@@ -897,12 +897,12 @@ V90ConnectionEvaluator::evaluatePhase4(float meanErrBefToAftUpdateRatio)
 						 (int)fabsf(avePdsnr),
 						 ce_frac3(avePdsnr));
 				}
-				word_1c = 0;
-				word_90 = 0;
-				word_18 = 0;
+				dataDurationCounter = 0;
+				silenceRrnRequest = 0;
+				retrainCounter = 0;
 			}
 		} else {
-			word_18 = 0;
+			retrainCounter = 0;
 		}
 
 		if (delayedRetrainRequest != 0 && delayedRetrainArmed != 0) {
@@ -930,8 +930,8 @@ V90ConnectionEvaluator::evaluatePhase4(float meanErrBefToAftUpdateRatio)
 					 "due to delayed retrain request\r\n",
 					 nofV90Retrains);
 			}
-			word_1c = 0;
-			word_90 = 0;
+			dataDurationCounter = 0;
+			silenceRrnRequest = 0;
 		}
 	}
 
@@ -1088,18 +1088,18 @@ ce_plain_rate_down(V90ConnectionEvaluator *ce, unsigned int nofSymbols)
 	int demanded = 0;
 
 	if (ce->avePdsnr > ce->threshDown) {
-		ce->word_14 += nofSymbols;
-		if (ce->word_14 >= (unsigned int)ce->rateDownDetectDuration
-		    && ce->word_1c
+		ce->rateDownCounter += nofSymbols;
+		if (ce->rateDownCounter >= (unsigned int)ce->rateDownDetectDuration
+		    && ce->dataDurationCounter
 		       >= (unsigned int)ce->minDurationInDataBeforeRrnDown) {
-			ce->word_98 = 0;
-			ce->word_90 = ce->params->RRN_SILENCE_REQUESTED;
-			ce->word_14 = 0;
-			ce->word_1c = 0;
+			ce->forceRateDownOnSilenceRrn = 0;
+			ce->silenceRrnRequest = ce->params->RRN_SILENCE_REQUESTED;
+			ce->rateDownCounter = 0;
+			ce->dataDurationCounter = 0;
 			demanded = 1;
 		}
 	} else {
-		ce->word_14 = 0;
+		ce->rateDownCounter = 0;
 	}
 
 	return demanded;
@@ -1110,7 +1110,7 @@ ce_plain_rate_down(V90ConnectionEvaluator *ce, unsigned int nofSymbols)
  * `threshDown` the average has first been SCALED against, and a fire
  * condition that is two alternatives rather than one.  0x3e9dd .. 0x3eaf0.
  *
- * `word_14 >= rateDownDetectDuration / 3` AND `word_14 >= .../ 5` ARE BOTH
+ * `rateDownCounter >= rateDownDetectDuration / 3` AND `rateDownCounter >= .../ 5` ARE BOTH
  * UNSIGNED DIVISIONS: 0x3ea0c is `mov $0xaaaaaaab,%edx; mul %edx; shr $1,%edx`
  * and 0x3ea4d is `mov $0xcccccccd,%edx; mul %edx; shr $2,%edx`, the reciprocal
  * sequences for an unsigned divide by three and by five.  A signed divide by
@@ -1119,7 +1119,7 @@ ce_plain_rate_down(V90ConnectionEvaluator *ce, unsigned int nofSymbols)
  * THE DWELL COMPARISONS ARE IN DOUBLE, and 1.3 and 0.6 are eight-byte
  * constants (`.rodata.cst8+0xc8` and `+0xd0`) because neither is exactly
  * representable -- so unlike the tens and thousands elsewhere in this file the
- * section really does fix the type.  `word_1c` reaches the x87 through `push
+ * section really does fix the type.  `dataDurationCounter` reaches the x87 through `push
  * $0; push %eax; fildll`, the zero-extending form, which is what an
  * `unsigned int` converts with.
  */
@@ -1135,26 +1135,26 @@ ce_echo_rate_down(V90ConnectionEvaluator *ce, unsigned int nofSymbols,
 	ce->word_b8 = scale;
 
 	if (ce->avePdsnr * scale > ce->threshDown) {
-		ce->word_14 += nofSymbols;
-		if ((ce->word_14 >= dur / 3 && ce->word_1c >= minDur * 1.3)
-		    || (ce->word_14 >= dur / 5 && ce->echoRrnState == 1
-			&& ce->word_1c >= minDur * 0.6)) {
+		ce->rateDownCounter += nofSymbols;
+		if ((ce->rateDownCounter >= dur / 3 && ce->dataDurationCounter >= minDur * 1.3)
+		    || (ce->rateDownCounter >= dur / 5 && ce->echoRrnState == 1
+			&& ce->dataDurationCounter >= minDur * 0.6)) {
 			ce->echoRrnState++;
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
 				    "V90-mod3 CHANGE echoRrnState = %d",
 				    ce->echoRrnState);
 			ce_echo_rrn_debug(ce);
-			ce->word_98 = 0;
-			ce->word_90 = ce->params->RRN_SILENCE_REQUESTED;
+			ce->forceRateDownOnSilenceRrn = 0;
+			ce->silenceRrnRequest = ce->params->RRN_SILENCE_REQUESTED;
 			ce->params->RRN_SILENCE_MIN_ECHO_ENERGY_FOR_KEEP_RATE =
 			    (ce->echoRrnState == 1) ? 0.65f : 1.8f;
-			ce->word_14 = 0;
-			ce->word_1c = 0;
+			ce->rateDownCounter = 0;
+			ce->dataDurationCounter = 0;
 			demanded = 1;
 		}
 	} else {
-		ce->word_14 = 0;
+		ce->rateDownCounter = 0;
 	}
 
 	return demanded;
@@ -1178,11 +1178,11 @@ V90ConnectionEvaluator::evaluateConnection()
 	if (nofSymbols == 0)
 		return V90CE_VERDICT_NONE;
 
-	word_1c += nofSymbols;
+	dataDurationCounter += nofSymbols;
 
 	/* ----------------------------------------------- 1: the fade clock */
 
-	fadeClock = word_20;
+	fadeClock = fadeCounter;
 
 	if (nofV90Retrains != 0) {
 		int now = (fadeClock + nofSymbols) / retrainCounterFadeCount;
@@ -1206,7 +1206,7 @@ V90ConnectionEvaluator::evaluateConnection()
 			nofRemoteRateReneg--;
 	}
 
-	word_20 = fadeClock + nofSymbols;
+	fadeCounter = fadeClock + nofSymbols;
 
 	/* ------------------------------------------- 2: the external demand */
 
@@ -1225,23 +1225,23 @@ V90ConnectionEvaluator::evaluateConnection()
 				edprintf("V90ConnectionEvaluator: Initiating "
 					 "RRN Down (external demand)\r\n");
 			}
-			word_90 = (externalDemandCode > 3);
-			word_98 = (externalDemandCode == 5);
-			word_1c = 0;
-			word_14 = 0;
-			word_10 = 0;
-			word_18 = 0;
+			silenceRrnRequest = (externalDemandCode > 3);
+			forceRateDownOnSilenceRrn = (externalDemandCode == 5);
+			dataDurationCounter = 0;
+			rateDownCounter = 0;
+			rateUpCounter = 0;
+			retrainCounter = 0;
 			break;
 
 		case 3:
 			verdict = V90CE_VERDICT_RRN_UP;
 			edprintf("V90ConnectionEvaluator: Initiating RRN up "
 				 "(external demand)\r\n");
-			word_90 = 0;
-			word_1c = 0;
-			word_14 = 0;
-			word_10 = 0;
-			word_18 = 0;
+			silenceRrnRequest = 0;
+			dataDurationCounter = 0;
+			rateDownCounter = 0;
+			rateUpCounter = 0;
+			retrainCounter = 0;
 			break;
 
 		case 6:
@@ -1274,9 +1274,9 @@ V90ConnectionEvaluator::evaluateConnection()
 					 nofV90Retrains,
 					 params->
 					 MAX_NOF_RATES_DIFF_BEFORE_RETRAIN);
-				word_18 = 0;
+				retrainCounter = 0;
 				verdict = V90CE_VERDICT_RETRAIN;
-				word_1c = 0;
+				dataDurationCounter = 0;
 				initDmin = -1;
 				if (nofV90Retrains
 				    > (unsigned int)
@@ -1287,16 +1287,16 @@ V90ConnectionEvaluator::evaluateConnection()
 					nofV90Retrains = 0;
 					verdict = V90CE_VERDICT_FALLBACK_V34;
 				}
-				word_90 = 0;
+				silenceRrnRequest = 0;
 			} else {
 				edprintf("V90ConnectionEvaluator: initiating "
 					 "One Rate Down, due to error " "correction mechanism demand.\r\n");
-				word_14 = 0;
-				word_10 = 0;
+				rateDownCounter = 0;
+				rateUpCounter = 0;
 				verdict = V90CE_VERDICT_RRN_DOWN;
-				word_1c = 0;
-				word_98 = 0;
-				word_90 = params->RRN_SILENCE_REQUESTED;
+				dataDurationCounter = 0;
+				forceRateDownOnSilenceRrn = 0;
+				silenceRrnRequest = params->RRN_SILENCE_REQUESTED;
 			}
 
 			/* the external-demand copy of the override */
@@ -1308,7 +1308,7 @@ V90ConnectionEvaluator::evaluateConnection()
 					 "Retrain instead of One Rate Down " "!!\r\n");
 				edprintf("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
 					 "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@" "@@@@@@@@@@\r\n");
-				word_90 = 0;
+				silenceRrnRequest = 0;
 				verdict = V90CE_VERDICT_RETRAIN;
 			}
 
@@ -1324,15 +1324,15 @@ V90ConnectionEvaluator::evaluateConnection()
 	/* ------------------------------------------------------ 3: rate up */
 
 	if (enableRrnUp != 0 && avePdsnr < threshUp) {
-		word_10 += nofSymbols;
-		if (word_10 >= (unsigned int)rateUpDetectDuration
-		    && word_1c >= (unsigned int)minDurationInDataBeforeRrnUp) {
-			word_10 = 0;
+		rateUpCounter += nofSymbols;
+		if (rateUpCounter >= (unsigned int)rateUpDetectDuration
+		    && dataDurationCounter >= (unsigned int)minDurationInDataBeforeRrnUp) {
+			rateUpCounter = 0;
 			verdict = V90CE_VERDICT_RRN_UP;
-			word_1c = 0;
+			dataDurationCounter = 0;
 		}
 	} else {
-		word_10 = 0;
+		rateUpCounter = 0;
 	}
 
 	/* ---------------------------------------------------- 4: rate down */
@@ -1351,7 +1351,7 @@ V90ConnectionEvaluator::evaluateConnection()
 		 * the same x87 value back with `fistpll` and compares that,
 		 * which is exact for every 32-bit input -- `fildll` and
 		 * `fistpll` round-trip a 32-bit integer through a 64-bit
-		 * mantissa without loss -- so `word_1c < minDur` is what it
+		 * mantissa without loss -- so `dataDurationCounter < minDur` is what it
 		 * computes.
 		 *
 		 * A FIRST VERSION OF THIS COMMENT SAID SPELLING IT AS
@@ -1371,9 +1371,9 @@ V90ConnectionEvaluator::evaluateConnection()
 		float scale = 0.0f;
 		int scaled = 1;
 
-		if (word_1c < (unsigned int)(minDur * 2.3f) && echoRrnState == 0)
+		if (dataDurationCounter < (unsigned int)(minDur * 2.3f) && echoRrnState == 0)
 			scale = 1.52f;
-		else if (word_1c < minDur && echoRrnState == 1)
+		else if (dataDurationCounter < minDur && echoRrnState == 1)
 			scale = 1.39f;
 		else {
 			scaled = 0;
@@ -1383,7 +1383,7 @@ V90ConnectionEvaluator::evaluateConnection()
 					    "V90-mod3  Echo_Rrn_State = %d ",
 					    echoRrnState);
 				ce_echo_rrn_debug(this);
-				word_14 = 0;
+				rateDownCounter = 0;
 				echoRrnState = 3;
 				params->
 				    RRN_SILENCE_MIN_ECHO_ENERGY_FOR_KEEP_RATE
@@ -1401,14 +1401,14 @@ V90ConnectionEvaluator::evaluateConnection()
 		if (ce_plain_rate_down(this, nofSymbols))
 			verdict = V90CE_VERDICT_RRN_DOWN;
 	} else {
-		word_14 = 0;
+		rateDownCounter = 0;
 	}
 
 	/* ------------------------------------------------------ 4b: retrain */
 
 	if (avePdsnr > threshRetrain) {
-		word_18 += nofSymbols;
-		if (word_18 >= (unsigned int)retrainDetectDuration) {
+		retrainCounter += nofSymbols;
+		if (retrainCounter >= (unsigned int)retrainDetectDuration) {
 			nofV90Retrains++;
 			if (nofV90Retrains
 			    > (unsigned int)
@@ -1430,11 +1430,11 @@ V90ConnectionEvaluator::evaluateConnection()
 					 (int)fabsf(avePdsnr),
 					 ce_frac2(avePdsnr));
 			}
-			word_1c = 0;
-			word_18 = 0;
+			dataDurationCounter = 0;
+			retrainCounter = 0;
 		}
 	} else {
-		word_18 = 0;
+		retrainCounter = 0;
 	}
 
 	/* ------------------------------ 4c: too many remote renegotiations */
@@ -1447,8 +1447,8 @@ V90ConnectionEvaluator::evaluateConnection()
 			 "no %d) due to %d remote rate reneg\r\n",
 			 nofV90Retrains, nofRemoteRateReneg);
 		nofRemoteRateReneg = 0;
-		word_1c = 0;
-		word_18 = 0;
+		dataDurationCounter = 0;
+		retrainCounter = 0;
 	}
 
 	/* ----------------------------- 4d: what the verdict so far implies */
@@ -1459,7 +1459,7 @@ V90ConnectionEvaluator::evaluateConnection()
 			 "demand, avePdsnr = %c%d.%02d\r\n",
 			 !(0.0f >= avePdsnr) ? '+' : '-',
 			 (int)fabsf(avePdsnr), ce_frac2(avePdsnr));
-		word_90 = 0;
+		silenceRrnRequest = 0;
 		break;
 
 	case V90CE_VERDICT_RRN_DOWN:
@@ -1475,7 +1475,7 @@ V90ConnectionEvaluator::evaluateConnection()
 				 ce_frac2(avePdsnr));
 			edprintf("V90ConnectionEvaluator: retrain no %d\r\n",
 				 nofV90Retrains);
-			word_18 = 0;
+			retrainCounter = 0;
 			initDmin = -1;
 			verdict = V90CE_VERDICT_RETRAIN;
 			if (nofV90Retrains
@@ -1486,7 +1486,7 @@ V90ConnectionEvaluator::evaluateConnection()
 				verdict = V90CE_VERDICT_FALLBACK_V34;
 				nofV90Retrains = 0;
 			}
-			word_90 = 0;
+			silenceRrnRequest = 0;
 		} else {
 			edprintf("V90ConnectionEvaluator: initiating One Rate "
 				 "Down demand, avePdsnr = %c%d.%02d\r\n",
@@ -1498,7 +1498,7 @@ V90ConnectionEvaluator::evaluateConnection()
 
 	case V90CE_VERDICT_RETRAIN:
 		initDmin = -1;
-		word_90 = 0;
+		silenceRrnRequest = 0;
 		break;
 	}
 
@@ -1510,73 +1510,73 @@ V90ConnectionEvaluator::evaluateConnection()
 			 "of One Rate Down !!\r\n");
 		edprintf("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
 			 "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\r\n");
-		word_90 = 0;
+		silenceRrnRequest = 0;
 		verdict = V90CE_VERDICT_RETRAIN;
 	}
 
 	/* ------------------------------------------------ 5: the debug arms */
 
 	if (debugAlternateDebug != 0) {
-		word_24 += nofSymbols;
-		if (word_24 >= debugPeriod) {
+		debugPeriodCounter += nofSymbols;
+		if (debugPeriodCounter >= debugPeriod) {
 			switch (debugAlternateState) {
 			case 0:
 			case 2:
 				verdict = V90CE_VERDICT_RETRAIN;
 				edprintf("V90ConnectionEvaluator: Alternate " "Debug Retrain\r\n");
 				debugAlternateState++;
-				word_24 = 0;
-				word_90 = 0;
+				debugPeriodCounter = 0;
+				silenceRrnRequest = 0;
 				break;
 			case 1:
 				verdict = V90CE_VERDICT_RRN_UP;
 				edprintf("V90ConnectionEvaluator: Alternate " "Debug RRN up\r\n");
 				debugAlternateState++;
-				word_24 = 0;
-				word_90 = 0;
+				debugPeriodCounter = 0;
+				silenceRrnRequest = 0;
 				break;
 			case 3:
 				edprintf("V90ConnectionEvaluator: Alternate " "Debug RRN down\r\n");
-				word_24 = 0;
+				debugPeriodCounter = 0;
 				verdict = V90CE_VERDICT_RRN_DOWN;
 				debugAlternateState = 0;
-				word_98 = 0;
-				word_90 = params->RRN_SILENCE_REQUESTED;
+				forceRateDownOnSilenceRrn = 0;
+				silenceRrnRequest = params->RRN_SILENCE_REQUESTED;
 				break;
 			}
 		}
 	} else if (debugFallBack != 0) {
-		word_24 += nofSymbols;
-		if (word_24 >= debugPeriod) {
+		debugPeriodCounter += nofSymbols;
+		if (debugPeriodCounter >= debugPeriod) {
 			verdict = V90CE_VERDICT_FALLBACK_V34;
 			edprintf("V90ConnectionEvaluator: Debug fall back to " "V34\r\n");
-			word_24 = 0;
-			word_90 = 0;
+			debugPeriodCounter = 0;
+			silenceRrnRequest = 0;
 		}
 	} else if (debugRetrain != 0) {
-		word_24 += nofSymbols;
-		if (word_24 >= debugPeriod) {
+		debugPeriodCounter += nofSymbols;
+		if (debugPeriodCounter >= debugPeriod) {
 			verdict = V90CE_VERDICT_RETRAIN;
 			edprintf("V90ConnectionEvaluator: Debug initiating " "Retrain\r\n");
-			word_24 = 0;
-			word_90 = 0;
+			debugPeriodCounter = 0;
+			silenceRrnRequest = 0;
 		}
 	} else if (debugRateUp != 0) {
-		word_24 += nofSymbols;
-		if (word_24 >= debugPeriod) {
+		debugPeriodCounter += nofSymbols;
+		if (debugPeriodCounter >= debugPeriod) {
 			verdict = V90CE_VERDICT_RRN_UP;
 			edprintf("V90ConnectionEvaluator: Debug One Rate " "Up\r\n");
-			word_24 = 0;
-			word_90 = 0;
+			debugPeriodCounter = 0;
+			silenceRrnRequest = 0;
 		}
 	} else if (debugRateDown != 0) {
-		word_24 += nofSymbols;
-		if (word_24 >= debugPeriod) {
+		debugPeriodCounter += nofSymbols;
+		if (debugPeriodCounter >= debugPeriod) {
 			verdict = V90CE_VERDICT_RRN_DOWN;
 			edprintf("V90ConnectionEvaluator: Debug One Rate " "Down\r\n");
-			word_24 = 0;
-			word_98 = 0;
-			word_90 = params->RRN_SILENCE_REQUESTED;
+			debugPeriodCounter = 0;
+			forceRateDownOnSilenceRrn = 0;
+			silenceRrnRequest = params->RRN_SILENCE_REQUESTED;
 		}
 	}
 
@@ -1609,10 +1609,10 @@ V90ConnectionEvaluator::printStatus() const
 		 nofRemoteRateReneg);
 	edprintf("V90ConnectionEvaluator: nofRemoteRetrainsSoFar = %d\r\n",
 		 nofRemoteRetrains);
-	edprintf("V90ConnectionEvaluator: rateUpCounter = %d\r\n", word_10);
-	edprintf("V90ConnectionEvaluator: rateDownCounter = %d\r\n", word_14);
-	edprintf("V90ConnectionEvaluator: retrainCounter = %d\r\n", word_18);
+	edprintf("V90ConnectionEvaluator: rateUpCounter = %d\r\n", rateUpCounter);
+	edprintf("V90ConnectionEvaluator: rateDownCounter = %d\r\n", rateDownCounter);
+	edprintf("V90ConnectionEvaluator: retrainCounter = %d\r\n", retrainCounter);
 	edprintf("V90ConnectionEvaluator: evaluatorCounter = %d\r\n",
-		 word_1c);
-	edprintf("V90ConnectionEvaluator: fadeCounter = %d\r\n", word_20);
+		 dataDurationCounter);
+	edprintf("V90ConnectionEvaluator: fadeCounter = %d\r\n", fadeCounter);
 }
