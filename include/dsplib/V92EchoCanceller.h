@@ -18,12 +18,12 @@
  * (finding F1270). `sizeof(V92EchoCanceller)` is 0x3c; every field below is
  * mapped, with no `pad_*` remaining.
  *
- * Two fields have no name the object gives them, forced rather than chosen:
- * `word_10`, the sample count `process` compares against `updateDuration`
- * before asking `setState` for the next state, and `word_18`, always
- * `filterLength - 1` and used only by the constructor's history-length
- * arithmetic (finding F226 -- a value with no method name or diagnostic
- * naming it stays a `word_NNNN`, not an invented name).
+ * Two field names are usage-derived, not recovered original identifiers:
+ * `updateSampleCount` counts samples toward `updateDuration` before process
+ * asks setState for the next state; `filterLengthMinusOne` caches the
+ * constructor's unsigned `filterLength - 1` for history sizing and the
+ * process cursor's wrap limit. Their roles are established even though no
+ * method name or diagnostic supplies the original field spelling.
  *
  * **A correction to deviation D72's arithmetic, not its verdict.** D72 and
  * finding F1188 both spell the filter length `V92_ECHO_FILTER_LENGTH & ~3`;
@@ -150,7 +150,7 @@ public:
 
 	/**
 	 * @brief Move the canceller to a new state and reset the
-	 *        `updateDuration`/`word_10` sample counters for it. A no-op
+	 *        `updateDuration`/`updateSampleCount` sample counters for it. A no-op
 	 *        if @p newState already holds.
 	 * @param newState  One of the #V92EchoCancellerState values.
 	 */
@@ -201,12 +201,12 @@ public:
 	 * `echoDelay + 400`, the same quantity built from the delay rather
 	 * than read from the parameter block.
 	 *
-	 * +0x10 is what is compared against it, and nothing names it:
+	 * +0x10 is the sample counter compared against it:
 	 * `process` adds its block length here and, when the sum reaches
 	 * +0x0c, asks `setState` for the next state; `setState` clears it on
-	 * every state change and only on a change. The role is forced and the
-	 * name is not recoverable (finding F226); `word_10` is the honest
-	 * spelling.
+	 * every state change and only on a change. `updateSampleCount` names
+	 * that measured role, not the author's unrecovered identifier. The
+	 * filter-only process arm returns without advancing this counter.
 	 *
 	 * Both are unsigned because the comparison is: `cmp 0xc(%edi),%esi;
 	 * jb` is the unsigned branch, which needs one unsigned operand. Which
@@ -215,17 +215,18 @@ public:
 	 * arguments are converted on the way in.
 	 */
 	unsigned int updateDuration;	/* +0x0c samples in this state       */
-	unsigned int word_10;		/* +0x10 samples so far in it        */
+	unsigned int updateSampleCount;		/* +0x10 samples so far in it        */
 	unsigned int filterLength;	/* +0x14 taps in `echoCoeff`         */
 	/*
-	 * +0x18  `filterLength - 1`, and nothing else: the constructor writes
+	 * +0x18  Cached `filterLength - 1`: the constructor writes
 	 * it (`lea -0x1(%eax),%ecx`) one instruction before writing
-	 * `filterLength` from the same register, and its only other read is
-	 * four instructions later, as the first term of the history-length
-	 * computation. The value is measured; no method name or diagnostic
-	 * names the quantity itself, so it stays `word_18` (finding F226).
+	 * `filterLength` from the same register. It supplies the first term
+	 * of history sizing and is subtracted from historyAlloc at process's
+	 * cursor wrap. The name describes the cached quantity, not recovered
+	 * original spelling. Keep the field and its reads: recomputing it from
+	 * filterLength would change behavior if a caller changes either member.
 	 */
-	unsigned int word_18;		/* +0x18 == filterLength - 1         */
+	unsigned int filterLengthMinusOne;		/* +0x18 == filterLength - 1         */
 	/*
 	 * +0x1c  The history's allocated length, use-derived rather than
 	 * named: the constructor computes it, stores it here, and hands

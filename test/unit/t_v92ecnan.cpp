@@ -267,7 +267,7 @@ main(void)
 						e->echoCoeff = ecn_coeff[side];
 						e->echoHistory = ECN_H(side);
 						e->filterLength = fl;
-						e->word_18 = fl - 1u;
+						e->filterLengthMinusOne = fl - 1u;
 						e->historyAlloc = ECN_HIST;
 						e->echoLength = 0x33333333u;
 						e->historyIndex = hi0;
@@ -276,7 +276,7 @@ main(void)
 						    ecn_states[st];
 						e->echoDelay = 120u;
 						e->updateDuration = 1u;
-						e->word_10 = 0u;
+						e->updateSampleCount = 0u;
 						e->echoBeta =
 						    ecn_bits(0x3ca3d70au);
 						e->echoBetaDecay =

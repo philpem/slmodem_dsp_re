@@ -243,3 +243,32 @@ source-object differences. The three different objects are the fixtures
 were renamed. No full-object or instruction-identity claim is made for those
 three fixtures. The differential gate verifies their runtime checks still
 pass. Full comparison: `object-identity.log` beside the deciding gate log.
+
+## Batch 7: V.92 echo-canceller state fields
+
+Two fields reviewed and named; no unresolved member in this bounded batch:
+
+| Owner | Offset | Old name | New name | Evidence |
+|---|---|---|---|---|
+| `V92EchoCanceller` | 0x10 | `word_10` | `updateSampleCount` | process adds the block count and compares against updateDuration; setState clears it on a transition. The filter-only process arm does not advance it. |
+| `V92EchoCanceller` | 0x18 | `word_18` | `filterLengthMinusOne` | Constructor stores unsigned length minus one; history sizing and process wrap limits read this cached quantity. |
+
+These are usage-derived semantic names, not claims to recover original
+identifiers. Missing original spelling alone is not an unresolved role.
+The old header's assertion that +0x18 was only read during construction was
+stale: process subtracts it from historyAlloc. Its independent storage, reads,
+unsigned underflow at zero filter length, and all arithmetic are preserved.
+Do not replace the cached field with a recomputation from filterLength.
+
+Consumers, live offset assertions, fixtures and mutation find/replace anchors
+use the new names. Mutation labels and fixture diagnostic strings remain
+unchanged. Similarly named fields in other owners (including additionalCPinfo
+and V92 phase-four state) are deliberately untouched.
+
+Batch 7 validation: the first run passed all 375 differential tests but
+rejected three stale mutation anchors. Their escaped-tab strings required
+explicit token updates; mutation labels and injected faults were preserved.
+The deciding rerun passed 375 tests with zero failures and all structural
+checks OK. All 655 baseline period objects remained SHA-256-identical.
+Artifacts: `build/structure-naming-v92-echo-fields-anchors/gates.log` and
+`object-identity.log` in the same directory.
