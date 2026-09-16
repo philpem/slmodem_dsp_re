@@ -316,3 +316,19 @@ The final Doxygen-inclusive gate passed 375 tests, zero failures, and all
 structural checks. All 655 baseline period objects remained SHA-256-identical.
 Artifacts: `build/structure-naming-demodulator-parameters-doxygen/gates.log`
 and `object-identity.log` beside it.
+
+## Batch 9: concise callback Doxygen
+
+After review and merge of #102 through #108, convert the nine previously
+explained V17/V27/V29/V32 callback declarations to Doxygen. Keep the root
+context, buffer roles, symbol/sample units, in/out counts and return semantics
+beside each declaration. The longer derivations remain in earlier batches of
+this ledger. This is a comments-only follow-up: no identifiers, declarations,
+expressions or layout change. No new local gate or Doxygen rendering run is
+claimed for this documentation-only batch.
+
+The merge review found no blocking source, ABI, test or mutation-fault issues.
+The five changed mutation manifests retained their labels and counts (67, 8,
+34, 44 and 95 respectively), and each merged PR had green Gentoo CI checks.
+The existing byte-identity and local gate measurements remain recorded per
+batch above, not re-labelled as measurements of these comments.
