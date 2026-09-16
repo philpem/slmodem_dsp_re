@@ -1228,7 +1228,7 @@ run_ec_dtor(void)
  *     that a different defect; every trial below uses a nonzero divisor and
  *     says so rather than avoiding it quietly.
  *
- * `filterLength == 0` IS DRIVEN, and it is not the same thing.  `word_18` is
+ * `filterLength == 0` IS DRIVEN, and it is not the same thing.  `filterLengthMinusOne` is
  * then `0 - 1`, and the wrap is real: the history length is built from it as
  * unsigned, so an initial delay of 1 brings the sum back to 0 and the object
  * allocates a small buffer.  Both sides wrap identically; the trials that do
@@ -1294,7 +1294,7 @@ static const struct ecc_case ecc_cases[] = {
 	{  40,  60,  16,	7u,	19u  },
 	{  64, 100,  12,	40u,	199u },
 	{  63,  17,   5,	5u,	3u   },
-	{   0,   1,   0,	1u,	4u   },	/* word_18 wraps; see the head */
+	{   0,   1,   0,	1u,	4u   },	/* filterLengthMinusOne wraps; see the head */
 	{   0,   8,   2,	4u,	9u   },
 	{ 180, 840, -14,	40u,	199u }	/* the shipped configuration  */
 };
@@ -1541,7 +1541,7 @@ run_ec_ctor(void)
 			diff_eq_int("the blob's filterLength (%ld)",
 				    (long)ec_b.o.filterLength, (long)len, tag);
 			diff_eq_int("the blob's word_18 (%ld)",
-				    (long)ec_b.o.word_18, (long)w18, tag);
+				    (long)ec_b.o.filterLengthMinusOne, (long)w18, tag);
 			diff_eq_int("the blob's historyAlloc (%ld)",
 				    (long)ec_b.o.historyAlloc, (long)need, tag);
 			diff_eq_int("the blob's echoDelay (%ld)",
@@ -2968,7 +2968,7 @@ run_ec_setstate(void)
 				 * leave behind, so `only_wrote` sees the
 				 * store even when the field held zero.
 				 */
-				e->word_10 = 0x11223344u;
+				e->updateSampleCount = 0x11223344u;
 			}
 
 			memcpy(before, ec_b.raw, EC_SLOT);
@@ -3019,7 +3019,7 @@ run_ec_setstate(void)
 				sawSame = 1;
 			} else {
 				diff_eq_int("the sample count restarted (%ld)",
-					    (long)ec_b.o.word_10, 0, tag);
+					    (long)ec_b.o.updateSampleCount, 0, tag);
 			}
 
 			if (st[n] == 0 && st[o] != 0) {
@@ -3235,7 +3235,7 @@ run_ec_update(void)
 				e->echoCoeff = 0;
 				e->echoHistory = ECX_H(side);
 				e->filterLength = fl;
-				e->word_18 = fl - 1u;
+				e->filterLengthMinusOne = fl - 1u;
 				e->historyAlloc = alloc;
 				e->echoLength = shape[trial].len;
 				e->historyIndex = 0x55aa55aau;
@@ -3481,7 +3481,7 @@ run_ec_process(void)
 				e->echoCoeff = ecx_coeff[side];
 				e->echoHistory = ECX_H(side);
 				e->filterLength = fl;
-				e->word_18 = fl - 1u;
+				e->filterLengthMinusOne = fl - 1u;
 				e->historyAlloc = ECX_HIST;
 				e->echoLength = 0x33333333u;
 				e->historyIndex = 0u;
@@ -3489,7 +3489,7 @@ run_ec_process(void)
 					   shape[trial].state;
 				e->echoDelay = 120u;
 				e->updateDuration = shape[trial].dur;
-				e->word_10 = 0u;
+				e->updateSampleCount = 0u;
 				e->echoBeta = ecx_bits(0x3ca3d70au);
 				e->echoBetaDecay = ecx_bits(0x3f7ff972u);
 			}

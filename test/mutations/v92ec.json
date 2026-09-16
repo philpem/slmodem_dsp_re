@@ -171,8 +171,8 @@
  },
  {
   "label": "word_18 is the filter length rather than one less",
-  "find": "\tword_18 = (unsigned int)length - 1u;",
-  "replace": "\tword_18 = (unsigned int)length;"
+  "find": "\tfilterLengthMinusOne = (unsigned int)length - 1u;",
+  "replace": "\tfilterLengthMinusOne = (unsigned int)length;"
  },
  {
   "label": "the coefficient array is sized in doubles",
@@ -181,8 +181,8 @@
  },
  {
   "label": "the history's span leaves out the delay",
-  "find": "\tspan = word_18 + echoDelay;",
-  "replace": "\tspan = word_18;"
+  "find": "\tspan = filterLengthMinusOne + echoDelay;",
+  "replace": "\tspan = filterLengthMinusOne;"
  },
  {
   "label": "the history's block term is not doubled",
@@ -316,7 +316,7 @@
  },
  {
   "label": "the sample count survives a state change",
-  "find": "\tword_10 = 0;\n}",
+  "find": "\tupdateSampleCount = 0;\n}",
   "replace": "}"
  },
  {
@@ -436,13 +436,13 @@
  },
  {
   "label": "the training cursor wraps at the filter length",
-  "find": "\n\t\tif (historyIndex + 1 == historyAlloc - word_18)",
+  "find": "\n\t\tif (historyIndex + 1 == historyAlloc - filterLengthMinusOne)",
   "replace": "\n\t\tif (historyIndex + 1 == historyAlloc - filterLength)"
  },
  {
   "label": "the filter-only cursor wraps one entry early",
-  "find": "\t\t\tif (historyIndex + 1 == historyAlloc - word_18)",
-  "replace": "\t\t\tif (historyIndex + 2 == historyAlloc - word_18)"
+  "find": "\t\t\tif (historyIndex + 1 == historyAlloc - filterLengthMinusOne)",
+  "replace": "\t\t\tif (historyIndex + 2 == historyAlloc - filterLengthMinusOne)"
  },
  {
   "label": "the copy state does not reduce the cursor",
@@ -461,17 +461,17 @@
  },
  {
   "label": "the block length replaces the sample count",
-  "find": "\tword_10 += count;\n\tif (word_10 >= updateDuration)",
-  "replace": "\tword_10 = count;\n\tif (word_10 >= updateDuration)"
+  "find": "\tupdateSampleCount += count;\n\tif (updateSampleCount >= updateDuration)",
+  "replace": "\tupdateSampleCount = count;\n\tif (updateSampleCount >= updateDuration)"
  },
  {
   "label": "the copy state's duration comparison is strict",
-  "find": "\t\tif (word_10 >= updateDuration)\n\t\t\tsetState(V92_ECHO_FAST_TRAINING);",
-  "replace": "\t\tif (word_10 > updateDuration)\n\t\t\tsetState(V92_ECHO_FAST_TRAINING);"
+  "find": "\t\tif (updateSampleCount >= updateDuration)\n\t\t\tsetState(V92_ECHO_FAST_TRAINING);",
+  "replace": "\t\tif (updateSampleCount > updateDuration)\n\t\t\tsetState(V92_ECHO_FAST_TRAINING);"
  },
  {
   "label": "the training duration comparison is strict",
-  "find": "\tif (word_10 >= updateDuration)\n\t\tsetState(state ==",
-  "replace": "\tif (word_10 > updateDuration)\n\t\tsetState(state =="
+  "find": "\tif (updateSampleCount >= updateDuration)\n\t\tsetState(state ==",
+  "replace": "\tif (updateSampleCount > updateDuration)\n\t\tsetState(state =="
  }
 ]

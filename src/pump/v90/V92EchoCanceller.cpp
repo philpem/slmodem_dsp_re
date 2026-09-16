@@ -62,9 +62,9 @@ V92EC_OFF(params,       0x00, params);
 V92EC_OFF(arma,         0x04, arma);
 V92EC_OFF(state,        0x08, state);
 V92EC_OFF(updateDuration, 0x0c, updateduration);
-V92EC_OFF(word_10,      0x10, word10);
+V92EC_OFF(updateSampleCount,      0x10, word10);
 V92EC_OFF(filterLength, 0x14, filterlength);
-V92EC_OFF(word_18,      0x18, word18);
+V92EC_OFF(filterLengthMinusOne,      0x18, word18);
 V92EC_OFF(historyAlloc, 0x1c, historyalloc);
 V92EC_OFF(echoCoeff,    0x20, echocoeff);
 V92EC_OFF(echoHistory,  0x24, echohistory);
@@ -211,13 +211,13 @@ V92EchoCanceller::V92EchoCanceller(V92Parameters *parameters,
 	setEchoDelay((unsigned int)params->V92_ECHO_INITIAL_DELAY);
 
 	length = params->V92_ECHO_FILTER_LENGTH / 4 * 4;
-	word_18 = (unsigned int)length - 1u;
+	filterLengthMinusOne = (unsigned int)length - 1u;
 	filterLength = (unsigned int)length;
 	edprintf("V92EchoCanceller: echoFilterLen = %d\r\n", filterLength);
 
 	echoCoeff = (float *)sysdep_malloc(filterLength * sizeof(float));
 
-	span = word_18 + echoDelay;
+	span = filterLengthMinusOne + echoDelay;
 	historyAlloc = span + 2u * blockLen + span / blockLen * blockLen
 		       + extra;
 	echoHistory = (float *)sysdep_malloc(historyAlloc * sizeof(float));
@@ -539,7 +539,7 @@ V92EchoCanceller::setEchoParams(float beta, float decay,
  *
  * A REPEATED STATE IS A NO-OP AND DOES NOT RESTART THE COUNT.  `cmp
  * %eax,0x8(%ebx); je` jumps past the `movl $0x0,0x10(%ebx)` that every other
- * arm falls into, so `word_10` survives a redundant call and is cleared by a
+ * arm falls into, so `updateSampleCount` survives a redundant call and is cleared by a
  * real change -- including a change to the ILLEGAL arm, which prints and
  * clears the count without touching the state.
  *
@@ -625,7 +625,7 @@ V92EchoCanceller::setState(V92EchoCancellerState newState)
 		break;
 	}
 
-	word_10 = 0;
+	updateSampleCount = 0;
 }
 
 /*
@@ -659,7 +659,7 @@ V92EchoCanceller::setState(V92EchoCancellerState newState)
  * THE COMPACTION KEEPS `filterLength - 1` SAMPLES, which is exactly the
  * overlap `process` needs: its window runs from `historyIndex` to
  * `historyIndex + filterLength - 1` and its cursor wraps at `historyAlloc -
- * word_18`, so the last `filterLength - 1` written samples are the ones a
+ * filterLengthMinusOne`, so the last `filterLength - 1` written samples are the ones a
  * wrapped reader is still looking at.  The copy runs DOWNWARD, from the
  * sample just written to the front of the buffer, and the loop is
  * BOTTOM-TESTED with no guard -- `lea -0x1(%esi),%edx` then `dec %edx; jne`
@@ -777,7 +777,7 @@ ec_filter_sum(const float *h, const float *c, unsigned int n)
  * `<`/`>` pair is the predicate the object has (finding F236's shape).
  *
  * FOUR PATHS, AND ONLY TWO OF THEM ADAPT.  State 0 filters and returns
- * without touching `word_10`, so a canceller that has finished training never
+ * without touching `updateSampleCount`, so a canceller that has finished training never
  * changes state again.  State 1 copies the block through, advances the cursor
  * by the whole block at once, and counts.  States 2 and 3 -- and, because the
  * dispatch is `if (state == 0) ... else if (state == 1) ... else`, every
@@ -790,7 +790,7 @@ ec_filter_sum(const float *h, const float *c, unsigned int n)
  * `long double err` is that, spelled so it does not depend on excess
  * precision.
  *
- * THE CURSOR WRAPS AT `historyAlloc - word_18` AND +0x18 IS WHAT IT READS --
+ * THE CURSOR WRAPS AT `historyAlloc - filterLengthMinusOne` AND +0x18 IS WHAT IT READS --
  * not `filterLength - 1` recomputed, which is what `updateEchoHistory`'s
  * compaction does with the same quantity.  Two fields holding one number, and
  * each function picks a different one; that is why +0x18 is a real member and
@@ -810,7 +810,7 @@ V92EchoCanceller::process(float *in, float *out, unsigned int count)
 	 * Finding F2300.
 	 */
 	if (out[0] == 177.0f) {
-		mod = historyAlloc - word_18;
+		mod = historyAlloc - filterLengthMinusOne;
 		for (i = 0; i < count; i++) {
 			out[i] = in[i];
 			if (historyIndex + 1 == mod)
@@ -827,7 +827,7 @@ V92EchoCanceller::process(float *in, float *out, unsigned int count)
 					    echoCoeff, filterLength);
 			out[i] = in[i] - sum;
 
-			if (historyIndex + 1 == historyAlloc - word_18)
+			if (historyIndex + 1 == historyAlloc - filterLengthMinusOne)
 				historyIndex = 0;
 			else
 				historyIndex = historyIndex + 1;
@@ -846,13 +846,13 @@ V92EchoCanceller::process(float *in, float *out, unsigned int count)
 		 * does not loop.  D274, and it cannot fire at any block
 		 * length the modem uses.
 		 */
-		mod = historyAlloc - word_18;
+		mod = historyAlloc - filterLengthMinusOne;
 		historyIndex += count;
 		if (historyIndex >= mod)
 			historyIndex -= mod;
 
-		word_10 += count;
-		if (word_10 >= updateDuration)
+		updateSampleCount += count;
+		if (updateSampleCount >= updateDuration)
 			setState(V92_ECHO_FAST_TRAINING);
 		return;
 	}
@@ -869,14 +869,14 @@ V92EchoCanceller::process(float *in, float *out, unsigned int count)
 
 		echoBeta = echoBeta * echoBetaDecay;
 
-		if (historyIndex + 1 == historyAlloc - word_18)
+		if (historyIndex + 1 == historyAlloc - filterLengthMinusOne)
 			historyIndex = 0;
 		else
 			historyIndex = historyIndex + 1;
 	}
 
-	word_10 += count;
-	if (word_10 >= updateDuration)
+	updateSampleCount += count;
+	if (updateSampleCount >= updateDuration)
 		setState(state == V92_ECHO_FAST_TRAINING
 			 ? V92_ECHO_SLOW_TRAINING : V92_ECHO_FILTER_ONLY);
 }
