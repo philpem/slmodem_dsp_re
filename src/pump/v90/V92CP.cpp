@@ -125,10 +125,10 @@ V92CP::resetCRC()
 }
 
 void
-V92CP::setSUV(unsigned int v)
+V92CP::setSUV(unsigned int value)
 {
 	word_104 = 16;
-	suv = v;
+	suv = value;
 }
 
 /*

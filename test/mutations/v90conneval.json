@@ -153,7 +153,7 @@
   "replace": "\treturn 1;\n}"},
 
  {"label": "evaluateMeanErrorStdPhase4 answers with its first argument",
-  "find": "V90ConnectionEvaluator::evaluateMeanErrorStdPhase4(float, float)\n{\n\treturn 0;",
+  "find": "V90ConnectionEvaluator::evaluateMeanErrorStdPhase4(float unused0, float unused1)\n{\n\treturn 0;",
   "replace": "V90ConnectionEvaluator::evaluateMeanErrorStdPhase4(float x, float)\n{\n\treturn (int)x;"},
 
  {"label": "the three decimals are scaled by a hundred",

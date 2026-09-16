@@ -219,7 +219,7 @@ public:
 	 * @return An event/decision code for this sample (widened from a
 	 *         16-bit result the object computes).
 	 */
-	short getV90Decision(float);
+	short getV90Decision(float sample);
 
 	/**
 	 * @brief The V.92 phase 3 receive state machine -- getV90Decision()'s
@@ -229,7 +229,7 @@ public:
 	 * @return An event/decision code for this sample (widened from a
 	 *         16-bit result the object computes).
 	 */
-	short getV92Decision(float);
+	short getV92Decision(float sample);
 
 	/**
 	 * @brief Dispatch to getV92Decision() or getV90Decision() by
@@ -237,7 +237,7 @@ public:
 	 * @param sample  The next demodulated sample.
 	 * @return The chosen decision function's result, widened to `int`.
 	 */
-	int getDecision(float);
+	int getDecision(float sample);
 
 	/**
 	 * @brief Slice one sample against the (possibly alternate) linear
@@ -269,7 +269,7 @@ public:
 	 *                it).
 	 * @return 1 on a hit, else 0.
 	 */
-	int JdNotDetector(int);
+	int JdNotDetector(int symbol);
 
 	/**
 	 * @brief Clear `verificationStatus` (with a diagnostic). Called by

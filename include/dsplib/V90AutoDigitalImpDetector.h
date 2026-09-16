@@ -207,10 +207,15 @@ public:
 	 *
 	 * @param magnitude  The sample magnitude to accumulate.
 	 */
-	void calculateLinearMeanAndVarAlt(short magnitude, unsigned int);
+	void calculateLinearMeanAndVarAlt(short magnitude, unsigned int phase);
 
-	/** @brief Clear a phase's alternate-RBS mean/variance accumulators. */
-	void clearCamulativeAltVal(short phase, short);
+	/**
+	 * @brief Clear a phase's alternate-RBS magnitude accumulators.
+	 *
+	 * The trailing ABI argument is ignored.
+	 * @param phase Index of the accumulator pair to clear.
+	 */
+	void clearCamulativeAltVal(short phase, short unused);
 
 	/** @brief Clear one cell's mean/variance accumulators. */
 	void clearCamulativeVal(short phase, short code);

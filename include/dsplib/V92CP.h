@@ -176,9 +176,9 @@ public:
 	/**
 	 * @brief Set `suv` (and unconditionally reset `word_104` to 16, whose
 	 *        role is not established).
-	 * @param v  New value of `suv`.
+	 * @param value New value of `suv`.
 	 */
-	void setSUV(unsigned int);
+	void setSUV(unsigned int value);
 
 	/* Public for the same reason as V90Jd's and V90CP's: it keeps the
 	 * class standard-layout, so the offsetof assertions are well defined. */

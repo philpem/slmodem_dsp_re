@@ -248,12 +248,12 @@
  },
  {
   "label": "ctor: params is stored after reset, not before",
-  "find": "\tparams = p;\n\treset(4000, V92P3M_STATE_RU, 0, NULL, NULL, 0);",
-  "replace": "\treset(4000, V92P3M_STATE_RU, 0, NULL, NULL, 0);\n\tparams = p;"
+  "find": "\tparams = parameters;\n\treset(4000, V92P3M_STATE_RU, 0, NULL, NULL, 0);",
+  "replace": "\treset(4000, V92P3M_STATE_RU, 0, NULL, NULL, 0);\n\tparams = parameters;"
  },
  {
   "label": "ctor: the V92Parameters * is not stored",
-  "find": "\tparams = p;\n\treset(4000, V92P3M_STATE_RU, 0, NULL, NULL, 0);",
+  "find": "\tparams = parameters;\n\treset(4000, V92P3M_STATE_RU, 0, NULL, NULL, 0);",
   "replace": "\t(void)p;\n\treset(4000, V92P3M_STATE_RU, 0, NULL, NULL, 0);"
  },
  {

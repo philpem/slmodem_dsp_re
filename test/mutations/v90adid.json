@@ -180,7 +180,7 @@
  },
  {
   "label": "use clearCamulativeAltVal's second argument, which the object ignores",
-  "find": "clearCamulativeAltVal(short phase, short)\n{\n\taltMagnitudeCount[phase] = 0;",
+  "find": "clearCamulativeAltVal(short phase, short unused)\n{\n\taltMagnitudeCount[phase] = 0;",
   "replace": "clearCamulativeAltVal(short phase, short code)\n{\n\taltMagnitudeCount[code & 5] = 0;"
  },
  {

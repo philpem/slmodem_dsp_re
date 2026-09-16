@@ -359,9 +359,10 @@ public:
 	 * magnitude with the law currently in force, and looks the learned
 	 * level up in `linMapp` by (phase, code). The `short` argument is
 	 * never read.
+	 * @param unused Ignored; the known symbol comes from the local modulator.
 	 * @return The signed, learned symbol level.
 	 */
-	int trn2dKnownDemod(short);
+	int trn2dKnownDemod(short unused);
 
 	/**
 	 * @brief The whole receiver's entry point: restore the eleven state

@@ -440,7 +440,7 @@ V90AutoDigitalImpDetector::clearCamulativeVal(short phase, short code)
  * it is not an omission.  docs/deviations.md D257.
  */
 void
-V90AutoDigitalImpDetector::clearCamulativeAltVal(short phase, short)
+V90AutoDigitalImpDetector::clearCamulativeAltVal(short phase, short unused)
 {
 	altMagnitudeCount[phase] = 0;
 	altMagnitudeSum[phase] = 0.0f;
