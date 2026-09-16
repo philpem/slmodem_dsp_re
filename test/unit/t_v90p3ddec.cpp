@@ -1218,8 +1218,8 @@ run_p3d_jdnotdetector(void)
  * nothing else in the object reaches it.
  *
  * EVERY TRIAL IS PROBED FIRST, BECAUSE `findPadGain` DOES NOT ALWAYS RETURN.
- * D290: its opening search counts a BYTE down against `(int)byte_a954 - 8`
- * with a signed `jg`, so a `byte_a954` of 3..7 makes the bound negative and
+ * D290: its opening search counts a BYTE down against `(int)originalMaxUcode - 8`
+ * with a signed `jg`, so a `originalMaxUcode` of 3..7 makes the bound negative and
  * the loop never ends.  That byte is whatever `determineMaxUcode` -- the call
  * immediately before -- happens to leave, so this method can be handed a
  * non-terminating input by its own first line, and this fixture found four
@@ -1312,21 +1312,21 @@ run_p3d_setdigimp(void)
 						adid[side].magnitudeSqSum[ph][ci] =
 						    2.0f + (float)(ci % 13u);
 					}
-				adid[side].float_a970 = 5.0f;
+				adid[side].altRbsVarianceThresholdFactor = 5.0f;
 				adid[side].float_a974 = 5.0f;
-				adid[side].float_a97c = 1.0f;
+				adid[side].padGainSearchScale = 1.0f;
 				adid[side].float_a980 = 1.0f;
 				adid[side].trn1Sigma = 1.0f;
 				/*
 				 * 0x30-ish, as t_v90adid's own findPadGain
 				 * fixture uses.  The floor `determineMaxUcode`
-				 * starts from decides the `byte_a954` it
+				 * starts from decides the `originalMaxUcode` it
 				 * leaves, and a floor near zero leaves a byte
 				 * near zero -- which is D290's non-terminating
 				 * band and also a scan long enough to dominate
 				 * this binary's run time.
 				 */
-				adid[side].short_a97a =
+				adid[side].minMaxUcode =
 				    (short)(0x30 + (trial & 7));
 				for (i = 0; i < V90ADID_PHASES; i++)
 					adid[side].maxUcode[i] = 0u;
@@ -1338,7 +1338,7 @@ run_p3d_setdigimp(void)
 			memcpy(probe_, &adid[0], sizeof(probe_));
 			adid[0].determineMaxUcode((short)maxcode_v[m]);
 			{
-				unsigned char b = adid[0].byte_a954;
+				unsigned char b = adid[0].originalMaxUcode;
 
 				memcpy(&adid[0], probe_, sizeof(probe_));
 				if (b >= 3 && b <= 7) {

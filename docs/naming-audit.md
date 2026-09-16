@@ -437,3 +437,36 @@ Decode escaped strings before identifier matching, and use identifier boundaries
 for inverse comparisons so `retrainCounter` does not alter
 `retrainCounterFadeCount`. A green anchor-count check does not validate identifiers
 introduced only by a mutant replacement; review those independently.
+
+## Batch 12: V90AutoDigitalImpDetector field dispositions
+
+Audited seventeen still-neutral declarations in this owner, correcting the
+older lexical estimate of eighteen. Five receive semantic names; twelve retain
+neutral names with explicit constraints. This is not a project-wide census.
+
+| Previous name | Disposition | Evidence |
+| --- | --- | --- |
+| byte_280c | Retain neutral | Rough-mapping consumers interpret nonzero as suspect, while QC mapping treats it as a usable phase verdict; no single Boolean meaning is established |
+| byte_a96a | suspectedPhaseCount | Incremented exactly when a phase is marked suspect |
+| byte_a954 | originalMaxUcode | Original diagnostic names the pre-floor maximum code |
+| short_a97a | minMaxUcode | Floor for the usable-code scan and selected maximum; usage inference |
+| float_a970 | altRbsVarianceThresholdFactor | Reset selects factor from altRbsExpected; consumed by getAltVarThresh |
+| float_a97c | padGainSearchScale | Mapping projection scale in findPadGain; usage inference |
+| short_a948 | Retain neutral | Reset-cleared, later-set latch without an established read-side role |
+| float_a950 | Retain neutral | Reciprocal source for QC-study threshold setup; underlying quantity unknown |
+| float_a974 | Retain neutral | Reset writes 5.0f; no established read-side role |
+| short_a978 | Retain neutral | Connection-type-selected configuration word; represented condition unknown |
+| float_a980 | Retain neutral | Variance-derived multiplier; exact policy role unestablished |
+| int_a98c, int_a990, int_a994, int_a998, int_a99c, int_a9a0 | Retain six neutral members | Independently copied study parameters; five timing consumers and one unread slot do not establish original semantic roles |
+
+Local Doxygen records these constraints. Widths, signedness and storage remain
+unchanged. Validation and independent scope/mutation review are pending.
+
+Batch 12 final validation: Gentoo `make phase` exited 0, **375 passed, 0 failed**,
+all structural checks green, **655/655 period objects byte-identical**.
+Independent review preserved mutation labels, counts and injected faults under
+boundary-aware inverse comparison. It also rejected the proposed name
+`suspectedPhaseFlag`: +0x280c has incompatible consumer interpretations, so
+`byte_280c` and its existing warning remain. Final denominator: **17 reviewed,
+5 semantically named, 12 explicitly unresolved**. A no-op visit to the mutation
+snapshot did not change its content and is not part of the batch.
