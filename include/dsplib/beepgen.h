@@ -65,23 +65,20 @@ struct beepgen {
 				/* +0x2c                                   */
 	/*
 	 * Three host callbacks, copied out of `struct beepgen_config`.  The
-	 * middle one is named from the object's own debug line: `beepgen_
-	 * sample` prints "Hook on proc" immediately before calling it, at
-	 * the only site that does.  The other two are neutral names --
-	 * `fn_011c` fires when a -1 (start-marker) tone BECOMES CURRENT,
-	 * which is the symmetric position, but nothing in the object says
-	 * what it is for.
+	 * The diagnostic string before the middle call is "Hook on proc", but
+	 * `voice_create` registers the voice hook-off callback in that slot.
+	 * The start callback fires when a -1 (start-marker) tone BECOMES CURRENT.
 	 *
-	 * `fn_0124` SUPPLIES THE MARKER'S DURATION AND ITS 24 IS NO LONGER
+	 * `get_sreg` SUPPLIES THE MARKER'S DURATION AND ITS 24 IS NO LONGER
 	 * UNEXPLAINED.  `voice_create` puts the voice config's S-register
 	 * getter in this slot (finding F8813), so the call is
 	 * `vce_get_sreg(modem, SREG_FLASH_TIMER)` -- 24 is that register's
 	 * number in dsplib/vce.h and in slmodemd's own `modem_defs.h`, and
 	 * the answer is VCE_FLASH_TIMER.  Finding F8814.
 	 */
-	void	(*fn_011c)(void *modem);		/* +0x11c */
-	void	(*hook_on_proc)(void *modem);		/* +0x120 */
-	int	(*fn_0124)(void *modem, int what);	/* +0x124 */
+	void	(*hook_on)(void *modem);		/* +0x11c */
+	void	(*hook_off)(void *modem);		/* +0x120 */
+	int	(*get_sreg)(void *modem, int what);	/* +0x124 */
 	int	dur_units_per_sec;
 				/* +0x128 10 or 100: `duration` is
 				 *        tone.duration * 8000 / this, and
@@ -97,17 +94,17 @@ struct beepgen {
  * (src/service/voicesvc.c) the object is explicit: it builds a SEPARATE
  * 16-byte local and rotates three of the four words into it, so
  * `struct voice_config` (dsplib/voice.h) and this type are two different
- * types that share a size.  In particular THIS `fn_04` is not the voice
- * config's -- it takes the voice config's `fn_08` -- and the S-register
- * getter lands in `fn_0c` below, which is why that slot is the one with a
+	 * types that share a size.  In particular THIS `hook_on` is not the voice
+	 * config's -- it takes the voice config's `hook_on` -- and the S-register
+	 * getter lands in `get_sreg` below, which is why that slot is the one with a
  * two-argument signature.  Findings F8813 and F8814.
  */
 struct beepgen_config {
 	void	*modem;			/* +0x00 */
-	void	(*fn_04)(void *modem);	/* +0x04 -> beepgen.fn_011c      */
-	void	(*fn_08)(void *modem);	/* +0x08 -> beepgen.hook_on_proc */
-	int	(*fn_0c)(void *modem, int what);
-					/* +0x0c -> beepgen.fn_0124      */
+	void	(*hook_on)(void *modem);	/* +0x04 -> beepgen.hook_on      */
+	void	(*hook_off)(void *modem);	/* +0x08 -> beepgen.hook_off     */
+	int	(*get_sreg)(void *modem, int what);
+					/* +0x0c -> beepgen.get_sreg     */
 };
 
 /*

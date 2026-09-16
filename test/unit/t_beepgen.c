@@ -120,13 +120,13 @@ trace_add(int tag)
 }
 
 static void
-cb_fn_011c(void *modem)
+cb_hook_on(void *modem)
 {
 	trace_add(modem == (void *)&modem_cookie ? TRACE_FN_011C : -1);
 }
 
 static void
-cb_hook_on(void *modem)
+cb_hook_off(void *modem)
 {
 	trace_add(modem == (void *)&modem_cookie ? TRACE_HOOK_ON : -1);
 }
@@ -140,7 +140,7 @@ cb_duration(void *modem, int what)
 }
 
 static const struct beepgen_config beep_cfg = {
-	&modem_cookie, cb_fn_011c, cb_hook_on, cb_duration
+	&modem_cookie, cb_hook_on, cb_hook_off, cb_duration
 };
 
 /* A config with every callback absent -- the NULL arms of all three sites. */
@@ -637,12 +637,12 @@ main(void)
 			    0x2c, 0);
 		diff_eq_int("sizeof tone entry",
 			    (long)sizeof(struct beepgen_tone), 12, 0);
-		diff_eq_int("fn_011c", (long)offsetof(struct beepgen, fn_011c),
+		diff_eq_int("hook_on", (long)offsetof(struct beepgen, hook_on),
 			    0x11c, 0);
-		diff_eq_int("hook_on_proc",
-			    (long)offsetof(struct beepgen, hook_on_proc),
+		diff_eq_int("hook_off",
+			    (long)offsetof(struct beepgen, hook_off),
 			    0x120, 0);
-		diff_eq_int("fn_0124", (long)offsetof(struct beepgen, fn_0124),
+		diff_eq_int("get_sreg", (long)offsetof(struct beepgen, get_sreg),
 			    0x124, 0);
 		diff_eq_int("dur_units_per_sec",
 			    (long)offsetof(struct beepgen, dur_units_per_sec),

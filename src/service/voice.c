@@ -212,7 +212,7 @@ vce_get_sreg(void *modem, unsigned int num)
  * single switch it would not produce the object's two `cmp $0x2580` /
  * `cmp $0xbb80` pairs.
  *
- * THE CONFIG BLOCK IS THE CLASS-2 EVIDENCE FOR `voice_config.fn_04`.  The
+ * THE CONFIG BLOCK IS THE CLASS-2 EVIDENCE FOR `voice_config.get_sreg`.  The
  * three function pointers are `R_386_32` relocations against `.text` at
  * 0x7e4, 0x7eb and 0x7f0 with targets 0x600, 0x630 and 0x660 -- vce_hook_on,
  * vce_hook_off and vce_get_sreg -- and the slot each lands in is fixed by the
@@ -269,9 +269,9 @@ VOICE_create(void *modem, unsigned int rate)
 						       MDMPRM_VOICEINFO);
 
 	cfg.modem = modem;
-	cfg.fn_04 = (unsigned int (*)(void *, int))vce_get_sreg;
-	cfg.fn_08 = vce_hook_on;
-	cfg.fn_0c = vce_hook_off;
+	cfg.get_sreg = (unsigned int (*)(void *, int))vce_get_sreg;
+	cfg.hook_on = vce_hook_on;
+	cfg.hook_off = vce_hook_off;
 
 	/*
 	 * The output ring starts a whole block ahead of the input one -- its
@@ -848,4 +848,3 @@ STRM_VCE_GetFDSPEnvironmentalParams(short *psFarEchoDelay,
 		    "voice: StrmVCE new: *psFarEchoDelay %d ,*psNearEchoDelay %d \n",
 		    *psFarEchoDelay, *psNearEchoDelay);
 }
-

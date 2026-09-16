@@ -46,29 +46,29 @@ struct silence;
  *
  *	voice_config		beepgen_config		struct beepgen
  *	+0x00 modem	  ->	+0x00 modem	  ->	+0x000 modem
- *	+0x08 fn_08	  ->	+0x04 fn_04	  ->	+0x11c fn_011c
- *	+0x0c fn_0c	  ->	+0x08 fn_08	  ->	+0x120 hook_on_proc
- *	+0x04 fn_04	  ->	+0x0c fn_0c	  ->	+0x124 fn_0124
+ *	+0x08 hook_on	  ->	+0x04 hook_on	  ->	+0x11c hook_on
+ *	+0x0c hook_off	 ->	+0x08 hook_off	 ->	+0x120 hook_off
+ *	+0x04 get_sreg	 ->	+0x0c get_sreg	 ->	+0x124 get_sreg
  *
  * so the two blocks are different types that happen to share a size.  That
  * rotation is what SETTLES the +0x04 slot: it is the S-register getter --
  * `detector_create` (0xac2f8) and `silence_create` (0xac337) both take it as
  * their third argument, `voicedp.c` reads the receive gains through it, and
- * `beepgen`'s `fn_0124` -- which is the slot it lands in -- is called as
+ * `beepgen`'s `get_sreg` -- which is the slot it lands in -- is called as
  * `f(modem, 24)`, i.e. `vce_get_sreg(modem, SREG_FLASH_TIMER)`.  Findings
  * F8813 and F8814.
  *
  * The three names stay as `voicedp.c` already spells them; only the TYPES and
- * the derivations are new.  `fn_04` is spelled the way `detector.h`'s
+ * the derivations are new.  `get_sreg` is spelled the way `detector.h`'s
  * `detector_sreg_fn` and `silence_create`'s third parameter are spelled --
  * `unsigned int` result, from the `shr` at 0xad531 (F8803).
  */
 struct voice_config {
 	void		*modem;			/* +0x00 host handle       */
-	unsigned int	(*fn_04)(void *modem, int num);
+	unsigned int	(*get_sreg)(void *modem, int num);
 						/* +0x04 vce_get_sreg      */
-	void		(*fn_08)(void *modem);	/* +0x08 -> beepgen fn_011c */
-	void		(*fn_0c)(void *modem);	/* +0x0c -> hook_on_proc   */
+	void		(*hook_on)(void *modem);	/* +0x08 -> beepgen hook_on  */
+	void		(*hook_off)(void *modem);	/* +0x0c -> beepgen hook_off */
 };
 
 /*

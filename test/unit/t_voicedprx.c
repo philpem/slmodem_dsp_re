@@ -19,7 +19,7 @@
  * invisible in the bytes and visible in the buffer; both are checked.
  *
  * THE HOST CALLBACK IS OURS AND IS SHARED.  `voice_set_rx` reads three gains
- * through `cfg.fn_04`, which finding F8788 shows is the settings callback and
+ * through `cfg.get_sreg`, which finding F8788 shows is the settings callback and
  * not the void hook `beepgen.h` calls it.  Both sides are given the same
  * function and the same answers, so the two contexts differ in nothing but
  * their own pointers.
@@ -201,8 +201,8 @@ pair_arm(int out_format, unsigned short marker_period, long tag)
 	 * declared with the S-register getter's real signature, which is what
 	 * `query` already has.
 	 */
-	P.a.cfg.fn_04 = query;
-	P.b.cfg.fn_04 = query;
+	P.a.cfg.get_sreg = query;
+	P.b.cfg.get_sreg = query;
 	P.a.out_format = out_format;
 	P.b.out_format = out_format;
 	P.a.marker_period = marker_period;

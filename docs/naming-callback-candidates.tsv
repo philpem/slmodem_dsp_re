@@ -1,0 +1,56 @@
+include/dsplib/b103fp.h:135	b103_hdx_fn	struct b103fp *fp, short *in, short *out, short *count
+include/dsplib/beepgen.h:82	fn_011c	void *modem
+include/dsplib/beepgen.h:83	hook_on_proc	void *modem
+include/dsplib/beepgen.h:84	fn_0124	void *modem, int what
+include/dsplib/beepgen.h:107	fn_04	void *modem
+include/dsplib/beepgen.h:108	fn_08	void *modem
+include/dsplib/beepgen.h:109	fn_0c	void *modem, int what
+include/dsplib/callprog_state.h:80	get_sreg	void *modem, unsigned short n
+include/dsplib/callprog_state.h:98	get_sreg	void *modem, unsigned short n
+include/dsplib/class1.h:746	class1_state_fn	struct fax_class1 *ctx, const short *rx, short *tx, int word3, int word4, int *rx_count, int *tx_count, int word7, int *word8
+include/dsplib/detector.h:92	detector_sreg_fn	void *modem, int num
+include/dsplib/dp.h:23	dp_process_fn	void *dp, void *in, void *out, int count
+include/dsplib/dp.h:28	create	void *modem, int id, int caller, int srate, int max_frag, struct dp_operations *op
+include/dsplib/dp.h:30	destroy	struct dp *dp
+include/dsplib/dp.h:31	process	struct dp *dp, void *in, void *out, int count
+include/dsplib/dp.h:32	hangup	struct dp *dp
+include/dsplib/faxvmi.h:437	faxvmi_create_fn	struct faxvmi_link *dp, const void *cfg
+include/dsplib/faxvmi.h:475	faxvmi_message_fn	void *handle, int code, char **out
+include/dsplib/faxvmi.h:500	faxvmi_delete_fn	struct faxvmi_link *dp
+include/dsplib/faxvmi.h:530	faxvmi_status_fn	struct faxvmi_link *dp, void *status
+include/dsplib/faxvmi.h:704	faxvmi_control_fn	struct faxvmi_link *dp, void *arg
+include/dsplib/faxvmi.h:774	faxvmi_process_fn	struct faxvmi_link *dp, short *a, unsigned short *b, unsigned short *c
+include/dsplib/faxvmi.h:1144	faxvmi_frame_fn	struct faxvmi *vmi, unsigned short *buf, short count
+include/dsplib/faxvmi.h:1146	faxvmi_reverse_fn	unsigned short *buf, short count
+include/dsplib/fpm_fse.h:53	fpm_fse_decision	struct fpm_fse *state, short *angle, short *mag
+include/dsplib/silence.h:50	query	void *obj, int what
+include/dsplib/silence.h:86	query	void *obj, int what
+include/dsplib/v17data.h:209	v17_encoder_fn	void *smc, struct fpm_smc_ring *ring, const unsigned short *data, unsigned short count
+include/dsplib/v17fax.h:549	process	void *modem, unsigned short *in, short *out, short *budget
+include/dsplib/v17fax.h:578	process	void *modem, short *in, short *out, unsigned short *count
+include/dsplib/v17fax.h:1520	v17rx_process_fn	void *modem, short *in, short *out, unsigned short *count
+include/dsplib/v17fax.h:1543	v17tx_process_fn	void *modem, unsigned short *in, short *out, short *budget
+include/dsplib/v21fax.h:150	handler	void *modem, unsigned short *in, short *out, short *budget
+include/dsplib/v21fax.h:315	handler	void *rx, short *in, short *out, short *count
+include/dsplib/v21fax.h:837	v21tx_process_fn	void *modem, unsigned short *in, short *out, short *budget
+include/dsplib/v22_fse.h:77	v22_fse_decision	struct v22_fse *state, short *angle, short *mag
+include/dsplib/v27fax.h:242	handler	void *modem, short *in, short *out, unsigned short *count
+include/dsplib/v27fax.h:291	handler	void *modem, unsigned short *in, short *out, short *budget
+include/dsplib/v27fax.h:407	v27tx_process_fn	void *modem, unsigned short *in, short *out, short *budget
+include/dsplib/v27fax.h:1151	v27_rx_state_fn	void *modem, short *in, short *out, unsigned short *count
+include/dsplib/v29fax.h:179	handler	void *modem, short *in, short *out, unsigned short *count
+include/dsplib/v29fax.h:225	handler	void *modem, unsigned short *in, short *out, short *budget
+include/dsplib/v29fax.h:573	v29tx_process_fn	void *modem, unsigned short *in, short *out, short *budget
+include/dsplib/v29fax.h:1268	v29_rx_state_fn	void *modem, short *in, short *out, unsigned short *count
+include/dsplib/v32fpstat.h:226	v32_protocol_fn	void *modem, unsigned short *txdata, short *txout, short *rxin, unsigned short *rxout, short *nsamples, unsigned short *rxcount
+include/dsplib/v32hdxst.h:102	v32_nextstate_fn	void *modem
+include/dsplib/v32struct.h:28	v32_txhdx_fn	void *modem, short *data, short *out, unsigned short *left
+include/dsplib/v32struct.h:37	v32_rxhdx_fn	void *modem, short *in, unsigned short *out, unsigned short *count
+include/dsplib/v32struct.h:45	v32_encoder_fn	struct v32_smc *smc, struct v32_symout *out, short *in, unsigned short count
+include/dsplib/v34shell.h:45	v34_putbits_fn	void *shell, int value, int nbits
+include/dsplib/v34shell.h:52	v34_getbits_fn	void *obj, int pos
+include/dsplib/v34shell.h:58	v34_scramble_fn	void *obj, short nbits
+include/dsplib/voice.h:68	fn_04	void *modem, int num
+include/dsplib/voice.h:70	fn_08	void *modem
+include/dsplib/voice.h:71	fn_0c	void *modem
+include/dsplib/voice.h:91	voice_handler_fn	struct voice_ctx *v, short *rx_lin, float *rx_flt, float *tx_flt, short *tx_lin, unsigned short *hostcount, unsigned short *countp

@@ -191,3 +191,55 @@ now reflect this evidence. This correction changes comments/documentation
 only; no executable expression, callback type or layout changed. The existing
 375/375 period gate and 655-object identity results precede this documentation
 correction; they are not a new test run or proof of comment semantics.
+
+## Batch 6: service callback member names
+
+The multiline lexical scan in `naming-callback-candidates.tsv` records 56
+explicit function-pointer declaration candidates under `include/dsplib/*.h`
+before this batch. It recognizes `(*identifier)(...)` with non-nested argument
+lists; typedef-based member declarations, other declarator syntax, source-local
+callbacks and semantic quality are outside this scan. It is a candidate
+snapshot, not a proof that all callbacks in the project have been audited.
+Eight candidates have offset-only `fn_hex` declarator names, all in the
+beep/voice group. Existing shared equalizer and datapump callbacks inspected
+in this pass already have named parameters.
+
+Nine member names are resolved in this batch: those eight offset-only names
+and one misleading existing name. Registration evidence, rather than analogy,
+settles their roles:
+
+| Type | Old member | New member | Evidence |
+|---|---|---|---|
+| `voice_config` | `fn_04` | `get_sreg` | VOICE_create installs vce_get_sreg; receive setup queries settings through it. |
+| `voice_config` | `fn_08` | `hook_on` | VOICE_create installs vce_hook_on. |
+| `voice_config` | `fn_0c` | `hook_off` | VOICE_create installs vce_hook_off. |
+| `beepgen_config` | `fn_04` | `hook_on` | voice_create maps voice_config's hook-on slot here. |
+| `beepgen_config` | `fn_08` | `hook_off` | voice_create maps voice_config's hook-off slot here. |
+| `beepgen_config` | `fn_0c` | `get_sreg` | voice_create maps the settings getter here. |
+| `beepgen` | `fn_011c` | `hook_on` | Copied from the corresponding config slot; invoked when the flash marker starts. |
+| `beepgen` | `hook_on_proc` | `hook_off` | Receives vce_hook_off through config; invoked when the flash marker ends. |
+| `beepgen` | `fn_0124` | `get_sreg` | Used with register 24 to obtain flash timing. |
+
+The original diagnostic string "Hook on proc" is deliberately preserved even
+though its adjacent callback receives vce_hook_off. Debug strings are strong
+naming evidence, not infallible evidence: the concrete registered callback
+settles this discrepancy. Return signedness and callback casts remain as
+reconstructed; naming is not an opportunity to change their contracts.
+
+Known callback parameter names, runtime expressions, mutation labels and
+mutation fault semantics remain unchanged. The earlier candidate snapshots
+are retained as historical inventories rather than silently rewritten totals.
+
+Batch 6 validation: the initial gate passed 373 tests and failed to compile
+`t_beepgen` and `t_voicesvc` because fixture helper/member renames were
+incomplete. Those references were corrected without changing trace tags or
+checks. The deciding rerun, `build/structure-naming-service-callbacks-fixed/`
+`gates.log`, passed all 375 period tests with structural checks OK.
+
+Before/after SHA-256 results: 652 of 655 baseline objects identical. All 275
+objects whose paths identify reconstruction `src/` files are identical; zero
+source-object differences. The three different objects are the fixtures
+`t_beepgen`, `t_voicesvc`, and `t_voiceapi`, whose callback helper identifiers
+were renamed. No full-object or instruction-identity claim is made for those
+three fixtures. The differential gate verifies their runtime checks still
+pass. Full comparison: `object-identity.log` beside the deciding gate log.
