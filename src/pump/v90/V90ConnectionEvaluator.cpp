@@ -414,7 +414,7 @@ V90ConnectionEvaluator::indicateRemoteRetrain()
  * pair is a real asymmetry in the original and not an artefact.
  */
 int
-V90ConnectionEvaluator::evaluateMeanErrorStdPhase4(float, float)
+V90ConnectionEvaluator::evaluateMeanErrorStdPhase4(float unused0, float unused1)
 {
 	return 0;
 }

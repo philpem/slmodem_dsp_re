@@ -41,14 +41,15 @@
  * and a destructor that releases nothing, which is the same statement the
  * other fifteen members make: the class is a name list.  The three
  * parameters are the mangling's (`PviP19_tagModemParameters`) and are never
- * read, so they are unnamed like every other ignored argument here.
+ * read. Their unused names record that fact without inventing a role.
  *
  * Declaring the pair makes the class non-trivial, which K56FlexFloModem.h
  * used to avoid on behalf of a union fixture; no fixture puts the class in a
  * union today (every test reaches it through a cast), so the cost is gone
  * and the two blob symbols are claimed.
  */
-K56FlexFloModem::K56FlexFloModem(void *, int, _tagModemParameters *)
+K56FlexFloModem::K56FlexFloModem(void *unused0, int unused1,
+				_tagModemParameters *unusedParams)
 {
 }
 
@@ -90,7 +91,7 @@ K56FlexFloModem::internalReset()
 }
 
 void
-K56FlexFloModem::setMinMaxRates(int, int)
+K56FlexFloModem::setMinMaxRates(int unused0, int unused1)
 {
 }
 
@@ -113,7 +114,8 @@ K56FlexFloModem::setMinMaxRates(int, int)
  * -- both sides get a seeded pair and neither may touch it.
  */
 int
-K56FlexFloModem::k56FlexRunDemodulator(float *, unsigned int, int *, int *)
+K56FlexFloModem::k56FlexRunDemodulator(float *unused0, unsigned int unused1,
+				    int *unused2, int *unused3)
 {
 	return 5;
 }
@@ -230,17 +232,15 @@ extern "C" {
  * same shape as the `VPCMXF_Create` call eight instructions earlier, and
  * passes NULL, `lea 0x2c(%ebx)`, what `dp_param_get` returned, and a computed
  * count.  The body is `sub`/`movl $0x14`/`call sysdep_malloc`/`add`/`ret` --
- * nineteen bytes that never read 0x10(%esp).  The parameters are therefore
- * unnamed: the declaration exists so that a future `vpcm_create` calls it with
- * the right stack, and naming them would put a meaning in the record that the
- * object does not give.
+ * nineteen bytes that never read 0x10(%esp). The unused parameter names
+ * preserve the call signature without assigning unproven semantic roles.
  *
  * `vpcm_create` DOES check the result -- `test %eax,%eax` at .text+0x3b31 and
  * a branch into the failure unwind -- so the null return matters to the caller
  * even though nothing but a failing allocator can produce one.
  */
 void *
-K56FLEX_Create(void *, void *, void *, int)
+K56FLEX_Create(void *unused0, void *unused1, void *unused2, int unused3)
 {
 	return sysdep_malloc(K56FLEX_OBJECT_SIZE);
 }

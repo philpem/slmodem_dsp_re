@@ -108,9 +108,9 @@ public:
 	 *        `trn1uLength` from two `V92Parameters` fields, so the other
 	 *        order would read an uninitialized pointer (both orderings
 	 *        are mutation-tested in test/mutations/v92p3mod.json).
-	 * @param p  Negotiated V.92 parameters; stored, not owned.
+	 * @param parameters Negotiated V.92 parameters; stored, not owned.
 	 */
-	V92Phase3Modulator(V92Parameters *);
+	V92Phase3Modulator(V92Parameters *parameters);
 
 	/**
 	 * @brief Destroy the modulator. Frees the scrambler's history buffer;

@@ -435,7 +435,7 @@ V90Phase4Demodulator::detectFPE(short sample)
 }
 
 int
-V90Phase4Demodulator::trn2dKnownDemod(short)
+V90Phase4Demodulator::trn2dKnownDemod(short unused)
 {
 	short gen = (short)phase4Modulator.generateSymbol();
 	short sign = (short)((gen < 0) ? -1 : 1);

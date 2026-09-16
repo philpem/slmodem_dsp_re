@@ -332,3 +332,60 @@ The five changed mutation manifests retained their labels and counts (67, 8,
 34, 44 and 95 respectively), and each merged PR had green Gentoo CI checks.
 The existing byte-identity and local gate measurements remain recorded per
 batch above, not re-labelled as measurements of these comments.
+
+## Batch 10: remaining scalar and stub parameters
+
+Named 24 previously unnamed parameter slots across 14 methods/functions:
+seven active arguments have names supported by their definitions, and seventeen
+ignored ABI arguments have explicit `unused` names rather than invented roles.
+This covers V90Phase3Demodulator, V90ConnectionEvaluator,
+V90AutoDigitalImpDetector, V90Phase4Demodulator, V92Phase3Modulator, V92CP,
+and the K56flex stubs in NoK56Flex.cpp. Signature-based mutation anchors follow
+the declaration changes; injected faults and labels are unchanged.
+
+The K56flex constructor, rate setter, demodulator stub and allocation wrapper
+ignore their arguments. Their comments deliberately make no claim about the
+missing implementation's argument meanings. The phase-four known-symbol
+routine likewise ignores its short argument and obtains the known symbol from
+its local modulator.
+
+### Remaining scope estimate
+
+The pre-batch lexical header inventory found 175 primitive `rXX`/`fXX`
+declaration lines, 447 other non-padding offset/neutral declaration lines,
+and 102 padding-only lines. These are triage counts, not a complete field
+census: source-local types, multiline declarations and other spellings are not
+fully covered. Historical candidate lists remain historical snapshots.
+
+Allow roughly 20-40 owner-level evidence batches for the field audit, plus
+further parameter cleanup. This is a work estimate, not a completion
+percentage. Each candidate needs either a supported name with a concise local
+Doxygen explanation or an explicit evidence-based unresolved disposition.
+Unreviewed fields cannot be declared unresolved merely to close issue #100.
+
+Validation for this batch is pending the Gentoo period reconstruction gate
+and comparison against the pre-edit period-object hashes.
+
+Batch 10 measured result: Gentoo period differential **375 passed, 0 failed**;
+all **655/655** baseline period objects are byte-identical. The overall
+`make phase` result is **FAIL**, because two `v92cpcrc` mutation anchors still
+use the former `setSUV` argument spelling: "setSUV stores fifteen rather than
+sixteen" and "setSUV stores its argument in both slots". No commit is ready
+until those anchors are synchronized without changing their injected faults
+and the structural gate is green.
+
+Next bounded owner audit: V90ConnectionEvaluator has ten proposed semantic
+names and one neutral disposition. The object's status text directly supports
+rateUpCounter, rateDownCounter, retrainCounter and fadeCounter. Access patterns
+support dataDurationCounter, debugPeriodCounter, phase3RateUpCheckPeriod,
+phase4RateUpCheckPeriod and silenceRrnRequested. The diagnostic "FORCED rate
+down on silence rrn" supports forceRateDownOnSilenceRrn. These proposals are
+not yet applied. Keep word_b8 neutral: its observed multiplication of avePdsnr
+and assignment from a local scale do not establish its full semantic role.
+
+Batch 10 correction and final validation: both `v92cpcrc` anchors and their
+replacement expressions now use `value`, preserving the same injected faults
+and labels. The corrected Gentoo `make phase` exited 0: **375 passed, 0 failed**,
+with all structural checks green. The repeated hash comparison found **655/655
+period objects byte-identical** to the pre-edit baseline. The initial failed
+run is retained above rather than represented as a successful gate.

@@ -90,7 +90,7 @@ extern void modem_dp_deregister(int id, void *op);
  * Both are `extern "C"` free functions in the object, which is what makes the
  * call legal across the boundary.
  */
-extern void *K56FLEX_Create(void *, void *, void *, int);
+extern void *K56FLEX_Create(void *unused0, void *unused1, void *unused2, int unused3);
 extern void K56FLEX_Delete(void *obj);
 
 /*

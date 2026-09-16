@@ -16,7 +16,7 @@
  },
  {
   "label": "K56FLEX_Create reads the argument it is not supposed to read",
-  "find": "K56FLEX_Create(void *, void *, void *, int)\n{\n\treturn sysdep_malloc(K56FLEX_OBJECT_SIZE);",
+  "find": "K56FLEX_Create(void *unused0, void *unused1, void *unused2, int unused3)\n{\n\treturn sysdep_malloc(K56FLEX_OBJECT_SIZE);",
   "replace": "K56FLEX_Create(void *, void *, void *a3, int)\n{\n\t*(unsigned char *)a3 = 0;\n\treturn sysdep_malloc(K56FLEX_OBJECT_SIZE);"
  },
  {
@@ -41,12 +41,12 @@
  },
  {
   "label": "the demodulator writes its two outputs",
-  "find": "K56FlexFloModem::k56FlexRunDemodulator(float *, unsigned int, int *, int *)\n{\n\treturn 5;",
+  "find": "K56FlexFloModem::k56FlexRunDemodulator(float *unused0, unsigned int unused1,\n\t\t\t\t    int *unused2, int *unused3)\n{\n\treturn 5;",
   "replace": "K56FlexFloModem::k56FlexRunDemodulator(float *, unsigned int, int *a, int *b)\n{\n\t*a = 0;\n\t*b = 0;\n\treturn 5;"
  },
  {
   "label": "the demodulator scales the samples it is handed",
-  "find": "K56FlexFloModem::k56FlexRunDemodulator(float *, unsigned int, int *, int *)\n{\n\treturn 5;",
+  "find": "K56FlexFloModem::k56FlexRunDemodulator(float *unused0, unsigned int unused1,\n\t\t\t\t    int *unused2, int *unused3)\n{\n\treturn 5;",
   "replace": "K56FlexFloModem::k56FlexRunDemodulator(float *in, unsigned int n, int *, int *)\n{\n\tunsigned int i;\n\n\tfor (i = 0; i < n; i++)\n\t\tin[i] *= 2.0f;\n\treturn 5;"
  },
  {

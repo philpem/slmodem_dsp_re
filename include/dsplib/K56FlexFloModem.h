@@ -49,10 +49,14 @@ public:
 	/**
 	 * @brief Construct a K56flex modem object. Initialises nothing.
 	 *
-	 * Defined in src/pump/v90/K56FlexFloModem.cpp; body is empty. The
+	 * Defined in src/pump/v90/NoK56Flex.cpp; body is empty. The
 	 * three parameters are the mangling's and never read.
+	 * @param unused0 Ignored pointer; no semantic role established.
+	 * @param unused1 Ignored integer; no semantic role established.
+	 * @param unusedParams Ignored parameter block; not stored or owned.
 	 */
-	K56FlexFloModem(void *, int, _tagModemParameters *);
+	K56FlexFloModem(void *unused0, int unused1,
+			_tagModemParameters *unusedParams);
 
 	/** @brief Destroy a K56flex modem object. Releases nothing (empty body). */
 	~K56FlexFloModem();
@@ -71,8 +75,12 @@ public:
 	 */
 	int getK56FlexJaBits(short *out);
 
-	/** @brief Stub. Empty body; does not use either argument. */
-	void setMinMaxRates(int, int);
+	/**
+	 * @brief Stub; does not change either rate limit.
+	 * @param unused0 Ignored first rate argument.
+	 * @param unused1 Ignored second rate argument.
+	 */
+	void setMinMaxRates(int unused0, int unused1);
 
 	/** @brief Stub. Empty body. */
 	void enterPhase3FullDuplex();
@@ -104,7 +112,8 @@ public:
 	 *
 	 * @return Always 5.
 	 */
-	int k56FlexRunDemodulator(float *, unsigned int, int *, int *);
+	int k56FlexRunDemodulator(float *unused0, unsigned int unused1,
+				 int *unused2, int *unused3);
 
 	/*
 	 * THE SIX VISUAL DIAGNOSTICS.  Each is `xor %eax,%eax; ret` and
@@ -176,9 +185,13 @@ public:
 extern "C" {
 /**
  * @brief Allocate the K56flex side's opaque object.
+ * @param unused0 Ignored pointer; not retained.
+ * @param unused1 Ignored pointer; not retained.
+ * @param unused2 Ignored pointer; not retained.
+ * @param unused3 Ignored integer; does not affect allocation size.
  * @return A newly allocated, `K56FLEX_OBJECT_SIZE`-byte block.
  */
-void *K56FLEX_Create(void *, void *, void *, int);
+void *K56FLEX_Create(void *unused0, void *unused1, void *unused2, int unused3);
 
 /**
  * @brief Free a K56flex object allocated by K56FLEX_Create(), if non-NULL.

@@ -60,13 +60,13 @@
  },
  {
   "label": "setSUV stores fifteen rather than sixteen",
-  "find": "\tword_104 = 16;\n\tsuv = v;",
-  "replace": "\tword_104 = 15;\n\tsuv = v;"
+  "find": "\tword_104 = 16;\n\tsuv = value;",
+  "replace": "\tword_104 = 15;\n\tsuv = value;"
  },
  {
   "label": "setSUV stores its argument in both slots",
-  "find": "\tword_104 = 16;\n\tsuv = v;",
-  "replace": "\tword_104 = v;\n\tsuv = v;"
+  "find": "\tword_104 = 16;\n\tsuv = value;",
+  "replace": "\tword_104 = value;\n\tsuv = value;"
  },
  {
   "label": "the message starts at seventeen",

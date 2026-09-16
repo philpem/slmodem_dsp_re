@@ -554,10 +554,10 @@ V92Phase3Modulator::reset(short levelArg, V92Phase3ModulatorState stateArg,
  * DIL descriptor available" complaint quiet.
  * ===========================================================================
  */
-V92Phase3Modulator::V92Phase3Modulator(V92Parameters *p)
+V92Phase3Modulator::V92Phase3Modulator(V92Parameters *parameters)
 	: scrambler(5, 23, 99)
 {
-	params = p;
+	params = parameters;
 	reset(4000, V92P3M_STATE_RU, 0, NULL, NULL, 0);
 }
 

@@ -117,14 +117,14 @@ public:
 	/**
 	 * @brief Phase-4 mean-error-standard-deviation stub.
 	 *
-	 * A three-byte body (`xor %eax,%eax; ret`) that reads neither
-	 * argument and always answers 0 -- a real asymmetry against its
+ * A three-byte body (`xor %eax,%eax; ret`) that ignores both arguments
+ * and always answers 0 -- a real asymmetry against its
 	 * phase-3 counterpart, evaluateMeanErrorStdPhase3(), which is 234
 	 * bytes and actually computes something.
 	 *
 	 * @return Always 0.
 	 */
-	int evaluateMeanErrorStdPhase4(float, float);
+int evaluateMeanErrorStdPhase4(float unused0, float unused1);
 
 	/**
 	 * @brief Count one local V.90 retrain and check it against the retrain limit.
