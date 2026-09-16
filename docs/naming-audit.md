@@ -125,3 +125,30 @@ Batch 3 validation: Gentoo GCC 3.4.2-r2 `make phase` passed 375 tests,
 zero failures; all structural checks OK. All 655 baseline top-level period
 objects remained SHA-256-identical after rebuilding. Logs are in
 `build/structure-naming-v29-callbacks/` (`gates.log`, `object-identity.log`).
+
+## Batch 4: V.32 callback typedefs
+
+Three typedefs reviewed, twelve previously unnamed parameters named, zero
+unresolved parameters in this bounded batch. Function-pointer types and all
+consumers remain unchanged.
+
+- `v32_txhdx_fn(modem, data, out, left)`: the caller passes the root modem,
+  seeds `left` from `hdx->symbol_len`, advances the output pointer by the
+  returned sample count, and repeats until the symbol budget is exhausted.
+- `v32_rxhdx_fn(modem, in, out, count)`: the dispatcher forwards the root
+  modem and arguments unchanged. `RxHdxData` overwrites the input count with
+  the demodulated and clamped output count. This is not V.29's remaining-input
+  convention; the callback has no return value.
+- `v32_encoder_fn(smc, out, in, count)`: the registered absolute, differential
+  and trellis symbol encoders append to the output ring. The trellis encoder
+  modifies input words, so naming does not introduce a const qualifier.
+
+Evidence: `V32TxHdxModem`, `V32RxHdxModem`, `RxHdxData`, the encoder assignments
+in `V32.c`, and the symbol encoder definitions. Names match the implementations.
+These typedefs feed `v32_hdx::tx_state`/`rx_state` and `v32_fp::encoders`;
+those existing role-based member names do not need a cosmetic rename.
+
+Batch 4 validation: Gentoo GCC 3.4.2-r2 `make phase` passed 375 tests,
+zero failures, with all structural checks OK. All 655 baseline period object
+files remained SHA-256-identical. Logs: `build/structure-naming-v32-callbacks/`
+(`gates.log` and `object-identity.log`).
