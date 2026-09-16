@@ -96,3 +96,32 @@ zero failures, with all structural checks OK. All 655 baseline top-level
 period object files remained byte-identical by SHA-256 after rebuilding.
 Artifacts: `build/structure-naming-cpp-parameters/gates.log` and
 `build/structure-naming-cpp-parameters/object-identity.log`.
+
+## Batch 3: V.29 callback member contracts
+
+Two function-pointer members reviewed, eight previously unnamed parameters
+named, zero unresolved parameters in this bounded batch:
+
+- `v29_rx_detector::handler(modem, in, out, count)` receives the owning
+  `v29_rx`, not its detector. The caller advances its input pointer by the
+  difference between the incoming and remaining count, and its output pointer
+  by the callback return. The return is a produced-word count, not a status.
+- `v29_tx_params::handler(modem, in, out, budget)` receives the owning
+  `v29_tx_root`, not its parameter block. The caller passes its input-word
+  pointer unchanged, advances output by the callback return, and repeats
+  while the signed output-sample budget remains positive. The budget is not
+  an input count. Some state handlers only transition and return zero.
+
+Names match the assigned `RxHdx*V29` and `TxHdx*V29` definitions. Contract
+comments come from `V29RX_modem`/`V29TX_modem` dispatch and handler assignments,
+not from a generic assumption about the last pointer argument. Member names
+remain `handler`: each is explicitly documented as its active state handler.
+No signature, member offset, return type or source expression changed.
+
+Callback typedefs and other function-pointer members remain in scope for #100;
+this batch does not claim the earlier single-line inventory covered them all.
+
+Batch 3 validation: Gentoo GCC 3.4.2-r2 `make phase` passed 375 tests,
+zero failures; all structural checks OK. All 655 baseline top-level period
+objects remained SHA-256-identical after rebuilding. Logs are in
+`build/structure-naming-v29-callbacks/` (`gates.log`, `object-identity.log`).
