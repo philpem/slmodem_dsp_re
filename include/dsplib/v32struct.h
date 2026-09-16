@@ -18,11 +18,32 @@ struct fpm_tone;
 struct fpm_mtd;
 #define V32_SEQ_REGS 5
 
-typedef short (*v32_txhdx_fn)(void *, short *, short *, unsigned short *);
-typedef void (*v32_rxhdx_fn)(void *, short *, unsigned short *,
-			     unsigned short *);
-typedef void (*v32_encoder_fn)(struct v32_smc *, struct v32_symout *,
-			       short *, unsigned short);
+/*
+ * Active half-duplex transmit state. modem is the root v32_modem, not its
+ * v32_hdx. data is the input-word pointer (unused by some states); out receives
+ * samples. left is the remaining symbol budget, initially hdx->symbol_len.
+ * Return the number of output samples, NOT the number of symbols consumed.
+ * V32TxHdxModem advances out by that return and dispatches until left is zero.
+ */
+typedef short (*v32_txhdx_fn)(void *modem, short *data, short *out,
+			    unsigned short *left);
+/*
+ * Active receive state, also passed the root modem. in supplies samples and
+ * out receives decoded words. count is an in/out count: the data state replaces
+ * the input count with its demodulated/clamped output count. It is NOT the
+ * unconsumed-input convention used by the V.29 receive callback. No return
+ * value carries the result; V32RxHdxModem forwards these arguments unchanged.
+ */
+typedef void (*v32_rxhdx_fn)(void *modem, short *in, unsigned short *out,
+			   unsigned short *count);
+/*
+ * Symbol mapper selected from the absolute, differential and trellis encoders.
+ * smc is coder state; out is the destination symbol ring; count counts input
+ * words. in stays writable because the trellis encoder masks words in place.
+ * Results are appended to the ring, not returned as a count.
+ */
+typedef void (*v32_encoder_fn)(struct v32_smc *smc, struct v32_symout *out,
+			      short *in, unsigned short count);
 
 struct v32_hdx {
 	struct fpm_agc agc;
