@@ -538,13 +538,13 @@ struct v17tx_priv {
 	int r0c;		/* +0x0c */
 	short mode;		/* +0x10 */
 	short r12;		/* +0x12 unmodelled */
-	/*
-	 * Active TX state; modem is the root v17tx, not this private block.
-	 * in is the caller's input-word pointer (unused by some states).
-	 * budget counts remaining SYMBOLS; the short return counts shaped
-	 * output SAMPLES. V17TX_modem advances out by that return and repeats
-	 * while budget is positive. TxHdxSilenceV17, for example, consumes n
-	 * symbol slots through TxNoCarrierV17 and returns its sample count.
+	/**
+	 * @brief Run the active transmit state.
+	 * @param modem Owning v17tx, not this private block.
+	 * @param in Input-word buffer; unused by some states.
+	 * @param[out] out Shaped output samples.
+	 * @param[in,out] budget Remaining symbols, not samples.
+	 * @return Samples written; a state-only transition may return zero.
 	 */
 	short (*process)(void *modem, unsigned short *in, short *out,
 			 short *budget); /* +0x14 */
@@ -568,12 +568,13 @@ struct v17rx_priv {
 	unsigned short rate_code; /* +0x0c */
 	short r0e;		/* +0x0e unmodelled */
 	int r10;		/* +0x10 */
-	/*
-	 * Active RX state; modem is the root v17rx, not this private block.
-	 * count holds available input samples on entry and unconsumed samples
-	 * on return. Return the output-word count. V17RX_modem advances in by
-	 * the consumed count and out by the return, and only after dispatch
-	 * completes replaces the caller's count with the total output count.
+	/**
+	 * @brief Run the active receive state.
+	 * @param modem Owning v17rx, not this private block.
+	 * @param in Input samples.
+	 * @param[out] out Decoded data words.
+	 * @param[in,out] count Available samples on entry, unconsumed on return.
+	 * @return Data words written. The dispatcher accumulates this separately.
 	 */
 	short (*process)(void *modem, short *in, short *out,
 			 unsigned short *count); /* +0x14 */

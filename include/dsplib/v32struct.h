@@ -18,29 +18,32 @@ struct fpm_tone;
 struct fpm_mtd;
 #define V32_SEQ_REGS 5
 
-/*
- * Active half-duplex transmit state. modem is the root v32_modem, not its
- * v32_hdx. data is the input-word pointer (unused by some states); out receives
- * samples. left is the remaining symbol budget, initially hdx->symbol_len.
- * Return the number of output samples, NOT the number of symbols consumed.
- * V32TxHdxModem advances out by that return and dispatches until left is zero.
+/**
+ * @brief Run the active half-duplex transmit state.
+ * @param modem Owning v32_modem, not its v32_hdx.
+ * @param data Input-word buffer; unused by some states.
+ * @param[out] out Shaped output samples.
+ * @param[in,out] left Remaining symbols, initially hdx->symbol_len.
+ * @return Samples written, not symbols consumed.
  */
 typedef short (*v32_txhdx_fn)(void *modem, short *data, short *out,
 			    unsigned short *left);
-/*
- * Active receive state, also passed the root modem. in supplies samples and
- * out receives decoded words. count is an in/out count: the data state replaces
- * the input count with its demodulated/clamped output count. It is NOT the
- * unconsumed-input convention used by the V.29 receive callback. No return
- * value carries the result; V32RxHdxModem forwards these arguments unchanged.
+/**
+ * @brief Run the active half-duplex receive state.
+ * @param modem Owning v32_modem, not its v32_hdx.
+ * @param in Input samples.
+ * @param[out] out Decoded data words.
+ * @param[in,out] count Input sample count; the data state replaces it with
+ *                     its output-word count, not unconsumed input samples.
  */
 typedef void (*v32_rxhdx_fn)(void *modem, short *in, unsigned short *out,
 			   unsigned short *count);
-/*
- * Symbol mapper selected from the absolute, differential and trellis encoders.
- * smc is coder state; out is the destination symbol ring; count counts input
- * words. in stays writable because the trellis encoder masks words in place.
- * Results are appended to the ring, not returned as a count.
+/**
+ * @brief Append absolute, differential or trellis-coded symbols to a ring.
+ * @param[in,out] smc Coder state.
+ * @param[in,out] out Destination symbol ring, including its write cursor.
+ * @param[in,out] in Input words; the trellis encoder masks them in place.
+ * @param count Number of input words to encode.
  */
 typedef void (*v32_encoder_fn)(struct v32_smc *smc, struct v32_symout *out,
 			      short *in, unsigned short count);

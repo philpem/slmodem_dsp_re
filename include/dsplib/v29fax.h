@@ -169,12 +169,13 @@ struct v29_rx_detector {
 	int int_0008;
 	short rate;
 	unsigned char pad_000e[2];
-	/*
-	 * Active receive-state handler. modem is the owning v29_rx, NOT
-	 * this detector. count is the input count on entry and the unconsumed
-	 * count on return. Return the number of output words written: the
-	 * V29RX_modem dispatcher advances in by the consumed count and out by
-	 * the return value. A transition can return zero without producing data.
+	/**
+	 * @brief Run the active receive state.
+	 * @param modem Owning v29_rx, not this detector.
+	 * @param in Input samples.
+	 * @param[out] out Decoded data words.
+	 * @param[in,out] count Available samples on entry, unconsumed on return.
+	 * @return Data words written; a state-only transition may return zero.
 	 */
 	short (*handler)(void *modem, short *in, short *out,
 			 unsigned short *count);
@@ -212,15 +213,13 @@ struct v29_tx_params {
 	int int_0008;
 	short rate;
 	unsigned char pad_000e[2];
-	/*
-	 * Active transmit-state handler. modem is the owning v29_tx_root,
-	 * NOT this parameter block. in is the dispatcher's input-word pointer;
-	 * individual states may ignore it. budget counts remaining SYMBOLS,
-	 * not output samples. TxHdxQuietV29 consumes n symbol slots through
-	 * TxNoCarrierV29, subtracts n from budget, and returns the shaper's
-	 * sample count. The data state consumes FIFO words at one per symbol.
-	 * Return the number of samples written to out. V29TX_modem advances
-	 * out by that result and dispatches again while budget remains positive.
+	/**
+	 * @brief Run the active transmit state.
+	 * @param modem Owning v29_tx_root, not this parameter block.
+	 * @param in Input-word buffer; the data state consumes one word per symbol.
+	 * @param[out] out Shaped output samples.
+	 * @param[in,out] budget Remaining symbols, not samples.
+	 * @return Samples written; a state-only transition may return zero.
 	 */
 	short (*handler)(void *modem, unsigned short *in, short *out,
 			 short *budget);
