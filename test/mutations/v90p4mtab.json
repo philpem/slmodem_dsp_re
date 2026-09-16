@@ -42,69 +42,69 @@
 
  {
   "label": "setRdRtSymbols: element 0 reads row 1",
-  "find": "\trdRtSymbols[0] = P4M_LEVEL(m, 0);",
-  "replace": "\trdRtSymbols[0] = P4M_LEVEL(m, 1);"
+  "find": "\trdRtSymbols[0] = P4M_LEVEL(mapping, 0);",
+  "replace": "\trdRtSymbols[0] = P4M_LEVEL(mapping, 1);"
  },
  {
   "label": "setRdRtSymbols: element 2 is negated",
-  "find": "\trdRtSymbols[2] = P4M_LEVEL(m, 2);",
-  "replace": "\trdRtSymbols[2] = -P4M_LEVEL(m, 2);"
+  "find": "\trdRtSymbols[2] = P4M_LEVEL(mapping, 2);",
+  "replace": "\trdRtSymbols[2] = -P4M_LEVEL(mapping, 2);"
  },
  {
   "label": "setRdRtSymbols: element 3 is not negated",
-  "find": "\trdRtSymbols[3] = -P4M_LEVEL(m, 3);",
-  "replace": "\trdRtSymbols[3] = P4M_LEVEL(m, 3);"
+  "find": "\trdRtSymbols[3] = -P4M_LEVEL(mapping, 3);",
+  "replace": "\trdRtSymbols[3] = P4M_LEVEL(mapping, 3);"
  },
  {
   "label": "setRdRtSymbols: element 5 is not negated",
-  "find": "\trdRtSymbols[5] = -P4M_LEVEL(m, 5);",
-  "replace": "\trdRtSymbols[5] = P4M_LEVEL(m, 5);"
+  "find": "\trdRtSymbols[5] = -P4M_LEVEL(mapping, 5);",
+  "replace": "\trdRtSymbols[5] = P4M_LEVEL(mapping, 5);"
  },
  {
   "label": "setRdRtSymbols: elements 4 and 5 read the same row",
-  "find": "\trdRtSymbols[4] = -P4M_LEVEL(m, 4);",
-  "replace": "\trdRtSymbols[4] = -P4M_LEVEL(m, 5);"
+  "find": "\trdRtSymbols[4] = -P4M_LEVEL(mapping, 4);",
+  "replace": "\trdRtSymbols[4] = -P4M_LEVEL(mapping, 5);"
  },
  {
   "label": "setRdRtSymbols: the first element is left alone",
-  "find": "\trdRtSymbols[0] = P4M_LEVEL(m, 0);\n\trdRtSymbols[1]",
+  "find": "\trdRtSymbols[0] = P4M_LEVEL(mapping, 0);\n\trdRtSymbols[1]",
   "replace": "\trdRtSymbols[1]"
  },
 
  {
   "label": "setRfSymbols: element 2 is not negated",
-  "find": "\trfSymbols[2] = -P4M_LEVEL(m, 2);",
-  "replace": "\trfSymbols[2] = P4M_LEVEL(m, 2);"
+  "find": "\trfSymbols[2] = -P4M_LEVEL(mapping, 2);",
+  "replace": "\trfSymbols[2] = P4M_LEVEL(mapping, 2);"
  },
  {
   "label": "setRfSymbols: element 4 is negated",
-  "find": "\trfSymbols[4] = P4M_LEVEL(m, 4);",
-  "replace": "\trfSymbols[4] = -P4M_LEVEL(m, 4);"
+  "find": "\trfSymbols[4] = P4M_LEVEL(mapping, 4);",
+  "replace": "\trfSymbols[4] = -P4M_LEVEL(mapping, 4);"
  },
  {
   "label": "setRfSymbols: the second half does not restart at row 0",
-  "find": "\trfSymbols[6] = -P4M_LEVEL(m, 0);",
-  "replace": "\trfSymbols[6] = -P4M_LEVEL(m, 1);"
+  "find": "\trfSymbols[6] = -P4M_LEVEL(mapping, 0);",
+  "replace": "\trfSymbols[6] = -P4M_LEVEL(mapping, 1);"
  },
  {
   "label": "setRfSymbols: the second half repeats the first half's signs",
-  "find": "\trfSymbols[8] = P4M_LEVEL(m, 2);",
-  "replace": "\trfSymbols[8] = -P4M_LEVEL(m, 2);"
+  "find": "\trfSymbols[8] = P4M_LEVEL(mapping, 2);",
+  "replace": "\trfSymbols[8] = -P4M_LEVEL(mapping, 2);"
  },
  {
   "label": "setRfSymbols: element 11 is not negated",
-  "find": "\trfSymbols[11] = -P4M_LEVEL(m, 5);",
-  "replace": "\trfSymbols[11] = P4M_LEVEL(m, 5);"
+  "find": "\trfSymbols[11] = -P4M_LEVEL(mapping, 5);",
+  "replace": "\trfSymbols[11] = P4M_LEVEL(mapping, 5);"
  },
  {
   "label": "setRfSymbols: the last element is left alone",
-  "find": "\trfSymbols[11] = -P4M_LEVEL(m, 5);\n}",
+  "find": "\trfSymbols[11] = -P4M_LEVEL(mapping, 5);\n}",
   "replace": "}"
  },
  {
   "label": "setRfSymbols: it fills the Rd/Rt table instead",
-  "find": "\trfSymbols[0] = P4M_LEVEL(m, 0);",
-  "replace": "\trdRtSymbols[0] = P4M_LEVEL(m, 0);\n\trfSymbols[0] = P4M_LEVEL(m, 0);"
+  "find": "\trfSymbols[0] = P4M_LEVEL(mapping, 0);",
+  "replace": "\trdRtSymbols[0] = P4M_LEVEL(mapping, 0);\n\trfSymbols[0] = P4M_LEVEL(mapping, 0);"
  },
 
  {

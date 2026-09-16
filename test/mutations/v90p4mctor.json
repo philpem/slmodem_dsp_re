@@ -1,186 +1,186 @@
 [
- {
-  "_": [
-   "The constructor and destructor of V90Phase4Modulator.  `setSessionFlag`",
-   "shares the file but is covered by t_v90leaves and has no anchor here.",
-   "The interesting claims are the eight arguments' offsets, the scrambler's",
-   "three taps, and the ownership flag at +0x2fa4 -- which the destructor",
-   "reads BEFORE the pointer, so both of its arms need a mutation each."
-  ]
- },
- {
-  "label": "ctor: the scrambler's near tap is 5, not 0x12",
-  "find": "\t: scrambler(0x12, 0x17, 0x63)",
-  "replace": "\t: scrambler(0x5, 0x17, 0x63)"
- },
- {
-  "label": "ctor: the scrambler's far tap is 0x12, not 0x17",
-  "find": "\t: scrambler(0x12, 0x17, 0x63)",
-  "replace": "\t: scrambler(0x12, 0x12, 0x63)"
- },
- {
-  "label": "ctor: the scrambler's buffer offset is 0x53, not 0x63",
-  "find": "\t: scrambler(0x12, 0x17, 0x63)",
-  "replace": "\t: scrambler(0x12, 0x17, 0x53)"
- },
- {
-  "label": "ctor: the two mapping-parameter arguments are swapped",
-  "find": "\tmappingParams = mpsA;\n\tsessionFlag = flag;",
-  "replace": "\tmappingParams = mpsB;\n\tsessionFlag = flag;"
- },
- {
-  "label": "ctor: mappingParams2 takes the fifth argument as well",
-  "find": "\tmappingParams2 = mpsB;",
-  "replace": "\tmappingParams2 = mpsA;"
- },
- {
-  "label": "ctor: the session flag and the eighth argument are swapped",
-  "find": "\tctorArg8 = arg8;",
-  "replace": "\tctorArg8 = flag;"
- },
- {
-  "label": "ctor: the V90MP and the V90CP land in each other's fields",
-  "find": "\tcp = cpArg;\n\tctorArg8 = arg8;\n\tmp = mpArg;",
-  "replace": "\tcp = (V90CP *)mpArg;\n\tctorArg8 = arg8;\n\tmp = (V90MP *)cpArg;"
- },
- {
-  "label": "ctor: +0x2f9c is left as it was found",
-  "find": "\tword_2f9c = 0;\n\tmappingParams2 = mpsB;",
-  "replace": "\tmappingParams2 = mpsB;"
- },
- {
-  "label": "ctor: +0x2fa0 is left as it was found",
-  "find": "\tword_2fa0 = 0;\n\tif (bts) {",
-  "replace": "\tif (bts) {"
- },
- {
-  "label": "ctor: the ownership flag is the wrong way round",
-  "find": "\t\tbitsToSymbol = bts;\n\t\texternalBitsToSymbol = 1;",
-  "replace": "\t\tbitsToSymbol = bts;\n\t\texternalBitsToSymbol = 0;"
- },
- {
-  "label": "ctor: the allocated converter is marked as borrowed",
-  "find": "\t\tbitsToSymbol = own;\n\t\texternalBitsToSymbol = 0;",
-  "replace": "\t\tbitsToSymbol = own;\n\t\texternalBitsToSymbol = 1;"
- },
- {
-  "label": "ctor: the owned converter takes 0x40 symbols, not 0x140",
-  "find": "\t\tnew (own) V90BitsToSymbol(0x140, p);",
-  "replace": "\t\tnew (own) V90BitsToSymbol(0x40, p);"
- },
- {
-  "label": "ctor: the owned converter is built with no parameters",
-  "find": "\t\tnew (own) V90BitsToSymbol(0x140, p);",
-  "replace": "\t\tnew (own) V90BitsToSymbol(0x140, 0);"
- },
- {
-  "label": "ctor: the converter is allocated whatever is supplied",
-  "find": "\tif (bts) {\n\t\tbitsToSymbol = bts;",
-  "replace": "\tif (!bts) {\n\t\tbitsToSymbol = bts;"
- },
- {
-  "label": "dtor: the ownership flag is not consulted",
-  "find": "\tif (!externalBitsToSymbol && bitsToSymbol) {",
-  "replace": "\tif (bitsToSymbol) {"
- },
- {
-  "label": "dtor: the ownership flag is read the wrong way round",
-  "find": "\tif (!externalBitsToSymbol && bitsToSymbol) {",
-  "replace": "\tif (externalBitsToSymbol && bitsToSymbol) {"
- },
- {
-  "label": "dtor: the null guard is dropped",
-  "find": "\tif (!externalBitsToSymbol && bitsToSymbol) {",
-  "replace": "\tif (!externalBitsToSymbol) {"
- },
- {
-  "label": "dtor: the converter is freed without being destroyed",
-  "find": "\t\tbitsToSymbol->~V90BitsToSymbol();\n\t\tsysdep_free(bitsToSymbol);",
-  "replace": "\t\tsysdep_free(bitsToSymbol);"
- },
- {
-  "label": "dtor: the converter is destroyed and not freed",
-  "find": "\t\tbitsToSymbol->~V90BitsToSymbol();\n\t\tsysdep_free(bitsToSymbol);",
-  "replace": "\t\tbitsToSymbol->~V90BitsToSymbol();"
- },
- {
-  "label": "dtor: the pointer is nulled afterwards, which the blob does not do",
-  "find": "\t\tbitsToSymbol->~V90BitsToSymbol();\n\t\tsysdep_free(bitsToSymbol);",
-  "replace": "\t\tbitsToSymbol->~V90BitsToSymbol();\n\t\tsysdep_free(bitsToSymbol);\n\t\tbitsToSymbol = 0;"
- },
- {
-  "_": [
-   "V90Phase4Modulator::setMappingParams, 96 bytes at .text+0x2d120, driven",
-   "by t_v90modchain's own group over the OWNED arm of the constructor -- a",
-   "supplied converter is one shared instance and the second side's call",
-   "would run over the first side's result.",
-   "",
-   "The function stores nothing in the modulator, so every mutation below is",
-   "caught in another object: the converter at +0x44 or the mapper it owns.",
-   "`pcmType` at +0x38 is poked because the constructor does not write it.",
-   "",
-   "A mutation that lets a null block through reaches V90Mapper::reset with",
-   "a null pointer and dies, which is still a failing run."
-  ]
- },
- {
-  "label": "setMappingParams: the modulator's own block is used",
-  "find": "\tbitsToSymbol->reset(mp, pcmType);",
-  "replace": "\tbitsToSymbol->reset(mappingParams, pcmType);"
- },
- {
-  "label": "setMappingParams: the second block is used",
-  "find": "\tbitsToSymbol->reset(mp, pcmType);",
-  "replace": "\tbitsToSymbol->reset(mappingParams2, pcmType);"
- },
- {
-  "label": "setMappingParams: the law is always mu-law",
-  "find": "\tbitsToSymbol->reset(mp, pcmType);",
-  "replace": "\tbitsToSymbol->reset(mp, PCM_TYPE_MU_LAW);"
- },
- {
-  "label": "setMappingParams: the law is always A-law",
-  "find": "\tbitsToSymbol->reset(mp, pcmType);",
-  "replace": "\tbitsToSymbol->reset(mp, PCM_TYPE_A_LAW);"
- },
- {
-  "label": "setMappingParams: the converter gets the no-spectral reset",
-  "find": "\tbitsToSymbol->reset(mp, pcmType);",
-  "replace": "\tbitsToSymbol->resetNoSpectral(mp, pcmType);"
- },
- {
-  "label": "setMappingParams: the block is never sized",
-  "find": "\tbitsToSymbol->setSymbolsBlockSize(1);",
-  "replace": ""
- },
- {
-  "label": "setMappingParams: the block is two symbols",
-  "find": "\tbitsToSymbol->setSymbolsBlockSize(1);",
-  "replace": "\tbitsToSymbol->setSymbolsBlockSize(2);"
- },
- {
-  "label": "setMappingParams: the block is zero symbols",
-  "find": "\tbitsToSymbol->setSymbolsBlockSize(1);",
-  "replace": "\tbitsToSymbol->setSymbolsBlockSize(0);"
- },
- {
-  "label": "setMappingParams: the two calls are the wrong way round",
-  "find": "\tbitsToSymbol->reset(mp, pcmType);\n\tbitsToSymbol->setSymbolsBlockSize(1);",
-  "replace": "\tbitsToSymbol->setSymbolsBlockSize(1);\n\tbitsToSymbol->reset(mp, pcmType);"
- },
- {
-  "label": "setMappingParams: the null guard is inverted",
-  "find": "{\n\tif (mp == 0) {",
-  "replace": "{\n\tif (mp != 0) {"
- },
- {
-  "label": "setMappingParams: the null block is announced below the gate",
-  "find": "\tif (mp == 0) {\n\t\tif (dsplibs_debug_level > 1)",
-  "replace": "\tif (mp == 0) {\n\t\tif (dsplibs_debug_level > 0)"
- },
- {
-  "label": "setMappingParams: the null block gets the wrong message",
-  "find": "\n\t\t\tdsplibs_debug_printf(\"V90Phase4Modulator: ERROR: Null \"\n\t\t\t\t\t     \"mappingParams @ setMappingParams\" \"\\r\\n\");",
-  "replace": "\t\t\tdsplibs_debug_printf(\"V90Phase4Modulator: enter \"\n\t\t\t\t\t     \"repeatedCPd @ %d\\r\\n\", 0);"
- }
+   {
+      "_" : [
+         "The constructor and destructor of V90Phase4Modulator.  `setSessionFlag`",
+         "shares the file but is covered by t_v90leaves and has no anchor here.",
+         "The interesting claims are the eight arguments' offsets, the scrambler's",
+         "three taps, and the ownership flag at +0x2fa4 -- which the destructor",
+         "reads BEFORE the pointer, so both of its arms need a mutation each."
+      ]
+   },
+   {
+      "find" : "\t: scrambler(0x12, 0x17, 0x63)",
+      "label" : "ctor: the scrambler's near tap is 5, not 0x12",
+      "replace" : "\t: scrambler(0x5, 0x17, 0x63)"
+   },
+   {
+      "find" : "\t: scrambler(0x12, 0x17, 0x63)",
+      "label" : "ctor: the scrambler's far tap is 0x12, not 0x17",
+      "replace" : "\t: scrambler(0x12, 0x12, 0x63)"
+   },
+   {
+      "find" : "\t: scrambler(0x12, 0x17, 0x63)",
+      "label" : "ctor: the scrambler's buffer offset is 0x53, not 0x63",
+      "replace" : "\t: scrambler(0x12, 0x17, 0x53)"
+   },
+   {
+      "find" : "\tmappingParams = mpsA;\n\tsessionFlag = flag;",
+      "label" : "ctor: the two mapping-parameter arguments are swapped",
+      "replace" : "\tmappingParams = mpsB;\n\tsessionFlag = flag;"
+   },
+   {
+      "find" : "\tmappingParams2 = mpsB;",
+      "label" : "ctor: mappingParams2 takes the fifth argument as well",
+      "replace" : "\tmappingParams2 = mpsA;"
+   },
+   {
+      "find" : "\tctorArg8 = arg8;",
+      "label" : "ctor: the session flag and the eighth argument are swapped",
+      "replace" : "\tctorArg8 = flag;"
+   },
+   {
+      "find" : "\tcp = cpArg;\n\tctorArg8 = arg8;\n\tmp = mpArg;",
+      "label" : "ctor: the V90MP and the V90CP land in each other's fields",
+      "replace" : "\tcp = (V90CP *)mpArg;\n\tctorArg8 = arg8;\n\tmp = (V90MP *)cpArg;"
+   },
+   {
+      "find" : "\tword_2f9c = 0;\n\tmappingParams2 = mpsB;",
+      "label" : "ctor: +0x2f9c is left as it was found",
+      "replace" : "\tmappingParams2 = mpsB;"
+   },
+   {
+      "find" : "\tword_2fa0 = 0;\n\tif (bts) {",
+      "label" : "ctor: +0x2fa0 is left as it was found",
+      "replace" : "\tif (bts) {"
+   },
+   {
+      "find" : "\t\tbitsToSymbol = bts;\n\t\texternalBitsToSymbol = 1;",
+      "label" : "ctor: the ownership flag is the wrong way round",
+      "replace" : "\t\tbitsToSymbol = bts;\n\t\texternalBitsToSymbol = 0;"
+   },
+   {
+      "find" : "\t\tbitsToSymbol = own;\n\t\texternalBitsToSymbol = 0;",
+      "label" : "ctor: the allocated converter is marked as borrowed",
+      "replace" : "\t\tbitsToSymbol = own;\n\t\texternalBitsToSymbol = 1;"
+   },
+   {
+      "find" : "\t\tnew (own) V90BitsToSymbol(0x140, p);",
+      "label" : "ctor: the owned converter takes 0x40 symbols, not 0x140",
+      "replace" : "\t\tnew (own) V90BitsToSymbol(0x40, p);"
+   },
+   {
+      "find" : "\t\tnew (own) V90BitsToSymbol(0x140, p);",
+      "label" : "ctor: the owned converter is built with no parameters",
+      "replace" : "\t\tnew (own) V90BitsToSymbol(0x140, 0);"
+   },
+   {
+      "find" : "\tif (bts) {\n\t\tbitsToSymbol = bts;",
+      "label" : "ctor: the converter is allocated whatever is supplied",
+      "replace" : "\tif (!bts) {\n\t\tbitsToSymbol = bts;"
+   },
+   {
+      "find" : "\tif (!externalBitsToSymbol && bitsToSymbol) {",
+      "label" : "dtor: the ownership flag is not consulted",
+      "replace" : "\tif (bitsToSymbol) {"
+   },
+   {
+      "find" : "\tif (!externalBitsToSymbol && bitsToSymbol) {",
+      "label" : "dtor: the ownership flag is read the wrong way round",
+      "replace" : "\tif (externalBitsToSymbol && bitsToSymbol) {"
+   },
+   {
+      "find" : "\tif (!externalBitsToSymbol && bitsToSymbol) {",
+      "label" : "dtor: the null guard is dropped",
+      "replace" : "\tif (!externalBitsToSymbol) {"
+   },
+   {
+      "find" : "\t\tbitsToSymbol->~V90BitsToSymbol();\n\t\tsysdep_free(bitsToSymbol);",
+      "label" : "dtor: the converter is freed without being destroyed",
+      "replace" : "\t\tsysdep_free(bitsToSymbol);"
+   },
+   {
+      "find" : "\t\tbitsToSymbol->~V90BitsToSymbol();\n\t\tsysdep_free(bitsToSymbol);",
+      "label" : "dtor: the converter is destroyed and not freed",
+      "replace" : "\t\tbitsToSymbol->~V90BitsToSymbol();"
+   },
+   {
+      "find" : "\t\tbitsToSymbol->~V90BitsToSymbol();\n\t\tsysdep_free(bitsToSymbol);",
+      "label" : "dtor: the pointer is nulled afterwards, which the blob does not do",
+      "replace" : "\t\tbitsToSymbol->~V90BitsToSymbol();\n\t\tsysdep_free(bitsToSymbol);\n\t\tbitsToSymbol = 0;"
+   },
+   {
+      "_" : [
+         "V90Phase4Modulator::setMappingParams, 96 bytes at .text+0x2d120, driven",
+         "by t_v90modchain's own group over the OWNED arm of the constructor -- a",
+         "supplied converter is one shared instance and the second side's call",
+         "would run over the first side's result.",
+         "",
+         "The function stores nothing in the modulator, so every mutation below is",
+         "caught in another object: the converter at +0x44 or the mapper it owns.",
+         "`pcmType` at +0x38 is poked because the constructor does not write it.",
+         "",
+         "A mutation that lets a null block through reaches V90Mapper::reset with",
+         "a null pointer and dies, which is still a failing run."
+      ]
+   },
+   {
+      "find" : "\tbitsToSymbol->reset(mapping, pcmType);",
+      "label" : "setMappingParams: the modulator's own block is used",
+      "replace" : "\tbitsToSymbol->reset(mappingParams, pcmType);"
+   },
+   {
+      "find" : "\tbitsToSymbol->reset(mapping, pcmType);",
+      "label" : "setMappingParams: the second block is used",
+      "replace" : "\tbitsToSymbol->reset(mappingParams2, pcmType);"
+   },
+   {
+      "find" : "\tbitsToSymbol->reset(mapping, pcmType);",
+      "label" : "setMappingParams: the law is always mu-law",
+      "replace" : "\tbitsToSymbol->reset(mapping, PCM_TYPE_MU_LAW);"
+   },
+   {
+      "find" : "\tbitsToSymbol->reset(mapping, pcmType);",
+      "label" : "setMappingParams: the law is always A-law",
+      "replace" : "\tbitsToSymbol->reset(mapping, PCM_TYPE_A_LAW);"
+   },
+   {
+      "find" : "\tbitsToSymbol->reset(mapping, pcmType);",
+      "label" : "setMappingParams: the converter gets the no-spectral reset",
+      "replace" : "\tbitsToSymbol->resetNoSpectral(mapping, pcmType);"
+   },
+   {
+      "find" : "\tbitsToSymbol->setSymbolsBlockSize(1);",
+      "label" : "setMappingParams: the block is never sized",
+      "replace" : ""
+   },
+   {
+      "find" : "\tbitsToSymbol->setSymbolsBlockSize(1);",
+      "label" : "setMappingParams: the block is two symbols",
+      "replace" : "\tbitsToSymbol->setSymbolsBlockSize(2);"
+   },
+   {
+      "find" : "\tbitsToSymbol->setSymbolsBlockSize(1);",
+      "label" : "setMappingParams: the block is zero symbols",
+      "replace" : "\tbitsToSymbol->setSymbolsBlockSize(0);"
+   },
+   {
+      "find" : "\tbitsToSymbol->reset(mapping, pcmType);\n\tbitsToSymbol->setSymbolsBlockSize(1);",
+      "label" : "setMappingParams: the two calls are the wrong way round",
+      "replace" : "\tbitsToSymbol->setSymbolsBlockSize(1);\n\tbitsToSymbol->reset(mapping, pcmType);"
+   },
+   {
+      "find" : "{\n\tif (mapping == 0) {",
+      "label" : "setMappingParams: the null guard is inverted",
+      "replace" : "{\n\tif (mapping != 0) {"
+   },
+   {
+      "find" : "\tif (mapping == 0) {\n\t\tif (dsplibs_debug_level > 1)",
+      "label" : "setMappingParams: the null block is announced below the gate",
+      "replace" : "\tif (mapping == 0) {\n\t\tif (dsplibs_debug_level > 0)"
+   },
+   {
+      "find" : "\n\t\t\tdsplibs_debug_printf(\"V90Phase4Modulator: ERROR: Null \"\n\t\t\t\t\t     \"mappingParams @ setMappingParams\" \"\\r\\n\");",
+      "label" : "setMappingParams: the null block gets the wrong message",
+      "replace" : "\t\t\tdsplibs_debug_printf(\"V90Phase4Modulator: enter \"\n\t\t\t\t\t     \"repeatedCPd @ %d\\r\\n\", 0);"
+   }
 ]

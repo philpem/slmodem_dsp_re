@@ -978,16 +978,16 @@ V90Phase4Modulator::exitMP()
  * ===========================================================================
  */
 void
-V90Phase4Modulator::setMappingParams(V90MappingParams *mp)
+V90Phase4Modulator::setMappingParams(V90MappingParams *mapping)
 {
-	if (mp == 0) {
+	if (mapping == 0) {
 		if (dsplibs_debug_level > 1)
 			dsplibs_debug_printf("V90Phase4Modulator: ERROR: Null "
 					     "mappingParams @ setMappingParams" "\r\n");
 		return;
 	}
 
-	bitsToSymbol->reset(mp, pcmType);
+	bitsToSymbol->reset(mapping, pcmType);
 	bitsToSymbol->setSymbolsBlockSize(1);
 }
 
@@ -1062,31 +1062,31 @@ V90Phase4Modulator::setMappingParams(V90MappingParams *mp)
  * ===========================================================================
  */
 void
-V90Phase4Modulator::setRdRtSymbols(V90MappingParams *m)
+V90Phase4Modulator::setRdRtSymbols(V90MappingParams *mapping)
 {
-	rdRtSymbols[0] = P4M_LEVEL(m, 0);
-	rdRtSymbols[1] = P4M_LEVEL(m, 1);
-	rdRtSymbols[2] = P4M_LEVEL(m, 2);
-	rdRtSymbols[3] = -P4M_LEVEL(m, 3);
-	rdRtSymbols[4] = -P4M_LEVEL(m, 4);
-	rdRtSymbols[5] = -P4M_LEVEL(m, 5);
+	rdRtSymbols[0] = P4M_LEVEL(mapping, 0);
+	rdRtSymbols[1] = P4M_LEVEL(mapping, 1);
+	rdRtSymbols[2] = P4M_LEVEL(mapping, 2);
+	rdRtSymbols[3] = -P4M_LEVEL(mapping, 3);
+	rdRtSymbols[4] = -P4M_LEVEL(mapping, 4);
+	rdRtSymbols[5] = -P4M_LEVEL(mapping, 5);
 }
 
 void
-V90Phase4Modulator::setRfSymbols(V90MappingParams *m)
+V90Phase4Modulator::setRfSymbols(V90MappingParams *mapping)
 {
-	rfSymbols[0] = P4M_LEVEL(m, 0);
-	rfSymbols[1] = P4M_LEVEL(m, 1);
-	rfSymbols[2] = -P4M_LEVEL(m, 2);
-	rfSymbols[3] = -P4M_LEVEL(m, 3);
-	rfSymbols[4] = P4M_LEVEL(m, 4);
-	rfSymbols[5] = P4M_LEVEL(m, 5);
-	rfSymbols[6] = -P4M_LEVEL(m, 0);
-	rfSymbols[7] = -P4M_LEVEL(m, 1);
-	rfSymbols[8] = P4M_LEVEL(m, 2);
-	rfSymbols[9] = P4M_LEVEL(m, 3);
-	rfSymbols[10] = -P4M_LEVEL(m, 4);
-	rfSymbols[11] = -P4M_LEVEL(m, 5);
+	rfSymbols[0] = P4M_LEVEL(mapping, 0);
+	rfSymbols[1] = P4M_LEVEL(mapping, 1);
+	rfSymbols[2] = -P4M_LEVEL(mapping, 2);
+	rfSymbols[3] = -P4M_LEVEL(mapping, 3);
+	rfSymbols[4] = P4M_LEVEL(mapping, 4);
+	rfSymbols[5] = P4M_LEVEL(mapping, 5);
+	rfSymbols[6] = -P4M_LEVEL(mapping, 0);
+	rfSymbols[7] = -P4M_LEVEL(mapping, 1);
+	rfSymbols[8] = P4M_LEVEL(mapping, 2);
+	rfSymbols[9] = P4M_LEVEL(mapping, 3);
+	rfSymbols[10] = -P4M_LEVEL(mapping, 4);
+	rfSymbols[11] = -P4M_LEVEL(mapping, 5);
 }
 
 /*
