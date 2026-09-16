@@ -254,7 +254,7 @@
  {
   "label": "ctor: the V92Parameters * is not stored",
   "find": "\tparams = parameters;\n\treset(4000, V92P3M_STATE_RU, 0, NULL, NULL, 0);",
-  "replace": "\t(void)p;\n\treset(4000, V92P3M_STATE_RU, 0, NULL, NULL, 0);"
+  "replace": "\t(void)parameters;\n\treset(4000, V92P3M_STATE_RU, 0, NULL, NULL, 0);"
  },
  {
   "label": "ctor: the upstream scrambler takes the downstream taps",
