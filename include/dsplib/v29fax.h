@@ -215,8 +215,10 @@ struct v29_tx_params {
 	/*
 	 * Active transmit-state handler. modem is the owning v29_tx_root,
 	 * NOT this parameter block. in is the dispatcher's input-word pointer;
-	 * individual states may ignore it. budget is the remaining output
-	 * sample budget, updated by the handler, NOT an input-word count.
+	 * individual states may ignore it. budget counts remaining SYMBOLS,
+	 * not output samples. TxHdxQuietV29 consumes n symbol slots through
+	 * TxNoCarrierV29, subtracts n from budget, and returns the shaper's
+	 * sample count. The data state consumes FIFO words at one per symbol.
 	 * Return the number of samples written to out. V29TX_modem advances
 	 * out by that result and dispatches again while budget remains positive.
 	 */

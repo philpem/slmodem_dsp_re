@@ -109,8 +109,8 @@ named, zero unresolved parameters in this bounded batch:
 - `v29_tx_params::handler(modem, in, out, budget)` receives the owning
   `v29_tx_root`, not its parameter block. The caller passes its input-word
   pointer unchanged, advances output by the callback return, and repeats
-  while the signed output-sample budget remains positive. The budget is not
-  an input count. Some state handlers only transition and return zero.
+  while the signed symbol budget remains positive. The data state consumes
+  one FIFO word per symbol. Some state handlers only transition and return zero.
 
 Names match the assigned `RxHdx*V29` and `TxHdx*V29` definitions. Contract
 comments come from `V29RX_modem`/`V29TX_modem` dispatch and handler assignments,
@@ -152,3 +152,42 @@ Batch 4 validation: Gentoo GCC 3.4.2-r2 `make phase` passed 375 tests,
 zero failures, with all structural checks OK. All 655 baseline period object
 files remained SHA-256-identical. Logs: `build/structure-naming-v32-callbacks/`
 (`gates.log` and `object-identity.log`).
+
+## Batch 5: V.17/V.27 callback members
+
+Four state-handler members reviewed. V.17 gains eight parameter names;
+V.27's eight member parameters were already named and are retained. Existing
+named callback typedefs are not duplicated or relocated. No callback types,
+member names, offsets, expressions or function definitions change.
+
+The names `modem`, `in`, `out`, `count`/`budget` match assigned state functions.
+The first argument is always the root modem, not the private/shared/source
+subobject that stores the function pointer. Comments now distinguish:
+
+- RX callback count: available input samples on entry, unconsumed input samples
+  on return. The short return counts produced data words. Each top-level
+  dispatcher replaces its caller's count with total output only after looping.
+- TX callback budget: remaining symbols/data words, NOT output samples. The
+  short return instead counts shaped output samples and advances the caller's
+  output pointer. Some states only transition and return zero.
+
+Evidence is independently traced for each mode: V17RX_modem/V17TX_modem,
+TxHdxSilenceV17 and TxNoCarrierV17; V27RX_modem/V27TX_modem, assigned RxHdx/TxHdx
+states, ModDataV27 and TxNoCarrierV27. A shape-compatible function pointer does
+not establish compatible count units; trace through the leaf generator.
+
+Batch 5 validation: Gentoo GCC 3.4.2-r2 `make phase` passed 375 tests,
+zero failures, with structural checks OK. All 655 baseline period objects
+remain SHA-256-identical. Logs: `build/structure-naming-v17-v27-callbacks/`.
+
+Correction to batch 3: the V.29 TX budget counts symbols, NOT output samples.
+The earlier description inferred units from dispatcher observations without
+tracing the leaf generator and was wrong. TxHdxQuietV29 passes n to
+TxNoCarrierV29 and subtracts that same n from budget. TxNoCarrierV29 writes
+exactly n symbol-ring slots before FPM_PPS_filter returns the shaped sample
+count. TxHdxDataV29 likewise subtracts the FIFO words passed to ModDataV29,
+not the sample count returned by it. The header comment and batch 3 ledger
+now reflect this evidence. This correction changes comments/documentation
+only; no executable expression, callback type or layout changed. The existing
+375/375 period gate and 655-object identity results precede this documentation
+correction; they are not a new test run or proof of comment semantics.

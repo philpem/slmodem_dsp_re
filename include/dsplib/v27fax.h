@@ -232,6 +232,13 @@ struct v27_rx_shared {
 	int int_0004;
 	short rate;
 	short train_long;
+	/*
+	 * Active RX state. modem is the root v27_rx, not this shared block.
+	 * count changes from available input samples to unconsumed samples;
+	 * return the number of output data words. V27RX_modem advances in by
+	 * consumption and out by the return, then reports total output words
+	 * through its caller's count after the dispatch loop finishes.
+	 */
 	short (*handler)(void *modem, short *in, short *out,
 			 unsigned short *count);
 	short rx_state;
@@ -273,6 +280,14 @@ struct v27_tx_source {
 	int int_0008;
 	short rate;
 	short train_long;
+	/*
+	 * Active TX state. modem is the root v27_tx, not this source block.
+	 * in is the dispatcher's input-word pointer; out receives samples.
+	 * budget counts remaining SYMBOLS, not samples: states pass their
+	 * consumed count to symbol generation and ModDataV27/TxNoCarrierV27.
+	 * Return the shaped output SAMPLE count, which advances the dispatcher's
+	 * output pointer. The existing v27tx_process_fn names the same signature.
+	 */
 	short (*handler)(void *modem, unsigned short *in, short *out,
 			 short *budget);
 	short state;
