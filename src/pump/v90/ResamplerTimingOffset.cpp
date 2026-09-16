@@ -117,7 +117,7 @@ ResamplerTimingOffset::reset()
  * kept at the accumulator's precision.
  */
 void
-ResamplerTimingOffset::timingCorrection(float)
+ResamplerTimingOffset::timingCorrection(float unusedSample)
 {
 	phase = phase + timingOffset;
 }

@@ -109,8 +109,9 @@ public:
 	 * than by a measurement. The argument is ignored -- the object's own
 	 * body never reads it; the base declares the parameter because the
 	 * class one level down (ResamplerTiming) uses it.
+	 * @param unusedSample Output sample ignored by this constant-offset hook.
 	 */
-	virtual void timingCorrection(float);
+	virtual void timingCorrection(float unusedSample);
 
 	/**
 	 * @brief Set the fixed timing offset.

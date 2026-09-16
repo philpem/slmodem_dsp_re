@@ -135,7 +135,7 @@ ResamplerTiming::~ResamplerTiming()
  * This is also the only thing that clears `dftDone`.
  */
 void
-ResamplerTiming::reset(unsigned int)
+ResamplerTiming::reset(unsigned int unused)
 {
 	ResamplerTimingOffset::reset();
 

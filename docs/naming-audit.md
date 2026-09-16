@@ -272,3 +272,47 @@ The deciding rerun passed 375 tests with zero failures and all structural
 checks OK. All 655 baseline period objects remained SHA-256-identical.
 Artifacts: `build/structure-naming-v92-echo-fields-anchors/gates.log` and
 `object-identity.log` in the same directory.
+
+## Batch 8: demodulator/message parameters and unused arguments
+
+Nine unnamed declaration slots named across six methods. Seven have
+implementation-established roles; two are explicitly unused in their bodies:
+
+| Method | Names | Evidence |
+|---|---|---|
+| `V90Demodulator::progress` | `out`, `nofOut`, `in`, `nofIn` | Existing definition names distinguish output bits/count from input samples/count. |
+| `V90Demodulator::reset` | `quickConnectArg` | Existing definition's name; no new interpretation of its values. |
+| `V92Jd::setJdPhase` | `jdPhase` | Definition scales the argument by 65536 before encoding phase-message bits. |
+| `V92Jd::setRatesMask` | `mask` | Definition extracts rate-selection bits into the two message groups. |
+| `ResamplerTiming::reset` | `unused` | Implementation does not read it; its historical meaning remains unspecified. |
+| `ResamplerTimingOffset::timingCorrection` | `unusedSample` | Override ignores the per-output-sample argument and advances phase by its constant timingOffset instead. |
+
+The two intentionally unused arguments are named consistently in declarations
+and definitions; no dummy expression, signature change or removal is introduced.
+V92Jd comments claiming these setters were undefined were stale and are corrected.
+Other comments about staged reconstruction are not treated as live coverage data.
+
+The audit of ordinary method declarations in V90Modulator and
+V90Phase3Modulator found their parameters already named; constructors and
+semantic quality of existing shorthand names were not exhaustively audited.
+V90Demodulator::enterChannelVerification remains unresolved: the first
+argument is unused/unnamed in the definition and the second is the offset-based
+placeholder short414. No semantic roles were invented for either. The three
+ResamplerTiming float declarations using documented implementation shorthand
+`v` remain for a later consistent semantic rename rather than assigning better
+names only in the header.
+
+Documentation convention: concise Doxygen at the method/member is the primary
+reader-facing explanation, including internal APIs. Record input/output roles,
+units and intentionally ignored arguments where established. Keep extended
+reconstruction evidence here rather than forcing readers through the audit
+history to understand an interface. This batch also gives the two previously
+named echo-canceller fields Doxygen member descriptions.
+
+Batch 8 validation: the first run passed 375 differential tests but found one
+mutation anchor still spelling an anonymous parameter. Only its find string
+was synchronized; the injected argument-scaling fault and label were retained.
+The final Doxygen-inclusive gate passed 375 tests, zero failures, and all
+structural checks. All 655 baseline period objects remained SHA-256-identical.
+Artifacts: `build/structure-naming-demodulator-parameters-doxygen/gates.log`
+and `object-identity.log` beside it.

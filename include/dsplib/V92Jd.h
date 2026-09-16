@@ -39,10 +39,9 @@
  * writes, and each unpacker refuses a message whose copy of it is not its
  * own.
  *
- * Fourteen of the class's nineteen methods are defined; the five setters
- * are declared for the record and left undefined, because a defined method
- * whose callees are not yet written breaks the link for the whole test
- * suite (docs/v90cpp.md). Nothing calls the undefined ones.
+ * Earlier reconstruction stages left setters undefined while their callees
+ * were missing (docs/v90cpp.md). That is historical, not a current method
+ * count: setJdPhase and setRatesMask have implementations in V92Jd.cpp.
  */
 
 #ifndef DSPLIB_V92JD_H
@@ -108,14 +107,16 @@ public:
 	 */
 	int unPackJdPhaseData(int bit);
 
-	/*
-	 * Declared, not defined -- see the file comment.  The signatures are
-	 * the mangling's; a return type is not mangled, so none is known.
+	/**
+	 * @brief Encode jdPhase scaled by 65536 into the phase-message bits.
+	 * @param jdPhase  Phase value; name matches the implemented setter.
 	 */
-	/** @brief Declared, not defined -- see the file comment. */
-	void setJdPhase(float);
-	/** @brief Declared, not defined -- see the file comment. */
-	void setRatesMask(int);
+	void setJdPhase(float jdPhase);
+	/**
+	 * @brief Write the rate mask into the framed data-message groups.
+	 * @param mask  Rate-selection bit mask.
+	 */
+	void setRatesMask(int mask);
 	/** @brief Declared, not defined -- see the file comment. */
 	void resetCrc();
 	/** @brief Declared, not defined -- see the file comment. */

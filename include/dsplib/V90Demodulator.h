@@ -270,15 +270,22 @@ public:
 	 * Wave 6 (F10173): defined in the .cpp, the largest function in this
 	 * reconstruction -- see its own file comment there. `void`'s return
 	 * is still want of evidence, since return types are not mangled.
+	 * @param[out] out Receives demodulated bits.
+	 * @param[out] nofOut Number of valid output bits produced.
+	 * @param[in] in Input receive samples.
+	 * @param[in] nofIn Number of input samples.
 	 */
-	void progress(int *, unsigned int &, float *, unsigned int);
+	void progress(int *out, unsigned int &nofOut, float *in,
+		      unsigned int nofIn);
 	/**
 	 * @brief Per-connection reset.
 	 * Wave 6 (F10173): defined in the .cpp. Stores its argument
 	 * into `quickConnect` and into `equalizer->quickConnect` (see
 	 * `quickConnect`'s own comment).
+	 * @param quickConnectArg Value copied to this instance's and the
+	 *                        equalizer's quick-connect state.
 	 */
-	void reset(unsigned int);
+	void reset(unsigned int quickConnectArg);
 	/**
 	 * @brief Enter channel verification.
 	 * Wave 6 (F10173): defined in the .cpp. Sets `inPhase3` to 5

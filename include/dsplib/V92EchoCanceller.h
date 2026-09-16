@@ -215,7 +215,7 @@ public:
 	 * arguments are converted on the way in.
 	 */
 	unsigned int updateDuration;	/* +0x0c samples in this state       */
-	unsigned int updateSampleCount;		/* +0x10 samples so far in it        */
+	unsigned int updateSampleCount; ///< Samples accumulated toward updateDuration (+0x10).
 	unsigned int filterLength;	/* +0x14 taps in `echoCoeff`         */
 	/*
 	 * +0x18  Cached `filterLength - 1`: the constructor writes
@@ -226,7 +226,7 @@ public:
 	 * original spelling. Keep the field and its reads: recomputing it from
 	 * filterLength would change behavior if a caller changes either member.
 	 */
-	unsigned int filterLengthMinusOne;		/* +0x18 == filterLength - 1         */
+	unsigned int filterLengthMinusOne; ///< Cached filterLength - 1 for history sizing/wrap (+0x18).
 	/*
 	 * +0x1c  The history's allocated length, use-derived rather than
 	 * named: the constructor computes it, stores it here, and hands
