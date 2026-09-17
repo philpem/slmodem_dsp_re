@@ -232,7 +232,7 @@ static unsigned char mc_bytes_b[MC_BITS + MC_GUARD];
 static unsigned int mc_words_a[6 + 4];
 static unsigned int mc_words_b[6 + 4];
 
-/* field_00 .. field_10: five moduli, none of them zero. */
+/* constellationSize0 .. constellationSize4: five moduli, none of them zero. */
 static const unsigned int mc_mod[][5] = {
 	{ 2u, 2u, 2u, 2u, 2u },
 	{ 3u, 5u, 7u, 11u, 13u },
@@ -434,7 +434,7 @@ run_progress(void)
  * Six digits are then K[i] = R[i] modulo M[i], with
  * R[i+1] = (R[i] - K[i]) / M[i].  Legal V.90 parameters satisfy
  * 2^K <= product(M[0]..M[5]); consequently the production shortcut which
- * leaves the final quotient in out[5], without reading field_14, is correct:
+ * leaves the final quotient in out[5], without reading constellationSize5, is correct:
  * that quotient is necessarily less than M[5].
  *
  * Only standards-legal values are judged here: Phase 4 K=6..24 and data-mode

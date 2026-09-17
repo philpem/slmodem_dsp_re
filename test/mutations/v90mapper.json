@@ -44,8 +44,8 @@
  },
  {
   "label": "ctor: +0x04 is left as it was found",
-  "find": "\tword_08 = 0;\n\tbitsPerFrame = 0;",
-  "replace": "\tword_08 = 0;"
+  "find": "\tmodulusBitCount = 0;\n\tbitsPerFrame = 0;",
+  "replace": "\tmodulusBitCount = 0;"
  },
  {
   "label": "ctor: the loop clears five words, not six",
@@ -92,23 +92,23 @@
    "which is what distinguishes it from `reset`."
   ],
   "label": "resetNoSpectral: +0x0c is written rather than read",
-  "find": "\tbitsPerFrame = mp->word_0;\n\tword_08 = bitsPerFrame - signBitsPerFrame;",
-  "replace": "\tbitsPerFrame = mp->word_0;\n\tsignBitsPerFrame = V90MAPPER_FRAME - mp->shaperSR;\n\tword_08 = bitsPerFrame - signBitsPerFrame;"
+  "find": "\tbitsPerFrame = mp->word_0;\n\tmodulusBitCount = bitsPerFrame - signBitsPerFrame;",
+  "replace": "\tbitsPerFrame = mp->word_0;\n\tsignBitsPerFrame = V90MAPPER_FRAME - mp->shaperSR;\n\tmodulusBitCount = bitsPerFrame - signBitsPerFrame;"
  },
  {
   "label": "resetNoSpectral: word_08 is bitsPerFrame, with no sign bits taken off",
-  "find": "\tbitsPerFrame = mp->word_0;\n\tword_08 = bitsPerFrame - signBitsPerFrame;",
-  "replace": "\tbitsPerFrame = mp->word_0;\n\tword_08 = bitsPerFrame;"
+  "find": "\tbitsPerFrame = mp->word_0;\n\tmodulusBitCount = bitsPerFrame - signBitsPerFrame;",
+  "replace": "\tbitsPerFrame = mp->word_0;\n\tmodulusBitCount = bitsPerFrame;"
  },
  {
   "label": "resetNoSpectral: the tail-fill is skipped, so a short row is left stale",
-  "find": "\t\tfor (j = constellationSize[i]; j < V90MAPPER_LEVELS; j++)\n\t\t\tconstellation[i][j] = 0;\n\t}\n\n\tmodulusEncoder.field_00 = constellationSize[0];\n\tmodulusEncoder.field_04 = constellationSize[1];\n\tmodulusEncoder.field_08 = constellationSize[2];\n\tmodulusEncoder.field_0c = constellationSize[3];\n\tmodulusEncoder.field_10 = constellationSize[4];\n\tmodulusEncoder.field_14 = constellationSize[5];\n\tmodulusEncoder.field_18 = word_08;\n\tsignEncoder.prev_ = 0;\n\n\tspectralShaper.resetSSFilter",
-  "replace": "\t}\n\n\tmodulusEncoder.field_00 = constellationSize[0];\n\tmodulusEncoder.field_04 = constellationSize[1];\n\tmodulusEncoder.field_08 = constellationSize[2];\n\tmodulusEncoder.field_0c = constellationSize[3];\n\tmodulusEncoder.field_10 = constellationSize[4];\n\tmodulusEncoder.field_14 = constellationSize[5];\n\tmodulusEncoder.field_18 = word_08;\n\tsignEncoder.prev_ = 0;\n\n\tspectralShaper.resetSSFilter"
+  "find": "\t\tfor (j = constellationSize[i]; j < V90MAPPER_LEVELS; j++)\n\t\t\tconstellation[i][j] = 0;\n\t}\n\n\tmodulusEncoder.constellationSize0 = constellationSize[0];\n\tmodulusEncoder.constellationSize1 = constellationSize[1];\n\tmodulusEncoder.constellationSize2 = constellationSize[2];\n\tmodulusEncoder.constellationSize3 = constellationSize[3];\n\tmodulusEncoder.constellationSize4 = constellationSize[4];\n\tmodulusEncoder.constellationSize5 = constellationSize[5];\n\tmodulusEncoder.bitCount = modulusBitCount;\n\tsignEncoder.prev_ = 0;\n\n\tspectralShaper.resetSSFilter",
+  "replace": "\t}\n\n\tmodulusEncoder.constellationSize0 = constellationSize[0];\n\tmodulusEncoder.constellationSize1 = constellationSize[1];\n\tmodulusEncoder.constellationSize2 = constellationSize[2];\n\tmodulusEncoder.constellationSize3 = constellationSize[3];\n\tmodulusEncoder.constellationSize4 = constellationSize[4];\n\tmodulusEncoder.constellationSize5 = constellationSize[5];\n\tmodulusEncoder.bitCount = modulusBitCount;\n\tsignEncoder.prev_ = 0;\n\n\tspectralShaper.resetSSFilter"
  },
  {
   "label": "resetNoSpectral: the modulus encoder gets a size rather than word_08",
-  "find": "\tmodulusEncoder.field_18 = word_08;\n\tsignEncoder.prev_ = 0;\n\n\tspectralShaper.resetSSFilter",
-  "replace": "\tmodulusEncoder.field_18 = constellationSize[5];\n\tsignEncoder.prev_ = 0;\n\n\tspectralShaper.resetSSFilter"
+  "find": "\tmodulusEncoder.bitCount = modulusBitCount;\n\tsignEncoder.prev_ = 0;\n\n\tspectralShaper.resetSSFilter",
+  "replace": "\tmodulusEncoder.bitCount = constellationSize[5];\n\tsignEncoder.prev_ = 0;\n\n\tspectralShaper.resetSSFilter"
  },
  {
   "label": "resetNoSpectral: the sign encoder is left as it was found",

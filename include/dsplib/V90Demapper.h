@@ -183,7 +183,7 @@ public:
 	unsigned int bitsPerFrame;
 
 	/*
-	 * +0x08  Modelled, unnamed. `resetNoSpectral` both computes and reads
+	 * +0x08  `modulusBitCount`. `resetNoSpectral` both computes and reads
 	 * it back:
 	 *
 	 *     30d09:  mov  0xc(%ecx),%ebp          <- signBitsPerFrame
@@ -194,18 +194,15 @@ public:
 	 *     30e77:  mov  %esi,0x18(%eax)         <- modulusDecoder's +0x18
 	 *
 	 * so it is `bitsPerFrame - signBitsPerFrame`, and it is the seventh
-	 * word handed to the embedded `ModulusDecoder`.
-	 *
-	 * Left unnamed on purpose. The arithmetic makes "the bits of a frame
-	 * that are not sign bits" certain; calling it the modulus bit count
-	 * would additionally assume what `ModulusDecoder` does with its
-	 * seventh word, and that class's seven members are all `field_NN`
-	 * because nothing in the object names them either. A wrong name is
-	 * believed by every future reader and no test can fail on it
-	 * (F3120), so the derivation stays here and the name waits for
-	 * `ModulusDecoder::progress`.
+	 * word handed to the embedded `ModulusDecoder`.  The name is resolved
+	 * rather than assumed: `ModulusDecoder::progress` reads that seventh
+	 * word -- `ModulusDecoder::bitCount` -- as the number of bits to
+	 * unpack, so the arithmetic and the role agree (issue #119).  Until
+	 * that `progress` was written the name was withheld on purpose, since
+	 * a wrong name is believed by every future reader and no test can
+	 * fail on it (F3120).
 	 */
-	unsigned int word_08;
+	unsigned int modulusBitCount;
 
 	/*
 	 * +0x0c  How many sign bits a frame carries, and therefore where the

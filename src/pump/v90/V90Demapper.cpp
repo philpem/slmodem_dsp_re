@@ -103,7 +103,7 @@ void *operator new[](size_t);
 
 DEM_OFF(params,			0x0000, params);
 DEM_OFF(bitsPerFrame,		0x0004, bitsframe);
-DEM_OFF(word_08,		0x0008, word08);
+DEM_OFF(modulusBitCount,		0x0008, word08);
 DEM_OFF(signBitsPerFrame,	0x000c, sbframe);
 DEM_OFF(signBitGroups,		0x0010, sbgroups);
 DEM_OFF(signBitGroupSize,	0x0014, sbgroupsz);
@@ -221,7 +221,7 @@ V90Demapper::V90Demapper(unsigned int levels, V90Parameters *params,
 	signBitGroupSize = 0;
 	signBitGroups = 0;
 	signBitsPerFrame = 0;
-	word_08 = 0;
+	modulusBitCount = 0;
 	bitsPerFrame = 0;
 
 	for (i = 0; i < V90DEMAPPER_CONSTELLATIONS; i++)
@@ -737,7 +737,7 @@ V90Demapper::reset(V90MappingParams *mapp)
 	bitsPerFrame = mapp->word_0;
 	signBitGroups = mapp->shaperSR;
 	signBitsPerFrame = V90DEMAPPER_FRAME - mapp->shaperSR;
-	word_08 = bitsPerFrame - signBitsPerFrame;
+	modulusBitCount = bitsPerFrame - signBitsPerFrame;
 
 	if (mapp->shaperSR != 0)
 		signBitGroupSize = V90DEMAPPER_FRAME / mapp->shaperSR;
@@ -777,13 +777,13 @@ V90Demapper::reset(V90MappingParams *mapp)
 		}
 	}
 
-	modulusDecoder.field_00 = constellationSize[0];
-	modulusDecoder.field_04 = constellationSize[1];
-	modulusDecoder.field_08 = constellationSize[2];
-	modulusDecoder.field_0c = constellationSize[3];
-	modulusDecoder.field_10 = constellationSize[4];
-	modulusDecoder.field_14 = constellationSize[5];
-	modulusDecoder.field_18 = word_08;
+	modulusDecoder.constellationSize0 = constellationSize[0];
+	modulusDecoder.constellationSize1 = constellationSize[1];
+	modulusDecoder.constellationSize2 = constellationSize[2];
+	modulusDecoder.constellationSize3 = constellationSize[3];
+	modulusDecoder.constellationSize4 = constellationSize[4];
+	modulusDecoder.constellationSize5 = constellationSize[5];
+	modulusDecoder.bitCount = modulusBitCount;
 	signDecoder.prev_ = 0;
 
 	signBits.reset(mapp->shaperSR, 0);
@@ -824,7 +824,7 @@ V90Demapper::resetNoSpectral(V90MappingParams *mapp)
 	unsigned int i, j;
 
 	bitsPerFrame = mapp->word_0;
-	word_08 = bitsPerFrame - signBitsPerFrame;
+	modulusBitCount = bitsPerFrame - signBitsPerFrame;
 
 	if (params->DEBUG_DEMAPPER_ERROR_HISTOGRAM) {
 		printErrorHistogramAndReset();
@@ -865,13 +865,13 @@ V90Demapper::resetNoSpectral(V90MappingParams *mapp)
 		}
 	}
 
-	modulusDecoder.field_00 = constellationSize[0];
-	modulusDecoder.field_04 = constellationSize[1];
-	modulusDecoder.field_08 = constellationSize[2];
-	modulusDecoder.field_0c = constellationSize[3];
-	modulusDecoder.field_10 = constellationSize[4];
-	modulusDecoder.field_14 = constellationSize[5];
-	modulusDecoder.field_18 = word_08;
+	modulusDecoder.constellationSize0 = constellationSize[0];
+	modulusDecoder.constellationSize1 = constellationSize[1];
+	modulusDecoder.constellationSize2 = constellationSize[2];
+	modulusDecoder.constellationSize3 = constellationSize[3];
+	modulusDecoder.constellationSize4 = constellationSize[4];
+	modulusDecoder.constellationSize5 = constellationSize[5];
+	modulusDecoder.bitCount = modulusBitCount;
 	signDecoder.prev_ = 0;
 }
 

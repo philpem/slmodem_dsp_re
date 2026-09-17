@@ -872,13 +872,13 @@ run_demproc(void)
 			 * the caller's buffer; the rest only have to be the
 			 * same on both sides.
 			 */
-			DEM(s).modulusDecoder.field_00 = 7u;
-			DEM(s).modulusDecoder.field_04 = 11u;
-			DEM(s).modulusDecoder.field_08 = 5u;
-			DEM(s).modulusDecoder.field_0c = 13u;
-			DEM(s).modulusDecoder.field_10 = 3u;
-			DEM(s).modulusDecoder.field_14 = 0u;
-			DEM(s).modulusDecoder.field_18 = 9u;
+			DEM(s).modulusDecoder.constellationSize0 = 7u;
+			DEM(s).modulusDecoder.constellationSize1 = 11u;
+			DEM(s).modulusDecoder.constellationSize2 = 5u;
+			DEM(s).modulusDecoder.constellationSize3 = 13u;
+			DEM(s).modulusDecoder.constellationSize4 = 3u;
+			DEM(s).modulusDecoder.constellationSize5 = 0u;
+			DEM(s).modulusDecoder.bitCount = 9u;
 			/* The embedded extractor, as `reset` would leave it. */
 			DEM(s).signBits.spacing = p->groups ? p->groups : 1u;
 			DEM(s).signBits.width = p->groupsz;
@@ -1338,10 +1338,10 @@ run_resetns(void)
 					    (long)d->bitsPerFrame,
 					    (long)MAPP->word_0, trial);
 				w08 = MAPP->word_0 - d->signBitsPerFrame;
-				diff_eq_int("word_08 (%ld)", (long)d->word_08,
+				diff_eq_int("word_08 (%ld)", (long)d->modulusBitCount,
 					    (long)w08, trial);
 				diff_eq_int("modulusDecoder tail (%ld)",
-					    (long)d->modulusDecoder.field_18,
+					    (long)d->modulusDecoder.bitCount,
 					    (long)w08, trial);
 				diff_eq_int("signDecoder cleared (%ld)",
 					    (long)d->signDecoder.prev_, 0,
@@ -1356,7 +1356,7 @@ run_resetns(void)
 						    trial);
 					diff_eq_int("modulus word (%ld)",
 						    (long)(&d->modulusDecoder.
-							   field_00)[i],
+							   constellationSize0)[i],
 						    (long)
 						    d->constellationSize[i],
 						    trial);
@@ -1562,7 +1562,7 @@ run_reset(void)
 				DEM(s).signBitsPerFrame = 0xb1b1b1b1u;
 				DEM(s).signBitGroups = 0xb2b2b2b2u;
 				DEM(s).signBitGroupSize = 0xb3b3b3b3u;
-				DEM(s).word_08 = 0xb4b4b4b4u;
+				DEM(s).modulusBitCount = 0xb4b4b4b4u;
 				DEM(s).sampleCount = 0x1234u;
 				DEM(s).frameStart = 0x5678u;
 				DEM(s).rbsFramePosition = 3u;
@@ -1619,13 +1619,13 @@ run_reset(void)
 					    (long)d->signBitsPerFrame,
 					    (long)(V90DEMAPPER_FRAME - sr),
 					    trial);
-				diff_eq_int("word_08 (%ld)", (long)d->word_08,
+				diff_eq_int("word_08 (%ld)", (long)d->modulusBitCount,
 					    (long)(MAPP->word_0
 						   - (V90DEMAPPER_FRAME - sr)),
 					    trial);
 				diff_eq_int("modulusDecoder tail (%ld)",
-					    (long)d->modulusDecoder.field_18,
-					    (long)d->word_08, trial);
+					    (long)d->modulusDecoder.bitCount,
+					    (long)d->modulusBitCount, trial);
 
 				/*
 				 * THE GUARDED DIVIDE.  With a zero spacing the
@@ -1682,7 +1682,7 @@ run_reset(void)
 						    trial);
 					diff_eq_int("modulus word (%ld)",
 						    (long)(&d->modulusDecoder.
-							   field_00)[i],
+							   constellationSize0)[i],
 						    (long)
 						    d->constellationSize[i],
 						    trial);

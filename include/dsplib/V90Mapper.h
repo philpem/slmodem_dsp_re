@@ -35,7 +35,7 @@
  *
  * Both resets confirm the first of them from the other side: they fill
  * +0x670..+0x688 with seven words -- the six constellation sizes and
- * `word_08` -- which is `ModulusEncoder`'s whole seven-member layout
+ * `modulusBitCount` -- which is `ModulusEncoder`'s whole seven-member layout
  * written out by hand, in the same order and from the same sources as
  * `V90Demapper::reset` writes into its embedded `ModulusDecoder`. There is
  * no call: the blob has no `ModulusEncoder::reset` symbol
@@ -57,7 +57,7 @@
  * arithmetic, and `include/dsplib/V90Demapper.h` already names all five:
  *
  *     +0x04   bitsPerFrame        = mp->word_0
- *     +0x08   word_08             = bitsPerFrame - signBitsPerFrame
+ *     +0x08   modulusBitCount             = bitsPerFrame - signBitsPerFrame
  *     +0x0c   signBitsPerFrame    = 6 - mp->shaperSR
  *     +0x10   signBitGroups       = mp->shaperSR
  *     +0x14   signBitGroupSize    = 6 / mp->shaperSR
@@ -67,10 +67,14 @@
  * with them here: it branches on `signBitGroups` being zero exactly as the
  * demapper does, and it strides the frame it hands `V90SpectralShaper::
  * process` by `signBitGroupSize` -- which is the shaper's own `blockLength`,
- * `6 / shaperSR`, computed a second time.  `word_08` keeps the demapper's
- * deliberately unnamed spelling for the reason that header gives at length:
- * calling it the modulus bit count assumes what `ModulusEncoder` does with
- * its seventh word, and that class's members are all `field_NN`.
+ * `6 / shaperSR`, computed a second time.  `modulusBitCount` is the
+ * demapper's own name for the same quantity, and the name is now resolved
+ * rather than borrowed: both classes store it as the seventh word of the
+ * embedded `ModulusEncoder`/`ModulusDecoder`, and `ModulusDecoder::progress`
+ * reads that word as the bit count -- how many bits `ModulusEncoder::
+ * progress` packs.  The old caution that it "assumes what the modulus coder
+ * does with its seventh word" expired when that class's `progress` was
+ * written and its seven members were named (issue #119).
  *
  * The one place the two classes DISAGREE is worth stating, because it is the
  * kind of difference a shared name hides.  With `shaperSR` zero the demapper
@@ -185,7 +189,7 @@ public:
 	 * @brief Set up for a connection, with spectral shaping.
 	 *
 	 * Computes `bitsPerFrame`, `signBitGroups`, `signBitGroupSize`,
-	 * `signBitsPerFrame` and `word_08` from @p mp; builds the six
+	 * `signBitsPerFrame` and `modulusBitCount` from @p mp; builds the six
 	 * constellations by companding @p mp's tables per @p pcm; loads the
 	 * modulus encoder's seven fields; resets the sign encoder; and, if
 	 * `signBitGroups` is nonzero, resets the embedded spectral shaper
@@ -205,7 +209,7 @@ public:
 	 * `reset()` without the shaper: leaves `signBitsPerFrame`,
 	 * `signBitGroups`, `signBitGroupSize`, `bitsBuffered` and +0x6f8
 	 * exactly as found, but still reads `signBitsPerFrame` to compute
-	 * `word_08`.
+	 * `modulusBitCount`.
 	 *
 	 * @param mp   The V.90 mapping parameters for this connection.
 	 * @param pcm  Zero selects mu-law; any other value selects A-law.
@@ -242,7 +246,7 @@ public:
 	/* +0x004 .. +0x014  See the file comment for where these names are
 	 * from.  All five are zeroed by the constructor. */
 	unsigned int bitsPerFrame;		/* +0x004 mp->word_0     */
-	unsigned int word_08;			/* +0x008                */
+	unsigned int modulusBitCount;			/* +0x008                */
 	unsigned int signBitsPerFrame;		/* +0x00c 6 - shaperSR   */
 	unsigned int signBitGroups;		/* +0x010 mp->shaperSR   */
 	unsigned int signBitGroupSize;		/* +0x014 6 / shaperSR   */

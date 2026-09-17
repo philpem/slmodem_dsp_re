@@ -33,7 +33,7 @@
  * and `.text+0x30280` (`resetNoSpectral`, 404 bytes) both run
  *
  *     bitsPerFrame = mp->word_0
- *     word_08      = bitsPerFrame - signBitsPerFrame
+ *     modulusBitCount      = bitsPerFrame - signBitsPerFrame
  *     the six-constellation fill
  *     the seven-word modulusEncoder fill
  *     signEncoder.prev_ = 0
@@ -85,7 +85,7 @@ extern "C" {
 
 V90MAPPER_OFF(params,		0x000, params);
 V90MAPPER_OFF(bitsPerFrame,	0x004, c004);
-V90MAPPER_OFF(word_08,		0x008, c008);
+V90MAPPER_OFF(modulusBitCount,		0x008, c008);
 V90MAPPER_OFF(signBitsPerFrame,	0x00c, c00c);
 V90MAPPER_OFF(signBitGroups,	0x010, c010);
 V90MAPPER_OFF(signBitGroupSize,	0x014, c014);
@@ -137,7 +137,7 @@ V90Mapper::V90Mapper(V90Parameters *p)
 	signBitGroupSize = 0;
 	signBitGroups = 0;
 	signBitsPerFrame = 0;
-	word_08 = 0;
+	modulusBitCount = 0;
 	bitsPerFrame = 0;
 	for (i = 0; i <= 5; i++)
 		constellationSize[i] = 0;
@@ -163,7 +163,7 @@ V90Mapper::~V90Mapper()
 /*
  * ===========================================================================
  * The part both resets share: build the six constellations out of the
- * companded code tables, then hand the six sizes and `word_08` to the
+ * companded code tables, then hand the six sizes and `modulusBitCount` to the
  * embedded ModulusEncoder and clear the sign encoder.
  *
  * It is written out TWICE below rather than factored into a helper, because
@@ -221,7 +221,7 @@ V90Mapper::reset(V90MappingParams *mp, PcmType pcm)
 		signBitGroupSize = 0;
 
 	signBitsPerFrame = V90MAPPER_FRAME - mp->shaperSR;
-	word_08 = bitsPerFrame - signBitsPerFrame;
+	modulusBitCount = bitsPerFrame - signBitsPerFrame;
 
 	for (i = 0; i < V90MAPPER_CONSTELLATIONS; i++) {
 		constellationSize[i] = mp->constellationSize[i];
@@ -250,13 +250,13 @@ V90Mapper::reset(V90MappingParams *mp, PcmType pcm)
 		primeFrames = 0;
 	}
 
-	modulusEncoder.field_00 = constellationSize[0];
-	modulusEncoder.field_04 = constellationSize[1];
-	modulusEncoder.field_08 = constellationSize[2];
-	modulusEncoder.field_0c = constellationSize[3];
-	modulusEncoder.field_10 = constellationSize[4];
-	modulusEncoder.field_14 = constellationSize[5];
-	modulusEncoder.field_18 = word_08;
+	modulusEncoder.constellationSize0 = constellationSize[0];
+	modulusEncoder.constellationSize1 = constellationSize[1];
+	modulusEncoder.constellationSize2 = constellationSize[2];
+	modulusEncoder.constellationSize3 = constellationSize[3];
+	modulusEncoder.constellationSize4 = constellationSize[4];
+	modulusEncoder.constellationSize5 = constellationSize[5];
+	modulusEncoder.bitCount = modulusBitCount;
 	signEncoder.prev_ = 0;
 
 	word_700 = 0;
@@ -269,7 +269,7 @@ V90Mapper::resetNoSpectral(V90MappingParams *mp, PcmType pcm)
 	unsigned int i, j;
 
 	bitsPerFrame = mp->word_0;
-	word_08 = bitsPerFrame - signBitsPerFrame;
+	modulusBitCount = bitsPerFrame - signBitsPerFrame;
 
 	for (i = 0; i < V90MAPPER_CONSTELLATIONS; i++) {
 		constellationSize[i] = mp->constellationSize[i];
@@ -289,13 +289,13 @@ V90Mapper::resetNoSpectral(V90MappingParams *mp, PcmType pcm)
 			constellation[i][j] = 0;
 	}
 
-	modulusEncoder.field_00 = constellationSize[0];
-	modulusEncoder.field_04 = constellationSize[1];
-	modulusEncoder.field_08 = constellationSize[2];
-	modulusEncoder.field_0c = constellationSize[3];
-	modulusEncoder.field_10 = constellationSize[4];
-	modulusEncoder.field_14 = constellationSize[5];
-	modulusEncoder.field_18 = word_08;
+	modulusEncoder.constellationSize0 = constellationSize[0];
+	modulusEncoder.constellationSize1 = constellationSize[1];
+	modulusEncoder.constellationSize2 = constellationSize[2];
+	modulusEncoder.constellationSize3 = constellationSize[3];
+	modulusEncoder.constellationSize4 = constellationSize[4];
+	modulusEncoder.constellationSize5 = constellationSize[5];
+	modulusEncoder.bitCount = modulusBitCount;
 	signEncoder.prev_ = 0;
 
 	spectralShaper.resetSSFilter(mp->shaperA1, mp->shaperA2,
@@ -324,7 +324,7 @@ V90Mapper::resetNoSpectral(V90MappingParams *mp, PcmType pcm)
  * differential tier cannot see: the two spellings agree over every divisor a
  * caller can produce and separate only for a negative one.
  *
- * `signBitsPerFrame` IS COMPUTED BEFORE `word_08` READS IT.  The object does
+ * `signBitsPerFrame` IS COMPUTED BEFORE `modulusBitCount` READS IT.  The object does
  * `mov $0x6,%edx ; sub %ecx,%edx ; mov %edx,0xc(%ebp) ; sub %edx,%ebx ; mov
  * %ebx,0x8(%ebp)` at 0x300a1..0x300b1 -- one value, stored and then used --
  * which is what makes `resetNoSpectral`'s bare read of the same field the
@@ -361,7 +361,7 @@ V90Mapper::resetNoSpectral(V90MappingParams *mp, PcmType pcm)
  *
  * THE FRAME IS THREE STAGES AND THE MIDDLE ONE HAS TWO ARMS:
  *
- *   - `ModulusEncoder::progress` turns the `word_08` bits above the sign bits
+ *   - `ModulusEncoder::progress` turns the `modulusBitCount` bits above the sign bits
  *     into six mixed-radix digits, and each digit picks a level out of its own
  *     constellation: `levels[k] = constellation[k][codes[k]]`, which the
  *     object addresses as one flat `(k << 7) + codes[k]` with no bound on the

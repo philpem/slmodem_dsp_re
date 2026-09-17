@@ -9,16 +9,16 @@
 #define MODDEC_OFF(field, off, tag) \
 	typedef char moddec_off_##tag[ \
 	    ((int)__builtin_offsetof(ModulusDecoder, field) == (off)) ? 1 : -1]
-MODDEC_OFF(field_00, 0x00, field_00);
-MODDEC_OFF(field_18, 0x18, field_18);
+MODDEC_OFF(constellationSize0, 0x00, field_00);
+MODDEC_OFF(bitCount, 0x18, field_18);
 typedef char moddec_size[(sizeof(ModulusDecoder) == 0x1c) ? 1 : -1];
 #endif
 
 /* The decoder default constructor is byte-for-byte the encoder's. */
 ModulusDecoder::ModulusDecoder()
 {
-	field_00 = field_04 = field_08 = field_0c = field_10 = field_14 =
-		field_18 = 0;
+	constellationSize0 = constellationSize1 = constellationSize2 = constellationSize3 = constellationSize4 = constellationSize5 =
+		bitCount = 0;
 }
 
 /*
@@ -28,8 +28,8 @@ ModulusDecoder::ModulusDecoder()
 ModulusDecoder::ModulusDecoder(unsigned int a, unsigned int b, unsigned int c,
 			       unsigned int d, unsigned int e, unsigned int f,
 			       unsigned int g)
-	: field_00(a), field_04(b), field_08(c), field_0c(d), field_10(e),
-	  field_14(f), field_18(g)
+	: constellationSize0(a), constellationSize1(b), constellationSize2(c), constellationSize3(d), constellationSize4(e),
+	  constellationSize5(f), bitCount(g)
 {
 }
 
@@ -43,12 +43,12 @@ ModulusDecoder::progress(unsigned char *bytes, unsigned int *in)
 {
 	long long acc;
 	unsigned int i;
-	acc = (long long)in[5] * field_10 + in[4];
-	acc = acc * field_0c + in[3];
-	acc = acc * field_08 + in[2];
-	acc = acc * field_04 + in[1];
-	acc = acc * field_00 + in[0];
-	for (i = 0; i < field_18; i++) {
+	acc = (long long)in[5] * constellationSize4 + in[4];
+	acc = acc * constellationSize3 + in[3];
+	acc = acc * constellationSize2 + in[2];
+	acc = acc * constellationSize1 + in[1];
+	acc = acc * constellationSize0 + in[0];
+	for (i = 0; i < bitCount; i++) {
 		bytes[i] = (unsigned char)(acc & 1);
 		acc >>= 1;
 	}

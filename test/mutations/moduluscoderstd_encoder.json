@@ -11,17 +11,17 @@
  },
  {
   "label": "the first digit uses the second modulus",
-  "find": "\tout[0] = (unsigned int)(acc % (long long)field_00);",
-  "replace": "\tout[0] = (unsigned int)(acc % (long long)field_04);"
+  "find": "\tout[0] = (unsigned int)(acc % (long long)constellationSize0);",
+  "replace": "\tout[0] = (unsigned int)(acc % (long long)constellationSize1);"
  },
  {
   "label": "the first remainder is added before division",
-  "find": "\tacc = (acc - out[0]) / (long long)field_00;",
-  "replace": "\tacc = (acc + out[0]) / (long long)field_00;"
+  "find": "\tacc = (acc - out[0]) / (long long)constellationSize0;",
+  "replace": "\tacc = (acc + out[0]) / (long long)constellationSize0;"
  },
  {
   "label": "the sixth digit is offset upward by M5",
   "find": "\tout[5] = (unsigned int)acc;",
-  "replace": "\tout[5] = (unsigned int)(acc + (long long)field_14);"
+  "replace": "\tout[5] = (unsigned int)(acc + (long long)constellationSize5);"
  }
 ]

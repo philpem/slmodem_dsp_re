@@ -71,8 +71,8 @@
  },
  {
   "label": "bitsPerFrame keeps its seed",
-  "find": "\tword_08 = 0;\n\tbitsPerFrame = 0;",
-  "replace": "\tword_08 = 0;",
+  "find": "\tmodulusBitCount = 0;\n\tbitsPerFrame = 0;",
+  "replace": "\tmodulusBitCount = 0;",
   "why": "Re-anchored by finding F7793: the constructor's eight zero stores are written high-to-low, which is the object's own emission order, and the two trailing stores are `params` then `errorHistogramCount`.  The mutation is unchanged."
  },
  {
