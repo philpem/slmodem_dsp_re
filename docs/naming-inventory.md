@@ -19,17 +19,17 @@ The production-use column counts the member's identifier across `src/` only. It 
 
 | | count |
 |---|---:|
-| member declarations parsed | 3250 |
+| member declarations parsed | 3246 |
 | owners (struct/class) | 242 |
-| named | 2607 |
-| offset-named | 412 |
-|   on record (batch/wave or beside the field) | 260 |
-|   residual, not on record | 152 |
-| placeholder (`unmapped_`/`unnamed_`) | 80 |
-|   residual placeholder | 64 |
+| named | 2626 |
+| offset-named | 393 |
+|   on record (batch/wave or beside the field) | 247 |
+|   residual, not on record | 146 |
+| placeholder (`unmapped_`/`unnamed_`) | 76 |
+|   residual placeholder | 60 |
 | padding | 151 |
 
-Of the 412 offset-named members, **252 are in non-FAX owners** (the issue #100 scope) and **27 of those are residual**. FAX owners are a separate phase: listed for completeness, not dispositioned here.
+Of the 393 offset-named members, **233 are in non-FAX owners** (the issue #100 scope) and **21 of those are residual**. FAX owners are a separate phase: listed for completeness, not dispositioned here.
 
 ## Coverage and limitations
 
@@ -37,19 +37,19 @@ The parser is textual: it reads single-line member declarations inside `struct`/
 
 ## Assessment
 
-- 2607 of 3250 parsed members carry a real name.
-- 412 carry an offset-only name; 260 of those are on record (a batch/wave ledger or a substantive comment beside them).
-- 152 offset-named members are residual and appear in the ledger below with an explicit, justified disposition.
-- 80 members are explicit placeholders (`unmapped_`/`unnamed_`); their names already state that the reconstruction does not model them.
+- 2626 of 3246 parsed members carry a real name.
+- 393 carry an offset-only name; 247 of those are on record (a batch/wave ledger or a substantive comment beside them).
+- 146 offset-named members are residual and appear in the ledger below with an explicit, justified disposition.
+- 76 members are explicit placeholders (`unmapped_`/`unnamed_`); their names already state that the reconstruction does not model them.
 - 151 members are alignment padding, which must not be named.
 
-Within the issue #100 scope (non-FAX owners) there are 252 offset-named members, 27 of them residual, and 66 placeholders. FAX is a separate phase. On this reading every inventoried member is named or explicitly dispositioned; what remains is reviewer acceptance of the dispositions, not undiscovered offsets.
+Within the issue #100 scope (non-FAX owners) there are 233 offset-named members, 21 of them residual, and 62 placeholders. FAX is a separate phase. On this reading every inventoried member is named or explicitly dispositioned; what remains is reviewer acceptance of the dispositions, not undiscovered offsets.
 
 ## Per-owner totals
 
 | owner | named | offset | on record | residual | placeholder | pad | audited by |
 |---|---:|---:|---:|---:|---:|---:|---|
-| `Agc` | 7 | 1 | 1 | 0 | 0 | 0 |  |
+| `Agc` | 8 | 0 | 0 | 0 | 0 | 0 |  |
 | `Descrambler` | 8 | 0 | 0 | 0 | 0 | 0 |  |
 | `FloatARMA` | 14 | 0 | 0 | 0 | 0 | 0 |  |
 | `FloatFIR` | 5 | 0 | 0 | 0 | 0 | 0 |  |
@@ -69,29 +69,29 @@ Within the issue #100 scope (non-FAX owners) there are 252 offset-named members,
 | `SerialDifferentialEncoder` | 1 | 0 | 0 | 0 | 0 | 0 |  |
 | `SineWave` | 4 | 0 | 0 | 0 | 0 | 0 |  |
 | `TAG_DiagnosticResults` | 12 | 11 | 11 | 0 | 0 | 6 | fieldnaming wave |
-| `V90AutoDigitalImpDetector` | 37 | 12 | 12 | 0 | 0 | 1 | Batch 12 |
+| `V90AutoDigitalImpDetector` | 38 | 11 | 11 | 0 | 0 | 1 | Batch 12 |
 | `V90BitsToSymbol` | 9 | 0 | 0 | 0 | 0 | 0 |  |
-| `V90CP` | 14 | 17 | 17 | 0 | 0 | 0 | Batch 13 |
+| `V90CP` | 15 | 16 | 16 | 0 | 0 | 0 | Batch 13 |
 | `V90CPUnPck` | 10 | 0 | 0 | 0 | 0 | 3 |  |
 | `V90CodecEntry` | 2 | 0 | 0 | 0 | 0 | 0 |  |
 | `V90ConnectionEvaluator` | 47 | 1 | 1 | 0 | 0 | 0 | Batch 11 |
 | `V90ConstellationDesigner` | 18 | 4 | 3 | 1 | 0 | 2 |  |
-| `V90ConstellationPower` | 7 | 1 | 1 | 0 | 0 | 0 |  |
-| `V90Demapper` | 28 | 3 | 3 | 0 | 0 | 0 |  |
+| `V90ConstellationPower` | 8 | 0 | 0 | 0 | 0 | 0 |  |
+| `V90Demapper` | 30 | 1 | 1 | 0 | 0 | 0 |  |
 | `V90Demodulator` | 17 | 1 | 1 | 0 | 0 | 0 | fieldnaming wave |
 | `V90Equalizer` | 86 | 0 | 0 | 0 | 0 | 1 |  |
 | `V90Jd` | 5 | 0 | 0 | 0 | 0 | 0 |  |
 | `V90MP` | 25 | 0 | 0 | 0 | 0 | 0 |  |
-| `V90Mapper` | 16 | 3 | 2 | 1 | 0 | 0 |  |
+| `V90Mapper` | 17 | 2 | 1 | 1 | 0 | 0 |  |
 | `V90MappingParams` | 9 | 1 | 1 | 0 | 0 | 0 |  |
 | `V90Modem` | 15 | 0 | 0 | 0 | 0 | 0 |  |
 | `V90Modulator` | 22 | 0 | 0 | 0 | 0 | 0 |  |
-| `V90Parameters` | 295 | 0 | 0 | 0 | 48 | 0 |  |
+| `V90Parameters` | 299 | 0 | 0 | 0 | 44 | 0 |  |
 | `V90Phase2Info` | 11 | 0 | 0 | 0 | 0 | 0 |  |
 | `V90Phase3Demodulator` | 24 | 9 | 9 | 0 | 0 | 0 | Batch 16 |
 | `V90Phase3Modulator` | 31 | 0 | 0 | 0 | 0 | 1 |  |
 | `V90Phase4Demodulator` | 30 | 12 | 12 | 0 | 0 | 2 |  |
-| `V90Phase4Modulator` | 26 | 12 | 12 | 0 | 0 | 0 | fieldnaming wave 6 |
+| `V90Phase4Modulator` | 30 | 8 | 8 | 0 | 0 | 0 | fieldnaming wave 6 |
 | `V90RDetector` | 11 | 0 | 0 | 0 | 0 | 0 |  |
 | `V90RefLoop` | 5 | 0 | 0 | 0 | 0 | 0 |  |
 | `V90SdDetector` | 6 | 0 | 0 | 0 | 0 | 0 |  |
@@ -115,7 +115,7 @@ Within the issue #100 scope (non-FAX owners) there are 252 offset-named members,
 | `V92ParamsInfo` | 19 | 0 | 0 | 0 | 0 | 0 |  |
 | `V92Phase2Info` | 18 | 0 | 0 | 0 | 0 | 0 |  |
 | `V92Phase3Modulator` | 12 | 1 | 1 | 0 | 0 | 1 |  |
-| `V92Phase4Modulator` | 22 | 11 | 11 | 0 | 0 | 2 | Batch 15 |
+| `V92Phase4Modulator` | 24 | 9 | 9 | 0 | 0 | 2 | Batch 15 |
 | `V92PreFilter` | 4 | 1 | 1 | 0 | 0 | 0 |  |
 | `V92Precoder` | 10 | 1 | 1 | 0 | 0 | 0 |  |
 | `V92Transmitter` | 10 | 1 | 1 | 0 | 0 | 2 |  |
@@ -130,10 +130,10 @@ Within the issue #100 scope (non-FAX owners) there are 252 offset-named members,
 | `cadence` | 29 | 2 | 2 | 0 | 1 | 2 |  |
 | `cadence_setup` | 7 | 0 | 0 | 0 | 0 | 0 |  |
 | `call` | 8 | 0 | 0 | 0 | 0 | 3 |  |
-| `call_dp` | 15 | 2 | 0 | 2 | 0 | 1 |  |
+| `call_dp` | 15 | 1 | 0 | 1 | 0 | 1 |  |
 | `call_queue` | 5 | 0 | 0 | 0 | 0 | 0 |  |
 | `calling_tone` | 4 | 0 | 0 | 0 | 0 | 0 |  |
-| `callprog` | 24 | 4 | 0 | 4 | 0 | 1 |  |
+| `callprog` | 25 | 3 | 0 | 3 | 0 | 1 |  |
 | `callprog_cfg` | 3 | 0 | 0 | 0 | 0 | 0 |  |
 | `cid` | 27 | 10 | 10 | 0 | 0 | 0 |  |
 | `cid_modem` | 5 | 0 | 0 | 0 | 0 | 0 |  |
@@ -196,7 +196,7 @@ Within the issue #100 scope (non-FAX owners) there are 252 offset-named members,
 | `sgd` | 4 | 0 | 0 | 0 | 0 | 0 |  |
 | `sgd_cfg` | 4 | 1 | 1 | 0 | 0 | 0 |  |
 | `sgd_control_req` | 2 | 0 | 0 | 0 | 0 | 0 |  |
-| `sgd_det_cfg` | 1 | 1 | 0 | 1 | 0 | 0 |  |
+| `sgd_det_cfg` | 2 | 0 | 0 | 0 | 0 | 0 |  |
 | `sgd_gen_cfg` | 4 | 4 | 4 | 0 | 0 | 0 |  |
 | `sgd_status` | 1 | 2 | 2 | 0 | 0 | 0 |  |
 | `tagV90AdditionalCPinfo` | 0 | 6 | 6 | 0 | 0 | 0 |  |
@@ -281,7 +281,7 @@ Within the issue #100 scope (non-FAX owners) there are 252 offset-named members,
 | `v8_cm` | 10 | 0 | 0 | 0 | 0 | 2 |  |
 | `v8_detector` | 13 | 1 | 0 | 1 | 0 | 1 |  |
 | `v8_dft_bin` | 5 | 1 | 0 | 1 | 0 | 0 |  |
-| `v8_dp` | 9 | 4 | 0 | 4 | 0 | 0 |  |
+| `v8_dp` | 9 | 1 | 0 | 1 | 0 | 0 |  |
 | `v8_handshake` | 1 | 0 | 0 | 0 | 0 | 1 |  |
 | `v8_phase_rev` | 9 | 0 | 0 | 0 | 0 | 2 |  |
 | `v8_rx` | 15 | 5 | 5 | 0 | 0 | 8 | fieldnaming wave |
@@ -299,10 +299,6 @@ Within the issue #100 scope (non-FAX owners) there are 252 offset-named members,
 | `V90ConstellationDesigner` | `word_40` | 0x40 | /* +0x40                    */ | 2 | referenced 2x in src; those uses establish no single role; retained neutral |
 | `V90Mapper` | `word_08` | 0x008 | /* +0x008                */ | 22 | referenced 22x in src; those uses establish no single role; retained neutral |
 | `V90Parameters` | `unnamed_07c` | 0x07c | /* +0x07c  setToDefault only */ | 1 | explicit placeholder name; the member's meaning is not modelled by the reconstruction |
-| `V90Parameters` | `unnamed_100` | 0x100 | /* +0x100  setToDefault only */ | 2 | explicit placeholder name; the member's meaning is not modelled by the reconstruction |
-| `V90Parameters` | `unnamed_104` | 0x104 | /* +0x104  setToDefault only */ | 2 | explicit placeholder name; the member's meaning is not modelled by the reconstruction |
-| `V90Parameters` | `unnamed_108` | 0x108 | /* +0x108  setToDefault only */ | 2 | explicit placeholder name; the member's meaning is not modelled by the reconstruction |
-| `V90Parameters` | `unnamed_10c` | 0x10c | /* +0x10c  setToDefault only */ | 2 | explicit placeholder name; the member's meaning is not modelled by the reconstruction |
 | `V90Parameters` | `unnamed_300` | 0x300 | /* +0x300  setToDefault only */ | 4 | explicit placeholder name; the member's meaning is not modelled by the reconstruction |
 | `V90Parameters` | `unnamed_304` | 0x304 | /* +0x304  setToDefault only */ | 2 | explicit placeholder name; the member's meaning is not modelled by the reconstruction |
 | `V90Parameters` | `unnamed_308` | 0x308 | /* +0x308  setToDefault only */ | 3 | explicit placeholder name; the member's meaning is not modelled by the reconstruction |
@@ -351,22 +347,16 @@ Within the issue #100 scope (non-FAX owners) there are 252 offset-named members,
 | `_tagModemParameters` | `unmapped_007c` | 0x078 | /* +0x078 */ | 0 | explicit placeholder name; the member's meaning is not modelled by the reconstruction |
 | `b103_dsp` | `rfe` | 0xfe | /* +0xfe                                   */ | 0 | no production reference; retained neutral (no evidence of a role) |
 | `b103_hdx` | `r18` | 0x18 | /* +0x18                                   */ | 12 | referenced 12x in src; those uses establish no single role; retained neutral |
-| `call_dp` | `f08` | 0x008 | /* +0x008 */ | 27 | referenced 27x in src; those uses establish no single role; retained neutral |
 | `call_dp` | `f5bc` | 0x5bc | /* +0x5bc */ | 1 | referenced 1x in src; those uses establish no single role; retained neutral |
-| `callprog` | `f1c` | 0x1c | /* +0x1c */ | 3 | referenced 3x in src; those uses establish no single role; retained neutral |
 | `callprog` | `f28` | 0x28 | /* +0x28 */ | 3 | referenced 3x in src; those uses establish no single role; retained neutral |
 | `callprog` | `f68` | 0x68 | /* +0x68 */ | 0 | no production reference; retained neutral (no evidence of a role) |
 | `callprog` | `f74` | 0x70 | /* +0x70 */ | 0 | no production reference; retained neutral (no evidence of a role) |
 | `fpm_mtd_cfg` | `f0a` | 0x0a | /* +0x0a                                 */ | 9 | referenced 9x in src; those uses establish no single role; retained neutral |
 | `fpm_tone_cfg` | `r16` | 0x16 | /* +0x16 .. +0x1a                            */ 				 *       count     | 14 | referenced 14x in src; those uses establish no single role; retained neutral |
-| `sgd_det_cfg` | `ref` | 0x00 | /* +0x00 reference sequence         */ | 30 | referenced 30x in src; those uses establish no single role; retained neutral |
 | `v22fp_ctl` | `unmapped_0000` | ? |  | 8 | explicit placeholder name; the member's meaning is not modelled by the reconstruction |
 | `v8_detector` | `f0c` | 0x0c | /* 1                     +0x0c */ | 5 | referenced 5x in src; those uses establish no single role; retained neutral |
 | `v8_dft_bin` | `f0e` | 0x0e | /* +0x0e */ | 2 | referenced 2x in src; those uses establish no single role; retained neutral |
-| `v8_dp` | `f08` | 0x08 | /* +0x08 */ | 27 | referenced 27x in src; those uses establish no single role; retained neutral |
-| `v8_dp` | `f1c` | 0x1c | /* +0x1c */ | 3 | referenced 3x in src; those uses establish no single role; retained neutral |
-| `v8_dp` | `f20` | 0x20 | /* +0x20 */ | 11 | referenced 11x in src; those uses establish no single role; retained neutral |
-| `v8_dp` | `f2c` | 0x2c | /* +0x2c */ | 3 | referenced 3x in src; those uses establish no single role; retained neutral |
+| `v8_dp` | `f1c` | 0x1c | /* +0x1c */ | 1 | referenced 1x in src; those uses establish no single role; retained neutral |
 | `v8_tone` | `f0c` | 0x0c | /* +0x0c */ | 5 | referenced 5x in src; those uses establish no single role; retained neutral |
 | `v8_tx_sequence` | `f2e` | 0x2e | /* +0x2e */ | 1 | referenced 1x in src; those uses establish no single role; retained neutral |
 | `v8_tx_sequence` | `f36` | 0x36 | /* +0x36 */ | 1 | referenced 1x in src; those uses establish no single role; retained neutral |
@@ -374,9 +364,9 @@ Within the issue #100 scope (non-FAX owners) there are 252 offset-named members,
 | `v8_v21_params` | `f0c` | 0xc2c | /* 4 or 7          +0xc2c */ | 5 | referenced 5x in src; those uses establish no single role; retained neutral |
 | `v8_v21_params` | `f0e` | 0xc2e | /* -100 or 0       +0xc2e */ | 2 | referenced 2x in src; those uses establish no single role; retained neutral |
 | `v8_v21_params` | `f14` | 0xc34 | /* 0x18            +0xc34 */ | 19 | referenced 19x in src; those uses establish no single role; retained neutral |
-| `v8_v21_params` | `f1c` | 0xc3c | /* +0xc3c */ | 3 | referenced 3x in src; those uses establish no single role; retained neutral |
+| `v8_v21_params` | `f1c` | 0xc3c | /* +0xc3c */ | 1 | referenced 1x in src; those uses establish no single role; retained neutral |
 
-Residual rows: **79**.  Every row has an explicit disposition; none is a name invented to clear an offset.
+Residual rows: **69**.  Every row has an explicit disposition; none is a name invented to clear an offset.
 
 ## FAX owners (separate phase)
 

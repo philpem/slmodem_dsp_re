@@ -1169,4 +1169,27 @@ Batch 20 gate result: Gentoo `make phase` exited 0, **`period differential:
 375 passed, 0 failed`** and `phase boundary: period differential and
 structural checks all OK`; 655/655 period objects byte-identical.
 
+## Batch 21: issue #119 Tier D -- census defects and stale banners
+
+No renames; this corrects the inventory apparatus and one stale banner.
+
+- `tools/namingcensus.py` classified the real identifiers `ref`
+  (`sgd_det_cfg`, "reference sequence") and `read` as offset names -- both
+  match the `^[rf][0-9a-fA-F]{2,}$` `rNN`/`fNNNN` shape (`ref` is r+ef, `read`
+  is r+ead). A stoplist now keeps dictionary words on the `named` side, and
+  `docs/naming-inventory.md` is regenerated from the corrected tool.
+- `ModulusCoder.h`'s banner said `progress` "is another batch's work" and that
+  the seven fields' meanings were unstated. Both `progress` members are
+  written (`V90ModulusEncoder.cpp`, `V90ModulusDecoder.cpp`) and the
+  constructor's `@param` docs give each field a role -- five conversion
+  moduli, a bit count and one argument neither reads. The declaration comment
+  is corrected; the fields keep offset names because the object spells none.
+  Naming them (and thereby `V90Mapper`/`V90Demapper::word_08` as
+  `modulusBitCount`) remains on issue #119.
+
+Batch 21 gate result: Gentoo `make phase` exited 0, **`period differential:
+375 passed, 0 failed`** and `phase boundary: period differential and
+structural checks all OK`.
+
+
 
