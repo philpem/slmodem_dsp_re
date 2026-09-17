@@ -556,9 +556,9 @@ run_rlms(void)
 			    (long)n_v[ni], trial);
 		diff_eq_int("completedRunCount (%ld)", (long)DEM(1).completedRunCount, 0,
 			    trial);
-		diff_eq_int("short_1ea4 (%ld)", (long)DEM(1).short_1ea4, 0,
+		diff_eq_int("short_1ea4 (%ld)", (long)DEM(1).studyRunFinished, 0,
 			    trial);
-		diff_eq_int("short_1ea6 (%ld)", (long)DEM(1).short_1ea6, 0,
+		diff_eq_int("short_1ea6 (%ld)", (long)DEM(1).secondStudyRunFinished, 0,
 			    trial);
 		diff_eq_int("decisionFramePosition (%ld)",
 			    (long)DEM(1).decisionFramePosition, 0, trial);
@@ -1740,9 +1740,9 @@ run_reset(void)
 				diff_eq_int("completedRunCount (%ld)",
 					    (long)d->completedRunCount, 0, trial);
 				diff_eq_int("short_1ea4 (%ld)",
-					    (long)d->short_1ea4, 0, trial);
+					    (long)d->studyRunFinished, 0, trial);
 				diff_eq_int("short_1ea6 (%ld)",
-					    (long)d->short_1ea6, 0, trial);
+					    (long)d->secondStudyRunFinished, 0, trial);
 				diff_eq_int("linearMappStudyEnabled (%ld)",
 					    (long)d->linearMappStudyEnabled, 0, trial);
 				diff_eq_int("decisionFramePosition (%ld)",
@@ -1923,8 +1923,8 @@ run_lms(void)
 				DEM(s).studyProgress = (unsigned int)
 				    (prog == 0 ? 0 : prog == 1 ? 2 : 3);
 				DEM(s).completedRunCount = (short)(xi & 1);
-				DEM(s).short_1ea4 = 0;
-				DEM(s).short_1ea6 = 0;
+				DEM(s).studyRunFinished = 0;
+				DEM(s).secondStudyRunFinished = 0;
 				memcpy(dem_before[s], dem_s[s], DEM_SLOT);
 			}
 			cnt_before = ADI(1).magnitudeCount[phase][code_v[code]];
@@ -1964,14 +1964,14 @@ run_lms(void)
 				diff_eq_int("progress rewound (%ld)",
 					    (long)d->studyProgress, 0, trial);
 				diff_eq_int("short_1ea4 raised (%ld)",
-					    (long)d->short_1ea4, 1, trial);
+					    (long)d->studyRunFinished, 1, trial);
 				diff_eq_int("completedRunCount advanced (%ld)",
 					    (long)d->completedRunCount,
 					    (long)(short)(b->completedRunCount + 1),
 					    trial);
 				diff_eq_int("short_1ea6 tracks the second run"
 					    " (%ld)",
-					    (long)d->short_1ea6,
+					    (long)d->secondStudyRunFinished,
 					    (long)(d->completedRunCount == 2 ? 1 : 0),
 					    trial);
 				for (p = 0; p < V90ADID_PHASES; p++)
@@ -1984,7 +1984,7 @@ run_lms(void)
 				diff_eq_int("all 768 cells cleared (%ld)",
 					    allz, 1, trial);
 				saw_end = 1;
-				if (d->short_1ea6 != 0)
+				if (d->secondStudyRunFinished != 0)
 					saw_two = 1;
 				if (dbg &&
 				    dsplib_debug_capture_text(1)[0] != '\0')
@@ -1996,7 +1996,7 @@ run_lms(void)
 						    dem_before[1])->studyProgress
 						   + 1u), trial);
 				diff_eq_int("short_1ea4 untouched (%ld)",
-					    (long)DEM(1).short_1ea4, 0, trial);
+					    (long)DEM(1).studyRunFinished, 0, trial);
 				if (cnt_after == cnt_before + 1u)
 					saw_accum = 1;
 				if (cnt_after == cnt_before)

@@ -76,7 +76,7 @@
  * calling tone's level reaches S221 (finding F55).
  */
 struct callprog_cfg {
-	int	w0;					/* -> cp->f1c    */
+	int	w0;					/* -> cp->blind_dial    */
 	long	(*get_sreg)(void *modem, unsigned short n);	/* -> cp->get_sreg */
 	void	*modem;					/* -> cp->modem  */
 	int	w3;					/* -> cp->f28    */
@@ -94,7 +94,15 @@ struct callprog {
 	 */
 	int	timeout[7];				/* +0x00 */
 
-	int	f1c;					/* +0x1c */
+	/*
+	 * +0x1c  Copy of `callprog_cfg::w0`, which `call_create` derives
+	 * from S56. When non-zero the supervisor blind-dials: `CALLPROG_Dial`
+	 * starts in state 1 and does not wait for dial tone, and
+	 * `CALLPROG_Progress` switches both dial-tone detectors off for the
+	 * two states that would listen (Callprog.c:981). See
+	 * docs/callprog_states.md for the measured table split.
+	 */
+	int	blind_dial;				/* +0x1c */
 	long	(*get_sreg)(void *modem, unsigned short n);	/* +0x20 */
 	void	*modem;					/* +0x24 */
 	int	f28;					/* +0x28 */

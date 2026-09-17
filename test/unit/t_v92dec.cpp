@@ -402,7 +402,7 @@ setup(int trial, const struct trial_args *t)
 		V90Phase3Demodulator *d = &slot[side].o;
 
 		fill_tables(side, trial);
-		adid[side].short_a948 = (short)t->a948;
+		adid[side].altRbsInUse = (short)t->a948;
 		adid[side].altRbsFlag[t->word_04 % V90ADID_PHASES] =
 		    (short)t->s2800;
 		adid[side].byte_280c[t->word_04 % V90ADID_PHASES] =

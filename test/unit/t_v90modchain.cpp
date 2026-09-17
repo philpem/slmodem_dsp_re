@@ -3739,7 +3739,7 @@ run_p4m_setmp(void)
  * by a unit test.  So `state` is poked, and with it every field the arms read
  * that no constructor writes: `symbolCount`, `mpBits`/`mpBitCount`,
  * `cpBits`/`cpBitCount`, the two sequence lengths, `word_2f64`, `delayedMpNotExit`,
- * `word_0018`, `byte_001c`, `word_0024`..`word_0034`, `word_0040`, `codeLevel`
+ * `repeatCpCount`, `repeatCpEnable`, `word_0024`..`word_0034`, `suvLimit`, `codeLevel`
  * and the two symbol tables.  Findings F7422, F7423 and F7430 are the same shape
  * with two statements; this is the same shape with a whole function.
  *
@@ -3885,7 +3885,7 @@ static const unsigned int pump_counts[] = {
  * on that the counter alone cannot: whether the block size lets the fill run,
  * whether `word_2f64` and `cpSequenceSymbols` equal the counter the arm is
  * about to see, whether the V.92 Ed arm's three-way silence guard is
- * satisfied, and whether `word_0018` has passed `word_0040 + 0x320`.
+ * satisfied, and whether `repeatCpCount` has passed `suvLimit + 0x320`.
  */
 static void
 setup_pump(int trial, int ci, int st, int cnt_i, int variant)
@@ -4041,15 +4041,15 @@ setup_pump(int trial, int ci, int st, int cnt_i, int variant)
 		m->word_0030 = (unsigned int)((variant >> 4) & 1);
 
 		/*
-		 * `word_0018` against `word_0040 + 0x320` in three positions
+		 * `repeatCpCount` against `suvLimit + 0x320` in three positions
 		 * -- below, exactly on, and above -- because the V.92 SUVd arm
 		 * repeats CPd on a STRICT `>` and both the strictness and the
 		 * 0x320 are claims.
 		 */
-		m->word_0040 = 0x40u;
-		m->word_0018 = (variant & 1) ? 0x361u
+		m->suvLimit = 0x40u;
+		m->repeatCpCount = (variant & 1) ? 0x361u
 					     : ((variant & 2) ? 0x360u : 1u);
-		m->byte_001c = (unsigned char)((variant & 1) ? 1 : 0);
+		m->repeatCpEnable = (unsigned char)((variant & 1) ? 1 : 0);
 		m->word_0020 = 0;
 		m->word_0034 = (unsigned int)(variant & 1);
 		m->pcmType = (PcmType)c->pcm;
@@ -4482,7 +4482,7 @@ run_pump_null(const char *name, pump ours, pump theirs, long base)
  * WHAT AN OBJECT COMPARISON CANNOT SEE IS ASSERTED BY VALUE ON THE BLOB'S
  * SIDE, which makes each of these a property of the object rather than of two
  * runs agreeing: `nextStateAfterTRN2d` is 4 or 5 by `sessionFlag`,
- * `word_0040` is argument five, `state` is argument three when nothing
+ * `suvLimit` is argument five, `state` is argument three when nothing
  * pumped, and `codeLevel` is the G.711 image of argument two.
  */
 
@@ -4610,7 +4610,7 @@ run_p4m_reset(const char *name, p4m_reset ours, p4m_reset theirs, long base)
 		 * be visible as "some word changed".
 		 */
 		diff_eq_int("word_0040 took argument five (%ld)",
-			    (long)mb->word_0040, (long)arg5, trial);
+			    (long)mb->suvLimit, (long)arg5, trial);
 		diff_eq_int("nextStateAfterTRN2d followed sessionFlag (%ld)",
 			    (long)mb->nextStateAfterTRN2d,
 			    flag ? (long)P4M_STATE_SUVD : (long)P4M_STATE_MP,

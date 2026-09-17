@@ -135,13 +135,13 @@
  },
  {
   "label": "recivedSUVtag does not clear +0x1c",
-  "find": "recivedSUVtag()\n{\n\tbyte_1c = 0;\n\tword_18 = 0;",
-  "replace": "recivedSUVtag()\n{\n\tword_18 = 0;"
+  "find": "recivedSUVtag()\n{\n\trepeatCpEnable = 0;\n\trepeatCpCount = 0;",
+  "replace": "recivedSUVtag()\n{\n\trepeatCpCount = 0;"
  },
  {
   "label": "recivedSUVtag does not clear +0x18",
-  "find": "void V92Phase4Modulator::recivedSUVtag()\n{\n\tbyte_1c = 0;\n\tword_18 = 0;\n\n\tif (dsplibs_debug_level",
-  "replace": "void V92Phase4Modulator::recivedSUVtag()\n{\n\tbyte_1c = 0;\n\n\tif (dsplibs_debug_level"
+  "find": "void V92Phase4Modulator::recivedSUVtag()\n{\n\trepeatCpEnable = 0;\n\trepeatCpCount = 0;\n\n\tif (dsplibs_debug_level",
+  "replace": "void V92Phase4Modulator::recivedSUVtag()\n{\n\trepeatCpEnable = 0;\n\n\tif (dsplibs_debug_level"
  },
  {
   "label": "recivedSUVtag's trace is gated at level 1 rather than above it",
@@ -300,8 +300,8 @@
  },
  {
   "label": "resetRRNSecondSection does not clear byte_1c",
-  "find": "\tflag_20 = 0;\n\tbyte_1c = 0;\n\tword_18 = 0;",
-  "replace": "\tflag_20 = 0;\n\tword_18 = 0;"
+  "find": "\tflag_20 = 0;\n\trepeatCpEnable = 0;\n\trepeatCpCount = 0;",
+  "replace": "\tflag_20 = 0;\n\trepeatCpCount = 0;"
  },
  {
   "label": "resetRRNSecondSection does not clear word_1c4",
@@ -504,7 +504,7 @@
  },
  {
   "label": "enterRepeatedCP does not clear the two trace fields",
-  "find": "\tbyte_1c = 0;\n\tword_18 = 0;\n\n\tif (dsplibs_debug_level > 1)\n\t\tdsplibs_debug_printf(\"V92Phase4Modulator: enter repeatedCPu \"",
+  "find": "\trepeatCpEnable = 0;\n\trepeatCpCount = 0;\n\n\tif (dsplibs_debug_level > 1)\n\t\tdsplibs_debug_printf(\"V92Phase4Modulator: enter repeatedCPu \"",
   "replace": "\tif (dsplibs_debug_level > 1)\n\t\tdsplibs_debug_printf(\"V92Phase4Modulator: enter repeatedCPu \""
  },
  {

@@ -574,7 +574,7 @@ CALLPROG_Create(struct callprog *cp, struct callprog_cfg *cfg)
 	setup.w5 = 0;
 	setup.w6 = 1;
 
-	cp->f1c = cfg->w0;
+	cp->blind_dial = cfg->w0;
 	cp->get_sreg = cfg->get_sreg;
 	cp->modem = cfg->modem;
 	cp->f28 = cfg->w3;
@@ -978,7 +978,7 @@ CALLPROG_Dial(struct callprog *cp, const char *s)
 
 	build_timeouts(cp);
 
-	if (cp->f1c != 0) {
+	if (cp->blind_dial != 0) {
 		/*
 		 * Blind dialling: do not wait for dial tone.  State 1 times
 		 * out straight into dialling rather than into an error, and

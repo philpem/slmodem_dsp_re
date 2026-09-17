@@ -225,8 +225,8 @@
  },
  {
   "label": "twoLevelDemod reads the alternate table whenever the flag is set",
-  "find": "\tif (ad->short_a948 != 0 &&\n\t    (short)ad->isAltRbs((short)framePosition, ucode, sample) != 0)",
-  "replace": "\tif (ad->short_a948 != 0)"
+  "find": "\tif (ad->altRbsInUse != 0 &&\n\t    (short)ad->isAltRbs((short)framePosition, ucode, sample) != 0)",
+  "replace": "\tif (ad->altRbsInUse != 0)"
  },
  {
   "label": "twoLevelDemod tests isAltRbs at its full width",

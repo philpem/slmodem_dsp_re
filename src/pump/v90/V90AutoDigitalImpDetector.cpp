@@ -63,7 +63,7 @@ ADID_OFF(magnitudeSqSum,        0x9118, float9118);
 ADID_OFF(altMagnitudeSum,   0x9d18, float9d18);
 ADID_OFF(altMagnitudeCount, 0x9d30, uint9d30);
 ADID_OFF(linearMappingVar,   0x9d48, float9d48);
-ADID_OFF(short_a948,   0xa948, shorta948);
+ADID_OFF(altRbsInUse,   0xa948, shorta948);
 ADID_OFF(pcmType,      0xa95c, pcmtype);
 
 /*
@@ -487,7 +487,7 @@ V90AutoDigitalImpDetector::reset(unsigned char code, PcmType law, short altRbs)
 		ucodeLevel = (short)ulaw2linear(
 		    (unsigned char)((code & 0x7f) ^ 0xff));
 
-	short_a948 = 0;
+	altRbsInUse = 0;
 	padGain = 1.0f;
 	altRbsExpected = altRbs;
 
@@ -2058,7 +2058,7 @@ V90AutoDigitalImpDetector::studyUrefHandler(float v, unsigned int phase)
 
 		adid_recheckAltRbs(this);
 
-		short_a948 = 1;
+		altRbsInUse = 1;
 		stateSampleCount = 0;
 		studyState = 4;
 		break;

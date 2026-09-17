@@ -50,22 +50,22 @@
  },
  {
   "label": "reset does not clear word_30",
-  "find": "\tword_30 = 0;\n\tword_34 = 0;\n\tword_18 = 0;",
-  "replace": "\tword_34 = 0;\n\tword_18 = 0;"
+  "find": "\tword_30 = 0;\n\tword_34 = 0;\n\trepeatCpCount = 0;",
+  "replace": "\tword_34 = 0;\n\trepeatCpCount = 0;"
  },
  {
   "label": "reset does not clear word_34",
-  "find": "\tword_34 = 0;\n\tword_18 = 0;",
-  "replace": "\tword_18 = 0;"
+  "find": "\tword_34 = 0;\n\trepeatCpCount = 0;",
+  "replace": "\trepeatCpCount = 0;"
  },
  {
   "label": "reset does not clear word_18",
-  "find": "\tword_18 = 0;\n\tbyte_1c = 0;\n\tflag_20 = 0;",
-  "replace": "\tbyte_1c = 0;\n\tflag_20 = 0;"
+  "find": "\trepeatCpCount = 0;\n\trepeatCpEnable = 0;\n\tflag_20 = 0;",
+  "replace": "\trepeatCpEnable = 0;\n\tflag_20 = 0;"
  },
  {
   "label": "reset does not clear byte_1c",
-  "find": "\tbyte_1c = 0;\n\tflag_20 = 0;\n\n\tcp->bitsPerSymbol = 1;",
+  "find": "\trepeatCpEnable = 0;\n\tflag_20 = 0;\n\n\tcp->bitsPerSymbol = 1;",
   "replace": "\tflag_20 = 0;\n\n\tcp->bitsPerSymbol = 1;"
  },
  {
@@ -92,8 +92,8 @@
  {
   "label": "byte_1c is cleared as a word rather than as a byte",
   "why": "The object's store is `movb $0x0,0x1c(%esi)` at .text+0x190e8, one byte wide. A four-byte store at the same offset would also clear `pad_1d`, which the fixture seeds with the top bit set on every trial for exactly this entry.",
-  "find": "\tword_18 = 0;\n\tbyte_1c = 0;\n\tflag_20 = 0;",
-  "replace": "\tword_18 = 0;\n\t*(unsigned int *)&byte_1c = 0;\n\tflag_20 = 0;"
+  "find": "\trepeatCpCount = 0;\n\trepeatCpEnable = 0;\n\tflag_20 = 0;",
+  "replace": "\trepeatCpCount = 0;\n\t*(unsigned int *)&repeatCpEnable = 0;\n\tflag_20 = 0;"
  },
  {
   "label": "the caller's V92CP byte_00 is cleared as a word rather than as a byte",
@@ -245,12 +245,12 @@
  },
  {
   "label": "reset also clears word_38",
-  "find": "\tword_34 = 0;\n\tword_18 = 0;",
-  "replace": "\tword_38 = 0;\n\tword_34 = 0;\n\tword_18 = 0;"
+  "find": "\tword_34 = 0;\n\trepeatCpCount = 0;",
+  "replace": "\tword_38 = 0;\n\tword_34 = 0;\n\trepeatCpCount = 0;"
  },
  {
   "label": "reset also clears word_1b8",
-  "find": "\tword_34 = 0;\n\tword_18 = 0;",
-  "replace": "\tword_1b8 = 0;\n\tword_34 = 0;\n\tword_18 = 0;"
+  "find": "\tword_34 = 0;\n\trepeatCpCount = 0;",
+  "replace": "\tword_1b8 = 0;\n\tword_34 = 0;\n\trepeatCpCount = 0;"
  }
 ]

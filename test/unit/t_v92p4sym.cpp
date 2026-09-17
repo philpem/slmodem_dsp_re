@@ -689,9 +689,9 @@ compare_text(long trial)
  * divisor of an unsigned `div` in six arms, so a zero traps on both sides at
  * once and proves nothing, which is `mods[]`'s rule in t_v92p4gen.
  *
- * `word_18` runs over 0, 800 and 801 against a `suvLimit` of zero, because the
- * state 5 arm compares `word_18 > suvLimit + 800` AFTER an increment that
- * `byte_1c` gates: 800 with `byte_1c` clear must not fire and 800 with it set
+ * `repeatCpCount` runs over 0, 800 and 801 against a `suvLimit` of zero, because the
+ * state 5 arm compares `repeatCpCount > suvLimit + 800` AFTER an increment that
+ * `repeatCpEnable` gates: 800 with `repeatCpEnable` clear must not fire and 800 with it set
  * must, which is what separates the increment from the comparison.
  *
  * A NULL `cp` is given to states 4, 23 and 24 ONLY.  Those three have a real
@@ -844,17 +844,17 @@ gs_setup(int trial)
 		o->e2uExtended = (unsigned int)((bi >> 4) & 1);
 
 		o->word_38 = (unsigned int)((ci >> 1) & 1);
-		o->byte_1c = (unsigned char)(shi & 1);
+		o->repeatCpEnable = (unsigned char)(shi & 1);
 		/*
 		 * NON-ZERO ON HALF THE TRIALS, and that is a mutation's
-		 * doing: at zero, `word_18 > suvLimit + 800` and
-		 * `word_18 > 800` are the same predicate, and the entry
+		 * doing: at zero, `repeatCpCount > suvLimit + 800` and
+		 * `repeatCpCount > 800` are the same predicate, and the entry
 		 * that drops the field read NOT CAUGHT over 1,056,001
 		 * checks.  Four is enough -- 801 clears 800 and does not
 		 * clear 804.
 		 */
 		o->suvLimit = ((mix & 4) != 0) ? 4u : 0u;
-		o->word_18 = (ci % 3 == 0) ? 0u
+		o->repeatCpCount = (ci % 3 == 0) ? 0u
 			   : ((ci % 3 == 1) ? 800u : 801u);
 		o->silenceRrnRequest = (unsigned int)(mix % 4);
 		o->cpReceived = (unsigned int)((ci + shi) & 1);
@@ -967,9 +967,9 @@ run_generate_symbol(unsigned int lvl)
 		before = M(0)->state;
 		before_pat = (unsigned char *)M(0)->pattern;
 		hadcp = (M(0)->cp != 0);
-		before_18 = M(0)->word_18;
+		before_18 = M(0)->repeatCpCount;
 		before_44 = M(0)->suvLimit;
-		before_latch = (M(0)->byte_1c != 0);
+		before_latch = (M(0)->repeatCpEnable != 0);
 
 		if (lvl != 0)
 			dsplib_debug_capture_reset();
@@ -1003,7 +1003,7 @@ run_generate_symbol(unsigned int lvl)
 			if (before == 5 && after == 13)
 				gs_saw_repeated_cp = 1;
 			/*
-			 * `byte_1c` gates state 5's counter, and 800 is the
+			 * `repeatCpEnable` gates state 5's counter, and 800 is the
 			 * value at which the increment is the whole
 			 * difference: with the latch clear it must not fire
 			 * and with it set it must.

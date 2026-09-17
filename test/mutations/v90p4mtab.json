@@ -198,18 +198,18 @@
  },
  {
   "label": "resetRRNSecondSection: the CP's tag byte is left alone",
-  "find": "\tword_0018 = 0;\n\tcp->byte_13 = 0;",
-  "replace": "\tword_0018 = 0;"
+  "find": "\trepeatCpCount = 0;\n\tcp->byte_13 = 0;",
+  "replace": "\trepeatCpCount = 0;"
  },
  {
   "label": "resetRRNSecondSection: the CP's tag byte is set rather than cleared",
-  "find": "\tword_0018 = 0;\n\tcp->byte_13 = 0;",
-  "replace": "\tword_0018 = 0;\n\tcp->byte_13 = 1;"
+  "find": "\trepeatCpCount = 0;\n\tcp->byte_13 = 0;",
+  "replace": "\trepeatCpCount = 0;\n\tcp->byte_13 = 1;"
  },
  {
   "label": "resetRRNSecondSection: +0x1c is a word rather than a byte",
-  "find": "\tword_0020 = 0;\n\tbyte_001c = 0;\n\tword_0018 = 0;",
-  "replace": "\tword_0020 = 0;\n\tword_0018 = 0;"
+  "find": "\tword_0020 = 0;\n\trepeatCpEnable = 0;\n\trepeatCpCount = 0;",
+  "replace": "\tword_0020 = 0;\n\trepeatCpCount = 0;"
  },
 
  {

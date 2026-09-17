@@ -84,14 +84,14 @@ V90P4_OFF(symbolCount,		0x0008, symbolcount);
 V90P4_OFF(eventCode,		0x000c, eventcode);
 V90P4_OFF(nextStateAfterTRN2d,	0x0010, nextafter);
 V90P4_OFF(delayedMpNotExit,		0x0014, delayedmpnotexit);
-V90P4_OFF(word_0018,		0x0018, w0018);
-V90P4_OFF(byte_001c,		0x001c, b001c);
+V90P4_OFF(repeatCpCount,		0x0018, w0018);
+V90P4_OFF(repeatCpEnable,		0x001c, b001c);
 V90P4_OFF(word_0020,		0x0020, w0020);
 V90P4_OFF(word_0024,		0x0024, w0024);
 V90P4_OFF(word_0034,		0x0034, w0034);
 V90P4_OFF(pcmType,		0x0038, pcmtype);
 V90P4_OFF(codeLevel,		0x003c, codelevel);
-V90P4_OFF(word_0040,		0x0040, w0040);
+V90P4_OFF(suvLimit,		0x0040, w0040);
 V90P4_OFF(bitsToSymbol,		0x0044, bts);
 V90P4_OFF(mp,			0x0048, mp);
 V90P4_OFF(mappingParams,	0x004c, mp1);
@@ -348,7 +348,7 @@ V90Phase4Modulator::reset(PcmType law, unsigned char code,
 	unsigned int i;
 
 	pcmType = law;
-	word_0040 = arg5;
+	suvLimit = arg5;
 	symbolCount = 0;
 	state = st;
 	eventCode = 0;
@@ -367,8 +367,8 @@ V90Phase4Modulator::reset(PcmType law, unsigned char code,
 	cpReceived = 0;
 	word_2fa0 = 0;
 	word_0030 = 0;
-	word_0018 = 0;
-	byte_001c = 0;
+	repeatCpCount = 0;
+	repeatCpEnable = 0;
 	word_0020 = 0;
 
 	for (i = 0; i < nofSymbols; i++) {
@@ -431,8 +431,8 @@ V90Phase4Modulator::generateRiNot()
 void
 V90Phase4Modulator::enterRepeatedCPd()
 {
-	byte_001c = 0;
-	word_0018 = 0;
+	repeatCpEnable = 0;
+	repeatCpCount = 0;
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("V90Phase4Modulator: enter repeatedCPd "
 				     "@ %d\r\n", symbolCount);
@@ -507,8 +507,8 @@ V90Phase4Modulator::resetRRNSecondSection()
 {
 	word_0030 = 1;
 	word_0020 = 0;
-	byte_001c = 0;
-	word_0018 = 0;
+	repeatCpEnable = 0;
+	repeatCpCount = 0;
 	cp->byte_13 = 0;
 	cpReceived = 0;
 	word_2fa0 = 0;
@@ -627,8 +627,8 @@ V90Phase4Modulator::recivedCP()
 void
 V90Phase4Modulator::recivedSUVtag()
 {
-	byte_001c = 0;
-	word_0018 = 0;
+	repeatCpEnable = 0;
+	repeatCpCount = 0;
 	if (cpReceived != 0 && word_0020 == 0) {
 		switch (state) {
 		case P4M_STATE_SUVD:
@@ -713,8 +713,8 @@ V90Phase4Modulator::recivedPartTwoSilenceRrnSUVtag()
 void
 V90Phase4Modulator::recivedCPtag()
 {
-	byte_001c = 0;
-	word_0018 = 0;
+	repeatCpEnable = 0;
+	repeatCpCount = 0;
 	if (word_0020 != 0) {
 		if (cpReceived != 0) {
 			if (symbolCount % cpSequenceSymbols == 0) {
@@ -1759,8 +1759,8 @@ V90Phase4Modulator::generateSUVd()
  *     entry at 0x09/0x0a, its FinalSUVd entry at 0x0c and its CPd termination
  *     at 0x07 are what carry the SUV half of the rate renegotiation.
  *
- *  4. SUVd counts CPd repetitions.  `if (byte_001c) word_0018++` at +0x2ee7c,
- *     and once `word_0018` passes `word_0040 + 0x320` the arm runs
+ *  4. SUVd counts CPd repetitions.  `if (repeatCpEnable) repeatCpCount++` at +0x2ee7c,
+ *     and once `repeatCpCount` passes `suvLimit + 0x320` the arm runs
  *     `enterRepeatedCPd()`.  Nothing in the V.90 pump reads either field.
  *
  *  5. Ed has a THIRD exit.  `word_0024 && word_002c && !word_0030` sends it to
@@ -1866,13 +1866,13 @@ V90Phase4Modulator::generateV92Symbol()
 		bitsToSymbol->process(nofBits, &sym);
 		symbol = sym;
 
-		if (byte_001c != 0)
-			word_0018++;
+		if (repeatCpEnable != 0)
+			repeatCpCount++;
 		if (symbolCount % cpSequenceSymbols == 0 && symbolCount != 0) {
 			cp->infoToBits();
 			cpBits = cp->getBitVector(cpBitCount);
 			cpSequenceSymbols = 6 * cpBitCount / cp->groupSize;
-			if (word_0018 > word_0040 + 0x320)
+			if (repeatCpCount > suvLimit + 0x320)
 				enterRepeatedCPd();
 		}
 		break;
@@ -1918,8 +1918,8 @@ V90Phase4Modulator::generateV92Symbol()
 
 		if (symbolCount == cpSequenceSymbols) {
 			edprintf("V90Phase4Modulator: CPd Terminated @ " "%d\r\n", symbolCount);
-			word_0018 = 0;
-			byte_001c = 1;
+			repeatCpCount = 0;
+			repeatCpEnable = 1;
 			state = P4M_STATE_SUVD;
 			symbolCount = 0;
 			cp->word_00 = 1;

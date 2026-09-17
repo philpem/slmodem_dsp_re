@@ -29,23 +29,23 @@
 
  {
   "label": "reset: +0x38 takes argument one and not a constant",
-  "find": "\tpcmType = law;\n\tword_0040 = arg5;",
-  "replace": "\tpcmType = PCM_TYPE_MU_LAW;\n\tword_0040 = arg5;"
+  "find": "\tpcmType = law;\n\tsuvLimit = arg5;",
+  "replace": "\tpcmType = PCM_TYPE_MU_LAW;\n\tsuvLimit = arg5;"
  },
  {
   "label": "reset: +0x40 takes argument FIVE and not argument four",
-  "find": "\tword_0040 = arg5;\n\tsymbolCount = 0;",
-  "replace": "\tword_0040 = nofSymbols;\n\tsymbolCount = 0;"
+  "find": "\tsuvLimit = arg5;\n\tsymbolCount = 0;",
+  "replace": "\tsuvLimit = nofSymbols;\n\tsymbolCount = 0;"
  },
  {
   "label": "reset: +0x40 is written at all",
-  "find": "\tpcmType = law;\n\tword_0040 = arg5;\n\tsymbolCount = 0;",
+  "find": "\tpcmType = law;\n\tsuvLimit = arg5;\n\tsymbolCount = 0;",
   "replace": "\tpcmType = law;\n\tsymbolCount = 0;"
  },
  {
   "label": "reset: the symbol counter is cleared",
-  "find": "\tword_0040 = arg5;\n\tsymbolCount = 0;\n\tstate = st;",
-  "replace": "\tword_0040 = arg5;\n\tstate = st;"
+  "find": "\tsuvLimit = arg5;\n\tsymbolCount = 0;\n\tstate = st;",
+  "replace": "\tsuvLimit = arg5;\n\tstate = st;"
  },
  {
   "label": "reset: +0x04 takes argument three and not a constant",
@@ -149,39 +149,39 @@
  },
  {
   "label": "reset: +0x18 is cleared",
-  "find": "\tword_0030 = 0;\n\tword_0018 = 0;\n\tbyte_001c = 0;",
-  "replace": "\tword_0030 = 0;\n\tbyte_001c = 0;"
+  "find": "\tword_0030 = 0;\n\trepeatCpCount = 0;\n\trepeatCpEnable = 0;",
+  "replace": "\tword_0030 = 0;\n\trepeatCpEnable = 0;"
  },
  {
   "label": "reset: +0x1c is cleared",
-  "find": "\tword_0018 = 0;\n\tbyte_001c = 0;\n\tword_0020 = 0;",
-  "replace": "\tword_0018 = 0;\n\tword_0020 = 0;"
+  "find": "\trepeatCpCount = 0;\n\trepeatCpEnable = 0;\n\tword_0020 = 0;",
+  "replace": "\trepeatCpCount = 0;\n\tword_0020 = 0;"
  },
  {
   "label": "reset: +0x20 is cleared",
-  "find": "\tbyte_001c = 0;\n\tword_0020 = 0;",
-  "replace": "\tbyte_001c = 0;"
+  "find": "\trepeatCpEnable = 0;\n\tword_0020 = 0;",
+  "replace": "\trepeatCpEnable = 0;"
  },
 
  {
   "label": "reset: +0x34 is NOT written, unlike resetBeforRRN's",
-  "find": "\tbyte_001c = 0;\n\tword_0020 = 0;",
-  "replace": "\tbyte_001c = 0;\n\tword_0020 = 0;\n\tword_0034 = 0;"
+  "find": "\trepeatCpEnable = 0;\n\tword_0020 = 0;",
+  "replace": "\trepeatCpEnable = 0;\n\tword_0020 = 0;\n\tword_0034 = 0;"
  },
  {
   "label": "reset: the deadline at +0x2f64 is NOT written",
-  "find": "\tbyte_001c = 0;\n\tword_0020 = 0;",
-  "replace": "\tbyte_001c = 0;\n\tword_0020 = 0;\n\tword_2f64 = 0;"
+  "find": "\trepeatCpEnable = 0;\n\tword_0020 = 0;",
+  "replace": "\trepeatCpEnable = 0;\n\tword_0020 = 0;\n\tword_2f64 = 0;"
  },
  {
   "label": "reset: the MP sequence length is NOT recomputed",
-  "find": "\tbyte_001c = 0;\n\tword_0020 = 0;",
-  "replace": "\tbyte_001c = 0;\n\tword_0020 = 0;\n\tmpSequenceSymbols = 0;"
+  "find": "\trepeatCpEnable = 0;\n\tword_0020 = 0;",
+  "replace": "\trepeatCpEnable = 0;\n\tword_0020 = 0;\n\tmpSequenceSymbols = 0;"
  },
  {
   "label": "reset: the CP sequence length is NOT recomputed",
-  "find": "\tbyte_001c = 0;\n\tword_0020 = 0;",
-  "replace": "\tbyte_001c = 0;\n\tword_0020 = 0;\n\tcpSequenceSymbols = 0;"
+  "find": "\trepeatCpEnable = 0;\n\tword_0020 = 0;",
+  "replace": "\trepeatCpEnable = 0;\n\tword_0020 = 0;\n\tcpSequenceSymbols = 0;"
  },
 
  {

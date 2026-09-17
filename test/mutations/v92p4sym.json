@@ -368,38 +368,38 @@
  },
  {
   "label": "SUV counts whether or not the byte_1c latch is set",
-  "find": "\t\tsym = generateSUVu();\n\t\tif (byte_1c != 0)\n\t\t\tword_18++;",
-  "replace": "\t\tsym = generateSUVu();\n\t\tword_18++;"
+  "find": "\t\tsym = generateSUVu();\n\t\tif (repeatCpEnable != 0)\n\t\t\trepeatCpCount++;",
+  "replace": "\t\tsym = generateSUVu();\n\t\trepeatCpCount++;"
  },
  {
   "label": "SUV does not count at all",
-  "find": "\t\tsym = generateSUVu();\n\t\tif (byte_1c != 0)\n\t\t\tword_18++;",
+  "find": "\t\tsym = generateSUVu();\n\t\tif (repeatCpEnable != 0)\n\t\t\trepeatCpCount++;",
   "replace": "\t\tsym = generateSUVu();"
  },
  {
   "label": "SUV repacks at count zero as well",
-  "find": "\t\tif (symbolCount % word_1b0 == 0 && symbolCount != 0) {\n\t\t\tcp->infoToBits();\n\t\t\tpattern = cp->getBitVector(patternLength);\n\t\t\tword_1b0 = patternLength / bitsPerSymbol;\n\t\t\tif (word_18 > suvLimit + 800)",
-  "replace": "\t\tif (symbolCount % word_1b0 == 0) {\n\t\t\tcp->infoToBits();\n\t\t\tpattern = cp->getBitVector(patternLength);\n\t\t\tword_1b0 = patternLength / bitsPerSymbol;\n\t\t\tif (word_18 > suvLimit + 800)"
+  "find": "\t\tif (symbolCount % word_1b0 == 0 && symbolCount != 0) {\n\t\t\tcp->infoToBits();\n\t\t\tpattern = cp->getBitVector(patternLength);\n\t\t\tword_1b0 = patternLength / bitsPerSymbol;\n\t\t\tif (repeatCpCount > suvLimit + 800)",
+  "replace": "\t\tif (symbolCount % word_1b0 == 0) {\n\t\t\tcp->infoToBits();\n\t\t\tpattern = cp->getBitVector(patternLength);\n\t\t\tword_1b0 = patternLength / bitsPerSymbol;\n\t\t\tif (repeatCpCount > suvLimit + 800)"
  },
  {
   "label": "SUV divides the vector by the CP's bitsPerSymbol rather than its own",
-  "find": "\t\t\tword_1b0 = patternLength / bitsPerSymbol;\n\t\t\tif (word_18 > suvLimit + 800)\n\t\t\t\tenterRepeatedCP();",
-  "replace": "\t\t\tword_1b0 = patternLength / cp->bitsPerSymbol;\n\t\t\tif (word_18 > suvLimit + 800)\n\t\t\t\tenterRepeatedCP();"
+  "find": "\t\t\tword_1b0 = patternLength / bitsPerSymbol;\n\t\t\tif (repeatCpCount > suvLimit + 800)\n\t\t\t\tenterRepeatedCP();",
+  "replace": "\t\t\tword_1b0 = patternLength / cp->bitsPerSymbol;\n\t\t\tif (repeatCpCount > suvLimit + 800)\n\t\t\t\tenterRepeatedCP();"
  },
  {
   "label": "SUV gives up on the repeated CP at word_44 + 800 inclusive",
-  "find": "\t\t\tif (word_18 > suvLimit + 800)\n\t\t\t\tenterRepeatedCP();",
-  "replace": "\t\t\tif (word_18 >= suvLimit + 800)\n\t\t\t\tenterRepeatedCP();"
+  "find": "\t\t\tif (repeatCpCount > suvLimit + 800)\n\t\t\t\tenterRepeatedCP();",
+  "replace": "\t\t\tif (repeatCpCount >= suvLimit + 800)\n\t\t\t\tenterRepeatedCP();"
  },
  {
   "label": "SUV's repeated-CP threshold ignores word_44",
-  "find": "\t\t\tif (word_18 > suvLimit + 800)\n\t\t\t\tenterRepeatedCP();",
-  "replace": "\t\t\tif (word_18 > 800)\n\t\t\t\tenterRepeatedCP();"
+  "find": "\t\t\tif (repeatCpCount > suvLimit + 800)\n\t\t\t\tenterRepeatedCP();",
+  "replace": "\t\t\tif (repeatCpCount > 800)\n\t\t\t\tenterRepeatedCP();"
  },
  {
   "label": "SUV's repeated-CP threshold is 4000 rather than 800",
-  "find": "\t\t\tif (word_18 > suvLimit + 800)\n\t\t\t\tenterRepeatedCP();",
-  "replace": "\t\t\tif (word_18 > suvLimit + 4000)\n\t\t\t\tenterRepeatedCP();"
+  "find": "\t\t\tif (repeatCpCount > suvLimit + 800)\n\t\t\t\tenterRepeatedCP();",
+  "replace": "\t\t\tif (repeatCpCount > suvLimit + 4000)\n\t\t\t\tenterRepeatedCP();"
  },
  {
   "label": "state 6's CPu message is encoded rather than gated on the debug level",
@@ -443,13 +443,13 @@
  },
  {
   "label": "CPu's termination does not set the byte_1c latch",
-  "find": "\t\t\tword_18 = 0;\n\t\t\tbyte_1c = 1;\n\t\t\tstate = V92P4M_STATE_SUV;",
-  "replace": "\t\t\tword_18 = 0;\n\t\t\tstate = V92P4M_STATE_SUV;"
+  "find": "\t\t\trepeatCpCount = 0;\n\t\t\trepeatCpEnable = 1;\n\t\t\tstate = V92P4M_STATE_SUV;",
+  "replace": "\t\t\trepeatCpCount = 0;\n\t\t\tstate = V92P4M_STATE_SUV;"
  },
  {
   "label": "CPu's termination does not clear the counter",
-  "find": "\t\t\tword_18 = 0;\n\t\t\tbyte_1c = 1;\n\t\t\tstate = V92P4M_STATE_SUV;",
-  "replace": "\t\t\tbyte_1c = 1;\n\t\t\tstate = V92P4M_STATE_SUV;"
+  "find": "\t\t\trepeatCpCount = 0;\n\t\t\trepeatCpEnable = 1;\n\t\t\tstate = V92P4M_STATE_SUV;",
+  "replace": "\t\t\trepeatCpEnable = 1;\n\t\t\tstate = V92P4M_STATE_SUV;"
  },
  {
   "label": "the repeated CP repacks at count zero as well",

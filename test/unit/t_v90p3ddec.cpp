@@ -631,7 +631,7 @@ dirty(int side, int trial, int st, unsigned int word2c)
 	o->word_3f4 = 0;
 	o->verificationStatus = (unsigned int)(trial & 1);
 
-	adid[side].short_a948 = (short)((trial >> 1) & 1);
+	adid[side].altRbsInUse = (short)((trial >> 1) & 1);
 	for (i = 0; i < V90ADID_PHASES; i++) {
 		adid[side].altRbsFlag[i] = (short)((trial + (int)i) & 1);
 		adid[side].byte_280c[i] =
@@ -1428,7 +1428,7 @@ run_p3d_twolevel(void)
 					    level_v[l];
 					adid[side].linMappAlt[ph][uc] =
 					    (short)(level_v[l] ^ 0x2a5);
-					adid[side].short_a948 = (short)a;
+					adid[side].altRbsInUse = (short)a;
 					/*
 					 * `isAltRbs` answers yes only when
 					 * `altRbsFlag[phase]` is set AND the

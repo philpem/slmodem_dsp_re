@@ -396,7 +396,7 @@ public:
 	 * path where `studyProgress + 1` reaches `studyLength` -- and nothing in
 	 * that function ever clears it; only `resetLinearMappStudy` and
 	 * `reset` do. So the `== 2` test fires exactly once per study, on the
-	 * second completed run, and what it does there is raise `short_1ea6`
+	 * second completed run, and what it does there is raise `secondStudyRunFinished`
 	 * below.
 	 */
 	short completedRunCount;
@@ -417,13 +417,15 @@ public:
 	V90AutoDigitalImpDetector *adiDetector;
 
 	/*
-	 * +0x1ea4 and +0x1ea6  Modelled, unnamed. Two claims that used to
-	 * stand here are withdrawn: that nothing in the object loads either,
-	 * and that the two stores at 0x315b6 and 0x3170f are "the two points
-	 * where the end-of-run pass begins". Both are wrong.
-	 *
-	 * They ARE read, by `V90Equalizer::process`, and the identification is
-	 * not a displacement coincidence -- the same function calls
+	 * +0x1ea4 and +0x1ea6  Two "run finished" flags, raised by
+	 * `linearMappingStudy` and read by `V90Equalizer::process`. The two
+	 * stores are under different conditions: +0x1ea4 is set on every
+	 * completed run (V90Demapper.cpp:1143, 0x315b6); +0x1ea6 only when
+	 * `completedRunCount` reaches two, the second completed run, once per
+	 * study (:1140, 0x3170f). Both are read in `V90Equalizer::process`
+	 * (V90Equalizer.cpp:2215, 2223) as the `&& flag_144` / `&& flag_146`
+	 * gates on a mean-error statistics update. The identification is not
+	 * a displacement coincidence -- the same function calls
 	 * `linearMappingStudy` thirty bytes earlier:
 	 *
 	 *     3a3dd:  call  V90Demapper::linearMappingStudy(short, short)
@@ -435,24 +437,15 @@ public:
 	 *     3a432:  cmpw  $0x0,0x1ea6(%eax)     ; je  -> skip
 	 *
 	 * so +0x3054 of the equaliser's argument is this demapper, each flag
-	 * is tested against zero, and each gates a second `cmpw $0x0` on a
-	 * flag at +0x144 / +0x146 of another object.  Finding F3531's rule is
-	 * why this matters and finding F4342 records it: a claim that NOTHING
-	 * reads a field is a claim about every function in the object, and
-	 * the way to test it is a displacement grep -- which works here only
-	 * because `1ea4` is a rare displacement and would prove nothing for,
-	 * say, `0x08`.
-	 *
-	 * And the two stores are under different conditions: 0x315b6 sets
-	 * +0x1ea4 on every completed run; 0x3170f sets +0x1ea6 only when
-	 * `completedRunCount` reaches two, the second completed run, once per study.
-	 * So one is "a run has finished" and the other "a second run has
-	 * finished" -- bounded, but what the equaliser does with the
-	 * distinction is in a function nobody has written, so the names stay
-	 * neutral and this comment carries the derivation.
+	 * tested against zero. Finding F3531's rule is why this matters and
+	 * finding F4342 records it: a claim that NOTHING reads a field is a
+	 * claim about every function in the object, and the way to test it is
+	 * a displacement grep -- which works here only because `1ea4` is a
+	 * rare displacement. Both are cleared by `reset` and
+	 * `resetLinearMappStudy`.
 	 */
-	short short_1ea4;
-	short short_1ea6;
+	short studyRunFinished;
+	short secondStudyRunFinished;
 
 	/*
 	 * +0x1ea8 and +0x1eb0  The linear-mapping study's length and its

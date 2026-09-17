@@ -226,8 +226,9 @@ public:
 	 * @param code        A G.711 code, expanded into `codeLevel`.
 	 * @param st           The state to reset into.
 	 * @param nofSymbols  How many warm-up symbols to pump.
-	 * @param arg5        Stored verbatim into `word_0040`; not otherwise
-	 *                    read by this class.
+	 * @param arg5        Stored as `suvLimit`, the SUV threshold the
+	 *                    SUVd arm of `generateV92Symbol` compares
+	 *                    `repeatCpCount` against, offset by 0x320 (800).
 	 */
 	void reset(PcmType law, unsigned char code, Phase4ModulatorState st,
 		   unsigned int nofSymbols, unsigned int arg5);
@@ -466,9 +467,9 @@ public:
 
 	/*
 	 * +0x0015..+0x0017 was `pad_0015[3]`: `delayedMpNotExit` ends at
-	 * +0x0015 and `word_0018` below is a 4-byte-aligned `unsigned int`, so
+	 * +0x0015 and `repeatCpCount` below is a 4-byte-aligned `unsigned int`, so
 	 * natural alignment inserts exactly these three bytes with the member
-	 * deleted -- proved by adding `V90P4_OFF(word_0018, 0x0018, w0018)`
+	 * deleted -- proved by adding `V90P4_OFF(repeatCpCount, 0x0018, w0018)`
 	 * (already present, V90Phase4Modulator.cpp). Zero readers/writers
 	 * anywhere in the object (`tools/dis.py` over every
 	 * `V90Phase4Modulator::` member function, `0x2c5a0..0x2f730`); removed
@@ -476,17 +477,27 @@ public:
 	 */
 
 	/*
-	 * +0x0018 and +0x001c  Written together and only ever to zero, by
-	 * `reset`, `resetRRNSecondSection`, `enterRepeatedCPd`,
-	 * `recivedCPtag` and `recivedSUVtag`; read by neither those nor
-	 * anything else in this file. The widths are the stores' (`movl` and
-	 * `movb`). Nothing establishes a meaning, so they keep offset names.
+	 * +0x0018 and +0x001c  The repeated-CP symbol countdown and its
+	 * enable. `generateV92Symbol`'s SUVd arm (`P4M_STATE_SUVD`) is the
+	 * reader the earlier "read by neither" note missed: it increments
+	 * `repeatCpCount` once per symbol, and only while `repeatCpEnable` is
+	 * non-zero, then enters the repeated CP once the count passes
+	 * `suvLimit + 0x320` (+0x2ee7c). Both are cleared together by `reset`,
+	 * `resetRRNSecondSection`, `enterRepeatedCPd`, `recivedCPtag` and
+	 * `recivedSUVtag`, and `generateV92Symbol`'s CPd termination sets
+	 * `repeatCpEnable` to 1 before handing back to SUVd. The widths are
+	 * the stores' (`movl` and `movb`).
+	 *
+	 * Named after the identical V.92 sibling pair
+	 * `V92Phase4Modulator::repeatCpCount` / `repeatCpEnable`, whose SUV
+	 * arm runs the same counter against `suvLimit + 800`; the twins share
+	 * one role and so one name.
 	 */
-	unsigned int word_0018;
-	unsigned char byte_001c;
+	unsigned int repeatCpCount;
+	unsigned char repeatCpEnable;
 
 	/*
-	 * +0x001d..+0x001f was `pad_001d[3]`: `byte_001c` ends at +0x001d and
+	 * +0x001d..+0x001f was `pad_001d[3]`: `repeatCpEnable` ends at +0x001d and
 	 * `word_0020` below is a 4-byte-aligned `unsigned int`, so natural
 	 * alignment inserts exactly these three bytes with the member deleted
 	 * -- proved by the existing `V90P4_OFF(word_0020, 0x0020, w0020)`.
@@ -537,19 +548,24 @@ public:
 
 	/*
 	 * +0x003e..+0x003f was `pad_003e[2]`: `codeLevel` ends at +0x003e and
-	 * `word_0040` below is a 4-byte-aligned `unsigned int`, so natural
+	 * `suvLimit` below is a 4-byte-aligned `unsigned int`, so natural
 	 * alignment inserts exactly these two bytes with the member deleted --
-	 * proved by the existing `V90P4_OFF(word_0040, 0x0040, w0040)`. Zero
+	 * proved by the existing `V90P4_OFF(suvLimit, 0x0040, w0040)`. Zero
 	 * readers/writers anywhere in the object (same sweep as above);
 	 * removed F10150.
 	 */
 
 	/*
-	 * +0x0040  `reset`'s fifth argument, stored and not otherwise touched
-	 * by anything this batch wrote. `unsigned int` is the mangling's; the
-	 * meaning is not established.
+	 * +0x0040  `reset`'s fifth argument, stored verbatim and read by
+	 * `generateV92Symbol`'s SUVd arm, which enters the repeated CP once
+	 * `repeatCpCount` has passed `suvLimit + 0x320`. So it is the SUV
+	 * threshold its caller sets, the same role as the sibling
+	 * `V92Phase4Modulator::suvLimit` (+0x44), whose `+ 800` is this
+	 * `+ 0x320` and which `reset` likewise fills from its own
+	 * `suvLimit` parameter. Named after that sibling rather than the
+	 * local `arg5`, which the object does not carry.
 	 */
-	unsigned int word_0040;
+	unsigned int suvLimit;
 
 	V90BitsToSymbol *bitsToSymbol;		/* +0x0044 argument 3      */
 	V90MP *mp;				/* +0x0048 argument 4      */
