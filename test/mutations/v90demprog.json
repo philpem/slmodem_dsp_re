@@ -329,8 +329,8 @@
  },
  {
   "label": "the AGC freeze deadline is the adaptation duration against +0x2c",
-  "find": "\t\t    params->AGC_ADAPTATION_DURATION <\n\t\t\t(int)phase3Demodulator->word_2c &&",
-  "replace": "\t\t    params->AGC_ADAPTATION_DURATION >\n\t\t\t(int)phase3Demodulator->word_2c &&"
+  "find": "\t\t    params->AGC_ADAPTATION_DURATION <\n\t\t\t(int)phase3Demodulator->samplesInState &&",
+  "replace": "\t\t    params->AGC_ADAPTATION_DURATION >\n\t\t\t(int)phase3Demodulator->samplesInState &&"
  },
  {
   "label": "the AGC is not frozen twice",
@@ -359,12 +359,12 @@
  },
  {
   "label": "the DIL ceiling is 0x74 on the deep arm",
-  "find": "\t\t\t\tphase3Demodulator->byte_3f8 = 0x74;\n\n\t\t\t\tif (agc.gain <",
-  "replace": "\t\t\t\tphase3Demodulator->byte_3f8 = 0x73;\n\n\t\t\t\tif (agc.gain <"
+  "find": "\t\t\t\tphase3Demodulator->dilMaxUcode = 0x74;\n\n\t\t\t\tif (agc.gain <",
+  "replace": "\t\t\t\tphase3Demodulator->dilMaxUcode = 0x73;\n\n\t\t\t\tif (agc.gain <"
  },
  {
   "label": "the DIL ceiling is set on the shallow arm too",
-  "find": "\t\t\t} else {\n\t\t\t\tphase3Demodulator->byte_3f8 = 0x74;\n\t\t\t}",
+  "find": "\t\t\t} else {\n\t\t\t\tphase3Demodulator->dilMaxUcode = 0x74;\n\t\t\t}",
   "replace": "\t\t\t} else {\n\t\t\t}"
  },
  {

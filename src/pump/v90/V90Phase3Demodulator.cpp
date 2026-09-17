@@ -67,14 +67,14 @@ P3D_OFF(dil,			0x01c, dil);
 P3D_OFF(jd,			0x020, jd);
 P3D_OFF(jdV92,			0x024, jdv92);
 P3D_OFF(state,			0x028, state);
-P3D_OFF(word_2c,		0x02c, word2c);
+P3D_OFF(samplesInState,		0x02c, word2c);
 P3D_OFF(eventCode,		0x030, eventcode);
 P3D_OFF(phase3Modulator,	0x034, phase3modulator);
 P3D_OFF(word_3cc,		0x3cc, word3cc);
 P3D_OFF(descrambler,		0x3d0, descrambler);
 P3D_OFF(sdDetector,		0x3f0, sddetector);
 P3D_OFF(word_3f4,		0x3f4, word3f4);
-P3D_OFF(byte_3f8,		0x3f8, byte3f8);
+P3D_OFF(dilMaxUcode,		0x3f8, byte3f8);
 P3D_OFF(byte_3f9,		0x3f9, byte3f9);
 P3D_OFF(word_3fc,		0x3fc, word3fc);
 P3D_OFF(short_400,		0x400, short400);
@@ -85,7 +85,7 @@ P3D_OFF(quickConnect,		0x410, quickconnect);
 P3D_OFF(short_414,		0x414, short414);
 P3D_OFF(float_418,		0x418, float418);
 P3D_OFF(verificationStatus,	0x41c, verifstatus);
-P3D_OFF(word_420,		0x420, word420);
+P3D_OFF(trn1dDdLength,		0x420, word420);
 P3D_OFF(byte_424,		0x424, byte424);
 P3D_OFF(ansamToneDetector,	0x428, ansam);
 
@@ -123,7 +123,7 @@ V90Phase3Demodulator::reset(PcmType pcmTypeArg, unsigned char ucodeArg,
 	pcmType = pcmTypeArg;
 	timeoutBase = word14Arg;
 	float_418 = float418Arg;
-	word_2c = word2cArg;
+	samplesInState = word2cArg;
 	state = stateArg;
 
 	/*
@@ -547,9 +547,9 @@ V90Phase3Demodulator::~V90Phase3Demodulator()
 #define P3D_CHECK_TERMINATED() \
 	do { \
 		if (phase3Modulator.eventCode == 6) { \
-			edprintf("V90Phase3Demodulator: Phase3 Terminated @ %d\r\n", word_2c); \
+			edprintf("V90Phase3Demodulator: Phase3 Terminated @ %d\r\n", samplesInState); \
 			state = (Phase3DemodulatorState)0x13; \
-			word_2c = 0; \
+			samplesInState = 0; \
 			eventCode = 0x14; \
 		} \
 	} while (0)
@@ -619,7 +619,7 @@ V90Phase3Demodulator::getV90Decision(float sample)
 	int bit;
 
 	s = (short)sample;
-	word_2c++;
+	samplesInState++;
 
 	switch ((int)state) {
 
@@ -636,13 +636,13 @@ V90Phase3Demodulator::getV90Decision(float sample)
 		}
 		if (sdDetector->process(sample) > 0) {
 			edprintf("V90Phase3Demodulator: Sd detected @ %d\r\n",
-				 word_2c);
+				 samplesInState);
 			state = (Phase3DemodulatorState)0x01;
-			word_2c = 0;
+			samplesInState = 0;
 			eventCode = 1;
-		} else if (word_2c == timeoutBase + 12000.0f) {
+		} else if (samplesInState == timeoutBase + 12000.0f) {
 			state = (Phase3DemodulatorState)0x14;
-			word_2c = 0;
+			samplesInState = 0;
 			eventCode = 0x15;
 			edprintf("V90Phase3Demodulator: WaitForSd TimeOut\r\n");
 		}
@@ -654,13 +654,13 @@ V90Phase3Demodulator::getV90Decision(float sample)
 		decision = s;
 		if (sdDetector->process(sample) < 0) {
 			edprintf("V90Phase3Demodulator: SdNot detected @ %d\r\n",
-				 word_2c);
+				 samplesInState);
 			state = (Phase3DemodulatorState)0x02;
-			word_2c = 0;
+			samplesInState = 0;
 			eventCode = 2;
-		} else if (word_2c == 0x180) {
+		} else if (samplesInState == 0x180) {
 			state = (Phase3DemodulatorState)0x15;
-			word_2c = 0;
+			samplesInState = 0;
 			eventCode = 0x15;
 			edprintf("V90Phase3Demodulator: SdDemod TimeOut\r\n");
 		}
@@ -670,10 +670,10 @@ V90Phase3Demodulator::getV90Decision(float sample)
 	case 0x02:
 		eventCode = 0;
 		decision = s;
-		if (word_2c == 0x30) {
+		if (samplesInState == 0x30) {
 			if (quickConnect != 0) {
 				state = (Phase3DemodulatorState)0x04;
-				word_420 = (unsigned int)
+				trn1dDdLength = (unsigned int)
 				    params->TRN1_QC_DD_LENGTH;
 				word_3f4 = (unsigned int)params->unnamed_4a4;
 				/*
@@ -688,7 +688,7 @@ V90Phase3Demodulator::getV90Decision(float sample)
 				edprintf("V90Phase3Demodulator: enter TRN1d " "Known Data state\r\n");
 			}
 			autoDigitalImpDetector->resetStudyUrefHandler(quickConnect);
-			word_2c = 0;
+			samplesInState = 0;
 			eventCode = 3;
 		}
 		break;
@@ -697,7 +697,7 @@ V90Phase3Demodulator::getV90Decision(float sample)
 	case 0x03:
 		eventCode = 0;
 		decision = (short)phase3Modulator.generateSymbol();
-		if (word_2c == 0x7f8) {
+		if (samplesInState == 0x7f8) {
 			if (jd == NULL) {
 				state = (Phase3DemodulatorState)0x19;
 				eventCode = 0x15;
@@ -710,12 +710,12 @@ V90Phase3Demodulator::getV90Decision(float sample)
 					if (DSPLIB_DEBUG_ON())
 						dsplibs_debug_printf(
 						    "V90Phase3Demodulator: " "setting params for short " "TRN1\n");
-					word_420 = (unsigned int)
+					trn1dDdLength = (unsigned int)
 					    params->TRN1_QC_DD_LENGTH;
 					word_3f4 = (unsigned int)
 					    params->unnamed_4a4;
 				} else {
-					word_420 = (unsigned int)
+					trn1dDdLength = (unsigned int)
 					    params->TRN1D_DD_LENGTH;
 					word_3f4 = (unsigned int)
 					    params->unnamed_344;
@@ -725,7 +725,7 @@ V90Phase3Demodulator::getV90Decision(float sample)
 				jd->unPackReset();
 				edprintf("V90Phase3Demodulator: enter TRN1d " "DD state\r\n");
 			}
-			word_2c = 0;
+			samplesInState = 0;
 		}
 		break;
 
@@ -751,15 +751,15 @@ V90Phase3Demodulator::getV90Decision(float sample)
 		bit = descrambler.process(bit);
 		decision = level;
 
-		if (word_2c == word_420) {
+		if (samplesInState == trn1dDdLength) {
 			edprintf("V90Phase3Demodulator: enter study reference "
-				 "Ucode state @ %d\r\n", word_2c);
+				 "Ucode state @ %d\r\n", samplesInState);
 			state = (Phase3DemodulatorState)0x05;
-			word_2c = 0;
+			samplesInState = 0;
 			eventCode = 4;
-		} else if (word_2c == 36000.0f) {
+		} else if (samplesInState == 36000.0f) {
 			state = (Phase3DemodulatorState)0x16;
-			word_2c = 0;
+			samplesInState = 0;
 			eventCode = 0x15;
 			edprintf("V90Phase3Demodulator: TRN1dDemod " "TimeOut\r\n");
 		}
@@ -792,24 +792,24 @@ V90Phase3Demodulator::getV90Decision(float sample)
 		if (++framePosition == 6)
 			framePosition = 0;
 		if (word_408 == 2) {
-			if (word_2c % 6 == 0) {
+			if (samplesInState % 6 == 0) {
 				if (autoDigitalImpDetector
 				    ->isThereAnyAltRbsPhase())
 					params
 					    ->PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH
 					    = params->unnamed_440;
 				edprintf("V90Phase3Demodulator: enter Wait "
-					 "For Jd state @ %d\r\n", word_2c);
+					 "For Jd state @ %d\r\n", samplesInState);
 				state = (Phase3DemodulatorState)0x06;
-				word_2c = 0;
+				samplesInState = 0;
 				eventCode = 5;
 			}
 			word_408 = 1;
 			break;
 		}
-		if (word_2c == 36000.0f) {
+		if (samplesInState == 36000.0f) {
 			state = (Phase3DemodulatorState)0x16;
-			word_2c = 0;
+			samplesInState = 0;
 			eventCode = 0x15;
 			edprintf("V90Phase3Demodulator: TRN1dDemod " "TimeOut\r\n");
 		}
@@ -840,7 +840,7 @@ V90Phase3Demodulator::getV90Decision(float sample)
 		if (++framePosition == 6)
 			framePosition = 0;
 		if (jd->unPackData(bit)) {
-			if (word_2c % 6 == 0 || quickConnect != 0) {
+			if (samplesInState % 6 == 0 || quickConnect != 0) {
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
 					    "V90Phase3Demodulator: waitForJd "
@@ -854,18 +854,18 @@ V90Phase3Demodulator::getV90Decision(float sample)
 						(short)framePosition);
 					framePosition = 0;
 				}
-				edprintf("V90Phase3Demodulator: Jd detected " "@ %d\r\n", word_2c);
+				edprintf("V90Phase3Demodulator: Jd detected " "@ %d\r\n", samplesInState);
 				eventCode = 6;
 				state = (Phase3DemodulatorState)0x09;
-				word_2c = 0;
+				samplesInState = 0;
 				jdNotRunLength = 0;
 			} else {
 				jd->unPackReset();
 			}
 		}
-		if (word_2c == 36000.0f) {
+		if (samplesInState == 36000.0f) {
 			state = (Phase3DemodulatorState)0x16;
-			word_2c = 0;
+			samplesInState = 0;
 			eventCode = 0x15;
 			edprintf("V90Phase3Demodulator: TRN1dDemod " "TimeOut\r\n");
 		}
@@ -899,9 +899,9 @@ V90Phase3Demodulator::getV90Decision(float sample)
 			jdNotRunLength = 0;
 		else
 			jdNotRunLength++;
-		if (jdNotRunLength > 0xb && word_2c % 72 == 12) {
+		if (jdNotRunLength > 0xb && samplesInState % 72 == 12) {
 			edprintf("V90Phase3Demodulator: JdNot detected @ %d\r\n",
-				 word_2c);
+				 samplesInState);
 			eventCode = 8;
 			if (quickConnect != 0) {
 				state = (Phase3DemodulatorState)0x0d;
@@ -912,14 +912,14 @@ V90Phase3Demodulator::getV90Decision(float sample)
 				state = (Phase3DemodulatorState)
 				    (params->PROBING_MODE ? 0x11 : 0x0a);
 			}
-			word_2c = 0;
+			samplesInState = 0;
 			phase3Modulator.reset(pcmType, ucode, P3M_STATE_DIL, 0,
 					      NULL, NULL, dil, 0);
 			break;
 		}
-		if (word_2c == timeoutBase + 38760.0f) {
+		if (samplesInState == timeoutBase + 38760.0f) {
 			state = (Phase3DemodulatorState)0x17;
-			word_2c = 0;
+			samplesInState = 0;
 			eventCode = 0x15;
 			edprintf("V90Phase3Demodulator: JdDemod TimeOut\r\n");
 		}
@@ -948,24 +948,24 @@ V90Phase3Demodulator::getV90Decision(float sample)
 								  framePosition);
 		if (++framePosition == 6)
 			framePosition = 0;
-		if (word_2c == (unsigned int)params->unnamed_30c) {
+		if (samplesInState == (unsigned int)params->unnamed_30c) {
 			autoDigitalImpDetector->porcessFirstStudy();
 			if (autoDigitalImpDetector->isThereAnyAltRbsPhase())
 				params
 				    ->PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH
 				    = params->unnamed_440;
-			word_2c = 0;
+			samplesInState = 0;
 			state = (Phase3DemodulatorState)0x0b;
-		} else if (word_2c == 0x9c40) {
+		} else if (samplesInState == 0x9c40) {
 			state = (Phase3DemodulatorState)0x18;
-			word_2c = 0;
+			samplesInState = 0;
 			eventCode = 0x15;
 			edprintf("V90Phase3Demodulator: DILDemodFirstStudy " "TimeOut\r\n");
 		}
 		if (phase3Modulator.eventCode == 6) {
-			edprintf("V90Phase3Demodulator: Phase3 Terminated " "@ %d\r\n", word_2c);
+			edprintf("V90Phase3Demodulator: Phase3 Terminated " "@ %d\r\n", samplesInState);
 			state = (Phase3DemodulatorState)0x13;
-			word_2c = 0;
+			samplesInState = 0;
 			eventCode = 0x14;
 		}
 		break;
@@ -1013,9 +1013,9 @@ V90Phase3Demodulator::getV90Decision(float sample)
 			autoDigitalImpDetector
 			    ->uniteLinMappInfoOfUnsuspectedPhases(
 				phase3Modulator.dilPcmCode);
-		if (word_2c == (unsigned int)params->unnamed_314)
+		if (samplesInState == (unsigned int)params->unnamed_314)
 			eventCode = 0x0c;
-		if (word_2c == (unsigned int)params->unnamed_300) {
+		if (samplesInState == (unsigned int)params->unnamed_300) {
 			if (short_400 != 0) {
 				eventCode = 0x10;
 				params->unnamed_31c = params->unnamed_320;
@@ -1025,7 +1025,7 @@ V90Phase3Demodulator::getV90Decision(float sample)
 		}
 		if (++framePosition == 6)
 			framePosition = 0;
-		if (word_2c == (unsigned int)params->unnamed_308) {
+		if (samplesInState == (unsigned int)params->unnamed_308) {
 			if (params->unnamed_310 != 0) {
 				eventCode = 0x10;
 				state = (Phase3DemodulatorState)0x0c;
@@ -1034,17 +1034,17 @@ V90Phase3Demodulator::getV90Decision(float sample)
 				eventCode = 0x11;
 				state = (Phase3DemodulatorState)0x10;
 			}
-			word_2c = 0;
-		} else if (word_2c == 0x9c40) {
+			samplesInState = 0;
+		} else if (samplesInState == 0x9c40) {
 			state = (Phase3DemodulatorState)0x18;
-			word_2c = 0;
+			samplesInState = 0;
 			eventCode = 0x15;
 			edprintf("V90Phase3Demodulator: DILDemodSecondStudy " "TimeOut\r\n");
 		}
 		if (phase3Modulator.eventCode == 6) {
-			edprintf("V90Phase3Demodulator: Phase3 Terminated " "@ %d\r\n", word_2c);
+			edprintf("V90Phase3Demodulator: Phase3 Terminated " "@ %d\r\n", samplesInState);
 			state = (Phase3DemodulatorState)0x13;
-			word_2c = 0;
+			samplesInState = 0;
 			eventCode = 0x14;
 		}
 		break;
@@ -1083,21 +1083,21 @@ V90Phase3Demodulator::getV90Decision(float sample)
 			autoDigitalImpDetector
 			    ->uniteLinMappInfoOfUnsuspectedPhases(
 				phase3Modulator.dilPcmCode);
-		if (word_2c == (unsigned int)params->unnamed_310) {
+		if (samplesInState == (unsigned int)params->unnamed_310) {
 			autoDigitalImpDetector->porcessSecondStudy();
-			word_2c = 0;
+			samplesInState = 0;
 			eventCode = 0x11;
 			state = (Phase3DemodulatorState)0x10;
-		} else if (word_2c == 0x9c40) {
+		} else if (samplesInState == 0x9c40) {
 			state = (Phase3DemodulatorState)0x18;
-			word_2c = 0;
+			samplesInState = 0;
 			eventCode = 0x15;
 			edprintf("V90Phase3Demodulator: " "DILDemodThirdStudyStage TimeOut\r\n");
 		}
 		if (phase3Modulator.eventCode == 6) {
-			edprintf("V90Phase3Demodulator: Phase3 Terminated " "@ %d\r\n", word_2c);
+			edprintf("V90Phase3Demodulator: Phase3 Terminated " "@ %d\r\n", samplesInState);
 			state = (Phase3DemodulatorState)0x13;
-			word_2c = 0;
+			samplesInState = 0;
 			eventCode = 0x14;
 		}
 		break;
@@ -1125,24 +1125,24 @@ V90Phase3Demodulator::getV90Decision(float sample)
 								  framePosition);
 		if (++framePosition == 6)
 			framePosition = 0;
-		if (word_2c == (unsigned int)params->unnamed_30c) {
+		if (samplesInState == (unsigned int)params->unnamed_30c) {
 			autoDigitalImpDetector->porcessFirstStudy();
 			if (autoDigitalImpDetector->isThereAnyAltRbsPhase())
 				params
 				    ->PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH
 				    = params->unnamed_440;
-			word_2c = 0;
+			samplesInState = 0;
 			state = (Phase3DemodulatorState)0x0e;
-		} else if (word_2c == 0x9c40) {
+		} else if (samplesInState == 0x9c40) {
 			state = (Phase3DemodulatorState)0x18;
-			word_2c = 0;
+			samplesInState = 0;
 			eventCode = 0x15;
 			edprintf("V90Phase3Demodulator: DILDemodQCfirstStudy " "TimeOut\r\n");
 		}
 		if (phase3Modulator.eventCode == 6) {
-			edprintf("V90Phase3Demodulator: Phase3 Terminated " "@ %d\r\n", word_2c);
+			edprintf("V90Phase3Demodulator: Phase3 Terminated " "@ %d\r\n", samplesInState);
 			state = (Phase3DemodulatorState)0x13;
-			word_2c = 0;
+			samplesInState = 0;
 			eventCode = 0x14;
 		}
 		break;
@@ -1191,9 +1191,9 @@ V90Phase3Demodulator::getV90Decision(float sample)
 			}
 		}
 		word_408 = 1;
-		if (word_2c == (unsigned int)params->unnamed_314)
+		if (samplesInState == (unsigned int)params->unnamed_314)
 			eventCode = 0x0c;
-		if (word_2c == (unsigned int)params->unnamed_300) {
+		if (samplesInState == (unsigned int)params->unnamed_300) {
 			if (short_400 != 0) {
 				eventCode = 0x10;
 				params->unnamed_31c = params->unnamed_320;
@@ -1203,20 +1203,20 @@ V90Phase3Demodulator::getV90Decision(float sample)
 		}
 		if (++framePosition == 6)
 			framePosition = 0;
-		if (word_2c == (unsigned int)params->unnamed_308) {
-			word_2c = 0;
+		if (samplesInState == (unsigned int)params->unnamed_308) {
+			samplesInState = 0;
 			eventCode = 0x10;
 			state = (Phase3DemodulatorState)0x0f;
-		} else if (word_2c == 0x9c40) {
+		} else if (samplesInState == 0x9c40) {
 			state = (Phase3DemodulatorState)0x18;
-			word_2c = 0;
+			samplesInState = 0;
 			eventCode = 0x15;
 			edprintf("V90Phase3Demodulator: DILDemodQCsecondStudy " "TimeOut\r\n");
 		}
 		if (phase3Modulator.eventCode == 6) {
-			edprintf("V90Phase3Demodulator: Phase3 Terminated " "@ %d\r\n", word_2c);
+			edprintf("V90Phase3Demodulator: Phase3 Terminated " "@ %d\r\n", samplesInState);
 			state = (Phase3DemodulatorState)0x13;
-			word_2c = 0;
+			samplesInState = 0;
 			eventCode = 0x14;
 		}
 		break;
@@ -1247,21 +1247,21 @@ V90Phase3Demodulator::getV90Decision(float sample)
 		word_408 = 0;
 		if (++framePosition == 6)
 			framePosition = 0;
-		if (word_2c == (unsigned int)params->unnamed_310) {
+		if (samplesInState == (unsigned int)params->unnamed_310) {
 			autoDigitalImpDetector->setQcLinearMapping();
-			word_2c = 0;
+			samplesInState = 0;
 			eventCode = 0x11;
 			state = (Phase3DemodulatorState)0x10;
-		} else if (word_2c == 0x9c40) {
+		} else if (samplesInState == 0x9c40) {
 			state = (Phase3DemodulatorState)0x18;
-			word_2c = 0;
+			samplesInState = 0;
 			eventCode = 0x15;
 			edprintf("V90Phase3Demodulator: DILDemodQCthirdStudy " "TimeOut\r\n");
 		}
 		if (phase3Modulator.eventCode == 6) {
-			edprintf("V90Phase3Demodulator: Phase3 Terminated " "@ %d\r\n", word_2c);
+			edprintf("V90Phase3Demodulator: Phase3 Terminated " "@ %d\r\n", samplesInState);
 			state = (Phase3DemodulatorState)0x13;
-			word_2c = 0;
+			samplesInState = 0;
 			eventCode = 0x14;
 		}
 		break;
@@ -1300,18 +1300,18 @@ V90Phase3Demodulator::getV90Decision(float sample)
 				word_408 = 1;
 			}
 		}
-		if (word_2c == (unsigned int)params->unnamed_318) {
+		if (samplesInState == (unsigned int)params->unnamed_318) {
 			eventCode = 0x12;
-		} else if (word_2c == 0x9c40) {
+		} else if (samplesInState == 0x9c40) {
 			state = (Phase3DemodulatorState)0x18;
-			word_2c = 0;
+			samplesInState = 0;
 			eventCode = 0x15;
 			edprintf("V90Phase3Demodulator: " "DILDemodErrorRelaxation TimeOut\r\n");
 		}
 		if (phase3Modulator.eventCode == 6) {
-			edprintf("V90Phase3Demodulator: Phase3 Terminated " "@ %d\r\n", word_2c);
+			edprintf("V90Phase3Demodulator: Phase3 Terminated " "@ %d\r\n", samplesInState);
 			state = (Phase3DemodulatorState)0x13;
-			word_2c = 0;
+			samplesInState = 0;
 			eventCode = 0x14;
 		}
 		break;
@@ -1327,12 +1327,12 @@ V90Phase3Demodulator::getV90Decision(float sample)
 			word_408 = 1;
 		else
 			word_408 = 0;
-		if (word_2c == dilLength) {
+		if (samplesInState == dilLength) {
 			edprintf("V90Phase3Demodulator: Probing DIL ended\r\n");
 			eventCode = 0x13;
-		} else if (word_2c == 0x9c40) {
+		} else if (samplesInState == 0x9c40) {
 			state = (Phase3DemodulatorState)0x18;
-			word_2c = 0;
+			samplesInState = 0;
 			eventCode = 0x15;
 			edprintf("V90Phase3Demodulator: ProbingDILDemod " "TimeOut\r\n");
 		}
@@ -1357,14 +1357,14 @@ V90Phase3Demodulator::getV90Decision(float sample)
 		ansamToneDetector->process(sample);
 		if (sdDetector->process(sample) > 0) {
 			edprintf("V90Phase3Demodulator: QTS detected @ %d\r\n",
-				 word_2c);
+				 samplesInState);
 			state = (Phase3DemodulatorState)0x1b;
-			word_2c = 0;
+			samplesInState = 0;
 			eventCode = 0x37;
-		} else if (word_2c == (unsigned int)
+		} else if (samplesInState == (unsigned int)
 			   params->ANSPCM_DEMODULATION_LENGTH) {
 			state = (Phase3DemodulatorState)0x20;
-			word_2c = 0;
+			samplesInState = 0;
 			verificationStatus = 0;
 			eventCode = 0x3a;
 			edprintf("V90Phase3Demodulator: WaitFor Qts TimeOut, "
@@ -1378,13 +1378,13 @@ V90Phase3Demodulator::getV90Decision(float sample)
 		decision = s;
 		ansamToneDetector->process(sample);
 		if (sdDetector->process(sample) < 0) {
-			edprintf("V90Phase3Demodulator: QTSNot detected " "@ %d\r\n", word_2c);
+			edprintf("V90Phase3Demodulator: QTSNot detected " "@ %d\r\n", samplesInState);
 			state = (Phase3DemodulatorState)0x1c;
-			word_2c = 0;
+			samplesInState = 0;
 			eventCode = 0x38;
-		} else if (word_2c == 0x300) {
+		} else if (samplesInState == 0x300) {
 			state = (Phase3DemodulatorState)0x21;
-			word_2c = 0;
+			samplesInState = 0;
 			verificationStatus = 0;
 			edprintf("V90Phase3Demodulator: WaitFor QtsNot "
 				 "TimeOut, decision is set to not same " "line\r\n");
@@ -1397,9 +1397,9 @@ V90Phase3Demodulator::getV90Decision(float sample)
 	case 0x1c:
 		eventCode = 0;
 		decision = s;
-		if (word_2c == 0x30) {
+		if (samplesInState == 0x30) {
 			state = (Phase3DemodulatorState)0x1d;
-			word_2c = 0;
+			samplesInState = 0;
 			if (params->modemParams->sessionFlags & 1)
 				params->ANSPCM_DEMODULATION_LENGTH = 0x320;
 			eventCode = 0x39;
@@ -1414,7 +1414,7 @@ V90Phase3Demodulator::getV90Decision(float sample)
 		eventCode = 0;
 		decision = s;
 		ansamToneDetector->process(sample);
-		if (word_2c == (unsigned int)
+		if (samplesInState == (unsigned int)
 		    params->ANSPCM_DEMODULATION_LENGTH)
 			eventCode = 0x3a;
 		break;
@@ -1447,7 +1447,7 @@ V90Phase3Demodulator::getV90Decision(float sample)
 				 "recovery, move to wait for drop...\r\n");
 			eventCode = 0x3a;
 		}
-		if (word_2c > 0x7cf) {
+		if (samplesInState > 0x7cf) {
 			edprintf("V90Phase3Demodulator: faking ANSpcm energy "
 				 "drop detected (QTs timeout)...\r\n");
 			eventCode = 0x3b;
@@ -1460,7 +1460,7 @@ V90Phase3Demodulator::getV90Decision(float sample)
 		eventCode = 0;
 		decision = s;
 		if (ansamToneDetector->process(sample)
-		    && word_2c >= (unsigned int)
+		    && samplesInState >= (unsigned int)
 		       params->ANSPCM_DEMODULATION_LENGTH) {
 			edprintf("V90Phase3Demodulator: ANSpcm detected on "
 				 "recovery, move to wait for drop...\r\n");
@@ -1488,10 +1488,10 @@ V90Phase3Demodulator::getV90Decision(float sample)
  * ONE SAMPLE IN, ONE PCM DECISION OUT, AND A THIRTY-FOUR-WAY STATE MACHINE IN
  * BETWEEN.  The whole body is
  *
- *     word_2c++;  eventCode = 0;  switch (state) { ... }  return decision;
+ *     samplesInState++;  eventCode = 0;  switch (state) { ... }  return decision;
  *
  * dispatched through a jump table of 34 entries at `.rodata+0x7cc` guarded by
- * `cmp $0x21,%eax; ja`.  `word_2c` is the per-state sample counter -- every
+ * `cmp $0x21,%eax; ja`.  `samplesInState` is the per-state sample counter -- every
  * arm that changes `state` also zeroes it -- and `eventCode` is an event code
  * the caller reads, cleared on entry and set by whichever arm has news.
  *
@@ -1558,7 +1558,7 @@ V90Phase3Demodulator::getV92Decision(float sample)
 	int sym;
 	int code;
 
-	word_2c++;
+	samplesInState++;
 	eventCode = 0;
 
 	switch ((int)state) {
@@ -1567,13 +1567,13 @@ V90Phase3Demodulator::getV92Decision(float sample)
 		decision = (short)level;
 		if (sdDetector->process(sample) > 0) {
 			edprintf("V90Phase3Demodulator: Sd detected @ %d\r\n",
-				 word_2c);
+				 samplesInState);
 			state = (Phase3DemodulatorState)1;
-			word_2c = 0;
+			samplesInState = 0;
 			eventCode = 1;
-		} else if (word_2c == timeoutBase + 12000.0f) {
+		} else if (samplesInState == timeoutBase + 12000.0f) {
 			state = (Phase3DemodulatorState)0x14;
-			word_2c = 0;
+			samplesInState = 0;
 			eventCode = 0x15;
 			edprintf("V90Phase3Demodulator: WaitForSd TimeOut\r\n");
 		}
@@ -1582,13 +1582,13 @@ V90Phase3Demodulator::getV92Decision(float sample)
 	case 1:					/* SdDemod */
 		decision = (short)level;
 		if (sdDetector->process(sample) < 0) {
-			edprintf("V90Phase3Demodulator: SdNot detected " "@ %d\r\n", word_2c);
+			edprintf("V90Phase3Demodulator: SdNot detected " "@ %d\r\n", samplesInState);
 			state = (Phase3DemodulatorState)2;
-			word_2c = 0;
+			samplesInState = 0;
 			eventCode = 2;
-		} else if (word_2c == 0x180) {
+		} else if (samplesInState == 0x180) {
 			state = (Phase3DemodulatorState)0x15;
-			word_2c = 0;
+			samplesInState = 0;
 			eventCode = 0x15;
 			edprintf("V90Phase3Demodulator: SdDemod TimeOut\r\n");
 		}
@@ -1596,10 +1596,10 @@ V90Phase3Demodulator::getV92Decision(float sample)
 
 	case 2:					/* SdNotDemod */
 		decision = (short)level;
-		if (word_2c == 0x30) {
+		if (samplesInState == 0x30) {
 			if (quickConnect != 0) {
 				state = (Phase3DemodulatorState)4;
-				word_420 = (unsigned int)
+				trn1dDdLength = (unsigned int)
 				    V90PW(params)[P3D_P_TRN1_QC_DD];
 				word_3f4 = (unsigned int)
 				    V90PW(params)[P3D_P_4A4];
@@ -1610,14 +1610,14 @@ V90Phase3Demodulator::getV92Decision(float sample)
 				edprintf("V90Phase3Demodulator: enter TRN1d " "Known Data state\r\n");
 			}
 			autoDigitalImpDetector->resetStudyUrefHandler(quickConnect);
-			word_2c = 0;
+			samplesInState = 0;
 			eventCode = 3;
 		}
 		break;
 
 	case 3:					/* TRN1dKnownData */
 		decision = (short)phase3Modulator.generateSymbol();
-		if (word_2c != 0x7f8)
+		if (samplesInState != 0x7f8)
 			break;
 		if (jdV92 == 0) {
 			state = (Phase3DemodulatorState)0x19;
@@ -1625,7 +1625,7 @@ V90Phase3Demodulator::getV92Decision(float sample)
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf("V90Phase3Demodulator: "
 				    "ERROR: Null V92JdDetector\r\n");
-			word_2c = 0;
+			samplesInState = 0;
 			break;
 		}
 		state = (Phase3DemodulatorState)4;
@@ -1633,30 +1633,30 @@ V90Phase3Demodulator::getV92Decision(float sample)
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf("V90Phase3Demodulator: "
 				    "V92 setting params for short TRN1\n");
-			word_420 = (unsigned int)
+			trn1dDdLength = (unsigned int)
 			    V90PW(params)[P3D_P_TRN1_QC_DD];
 			word_3f4 = (unsigned int)V90PW(params)[P3D_P_4A4];
 		} else {
-			word_420 = (unsigned int)
+			trn1dDdLength = (unsigned int)
 			    V90PW(params)[P3D_P_TRN1D_DD_LENGTH];
 			word_3f4 = (unsigned int)V90PW(params)[P3D_P_344];
 		}
 		autoDigitalImpDetector->resetStudyUrefHandler(quickConnect);
 		jdV92->unPackJdReset();
 		edprintf("V90Phase3Demodulator: enter TRN1d DD state\r\n");
-		word_2c = 0;
+		samplesInState = 0;
 		break;
 
 	case 4:					/* TRN1dDemod */
 		P3D_DEMOD_BIT();
-		if (word_2c == word_420) {
+		if (samplesInState == trn1dDdLength) {
 			edprintf("V90Phase3Demodulator: enter V92 study "
-				 "reference Ucode state @ %d\r\n", word_2c);
+				 "reference Ucode state @ %d\r\n", samplesInState);
 			state = (Phase3DemodulatorState)5;
-			word_2c = 0;
-		} else if (word_2c == 36000.0f) {
+			samplesInState = 0;
+		} else if (samplesInState == 36000.0f) {
 			state = (Phase3DemodulatorState)0x16;
-			word_2c = 0;
+			samplesInState = 0;
 			eventCode = 0x15;
 			edprintf("V90Phase3Demodulator: TRN1dDemod " "TimeOut\r\n");
 		}
@@ -1669,18 +1669,18 @@ V90Phase3Demodulator::getV92Decision(float sample)
 							       framePosition);
 		P3D_BUMP_FRAME();
 		if (word_408 == 2) {
-			if (word_2c % 6 == 0) {
+			if (samplesInState % 6 == 0) {
 				if ((short)adid->isThereAnyAltRbsPhase() != 0)
 					P3D_COPY_440_TO_438();
-				edprintf("V90Phase3Demodulator: JdNot detected " "@ %d\r\n", word_2c);
+				edprintf("V90Phase3Demodulator: JdNot detected " "@ %d\r\n", samplesInState);
 				state = (Phase3DemodulatorState)7;
-				word_2c = 0;
+				samplesInState = 0;
 				eventCode = 5;
 			}
 			word_408 = 1;
-		} else if (word_2c == 36000.0f) {
+		} else if (samplesInState == 36000.0f) {
 			state = (Phase3DemodulatorState)0x16;
-			word_2c = 0;
+			samplesInState = 0;
 			eventCode = 0x15;
 			edprintf("V90Phase3Demodulator: TRN1dDemod " "TimeOut\r\n");
 		}
@@ -1690,7 +1690,7 @@ V90Phase3Demodulator::getV92Decision(float sample)
 		P3D_DEMOD_BIT();
 		P3D_BUMP_FRAME();
 		if ((unsigned char)jdV92->unPackJdData(bit) != 0) {
-			if (word_2c % 6 == 0 || quickConnect != 0) {
+			if (samplesInState % 6 == 0 || quickConnect != 0) {
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
 					    "V90Phase3Demodulator: waitForJd "
@@ -1704,18 +1704,18 @@ V90Phase3Demodulator::getV92Decision(float sample)
 						(short)framePosition);
 					framePosition = 0;
 				}
-				edprintf("V90Phase3Demodulator: V92Jd " "detected @ %d\r\n", word_2c);
+				edprintf("V90Phase3Demodulator: V92Jd " "detected @ %d\r\n", samplesInState);
 				eventCode = 6;
 				state = (Phase3DemodulatorState)8;
 				jdV92->unPackJdPhaseReset();
-				word_2c = 0;
+				samplesInState = 0;
 			} else {
 				jdV92->unPackJdReset();
 			}
 		}
-		if (word_2c == timeoutBase + 38760.0f) {
+		if (samplesInState == timeoutBase + 38760.0f) {
 			state = (Phase3DemodulatorState)0x17;
-			word_2c = 0;
+			samplesInState = 0;
 			eventCode = 0x15;
 			edprintf("V90Phase3Demodulator: V92JdDemod " "TimeOut\r\n");
 		}
@@ -1725,19 +1725,19 @@ V90Phase3Demodulator::getV92Decision(float sample)
 		P3D_DEMOD_BIT();
 		P3D_BUMP_FRAME();
 		if ((unsigned char)jdV92->unPackJdPhaseData(bit) != 0) {
-			if (word_2c % 6 == 0) {
-				edprintf("V90Phase3Demodulator: V92JdPhase " "detected @ %d\r\n", word_2c);
+			if (samplesInState % 6 == 0) {
+				edprintf("V90Phase3Demodulator: V92JdPhase " "detected @ %d\r\n", samplesInState);
 				eventCode = 7;
 				state = (Phase3DemodulatorState)9;
-				word_2c = 0;
+				samplesInState = 0;
 				jdNotRunLength = 0;
 			} else {
 				jdV92->unPackJdPhaseReset();
 			}
 		}
-		if (word_2c == 24804.0f) {
+		if (samplesInState == 24804.0f) {
 			state = (Phase3DemodulatorState)0x17;
-			word_2c = 0;
+			samplesInState = 0;
 			eventCode = 0x15;
 			edprintf("V90Phase3Demodulator: JdPhaseDemod " "TimeOut\r\n");
 		}
@@ -1750,8 +1750,8 @@ V90Phase3Demodulator::getV92Decision(float sample)
 			jdNotRunLength = 0;
 		else
 			jdNotRunLength++;
-		if (jdNotRunLength > 0xb && word_2c % 72 == 12) {
-			edprintf("V90Phase3Demodulator: JdNot detected " "@ %d\r\n", word_2c);
+		if (jdNotRunLength > 0xb && samplesInState % 72 == 12) {
+			edprintf("V90Phase3Demodulator: JdNot detected " "@ %d\r\n", samplesInState);
 			eventCode = 8;
 			if (quickConnect != 0) {
 				state = (Phase3DemodulatorState)0xd;
@@ -1763,15 +1763,15 @@ V90Phase3Demodulator::getV92Decision(float sample)
 				    (V90PW(params)[P3D_P_PROBING_MODE] == 0
 					? 0xa : 0x11);
 			}
-			word_2c = 0;
+			samplesInState = 0;
 			phase3Modulator.reset(pcmType, ucode,
 					      (Phase3ModulatorState)9, 0,
 					      0, 0, dil, 0);
 			break;
 		}
-		if (word_2c == timeoutBase + 38760.0f) {
+		if (samplesInState == timeoutBase + 38760.0f) {
 			state = (Phase3DemodulatorState)0x17;
-			word_2c = 0;
+			samplesInState = 0;
 			eventCode = 0x15;
 			edprintf("V90Phase3Demodulator: JdDemod TimeOut\r\n");
 		}
@@ -1798,15 +1798,15 @@ V90Phase3Demodulator::getV92Decision(float sample)
 		adid->calculateLinearMeanAndVar((short)level, (short)sym,
 						framePosition);
 		P3D_BUMP_FRAME();
-		if (word_2c == (unsigned int)V90PW(params)[P3D_P_30C]) {
+		if (samplesInState == (unsigned int)V90PW(params)[P3D_P_30C]) {
 			adid->porcessFirstStudy();
 			if ((short)adid->isThereAnyAltRbsPhase() != 0)
 				P3D_COPY_440_TO_438();
-			word_2c = 0;
+			samplesInState = 0;
 			state = (Phase3DemodulatorState)0xb;
-		} else if (word_2c == 0x9c40) {
+		} else if (samplesInState == 0x9c40) {
 			state = (Phase3DemodulatorState)0x18;
-			word_2c = 0;
+			samplesInState = 0;
 			eventCode = 0x15;
 			edprintf("V90Phase3Demodulator: DILDemodFirstStudy " "TimeOut\r\n");
 		}
@@ -1852,9 +1852,9 @@ V90Phase3Demodulator::getV92Decision(float sample)
 		if (mod->segmentPos == 0 && mod->dilPcmCode != ucode)
 			adid->uniteLinMappInfoOfUnsuspectedPhases(
 			    mod->dilPcmCode);
-		if (word_2c == (unsigned int)V90PW(params)[P3D_P_314]) {
+		if (samplesInState == (unsigned int)V90PW(params)[P3D_P_314]) {
 			eventCode = 0xc;
-		} else if (word_2c == (unsigned int)
+		} else if (samplesInState == (unsigned int)
 			   V90PW(params)[P3D_P_300]) {
 			if (short_400 != 0) {
 				eventCode = 0x10;
@@ -1865,7 +1865,7 @@ V90Phase3Demodulator::getV92Decision(float sample)
 			}
 		}
 		P3D_BUMP_FRAME();
-		if (word_2c == (unsigned int)V90PW(params)[P3D_P_308]) {
+		if (samplesInState == (unsigned int)V90PW(params)[P3D_P_308]) {
 			if (V90PW(params)[P3D_P_310] == 0) {
 				adid->porcessSecondStudy();
 				eventCode = 0x11;
@@ -1874,10 +1874,10 @@ V90Phase3Demodulator::getV92Decision(float sample)
 				eventCode = 0x10;
 				state = (Phase3DemodulatorState)0xc;
 			}
-			word_2c = 0;
-		} else if (word_2c == 0x9c40) {
+			samplesInState = 0;
+		} else if (samplesInState == 0x9c40) {
 			state = (Phase3DemodulatorState)0x18;
-			word_2c = 0;
+			samplesInState = 0;
 			eventCode = 0x15;
 			edprintf("V90Phase3Demodulator: DILDemodSecondStudy " "TimeOut\r\n");
 		}
@@ -1913,14 +1913,14 @@ V90Phase3Demodulator::getV92Decision(float sample)
 		if (mod->segmentPos == 0 && mod->dilPcmCode != ucode)
 			adid->uniteLinMappInfoOfUnsuspectedPhases(
 			    mod->dilPcmCode);
-		if (word_2c == (unsigned int)V90PW(params)[P3D_P_310]) {
+		if (samplesInState == (unsigned int)V90PW(params)[P3D_P_310]) {
 			adid->porcessSecondStudy();
-			word_2c = 0;
+			samplesInState = 0;
 			eventCode = 0x11;
 			state = (Phase3DemodulatorState)0x10;
-		} else if (word_2c == 0x9c40) {
+		} else if (samplesInState == 0x9c40) {
 			state = (Phase3DemodulatorState)0x18;
-			word_2c = 0;
+			samplesInState = 0;
 			eventCode = 0x15;
 			edprintf("V90Phase3Demodulator: " "DILDemodThirdStudyStage TimeOut\r\n");
 		}
@@ -1948,15 +1948,15 @@ V90Phase3Demodulator::getV92Decision(float sample)
 		adid->calculateLinearMeanAndVar((short)level, (short)sym,
 						framePosition);
 		P3D_BUMP_FRAME();
-		if (word_2c == (unsigned int)V90PW(params)[P3D_P_30C]) {
+		if (samplesInState == (unsigned int)V90PW(params)[P3D_P_30C]) {
 			adid->porcessFirstStudy();
 			if ((short)adid->isThereAnyAltRbsPhase() != 0)
 				P3D_COPY_440_TO_438();
-			word_2c = 0;
+			samplesInState = 0;
 			state = (Phase3DemodulatorState)0xe;
-		} else if (word_2c == 0x9c40) {
+		} else if (samplesInState == 0x9c40) {
 			state = (Phase3DemodulatorState)0x18;
-			word_2c = 0;
+			samplesInState = 0;
 			eventCode = 0x15;
 			edprintf("V90Phase3Demodulator: DILDemodQCfirstStudy " "TimeOut\r\n");
 		}
@@ -2003,9 +2003,9 @@ V90Phase3Demodulator::getV92Decision(float sample)
 			}
 		}
 		word_408 = 1;
-		if (word_2c == (unsigned int)V90PW(params)[P3D_P_314]) {
+		if (samplesInState == (unsigned int)V90PW(params)[P3D_P_314]) {
 			eventCode = 0xc;
-		} else if (word_2c == (unsigned int)
+		} else if (samplesInState == (unsigned int)
 			   V90PW(params)[P3D_P_300]) {
 			if (short_400 != 0) {
 				eventCode = 0x10;
@@ -2016,13 +2016,13 @@ V90Phase3Demodulator::getV92Decision(float sample)
 			}
 		}
 		P3D_BUMP_FRAME();
-		if (word_2c == (unsigned int)V90PW(params)[P3D_P_308]) {
-			word_2c = 0;
+		if (samplesInState == (unsigned int)V90PW(params)[P3D_P_308]) {
+			samplesInState = 0;
 			eventCode = 0x10;
 			state = (Phase3DemodulatorState)0xf;
-		} else if (word_2c == 0x9c40) {
+		} else if (samplesInState == 0x9c40) {
 			state = (Phase3DemodulatorState)0x18;
-			word_2c = 0;
+			samplesInState = 0;
 			eventCode = 0x15;
 			edprintf("V90Phase3Demodulator: DILDemodQCsecondStudy " "TimeOut\r\n");
 		}
@@ -2054,14 +2054,14 @@ V90Phase3Demodulator::getV92Decision(float sample)
 		}
 		word_408 = 0;
 		P3D_BUMP_FRAME();
-		if (word_2c == (unsigned int)V90PW(params)[P3D_P_310]) {
+		if (samplesInState == (unsigned int)V90PW(params)[P3D_P_310]) {
 			adid->setQcLinearMapping();
-			word_2c = 0;
+			samplesInState = 0;
 			eventCode = 0x11;
 			state = (Phase3DemodulatorState)0x10;
-		} else if (word_2c == 0x9c40) {
+		} else if (samplesInState == 0x9c40) {
 			state = (Phase3DemodulatorState)0x18;
-			word_2c = 0;
+			samplesInState = 0;
 			eventCode = 0x15;
 			edprintf("V90Phase3Demodulator: DILDemodQCthirdStudy " "TimeOut\r\n");
 		}
@@ -2100,11 +2100,11 @@ V90Phase3Demodulator::getV92Decision(float sample)
 				word_408 = 1;
 			}
 		}
-		if (word_2c == (unsigned int)V90PW(params)[P3D_P_318]) {
+		if (samplesInState == (unsigned int)V90PW(params)[P3D_P_318]) {
 			eventCode = 0x12;
-		} else if (word_2c == 0x9c40) {
+		} else if (samplesInState == 0x9c40) {
 			state = (Phase3DemodulatorState)0x18;
-			word_2c = 0;
+			samplesInState = 0;
 			eventCode = 0x15;
 			edprintf("V90Phase3Demodulator: " "DILDemodErrorRelaxation TimeOut\r\n");
 		}
@@ -2121,12 +2121,12 @@ V90Phase3Demodulator::getV92Decision(float sample)
 			word_408 = 1;
 		else
 			word_408 = 0;
-		if (word_2c == dilLength) {
+		if (samplesInState == dilLength) {
 			edprintf("V90Phase3Demodulator: Probing DIL " "ended\r\n");
 			eventCode = 0x13;
-		} else if (word_2c == 0x9c40) {
+		} else if (samplesInState == 0x9c40) {
 			state = (Phase3DemodulatorState)0x18;
-			word_2c = 0;
+			samplesInState = 0;
 			eventCode = 0x15;
 			edprintf("V90Phase3Demodulator: ProbingDILDemod " "TimeOut\r\n");
 		}
@@ -2146,14 +2146,14 @@ V90Phase3Demodulator::getV92Decision(float sample)
 		decision = (short)level;
 		ansamToneDetector->process(sample);
 		if (sdDetector->process(sample) > 0) {
-			edprintf("V90Phase3Demodulator: QTS detected " "@ %d\r\n", word_2c);
+			edprintf("V90Phase3Demodulator: QTS detected " "@ %d\r\n", samplesInState);
 			state = (Phase3DemodulatorState)0x1b;
-			word_2c = 0;
+			samplesInState = 0;
 			eventCode = 0x37;
-		} else if (word_2c ==
+		} else if (samplesInState ==
 			   (unsigned int)V90PW(params)[P3D_P_ANSPCM_LENGTH]) {
 			state = (Phase3DemodulatorState)0x20;
-			word_2c = 0;
+			samplesInState = 0;
 			verificationStatus = 0;
 			eventCode = 0x3a;
 			edprintf("V90Phase3Demodulator: WaitFor Qts TimeOut, "
@@ -2165,13 +2165,13 @@ V90Phase3Demodulator::getV92Decision(float sample)
 		decision = (short)level;
 		ansamToneDetector->process(sample);
 		if (sdDetector->process(sample) < 0) {
-			edprintf("V90Phase3Demodulator: QTSNot detected " "@ %d\r\n", word_2c);
+			edprintf("V90Phase3Demodulator: QTSNot detected " "@ %d\r\n", samplesInState);
 			state = (Phase3DemodulatorState)0x1c;
-			word_2c = 0;
+			samplesInState = 0;
 			eventCode = 0x38;
-		} else if (word_2c == 0x300) {
+		} else if (samplesInState == 0x300) {
 			state = (Phase3DemodulatorState)0x21;
-			word_2c = 0;
+			samplesInState = 0;
 			verificationStatus = 0;
 			edprintf("V90Phase3Demodulator: WaitFor QtsNot "
 				 "TimeOut, decision is set to not same " "line\r\n");
@@ -2183,9 +2183,9 @@ V90Phase3Demodulator::getV92Decision(float sample)
 
 	case 28:				/* enter ANSpcm demod */
 		decision = (short)level;
-		if (word_2c == 0x30) {
+		if (samplesInState == 0x30) {
 			state = (Phase3DemodulatorState)0x1d;
-			word_2c = 0;
+			samplesInState = 0;
 			if (((*(const unsigned char *const *)(const void *)
 			      params)[0] & 1) != 0)
 				V90PW(params)[P3D_P_ANSPCM_LENGTH] = 0x320;
@@ -2199,7 +2199,7 @@ V90Phase3Demodulator::getV92Decision(float sample)
 	case 29:				/* ANSpcm demod */
 		decision = (short)level;
 		ansamToneDetector->process(sample);
-		if (word_2c ==
+		if (samplesInState ==
 		    (unsigned int)V90PW(params)[P3D_P_ANSPCM_LENGTH])
 			eventCode = 0x3a;
 		break;
@@ -2224,7 +2224,7 @@ V90Phase3Demodulator::getV92Decision(float sample)
 				 "recovery, move to wait for drop...\r\n");
 			eventCode = 0x3a;
 		}
-		if (word_2c > 0x7cf) {
+		if (samplesInState > 0x7cf) {
 			edprintf("V90Phase3Demodulator: faking ANSpcm energy "
 				 "drop detected (QTs timeout)...\r\n");
 			eventCode = 0x3b;
@@ -2235,7 +2235,7 @@ V90Phase3Demodulator::getV92Decision(float sample)
 	case 33:
 		decision = (short)level;
 		if (ansamToneDetector->process(sample) != 0 &&
-		    word_2c >= (unsigned int)
+		    samplesInState >= (unsigned int)
 			V90PW(params)[P3D_P_ANSPCM_LENGTH]) {
 			edprintf("V90Phase3Demodulator: ANSpcm detected on "
 				 "recovery, move to wait for drop...\r\n");
@@ -2368,7 +2368,7 @@ V90Phase3Demodulator::exitDIL()
 void
 V90Phase3Demodulator::setDigitalImairmentsInfo()
 {
-	autoDigitalImpDetector->determineMaxUcode(byte_3f8);
+	autoDigitalImpDetector->determineMaxUcode(dilMaxUcode);
 	autoDigitalImpDetector->findPadGain();
 	autoDigitalImpDetector->applyPadGainToLinMapp();
 }
@@ -2436,7 +2436,7 @@ V90Phase3Demodulator::JdNotDetector(int symbol)
 	else
 		jdNotRunLength = 0;
 
-	if (jdNotRunLength > 11 && word_2c % 72 == 12)
+	if (jdNotRunLength > 11 && samplesInState % 72 == 12)
 		return 1;
 
 	return 0;
@@ -2455,7 +2455,7 @@ V90Phase3Demodulator::enterWaitForANSpcmDrop()
 	if (state != P3D_STATE_WAIT_FOR_ANS_PCM_DROP) {
 		edprintf("V90Phase3Demodulator: enter WaitForANSpcmDrop\r\n");
 		state = P3D_STATE_WAIT_FOR_ANS_PCM_DROP;
-		word_2c = 0;
+		samplesInState = 0;
 	}
 }
 

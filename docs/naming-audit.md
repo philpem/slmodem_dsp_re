@@ -740,3 +740,91 @@ Batch 15 gate result: Gentoo `make phase` exited 0, **`period differential:
 checks all OK`. All 655 `build/period/*.o` hashes are **byte-identical** to the
 pre-edit snapshot (`/home/philpem/slmodem/tmp/issue100-v92p4m-before.sha256`,
 655/655).
+
+## Batch 16: V90Phase3Demodulator field names
+
+Owner-scoped pass over `V90Phase3Demodulator`. Three members are renamed and
+three stale or partial comments corrected. `byte_3f8` and `word_420` are
+declared by no other class in this tree; `word_2c` also appears as prose in
+`v34diag.cpp` and as a `V92Phase4Modulator` mutation label, so every occurrence
+of that one was classified by owning object before any edit.
+
+### Evidence
+
+| Previous name | New name | Evidence |
+| --- | --- | --- |
+| byte_3f8 | dilMaxUcode | Rank-1: `V90Demodulator` prints it with the author's own format string `"V90Demodulator: Dil max ucode = %d\n"` (`V90Demodulator.cpp:1568`) and stores 0x74 into it from both AGC arms (`:1548`, `:1564`); `V90Phase3Demodulator.cpp:2371` passes it as the only argument to the typed callee `V90AutoDigitalImpDetector::determineMaxUcode(short)`. |
+| word_420 | trn1dDdLength | Both decision functions load it from the author-named `params->TRN1_QC_DD_LENGTH` (+0x4a0) when `quickConnect` is set and `params->TRN1D_DD_LENGTH` (+0x2fc) when it is not, then compare the state counter against it to leave state 4 (`getV90Decision`) / state 5 (`getV92Decision`): it is the TRN1d data-directed stage length, and the name follows that role. Finding F2118. |
+| word_2c | samplesInState | Incremented once per sample at the top of both decision functions and zeroed on every state transition, so it holds the number of samples the current state has run. Read externally as a duration: `V90Equalizer.cpp:2382..2410` compares it against the `*_FREEZE_DURATION` constants and `V90Demodulator.cpp:1512` against `AGC_ADAPTATION_DURATION`. Usage inference (no format string or typed callee spells it), strengthened by the sibling `V90Demodulator::samplesInPhase` at `include/dsplib/V90Demodulator.h:389`. |
+
+### Cross-owner classification and scoping
+
+- `byte_3f8` -- declared only by `V90Phase3Demodulator`. Renamed in the header,
+  `V90Phase3Demodulator.cpp`, `V90Demodulator.cpp`, `t_v90p3ddec.cpp`, and the
+  `v90p3ddec`/`v90demprog` manifests.
+- `word_420` -- declared only by `V90Phase3Demodulator`. It is ALSO a field of
+  the local fixture `struct trial_args` in `test/unit/t_v92dec.cpp`, which
+  mirrors this class field-for-field, so that mirror field was renamed with it.
+- `word_2c` -- after Batch 15 no other class declares it. Renamed in the header,
+  `V90Phase3Demodulator.cpp` (uses and method-doc comments),
+  `V90Demodulator.cpp:1512`, `V90Equalizer.cpp:2382..2410`, the tests
+  `t_v90p3ddec.cpp`, `t_v90p3dreset.cpp`, `t_v90p4ddec.cpp` and the
+  `t_v92dec.cpp` `trial_args` mirror, and the `v90p3ddec`/`v90demprog`
+  manifests. **NOT renamed:** `src/pump/v34/v34diag.cpp:140` is prose about what
+  `V92Modulator`'s field was called before it was named `phase` -- not this
+  class; and the mutation `label`/`why` prose in `v92p4reset.json`,
+  `v92p4sym.json` and `snapshot.json` names `V92Phase4Modulator`'s field, not
+  this one. Those occurrences are byte-for-byte unchanged.
+
+The `P3D_OFF` first arguments were updated to the new names; the third (`tag`)
+arguments are left offset-based (`word2c`, `byte3f8`, `word420`), matching the
+existing `V92P4M_OFF(silenceRrnRequest, 0x02c, word2c)` precedent. Every offset
+is unchanged and the `sizeof == 0x42c` assertion still holds.
+
+### Stale comments corrected (no code change)
+
+- `byte_3f8` (now `dilMaxUcode`): the old "Nothing writes this byte in anything
+  written so far and no format string prints it ... not enough" was false. The
+  rank-1 format string and both 0x74 stores are in `V90Demodulator.cpp`, and
+  `determineMaxUcode` is a typed callee; the comment now records all three.
+- `word_2c` (now `samplesInState`): the old comment only described it as
+  `reset`'s fourth argument. It now keeps that role and adds the per-state
+  sample counter and the external `*_FREEZE_DURATION` /
+  `AGC_ADAPTATION_DURATION` readers, with the sibling-class precedent.
+- `word_420` (now `trn1dDdLength`): the existing unit caveat (samples vs
+  symbols, unsettled) is kept; the comment now also says where the name comes
+  from.
+
+Method-doc references to `word_2c` were renamed to `samplesInState`
+(`enterWaitForANSpcmDrop`'s doc, the `timeoutBase` and `eventCode` field
+comments, and the `getV92Decision` / `P3D_CHECK_TERMINATED` comments in the
+`.cpp`).
+
+Retained neutral, unchanged from the class's existing dispositions:
+`word_3cc`, `word_3f4`, `byte_3f9`, `word_3fc`, `short_400`, `word_408`,
+`short_414`, `float_418`, `byte_424`.
+
+### Verification
+
+A token-boundary forward substitution of `HEAD` reproduces the working tree
+exactly for every changed source/test/manifest file except two intended
+deviations: the three rewritten comment blocks in `V90Phase3Demodulator.h`, and
+the preserved string literal `"word_2c stored (%ld)"` in `t_v90p3dreset.cpp`
+(the assertion's field reference was renamed; the message text was kept because
+the batch rule preserves string literals). No changed line names
+`V90Phase4Modulator`'s or `V92Phase4Modulator`'s `word_2c`. The manifests were
+transformed by decoding each `find`/`replace` value, substituting at the token
+boundary and re-encoding with `indent=1`; every `label`, `why`, `note`,
+`equivalent`, `fn`, `_` and blank line is preserved byte-for-byte (checked by
+per-entry property equality). The token-count check found each old->new pair
+balanced and 0 non-name identifier changes in every file except the header,
+whose three intended prose rewrites add one `samplesInState` mention (5 removed
+-> 6 added) and change only English words. `anchorcheck` passed all 272 suites
+(10041 mutations, 0 matching other than exactly once) and `refcheck` resolved
+all 13938 references.
+
+Batch 16 gate result: Gentoo `make phase` exited 0, **`period differential:
+375 passed, 0 failed`** and `phase boundary: period differential and structural
+checks all OK`. All 655 `build/period/*.o` hashes are **byte-identical** to the
+pre-edit snapshot (`/home/philpem/slmodem/tmp/issue100-v90p3d-before.sha256`,
+655/655).

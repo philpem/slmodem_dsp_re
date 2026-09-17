@@ -1,8 +1,8 @@
 [
  {
   "label": "the sample counter counts down",
-  "find": "\ts = (short)sample;\n\tword_2c++;\n",
-  "replace": "\ts = (short)sample;\n\tword_2c--;\n",
+  "find": "\ts = (short)sample;\n\tsamplesInState++;\n",
+  "replace": "\ts = (short)sample;\n\tsamplesInState--;\n",
   "note": "Anchor carries 1 line(s) above it: another arm of this function spells the same statements, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
@@ -34,30 +34,30 @@
  },
  {
   "label": "the SdDemod timeout is one sample late",
-  "find": "\t\t\tstate = (Phase3DemodulatorState)0x02;\n\t\t\tword_2c = 0;\n\t\t\teventCode = 2;\n\t\t} else if (word_2c == 0x180) {",
-  "replace": "\t\t\tstate = (Phase3DemodulatorState)0x02;\n\t\t\tword_2c = 0;\n\t\t\teventCode = 2;\n\t\t} else if (word_2c == 0x181) {",
+  "find": "\t\t\tstate = (Phase3DemodulatorState)0x02;\n\t\t\tsamplesInState = 0;\n\t\t\teventCode = 2;\n\t\t} else if (samplesInState == 0x180) {",
+  "replace": "\t\t\tstate = (Phase3DemodulatorState)0x02;\n\t\t\tsamplesInState = 0;\n\t\t\teventCode = 2;\n\t\t} else if (samplesInState == 0x181) {",
   "note": "Anchor carries 3 line(s) above it: another arm of this function spells the same statements, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
   "label": "the TRN1dKnownData handover is one sample late",
-  "find": "\t\tif (word_2c == 0x7f8) {",
-  "replace": "\t\tif (word_2c == 0x7f9) {"
+  "find": "\t\tif (samplesInState == 0x7f8) {",
+  "replace": "\t\tif (samplesInState == 0x7f9) {"
  },
  {
   "label": "the faked energy drop fires one sample early",
-  "find": "\t\tif (ansamToneDetector->process(sample)) {\n\t\t\tedprintf(\"V90Phase3Demodulator: ANSpcm detected on \"\n\t\t\t\t \"recovery, move to wait for drop...\\r\\n\");\n\t\t\teventCode = 0x3a;\n\t\t}\n\t\tif (word_2c > 0x7cf) {",
-  "replace": "\t\tif (ansamToneDetector->process(sample)) {\n\t\t\tedprintf(\"V90Phase3Demodulator: ANSpcm detected on \"\n\t\t\t\t \"recovery, move to wait for drop...\\r\\n\");\n\t\t\teventCode = 0x3a;\n\t\t}\n\t\tif (word_2c >= 0x7cf) {"
+  "find": "\t\tif (ansamToneDetector->process(sample)) {\n\t\t\tedprintf(\"V90Phase3Demodulator: ANSpcm detected on \"\n\t\t\t\t \"recovery, move to wait for drop...\\r\\n\");\n\t\t\teventCode = 0x3a;\n\t\t}\n\t\tif (samplesInState > 0x7cf) {",
+  "replace": "\t\tif (ansamToneDetector->process(sample)) {\n\t\t\tedprintf(\"V90Phase3Demodulator: ANSpcm detected on \"\n\t\t\t\t \"recovery, move to wait for drop...\\r\\n\");\n\t\t\teventCode = 0x3a;\n\t\t}\n\t\tif (samplesInState >= 0x7cf) {"
  },
  {
   "label": "the JdNot frame position is 13 rather than 12",
-  "find": "\t\t\tframePosition = 0;\n\t\tif (bit != 0)\n\t\t\tjdNotRunLength = 0;\n\t\telse\n\t\t\tjdNotRunLength++;\n\t\tif (jdNotRunLength > 0xb && word_2c % 72 == 12) {",
-  "replace": "\t\t\tframePosition = 0;\n\t\tif (bit != 0)\n\t\t\tjdNotRunLength = 0;\n\t\telse\n\t\t\tjdNotRunLength++;\n\t\tif (jdNotRunLength > 0xb && word_2c % 72 == 13) {",
+  "find": "\t\t\tframePosition = 0;\n\t\tif (bit != 0)\n\t\t\tjdNotRunLength = 0;\n\t\telse\n\t\t\tjdNotRunLength++;\n\t\tif (jdNotRunLength > 0xb && samplesInState % 72 == 12) {",
+  "replace": "\t\t\tframePosition = 0;\n\t\tif (bit != 0)\n\t\t\tjdNotRunLength = 0;\n\t\telse\n\t\t\tjdNotRunLength++;\n\t\tif (jdNotRunLength > 0xb && samplesInState % 72 == 13) {",
   "note": "Anchor carries 5 line(s) above it: another arm of this function spells the same statements, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
   "label": "the JdNot run length is 12 rather than 11",
-  "find": "\t\t\tframePosition = 0;\n\t\tif (bit != 0)\n\t\t\tjdNotRunLength = 0;\n\t\telse\n\t\t\tjdNotRunLength++;\n\t\tif (jdNotRunLength > 0xb && word_2c % 72 == 12) {\n",
-  "replace": "\t\t\tframePosition = 0;\n\t\tif (bit != 0)\n\t\t\tjdNotRunLength = 0;\n\t\telse\n\t\t\tjdNotRunLength++;\n\t\tif (jdNotRunLength > 0xc && word_2c % 72 == 12) {\n",
+  "find": "\t\t\tframePosition = 0;\n\t\tif (bit != 0)\n\t\t\tjdNotRunLength = 0;\n\t\telse\n\t\t\tjdNotRunLength++;\n\t\tif (jdNotRunLength > 0xb && samplesInState % 72 == 12) {\n",
+  "replace": "\t\t\tframePosition = 0;\n\t\tif (bit != 0)\n\t\t\tjdNotRunLength = 0;\n\t\telse\n\t\t\tjdNotRunLength++;\n\t\tif (jdNotRunLength > 0xc && samplesInState % 72 == 12) {\n",
   "note": "Anchor carries 5 line(s) above it: another arm of this function spells the same statements, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
@@ -84,14 +84,14 @@
  },
  {
   "label": "the QTS-detected event code is the QTSNot one",
-  "find": "\t\t\t\t word_2c);\n\t\t\tstate = (Phase3DemodulatorState)0x1b;\n\t\t\tword_2c = 0;\n\t\t\teventCode = 0x37;",
-  "replace": "\t\t\t\t word_2c);\n\t\t\tstate = (Phase3DemodulatorState)0x1b;\n\t\t\tword_2c = 0;\n\t\t\teventCode = 0x38;",
+  "find": "\t\t\t\t samplesInState);\n\t\t\tstate = (Phase3DemodulatorState)0x1b;\n\t\t\tsamplesInState = 0;\n\t\t\teventCode = 0x37;",
+  "replace": "\t\t\t\t samplesInState);\n\t\t\tstate = (Phase3DemodulatorState)0x1b;\n\t\t\tsamplesInState = 0;\n\t\t\teventCode = 0x38;",
   "note": "Anchor carries 3 line(s) above it: another arm of this function spells the same statements, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
   "label": "the recovery watch uses > where the object uses >=",
-  "find": "\t\tif (ansamToneDetector->process(sample)\n\t\t    && word_2c >= (unsigned int)",
-  "replace": "\t\tif (ansamToneDetector->process(sample)\n\t\t    && word_2c > (unsigned int)"
+  "find": "\t\tif (ansamToneDetector->process(sample)\n\t\t    && samplesInState >= (unsigned int)",
+  "replace": "\t\tif (ansamToneDetector->process(sample)\n\t\t    && samplesInState > (unsigned int)"
  },
  {
   "label": "the terminal states return the sample rather than zero",
@@ -105,8 +105,8 @@
  },
  {
   "label": "the probing DIL ends one sample late",
-  "find": "\t\t       params->DFE_LENGTH)\n\t\t\tword_408 = 1;\n\t\telse\n\t\t\tword_408 = 0;\n\t\tif (word_2c == dilLength) {",
-  "replace": "\t\t       params->DFE_LENGTH)\n\t\t\tword_408 = 1;\n\t\telse\n\t\t\tword_408 = 0;\n\t\tif (word_2c == dilLength + 1) {",
+  "find": "\t\t       params->DFE_LENGTH)\n\t\t\tword_408 = 1;\n\t\telse\n\t\t\tword_408 = 0;\n\t\tif (samplesInState == dilLength) {",
+  "replace": "\t\t       params->DFE_LENGTH)\n\t\t\tword_408 = 1;\n\t\telse\n\t\t\tword_408 = 0;\n\t\tif (samplesInState == dilLength + 1) {",
   "note": "Anchor carries 4 line(s) above it: another arm of this function spells the same statements, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
@@ -139,7 +139,7 @@
  },
  {
   "label": "entering the ANSpcm drop state does not restart the counter",
-  "find": "\t\tstate = P3D_STATE_WAIT_FOR_ANS_PCM_DROP;\n\t\tword_2c = 0;",
+  "find": "\t\tstate = P3D_STATE_WAIT_FOR_ANS_PCM_DROP;\n\t\tsamplesInState = 0;",
   "replace": "\t\tstate = P3D_STATE_WAIT_FOR_ANS_PCM_DROP;"
  },
  {
@@ -149,13 +149,13 @@
  },
  {
   "label": "the ANSpcm drop state is 29",
-  "find": "\t\tstate = P3D_STATE_WAIT_FOR_ANS_PCM_DROP;\n\t\tword_2c = 0;",
-  "replace": "\t\tstate = (Phase3DemodulatorState)29;\n\t\tword_2c = 0;"
+  "find": "\t\tstate = P3D_STATE_WAIT_FOR_ANS_PCM_DROP;\n\t\tsamplesInState = 0;",
+  "replace": "\t\tstate = (Phase3DemodulatorState)29;\n\t\tsamplesInState = 0;"
  },
  {
   "label": "the pad gain is found before the maximum code",
-  "find": "\tautoDigitalImpDetector->determineMaxUcode(byte_3f8);\n\tautoDigitalImpDetector->findPadGain();",
-  "replace": "\tautoDigitalImpDetector->findPadGain();\n\tautoDigitalImpDetector->determineMaxUcode(byte_3f8);"
+  "find": "\tautoDigitalImpDetector->determineMaxUcode(dilMaxUcode);\n\tautoDigitalImpDetector->findPadGain();",
+  "replace": "\tautoDigitalImpDetector->findPadGain();\n\tautoDigitalImpDetector->determineMaxUcode(dilMaxUcode);"
  },
  {
   "label": "the pad gain is applied before it is found",
@@ -165,7 +165,7 @@
  },
  {
   "label": "the maximum code comes from the ucode rather than +0x3f8",
-  "find": "\tautoDigitalImpDetector->determineMaxUcode(byte_3f8);",
+  "find": "\tautoDigitalImpDetector->determineMaxUcode(dilMaxUcode);",
   "replace": "\tautoDigitalImpDetector->determineMaxUcode(ucode);"
  },
  {
@@ -185,18 +185,18 @@
  },
  {
   "label": "the JdNot run length is twelve, not eleven",
-  "find": "\tif (jdNotRunLength > 11 && word_2c % 72 == 12)",
-  "replace": "\tif (jdNotRunLength > 12 && word_2c % 72 == 12)"
+  "find": "\tif (jdNotRunLength > 11 && samplesInState % 72 == 12)",
+  "replace": "\tif (jdNotRunLength > 12 && samplesInState % 72 == 12)"
  },
  {
   "label": "the JdNot frame modulus is thirty-six",
-  "find": "\tif (jdNotRunLength > 11 && word_2c % 72 == 12)",
-  "replace": "\tif (jdNotRunLength > 11 && word_2c % 36 == 12)"
+  "find": "\tif (jdNotRunLength > 11 && samplesInState % 72 == 12)",
+  "replace": "\tif (jdNotRunLength > 11 && samplesInState % 36 == 12)"
  },
  {
   "label": "the JdNot frame position is eleven",
-  "find": "\tif (jdNotRunLength > 11 && word_2c % 72 == 12)",
-  "replace": "\tif (jdNotRunLength > 11 && word_2c % 72 == 11)"
+  "find": "\tif (jdNotRunLength > 11 && samplesInState % 72 == 12)",
+  "replace": "\tif (jdNotRunLength > 11 && samplesInState % 72 == 11)"
  },
  {
   "label": "exitDIL acts on state 17 as well",

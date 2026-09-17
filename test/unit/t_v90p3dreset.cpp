@@ -532,7 +532,7 @@ run_arguments(void)
 			    (long)ucode, tag);
 		diff_eq_int("state stored (%ld)", (long)slot[1].o.state,
 			    (long)P3D_STATE_WAIT_FOR_SD, tag);
-		diff_eq_int("word_2c stored (%ld)", (long)slot[1].o.word_2c,
+		diff_eq_int("word_2c stored (%ld)", (long)slot[1].o.samplesInState,
 			    (long)word_v[trial % NWORD], tag);
 		diff_eq_int("short_414 stored (%ld)",
 			    (long)slot[1].o.short_414,
