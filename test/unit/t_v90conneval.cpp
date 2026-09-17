@@ -1064,7 +1064,7 @@ static int p3_altrbs, p3_trn1d, p3_large, p3_retrain, p3_none, p3_empty;
 static int p3_five_then_four, p3_cleared_10, p3_cleared_18;
 static int p4_mean_arm, p4_mean_skipped, p4_large, p4_retrain, p4_none;
 static int p4_empty, p4_delayed, p4_delayed_over, p4_thresh_replaced;
-/* The retrain fired with an unordered `unnamed_434`.  Finding F2410. */
+/* The retrain fired with an unordered `PDSNR_CURRENT_V34_DROP_THRESH_PHASE4`.  Finding F2410. */
 static int p4_nan_thresh;
 static int p4_cleared_10, p4_cleared_18, p4_guard_b0, p4_guard_ratio;
 static int p4_guard_count, p4_delayed_half, p4_missing_arg;
@@ -1087,7 +1087,7 @@ p34_params(void)
 	SET_PF(PDSNR_THRESHOLD_IN_PHASE4,		0x41500000u); /* 13 */
 	SET_PF(PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH,
 							0x41600000u); /* 14 */
-	SET_PF(unnamed_434,				0x437a0000u); /* 250 */
+	SET_PF(PDSNR_CURRENT_V34_DROP_THRESH_PHASE4,				0x437a0000u); /* 250 */
 
 	/*
 	 * The slots neither function reads.  +FLT_MAX, so a comparison that
@@ -1917,7 +1917,7 @@ run_ce_phase4(void)
 		/*
 		 * THE PHASE-4 RETRAIN, and the store into +0xac that comes with
 		 * it.  The first retrain replaces the threshold with
-		 * `params->unnamed_434` -- 250.0f -- which the next block's
+		 * `params->PDSNR_CURRENT_V34_DROP_THRESH_PHASE4` -- 250.0f -- which the next block's
 		 * comparison then uses, so this also proves the field is read
 		 * back and not only written.
 		 */
@@ -2014,7 +2014,7 @@ run_ce_phase4(void)
 		}
 
 		/*
-		 * THE SAME RETRAIN WITH AN UNORDERED `unnamed_434`, WHICH IS
+		 * THE SAME RETRAIN WITH AN UNORDERED `PDSNR_CURRENT_V34_DROP_THRESH_PHASE4`, WHICH IS
 		 * THE ONLY WAY A NaN REACHES A SIGN PRINTER IN THIS FILE.
 		 *
 		 * Nineteen of this object's branchless sign selects are in
@@ -2023,7 +2023,7 @@ run_ce_phase4(void)
 		 * `flds; fcoms; ja`, which is FALSE for an unordered compare,
 		 * so a NaN average provably cannot reach any of them.  The
 		 * nineteenth prints `t`, the replacement threshold read out of
-		 * `params->unnamed_434`, and its gate is on `avePdsnr` and the
+		 * `params->PDSNR_CURRENT_V34_DROP_THRESH_PHASE4`, and its gate is on `avePdsnr` and the
 		 * counters and not on `t` -- so an unordered parameter gets
 		 * there with the average left ordered at 100.0f.
 		 *
@@ -2045,7 +2045,7 @@ run_ce_phase4(void)
 			fill_pair(parm_a, parm_b, PARM_SLOT, 3451 + lvl,
 				  (lvl + 2) & 3);
 			p34_params();
-			SET_PF(unnamed_434, 0x7fc00000u);	/* a quiet NaN */
+			SET_PF(PDSNR_CURRENT_V34_DROP_THRESH_PHASE4, 0x7fc00000u);	/* a quiet NaN */
 			SET_P(MAX_NOF_V90_RETRAINS, 4);
 			SET_P(MAX_NOF_REMOTE_RETRAINS, -5);
 			SET_P(unnamed_45c, -5);

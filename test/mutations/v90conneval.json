@@ -375,7 +375,7 @@
   "replace": "\t\t\t\t\t(void)t;"},
 
  {"label": "+0xac is replaced by PHASE4_ERROR_FOR_V34_FALLBACK",
-  "find": "\t\t\t\t\tfloat t = ce_param_float(\n\t\t\t\t\t    params->unnamed_434);",
+  "find": "\t\t\t\t\tfloat t = ce_param_float(\n\t\t\t\t\t    params->PDSNR_CURRENT_V34_DROP_THRESH_PHASE4);",
   "replace": "\t\t\t\t\tfloat t =\n\t\t\t\t\t    params->PHASE4_ERROR_FOR_V34_FALLBACK;"},
 
  {"label": "the threshold diagnostic is not gated",

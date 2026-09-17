@@ -1246,6 +1246,50 @@ Batch 22 gate result: Gentoo `make phase` exited 0, **`period differential:
 375 passed, 0 failed`** and `phase boundary: period differential and
 structural checks all OK`; 655/655 period objects byte-identical.
 
+## Batch 23: V90Parameters pdsnr/threshold names (issue #119)
+
+Batch 20 retained `unnamed_434` and `unnamed_440` on the ground that each was
+used once with no typed anchor. Both now have one, so this batch supersedes
+that disposition. Neither type changed: `+0x434` stays the declared `int` and
+`ce_param_float` union read, and `+0x440` stays `float`.
+
+`unnamed_434` is named from the object's own diagnostic. In
+`V90ConnectionEvaluator::evaluatePhase4` the store `fsts 0xac(%ebx)` copies
+this parameter word into the evaluator's `phase4ErrorForV34Fallback`
+(`V90ConnectionEvaluator.cpp:882`), and the debug string printed beside exactly
+that store names the value stored:
+`"V90ConnectionEvaluator(phase4): pdsnrCurrentV34DropThreshPhase4 set to = ..."`
+(`:887-891`). That is the author's identifier for the slot, and
+`include/dsplib/V90ConnectionEvaluator.h:566-597` already derives the whole
+path. The F878 int/float question is a separate site and is not touched here.
+
+`unnamed_440` is the ALT-RBS variant of the already-named `+0x438` threshold.
+`V90Phase3Demodulator` copies it into
+`PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH` only when
+`autoDigitalImpDetector->isThereAnyAltRbsPhase()` is true
+(`V90Phase3Demodulator.cpp:800`, `:956`, `:1133`) and unconditionally in
+`setAltRbsParams` (`:2397`), sitting directly beside the already-named QC
+variant at `+0x43c` (`QC_PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH`).
+
+| Previous | New | Anchor |
+| --- | --- | --- |
+| `V90Parameters::unnamed_434` | `PDSNR_CURRENT_V34_DROP_THRESH_PHASE4` | diagnostic beside the `fsts 0xac(%ebx)` store (`V90ConnectionEvaluator.cpp:887`) |
+| `V90Parameters::unnamed_440` | `PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH_ALT_RBS` | copied into `+0x438` only under `isThereAnyAltRbsPhase()` (`V90Phase3Demodulator.cpp:800,956,1133,2397`) |
+
+Mutation manifests were transformed structurally in their `find`/`replace`
+VALUES only. `v90p3ddec.json`'s two alt-RBS anchors keep their faults: the
+swap still exchanges `..._THRESH` and `..._THRESH_ALT_RBS`, and the
+one-slot-along mutation still writes the QC threshold. The `why` prose in both
+manifests and the four C string literals in `t_v90conneval.cpp` that spell the
+old identifier (`:1970`, `:2070`, `:3586`, `:3592`) are deliberately left as
+they were -- prose and literals are not identifiers. Every changed `find`
+still matches its source exactly once, and all 260 finds in the two manifests
+still resolve.
+
+Batch 23 gate result: Gentoo `make phase` exited 0, **`period differential:
+375 passed, 0 failed`** and `phase boundary: period differential and
+structural checks all OK`; 655/655 period objects byte-identical.
+
 
 
 

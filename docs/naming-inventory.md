@@ -21,11 +21,11 @@ The production-use column counts the member's identifier across `src/` only. It 
 |---|---:|
 | member declarations parsed | 3246 |
 | owners (struct/class) | 242 |
-| named | 2628 |
+| named | 2630 |
 | offset-named | 391 |
 |   on record (batch/wave or beside the field) | 246 |
 |   residual, not on record | 145 |
-| placeholder (`unmapped_`/`unnamed_`) | 76 |
+| placeholder (`unmapped_`/`unnamed_`) | 74 |
 |   residual placeholder | 60 |
 | padding | 151 |
 
@@ -37,13 +37,13 @@ The parser is textual: it reads single-line member declarations inside `struct`/
 
 ## Assessment
 
-- 2628 of 3246 parsed members carry a real name.
+- 2630 of 3246 parsed members carry a real name.
 - 391 carry an offset-only name; 246 of those are on record (a batch/wave ledger or a substantive comment beside them).
 - 145 offset-named members are residual and appear in the ledger below with an explicit, justified disposition.
-- 76 members are explicit placeholders (`unmapped_`/`unnamed_`); their names already state that the reconstruction does not model them.
+- 74 members are explicit placeholders (`unmapped_`/`unnamed_`); their names already state that the reconstruction does not model them.
 - 151 members are alignment padding, which must not be named.
 
-Within the issue #100 scope (non-FAX owners) there are 231 offset-named members, 20 of them residual, and 62 placeholders. FAX is a separate phase. On this reading every inventoried member is named or explicitly dispositioned; what remains is reviewer acceptance of the dispositions, not undiscovered offsets.
+Within the issue #100 scope (non-FAX owners) there are 231 offset-named members, 20 of them residual, and 60 placeholders. FAX is a separate phase. On this reading every inventoried member is named or explicitly dispositioned; what remains is reviewer acceptance of the dispositions, not undiscovered offsets.
 
 ## Per-owner totals
 
@@ -86,7 +86,7 @@ Within the issue #100 scope (non-FAX owners) there are 231 offset-named members,
 | `V90MappingParams` | 9 | 1 | 1 | 0 | 0 | 0 |  |
 | `V90Modem` | 15 | 0 | 0 | 0 | 0 | 0 |  |
 | `V90Modulator` | 22 | 0 | 0 | 0 | 0 | 0 |  |
-| `V90Parameters` | 299 | 0 | 0 | 0 | 44 | 0 |  |
+| `V90Parameters` | 301 | 0 | 0 | 0 | 42 | 0 |  |
 | `V90Phase2Info` | 11 | 0 | 0 | 0 | 0 | 0 |  |
 | `V90Phase3Demodulator` | 24 | 9 | 9 | 0 | 0 | 0 | Batch 16 |
 | `V90Phase3Modulator` | 31 | 0 | 0 | 0 | 0 | 1 |  |

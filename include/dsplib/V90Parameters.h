@@ -486,7 +486,13 @@ public:
 	float	TRN2D_MAX_MEAN_ERROR_ENERGY_IN_PHASE4;	/* +0x428 */
 	float	PHASE3_ERROR_FOR_V34_FALLBACK;	/* +0x42c */
 	float	PHASE4_ERROR_FOR_V34_FALLBACK;	/* +0x430 */
-	int	unnamed_434;		/* +0x434  setToDefault only; the object stores 250.0f (0x437a0000) -- 878 */
+	/* +0x434  read by V90ConnectionEvaluator.cpp:882 and copied into the
+	 * evaluator's `phase4ErrorForV34Fallback`; the object's own diagnostic
+	 * there prints "pdsnrCurrentV34DropThreshPhase4 set to = ...", which is
+	 * the author's name for this slot.  Kept `int` per finding F878 -- the
+	 * value is a float at runtime (250.0f, 0x437a0000) but the int/float
+	 * question is a separate F878 site, not this batch. */
+	int	PDSNR_CURRENT_V34_DROP_THRESH_PHASE4;	/* +0x434 */
 	float	PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH;	/* +0x438 */
 	float	QC_PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH;	/* +0x43c */
 	/*
@@ -497,7 +503,12 @@ public:
 	 * never for an int-to-float one.  `setToDefault` stores the same
 	 * four bytes either way.
 	 */
-	float	unnamed_440;		/* +0x440  setToDefault only; 10.0f -- 878 */
+	/* +0x440  the ALT-RBS variant of +0x438: V90Phase3Demodulator copies it
+	 * into `PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH` only when
+	 * `isThereAnyAltRbsPhase()` (V90Phase3Demodulator.cpp:800, 956, 1133,
+	 * 2397), beside the already-named QC variant at +0x43c.  10.0f by
+	 * default (0x41200000) -- finding F878. */
+	float	PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH_ALT_RBS;	/* +0x440 */
 	int  	ENABLE_RRN_UP;	/* +0x444 */
 	int  	ENABLE_RRN_DOWN;	/* +0x448 */
 	int  	RATE_UP_DETECT_DURATION;	/* +0x44c */
