@@ -165,11 +165,22 @@ struct v17_status {
 	 * independently calls the same offset `snr`.  Finding F9100.
 	 */
 	short snr;		/* +0x08 <- GetSNRV17; 0 from V17TX_status  */
+	/* +0x0a: written 0 by both fillers and read by nothing, and
+	 * `v22_status` leaves this same offset unnamed -- retained neutral
+	 * (Batch 28). */
 	short short_0a;		/* +0x0a always 0 here                       */
+	/* +0x0c: written 0 by `V17TX_status` alone and read by nothing,
+	 * `v22_status` leaves the offset unmodelled and `v32_status` names
+	 * its own `r0c` from a source V.17 does not have -- retained neutral
+	 * (Batch 28). */
 	short short_0c;		/* +0x0c always 0 here                       */
 	short short_0e;		/* +0x0e NOT WRITTEN -- the object steps over
 				 *       it, and v32_status zeroes it        */
 	short short_10;		/* +0x10 <- params + 0x02, read a second time */
+	/* +0x12: `V17TX_status` writes 0 and `V17RX_status` writes the
+	 * receive bit rate; `v22_status` leaves it unnamed and `v32_status`'s
+	 * `r12` comes from an unrelated source -- two modules disagree, so
+	 * retained neutral (Batch 28). */
 	short short_12;		/* +0x12 always 0 here                       */
 	unsigned char flags;	/* +0x14 ASSIGNED, not merged; see D1032     */
 	unsigned char flags1;	/* +0x15 bit 0 cleared, bits 1..7 preserved  */
@@ -305,7 +316,8 @@ struct v17_status {
  * `V17TX_modem` tests for zero to choose between queueing the caller's
  * block and passing it straight through, and +0x14 is a dispatch slot
  * planted at construction (the call carries no relocation, so nothing
- * here can say which function lands in it).
+ * here can say which function lands in it).  +0x08 is the field
+ * `v17tx_priv::r08`, which Batch 28 retained neutral on that ground.
  */
 #define V17TXP_FIFO		0x00
 #define V17TXP_SGD		0x04
@@ -370,7 +382,9 @@ struct v17_status {
  * `V17TX_STATE_SCR1` instead of by way of `V17TX_STATE_BRIDGE`. That reads as
  * a short-versus-long training request, the same role V.17 fax's "short
  * training" option plays in the ITU-T text, but nothing in the object types
- * it that way, so the name stays neutral.
+ * it that way, so the name stays neutral.  `v17tx_priv::r0c` is this value
+ * copied at construction and is retained neutral for the same reason
+ * (Batch 28).
  *
  * `V17TXP_STATE` is the half-duplex machine's own state number, `V17TX_STATE_*`
  * below -- typed by `TxNextStateV17`'s own `jmp *table(,%eax,4)` (a real jump
@@ -392,7 +406,8 @@ struct v17_status {
  * Cleared to 0 by `TxNextStateV17`'s ALT arm alone, immediately before it
  * seeds the equaliser-conditioning LFSR with `SeedScramblerV17`. NEUTRAL:
  * nothing else in this closure reads or writes it, so no role is established
- * beyond "the ALT transition clears it".
+ * beyond "the ALT transition clears it".  Batch 28 retained the field
+ * `v17tx_priv::r1c` on this ground.
  */
 #define V17TXP_SHORT_001C	0x1c
 
@@ -543,10 +558,22 @@ union v17_result {
 struct v17tx_priv {
 	struct fax_fifo *fifo;	/* +0x00 */
 	struct sgd *sgd;	/* +0x04 */
+	/* +0x08 is the V17TXP_INT_0008 FIFO-bypass gate: `V17TX_modem`
+	 * queues the caller's block when it is zero and passes it through
+	 * when non-zero, and `V17TX_control` sets it 0/1 from `ctl1` bit 4.
+	 * The bit's meaning beyond the gate is unstated -- retained neutral
+	 * (Batch 28). */
 	int r08;		/* +0x08 */
+	/* +0x0c is the value of `cfg.int_0018` (V17TXP_INT_000C) copied at
+	 * construction and read only by the ALT and EQCOND arms; it selects
+	 * a budget and bypasses BRIDGE, which reads as short-vs-long
+	 * training but is not typed by the object -- retained neutral
+	 * (Batch 28). */
 	int r0c;		/* +0x0c */
 	short mode;		/* +0x10 */
-	short r12;		/* +0x12 unmodelled */
+	/* +0x12 is touched by nothing reconstructed, reader or writer --
+	 * retained neutral (Batch 28). */
+	short r12;		/* +0x12 */
 	/**
 	 * @brief Run the active transmit state.
 	 * @param modem Owning v17tx, not this private block.
@@ -559,6 +586,8 @@ struct v17tx_priv {
 			 short *budget); /* +0x14 */
 	short state;		/* +0x18 */
 	short countdown;	/* +0x1a */
+	/* +0x1c is V17TXP_SHORT_001C: cleared by the ALT arm alone and read
+	 * by nothing -- retained neutral (Batch 28). */
 	short r1c;		/* +0x1c */
 	unsigned short no_carrier_sym; /* +0x1e */
 };

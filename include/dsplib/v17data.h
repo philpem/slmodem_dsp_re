@@ -220,9 +220,14 @@ struct v17_smc {
 		} byte;
 	} mode;			/* +0x00 whole-word stores, low-byte reads */
 	short r02;		/* +0x02 copied from SMCv17_CFG            */
+	/* +0x04 is in no dataflow at all -- it is absent from the field map
+	 * above and written and read by nothing reconstructed -- retained
+	 * neutral (Batch 28). */
 	short r04;		/* +0x04 unmodelled                        */
 	short quad;		/* +0x06                                   */
 	short state;		/* +0x08 differential state                */
+	/* +0x0a, like +0x04, is in no dataflow; no reader and no writer --
+	 * retained neutral (Batch 28). */
 	short r0a;		/* +0x0a unmodelled                        */
 	short trellis;		/* +0x0c                                   */
 	short prev;		/* +0x0e previous trellis state            */
@@ -232,6 +237,11 @@ struct v17_smc {
 
 /* V17TX_create's 0x90-byte fixed-point block. */
 struct v17tx_fp {
+	/* +0x00 is an eight-byte head nothing reconstructed touches.  The
+	 * sibling transmit blocks (`v27_tx_block`, `v32_symout`) call an
+	 * identical head padding, but this one's content is not established
+	 * and giving it the sibling's name would claim more than the object
+	 * says -- retained neutral (Batch 28). */
 	unsigned char r00[8];		/* +0x00 unmodelled                   */
 	struct fpm_smc_ring ring;	/* +0x08 shared mapper/shaper ring    */
 	struct fpm_sdm sdm;		/* +0x1c transmit scrambler           */
@@ -239,6 +249,8 @@ struct v17tx_fp {
 	struct fpm_pps pps;		/* +0x48 pulse shaper                 */
 	v17_encoder_fn encoders[V17FP_ENCODERS_N]; /* +0x80              */
 	short encoder_sel;		/* +0x8c                              */
+	/* +0x8e, the block's trailing short, is written and read by nothing
+	 * reconstructed -- retained neutral (Batch 28). */
 	short r8e;			/* +0x8e unmodelled                   */
 };
 
@@ -293,6 +305,9 @@ void SMCv17_init(void *smc, const short *cfg);
  *               (1, 2, 3, 4), UNSIGNED (`movzwl`), used both as a shift
  *               count and to build the three masks `SMCv17_encoder_tcm`
  *               derives from it once, before its loop
+ *
+ * `smc + 0x04` and `smc + 0x0a` appear in none of that dataflow -- no
+ * reader and no writer reconstructed -- and are retained neutral (Batch 28).
  */
 extern const unsigned short SMCv17_PMAP4[4];	/* differential quadrant map,
 						 * SMCv17_encoder_dif only    */
