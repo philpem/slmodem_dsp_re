@@ -23,8 +23,8 @@ The production-use column counts the member's identifier across `src/` only. It 
 | owners (struct/class) | 242 |
 | named | 2644 |
 | offset-named | 378 |
-|   on record (batch/wave or beside the field) | 346 |
-|   residual, not on record | 32 |
+|   on record (batch/wave or beside the field) | 358 |
+|   residual, not on record | 20 |
 | placeholder (`unmapped_`/`unnamed_`) | 73 |
 |   residual placeholder | 56 |
 | padding | 151 |
@@ -38,8 +38,8 @@ The parser is textual: it reads single-line member declarations inside `struct`/
 ## Assessment
 
 - 2644 of 3246 parsed members carry a real name.
-- 378 carry an offset-only name; 346 of those are on record (a batch/wave ledger or a substantive comment beside them).
-- 32 offset-named members are residual and appear in the ledger below with an explicit, justified disposition.
+- 378 carry an offset-only name; 358 of those are on record (a batch/wave ledger or a substantive comment beside them).
+- 20 offset-named members are residual and appear in the ledger below with an explicit, justified disposition.
 - 73 members are explicit placeholders (`unmapped_`/`unnamed_`); their names already state that the reconstruction does not model them.
 - 151 members are alignment padding, which must not be named.
 
@@ -153,7 +153,7 @@ Within the issue #100 scope (non-FAX owners) there are 230 offset-named members,
 | `fax_ctx` | 2 | 0 | 0 | 0 | 0 | 2 |  |
 | `fax_fifo` | 4 | 0 | 0 | 0 | 0 | 0 |  |
 | `faxvmi` | 6 | 0 | 0 | 0 | 0 | 1 |  |
-| `faxvmi_cfg` | 1 | 2 | 1 | 1 | 0 | 0 |  |
+| `faxvmi_cfg` | 1 | 2 | 2 | 0 | 0 | 0 |  |
 | `faxvmi_ctl` | 0 | 4 | 4 | 0 | 0 | 0 |  |
 | `faxvmi_framer` | 6 | 0 | 0 | 0 | 0 | 1 |  |
 | `faxvmi_link` | 0 | 1 | 1 | 0 | 0 | 1 |  |
@@ -204,8 +204,8 @@ Within the issue #100 scope (non-FAX owners) there are 230 offset-named members,
 | `tag_retrainReqDet` | 9 | 0 | 0 | 0 | 0 | 0 |  |
 | `toneiir` | 10 | 0 | 0 | 0 | 0 | 0 |  |
 | `toneiir_cfg` | 12 | 0 | 0 | 0 | 0 | 1 |  |
-| `v17_smc` | 5 | 4 | 2 | 2 | 0 | 0 |  |
-| `v17_status` | 7 | 6 | 3 | 3 | 0 | 0 |  |
+| `v17_smc` | 5 | 4 | 4 | 0 | 0 | 0 |  |
+| `v17_status` | 7 | 6 | 6 | 0 | 0 | 0 |  |
 | `v17rx` | 10 | 9 | 9 | 0 | 0 | 0 |  |
 | `v17rx_cfg` | 3 | 5 | 5 | 0 | 0 | 0 |  |
 | `v17rx_ctl` | 3 | 1 | 1 | 0 | 3 | 0 |  |
@@ -214,8 +214,8 @@ Within the issue #100 scope (non-FAX owners) there are 230 offset-named members,
 | `v17tx` | 4 | 0 | 0 | 0 | 0 | 0 |  |
 | `v17tx_cfg` | 3 | 5 | 5 | 0 | 0 | 0 |  |
 | `v17tx_control_req` | 3 | 1 | 1 | 0 | 0 | 1 |  |
-| `v17tx_fp` | 6 | 2 | 0 | 2 | 0 | 0 |  |
-| `v17tx_priv` | 6 | 4 | 0 | 4 | 0 | 0 |  |
+| `v17tx_fp` | 6 | 2 | 2 | 0 | 0 | 0 |  |
+| `v17tx_priv` | 6 | 4 | 4 | 0 | 0 | 0 |  |
 | `v21_rx` | 4 | 12 | 12 | 0 | 0 | 3 |  |
 | `v21_rx_dsp` | 3 | 3 | 3 | 0 | 0 | 0 |  |
 | `v21_rx_hdx` | 2 | 0 | 0 | 0 | 0 | 0 |  |
@@ -371,11 +371,11 @@ Residual rows: **68**.  Every row has an explicit disposition; none is a name in
 
 | owner | named | offset | on record | residual | placeholder | pad |
 |---|---:|---:|---:|---:|---:|---:|
-| `faxvmi_cfg` | 1 | 2 | 1 | 1 | 0 | 0 |
+| `faxvmi_cfg` | 1 | 2 | 2 | 0 | 0 | 0 |
 | `faxvmi_ctl` | 0 | 4 | 4 | 0 | 0 | 0 |
 | `faxvmi_link` | 0 | 1 | 1 | 0 | 0 | 1 |
-| `v17_smc` | 5 | 4 | 2 | 2 | 0 | 0 |
-| `v17_status` | 7 | 6 | 3 | 3 | 0 | 0 |
+| `v17_smc` | 5 | 4 | 4 | 0 | 0 | 0 |
+| `v17_status` | 7 | 6 | 6 | 0 | 0 | 0 |
 | `v17rx` | 10 | 9 | 9 | 0 | 0 | 0 |
 | `v17rx_cfg` | 3 | 5 | 5 | 0 | 0 | 0 |
 | `v17rx_ctl` | 3 | 1 | 1 | 0 | 3 | 0 |
@@ -383,8 +383,8 @@ Residual rows: **68**.  Every row has an explicit disposition; none is a name in
 | `v17rx_state` | 15 | 14 | 14 | 0 | 0 | 0 |
 | `v17tx_cfg` | 3 | 5 | 5 | 0 | 0 | 0 |
 | `v17tx_control_req` | 3 | 1 | 1 | 0 | 0 | 1 |
-| `v17tx_fp` | 6 | 2 | 0 | 2 | 0 | 0 |
-| `v17tx_priv` | 6 | 4 | 0 | 4 | 0 | 0 |
+| `v17tx_fp` | 6 | 2 | 2 | 0 | 0 | 0 |
+| `v17tx_priv` | 6 | 4 | 4 | 0 | 0 | 0 |
 | `v21_rx` | 4 | 12 | 12 | 0 | 0 | 3 |
 | `v21_rx_dsp` | 3 | 3 | 3 | 0 | 0 | 0 |
 | `v21_status` | 7 | 5 | 5 | 0 | 0 | 0 |

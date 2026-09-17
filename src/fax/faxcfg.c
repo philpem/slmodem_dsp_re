@@ -42,7 +42,7 @@ const struct faxvmi_cfg FAXVMI_CFG = {
 	128,		/* +0x0c  frame_size                                 */
 	0,		/* +0x0e  slot                                       */
 	0,		/* +0x10  modem_cfg                                  */
-	0		/* +0x14                                             */
+	0		/* +0x14  ptr_0014 (constructor's 4th arg, NULL)     */
 };
 
 /* V.17: 14400 bit/s, the fastest of the three. */

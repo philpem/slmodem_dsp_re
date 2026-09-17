@@ -452,25 +452,26 @@ def main():
     owners = {}
     for e in entries:
         owners.setdefault(e["owner"], {"named": 0, "offset": 0, "pad": 0,
-                                       "offset_doc": 0})
+                                       "offset_doc": 0, "placeholder": 0})
         owners[e["owner"]][e["kind"]] += 1
         if e["kind"] == "offset" and e["has_disposition"]:
             owners[e["owner"]]["offset_doc"] += 1
-    tot = {"named": 0, "offset": 0, "pad": 0, "offset_doc": 0}
-    print(f"{'owner':<34} {'named':>5} {'offset':>6} {'doc':>4} {'pad':>4} "
-          f"{'gap':>4}")
+    tot = {"named": 0, "offset": 0, "pad": 0, "offset_doc": 0,
+           "placeholder": 0}
+    print(f"{'owner':<34} {'named':>5} {'offset':>6} {'doc':>4} {'ph':>3} "
+          f"{'pad':>4} {'gap':>4}")
     for owner in sorted(owners):
         o = owners[owner]
         for k in tot:
             tot[k] += o[k]
         gap = o["offset"] - o["offset_doc"]
         print(f"{owner:<34} {o['named']:>5} {o['offset']:>6} "
-              f"{o['offset_doc']:>4} {o['pad']:>4} {gap:>4}")
+              f"{o['offset_doc']:>4} {o['placeholder']:>3} {o['pad']:>4} {gap:>4}")
     print(f"{'TOTAL':<34} {tot['named']:>5} {tot['offset']:>6} "
-          f"{tot['offset_doc']:>4} {tot['pad']:>4} "
+          f"{tot['offset_doc']:>4} {tot['placeholder']:>3} {tot['pad']:>4} "
           f"{tot['offset'] - tot['offset_doc']:>4}")
     print(f"\n{len(owners)} owner(s), {len(entries)} member declaration(s), "
-          f"{tot['offset']} offset-named.")
+          f"{tot['offset']} offset-named, {tot['placeholder']} placeholder.")
 
 
 if __name__ == "__main__":

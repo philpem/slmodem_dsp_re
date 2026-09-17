@@ -1768,6 +1768,102 @@ declarations -- `v27rx_cfg`'s seven and `v29rx_cfg`'s six, plus
 `v29tx_control_req::scale_mul` -- were restored to single-line trailing
 annotations, and the final run reports 2202 again.
 
+## Batch 28: FAX V.17 leftovers and faxvmi_cfg (issue #130)
+
+Owner-scoped pass over the last offset-named FAX members: `struct v17_status`
+(`short_0a`, `short_0c`, `short_12`), `struct v17tx_priv` (`r08`, `r0c`,
+`r12`, `r1c`), `struct v17tx_fp` (`r00`, `r8e`), `struct v17_smc` (`r04`,
+`r0a`) and `struct faxvmi_cfg` (`ptr_0014`).  These are the twelve the census
+reported as offset residuals after Batch 27; `struct v17tx`,
+`struct v17tx_cfg` and `struct v17tx_control_req` carry no residual, so
+nothing in those owners was in scope.
+
+**None of the twelve is renamed, and that is the batch's result.**  Each is
+retained neutral with the reason recorded beside it, because the object
+establishes only the plumbing and never a single role.  A wrong name is worse
+than an offset, and the siblings these fields were compared against carry no
+name to carry across.
+
+### Retained neutral, with the reason
+
+| Owner | Member | Reason | Confidence |
+| --- | --- | --- | --- |
+| `v17_status` | `short_0a` | Written 0 by both fillers and read by nothing; `v22_status` leaves the same offset unnamed and `v32_status` does not model `+0x0a` as a role | high |
+| `v17_status` | `short_0c` | Written 0 by `V17TX_status` alone and untouched by `V17RX_status`; `v22_status` leaves `+0x0c` unmodelled and `v32_status`'s `r0c` has a different source | high |
+| `v17_status` | `short_12` | `V17TX_status` writes 0 and `V17RX_status` writes the receive bit rate; `v22_status` leaves it unnamed and `v32_status`'s `r12` is unrelated -- two modules disagree | high |
+| `v17tx_priv` | `r08` | The `V17TXP_INT_0008` FIFO-bypass/underrun gate in `V17TX_modem` and `TxHdxDataV17`; the bit's meaning beyond the gate is unstated, the same disposition Batch 27 gave `v27_tx_source::int_0008`/`v29_tx_params::int_0008` | high |
+| `v17tx_priv` | `r0c` | The value of `cfg.int_0018` (`V17TXP_INT_000C`) copied at construction and read only by the ALT/EQCOND arms, whose budget and BRIDGE bypass read as short-vs-long training but are not typed; the constant itself is deliberately neutral | high |
+| `v17tx_priv` | `r12` | Written and read by nothing reconstructed | high |
+| `v17tx_priv` | `r1c` | `V17TXP_SHORT_001C`: cleared by the ALT arm alone and read by nothing | high |
+| `v17tx_fp` | `r00[8]` | Eight-byte head touched by nothing reconstructed.  `v27_tx_block`/`v32_symout` call an identical head `pad_*`, but this one's content is not established, so the sibling's name is declined | high |
+| `v17tx_fp` | `r8e` | The block's trailing short, written and read by nothing reconstructed | high |
+| `v17_smc` | `r04` | In no dataflow: absent from the coder's own field map and written/read by nothing | high |
+| `v17_smc` | `r0a` | In no dataflow, like `r04` | high |
+| `faxvmi_cfg` | `ptr_0014` | The constructor's fourth argument.  Every reconstructed caller passes NULL, and its destination `faxvmi::int_0014` is read by nothing | high |
+
+The three `v17_status` fields are the offsets `v22_status`/`v32_status`
+already disagree on or leave unnamed; `v17fax.h`'s banner records that the
+neutral offset name is kept there, and this batch carries that disposition
+onto the fields themselves.  `r08`/`r0c`/`r1c` are the storage behind
+`V17TXP_INT_0008`/`V17TXP_INT_000C`/`V17TXP_SHORT_001C`; those constants are
+themselves deliberately neutral, so the fields cannot take a stronger name
+than the constants do.
+
+`r00[8]` is the one place a sibling name was declined rather than carried:
+`v27_tx_block`'s `pad_0000[8]` and `v32_symout`'s `pad00[8]` are the same
+shape, but calling this one padding would be a claim about content the
+object does not make.  It matches Batch 25's treatment of
+`v17rx_state::r4f88[4]`.
+
+### Scoping, macros and manifests
+
+Every renamed identifier was classified by owning object before editing;
+there is none, so no `src/`, test or mutation occurrence moved.  The
+`v17_status` `short_0a`/`short_0c`/`short_12`, the `v17tx_priv` `r08`/`r0c`/
+`r12`/`r1c`, the `v17tx_fp` `r00`/`r8e`, the `v17_smc` `r04`/`r0a` and
+`faxvmi_cfg::ptr_0014` keep their spellings, so no mutation manifest
+`find`/`replace` changes; none of these identifiers appears in
+`test/mutations/` at all (checked with a tree-wide search).
+
+The offset constants keep their spelling.  Their comments now record the
+disposition of the field each names: `V17TXP_INT_0008` (`v17tx_priv::r08`),
+`V17TXP_INT_000C` (`::r0c`) and `V17TXP_SHORT_001C` (`::r1c`).  There is no
+constant for `v17_smc` `+0x04`/`+0x0a`, for `v17tx_fp` `+0x00`/`+0x8e`, or
+for `v17_status` `+0x0a`/`+0x0c`/`+0x12`, so only the field comments carry
+those.  `FAXVMI_CFG`'s own initializer comment in `src/fax/faxcfg.c` records
+`+0x14` as `ptr_0014`.
+
+### Verification
+
+Every changed non-doc file differs from `HEAD` by comments alone: a token
+comparison with comments and string/character-literal contents removed
+reports zero code change in `v17fax.h`, `v17data.h`, `faxcfg.h` and
+`faxcfg.c`.  No identifier can have moved, so the manifest check (every
+non-`{old,new}` identifier count unchanged, pairs balanced) holds vacuously.
+One trap was hit and fixed in the census pass: a comment line ending in a
+semicolon (`... read by nothing;`) is parsed as a member declaration and
+invented a spurious `nothing` field, taking the total from 3246 to 3247.  The
+semicolon was removed before the inventory was regenerated; the census now
+reads its baseline 3246 members again.
+
+### Gate
+
+Batch 28 gate result: Gentoo `make phase` exited 0, **`period differential:
+375 passed, 0 failed`** and `phase boundary: period differential and
+structural checks all OK`.  All 655 `build/period/*.o` hashes are
+**byte-identical** to the pre-edit snapshot
+(`/home/philpem/slmodem/tmp/fax-v17left-before.sha256` vs
+`/home/philpem/slmodem/tmp/fax-v17left-after.sha256`, 655/655).  Structural
+checks in the same log: 2202 offset annotations matching
+`__builtin_offsetof`, 13973 references checked with 0 resolving to nothing,
+10041 mutations over 272 suites with 0 anchors matching other than exactly
+once.  Log: `build/structure-fax-v17left/gates.log`.
+
+`docs/naming-inventory.md` was regenerated: named 2644 (unchanged),
+offset-named 378 (unchanged), on-record 346 -> 358, residual 32 -> 20; **FAX
+offset residual 12 -> 0**.  Placeholder 73, padding 151, member declarations
+3246 and owners 242 are unchanged.
+
 
 
 

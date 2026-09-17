@@ -118,6 +118,10 @@ struct faxvmi_cfg {
 					 * constructors themselves plant here
 					 * (F9053)                           */
 	void	       *modem_cfg;	/* +0x10  the allocated modem table  */
+	/* +0x14 is the constructor's fourth argument.  Every reconstructed
+	 * caller passes NULL for it, and its destination in `struct faxvmi`
+	 * (`int_0014`) is read by nothing, so no role is established --
+	 * retained neutral (Batch 28). */
 	void	       *ptr_0014;	/* +0x14  the constructor's 4th arg  */
 };
 
