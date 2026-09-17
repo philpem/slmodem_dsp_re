@@ -374,7 +374,7 @@ V21RX_delete(void *modem)
  * apart.  `t_fifocreate.c` is what proves `FIFO_CFG` itself, through
  * `FIFO_create`'s own NULL-config default.
  *
- * THE THREE LITERAL FREQUENCY WRITES ARE DEAD.  `V21TX_CFG.short_0000`
+ * THE THREE LITERAL FREQUENCY WRITES ARE DEAD.  `V21TX_CFG.protocol`
  * selects one of three short blocks (1180/980, 0/0, or 1850/1650 depending on
  * whether it is 0, anything else, or 1) that each store a freq pair onto the
  * stack -- and every one of the three is unconditionally overwritten by
@@ -409,7 +409,7 @@ V21TX_create(void *modem, const struct v21tx_cfg *params)
 	struct v21_tx_dsp *dsp;
 	struct v21_tx_hdx *hdx;
 	void *existing_fifo;
-	short short_0000;
+	short protocol;
 	int fresh = 0;
 	int zero = 0;
 
@@ -474,11 +474,11 @@ V21TX_create(void *modem, const struct v21tx_cfg *params)
 	}
 
 	/*
-	 * `short_0000` selects one of three (past the dead frequency writes,
+	 * `protocol` selects one of three (past the dead frequency writes,
 	 * identical) paths; only the third has an observable side effect.
 	 */
-	memcpy(&short_0000, modem, sizeof short_0000);
-	if (short_0000 == 0 || short_0000 == 1) {
+	memcpy(&protocol, modem, sizeof protocol);
+	if (protocol == 0 || protocol == 1) {
 		/* No observable effect; see the function comment and D1241. */
 	} else {
 		tx->result.byte.flags1 |= V21TX_RESULT_B1_BIT1;
@@ -1269,7 +1269,7 @@ V21TX_status(void *modem, struct v21_status *st)
 		return 0;
 
 	tx_flags = ((unsigned char *)(void *)&tx->cfg)[V21TX_OBJ_FLAGS];
-	st->protocol = tx->cfg.short_0000;
+	st->protocol = tx->cfg.protocol;
 	st->tx_bps = V21_STATUS_BPS;
 	st->rx_bps = 0;
 	st->quality = 0;

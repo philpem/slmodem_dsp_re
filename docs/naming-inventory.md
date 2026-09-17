@@ -21,15 +21,15 @@ The production-use column counts the member's identifier across `src/` only. It 
 |---|---:|
 | member declarations parsed | 3246 |
 | owners (struct/class) | 242 |
-| named | 2638 |
-| offset-named | 384 |
-|   on record (batch/wave or beside the field) | 273 |
-|   residual, not on record | 111 |
+| named | 2640 |
+| offset-named | 382 |
+|   on record (batch/wave or beside the field) | 300 |
+|   residual, not on record | 82 |
 | placeholder (`unmapped_`/`unnamed_`) | 73 |
 |   residual placeholder | 60 |
 | padding | 151 |
 
-Of the 384 offset-named members, **230 are in non-FAX owners** (the issue #100 scope) and **20 of those are residual**. FAX owners are a separate phase: listed for completeness, not dispositioned here.
+Of the 382 offset-named members, **230 are in non-FAX owners** (the issue #100 scope) and **20 of those are residual**. FAX owners are a separate phase: listed for completeness, not dispositioned here.
 
 ## Coverage and limitations
 
@@ -37,9 +37,9 @@ The parser is textual: it reads single-line member declarations inside `struct`/
 
 ## Assessment
 
-- 2638 of 3246 parsed members carry a real name.
-- 384 carry an offset-only name; 273 of those are on record (a batch/wave ledger or a substantive comment beside them).
-- 111 offset-named members are residual and appear in the ledger below with an explicit, justified disposition.
+- 2640 of 3246 parsed members carry a real name.
+- 382 carry an offset-only name; 300 of those are on record (a batch/wave ledger or a substantive comment beside them).
+- 82 offset-named members are residual and appear in the ledger below with an explicit, justified disposition.
 - 73 members are explicit placeholders (`unmapped_`/`unnamed_`); their names already state that the reconstruction does not model them.
 - 151 members are alignment padding, which must not be named.
 
@@ -216,16 +216,16 @@ Within the issue #100 scope (non-FAX owners) there are 230 offset-named members,
 | `v17tx_control_req` | 3 | 1 | 1 | 0 | 0 | 1 |  |
 | `v17tx_fp` | 6 | 2 | 0 | 2 | 0 | 0 |  |
 | `v17tx_priv` | 6 | 4 | 0 | 4 | 0 | 0 |  |
-| `v21_rx` | 4 | 12 | 0 | 12 | 0 | 3 |  |
-| `v21_rx_dsp` | 3 | 2 | 2 | 0 | 0 | 0 |  |
+| `v21_rx` | 4 | 12 | 12 | 0 | 0 | 3 |  |
+| `v21_rx_dsp` | 3 | 3 | 3 | 0 | 0 | 0 |  |
 | `v21_rx_hdx` | 2 | 0 | 0 | 0 | 0 | 0 |  |
-| `v21_status` | 7 | 6 | 3 | 3 | 0 | 0 |  |
+| `v21_status` | 7 | 5 | 5 | 0 | 0 | 0 |  |
 | `v21_tx` | 4 | 0 | 0 | 0 | 0 | 0 |  |
 | `v21_tx_dsp` | 3 | 0 | 0 | 0 | 0 | 0 |  |
-| `v21_tx_hdx` | 2 | 2 | 0 | 2 | 0 | 0 |  |
-| `v21rx_cfg` | 2 | 5 | 0 | 5 | 0 | 0 |  |
+| `v21_tx_hdx` | 2 | 2 | 2 | 0 | 0 | 0 |  |
+| `v21rx_cfg` | 2 | 5 | 5 | 0 | 0 | 0 |  |
 | `v21rx_ctl` | 1 | 1 | 1 | 0 | 2 | 0 |  |
-| `v21tx_cfg` | 1 | 8 | 1 | 7 | 0 | 0 |  |
+| `v21tx_cfg` | 3 | 6 | 6 | 0 | 0 | 0 |  |
 | `v21tx_ctl` | 2 | 1 | 1 | 0 | 3 | 0 |  |
 | `v22_dp` | 7 | 0 | 0 | 0 | 0 | 0 |  |
 | `v22_fse` | 21 | 8 | 8 | 0 | 0 | 0 | fieldnaming wave |
@@ -385,13 +385,13 @@ Residual rows: **68**.  Every row has an explicit disposition; none is a name in
 | `v17tx_control_req` | 3 | 1 | 1 | 0 | 0 | 1 |
 | `v17tx_fp` | 6 | 2 | 0 | 2 | 0 | 0 |
 | `v17tx_priv` | 6 | 4 | 0 | 4 | 0 | 0 |
-| `v21_rx` | 4 | 12 | 0 | 12 | 0 | 3 |
-| `v21_rx_dsp` | 3 | 2 | 2 | 0 | 0 | 0 |
-| `v21_status` | 7 | 6 | 3 | 3 | 0 | 0 |
-| `v21_tx_hdx` | 2 | 2 | 0 | 2 | 0 | 0 |
-| `v21rx_cfg` | 2 | 5 | 0 | 5 | 0 | 0 |
+| `v21_rx` | 4 | 12 | 12 | 0 | 0 | 3 |
+| `v21_rx_dsp` | 3 | 3 | 3 | 0 | 0 | 0 |
+| `v21_status` | 7 | 5 | 5 | 0 | 0 | 0 |
+| `v21_tx_hdx` | 2 | 2 | 2 | 0 | 0 | 0 |
+| `v21rx_cfg` | 2 | 5 | 5 | 0 | 0 | 0 |
 | `v21rx_ctl` | 1 | 1 | 1 | 0 | 2 | 0 |
-| `v21tx_cfg` | 1 | 8 | 1 | 7 | 0 | 0 |
+| `v21tx_cfg` | 3 | 6 | 6 | 0 | 0 | 0 |
 | `v21tx_ctl` | 2 | 1 | 1 | 0 | 3 | 0 |
 | `v27_rx` | 10 | 6 | 0 | 6 | 0 | 3 |
 | `v27_rx_block` | 18 | 2 | 0 | 2 | 0 | 3 |

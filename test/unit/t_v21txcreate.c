@@ -295,7 +295,7 @@ compare_tree(const char *what, void *a, void *b, long tag)
 static const struct {
 	const char *name;
 	int use_default;
-	short short_0000;
+	short protocol;
 } cases[] = {
 	{ "params NULL (V21TX_CFG)",         1, 0 },
 	{ "explicit, short_0000 == 0",       0, 0 },
@@ -309,7 +309,7 @@ static void
 build_cfg(struct v21tx_cfg *c, long k)
 {
 	*c = V21TX_CFG;
-	c->short_0000 = cases[k].short_0000;
+	c->protocol = cases[k].protocol;
 }
 
 static int
@@ -357,13 +357,13 @@ test_create_self_allocating(void)
 		}
 
 		/*
-		 * `short_0000`'s one observable effect: the "neither 0 nor
+		 * `protocol`'s one observable effect: the "neither 0 nor
 		 * 1" branch alone raises V21TX_RESULT_B1_BIT1 and reports
 		 * V21TX_STATUS_DEFAULT.  Checked directly, not only through
 		 * the blob comparison above.
 		 */
-		if (!cases[k].use_default && cases[k].short_0000 != 0
-		    && cases[k].short_0000 != 1) {
+		if (!cases[k].use_default && cases[k].protocol != 0
+		    && cases[k].protocol != 1) {
 			diff_eq_int("default-arm status is V21TX_STATUS_DEFAULT (%ld)",
 				    *FIELD(a, V21TX_OBJ_RESULT),
 				    V21TX_STATUS_DEFAULT, k);
@@ -372,7 +372,7 @@ test_create_self_allocating(void)
 				     & V21TX_RESULT_B1_BIT1) != 0, 1, k);
 		} else if (!cases[k].use_default) {
 			/*
-			 * short_0000 in {0, 1}: no further write to the
+			 * protocol in {0, 1}: no further write to the
 			 * status byte after V21TX_create's own zeroing of
 			 * the whole result word (0x09934d/0x099360) -- it
 			 * only becomes V21TX_STATUS_START once TxHdxStartV21

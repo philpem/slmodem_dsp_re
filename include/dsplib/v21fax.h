@@ -29,9 +29,11 @@
  * it does NOT do is say what most of them mean, since it is the only thing in
  * the object that writes them.  `V21TX_create` fixes the transmit handle at
  * `V21TX_OBJ_SIZE` (0x28) bytes the same way -- its own config area
- * (+0x00..+0x1b) is likewise WRITE-ONLY, read back by nothing reconstructed,
- * and kept as `struct v21tx_cfg` in `v21cfg.h` for that reason rather than
- * individually-named fields.  What IS modelled is the two DSP sub-blocks the
+ * (+0x00..+0x1b) is `struct v21tx_cfg` in `v21cfg.h`.  That area is NOT
+ * write-only: `V21TX_status` reads +0x00 and the byte at +0x10 back out, and
+ * `V21TX_control` writes +0x08 and that byte, which is what names
+ * `v21tx_cfg::protocol` and `v21tx_cfg::flags` (Batch 26).  What IS modelled
+ * is the two DSP sub-blocks the
  * handles point at, because every field in them is forced by the type of the
  * callee it is handed to -- which is CLAUDE.md's second-strongest class of
  * evidence, and is how `b103fp.h` came by the same layout for Bell 103.
@@ -114,6 +116,11 @@
  *
  * `hdx + 0x00` is an int `RxHdxDataV21` tests and the transition into the
  * IDLE state clears.  Nothing reconstructed sets it, so it is not named.
+ *
+ * BATCH 26 re-confirmed all three `struct v21_rx_dsp` offsets: `int_0000` is
+ * read by nothing traced, and `int_0004`/`int_0008` keep the F8895
+ * disposition above -- the only B.103 parallel would mis-name one of the
+ * pair.
  */
 
 #ifndef DSPLIB_V21FAX_H
@@ -146,11 +153,11 @@ struct v21_tx_dsp {
 
 struct v21_tx_hdx {
 	struct fax_fifo	*fifo;
-	int		int_0004;
+	int		int_0004;	/* +0x04 arm gate; meaning unstated */
 	short		(*handler)(void *modem, unsigned short *in,
 				   short *out, short *budget);
 	short		state;
-	short		short_000e;
+	short		short_000e;	/* +0x0e 0; no reader, retained */
 };
 
 union v21_tx_result {
@@ -231,7 +238,7 @@ struct v21_tx {
  */
 struct v21tx_ctl {
 	unsigned char	unmapped_0000[0x04];
-	int		int_0004;	/* +0x04 -> cfg->int_0008           */
+	int		int_0004;	/* +0x04 -> cfg->int_0008; unread dest */
 	int		scale;		/* +0x08 -> dsp->fsm.cfg.scale, narrowed */
 	unsigned char	mask;		/* +0x0c bit 2 -> V21TX_FLAGS bit 2 */
 	unsigned char	flags;		/* +0x0d bit 1 REINIT, bit 4 forces
@@ -274,9 +281,8 @@ struct v21tx_ctl {
  */
 struct v21_rx_dsp {
 	int		int_0000;	/* +0x00 read by nothing traced     */
-	int		int_0004;	/* +0x04 CarrierDetectV21, and see
-					 *       the header note above      */
-	int		int_0008;	/* +0x08 CarrierDetectV21           */
+	int		int_0004;	/* +0x04 CarrierDetectV21; retained (F8895) */
+	int		int_0008;	/* +0x08 CarrierDetectV21; retained (F8895) */
 	struct fpm_agc	agc;		/* +0x0c DemodDataV21 hands this to
 					 *       FPM_AGC_agc; sizeof is 0x2c
 					 *       and the span was 0x2c      */
@@ -351,20 +357,20 @@ union v21_rx_status_word {
 struct v21_rx {
 	struct v21rx_cfg		cfg;
 	union v21_rx_status_word status;
-	short			*ptr_001c;
-	int			int_0020;
-	short			*ptr_0024;
-	int			int_0028;
-	int			int_002c;
-	short			short_0030;
+	short			*ptr_001c;	/* +0x1c fsd.trace; retained */
+	int			int_0020;	/* +0x20 0; read by nothing  */
+	short			*ptr_0024;	/* +0x24 &fsd.last_count; retained */
+	int			int_0028;	/* +0x28 0; read by nothing  */
+	int			int_002c;	/* +0x2c 0; read by nothing  */
+	short			short_0030;	/* +0x30 0; read by nothing  */
 	unsigned char		pad_0032[2];
-	int			int_0034;
-	int			int_0038;
-	short			short_003c;
+	int			int_0034;	/* +0x34 0; read by nothing  */
+	int			int_0038;	/* +0x38 0; read by nothing  */
+	short			short_003c;	/* +0x3c 0; read by nothing  */
 	unsigned char		pad_003e[2];
-	int			int_0040;
-	int			int_0044;
-	short			short_0048;
+	int			int_0040;	/* +0x40 0; read by nothing  */
+	int			int_0044;	/* +0x44 0; read by nothing  */
+	short			short_0048;	/* +0x48 0; read by nothing  */
 	unsigned char		pad_004a[2];
 	struct v21_rx_hdx	*hdx;
 	struct v21_rx_dsp	*dsp;
@@ -396,7 +402,7 @@ struct v21_rx {
  */
 struct v21rx_ctl {
 	unsigned char	unmapped_0000[0x04];
-	int		int_0004;	/* +0x04 -> cfg->int_0008           */
+	int		int_0004;	/* +0x04 -> cfg->int_0008; unread dest */
 	unsigned char	unmapped_0008[0x05];
 	unsigned char	flags;		/* +0x0d                            */
 };
@@ -481,6 +487,14 @@ struct v21rx_ctl {
  * is not enough to say they are an ARRAY rather than three fields that happen
  * to match, and nothing reads them to settle it.  They are spelled out one at
  * a time for that reason.
+ *
+ * BATCH 26 re-checked all twelve against the whole reconstructed tree
+ * (`v21.c`, `V21rx.c`, `class1*.c`, `faxvmi.c` and the unit tests): the
+ * constructor is still the only writer and no reconstructed reader exists,
+ * so `ptr_001c`, `int_0020`, `ptr_0024`, `int_0028`, `int_002c`,
+ * `short_0030`, `int_0034`, `int_0038`, `short_003c`, `int_0040`, `int_0044`
+ * and `short_0048` all stay offsets.  `V21RX_OBJ_TRACE`/`V21RX_OBJ_COUNT_AT`
+ * name the two sources, not the fields' purpose.
  */
 #define V21RX_OBJ_TRACE		0x1c	/* short *: dsp->fsd.trace          */
 #define V21RX_OBJ_INT_0020	0x20
@@ -635,6 +649,14 @@ struct v21rx_ctl {
  *
  * `V21TX_status` writes +0x00 through +0x0c, +0x10, +0x12, +0x14 and +0x15,
  * and touches neither +0x0e nor +0x16 nor +0x18.
+ *
+ * BATCH 26 reviewed `short_0a`, `short_0c` and `short_12` and retains all
+ * three.  `v22_status`, `v17_status` and `v29_status_prefix` model the same
+ * offsets and leave them unnamed too: `short_0a` and `short_0c` are written a
+ * literal zero by every filler, and `short_12` is written zero by
+ * `V21TX_status` while `V21RX_status` computes it from the FSD
+ * (`short_12 IS COMPUTED`, below) -- one arithmetic route to the same 300 the
+ * literal `rx_bps` carries, with no sibling name to carry across.
  */
 struct v21_status {
 	short		protocol;	/* +0x00 <- the transmitter's +0x00 */
@@ -642,12 +664,13 @@ struct v21_status {
 	short		rx_bps;		/* +0x04 written 0                  */
 	short		quality;	/* +0x06 written 0                  */
 	short		snr;		/* +0x08 written 0                  */
-	short		short_0a;	/* +0x0a written 0                  */
-	short		short_0c;	/* +0x0c written 0                  */
+	short		short_0a;	/* +0x0a written 0; retained (Batch 26) */
+	short		short_0c;	/* +0x0c written 0; retained (Batch 26) */
 	short		short_0e;	/* +0x0e written 0 by V21RX_status;
 					 *      NOT written by V21TX_status */
 	short		short_10;	/* +0x10 written 0                  */
-	short		short_12;	/* +0x12 written 0                  */
+	short		short_12;	/* +0x12 written 0 by TX, COMPUTED
+					 *      by RX; retained (Batch 26)    */
 	unsigned char	flags;		/* +0x14 see below                  */
 	unsigned char	flags1;		/* +0x15 bit 0 cleared, rest kept   */
 	short		short_16;	/* +0x16 NOT written                */
@@ -681,12 +704,14 @@ struct v21_status {
  *
  * +0x00 is loaded `movzwl` and only `%ax` is used, so its SIGNEDNESS IS FREE
  * (finding F614); it is spelled `unsigned short` here to match the load and
- * narrowed at the store, which is what the object does.
+ * narrowed at the store, which is what the object does.  The storage is
+ * `v21tx_cfg::protocol` (Batch 26).
  */
-#define V21TX_OBJ_PROTOCOL	0x00	/* unsigned short */
-#define V21TX_OBJ_FLAGS		0x10	/* unsigned char  */
+#define V21TX_OBJ_PROTOCOL	0x00	/* unsigned short; cfg.protocol      */
+#define V21TX_OBJ_FLAGS		0x10	/* unsigned char; low byte of
+					 * cfg.flags                         */
 
-#define V21TX_PROTOCOL(m) ((unsigned short)((struct v21_tx *)(m))->cfg.short_0000)
+#define V21TX_PROTOCOL(m) ((unsigned short)((struct v21_tx *)(m))->cfg.protocol)
 #define V21TX_FLAGS(m) (((unsigned char *)(void *)&((struct v21_tx *)(m))->cfg)[V21TX_OBJ_FLAGS])
 
 /* ------------------------------------------------------------------------ */
@@ -778,6 +803,9 @@ struct v21_status {
  * slot holds a function pointer and the word beside it is an `int` seeded to
  * zero.  `V21TX_modem` reads the first to choose an arm and calls through the
  * second.  What the int MEANS is not established, so it keeps its offset name.
+ * BATCH 26 re-checked it against the sibling transmit gates: `v27_tx_source::
+ * int_0008` and `v29_tx_params::int_0008` are the same arm selector and are
+ * themselves still unnamed, so there is no name to carry across.
  */
 #define V21TX_OBJ_PARAMS	0x20
 
@@ -802,7 +830,9 @@ struct v21_status {
  *
  * `V21TXP_SHORT_000E` is zeroed by the START and IDLE transition arms (the
  * ones that install TxHdxDataV21 and TxHdxStartV21 respectively) and by
- * NOTHING else in the object, so it is not named further.
+ * NOTHING else in the object, so it is not named further.  BATCH 26 retained
+ * it: V.27's/V.29's own second short past their state slot (`countdown`,
+ * `short_0016`) sits at a different offset and no role is shared.
  */
 #define V21TXP_STATE		0x0c	/* short: V21TX_STATE_*              */
 #define V21TXP_SHORT_000E	0x0e
@@ -1021,12 +1051,12 @@ void V21RX_delete(void *modem);
  * `FPM_FSM_init`'s frequencies and `samples_per_sym` are `FPM_FSM_CFG`'s own
  * (V.21 channel 2, 1850/1650 Hz, 24 samples/symbol) UNCONDITIONALLY --
  * `V21TX_create` writes two DIFFERENT literal frequency pairs first (1180/980
- * for `V21TX_CFG.short_0000 == 0`, 0/0 otherwise, 1850/1650 for `== 1`) and
+ * for `V21TX_CFG.protocol == 0`, 0/0 otherwise, 1850/1650 for `== 1`) and
  * every one of the three is immediately overwritten by the same 32-bit load
  * off `FPM_FSM_CFG` at 0x099409, so none is ever observed.  `scale` alone
  * survives as an override, to 0x1900 (6400) rather than the library's 32767.
  * D1241 records the dead literals; the net effect is reproduced without
- * writing dead code for it.  `V21TX_CFG.short_0000` still selects which of
+ * writing dead code for it.  `V21TX_CFG.protocol` still selects which of
  * three (near-identical, past the dead writes) paths runs, and only the
  * "neither 0 nor 1" one has an observable side effect: it raises
  * `V21TX_RESULT_B1_BIT1` and sets `V21TX_OBJ_RESULT` to `V21TX_STATUS_DEFAULT`
