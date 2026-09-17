@@ -521,7 +521,8 @@ V90Phase3Demodulator::~V90Phase3Demodulator()
 #define P3D_P_ANSPCM_LENGTH	(0x4cc / 4)
 
 /*
- * `params->unnamed_438 = params->unnamed_440` is `mov 0x440(%c),%eax;
+ * `params->unnamed_438 = params->PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH_ALT_RBS`
+ * is `mov 0x440(%c),%eax;
  * mov %eax,0x438(%c)` -- a raw 32-bit copy.  This comment used to add "between
  * a slot this tree types `float` and one it types `int`", which was the reason
  * for the word view; finding F2112 has since retyped +0x440 to `float` on the
@@ -797,7 +798,7 @@ V90Phase3Demodulator::getV90Decision(float sample)
 				    ->isThereAnyAltRbsPhase())
 					params
 					    ->PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH
-					    = params->unnamed_440;
+					    = params->PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH_ALT_RBS;
 				edprintf("V90Phase3Demodulator: enter Wait "
 					 "For Jd state @ %d\r\n", samplesInState);
 				state = (Phase3DemodulatorState)0x06;
@@ -953,7 +954,7 @@ V90Phase3Demodulator::getV90Decision(float sample)
 			if (autoDigitalImpDetector->isThereAnyAltRbsPhase())
 				params
 				    ->PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH
-				    = params->unnamed_440;
+				    = params->PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH_ALT_RBS;
 			samplesInState = 0;
 			state = (Phase3DemodulatorState)0x0b;
 		} else if (samplesInState == 0x9c40) {
@@ -1130,7 +1131,7 @@ V90Phase3Demodulator::getV90Decision(float sample)
 			if (autoDigitalImpDetector->isThereAnyAltRbsPhase())
 				params
 				    ->PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH
-				    = params->unnamed_440;
+				    = params->PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH_ALT_RBS;
 			samplesInState = 0;
 			state = (Phase3DemodulatorState)0x0e;
 		} else if (samplesInState == 0x9c40) {
@@ -2394,7 +2395,7 @@ void
 V90Phase3Demodulator::setAltRbsParams()
 {
 	params->PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH =
-	    params->unnamed_440;
+	    params->PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH_ALT_RBS;
 }
 
 /*

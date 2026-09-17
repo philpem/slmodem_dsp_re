@@ -567,9 +567,10 @@ int evaluateMeanErrorStdPhase4(float unused0, float unused1);
 	 * +0xac  Initialised from `params->PHASE4_ERROR_FOR_V34_FALLBACK`, but
 	 * this is the current threshold rather than a fixed copy: the first
 	 * time `evaluatePhase4` asks for a retrain it replaces the value here
-	 * with `params->unnamed_434` (a float despite `V90Parameters.h`
-	 * calling the slot `int`; read through a union rather than retyping a
-	 * header this file does not own -- 250.0f by default, finding F878).
+	 * with `params->PDSNR_CURRENT_V34_DROP_THRESH_PHASE4` (a float
+	 * despite `V90Parameters.h` calling the slot `int`; read through a
+	 * union rather than retyping a header this file does not own --
+	 * 250.0f by default, finding F878).
 	 *
 	 * The author's own name for it is `pdsnrCurrentV34DropThreshPhase4`,
 	 * legible in `evaluatePhase4`: 0x3fd38 is `fsts 0xac(%ebx)` and the
@@ -585,16 +586,18 @@ int evaluateMeanErrorStdPhase4(float unused0, float unused1);
 	 * was never offset-named, so there was nothing to carry through here.
 	 * The two names are consistent -- `reset` initialises the threshold
 	 * from `PHASE4_ERROR_FOR_V34_FALLBACK` and `evaluatePhase4` replaces it
-	 * with `params->unnamed_434` (250.0f by default, finding F878) the
-	 * first time it asks for a retrain, so the slot is the current
-	 * threshold and the parameter is only where it starts.
+	 * with `params->PDSNR_CURRENT_V34_DROP_THRESH_PHASE4` (250.0f by
+	 * default, finding F878) the first time it asks for a retrain, so the
+	 * slot is the current threshold and the parameter is only where it
+	 * starts.
 	 *
-	 * `params->unnamed_434` is a float: `flds 0x434(%ecx)` into `fsts
-	 * 0xac(%ebx)` is a float load and a float store with no conversion
-	 * between them, and 0x437a0000 is 250.0f. `V90Parameters.h` types the
-	 * slot `int`; that header is a shared frozen type this batch does not
-	 * own, so `V90ConnectionEvaluator.cpp` reads the four bytes through a
-	 * union rather than retyping it.
+	 * `params->PDSNR_CURRENT_V34_DROP_THRESH_PHASE4` is a float:
+	 * `flds 0x434(%ecx)` into `fsts 0xac(%ebx)` is a float load and a
+	 * float store with no conversion between them, and 0x437a0000 is
+	 * 250.0f. `V90Parameters.h` types the slot `int`; that header is a
+	 * shared frozen type this batch does not own, so
+	 * `V90ConnectionEvaluator.cpp` reads the four bytes through a union
+	 * rather than retyping it.
 	 */
 	float phase4ErrorForV34Fallback;
 

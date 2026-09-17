@@ -458,7 +458,8 @@ V90ConnectionEvaluator::evaluateMeanErrorStdPhase4(float unused0, float unused1)
  * `avePdsnr * scale > threshDown` and the other behind the counters.
  *
  * The nineteenth is the replacement threshold `t` below, read out of
- * `params->unnamed_434` and gated on the average and the counters rather than
+ * `params->PDSNR_CURRENT_V34_DROP_THRESH_PHASE4` and gated on the average
+ * and the counters rather than
  * on itself; t_v90conneval drives an unordered one through it at tag 7500 and
  * the mutation for it dies there.  The other eighteen are verified in the
  * codegen tier only.
@@ -518,7 +519,8 @@ ce_frac2(float v)
 }
 
 /*
- * `params->unnamed_434` IS A FLOAT AND `V90Parameters.h` TYPES IT `int`.
+ * `params->PDSNR_CURRENT_V34_DROP_THRESH_PHASE4` IS A FLOAT AND
+ * `V90Parameters.h` TYPES IT `int`.
  * `evaluatePhase4` loads it with `flds 0x434(%ecx)` and stores it straight to
  * +0xac with `fsts`, and 0x437a0000 -- the value `setToDefault` plants there
  * (finding F878) -- is 250.0f.  Both measurements say float.
@@ -737,7 +739,8 @@ V90ConnectionEvaluator::evaluatePhase3()
  *
  * +0xac IS BOTH READ AND WRITTEN HERE.  It is read as the fall-back threshold
  * for the average, and on the retrain path it is REPLACED by
- * `params->unnamed_434` -- and the diagnostic that announces the store names
+ * `params->PDSNR_CURRENT_V34_DROP_THRESH_PHASE4` -- and the diagnostic
+ * that announces the store names
  * the field: "pdsnrCurrentV34DropThreshPhase4 set to = %c%d.%03d".  That is
  * the author's own name for +0xac, recorded in the header; the field keeps the
  * name the lifecycle batch gave it because `t_v90leaves.cpp` uses that name and
@@ -879,7 +882,7 @@ V90ConnectionEvaluator::evaluatePhase4(float meanErrBefToAftUpdateRatio)
 					nofV90Retrains = 0;
 				} else {
 					float t = ce_param_float(
-					    params->unnamed_434);
+					    params->PDSNR_CURRENT_V34_DROP_THRESH_PHASE4);
 
 					phase4ErrorForV34Fallback = t;
 					if (DSPLIB_DEBUG_ON())

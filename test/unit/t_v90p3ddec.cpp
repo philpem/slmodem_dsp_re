@@ -17,7 +17,7 @@
  *
  * The parameter block is not shared between the sides the way t_v90adid.cpp
  * and t_v90p3dreset.cpp share theirs, because this method stores through it
- * three different ways: `params->PHASE4_MEAN_ERROR_...` from `unnamed_440`,
+ * three different ways: `params->PHASE4_MEAN_ERROR_...` from `PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH_ALT_RBS`,
  * `unnamed_31c` from `unnamed_320`, and `ANSPCM_DEMODULATION_LENGTH` from a
  * literal 0x320.  A shared block would let a reconstruction that wrote the
  * wrong one of those pass.
@@ -245,7 +245,7 @@ set_params(int side, int trial)
 
 	p->PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH = 1.5f;
 	p->QC_PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH = 1.75f;
-	p->unnamed_440 = 10.0f;
+	p->PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH_ALT_RBS = 10.0f;
 }
 
 /*
@@ -906,7 +906,7 @@ run_p3d_leaves(void)
 					slot[side].o.framePosition =
 					    (unsigned int)st;
 					slot[side].o.jdNotRunLength = 7u + (unsigned)w;
-					parm[side].unnamed_440 =
+					parm[side].PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH_ALT_RBS =
 					    3.5f + (float)trial;
 					parm[side].
 					  PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH
@@ -926,7 +926,7 @@ run_p3d_leaves(void)
 				compare_all("after setAltRbsParams", tag);
 				if (parm[1].
 				      PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH
-				    == parm[1].unnamed_440)
+				    == parm[1].PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH_ALT_RBS)
 					sawcopied++;
 
 				ga = slot[0].o.getMaxUcode();

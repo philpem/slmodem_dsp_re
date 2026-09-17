@@ -124,13 +124,13 @@
  },
  {
   "label": "the alt-RBS copy goes the other way",
-  "find": "\tparams->PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH =\n\t    params->unnamed_440;",
-  "replace": "\tparams->unnamed_440 =\n\t    params->PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH;"
+  "find": "\tparams->PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH =\n\t    params->PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH_ALT_RBS;",
+  "replace": "\tparams->PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH_ALT_RBS =\n\t    params->PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH;"
  },
  {
   "label": "the alt-RBS copy lands one slot along",
-  "find": "\tparams->PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH =\n\t    params->unnamed_440;",
-  "replace": "\tparams->QC_PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH =\n\t    params->unnamed_440;"
+  "find": "\tparams->PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH =\n\t    params->PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH_ALT_RBS;",
+  "replace": "\tparams->QC_PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH =\n\t    params->PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH_ALT_RBS;"
  },
  {
   "label": "the frame position wraps at seven",
