@@ -99,7 +99,7 @@ V90CP_OFF(rxState,		0x0ca4, rxState);
 V90CP_OFF(onesRun,		0x0ca9, onesRun);
 V90CP_OFF(zerosRun,		0x0caa, zerosRun);
 V90CP_OFF(bitIndex,		0x0cac, bitIndex);
-V90CP_OFF(word_cb0,		0x0cb0, wordcb0);
+V90CP_OFF(stateBitCount,		0x0cb0, wordcb0);
 V90CP_OFF(bits,			0x0cb8, bits);
 V90CP_OFF(crc,			0x3b98, crc);
 V90CP_OFF(groupSize,		0x3ba8, groupSize);
@@ -146,7 +146,7 @@ V90CP::V90CP()
 	buf[5] = (int *)sysdep_malloc(V90CP_BUFSIZE);
 
 	bitIndex = 18;
-	word_cb0 = 0;
+	stateBitCount = 0;
 	rxState = 0;
 	onesRun = 0;
 	zerosRun = 0;
@@ -183,7 +183,7 @@ void
 V90CP::resetDetector()
 {
 	bitIndex = 18;
-	word_cb0 = 0;
+	stateBitCount = 0;
 	rxState = 0;
 	onesRun = 0;
 	zerosRun = 0;
@@ -928,7 +928,7 @@ V90CP::infoToBits()
 /*
  * bitsToInfo -- 0x52d20, 2391 bytes, and the RECEIVE-SIDE DRIVER of the class:
  * take one arriving bit, drive `rxState` (the decoder state), `bitIndex` (the
- * cursor) and `word_cb0` (the count within the current block), and say what
+ * cursor) and `stateBitCount` (the count within the current block), and say what
  * the bit completed.
  *
  * IT IS NOT `void`, which the header used to say it was, and the mangling
@@ -958,7 +958,7 @@ V90CP::infoToBits()
  * statics -- .bss, mangled `_ZZN5V90CP10bitsToInfoEhE5alpha` and `...E4beta`,
  * so their C++ names are the author's -- and each holds the bit LENGTH of one
  * counted block, computed once when the block's counts have been decoded and
- * compared against `word_cb0` while the block arrives.  Seventeen bits to the
+ * compared against `stateBitCount` while the block arrives.  Seventeen bits to the
  * entry, which is one frame each:
  *
  *      alpha = 17 * (nof_58[0] + ... + nof_58[3])   the four shorts lists
@@ -1057,7 +1057,7 @@ V90CP::bitsToInfo(unsigned char bit)
 		bits[bitIndex] = bit;
 		bitIndex++;
 		rxState = (word_00 != 0) ? 3 : 4;
-		word_cb0 = 0;
+		stateBitCount = 0;
 		break;
 
 	case 3:
@@ -1071,11 +1071,11 @@ V90CP::bitsToInfo(unsigned char bit)
 		} else if (DSPLIB_DEBUG_ON()) {
 			dsplibs_debug_printf(V90CP_NOMEM);
 		}
-		word_cb0++;
-		if (word_cb0 == 0xf) {
+		stateBitCount++;
+		if (stateBitCount == 0xf) {
 			evaluateInfo();
 			rxState = 12;
-			word_cb0 = 0;
+			stateBitCount = 0;
 		}
 		break;
 
@@ -1083,12 +1083,12 @@ V90CP::bitsToInfo(unsigned char bit)
 		/*
 		 * The three block flags, one bit each, dispatched on the
 		 * count rather than shifted.  The object's `jb` on the tree's
-		 * `x < 1` arm is what makes `word_cb0` unsigned: a signed
+		 * `x < 1` arm is what makes `stateBitCount` unsigned: a signed
 		 * index would have needed a second test for zero.
 		 */
 		bits[bitIndex] = bit;
 		bitIndex++;
-		switch (word_cb0) {
+		switch (stateBitCount) {
 		case 0:
 			word_04 = bit;
 			break;
@@ -1099,10 +1099,10 @@ V90CP::bitsToInfo(unsigned char bit)
 			word_0c = bit;
 			break;
 		}
-		word_cb0++;
-		if (word_cb0 == 3) {
+		stateBitCount++;
+		if (stateBitCount == 3) {
 			rxState = 5;
-			word_cb0 = 0;
+			stateBitCount = 0;
 		}
 		break;
 
@@ -1124,7 +1124,7 @@ V90CP::bitsToInfo(unsigned char bit)
 				rxState = 7;
 			else
 				rxState = (word_0c != 0) ? 10 : 12;
-			word_cb0 = 0;
+			stateBitCount = 0;
 		}
 		break;
 
@@ -1140,7 +1140,7 @@ V90CP::bitsToInfo(unsigned char bit)
 				rxState = 7;
 			else
 				rxState = (word_0c != 0) ? 10 : 12;
-			word_cb0 = 0;
+			stateBitCount = 0;
 		}
 		break;
 
@@ -1149,11 +1149,11 @@ V90CP::bitsToInfo(unsigned char bit)
 		 * they are decoded the next block's length is known. */
 		bits[bitIndex] = bit;
 		bitIndex++;
-		word_cb0++;
-		if (word_cb0 == 0x44) {
+		stateBitCount++;
+		if (stateBitCount == 0x44) {
 			evaluateInfo();
 			rxState = 8;
-			word_cb0 = 0;
+			stateBitCount = 0;
 			alpha = 17 * (nof_58[0] + nof_58[1] + nof_58[2] +
 				      nof_58[3]);
 		}
@@ -1167,11 +1167,11 @@ V90CP::bitsToInfo(unsigned char bit)
 		} else if (DSPLIB_DEBUG_ON()) {
 			dsplibs_debug_printf(V90CP_NOMEM);
 		}
-		word_cb0++;
-		if (word_cb0 == alpha) {
+		stateBitCount++;
+		if (stateBitCount == alpha) {
 			evaluateInfo();
 			rxState = (word_0c != 0) ? 10 : 12;
-			word_cb0 = 0;
+			stateBitCount = 0;
 		}
 		break;
 
@@ -1184,11 +1184,11 @@ V90CP::bitsToInfo(unsigned char bit)
 		} else if (DSPLIB_DEBUG_ON()) {
 			dsplibs_debug_printf(V90CP_NOMEM);
 		}
-		word_cb0++;
-		if (word_cb0 == 0x55) {
+		stateBitCount++;
+		if (stateBitCount == 0x55) {
 			evaluateInfo();
 			rxState = 11;
-			word_cb0 = 0;
+			stateBitCount = 0;
 			beta = 17 * (nof_buf[0] + nof_buf[1] + nof_buf[2] +
 				     nof_buf[3] + nof_buf[4] + nof_buf[5]);
 		}
@@ -1202,11 +1202,11 @@ V90CP::bitsToInfo(unsigned char bit)
 		} else if (DSPLIB_DEBUG_ON()) {
 			dsplibs_debug_printf(V90CP_NOMEM);
 		}
-		word_cb0++;
-		if (word_cb0 == beta) {
+		stateBitCount++;
+		if (stateBitCount == beta) {
 			evaluateInfo();
 			rxState = 12;
-			word_cb0 = 0;
+			stateBitCount = 0;
 		}
 		break;
 
@@ -1229,11 +1229,11 @@ V90CP::bitsToInfo(unsigned char bit)
 		} else if (DSPLIB_DEBUG_ON()) {
 			dsplibs_debug_printf(V90CP_NOMEM);
 		}
-		word_cb0++;
-		if (word_cb0 == 0x11) {
+		stateBitCount++;
+		if (stateBitCount == 0x11) {
 			bodyLength = bitIndex;
 			if (evaluateCRC()) {
-				word_cb0 = 0x11;
+				stateBitCount = 0x11;
 				rxState = 13;
 			} else {
 				resetDetector();

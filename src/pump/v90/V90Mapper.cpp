@@ -99,7 +99,7 @@ V90MAPPER_OFF(constellation,	0x056, cons);
 V90MAPPER_OFF(constellationSize,0x658, c658);
 V90MAPPER_OFF(modulusEncoder,	0x670, modenc);
 V90MAPPER_OFF(spectralShaper,	0x68c, shaper);
-V90MAPPER_OFF(uint_6f8,		0x6f8, c6f8);
+V90MAPPER_OFF(primeFrames,		0x6f8, c6f8);
 V90MAPPER_OFF(signEncoder,	0x6fc, c6fc);
 V90MAPPER_OFF(word_700,		0x700, c700);
 typedef char v90mapper_size[(sizeof(V90Mapper) == 0x704) ? 1 : -1];
@@ -133,7 +133,7 @@ V90Mapper::V90Mapper(V90Parameters *p)
 	signEncoder.prev_ = 0;
 	buf = sysdep_malloc(0x50);
 	bitsBuffered = 0;
-	uint_6f8 = 0;
+	primeFrames = 0;
 	signBitGroupSize = 0;
 	signBitGroups = 0;
 	signBitsPerFrame = 0;
@@ -245,9 +245,9 @@ V90Mapper::reset(V90MappingParams *mp, PcmType pcm)
 		spectralShaper.reset(mp->shaperId, (unsigned int)mp->shaperSR,
 				     mp->shaperA1, mp->shaperA2,
 				     mp->shaperB1, mp->shaperB2);
-		uint_6f8 = mp->shaperId;
+		primeFrames = mp->shaperId;
 	} else {
-		uint_6f8 = 0;
+		primeFrames = 0;
 	}
 
 	modulusEncoder.field_00 = constellationSize[0];
@@ -441,17 +441,17 @@ V90Mapper::process(unsigned char *bits, unsigned int nofBits, short *symbols,
 				}
 			}
 
-			if (uint_6f8 != 0) {
-				if (uint_6f8 >= signBitGroups) {
-					uint_6f8 -= signBitGroups;
+			if (primeFrames != 0) {
+				if (primeFrames >= signBitGroups) {
+					primeFrames -= signBitGroups;
 				} else {
-					unsigned int start = uint_6f8 * signBitGroupSize;
+					unsigned int start = primeFrames * signBitGroupSize;
 
 					for (k = start; k < V90MAPPER_FRAME; k++)
 						symbols[nofOut + k - start] = samples[k];
 					nofOut += V90MAPPER_FRAME
-					    - uint_6f8 * signBitGroupSize;
-					uint_6f8 = 0;
+					    - primeFrames * signBitGroupSize;
+					primeFrames = 0;
 				}
 			} else {
 				for (k = 0; k < V90MAPPER_FRAME; k++)

@@ -106,7 +106,7 @@
  {
   "label": "recivedSUV: the latch it reads is +0x2f9c",
   "find": "V90Phase4Modulator::recivedSUV()\n{\n\tif (word_2fa0 == 0 && state == P4M_STATE_SUVD) {",
-  "replace": "V90Phase4Modulator::recivedSUV()\n{\n\tif (word_2f9c == 0 && state == P4M_STATE_SUVD) {"
+  "replace": "V90Phase4Modulator::recivedSUV()\n{\n\tif (cpReceived == 0 && state == P4M_STATE_SUVD) {"
  },
  {
   "label": "recivedSUV: it acts in the CPd state",
@@ -157,28 +157,28 @@
  },
  {
   "label": "recivedCPtag: it acts when +0x20 is clear",
-  "find": "\tword_0018 = 0;\n\tif (word_0020 != 0) {\n\t\tif (word_2f9c != 0) {",
-  "replace": "\tword_0018 = 0;\n\tif (word_0020 == 0) {\n\t\tif (word_2f9c != 0) {"
+  "find": "\tword_0018 = 0;\n\tif (word_0020 != 0) {\n\t\tif (cpReceived != 0) {",
+  "replace": "\tword_0018 = 0;\n\tif (word_0020 == 0) {\n\t\tif (cpReceived != 0) {"
  },
  {
   "label": "recivedCPtag: the two latches are swapped",
-  "find": "\tword_0018 = 0;\n\tif (word_0020 != 0) {\n\t\tif (word_2f9c != 0) {",
-  "replace": "\tword_0018 = 0;\n\tif (word_2f9c != 0) {\n\t\tif (word_0020 != 0) {"
+  "find": "\tword_0018 = 0;\n\tif (word_0020 != 0) {\n\t\tif (cpReceived != 0) {",
+  "replace": "\tword_0018 = 0;\n\tif (cpReceived != 0) {\n\t\tif (word_0020 != 0) {"
  },
  {
   "label": "recivedCPtag: the first CP does not select the short form",
-  "find": "\t\t\tword_2f9c = 1;\n\t\t\tcp->byte_13 = 1;\n\t\t\tcp->word_00 = 1;",
-  "replace": "\t\t\tword_2f9c = 1;\n\t\t\tcp->byte_13 = 1;\n\t\t\tcp->word_00 = 0;"
+  "find": "\t\t\tcpReceived = 1;\n\t\t\tcp->byte_13 = 1;\n\t\t\tcp->word_00 = 1;",
+  "replace": "\t\t\tcpReceived = 1;\n\t\t\tcp->byte_13 = 1;\n\t\t\tcp->word_00 = 0;"
  },
  {
   "label": "recivedCPtag: the first CP does not raise the latch",
-  "find": "\t\t\tword_2f9c = 1;\n\t\t\tcp->byte_13 = 1;\n\t\t\tcp->word_00 = 1;",
+  "find": "\t\t\tcpReceived = 1;\n\t\t\tcp->byte_13 = 1;\n\t\t\tcp->word_00 = 1;",
   "replace": "\t\t\tcp->byte_13 = 1;\n\t\t\tcp->word_00 = 1;"
  },
  {
   "label": "recivedCPtag: the first CP does not tag the record",
-  "find": "\t\t\tword_2f9c = 1;\n\t\t\tcp->byte_13 = 1;\n\t\t\tcp->word_00 = 1;",
-  "replace": "\t\t\tword_2f9c = 1;\n\t\t\tcp->word_00 = 1;"
+  "find": "\t\t\tcpReceived = 1;\n\t\t\tcp->byte_13 = 1;\n\t\t\tcp->word_00 = 1;",
+  "replace": "\t\t\tcpReceived = 1;\n\t\t\tcp->word_00 = 1;"
  },
  {
   "label": "recivedCPtag: the first CP repacks the message",
@@ -202,13 +202,13 @@
  },
  {
   "label": "recivedCPtag: the boundary test is inverted",
-  "find": "\t\tif (word_2f9c != 0) {\n\t\t\tif (symbolCount % cpSequenceSymbols == 0) {",
-  "replace": "\t\tif (word_2f9c != 0) {\n\t\t\tif (symbolCount % cpSequenceSymbols != 0) {"
+  "find": "\t\tif (cpReceived != 0) {\n\t\t\tif (symbolCount % cpSequenceSymbols == 0) {",
+  "replace": "\t\tif (cpReceived != 0) {\n\t\t\tif (symbolCount % cpSequenceSymbols != 0) {"
  },
  {
   "label": "recivedSUVtag: it acts when +0x20 is set",
-  "find": "\tif (word_2f9c != 0 && word_0020 == 0) {\n\t\tswitch (state) {",
-  "replace": "\tif (word_2f9c != 0 && word_0020 != 0) {\n\t\tswitch (state) {"
+  "find": "\tif (cpReceived != 0 && word_0020 == 0) {\n\t\tswitch (state) {",
+  "replace": "\tif (cpReceived != 0 && word_0020 != 0) {\n\t\tswitch (state) {"
  },
  {
   "label": "recivedSUVtag: the SUVd case waits in the CPd waiting state",
@@ -222,7 +222,7 @@
  },
  {
   "label": "recivedSUVtag: the first latch is not read",
-  "find": "\tif (word_2f9c != 0 && word_0020 == 0) {\n\t\tswitch (state) {",
+  "find": "\tif (cpReceived != 0 && word_0020 == 0) {\n\t\tswitch (state) {",
   "replace": "\tif (word_0020 == 0) {\n\t\tswitch (state) {"
  },
  {

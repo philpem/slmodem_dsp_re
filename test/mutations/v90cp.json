@@ -16,32 +16,32 @@
  },
  {
   "label": "the detector's counter left alone",
-  "find": "\tbuf[5] = (int *)sysdep_malloc(V90CP_BUFSIZE);\n\n\tbitIndex = 18;\n\tword_cb0 = 0;\n\trxState = 0;\n\tonesRun = 0;\n\tzerosRun = 0;\n",
-  "replace": "\tbuf[5] = (int *)sysdep_malloc(V90CP_BUFSIZE);\n\n\tbitIndex = 18;\n\tword_cb0 = 0;\n\tonesRun = 0;\n\tzerosRun = 0;\n"
+  "find": "\tbuf[5] = (int *)sysdep_malloc(V90CP_BUFSIZE);\n\n\tbitIndex = 18;\n\tstateBitCount = 0;\n\trxState = 0;\n\tonesRun = 0;\n\tzerosRun = 0;\n",
+  "replace": "\tbuf[5] = (int *)sysdep_malloc(V90CP_BUFSIZE);\n\n\tbitIndex = 18;\n\tstateBitCount = 0;\n\tonesRun = 0;\n\tzerosRun = 0;\n"
  },
  {
   "label": "the detector's first flag left alone",
-  "find": "\tbuf[5] = (int *)sysdep_malloc(V90CP_BUFSIZE);\n\n\tbitIndex = 18;\n\tword_cb0 = 0;\n\trxState = 0;\n\tonesRun = 0;\n\tzerosRun = 0;\n",
-  "replace": "\tbuf[5] = (int *)sysdep_malloc(V90CP_BUFSIZE);\n\n\tbitIndex = 18;\n\tword_cb0 = 0;\n\trxState = 0;\n\tzerosRun = 0;\n"
+  "find": "\tbuf[5] = (int *)sysdep_malloc(V90CP_BUFSIZE);\n\n\tbitIndex = 18;\n\tstateBitCount = 0;\n\trxState = 0;\n\tonesRun = 0;\n\tzerosRun = 0;\n",
+  "replace": "\tbuf[5] = (int *)sysdep_malloc(V90CP_BUFSIZE);\n\n\tbitIndex = 18;\n\tstateBitCount = 0;\n\trxState = 0;\n\tzerosRun = 0;\n"
  },
  {
   "label": "the detector's second flag left alone",
-  "find": "\tbuf[5] = (int *)sysdep_malloc(V90CP_BUFSIZE);\n\n\tbitIndex = 18;\n\tword_cb0 = 0;\n\trxState = 0;\n\tonesRun = 0;\n\tzerosRun = 0;\n",
-  "replace": "\tbuf[5] = (int *)sysdep_malloc(V90CP_BUFSIZE);\n\n\tbitIndex = 18;\n\tword_cb0 = 0;\n\trxState = 0;\n\tonesRun = 0;\n"
+  "find": "\tbuf[5] = (int *)sysdep_malloc(V90CP_BUFSIZE);\n\n\tbitIndex = 18;\n\tstateBitCount = 0;\n\trxState = 0;\n\tonesRun = 0;\n\tzerosRun = 0;\n",
+  "replace": "\tbuf[5] = (int *)sysdep_malloc(V90CP_BUFSIZE);\n\n\tbitIndex = 18;\n\tstateBitCount = 0;\n\trxState = 0;\n\tonesRun = 0;\n"
  },
  {
   "label": "+0xcac starts at 17, not 18",
-  "find": "\tbuf[5] = (int *)sysdep_malloc(V90CP_BUFSIZE);\n\n\tbitIndex = 18;\n\tword_cb0 = 0;\n\trxState = 0;\n\tonesRun = 0;\n\tzerosRun = 0;\n",
-  "replace": "\tbuf[5] = (int *)sysdep_malloc(V90CP_BUFSIZE);\n\n\tbitIndex = 17;\n\tword_cb0 = 0;\n\trxState = 0;\n\tonesRun = 0;\n\tzerosRun = 0;\n"
+  "find": "\tbuf[5] = (int *)sysdep_malloc(V90CP_BUFSIZE);\n\n\tbitIndex = 18;\n\tstateBitCount = 0;\n\trxState = 0;\n\tonesRun = 0;\n\tzerosRun = 0;\n",
+  "replace": "\tbuf[5] = (int *)sysdep_malloc(V90CP_BUFSIZE);\n\n\tbitIndex = 17;\n\tstateBitCount = 0;\n\trxState = 0;\n\tonesRun = 0;\n\tzerosRun = 0;\n"
  },
  {
   "label": "+0xcac written as a byte",
-  "find": "\tbuf[5] = (int *)sysdep_malloc(V90CP_BUFSIZE);\n\n\tbitIndex = 18;\n\tword_cb0 = 0;\n\trxState = 0;\n\tonesRun = 0;\n\tzerosRun = 0;\n",
-  "replace": "\tbuf[5] = (int *)sysdep_malloc(V90CP_BUFSIZE);\n\n\t*(unsigned char *)&bitIndex = 18;\n\tword_cb0 = 0;\n\trxState = 0;\n\tonesRun = 0;\n\tzerosRun = 0;\n"
+  "find": "\tbuf[5] = (int *)sysdep_malloc(V90CP_BUFSIZE);\n\n\tbitIndex = 18;\n\tstateBitCount = 0;\n\trxState = 0;\n\tonesRun = 0;\n\tzerosRun = 0;\n",
+  "replace": "\tbuf[5] = (int *)sysdep_malloc(V90CP_BUFSIZE);\n\n\t*(unsigned char *)&bitIndex = 18;\n\tstateBitCount = 0;\n\trxState = 0;\n\tonesRun = 0;\n\tzerosRun = 0;\n"
  },
  {
   "label": "+0xcb0 left alone",
-  "find": "\tbuf[5] = (int *)sysdep_malloc(V90CP_BUFSIZE);\n\n\tbitIndex = 18;\n\tword_cb0 = 0;\n\trxState = 0;\n\tonesRun = 0;\n\tzerosRun = 0;\n",
+  "find": "\tbuf[5] = (int *)sysdep_malloc(V90CP_BUFSIZE);\n\n\tbitIndex = 18;\n\tstateBitCount = 0;\n\trxState = 0;\n\tonesRun = 0;\n\tzerosRun = 0;\n",
   "replace": "\tbuf[5] = (int *)sysdep_malloc(V90CP_BUFSIZE);\n\n\tbitIndex = 18;\n\trxState = 0;\n\tonesRun = 0;\n\tzerosRun = 0;\n"
  },
  {

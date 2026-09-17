@@ -295,7 +295,7 @@ seed_receivers(int trial, int mode, unsigned int group, int holdoff)
 	}
 
 	CPA->bitIndex = CPB->bitIndex = 18;
-	CPA->word_cb0 = CPB->word_cb0 = 0;
+	CPA->stateBitCount = CPB->stateBitCount = 0;
 	CPA->rxState = CPB->rxState = 0;
 	CPA->onesRun = CPB->onesRun = 0;
 	CPA->zerosRun = CPB->zerosRun = 0;
@@ -851,7 +851,7 @@ run_cp_b2i_guard(void)
 			seed_receivers(130 + i, i % 3, 6u, -1);
 			CPA->rxState = CPB->rxState = st;
 			CPA->bitIndex = CPB->bitIndex = V90CP_BITS - 1;
-			CPA->word_cb0 = CPB->word_cb0 = 1;
+			CPA->stateBitCount = CPB->stateBitCount = 1;
 			CPA->nof_58[0] = CPB->nof_58[0] = 0;
 
 			dsplib_debug_capture_on = 1;
@@ -879,7 +879,7 @@ run_cp_b2i_guard(void)
 			seed_receivers(140 + i, i % 3, 6u, -1);
 			CPA->rxState = CPB->rxState = st;
 			CPA->bitIndex = CPB->bitIndex = V90CP_BITS;
-			CPA->word_cb0 = CPB->word_cb0 = 1;
+			CPA->stateBitCount = CPB->stateBitCount = 1;
 			CPA->crc[0] = CPB->crc[0] = 0x37;
 
 			dsplib_debug_capture_on = 1;
@@ -936,7 +936,7 @@ run_cp_b2i_guard(void)
 		seed_receivers(150 + i, i % 3, 6u, -1);
 		CPA->rxState = CPB->rxState = st;
 		CPA->bitIndex = CPB->bitIndex = V90CP_BITS;
-		CPA->word_cb0 = CPB->word_cb0 = 0;
+		CPA->stateBitCount = CPB->stateBitCount = 0;
 		CPA->crc[0] = CPB->crc[0] = 0x37;
 
 		{
@@ -1050,7 +1050,7 @@ run_cp_b2i_corners(void)
 
 	/*
 	 * D501: a counted block whose count is zero never satisfies
-	 * `word_cb0 == alpha`, because the count is incremented before the
+	 * `stateBitCount == alpha`, because the count is incremented before the
 	 * test, so the receiver sits in state 8 and consumes the rest.
 	 */
 	for (trial = 0; trial < 4; trial++) {

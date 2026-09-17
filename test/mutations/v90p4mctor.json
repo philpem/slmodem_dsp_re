@@ -44,7 +44,7 @@
       "replace" : "\tcp = (V90CP *)mpArg;\n\tctorArg8 = arg8;\n\tmp = (V90MP *)cpArg;"
    },
    {
-      "find" : "\tword_2f9c = 0;\n\tmappingParams2 = mpsB;",
+      "find" : "\tcpReceived = 0;\n\tmappingParams2 = mpsB;",
       "label" : "ctor: +0x2f9c is left as it was found",
       "replace" : "\tmappingParams2 = mpsB;"
    },

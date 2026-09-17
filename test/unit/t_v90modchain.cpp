@@ -729,7 +729,7 @@ static unsigned char rst_mp[sizeof(V90MappingParams)]
  * three allocations and a destructor that dereferences them -- and the
  * constructor zeroes nine of the words the resets write.  So over a
  * constructed object a reset that fails to store zero into `cleared_01c`,
- * `uint_6f8`, `signBitGroupSize` or the sign encoder is INVISIBLE: the field
+ * `primeFrames`, `signBitGroupSize` or the sign encoder is INVISIBLE: the field
  * already holds the value the store would have left.  Five mutations proved
  * exactly that and are the reason this table exists; the seed cannot reach
  * these fields because the constructor runs after it.
@@ -754,7 +754,7 @@ static const struct {
 	{ 0x010u, 0x5151u, 4u },	/* signBitGroups     */
 	{ 0x014u, 0x6262u, 4u },	/* signBitGroupSize  */
 	{ 0x01cu, 0x7373u, 4u },	/* cleared_01c       */
-	{ 0x6f8u, 0x8484u, 4u },	/* uint_6f8          */
+	{ 0x6f8u, 0x8484u, 4u },	/* primeFrames          */
 	{ 0x6fcu, 0x00a5u, 1u }		/* signEncoder.prev_ */
 };
 #define NPOKE	((int)(sizeof(pokes) / sizeof(pokes[0])))
@@ -1759,12 +1759,12 @@ run_mapper_frame_std(void)
 /*
  * THE ARM NO `reset` CAN REACH, and finding F7423 is why it is driven by hand.
  *
- * The object's partial-copy arm computes `start = uint_6f8 * signBitGroupSize`
+ * The object's partial-copy arm computes `start = primeFrames * signBitGroupSize`
  * and guards the copy with `cmp $0x5,%edx ; ja` -- but the block it jumps to
  * updates `nofOut` by `6 - start` ANYWAY.  Written with the count advanced
  * inside the loop instead, a skipped loop would leave `nofOut` alone, and the
  * two spellings agree over every state a `reset` can produce: that arm needs
- * `0 < uint_6f8 < signBitGroups`, which bounds `start` at `6 - signBitGroupSize`
+ * `0 < primeFrames < signBitGroups`, which bounds `start` at `6 - signBitGroupSize`
  * and so at 5.
  *
  * So the three fields are poked directly, on BOTH sides, after a reset that
@@ -4054,7 +4054,7 @@ setup_pump(int trial, int ci, int st, int cnt_i, int variant)
 		m->word_0034 = (unsigned int)(variant & 1);
 		m->pcmType = (PcmType)c->pcm;
 		m->codeLevel = (short)(0x1234 + trial);
-		m->word_2f9c = 0;
+		m->cpReceived = 0;
 		m->word_2fa0 = 0;
 
 		for (k = 0; k < V90P4M_RDRT_SYMBOLS; k++)
@@ -4584,7 +4584,7 @@ run_p4m_reset(const char *name, p4m_reset ours, p4m_reset theirs, long base)
 			 * loop runs, so the pumps see what they always saw.
 			 */
 			m->word_0020 = 0xb1u + (unsigned int)trial;
-			m->word_2f9c = 0xb2u + (unsigned int)trial;
+			m->cpReceived = 0xb2u + (unsigned int)trial;
 			m->word_2fa0 = 0xb3u + (unsigned int)trial;
 		}
 		memcpy(pre_b, p4m_b, P4M_SIZE);

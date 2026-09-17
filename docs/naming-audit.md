@@ -921,3 +921,102 @@ Batch 17 gate result: Gentoo `make phase` exited 0, **`period differential:
 checks all OK`. All 655 `build/period/*.o` hashes are **byte-identical** to the
 pre-edit snapshot (`/home/philpem/slmodem/tmp/issue100-v22org-before.sha256`,
 655/655).
+
+## Batch 18: issue #119 Tier A names
+
+Owner-scoped pass over seven members whose "retain" disposition in the
+acceptance inventory (`docs/naming-inventory.md`) went stale because the reader
+or sibling that settles the role has since been reconstructed. All seven take
+the name their sibling already carries; offsets, widths, signedness and layout
+are unchanged. The owners are `V90Phase4Modulator`, `V90CP`, `V90Mapper` and
+the two datapump wrappers whose +0x08 is the shared `struct dp` header.
+
+### Evidence
+
+| Owner | Previous name | New name | Evidence |
+| --- | --- | --- | --- |
+| `V90Phase4Modulator` | `word_2f9c` | `cpReceived` | Set to 1 by `recivedCP` (`V90Phase4Modulator.cpp:618`) and by `recivedCPtag`'s first-tag path (`:742`, alongside `cp->word_00 = 1`), and read as a gate at `recivedSUVtag` (`:632`) and at `recivedCPtag` (`:719`, the first/later discriminator). The identical latch is the sibling `V92Phase4Modulator::cpReceived` (`V92Phase4Modulator.h:890`), whose own `recivedCPtag` takes the same first-tag branch (`V92Phase4Modulator.cpp:918`). |
+| `V90CP` | `word_cb0` | `stateBitCount` | Cleared per block, incremented per bit and compared to each block's length -- `0xf`, `3`, `0x44`, `0x55`, `0x11`, or the message-carried `alpha`/`beta` (`V90CP.cpp:1060-1236`). Unsigned, forced by `bitsToInfo`'s `cmp $0x1`/`jb` switch. The sibling `V92CP::stateBitCount` (`V92CP.h:489`) is the same per-block role. |
+| `V90Mapper` | `uint_6f8` | `primeFrames` | Seeded from `mp->shaperId` when the shaper runs and 0 otherwise (`V90Mapper.cpp:248-250`); `process` tests it, subtracts `signBitGroups` and completes a short frame (`:444-454`). The blocker named in the old comment -- `V90SpectralShaper::primeFrames` (`V90SpectralShaper.h:269`) -- is now written, and this is the same priming countdown. |
+| `call_dp` | `f08` | `status` | The shared datapump header's +0x08; `struct dp` types it `unsigned status` (`dp.h:38`). Declaration-only here -- `call.c` never touches it. Kept `int`, as declared; only the role is named. |
+| `v8_dp` | `f08` | `status` | Same ABI sibling as `call_dp` and `struct dp`. |
+| `v8_dp` | `f20` | `idle_timer` | Set to `modem_get_param(..., 5) + 0x2a0` when a datapump change is requested and counted down by each call's `count` until the window closes and the change is forced (`v8.c:201-224`); the unit test already diagnoses it "idle timer" (`t_v8dp.c:366`). |
+| `v8_dp` | `f2c` | `last_status` | The previous `V8Process` status: `v8.c:212-216` updates it only when the status changes, the same one-layer-up change detector `V8Process` runs on its own `prev_status`. `b103.h:34` names the sibling `last_status`. |
+
+### Cross-owner classification and scoping
+
+`word_2f9c`, `word_cb0` and `uint_6f8` are each declared by one owner only
+(verified by `git grep` over `src`/`include`/`test`). `f08`, `f20` and `f2c`
+are short and collide across many structs, so only the `struct call_dp` and
+`struct v8_dp` members were renamed. Classified and left byte-for-byte
+unchanged:
+
+- `class1.h:528` (`struct class1` context `f08`);
+- `fpm_agc.h:49` and `fpm_tone.h:36` (`f08`), and `smc.h`'s `f20`/`f24`
+  oscillator-config output;
+- `v22.h` (`cfg.f08` comment), `v22fp.h:114`/`:153` (`f08`/`r08`),
+  `v29data.h` (`f20` comment);
+- the `f08` initialisers/readers in `src/dsp/fpm_tone.c`,
+  `src/fax/V17rxtab.c`, `V27rxtab.c`, `V29rxtab.c`, `class1.c`, `fax.c`,
+  `v21cfg.c`, `src/pump/b103/B103tab.c`, `src/pump/v22/V22.c`, `v22.c`,
+  `v22rxtab.c`, `v22txtab.c`, `src/pump/v23/bwchdem.c`, `v23rx.c`, `v23tx.c`,
+  `src/pump/v32/V32.c`, `v32cfg.c`, `v32nsorg.c`;
+- the unit-test readers `t_class1create.c`, `t_v17cfg.c`, `t_v21cfg.c`,
+  `t_v22ans.c`, `t_v22conn.c`, `t_v22ctl.c`, `t_v22fpcreate.c`, `t_v22fpdel.c`,
+  `t_v22hdx.c`, `t_v22loop.c`, `t_v22modem.c`, `t_v22org.c`, `t_v22rate.c`,
+  `t_v22status.c`, `t_v22tab.c`, `t_v27cfg.c`, `t_v27fax.c`, `t_v29cfg.c`,
+  `t_v32cfg.c`, `t_v32nsorg.c`, `t_v92info.cpp`.
+
+### Comment corrections (no code change)
+
+- `V90CP.h`: the field-list paragraph at :124 now records that the per-block
+  count is named from the other sibling, `V92CP::stateBitCount`, and the
+  field's own comment says the same.
+- `V90Phase4Modulator.h`: `word_2f9c`'s comment now says the sibling
+  `V92Phase4Modulator::cpReceived` names the role, and which reads
+  discriminate first from later tags.
+- `V90Mapper.h`: `uint_6f8`'s comment now records that the blocker
+  (`V90SpectralShaper::primeFrames`) is written.
+- `call.h`/`v8dp.h`: the `f08` comments name the shared datapump header's
+  `status` (`dp.h:38`), keep the declared `int`, and say the sibling there is
+  `unsigned`. `v8dp.h`'s `idle_timer`/`last_status` field comments are added.
+- `v8.c`: the idle-timer comment is reflowed around `idle_timer`, and the
+  change-detector comment names `last_status`.
+
+### Verification
+
+A token-aware forward substitution of `HEAD` reproduces every changed
+non-doc file exactly except the intended deviations: the five rewritten header
+prose blocks, the two rewritten `v8.c` comments, and the preserved
+`"f2c (%ld)"` string literal in `t_v8dp.c` (only the identifiers beside it
+changed). Ten mutation manifests were edited by DECODING JSON and
+substituting only `find`/`replace` values -- the raw files contain literal
+`\t`, which defeats a naive `\b` match (the known trap). The same trap hid
+four `word_2f9c` manifests (`v90p4mctor`, `v90p4mreset`, `v90p4mtab`,
+`v90p4msym`) from the initial `\b`-scoped `git grep` enumeration; the first
+gate run's anchor check is what caught them (7 detached anchors), and the
+substring search over the filesystem is what completed the list. A
+decoded-JSON re-derivation of `HEAD` reproduces every changed
+`find`/`replace` value exactly with 0 other leaf strings changed. The manifest
+token balance is clean for all ten: `word_2f9c` 15+1+3+8+1 = 28/28,
+`word_cb0` 22+11+5 = 38/38, `uint_6f8` 14/14, `f20` 6/6 and `f2c` 5/5, with
+no non-`{old,new}` identifier count moved. `make refs` is green: 272 suites,
+10041 mutations, 0 anchors matching other than exactly once. A
+`git diff` scan of every changed line carrying `f08`/`f20`/`f2c` shows all of
+them in the four target files (`call.h`, `v8dp.h`, `v8.c`, `t_v8dp.c`) and the
+one target manifest (`v8dp.json`); no other owner's occurrence changed.
+
+A first pass wrapped the reworked `diff_eq_int("f2c (%ld)", ...)` call across
+two lines and the period object changed: `diff_eq_int` embeds `__LINE__`
+(`test/harness/harness.h:323`), so adding a line shifts every later `__LINE__`
+in `t_v8dp.c` and moves `test_unit_t_v8dp.o`. The call was restored to one
+line, restoring the object. Every other edited test file kept its line count
+and stayed byte-identical.
+
+Batch 18 gate result: Gentoo `make phase` exited 0, **`period differential:
+375 passed, 0 failed`** and **`phase boundary: period differential and
+structural checks all OK`**; `make refs` reported 272 suites / 10041 mutations
+with 0 anchors matching other than exactly once. All 655 `build/period/*.o`
+hashes are **byte-identical** to the pre-edit snapshot
+(`/home/philpem/slmodem/tmp/issue119-tier-a-before.sha256`, 655/655).
+

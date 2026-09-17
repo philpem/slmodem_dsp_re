@@ -328,12 +328,12 @@ public:
 	 * when the shaper is running and zero when it is not, and
 	 * `resetNoSpectral` does not touch it.  `process` reads it, tests it
 	 * for nonzero and counts it down by `signBitGroups`, which is the
-	 * shape of a priming countdown like `V90SpectralShaper::primeFrames`
-	 * -- but that is one unwritten function's arithmetic and the name
-	 * waits for it.  `type_NNNN` per CLAUDE.md: the width and the shape
-	 * are known, the meaning is not.
+	 * shape of a priming countdown -- and the blocker that made the name
+	 * wait has since been written: `V90SpectralShaper::primeFrames` is
+	 * the same role, named in that class, so this takes that name rather
+	 * than the `type_NNNN` placeholder it used to carry.
 	 */
-	unsigned int uint_6f8;
+	unsigned int primeFrames;
 
 	/*
 	 * +0x6fc  A `SerialDifferentialEncoder<unsigned char>`, and the type

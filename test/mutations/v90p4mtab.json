@@ -182,8 +182,8 @@
  },
  {
   "label": "resetBeforRRN: +0x2fa0 is left as it was found",
-  "find": "\tword_2f9c = 0;\n\tword_2fa0 = 0;\n\tword_0024 = 1;",
-  "replace": "\tword_2f9c = 0;\n\tword_0024 = 1;"
+  "find": "\tcpReceived = 0;\n\tword_2fa0 = 0;\n\tword_0024 = 1;",
+  "replace": "\tcpReceived = 0;\n\tword_0024 = 1;"
  },
  {
   "label": "resetBeforRRN: +0x2c is left as it was found",
@@ -214,17 +214,17 @@
 
  {
   "label": "recivedCP: the latch is cleared rather than set",
-  "find": "\tword_2f9c = 1;\n\tcp->byte_13 = 1;",
-  "replace": "\tword_2f9c = 0;\n\tcp->byte_13 = 1;"
+  "find": "\tcpReceived = 1;\n\tcp->byte_13 = 1;",
+  "replace": "\tcpReceived = 0;\n\tcp->byte_13 = 1;"
  },
  {
   "label": "recivedCP: the CP is not tagged",
-  "find": "\tword_2f9c = 1;\n\tcp->byte_13 = 1;",
-  "replace": "\tword_2f9c = 1;"
+  "find": "\tcpReceived = 1;\n\tcp->byte_13 = 1;",
+  "replace": "\tcpReceived = 1;"
  },
  {
   "label": "recivedCP: the latch is +0x2fa0",
-  "find": "\tword_2f9c = 1;\n\tcp->byte_13 = 1;",
+  "find": "\tcpReceived = 1;\n\tcp->byte_13 = 1;",
   "replace": "\tword_2fa0 = 1;\n\tcp->byte_13 = 1;"
  },
  {
@@ -235,6 +235,6 @@
  {
   "label": "recivedPartOneSilenceRrnSUV: it sets the latch as well",
   "find": "V90Phase4Modulator::recivedPartOneSilenceRrnSUV()\n{\n\tcp->byte_13 = 1;",
-  "replace": "V90Phase4Modulator::recivedPartOneSilenceRrnSUV()\n{\n\tword_2f9c = 1;\n\tcp->byte_13 = 1;"
+  "replace": "V90Phase4Modulator::recivedPartOneSilenceRrnSUV()\n{\n\tcpReceived = 1;\n\tcp->byte_13 = 1;"
  }
 ]

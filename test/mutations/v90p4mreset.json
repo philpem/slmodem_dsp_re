@@ -134,13 +134,13 @@
  },
  {
   "label": "reset: +0x2f9c is cleared",
-  "find": "P4M_STATE_MP;\n\tword_2f9c = 0;\n\tword_2fa0 = 0;",
+  "find": "P4M_STATE_MP;\n\tcpReceived = 0;\n\tword_2fa0 = 0;",
   "replace": "P4M_STATE_MP;\n\tword_2fa0 = 0;"
  },
  {
   "label": "reset: +0x2fa0 is cleared",
-  "find": "P4M_STATE_MP;\n\tword_2f9c = 0;\n\tword_2fa0 = 0;\n\tword_0030 = 0;",
-  "replace": "P4M_STATE_MP;\n\tword_2f9c = 0;\n\tword_0030 = 0;"
+  "find": "P4M_STATE_MP;\n\tcpReceived = 0;\n\tword_2fa0 = 0;\n\tword_0030 = 0;",
+  "replace": "P4M_STATE_MP;\n\tcpReceived = 0;\n\tword_0030 = 0;"
  },
  {
   "label": "reset: +0x30 is cleared, not set to one as resetRRNSecondSection does",
