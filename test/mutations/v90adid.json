@@ -76,8 +76,8 @@
  },
  {
   "label": "swap the two +0xa970 constants",
-  "find": "\tfloat_a970 = altRbsExpected != 0 ? 5.0f : 1.5f;",
-  "replace": "\tfloat_a970 = altRbsExpected != 0 ? 1.5f : 5.0f;"
+  "find": "\taltRbsVarianceThresholdFactor = altRbsExpected != 0 ? 5.0f : 1.5f;",
+  "replace": "\taltRbsVarianceThresholdFactor = altRbsExpected != 0 ? 1.5f : 5.0f;"
  },
  {
   "label": "make +0xa974 follow the same test as +0xa970",
@@ -101,18 +101,18 @@
  },
  {
   "label": "swap the two +0xa97a constants",
-  "find": "\t\tshort_a97a = 88;\n\t\tfloat_a97c = 0.35f;\n\t\tfloat_a980 = 1.75f;\n\t} else {\n\t\tshort_a978 = 0;\n\t\tshort_a97a = 80;",
-  "replace": "\t\tshort_a97a = 80;\n\t\tfloat_a97c = 0.35f;\n\t\tfloat_a980 = 1.75f;\n\t} else {\n\t\tshort_a978 = 0;\n\t\tshort_a97a = 88;"
+  "find": "\t\tminMaxUcode = 88;\n\t\tpadGainSearchScale = 0.35f;\n\t\tfloat_a980 = 1.75f;\n\t} else {\n\t\tshort_a978 = 0;\n\t\tminMaxUcode = 80;",
+  "replace": "\t\tminMaxUcode = 80;\n\t\tpadGainSearchScale = 0.35f;\n\t\tfloat_a980 = 1.75f;\n\t} else {\n\t\tshort_a978 = 0;\n\t\tminMaxUcode = 88;"
  },
  {
   "label": "swap the two +0xa97c constants",
-  "find": "\t\tfloat_a97c = 0.35f;\n\t\tfloat_a980 = 1.75f;\n\t} else {\n\t\tshort_a978 = 0;\n\t\tshort_a97a = 80;\n\t\tfloat_a97c = 0.25f;",
-  "replace": "\t\tfloat_a97c = 0.25f;\n\t\tfloat_a980 = 1.75f;\n\t} else {\n\t\tshort_a978 = 0;\n\t\tshort_a97a = 80;\n\t\tfloat_a97c = 0.35f;"
+  "find": "\t\tpadGainSearchScale = 0.35f;\n\t\tfloat_a980 = 1.75f;\n\t} else {\n\t\tshort_a978 = 0;\n\t\tminMaxUcode = 80;\n\t\tpadGainSearchScale = 0.25f;",
+  "replace": "\t\tpadGainSearchScale = 0.25f;\n\t\tfloat_a980 = 1.75f;\n\t} else {\n\t\tshort_a978 = 0;\n\t\tminMaxUcode = 80;\n\t\tpadGainSearchScale = 0.35f;"
  },
  {
   "label": "swap the two +0xa980 constants",
-  "find": "\t\tfloat_a980 = 1.75f;\n\t} else {\n\t\tshort_a978 = 0;\n\t\tshort_a97a = 80;\n\t\tfloat_a97c = 0.25f;\n\t\tfloat_a980 = 1.5f;",
-  "replace": "\t\tfloat_a980 = 1.5f;\n\t} else {\n\t\tshort_a978 = 0;\n\t\tshort_a97a = 80;\n\t\tfloat_a97c = 0.25f;\n\t\tfloat_a980 = 1.75f;"
+  "find": "\t\tfloat_a980 = 1.75f;\n\t} else {\n\t\tshort_a978 = 0;\n\t\tminMaxUcode = 80;\n\t\tpadGainSearchScale = 0.25f;\n\t\tfloat_a980 = 1.5f;",
+  "replace": "\t\tfloat_a980 = 1.5f;\n\t} else {\n\t\tshort_a978 = 0;\n\t\tminMaxUcode = 80;\n\t\tpadGainSearchScale = 0.25f;\n\t\tfloat_a980 = 1.75f;"
  },
  {
   "label": "set the +0xa978 flag on the wrong branch",
@@ -220,13 +220,13 @@
  },
  {
   "label": "give setConnectionType's else arm the fourth store reset has (D255)",
-  "find": "\t} else {\n\t\tshort_a97a = 80;\n\t\tfloat_a97c = 0.25f;\n\t\tfloat_a980 = 1.5f;\n\t}\n}",
-  "replace": "\t} else {\n\t\tshort_a978 = 0;\n\t\tshort_a97a = 80;\n\t\tfloat_a97c = 0.25f;\n\t\tfloat_a980 = 1.5f;\n\t}\n}"
+  "find": "\t} else {\n\t\tminMaxUcode = 80;\n\t\tpadGainSearchScale = 0.25f;\n\t\tfloat_a980 = 1.5f;\n\t}\n}",
+  "replace": "\t} else {\n\t\tshort_a978 = 0;\n\t\tminMaxUcode = 80;\n\t\tpadGainSearchScale = 0.25f;\n\t\tfloat_a980 = 1.5f;\n\t}\n}"
  },
  {
   "label": "swap setConnectionType's two thresholds",
-  "find": "\tif (type == 2) {\n\t\tshort_a978 = 1;\n\t\tshort_a97a = 88;",
-  "replace": "\tif (type == 2) {\n\t\tshort_a978 = 1;\n\t\tshort_a97a = 80;"
+  "find": "\tif (type == 2) {\n\t\tshort_a978 = 1;\n\t\tminMaxUcode = 88;",
+  "replace": "\tif (type == 2) {\n\t\tshort_a978 = 1;\n\t\tminMaxUcode = 80;"
  },
  {
   "label": "answer on a nonzero total rather than a positive one",
@@ -951,17 +951,17 @@
  },
  {
   "label": "leave the suspected flag clear",
-  "find": "\t\tbyte_a96a++;\n\t\tbyte_280c[phase] = 1;",
-  "replace": "\t\tbyte_a96a++;\n\t\tbyte_280c[phase] = 0;"
+  "find": "\t\tsuspectedPhaseCount++;\n\t\tbyte_280c[phase] = 1;",
+  "replace": "\t\tsuspectedPhaseCount++;\n\t\tbyte_280c[phase] = 0;"
  },
  {
   "label": "start the suspected tally at one",
-  "find": "\tbyte_a96a = 0;",
-  "replace": "\tbyte_a96a = 1;"
+  "find": "\tsuspectedPhaseCount = 0;",
+  "replace": "\tsuspectedPhaseCount = 1;"
  },
  {
   "label": "count the trusted phases in the tally instead",
-  "find": "\t\tbyte_a96a++;\n\t\tbyte_280c[phase] = 1;",
+  "find": "\t\tsuspectedPhaseCount++;\n\t\tbyte_280c[phase] = 1;",
   "replace": "\t\tbyte_280c[phase] = 1;"
  },
  {
@@ -1493,7 +1493,7 @@
  {
   "label": "dmu: threshold scaled by the wrong field",
   "find": "product = sum * float_a980 * 0.05f;",
-  "replace": "product = sum * float_a97c * 0.05f;"
+  "replace": "product = sum * padGainSearchScale * 0.05f;"
  },
  {
   "label": "dmu: the first report's whole part from the rounded value",
@@ -1549,13 +1549,13 @@
  },
  {
   "label": "dmu: the report loop starts at short_a97a",
-  "find": "for (k = (unsigned char)(short_a97a + 1); (int)k <= maxCode; k++)",
-  "replace": "for (k = (unsigned char)(short_a97a); (int)k <= maxCode; k++)"
+  "find": "for (k = (unsigned char)(minMaxUcode + 1); (int)k <= maxCode; k++)",
+  "replace": "for (k = (unsigned char)(minMaxUcode); (int)k <= maxCode; k++)"
  },
  {
   "label": "dmu: the report loop stops one short",
-  "find": "for (k = (unsigned char)(short_a97a + 1); (int)k <= maxCode; k++)",
-  "replace": "for (k = (unsigned char)(short_a97a + 1); (int)k < maxCode; k++)"
+  "find": "for (k = (unsigned char)(minMaxUcode + 1); (int)k <= maxCode; k++)",
+  "replace": "for (k = (unsigned char)(minMaxUcode + 1); (int)k < maxCode; k++)"
  },
  {
   "label": "dmu: the report's two indices swapped",
@@ -1629,23 +1629,23 @@
  },
  {
   "label": "dmu: the floor test is not strict",
-  "find": "if ((int)mu < (int)short_a97a) {",
-  "replace": "if ((int)mu <= (int)short_a97a) {"
+  "find": "if ((int)mu < (int)minMaxUcode) {",
+  "replace": "if ((int)mu <= (int)minMaxUcode) {"
  },
  {
   "label": "dmu: the floor test is unsigned",
-  "find": "if ((int)mu < (int)short_a97a) {",
-  "replace": "if ((int)mu < (int)(unsigned short)short_a97a) {"
+  "find": "if ((int)mu < (int)minMaxUcode) {",
+  "replace": "if ((int)mu < (int)(unsigned short)minMaxUcode) {"
  },
  {
   "label": "dmu: the floor report's two arguments swapped",
-  "find": "\t\t\t \"forced minimum maxUcode = %d\\n\", mu, short_a97a);",
-  "replace": "\t\t\t \"forced minimum maxUcode = %d\\n\", short_a97a, mu);"
+  "find": "\t\t\t \"forced minimum maxUcode = %d\\n\", mu, minMaxUcode);",
+  "replace": "\t\t\t \"forced minimum maxUcode = %d\\n\", minMaxUcode, mu);"
  },
  {
   "label": "dmu: the floor installs the old value",
-  "find": "\t\tbyte_a954 = (unsigned char)short_a97a;\n\t\tmu = (unsigned char)short_a97a;",
-  "replace": "\t\tbyte_a954 = mu;\n\t\tmu = (unsigned char)short_a97a;"
+  "find": "\t\toriginalMaxUcode = (unsigned char)minMaxUcode;\n\t\tmu = (unsigned char)minMaxUcode;",
+  "replace": "\t\toriginalMaxUcode = mu;\n\t\tmu = (unsigned char)minMaxUcode;"
  },
  {
   "label": "dmu: the mask threshold is not doubled",
@@ -1731,8 +1731,8 @@
  },
  {
   "label": "fpg: the scan starts two below the maximum",
-  "find": "unsigned char d = (unsigned char)(byte_a954 - 3);",
-  "replace": "unsigned char d = (unsigned char)(byte_a954 - 2);"
+  "find": "unsigned char d = (unsigned char)(originalMaxUcode - 3);",
+  "replace": "unsigned char d = (unsigned char)(originalMaxUcode - 2);"
  },
  {
   "label": "fpg: the scan window is one narrower",
@@ -1808,7 +1808,7 @@
  },
  {
   "label": "fpg: the range's start is scaled by the wrong field",
-  "find": "float scale = float_a97c;",
+  "find": "float scale = padGainSearchScale;",
   "replace": "float scale = float_a980;"
  },
  {
@@ -1863,13 +1863,13 @@
  },
  {
   "label": "fpg: the projection starts one code up",
-  "find": "for (k = 0x40; k <= byte_a954; k++) {",
-  "replace": "for (k = 0x41; k <= byte_a954; k++) {"
+  "find": "for (k = 0x40; k <= originalMaxUcode; k++) {",
+  "replace": "for (k = 0x41; k <= originalMaxUcode; k++) {"
  },
  {
   "label": "fpg: the projection stops one short",
-  "find": "for (k = 0x40; k <= byte_a954; k++) {",
-  "replace": "for (k = 0x40; k < byte_a954; k++) {"
+  "find": "for (k = 0x40; k <= originalMaxUcode; k++) {",
+  "replace": "for (k = 0x40; k < originalMaxUcode; k++) {"
  },
  {
   "label": "fpg: the projection multiplies by the gain",
@@ -2194,7 +2194,7 @@
  },
  {
   "label": "suh: the variance threshold is scaled by the wrong factor",
-  "find": "\t\tthresh = getAltVarThresh(var, float_a970);",
+  "find": "\t\tthresh = getAltVarThresh(var, altRbsVarianceThresholdFactor);",
   "replace": "\t\tthresh = getAltVarThresh(var, float_a974);"
  },
  {

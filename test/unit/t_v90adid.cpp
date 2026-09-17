@@ -972,7 +972,7 @@ adid_set_2800(int pattern)
 
 /*
  * Plant the five variances `findPadGain`'s scan reads -- the entries at
- * `byte_a954 - 3` and the four below it -- with the smallest at a chosen
+ * `originalMaxUcode - 3` and the four below it -- with the smallest at a chosen
  * offset.  That does two things: it fixes `projectionBaseUcode`, which is
  * otherwise a function of seeded bytes and unobservable behind the
  * [0x50, 0x5f] clamp, and it guarantees the scan's take happens at all, which
@@ -1068,8 +1068,8 @@ run_setters(void)
 		if (memcmp(before, ours.raw, SLOT) != 0)
 			moved = 1;
 		if (trial == 0)
-			first = ours_o.short_a97a;
-		else if (ours_o.short_a97a != first)
+			first = ours_o.minMaxUcode;
+		else if (ours_o.minMaxUcode != first)
 			distinct = 1;
 	}
 
@@ -1861,7 +1861,7 @@ run_signal(void)
 			short mc = (short)(0x40 + block % 0x40);
 
 			BOTH(unSuspectedPhase, safe_usp(mc, block % NPHASE));
-			BOTH(short_a97a, (short)(0x30 + block % 8));
+			BOTH(minMaxUcode, (short)(0x30 + block % 8));
 			BOTH(float_a980, 1.0f + (float)(block % 5));
 			ours_o.determineMaxUcode(mc);
 			ref_determineMaxUcode(&theirs_o, mc);
@@ -1869,9 +1869,9 @@ run_signal(void)
 				    V90AutoDigitalImpDetector, &ours_o,
 				    &theirs_o, block);
 
-			BOTH(byte_a954, (unsigned char)(0x50 + block % 0x28));
+			BOTH(originalMaxUcode, (unsigned char)(0x50 + block % 0x28));
 			plant_window(ours_o.unSuspectedPhase,
-				     ours_o.byte_a954, block % 5, 1.0f,
+				     ours_o.originalMaxUcode, block % 5, 1.0f,
 				     1.0e9f);
 			ours_o.findPadGain();
 			ref_findPadGain(&theirs_o);
@@ -3143,8 +3143,8 @@ run_firststudy(void)
 		if (memcmp(before, ours.raw, SLOT) != 0)
 			moved = 1;
 		if (trial == 0)
-			firsttally = ours_o.byte_a96a;
-		else if (ours_o.byte_a96a != firsttally)
+			firsttally = ours_o.suspectedPhaseCount;
+		else if (ours_o.suspectedPhaseCount != firsttally)
 			distinct = 1;
 	}
 
@@ -4007,8 +4007,8 @@ run_qcmapping(void)
  *   wraps from 255 to 0 and 0 is still under the bound.  Every argument here
  *   is 254 or less.
  *
- *   `findPadGain`'s SCAN BOUND IS `(int)(byte_a954 - 3) - 5` COMPARED AGAINST
- *   A ZERO-EXTENDED BYTE, so a `byte_a954` of 3..7 makes the bound negative
+ *   `findPadGain`'s SCAN BOUND IS `(int)(originalMaxUcode - 3) - 5` COMPARED AGAINST
+ *   A ZERO-EXTENDED BYTE, so a `originalMaxUcode` of 3..7 makes the bound negative
  *   and the loop never ends.  Every trial forces the field into [8, 0x9c],
  *   whose top keeps the window's own index inside entry 793 at phase 5.
  *
@@ -4090,7 +4090,7 @@ mu_finite_variances(void)
  *
  * THE METHOD IS FIVE DECISIONS DEEP AND A SEEDED OBJECT REACHES ONE SIDE OF
  * MOST OF THEM, so the sweep forces the six fields the answers turn on --
- * `unSuspectedPhase`, `short_a97a`, `float_a980`, `ucode`, the six flags at
+ * `unSuspectedPhase`, `minMaxUcode`, `float_a980`, `ucode`, the six flags at
  * +0x2800, and the argument -- and then four directed grids drive the arms a
  * sweep cannot reach.
  *
@@ -4148,7 +4148,7 @@ run_maxucode(void)
 		seed(trial, trial % 4);
 		mu_finite_variances();
 		BOTH(unSuspectedPhase, usp);
-		BOTH(short_a97a, a97a);
+		BOTH(minMaxUcode, a97a);
 		BOTH(float_a980, a980v[IDX(trial, 5)]);
 		BOTH(ucode, ucv[IDX(trial, 7)]);
 
@@ -4194,13 +4194,13 @@ run_maxucode(void)
 		if (memcmp(before, ours.raw, SLOT) != 0)
 			moved = 1;
 		if (trial == 0)
-			first = ours_o.byte_a954;
-		else if (ours_o.byte_a954 != first)
+			first = ours_o.originalMaxUcode;
+		else if (ours_o.originalMaxUcode != first)
 			distinct = 1;
 
 		if (a97a == 300)
 			forced = 1;
-		else if (ours_o.byte_a954 > (unsigned char)a97a)
+		else if (ours_o.originalMaxUcode > (unsigned char)a97a)
 			unforced = 1;
 
 		for (p = 0; p < NPHASE; p++) {
@@ -4208,7 +4208,7 @@ run_maxucode(void)
 
 			if (ours_o.altRbsFlag[p] != 0)
 				continue;
-			if (ours_o.maxUcode[p] == ours_o.byte_a954)
+			if (ours_o.maxUcode[p] == ours_o.originalMaxUcode)
 				direct = 1;
 			else
 				walked = 1;
@@ -4252,7 +4252,7 @@ run_maxucode(void)
 			seed(700 + g, 0);
 			mu_finite_variances();
 			BOTH(unSuspectedPhase, (short)(g % NPHASE));
-			BOTH(short_a97a, 0x30);
+			BOTH(minMaxUcode, 0x30);
 			BOTH(float_a980, 1.0f);
 			BOTH(ucode, (unsigned char)(0x41 + g));
 			adid_set_2800(0x15);
@@ -4319,7 +4319,7 @@ run_maxucode(void)
 			seed(760 + w, 0);
 			mu_finite_variances();
 			BOTH(unSuspectedPhase, 2);
-			BOTH(short_a97a, 0x30);
+			BOTH(minMaxUcode, 0x30);
 			BOTH(float_a980, 1.0f);
 			BOTH(ucode, 0x41);
 			adid_set_2800(0x15);
@@ -4352,7 +4352,7 @@ run_maxucode(void)
 				    strcmp(dsplib_debug_capture_text(0),
 					   dsplib_debug_capture_text(1)) == 0,
 				    1, w);
-			seen[w] = ours_o.byte_a954;
+			seen[w] = ours_o.originalMaxUcode;
 		}
 
 		/*
@@ -4383,10 +4383,10 @@ run_maxucode(void)
 	 * 0x30 holds all three and does -- but the scan's test is `ci > minU`
 	 * and never evaluates it.  A test of `ci >= minU` would qualify there,
 	 * answer 0x2e, and then have that answer forced back up to 0x30 by the
-	 * floor -- so `byte_a954` is 0x30 either way and the only difference is
+	 * floor -- so `originalMaxUcode` is 0x30 either way and the only difference is
 	 * the "original maxUcode ... forced minimum maxUcode" line.
 	 *
-	 * ROW 1, A NEGATIVE FLOOR.  `short_a97a` of -1 makes the byte 0xff, so
+	 * ROW 1, A NEGATIVE FLOOR.  `minMaxUcode` of -1 makes the byte 0xff, so
 	 * the scan never runs and the answer is 0xff -- and the floor test is a
 	 * SIGNED compare against the whole `short`, so 255 < -1 is false and
 	 * nothing is forced.  Read unsigned it would be 255 < 65535, which
@@ -4424,14 +4424,14 @@ run_maxucode(void)
 				    (r == 2) ? 1000.0f : 1.0e9f;
 
 			if (r == 0) {
-				BOTH(short_a97a, 0x30);
+				BOTH(minMaxUcode, 0x30);
 				for (i = 0x2c; i <= 0x2e; i++)
 					ours_o.linearMappingVar[1][i] =
 					    theirs_o.linearMappingVar[1][i] = 1.0f;
 			} else if (r == 1) {
-				BOTH(short_a97a, -1);
+				BOTH(minMaxUcode, -1);
 			} else {
-				BOTH(short_a97a, 0x30);
+				BOTH(minMaxUcode, 0x30);
 				for (i = 0x10; i <= 0x1f; i++)
 					ours_o.linearMappingVar[1][i] =
 					    theirs_o.linearMappingVar[1][i] = 2000.0f;
@@ -4455,7 +4455,7 @@ run_maxucode(void)
 	 * and makes every code fail `code <= arg`, so the mask comes out all
 	 * zero except the reference code the fill forces back to 1 -- which is
 	 * the only thing that stops the backwards walk in the last loop.  An
-	 * argument at or below `short_a97a` skips the scan entirely.  Both are
+	 * argument at or below `minMaxUcode` skips the scan entirely.  Both are
 	 * only offered to phases 0..4, because a byte-wide argument of 0xff at
 	 * phase 5 would index past the object.
 	 */
@@ -4468,7 +4468,7 @@ run_maxucode(void)
 			seed(800 + a, a % 4);
 			mu_finite_variances();
 			BOTH(unSuspectedPhase, (short)(a % 5));
-			BOTH(short_a97a, 0x30);
+			BOTH(minMaxUcode, 0x30);
 			BOTH(float_a980, 1.0f);
 			BOTH(ucode, (unsigned char)(0x20 + a));
 			adid_set_2800(1 + a * 7 % 62);
@@ -4521,9 +4521,9 @@ run_maxucode(void)
 /*
  * findPadGain.
  *
- * FIVE THINGS ARE FORCED AND ONE IS PLANTED.  `byte_a954` sets both scans'
+ * FIVE THINGS ARE FORCED AND ONE IS PLANTED.  `originalMaxUcode` sets both scans'
  * extent and has to stay in [8, 0x9c] for the method to terminate at all;
- * `unSuspectedPhase` picks the row everything is read from; `float_a97c`
+ * `unSuspectedPhase` picks the row everything is read from; `padGainSearchScale`
  * decides where the candidate range starts; `linMapp[phase][base]` is the
  * numerator of every candidate gain and therefore the only lever on which of
  * the three error buckets a candidate lands in; and the five-entry variance
@@ -4577,8 +4577,8 @@ run_padgain(void)
 
 		seed(trial, trial % 4);
 		BOTH(unSuspectedPhase, usp);
-		BOTH(byte_a954, a954);
-		BOTH(float_a97c, a97cv[IDX(trial, 3)]);
+		BOTH(originalMaxUcode, a954);
+		BOTH(padGainSearchScale, a97cv[IDX(trial, 3)]);
 		plant_window(usp, a954, minoff, 1.0f, 1.0e9f);
 		ours_o.linMapp[usp][base] = theirs_o.linMapp[usp][base] =
 		    refv[IDX(trial, 5)];
@@ -4674,8 +4674,8 @@ run_padgain(void)
 
 			seed(860 + w, 0);
 			BOTH(unSuspectedPhase, 1);
-			BOTH(byte_a954, 0x62);
-			BOTH(float_a97c, 0.25f);
+			BOTH(originalMaxUcode, 0x62);
+			BOTH(padGainSearchScale, 0.25f);
 			plant_window(1, 0x62, w, 1.0f, 1.0e9f);
 
 			/*
@@ -4733,8 +4733,8 @@ run_padgain(void)
 
 			seed(880 + t, 0);
 			BOTH(unSuspectedPhase, 0);
-			BOTH(byte_a954, 0x62);
-			BOTH(float_a97c, 0.25f);
+			BOTH(originalMaxUcode, 0x62);
+			BOTH(padGainSearchScale, 0.25f);
 
 			for (i = 0; i < V90ADID_CODES; i++)
 				ours_o.linMapp[0][i] = theirs_o.linMapp[0][i] =
@@ -4773,7 +4773,7 @@ run_padgain(void)
 	 * The gain is `linMapp[phase][base] / level(cur)` with `level` fixed
 	 * per candidate, so stepping the mapping by 37 a call steps every
 	 * candidate gain in that call by a few hundredths and walks it across
-	 * each boundary many times.  `float_a97c` is swept in thousandths over
+	 * each boundary many times.  `padGainSearchScale` is swept in thousandths over
 	 * the range that puts the companded floor in the low forties, which is
 	 * where `minU` can be exactly 0x27.
 	 */
@@ -4788,8 +4788,8 @@ run_padgain(void)
 
 			seed(900 + k, 0);
 			BOTH(unSuspectedPhase, usp);
-			BOTH(byte_a954, a954);
-			BOTH(float_a97c, 0.001f + 0.002f * (float)(k % 80));
+			BOTH(originalMaxUcode, a954);
+			BOTH(padGainSearchScale, 0.001f + 0.002f * (float)(k % 80));
 			plant_window(usp, a954, k % 5, 1.0f, 1.0e9f);
 			for (i = 0; i < V90ADID_CODES; i++)
 				ours_o.linMapp[usp][i] =
@@ -4807,7 +4807,7 @@ run_padgain(void)
 	}
 
 	/*
-	 * AND THE SAME GRID WITH THE PROJECTION LOOP EMPTY.  A `byte_a954`
+	 * AND THE SAME GRID WITH THE PROJECTION LOOP EMPTY.  A `originalMaxUcode`
 	 * under 0x40 skips the round trip entirely, so every candidate's error
 	 * is exactly zero -- and then the best-of-three's `errMid * 0.8f >
 	 * errHigh` is `0 > 0`, which is the one input that separates it from
@@ -4824,8 +4824,8 @@ run_padgain(void)
 
 			seed(1100 + k, 0);
 			BOTH(unSuspectedPhase, usp);
-			BOTH(byte_a954, 0x20);
-			BOTH(float_a97c, 0.25f);
+			BOTH(originalMaxUcode, 0x20);
+			BOTH(padGainSearchScale, 0.25f);
 			plant_window(usp, 0x20, k % 5, 1.0f, 1.0e9f);
 			for (i = 0; i < V90ADID_CODES; i++)
 				ours_o.linMapp[usp][i] =
@@ -4849,7 +4849,7 @@ run_padgain(void)
 	 * of `minU`, and `minU` is a companded code -- so no sweep of a scaling
 	 * factor lands on it by luck.  It was solved for instead: at a base
 	 * code of 0x50 and mu-law, `~linear2ulaw(|(int)(620 * a97c)|)` is 0x27
-	 * for `float_a97c` anywhere in [0.14775, 0.15525], which a throwaway
+	 * for `padGainSearchScale` anywhere in [0.14775, 0.15525], which a throwaway
 	 * program built -m32 -mfpmath=387 against this tree's own `pcm.c`
 	 * enumerated.  Eight values inside that band are swept here.
 	 *
@@ -4873,8 +4873,8 @@ run_padgain(void)
 
 			seed(1200 + j, 0);
 			BOTH(unSuspectedPhase, usp);
-			BOTH(byte_a954, 0x20);
-			BOTH(float_a97c, 0.148f + 0.001f * (float)j);
+			BOTH(originalMaxUcode, 0x20);
+			BOTH(padGainSearchScale, 0.148f + 0.001f * (float)j);
 			plant_window(usp, 0x20, j % 5, 1.0f, 1.0e9f);
 			for (i = 0; i < V90ADID_CODES; i++)
 				ours_o.linMapp[usp][i] =
@@ -5046,7 +5046,7 @@ run_studyuref(void)
 		study_durations(11, 13, 7, 17, 5);
 		BOTH(uniteUrefDistanceThresh, (short)(1 << (trial % 12)));
 		BOTH(altRbsDistanceThresh, dists[IDX(trial, 7)]);
-		BOTH(float_a970, factors[IDX(trial, 3)]);
+		BOTH(altRbsVarianceThresholdFactor, factors[IDX(trial, 3)]);
 		BOTH(altMinVarThresh, (float)(trial % 5) * 1000.0f);
 		BOTH(short_a948, (short)-1);
 		BOTH(trn1Sigma, -1.0f);
@@ -5222,7 +5222,7 @@ run_studyuref(void)
 			BOTH(studyState, 0);
 			BOTH(stateSampleCount, 4);
 			study_durations(5, 13, 7, 17, 3);
-			BOTH(float_a970, 1.5f);
+			BOTH(altRbsVarianceThresholdFactor, 1.5f);
 			BOTH(altMinVarThresh, 0.0f);
 
 			for (p = 0; p < NPHASE; p++) {
@@ -5288,7 +5288,7 @@ run_studyuref(void)
 		study_durations(3, 4, 3, 5, 2);
 		BOTH(uniteUrefDistanceThresh, 40);
 		BOTH(altRbsDistanceThresh, 60);
-		BOTH(float_a970, 1.5f);
+		BOTH(altRbsVarianceThresholdFactor, 1.5f);
 		BOTH(altMinVarThresh, 10.0f);
 		BOTH(short_a948, 0);
 		BOTH(trn1Sigma, 0.0f);
@@ -5377,7 +5377,7 @@ run_studyuref(void)
 		BOTH(studyState, 0);
 		BOTH(stateSampleCount, 4);
 		study_durations(5, 13, 7, 17, 3);
-		BOTH(float_a970, 1.0f);
+		BOTH(altRbsVarianceThresholdFactor, 1.0f);
 		BOTH(altMinVarThresh, 1234.75f);
 
 		for (p = 0; p < NPHASE; p++) {
@@ -5490,7 +5490,7 @@ run_studyuref(void)
 			BOTH(stateSampleCount, dur - 1);
 			study_durations(11, 13, 7, 17, 5);
 			BOTH(altRbsDistanceThresh, (short)(k * 40));
-			BOTH(float_a970, 1.5f);
+			BOTH(altRbsVarianceThresholdFactor, 1.5f);
 			BOTH(altMinVarThresh, 100.0f);
 
 			for (p = 0; p < NPHASE; p++) {

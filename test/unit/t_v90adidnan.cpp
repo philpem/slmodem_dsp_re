@@ -225,7 +225,7 @@ main(void)
 		seed(760 + w);
 		finite_variances();
 		BOTH(unSuspectedPhase, 2);
-		BOTH(short_a97a, 0x30);
+		BOTH(minMaxUcode, 0x30);
 		BOTH(float_a980, 1.0f);
 		BOTH(ucode, 0x41);
 		adid_set_2800(0x15);
@@ -255,7 +255,7 @@ main(void)
 		diff_eq_int("both sides printed the same number of lines (%ld)",
 			    (long)dsplib_debug_capture_lines(0),
 			    (long)dsplib_debug_capture_lines(1), w);
-		seen[w] = theirs_o.byte_a954;
+		seen[w] = theirs_o.originalMaxUcode;
 	}
 
 	dsplib_debug_capture_on = 0;

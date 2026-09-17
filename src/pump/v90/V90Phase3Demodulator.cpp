@@ -2357,7 +2357,7 @@ V90Phase3Demodulator::exitDIL()
  *
  * Three calls on the detector in a fixed order, the last of them a tail jump,
  * and the order is load-bearing rather than incidental: `determineMaxUcode`
- * leaves `byte_a954` behind, `findPadGain` starts from that byte and stores
+ * leaves `originalMaxUcode` behind, `findPadGain` starts from that byte and stores
  * `padGain`, and `applyPadGainToLinMapp` divides both mapping tables by
  * `padGain`.  Run in any other order the third does nothing, because `reset`
  * seeds the gain with 1.0f.

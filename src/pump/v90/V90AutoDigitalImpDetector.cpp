@@ -93,11 +93,11 @@ ADID_OFF(altRbsDistanceThresh,   0xa9a6, shorta9a6);
 ADID_OFF(ucode,        0xa96b, ucode);
 ADID_OFF(ucodeLevel,   0xa96c, ucodelevel);
 ADID_OFF(altRbsExpected,   0xa96e, shorta96e);
-ADID_OFF(float_a970,   0xa970, floata970);
+ADID_OFF(altRbsVarianceThresholdFactor,   0xa970, floata970);
 ADID_OFF(float_a974,   0xa974, floata974);
 ADID_OFF(short_a978,   0xa978, shorta978);
-ADID_OFF(short_a97a,   0xa97a, shorta97a);
-ADID_OFF(float_a97c,   0xa97c, floata97c);
+ADID_OFF(minMaxUcode,   0xa97a, shorta97a);
+ADID_OFF(padGainSearchScale,   0xa97c, floata97c);
 ADID_OFF(float_a980,   0xa980, floata980);
 
 /*
@@ -128,7 +128,7 @@ ADID_OFF(float_a980,   0xa980, floata980);
  */
 ADID_OFF(float_a950,   0xa950, floata950);
 ADID_OFF(trn1Sigma,    0xa964, trn1sigma);
-ADID_OFF(byte_a96a,    0xa96a, bytea96a);
+ADID_OFF(suspectedPhaseCount,    0xa96a, bytea96a);
 ADID_OFF(studyState,     0xa984, inta984);
 ADID_OFF(stateSampleCount,     0xa988, inta988);
 ADID_OFF(int_a98c,     0xa98c, inta98c);
@@ -151,7 +151,7 @@ ADID_OFF(neighborUcodeMaxDistance, 0xa9ae, neighborucodemax);
  *          sign-extend: `movswl 0xa968(%ebp),%esi` at 0x418ff in
  *          updateAltRbsPhaseInDil, and the same instruction four times in
  *          findPadGain and five times in determineMaxUcode.  Two bytes, and
- *          `byte_a96a` at +0xa96a is what bounds it above.
+ *          `suspectedPhaseCount` at +0xa96a is what bounds it above.
  */
 ADID_OFF(unSuspectedPhase, 0xa968, unsuspectedphase);
 
@@ -170,7 +170,7 @@ ADID_OFF(unSuspectedPhase, 0xa968, unsuspectedphase);
  *          0x440c4 in findPadGain -- 32-bit stores of 0 and 1, which is what
  *          makes the whole four-byte region one `int`.
  */
-ADID_OFF(byte_a954,    0xa954, bytea954);
+ADID_OFF(originalMaxUcode,    0xa954, bytea954);
 ADID_OFF(detectedPcmType,     0xa960, inta960);
 
 typedef char adid_size[(sizeof(V90AutoDigitalImpDetector) == 0xa9b0) ? 1 : -1];
@@ -462,12 +462,12 @@ V90AutoDigitalImpDetector::setConnectionType(short type)
 {
 	if (type == 2) {
 		short_a978 = 1;
-		short_a97a = 88;
-		float_a97c = 0.35f;
+		minMaxUcode = 88;
+		padGainSearchScale = 0.35f;
 		float_a980 = 1.75f;
 	} else {
-		short_a97a = 80;
-		float_a97c = 0.25f;
+		minMaxUcode = 80;
+		padGainSearchScale = 0.25f;
 		float_a980 = 1.5f;
 	}
 }
@@ -510,18 +510,18 @@ V90AutoDigitalImpDetector::reset(unsigned char code, PcmType law, short altRbs)
 		altMagnitudeSum[phase] = 0.0f;
 	}
 
-	float_a970 = altRbsExpected != 0 ? 5.0f : 1.5f;
+	altRbsVarianceThresholdFactor = altRbsExpected != 0 ? 5.0f : 1.5f;
 	float_a974 = 5.0f;
 
 	if (paramShort(params, V90PARAMETERS_CONNECTION_TYPE) == 2) {
 		short_a978 = 1;
-		short_a97a = 88;
-		float_a97c = 0.35f;
+		minMaxUcode = 88;
+		padGainSearchScale = 0.35f;
 		float_a980 = 1.75f;
 	} else {
 		short_a978 = 0;
-		short_a97a = 80;
-		float_a97c = 0.25f;
+		minMaxUcode = 80;
+		padGainSearchScale = 0.25f;
 		float_a980 = 1.5f;
 	}
 }
@@ -1159,7 +1159,7 @@ V90AutoDigitalImpDetector::porcessFirstStudy()
 		}
 	}
 
-	byte_a96a = 0;
+	suspectedPhaseCount = 0;
 
 	for (phase = 0; phase < V90ADID_PHASES; phase++) {
 		short n = 1;
@@ -1179,7 +1179,7 @@ V90AutoDigitalImpDetector::porcessFirstStudy()
 			}
 		}
 
-		byte_a96a++;
+		suspectedPhaseCount++;
 		byte_280c[phase] = 1;
 	}
 
@@ -1938,7 +1938,7 @@ V90AutoDigitalImpDetector::studyUrefHandler(float v, unsigned int phase)
 					     (int)var[3], (int)var[4],
 					     (int)var[5]);
 
-		thresh = getAltVarThresh(var, float_a970);
+		thresh = getAltVarThresh(var, altRbsVarianceThresholdFactor);
 
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V90AutoDigitalImpDetector:  "
@@ -2208,7 +2208,7 @@ V90AutoDigitalImpDetector::studyUrefHandler(float v, unsigned int phase)
  *
  * THE SEARCH FOR THE STARTING CODE IS FIVE ENTRIES WIDE AND ITS RESULT IS
  * THEN CLAMPED INTO SIXTEEN.  `projectionBaseUcode` is the code with the
- * smallest variance among the five ending at `byte_a954 - 3`, and it is then
+ * smallest variance among the five ending at `originalMaxUcode - 3`, and it is then
  * forced into [0x50, 0x5f] -- so the search only shows through the clamp, and
  * only when it lands inside that window.  Both names are the object's own:
  * it prints them as "projectionBaseUcode" and "minUcodeForCodecProjection".
@@ -2256,7 +2256,7 @@ V90AutoDigitalImpDetector::findPadGain()
 
 	{
 		/*
-		 * Five codes ending at `byte_a954 - 3`, and the one with the
+		 * Five codes ending at `originalMaxUcode - 3`, and the one with the
 		 * smallest variance wins.  Every index is a BYTE, recomputed
 		 * from the counter rather than walked as a pointer -- 0x43674
 		 * forms the address afresh each pass -- so a counter that
@@ -2264,13 +2264,13 @@ V90AutoDigitalImpDetector::findPadGain()
 		 * in front of it.
 		 *
 		 * The bound is `(int)start - 5` and the counter is compared
-		 * against it zero-extended with a SIGNED `jg`, so a `byte_a954`
+		 * against it zero-extended with a SIGNED `jg`, so a `originalMaxUcode`
 		 * of 3 to 7 inclusive makes the bound negative and the loop
 		 * never ends.  D290.
 		 */
 		float bestVar = 100000000.0f;
 		unsigned char bestAt;
-		unsigned char d = (unsigned char)(byte_a954 - 3);
+		unsigned char d = (unsigned char)(originalMaxUcode - 3);
 		int lim = (int)d - 5;
 
 		do {
@@ -2310,12 +2310,12 @@ V90AutoDigitalImpDetector::findPadGain()
 		float errHigh = 1000000.0f, gainHigh = 1.0f;
 		float errMid = 1000000.0f, gainMid = 1.0f;
 		float errLow = 1000000.0f;
-		float scale = float_a97c;
+		float scale = padGainSearchScale;
 		unsigned char cur;
 
 		/*
 		 * The bottom of the candidate range: the base code's level cut
-		 * by `float_a97c`, companded back, and floored at 0x28.  The
+		 * by `padGainSearchScale`, companded back, and floored at 0x28.  The
 		 * object loads the scale before the call and spills it, which
 		 * is a spill and not an ordering the arithmetic depends on.
 		 */
@@ -2371,7 +2371,7 @@ V90AutoDigitalImpDetector::findPadGain()
 			gain = ref / (float)level;
 
 			/*
-			 * The round trip, over codes 0x40 up to `byte_a954`.
+			 * The round trip, over codes 0x40 up to `originalMaxUcode`.
 			 * The reciprocal is formed INSIDE the loop -- the
 			 * object issues `flds 1.0f` and `fdivs` on every pass
 			 * at 0x4382b -- and the projected level is stored
@@ -2379,7 +2379,7 @@ V90AutoDigitalImpDetector::findPadGain()
 			 * of a `short`'s range comes back as 0x8000 rather
 			 * than as the low half of a 32-bit conversion.
 			 */
-			for (k = 0x40; k <= byte_a954; k++) {
+			for (k = 0x40; k <= originalMaxUcode; k++) {
 				short proj = (short)(
 				    linMapp[unSuspectedPhase][k]
 				    * (1.0f / gain) + 0.5f);
@@ -2615,7 +2615,7 @@ V90AutoDigitalImpDetector::applyPadGainToLinMapp()
  *      [500, 100000];
  *   3. a scan DOWNWARDS from the argument for the first window of five
  *      adjacent codes containing more than two "small but not zero"
- *      variances, whose top becomes `byte_a954`, floored at `short_a97a`;
+ *      variances, whose top becomes `originalMaxUcode`, floored at `minMaxUcode`;
  *   4. `usableMask[phase][code]` set to 1 exactly where the code is within the
  *      argument's reach and the variance is under twice the threshold;
  *   5. `maxUcode[phase]` read back out of that mask.
@@ -2630,7 +2630,7 @@ V90AutoDigitalImpDetector::applyPadGainToLinMapp()
  *
  * THE REPORT HEADER IS HANDED THREE ARGUMENTS IT HAS NO CONVERSIONS FOR.
  * "linearMappingVar report:" contains no `%`, and the object still stores
- * `unSuspectedPhase`, `short_a97a + 1` and the argument into the outgoing
+ * `unSuspectedPhase`, `minMaxUcode + 1` and the argument into the outgoing
  * argument slots at 0x44373, 0x4437f and 0x44391 before the call.  GCC does
  * not emit dead stores into an argument area, so they are the call's and they
  * are written; no transcript can see the difference, so the disassembly is
@@ -2646,7 +2646,7 @@ V90AutoDigitalImpDetector::determineMaxUcode(short maxCode)
 	/* `fsts 0x1c(%esp)` at 0x4424b, reloaded with `flds` eight times. */
 	volatile float varThresh;
 	int origWhole;
-	unsigned char minU = (unsigned char)short_a97a;
+	unsigned char minU = (unsigned char)minMaxUcode;
 	unsigned char mu;
 	unsigned char at;
 	unsigned char phase;
@@ -2706,7 +2706,7 @@ V90AutoDigitalImpDetector::determineMaxUcode(short maxCode)
 
 	edprintf("--------------------------------------------------------\r\n");
 	edprintf("V90AutoDigitalImpDetector: linearMappingVar report:\r\n",
-		 unSuspectedPhase, short_a97a + 1, maxCode);
+		 unSuspectedPhase, minMaxUcode + 1, maxCode);
 
 	/*
 	 * A BYTE COUNTER AGAINST A SIGNED INT BOUND.  `k` is zero-extended for
@@ -2714,7 +2714,7 @@ V90AutoDigitalImpDetector::determineMaxUcode(short maxCode)
 	 * the counter wraps to 0 and 0 is still under the bound -- and a
 	 * negative one skips it entirely.  D288.
 	 */
-	for (k = (unsigned char)(short_a97a + 1); (int)k <= maxCode; k++)
+	for (k = (unsigned char)(minMaxUcode + 1); (int)k <= maxCode; k++)
 		edprintf("linearMappingVar[%d][%d] = %d\r\n", unSuspectedPhase,
 			 k, adid_abs((int)linearMappingVar[unSuspectedPhase][k]));
 
@@ -2773,19 +2773,19 @@ V90AutoDigitalImpDetector::determineMaxUcode(short maxCode)
 		}
 	}
 
-	byte_a954 = at;
+	originalMaxUcode = at;
 
 	/*
 	 * The floor.  The compare is signed and against the whole `short`, so
-	 * a `short_a97a` above 255 forces the byte every time.
+	 * a `minMaxUcode` above 255 forces the byte every time.
 	 */
-	mu = byte_a954;
+	mu = originalMaxUcode;
 
-	if ((int)mu < (int)short_a97a) {
+	if ((int)mu < (int)minMaxUcode) {
 		edprintf("V90AutoDigitalImpDetector: original maxUcode = %d  "
-			 "forced minimum maxUcode = %d\n", mu, short_a97a);
-		byte_a954 = (unsigned char)short_a97a;
-		mu = (unsigned char)short_a97a;
+			 "forced minimum maxUcode = %d\n", mu, minMaxUcode);
+		originalMaxUcode = (unsigned char)minMaxUcode;
+		mu = (unsigned char)minMaxUcode;
 	}
 
 	/*
@@ -2837,7 +2837,7 @@ V90AutoDigitalImpDetector::determineMaxUcode(short maxCode)
 	 * ends.  docs/deviations.md D289.
 	 */
 	for (phase = 0; phase < V90ADID_PHASES; phase++) {
-		unsigned char m = byte_a954;
+		unsigned char m = originalMaxUcode;
 
 		if (altRbsFlag[phase] == 0) {
 			maxUcode[phase] = m;

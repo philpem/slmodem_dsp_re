@@ -437,7 +437,7 @@ public:
 	 * only `edprintf`.
 	 *
 	 * `determineMaxUcode` fills `usableMask` and reads it back to give every
-	 * phase a `maxUcode`, and it is what leaves `byte_a954` behind.
+	 * phase a `maxUcode`, and it is what leaves `originalMaxUcode` behind.
 	 * `findPadGain` starts from that byte, projects the reference phase's
 	 * mapping through both companding laws at a range of assumed gains,
 	 * takes the gain whose round-trip error is smallest, and stores it in
@@ -457,7 +457,7 @@ public:
 	 *
 	 * Fills `usableMask` with a per-cell "usable" mask (usable when the
 	 * code is within `maxCode` and the cell's variance is small), leaves
-	 * the scan's own top behind in `byte_a954`, and gives every phase a
+	 * the scan's own top behind in `originalMaxUcode`, and gives every phase a
 	 * `maxUcode[]` entry at or below it.
 	 *
 	 * @param maxCode  The highest code to consider usable at all.
@@ -469,7 +469,7 @@ public:
 	 *        phase's mapping round-trip through a companding law
 	 *        unchanged, and store it in `padGain`.
 	 *
-	 * Starts from `byte_a954`, projects the reference phase's mapping
+	 * Starts from `originalMaxUcode`, projects the reference phase's mapping
 	 * through both companding laws at a range of assumed gains, and
 	 * keeps the gain with the smallest round-trip error. Also decides
 	 * which companding law the line is actually using and records it in
@@ -561,7 +561,7 @@ public:
 	 * `[phase][code]` when the code is within the argument's reach AND the
 	 * phase's variance for it is small -- `code <= arg` and
 	 * `|linearMappingVar[phase][code]| < 2 * varThresh` -- and 0 otherwise,
-	 * and then walks the row DOWNWARDS from `byte_a954` looking for the
+	 * and then walks the row DOWNWARDS from `originalMaxUcode` looking for the
 	 * first 1, which becomes that phase's `maxUcode`.  So a 1 is "usable"
 	 * and the array is the per-code mask the per-phase maximum is read out
 	 * of.  Finding F1435.
@@ -695,7 +695,10 @@ public:
 	 */
 	float linearMappingVar[V90ADID_PHASES][V90ADID_CODES];	/* +0x9d48 */
 
-	/* Cleared by `reset`; `studyUrefHandler` is the only other writer. */
+	/*
+	 * Cleared by `reset` and set after the second study update, but never read
+	 * in this class. Its semantic role is not established.
+	 */
 	short short_a948;					/* +0xa948 */
 
 	/*
@@ -727,12 +730,13 @@ public:
 	 * reproduces three of the five defaults exactly and the field is a
 	 * scale rather than an offset.  What sets it is not written yet.
 	 */
+	/* Its threshold-scaling policy is not established beyond this use. */
 	float float_a950;					/* +0xa950 */
 
 	/*
 	 * The object calls this one `maxUcode` too, and it is the scalar the
 	 * six-byte array below is derived from: `determineMaxUcode` prints it
-	 * as "original maxUcode = %d" while forcing it up to `short_a97a`, and
+	 * as "original maxUcode = %d" while forcing it up to `minMaxUcode`, and
 	 * then gives every phase a `maxUcode[phase]` at or below it.
 	 *
 	 * One byte.  `determineMaxUcode` writes it with `mov %bl,0xa954(%ebp)`
@@ -755,13 +759,13 @@ public:
 	 * shape as `VPcmFloModem::pad_6fb8` and `V92CP::pad_40` -- stays
 	 * explicit.
 	 */
-	unsigned char byte_a954;				/* +0xa954 */
+	unsigned char originalMaxUcode;				/* +0xa954 */
 	unsigned char pad_a955[1];				/* +0xa955 */
 
 	/*
 	 * Six bytes, one per phase, copied in by `setMaxUcodeArray`. The
 	 * values are the highest PCM code each phase may be driven at:
-	 * `determineMaxUcode` fills them from `byte_a954` above, walking each
+	 * `determineMaxUcode` fills them from `originalMaxUcode` above, walking each
 	 * phase's `usableMask` row down to the first usable code, and clamping
 	 * a flagged phase to two below its own argument.
 	 */
@@ -821,7 +825,7 @@ public:
 	 * every phase it flags at +0x280c.  A byte, and no other member of
 	 * the class touches it.
 	 */
-	unsigned char byte_a96a;				/* +0xa96a */
+	unsigned char suspectedPhaseCount;				/* +0xa96a */
 
 	/*
 	 * The reference PCM code and the linear level it companded to.  `reset`
@@ -835,7 +839,7 @@ public:
 
 	/*
 	 * `reset`'s third argument, stored unchanged, and the only thing it
-	 * selects: nonzero puts 5.0f in `float_a970` where zero puts 1.5f.
+	 * selects: nonzero puts 5.0f in `altRbsVarianceThresholdFactor` where zero puts 1.5f.
 	 * Named for the argument's own doc comment on `reset` ("Nonzero if the
 	 * session should expect alternate RBS"), and deliberately not just
 	 * `altRbs` -- that would read as the same concept as the per-phase
@@ -845,16 +849,21 @@ public:
 	 */
 	short altRbsExpected;					/* +0xa96e */
 
-	float float_a970;					/* +0xa970 */
+	/* Scale supplied to getAltVarThresh for alternate-RBS detection. */
+	float altRbsVarianceThresholdFactor;					/* +0xa970 */
+	/* Reset writes 5.0f, but no read-side role is established. */
 	float float_a974;					/* +0xa974 */
 
 	/*
 	 * The four `reset` sets from `params->[+0x0c] == 2`: (1, 88, 0.35f,
 	 * 1.75f) when it is 2 and (0, 80, 0.25f, 1.5f) when it is not.
 	 */
+	/* Connection-type-selected 0/1 word; its consumer is not established. */
 	short short_a978;					/* +0xa978 */
-	short short_a97a;					/* +0xa97a */
-	float float_a97c;					/* +0xa97c */
+	/* Floor applied to the detector's initially selected maximum ucode. */
+	short minMaxUcode;					/* +0xa97a */
+	/* Scale applied while findPadGain searches codec projections. */
+	float padGainSearchScale;					/* +0xa97c */
 	float float_a980;					/* +0xa980 */
 
 	/*
