@@ -68,13 +68,13 @@ struct v27rx_cfg V27RX_CFG = {
 	60000,		/* +0x08 */
 	0,		/* +0x0c */
 	0,		/* +0x10 */
-	0,		/* +0x14 */
+	0,		/* +0x14  short_train                                */
 	0		/* +0x18 */
 };
 
 /* V.29: 9600 bit/s.  `v29rx_create` tests this field against 7200. */
 struct v29rx_cfg V29RX_CFG = {
-	1,		/* +0x00 */
+	1,		/* +0x00  protocol                                   */
 	9600,		/* +0x04  bit_rate                                   */
 	0,		/* +0x06 */
 	60000,		/* +0x08 */

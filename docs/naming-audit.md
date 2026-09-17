@@ -1592,6 +1592,182 @@ matching other than exactly once, 2202 offset annotations matching.
 `docs/naming-inventory.md` was regenerated: named 2638 -> 2640, offset-named
 384 -> 382, on-record 273 -> 300, residual 111 -> 82.
 
+## Batch 27: FAX V.27/V.29 clusters (issue #130)
+
+Owner-scoped pass over the V.27 and V.29 FAX clusters. This is an
+owner-scoped candidate denominator, not a claim that the FAX inventory is
+complete; the V.17 and V.21 owners are untouched.
+
+V.27 owners: `v27rx_cfg`, `v27_rx`, `v27_rx_block`, `v27_rx_shared`,
+`v27rx_ctl`, `v27_status_prefix`, `v27_tx_source`, `v27tx_cfg`,
+`v27tx_ctl`. V.29 owners: `v29rx_cfg`, `v29_rx`, `v29_rx_block`,
+`v29_rx_decoder`, `v29_rx_detector`, `v29_status_prefix`, `v29_tx_params`,
+`v29tx_cfg`, and the two runtime control-request types.
+
+The V.29 owner names in the batch brief -- `struct v29rx_ctl`, `struct
+v29tx_ctl`, `struct v29_rx_shared` -- do not exist in this tree. V.29's
+runtime requests are `struct v29rx_control_req` / `struct
+v29tx_control_req` (`v29fax.h`), and V.29 has no shared block: the
+detection block (`v29_rx_detector`) plays that role. Those are the types
+reviewed here.
+
+Four fields are renamed, each by evidence rank 2 (a typed destination or
+an already-named sibling with the identical role); every other member in
+scope is retained neutral with the reason recorded beside it in its own
+header and below. A wrong name is worse than an offset, and most of the
+V.27 cluster is a constructor seed that nothing reads.
+
+### Renamed
+
+| Owner | Previous | New | Evidence | Confidence |
+| --- | --- | --- | --- | --- |
+| `v27rx_cfg` | `int_0014` | `short_train` | `V27RX_create` derives `v27_rx_shared::train_long` from `(short_train == 0)` (`v27.c:233`); `v17rx_cfg::short_train` is the same field at the same offset with the identical role (Batch 25), and the `v17_dec::short_train` chain is the same value at each hop | high |
+| `v29rx_cfg` | `int_0000` | `protocol` | `V29RX_status` stores it into `v29_status_prefix::protocol` (`v29.c:1714`); `v17rx_cfg::protocol` is the same field at the same offset on the identical store-to-status evidence (Batch 25) | high |
+| `v29_tx_params` | `short_0016` | `countdown` | `v27fax.h`'s `struct v27_tx_source::countdown` is the same field at the same offset (+0x16): the per-state budget `TxNextStateV29` seeds and `TxHdxQuiet/AB/EQCond/SCR1V29` decrement and test (`v29.c:2100`..`2236`); `TxHdxDataV29` reads it as a one-shot flag | high |
+| `v29tx_control_req` | `int_0008` | `scale_mul` | `V29TX_control` stores it into the shaper's `cfg.scale`, multiplied by `V29TX_PPS_SCALE[rate]` (`v29.c:2336-2337`); `v27tx_ctl::scale_mul` and `v17tx_control_req::scale_mul` are the same field of the same five-effect request shape, and `v17fax.h:1928-1932` (F10144) named this copy a candidate for whoever visited V.29 next | high |
+
+`short_train`, `protocol` and `scale_mul` are carried from the siblings
+because the store target and the role are identical, not because the
+offsets are adjacent. `countdown` is the one name carried from V.27 rather
+than from a V.29 reader, and V.29's four handlers' own decrement/test loop
+is the second, independent statement of the role.
+
+### Retained neutral, with the reason
+
+| Owner | Member | Reason | Confidence in retention |
+| --- | --- | --- | --- |
+| `v27rx_cfg` | `int_0000` | no reader; V.27's `V27RX_status` reports only whether a block was supplied, so it has no `protocol` store target to carry the V.17 name to | high |
+| `v27rx_cfg` | `short_0006` | never read | high |
+| `v27rx_cfg` | `int_0008` | written by `V27RX_control` from its `+0x04`, read by nothing | high |
+| `v27rx_cfg` | `int_000c`, `int_0010` | never read | high |
+| `v27rx_cfg` | `ptr_0018` | the constructor's 4th argument, handed to three modules' `aux`/`reserved34` slots; no agreed name, and `v17rx_cfg::ptr_0024` is unnamed too | high |
+| `v27_rx` | `int_0038`, `int_003c`, `short_0040`, `int_0044`, `int_0048`, `short_004c` | the six `V27RX_create` zeroes; nothing else in the object touches any of them | high |
+| `v27_rx_block` | `int_0000` | set 1 by `V27RX_create`, cleared by `V27RX_control`'s mask bit 3; no reader | high |
+| `v27_rx_block` | `int_000c` | constructor writes 0; no reader | high |
+| `v27_rx_shared` | `int_0004` | `V27RX_control` writes 0/1, `RxHdxDataV27` gates on zero; the gate is measured but the field's meaning beyond it is not. `V29DET_INT_0008` (the same gate one modulation over) is likewise unnamed | high |
+| `v27rx_ctl` | `int_0004` | copied into `v27rx_cfg::int_0008`, which nothing reads; `v17rx_ctl::int_0004` is the same | high |
+| `v27_status_prefix` | `short_0e` | not written by `V27TX_status`; `v17_status::short_0e` is the same slot, likewise unnamed | high |
+| `v27_status_prefix` | `short_16` | not written by `V27TX_status`; `v17_status::short_16` is the same slot, likewise unnamed | high |
+| `v27_status_prefix` | `word_18` | written from `v27tx_cfg::int_0018`, which is itself unnamed; `v17_status::int_18` and `v22_status` carry the slot without a semantic name | high |
+| `v27_tx_source` | `int_0008` | the underrun gate; nothing reconstructed sets it non-zero except `V27TX_control`'s own ctl1 bit 4, and `V29TXP_INT_0008` is the same gate, also unnamed | high |
+| `v27tx_cfg` | `int_0004` | never read | high |
+| `v27tx_cfg` | `short_0012` | never read | high |
+| `v27tx_ctl` | `int_0004` | copied into `v27tx_cfg::int_0008`, which nothing reads; `v17tx_control_req::int_0004` is the same | high |
+| `v27tx_ctl` | `int_0010` | copied into `v27tx_cfg::int_0018`, the `V27TXP_TRAIN_LONG` source; that source is itself unnamed | high |
+| `v29rx_cfg` | `short_0006` | never read | high |
+| `v29rx_cfg` | `int_0008` | written by `V29RX_control` from its `+0x04`, read by nothing | high |
+| `v29rx_cfg` | `int_000c`, `int_0010` | never read | high |
+| `v29rx_cfg` | `ptr_0014` | the constructor's 4th argument, handed to the module `aux`/`reserved34` slots; no agreed name | high |
+| `v29_rx` | `int_0034`, `int_0038`, `short_003c`, `int_0040`, `int_0044`, `short_0048` | the `V29RX_create` zeroes; nothing else touches any of them | high |
+| `v29_rx_block` | `int_000c`, `int_0014`, `int_0024` | seeded 0/1/0 by `V29RX_create`; no reader | high |
+| `v29_rx_block` | `short_4f62` | `QualityDetectV29`'s once-only verdict; nothing reconstructed reads it, so the polarity is recorded and not named | high |
+| `v29_rx_decoder` | `short_001a` | zeroed by `V29RX_create`; touched by nothing else, not by any slicer | high |
+| `v29_rx_detector` | `int_0008` | the demodulator gate: written by `V29RX_control`'s ctl1 bit 4, read by `RxHdxDataV29`; the bit's meaning beyond the gate is not established | high |
+| `v29_status_prefix` | `short_0c` | written 0 by `V29TX_status`, untouched by `V29RX_status`; `v22_status` leaves `+0x0c` unmodelled | high |
+| `v29_status_prefix` | `short_12` | `V29RX_status` stores the config's bit rate and `V29TX_status` writes 0; `v22_status::short_12` (the same block) carries no semantic name | high |
+| `v29_tx_params` | `int_0008` | the no-FIFO gate; same disposition as `v27_tx_source::int_0008` | high |
+| `v29tx_cfg` | `short_0004`, `short_0006` | never read | high |
+| `v29tx_cfg` | `int_000c` | never read; it is not V.27's `scale_mul` -- V.29's shaper scale is the per-rate table alone | high |
+| `v29tx_cfg` | `short_0012` | never read | high |
+| `v29tx_cfg` | `int_0018` | `V29TX_create` passes it as `FPM_PPS_CFG::aux`; the aux itself is unnamed | high |
+| `v29rx_control_req` | `int_0004` | copied into `v29rx_cfg::int_0008`, which nothing reads; `v27rx_ctl::int_0004`/`v17rx_ctl::int_0004` are the same | high |
+| `v29tx_control_req` | `int_0004` | copied into `v29tx_cfg::int_0008`, which nothing reads; `v17tx_control_req::int_0004` is the same | high |
+
+### Stale comments corrected (no code change)
+
+- `V27SH_INT_0004`'s block said the field had "no writer at all". False:
+  `V27RX_control` writes it -- cleared to 0 on every request and set to 1
+  by the request's FORCE_NOCARRIER flag. The same claim in
+  `RxHdxDataV27`'s doc comment is corrected in place.
+- `v27tx_cfg::int_0018`'s comment said `faxcfg.h`'s
+  `v27rx_cfg::int_0014` was unnamed; it is now `short_train` (Batch 27).
+
+### Scoping, macros and manifests
+
+Every occurrence of the four old identifiers was classified by owning
+object before editing. The rename touches `include/dsplib/faxcfg.h`,
+`include/dsplib/v29data.h`, `include/dsplib/v29fax.h`, `src/fax/v27.c`,
+`src/fax/v29.c`, `src/fax/class1tx.c` (one initializer comment), and the
+tests `t_faxcfg.c`, `t_faxadapt.c` (its `v29tx_control` fixture), `t_v27fax.c`
+(its `crt_setup` mirror field and the config it builds) and `t_v29txcreate.c`.
+
+NOT renamed, and verified unchanged: `v29.c`'s
+`((struct v29_rx_block *)rx)->int_0014` (a different field),
+`faxvmi_link::int_0014` and every adapter's `dp->int_0014`,
+`v21cfg`/`voice`'s `int_0014`, the retained `v21`/`v27`/`v29` `int_0000`
+and `int_0008`, `struct sgd`'s `short_0016`, and `v29tx_cfg::int_0008`.
+
+Offset constants keep their spelling. `V29TXP_SHORT_0016` (+0x16) is the
+only one naming a renamed member; its comment now records the new field
+name and the rank-2 derivation. `V27RXH_ZERO_*`, `V29RX_SHORT_4F62` and
+`V29DET_INT_0008` name retained fields and are unchanged apart from the
+stale `V27SH_INT_0004` paragraph above.
+
+No mutation manifest is changed. `test/mutations/suites.json` maps
+`v27status` to `src/fax/v27.c`, `faxadaptcreate` to `src/fax/V27rx.c` and
+`faxadaptcreate_v29tx` to `src/fax/V29tx.c`, but no `find`/`replace`
+string in any of them contains a renamed member: `faxadaptcreate`'s four
+`int_0014` leaves are the `faxvmi_link` field `dp->int_0014`, a different
+owner. `v27status.json`'s one `int_0018` is `v27tx_cfg`'s own retained
+field.
+
+### Verification
+
+A token-aware comparison of `HEAD` against the working tree, with comments
+blanked and string/character-literal contents removed, shows every changed
+non-doc file differs only by the four rename pairs, in balance, with zero
+non-`{old,new}` identifier change:
+
+- `faxcfg.h` `int_0014`-1 / `short_train`+1, `int_0000`-1 / `protocol`+1
+- `v29fax.h` `short_0016`-1 / `countdown`+1, `int_0008`-1 / `scale_mul`+1
+- `v27.c` `int_0014`-1 / `short_train`+1
+- `v29.c` `int_0000`-1 / `protocol`+1, `short_0016`-18 / `countdown`+18,
+  `int_0008`-2 / `scale_mul`+2
+- `t_faxcfg.c` `int_0014`-4 / `short_train`+4, `int_0000`-5 / `protocol`+5
+- `t_faxadapt.c` `int_0008`-1 / `scale_mul`+1
+- `t_v27fax.c` `int_0014`-5 / `short_train`+5
+- `t_v29txcreate.c` `int_0008`-1 / `scale_mul`+1
+
+`v27fax.h`, `v29data.h`, `faxcfg.c` and `class1tx.c` are comment-only and
+show zero code-token change. Every surviving occurrence of an old
+identifier is a retained field (`v29_rx_block::int_0014`,
+`v29_rx_block::int_0000`, `struct sgd::short_0016`, the V.21 chain, the
+`faxvmi_link` adapters); none is a renamed member, and no other owner's
+occurrence moved.
+
+`docs/naming-inventory.md` was regenerated: named 2640 -> 2644,
+offset-named 382 -> 378, on-record 300 -> 346, residual 82 -> 32;
+placeholder 73, padding 151 and member declarations 3246 are unchanged.
+
+### Gate
+
+Batch 27 gate result: Gentoo `make phase` exited 0, **`period differential:
+375 passed, 0 failed`** and `phase boundary: period differential and
+structural checks all OK`. All 655 `build/period/*.o` hashes are
+**byte-identical** to the pre-edit snapshot
+(`/home/philpem/slmodem/tmp/fax-v2729-before.sha256` vs
+`/home/philpem/slmodem/tmp/fax-v2729-after.sha256`, 655/655). Structural
+checks in the same log: 2202 offset annotations matching
+`__builtin_offsetof`, 13973 references resolve, 10041 mutations over 272
+suites with 0 anchors matching other than exactly once. Log:
+`build/structure-fax-v2729/gates.log`.
+
+The first gate run failed to compile `t_faxadapt` on `arg.int_0008` -- a
+`v29tx_control_req` consumer the scoping sweep's `req->int_0008` pattern
+missed because the variable is named `arg`. It was renamed to
+`arg.scale_mul`, the verification's file list gained `t_faxadapt.c`, and
+the rerun above is the deciding gate.
+
+One follow-on correction, and it is a coverage trap worth recording: moving
+a `+0xNN` annotation from a trailing comment to a comment above a
+declaration drops it from `offcheck.py`, which requires the annotation on
+the declaration line (`field; /* +0xNN`). The first green run therefore
+read 2186 annotations against HEAD's 2202. The sixteen affected
+declarations -- `v27rx_cfg`'s seven and `v29rx_cfg`'s six, plus
+`v27tx_cfg::int_0004`, `v29tx_cfg::int_0018` and
+`v29tx_control_req::scale_mul` -- were restored to single-line trailing
+annotations, and the final run reports 2202 again.
+
 
 
 

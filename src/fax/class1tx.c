@@ -1001,7 +1001,7 @@ const struct v27tx_ctl V27TX_CTL = {
 const struct v29tx_control_req V29TX_CTL = {
 	{ 0x80, 0x25, 0x00, 0x00 },	/* pad_0000 */
 	60000,				/* int_0004 */
-	1,				/* int_0008 */
+	1,				/* scale_mul */
 	0x00,				/* ctl0     */
 	0x00,				/* ctl1     */
 };

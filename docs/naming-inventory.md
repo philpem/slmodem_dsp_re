@@ -21,15 +21,15 @@ The production-use column counts the member's identifier across `src/` only. It 
 |---|---:|
 | member declarations parsed | 3246 |
 | owners (struct/class) | 242 |
-| named | 2640 |
-| offset-named | 382 |
-|   on record (batch/wave or beside the field) | 300 |
-|   residual, not on record | 82 |
+| named | 2644 |
+| offset-named | 378 |
+|   on record (batch/wave or beside the field) | 346 |
+|   residual, not on record | 32 |
 | placeholder (`unmapped_`/`unnamed_`) | 73 |
-|   residual placeholder | 60 |
+|   residual placeholder | 56 |
 | padding | 151 |
 
-Of the 382 offset-named members, **230 are in non-FAX owners** (the issue #100 scope) and **20 of those are residual**. FAX owners are a separate phase: listed for completeness, not dispositioned here.
+Of the 378 offset-named members, **230 are in non-FAX owners** (the issue #100 scope) and **20 of those are residual**. FAX owners are a separate phase: listed for completeness, not dispositioned here.
 
 ## Coverage and limitations
 
@@ -37,9 +37,9 @@ The parser is textual: it reads single-line member declarations inside `struct`/
 
 ## Assessment
 
-- 2640 of 3246 parsed members carry a real name.
-- 382 carry an offset-only name; 300 of those are on record (a batch/wave ledger or a substantive comment beside them).
-- 82 offset-named members are residual and appear in the ledger below with an explicit, justified disposition.
+- 2644 of 3246 parsed members carry a real name.
+- 378 carry an offset-only name; 346 of those are on record (a batch/wave ledger or a substantive comment beside them).
+- 32 offset-named members are residual and appear in the ledger below with an explicit, justified disposition.
 - 73 members are explicit placeholders (`unmapped_`/`unnamed_`); their names already state that the reconstruction does not model them.
 - 151 members are alignment padding, which must not be named.
 
@@ -247,30 +247,30 @@ Within the issue #100 scope (non-FAX owners) there are 230 offset-named members,
 | `v23modem` | 6 | 0 | 0 | 0 | 0 | 1 |  |
 | `v23rx` | 13 | 0 | 0 | 0 | 0 | 2 |  |
 | `v23tx` | 5 | 0 | 0 | 0 | 0 | 1 |  |
-| `v27_rx` | 10 | 6 | 0 | 6 | 0 | 3 |  |
-| `v27_rx_block` | 18 | 2 | 0 | 2 | 0 | 3 |  |
+| `v27_rx` | 10 | 6 | 6 | 0 | 0 | 3 |  |
+| `v27_rx_block` | 18 | 2 | 2 | 0 | 0 | 3 |  |
 | `v27_rx_decoder` | 16 | 0 | 0 | 0 | 0 | 0 |  |
-| `v27_rx_shared` | 11 | 1 | 0 | 1 | 0 | 1 |  |
-| `v27_status_prefix` | 3 | 3 | 0 | 3 | 0 | 0 |  |
+| `v27_rx_shared` | 11 | 1 | 1 | 0 | 0 | 1 |  |
+| `v27_status_prefix` | 3 | 3 | 3 | 0 | 0 | 0 |  |
 | `v27_tx` | 4 | 0 | 0 | 0 | 0 | 0 |  |
 | `v27_tx_block` | 4 | 0 | 0 | 0 | 0 | 2 |  |
-| `v27_tx_source` | 6 | 1 | 0 | 1 | 0 | 0 |  |
-| `v27rx_cfg` | 0 | 7 | 0 | 7 | 0 | 0 |  |
-| `v27rx_ctl` | 2 | 1 | 0 | 1 | 4 | 0 |  |
-| `v27tx_cfg` | 4 | 3 | 1 | 2 | 0 | 0 |  |
-| `v27tx_ctl` | 3 | 2 | 0 | 2 | 2 | 0 |  |
-| `v29_rx` | 8 | 4 | 0 | 4 | 0 | 3 |  |
-| `v29_rx_block` | 8 | 4 | 0 | 4 | 0 | 2 |  |
-| `v29_rx_decoder` | 8 | 1 | 0 | 1 | 0 | 0 |  |
-| `v29_rx_detector` | 10 | 1 | 0 | 1 | 0 | 2 |  |
-| `v29_status_prefix` | 1 | 2 | 0 | 2 | 0 | 0 |  |
-| `v29_tx_params` | 4 | 2 | 0 | 2 | 0 | 2 |  |
+| `v27_tx_source` | 6 | 1 | 1 | 0 | 0 | 0 |  |
+| `v27rx_cfg` | 1 | 6 | 6 | 0 | 0 | 0 |  |
+| `v27rx_ctl` | 2 | 1 | 1 | 0 | 4 | 0 |  |
+| `v27tx_cfg` | 4 | 3 | 3 | 0 | 0 | 0 |  |
+| `v27tx_ctl` | 3 | 2 | 2 | 0 | 2 | 0 |  |
+| `v29_rx` | 8 | 4 | 4 | 0 | 0 | 3 |  |
+| `v29_rx_block` | 8 | 4 | 4 | 0 | 0 | 2 |  |
+| `v29_rx_decoder` | 8 | 1 | 1 | 0 | 0 | 0 |  |
+| `v29_rx_detector` | 10 | 1 | 1 | 0 | 0 | 2 |  |
+| `v29_status_prefix` | 1 | 2 | 2 | 0 | 0 | 0 |  |
+| `v29_tx_params` | 5 | 1 | 1 | 0 | 0 | 2 |  |
 | `v29_tx_root` | 4 | 0 | 0 | 0 | 0 | 0 |  |
-| `v29rx_cfg` | 0 | 6 | 0 | 6 | 0 | 0 |  |
+| `v29rx_cfg` | 1 | 5 | 5 | 0 | 0 | 0 |  |
 | `v29rx_control_req` | 2 | 1 | 1 | 0 | 0 | 2 |  |
 | `v29tx` | 3 | 0 | 0 | 0 | 0 | 1 |  |
-| `v29tx_cfg` | 3 | 6 | 1 | 5 | 0 | 0 |  |
-| `v29tx_control_req` | 2 | 2 | 2 | 0 | 0 | 1 |  |
+| `v29tx_cfg` | 3 | 6 | 6 | 0 | 0 | 0 |  |
+| `v29tx_control_req` | 3 | 1 | 1 | 0 | 0 | 1 |  |
 | `v32_dec` | 10 | 4 | 4 | 0 | 0 | 2 | fieldnaming wave |
 | `v32_dp` | 8 | 0 | 0 | 0 | 0 | 0 |  |
 | `v32_fp` | 21 | 2 | 2 | 0 | 0 | 6 | fieldnaming wave |
@@ -393,25 +393,25 @@ Residual rows: **68**.  Every row has an explicit disposition; none is a name in
 | `v21rx_ctl` | 1 | 1 | 1 | 0 | 2 | 0 |
 | `v21tx_cfg` | 3 | 6 | 6 | 0 | 0 | 0 |
 | `v21tx_ctl` | 2 | 1 | 1 | 0 | 3 | 0 |
-| `v27_rx` | 10 | 6 | 0 | 6 | 0 | 3 |
-| `v27_rx_block` | 18 | 2 | 0 | 2 | 0 | 3 |
-| `v27_rx_shared` | 11 | 1 | 0 | 1 | 0 | 1 |
-| `v27_status_prefix` | 3 | 3 | 0 | 3 | 0 | 0 |
-| `v27_tx_source` | 6 | 1 | 0 | 1 | 0 | 0 |
-| `v27rx_cfg` | 0 | 7 | 0 | 7 | 0 | 0 |
-| `v27rx_ctl` | 2 | 1 | 0 | 1 | 4 | 0 |
-| `v27tx_cfg` | 4 | 3 | 1 | 2 | 0 | 0 |
-| `v27tx_ctl` | 3 | 2 | 0 | 2 | 2 | 0 |
-| `v29_rx` | 8 | 4 | 0 | 4 | 0 | 3 |
-| `v29_rx_block` | 8 | 4 | 0 | 4 | 0 | 2 |
-| `v29_rx_decoder` | 8 | 1 | 0 | 1 | 0 | 0 |
-| `v29_rx_detector` | 10 | 1 | 0 | 1 | 0 | 2 |
-| `v29_status_prefix` | 1 | 2 | 0 | 2 | 0 | 0 |
-| `v29_tx_params` | 4 | 2 | 0 | 2 | 0 | 2 |
-| `v29rx_cfg` | 0 | 6 | 0 | 6 | 0 | 0 |
+| `v27_rx` | 10 | 6 | 6 | 0 | 0 | 3 |
+| `v27_rx_block` | 18 | 2 | 2 | 0 | 0 | 3 |
+| `v27_rx_shared` | 11 | 1 | 1 | 0 | 0 | 1 |
+| `v27_status_prefix` | 3 | 3 | 3 | 0 | 0 | 0 |
+| `v27_tx_source` | 6 | 1 | 1 | 0 | 0 | 0 |
+| `v27rx_cfg` | 1 | 6 | 6 | 0 | 0 | 0 |
+| `v27rx_ctl` | 2 | 1 | 1 | 0 | 4 | 0 |
+| `v27tx_cfg` | 4 | 3 | 3 | 0 | 0 | 0 |
+| `v27tx_ctl` | 3 | 2 | 2 | 0 | 2 | 0 |
+| `v29_rx` | 8 | 4 | 4 | 0 | 0 | 3 |
+| `v29_rx_block` | 8 | 4 | 4 | 0 | 0 | 2 |
+| `v29_rx_decoder` | 8 | 1 | 1 | 0 | 0 | 0 |
+| `v29_rx_detector` | 10 | 1 | 1 | 0 | 0 | 2 |
+| `v29_status_prefix` | 1 | 2 | 2 | 0 | 0 | 0 |
+| `v29_tx_params` | 5 | 1 | 1 | 0 | 0 | 2 |
+| `v29rx_cfg` | 1 | 5 | 5 | 0 | 0 | 0 |
 | `v29rx_control_req` | 2 | 1 | 1 | 0 | 0 | 2 |
-| `v29tx_cfg` | 3 | 6 | 1 | 5 | 0 | 0 |
-| `v29tx_control_req` | 2 | 2 | 2 | 0 | 0 | 1 |
+| `v29tx_cfg` | 3 | 6 | 6 | 0 | 0 | 0 |
+| `v29tx_control_req` | 3 | 1 | 1 | 0 | 0 | 1 |
 
 ## Parameters and callbacks
 

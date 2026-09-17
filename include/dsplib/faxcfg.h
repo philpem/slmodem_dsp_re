@@ -180,29 +180,39 @@ struct v17rx_cfg {
 	void	       *ptr_0024;	/* +0x24  init: the 4th argument     */
 };
 
-/* V.27ter receive.  28 bytes; the same prefix, four fewer fields. */
+/* V.27ter receive.  28 bytes; the same prefix, four fewer fields.
+ *
+ * Batch 27 reviewed all seven offset-named members.  `short_train` is the
+ * one rename: `V27RX_create` derives `v27_rx_shared::train_long` from
+ * `(short_train == 0)`, the identical role `v17rx_cfg::short_train` carries
+ * at this offset.  The other six have no reader in the object and are
+ * retained neutral, each for the reason beside it. */
 struct v27rx_cfg {
-	int		int_0000;	/* +0x00  1                          */
+	int		int_0000;	/* +0x00  1; no reader -- retained neutral (Batch 27) */
 	short		bit_rate;	/* +0x04  4800.  Same evidence as
 					 * v17rx_cfg's own (F9052)           */
-	short		short_0006;	/* +0x06  0                          */
-	int		int_0008;	/* +0x08  60000                      */
-	int		int_000c;	/* +0x0c  0                          */
-	int		int_0010;	/* +0x10  0                          */
-	int		int_0014;	/* +0x14  0                          */
-	void	       *ptr_0018;	/* +0x18  init: the 4th argument     */
+	short		short_0006;	/* +0x06  0; never read -- retained neutral (Batch 27) */
+	int		int_0008;	/* +0x08  60000; `V27RX_control` writes it, never read -- retained neutral (Batch 27) */
+	int		int_000c;	/* +0x0c  0; never read -- retained neutral (Batch 27) */
+	int		int_0010;	/* +0x10  0; never read -- retained neutral (Batch 27) */
+	int		short_train;	/* +0x14  0; rank-2 rename: `V27RX_create` derives `v27_rx_shared::train_long` from it, as `v17rx_cfg::short_train` does (Batch 27) */
+	void	       *ptr_0018;	/* +0x18  init: the 4th argument; no agreed name -- retained neutral (Batch 27) */
 };
 
-/* V.29 receive.  24 bytes. */
+/* V.29 receive.  24 bytes.  Batch 27 reviewed all six offset-named members.
+ * `protocol` is the one rename: `V29RX_status` stores it into
+ * `v29_status_prefix::protocol` (v29.c), the identical evidence
+ * `v17rx_cfg::protocol` has.  The other five have no reader in the object
+ * and are retained neutral. */
 struct v29rx_cfg {
-	int		int_0000;	/* +0x00  1                          */
+	int		protocol;	/* +0x00  1; rank-2 rename: `V29RX_status` stores it into `v29_status_prefix::protocol` (Batch 27) */
 	short		bit_rate;	/* +0x04  9600.  Same evidence as
 					 * v17rx_cfg's own (F9052)           */
-	short		short_0006;	/* +0x06  0                          */
-	int		int_0008;	/* +0x08  60000                      */
-	int		int_000c;	/* +0x0c  0                          */
-	int		int_0010;	/* +0x10  0                          */
-	void	       *ptr_0014;	/* +0x14  init: the 4th argument     */
+	short		short_0006;	/* +0x06  0; never read -- retained neutral (Batch 27) */
+	int		int_0008;	/* +0x08  60000; `V29RX_control` writes it, never read -- retained neutral (Batch 27) */
+	int		int_000c;	/* +0x0c  0; never read -- retained neutral (Batch 27) */
+	int		int_0010;	/* +0x10  0; never read -- retained neutral (Batch 27) */
+	void	       *ptr_0014;	/* +0x14  init: the 4th argument; no agreed name -- retained neutral (Batch 27) */
 };
 
 /*
