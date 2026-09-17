@@ -1484,6 +1484,115 @@ structural checks all OK`; 655/655 period objects byte-identical
 `docs/naming-inventory.md` was regenerated: named 2632 -> 2638, offset-named
 390 -> 384, on-record 245 -> 273, residual 145 -> 111.
 
+## Batch 26: FAX V.21 cluster (issue #130)
+
+Owner-scoped pass over the V.21 control-channel cluster: `struct v21_rx`,
+`struct v21_rx_dsp`, `struct v21rx_cfg`, `struct v21tx_cfg`,
+`struct v21_status`, `struct v21_tx_hdx`, `struct v21rx_ctl` and
+`struct v21tx_ctl`. This is an owner-scoped candidate denominator, not a
+claim that the FAX inventory is complete. The V.17/V.27/V.29 owners are
+untouched.
+
+Two fields are renamed, each by evidence rank 2 (a typed destination plus an
+already-named sibling at the same offset with the same role); the other
+thirty-two members in scope are retained neutral with the reason recorded
+beside each field. A wrong name is worse than an offset, and most of this
+cluster is written by a constructor and read by nothing.
+
+### Renamed
+
+| Owner | Previous | New | Evidence | Confidence |
+| --- | --- | --- | --- | --- |
+| `v21tx_cfg` | `short_0000` | `protocol` | `V21TX_status` stores it into `v21_status::protocol` (`v21.c:1272`); `V21TX_OBJ_PROTOCOL` is +0x00; `v27tx_cfg` and `v29tx_cfg` name the same offset `protocol`. `V21TX_create` tests it 16-bit (`movzwl`/`test %ax`, 0x0993c4), forcing the `short` width. | high |
+| `v21tx_cfg` | `int_0010` | `flags` | `V21TX_control` ORs bit 2 into the byte at +0x10 (`orb $0x4,0x10(%esi)`, 0x0a2bc9) and `V21TX_status` reads that byte back (`movzbl 0x10(%ecx)`, `and $0x4`) into `v21_status::flags`; `V21TX_OBJ_FLAGS` is +0x10; `v27tx_cfg`/`v29tx_cfg` name +0x10 `flags` for the same bit-2 role. The struct keeps `int` -- the 7-dword copy at 0x099328 is width-blind and widths are held -- and the byte is reached by the existing cast. | high |
+
+### A stale claim corrected
+
+`v21fax.h`'s banner and `v21cfg.h`'s `v21tx_cfg` block both said the transmit
+config area was WRITE-ONLY, "read back by nothing reconstructed". That is
+false, and it was the stated reason these two fields had stayed offsets:
+`V21TX_status` reads +0x00 and +0x10 out of the handle, and `V21TX_control`
+writes +0x08 and +0x10. The sentences are corrected in place. This is the
+F10139/F10140 shape -- a rationale that went stale when a reader was
+reconstructed -- and it is exactly what Batch 25's method note warns about.
+The old "CONFIRMED-EXHAUSTED" text also claimed the siblings' `flags` field
+was "further along the struct"; it is at +0x10 in both `v27tx_cfg` and
+`v29tx_cfg`, inside the range the text said it was outside.
+
+### Retained neutral, with the reason
+
+| Owner | Member | Reason | Confidence in retention |
+| --- | --- | --- | --- |
+| `v21_rx` | `ptr_001c` | `V21RX_create` stores `dsp->fsd.trace` here; no reconstructed reader, so the field's purpose is not established. `V21RX_OBJ_TRACE` names the source, not the role. | high |
+| `v21_rx` | `int_0020` | written 0 by the constructor; read by nothing | high |
+| `v21_rx` | `ptr_0024` | constructor stores `&dsp->fsd.last_count`; no reader | high |
+| `v21_rx` | `int_0028`, `int_002c`, `int_0034`, `int_0038`, `int_0040`, `int_0044` | written 0; read by nothing | high |
+| `v21_rx` | `short_0030`, `short_003c`, `short_0048` | written 0; read by nothing | high |
+| `v21rx_cfg` | `short_0002`, `short_0006`, `int_000c`, `int_0010` | zero and untouched; read by nothing; `v17rx_cfg`/`v27rx_cfg`/`v29rx_cfg` carry the same shape unnamed | high |
+| `v21rx_cfg` | `int_0008` | 60000; `V21RX_control` writes it from its own +0x04, read by nothing; 60000 in all four sibling tables | high |
+| `v21tx_cfg` | `short_0004`, `short_0006` | copied, never read | high |
+| `v21tx_cfg` | `int_000c` | 3200; never read; no sibling carries a role at +0x0c (`v17tx_cfg` is unnamed there, V.27's `scale_mul` is PPS-specific) | high |
+| `v21tx_cfg` | `int_0014` | 0; never read; NOT the siblings' `fifo_size_factor` -- V.21's transmit FIFO is a fixed 6 elements, not derived from any field here | high |
+| `v21tx_cfg` | `int_0018` | 0; never read; matches V.27's/V.29's own still-unnamed `int_0018` | high |
+| `v21_status` | `short_0a` | written 0 by both fillers; `v22_status`/`v17_status`/`v29_status_prefix` leave it unnamed | high |
+| `v21_status` | `short_0c` | written 0 by `V21TX_status`; siblings leave it unnamed | high |
+| `v21_status` | `short_12` | written 0 by TX; `V21RX_status` computes it from `fsd.f22`/`fsd.cfg.bit_samples`, one route to the same 300 the literal `rx_bps` carries; no sibling name | high |
+| `v21_tx_hdx` | `int_0004` | arm gate (zero selects the FIFO arm); set from `V21TX_control`'s flags bit 4; meaning unstated; `v27_tx_source::int_0008`/`v29_tx_params::int_0008` are the same gate and unnamed | high |
+| `v21_tx_hdx` | `short_000e` | zeroed by the START and IDLE transition arms only; no reader | high |
+| `v21rx_ctl` | `int_0004` | copied into `cfg->int_0008`, which nothing reads; no role | high |
+| `v21tx_ctl` | `int_0004` | copied into `cfg->int_0008`, which nothing reads; no role | high |
+| `v21_rx_dsp` | `int_0000` | read by nothing traced | high |
+| `v21_rx_dsp` | `int_0004`, `int_0008` | ANDed by `CarrierDetectV21`; roles known (`agc.signal` / tone-present) but the only B.103 parallel would mis-name one of the pair (F8895) | high |
+
+`v21tx_cfg::int_0008` is already on record (the 60000 literal every sibling
+carries) and was not a candidate in this batch; `bit_rate` is already named.
+
+### Scoping, macros and manifests
+
+Every occurrence of `short_0000`/`int_0010` was classified by owning object
+before editing. The rename touches only `include/dsplib/v21cfg.h`,
+`include/dsplib/v21fax.h`, `src/fax/v21.c`, `src/fax/v21cfg.c` and
+`test/unit/t_v21txcreate.c`. `Fdspkrnl`'s `short_0000[2000]`, the retained
+`v21rx_cfg::int_0010`, `v17tx_cfg::int_0010`, `v17tx_ctl::int_0010`,
+`faxvmi_cfg::int_0010` and the V.27/V.29 `int_0010` are untouched.
+
+The offset constants keep their spelling: `V21TX_OBJ_PROTOCOL` (+0x00) and
+`V21TX_OBJ_FLAGS` (+0x10), which the tests reach through; the
+`V21TX_PROTOCOL(m)` accessor now reads `cfg.protocol`. There are no `*_OFF`
+assertion macros in this cluster.
+
+No mutation suite covers any V.21 file: `test/mutations/suites.json` maps no
+`src/fax/v21*.c`, `V21rx.c`, `V21tx.c` or `class1*.c`.
+`test/mutations/fdspkrnl.json`'s `short_0000` is the fdspkrnl array, a
+different owner, and is unchanged. So no manifest carries a changed
+`find`/`replace`.
+
+### Verification
+
+A token-aware, owner-scoped forward substitution of `HEAD` reproduces every
+changed non-doc file, code token for code token: `v21cfg.h` 95, `v21fax.h`
+772, `v21.c` 2391, `v21cfg.c` 34 and `t_v21txcreate.c` 1586. String literals
+(the `t_v21txcreate.c` case labels) are preserved, and the test-local
+`cases[].short_0000` is renamed with the field it feeds. Manifest check: every
+non-`{old,new}` identifier count is unchanged. The pairs balance --
+`short_0000` 13 -> 0 against `protocol` 3 -> 16, and `int_0010` 2 -> 1 against
+`flags` 35 -> 36 -- and the one surviving `int_0010` is the retained
+`v21rx_cfg` field, the only `int_0010` code occurrence left.
+
+### Gate
+
+Batch 26 gate result: Gentoo `make phase` exited 0, **`period differential:
+375 passed, 0 failed`** and `phase boundary: period differential and
+structural checks all OK`; 655/655 period objects byte-identical
+(`/home/philpem/slmodem/tmp/fax-v21-before.sha256` vs
+`/home/philpem/slmodem/tmp/fax-v21-after.sha256`). Structural checks in the
+same log: 13973 references resolve, 10041 mutations over 272 suites, 0 anchors
+matching other than exactly once, 2202 offset annotations matching.
+
+`docs/naming-inventory.md` was regenerated: named 2638 -> 2640, offset-named
+384 -> 382, on-record 273 -> 300, residual 111 -> 82.
+
+
 
 
 

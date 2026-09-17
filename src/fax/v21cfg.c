@@ -186,13 +186,13 @@ short V21_CHAN1_MTD_COEFF[10] = {
  * force.
  */
 struct v21tx_cfg V21TX_CFG = {
-	1,		/* +0x00 short_0000                         */
+	1,		/* +0x00 protocol                           */
 	300,		/* +0x02 bit_rate                           */
 	0,		/* +0x04 short_0004                         */
 	0,		/* +0x06 short_0006                         */
 	60000,		/* +0x08 int_0008                           */
 	3200,		/* +0x0c int_000c                           */
-	0,		/* +0x10 int_0010                           */
+	0,		/* +0x10 flags                              */
 	0,		/* +0x14 int_0014                           */
 	0		/* +0x18 int_0018                           */
 };

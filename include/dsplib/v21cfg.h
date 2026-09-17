@@ -95,22 +95,23 @@ struct fpm_agc_cfg;
  * comparison the object makes on `chan2` is against zero, which carries no
  * sign, and the only value it holds is 1.
  *
- * CONFIRMED-EXHAUSTED, WAVE 7: `short_0002`/`short_0006`/`int_0008`/
- * `int_000c`/`int_0010` were re-checked against this struct's own three
- * `faxcfg.h` siblings (`v17rx_cfg`/`v27rx_cfg`/`v29rx_cfg`), which carry the
- * identical shape at the identical offsets and stay unnamed there too for
- * the same reason (`int_0008` is 60000 in all four and read back by
- * nothing; the rest are zero and untouched) -- a negative twin-class
- * result, not an unexamined one.
+ * CONFIRMED-EXHAUSTED, WAVE 7, AND AGAIN IN BATCH 26: `short_0002`/
+ * `short_0006`/`int_0008`/`int_000c`/`int_0010` were re-checked against this
+ * struct's own three `faxcfg.h` siblings (`v17rx_cfg`/`v27rx_cfg`/
+ * `v29rx_cfg`), which carry the identical shape at the identical offsets and
+ * stay unnamed there too for the same reason (`int_0008` is 60000 in all
+ * four and read back by nothing -- `V21RX_control` writes it from its own
+ * +0x04 and nothing reads it; the rest are zero and untouched) -- a negative
+ * twin-class result, not an unexamined one.
  */
 struct v21rx_cfg {
 	short		chan2;		/* +0x00  1: use channel 2's tables  */
-	short		short_0002;	/* +0x02  0                          */
+	short		short_0002;	/* +0x02  0; read by nothing         */
 	short		bit_rate;	/* +0x04  300                        */
-	short		short_0006;	/* +0x06  0                          */
-	int		int_0008;	/* +0x08  60000, as in all four      */
-	int		int_000c;	/* +0x0c  0                          */
-	int		int_0010;	/* +0x10  0                          */
+	short		short_0006;	/* +0x06  0; read by nothing         */
+	int		int_0008;	/* +0x08  60000; written, never read */
+	int		int_000c;	/* +0x0c  0; read by nothing         */
+	int		int_0010;	/* +0x10  0; read by nothing         */
 	void	       *aux;		/* +0x14  0; V21RX_create forwards
 					 *        it to BOTH `fpm_mrf_cfg`'s
 					 *        `aux` and the fsd config's
@@ -138,17 +139,21 @@ extern struct v21rx_cfg V21RX_CFG;
  * `V21TX_CFG`, `D` at .data 0x07af8, 28 bytes -- `V21TX_create`'s own
  * default, copied onto the transmit handle's first 28 bytes exactly as
  * `V21RX_CFG` is onto the receiver's first 24.  See v21fax.h for what
- * `V21TX_create` (0x0992f0) establishes about the handle; NOTHING
- * reconstructed READS any field of this table back out of the handle, so it
- * is spelled from the object's bytes and forced widths alone, not from a
- * consumer.
+ * `V21TX_create` (0x0992f0) establishes about the handle.
+ *
+ * THE CONFIG AREA IS NOT WRITE-ONLY.  `V21TX_status` reads two of its fields
+ * back out of the handle -- +0x00 into `v21_status::protocol` and the byte at
+ * +0x10 into `v21_status::flags` -- and `V21TX_control` writes two of them
+ * (+0x08 from its own +0x04, and bit 2 of the byte at +0x10).  That is the
+ * evidence `protocol` and `flags` are named from in Batch 26; the older text
+ * here claiming nothing read the table was wrong.
  *
  * NOT `struct v21rx_cfg`'s layout, and F9356 already showed why: the
  * receiver's +0x00 is tested `cmpw` (16-bit forced) while this table is 28
  * bytes to the receiver's 24, with a different value at +0x0c than the
- * receiver's +0x08.  `V21TX_create` never tests any field of its own copy
- * with a width-forcing compare (the six-plus-one dword copy at 0x099328 is a
- * bulk `mov` sequence, width-blind), so the SHORT/INT split below is the
+ * receiver's +0x08.  `V21TX_create` tests only +0x00 (`movzwl`/`test %ax` at
+ * 0x0993c4, 16-bit forced); the six-plus-one dword copy at 0x099328 is a bulk
+ * `mov` sequence, width-blind, so the SHORT/INT split elsewhere is the
  * receiver's own precedent, not something this table's own instructions
  * force -- keep that distinction in mind before trusting it further than
  * that.
@@ -160,30 +165,25 @@ extern struct v21rx_cfg V21RX_CFG;
  * `V21RX_CFG.int_0008` and every one of `faxcfg.h`'s siblings carry at their
  * own +0x08. 3200 has no parallel elsewhere in this file and is not named.
  *
- * CONFIRMED-EXHAUSTED, WAVE 7: every field re-checked against `V21TX_
- * create`'s own reads (none past a bulk copy -- see the header comment) and
- * against the sibling `v17tx_cfg`/`v27tx_cfg`/`v29tx_cfg` (F10183, this
- * wave) at the same offsets; none of those siblings' own established
- * fields (`fifo_size_factor`/`scale_mul`/`flags`, all further along the
- * struct) land inside this table's own +0x00..+0x18, since V.21's
- * transmit config is a different, shorter shape (write-only, no FIFO
- * size factor of its own -- `V21TX_create`'s FIFO is a fixed 6 elements,
- * not derived from any field here). `short_0000`'s own three-arm behaviour
- * is already fully derived above; it is not `chan2` under another name,
- * since arms 0 and 1 are observably IDENTICAL (both take the same
- * unconditionally-overwritten tone pair) where `chan2` genuinely selects
- * between two different table sets.
+ * BATCH 26 re-checked every field against `V21TX_create`'s own reads and
+ * against the sibling `v17tx_cfg`/`v27tx_cfg`/`v29tx_cfg`.  `short_0000` and
+ * `int_0010` are named `protocol` and `flags` -- see each field.  The rest
+ * stay offsets: `short_0004`/`short_0006` are copied and never read,
+ * `int_000c` (3200) is never read, and `int_0014` is NOT the siblings'
+ * `fifo_size_factor` even though that field also sits at +0x14, because
+ * V.21's transmit FIFO is a fixed 6 elements and not derived from any field
+ * here.  `int_0018` matches V.27's/V.29's own still-unnamed `int_0018`.
  */
 struct v21tx_cfg {
-	short	short_0000;	/* +0x00  1                                 */
-	short	bit_rate;	/* +0x02  300, V.21's only rate              */
-	short	short_0004;	/* +0x04  0                                  */
-	short	short_0006;	/* +0x06  0                                  */
-	int	int_0008;	/* +0x08  60000, as in every sibling table   */
-	int	int_000c;	/* +0x0c  3200                               */
-	int	int_0010;	/* +0x10  0                                  */
-	int	int_0014;	/* +0x14  0                                  */
-	int	int_0018;	/* +0x18  0                                  */
+	short		protocol;	/* +0x00  1; `V21TX_status` reports it */
+	short		bit_rate;	/* +0x02  300, V.21's only rate      */
+	short		short_0004;	/* +0x04  0; copied, never read      */
+	short		short_0006;	/* +0x06  0; copied, never read      */
+	int		int_0008;	/* +0x08  60000; written, never read */
+	int		int_000c;	/* +0x0c  3200; never read           */
+	int		flags;		/* +0x10  0; low byte read back (B26) */
+	int		int_0014;	/* +0x14  0; never read              */
+	int		int_0018;	/* +0x18  0; never read              */
 };
 
 extern struct v21tx_cfg V21TX_CFG;
