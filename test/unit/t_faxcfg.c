@@ -168,7 +168,7 @@ test_shape(void)
 	diff_eq_int("v17rx_cfg.int_0008 at %ld",
 		    (long)offsetof(struct v17rx_cfg, int_0008), 0x08, 0);
 	diff_eq_int("v17rx_cfg.int_0014 at %ld",
-		    (long)offsetof(struct v17rx_cfg, int_0014), 0x14, 0);
+		    (long)offsetof(struct v17rx_cfg, short_train), 0x14, 0);
 	diff_eq_int("v17rx_cfg.coefsave0 at %ld",
 		    (long)offsetof(struct v17rx_cfg, coefsave0), 0x18, 0);
 	diff_eq_int("v17rx_cfg.coefsave1 at %ld",
@@ -225,8 +225,8 @@ test_values(void)
 		    0x14);
 
 	/* V17RX_CFG. */
-	diff_eq_int("V17RX_CFG.int_0000 (%ld)", V17RX_CFG.int_0000,
-		    ref_V17RX_CFG.int_0000, 0x00);
+	diff_eq_int("V17RX_CFG.int_0000 (%ld)", V17RX_CFG.protocol,
+		    ref_V17RX_CFG.protocol, 0x00);
 	diff_eq_int("V17RX_CFG.bit_rate (%ld)", V17RX_CFG.bit_rate,
 		    ref_V17RX_CFG.bit_rate, 0x04);
 	diff_eq_int("V17RX_CFG.short_0006 (%ld)", V17RX_CFG.short_0006,
@@ -237,8 +237,8 @@ test_values(void)
 		    ref_V17RX_CFG.int_000c, 0x0c);
 	diff_eq_int("V17RX_CFG.int_0010 (%ld)", V17RX_CFG.int_0010,
 		    ref_V17RX_CFG.int_0010, 0x10);
-	diff_eq_int("V17RX_CFG.int_0014 (%ld)", V17RX_CFG.int_0014,
-		    ref_V17RX_CFG.int_0014, 0x14);
+	diff_eq_int("V17RX_CFG.int_0014 (%ld)", V17RX_CFG.short_train,
+		    ref_V17RX_CFG.short_train, 0x14);
 	diff_eq_int("V17RX_CFG.coefsave0 is null (%ld)",
 		    V17RX_CFG.coefsave0 == 0, ref_V17RX_CFG.coefsave0 == 0, 0x18);
 	diff_eq_int("V17RX_CFG.coefsave1 is null (%ld)",
@@ -331,7 +331,7 @@ test_value_shape(void)
 		    V27RX_CFG.bit_rate != V29RX_CFG.bit_rate, 1, 0);
 
 	/* The prefix the three DO share, asserted so it is a claim. */
-	diff_eq_int("V17RX_CFG.int_0000 is 1 (%ld)", V17RX_CFG.int_0000, 1, 0);
+	diff_eq_int("V17RX_CFG.int_0000 is 1 (%ld)", V17RX_CFG.protocol, 1, 0);
 	diff_eq_int("V27RX_CFG.int_0000 is 1 (%ld)", V27RX_CFG.int_0000, 1, 0);
 	diff_eq_int("V29RX_CFG.int_0000 is 1 (%ld)", V29RX_CFG.int_0000, 1, 0);
 	diff_eq_int("V17RX_CFG.int_0008 is 60000 (%ld)",
@@ -499,8 +499,8 @@ test_init_v17(void)
 		ca = (const struct v17rx_cfg *)ua.cfg.modem_cfg;
 		cb = (const struct v17rx_cfg *)ub.cfg.modem_cfg;
 
-		diff_eq_int("cfg.int_0000, input %ld", ca->int_0000,
-			    cb->int_0000, i);
+		diff_eq_int("cfg.int_0000, input %ld", ca->protocol,
+			    cb->protocol, i);
 		diff_eq_int("cfg.bit_rate, input %ld", ca->bit_rate,
 			    cb->bit_rate, i);
 		diff_eq_int("cfg.bit_rate is the argument, input %ld",
@@ -513,8 +513,8 @@ test_init_v17(void)
 			    cb->int_000c, i);
 		diff_eq_int("cfg.int_0010, input %ld", ca->int_0010,
 			    cb->int_0010, i);
-		diff_eq_int("cfg.int_0014 cleared, input %ld", ca->int_0014,
-			    cb->int_0014, i);
+		diff_eq_int("cfg.int_0014 cleared, input %ld", ca->short_train,
+			    cb->short_train, i);
 		diff_eq_int("cfg.ptr_0024 is the argument, input %ld",
 			    ca->ptr_0024 == (void *)&marker[i & 3], 1, i);
 		diff_eq_int("cfg.ptr_0024 same on both sides, input %ld",

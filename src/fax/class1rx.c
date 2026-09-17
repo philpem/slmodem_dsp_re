@@ -69,7 +69,7 @@ init_vmi_v17rx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
 	*cfg = V17RX_CFG;
 	cfg->ptr_0024 = arg_3;
 	cfg->bit_rate = (short)bit_rate;
-	cfg->int_0014 = 0;
+	cfg->short_train = 0;
 	cfg->coefsave0 = sysdep_malloc(0x62);
 	cfg->coefsave1 = sysdep_malloc(0x62);
 	cfg->ratesave = sysdep_malloc(2);
@@ -221,7 +221,7 @@ const struct v17rx_ctl V17RX_CTL = {
 	0x00,				/* flags_0c      */
 	0x00,				/* flags_0d      */
 	{ 0, 0 },			/* unmapped_000e */
-	0,				/* int_0010      */
+	0,				/* short_train   */
 };
 
 const struct v27rx_ctl V27RX_CTL = {

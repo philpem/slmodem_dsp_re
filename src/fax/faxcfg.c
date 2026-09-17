@@ -47,13 +47,13 @@ const struct faxvmi_cfg FAXVMI_CFG = {
 
 /* V.17: 14400 bit/s, the fastest of the three. */
 struct v17rx_cfg V17RX_CFG = {
-	1,		/* +0x00 */
+	1,		/* +0x00  protocol                                   */
 	14400,		/* +0x04  bit_rate                                   */
 	0,		/* +0x06 */
 	60000,		/* +0x08 */
 	0,		/* +0x0c */
 	0,		/* +0x10 */
-	0,		/* +0x14 */
+	0,		/* +0x14  short_train                                */
 	0,		/* +0x18  coefsave0                                  */
 	0,		/* +0x1c  coefsave1                                  */
 	0,		/* +0x20  ratesave                                   */

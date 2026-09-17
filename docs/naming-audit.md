@@ -1388,6 +1388,102 @@ structural checks all OK`; 655/655 period objects byte-identical
 (`/home/philpem/slmodem/tmp/issue119-final-before.sha256` vs
 `issue119-final-after.sha256`).
 
+## Batch 25: FAX V.17 receive cluster (issue #130)
+
+Owner-scoped first pass over the V.17 receive cluster: `struct v17rx_state`,
+`struct v17rx`, `struct v17rx_priv`, `struct v17rx_cfg` and `struct
+v17rx_ctl`. This is an owner-scoped candidate denominator, not a claim that
+the FAX inventory is complete. `v17_smc` and `v17tx_fp` are transmit-only
+readers and are out of scope.
+
+Six fields are renamed, each by evidence rank 2 (a typed destination or an
+already-named sibling field of the same role); the rest are retained neutral
+with the reason recorded beside them. A wrong name is worse than an offset,
+and the object gives most of this cluster no role to carry across.
+
+### Renamed
+
+| Owner | Previous | New | Evidence | Confidence |
+| --- | --- | --- | --- | --- |
+| `v17rx_cfg` | `int_0000` | `protocol` | `V17RX_status` stores it into `v17_status::protocol` (`v17.c:1781`); `V17RX_OBJ_PROTOCOL` is +0x00, and `v17tx_cfg` names the same offset `protocol` | high |
+| `v17rx_cfg` | `int_0014` | `short_train` | `V17RX_create` copies it into the already-named `v17_dec::short_train` (`v17.c:345`), the decoder field that selects the short-vs-long training path | high |
+| `v17rx_ctl` | `int_0010` | `short_train` | `V17RX_control` copies it into `cfg->short_train` on REINIT (`v17.c:1729`), the field above | high |
+| `v17rx_priv` | `r10` | `short_train` | `V17RX_create` copies it straight into `v17_dec::short_train` (`v17.c:529`); `v17dec.h` already records that the decoder field comes from the control block at +0x10 | high |
+| `v17rx_state` | `r4fb0` | `quality_threshold` | `QualityDetectV17` compares the smoothed error `qavg` against it (`v17.c:3000`); `V17RX_create` seeds it per rate (0xa28/0x514/0x341/0x1c2). Usage inference, single reader; the offset comment block already called it "the quality threshold" | medium-high |
+| `v17rx_priv` | `r2e` | `offband_latch` | set on a data-carrier failure and gates the V.21 offband watch (`v17.c:2892`, `:2895`); `V17RXC_SHORT_002E`'s own block calls it "a latch". Usage inference, single role | medium |
+
+The three names form one chain -- `v17rx_ctl::short_train` ->
+`v17rx_cfg::short_train` -> `v17rx_priv::short_train` ->
+`v17_dec::short_train` -- and are the same value at each hop. No format
+string names any of them; the carry-across is from our own already-accepted
+decoder field, and it does not claim an author string.
+
+### Retained neutral, with the reason
+
+| Owner | Member | Reason | Confidence in retention |
+| --- | --- | --- | --- |
+| `v17rx_cfg` | `short_0006` | copied in, never read | high |
+| `v17rx_cfg` | `int_0008` | written by `V17RX_control` from its +0x04, read by nothing | high |
+| `v17rx_cfg` | `int_000c`, `int_0010` | never read | high |
+| `v17rx_ctl` | `int_0004` | destination `cfg->int_0008` is unread; no role | high |
+| `v17rx_priv` | `r08` | gate `RxHdxDataV17` must see as zero; three writers, no established meaning (F9442) | high |
+| `v17rx_priv` | `r0e`, `r22` | unread/unwritten in the object | high |
+| `v17rx_priv` | `r20` | read once to pick a `DataCarrierDetectV17` body, never written by anything traced; role unstated | high |
+| `v17rx_state` | `r04`, `r08`, `r10` | ANDed with the AGC `signal` flag to enable the SRE adapt / FSE PLL / FSE LMS loops; only the plumbing is established, not a meaning (F9102) | high |
+| `v17rx_state` | `r00` | cleared by `V17RX_control` and reported as a status bit; multi-role | high |
+| `v17rx_state` | `r1c` | bit 0 reported as a status bit; meaning unstated (F9474) | high |
+| `v17rx_state` | `r0c`, `r14`, `r18`, `r20`, `r28` | constructor writes one constant, nothing reads | high |
+| `v17rx_state` | `r26` | read by nothing | high |
+| `v17rx_state` | `r4f88[4]` | four-byte gap below the equaliser, untouched | high |
+| `v17rx_state` | `r4fb2` | write-only quality verdict; no reader in the object | high |
+| `v17rx` | `r42`, `r4e`, `r5a` | never written by the constructor or anything else | high |
+| `v17rx` | `r44`, `r48`, `r4c`, `r50`, `r54`, `r58` | constructor writes 0, nothing reads | high |
+
+`struct v17rx_ctl`'s `unmapped_0000`/`unmapped_0008` keep their explicit
+placeholder names and `flags_0c`/`flags_0d` their existing names.
+
+### Scoping, macros and manifests
+
+Every occurrence of the six old identifiers was classified by owning object
+before editing. The rename touches only the five V.17 receive owners:
+`include/dsplib/v17fax.h`, `include/dsplib/faxcfg.h`, `src/fax/v17.c`,
+`src/fax/faxcfg.c`, `src/fax/class1rx.c`, `test/unit/t_faxcfg.c` and
+`test/unit/t_v17rxcreate.c`. The V.27/V.29 `int_0000`/`int_0014` fields,
+`faxvmi_link::int_0014`, `voice`'s and `v21cfg`'s `int_0014`, and
+`v17tx_control_req::int_0010` are untouched; the `test/unit/t_v27fax.c` and
+`t_faxadapt.c` occurrences are other owners' fields.
+
+The offset constants that name the same storage keep their spelling, because
+the tests reach the fields through them: `V17RXC_INT_0010` (+0x10),
+`V17RXC_SHORT_002E` (+0x2e) and `V17RXS_SHORT_4FB0`/`_4FB2` (+0x4fb0/2).
+Their comments now record the field names. There are no `*_OFF` assertion
+macros in this cluster, so no assertion-label identifier moved.
+
+No mutation suite covers these files (`test/mutations/suites.json` maps only
+`v17data` to `src/pump/v17/v17data.c`, the transmit data leaves), so no
+manifest carries a changed `find`/`replace`.
+
+### Verification
+
+A token-aware forward substitution of `HEAD` reproduces every changed
+non-doc file; the header files differ only by intended prose rewrites in
+comments. Test edits are identifier-only with string labels and line counts
+preserved, because `diff_eq_int` embeds `__FILE__`/`__LINE__` and the period
+test objects must stay byte-identical. The `anchorcheck`/`refcheck` tiers
+report 0 anchors matching other than exactly once over 10041 mutations and
+13966 references.
+
+### Gate
+
+Batch 25 gate result: Gentoo `make phase` exited 0, **`period differential:
+375 passed, 0 failed`** and `phase boundary: period differential and
+structural checks all OK`; 655/655 period objects byte-identical
+(`/home/philpem/slmodem/tmp/fax-v17rx-before.sha256` vs
+`/home/philpem/slmodem/tmp/fax-v17rx-after.sha256`).
+
+`docs/naming-inventory.md` was regenerated: named 2632 -> 2638, offset-named
+390 -> 384, on-record 245 -> 273, residual 145 -> 111.
+
 
 
 
