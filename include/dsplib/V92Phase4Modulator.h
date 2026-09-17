@@ -276,7 +276,7 @@ public:
 	 * @param nSymbols     How many times `generateSymbol` is called
 	 *                      before returning; zero means not at all.
 	 * @param suvLimit     Stored as `this->suvLimit`, the SUV threshold
-	 *                      state 5 compares `word_18` against, offset by
+	 *                      state 5 compares `repeatCpCount` against, offset by
 	 *                      800.
 	 */
 	void reset(short amplitudeArg, unsigned char bitsArg,
@@ -501,7 +501,7 @@ public:
 
 	/**
 	 * @brief Prepare the RRN-second-section fields (`word_1c4`,
-	 *        `word_34`, `flag_20`, `byte_1c`, `word_18`, `cpReceived`) and
+	 *        `word_34`, `flag_20`, `repeatCpEnable`, `repeatCpCount`, `cpReceived`) and
 	 *        the CP's `word_110`/`byte_04` ahead of that section.
 	 */
 	void resetRRNSecondSection();
@@ -584,7 +584,7 @@ public:
 	 * +0x10 .. +0x17  Not touched by anything written here.
 	 *
 	 * NOT removable under the pad-removal workstream (F10150): `eventCode`
-	 * ends at +0x10, already 4-byte aligned, and `word_18` below needs
+	 * ends at +0x10, already 4-byte aligned, and `repeatCpCount` below needs
 	 * only that same 4-byte alignment -- a field-to-field gap here would
 	 * be 0 bytes, not 8, if the member vanished. The compiler's own
 	 * implicit padding does not reproduce this eight-byte span, same
@@ -593,8 +593,8 @@ public:
 	unsigned char pad_10[8];
 
 	/*
-	 * +0x18  A counter, and `byte_1c` is its enable. `generateSymbol`'s
-	 * state 5 arm increments it once per symbol and only while `byte_1c`
+	 * +0x18  A counter, and `repeatCpEnable` is its enable. `generateSymbol`'s
+	 * state 5 arm increments it once per symbol and only while `repeatCpEnable`
 	 * is non-zero, and enters the repeated CP once it passes
 	 * `suvLimit + 800`. Cleared by the constructor, by `reset`, by
 	 * `enterRepeatedCP`, by `recivedSUVtag`, by `recivedCPtag`, by
@@ -602,20 +602,28 @@ public:
 	 * remaining paths that touch it. What it counts is symbols in SUV,
 	 * but only because state 5 is where it is counted -- nothing prints
 	 * it and nothing else reads it.
+	 *
+	 * Named after the identical V.90 sibling
+	 * `V90Phase4Modulator::repeatCpCount`, whose SUVd arm runs the same
+	 * counter against `suvLimit + 0x320` (this `+ 800`); the twins share
+	 * one role and so one name, reversing this field's earlier
+	 * deliberate retain now that the sibling's role is established.
 	 */
-	unsigned int word_18;
+	unsigned int repeatCpCount;
 
 	/*
-	 * +0x1c  Whether `word_18` is counting. Set to 1 at exactly one site
+	 * +0x1c  Whether `repeatCpCount` is counting. Set to 1 at exactly one site
 	 * -- `generateSymbol`'s state 12 arm, beside "CPu Terminated @ %d" --
 	 * and cleared by the constructor, `reset`, `enterRepeatedCP`,
 	 * `recivedSUVtag`, `recivedCPtag` and `resetRRNSecondSection`, always
-	 * alongside `word_18`. One byte, stored as a byte.
+	 * alongside `repeatCpCount`. One byte, stored as a byte. Named after
+	 * the V.90 sibling `V90Phase4Modulator::repeatCpEnable`, whose CPd
+	 * termination sets it the same way.
 	 */
-	unsigned char byte_1c;
+	unsigned char repeatCpEnable;
 
 	/*
-	 * +0x1d..+0x1f was `pad_1d[3]`: `byte_1c` ends at +0x1d and `flag_20`
+	 * +0x1d..+0x1f was `pad_1d[3]`: `repeatCpEnable` ends at +0x1d and `flag_20`
 	 * below is a 4-byte-aligned `unsigned int`, so natural alignment
 	 * inserts exactly these three bytes with the member deleted --
 	 * proved by the existing offset assertion on `flag_20` (0x020,
@@ -744,10 +752,10 @@ public:
 	 * +0x44  `reset`'s FIFTH argument, stored and read once:
 	 * `mov 0x34(%esp),%eax; mov %eax,0x44(%esi)` at .text+0x1903f, and
 	 * `generateSymbol`'s state 5 arm gives up on SUV and enters the
-	 * repeated CP once `word_18` has passed `suvLimit + 800`. So it is
-	 * a threshold that the caller of `reset` sets, offset by 800; what
-	 * it counts is `word_18`'s business and nothing written
-	 * establishes that.
+	 * repeated CP once `repeatCpCount` has passed `suvLimit + 800`. So it is
+	 * a threshold that the caller of `reset` sets, offset by 800; the
+	 * identical V.90 sibling `V90Phase4Modulator::suvLimit` (+0x40) is
+	 * read the same way against `+ 0x320`.
 	 *
 	 * Named `suvLimit` after `reset`'s own parameter of that name
 	 * (rank 2, a typed source already carrying the word) -- this

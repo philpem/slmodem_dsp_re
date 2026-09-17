@@ -2212,7 +2212,7 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 				if (phase4Demod->linearMappStudyStart
 				    == phase4Demod->countInState)
 					meanErrorRecordEnable = 1;
-				if (phase4Demod->demapper->short_1ea4
+				if (phase4Demod->demapper->studyRunFinished
 				    && flag_144) {
 					flag_144 = 0;
 					calcMeanErrorStatistics();
@@ -2220,7 +2220,7 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 					ph4MeanErrorEnergyBeforeUpdate = meanErrorEnergyMean;
 					meanErrorCount = 0;
 				}
-				if (phase4Demod->demapper->short_1ea6
+				if (phase4Demod->demapper->secondStudyRunFinished
 				    && flag_146) {
 					flag_146 = 0;
 					calcMeanErrorStatistics();

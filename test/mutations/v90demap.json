@@ -24,23 +24,23 @@
  },
  {
   "label": "the argument lands one field early",
-  "find": "\tshort_1ea6 = 0;\n\tcompletedRunCount = 0;\n\tstudyLength = n;",
-  "replace": "\tshort_1ea6 = (short)n;\n\tcompletedRunCount = 0;\n\tstudyLength = 0;"
+  "find": "\tsecondStudyRunFinished = 0;\n\tcompletedRunCount = 0;\n\tstudyLength = n;",
+  "replace": "\tsecondStudyRunFinished = (short)n;\n\tcompletedRunCount = 0;\n\tstudyLength = 0;"
  },
  {
   "label": "+0x1ea4 keeps whatever it found",
-  "find": "\tshort_1ea4 = 0;\n\tshort_1ea6 = 0;\n\tcompletedRunCount = 0;\n\tstudyLength = n;",
-  "replace": "\tshort_1ea6 = 0;\n\tcompletedRunCount = 0;\n\tstudyLength = n;"
+  "find": "\tstudyRunFinished = 0;\n\tsecondStudyRunFinished = 0;\n\tcompletedRunCount = 0;\n\tstudyLength = n;",
+  "replace": "\tsecondStudyRunFinished = 0;\n\tcompletedRunCount = 0;\n\tstudyLength = n;"
  },
  {
   "label": "the study clears the last decision's code as well",
-  "find": "\tstudyProgress = 0;\n\tdecisionFramePosition = 0;\n\tshort_1ea4 = 0;\n\tshort_1ea6 = 0;\n\tcompletedRunCount = 0;\n\tstudyLength = n;",
-  "replace": "\tstudyProgress = 0;\n\tdecisionCode = 0;\n\tdecisionFramePosition = 0;\n\tshort_1ea4 = 0;\n\tshort_1ea6 = 0;\n\tcompletedRunCount = 0;\n\tstudyLength = n;"
+  "find": "\tstudyProgress = 0;\n\tdecisionFramePosition = 0;\n\tstudyRunFinished = 0;\n\tsecondStudyRunFinished = 0;\n\tcompletedRunCount = 0;\n\tstudyLength = n;",
+  "replace": "\tstudyProgress = 0;\n\tdecisionCode = 0;\n\tdecisionFramePosition = 0;\n\tstudyRunFinished = 0;\n\tsecondStudyRunFinished = 0;\n\tcompletedRunCount = 0;\n\tstudyLength = n;"
  },
  {
   "label": "+0x1eb0 keeps whatever it found",
-  "find": "\tstudyProgress = 0;\n\tdecisionFramePosition = 0;\n\tshort_1ea4 = 0;\n\tshort_1ea6 = 0;\n\tcompletedRunCount = 0;\n\tstudyLength = n;",
-  "replace": "\tdecisionFramePosition = 0;\n\tshort_1ea4 = 0;\n\tshort_1ea6 = 0;\n\tcompletedRunCount = 0;\n\tstudyLength = n;"
+  "find": "\tstudyProgress = 0;\n\tdecisionFramePosition = 0;\n\tstudyRunFinished = 0;\n\tsecondStudyRunFinished = 0;\n\tcompletedRunCount = 0;\n\tstudyLength = n;",
+  "replace": "\tdecisionFramePosition = 0;\n\tstudyRunFinished = 0;\n\tsecondStudyRunFinished = 0;\n\tcompletedRunCount = 0;\n\tstudyLength = n;"
  },
  {
   "label": "hardDecision records the frame position after the advance, not before",
@@ -398,18 +398,18 @@
  },
  {
   "label": "+0x1ea6 goes up on the THIRD completed run",
-  "find": "\t\tif (completedRunCount == 2)\n\t\t\tshort_1ea6 = 1;",
-  "replace": "\t\tif (completedRunCount == 3)\n\t\t\tshort_1ea6 = 1;"
+  "find": "\t\tif (completedRunCount == 2)\n\t\t\tsecondStudyRunFinished = 1;",
+  "replace": "\t\tif (completedRunCount == 3)\n\t\t\tsecondStudyRunFinished = 1;"
  },
  {
   "label": "+0x1ea4 is left as the study found it",
-  "find": "\t\tstudyProgress = 0;\n\t\tshort_1ea4 = 1;",
+  "find": "\t\tstudyProgress = 0;\n\t\tstudyRunFinished = 1;",
   "replace": "\t\tstudyProgress = 0;"
  },
  {
   "label": "the progress is not rewound at the end of a run",
-  "find": "\t\tstudyProgress = 0;\n\t\tshort_1ea4 = 1;",
-  "replace": "\t\tshort_1ea4 = 1;"
+  "find": "\t\tstudyProgress = 0;\n\t\tstudyRunFinished = 1;",
+  "replace": "\t\tstudyRunFinished = 1;"
  },
  {
   "label": "the cells are cleared BEFORE they are read into the constellation",
@@ -509,8 +509,8 @@
  },
  {
   "label": "+0x1eac is cleared with the words either side of it",
-  "find": "\tstudyProgress = 0;\n\tdecisionFramePosition = 0;\n\tshort_1ea4 = 0;\n\tshort_1ea6 = 0;\n\tcompletedRunCount = 0;\n\tstudyLength = 0;\n\tlinearMappStudyEnabled = 0;",
-  "replace": "\tstudyProgress = 0;\n\tdecisionCode = 0;\n\tdecisionFramePosition = 0;\n\tshort_1ea4 = 0;\n\tshort_1ea6 = 0;\n\tcompletedRunCount = 0;\n\tstudyLength = 0;\n\tlinearMappStudyEnabled = 0;"
+  "find": "\tstudyProgress = 0;\n\tdecisionFramePosition = 0;\n\tstudyRunFinished = 0;\n\tsecondStudyRunFinished = 0;\n\tcompletedRunCount = 0;\n\tstudyLength = 0;\n\tlinearMappStudyEnabled = 0;",
+  "replace": "\tstudyProgress = 0;\n\tdecisionCode = 0;\n\tdecisionFramePosition = 0;\n\tstudyRunFinished = 0;\n\tsecondStudyRunFinished = 0;\n\tcompletedRunCount = 0;\n\tstudyLength = 0;\n\tlinearMappStudyEnabled = 0;"
  },
  {
   "label": "the study length keeps whatever it held",
@@ -529,8 +529,8 @@
  },
  {
   "label": "reset's own code loop stops one cell short of 128",
-  "find": "\t\tfor (code = 0; code < V90DEMAPPER_LEVELS; code++)\n\t\t\tadiDetector->clearCamulativeVal(phase, code);\n\n\tstudyProgress = 0;\n\tdecisionFramePosition = 0;\n\tshort_1ea4 = 0;\n\tshort_1ea6 = 0;\n\tcompletedRunCount = 0;\n\tstudyLength = 0;\n\tlinearMappStudyEnabled = 0;",
-  "replace": "\t\tfor (code = 0; code + 1 < V90DEMAPPER_LEVELS; code++)\n\t\t\tadiDetector->clearCamulativeVal(phase, code);\n\n\tstudyProgress = 0;\n\tdecisionFramePosition = 0;\n\tshort_1ea4 = 0;\n\tshort_1ea6 = 0;\n\tcompletedRunCount = 0;\n\tstudyLength = 0;\n\tlinearMappStudyEnabled = 0;"
+  "find": "\t\tfor (code = 0; code < V90DEMAPPER_LEVELS; code++)\n\t\t\tadiDetector->clearCamulativeVal(phase, code);\n\n\tstudyProgress = 0;\n\tdecisionFramePosition = 0;\n\tstudyRunFinished = 0;\n\tsecondStudyRunFinished = 0;\n\tcompletedRunCount = 0;\n\tstudyLength = 0;\n\tlinearMappStudyEnabled = 0;",
+  "replace": "\t\tfor (code = 0; code + 1 < V90DEMAPPER_LEVELS; code++)\n\t\t\tadiDetector->clearCamulativeVal(phase, code);\n\n\tstudyProgress = 0;\n\tdecisionFramePosition = 0;\n\tstudyRunFinished = 0;\n\tsecondStudyRunFinished = 0;\n\tcompletedRunCount = 0;\n\tstudyLength = 0;\n\tlinearMappStudyEnabled = 0;"
  },
  {
   "label": "the delay bound is not strict",

@@ -1020,3 +1020,109 @@ with 0 anchors matching other than exactly once. All 655 `build/period/*.o`
 hashes are **byte-identical** to the pre-edit snapshot
 (`/home/philpem/slmodem/tmp/issue119-tier-a-before.sha256`, 655/655).
 
+## Batch 19: issue #119 Tier B names
+
+Owner-scoped pass over nine members whose "retain" disposition in the
+acceptance inventory (`docs/naming-inventory.md`) went stale because the
+reader or sibling that settles the role has since been reconstructed. Offsets,
+widths, signedness and layout are unchanged; only the names, the reader
+comments and the fixture identifiers move.
+
+### Evidence
+
+| Owner | Previous name | New name | Evidence |
+| --- | --- | --- | --- |
+| `V90Phase4Modulator` | `word_0018` | `repeatCpCount` | Read in `generateV92Symbol`'s SUVd arm (`P4M_STATE_SUVD`): `if (repeatCpEnable) repeatCpCount++` and `if (repeatCpCount > suvLimit + 0x320) enterRepeatedCPd()` (`V90Phase4Modulator.cpp:1869-1876`, +0x2ee7c). The same counter is `V92Phase4Modulator::repeatCpCount`, whose SUV arm runs `suvLimit + 800`. |
+| `V90Phase4Modulator` | `byte_001c` | `repeatCpEnable` | The enable for that counter -- it gates the increment and is set to 1 by `generateV92Symbol`'s CPd termination (`:1919-1922`), exactly as the V.92 sibling's CPU termination does. |
+| `V90Phase4Modulator` | `word_0040` | `suvLimit` | `reset`'s fifth argument, stored verbatim (`:351`) and read only by the same SUVd arm as `repeatCpCount > suvLimit + 0x320`. The sibling `V92Phase4Modulator::suvLimit` (+0x44) is the same field, filled the same way by `reset` and read against `+ 800`. |
+| `V92Phase4Modulator` | `word_18` | `repeatCpCount` | `generateSymbol`'s state 5 arm: `if (repeatCpEnable) repeatCpCount++; if (repeatCpCount > suvLimit + 800) enterRepeatedCP()` (`V92Phase4Modulator.cpp:1275-1282`). The counter is the identical V.90 sibling's. |
+| `V92Phase4Modulator` | `byte_1c` | `repeatCpEnable` | The enable above; set to 1 by `generateSymbol`'s CPU termination (`:1356-1357`), the twin of the V.90 CPd termination. |
+| `V90AutoDigitalImpDetector` | `short_a948` | `altRbsInUse` | Set to 1 after the study's second update, beside `adid_recheckAltRbs` (`V90AutoDigitalImpDetector.cpp:2059-2061`), cleared by `reset` (`:490`). Read by `V90Phase3Demodulator` at six sites -- the `P3D_DEMOD_BIT` macro and `twoLevelDemod`, plus the four TRN1d arms (`V90Phase3Demodulator.cpp:569, 736, 772, 822, 878, 2501`) -- every one as `altRbsInUse != 0 && isAltRbs(...)`, choosing `linMappAlt` over `linMapp`. |
+| `V90Demapper` | `short_1ea4` | `studyRunFinished` | Set on every completed run by `linearMappingStudy` (`V90Demapper.cpp:1143`, 0x315b6); read by `V90Equalizer::process` as the `&& flag_144` gate on a mean-error statistics update (`V90Equalizer.cpp:2215`). |
+| `V90Demapper` | `short_1ea6` | `secondStudyRunFinished` | Set only when `completedRunCount == 2` (`V90Demapper.cpp:1140`, 0x3170f); read by `V90Equalizer::process` as the `&& flag_146` gate (`V90Equalizer.cpp:2223`). |
+| `callprog` | `f1c` | `blind_dial` | Written from `cfg->w0` by `CALLPROG_Create` (`Callprog.c:577`), read by `CALLPROG_Dial` to suppress dial-tone listening and enter blind dialling (`:981`). `call_create` derives `w0` from S56; `docs/callprog_states.md:114-131` names and measures the behaviour. |
+
+The `V92Phase4Modulator::word_18` / `byte_1c` rename reverses a Batch 15
+deliberate retain. Batch 15 kept them offset-named because the V.92 side alone
+did not establish the role; the V.90 sibling's SUVd arm is now reconstructed
+and proves the identical counter and enable, so the twins share one name for
+one role.
+
+### Cross-owner classification and scoping
+
+- `word_18` collides across owners. Renamed only for `V92Phase4Modulator`.
+  Left byte-for-byte unchanged: `V90CP::word_18[12]` (`V90CP.h:369`,
+  `V90CP.cpp` and its unit tests `t_v90conneval`, `t_v90cpb2i`, `t_v90cpinfo`,
+  `t_v90leaves`, `t_v90modprog`), `v27fax::word_18` (`v27fax.h:182`,
+  `src/fax/v27.c:1518`, `test/mutations/v27status.json`), the
+  `t_v90modchain.cpp:3842` and `t_v90p4mgen.cpp:276` V90CP objects, the
+  `v92ec.json` label, and the `snapshot.json` verdict keys.
+- `byte_1c` is unique to `V92Phase4Modulator` (verified across `src`,
+  `include`, `test`); no other owner carries it.
+- `f1c` collides across owners. Renamed only for `struct callprog`. Left
+  unchanged: `struct v8_dp` (`v8dp.h:62`, `src/v8/v8.c:224`, `t_v8dp.c`),
+  `struct v8` (`v8.h:175`), the `fpm_tone.h:47` comment, and the local `float`
+  in `t_v92info.cpp`.
+- `short_a948`, `short_1ea4` and `short_1ea6` are each unique to their owner.
+
+### Comment corrections (no code change)
+
+- `V90Phase4Modulator.h`: `reset`'s `@param arg5` now names `suvLimit` and its
+  reader; the +0x0018/+0x001c block replaces the false "read by neither those
+  nor anything else in this file" with the `generateV92Symbol` SUVd-arm reader
+  and the shared V.92 sibling role; the +0x0040 block names `suvLimit`, its
+  reader and the sibling.
+- `V92Phase4Modulator.h`: the +0x18/+0x1c blocks state the shared V.90 sibling
+  role and that the rename reverses the earlier retain; the +0x44 `suvLimit`
+  block cites the V.90 sibling and drops the stale "nothing written
+  establishes that".
+- `V90AutoDigitalImpDetector.h`: `altRbsInUse`'s comment cites the six
+  `V90Phase3Demodulator` readers and the `isAltRbs`/`linMappAlt` selection.
+- `V90Demapper.h`: `studyRunFinished`/`secondStudyRunFinished`'s comment cites
+  `V90Equalizer::process`, the store conditions and the two clears, replacing
+  the "names stay neutral / function nobody has written" text.
+- `callprog_state.h`: `blind_dial` gains a field comment citing S56, the
+  `CALLPROG_Dial`/`CALLPROG_Progress` behaviour and `docs/callprog_states.md`;
+  the `callprog_cfg::w0` comment now points at `cp->blind_dial`.
+
+### Verification
+
+A token-aware forward substitution of `HEAD` reproduces every changed non-doc
+file exactly except the five intended prose rewrites above
+(`V90Phase4Modulator.h`, `V92Phase4Modulator.h`, `V90AutoDigitalImpDetector.h`,
+`V90Demapper.h`, `callprog_state.h`). Sixteen files are pure
+identifier-boundary substitutions, including all the `.cpp` and `test/unit`
+sources; no non-target `word_18`, `f1c`, `byte_1c` or `word_0040` occurrence
+changed. String literals that name a field are preserved byte-for-byte (the
+`"f1c"`, `"short_1ea4 (%ld)"`, `"short_1ea6 tracks the second run"`,
+`"word_0040 took argument five (%ld)"` and `"the byte_1c latch ..."` strings);
+only the identifiers beside them moved.
+
+A token-count check over every machine-edited source/test file reports 0
+non-`{old,new}` identifier count differences for all sixteen pure files. Each
+old->new pair is balanced there (for example `V90Phase4Modulator.cpp`:
+`word_0018` 11->0 / `repeatCpCount` 0->11, `byte_001c` 9->0 /
+`repeatCpEnable` 0->9, `word_0040` 4->0 / `suvLimit` 0->4). The only
+old-token residues are the preserved string literals (`t_v90modchain.cpp`
+`word_0040` 7->1, `t_v92p4sym.cpp` `byte_1c` 7->2, `t_v90demap.cpp`
+`short_1ea4` 9->4 and `short_1ea6` 8->3, `t_callprog_create.c` `f1c` 3->1),
+and the only new>old excess is the added prose in the five rewritten header
+comments.
+
+Eleven mutation manifests were edited by DECODING JSON and substituting only
+`find`/`replace` values -- the raw files contain literal `\t`, which defeats a
+naive `\b` match. A decoded-JSON re-derivation of `HEAD` reproduces every
+changed `find`/`replace` value exactly, with 0 other leaf strings changed:
+labels, `why`, `description`, `note`, `equivalent` and the file-level `_`
+descriptions (including `v90p4mreset.json`'s `word_0040` mention) are
+byte-for-byte identical, and the blank-line formatting of `v90p4mreset.json`
+is preserved. `v27status.json` and the `v92ec.json` label were left untouched.
+
+### Gate
+
+Batch 19 gate result: Gentoo `make phase` exited 0, **`period differential:
+375 passed, 0 failed`** and **`phase boundary: period differential and
+structural checks all OK`**. All 655 `build/period/*.o` hashes are
+**byte-identical** to the pre-edit snapshot
+(`/home/philpem/slmodem/tmp/issue119-tier-b-before.sha256`, 655/655).
+

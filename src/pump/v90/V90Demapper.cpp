@@ -125,8 +125,8 @@ DEM_OFF(histogramDelay,		0x1e94, histdelay);
 DEM_OFF(histogramIntegration,	0x1e98, histint);
 DEM_OFF(completedRunCount,		0x1e9c, short1e9c);
 DEM_OFF(adiDetector,		0x1ea0, adi);
-DEM_OFF(short_1ea4,		0x1ea4, short1ea4);
-DEM_OFF(short_1ea6,		0x1ea6, short1ea6);
+DEM_OFF(studyRunFinished,		0x1ea4, short1ea4);
+DEM_OFF(secondStudyRunFinished,		0x1ea6, short1ea6);
 DEM_OFF(studyLength,		0x1ea8, uint1ea8);
 DEM_OFF(decisionCode,		0x1eac, deccode);
 DEM_OFF(decisionFramePosition,	0x1eae, decpos);
@@ -399,8 +399,8 @@ V90Demapper::resetLinearMappStudy(unsigned int n)
 
 	studyProgress = 0;
 	decisionFramePosition = 0;
-	short_1ea4 = 0;
-	short_1ea6 = 0;
+	studyRunFinished = 0;
+	secondStudyRunFinished = 0;
 	completedRunCount = 0;
 	studyLength = n;
 }
@@ -811,8 +811,8 @@ V90Demapper::reset(V90MappingParams *mapp)
 
 	studyProgress = 0;
 	decisionFramePosition = 0;
-	short_1ea4 = 0;
-	short_1ea6 = 0;
+	studyRunFinished = 0;
+	secondStudyRunFinished = 0;
 	completedRunCount = 0;
 	studyLength = 0;
 	linearMappStudyEnabled = 0;
@@ -1084,7 +1084,7 @@ V90Demapper::updateConstelation()
  *
  * `completedRunCount` IS NOT CLEARED HERE.  It counts completed runs and is only ever
  * zeroed by `resetLinearMappStudy`, so the `== 2` test fires exactly once per
- * study and `short_1ea6` is "a second run has finished" where `short_1ea4`,
+ * study and `secondStudyRunFinished` is "a second run has finished" where `studyRunFinished`,
  * set unconditionally below, is "a run has finished".
  */
 void
@@ -1137,10 +1137,10 @@ V90Demapper::linearMappingStudy(short sample, short level)
 
 		completedRunCount++;
 		if (completedRunCount == 2)
-			short_1ea6 = 1;
+			secondStudyRunFinished = 1;
 
 		studyProgress = 0;
-		short_1ea4 = 1;
+		studyRunFinished = 1;
 
 		updateConstelation();
 

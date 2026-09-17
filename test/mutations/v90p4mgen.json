@@ -100,8 +100,8 @@
  },
  {
   "label": "enterRepeatedCPd: +0x18 is left as it was found",
-  "find": "\tbyte_001c = 0;\n\tword_0018 = 0;\n\tif (DSPLIB_DEBUG_ON())",
-  "replace": "\tbyte_001c = 0;\n\tif (DSPLIB_DEBUG_ON())"
+  "find": "\trepeatCpEnable = 0;\n\trepeatCpCount = 0;\n\tif (DSPLIB_DEBUG_ON())",
+  "replace": "\trepeatCpEnable = 0;\n\tif (DSPLIB_DEBUG_ON())"
  },
  {
   "label": "recivedSUV: the latch it reads is +0x2f9c",
@@ -157,13 +157,13 @@
  },
  {
   "label": "recivedCPtag: it acts when +0x20 is clear",
-  "find": "\tword_0018 = 0;\n\tif (word_0020 != 0) {\n\t\tif (cpReceived != 0) {",
-  "replace": "\tword_0018 = 0;\n\tif (word_0020 == 0) {\n\t\tif (cpReceived != 0) {"
+  "find": "\trepeatCpCount = 0;\n\tif (word_0020 != 0) {\n\t\tif (cpReceived != 0) {",
+  "replace": "\trepeatCpCount = 0;\n\tif (word_0020 == 0) {\n\t\tif (cpReceived != 0) {"
  },
  {
   "label": "recivedCPtag: the two latches are swapped",
-  "find": "\tword_0018 = 0;\n\tif (word_0020 != 0) {\n\t\tif (cpReceived != 0) {",
-  "replace": "\tword_0018 = 0;\n\tif (cpReceived != 0) {\n\t\tif (word_0020 != 0) {"
+  "find": "\trepeatCpCount = 0;\n\tif (word_0020 != 0) {\n\t\tif (cpReceived != 0) {",
+  "replace": "\trepeatCpCount = 0;\n\tif (cpReceived != 0) {\n\t\tif (word_0020 != 0) {"
  },
  {
   "label": "recivedCPtag: the first CP does not select the short form",

@@ -49,8 +49,8 @@ V92P4M_OFF(symbolCount,		0x004, symbolcount);
 V92P4M_OFF(patternIndex,	0x008, patternindex);
 V92P4M_OFF(eventCode,		0x00c, word0c);
 V92P4M_OFF(pad_10,		0x010, pad10);
-V92P4M_OFF(word_18,		0x018, word18);
-V92P4M_OFF(byte_1c,		0x01c, byte1c);
+V92P4M_OFF(repeatCpCount,		0x018, word18);
+V92P4M_OFF(repeatCpEnable,		0x01c, byte1c);
 V92P4M_OFF(flag_20,		0x020, flag20);
 V92P4M_OFF(word_24,		0x024, word24);
 V92P4M_OFF(word_28,		0x028, word28);
@@ -207,8 +207,8 @@ V92Phase4Modulator::V92Phase4Modulator(V92Parameters *p, V92BitsToSymbol *bts,
 	cpReceived = 0;
 	word_1c4 = 0;
 	cp->word_110 = 0;
-	word_18 = 0;
-	byte_1c = 0;
+	repeatCpCount = 0;
+	repeatCpEnable = 0;
 }
 
 /*
@@ -564,8 +564,8 @@ void V92Phase4Modulator::resetBeforFPE()
  */
 void V92Phase4Modulator::enterRepeatedCP()
 {
-	byte_1c = 0;
-	word_18 = 0;
+	repeatCpEnable = 0;
+	repeatCpCount = 0;
 
 	if (dsplibs_debug_level > 1)
 		dsplibs_debug_printf("V92Phase4Modulator: enter repeatedCPu "
@@ -639,8 +639,8 @@ void V92Phase4Modulator::resetRRNSecondSection()
 	word_1c4 = 0;
 	word_34 = 1;
 	flag_20 = 0;
-	byte_1c = 0;
-	word_18 = 0;
+	repeatCpEnable = 0;
+	repeatCpCount = 0;
 	cpReceived = 0;
 	cp->word_110 = 0;
 	cp->byte_04 = 0;
@@ -809,8 +809,8 @@ void V92Phase4Modulator::recivedCP()
  */
 void V92Phase4Modulator::recivedSUVtag()
 {
-	byte_1c = 0;
-	word_18 = 0;
+	repeatCpEnable = 0;
+	repeatCpCount = 0;
 
 	if (dsplibs_debug_level > 1)
 		dsplibs_debug_printf("recivedSUVtag called\r\n");
@@ -909,8 +909,8 @@ void V92Phase4Modulator::recivedPartTwoSilenceRrnSUVtag()
  */
 void V92Phase4Modulator::recivedCPtag()
 {
-	byte_1c = 0;
-	word_18 = 0;
+	repeatCpEnable = 0;
+	repeatCpCount = 0;
 
 	if (cpReceived == 0) {
 		if (flag_20 != 0)
@@ -1267,18 +1267,18 @@ int V92Phase4Modulator::generateSymbol()
 
 	/*
 	 * SUV.  The message is repacked on every period boundary, and once
-	 * the SUV has run `suvLimit + 800` symbols past the point `byte_1c`
+	 * the SUV has run `suvLimit + 800` symbols past the point `repeatCpEnable`
 	 * started the count, the repeated CP takes over.
 	 */
 	case V92P4M_STATE_SUV:
 		sym = generateSUVu();
-		if (byte_1c != 0)
-			word_18++;
+		if (repeatCpEnable != 0)
+			repeatCpCount++;
 		if (symbolCount % word_1b0 == 0 && symbolCount != 0) {
 			cp->infoToBits();
 			pattern = cp->getBitVector(patternLength);
 			word_1b0 = patternLength / bitsPerSymbol;
-			if (word_18 > suvLimit + 800)
+			if (repeatCpCount > suvLimit + 800)
 				enterRepeatedCP();
 		}
 		break;
@@ -1353,8 +1353,8 @@ int V92Phase4Modulator::generateSymbol()
 		sym = generateCPu();
 		if (symbolCount == word_1b0) {
 			edprintf("V92Phase4Modulator: CPu Terminated" " @ %d\r\n", symbolCount);
-			word_18 = 0;
-			byte_1c = 1;
+			repeatCpCount = 0;
+			repeatCpEnable = 1;
 			state = V92P4M_STATE_SUV;
 			symbolCount = 0;
 			cp->byte_00 = 1;
@@ -1582,7 +1582,7 @@ int V92Phase4Modulator::generateSymbol()
  *     prevBit = 0
  *     cpReceived = 0 ; cp->word_110 = 0 ; word_1c4 = 0
  *     word_28 = 0 ; flag_3c = 0 ; silenceRrnRequest = 0 ; word_30 = 0 ; word_34 = 0
- *     word_18 = 0 ; byte_1c = 0 ; flag_20 = 0
+ *     repeatCpCount = 0 ; repeatCpEnable = 0 ; flag_20 = 0
  *     cp->bitsPerSymbol = 1
  *     cp->byte_00 = 0
  *     cp->infoToBits()
@@ -1676,8 +1676,8 @@ V92Phase4Modulator::reset(short amplitudeArg, unsigned char bitsArg,
 	silenceRrnRequest = 0;
 	word_30 = 0;
 	word_34 = 0;
-	word_18 = 0;
-	byte_1c = 0;
+	repeatCpCount = 0;
+	repeatCpEnable = 0;
 	flag_20 = 0;
 
 	cp->bitsPerSymbol = 1;

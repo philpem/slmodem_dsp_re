@@ -61,7 +61,7 @@
  },
  {
   "label": "leave the short at +0xa948 alone",
-  "find": "\tshort_a948 = 0;",
+  "find": "\taltRbsInUse = 0;",
   "replace": "\t/* deliberately removed */"
  },
  {
@@ -2334,23 +2334,23 @@
  },
  {
   "label": "suh: the Alt first-update report prints the plain table",
-  "find": "\t\t\t\t\t     \" %d  %d\\n\", linMappAlt[0][ucode],\n\t\t\t\t\t     linMappAlt[1][ucode],\n\t\t\t\t\t     linMappAlt[2][ucode],\n\t\t\t\t\t     linMappAlt[3][ucode],\n\t\t\t\t\t     linMappAlt[4][ucode],\n\t\t\t\t\t     linMappAlt[5][ucode]);\n\n\t\tadid_recheckAltRbs(this);\n\n\t\tshort_a948 = 1;",
-  "replace": "\t\t\t\t\t     \" %d  %d\\n\", linMapp[0][ucode],\n\t\t\t\t\t     linMapp[1][ucode],\n\t\t\t\t\t     linMapp[2][ucode],\n\t\t\t\t\t     linMapp[3][ucode],\n\t\t\t\t\t     linMapp[4][ucode],\n\t\t\t\t\t     linMapp[5][ucode]);\n\n\t\tadid_recheckAltRbs(this);\n\n\t\tshort_a948 = 1;"
+  "find": "\t\t\t\t\t     \" %d  %d\\n\", linMappAlt[0][ucode],\n\t\t\t\t\t     linMappAlt[1][ucode],\n\t\t\t\t\t     linMappAlt[2][ucode],\n\t\t\t\t\t     linMappAlt[3][ucode],\n\t\t\t\t\t     linMappAlt[4][ucode],\n\t\t\t\t\t     linMappAlt[5][ucode]);\n\n\t\tadid_recheckAltRbs(this);\n\n\t\taltRbsInUse = 1;",
+  "replace": "\t\t\t\t\t     \" %d  %d\\n\", linMapp[0][ucode],\n\t\t\t\t\t     linMapp[1][ucode],\n\t\t\t\t\t     linMapp[2][ucode],\n\t\t\t\t\t     linMapp[3][ucode],\n\t\t\t\t\t     linMapp[4][ucode],\n\t\t\t\t\t     linMapp[5][ucode]);\n\n\t\tadid_recheckAltRbs(this);\n\n\t\taltRbsInUse = 1;"
  },
  {
   "label": "suh: state 2 does not re-test the flags",
-  "find": "\t\tadid_recheckAltRbs(this);\n\n\t\tshort_a948 = 1;",
-  "replace": "\t\tshort_a948 = 1;"
+  "find": "\t\tadid_recheckAltRbs(this);\n\n\t\taltRbsInUse = 1;",
+  "replace": "\t\taltRbsInUse = 1;"
  },
  {
   "label": "suh: state 2 clears the study flag instead of setting it",
-  "find": "\t\tshort_a948 = 1;\n\t\tstateSampleCount = 0;\n\t\tstudyState = 4;",
-  "replace": "\t\tshort_a948 = 0;\n\t\tstateSampleCount = 0;\n\t\tstudyState = 4;"
+  "find": "\t\taltRbsInUse = 1;\n\t\tstateSampleCount = 0;\n\t\tstudyState = 4;",
+  "replace": "\t\taltRbsInUse = 0;\n\t\tstateSampleCount = 0;\n\t\tstudyState = 4;"
  },
  {
   "label": "suh: state 2 hands on to state 3 rather than state 4",
-  "find": "\t\tshort_a948 = 1;\n\t\tstateSampleCount = 0;\n\t\tstudyState = 4;",
-  "replace": "\t\tshort_a948 = 1;\n\t\tstateSampleCount = 0;\n\t\tstudyState = 3;"
+  "find": "\t\taltRbsInUse = 1;\n\t\tstateSampleCount = 0;\n\t\tstudyState = 4;",
+  "replace": "\t\taltRbsInUse = 1;\n\t\tstateSampleCount = 0;\n\t\tstudyState = 3;"
  },
  {
   "label": "suh: state 3 fires on the wrong duration",

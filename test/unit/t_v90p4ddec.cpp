@@ -1028,8 +1028,8 @@ run_linear_mapping_argument_order(void)
 		m->studyLength = 4u;
 		m->studyProgress = 0u;
 		m->completedRunCount = 0;
-		m->short_1ea4 = 0;
-		m->short_1ea6 = 0;
+		m->studyRunFinished = 0;
+		m->secondStudyRunFinished = 0;
 	}
 
 	ADI->magnitudeSum[phase][code] = 0.0f;

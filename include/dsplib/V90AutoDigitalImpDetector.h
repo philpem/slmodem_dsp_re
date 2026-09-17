@@ -696,13 +696,19 @@ public:
 	float linearMappingVar[V90ADID_PHASES][V90ADID_CODES];	/* +0x9d48 */
 
 	/*
-	 * Cleared by `reset` and set after the second study update, but never read
-	 * in this class. Its semantic role is not established.
+	 * Cleared by `reset` and set to 1 after the study's second update,
+	 * where `adid_recheckAltRbs` has just rechecked the alternate RBS
+	 * mapping. Not read in this class, but read by `V90Phase3Demodulator`
+	 * at six sites -- the `P3D_DEMOD_BIT` macro, the four TRN1d arms and
+	 * `twoLevelDemod` (V90Phase3Demodulator.cpp:569, 736, 772, 822, 878,
+	 * 2501) -- every one as `altRbsInUse != 0 && isAltRbs(...)`, choosing
+	 * `linMappAlt` over `linMapp`. So it is the switch that puts the
+	 * alternate-RBS linear map in use.
 	 */
-	short short_a948;					/* +0xa948 */
+	short altRbsInUse;					/* +0xa948 */
 
 	/*
-	 * +0xa94a..+0xa94b was `pad_a94a[2]`: `short_a948` ends at +0xa94a and
+	 * +0xa94a..+0xa94b was `pad_a94a[2]`: `altRbsInUse` ends at +0xa94a and
 	 * `padGain` below is a 4-byte-aligned `float`, so natural alignment
 	 * inserts exactly these two bytes with the member deleted -- the
 	 * existing `ADID_OFF(padGain, 0xa94c, padgain)`

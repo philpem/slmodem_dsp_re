@@ -566,7 +566,7 @@ V90Phase3Demodulator::~V90Phase3Demodulator()
 		V90AutoDigitalImpDetector *ad_ = autoDigitalImpDetector; \
 		int v_; \
 		\
-		if (ad_->short_a948 != 0 && \
+		if (ad_->altRbsInUse != 0 && \
 		    (short)ad_->isAltRbs((short)framePosition, ucode, sample) != 0) \
 			v_ = P3D_LINMAPPALT(ad_, ucode); \
 		else \
@@ -733,7 +733,7 @@ V90Phase3Demodulator::getV90Decision(float sample)
 	case 0x04:
 		eventCode = 0;
 		/* twoLevelDemod(sample, bit), copy 1 of 4 */
-		if (autoDigitalImpDetector->short_a948 != 0
+		if (autoDigitalImpDetector->altRbsInUse != 0
 		    && autoDigitalImpDetector->isAltRbs((short)framePosition, ucode,
 							sample))
 			level = autoDigitalImpDetector
@@ -769,7 +769,7 @@ V90Phase3Demodulator::getV90Decision(float sample)
 	case 0x05:
 		eventCode = 0;
 		/* twoLevelDemod(sample, bit), copy 2 of 4 */
-		if (autoDigitalImpDetector->short_a948 != 0
+		if (autoDigitalImpDetector->altRbsInUse != 0
 		    && autoDigitalImpDetector->isAltRbs((short)framePosition, ucode,
 							sample))
 			level = autoDigitalImpDetector
@@ -819,7 +819,7 @@ V90Phase3Demodulator::getV90Decision(float sample)
 	case 0x06:
 		eventCode = 0;
 		/* twoLevelDemod(sample, bit), copy 3 of 4 */
-		if (autoDigitalImpDetector->short_a948 != 0
+		if (autoDigitalImpDetector->altRbsInUse != 0
 		    && autoDigitalImpDetector->isAltRbs((short)framePosition, ucode,
 							sample))
 			level = autoDigitalImpDetector
@@ -875,7 +875,7 @@ V90Phase3Demodulator::getV90Decision(float sample)
 	case 0x09:
 		eventCode = 0;
 		/* twoLevelDemod(sample, bit), copy 4 of 4 */
-		if (autoDigitalImpDetector->short_a948 != 0
+		if (autoDigitalImpDetector->altRbsInUse != 0
 		    && autoDigitalImpDetector->isAltRbs((short)framePosition, ucode,
 							sample))
 			level = autoDigitalImpDetector
@@ -2498,7 +2498,7 @@ V90Phase3Demodulator::twoLevelDemod(float sample, int &bit)
 	V90AutoDigitalImpDetector *ad = autoDigitalImpDetector;
 	int level;
 
-	if (ad->short_a948 != 0 &&
+	if (ad->altRbsInUse != 0 &&
 	    (short)ad->isAltRbs((short)framePosition, ucode, sample) != 0)
 		level = P3D_LINMAPPALT(ad, ucode);
 	else

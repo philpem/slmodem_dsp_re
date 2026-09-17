@@ -146,7 +146,7 @@ compare_object(const struct callprog *b, const struct callprog *a, long n)
 
 	for (i = 0; i < 7; i++)
 		diff_eq_int("timeout[%ld]", b->timeout[i], a->timeout[i], i);
-	diff_eq_int("f1c", b->f1c, a->f1c, n);
+	diff_eq_int("f1c", b->blind_dial, a->blind_dial, n);
 	diff_eq_int("same get_sreg", b->get_sreg == a->get_sreg, 1, n);
 	diff_eq_int("same modem", b->modem == a->modem, 1, n);
 	diff_eq_int("f28", b->f28, a->f28, n);

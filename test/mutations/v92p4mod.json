@@ -35,18 +35,18 @@
  },
  {
   "label": "+0x18 is not cleared",
-  "find": "\tword_18 = 0;\n\tbyte_1c = 0;\n}",
-  "replace": "\tbyte_1c = 0;\n}"
+  "find": "\trepeatCpCount = 0;\n\trepeatCpEnable = 0;\n}",
+  "replace": "\trepeatCpEnable = 0;\n}"
  },
  {
   "label": "+0x1c is not cleared",
-  "find": "\tbyte_1c = 0;\n}",
+  "find": "\trepeatCpEnable = 0;\n}",
   "replace": "}"
  },
  {
   "label": "+0x1c is cleared as a word rather than as a byte",
-  "find": "\tbyte_1c = 0;\n}",
-  "replace": "\t*(unsigned int *)&byte_1c = 0;\n}"
+  "find": "\trepeatCpEnable = 0;\n}",
+  "replace": "\t*(unsigned int *)&repeatCpEnable = 0;\n}"
  },
  {
   "label": "the fourth argument is filed where the first belongs",
@@ -60,18 +60,18 @@
  },
  {
   "label": "the caller's V92CP is left alone",
-  "find": "\tcp->word_110 = 0;\n\tword_18 = 0;",
-  "replace": "\tword_18 = 0;"
+  "find": "\tcp->word_110 = 0;\n\trepeatCpCount = 0;",
+  "replace": "\trepeatCpCount = 0;"
  },
  {
   "label": "the word cleared in the caller's V92CP is +0x114",
-  "find": "\tcp->word_110 = 0;\n\tword_18",
-  "replace": "\t*(unsigned int *)((unsigned char *)cp + 0x114) = 0;\n\tword_18"
+  "find": "\tcp->word_110 = 0;\n\trepeatCpCount",
+  "replace": "\t*(unsigned int *)((unsigned char *)cp + 0x114) = 0;\n\trepeatCpCount"
  },
  {
   "label": "the caller's V92CP is cleared through the mapping parameters instead",
-  "find": "\tword_1c4 = 0;\n\tcp->word_110 = 0;\n\tword_18 = 0;",
-  "replace": "\tword_1c4 = 0;\n\t((V92CP *)mp)->word_110 = 0;\n\tword_18 = 0;"
+  "find": "\tword_1c4 = 0;\n\tcp->word_110 = 0;\n\trepeatCpCount = 0;",
+  "replace": "\tword_1c4 = 0;\n\t((V92CP *)mp)->word_110 = 0;\n\trepeatCpCount = 0;"
  },
  {
   "label": "the mapper's null test is dropped",

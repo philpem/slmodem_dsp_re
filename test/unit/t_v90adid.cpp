@@ -5048,7 +5048,7 @@ run_studyuref(void)
 		BOTH(altRbsDistanceThresh, dists[IDX(trial, 7)]);
 		BOTH(altRbsVarianceThresholdFactor, factors[IDX(trial, 3)]);
 		BOTH(altMinVarThresh, (float)(trial % 5) * 1000.0f);
-		BOTH(short_a948, (short)-1);
+		BOTH(altRbsInUse, (short)-1);
 		BOTH(trn1Sigma, -1.0f);
 
 		for (p = 0; p < NPHASE; p++) {
@@ -5290,7 +5290,7 @@ run_studyuref(void)
 		BOTH(altRbsDistanceThresh, 60);
 		BOTH(altRbsVarianceThresholdFactor, 1.5f);
 		BOTH(altMinVarThresh, 10.0f);
-		BOTH(short_a948, 0);
+		BOTH(altRbsInUse, 0);
 		BOTH(trn1Sigma, 0.0f);
 
 		for (p = 0; p < NPHASE; p++) {

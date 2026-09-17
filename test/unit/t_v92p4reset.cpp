@@ -24,7 +24,7 @@
  *     prevBit = 0
  *     cpReceived = 0 ; cp->word_110 = 0 ; word_1c4 = 0
  *     word_28 = 0 ; flag_3c = 0 ; silenceRrnRequest = 0 ; word_30 = 0 ; word_34 = 0
- *     word_18 = 0 ; byte_1c = 0 ; flag_20 = 0
+ *     repeatCpCount = 0 ; repeatCpEnable = 0 ; flag_20 = 0
  *     cp->bitsPerSymbol = 1 ; cp->byte_00 = 0 ; cp->infoToBits()
  *     pattern = cp->getBitVector(patternLength)
  *     e2uExtended = 0
@@ -131,7 +131,7 @@
  *
  * `word_24`, `word_38`, `word_1b0`, `word_1b8`, `pad_10`, `+0x1d..+0x1f`
  * (`pad_1d` until finding F10150 folded it into the compiler's own tail
- * alignment after `byte_1c`), `patternIndex`, `mappingParams`,
+ * alignment after `repeatCpEnable`), `patternIndex`, `mappingParams`,
  * `bitsToSymbol`, `mapper`, `cp` and `params` are untouched.  A field seeded to ZERO cannot tell "reset left it alone"
  * apart from "reset cleared it", so in RUN A every one of them is non-zero on
  * every trial and a reconstruction that helpfully cleared one fails.  RUN B
@@ -707,8 +707,8 @@ setup(long trial, const struct args *a, int runb)
 		o->state = 0x7eadbee1;
 		o->symbolCount = 0x11110000u + (unsigned)trial;
 		o->eventCode = 0xdeadbeefu;
-		o->word_18 = 0x18181818u;
-		o->byte_1c = 0x9cu;
+		o->repeatCpCount = 0x18181818u;
+		o->repeatCpEnable = 0x9cu;
 		o->flag_20 = 0x20202020u;
 		o->word_28 = 0x28282828u;
 		o->silenceRrnRequest = 0x2c2c2c2cu;
@@ -759,7 +759,7 @@ setup(long trial, const struct args *a, int runb)
 			o->pad_10[j] = (unsigned char)(0x80u | (j + mix));
 		/*
 		 * +0x1d..+0x1f was `pad_1d[3]`, removed under the pad-removal
-		 * workstream (F10150): `byte_1c` ends at +0x1d and `flag_20`
+		 * workstream (F10150): `repeatCpEnable` ends at +0x1d and `flag_20`
 		 * is a 4-byte-aligned `unsigned int` at +0x20, so the compiler
 		 * now inserts these three bytes itself.  They are still real
 		 * memory inside the object -- an implicit tail is not an
