@@ -15,17 +15,17 @@
  },
  {
   "label": "resetDetector seeds the counter with seventeen",
-  "find": "\tword_11c = 18;\n\tstateBitCount = 0;\n\trxState = 0;",
-  "replace": "\tword_11c = 17;\n\tstateBitCount = 0;\n\trxState = 0;"
+  "find": "\tbitIndex = 18;\n\tstateBitCount = 0;\n\trxState = 0;",
+  "replace": "\tbitIndex = 17;\n\tstateBitCount = 0;\n\trxState = 0;"
  },
  {
   "label": "resetDetector leaves +0x120 alone",
-  "find": "\tword_11c = 18;\n\tstateBitCount = 0;\n\trxState = 0;",
-  "replace": "\tword_11c = 18;\n\trxState = 0;"
+  "find": "\tbitIndex = 18;\n\tstateBitCount = 0;\n\trxState = 0;",
+  "replace": "\tbitIndex = 18;\n\trxState = 0;"
  },
  {
   "label": "resetDetector leaves the two flag bytes alone",
-  "find": "\tbyte_119 = 0;\n\tbyte_11a = 0;\n}",
+  "find": "\tonesRun = 0;\n\tzerosRun = 0;\n}",
   "replace": "}"
  },
  {
@@ -45,8 +45,8 @@
  },
  {
   "label": "resetDetector also writes +0x914, which it does NOT",
-  "find": "\tbyte_119 = 0;\n\tbyte_11a = 0;\n}",
-  "replace": "\tbyte_119 = 0;\n\tbyte_11a = 0;\n\tword_914 = -1;\n}"
+  "find": "\tonesRun = 0;\n\tzerosRun = 0;\n}",
+  "replace": "\tonesRun = 0;\n\tzerosRun = 0;\n\tword_914 = -1;\n}"
  },
  {
   "label": "getBitVector reports the other length",

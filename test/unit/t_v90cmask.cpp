@@ -511,8 +511,8 @@ run_masks(void)
  * which it must not write at all.
  *
  * `word_10c` IS NOT SWEPT PAST SIX.  Both mask blocks hold six groups and the
- * two loops trust the field, so a larger value writes past `short_42` into
- * `short_a2` and past `short_a2` into `word_104` -- D570 measured exactly that
+ * two loops trust the field, so a larger value writes past `constellationMask` into
+ * `codecConstellationMask` and past `codecConstellationMask` into `word_104` -- D570 measured exactly that
  * on `V92CP::infoToBits`.  The value here is `getConstellationsIndex`'s return,
  * which is 1..6 by construction, and the fixture does not disturb it: a trial
  * that reaches undefined behaviour in the RECONSTRUCTION is not a differential
@@ -524,8 +524,8 @@ run_masks(void)
  * `mask[b >> 4]` UNMASKED, so a table byte of 0x80 or more addresses entries 8
  * to 15 -- the object's behaviour, driven deliberately by `run_masks` above
  * into a buffer with eight guard entries.  Here the buffer is a ROW of
- * `cp->short_42`, so the same write runs into the next row, and at row 5 it
- * runs out of `short_42` into `short_a2`; the codec loop's row 5 then reaches
+ * `cp->constellationMask`, so the same write runs into the next row, and at row 5 it
+ * runs out of `constellationMask` into `codecConstellationMask`; the codec loop's row 5 then reaches
  * +0x102..+0x111, which is `word_104`, `suv` AND `word_10c` -- the field that
  * is bounding the loop it is inside.  Both sides do it and both sides agree,
  * and it is still out of bounds in OUR source, which D561 says is not a trial.
@@ -589,7 +589,7 @@ run_pack(void)
 
 		seed_params(trial, mode, &shapes[s], 0);
 		seed_cp(trial, gate);
-		before_a2 = (unsigned)(unsigned short)ourCp.short_a2[0][0];
+		before_a2 = (unsigned)(unsigned short)ourCp.codecConstellationMask[0][0];
 
 		setV92CPpckFromParamsInfo(&ourParams, &ourInfo, &ourCp);
 		blobPack(&theirParams, &theirInfo, &theirCp);
@@ -629,14 +629,14 @@ run_pack(void)
 		 */
 		if (gate) {
 			sawGateOn = 1;
-			if ((unsigned)(unsigned short)ourCp.short_a2[0][0]
+			if ((unsigned)(unsigned short)ourCp.codecConstellationMask[0][0]
 			    != before_a2)
 				sawMaskWritten = 1;
 		} else {
 			sawGateOff = 1;
 			diff_eq_int("the gate leaves the codec block %ld",
 				    (unsigned)(unsigned short)
-				    ourCp.short_a2[0][0], (long)before_a2, t);
+				    ourCp.codecConstellationMask[0][0], (long)before_a2, t);
 			sawCodecUntouched = 1;
 		}
 
@@ -680,7 +680,7 @@ run_pack(void)
 			diff_eq_obj("V92CP block, closing byte", V92CP,
 				    &ourCp, &theirCp, t);
 			diff_eq_int("the closing byte %ld",
-				    (long)ourCp.char_02,
+				    (long)ourCp.dataBitRate,
 				    k ? (long)(0x40 - 0x14) : (long)(0x40 - 8),
 				    t);
 			if (k == 0)
@@ -1247,7 +1247,7 @@ run_databitrate(void)
  *
  * AND IT CAN DRIVE THE HIGH BYTE ALPHABET WHERE `run_pack` CANNOT, which is
  * the one real difference between the two.  `run_pack`'s destination is a ROW
- * of `V92CP::short_42`, so `getConstellationMask`'s unmasked `mask[b >> 4]`
+ * of `V92CP::constellationMask`, so `getConstellationMask`'s unmasked `mask[b >> 4]`
  * runs into the next row and out of the object -- undefined behaviour in OUR
  * source, so D790 records it instead of driving it.  Here the destination is
  * a LOCAL sized for what the callee reaches (D791), so modes 0 and 1 are in

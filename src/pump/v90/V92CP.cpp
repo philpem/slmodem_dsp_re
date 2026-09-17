@@ -34,29 +34,29 @@
 
 V92CP_OFF(byte_00,	0x000, byte00);
 V92CP_OFF(char_01,	0x001, char01);
-V92CP_OFF(char_02,	0x002, char02);
+V92CP_OFF(dataBitRate,	0x002, char02);
 V92CP_OFF(byte_03,	0x003, byte03);
 V92CP_OFF(byte_04,	0x004, byte04);
-V92CP_OFF(word_08,	0x008, word08);
-V92CP_OFF(word_0c,	0x00c, word0c);
+V92CP_OFF(shaperSR,	0x008, word08);
+V92CP_OFF(shaperId,	0x00c, word0c);
 V92CP_OFF(flt_10,	0x010, flt10);
-V92CP_OFF(flt_14,	0x014, flt14);
-V92CP_OFF(flt_18,	0x018, flt18);
-V92CP_OFF(flt_1c,	0x01c, flt1c);
-V92CP_OFF(flt_20,	0x020, flt20);
+V92CP_OFF(shaperA1,	0x014, flt14);
+V92CP_OFF(shaperA2,	0x018, flt18);
+V92CP_OFF(shaperB1,	0x01c, flt1c);
+V92CP_OFF(shaperB2,	0x020, flt20);
 V92CP_OFF(byte_24,	0x024, byte24);
-V92CP_OFF(word_28,	0x028, word28);
-V92CP_OFF(short_42,	0x042, short42);
-V92CP_OFF(short_a2,	0x0a2, shorta2);
+V92CP_OFF(distinctIndex,	0x028, word28);
+V92CP_OFF(constellationMask,	0x042, short42);
+V92CP_OFF(codecConstellationMask,	0x0a2, shorta2);
 V92CP_OFF(word_104,	0x104, word104);
 V92CP_OFF(suv,		0x108, suv);
 V92CP_OFF(word_10c,	0x10c, word10c);
 V92CP_OFF(word_110,	0x110, word110);
 V92CP_OFF(rxState,	0x114, word114);
 V92CP_OFF(byte_118,	0x118, byte118);
-V92CP_OFF(byte_119,	0x119, byte119);
-V92CP_OFF(byte_11a,	0x11a, byte11a);
-V92CP_OFF(word_11c,	0x11c, word11c);
+V92CP_OFF(onesRun,	0x119, byte119);
+V92CP_OFF(zerosRun,	0x11a, byte11a);
+V92CP_OFF(bitIndex,	0x11c, word11c);
 V92CP_OFF(stateBitCount,	0x120, word120);
 V92CP_OFF(word_124,	0x124, word124);
 V92CP_OFF(bitsPerSymbol,	0x128, byte128);
@@ -73,9 +73,9 @@ V92CP::V92CP()
 	byte_04 = 0;
 
 	rxState = 0;
-	byte_119 = 0;
-	byte_11a = 0;
-	word_11c = 18;
+	onesRun = 0;
+	zerosRun = 0;
+	bitIndex = 18;
 	stateBitCount = 0;
 
 	word_914 = -1;
@@ -159,11 +159,11 @@ V92CP::setSUV(unsigned int value)
 void
 V92CP::resetDetector()
 {
-	word_11c = 18;
+	bitIndex = 18;
 	stateBitCount = 0;
 	rxState = 0;
-	byte_119 = 0;
-	byte_11a = 0;
+	onesRun = 0;
+	zerosRun = 0;
 }
 
 /*
@@ -423,19 +423,19 @@ float2Bits(float f, unsigned char *bits, int mode)
  *     17        marker
  *     18..33    byte_00; then either the SUV form or the field form
  *     34        marker                               char_01 <= 1 only
- *     35..50    byte_03, thirteen more of char_02, two of word_0c
+ *     35..50    byte_03, thirteen more of dataBitRate, two of shaperId
  *     51        marker
  *     52..67    sixteen magnitude entries of flt_10
  *     68        marker
- *     69..84    flt_14 and flt_18, seven magnitude and one sign each
+ *     69..84    shaperA1 and shaperA2, seven magnitude and one sign each
  *     85        marker
- *     86..101   flt_1c and flt_20, likewise
+ *     86..101   shaperB1 and shaperB2, likewise
  *     102       marker
- *     103..118  four bits each of word_28[0..3]
+ *     103..118  four bits each of distinctIndex[0..3]
  *     119       marker
- *     120..135  four bits each of word_28[4..5], byte_24, seven zeros
- *     then      word_10c groups of eight from short_42, and as many again
- *               from short_a2 when bits[128] is non-zero
+ *     120..135  four bits each of distinctIndex[4..5], byte_24, seven zeros
+ *     then      word_10c groups of eight from constellationMask, and as many again
+ *               from codecConstellationMask when bits[128] is non-zero
  *     then      a marker, the sixteen CRC entries, a marker, and zeros to
  *               `vectorLen`
  *
@@ -443,7 +443,7 @@ float2Bits(float f, unsigned char *bits, int mode)
  * THREE READINGS THAT ARE FORCED AND LOOK LIKE MISTAKES.  Each is reproduced
  * because the object encodes it and no reading of the source can avoid it.
  *
- *  1. `t` IS NOT RELOADED between the five bits of `char_02` at 21..25 and the
+ *  1. `t` IS NOT RELOADED between the five bits of `dataBitRate` at 21..25 and the
  *     thirteen at 36..48.  `%ecx` holds it across the branch at .text+0x4ed10
  *     and there is no second `movsbl`; the thirteen are therefore the sign
  *     extension of a signed byte, thirteen copies of bit 7.  A version that
@@ -524,7 +524,7 @@ V92CP::infoToBits()
 		bits[32] = (unsigned char)suv;
 
 		e = byte_04;
-		word_11c = 34;
+		bitIndex = 34;
 		bits[33] = e;
 	} else {
 		signed char b = char_01;
@@ -536,7 +536,7 @@ V92CP::infoToBits()
 		if (b == 0)
 			bitsPerSymbol = 1;
 
-		t = char_02;
+		t = dataBitRate;
 		for (i = 0; i <= 4; i++) {
 			bits[21 + i] = (unsigned char)(t & 1);
 			t >>= 1;
@@ -546,12 +546,12 @@ V92CP::infoToBits()
 			bits[i] = 0;
 
 		if (b <= 1) {
-			bits[31] = (unsigned char)(word_08 & 1);
-			bits[32] = (unsigned char)((word_08 >> 1) & 1);
+			bits[31] = (unsigned char)(shaperSR & 1);
+			bits[32] = (unsigned char)((shaperSR >> 1) & 1);
 		}
 
 		e = byte_04;
-		word_11c = 34;
+		bitIndex = 34;
 		bits[33] = e;
 
 		if (b <= 1) {
@@ -566,8 +566,8 @@ V92CP::infoToBits()
 				t >>= 1;
 			}
 
-			bits[49] = (unsigned char)(word_0c & 1);
-			bits[50] = (unsigned char)((word_0c >> 1) & 1);
+			bits[49] = (unsigned char)(shaperId & 1);
+			bits[50] = (unsigned char)((shaperId >> 1) & 1);
 			bits[51] = 0;
 
 			x = (float)fabs(flt_10);
@@ -584,8 +584,8 @@ V92CP::infoToBits()
 
 			bits[68] = 0;
 
-			bits[76] = (unsigned char)(flt_14 < 0);
-			x = (float)fabs(flt_14);
+			bits[76] = (unsigned char)(shaperA1 < 0);
+			x = (float)fabs(shaperA1);
 			p = &bits[75];
 			for (j = 0; j <= 6; j++) {
 				if (fltTable_1[j] > x) {
@@ -597,8 +597,8 @@ V92CP::infoToBits()
 				p--;
 			}
 
-			bits[84] = (unsigned char)(flt_18 < 0);
-			x = (float)fabs(flt_18);
+			bits[84] = (unsigned char)(shaperA2 < 0);
+			x = (float)fabs(shaperA2);
 			p = &bits[83];
 			for (j = 0; j <= 6; j++) {
 				if (fltTable_1[j] > x) {
@@ -612,8 +612,8 @@ V92CP::infoToBits()
 
 			bits[85] = 0;
 
-			bits[93] = (unsigned char)(flt_1c < 0);
-			x = (float)fabs(flt_1c);
+			bits[93] = (unsigned char)(shaperB1 < 0);
+			x = (float)fabs(shaperB1);
 			p = &bits[92];
 			for (j = 0; j <= 6; j++) {
 				if (fltTable_1[j] > x) {
@@ -625,8 +625,8 @@ V92CP::infoToBits()
 				p--;
 			}
 
-			bits[101] = (unsigned char)(flt_20 < 0);
-			x = (float)fabs(flt_20);
+			bits[101] = (unsigned char)(shaperB2 < 0);
+			x = (float)fabs(shaperB2);
 			p = &bits[100];
 			for (j = 0; j <= 6; j++) {
 				if (fltTable_1[j] > x) {
@@ -641,7 +641,7 @@ V92CP::infoToBits()
 			bits[102] = 0;
 
 			for (i = 0; i <= 3; i++) {
-				short s = (short)word_28[i];
+				short s = (short)distinctIndex[i];
 
 				p = &bits[103 + 4 * i];
 				for (j = 3; j >= 0; j--) {
@@ -653,7 +653,7 @@ V92CP::infoToBits()
 			bits[119] = 0;
 
 			for (i = 0; i <= 1; i++) {
-				short s = (short)word_28[4 + i];
+				short s = (short)distinctIndex[4 + i];
 
 				p = &bits[120 + 4 * i];
 				for (j = 3; j >= 0; j--) {
@@ -667,41 +667,41 @@ V92CP::infoToBits()
 			for (i = 129; i <= 135; i++)
 				bits[i] = 0;
 
-			word_11c = 136;
+			bitIndex = 136;
 
 			n = word_10c;
 
 			for (i = 0; i < n; i++) {
 				for (k = 0; k <= 7; k++) {
-					short s = short_42[i][k];
+					short s = constellationMask[i][k];
 
-					pos = (unsigned int)word_11c;
+					pos = (unsigned int)bitIndex;
 					bits[pos] = 0;
-					word_11c = (int)(pos + 1);
+					bitIndex = (int)(pos + 1);
 					p = &bits[pos + 1];
 					for (j = 15; j >= 0; j--) {
 						*p++ = (unsigned char)(s & 1);
 						s = (short)(s >> 1);
 					}
-					word_11c = (int)(pos + 17);
+					bitIndex = (int)(pos + 17);
 				}
 			}
 
 			if (bits[128] != 0) {
 				for (i = 0; i < n; i++) {
 					for (k = 0; k <= 7; k++) {
-						short s = short_a2[i][k];
+						short s = codecConstellationMask[i][k];
 
-						pos = (unsigned int)word_11c;
+						pos = (unsigned int)bitIndex;
 						bits[pos] = 0;
-						word_11c = (int)(pos + 1);
+						bitIndex = (int)(pos + 1);
 						p = &bits[pos + 1];
 						for (j = 15; j >= 0; j--) {
 							*p++ = (unsigned char)
 							    (s & 1);
 							s = (short)(s >> 1);
 						}
-						word_11c = (int)(pos + 17);
+						bitIndex = (int)(pos + 17);
 					}
 				}
 			}
@@ -710,24 +710,24 @@ V92CP::infoToBits()
 		}
 	}
 
-	pos = (unsigned int)word_11c;
+	pos = (unsigned int)bitIndex;
 	bits[pos] = 0;
-	word_11c = (int)(pos + 1);
+	bitIndex = (int)(pos + 1);
 	msgLen = pos + 17;
 
 	resetCRC();
 	calcCRC();
 
-	pos = (unsigned int)word_11c;
+	pos = (unsigned int)bitIndex;
 	for (i = 0; i <= 15; i++)
 		bits[pos + i] = crc[i];
 	bits[pos + 16] = 0;
-	word_11c = (int)(pos + 17);
+	bitIndex = (int)(pos + 17);
 
 	quantum = 12u * bitsPerSymbol;
-	vectorLen = ((unsigned int)word_11c / quantum + 1) * quantum;
+	vectorLen = ((unsigned int)bitIndex / quantum + 1) * quantum;
 
-	for (i = (unsigned int)word_11c; i < vectorLen; i++)
+	for (i = (unsigned int)bitIndex; i < vectorLen; i++)
 		bits[i] = 0;
 
 	if (e != 0)
@@ -791,11 +791,11 @@ int binaryTable[16] = {
  * addresses at different times and they agree on all of
  *
  *     bits[27..31] word_104   bits[32] suv        bits[33] byte_04
- *     bits[19,20]  char_01    bits[21..25] char_02
- *     bits[31,32]  word_08    bits[35] byte_03    bits[49,50] word_0c
- *     bits[52..67] flt_10     bits[69..76] flt_14 bits[77..84] flt_18
- *     bits[86..93] flt_1c     bits[94..101] flt_20
- *     bits[103..118] word_28[0..3]              bits[120..127] word_28[4..5]
+ *     bits[19,20]  char_01    bits[21..25] dataBitRate
+ *     bits[31,32]  shaperSR    bits[35] byte_03    bits[49,50] shaperId
+ *     bits[52..67] flt_10     bits[69..76] shaperA1 bits[77..84] shaperA2
+ *     bits[86..93] shaperB1     bits[94..101] shaperB2
+ *     bits[103..118] distinctIndex[0..3]              bits[120..127] distinctIndex[4..5]
  *     bits[128] byte_24
  *
  * ONE FIELD DOES NOT ROUND TRIP, and it is the mask blocks.  `infoToBits`
@@ -812,14 +812,14 @@ int binaryTable[16] = {
  * and it is not carried across by analogy in either direction.
  *
  * WHERE THE ACCUMULATOR LIVES IS ALSO THE OBJECT'S, and it differs between
- * arms in a way that is observable rather than cosmetic.  `word_28` is
+ * arms in a way that is observable rather than cosmetic.  `distinctIndex` is
  * accumulated IN PLACE -- `mov 0x28(%edi,%esi,4),%eax; add %eax,%edx; mov
  * %edx,0x28(...)`, a reload every iteration -- while the two mask arms hold
  * the sum in a register and store once at the end, over a destination that
  * has already been zeroed.  The difference only shows when the destination
  * aliases something the loop reads, or the loop bound, and `word_10c` is
- * unbounded (D570), so it can: `short_42[12][5]` IS `word_10c`, and
- * `short_42[22][0]` is inside `bits`.  Reproduced as read.
+ * unbounded (D570), so it can: `constellationMask[12][5]` IS `word_10c`, and
+ * `constellationMask[22][0]` is inside `bits`.  Reproduced as read.
  *
  * `word_124` IS THE READ CURSOR and this is its only user; see V92CP.h.
  * ===========================================================================
@@ -847,21 +847,21 @@ V92CP::evaluateInfo()
 
 	case 5:
 		/*
-		 * The header.  `char_01` is two bits and `char_02` five, and
-		 * `word_08` is present only for the long form -- the object's
+		 * The header.  `char_01` is two bits and `dataBitRate` five, and
+		 * `shaperSR` is present only for the long form -- the object's
 		 * `dec %bl; jg` is a SIGNED test of `char_01`, which is what
 		 * makes that field a `signed char` here and in `infoToBits`.
 		 */
 		char_01 = (signed char)((bits[19] & 1) | (bits[20] << 1));
 		byte_118 = (unsigned char)char_01;
 
-		char_02 = 0;
+		dataBitRate = 0;
 		for (i = 25; i > 20; i--)
-			char_02 = (signed char)((char_02 << 1) |
+			dataBitRate = (signed char)((dataBitRate << 1) |
 						(bits[i] & 1));
 
 		if (char_01 <= 1)
-			word_08 = (bits[31] & 1) | (bits[32] << 1);
+			shaperSR = (bits[31] & 1) | (bits[32] << 1);
 
 		byte_04 = bits[33];
 		break;
@@ -880,7 +880,7 @@ V92CP::evaluateInfo()
 		float f;
 
 		byte_03 = bits[35];
-		word_0c = (bits[49] & 1) | (bits[50] << 1);
+		shaperId = (bits[49] & 1) | (bits[50] << 1);
 
 		word_124 = 52;
 
@@ -905,7 +905,7 @@ V92CP::evaluateInfo()
 		 * `0x1c(%edi,%esi,4)` with %esi running 0 then 1, which is a
 		 * variable index and therefore an array in the source.  The
 		 * header keeps four scalars all the same -- turning them into
-		 * `flt_14[2]` and `flt_1c[2]` would rename fifty sites across
+		 * `shaperA1[2]` and `shaperB1[2]` would rename fifty sites across
 		 * two RECORDED mutation snapshots, and no tier here can tell
 		 * the two spellings apart.  The `if (m == 0)` is the cost of
 		 * that and is the one place in this function written for the
@@ -929,9 +929,9 @@ V92CP::evaluateInfo()
 			word_124++;
 
 			if (m == 0)
-				flt_14 = f;
+				shaperA1 = f;
 			else
-				flt_18 = f;
+				shaperA2 = f;
 		}
 
 		word_124++;		/* the framing position at 85 */
@@ -948,9 +948,9 @@ V92CP::evaluateInfo()
 			word_124++;
 
 			if (m == 0)
-				flt_1c = f;
+				shaperB1 = f;
 			else
-				flt_20 = f;
+				shaperB2 = f;
 		}
 
 		word_124++;		/* the framing position at 102 */
@@ -965,25 +965,25 @@ V92CP::evaluateInfo()
 		max = 0;
 
 		for (k = 0; k <= 3; k++) {
-			word_28[k] = 0;
+			distinctIndex[k] = 0;
 			for (i = 0; i <= 3; i++) {
-				word_28[k] += bits[word_124] * binaryTable[i];
+				distinctIndex[k] += bits[word_124] * binaryTable[i];
 				word_124++;
 			}
-			if (word_28[k] > max)
-				max = word_28[k];
+			if (distinctIndex[k] > max)
+				max = distinctIndex[k];
 		}
 
 		word_124++;		/* the framing position at 119 */
 
 		for (k = 4; k <= 5; k++) {
-			word_28[k] = 0;
+			distinctIndex[k] = 0;
 			for (i = 0; i <= 3; i++) {
-				word_28[k] += bits[word_124] * binaryTable[i];
+				distinctIndex[k] += bits[word_124] * binaryTable[i];
 				word_124++;
 			}
-			if (word_28[k] > max)
-				max = word_28[k];
+			if (distinctIndex[k] > max)
+				max = distinctIndex[k];
 		}
 
 		word_10c = (unsigned short)(max + 1);
@@ -993,7 +993,7 @@ V92CP::evaluateInfo()
 
 		/*
 		 * And then seven positions are skipped, which lands the cursor
-		 * on 136 -- `word_11c`'s value at the same point in
+		 * on 136 -- `bitIndex`'s value at the same point in
 		 * `infoToBits`, and 8 * 17, the start of a group.
 		 *
 		 * THE OBJECT SPELLS THIS AS A LOOP WITH NOTHING LEFT IN IT:
@@ -1017,7 +1017,7 @@ V92CP::evaluateInfo()
 		 *
 		 * THE BOUND IS TAKEN ONCE.  The object loads `word_10c` before
 		 * the loop and keeps it in a stack slot, so a store into
-		 * `short_42[12][5]` -- which IS `word_10c`, the two being 0xca
+		 * `constellationMask[12][5]` -- which IS `word_10c`, the two being 0xca
 		 * apart -- does not change the number of groups.
 		 * `infoToBits` reads it into a local the same way.
 		 */
@@ -1028,7 +1028,7 @@ V92CP::evaluateInfo()
 				int acc = 0;
 
 				word_124++;
-				short_42[k][j] = 0;
+				constellationMask[k][j] = 0;
 
 				for (i = 0; i <= 15; i++) {
 					/*
@@ -1064,7 +1064,7 @@ V92CP::evaluateInfo()
 					word_124++;
 				}
 
-				short_42[k][j] = (short)acc;
+				constellationMask[k][j] = (short)acc;
 			}
 		}
 		break;
@@ -1079,7 +1079,7 @@ V92CP::evaluateInfo()
 				int acc = 0;
 
 				word_124++;
-				short_a2[k][j] = 0;
+				codecConstellationMask[k][j] = 0;
 
 				for (i = 0; i <= 15; i++) {
 					/* The second mask block, D920 again.  Finding F6800. */
@@ -1093,7 +1093,7 @@ V92CP::evaluateInfo()
 					word_124++;
 				}
 
-				short_a2[k][j] = (short)acc;
+				codecConstellationMask[k][j] = (short)acc;
 			}
 		}
 		break;
@@ -1172,8 +1172,8 @@ V92CP::evaluateInfo()
  * ===========================================================================
  */
 /*
- * D923 -- `bitsToInfo` stores into `bits[word_11c]` at seven sites and the
- * object guards none of them, while `word_11c` advances on every call in
+ * D923 -- `bitsToInfo` stores into `bits[bitIndex]` at seven sites and the
+ * object guards none of them, while `bitIndex` advances on every call in
  * states 2 to 10 with no upper bound anywhere.
  *
  * EFFECT: a stream staying in one collecting state past 2,000 positions writes
@@ -1204,15 +1204,15 @@ V92CP::evaluateInfo()
 #ifdef DSPLIB_REPRODUCE_BUGS
 #define V92CP_PUT_BIT(b)						\
 	do {							\
-		bits[word_11c] = (b);				\
-		word_11c++;					\
+		bits[bitIndex] = (b);				\
+		bitIndex++;					\
 	} while (0)
 #else
 #define V92CP_PUT_BIT(b)						\
 	do {							\
-		if (word_11c <= V92CP_BITS - 1) {		\
-			bits[word_11c] = (b);			\
-			word_11c++;				\
+		if (bitIndex <= V92CP_BITS - 1) {		\
+			bits[bitIndex] = (b);			\
+			bitIndex++;				\
 		} else if (DSPLIB_DEBUG_ON()) {			\
 			dsplibs_debug_printf(V92CP_NOMEM);	\
 		}						\
@@ -1239,18 +1239,18 @@ V92CP::bitsToInfo(unsigned char bit)
 
 	/*
 	 * THE RUN COUNTERS COME FIRST and are independent of the state: every
-	 * bit lengthens one run and clears the other.  `byte_11a` is read
+	 * bit lengthens one run and clears the other.  `zerosRun` is read
 	 * back out of the object rather than out of a register -- the object
 	 * stores 0 and reloads it four instructions later -- which matters
 	 * when `bitsPerSymbol` is zero, because the quantum is then zero and
 	 * the test is true on a ONE bit as well.
 	 */
 	if (bit != 0) {
-		byte_119++;
-		byte_11a = 0;
+		onesRun++;
+		zerosRun = 0;
 	} else {
-		byte_119 = 0;
-		byte_11a++;
+		onesRun = 0;
+		zerosRun++;
 	}
 
 	/*
@@ -1263,13 +1263,13 @@ V92CP::bitsToInfo(unsigned char bit)
 	 */
 	frameBits = 12u * bitsPerSymbol;
 
-	if (byte_11a == frameBits && word_11c == 18)
+	if (zerosRun == frameBits && bitIndex == 18)
 		rc = 5;
 
 	switch (rxState) {
 	case 0:
 		/* Seventeen ones is the preamble; sixteen are not enough. */
-		if (byte_119 > 16)
+		if (onesRun > 16)
 			rxState = 1;
 		break;
 
@@ -1297,10 +1297,10 @@ V92CP::bitsToInfo(unsigned char bit)
 	case 3:
 		/*
 		 * The short form: on to index 34, which is where `infoToBits`
-		 * leaves `word_11c` for the same message.
+		 * leaves `bitIndex` for the same message.
 		 */
 		V92CP_PUT_BIT(bit);
-		if (word_11c == 34) {
+		if (bitIndex == 34) {
 			evaluateInfo();
 			rxState = 9;
 			stateBitCount = 0;
@@ -1322,7 +1322,7 @@ V92CP::bitsToInfo(unsigned char bit)
 		 * been decoded by then and picks what comes next.
 		 */
 		V92CP_PUT_BIT(bit);
-		if (word_11c == 34) {
+		if (bitIndex == 34) {
 			evaluateInfo();
 			rxState = (char_01 > 1) ? 9 : 6;
 			stateBitCount = 0;
@@ -1332,10 +1332,10 @@ V92CP::bitsToInfo(unsigned char bit)
 	case 6:
 		/*
 		 * The fixed part, to index 136 -- 8 * 17, and the value
-		 * `infoToBits` sets `word_11c` to at the same point.
+		 * `infoToBits` sets `bitIndex` to at the same point.
 		 */
 		V92CP_PUT_BIT(bit);
-		if (word_11c == 136) {
+		if (bitIndex == 136) {
 			evaluateInfo();
 			rxState = 7;
 			stateBitCount = 0;
@@ -1392,7 +1392,7 @@ V92CP::bitsToInfo(unsigned char bit)
 		V92CP_PUT_BIT(bit);
 		stateBitCount++;
 		if (stateBitCount == 17) {
-			msgLen = (unsigned int)word_11c;
+			msgLen = (unsigned int)bitIndex;
 
 			if (evaluateCRC()) {
 				rxState = 10;
@@ -1417,11 +1417,11 @@ V92CP::bitsToInfo(unsigned char bit)
 		 * `bitsPerSymbol` divides by zero here exactly as it does in
 		 * `infoToBits`.  docs/deviations.md D571 records it.
 		 */
-		word_11c++;
+		bitIndex++;
 		if (bit != 0)
 			resetDetector();
 
-		if ((unsigned int)word_11c % frameBits == 0) {
+		if ((unsigned int)bitIndex % frameBits == 0) {
 			resetDetector();
 
 			if (byte_00 == 1)

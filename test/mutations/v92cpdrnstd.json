@@ -5,17 +5,17 @@
  },
  {
   "label": "the legal middle DRn=11 is treated as DRn=10",
-  "find": "\tsetDataBitRateInline(params, (int)cp->char_01, (int)cp->char_02);",
-  "replace": "\tsetDataBitRateInline(params, (int)cp->char_01,\n\t\t(int)(cp->char_02 == 11 ? 10 : cp->char_02));"
+  "find": "\tsetDataBitRateInline(params, (int)cp->char_01, (int)cp->dataBitRate);",
+  "replace": "\tsetDataBitRateInline(params, (int)cp->char_01,\n\t\t(int)(cp->dataBitRate == 11 ? 10 : cp->dataBitRate));"
  },
  {
   "label": "the legal CPu upper endpoint DRn=22 is capped at 21",
-  "find": "\tsetDataBitRateInline(params, (int)cp->char_01, (int)cp->char_02);",
-  "replace": "\tsetDataBitRateInline(params, (int)cp->char_01,\n\t\t(int)(cp->char_01 != 0 && cp->char_02 == 22 ? 21 : cp->char_02));"
+  "find": "\tsetDataBitRateInline(params, (int)cp->char_01, (int)cp->dataBitRate);",
+  "replace": "\tsetDataBitRateInline(params, (int)cp->char_01,\n\t\t(int)(cp->char_01 != 0 && cp->dataBitRate == 22 ? 21 : cp->dataBitRate));"
  },
  {
   "label": "the legal CPt upper endpoint DRn=22 is capped at 21",
-  "find": "\tsetDataBitRateInline(params, (int)cp->char_01, (int)cp->char_02);",
-  "replace": "\tsetDataBitRateInline(params, (int)cp->char_01,\n\t\t(int)(cp->char_01 == 0 && cp->char_02 == 22 ? 21 : cp->char_02));"
+  "find": "\tsetDataBitRateInline(params, (int)cp->char_01, (int)cp->dataBitRate);",
+  "replace": "\tsetDataBitRateInline(params, (int)cp->char_01,\n\t\t(int)(cp->char_01 == 0 && cp->dataBitRate == 22 ? 21 : cp->dataBitRate));"
  }
 ]

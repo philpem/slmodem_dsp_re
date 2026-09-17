@@ -354,10 +354,10 @@ setup(int trial)
 
 				switch (f) {
 				case 0:	c->flt_10 = v;	break;
-				case 1:	c->flt_14 = -v;	break;
-				case 2:	c->flt_18 = v;	break;
-				case 3:	c->flt_1c = -v;	break;
-				default: c->flt_20 = v;	break;
+				case 1:	c->shaperA1 = -v;	break;
+				case 2:	c->shaperA2 = v;	break;
+				case 3:	c->shaperB1 = -v;	break;
+				default: c->shaperB2 = v;	break;
 				}
 			}
 

@@ -537,3 +537,128 @@ substitution, and every mutation manifest differs only in decoded
 `find`/`replace` identifier values, verified by a token-level comparison of
 all non-`find`/`replace` properties and a boundary-aware inverse of the
 renamed strings.
+
+## Batch 14: V92CP field names
+
+Owner-scoped pass over `V92CP`. Thirteen members are renamed and the
+`bitsToInfo` declaration gains its parameter name. The header paragraph that
+claimed the message fields were offset-named "because nothing written
+establishes what any of them holds" was STALE and is rewritten below.
+
+### Evidence
+
+`src/pump/v90/V90MappingParamsInt.cpp`'s `setV92CPpckFromParamsInfo` (around
+line 606) copies the fields directly from author-named `V90MappingParams`
+members -- `cp->word_08 = params->shaperSR`, `cp->word_0c = params->shaperId`,
+`cp->flt_14/18/1c/20 = params->shaperA1/A2/B1/B2` -- so a destination holding a
+source's value is that source, not an adjacency guess. The same file's
+`getDataBitRate`/`setDataBitRate` pair shows `char_02` is the data bit rate
+(`setDataBitRateInline(params, (int)cp->char_01, (int)cp->char_02)`), and the
+object's own symbols `getConstellationsIndex`, `getConstellationMask` and
+`getCodecConstellationMask` fill `word_28`, `short_42` and `short_a2`
+respectively. `byte_119`/`byte_11a`/`word_11c` are the roles the siblings
+`V90CP`/`V90MP` already name `onesRun`/`zerosRun`/`bitIndex`, and `V92CP.h`
+itself said `byte_11a` is "the same shape V90CP's `zerosRun` has".
+
+| Previous name | New name | Evidence |
+| --- | --- | --- |
+| word_08 | shaperSR | `setV92CPpckFromParamsInfo`: `cp->word_08 = params->shaperSR`; `V90MappingParams::shaperSR` is author-named |
+| word_0c | shaperId | Same function: `cp->word_0c = params->shaperId` |
+| flt_14 | shaperA1 | Same function: `cp->flt_14 = params->shaperA1` |
+| flt_18 | shaperA2 | Same function: `cp->flt_18 = params->shaperA2` |
+| flt_1c | shaperB1 | Same function: `cp->flt_1c = params->shaperB1` |
+| flt_20 | shaperB2 | Same function: `cp->flt_20 = params->shaperB2` |
+| char_02 | dataBitRate | `setDataBitRateInline(params, (int)cp->char_01, (int)cp->char_02)`; `getDataBitRate` reads the same field |
+| word_28 | distinctIndex | `getConstellationsIndex(params, cp->word_28)` fills it with group numbers; `setParamsInfoFromV92CPUnPck` copies it to `params->distinctIndex` |
+| short_42 | constellationMask | `getConstellationMask(params, (int)i, cp->short_42[i])` |
+| short_a2 | codecConstellationMask | `getCodecConstellationMask(params, (int)i, cp->short_a2[i])` |
+| byte_119 | onesRun | Sibling `V90CP::onesRun`/`V90MP::onesRun`; the run of ones in `bitsToInfo` |
+| byte_11a | zerosRun | Sibling `V90CP::zerosRun`/`V90MP::zerosRun`; `V92CP.h` says "the same shape V90CP's `zerosRun` has" |
+| word_11c | bitIndex | Sibling `V90CP::bitIndex`/`V90MP::bitIndex`; the cursor `bitsToInfo` stores at and `infoToBits` writes through |
+
+`bitsToInfo(unsigned char)` becomes `bitsToInfo(unsigned char bit)`, matching
+the definition in `V92CP.cpp`.
+
+Retained neutral, with the reason each stays an offset:
+
+| Retained name | Reason |
+| --- | --- |
+| byte_00 | `bits[18]` stored whole and tested against ONE; picks short vs long form, no name stated |
+| char_01 | Signed header byte; two bits leave and `<= 1` picks the long form; no name stated |
+| byte_03 | `bits[35]` stored whole; only `infoToBits`/`evaluateInfo` touch it |
+| byte_04 | `bits[33]`; raises `word_110`; other classes write it, but its meaning is still unstated |
+| flt_10 | Sixteen magnitude entries; no consumer or string names it |
+| byte_24 | `bits[128]` and the second-mask gate; the role is bounded, the name is not |
+| word_104 | `setSUV` stores 16 before its argument and five bits go out; what the sixteen counts is unstated |
+| word_10c | Group count; unbounded (D570) and no consumer names it |
+| word_110 | Raised when `byte_04` is non-zero; what it holds is unstated |
+| byte_118 | A whole copy of `char_01` that nothing written reads |
+| word_124 | The read cursor; role bounded but no agreed name |
+| word_914 | Hold-off counter over `bitsToInfo`'s answer; usage inference only (F6606) |
+
+### Cross-owner classification and scoping
+
+Every occurrence of `word_08`/`word_0c` was classified by the owning object
+before any edit. Renamed: the `V92CP` members only -- `V92CP.h`,
+`V92CP.cpp`, `V90MappingParamsInt.cpp`'s two `setParamsInfoFrom*UnPck`
+bodies and the V.92 unit tests/manifests. NOT renamed: `V90CP`
+(`V90CP.h`/`V90CP.cpp`, tests `t_v90cpinfo`, `t_v90cpb2i`, `t_v90modprog`,
+`t_v90p4mgen`), `V90Mapper` (`V90Mapper.h`/`.cpp`, `t_v90modchain`,
+`t_v90equproc`), `V90Demapper` (`V90Demapper.h`/`.cpp`, `t_v90demap`,
+`t_v90demapctor`, `t_v90p4ddec`), and `tagV90AdditionalCPinfo`'s own
+`word_0c` (`V90Demodulator.cpp`, `V90CPpck.cpp`, `V90CPUnPck.h` comment,
+`t_v90cmask`, `t_vpcmrunpcm`, `t_v90rundemod`). `short_42`/`short_a2` are not
+declared by any other class in this tree (the `V90CPUnPck.h` mention is
+prose); `word_28` is a `V92Phase4Modulator` member and a
+`V90SpectralVerifier` member, and those occurrences are untouched.
+
+The `V92CP_OFF` field argument in `V92CP.cpp` was updated to the new name; the
+third (`tag`) argument is left offset-based, matching the existing
+`V92CP_OFF(rxState, 0x114, word114)` and
+`V92CP_OFF(stateBitCount, 0x120, word120)` precedent. Every offset is
+unchanged.
+
+### The V.90 twin collision, and the re-anchored mutations
+
+`V90CPUnPck` ALREADY uses these names, and its
+`setParamsInfoFromCPUnPck` sits in the same file as
+`setParamsInfoFromV92CPUnPck` with a line-for-line identical body over the
+scalar copies and the two mask loops. Renaming V.92's fields therefore made
+textually identical lines where the offset names had kept them apart. Twelve
+`v92mpunpck` anchors that had been unique only because they carried
+`cp->word_28`/`cp->short_42`/`cp->short_a2` became ambiguous, and three
+`v90unpck` anchors that named the V.90 twin's lines became ambiguous in the
+other direction. `anchorcheck.py` -- which `make phase` runs through the
+`refs` tier and which FAILS on any anchor matching other than exactly once --
+caught all fifteen. Each was re-anchored to a window containing a V.92-only or
+V.90-only token (the `(int)` cast on `shaperSR`, `V90_CONSTELLATIONS` vs
+`V90_CPUNPCK_CONSTELS`, `cp->byte_24` vs `cp->codecConstellationPresent`),
+with the same line mutated inside the window, so the injected fault and every
+label are byte-identical. This is the only deviation from an
+identifier-only transform of the manifests, and it is required by the
+exactly-once rule itself.
+
+### Verification
+
+A token-aware forward substitution of `HEAD` reproduces the working tree
+exactly for the thirteen changed source/test files (strings and character
+literals excluded, as the headers demand). The only file that differs is
+`V92CP.h`, and it differs only by (a) the rewritten stale paragraph and (b)
+`bitsToInfo`'s new parameter name -- both intended. Every remaining old
+identifier in changed code is either a string literal or a protected
+other-class member (`info->word_0c`, `ourInfo/theirInfo.word_0c`,
+`o->word_28`). The manifests were transformed by decoding each `find`/`replace`
+string value, substituting identifiers and re-encoding at the token boundary,
+so every `label`, `why`, `note`, `equivalent`, `fn` and blank line is
+preserved; the only values widened are the fifteen re-anchored finds above.
+`anchorcheck.py` then passed the whole register (272 suites, 10041 mutations,
+0 matching other than exactly once) and `refcheck.py` resolved all 13936
+references.
+
+Batch 14 gate result: Gentoo `make phase` exited 0, **`period differential:
+375 passed, 0 failed`** and `phase boundary: period differential and
+structural checks all OK`. All 655 `build/period/*.o` hashes are
+**byte-identical** to the pre-edit snapshot (`/home/philpem/slmodem/tmp/
+issue100-v92cp-before.sha256`, 655/655). `anchorcheck` passed the full register
+(272 suites, 10041 mutations, 0 matching other than exactly once) and
+`refcheck` resolved all 13938 references.

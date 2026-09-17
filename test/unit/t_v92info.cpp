@@ -21,7 +21,7 @@
  *
  *   - `word_10c > 6`.  It is the group count for two blocks that hold six
  *     groups each, and NOTHING bounds it -- the object trusts the field and
- *     walks past `short_a2` into `word_104` and beyond.  The grid uses 0..6,
+ *     walks past `codecConstellationMask` into `word_104` and beyond.  The grid uses 0..6,
  *     and docs/deviations.md D570 records the missing bound.
  *
  *   - a NaN or an infinity in any of the five floats.  `-mno-ieee-fp` leaves
@@ -36,13 +36,13 @@
  * an x87 register, which is not what this test is measuring.
  *
  * ---------------------------------------------------------------------------
- * THE TRIAL THAT ADJUDICATES THE `char_02` TEMPORARY.  The object takes five
+ * THE TRIAL THAT ADJUDICATES THE `dataBitRate` TEMPORARY.  The object takes five
  * bits of +0x002 into bits[21..25] and thirteen more into bits[36..48] out of
  * the SAME register, with no second load, so the thirteen are the sign
  * extension of a signed byte.  A version that re-read the field would put bits
  * 0..12 there instead.
  *
- * `char_02 = -1` CANNOT TELL THEM APART: 0xff gives thirteen ones under both
+ * `dataBitRate = -1` CANNOT TELL THEM APART: 0xff gives thirteen ones under both
  * readings.  Neither can 0.  What separates them is a value with a one below
  * bit 5 and a clear bit 7 -- `0x0f` gives thirteen zeros for the object and
  * `1,1,1,1,0,...` for a reload -- and four cases below carry one.
@@ -112,11 +112,11 @@ struct icase {
 	const char *name;
 	unsigned char byte_00;
 	signed char char_01;
-	signed char char_02;
+	signed char dataBitRate;
 	unsigned char byte_03;
 	unsigned char byte_04;
-	unsigned int word_08;
-	unsigned int word_0c;
+	unsigned int shaperSR;
+	unsigned int shaperId;
 	float f10, f14, f18, f1c, f20;
 	unsigned char byte_24;
 	unsigned short word_10c;
@@ -284,16 +284,16 @@ setup(int c, unsigned int seed)
 
 	o->byte_00 = k->byte_00;
 	o->char_01 = k->char_01;
-	o->char_02 = k->char_02;
+	o->dataBitRate = k->dataBitRate;
 	o->byte_03 = k->byte_03;
 	o->byte_04 = k->byte_04;
-	o->word_08 = k->word_08;
-	o->word_0c = k->word_0c;
+	o->shaperSR = k->shaperSR;
+	o->shaperId = k->shaperId;
 	o->flt_10 = k->f10;
-	o->flt_14 = k->f14;
-	o->flt_18 = k->f18;
-	o->flt_1c = k->f1c;
-	o->flt_20 = k->f20;
+	o->shaperA1 = k->f14;
+	o->shaperA2 = k->f18;
+	o->shaperB1 = k->f1c;
+	o->shaperB2 = k->f20;
 	o->byte_24 = k->byte_24;
 	o->word_104 = k->word_104;
 	o->suv = k->suv;
@@ -303,13 +303,13 @@ setup(int c, unsigned int seed)
 	for (i = 0; i < V92CP_GROUPS; i++) {
 		switch (k->fill) {
 		case FILL_ZEROS:
-			o->word_28[i] = 0;
+			o->distinctIndex[i] = 0;
 			break;
 		case FILL_PATTERN:
-			o->word_28[i] = (int)(0x11111111u * (i + 1u));
+			o->distinctIndex[i] = (int)(0x11111111u * (i + 1u));
 			break;
 		default:
-			o->word_28[i] = (int)((unsigned int)nextbyte() << 24 |
+			o->distinctIndex[i] = (int)((unsigned int)nextbyte() << 24 |
 					      (unsigned int)nextbyte() << 16 |
 					      (unsigned int)nextbyte() << 8 |
 					      (unsigned int)nextbyte());
@@ -335,8 +335,8 @@ setup(int c, unsigned int seed)
 					    (int)nextbyte());
 				break;
 			}
-			o->short_42[i][j] = a;
-			o->short_a2[i][j] = b;
+			o->constellationMask[i][j] = a;
+			o->codecConstellationMask[i][j] = b;
 		}
 	}
 
@@ -413,8 +413,8 @@ run_cases(void)
 			    (long)C(1)->msgLen, (long)c);
 		diff_eq_int("vectorLen agrees (%ld)", (long)C(0)->vectorLen,
 			    (long)C(1)->vectorLen, (long)c);
-		diff_eq_int("word_11c agrees (%ld)", (long)C(0)->word_11c,
-			    (long)C(1)->word_11c, (long)c);
+		diff_eq_int("word_11c agrees (%ld)", (long)C(0)->bitIndex,
+			    (long)C(1)->bitIndex, (long)c);
 
 		/*
 		 * ANTI-VACUITY, and the reason the grid is bounded the way it
@@ -437,7 +437,7 @@ run_cases(void)
 				   (12u * cases[c].bitsPerSymbol)), 0, (long)c);
 		diff_eq_int("and strictly above the cursor (%ld)",
 			    (long)(C(1)->vectorLen >
-				   (unsigned int)C(1)->word_11c), 1, (long)c);
+				   (unsigned int)C(1)->bitIndex), 1, (long)c);
 	}
 
 	return diff_end();
@@ -464,11 +464,11 @@ run_sweep(void)
 		o = C(0);
 		o->byte_00 = (unsigned char)(nextbyte() & 3u);
 		o->char_01 = (signed char)nextbyte();
-		o->char_02 = (signed char)nextbyte();
+		o->dataBitRate = (signed char)nextbyte();
 		o->byte_03 = nextbyte();
 		o->byte_04 = (unsigned char)(nextbyte() & 1u);
-		o->word_08 = (unsigned int)nextbyte();
-		o->word_0c = (unsigned int)nextbyte();
+		o->shaperSR = (unsigned int)nextbyte();
+		o->shaperId = (unsigned int)nextbyte();
 		o->byte_24 = (unsigned char)(nextbyte() & 1u);
 		o->word_10c = (unsigned short)(nextbyte() % 7u);
 		o->bitsPerSymbol = (unsigned char)(nextbyte() % 6u + 1u);
@@ -490,10 +490,10 @@ run_sweep(void)
 
 			switch (i) {
 			case 0:	o->flt_10 = v;	break;
-			case 1:	o->flt_14 = v;	break;
-			case 2:	o->flt_18 = v;	break;
-			case 3:	o->flt_1c = v;	break;
-			default: o->flt_20 = v;	break;
+			case 1:	o->shaperA1 = v;	break;
+			case 2:	o->shaperA2 = v;	break;
+			case 3:	o->shaperB1 = v;	break;
+			default: o->shaperB2 = v;	break;
 			}
 		}
 
@@ -578,15 +578,15 @@ main(void)
 	diff_eq_int("sizeof(V92CP) is %ld", (long)sizeof(V92CP), 0x918, 0x918);
 	diff_eq_int("byte_00 is at +0x%lx", (long)offsetof(V92CP, byte_00), 0,
 		    0);
-	diff_eq_int("word_08 is at +0x%lx", (long)offsetof(V92CP, word_08),
+	diff_eq_int("word_08 is at +0x%lx", (long)offsetof(V92CP, shaperSR),
 		    0x08, 0x08);
 	diff_eq_int("flt_10 is at +0x%lx", (long)offsetof(V92CP, flt_10),
 		    0x10, 0x10);
-	diff_eq_int("word_28 is at +0x%lx", (long)offsetof(V92CP, word_28),
+	diff_eq_int("word_28 is at +0x%lx", (long)offsetof(V92CP, distinctIndex),
 		    0x28, 0x28);
-	diff_eq_int("short_42 is at +0x%lx", (long)offsetof(V92CP, short_42),
+	diff_eq_int("short_42 is at +0x%lx", (long)offsetof(V92CP, constellationMask),
 		    0x42, 0x42);
-	diff_eq_int("short_a2 is at +0x%lx", (long)offsetof(V92CP, short_a2),
+	diff_eq_int("short_a2 is at +0x%lx", (long)offsetof(V92CP, codecConstellationMask),
 		    0xa2, 0xa2);
 	diff_eq_int("word_10c is at +0x%lx", (long)offsetof(V92CP, word_10c),
 		    0x10c, 0x10c);

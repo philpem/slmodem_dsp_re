@@ -9,14 +9,14 @@
  },
  {
   "label": "sensitivity to the reproduced departure: encode a1 as signed Q1.6 two's complement",
-  "find": "\t\t\tbits[76] = (unsigned char)(flt_14 < 0);\n\t\t\tx = (float)fabs(flt_14);\n\t\t\tp = &bits[75];\n\t\t\tfor (j = 0; j <= 6; j++) {\n\t\t\t\tif (fltTable_1[j] > x) {\n\t\t\t\t\t*p = 0;\n\t\t\t\t} else {\n\t\t\t\t\t*p = 1;\n\t\t\t\t\tx -= fltTable_1[j];\n\t\t\t\t}\n\t\t\t\tp--;\n\t\t\t}",
-  "replace": "\t\t\t{\n\t\t\t\tsigned char q = (signed char)(flt_14 * 64.0f);\n\n\t\t\t\tfor (j = 0; j <= 7; j++) {\n\t\t\t\t\tbits[69 + j] = (unsigned char)(q & 1);\n\t\t\t\t\tq = (signed char)(q >> 1);\n\t\t\t\t}\n\t\t\t}",
+  "find": "\t\t\tbits[76] = (unsigned char)(shaperA1 < 0);\n\t\t\tx = (float)fabs(shaperA1);\n\t\t\tp = &bits[75];\n\t\t\tfor (j = 0; j <= 6; j++) {\n\t\t\t\tif (fltTable_1[j] > x) {\n\t\t\t\t\t*p = 0;\n\t\t\t\t} else {\n\t\t\t\t\t*p = 1;\n\t\t\t\t\tx -= fltTable_1[j];\n\t\t\t\t}\n\t\t\t\tp--;\n\t\t\t}",
+  "replace": "\t\t\t{\n\t\t\t\tsigned char q = (signed char)(shaperA1 * 64.0f);\n\n\t\t\t\tfor (j = 0; j <= 7; j++) {\n\t\t\t\t\tbits[69 + j] = (unsigned char)(q & 1);\n\t\t\t\t\tq = (signed char)(q >> 1);\n\t\t\t\t}\n\t\t\t}",
   "fn": "infoToBits"
  },
  {
   "label": "sensitivity to the reproduced departure: decode a1 as signed Q1.6 two's complement",
-  "find": "\t\t\tif (m == 0)\n\t\t\t\tflt_14 = f;\n\t\t\telse\n\t\t\t\tflt_18 = f;",
-  "replace": "\t\t\tif (m == 0) {\n\t\t\t\tint q = 0;\n\n\t\t\t\tfor (j = 0; j <= 7; j++)\n\t\t\t\t\tq |= (bits[69 + j] & 1) << j;\n\t\t\t\tflt_14 = (float)(signed char)q / 64.0f;\n\t\t\t} else {\n\t\t\t\tflt_18 = f;\n\t\t\t}",
+  "find": "\t\t\tif (m == 0)\n\t\t\t\tshaperA1 = f;\n\t\t\telse\n\t\t\t\tshaperA2 = f;",
+  "replace": "\t\t\tif (m == 0) {\n\t\t\t\tint q = 0;\n\n\t\t\t\tfor (j = 0; j <= 7; j++)\n\t\t\t\t\tq |= (bits[69 + j] & 1) << j;\n\t\t\t\tshaperA1 = (float)(signed char)q / 64.0f;\n\t\t\t} else {\n\t\t\t\tshaperA2 = f;\n\t\t\t}",
   "fn": "evaluateInfo"
  },
  {
@@ -111,8 +111,8 @@
  },
  {
   "label": "the V.92 padding does not advance past an exact frame boundary",
-  "find": "\tvectorLen = ((unsigned int)word_11c / quantum + 1) * quantum;",
-  "replace": "\tvectorLen = ((unsigned int)word_11c / quantum) * quantum;",
+  "find": "\tvectorLen = ((unsigned int)bitIndex / quantum + 1) * quantum;",
+  "replace": "\tvectorLen = ((unsigned int)bitIndex / quantum) * quantum;",
   "fn": "infoToBits"
  }
 ]

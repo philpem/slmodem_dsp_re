@@ -52,13 +52,13 @@
  *                             case and checked in both directions, so this
  *                             cannot rot into a vacuous run.
  *
- *   word_28 is NOT the        the block each constellation is unpacked from is
- *   identity                  `cp->short_42[cp->word_28[i]]`, and with an
+ *   distinctIndex is NOT the        the block each constellation is unpacked from is
+ *   identity                  `cp->constellationMask[cp->distinctIndex[i]]`, and with an
  *                             identity permutation a body that used `i`
  *                             directly would agree on every trial.  That is
  *                             7458's shape.  Repeats are in there too, because
  *                             two constellations sharing one mask block is
- *                             what the field is FOR -- `word_28` holds
+ *                             what the field is FOR -- `distinctIndex` holds
  *                             `getConstellationsIndex`'s GROUP numbers on the
  *                             way out, and groups repeat by construction.
  *
@@ -86,10 +86,10 @@
  *                             table keeps entries past it.  With equal
  *                             populations that is unobservable.
  *
- *   both arms of the rate,    `word_0` is `cp->char_02` plus 0x14 or plus 8,
+ *   both arms of the rate,    `word_0` is `cp->dataBitRate` plus 0x14 or plus 8,
  *   and a rate that wraps     chosen on `cp->char_01`.  The two constants
  *                             differ by 12, so the rate has to be compared and
- *                             not just present; `char_02` is a SIGNED byte and
+ *                             not just present; `dataBitRate` is a SIGNED byte and
  *                             -128 is carried, so the sum going negative and
  *                             the store into an `unsigned int word_0` wrapping
  *                             is exercised rather than assumed.  `char_01` is
@@ -114,7 +114,7 @@
  * the `<` is therefore equivalent and a mutation of the `6` downwards is not;
  * both are recorded in test/mutations/v92mpunpck.json.
  *
- * AND `word_28` IS KEPT INSIDE 0..5, which is the fixture's choice and not the
+ * AND `distinctIndex` IS KEPT INSIDE 0..5, which is the fixture's choice and not the
  * object's.  The field is an `int[6]` that the object neither masks nor
  * bounds, and it scales the mask base by sixteen -- so a 6, or a negative
  * value, reads outside the two mask blocks.  The blob would do that too, but
@@ -261,9 +261,9 @@ struct tcase {
 	const char *name;
 	int maskMode;
 	int codecMaskMode;
-	int group[V92CP_GROUPS];	/* what goes into cp.word_28  */
+	int group[V92CP_GROUPS];	/* what goes into cp.distinctIndex  */
 	signed char islong;		/* cp.char_01                 */
-	signed char rate;		/* cp.char_02                 */
+	signed char rate;		/* cp.dataBitRate                 */
 	/*
 	 * WHETHER THE TWO MASK BLOCKS DIFFER, DECLARED AND THEN CHECKED.
 	 * The gate only means anything where they do, so a case that quietly
@@ -302,7 +302,7 @@ static const struct tcase cases[] = {
  { "both full",			 MM_ONES,     MM_ONES,
 				 {2, 4, 0, 5, 1, 3},  1,   0x40,	0 },
  /*
-  * `char_02` is a SIGNED byte and the sum lands in an `unsigned int`, so -128
+  * `dataBitRate` is a SIGNED byte and the sum lands in an `unsigned int`, so -128
   * plus 8 is 0xffffff88 and -128 plus 0x14 is 0xffffff94.  Both arms carry it.
   */
  { "rate is -128, long arm",	 MM_RANDOM,   MM_HEAVY,
@@ -350,15 +350,15 @@ seed_all(unsigned int s, const struct tcase *t, unsigned char gate, int fm)
 	lfsr = 0x3c19u + 0x4e6du * s;
 	fill(&cp, sizeof(cp));
 
-	build_masks(cp.short_42, t->maskMode, s);
-	build_masks(cp.short_a2, t->codecMaskMode, s + 1u);
+	build_masks(cp.constellationMask, t->maskMode, s);
+	build_masks(cp.codecConstellationMask, t->codecMaskMode, s + 1u);
 
 	for (i = 0; i < V92CP_GROUPS; i++)
-		cp.word_28[i] = t->group[i];
+		cp.distinctIndex[i] = t->group[i];
 
 	cp.byte_24 = gate;
 	cp.char_01 = t->islong;
-	cp.char_02 = t->rate;
+	cp.dataBitRate = t->rate;
 }
 
 static void
@@ -404,42 +404,42 @@ run_map(void)
 	diff_eq_int("CP: char_01 is at +0x%lx",
 		    (long)__builtin_offsetof(V92CP, char_01), 0x01, 0x01);
 	diff_eq_int("CP: char_02 is at +0x%lx",
-		    (long)__builtin_offsetof(V92CP, char_02), 0x02, 0x02);
+		    (long)__builtin_offsetof(V92CP, dataBitRate), 0x02, 0x02);
 	diff_eq_int("CP: word_08 is at +0x%lx",
-		    (long)__builtin_offsetof(V92CP, word_08), 0x08, 0x08);
+		    (long)__builtin_offsetof(V92CP, shaperSR), 0x08, 0x08);
 	diff_eq_int("CP: word_0c is at +0x%lx",
-		    (long)__builtin_offsetof(V92CP, word_0c), 0x0c, 0x0c);
+		    (long)__builtin_offsetof(V92CP, shaperId), 0x0c, 0x0c);
 	diff_eq_int("CP: flt_14 is at +0x%lx",
-		    (long)__builtin_offsetof(V92CP, flt_14), 0x14, 0x14);
+		    (long)__builtin_offsetof(V92CP, shaperA1), 0x14, 0x14);
 	diff_eq_int("CP: flt_18 is at +0x%lx",
-		    (long)__builtin_offsetof(V92CP, flt_18), 0x18, 0x18);
+		    (long)__builtin_offsetof(V92CP, shaperA2), 0x18, 0x18);
 	diff_eq_int("CP: flt_1c is at +0x%lx",
-		    (long)__builtin_offsetof(V92CP, flt_1c), 0x1c, 0x1c);
+		    (long)__builtin_offsetof(V92CP, shaperB1), 0x1c, 0x1c);
 	diff_eq_int("CP: flt_20 is at +0x%lx",
-		    (long)__builtin_offsetof(V92CP, flt_20), 0x20, 0x20);
+		    (long)__builtin_offsetof(V92CP, shaperB2), 0x20, 0x20);
 	diff_eq_int("CP: byte_24 is at +0x%lx",
 		    (long)__builtin_offsetof(V92CP, byte_24), 0x24, 0x24);
 	diff_eq_int("CP: word_28 is at +0x%lx",
-		    (long)__builtin_offsetof(V92CP, word_28), 0x28, 0x28);
+		    (long)__builtin_offsetof(V92CP, distinctIndex), 0x28, 0x28);
 	diff_eq_int("CP: short_42 is at +0x%lx",
-		    (long)__builtin_offsetof(V92CP, short_42), 0x42, 0x42);
+		    (long)__builtin_offsetof(V92CP, constellationMask), 0x42, 0x42);
 	diff_eq_int("CP: short_a2 is at +0x%lx",
-		    (long)__builtin_offsetof(V92CP, short_a2), 0xa2, 0xa2);
+		    (long)__builtin_offsetof(V92CP, codecConstellationMask), 0xa2, 0xa2);
 
 	/*
 	 * THE TWO MASK BLOCKS ABUT, which is the structural difference from
 	 * the V.90 message (0x9c - 0x3a = 0x62, two bytes nothing reads).
 	 * 0xa2 - 0x42 = 0x60 = 6 * 16, and the row stride is sixteen bytes
-	 * because the object scales `word_28[i]` by `shl $0x4`.
+	 * because the object scales `distinctIndex[i]` by `shl $0x4`.
 	 */
 	diff_eq_int("CP: the two mask blocks abut, 0x%lx apart",
-		    (long)(__builtin_offsetof(V92CP, short_a2)
-			   - __builtin_offsetof(V92CP, short_42)),
+		    (long)(__builtin_offsetof(V92CP, codecConstellationMask)
+			   - __builtin_offsetof(V92CP, constellationMask)),
 		    0x60, 0x60);
 	diff_eq_int("CP: one mask row is %ld bytes",
-		    (long)sizeof(cp.short_42[0]), 16, 16);
+		    (long)sizeof(cp.constellationMask[0]), 16, 16);
 	diff_eq_int("CP: word_28's stride is %ld",
-		    (long)sizeof(cp.word_28[0]), 4, 4);
+		    (long)sizeof(cp.distinctIndex[0]), 4, 4);
 
 	return diff_end();
 }
@@ -494,8 +494,8 @@ run_trials(void)
 				 */
 				diff_eq_int("the two mask blocks differ as the"
 					    " case says (%ld)",
-					    memcmp(cp.short_42, cp.short_a2,
-						   sizeof(cp.short_42)) != 0,
+					    memcmp(cp.constellationMask, cp.codecConstellationMask,
+						   sizeof(cp.constellationMask)) != 0,
 					    cases[c].arraysDiffer, tag);
 
 				setParamsInfoFromV92CPUnPck(&ours.p, &cp);
@@ -537,14 +537,14 @@ run_trials(void)
 				 */
 				diff_eq_int("shaperSR (case %ld)",
 					    (long)ours.p.shaperSR,
-					    (long)(int)cp.word_08, tag);
+					    (long)(int)cp.shaperSR, tag);
 				diff_eq_int("shaperId (case %ld)",
 					    (long)ours.p.shaperId,
-					    (long)cp.word_0c, tag);
+					    (long)cp.shaperId, tag);
 				diff_eq_obj_(__FILE__, __LINE__,
 					     cases[c].name,
 					     "the four shaper floats, as bits",
-					     &ours.p.shaperA1, &cp.flt_14,
+					     &ours.p.shaperA1, &cp.shaperA1,
 					     4 * sizeof(float), tag);
 
 				for (i = 0; i < V92CP_GROUPS; i++) {
@@ -566,9 +566,9 @@ run_trials(void)
 					 * back from either side.
 					 */
 					wantN = (gate != 0)
-					    ? popcount_masks(cp.short_a2,
+					    ? popcount_masks(cp.codecConstellationMask,
 							     (int)b)
-					    : popcount_masks(cp.short_42,
+					    : popcount_masks(cp.constellationMask,
 							     (int)b);
 					diff_eq_int("constellationSize[%ld]",
 						    (long)ours.p.constellationSize[i],
@@ -579,7 +579,7 @@ run_trials(void)
 					if (wantN == 128)
 						sawFull = 1;
 					if (gate != 0
-					    && popcount_masks(cp.short_42,
+					    && popcount_masks(cp.constellationMask,
 							      (int)b) != wantN)
 						sawWeightSplit = 1;
 				}
@@ -658,7 +658,7 @@ run_table23_subject(const struct table23_subject *subject)
 
 		seed_all(seed, &cases[0], 0, FM_VARIED);
 		cp.char_01 = (signed char)subject->type;
-		cp.char_02 = (signed char)drn;
+		cp.dataBitRate = (signed char)drn;
 		memcpy(table23_cp_before, &cp, sizeof cp);
 
 		if (subject->side == 0) {

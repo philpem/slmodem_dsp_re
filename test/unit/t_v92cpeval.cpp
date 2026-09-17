@@ -35,7 +35,7 @@
  *               that separates `bits[p] * binaryTable[w]` from
  *               `(bits[p] & 1) * binaryTable[w]`.
  *
- *   char_01     `case 5` skips `word_08` when `char_01 > 1`, and the field it
+ *   char_01     `case 5` skips `shaperSR` when `char_01 > 1`, and the field it
  *               tests is one it decoded four instructions earlier.  Fill 5
  *               puts 9 there and fills 0..4 put 0, 1, 1, 1 and -1, so both
  *               sides of that branch are driven.
@@ -51,14 +51,14 @@
  *               position of cursor movement.  Two cases carry it.
  *
  *   aliasing    `word_10c` is unbounded (docs/deviations.md D570) and the
- *               destination walks out of `short_42` the moment it passes six.
+ *               destination walks out of `constellationMask` the moment it passes six.
  *               THE TWO ARMS HAVE DIFFERENT CEILINGS, because their
- *               destinations start 0x60 apart.  `short_42[k][j]` is at
- *               0x42 + 16k + 2j and `short_a2[k][j]` at 0xa2 + 16k + 2j, and
+ *               destinations start 0x60 apart.  `constellationMask[k][j]` is at
+ *               0x42 + 16k + 2j and `codecConstellationMask[k][j]` at 0xa2 + 16k + 2j, and
  *               what each reaches first is:
  *
- *                 case 7, word_10c   7..12  short_a2, and at [12][5] `word_10c`
- *                                    13     `rxState`, `word_11c`, `stateBitCount`
+ *                 case 7, word_10c   7..12  codecConstellationMask, and at [12][5] `word_10c`
+ *                                    13     `rxState`, `bitIndex`, `stateBitCount`
  *                                    14     the top half of `stateBitCount`
  *                                    15     `word_124` -- THE CURSOR
  *
@@ -309,8 +309,8 @@ run_reach(void)
 			if (o->word_10c !=
 			    ((const V92CP *)before)->word_10c)
 				w10c_changed++;
-			if (memcmp(before + offsetof(V92CP, short_42),
-				   cp[1] + offsetof(V92CP, short_42),
+			if (memcmp(before + offsetof(V92CP, constellationMask),
+				   cp[1] + offsetof(V92CP, constellationMask),
 				   2u * 6u * 8u) != 0)
 				mask_written++;
 		}

@@ -5,18 +5,18 @@
  },
  {
   "label": "the preamble leaves on sixteen ones",
-  "find": "\t\tif (byte_119 > 16)",
-  "replace": "\t\tif (byte_119 >= 16)"
+  "find": "\t\tif (onesRun > 16)",
+  "replace": "\t\tif (onesRun >= 16)"
  },
  {
   "label": "the run counters are the other way round",
-  "find": "\tif (bit != 0) {\n\t\tbyte_119++;\n\t\tbyte_11a = 0;\n\t} else {\n\t\tbyte_119 = 0;\n\t\tbyte_11a++;\n\t}",
-  "replace": "\tif (bit != 0) {\n\t\tbyte_11a++;\n\t\tbyte_119 = 0;\n\t} else {\n\t\tbyte_11a = 0;\n\t\tbyte_119++;\n\t}"
+  "find": "\tif (bit != 0) {\n\t\tonesRun++;\n\t\tzerosRun = 0;\n\t} else {\n\t\tonesRun = 0;\n\t\tzerosRun++;\n\t}",
+  "replace": "\tif (bit != 0) {\n\t\tzerosRun++;\n\t\tonesRun = 0;\n\t} else {\n\t\tzerosRun = 0;\n\t\tonesRun++;\n\t}"
  },
  {
   "label": "a ONE does not clear the run of zeros",
-  "find": "\t\tbyte_119++;\n\t\tbyte_11a = 0;",
-  "replace": "\t\tbyte_119++;"
+  "find": "\t\tonesRun++;\n\t\tzerosRun = 0;",
+  "replace": "\t\tonesRun++;"
  },
  {
   "label": "the quantum ignores the symbol size",
@@ -25,23 +25,23 @@
  },
  {
   "label": "the far-end test is a threshold rather than an equality",
-  "find": "\tif (byte_11a == frameBits && word_11c == 18)",
-  "replace": "\tif (byte_11a >= frameBits && word_11c == 18)"
+  "find": "\tif (zerosRun == frameBits && bitIndex == 18)",
+  "replace": "\tif (zerosRun >= frameBits && bitIndex == 18)"
  },
  {
   "label": "the far-end test does not require the cursor at home",
-  "find": "\tif (byte_11a == frameBits && word_11c == 18)\n\t\trc = 5;",
-  "replace": "\tif (byte_11a == frameBits)\n\t\trc = 5;"
+  "find": "\tif (zerosRun == frameBits && bitIndex == 18)\n\t\trc = 5;",
+  "replace": "\tif (zerosRun == frameBits)\n\t\trc = 5;"
  },
  {
   "label": "the far-end test uses the cursor's seed minus one",
-  "find": "\tif (byte_11a == frameBits && word_11c == 18)\n",
-  "replace": "\tif (byte_11a == frameBits && word_11c == 17)\n"
+  "find": "\tif (zerosRun == frameBits && bitIndex == 18)\n",
+  "replace": "\tif (zerosRun == frameBits && bitIndex == 17)\n"
  },
  {
   "label": "state 0 goes straight to the type bit",
-  "find": "\t\tif (byte_119 > 16)\n\t\t\trxState = 1;",
-  "replace": "\t\tif (byte_119 > 16)\n\t\t\trxState = 2;"
+  "find": "\t\tif (onesRun > 16)\n\t\t\trxState = 1;",
+  "replace": "\t\tif (onesRun > 16)\n\t\t\trxState = 2;"
  },
  {
   "label": "state 1 takes a ONE as the framing bit",
@@ -65,13 +65,13 @@
  },
  {
   "label": "state 3 ends one position early",
-  "find": "\t\tif (word_11c == 34) {\n\t\t\tevaluateInfo();\n\t\t\trxState = 9;",
-  "replace": "\t\tif (word_11c == 33) {\n\t\t\tevaluateInfo();\n\t\t\trxState = 9;"
+  "find": "\t\tif (bitIndex == 34) {\n\t\t\tevaluateInfo();\n\t\t\trxState = 9;",
+  "replace": "\t\tif (bitIndex == 33) {\n\t\t\tevaluateInfo();\n\t\t\trxState = 9;"
  },
  {
   "label": "state 3 does not decode before moving on",
-  "find": "\t\tif (word_11c == 34) {\n\t\t\tevaluateInfo();\n\t\t\trxState = 9;\n\t\t\tstateBitCount = 0;\n\t\t}",
-  "replace": "\t\tif (word_11c == 34) {\n\t\t\trxState = 9;\n\t\t\tstateBitCount = 0;\n\t\t}"
+  "find": "\t\tif (bitIndex == 34) {\n\t\t\tevaluateInfo();\n\t\t\trxState = 9;\n\t\t\tstateBitCount = 0;\n\t\t}",
+  "replace": "\t\tif (bitIndex == 34) {\n\t\t\trxState = 9;\n\t\t\tstateBitCount = 0;\n\t\t}"
  },
  {
   "label": "state 5 chooses the long and short bodies the other way round",
@@ -85,13 +85,13 @@
  },
  {
   "label": "state 5 ends one position late",
-  "find": "\t\tif (word_11c == 34) {\n\t\t\tevaluateInfo();\n\t\t\trxState = (char_01 > 1) ? 9 : 6;",
-  "replace": "\t\tif (word_11c == 35) {\n\t\t\tevaluateInfo();\n\t\t\trxState = (char_01 > 1) ? 9 : 6;"
+  "find": "\t\tif (bitIndex == 34) {\n\t\t\tevaluateInfo();\n\t\t\trxState = (char_01 > 1) ? 9 : 6;",
+  "replace": "\t\tif (bitIndex == 35) {\n\t\t\tevaluateInfo();\n\t\t\trxState = (char_01 > 1) ? 9 : 6;"
  },
  {
   "label": "state 6 ends at the group boundary above 136",
-  "find": "\t\tif (word_11c == 136) {",
-  "replace": "\t\tif (word_11c == 153) {"
+  "find": "\t\tif (bitIndex == 136) {",
+  "replace": "\t\tif (bitIndex == 153) {"
  },
  {
   "label": "gamma counts mask words rather than positions",
@@ -140,7 +140,7 @@
  {
   "label": "state 7 counts positions against the cursor rather than the count",
   "find": "\t\tstateBitCount++;\n\t\tif ((unsigned int)stateBitCount == gamma) {",
-  "replace": "\t\tif ((unsigned int)word_11c == gamma) {"
+  "replace": "\t\tif ((unsigned int)bitIndex == gamma) {"
  },
  {
   "label": "the closing frame is sixteen positions",
@@ -149,13 +149,13 @@
  },
  {
   "label": "msgLen is one short of the cursor",
-  "find": "\t\t\tmsgLen = (unsigned int)word_11c;",
-  "replace": "\t\t\tmsgLen = (unsigned int)word_11c - 1u;"
+  "find": "\t\t\tmsgLen = (unsigned int)bitIndex;",
+  "replace": "\t\t\tmsgLen = (unsigned int)bitIndex - 1u;"
  },
  {
   "label": "the closing frame is eighteen positions",
-  "find": "\t\tif (stateBitCount == 17) {\n\t\t\tmsgLen = (unsigned int)word_11c;",
-  "replace": "\t\tif (stateBitCount == 18) {\n\t\t\tmsgLen = (unsigned int)word_11c;"
+  "find": "\t\tif (stateBitCount == 17) {\n\t\t\tmsgLen = (unsigned int)bitIndex;",
+  "replace": "\t\tif (stateBitCount == 18) {\n\t\t\tmsgLen = (unsigned int)bitIndex;"
  },
  {
   "label": "the CRC verdict is inverted",
@@ -179,13 +179,13 @@
  },
  {
   "label": "state 10 does not advance the cursor",
-  "find": "\t\tword_11c++;\n\t\tif (bit != 0)\n\t\t\tresetDetector();",
+  "find": "\t\tbitIndex++;\n\t\tif (bit != 0)\n\t\t\tresetDetector();",
   "replace": "\t\tif (bit != 0)\n\t\t\tresetDetector();"
  },
  {
   "label": "state 10 lands on the symbol rather than the frame",
-  "find": "\t\tif ((unsigned int)word_11c % frameBits == 0) {",
-  "replace": "\t\tif ((unsigned int)word_11c % (frameBits / 12u) == 0) {"
+  "find": "\t\tif ((unsigned int)bitIndex % frameBits == 0) {",
+  "replace": "\t\tif ((unsigned int)bitIndex % (frameBits / 12u) == 0) {"
  },
  {
   "label": "state 10 does not restart the detector before reporting",

@@ -577,10 +577,10 @@ setParamsInfoFromCPUnPck(V90MappingParams *params, V90CPUnPck *cp)
  * functions inlined by the compiler rather than open-coded by the author:
  *
  *   1. `getConstellationsIndex` over the six constellations, writing the
- *      group numbers into `cp->word_28` and the count into `cp->word_10c`.
+ *      group numbers into `cp->distinctIndex` and the count into `cp->word_10c`.
  *   2. eight scalars out of the two sources into the message block.
- *   3. `getConstellationMask` for each group, into `cp->short_42[i]`, and
- *      `getCodecConstellationMask` the same way into `cp->short_a2[i]` when
+ *   3. `getConstellationMask` for each group, into `cp->constellationMask[i]`, and
+ *      `getCodecConstellationMask` the same way into `cp->codecConstellationMask[i]` when
  *      `cp->byte_24` is non-zero -- which is the gate `V92CP::infoToBits`
  *      applies to the same block on the way out.
  *   4. one derived byte: `params->word_0` less 0x14 or 8 according to
@@ -609,7 +609,7 @@ setV92CPpckFromParamsInfo(V90MappingParams *params,
 	unsigned int i;
 
 	cp->word_10c = (unsigned short)getConstellationsIndex(params,
-							      cp->word_28);
+							      cp->distinctIndex);
 
 	/*
 	 * The eight scalars.  Five come from the record and three of those
@@ -629,21 +629,21 @@ setV92CPpckFromParamsInfo(V90MappingParams *params,
 	cp->flt_10 = info->float_08;
 	cp->suv = info->word_10;
 
-	cp->word_08 = (unsigned int)params->shaperSR;
-	cp->word_0c = params->shaperId;
-	cp->flt_14 = params->shaperA1;
-	cp->flt_18 = params->shaperA2;
-	cp->flt_1c = params->shaperB1;
-	cp->flt_20 = params->shaperB2;
+	cp->shaperSR = (unsigned int)params->shaperSR;
+	cp->shaperId = params->shaperId;
+	cp->shaperA1 = params->shaperA1;
+	cp->shaperA2 = params->shaperA2;
+	cp->shaperB1 = params->shaperB1;
+	cp->shaperB2 = params->shaperB2;
 	cp->byte_24 = (unsigned char)params->word_61c;
 
 	for (i = 0; i < cp->word_10c; i++)
-		getConstellationMask(params, (int)i, cp->short_42[i]);
+		getConstellationMask(params, (int)i, cp->constellationMask[i]);
 
 	if (cp->byte_24 != 0)
 		for (i = 0; i < cp->word_10c; i++)
 			getCodecConstellationMask(params, (int)i,
-						  cp->short_a2[i]);
+						  cp->codecConstellationMask[i]);
 
 	/*
 	 * The closing byte, and the two constants are 0x14 and 8 rather than
@@ -651,9 +651,9 @@ setV92CPpckFromParamsInfo(V90MappingParams *params,
 	 * its own subtract, its own store and its own epilogue.
 	 */
 	if (cp->char_01 != 0)
-		cp->char_02 = (signed char)(params->word_0 - 0x14);
+		cp->dataBitRate = (signed char)(params->word_0 - 0x14);
 	else
-		cp->char_02 = (signed char)(params->word_0 - 8);
+		cp->dataBitRate = (signed char)(params->word_0 - 8);
 }
 
 /*
@@ -686,17 +686,17 @@ setV92CPpckFromParamsInfo(V90MappingParams *params,
  * the width the object reads it:
  *
  *	+0x01	`char_01`	`cmpb $0x0,0x1(%esi)`, the rate gate
- *	+0x02	`char_02`	`movsbl 0x2(%esi),%eax`, SIGNED
- *	+0x08	`word_08`	`mov 0x8(%edx),%ebx`   -> `shaperSR`
- *	+0x0c	`word_0c`	                       -> `shaperId`
- *	+0x14	`flt_14`	                       -> `shaperA1`
- *	+0x18	`flt_18`	                       -> `shaperA2`
- *	+0x1c	`flt_1c`	                       -> `shaperB1`
- *	+0x20	`flt_20`	                       -> `shaperB2`
+ *	+0x02	`dataBitRate`	`movsbl 0x2(%esi),%eax`, SIGNED
+ *	+0x08	`shaperSR`	`mov 0x8(%edx),%ebx`   -> `shaperSR`
+ *	+0x0c	`shaperId`	                       -> `shaperId`
+ *	+0x14	`shaperA1`	                       -> `shaperA1`
+ *	+0x18	`shaperA2`	                       -> `shaperA2`
+ *	+0x1c	`shaperB1`	                       -> `shaperB1`
+ *	+0x20	`shaperB2`	                       -> `shaperB2`
  *	+0x24	`byte_24`	`cmpb $0x0,0x24(%edx)`, the codec gate
- *	+0x28	`word_28[6]`	`mov 0x28(%edi,%edx,4)`, a FOUR-byte stride
- *	+0x42	`short_42[6][8]` `lea 0x42(%ebx,%ecx,1)` with %ebx = k << 4
- *	+0xa2	`short_a2[6][8]` `lea 0xa2(%edi,%ecx,1)`, the same shape
+ *	+0x28	`distinctIndex[6]`	`mov 0x28(%edi,%edx,4)`, a FOUR-byte stride
+ *	+0x42	`constellationMask[6][8]` `lea 0x42(%ebx,%ecx,1)` with %ebx = k << 4
+ *	+0xa2	`codecConstellationMask[6][8]` `lea 0xa2(%edi,%ecx,1)`, the same shape
  *
  * so NO NEW TYPE IS DECLARED and none is needed.  The corroboration is that
  * this is `setV92CPpckFromParamsInfo` run backwards through the same twelve
@@ -729,7 +729,7 @@ setV92CPpckFromParamsInfo(V90MappingParams *params,
  *      twin widens a byte: `mov 0x28(%edi,%edx,4),%esi ; mov
  *      %esi,0x638(%ecx,%edx,4)`.  A separate loop from 3 -- the object closes
  *      it at .text+0x33ccd and opens the next at +0x33ccf.
- *   3. The six constellations, each from `cp->short_42[cp->word_28[i]]`.
+ *   3. The six constellations, each from `cp->constellationMask[cp->distinctIndex[i]]`.
  *   4. The six codec constellations.  ONE gate selects the source and it is
  *      re-read from the SOURCE on every iteration: .text+0x33d71 reloads the
  *      CP pointer and +0x33d75 is `cmpb $0x0,0x24(%ecx)`, both INSIDE the loop
@@ -742,12 +742,12 @@ setV92CPpckFromParamsInfo(V90MappingParams *params,
  *      from the ORDINARY bitmaps at +0x42 (`lea 0x42(%ebx,%edi,1)` at
  *      .text+0x33e14) into the CODEC destination at +0x304 (`lea
  *      0x304(%edx,%esi,1)` at +0x33e3c).  Same source, other destination.
- *   5. `word_0`, `char_02` plus 0x14 or plus 8.
+ *   5. `word_0`, `dataBitRate` plus 0x14 or plus 8.
  *
- * THE SELECTOR IS `word_28` AND NOT `i`, and the two are the same only by
- * accident.  `setV92CPpckFromParamsInfo` fills `cp->word_28` with
+ * THE SELECTOR IS `distinctIndex` AND NOT `i`, and the two are the same only by
+ * accident.  `setV92CPpckFromParamsInfo` fills `cp->distinctIndex` with
  * `getConstellationsIndex`'s GROUP NUMBERS and writes group g's bitmap into
- * `short_42[g]`; so constellation i's bitmap is at `short_42[word_28[i]]`, and
+ * `constellationMask[g]`; so constellation i's bitmap is at `constellationMask[distinctIndex[i]]`, and
  * that is what the object reads.  The address is built
  * `mov 0x28(%ecx,%ebp,4),%ebx ; shl $0x4,%ebx ; lea 0x42(%ebx,%ecx,1)` -- a
  * sixteen-byte stride, which is `short[8]`, the row length `V92CP.h` derives
@@ -812,31 +812,31 @@ setParamsInfoFromV92CPUnPck(V90MappingParams *params, V92CP *cp)
 {
 	unsigned int i;
 
-	params->shaperSR = (int)cp->word_08;
-	params->shaperId = cp->word_0c;
-	params->shaperA1 = cp->flt_14;
-	params->shaperA2 = cp->flt_18;
-	params->shaperB1 = cp->flt_1c;
-	params->shaperB2 = cp->flt_20;
+	params->shaperSR = (int)cp->shaperSR;
+	params->shaperId = cp->shaperId;
+	params->shaperA1 = cp->shaperA1;
+	params->shaperA2 = cp->shaperA2;
+	params->shaperB1 = cp->shaperB1;
+	params->shaperB2 = cp->shaperB2;
 	params->word_61c = (cp->byte_24 != 0);
 
 	for (i = 0; i < V90_CONSTELLATIONS; i++)
-		params->distinctIndex[i] = cp->word_28[i];
+		params->distinctIndex[i] = cp->distinctIndex[i];
 
 	for (i = 0; i < V90_CONSTELLATIONS; i++)
 		setConstellationMaskInline(params, (int)i,
-					   cp->short_42[cp->word_28[i]]);
+					   cp->constellationMask[cp->distinctIndex[i]]);
 
 	for (i = 0; i < V90_CONSTELLATIONS; i++) {
 		if (cp->byte_24 != 0)
 			setCodecConstellationMaskInline(params, (int)i,
-			    cp->short_a2[cp->word_28[i]]);
+			    cp->codecConstellationMask[cp->distinctIndex[i]]);
 		else
 			setCodecConstellationMaskInline(params, (int)i,
-			    cp->short_42[cp->word_28[i]]);
+			    cp->constellationMask[cp->distinctIndex[i]]);
 	}
 
-	setDataBitRateInline(params, (int)cp->char_01, (int)cp->char_02);
+	setDataBitRateInline(params, (int)cp->char_01, (int)cp->dataBitRate);
 }
 
 /*

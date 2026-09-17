@@ -6,8 +6,8 @@
 
  {
   "label": "the codec loop's else arm reads the codec bitmaps rather than the ordinary ones",
-  "find": "\t\telse\n\t\t\tsetCodecConstellationMaskInline(params, (int)i,\n\t\t\t    cp->constellationMask[cp->distinctIndex[i]]);",
-  "replace": "\t\telse\n\t\t\tsetCodecConstellationMaskInline(params, (int)i,\n\t\t\t    cp->codecConstellationMask[cp->distinctIndex[i]]);"
+  "find": "\tfor (i = 0; i < V90_CPUNPCK_CONSTELS; i++) {\n\t\tif (cp->codecConstellationPresent != 0)\n\t\t\tsetCodecConstellationMaskInline(params, (int)i,\n\t\t\t    cp->codecConstellationMask[cp->distinctIndex[i]]);\n\t\telse\n\t\t\tsetCodecConstellationMaskInline(params, (int)i,\n\t\t\t    cp->constellationMask[cp->distinctIndex[i]]);",
+  "replace": "\tfor (i = 0; i < V90_CPUNPCK_CONSTELS; i++) {\n\t\tif (cp->codecConstellationPresent != 0)\n\t\t\tsetCodecConstellationMaskInline(params, (int)i,\n\t\t\t    cp->codecConstellationMask[cp->distinctIndex[i]]);\n\t\telse\n\t\t\tsetCodecConstellationMaskInline(params, (int)i,\n\t\t\t    cp->codecConstellationMask[cp->distinctIndex[i]]);"
  },
  {
   "label": "the codec loop's set arm reads the ordinary bitmaps",
@@ -26,8 +26,8 @@
  },
  {
   "label": "the codec loop selects its bitmap by i rather than through distinctIndex",
-  "find": "\t\t\tsetCodecConstellationMaskInline(params, (int)i,\n\t\t\t    cp->codecConstellationMask[cp->distinctIndex[i]]);",
-  "replace": "\t\t\tsetCodecConstellationMaskInline(params, (int)i,\n\t\t\t    cp->codecConstellationMask[i]);"
+  "find": "\tfor (i = 0; i < V90_CPUNPCK_CONSTELS; i++) {\n\t\tif (cp->codecConstellationPresent != 0)\n\t\t\tsetCodecConstellationMaskInline(params, (int)i,\n\t\t\t    cp->codecConstellationMask[cp->distinctIndex[i]]);",
+  "replace": "\tfor (i = 0; i < V90_CPUNPCK_CONSTELS; i++) {\n\t\tif (cp->codecConstellationPresent != 0)\n\t\t\tsetCodecConstellationMaskInline(params, (int)i,\n\t\t\t    cp->codecConstellationMask[i]);"
  },
  {
   "label": "distinctIndex is copied for five constellations rather than six",
@@ -41,8 +41,8 @@
  },
  {
   "label": "shaperA1 and shaperA2 are copied from each other's source",
-  "find": "\tparams->shaperA1 = cp->shaperA1;\n\tparams->shaperA2 = cp->shaperA2;",
-  "replace": "\tparams->shaperA1 = cp->shaperA2;\n\tparams->shaperA2 = cp->shaperA1;"
+  "find": "\tparams->shaperSR = cp->shaperSR;\n\tparams->shaperId = cp->shaperId;\n\tparams->shaperA1 = cp->shaperA1;\n\tparams->shaperA2 = cp->shaperA2;\n\tparams->shaperB1 = cp->shaperB1;\n\tparams->shaperB2 = cp->shaperB2;\n\tparams->word_61c = (cp->codecConstellationPresent != 0);",
+  "replace": "\tparams->shaperSR = cp->shaperSR;\n\tparams->shaperId = cp->shaperId;\n\tparams->shaperA1 = cp->shaperA2;\n\tparams->shaperA2 = cp->shaperA1;\n\tparams->shaperB1 = cp->shaperB1;\n\tparams->shaperB2 = cp->shaperB2;\n\tparams->word_61c = (cp->codecConstellationPresent != 0);"
  },
  {
   "label": "the long rate arm adds 8 rather than 0x14",
