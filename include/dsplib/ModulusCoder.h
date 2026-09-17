@@ -39,8 +39,14 @@
  * ascending offsets in argument order with no arithmetic anywhere.  That is
  * what a constructor whose whole job is a member-initialiser list looks like,
  * so the seven parameters ARE the seven members and the order is settled.
- * Their meanings are not: nothing in this tree names them yet, and `progress`
- * is another batch's work.
+ * Their meanings ARE established now.  `progress` is written -- the encoder
+ * in `src/pump/v90/V90ModulusEncoder.cpp`, the decoder in
+ * `V90ModulusDecoder.cpp` -- and the constructor's `@param` docs below tie
+ * `field_00`..`field_10` to the five conversion moduli, `field_18` to the bit
+ * count, and `field_14` to an argument neither `progress` reads.  The fields
+ * keep offset names only because the object itself spells none; naming them
+ * `modulus*`/`bitCount` is the issue #119 pass that also unblocks
+ * `V90Mapper`/`V90Demapper::word_08`.
  */
 
 #ifndef DSPLIB_MODULUSCODER_H
@@ -96,10 +102,11 @@ public:
 
 	/*
 	 * Public because the original's access specifiers are not recoverable
-	 * and one access section keeps the class standard-layout.  The names
-	 * are the offsets because the object gives no meanings; the type is
+	 * and one access section keeps the class standard-layout.  The type is
 	 * the seven-argument constructor's `unsigned int`, which is evidence
-	 * and not a default.
+	 * and not a default.  The names stay the offsets because the object
+	 * spells none, though `progress` now gives each a role -- see the
+	 * constructor's `@param` docs and the file banner.
 	 */
 	unsigned int field_00;
 	unsigned int field_04;

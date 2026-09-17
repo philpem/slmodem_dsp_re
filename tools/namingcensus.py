@@ -38,6 +38,11 @@ OFFSET_NAME = [
 PAD_NAME = re.compile(r"^pad(_?[0-9a-fA-F]+)?$")
 PLACEHOLDER = re.compile(r"^(?:unmapped|unnamed|unused|unknown|reserved)_?\w*$",
                          re.IGNORECASE)
+# Real identifiers that match the `rNN`/`fNNNN` hex-suffix shape (`ref` is
+# r+ef, `read` is r+ead).  Without this they are misread as offsets and
+# pollute the residual ledger (issue #119 Tier D).
+RF_STOPWORDS = {"read", "ref", "fee", "feed", "face", "fade", "fad", "red",
+                "fed", "dec", "cab", "bad", "add"}
 
 # Owners already through a naming batch or wave.  A residual row here is
 # covered by that batch's ledger in docs/naming-audit.md even when its own
@@ -100,6 +105,8 @@ def classify(name):
         return "pad"
     if PLACEHOLDER.match(name):
         return "placeholder"
+    if name.lower() in RF_STOPWORDS:
+        return "named"
     for pat in OFFSET_NAME:
         if pat.match(name):
             return "offset"
