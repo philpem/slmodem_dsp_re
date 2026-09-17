@@ -26,7 +26,7 @@
  * WHAT MAKES THEM OBSERVABLE ANYWAY is that they are the LENGTHS the state
  * machine counts to.  `gamma` decides the bit at which state 7 hands over, and
  * `delta` the bit at which state 8 does, so a wrong value moves a state change
- * -- and `rxState`, `word_11c` and `stateBitCount` are compared after every bit.
+ * -- and `rxState`, `bitIndex` and `stateBitCount` are compared after every bit.
  * A stale `gamma` cannot hide: it ends the block early or late and the whole
  * object diverges on that bit.
  *
@@ -79,7 +79,7 @@
  *                rest of the object.
  *
  * ---------------------------------------------------------------------------
- * WHAT IS NOT DRIVEN, and why.  `bitsToInfo` stores into `bits[word_11c]` at
+ * WHAT IS NOT DRIVEN, and why.  `bitsToInfo` stores into `bits[bitIndex]` at
  * seven sites and NONE of them is bounds-checked -- docs/deviations.md D923 --
  * so a stream long enough to fill the vector walks off the object on both
  * sides.  Every case here stays inside it: the longest message the grid builds
@@ -131,7 +131,7 @@ blank(V92CP *o)
 {
 	memset((void *)o, 0, SLOT);
 
-	o->word_11c = 18;
+	o->bitIndex = 18;
 	o->word_914 = -1;
 }
 
@@ -148,7 +148,7 @@ struct mcase {
 	const char *name;
 	unsigned char byte_00;
 	signed char char_01;
-	signed char char_02;
+	signed char dataBitRate;
 	unsigned char byte_04;
 	unsigned char byte_24;
 	unsigned short word_10c;
@@ -166,7 +166,7 @@ struct mcase {
  * a cached `gamma` or `delta` fail.  The order below is 1, 6, 2, 5, 3 and not
  * an accident.
  *
- * `word_28[i]` is set to `word_10c - 1` for every i by `build`, because the
+ * `distinctIndex[i]` is set to `word_10c - 1` for every i by `build`, because the
  * DECODER derives its group count from those six four-bit fields and the
  * encoder from the field itself; if the two disagreed, the block lengths would
  * not line up and every long case would fail its CRC for a reason that has
@@ -225,16 +225,16 @@ build(int c)
 
 	G->byte_00 = m->byte_00;
 	G->char_01 = m->char_01;
-	G->char_02 = m->char_02;
+	G->dataBitRate = m->dataBitRate;
 	G->byte_03 = 0x21;
 	G->byte_04 = m->byte_04;
-	G->word_08 = 2u;
-	G->word_0c = 1u;
+	G->shaperSR = 2u;
+	G->shaperId = 1u;
 	G->flt_10 = 1.5f;
-	G->flt_14 = 0.5f;
-	G->flt_18 = -0.25f;
-	G->flt_1c = 0.125f;
-	G->flt_20 = -0.0625f;
+	G->shaperA1 = 0.5f;
+	G->shaperA2 = -0.25f;
+	G->shaperB1 = 0.125f;
+	G->shaperB2 = -0.0625f;
 	G->byte_24 = m->byte_24;
 	G->word_10c = m->word_10c;
 	G->bitsPerSymbol = m->bitsPerSymbol;
@@ -242,16 +242,16 @@ build(int c)
 	G->suv = 1u;
 
 	for (i = 0; i < 6u; i++)
-		G->word_28[i] = (int)m->word_10c - 1;
+		G->distinctIndex[i] = (int)m->word_10c - 1;
 
 	for (i = 0; i < 6u; i++) {
 		for (k = 0; k < 8u; k++) {
-			G->short_42[i][k] = (short)(0x1234 + 0x11 * (i * 8 + k));
-			G->short_a2[i][k] = (short)(0x4321 - 0x13 * (i * 8 + k));
+			G->constellationMask[i][k] = (short)(0x1234 + 0x11 * (i * 8 + k));
+			G->codecConstellationMask[i][k] = (short)(0x4321 - 0x13 * (i * 8 + k));
 		}
 	}
 
-	G->word_11c = 18;
+	G->bitIndex = 18;
 	G->infoToBits();
 
 	if (m->corrupt >= 0)
@@ -411,7 +411,7 @@ run_cases(void)
  * Answer 5 has no message behind it: it is a run of `12 * bitsPerSymbol` zeros
  * arriving with the cursor still at its home 18, which is the detector saying
  * the far end has stopped.  Driven at four symbol sizes, and at zero -- where
- * the quantum is zero, the object reloads `byte_11a` after clearing it, and
+ * the quantum is zero, the object reloads `zerosRun` after clearing it, and
  * the test is therefore true on a ONE bit as well.
  */
 static int
@@ -444,8 +444,8 @@ run_silence(void)
 		/*
 		 * AND THE ZERO SIZE IS THE OTHER WAY ROUND, which is the whole
 		 * point of driving it.  The quantum is `12 * bitsPerSymbol`,
-		 * so at zero the test is `byte_11a == 0` -- and a ZERO bit
-		 * INCREMENTS `byte_11a`, so it is 1, 2, 3 ... and never 0.  A
+		 * so at zero the test is `zerosRun == 0` -- and a ZERO bit
+		 * INCREMENTS `zerosRun`, so it is 1, 2, 3 ... and never 0.  A
 		 * run of silence at `bitsPerSymbol == 0` therefore answers
 		 * NOTHING, while a single ONE answers 5, because the one arm
 		 * clears the field and the object reloads it.  The two
@@ -558,7 +558,7 @@ run_poked(void)
 				A->byte_00 = B->byte_00 = (unsigned char)b0;
 				A->byte_04 = B->byte_04 = (unsigned char)b4;
 				A->rxState = B->rxState = 10;
-				A->word_11c = B->word_11c = 35;
+				A->bitIndex = B->bitIndex = 35;
 				A->word_914 = B->word_914 = holds[h];
 
 				diff_eq_int("the answer matches (%ld)",
@@ -578,7 +578,7 @@ run_poked(void)
 		blank(A);
 		blank(B);
 		A->bitsPerSymbol = B->bitsPerSymbol = 3;
-		A->byte_11a = B->byte_11a = 35;
+		A->zerosRun = B->zerosRun = 35;
 		A->word_914 = B->word_914 = holds[h];
 
 		diff_eq_int("the answer matches (%ld)", (long)A->bitsToInfo(0),
@@ -598,7 +598,7 @@ run_poked(void)
 			blank(B);
 			A->bitsPerSymbol = B->bitsPerSymbol = 2;
 			A->rxState = B->rxState = 5;
-			A->word_11c = B->word_11c = 33;
+			A->bitIndex = B->bitIndex = 33;
 			A->bits[19] = B->bits[19] = 1;
 			A->bits[20] = B->bits[20] = hi[k];
 
@@ -637,8 +637,8 @@ run_poked(void)
 				blank(B);
 				A->bitsPerSymbol = B->bitsPerSymbol = 3;
 				A->rxState = B->rxState = st[k];
-				A->word_11c = B->word_11c = 20;
-				A->byte_119 = B->byte_119 = 4;
+				A->bitIndex = B->bitIndex = 20;
+				A->onesRun = B->onesRun = 4;
 
 				diff_eq_int("the answer matches (%ld)",
 					    (long)A->bitsToInfo(
@@ -648,8 +648,8 @@ run_poked(void)
 				diff_eq_obj("after the restart arm", V92CP, A,
 					    B, tag);
 				diff_eq_int("the cursor agrees (%ld)",
-					    (long)A->word_11c,
-					    (long)B->word_11c, tag);
+					    (long)A->bitIndex,
+					    (long)B->bitIndex, tag);
 			}
 		}
 	}
@@ -703,7 +703,7 @@ main(void)
 	diff_eq_int("sizeof(V92CP) is %ld", (long)sizeof(V92CP), 0x918, 0x918);
 	diff_eq_int("rxState is at +0x%lx", (long)offsetof(V92CP, rxState),
 		    0x114, 0x114);
-	diff_eq_int("word_11c is at +0x%lx", (long)offsetof(V92CP, word_11c),
+	diff_eq_int("word_11c is at +0x%lx", (long)offsetof(V92CP, bitIndex),
 		    0x11c, 0x11c);
 	diff_eq_int("word_914 is at +0x%lx", (long)offsetof(V92CP, word_914),
 		    0x914, 0x914);

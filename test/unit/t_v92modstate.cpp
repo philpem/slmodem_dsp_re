@@ -363,15 +363,15 @@ sane_cp(int trial)
 	c->bitsPerSymbol = (unsigned char)(1 + (mix % 6));
 	c->word_10c = (unsigned short)(mix % 7);
 	c->char_01 = (signed char)((mix % 5) - 1);
-	c->char_02 = (signed char)((mix % 9) - 4);
+	c->dataBitRate = (signed char)((mix % 9) - 4);
 	c->byte_00 = (unsigned char)(mix % 3);
 	c->byte_04 = (unsigned char)(1 + (mix & 1));
 	c->byte_24 = (unsigned char)((mix >> 1) & 1);
 	c->flt_10 = 0.25f;
-	c->flt_14 = -0.5f;
-	c->flt_18 = 0.75f;
-	c->flt_1c = -0.125f;
-	c->flt_20 = 0.5f;
+	c->shaperA1 = -0.5f;
+	c->shaperA2 = 0.75f;
+	c->shaperB1 = -0.125f;
+	c->shaperB2 = 0.5f;
 }
 
 static int

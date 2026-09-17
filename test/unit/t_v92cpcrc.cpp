@@ -246,7 +246,7 @@ run_small(void)
 		our_cp_resetdet(C(0));
 		ref_cp_resetdet(C(1));
 		compare("after resetDetector", 100 + (long)c);
-		diff_eq_int("+0x11c is eighteen (%ld)", (long)C(1)->word_11c,
+		diff_eq_int("+0x11c is eighteen (%ld)", (long)C(1)->bitIndex,
 			    18, (long)c);
 
 		/*
@@ -263,7 +263,7 @@ run_small(void)
 		compare("after reset", 200 + (long)c);
 		diff_eq_int("+0x914 is -1 (%ld)", (long)C(1)->word_914, -1,
 			    (long)c);
-		diff_eq_int("+0x11c is eighteen (%ld)", (long)C(1)->word_11c,
+		diff_eq_int("+0x11c is eighteen (%ld)", (long)C(1)->bitIndex,
 			    18, (long)c);
 
 		/*
@@ -642,21 +642,21 @@ spec_table23(V92CP *p, unsigned int type, unsigned int m,
 {
 	unsigned int i, j, block, first_indices = 0, last_indices = 0;
 	p->char_01 = (signed char)type;
-	p->char_02 = (signed char)rate;
+	p->dataBitRate = (signed char)rate;
 	p->byte_03 = (unsigned char)(m & 1u);
 	p->byte_04 = (unsigned char)paired;
-	p->word_08 = m % 3u;
-	p->word_0c = m % 3u;
+	p->shaperSR = m % 3u;
+	p->shaperId = m % 3u;
 	p->flt_10 = 1.0f;
-	p->flt_14 = 0.5f;
-	p->flt_18 = 0.25f;
-	p->flt_1c = 0.125f;
-	p->flt_20 = 0.0625f;
+	p->shaperA1 = 0.5f;
+	p->shaperA2 = 0.25f;
+	p->shaperB1 = 0.125f;
+	p->shaperB2 = 0.0625f;
 	p->byte_24 = (unsigned char)paired;
 	p->word_10c = (unsigned short)(m + 1u);
 	for (i = 0; i < 6u; i++) {
 		unsigned int index = i == 5u ? m : i % (m + 1u);
-		p->word_28[i] = index;
+		p->distinctIndex[i] = index;
 		if (i < 4u)
 			first_indices |= index << (4u * i);
 		else
@@ -676,9 +676,9 @@ spec_table23(V92CP *p, unsigned int type, unsigned int m,
 			for (j = 0; j < 8u; j++) {
 				unsigned int mask = spec_mask(block, i, j);
 				if (block == 0)
-					p->short_42[i][j] = (short)mask;
+					p->constellationMask[i][j] = (short)mask;
 				else
-					p->short_a2[i][j] = (short)mask;
+					p->codecConstellationMask[i][j] = (short)mask;
 				spec_word(mask);
 			}
 }
@@ -761,11 +761,11 @@ run_standard_pack(const char *name, spec_void_fn pack, spec_void_fn calc,
 		unsigned int length, quantum = 12u * (2u + (rate & 1u));
 		unsigned int vector;
 		p->char_01 = 2;
-		p->char_02 = (signed char)rate;
+		p->dataBitRate = (signed char)rate;
 		p->byte_04 = (unsigned char)(rate & 1u);
 		p->bitsPerSymbol = (unsigned char)(quantum / 12u);
 		/* Nonzero irrelevant fields make accidentally taking the long arm visible. */
-		p->word_08 = 3;
+		p->shaperSR = 3;
 		p->word_10c = 6;
 		spec_word(4u | (rate << 3) | ((rate & 1u) << 15));
 		length = spec_wire(quantum);
@@ -851,9 +851,9 @@ run_standard_departures(const char *name, spec_void_fn pack, spec_void_fn info)
 	p->word_124 = 136;
 	info(p);
 	diff_eq_int("D920 Ucode 0 departs from mask bit zero (%ld)",
-		(unsigned short)p->short_42[0][0] != 1u, 1, 0);
+		(unsigned short)p->constellationMask[0][0] != 1u, 1, 0);
 	diff_eq_int("D920 Ucode 0 becomes mask bit fifteen (%ld)",
-		(unsigned short)p->short_42[0][0], 0x8000u, 0);
+		(unsigned short)p->constellationMask[0][0], 0x8000u, 0);
 	diff_eq_int("mask decode guards intact (%ld)", spec_guards(), 1, 0);
 	/* V.92 3.5 defines signed Qa.b as TWO'S COMPLEMENT.  Table 23's
 	 * a1, a2, b1 and b2 all use Q1.6.  -1/4 therefore has integer code
@@ -867,7 +867,7 @@ run_standard_departures(const char *name, spec_void_fn pack, spec_void_fn info)
 		p = spec_reset();
 		p->bitsPerSymbol = 1;
 		spec_table23(p, 0, 0, 0, 1);
-		p->flt_14 = p->flt_18 = p->flt_1c = p->flt_20 = -0.25f;
+		p->shaperA1 = p->shaperA2 = p->shaperB1 = p->shaperB2 = -0.25f;
 		pack(p);
 		for (field = 0; field < 4u; field++) {
 			actual = 0;
@@ -887,10 +887,10 @@ run_standard_departures(const char *name, spec_void_fn pack, spec_void_fn info)
 					((0xf0u >> bit) & 1u);
 		p->rxState = 6;
 		info(p);
-		decoded[0] = p->flt_14;
-		decoded[1] = p->flt_18;
-		decoded[2] = p->flt_1c;
-		decoded[3] = p->flt_20;
+		decoded[0] = p->shaperA1;
+		decoded[1] = p->shaperA2;
+		decoded[2] = p->shaperB1;
+		decoded[3] = p->shaperB2;
 		for (field = 0; field < 4u; field++) {
 			diff_eq_int("received Q1.6 0xf0 departs from -1/4 (%ld)",
 				decoded[field] != -0.25f, 1, field);

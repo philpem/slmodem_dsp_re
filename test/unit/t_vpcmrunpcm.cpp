@@ -893,10 +893,10 @@ seed_v92cp(V92CP *cp)
 	cp->word_10c = SEED_CP_GROUPS;
 	cp->byte_24 = 1;
 	for (i = 0; i < V92CP_GROUPS; i++) {
-		cp->word_28[i] = i * 3 + 1;
+		cp->distinctIndex[i] = i * 3 + 1;
 		for (k = 0; k < V92CP_MASKS; k++) {
-			cp->short_42[i][k] = (short)(0x1000 + i * 16 + k);
-			cp->short_a2[i][k] = (short)(0x2000 + i * 16 + k);
+			cp->constellationMask[i][k] = (short)(0x1000 + i * 16 + k);
+			cp->codecConstellationMask[i][k] = (short)(0x2000 + i * 16 + k);
 		}
 	}
 }

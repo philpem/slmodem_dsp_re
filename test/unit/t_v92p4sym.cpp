@@ -796,7 +796,7 @@ gs_setup(int trial)
 		c->bitsPerSymbol = (unsigned char)(1 + (mix % 6));
 		c->word_10c = (unsigned short)(mix % 7);
 		c->char_01 = (signed char)((mix % 5) - 1);
-		c->char_02 = (signed char)((mix % 9) - 4);
+		c->dataBitRate = (signed char)((mix % 9) - 4);
 		c->byte_00 = (unsigned char)(mix % 3);
 		c->byte_04 = (unsigned char)(mix & 1);
 		c->byte_24 = (unsigned char)((mix >> 1) & 1);
@@ -806,10 +806,10 @@ gs_setup(int trial)
 
 			switch (f) {
 			case 0:	c->flt_10 = v;	break;
-			case 1:	c->flt_14 = -v;	break;
-			case 2:	c->flt_18 = v;	break;
-			case 3:	c->flt_1c = -v;	break;
-			default: c->flt_20 = v;	break;
+			case 1:	c->shaperA1 = -v;	break;
+			case 2:	c->shaperA2 = v;	break;
+			case 3:	c->shaperB1 = -v;	break;
+			default: c->shaperB2 = v;	break;
 			}
 		}
 		memcpy(gscp[1], gscp[0], CPSZ);

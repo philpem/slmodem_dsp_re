@@ -86,7 +86,7 @@ public:
 	/**
 	 * @brief Construct an idle CP message: clears `byte_04`, resets the
 	 *        receive detector's state (`rxState`, both run counters and
-	 *        the cursor `word_11c`), and idles the hold-off counter
+	 *        the cursor `bitIndex`), and idles the hold-off counter
 	 *        (`word_914 = -1`). Does not clear the message fields.
 	 */
 	V92CP();
@@ -116,8 +116,8 @@ public:
 
 	/**
 	 * @brief Reset the receive detector's state machine (`rxState`, both
-	 *        run counters `byte_119`/`byte_11a`, the write cursor
-	 *        `word_11c`, and `stateBitCount`) without touching the hold-off
+	 *        run counters `onesRun`/`zerosRun`, the write cursor
+	 *        `bitIndex`, and `stateBitCount`) without touching the hold-off
 	 *        counter or the message fields already decoded.
 	 */
 	void resetDetector();
@@ -171,7 +171,7 @@ public:
 	 *         zeros arrived with nothing yet collected -- what exactly
 	 *         each value means downstream is not established.
 	 */
-	int bitsToInfo(unsigned char);
+	int bitsToInfo(unsigned char bit);
 
 	/**
 	 * @brief Set `suv` (and unconditionally reset `word_104` to 16, whose
@@ -188,23 +188,41 @@ public:
 	 * +0x000 .. +0x103  THE MESSAGE FIELDS, which `infoToBits` packs into
 	 * `bits` and `setV92CPpckFromParamsInfo` fills.
 	 *
-	 * SHAPE IS MEASURED AND MEANING IS NOT.  Every type below is forced by
-	 * an instruction -- a store width, a load's extension whose 32-bit
-	 * result is used, or an index stride -- and every one of them is
-	 * NAMED BY ITS OFFSET, because nothing written establishes what any of
-	 * them holds.  `V92CPUnPck` is a different struct at
-	 * `VPcmFloModem+0x254c` whose author-printed names are tempting and
-	 * are NOT carried across: the correspondence would be adjacency and
-	 * not evidence, and CLAUDE.md's "a wrong name is worse than a pad"
-	 * covers exactly that.
+	 * SHAPE AND ROLE ARE MEASURED.  Every type below is forced by an
+	 * instruction -- a store width, a load's extension whose 32-bit result
+	 * is used, or an index stride -- and the names are the object's own:
+	 * `setV92CPpckFromParamsInfo` (V90MappingParamsInt.cpp) copies these
+	 * fields directly from author-named `V90MappingParams` members --
+	 * `shaperSR`, `shaperId`, `shaperA1/A2/B1/B2` -- so a destination
+	 * holding a source's value is that source, not an adjacency guess.
+	 * `dataBitRate` is the rate the same file hands
+	 * `setDataBitRateInline`/`getDataBitRate`, and the mask blocks are
+	 * filled by the object's own `getConstellationMask`,
+	 * `getCodecConstellationMask` and `getConstellationsIndex`, whose
+	 * names state the roles directly.
+	 *
+	 * THE OFFSET-ONLY STANCE THAT STOOD HERE IS SUPERSEDED.  It read shape
+	 * from instructions and refused to name anything because nothing
+	 * written established what the fields held; `setV92CPpckFromParamsInfo`
+	 * and that family of symbols are what settled it.  The retained
+	 * offset-named fields (`byte_00`, `char_01`, `byte_03`, `byte_04`,
+	 * `flt_10`, `byte_24`, `word_104`, `word_10c`, `word_110`, `byte_118`,
+	 * `word_124`, `word_914`) keep their offset names because their role
+	 * is still unstated.
+	 *
+	 * `V92CPUnPck` is a different struct at `VPcmFloModem+0x254c` whose
+	 * author-printed names are tempting and are NOT carried across: the
+	 * correspondence would be adjacency and not evidence.  The names above
+	 * come from the direct copies, not from that struct.
 	 *
 	 * `bitsToInfo` and `evaluateInfo` were named here as the two unwritten
-	 * members that might settle it.  THEY ARE NOW WRITTEN AND THEY DO NOT.
+	 * members that might settle the layout.  THEY ARE NOW WRITTEN, and
 	 * `evaluateInfo` is the exact inverse of `infoToBits` -- every field
 	 * comes back out of the same bit positions it went in at -- so the
 	 * pair proves the LAYOUT twice over and says nothing more about what
 	 * any field means than the packer already did.  Finding F6602; the two
-	 * fields that DID gain something are +0x114 and +0x124 below.
+	 * fields that DID gain something from that pair are +0x114 and +0x124
+	 * below.
 	 * ===================================================================
 	 */
 
@@ -230,7 +248,7 @@ public:
 	 * `bits[36..48]`. Those thirteen are the sign extension of a byte;
 	 * that is what the object does and it is reproduced.
 	 */
-	signed char char_02;
+	signed char dataBitRate;
 
 	/* +0x003  `bits[35]`, stored whole. */
 	unsigned char byte_03;
@@ -248,9 +266,9 @@ public:
 
 	/*
 	 * +0x005..+0x007 was `pad_05[3]`: `byte_04` ends at +0x005 and
-	 * `word_08` below is a 4-byte-aligned `unsigned int`, so natural
+	 * `shaperSR` below is a 4-byte-aligned `unsigned int`, so natural
 	 * alignment inserts exactly these three bytes with the member deleted
-	 * -- the existing `V92CP_OFF(word_08, 0x008, word08)` (V92CP.cpp) is
+	 * -- the existing `V92CP_OFF(shaperSR, 0x008, word08)` (V92CP.cpp) is
 	 * what proves it. Zero readers/writers anywhere in the object
 	 * (F10142); removed F10150.
 	 */
@@ -258,10 +276,10 @@ public:
 	/* +0x008  UNSIGNED: `shr $1` on the 32-bit value.  Two bits, and they
 	 * go out at `bits[31]` and `bits[32]` -- over the top of two of the
 	 * seven zeros already written there -- only when `char_01 <= 1`. */
-	unsigned int word_08;
+	unsigned int shaperSR;
 
 	/* +0x00c  UNSIGNED, same shape: two bits at `bits[49]`, `bits[50]`. */
-	unsigned int word_0c;
+	unsigned int shaperId;
 
 	/*
 	 * +0x010  Sixteen magnitude entries at `bits[52..67]`, weights 4 down
@@ -275,10 +293,10 @@ public:
 	 * weights 1 down to 2^-6, again most significant at the highest
 	 * index, each followed by one entry that is `f < 0`.
 	 */
-	float flt_14;
-	float flt_18;
-	float flt_1c;
-	float flt_20;
+	float shaperA1;
+	float shaperA2;
+	float shaperB1;
+	float shaperB2;
 
 	/*
 	 * +0x024  `bits[128]`, stored whole, and separately a GATE: the second
@@ -290,9 +308,9 @@ public:
 
 	/*
 	 * +0x025..+0x027 was `pad_25[3]`: `byte_24` ends at +0x025 and
-	 * `word_28` below is a 4-byte-aligned `int[]`, so natural alignment
+	 * `distinctIndex` below is a 4-byte-aligned `int[]`, so natural alignment
 	 * inserts exactly these three bytes with the member deleted -- the
-	 * existing `V92CP_OFF(word_28, 0x028, word28)` (V92CP.cpp) is what
+	 * existing `V92CP_OFF(distinctIndex, 0x028, word28)` (V92CP.cpp) is what
 	 * proves it. Zero readers/writers anywhere in the object (F10142);
 	 * removed F10150.
 	 */
@@ -308,11 +326,11 @@ public:
 	 * between them: entries 0..3 at `bits[103..118]` and entries 4..5 at
 	 * `bits[120..127]`, with the marker at 119 in between.
 	 */
-	int word_28[V92CP_GROUPS];
+	int distinctIndex[V92CP_GROUPS];
 
 	/*
 	 * +0x040  NOT REMOVABLE under the pad-removal workstream (F10150):
-	 * `short_42` below needs only 2-byte alignment and +0x040 is already
+	 * `constellationMask` below needs only 2-byte alignment and +0x040 is already
 	 * 4-byte (and so 2-byte) aligned, so a field-to-field gap here would
 	 * be 0 bytes, not 2, if the member vanished -- the compiler's own
 	 * implicit padding does NOT reproduce this span.  Confirmed dead (zero
@@ -333,11 +351,11 @@ public:
 	 * OR a bit in.  Sixteen bits are extracted either way, so nothing
 	 * observable turns on it and neither reading is preferred here.
 	 */
-	short short_42[V92CP_GROUPS][V92CP_MASKS];
-	short short_a2[V92CP_GROUPS][V92CP_MASKS];
+	short constellationMask[V92CP_GROUPS][V92CP_MASKS];
+	short codecConstellationMask[V92CP_GROUPS][V92CP_MASKS];
 
 	/*
-	 * +0x102..+0x103 was `pad_102[2]`: `short_a2` ends at +0x102 and
+	 * +0x102..+0x103 was `pad_102[2]`: `codecConstellationMask` ends at +0x102 and
 	 * `word_104` below is a 4-byte-aligned `unsigned int`, so natural
 	 * alignment inserts exactly these two bytes with the member deleted
 	 * -- the existing `V92CP_OFF(word_104, 0x104, word104)` (V92CP.cpp) is
@@ -414,12 +432,12 @@ public:
 	 * which is the seventeen-one preamble `infoToBits` opens with.
 	 * Cleared by `resetDetector`.
 	 */
-	unsigned char byte_119;
+	unsigned char onesRun;
 
 	/*
 	 * +0x11a  THE RUN OF ZEROS, the other half of the same pair: raised on
 	 * every `0` and cleared on every `1`.  `12 * bitsPerSymbol` of them
-	 * arriving while `word_11c` is still at its home 18 is `bitsToInfo`'s
+	 * arriving while `bitIndex` is still at its home 18 is `bitsToInfo`'s
 	 * answer 5, and that answer does NOT stop the state machine, which
 	 * runs on afterwards and can overwrite it.
 	 *
@@ -430,13 +448,13 @@ public:
 	 * is the same shape V90CP's `zerosRun` has.  Cleared by
 	 * `resetDetector`.
 	 */
-	unsigned char byte_11a;
+	unsigned char zerosRun;
 
 	/*
-	 * +0x11b was `pad_11b[1]`: `byte_11a` ends at +0x11b and `word_11c`
+	 * +0x11b was `pad_11b[1]`: `zerosRun` ends at +0x11b and `bitIndex`
 	 * below is a 4-byte-aligned `int`, so natural alignment inserts
 	 * exactly this one byte with the member deleted -- the existing
-	 * `V92CP_OFF(word_11c, 0x11c, word11c)` (V92CP.cpp) is what proves it.
+	 * `V92CP_OFF(bitIndex, 0x11c, word11c)` (V92CP.cpp) is what proves it.
 	 * Zero readers/writers anywhere in the object (F10142); removed
 	 * F10150.
 	 */
@@ -452,17 +470,17 @@ public:
 	 * AND THE RECEIVE SIDE DOES MEAN THE SAME THING BY IT.  This used to
 	 * say that `bitsToInfo` and `evaluateInfo` would settle that and were
 	 * not written.  They are, and they do: `bitsToInfo` stores each
-	 * arriving bit at `bits[word_11c]` and advances it by one, from the
+	 * arriving bit at `bits[bitIndex]` and advances it by one, from the
 	 * same 18 `resetDetector` seeds, and stops each block at the same
 	 * absolute index `infoToBits` writes it at -- 34 for the header, 136
-	 * for the fixed part.  Kept neutral all the same, because what it
-	 * counts is still an index into `bits` and nothing names it.
+	 * for the fixed part.  The sibling `V90CP`/`V90MP` calls this same
+	 * write cursor `bitIndex`, so this field follows the sibling.
 	 */
-	int word_11c;
+	int bitIndex;
 
 	/*
 	 * +0x120  Bits taken so far in the current state -- a different
-	 * quantity from `word_11c`: `bitsToInfo` clears it at every state
+	 * quantity from `bitIndex`: `bitsToInfo` clears it at every state
 	 * change and compares it against the length of the block the state is
 	 * collecting (17 for the CRC, `gamma` and `delta` for the two
 	 * variable-length mask blocks). Zeroed by `resetDetector`. Renamed
@@ -471,7 +489,7 @@ public:
 	int stateBitCount;
 
 	/*
-	 * +0x124  THE READ CURSOR, and the counterpart of `word_11c`.
+	 * +0x124  THE READ CURSOR, and the counterpart of `bitIndex`.
 	 * `evaluateInfo` is the only member that touches it: every arm walks
 	 * it forward through `bits` -- `movzbl 0x129(%eax,%edi,1)` with %eax
 	 * loaded from here and the incremented value stored straight back --
@@ -482,10 +500,10 @@ public:
 	 * FOUR BYTES is forced by the `incl` and by the 32-bit loads; the
 	 * SIGNEDNESS is not, because every use is either an index into `bits`
 	 * or an increment and neither reading differs over any value it holds.
-	 * Spelled `int` to match `word_11c` and `stateBitCount`, the two cursors
+	 * Spelled `int` to match `bitIndex` and `stateBitCount`, the two cursors
 	 * beside it, and not because anything measures it.
 	 *
-	 * It is NOT reset by `resetDetector`, where `word_11c` and `stateBitCount`
+	 * It is NOT reset by `resetDetector`, where `bitIndex` and `stateBitCount`
 	 * both are, so a detector restart leaves it where the last decode left
 	 * it.  Every arm that reads a variable-length block sets it first, so
 	 * nothing written depends on that -- but it is the object's own

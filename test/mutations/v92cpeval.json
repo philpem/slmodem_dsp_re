@@ -75,13 +75,13 @@
  },
  {
   "label": "case 5 does not clear char_02 first",
-  "find": "\t\tchar_02 = 0;\n\t\tfor (i = 25; i > 20; i--)",
+  "find": "\t\tdataBitRate = 0;\n\t\tfor (i = 25; i > 20; i--)",
   "replace": "\t\tfor (i = 25; i > 20; i--)"
  },
  {
   "label": "case 5 gates word_08 on char_01 below one",
-  "find": "\t\tif (char_01 <= 1)\n\t\t\tword_08 = (bits[31] & 1) | (bits[32] << 1);",
-  "replace": "\t\tif (char_01 < 1)\n\t\t\tword_08 = (bits[31] & 1) | (bits[32] << 1);"
+  "find": "\t\tif (char_01 <= 1)\n\t\t\tshaperSR = (bits[31] & 1) | (bits[32] << 1);",
+  "replace": "\t\tif (char_01 < 1)\n\t\t\tshaperSR = (bits[31] & 1) | (bits[32] << 1);"
  },
  {
   "label": "case 5 gates word_08 on an unsigned comparison",
@@ -90,8 +90,8 @@
  },
  {
   "label": "case 5 takes word_08's two bits the other way round",
-  "find": "\t\t\tword_08 = (bits[31] & 1) | (bits[32] << 1);",
-  "replace": "\t\t\tword_08 = (bits[32] & 1) | (bits[31] << 1);"
+  "find": "\t\t\tshaperSR = (bits[31] & 1) | (bits[32] << 1);",
+  "replace": "\t\t\tshaperSR = (bits[32] & 1) | (bits[31] << 1);"
  },
  {
   "label": "case 6 finds byte_03 one position late",
@@ -100,8 +100,8 @@
  },
  {
   "label": "case 6 takes word_0c's two bits the other way round",
-  "find": "\t\tword_0c = (bits[49] & 1) | (bits[50] << 1);",
-  "replace": "\t\tword_0c = (bits[50] & 1) | (bits[49] << 1);"
+  "find": "\t\tshaperId = (bits[49] & 1) | (bits[50] << 1);",
+  "replace": "\t\tshaperId = (bits[50] & 1) | (bits[49] << 1);"
  },
  {
   "label": "case 6 seeds the read cursor one position late",
@@ -130,28 +130,28 @@
  },
  {
   "label": "case 6 reads the first magnitude pair lightest weight last",
-  "find": "\t\t\t\t\tf += fltTable_1[6 - i];\n\t\t\t\tword_124++;\n\t\t\t}\n\t\t\tif (bits[word_124] != 0)\n\t\t\t\tf = -f;\n\t\t\tword_124++;\n\n\t\t\tif (m == 0)\n\t\t\t\tflt_14 = f;",
-  "replace": "\t\t\t\t\tf += fltTable_1[i];\n\t\t\t\tword_124++;\n\t\t\t}\n\t\t\tif (bits[word_124] != 0)\n\t\t\t\tf = -f;\n\t\t\tword_124++;\n\n\t\t\tif (m == 0)\n\t\t\t\tflt_14 = f;"
+  "find": "\t\t\t\t\tf += fltTable_1[6 - i];\n\t\t\t\tword_124++;\n\t\t\t}\n\t\t\tif (bits[word_124] != 0)\n\t\t\t\tf = -f;\n\t\t\tword_124++;\n\n\t\t\tif (m == 0)\n\t\t\t\tshaperA1 = f;",
+  "replace": "\t\t\t\t\tf += fltTable_1[i];\n\t\t\t\tword_124++;\n\t\t\t}\n\t\t\tif (bits[word_124] != 0)\n\t\t\t\tf = -f;\n\t\t\tword_124++;\n\n\t\t\tif (m == 0)\n\t\t\t\tshaperA1 = f;"
  },
  {
   "label": "case 6 ignores the sign entry of the first pair",
-  "find": "\t\t\tif (bits[word_124] != 0)\n\t\t\t\tf = -f;\n\t\t\tword_124++;\n\n\t\t\tif (m == 0)\n\t\t\t\tflt_14 = f;",
-  "replace": "\t\t\tword_124++;\n\n\t\t\tif (m == 0)\n\t\t\t\tflt_14 = f;"
+  "find": "\t\t\tif (bits[word_124] != 0)\n\t\t\t\tf = -f;\n\t\t\tword_124++;\n\n\t\t\tif (m == 0)\n\t\t\t\tshaperA1 = f;",
+  "replace": "\t\t\tword_124++;\n\n\t\t\tif (m == 0)\n\t\t\t\tshaperA1 = f;"
  },
  {
   "label": "case 6 ignores the sign entry of the second pair",
-  "find": "\t\t\tif (bits[word_124] != 0)\n\t\t\t\tf = -f;\n\t\t\tword_124++;\n\n\t\t\tif (m == 0)\n\t\t\t\tflt_1c = f;",
-  "replace": "\t\t\tword_124++;\n\n\t\t\tif (m == 0)\n\t\t\t\tflt_1c = f;"
+  "find": "\t\t\tif (bits[word_124] != 0)\n\t\t\t\tf = -f;\n\t\t\tword_124++;\n\n\t\t\tif (m == 0)\n\t\t\t\tshaperB1 = f;",
+  "replace": "\t\t\tword_124++;\n\n\t\t\tif (m == 0)\n\t\t\t\tshaperB1 = f;"
  },
  {
   "label": "case 6 puts the second pair the other way round",
-  "find": "\t\t\tif (m == 0)\n\t\t\t\tflt_1c = f;\n\t\t\telse\n\t\t\t\tflt_20 = f;",
-  "replace": "\t\t\tif (m == 0)\n\t\t\t\tflt_20 = f;\n\t\t\telse\n\t\t\t\tflt_1c = f;"
+  "find": "\t\t\tif (m == 0)\n\t\t\t\tshaperB1 = f;\n\t\t\telse\n\t\t\t\tshaperB2 = f;",
+  "replace": "\t\t\tif (m == 0)\n\t\t\t\tshaperB2 = f;\n\t\t\telse\n\t\t\t\tshaperB1 = f;"
  },
  {
   "label": "case 6 takes six magnitude entries for each signed value",
-  "find": "\t\t\tfor (i = 0; i <= 6; i++) {\n\t\t\t\tif (bits[word_124] != 0)\n\t\t\t\t\tf += fltTable_1[6 - i];\n\t\t\t\tword_124++;\n\t\t\t}\n\t\t\tif (bits[word_124] != 0)\n\t\t\t\tf = -f;\n\t\t\tword_124++;\n\n\t\t\tif (m == 0)\n\t\t\t\tflt_1c = f;",
-  "replace": "\t\t\tfor (i = 0; i <= 5; i++) {\n\t\t\t\tif (bits[word_124] != 0)\n\t\t\t\t\tf += fltTable_1[6 - i];\n\t\t\t\tword_124++;\n\t\t\t}\n\t\t\tif (bits[word_124] != 0)\n\t\t\t\tf = -f;\n\t\t\tword_124++;\n\n\t\t\tif (m == 0)\n\t\t\t\tflt_1c = f;"
+  "find": "\t\t\tfor (i = 0; i <= 6; i++) {\n\t\t\t\tif (bits[word_124] != 0)\n\t\t\t\t\tf += fltTable_1[6 - i];\n\t\t\t\tword_124++;\n\t\t\t}\n\t\t\tif (bits[word_124] != 0)\n\t\t\t\tf = -f;\n\t\t\tword_124++;\n\n\t\t\tif (m == 0)\n\t\t\t\tshaperB1 = f;",
+  "replace": "\t\t\tfor (i = 0; i <= 5; i++) {\n\t\t\t\tif (bits[word_124] != 0)\n\t\t\t\t\tf += fltTable_1[6 - i];\n\t\t\t\tword_124++;\n\t\t\t}\n\t\t\tif (bits[word_124] != 0)\n\t\t\t\tf = -f;\n\t\t\tword_124++;\n\n\t\t\tif (m == 0)\n\t\t\t\tshaperB1 = f;"
  },
  {
   "label": "case 6 does not skip the framing position before flt_1c",
@@ -165,18 +165,18 @@
  },
  {
   "label": "case 6 takes the last count rather than the largest",
-  "find": "\t\t\tif (word_28[k] > max)\n\t\t\t\tmax = word_28[k];\n\t\t}\n\n\t\tword_124++;\t\t/* the framing position at 119 */",
-  "replace": "\t\t\tmax = word_28[k];\n\t\t}\n\n\t\tword_124++;\t\t/* the framing position at 119 */"
+  "find": "\t\t\tif (distinctIndex[k] > max)\n\t\t\t\tmax = distinctIndex[k];\n\t\t}\n\n\t\tword_124++;\t\t/* the framing position at 119 */",
+  "replace": "\t\t\tmax = distinctIndex[k];\n\t\t}\n\n\t\tword_124++;\t\t/* the framing position at 119 */"
  },
  {
   "label": "case 6 reads the first four counts most significant first",
-  "find": "\t\tfor (k = 0; k <= 3; k++) {\n\t\t\tword_28[k] = 0;\n\t\t\tfor (i = 0; i <= 3; i++) {\n\t\t\t\tword_28[k] += bits[word_124] * binaryTable[i];",
-  "replace": "\t\tfor (k = 0; k <= 3; k++) {\n\t\t\tword_28[k] = 0;\n\t\t\tfor (i = 0; i <= 3; i++) {\n\t\t\t\tword_28[k] += bits[word_124] * binaryTable[3 - i];"
+  "find": "\t\tfor (k = 0; k <= 3; k++) {\n\t\t\tdistinctIndex[k] = 0;\n\t\t\tfor (i = 0; i <= 3; i++) {\n\t\t\t\tdistinctIndex[k] += bits[word_124] * binaryTable[i];",
+  "replace": "\t\tfor (k = 0; k <= 3; k++) {\n\t\t\tdistinctIndex[k] = 0;\n\t\t\tfor (i = 0; i <= 3; i++) {\n\t\t\t\tdistinctIndex[k] += bits[word_124] * binaryTable[3 - i];"
  },
  {
   "label": "case 6 reads the last two counts most significant first",
-  "find": "\t\tfor (k = 4; k <= 5; k++) {\n\t\t\tword_28[k] = 0;\n\t\t\tfor (i = 0; i <= 3; i++) {\n\t\t\t\tword_28[k] += bits[word_124] * binaryTable[i];",
-  "replace": "\t\tfor (k = 4; k <= 5; k++) {\n\t\t\tword_28[k] = 0;\n\t\t\tfor (i = 0; i <= 3; i++) {\n\t\t\t\tword_28[k] += bits[word_124] * binaryTable[3 - i];"
+  "find": "\t\tfor (k = 4; k <= 5; k++) {\n\t\t\tdistinctIndex[k] = 0;\n\t\t\tfor (i = 0; i <= 3; i++) {\n\t\t\t\tdistinctIndex[k] += bits[word_124] * binaryTable[i];",
+  "replace": "\t\tfor (k = 4; k <= 5; k++) {\n\t\t\tdistinctIndex[k] = 0;\n\t\t\tfor (i = 0; i <= 3; i++) {\n\t\t\t\tdistinctIndex[k] += bits[word_124] * binaryTable[3 - i];"
  },
  {
   "label": "case 6 does not skip the framing position at 119",
@@ -200,52 +200,52 @@
  },
  {
   "label": "case 7 reads the mask words least significant first",
-  "find": "#ifdef DSPLIB_REPRODUCE_BUGS\n\t\t\t\t\tacc += bits[word_124] *\n\t\t\t\t\t       binaryTable[15 - i];\n#else\n\t\t\t\t\tacc += bits[word_124] *\n\t\t\t\t\t       binaryTable[i];\n#endif\n\t\t\t\t\tword_124++;\n\t\t\t\t}\n\n\t\t\t\tshort_42[k][j] = (short)acc;",
-  "replace": "#ifdef DSPLIB_REPRODUCE_BUGS\n\t\t\t\t\tacc += bits[word_124] *\n\t\t\t\t\t       binaryTable[i];\n#else\n\t\t\t\t\tacc += bits[word_124] *\n\t\t\t\t\t       binaryTable[i];\n#endif\n\t\t\t\t\tword_124++;\n\t\t\t\t}\n\n\t\t\t\tshort_42[k][j] = (short)acc;"
+  "find": "#ifdef DSPLIB_REPRODUCE_BUGS\n\t\t\t\t\tacc += bits[word_124] *\n\t\t\t\t\t       binaryTable[15 - i];\n#else\n\t\t\t\t\tacc += bits[word_124] *\n\t\t\t\t\t       binaryTable[i];\n#endif\n\t\t\t\t\tword_124++;\n\t\t\t\t}\n\n\t\t\t\tconstellationMask[k][j] = (short)acc;",
+  "replace": "#ifdef DSPLIB_REPRODUCE_BUGS\n\t\t\t\t\tacc += bits[word_124] *\n\t\t\t\t\t       binaryTable[i];\n#else\n\t\t\t\t\tacc += bits[word_124] *\n\t\t\t\t\t       binaryTable[i];\n#endif\n\t\t\t\t\tword_124++;\n\t\t\t\t}\n\n\t\t\t\tconstellationMask[k][j] = (short)acc;"
  },
  {
   "label": "case 8 reads the mask words least significant first",
-  "find": "#ifdef DSPLIB_REPRODUCE_BUGS\n\t\t\t\t\tacc += bits[word_124] *\n\t\t\t\t\t       binaryTable[15 - i];\n#else\n\t\t\t\t\tacc += bits[word_124] *\n\t\t\t\t\t       binaryTable[i];\n#endif\n\t\t\t\t\tword_124++;\n\t\t\t\t}\n\n\t\t\t\tshort_a2[k][j] = (short)acc;",
-  "replace": "#ifdef DSPLIB_REPRODUCE_BUGS\n\t\t\t\t\tacc += bits[word_124] *\n\t\t\t\t\t       binaryTable[i];\n#else\n\t\t\t\t\tacc += bits[word_124] *\n\t\t\t\t\t       binaryTable[i];\n#endif\n\t\t\t\t\tword_124++;\n\t\t\t\t}\n\n\t\t\t\tshort_a2[k][j] = (short)acc;"
+  "find": "#ifdef DSPLIB_REPRODUCE_BUGS\n\t\t\t\t\tacc += bits[word_124] *\n\t\t\t\t\t       binaryTable[15 - i];\n#else\n\t\t\t\t\tacc += bits[word_124] *\n\t\t\t\t\t       binaryTable[i];\n#endif\n\t\t\t\t\tword_124++;\n\t\t\t\t}\n\n\t\t\t\tcodecConstellationMask[k][j] = (short)acc;",
+  "replace": "#ifdef DSPLIB_REPRODUCE_BUGS\n\t\t\t\t\tacc += bits[word_124] *\n\t\t\t\t\t       binaryTable[i];\n#else\n\t\t\t\t\tacc += bits[word_124] *\n\t\t\t\t\t       binaryTable[i];\n#endif\n\t\t\t\t\tword_124++;\n\t\t\t\t}\n\n\t\t\t\tcodecConstellationMask[k][j] = (short)acc;"
  },
  {
   "label": "case 7 does not skip the framing position of each mask word",
-  "find": "\t\t\t\tword_124++;\n\t\t\t\tshort_42[k][j] = 0;",
-  "replace": "\t\t\t\tshort_42[k][j] = 0;"
+  "find": "\t\t\t\tword_124++;\n\t\t\t\tconstellationMask[k][j] = 0;",
+  "replace": "\t\t\t\tconstellationMask[k][j] = 0;"
  },
  {
   "label": "case 8 does not skip the framing position of each mask word",
-  "find": "\t\t\t\tword_124++;\n\t\t\t\tshort_a2[k][j] = 0;",
-  "replace": "\t\t\t\tshort_a2[k][j] = 0;"
+  "find": "\t\t\t\tword_124++;\n\t\t\t\tcodecConstellationMask[k][j] = 0;",
+  "replace": "\t\t\t\tcodecConstellationMask[k][j] = 0;"
  },
  {
   "label": "case 7 does not zero the destination first",
-  "find": "\t\t\t\tshort_42[k][j] = 0;\n",
+  "find": "\t\t\t\tconstellationMask[k][j] = 0;\n",
   "replace": "",
   "equivalent": true,
   "why": "`short_42[k][j] = 0;` is immediately followed by an `int acc = 0;` accumulation over `i` that never reads `short_42[k][j]`, and the loop ends with the unconditional `short_42[k][j] = (short)acc;` a few lines below -- so whatever this line stores is overwritten before anything reads it. Dropping it cannot change any observable value for any input; it is the same shape as D195's redundant memset in VPcmV34Create (finding F1260), one array element instead of a whole block."
  },
  {
   "label": "case 8 does not zero the destination first",
-  "find": "\t\t\t\tshort_a2[k][j] = 0;\n",
+  "find": "\t\t\t\tcodecConstellationMask[k][j] = 0;\n",
   "replace": "",
   "equivalent": true,
   "why": "Same shape as 'case 7 does not zero the destination first' above: `short_a2[k][j] = 0;` is dead, unconditionally overwritten by `short_a2[k][j] = (short)acc;` at the end of the same iteration with no intervening read."
  },
  {
   "label": "case 7 takes seven mask words to the group",
-  "find": "\t\tfor (k = 0; k < n; k++) {\n\t\t\tfor (j = 0; j <= 7; j++) {\n\t\t\t\tint acc = 0;\n\n\t\t\t\tword_124++;\n\t\t\t\tshort_42[k][j] = 0;",
-  "replace": "\t\tfor (k = 0; k < n; k++) {\n\t\t\tfor (j = 0; j <= 6; j++) {\n\t\t\t\tint acc = 0;\n\n\t\t\t\tword_124++;\n\t\t\t\tshort_42[k][j] = 0;"
+  "find": "\t\tfor (k = 0; k < n; k++) {\n\t\t\tfor (j = 0; j <= 7; j++) {\n\t\t\t\tint acc = 0;\n\n\t\t\t\tword_124++;\n\t\t\t\tconstellationMask[k][j] = 0;",
+  "replace": "\t\tfor (k = 0; k < n; k++) {\n\t\t\tfor (j = 0; j <= 6; j++) {\n\t\t\t\tint acc = 0;\n\n\t\t\t\tword_124++;\n\t\t\t\tconstellationMask[k][j] = 0;"
  },
  {
   "label": "case 7 bounds the group count at the six the class holds",
-  "find": "\t\tn = word_10c;\n\n\t\tfor (k = 0; k < n; k++) {\n\t\t\tfor (j = 0; j <= 7; j++) {\n\t\t\t\tint acc = 0;\n\n\t\t\t\tword_124++;\n\t\t\t\tshort_42[k][j] = 0;",
-  "replace": "\t\tn = word_10c > 6 ? 6 : word_10c;\n\n\t\tfor (k = 0; k < n; k++) {\n\t\t\tfor (j = 0; j <= 7; j++) {\n\t\t\t\tint acc = 0;\n\n\t\t\t\tword_124++;\n\t\t\t\tshort_42[k][j] = 0;"
+  "find": "\t\tn = word_10c;\n\n\t\tfor (k = 0; k < n; k++) {\n\t\t\tfor (j = 0; j <= 7; j++) {\n\t\t\t\tint acc = 0;\n\n\t\t\t\tword_124++;\n\t\t\t\tconstellationMask[k][j] = 0;",
+  "replace": "\t\tn = word_10c > 6 ? 6 : word_10c;\n\n\t\tfor (k = 0; k < n; k++) {\n\t\t\tfor (j = 0; j <= 7; j++) {\n\t\t\t\tint acc = 0;\n\n\t\t\t\tword_124++;\n\t\t\t\tconstellationMask[k][j] = 0;"
  },
  {
   "label": "case 8 writes into the first mask block",
-  "find": "\t\t\t\tshort_a2[k][j] = (short)acc;",
-  "replace": "\t\t\t\tshort_42[k][j] = (short)acc;"
+  "find": "\t\t\t\tcodecConstellationMask[k][j] = (short)acc;",
+  "replace": "\t\t\t\tconstellationMask[k][j] = (short)acc;"
  },
  {
   "label": "the switch has no hole at state 4",

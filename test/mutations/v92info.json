@@ -6,7 +6,7 @@
  {
   "label": "char_02 is re-read for the thirteen bits at 36, rather than shifted on",
   "find": "\t\t\tfor (i = 0; i <= 12; i++) {\n\t\t\t\tbits[36 + i] = (unsigned char)(t & 1);",
-  "replace": "\t\t\tt = char_02;\n\t\t\tfor (i = 0; i <= 12; i++) {\n\t\t\t\tbits[36 + i] = (unsigned char)(t & 1);"
+  "replace": "\t\t\tt = dataBitRate;\n\t\t\tfor (i = 0; i <= 12; i++) {\n\t\t\t\tbits[36 + i] = (unsigned char)(t & 1);"
  },
  {
   "label": "fltTable_2 holds 2^-8 where the object holds 2^-9 twice",
@@ -35,8 +35,8 @@
  },
  {
   "label": "the padded length is not rounded past an exact multiple",
-  "find": "\tvectorLen = ((unsigned int)word_11c / quantum + 1) * quantum;",
-  "replace": "\tvectorLen = ((unsigned int)word_11c / quantum) * quantum;"
+  "find": "\tvectorLen = ((unsigned int)bitIndex / quantum + 1) * quantum;",
+  "replace": "\tvectorLen = ((unsigned int)bitIndex / quantum) * quantum;"
  },
  {
   "label": "the quantum ignores bitsPerSymbol",
@@ -70,13 +70,13 @@
  },
  {
   "label": "flt_14's sign entry is the other way up",
-  "find": "\t\t\tbits[76] = (unsigned char)(flt_14 < 0);",
-  "replace": "\t\t\tbits[76] = (unsigned char)(flt_14 > 0);"
+  "find": "\t\t\tbits[76] = (unsigned char)(shaperA1 < 0);",
+  "replace": "\t\t\tbits[76] = (unsigned char)(shaperA1 > 0);"
  },
  {
   "label": "flt_18's sign entry lands on flt_14's",
-  "find": "\t\t\tbits[84] = (unsigned char)(flt_18 < 0);",
-  "replace": "\t\t\tbits[76] = (unsigned char)(flt_18 < 0);"
+  "find": "\t\t\tbits[84] = (unsigned char)(shaperA2 < 0);",
+  "replace": "\t\t\tbits[76] = (unsigned char)(shaperA2 < 0);"
  },
  {
   "label": "the marker at 85 is not written",
@@ -116,18 +116,18 @@
  },
  {
   "label": "the second run of four-bit entries repeats the first",
-  "find": "\t\t\t\tshort s = (short)word_28[4 + i];",
-  "replace": "\t\t\t\tshort s = (short)word_28[i];"
+  "find": "\t\t\t\tshort s = (short)distinctIndex[4 + i];",
+  "replace": "\t\t\t\tshort s = (short)distinctIndex[i];"
  },
  {
   "label": "the first mask block reads the second",
-  "find": "\t\t\t\t\tshort s = short_42[i][k];",
-  "replace": "\t\t\t\t\tshort s = short_a2[i][k];"
+  "find": "\t\t\t\t\tshort s = constellationMask[i][k];",
+  "replace": "\t\t\t\t\tshort s = codecConstellationMask[i][k];"
  },
  {
   "label": "the second block's mask words go out byte-swapped",
-  "find": "\t\t\t\t\t\tshort s = short_a2[i][k];",
-  "replace": "\t\t\t\t\t\tshort s = (short)((short_a2[i][k] >> 8) | (short_a2[i][k] << 8));"
+  "find": "\t\t\t\t\t\tshort s = codecConstellationMask[i][k];",
+  "replace": "\t\t\t\t\t\tshort s = (short)((codecConstellationMask[i][k] >> 8) | (codecConstellationMask[i][k] << 8));"
  },
  {
   "label": "the second mask block is emitted when the gate is CLEAR",
@@ -141,8 +141,8 @@
  },
  {
   "label": "the padding starts one entry late",
-  "find": "\tfor (i = (unsigned int)word_11c; i < vectorLen; i++)\n\t\tbits[i] = 0;",
-  "replace": "\tfor (i = (unsigned int)word_11c + 1; i < vectorLen; i++)\n\t\tbits[i] = 0;"
+  "find": "\tfor (i = (unsigned int)bitIndex; i < vectorLen; i++)\n\t\tbits[i] = 0;",
+  "replace": "\tfor (i = (unsigned int)bitIndex + 1; i < vectorLen; i++)\n\t\tbits[i] = 0;"
  },
  {
   "label": "word_110 is raised whatever byte_04 holds",
@@ -151,8 +151,8 @@
  },
  {
   "label": "word_08's two entries go out on the short form as well",
-  "find": "\t\tif (b <= 1) {\n\t\t\tbits[31] = (unsigned char)(word_08 & 1);",
-  "replace": "\t\tif (1) {\n\t\t\tbits[31] = (unsigned char)(word_08 & 1);"
+  "find": "\t\tif (b <= 1) {\n\t\t\tbits[31] = (unsigned char)(shaperSR & 1);",
+  "replace": "\t\tif (1) {\n\t\t\tbits[31] = (unsigned char)(shaperSR & 1);"
  },
  {
   "label": "bitsPerSymbol is left alone when char_01 is zero",
@@ -176,8 +176,8 @@
  },
  {
   "label": "the cursor after the fixed part is 33",
-  "find": "\t\te = byte_04;\n\t\tword_11c = 34;\n\t\tbits[33] = e;\n\t} else {",
-  "replace": "\t\te = byte_04;\n\t\tword_11c = 33;\n\t\tbits[33] = e;\n\t} else {"
+  "find": "\t\te = byte_04;\n\t\tbitIndex = 34;\n\t\tbits[33] = e;\n\t} else {",
+  "replace": "\t\te = byte_04;\n\t\tbitIndex = 33;\n\t\tbits[33] = e;\n\t} else {"
  },
  {
   "label": "the CRC entries are copied backwards",
@@ -216,8 +216,8 @@
  },
  {
   "label": "the cursor after the fixed long part is 135",
-  "find": "\t\t\tword_11c = 136;",
-  "replace": "\t\t\tword_11c = 135;"
+  "find": "\t\t\tbitIndex = 136;",
+  "replace": "\t\t\tbitIndex = 135;"
  },
  {
   "label": "byte_03 is masked rather than stored whole",
@@ -226,12 +226,12 @@
  },
  {
   "label": "word_0c's two entries are swapped",
-  "find": "\t\t\tbits[49] = (unsigned char)(word_0c & 1);\n\t\t\tbits[50] = (unsigned char)((word_0c >> 1) & 1);",
-  "replace": "\t\t\tbits[49] = (unsigned char)((word_0c >> 1) & 1);\n\t\t\tbits[50] = (unsigned char)(word_0c & 1);"
+  "find": "\t\t\tbits[49] = (unsigned char)(shaperId & 1);\n\t\t\tbits[50] = (unsigned char)((shaperId >> 1) & 1);",
+  "replace": "\t\t\tbits[49] = (unsigned char)((shaperId >> 1) & 1);\n\t\t\tbits[50] = (unsigned char)(shaperId & 1);"
  },
  {
   "label": "flt_20's expansion starts one entry low",
-  "find": "\t\t\tx = (float)fabs(flt_20);\n\t\t\tp = &bits[100];",
-  "replace": "\t\t\tx = (float)fabs(flt_20);\n\t\t\tp = &bits[99];"
+  "find": "\t\t\tx = (float)fabs(shaperB2);\n\t\t\tp = &bits[100];",
+  "replace": "\t\t\tx = (float)fabs(shaperB2);\n\t\t\tp = &bits[99];"
  }
 ]

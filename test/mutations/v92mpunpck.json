@@ -6,33 +6,33 @@
 
  {
   "label": "shaperSR takes word_0c rather than word_08",
-  "find": "\tparams->shaperSR = (int)cp->word_08;\n\tparams->shaperId = cp->word_0c;",
-  "replace": "\tparams->shaperSR = (int)cp->word_0c;\n\tparams->shaperId = cp->word_0c;"
+  "find": "\tparams->shaperSR = (int)cp->shaperSR;\n\tparams->shaperId = cp->shaperId;",
+  "replace": "\tparams->shaperSR = (int)cp->shaperId;\n\tparams->shaperId = cp->shaperId;"
  },
  {
   "label": "shaperId takes word_08 rather than word_0c",
-  "find": "\tparams->shaperId = cp->word_0c;\n\tparams->shaperA1 = cp->flt_14;",
-  "replace": "\tparams->shaperId = cp->word_08;\n\tparams->shaperA1 = cp->flt_14;"
+  "find": "\tparams->shaperSR = (int)cp->shaperSR;\n\tparams->shaperId = cp->shaperId;\n\tparams->shaperA1 = cp->shaperA1;\n\tparams->shaperA2 = cp->shaperA2;\n\tparams->shaperB1 = cp->shaperB1;\n\tparams->shaperB2 = cp->shaperB2;\n\tparams->word_61c = (cp->byte_24 != 0);",
+  "replace": "\tparams->shaperSR = (int)cp->shaperSR;\n\tparams->shaperId = cp->shaperSR;\n\tparams->shaperA1 = cp->shaperA1;\n\tparams->shaperA2 = cp->shaperA2;\n\tparams->shaperB1 = cp->shaperB1;\n\tparams->shaperB2 = cp->shaperB2;\n\tparams->word_61c = (cp->byte_24 != 0);"
  },
  {
   "label": "shaperA1 takes flt_18",
-  "find": "\tparams->shaperA1 = cp->flt_14;",
-  "replace": "\tparams->shaperA1 = cp->flt_18;"
+  "find": "\tparams->shaperSR = (int)cp->shaperSR;\n\tparams->shaperId = cp->shaperId;\n\tparams->shaperA1 = cp->shaperA1;\n\tparams->shaperA2 = cp->shaperA2;\n\tparams->shaperB1 = cp->shaperB1;\n\tparams->shaperB2 = cp->shaperB2;\n\tparams->word_61c = (cp->byte_24 != 0);",
+  "replace": "\tparams->shaperSR = (int)cp->shaperSR;\n\tparams->shaperId = cp->shaperId;\n\tparams->shaperA1 = cp->shaperA2;\n\tparams->shaperA2 = cp->shaperA2;\n\tparams->shaperB1 = cp->shaperB1;\n\tparams->shaperB2 = cp->shaperB2;\n\tparams->word_61c = (cp->byte_24 != 0);"
  },
  {
   "label": "shaperA2 takes flt_1c",
-  "find": "\tparams->shaperA2 = cp->flt_18;",
-  "replace": "\tparams->shaperA2 = cp->flt_1c;"
+  "find": "\tparams->shaperSR = (int)cp->shaperSR;\n\tparams->shaperId = cp->shaperId;\n\tparams->shaperA1 = cp->shaperA1;\n\tparams->shaperA2 = cp->shaperA2;\n\tparams->shaperB1 = cp->shaperB1;\n\tparams->shaperB2 = cp->shaperB2;\n\tparams->word_61c = (cp->byte_24 != 0);",
+  "replace": "\tparams->shaperSR = (int)cp->shaperSR;\n\tparams->shaperId = cp->shaperId;\n\tparams->shaperA1 = cp->shaperA1;\n\tparams->shaperA2 = cp->shaperB1;\n\tparams->shaperB1 = cp->shaperB1;\n\tparams->shaperB2 = cp->shaperB2;\n\tparams->word_61c = (cp->byte_24 != 0);"
  },
  {
   "label": "shaperB1 takes flt_20",
-  "find": "\tparams->shaperB1 = cp->flt_1c;",
-  "replace": "\tparams->shaperB1 = cp->flt_20;"
+  "find": "\tparams->shaperSR = (int)cp->shaperSR;\n\tparams->shaperId = cp->shaperId;\n\tparams->shaperA1 = cp->shaperA1;\n\tparams->shaperA2 = cp->shaperA2;\n\tparams->shaperB1 = cp->shaperB1;\n\tparams->shaperB2 = cp->shaperB2;\n\tparams->word_61c = (cp->byte_24 != 0);",
+  "replace": "\tparams->shaperSR = (int)cp->shaperSR;\n\tparams->shaperId = cp->shaperId;\n\tparams->shaperA1 = cp->shaperA1;\n\tparams->shaperA2 = cp->shaperA2;\n\tparams->shaperB1 = cp->shaperB2;\n\tparams->shaperB2 = cp->shaperB2;\n\tparams->word_61c = (cp->byte_24 != 0);"
  },
  {
   "label": "shaperB2 takes flt_1c",
-  "find": "\tparams->shaperB2 = cp->flt_20;",
-  "replace": "\tparams->shaperB2 = cp->flt_1c;"
+  "find": "\tparams->shaperSR = (int)cp->shaperSR;\n\tparams->shaperId = cp->shaperId;\n\tparams->shaperA1 = cp->shaperA1;\n\tparams->shaperA2 = cp->shaperA2;\n\tparams->shaperB1 = cp->shaperB1;\n\tparams->shaperB2 = cp->shaperB2;\n\tparams->word_61c = (cp->byte_24 != 0);",
+  "replace": "\tparams->shaperSR = (int)cp->shaperSR;\n\tparams->shaperId = cp->shaperId;\n\tparams->shaperA1 = cp->shaperA1;\n\tparams->shaperA2 = cp->shaperA2;\n\tparams->shaperB1 = cp->shaperB1;\n\tparams->shaperB2 = cp->shaperB1;\n\tparams->word_61c = (cp->byte_24 != 0);"
  },
 
  {
@@ -48,53 +48,53 @@
 
  {
   "label": "distinctIndex is copied for five constellations rather than six",
-  "find": "\tfor (i = 0; i < V90_CONSTELLATIONS; i++)\n\t\tparams->distinctIndex[i] = cp->word_28[i];",
-  "replace": "\tfor (i = 0; i < V90_CONSTELLATIONS - 1; i++)\n\t\tparams->distinctIndex[i] = cp->word_28[i];"
+  "find": "\tfor (i = 0; i < V90_CONSTELLATIONS; i++)\n\t\tparams->distinctIndex[i] = cp->distinctIndex[i];",
+  "replace": "\tfor (i = 0; i < V90_CONSTELLATIONS - 1; i++)\n\t\tparams->distinctIndex[i] = cp->distinctIndex[i];"
  },
  {
   "label": "distinctIndex is filled with the loop counter rather than from word_28",
-  "find": "\t\tparams->distinctIndex[i] = cp->word_28[i];",
-  "replace": "\t\tparams->distinctIndex[i] = (int)i;"
+  "find": "\tfor (i = 0; i < V90_CONSTELLATIONS; i++)\n\t\tparams->distinctIndex[i] = cp->distinctIndex[i];",
+  "replace": "\tfor (i = 0; i < V90_CONSTELLATIONS; i++)\n\t\tparams->distinctIndex[i] = (int)i;"
  },
  {
   "label": "distinctIndex is narrowed to a byte on the way across",
-  "find": "\t\tparams->distinctIndex[i] = cp->word_28[i];",
-  "replace": "\t\tparams->distinctIndex[i] = (int)(unsigned char)cp->word_28[i];",
+  "find": "\tfor (i = 0; i < V90_CONSTELLATIONS; i++)\n\t\tparams->distinctIndex[i] = cp->distinctIndex[i];",
+  "replace": "\tfor (i = 0; i < V90_CONSTELLATIONS; i++)\n\t\tparams->distinctIndex[i] = (int)(unsigned char)cp->distinctIndex[i];",
   "equivalent": true,
   "why": "THE STORE IS THIRTY-TWO BITS AND THE FIXTURE CANNOT SEE IT, BY ITS OWN CHOICE.  The object copies a whole word -- `mov 0x28(%edi,%edx,4),%esi ; mov %esi,0x638(%ecx,%edx,4)` at .text+0x33cbe -- so the width is settled from the instructions and not from this tier.  It cannot be settled here because the same field also SCALES THE MASK BASE by sixteen (`shl $0x4` then `lea 0x42(...)`), so any trial whose `word_28[i]` did not fit in a byte would read outside both mask blocks; the blob does that too, but it is undefined in the reconstruction and a trial that reaches undefined behaviour is not a trial (D561).  Every trial therefore keeps `word_28` in 0..5, where the narrowed and the wide spelling agree byte for byte.  The row is kept rather than deleted because it names exactly which claim rests on the disassembly alone."
  },
  {
   "label": "the loop bound is spelled with the SOURCE's macro rather than the destination's",
-  "find": "\tfor (i = 0; i < V90_CONSTELLATIONS; i++)\n\t\tparams->distinctIndex[i] = cp->word_28[i];",
-  "replace": "\tfor (i = 0; i < V92CP_GROUPS; i++)\n\t\tparams->distinctIndex[i] = cp->word_28[i];",
+  "find": "\tfor (i = 0; i < V90_CONSTELLATIONS; i++)\n\t\tparams->distinctIndex[i] = cp->distinctIndex[i];",
+  "replace": "\tfor (i = 0; i < V92CP_GROUPS; i++)\n\t\tparams->distinctIndex[i] = cp->distinctIndex[i];",
   "equivalent": true,
   "why": "V90_CONSTELLATIONS AND V92CP_GROUPS ARE BOTH 6, AND THE OBJECT CANNOT SEPARATE THEM.  The loop reads `cp->word_28[i]`, which has V92CP_GROUPS entries, and writes `params->distinctIndex[i]`, which has V90_CONSTELLATIONS -- so either macro is defensible and the object emits one immediate, `cmp $0x5 ; jbe` at .text+0x33cca, for both.  V90_CONSTELLATIONS is chosen because the loop's purpose is to fill the destination block, and V90MappingParams.h derives its 6 from the three getters' own `cmpl $0x5` while V92CP.h derives its 6 from the packer's `add $0x10` and the two blocks' spacing.  A mutation that changes the VALUE -- the row above -- is not equivalent and is caught."
  },
 
  {
   "label": "the ordinary loop selects its mask block by i rather than through word_28",
-  "find": "\t\tsetConstellationMaskInline(params, (int)i,\n\t\t\t\t\t   cp->short_42[cp->word_28[i]]);",
-  "replace": "\t\tsetConstellationMaskInline(params, (int)i,\n\t\t\t\t\t   cp->short_42[i]);"
+  "find": "\t\tsetConstellationMaskInline(params, (int)i,\n\t\t\t\t\t   cp->constellationMask[cp->distinctIndex[i]]);",
+  "replace": "\t\tsetConstellationMaskInline(params, (int)i,\n\t\t\t\t\t   cp->constellationMask[i]);"
  },
  {
   "label": "the ordinary loop reads the CODEC mask block",
-  "find": "\t\tsetConstellationMaskInline(params, (int)i,\n\t\t\t\t\t   cp->short_42[cp->word_28[i]]);",
-  "replace": "\t\tsetConstellationMaskInline(params, (int)i,\n\t\t\t\t\t   cp->short_a2[cp->word_28[i]]);"
+  "find": "\t\tsetConstellationMaskInline(params, (int)i,\n\t\t\t\t\t   cp->constellationMask[cp->distinctIndex[i]]);",
+  "replace": "\t\tsetConstellationMaskInline(params, (int)i,\n\t\t\t\t\t   cp->codecConstellationMask[cp->distinctIndex[i]]);"
  },
  {
   "label": "the ordinary loop writes the CODEC destination",
-  "find": "\t\tsetConstellationMaskInline(params, (int)i,\n\t\t\t\t\t   cp->short_42[cp->word_28[i]]);",
-  "replace": "\t\tsetCodecConstellationMaskInline(params, (int)i,\n\t\t\t\t\t   cp->short_42[cp->word_28[i]]);"
+  "find": "\t\tsetConstellationMaskInline(params, (int)i,\n\t\t\t\t\t   cp->constellationMask[cp->distinctIndex[i]]);",
+  "replace": "\t\tsetCodecConstellationMaskInline(params, (int)i,\n\t\t\t\t\t   cp->constellationMask[cp->distinctIndex[i]]);"
  },
  {
   "label": "the ordinary loop writes constellation 0 on every iteration",
-  "find": "\t\tsetConstellationMaskInline(params, (int)i,\n\t\t\t\t\t   cp->short_42[cp->word_28[i]]);",
-  "replace": "\t\tsetConstellationMaskInline(params, 0,\n\t\t\t\t\t   cp->short_42[cp->word_28[i]]);"
+  "find": "\t\tsetConstellationMaskInline(params, (int)i,\n\t\t\t\t\t   cp->constellationMask[cp->distinctIndex[i]]);",
+  "replace": "\t\tsetConstellationMaskInline(params, 0,\n\t\t\t\t\t   cp->constellationMask[cp->distinctIndex[i]]);"
  },
  {
   "label": "the ordinary loop writes the destination indexed by the GROUP rather than by the constellation",
-  "find": "\t\tsetConstellationMaskInline(params, (int)i,\n\t\t\t\t\t   cp->short_42[cp->word_28[i]]);",
-  "replace": "\t\tsetConstellationMaskInline(params, (int)cp->word_28[i],\n\t\t\t\t\t   cp->short_42[cp->word_28[i]]);"
+  "find": "\t\tsetConstellationMaskInline(params, (int)i,\n\t\t\t\t\t   cp->constellationMask[cp->distinctIndex[i]]);",
+  "replace": "\t\tsetConstellationMaskInline(params, (int)cp->distinctIndex[i],\n\t\t\t\t\t   cp->constellationMask[cp->distinctIndex[i]]);"
  },
  {
   "label": "the ordinary loop runs five times rather than six",
@@ -104,18 +104,18 @@
 
  {
   "label": "the codec loop's else arm reads the codec mask block rather than the ordinary one",
-  "find": "\t\telse\n\t\t\tsetCodecConstellationMaskInline(params, (int)i,\n\t\t\t    cp->short_42[cp->word_28[i]]);",
-  "replace": "\t\telse\n\t\t\tsetCodecConstellationMaskInline(params, (int)i,\n\t\t\t    cp->short_a2[cp->word_28[i]]);"
+  "find": "\tfor (i = 0; i < V90_CONSTELLATIONS; i++) {\n\t\tif (cp->byte_24 != 0)\n\t\t\tsetCodecConstellationMaskInline(params, (int)i,\n\t\t\t    cp->codecConstellationMask[cp->distinctIndex[i]]);\n\t\telse\n\t\t\tsetCodecConstellationMaskInline(params, (int)i,\n\t\t\t    cp->constellationMask[cp->distinctIndex[i]]);",
+  "replace": "\tfor (i = 0; i < V90_CONSTELLATIONS; i++) {\n\t\tif (cp->byte_24 != 0)\n\t\t\tsetCodecConstellationMaskInline(params, (int)i,\n\t\t\t    cp->codecConstellationMask[cp->distinctIndex[i]]);\n\t\telse\n\t\t\tsetCodecConstellationMaskInline(params, (int)i,\n\t\t\t    cp->codecConstellationMask[cp->distinctIndex[i]]);"
  },
  {
   "label": "the codec loop's set arm reads the ordinary mask block",
-  "find": "\t\tif (cp->byte_24 != 0)\n\t\t\tsetCodecConstellationMaskInline(params, (int)i,\n\t\t\t    cp->short_a2[cp->word_28[i]]);",
-  "replace": "\t\tif (cp->byte_24 != 0)\n\t\t\tsetCodecConstellationMaskInline(params, (int)i,\n\t\t\t    cp->short_42[cp->word_28[i]]);"
+  "find": "\t\tif (cp->byte_24 != 0)\n\t\t\tsetCodecConstellationMaskInline(params, (int)i,\n\t\t\t    cp->codecConstellationMask[cp->distinctIndex[i]]);",
+  "replace": "\t\tif (cp->byte_24 != 0)\n\t\t\tsetCodecConstellationMaskInline(params, (int)i,\n\t\t\t    cp->constellationMask[cp->distinctIndex[i]]);"
  },
  {
   "label": "the codec loop's set arm writes the ORDINARY destination",
-  "find": "\t\tif (cp->byte_24 != 0)\n\t\t\tsetCodecConstellationMaskInline(params, (int)i,\n\t\t\t    cp->short_a2[cp->word_28[i]]);",
-  "replace": "\t\tif (cp->byte_24 != 0)\n\t\t\tsetConstellationMaskInline(params, (int)i,\n\t\t\t    cp->short_a2[cp->word_28[i]]);"
+  "find": "\t\tif (cp->byte_24 != 0)\n\t\t\tsetCodecConstellationMaskInline(params, (int)i,\n\t\t\t    cp->codecConstellationMask[cp->distinctIndex[i]]);",
+  "replace": "\t\tif (cp->byte_24 != 0)\n\t\t\tsetConstellationMaskInline(params, (int)i,\n\t\t\t    cp->codecConstellationMask[cp->distinctIndex[i]]);"
  },
  {
   "label": "the gate is tested the other way round",
@@ -136,23 +136,23 @@
  },
  {
   "label": "the codec loop's set arm selects its mask block by i rather than through word_28",
-  "find": "\t\t\tsetCodecConstellationMaskInline(params, (int)i,\n\t\t\t    cp->short_a2[cp->word_28[i]]);",
-  "replace": "\t\t\tsetCodecConstellationMaskInline(params, (int)i,\n\t\t\t    cp->short_a2[i]);"
+  "find": "\tfor (i = 0; i < V90_CONSTELLATIONS; i++) {\n\t\tif (cp->byte_24 != 0)\n\t\t\tsetCodecConstellationMaskInline(params, (int)i,\n\t\t\t    cp->codecConstellationMask[cp->distinctIndex[i]]);\n\t\telse\n\t\t\tsetCodecConstellationMaskInline(params, (int)i,\n\t\t\t    cp->constellationMask[cp->distinctIndex[i]]);",
+  "replace": "\tfor (i = 0; i < V90_CONSTELLATIONS; i++) {\n\t\tif (cp->byte_24 != 0)\n\t\t\tsetCodecConstellationMaskInline(params, (int)i,\n\t\t\t    cp->codecConstellationMask[i]);\n\t\telse\n\t\t\tsetCodecConstellationMaskInline(params, (int)i,\n\t\t\t    cp->constellationMask[cp->distinctIndex[i]]);"
  },
  {
   "label": "the codec loop's set arm writes the destination indexed by the GROUP",
-  "find": "\t\t\tsetCodecConstellationMaskInline(params, (int)i,\n\t\t\t    cp->short_a2[cp->word_28[i]]);",
-  "replace": "\t\t\tsetCodecConstellationMaskInline(params, (int)cp->word_28[i],\n\t\t\t    cp->short_a2[cp->word_28[i]]);"
+  "find": "\tfor (i = 0; i < V90_CONSTELLATIONS; i++) {\n\t\tif (cp->byte_24 != 0)\n\t\t\tsetCodecConstellationMaskInline(params, (int)i,\n\t\t\t    cp->codecConstellationMask[cp->distinctIndex[i]]);\n\t\telse\n\t\t\tsetCodecConstellationMaskInline(params, (int)i,\n\t\t\t    cp->constellationMask[cp->distinctIndex[i]]);",
+  "replace": "\tfor (i = 0; i < V90_CONSTELLATIONS; i++) {\n\t\tif (cp->byte_24 != 0)\n\t\t\tsetCodecConstellationMaskInline(params, (int)cp->distinctIndex[i],\n\t\t\t    cp->codecConstellationMask[cp->distinctIndex[i]]);\n\t\telse\n\t\t\tsetCodecConstellationMaskInline(params, (int)i,\n\t\t\t    cp->constellationMask[cp->distinctIndex[i]]);"
  },
  {
   "label": "the codec loop's else arm selects its mask block by i rather than through word_28",
-  "find": "\t\t\tsetCodecConstellationMaskInline(params, (int)i,\n\t\t\t    cp->short_42[cp->word_28[i]]);",
-  "replace": "\t\t\tsetCodecConstellationMaskInline(params, (int)i,\n\t\t\t    cp->short_42[i]);"
+  "find": "\tfor (i = 0; i < V90_CONSTELLATIONS; i++) {\n\t\tif (cp->byte_24 != 0)\n\t\t\tsetCodecConstellationMaskInline(params, (int)i,\n\t\t\t    cp->codecConstellationMask[cp->distinctIndex[i]]);\n\t\telse\n\t\t\tsetCodecConstellationMaskInline(params, (int)i,\n\t\t\t    cp->constellationMask[cp->distinctIndex[i]]);",
+  "replace": "\tfor (i = 0; i < V90_CONSTELLATIONS; i++) {\n\t\tif (cp->byte_24 != 0)\n\t\t\tsetCodecConstellationMaskInline(params, (int)i,\n\t\t\t    cp->codecConstellationMask[cp->distinctIndex[i]]);\n\t\telse\n\t\t\tsetCodecConstellationMaskInline(params, (int)i,\n\t\t\t    cp->constellationMask[i]);"
  },
  {
   "label": "the codec loop's else arm writes the ORDINARY destination",
-  "find": "\t\t\tsetCodecConstellationMaskInline(params, (int)i,\n\t\t\t    cp->short_42[cp->word_28[i]]);",
-  "replace": "\t\t\tsetConstellationMaskInline(params, (int)i,\n\t\t\t    cp->short_42[cp->word_28[i]]);"
+  "find": "\tfor (i = 0; i < V90_CONSTELLATIONS; i++) {\n\t\tif (cp->byte_24 != 0)\n\t\t\tsetCodecConstellationMaskInline(params, (int)i,\n\t\t\t    cp->codecConstellationMask[cp->distinctIndex[i]]);\n\t\telse\n\t\t\tsetCodecConstellationMaskInline(params, (int)i,\n\t\t\t    cp->constellationMask[cp->distinctIndex[i]]);",
+  "replace": "\tfor (i = 0; i < V90_CONSTELLATIONS; i++) {\n\t\tif (cp->byte_24 != 0)\n\t\t\tsetCodecConstellationMaskInline(params, (int)i,\n\t\t\t    cp->codecConstellationMask[cp->distinctIndex[i]]);\n\t\telse\n\t\t\tsetConstellationMaskInline(params, (int)i,\n\t\t\t    cp->constellationMask[cp->distinctIndex[i]]);"
  },
  {
   "label": "the codec loop runs five times rather than six",
@@ -162,27 +162,27 @@
 
  {
   "label": "the rate gate is char_02 rather than char_01",
-  "find": "\tsetDataBitRateInline(params, (int)cp->char_01, (int)cp->char_02);",
-  "replace": "\tsetDataBitRateInline(params, (int)cp->char_02, (int)cp->char_02);"
+  "find": "\tsetDataBitRateInline(params, (int)cp->char_01, (int)cp->dataBitRate);",
+  "replace": "\tsetDataBitRateInline(params, (int)cp->dataBitRate, (int)cp->dataBitRate);"
  },
  {
   "label": "the rate is char_01 rather than char_02",
-  "find": "\tsetDataBitRateInline(params, (int)cp->char_01, (int)cp->char_02);",
+  "find": "\tsetDataBitRateInline(params, (int)cp->char_01, (int)cp->dataBitRate);",
   "replace": "\tsetDataBitRateInline(params, (int)cp->char_01, (int)cp->char_01);"
  },
  {
   "label": "the rate always takes the short arm",
-  "find": "\tsetDataBitRateInline(params, (int)cp->char_01, (int)cp->char_02);",
-  "replace": "\tsetDataBitRateInline(params, 0, (int)cp->char_02);"
+  "find": "\tsetDataBitRateInline(params, (int)cp->char_01, (int)cp->dataBitRate);",
+  "replace": "\tsetDataBitRateInline(params, 0, (int)cp->dataBitRate);"
  },
  {
   "label": "the rate always takes the long arm",
-  "find": "\tsetDataBitRateInline(params, (int)cp->char_01, (int)cp->char_02);",
-  "replace": "\tsetDataBitRateInline(params, 1, (int)cp->char_02);"
+  "find": "\tsetDataBitRateInline(params, (int)cp->char_01, (int)cp->dataBitRate);",
+  "replace": "\tsetDataBitRateInline(params, 1, (int)cp->dataBitRate);"
  },
  {
   "label": "the rate byte is widened UNSIGNED rather than signed",
-  "find": "\tsetDataBitRateInline(params, (int)cp->char_01, (int)cp->char_02);",
-  "replace": "\tsetDataBitRateInline(params, (int)cp->char_01, (int)(unsigned char)cp->char_02);"
+  "find": "\tsetDataBitRateInline(params, (int)cp->char_01, (int)cp->dataBitRate);",
+  "replace": "\tsetDataBitRateInline(params, (int)cp->char_01, (int)(unsigned char)cp->dataBitRate);"
  }
 ]

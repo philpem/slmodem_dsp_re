@@ -103,8 +103,8 @@
  *      `word_10c` at most six, the five floats finite (D570, D571).  The
  *      bound on `bitsPerSymbol` is not inherited politeness: the mutation that
  *      DROPS `cp->bitsPerSymbol = 1` lets the seeded value reach
- *      `vectorLen = (word_11c / (12 * bps) + 1) * (12 * bps)` and then
- *      `for (i = word_11c; i < vectorLen; i++) bits[i] = 0`, so a seed of 200
+ *      `vectorLen = (bitIndex / (12 * bps) + 1) * (12 * bps)` and then
+ *      `for (i = bitIndex; i < vectorLen; i++) bits[i] = 0`, so a seed of 200
  *      zero-fills to 2400 against a `V92CP_BITS` of 2000 -- straight through
  *      `crc`, `vectorLen`, `msgLen` and out of the object.  That mutant would
  *      be "caught" by a scribble, which is a verdict nobody can read.
@@ -658,7 +658,7 @@ setup(long trial, const struct args *a, int runb)
 		c->bitsPerSymbol = seed_cpbps;
 		c->word_10c = (unsigned short)(mix % 7u);
 		c->char_01 = (signed char)seed_char01;
-		c->char_02 = (signed char)((int)(mix % 9u) - 4);
+		c->dataBitRate = (signed char)((int)(mix % 9u) - 4);
 		/* NEVER ZERO: `reset` clears it, and a zero seed could not
 		 * tell the store from its absence. */
 		c->byte_00 = seed_byte00;
@@ -672,10 +672,10 @@ setup(long trial, const struct args *a, int runb)
 
 			switch (f) {
 			case 0:	c->flt_10 = v;	break;
-			case 1:	c->flt_14 = -v;	break;
-			case 2:	c->flt_18 = v;	break;
-			case 3:	c->flt_1c = -v;	break;
-			default: c->flt_20 = v;	break;
+			case 1:	c->shaperA1 = -v;	break;
+			case 2:	c->shaperA2 = v;	break;
+			case 3:	c->shaperB1 = -v;	break;
+			default: c->shaperB2 = v;	break;
 			}
 		}
 	}
