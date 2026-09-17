@@ -8,7 +8,7 @@
  * sweep of varied bytes sits in states 0 and 1 for ever and every one of the
  * fourteen arms would go untested while the suite went green.  So the stimulus
  * is CLOSED WITH THE TRANSMITTER: a third object is filled in, `infoToBits`
- * lays the message out into its `bits`, and those `word_3bac` bytes are then
+ * lays the message out into its `bits`, and those `seqLength` bytes are then
  * fed one at a time into a fresh pair.  `infoToBits` is differentially
  * identical to the blob's already (t_v90cpinfo), so using it to make the
  * stimulus asserts nothing about the member under test.
@@ -216,7 +216,7 @@ make_message(int trial, int shortform, unsigned int group, int flags,
 		GEN->buf[k] = bufs_g[k];
 	}
 
-	GEN->word_3ba8 = group;
+	GEN->groupSize = group;
 	GEN->word_00 = shortform;
 	GEN->word_ca0 = step() & 1u;
 	GEN->byte_13 = (unsigned char)((unsigned)flags >> 3 & 1u);
@@ -261,7 +261,7 @@ make_message(int trial, int shortform, unsigned int group, int flags,
 
 	GEN->infoToBits();
 
-	seqlen = GEN->word_3bac;
+	seqlen = GEN->seqLength;
 	if (seqlen > SEQ_MAX)
 		seqlen = SEQ_MAX;		/* cannot happen; bounded above */
 	for (i = 0; i < seqlen; i++)
@@ -294,12 +294,12 @@ seed_receivers(int trial, int mode, unsigned int group, int holdoff)
 		CPB->buf[k] = bufs_b[k];
 	}
 
-	CPA->word_cac = CPB->word_cac = 18;
+	CPA->bitIndex = CPB->bitIndex = 18;
 	CPA->word_cb0 = CPB->word_cb0 = 0;
-	CPA->word_ca4 = CPB->word_ca4 = 0;
-	CPA->byte_ca9 = CPB->byte_ca9 = 0;
-	CPA->byte_caa = CPB->byte_caa = 0;
-	CPA->word_3ba8 = CPB->word_3ba8 = group;
+	CPA->rxState = CPB->rxState = 0;
+	CPA->onesRun = CPB->onesRun = 0;
+	CPA->zerosRun = CPB->zerosRun = 0;
+	CPA->groupSize = CPB->groupSize = group;
 	CPA->word_3bbc = CPB->word_3bbc = holdoff;
 }
 
@@ -318,7 +318,7 @@ static int state_at_16_ones;
 static void
 feed_one(unsigned char v, long tag)
 {
-	unsigned int before = CPB->word_ca4;
+	unsigned int before = CPB->rxState;
 	int ra = CPA->bitsToInfo(v);
 	int rb = ref_cp_bitstoinfo(cp_b, v);
 
@@ -327,8 +327,8 @@ feed_one(unsigned char v, long tag)
 		reports++;
 		last_rc = rb;
 	}
-	statemask |= 1u << (CPB->word_ca4 & 31u);
-	if (CPB->word_ca4 != before)
+	statemask |= 1u << (CPB->rxState & 31u);
+	if (CPB->rxState != before)
 		compare_pair("at a state change", tag);
 }
 
@@ -337,7 +337,7 @@ run_sequence(long tagbase, int prefix16)
 {
 	unsigned int i;
 
-	statemask = 1u << (CPB->word_ca4 & 31u);
+	statemask = 1u << (CPB->rxState & 31u);
 	reports = 0;
 	last_rc = 0;
 	state_at_16_ones = -1;
@@ -349,7 +349,7 @@ run_sequence(long tagbase, int prefix16)
 		 */
 		for (i = 0; i < 16; i++)
 			feed_one(1, tagbase * 10000 + 9000 + (long)i);
-		state_at_16_ones = (int)CPB->word_ca4;
+		state_at_16_ones = (int)CPB->rxState;
 		feed_one(0, tagbase * 10000 + 9100);
 	}
 
@@ -401,10 +401,10 @@ run_cp_b2i_message(void)
 		 * object's: `evaluateCRC` compares the register against them
 		 * by absolute DIFFERENCE, not by parity, so a received 0xff
 		 * against a computed 1 is a mismatch.  The payload ends at
-		 * the framing bit before them, which is word_3bb0 - 0x11.
+		 * the framing bit before them, which is bodyLength - 0x11.
 		 */
 		if ((trial & 3) == 3) {
-			unsigned int end = GEN->word_3bb0 - 0x11u;
+			unsigned int end = GEN->bodyLength - 0x11u;
 
 			for (i = 0; i < seqlen && i < end; i++)
 				if (seq[i] != 0)
@@ -642,7 +642,7 @@ run_cp_b2i_answers(void)
 		int n;
 
 		seed_receivers(99, 0, 6u, 0);
-		CPA->word_ca4 = CPB->word_ca4 = 15;
+		CPA->rxState = CPB->rxState = 15;
 		for (n = 0; n < 0x320; n++) {
 			int ra = CPA->bitsToInfo((unsigned char)(n & 1));
 			int rb = ref_cp_bitstoinfo(cp_b,
@@ -715,9 +715,9 @@ run_cp_b2i_badcrc(void)
 			diff_eq_int("nothing was reported (%ld)", reports, 0,
 				    tag);
 			diff_eq_int("and it reset to state 0 (%ld)",
-				    (long)CPB->word_ca4, 0, tag);
+				    (long)CPB->rxState, 0, tag);
 			diff_eq_int("the cursor went home (%ld)",
-				    (long)CPB->word_cac, 18, tag);
+				    (long)CPB->bitIndex, 18, tag);
 			seen = 1;
 
 			if (lvl > 1) {
@@ -815,7 +815,7 @@ run_cp_b2i_ed(void)
 		int ra, rb;
 
 		seed_receivers(121, 0, 0u, -1);
-		CPA->word_cac = CPB->word_cac = 19;
+		CPA->bitIndex = CPB->bitIndex = 19;
 		ra = CPA->bitsToInfo(1);
 		rb = ref_cp_bitstoinfo(cp_b, 1);
 		diff_eq_int("the answer matches (%ld)", ra, rb, tag);
@@ -849,8 +849,8 @@ run_cp_b2i_guard(void)
 
 			/* At the last index that fits: it must store. */
 			seed_receivers(130 + i, i % 3, 6u, -1);
-			CPA->word_ca4 = CPB->word_ca4 = st;
-			CPA->word_cac = CPB->word_cac = V90CP_BITS - 1;
+			CPA->rxState = CPB->rxState = st;
+			CPA->bitIndex = CPB->bitIndex = V90CP_BITS - 1;
 			CPA->word_cb0 = CPB->word_cb0 = 1;
 			CPA->nof_58[0] = CPB->nof_58[0] = 0;
 
@@ -869,7 +869,7 @@ run_cp_b2i_guard(void)
 			diff_eq_int("the last byte was stored (%ld)",
 				    (long)CPB->bits[V90CP_BITS - 1], 1, tag);
 			diff_eq_int("the cursor moved on (%ld)",
-				    (long)CPB->word_cac, V90CP_BITS, tag);
+				    (long)CPB->bitIndex, V90CP_BITS, tag);
 			diff_eq_int("and it was silent (%ld)",
 				    (int)dsplib_debug_capture_lines(1), 0,
 				    tag);
@@ -877,8 +877,8 @@ run_cp_b2i_guard(void)
 
 			/* One past it: it must refuse, and say so. */
 			seed_receivers(140 + i, i % 3, 6u, -1);
-			CPA->word_ca4 = CPB->word_ca4 = st;
-			CPA->word_cac = CPB->word_cac = V90CP_BITS;
+			CPA->rxState = CPB->rxState = st;
+			CPA->bitIndex = CPB->bitIndex = V90CP_BITS;
 			CPA->word_cb0 = CPB->word_cb0 = 1;
 			CPA->crc[0] = CPB->crc[0] = 0x37;
 
@@ -905,7 +905,7 @@ run_cp_b2i_guard(void)
 			diff_eq_int("crc[0] was not touched (%ld)",
 				    (long)CPB->crc[0], 0x37, tag + 500);
 			diff_eq_int("the cursor did not move (%ld)",
-				    (long)CPB->word_cac, V90CP_BITS,
+				    (long)CPB->bitIndex, V90CP_BITS,
 				    tag + 500);
 			refused = 1;
 
@@ -934,8 +934,8 @@ run_cp_b2i_guard(void)
 		unsigned int st = open_arms[i];
 
 		seed_receivers(150 + i, i % 3, 6u, -1);
-		CPA->word_ca4 = CPB->word_ca4 = st;
-		CPA->word_cac = CPB->word_cac = V90CP_BITS;
+		CPA->rxState = CPB->rxState = st;
+		CPA->bitIndex = CPB->bitIndex = V90CP_BITS;
 		CPA->word_cb0 = CPB->word_cb0 = 0;
 		CPA->crc[0] = CPB->crc[0] = 0x37;
 
@@ -949,7 +949,7 @@ run_cp_b2i_guard(void)
 		compare_pair("an unguarded arm past the end", tag);
 		diff_eq_int("it wrote crc[0] (%ld)", (long)CPB->crc[0], 1,
 			    tag);
-		diff_eq_int("and moved on (%ld)", (long)CPB->word_cac,
+		diff_eq_int("and moved on (%ld)", (long)CPB->bitIndex,
 			    V90CP_BITS + 1, tag);
 		unguarded = 1;
 	}
@@ -984,8 +984,8 @@ run_cp_b2i_holes(void)
 		int ra, rb;
 
 		seed_receivers(trial + 160, trial % 3, 6u, -1);
-		CPA->word_ca4 = CPB->word_ca4 = st;
-		CPA->word_cac = CPB->word_cac = 0x40 + (unsigned)trial;
+		CPA->rxState = CPB->rxState = st;
+		CPA->bitIndex = CPB->bitIndex = 0x40 + (unsigned)trial;
 		memcpy(before, cp_b, CP_SLOT);
 
 		ra = CPA->bitsToInfo(v);
@@ -997,9 +997,9 @@ run_cp_b2i_holes(void)
 
 		/* Nothing but the two run counters and the hold-off. */
 		diff_eq_int("the state did not move (%ld)",
-			    (long)(CPB->word_ca4 == st), 1, tag);
+			    (long)(CPB->rxState == st), 1, tag);
 		diff_eq_int("the cursor did not move (%ld)",
-			    (long)CPB->word_cac, 0x40 + trial, tag);
+			    (long)CPB->bitIndex, 0x40 + trial, tag);
 		diff_eq_int("the count did not move (%ld)",
 			    memcmp(before + 0xcb0, cp_b + 0xcb0, 4) == 0, 1,
 			    tag);
@@ -1062,7 +1062,7 @@ run_cp_b2i_corners(void)
 
 		diff_eq_int("state 8 was entered (%ld)",
 			    (statemask >> 8) & 1u, 1, tag);
-		diff_eq_int("and it never left (%ld)", (long)CPB->word_ca4, 8,
+		diff_eq_int("and it never left (%ld)", (long)CPB->rxState, 8,
 			    tag);
 		diff_eq_int("nothing was reported (%ld)", reports, 0, tag);
 		stalled = 1;

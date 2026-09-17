@@ -1246,7 +1246,7 @@ V90Phase4Demodulator::getV92Decision(short sample)
 			trn2dDDLength = params->RRN_TRN2D_DD_LENGTH;
 			cp->reset();
 			cp->byte_13 = 0;
-			cp->word_3ba8 = mappingParams1->word_0;
+			cp->groupSize = mappingParams1->word_0;
 			uchar_0030 = 0;
 			demapper->resetNoSpectral(mappingParams1);
 		}
@@ -1394,7 +1394,7 @@ V90Phase4Demodulator::getV92Decision(short sample)
 			countInState = 0;
 			int_0028 = 0x28;
 			cp->reset();
-			cp->word_3ba8 = mappingParams1->word_0;
+			cp->groupSize = mappingParams1->word_0;
 			edprintf("V90Phase4Demodulator: No reset to demapper, "
 				 "current Phase - %d\r\n",
 				 demapper->rbsFramePosition);
@@ -1416,7 +1416,7 @@ V90Phase4Demodulator::getV92Decision(short sample)
 			countInState = 0;
 			cp->reset();
 			cp->byte_13 = 0;
-			cp->word_3ba8 = mappingParams2->word_0;
+			cp->groupSize = mappingParams2->word_0;
 			uchar_0030 = 0;
 		}
 		break;
@@ -1524,7 +1524,7 @@ V90Phase4Demodulator::reset(unsigned char code, Phase4DemodulatorState st,
 		cp->reset();
 		groupSize = mappingParams1->word_0;
 		uint_34fc = groupSize;
-		cp->word_3ba8 = groupSize;
+		cp->groupSize = groupSize;
 	} else {
 		mp->reset();
 		mp->groupSize = mappingParams1->word_0;

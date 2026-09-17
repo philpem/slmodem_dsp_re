@@ -3854,8 +3854,8 @@ plant_cp(V90CP *c, int side, int trial)
 		c->word_c70[k] = (int)(0x17u * (unsigned)(trial + k));
 	}
 	c->word_ca0 = (unsigned int)(trial * 3);
-	c->word_3ba8 = 17u;
-	c->word_3bac = PUMP_CPLEN;
+	c->groupSize = 17u;
+	c->seqLength = PUMP_CPLEN;
 }
 
 /*

@@ -43,7 +43,7 @@ USAGE
 
     tools/fieldcorrelate.py capture  --type "V90CP" --out /tmp/v90cp.jsonl
     tools/fieldcorrelate.py analyze  --type "V90CP" --log /tmp/v90cp.jsonl \\
-                                      --candidate word_3ba8
+                                      --candidate groupSize
 
 `--type` is the exact string a `diff_eq_obj`/`diff_eq_obj_` call site passes
 as its `type` argument -- usually the bare C++ class name or `struct foo`,

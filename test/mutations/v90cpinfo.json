@@ -36,18 +36,18 @@
  },
  {
   "label": "the CRC's second tap is one place out",
-  "find": "\t\tcrc[10] = (unsigned char)((crc[11] + a) & 1);\n\t\tcrc[11] = crc[12];\n\t\tcrc[12] = crc[13];\n\t\tcrc[13] = crc[14];\n\t\tcrc[14] = crc[15];\n\t\tcrc[15] = a;\n\t}\n\n\tpos = (unsigned int)word_cac;",
-  "replace": "\t\tcrc[10] = crc[11];\n\t\tcrc[11] = (unsigned char)((crc[12] + a) & 1);\n\t\tcrc[12] = crc[13];\n\t\tcrc[13] = crc[14];\n\t\tcrc[14] = crc[15];\n\t\tcrc[15] = a;\n\t}\n\n\tpos = (unsigned int)word_cac;"
+  "find": "\t\tcrc[10] = (unsigned char)((crc[11] + a) & 1);\n\t\tcrc[11] = crc[12];\n\t\tcrc[12] = crc[13];\n\t\tcrc[13] = crc[14];\n\t\tcrc[14] = crc[15];\n\t\tcrc[15] = a;\n\t}\n\n\tpos = (unsigned int)bitIndex;",
+  "replace": "\t\tcrc[10] = crc[11];\n\t\tcrc[11] = (unsigned char)((crc[12] + a) & 1);\n\t\tcrc[12] = crc[13];\n\t\tcrc[13] = crc[14];\n\t\tcrc[14] = crc[15];\n\t\tcrc[15] = a;\n\t}\n\n\tpos = (unsigned int)bitIndex;"
  },
  {
   "label": "the length is rounded down, not up",
-  "find": "\ttotal = nbits + 1;\n\tgroup = word_3ba8;\n\tquot = total / group;\n\tif (group * quot == total)\n\t\tword_3bac = group * quot;\n\telse\n\t\tword_3bac = (quot + 1) * group;",
-  "replace": "\ttotal = nbits + 1;\n\tgroup = word_3ba8;\n\tquot = total / group;\n\tif (group * quot == total)\n\t\tword_3bac = group * quot;\n\telse\n\t\tword_3bac = quot * group;"
+  "find": "\ttotal = nbits + 1;\n\tgroup = groupSize;\n\tquot = total / group;\n\tif (group * quot == total)\n\t\tseqLength = group * quot;\n\telse\n\t\tseqLength = (quot + 1) * group;",
+  "replace": "\ttotal = nbits + 1;\n\tgroup = groupSize;\n\tquot = total / group;\n\tif (group * quot == total)\n\t\tseqLength = group * quot;\n\telse\n\t\tseqLength = quot * group;"
  },
  {
   "label": "the pad is counted but not written",
-  "find": "\twhile (word_3bac > pos) {\n\t\tbits[pos] = 0;\n\t\tpos++;\n\t}",
-  "replace": "\twhile (word_3bac > pos)\n\t\tpos++;"
+  "find": "\twhile (seqLength > pos) {\n\t\tbits[pos] = 0;\n\t\tpos++;\n\t}",
+  "replace": "\twhile (seqLength > pos)\n\t\tpos++;"
  },
  {
   "label": "the header arm leaves the cursor at 0x33",
@@ -86,18 +86,18 @@
  },
  {
   "label": "a value outside the jump table decodes the header",
-  "find": "\tswitch (word_ca4) {\n\tcase 3:",
-  "replace": "\tswitch (word_ca4 == 12 ? 5 : word_ca4) {\n\tcase 3:"
+  "find": "\tswitch (rxState) {\n\tcase 3:",
+  "replace": "\tswitch (rxState == 12 ? 5 : rxState) {\n\tcase 3:"
  },
  {
   "label": "evaluateCRC covers one frame too many",
-  "find": "\t\tcrc[c] = 1;\n\n\tend = word_3bb0 - 0x11;",
-  "replace": "\t\tcrc[c] = 1;\n\n\tend = word_3bb0 - 0x10;"
+  "find": "\t\tcrc[c] = 1;\n\n\tend = bodyLength - 0x11;",
+  "replace": "\t\tcrc[c] = 1;\n\n\tend = bodyLength - 0x10;"
  },
  {
   "label": "evaluateCRC compares against the wrong sixteen bits",
-  "find": "\t\tint d = (int)crc[i] - (int)bits[word_3bb0 - 0x10 + i];",
-  "replace": "\t\tint d = (int)crc[i] - (int)bits[word_3bb0 - 0xf + i];"
+  "find": "\t\tint d = (int)crc[i] - (int)bits[bodyLength - 0x10 + i];",
+  "replace": "\t\tint d = (int)crc[i] - (int)bits[bodyLength - 0xf + i];"
  },
  {
   "label": "evaluateCRC returns the opposite verdict",

@@ -39,7 +39,7 @@ typedef char cp_bits_are_at_cb8[
 typedef char cp_crc_is_at_3b98[
 	(__builtin_offsetof(V90CP, crc) == 0x3b98) ? 1 : -1];
 typedef char cp_length_is_at_3bb0[
-	(__builtin_offsetof(V90CP, word_3bb0) == 0x3bb0) ? 1 : -1];
+	(__builtin_offsetof(V90CP, bodyLength) == 0x3bb0) ? 1 : -1];
 #endif
 
 /*
@@ -171,7 +171,7 @@ table14_layout(V90CP *cp, unsigned int m, int codec, unsigned int seed)
 			      (i + 1u == NP(table14_constellation_bits)) ? m :
 			      (m == 0 ? 0 : i % (m + 1u)));
 	cp->bits[128] = (unsigned char)(codec != 0);
-	cp->word_3bb0 = table14_word_3bb0(m, codec);
+	cp->bodyLength = table14_word_3bb0(m, codec);
 }
 
 static int
@@ -214,7 +214,7 @@ static void
 place_crc(V90CP *cp, unsigned int reg, int reverse)
 {
 	unsigned int i;
-	unsigned int at = cp->word_3bb0 - V90CP_CRC;
+	unsigned int at = cp->bodyLength - V90CP_CRC;
 
 	for (i = 0; i < V90CP_CRC; i++)
 		cp->bits[at + i] = (unsigned char)
@@ -309,7 +309,7 @@ run_subject(const char *group, const char *subject, calc_fn calc, eval_fn eval)
 			    codec ? 368L + 256L * (long)m : 240L + 128L * (long)m,
 			    tag);
 		diff_eq_int("Table 14 CRC end is 289 + delta (%ld)",
-			    (long)cp->word_3bb0,
+			    (long)cp->bodyLength,
 			    (long)table14_word_3bb0(m, codec), tag);
 
 		seed_register(cp);
@@ -333,7 +333,7 @@ run_subject(const char *group, const char *subject, calc_fn calc, eval_fn eval)
 		case 1: excluded = 34u; break;
 		case 2: excluded = table14_final_start(m, codec); break;
 		case 3: excluded = table14_final_start(m, codec) + 1u; break;
-		default: excluded = cp->word_3bb0; break;
+		default: excluded = cp->bodyLength; break;
 		}
 		switch (trial % 3) {
 		case 0: included = 18u; break;
@@ -343,7 +343,7 @@ run_subject(const char *group, const char *subject, calc_fn calc, eval_fn eval)
 		switch (trial % 3) {
 		case 0: ignored = 5u; break;
 		case 1: ignored = table14_final_start(m, codec); break;
-		default: ignored = cp->word_3bb0; break;
+		default: ignored = cp->bodyLength; break;
 		}
 
 		table14_layout(cp, m, codec, 0x5519u + (unsigned int)trial);

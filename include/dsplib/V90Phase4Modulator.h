@@ -625,7 +625,7 @@ public:
 	unsigned int cpBitCount;
 
 	/*
-	 * +0x2f94  `6 * cpBitCount / cp->word_3ba8`, the CP sequence's length
+	 * +0x2f94  `6 * cpBitCount / cp->groupSize`, the CP sequence's length
 	 * in symbols, and the most-read field in the class: fifteen `divl`
 	 * sites take `symbolCounter % cpSequenceSymbols`.
 	 */
