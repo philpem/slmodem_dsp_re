@@ -25,13 +25,14 @@
  * here and stays `ResamplerTiming`'s.
  *
  * ---------------------------------------------------------------------------
- * A NOTE ON +0x0f4 OF `V90Parameters`, WHICH THIS FILE READS AS A FLOAT
+ * A NOTE ON +0x0f0 AND +0x0f4 OF `V90Parameters`, WHICH THIS FILE READS AS A FLOAT
  *
- * `include/dsplib/V90Parameters.h` declares +0x0f0
- * `BLL_TRN1_QC_SLOW_K2` (with `BLL_TRN1_QC_SLOW_K1` recorded beside it as an
- * alias) and +0x0f4 `unnamed_0f4`, now a float after finding F7960 corrected
- * its former int type.  `setBllState`'s TRN1_QC_SLOW arm settles what those
- * two are:
+ * `include/dsplib/V90Parameters.h` declares +0x0f0 `BLL_TRN1_QC_SLOW_K1` and
+ * +0x0f4 `BLL_TRN1_QC_SLOW_K2`, the latter a float after finding F7960
+ * corrected its former int type.  +0x0f0 is read TWICE by `loadParams` -- the
+ * `BLL_TRN1_QC_SLOW_K2` call lands on it as well, which is D901's reproduced
+ * original defect -- but `setBllState`'s TRN1_QC_SLOW arm settles what the
+ * two offsets are:
  * it copies +0x0f0 into `bllK1` and +0x0f4 into `bllK2`, with two plain
  * 32-bit `mov`s and no conversion, exactly as its thirteen sibling arms copy
  * the (K1, K2) pair at +0x088, +0x090, +0x098 and so on.  So +0x0f0 is the
@@ -270,8 +271,8 @@ V90Resampler::setBllState(V90BllState state, unsigned int countSamples)
 		break;
 	case V90_BLL_TRN1_QC_SLOW:
 		/* See the file comment for +0x0f0 and +0x0f4. */
-		bllK1 = params->BLL_TRN1_QC_SLOW_K2;
-		__builtin_memcpy(&bllK2, &params->unnamed_0f4, sizeof bllK2);
+		bllK1 = params->BLL_TRN1_QC_SLOW_K1;
+		__builtin_memcpy(&bllK2, &params->BLL_TRN1_QC_SLOW_K2, sizeof bllK2);
 		edprintf("V90Resampler: state = TRN1_QC_SLOW\r\n");
 		break;
 	}

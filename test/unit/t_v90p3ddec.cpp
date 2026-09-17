@@ -1315,7 +1315,7 @@ run_p3d_setdigimp(void)
 				adid[side].altRbsVarianceThresholdFactor = 5.0f;
 				adid[side].float_a974 = 5.0f;
 				adid[side].padGainSearchScale = 1.0f;
-				adid[side].float_a980 = 1.0f;
+				adid[side].varThreshScale = 1.0f;
 				adid[side].trn1Sigma = 1.0f;
 				/*
 				 * 0x30-ish, as t_v90adid's own findPadGain

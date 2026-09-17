@@ -47,6 +47,19 @@ CLASSES = (
      ('0x13d90', '0x13f20')),
 )
 
+# Reproduced original defects that invert the alias rule below.  At
+# V90Parameters +0x0f0 the object reads the `BLL_TRN1_QC_SLOW_K1` string and
+# then the `BLL_TRN1_QC_SLOW_K2` string into the SAME field; the second read is
+# the original's defect (docs/deviations.md D901), so the header correctly
+# carries the FIRST read's name.  The entry is (index into the reads that the
+# header carries, the OTHER read's name, why), and the gate still requires the
+# defect's second read to be present -- `t_v90loadparams` proves the call
+# sequence, this proves the field name that sequence cannot.
+DEFECT_READS = {
+    ('V90Parameters.h', 0x0f0): (0, 'BLL_TRN1_QC_SLOW_K2',
+                                  'docs/deviations.md D901'),
+}
+
 FIELD_RE = re.compile(
     r'^\t(int|float)\s+(\w+);\s*/\*\s*\+0x([0-9a-f]+)(.*?)\*/', re.M)
 
@@ -75,13 +88,14 @@ def from_blob(obj, sym):
         sys.exit('paramcheck.py: %s -- %d of %d calls unresolved; vparse.py '
                  'cannot read this function and NOTHING below is checked'
                  % (sym, len(calls) - n, len(calls)))
-    # The last read of an offset is the one that survives, and is the name the
-    # header carries; earlier reads of the same offset are aliases.
+    # Every read of an offset, in call order.  The last read is normally the
+    # name the header carries; earlier reads of the same offset are aliases.
+    # A reproduced defect can invert that -- see DEFECT_READS above.
     out = {}
     for kind, slots in calls:
         nm, ptr = slots.get(4), slots.get(8)
-        out[ptr[1]] = (strs[nm[1]][nm[2]],
-                       'float' if kind.endswith('float') else 'int')
+        out.setdefault(ptr[1], []).append(
+            (strs[nm[1]][nm[2]], 'float' if kind.endswith('float') else 'int'))
     return out
 
 
@@ -145,10 +159,23 @@ def main():
         hdr = from_header(path)
         n = 0
         for off in sorted(set(blob) | set(hdr)):
-            b, h = blob.get(off), hdr.get(off)
-            if b is None:
+            reads, h = blob.get(off), hdr.get(off)
+            if not reads:
                 continue          # setToDefault-only field; loadParams is
                                   # silent about it and so is this check
+            sel = DEFECT_READS.get((header, off))
+            if sel:
+                idx, other, why = sel
+                b = reads[idx]
+                if len(reads) != 2 or reads[1 - idx][0] != other:
+                    print('  DEFECT   +0x%03x  %s: expected the reproduced '
+                          'second read of %s (%s), found %s'
+                          % (off, header, other, why,
+                             [r[0] for r in reads]))
+                    bad += 1
+                    continue
+            else:
+                b = reads[-1]     # the last read is the one that survives
             if h is None:
                 print('  MISSING  +0x%03x  %s %s -- in the object, not in %s'
                       % (off, b[1], b[0], header))

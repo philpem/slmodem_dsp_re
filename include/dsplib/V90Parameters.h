@@ -80,11 +80,17 @@
  * `MAX_TX_RATE_INDEX_FOR_SENSITIVE_ISP` are read by `loadParams` and never
  * written by `setToDefault`, so they start as whatever the allocation left.
  *
- * Four offsets are read twice under two names and are marked `alias`
+ * Three offsets are read twice under two names and are marked `alias`
  * below. The parser is called once per name against the same address, so
  * the second read wins if the file carries both; the field is named for
  * the later call and the earlier name is recorded beside it. `GERMAN_PBX_*`
- * is three of the four, the shape you would expect of a per-market override.
+ * is all three, the shape you would expect of a per-market override.
+ *
+ * The fourth offset read twice is not that shape. +0x0f0 is `SLOW_K1`: the
+ * `BLL_TRN1_QC_SLOW_K1` read lands there and the very next call reads
+ * `BLL_TRN1_QC_SLOW_K2` into the SAME field, where +0x0f4 is the real
+ * `SLOW_K2`. That is a defect in the original, preserved exactly as the
+ * object has it (`docs/deviations.md` D901), and not a market override.
  *
  * `Vparser_read_int` and `Vparser_read_float` are three-byte stubs in the
  * shipped object -- `xor %eax,%eax; ret` -- so none of these reads has any
@@ -268,8 +274,8 @@ public:
 	float	BLL_TRN1_QC_FAST_K2;	/* +0x0e4 */
 	float	BLL_TRN1_QC_MEDIUM_K1;	/* +0x0e8 */
 	float	BLL_TRN1_QC_MEDIUM_K2;	/* +0x0ec */
-	float	BLL_TRN1_QC_SLOW_K2;	/* +0x0f0  alias BLL_TRN1_QC_SLOW_K1 -- D901 */
-	float	unnamed_0f4;		/* +0x0f4  setToDefault only; 2e-12f.  FLOAT: shares one materialisation with +0x12c and +0x19c, both float -- 878, F7960, and D901 argues this is the real SLOW_K2 */
+	float	BLL_TRN1_QC_SLOW_K1;	/* +0x0f0  read TWICE; D901: the `SLOW_K2` file name lands here too */
+	float	BLL_TRN1_QC_SLOW_K2;	/* +0x0f4  setToDefault only; 2e-12f.  FLOAT: shares one materialisation with +0x12c and +0x19c, both float -- 878, F7960 */
 	int  	BLL_TRN1D_INITIAL_TO_FAST_DURATION;	/* +0x0f8 */
 	int  	BLL_TRN1D_FAST_TO_SLOW_DURATION;	/* +0x0fc */
 	/*
@@ -316,6 +322,19 @@ public:
 	float	LINEAR_EQU_FADE_RIGHT_EDGE_RATIO;	/* +0x180 */
 	int  	LINEAR_EQU_CURSOR_PLACE;	/* +0x184 */
 	float	LINEAR_EQU_TRN1D_BETA;	/* +0x188 */
+	/*
+	 * The active DIL-beta trio, +0x18c/+0x190/+0x194. Each is read from
+	 * the parameter file under the generic `LINEAR_EQU_DIL_*` name and
+	 * again under the `GERMAN_PBX_` name beside it
+	 * (`V90Parameters.cpp:211-213` and `:220-222`), so each carries the
+	 * later (market) name under the alias rule above. The
+	 * `GERMAN_PBX_` values are then OVERWRITTEN at run time, under
+	 * connection type 2 (German PBX), from +0x1b0/+0x1b4/+0x1b8 below --
+	 * exactly as `LINEAR_EQU_DATA_BETA` is overwritten from
+	 * `GERMAN_PBX_LINEAR_EQU_DATA_BETA` (`V90Demodulator.cpp:1310-1319`).
+	 * `V90Equalizer` reads these three under their `GERMAN_PBX_` names
+	 * (`:2292`, `:2301`, `:2319`, `:2325`, `:2331`).
+	 */
 	float	GERMAN_PBX_LINEAR_EQU_DIL_BETA;	/* +0x18c  alias LINEAR_EQU_DIL_BETA */
 	float	GERMAN_PBX_LINEAR_EQU_DIL_MED_UCODE_BETA;	/* +0x190  alias LINEAR_EQU_DIL_MED_UCODE_BETA */
 	float	GERMAN_PBX_LINEAR_EQU_DIL_HIGH_UCODE_BETA;	/* +0x194  alias LINEAR_EQU_DIL_HIGH_UCODE_BETA */
@@ -325,6 +344,19 @@ public:
 	float	LINEAR_EQU_ALT_DIL_BETA;	/* +0x1a4 */
 	float	LINEAR_EQU_ALT_DIL_MED_UCODE_BETA;	/* +0x1a8 */
 	float	LINEAR_EQU_ALT_DIL_HIGH_UCODE_BETA;	/* +0x1ac */
+	/*
+	 * The German-PBX SOURCE trio, +0x1b0/+0x1b4/+0x1b8: `setToDefault`
+	 * hardcodes 8.5e-11 / 6e-11 / 1.5e-11 and `V90Demodulator` copies
+	 * them into the active +0x18c/+0x190/+0x194 fields when the
+	 * connection type is 2 (`:1314-1319`). They deliberately keep offset
+	 * names: they are the values that OVERWRITE the already-named
+	 * `GERMAN_PBX_LINEAR_EQU_DIL_*` destinations, so taking those names
+	 * would collide with them, and nothing names the sources -- no
+	 * parameter-file read and no diagnostic reaches them (D901-adjacent
+	 * disposition in `docs/naming-audit.md`, Batch 24). FLOAT, not int:
+	 * each shares one materialisation with a named float below (F878,
+	 * F7960).
+	 */
 	float	unnamed_1b0;		/* +0x1b0  setToDefault only; 8.5e-11f.  FLOAT: shares one materialisation with +0x1e4, a float -- 878, F7960 */
 	float	unnamed_1b4;		/* +0x1b4  setToDefault only; 6e-11f.  FLOAT: shares one materialisation with +0x1f8, a float -- 878, F7960 */
 	float	unnamed_1b8;		/* +0x1b8  setToDefault only; 1.5e-11f.  FLOAT, forced: the object's store is `fsts` -- 878, F7960 */

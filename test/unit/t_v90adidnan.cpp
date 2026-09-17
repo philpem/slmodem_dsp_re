@@ -226,7 +226,7 @@ main(void)
 		finite_variances();
 		BOTH(unSuspectedPhase, 2);
 		BOTH(minMaxUcode, 0x30);
-		BOTH(float_a980, 1.0f);
+		BOTH(varThreshScale, 1.0f);
 		BOTH(ucode, 0x41);
 		adid_set_2800(0x15);
 

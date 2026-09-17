@@ -101,18 +101,18 @@
  },
  {
   "label": "swap the two +0xa97a constants",
-  "find": "\t\tminMaxUcode = 88;\n\t\tpadGainSearchScale = 0.35f;\n\t\tfloat_a980 = 1.75f;\n\t} else {\n\t\tshort_a978 = 0;\n\t\tminMaxUcode = 80;",
-  "replace": "\t\tminMaxUcode = 80;\n\t\tpadGainSearchScale = 0.35f;\n\t\tfloat_a980 = 1.75f;\n\t} else {\n\t\tshort_a978 = 0;\n\t\tminMaxUcode = 88;"
+  "find": "\t\tminMaxUcode = 88;\n\t\tpadGainSearchScale = 0.35f;\n\t\tvarThreshScale = 1.75f;\n\t} else {\n\t\tshort_a978 = 0;\n\t\tminMaxUcode = 80;",
+  "replace": "\t\tminMaxUcode = 80;\n\t\tpadGainSearchScale = 0.35f;\n\t\tvarThreshScale = 1.75f;\n\t} else {\n\t\tshort_a978 = 0;\n\t\tminMaxUcode = 88;"
  },
  {
   "label": "swap the two +0xa97c constants",
-  "find": "\t\tpadGainSearchScale = 0.35f;\n\t\tfloat_a980 = 1.75f;\n\t} else {\n\t\tshort_a978 = 0;\n\t\tminMaxUcode = 80;\n\t\tpadGainSearchScale = 0.25f;",
-  "replace": "\t\tpadGainSearchScale = 0.25f;\n\t\tfloat_a980 = 1.75f;\n\t} else {\n\t\tshort_a978 = 0;\n\t\tminMaxUcode = 80;\n\t\tpadGainSearchScale = 0.35f;"
+  "find": "\t\tpadGainSearchScale = 0.35f;\n\t\tvarThreshScale = 1.75f;\n\t} else {\n\t\tshort_a978 = 0;\n\t\tminMaxUcode = 80;\n\t\tpadGainSearchScale = 0.25f;",
+  "replace": "\t\tpadGainSearchScale = 0.25f;\n\t\tvarThreshScale = 1.75f;\n\t} else {\n\t\tshort_a978 = 0;\n\t\tminMaxUcode = 80;\n\t\tpadGainSearchScale = 0.35f;"
  },
  {
   "label": "swap the two +0xa980 constants",
-  "find": "\t\tfloat_a980 = 1.75f;\n\t} else {\n\t\tshort_a978 = 0;\n\t\tminMaxUcode = 80;\n\t\tpadGainSearchScale = 0.25f;\n\t\tfloat_a980 = 1.5f;",
-  "replace": "\t\tfloat_a980 = 1.5f;\n\t} else {\n\t\tshort_a978 = 0;\n\t\tminMaxUcode = 80;\n\t\tpadGainSearchScale = 0.25f;\n\t\tfloat_a980 = 1.75f;"
+  "find": "\t\tvarThreshScale = 1.75f;\n\t} else {\n\t\tshort_a978 = 0;\n\t\tminMaxUcode = 80;\n\t\tpadGainSearchScale = 0.25f;\n\t\tvarThreshScale = 1.5f;",
+  "replace": "\t\tvarThreshScale = 1.5f;\n\t} else {\n\t\tshort_a978 = 0;\n\t\tminMaxUcode = 80;\n\t\tpadGainSearchScale = 0.25f;\n\t\tvarThreshScale = 1.75f;"
  },
  {
   "label": "set the +0xa978 flag on the wrong branch",
@@ -220,8 +220,8 @@
  },
  {
   "label": "give setConnectionType's else arm the fourth store reset has (D255)",
-  "find": "\t} else {\n\t\tminMaxUcode = 80;\n\t\tpadGainSearchScale = 0.25f;\n\t\tfloat_a980 = 1.5f;\n\t}\n}",
-  "replace": "\t} else {\n\t\tshort_a978 = 0;\n\t\tminMaxUcode = 80;\n\t\tpadGainSearchScale = 0.25f;\n\t\tfloat_a980 = 1.5f;\n\t}\n}"
+  "find": "\t} else {\n\t\tminMaxUcode = 80;\n\t\tpadGainSearchScale = 0.25f;\n\t\tvarThreshScale = 1.5f;\n\t}\n}",
+  "replace": "\t} else {\n\t\tshort_a978 = 0;\n\t\tminMaxUcode = 80;\n\t\tpadGainSearchScale = 0.25f;\n\t\tvarThreshScale = 1.5f;\n\t}\n}"
  },
  {
   "label": "swap setConnectionType's two thresholds",
@@ -1487,12 +1487,12 @@
  },
  {
   "label": "dmu: threshold scale 0.05 -> 0.06",
-  "find": "product = sum * float_a980 * 0.05f;",
-  "replace": "product = sum * float_a980 * 0.06f;"
+  "find": "product = sum * varThreshScale * 0.05f;",
+  "replace": "product = sum * varThreshScale * 0.06f;"
  },
  {
   "label": "dmu: threshold scaled by the wrong field",
-  "find": "product = sum * float_a980 * 0.05f;",
+  "find": "product = sum * varThreshScale * 0.05f;",
   "replace": "product = sum * padGainSearchScale * 0.05f;"
  },
  {
@@ -1809,7 +1809,7 @@
  {
   "label": "fpg: the range's start is scaled by the wrong field",
   "find": "float scale = padGainSearchScale;",
-  "replace": "float scale = float_a980;"
+  "replace": "float scale = varThreshScale;"
  },
  {
   "label": "fpg: the range's A-law start mask",

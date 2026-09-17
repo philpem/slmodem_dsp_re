@@ -1862,7 +1862,7 @@ run_signal(void)
 
 			BOTH(unSuspectedPhase, safe_usp(mc, block % NPHASE));
 			BOTH(minMaxUcode, (short)(0x30 + block % 8));
-			BOTH(float_a980, 1.0f + (float)(block % 5));
+			BOTH(varThreshScale, 1.0f + (float)(block % 5));
 			ours_o.determineMaxUcode(mc);
 			ref_determineMaxUcode(&theirs_o, mc);
 			diff_eq_obj("block: determineMaxUcode",
@@ -4090,12 +4090,12 @@ mu_finite_variances(void)
  *
  * THE METHOD IS FIVE DECISIONS DEEP AND A SEEDED OBJECT REACHES ONE SIDE OF
  * MOST OF THEM, so the sweep forces the six fields the answers turn on --
- * `unSuspectedPhase`, `minMaxUcode`, `float_a980`, `ucode`, the six flags at
+ * `unSuspectedPhase`, `minMaxUcode`, `varThreshScale`, `ucode`, the six flags at
  * +0x2800, and the argument -- and then four directed grids drive the arms a
  * sweep cannot reach.
  *
  * THE THRESHOLD'S TWO CLAMPS NEED A CONSTRUCTED INPUT.  It is the mean of
- * twenty variances times `float_a980`, and a seeded `linearMappingVar` puts that
+ * twenty variances times `varThreshScale`, and a seeded `linearMappingVar` puts that
  * mean somewhere astronomical almost every time -- so the grid sets those
  * twenty entries directly: all zero clamps it up to 500, all 1e9 clamps it
  * down to 100000, and a middling set leaves it alone.
@@ -4149,7 +4149,7 @@ run_maxucode(void)
 		mu_finite_variances();
 		BOTH(unSuspectedPhase, usp);
 		BOTH(minMaxUcode, a97a);
-		BOTH(float_a980, a980v[IDX(trial, 5)]);
+		BOTH(varThreshScale, a980v[IDX(trial, 5)]);
 		BOTH(ucode, ucv[IDX(trial, 7)]);
 
 		/*
@@ -4253,7 +4253,7 @@ run_maxucode(void)
 			mu_finite_variances();
 			BOTH(unSuspectedPhase, (short)(g % NPHASE));
 			BOTH(minMaxUcode, 0x30);
-			BOTH(float_a980, 1.0f);
+			BOTH(varThreshScale, 1.0f);
 			BOTH(ucode, (unsigned char)(0x41 + g));
 			adid_set_2800(0x15);
 
@@ -4320,7 +4320,7 @@ run_maxucode(void)
 			mu_finite_variances();
 			BOTH(unSuspectedPhase, 2);
 			BOTH(minMaxUcode, 0x30);
-			BOTH(float_a980, 1.0f);
+			BOTH(varThreshScale, 1.0f);
 			BOTH(ucode, 0x41);
 			adid_set_2800(0x15);
 
@@ -4414,7 +4414,7 @@ run_maxucode(void)
 			seed(830 + r, 0);
 			mu_finite_variances();
 			BOTH(unSuspectedPhase, 1);
-			BOTH(float_a980, 1.0f);
+			BOTH(varThreshScale, 1.0f);
 			BOTH(ucode, 0x41);
 			adid_set_2800(0x15);
 
@@ -4469,7 +4469,7 @@ run_maxucode(void)
 			mu_finite_variances();
 			BOTH(unSuspectedPhase, (short)(a % 5));
 			BOTH(minMaxUcode, 0x30);
-			BOTH(float_a980, 1.0f);
+			BOTH(varThreshScale, 1.0f);
 			BOTH(ucode, (unsigned char)(0x20 + a));
 			adid_set_2800(1 + a * 7 % 62);
 

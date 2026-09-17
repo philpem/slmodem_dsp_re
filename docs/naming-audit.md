@@ -1290,6 +1290,104 @@ Batch 23 gate result: Gentoo `make phase` exited 0, **`period differential:
 375 passed, 0 failed`** and `phase boundary: period differential and
 structural checks all OK`; 655/655 period objects byte-identical.
 
+## Batch 24: issue #119 final (D901, float_a980, German-PBX disposition)
+
+The last three open #119 items. This batch resolves the D901 field-name
+correction and the German-PBX source disposition that Batch 20 left retained,
+and names `float_a980`.
+
+### A. D901: the +0x0f0 field is `SLOW_K1`, and +0x0f4 is `SLOW_K2`
+
+`docs/deviations.md` D901 records that `loadParams` reads the
+`"BLL_TRN1_QC_SLOW_K1"` string and then the `"BLL_TRN1_QC_SLOW_K2"` string
+into the SAME field at +0x0f0, and that +0x0f4 is the real K2 slot. The field
+names were therefore on the wrong offsets. They are corrected:
+
+| Offset | Previous | New | Anchor |
+| --- | --- | --- | --- |
+| +0x0f0 | `V90Parameters::BLL_TRN1_QC_SLOW_K2` | `V90Parameters::BLL_TRN1_QC_SLOW_K1` | `V90Resampler::setBllState`'s TRN1_QC_SLOW arm copies +0x0f0 into `bllK1` (`V90Resampler.cpp:273`); D901 |
+| +0x0f4 | `V90Parameters::unnamed_0f4` | `V90Parameters::BLL_TRN1_QC_SLOW_K2` | the same arm copies +0x0f4 into `bllK2` (`:274`); D901, and the 2e-12f `K2` series |
+
+The defect itself is **preserved**: `V90Parameters.cpp:180-181` still reads
+both file names into the one field (`&BLL_TRN1_QC_SLOW_K1`), and
+`setToDefault` writes 0.0001f / 2e-12f into +0x0f0 / +0x0f4 under the
+corrected names. String literals (`"BLL_TRN1_QC_SLOW_K1"`,
+`"BLL_TRN1_QC_SLOW_K2"`) are unchanged, as is `t_v90loadparams`, which
+compares the two calls entry for entry. Header and file comments were
+rewritten to say +0x0f0 is `SLOW_K1` (the K2-name read into it being D901's
+defect) and +0x0f4 is `SLOW_K2`; the "alias ... K1 -- D901" wording is gone.
+
+`tools/paramcheck.py` gains a **declared exception** for the defect. Its rule
+is that the last read of an offset is the name the header carries; D901 is
+the one offset where that is false. `DEFECT_READS` names
+`('V90Parameters.h', 0x0f0)` -> first read `SLOW_K1`, with the reproduced
+second read `SLOW_K2` still required, so a repair of the object's defect would
+also fail the gate and have to update the register. The other three aliases
+(`+0x18c/+0x190/+0x194`) keep the last-read rule. Both branches were shown to
+fire: a perturbed +0x0f0 header name gives `NAME`, and a perturbed expected
+second-read name gives `DEFECT`, each exit 1; restored, exit 0.
+
+### B. `float_a980` -> `varThreshScale`
+
+`V90AutoDigitalImpDetector::float_a980` is set 1.75f / 1.5f by the
+connection-type test (`setConnectionType`, `:467,471`; `reset`, `:520,525`)
+and read once as `product = sum * varThreshScale * 0.05f; varThresh =
+product;` (`:2684`), scaling the reference-phase variance sum into the
+maximum-ucode threshold. The name matches the code's own `varThresh`. This is
+**usage inference** -- no string or callee types it -- and the header comment
+says so. No type changed: it stays `float`.
+
+### C. German-PBX source betas -- explicit disposition, no rename
+
+`V90Parameters::unnamed_1b0/1b4/1b8` (+0x1b0/1b4/1b8, floats, hardcoded
+8.5e-11 / 6e-11 / 1.5e-11) are copied into the active DIL-beta fields at
++0x18c/0x190/0x194 by `V90Demodulator.cpp:1314-1319` when the connection type
+is 2 (German PBX), exactly as `params->LINEAR_EQU_DATA_BETA =
+params->GERMAN_PBX_LINEAR_EQU_DATA_BETA` sits above them (`:1310-1311`). The
++0x18c/0x190/0x194 fields are read by `V90Equalizer.cpp:2292,2301,2319,2325,2331`
+under their existing `GERMAN_PBX_LINEAR_EQU_DIL_*` names and are also read
+from the parameter file under the generic names (`V90Parameters.cpp:211-213`).
+
+Because the source set would collide with the active field names it
+overwrites, it correctly keeps offset names. No German-PBX field was renamed.
+The header comments for **both** sets now record this structure and the reason
+the source set stays neutral.
+
+### Mutation manifests and verification
+
+`test/mutations/v90resampler.json` and `test/mutations/v90adid.json` were
+transformed structurally -- JSON decoded, only `find`/`replace` VALUES
+substituted -- because the raw files carry literal `\t`. Labels, `why`,
+`description`, `note`, `equivalent` and every other property are byte-for-byte
+identical. Every changed `find` still matches its source exactly once
+(v90resampler 4 changed leaves, v90adid 12; 0 non-find/replace leaves changed).
+The resampler "reads +0x0f0 for both gains" fault is preserved: its `replace`
+still writes the +0x0f0 field (`BLL_TRN1_QC_SLOW_K1`) into `bllK2`.
+
+A token-aware forward substitution of `HEAD` reproduces all eight changed
+source/test files. Four of them (`V90Parameters.h`, `V90Parameters.cpp`,
+`V90Resampler.cpp`, `V90AutoDigitalImpDetector.h`) carry intended prose
+rewrites in comments; the other four are pure identifier substitutions with
+zero residual diff. Over CODE tokens only (comments blanked, string literals
+preserved), every file reports **0 non-`{old,new}` identifier count
+differences**, and each pair balances: `V90AutoDigitalImpDetector.cpp`
+`float_a980` 6->0 / `varThreshScale` 0->6, `t_v90adid.cpp` 6->0 / 0->6, and
+the chained pair `BLL_TRN1_QC_SLOW_K2`/`unnamed_0f4` ->
+`BLL_TRN1_QC_SLOW_K1`/`BLL_TRN1_QC_SLOW_K2` conserves tokens in
+`V90Parameters.cpp` (4/1 -> 2/4 reads plus the stores). The manifests report
+the same: 0 non-`{old,new}` token diffs.
+
+`docs/naming-inventory.md` was regenerated: named 2630 -> 2632, offset-named
+391 -> 390, placeholder 74 -> 73.
+
+### Gate
+
+Batch 24 gate result: Gentoo `make phase` exited 0, **`period differential:
+375 passed, 0 failed`** and `phase boundary: period differential and
+structural checks all OK`; 655/655 period objects byte-identical
+(`/home/philpem/slmodem/tmp/issue119-final-before.sha256` vs
+`issue119-final-after.sha256`).
+
 
 
 
