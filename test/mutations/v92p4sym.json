@@ -343,17 +343,17 @@
  },
  {
   "label": "state 4 does not clear the pattern index",
-  "find": "\t\t\t\tstate = V92P4M_STATE_SUV;\n\t\t\t\tsymbolCount = 0;\n\t\t\t\tpatternIndex = 0;\n\t\t\t\tcp->bitsPerSymbol = bitsPerSymbol;\n\t\t\t\tcp->byte_00 = 1;\n\t\t\t\tcp->setSUV(word_2c);",
-  "replace": "\t\t\t\tstate = V92P4M_STATE_SUV;\n\t\t\t\tsymbolCount = 0;\n\t\t\t\tcp->bitsPerSymbol = bitsPerSymbol;\n\t\t\t\tcp->byte_00 = 1;\n\t\t\t\tcp->setSUV(word_2c);"
+  "find": "\t\t\t\tstate = V92P4M_STATE_SUV;\n\t\t\t\tsymbolCount = 0;\n\t\t\t\tpatternIndex = 0;\n\t\t\t\tcp->bitsPerSymbol = bitsPerSymbol;\n\t\t\t\tcp->byte_00 = 1;\n\t\t\t\tcp->setSUV(silenceRrnRequest);",
+  "replace": "\t\t\t\tstate = V92P4M_STATE_SUV;\n\t\t\t\tsymbolCount = 0;\n\t\t\t\tcp->bitsPerSymbol = bitsPerSymbol;\n\t\t\t\tcp->byte_00 = 1;\n\t\t\t\tcp->setSUV(silenceRrnRequest);"
  },
  {
   "label": "state 4 does not copy bitsPerSymbol into the CP",
-  "find": "\t\t\t\tpatternIndex = 0;\n\t\t\t\tcp->bitsPerSymbol = bitsPerSymbol;\n\t\t\t\tcp->byte_00 = 1;\n\t\t\t\tcp->setSUV(word_2c);",
-  "replace": "\t\t\t\tpatternIndex = 0;\n\t\t\t\tcp->byte_00 = 1;\n\t\t\t\tcp->setSUV(word_2c);"
+  "find": "\t\t\t\tpatternIndex = 0;\n\t\t\t\tcp->bitsPerSymbol = bitsPerSymbol;\n\t\t\t\tcp->byte_00 = 1;\n\t\t\t\tcp->setSUV(silenceRrnRequest);",
+  "replace": "\t\t\t\tpatternIndex = 0;\n\t\t\t\tcp->byte_00 = 1;\n\t\t\t\tcp->setSUV(silenceRrnRequest);"
  },
  {
   "label": "state 4 sets the SUV to zero rather than to word_2c",
-  "find": "\t\t\t\tcp->byte_00 = 1;\n\t\t\t\tcp->setSUV(word_2c);\n\t\t\t\tcp->infoToBits();\n\t\t\t\tpattern = cp->getBitVector(patternLength);\n\t\t\t\tword_1b0 = patternLength / bitsPerSymbol;\n\t\t\t}\n\t\t}\n\t\tbreak;\n\n\t/*\n\t * SUV.",
+  "find": "\t\t\t\tcp->byte_00 = 1;\n\t\t\t\tcp->setSUV(silenceRrnRequest);\n\t\t\t\tcp->infoToBits();\n\t\t\t\tpattern = cp->getBitVector(patternLength);\n\t\t\t\tword_1b0 = patternLength / bitsPerSymbol;\n\t\t\t}\n\t\t}\n\t\tbreak;\n\n\t/*\n\t * SUV.",
   "replace": "\t\t\t\tcp->byte_00 = 1;\n\t\t\t\tcp->setSUV(0u);\n\t\t\t\tcp->infoToBits();\n\t\t\t\tpattern = cp->getBitVector(patternLength);\n\t\t\t\tword_1b0 = patternLength / bitsPerSymbol;\n\t\t\t}\n\t\t}\n\t\tbreak;\n\n\t/*\n\t * SUV."
  },
  {
@@ -623,7 +623,7 @@
  },
  {
   "label": "state 27 sets the SUV to zero rather than to word_2c",
-  "find": "\t\t\tcp->byte_00 = 1;\n\t\t\tcp->setSUV(word_2c);\n\t\t\tcp->infoToBits();\n\t\t\tpattern = cp->getBitVector(patternLength);\n\t\t\tword_1b0 = patternLength / bitsPerSymbol;\n\t\t\tsetMappingParams(mappingParams);",
+  "find": "\t\t\tcp->byte_00 = 1;\n\t\t\tcp->setSUV(silenceRrnRequest);\n\t\t\tcp->infoToBits();\n\t\t\tpattern = cp->getBitVector(patternLength);\n\t\t\tword_1b0 = patternLength / bitsPerSymbol;\n\t\t\tsetMappingParams(mappingParams);",
   "replace": "\t\t\tcp->byte_00 = 1;\n\t\t\tcp->setSUV(0u);\n\t\t\tcp->infoToBits();\n\t\t\tpattern = cp->getBitVector(patternLength);\n\t\t\tword_1b0 = patternLength / bitsPerSymbol;\n\t\t\tsetMappingParams(mappingParams);"
  },
  {

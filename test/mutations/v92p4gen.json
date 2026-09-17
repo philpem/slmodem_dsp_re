@@ -5,13 +5,13 @@
  },
  {
   "label": "recivedCP sets +0x1c0 to 0 rather than 1",
-  "find": "\tword_1c0 = 1;\n\tcp->byte_04 = 1;",
-  "replace": "\tword_1c0 = 0;\n\tcp->byte_04 = 1;"
+  "find": "\tcpReceived = 1;\n\tcp->byte_04 = 1;",
+  "replace": "\tcpReceived = 0;\n\tcp->byte_04 = 1;"
  },
  {
   "label": "recivedCP leaves the V92CP's +0x04 alone",
-  "find": "\tword_1c0 = 1;\n\tcp->byte_04 = 1;\n\tcp->word_110 = 0;",
-  "replace": "\tword_1c0 = 1;\n\tcp->word_110 = 0;"
+  "find": "\tcpReceived = 1;\n\tcp->byte_04 = 1;\n\tcp->word_110 = 0;",
+  "replace": "\tcpReceived = 1;\n\tcp->word_110 = 0;"
  },
  {
   "label": "recivedCP sets the V92CP's +0x110 rather than clearing it",
@@ -20,8 +20,8 @@
  },
  {
   "label": "recivedCP writes the V92CP's +0x04 as a word",
-  "find": "\tword_1c0 = 1;\n\tcp->byte_04 = 1;\n",
-  "replace": "\tword_1c0 = 1;\n\t*(unsigned int *)&cp->byte_04 = 1;\n"
+  "find": "\tcpReceived = 1;\n\tcp->byte_04 = 1;\n",
+  "replace": "\tcpReceived = 1;\n\t*(unsigned int *)&cp->byte_04 = 1;\n"
  },
  {
   "label": "recivedPartOneSilenceRrnSUV clears the V92CP's +0x04 instead of setting it",
@@ -150,13 +150,13 @@
  },
  {
   "label": "recivedSUVtag does not require word_1c0",
-  "find": "\tif (word_1c0 == 0 || cp->word_110 == 0 || flag_20 != 0)",
+  "find": "\tif (cpReceived == 0 || cp->word_110 == 0 || flag_20 != 0)",
   "replace": "\tif (cp->word_110 == 0 || flag_20 != 0)"
  },
  {
   "label": "recivedSUVtag does not require the V92CP's +0x110",
-  "find": "\tif (word_1c0 == 0 || cp->word_110 == 0 || flag_20 != 0)\n\t\treturn;",
-  "replace": "\tif (word_1c0 == 0 || flag_20 != 0)\n\t\treturn;"
+  "find": "\tif (cpReceived == 0 || cp->word_110 == 0 || flag_20 != 0)\n\t\treturn;",
+  "replace": "\tif (cpReceived == 0 || flag_20 != 0)\n\t\treturn;"
  },
  {
   "label": "recivedSUVtag ignores flag_20",
@@ -255,8 +255,8 @@
  },
  {
   "label": "resetBeforRRN clears word_28 rather than setting it",
-  "find": "\tword_28 = 1;\n\tword_2c = 0;",
-  "replace": "\tword_28 = 0;\n\tword_2c = 0;"
+  "find": "\tword_28 = 1;\n\tsilenceRrnRequest = 0;",
+  "replace": "\tword_28 = 0;\n\tsilenceRrnRequest = 0;"
  },
  {
   "label": "resetBeforRRN leaves the V92CP alone",
@@ -275,7 +275,7 @@
  },
  {
   "label": "resetBeforRRN does not clear word_1c0",
-  "find": "resetBeforRRN()\n{\n\tword_1c0 = 0;\n\tword_1c4 = 0;",
+  "find": "resetBeforRRN()\n{\n\tcpReceived = 0;\n\tword_1c4 = 0;",
   "replace": "resetBeforRRN()\n{\n\tword_1c4 = 0;"
  },
  {
@@ -439,7 +439,7 @@
  },
  {
   "label": "recivedCPtag's first tag does not raise word_1c0",
-  "find": "\t\tword_1c0 = 1;\n\t\tcp->byte_04 = 1;\n\t\tcp->byte_00 = 1;",
+  "find": "\t\tcpReceived = 1;\n\t\tcp->byte_04 = 1;\n\t\tcp->byte_00 = 1;",
   "replace": "\t\tcp->byte_04 = 1;\n\t\tcp->byte_00 = 1;"
  },
  {
@@ -449,8 +449,8 @@
  },
  {
   "label": "recivedCPtag ignores flag_20 on the first tag",
-  "find": "\tif (word_1c0 == 0) {\n\t\tif (flag_20 != 0)\n\t\t\treturn;",
-  "replace": "\tif (word_1c0 == 0) {"
+  "find": "\tif (cpReceived == 0) {\n\t\tif (flag_20 != 0)\n\t\t\treturn;",
+  "replace": "\tif (cpReceived == 0) {"
  },
  {
   "label": "recivedCPtag acts in every state rather than 5, 12 and 13",

@@ -52,7 +52,7 @@
  * `exitCPt` subtracts, either side of it, several whole multiples, and
  * 0xffffffff so the subtraction wraps; `word_1b0` over moduli that do and do
  * not divide those counts.  Crossed with them, four one-bit inputs --
- * `flag_20`, `e2uExtended`, `word_1c0` and the V92CP's own `word_110` -- which
+ * `flag_20`, `e2uExtended`, `cpReceived` and the V92CP's own `word_110` -- which
  * are the guards three of the handlers test.
  *
  *   1. `flag_20` is tested at the top of `recivedEd` and `recivedFirstRrnEd`
@@ -254,7 +254,7 @@ static const unsigned int counts[] = {
 static const unsigned int mods[] = { 1u, 2u, 6u, 12u };
 #define NMOD ((int)(sizeof(mods) / sizeof(mods[0])))
 
-#define NBIT	16		/* flag_20, e2uExtended, word_1c0, cp->word_110 */
+#define NBIT	16		/* flag_20, e2uExtended, cpReceived, cp->word_110 */
 #define NTRIAL	(NSTATE * NCOUNT * NMOD * NBIT)
 
 /*
@@ -302,7 +302,7 @@ setup(int trial)
 		o->word_1b0 = mods[mi];
 		o->flag_20 = (unsigned)((b >> 0) & 1);
 		o->e2uExtended = (unsigned)((b >> 1) & 1);
-		o->word_1c0 = (unsigned)((b >> 2) & 1);
+		o->cpReceived = (unsigned)((b >> 2) & 1);
 		o->patternLength = 1u + (mods[mi] & 7u);
 
 		o->pattern = shared_pattern;

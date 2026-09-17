@@ -408,13 +408,13 @@ public:
 	void enterRepeatedCP();
 
 	/**
-	 * @brief Record that a CP has been received: set `word_1c0` and the
+	 * @brief Record that a CP has been received: set `cpReceived` and the
 	 *        CP's own `byte_04`, and clear the CP's `word_110`.
 	 */
 	void recivedCP();
 
 	/**
-	 * @brief Record a received CP tag. The first tag (`word_1c0` still
+	 * @brief Record a received CP tag. The first tag (`cpReceived` still
 	 *        clear) raises the CP flags and rebuilds the message; every
 	 *        tag after it takes the same E2u transition as `recivedEd`.
 	 */
@@ -501,14 +501,14 @@ public:
 
 	/**
 	 * @brief Prepare the RRN-second-section fields (`word_1c4`,
-	 *        `word_34`, `flag_20`, `byte_1c`, `word_18`, `word_1c0`) and
+	 *        `word_34`, `flag_20`, `byte_1c`, `word_18`, `cpReceived`) and
 	 *        the CP's `word_110`/`byte_04` ahead of that section.
 	 */
 	void resetRRNSecondSection();
 
 	/**
-	 * @brief Zero `word_1c0`/`word_1c4`/`symbolCount`, the CP's
-	 *        `word_110`, `word_2c`/`word_30`/`word_34`/`word_38`/
+	 * @brief Zero `cpReceived`/`word_1c4`/`symbolCount`, the CP's
+	 *        `word_110`, `silenceRrnRequest`/`word_30`/`word_34`/`word_38`/
 	 *        `flag_20`, and set `word_28` to 1, ahead of an RRN
 	 *        renegotiation.
 	 */
@@ -662,15 +662,18 @@ public:
 	unsigned int word_28;
 
 	/*
-	 * +0x2c  The SUV value, and the name is the CALLEE'S: two of
+	 * +0x2c  The SUV silence threshold an RRN carries. Two of
 	 * `generateSymbol`'s arms pass it straight to `V92CP::setSUV(unsigned
 	 * int)` -- `mov 0x2c(%esi),%edx` then the call, at .text+0x18193 and
-	 * +0x18f39 -- which stores it at `V92CP::suv`. Cleared by
-	 * `resetBeforRRN` and by `reset`, and nothing written assigns it
-	 * anything else, so what it ever holds besides zero is not
-	 * established and the offset name stays.
+	 * +0x18f39 -- which stores it at `V92CP::suv`; and
+	 * `VpcmFloModem::runPcmModem`'s two RRN arms assign it from the
+	 * already-named `V90ConnectionEvaluator::silenceRrnRequest` before
+	 * calling `initiateRRN` (VpcmFloModem.cpp:1735 and :1746). Cleared by
+	 * `resetBeforRRN` and by `reset`. The writer names the source and the
+	 * callee names the destination, so the field takes the writer's name:
+	 * the earlier "nothing written assigns it anything else" was stale.
 	 */
-	unsigned int word_2c;
+	unsigned int silenceRrnRequest;
 
 	/* +0x30  See `word_28`. */
 	unsigned int word_30;
@@ -679,10 +682,14 @@ public:
 	unsigned int word_34;
 
 	/*
-	 * +0x38  Cleared by `resetBeforRRN` and by `reset`, and read at two
-	 * sites: `recivedRt` will not act while it is clear, and
-	 * `generateSymbol` picks `word_24` as 4000 when it is set and 8004
-	 * when it is not. Nothing written sets it.
+	 * +0x38  Read at two sites: `recivedRt` will not act while it is
+	 * clear, and `generateSymbol` picks `word_24` as 4000 when it is set
+	 * and 8004 when it is not. Assigned from the demodulator's counted
+	 * block (`cp->word_ca0`) by the two silence-during-RRN arms of
+	 * `VpcmFloModem::runPcmModem` (VpcmFloModem.cpp:1826 and :1834);
+	 * `resetBeforRRN` clears it, and `reset` does NOT. The earlier
+	 * comment's "nothing written sets it" and its implication that
+	 * `reset` clears it were both stale. The name stays neutral.
 	 */
 	unsigned int word_38;
 
@@ -870,10 +877,27 @@ public:
 	 */
 	unsigned int e2uExtended;
 
-	/* +0x1c0  Cleared by the constructor. */
-	unsigned int word_1c0;
+	/*
+	 * +0x1c0  The "a CP has already been received" latch. Set by
+	 * `recivedCP` and by `recivedCPtag`'s first-tag path, and cleared by
+	 * the constructor, `resetBeforRRN`, `resetRRNSecondSection` and
+	 * `reset`. Read at two sites: `recivedSUVtag` will not take its
+	 * transition while it is clear, and `recivedCPtag` uses it to tell
+	 * the first CP tag from every one after it. Usage inference across
+	 * those sites, CLAUDE.md's weakest tier; no format string prints it.
+	 * The earlier "Cleared by the constructor." was stale.
+	 */
+	unsigned int cpReceived;
 
-	/* +0x1c4  Cleared by the constructor. */
+	/*
+	 * +0x1c4  The once-per-SUV latch: written by `recivedSUV`,
+	 * `recivedPartTwoSilenceRrnSUV` and the `SUVu`->`CPu` arm of
+	 * `generateSymbol`, and cleared by the constructor, `resetBeforRRN`,
+	 * `resetRRNSecondSection` and `reset`. Both `recivedSUV` handlers
+	 * read it as their early-out guard. The name stays neutral: the
+	 * three writers do not agree on one semantic, and the earlier
+	 * "Cleared by the constructor." was stale.
+	 */
 	unsigned int word_1c4;
 
 	/*

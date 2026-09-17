@@ -54,7 +54,7 @@ V92P4M_OFF(byte_1c,		0x01c, byte1c);
 V92P4M_OFF(flag_20,		0x020, flag20);
 V92P4M_OFF(word_24,		0x024, word24);
 V92P4M_OFF(word_28,		0x028, word28);
-V92P4M_OFF(word_2c,		0x02c, word2c);
+V92P4M_OFF(silenceRrnRequest,		0x02c, word2c);
 V92P4M_OFF(word_30,		0x030, word30);
 V92P4M_OFF(word_34,		0x034, word34);
 V92P4M_OFF(word_38,		0x038, word38);
@@ -86,7 +86,7 @@ V92P4M_OFF(patternLength,	0x1ac, patternlength);
 V92P4M_OFF(word_1b0,		0x1b0, word1b0);
 V92P4M_OFF(word_1b8,		0x1b8, word1b8);
 V92P4M_OFF(e2uExtended,		0x1bc, e2uextended);
-V92P4M_OFF(word_1c0,		0x1c0, word1c0);
+V92P4M_OFF(cpReceived,		0x1c0, word1c0);
 V92P4M_OFF(word_1c4,		0x1c4, word1c4);
 V92P4M_OFF(params,		0x1c8, params);
 
@@ -204,7 +204,7 @@ V92Phase4Modulator::V92Phase4Modulator(V92Parameters *p, V92BitsToSymbol *bts,
 	params = p;
 	cp = c;
 	bitsToSymbol = bts;
-	word_1c0 = 0;
+	cpReceived = 0;
 	word_1c4 = 0;
 	cp->word_110 = 0;
 	word_18 = 0;
@@ -535,12 +535,12 @@ int V92Phase4Modulator::generateB1u()
  */
 void V92Phase4Modulator::resetBeforRRN()
 {
-	word_1c0 = 0;
+	cpReceived = 0;
 	word_1c4 = 0;
 	symbolCount = 0;
 	cp->word_110 = 0;
 	word_28 = 1;
-	word_2c = 0;
+	silenceRrnRequest = 0;
 	word_30 = 0;
 	word_34 = 0;
 	word_38 = 0;
@@ -641,7 +641,7 @@ void V92Phase4Modulator::resetRRNSecondSection()
 	flag_20 = 0;
 	byte_1c = 0;
 	word_18 = 0;
-	word_1c0 = 0;
+	cpReceived = 0;
 	cp->word_110 = 0;
 	cp->byte_04 = 0;
 }
@@ -780,7 +780,7 @@ void V92Phase4Modulator::recivedPartTwoSilenceRrnSUV()
  * statements through the pointer and not one. */
 void V92Phase4Modulator::recivedCP()
 {
-	word_1c0 = 1;
+	cpReceived = 1;
 	cp->byte_04 = 1;
 	cp->word_110 = 0;
 }
@@ -802,7 +802,7 @@ void V92Phase4Modulator::recivedCP()
  * recivedSUVtag (.text+0x172f0, 207 B).
  *
  * The two clears at the top and the trace happen whatever else does; the
- * transition needs `word_1c0`, the CP's own `word_110`, and `flag_20` clear.
+ * transition needs `cpReceived`, the CP's own `word_110`, and `flag_20` clear.
  * The message goes through `dsplibs_debug_printf` rather than `edprintf`, so
  * it is neither encoded nor part of edprintf's key stream -- `cmpl $0x1,
  * dsplibs_debug_level; ja` at +0x172fc.
@@ -815,7 +815,7 @@ void V92Phase4Modulator::recivedSUVtag()
 	if (dsplibs_debug_level > 1)
 		dsplibs_debug_printf("recivedSUVtag called\r\n");
 
-	if (word_1c0 == 0 || cp->word_110 == 0 || flag_20 != 0)
+	if (cpReceived == 0 || cp->word_110 == 0 || flag_20 != 0)
 		return;
 
 	switch (state) {
@@ -901,7 +901,7 @@ void V92Phase4Modulator::recivedPartTwoSilenceRrnSUVtag()
 /*
  * recivedCPtag (.text+0x17500, 296 B).
  *
- * Two halves that share only their tail.  The FIRST CP tag -- `word_1c0`
+ * Two halves that share only their tail.  The FIRST CP tag -- `cpReceived`
  * clear -- raises the two CP flags and rebuilds the message; every one after
  * it takes `recivedSUVtag`'s transition instead, with the modulus test on the
  * outside and the state switch in its false arm, which is `recivedEd`'s
@@ -912,11 +912,11 @@ void V92Phase4Modulator::recivedCPtag()
 	byte_1c = 0;
 	word_18 = 0;
 
-	if (word_1c0 == 0) {
+	if (cpReceived == 0) {
 		if (flag_20 != 0)
 			return;
 
-		word_1c0 = 1;
+		cpReceived = 1;
 		cp->byte_04 = 1;
 		cp->byte_00 = 1;
 
@@ -1257,7 +1257,7 @@ int V92Phase4Modulator::generateSymbol()
 				patternIndex = 0;
 				cp->bitsPerSymbol = bitsPerSymbol;
 				cp->byte_00 = 1;
-				cp->setSUV(word_2c);
+				cp->setSUV(silenceRrnRequest);
 				cp->infoToBits();
 				pattern = cp->getBitVector(patternLength);
 				word_1b0 = patternLength / bitsPerSymbol;
@@ -1535,7 +1535,7 @@ int V92Phase4Modulator::generateSymbol()
 			symbolCount = 0;
 			cp->bitsPerSymbol = bitsPerSymbol;
 			cp->byte_00 = 1;
-			cp->setSUV(word_2c);
+			cp->setSUV(silenceRrnRequest);
 			cp->infoToBits();
 			pattern = cp->getBitVector(patternLength);
 			word_1b0 = patternLength / bitsPerSymbol;
@@ -1580,8 +1580,8 @@ int V92Phase4Modulator::generateSymbol()
  *     mapper->reset(amplitude, bitsArg)
  *     scrambler.reset(0)
  *     prevBit = 0
- *     word_1c0 = 0 ; cp->word_110 = 0 ; word_1c4 = 0
- *     word_28 = 0 ; flag_3c = 0 ; word_2c = 0 ; word_30 = 0 ; word_34 = 0
+ *     cpReceived = 0 ; cp->word_110 = 0 ; word_1c4 = 0
+ *     word_28 = 0 ; flag_3c = 0 ; silenceRrnRequest = 0 ; word_30 = 0 ; word_34 = 0
  *     word_18 = 0 ; byte_1c = 0 ; flag_20 = 0
  *     cp->bitsPerSymbol = 1
  *     cp->byte_00 = 0
@@ -1668,12 +1668,12 @@ V92Phase4Modulator::reset(short amplitudeArg, unsigned char bitsArg,
 	scrambler.reset(0);
 
 	prevBit = 0;
-	word_1c0 = 0;
+	cpReceived = 0;
 	cp->word_110 = 0;
 	word_1c4 = 0;
 	word_28 = 0;
 	flag_3c = 0;
-	word_2c = 0;
+	silenceRrnRequest = 0;
 	word_30 = 0;
 	word_34 = 0;
 	word_18 = 0;

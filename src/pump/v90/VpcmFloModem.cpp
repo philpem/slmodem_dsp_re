@@ -1732,7 +1732,7 @@ VPcmFloModem::runPcmModem(float *in, float *out, unsigned int n, int *rxbits,
 		ret = 1;
 		if (v92modem.modulator->phase == V92MOD_PHASE_DATA) {
 			v92modem.modulator->initiateRRN();
-			v92modem.modulator->phase4Modulator->word_2c =
+			v92modem.modulator->phase4Modulator->silenceRrnRequest =
 			    modem.demodulator->connectionEvaluator->silenceRrnRequest;
 		}
 		VPcmV34IndicateLocalRRN(v34Object);
@@ -1743,7 +1743,7 @@ VPcmFloModem::runPcmModem(float *in, float *out, unsigned int n, int *rxbits,
 		ret = 1;
 		if (v92modem.modulator->phase == V92MOD_PHASE_DATA) {
 			v92modem.modulator->initiateRRN();
-			v92modem.modulator->phase4Modulator->word_2c =
+			v92modem.modulator->phase4Modulator->silenceRrnRequest =
 			    modem.demodulator->connectionEvaluator->silenceRrnRequest;
 		}
 		VPcmV34IndicateRemoteRRN(v34Object);
