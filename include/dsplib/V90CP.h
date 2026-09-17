@@ -121,14 +121,16 @@
  * strings are a bounds check on `bits` and a bad-CRC line that names the
  * message but no field of it, so the remaining members below keep their
  * offsets for names. What it does settle is the role of five of them --
- * `rxState` the state, `bitIndex` the cursor, `word_cb0` the count within
+ * `rxState` the state, `bitIndex` the cursor, `stateBitCount` the count within
  * the current block, `onesRun` and `zerosRun` the run lengths of ones and
  * of zeros -- and roles are what the comments below carry. The sibling
  * `V90MP` reached the same roles from its own driver and, in commit
  * `22fa07e2` (finding F10181), named the state, the two run counters and the
  * cursor `rxState`, `onesRun`, `zerosRun` and `bitIndex`; `V90CP` follows
  * the sibling for the same roles, so `rxState`, `onesRun`, `zerosRun` and
- * `bitIndex` now carry those names. The sequence-length fields take the
+ * `bitIndex` now carry those names. The per-block count is named from the
+ * other sibling, `V92CP::stateBitCount` (`V92CP.h:489`), which is the same
+ * role. The sequence-length fields take the
  * sibling's names too, `groupSize`, `seqLength` and `bodyLength`, which
  * `calcSequenceLength` already described in those terms. The fields that keep their offsets as
  * names do so because nothing in the object states their wire meaning.
@@ -232,7 +234,7 @@ public:
 	 */
 	void reset();
 
-	/** @brief Clear the receive-side detector state (`rxState`, `onesRun`, `zerosRun`, `bitIndex`, `word_cb0`). */
+	/** @brief Clear the receive-side detector state (`rxState`, `onesRun`, `zerosRun`, `bitIndex`, `stateBitCount`). */
 	void resetDetector();
 
 	/** @brief Set the sixteen-byte CRC register (`crc[]`) to all ones. */
@@ -257,7 +259,7 @@ public:
 	 * and as the sibling `V90MP::bitsToInfo`; finding F4360).
 	 *
 	 * It is the receive-side driver: stores the bit into `bits` at
-	 * `bitIndex`, counts within the current block in `word_cb0`, and
+	 * `bitIndex`, counts within the current block in `stateBitCount`, and
 	 * steps `rxState` through the states documented at that field. Its
 	 * two function-local statics `alpha` and `beta` hold the two counted
 	 * blocks' bit lengths.
@@ -523,8 +525,12 @@ public:
 	 * equality compare and says nothing, and no test can hold this --
 	 * the two readings agree over every value the field takes. Finding
 	 * F4365.
+	 *
+	 * The same per-block counter is named `stateBitCount` in the sibling
+	 * `V92CP` (`V92CP.h:489`), which is the role this one serves, so it
+	 * takes that name instead of the offset it used to carry.
 	 */
-	unsigned int word_cb0;
+	unsigned int stateBitCount;
 
 	/*
 	 * +0x0cb4  The read cursor, and the mirror of +0x0cac: every arm of

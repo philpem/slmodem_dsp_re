@@ -454,7 +454,7 @@ setup(int trial, int mode)
 		CPR(s).onesRun = 0;
 		CPR(s).zerosRun = 1;
 		CPR(s).bitIndex = 18u;
-		CPR(s).word_cb0 = 0u;
+		CPR(s).stateBitCount = 0u;
 		CPR(s).groupSize = 1u;
 
 		/* The CP record's six buffers, one array per side. */
@@ -1177,7 +1177,7 @@ prefeed_cp(int shortform, int byte13, int cpbit, long tag)
 		CPR(i).onesRun = 0;
 		CPR(i).zerosRun = 0;
 		CPR(i).bitIndex = 18u;
-		CPR(i).word_cb0 = 0u;
+		CPR(i).stateBitCount = 0u;
 		CPR(i).groupSize = 6u;
 		CPR(i).word_3bbc = -1;
 	}

@@ -1110,7 +1110,7 @@ p4_setup(long tag, int dly)
 		CPR(s).onesRun = 0;
 		CPR(s).zerosRun = 1;
 		CPR(s).bitIndex = 18u;
-		CPR(s).word_cb0 = 0u;
+		CPR(s).stateBitCount = 0u;
 		CPR(s).groupSize = 1u;
 		for (k = 0; k < V90CP_BUFS; k++) {
 			CPR(s).buf[k] = cpbuf_s[s][k];

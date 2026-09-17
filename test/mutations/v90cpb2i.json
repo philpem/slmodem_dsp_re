@@ -53,8 +53,8 @@
  },
  {
   "label": "the short form is sixteen bits, not fifteen",
-  "find": "\t\tif (word_cb0 == 0xf) {\n\t\t\tevaluateInfo();\n\t\t\trxState = 12;",
-  "replace": "\t\tif (word_cb0 == 0x10) {\n\t\t\tevaluateInfo();\n\t\t\trxState = 12;"
+  "find": "\t\tif (stateBitCount == 0xf) {\n\t\t\tevaluateInfo();\n\t\t\trxState = 12;",
+  "replace": "\t\tif (stateBitCount == 0x10) {\n\t\t\tevaluateInfo();\n\t\t\trxState = 12;"
  },
  {
   "label": "the three block flags land in the wrong fields",
@@ -63,8 +63,8 @@
  },
  {
   "label": "the flag block is four bits, not three",
-  "find": "\t\tif (word_cb0 == 3) {\n\t\t\trxState = 5;",
-  "replace": "\t\tif (word_cb0 == 4) {\n\t\t\trxState = 5;"
+  "find": "\t\tif (stateBitCount == 3) {\n\t\t\trxState = 5;",
+  "replace": "\t\tif (stateBitCount == 4) {\n\t\t\trxState = 5;"
  },
  {
   "label": "the header ends at 0x32 rather than 0x33",
@@ -85,13 +85,13 @@
  },
  {
   "label": "the pairs block hands over to 10 whatever +0x08 says",
-  "find": "\t\t\tif (word_08 != 0)\n\t\t\t\trxState = 7;\n\t\t\telse\n\t\t\t\trxState = (word_0c != 0) ? 10 : 12;\n\t\t\tword_cb0 = 0;\n\t\t}\n\t\tbreak;\n\n\tcase 7:",
-  "replace": "\t\t\trxState = (word_0c != 0) ? 10 : 12;\n\t\t\tword_cb0 = 0;\n\t\t}\n\t\tbreak;\n\n\tcase 7:"
+  "find": "\t\t\tif (word_08 != 0)\n\t\t\t\trxState = 7;\n\t\t\telse\n\t\t\t\trxState = (word_0c != 0) ? 10 : 12;\n\t\t\tstateBitCount = 0;\n\t\t}\n\t\tbreak;\n\n\tcase 7:",
+  "replace": "\t\t\trxState = (word_0c != 0) ? 10 : 12;\n\t\t\tstateBitCount = 0;\n\t\t}\n\t\tbreak;\n\n\tcase 7:"
  },
  {
   "label": "the four counts are four frames of sixteen, not seventeen",
-  "find": "\t\tif (word_cb0 == 0x44) {",
-  "replace": "\t\tif (word_cb0 == 0x40) {"
+  "find": "\t\tif (stateBitCount == 0x44) {",
+  "replace": "\t\tif (stateBitCount == 0x40) {"
  },
  {
   "label": "alpha is sixteen bits to the entry, not seventeen",
@@ -107,13 +107,13 @@
  {
   "label": "the lists block is bounded by beta rather than alpha",
   "why": "alpha is +0x8 in .bss and beta +0xc, and the object compares this arm against the first.",
-  "find": "\t\tword_cb0++;\n\t\tif (word_cb0 == alpha) {",
-  "replace": "\t\tword_cb0++;\n\t\tif (word_cb0 == beta) {"
+  "find": "\t\tstateBitCount++;\n\t\tif (stateBitCount == alpha) {",
+  "replace": "\t\tstateBitCount++;\n\t\tif (stateBitCount == beta) {"
  },
  {
   "label": "the values and counts block is four frames, not five",
-  "find": "\t\tif (word_cb0 == 0x55) {",
-  "replace": "\t\tif (word_cb0 == 0x44) {"
+  "find": "\t\tif (stateBitCount == 0x55) {",
+  "replace": "\t\tif (stateBitCount == 0x44) {"
  },
  {
   "label": "beta is sixteen bits to the entry, not seventeen",
@@ -127,14 +127,14 @@
  },
  {
   "label": "the buffers block is bounded by alpha rather than beta",
-  "find": "\t\tword_cb0++;\n\t\tif (word_cb0 == beta) {",
-  "replace": "\t\tword_cb0++;\n\t\tif (word_cb0 == alpha) {"
+  "find": "\t\tstateBitCount++;\n\t\tif (stateBitCount == beta) {",
+  "replace": "\t\tstateBitCount++;\n\t\tif (stateBitCount == alpha) {"
  },
  {
   "label": "the CRC frame is sixteen bits, not seventeen",
   "why": "One framing zero and sixteen CRC bits.",
-  "find": "\t\tif (word_cb0 == 0x11) {\n\t\t\tbodyLength = bitIndex;",
-  "replace": "\t\tif (word_cb0 == 0x10) {\n\t\t\tbodyLength = bitIndex;"
+  "find": "\t\tif (stateBitCount == 0x11) {\n\t\t\tbodyLength = bitIndex;",
+  "replace": "\t\tif (stateBitCount == 0x10) {\n\t\t\tbodyLength = bitIndex;"
  },
  {
   "label": "the CRC extent is one past the cursor",
@@ -144,8 +144,8 @@
  },
  {
   "label": "the CRC verdict is inverted",
-  "find": "\t\t\tif (evaluateCRC()) {\n\t\t\t\tword_cb0 = 0x11;\n\t\t\t\trxState = 13;\n\t\t\t} else {",
-  "replace": "\t\t\tif (!evaluateCRC()) {\n\t\t\t\tword_cb0 = 0x11;\n\t\t\t\trxState = 13;\n\t\t\t} else {"
+  "find": "\t\t\tif (evaluateCRC()) {\n\t\t\t\tstateBitCount = 0x11;\n\t\t\t\trxState = 13;\n\t\t\t} else {",
+  "replace": "\t\t\tif (!evaluateCRC()) {\n\t\t\t\tstateBitCount = 0x11;\n\t\t\t\trxState = 13;\n\t\t\t} else {"
  },
  {
   "label": "a bad CRC does not reset the detector",

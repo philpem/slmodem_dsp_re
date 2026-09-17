@@ -638,12 +638,13 @@ public:
 	 * and by `resetRRNSecondSection`; set to 1 by `recivedCP`, and by
 	 * `recivedCPtag` on the one path where it was still zero -- the path
 	 * that also sets `cp->word_00` and the CP byte at +0x13 and rebuilds
-	 * the CP sequence.  Read as a gate by `recivedCPtag` and
-	 * `recivedSUVtag`.  A latch, and the object does not say for what, so
-	 * it keeps the offset name; it was `cleared_2f9c`, which recorded
-	 * only that the constructor cleared it.
+	 * the CP sequence.  Read as a gate by `recivedSUVtag`, and read by
+	 * `recivedCPtag` to tell the first tag (`cpReceived == 0`) from the
+	 * later ones.  The identical latch is named `cpReceived` in the
+	 * sibling `V92Phase4Modulator`, which names the role here too; it was
+	 * `cleared_2f9c`, which recorded only that the constructor cleared it.
 	 */
-	unsigned int word_2f9c;
+	unsigned int cpReceived;
 
 	/*
 	 * +0x2fa0  The same shape one step later: cleared by the same four,

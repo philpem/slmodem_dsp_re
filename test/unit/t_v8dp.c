@@ -142,7 +142,7 @@ main(void)
 					    id);
 				diff_eq_int("dspinfo (%ld)", db->dspinfo,
 					    da->dspinfo, id);
-				diff_eq_int("f2c (%ld)", db->f2c, da->f2c, id);
+				diff_eq_int("f2c (%ld)", db->last_status, da->last_status, id);
 				diff_eq_int("handshake built (%ld)",
 					    db->v8 != 0, da->v8 != 0, id);
 				/* The handshake itself, where it is comparable. */
@@ -339,8 +339,8 @@ main(void)
 				da->v8->sym_avail = db->v8->sym_avail =
 					states[si].f9d6 == 0x63 ? 40 : -40;
 				da->v8->prev_status = db->v8->prev_status = V8_INIT;
-				da->f2c = db->f2c = V8_INIT;
-				da->f20 = db->f20 = 0;
+				da->last_status = db->last_status = V8_INIT;
+				da->idle_timer = db->idle_timer = 0;
 				da->v8->quick_connect = db->v8->quick_connect = states[si].fdc4;
 				da->v8->anspcm_level = db->v8->anspcm_level = 0;
 				da->v8->lapm_indication = db->v8->lapm_indication = 1;
@@ -363,11 +363,11 @@ main(void)
 						    (long)(lvl * 64 + si * 4
 							   + call));
 					diff_eq_int("idle timer (%ld)",
-						    db->f20, da->f20,
+						    db->idle_timer, da->idle_timer,
 						    (long)(lvl * 64 + si * 4
 							   + call));
 					diff_eq_int("status kept (%ld)",
-						    db->f2c, da->f2c,
+						    db->last_status, da->last_status,
 						    (long)(lvl * 64 + si * 4
 							   + call));
 					diff_eq_int("f1c (%ld)", db->f1c,

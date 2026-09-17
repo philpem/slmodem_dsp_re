@@ -65,7 +65,7 @@ v8_create(void *modem, int id, int caller, int srate, int max_frag,
 	st->op = op;
 	st->answerer = caller == 0;
 	st->want = id;
-	st->f20 = 0;
+	st->idle_timer = 0;
 	st->dspinfo = (struct dsp_info *)(intptr_t)
 		      modem_get_param(modem, MDMPRM_DSPINFO);
 
@@ -96,7 +96,7 @@ v8_create(void *modem, int id, int caller, int srate, int max_frag,
 		sysdep_free(st);
 		return 0;
 	}
-	st->f2c = 0;
+	st->last_status = 0;
 	return (struct dp *)st;
 }
 
@@ -139,10 +139,10 @@ v8_process(struct dp *dp, void *in, void *out, int count)
 			dsplibs_debug_printf("v8: process: OK.\n");
 		/*
 		 * ...but only while the idle timer is not already running.
-		 * Once a change has been asked for, `f20` is counting down to
-		 * it and a second V8_OK must not start over.
+		 * Once a change has been asked for, `idle_timer` counts down
+		 * to it and a second V8_OK must not start over.
 		 */
-		if (st->f20 != 0)
+		if (st->idle_timer != 0)
 			break;
 		V8UpdateModemParameters(st->v8, st->cm);
 
@@ -185,7 +185,7 @@ v8_process(struct dp *dp, void *in, void *out, int count)
 		 */
 		if (st->want != 92 && st->want != 90) {
 			ret = DPSTAT_ERROR;
-		} else if (st->f20 == 0) {
+		} else if (st->idle_timer == 0) {
 			st->dspinfo->qc_lapm &= 1;
 			arg = 92;
 		}
@@ -198,26 +198,29 @@ v8_process(struct dp *dp, void *in, void *out, int count)
 	if (arg >= 0) {
 		modem_set_param(dp->modem, 9, arg);
 		ret = DPSTAT_CHANGEDP;
-		st->f20 = (int)modem_get_param(dp->modem, 5) + 0x2a0;
+		st->idle_timer = (int)modem_get_param(dp->modem, 5) + 0x2a0;
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf(
 			    "v8: Link established. Idle timer %d.\n",
-			    st->f20);
+			    st->idle_timer);
 	}
 
-	/* The same change detector as V8Process's, one layer up. */
-	if (st->f2c != rc) {
+	/*
+	 * The same change detector as V8Process's, one layer up: keep the
+	 * previous status in `last_status` and act only when it changes.
+	 */
+	if (st->last_status != rc) {
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("v8: status (%d) %s\n", rc,
 					     v8StatusName[rc]);
-		st->f2c = rc;
+		st->last_status = rc;
 	}
 
-	if (st->f20 > 0) {
-		st->f20 -= count;
-		if (st->f20 <= 0) {
+	if (st->idle_timer > 0) {
+		st->idle_timer -= count;
+		if (st->idle_timer <= 0) {
 			/* The window closed: give up and change anyway. */
-			st->f20 = -1;
+			st->idle_timer = -1;
 			st->f1c = 0;
 			modem_set_param(dp->modem, 9, 0);
 			ret = DPSTAT_CHANGEDP;

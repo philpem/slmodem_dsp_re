@@ -255,7 +255,7 @@ setup(int trial, int mode, int latch, unsigned int count)
 		m->mpSequenceSymbols = 3u;
 		m->symbolCount = count;
 		m->word_0020 = (latch & 1) ? 1u : 0u;
-		m->word_2f9c = (latch & 2) ? 1u : 0u;
+		m->cpReceived = (latch & 2) ? 1u : 0u;
 		m->word_2fa0 = (latch & 4) ? 1u : 0u;
 
 		/*
@@ -581,7 +581,7 @@ run_latch(void)
 		for (v = 0; v < 2; v++) {
 			setup((int)trial, 0, v ? 1 : 0, 8u);
 			P4M(1).state = P4M_STATE_CPD;
-			P4M(1).word_2f9c = 1u;
+			P4M(1).cpReceived = 1u;
 
 			set_level(0);
 			dsplib_debug_capture_reset();

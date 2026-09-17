@@ -114,7 +114,7 @@ V90P4_OFF(cpSequenceSymbols,	0x2f94, cpsym);
  * byte too many or too few, this fails.
  */
 V90P4_OFF(ctorArg8,		0x2f98, arg8);
-V90P4_OFF(word_2f9c,		0x2f9c, c2f9c);
+V90P4_OFF(cpReceived,		0x2f9c, c2f9c);
 V90P4_OFF(word_2fa0,		0x2fa0, c2fa0);
 V90P4_OFF(externalBitsToSymbol,	0x2fa4, external);
 V90P4_OFF(params,		0x2fa8, params);
@@ -184,7 +184,7 @@ V90Phase4Modulator::V90Phase4Modulator(V90Parameters *p, unsigned int flag,
 	mp = mpArg;
 	mappingParams = mpsA;
 	sessionFlag = flag;
-	word_2f9c = 0;
+	cpReceived = 0;
 	mappingParams2 = mpsB;
 	word_2fa0 = 0;
 	if (bts) {
@@ -251,7 +251,7 @@ V90Phase4Modulator::~V90Phase4Modulator()
 void
 V90Phase4Modulator::resetBeforRRN()
 {
-	word_2f9c = 0;
+	cpReceived = 0;
 	word_2fa0 = 0;
 	word_0024 = 1;
 	word_0028 = 0;
@@ -364,7 +364,7 @@ V90Phase4Modulator::reset(PcmType law, unsigned char code,
 	word_0028 = 0;
 	word_002c = 0;
 	nextStateAfterTRN2d = sessionFlag != 0 ? P4M_STATE_SUVD : P4M_STATE_MP;
-	word_2f9c = 0;
+	cpReceived = 0;
 	word_2fa0 = 0;
 	word_0030 = 0;
 	word_0018 = 0;
@@ -510,7 +510,7 @@ V90Phase4Modulator::resetRRNSecondSection()
 	byte_001c = 0;
 	word_0018 = 0;
 	cp->byte_13 = 0;
-	word_2f9c = 0;
+	cpReceived = 0;
 	word_2fa0 = 0;
 }
 
@@ -615,7 +615,7 @@ V90Phase4Modulator::recivedPartTwoSilenceRrnSUV()
 void
 V90Phase4Modulator::recivedCP()
 {
-	word_2f9c = 1;
+	cpReceived = 1;
 	cp->byte_13 = 1;
 }
 
@@ -629,7 +629,7 @@ V90Phase4Modulator::recivedSUVtag()
 {
 	byte_001c = 0;
 	word_0018 = 0;
-	if (word_2f9c != 0 && word_0020 == 0) {
+	if (cpReceived != 0 && word_0020 == 0) {
 		switch (state) {
 		case P4M_STATE_SUVD:
 			if (symbolCount % cpSequenceSymbols != 0) {
@@ -716,7 +716,7 @@ V90Phase4Modulator::recivedCPtag()
 	byte_001c = 0;
 	word_0018 = 0;
 	if (word_0020 != 0) {
-		if (word_2f9c != 0) {
+		if (cpReceived != 0) {
 			if (symbolCount % cpSequenceSymbols == 0) {
 				edprintf("V90Phase4Modulator: enter Ed @ " "%d\r\n", symbolCount);
 				state = P4M_STATE_ED;
@@ -739,7 +739,7 @@ V90Phase4Modulator::recivedCPtag()
 				}
 			}
 		} else {
-			word_2f9c = 1;
+			cpReceived = 1;
 			cp->byte_13 = 1;
 			cp->word_00 = 1;
 			if (symbolCount % cpSequenceSymbols != 0) {

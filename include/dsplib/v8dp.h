@@ -51,20 +51,25 @@
 struct v8_dp {
 	int			id;		/* +0x00  always DP_V8 */
 	void			*modem;		/* +0x04 */
-	int			f08;		/* +0x08 */
+	int			status;		/* +0x08  the shared datapump
+						 * header's `status` (dp.h:38);
+						 * kept `int`, the sibling there
+						 * is `unsigned` */
 	struct dp_operations	*op;		/* +0x0c */
 	struct v8_dp		*self;		/* +0x10 */
 	int			answerer;	/* +0x14 */
 	int			want;		/* +0x18  the requested id */
 	int			f1c;		/* +0x1c */
-	int			f20;		/* +0x20 */
+	int			idle_timer;	/* +0x20  the idle timer, counted
+						 * down by `count` each call */
 	/*
 	 * MDMPRM_DSPINFO is an address, not a number: the wrapper writes the
 	 * negotiated result into it when the handshake finishes.
 	 */
 	struct dsp_info		*dspinfo;	/* +0x24 */
 	struct v8_cm		*cm;		/* +0x28 */
-	int			f2c;		/* +0x2c */
+	int			last_status;	/* +0x2c  the previous status, kept
+						 * to detect a change */
 	struct v8			*v8;	/* +0x30 */
 };
 

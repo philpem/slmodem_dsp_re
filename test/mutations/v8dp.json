@@ -21,13 +21,13 @@
  },
  {
   "label": "drop the wrapper's status line",
-  "find": "\tif (st->f2c != rc) {\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"v8: status (%d) %s\\n\", rc,\n\t\t\t\t\t     v8StatusName[rc]);\n\t\tst->f2c = rc;\n\t}",
-  "replace": "\tif (st->f2c != rc)\n\t\tst->f2c = rc;"
+  "find": "\tif (st->last_status != rc) {\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"v8: status (%d) %s\\n\", rc,\n\t\t\t\t\t     v8StatusName[rc]);\n\t\tst->last_status = rc;\n\t}",
+  "replace": "\tif (st->last_status != rc)\n\t\tst->last_status = rc;"
  },
  {
   "label": "name the previous status rather than the new one",
   "find": "\t\t\tdsplibs_debug_printf(\"v8: status (%d) %s\\n\", rc,\n\t\t\t\t\t     v8StatusName[rc]);",
-  "replace": "\t\t\tdsplibs_debug_printf(\"v8: status (%d) %s\\n\", rc,\n\t\t\t\t\t     v8StatusName[st->f2c]);"
+  "replace": "\t\t\tdsplibs_debug_printf(\"v8: status (%d) %s\\n\", rc,\n\t\t\t\t\t     v8StatusName[st->last_status]);"
  },
  {
   "label": "drop the timeout announcement",
@@ -37,11 +37,11 @@
  {
   "label": "announce OK after the idle timer is consulted",
   "find": "\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"v8: process: OK.\\n\");",
-  "replace": "\t\tif (st->f20 != 0)\n\t\t\tbreak;\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"v8: process: OK.\\n\");"
+  "replace": "\t\tif (st->idle_timer != 0)\n\t\t\tbreak;\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"v8: process: OK.\\n\");"
  },
  {
   "label": "renegotiate on every V8_OK",
-  "find": "\t\tif (st->f20 != 0)\n\t\t\tbreak;\n\t\tV8UpdateModemParameters(st->v8, st->cm);",
+  "find": "\t\tif (st->idle_timer != 0)\n\t\t\tbreak;\n\t\tV8UpdateModemParameters(st->v8, st->cm);",
   "replace": "\t\tV8UpdateModemParameters(st->v8, st->cm);"
  },
  {
@@ -71,12 +71,12 @@
  },
  {
   "label": "drop the idle timer announcement",
-  "find": "\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\n\t\t\t    \"v8: Link established. Idle timer %d.\\n\",\n\t\t\t    st->f20);",
+  "find": "\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\n\t\t\t    \"v8: Link established. Idle timer %d.\\n\",\n\t\t\t    st->idle_timer);",
   "replace": "\t\t(void)0;"
  },
  {
   "label": "announce the idle timer before it is set",
-  "find": "\t\tst->f20 = (int)modem_get_param(dp->modem, 5) + 0x2a0;\n\t\tif (DSPLIB_DEBUG_ON())",
-  "replace": "\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\n\t\t\t    \"v8: Link established. Idle timer %d.\\n\",\n\t\t\t    st->f20);\n\t\tst->f20 = (int)modem_get_param(dp->modem, 5) + 0x2a0;\n\t\tif (0)"
+  "find": "\t\tst->idle_timer = (int)modem_get_param(dp->modem, 5) + 0x2a0;\n\t\tif (DSPLIB_DEBUG_ON())",
+  "replace": "\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\n\t\t\t    \"v8: Link established. Idle timer %d.\\n\",\n\t\t\t    st->idle_timer);\n\t\tst->idle_timer = (int)modem_get_param(dp->modem, 5) + 0x2a0;\n\t\tif (0)"
  }
 ]

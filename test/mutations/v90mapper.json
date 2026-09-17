@@ -34,12 +34,12 @@
  },
  {
   "label": "ctor: +0x1c is left as it was found",
-  "find": "\tbitsBuffered = 0;\n\tuint_6f8 = 0;",
-  "replace": "\tuint_6f8 = 0;"
+  "find": "\tbitsBuffered = 0;\n\tprimeFrames = 0;",
+  "replace": "\tprimeFrames = 0;"
  },
  {
   "label": "ctor: +0x6f8 is left as it was found",
-  "find": "\tuint_6f8 = 0;\n\tsignBitGroupSize = 0;",
+  "find": "\tprimeFrames = 0;\n\tsignBitGroupSize = 0;",
   "replace": "\tsignBitGroupSize = 0;"
  },
  {
@@ -152,12 +152,12 @@
  },
  {
   "label": "reset: +0x6f8 gets shaperSR rather than shaperId",
-  "find": "\t\tuint_6f8 = mp->shaperId;\n\t} else {",
-  "replace": "\t\tuint_6f8 = (unsigned int)mp->shaperSR;\n\t} else {"
+  "find": "\t\tprimeFrames = mp->shaperId;\n\t} else {",
+  "replace": "\t\tprimeFrames = (unsigned int)mp->shaperSR;\n\t} else {"
  },
  {
   "label": "reset: +0x6f8 is left as it was found when there is no shaper",
-  "find": "\t} else {\n\t\tuint_6f8 = 0;\n\t}",
+  "find": "\t} else {\n\t\tprimeFrames = 0;\n\t}",
   "replace": "\t}"
  },
  {
@@ -229,7 +229,7 @@
  },
  {
   "label": "process: nofOut is counted inside the copy loop",
-  "find": "\t\t\t\t\tfor (k = start; k < V90MAPPER_FRAME; k++)\n\t\t\t\t\t\tsymbols[nofOut + k - start] = samples[k];\n\t\t\t\t\tnofOut += V90MAPPER_FRAME\n\t\t\t\t\t    - uint_6f8 * signBitGroupSize;",
+  "find": "\t\t\t\t\tfor (k = start; k < V90MAPPER_FRAME; k++)\n\t\t\t\t\t\tsymbols[nofOut + k - start] = samples[k];\n\t\t\t\t\tnofOut += V90MAPPER_FRAME\n\t\t\t\t\t    - primeFrames * signBitGroupSize;",
   "replace": "\t\t\t\t\tfor (k = start; k < V90MAPPER_FRAME; k++)\n\t\t\t\t\t\tsymbols[nofOut++] = samples[k];"
  },
  {
@@ -259,18 +259,18 @@
  },
  {
   "label": "process: the countdown is ended rather than counted down",
-  "find": "\t\t\tuint_6f8 -= signBitGroups;",
-  "replace": "\t\t\tuint_6f8 = 0;"
+  "find": "\t\t\tprimeFrames -= signBitGroups;",
+  "replace": "\t\t\tprimeFrames = 0;"
  },
  {
   "label": "process: the partial arm leaves the countdown running",
-  "find": "\t\t\t\t\tnofOut += V90MAPPER_FRAME\n\t\t\t\t\t    - uint_6f8 * signBitGroupSize;\n\t\t\t\t\tuint_6f8 = 0;",
-  "replace": "\t\t\t\t\tnofOut += V90MAPPER_FRAME\n\t\t\t\t\t    - uint_6f8 * signBitGroupSize;"
+  "find": "\t\t\t\t\tnofOut += V90MAPPER_FRAME\n\t\t\t\t\t    - primeFrames * signBitGroupSize;\n\t\t\t\t\tprimeFrames = 0;",
+  "replace": "\t\t\t\t\tnofOut += V90MAPPER_FRAME\n\t\t\t\t\t    - primeFrames * signBitGroupSize;"
  },
  {
   "label": "process: the countdown boundary is inclusive",
-  "find": "\t\t\t\tif (uint_6f8 >= signBitGroups) {",
-  "replace": "\t\t\t\tif (uint_6f8 > signBitGroups) {"
+  "find": "\t\t\t\tif (primeFrames >= signBitGroups) {",
+  "replace": "\t\t\t\tif (primeFrames > signBitGroups) {"
  },
  {
   "label": "process: the answer is never written back",

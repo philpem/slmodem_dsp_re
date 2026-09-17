@@ -54,7 +54,10 @@ struct call_queue {
 struct call_dp {
 	int			id;		/* +0x000 */
 	void			*modem;		/* +0x004 */
-	int			f08;		/* +0x008 */
+	int			status;		/* +0x008  the shared datapump
+						 * header's `status` (dp.h:38);
+						 * kept `int`, the sibling there
+						 * is `unsigned` */
 	struct dp_operations	*op;		/* +0x00c */
 	struct call_dp		*self;		/* +0x010 */
 

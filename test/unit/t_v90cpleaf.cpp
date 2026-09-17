@@ -250,7 +250,7 @@ run_cp_resetdetector(void)
 
 		/* Read off the BLOB: the five it writes, and the four it does not. */
 		diff_eq_int("+0xcac is 18 (%ld)", (long)CPB->bitIndex, 18, tag);
-		diff_eq_int("+0xcb0 is zero (%ld)", (long)CPB->word_cb0, 0,
+		diff_eq_int("+0xcb0 is zero (%ld)", (long)CPB->stateBitCount, 0,
 			    tag);
 		diff_eq_int("+0xca4 is zero (%ld)", (long)CPB->rxState, 0,
 			    tag);
@@ -305,7 +305,7 @@ run_cp_reset(void)
 			moved = 1;
 
 		diff_eq_int("+0xcac is 18 (%ld)", (long)CPB->bitIndex, 18, tag);
-		diff_eq_int("+0xcb0 is zero (%ld)", (long)CPB->word_cb0, 0,
+		diff_eq_int("+0xcb0 is zero (%ld)", (long)CPB->stateBitCount, 0,
 			    tag);
 		diff_eq_int("+0xca4 is zero (%ld)", (long)CPB->rxState, 0,
 			    tag);
