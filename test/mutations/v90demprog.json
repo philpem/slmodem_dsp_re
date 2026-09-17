@@ -319,8 +319,8 @@
  },
  {
   "label": "the ladder's comparison is strict",
-  "find": "\t\t    params->unnamed_10c < bllSamples)",
-  "replace": "\t\t    params->unnamed_10c <= bllSamples)"
+   "find": "\t\t    params->BLL_TRN1_QC_MEDIUM_TO_SLOW_DURATION < bllSamples)",
+   "replace": "\t\t    params->BLL_TRN1_QC_MEDIUM_TO_SLOW_DURATION <= bllSamples)"
  },
  {
   "label": "the AGC freeze is gated on phase 3 state 3",

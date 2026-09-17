@@ -1491,16 +1491,16 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 		    params->BLL_TRN1D_FAST_TO_SLOW_DURATION < bllSamples)
 			resampler.setBllState(V90_BLL_MEDIUM, 1);
 		if (quickConnect == 0 && bllState == V90_BLL_SLOW &&
-		    params->unnamed_100 < bllSamples)
+		    params->BLL_TRN1D_SLOW_TO_SLOW2_DURATION < bllSamples)
 			resampler.setBllState(V90_BLL_SLOW2, 1);
 		if (quickConnect != 0 && bllState == V90_BLL_TRN1_QC_INITIAL &&
-		    params->unnamed_104 < bllSamples)
+		    params->BLL_TRN1_QC_INITIAL_TO_FAST_DURATION < bllSamples)
 			resampler.setBllState(V90_BLL_TRN1_QC_FAST, 1);
 		if (quickConnect != 0 && bllState == V90_BLL_TRN1_QC_FAST &&
-		    params->unnamed_108 < bllSamples)
+		    params->BLL_TRN1_QC_FAST_TO_MEDIUM_DURATION < bllSamples)
 			resampler.setBllState(V90_BLL_TRN1_QC_MEDIUM, 1);
 		if (quickConnect != 0 && bllState == V90_BLL_TRN1_QC_MEDIUM &&
-		    params->unnamed_10c < bllSamples)
+		    params->BLL_TRN1_QC_MEDIUM_TO_SLOW_DURATION < bllSamples)
 			resampler.setBllState(V90_BLL_TRN1_QC_SLOW, 1);
 
 		/*
