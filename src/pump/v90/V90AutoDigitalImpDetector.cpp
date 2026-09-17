@@ -98,7 +98,7 @@ ADID_OFF(float_a974,   0xa974, floata974);
 ADID_OFF(short_a978,   0xa978, shorta978);
 ADID_OFF(minMaxUcode,   0xa97a, shorta97a);
 ADID_OFF(padGainSearchScale,   0xa97c, floata97c);
-ADID_OFF(float_a980,   0xa980, floata980);
+ADID_OFF(varThreshScale,   0xa980, floata980);
 
 /*
  * THE ELEVEN THE STUDY BATCH ADDS, which between them retire every `pad_`
@@ -464,11 +464,11 @@ V90AutoDigitalImpDetector::setConnectionType(short type)
 		short_a978 = 1;
 		minMaxUcode = 88;
 		padGainSearchScale = 0.35f;
-		float_a980 = 1.75f;
+		varThreshScale = 1.75f;
 	} else {
 		minMaxUcode = 80;
 		padGainSearchScale = 0.25f;
-		float_a980 = 1.5f;
+		varThreshScale = 1.5f;
 	}
 }
 
@@ -517,12 +517,12 @@ V90AutoDigitalImpDetector::reset(unsigned char code, PcmType law, short altRbs)
 		short_a978 = 1;
 		minMaxUcode = 88;
 		padGainSearchScale = 0.35f;
-		float_a980 = 1.75f;
+		varThreshScale = 1.75f;
 	} else {
 		short_a978 = 0;
 		minMaxUcode = 80;
 		padGainSearchScale = 0.25f;
-		float_a980 = 1.5f;
+		varThreshScale = 1.5f;
 	}
 }
 
@@ -2609,7 +2609,7 @@ V90AutoDigitalImpDetector::applyPadGainToLinMapp()
  * FIVE STEPS, and the third is the one the method is named for:
  *
  *   1. a variance threshold, from the sum of |`linearMappingVar`| over codes
- *      40..59 of the reference phase, scaled by `float_a980` and by 0.05f,
+ *      40..59 of the reference phase, scaled by `varThreshScale` and by 0.05f,
  *      which is the 1/20 of the twenty entries written out;
  *   2. two reports of that threshold, either side of a clamp into
  *      [500, 100000];
@@ -2681,7 +2681,7 @@ V90AutoDigitalImpDetector::determineMaxUcode(short maxCode)
 		 * written.  Everything from the clamp onwards uses the rounded
 		 * value alone.  Finding F1437.
 		 */
-		product = sum * float_a980 * 0.05f;
+		product = sum * varThreshScale * 0.05f;
 		origWhole = ADID_PRINT_WHOLE(product);
 		varThresh = product;
 	}

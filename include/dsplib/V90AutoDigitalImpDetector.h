@@ -870,7 +870,15 @@ public:
 	short minMaxUcode;					/* +0xa97a */
 	/* Scale applied while findPadGain searches codec projections. */
 	float padGainSearchScale;					/* +0xa97c */
-	float float_a980;					/* +0xa980 */
+	/*
+	 * Set 1.75f / 1.5f by the connection-type test above, and read once at
+	 * `V90AutoDigitalImpDetector.cpp:2684` as
+	 * `product = sum * varThreshScale * 0.05f; varThresh = product;` --
+	 * it scales the reference-phase variance sum into the maximum-ucode
+	 * threshold, so the name matches the code's own `varThresh`.  Usage
+	 * inference; no string or callee names it.
+	 */
+	float varThreshScale;					/* +0xa980 */
 
 	/*
 	 * The study handler's own state, and the six durations it runs

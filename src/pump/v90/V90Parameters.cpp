@@ -104,8 +104,12 @@ V90Parameters::~V90Parameters()
  *
  * FOUR OFFSETS ARE READ TWICE UNDER TWO NAMES, so 295 calls cover 291 fields:
  * +0x0f0, +0x18c, +0x190 and +0x194 (finding F861).  Both calls are emitted,
- * in the object's order, and the field is named for the LATER one -- three of
- * the four are a `GERMAN_PBX_` override of the name beside it.  A generator
+ * in the object's order.  Three of the four are a `GERMAN_PBX_` override and
+ * the field there is named for the LATER call.  The fourth is +0x0f0, where
+ * the field is named for the EARLIER call: the `BLL_TRN1_QC_SLOW_K1` read
+ * lands on it and the next call reads `BLL_TRN1_QC_SLOW_K2` into the same
+ * field, the real `SLOW_K2` being +0x0f4.  That is the reproduced original
+ * defect D901, and both calls target the one field.  A generator
  * driven by the header's field list rather than by the call list would emit
  * 291 calls and `make params` would not notice, because that gate compares
  * maps and this function is a SEQUENCE.
@@ -173,8 +177,8 @@ V90Parameters::loadParams(char *paramFile)
 	Vparser_read_float(paramFile, "BLL_TRN1_QC_FAST_K2", &BLL_TRN1_QC_FAST_K2);
 	Vparser_read_float(paramFile, "BLL_TRN1_QC_MEDIUM_K1", &BLL_TRN1_QC_MEDIUM_K1);
 	Vparser_read_float(paramFile, "BLL_TRN1_QC_MEDIUM_K2", &BLL_TRN1_QC_MEDIUM_K2);
-	Vparser_read_float(paramFile, "BLL_TRN1_QC_SLOW_K1", &BLL_TRN1_QC_SLOW_K2);
-	Vparser_read_float(paramFile, "BLL_TRN1_QC_SLOW_K2", &BLL_TRN1_QC_SLOW_K2);
+	Vparser_read_float(paramFile, "BLL_TRN1_QC_SLOW_K1", &BLL_TRN1_QC_SLOW_K1);
+	Vparser_read_float(paramFile, "BLL_TRN1_QC_SLOW_K2", &BLL_TRN1_QC_SLOW_K1);
 	Vparser_read_int(paramFile, "BLL_TRN1D_INITIAL_TO_FAST_DURATION", &BLL_TRN1D_INITIAL_TO_FAST_DURATION);
 	Vparser_read_int(paramFile, "BLL_TRN1D_FAST_TO_SLOW_DURATION", &BLL_TRN1D_FAST_TO_SLOW_DURATION);
 	Vparser_read_float(paramFile, "EIA6_BLL_INITIAL_K1", &EIA6_BLL_INITIAL_K1);
@@ -484,8 +488,8 @@ V90Parameters::setToDefault()
 	BLL_TRN1_QC_FAST_K2 = 7e-12f;
 	BLL_TRN1_QC_MEDIUM_K1 = 0.0003f;
 	BLL_TRN1_QC_MEDIUM_K2 = 5e-12f;
-	BLL_TRN1_QC_SLOW_K2 = 0.0001f;
-	unnamed_0f4 = 2e-12f;		/* float; shares +0x12c and +0x19c's materialisation -- F878, F7960 */
+	BLL_TRN1_QC_SLOW_K1 = 0.0001f;
+	BLL_TRN1_QC_SLOW_K2 = 2e-12f;		/* float; shares +0x12c and +0x19c's materialisation -- F878, F7960 */
 	BLL_TRN1D_INITIAL_TO_FAST_DURATION = 2000;
 	BLL_TRN1D_FAST_TO_SLOW_DURATION = 7200;
 	BLL_TRN1D_SLOW_TO_SLOW2_DURATION = 6000;

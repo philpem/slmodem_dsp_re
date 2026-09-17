@@ -71,13 +71,13 @@
  },
  {
   "label": "TRN1_QC_SLOW reads +0x0f0 for both gains",
-  "find": "\t\t__builtin_memcpy(&bllK2, &params->unnamed_0f4, sizeof bllK2);",
-  "replace": "\t\tbllK2 = params->BLL_TRN1_QC_SLOW_K2;"
+  "find": "\t\t__builtin_memcpy(&bllK2, &params->BLL_TRN1_QC_SLOW_K2, sizeof bllK2);",
+  "replace": "\t\tbllK2 = params->BLL_TRN1_QC_SLOW_K1;"
  },
  {
   "label": "TRN1_QC_SLOW converts +0x0f4 rather than copying its bits",
-  "find": "\t\t__builtin_memcpy(&bllK2, &params->unnamed_0f4, sizeof bllK2);",
-  "replace": "\t\t{ int bits; __builtin_memcpy(&bits, &params->unnamed_0f4, sizeof bits); bllK2 = (float)bits; }"
+  "find": "\t\t__builtin_memcpy(&bllK2, &params->BLL_TRN1_QC_SLOW_K2, sizeof bllK2);",
+  "replace": "\t\t{ int bits; __builtin_memcpy(&bits, &params->BLL_TRN1_QC_SLOW_K2, sizeof bits); bllK2 = (float)bits; }"
  },
  {
   "label": "MEDIUM prints SLOW2's name",
