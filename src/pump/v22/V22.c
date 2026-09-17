@@ -236,15 +236,15 @@ V22FP_create(struct v22fp *fp, const struct v22fp_cfg *cfg)
 
 	hdx->gtimer = 0;
 	hdx->r08 = 0;
-	hdx->r0a = 0;
+	hdx->ones_detect_ms = 0;
 	hdx->connect_substate = 0;
-	hdx->r28 = 0;
-	hdx->r30 = 0x2454;
-	hdx->r32 = 0;
+	hdx->rx_rms = 0;
+	hdx->rms_threshold = 0x2454;
+	hdx->rms_blocks = 0;
 	hdx->rx_shift = 0;
 	hdx->node_deadline = fp->params.r08;
 	hdx->trained = 0;
-	hdx->r2c = 0;
+	hdx->rms_accum = 0;
 	hdx->carrier_loss_blocks = 0;
 
 	/*
@@ -466,7 +466,7 @@ V22FP_ASSERT_OFF(h_mtd, struct v22fp_hdx, mtd, 0x18);
 V22FP_ASSERT_OFF(h_mtd_s1, struct v22fp_hdx, mtd_s1, 0x1c);
 V22FP_ASSERT_OFF(h_mtd2, struct v22fp_hdx, mtd2, 0x20);
 V22FP_ASSERT_OFF(h_iir, struct v22fp_hdx, iir, 0x24);
-V22FP_ASSERT_OFF(h_r30, struct v22fp_hdx, r30, 0x30);
+V22FP_ASSERT_OFF(h_r30, struct v22fp_hdx, rms_threshold, 0x30);
 V22FP_ASSERT_OFF(h_r3c, struct v22fp_hdx, carrier_loss_blocks, 0x3c);
 
 V22FP_ASSERT_OFF(d_r20, struct v22fp_dsp, r20, 0x20);

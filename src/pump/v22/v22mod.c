@@ -232,7 +232,7 @@ v22_answer(struct v22fp *fp, unsigned short *txsym, short *txout,
 
 		fp->hdx->gtimer = 0;
 		fp->hdx->r08 = 0;
-		fp->hdx->r0a = 0;
+		fp->hdx->ones_detect_ms = 0;
 
 		/*
 		 * The report is taken for ONE BIT of it: +0x15 bit 0, which
@@ -358,14 +358,14 @@ v22_answer(struct v22fp *fp, unsigned short *txsym, short *txout,
 				ones = (short)Detect_1s(rxsym, rxcount,
 							V22_ORG_DETECT_BPS,
 							V22_ORG_DETECT_THRESH);
-				fp->hdx->r0a = (short)(fp->hdx->r0a + ones);
+				fp->hdx->ones_detect_ms = (short)(fp->hdx->ones_detect_ms + ones);
 				/*
 				 * The reset `v22_originate`'s two copies of
 				 * this block do NOT have.  See v22org.h.
 				 */
-				if (ones == 0 && (unsigned short)fp->hdx->r0a
+				if (ones == 0 && (unsigned short)fp->hdx->ones_detect_ms
 						 <= V22_ORG_MIN_RUN_MS)
-					fp->hdx->r0a = 0;
+					fp->hdx->ones_detect_ms = 0;
 			}
 		}
 
@@ -379,17 +379,17 @@ v22_answer(struct v22fp *fp, unsigned short *txsym, short *txout,
 				    "Detected V22bis Carrier\n");
 			fp->hdx->gtimer = 0;
 			fp->hdx->r08 = 0;
-			fp->hdx->r0a = 0;
+			fp->hdx->ones_detect_ms = 0;
 			fp->hdx->connect_substate = V22_ANS_NODE_4;
 			SetAdaptEqV22(fp, V22_ORG_EQ_MODE_CARRIER);
 			fp->r1e[0] |= V22FP_R1E_BIT3;
 			FPM_AGC_Freeze(&fp->dsp->agc);
-		} else if ((unsigned short)fp->hdx->r0a > V22_ORG_ONES_MS) {
+		} else if ((unsigned short)fp->hdx->ones_detect_ms > V22_ORG_ONES_MS) {
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf("Detected V22 Carrier\n");
 			fp->hdx->gtimer = 0;
 			fp->hdx->r08 = 0;
-			fp->hdx->r0a = 0;
+			fp->hdx->ones_detect_ms = 0;
 			fp->hdx->connect_substate = V22_NODE_1200_12;
 			SetAdaptEqV22(fp, V22_ORG_EQ_MODE_CARRIER);
 			fp->r1e[0] |= V22FP_R1E_BIT3;

@@ -110,7 +110,7 @@ v22_data(struct v22fp *fp, unsigned short *txsym, short *txout,
 				hdx = fp->hdx;
 				hdx->gtimer = 0;
 				hdx->r08 = 0;
-				hdx->r0a = 0;
+				hdx->ones_detect_ms = 0;
 				hdx->connect_substate = 0;
 				HDX_0038(hdx) = 0;
 				ResetRx(fp);

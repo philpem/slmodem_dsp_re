@@ -115,7 +115,7 @@ v22_retrain(struct v22fp *fp, unsigned short *txdata, short *txout,
 		 */
 		fp->hdx->gtimer = 0;
 		fp->hdx->r08 = 0;
-		fp->hdx->r0a = 0;
+		fp->hdx->ones_detect_ms = 0;
 		fp->hdx->connect_substate = 2;
 		ResetRx(fp);
 		SetTxRate(fp, V22_RATE_1200);

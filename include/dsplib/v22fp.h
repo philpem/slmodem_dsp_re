@@ -61,6 +61,12 @@
  * `dsp.descrambler_on` and the reading of `status` as a MESSAGE CODE, each
  * with its evidence beside it below.  Findings F8526, F8531, F8534 and
  * F8600-F8605.
+ *
+ * FIVE MORE CAME WITH THE v22org PASS: `hdx.ones_detect_ms`, `hdx.rx_rms`,
+ * `hdx.rms_accum`, `hdx.rms_threshold` and `hdx.rms_blocks` -- the 1200-baud
+ * ones-detector run, and the received-RMS level, accumulator, threshold and
+ * block count of `v22_originate`'s NODE_3.  Each has exactly one role across
+ * every reconstructed user, and the derivation sits on the field.
  */
 
 #ifndef DSPLIB_V22FP_H
@@ -201,8 +207,23 @@ struct v22fp_hdx {
 	 * `v22_create`'s 60000 is that deadline, 3000 blocks.
 	 */
 	int node_deadline;	/* +0x04 <- params.r08                      */
-	short r08;		/* +0x08 init 0                             */
-	short r0a;		/* +0x0a init 0                             */
+	/*
+	 * +0x08 is RETAINED NEUTRAL because it is genuinely multi-role across
+	 * eight handlers: the S1-absence run in the carrier hunts of
+	 * `v22_answer` and `v22_originate`, the quality timer, the silence
+	 * run, the ACK milliseconds and the carrier-loss milliseconds are all
+	 * counted here by different handlers, and no single name covers them.
+	 */
+	short r08;		/* +0x08 init 0.  Multi-role, see above     */
+	/*
+	 * +0x0a is the 1200-baud ONES DETECTOR RUN, in milliseconds:
+	 * `Detect_1s`'s answer accumulated and thresholded by an `*_ONES_MS`
+	 * constant in every handler that hunts carrier (v22org.c:207,252,275;
+	 * v22mod.c:361,366,387; v22loop.c:199,215).  Every read is a
+	 * `movzwl` feeding an unsigned compare, so the source casts at each
+	 * site while the declaration stays `short` (finding F8531).
+	 */
+	short ones_detect_ms;	/* +0x0a init 0                             */
 	/*
 	 * +0x0c is the SUB-STATE within the protocol state below.
 	 * `connect_2400` prints NODE_2400A..NODE_2400D on entering 8, 9, 10
@@ -241,11 +262,34 @@ struct v22fp_hdx {
 	 * allocator's fill otherwise.
 	 */
 	short *iir;		/* +0x24                                    */
-	short r28;		/* +0x28 init 0                             */
+	/*
+	 * +0x28 is the received block's RMS LEVEL, `FPM_rms(rxin,
+	 * V22_ORG_BLOCK)`, kept only long enough for `v22_originate`'s NODE_3
+	 * to add it into `rms_accum` (v22org.c:102,110).  Its only writer is
+	 * that one arm, so the role is `v22_originate`'s alone.
+	 */
+	short rx_rms;		/* +0x28 init 0                             */
 	short pad2a;		/* +0x2a                                    */
-	int r2c;		/* +0x2c init 0                             */
-	short r30;		/* +0x30 init 0x2454                        */
-	short r32;		/* +0x32 init 0                             */
+	/*
+	 * +0x2c accumulates `rx_rms` over the blocks NODE_3 counted, then
+	 * holds the UNSIGNED MEAN once `v22_originate` divides it by
+	 * `rms_blocks` (v22org.c:110,127).  Declared `int`, but the divide
+	 * and every read are unsigned.
+	 */
+	int rms_accum;		/* +0x2c init 0                             */
+	/*
+	 * +0x30 is the RMS-MEAN THRESHOLD `v22_originate`'s NODE_3 compares
+	 * the mean against to set `rx_shift`: `V22FP_create` writes 0x2454
+	 * (9,300) and the one reader is v22org.c:130.
+	 */
+	short rms_threshold;	/* +0x30 init 0x2454                        */
+	/*
+	 * +0x32 counts the blocks with symbols in them over which NODE_3 has
+	 * accumulated `rx_rms` -- incremented beside `ones_detect_ms` under
+	 * the same `if (nsym != 0)` guard -- and is the divisor of the mean
+	 * (v22org.c:115,128).
+	 */
+	short rms_blocks;	/* +0x32 init 0                             */
 	/*
 	 * +0x34 is the RECEIVE INPUT RIGHT SHIFT: `V22FP_modem` stages every
 	 * input sample as `(short)((int)in[i] >> rx_shift)`, with the count

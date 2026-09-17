@@ -37,7 +37,7 @@ v22_originate(struct v22fp *fp, unsigned short *txsym, short *txout,
 
 		fp->hdx->gtimer = 0;
 		fp->hdx->r08 = 0;
-		fp->hdx->r0a = 0;
+		fp->hdx->ones_detect_ms = 0;
 		fp->hdx->connect_substate = V22_ORG_NODE_1;
 
 		/*
@@ -99,7 +99,7 @@ v22_originate(struct v22fp *fp, unsigned short *txsym, short *txout,
 			dsplibs_debug_printf("V22_originate, NODE_3\n");
 
 		/* The received level for this block, kept for the mean. */
-		fp->hdx->r28 = FPM_rms(rxin, V22_ORG_BLOCK);
+		fp->hdx->rx_rms = FPM_rms(rxin, V22_ORG_BLOCK);
 
 		TxNOP(fp, txsym, txout, (short *)txcount);
 
@@ -107,12 +107,12 @@ v22_originate(struct v22fp *fp, unsigned short *txsym, short *txout,
 		*rxcount = nsym;
 
 		if (nsym != 0) {
-			fp->hdx->r2c += (unsigned short)fp->hdx->r28;
+			fp->hdx->rms_accum += (unsigned short)fp->hdx->rx_rms;
 			fp->hdx->r08 = (short)(fp->hdx->r08
 					       + Detect_1s(rxsym, rxcount,
 							   V22_ORG_DETECT_BPS,
 							   V22_ORG_DETECT_THRESH));
-			fp->hdx->r32++;
+			fp->hdx->rms_blocks++;
 		}
 
 		if ((unsigned short)fp->hdx->r08 > V22_ORG_NODE_3_RUN_MS) {
@@ -121,13 +121,13 @@ v22_originate(struct v22fp *fp, unsigned short *txsym, short *txout,
 			fp->hdx->connect_substate = V22_ORG_NODE_4;
 			/*
 			 * The mean level over the blocks counted.  An UNSIGNED
-			 * divide, and by `r32` -- which is zero until the first
+			 * divide, and by `rms_blocks` -- which is zero until the first
 			 * block with symbols in it.  See v22org.h.
 			 */
-			fp->hdx->r2c = (int)((unsigned int)fp->hdx->r2c
-					     / (unsigned short)fp->hdx->r32);
-			if ((unsigned int)fp->hdx->r2c
-			    > (unsigned short)fp->hdx->r30)
+			fp->hdx->rms_accum = (int)((unsigned int)fp->hdx->rms_accum
+					     / (unsigned short)fp->hdx->rms_blocks);
+			if ((unsigned int)fp->hdx->rms_accum
+			    > (unsigned short)fp->hdx->rms_threshold)
 				fp->hdx->rx_shift = 1;
 		}
 
@@ -204,8 +204,8 @@ v22_originate(struct v22fp *fp, unsigned short *txsym, short *txout,
 						V22_ORG_DETECT_THRESH);
 			if (ones == 0) {
 				DescrambleDataV22(fp, rxsym, *rxcount);
-				fp->hdx->r0a =
-				    (short)(fp->hdx->r0a
+				fp->hdx->ones_detect_ms =
+				    (short)(fp->hdx->ones_detect_ms
 					    + Detect_1s(rxsym, rxcount,
 							V22_ORG_DETECT_BPS,
 							V22_ORG_DETECT_THRESH));
@@ -249,8 +249,8 @@ v22_originate(struct v22fp *fp, unsigned short *txsym, short *txout,
 						V22_ORG_DETECT_THRESH);
 			if (ones == 0) {
 				DescrambleDataV22(fp, rxsym, *rxcount);
-				fp->hdx->r0a =
-				    (short)(fp->hdx->r0a
+				fp->hdx->ones_detect_ms =
+				    (short)(fp->hdx->ones_detect_ms
 					    + Detect_1s(rxsym, rxcount,
 							V22_ORG_DETECT_BPS,
 							V22_ORG_DETECT_THRESH));
@@ -268,11 +268,11 @@ v22_originate(struct v22fp *fp, unsigned short *txsym, short *txout,
 		    && gap == 0) {
 			fp->hdx->gtimer = 0;
 			fp->hdx->r08 = 0;
-			fp->hdx->r0a = 0;
+			fp->hdx->ones_detect_ms = 0;
 			fp->hdx->connect_substate = V22_NODE_2400A;
 			SetAdaptEqV22(fp, V22_ORG_EQ_MODE_CARRIER);
 			FPM_AGC_Freeze(&fp->dsp->agc);
-		} else if ((unsigned short)fp->hdx->r0a > V22_ORG_ONES_MS) {
+		} else if ((unsigned short)fp->hdx->ones_detect_ms > V22_ORG_ONES_MS) {
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
 				    "V.22 %d modem det true\n",
@@ -280,7 +280,7 @@ v22_originate(struct v22fp *fp, unsigned short *txsym, short *txout,
 			fp->r1e[0] |= V22FP_R1E_BIT3;
 			fp->hdx->gtimer = 0;
 			fp->hdx->r08 = 0;
-			fp->hdx->r0a = 0;
+			fp->hdx->ones_detect_ms = 0;
 			fp->hdx->connect_substate = V22_NODE_1200_12;
 			SetAdaptEqV22(fp, V22_ORG_EQ_MODE_CARRIER);
 			FPM_AGC_Freeze(&fp->dsp->agc);

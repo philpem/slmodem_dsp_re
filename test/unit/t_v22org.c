@@ -25,8 +25,8 @@
  *      the whole ladder.  Values with no case fall through to the epilogue
  *      with nothing but the status byte written.
  *
- *   2. `hdx->gtimer`, `hdx->node_deadline`, `hdx->r08`, `hdx->r0a`, `hdx->r2c` and
- *      `hdx->r32` are the counters the arms compare against.  Poking them per
+ *   2. `hdx->gtimer`, `hdx->node_deadline`, `hdx->r08`, `hdx->ones_detect_ms`, `hdx->rms_accum` and
+ *      `hdx->rms_blocks` are the counters the arms compare against.  Poking them per
  *      block -- the `repoke` column -- makes each comparison land exactly
  *      where the probe wants it.  NOTE that `hdx->gtimer` only ever presents
  *      `gtimer + 20` to `ReadGTimer`, so a deadline constant needs TWO probes:
@@ -37,7 +37,7 @@
  *   3. NEGATIVE values in those counters are what separate the object's
  *      unsigned tests from the signed ones the same C source would produce
  *      with the declared types.  `-100` on the clock is above every deadline
- *      unsigned and below every one signed, and `-1` in `r08` or `r0a` is
+ *      unsigned and below every one signed, and `-1` in `r08` or `ones_detect_ms` is
  *      65535 unsigned.  Nothing in the datapump can produce either; the
  *      differential test can, and does.
  *
@@ -90,11 +90,11 @@
  * ---------------------------------------------------------------------------
  * ONE INPUT THIS TEST MUST NOT CONSTRUCT
  *
- * `v22_originate`'s NODE_3 divides `hdx->r2c` by `hdx->r32` once `r08` passes
- * 135.  `V22FP_create` leaves `r32` at zero and only a block with symbols in
+ * `v22_originate`'s NODE_3 divides `hdx->rms_accum` by `hdx->rms_blocks` once `r08` passes
+ * 135.  `V22FP_create` leaves `rms_blocks` at zero and only a block with symbols in
  * it increments it, so entering that arm with no block counted is a divide by
  * zero -- in the blob as much as here.  Every scenario that pokes `r08` near
- * the threshold pokes `r32` as well.
+ * the threshold pokes `rms_blocks` as well.
  */
 
 #include <string.h>
@@ -397,9 +397,9 @@ struct scenario {
 	int gtimer;		/* hdx->gtimer, or KEEP                     */
 	int node_deadline;	/* hdx->node_deadline, the give-up one     */
 	int r08;		/* hdx->r08, or KEEP                        */
-	int r0a;		/* hdx->r0a, or KEEP                        */
-	int r2c;		/* hdx->r2c, or KEEP                        */
-	int r32;		/* hdx->r32, or KEEP                        */
+	int ones_detect_ms;		/* hdx->ones_detect_ms, or KEEP                        */
+	int rms_accum;		/* hdx->rms_accum, or KEEP                        */
+	int rms_blocks;		/* hdx->rms_blocks, or KEEP                        */
 	int protocol;		/* hdx->protocol, or KEEP                  */
 	int bps2;		/* params.bps2, or 0 to leave it            */
 	int repoke;		/* re-apply the counters every block        */
@@ -720,12 +720,12 @@ poke_counters(struct v22fp *fp, const struct scenario *s)
 		fp->hdx->gtimer = s->gtimer;
 	if (s->r08 != KEEP)
 		fp->hdx->r08 = (short)s->r08;
-	if (s->r0a != KEEP)
-		fp->hdx->r0a = (short)s->r0a;
-	if (s->r2c != KEEP)
-		fp->hdx->r2c = s->r2c;
-	if (s->r32 != KEEP)
-		fp->hdx->r32 = (short)s->r32;
+	if (s->ones_detect_ms != KEEP)
+		fp->hdx->ones_detect_ms = (short)s->ones_detect_ms;
+	if (s->rms_accum != KEEP)
+		fp->hdx->rms_accum = s->rms_accum;
+	if (s->rms_blocks != KEEP)
+		fp->hdx->rms_blocks = (short)s->rms_blocks;
 	if (s->protocol != KEEP)
 		fp->hdx->protocol = (short)s->protocol;
 }
@@ -784,7 +784,7 @@ cover_answer(struct v22fp *a, short node_before, short r08_before,
 		if (a->hdx->connect_substate == node_before
 		    && status_after != V22_MSG_ERROR5) {
 			short r08 = a->hdx->r08;
-			short r0a = a->hdx->r0a;
+			short ones_detect_ms = a->hdx->ones_detect_ms;
 
 			if (r08 == (short)(r08_before + V22_BLOCK_MS)
 			    && r08_before != 0)
@@ -794,14 +794,14 @@ cover_answer(struct v22fp *a, short node_before, short r08_before,
 			else if (r08 == r08_before && r08_before != 0)
 				saw_n3_r08_keep++;
 
-			if (r0a > r0a_before)
+			if (ones_detect_ms > r0a_before)
 				saw_n3_r0a_inc++;
-			else if (r0a == 0 && r0a_before != 0)
+			else if (ones_detect_ms == 0 && r0a_before != 0)
 				saw_n3_r0a_reset++;
-			else if (r0a == r0a_before && r0a_before != 0)
+			else if (ones_detect_ms == r0a_before && r0a_before != 0)
 				saw_n3_r0a_keep++;
 
-			if (r08 == r08_before && r0a == r0a_before
+			if (r08 == r08_before && ones_detect_ms == r0a_before
 			    && r08_before != 0 && r0a_before != 0)
 				saw_n3_quiet++;
 		}
@@ -865,7 +865,7 @@ cover_originate(struct v22fp *a, short node_before, short r08_before,
 		break;
 
 	case V22_ORG_NODE_3:
-		if (a->hdx->r32 != r32_before)
+		if (a->hdx->rms_blocks != r32_before)
 			saw_o_n3_sym++;
 		else
 			saw_o_n3_nosym++;
@@ -897,7 +897,7 @@ cover_originate(struct v22fp *a, short node_before, short r08_before,
 			saw_o_n5_wait++;
 		{
 			short r08 = a->hdx->r08;
-			short r0a = a->hdx->r0a;
+			short ones_detect_ms = a->hdx->ones_detect_ms;
 
 			if (r08 == (short)(r08_before + V22_BLOCK_MS)
 			    && r08_before != 0)
@@ -905,9 +905,9 @@ cover_originate(struct v22fp *a, short node_before, short r08_before,
 			else if (r08 == 0 && r08_before != 0)
 				saw_o_n5_r08_reset++;
 
-			if (r0a > r0a_before)
+			if (ones_detect_ms > r0a_before)
 				saw_o_n5_r0a_inc++;
-			if (r08 == r08_before && r0a == r0a_before
+			if (r08 == r08_before && ones_detect_ms == r0a_before
 			    && r08_before != 0 && r0a_before != 0)
 				saw_o_n5_quiet++;
 		}
@@ -926,7 +926,7 @@ cover_originate(struct v22fp *a, short node_before, short r08_before,
 		if (a->hdx->connect_substate == node_before
 		    && status_after != V22_MSG_ERROR4) {
 			short r08 = a->hdx->r08;
-			short r0a = a->hdx->r0a;
+			short ones_detect_ms = a->hdx->ones_detect_ms;
 
 			if (r08 == (short)(r08_before + V22_BLOCK_MS)
 			    && r08_before != 0)
@@ -936,7 +936,7 @@ cover_originate(struct v22fp *a, short node_before, short r08_before,
 			else if (r08 == r08_before && r08_before != 0)
 				saw_o_n6_r08_keep++;
 
-			if (r0a > r0a_before)
+			if (ones_detect_ms > r0a_before)
 				saw_o_n6_r0a_inc++;
 		}
 		break;
@@ -1040,8 +1040,8 @@ run_scenario(const struct scenario *s, int which, long *tagp)
 
 		node_before = a->hdx->connect_substate;
 		r08_before = a->hdx->r08;
-		r0a_before = a->hdx->r0a;
-		r32_before = a->hdx->r32;
+		r0a_before = a->hdx->ones_detect_ms;
+		r32_before = a->hdx->rms_blocks;
 		r34_before = a->hdx->rx_shift;
 		gtimer_before = a->hdx->gtimer;
 		note_node(which, node_before);

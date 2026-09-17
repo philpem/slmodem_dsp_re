@@ -27,7 +27,7 @@
  *     function pointer in a graph THIS TEST OWNS, so installing one of our own
  *     on both sides makes the demodulated symbol stream an input.  That is
  *     what reaches both arms of `Detect_1s` -- and, through it, both the
- *     descrambler and the `hdx->r0a` accumulator, which no amount of noise
+ *     descrambler and the `hdx->ones_detect_ms` accumulator, which no amount of noise
  *     into a cold equaliser would drive to 230 ms.
  *
  *   - `mtd_s1->cfg.min_level` RAISED TO 0x7fff.  `hdx->r08` moves one of three
@@ -48,7 +48,7 @@
  *     first block of a fresh graph faces `acquire_level` and every later one
  *     faces `squelch_level`.
  *
- *   - `hdx->r08`, `hdx->r0a`, `hdx->gtimer` and `hdx->node_deadline` POKED DIRECTLY.
+ *   - `hdx->r08`, `hdx->ones_detect_ms`, `hdx->gtimer` and `hdx->node_deadline` POKED DIRECTLY.
  *     They are the handler's own state and every comparison against them is
  *     UNSIGNED in the object, so the sweeps carry values a working modem never
  *     reaches -- a negative `r08` whose value after the +20 step has bit 15
@@ -92,7 +92,7 @@
  *
  * TWO of the thirty-two needed a probe the first sweep did not have, and both
  * are recorded beside the array that gained it: a deadline WIDER than sixteen
- * bits, and a NEGATIVE `hdx->r0a`.  Neither gap was visible from the coverage
+ * bits, and a NEGATIVE `hdx->ones_detect_ms`.  Neither gap was visible from the coverage
  * guards -- every guard was green while both mutants lived.
  */
 
@@ -565,7 +565,7 @@ struct poke {
 	int gtimer;
 	int node_deadline;
 	short r08;
-	short r0a;
+	short ones_detect_ms;
 	int mtd;		/* 0 as built, 1 force ABSENT, 2 NOSIGNAL */
 	int agc_gate;		/* force SignalDetect() == 0            */
 	int desc_fix;		/* make the descrambler emit all 3s     */
@@ -580,7 +580,7 @@ apply(struct v22fp *p, const struct poke *k)
 	p->hdx->gtimer = k->gtimer;
 	p->hdx->node_deadline = k->node_deadline;
 	p->hdx->r08 = k->r08;
-	p->hdx->r0a = k->r0a;
+	p->hdx->ones_detect_ms = k->ones_detect_ms;
 	p->dsp->fse.decision = test_decision;
 	/*
 	 * `TxClockSync` inside `connect_1200` writes `3 * sre.pll_acc` into
@@ -610,7 +610,7 @@ apply(struct v22fp *p, const struct poke *k)
 	}
 	/*
 	 * THE DESCRAMBLED-ONES FIXTURE, and it is the only way this test can
-	 * reach the `hdx->r0a` accumulator at all.
+	 * reach the `hdx->ones_detect_ms` accumulator at all.
 	 *
 	 * The object runs `Detect_1s` TWICE on the same buffer -- once on the
 	 * raw symbols, and, only if that found nothing, once more after
@@ -710,7 +710,7 @@ base_poke(void)
 	k.gtimer = 0;
 	k.node_deadline = 60000;
 	k.r08 = 0;
-	k.r0a = 0;
+	k.ones_detect_ms = 0;
 	return k;
 }
 
@@ -745,7 +745,7 @@ run_node0(void)
 		/* Non-zero so the zeroing at the top of the arm is visible. */
 		k.gtimer = 1234;
 		k.r08 = 111;
-		k.r0a = 222;
+		k.ones_detect_ms = 222;
 
 		a = drive(&k, &b, tag);
 
@@ -871,8 +871,8 @@ run_node3(void)
 	/*
 	 * Straddling the transition into V22_NODE_1200_12.  The negative is
 	 * the unsigned probe for THIS comparison, and it is not redundant with
-	 * `r08`'s: a sweep whose `r0a` values were all non-negative let a
-	 * signed reading of the `hdx->r0a` test survive while catching every
+	 * `r08`'s: a sweep whose `ones_detect_ms` values were all non-negative let a
+	 * signed reading of the `hdx->ones_detect_ms` test survive while catching every
 	 * other one.
 	 */
 	static const short r0as[] = { -40, 0, 0xe6, 0xe7 };
@@ -935,7 +935,7 @@ run_node3(void)
 		k.agc_gate = ag;
 		k.desc_fix = df;
 		k.r08 = pre_r08;
-		k.r0a = pre_r0a;
+		k.ones_detect_ms = pre_r0a;
 		k.node_deadline = r04s[gi];
 		k.gtimer = gtimers[gi];
 
@@ -992,7 +992,7 @@ run_node3(void)
 		 */
 		descrambled = memcmp(&g_pre_sdm2, &g_post_sdm2,
 				     sizeof(g_pre_sdm2)) != 0
-			      || a->hdx->r0a != pre_r0a;
+			      || a->hdx->ones_detect_ms != pre_r0a;
 		if (a->hdx->connect_substate == V22_LOOP_NODE_3 && signalled) {
 			if (descrambled)
 				saw_no_ones++;
@@ -1000,7 +1000,7 @@ run_node3(void)
 				saw_ones++;
 		}
 		if (a->hdx->connect_substate == V22_LOOP_NODE_3
-		    && a->hdx->r0a != pre_r0a)
+		    && a->hdx->ones_detect_ms != pre_r0a)
 			saw_r0a_grew++;
 
 		if (a->hdx->connect_substate == V22_NODE_2400A)
