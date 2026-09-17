@@ -15,12 +15,12 @@
  },
  {
   "label": "reset does not clear prevBit",
-  "find": "\tprevBit = 0;\n\tword_1c0 = 0;",
-  "replace": "\tword_1c0 = 0;"
+  "find": "\tprevBit = 0;\n\tcpReceived = 0;",
+  "replace": "\tcpReceived = 0;"
  },
  {
   "label": "reset does not clear word_1c0",
-  "find": "\tprevBit = 0;\n\tword_1c0 = 0;\n\tcp->word_110 = 0;",
+  "find": "\tprevBit = 0;\n\tcpReceived = 0;\n\tcp->word_110 = 0;",
   "replace": "\tprevBit = 0;\n\tcp->word_110 = 0;"
  },
  {
@@ -40,12 +40,12 @@
  },
  {
   "label": "reset does not clear flag_3c",
-  "find": "\tflag_3c = 0;\n\tword_2c = 0;",
-  "replace": "\tword_2c = 0;"
+  "find": "\tflag_3c = 0;\n\tsilenceRrnRequest = 0;",
+  "replace": "\tsilenceRrnRequest = 0;"
  },
  {
   "label": "reset does not clear word_2c",
-  "find": "\tflag_3c = 0;\n\tword_2c = 0;\n\tword_30 = 0;",
+  "find": "\tflag_3c = 0;\n\tsilenceRrnRequest = 0;\n\tword_30 = 0;",
   "replace": "\tflag_3c = 0;\n\tword_30 = 0;"
  },
  {
@@ -240,8 +240,8 @@
  },
  {
   "label": "reset also clears word_24",
-  "find": "\tflag_3c = 0;\n\tword_2c = 0;",
-  "replace": "\tflag_3c = 0;\n\tword_24 = 0;\n\tword_2c = 0;"
+  "find": "\tflag_3c = 0;\n\tsilenceRrnRequest = 0;",
+  "replace": "\tflag_3c = 0;\n\tword_24 = 0;\n\tsilenceRrnRequest = 0;"
  },
  {
   "label": "reset also clears word_38",

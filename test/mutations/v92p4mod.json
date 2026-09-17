@@ -25,13 +25,13 @@
  },
  {
   "label": "+0x1c0 is not cleared",
-  "find": "\tbitsToSymbol = bts;\n\tword_1c0 = 0;",
+  "find": "\tbitsToSymbol = bts;\n\tcpReceived = 0;",
   "replace": "\tbitsToSymbol = bts;"
  },
  {
   "label": "+0x1c4 is not cleared",
-  "find": "\tbitsToSymbol = bts;\n\tword_1c0 = 0;\n\tword_1c4 = 0;\n\tcp->word_110 = 0;",
-  "replace": "\tbitsToSymbol = bts;\n\tword_1c0 = 0;\n\tcp->word_110 = 0;"
+  "find": "\tbitsToSymbol = bts;\n\tcpReceived = 0;\n\tword_1c4 = 0;\n\tcp->word_110 = 0;",
+  "replace": "\tbitsToSymbol = bts;\n\tcpReceived = 0;\n\tcp->word_110 = 0;"
  },
  {
   "label": "+0x18 is not cleared",

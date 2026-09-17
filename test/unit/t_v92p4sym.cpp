@@ -856,8 +856,8 @@ gs_setup(int trial)
 		o->suvLimit = ((mix & 4) != 0) ? 4u : 0u;
 		o->word_18 = (ci % 3 == 0) ? 0u
 			   : ((ci % 3 == 1) ? 800u : 801u);
-		o->word_2c = (unsigned int)(mix % 4);
-		o->word_1c0 = (unsigned int)((ci + shi) & 1);
+		o->silenceRrnRequest = (unsigned int)(mix % 4);
+		o->cpReceived = (unsigned int)((ci + shi) & 1);
 		o->word_1c4 = (unsigned int)((ci + bi) & 1);
 		o->flag_20 = (unsigned int)((shi + bi) & 1);
 		o->eventCode = 0xdeadbeefu;	/* the prologue must clear it */

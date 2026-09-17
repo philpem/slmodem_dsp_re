@@ -25,7 +25,7 @@
  *
  * `runPcmModem` writes into at least five different blocks: the object
  * itself, the V92Modulator (`float_28`, and the phase codes its `exit*`
- * members set), the V92Phase4Modulator two levels down (`word_2c`, `word_30`,
+ * members set), the V92Phase4Modulator two levels down (`silenceRrnRequest`, `word_30`,
  * `word_38`, `e2uExtended`), the V92CP the packer fills, the V92ParamsInfo
  * the unpacker fills, and the `_tagModemParameters` and `struct v34_object`
  * outside the modem entirely.  Naming those by hand would be a list nobody
@@ -1001,7 +1001,7 @@ poke(int s, const struct trial *t)
 		p4->flag_20 = 0;
 		p4->word_1c4 = 0;
 		p4->e2uExtended = 0;
-		p4->word_2c = 0;
+		p4->silenceRrnRequest = 0;
 		p4->word_30 = 0;
 
 		memcpy(&jd, o + OFF_JD92, sizeof jd);

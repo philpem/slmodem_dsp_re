@@ -22,8 +22,8 @@
  *     mapper->reset(amplitude, bitsArg)
  *     scrambler.reset(0)
  *     prevBit = 0
- *     word_1c0 = 0 ; cp->word_110 = 0 ; word_1c4 = 0
- *     word_28 = 0 ; flag_3c = 0 ; word_2c = 0 ; word_30 = 0 ; word_34 = 0
+ *     cpReceived = 0 ; cp->word_110 = 0 ; word_1c4 = 0
+ *     word_28 = 0 ; flag_3c = 0 ; silenceRrnRequest = 0 ; word_30 = 0 ; word_34 = 0
  *     word_18 = 0 ; byte_1c = 0 ; flag_20 = 0
  *     cp->bitsPerSymbol = 1 ; cp->byte_00 = 0 ; cp->infoToBits()
  *     pattern = cp->getBitVector(patternLength)
@@ -711,7 +711,7 @@ setup(long trial, const struct args *a, int runb)
 		o->byte_1c = 0x9cu;
 		o->flag_20 = 0x20202020u;
 		o->word_28 = 0x28282828u;
-		o->word_2c = 0x2c2c2c2cu;
+		o->silenceRrnRequest = 0x2c2c2c2cu;
 		o->word_30 = 0x30303030u;
 		o->word_34 = 0x34343434u;
 		o->flag_3c = 0x3c3c3c3cu;
@@ -721,7 +721,7 @@ setup(long trial, const struct args *a, int runb)
 		o->suvLimit = 0x44444444u;
 		o->prevBit = 1u + (mix % 3u);
 		o->e2uExtended = 0xbcbcbcbcu;
-		o->word_1c0 = 0xc0c0c0c0u;
+		o->cpReceived = 0xc0c0c0c0u;
 		o->word_1c4 = 0xc4c4c4c4u;
 
 		/*

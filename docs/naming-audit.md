@@ -662,3 +662,81 @@ structural checks all OK`. All 655 `build/period/*.o` hashes are
 issue100-v92cp-before.sha256`, 655/655). `anchorcheck` passed the full register
 (272 suites, 10041 mutations, 0 matching other than exactly once) and
 `refcheck` resolved all 13938 references.
+
+## Batch 15: V92Phase4Modulator field names
+
+Owner-scoped pass over `V92Phase4Modulator`. Two members are renamed and four
+stale comments corrected. `word_1c0` is unique to the class; `word_2c` is ALSO
+a `V90Phase3Demodulator` member, so every occurrence of that one was classified
+by owning object before any edit.
+
+### Evidence
+
+| Previous name | New name | Evidence |
+| --- | --- | --- |
+| word_2c | silenceRrnRequest | Assigned from the already-named `V90ConnectionEvaluator::silenceRrnRequest` in `VpcmFloModem::runPcmModem`'s two RRN arms (`VpcmFloModem.cpp:1735`, `:1746`) and passed to `V92CP::setSUV(unsigned int)` in `generateSymbol` (`V92Phase4Modulator.cpp:1260`, `:1538`), which stores it at `V92CP::suv` |
+| word_1c0 | cpReceived | Set by `recivedCP` (`:783`) and `recivedCPtag`'s first-tag path (`:919`); cleared by the constructor (`:207`), `resetBeforRRN` (`:538`), `resetRRNSecondSection` (`:644`) and `reset` (`:1671`); read as the `recivedSUVtag` guard (`:818`) and the `recivedCPtag` first-tag test (`:915`). Usage inference, CLAUDE.md's weakest tier; no format string prints it. |
+
+### Cross-owner classification and scoping
+
+`word_2c` is declared by two classes. Renamed: `V92Phase4Modulator` only --
+`V92Phase4Modulator.h`, `V92Phase4Modulator.cpp`, `VpcmFloModem.cpp`'s two
+`phase4Modulator->word_2c` stores, the four V.92 unit tests (`t_v92p4gen`,
+`t_v92p4reset`, `t_v92p4sym`, `t_vpcmrunpcm`) and the
+`v92p4gen`/`v92p4reset`/`v92p4sym`/`vpcmrunpcm`/`v92p4mod` manifests. NOT
+renamed: `V90Phase3Demodulator` (`V90Phase3Demodulator.h`/`.cpp`),
+`V90Equalizer.cpp`, `V90Demodulator.cpp`, `v34diag.cpp`, tests `t_v92dec`,
+`t_v90p3ddec`, `t_v90p3dreset`, `t_v90p4ddec`, and manifests
+`v90p3ddec.json`, `v90demprog.json`. Those occurrences are byte-for-byte
+unchanged; the guard in verification found 0 changed lines naming that class.
+`word_1c0` is declared by no other class in this tree.
+
+The `V92P4M_OFF` first argument was updated to the new name; the third (`tag`)
+argument is left offset-based (`word2c`, `word1c0`), matching the existing
+`V92P4M_OFF(eventCode, 0x00c, word0c)` and `suvLimit`/`word44` precedent. Every
+offset is unchanged.
+
+### Stale comments corrected (no code change)
+
+- `word_2c` (now `silenceRrnRequest`): the old "nothing written assigns it
+  anything else" was false -- `VpcmFloModem.cpp:1735`/`:1746` assign it.
+- `word_38`: the old "Nothing written sets it" and its implication that `reset`
+  clears it were both false -- `VpcmFloModem.cpp:1826`/`:1834` set it from
+  `cp->word_ca0`, and `reset` does NOT clear it. The name stays neutral: what
+  the two sites compute is not established.
+- `word_1c0`: "Cleared by the constructor." was stale; replaced by the latch
+  role described above.
+- `word_1c4`: "Cleared by the constructor." was stale; replaced by the
+  once-per-SUV latch role (written by `recivedSUV` `:747`,
+  `recivedPartTwoSilenceRrnSUV` `:776` and the `SUVu`->`CPu` arm `:1298`,
+  cleared by constructor/`resetBeforRRN`/`resetRRNSecondSection`/`reset`, read
+  as the early-out guard in both `recivedSUV` handlers). The name stays
+  neutral: the three writers do not agree on one semantic.
+
+Method-doc references to `word_1c0`/`word_2c` were renamed to the new names.
+Retained neutral, unchanged from the class's existing dispositions:
+`word_18`, `byte_1c`, `flag_20`, `word_24`, `word_28`, `word_30`, `word_34`,
+`word_38`, `flag_3c`, `byte_42`, `word_1b0`, `word_1b8`, `word_1c4`.
+
+### Verification
+
+A token-aware forward substitution of `HEAD` reproduces the working tree
+exactly for the six changed cpp/test files. The only file that differs is
+`V92Phase4Modulator.h`, and it differs by exactly three blocks: the rewritten
+`word_2c`, `word_38` and `word_1c0`/`word_1c4` comments -- all intended. No
+changed line names `V90Phase3Demodulator`. The manifests were transformed by
+decoding each `find`/`replace` string value, substituting identifiers at the
+token boundary and re-encoding with the file's own `indent=1` formatting, so
+every `label`, `why`, `note`, `equivalent`, `fn` and blank line is preserved
+byte-for-byte; the old names remain only in retained labels and one `why`
+(`v92p4gen`: labels 30/55/88; `v92p4reset`: labels 4/9; `v92p4sym`: `why` 2 and
+labels 71/125; `snapshot.json`'s seven labels, which are unchanged). The
+token-count check found 0 structural problems and each old->new pair balanced.
+`anchorcheck` passed all five changed suites (395 mutations, 0 matching other
+than exactly once), and `refcheck` resolved all 13938 references.
+
+Batch 15 gate result: Gentoo `make phase` exited 0, **`period differential:
+375 passed, 0 failed`** and `phase boundary: period differential and structural
+checks all OK`. All 655 `build/period/*.o` hashes are **byte-identical** to the
+pre-edit snapshot (`/home/philpem/slmodem/tmp/issue100-v92p4m-before.sha256`,
+655/655).
