@@ -272,10 +272,19 @@ public:
 	float	unnamed_0f4;		/* +0x0f4  setToDefault only; 2e-12f.  FLOAT: shares one materialisation with +0x12c and +0x19c, both float -- 878, F7960, and D901 argues this is the real SLOW_K2 */
 	int  	BLL_TRN1D_INITIAL_TO_FAST_DURATION;	/* +0x0f8 */
 	int  	BLL_TRN1D_FAST_TO_SLOW_DURATION;	/* +0x0fc */
-	int	unnamed_100;		/* +0x100  setToDefault only */
-	int	unnamed_104;		/* +0x104  setToDefault only */
-	int	unnamed_108;		/* +0x108  setToDefault only */
-	int	unnamed_10c;		/* +0x10c  setToDefault only */
+	/*
+	 * The QUICK-CONNECT BLL transition thresholds, in `bllSamples`, one
+	 * per state change: `V90Demodulator`'s state machine advances when
+	 * each is exceeded (`:1493-1504`).  Named by the transition each one
+	 * gates, in the same `<FROM>_TO_<TO>_DURATION` shape the two
+	 * non-QC thresholds above already use -- usage inference, but the
+	 * gate and the constant are the same site.  They were
+	 * `unnamed_100/104/108/10c`; the object prints no name.
+	 */
+	int	BLL_TRN1D_SLOW_TO_SLOW2_DURATION;	/* +0x100  6000 */
+	int	BLL_TRN1_QC_INITIAL_TO_FAST_DURATION;	/* +0x104  1000 */
+	int	BLL_TRN1_QC_FAST_TO_MEDIUM_DURATION;	/* +0x108  4000 */
+	int	BLL_TRN1_QC_MEDIUM_TO_SLOW_DURATION;	/* +0x10c  4000 */
 	float	EIA6_BLL_INITIAL_K1;	/* +0x110 */
 	float	EIA6_BLL_INITIAL_K2;	/* +0x114 */
 	float	EIA6_BLL_FAST_K1;	/* +0x118 */

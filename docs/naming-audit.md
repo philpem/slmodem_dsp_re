@@ -1126,3 +1126,47 @@ structural checks all OK`**. All 655 `build/period/*.o` hashes are
 **byte-identical** to the pre-edit snapshot
 (`/home/philpem/slmodem/tmp/issue119-tier-b-before.sha256`, 655/655).
 
+## Batch 20: issue #119 Tier C -- V90Parameters BLL durations
+
+The four QUICK-CONNECT BLL transition thresholds in `V90Parameters` were
+`unnamed_*`. They are compared against `bllSamples` in `V90Demodulator`'s
+BLL state machine, each gating exactly one transition, so each is named by
+that transition in the `<FROM>_TO_<TO>_DURATION` shape the two non-QC
+thresholds above already use (`BLL_TRN1D_INITIAL_TO_FAST_DURATION`,
+`BLL_TRN1D_FAST_TO_SLOW_DURATION`). Usage inference -- the object prints no
+name -- but the constant, the comparison and the state change are one site.
+
+| Previous | New | Gate |
+| --- | --- | --- |
+| `unnamed_100` | `BLL_TRN1D_SLOW_TO_SLOW2_DURATION` | `V90_BLL_SLOW` -> `V90_BLL_SLOW2` (`V90Demodulator.cpp:1493`) |
+| `unnamed_104` | `BLL_TRN1_QC_INITIAL_TO_FAST_DURATION` | `V90_BLL_TRN1_QC_INITIAL` -> `_FAST` (`:1496`) |
+| `unnamed_108` | `BLL_TRN1_QC_FAST_TO_MEDIUM_DURATION` | `V90_BLL_TRN1_QC_FAST` -> `_MEDIUM` (`:1499`) |
+| `unnamed_10c` | `BLL_TRN1_QC_MEDIUM_TO_SLOW_DURATION` | `V90_BLL_TRN1_QC_MEDIUM` -> `_SLOW` (`:1502`) |
+
+`v90demprog.json`'s "the ladder's comparison is strict" anchor follows the
+`unnamed_10c` rename; its label and fault are unchanged.
+
+LEFT RETAINED, with the reasons on record, not renamed:
+
+- `unnamed_0f4` and `BLL_TRN1_QC_SLOW_K2` at +0x0f0: D901 records an alias
+  ambiguity, and `V90Parameters.cpp:176-177` reads BOTH `BLL_TRN1_QC_SLOW_K1`
+  and `BLL_TRN1_QC_SLOW_K2` into the +0x0f0 field -- a separate wiring
+  question, not a naming one. Do not rename these until that is resolved.
+- `unnamed_080` (`nofUcodesInTrn2`'s configured value): finding 3527
+  deliberately ruled it keeps its offset name.
+- `unnamed_1b0/1b4/1b8` (the German-PBX DIL betas): the alias fields
+  `GERMAN_PBX_LINEAR_EQU_DIL_*_BETA` at +0x18c/0x190/0x194 already carry
+  those names, and the unnamed fields are their source; a non-colliding name
+  needs the alias/source relationship resolved first.
+- `unnamed_434`, `unnamed_440`: each is used once (a V.34-fallback threshold
+  and the `..._ALT_RBS` mean-error ratio) and the object prints neither; a
+  name would be inference with no typed anchor.
+- `_tagModemParameters::unnamed_0003` (`cfgFlags3`): sits in the host
+  `dp_runtime` record, not `V90Parameters`; naming it crosses a namespace
+  boundary the inventory warns about.
+
+Batch 20 gate result: Gentoo `make phase` exited 0, **`period differential:
+375 passed, 0 failed`** and `phase boundary: period differential and
+structural checks all OK`; 655/655 period objects byte-identical.
+
+
