@@ -5,13 +5,13 @@
  },
  {
   "label": "the decoder's final Horner stage uses the second modulus",
-  "find": "\tacc = acc * field_00 + in[0];",
-  "replace": "\tacc = acc * field_04 + in[0];"
+  "find": "\tacc = acc * constellationSize0 + in[0];",
+  "replace": "\tacc = acc * constellationSize1 + in[0];"
  },
  {
   "label": "the decoder's final Horner stage uses the second digit",
-  "find": "\tacc = acc * field_00 + in[0];",
-  "replace": "\tacc = acc * field_00 + in[1];"
+  "find": "\tacc = acc * constellationSize0 + in[0];",
+  "replace": "\tacc = acc * constellationSize0 + in[1];"
  },
  {
   "label": "the decoder reverses every reconstructed bit",

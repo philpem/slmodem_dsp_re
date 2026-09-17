@@ -271,13 +271,13 @@
  },
  {
   "label": "the frame's bit count is left as it was found",
-  "find": "\tbitsPerFrame = mapp->word_0;\n\tword_08 = bitsPerFrame - signBitsPerFrame;",
-  "replace": "\tword_08 = bitsPerFrame - signBitsPerFrame;"
+  "find": "\tbitsPerFrame = mapp->word_0;\n\tmodulusBitCount = bitsPerFrame - signBitsPerFrame;",
+  "replace": "\tmodulusBitCount = bitsPerFrame - signBitsPerFrame;"
  },
  {
   "label": "+0x08 is the SUM of the two counts, not the difference",
-  "find": "\tbitsPerFrame = mapp->word_0;\n\tword_08 = bitsPerFrame - signBitsPerFrame;",
-  "replace": "\tbitsPerFrame = mapp->word_0;\n\tword_08 = bitsPerFrame + signBitsPerFrame;"
+  "find": "\tbitsPerFrame = mapp->word_0;\n\tmodulusBitCount = bitsPerFrame - signBitsPerFrame;",
+  "replace": "\tbitsPerFrame = mapp->word_0;\n\tmodulusBitCount = bitsPerFrame + signBitsPerFrame;"
  },
  {
   "label": "the histogram is printed but the delay is not reseeded",
@@ -323,18 +323,18 @@
  },
  {
   "label": "the modulus decoder's seventh word is the frame's whole bit count",
-  "find": "\t\t\tfor (j = 0; j < constellationSize[i]; j++)\n\t\t\t\tconstellation[i][j] = adiDetector->linMapp[i]\n\t\t\t\t    [mapp->constellation[i][j]];\n\t\t}\n\t}\n\n\tmodulusDecoder.field_00 = constellationSize[0];\n\tmodulusDecoder.field_04 = constellationSize[1];\n\tmodulusDecoder.field_08 = constellationSize[2];\n\tmodulusDecoder.field_0c = constellationSize[3];\n\tmodulusDecoder.field_10 = constellationSize[4];\n\tmodulusDecoder.field_14 = constellationSize[5];\n\tmodulusDecoder.field_18 = word_08;",
-  "replace": "\t\t\tfor (j = 0; j < constellationSize[i]; j++)\n\t\t\t\tconstellation[i][j] = adiDetector->linMapp[i]\n\t\t\t\t    [mapp->constellation[i][j]];\n\t\t}\n\t}\n\n\tmodulusDecoder.field_00 = constellationSize[0];\n\tmodulusDecoder.field_04 = constellationSize[1];\n\tmodulusDecoder.field_08 = constellationSize[2];\n\tmodulusDecoder.field_0c = constellationSize[3];\n\tmodulusDecoder.field_10 = constellationSize[4];\n\tmodulusDecoder.field_14 = constellationSize[5];\n\tmodulusDecoder.field_18 = bitsPerFrame;"
+  "find": "\t\t\tfor (j = 0; j < constellationSize[i]; j++)\n\t\t\t\tconstellation[i][j] = adiDetector->linMapp[i]\n\t\t\t\t    [mapp->constellation[i][j]];\n\t\t}\n\t}\n\n\tmodulusDecoder.constellationSize0 = constellationSize[0];\n\tmodulusDecoder.constellationSize1 = constellationSize[1];\n\tmodulusDecoder.constellationSize2 = constellationSize[2];\n\tmodulusDecoder.constellationSize3 = constellationSize[3];\n\tmodulusDecoder.constellationSize4 = constellationSize[4];\n\tmodulusDecoder.constellationSize5 = constellationSize[5];\n\tmodulusDecoder.bitCount = modulusBitCount;",
+  "replace": "\t\t\tfor (j = 0; j < constellationSize[i]; j++)\n\t\t\t\tconstellation[i][j] = adiDetector->linMapp[i]\n\t\t\t\t    [mapp->constellation[i][j]];\n\t\t}\n\t}\n\n\tmodulusDecoder.constellationSize0 = constellationSize[0];\n\tmodulusDecoder.constellationSize1 = constellationSize[1];\n\tmodulusDecoder.constellationSize2 = constellationSize[2];\n\tmodulusDecoder.constellationSize3 = constellationSize[3];\n\tmodulusDecoder.constellationSize4 = constellationSize[4];\n\tmodulusDecoder.constellationSize5 = constellationSize[5];\n\tmodulusDecoder.bitCount = bitsPerFrame;"
  },
  {
   "label": "the six row lengths reach the modulus decoder one slot out",
-  "find": "\t\t\tfor (j = 0; j < constellationSize[i]; j++)\n\t\t\t\tconstellation[i][j] = adiDetector->linMapp[i]\n\t\t\t\t    [mapp->constellation[i][j]];\n\t\t}\n\t}\n\n\tmodulusDecoder.field_00 = constellationSize[0];\n\tmodulusDecoder.field_04 = constellationSize[1];",
-  "replace": "\t\t\tfor (j = 0; j < constellationSize[i]; j++)\n\t\t\t\tconstellation[i][j] = adiDetector->linMapp[i]\n\t\t\t\t    [mapp->constellation[i][j]];\n\t\t}\n\t}\n\n\tmodulusDecoder.field_00 = constellationSize[1];\n\tmodulusDecoder.field_04 = constellationSize[0];"
+  "find": "\t\t\tfor (j = 0; j < constellationSize[i]; j++)\n\t\t\t\tconstellation[i][j] = adiDetector->linMapp[i]\n\t\t\t\t    [mapp->constellation[i][j]];\n\t\t}\n\t}\n\n\tmodulusDecoder.constellationSize0 = constellationSize[0];\n\tmodulusDecoder.constellationSize1 = constellationSize[1];",
+  "replace": "\t\t\tfor (j = 0; j < constellationSize[i]; j++)\n\t\t\t\tconstellation[i][j] = adiDetector->linMapp[i]\n\t\t\t\t    [mapp->constellation[i][j]];\n\t\t}\n\t}\n\n\tmodulusDecoder.constellationSize0 = constellationSize[1];\n\tmodulusDecoder.constellationSize1 = constellationSize[0];"
  },
  {
   "label": "the serial sign decoder keeps its previous bit",
-  "find": "\t\t\tfor (j = 0; j < constellationSize[i]; j++)\n\t\t\t\tconstellation[i][j] = adiDetector->linMapp[i]\n\t\t\t\t    [mapp->constellation[i][j]];\n\t\t}\n\t}\n\n\tmodulusDecoder.field_00 = constellationSize[0];\n\tmodulusDecoder.field_04 = constellationSize[1];\n\tmodulusDecoder.field_08 = constellationSize[2];\n\tmodulusDecoder.field_0c = constellationSize[3];\n\tmodulusDecoder.field_10 = constellationSize[4];\n\tmodulusDecoder.field_14 = constellationSize[5];\n\tmodulusDecoder.field_18 = word_08;\n\tsignDecoder.prev_ = 0;",
-  "replace": "\t\t\tfor (j = 0; j < constellationSize[i]; j++)\n\t\t\t\tconstellation[i][j] = adiDetector->linMapp[i]\n\t\t\t\t    [mapp->constellation[i][j]];\n\t\t}\n\t}\n\n\tmodulusDecoder.field_00 = constellationSize[0];\n\tmodulusDecoder.field_04 = constellationSize[1];\n\tmodulusDecoder.field_08 = constellationSize[2];\n\tmodulusDecoder.field_0c = constellationSize[3];\n\tmodulusDecoder.field_10 = constellationSize[4];\n\tmodulusDecoder.field_14 = constellationSize[5];\n\tmodulusDecoder.field_18 = word_08;\n\t(void)0;"
+  "find": "\t\t\tfor (j = 0; j < constellationSize[i]; j++)\n\t\t\t\tconstellation[i][j] = adiDetector->linMapp[i]\n\t\t\t\t    [mapp->constellation[i][j]];\n\t\t}\n\t}\n\n\tmodulusDecoder.constellationSize0 = constellationSize[0];\n\tmodulusDecoder.constellationSize1 = constellationSize[1];\n\tmodulusDecoder.constellationSize2 = constellationSize[2];\n\tmodulusDecoder.constellationSize3 = constellationSize[3];\n\tmodulusDecoder.constellationSize4 = constellationSize[4];\n\tmodulusDecoder.constellationSize5 = constellationSize[5];\n\tmodulusDecoder.bitCount = modulusBitCount;\n\tsignDecoder.prev_ = 0;",
+  "replace": "\t\t\tfor (j = 0; j < constellationSize[i]; j++)\n\t\t\t\tconstellation[i][j] = adiDetector->linMapp[i]\n\t\t\t\t    [mapp->constellation[i][j]];\n\t\t}\n\t}\n\n\tmodulusDecoder.constellationSize0 = constellationSize[0];\n\tmodulusDecoder.constellationSize1 = constellationSize[1];\n\tmodulusDecoder.constellationSize2 = constellationSize[2];\n\tmodulusDecoder.constellationSize3 = constellationSize[3];\n\tmodulusDecoder.constellationSize4 = constellationSize[4];\n\tmodulusDecoder.constellationSize5 = constellationSize[5];\n\tmodulusDecoder.bitCount = modulusBitCount;\n\t(void)0;"
  },
  {
   "label": "an equal magnitude takes the upper pair -- `>=` and not `>`",
@@ -441,8 +441,8 @@
  },
  {
   "label": "+0x08 is the sum of the two counts, not the difference",
-  "find": "\tsignBitsPerFrame = V90DEMAPPER_FRAME - mapp->shaperSR;\n\tword_08 = bitsPerFrame - signBitsPerFrame;\n",
-  "replace": "\tsignBitsPerFrame = V90DEMAPPER_FRAME - mapp->shaperSR;\n\tword_08 = bitsPerFrame + signBitsPerFrame;\n"
+  "find": "\tsignBitsPerFrame = V90DEMAPPER_FRAME - mapp->shaperSR;\n\tmodulusBitCount = bitsPerFrame - signBitsPerFrame;\n",
+  "replace": "\tsignBitsPerFrame = V90DEMAPPER_FRAME - mapp->shaperSR;\n\tmodulusBitCount = bitsPerFrame + signBitsPerFrame;\n"
  },
  {
   "label": "a zero spacing writes a zero group size instead of leaving it alone",

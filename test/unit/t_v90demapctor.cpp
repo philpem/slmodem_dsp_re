@@ -260,7 +260,7 @@ run_ctor(void)
 				    (long)THEIRS.errorHistogramCount, 0, trial);
 			diff_eq_int("bitsPerFrame (%ld)", (long)THEIRS.bitsPerFrame, 0,
 				    trial);
-			diff_eq_int("word_08 (%ld)", (long)THEIRS.word_08, 0,
+			diff_eq_int("word_08 (%ld)", (long)THEIRS.modulusBitCount, 0,
 				    trial);
 			diff_eq_int("signBitsPerFrame (%ld)",
 				    (long)THEIRS.signBitsPerFrame, 0,

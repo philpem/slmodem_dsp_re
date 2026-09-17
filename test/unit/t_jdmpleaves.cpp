@@ -412,8 +412,8 @@ run_ctor7(const char *name, ctor7 ours, ctor7 theirs)
 				   MC_SLOT - sizeof(ModulusEncoder)) == 0, 1,
 			    trial);
 		diff_eq_int("all seven landed in order (trial %ld)",
-			    ((ModulusEncoder *)(void *)mc[0])->field_00 == a[0]
-			    && ((ModulusEncoder *)(void *)mc[0])->field_18
+			    ((ModulusEncoder *)(void *)mc[0])->constellationSize0 == a[0]
+			    && ((ModulusEncoder *)(void *)mc[0])->bitCount
 			       == a[6], 1, trial);
 		if (memcmp(before, mc[0], MC_SLOT) != 0)
 			moved = 1;

@@ -743,7 +743,7 @@ static unsigned char rst_mp[sizeof(V90MappingParams)]
  * `+0x00c` is the one that was always needed rather than one of the five:
  * `resetNoSpectral` READS `signBitsPerFrame` and never writes it, which is its
  * whole difference from `reset` at the top of the function.  0x1234 is
- * unmistakable in `word_08` because `6 - shaperSR` is at most 6.
+ * unmistakable in `modulusBitCount` because `6 - shaperSR` is at most 6.
  */
 static const struct {
 	unsigned int off;
@@ -1240,7 +1240,7 @@ struct proc_case {
 	unsigned int size[V90MAPPER_CONSTELLATIONS];
 	int	     sr;		/* mp->shaperSR                     */
 	unsigned int id;		/* mp->shaperId                     */
-	unsigned int payload;		/* word_08, the modulus bit count   */
+	unsigned int payload;		/* modulusBitCount, the modulus bit count   */
 	int	     pcm;
 };
 

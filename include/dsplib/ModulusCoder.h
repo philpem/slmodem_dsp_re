@@ -39,14 +39,17 @@
  * ascending offsets in argument order with no arithmetic anywhere.  That is
  * what a constructor whose whole job is a member-initialiser list looks like,
  * so the seven parameters ARE the seven members and the order is settled.
- * Their meanings ARE established now.  `progress` is written -- the encoder
- * in `src/pump/v90/V90ModulusEncoder.cpp`, the decoder in
+ * Their meanings ARE established, and the fields are named from them (issue
+ * #119).  `progress` is written -- the encoder in
+ * `src/pump/v90/V90ModulusEncoder.cpp`, the decoder in
  * `V90ModulusDecoder.cpp` -- and the constructor's `@param` docs below tie
- * `field_00`..`field_10` to the five conversion moduli, `field_18` to the bit
- * count, and `field_14` to an argument neither `progress` reads.  The fields
- * keep offset names only because the object itself spells none; naming them
- * `modulus*`/`bitCount` is the issue #119 pass that also unblocks
- * `V90Mapper`/`V90Demapper::word_08`.
+ * `constellationSize0`..`constellationSize4` to the five conversion moduli
+ * and `bitCount` to the bit count.  `constellationSize5` is stored but read
+ * by NEITHER `progress` member: only the first five are moduli, because the
+ * sixth output digit is the remainder rather than a divisor.  The names are
+ * the caller's own -- `V90Mapper::reset` and `V90Demapper::reset` store
+ * their six `constellationSize[]` entries and their `modulusBitCount` into
+ * these seven words, in order.
  */
 
 #ifndef DSPLIB_MODULUSCODER_H
@@ -71,13 +74,14 @@ public:
 	 * and @p a..@p e as the five conversion moduli; @p f is stored but
 	 * read by neither `progress()` member.
 	 *
-	 * @param a  Modulus for output digit 0 (`field_00`).
-	 * @param b  Modulus for output digit 1 (`field_04`).
-	 * @param c  Modulus for output digit 2 (`field_08`).
-	 * @param d  Modulus for output digit 3 (`field_0c`).
-	 * @param e  Modulus for output digit 4 (`field_10`).
-	 * @param f  Stored but unused by progress() (`field_14`).
-	 * @param g  Bit count / byte position (`field_18`).
+	 * @param a  Modulus for output digit 0 (`constellationSize0`).
+	 * @param b  Modulus for output digit 1 (`constellationSize1`).
+	 * @param c  Modulus for output digit 2 (`constellationSize2`).
+	 * @param d  Modulus for output digit 3 (`constellationSize3`).
+	 * @param e  Modulus for output digit 4 (`constellationSize4`).
+	 * @param f  Modulus slot 5, stored but read by neither `progress()`
+	 *           member: the sixth output digit is the remainder.
+	 * @param g  Bit count (`bitCount`).
 	 */
 	ModulusEncoder(unsigned int a, unsigned int b, unsigned int c,
 		       unsigned int d, unsigned int e, unsigned int f,
@@ -86,15 +90,15 @@ public:
 	/**
 	 * @brief Convert a bit string into six mixed-radix digits.
 	 *
-	 * Packs `field_18` bits from @p bytes (one bit per byte, MSB-first
+	 * Packs `bitCount` bits from @p bytes (one bit per byte, MSB-first
 	 * from the top of the array) into a signed 64-bit accumulator, then
-	 * divides out five digits by the moduli `field_00`.. `field_10` in
+	 * divides out five digits by the moduli `constellationSize0`.. `constellationSize4` in
 	 * order; the sixth output word is whatever remains. The accumulator
 	 * is genuinely signed (the object uses the signed `__divdi3`/
 	 * `__moddi3` helpers), so a bit count of 64 or more lets the top bit
 	 * become the sign -- reproduced rather than tidied.
 	 *
-	 * @param bytes  Input bit string, `field_18` bytes, one bit (bit 0)
+	 * @param bytes  Input bit string, `bitCount` bytes, one bit (bit 0)
 	 *               used per byte.
 	 * @param out    Output: six mixed-radix digits.
 	 */
@@ -104,17 +108,18 @@ public:
 	 * Public because the original's access specifiers are not recoverable
 	 * and one access section keeps the class standard-layout.  The type is
 	 * the seven-argument constructor's `unsigned int`, which is evidence
-	 * and not a default.  The names stay the offsets because the object
-	 * spells none, though `progress` now gives each a role -- see the
-	 * constructor's `@param` docs and the file banner.
+	 * and not a default.  The names are the caller's own -- the six
+	 * `constellationSize[]` entries and the modulus bit count stored by
+	 * `V90Mapper::reset` / `V90Demapper::reset` -- and `progress` gives
+	 * each its role; see the constructor's `@param` docs and the banner.
 	 */
-	unsigned int field_00;
-	unsigned int field_04;
-	unsigned int field_08;
-	unsigned int field_0c;
-	unsigned int field_10;
-	unsigned int field_14;
-	unsigned int field_18;	/* byte position, per `progress` above */
+	unsigned int constellationSize0;
+	unsigned int constellationSize1;
+	unsigned int constellationSize2;
+	unsigned int constellationSize3;
+	unsigned int constellationSize4;
+	unsigned int constellationSize5;
+	unsigned int bitCount;	/* bit count, per `progress` above */
 };
 
 /*
@@ -143,27 +148,27 @@ public:
 	 * @brief Convert six mixed-radix digits back into a bit string.
 	 *
 	 * The encoder run backwards: Horner's method from the top digit down
-	 * through moduli `field_10`.. `field_00` builds a signed 64-bit
-	 * accumulator, then `field_18` bits come back out from the bottom.
-	 * The loop bound (`field_18`) is re-read from the object every
+	 * through moduli `constellationSize4`.. `constellationSize0` builds a signed 64-bit
+	 * accumulator, then `bitCount` bits come back out from the bottom.
+	 * The loop bound (`bitCount`) is re-read from the object every
 	 * iteration and the shift is arithmetic; both are the object's own
 	 * behaviour. Nothing checks that a digit is below its modulus -- an
 	 * out-of-range digit simply carries into the next.
 	 *
-	 * @param bytes  Output bit string, `field_18` bytes, one bit per byte.
+	 * @param bytes  Output bit string, `bitCount` bytes, one bit per byte.
 	 * @param out    Input: six mixed-radix digits (named @p out to match
 	 *               progress()'s counterpart, though this direction reads
 	 *               it).
 	 */
 	void progress(unsigned char *bytes, unsigned int *out);
 
-	unsigned int field_00;
-	unsigned int field_04;
-	unsigned int field_08;
-	unsigned int field_0c;
-	unsigned int field_10;
-	unsigned int field_14;
-	unsigned int field_18;
+	unsigned int constellationSize0;
+	unsigned int constellationSize1;
+	unsigned int constellationSize2;
+	unsigned int constellationSize3;
+	unsigned int constellationSize4;
+	unsigned int constellationSize5;
+	unsigned int bitCount;
 };
 
 #endif /* DSPLIB_MODULUSCODER_H */

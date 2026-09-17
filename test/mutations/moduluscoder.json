@@ -9,32 +9,32 @@
  },
  {
   "label": "the decoder leaves its last word alone",
-  "find": "ModulusDecoder::ModulusDecoder()\n{\n\tfield_00 = field_04 = field_08 = field_0c = field_10 = field_14 =\n\t\tfield_18 = 0;\n}",
-  "replace": "ModulusDecoder::ModulusDecoder()\n{\n\tfield_00 = field_04 = field_08 = field_0c = field_10 = field_14 = 0;\n}"
+  "find": "ModulusDecoder::ModulusDecoder()\n{\n\tconstellationSize0 = constellationSize1 = constellationSize2 = constellationSize3 = constellationSize4 = constellationSize5 =\n\t\tbitCount = 0;\n}",
+  "replace": "ModulusDecoder::ModulusDecoder()\n{\n\tconstellationSize0 = constellationSize1 = constellationSize2 = constellationSize3 = constellationSize4 = constellationSize5 = 0;\n}"
  },
  {
   "label": "the decoder clears one word that is not its own",
-  "find": "ModulusDecoder::ModulusDecoder()\n{\n\tfield_00 = field_04 = field_08 = field_0c = field_10 = field_14 =\n\t\tfield_18 = 0;\n}",
-  "replace": "ModulusDecoder::ModulusDecoder()\n{\n\tfield_00 = field_04 = field_08 = field_0c = field_10 = field_14 =\n\t\tfield_18 = 0;\n\t((unsigned int *)this)[7] = 0;\n}"
+  "find": "ModulusDecoder::ModulusDecoder()\n{\n\tconstellationSize0 = constellationSize1 = constellationSize2 = constellationSize3 = constellationSize4 = constellationSize5 =\n\t\tbitCount = 0;\n}",
+  "replace": "ModulusDecoder::ModulusDecoder()\n{\n\tconstellationSize0 = constellationSize1 = constellationSize2 = constellationSize3 = constellationSize4 = constellationSize5 =\n\t\tbitCount = 0;\n\t((unsigned int *)this)[7] = 0;\n}"
  },
  {
   "label": "the decoder's Horner starts at the wrong end",
-  "find": "\tacc = (long long)in[5] * field_10 + in[4];",
-  "replace": "\tacc = (long long)in[0] * field_00 + in[1];"
+  "find": "\tacc = (long long)in[5] * constellationSize4 + in[4];",
+  "replace": "\tacc = (long long)in[0] * constellationSize0 + in[1];"
  },
  {
   "label": "the decoder's second stage takes the wrong modulus",
-  "find": "\tacc = acc * field_0c + in[3];",
-  "replace": "\tacc = acc * field_10 + in[3];"
+  "find": "\tacc = acc * constellationSize3 + in[3];",
+  "replace": "\tacc = acc * constellationSize4 + in[3];"
  },
  {
   "label": "the decoder's second stage takes the wrong digit",
-  "find": "\tacc = acc * field_0c + in[3];",
-  "replace": "\tacc = acc * field_0c + in[2];"
+  "find": "\tacc = acc * constellationSize3 + in[3];",
+  "replace": "\tacc = acc * constellationSize3 + in[2];"
  },
  {
   "label": "the decoder loses its last stage",
-  "find": "\tacc = acc * field_00 + in[0];",
+  "find": "\tacc = acc * constellationSize0 + in[0];",
   "replace": "\tacc = acc + in[0];"
  },
  {
@@ -54,7 +54,7 @@
  },
  {
   "label": "the decoder writes one bit too many",
-  "find": "\tfor (i = 0; i < field_18; i++) {",
-  "replace": "\tfor (i = 0; i <= field_18; i++) {"
+  "find": "\tfor (i = 0; i < bitCount; i++) {",
+  "replace": "\tfor (i = 0; i <= bitCount; i++) {"
  }
 ]

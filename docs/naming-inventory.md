@@ -21,15 +21,15 @@ The production-use column counts the member's identifier across `src/` only. It 
 |---|---:|
 | member declarations parsed | 3246 |
 | owners (struct/class) | 242 |
-| named | 2626 |
-| offset-named | 393 |
-|   on record (batch/wave or beside the field) | 247 |
-|   residual, not on record | 146 |
+| named | 2628 |
+| offset-named | 391 |
+|   on record (batch/wave or beside the field) | 246 |
+|   residual, not on record | 145 |
 | placeholder (`unmapped_`/`unnamed_`) | 76 |
 |   residual placeholder | 60 |
 | padding | 151 |
 
-Of the 393 offset-named members, **233 are in non-FAX owners** (the issue #100 scope) and **21 of those are residual**. FAX owners are a separate phase: listed for completeness, not dispositioned here.
+Of the 391 offset-named members, **231 are in non-FAX owners** (the issue #100 scope) and **20 of those are residual**. FAX owners are a separate phase: listed for completeness, not dispositioned here.
 
 ## Coverage and limitations
 
@@ -37,13 +37,13 @@ The parser is textual: it reads single-line member declarations inside `struct`/
 
 ## Assessment
 
-- 2626 of 3246 parsed members carry a real name.
-- 393 carry an offset-only name; 247 of those are on record (a batch/wave ledger or a substantive comment beside them).
-- 146 offset-named members are residual and appear in the ledger below with an explicit, justified disposition.
+- 2628 of 3246 parsed members carry a real name.
+- 391 carry an offset-only name; 246 of those are on record (a batch/wave ledger or a substantive comment beside them).
+- 145 offset-named members are residual and appear in the ledger below with an explicit, justified disposition.
 - 76 members are explicit placeholders (`unmapped_`/`unnamed_`); their names already state that the reconstruction does not model them.
 - 151 members are alignment padding, which must not be named.
 
-Within the issue #100 scope (non-FAX owners) there are 233 offset-named members, 21 of them residual, and 62 placeholders. FAX is a separate phase. On this reading every inventoried member is named or explicitly dispositioned; what remains is reviewer acceptance of the dispositions, not undiscovered offsets.
+Within the issue #100 scope (non-FAX owners) there are 231 offset-named members, 20 of them residual, and 62 placeholders. FAX is a separate phase. On this reading every inventoried member is named or explicitly dispositioned; what remains is reviewer acceptance of the dispositions, not undiscovered offsets.
 
 ## Per-owner totals
 
@@ -77,12 +77,12 @@ Within the issue #100 scope (non-FAX owners) there are 233 offset-named members,
 | `V90ConnectionEvaluator` | 47 | 1 | 1 | 0 | 0 | 0 | Batch 11 |
 | `V90ConstellationDesigner` | 18 | 4 | 3 | 1 | 0 | 2 |  |
 | `V90ConstellationPower` | 8 | 0 | 0 | 0 | 0 | 0 |  |
-| `V90Demapper` | 30 | 1 | 1 | 0 | 0 | 0 |  |
+| `V90Demapper` | 31 | 0 | 0 | 0 | 0 | 0 |  |
 | `V90Demodulator` | 17 | 1 | 1 | 0 | 0 | 0 | fieldnaming wave |
 | `V90Equalizer` | 86 | 0 | 0 | 0 | 0 | 1 |  |
 | `V90Jd` | 5 | 0 | 0 | 0 | 0 | 0 |  |
 | `V90MP` | 25 | 0 | 0 | 0 | 0 | 0 |  |
-| `V90Mapper` | 17 | 2 | 1 | 1 | 0 | 0 |  |
+| `V90Mapper` | 18 | 1 | 1 | 0 | 0 | 0 |  |
 | `V90MappingParams` | 9 | 1 | 1 | 0 | 0 | 0 |  |
 | `V90Modem` | 15 | 0 | 0 | 0 | 0 | 0 |  |
 | `V90Modulator` | 22 | 0 | 0 | 0 | 0 | 0 |  |
@@ -297,7 +297,6 @@ Within the issue #100 scope (non-FAX owners) there are 233 offset-named members,
 | owner | member | offset | note | src uses | disposition |
 |---|---|---|---|---:|---|
 | `V90ConstellationDesigner` | `word_40` | 0x40 | /* +0x40                    */ | 2 | referenced 2x in src; those uses establish no single role; retained neutral |
-| `V90Mapper` | `word_08` | 0x008 | /* +0x008                */ | 22 | referenced 22x in src; those uses establish no single role; retained neutral |
 | `V90Parameters` | `unnamed_07c` | 0x07c | /* +0x07c  setToDefault only */ | 1 | explicit placeholder name; the member's meaning is not modelled by the reconstruction |
 | `V90Parameters` | `unnamed_300` | 0x300 | /* +0x300  setToDefault only */ | 4 | explicit placeholder name; the member's meaning is not modelled by the reconstruction |
 | `V90Parameters` | `unnamed_304` | 0x304 | /* +0x304  setToDefault only */ | 2 | explicit placeholder name; the member's meaning is not modelled by the reconstruction |
@@ -366,7 +365,7 @@ Within the issue #100 scope (non-FAX owners) there are 233 offset-named members,
 | `v8_v21_params` | `f14` | 0xc34 | /* 0x18            +0xc34 */ | 19 | referenced 19x in src; those uses establish no single role; retained neutral |
 | `v8_v21_params` | `f1c` | 0xc3c | /* +0xc3c */ | 1 | referenced 1x in src; those uses establish no single role; retained neutral |
 
-Residual rows: **69**.  Every row has an explicit disposition; none is a name invented to clear an offset.
+Residual rows: **68**.  Every row has an explicit disposition; none is a name invented to clear an offset.
 
 ## FAX owners (separate phase)
 

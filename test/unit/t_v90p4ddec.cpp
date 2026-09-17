@@ -393,21 +393,21 @@ setup(int trial, int mode)
 		/*
 		 * NOT 3.  The RtNot arm calls `incrementRBSFramePosition`
 		 * before it prints, which takes the cursor from 2 to 3, so a
-		 * `word_08` of 3 makes "prints the cursor" and "prints the
+		 * `modulusBitCount` of 3 makes "prints the cursor" and "prints the
 		 * phase count" produce the same line and the mutation that
 		 * swaps them survives.  `resetNoSpectral` also computes
-		 * `word_08` as `word_0 - signBitsPerFrame`, which is 1 or 3,
+		 * `modulusBitCount` as `word_0 - signBitsPerFrame`, which is 1 or 3,
 		 * so 5 is clear of both.  Finding F4811.
 		 */
-		m->word_08 = 5u;
+		m->modulusBitCount = 5u;
 		m->linearMappStudyEnabled = (short)((mode & 1) ? 1 : 0);
-		m->modulusDecoder.field_00 = 7u;
-		m->modulusDecoder.field_04 = 11u;
-		m->modulusDecoder.field_08 = 5u;
-		m->modulusDecoder.field_0c = 13u;
-		m->modulusDecoder.field_10 = 3u;
-		m->modulusDecoder.field_14 = 0u;
-		m->modulusDecoder.field_18 = 6u;
+		m->modulusDecoder.constellationSize0 = 7u;
+		m->modulusDecoder.constellationSize1 = 11u;
+		m->modulusDecoder.constellationSize2 = 5u;
+		m->modulusDecoder.constellationSize3 = 13u;
+		m->modulusDecoder.constellationSize4 = 3u;
+		m->modulusDecoder.constellationSize5 = 0u;
+		m->modulusDecoder.bitCount = 6u;
 		m->signBits.spacing = 1u;
 		m->signBits.width = 1u;
 		m->signBits.state = 0u;
@@ -1216,7 +1216,7 @@ arm_one_zero_bit(void)
 		DEM(s).bitsPerFrame = 1u;
 		DEM(s).signBitsPerFrame = 1u;
 		DEM(s).signBitGroups = 0u;
-		DEM(s).modulusDecoder.field_18 = 0u;
+		DEM(s).modulusDecoder.bitCount = 0u;
 		DEM(s).signDecoder.prev_ = 0;
 		sign_s[s][0] = 0;
 	}

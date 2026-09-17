@@ -1192,4 +1192,60 @@ Batch 21 gate result: Gentoo `make phase` exited 0, **`period differential:
 structural checks all OK`.
 
 
+## Batch 22: ModulusCoder fields and word_08 (issue #119)
+
+`ModulusEncoder` and `ModulusDecoder` (one header, one layout, adjacent in the
+blob) each carry seven `unsigned int` members that the constructor's mangling
+and seven ascending stores settle as seven, and that `progress` now types:
+five mixed-radix conversion moduli and a bit count. The names come from the
+caller, not from inference -- `V90Mapper::reset` (`V90Mapper.cpp:253-259`) and
+`V90Demapper::reset` (`V90Demapper.cpp:780-786`) store their six
+`constellationSize[]` entries into +0x00..+0x14 and their modulus bit count
+into +0x18, in that order, and the constructor's `@param` docs already tie the
+arguments to those roles.
+
+| Previous | New | Role |
+| --- | --- | --- |
+| `ModulusEncoder/Decoder::field_00` | `constellationSize0` | modulus for output digit 0 |
+| `ModulusEncoder/Decoder::field_04` | `constellationSize1` | modulus for output digit 1 |
+| `ModulusEncoder/Decoder::field_08` | `constellationSize2` | modulus for output digit 2 |
+| `ModulusEncoder/Decoder::field_0c` | `constellationSize3` | modulus for output digit 3 |
+| `ModulusEncoder/Decoder::field_10` | `constellationSize4` | modulus for output digit 4 |
+| `ModulusEncoder/Decoder::field_14` | `constellationSize5` | stored, read by neither `progress`; the sixth digit is the remainder |
+| `ModulusEncoder/Decoder::field_18` | `bitCount` | bits packed/unpacked by `progress` |
+| `V90Mapper::word_08` | `modulusBitCount` | `bitsPerFrame - signBitsPerFrame` |
+| `V90Demapper::word_08` | `modulusBitCount` | the same, seventh word handed to `ModulusDecoder` |
+
+The `field_14` disposition is not a rename of convenience: only the first five
+members are divided out as moduli, and `out[5]` is the leftover accumulator, so
+naming it `constellationSize5` records what the caller stores rather than
+claiming a sixth divisor. `progress` is what resolves `word_08` from "the
+frame bits that are not sign bits" to the modulus bit count: the demapper's
+`resetNoSpectral` computes `bitsPerFrame - signBitsPerFrame` and stores it as
+the decoder's seventh word, and `ModulusDecoder::progress` reads that word as
+its bit count. `V90Mapper.h`'s "deliberately unnamed spelling" and
+`V90Demapper.h`'s "left unnamed on purpose" paragraphs are corrected to say so.
+
+CROSS-OWNER TRAPS, all left untouched: `V92ModulusEncoder::field_18`
+(`include/dsplib/V92ModulusEncoder.h`, `src/pump/v90/V92ModulusEncoder.cpp`,
+`test/mutations/v92modulusencoder.json`) is a different class's member;
+`V90CP::word_08` (`include/dsplib/V90CP.h`, `V90CP.cpp`, `v90cpb2i.json`,
+`t_v90cpb2i.cpp`, `t_v90cpinfo.cpp`, `t_v90modprog.cpp`, `t_v90p4mgen.cpp`) is
+a V90CP field; `TAG_DiagnosticResults::word_080` is a different identifier
+entirely. `t_v90modchain.cpp` mixes both owners in one file -- its V90Mapper
+`word_08` (lines 746, 965, 1243) is renamed and its V90CP `word_08`
+(line 3834, `plant_cp`) is not. The `MODENC_OFF`/`MODDEC_OFF` assertions take
+the new member name but keep their original tags and offsets (rule 4);
+`V90MAPPER_OFF`/`DEM_OFF` tags were already offset-spelled and did not move.
+Mutation manifests were transformed structurally in their `find`/`replace`
+VALUES only; every label, fault and other property is byte-for-byte unchanged,
+and all eight changed manifests' `find` strings still match their source
+exactly once.
+
+Batch 22 gate result: Gentoo `make phase` exited 0, **`period differential:
+375 passed, 0 failed`** and `phase boundary: period differential and
+structural checks all OK`; 655/655 period objects byte-identical.
+
+
+
 
