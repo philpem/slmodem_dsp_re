@@ -287,7 +287,7 @@ public:
 
 	/**
 	 * @brief Idempotently enter the ANSam-energy-drop wait state, if not
-	 * already in it (resets `word_2c` and prints the state-entry
+	 * already in it (resets `samplesInState` and prints the state-entry
 	 * diagnostic only on the actual transition).
 	 */
 	void enterWaitForANSpcmDrop();
@@ -356,7 +356,7 @@ public:
 	 * +0x014  `reset`'s last argument.  THIS COMMENT USED TO SAY "stored
 	 * and not otherwise used", and that was true only until the decision
 	 * functions landed: both `getV90Decision` and `getV92Decision`
-	 * compare `word_2c` against this field plus a float constant to fire
+	 * compare `samplesInState` against this field plus a float constant to fire
 	 * a long timeout -- `+ 12000.0f` for "WaitForSd TimeOut" and
 	 * `+ 38760.0f` for "JdDemod TimeOut"/"V92JdDemod TimeOut" -- which is
 	 * exactly the role `V90Phase3Modulator::timeoutBase` plays for ITS
@@ -410,15 +410,27 @@ public:
 	Phase3DemodulatorState state;
 
 	/*
-	 * +0x02c  `reset`'s fourth argument.  Stored here always, and passed
-	 * on to `V90Phase3Modulator::reset` only from the TRN1dKnownData
-	 * branch -- every other branch passes it 0.
+	 * +0x02c  The per-state sample counter.  `reset` stores its fourth
+	 * argument here and passes it on to `V90Phase3Modulator::reset` only
+	 * from the TRN1dKnownData branch -- every other branch passes it 0.
+	 * Both decision functions then increment it once per sample and zero
+	 * it on every state transition (`samplesInState++` is the first
+	 * statement of each), so it holds the number of samples the current
+	 * state has been running.
+	 *
+	 * External readers use it as a duration: `V90Equalizer.cpp:2382..2410`
+	 * compares it against the `*_FREEZE_DURATION` constants and
+	 * `V90Demodulator.cpp:1512` against `AGC_ADAPTATION_DURATION`.  The
+	 * name is usage inference -- no format string or typed callee spells
+	 * it -- strengthened by the paired class's identical counter,
+	 * `V90Demodulator::samplesInPhase`
+	 * (`include/dsplib/V90Demodulator.h:389`).
 	 */
-	unsigned int word_2c;
+	unsigned int samplesInState;
 
 	/*
 	 * +0x030  Zeroed by `reset`, and on every entry to both decision
-	 * functions -- `word_2c++; eventCode = 0; switch (state) { ... }` is
+	 * functions -- `samplesInState++; eventCode = 0; switch (state) { ... }` is
 	 * the whole of each function's own opening, per
 	 * `V90Phase3Demodulator.cpp`'s own comment on `getV92Decision`. Every
 	 * arm that has news for the caller sets it to a small constant before
@@ -583,22 +595,24 @@ public:
 	unsigned int word_3f4;		/* +0x3f4                        */
 
 	/*
-	 * +0x3f8  IT IS A FIELD NOW, and this comment used to say nothing
-	 * reaches it.  `setDigitalImairmentsInfo` reads it with
+	 * +0x3f8  The DIL max ucode, and the name is the object's own.
+	 * `V90Demodulator` stores 0x74 into it from both AGC arms
+	 * (`V90Demodulator.cpp:1548`, `:1564`) and prints it with the format
+	 * string "V90Demodulator: Dil max ucode = %d\n" (`:1568`), which is
+	 * rank-1 evidence.  `setDigitalImairmentsInfo` reads it with
 	 * `movzbl 0x3f8(%ebx),%eax` and hands it to
 	 * `V90AutoDigitalImpDetector::determineMaxUcode(short)` as that
 	 * method's only argument -- so it is ONE BYTE, unsigned, and widened
 	 * rather than sign-extended.
 	 *
-	 * The name is deliberately not `maxCode`.  That is the name this tree
-	 * gave `determineMaxUcode`'s parameter when it reconstructed it; the
-	 * mangling carries `s` and no name, so calling the field after it would
-	 * be promoting our own invention into a second place.  Nothing writes
-	 * this byte in anything written so far and no format string prints it,
-	 * which leaves usage inference alone -- CLAUDE.md's weakest tier, and
-	 * not enough.
+	 * This comment used to say "Nothing writes this byte ... and no
+	 * format string prints it".  That was stale: the store and the print
+	 * are both in `V90Demodulator.cpp`, and `determineMaxUcode` is a
+	 * typed callee.  The name deliberately keeps the object's own "Dil
+	 * max ucode" wording rather than `maxCode`, which is what this tree
+	 * had already called `determineMaxUcode`'s parameter.
 	 */
-	unsigned char byte_3f8;
+	unsigned char dilMaxUcode;
 
 	/* +0x3f9  Zeroed by `reset`. */
 	unsigned char byte_3f9;
@@ -717,16 +731,17 @@ public:
 	 * +0x420  The length of the TRN1d data-directed stage, and likewise no
 	 * longer padding.  BOTH decision functions load it from
 	 * `params->TRN1_QC_DD_LENGTH` (+0x4a0) when `quickConnect` is set and
-	 * from `params->TRN1D_DD_LENGTH` (+0x2fc) when it is not, and then COMPARE
-	 * the counter `word_2c` against it to decide when to leave -- state 4
-	 * in `getV90Decision`, state 5 in `getV92Decision`.  So unlike +0x3f4
-	 * this one is both written and read, and it holds a length.  The two
+	 * from `params->TRN1D_DD_LENGTH` (+0x2fc) when it is not, and then
+	 * COMPARE the counter `samplesInState` against it to decide when to
+	 * leave -- state 4 in `getV90Decision`, state 5 in `getV92Decision`.
+	 * So unlike +0x3f4 this one is both written and read, and it holds a
+	 * length, which is where the name comes from.  The two
 	 * reconstructions disagree only on the UNIT, one saying samples and the
 	 * other symbols; nothing here settles which, and at 8 kHz on a
 	 * one-sample-in one-decision-out function they are the same count.
 	 * Finding F2118.
 	 */
-	unsigned int word_420;		/* +0x420                        */
+	unsigned int trn1dDdLength;		/* +0x420                        */
 
 	/* +0x424  Zeroed by `reset`, before anything else it does. */
 	unsigned char byte_424;

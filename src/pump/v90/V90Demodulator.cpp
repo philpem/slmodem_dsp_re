@@ -1509,7 +1509,7 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 		 */
 		if (phase3Demodulator->state == 3 &&
 		    params->AGC_ADAPTATION_DURATION <
-			(int)phase3Demodulator->word_2c &&
+			(int)phase3Demodulator->samplesInState &&
 		    agc.alpha != 1.0f) {
 			agc.freeze();
 			edprintf("V90Demodulator: Agc Frozen\r\n");
@@ -1545,7 +1545,7 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 					      V90PF(params)[PARAMS_UNNAMED_06C])
 						     * 250.0f) + 1);
 				}
-				phase3Demodulator->byte_3f8 = 0x74;
+				phase3Demodulator->dilMaxUcode = 0x74;
 
 				if (agc.gain <
 				    V90PF(params)[PARAMS_UNNAMED_070]) {
@@ -1561,11 +1561,11 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 					    "!!!\r\n");
 				}
 			} else {
-				phase3Demodulator->byte_3f8 = 0x74;
+				phase3Demodulator->dilMaxUcode = 0x74;
 			}
 
 			edprintf("V90Demodulator: Dil max ucode = %d\n",
-				 phase3Demodulator->byte_3f8);
+				 phase3Demodulator->dilMaxUcode);
 		}
 
 		verdict = connectionEvaluator->evaluatePhase3();

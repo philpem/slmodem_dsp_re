@@ -2455,7 +2455,7 @@ run_exit_phase3(void)
 			 */
 			X3_P3D(s)->state = (Phase3DemodulatorState)
 			    (int)(trial % 18);
-			X3_P3D(s)->word_2c = 0x2c000000u + (unsigned)trial;
+			X3_P3D(s)->samplesInState = 0x2c000000u + (unsigned)trial;
 			X3_P3D(s)->phase3Modulator.state =
 			    (Phase3ModulatorState)(int)((trial / 3) % 12);
 			X3_P3D(s)->phase3Modulator.symbolCount =

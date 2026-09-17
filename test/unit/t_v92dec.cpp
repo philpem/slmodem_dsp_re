@@ -9,7 +9,7 @@
  * THE FIXTURE IS BUILT, NOT SEEDED, AND THAT IS THE WHOLE DESIGN.
  * `t_v90p3dreset.cpp` can seed its objects with pseudorandom bytes because
  * `reset` OVERWRITES what it touches.  This method READS dozens of fields and
- * hands them to real code: `word_2c` is compared against parameter-block
+ * hands them to real code: `samplesInState` is compared against parameter-block
  * slots, `word_04` indexes six-entry rows, `generateSymbol` runs a state
  * machine over the embedded modulator, and the impairment detector does x87
  * arithmetic over 40 KB of tables.  A random 32-bit pattern is a signalling
@@ -32,7 +32,7 @@
  * WRITES three slots of it -- +0x438, +0x31c and +0x4cc -- so the two sides
  * cannot share one, and its words are small integers so that every slot read
  * as a float is finite and every slot read as a length is short.  The slots
- * the arms compare `word_2c` against are then set per trial, which is how the
+ * the arms compare `samplesInState` against are then set per trial, which is how the
  * timeout branches are reached at all.
  *
  * THE ANSam DETECTOR IS CONSTRUCTED PER SIDE by that side's own constructor,
@@ -41,9 +41,9 @@
  * four pointers are per-side addresses that can never compare equal; they are
  * neutralised and what they point at is compared separately.
  *
- * HOW THE BRANCHES ARE REACHED.  `word_2c` is incremented on entry before
- * anything compares it, so a trial that wants the comparison `word_2c == X`
- * to fire sets `word_2c = X - 1`.  `cand[]` below is every X the thirty-four
+ * HOW THE BRANCHES ARE REACHED.  `samplesInState` is incremented on entry before
+ * anything compares it, so a trial that wants the comparison `samplesInState == X`
+ * to fire sets `samplesInState = X - 1`.  `cand[]` below is every X the thirty-four
  * arms test against -- the eleven parameter slots, the five literals, the two
  * float constants, the two `timeoutBase`-relative constants and the two modular
  * conditions -- and the sweep runs all of them against all thirty-four states.
@@ -198,7 +198,7 @@ fill_pair(void *a, void *b, size_t n)
  */
 struct trial_args {
 	int		state;		/* +0x28, the arm under test    */
-	unsigned int	word_2c;	/* the counter BEFORE the entry ++ */
+	unsigned int	samplesInState;	/* the counter BEFORE the entry ++ */
 	unsigned int	word_04;	/* the frame position, 0..5     */
 	unsigned int	quickConnect;	/* selects the short-TRN1 arms  */
 	unsigned int	timeoutBase;	/* the two relative timeouts    */
@@ -217,7 +217,7 @@ struct trial_args {
 	short		short_400;
 	unsigned int	word_404;
 	unsigned int	word_408;
-	unsigned int	word_420;
+	unsigned int	trn1dDdLength;
 	unsigned int	dilLength;
 	int		withJd92;	/* a null jdV92 is a real arm   */
 	int		forceUcode;	/* make abs(symbol)==ucodeLevel */
@@ -409,7 +409,7 @@ setup(int trial, const struct trial_args *t)
 		    (unsigned char)t->b280c;
 
 		d->state = (Phase3DemodulatorState)t->state;
-		d->word_2c = t->word_2c;
+		d->samplesInState = t->samplesInState;
 		d->eventCode = 0xdead;
 		d->framePosition = t->word_04;
 		d->quickConnect = t->quickConnect;
@@ -422,7 +422,7 @@ setup(int trial, const struct trial_args *t)
 		d->short_400 = t->short_400;
 		d->jdNotRunLength = t->word_404;
 		d->word_408 = t->word_408;
-		d->word_420 = t->word_420;
+		d->trn1dDdLength = t->trn1dDdLength;
 		d->word_3f4 = 0x5a5a5a5au;
 		d->dilLength = t->dilLength;
 		d->verificationStatus = 0x1234u;
@@ -856,9 +856,9 @@ run_trial(int trial, const struct trial_args *t, int calls, long tag)
 }
 
 /*
- * Every value the thirty-four arms compare `word_2c` against, expressed as the
+ * Every value the thirty-four arms compare `samplesInState` against, expressed as the
  * value to PUT there -- one less than the target, because the method's first
- * act is `word_2c++`.  `cand_of` needs the trial's own `timeoutBase` for the two
+ * act is `samplesInState++`.  `cand_of` needs the trial's own `timeoutBase` for the two
  * relative timeouts and the parameter block for the eleven slot ones.
  */
 #define NCAND	26
@@ -895,7 +895,7 @@ cand_of(int k, const struct trial_args *t, int trial)
 	case 11: return 24804u - 1u;
 	case 12: return t->timeoutBase + 12000u - 1u;
 	case 13: return t->timeoutBase + 38760u - 1u;
-	case 14: return t->word_420 - 1u;
+	case 14: return t->trn1dDdLength - 1u;
 	case 15: return t->dilLength - 1u;
 	case 16: return 11u;			/* %6 == 0 on entry     */
 	case 17: return 12u;			/* %6 != 0 on entry     */
@@ -964,7 +964,7 @@ run_states(void)
 			t.short_400 = (short)((v / 31) & 1);
 			t.word_404 = (unsigned int)(0x20u + (v % 3) * 6u);
 			t.word_408 = (unsigned int)(v % 3);
-			t.word_420 = (unsigned int)(v % 97 + 1);
+			t.trn1dDdLength = (unsigned int)(v % 97 + 1);
 			t.dilLength = (unsigned int)(v % 89 + 1);
 			t.withJd92 = (st == 3) ? ((v / 4) & 1) : 1;
 			t.forceUcode = (v / 37) & 1;
@@ -972,7 +972,7 @@ run_states(void)
 			t.forceJdPhase = (st == 8 && (k & 1));
 			t.forceDilEnd = pass;
 			if (t.forceJd || t.forceJdPhase)
-				t.word_2c = 11u;	/* 12 on entry, %6 == 0 */
+				t.samplesInState = 11u;	/* 12 on entry, %6 == 0 */
 			t.sample = sample_v[v % NSAMPLE];
 			t.ucodeLevel = (short)((v & 1) ? 4095 : 1234);
 			/*
@@ -981,7 +981,7 @@ run_states(void)
 			 */
 			t.word_3fc = (unsigned int)
 			    pslot(P_31C, trial) - (unsigned int)((v & 1));
-			t.word_2c = cand_of(k, &t, trial);
+			t.samplesInState = cand_of(k, &t, trial);
 
 			tag = (long)pass * 100000 + (long)st * 1000 + k;
 			run_trial(trial++, &t, 3, tag);
@@ -1139,13 +1139,13 @@ run_transcripts(void)
 				t.short_400 = (short)((k / 5) & 1);
 				t.word_404 = 12u;
 				t.word_408 = 2u;
-				t.word_420 = 50u;
+				t.trn1dDdLength = 50u;
 				t.dilLength = 40u;
 				t.withJd92 = (st == 3) ? (k & 1) : 1;
 				t.sample = sample_v[k % NSAMPLE];
 				t.word_3fc =
 				    (unsigned int)pslot(P_31C, trial) - 1u;
-				t.word_2c = cand_of(k, &t, trial);
+				t.samplesInState = cand_of(k, &t, trial);
 				/*
 				 * THE THREE GATED DIAGNOSTICS LIVE BEHIND
 				 * BRANCHES NOTHING RANDOM REACHES, so the
@@ -1164,9 +1164,9 @@ run_transcripts(void)
 				t.forceJd = (st == 7);
 				t.forceJdPhase = (st == 8);
 				if (st == 7 || st == 8)
-					t.word_2c = 11u;
+					t.samplesInState = 11u;
 				if (st == 9) {
-					t.word_2c = 11u + 72u;
+					t.samplesInState = 11u + 72u;
 					t.quickConnect = 1;
 					t.word_404 = 0x40u;
 				}
@@ -1180,7 +1180,7 @@ run_transcripts(void)
 				 * others are driven from k's low bit.
 				 */
 				if (st == 3) {
-					t.word_2c = 0x7f8u - 1u;
+					t.samplesInState = 0x7f8u - 1u;
 					t.withJd92 = (k & 1) == 0;
 					t.quickConnect = 1;
 				}

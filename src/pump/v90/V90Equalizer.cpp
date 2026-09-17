@@ -2379,20 +2379,20 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 			}
 			if (phase3Demod->state == 3
 			    && params->LINEAR_EQU_TRN1D_FREEZE_DURATION
-			       == phase3Demod->word_2c
+			       == phase3Demod->samplesInState
 			    && !quickConnect)
 				setLinearEquBeta(params->LINEAR_EQU_TRN1D_BETA);
 			if (phase3Demod->state == 3
 			    && params->DFE_TRN1D_FREEZE_DURATION
-			       == phase3Demod->word_2c
+			       == phase3Demod->samplesInState
 			    && !quickConnect)
 				setDfeBeta(params->DFE_TRN1D_BETA);
 			if (quickConnect && phase3Demod->state == 4) {
 				if (params->LINEAR_EQU_QC_TRN1D_FREEZE_DURATION
-				    == phase3Demod->word_2c)
+				    == phase3Demod->samplesInState)
 					setLinearEquBeta(params->LINEAR_EQU_DATA_BETA);
 				if (params->DFE_QC_TRN1D_FREEZE_DURATION
-				    == phase3Demod->word_2c)
+				    == phase3Demod->samplesInState)
 					setDfeBeta(params->DFE_DATA_BETA);
 			}
 			if (phase3Demod->state == 5 || phase3Demod->state == 10
@@ -2407,7 +2407,7 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 				updateCoefs = (int)phase3Demod->word_408;
 			else if (phase3Demod->state == 4
 				 && params->NOF_DD_SYMBOLS_BEFORE_MEAN_ERROR_DIAG_PHASE3
-				    == phase3Demod->word_2c)
+				    == phase3Demod->samplesInState)
 				meanErrorRecordEnable = 1;
 			if (phase3Demod->state == 10
 			    || phase3Demod->state == 13)

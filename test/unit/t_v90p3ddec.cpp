@@ -30,10 +30,10 @@
  * that is defined.  D321.
  *
  * THE THRESHOLD PARAMETERS ARE SET SMALL AND DISTINCT.  Nine of the switch's
- * arms turn on `word_2c` reaching a field of the parameter block, and with the
+ * arms turn on `samplesInState` reaching a field of the parameter block, and with the
  * block's real defaults (thousands of samples) a sweep long enough to reach
  * them is a sweep too long to run.  Setting them to 3, 5, 7 ... and sweeping
- * `word_2c` across 0..30 reaches every one of them, and the four hard-coded
+ * `samplesInState` across 0..30 reaches every one of them, and the four hard-coded
  * timeouts -- 0x30, 0x180, 0x300, 0x7cf, 0x7f8, 0x9c40, and the two that are
  * `timeoutBase` plus a float constant -- are reached by naming them directly.
  */
@@ -214,7 +214,7 @@ place_scrambler(int side)
 
 /*
  * The parameter block: seeded like everything else, then every field this
- * method reads is SET, so that a `word_2c` sweep of thirty samples reaches
+ * method reads is SET, so that a `samplesInState` sweep of thirty samples reaches
  * all nine of the thresholds rather than none of them.  The two float fields
  * are set for the reason v90demfix.h gives -- a seeded 32-bit pattern is a
  * signalling NaN about one time in 250.
@@ -594,7 +594,7 @@ dirty(int side, int trial, int st, unsigned int word2c)
 	unsigned int i;
 
 	o->state = (Phase3DemodulatorState)st;
-	o->word_2c = word2c;
+	o->samplesInState = word2c;
 	o->framePosition = (unsigned int)(trial % 6);
 	o->byte_3f9 = (unsigned char)(trial & 1);
 	o->short_400 = (short)((trial >> 1) & 1);
@@ -619,10 +619,10 @@ dirty(int side, int trial, int st, unsigned int word2c)
 	 */
 	sdd[side].count = (unsigned int)((trial * 5) % 13);
 	o->byte_424 = (unsigned char)((trial >> 3) & 1);
-	o->word_420 = 5;
+	o->trn1dDdLength = 5;
 	/*
 	 * SMALL, so that state 0x11's "Probing DIL ended" arm is inside the
-	 * `word_2c` sweep at all.  `reset` computes this from the DIL
+	 * `samplesInState` sweep at all.  `reset` computes this from the DIL
 	 * descriptor and gets a number in the thousands, which no sweep this
 	 * length reaches -- the same reason the parameter thresholds are set
 	 * rather than left at their defaults.
@@ -651,7 +651,7 @@ set_level(unsigned int lvl)
 }
 
 /*
- * `word_2c` is incremented before the dispatch, so a value of N-1 here is what
+ * `samplesInState` is incremented before the dispatch, so a value of N-1 here is what
  * makes the method see N.  Everything below is one less than a threshold the
  * disassembly compares against, plus a short run of small values so that the
  * "no threshold reached" path is covered too.
@@ -801,7 +801,7 @@ run_free(void)
 /*
  * State 9's JdNot arm, driven on purpose.  Reaching it needs three things at
  * once -- a descrambled symbol of zero, `jdNotRunLength` past its bound, and
- * `word_2c` at 12 modulo 72 -- and the first of those is whatever the
+ * `samplesInState` at 12 modulo 72 -- and the first of those is whatever the
  * descrambler happens to produce, so the sweep above reaches it only by luck.
  * This walks the grid instead, and it is what tests the two states the arm
  * chooses between and the bound it compares against.
@@ -1008,9 +1008,9 @@ run_p3d_enterdrop(void)
 
 			lines = dsplib_debug_capture_lines(1);
 			if (exitdil_states[i] == 30) {
-				if (slot[1].o.word_2c == 13u)
+				if (slot[1].o.samplesInState == 13u)
 					sawalready++;
-			} else if (slot[1].o.word_2c == 0
+			} else if (slot[1].o.samplesInState == 0
 				   && (int)slot[1].o.state == 30) {
 				sawentered++;
 			}
@@ -1108,7 +1108,7 @@ run_p3d_exitdil(void)
 					else
 						sawnoterm++;
 				} else if ((int)slot[1].o.state == st
-					   && slot[1].o.word_2c == 29u) {
+					   && slot[1].o.samplesInState == 29u) {
 					sawignored++;
 				}
 
@@ -1130,7 +1130,7 @@ run_p3d_exitdil(void)
  * `JdNotDetector` -- the run length, and the one frame in seventy-two.
  *
  * `w404_v` above straddles the `> 0xb` bound and lands on 12 exactly, which
- * is what separates that bound from `> 0xc`; the `word_2c` values here
+ * is what separates that bound from `> 0xc`; the `samplesInState` values here
  * straddle the modulus, which is what separates 72 from anything else.
  */
 static int
@@ -1172,7 +1172,7 @@ run_p3d_jdnotdetector(void)
 
 				for (side = 0; side < 2; side++) {
 					slot[side].o.jdNotRunLength = w404_v[c];
-					slot[side].o.word_2c = w2c_v[w];
+					slot[side].o.samplesInState = w2c_v[w];
 				}
 				before = w404_v[c];
 
@@ -1277,7 +1277,7 @@ run_p3d_setdigimp(void)
 			for (side = 0; side < 2; side++) {
 				unsigned int ph, ci;
 
-				slot[side].o.byte_3f8 = maxcode_v[m];
+				slot[side].o.dilMaxUcode = maxcode_v[m];
 				adid[side].unSuspectedPhase =
 				    (short)(trial % V90ADID_PHASES);
 				adid[side].padGain = 1.0f;
