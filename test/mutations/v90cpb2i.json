@@ -6,19 +6,19 @@
  {
   "label": "the run counters are swapped",
   "why": "+0xca9 counts ones and +0xcaa zeros; swapping them stops the preamble ever completing.",
-  "find": "\tif (bit != 0) {\n\t\tbyte_ca9++;\n\t\tbyte_caa = 0;\n\t} else {\n\t\tbyte_caa++;\n\t\tbyte_ca9 = 0;\n\t}",
-  "replace": "\tif (bit != 0) {\n\t\tbyte_caa++;\n\t\tbyte_ca9 = 0;\n\t} else {\n\t\tbyte_ca9++;\n\t\tbyte_caa = 0;\n\t}"
+  "find": "\tif (bit != 0) {\n\t\tonesRun++;\n\t\tzerosRun = 0;\n\t} else {\n\t\tzerosRun++;\n\t\tonesRun = 0;\n\t}",
+  "replace": "\tif (bit != 0) {\n\t\tzerosRun++;\n\t\tonesRun = 0;\n\t} else {\n\t\tonesRun++;\n\t\tzerosRun = 0;\n\t}"
  },
  {
   "label": "Ed is read from a local rather than back out of the object",
   "why": "The object stores 0 into +0xcaa on a one bit and reloads it four instructions later, so a group size of zero makes the test true on a ONE.  Guarding on `bit == 0` is what a cached counter would behave like, and the zero-group corner is what kills it.",
-  "find": "\tif (byte_caa == 2 * word_3ba8 && word_cac == 18)",
-  "replace": "\tif (bit == 0 && byte_caa == 2 * word_3ba8 && word_cac == 18)"
+  "find": "\tif (zerosRun == 2 * groupSize && bitIndex == 18)",
+  "replace": "\tif (bit == 0 && zerosRun == 2 * groupSize && bitIndex == 18)"
  },
  {
   "label": "Ed does not require the cursor to be home",
-  "find": "\tif (byte_caa == 2 * word_3ba8 && word_cac == 18)",
-  "replace": "\tif (byte_caa == 2 * word_3ba8)"
+  "find": "\tif (zerosRun == 2 * groupSize && bitIndex == 18)",
+  "replace": "\tif (zerosRun == 2 * groupSize)"
  },
  {
   "label": "Ed answers V90MP's 3 rather than 5",
@@ -28,33 +28,33 @@
  {
   "label": "sixteen ones are enough for the preamble",
   "why": "`cmp $0x10,%cl` / `jbe`, so it takes SEVENTEEN.  The test feeds sixteen and a zero and reads the blob's state back.",
-  "find": "\t\tif (byte_ca9 > 0x10)",
-  "replace": "\t\tif (byte_ca9 >= 0x10)"
+  "find": "\t\tif (onesRun > 0x10)",
+  "replace": "\t\tif (onesRun >= 0x10)"
  },
  {
   "label": "the preamble hands over to state 2 rather than 1",
-  "find": "\t\tif (byte_ca9 > 0x10)\n\t\t\tword_ca4 = 1;",
-  "replace": "\t\tif (byte_ca9 > 0x10)\n\t\t\tword_ca4 = 2;"
+  "find": "\t\tif (onesRun > 0x10)\n\t\t\trxState = 1;",
+  "replace": "\t\tif (onesRun > 0x10)\n\t\t\trxState = 2;"
  },
  {
   "label": "the framing zero test is inverted",
-  "find": "\t\tif (bit == 0)\n\t\t\tword_ca4 = 2;\n\t\telse\n\t\t\tresetDetector();",
-  "replace": "\t\tif (bit != 0)\n\t\t\tword_ca4 = 2;\n\t\telse\n\t\t\tresetDetector();"
+  "find": "\t\tif (bit == 0)\n\t\t\trxState = 2;\n\t\telse\n\t\t\tresetDetector();",
+  "replace": "\t\tif (bit != 0)\n\t\t\trxState = 2;\n\t\telse\n\t\t\tresetDetector();"
  },
  {
   "label": "the type bit selects the wrong form",
-  "find": "\t\tword_ca4 = (word_00 != 0) ? 3 : 4;",
-  "replace": "\t\tword_ca4 = (word_00 != 0) ? 4 : 3;"
+  "find": "\t\trxState = (word_00 != 0) ? 3 : 4;",
+  "replace": "\t\trxState = (word_00 != 0) ? 4 : 3;"
  },
  {
   "label": "the type bit is not stored",
-  "find": "\t\tword_00 = bit;\n\t\tbits[word_cac] = bit;",
-  "replace": "\t\tbits[word_cac] = bit;"
+  "find": "\t\tword_00 = bit;\n\t\tbits[bitIndex] = bit;",
+  "replace": "\t\tbits[bitIndex] = bit;"
  },
  {
   "label": "the short form is sixteen bits, not fifteen",
-  "find": "\t\tif (word_cb0 == 0xf) {\n\t\t\tevaluateInfo();\n\t\t\tword_ca4 = 12;",
-  "replace": "\t\tif (word_cb0 == 0x10) {\n\t\t\tevaluateInfo();\n\t\t\tword_ca4 = 12;"
+  "find": "\t\tif (word_cb0 == 0xf) {\n\t\t\tevaluateInfo();\n\t\t\trxState = 12;",
+  "replace": "\t\tif (word_cb0 == 0x10) {\n\t\t\tevaluateInfo();\n\t\t\trxState = 12;"
  },
  {
   "label": "the three block flags land in the wrong fields",
@@ -63,30 +63,30 @@
  },
  {
   "label": "the flag block is four bits, not three",
-  "find": "\t\tif (word_cb0 == 3) {\n\t\t\tword_ca4 = 5;",
-  "replace": "\t\tif (word_cb0 == 4) {\n\t\t\tword_ca4 = 5;"
+  "find": "\t\tif (word_cb0 == 3) {\n\t\t\trxState = 5;",
+  "replace": "\t\tif (word_cb0 == 4) {\n\t\t\trxState = 5;"
  },
  {
   "label": "the header ends at 0x32 rather than 0x33",
   "why": "`evaluateInfo`'s case 5 stores 0x32 into the READ cursor and the write cursor stops one past it.  The two halves were read independently and agree.",
-  "find": "\t\tif (word_cac == 0x33) {",
-  "replace": "\t\tif (word_cac == 0x32) {"
+  "find": "\t\tif (bitIndex == 0x33) {",
+  "replace": "\t\tif (bitIndex == 0x32) {"
  },
  {
   "label": "the next block is chosen in the wrong order",
   "why": "+0x04, then +0x08, then +0x0c, which is the order the blocks travel.",
-  "find": "\t\t\tif (word_04 != 0)\n\t\t\t\tword_ca4 = 6;\n\t\t\telse if (word_08 != 0)\n\t\t\t\tword_ca4 = 7;",
-  "replace": "\t\t\tif (word_08 != 0)\n\t\t\t\tword_ca4 = 7;\n\t\t\telse if (word_04 != 0)\n\t\t\t\tword_ca4 = 6;"
+  "find": "\t\t\tif (word_04 != 0)\n\t\t\t\trxState = 6;\n\t\t\telse if (word_08 != 0)\n\t\t\t\trxState = 7;",
+  "replace": "\t\t\tif (word_08 != 0)\n\t\t\t\trxState = 7;\n\t\t\telse if (word_04 != 0)\n\t\t\t\trxState = 6;"
  },
  {
   "label": "the pairs block ends at 0x98 rather than 0x99",
-  "find": "\t\tif (word_cac == 0x99) {",
-  "replace": "\t\tif (word_cac == 0x98) {"
+  "find": "\t\tif (bitIndex == 0x99) {",
+  "replace": "\t\tif (bitIndex == 0x98) {"
  },
  {
   "label": "the pairs block hands over to 10 whatever +0x08 says",
-  "find": "\t\t\tif (word_08 != 0)\n\t\t\t\tword_ca4 = 7;\n\t\t\telse\n\t\t\t\tword_ca4 = (word_0c != 0) ? 10 : 12;\n\t\t\tword_cb0 = 0;\n\t\t}\n\t\tbreak;\n\n\tcase 7:",
-  "replace": "\t\t\tword_ca4 = (word_0c != 0) ? 10 : 12;\n\t\t\tword_cb0 = 0;\n\t\t}\n\t\tbreak;\n\n\tcase 7:"
+  "find": "\t\t\tif (word_08 != 0)\n\t\t\t\trxState = 7;\n\t\t\telse\n\t\t\t\trxState = (word_0c != 0) ? 10 : 12;\n\t\t\tword_cb0 = 0;\n\t\t}\n\t\tbreak;\n\n\tcase 7:",
+  "replace": "\t\t\trxState = (word_0c != 0) ? 10 : 12;\n\t\t\tword_cb0 = 0;\n\t\t}\n\t\tbreak;\n\n\tcase 7:"
  },
  {
   "label": "the four counts are four frames of sixteen, not seventeen",
@@ -133,19 +133,19 @@
  {
   "label": "the CRC frame is sixteen bits, not seventeen",
   "why": "One framing zero and sixteen CRC bits.",
-  "find": "\t\tif (word_cb0 == 0x11) {\n\t\t\tword_3bb0 = word_cac;",
-  "replace": "\t\tif (word_cb0 == 0x10) {\n\t\t\tword_3bb0 = word_cac;"
+  "find": "\t\tif (word_cb0 == 0x11) {\n\t\t\tbodyLength = bitIndex;",
+  "replace": "\t\tif (word_cb0 == 0x10) {\n\t\t\tbodyLength = bitIndex;"
  },
  {
   "label": "the CRC extent is one past the cursor",
   "why": "`infoToBits` computes the same number as start + 0x11 from the other side.",
-  "find": "\t\t\tword_3bb0 = word_cac;",
-  "replace": "\t\t\tword_3bb0 = word_cac + 1;"
+  "find": "\t\t\tbodyLength = bitIndex;",
+  "replace": "\t\t\tbodyLength = bitIndex + 1;"
  },
  {
   "label": "the CRC verdict is inverted",
-  "find": "\t\t\tif (evaluateCRC()) {\n\t\t\t\tword_cb0 = 0x11;\n\t\t\t\tword_ca4 = 13;\n\t\t\t} else {",
-  "replace": "\t\t\tif (!evaluateCRC()) {\n\t\t\t\tword_cb0 = 0x11;\n\t\t\t\tword_ca4 = 13;\n\t\t\t} else {"
+  "find": "\t\t\tif (evaluateCRC()) {\n\t\t\t\tword_cb0 = 0x11;\n\t\t\t\trxState = 13;\n\t\t\t} else {",
+  "replace": "\t\t\tif (!evaluateCRC()) {\n\t\t\t\tword_cb0 = 0x11;\n\t\t\t\trxState = 13;\n\t\t\t} else {"
  },
  {
   "label": "a bad CRC does not reset the detector",
@@ -161,13 +161,13 @@
  {
   "label": "the tail waits on the group size rather than on six",
   "why": "Finding F4364: the transmitter pads to a whole number of +0x3ba8 and the receiver hardcodes six.  The suite sweeps the group size over 1..6, 12 and 17.",
-  "find": "\t\tif (word_cac % 6 == 0) {",
-  "replace": "\t\tif (word_ca4 != 0 && word_3ba8 != 0 && word_cac % word_3ba8 == 0) {"
+  "find": "\t\tif (bitIndex % 6 == 0) {",
+  "replace": "\t\tif (rxState != 0 && groupSize != 0 && bitIndex % groupSize == 0) {"
  },
  {
   "label": "the tail's bit test is inverted",
-  "find": "\t\tif (bit != 0)\n\t\t\tresetDetector();\n\t\telse\n\t\t\tword_cac++;",
-  "replace": "\t\tif (bit == 0)\n\t\t\tresetDetector();\n\t\telse\n\t\t\tword_cac++;"
+  "find": "\t\tif (bit != 0)\n\t\t\tresetDetector();\n\t\telse\n\t\t\tbitIndex++;",
+  "replace": "\t\tif (bit == 0)\n\t\t\tresetDetector();\n\t\telse\n\t\t\tbitIndex++;"
  },
  {
   "label": "the tail does not reset the detector before reporting",
@@ -208,19 +208,19 @@
  {
   "label": "the bound is one too high in the short form's arm",
   "why": "`cmp $0x2edf` / `ja`: 0x2edf is the last index that fits, and 0x2ee0 is crc[0].",
-  "find": "\tcase 3:\n\t\t/*\n\t\t * The short form: fifteen more bits, ending at 0x21, which is\n\t\t * exactly the two `evaluateInfo`'s `case 3` reads back.\n\t\t */\n\t\tif (word_cac <= V90CP_BITS - 1) {",
-  "replace": "\tcase 3:\n\t\t/*\n\t\t * The short form: fifteen more bits, ending at 0x21, which is\n\t\t * exactly the two `evaluateInfo`'s `case 3` reads back.\n\t\t */\n\t\tif (word_cac <= V90CP_BITS) {"
+  "find": "\tcase 3:\n\t\t/*\n\t\t * The short form: fifteen more bits, ending at 0x21, which is\n\t\t * exactly the two `evaluateInfo`'s `case 3` reads back.\n\t\t */\n\t\tif (bitIndex <= V90CP_BITS - 1) {",
+  "replace": "\tcase 3:\n\t\t/*\n\t\t * The short form: fifteen more bits, ending at 0x21, which is\n\t\t * exactly the two `evaluateInfo`'s `case 3` reads back.\n\t\t */\n\t\tif (bitIndex <= V90CP_BITS) {"
  },
  {
   "label": "the lists arm is not bounded at all",
-  "find": "\tcase 8:\n\t\t/* The four counted lists, `alpha` bits of them. */\n\t\tif (word_cac <= V90CP_BITS - 1) {\n\t\t\tbits[word_cac] = bit;\n\t\t\tword_cac++;\n\t\t} else if (DSPLIB_DEBUG_ON()) {\n\t\t\tdsplibs_debug_printf(V90CP_NOMEM);\n\t\t}",
-  "replace": "\tcase 8:\n\t\t/* The four counted lists, `alpha` bits of them. */\n\t\tbits[word_cac] = bit;\n\t\tword_cac++;"
+  "find": "\tcase 8:\n\t\t/* The four counted lists, `alpha` bits of them. */\n\t\tif (bitIndex <= V90CP_BITS - 1) {\n\t\t\tbits[bitIndex] = bit;\n\t\t\tbitIndex++;\n\t\t} else if (DSPLIB_DEBUG_ON()) {\n\t\t\tdsplibs_debug_printf(V90CP_NOMEM);\n\t\t}",
+  "replace": "\tcase 8:\n\t\t/* The four counted lists, `alpha` bits of them. */\n\t\tbits[bitIndex] = bit;\n\t\tbitIndex++;"
  },
  {
   "label": "the header arm IS bounded, where the object leaves it open",
   "why": "D500: five of the ten store sites carry the check and five do not, and case 5 is one of the five that do not.  Adding it changes what happens at 0x2ee0.",
-  "find": "\tcase 5:\n\t\t/*\n\t\t * The rest of the header, to the absolute 0x33 -- one past\n\t\t * `evaluateInfo`'s `case 5`, which ends at 0x32.  Then the\n\t\t * first of the two places that pick the next block, in the\n\t\t * order the blocks travel: +0x18, then +0x48/+0x58, then\n\t\t * everything from +0xc58, then the CRC.\n\t\t */\n\t\tbits[word_cac] = bit;\n\t\tword_cac++;",
-  "replace": "\tcase 5:\n\t\t/*\n\t\t * The rest of the header, to the absolute 0x33 -- one past\n\t\t * `evaluateInfo`'s `case 5`, which ends at 0x32.  Then the\n\t\t * first of the two places that pick the next block, in the\n\t\t * order the blocks travel: +0x18, then +0x48/+0x58, then\n\t\t * everything from +0xc58, then the CRC.\n\t\t */\n\t\tif (word_cac <= V90CP_BITS - 1) {\n\t\t\tbits[word_cac] = bit;\n\t\t\tword_cac++;\n\t\t}"
+  "find": "\tcase 5:\n\t\t/*\n\t\t * The rest of the header, to the absolute 0x33 -- one past\n\t\t * `evaluateInfo`'s `case 5`, which ends at 0x32.  Then the\n\t\t * first of the two places that pick the next block, in the\n\t\t * order the blocks travel: +0x18, then +0x48/+0x58, then\n\t\t * everything from +0xc58, then the CRC.\n\t\t */\n\t\tbits[bitIndex] = bit;\n\t\tbitIndex++;",
+  "replace": "\tcase 5:\n\t\t/*\n\t\t * The rest of the header, to the absolute 0x33 -- one past\n\t\t * `evaluateInfo`'s `case 5`, which ends at 0x32.  Then the\n\t\t * first of the two places that pick the next block, in the\n\t\t * order the blocks travel: +0x18, then +0x48/+0x58, then\n\t\t * everything from +0xc58, then the CRC.\n\t\t */\n\t\tif (bitIndex <= V90CP_BITS - 1) {\n\t\t\tbits[bitIndex] = bit;\n\t\t\tbitIndex++;\n\t\t}"
  },
  {
   "label": "the overrun line loses the author's spelling",

@@ -95,8 +95,8 @@
  },
  {
   "label": "enterRepeatedCPd: the counter is not restarted",
-  "find": "\tcpSequenceSymbols = 6 * cpBitCount / cp->word_3ba8;\n\tsymbolCount = 0;\n}",
-  "replace": "\tcpSequenceSymbols = 6 * cpBitCount / cp->word_3ba8;\n}"
+  "find": "\tcpSequenceSymbols = 6 * cpBitCount / cp->groupSize;\n\tsymbolCount = 0;\n}",
+  "replace": "\tcpSequenceSymbols = 6 * cpBitCount / cp->groupSize;\n}"
  },
  {
   "label": "enterRepeatedCPd: +0x18 is left as it was found",
@@ -115,8 +115,8 @@
  },
  {
   "label": "recivedSUV: the latch is not set once the sequence is rebuilt",
-  "find": "V90Phase4Modulator::recivedSUV()\n{\n\tif (word_2fa0 == 0 && state == P4M_STATE_SUVD) {\n\t\tif (symbolCount % cpSequenceSymbols != 0) {\n\t\t\tstate = P4M_STATE_UNNAMED_06;\n\t\t} else {\n\t\t\tedprintf(\"V90Phase4Modulator: enter CPd @ %d\\r\\n\",\n\t\t\t\t symbolCount);\n\t\t\tsymbolCount = 0;\n\t\t\tcp->word_00 = 0;\n\t\t\tstate = P4M_STATE_CPD;\n\t\t\tcp->infoToBits();\n\t\t\tcpBits = cp->getBitVector(cpBitCount);\n\t\t\tcpSequenceSymbols = 6 * cpBitCount / cp->word_3ba8;\n\t\t\tword_2fa0 = 1;",
-  "replace": "V90Phase4Modulator::recivedSUV()\n{\n\tif (word_2fa0 == 0 && state == P4M_STATE_SUVD) {\n\t\tif (symbolCount % cpSequenceSymbols != 0) {\n\t\t\tstate = P4M_STATE_UNNAMED_06;\n\t\t} else {\n\t\t\tedprintf(\"V90Phase4Modulator: enter CPd @ %d\\r\\n\",\n\t\t\t\t symbolCount);\n\t\t\tsymbolCount = 0;\n\t\t\tcp->word_00 = 0;\n\t\t\tstate = P4M_STATE_CPD;\n\t\t\tcp->infoToBits();\n\t\t\tcpBits = cp->getBitVector(cpBitCount);\n\t\t\tcpSequenceSymbols = 6 * cpBitCount / cp->word_3ba8;"
+  "find": "V90Phase4Modulator::recivedSUV()\n{\n\tif (word_2fa0 == 0 && state == P4M_STATE_SUVD) {\n\t\tif (symbolCount % cpSequenceSymbols != 0) {\n\t\t\tstate = P4M_STATE_UNNAMED_06;\n\t\t} else {\n\t\t\tedprintf(\"V90Phase4Modulator: enter CPd @ %d\\r\\n\",\n\t\t\t\t symbolCount);\n\t\t\tsymbolCount = 0;\n\t\t\tcp->word_00 = 0;\n\t\t\tstate = P4M_STATE_CPD;\n\t\t\tcp->infoToBits();\n\t\t\tcpBits = cp->getBitVector(cpBitCount);\n\t\t\tcpSequenceSymbols = 6 * cpBitCount / cp->groupSize;\n\t\t\tword_2fa0 = 1;",
+  "replace": "V90Phase4Modulator::recivedSUV()\n{\n\tif (word_2fa0 == 0 && state == P4M_STATE_SUVD) {\n\t\tif (symbolCount % cpSequenceSymbols != 0) {\n\t\t\tstate = P4M_STATE_UNNAMED_06;\n\t\t} else {\n\t\t\tedprintf(\"V90Phase4Modulator: enter CPd @ %d\\r\\n\",\n\t\t\t\t symbolCount);\n\t\t\tsymbolCount = 0;\n\t\t\tcp->word_00 = 0;\n\t\t\tstate = P4M_STATE_CPD;\n\t\t\tcp->infoToBits();\n\t\t\tcpBits = cp->getBitVector(cpBitCount);\n\t\t\tcpSequenceSymbols = 6 * cpBitCount / cp->groupSize;"
  },
  {
   "label": "recivedSUV: off a boundary it enters CPd anyway",
@@ -137,8 +137,8 @@
  },
  {
   "label": "recivedPartTwoSilenceRrnSUV: the latch is not set",
-  "find": "\t\t\tcpSequenceSymbols = 6 * cpBitCount / cp->word_3ba8;\n\t\t\tword_2fa0 = 1;\n\t\t}\n\t}\n}\n\n/*\n * recivedCP -- .text+0x2cb20",
-  "replace": "\t\t\tcpSequenceSymbols = 6 * cpBitCount / cp->word_3ba8;\n\t\t}\n\t}\n}\n\n/*\n * recivedCP -- .text+0x2cb20"
+  "find": "\t\t\tcpSequenceSymbols = 6 * cpBitCount / cp->groupSize;\n\t\t\tword_2fa0 = 1;\n\t\t}\n\t}\n}\n\n/*\n * recivedCP -- .text+0x2cb20",
+  "replace": "\t\t\tcpSequenceSymbols = 6 * cpBitCount / cp->groupSize;\n\t\t}\n\t}\n}\n\n/*\n * recivedCP -- .text+0x2cb20"
  },
  {
   "label": "recivedFirstSUVuPartTwoRrn: the silence arm runs the CP branch's guard",

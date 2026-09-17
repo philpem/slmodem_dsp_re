@@ -1,33 +1,33 @@
 [
  {
   "label": "calcCRC includes the final framing start in the protected extent",
-  "find": "V90CP::calcCRC()\n{\n\tunsigned int i, end;\n\tunsigned char a;\n\n\tend = word_3bb0 - 0x11;",
-  "replace": "V90CP::calcCRC()\n{\n\tunsigned int i, end;\n\tunsigned char a;\n\n\tend = word_3bb0 - 0x10;"
+  "find": "V90CP::calcCRC()\n{\n\tunsigned int i, end;\n\tunsigned char a;\n\n\tend = bodyLength - 0x11;",
+  "replace": "V90CP::calcCRC()\n{\n\tunsigned int i, end;\n\tunsigned char a;\n\n\tend = bodyLength - 0x10;"
  },
  {
   "label": "calcCRC starts after the CP type bit",
-  "find": "V90CP::calcCRC()\n{\n\tunsigned int i, end;\n\tunsigned char a;\n\n\tend = word_3bb0 - 0x11;\n\tfor (i = 0x12; i < end; ) {\n\t\tif (i % 17 == 0)",
-  "replace": "V90CP::calcCRC()\n{\n\tunsigned int i, end;\n\tunsigned char a;\n\n\tend = word_3bb0 - 0x11;\n\tfor (i = 0x13; i < end; ) {\n\t\tif (i % 17 == 0)"
+  "find": "V90CP::calcCRC()\n{\n\tunsigned int i, end;\n\tunsigned char a;\n\n\tend = bodyLength - 0x11;\n\tfor (i = 0x12; i < end; ) {\n\t\tif (i % 17 == 0)",
+  "replace": "V90CP::calcCRC()\n{\n\tunsigned int i, end;\n\tunsigned char a;\n\n\tend = bodyLength - 0x11;\n\tfor (i = 0x13; i < end; ) {\n\t\tif (i % 17 == 0)"
  },
  {
   "label": "calcCRC clocks the Table 14 start bits",
-  "find": "V90CP::calcCRC()\n{\n\tunsigned int i, end;\n\tunsigned char a;\n\n\tend = word_3bb0 - 0x11;\n\tfor (i = 0x12; i < end; ) {\n\t\tif (i % 17 == 0)\n\t\t\ti++;",
-  "replace": "V90CP::calcCRC()\n{\n\tunsigned int i, end;\n\tunsigned char a;\n\n\tend = word_3bb0 - 0x11;\n\tfor (i = 0x12; i < end; ) {"
+  "find": "V90CP::calcCRC()\n{\n\tunsigned int i, end;\n\tunsigned char a;\n\n\tend = bodyLength - 0x11;\n\tfor (i = 0x12; i < end; ) {\n\t\tif (i % 17 == 0)\n\t\t\ti++;",
+  "replace": "V90CP::calcCRC()\n{\n\tunsigned int i, end;\n\tunsigned char a;\n\n\tend = bodyLength - 0x11;\n\tfor (i = 0x12; i < end; ) {"
  },
  {
   "label": "calcCRC treats sixteen-bit groups as complete frames",
-  "find": "V90CP::calcCRC()\n{\n\tunsigned int i, end;\n\tunsigned char a;\n\n\tend = word_3bb0 - 0x11;\n\tfor (i = 0x12; i < end; ) {\n\t\tif (i % 17 == 0)",
-  "replace": "V90CP::calcCRC()\n{\n\tunsigned int i, end;\n\tunsigned char a;\n\n\tend = word_3bb0 - 0x11;\n\tfor (i = 0x12; i < end; ) {\n\t\tif (i % 16 == 0)"
+  "find": "V90CP::calcCRC()\n{\n\tunsigned int i, end;\n\tunsigned char a;\n\n\tend = bodyLength - 0x11;\n\tfor (i = 0x12; i < end; ) {\n\t\tif (i % 17 == 0)",
+  "replace": "V90CP::calcCRC()\n{\n\tunsigned int i, end;\n\tunsigned char a;\n\n\tend = bodyLength - 0x11;\n\tfor (i = 0x12; i < end; ) {\n\t\tif (i % 16 == 0)"
  },
  {
   "label": "calcCRC moves the x12 feedback tap one stage",
-  "find": "V90CP::calcCRC()\n{\n\tunsigned int i, end;\n\tunsigned char a;\n\n\tend = word_3bb0 - 0x11;\n\tfor (i = 0x12; i < end; ) {\n\t\tif (i % 17 == 0)\n\t\t\ti++;\n\t\ta = (unsigned char)((crc[0] + bits[i]) & 1);\n\t\ti++;\n\n\t\tcrc[0] = crc[1];\n\t\tcrc[1] = crc[2];\n\t\tcrc[2] = crc[3];\n\t\tcrc[3] = (unsigned char)((crc[4] + a) & 1);\n\t\tcrc[4] = crc[5];\n\t\tcrc[5] = crc[6];\n\t\tcrc[6] = crc[7];\n\t\tcrc[7] = crc[8];\n\t\tcrc[8] = crc[9];\n\t\tcrc[9] = crc[10];\n\t\tcrc[10] = (unsigned char)((crc[11] + a) & 1);\n\t\tcrc[11] = crc[12];\n\t\tcrc[12] = crc[13];\n\t\tcrc[13] = crc[14];\n\t\tcrc[14] = crc[15];\n\t\tcrc[15] = a;",
-  "replace": "V90CP::calcCRC()\n{\n\tunsigned int i, end;\n\tunsigned char a;\n\n\tend = word_3bb0 - 0x11;\n\tfor (i = 0x12; i < end; ) {\n\t\tif (i % 17 == 0)\n\t\t\ti++;\n\t\ta = (unsigned char)((crc[0] + bits[i]) & 1);\n\t\ti++;\n\n\t\tcrc[0] = crc[1];\n\t\tcrc[1] = crc[2];\n\t\tcrc[2] = crc[3];\n\t\tcrc[3] = (unsigned char)((crc[4] + a) & 1);\n\t\tcrc[4] = crc[5];\n\t\tcrc[5] = crc[6];\n\t\tcrc[6] = crc[7];\n\t\tcrc[7] = crc[8];\n\t\tcrc[8] = crc[9];\n\t\tcrc[9] = crc[10];\n\t\tcrc[10] = (unsigned char)((crc[12] + a) & 1);\n\t\tcrc[11] = crc[12];\n\t\tcrc[12] = crc[13];\n\t\tcrc[13] = crc[14];\n\t\tcrc[14] = crc[15];\n\t\tcrc[15] = a;"
+  "find": "V90CP::calcCRC()\n{\n\tunsigned int i, end;\n\tunsigned char a;\n\n\tend = bodyLength - 0x11;\n\tfor (i = 0x12; i < end; ) {\n\t\tif (i % 17 == 0)\n\t\t\ti++;\n\t\ta = (unsigned char)((crc[0] + bits[i]) & 1);\n\t\ti++;\n\n\t\tcrc[0] = crc[1];\n\t\tcrc[1] = crc[2];\n\t\tcrc[2] = crc[3];\n\t\tcrc[3] = (unsigned char)((crc[4] + a) & 1);\n\t\tcrc[4] = crc[5];\n\t\tcrc[5] = crc[6];\n\t\tcrc[6] = crc[7];\n\t\tcrc[7] = crc[8];\n\t\tcrc[8] = crc[9];\n\t\tcrc[9] = crc[10];\n\t\tcrc[10] = (unsigned char)((crc[11] + a) & 1);\n\t\tcrc[11] = crc[12];\n\t\tcrc[12] = crc[13];\n\t\tcrc[13] = crc[14];\n\t\tcrc[14] = crc[15];\n\t\tcrc[15] = a;",
+  "replace": "V90CP::calcCRC()\n{\n\tunsigned int i, end;\n\tunsigned char a;\n\n\tend = bodyLength - 0x11;\n\tfor (i = 0x12; i < end; ) {\n\t\tif (i % 17 == 0)\n\t\t\ti++;\n\t\ta = (unsigned char)((crc[0] + bits[i]) & 1);\n\t\ti++;\n\n\t\tcrc[0] = crc[1];\n\t\tcrc[1] = crc[2];\n\t\tcrc[2] = crc[3];\n\t\tcrc[3] = (unsigned char)((crc[4] + a) & 1);\n\t\tcrc[4] = crc[5];\n\t\tcrc[5] = crc[6];\n\t\tcrc[6] = crc[7];\n\t\tcrc[7] = crc[8];\n\t\tcrc[8] = crc[9];\n\t\tcrc[9] = crc[10];\n\t\tcrc[10] = (unsigned char)((crc[12] + a) & 1);\n\t\tcrc[11] = crc[12];\n\t\tcrc[12] = crc[13];\n\t\tcrc[13] = crc[14];\n\t\tcrc[14] = crc[15];\n\t\tcrc[15] = a;"
  },
  {
   "label": "calcCRC drops the feedback bit instead of stage 15",
-  "find": "V90CP::calcCRC()\n{\n\tunsigned int i, end;\n\tunsigned char a;\n\n\tend = word_3bb0 - 0x11;\n\tfor (i = 0x12; i < end; ) {\n\t\tif (i % 17 == 0)\n\t\t\ti++;\n\t\ta = (unsigned char)((crc[0] + bits[i]) & 1);\n\t\ti++;\n\n\t\tcrc[0] = crc[1];\n\t\tcrc[1] = crc[2];\n\t\tcrc[2] = crc[3];\n\t\tcrc[3] = (unsigned char)((crc[4] + a) & 1);\n\t\tcrc[4] = crc[5];\n\t\tcrc[5] = crc[6];\n\t\tcrc[6] = crc[7];\n\t\tcrc[7] = crc[8];\n\t\tcrc[8] = crc[9];\n\t\tcrc[9] = crc[10];\n\t\tcrc[10] = (unsigned char)((crc[11] + a) & 1);\n\t\tcrc[11] = crc[12];\n\t\tcrc[12] = crc[13];\n\t\tcrc[13] = crc[14];\n\t\tcrc[14] = crc[15];\n\t\tcrc[15] = a;",
-  "replace": "V90CP::calcCRC()\n{\n\tunsigned int i, end;\n\tunsigned char a;\n\n\tend = word_3bb0 - 0x11;\n\tfor (i = 0x12; i < end; ) {\n\t\tif (i % 17 == 0)\n\t\t\ti++;\n\t\ta = (unsigned char)((crc[0] + bits[i]) & 1);\n\t\ti++;\n\n\t\tcrc[0] = crc[1];\n\t\tcrc[1] = crc[2];\n\t\tcrc[2] = crc[3];\n\t\tcrc[3] = (unsigned char)((crc[4] + a) & 1);\n\t\tcrc[4] = crc[5];\n\t\tcrc[5] = crc[6];\n\t\tcrc[6] = crc[7];\n\t\tcrc[7] = crc[8];\n\t\tcrc[8] = crc[9];\n\t\tcrc[9] = crc[10];\n\t\tcrc[10] = (unsigned char)((crc[11] + a) & 1);\n\t\tcrc[11] = crc[12];\n\t\tcrc[12] = crc[13];\n\t\tcrc[13] = crc[14];\n\t\tcrc[14] = crc[15];\n\t\tcrc[15] = 0;"
+  "find": "V90CP::calcCRC()\n{\n\tunsigned int i, end;\n\tunsigned char a;\n\n\tend = bodyLength - 0x11;\n\tfor (i = 0x12; i < end; ) {\n\t\tif (i % 17 == 0)\n\t\t\ti++;\n\t\ta = (unsigned char)((crc[0] + bits[i]) & 1);\n\t\ti++;\n\n\t\tcrc[0] = crc[1];\n\t\tcrc[1] = crc[2];\n\t\tcrc[2] = crc[3];\n\t\tcrc[3] = (unsigned char)((crc[4] + a) & 1);\n\t\tcrc[4] = crc[5];\n\t\tcrc[5] = crc[6];\n\t\tcrc[6] = crc[7];\n\t\tcrc[7] = crc[8];\n\t\tcrc[8] = crc[9];\n\t\tcrc[9] = crc[10];\n\t\tcrc[10] = (unsigned char)((crc[11] + a) & 1);\n\t\tcrc[11] = crc[12];\n\t\tcrc[12] = crc[13];\n\t\tcrc[13] = crc[14];\n\t\tcrc[14] = crc[15];\n\t\tcrc[15] = a;",
+  "replace": "V90CP::calcCRC()\n{\n\tunsigned int i, end;\n\tunsigned char a;\n\n\tend = bodyLength - 0x11;\n\tfor (i = 0x12; i < end; ) {\n\t\tif (i % 17 == 0)\n\t\t\ti++;\n\t\ta = (unsigned char)((crc[0] + bits[i]) & 1);\n\t\ti++;\n\n\t\tcrc[0] = crc[1];\n\t\tcrc[1] = crc[2];\n\t\tcrc[2] = crc[3];\n\t\tcrc[3] = (unsigned char)((crc[4] + a) & 1);\n\t\tcrc[4] = crc[5];\n\t\tcrc[5] = crc[6];\n\t\tcrc[6] = crc[7];\n\t\tcrc[7] = crc[8];\n\t\tcrc[8] = crc[9];\n\t\tcrc[9] = crc[10];\n\t\tcrc[10] = (unsigned char)((crc[11] + a) & 1);\n\t\tcrc[11] = crc[12];\n\t\tcrc[12] = crc[13];\n\t\tcrc[13] = crc[14];\n\t\tcrc[14] = crc[15];\n\t\tcrc[15] = 0;"
  },
  {
   "label": "evaluateCRC preloads zero rather than the required all-ones register",
@@ -36,18 +36,18 @@
  },
  {
   "label": "evaluateCRC includes the final framing start in the protected extent",
-  "find": "\tfor (c = 0; c <= 0xf; c++)\n\t\tcrc[c] = 1;\n\n\tend = word_3bb0 - 0x11;",
-  "replace": "\tfor (c = 0; c <= 0xf; c++)\n\t\tcrc[c] = 1;\n\n\tend = word_3bb0 - 0x10;"
+  "find": "\tfor (c = 0; c <= 0xf; c++)\n\t\tcrc[c] = 1;\n\n\tend = bodyLength - 0x11;",
+  "replace": "\tfor (c = 0; c <= 0xf; c++)\n\t\tcrc[c] = 1;\n\n\tend = bodyLength - 0x10;"
  },
  {
   "label": "evaluateCRC clocks the Table 14 start bits",
-  "find": "V90CP::evaluateCRC()\n{\n\tunsigned int i, end;\n\tint c;\n\tunsigned char a;\n\tunsigned char diff;\n\n\t/* SIGNED: the object's bound is `cmp $0xf` / `jle`, as in `resetCRC`. */\n\tfor (c = 0; c <= 0xf; c++)\n\t\tcrc[c] = 1;\n\n\tend = word_3bb0 - 0x11;\n\tfor (i = 0x12; i < end; ) {\n\t\tif (i % 17 == 0)\n\t\t\ti++;",
-  "replace": "V90CP::evaluateCRC()\n{\n\tunsigned int i, end;\n\tint c;\n\tunsigned char a;\n\tunsigned char diff;\n\n\t/* SIGNED: the object's bound is `cmp $0xf` / `jle`, as in `resetCRC`. */\n\tfor (c = 0; c <= 0xf; c++)\n\t\tcrc[c] = 1;\n\n\tend = word_3bb0 - 0x11;\n\tfor (i = 0x12; i < end; ) {"
+  "find": "V90CP::evaluateCRC()\n{\n\tunsigned int i, end;\n\tint c;\n\tunsigned char a;\n\tunsigned char diff;\n\n\t/* SIGNED: the object's bound is `cmp $0xf` / `jle`, as in `resetCRC`. */\n\tfor (c = 0; c <= 0xf; c++)\n\t\tcrc[c] = 1;\n\n\tend = bodyLength - 0x11;\n\tfor (i = 0x12; i < end; ) {\n\t\tif (i % 17 == 0)\n\t\t\ti++;",
+  "replace": "V90CP::evaluateCRC()\n{\n\tunsigned int i, end;\n\tint c;\n\tunsigned char a;\n\tunsigned char diff;\n\n\t/* SIGNED: the object's bound is `cmp $0xf` / `jle`, as in `resetCRC`. */\n\tfor (c = 0; c <= 0xf; c++)\n\t\tcrc[c] = 1;\n\n\tend = bodyLength - 0x11;\n\tfor (i = 0x12; i < end; ) {"
  },
  {
   "label": "evaluateCRC reads the peer CRC one bit late",
-  "find": "\t\tint d = (int)crc[i] - (int)bits[word_3bb0 - 0x10 + i];",
-  "replace": "\t\tint d = (int)crc[i] - (int)bits[word_3bb0 - 0xf + i];"
+  "find": "\t\tint d = (int)crc[i] - (int)bits[bodyLength - 0x10 + i];",
+  "replace": "\t\tint d = (int)crc[i] - (int)bits[bodyLength - 0xf + i];"
  },
  {
   "label": "evaluateCRC returns the opposite standards verdict",

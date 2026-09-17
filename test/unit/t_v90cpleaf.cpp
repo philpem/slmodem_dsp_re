@@ -43,8 +43,8 @@
  * could report.  The sweep therefore excludes it and says so here.
  *
  * THE BIT VECTOR IS KEPT INSIDE THE OBJECT.  `calcCRC` walks from 0x12 to
- * `word_3bb0 - 0x11`, unsigned, so a `word_3bb0` below 0x11 wraps the bound
- * to near 2^32 and both sides run off the end.  The sweep keeps `word_3bb0`
+ * `bodyLength - 0x11`, unsigned, so a `bodyLength` below 0x11 wraps the bound
+ * to near 2^32 and both sides run off the end.  The sweep keeps `bodyLength`
  * inside [0x11, 2000], which is well inside the 12000-byte vector.
  */
 
@@ -167,7 +167,7 @@ run_cp_getbitvector(void)
 		    lens[(unsigned)trial % (sizeof(lens) / sizeof(lens[0]))];
 
 		seed_pair(trial + 300, trial % 3);
-		CPA->word_3bac = CPB->word_3bac = want;
+		CPA->seqLength = CPB->seqLength = want;
 		if (want >= 0x80000000u)
 			high_seen = 1;
 		memcpy(before_a, cp_a, CP_SLOT);
@@ -249,14 +249,14 @@ run_cp_resetdetector(void)
 			moved = 1;
 
 		/* Read off the BLOB: the five it writes, and the four it does not. */
-		diff_eq_int("+0xcac is 18 (%ld)", (long)CPB->word_cac, 18, tag);
+		diff_eq_int("+0xcac is 18 (%ld)", (long)CPB->bitIndex, 18, tag);
 		diff_eq_int("+0xcb0 is zero (%ld)", (long)CPB->word_cb0, 0,
 			    tag);
-		diff_eq_int("+0xca4 is zero (%ld)", (long)CPB->word_ca4, 0,
+		diff_eq_int("+0xca4 is zero (%ld)", (long)CPB->rxState, 0,
 			    tag);
-		diff_eq_int("+0xca9 is zero (%ld)", (long)CPB->byte_ca9, 0,
+		diff_eq_int("+0xca9 is zero (%ld)", (long)CPB->onesRun, 0,
 			    tag);
-		diff_eq_int("+0xcaa is zero (%ld)", (long)CPB->byte_caa, 0,
+		diff_eq_int("+0xcaa is zero (%ld)", (long)CPB->zerosRun, 0,
 			    tag);
 
 		diff_eq_int("it left +0x3bb4 alone (%ld)",
@@ -304,14 +304,14 @@ run_cp_reset(void)
 		if (memcmp(before, cp_b, sizeof(V90CP)) != 0)
 			moved = 1;
 
-		diff_eq_int("+0xcac is 18 (%ld)", (long)CPB->word_cac, 18, tag);
+		diff_eq_int("+0xcac is 18 (%ld)", (long)CPB->bitIndex, 18, tag);
 		diff_eq_int("+0xcb0 is zero (%ld)", (long)CPB->word_cb0, 0,
 			    tag);
-		diff_eq_int("+0xca4 is zero (%ld)", (long)CPB->word_ca4, 0,
+		diff_eq_int("+0xca4 is zero (%ld)", (long)CPB->rxState, 0,
 			    tag);
-		diff_eq_int("+0xca9 is zero (%ld)", (long)CPB->byte_ca9, 0,
+		diff_eq_int("+0xca9 is zero (%ld)", (long)CPB->onesRun, 0,
 			    tag);
-		diff_eq_int("+0xcaa is zero (%ld)", (long)CPB->byte_caa, 0,
+		diff_eq_int("+0xcaa is zero (%ld)", (long)CPB->zerosRun, 0,
 			    tag);
 		diff_eq_int("the MP counter is zero (%ld)",
 			    (long)CPB->nofRecievedMp, 0, tag);
@@ -402,8 +402,8 @@ run_cp_calcseqlen(void)
 				      (sizeof(lens) / sizeof(lens[0]))];
 
 		seed_pair(trial + 700, trial % 3);
-		CPA->word_3ba8 = CPB->word_3ba8 = g;
-		CPA->word_3bb0 = CPB->word_3bb0 = n;
+		CPA->groupSize = CPB->groupSize = g;
+		CPA->bodyLength = CPB->bodyLength = n;
 		memcpy(before, cp_b, CP_SLOT);
 
 		CPA->calcSequenceLength();
@@ -421,21 +421,21 @@ run_cp_calcseqlen(void)
 		if ((n + 1u) % g == 0u) {
 			exact = 1;
 			diff_eq_int("the exact arm stored n+1 (%ld)",
-				    (long)CPB->word_3bac, (long)(n + 1u), tag);
+				    (long)CPB->seqLength, (long)(n + 1u), tag);
 		} else {
 			rounded = 1;
 			diff_eq_int("the rounding arm rounded up (%ld)",
-				    (long)CPB->word_3bac,
+				    (long)CPB->seqLength,
 				    (long)(((n + 1u) / g + 1u) * g), tag);
 			diff_eq_int("and that is not n+1 (%ld)",
-				    CPB->word_3bac != n + 1u, 1, tag);
+				    CPB->seqLength != n + 1u, 1, tag);
 		}
 
 		/* It writes one word and nothing else. */
 		diff_eq_int("+0x3ba8 is untouched (%ld)",
-			    (long)CPB->word_3ba8, (long)g, tag);
+			    (long)CPB->groupSize, (long)g, tag);
 		diff_eq_int("+0x3bb0 is untouched (%ld)",
-			    (long)CPB->word_3bb0, (long)n, tag);
+			    (long)CPB->bodyLength, (long)n, tag);
 	}
 
 	diff_eq_int("the exact arm was taken", exact, 1, 0);
@@ -478,7 +478,7 @@ run_cp_calccrc(void)
 		int i;
 
 		seed_pair(trial + 800, trial % 3);
-		CPA->word_3bb0 = CPB->word_3bb0 = n;
+		CPA->bodyLength = CPB->bodyLength = n;
 
 		/*
 		 * The bit vector holds 0 and 1 the way a real sequence does,
@@ -526,7 +526,7 @@ run_cp_calccrc(void)
 
 		/* Nothing outside the register moves. */
 		diff_eq_int("+0x3bb0 is untouched (%ld)",
-			    (long)CPB->word_3bb0, (long)n, tag);
+			    (long)CPB->bodyLength, (long)n, tag);
 		diff_eq_int("the bit vector is untouched (%ld)",
 			    memcmp(before + 0xcb8, cp_b + 0xcb8, 2100) == 0, 1,
 			    tag);
@@ -544,7 +544,7 @@ run_cp_calccrc(void)
 		int i;
 
 		seed_pair(999, 0);
-		CPA->word_3bb0 = CPB->word_3bb0 = 300u;
+		CPA->bodyLength = CPB->bodyLength = 300u;
 		for (i = 0; i < 2100; i++) {
 			unsigned char v = (unsigned char)((lfsr =
 			    (lfsr >> 1) ^ (-(int)(lfsr & 1u) & 0xb400u)) & 1u);
@@ -580,7 +580,7 @@ run_cp_calccrc(void)
 		int i;
 
 		seed_pair(998, 0);
-		CPA->word_3bb0 = CPB->word_3bb0 = 300u;
+		CPA->bodyLength = CPB->bodyLength = 300u;
 		for (i = 0; i < 2100; i++) {
 			unsigned char v = (unsigned char)((lfsr =
 			    (lfsr >> 1) ^ (-(int)(lfsr & 1u) & 0xb400u)) & 1u);

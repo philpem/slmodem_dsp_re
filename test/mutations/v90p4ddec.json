@@ -408,8 +408,8 @@
  {
   "label": "the RdNot arm does not clear the CP type byte",
   "fn": "getV92Decision",
-  "find": "cp->byte_13 = 0;\n\t\t\tcp->word_3ba8 = mappingParams1->word_0;\n\t\t\tuchar_0030 = 0;",
-  "replace": "cp->word_3ba8 = mappingParams1->word_0;\n\t\t\tuchar_0030 = 0;"
+  "find": "cp->byte_13 = 0;\n\t\t\tcp->groupSize = mappingParams1->word_0;\n\t\t\tuchar_0030 = 0;",
+  "replace": "cp->groupSize = mappingParams1->word_0;\n\t\t\tuchar_0030 = 0;"
  },
  {
   "label": "the RfNot arm is fed the sample",
@@ -421,8 +421,8 @@
  {
   "label": "the RfNot arm hands the CP record the first mapping block",
   "fn": "getV92Decision",
-  "find": "cp->word_3ba8 = mappingParams2->word_0;",
-  "replace": "cp->word_3ba8 = mappingParams1->word_0;"
+  "find": "cp->groupSize = mappingParams2->word_0;",
+  "replace": "cp->groupSize = mappingParams1->word_0;"
  },
  {
   "label": "V.92's Rt arm records V.90's absent code",
@@ -439,8 +439,8 @@
  {
   "label": "V.92's RtNot arm reads the second mapping block",
   "fn": "getV92Decision",
-  "find": "/* RtNot, and it does NOT print the WaitForMP message V.90 does. */\n\tcase P4D_STATE_WAIT_FOR_RT_NOT:\n\t\tdecision = sample;\n\t\tdemapper->incrementRBSFramePosition();\n\t\tif (rDetector1.detectRNot(sample)) {\n\t\t\tedprintf(\"V90Phase4Demodulator: RtNot detected @ \" \"%d\\r\\n\", countInState);\n\t\t\tstate = P4D_STATE_WAIT_FOR_V90CP;\n\t\t\tcountInState = 0;\n\t\t\tint_0028 = 0x28;\n\t\t\tcp->reset();\n\t\t\tcp->word_3ba8 = mappingParams1->word_0;",
-  "replace": "/* RtNot, and it does NOT print the WaitForMP message V.90 does. */\n\tcase P4D_STATE_WAIT_FOR_RT_NOT:\n\t\tdecision = sample;\n\t\tdemapper->incrementRBSFramePosition();\n\t\tif (rDetector1.detectRNot(sample)) {\n\t\t\tedprintf(\"V90Phase4Demodulator: RtNot detected @ \"\n\t\t\t\t \"%d\\r\\n\", countInState);\n\t\t\tstate = P4D_STATE_WAIT_FOR_V90CP;\n\t\t\tcountInState = 0;\n\t\t\tint_0028 = 0x28;\n\t\t\tcp->reset();\n\t\t\tcp->word_3ba8 = mappingParams2->word_0;"
+  "find": "/* RtNot, and it does NOT print the WaitForMP message V.90 does. */\n\tcase P4D_STATE_WAIT_FOR_RT_NOT:\n\t\tdecision = sample;\n\t\tdemapper->incrementRBSFramePosition();\n\t\tif (rDetector1.detectRNot(sample)) {\n\t\t\tedprintf(\"V90Phase4Demodulator: RtNot detected @ \" \"%d\\r\\n\", countInState);\n\t\t\tstate = P4D_STATE_WAIT_FOR_V90CP;\n\t\t\tcountInState = 0;\n\t\t\tint_0028 = 0x28;\n\t\t\tcp->reset();\n\t\t\tcp->groupSize = mappingParams1->word_0;",
+  "replace": "/* RtNot, and it does NOT print the WaitForMP message V.90 does. */\n\tcase P4D_STATE_WAIT_FOR_RT_NOT:\n\t\tdecision = sample;\n\t\tdemapper->incrementRBSFramePosition();\n\t\tif (rDetector1.detectRNot(sample)) {\n\t\t\tedprintf(\"V90Phase4Demodulator: RtNot detected @ \"\n\t\t\t\t \"%d\\r\\n\", countInState);\n\t\t\tstate = P4D_STATE_WAIT_FOR_V90CP;\n\t\t\tcountInState = 0;\n\t\t\tint_0028 = 0x28;\n\t\t\tcp->reset();\n\t\t\tcp->groupSize = mappingParams2->word_0;"
  },
  {
   "label": "getDecision picks the V.90 arm always",

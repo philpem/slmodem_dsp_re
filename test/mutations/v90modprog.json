@@ -426,8 +426,8 @@
  },
  {
   "label": "the Ri exit's session fork is inverted",
-  "find": "\tif (sessionFlag)\n\t\tcp->word_3ba8 = mappingParams->word_0;",
-  "replace": "\tif (!sessionFlag)\n\t\tcp->word_3ba8 = mappingParams->word_0;"
+  "find": "\tif (sessionFlag)\n\t\tcp->groupSize = mappingParams->word_0;",
+  "replace": "\tif (!sessionFlag)\n\t\tcp->groupSize = mappingParams->word_0;"
  },
  {
   "label": "the Ri exit stores the other block's word in the MP",
@@ -436,7 +436,7 @@
  },
  {
   "label": "the Ri exit writes the MP on both arms",
-  "find": "\tif (sessionFlag)\n\t\tcp->word_3ba8 = mappingParams->word_0;\n\telse\n\t\tmp->groupSize = mappingParams->word_0;",
+  "find": "\tif (sessionFlag)\n\t\tcp->groupSize = mappingParams->word_0;\n\telse\n\t\tmp->groupSize = mappingParams->word_0;",
   "replace": "\tmp->groupSize = mappingParams->word_0;"
  },
  {

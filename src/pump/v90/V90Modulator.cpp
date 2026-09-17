@@ -370,7 +370,7 @@ V90Modulator::exitJdPhase()
  * the same polarity: nonzero is V.92 and writes the `V90CP`, zero is V.90 and
  * writes the `V90MP`.
  *
- * The three field names stay as their own headers have them.  `word_3ba8`,
+ * The three field names stay as their own headers have them.  `groupSize`,
  * `groupSize` and `word_0` are each already commented with their role; what
  * this edge adds is where the value comes from, which is recorded in the
  * finding rather than by renaming three fields in three files this batch does
@@ -395,7 +395,7 @@ V90Modulator::exitRi()
 	edprintf("V90Modulator: TRN2d D = %d\r\n", mappingParams->word_0);
 
 	if (sessionFlag)
-		cp->word_3ba8 = mappingParams->word_0;
+		cp->groupSize = mappingParams->word_0;
 	else
 		mp->groupSize = mappingParams->word_0;
 }

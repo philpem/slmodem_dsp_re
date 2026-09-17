@@ -201,7 +201,7 @@ set_info(int trial)
 	}
 
 	CPA->word_ca0 = CPB->word_ca0 = (unsigned int)(trial * 3);
-	CPA->word_3ba8 = CPB->word_3ba8 = groups[trial % NGROUPS];
+	CPA->groupSize = CPB->groupSize = groups[trial % NGROUPS];
 }
 
 /* --------------------------------------------- infoToBits (2785 bytes) */
@@ -254,7 +254,7 @@ run_cp_infotobits(void)
 				    (long)CPB->bits[0x20],
 				    (long)(unsigned char)CPB->word_ca0, tag);
 			diff_eq_int("the short form is 0x22 bits long (%ld)",
-				    (long)CPB->word_3bb0, 0x22 + 0x11, tag);
+				    (long)CPB->bodyLength, 0x22 + 0x11, tag);
 		} else {
 			saw_long = 1;
 			diff_eq_int("bit 19 is +0x04 (%ld)",
@@ -312,7 +312,7 @@ run_cp_infotobits(void)
 		}
 
 		/* Every seventeenth bit inside the message is a framing zero. */
-		len = CPB->word_3bb0;
+		len = CPB->bodyLength;
 		for (i = 0x11; (unsigned int)i < len; i += 17)
 			if (CPB->bits[i] != 0)
 				break;
@@ -320,21 +320,21 @@ run_cp_infotobits(void)
 			    (unsigned int)i >= len, 1, tag);
 
 		/* The length, computed from the blob's own +0x3bb0. */
-		n = CPB->word_3bb0 + 1;
-		g = CPB->word_3ba8;
+		n = CPB->bodyLength + 1;
+		g = CPB->groupSize;
 		want = (n / g) * g == n ? n : (n / g + 1) * g;
 		diff_eq_int("+0x3bac is +0x3bb0+1 rounded up (%ld)",
-			    (long)CPB->word_3bac, (long)want, tag);
+			    (long)CPB->seqLength, (long)want, tag);
 		if (want == n)
 			saw_exact = 1;
 		else
 			saw_pad = 1;
 
 		/* The pad really is written, not just counted. */
-		if (want > CPB->word_3bb0 + 1) {
+		if (want > CPB->bodyLength + 1) {
 			int all0 = 1;
 
-			for (i = (int)CPB->word_3bb0 + 1; (unsigned int)i < want;
+			for (i = (int)CPB->bodyLength + 1; (unsigned int)i < want;
 			     i++)
 				if (CPB->bits[i] != 0)
 					all0 = 0;
@@ -383,7 +383,7 @@ run_cp_evaluateinfo(void)
 		 * a 12000-byte array and the arms walk it forward; a random
 		 * word would leave the object on the first read.
 		 */
-		CPA->word_ca4 = CPB->word_ca4 = state;
+		CPA->rxState = CPB->rxState = state;
 		CPA->word_cb4 = CPB->word_cb4 =
 		    (unsigned int)(0x32 + (trial % 24));
 
@@ -477,7 +477,7 @@ run_cp_evaluatecrc(void)
 
 		seed_pair(trial + 300, trial % 3);
 		set_info(trial);
-		CPA->word_3ba8 = CPB->word_3ba8 = 17;
+		CPA->groupSize = CPB->groupSize = 17;
 
 		/*
 		 * Build a real sequence first -- with the blob, so that what
@@ -497,7 +497,7 @@ run_cp_evaluatecrc(void)
 
 		if (mode == 1) {
 			unsigned int at = 0x12 + (unsigned int)trial %
-					  (CPB->word_3bb0 - 0x22);
+					  (CPB->bodyLength - 0x22);
 
 			if (at % 17 == 0)
 				at++;
@@ -514,7 +514,7 @@ run_cp_evaluatecrc(void)
 			 * differences are 0 or 1.  The blob is the oracle for
 			 * what a byte does, and it answers "matches".
 			 */
-			unsigned int at = CPB->word_3bb0 - 0x10;
+			unsigned int at = CPB->bodyLength - 0x10;
 
 			CPA->bits[at] = CPB->bits[at] =
 			    (unsigned char)(CPB->bits[at] + 128);
@@ -534,7 +534,7 @@ run_cp_evaluatecrc(void)
 			saw_bad = 1;
 
 		if (mode == 2) {
-			unsigned int at = CPB->word_3bb0 - 0x10;
+			unsigned int at = CPB->bodyLength - 0x10;
 
 			/*
 			 * Both halves of the claim, read off the BLOB: the two

@@ -394,7 +394,7 @@ public:
 	 * that dispatch on it: `bitsToInfo` runs states 0..10, and
 	 * `evaluateInfo` decodes 3, 5, 6, 7 and 8, with 4 a hole in its case
 	 * list rather than an arm that does nothing (the same shape V90CP's
-	 * `word_ca4` has). The two machines line up: `bitsToInfo`'s state N
+	 * `rxState` has). The two machines line up: `bitsToInfo`'s state N
 	 * fills a block of `bits` and then calls `evaluateInfo`, which is
 	 * still in state N when it decodes it. Unsigned is forced by both
 	 * dispatches' range checks (`ja`). Zeroed by `resetDetector` (and so
@@ -427,7 +427,7 @@ public:
 	 * the object stores 0 and reloads it four instructions later -- which
 	 * matters when `bitsPerSymbol` is zero, because the quantum is then
 	 * zero and the test is true on a ONE bit as well.  Reproduced, and it
-	 * is the same shape V90CP's `byte_caa` has.  Cleared by
+	 * is the same shape V90CP's `zerosRun` has.  Cleared by
 	 * `resetDetector`.
 	 */
 	unsigned char byte_11a;

@@ -119,14 +119,20 @@
  *
  * `bitsToInfo` has now been read and it names nothing either. Its two
  * strings are a bounds check on `bits` and a bad-CRC line that names the
- * message but no field of it, so all twenty-three members below keep their
+ * message but no field of it, so the remaining members below keep their
  * offsets for names. What it does settle is the role of five of them --
- * `word_ca4` is the state, `word_cac` the cursor, `word_cb0` the count
- * within the current block, `byte_ca9` and `byte_caa` the run lengths of
- * ones and of zeros -- and roles are what the comments below now carry. The
- * sibling `V90MP` reached the same four roles from its own driver and kept
- * `byte_19`, `byte_1a`, `byte_1b` and `word_14`, so this is the precedent
- * and not a new caution. Finding F4360.
+ * `rxState` the state, `bitIndex` the cursor, `word_cb0` the count within
+ * the current block, `onesRun` and `zerosRun` the run lengths of ones and
+ * of zeros -- and roles are what the comments below carry. The sibling
+ * `V90MP` reached the same roles from its own driver and, in commit
+ * `22fa07e2` (finding F10181), named the state, the two run counters and the
+ * cursor `rxState`, `onesRun`, `zerosRun` and `bitIndex`; `V90CP` follows
+ * the sibling for the same roles, so `rxState`, `onesRun`, `zerosRun` and
+ * `bitIndex` now carry those names. The sequence-length fields take the
+ * sibling's names too, `groupSize`, `seqLength` and `bodyLength`, which
+ * `calcSequenceLength` already described in those terms. The fields that keep their offsets as
+ * names do so because nothing in the object states their wire meaning.
+ * Finding F4360.
  */
 
 #ifndef DSPLIB_V90CP_H
@@ -211,7 +217,7 @@ public:
 	 * is not mangled, so that had to be read out of the epilogue.
 	 *
 	 * @param length  Receives the sequence length `calcSequenceLength()`
-	 *                last computed (`word_3bac`).
+	 *                last computed (`seqLength`).
 	 * @return `this+0xcb8`, i.e. `bits`.
 	 */
 	unsigned char *getBitVector(unsigned int &length);
@@ -226,7 +232,7 @@ public:
 	 */
 	void reset();
 
-	/** @brief Clear the receive-side detector state (`word_ca4`, `byte_ca9`, `byte_caa`, `word_cac`, `word_cb0`). */
+	/** @brief Clear the receive-side detector state (`rxState`, `onesRun`, `zerosRun`, `bitIndex`, `word_cb0`). */
 	void resetDetector();
 
 	/** @brief Set the sixteen-byte CRC register (`crc[]`) to all ones. */
@@ -235,7 +241,7 @@ public:
 	/** @brief Compute the CCITT CRC over the message and write it into the CRC frame. */
 	void calcCRC();
 
-	/** @brief Round `word_3bb0 + 1` up to a multiple of `word_3ba8` and store the result in `word_3bac`, the reported sequence length. */
+	/** @brief Round `bodyLength + 1` up to a multiple of `groupSize` and store the result in `seqLength`, the reported sequence length. */
 	void calcSequenceLength();
 
 	/** @brief Print the received-frame counters as "received %d MP, %d MPNot" (`nofRecievedMp`, `nofRecievedMpNot`). */
@@ -251,13 +257,13 @@ public:
 	 * and as the sibling `V90MP::bitsToInfo`; finding F4360).
 	 *
 	 * It is the receive-side driver: stores the bit into `bits` at
-	 * `word_cac`, counts within the current block in `word_cb0`, and
-	 * steps `word_ca4` through the states documented at that field. Its
+	 * `bitIndex`, counts within the current block in `word_cb0`, and
+	 * steps `rxState` through the states documented at that field. Its
 	 * two function-local statics `alpha` and `beta` hold the two counted
 	 * blocks' bit lengths.
 	 *
 	 * @param bit  The next received bit (0 or 1).
-	 * @return One of 0..5, decoded per the state comment on `word_ca4`.
+	 * @return One of 0..5, decoded per the state comment on `rxState`.
 	 */
 	int bitsToInfo(unsigned char bit);
 
@@ -298,7 +304,7 @@ public:
 	 * +0x0004 the six pairs at +0x0018, +0x0008 the four counted lists at
 	 * +0x0048, +0x000c everything from +0xc58 on.  `evaluateInfo` never
 	 * writes them -- the decoder is told which block to expect by
-	 * `word_ca4` instead -- so only `infoToBits` establishes them.
+	 * `rxState` instead -- so only `infoToBits` establishes them.
 	 */
 	int word_04;
 	int word_08;
@@ -443,7 +449,7 @@ public:
 	 * fourteen the receiver walks, and 0, 1, 2, 4, 12 and 13 exist only
 	 * on this side.  Finding F4360.
 	 */
-	unsigned int word_ca4;
+	unsigned int rxState;
 
 	/*
 	 * +0x0ca8  One byte, and `infoToBits` clearing it to zero on the long
@@ -459,23 +465,23 @@ public:
 	 * sixteen are not enough. Eight bits and it wraps: the object's
 	 * `inc %cl` and `cmp $0x10,%cl` are both byte-wide.
 	 */
-	unsigned char byte_ca9;
+	unsigned char onesRun;
 
 	/*
 	 * +0x0caa  And the length of the current run of zeros, the mirror of
 	 * +0xca9: every zero increments it and every one clears it. A run of
-	 * `2 * word_3ba8` zeros with the cursor still at its home 18 is the
+	 * `2 * groupSize` zeros with the cursor still at its home 18 is the
 	 * far end having stopped, and `bitsToInfo` answers 5. The member is
 	 * re-read out of the object after being cleared, which is why a
-	 * `word_3ba8` of zero makes that test true on a one bit as well.
+	 * `groupSize` of zero makes that test true on a one bit as well.
 	 */
-	unsigned char byte_caa;
+	unsigned char zerosRun;
 
 	/*
-	 * +0x0cab was `pad_cab[1]`: `byte_caa` ends at +0x0cab and `word_cac`
+	 * +0x0cab was `pad_cab[1]`: `zerosRun` ends at +0x0cab and `bitIndex`
 	 * below is a 4-byte-aligned `unsigned int`, so natural alignment
 	 * inserts exactly this one byte with the member deleted -- the
-	 * existing `V90CP_OFF(word_cac, 0x0cac, wordcac)` (V90CP.cpp) is what
+	 * existing `V90CP_OFF(bitIndex, 0x0cac, bitIndex)` (V90CP.cpp) is what
 	 * proves it.  Zero readers/writers anywhere in the object (confirmed
 	 * via `tools/dis.py` over every `V90CP::` member function,
 	 * `0x51150..0x53830`, and a whole-object grep for `0xcab(`); removed
@@ -499,7 +505,7 @@ public:
 	 * the class forces signed, so `unsigned int` is the simpler source.
 	 * Finding F4362.
 	 */
-	unsigned int word_cac;
+	unsigned int bitIndex;
 
 	/*
 	 * +0x0cb0  Zeroed by `resetDetector`, and it is the receive counter:
@@ -537,15 +543,15 @@ public:
 	unsigned char crc[V90CP_CRC];
 
 	/* +0x3ba8  `calcSequenceLength`'s divisor: the group size. */
-	unsigned int word_3ba8;
+	unsigned int groupSize;
 
 	/* +0x3bac  The sequence length `calcSequenceLength` computes and
 	 * `getBitVector` reports through its reference argument. */
-	unsigned int word_3bac;
+	unsigned int seqLength;
 
 	/* +0x3bb0  `calcSequenceLength`'s input: one less than the bit count
 	 * it rounds up. */
-	unsigned int word_3bb0;
+	unsigned int bodyLength;
 
 	/* +0x3bb4  MP frames received, by the debug string's own words. */
 	int nofRecievedMp;

@@ -1,8 +1,8 @@
 [
  {
   "label": "the length comes from +0x3bb0, not +0x3bac",
-  "find": "\tlength = word_3bac;",
-  "replace": "\tlength = word_3bb0;"
+  "find": "\tlength = seqLength;",
+  "replace": "\tlength = bodyLength;"
  },
  {
   "label": "getBitVector returns the CRC register",
@@ -11,33 +11,33 @@
  },
  {
   "label": "getBitVector reports nothing",
-  "find": "\tlength = word_3bac;\n",
+  "find": "\tlength = seqLength;\n",
   "replace": ""
  },
  {
   "label": "resetDetector: the cursor starts at 17",
-  "find": "\tword_cac = 18;\n\tword_cb0 = 0;\n\tword_ca4 = 0;\n\tbyte_ca9 = 0;\n\tbyte_caa = 0;\n}",
-  "replace": "\tword_cac = 17;\n\tword_cb0 = 0;\n\tword_ca4 = 0;\n\tbyte_ca9 = 0;\n\tbyte_caa = 0;\n}"
+  "find": "\tbitIndex = 18;\n\tword_cb0 = 0;\n\trxState = 0;\n\tonesRun = 0;\n\tzerosRun = 0;\n}",
+  "replace": "\tbitIndex = 17;\n\tword_cb0 = 0;\n\trxState = 0;\n\tonesRun = 0;\n\tzerosRun = 0;\n}"
  },
  {
   "label": "resetDetector: +0xcb0 left alone",
-  "find": "\tword_cac = 18;\n\tword_cb0 = 0;\n\tword_ca4 = 0;\n\tbyte_ca9 = 0;\n\tbyte_caa = 0;\n}",
-  "replace": "\tword_cac = 18;\n\tword_ca4 = 0;\n\tbyte_ca9 = 0;\n\tbyte_caa = 0;\n}"
+  "find": "\tbitIndex = 18;\n\tword_cb0 = 0;\n\trxState = 0;\n\tonesRun = 0;\n\tzerosRun = 0;\n}",
+  "replace": "\tbitIndex = 18;\n\trxState = 0;\n\tonesRun = 0;\n\tzerosRun = 0;\n}"
  },
  {
   "label": "resetDetector: +0xcaa left alone",
-  "find": "\tbyte_caa = 0;\n}",
+  "find": "\tzerosRun = 0;\n}",
   "replace": "}"
  },
  {
   "label": "resetDetector: +0xca4 left alone",
-  "find": "\tword_cac = 18;\n\tword_cb0 = 0;\n\tword_ca4 = 0;\n\tbyte_ca9 = 0;\n\tbyte_caa = 0;\n}",
-  "replace": "\tword_cac = 18;\n\tword_cb0 = 0;\n\tbyte_ca9 = 0;\n\tbyte_caa = 0;\n}"
+  "find": "\tbitIndex = 18;\n\tword_cb0 = 0;\n\trxState = 0;\n\tonesRun = 0;\n\tzerosRun = 0;\n}",
+  "replace": "\tbitIndex = 18;\n\tword_cb0 = 0;\n\tonesRun = 0;\n\tzerosRun = 0;\n}"
  },
  {
   "label": "resetDetector also clears +0x13, as the ctor does",
-  "find": "\tbyte_caa = 0;\n}",
-  "replace": "\tbyte_caa = 0;\n\tbyte_13 = 0;\n}"
+  "find": "\tzerosRun = 0;\n}",
+  "replace": "\tzerosRun = 0;\n\tbyte_13 = 0;\n}"
  },
  {
   "label": "reset does not reset the detector",
@@ -77,43 +77,43 @@
  },
  {
   "label": "calcSequenceLength rounds +0x3bb0, not +0x3bb0 + 1",
-  "find": "\ttotal = word_3bb0 + 1;",
-  "replace": "\ttotal = word_3bb0;"
+  "find": "\ttotal = bodyLength + 1;",
+  "replace": "\ttotal = bodyLength;"
  },
  {
   "label": "calcSequenceLength rounds down, not up",
-  "find": "\t\tword_3bac = (quot + 1) * group;\n}",
-  "replace": "\t\tword_3bac = quot * group;\n}"
+  "find": "\t\tseqLength = (quot + 1) * group;\n}",
+  "replace": "\t\tseqLength = quot * group;\n}"
  },
  {
   "label": "calcSequenceLength always rounds up",
-  "find": "\tif (group * quot == total)\n\t\tword_3bac = group * quot;\n\telse\n\t\tword_3bac = (quot + 1) * group;\n}",
-  "replace": "\tword_3bac = (quot + 1) * group;\n}"
+  "find": "\tif (group * quot == total)\n\t\tseqLength = group * quot;\n\telse\n\t\tseqLength = (quot + 1) * group;\n}",
+  "replace": "\tseqLength = (quot + 1) * group;\n}"
  },
  {
   "label": "calcSequenceLength writes the quotient, not the product",
-  "find": "\t\tword_3bac = (quot + 1) * group;\n}",
-  "replace": "\t\tword_3bac = quot + 1;\n}"
+  "find": "\t\tseqLength = (quot + 1) * group;\n}",
+  "replace": "\t\tseqLength = quot + 1;\n}"
  },
  {
   "label": "calcCRC seeds the register the way resetCRC does",
-  "find": "\tunsigned char a;\n\n\tend = word_3bb0 - 0x11;",
-  "replace": "\tunsigned char a;\n\tunsigned int k;\n\n\tfor (k = 0; k <= 0xf; k++)\n\t\tcrc[k] = 1;\n\tend = word_3bb0 - 0x11;"
+  "find": "\tunsigned char a;\n\n\tend = bodyLength - 0x11;",
+  "replace": "\tunsigned char a;\n\tunsigned int k;\n\n\tfor (k = 0; k <= 0xf; k++)\n\t\tcrc[k] = 1;\n\tend = bodyLength - 0x11;"
  },
  {
   "label": "calcCRC covers one frame too many",
-  "find": "\tunsigned char a;\n\n\tend = word_3bb0 - 0x11;",
-  "replace": "\tunsigned char a;\n\n\tend = word_3bb0 - 0x10;"
+  "find": "\tunsigned char a;\n\n\tend = bodyLength - 0x11;",
+  "replace": "\tunsigned char a;\n\n\tend = bodyLength - 0x10;"
  },
  {
   "label": "calcCRC does not step over the framing bits",
-  "find": "\tunsigned char a;\n\n\tend = word_3bb0 - 0x11;\n\tfor (i = 0x12; i < end; ) {\n\t\tif (i % 17 == 0)\n\t\t\ti++;\n",
-  "replace": "\tunsigned char a;\n\n\tend = word_3bb0 - 0x11;\n\tfor (i = 0x12; i < end; ) {\n"
+  "find": "\tunsigned char a;\n\n\tend = bodyLength - 0x11;\n\tfor (i = 0x12; i < end; ) {\n\t\tif (i % 17 == 0)\n\t\t\ti++;\n",
+  "replace": "\tunsigned char a;\n\n\tend = bodyLength - 0x11;\n\tfor (i = 0x12; i < end; ) {\n"
  },
  {
   "label": "calcCRC starts at the preamble, not at 0x12",
-  "find": "\tunsigned char a;\n\n\tend = word_3bb0 - 0x11;\n\tfor (i = 0x12; i < end; ) {\n\t\tif (i % 17 == 0)\n\t\t\ti++;\n",
-  "replace": "\tunsigned char a;\n\n\tend = word_3bb0 - 0x11;\n\tfor (i = 0x11; i < end; ) {\n\t\tif (i % 17 == 0)\n\t\t\ti++;\n"
+  "find": "\tunsigned char a;\n\n\tend = bodyLength - 0x11;\n\tfor (i = 0x12; i < end; ) {\n\t\tif (i % 17 == 0)\n\t\t\ti++;\n",
+  "replace": "\tunsigned char a;\n\n\tend = bodyLength - 0x11;\n\tfor (i = 0x11; i < end; ) {\n\t\tif (i % 17 == 0)\n\t\t\ti++;\n"
  },
  {
   "label": "calcCRC drops the feedback into 15",

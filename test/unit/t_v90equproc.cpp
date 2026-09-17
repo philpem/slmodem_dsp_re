@@ -1106,12 +1106,12 @@ p4_setup(long tag, int dly)
 		MPR(s).zerosRun = 1;
 		MPR(s).bitIndex = 18;
 		MPR(s).groupSize = 1u;
-		CPR(s).word_ca4 = 0u;
-		CPR(s).byte_ca9 = 0;
-		CPR(s).byte_caa = 1;
-		CPR(s).word_cac = 18u;
+		CPR(s).rxState = 0u;
+		CPR(s).onesRun = 0;
+		CPR(s).zerosRun = 1;
+		CPR(s).bitIndex = 18u;
 		CPR(s).word_cb0 = 0u;
-		CPR(s).word_3ba8 = 1u;
+		CPR(s).groupSize = 1u;
 		for (k = 0; k < V90CP_BUFS; k++) {
 			CPR(s).buf[k] = cpbuf_s[s][k];
 			CPR(s).nof_buf[k] = 1u;

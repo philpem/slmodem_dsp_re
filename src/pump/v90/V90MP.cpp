@@ -605,7 +605,7 @@ V90MP::infoToBits()
  *
  * WHERE IT GENUINELY DIFFERS FROM THE V.90 CP TWIN IS THE EXTENT, and this
  * is the whole of the difference.  `V90CP::calcCRC` computes `end` as
- * `word_3bb0 - 0x11` from the four-byte sequence length; this one takes it
+ * `bodyLength - 0x11` from the four-byte sequence length; this one takes it
  * from the ONE-BYTE type flag at +0x18 and a pair of constants:
  *
  *     1f180:  movzbl 0x18(%edi),%edx
@@ -660,7 +660,7 @@ V90MP::infoToBits()
  * `sete %al`; see V90MP.h.
  *
  * THE TWO EXTENTS COME FROM TWO DIFFERENT FIELDS, and that is the sharpest
- * difference from `V90CP::evaluateCRC`, which takes both from `word_3bb0`:
+ * difference from `V90CP::evaluateCRC`, which takes both from `bodyLength`:
  *
  *   - the information bits are bounded by `type ? 0xaa : 0x44`, read from
  *     +0x18 by the same five instructions `calcCRC` uses (0x1f48f..0x1f4a0);

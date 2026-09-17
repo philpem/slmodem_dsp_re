@@ -289,8 +289,8 @@ setup(int trial, int mode, int latch, unsigned int count)
 			c->word_c70[k] = (int)(0x17u * (unsigned)(trial + k));
 		}
 		c->word_ca0 = (unsigned int)(trial * 3);
-		c->word_3ba8 = 17u;
-		c->word_3bac = 0x30u;
+		c->groupSize = 17u;
+		c->seqLength = 0x30u;
 
 		/*
 		 * The converter.  Two configurations and no third: see the

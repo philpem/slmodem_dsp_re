@@ -438,7 +438,7 @@ setup(int trial, int mode)
 		 * without this neither bit loop ever produces one.  Both
 		 * answer on a run of zeros while the cursor is still at its
 		 * home 18 -- `zerosRun == 2 * groupSize` for the MP record and
-		 * `byte_caa == 2 * word_3ba8` for the CP one -- so a group
+		 * `zerosRun == 2 * groupSize` for the CP one -- so a group
 		 * size of 1 and a run already at 1 turns the first zero bit
 		 * `Descrambler` hands over into `Ed detected` (3) for V.90 and
 		 * into answer 5 for V.92.  State 0 is the preamble and leaves
@@ -450,12 +450,12 @@ setup(int trial, int mode)
 		MPR(s).zerosRun = 1;
 		MPR(s).bitIndex = 18;
 		MPR(s).groupSize = 1u;
-		CPR(s).word_ca4 = 0u;
-		CPR(s).byte_ca9 = 0;
-		CPR(s).byte_caa = 1;
-		CPR(s).word_cac = 18u;
+		CPR(s).rxState = 0u;
+		CPR(s).onesRun = 0;
+		CPR(s).zerosRun = 1;
+		CPR(s).bitIndex = 18u;
 		CPR(s).word_cb0 = 0u;
-		CPR(s).word_3ba8 = 1u;
+		CPR(s).groupSize = 1u;
 
 		/* The CP record's six buffers, one array per side. */
 		for (k = 0; k < V90CP_BUFS; k++) {
@@ -1168,17 +1168,17 @@ prefeed_cp(int shortform, int byte13, int cpbit, long tag)
 	CPGEN.byte_11 = 2;
 	CPGEN.byte_12 = 1;
 	CPGEN.word_14 = 0x1234;
-	CPGEN.word_3ba8 = 6u;
+	CPGEN.groupSize = 6u;
 	ref_cp_infotobits(cp_gen_s);
-	n = CPGEN.word_3bac;
+	n = CPGEN.seqLength;
 
 	for (i = 0; i < 2; i++) {
-		CPR(i).word_ca4 = 0u;
-		CPR(i).byte_ca9 = 0;
-		CPR(i).byte_caa = 0;
-		CPR(i).word_cac = 18u;
+		CPR(i).rxState = 0u;
+		CPR(i).onesRun = 0;
+		CPR(i).zerosRun = 0;
+		CPR(i).bitIndex = 18u;
 		CPR(i).word_cb0 = 0u;
-		CPR(i).word_3ba8 = 6u;
+		CPR(i).groupSize = 6u;
 		CPR(i).word_3bbc = -1;
 	}
 
@@ -1200,9 +1200,9 @@ prefeed_cp(int shortform, int byte13, int cpbit, long tag)
 	diff_eq_int("the CP completing bit is padding zero (%ld)",
 		    (long)CPGEN.bits[n - 1], 0L, tag);
 	diff_eq_int("the CP decoder is in its padding state (%ld)",
-		    (long)CPR(1).word_ca4, 13L, tag);
+		    (long)CPR(1).rxState, 13L, tag);
 	diff_eq_int("the CP decoder is one bit from reporting (%ld)",
-		    (long)(CPR(1).word_cac % 6u), 5L, tag);
+		    (long)(CPR(1).bitIndex % 6u), 5L, tag);
 	compare_all("after the CP prefeed", tag);
 }
 
@@ -1976,7 +1976,7 @@ run_p4d_reset(void)
 				    (long)P4D(1).uint_34fc,
 				    (long)MAPP1->word_0, trial);
 			diff_eq_int("the CP took the group size (%ld)",
-				    (long)CPR(1).word_3ba8,
+				    (long)CPR(1).groupSize,
 				    (long)MAPP1->word_0, trial);
 			if (memcmp(cp_pre, cp_s[1], CP_SLOT) != 0)
 				cparm++;

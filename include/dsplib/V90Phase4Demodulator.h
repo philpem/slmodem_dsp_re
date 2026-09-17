@@ -621,7 +621,7 @@ public:
 	 * nothing else in the object reaches it.
 	 *
 	 * What the value is is bounded and not established. The same word
-	 * goes into `V90CP::word_3ba8` in the same breath, and both V90CP.h
+	 * goes into `V90CP::groupSize` in the same breath, and both V90CP.h
 	 * and V90MP.h call their copy "`calcSequenceLength`'s divisor: the
 	 * group size" -- so this is a shadow of the group size the CP was
 	 * just given. Whether the class keeps it as that, or as the frame

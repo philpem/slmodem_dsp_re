@@ -137,12 +137,12 @@
  },
  {
   "label": "reset: +0x34fc is written on the CP arm",
-  "find": "\t\tuint_34fc = groupSize;\n\t\tcp->word_3ba8 = groupSize;",
-  "replace": "\t\tcp->word_3ba8 = groupSize;"
+  "find": "\t\tuint_34fc = groupSize;\n\t\tcp->groupSize = groupSize;",
+  "replace": "\t\tcp->groupSize = groupSize;"
  },
  {
   "label": "reset: the CP's group size is written",
-  "find": "\t\tuint_34fc = groupSize;\n\t\tcp->word_3ba8 = groupSize;",
+  "find": "\t\tuint_34fc = groupSize;\n\t\tcp->groupSize = groupSize;",
   "replace": "\t\tuint_34fc = groupSize;"
  },
  {

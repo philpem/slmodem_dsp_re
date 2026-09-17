@@ -395,7 +395,7 @@ plausible_cp(V90CP *cp, int trial)
 		cp->word_c70[k] = 0x17 * (trial + k);
 	}
 	cp->word_ca0 = (unsigned int)(trial * 3);
-	cp->word_3ba8 = 17u;
+	cp->groupSize = 17u;
 	/*
 	 * NOT ZERO, because `initiateRRN`'s V.92 arm stores a zero here and a
 	 * field that already held the value the store writes cannot fail
@@ -2340,7 +2340,7 @@ run_edges(void)
 		 * was there, not against a constant.
 		 */
 		mp114_pre = MODEM(1)->mp.groupSize;
-		cp3ba8_pre = MODEM(1)->cp.word_3ba8;
+		cp3ba8_pre = MODEM(1)->cp.groupSize;
 
 		compare_graph("before the edge", 0, tag);
 
@@ -2479,7 +2479,7 @@ run_edges(void)
 				if (t->flag != 0)
 					diff_eq_int("V.92 puts the frame size "
 						    "in the CP (%ld)",
-						    (long)MODEM(1)->cp.word_3ba8,
+						    (long)MODEM(1)->cp.groupSize,
 						    (long)BPF_RI, tag);
 				else
 					diff_eq_int("V.90 puts the frame size "
@@ -2494,7 +2494,7 @@ run_edges(void)
 					    (long)MODEM(1)->mp.groupSize,
 					    (long)mp114_pre, tag);
 				diff_eq_int("and the CP one (%ld)",
-					    (long)MODEM(1)->cp.word_3ba8,
+					    (long)MODEM(1)->cp.groupSize,
 					    (long)cp3ba8_pre, tag);
 				diff_eq_int("and neither is the block's word "
 					    "(%ld)",

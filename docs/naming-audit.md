@@ -470,3 +470,70 @@ boundary-aware inverse comparison. It also rejected the proposed name
 `byte_280c` and its existing warning remain. Final denominator: **17 reviewed,
 5 semantically named, 12 explicitly unresolved**. A no-op visit to the mutation
 snapshot did not change its content and is not part of the batch.
+
+## Batch 13: V90CP field names
+
+Owner-scoped pass over `V90CP`, following the sibling `V90MP` rather than
+re-deriving roles. Seven members are renamed; the rest of the class keeps its
+existing offset-anchored names for the reasons already recorded in
+`include/dsplib/V90CP.h`.
+
+`V90MP`'s `rxState`, `onesRun`, `zerosRun`, `bitIndex`, `groupSize`,
+`seqLength` and `bodyLength` were named from its own driver and diagnostics in
+commit `22fa07e2` (finding F10181). `V90CP`'s `bitsToInfo`/`evaluateInfo` pair
+had already established the same roles and `calcSequenceLength` already
+described the sequence-length fields in those terms, so the sibling name is
+the strongest available evidence (evidence order 2, a sibling that types the
+same role). No new wire meaning is claimed.
+
+| Previous name | New name | Evidence |
+| --- | --- | --- |
+| word_ca4 | rxState | Sibling `V90MP::rxState` (22fa07e2, F10181); the decoder's state, documented at the field |
+| byte_ca9 | onesRun | Sibling `V90MP::onesRun`; run length of ones in `bitsToInfo` |
+| byte_caa | zerosRun | Sibling `V90MP::zerosRun`; run length of zeros in `bitsToInfo` |
+| word_cac | bitIndex | Sibling `V90MP::bitIndex`; the cursor `bitsToInfo` stores at |
+| word_3ba8 | groupSize | Sibling `V90MP::groupSize`; `calcSequenceLength`'s divisor |
+| word_3bac | seqLength | Sibling `V90MP::seqLength`; the reported sequence length |
+| word_3bb0 | bodyLength | Sibling `V90MP::bodyLength`; `calcSequenceLength`'s rounded input |
+
+Retained neutral, with the reason each stays an offset:
+
+| Retained name | Reason |
+| --- | --- |
+| word_00 | Polarity is opposite the sibling's `Type`; `V90CP` shortens on nonzero, so the name is not carried across (documented in V90CP.h) |
+| word_04, word_08, word_0c | Whole-word long-form block flags; only `infoToBits` establishes them and their wire meaning is unstated |
+| byte_10 | Five-bit signed header value; no string or caller names it |
+| byte_11 | Two-bit four-arm switch; four arms written out but no enumeration is named in the object |
+| byte_12 | One bit copied into `bits[0x1d]`; no consumer states its meaning |
+| byte_13 | Raised/lowered by `V90Phase4Modulator`, but what bits[0x21] means on the wire is not stated |
+| word_14 | Sixteen-bit header value; neither direction names it |
+| word_18 | Six frames of signed pairs; contents not established anywhere in the object |
+| short_58 | Four short lists; contents not established |
+| word_c70 | Six four-bit values; position is the only structure |
+| word_ca0 | Short-form payload; role is bounded but not semantic |
+| byte_ca8 | Width settled by two accesses; nothing else about it |
+| word_cb0 | Receive counter within the current block; role bounded, no agreed wire name |
+| word_cb4 | The read cursor, mirror of `bitIndex`; role bounded, no agreed wire name |
+| word_3bbc | Hold-off counter; what it holds off is not stated |
+
+Production consumers in `src/pump/v90/`, the external `cp->` accesses in
+`V90Modulator.cpp`, `V90Phase4Modulator.cpp` and `V90Phase4Demodulator.cpp`,
+nine unit tests, the twelve affected mutation manifests and the
+`tools/fieldcorrelate.py` usage example follow the new names. The
+`V90CP_OFF` assertion labels in `src/pump/v90/V90CP.cpp` were updated to match
+with their offsets unchanged. Mutation `find`/`replace` values were decoded
+and transformed structurally; labels, `why` prose and every injected fault are
+unchanged. The stale paragraph in `V90CP.h` that read "The sibling V90MP ...
+kept byte_19, byte_1a, byte_1b and word_14, so this is the precedent" was
+corrected.
+
+Batch 13 final validation: Gentoo `make phase` exited 0, **375 passed, 0 failed**,
+all structural checks green, **655/655 baseline period objects byte-identical**.
+`anchorcheck` revalidated all 10041 mutation anchors against the renamed
+source (0 matching other than exactly once) and `refcheck` resolved all 13936
+references. Scope was checked token-by-token: apart from the intended
+`V90CP.h` prose correction, every source/test edit is an identifier-only
+substitution, and every mutation manifest differs only in decoded
+`find`/`replace` identifier values, verified by a token-level comparison of
+all non-`find`/`replace` properties and a boundary-aware inverse of the
+renamed strings.

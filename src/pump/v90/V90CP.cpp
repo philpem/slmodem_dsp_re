@@ -95,16 +95,16 @@ V90CP_OFF(buf,			0x0c88, buf);
 V90CP_OFF(word_ca0,		0x0ca0, wordca0);
 V90CP_OFF(byte_ca8,		0x0ca8, byteca8);
 V90CP_OFF(word_cb4,		0x0cb4, wordcb4);
-V90CP_OFF(word_ca4,		0x0ca4, wordca4);
-V90CP_OFF(byte_ca9,		0x0ca9, byteca9);
-V90CP_OFF(byte_caa,		0x0caa, bytecaa);
-V90CP_OFF(word_cac,		0x0cac, wordcac);
+V90CP_OFF(rxState,		0x0ca4, rxState);
+V90CP_OFF(onesRun,		0x0ca9, onesRun);
+V90CP_OFF(zerosRun,		0x0caa, zerosRun);
+V90CP_OFF(bitIndex,		0x0cac, bitIndex);
 V90CP_OFF(word_cb0,		0x0cb0, wordcb0);
 V90CP_OFF(bits,			0x0cb8, bits);
 V90CP_OFF(crc,			0x3b98, crc);
-V90CP_OFF(word_3ba8,		0x3ba8, word3ba8);
-V90CP_OFF(word_3bac,		0x3bac, word3bac);
-V90CP_OFF(word_3bb0,		0x3bb0, word3bb0);
+V90CP_OFF(groupSize,		0x3ba8, groupSize);
+V90CP_OFF(seqLength,		0x3bac, seqLength);
+V90CP_OFF(bodyLength,		0x3bb0, bodyLength);
 V90CP_OFF(nofRecievedMp,	0x3bb4, nofmp);
 V90CP_OFF(nofRecievedMpNot,	0x3bb8, nofmpnot);
 V90CP_OFF(word_3bbc,		0x3bbc, word3bbc);
@@ -145,11 +145,11 @@ V90CP::V90CP()
 	buf[4] = (int *)sysdep_malloc(V90CP_BUFSIZE);
 	buf[5] = (int *)sysdep_malloc(V90CP_BUFSIZE);
 
-	word_cac = 18;
+	bitIndex = 18;
 	word_cb0 = 0;
-	word_ca4 = 0;
-	byte_ca9 = 0;
-	byte_caa = 0;
+	rxState = 0;
+	onesRun = 0;
+	zerosRun = 0;
 
 	nofRecievedMp = 0;
 	nofRecievedMpNot = 0;
@@ -182,17 +182,17 @@ V90CP::~V90CP()
 void
 V90CP::resetDetector()
 {
-	word_cac = 18;
+	bitIndex = 18;
 	word_cb0 = 0;
-	word_ca4 = 0;
-	byte_ca9 = 0;
-	byte_caa = 0;
+	rxState = 0;
+	onesRun = 0;
+	zerosRun = 0;
 }
 
 unsigned char *
 V90CP::getBitVector(unsigned int &length)
 {
-	length = word_3bac;
+	length = seqLength;
 	return bits;
 }
 
@@ -268,13 +268,13 @@ V90CP::calcSequenceLength()
 {
 	unsigned int total, group, quot;
 
-	total = word_3bb0 + 1;
-	group = word_3ba8;
+	total = bodyLength + 1;
+	group = groupSize;
 	quot = total / group;
 	if (group * quot == total)
-		word_3bac = group * quot;
+		seqLength = group * quot;
 	else
-		word_3bac = (quot + 1) * group;
+		seqLength = (quot + 1) * group;
 }
 
 /*
@@ -304,7 +304,7 @@ V90CP::calcCRC()
 	unsigned int i, end;
 	unsigned char a;
 
-	end = word_3bb0 - 0x11;
+	end = bodyLength - 0x11;
 	for (i = 0x12; i < end; ) {
 		if (i % 17 == 0)
 			i++;
@@ -348,7 +348,7 @@ V90CP::printNofRecievedMpMpNot()
  * continues from whatever `resetCRC` (or the previous call) left -- and it
  * does not compare anything afterwards, so it returns nothing.  The extent
  * and the frame skip are identical: information bits run from 0x12 up to
- * `word_3bb0 - 0x11`, and every index that is a multiple of seventeen is a
+ * `bodyLength - 0x11`, and every index that is a multiple of seventeen is a
  * framing bit and is stepped over.
  *
  * The whole register lives in the sixteen bytes of the object's stack frame
@@ -375,7 +375,7 @@ V90CP::resetCRC()
  * bound and is why this is written that way rather than `< 16`.
  */
 /*
- * evaluateInfo -- 0x519f0, 1986 bytes.  ONE SWITCH OVER `word_ca4` and
+ * evaluateInfo -- 0x519f0, 1986 bytes.  ONE SWITCH OVER `rxState` and
  * nothing else: `sub $0x3` / `cmp $0x8` / `jmp *0xe50(,%eax,4)`, so the arms
  * are 3..11 and everything outside falls through to the same `ret`.  The
  * table's nine entries are 0x51d3a, 0x51af0, 0x51d56, 0x51de8, 0x51a14,
@@ -406,7 +406,7 @@ V90CP::evaluateInfo()
 	unsigned int i, j, k, p, q, n;
 	int *dst;
 
-	switch (word_ca4) {
+	switch (rxState) {
 	case 3:
 		/* The short form: two bits, and no cursor movement. */
 		word_ca0 = bits[0x20];
@@ -564,7 +564,7 @@ V90CP::evaluateInfo()
 /*
  * infoToBits -- 0x52230, 2785 bytes, and the inverse of `evaluateInfo` field
  * for field.  It lays the CP sequence out one byte per bit into `bits`,
- * running the write cursor `word_cac` forward, and closes by generating the
+ * running the write cursor `bitIndex` forward, and closes by generating the
  * CRC over what it just wrote and padding out to a whole number of whatever
  * +0x3ba8 counts.
  *
@@ -594,7 +594,7 @@ V90CP::evaluateCRC()
 	for (c = 0; c <= 0xf; c++)
 		crc[c] = 1;
 
-	end = word_3bb0 - 0x11;
+	end = bodyLength - 0x11;
 	for (i = 0x12; i < end; ) {
 		if (i % 17 == 0)
 			i++;
@@ -621,7 +621,7 @@ V90CP::evaluateCRC()
 
 	diff = 0;
 	for (i = 0; i <= 0xf; i++) {
-		int d = (int)crc[i] - (int)bits[word_3bb0 - 0x10 + i];
+		int d = (int)crc[i] - (int)bits[bodyLength - 0x10 + i];
 
 		if (d < 0)
 			d = -d;
@@ -649,7 +649,7 @@ V90CP::infoToBits()
 		/* The short form: three frames and straight to the CRC. */
 		for (i = 0x13; i <= 0x1f; i++)
 			bits[i] = 0;
-		word_cac = 0x22;
+		bitIndex = 0x22;
 		bits[0x20] = (unsigned char)word_ca0;
 		bits[0x21] = byte_13;
 	} else {
@@ -698,28 +698,28 @@ V90CP::infoToBits()
 		}
 
 		byte_ca8 = 0;
-		word_cac = 0x33;
+		bitIndex = 0x33;
 
 		if (word_04 != 0) {
 			for (k = 0; k <= 5; k++) {
 				int lo = (short)word_18[2 * k];
 				int hi = (short)word_18[2 * k + 1];
 
-				pos = word_cac;
+				pos = bitIndex;
 				bits[pos] = 0;
 				pos++;
-				word_cac = pos;
+				bitIndex = pos;
 				for (i = 0; i <= 7; i++) {
 					bits[pos + i] = (unsigned char)(lo & 1);
 					lo >>= 1;
 				}
 				pos += 8;
-				word_cac = pos;
+				bitIndex = pos;
 				for (i = 0; i <= 7; i++) {
 					bits[pos + i] = (unsigned char)(hi & 1);
 					hi >>= 1;
 				}
-				word_cac = pos + 8;
+				bitIndex = pos + 8;
 			}
 		}
 
@@ -733,91 +733,91 @@ V90CP::infoToBits()
 			}
 
 			for (k = 0; k <= 3; k++) {
-				pos = word_cac;
+				pos = bitIndex;
 				bits[pos] = 0;
 				pos++;
-				word_cac = pos;
+				bitIndex = pos;
 				for (i = 0; i <= 8; i++) {
 					bits[pos + i] = (unsigned char)(t[k] & 1);
 					t[k] >>= 1;
 				}
-				word_cac = pos + 9;
+				bitIndex = pos + 9;
 				for (i = 0; i <= 6; i++)
 					bits[pos + 9 + i] = 0;
-				word_cac = pos + 16;
+				bitIndex = pos + 16;
 			}
 
 			for (k = 0; k <= 3; k++) {
 				for (j = 0; j < n[k]; j++) {
 					int w = short_58[k][j];
 
-					pos = word_cac;
+					pos = bitIndex;
 					bits[pos] = 0;
 					pos++;
-					word_cac = pos;
+					bitIndex = pos;
 					for (i = 0; i <= 0xf; i++) {
 						bits[pos + i] =
 						    (unsigned char)(w & 1);
 						w >>= 1;
 					}
-					word_cac = pos + 16;
+					bitIndex = pos + 16;
 				}
 			}
 		}
 
 		if (word_0c != 0) {
-			pos = word_cac;
+			pos = bitIndex;
 			bits[pos] = 0;
-			word_cac = pos + 1;
+			bitIndex = pos + 1;
 			for (k = 0; k <= 3; k++) {
 				int w = (short)word_c70[k];
 
-				pos = word_cac;
+				pos = bitIndex;
 				for (i = 0; i <= 3; i++) {
 					bits[pos + i] = (unsigned char)(w & 1);
 					w >>= 1;
 				}
-				word_cac = pos + 4;
+				bitIndex = pos + 4;
 			}
 
-			pos = word_cac;
+			pos = bitIndex;
 			bits[pos] = 0;
-			word_cac = pos + 1;
+			bitIndex = pos + 1;
 			for (k = 4; k <= 5; k++) {
 				int w = (short)word_c70[k];
 
-				pos = word_cac;
+				pos = bitIndex;
 				for (i = 0; i <= 3; i++) {
 					bits[pos + i] = (unsigned char)(w & 1);
 					w >>= 1;
 				}
-				word_cac = pos + 4;
+				bitIndex = pos + 4;
 			}
 
-			pos = word_cac;
+			pos = bitIndex;
 			for (i = 0; i <= 7; i++)
 				bits[pos + i] = 0;
-			word_cac = pos + 8;
+			bitIndex = pos + 8;
 
 			for (k = 0; k <= 2; k++) {
 				int lo = (short)nof_buf[2 * k];
 				int hi = (short)nof_buf[2 * k + 1];
 
-				pos = word_cac;
+				pos = bitIndex;
 				bits[pos] = 0;
 				pos++;
-				word_cac = pos;
+				bitIndex = pos;
 				for (i = 0; i <= 7; i++) {
 					bits[pos + i] = (unsigned char)(lo & 1);
 					lo >>= 1;
 				}
 				pos += 8;
-				word_cac = pos;
+				bitIndex = pos;
 				for (i = 0; i <= 7; i++) {
 					bits[pos + i] = (unsigned char)(hi & 1);
 					hi >>= 1;
 				}
-				word_cac = pos + 8;
+				bitIndex = pos + 8;
 			}
 
 			for (k = 0; k <= 5; k++) {
@@ -830,16 +830,16 @@ V90CP::infoToBits()
 				for (j = 0; j < n; j++) {
 					int w = (short)src[j];
 
-					pos = word_cac;
+					pos = bitIndex;
 					bits[pos] = 0;
 					pos++;
-					word_cac = pos;
+					bitIndex = pos;
 					for (i = 0; i <= 0xf; i++) {
 						bits[pos + i] =
 						    (unsigned char)(w & 1);
 						w >>= 1;
 					}
-					word_cac = pos + 16;
+					bitIndex = pos + 16;
 				}
 			}
 		}
@@ -847,11 +847,11 @@ V90CP::infoToBits()
 
 	/* --- the tail, which both forms reach --- */
 
-	start = (unsigned int)word_cac;
+	start = (unsigned int)bitIndex;
 	bits[start] = 0;
-	word_cac = start + 1;
+	bitIndex = start + 1;
 	nbits = start + 0x11;
-	word_3bb0 = nbits;
+	bodyLength = nbits;
 
 	/* SIGNED, exactly as in `evaluateCRC` and `resetCRC`: `jle`. */
 	for (c = 0; c <= 0xf; c++)
@@ -881,26 +881,26 @@ V90CP::infoToBits()
 		crc[15] = a;
 	}
 
-	pos = (unsigned int)word_cac;
+	pos = (unsigned int)bitIndex;
 	for (i = 0; i <= 0xf; i++) {
 		bits[pos] = crc[i];
 		pos++;
 	}
 	bits[pos] = 0;
-	word_cac = pos + 1;
+	bitIndex = pos + 1;
 
 	/* calcSequenceLength, inlined: round the bit count up to a whole
 	 * number of +0x3ba8 and record it at +0x3bac. */
 	total = nbits + 1;
-	group = word_3ba8;
+	group = groupSize;
 	quot = total / group;
 	if (group * quot == total)
-		word_3bac = group * quot;
+		seqLength = group * quot;
 	else
-		word_3bac = (quot + 1) * group;
+		seqLength = (quot + 1) * group;
 
-	pos = (unsigned int)word_cac;
-	while (word_3bac > pos) {
+	pos = (unsigned int)bitIndex;
+	while (seqLength > pos) {
 		bits[pos] = 0;
 		pos++;
 	}
@@ -911,12 +911,12 @@ V90CP::infoToBits()
  * recompute the CRC over the information bits of a RECEIVED sequence and
  * compare it against the sixteen the peer sent.
  *
- * The extent is `word_3bb0`, which `bitsToInfo` has by then set the way
+ * The extent is `bodyLength`, which `bitsToInfo` has by then set the way
  * `infoToBits` sets it -- information bits run from 0x12 up to
- * word_3bb0 - 0x11, and the peer's CRC occupies the sixteen bits ending at
- * word_3bb0 - 1.  The object reaches those through a single displacement,
+ * bodyLength - 0x11, and the peer's CRC occupies the sixteen bits ending at
+ * bodyLength - 1.  The object reaches those through a single displacement,
  * `-0x2ef0(%ecx,%edi,1)` with %ecx walking `crc` and %edi holding
- * word_3bb0, and 0x3b98 - 0x2ef0 - 0xcb8 is -0x10, which is where the -0x10
+ * bodyLength, and 0x3b98 - 0x2ef0 - 0xcb8 is -0x10, which is where the -0x10
  * below comes from.
  *
  * IT RETURNS A VALUE, which the header used to say it did not: the epilogue
@@ -927,7 +927,7 @@ V90CP::infoToBits()
  */
 /*
  * bitsToInfo -- 0x52d20, 2391 bytes, and the RECEIVE-SIDE DRIVER of the class:
- * take one arriving bit, drive `word_ca4` (the decoder state), `word_cac` (the
+ * take one arriving bit, drive `rxState` (the decoder state), `bitIndex` (the
  * cursor) and `word_cb0` (the count within the current block), and say what
  * the bit completed.
  *
@@ -976,9 +976,9 @@ V90CP::infoToBits()
  * modelled.  FIVE OF THE TEN STORE SITES ARE GUARDED AND FIVE ARE NOT --
  * docs/deviations.md D520.  Finding F4361.
  *
- * THE RECEIVER HARDCODES SIX WHERE THE TRANSMITTER USES `word_3ba8`.
+ * THE RECEIVER HARDCODES SIX WHERE THE TRANSMITTER USES `groupSize`.
  * `infoToBits` pads the sequence out to a whole number of +0x3ba8; `case 13`
- * here waits for `word_cac % 6 == 0`, with the six as an immediate.  Finding
+ * here waits for `bitIndex % 6 == 0`, with the six as an immediate.  Finding
  * F4364.
  *
  * `evaluateInfo` is CALLED -- eight relocations against it -- and
@@ -1014,33 +1014,33 @@ V90CP::bitsToInfo(unsigned char bit)
 	 * the far end having stopped, and that answer does NOT stop the state
 	 * machine below, which runs on and can overwrite it.
 	 *
-	 * `byte_caa` is read back out of the object rather than out of a
+	 * `zerosRun` is read back out of the object rather than out of a
 	 * local -- the object stores 0 and reloads it four instructions later
-	 * -- which matters when `word_3ba8` is zero, because then the test is
+	 * -- which matters when `groupSize` is zero, because then the test is
 	 * true on a ONE bit as well.
 	 */
 	if (bit != 0) {
-		byte_ca9++;
-		byte_caa = 0;
+		onesRun++;
+		zerosRun = 0;
 	} else {
-		byte_caa++;
-		byte_ca9 = 0;
+		zerosRun++;
+		onesRun = 0;
 	}
 
-	if (byte_caa == 2 * word_3ba8 && word_cac == 18)
+	if (zerosRun == 2 * groupSize && bitIndex == 18)
 		rc = 5;
 
-	switch (word_ca4) {
+	switch (rxState) {
 	case 0:
 		/* Seventeen ones is the preamble; sixteen are not enough. */
-		if (byte_ca9 > 0x10)
-			word_ca4 = 1;
+		if (onesRun > 0x10)
+			rxState = 1;
 		break;
 
 	case 1:
 		/* The framing zero, or start again. */
 		if (bit == 0)
-			word_ca4 = 2;
+			rxState = 2;
 		else
 			resetDetector();
 		break;
@@ -1054,9 +1054,9 @@ V90CP::bitsToInfo(unsigned char bit)
 		 * one of `evaluateInfo`'s two holes, so nothing decodes it.
 		 */
 		word_00 = bit;
-		bits[word_cac] = bit;
-		word_cac++;
-		word_ca4 = (word_00 != 0) ? 3 : 4;
+		bits[bitIndex] = bit;
+		bitIndex++;
+		rxState = (word_00 != 0) ? 3 : 4;
 		word_cb0 = 0;
 		break;
 
@@ -1065,16 +1065,16 @@ V90CP::bitsToInfo(unsigned char bit)
 		 * The short form: fifteen more bits, ending at 0x21, which is
 		 * exactly the two `evaluateInfo`'s `case 3` reads back.
 		 */
-		if (word_cac <= V90CP_BITS - 1) {
-			bits[word_cac] = bit;
-			word_cac++;
+		if (bitIndex <= V90CP_BITS - 1) {
+			bits[bitIndex] = bit;
+			bitIndex++;
 		} else if (DSPLIB_DEBUG_ON()) {
 			dsplibs_debug_printf(V90CP_NOMEM);
 		}
 		word_cb0++;
 		if (word_cb0 == 0xf) {
 			evaluateInfo();
-			word_ca4 = 12;
+			rxState = 12;
 			word_cb0 = 0;
 		}
 		break;
@@ -1086,8 +1086,8 @@ V90CP::bitsToInfo(unsigned char bit)
 		 * `x < 1` arm is what makes `word_cb0` unsigned: a signed
 		 * index would have needed a second test for zero.
 		 */
-		bits[word_cac] = bit;
-		word_cac++;
+		bits[bitIndex] = bit;
+		bitIndex++;
 		switch (word_cb0) {
 		case 0:
 			word_04 = bit;
@@ -1101,7 +1101,7 @@ V90CP::bitsToInfo(unsigned char bit)
 		}
 		word_cb0++;
 		if (word_cb0 == 3) {
-			word_ca4 = 5;
+			rxState = 5;
 			word_cb0 = 0;
 		}
 		break;
@@ -1114,16 +1114,16 @@ V90CP::bitsToInfo(unsigned char bit)
 		 * order the blocks travel: +0x18, then +0x48/+0x58, then
 		 * everything from +0xc58, then the CRC.
 		 */
-		bits[word_cac] = bit;
-		word_cac++;
-		if (word_cac == 0x33) {
+		bits[bitIndex] = bit;
+		bitIndex++;
+		if (bitIndex == 0x33) {
 			evaluateInfo();
 			if (word_04 != 0)
-				word_ca4 = 6;
+				rxState = 6;
 			else if (word_08 != 0)
-				word_ca4 = 7;
+				rxState = 7;
 			else
-				word_ca4 = (word_0c != 0) ? 10 : 12;
+				rxState = (word_0c != 0) ? 10 : 12;
 			word_cb0 = 0;
 		}
 		break;
@@ -1132,14 +1132,14 @@ V90CP::bitsToInfo(unsigned char bit)
 		/* Six frames of pairs, to 0x99 -- one past the 0x98 that
 		 * `evaluateInfo`'s `case 6` stores.  The two halves were read
 		 * independently and agree. */
-		bits[word_cac] = bit;
-		word_cac++;
-		if (word_cac == 0x99) {
+		bits[bitIndex] = bit;
+		bitIndex++;
+		if (bitIndex == 0x99) {
 			evaluateInfo();
 			if (word_08 != 0)
-				word_ca4 = 7;
+				rxState = 7;
 			else
-				word_ca4 = (word_0c != 0) ? 10 : 12;
+				rxState = (word_0c != 0) ? 10 : 12;
 			word_cb0 = 0;
 		}
 		break;
@@ -1147,12 +1147,12 @@ V90CP::bitsToInfo(unsigned char bit)
 	case 7:
 		/* The four nine-bit counts: four frames, 0x44 bits.  Once
 		 * they are decoded the next block's length is known. */
-		bits[word_cac] = bit;
-		word_cac++;
+		bits[bitIndex] = bit;
+		bitIndex++;
 		word_cb0++;
 		if (word_cb0 == 0x44) {
 			evaluateInfo();
-			word_ca4 = 8;
+			rxState = 8;
 			word_cb0 = 0;
 			alpha = 17 * (nof_58[0] + nof_58[1] + nof_58[2] +
 				      nof_58[3]);
@@ -1161,16 +1161,16 @@ V90CP::bitsToInfo(unsigned char bit)
 
 	case 8:
 		/* The four counted lists, `alpha` bits of them. */
-		if (word_cac <= V90CP_BITS - 1) {
-			bits[word_cac] = bit;
-			word_cac++;
+		if (bitIndex <= V90CP_BITS - 1) {
+			bits[bitIndex] = bit;
+			bitIndex++;
 		} else if (DSPLIB_DEBUG_ON()) {
 			dsplibs_debug_printf(V90CP_NOMEM);
 		}
 		word_cb0++;
 		if (word_cb0 == alpha) {
 			evaluateInfo();
-			word_ca4 = (word_0c != 0) ? 10 : 12;
+			rxState = (word_0c != 0) ? 10 : 12;
 			word_cb0 = 0;
 		}
 		break;
@@ -1178,16 +1178,16 @@ V90CP::bitsToInfo(unsigned char bit)
 	case 10:
 		/* Five frames, 0x55 bits: the six four-bit values and the six
 		 * eight-bit buffer counts.  Then the buffers' length. */
-		if (word_cac <= V90CP_BITS - 1) {
-			bits[word_cac] = bit;
-			word_cac++;
+		if (bitIndex <= V90CP_BITS - 1) {
+			bits[bitIndex] = bit;
+			bitIndex++;
 		} else if (DSPLIB_DEBUG_ON()) {
 			dsplibs_debug_printf(V90CP_NOMEM);
 		}
 		word_cb0++;
 		if (word_cb0 == 0x55) {
 			evaluateInfo();
-			word_ca4 = 11;
+			rxState = 11;
 			word_cb0 = 0;
 			beta = 17 * (nof_buf[0] + nof_buf[1] + nof_buf[2] +
 				     nof_buf[3] + nof_buf[4] + nof_buf[5]);
@@ -1196,16 +1196,16 @@ V90CP::bitsToInfo(unsigned char bit)
 
 	case 11:
 		/* The six buffers, `beta` bits of them. */
-		if (word_cac <= V90CP_BITS - 1) {
-			bits[word_cac] = bit;
-			word_cac++;
+		if (bitIndex <= V90CP_BITS - 1) {
+			bits[bitIndex] = bit;
+			bitIndex++;
 		} else if (DSPLIB_DEBUG_ON()) {
 			dsplibs_debug_printf(V90CP_NOMEM);
 		}
 		word_cb0++;
 		if (word_cb0 == beta) {
 			evaluateInfo();
-			word_ca4 = 12;
+			rxState = 12;
 			word_cb0 = 0;
 		}
 		break;
@@ -1213,28 +1213,28 @@ V90CP::bitsToInfo(unsigned char bit)
 	case 12:
 		/*
 		 * The CRC frame: one framing zero and sixteen CRC bits.
-		 * `word_3bb0` is then the cursor itself, which is what
+		 * `bodyLength` is then the cursor itself, which is what
 		 * `evaluateCRC` wants -- it runs from 0x12 to
-		 * word_3bb0 - 0x11 and compares against the sixteen bits
-		 * ending at word_3bb0 - 1.  `infoToBits` computes the same
+		 * bodyLength - 0x11 and compares against the sixteen bits
+		 * ending at bodyLength - 1.  `infoToBits` computes the same
 		 * number as start + 0x11 from the other side.
 		 *
 		 * The call is INLINED by the compiler, exactly as `reset`'s
 		 * call of `resetDetector` is: `evaluateCRC` is a global symbol
 		 * and there is no relocation against it here.
 		 */
-		if (word_cac <= V90CP_BITS - 1) {
-			bits[word_cac] = bit;
-			word_cac++;
+		if (bitIndex <= V90CP_BITS - 1) {
+			bits[bitIndex] = bit;
+			bitIndex++;
 		} else if (DSPLIB_DEBUG_ON()) {
 			dsplibs_debug_printf(V90CP_NOMEM);
 		}
 		word_cb0++;
 		if (word_cb0 == 0x11) {
-			word_3bb0 = word_cac;
+			bodyLength = bitIndex;
 			if (evaluateCRC()) {
 				word_cb0 = 0x11;
-				word_ca4 = 13;
+				rxState = 13;
 			} else {
 				resetDetector();
 				if (DSPLIB_DEBUG_ON())
@@ -1250,7 +1250,7 @@ V90CP::bitsToInfo(unsigned char bit)
 		 * the detector; either way the message is handed over on the
 		 * next cursor position that is a multiple of SIX -- an
 		 * immediate, where `infoToBits` pads to a multiple of
-		 * `word_3ba8`.  A one therefore reports as well, because
+		 * `groupSize`.  A one therefore reports as well, because
 		 * `resetDetector` leaves the cursor at 18 and 18 % 6 is 0;
 		 * `evaluateInfo` is then called with a state of 0 and does
 		 * nothing.
@@ -1258,8 +1258,8 @@ V90CP::bitsToInfo(unsigned char bit)
 		if (bit != 0)
 			resetDetector();
 		else
-			word_cac++;
-		if (word_cac % 6 == 0) {
+			bitIndex++;
+		if (bitIndex % 6 == 0) {
 			evaluateInfo();
 			resetDetector();
 			if (byte_13 != 0)

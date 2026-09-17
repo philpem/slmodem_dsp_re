@@ -440,7 +440,7 @@ V90Phase4Modulator::enterRepeatedCPd()
 	cp->word_00 = 0;
 	cp->infoToBits();
 	cpBits = cp->getBitVector(cpBitCount);
-	cpSequenceSymbols = 6 * cpBitCount / cp->word_3ba8;
+	cpSequenceSymbols = 6 * cpBitCount / cp->groupSize;
 	symbolCount = 0;
 }
 
@@ -566,7 +566,7 @@ V90Phase4Modulator::recivedSUV()
 			state = P4M_STATE_CPD;
 			cp->infoToBits();
 			cpBits = cp->getBitVector(cpBitCount);
-			cpSequenceSymbols = 6 * cpBitCount / cp->word_3ba8;
+			cpSequenceSymbols = 6 * cpBitCount / cp->groupSize;
 			word_2fa0 = 1;
 		}
 	}
@@ -602,7 +602,7 @@ V90Phase4Modulator::recivedPartTwoSilenceRrnSUV()
 			state = P4M_STATE_CPD;
 			cp->infoToBits();
 			cpBits = cp->getBitVector(cpBitCount);
-			cpSequenceSymbols = 6 * cpBitCount / cp->word_3ba8;
+			cpSequenceSymbols = 6 * cpBitCount / cp->groupSize;
 			word_2fa0 = 1;
 		}
 	}
@@ -751,7 +751,7 @@ V90Phase4Modulator::recivedCPtag()
 				word_0020 = 1;
 				cpBits = cp->getBitVector(cpBitCount);
 				cpSequenceSymbols =
-				    6 * cpBitCount / cp->word_3ba8;
+				    6 * cpBitCount / cp->groupSize;
 			}
 		}
 	}
@@ -853,7 +853,7 @@ V90Phase4Modulator::recivedFirstSUVuPartTwoRrn()
 			state = P4M_STATE_CPD;
 			cp->infoToBits();
 			cpBits = cp->getBitVector(cpBitCount);
-			cpSequenceSymbols = 6 * cpBitCount / cp->word_3ba8;
+			cpSequenceSymbols = 6 * cpBitCount / cp->groupSize;
 			word_2fa0 = 1;
 		}
 	}
@@ -898,7 +898,7 @@ V90Phase4Modulator::recivedFirstSUVuPartTwoRrn()
  *
  * THE CP SEQUENCE IS RE-DERIVED IN FIVE PLACES BY THE SAME THREE LINES --
  * `getBitVector` into `cpBits`/`cpBitCount`, then `6 * cpBitCount /
- * cp->word_3ba8` into `cpSequenceSymbols` -- and `exitMP` is the MP copy of
+ * cp->groupSize` into `cpSequenceSymbols` -- and `exitMP` is the MP copy of
  * it against `mp->groupSize`.  Six symbols carry one group, so the quotient is
  * a count of symbols; V90Phase4Modulator.h has the argument in full.
  * ===========================================================================
@@ -1769,7 +1769,7 @@ V90Phase4Modulator::generateSUVd()
  *     which is 0x17 for non-zero and 0x18 for zero).  V.90's Ed has the null
  *     guard and the B1d arm and nothing else.
  *
- *  6. RdNot copies `mappingParams2->word_0` into `cp->word_3ba8` before it
+ *  6. RdNot copies `mappingParams2->word_0` into `cp->groupSize` before it
  *     resets the converter (+0x2ea60).  V.90's RdNot is the same five calls
  *     without that store.
  *
@@ -1847,7 +1847,7 @@ V90Phase4Modulator::generateV92Symbol()
 				cp->infoToBits();
 				cpBits = cp->getBitVector(cpBitCount);
 				cpSequenceSymbols =
-				    6 * cpBitCount / cp->word_3ba8;
+				    6 * cpBitCount / cp->groupSize;
 			}
 			eventCode = 4;
 		}
@@ -1871,7 +1871,7 @@ V90Phase4Modulator::generateV92Symbol()
 		if (symbolCount % cpSequenceSymbols == 0 && symbolCount != 0) {
 			cp->infoToBits();
 			cpBits = cp->getBitVector(cpBitCount);
-			cpSequenceSymbols = 6 * cpBitCount / cp->word_3ba8;
+			cpSequenceSymbols = 6 * cpBitCount / cp->groupSize;
 			if (word_0018 > word_0040 + 0x320)
 				enterRepeatedCPd();
 		}
@@ -1898,7 +1898,7 @@ V90Phase4Modulator::generateV92Symbol()
 			state = P4M_STATE_CPD;
 			cp->infoToBits();
 			cpBits = cp->getBitVector(cpBitCount);
-			cpSequenceSymbols = 6 * cpBitCount / cp->word_3ba8;
+			cpSequenceSymbols = 6 * cpBitCount / cp->groupSize;
 			word_2fa0 = 1;
 		}
 		break;
@@ -1925,7 +1925,7 @@ V90Phase4Modulator::generateV92Symbol()
 			cp->word_00 = 1;
 			cp->infoToBits();
 			cpBits = cp->getBitVector(cpBitCount);
-			cpSequenceSymbols = 6 * cpBitCount / cp->word_3ba8;
+			cpSequenceSymbols = 6 * cpBitCount / cp->groupSize;
 		}
 		break;
 	}
@@ -1945,7 +1945,7 @@ V90Phase4Modulator::generateV92Symbol()
 		if (symbolCount % cpSequenceSymbols == 0 && symbolCount != 0) {
 			cp->infoToBits();
 			cpBits = cp->getBitVector(cpBitCount);
-			cpSequenceSymbols = 6 * cpBitCount / cp->word_3ba8;
+			cpSequenceSymbols = 6 * cpBitCount / cp->groupSize;
 		}
 		break;
 	}
@@ -2035,7 +2035,7 @@ V90Phase4Modulator::generateV92Symbol()
 			cp->word_00 = 1;
 			cp->infoToBits();
 			cpBits = cp->getBitVector(cpBitCount);
-			cpSequenceSymbols = 6 * cpBitCount / cp->word_3ba8;
+			cpSequenceSymbols = 6 * cpBitCount / cp->groupSize;
 		}
 		break;
 	}
@@ -2142,7 +2142,7 @@ V90Phase4Modulator::generateV92Symbol()
 				 symbolCount);
 			symbolCount = 0;
 			state = P4M_STATE_TRN2D;
-			cp->word_3ba8 = mappingParams2->word_0;
+			cp->groupSize = mappingParams2->word_0;
 			bitsToSymbol->resetNoSpectral(mappingParams2, pcmType);
 			edprintf("V90Phase4Modulator: TRN2d spectral " "parameters:\r\n");
 			displaySpectralParams(mappingParams2);
@@ -2192,7 +2192,7 @@ V90Phase4Modulator::generateV92Symbol()
 			cp->word_00 = 1;
 			cp->infoToBits();
 			cpBits = cp->getBitVector(cpBitCount);
-			cpSequenceSymbols = 6 * cpBitCount / cp->word_3ba8;
+			cpSequenceSymbols = 6 * cpBitCount / cp->groupSize;
 		}
 		break;
 
@@ -2218,11 +2218,11 @@ V90Phase4Modulator::generateV92Symbol()
 			symbolCount = 0;
 			state = P4M_STATE_SUVD;
 			cp->word_00 = 1;
-			cp->word_3ba8 = mappingParams->word_0;
+			cp->groupSize = mappingParams->word_0;
 			cp->word_ca0 = word_0028;
 			cp->infoToBits();
 			cpBits = cp->getBitVector(cpBitCount);
-			cpSequenceSymbols = 6 * cpBitCount / cp->word_3ba8;
+			cpSequenceSymbols = 6 * cpBitCount / cp->groupSize;
 		}
 		break;
 

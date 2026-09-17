@@ -358,7 +358,7 @@
  {
   "label": "the silent-RRN SUV arm reads the CP counter at the wrong offset",
   "find": "\tcase 0x31:\n\t\tv92modem.modulator->phase4Modulator->word_30 = 1;\n\t\tv92modem.modulator->phase4Modulator->word_38 =\n\t\t    modem.demodulator->cp->word_ca0;",
-  "replace": "\tcase 0x31:\n\t\tv92modem.modulator->phase4Modulator->word_30 = 1;\n\t\tv92modem.modulator->phase4Modulator->word_38 =\n\t\t    modem.demodulator->cp->word_ca4;"
+  "replace": "\tcase 0x31:\n\t\tv92modem.modulator->phase4Modulator->word_30 = 1;\n\t\tv92modem.modulator->phase4Modulator->word_38 =\n\t\t    modem.demodulator->cp->rxState;"
  },
  {
   "label": "the tagged silent-RRN SUV arm does not set the length",
