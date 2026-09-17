@@ -175,15 +175,15 @@ void GenEQTrnSequenceV29(void *modem, unsigned short *out, unsigned short n);
 struct v29tx_cfg {
 	short	protocol;	/* +0x00  0                                  */
 	short	bitrate;	/* +0x02  9600                               */
-	short	short_0004;	/* +0x04  0                                  */
-	short	short_0006;	/* +0x06  0                                  */
+	short	short_0004;	/* +0x04  0; never read -- retained neutral (Batch 27) */
+	short	short_0006;	/* +0x06  0; never read -- retained neutral (Batch 27) */
 	int	int_0008;	/* +0x08  60000, as in every sibling table   */
-	int	int_000c;	/* +0x0c  1                                  */
+	int	int_000c;	/* +0x0c  1; never read -- retained neutral (Batch 27) */
 	short	flags;		/* +0x10  0; V29TXS_FLAGS_10                 */
-	short	short_0012;	/* +0x12  0                                  */
+	short	short_0012;	/* +0x12  0; never read -- retained neutral (Batch 27) */
 	int	fifo_size_factor; /* +0x14  1 -> FIFO capacity, * 3 * 16,
 					  `v17tx_cfg`'s own field, same name */
-	int	int_0018;	/* +0x18  0                                  */
+	int	int_0018;	/* +0x18  0; `V29TX_create` passes it as `FPM_PPS_CFG::aux`, itself unnamed -- retained neutral (Batch 27) */
 };
 
 extern struct v29tx_cfg V29TX_CFG;

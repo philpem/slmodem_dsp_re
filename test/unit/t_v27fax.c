@@ -5950,7 +5950,7 @@ crt_tables_init(void)
 struct crt_setup {
 	int		use_default;	/* pass a null `cfg`               */
 	short		bit_rate;
-	int		int_0014;
+	int		short_train;
 	int		preallocate;	/* hand it a handle it must reuse  */
 };
 
@@ -6146,7 +6146,7 @@ crt_expect(long *v, const struct crt_setup *u, int variant)
 	if (variant == CR_RATE_SWAP)
 		r = 1 - r;
 
-	train_long = (u->use_default ? V27RX_CFG.int_0014 : u->int_0014) == 0;
+	train_long = (u->use_default ? V27RX_CFG.short_train : u->short_train) == 0;
 
 	v[n++] = r;
 	v[n++] = train_long;
@@ -6378,7 +6378,7 @@ crt_one(const struct crt_setup *u, long tag)
 
 	c = V27RX_CFG;
 	c.bit_rate = u->bit_rate;
-	c.int_0014 = u->int_0014;
+	c.short_train = u->short_train;
 	c.ptr_0018 = &crt_aux_object;
 	crt_aux_want = u->use_default ? V27RX_CFG.ptr_0018 : &crt_aux_object;
 
@@ -6534,7 +6534,7 @@ static int
 run_create(void)
 {
 	static const struct crt_setup setups[] = {
-	  /* dflt rate  int_0014 prealloc */
+	  /* dflt rate  short_train prealloc */
 	  {  0,  2400,  0,       0 },
 	  {  0,  2400,  1,       0 },
 	  {  0,  4800,  0,       0 },

@@ -230,7 +230,7 @@ V27RX_create(void *modem, const struct v27rx_cfg *cfg)
 	((struct v27_rx_shared *)sh)->countdown = 0;
 	((struct v27_rx_shared *)sh)->handler = RxHdxStartV27;
 	((struct v27_rx_shared *)sh)->train_long =
-		(short)((&((struct v27_rx *)modem)->cfg)->int_0014 == 0);
+		(short)((&((struct v27_rx *)modem)->cfg)->short_train == 0);
 
 	/*
 	 * The V.21 control-channel detector.  Note it is built and created

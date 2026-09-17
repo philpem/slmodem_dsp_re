@@ -142,22 +142,21 @@ struct fpm_mtd;
 struct v27tx_cfg {
 	short	protocol;	/* +0x00                                     */
 	short	bitrate;	/* +0x02  2400 or 4800                       */
-	int	int_0004;	/* +0x04                                     */
+	int	int_0004;	/* +0x04  0; never read -- retained neutral (Batch 27) */
 	int	int_0008;	/* +0x08  60000, `v27rx_cfg`'s own value      */
 	int	scale_mul;	/* +0x0c  1; multiplies into the PPS gain,
 					same role as `v27tx_ctl::scale_mul`  */
 	short	flags;		/* +0x10  `V27TX_HANDLE_FLAGS`                */
-	short	short_0012;	/* +0x12                                     */
+	short	short_0012;	/* +0x12  0; never read -- retained neutral (Batch 27) */
 	int	fifo_size_factor; /* +0x14  the transmit FIFO's element count
 					  is this * `V27TX_FRMSIZE[rate]`;
 					  `v17tx_cfg`'s own field, same name */
 	int	int_0018;	/* +0x18  `== 0` seeds `V27TXP_TRAIN_LONG`,
 					the same role `V27RX_create` derives
 					`V27SH_TRAIN_LONG` from out of
-					`faxcfg.h`'s own `v27rx_cfg::int_0014`
-					(out of this wave's scope) -- checked
-					and left neutral, since even that
-					established sibling stays unnamed   */
+					`faxcfg.h`'s own
+					`v27rx_cfg::short_train` (Batch 27);
+					checked and left neutral            */
 	int	int_001c;	/* +0x1c  `FPM_PPS_CFG`'s `aux`, across the
 					`(void *)(long)` idiom D1250 names   */
 };
@@ -175,10 +174,18 @@ union v27_status_word {
 /* Observed caller-owned status prefix; this does not bound the allocation. */
 struct v27_status_prefix {
 	unsigned short protocol, tx_bps, rx_bps, quality;
+	/* +0x0e  not written by `V27TX_status`; retained neutral (Batch 27).
+	 * `v17_status::short_0e` is the same slot, likewise unnamed. */
 	unsigned short zero_08, zero_0a, zero_0c, short_0e;
 	unsigned short word_10, zero_12;
 	unsigned char flags, flags2;
+	/* +0x16  not written by `V27TX_status`; retained neutral (Batch 27).
+	 * `v17_status::short_16` is the same slot, likewise unnamed. */
 	short short_16;
+	/* +0x18  `V27TX_status` writes `v27tx_cfg::int_0018` here; that source
+	 * is itself unnamed, and `v17_status::int_18` and `v22_status` carry
+	 * the same slot without a semantic name -- retained neutral
+	 * (Batch 27). */
 	int word_18;
 };
 
@@ -202,9 +209,12 @@ struct v27_rx_decoder {
 };
 
 struct v27_rx_block {
+	/* +0x00  set 1 by `V27RX_create`; cleared by `V27RX_control`'s mask
+	 * bit 3; no reader -- retained neutral (Batch 27). */
 	int int_0000;
 	int en_sre_adapt;
 	int en_fse_pll;
+	/* +0x0c  0; never read -- retained neutral (Batch 27). */
 	int int_000c;
 	int en_fse_lms;
 	struct v27_rx_decoder dec;
@@ -229,6 +239,12 @@ struct v27_rx_block {
 
 struct v27_rx_shared {
 	struct fpm_mtd *mtd;
+	/* +0x04  cleared to 0 by `V27RX_control`, set to 1 when its
+	 * FORCE_NOCARRIER flag is raised; `RxHdxDataV27` gates on it being
+	 * zero.  The gate is measured; the field's meaning beyond it is not
+	 * -- retained neutral (Batch 27).  The `V27SH_INT_0004` block above
+	 * is stale where it says "no writer at all": `V27RX_control` writes
+	 * it. */
 	int int_0004;
 	short rate;
 	short train_long;
@@ -263,6 +279,9 @@ struct v27_rx {
 	short *eq_qcoeff;
 	unsigned short eq_taps;
 	unsigned char pad_0036[2];
+	/* +0x38..+0x4c: the six `V27RX_create` zeroes; nothing else in the
+	 * object reads or writes any of them -- no reader -- retained neutral
+	 * (Batch 27). */
 	int int_0038;
 	int int_003c;
 	short short_0040;
@@ -278,6 +297,11 @@ struct v27_rx {
 struct v27_tx_source {
 	struct fax_fifo *fifo;
 	struct sgd *sgd;
+	/* +0x08  zeroed by `V27TX_create`; `TxHdxDataV27` takes its underrun
+	 * arm when non-zero, and `V27TX_control` sets it 0/1 from its own
+	 * flags bit 4.  The arm's meaning beyond that is unstated, and V.29's
+	 * `V29TXP_INT_0008` is the same gate, also unnamed -- retained
+	 * neutral (Batch 27). */
 	int int_0008;
 	short rate;
 	short train_long;
@@ -986,8 +1010,10 @@ typedef short (*v27tx_process_fn)(void *modem, unsigned short *in,
 /*
  * An int `RxHdxDataV27` requires to be zero before it will demodulate, and
  * the second half of its gate: the carrier must be up and this must be
- * clear.  Neutral: it has exactly one reader in the whole object and no
- * writer at all, so what sets it is outside what has been read.
+ * clear.  Neutral: the reader is measured, and `V27RX_control` writes it
+ * too -- cleared to 0 on every request, and set to 1 by that request's
+ * FORCE_NOCARRIER flag (Batch 27; the earlier "no writer at all" here was
+ * stale).  What the field means beyond the gate is not established.
  *
  * It is not `V27RX_EN_SRE_ADAPT`, which is a different block:
  * `DemodDataV27` reads +0x04 of the receiver block (`V27_OBJ_RX`) for that
@@ -1296,6 +1322,9 @@ int V27RX_status(void *rx, void *status);
  */
 struct v27rx_ctl {
 	unsigned char	unmapped_0000[4];
+	/* +0x04  copied straight into the handle's `v27rx_cfg::int_0008`,
+	 * which nothing reads -- retained neutral (Batch 27), the same
+	 * disposition `v17rx_ctl::int_0004` has. */
 	int		int_0004;
 	unsigned char	unmapped_0008[4];
 	unsigned char	mask;
@@ -1359,11 +1388,16 @@ int V27RX_control(void *rx, void *req);
  */
 struct v27tx_ctl {
 	unsigned char	unmapped_0000[4];
+	/* +0x04  copied into the handle's `v27tx_cfg::int_0008`, which nothing
+	 * reads -- retained neutral (Batch 27). */
 	int		int_0004;
 	int		scale_mul;
 	unsigned char	mask;
 	unsigned char	flags;
 	unsigned char	unmapped_000e[2];
+	/* +0x10  copied into the handle's `v27tx_cfg::int_0018`, the
+	 * `V27TXP_TRAIN_LONG` source; that source is itself unnamed, so this
+	 * keeps its offset -- retained neutral (Batch 27). */
 	int		int_0010;
 };
 
@@ -1697,10 +1731,10 @@ short RxHdxErrorV27(void *modem, short *in, short *out, unsigned short *count);
  * which is not the same as assigning it.  Nothing advances the state on
  * either arm.
  *
- * The gate is two terms and the second is `V27SH_INT_0004`, which nothing
- * in the object writes -- so the demodulating arm is reached only when
- * something outside has left that field zero.  The test plants it rather
- * than reaching it.
+ * The gate is two terms and the second is `V27SH_INT_0004`: the demodulating
+ * arm is reached only while that field is zero, and `V27RX_control` is its
+ * only writer (Batch 27 -- the earlier "nothing in the object writes" was
+ * stale).  The test plants it rather than reaching the control path.
  *
  * @param modem  The V.27ter modem object.
  * @param in     Input samples.

@@ -1778,7 +1778,7 @@ run_control(void)
 
 		memset(&arg, 0, sizeof arg);
 		arg.int_0004 = 1234;
-		arg.int_0008 = 3;
+		arg.scale_mul = 3;
 		arg.ctl0 = V29TXCTL_CTL0_BIT2;
 		arg.ctl1 = V29TXCTL_CTL1_BIT4;
 		la0 = la;

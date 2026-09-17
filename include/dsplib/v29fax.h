@@ -117,7 +117,13 @@ union v29_result_word {
 
 /* Observed caller-owned status prefix; this does not bound the allocation. */
 struct v29_status_prefix {
+	/* +0x0c  written 0 by `V29TX_status`; `V29RX_status` does not touch
+	 * it; `v22_status` leaves +0x0c unmodelled -- retained neutral
+	 * (Batch 27). */
 	short protocol, tx_bps, short_04, quality, short_08, short_0a, short_0c;
+	/* +0x12  `V29RX_status` stores the config's bit rate here and
+	 * `V29TX_status` writes 0; `v22_status::short_12` (the same block)
+	 * carries no semantic name -- retained neutral (Batch 27). */
 	short short_0e, short_10, short_12;
 	unsigned char flags, flags2;
 };
@@ -134,13 +140,20 @@ struct v29_rx_decoder {
 	unsigned short last;
 	short train_lfsr;
 	unsigned short train_count;
+	/* +0x1a  zeroed by `V29RX_create` and touched by nothing else in the
+	 * object, not by any slicer -- retained neutral (Batch 27). */
 	short short_001a;
 	unsigned short angle_prev;
 	unsigned short sym_count;
 };
 
 struct v29_rx_block {
+	/* +0x0c  seeded 0 by `V29RX_create`; no reader -- retained neutral
+	 * (Batch 27).  The other three on this line are the enables and the
+	 * status-read word named by `V29RX_INT_*`/`V29RX_FLAGS_0018`. */
 	int int_0000, int_0004, int_0008, int_000c;
+	/* +0x14  seeded 1 by `V29RX_create`; no reader -- retained neutral
+	 * (Batch 27). */
 	int int_0010, int_0014;
 	union {
 		struct {
@@ -149,6 +162,8 @@ struct v29_rx_block {
 		};
 		int flags_word_0018;
 	};
+	/* +0x24  seeded 0 by `V29RX_create`; no reader -- retained neutral
+	 * (Batch 27). */
 	int int_001c, int_0020, int_0024;
 	struct v29_rx_decoder dec;
 	struct fpm_mrf mrf;
@@ -158,6 +173,9 @@ struct v29_rx_block {
 	unsigned char pad_4f38[4];
 	struct fpm_sdm sdm;
 	short *buf_mrf, *buf_sre;
+	/* +0x4f62  `QualityDetectV29` sets it to 1 when the block-0x32 average
+	 * did NOT exceed the limit; nothing reconstructed reads it, so the
+	 * polarity is recorded and not named -- retained neutral (Batch 27). */
 	short dec_error_avg, dec_error_n, dec_error_limit, short_4f62;
 	short short_4f64, rms_ref, rms_n;
 	unsigned char pad_4f6a[2];
@@ -166,6 +184,10 @@ struct v29_rx_block {
 struct v29_rx_detector {
 	struct fpm_mtd *mtd;
 	struct fpm_tone *tone;
+	/* +0x08  the demodulator gate: `V29RX_control` sets it from its ctl1
+	 * bit 4, and `RxHdxDataV29` demodulates only while it is zero.  What
+	 * the bit indicates beyond that gate is not established -- retained
+	 * neutral (Batch 27). */
 	int int_0008;
 	short rate;
 	unsigned char pad_000e[2];
@@ -197,10 +219,18 @@ struct v29_rx {
 	short *eq_icoeff, *eq_qcoeff;
 	short eq_taps;
 	unsigned char pad_0032[2];
+	/* +0x38 and +0x34: `V29RX_create` zeroes both; nothing reads either
+	 * -- retained neutral (Batch 27). */
 	int int_0034, int_0038;
+	/* +0x3c  zeroed by `V29RX_create`; no reader -- retained neutral
+	 * (Batch 27). */
 	short short_003c;
 	unsigned char pad_003e[2];
+	/* +0x44 and +0x40: `V29RX_create` zeroes both; nothing reads either
+	 * -- retained neutral (Batch 27). */
 	int int_0040, int_0044;
+	/* +0x48  zeroed by `V29RX_create`; no reader -- retained neutral
+	 * (Batch 27). */
 	short short_0048;
 	unsigned char pad_004a[2];
 	struct v29_rx_detector *det;
@@ -210,6 +240,11 @@ struct v29_rx {
 struct v29_tx_params {
 	struct fax_fifo *fifo;
 	struct sgd *sgd;
+	/* +0x08  zeroed by `V29TX_create`; `V29TX_modem` takes its no-FIFO
+	 * arm when non-zero, and `V29TX_control` sets it 0/1 from its ctl1
+	 * bit 4.  The arm's meaning beyond that is unstated -- retained
+	 * neutral (Batch 27); V.27's `v27_tx_source::int_0008` is the same
+	 * gate. */
 	int int_0008;
 	short rate;
 	unsigned char pad_000e[2];
@@ -223,7 +258,7 @@ struct v29_tx_params {
 	 */
 	short (*handler)(void *modem, unsigned short *in, short *out,
 			 short *budget);
-	short state, short_0016;
+	short state, countdown;
 	short scram_sr;
 	unsigned char pad_001a[2];
 };
@@ -553,6 +588,13 @@ struct v29tx_cfg;
  * `V29TX_create` also seeds it 0 at construction (state starts at START).
  * USAGE INFERENCE: no format string names it and no function outside this
  * cycle touches it.
+ *
+ * Batch 27: renamed `countdown`, the already-named sibling with this exact
+ * role at this exact offset -- `v27fax.h`'s `struct v27_tx_source::countdown`
+ * ("the current handler's remaining budget for this state; every `TxHdx*V27`
+ * decrements it and calls `TxNextStateV27` at zero").  V.29's four handlers
+ * (QUIET/ALT/EQCOND/SCR1) do the same through the `struct v29_tx_params *`,
+ * and `TxHdxDataV29` tests it as a one-shot flag.  Evidence rank 2.
  */
 #define V29TXP_SHORT_0016	0x16	/* short                             */
 
@@ -1373,7 +1415,7 @@ int V29TX_status(void *tx, void *status);
 struct v29tx_control_req {
 	unsigned char	pad_0000[0x04];
 	int		int_0004;	/* +0x04 -> handle's v29tx_cfg::int_0008 */
-	int		int_0008;	/* +0x08 scales the PPS shaper's gain    */
+	int		scale_mul;	/* +0x08  scales the PPS shaper's gain; rank-2 rename of the sibling `v27tx_ctl::scale_mul` / `v17tx_control_req::scale_mul` (Batch 27, F10144) */
 	unsigned char	ctl0;		/* +0x0c */
 	unsigned char	ctl1;		/* +0x0d */
 };

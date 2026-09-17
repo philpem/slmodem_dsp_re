@@ -1059,7 +1059,7 @@ V29TX_create(void *modem, const struct v29tx_cfg *params)
 
 	prm = ((struct v29_tx_root *)modem)->params;
 	((struct v29_tx_params *)prm)->state = V29TX_STATE_START;
-	((struct v29_tx_params *)prm)->short_0016 = 0;
+	((struct v29_tx_params *)prm)->countdown = 0;
 	((struct v29_tx_params *)prm)->scram_sr = 0x2a;
 
 	((struct v29_tx_params *)prm)->int_0008 = 0;
@@ -1711,7 +1711,7 @@ V29RX_status(void *modem, void *status)
 		return 0;
 
 	((struct v29_status_prefix *)status)->protocol =
-		(short)((unsigned short)((struct v29_rx *)modem)->cfg.int_0000);
+		(short)((unsigned short)((struct v29_rx *)modem)->cfg.protocol);
 	((struct v29_status_prefix *)status)->tx_bps = 0;
 	((struct v29_status_prefix *)status)->short_04 =
 		(short)((unsigned short)((struct v29_rx *)modem)->cfg.bit_rate);
@@ -1914,7 +1914,7 @@ TxNextStateV29(void *modem)
 	case V29TX_STATE_START:
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V29TX_STATE_START\n");
-		((struct v29_tx_params *)prm)->short_0016 = 0x30;
+		((struct v29_tx_params *)prm)->countdown = 0x30;
 		((struct v29_tx_params *)prm)->handler =
 			TxHdxQuietV29;
 		((struct v29_tx_params *)prm)->state = V29TX_STATE_QUIET;
@@ -1938,7 +1938,7 @@ TxNextStateV29(void *modem)
 		}
 		SetEncoderV29(modem, 1);
 		prm = ((struct v29_tx_root *)modem)->params;
-		((struct v29_tx_params *)prm)->short_0016 = 0x80;
+		((struct v29_tx_params *)prm)->countdown = 0x80;
 		((struct v29_tx_params *)prm)->handler =
 			TxHdxABV29;
 		((struct v29_tx_params *)prm)->state = V29TX_STATE_ALT;
@@ -1949,7 +1949,7 @@ TxNextStateV29(void *modem)
 	case V29TX_STATE_ALT:
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V29TX_STATE_ALT\n");
-		((struct v29_tx_params *)prm)->short_0016 = 0x180;
+		((struct v29_tx_params *)prm)->countdown = 0x180;
 		((struct v29_tx_params *)prm)->handler =
 			TxHdxEQCondV29;
 		((struct v29_tx_params *)prm)->state = V29TX_STATE_EQCOND;
@@ -1976,7 +1976,7 @@ TxNextStateV29(void *modem)
 		SeedScramblerV29(modem, 0);
 		SetEncoderV29(modem, 0);
 		prm = ((struct v29_tx_root *)modem)->params;
-		((struct v29_tx_params *)prm)->short_0016 = 0x30;
+		((struct v29_tx_params *)prm)->countdown = 0x30;
 		((struct v29_tx_params *)prm)->handler =
 			TxHdxSCR1V29;
 		((struct v29_tx_params *)prm)->state = V29TX_STATE_SCR1;
@@ -1987,7 +1987,7 @@ TxNextStateV29(void *modem)
 	case V29TX_STATE_SCR1:
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V29TX_STATE_SCR1\n");
-		((struct v29_tx_params *)prm)->short_0016 = 1;
+		((struct v29_tx_params *)prm)->countdown = 1;
 		((struct v29_tx_params *)prm)->handler =
 			TxHdxDataV29;
 		((struct v29_tx_params *)prm)->state = V29TX_STATE_DATA;
@@ -1999,7 +1999,7 @@ TxNextStateV29(void *modem)
 	case V29TX_STATE_DATA:
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V29TX_STATE_DATA\n");
-		((struct v29_tx_params *)prm)->short_0016 = 0;
+		((struct v29_tx_params *)prm)->countdown = 0;
 		((struct v29_tx_params *)prm)->handler =
 			TxHdxIdleV29;
 		((struct v29_tx_params *)prm)->state = V29TX_STATE_IDLE;
@@ -2011,7 +2011,7 @@ TxNextStateV29(void *modem)
 	case V29TX_STATE_IDLE:
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V29TX_STATE_IDLE\n");
-		((struct v29_tx_params *)prm)->short_0016 = 0;
+		((struct v29_tx_params *)prm)->countdown = 0;
 		((struct v29_tx_params *)prm)->handler =
 			TxHdxStartV29;
 		((struct v29_tx_params *)prm)->state = V29TX_STATE_START;
@@ -2097,7 +2097,7 @@ TxHdxQuietV29(void *modem, unsigned short *in, short *out, short *budget)
 
 	((struct v29_tx_root *)modem)->result.byte.status = 1;
 
-	remaining = ((struct v29_tx_params *)prm)->short_0016;
+	remaining = ((struct v29_tx_params *)prm)->countdown;
 	if (remaining <= 0) {
 		TxNextStateV29(modem);
 		return 0;
@@ -2105,7 +2105,7 @@ TxHdxQuietV29(void *modem, unsigned short *in, short *out, short *budget)
 
 	n = (remaining <= (short)*budget) ? (unsigned short)remaining
 					   : (unsigned short)*budget;
-	((struct v29_tx_params *)prm)->short_0016 = (short)(remaining - n);
+	((struct v29_tx_params *)prm)->countdown = (short)(remaining - n);
 
 	nsamples = (short)TxNoCarrierV29(modem, in, out, n);
 	*budget = (short)((unsigned short)*budget - n);
@@ -2133,7 +2133,7 @@ TxHdxABV29(void *modem, unsigned short *in, short *out, short *budget)
 
 	((struct v29_tx_root *)modem)->result.byte.status = 1;
 
-	remaining = ((struct v29_tx_params *)prm)->short_0016;
+	remaining = ((struct v29_tx_params *)prm)->countdown;
 	if (remaining <= 0) {
 		TxNextStateV29(modem);
 		return 0;
@@ -2141,7 +2141,7 @@ TxHdxABV29(void *modem, unsigned short *in, short *out, short *budget)
 
 	n = (remaining <= (short)*budget) ? (unsigned short)remaining
 					   : (unsigned short)*budget;
-	((struct v29_tx_params *)prm)->short_0016 = (short)(remaining - n);
+	((struct v29_tx_params *)prm)->countdown = (short)(remaining - n);
 
 	SGD_symbol_gen((struct sgd *)((struct v29_tx_params *)prm)->sgd, in, (short)n);
 	nsamples = (short)ModDataV29(modem, in, out, n);
@@ -2179,7 +2179,7 @@ TxHdxEQCondV29(void *modem, unsigned short *in, short *out, short *budget)
 
 	((struct v29_tx_root *)modem)->result.byte.status = 1;
 
-	remaining = ((struct v29_tx_params *)prm)->short_0016;
+	remaining = ((struct v29_tx_params *)prm)->countdown;
 	if (remaining <= 0) {
 		TxNextStateV29(modem);
 		return 0;
@@ -2187,7 +2187,7 @@ TxHdxEQCondV29(void *modem, unsigned short *in, short *out, short *budget)
 
 	n = (remaining <= (short)*budget) ? (unsigned short)remaining
 					   : (unsigned short)*budget;
-	((struct v29_tx_params *)prm)->short_0016 = (short)(remaining - n);
+	((struct v29_tx_params *)prm)->countdown = (short)(remaining - n);
 
 	reg = ((struct v29_tx_params *)prm)->scram_sr;
 	for (i = 0; i < n; i++) {
@@ -2225,7 +2225,7 @@ TxHdxSCR1V29(void *modem, unsigned short *in, short *out, short *budget)
 
 	((struct v29_tx_root *)modem)->result.byte.status = 1;
 
-	remaining = ((struct v29_tx_params *)prm)->short_0016;
+	remaining = ((struct v29_tx_params *)prm)->countdown;
 	if (remaining <= 0) {
 		TxNextStateV29(modem);
 		return 0;
@@ -2233,7 +2233,7 @@ TxHdxSCR1V29(void *modem, unsigned short *in, short *out, short *budget)
 
 	n = (remaining <= (short)*budget) ? (unsigned short)remaining
 					   : (unsigned short)*budget;
-	((struct v29_tx_params *)prm)->short_0016 = (short)(remaining - n);
+	((struct v29_tx_params *)prm)->countdown = (short)(remaining - n);
 
 	SGD_symbol_gen((struct sgd *)((struct v29_tx_params *)prm)->sgd, in, (short)n);
 	ScrambleDataV29(modem, in, n);
@@ -2271,10 +2271,10 @@ TxHdxDataV29(void *modem, unsigned short *in, short *out, short *budget)
 
 	((struct v29_tx_root *)modem)->result.byte.status = 0;
 
-	if (((struct v29_tx_params *)prm)->short_0016 != 0) {
+	if (((struct v29_tx_params *)prm)->countdown != 0) {
 		short which = ((struct v29_tx_params *)prm)->rate;
 
-		((struct v29_tx_params *)prm)->short_0016 = 0;
+		((struct v29_tx_params *)prm)->countdown = 0;
 
 		if (which == V29_RATE_7200)
 			((struct v29_tx_root *)modem)->result.byte.status =
@@ -2333,8 +2333,8 @@ V29TX_control(void *fp, const struct v29tx_control_req *req)
 	prm = ((struct v29_tx_root *)fp)->params;
 	rate = ((struct v29_tx_params *)prm)->rate;
 
-	((struct v29_tx_root *)fp)->tx->pps.cfg.scale = req->int_0008;
-	((struct v29_tx_root *)fp)->tx->pps.cfg.scale = V29TX_PPS_SCALE[rate] * req->int_0008;
+	((struct v29_tx_root *)fp)->tx->pps.cfg.scale = req->scale_mul;
+	((struct v29_tx_root *)fp)->tx->pps.cfg.scale = V29TX_PPS_SCALE[rate] * req->scale_mul;
 
 	((struct v29tx_cfg *)fp)->int_0008 = req->int_0004;
 
