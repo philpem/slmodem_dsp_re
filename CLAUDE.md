@@ -40,18 +40,32 @@ other, divided between two adjacent functions 0x170 apart. Schedule V.32 as
 `Dialer.c +18` **and** `V32mod.c +39` together, and never as a "Dialer pass". Any goal phrased as "cover the data
 modes" requires it, and while it was fenced that goal could not be reached.
 
-**FAX WAS LAST ON PURPOSE, AND SINCE 2026-08-31 IT IS THE CURRENT PHASE.**
-The order below is unchanged as history and the reason it gave was never
-difficulty; what changed is the GOAL, from covering the modes to completing the
-object. The data modes and the services are done, so fax is the only thing
-left. `docs/remaining.md` carries the decision and the measured scope. Read the
-rest of this paragraph as why it was deferred, not as a reason to defer it now.
+**FAX IS COMPLETE (PHASE 9), AND SO IS THE SOURCE-RECONSTRUCTION PHASE.**
+The paragraphs below were written while fax was still deliberately deferred
+and are kept as history; they are **not** a description of the current tree.
+The fax phase has since been executed and closed -- `docs/remaining.md`'s
+phase ledger records phase 9, "fax Class 1 (V.17 / V.27ter / V.29)",
+**reconstructed -- closed in waves 5-12 below** -- and its next section says
+the source-reconstruction phase is complete.
 
-**FAX IS LAST ON PURPOSE, AND THE REASON IS NOT DIFFICULTY.** It is 283 symbols
-and 78,331 bytes -- larger than everything else remaining put together -- and
-SpanDSP already implements Class 1 fax in the open-source world, so the
-marginal value of reconstructing it is lower than for anything else here. It is
-a project phase, not a wave.
+Measure this before trusting any count in this file or elsewhere:
+
+    python3 tools/service.py      # 0 unwritten call symbols in every service
+    python3 tools/worklist.py     # "NOT WRITTEN" is empty
+
+Both read the object tree's symbol tables (populate it with `make coverage`
+or `make`) and print their denominators. The only unreconstructed *regions*
+left are two stub arms (`vpcm_run` in `vpcm.c`, `v34handshak` in
+`V34hshak.c`), and they are data-mode, not fax. What remains is a different
+kind of work: byte-exactness, differential/mutation coverage, the V.90
+digital-side bring-up and the 8 kHz retarget -- `docs/remaining.md` carries
+that list. Do not re-open the fax reconstruction.
+
+**HISTORICAL -- why fax was deferred.** The order was never about
+difficulty; it was deferred because it was 283 symbols and 78,331 bytes,
+larger than everything else then remaining put together, and SpanDSP already
+implements Class 1 fax in the open-source world, so its marginal value was
+lower than for anything else here.
 
 **"LEAVES BEFORE FAX" WAS TRUE, IT PAID, AND IT IS NOW EXHAUSTED -- MEASURED,
 SO DO NOT RE-DERIVE IT (F8320).**
