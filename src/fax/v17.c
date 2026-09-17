@@ -191,7 +191,7 @@
  * function then reads back:
  *
  *     +0x04 bit_rate    -> the rate switch at 0x097113, `movswl`
- *     +0x14 int_0014    -> `V17RXC_INT_0010` at 0x09709c
+ *     +0x14 short_train -> `V17RXC_INT_0010` at 0x09709c
  *     +0x18 coefsave0   -> `fpm_fse_cfg::icoff`  = `V17RX_OBJ_COEFSAVE0`
  *     +0x1c coefsave1   -> `fpm_fse_cfg::qcoff`  = `V17RX_OBJ_COEFSAVE1`
  *     +0x24 ptr_0024    -> three configurations' tail context slot
@@ -247,8 +247,9 @@
  * the plain pair), and whether the equaliser starts from the caller's saved
  * coefficients or from `FSEv17_ICOFF`/`FSEv17_QCOFF`.  `StoreCoefV17` fills
  * those same two saved arrays.  That reads as a short retrain and it is
- * recorded as a derivation only: no format string and no callee names it, so
- * the field keeps its neutral name.  Finding F9477.
+ * recorded as a derivation: no format string names it, so the name
+ * `short_train` is carried from the decoder field this constructor copies it
+ * into, `v17_dec::short_train` (rank 2, Batch 25).  Finding F9477.
  *
  * ---------------------------------------------------------------------------
  * NO ERROR PATH EXISTS.  Eight `sysdep_malloc` calls, none checked, and one
@@ -341,8 +342,8 @@ V17RX_create(void *modem, const struct v17rx_cfg *params)
 	RXCTL(modem)->countdown = 0;
 	RXCTL(modem)->r08 = 0;
 	CTL_PROCESS(modem) = RxHdxStartV17;
-	RXCTL(modem)->r10 =
-		RXROOT(modem)->cfg.int_0014;
+	RXCTL(modem)->short_train =
+		RXROOT(modem)->cfg.short_train;
 
 	/*
 	 * The SECOND detector, and its band is V.21 CHANNEL 2 -- not V.17's.
@@ -362,7 +363,7 @@ V17RX_create(void *modem, const struct v17rx_cfg *params)
 	FPM_AGC_init(&RXCTL(modem)->agc, &AGCv17_CFG, ctl_fresh);
 
 	RXCTL(modem)->offband = 0;
-	RXCTL(modem)->r2e = 0;
+	RXCTL(modem)->offband_latch = 0;
 
 	/*
 	 * The bit rate to the four-value code, and the two DEAD STORES on the
@@ -442,7 +443,7 @@ V17RX_create(void *modem, const struct v17rx_cfg *params)
 	srecfg.xclock = SREv17_xCLOCK;
 	srecfg.yclock = SREv17_yCLOCK;
 	srecfg.pll_k2 = SREv17_PLL_K2;
-	if (RXCTL(modem)->r10 != 0) {
+	if (RXCTL(modem)->short_train != 0) {
 		srecfg.settle = 0x30;
 		srecfg.pll_k1 = SREv17_PLL_K1_S;
 	} else {
@@ -484,7 +485,7 @@ V17RX_create(void *modem, const struct v17rx_cfg *params)
 	fsecfg = FPM_FSE_CFG;
 	fsecfg.block = 0x90;
 	fsecfg.interp = 3;
-	if (RXCTL(modem)->r10 != 0) {
+	if (RXCTL(modem)->short_train != 0) {
 		fsecfg.icoff = (const short *)
 			RXROOT(modem)->cfg.coefsave0;
 		fsecfg.qcoff = (const short *)
@@ -525,7 +526,7 @@ V17RX_create(void *modem, const struct v17rx_cfg *params)
 	RXS_DEC(RXS(modem))->sym_count = 0;
 	RXS_DEC(RXS(modem))->short_0066 = 3;
 	RXS_DEC(RXS(modem))->rate = rate;
-	RXS_DEC(RXS(modem))->short_train = RXCTL(modem)->r10;
+	RXS_DEC(RXS(modem))->short_train = RXCTL(modem)->short_train;
 	RXS_DEC(RXS(modem))->count = 0;
 	RXS_DEC(RXS(modem))->scram = 0;
 	RXS_DEC(RXS(modem))->ang_prev = 0;
@@ -664,16 +665,16 @@ V17RX_create(void *modem, const struct v17rx_cfg *params)
 	 */
 	switch ((short)RXCTL(modem)->rate_code) {
 	case V17RX_RATE_7200:
-		RXSTATE(modem)->r4fb0 = 0xa28;
+		RXSTATE(modem)->quality_threshold = 0xa28;
 		break;
 	case V17RX_RATE_9600:
-		RXSTATE(modem)->r4fb0 = 0x514;
+		RXSTATE(modem)->quality_threshold = 0x514;
 		break;
 	case V17RX_RATE_12000:
-		RXSTATE(modem)->r4fb0 = 0x341;
+		RXSTATE(modem)->quality_threshold = 0x341;
 		break;
 	case V17RX_RATE_14400:
-		RXSTATE(modem)->r4fb0 = 0x1c2;
+		RXSTATE(modem)->quality_threshold = 0x1c2;
 		break;
 	}
 
@@ -1297,10 +1298,10 @@ RxNextStateV17(void *modem)
 	case V17RX_STATE_EPOCH_DET:
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V17RX_STATE_EPOCH_DET\n");
-		if (RXCTL(modem)->r10 != 0)
+		if (RXCTL(modem)->short_train != 0)
 			Restore_rateV17(modem);
 		RXCTL(modem)->countdown = (short)
-			(RXCTL(modem)->r10 != 0 ? 1 : 62);
+			(RXCTL(modem)->short_train != 0 ? 1 : 62);
 		CTL_PROCESS(modem) = RxHdxPrtcolV17;
 		RXCTL(modem)->state = V17RX_STATE_PROTOCOL;
 		RXROOT(modem)->result.byte.flags2 &=
@@ -1320,7 +1321,7 @@ RxNextStateV17(void *modem)
 	case V17RX_STATE_PROTOCOL:
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V17RX_STATE_PROTOCOL\n");
-		if (RXCTL(modem)->r10 != 0) {
+		if (RXCTL(modem)->short_train != 0) {
 			RXCTL(modem)->countdown = 1;
 			CTL_PROCESS(modem) = RxHdxScramV17;
 			RXCTL(modem)->state = V17RX_STATE_SCRAM;
@@ -1725,7 +1726,7 @@ V17RX_control(void *modem, const struct v17rx_ctl *arg)
 		(arg->flags_0d & V17RXCTL_SET_CTL_INT_0008) != 0;
 
 	if (arg->flags_0d & V17RXCTL_REINIT) {
-		cfg->int_0014 = arg->int_0010;
+		cfg->short_train = arg->short_train;
 		V17RX_create(modem, (const struct v17rx_cfg *)modem);
 	}
 
@@ -1777,7 +1778,7 @@ V17RX_status(void *modem, struct v17_status *status)
 	 */
 	rx = (unsigned char *)modem;
 
-	status->protocol = (short)RXROOT(modem)->cfg.int_0000;
+	status->protocol = (short)RXROOT(modem)->cfg.protocol;
 	status->tx_bps = 0;
 	status->rx_bps = RXROOT(modem)->cfg.bit_rate;
 	status->snr_ok = (short)
@@ -2829,7 +2830,7 @@ CarrierDetectV17(void *modem)
 	/* +0xd0 is read 32-bit HERE and 16-bit in QualityDetectV17. */
 	r = rx->agc.value.signal & rx->sre.active;
 
-	if (ctl->r10 != 0
+	if (ctl->short_train != 0
 	    && rx->fse.lms_force != 0
 	    && (short)rx->dec.sym_count > V17RXS_0094_MIN) {
 		if (rx->fse.mse > V17RXS_DEC_ERROR_MAX)
@@ -2872,7 +2873,7 @@ DataCarrierDetectV17(void *modem, const short *in, unsigned short count)
 		 * `CarrierDetectV17`, including its doubled test of the
 		 * decoder error and its format string.
 		 */
-		if (ctl->r10 != 0
+		if (ctl->short_train != 0
 		    && rx->fse.lms_force != 0
 		    && (short)rx->dec.sym_count > V17RXS_0094_MIN) {
 			if (rx->fse.mse > V17RXS_DEC_ERROR_MAX)
@@ -2888,10 +2889,10 @@ DataCarrierDetectV17(void *modem, const short *in, unsigned short count)
 	} else {
 		if (rx->fse.mse > V17RXS_DEC_ERROR_MAX
 		    || (r & 1) == 0)
-			ctl->r2e = 1;
+			ctl->offband_latch = 1;
 
 		r = 1;
-		if (ctl->r2e != 0) {
+		if (ctl->offband_latch != 0) {
 			short *buf;
 			short i;
 
@@ -2997,7 +2998,7 @@ QualityDetectV17(void *modem)
 		if (n != V17RXS_QCOUNT_JUDGE)
 			return r;
 		if (rx->qavg
-		    <= (short)(unsigned short)rx->r4fb0)
+		    <= (short)(unsigned short)rx->quality_threshold)
 			rx->r4fb2 = 1;
 	} else {
 		rx->qavg = (short)

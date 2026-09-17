@@ -73,18 +73,27 @@ struct v17rx_cfg;	/* faxcfg.h -- and the receive instance's own head */
  * caller, so nothing reconstructed corroborates the type further than
  * these four loads do.
  *
- * `int_0004` and `int_0010` are `int`, both loaded and stored whole
+ * `int_0004` and `short_train` are `int`, both loaded and stored whole
  * (`mov`/`mov`, no narrowing).  `flags_0c` and `flags_0d` are `unsigned
  * char`, each read once with `movzbl` and tested bit by bit.
+ *
+ * `short_train` is named by its destination (rank 2): `V17RX_control`
+ * copies it into `cfg->short_train` on the REINIT path, and that field is
+ * what `V17RX_create` hands to the decoder as `v17_dec::short_train`.
+ * `int_0004` has the same shape but its destination `cfg->int_0008` is
+ * read by nothing, so it stays an offset.  Batch 25.
  */
 struct v17rx_ctl {
 	unsigned char	unmapped_0000[0x04];
-	int		int_0004;	/* +0x04 -> cfg->int_0008            */
+	/* +0x04 -> cfg->int_0008, which nothing reads back; retained
+	 * neutral (Batch 25). */
+	int		int_0004;
 	unsigned char	unmapped_0008[0x04];
 	unsigned char	flags_0c;	/* +0x0c                             */
 	unsigned char	flags_0d;	/* +0x0d                             */
 	unsigned char	unmapped_000e[0x02];
-	int		int_0010;	/* +0x10 -> cfg->int_0014, REINIT only */
+	/* +0x10 -> cfg->short_train, REINIT only; rank 2 (Batch 25). */
+	int		short_train;
 };
 
 /*
@@ -564,10 +573,15 @@ struct v17tx {
 struct v17rx_priv {
 	struct fpm_mtd *mtd;	/* +0x00 */
 	struct fpm_tone *tone;	/* +0x04 */
-	int r08;		/* +0x08 */
+	/* +0x08 gate `RxHdxDataV17` must see as zero before it
+	 * demodulates; three writers, no established meaning -- retained
+	 * neutral (V17RXC_INT_0008, F9442, Batch 25). */
+	int r08;
 	unsigned short rate_code; /* +0x0c */
-	short r0e;		/* +0x0e unmodelled */
-	int r10;		/* +0x10 */
+	short r0e;		/* +0x0e unmodelled; retained neutral  */
+	/* +0x10 copied from `cfg` +0x14; rank 2, the decoder's own field
+	 * of this name (`v17_dec::short_train`), Batch 25. */
+	int short_train;
 	/**
 	 * @brief Run the active receive state.
 	 * @param modem Owning v17rx, not this private block.
@@ -581,12 +595,16 @@ struct v17rx_priv {
 	short state;		/* +0x18 */
 	short countdown;	/* +0x1a */
 	short *scratch;		/* +0x1c */
-	short r20;		/* +0x20 */
-	short r22;		/* +0x22 unmodelled */
+	/* +0x20 selects DataCarrierDetectV17's body; nothing traced writes
+	 * it, so its role is unstated -- retained neutral. */
+	short r20;
+	short r22;		/* +0x22 unmodelled; retained neutral  */
 	struct fpm_mtd *mtd2;	/* +0x24 */
 	short *buf2;		/* +0x28 */
 	short offband;		/* +0x2c */
-	short r2e;		/* +0x2e */
+	/* +0x2e set on a data-carrier failure and gates the V.21 offband
+	 * watch; usage inference, single role (Batch 25). */
+	short offband_latch;
 	struct fpm_agc agc;	/* +0x30 */
 };
 
@@ -600,35 +618,58 @@ union v17rx_agc {
 	} narrow;
 };
 
+/*
+ * Batch 25 dispositioned every offset-only member of this struct.  None
+ * carries a single established role: the head is either a constant the
+ * constructor writes and nothing reads, a state field reported through an
+ * unnamed status bit, or one of the three AGC-gated enables whose only
+ * evidence is the plumbing they drive (F9102).  `quality_threshold` is the
+ * one exception and is named from `QualityDetectV17`'s own comparison.
+ */
 struct v17rx_state {
+	/* +0x00 cleared by `V17RX_control`'s CLEAR_STATE0 bit and reported
+	 * as `V17RX_status` flags bit 3; multi-role, retained neutral. */
 	int r00;
+	/* +0x04 enables SRE adapt; plumbing only, retained neutral
+	 * (F9102). */
 	int r04;
+	/* +0x08 enables FSE PLL; plumbing only, retained neutral
+	 * (F9102). */
 	int r08;
-	int r0c;
+	int r0c;		/* +0x0c written 0, read by nothing; retained */
+	/* +0x10 enables FSE LMS; plumbing only, retained neutral
+	 * (F9102). */
 	int r10;
-	int r14;
-	int r18;
+	int r14;		/* +0x14 written 0, read by nothing; retained */
+	int r18;		/* +0x18 written 1, read by nothing; retained */
+	/* +0x1c bit 0 -> status flags bit 1; meaning unstated, retained
+	 * neutral (F9474). */
 	int r1c;
-	int r20;
+	int r20;		/* +0x20 written 0, read by nothing; retained */
 	unsigned short rate_code;
-	short r26;
-	int r28;
+	short r26;		/* +0x26 read by nothing; retained neutral */
+	int r28;		/* +0x28 written 0, read by nothing; retained */
 	struct v17_dec dec;		/* +0x2c */
 	struct fpm_mrf mrf;		/* +0x98 */
 	union v17rx_agc agc;		/* +0xb4 */
 	struct fpm_sre sre;		/* +0xe0 */
 	struct fpm_fse fse;		/* +0x170 */
+	/* +0x4f88 four-byte gap below the equaliser, untouched; retained. */
 	unsigned char r4f88[4];
 	struct fpm_sdm sdm;		/* +0x4f8c */
 	short *buf_mrf;			/* +0x4fa4 */
 	short *buf_sre;			/* +0x4fa8 */
 	short qavg;			/* +0x4fac */
 	short qcount;			/* +0x4fae */
-	short r4fb0;
+	/* +0x4fb0 per-rate threshold `QualityDetectV17` judges `qavg`
+	 * against; usage inference (Batch 25). */
+	short quality_threshold;
+	/* +0x4fb2 write-only quality verdict; no reader, retained
+	 * neutral. */
 	short r4fb2;
 	short energy_watch;		/* +0x4fb4 */
 	short rms_ref;			/* +0x4fb6 */
-	short rms_phase;			/* +0x4fb8 */
+	short rms_phase;		/* +0x4fb8 */
 	short r4fba;			/* allocation tail, unmodelled */
 };
 
@@ -641,15 +682,21 @@ struct v17rx {
 	short *icoeff;			/* +0x38 */
 	short *qcoeff;			/* +0x3c */
 	unsigned short taps;		/* +0x40 */
-	short r42;
+	short r42;			/* +0x42 never written; retained */
+	/* +0x44 written 0, read by nothing; retained neutral. */
 	int r44;
+	/* +0x48 written 0, read by nothing; retained neutral. */
 	int r48;
+	/* +0x4c written 0, read by nothing; retained neutral. */
 	short r4c;
-	short r4e;
+	short r4e;			/* +0x4e never written; retained */
+	/* +0x50 written 0, read by nothing; retained neutral. */
 	int r50;
+	/* +0x54 written 0, read by nothing; retained neutral. */
 	int r54;
+	/* +0x58 written 0, read by nothing; retained neutral. */
 	short r58;
-	short r5a;
+	short r5a;			/* +0x5a never written; retained */
 	struct v17rx_priv *ctl;		/* +0x5c */
 	struct v17rx_state *state;	/* +0x60 */
 };
@@ -1100,13 +1147,15 @@ short TxHdxIdleV17(void *modem, unsigned short *in, short *out,
 #define V17RX_RATE_14400	3
 
 /*
- * An int `CarrierDetectV17` and `DataCarrierDetectV17` both require to be
- * non-zero before they will look at the decoder error at all.  Neutral: what
- * it indicates is not established, only that it gates the carrier verdict.
- *
- * `RxNextStateV17` reads it too, twice on one arm, and chooses BOTH the
- * countdown seed and whether to call `Restore_rateV17` from it.  That does not
- * type it either; see D1212 for why the second of the two reads is dead.
+ * `struct v17rx_priv::short_train` (Batch 25): an int `CarrierDetectV17` and
+ * `DataCarrierDetectV17` both require to be non-zero before they will look
+ * at the decoder error at all, and `RxNextStateV17` reads it twice on one
+ * arm to choose BOTH the countdown seed and whether to call
+ * `Restore_rateV17` (see D1212 for why the second read is dead).  The name
+ * is rank-2 and not an author string: `V17RX_create` copies this field into
+ * `v17_dec::short_train`, the decoder's own field of that name, which
+ * selects the short-vs-long training path.  The offset constant keeps its
+ * old spelling because the tests reach the field through it.
  */
 #define V17RXC_INT_0010		0x10
 
@@ -1201,7 +1250,8 @@ short TxHdxIdleV17(void *modem, unsigned short *in, short *out,
 /*
  * The second detector chain, which is `DataCarrierDetectV17`'s alone: a
  * `struct fpm_mtd *` at +0x24, its own `short *` buffer at +0x28, a sample
- * counter at +0x2c, a latch at +0x2e and a `struct fpm_agc` at +0x30.
+ * counter at +0x2c, a latch at +0x2e (`offband_latch`, Batch 25) and a
+ * `struct fpm_agc` at +0x30.
  * `V17RXC_MTD2`, `V17RXC_BUF2` and `V17RXC_AGC` are all typed by their
  * callees (CLAUDE.md rank 2), exactly as `V17RXC_MTD`/`V17RXC_TONE` are.
  *
@@ -1489,8 +1539,11 @@ short TxHdxIdleV17(void *modem, unsigned short *in, short *out,
  * average is compared against +0x4fb0 and +0x4fb2 is latched to 1 if the
  * average has NOT stayed above it.
  *
- * The threshold and the latch are neutral because nothing traced reads them
- * back; only the direction of the test is established.
+ * The threshold +0x4fb0 is read by `QualityDetectV17`'s comparison and is
+ * named `struct v17rx_state::quality_threshold` (Batch 25); the latch
+ * +0x4fb2 is written by that comparison and read by nothing in the object,
+ * so it stays neutral.  The offset constants keep their spelling because the
+ * tests and `class1.c` reach the fields through them.
  */
 #define V17RXS_QAVG		0x4fac
 #define V17RXS_QCOUNT		0x4fae
@@ -1684,7 +1737,8 @@ int V17TX_modem(void *modem, unsigned short *in, short *out,
  * (the instance's own head, `struct v17rx_cfg`) is unconditionally set
  * from `arg->int_0004`; `V17RXC_INT_0008` is set from
  * `V17RXCTL_SET_CTL_INT_0008` in `arg->flags_0d`; `V17RXCTL_REINIT` (also
- * in `flags_0d`) copies `arg->int_0010` into `cfg->int_0014` and then calls
+ * in `flags_0d`) copies `arg->short_train` into `cfg->short_train` and then
+ * calls
  * `V17RX_create(modem, modem)`; and regardless of which of those branches
  * ran, `arg->flags_0c` clears `V17RXS_INT_0000`/`V17RXS_INT_0010` per
  * `V17RXCTL_CLEAR_STATE0`/`_STATE10`.

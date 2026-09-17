@@ -128,9 +128,17 @@ struct faxvmi_cfg {
  * +0x20.  Those three are pointers BECAUSE a malloc result is stored in them,
  * which is a fact about the store and not about the table -- in the table
  * itself all three are zero.
+ *
+ * Batch 25 named +0x00 `protocol` and +0x14 `short_train`, both rank 2: the
+ * first is what `V17RX_status` stores into `v17_status::protocol`, the second
+ * what `V17RX_create` copies into `v17_dec::short_train`.  `short_0006`,
+ * `int_0008`, `int_000c` and `int_0010` are read by nothing and stay offsets.
  */
 struct v17rx_cfg {
-	int		int_0000;	/* +0x00  1                          */
+	/* +0x00  1.  Rank 2: `V17RX_status` stores it into
+	 * `v17_status::protocol` and `V17RX_OBJ_PROTOCOL` is +0x00
+	 * (Batch 25). */
+	int		protocol;
 	short		bit_rate;	/* +0x04  14400.  Compared against
 					 * 14400/12000/9600 by `v17rx_create`
 					 * -- the rates V.17 defines and
@@ -139,11 +147,18 @@ struct v17rx_cfg {
 					 * argument (F9052).  16-bit access
 					 * throughout, sign a choice: every
 					 * comparison is an equality        */
-	short		short_0006;	/* +0x06  0                          */
-	int		int_0008;	/* +0x08  60000                      */
-	int		int_000c;	/* +0x0c  0                          */
-	int		int_0010;	/* +0x10  0                          */
-	int		int_0014;	/* +0x14  0, cleared again on init   */
+	/* +0x06  0; never read, retained neutral. */
+	short		short_0006;
+	/* +0x08  60000; written by `V17RX_control` from its +0x04, read
+	 * by nothing; retained neutral. */
+	int		int_0008;
+	/* +0x0c  0; never read, retained neutral. */
+	int		int_000c;
+	/* +0x10  0; never read, retained neutral. */
+	int		int_0010;
+	/* +0x14  0, cleared again on init.  Rank 2: `V17RX_create` copies
+	 * it into `v17_dec::short_train` (Batch 25). */
+	int		short_train;
 	void	       *coefsave0;	/* +0x18  init: sysdep_malloc(0x62).
 					 * `V17RX_OBJ_COEFSAVE0` (v17fax.h) --
 					 * same storage, the instance's head

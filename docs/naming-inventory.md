@@ -21,15 +21,15 @@ The production-use column counts the member's identifier across `src/` only. It 
 |---|---:|
 | member declarations parsed | 3246 |
 | owners (struct/class) | 242 |
-| named | 2632 |
-| offset-named | 390 |
-|   on record (batch/wave or beside the field) | 245 |
-|   residual, not on record | 145 |
+| named | 2638 |
+| offset-named | 384 |
+|   on record (batch/wave or beside the field) | 273 |
+|   residual, not on record | 111 |
 | placeholder (`unmapped_`/`unnamed_`) | 73 |
 |   residual placeholder | 60 |
 | padding | 151 |
 
-Of the 390 offset-named members, **230 are in non-FAX owners** (the issue #100 scope) and **20 of those are residual**. FAX owners are a separate phase: listed for completeness, not dispositioned here.
+Of the 384 offset-named members, **230 are in non-FAX owners** (the issue #100 scope) and **20 of those are residual**. FAX owners are a separate phase: listed for completeness, not dispositioned here.
 
 ## Coverage and limitations
 
@@ -37,9 +37,9 @@ The parser is textual: it reads single-line member declarations inside `struct`/
 
 ## Assessment
 
-- 2632 of 3246 parsed members carry a real name.
-- 390 carry an offset-only name; 245 of those are on record (a batch/wave ledger or a substantive comment beside them).
-- 145 offset-named members are residual and appear in the ledger below with an explicit, justified disposition.
+- 2638 of 3246 parsed members carry a real name.
+- 384 carry an offset-only name; 273 of those are on record (a batch/wave ledger or a substantive comment beside them).
+- 111 offset-named members are residual and appear in the ledger below with an explicit, justified disposition.
 - 73 members are explicit placeholders (`unmapped_`/`unnamed_`); their names already state that the reconstruction does not model them.
 - 151 members are alignment padding, which must not be named.
 
@@ -206,11 +206,11 @@ Within the issue #100 scope (non-FAX owners) there are 230 offset-named members,
 | `toneiir_cfg` | 12 | 0 | 0 | 0 | 0 | 1 |  |
 | `v17_smc` | 5 | 4 | 2 | 2 | 0 | 0 |  |
 | `v17_status` | 7 | 6 | 3 | 3 | 0 | 0 |  |
-| `v17rx` | 10 | 9 | 0 | 9 | 0 | 0 |  |
-| `v17rx_cfg` | 1 | 7 | 2 | 5 | 0 | 0 |  |
-| `v17rx_ctl` | 2 | 2 | 2 | 0 | 3 | 0 |  |
-| `v17rx_priv` | 10 | 6 | 0 | 6 | 0 | 0 |  |
-| `v17rx_state` | 14 | 15 | 1 | 14 | 0 | 0 |  |
+| `v17rx` | 10 | 9 | 9 | 0 | 0 | 0 |  |
+| `v17rx_cfg` | 3 | 5 | 5 | 0 | 0 | 0 |  |
+| `v17rx_ctl` | 3 | 1 | 1 | 0 | 3 | 0 |  |
+| `v17rx_priv` | 12 | 4 | 4 | 0 | 0 | 0 |  |
+| `v17rx_state` | 15 | 14 | 14 | 0 | 0 | 0 |  |
 | `v17tx` | 4 | 0 | 0 | 0 | 0 | 0 |  |
 | `v17tx_cfg` | 3 | 5 | 5 | 0 | 0 | 0 |  |
 | `v17tx_control_req` | 3 | 1 | 1 | 0 | 0 | 1 |  |
@@ -376,11 +376,11 @@ Residual rows: **68**.  Every row has an explicit disposition; none is a name in
 | `faxvmi_link` | 0 | 1 | 1 | 0 | 0 | 1 |
 | `v17_smc` | 5 | 4 | 2 | 2 | 0 | 0 |
 | `v17_status` | 7 | 6 | 3 | 3 | 0 | 0 |
-| `v17rx` | 10 | 9 | 0 | 9 | 0 | 0 |
-| `v17rx_cfg` | 1 | 7 | 2 | 5 | 0 | 0 |
-| `v17rx_ctl` | 2 | 2 | 2 | 0 | 3 | 0 |
-| `v17rx_priv` | 10 | 6 | 0 | 6 | 0 | 0 |
-| `v17rx_state` | 14 | 15 | 1 | 14 | 0 | 0 |
+| `v17rx` | 10 | 9 | 9 | 0 | 0 | 0 |
+| `v17rx_cfg` | 3 | 5 | 5 | 0 | 0 | 0 |
+| `v17rx_ctl` | 3 | 1 | 1 | 0 | 3 | 0 |
+| `v17rx_priv` | 12 | 4 | 4 | 0 | 0 | 0 |
+| `v17rx_state` | 15 | 14 | 14 | 0 | 0 | 0 |
 | `v17tx_cfg` | 3 | 5 | 5 | 0 | 0 | 0 |
 | `v17tx_control_req` | 3 | 1 | 1 | 0 | 0 | 1 |
 | `v17tx_fp` | 6 | 2 | 0 | 2 | 0 | 0 |

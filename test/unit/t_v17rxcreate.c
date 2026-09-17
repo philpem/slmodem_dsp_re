@@ -706,7 +706,7 @@ static const struct {
 	const char *name;
 	int use_default;	/* pass params == NULL                       */
 	short bit_rate;
-	int retrain;		/* struct v17rx_cfg::int_0014                */
+	int retrain;		/* struct v17rx_cfg::short_train             */
 	int arm;		/* which rate_arm[] this reaches             */
 	int code;		/* the V17RX_RATE_* it must produce          */
 } cases[] = {
@@ -749,7 +749,7 @@ build_cfg(struct v17rx_cfg *c, long k)
 	*c = V17RX_CFG;
 	if (!cases[k].use_default) {
 		c->bit_rate = cases[k].bit_rate;
-		c->int_0014 = cases[k].retrain;
+		c->short_train = cases[k].retrain;
 		c->coefsave0 = save0;
 		c->coefsave1 = save1;
 		c->ratesave = ratesave;
@@ -857,7 +857,7 @@ check_shape(void)
 			    *(short *)(void *)(ctl + V17RXC_COUNTDOWN), 0, k);
 		diff_eq_int("V17RXC_INT_0010 is the instance's +0x14 (%ld)",
 			    *(int *)(void *)(ctl + V17RXC_INT_0010),
-			    cases[k].use_default ? V17RX_CFG.int_0014
+			    cases[k].use_default ? V17RX_CFG.short_train
 						 : cases[k].retrain, k);
 		diff_eq_int("the status byte is START (%ld)",
 			    ((const unsigned char *)a)[V17RX_OBJ_RESULT],
@@ -1269,15 +1269,15 @@ static const struct {
 	int int_0004;
 	unsigned char flags_0c;
 	unsigned char flags_0d;
-	int int_0010;
+	int short_train;
 } ctl_cases[] = {
 	/*
 	 * `int_0004` lands in `cfg->int_0008`, which every sibling table in
 	 * faxcfg.h holds as the literal 60000 and nothing traced re-reads
-	 * during construction; kept realistic anyway.  `int_0010` lands in
-	 * `cfg->int_0014`, `V17RX_create`'s own retrain flag, and EVERY CASE
+	 * during construction; kept realistic anyway.  `short_train` lands in
+	 * `cfg->short_train`, `V17RX_create`'s own retrain flag, and EVERY CASE
 	 * HERE KEEPS IT AT 0 (cold) DELIBERATELY: the base instance below is
-	 * always built cold (case 0), and driving REINIT with `int_0010 == 1`
+	 * always built cold (case 0), and driving REINIT with `short_train == 1`
 	 * against an object that was BUILT cold -- a 0 -> 1 transition under
 	 * reuse (`owned == 0`) -- crashes `ref_V17RX_control` itself.
 	 * `t_v17rxcreate.c`'s own `test_reinit` only ever reinits a `retrain`
@@ -1338,7 +1338,7 @@ test_control(void)
 		arga.int_0004 = ctl_cases[k].int_0004;
 		arga.flags_0c = ctl_cases[k].flags_0c;
 		arga.flags_0d = ctl_cases[k].flags_0d;
-		arga.int_0010 = ctl_cases[k].int_0010;
+		arga.short_train = ctl_cases[k].short_train;
 		argb = arga;
 
 		control_null_arm[ctl_cases[k].null_arg]++;
