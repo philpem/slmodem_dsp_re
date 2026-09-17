@@ -60,7 +60,7 @@
  * ---------------------------------------------------------------------------
  * SUB-STATE 3'S TWO ACCUMULATORS ARE THE WHOLE FUNCTION
  *
- * `hdx->r08` and `hdx->r0a` both count milliseconds and each has its own
+ * `hdx->r08` and `hdx->ones_detect_ms` both count milliseconds and each has its own
  * threshold and its own destination:
  *
  *   r08  += V22_LOOP_BLOCK_MS on every block where the S1 detector
@@ -68,7 +68,7 @@
  *           block where it does not -- but ONLY while it is still at or below
  *           V22_LOOP_S1_HOLD_MS.  Above that a detection no longer resets it.
  *           Past V22_LOOP_S1_MS the machine goes to V22_NODE_2400A.
- *   r0a  += whatever `Detect_1s` returns for the DESCRAMBLED symbols, on the
+ *   ones_detect_ms  += whatever `Detect_1s` returns for the DESCRAMBLED symbols, on the
  *           blocks where the same detector applied to the RAW symbols returned
  *           zero.  Past V22_LOOP_ONES_MS the machine goes to V22_NODE_1200_12.
  *
@@ -84,13 +84,13 @@
  *
  *   - Every `ReadGTimer` comparison is `jbe`, i.e. UNSIGNED, although the
  *     function is declared `int`.  Two sites here, and both are cast.
- *   - Every read of `hdx->r08` and `hdx->r0a` is `movzwl` feeding an unsigned
+ *   - Every read of `hdx->r08` and `hdx->ones_detect_ms` is `movzwl` feeding an unsigned
  *     compare, although v22fp.h declares both `short`.  Cast at the site;
  *     the header is not touched.
  *   - `Detect_1s` is declared `int` in v22det.h and the first of the two call
  *     sites here narrows the result to sixteen bits before testing it
  *     (`test %ax,%ax`).  The second does NOT -- its full 32-bit return is
- *     added to `r0a` and only the sum is truncated -- so the two spellings
+ *     added to `ones_detect_ms` and only the sum is truncated -- so the two spellings
  *     below differ on purpose.
  *   - `hdx->node_deadline` is the node deadline in `ReadGTimer`'s milliseconds, and it
  *     is `params.r08` as `V22FP_create` copied it.
@@ -171,7 +171,7 @@ struct v22fp;
 #define V22_LOOP_S1_MS		0x61	/* r08: past this -> V22_NODE_2400A  */
 #define V22_LOOP_S1_HOLD_MS	0x3b	/* r08: past this, a hit stops
 					 *      resetting it                 */
-#define V22_LOOP_ONES_MS	0xe6	/* r0a: past this -> V22_NODE_1200_12 */
+#define V22_LOOP_ONES_MS	0xe6	/* ones_detect_ms: past this -> V22_NODE_1200_12 */
 
 /*
  * What sub-state 3 hands `Detect_1s`, both times.  The rate is the literal

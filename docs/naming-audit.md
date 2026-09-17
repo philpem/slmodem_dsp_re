@@ -828,3 +828,96 @@ Batch 16 gate result: Gentoo `make phase` exited 0, **`period differential:
 checks all OK`. All 655 `build/period/*.o` hashes are **byte-identical** to the
 pre-edit snapshot (`/home/philpem/slmodem/tmp/issue100-v90p3d-before.sha256`,
 655/655).
+
+## Batch 17: v22org (v22fp_hdx) field names
+
+Owner-scoped pass over `struct v22fp_hdx` (declared in `include/dsplib/v22fp.h`).
+Five members are renamed and eight stale or incorrect prose passages in
+`include/dsplib/v22org.h` are corrected. `r08` is RETAINED NEUTRAL (genuinely
+multi-role), and `struct v22fp::r34` and `struct v22fp::r1e[2]` are retained.
+
+### Evidence
+
+| Previous name | New name | Evidence |
+| --- | --- | --- |
+| r0a | ones_detect_ms | Every read and accumulation is `Detect_1s`'s millisecond answer for the 1200-baud ones detector, thresholded by an `*_ONES_MS` constant: `v22org.c:207,252,275`, `v22mod.c:361,366,387`, `v22loop.c:199,215`. Reset in `V22.c:239`, `v22org.c:40,271,283`, `v22mod.c:235,382,392`, `v22loop.c:62,212,218`, `v22hdx.c:118`, `v22ans.c:113`. One role across every reconstructed user. |
+| r28 | rx_rms | `v22org.c:102` `hdx->rx_rms = FPM_rms(rxin, V22_ORG_BLOCK);` and `:110` adds it into `rms_accum`. Its only user is `v22_originate`; init `V22.c:241`. |
+| r2c | rms_accum | `v22org.c:110` RMS sum, `:127` divides by `rms_blocks` to become the mean, `:129` compares it to `rms_threshold`. Only `v22_originate`; init `V22.c:247`. |
+| r30 | rms_threshold | `v22org.c:130` is the only reader; `V22.c:242` inits 0x2454 (9,300). |
+| r32 | rms_blocks | `v22org.c:115` count, `:128` divisor; `V22.c:243` inits 0. |
+
+### Cross-owner classification and scoping
+
+The five members are declared only by `struct v22fp_hdx`. Same-named members of
+other owners were classified and left byte-for-byte unchanged:
+
+- `struct v22fp_dsp::r28`/`r2c` -- `V22.c:209,215,220,225,281,290`,
+  `v22rate.c:51,68`, `v22stc.c:33`, the `v22fp.h:144` comment about the
+  `(r2c, r2e)` DSP pair, the `v22fp.h:355/:363` field definitions, and the
+  `V22FP_ASSERT_OFF(d_r28, struct v22fp_dsp, r28, 0x28)` assertion.
+- `struct v22fp_params::r08` (`params.r08`), `struct v22fp::r34` (`fp->r34`)
+  and the `struct v22fp::r1e[2]` mask.
+- `v17data.h:226` `r0a`, `v17fax.h:615` `r28`, `v32fpstat.h:93` `r0a`,
+  `v32fp.h:174` `r2c`, `b103fp.h:220` `r2c`, and the V.32 locals in
+  `V32.c:364`, `V32stc.c:239..292`, `t_v32fptab.c`/`t_v32fpdisp.c`.
+
+Renamed: the `v22fp_hdx` members in `v22fp.h`, `V22.c`, `v22org.c`, `v22mod.c`,
+`v22loop.c`, `v22hdx.c`, `v22ans.c`; the test-local mirror fields that hold
+these counters (`struct scenario` in `t_v22org.c`, `struct poke` in
+`t_v22loop.c`); and the method-doc comments in `v22loop.h`. String-literal
+labels (`"N3 r0a boundary -"`, `"O NODE_3 mean above r30 (%ld)"`,
+`"r0a accumulated (%ld)"`, ...) are preserved unchanged, as are derived test
+identifiers (`r0a_before`, `pre_r0a`, `saw_n3_r0a_inc`, `r32_before`).
+
+The `V22FP_ASSERT_OFF(h_r30, struct v22fp_hdx, rms_threshold, 0x30)` field
+argument was updated; the `h_r30` tag is left offset-based, matching the
+existing `p_r18`/`h_r3c` precedent. Every offset is unchanged.
+
+### Stale or incorrect prose corrected (no code change)
+
+- **S1** banner node table: `r0c == N` -> `connect_substate == N`
+  (+0x0c is now `connect_substate`).
+- **S2** "WHAT IS NOT RENAMED" rewritten: `r0c`, `r34`, `r0a`, `r28`, `r2c`,
+  `r30`, `r32` have since been named, and `r04` is not an hdx field at all
+  (+0x04 is `node_deadline`). Only `r08` and `fp->r1e` remain offset-based.
+- **S3** "sets `r34` when that mean exceeds `r30`" was wrong; `v22org.c:131`
+  sets `fp->hdx->rx_shift`.
+- **S4** `iSilenceAfter2100` is `static` in `src/pump/v22/v22mod.c`, where
+  `v22_answer` is defined -- not in `v22org.c`. The `.bss`+0x380 and
+  three-reference facts are kept.
+- **S5** the "left to whoever lands them" status was stale; the renames have
+  landed.
+- **S6** the divide-by-zero warning was false for the reconstructed flow:
+  `rms_accum`/`ones_detect_ms`/`rms_blocks` move under the same
+  `if (nsym != 0)` guard and `ones_detect_ms` is zeroed at NODE_0 and at the
+  NODE_3 transition, so `rms_blocks == 0` implies `ones_detect_ms == 0` and the
+  `> 135` test cannot pass. Corrected to state the object's guard. (The
+  `docs/remaining.md:656` note is a separate historical finding and was not
+  touched.)
+- **S7** "Two of the arms" listed three; now "Three of the arms".
+- **S8** the unsigned-read claim made precise: it holds for `r08`,
+  `ones_detect_ms`, `rx_rms`, `rms_accum`, `rms_threshold` and `rms_blocks`,
+  but `fp->r1e` is an `unsigned char` bit mask with no signedness to invert.
+- `v22fp.h`: five new Doxygen field comments, the `r08` multi-role retention
+  note, and the banner's named-field count updated. `v22loop.h` comments and
+  `V22_LOOP_ONES_MS` updated to the new name.
+
+### Verification
+
+A token-aware forward substitution of `HEAD` reproduces the working tree
+exactly for all six code/test files except the intended deviations: the two
+rewritten header prose blocks (`v22fp.h`, `v22org.h`), the `h_r30` assertion
+field argument on `V22.c`, and the single `v22org.c` comment naming `rms_blocks`
+(the identifier substitution there is paired with a reflowed comment). No
+protected `v22fp_dsp`/`v22fp_params`/`v22fp::r34`/`r1e` code occurrence changed.
+No mutation manifest value contains any of the five old identifiers (a
+decoded-JSON scan of all 274 files found 0), so 0 `find`/`replace` values were
+changed and every anchor still matches its renamed source; the gate's
+`anchorcheck` passed 272 suites / 10041 mutations with 0 matching other than
+exactly once, and `refcheck` resolved 13940 references with 0 unresolved.
+
+Batch 17 gate result: Gentoo `make phase` exited 0, **`period differential:
+375 passed, 0 failed`** and `phase boundary: period differential and structural
+checks all OK`. All 655 `build/period/*.o` hashes are **byte-identical** to the
+pre-edit snapshot (`/home/philpem/slmodem/tmp/issue100-v22org-before.sha256`,
+655/655).

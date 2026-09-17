@@ -59,7 +59,7 @@ v22_local_loop(struct v22fp *fp, unsigned short *txsym, short *txout,
 	case V22_LOOP_NODE_0:
 		hdx->gtimer = 0;
 		hdx->r08 = 0;
-		hdx->r0a = 0;
+		hdx->ones_detect_ms = 0;
 
 		V22_status(fp, &st);
 		TxNOP(fp, txsym, txout, (short *)txcount);
@@ -196,7 +196,7 @@ v22_local_loop(struct v22fp *fp, unsigned short *txsym, short *txout,
 			if ((short)Detect_1s(rxsym, rxcount, V22_LOOP_DET_BPS,
 					     V22_LOOP_ONES_Q15) == 0) {
 				DescrambleDataV22(fp, rxsym, *rxcount);
-				fp->hdx->r0a = (short)((unsigned short)fp->hdx->r0a
+				fp->hdx->ones_detect_ms = (short)((unsigned short)fp->hdx->ones_detect_ms
 						   + Detect_1s(rxsym, rxcount,
 							V22_LOOP_DET_BPS,
 							V22_LOOP_ONES_Q15));
@@ -209,13 +209,13 @@ v22_local_loop(struct v22fp *fp, unsigned short *txsym, short *txout,
 		if ((unsigned short)hdx->r08 > V22_LOOP_S1_MS) {
 			hdx->gtimer = 0;
 			hdx->r08 = 0;
-			hdx->r0a = 0;
+			hdx->ones_detect_ms = 0;
 			hdx->connect_substate = V22_NODE_2400A;
 			SetAdaptEqV22(fp, 2);
-		} else if ((unsigned short)hdx->r0a > V22_LOOP_ONES_MS) {
+		} else if ((unsigned short)hdx->ones_detect_ms > V22_LOOP_ONES_MS) {
 			hdx->gtimer = 0;
 			hdx->r08 = 0;
-			hdx->r0a = 0;
+			hdx->ones_detect_ms = 0;
 			hdx->connect_substate = V22_NODE_1200_12;
 			SetAdaptEqV22(fp, 2);
 		} else if ((unsigned int)ReadGTimer(fp)

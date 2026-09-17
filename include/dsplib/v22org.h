@@ -26,17 +26,17 @@
  * Every arm of both functions opens with a debug print, and eleven of them
  * name the node they are entering:
  *
- *     "V22_answer,NODE_0\n"                     answer, r0c == 0
- *     "V22_answer,NODE_1\n"                     answer, r0c == 1
- *     "V22_answer,NODE_3\n"                     answer, r0c == 3
- *     "V22_answer,NODE_4\n"                     answer, r0c == 4
- *     "V22_answer,NODE_SILENCE_AFTER_2100\n"    answer, r0c == 14
- *     "V22_originate,NODE_0\n"                  originate, r0c == 0
- *     "V22_originate, NODE_1\n"                 originate, r0c == 1
- *     "V22_originate, NODE_3\n"                 originate, r0c == 3
- *     "V22_originate, NODE_4\n"                 originate, r0c == 4
- *     "V22_originate, NODE_5\n"                 originate, r0c == 5
- *     "V22_originate, NODE_6\n"                 originate, r0c == 6
+ *     "V22_answer,NODE_0\n"                     answer, connect_substate == 0
+ *     "V22_answer,NODE_1\n"                     answer, connect_substate == 1
+ *     "V22_answer,NODE_3\n"                     answer, connect_substate == 3
+ *     "V22_answer,NODE_4\n"                     answer, connect_substate == 4
+ *     "V22_answer,NODE_SILENCE_AFTER_2100\n"    answer, connect_substate == 14
+ *     "V22_originate,NODE_0\n"                  originate, connect_substate == 0
+ *     "V22_originate, NODE_1\n"                 originate, connect_substate == 1
+ *     "V22_originate, NODE_3\n"                 originate, connect_substate == 3
+ *     "V22_originate, NODE_4\n"                 originate, connect_substate == 4
+ *     "V22_originate, NODE_5\n"                 originate, connect_substate == 5
+ *     "V22_originate, NODE_6\n"                 originate, connect_substate == 6
  *
  * -- so those values ARE named, by the strongest evidence there is.  The
  * remaining arms print "V22_answer, NODE %d\n " or "V22_originate, NODE %d\n "
@@ -67,7 +67,8 @@
  * `iSilenceAfter2100`, 2 bytes at `.bss` + 0x380, LOCAL, referenced three
  * times by `v22_answer` and by nothing else in the whole object: node 1 clears
  * it on the way out, and node 14 increments it and compares it with 4.  It is
- * `static` in src/pump/v22/v22org.c for that reason.  The load is `movzwl`,
+ * `static` in src/pump/v22/v22mod.c, where `v22_answer` itself is defined --
+ * not in this file, which holds `v22_originate` alone.  The load is `movzwl`,
  * which is what makes it unsigned.
  *
  * At one 160-sample block per call, four blocks is 80 ms -- the
@@ -85,10 +86,10 @@
  *   `FPM_MTD_detect` on `hdx->mtd_s1` reported NOTHING.  A block that does
  *   report resets the counter unless the run has already passed 59 ms.
  *
- *   `hdx->r0a` accumulates `Detect_1s`'s answer, which v22det.c shows IS a
+ *   `hdx->ones_detect_ms` accumulates `Detect_1s`'s answer, which v22det.c shows IS a
  *   duration in milliseconds -- `(count * V22_DET_SYMBOL_MS_Q14) >> 14`.
  *
- * `v22_answer`'s copy adds a reset of `r0a` on the same 59 ms rule that
+ * `v22_answer`'s copy adds a reset of `ones_detect_ms` on the same 59 ms rule that
  * `r08` gets; NEITHER of `v22_originate`'s does, and that asymmetry is the
  * object's.  The verdicts are then printed in the author's words: "Detected
  * V22bis Carrier\n" and "Detected V22 Carrier\n" in `v22_answer`, and
@@ -105,7 +106,7 @@
  * THE COMPARISONS ARE UNSIGNED AND THAT IS ENCODED
  *
  * Same finding as v22conn.h's.  Every `ReadGTimer` test in both functions is
- * `jbe`, all the `hdx->r08` and `hdx->r0a` tests are `seta`/`ja`/`jbe` on a
+ * `jbe`, all the `hdx->r08` and `hdx->ones_detect_ms` tests are `seta`/`ja`/`jbe` on a
  * `cmpw`, the answer machine's NODE_3 tone gate is a `ja` on `hdx->gtimer`,
  * and `v22_originate`'s NODE_3 mean is a `div` -- an UNSIGNED divide, with
  * `%edx` zeroed first.  Every one of those fields is declared signed in
@@ -140,21 +141,38 @@
  * FPM_TONE_generate(...)`, matching the object.
  *
  * ---------------------------------------------------------------------------
- * WHAT IS NOT RENAMED
+ * WHAT IS STILL OFFSET-NAMED, AND WHAT HAS SINCE BEEN NAMED
  *
- * `hdx->r08`, `r0a`, `r0c`, `r04`, `r28`, `r2c`, `r30`, `r32`, `r34` and
- * `fp->r1e` keep v22fp.h's names.  Several of them are now read by something
- * -- `r08` and `r0a` are the two counters above, and `v22_originate`'s NODE_3
- * accumulates `FPM_rms` into `r2c` over `r32` blocks, divides to get the mean
- * and sets `r34` when that mean exceeds `r30` (9,300 from `V22FP_create`) --
- * and all of them are read UNSIGNED here while v22fp.h declares them signed.
- * A rename is a change to a shared header that other branches are editing; the
- * derivation is recorded and the rename is left to whoever lands them.
+ * Only two of the fields this paragraph used to list are still offset-based:
+ * `hdx->r08`, which is genuinely multi-role and is RETAINED NEUTRAL, and
+ * `fp->r1e`, which is a bit mask rather than a counter.  The old list named
+ * `r0a`, `r0c`, `r28`, `r2c`, `r30`, `r32`, `r34` and an `r04` that is not an
+ * hdx field at all; those have since been named -- `r0c` is
+ * `connect_substate`, `r34` is `rx_shift`, and this batch named `r0a`
+ * `ones_detect_ms` and `r28`/`r2c`/`r30`/`r32` `rx_rms`/`rms_accum`/
+ * `rms_threshold`/`rms_blocks`.  +0x04 is `node_deadline`, which the final
+ * spelling never left offset-named.
  *
- * NOTE THE DIVIDE BY `r32`.  `V22FP_create` leaves it zero and only the
- * `*rxcount != 0` path increments it, so entering NODE_3's mean calculation
- * with `r08` already past 135 and no block counted divides by zero.  That is
- * the object's, and a test must not construct it.
+ * `v22_originate`'s NODE_3 accumulates `FPM_rms` into `rms_accum` over
+ * `rms_blocks` blocks, divides to get the mean and sets `fp->hdx->rx_shift`
+ * when that mean exceeds `rms_threshold` (9,300 from `V22FP_create`).
+ *
+ * THE COUNTERS ARE READ UNSIGNED AND THAT IS ENCODED.  `hdx->r08`,
+ * `ones_detect_ms`, `rx_rms`, `rms_accum`, `rms_threshold` and `rms_blocks`
+ * are all read `movzwl`/unsigned or divided unsigned here while v22fp.h
+ * declares them signed; the source casts at each site and the header is not
+ * touched.  `fp->r1e` is the exception: it is an `unsigned char` bit mask, so
+ * it has no signedness to invert and no cast appears.
+ *
+ * NO DIVIDE-BY-ZERO IS REACHABLE IN THE RECONSTRUCTED FLOW.  `rms_blocks`
+ * starts at zero, but `rx_rms` is added into `rms_accum` and `rms_blocks` is
+ * incremented under the SAME `if (nsym != 0)` guard (v22org.c:109..116), and
+ * `ones_detect_ms` is accumulated under that guard too while being zeroed at
+ * NODE_0 (:39) and again at the NODE_3 -> NODE_4 transition (:120).  So
+ * `rms_blocks == 0` implies `ones_detect_ms == 0`, the `> 135` test at :118
+ * cannot pass, and the divide at :127 is only reached with at least one block
+ * counted.  The object's own guard is what makes that true; a test that pokes
+ * the counters can still construct the division by zero and none should.
  */
 
 #ifndef DSPLIB_V22ORG_H
@@ -164,7 +182,7 @@ struct v22fp;
 
 /*
  * ---------------------------------------------------------------------------
- * The sub-states, `struct v22fp_hdx::r0c`.  Named by the author's own debug
+ * The sub-states, `struct v22fp_hdx::connect_substate`.  Named by the author's own debug
  * strings; 8..13 are v22conn.h's and are not repeated here.
  */
 #define V22_ANS_NODE_0			0
@@ -225,9 +243,10 @@ struct v22fp;
  * own `cmp`.  The clock advances 20 ms per call, so the effective thresholds
  * are the next multiple of 20 above each.
  *
- * Two of the arms have no constant at all and compare against `hdx->node_deadline`, the
- * caller's own limit -- 60,000 ms as `v22_create` configures it: `v22_answer`'s
- * NODE_3 and `v22_originate`'s NODE_1 and NODE_3.
+ * Three of the arms have no constant at all and compare against
+ * `hdx->node_deadline`, the caller's own limit -- 60,000 ms as `v22_create`
+ * configures it: `v22_answer`'s NODE_3 and `v22_originate`'s NODE_1 and
+ * NODE_3.
  */
 #define V22_ANS_NODE_1_MS	3300u	/* the answer tone's length          */
 #define V22_ANS_NODE_3_TONE_MS	1470u	/* NODE_3 switches its transmitter
@@ -298,13 +317,13 @@ struct v22fp;
 /**
  * @brief V.22 protocol handler for the ANSWER station's connection sequence (index 2 of V22_PROTOCOL).
  *
- * A jump table of fifteen sub-states (`hdx->r0c`, `.rodata`+0x85b8): NODE_0
+ * A jump table of fifteen sub-states (`hdx->connect_substate`, `.rodata`+0x85b8): NODE_0
  * resets, NODE_1 sends the 2225 Hz answer tone for V22_ANS_NODE_1_MS then
  * moves to NODE_SILENCE_AFTER_2100, that node waits V22_ANS_SILENCE_BLOCKS
  * calls then moves to NODE_3, NODE_3 hunts for carrier over two detectors
  * and NODE_4 is a short S1 burst before handing over to `connect_2400`
  * (nodes 8..11) or `connect_1200` (12..13). See the file banner for the
- * full derivation, including the two carrier-hunt counters `hdx->r08`/`r0a`.
+ * full derivation, including the two carrier-hunt counters `hdx->r08`/`ones_detect_ms`.
  *
  * @param fp       The V.22 datapump instance.
  * @param txsym    Transmit symbols to scramble and modulate.
@@ -321,7 +340,7 @@ void v22_answer(struct v22fp *fp, unsigned short *txsym, short *txout,
 /**
  * @brief V.22 protocol handler for the ORIGINATE station's connection sequence (index 1 of V22_PROTOCOL).
  *
- * A jump table of fourteen sub-states (`hdx->r0c`, `.rodata`+0x85f4):
+ * A jump table of fourteen sub-states (`hdx->connect_substate`, `.rodata`+0x85f4):
  * NODE_0 resets and retunes the tone generator to 1200 Hz, NODE_1 waits for
  * the far end, NODE_3 measures the received RMS mean against a threshold,
  * NODE_4 is a descrambled receive phase leading to NODE_5, and NODE_5/NODE_6
