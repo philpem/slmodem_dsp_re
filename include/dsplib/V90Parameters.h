@@ -518,13 +518,15 @@ public:
 	float	TRN2D_MAX_MEAN_ERROR_ENERGY_IN_PHASE4;	/* +0x428 */
 	float	PHASE3_ERROR_FOR_V34_FALLBACK;	/* +0x42c */
 	float	PHASE4_ERROR_FOR_V34_FALLBACK;	/* +0x430 */
-	/* +0x434  read by V90ConnectionEvaluator.cpp:882 and copied into the
+	/* +0x434  read by V90ConnectionEvaluator.cpp and copied into the
 	 * evaluator's `phase4ErrorForV34Fallback`; the object's own diagnostic
 	 * there prints "pdsnrCurrentV34DropThreshPhase4 set to = ...", which is
-	 * the author's name for this slot.  Kept `int` per finding F878 -- the
-	 * value is a float at runtime (250.0f, 0x437a0000) but the int/float
-	 * question is a separate F878 site, not this batch. */
-	int	PDSNR_CURRENT_V34_DROP_THRESH_PHASE4;	/* +0x434 */
+	 * the author's name for this slot.  A FLOAT: the object loads it with
+	 * `flds 0x434(%ecx)` and stores it with `fsts`, and `setToDefault`
+	 * plants 250.0f.  The `int` typing and the `ce_param_float` union read
+	 * were the workaround for the frozen span; both are gone (finding F878,
+	 * issue #127). */
+	float	PDSNR_CURRENT_V34_DROP_THRESH_PHASE4;	/* +0x434 */
 	float	PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH;	/* +0x438 */
 	float	QC_PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH;	/* +0x43c */
 	/*

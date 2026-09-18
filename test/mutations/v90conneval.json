@@ -173,11 +173,6 @@
   "find": "\tint frac = (int)((v - (float)(int)v) * 1000.0f);\n",
   "replace": "\tint frac = (int)((v - v) * 1000.0f);\n"},
 
- {"label": "ce_param_float converts rather than reinterprets",
-  "why": "`flds 0x434(%ecx)` loads the four bytes AS a float; a conversion would have been `fildl`.  Caught by the assertion that +0xac holds 0x437a0000 after the phase-4 retrain.",
-  "find": "\tu.i = bits;\n\treturn u.f;",
-  "replace": "\tu.i = bits;\n\treturn (float)u.i;"},
-
  {"label": "the scale is spelt as an int, or as a double",
   "equivalent": true,
   "why": "PROVEN, not assumed.  `1000.0f`, `1000` and `1000.0` were each compiled into V90ConnectionEvaluator.cpp with this tree's own CXXFLAGS and the `objdump -d` instruction text diffed: all three are IDENTICAL, and none of them emits a `.rodata.cst8` -- the constant stays four bytes in `.rodata.cst4` in every spelling, because 1000 is exactly representable and GCC narrows it back.  So the section the relocation names bounds the constant's WIDTH and says nothing about how it was written; finding F1384 again, one function along.",
@@ -375,7 +370,7 @@
   "replace": "\t\t\t\t\t(void)t;"},
 
  {"label": "+0xac is replaced by PHASE4_ERROR_FOR_V34_FALLBACK",
-  "find": "\t\t\t\t\tfloat t = ce_param_float(\n\t\t\t\t\t    params->PDSNR_CURRENT_V34_DROP_THRESH_PHASE4);",
+  "find": "\t\t\t\t\tfloat t =\n\t\t\t\t\t    params->PDSNR_CURRENT_V34_DROP_THRESH_PHASE4;",
   "replace": "\t\t\t\t\tfloat t =\n\t\t\t\t\t    params->PHASE4_ERROR_FOR_V34_FALLBACK;"},
 
  {"label": "the threshold diagnostic is not gated",
