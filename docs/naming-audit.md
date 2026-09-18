@@ -2502,3 +2502,17 @@ Modern compile clean on every affected TU (`V32.c`, `V32mod.c`, `V32stc.c`,
 with no redundant casts; the base pointer spelling (b) was measured equally
 neutral but removes fewer casts and is not the chosen form.
 
+## #158 source change: the rate ladder is an `if`/`else` chain, not a `switch`
+
+No name changed. The change is the control-flow spelling of the rate ladder in
+`RxNextStateV17`'s IDLE arm and `RxHdxScramV17`'s expiry path, and it is
+recorded here because it selects on the already-named `V17RXC_RATE_CODE`
+(`unsigned short`, F9443) and its four `V17RX_RATE_*` values and
+`V17RX_STATUS_RATE_*` results. `switch (RXCTL(modem)->rate_code)` promotes the
+controlling expression to `int` and emits 32-bit compares; the `if`/`else if`
+chain on the same field is the only enumerated spelling that emits the object's
+16-bit `test %ax,%ax` / `cmp $0x1,%ax` / `cmp $0x2,%ax`. The field is read as
+`unsigned short` in both spellings, so no computed value was narrowed; see
+`docs/method/refinement.md` lever 8 for the nine-cell enumeration and the
+verdicts.
+

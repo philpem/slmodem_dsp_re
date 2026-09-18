@@ -1110,6 +1110,45 @@ would not convert silently in C++ at all — it needs a cast the object gives no
 reason for. Evidence class 2 beats class 3, and `compare.py` did not move by
 one symbol on the retype (5850).
 
+**A `switch` PROMOTES ITS CONTROLLING EXPRESSION; AN `if`/`else` CHAIN DOES
+NOT — that is the width, and the FIELD's declared type does not change.**
+Issue #158, `RxNextStateV17`'s IDLE-arm rate ladder. The object loads
+`V17RXC_RATE_CODE` (`unsigned short`) with `movzwl` and then compares **16
+bits**: `test %ax,%ax` / `cmp $0x1,%ax` / `cmp $0x2,%ax; sete; add $0x6`. A
+`switch (RXCTL(modem)->rate_code)` emits `cmp $0x1,%eax` / `jle` / `cmp
+$0x2,%eax` — the switch's controlling expression undergoes the integer
+promotions, so the tree is SImode and the compare is 32 bits wide. Nine
+spellings were compiled under the period flags and compared full-text, and the
+`if`/`else if` chain **directly on the field** is the only one that maps:
+
+    switch (RXCTL(modem)->rate_code)        32-bit cmp, SIZE 6 off
+    short rate = (short)RXCTL(...)->rate_code; switch (rate)   movswl, 32-bit
+    short rate = RXCTL(...)->rate_code; switch (rate)          movswl, 32-bit
+    unsigned short rate = RXCTL(...)->rate_code; switch (rate) movzwl, 32-bit
+    if/else if on RXCTL(modem)->rate_code                     movzwl + 16-bit  <-- the object
+    short rate = (short)RXCTL(...)->rate_code; if/else chain   movswl + test %eax
+    unsigned short rate = RXCTL(...)->rate_code; if/else chain movzwl + test %eax
+
+This is not a narrowing of a computed value: the lvalue read is the same
+`unsigned short` field in every cell, and the object's own `movzwl` says
+unsigned. What the chain changes is where the promotion happens, and the
+HImode compare is what the compiler was FORCED to encode from it. Applying it
+to `RxNextStateV17` took the symbol from SIZE (6 bytes / 4 instructions) to
+all bytes equal with one section relocation unresolved, and `RxHdxScramV17`'s
+expiry ladder to the object's shape. **The same substitution is worth checking
+wherever a narrow lvalue is `switch`ed and the object compares it at 16 bits.**
+
+**AND THE LADDER IS NOT `RxHdxScramV17`'s WHOLE RESIDUAL.** The expiry
+countdown is a separate, pre-existing difference with its own cause:
+`left = (short)((unsigned short)RXCTL(modem)->countdown - 1); ... if (left > 0)
+return 0;` emits `movzwl; dec; cwtl; mov %ax; test %ax,%ax; jg` where the
+object has `movzwl; dec; test %cx,%cx; mov %cx; jle` — a sign-extension and a
+test/store order the ladder change does not touch. It is shared with
+`RxHdxBridgeV17` and `RxHdxPrtcolV17`, which carry no ladder at all, so it is
+not this lever and not #158. After the ladder fix `RxHdxScramV17` is 270 bytes
+against the object's 266 and the three handlers are all 210/210 in the twins
+with 79 bytes differing. Recorded, not acted on.
+
 ### Lever 9. Operand order — which is decided by the TREE, not by how you spell it
 
 `return dsp->rx_energy & dsp->rx_tone;` — swapping the two operands gave byte
