@@ -14,8 +14,8 @@
  },
  {
   "label": "the delay line is cleared one entry short",
-  "find": "\t\tfor (i = 0; i < ecc->line_len; i++)\n\t\t\tecc->line[i] = 0;\n\t\t((struct v32_fp *)fp)->int_14 = 1;",
-  "replace": "\t\tfor (i = 0; i < ecc->line_len - 1; i++)\n\t\t\tecc->line[i] = 0;\n\t\t((struct v32_fp *)fp)->int_14 = 1;"
+  "find": "\t\tfor (i = 0; i < ecc->line_len; i++)\n\t\t\tecc->line[i] = 0;\n\t\tfp->int_14 = 1;",
+  "replace": "\t\tfor (i = 0; i < ecc->line_len - 1; i++)\n\t\t\tecc->line[i] = 0;\n\t\tfp->int_14 = 1;"
  },
  {
   "label": "the near update loop is left off when the canceller is switched on",
@@ -64,13 +64,13 @@
  },
  {
   "label": "the tone setter retunes the second detector",
-  "find": "\tcfg = ((struct fpm_tone *)((struct v32_hdx *)hdx)->tone0)->cfg;",
-  "replace": "\tcfg = ((struct fpm_tone *)((struct v32_hdx *)hdx)->tone1)->cfg;"
+  "find": "\tcfg = ((struct fpm_tone *)hdx->tone0)->cfg;",
+  "replace": "\tcfg = ((struct fpm_tone *)hdx->tone1)->cfg;"
  },
  {
   "label": "the tone setter rebuilds the first detector from the second's configuration",
-  "find": "\tFPM_TONE_create((struct fpm_tone *)((struct v32_hdx *)hdx)->tone0, &cfg);",
-  "replace": "\tFPM_TONE_create((struct fpm_tone *)((struct v32_hdx *)hdx)->tone1, &cfg);"
+  "find": "\tFPM_TONE_create((struct fpm_tone *)hdx->tone0, &cfg);",
+  "replace": "\tFPM_TONE_create((struct fpm_tone *)hdx->tone1, &cfg);"
  },
  {
   "label": "the requested frequency never reaches the copied configuration",
@@ -84,8 +84,8 @@
  },
  {
   "label": "the tone setter hands FPM_TONE_create the library default configuration",
-  "find": "((struct v32_hdx *)hdx)->tone0, &cfg);\n}",
-  "replace": "((struct v32_hdx *)hdx)->tone0, 0);\n}"
+  "find": "hdx->tone0, &cfg);\n}",
+  "replace": "hdx->tone0, 0);\n}"
  },
  {
   "label": "the multi-tone detector is deleted from the tone slot above it",

@@ -59,13 +59,13 @@
  },
  {
   "label": "an out-of-range transmit mode replaces the fault flags instead of setting one bit",
-  "find": "\t\t((struct v32_modem *)modem)->flags |= V32_FLAG_FAULT;\n\t\tfp = (unsigned char *)FP(modem);",
-  "replace": "\t\t((struct v32_modem *)modem)->flags = V32_FLAG_FAULT;\n\t\tfp = (unsigned char *)FP(modem);"
+  "find": "\t\t((struct v32_modem *)modem)->flags |= V32_FLAG_FAULT;\n\t\tfp = FP(modem);",
+  "replace": "\t\t((struct v32_modem *)modem)->flags = V32_FLAG_FAULT;\n\t\tfp = FP(modem);"
  },
  {
   "label": "an out-of-range transmit mode leaves the scrambler at one bit per symbol rather than none",
-  "find": "\t\tfp = (unsigned char *)FP(modem);\n\t\tshift = 0;\n\t\tbreak;",
-  "replace": "\t\tfp = (unsigned char *)FP(modem);\n\t\tshift = 1;\n\t\tbreak;"
+  "find": "\t\tfp = FP(modem);\n\t\tshift = 0;\n\t\tbreak;",
+  "replace": "\t\tfp = FP(modem);\n\t\tshift = 1;\n\t\tbreak;"
  },
  {
   "label": "the receive four-point arms install the absolute slicer where the object installs the differential one",
@@ -79,8 +79,8 @@
  },
  {
   "label": "the receive four-point arms do not clear the decoder's phase counter",
-  "find": "\t\t((struct v32_fp *)fp)->short_2e = 0;\n\t\tdec->count = 0;",
-  "replace": "\t\t((struct v32_fp *)fp)->short_2e = 0;"
+  "find": "\t\tfp->short_2e = 0;\n\t\tdec->count = 0;",
+  "replace": "\t\tfp->short_2e = 0;"
  },
  {
   "label": "12000 initialises the Viterbi decoder for 14400",
@@ -139,33 +139,33 @@
  },
  {
   "label": "the equaliser's two step sizes are transposed",
-  "find": "\tcase V32_ADAPTEQ_MU0:\n\t\tfp = (unsigned char *)FP(modem);\n\t\t((struct v32_fp *)fp)->eq_adapt = 1;\n\t\tFSE(fp)->mu_sel = 0;",
-  "replace": "\tcase V32_ADAPTEQ_MU0:\n\t\tfp = (unsigned char *)FP(modem);\n\t\t((struct v32_fp *)fp)->eq_adapt = 1;\n\t\tFSE(fp)->mu_sel = 1;"
+  "find": "\tcase V32_ADAPTEQ_MU0:\n\t\tfp = FP(modem);\n\t\tfp->eq_adapt = 1;\n\t\tFSE(fp)->mu_sel = 0;",
+  "replace": "\tcase V32_ADAPTEQ_MU0:\n\t\tfp = FP(modem);\n\t\tfp->eq_adapt = 1;\n\t\tFSE(fp)->mu_sel = 1;"
  },
  {
   "label": "switching the equaliser off leaves it adapting",
-  "find": "\tcase V32_ADAPTEQ_OFF:\n\t\tfp = (unsigned char *)FP(modem);\n\t\t((struct v32_fp *)fp)->eq_adapt = 0;",
-  "replace": "\tcase V32_ADAPTEQ_OFF:\n\t\tfp = (unsigned char *)FP(modem);\n\t\t((struct v32_fp *)fp)->eq_adapt = 1;"
+  "find": "\tcase V32_ADAPTEQ_OFF:\n\t\tfp = FP(modem);\n\t\tfp->eq_adapt = 0;",
+  "replace": "\tcase V32_ADAPTEQ_OFF:\n\t\tfp = FP(modem);\n\t\tfp->eq_adapt = 1;"
  },
  {
   "label": "the equaliser's step selector is one field above mu_sel",
-  "find": "\tcase V32_ADAPTEQ_MU1:\n\t\tfp = (unsigned char *)FP(modem);\n\t\t((struct v32_fp *)fp)->eq_adapt = 1;\n\t\tFSE(fp)->mu_sel = 1;",
-  "replace": "\tcase V32_ADAPTEQ_MU1:\n\t\tfp = (unsigned char *)FP(modem);\n\t\t((struct v32_fp *)fp)->eq_adapt = 1;\n\t\tFSE(fp)->pll_sel = 1;"
+  "find": "\tcase V32_ADAPTEQ_MU1:\n\t\tfp = FP(modem);\n\t\tfp->eq_adapt = 1;\n\t\tFSE(fp)->mu_sel = 1;",
+  "replace": "\tcase V32_ADAPTEQ_MU1:\n\t\tfp = FP(modem);\n\t\tfp->eq_adapt = 1;\n\t\tFSE(fp)->pll_sel = 1;"
  },
  {
   "label": "the receive loops are switched on where the object switches them off",
-  "find": "\tcase 1:\n\t\tfp = (unsigned char *)FP(modem);\n\t\t((struct v32_fp *)fp)->int_08 = 0;",
-  "replace": "\tcase 1:\n\t\tfp = (unsigned char *)FP(modem);\n\t\t((struct v32_fp *)fp)->int_08 = 1;"
+  "find": "\tcase 1:\n\t\tfp = FP(modem);\n\t\tfp->int_08 = 0;",
+  "replace": "\tcase 1:\n\t\tfp = FP(modem);\n\t\tfp->int_08 = 1;"
  },
  {
   "label": "only three of the four receive loops are switched on",
-  "find": "\t\t((struct v32_fp *)fp)->int_08 = 1;\n\t\t((struct v32_fp *)fp)->int_0c = 1;\n\t\t((struct v32_fp *)fp)->int_00 = 1;\n\t\t((struct v32_fp *)fp)->int_04 = 1;",
-  "replace": "\t\t((struct v32_fp *)fp)->int_08 = 1;\n\t\t((struct v32_fp *)fp)->int_0c = 1;\n\t\t((struct v32_fp *)fp)->int_00 = 1;"
+  "find": "\t\tfp->int_08 = 1;\n\t\tfp->int_0c = 1;\n\t\tfp->int_00 = 1;\n\t\tfp->int_04 = 1;",
+  "replace": "\t\tfp->int_08 = 1;\n\t\tfp->int_0c = 1;\n\t\tfp->int_00 = 1;"
  },
  {
   "label": "mode 3 is not one of the receive loop switch's arms",
-  "find": "\tcase 2:\n\tcase 3:\n\t\tfp = (unsigned char *)FP(modem);\n\t\t((struct v32_fp *)fp)->int_08 = 1;",
-  "replace": "\tcase 2:\n\t\tfp = (unsigned char *)FP(modem);\n\t\t((struct v32_fp *)fp)->int_08 = 1;"
+  "find": "\tcase 2:\n\tcase 3:\n\t\tfp = FP(modem);\n\t\tfp->int_08 = 1;",
+  "replace": "\tcase 2:\n\t\tfp = FP(modem);\n\t\tfp->int_08 = 1;"
  },
  {
   "label": "the round-trip delay is held DOWN to the far section's length instead of raised to it",
@@ -254,8 +254,8 @@
  },
  {
   "label": "the clamp writes one word too few",
-  "find": "\tfor (i = (short)(((struct v32_hdx *)hdx)->symbol_len - 1); i != -1; i--)",
-  "replace": "\tfor (i = (short)(((struct v32_hdx *)hdx)->symbol_len - 2); i != -1; i--)"
+  "find": "\tfor (i = (short)(hdx->symbol_len - 1); i != -1; i--)",
+  "replace": "\tfor (i = (short)(hdx->symbol_len - 2); i != -1; i--)"
  },
  {
   "label": "the clamp writes a value one below the object's",
@@ -264,18 +264,18 @@
  },
  {
   "label": "the clamp counts down from the block length as an INT, so a negative length writes nothing",
-  "find": "\tvoid *hdx = HDX(modem);\n\tshort i;\n\n\t(void)in;\n\t(void)count;",
-  "replace": "\tvoid *hdx = HDX(modem);\n\tint i;\n\n\t(void)in;\n\t(void)count;"
+  "find": "\tstruct v32_hdx *hdx = HDX(modem);\n\tshort i;\n\n\t(void)in;\n\t(void)count;",
+  "replace": "\tstruct v32_hdx *hdx = HDX(modem);\n\tint i;\n\n\t(void)in;\n\t(void)count;"
  },
  {
   "label": "the clamp reports the count it was passed rather than the block length",
-  "find": "\treturn ((struct v32_hdx *)hdx)->symbol_len;\n}",
+  "find": "\treturn hdx->symbol_len;\n}",
   "replace": "\treturn count;\n}"
  },
  {
   "label": "the turnaround budget is charged only twice",
-  "find": "\t\t       - (((struct v32_hdx *)hdx)->short_9c\n\t\t\t  + ((struct v32_hdx *)hdx)->short_98\n\t\t\t  + ((struct v32_hdx *)hdx)->short_9a));",
-  "replace": "\t\t       - (((struct v32_hdx *)hdx)->short_9c\n\t\t\t  + ((struct v32_hdx *)hdx)->short_98));"
+  "find": "\t\t       - (hdx->short_9c\n\t\t\t  + hdx->short_98\n\t\t\t  + hdx->short_9a));",
+  "replace": "\t\t       - (hdx->short_9c\n\t\t\t  + hdx->short_98));"
  },
  {
   "label": "the turnaround surplus is not clamped at zero",
@@ -284,8 +284,8 @@
  },
  {
   "label": "the turnaround subtraction is done at 32 bits, so it does not wrap",
-  "find": "\tshort left;\n\n\tleft = (short)(((struct v32_hdx *)hdx)->turnaround",
-  "replace": "\tint left;\n\n\tleft = (int)(((struct v32_hdx *)hdx)->turnaround"
+  "find": "\tshort left;\n\n\tleft = (short)(hdx->turnaround",
+  "replace": "\tint left;\n\n\tleft = (int)(hdx->turnaround"
  },
  {
   "label": "the cleaned-sample count is capped one sample high",
