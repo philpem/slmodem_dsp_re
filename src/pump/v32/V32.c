@@ -149,8 +149,8 @@ static const short V32DiconnectThreshTable[8] = {
 
 /* The instance is not modelled; these are v32fpctl.c's accessors. */
 
-#define HDX(m)			(((struct v32_modem *)(m))->hdx)
-#define FP(m)			(((struct v32_modem *)(m))->fp)
+#define HDX(m)			((m)->hdx)
+#define FP(m)			((m)->fp)
 
 #define SDM_TX(fp)	(&((struct v32_fp *)(fp))->scrambler)
 #define SDM_RX(fp)	(&((struct v32_fp *)(fp))->descrambler)
@@ -298,7 +298,7 @@ static const short V32DiconnectThreshTable[8] = {
 #define V32_TIMEOUT_SCALE	0x4ccc
 
 void *
-V32FP_recreate(void *modem, const struct v32fp_params *param, void *arg2)
+V32FP_recreate(struct v32_modem *modem, const struct v32fp_params *param, void *arg2)
 {
 	struct v32fp_params *p;
 	struct v32_fp *fp;
@@ -331,10 +331,10 @@ V32FP_recreate(void *modem, const struct v32fp_params *param, void *arg2)
 	fresh = 0;
 	if (modem == 0) {
 		modem = sysdep_malloc(sizeof(struct v32_modem));
-		((struct v32_modem *)modem)->fp =
+		modem->fp =
 			sysdep_malloc(sizeof(struct v32_fp));
 		hdx = sysdep_malloc(sizeof(struct v32_hdx));
-		((struct v32_modem *)modem)->hdx = hdx;
+		modem->hdx = hdx;
 		hdx->tone0 = 0;
 		hdx->mtd = 0;
 		hdx->buffer =
@@ -355,11 +355,11 @@ V32FP_recreate(void *modem, const struct v32fp_params *param, void *arg2)
 	 * object exactly as they do here.
 	 */
 	if (param == 0)
-		*(struct v32fp_params *)modem = V32_CFG;
+		modem->params = V32_CFG;
 	else
-		*(struct v32fp_params *)modem = *param;
+		modem->params = *param;
 
-	p = (struct v32fp_params *)modem;
+	p = &modem->params;
 	p->disconnect_thresh = V32DiconnectThreshTable[3];
 	p->r2c = 0;
 
@@ -709,26 +709,26 @@ V32FP_recreate(void *modem, const struct v32fp_params *param, void *arg2)
 	fp->rate_fallback = 0;
 
 	/* The instance's own status byte, its flag, and the window. */
-	((struct v32_modem *)modem)->status_word = 0;
-	((struct v32_modem *)modem)->flags |= V32_FLAG_BIT6;
-	((struct v32_modem *)modem)->status = 1;
+	modem->status_word = 0;
+	modem->flags |= V32_FLAG_BIT6;
+	modem->status = 1;
 
-	((struct v32_modem *)modem)->diag_out_i = FSE(fp)->out_i;
-	((struct v32_modem *)modem)->diag_out_q = FSE(fp)->out_q;
-	((struct v32_modem *)modem)->diag_icoeff = FSE(fp)->icoeff;
-	((struct v32_modem *)modem)->diag_qcoeff = FSE(fp)->qcoeff;
+	modem->diag_out_i = FSE(fp)->out_i;
+	modem->diag_out_q = FSE(fp)->out_q;
+	modem->diag_icoeff = FSE(fp)->icoeff;
+	modem->diag_qcoeff = FSE(fp)->qcoeff;
 	near_n = ECC(fp)->cfg.near_taps;
 	far_n = ECC(fp)->cfg.far_taps;
 	coef = ECC(fp)->coef[0];
-	((struct v32_modem *)modem)->diag_near_i = coef;
-	((struct v32_modem *)modem)->diag_near_q = coef + near_n;
-	((struct v32_modem *)modem)->diag_fse_taps = 0x31;
-	((struct v32_modem *)modem)->diag_far_i = coef + 2 * near_n;
-	((struct v32_modem *)modem)->diag_n_out = &FSE(fp)->n_out;
-	((struct v32_modem *)modem)->diag_near_n =
+	modem->diag_near_i = coef;
+	modem->diag_near_q = coef + near_n;
+	modem->diag_fse_taps = 0x31;
+	modem->diag_far_i = coef + 2 * near_n;
+	modem->diag_n_out = &FSE(fp)->n_out;
+	modem->diag_near_n =
 		(unsigned short)ECC(fp)->cfg.near_taps;
-	((struct v32_modem *)modem)->diag_far_q = coef + 2 * near_n + far_n;
-	((struct v32_modem *)modem)->diag_far_n =
+	modem->diag_far_q = coef + 2 * near_n + far_n;
+	modem->diag_far_n =
 		(unsigned short)ECC(fp)->cfg.far_taps;
 
 	/*
