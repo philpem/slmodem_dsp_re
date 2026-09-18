@@ -1393,6 +1393,19 @@ information the compiler needed and then hands back what it would have derived.
 Finding F7941, and it is lever 9's rule -- act on what the compiler was forced
 to encode -- applied to an induction variable.
 
+**AND A MEMBER REACHED THROUGH A CAST HAS A THIRD FORM, where the obvious
+cleanup is NOT neutral.** Issue #141 removed the cast-hiding macros from the
+fax read paths, and one site resisted. `RXS(modem)` is
+`((struct v17rx *)(modem))->state`, so `(&RXS(modem)->agc.value)->cfg.alpha++`
+is an address-deref through that cast. Rewriting it to the direct-dot
+`RXS(modem)->agc.value.cfg.alpha++` -- dropping a redundant parenthesis only --
+grew `RxNextStateV17` by 16 bytes, an extra `mov 0x60(%ebx),%edx` reload of the
+state pointer, object `0f051a30…`. The object's form is the address-deref:
+taking the address of the subobject is what keeps the base in a register here.
+Every other direct-member site in the same edit was byte-identical, so this is
+lever 13 applied to a single field and not a new class of difference. Reverted
+and recorded rather than forced. Issue #141.
+
 ### Lever 14. The TRANSLATION-UNIT PARTITION is a source property the object records
 
 `src/service/voice.c` held the whole ring detector, and `RD_delete`,
