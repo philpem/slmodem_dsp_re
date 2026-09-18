@@ -1496,6 +1496,37 @@ family:
   Check the flag dependency before moving a function template whose body uses
   a transcendental. See #74's F11356.
 
+### Lever 16. A holder declared with the wrong pointer type hides casts that retyping removes
+
+When a local, field or parameter holds one specific struct pointer but is
+declared as a generic or wrong pointer type, every use site casts to the real
+struct. Retyping the holder to the real struct type is **codegen-neutral** --
+pointer types are not observable in the emitted code, and the symbols here are
+`extern "C"`, so no mangling or DWARF recovers the declared type -- and it
+lets the casts go.
+
+Measured on `DemodDataV17` (`src/fax/v17.c`): `rxs` held `RXS(modem)`
+(`struct v17rx_state *`) but was declared `unsigned char *`. Compiling the
+file on the Gentoo period compiler with each of `unsigned char *`, `void *`
+and `struct v17rx_state *` gives the **identical** object (`94c51dc0...`).
+Retyping to `struct v17rx_state *` removed three `((struct v17rx_state *)rxs)`
+casts.
+
+The type is a fidelity CHOICE, not a recovery. Among the candidates keep the
+truthful struct type over `void *` (a convenience that keeps the casts) and
+over `unsigned char *` (not an established idiom). The retype also removes a
+modern-compiler rejection -- GCC 14's `-Wincompatible-pointer-types` is what
+stopped `make coverage` at this file.
+
+Do NOT collapse these: a `void *`/`char *` holder cast to DIFFERENT struct
+types at different sites (one generic pointer, several targets), and a
+`char *`/`unsigned char *` used deliberately as a byte pointer. Decide per
+holder from its USES, not from the declaration. A retype that is not
+codegen-neutral is a different finding -- record it and leave the cast.
+
+Issues #140 (tree-wide retyping audit) and #141 (replace the cast macros this
+hides behind -- `RXS`, `RXS_SRE`, `RXS_FSE`, `RXSTATE`).
+
 ## Narrow where the object narrows, not earlier
 
 `InitGenSequence` provides a small, exact discriminator. Its reconstruction
