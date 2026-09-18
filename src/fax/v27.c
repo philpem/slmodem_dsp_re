@@ -180,8 +180,8 @@ V27RX_create(void *modem, const struct v27rx_cfg *cfg)
 	struct sdmv27_cfg dcfg;
 	struct fpm_fse *fse;
 	struct fpm_sre *sre;
-	void *sh;
-	void *rx;
+	struct v27_rx_shared *sh;
+	struct v27_rx_block *rx;
 	void *aux;
 	short *bufa;
 	short *bufb;
@@ -219,17 +219,17 @@ V27RX_create(void *modem, const struct v27rx_cfg *cfg)
 		sh = sysdep_malloc(V27SH_SIZE);
 		((struct v27_rx *)modem)->shared = sh;
 		fresh_sh = 1;
-		((struct v27_rx_shared *)sh)->mtd = 0;
-		((struct v27_rx_shared *)sh)->buf = sysdep_malloc(V27SH_BUF_BYTES);
+		sh->mtd = 0;
+		sh->buf = sysdep_malloc(V27SH_BUF_BYTES);
 		sh = ((struct v27_rx *)modem)->shared;
-		((struct v27_rx_shared *)sh)->mtd_v21 = 0;
+		sh->mtd_v21 = 0;
 	}
 
-	((struct v27_rx_shared *)sh)->int_0004 = 0;
-	((struct v27_rx_shared *)sh)->rx_state = V27RX_STATE_START;
-	((struct v27_rx_shared *)sh)->countdown = 0;
-	((struct v27_rx_shared *)sh)->handler = RxHdxStartV27;
-	((struct v27_rx_shared *)sh)->train_long =
+	sh->int_0004 = 0;
+	sh->rx_state = V27RX_STATE_START;
+	sh->countdown = 0;
+	sh->handler = RxHdxStartV27;
+	sh->train_long =
 		(short)((&((struct v27_rx *)modem)->cfg)->short_train == 0);
 
 	/*
@@ -243,40 +243,40 @@ V27RX_create(void *modem, const struct v27rx_cfg *cfg)
 	mcfg.ratio = V27_MTD_V21_RATIO;
 	mcfg.min_level = V27_MTD_V21_MIN_LEVEL;
 	sh = ((struct v27_rx *)modem)->shared;
-	((struct v27_rx_shared *)sh)->mtd_v21 = FPM_MTD_create(
-		(struct fpm_mtd *)((struct v27_rx_shared *)sh)->mtd_v21, &mcfg);
+	sh->mtd_v21 = FPM_MTD_create(
+		(struct fpm_mtd *)sh->mtd_v21, &mcfg);
 
 	FPM_AGC_init(&((struct v27_rx *)modem)->shared->agc,
 		     &AGCv27_CFG, fresh_sh);
 
 	sh = ((struct v27_rx *)modem)->shared;
-	((struct v27_rx_shared *)sh)->v21_samples = 0;
-	((struct v27_rx_shared *)sh)->v21_armed = 0;
+	sh->v21_samples = 0;
+	sh->v21_armed = 0;
 
 	/*
 	 * THE RATE, and the two numbers are V.27ter's own.  An unrecognised
 	 * one is reported through the status word and then treated as 4800.
 	 */
 	if ((&((struct v27_rx *)modem)->cfg)->bit_rate == 2400) {
-		((struct v27_rx_shared *)sh)->rate = V27SH_RATE_2400;
+		sh->rate = V27SH_RATE_2400;
 	} else if ((&((struct v27_rx *)modem)->cfg)->bit_rate == 4800) {
-		((struct v27_rx_shared *)sh)->rate = V27SH_RATE_4800;
+		sh->rate = V27SH_RATE_4800;
 	} else {
-		((struct v27_rx_shared *)sh)->rate = V27SH_RATE_4800;
+		sh->rate = V27SH_RATE_4800;
 		((struct v27_rx *)modem)->result.byte.flags |= V27_STATUS_FLAG_ERROR;
 		((struct v27_rx *)modem)->result.byte.status = V27_STATUS_DEFAULT;
 	}
 
 	/* The data-channel detector, which does depend on the rate. */
 	mcfg = FPM_MTD_CFG;
-	mcfg.coeff = ((struct v27_rx_shared *)sh)->rate == V27SH_RATE_4800 ? V27_MTD_COEFF_4800
+	mcfg.coeff = sh->rate == V27SH_RATE_4800 ? V27_MTD_COEFF_4800
 						 : V27_MTD_COEFF_2400;
 	mcfg.tones = V27_MTD_TONES;
 	mcfg.ratio = V27_MTD_RATIO;
 	mcfg.min_level = V27_MTD_MIN_LEVEL;
 	sh = ((struct v27_rx *)modem)->shared;
-	((struct v27_rx_shared *)sh)->mtd = FPM_MTD_create(
-		(struct fpm_mtd *)((struct v27_rx_shared *)sh)->mtd, &mcfg);
+	sh->mtd = FPM_MTD_create(
+		(struct fpm_mtd *)sh->mtd, &mcfg);
 
 	/* ---- the receive block ---------------------------------------- */
 
@@ -286,18 +286,18 @@ V27RX_create(void *modem, const struct v27rx_cfg *cfg)
 	if (rx == 0) {
 		rx = sysdep_malloc(V27RX_BLOCK_SIZE);
 		((struct v27_rx *)modem)->rx = rx;
-		((struct v27_rx_block *)rx)->buf_a = sysdep_malloc(V27RX_BUF_A_BYTES);
+		rx->buf_a = sysdep_malloc(V27RX_BUF_A_BYTES);
 		rx = ((struct v27_rx *)modem)->rx;
-		((struct v27_rx_block *)rx)->buf_b = sysdep_malloc(V27RX_BUF_B_BYTES);
+		rx->buf_b = sysdep_malloc(V27RX_BUF_B_BYTES);
 	}
 
 	rcfg = FPM_MRF_CFG;
 	rcfg.aux = aux;
 	sh = ((struct v27_rx *)modem)->shared;
-	rcfg.branches = V27RX_MRF_UP[((struct v27_rx_shared *)sh)->rate];
-	rcfg.decimate = V27RX_MRF_DOWN[((struct v27_rx_shared *)sh)->rate];
-	rcfg.coeff = V27RX_MRF_FILT[((struct v27_rx_shared *)sh)->rate];
-	rcfg.taps = V27RX_MRF_FILT_LEN[((struct v27_rx_shared *)sh)->rate];
+	rcfg.branches = V27RX_MRF_UP[sh->rate];
+	rcfg.decimate = V27RX_MRF_DOWN[sh->rate];
+	rcfg.coeff = V27RX_MRF_FILT[sh->rate];
+	rcfg.taps = V27RX_MRF_FILT_LEN[sh->rate];
 	FPM_MRF_init(&((struct v27_rx *)modem)->rx->mrf, &rcfg,
 		     fresh_handle);
 
@@ -310,7 +310,7 @@ V27RX_create(void *modem, const struct v27rx_cfg *cfg)
 	 * given, so it is a post-init fix-up and not a fifth stack config.
 	 */
 	sh = ((struct v27_rx *)modem)->shared;
-	if (((struct v27_rx_shared *)sh)->rate == V27SH_RATE_4800)
+	if (sh->rate == V27SH_RATE_4800)
 		((struct v27_rx *)modem)->rx->agc.cfg.block_len =
 							V27_AGC_BLOCK_4800;
 
@@ -327,14 +327,14 @@ V27RX_create(void *modem, const struct v27rx_cfg *cfg)
 	scfg.groups_trk = V27_SRE_GROUPS_TRK;
 	scfg.settle = V27_SRE_SETTLE;
 	sh = ((struct v27_rx *)modem)->shared;
-	scfg.clock_len = V27RX_SAMP_PER_BAUD[((struct v27_rx_shared *)sh)->rate];
-	scfg.coeffs = V27RX_SRE_FILT_LEN[((struct v27_rx_shared *)sh)->rate];
-	scfg.proto = V27RX_SRE_FILT[((struct v27_rx_shared *)sh)->rate];
-	scfg.disc = V27RX_XB_COFFS[((struct v27_rx_shared *)sh)->rate];
-	scfg.xclock = V27RX_XCLOCK[((struct v27_rx_shared *)sh)->rate];
-	scfg.yclock = V27RX_YCLOCK[((struct v27_rx_shared *)sh)->rate];
-	scfg.pll_k1 = V27RX_SRE_PLLK1[((struct v27_rx_shared *)sh)->rate];
-	scfg.pll_k2 = V27RX_SRE_PLLK2[((struct v27_rx_shared *)sh)->rate];
+	scfg.clock_len = V27RX_SAMP_PER_BAUD[sh->rate];
+	scfg.coeffs = V27RX_SRE_FILT_LEN[sh->rate];
+	scfg.proto = V27RX_SRE_FILT[sh->rate];
+	scfg.disc = V27RX_XB_COFFS[sh->rate];
+	scfg.xclock = V27RX_XCLOCK[sh->rate];
+	scfg.yclock = V27RX_YCLOCK[sh->rate];
+	scfg.pll_k1 = V27RX_SRE_PLLK1[sh->rate];
+	scfg.pll_k2 = V27RX_SRE_PLLK2[sh->rate];
 	scfg.mag_hi = V27_SRE_MAG_HI;
 	scfg.mag_lo = V27_SRE_MAG_LO;
 	scfg.err_hi = V27_SRE_ERR_HI;
@@ -344,7 +344,7 @@ V27RX_create(void *modem, const struct v27rx_cfg *cfg)
 		(((struct v27_rx *)modem)->rx->agc.cfg.ref_level
 		 / V27_SRE_RMS_MIN_DIV);
 	scfg.rms_len = (short)(V27_SRE_RMS_LEN_SYMS
-			       * V27RX_SAMP_PER_BAUD[((struct v27_rx_shared *)sh)->rate]);
+			       * V27RX_SAMP_PER_BAUD[sh->rate]);
 	FPM_SRE_init(&((struct v27_rx *)modem)->rx->sre, &scfg,
 		     fresh_handle);
 
@@ -362,7 +362,7 @@ V27RX_create(void *modem, const struct v27rx_cfg *cfg)
 	 */
 	sh = ((struct v27_rx *)modem)->shared;
 	sre = &((struct v27_rx *)modem)->rx->sre;
-	sre->ppm_step = (short)(((struct v27_rx_shared *)sh)->rate == V27SH_RATE_2400
+	sre->ppm_step = (short)(sh->rate == V27SH_RATE_2400
 				? V27_SRE_PPM_STEP_2400
 				: V27_SRE_PPM_STEP_4800);
 	period = (short)(sre->ppm_step * V27_SRE_PPM_UNIT);
@@ -374,22 +374,22 @@ V27RX_create(void *modem, const struct v27rx_cfg *cfg)
 	fcfg = FPM_FSE_CFG;
 	fcfg.reserved34 = aux;
 	sh = ((struct v27_rx *)modem)->shared;
-	fcfg.block = (short)(((struct v27_rx_shared *)sh)->rate == V27SH_RATE_2400 ? V27_FSE_BLOCK_2400
+	fcfg.block = (short)(sh->rate == V27SH_RATE_2400 ? V27_FSE_BLOCK_2400
 							 : V27_FSE_BLOCK_4800);
-	fcfg.interp = V27RX_SAMP_PER_BAUD[((struct v27_rx_shared *)sh)->rate];
-	fcfg.icoff = V27RX_FSE_IFILT[((struct v27_rx_shared *)sh)->rate];
-	fcfg.qcoff = V27RX_FSE_QFILT[((struct v27_rx_shared *)sh)->rate];
-	fcfg.taps = V27RX_FSE_FILT_LEN[((struct v27_rx_shared *)sh)->rate];
-	fcfg.mu[0] = V27RX_FSE_MU_TRAIN[((struct v27_rx_shared *)sh)->rate];
-	fcfg.mu[1] = V27RX_FSE_MU_TRACK[((struct v27_rx_shared *)sh)->rate];
-	fcfg.clk = V27RX_CRR_TABLE[((struct v27_rx_shared *)sh)->rate];
-	fcfg.clk_mod = V27RX_CRR_TABLE_LEN[((struct v27_rx_shared *)sh)->rate];
+	fcfg.interp = V27RX_SAMP_PER_BAUD[sh->rate];
+	fcfg.icoff = V27RX_FSE_IFILT[sh->rate];
+	fcfg.qcoff = V27RX_FSE_QFILT[sh->rate];
+	fcfg.taps = V27RX_FSE_FILT_LEN[sh->rate];
+	fcfg.mu[0] = V27RX_FSE_MU_TRAIN[sh->rate];
+	fcfg.mu[1] = V27RX_FSE_MU_TRACK[sh->rate];
+	fcfg.clk = V27RX_CRR_TABLE[sh->rate];
+	fcfg.clk_mod = V27RX_CRR_TABLE_LEN[sh->rate];
 	fcfg.train_sym = V27_FSE_TRAIN_SYM;
 	fcfg.err_hi = V27_FSE_ERR_HI;
 	fcfg.err_lo = V27_FSE_ERR_LO;
-	fcfg.clk_inc = V27RX_CRR_ADJUST[((struct v27_rx_shared *)sh)->rate];
-	fcfg.pll_k1 = V27RX_FSE_PLLK1[((struct v27_rx_shared *)sh)->rate];
-	fcfg.pll_k2 = V27RX_FSE_PLLK2[((struct v27_rx_shared *)sh)->rate];
+	fcfg.clk_inc = V27RX_CRR_ADJUST[sh->rate];
+	fcfg.pll_k1 = V27RX_FSE_PLLK1[sh->rate];
+	fcfg.pll_k2 = V27RX_FSE_PLLK2[sh->rate];
 	fcfg.owner = &((struct v27_rx *)modem)->rx->dec;
 	fcfg.decision = V27RX_epoch_det;
 	FPM_FSE_init(&((struct v27_rx *)modem)->rx->fse, &fcfg,
@@ -398,8 +398,8 @@ V27RX_create(void *modem, const struct v27rx_cfg *cfg)
 	/* ---- the scratch buffers, the smoothers, the decoder ---------- */
 
 	rx = ((struct v27_rx *)modem)->rx;
-	bufa = (short *)((struct v27_rx_block *)rx)->buf_a;
-	bufb = (short *)((struct v27_rx_block *)rx)->buf_b;
+	bufa = (short *)rx->buf_a;
+	bufb = (short *)rx->buf_b;
 	/*
 	 * 160 entries of each, with a `short` induction variable (`inc` then
 	 * `cwtl` at 0x99bcc).  `V27RX_BUF_B` is four bytes longer than that
@@ -410,47 +410,47 @@ V27RX_create(void *modem, const struct v27rx_cfg *cfg)
 		bufb[i] = 0;
 	}
 
-	((struct v27_rx_block *)rx)->q_flag = 0;
-	((struct v27_rx_block *)rx)->q_acc = 0;
-	((struct v27_rx_block *)rx)->q_count = 0;
+	rx->q_flag = 0;
+	rx->q_acc = 0;
+	rx->q_count = 0;
 
 	sh = ((struct v27_rx *)modem)->shared;
-	rate = ((struct v27_rx_shared *)sh)->rate;
+	rate = sh->rate;
 	if (rate == V27SH_RATE_2400)
-		((struct v27_rx_block *)rx)->q_limit = V27RX_Q_LIMIT_2400;
+		rx->q_limit = V27RX_Q_LIMIT_2400;
 	else if (rate == V27SH_RATE_4800)
-		((struct v27_rx_block *)rx)->q_limit = V27RX_Q_LIMIT_4800;
+		rx->q_limit = V27RX_Q_LIMIT_4800;
 
-	((struct v27_rx_block *)rx)->dec.epoch_i0 = 0;
-	((struct v27_rx_block *)rx)->rms_count = 0;
-	((struct v27_rx_block *)rx)->rms_on = 1;
-	((struct v27_rx_block *)rx)->rms_ref = 0;
-	((struct v27_rx_block *)rx)->dec.epoch_q0 = 0;
-	((struct v27_rx_block *)rx)->dec.epoch_i1 = 0;
-	((struct v27_rx_block *)rx)->dec.epoch_q1 = 0;
-	((struct v27_rx_block *)rx)->dec.epoch_i2 = 0;
-	((struct v27_rx_block *)rx)->dec.epoch_q2 = 0;
+	rx->dec.epoch_i0 = 0;
+	rx->rms_count = 0;
+	rx->rms_on = 1;
+	rx->rms_ref = 0;
+	rx->dec.epoch_q0 = 0;
+	rx->dec.epoch_i1 = 0;
+	rx->dec.epoch_q1 = 0;
+	rx->dec.epoch_i2 = 0;
+	rx->dec.epoch_q2 = 0;
 
-	((struct v27_rx_block *)rx)->dec.eight_phase =
-					((struct v27_rx_shared *)sh)->rate == V27SH_RATE_4800;
-	((struct v27_rx_block *)rx)->dec.last = 0;
-	((struct v27_rx_block *)rx)->dec.phase_mask =
+	rx->dec.eight_phase =
+					sh->rate == V27SH_RATE_4800;
+	rx->dec.last = 0;
+	rx->dec.phase_mask =
 					(unsigned short)
-					V27RX_DEC_PHS_MASK[((struct v27_rx_shared *)sh)->rate];
-	((struct v27_rx_block *)rx)->dec.train_count = 0;
-	((struct v27_rx_block *)rx)->dec.epoch_avg = V27DEC_MAG;
-	((struct v27_rx_block *)rx)->dec.angle_prev = 0;
-	((struct v27_rx_block *)rx)->dec.train_short =
-					((struct v27_rx_shared *)sh)->train_long == 0;
-	((struct v27_rx_block *)rx)->dec.sym_count = 0;
-	((struct v27_rx_block *)rx)->dec.pmap =
-					V27RX_DEC_PMAP[((struct v27_rx_shared *)sh)->rate];
-	((struct v27_rx_block *)rx)->dec.angles =
-					V27RX_DEC_LAST_PHASE[((struct v27_rx_shared *)sh)->rate];
+					V27RX_DEC_PHS_MASK[sh->rate];
+	rx->dec.train_count = 0;
+	rx->dec.epoch_avg = V27DEC_MAG;
+	rx->dec.angle_prev = 0;
+	rx->dec.train_short =
+					sh->train_long == 0;
+	rx->dec.sym_count = 0;
+	rx->dec.pmap =
+					V27RX_DEC_PMAP[sh->rate];
+	rx->dec.angles =
+					V27RX_DEC_LAST_PHASE[sh->rate];
 
 	dcfg = SDMv27_CFG;
 	dcfg.nbits = (unsigned short)(V27_SDM_NBITS_4800
-				      - (((struct v27_rx_shared *)sh)->rate == V27SH_RATE_2400));
+				      - (sh->rate == V27SH_RATE_2400));
 	SDMv27_init((struct sdmv27 *)(void *)
 			&((struct v27_rx *)modem)->rx->sdm,
 		    &dcfg);
@@ -458,17 +458,17 @@ V27RX_create(void *modem, const struct v27rx_cfg *cfg)
 	/* ---- the enables, the status word and the equaliser view ------ */
 
 	rx = ((struct v27_rx *)modem)->rx;
-	((struct v27_rx_block *)rx)->int_0000 = 1;
-	((struct v27_rx_block *)rx)->en_sre_adapt = 1;
-	((struct v27_rx_block *)rx)->en_fse_pll = 1;
-	((struct v27_rx_block *)rx)->int_000c = 0;
-	((struct v27_rx_block *)rx)->en_fse_lms = 1;
+	rx->int_0000 = 1;
+	rx->en_sre_adapt = 1;
+	rx->en_fse_pll = 1;
+	rx->int_000c = 0;
+	rx->en_fse_lms = 1;
 
 	((struct v27_rx *)modem)->result.word = 0;
 	((struct v27_rx *)modem)->result.byte.flags |= V27_STATUS_FLAGS_SEED;
 	((struct v27_rx *)modem)->result.byte.status = V27_STATUS_START;
 
-	fse = (&((struct v27_rx_block *)rx)->fse);
+	fse = (&rx->fse);
 	((struct v27_rx *)modem)->eq_out_i = fse->out_i;
 	((struct v27_rx *)modem)->eq_out_q = fse->out_q;
 	((struct v27_rx *)modem)->eq_n_out = &fse->n_out;
@@ -498,35 +498,35 @@ V27RX_create(void *modem, const struct v27rx_cfg *cfg)
 void
 V27RX_delete(void *modem)
 {
-	void *rx;
-	void *sh;
+	struct v27_rx_block *rx;
+	struct v27_rx_shared *sh;
 
 	rx = ((struct v27_rx *)modem)->rx;
-	FPM_FSE_free((&((struct v27_rx_block *)rx)->fse));
+	FPM_FSE_free((&rx->fse));
 
 	rx = ((struct v27_rx *)modem)->rx;
-	FPM_SRE_free((&((struct v27_rx_block *)rx)->sre));
+	FPM_SRE_free((&rx->sre));
 
 	rx = ((struct v27_rx *)modem)->rx;
-	FPM_MRF_free((&((struct v27_rx_block *)rx)->mrf));
+	FPM_MRF_free((&rx->mrf));
 
 	rx = ((struct v27_rx *)modem)->rx;
-	sysdep_free(((struct v27_rx_block *)rx)->buf_b);
+	sysdep_free(rx->buf_b);
 
 	rx = ((struct v27_rx *)modem)->rx;
-	sysdep_free(((struct v27_rx_block *)rx)->buf_a);
+	sysdep_free(rx->buf_a);
 
 	rx = ((struct v27_rx *)modem)->rx;
 	sysdep_free(rx);
 
 	sh = ((struct v27_rx *)modem)->shared;
-	FPM_MTD_delete((struct fpm_mtd *)((struct v27_rx_shared *)sh)->mtd);
+	FPM_MTD_delete((struct fpm_mtd *)sh->mtd);
 
 	sh = ((struct v27_rx *)modem)->shared;
-	sysdep_free(((struct v27_rx_shared *)sh)->buf);
+	sysdep_free(sh->buf);
 
 	sh = ((struct v27_rx *)modem)->shared;
-	FPM_MTD_delete((struct fpm_mtd *)((struct v27_rx_shared *)sh)->mtd_v21);
+	FPM_MTD_delete((struct fpm_mtd *)sh->mtd_v21);
 
 	sh = ((struct v27_rx *)modem)->shared;
 	sysdep_free(sh);
@@ -591,7 +591,7 @@ V27RX_delete(void *modem)
 unsigned short
 V27RX_epoch_det(struct fpm_fse *state, short *angle, short *mag)
 {
-	void *dec = state->cfg.owner;
+	struct v27_rx_decoder *dec = state->cfg.owner;
 	short n = (short)state->n_out;
 	short i, q;
 	short di, dq, ei, eq;
@@ -602,10 +602,10 @@ V27RX_epoch_det(struct fpm_fse *state, short *angle, short *mag)
 	(void)angle;
 	(void)mag;
 
-	((struct v27_rx_decoder *)dec)->sym_count =
-		(unsigned short)(((struct v27_rx_decoder *)dec)->sym_count + 1);
+	dec->sym_count =
+		(unsigned short)(dec->sym_count + 1);
 
-	limit = ((struct v27_rx_decoder *)dec)->train_short ? V27EPOCH_SYMS_SHORT
+	limit = dec->train_short ? V27EPOCH_SYMS_SHORT
 						 : V27EPOCH_SYMS_LONG;
 
 	i = state->out_i[n];
@@ -616,42 +616,42 @@ V27RX_epoch_det(struct fpm_fse *state, short *angle, short *mag)
 	 * against the newest one -- both of which are two symbols apart once
 	 * the shift below has happened.
 	 */
-	di = (short)(((struct v27_rx_decoder *)dec)->epoch_i1 - i);
-	dq = (short)(((struct v27_rx_decoder *)dec)->epoch_q1 - q);
-	ei = (short)(((struct v27_rx_decoder *)dec)->epoch_i2
-		     - ((struct v27_rx_decoder *)dec)->epoch_i0);
-	eq = (short)(((struct v27_rx_decoder *)dec)->epoch_q2
-		     - ((struct v27_rx_decoder *)dec)->epoch_q0);
+	di = (short)(dec->epoch_i1 - i);
+	dq = (short)(dec->epoch_q1 - q);
+	ei = (short)(dec->epoch_i2
+		     - dec->epoch_i0);
+	eq = (short)(dec->epoch_q2
+		     - dec->epoch_q0);
 
 	d = (short)(((di * di + dq * dq) >> 15)
 		    + ((ei * ei + eq * eq) >> 15));
 
-	((struct v27_rx_decoder *)dec)->epoch_i2 = ((struct v27_rx_decoder *)dec)->epoch_i1;
-	((struct v27_rx_decoder *)dec)->epoch_q2 = ((struct v27_rx_decoder *)dec)->epoch_q1;
-	((struct v27_rx_decoder *)dec)->epoch_i1 = ((struct v27_rx_decoder *)dec)->epoch_i0;
-	((struct v27_rx_decoder *)dec)->epoch_q1 = ((struct v27_rx_decoder *)dec)->epoch_q0;
-	((struct v27_rx_decoder *)dec)->epoch_i0 = (unsigned short)i;
-	((struct v27_rx_decoder *)dec)->epoch_q0 = (unsigned short)q;
+	dec->epoch_i2 = dec->epoch_i1;
+	dec->epoch_q2 = dec->epoch_q1;
+	dec->epoch_i1 = dec->epoch_i0;
+	dec->epoch_q1 = dec->epoch_q0;
+	dec->epoch_i0 = (unsigned short)i;
+	dec->epoch_q0 = (unsigned short)q;
 
 	e = (short)((i * i + q * q) >> 15);
 
-	if (((short)((struct v27_rx_decoder *)dec)->train_count) > limit) {
-		avg = (short)(((((struct v27_rx_decoder *)dec)->epoch_avg
+	if (((short)dec->train_count) > limit) {
+		avg = (short)(((dec->epoch_avg
 				* V27EPOCH_AVG_WEIGHT) >> V27EPOCH_AVG_SHIFT)
 			      + (e >> V27EPOCH_AVG_SHIFT));
-		((struct v27_rx_decoder *)dec)->epoch_avg = avg;
+		dec->epoch_avg = avg;
 
 		if (d > avg * V27EPOCH_TRIGGER) {
-			((struct v27_rx_decoder *)dec)->train_count = 0xffff;
+			dec->train_count = 0xffff;
 			state->lms_force = 1;
 			state->cfg.decision = V27RX_eq_train;
 		}
 	} else {
-		((struct v27_rx_decoder *)dec)->epoch_avg = (short)e;
+		dec->epoch_avg = (short)e;
 	}
 
-	((struct v27_rx_decoder *)dec)->train_count =
-		(unsigned short)(((struct v27_rx_decoder *)dec)->train_count + 1);
+	dec->train_count =
+		(unsigned short)(dec->train_count + 1);
 
 	return 0xffff;
 }
@@ -672,11 +672,11 @@ V27RX_epoch_det(struct fpm_fse *state, short *angle, short *mag)
 void
 V27TX_delete(void *modem)
 {
-	void *tx;
-	void *src;
+	struct v27_tx_block *tx;
+	struct v27_tx_source *src;
 
 	tx = ((struct v27_tx *)modem)->tx;
-	FPM_PPS_free(&((struct v27_tx_block *)tx)->pps);
+	FPM_PPS_free(&tx->pps);
 
 	/*
 	 * The SYMBOL RING's buffer, not a scratch allocation of the
@@ -686,16 +686,16 @@ V27TX_delete(void *modem)
 	 */
 	tx = ((struct v27_tx *)modem)->tx;
 	sysdep_free(((struct fpm_smc_ring *)(void *)
-			&((struct v27_tx_block *)tx)->ring)->sym);
+			&tx->ring)->sym);
 
 	tx = ((struct v27_tx *)modem)->tx;
 	sysdep_free(tx);
 
 	src = ((struct v27_tx *)modem)->source;
-	FIFO_delete((struct fax_fifo *)((struct v27_tx_source *)src)->fifo);
+	FIFO_delete((struct fax_fifo *)src->fifo);
 
 	src = ((struct v27_tx *)modem)->source;
-	SGD_delete((struct sgd *)((struct v27_tx_source *)src)->sgd);
+	SGD_delete((struct sgd *)src->sgd);
 
 	src = ((struct v27_tx *)modem)->source;
 	sysdep_free(src);
@@ -741,7 +741,7 @@ V27TX_delete(void *modem)
 unsigned short
 V27RX_eq_train(struct fpm_fse *state, short *angle, short *mag)
 {
-	void *dec = state->cfg.owner;
+	struct v27_rx_decoder *dec = state->cfg.owner;
 	const short *tbl;
 	unsigned short count;
 	short step;
@@ -752,16 +752,16 @@ V27RX_eq_train(struct fpm_fse *state, short *angle, short *mag)
 	short i;
 
 	/* Saturating, and it restarts at half scale -- V27RX_decision's. */
-	count = (unsigned short)(((struct v27_rx_decoder *)dec)->sym_count + 1);
+	count = (unsigned short)(dec->sym_count + 1);
 	if (count == V27DEC_PHASE_FULL)
-		((struct v27_rx_decoder *)dec)->sym_count = V27DEC_PHASE_FULL / 2;
+		dec->sym_count = V27DEC_PHASE_FULL / 2;
 	else
-		((struct v27_rx_decoder *)dec)->sym_count = count;
+		dec->sym_count = count;
 
 	/* Half the constellation: 4 of 8, or 2 of 4. */
-	step = ((struct v27_rx_decoder *)dec)->eight_phase ? 4 : 2;
+	step = dec->eight_phase ? 4 : 2;
 
-	diff = (short)(*angle - ((struct v27_rx_decoder *)dec)->angle_prev);
+	diff = (short)(*angle - dec->angle_prev);
 	if (diff > V27DEC_HALF_TURN)
 		diff = (short)(diff + V27DEC_PHASE_FULL);
 	if (diff < -V27DEC_HALF_TURN)
@@ -771,22 +771,22 @@ V27RX_eq_train(struct fpm_fse *state, short *angle, short *mag)
 
 	err = (short)(diff < 0 ? (short)-diff : diff);
 	if (err > V27DEC_QUARTER_TURN)
-		((struct v27_rx_decoder *)dec)->last =
-			(short)((((struct v27_rx_decoder *)dec)->last + step)
-				& ((struct v27_rx_decoder *)dec)->phase_mask);
+		dec->last =
+			(short)((dec->last + step)
+				& dec->phase_mask);
 
-	tbl = (const short *)((struct v27_rx_decoder *)dec)->angles;
-	a = tbl[((struct v27_rx_decoder *)dec)->last];
-	limit = ((struct v27_rx_decoder *)dec)->train_short ? V27DEC_TRAIN_SYMS_SHORT
+	tbl = (const short *)dec->angles;
+	a = tbl[dec->last];
+	limit = dec->train_short ? V27DEC_TRAIN_SYMS_SHORT
 						 : V27DEC_TRAIN_SYMS_LONG;
 	*angle = a;
-	((struct v27_rx_decoder *)dec)->angle_prev = a;
-	((struct v27_rx_decoder *)dec)->train_count =
-		(unsigned short)(((struct v27_rx_decoder *)dec)->train_count + 1);
+	dec->angle_prev = a;
+	dec->train_count =
+		(unsigned short)(dec->train_count + 1);
 
 	state->mu_sel = 0;
 
-	if (((short)((struct v27_rx_decoder *)dec)->train_count) >= limit) {
+	if (((short)dec->train_count) >= limit) {
 		for (i = 0; i < state->cfg.taps; i = (short)(i + 1)) {
 			/* No body in the object.  See the note above. */
 		}
@@ -826,22 +826,22 @@ V27RX_eq_train(struct fpm_fse *state, short *angle, short *mag)
 unsigned short
 V27RX_decision(struct fpm_fse *state, short *angle, short *mag)
 {
-	void *dec = state->cfg.owner;
-	const short *tbl = (const short *)((struct v27_rx_decoder *)dec)->angles;
-	const short *pmap = (const short *)((struct v27_rx_decoder *)dec)->pmap;
-	short n = ((struct v27_rx_decoder *)dec)->eight_phase ? 8 : 4;
+	struct v27_rx_decoder *dec = state->cfg.owner;
+	const short *tbl = (const short *)dec->angles;
+	const short *pmap = (const short *)dec->pmap;
+	short n = dec->eight_phase ? 8 : 4;
 	unsigned short count;
 	short best, bi, k;
 	int diff;
 
-	diff = *angle - tbl[((struct v27_rx_decoder *)dec)->last];
+	diff = *angle - tbl[dec->last];
 
 	/* Saturating, and it restarts at half scale rather than at zero. */
-	count = (unsigned short)(((struct v27_rx_decoder *)dec)->sym_count + 1);
+	count = (unsigned short)(dec->sym_count + 1);
 	if (count == V27DEC_PHASE_FULL)
-		((struct v27_rx_decoder *)dec)->sym_count = V27DEC_PHASE_FULL / 2;
+		dec->sym_count = V27DEC_PHASE_FULL / 2;
 	else
-		((struct v27_rx_decoder *)dec)->sym_count = count;
+		dec->sym_count = count;
 
 	/* One revolution, taken as [0, V27DEC_PHASE_FULL]. */
 	if (diff < 0)
@@ -865,10 +865,10 @@ V27RX_decision(struct fpm_fse *state, short *angle, short *mag)
 		}
 	}
 
-	((struct v27_rx_decoder *)dec)->last = (short)((((struct v27_rx_decoder *)dec)->last + bi)
-					    & ((struct v27_rx_decoder *)dec)->phase_mask);
+	dec->last = (short)((dec->last + bi)
+					    & dec->phase_mask);
 	*mag = V27DEC_MAG;
-	*angle = tbl[((struct v27_rx_decoder *)dec)->last];
+	*angle = tbl[dec->last];
 
 	return (unsigned short)pmap[bi];
 }
@@ -1040,19 +1040,19 @@ RxHdxErrorV27(void *modem, short *in, short *out, unsigned short *count)
 void
 RxNextStateV27(void *modem)
 {
-	void *sh = ((struct v27_rx *)modem)->shared;
-	void *rx;
+	struct v27_rx_shared *sh = ((struct v27_rx *)modem)->shared;
+	struct v27_rx_block *rx;
 	unsigned short blocks;
 	unsigned char flags;
-	int state = ((struct v27_rx_shared *)sh)->rx_state;
+	int state = sh->rx_state;
 
 	switch (state) {
 	case V27RX_STATE_START:
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V27RX_STATE_START\n");
-		((struct v27_rx_shared *)sh)->countdown = V27SH_EPOCH_DET_BLOCKS;
-		((struct v27_rx_shared *)sh)->handler = RxHdxEpochDetV27;
-		((struct v27_rx_shared *)sh)->rx_state = V27RX_STATE_EPOCH_DET;
+		sh->countdown = V27SH_EPOCH_DET_BLOCKS;
+		sh->handler = RxHdxEpochDetV27;
+		sh->rx_state = V27RX_STATE_EPOCH_DET;
 		((struct v27_rx *)modem)->result.byte.flags2 &=
 			(unsigned char)~(unsigned char)V27_STATUS_FLAG2_IDLE;
 		((struct v27_rx *)modem)->result.byte.flags &=
@@ -1070,26 +1070,26 @@ RxNextStateV27(void *modem)
 		 * here, and the four values differ so the two spellings
 		 * cannot be confused for one another.
 		 */
-		if (((struct v27_rx_shared *)sh)->train_long == 0)
-			blocks = ((struct v27_rx_shared *)sh)->rate == V27SH_RATE_4800
+		if (sh->train_long == 0)
+			blocks = sh->rate == V27SH_RATE_4800
 			       ? V27SH_PROTOCOL_SHORT_4800
 			       : V27SH_PROTOCOL_SHORT_2400;
 		else
-			blocks = ((struct v27_rx_shared *)sh)->rate == V27SH_RATE_4800
+			blocks = sh->rate == V27SH_RATE_4800
 			       ? V27SH_PROTOCOL_LONG_4800
 			       : V27SH_PROTOCOL_LONG_2400;
-		((struct v27_rx_shared *)sh)->countdown = blocks;
+		sh->countdown = blocks;
 
 		rx = ((struct v27_rx *)modem)->rx;
-		((struct v27_rx_shared *)sh)->handler = RxHdxPrtcolV27;
-		((struct v27_rx_shared *)sh)->rx_state = V27RX_STATE_PROTOCOL;
+		sh->handler = RxHdxPrtcolV27;
+		sh->rx_state = V27RX_STATE_PROTOCOL;
 		((struct v27_rx *)modem)->result.byte.flags2 &=
 			(unsigned char)~(unsigned char)V27_STATUS_FLAG2_IDLE;
 		((struct v27_rx *)modem)->result.byte.flags &=
 			(unsigned char)~(unsigned char)V27_STATUS_FLAG_DATA;
 		/* One `short` along each, not two of anything.  F9303. */
-		(&((struct v27_rx_block *)rx)->agc)->cfg.alpha++;
-		(&((struct v27_rx_block *)rx)->agc)->cfg.beta++;
+		(&rx->agc)->cfg.alpha++;
+		(&rx->agc)->cfg.beta++;
 		break;
 
 	case V27RX_STATE_PROTOCOL:
@@ -1098,9 +1098,9 @@ RxNextStateV27(void *modem)
 		FPM_AGC_Freeze(&((struct v27_rx *)modem)->rx->agc);
 		/* Re-read across the call; the object does (0x0a2ef4). */
 		sh = ((struct v27_rx *)modem)->shared;
-		((struct v27_rx_shared *)sh)->countdown = 0;
-		((struct v27_rx_shared *)sh)->handler = RxHdxDataV27;
-		((struct v27_rx_shared *)sh)->rx_state = V27RX_STATE_DATA;
+		sh->countdown = 0;
+		sh->handler = RxHdxDataV27;
+		sh->rx_state = V27RX_STATE_DATA;
 		((struct v27_rx *)modem)->result.byte.flags |= V27_STATUS_FLAG_DATA;
 		((struct v27_rx *)modem)->result.byte.flags2 &=
 			(unsigned char)~(unsigned char)V27_STATUS_FLAG2_IDLE;
@@ -1109,16 +1109,16 @@ RxNextStateV27(void *modem)
 	case V27RX_STATE_DATA:
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V27RX_STATE_DATA\n");
-		((struct v27_rx_shared *)sh)->handler = RxHdxIdleV27;
-		((struct v27_rx_shared *)sh)->rx_state = V27RX_STATE_IDLE;
-		((struct v27_rx_shared *)sh)->countdown = 0;
+		sh->handler = RxHdxIdleV27;
+		sh->rx_state = V27RX_STATE_IDLE;
+		sh->countdown = 0;
 		/*
 		 * The gate `RxHdxDataV27` refuses to demodulate through.
 		 * Nothing in the object SETS it, and this is the only thing
 		 * that clears it -- exactly as `RxNextStateV21` clears
 		 * `hdx->int_0000` on the same transition.
 		 */
-		((struct v27_rx_shared *)sh)->int_0004 = 0;
+		sh->int_0004 = 0;
 		((struct v27_rx *)modem)->result.byte.flags2 |= V27_STATUS_FLAG2_IDLE;
 		((struct v27_rx *)modem)->result.byte.flags &=
 			(unsigned char)~(unsigned char)V27_STATUS_FLAG_DATA;
@@ -1127,13 +1127,13 @@ RxNextStateV27(void *modem)
 	case V27RX_STATE_IDLE:
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V27RX_STATE_IDLE\n");
-		((struct v27_rx_shared *)sh)->handler = RxHdxDataV27;
-		((struct v27_rx_shared *)sh)->rx_state = V27RX_STATE_DATA;
+		sh->handler = RxHdxDataV27;
+		sh->rx_state = V27RX_STATE_DATA;
 		((struct v27_rx *)modem)->result.byte.flags |= V27_STATUS_FLAG_DATA;
 		((struct v27_rx *)modem)->result.byte.flags2 &=
 			(unsigned char)~(unsigned char)V27_STATUS_FLAG2_IDLE;
 		((struct v27_rx *)modem)->result.byte.status = (unsigned char)
-			(((struct v27_rx_shared *)sh)->rate == V27SH_RATE_2400
+			(sh->rate == V27SH_RATE_2400
 			 ? V27_STATUS_ENTER_DATA_2400
 			 : V27_STATUS_ENTER_DATA_4800);
 		break;
@@ -1228,7 +1228,7 @@ RxHdxIdleV27(void *modem, short *in, short *out, unsigned short *count)
 short
 RxHdxPrtcolV27(void *modem, short *in, short *out, unsigned short *count)
 {
-	void *sh;
+	struct v27_rx_shared *sh;
 	unsigned short n;
 	unsigned short left;
 
@@ -1240,8 +1240,8 @@ RxHdxPrtcolV27(void *modem, short *in, short *out, unsigned short *count)
 		unsigned char flags;
 
 		sh = ((struct v27_rx *)modem)->shared;
-		((struct v27_rx_shared *)sh)->handler = RxHdxErrorV27;
-		((struct v27_rx_shared *)sh)->rx_state = V27RX_STATE_ERROR;
+		sh->handler = RxHdxErrorV27;
+		sh->rx_state = V27RX_STATE_ERROR;
 		flags = ((struct v27_rx *)modem)->result.byte.flags;
 		((struct v27_rx *)modem)->result.byte.status = V27_STATUS_ERROR;
 		((struct v27_rx *)modem)->result.byte.flags = (unsigned char)
@@ -1254,13 +1254,13 @@ RxHdxPrtcolV27(void *modem, short *in, short *out, unsigned short *count)
 	sh = ((struct v27_rx *)modem)->shared;
 	((struct v27_rx *)modem)->result.byte.status = V27_STATUS_TRAINING;
 
-	left = (unsigned short)(((struct v27_rx_shared *)sh)->countdown - 1);
-	((struct v27_rx_shared *)sh)->countdown = left;
+	left = (unsigned short)(sh->countdown - 1);
+	sh->countdown = left;
 	if ((short)left > 0)
 		return 0;
 
 	((struct v27_rx *)modem)->result.byte.status = (unsigned char)
-		(((struct v27_rx_shared *)sh)->rate == V27SH_RATE_2400
+		(sh->rate == V27SH_RATE_2400
 		 ? V27_STATUS_ENTER_DATA_2400
 		 : V27_STATUS_ENTER_DATA_4800);
 	RxNextStateV27(modem);
@@ -1291,7 +1291,7 @@ RxHdxPrtcolV27(void *modem, short *in, short *out, unsigned short *count)
 short
 RxHdxEpochDetV27(void *modem, short *in, short *out, unsigned short *count)
 {
-	void *sh;
+	struct v27_rx_shared *sh;
 	unsigned short left;
 
 	DemodDataV27(modem, in, (unsigned short *)(void *)out, *count);
@@ -1301,8 +1301,8 @@ RxHdxEpochDetV27(void *modem, short *in, short *out, unsigned short *count)
 		unsigned char flags;
 
 		sh = ((struct v27_rx *)modem)->shared;
-		((struct v27_rx_shared *)sh)->handler = RxHdxErrorV27;
-		((struct v27_rx_shared *)sh)->rx_state = V27RX_STATE_ERROR;
+		sh->handler = RxHdxErrorV27;
+		sh->rx_state = V27RX_STATE_ERROR;
 		flags = ((struct v27_rx *)modem)->result.byte.flags;
 		((struct v27_rx *)modem)->result.byte.status = V27_STATUS_ERROR;
 		((struct v27_rx *)modem)->result.byte.flags = (unsigned char)
@@ -1315,8 +1315,8 @@ RxHdxEpochDetV27(void *modem, short *in, short *out, unsigned short *count)
 	sh = ((struct v27_rx *)modem)->shared;
 	((struct v27_rx *)modem)->result.byte.status = V27_STATUS_TRAINING;
 
-	left = (unsigned short)(((struct v27_rx_shared *)sh)->countdown - 1);
-	((struct v27_rx_shared *)sh)->countdown = left;
+	left = (unsigned short)(sh->countdown - 1);
+	sh->countdown = left;
 	if ((short)left > 0 && (short)EpochDetectV27(modem) == 0)
 		return 0;
 
@@ -1427,7 +1427,7 @@ int
 V27TX_control(void *modem, void *req)
 {
 	struct v27tx_ctl *ctl = (struct v27tx_ctl *)req;
-	void *prm;
+	struct v27_tx_source *prm;
 	struct fpm_pps *pps;
 	short rate;
 	unsigned char mask;
@@ -1439,7 +1439,7 @@ V27TX_control(void *modem, void *req)
 	prm = ((struct v27_tx *)modem)->source;
 	pps = (struct fpm_pps *)(void *)
 		&((struct v27_tx *)modem)->tx->pps;
-	rate = ((struct v27_tx_source *)prm)->rate;
+	rate = prm->rate;
 
 	pps->cfg.scale = ctl->scale_mul *
 		V27TX_PPS_SCALE[rate];
@@ -1451,11 +1451,11 @@ V27TX_control(void *modem, void *req)
 	if (mask & V27TXCTL_MASK_HANDLE_FLAG_04)
 		*((unsigned char *)(void *)&((struct v27_tx *)modem)->cfg.flags) |= 0x04;
 
-	((struct v27_tx_source *)prm)->int_0008 = 0;
+	prm->int_0008 = 0;
 
 	flags = ctl->flags;
 	if (flags & V27TXCTL_FLAGS_FORCE_INT_0008)
-		((struct v27_tx_source *)prm)->int_0008 = 1;
+		prm->int_0008 = 1;
 	if (flags & V27TXCTL_FLAGS_REINIT)
 		V27TX_create(modem, &((struct v27_tx *)modem)->cfg);
 
@@ -1555,8 +1555,8 @@ DemodDataV27(void *modem, short *in, unsigned short *bits, unsigned short count)
 	int signal;
 	unsigned short n;
 	unsigned short m;
-	void *rx;
-	void *sh;
+	struct v27_rx_block *rx;
+	struct v27_rx_shared *sh;
 
 	FPM_AGC_agc(&((struct v27_rx *)modem)->rx->agc, in, count);
 	/* Not the object's `%eax`; the same value.  D1094. */
@@ -1569,34 +1569,34 @@ DemodDataV27(void *modem, short *in, unsigned short *bits, unsigned short count)
 	 * does not say which extension the author's declaration carried and
 	 * this site is unchanged by the rename.  See v27fax.h and F9300.
 	 */
-	if (((struct v27_rx_shared *)sh)->rx_state == V27RX_STATE_START) {
-		if (FPM_MTD_detect((struct fpm_mtd *)((struct v27_rx_shared *)sh)->mtd,
+	if (sh->rx_state == V27RX_STATE_START) {
+		if (FPM_MTD_detect((struct fpm_mtd *)sh->mtd,
 				   in, (short)count) != 0)
 			return 0;
 	}
 
 	rx = ((struct v27_rx *)modem)->rx;
-	n = (unsigned short)FPM_MRF_filter((&((struct v27_rx_block *)rx)->mrf), in,
-					   (short *)((struct v27_rx_block *)rx)->buf_a,
+	n = (unsigned short)FPM_MRF_filter((&rx->mrf), in,
+					   (short *)rx->buf_a,
 					   (short)count);
 
 	rx = ((struct v27_rx *)modem)->rx;
-	(&((struct v27_rx_block *)rx)->sre)->adapt = signal & ((struct v27_rx_block *)rx)->en_sre_adapt;
-	m = FPM_SRE_recover((&((struct v27_rx_block *)rx)->sre),
-			    (const short *)((struct v27_rx_block *)rx)->buf_a,
-			    (short *)((struct v27_rx_block *)rx)->buf_b,
+	(&rx->sre)->adapt = signal & rx->en_sre_adapt;
+	m = FPM_SRE_recover((&rx->sre),
+			    (const short *)rx->buf_a,
+			    (short *)rx->buf_b,
 			    (short)n);
 
 	if (m > V27RX_SRE_MAX && DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("ERROR: SRE buffer violation(%d)", m);
 
 	rx = ((struct v27_rx *)modem)->rx;
-	(&((struct v27_rx_block *)rx)->fse)->tilt_on = 0;
-	(&((struct v27_rx_block *)rx)->fse)->lms_on = signal & ((struct v27_rx_block *)rx)->en_fse_lms;
-	(&((struct v27_rx_block *)rx)->fse)->pll_on = signal & ((struct v27_rx_block *)rx)->en_fse_pll;
+	(&rx->fse)->tilt_on = 0;
+	(&rx->fse)->lms_on = signal & rx->en_fse_lms;
+	(&rx->fse)->pll_on = signal & rx->en_fse_pll;
 
-	return FPM_FSE_receive((&((struct v27_rx_block *)rx)->fse),
-			       (const short *)((struct v27_rx_block *)rx)->buf_b,
+	return FPM_FSE_receive((&rx->fse),
+			       (const short *)rx->buf_b,
 			       bits, m);
 }
 
@@ -1629,48 +1629,48 @@ DescrambleDataV27(void *modem, unsigned short *data, short count)
 short
 DataCarrierDetectV27(void *modem, short *samples, unsigned short count)
 {
-	void *rx = ((struct v27_rx *)modem)->rx;
-	void *sh = ((struct v27_rx *)modem)->shared;
-	void *dec = &((struct v27_rx_block *)rx)->dec;
+	struct v27_rx_block *rx = ((struct v27_rx *)modem)->rx;
+	struct v27_rx_shared *sh = ((struct v27_rx *)modem)->shared;
+	struct v27_rx_decoder *dec = &rx->dec;
 	short cd;
 
-	cd = (short)((&((struct v27_rx_block *)rx)->agc)->signal & (&((struct v27_rx_block *)rx)->sre)->active);
+	cd = (short)((&rx->agc)->signal & (&rx->sre)->active);
 
-	if (((struct v27_rx_shared *)sh)->v21_watch == 0) {
-		if (((short)((struct v27_rx_decoder *)dec)->sym_count) > V27RX_DEC_SETTLED) {
-			if ((&((struct v27_rx_block *)rx)->fse)->mse > V27RX_MSE_NO_CARRIER)
+	if (sh->v21_watch == 0) {
+		if (((short)dec->sym_count) > V27RX_DEC_SETTLED) {
+			if ((&rx->fse)->mse > V27RX_MSE_NO_CARRIER)
 				cd = 0;
 			else
 				cd &= 1;
 		}
-		if ((&((struct v27_rx_block *)rx)->fse)->mse > V27RX_MSE_NO_CARRIER && DSPLIB_DEBUG_ON())
+		if ((&rx->fse)->mse > V27RX_MSE_NO_CARRIER && DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V27 Decoder error too big..." " no carrier\n");
 	} else {
 		short i;
 
-		if ((&((struct v27_rx_block *)rx)->fse)->mse > V27RX_MSE_NO_CARRIER || (cd & 1) == 0)
-			((struct v27_rx_shared *)sh)->v21_armed = 1;
+		if ((&rx->fse)->mse > V27RX_MSE_NO_CARRIER || (cd & 1) == 0)
+			sh->v21_armed = 1;
 
 		cd = 1;
-		if (((struct v27_rx_shared *)sh)->v21_armed != 0) {
-			short *buf = (short *)((struct v27_rx_shared *)sh)->buf;
+		if (sh->v21_armed != 0) {
+			short *buf = (short *)sh->buf;
 
 			for (i = 0; i < (int)count; i = (short)(i + 1))
 				buf[i] = samples[i];
 
-			FPM_AGC_agc(&((struct v27_rx_shared *)sh)->agc, buf, count);
+			FPM_AGC_agc(&sh->agc, buf, count);
 
 			if (FPM_MTD_detect((struct fpm_mtd *)
-						((struct v27_rx_shared *)sh)->mtd_v21,
+						sh->mtd_v21,
 					   buf, (short)count) != 0)
-				((struct v27_rx_shared *)sh)->v21_samples = 0;
+				sh->v21_samples = 0;
 			else
-				((struct v27_rx_shared *)sh)->v21_samples =
+				sh->v21_samples =
 					(unsigned short)
-					(((struct v27_rx_shared *)sh)->v21_samples
+					(sh->v21_samples
 					 + count);
 
-			if (((short)((struct v27_rx_shared *)sh)->v21_samples)
+			if (((short)sh->v21_samples)
 			    > V27SH_V21_TIMEOUT) {
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
@@ -1680,23 +1680,23 @@ DataCarrierDetectV27(void *modem, short *samples, unsigned short count)
 		}
 	}
 
-	if (((struct v27_rx_block *)rx)->rms_on != 0) {
+	if (rx->rms_on != 0) {
 		short level = FPM_rms(samples, count);
 		unsigned short n;
 
-		if (level < (short)((((struct v27_rx_block *)rx)->rms_ref
+		if (level < (short)((rx->rms_ref
 				     * V27RX_RMS_DROP_Q15) >> 15)) {
 			cd = 0;
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf("sudden energy drop >" " 8[dB], no carrier");
 		}
 
-		n = (unsigned short)(((struct v27_rx_block *)rx)->rms_count + 1);
+		n = (unsigned short)(rx->rms_count + 1);
 		if (n == 2) {
-			((struct v27_rx_block *)rx)->rms_ref = level;
-			((struct v27_rx_block *)rx)->rms_count = 0;
+			rx->rms_ref = level;
+			rx->rms_count = 0;
 		} else {
-			((struct v27_rx_block *)rx)->rms_count = n;
+			rx->rms_count = n;
 		}
 	}
 
@@ -1717,31 +1717,31 @@ DataCarrierDetectV27(void *modem, short *samples, unsigned short count)
 short
 QualityDetectV27(void *modem)
 {
-	void *rx = ((struct v27_rx *)modem)->rx;
-	short mse = (&((struct v27_rx_block *)rx)->fse)->mse;
+	struct v27_rx_block *rx = ((struct v27_rx *)modem)->rx;
+	short mse = (&rx->fse)->mse;
 	short verdict;
 	unsigned short n;
 
-	verdict = (short)((&((struct v27_rx_block *)rx)->agc)->signal & (&((struct v27_rx_block *)rx)->sre)->active);
+	verdict = (short)((&rx->agc)->signal & (&rx->sre)->active);
 	if (verdict == 0) {
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V27 Dec error too big..." " unreliable data\n");
 		verdict = V27_QUALITY_UNRELIABLE;
 	}
 
-	n = ((struct v27_rx_block *)rx)->q_count;
+	n = rx->q_count;
 	if (n == 0) {
-		((struct v27_rx_block *)rx)->q_acc = mse;
-		((struct v27_rx_block *)rx)->q_count = 1;
+		rx->q_acc = mse;
+		rx->q_count = 1;
 	} else if ((short)n <= 0x31) {
-		((struct v27_rx_block *)rx)->q_acc = (short)
-			(((((struct v27_rx_block *)rx)->q_acc * 0x7333 + 0x4000) >> 15)
+		rx->q_acc = (short)
+			(((rx->q_acc * 0x7333 + 0x4000) >> 15)
 			 + ((mse * 0xccd + 0x4000) >> 15));
-		((struct v27_rx_block *)rx)->q_count = (unsigned short)(n + 1);
+		rx->q_count = (unsigned short)(n + 1);
 	} else if ((short)n == 0x32) {
-		if (((struct v27_rx_block *)rx)->q_acc <= ((short)((struct v27_rx_block *)rx)->q_limit))
-			((struct v27_rx_block *)rx)->q_flag = 1;
-		((struct v27_rx_block *)rx)->q_count = (unsigned short)(n + 1);
+		if (rx->q_acc <= ((short)rx->q_limit))
+			rx->q_flag = 1;
+		rx->q_count = (unsigned short)(n + 1);
 	}
 
 	return verdict;
@@ -1752,17 +1752,17 @@ QualityDetectV27(void *modem)
 int
 EpochDetectV27(void *modem)
 {
-	void *rx = ((struct v27_rx *)modem)->rx;
+	struct v27_rx_block *rx = ((struct v27_rx *)modem)->rx;
 
-	return (&((struct v27_rx_block *)rx)->fse)->lms_force != 0;
+	return (&rx->fse)->lms_force != 0;
 }
 
 int
 CarrierDetectV27(void *modem)
 {
-	void *rx = ((struct v27_rx *)modem)->rx;
+	struct v27_rx_block *rx = ((struct v27_rx *)modem)->rx;
 
-	return (&((struct v27_rx_block *)rx)->agc)->signal & (&((struct v27_rx_block *)rx)->sre)->active;
+	return (&rx->agc)->signal & (&rx->sre)->active;
 }
 
 short
@@ -1790,17 +1790,17 @@ unsigned short
 ModDataV27(void *modem, const unsigned short *bits, short *samples,
 	   unsigned short count)
 {
-	void *tx;
+	struct v27_tx_block *tx;
 
 	tx = ((struct v27_tx *)modem)->tx;
-	SMC_encoder(&((struct v27_tx_block *)tx)->smc,
-		    &((struct v27_tx_block *)tx)->ring,
+	SMC_encoder(&tx->smc,
+		    &tx->ring,
 		    bits, count);
 
 	tx = ((struct v27_tx *)modem)->tx;
-	return FPM_PPS_filter(&((struct v27_tx_block *)tx)->pps,
+	return FPM_PPS_filter(&tx->pps,
 			      (struct fpm_smc_ring *)(void *)
-					&((struct v27_tx_block *)tx)->ring,
+					&tx->ring,
 			      samples, count);
 }
 
@@ -1859,7 +1859,7 @@ void
 SetScramblerV27(void *modem)
 {
 	struct sdmv27_cfg cfg;
-	void *prm;
+	struct v27_tx_source *prm;
 	struct sdmv27 *sdm;
 	short rate;
 	unsigned short reg;
@@ -1867,7 +1867,7 @@ SetScramblerV27(void *modem)
 	cfg = SDMv27_CFG;
 
 	prm = ((struct v27_tx *)modem)->source;
-	rate = ((struct v27_tx_source *)prm)->rate;
+	rate = prm->rate;
 	cfg.nbits = (unsigned short)V27TX_SDM_NUM_BITS[rate];
 
 	sdm = &((struct v27_tx *)modem)->tx->sdm;
@@ -1909,7 +1909,7 @@ SetScramblerV27(void *modem)
 void *
 V27TX_create(void *modem, const struct v27tx_cfg *params)
 {
-	void *prm;
+	struct v27_tx_source *prm;
 	int fresh = 0;
 
 	if (DSPLIB_DEBUG_ON())
@@ -1943,8 +1943,8 @@ V27TX_create(void *modem, const struct v27tx_cfg *params)
 	if (prm == 0) {
 		prm = sysdep_malloc(V27TXDATA_SIZE);
 		((struct v27_tx *)modem)->source = prm;
-		((struct v27_tx_source *)prm)->fifo = 0;
-		((struct v27_tx_source *)prm)->sgd = 0;
+		prm->fifo = 0;
+		prm->sgd = 0;
 	}
 
 	{
@@ -1953,27 +1953,27 @@ V27TX_create(void *modem, const struct v27tx_cfg *params)
 
 		gcfg.sym_bits = 3;
 
-		existing = ((struct v27_tx_source *)prm)->sgd;
-		((struct v27_tx_source *)prm)->sgd =
+		existing = prm->sgd;
+		prm->sgd =
 			SGD_create((struct sgd *)existing, &gcfg);
 	}
 
 	/* ---- the half-duplex machine's own state ---------------------- */
 
 	prm = ((struct v27_tx *)modem)->source;
-	((struct v27_tx_source *)prm)->int_0008 = 0;
-	((struct v27_tx_source *)prm)->state = V27TX_STATE_START;
-	((struct v27_tx_source *)prm)->countdown = 0;
-	((struct v27_tx_source *)prm)->handler = TxHdxStartV27;
-	((struct v27_tx_source *)prm)->train_long = (short)
+	prm->int_0008 = 0;
+	prm->state = V27TX_STATE_START;
+	prm->countdown = 0;
+	prm->handler = TxHdxStartV27;
+	prm->train_long = (short)
 		((&((struct v27_tx *)modem)->cfg)->int_0018 == 0);
 
 	if ((&((struct v27_tx *)modem)->cfg)->bitrate == 2400) {
-		((struct v27_tx_source *)prm)->rate = 0;
+		prm->rate = 0;
 	} else if ((&((struct v27_tx *)modem)->cfg)->bitrate == 4800) {
-		((struct v27_tx_source *)prm)->rate = 1;
+		prm->rate = 1;
 	} else {
-		((struct v27_tx_source *)prm)->rate = 1;
+		prm->rate = 1;
 		((struct v27_tx *)modem)->result.byte.flags |= V27TX_RESULT_B1_BIT1;
 		((struct v27_tx *)modem)->result.byte.status = V27TX_STATUS_DEFAULT;
 	}
@@ -1988,14 +1988,14 @@ V27TX_create(void *modem, const struct v27tx_cfg *params)
 		short rate;
 
 		prm = ((struct v27_tx *)modem)->source;
-		rate = ((struct v27_tx_source *)prm)->rate;
+		rate = prm->rate;
 
 		fc.word0 = FIFO_CFG.word0;
 		fc.fill = 0;
 		fc.size = (short)(n * V27TX_FRMSIZE[rate]);
 
-		existing = ((struct v27_tx_source *)prm)->fifo;
-		((struct v27_tx_source *)prm)->fifo =
+		existing = prm->fifo;
+		prm->fifo =
 			FIFO_create((struct fax_fifo *)existing, &fc);
 	}
 
@@ -2003,12 +2003,12 @@ V27TX_create(void *modem, const struct v27tx_cfg *params)
 	 * and the pulse shaper ---------------------------------------------- */
 
 	{
-		void *tx;
+		struct v27_tx_block *tx;
 		short rate;
 		short ring_len;
 
 		prm = ((struct v27_tx *)modem)->source;
-		rate = ((struct v27_tx_source *)prm)->rate;
+		rate = prm->rate;
 		ring_len = (short)(V27TX_FRMSIZE[rate] + 2);
 
 		tx = ((struct v27_tx *)modem)->tx;
@@ -2018,7 +2018,7 @@ V27TX_create(void *modem, const struct v27tx_cfg *params)
 			tx = sysdep_malloc(0x94);
 			((struct v27_tx *)modem)->tx = tx;
 			ring = (struct fpm_smc_ring *)(void *)
-					&((struct v27_tx_block *)tx)->ring;
+					&tx->ring;
 			ring->sym = (short *)
 				sysdep_malloc((unsigned)(ring_len * 2));
 		}
@@ -2026,7 +2026,7 @@ V27TX_create(void *modem, const struct v27tx_cfg *params)
 		tx = ((struct v27_tx *)modem)->tx;
 		{
 			struct fpm_smc_ring *ring = (struct fpm_smc_ring *)
-					(void *)&((struct v27_tx_block *)tx)->ring;
+					(void *)&tx->ring;
 			short i;
 
 			ring->i = 0;
@@ -2042,7 +2042,7 @@ V27TX_create(void *modem, const struct v27tx_cfg *params)
 
 	{
 		struct fpm_smc_cfg scfg = SMC_CFG;
-		void *tx = ((struct v27_tx *)modem)->tx;
+		struct v27_tx_block *tx = ((struct v27_tx *)modem)->tx;
 		short rate = ((struct v27_tx *)modem)->source->rate;
 
 		scfg.f00 = 1;
@@ -2055,12 +2055,12 @@ V27TX_create(void *modem, const struct v27tx_cfg *params)
 		scfg.pmask = (unsigned short)V27TX_SMC_PHS_MASK[rate];
 		scfg.pmap = V27TX_SMC_PMAP[rate];
 
-		SMC_init(&((struct v27_tx_block *)tx)->smc, &scfg);
+		SMC_init(&tx->smc, &scfg);
 	}
 
 	{
 		struct fpm_pps_cfg pcfg = FPM_PPS_CFG;
-		void *tx = ((struct v27_tx *)modem)->tx;
+		struct v27_tx_block *tx = ((struct v27_tx *)modem)->tx;
 		short rate = ((struct v27_tx *)modem)->source->rate;
 
 		pcfg.phases = V27TX_PPS_UP_FACT[rate];
@@ -2076,16 +2076,16 @@ V27TX_create(void *modem, const struct v27tx_cfg *params)
 		pcfg.coeffs = V27TX_PPS_FILT_LEN[rate];
 		pcfg.aux = (void *)(long)(&((struct v27_tx *)modem)->cfg)->int_001c;
 
-		FPM_PPS_init(&((struct v27_tx_block *)tx)->pps,
+		FPM_PPS_init(&tx->pps,
 			    &pcfg, fresh);
 	}
 
 	{
 		struct sdmv27_cfg dcfg;
-		void *tx = ((struct v27_tx *)modem)->tx;
+		struct v27_tx_block *tx = ((struct v27_tx *)modem)->tx;
 
 		dcfg.nbits = 3;
-		SDMv27_init(&((struct v27_tx_block *)tx)->sdm,
+		SDMv27_init(&tx->sdm,
 			   &dcfg);
 	}
 
@@ -2107,7 +2107,7 @@ int
 V27TX_modem(void *modem, unsigned short *in, short *out,
 	   unsigned short *count)
 {
-	void *prm;
+	struct v27_tx_source *prm;
 	unsigned short taken;
 	short budget;
 	short total;
@@ -2117,21 +2117,21 @@ V27TX_modem(void *modem, unsigned short *in, short *out,
 	((struct v27_tx *)modem)->result.byte.flags &=
 		(unsigned char)~V27TX_RESULT_B1_BIT1;
 
-	if (((struct v27_tx_source *)prm)->int_0008 == 0)
+	if (prm->int_0008 == 0)
 		taken = (unsigned short)FIFO_write(
 				(struct fax_fifo *)
-					((struct v27_tx_source *)prm)->fifo,
+					prm->fifo,
 				in, *count);
 	else
 		taken = *count;
 
-	budget = V27TX_FRMSIZE[((struct v27_tx_source *)prm)->rate];
+	budget = V27TX_FRMSIZE[prm->rate];
 	total = 0;
 	do {
 		short got;
 
 		prm = ((struct v27_tx *)modem)->source;
-		got = ((struct v27_tx_source *)prm)->handler
+		got = prm->handler
 					(modem, in, out, &budget);
 
 		out += got;
@@ -2196,18 +2196,18 @@ V27TX_modem(void *modem, unsigned short *in, short *out,
 void
 TxNextStateV27(void *modem)
 {
-	void *prm = ((struct v27_tx *)modem)->source;
-	short state = ((struct v27_tx_source *)prm)->state;
+	struct v27_tx_source *prm = ((struct v27_tx *)modem)->source;
+	short state = prm->state;
 
 	switch (state) {
 	case V27TX_STATE_START:
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V27TX_STATE_START\n");
-		((struct v27_tx_source *)prm)->countdown =
-			V27TX_FRMSIZE[((struct v27_tx_source *)prm)->rate];
-		((struct v27_tx_source *)prm)->handler =
+		prm->countdown =
+			V27TX_FRMSIZE[prm->rate];
+		prm->handler =
 			TxHdxQuietV27;
-		((struct v27_tx_source *)prm)->state = V27TX_STATE_QUIET;
+		prm->state = V27TX_STATE_QUIET;
 		((struct v27_tx *)modem)->result.byte.flags2 &=
 			(unsigned char)~V27TX_RESULT_B2_BIT0;
 		break;
@@ -2220,19 +2220,19 @@ TxNextStateV27(void *modem)
 			struct sgd_control_req req;
 
 			gen.data_word = (unsigned short)
-				V27TX_PATTERN_CARR[((struct v27_tx_source *)prm)->rate];
+				V27TX_PATTERN_CARR[prm->rate];
 			gen.word_syms = 1;
 			req.gen = &gen;
 			req.det = SGD_CTL.det;
 			SGD_control((struct sgd *)
-					((struct v27_tx_source *)prm)->sgd, &req);
+					prm->sgd, &req);
 		}
 		prm = ((struct v27_tx *)modem)->source;
-		((struct v27_tx_source *)prm)->countdown = (short)
-			(V27TX_FRMSIZE[((struct v27_tx_source *)prm)->rate] * 10);
-		((struct v27_tx_source *)prm)->handler =
+		prm->countdown = (short)
+			(V27TX_FRMSIZE[prm->rate] * 10);
+		prm->handler =
 			TxHdxAltV27;
-		((struct v27_tx_source *)prm)->state = V27TX_STATE_CARR;
+		prm->state = V27TX_STATE_CARR;
 		((struct v27_tx *)modem)->result.byte.flags2 &=
 			(unsigned char)~V27TX_RESULT_B2_BIT0;
 		break;
@@ -2240,11 +2240,11 @@ TxNextStateV27(void *modem)
 	case V27TX_STATE_CARR:
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V27TX_STATE_CARR\n");
-		((struct v27_tx_source *)prm)->countdown =
-			V27TX_FRMSIZE[((struct v27_tx_source *)prm)->rate];
-		((struct v27_tx_source *)prm)->handler =
+		prm->countdown =
+			V27TX_FRMSIZE[prm->rate];
+		prm->handler =
 			TxHdxQuietV27;
-		((struct v27_tx_source *)prm)->state = V27TX_STATE_NOCARR;
+		prm->state = V27TX_STATE_NOCARR;
 		((struct v27_tx *)modem)->result.byte.flags2 &=
 			(unsigned char)~V27TX_RESULT_B2_BIT0;
 		break;
@@ -2257,19 +2257,19 @@ TxNextStateV27(void *modem)
 			struct sgd_control_req req;
 
 			gen.data_word = (unsigned short)
-				V27TX_PATTERN_ALT[((struct v27_tx_source *)prm)->rate];
+				V27TX_PATTERN_ALT[prm->rate];
 			gen.word_syms = 1;
 			req.gen = &gen;
 			req.det = SGD_CTL.det;
 			SGD_control((struct sgd *)
-					((struct v27_tx_source *)prm)->sgd, &req);
+					prm->sgd, &req);
 		}
 		prm = ((struct v27_tx *)modem)->source;
-		((struct v27_tx_source *)prm)->countdown =
-			V27TX_ALT_COUNT[((struct v27_tx_source *)prm)->train_long];
-		((struct v27_tx_source *)prm)->handler =
+		prm->countdown =
+			V27TX_ALT_COUNT[prm->train_long];
+		prm->handler =
 			TxHdxAltV27;
-		((struct v27_tx_source *)prm)->state = V27TX_STATE_ALT;
+		prm->state = V27TX_STATE_ALT;
 		((struct v27_tx *)modem)->result.byte.flags2 &=
 			(unsigned char)~V27TX_RESULT_B2_BIT0;
 		break;
@@ -2277,11 +2277,11 @@ TxNextStateV27(void *modem)
 	case V27TX_STATE_ALT:
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V27TX_STATE_ALT\n");
-		((struct v27_tx_source *)prm)->countdown =
-			V27TX_EQCOND_COUNT[((struct v27_tx_source *)prm)->train_long];
-		((struct v27_tx_source *)prm)->handler =
+		prm->countdown =
+			V27TX_EQCOND_COUNT[prm->train_long];
+		prm->handler =
 			TxHdxEQCondV27;
-		((struct v27_tx_source *)prm)->state = V27TX_STATE_EQCOND;
+		prm->state = V27TX_STATE_EQCOND;
 		((struct v27_tx *)modem)->result.byte.flags2 &=
 			(unsigned char)~V27TX_RESULT_B2_BIT0;
 		break;
@@ -2294,18 +2294,18 @@ TxNextStateV27(void *modem)
 			struct sgd_control_req req;
 
 			gen.data_word = (unsigned short)
-				V27TX_PATTERN_SCR1[((struct v27_tx_source *)prm)->rate];
+				V27TX_PATTERN_SCR1[prm->rate];
 			gen.word_syms = 1;
 			req.gen = &gen;
 			req.det = SGD_CTL.det;
 			SGD_control((struct sgd *)
-					((struct v27_tx_source *)prm)->sgd, &req);
+					prm->sgd, &req);
 		}
 		prm = ((struct v27_tx *)modem)->source;
-		((struct v27_tx_source *)prm)->countdown = 8;
-		((struct v27_tx_source *)prm)->handler =
+		prm->countdown = 8;
+		prm->handler =
 			TxHdxSCR1V27;
-		((struct v27_tx_source *)prm)->state = V27TX_STATE_SCR1;
+		prm->state = V27TX_STATE_SCR1;
 		((struct v27_tx *)modem)->result.byte.flags2 &=
 			(unsigned char)~V27TX_RESULT_B2_BIT0;
 		((struct v27_tx *)modem)->result.byte.flags &=
@@ -2316,10 +2316,10 @@ TxNextStateV27(void *modem)
 	case V27TX_STATE_SCR1:
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V27TX_STATE_SCR1\n");
-		((struct v27_tx_source *)prm)->countdown = 1;
-		((struct v27_tx_source *)prm)->handler =
+		prm->countdown = 1;
+		prm->handler =
 			TxHdxDataV27;
-		((struct v27_tx_source *)prm)->state = V27TX_STATE_DATA;
+		prm->state = V27TX_STATE_DATA;
 		((struct v27_tx *)modem)->result.byte.flags2 &=
 			(unsigned char)~V27TX_RESULT_B2_BIT0;
 		((struct v27_tx *)modem)->result.byte.flags |= V27TX_RESULT_B1_BIT0;
@@ -2333,19 +2333,19 @@ TxNextStateV27(void *modem)
 			struct sgd_control_req req;
 
 			gen.data_word = (unsigned short)
-				V27TX_PATTERN_SCR1[((struct v27_tx_source *)prm)->rate];
+				V27TX_PATTERN_SCR1[prm->rate];
 			gen.word_syms = 1;
 			req.gen = &gen;
 			req.det = SGD_CTL.det;
 			SGD_control((struct sgd *)
-					((struct v27_tx_source *)prm)->sgd, &req);
+					prm->sgd, &req);
 		}
 		prm = ((struct v27_tx *)modem)->source;
-		((struct v27_tx_source *)prm)->countdown =
-			V27TX_FRMSIZE[((struct v27_tx_source *)prm)->rate];
-		((struct v27_tx_source *)prm)->handler =
+		prm->countdown =
+			V27TX_FRMSIZE[prm->rate];
+		prm->handler =
 			TxHdxSCR1V27;
-		((struct v27_tx_source *)prm)->state = V27TX_STATE_TURNOFF;
+		prm->state = V27TX_STATE_TURNOFF;
 		((struct v27_tx *)modem)->result.byte.flags2 &=
 			(unsigned char)~V27TX_RESULT_B2_BIT0;
 		break;
@@ -2353,11 +2353,11 @@ TxNextStateV27(void *modem)
 	case V27TX_STATE_TURNOFF:
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V27TX_STATE_TURNOFF\n");
-		((struct v27_tx_source *)prm)->countdown =
-			V27TX_FRMSIZE[((struct v27_tx_source *)prm)->rate];
-		((struct v27_tx_source *)prm)->handler =
+		prm->countdown =
+			V27TX_FRMSIZE[prm->rate];
+		prm->handler =
 			TxHdxQuietV27;
-		((struct v27_tx_source *)prm)->state = V27TX_STATE_NOENG;
+		prm->state = V27TX_STATE_NOENG;
 		((struct v27_tx *)modem)->result.byte.flags2 &=
 			(unsigned char)~V27TX_RESULT_B2_BIT0;
 		break;
@@ -2365,10 +2365,10 @@ TxNextStateV27(void *modem)
 	case V27TX_STATE_NOENG:
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V27TX_STATE_NOENG\n");
-		((struct v27_tx_source *)prm)->countdown = 0;
-		((struct v27_tx_source *)prm)->handler =
+		prm->countdown = 0;
+		prm->handler =
 			TxHdxIdleV27;
-		((struct v27_tx_source *)prm)->state = V27TX_STATE_IDLE;
+		prm->state = V27TX_STATE_IDLE;
 		((struct v27_tx *)modem)->result.byte.flags2 |= V27TX_RESULT_B2_BIT0;
 		((struct v27_tx *)modem)->result.byte.flags &=
 			(unsigned char)~V27TX_RESULT_B1_BIT0;
@@ -2377,10 +2377,10 @@ TxNextStateV27(void *modem)
 	case V27TX_STATE_IDLE:
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V27TX_STATE_IDLE\n");
-		((struct v27_tx_source *)prm)->countdown = 0;
-		((struct v27_tx_source *)prm)->handler =
+		prm->countdown = 0;
+		prm->handler =
 			TxHdxStartV27;
-		((struct v27_tx_source *)prm)->state = V27TX_STATE_START;
+		prm->state = V27TX_STATE_START;
 		((struct v27_tx *)modem)->result.byte.flags2 &=
 			(unsigned char)~V27TX_RESULT_B2_BIT0;
 		break;
@@ -2425,21 +2425,21 @@ TxHdxStartV27(void *modem, unsigned short *in, short *out, short *budget)
 short
 TxHdxQuietV27(void *modem, unsigned short *in, short *out, short *budget)
 {
-	void *prm = ((struct v27_tx *)modem)->source;
+	struct v27_tx_source *prm = ((struct v27_tx *)modem)->source;
 	short countdown;
 	short taken;
 	short r;
 
 	((struct v27_tx *)modem)->result.byte.status = V27TX_STATUS_TRAINING;
 
-	countdown = ((struct v27_tx_source *)prm)->countdown;
+	countdown = prm->countdown;
 	if (countdown <= 0) {
 		TxNextStateV27(modem);
 		return 0;
 	}
 
 	taken = (short)((countdown <= *budget) ? countdown : *budget);
-	((struct v27_tx_source *)prm)->countdown = (short)(countdown - taken);
+	prm->countdown = (short)(countdown - taken);
 
 	r = TxNoCarrierV27(modem, in, out, (unsigned short)taken);
 	*budget = (short)(*budget - taken);
@@ -2457,23 +2457,23 @@ TxHdxQuietV27(void *modem, unsigned short *in, short *out, short *budget)
 short
 TxHdxAltV27(void *modem, unsigned short *in, short *out, short *budget)
 {
-	void *prm = ((struct v27_tx *)modem)->source;
+	struct v27_tx_source *prm = ((struct v27_tx *)modem)->source;
 	short countdown;
 	short taken;
 	short r;
 
 	((struct v27_tx *)modem)->result.byte.status = V27TX_STATUS_TRAINING;
 
-	countdown = ((struct v27_tx_source *)prm)->countdown;
+	countdown = prm->countdown;
 	if (countdown <= 0) {
 		TxNextStateV27(modem);
 		return 0;
 	}
 
 	taken = (short)((countdown <= *budget) ? countdown : *budget);
-	((struct v27_tx_source *)prm)->countdown = (short)(countdown - taken);
+	prm->countdown = (short)(countdown - taken);
 
-	SGD_symbol_gen((struct sgd *)((struct v27_tx_source *)prm)->sgd, in, taken);
+	SGD_symbol_gen((struct sgd *)prm->sgd, in, taken);
 	r = (short)ModDataV27(modem, in, out, (unsigned short)taken);
 
 	*budget = (short)(*budget - taken);
@@ -2494,7 +2494,7 @@ TxHdxAltV27(void *modem, unsigned short *in, short *out, short *budget)
 short
 TxHdxEQCondV27(void *modem, unsigned short *in, short *out, short *budget)
 {
-	void *prm = ((struct v27_tx *)modem)->source;
+	struct v27_tx_source *prm = ((struct v27_tx *)modem)->source;
 	short countdown;
 	short taken;
 	short r;
@@ -2502,14 +2502,14 @@ TxHdxEQCondV27(void *modem, unsigned short *in, short *out, short *budget)
 
 	((struct v27_tx *)modem)->result.byte.status = V27TX_STATUS_TRAINING;
 
-	countdown = ((struct v27_tx_source *)prm)->countdown;
+	countdown = prm->countdown;
 	if (countdown <= 0) {
 		TxNextStateV27(modem);
 		return 0;
 	}
 
 	taken = (short)((countdown <= *budget) ? countdown : *budget);
-	((struct v27_tx_source *)prm)->countdown = (short)(countdown - taken);
+	prm->countdown = (short)(countdown - taken);
 
 	for (i = 0; i < taken; i++)
 		in[i] = 7;
@@ -2520,7 +2520,7 @@ TxHdxEQCondV27(void *modem, unsigned short *in, short *out, short *budget)
 		short rate;
 
 		prm = ((struct v27_tx *)modem)->source;
-		rate = ((struct v27_tx_source *)prm)->rate;
+		rate = prm->rate;
 
 		for (i = 0; i < taken; i++) {
 			if (in[i + 1] & 0x04)
@@ -2549,23 +2549,23 @@ TxHdxEQCondV27(void *modem, unsigned short *in, short *out, short *budget)
 short
 TxHdxSCR1V27(void *modem, unsigned short *in, short *out, short *budget)
 {
-	void *prm = ((struct v27_tx *)modem)->source;
+	struct v27_tx_source *prm = ((struct v27_tx *)modem)->source;
 	short countdown;
 	short taken;
 	short r;
 
 	((struct v27_tx *)modem)->result.byte.status = V27TX_STATUS_TRAINING;
 
-	countdown = ((struct v27_tx_source *)prm)->countdown;
+	countdown = prm->countdown;
 	if (countdown <= 0) {
 		TxNextStateV27(modem);
 		return 0;
 	}
 
 	taken = (short)((countdown <= *budget) ? countdown : *budget);
-	((struct v27_tx_source *)prm)->countdown = (short)(countdown - taken);
+	prm->countdown = (short)(countdown - taken);
 
-	SGD_symbol_gen((struct sgd *)((struct v27_tx_source *)prm)->sgd, in, taken);
+	SGD_symbol_gen((struct sgd *)prm->sgd, in, taken);
 	ScrambleDataV27(modem, in, taken);
 	r = (short)ModDataV27(modem, in, out, (unsigned short)taken);
 
@@ -2594,17 +2594,17 @@ TxHdxSCR1V27(void *modem, unsigned short *in, short *out, short *budget)
 short
 TxHdxDataV27(void *modem, unsigned short *in, short *out, short *budget)
 {
-	void *prm = ((struct v27_tx *)modem)->source;
+	struct v27_tx_source *prm = ((struct v27_tx *)modem)->source;
 	short taken;
 	short got;
 	short r;
 
 	((struct v27_tx *)modem)->result.byte.status = V27TX_STATUS_DATA;
 
-	if (((struct v27_tx_source *)prm)->countdown != 0) {
-		short rate = ((struct v27_tx_source *)prm)->rate;
+	if (prm->countdown != 0) {
+		short rate = prm->rate;
 
-		((struct v27_tx_source *)prm)->countdown = 0;
+		prm->countdown = 0;
 
 		if (rate == 0)
 			((struct v27_tx *)modem)->result.byte.status =
@@ -2619,7 +2619,7 @@ TxHdxDataV27(void *modem, unsigned short *in, short *out, short *budget)
 
 	taken = *budget;
 	got = (short)FIFO_read((struct fax_fifo *)
-					((struct v27_tx_source *)prm)->fifo,
+					prm->fifo,
 			       in, (unsigned short)taken);
 
 	if (*budget <= got) {
@@ -2630,7 +2630,7 @@ TxHdxDataV27(void *modem, unsigned short *in, short *out, short *budget)
 	}
 
 	/* Underrun: FIFO_read returned fewer than asked for. */
-	if (((struct v27_tx_source *)prm)->int_0008 != 0) {
+	if (prm->int_0008 != 0) {
 		short remaining = (short)(*budget - got);
 
 		*budget = remaining;
@@ -2661,14 +2661,14 @@ TxHdxDataV27(void *modem, unsigned short *in, short *out, short *budget)
 short
 TxHdxIdleV27(void *modem, unsigned short *in, short *out, short *budget)
 {
-	void *prm = ((struct v27_tx *)modem)->source;
+	struct v27_tx_source *prm = ((struct v27_tx *)modem)->source;
 	struct fax_fifo *fifo;
 	short taken;
 	short r;
 
 	((struct v27_tx *)modem)->result.byte.status = V27TX_STATUS_IDLE;
 
-	fifo = (struct fax_fifo *)((struct v27_tx_source *)prm)->fifo;
+	fifo = (struct fax_fifo *)prm->fifo;
 	if (fifo->count != 0) {
 		TxNextStateV27(modem);
 		return 0;
@@ -2695,9 +2695,9 @@ short
 TxNoCarrierV27(void *modem, unsigned short *in, short *out,
 	      unsigned short count)
 {
-	void *tx = ((struct v27_tx *)modem)->tx;
+	struct v27_tx_block *tx = ((struct v27_tx *)modem)->tx;
 	struct fpm_smc_ring *ring =
-		&((struct v27_tx_block *)tx)->ring;
+		&tx->ring;
 	short *sym = ring->sym;
 	short len = ring->len;
 	short widx = ring->widx;
@@ -2707,20 +2707,20 @@ TxNoCarrierV27(void *modem, unsigned short *in, short *out,
 	(void)in;
 
 	for (i = 0; i < count; i++) {
-		void *prm = ((struct v27_tx *)modem)->source;
-		short rate = ((struct v27_tx_source *)prm)->rate;
+		struct v27_tx_source *prm = ((struct v27_tx *)modem)->source;
+		short rate = prm->rate;
 
 		sym[widx] = V27TX_NOCARR_SYMBOL[rate];
 		widx = (short)((widx + 1 < len) ? widx + 1 : 0);
 	}
 
 	r = (short)FPM_PPS_filter(
-		&((struct v27_tx_block *)tx)->pps,
-		&((struct v27_tx_block *)tx)->ring,
+		&tx->pps,
+		&tx->ring,
 		out, count);
 
 	tx = ((struct v27_tx *)modem)->tx;
-	(&((struct v27_tx_block *)tx)->ring)->widx = widx;
+	(&tx->ring)->widx = widx;
 
 	return r;
 }
@@ -2745,8 +2745,8 @@ GenEQTrnSequenceV27(void *modem, unsigned short *buf, unsigned short count)
 	ScrambleDataV27(modem, buf, (short)count);
 
 	if (count != 0) {
-		void *prm = ((struct v27_tx *)modem)->source;
-		short rate = ((struct v27_tx_source *)prm)->rate;
+		struct v27_tx_source *prm = ((struct v27_tx *)modem)->source;
+		short rate = prm->rate;
 
 		for (i = 0; i < count; i++) {
 			if (buf[i + 1] & 0x04)
