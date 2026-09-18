@@ -519,30 +519,6 @@ ce_frac2(float v)
 }
 
 /*
- * `params->PDSNR_CURRENT_V34_DROP_THRESH_PHASE4` IS A FLOAT AND
- * `V90Parameters.h` TYPES IT `int`.
- * `evaluatePhase4` loads it with `flds 0x434(%ecx)` and stores it straight to
- * +0xac with `fsts`, and 0x437a0000 -- the value `setToDefault` plants there
- * (finding F878) -- is 250.0f.  Both measurements say float.
- *
- * The header is a SHARED, FROZEN type that this batch does not own, so the
- * slot is read through the type the object uses rather than retyped.  A union
- * because GCC defines the pun and needs no header for it; the four bytes are
- * the same four bytes either way.
- */
-static float
-ce_param_float(int bits)
-{
-	union {
-		int i;
-		float f;
-	} u;
-
-	u.i = bits;
-	return u.f;
-}
-
-/*
  * ===========================================================================
  * evaluatePhase3 -- 980 bytes, 0x3f5f0
  * ===========================================================================
@@ -881,8 +857,8 @@ V90ConnectionEvaluator::evaluatePhase4(float meanErrBefToAftUpdateRatio)
 						 ce_frac3(avePdsnr));
 					nofV90Retrains = 0;
 				} else {
-					float t = ce_param_float(
-					    params->PDSNR_CURRENT_V34_DROP_THRESH_PHASE4);
+					float t =
+					    params->PDSNR_CURRENT_V34_DROP_THRESH_PHASE4;
 
 					phase4ErrorForV34Fallback = t;
 					if (DSPLIB_DEBUG_ON())

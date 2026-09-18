@@ -1864,6 +1864,75 @@ offset-named 378 (unchanged), on-record 346 -> 358, residual 32 -> 20; **FAX
 offset residual 12 -> 0**.  Placeholder 73, padding 151, member declarations
 3246 and owners 242 are unchanged.
 
+## Batch 29: F878 +0x434 retype (issue #127)
+
+The last actionable F878 slot. F878 found nine `V90Parameters` fields whose
+`setToDefault` store is a float bit pattern but whose header type was `int`
+(they are the offsets `loadParams` never names). Six were retyped earlier;
+`PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH_ALT_RBS` (+0x440) was
+already `float`; this batch settles `PDSNR_CURRENT_V34_DROP_THRESH_PHASE4`
+(+0x434). `unnamed_328` (+0x328) **stays `int` deliberately**: finding F7960
+measured that the object cannot distinguish the two types for it -- it has no
+sharing partner and all 128 cells of F7960's enumeration are pairwise
+identical across the field's type. Its comment is unchanged.
+
+`+0x434` is a float on two independent measurements: `evaluatePhase4` loads it
+with `flds 0x434(%ecx)` and stores it straight to `+0xac` with `fsts`, and
+`setToDefault` plants `250.0f`. `include/dsplib/V90Parameters.h` now declares
+it `float`; `src/pump/v90/V90Parameters.cpp` stores `250.0f`; and the
+`ce_param_float(int bits)` union in `src/pump/v90/V90ConnectionEvaluator.cpp`,
+which existed only to read the word through the frozen `int` declaration, is
+deleted. `V90ConnectionEvaluator.cpp` now reads the field directly and
+`V90ConnectionEvaluator.h`'s `+0xac` comment records that the slot is owned as
+a `float` rather than read through a union.
+
+The mutation manifest `test/mutations/v90conneval.json` loses the mutation
+`"ce_param_float converts rather than reinterprets"`, whose `find`
+(`\tu.i = bits;\n\treturn u.f;`) no longer exists. **One other anchor was
+re-pointed, necessarily**: `"+0xac is replaced by PHASE4_ERROR_FOR_V34_FALLBACK"`
+located the retrain by the removed `ce_param_float(...)` call, so its `find`
+was moved to the direct read. Its label and `replace` are unchanged. The two
+`why` strings that mention `unnamed_434` are historical prose and were left as
+they are. `anchorcheck.py` now checks **10040 mutations over 272 suites, 0
+anchors matching other than exactly once** (was 10041; one deleted).
+
+### Verification
+
+Gentoo `make phase` exited 0, **`period differential: 375 passed, 0 failed`**
+and `phase boundary: period differential and structural checks all OK`.  Log:
+`build/structure-issue127/gates.log`.
+
+Of the 655 `build/period/*.o` objects, **654 are byte-identical** to the
+pre-edit snapshot (`/home/philpem/slmodem/tmp/issue127-before.sha256` vs
+`issue127-after.sha256`). The one that moves is
+`src_pump_v90_V90Parameters.o`, and the move is confined to register
+allocation in `V90Parameters::V90Parameters(tagModemParameters*)` -- the
+constructor's two stores at `+0x4f8`/`+0x4fc` swap `%edx`/`%ecx` with no
+change of immediate, offset or instruction. `setToDefault` itself, including
+the `+0x434` store (`mov $0x437a0000,%esi; ...; mov %esi,0x434(%ebp)`), is
+**byte-identical** before and after: the before object was rebuilt from the
+HEAD source with the period compiler and its hash reproduced the recorded
+pre-edit hash exactly, so the comparison is against the real baseline.
+
+The reader change moved nothing: `src_pump_v90_V90ConnectionEvaluator.o` is
+byte-identical before and after, because the union helper was already inlined
+to the same `flds 0x434(%ecx); fsts 0xac(%ebx)` pair, which is exactly the
+blob's own encoding (`d9 81 34 04 00 00`, `d9 93 ac 00 00 00`).
+
+### Mutation snapshot
+
+`python3 tools/mutsnap.py --update v90conneval` was attempted and **could not
+run the suite**: the modern build on this host is GCC 14.2.0, and `src/fax/v17.c`
+already fails it at `-Wincompatible-pointer-types` (`rxs = RXS(modem)`, unrelated
+to this batch), so `mutate.py` refuses to judge mutations against a test that
+does not build. This is the pre-existing GCC 14 portability break, not a result
+of the retype. `test/mutations/snapshot.json` was therefore left **unchanged**
+(the update run rewrote it byte-identically); it was already globally stale
+(74 commits since its last refresh at `cf7af92e`) and `mutsnap --check` already
+exited 1 on two pre-existing MISSING suites (`faxadaptcreate_v29tx`,
+`fdspkrnl_tone`). The deleted mutation's recorded verdict remains only in that
+stale, non-baseline entry; no verdict was hand-edited.
+
 
 
 
