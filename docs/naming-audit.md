@@ -2268,3 +2268,15 @@ callback-contract handle, or a generic/byte pointer -- so there is no safe
 candidate left for a further #140 tranche. Re-typing the published signatures
 is the #145 consolidation question. #140 can close.
 
+**#141 disposition: complete.** The cast-in-macro accessors are gone -- 44
+`RXS_MRF`/`RXS_AGC`/`RXS_SRE`/`RXS_FSE`/`RXS_DEC` uses and 13 `CTL_PROCESS`
+uses in `src/fax/v17.c`, 8 `SET_HANDLER` uses in `src/fax/v29.c`, and the six
+unused `SMC_*` macros -- and the root/state chain (`RXROOT`, `TXROOT`, `RXCTL`,
+`RXSTATE`, `TXPRIV`, `TXBLOCK`, `CTL`, `RXS`, `TXP`, `TXFP`) is a deliberate
+leave because its cast is on the published `void *modem` and is #145's
+question. One spelling was non-neutral and reverted: the direct
+`RXS(modem)->agc.value.cfg.alpha++`/`.beta++` at `RxNextStateV17` grew `.text`
+by 16 bytes (an extra `mov 0x60(%ebx)` state reload), so the address-deref form
+`(&RXS(modem)->agc.value)->cfg.alpha++` is used there; every other site's direct
+member form is byte-identical.
+

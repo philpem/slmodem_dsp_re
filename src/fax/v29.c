@@ -116,10 +116,6 @@
 
 /* The decoder block, `fse->cfg.owner`, and the receive block's rx + 0x28. */
 
-/* Install a receive state handler.  See `V29DET_HANDLER` in v29fax.h. */
-#define SET_HANDLER(det, fn) \
-	(((struct v29_rx_detector *)(det))->handler = (fn))
-
 /*
  * ---------------------------------------------------------------------------
  * V29RX_create -- .text 0x09ad40, 2,127 bytes.
@@ -254,7 +250,7 @@ V29RX_create(void *modem, const struct v29rx_cfg *params)
 	det->state = V29RX_STATE_START;
 	det->state_count = 0;
 	det->int_0008 = 0;
-	SET_HANDLER(det, RxHdxStartV29);
+	det->handler = RxHdxStartV29;
 
 	/* The V.21 channel-2 detector, from the same template again. */
 	mcfg = FPM_MTD_CFG;
@@ -1367,7 +1363,7 @@ RxNextStateV29(void *modem)
 
 		((struct v29_rx *)modem)->det->state_count =
 					V29DET_COUNT_EPOCH_DET;
-		SET_HANDLER(((struct v29_rx *)modem)->det, RxHdxEpochDetV29);
+		((struct v29_rx *)modem)->det->handler = RxHdxEpochDetV29;
 		((struct v29_rx *)modem)->det->state = V29RX_STATE_EPOCH_DET;
 
 		((struct v29_rx *)modem)->result.word &= ~V29_STATUS_IDLE;
@@ -1380,7 +1376,7 @@ RxNextStateV29(void *modem)
 
 		((struct v29_rx *)modem)->det->state_count =
 					V29DET_COUNT_PROTOCOL;
-		SET_HANDLER(((struct v29_rx *)modem)->det, RxHdxPrtcolV29);
+		((struct v29_rx *)modem)->det->handler = RxHdxPrtcolV29;
 		((struct v29_rx *)modem)->det->state = V29RX_STATE_PROTOCOL;
 
 		((struct v29_rx *)modem)->result.word &= ~V29_STATUS_IDLE;
@@ -1408,7 +1404,7 @@ RxNextStateV29(void *modem)
 		FPM_AGC_Freeze(&((struct v29_rx *)modem)->rx->agc);
 
 		((struct v29_rx *)modem)->det->state_count = 0;
-		SET_HANDLER(((struct v29_rx *)modem)->det, RxHdxDataV29);
+		((struct v29_rx *)modem)->det->handler = RxHdxDataV29;
 		((struct v29_rx *)modem)->det->state = V29RX_STATE_DATA;
 
 		((struct v29_rx *)modem)->result.word &= ~V29_STATUS_IDLE;
@@ -1419,7 +1415,7 @@ RxNextStateV29(void *modem)
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V29RX_STATE_DATA\n");
 
-		SET_HANDLER(((struct v29_rx *)modem)->det, RxHdxIdleV29);
+		((struct v29_rx *)modem)->det->handler = RxHdxIdleV29;
 		((struct v29_rx *)modem)->det->state = V29RX_STATE_IDLE;
 		((struct v29_rx *)modem)->det->state_count = 0;
 		((struct v29_rx *)modem)->det->int_0008 = 0;
@@ -1432,7 +1428,7 @@ RxNextStateV29(void *modem)
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V29RX_STATE_IDLE\n");
 
-		SET_HANDLER(((struct v29_rx *)modem)->det, RxHdxDataV29);
+		((struct v29_rx *)modem)->det->handler = RxHdxDataV29;
 		((struct v29_rx *)modem)->det->state = V29RX_STATE_DATA;
 
 		((struct v29_rx *)modem)->result.word &= ~V29_STATUS_IDLE;
@@ -1552,7 +1548,7 @@ RxHdxPrtcolV29(void *modem, short *in, short *out, unsigned short *count)
 	*count = 0;
 
 	if (!CarrierDetectV29(modem)) {
-		SET_HANDLER(((struct v29_rx *)modem)->det, RxHdxErrorV29);
+		((struct v29_rx *)modem)->det->handler = RxHdxErrorV29;
 		((struct v29_rx *)modem)->det->state = V29RX_STATE_ERROR;
 		((struct v29_rx *)modem)->result.word |= V29_STATUS_ERROR;
 		((struct v29_rx *)modem)->result.byte.status = V29RX_STATUS_LOST;
@@ -1610,7 +1606,7 @@ RxHdxEpochDetV29(void *modem, short *in, short *out, unsigned short *count)
 	*count = 0;
 
 	if (!CarrierDetectV29(modem)) {
-		SET_HANDLER(((struct v29_rx *)modem)->det, RxHdxErrorV29);
+		((struct v29_rx *)modem)->det->handler = RxHdxErrorV29;
 		((struct v29_rx *)modem)->det->state = V29RX_STATE_ERROR;
 		((struct v29_rx *)modem)->result.word |= V29_STATUS_ERROR;
 		((struct v29_rx *)modem)->result.byte.status = V29RX_STATUS_LOST;

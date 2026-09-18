@@ -118,18 +118,6 @@
 				 * coder tables, see v17data.h              */
 #include "dsplib/vtb.h"
 
-/*
- * The SMCv17 coder's fields, offset from `smc` (== `V17FP_SMC`) rather than
- * from `fp` -- `V17FP_SMC_SHORT_NN - V17FP_SMC`, tied to those constants
- * rather than restated.  See v17data.h for the derivation.
- */
-#define SMC_MODE(smc)		(((struct v17_smc *)(smc))->mode.byte.value)
-#define SMC_QUAD(smc)		(((struct v17_smc *)(smc))->quad)
-#define SMC_STATE(smc)		(((struct v17_smc *)(smc))->state)
-#define SMC_TRELLIS(smc)	(((struct v17_smc *)(smc))->trellis)
-#define SMC_PREV(smc)		(((struct v17_smc *)(smc))->prev)
-#define SMC_NBITS(smc)		(((struct v17_smc *)(smc))->nbits)
-
 #define RXROOT(modem)		((struct v17rx *)(modem))
 #define TXROOT(modem)		((struct v17tx *)(modem))
 #define RXCTL(modem)		(RXROOT(modem)->ctl)
@@ -140,32 +128,6 @@
 #define RXS(modem)		RXSTATE(modem)
 #define TXP(modem)		TXPRIV(modem)
 #define TXFP(modem)		TXBLOCK(modem)
-
-/*
- * The dispatch slot as an lvalue.  `V17RX_modem` already spells the CALL this
- * way; the state machine is what writes it, and storing a handler's address is
- * a link-time reference exactly as a call is (CLAUDE.md, finding F8493).
- */
-#define CTL_PROCESS(modem)	\
-	(((struct v17rx_priv *)CTL(modem))->process)
-
-/*
- * The four FPM objects the receive chain runs, reached the long way round
- * because the block they tile is not modelled.  See F8854 for the tiling and
- * v17fax.h for each offset's evidence.
- */
-#define RXS_MRF(rxs)	(&((struct v17rx_state *)(rxs))->mrf)
-#define RXS_AGC(rxs)	(&((struct v17rx_state *)(rxs))->agc.value)
-#define RXS_SRE(rxs)	(&((struct v17rx_state *)(rxs))->sre)
-#define RXS_FSE(rxs)	(&((struct v17rx_state *)(rxs))->fse)
-
-/*
- * The slicers' view of the receiver state, `fpm_fse_cfg::owner`.  `v17dec.h`
- * derives its base as `V17RX_OBJ_STATE + 0x2c` from this function's own
- * `lea 0x2c(%ebp)` at 0x0974a1, and `V17RXS_SGD` is that struct's first
- * member -- so the two names are one address and this is the writer of both.
- */
-#define RXS_DEC(rxs)	(&((struct v17rx_state *)(rxs))->dec)
 
 /* --------------------------------------------------------------------- */
 
@@ -341,7 +303,7 @@ V17RX_create(void *modem, const struct v17rx_cfg *params)
 	RXCTL(modem)->state = V17RX_STATE_START;
 	RXCTL(modem)->countdown = 0;
 	RXCTL(modem)->r08 = 0;
-	CTL_PROCESS(modem) = RxHdxStartV17;
+	CTL(modem)->process = RxHdxStartV17;
 	RXCTL(modem)->short_train =
 		RXROOT(modem)->cfg.short_train;
 
@@ -425,9 +387,9 @@ V17RX_create(void *modem, const struct v17rx_cfg *params)
 	mrfcfg.coeff = MRFv17_COFFS;
 	mrfcfg.taps = 0x168;
 	mrfcfg.aux = aux;
-	FPM_MRF_init(RXS_MRF(RXS(modem)), &mrfcfg, owned);
+	FPM_MRF_init(&RXS(modem)->mrf, &mrfcfg, owned);
 
-	FPM_AGC_init(RXS_AGC(RXS(modem)), &AGCv17_CFG, owned);
+	FPM_AGC_init(&RXS(modem)->agc.value, &AGCv17_CFG, owned);
 
 	/* ---- symbol-timing recovery ----------------------------------- */
 
@@ -461,12 +423,12 @@ V17RX_create(void *modem, const struct v17rx_cfg *params)
 	 * `V17RXS_AGC` + `offsetof(struct fpm_agc, cfg.ref_level)`, and the
 	 * `imul $0x2aaaaaab` / `sub` pair is a signed divide by six.
 	 */
-	srecfg.rms_min = (short)(RXS_AGC(RXS(modem))->cfg.ref_level / 6);
+	srecfg.rms_min = (short)(RXS(modem)->agc.value.cfg.ref_level / 6);
 	srecfg.rms_len = 9;
 	/* fpm_sre_cfg + 0x34; see the head of this function and F9475. */
 	memcpy(&srecfg.pad34, &aux,
 	       sizeof srecfg.pad34 + sizeof srecfg.pad36);
-	FPM_SRE_init(RXS_SRE(RXS(modem)), &srecfg, owned);
+	FPM_SRE_init(&RXS(modem)->sre, &srecfg, owned);
 
 	/*
 	 * The four ppm-meter parameters `FPM_SRE_init` never writes, which
@@ -474,10 +436,10 @@ V17RX_create(void *modem, const struct v17rx_cfg *params)
 	 * slipped sample at this loop's own output rate: `clock_len` points
 	 * per symbol at 9600 symbols a second, so 10^6 / 28800 = 34.
 	 */
-	RXS_SRE(RXS(modem))->ppm_step = 0x30;
-	RXS_SRE(RXS(modem))->ppm_period = 0x2580;
-	RXS_SRE(RXS(modem))->ppm_n_max = 0x68;
-	RXS_SRE(RXS(modem))->ppm_scale =
+	RXS(modem)->sre.ppm_step = 0x30;
+	RXS(modem)->sre.ppm_period = 0x2580;
+	RXS(modem)->sre.ppm_n_max = 0x68;
+	RXS(modem)->sre.ppm_scale =
 		(short)(1000000 / (srecfg.clock_len * 0x2580));
 
 	/* ---- the equaliser and its slicer ----------------------------- */
@@ -507,7 +469,7 @@ V17RX_create(void *modem, const struct v17rx_cfg *params)
 	fsecfg.err_hi = 0x199a;
 	fsecfg.err_lo = 0x666;
 	fsecfg.pll_k2 = CRRv17_PLL_K2;
-	fsecfg.owner = RXS_DEC(RXS(modem));
+	fsecfg.owner = &RXS(modem)->dec;
 	/*
 	 * THE SLICER IS `FAX_FSE_decision_AB` AND IT IS NOT PER RATE.  This
 	 * function carries no relocation against `FSEv17_decision` at all --
@@ -518,21 +480,21 @@ V17RX_create(void *modem, const struct v17rx_cfg *params)
 	 */
 	fsecfg.decision = FAX_FSE_decision_AB;
 	fsecfg.reserved34 = aux;
-	FPM_FSE_init(RXS_FSE(RXS(modem)), &fsecfg, owned);
+	FPM_FSE_init(&RXS(modem)->fse, &fsecfg, owned);
 
 	/* ---- the slicers' own state ----------------------------------- */
 
 	rate = (short)RXCTL(modem)->rate_code;
-	RXS_DEC(RXS(modem))->sym_count = 0;
-	RXS_DEC(RXS(modem))->short_0066 = 3;
-	RXS_DEC(RXS(modem))->rate = rate;
-	RXS_DEC(RXS(modem))->short_train = RXCTL(modem)->short_train;
-	RXS_DEC(RXS(modem))->count = 0;
-	RXS_DEC(RXS(modem))->scram = 0;
-	RXS_DEC(RXS(modem))->ang_prev = 0;
-	RXS_DEC(RXS(modem))->eqm_a = 0;
-	RXS_DEC(RXS(modem))->eqm_b = 0;
-	RXS_DEC(RXS(modem))->int_0050 = 0;
+	RXS(modem)->dec.sym_count = 0;
+	RXS(modem)->dec.short_0066 = 3;
+	RXS(modem)->dec.rate = rate;
+	RXS(modem)->dec.short_train = RXCTL(modem)->short_train;
+	RXS(modem)->dec.count = 0;
+	RXS(modem)->dec.scram = 0;
+	RXS(modem)->dec.ang_prev = 0;
+	RXS(modem)->dec.eqm_a = 0;
+	RXS(modem)->dec.eqm_b = 0;
+	RXS(modem)->dec.int_0050 = 0;
 	/*
 	 * `movl $0x0,0x54(%ebp)` -- four bytes of the six `v17dec.h` carries
 	 * as `pad54`, so the two at +0x58 stay as the allocator left them.
@@ -540,14 +502,14 @@ V17RX_create(void *modem, const struct v17rx_cfg *params)
 	 * edit and a wider member would be a claim about bytes the object
 	 * does not touch.
 	 */
-	memset(RXS_DEC(RXS(modem))->pad54, 0, 4);
+	memset(RXS(modem)->dec.pad54, 0, 4);
 	/*
 	 * `sym_i`, `sym_q`, `sym_i1`, `sym_q1`, `sym_i2`, `sym_q2` -- six
 	 * contiguous shorts from +0x3e, cleared by one loop (0x097550,
 	 * `cmp $0x5`) rather than one at a time.
 	 */
 	for (i = 0; (short)i <= 5; i++)
-		(&RXS_DEC(RXS(modem))->sym_i)[i] = 0;
+		(&RXS(modem)->dec.sym_i)[i] = 0;
 
 	/*
 	 * `VTBv32_init`'s body, INLINED, with only the switch's case values
@@ -557,7 +519,7 @@ V17RX_create(void *modem, const struct v17rx_cfg *params)
 	 * the reason the zeroing loop below can walk an uninitialised pointer.
 	 * D1222.
 	 */
-	v = &RXS_DEC(RXS(modem))->vtb;
+	v = &RXS(modem)->dec.vtb;
 	if (owned)
 		v->paths = sysdep_malloc(
 			16 * 8 * sizeof(struct vtb_path));
@@ -717,13 +679,13 @@ V17RX_create(void *modem, const struct v17rx_cfg *params)
 	 * inference.  The six zeroed at +0x44..+0x58 have no evidence of role
 	 * anywhere and are left unnamed.  Finding F9476.
 	 */
-	RXROOT(modem)->out_i = RXS_FSE(RXS(modem))->out_i;
-	RXROOT(modem)->out_q = RXS_FSE(RXS(modem))->out_q;
-	RXROOT(modem)->n_out = &RXS_FSE(RXS(modem))->n_out;
-	RXROOT(modem)->icoeff = RXS_FSE(RXS(modem))->icoeff;
-	RXROOT(modem)->qcoeff = RXS_FSE(RXS(modem))->qcoeff;
+	RXROOT(modem)->out_i = RXS(modem)->fse.out_i;
+	RXROOT(modem)->out_q = RXS(modem)->fse.out_q;
+	RXROOT(modem)->n_out = &RXS(modem)->fse.n_out;
+	RXROOT(modem)->icoeff = RXS(modem)->fse.icoeff;
+	RXROOT(modem)->qcoeff = RXS(modem)->fse.qcoeff;
 	RXROOT(modem)->taps = (unsigned short)
-		RXS_FSE(RXS(modem))->cfg.taps;
+		RXS(modem)->fse.cfg.taps;
 
 	RXROOT(modem)->r44 = 0;
 	RXROOT(modem)->r48 = 0;
@@ -747,9 +709,9 @@ V17RX_delete(void *modem)
 	SGD_delete(RXSTATE(modem)->dec.sgd);
 	sysdep_free(RXSTATE(modem)->dec.vtb.paths);
 
-	FPM_FSE_free(RXS_FSE(RXS(modem)));
-	FPM_SRE_free(RXS_SRE(RXS(modem)));
-	FPM_MRF_free(RXS_MRF(RXS(modem)));
+	FPM_FSE_free(&RXS(modem)->fse);
+	FPM_SRE_free(&RXS(modem)->sre);
+	FPM_MRF_free(&RXS(modem)->mrf);
 
 	sysdep_free(RXSTATE(modem)->buf_sre);
 	sysdep_free(RXSTATE(modem)->buf_mrf);
@@ -1287,7 +1249,7 @@ RxNextStateV17(void *modem)
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V17RX_STATE_START\n");
 		RXCTL(modem)->countdown = 5;
-		CTL_PROCESS(modem) = RxHdxEpochDetV17;
+		CTL(modem)->process = RxHdxEpochDetV17;
 		RXCTL(modem)->state = V17RX_STATE_EPOCH_DET;
 		RXROOT(modem)->result.byte.flags2 &=
 			(unsigned char)~V17RX_RESULT_B2_BIT0;
@@ -1302,7 +1264,7 @@ RxNextStateV17(void *modem)
 			Restore_rateV17(modem);
 		RXCTL(modem)->countdown = (short)
 			(RXCTL(modem)->short_train != 0 ? 1 : 62);
-		CTL_PROCESS(modem) = RxHdxPrtcolV17;
+		CTL(modem)->process = RxHdxPrtcolV17;
 		RXCTL(modem)->state = V17RX_STATE_PROTOCOL;
 		RXROOT(modem)->result.byte.flags2 &=
 			(unsigned char)~V17RX_RESULT_B2_BIT0;
@@ -1314,8 +1276,8 @@ RxNextStateV17(void *modem)
 		 * object spells `addl $0x2` because that is what `const short *`
 		 * arithmetic compiles to.  See v17fax.h and D1216.
 		 */
-		RXS_AGC(RXS(modem))->cfg.alpha++;
-		RXS_AGC(RXS(modem))->cfg.beta++;
+		(&RXS(modem)->agc.value)->cfg.alpha++;
+		(&RXS(modem)->agc.value)->cfg.beta++;
 		break;
 
 	case V17RX_STATE_PROTOCOL:
@@ -1323,14 +1285,14 @@ RxNextStateV17(void *modem)
 			dsplibs_debug_printf("V17RX_STATE_PROTOCOL\n");
 		if (RXCTL(modem)->short_train != 0) {
 			RXCTL(modem)->countdown = 1;
-			CTL_PROCESS(modem) = RxHdxScramV17;
+			CTL(modem)->process = RxHdxScramV17;
 			RXCTL(modem)->state = V17RX_STATE_SCRAM;
 			RXROOT(modem)->result.byte.flags &=
 				(unsigned char)~V17RX_FLAG_DATA;
 			/* No write to V17RX_OBJ_RESULT_B2 here.  D1213. */
 		} else {
 			RXCTL(modem)->countdown = 1;
-			CTL_PROCESS(modem) = RxHdxBridgeV17;
+			CTL(modem)->process = RxHdxBridgeV17;
 			RXCTL(modem)->state = V17RX_STATE_BRIDGE;
 			RXROOT(modem)->result.byte.flags &=
 				(unsigned char)~V17RX_FLAG_DATA;
@@ -1344,7 +1306,7 @@ RxNextStateV17(void *modem)
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V17RX_STATE_BRIDGE\n");
 		RXCTL(modem)->countdown = 1;
-		CTL_PROCESS(modem) = RxHdxScramV17;
+		CTL(modem)->process = RxHdxScramV17;
 		RXCTL(modem)->state = V17RX_STATE_SCRAM;
 		RXROOT(modem)->result.byte.flags2 &=
 			(unsigned char)~V17RX_RESULT_B2_BIT0;
@@ -1355,9 +1317,9 @@ RxNextStateV17(void *modem)
 	case V17RX_STATE_SCRAM:
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V17RX_STATE_SCRAM\n");
-		FPM_AGC_Freeze(RXS_AGC(RXS(modem)));
+		FPM_AGC_Freeze(&RXS(modem)->agc.value);
 		RXCTL(modem)->countdown = 0;
-		CTL_PROCESS(modem) = RxHdxDataV17;
+		CTL(modem)->process = RxHdxDataV17;
 		RXCTL(modem)->state = V17RX_STATE_DATA;
 		RXROOT(modem)->result.byte.flags2 &=
 			(unsigned char)~V17RX_RESULT_B2_BIT0;
@@ -1376,7 +1338,7 @@ RxNextStateV17(void *modem)
 		 */
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V17RX_STATE_DATA\n");
-		CTL_PROCESS(modem) = RxHdxIdleV17;
+		CTL(modem)->process = RxHdxIdleV17;
 		RXCTL(modem)->state = V17RX_STATE_IDLE;
 		RXCTL(modem)->countdown = 0;
 		RXCTL(modem)->r08 = 0;
@@ -1388,7 +1350,7 @@ RxNextStateV17(void *modem)
 	case V17RX_STATE_IDLE:
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V17RX_STATE_IDLE\n");
-		CTL_PROCESS(modem) = RxHdxDataV17;
+		CTL(modem)->process = RxHdxDataV17;
 		RXCTL(modem)->state = V17RX_STATE_DATA;
 		RXROOT(modem)->result.byte.flags2 &=
 			(unsigned char)~V17RX_RESULT_B2_BIT0;
@@ -1498,7 +1460,7 @@ RxHdxScramV17(void *modem, short *in, short *out, unsigned short *count)
 	*count = 0;
 
 	if (CarrierDetectV17(modem) == 0) {
-		CTL_PROCESS(modem) = RxHdxErrorV17;
+		CTL(modem)->process = RxHdxErrorV17;
 		RXCTL(modem)->state = V17RX_STATE_ERROR;
 		RXROOT(modem)->result.byte.status = V17RX_STATUS_ERROR;
 		RXROOT(modem)->result.byte.flags = (unsigned char)
@@ -1560,7 +1522,7 @@ RxHdxBridgeV17(void *modem, short *in, short *out, unsigned short *count)
 	*count = 0;
 
 	if (CarrierDetectV17(modem) == 0) {
-		CTL_PROCESS(modem) = RxHdxErrorV17;
+		CTL(modem)->process = RxHdxErrorV17;
 		RXCTL(modem)->state = V17RX_STATE_ERROR;
 		RXROOT(modem)->result.byte.status = V17RX_STATUS_ERROR;
 		RXROOT(modem)->result.byte.flags = (unsigned char)
@@ -1601,7 +1563,7 @@ RxHdxPrtcolV17(void *modem, short *in, short *out, unsigned short *count)
 	*count = 0;
 
 	if (CarrierDetectV17(modem) == 0) {
-		CTL_PROCESS(modem) = RxHdxErrorV17;
+		CTL(modem)->process = RxHdxErrorV17;
 		RXCTL(modem)->state = V17RX_STATE_ERROR;
 		RXROOT(modem)->result.byte.status = V17RX_STATUS_ERROR;
 		RXROOT(modem)->result.byte.flags = (unsigned char)
@@ -1646,7 +1608,7 @@ RxHdxEpochDetV17(void *modem, short *in, short *out, unsigned short *count)
 	*count = 0;
 
 	if (CarrierDetectV17(modem) == 0) {
-		CTL_PROCESS(modem) = RxHdxErrorV17;
+		CTL(modem)->process = RxHdxErrorV17;
 		RXCTL(modem)->state = V17RX_STATE_ERROR;
 		RXROOT(modem)->result.byte.status = V17RX_STATUS_ERROR;
 		RXROOT(modem)->result.byte.flags = (unsigned char)
@@ -2751,9 +2713,9 @@ DemodDataV17(void *modem, short *in, unsigned short *bits, unsigned short count)
 	unsigned short n;
 	struct v17rx_state *rxs;
 
-	FPM_AGC_agc(RXS_AGC(RXS(modem)), in, count);
+	FPM_AGC_agc(&RXS(modem)->agc.value, in, count);
 	/* Not the object's `%eax`; the same value.  D1091. */
-	signal = RXS_AGC(RXS(modem))->signal;
+	signal = RXS(modem)->agc.value.signal;
 
 	if (RXCTL(modem)->state == V17RX_STATE_START) {
 		short *buf = (short *)RXCTL(modem)->scratch;
@@ -2777,15 +2739,15 @@ DemodDataV17(void *modem, short *in, unsigned short *bits, unsigned short count)
 	}
 
 	n = (unsigned short)FPM_MRF_filter(
-			RXS_MRF(RXS(modem)),
+			&RXS(modem)->mrf,
 			in,
 			(short *)RXSTATE(modem)->buf_mrf,
 			(short)count);
 
 	rxs = RXS(modem);
-	RXS_SRE(rxs)->adapt = signal & rxs->r04;
+	rxs->sre.adapt = signal & rxs->r04;
 
-	n = FPM_SRE_recover(RXS_SRE(RXS(modem)),
+	n = FPM_SRE_recover(&RXS(modem)->sre,
 			    (const short *)
 				RXSTATE(modem)->buf_mrf,
 			    (short *)RXSTATE(modem)->buf_sre,
@@ -2795,11 +2757,11 @@ DemodDataV17(void *modem, short *in, unsigned short *bits, unsigned short count)
 		dsplibs_debug_printf("ERROR: SRE buffer violation!(%d)", n);
 
 	rxs = RXS(modem);
-	RXS_FSE(rxs)->tilt_on = 0;
-	RXS_FSE(rxs)->pll_on = signal & rxs->r08;
-	RXS_FSE(rxs)->lms_on = signal & rxs->r10;
+	rxs->fse.tilt_on = 0;
+	rxs->fse.pll_on = signal & rxs->r08;
+	rxs->fse.lms_on = signal & rxs->r10;
 
-	return FPM_FSE_receive(RXS_FSE(RXS(modem)),
+	return FPM_FSE_receive(&RXS(modem)->fse,
 			       (const short *)
 				RXSTATE(modem)->buf_sre,
 			       bits, n);
