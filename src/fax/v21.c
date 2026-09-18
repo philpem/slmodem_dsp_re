@@ -408,7 +408,7 @@ V21TX_create(void *modem, const struct v21tx_cfg *params)
 	struct fifo_cfg fc;
 	struct v21_tx_dsp *dsp;
 	struct v21_tx_hdx *hdx;
-	void *existing_fifo;
+	struct fax_fifo *existing_fifo;
 	short protocol;
 	int fresh = 0;
 	int zero = 0;
@@ -456,7 +456,7 @@ V21TX_create(void *modem, const struct v21tx_cfg *params)
 	fc.fill = 1;
 	existing_fifo = hdx->fifo;
 	hdx->fifo =
-		FIFO_create((struct fax_fifo *)existing_fifo, &fc);
+		FIFO_create(existing_fifo, &fc);
 
 	hdx->int_0004 = 0;
 	hdx->handler = TxHdxStartV21;
