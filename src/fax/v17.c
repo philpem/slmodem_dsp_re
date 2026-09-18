@@ -1356,24 +1356,18 @@ RxNextStateV17(void *modem)
 			(unsigned char)~V17RX_RESULT_B2_BIT0;
 		RXROOT(modem)->result.byte.flags |= V17RX_FLAG_DATA;
 		/* The one arm that does not seed the countdown.  D1215. */
-		switch (RXCTL(modem)->rate_code) {
-		case V17RX_RATE_7200:
+		if (RXCTL(modem)->rate_code == V17RX_RATE_7200)
 			RXROOT(modem)->result.byte.status =
 				V17RX_STATUS_RATE_7200;
-			break;
-		case V17RX_RATE_9600:
+		else if (RXCTL(modem)->rate_code == V17RX_RATE_9600)
 			RXROOT(modem)->result.byte.status =
 				V17RX_STATUS_RATE_9600;
-			break;
-		case V17RX_RATE_12000:
+		else if (RXCTL(modem)->rate_code == V17RX_RATE_12000)
 			RXROOT(modem)->result.byte.status =
 				V17RX_STATUS_RATE_12000;
-			break;
-		default:
+		else
 			RXROOT(modem)->result.byte.status =
 				V17RX_STATUS_RATE_14400;
-			break;
-		}
 		break;
 
 	default:
@@ -1477,20 +1471,14 @@ RxHdxScramV17(void *modem, short *in, short *out, unsigned short *count)
 	if (left > 0)
 		return 0;
 
-	switch (RXCTL(modem)->rate_code) {
-	case V17RX_RATE_7200:
+	if (RXCTL(modem)->rate_code == V17RX_RATE_7200)
 		RXROOT(modem)->result.byte.status = V17RX_STATUS_RATE_7200;
-		break;
-	case V17RX_RATE_9600:
+	else if (RXCTL(modem)->rate_code == V17RX_RATE_9600)
 		RXROOT(modem)->result.byte.status = V17RX_STATUS_RATE_9600;
-		break;
-	case V17RX_RATE_12000:
+	else if (RXCTL(modem)->rate_code == V17RX_RATE_12000)
 		RXROOT(modem)->result.byte.status = V17RX_STATUS_RATE_12000;
-		break;
-	default:
+	else
 		RXROOT(modem)->result.byte.status = V17RX_STATUS_RATE_14400;
-		break;
-	}
 
 	/* SET and never cleared; only RxHdxDataV17 clears it.  D1217. */
 	if (GetSNRV17(modem) <= V17RX_SNR_THRESHOLD)
