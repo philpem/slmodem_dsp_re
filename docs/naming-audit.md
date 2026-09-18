@@ -2402,3 +2402,103 @@ The modern tier compiles both files clean with **GCC 14.2.0** at
 deliberate leave or an unproven consolidation as above. No struct was
 restructured.
 
+## Batch: issue #151, the v32_modem / v32fp_params shared base
+
+Lever 16 of `docs/method/refinement.md`; experiment design per
+`docs/method/experiment-design.md`. The one concrete shared leading member left
+by #145 is `struct v32_modem`'s first member `struct v32fp_params params`
+(`v32struct.h:110-111`). This pass characterised that model, enumerated four
+holder/macro source forms, and applied the neutral one that removes the most
+casts.
+
+### The model, and that the reverse holds at every use site
+
+`params` is at +0x00 of `struct v32_modem` (asserted at
+`v32struct.h:155-156`, `V32_SO(struct v32_modem, fp) == 0x68` and
+`sizeof(struct v32_modem) == 0x6c`). The object agrees: `V32FP_recreate`'s
+`rep movsl` writes the 0xc-dword parameter block to the base (0x7e8ab) and then
+reaches `fp` at +0x68 (0x7e8cb). So a `struct v32fp_params *` and a
+`struct v32_modem *` name the same address, and both directions of cast are a
+zero-adjustment pun. **The base is the first member at every use site, so
+`(struct v32fp_params *)obj` and `(struct v32_modem *)params` need no negative
+adjustment.** The only place the holder is not the object base is the
+`param != 0` argument, which is a separate parameter block and is never cast to
+`struct v32_modem *`.
+
+### Enumeration (all cells measured, not scored)
+
+Every cell compiled the complete transitive includer set of `v32fpstat.h`
+(`V32.c`, `V32mod.c`, `V32stc.c`, `v32.c`, `t_v32dp.c`, `t_v32fpdisp.c`,
+`t_v32fprecr.c`) with the exact period flags (Gentoo GCC 3.4.2-r2,
+`-O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387 -mno-ieee-fp
+-fomit-frame-pointer -maccumulate-outgoing-args -DDSPLIB_REPRODUCE_BUGS
+-D__SIZEOF_POINTER__=4 -std=gnu99 -include tools/toolchain/period_compat.h`)
+and compared each object byte-for-byte against `build/period`. Byte identity is
+the full-text comparison: same instructions, same operands, same everything.
+
+| model | source form | full-text verdict | casts removed | files touched |
+|---|---|---|---|---|
+| (a) | `void *modem` + `(struct v32_modem *)` casts (baseline) | — (control) | 0 | 0 |
+| (b) | `struct v32fp_params *modem` (base pointer); derived casts kept | **neutral**, all 7 objects identical | 3 (`*(struct v32fp_params *)modem` x2, `p = (struct v32fp_params *)modem` x1); 19 derived casts + the two macros remain | `V32.c`, `v32fpstat.h` |
+| (c) | `union v32_modem_view { struct v32fp_params params; struct v32_modem modem; }` as the holder | **NOT neutral** — `src_pump_v32_V32.o` differs: 8 bytes larger, 2,465 bytes differ, instruction scheduling and stack offsets move (union members are assumed to overlap, so the write through `.params` and the read through `.modem.fp` no longer optimise as independent) | 0 net (casts become member selectors) | `V32.c`, `v32fpstat.h`, `v32struct.h` |
+| (d) | `struct v32_modem *modem` (derived pointer, signature change) | **neutral**, all 7 objects identical | 22 explicit casts (`((struct v32_modem *)modem)->` x19, `*(struct v32fp_params *)modem` x2, `p = ...` x1) **plus** the two local `HDX`/`FP` macro casts; no derived casts remain | `V32.c`, `v32fpstat.h` |
+
+Only (b) and (d) map (compile and are codegen-neutral). (a) is the control;
+(c) is measured non-neutral and rejected. Per step 3, the model that removes the
+most redundant casts is applied: **(d)**. It removes 22 explicit casts and makes
+both local macros cast-free, against (b)'s 3; (b) leaves 19 necessary derived
+casts and types the whole object as its first 48 bytes, which is less truthful
+than typing it as the object it is. (d) reaches the base through the shared
+first member (`modem->params`), which is exactly the +0x00 relationship the
+issue is about, so it is the consolidation, not a bypass of it.
+
+### Applied: (d)
+
+`V32FP_recreate`'s holder is now `struct v32_modem *modem`; the base view is
+`&modem->params`, and the derived fields are reached directly. The two local
+macros are `((m)->hdx)` / `((m)->fp)`. The published prototype in
+`v32fpstat.h` carries the new type with a `struct v32_modem;` forward
+declaration. **No caller source changed**: `void *` converts implicitly to
+`struct v32_modem *`, so `V32FP_control` (`V32stc.c:122,129`) and
+`V32FP_create` (`V32.c:805`) are untouched, and the test fixture's
+`V32FP_recreate(a, (struct v32fp_params *)a, 0)` still type-checks. The ABI is
+unchanged — pointer types are not observable in the emitted code.
+
+Casts disappeared: 22 explicit plus the two macro-internal ones. Derived casts
+remaining: **none** in this holder. `V32FP_recreate` now contains zero
+`(struct v32_modem *)` casts.
+
+### Boundary, not taken
+
+The same retype was **not** applied to the other V.32 holders. The shared views
+`HDX(m)`/`FP(m)`/`PARAMS(m)` in `src/pump/v32/v32fpdisp-common.h:90-97`, the
+seven further own copies of `HDX`/`FP` (`v32fpctl.c`, `v32nsans.c`,
+`v32nsloop.c`, `v32nsorg.c`, `v32nsrng.c`, `V32rxhdx.c`, `V32TXHDX.c`), and the
+`V32mod.c`/`V32stc.c` consumers of the shared header are held by published
+`void *modem` parameters across the remaining thirteen source files; retyping
+those to `struct v32_modem *` would remove the remaining 144
+`(struct v32_modem *)` casts but fans out well past the bounded pass this issue
+set. That is a follow-up, not a silent scope increase. It is a holder retype of
+the same measured shape, so its neutrality is expected but is **not** claimed
+here.
+
+### Verification
+
+Gentoo `make phase` exited 0, **`period differential: 375 passed, 0 failed`**
+and `phase boundary: period differential and structural checks all OK`. Log:
+`build/structure-issue151/gates.log`.
+
+All **655 `build/period/*.o` objects are byte-identical** to the pre-edit
+snapshot (`/home/philpem/slmodem/tmp/issue151-before.sha256` vs
+`issue151-after.sha256`, `diff` empty). `src_pump_v32_V32.o` was recompiled at
+18:49:55 from `V32.c` edited at 18:44:42 and is identical, so the identity is
+real and not a stale-object artefact.
+
+Modern compile clean on every affected TU (`V32.c`, `V32mod.c`, `V32stc.c`,
+`v32.c`, `t_v32dp.c`, `t_v32fpdisp.c`, `t_v32fprecr.c`) with **GCC 14.2.0** at
+`-m32 -Werror=incompatible-pointer-types -fsyntax-only`, exit 0.
+
+**#151 disposition:** closed. The holder is a single pointer to the object base
+with no redundant casts; the base pointer spelling (b) was measured equally
+neutral but removes fewer casts and is not the chosen form.
+

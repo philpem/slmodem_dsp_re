@@ -25,6 +25,7 @@ extern "C" {
 
 struct v32fp_ctl;
 struct v32fp_params;
+struct v32_modem;
 
 /*
  * ---------------------------------------------------------------------------
@@ -137,8 +138,8 @@ struct v32_status {
  * @param arg2    Forwarded from `V32FP_create`'s second argument (always 0 in practice).
  * @return The instance, allocated or not.
  */
-void *V32FP_recreate(void *modem, const struct v32fp_params *params,
-		     void *arg2);
+void *V32FP_recreate(struct v32_modem *modem,
+		     const struct v32fp_params *params, void *arg2);
 
 /**
  * @brief Build a V.32 datapump instance from the caller's compact configuration.
