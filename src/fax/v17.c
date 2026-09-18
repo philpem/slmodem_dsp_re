@@ -2749,7 +2749,7 @@ DemodDataV17(void *modem, short *in, unsigned short *bits, unsigned short count)
 {
 	int signal;
 	unsigned short n;
-	unsigned char *rxs;
+	struct v17rx_state *rxs;
 
 	FPM_AGC_agc(RXS_AGC(RXS(modem)), in, count);
 	/* Not the object's `%eax`; the same value.  D1091. */
@@ -2783,7 +2783,7 @@ DemodDataV17(void *modem, short *in, unsigned short *bits, unsigned short count)
 			(short)count);
 
 	rxs = RXS(modem);
-	RXS_SRE(rxs)->adapt = signal & ((struct v17rx_state *)rxs)->r04;
+	RXS_SRE(rxs)->adapt = signal & rxs->r04;
 
 	n = FPM_SRE_recover(RXS_SRE(RXS(modem)),
 			    (const short *)
@@ -2796,8 +2796,8 @@ DemodDataV17(void *modem, short *in, unsigned short *bits, unsigned short count)
 
 	rxs = RXS(modem);
 	RXS_FSE(rxs)->tilt_on = 0;
-	RXS_FSE(rxs)->pll_on = signal & ((struct v17rx_state *)rxs)->r08;
-	RXS_FSE(rxs)->lms_on = signal & ((struct v17rx_state *)rxs)->r10;
+	RXS_FSE(rxs)->pll_on = signal & rxs->r08;
+	RXS_FSE(rxs)->lms_on = signal & rxs->r10;
 
 	return FPM_FSE_receive(RXS_FSE(RXS(modem)),
 			       (const short *)
