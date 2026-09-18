@@ -916,7 +916,7 @@ V17TX_create(void *modem, const struct v17tx_cfg *params)
 	fp = TXFP(modem);
 	if (fp == 0) {
 		fp = sysdep_malloc(0x90);
-		TXROOT(modem)->fp = (struct v17tx_fp *)fp;
+		TXROOT(modem)->fp = fp;
 		TXBLOCK(modem)->ring.sym = (short *)sysdep_malloc(0x64);
 	}
 

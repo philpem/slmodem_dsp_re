@@ -1949,13 +1949,13 @@ V27TX_create(void *modem, const struct v27tx_cfg *params)
 
 	{
 		struct sgd_cfg gcfg = SGD_CFG;
-		void *existing;
+		struct sgd *existing;
 
 		gcfg.sym_bits = 3;
 
 		existing = prm->sgd;
 		prm->sgd =
-			SGD_create((struct sgd *)existing, &gcfg);
+			SGD_create(existing, &gcfg);
 	}
 
 	/* ---- the half-duplex machine's own state ---------------------- */
@@ -1984,7 +1984,7 @@ V27TX_create(void *modem, const struct v27tx_cfg *params)
 		struct fifo_cfg fc;
 		unsigned short n = (unsigned short)
 			(&((struct v27_tx *)modem)->cfg)->fifo_size_factor;
-		void *existing;
+		struct fax_fifo *existing;
 		short rate;
 
 		prm = ((struct v27_tx *)modem)->source;
@@ -1996,7 +1996,7 @@ V27TX_create(void *modem, const struct v27tx_cfg *params)
 
 		existing = prm->fifo;
 		prm->fifo =
-			FIFO_create((struct fax_fifo *)existing, &fc);
+			FIFO_create(existing, &fc);
 	}
 
 	/* ---- the private block: the ring, the scrambler, the symbol coder
