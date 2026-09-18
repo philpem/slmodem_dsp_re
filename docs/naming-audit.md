@@ -1933,6 +1933,98 @@ exited 1 on two pre-existing MISSING suites (`faxadaptcreate_v29tx`,
 `fdspkrnl_tone`). The deleted mutation's recorded verdict remains only in that
 stale, non-baseline entry; no verdict was hand-edited.
 
+## Batch: issue #140 struct-cast retyping (v27/v29 tranche)
+
+Lever 16 of `docs/method/refinement.md`: a holder declared with a generic
+pointer type whose every `(struct T *)` cast targets a single struct can be
+retyped to `struct T *`, and the now-redundant casts removed. Pointer type is
+codegen-neutral -- the symbols are `extern "C"`, no mangling or DWARF records
+the declaration, and the retype removes no load, store or operand -- so the
+change is proven by the period object rather than argued. This tranche covers
+`src/fax/v29.c` and `src/fax/v27.c` only. Nothing else in either file changed:
+no cast carried a computed value, no holder was used as a byte pointer, and no
+`sizeof`/`memcpy`/pointer arithmetic touched a retyped holder.
+
+**No header changed, and none needed to.** Every sub-object pointer in
+`include/dsplib/v29fax.h` and `include/dsplib/v27fax.h` is already spelled
+`struct ... *` (there is no `void *`/`char *` field in either file), so the
+struct-field half of the issue was already done by the earlier naming batches;
+there were no consumer casts of those fields to drop. `docs/naming-inventory.md`
+was therefore **not regenerated** -- it counts names, not types, and
+`tools/namingcensus.py` reproduces it byte for byte.
+
+### Holders retyped
+
+| holder | file | functions (declaration sites) | old type -> new type | casts removed | single-target evidence |
+|---|---|---|---|---|---|
+| `det` | `src/fax/v29.c` | `V29RX_create`, `DataCarrierDetectV29` (2) | `void *` -> `struct v29_rx_detector *` | 27 | every `(struct v29_rx_detector *)det`; no other struct cast on `det` anywhere in the file |
+| `rx` | `src/fax/v29.c` | `V29RX_create`, `DemodDataV29`, `CarrierDetectV29`, `DataCarrierDetectV29`, `QualityDetectV29` (5) | `void *` -> `struct v29_rx_block *` | 63 | every `(struct v29_rx_block *)rx`; file-wide cast census has no second target |
+| `dec` | `src/fax/v29.c` | `V29RX_create`, `V29RX_epoch_det`, `V29RX_eq_train`, `V29RX_decision` (4) | `void *` -> `struct v29_rx_decoder *` | 67 | every `(struct v29_rx_decoder *)dec` |
+| `prm` | `src/fax/v29.c` | `V29TX_create`, `V29TX_modem`, `TxNextStateV29`, `TxHdx{Start,Idle,Quiet,AB,EQCond,SCR1,Data}V29`, `V29TX_control` (10) | `void *` -> `struct v29_tx_params *` | 66 | every `(struct v29_tx_params *)prm` |
+| `sh` | `src/fax/v27.c` | `V27RX_create`, `V27RX_delete`, `RxNextStateV27`, `RxHdxPrtcolV27`, `RxHdxEpochDetV27`, `DemodDataV27`, `DataCarrierDetectV27` (7) | `void *` -> `struct v27_rx_shared *` | 96 | every `(struct v27_rx_shared *)sh` |
+| `rx` | `src/fax/v27.c` | `V27RX_create`, `V27RX_delete`, `RxNextStateV27`, `DemodDataV27`, `DataCarrierDetectV27`, `QualityDetectV27`, `EpochDetectV27`, `CarrierDetectV27` (8) | `void *` -> `struct v27_rx_block *` | 83 | every local `rx` is cast only to `struct v27_rx_block *`; the only `(struct v27_rx *)rx` in the file is the separate `V27RX_control(void *rx, ...)` **parameter**, a different holder and left untouched |
+| `dec` | `src/fax/v27.c` | `V27RX_epoch_det`, `V27RX_eq_train`, `V27RX_decision`, `DataCarrierDetectV27` (4) | `void *` -> `struct v27_rx_decoder *` | 53 | every `(struct v27_rx_decoder *)dec` |
+| `prm` | `src/fax/v27.c` | `V27TX_control`, `SetScramblerV27`, `V27TX_create`, `V27TX_modem`, `TxNextStateV27`, `TxHdx{Start,Quiet,Alt,EQCond,SCR1,Data}V27`, `TxNoCarrierV27`, `GenEQTrnSequenceV27` (13) | `void *` -> `struct v27_tx_source *` | 92 | every `(struct v27_tx_source *)prm` |
+| `src` | `src/fax/v27.c` | `V27TX_delete` (1) | `void *` -> `struct v27_tx_source *` | 2 | every `(struct v27_tx_source *)src` |
+| `tx` | `src/fax/v27.c` | `V27TX_delete`, `ModDataV27`, `V27TX_create`, `TxNoCarrierV27` (7) | `void *` -> `struct v27_tx_block *` | 15 | every `(struct v27_tx_block *)tx`; the `const void *tx` of `V27TX_status` is a separate parameter cast to `struct v27_tx *` and is left untouched |
+
+Totals: **`src/fax/v29.c` 223 casts removed, `src/fax/v27.c` 341 casts removed**
+(564 across the batch).
+
+### Retained, and why
+
+- **The generic handle idiom.** `modem` (`struct v29_rx *` and
+  `struct v29_tx_root *`; `struct v27_rx *` and `struct v27_tx *`), `fp` in
+  `V29TX_control` (`struct v29_tx_root *` / `struct v29tx_cfg *`), and the
+  `req` parameters (`v27rx_ctl` / `v27tx_ctl`) are each one `void *` cast to
+  different struct types at different sites. This is exactly the idiom `void *`
+  exists for; retyping any of them would falsify the other arm.
+- **`existing`** (`src/fax/v29.c` and `v27.c`, `V29TX_create` / `V27TX_create`)
+  is cast to `struct fax_fifo *` on one path and `struct sgd *` on the other.
+  Multi-target; retained.
+- **`aux`** (`V29RX_create` / `V27RX_create`) is a byte payload, not a struct
+  handle: `memcpy(&scfg.pad34, &aux, sizeof aux)` and
+  `fcfg.reserved34 = aux`. It is never cast to a struct, so there is nothing to
+  collapse; retyping would assert a struct type the shared `fpm_*_cfg` payload
+  does not have.
+- **Public/exported parameters.** `V29RX_status`/`V29TX_status`'s `status`, the
+  `V29TX_status` `tx`, and `V27RX_control`'s `rx` and `V27TX_status`'s `tx` are
+  part of the published `dp`-layer signature declared in `v29fax.h`/`v27fax.h`
+  and reached through `src/fax/V29rx.c`, `V29tx.c`, `V27rx.c`, `V27tx.c`. The
+  wrappers pass `void *`, so retyping would change the exported interface and
+  every wrapper; per the issue they are left, and their casts remain.
+
+### Verification
+
+Gentoo `make phase` exited 0, **`period differential: 375 passed, 0 failed`**
+and `phase boundary: period differential and structural checks all OK`. Log:
+`build/structure-issue140/gates.log`.
+
+All **655 `build/period/*.o` objects are byte-identical** to the pre-edit
+snapshot (`/home/philpem/slmodem/tmp/issue140-before.sha256` vs
+`issue140-after.sha256`, `diff` empty). The two that could have moved,
+`src_fax_v29.o` and `src_fax_v27.o`, were recompiled at 10:26:46 from sources
+edited at 10:24:56, so the comparison is against objects built from the changed
+source and the identity is real, not a stale-object artefact.
+
+The modern tier compiles both files clean with **GCC 14.2.0** at
+`-m32 -O2 -mfpmath=387 -Wall -Wextra`, including
+`-Werror=incompatible-pointer-types` (the check that stopped `make coverage` on
+this class of holder in passing).
+
+No mutation manifest edits were needed: no `find`/`replace` value in
+`test/mutations/*.json` contains a cast to any of the ten retyped types, and
+`anchorcheck.py` still reports **10040 mutations over 272 suites, 0 anchors
+matching other than exactly once**. `test/mutations/snapshot.json` was not
+touched.
+
+### Remaining for the next tranche
+
+The same per-holder audit is unstarted in `src/fax/v17.c`, `src/fax/v21.c`,
+`src/fax/V17rx.c`, `V17tx.c`, `V21rx.c`, `V21tx.c`, `V27rx.c`, `V27tx.c`,
+`V29rx.c`, `V29tx.c`, `src/pump/v22/*.c`, `src/pump/v32/*.c` and
+`src/pump/v34/*.c`. The v22/v32/v34 files were explicitly out of scope here.
+
 
 
 
