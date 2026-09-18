@@ -2142,7 +2142,129 @@ consolidation question, and `src/fax/v17.c`, `src/fax/v21.c`, `src/fax/V17rx.c`,
 `V17tx.c`, `V21rx.c`, `V21tx.c`, `V27rx.c`, `V27tx.c`, `V29rx.c`, `V29tx.c`
 and `src/pump/v22/*.c` are still unaudited for locals and fields.
 
+## Batch: issue #140 struct-cast retyping (final tranche and disposition)
 
+Lever 16 of `docs/method/refinement.md`, the third and final tranche of #140
+(`improve/issue140-tranche3`). Every remaining candidate on the #140 list was
+audited per function scope. **One local holder was retyped.** Every other
+candidate is a deliberate leave, and the reason is given per holder below.
+No header changed and no published signature moved.
 
+### Holder retyped
 
+| holder | file | function | old type -> new type | casts removed | single-target evidence |
+|---|---|---|---|---|---|
+| `existing_fifo` | `src/fax/v21.c` | `V21TX_create` (1) | `void *` -> `struct fax_fifo *` | 1 | the local is assigned once from `hdx->fifo` (already `struct fax_fifo *`, `v21fax.h:155`) and used once as `FIFO_create((struct fax_fifo *)existing_fifo, &fc)`; `FIFO_create`'s first parameter is `struct fax_fifo *` (`faxfifo.h:192`); no other cast and no byte use |
+
+`Smc.c` was checked first and is **not** this task's target. `SMCv17_encoder_dif`/
+`_abs`/`_tcm`/`SMCv17_init`'s `void *smc` is a **published** signature: declared
+in `include/dsplib/v17data.h` and called from `src/fax/v17.c`, a different
+translation unit. The three encoders are also stored in
+`struct v17tx_block::encoders[]`, whose element type is `v17_encoder_fn` (a
+`void *` first parameter, `v17data.h:209`); retyping would make
+`encoders[0] = SMCv17_encoder_dif` an incompatible function-pointer assignment
+and require a **new** cast at `v17.c:1011-1012` (GCC 14
+`-Wincompatible-pointer-types`). It is a published-signature consolidation,
+i.e. #145's work, not a cast removal.
+
+### Retained: final per-holder disposition
+
+**A. Published `void *` interface/entry-point parameters -- left, tracked in
+#145.** Each signature is declared in a module header and reached from another
+translation unit; retyping changes the exported interface and every wrapper.
+
+- `src/fax/Smc.c` `smc` -> `struct v17_smc *` (4 cast sites; `v17data.h`
+  declarations; `v17.c` caller; `encoders[]` function-pointer contract).
+- `src/fax/v29.c` `status` -> `struct v29_status_prefix *` (33; `V29RX_status`,
+  `V29TX_status`) and `tx` -> `struct v29_tx_root *` (4; `V29TX_status`);
+  `v29fax.h`, reached through `V29rx.c`/`V29tx.c`.
+- `src/fax/v27.c` `rx` -> `struct v27_rx *` (4; `V27RX_status`,
+  `V27RX_control`) and `status` -> `struct v27_status_prefix *` (1;
+  `V27RX_status`, `V27TX_status`); `v27fax.h`, reached through
+  `V27rx.c`/`V27tx.c`.
+- `src/fax/v17.c` `modem` -> `struct v17rx_cfg *` (1; `V17RX_control`);
+  `v17fax.h:1786`, reached through `V17rx.c`.
+- `src/pump/v17/v17data.c` `modem` -> `struct v17tx *` (2; `ModDataV17`,
+  `TxNoCarrierV17`); `v17data.h`.
+- `src/pump/v29/v29data.c` `modem` -> `struct v29_tx_root *` (2;
+  `TxNoCarrierV29`, `GenEQTrnSequenceV29`); `v29data.h`.
+- `src/pump/v22/v22data.c` `modem` -> `struct v22fp *` (4; `Detect_v22`,
+  `ScrambleDataV22`, `DescrambleDataV22`, `ModDataV22`) and
+  `src/pump/v22/v22prc.c` `modem` -> `struct v22fp *` (6; `ReadGTimer`,
+  `SetAdaptEqV22`, `TxClockSync`, `CarrierDetect`, `SignalDetect`,
+  `GetSignalQuality`); `v22fp.h`.
+- `src/pump/v32/*` `modem` -> `struct v32_modem *` (`v32fpctl.c` 8,
+  `v32data.c` 3, `v32demod.c` 1, `v32hdx.c` 3, `v32nsans.c` 11, `v32nsloop.c`
+  4, `v32nsorg.c` 8, `v32nsrng.c` 26, `v32seq.c` 8) and `v32anstone.c` `ctx`
+  -> `struct v32_ans_tone *` (1; `GenerateAnsTone`); `v32*.h`.
+- `src/pump/v34/*` `objp`/`obj`/`vobj` -> `struct v34_object *` (`V34RX.c` 14,
+  `V34hshak.c` 15 + 2 `void *obj`, `v34digital.c` 1, `v34filters.c` 2,
+  `v34info.c` 7, `v34pcmif.c` 33, `v34scram.c` 4, `v34diag.cpp` 2,
+  `v34hstx1.cpp` 17); `v34*.h`.
+- `src/pump/v34/v34shell.c` `shellp` -> `struct v34_shell *` (4;
+  `shellDemapper`, `putFrame`, `decodeDepth`, `demapFrame`); `v34shell.h`.
+- `src/pump/v34/v34shell.c` `fields` -> `struct v34_shell_fields *` (1 cast
+  site, `shell_of()`; used by `setScramble`, `preinitV34`, `initG248`,
+  `initV34`); declared `void *fields` in `v34shell.h`. It is the shell fields
+  sub-object base -- `preinitV34((char *)tx + V34_SHELL_FIELDS)`,
+  `v34digital.c:54` -- a byte-offset base, not a whole struct.
+- `src/service/rd.c` `obj` -> `struct rd *` (3; `RD_delete`, `RD_process`,
+  `RD_ring_details`); `ringdet.h`.
+- `src/service/voice.c` `obj` -> `struct vce *` (3; `VOICE_delete`,
+  `VOICE_command`, `VOICE_process`); `vce.h`.
+- `src/pump/v90/V92bitsToSymbol.cpp` `p` -> `struct V92ParamsInfo *` (1;
+  `V92BitsToSymbol::reset`); the header spells the parameter
+  `V92MappingParams *`, and it is passed to `transmitter->reset(p)`.
+
+**B. Callback-contract generic handle -- left.** `dp_arg` -> `struct dp *` in
+`src/pump/b103/b103.c`, `src/pump/v22/v22.c`, `src/pump/v23/v23.c` and
+`src/pump/v32/v32.c` (1 each; the static `b103_process`/`v22_process`/
+`v23_process`/`v32_process`). The functions are `static`, but they are the
+implementation of the published `dp_process_fn` typedef (`dp.h:23`, first
+parameter `void *`) and are handed to `dp_wrapper_create` directly. Retyping
+makes each registration an incompatible function-pointer argument and requires
+a **new** cast, so it is a wash and a signature change, not a cast removal.
+
+**C. Generic field / byte pointer -- left.** `src/pump/b103/b103.c` (and the
+sibling datapumps) casts `dp->dp_data` to `struct dp_wrapper *` (2). The holder
+is the field `struct dp::dp_data`, deliberately `void *` (`dp.h:47`) as the
+opaque datapump state consumed through `dp_wrapper_run`; it is not a
+single-struct handle.
+
+### Cumulative retyped (tranches 1-3)
+
+564 casts (`src/fax/v29.c`, `src/fax/v27.c`; PR #144) + 159 casts
+(`src/pump/v32/V32.c`, `src/pump/v32/v32fpctl.c`; PR #146) + 1 cast
+(`src/fax/v21.c`; this tranche) = **724 redundant casts removed across 15
+holders**. Nothing in section A/B/C is a retype deferred for difficulty: every
+one is either a published signature (#145's consolidation), a callback
+contract, or a deliberate generic/byte pointer.
+
+### Verification
+
+Gentoo `make phase` exited 0, **`period differential: 375 passed, 0 failed`**
+and `phase boundary: period differential and structural checks all OK`. Log:
+`build/structure-issue140-t3/gates.log`.
+
+All **655 `build/period/*.o` objects are byte-identical** to the pre-edit
+snapshot (`/home/philpem/slmodem/tmp/issue140-t3-before.sha256` vs
+`issue140-t3-after.sha256`, `diff` empty). `src_fax_v21.o` was recompiled at
+12:32 from the source edited at 12:31, so the identity is real and not a
+stale-object artefact.
+
+The modern tier compiles the file clean with **GCC 14.2.0** at
+`-m32 -O2 -mfpmath=387 -Wall -Wextra -Wno-unused-parameter
+-Werror=incompatible-pointer-types`, exit 0, no warnings.
+
+No mutation manifest edit was needed: no `find`/`replace` value in
+`test/mutations/*.json` contains `existing_fifo` or `fax_fifo`, and the gate's
+`anchorcheck.py` still reports **272 suites, 10040 mutations, 0 anchors
+matching other than exactly once**. `test/mutations/snapshot.json` was not
+touched.
+
+**#140 disposition: complete.** Every remaining item on the #140 list is a
+deliberate leave -- a published `void *` interface parameter, a
+callback-contract handle, or a generic/byte pointer -- so there is no safe
+candidate left for a further #140 tranche. Re-typing the published signatures
+is the #145 consolidation question. #140 can close.
 
