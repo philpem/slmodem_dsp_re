@@ -2749,7 +2749,7 @@ DemodDataV17(void *modem, short *in, unsigned short *bits, unsigned short count)
 {
 	int signal;
 	unsigned short n;
-	unsigned char *rxs;
+	void *rxs;
 
 	FPM_AGC_agc(RXS_AGC(RXS(modem)), in, count);
 	/* Not the object's `%eax`; the same value.  D1091. */
