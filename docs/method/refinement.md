@@ -1394,17 +1394,39 @@ Finding F7941, and it is lever 9's rule -- act on what the compiler was forced
 to encode -- applied to an induction variable.
 
 **AND A MEMBER REACHED THROUGH A CAST HAS A THIRD FORM, where the obvious
-cleanup is NOT neutral.** Issue #141 removed the cast-hiding macros from the
-fax read paths, and one site resisted. `RXS(modem)` is
-`((struct v17rx *)(modem))->state`, so `(&RXS(modem)->agc.value)->cfg.alpha++`
-is an address-deref through that cast. Rewriting it to the direct-dot
-`RXS(modem)->agc.value.cfg.alpha++` -- dropping a redundant parenthesis only --
-grew `RxNextStateV17` by 16 bytes, an extra `mov 0x60(%ebx),%edx` reload of the
-state pointer, object `0f051a30…`. The object's form is the address-deref:
-taking the address of the subobject is what keeps the base in a register here.
-Every other direct-member site in the same edit was byte-identical, so this is
-lever 13 applied to a single field and not a new class of difference. Reverted
-and recorded rather than forced. Issue #141.
+cleanup is NOT neutral -- BUT THE NEUTRAL FORM IS NOT THE DEREF SPELLING.**
+Issue #141 removed the cast-hiding macros from the fax read paths, and one site
+resisted. `RXS(modem)` is `((struct v17rx *)(modem))->state`, so
+`(&RXS(modem)->agc.value)->cfg.alpha++` is an address-deref through that cast.
+Rewriting it to the direct-dot `RXS(modem)->agc.value.cfg.alpha++` -- dropping a
+redundant parenthesis only -- grew `RxNextStateV17` by 16 bytes, and #141
+recorded the address-deref as the object's form on that ground. Issue #152
+enumerated the forms and the ground does not hold.
+
+**THE 16 BYTES ARE THE COST OF RE-EVALUATING `RXS(modem)`, NOT OF THE DOT.**
+The direct-dot re-loads `modem->state` between the two statements -- an extra
+`mov 0x60(%ebx),%edx` and the register/alignment shift it forces -- where the
+address-deref form CSEs one load across both. A cached state pointer is
+neutral: `struct v17rx_state *rxs = RXS(modem); rxs->agc.value.cfg.alpha++;
+rxs->agc.value.cfg.beta++;` is byte-for-byte identical to the address-deref
+form over the whole function, as is `(&rxs->agc.value)->cfg.alpha++`, and so
+are the address-deref, the double-address-deref and the parenthesised-dot
+spellings. The object's own increments are `addl $0x2,0xc0(%edx)` /
+`addl $0x2,0xc4(%edx)` -- base is the STATE pointer, offsets from `agc.value` --
+and every one of those forms emits exactly that. Caching a pointer to the
+SUB-object instead (`struct fpm_agc *a = &RXS(modem)->agc.value;`, or
+`struct fpm_agc_cfg *c = &...->cfg;`) emits `addl $0x2,0xc(%edx)` /
+`0x10(%edx)` and is excluded by the object's offsets. So the preimage is NOT
+unique, and the +16 does not establish the address-deref form.
+
+**THE WHOLE-FUNCTION CONTROL WAS UNAVAILABLE, AND THAT IS PART OF THE RESULT.**
+At HEAD `RxNextStateV17` is 845 bytes against the object's 730 because
+`Restore_rateV17` and `StoreCoefV17` are INLINED here where the object CALLS
+both -- an inline-boundary difference unrelated to this field. The +16 and the
+equality of the cached forms are therefore measured with the rest of the
+function held fixed, not by full-text identity with the blob. The current form
+is retained because several forms are byte-identical; it is not uniquely
+recovered. Issue #141, #152.
 
 ### Lever 14. The TRANSLATION-UNIT PARTITION is a source property the object records
 
