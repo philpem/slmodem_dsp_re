@@ -2025,6 +2025,123 @@ The same per-holder audit is unstarted in `src/fax/v17.c`, `src/fax/v21.c`,
 `V29rx.c`, `V29tx.c`, `src/pump/v22/*.c`, `src/pump/v32/*.c` and
 `src/pump/v34/*.c`. The v22/v32/v34 files were explicitly out of scope here.
 
+## Batch: issue #140 struct-cast retyping (v32/v34 tranche)
+
+Lever 16 of `docs/method/refinement.md`, the second tranche of #140
+(`improve/issue140-pump`). This tranche audited `src/pump/v32/` and
+`src/pump/v34/` per function scope. Four local holders in two files were
+retyped and their casts removed. **Every other candidate on the #140 list is
+a function parameter and is retained**, because the `void *` there is
+published in a module header and is the deliberate interface type, or because
+the holder is a byte pointer. The retained set is listed below with the
+evidence, not merely asserted.
+
+**No header changed, and none needed to.** Nothing retyped here is a struct
+field or a parameter, so no published signature moved and no caller was
+touched. `docs/naming-inventory.md` was not regenerated: it counts names, not
+types, and `tools/namingcensus.py` reproduces it byte for byte.
+
+### Holders retyped
+
+| holder | file | functions (declaration sites) | old type -> new type | casts removed | single-target evidence |
+|---|---|---|---|---|---|
+| `fp` | `src/pump/v32/V32.c` | `V32FP_recreate` (1) | `unsigned char *` -> `struct v32_fp *` | 38 | every use in the function is `(struct v32_fp *)fp` (32) or the initialiser `(unsigned char *)FP(modem)` (6); no `(struct ...)fp` with a second target, no `sizeof`/`memcpy`/pointer arithmetic on `fp` |
+| `hdx` | `src/pump/v32/V32.c` | `V32FP_recreate` (1) | `unsigned char *` -> `struct v32_hdx *` | 53 | every use is `(struct v32_hdx *)hdx` (43), the store `...->hdx = (struct v32_hdx *)hdx` (1) or the initialiser `(unsigned char *)HDX(modem)` (9); no second target and no byte use |
+| `fp` | `src/pump/v32/v32fpctl.c` | `SetTxModeV32`, `SetRxModeV32`, `SetAdaptEqV32`, `SetAdaptEcV32`, `SetRxLoopsV32`, `SetECRndTripDelayV32` (6) | `unsigned char *` -> `struct v32_fp *` | 60 | all 39 `(struct v32_fp *)fp` casts plus 21 `fp = (unsigned char *)FP(modem)` initialisers target the one struct; each `fp` is a separate function-local, never used as a byte pointer |
+| `hdx` | `src/pump/v32/v32fpctl.c` | `RxClampV32`, `SetToneDetect`, `CalcTurnAroundDelay` (3) | `void *` -> `struct v32_hdx *` | 8 | all 8 `(struct v32_hdx *)hdx` casts target the one struct; the declaration was `void *hdx = HDX(modem)` and `HDX()` is already `struct v32_hdx *` |
+
+Totals: **159 casts removed** (38 + 53 + 60 + 8). The counts include the
+initialiser casts `(unsigned char *)FP(modem)` / `(unsigned char *)HDX(modem)`
+and the one store cast at `V32FP_recreate`, which become redundant with the
+declaration and are removed with the `((struct T *)holder)` forms the issue
+names.
+
+### Retained, and why
+
+The #140 candidate list is file-scoped and names params as well as locals.
+Audited per function scope, none of the parameter candidates is this task's
+target, for one of two reasons.
+
+- **The `void *` is the published, deliberate interface type.**
+  `include/dsplib/v32fpctl.h` states it for `modem` in so many words -- "The
+  parameter is `void *` and the offsets are named constants" -- and
+  `include/dsplib/v34rx.h` states it for `obj` -- "Declared `void *` because
+  this header must not depend on v34fsk.h, which is where `struct v34_object`
+  is declared." Retyping these means changing the declaration and every
+  caller for no code that differs; per the issue they are left. They are
+  single-target per scope, so they remain candidates for #145's consolidation
+  question, not defects.
+  - `v32` `modem` -> `struct v32_modem *`: `v32fpctl.c` (8, the control
+    entry points `SetTxModeV32`/`SetRxModeV32`/`SetAdaptEqV32`/`SetAdaptEcV32`/
+    `SetRxLoopsV32`/`SetECRndTripDelayV32`/`GetRateV32`/`CalcTurnAroundDelay`);
+    `v32nsrng.c` (26), `v32nsans.c` (11), `v32nsorg.c` (8), `v32seq.c` (8,
+    including the static `v32_common_rate` whose callers pass the public
+    `void *` through), `v32nsloop.c` (4), `v32data.c` (3: `ModDataV32`,
+    `TxNoCarrierV32`), `v32hdx.c` (3: `V32TxHdxModem`, `V32RxHdxModem`),
+    `v32demod.c` (1: `DemodDataV32`). All are `void *modem` state/data
+    functions declared in `v32hdx.h`, `v32seq.h`, `v32data.h`, `v32demod.h`
+    and reached from the dp layer and each other.
+  - `v32` `ctx` -> `struct v32_ans_tone *`: `v32anstone.c:GenerateAnsTone`
+    (1), `void *ctx` in `v32anstone.h`.
+  - `v34` `objp`/`obj`/`vobj` -> `struct v34_object *`: `V34RX.c` (14:
+    `txinit`, `rxtiminginit`, `rxinit`, `txmit`, `rxtiming`, `v34FreezeEcho`,
+    `V34SetupDemodulator`, `adaptecho`, `modem_serrint`, `decoderv34`,
+    `setInitialPhase`, `setTimingStateParameters`, `TimingV34`, `receiver`);
+    `V34hshak.c` (15 `objp` plus 2 `void *obj` params); `v34pcmif.c` (33, the
+    whole `VPcmV34*`/`V34XF_*` PCM interface); `v34hstx1.cpp` (17, the
+    `v34tx1_*` transmit arms); `v34info.c` (7, `V34SetINFO*`/`V34Give*`/
+    `VPcmV34SetMohMessageBits`); `v34scram.c` (4,
+    `scrambleGPC`/`scrambleGPA`/`descrambleGPC`/`descrambleGPA`); `v34diag.cpp`
+    (2, `VPcmV34GetDiagnostics`/`VPcmV34GetVisualDiagnostics`); `v34filters.c`
+    (2, `V34InitializeImplementationSpecific`/`V34EchoHistoryBackwardClean`);
+    `v34digital.c` (1, `preinitdigital`); `v34info1a.cpp` (1,
+    `V34SetINFO1aBits`); plus `v34handshak(void *vobj)` (1) and the two
+    `void *obj` parameters in `V34hshak.c`. Every one is declared in a
+    `v34*.h` header and called from another translation unit.
+- **A byte pointer, or a `void *` used as one.** `v34shell.c:fields` is the
+  shell object materialised at `fields - 0xa00` (`shell_of()` casts it once);
+  the four `fields` parameters are an offset base, not a struct handle.
+  `v34hstx1.cpp`/`V34hshak.c`'s static `tx1_get`/`tx1_put`/`tx1_get_int`/
+  `tx1_put_int` do `*(const short *)((const char *)objp + off)` -- those
+  `objp`s are byte cursors and their `(char *)` casts are load-bearing.
+- **Multi-target in one scope.** `v34hstx1.cpp`'s `tx1_*` family casts `objp`
+  to `char *` for the byte accessors and `struct v34_object *` in the
+  dispatch arms; those are separate functions, but the helper's parameter is
+  never a single struct.
+
+### Verification
+
+Gentoo `make phase` exited 0, **`period differential: 375 passed, 0 failed`**
+and `phase boundary: period differential and structural checks all OK`. Log:
+`build/structure-issue140-pump/gates.log`.
+
+All **655 `build/period/*.o` objects are byte-identical** to the pre-edit
+snapshot (`/home/philpem/slmodem/tmp/issue140-pump-before.sha256` vs
+`issue140-pump-after.sha256`, `diff` empty). The gate recompiled all 280
+period objects from the changed sources, so the identity is real and not a
+stale-object artefact.
+
+The modern tier compiles both files clean with **GCC 14.2.0** at
+`-m32 -O2 -mfpmath=387 -Wall -Wextra -Werror=incompatible-pointer-types`,
+with the same three pre-existing `-Warray-bounds` warnings on
+`V32FP_recreate`'s `hdx->regs` loop that HEAD produces.
+
+No string literal, width, signedness or layout changed; only identifiers and
+types did.
+
+`anchorcheck.py` reports **10040 mutations over 272 suites, 0 anchors matching
+other than exactly once**. Four mutation anchors in `test/mutations/v32fpctl.json`
+(27 values) and `test/mutations/v32fpsub.json` (8 values) referenced the
+retired cast text; only their `find`/`replace` values were transformed, and
+`test/mutations/snapshot.json` was not touched.
+
+### Remaining for the next tranche
+
+The parameter candidates above are not work stayed; they are the #145
+consolidation question, and `src/fax/v17.c`, `src/fax/v21.c`, `src/fax/V17rx.c`,
+`V17tx.c`, `V21rx.c`, `V21tx.c`, `V27rx.c`, `V27tx.c`, `V29rx.c`, `V29tx.c`
+and `src/pump/v22/*.c` are still unaudited for locals and fields.
+
 
 
 

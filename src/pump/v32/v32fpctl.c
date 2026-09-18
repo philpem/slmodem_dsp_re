@@ -222,7 +222,7 @@ V32FP_GetCleanedSamples(void *modem, int *n)
 void
 SetTxModeV32(void *modem, short mode)
 {
-	unsigned char *fp;
+	struct v32_fp *fp;
 	struct v32_sdm *sdm;
 	unsigned int mask;
 	short sel;
@@ -239,87 +239,87 @@ SetTxModeV32(void *modem, short mode)
 		 * that anything writes that field at all -- v32smc.h has it as
 		 * "not read by any encoder", which stays true.  Finding F8216.
 		 */
-		fp = (unsigned char *)FP(modem);
+		fp = FP(modem);
 		sel = (short)(mode == V32_MODE_ABS4 ? 1 : 0);
 		SMC(fp)->pad02 = sel;
-		((struct v32_fp *)fp)->encoder_sel = sel;
+		fp->encoder_sel = sel;
 		SDM_TX(fp)->group = 2;
 		SMC(fp)->mode = 0;
 		SMC(fp)->shift = 0;
 		PPS(fp)->cfg.imap = SMCv32_IMAP16;
 		PPS(fp)->cfg.qmap = SMCv32_QMAP16;
-		((struct v32_fp *)fp)->short_2c = 0;
+		fp->short_2c = 0;
 		shift = 2;
 		break;
 
 	case V32_MODE_16:
-		fp = (unsigned char *)FP(modem);
+		fp = FP(modem);
 		SDM_TX(fp)->group = 4;
 		SMC(fp)->mode = 1;
 		SMC(fp)->pad02 = 0;
-		((struct v32_fp *)fp)->encoder_sel = 0;
+		fp->encoder_sel = 0;
 		SMC(fp)->shift = 2;
 		PPS(fp)->cfg.imap = SMCv32_IMAP16;
 		PPS(fp)->cfg.qmap = SMCv32_QMAP16;
-		((struct v32_fp *)fp)->short_2c = 1;
+		fp->short_2c = 1;
 		shift = 4;
 		break;
 
 	case V32_MODE_32T:
-		fp = (unsigned char *)FP(modem);
+		fp = FP(modem);
 		SDM_TX(fp)->group = 4;
 		SMC(fp)->uncoded_bits = 2;
 		SMC(fp)->mode = 2;
 		SMC(fp)->pad02 = 2;
-		((struct v32_fp *)fp)->encoder_sel = 2;
+		fp->encoder_sel = 2;
 		SMC(fp)->shift = 2;
 		PPS(fp)->cfg.imap = VTBv32_IMAP32;
 		PPS(fp)->cfg.qmap = VTBv32_QMAP32;
-		((struct v32_fp *)fp)->short_2c = 1;
+		fp->short_2c = 1;
 		shift = 4;
 		break;
 
 	case V32_MODE_16T:
-		fp = (unsigned char *)FP(modem);
+		fp = FP(modem);
 		SDM_TX(fp)->group = 3;
 		SMC(fp)->uncoded_bits = 1;
 		SMC(fp)->mode = 3;
-		((struct v32_fp *)fp)->encoder_sel = 2;
+		fp->encoder_sel = 2;
 		PPS(fp)->cfg.imap = VTBv32_IMAP16T;
 		PPS(fp)->cfg.qmap = VTBv32_QMAP16T;
-		((struct v32_fp *)fp)->short_2c = 3;
+		fp->short_2c = 3;
 		shift = 3;
 		break;
 
 	case V32_MODE_64T:
-		fp = (unsigned char *)FP(modem);
+		fp = FP(modem);
 		SDM_TX(fp)->group = 5;
 		SMC(fp)->uncoded_bits = 3;
 		SMC(fp)->mode = 4;
-		((struct v32_fp *)fp)->encoder_sel = 2;
+		fp->encoder_sel = 2;
 		PPS(fp)->cfg.imap = VTBv32_IMAP64;
 		PPS(fp)->cfg.qmap = VTBv32_QMAP64;
-		((struct v32_fp *)fp)->short_2c = 4;
+		fp->short_2c = 4;
 		shift = 5;
 		break;
 
 	case V32_MODE_128T:
-		fp = (unsigned char *)FP(modem);
+		fp = FP(modem);
 		SDM_TX(fp)->group = 6;
 		SMC(fp)->uncoded_bits = 4;
 		SMC(fp)->mode = 5;
 		SMC(fp)->pad02 = 2;
-		((struct v32_fp *)fp)->encoder_sel = 2;
+		fp->encoder_sel = 2;
 		PPS(fp)->cfg.imap = VTBv32_IMAP128;
 		PPS(fp)->cfg.qmap = VTBv32_QMAP128;
-		((struct v32_fp *)fp)->short_2c = 5;
+		fp->short_2c = 5;
 		shift = 3;		/* six bits, sent as two groups of 3 */
 		break;
 
 	default:
 		((struct v32_modem *)modem)->status = V32_STATUS_BAD_MODE;
 		((struct v32_modem *)modem)->flags |= V32_FLAG_FAULT;
-		fp = (unsigned char *)FP(modem);
+		fp = FP(modem);
 		shift = 0;
 		break;
 	}
@@ -345,7 +345,7 @@ SetTxModeV32(void *modem, short mode)
 void
 SetRxModeV32(void *modem, short mode)
 {
-	unsigned char *fp;
+	struct v32_fp *fp;
 	struct v32_dec *dec;
 	struct v32_sdm *sdm;
 	unsigned int mask;
@@ -354,14 +354,14 @@ SetRxModeV32(void *modem, short mode)
 	switch (mode) {
 	case V32_MODE_ABS4:
 	case V32_MODE_DIF4:
-		fp = (unsigned char *)FP(modem);
+		fp = FP(modem);
 		SDM_RX(fp)->group = 2;
-		((struct v32_fp *)fp)->rx_smc.shift = 0;
+		fp->rx_smc.shift = 0;
 		dec = DEC(fp);
-		((struct v32_fp *)fp)->rx_smc.mode = 0;
+		fp->rx_smc.mode = 0;
 		dec->short_04 = 0;
 		dec->chan = 0;
-		((struct v32_fp *)fp)->short_2e = 0;
+		fp->short_2e = 0;
 		dec->count = 0;
 		if (mode == V32_MODE_ABS4) {
 			dec->rate_change = 0;
@@ -373,55 +373,55 @@ SetRxModeV32(void *modem, short mode)
 		break;
 
 	case V32_MODE_16:
-		fp = (unsigned char *)FP(modem);
+		fp = FP(modem);
 		SDM_RX(fp)->group = 4;
 		dec = DEC(fp);
-		((struct v32_fp *)fp)->rx_smc.mode = 1;
-		((struct v32_fp *)fp)->rx_smc.shift = 2;
+		fp->rx_smc.mode = 1;
+		fp->rx_smc.shift = 2;
 		dec->chan = 1;
 		dec->short_04 = 2;
 		FSE(fp)->cfg.decision = FSE_decision_16pt;
-		((struct v32_fp *)fp)->short_2e = 1;
+		fp->short_2e = 1;
 		shift = 4;
 		break;
 
 	case V32_MODE_32T:
-		fp = (unsigned char *)FP(modem);
-		((struct v32_fp *)fp)->rx_smc.mode = 1;
+		fp = FP(modem);
+		fp->rx_smc.mode = 1;
 		dec = DEC(fp);
 		SDM_RX(fp)->group = 4;
-		((struct v32_fp *)fp)->rx_smc.shift = 2;
+		fp->rx_smc.shift = 2;
 		dec->chan = 1;
 		dec->short_04 = 2;
 		FSE(fp)->cfg.decision = FSE_decision_32pt;
-		((struct v32_fp *)fp)->short_2e = 1;
+		fp->short_2e = 1;
 		VTBv32_init(&dec->vtb, 2, 0);
 		shift = 4;
 		break;
 
 	case V32_MODE_16T:
-		fp = (unsigned char *)FP(modem);
+		fp = FP(modem);
 		SDM_RX(fp)->group = 3;
 		FSE(fp)->cfg.decision = FSE_decision_16Tpt;
-		((struct v32_fp *)fp)->short_2e = 3;
+		fp->short_2e = 3;
 		VTBv32_init(&DEC(fp)->vtb, 3, 0);
 		shift = 3;
 		break;
 
 	case V32_MODE_64T:
-		fp = (unsigned char *)FP(modem);
+		fp = FP(modem);
 		SDM_RX(fp)->group = 5;
 		FSE(fp)->cfg.decision = FSE_decision_64pt;
-		((struct v32_fp *)fp)->short_2e = 4;
+		fp->short_2e = 4;
 		VTBv32_init(&DEC(fp)->vtb, 4, 0);
 		shift = 5;
 		break;
 
 	case V32_MODE_128T:
-		fp = (unsigned char *)FP(modem);
+		fp = FP(modem);
 		SDM_RX(fp)->group = 6;
 		FSE(fp)->cfg.decision = FSE_decision_128pt;
-		((struct v32_fp *)fp)->short_2e = 5;
+		fp->short_2e = 5;
 		VTBv32_init(&DEC(fp)->vtb, 5, 0);
 		shift = 3;		/* see SetTxModeV32 */
 		break;
@@ -499,21 +499,21 @@ DescrambleDataV32(void *modem, short *buf, unsigned short count)
 void
 SetAdaptEqV32(void *modem, unsigned short mode)
 {
-	unsigned char *fp;
+	struct v32_fp *fp;
 
 	switch (mode) {
 	case V32_ADAPTEQ_MU1:
-		fp = (unsigned char *)FP(modem);
-		((struct v32_fp *)fp)->eq_adapt = 1;
+		fp = FP(modem);
+		fp->eq_adapt = 1;
 		FSE(fp)->mu_sel = 1;
 		break;
 	case V32_ADAPTEQ_OFF:
-		fp = (unsigned char *)FP(modem);
-		((struct v32_fp *)fp)->eq_adapt = 0;
+		fp = FP(modem);
+		fp->eq_adapt = 0;
 		break;
 	case V32_ADAPTEQ_MU0:
-		fp = (unsigned char *)FP(modem);
-		((struct v32_fp *)fp)->eq_adapt = 1;
+		fp = FP(modem);
+		fp->eq_adapt = 1;
 		FSE(fp)->mu_sel = 0;
 		break;
 	default:
@@ -541,29 +541,29 @@ SetAdaptEqV32(void *modem, unsigned short mode)
 void
 SetAdaptEcV32(void *modem, unsigned short mode)
 {
-	unsigned char *fp;
+	struct v32_fp *fp;
 	struct fpm_ecc *ecc;
 	short i;
 
 	switch (mode) {
 	case V32_ADAPTEC_OFF:
-		fp = (unsigned char *)FP(modem);
+		fp = FP(modem);
 		ECC(fp)->adapt_near = 0;
 		ECC(fp)->adapt_far = 0;
-		((struct v32_fp *)fp)->int_14 = 0;
-		((struct v32_fp *)fp)->int_18 = 0;
+		fp->int_14 = 0;
+		fp->int_18 = 0;
 		break;
 
 	case V32_ADAPTEC_ON:
-		fp = (unsigned char *)FP(modem);
+		fp = FP(modem);
 		ecc = ECC(fp);
 		for (i = 0; i < ecc->line_len; i++)
 			ecc->line[i] = 0;
-		((struct v32_fp *)fp)->int_14 = 1;
+		fp->int_14 = 1;
 		ecc->unk1a = 0;
 		ecc->adapt_near = 1;
 		ecc->adapt_far = 1;
-		((struct v32_fp *)fp)->int_18 = 1;
+		fp->int_18 = 1;
 		break;
 
 	case V32_ADAPTEC_SLOW:
@@ -597,23 +597,23 @@ SetAdaptEcV32(void *modem, unsigned short mode)
 void
 SetRxLoopsV32(void *modem, unsigned short mode)
 {
-	unsigned char *fp;
+	struct v32_fp *fp;
 
 	switch (mode) {
 	case 1:
-		fp = (unsigned char *)FP(modem);
-		((struct v32_fp *)fp)->int_08 = 0;
-		((struct v32_fp *)fp)->int_0c = 0;
-		((struct v32_fp *)fp)->int_00 = 0;
-		((struct v32_fp *)fp)->int_04 = 0;
+		fp = FP(modem);
+		fp->int_08 = 0;
+		fp->int_0c = 0;
+		fp->int_00 = 0;
+		fp->int_04 = 0;
 		break;
 	case 2:
 	case 3:
-		fp = (unsigned char *)FP(modem);
-		((struct v32_fp *)fp)->int_08 = 1;
-		((struct v32_fp *)fp)->int_0c = 1;
-		((struct v32_fp *)fp)->int_00 = 1;
-		((struct v32_fp *)fp)->int_04 = 1;
+		fp = FP(modem);
+		fp->int_08 = 1;
+		fp->int_0c = 1;
+		fp->int_00 = 1;
+		fp->int_04 = 1;
 		break;
 	default:
 		break;
@@ -647,14 +647,14 @@ SetRxLoopsV32(void *modem, unsigned short mode)
 void
 SetECRndTripDelayV32(void *modem, short delay)
 {
-	unsigned char *fp;
+	struct v32_fp *fp;
 	struct fpm_ecc *ecc;
 	struct v32_symout *ring;
 	short lag, symlen, d, t, i;
 
 	lag = HDX(modem)->short_9c;
 	symlen = V32_SYMBOL_LEN[((struct v32_modem *)modem)->params.symlen_sel];
-	fp = (unsigned char *)FP(modem);
+	fp = FP(modem);
 	ecc = ECC(fp);
 	ring = RING(fp);
 
@@ -760,16 +760,16 @@ RenegotiateDetectV32(void *modem)
 unsigned short
 RxClampV32(void *modem, short *in, short *out, unsigned short count)
 {
-	void *hdx = HDX(modem);
+	struct v32_hdx *hdx = HDX(modem);
 	short i;
 
 	(void)in;
 	(void)count;
 
-	for (i = (short)(((struct v32_hdx *)hdx)->symbol_len - 1); i != -1; i--)
+	for (i = (short)(hdx->symbol_len - 1); i != -1; i--)
 		*out++ = 0xff;
 
-	return ((struct v32_hdx *)hdx)->symbol_len;
+	return hdx->symbol_len;
 }
 
 /*
@@ -787,12 +787,12 @@ RxClampV32(void *modem, short *in, short *out, unsigned short count)
 void
 SetToneDetect(void *modem, short hz)
 {
-	void *hdx = HDX(modem);
+	struct v32_hdx *hdx = HDX(modem);
 	struct fpm_tone_cfg cfg;
 
-	cfg = ((struct fpm_tone *)((struct v32_hdx *)hdx)->tone0)->cfg;
+	cfg = ((struct fpm_tone *)hdx->tone0)->cfg;
 	cfg.freq = hz;
-	FPM_TONE_create((struct fpm_tone *)((struct v32_hdx *)hdx)->tone0, &cfg);
+	FPM_TONE_create((struct fpm_tone *)hdx->tone0, &cfg);
 }
 
 /*
@@ -810,12 +810,12 @@ SetToneDetect(void *modem, short hz)
 short
 CalcTurnAroundDelay(void *modem)
 {
-	void *hdx = HDX(modem);
+	struct v32_hdx *hdx = HDX(modem);
 	short left;
 
-	left = (short)(((struct v32_hdx *)hdx)->turnaround
-		       - (((struct v32_hdx *)hdx)->short_9c
-			  + ((struct v32_hdx *)hdx)->short_98
-			  + ((struct v32_hdx *)hdx)->short_9a));
+	left = (short)(hdx->turnaround
+		       - (hdx->short_9c
+			  + hdx->short_98
+			  + hdx->short_9a));
 	return (short)(left < 0 ? 0 : left);
 }
