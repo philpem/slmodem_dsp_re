@@ -2280,3 +2280,125 @@ by 16 bytes (an extra `mov 0x60(%ebx)` state reload), so the address-deref form
 `(&RXS(modem)->agc.value)->cfg.alpha++` is used there; every other site's direct
 member form is byte-identical.
 
+## Batch: issue #145 per-function re-scan and shared-header disposition
+
+Lever 16 of `docs/method/refinement.md`. #140's remaining generic holders were
+classified FILE-scoped, so a name reused across RX and TX entry points read as
+multi-target when each function casts it to exactly one struct. This pass
+re-scanned every holder in #145 **per function** and split the result into
+retyped, deliberate leave, and unproven consolidation. No struct was
+restructured and no published signature moved.
+
+### Holders retyped (single-target local, non-published holder)
+
+| holder | file | function (scope) | old -> new | casts removed | evidence |
+|---|---|---|---|---|---|
+| `existing` | `src/fax/v27.c` | `V27TX_create`, SGD block (block-scoped local) | `void *` -> `struct sgd *` | 1 | assigned once from `prm->sgd` (`struct v27_tx_source::sgd`, `v27fax.h:299`), used once as `SGD_create((struct sgd *)existing, ...)`; `SGD_create`'s first parameter is `struct sgd *` (`sgd.h:192`) |
+| `existing` | `src/fax/v27.c` | `V27TX_create`, FIFO block (separate block-scoped local) | `void *` -> `struct fax_fifo *` | 1 | assigned once from `prm->fifo` (`v27fax.h:298`), used once as `FIFO_create((struct fax_fifo *)existing, ...)`; `FIFO_create`'s first parameter is `struct fax_fifo *` (`faxfifo.h:192`) |
+| `fp` | `src/fax/v17.c` | `V17TX_create` (function-local, not the published parameter) | already `struct v17tx_fp *`; cast removed only | 1 | `fp = TXFP(modem)` and `TXFP(m)` is `TXROOT(m)->fp`, `struct v17tx_fp *` (`v17fax.h:599`); the store `TXROOT(modem)->fp = (struct v17tx_fp *)fp` was redundant |
+
+The two `v27.c` `existing` declarations are in DIFFERENT block scopes of one
+function, each single-target -- the same shape #147 retyped in `V21TX_create`.
+The file-scoped scan had merged them.
+
+### Deliberate leaves, per holder
+
+- **Published `void *` entry-point/state parameters -- left.** Every function
+  below is declared in a module header with `void *` first (or second)
+  parameter and reached cross-TU; retyping changes the exported interface and
+  every caller for code that does not differ. Re-scanned per function, each is
+  single-target **within** its own function; the file-scoped >1 report was the
+  RX/TX name reuse.
+  - `src/fax/v27.c`: `modem` -> `struct v27_rx *` in every RX function
+    (`V27RX_create`, `V27RX_delete`, `V27RX_modem`, `RxHdx*V27`,
+    `DemodDataV27`, `DataCarrierDetectV27`, `QualityDetectV27`, ...) and
+    -> `struct v27_tx *` in every TX function (`V27TX_create`,
+    `V27TX_delete`, `V27TX_modem`, `ModDataV27`, `TxHdx*V27`, ...); `req` ->
+    `v27rx_ctl` in `V27RX_control` and `v27tx_ctl` in `V27TX_control`.
+    Declared `void *modem`/`void *req` in `v27fax.h`.
+  - `src/fax/v29.c`: `modem` -> `struct v29_rx *` (RX) / `struct v29_tx_root *`
+    (TX); `fp` -> `struct v29_tx_root *` + `struct v29tx_cfg *` in
+    `V29TX_control`. Declared in `v29fax.h`.
+  - `src/fax/v17.c`: `modem` -> `struct v17rx_cfg *` in `V17RX_control`;
+    `fp` -> `struct v17tx_cfg *` + `struct v17tx *` + `struct v17tx_priv *` +
+    `struct v17tx_fp *` (via `TXROOT`/`TXPRIV`/`TXBLOCK`) in `V17TX_control`.
+    Declared in `v17fax.h`.
+  - `src/fax/v21.c`: `modem` -> `struct v21_rx *` (RX) / `struct v21_tx *`
+    (TX). Declared in `v21fax.h`.
+  - `src/pump/v32/v32.c`: `modem` -> `struct modem *` (the vendored core
+    handle), a parameter of the file-local `v32_create`.
+  - `src/pump/v34/v34shell.c`: `obj` -> `struct v34_object *` in
+    `initdigital` (also used as a byte base, `(char *)obj + V34_RATECFG`);
+    `objp` -> `struct v34_shell *` in `getFrame`. `initdigital`/`modulatevector`
+    are declared `void *obj` in `v34shell.h:394,406`.
+  - `src/pump/v34/VPcmV34Main.cpp`: `objp` -> `struct v34_object *` (spelled
+    `tagV34Object` at four sites, the object's own C++ name for the same
+    struct); published `void *` parameters.
+- **Callback-contract handle -- left.** `dp_arg` -> `struct dp *` in
+  `src/pump/v22/v22.c`, `src/pump/b103/b103.c`, `src/pump/v23/v23.c` and
+  `src/pump/v32/v32.c` (one per static process function). The functions are the
+  implementation of the published `dp_process_fn` typedef
+  (`dp.h:23`, first parameter `void *`) handed to `dp_wrapper_create`
+  (`dp_wrapper.h:70`); retyping makes the registration an incompatible
+  function-pointer argument and needs a new cast.
+- **Generic field / byte pointers -- left.** `struct dp::dp_data` is `void *`
+  (`dp.h:47`), consumed opaquely; the sibling datapumps cast it to
+  `struct dp_wrapper *`. `v34shell.c` `fields` is the shell fields sub-object
+  base (`shell_of()` casts once; `obj + V34_SHELL_FIELDS`, `v34shell.h:78`).
+  `VPcmV34Main.cpp`'s `m`/`sess`/`cfg`/`k56` are `(unsigned char *)` byte
+  cursors. `v17.c` `rx` (`V17RX_status`) and `p` (`V17TX_status`) are
+  deliberate byte views of an unmodelled block, with the reason in a comment
+  already at each site. `aux` is a byte payload, never a struct cast.
+- **Multi-target within one function -- left.** `src/fax/v29.c`
+  `V29TX_create` and `src/fax/v17.c` `V17TX_create` each declare ONE
+  function-scoped `existing` used for BOTH `struct fax_fifo *` and
+  `struct sgd *`; `src/pump/v34/v34shell.c` `modulatevector` casts `obj` to
+  `struct v34_object *` AND `struct v34_shell *`.
+
+### Shared-header / consolidation evidence, per pair
+
+Struct layouts are from the headers the object's own field accesses fixed;
+the object disassembly is quoted where it is the witness.
+
+| pair | shared leading member at +0x00? | offset / evidence |
+|---|---|---|
+| `v27_rx` / `v27_tx` | **NO** | `v27_rx` +0x00 is `int int_0000` (value 1, no reader, `faxcfg.h:195`); `v27_tx` +0x00 is `short protocol` (`v27fax.h:143`). Different leading types and different cfg structs (`v27rx_cfg` vs `v27tx_cfg`). |
+| `v29_rx` / `v29_tx_root` | **NO** (semantic word only, no shared C type) | `v29_rx` +0x00 is `int protocol` (value 1, `faxcfg.h:212`); `v29_tx_root` +0x00 is `v29tx_cfg::protocol`, a `short` (value 0, `v29data.h:176`). Both named `protocol` but different width and different cfg structs; `V29RX_create`/`V29TX_create` bulk-copy the config 32 bits at a time (`mov (%ebx),%e..; mov %e..,0x0(%ebp)` at 0x9ad85 and 0x9ba45), which is width-blind and does not make them one type. |
+| `v21_rx` / `v21_tx` | **NO** | `v21_rx` +0x00 is `short chan2` (value 1, `v21cfg.h:108`); `v21_tx` +0x00 is `short protocol` (value 1, `v21cfg.h:178`). Different names and roles. |
+| `v32_modem` / `v32fp_params` | **YES** | `struct v32_modem` embeds `struct v32fp_params params;` as its FIRST member (`v32struct.h:110-111`), so both views share +0x00. Witness: `V32FP_recreate` copies 0x30 bytes to the base -- `mov %ebp,%edi; rep movsl` at 0x7e8ab (0xc dwords = `sizeof(struct v32fp_params)`) -- and then reads `struct v32_modem::fp` at +0x68 (`mov 0x68(%ebp),%esi` at 0x7e8cb). |
+| `v34_object` / `v34_shell` | **NO** | `v34_object` +0x00 is `int status` (`v34fsk.h:196`); `v34_shell` +0x00 is `unsigned char pad_000[0xa00]` (`v34shell.h:103`) with its fields beginning at +0xa00. The shell is an offset view (`obj + V34_SHELL_FIELDS`, `v34shell.h:78`), not an embedded base. |
+
+### Unproven consolidation, recorded not changed
+
+The only concrete shared leading member is `v32_modem`/`v32fp_params` (above),
+and the holder that sees both is the **published** `void *modem` of
+`V32FP_recreate` (`v32fpctl.h` states the parameter is deliberately `void *`).
+Collapsing it to a base-pointer model would change that published signature or
+introduce a new base type across `v32struct.h`/`v32fp.h` -- a design change
+larger than this bounded pass. It is recorded here and belongs in a follow-up
+issue, not a struct rewrite now. The v29 `protocol` coincidence is a semantic
+word, not a shared type, and the v34 shell is offset arithmetic; neither
+supports a base struct.
+
+### Verification
+
+Gentoo `make phase` exited 0, **`period differential: 375 passed, 0 failed`**
+and `phase boundary: period differential and structural checks all OK`. Log:
+`build/structure-issue145/gates.log`.
+
+All **655 `build/period/*.o` objects are byte-identical** to the pre-edit
+snapshot (`/home/philpem/slmodem/tmp/issue145-before.sha256` vs
+`issue145-after.sha256`, `diff` empty). `src_fax_v27.o` and `src_fax_v17.o`
+were recompiled at 16:46 from sources edited at 16:41, so the identity is real
+and not a stale-object artefact.
+
+The modern tier compiles both files clean with **GCC 14.2.0** at
+`-m32 -O2 -mfpmath=387 -Wall -Wextra -Wno-unused-parameter
+-Werror=incompatible-pointer-types`, exit 0 (the one pre-existing
+`unused variable 'fp'` warning in `SetEncoderV17` is at HEAD and unrelated).
+
+**#145 disposition:** three redundant casts removed across three holders
+(`v27.c` `existing` x2, `v17.c` `fp` x1); every other #145 holder is a
+deliberate leave or an unproven consolidation as above. No struct was
+restructured.
+
