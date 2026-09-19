@@ -62,6 +62,12 @@ struct fx {
 static struct fx ours;
 static struct fx theirs;
 
+static struct v32_modem *
+modem_of(struct fx *f)
+{
+	return (struct v32_modem *)(void *)f->obj;
+}
+
 /*
  * `diff_begin` ZEROES `diff_failures`, so a section's verdict is only
  * readable between its own begin and the next one.  `main` used to end
@@ -167,7 +173,7 @@ rate_to_seq(void)
 	diff_begin("RateToSeq over every index the table has");
 	fx_init(0x5eed0001u);
 	for (r = 0; r < V32_RATE_COUNT; r++) {
-		diff_eq_int("RateToSeq(%ld)", RateToSeq(ours.obj, r),
+		diff_eq_int("RateToSeq(%ld)", RateToSeq(modem_of(&ours), r),
 			    ref_RateToSeq(theirs.obj, r), r);
 		fx_same("RateToSeq", r);
 	}
@@ -196,18 +202,18 @@ ladder_sweep(void)
 			unsigned short q = (unsigned short)s;
 
 			n++;
-			if (SeqToRate(ours.obj, q) != ref_SeqToRate(theirs.obj, q))
+			if (SeqToRate(modem_of(&ours), q) != ref_SeqToRate(theirs.obj, q))
 				bad_seq++;
-			if (DecodeRateSeq(ours.obj, q) !=
+			if (DecodeRateSeq(modem_of(&ours), q) !=
 			    ref_DecodeRateSeq(theirs.obj, q))
 				bad_dec++;
-			if (CodeRateSeq(ours.obj, q) !=
+			if (CodeRateSeq(modem_of(&ours), q) !=
 			    ref_CodeRateSeq(theirs.obj, q))
 				bad_code++;
-			if (CodeFinalRateSeq(ours.obj, q) !=
+			if (CodeFinalRateSeq(modem_of(&ours), q) !=
 			    ref_CodeFinalRateSeq(theirs.obj, q))
 				bad_final++;
-			if (CodeESeq(ours.obj, q) !=
+			if (CodeESeq(modem_of(&ours), q) !=
 			    ref_CodeESeq(theirs.obj, q))
 				bad_e++;
 		}
@@ -254,19 +260,19 @@ ladder_named(void)
 			int in = (int)((unsigned)idx << 16) | (int)q;
 
 			diff_eq_int("SeqToRate(idx<<16|seq = %#lx)",
-				    SeqToRate(ours.obj, q),
+				    SeqToRate(modem_of(&ours), q),
 				    ref_SeqToRate(theirs.obj, q), in);
 			diff_eq_int("DecodeRateSeq(%#lx)",
-				    DecodeRateSeq(ours.obj, q),
+				    DecodeRateSeq(modem_of(&ours), q),
 				    ref_DecodeRateSeq(theirs.obj, q), in);
 			diff_eq_int("CodeRateSeq(%#lx)",
-				    CodeRateSeq(ours.obj, q),
+				    CodeRateSeq(modem_of(&ours), q),
 				    ref_CodeRateSeq(theirs.obj, q), in);
 			diff_eq_int("CodeFinalRateSeq(%#lx)",
-				    CodeFinalRateSeq(ours.obj, q),
+				    CodeFinalRateSeq(modem_of(&ours), q),
 				    ref_CodeFinalRateSeq(theirs.obj, q), in);
 			diff_eq_int("CodeESeq(%#lx)",
-				    CodeESeq(ours.obj, q),
+				    CodeESeq(modem_of(&ours), q),
 				    ref_CodeESeq(theirs.obj, q), in);
 		}
 		fx_same("ladder named", idx);
@@ -287,7 +293,7 @@ ladder_named(void)
 			seen[r] = 0;
 		set_rate_index(5);		/* the all-bits entry */
 		for (s = 0; s <= 0xffffu; s++) {
-			r = SeqToRate(ours.obj, (unsigned short)s);
+			r = SeqToRate(modem_of(&ours), (unsigned short)s);
 			if (r >= 0 && r <= V32_RATE_COUNT)
 				seen[r]++;
 		}
@@ -311,24 +317,24 @@ regs(void)
 		short r = idxs[k];
 		short v = (short)(0x4100 + k);
 
-		StoreReg(ours.obj, v, r);
+		StoreReg(modem_of(&ours), v, r);
 		ref_StoreReg(theirs.obj, v, r);
 		fx_same("StoreReg", r);
-		diff_eq_int("LoadReg(%ld) after StoreReg", LoadReg(ours.obj, r),
+		diff_eq_int("LoadReg(%ld) after StoreReg", LoadReg(modem_of(&ours), r),
 			    ref_LoadReg(theirs.obj, r), r);
 		fx_same("LoadReg", r);
 	}
 	/* Every in-range slot must be readable back as what was written. */
 	for (k = 0; k < V32HDX_NREGS; k++) {
-		StoreReg(ours.obj, (short)(0x1000 + k), (short)k);
+		StoreReg(modem_of(&ours), (short)(0x1000 + k), (short)k);
 		ref_StoreReg(theirs.obj, (short)(0x1000 + k), (short)k);
 	}
 	for (k = 0; k < V32HDX_NREGS; k++) {
 		diff_eq_int("register %ld round-trips",
-			    LoadReg(ours.obj, (short)k), (int)(0x1000 + k),
+			    LoadReg(modem_of(&ours), (short)k), (int)(0x1000 + k),
 			    (int)k);
 		diff_eq_int("register %ld agrees with the blob",
-			    LoadReg(ours.obj, (short)k),
+			    LoadReg(modem_of(&ours), (short)k),
 			    ref_LoadReg(theirs.obj, (short)k), (int)k);
 	}
 	fx_same("regs", 0);
@@ -356,7 +362,7 @@ generator(void)
 	diff_begin("InitGenSequence and GenSequence");
 	for (k = 0; k < sizeof(cfg) / sizeof(cfg[0]); k++) {
 		fx_init(0x5eed0010u + k);
-		InitGenSequence(ours.obj, cfg[k][0], cfg[k][1], cfg[k][2]);
+		InitGenSequence(modem_of(&ours), cfg[k][0], cfg[k][1], cfg[k][2]);
 		ref_InitGenSequence(theirs.obj, cfg[k][0], cfg[k][1],
 				    cfg[k][2]);
 		fx_same("InitGenSequence", (int)k);
@@ -368,7 +374,7 @@ generator(void)
 
 			memset(a, 0x5a, sizeof(a));
 			memset(b, 0x5a, sizeof(b));
-			GenSequence(ours.obj, a, n);
+			GenSequence(modem_of(&ours), a, n);
 			ref_GenSequence(theirs.obj, b, n);
 			for (j = 0; j < sizeof(a) / sizeof(a[0]); j++)
 				diff_eq_int("GenSequence word %ld", a[j], b[j],
@@ -378,11 +384,11 @@ generator(void)
 	}
 	/* A zero count must emit nothing and must still write the index back. */
 	fx_init(0x5eed0020u);
-	InitGenSequence(ours.obj, 0x1234, 16, 4);
+	InitGenSequence(modem_of(&ours), 0x1234, 16, 4);
 	ref_InitGenSequence(theirs.obj, 0x1234, 16, 4);
 	memset(a, 0x5a, sizeof(a));
 	memset(b, 0x5a, sizeof(b));
-	GenSequence(ours.obj, a, 0);
+	GenSequence(modem_of(&ours), a, 0);
 	ref_GenSequence(theirs.obj, b, 0);
 	diff_eq_int("zero count writes nothing", memcmp(a, b, sizeof(a)), 0, 0);
 	diff_eq_int("zero count leaves the buffer alone", a[0], 0x5a5a, 0);
@@ -429,7 +435,7 @@ detector(void)
 		 */
 		*(unsigned short *)(void *)(ours.hdx + V32HDX_GEN_WIDTH) = 3;
 		*(unsigned short *)(void *)(theirs.hdx + V32HDX_GEN_WIDTH) = 3;
-		InitDetSequence(ours.obj, arm[k].target, arm[k].mask,
+		InitDetSequence(modem_of(&ours), arm[k].target, arm[k].mask,
 				arm[k].out_mask, arm[k].width);
 		ref_InitDetSequence(theirs.obj, arm[k].target, arm[k].mask,
 				    arm[k].out_mask, arm[k].width);
@@ -444,19 +450,19 @@ detector(void)
 			const short *p = stream + i * 4;
 
 			diff_eq_int("DetSequence arm %ld",
-				    DetSequence(ours.obj, p, 4),
+				    DetSequence(modem_of(&ours), p, 4),
 				    ref_DetSequence(theirs.obj, p, 4),
 				    (int)(k * 10 + i));
 			fx_same("DetSequence", (int)(k * 10 + i));
 			diff_eq_int("GetSequence arm %ld",
-				    GetSequence(ours.obj),
+				    GetSequence(modem_of(&ours)),
 				    ref_GetSequence(theirs.obj),
 				    (int)(k * 10 + i));
 		}
 
 		/* A zero count still has to leave the register where it was. */
 		diff_eq_int("DetSequence with count 0, arm %ld",
-			    DetSequence(ours.obj, stream, 0),
+			    DetSequence(modem_of(&ours), stream, 0),
 			    ref_DetSequence(theirs.obj, stream, 0), (int)k);
 		fx_same("DetSequence zero", (int)k);
 	}
@@ -472,10 +478,10 @@ detector(void)
 		fx_init(0x5eed0040u);
 		*(unsigned short *)(void *)(ours.hdx + V32HDX_GEN_WIDTH) = 3;
 		*(unsigned short *)(void *)(theirs.hdx + V32HDX_GEN_WIDTH) = 3;
-		InitDetSequence(ours.obj, 0x0a, 0x0f, 0x0f, 4);
+		InitDetSequence(modem_of(&ours), 0x0a, 0x0f, 0x0f, 4);
 		ref_InitDetSequence(theirs.obj, 0x0a, 0x0f, 0x0f, 4);
 		for (i2 = 0; i2 < sizeof(stream) / sizeof(stream[0]); i2++) {
-			if (DetSequence(ours.obj, stream + i2, 1) < 0)
+			if (DetSequence(modem_of(&ours), stream + i2, 1) < 0)
 				misses++;
 			else
 				hits++;
@@ -517,15 +523,15 @@ detector(void)
 		fx_init(0x5eed0050u);
 		*(unsigned short *)(void *)(ours.hdx + V32HDX_GEN_WIDTH) = 3;
 		*(unsigned short *)(void *)(theirs.hdx + V32HDX_GEN_WIDTH) = 3;
-		InitDetSequence(ours.obj, 0x0f, 0x0f, -1, 16);
+		InitDetSequence(modem_of(&ours), 0x0f, 0x0f, -1, 16);
 		ref_InitDetSequence(theirs.obj, 0x0f, 0x0f, -1, 16);
 		for (i2 = 0; i2 < sizeof(ones) / sizeof(ones[0]); i2++) {
 			diff_eq_int("all-ones word %ld",
-				    DetSequence(ours.obj, ones + i2, 1),
+				    DetSequence(modem_of(&ours), ones + i2, 1),
 				    ref_DetSequence(theirs.obj, ones + i2, 1),
 				    (int)i2);
 			diff_eq_int("all-ones match value after word %ld",
-				    GetSequence(ours.obj),
+				    GetSequence(modem_of(&ours)),
 				    ref_GetSequence(theirs.obj), (int)i2);
 			fx_same("all-ones", (int)i2);
 			if (*(int *)(void *)(ours.hdx + V32HDX_DET_REG) == -1)
@@ -534,7 +540,7 @@ detector(void)
 		diff_eq_int("the shift register does reach all ones", reached,
 			    1, 0);
 		diff_eq_int("and the guard kept it out of the match value",
-			    GetSequence(ours.obj) != -1, 1, 0);
+			    GetSequence(modem_of(&ours)) != -1, 1, 0);
 	}
 	failed |= diff_end();
 }

@@ -109,6 +109,12 @@ struct fix {
 
 static struct fix fa, fb;
 
+static struct v32_modem *
+modem_of(struct fix *f)
+{
+	return (struct v32_modem *)(void *)f->obj;
+}
+
 static const struct txstep *script;
 static int script_len;
 static int script_pos;
@@ -162,15 +168,16 @@ get_ptr(const unsigned char *p, int off)
 
 /* --------------------------------------------------------------------- */
 
-static short tx_state_0(void *modem, short *data, short *out,
+static short tx_state_0(struct v32_modem *modem, short *data, short *out,
 			unsigned short *left);
-static short tx_state_1(void *modem, short *data, short *out,
+static short tx_state_1(struct v32_modem *modem, short *data, short *out,
 			unsigned short *left);
 
 static const v32_txhdx_fn tx_states[2] = { tx_state_0, tx_state_1 };
 
 static short
-tx_body(int id, void *modem, short *data, short *out, unsigned short *left)
+tx_body(int id, struct v32_modem *modem, short *data, short *out,
+	unsigned short *left)
 {
 	const struct txstep *st;
 	struct txcall *c;
@@ -222,13 +229,15 @@ tx_body(int id, void *modem, short *data, short *out, unsigned short *left)
 }
 
 static short
-tx_state_0(void *modem, short *data, short *out, unsigned short *left)
+tx_state_0(struct v32_modem *modem, short *data, short *out,
+	   unsigned short *left)
 {
 	return tx_body(0, modem, data, out, left);
 }
 
 static short
-tx_state_1(void *modem, short *data, short *out, unsigned short *left)
+tx_state_1(struct v32_modem *modem, short *data, short *out,
+	   unsigned short *left)
 {
 	return tx_body(1, modem, data, out, left);
 }
@@ -356,7 +365,7 @@ run_tx_one(const char *what, unsigned seed, short symlen, short samplen,
 	script_pos = 0;
 	cur_side = 0;
 	cur_fix = &fa;
-	V32TxHdxModem(fa.obj, fa.dbuf, fa.obuf + GUARD, &na);
+	V32TxHdxModem(modem_of(&fa), fa.dbuf, fa.obuf + GUARD, &na);
 
 	fixture(&fb, seed, symlen, samplen, primary, alt_state, 0);
 	script_pos = 0;
@@ -444,7 +453,7 @@ run_rx_one(const char *what, unsigned seed, int rx_primary,
 	fixture(&fa, seed, 7, 11, 0, 1, rx_primary);
 	cur_side = 0;
 	cur_fix = &fa;
-	V32RxHdxModem(fa.obj, fa.dbuf, fa.ubuf, &ca);
+	V32RxHdxModem(modem_of(&fa), fa.dbuf, fa.ubuf, &ca);
 
 	fixture(&fb, seed, 7, 11, 0, 1, rx_primary);
 	cur_side = 1;

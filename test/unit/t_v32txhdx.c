@@ -102,21 +102,21 @@
 
 /* ------------------------------------------------------------------ blob */
 
-extern short ref_TxHdxTone(void *modem, short *data, short *out,
+extern short ref_TxHdxTone(struct v32_modem *modem, short *data, short *out,
 			   unsigned short *left);
-extern short ref_TxHdxCarrierState(void *modem, short *data, short *out,
-				   unsigned short *left);
-extern short ref_TxHdxScrSequence(void *modem, short *data, short *out,
-				  unsigned short *left);
-extern short ref_TxHdxTRN(void *modem, short *data, short *out,
+extern short ref_TxHdxCarrierState(struct v32_modem *modem, short *data,
+				   short *out, unsigned short *left);
+extern short ref_TxHdxScrSequence(struct v32_modem *modem, short *data,
+				  short *out, unsigned short *left);
+extern short ref_TxHdxTRN(struct v32_modem *modem, short *data, short *out,
 			  unsigned short *left);
-extern short ref_TxHdxData(void *modem, short *data, short *out,
+extern short ref_TxHdxData(struct v32_modem *modem, short *data, short *out,
 			   unsigned short *left);
-extern short ref_TxHdxNoCarrier(void *modem, short *data, short *out,
-				unsigned short *left);
-extern short ref_TxHdxFinishFrame(void *modem, short *data, short *out,
-				  unsigned short *left);
-extern short ref_TxHdxNull(void *modem, short *data, short *out,
+extern short ref_TxHdxNoCarrier(struct v32_modem *modem, short *data,
+				short *out, unsigned short *left);
+extern short ref_TxHdxFinishFrame(struct v32_modem *modem, short *data,
+				  short *out, unsigned short *left);
+extern short ref_TxHdxNull(struct v32_modem *modem, short *data, short *out,
 			   unsigned short *left);
 
 extern v32_nextstate_fn ref_V32NextState[V32_NEXTSTATE_COUNT];
@@ -174,7 +174,7 @@ static const char *const state_name[S_COUNT] = {
 	"TxHdxData", "TxHdxNoCarrier", "TxHdxFinishFrame", "TxHdxNull"
 };
 
-typedef short (*txfn)(void *modem, short *data, short *out,
+typedef short (*txfn)(struct v32_modem *modem, short *data, short *out,
 		      unsigned short *left);
 
 static const txfn ours[S_COUNT] = {
@@ -372,7 +372,7 @@ static v32_nextstate_fn saved_ours[V32_NEXTSTATE_COUNT];
 static v32_nextstate_fn saved_ref[V32_NEXTSTATE_COUNT];
 
 static void
-ns_body(int slot, void *modem)
+ns_body(int slot, struct v32_modem *modem)
 {
 	unsigned char *hdx = get_ptr(cur_fix->obj, V32_OBJ_HDX);
 
@@ -393,12 +393,12 @@ ns_body(int slot, void *modem)
 		*cur_left = (unsigned short)ns_setleft;
 }
 
-static void ns0(void *m) { ns_body(0, m); }
-static void ns1(void *m) { ns_body(1, m); }
-static void ns2(void *m) { ns_body(2, m); }
-static void ns3(void *m) { ns_body(3, m); }
-static void ns4(void *m) { ns_body(4, m); }
-static void ns5(void *m) { ns_body(5, m); }
+static void ns0(struct v32_modem *m) { ns_body(0, m); }
+static void ns1(struct v32_modem *m) { ns_body(1, m); }
+static void ns2(struct v32_modem *m) { ns_body(2, m); }
+static void ns3(struct v32_modem *m) { ns_body(3, m); }
+static void ns4(struct v32_modem *m) { ns_body(4, m); }
+static void ns5(struct v32_modem *m) { ns_body(5, m); }
 
 static void
 install_dispatchers(void)
@@ -591,6 +591,12 @@ pps_of(struct fix *f)
 	return (struct fpm_pps *)(void *)(f->fp + V32FP_PPS);
 }
 
+static struct v32_modem *
+modem_of(struct fix *f)
+{
+	return (struct v32_modem *)(void *)f->obj;
+}
+
 /*
  * The three blocks that hold a POINTER are compared with a skipping loop --
  * CLAUDE.md's exception, since the two sides hold two different addresses and
@@ -678,14 +684,14 @@ run_one(const struct trial *t, int which)
 	cur_fix = &fa;
 	cur_left = &la;
 	enc_swapped = 0;
-	na = ours[which](fa.obj, fa.dbuf, fa.obuf + GUARD, &la);
+	na = ours[which](modem_of(&fa), fa.dbuf, fa.obuf + GUARD, &la);
 
 	fixture(&fb, t);
 	cur_side = 1;
 	cur_fix = &fb;
 	cur_left = &lb;
 	enc_swapped = 0;
-	nb = refs[which](fb.obj, fb.dbuf, fb.obuf + GUARD, &lb);
+	nb = refs[which](modem_of(&fb), fb.dbuf, fb.obuf + GUARD, &lb);
 
 	sprintf(label, "%s: %s", state_name[which], t->what);
 	diff_begin(label);

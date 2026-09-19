@@ -270,6 +270,12 @@ struct fix {
 
 static struct fix fa, fb;
 
+static struct v32_modem *
+modem_of(struct fix *f)
+{
+	return (struct v32_modem *)(void *)f->obj;
+}
+
 /* Named images, so diff_eq_obj can stringify a type for whichfield.py. */
 struct ecline_image { short s[ECLINE_N]; };
 struct kern_image { short s[3][TONE_LEN]; };
@@ -848,7 +854,7 @@ note_coverage(const struct trial *t)
 	if (st == V32_STATE_T || st == V32_STATE_Y || st == V32_STATE_Z
 	    || st == V32_STATE_END || st == V32_STATE_L) {
 		short reg = st == V32_STATE_T ? t->reg[2] : t->reg[4];
-		short rate = DecodeRateSeq(fa.obj, (unsigned short)reg);
+		short rate = DecodeRateSeq(modem_of(&fa), (unsigned short)reg);
 
 		if (rate >= 0 && rate < V32_RATE_COUNT)
 			sep_rate_seen[rate]++;
@@ -869,7 +875,7 @@ run_one(const struct trial *t)
 	fixture(&fa, t);
 	fixture(&fb, t);
 
-	V32AnsNextState(fa.obj);
+	V32AnsNextState(modem_of(&fa));
 	ref_V32AnsNextState(fb.obj);
 
 	diff_begin(what);
@@ -1152,7 +1158,7 @@ sweep_debug(void)
 		dsplibs_debug_level = 2u;
 		ref_dsplibs_debug_level = 2u;
 
-		V32AnsNextState(fa.obj);
+		V32AnsNextState(modem_of(&fa));
 		ref_V32AnsNextState(fb.obj);
 
 		dsplibs_debug_level = 0u;
