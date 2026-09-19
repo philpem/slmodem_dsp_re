@@ -2062,7 +2062,26 @@ run_ce_phase4(void)
 			SET_CE(avePdsnrNofSymbols, 100u);
 			SET_CEF(avePdsnr, 0x42c80000u);		/* 100.0f */
 
-			vb = p4_call(tag, as_float(0x00000000u), 1);
+			/*
+			 * THE TEXT IS NOT COMPARED HERE, and it is the one
+			 * place in this file where a diverging transcript is
+			 * expected rather than a defect.  The line prints `t`,
+			 * which is a NaN, and the object's `!(0.0f >= t)` sets
+			 * the carry for an unordered compare and prints '+'
+			 * (finding F2410).  `make period` reproduces that -- but
+			 * the modern build's recovered `-ffast-math` profile
+			 * (CXXMATHFLAGS) implies `-ffinite-math-only`, and GCC
+			 * 14 folds the ternary to a `fcomip`/`setbe` that prints
+			 * '-'.  There is no source spelling that serves both: the
+			 * object's '+'-for-NaN is only reachable through the
+			 * ordered compare.  So the transcript check is LIFTED to
+			 * its own binary, `t_v90connevalnan`, which carries the
+			 * declaration in `tools/gccdiverge.json`; this file keeps
+			 * the verdict, the +0xac store and the line count and is
+			 * green under both compilers so its mutation suite can be
+			 * scored.  See issue #143 and finding F2410.
+			 */
+			vb = p4_call(tag, as_float(0x00000000u), 0);
 
 			diff_eq_int("the retrain fired on an unordered "
 				    "threshold (%ld)", vb, 4, tag);
