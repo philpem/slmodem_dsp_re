@@ -1,0 +1,63 @@
+{
+  "t_agc": {
+    "finding": "F11359",
+    "symbols": [
+      "Agc<float>::Agc()",
+      "Agc<float>::freeze()",
+      "Agc<float>::process(float const*, float*, unsigned int)",
+      "Agc<float>::reset()"
+    ],
+    "why": "`Agc<float>` is an out-of-line template instantiation inside V90Demodulator.cpp. GCC 3.4.2 does not inline every call and emits the weak instantiation, which the period object carries; GCC 13+ inlines them all and emits nothing. Measured: of `-fno-partial-inlining -fno-ipa-cp`, `-fkeep-inline-functions`, `-fno-toplevel-reorder` and `-fno-inline`, only `-fno-inline` keeps the symbols -- and that changes code generation in every translation unit, which is not a declaration the modern tier may make. Issue #77; `make period` passes this binary with the object's own compiler."
+  },
+  "t_diffcoder": {
+    "finding": "F11359",
+    "symbols": [
+      "ParallelDifferentialDecoder<unsigned char>::ParallelDifferentialDecoder(unsigned int)",
+      "ParallelDifferentialDecoder<unsigned char>::process(unsigned char*, unsigned char*)",
+      "ParallelDifferentialDecoder<unsigned char>::reset(unsigned int, unsigned char)",
+      "ParallelDifferentialDecoder<unsigned char>::~ParallelDifferentialDecoder()",
+      "ParallelDifferentialEncoder<unsigned char>::ParallelDifferentialEncoder(unsigned int)",
+      "ParallelDifferentialEncoder<unsigned char>::process(unsigned char*, unsigned char*)",
+      "ParallelDifferentialEncoder<unsigned char>::reset(unsigned int, unsigned char)",
+      "ParallelDifferentialEncoder<unsigned char>::~ParallelDifferentialEncoder()",
+      "SerialDifferentialDecoder<int>::process(int)",
+      "SerialDifferentialDecoder<unsigned char>::process(unsigned char)",
+      "SerialDifferentialEncoder<unsigned char>::process(unsigned char)"
+    ],
+    "why": "Header-only `DifferentialEncoder`/`DifferentialDecoder` template instantiations. The period object emits the out-of-line weak copies because GCC 3.4.2 does not inline every call; GCC 13+ inlines them all away. Same class as t_agc, and the same measurement bounds it: no apparatus flag keeps them short of `-fno-inline`. Issue #77."
+  },
+  "t_lowpassfir": {
+    "finding": "F11359",
+    "symbols": [
+      "LowPassFIR<float>::LowPassFIR(unsigned int, float, WindowType, float)",
+      "LowPassFIR<float>::design(unsigned int, float, WindowType, float)",
+      "LowPassFIR<float>::design(unsigned int, float, float, float const*, int)",
+      "LowPassFIR<float>::~LowPassFIR()"
+    ],
+    "why": "Header-only `LowPassFIR<float>` template instantiation. The period object carries the out-of-line weak copies GCC 3.4.2 emits; GCC 13+ inlines them away. Same class as t_agc. Issue #77."
+  },
+  "t_queue": {
+    "finding": "F11359",
+    "symbols": [
+      "Queue<float>::write(float)"
+    ],
+    "why": "Header-only `Queue<float>` template instantiation. The period object carries the out-of-line weak copy GCC 3.4.2 emits; GCC 13+ inlines it away. Same class as t_agc. Issue #77."
+  },
+  "t_sinewave": {
+    "finding": "F11359",
+    "symbols": [
+      "SineWave<float, float>::SineWave(float, float, float, float)",
+      "SineWave<float, float>::generate(float*, unsigned long)",
+      "SineWave<float, float>::~SineWave()"
+    ],
+    "why": "Header-only `SineWave<float, float>` template instantiation. The period object carries the out-of-line weak copies GCC 3.4.2 emits; GCC 13+ inlines them away. Same class as t_agc. Issue #77."
+  },
+  "t_v90shapereset": {
+    "finding": "F11359",
+    "symbols": [
+      "Scrambler<int, unsigned char>::Scrambler(unsigned int, unsigned int, unsigned int)",
+      "Scrambler<int, unsigned char>::~Scrambler()"
+    ],
+    "why": "Header-only `Scrambler<int, unsigned char>` template instantiation. The period object carries the out-of-line weak copies GCC 3.4.2 emits; GCC 13+ inlines them away. Same class as t_agc. Issue #77."
+  }
+}

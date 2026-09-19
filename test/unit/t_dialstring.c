@@ -66,9 +66,19 @@ extern int ref_AnalyseDialString(struct dialer *d, const char *s, int store)
  * Ours: FILE-LOCAL in the object, so it is `static` in Dialer.c and
  * dialer.h no longer declares it.  The test tier links a globalized copy
  * (tools/testvisible.py).
+ *
+ * The convention is the BUILDING compiler's, exactly as for EchoCanceler in
+ * t_fdspkrnl.c: GCC 3.4.2 caps a static function at regparm(2), GCC 4 and
+ * later use regparm(3).  Declaring regparm(2) for a modern build leaves the
+ * third argument on the stack where the callee never looks (finding F11359).
  */
+#if __GNUC__ >= 4
+extern int AnalyseDialString(struct dialer *d, const char *s, int store)
+	__attribute__((regparm(3)));
+#else
 extern int AnalyseDialString(struct dialer *d, const char *s, int store)
 	__attribute__((regparm(2)));
+#endif
 
 static int grade_seen[4];
 static long stored_something;
