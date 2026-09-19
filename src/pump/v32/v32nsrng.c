@@ -131,10 +131,10 @@
 #include "dsplib/fpm_fse.h"
 #include "dsplib/debug.h"
 
-/* The instance is not modelled; see v32hdx.h.  These are the accessors. */
+/* The instance is `struct v32_modem`; see v32hdx.h.  These are the accessors. */
 
-#define HDX(m) (((struct v32_modem *)(m))->hdx)
-#define FP(m) (((struct v32_modem *)(m))->fp)
+#define HDX(m) ((m)->hdx)
+#define FP(m) ((m)->fp)
 
 /*
  * `LoadReg` and `StoreReg` reach V32HDX_REGS through an index; these two
@@ -245,7 +245,7 @@
 /* ------------------------------------------------------------------------ */
 
 void
-V32RngInitNextState(void *modem)
+V32RngInitNextState(struct v32_modem *modem)
 {
 	struct v32_hdx *hdx = HDX(modem);
 	struct v32_fp *fp;
@@ -268,15 +268,15 @@ V32RngInitNextState(void *modem)
 		SetTxModeV32(modem, V32_MODE_ABS4);
 		InitGenSequence(modem,
 				(unsigned short)
-				(((struct v32_modem *)modem)->params.protocol == 0
+				(modem->params.protocol == 0
 				 ? 0 : 3),
 				4, 2);
 
-		((struct v32_modem *)modem)->flags = (unsigned char)
-			((((struct v32_modem *)modem)->flags & ~V32_FLAG_08)
+		modem->flags = (unsigned char)
+			((modem->flags & ~V32_FLAG_08)
 			 | V32_FLAG_04);
 		SetToneDetect(modem,
-			      (short)(((struct v32_modem *)modem)->params.protocol == 0
+			      (short)(modem->params.protocol == 0
 				      ? 600 : 1800));
 
 		hdx = HDX(modem);
@@ -300,12 +300,12 @@ V32RngInitNextState(void *modem)
 			hdx->state_left = 8;
 			InitGenSequence(modem,
 					(unsigned short)
-					(((struct v32_modem *)modem)->params.protocol == 0
+					(modem->params.protocol == 0
 					 ? 15 : 12),
 					4, 2);
 			hdx = HDX(modem);
 		} else {
-			((struct v32_modem *)modem)->flags &=
+			modem->flags &=
 				(unsigned char)~V32_FLAG_04;
 		}
 		hdx->rx_state = (void *)RxHdxToneData;
@@ -313,7 +313,7 @@ V32RngInitNextState(void *modem)
 
 	case V32_STATE_C:
 		if (hdx->state_left > 0) {
-			((struct v32_modem *)modem)->flags &=
+			modem->flags &=
 				(unsigned char)~V32_FLAG_04;
 			hdx->rx_state = (void *)RxHdxToneData;
 			break;
@@ -323,7 +323,7 @@ V32RngInitNextState(void *modem)
 		hdx->tx_state = (void *)TxHdxScrSequence;
 		hdx->state_left = hdx->limit;
 
-		if ((((struct v32_modem *)modem)->flags & V32_FLAG_04) == 0) {
+		if ((modem->flags & V32_FLAG_04) == 0) {
 			hdx->rx_state = (void *)RxHdxSequence;
 			SetRxModeV32(modem, V32_MODE_DIF4);
 			InitDetSequence(modem, V32_DET_SEQ, V32_DET_MASK, -1,
@@ -337,13 +337,13 @@ V32RngInitNextState(void *modem)
 		SetTxModeV32(modem, V32_MODE_DIF4);
 		SeedScramblerV32(modem, 0);
 		FP(modem)->tx_smc.state[0] =
-			(short)(((struct v32_modem *)modem)->params.protocol == 0
+			(short)(modem->params.protocol == 0
 				? 12 : 0);
 		break;
 
 	case V32_STATE_D:
-		if ((((struct v32_modem *)modem)->flags & V32_FLAG_04) != 0) {
-			((struct v32_modem *)modem)->flags &=
+		if ((modem->flags & V32_FLAG_04) != 0) {
+			modem->flags &=
 				(unsigned char)~V32_FLAG_04;
 			hdx->rx_state = (void *)RxHdxSequence;
 			SetRxModeV32(modem, V32_MODE_DIF4);
@@ -405,7 +405,7 @@ V32RngInitNextState(void *modem)
 		break;
 
 	case V32_STATE_F:
-		((struct v32_modem *)modem)->flags |= V32_FLAG_08;
+		modem->flags |= V32_FLAG_08;
 
 		rate = DecodeRateSeq(modem,
 				     (unsigned short)LoadReg(modem, 1));
@@ -457,15 +457,15 @@ V32RngInitNextState(void *modem)
 			 * the tail below.  See the header comment: F8588.
 			 */
 			hdx->state_left = 0x40;
-			((struct v32_modem *)modem)->flags |= V32_FLAG_FAULT;
-			((struct v32_modem *)modem)->status = V32_STATUS_0E;
+			modem->flags |= V32_FLAG_FAULT;
+			modem->status = V32_STATUS_0E;
 			hdx->state = V32_STATE_CLEARDOWN;
 		}
 
 		hdx->timer = 0;
 		hdx->state_left = hdx->limit;
-		((struct v32_modem *)modem)->flags |= V32_FLAG_01 | V32_FLAG_04;
-		((struct v32_modem *)modem)->status =
+		modem->flags |= V32_FLAG_01 | V32_FLAG_04;
+		modem->status =
 			(unsigned char)V32_CONNECT[rate];
 		((struct v32_dec *)FP(modem)->fse.cfg.owner)->retrain = 0;
 		break;
@@ -488,7 +488,7 @@ V32RngInitNextState(void *modem)
 /* ------------------------------------------------------------------------ */
 
 void
-V32RngRespNextState(void *modem)
+V32RngRespNextState(struct v32_modem *modem)
 {
 	struct v32_hdx *hdx = HDX(modem);
 	struct v32_fp *fp;
@@ -512,7 +512,7 @@ V32RngRespNextState(void *modem)
 
 		InitDetSequence(modem, V32_DET_SEQ, V32_DET_MASK, 0xffff, 2);
 		SetRxModeV32(modem, V32_MODE_DIF4);
-		((struct v32_modem *)modem)->flags &= (unsigned char)~V32_FLAG_04;
+		modem->flags &= (unsigned char)~V32_FLAG_04;
 
 		rate = (short)GetRateV32(modem);
 		seq = (short)CodeRateSeq(modem, RateToSeq(modem, rate));
@@ -533,13 +533,13 @@ V32RngRespNextState(void *modem)
 
 		InitGenSequence(modem,
 				(unsigned short)
-				(((struct v32_modem *)modem)->params.protocol == 0
+				(modem->params.protocol == 0
 				 ? 0 : 3),
 				4, 2);
 		SetTxModeV32(modem, V32_MODE_ABS4);
 		StoreReg(modem, (short)GetSequence(modem), 1);
 		InitDetSequence(modem, V32_DET_ESEQ, V32_DET_MASK, -1, 2);
-		((struct v32_modem *)modem)->flags &= (unsigned char)~V32_FLAG_08;
+		modem->flags &= (unsigned char)~V32_FLAG_08;
 		break;
 
 	case V32_STATE_C:
@@ -549,7 +549,7 @@ V32RngRespNextState(void *modem)
 		hdx->timer = 0;
 		InitGenSequence(modem,
 				(unsigned short)
-				(((struct v32_modem *)modem)->params.protocol == 0
+				(modem->params.protocol == 0
 				 ? 15 : 12),
 				4, 2);
 		break;
@@ -567,7 +567,7 @@ V32RngRespNextState(void *modem)
 				0x10, 2);
 		SeedScramblerV32(modem, 0);
 		FP(modem)->tx_smc.state[0] =
-			(short)(((struct v32_modem *)modem)->params.protocol == 0
+			(short)(modem->params.protocol == 0
 				? 12 : 0);
 		break;
 
@@ -594,8 +594,8 @@ V32RngRespNextState(void *modem)
 		if (rate == V32_RATE_NONE) {
 			hdx = HDX(modem);
 			hdx->state_left = 0x28;
-			((struct v32_modem *)modem)->flags |= V32_FLAG_FAULT;
-			((struct v32_modem *)modem)->status = V32_STATUS_17;
+			modem->flags |= V32_FLAG_FAULT;
+			modem->status = V32_STATUS_17;
 			hdx->state = V32_STATE_CLEARDOWN;
 			break;
 		}
@@ -609,7 +609,7 @@ V32RngRespNextState(void *modem)
 		break;
 
 	case V32_STATE_G:
-		((struct v32_modem *)modem)->flags |= V32_FLAG_08;
+		modem->flags |= V32_FLAG_08;
 
 		rate = DecodeRateSeq(modem,
 				     (unsigned short)LoadReg(modem, 1));
@@ -644,10 +644,10 @@ V32RngRespNextState(void *modem)
 	case V32_STATE_DONE:
 		hdx->timer = 0;
 		hdx->state_left = hdx->limit;
-		((struct v32_modem *)modem)->flags |= V32_FLAG_01 | V32_FLAG_04;
+		modem->flags |= V32_FLAG_01 | V32_FLAG_04;
 
 		rate = DecodeRateSeq(modem, hdx->regs[4]);
-		((struct v32_modem *)modem)->status =
+		modem->status =
 			(unsigned char)V32_CONNECT[rate];
 		((struct v32_dec *)FP(modem)->fse.cfg.owner)->retrain = 0;
 		break;

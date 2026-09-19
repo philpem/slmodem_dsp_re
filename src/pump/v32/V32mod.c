@@ -18,7 +18,7 @@ static unsigned short rx_out_internal[V32_BIT_BUFFER];
  * and the two bytes above it reach the caller and are discarded.
  */
 int
-V32FP_modem(void *modem, const int *txbits, short *out, const short *in,
+V32FP_modem(struct v32_modem *modem, const int *txbits, short *out, const short *in,
 	    int *rxbits, int *nout, int *nin)
 {
 	struct v32_fp *fp;
@@ -44,7 +44,7 @@ V32FP_modem(void *modem, const int *txbits, short *out, const short *in,
 	for (i = 0; i < *nout; i++)
 		tx_in_internal[i] = (unsigned short)txbits[i];
 
-	((struct v32_modem *)(modem))->flags &= (unsigned char)~V32_FLAG_FAULT;
+	modem->flags &= (unsigned char)~V32_FLAG_FAULT;
 	hdx = HDX(modem);
 	V32_PROTOCOL[hdx->mode](modem, tx_in_internal, out,
 						  (short *)in, rx_out_internal,
@@ -56,7 +56,7 @@ V32FP_modem(void *modem, const int *txbits, short *out, const short *in,
 	for (i = 0; i < *nin; i++)
 		rxbits[i] = (int)rx_out_internal[i];
 
-	if ((((struct v32_modem *)(modem))->flags & V32_FLAG_DATA) != 0) {
+	if ((modem->flags & V32_FLAG_DATA) != 0) {
 		hdx = HDX(modem);
 		hdx->mode = V32_PROTO_DATA;
 		hdx->state = V32_STATE_DONT_CARE;
@@ -69,7 +69,7 @@ V32FP_modem(void *modem, const int *txbits, short *out, const short *in,
 			out[i] = (short)((out[i] * scale) >> 15);
 	}
 
-	return ((struct v32_modem *)(modem))->status_word;
+	return modem->status_word;
 }
 
 /* ------------------------------------------------------------------------ */
@@ -107,7 +107,7 @@ V32FP_modem(void *modem, const int *txbits, short *out, const short *in,
  * test declares it the ordinary way.
  */
 static void
-v32_data(void *modem, unsigned short *txdata, short *txout, short *rxin,
+v32_data(struct v32_modem *modem, unsigned short *txdata, short *txout, short *rxin,
 	 unsigned short *rxout, short *nsamples, unsigned short *rxcount)
 {
 	struct v32_status st;
@@ -149,7 +149,7 @@ v32_data(void *modem, unsigned short *txdata, short *txout, short *rxin,
 		TxClockSyncV32(modem);
 	if ((st.flags & V32_STFLAG_RETRAIN_DET) != 0
 	    && RetrainDetectV32(modem) != 0) {
-		((struct v32_modem *)(modem))->flags &= (unsigned char)~V32_FLAG_DATA;
+		modem->flags &= (unsigned char)~V32_FLAG_DATA;
 		ctl = V32_CTL;
 		ctl.ctl0 = (unsigned char)
 			(((((ctl.ctl0 & 0xfc) | (st.flags & 1)
@@ -172,7 +172,7 @@ v32_data(void *modem, unsigned short *txdata, short *txout, short *rxin,
 		code = V32_MSG_RENEG;
 	}
 
-	if ((((struct v32_modem *)(modem))->flags & V32_FLAG_RETRAIN) != 0) {
+	if ((modem->flags & V32_FLAG_RETRAIN) != 0) {
 		HDX(modem)->loss_blocks = 0;
 	} else {
 		short elapsed;
@@ -202,8 +202,8 @@ v32_data(void *modem, unsigned short *txdata, short *txout, short *rxin,
 	 * name here would be an offset in disguise.  Recorded as the object's
 	 * own constant.
 	 */
-	((struct v32_modem *)(modem))->flags |= (unsigned char)0x0c;
-	((struct v32_modem *)(modem))->status = (unsigned char)code;
+	modem->flags |= (unsigned char)0x0c;
+	modem->status = (unsigned char)code;
 }
 
 /*
@@ -235,19 +235,19 @@ v32_data(void *modem, unsigned short *txdata, short *txout, short *rxin,
 #define V32_FLAG_08		0x08
 
 static void
-v32_handshake(void *modem, unsigned short *txdata, short *txout, short *rxin,
+v32_handshake(struct v32_modem *modem, unsigned short *txdata, short *txout, short *rxin,
 	      unsigned short *rxout, short *nsamples, unsigned short *rxcount)
 {
 	struct v32_hdx *hdx;
 	unsigned char flags;
 	short i;
 
-	hdx = ((struct v32_modem *)(modem))->hdx;
+	hdx = modem->hdx;
 
-	flags = ((struct v32_modem *)(modem))->flags;
+	flags = modem->flags;
 	if (hdx->mode == V32_MODE_RING_INIT)
 		flags = (unsigned char)(flags & ~(V32_FLAG_04 | V32_FLAG_08));
-	((struct v32_modem *)(modem))->flags = (unsigned char)(flags & ~V32_FLAG_01);
+	modem->flags = (unsigned char)(flags & ~V32_FLAG_01);
 
 	if (hdx->symbol_len > 0) {
 		unsigned short *buf;
@@ -266,7 +266,7 @@ v32_handshake(void *modem, unsigned short *txdata, short *txout, short *rxin,
 	 * RE-READ, and it matters: the receive state may have replaced the
 	 * whole context, exactly as `V32TxHdxModem`'s own loop allows.
 	 */
-	hdx = ((struct v32_modem *)(modem))->hdx;
+	hdx = modem->hdx;
 	V32TxHdxModem(modem, (short *)hdx->buffer, txout,
 		      nsamples);
 }

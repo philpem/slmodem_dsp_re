@@ -7,8 +7,9 @@
  * the equaliser: resample, cancel the echo, take a copy for the diagnostics,
  * gate on energy, apply the AGC, recover the symbol clock, then equalise.
  *
- * THE INSTANCE IS NOT MODELLED; the parameter is `void *` and the offsets are
- * named constants -- `v32data.h`'s ruling, and `v32hdx.h` follows it too.
+ * THE INSTANCE IS REACHED THROUGH `struct v32_modem`; the parameter is that
+ * base type and the offsets are named constants -- `v32data.h`'s ruling, and
+ * `v32hdx.h` follows it too.
  * The SUB-OBJECTS are modelled, and by somebody else: every one of the five
  * DSP blocks below already has a header and a reconstruction, and this file
  * only says where in `fp` each one sits.
@@ -89,6 +90,8 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+struct v32_modem;
 
 /*
  * The RMS floor the mode-6 receive path gates on.
@@ -184,7 +187,7 @@ extern "C" {
  *         the three paths that decline the block (see the file banner for
  *         how to tell them apart).
  */
-unsigned short DemodDataV32(void *modem, short *in, unsigned short *out,
+unsigned short DemodDataV32(struct v32_modem *modem, short *in, unsigned short *out,
 			    unsigned short count);
 
 #ifdef __cplusplus

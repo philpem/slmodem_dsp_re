@@ -93,8 +93,8 @@
 /* Raw access remains only for deliberately overlapping legacy subfields. */
 #include "dsplib/v32struct.h"
 
-#define HDX(m)			(((struct v32_modem *)(m))->hdx)
-#define FP(m)			(((struct v32_modem *)(m))->fp)
+#define HDX(m)			((m)->hdx)
+#define FP(m)			((m)->fp)
 
 #define SDM_TX(fp)	(&((struct v32_fp *)(fp))->scrambler)
 #define SDM_RX(fp)	(&((struct v32_fp *)(fp))->descrambler)
@@ -153,7 +153,7 @@ short V32_SAMPLE_LEN[2] = { 40, 160 };
  * differential tier cannot see it either way.  D481 and finding F8215.
  */
 void
-V32FP_delete(void *modem)
+V32FP_delete(struct v32_modem *modem)
 {
 	FPM_MTD_delete((struct fpm_mtd *)HDX(modem)->mtd);
 	FPM_TONE_delete((struct fpm_tone *)HDX(modem)->tone2);
@@ -172,7 +172,7 @@ V32FP_delete(void *modem)
 	sysdep_free(HDX(modem)->buffer);
 	sysdep_free(HDX(modem));
 	sysdep_free(FP(modem));
-	sysdep_free((struct v32_modem *)modem);
+	sysdep_free(modem);
 }
 
 /*
@@ -180,7 +180,7 @@ V32FP_delete(void *modem)
  * argument is rewritten, and it is a tail call in the object.
  */
 int
-V32FP_GetDiagnostics(void *modem, int which, struct fpm_fse_point *out,
+V32FP_GetDiagnostics(struct v32_modem *modem, int which, struct fpm_fse_point *out,
 		     int max)
 {
 	return FSE_getdiag(FSE(FP(modem)), which, out, max);
@@ -195,7 +195,7 @@ V32FP_GetDiagnostics(void *modem, int which, struct fpm_fse_point *out,
  * every value that reaches the first branch.
  */
 short *
-V32FP_GetCleanedSamples(void *modem, int *n)
+V32FP_GetCleanedSamples(struct v32_modem *modem, int *n)
 {
 	unsigned short have;
 
@@ -220,7 +220,7 @@ V32FP_GetCleanedSamples(void *modem, int *n)
  * `regmask` at all-ones, which is a scrambler that emits nothing.
  */
 void
-SetTxModeV32(void *modem, short mode)
+SetTxModeV32(struct v32_modem *modem, short mode)
 {
 	struct v32_fp *fp;
 	struct v32_sdm *sdm;
@@ -317,8 +317,8 @@ SetTxModeV32(void *modem, short mode)
 		break;
 
 	default:
-		((struct v32_modem *)modem)->status = V32_STATUS_BAD_MODE;
-		((struct v32_modem *)modem)->flags |= V32_FLAG_FAULT;
+		modem->status = V32_STATUS_BAD_MODE;
+		modem->flags |= V32_FLAG_FAULT;
 		fp = FP(modem);
 		shift = 0;
 		break;
@@ -343,7 +343,7 @@ SetTxModeV32(void *modem, short mode)
  * the two four-point arms clear the decoder's differential context.
  */
 void
-SetRxModeV32(void *modem, short mode)
+SetRxModeV32(struct v32_modem *modem, short mode)
 {
 	struct v32_fp *fp;
 	struct v32_dec *dec;
@@ -427,8 +427,8 @@ SetRxModeV32(void *modem, short mode)
 		break;
 
 	default:
-		((struct v32_modem *)modem)->flags |= V32_FLAG_FAULT;
-		((struct v32_modem *)modem)->status = V32_STATUS_BAD_MODE;
+		modem->flags |= V32_FLAG_FAULT;
+		modem->status = V32_STATUS_BAD_MODE;
 		shift = 0;
 		break;
 	}
@@ -443,7 +443,7 @@ SetRxModeV32(void *modem, short mode)
 
 /* Load the transmit scrambler's shift register. */
 void
-SeedScramblerV32(void *modem, unsigned int seed)
+SeedScramblerV32(struct v32_modem *modem, unsigned int seed)
 {
 	SDM_TX(FP(modem))->reg = seed;
 }
@@ -456,16 +456,16 @@ SeedScramblerV32(void *modem, unsigned int seed)
  * reports V32_RATE_INVALID rather than any of the five.
  */
 int
-GetRateV32(void *modem)
+GetRateV32(struct v32_modem *modem)
 {
-	unsigned short bps = ((struct v32_modem *)modem)->params.rx_rate;
+	unsigned short bps = modem->params.rx_rate;
 
 	if (bps == 14400)
 		return V32_RATE_14400;
 	if (bps == 12000)
 		return V32_RATE_12000;
 	if (bps == 9600)
-		return ((struct v32_modem *)modem)->params.trellis ? V32_RATE_9600
+		return modem->params.trellis ? V32_RATE_9600
 							 : V32_RATE_9600_NT;
 	if (bps == 7200)
 		return V32_RATE_7200;
@@ -476,14 +476,14 @@ GetRateV32(void *modem)
 
 /* Scramble `count` words of `buf` in place.  A tail call in the object. */
 void
-ScrambleDataV32(void *modem, short *buf, unsigned short count)
+ScrambleDataV32(struct v32_modem *modem, short *buf, unsigned short count)
 {
 	SDMv32_scrambler(SDM_TX(FP(modem)), buf, count);
 }
 
 /* And the receive direction, through the descrambler at fp + 0x50b0. */
 void
-DescrambleDataV32(void *modem, short *buf, unsigned short count)
+DescrambleDataV32(struct v32_modem *modem, short *buf, unsigned short count)
 {
 	SDMv32_descrambler(SDM_RX(FP(modem)), buf, count);
 }
@@ -497,7 +497,7 @@ DescrambleDataV32(void *modem, short *buf, unsigned short count)
  * The MU1, OFF, MU0 case order recovers the period emission (F10227).
  */
 void
-SetAdaptEqV32(void *modem, unsigned short mode)
+SetAdaptEqV32(struct v32_modem *modem, unsigned short mode)
 {
 	struct v32_fp *fp;
 
@@ -539,7 +539,7 @@ SetAdaptEqV32(void *modem, unsigned short mode)
  * places take it to 0.1.  Both readings compile; only one agrees.
  */
 void
-SetAdaptEcV32(void *modem, unsigned short mode)
+SetAdaptEcV32(struct v32_modem *modem, unsigned short mode)
 {
 	struct v32_fp *fp;
 	struct fpm_ecc *ecc;
@@ -573,7 +573,7 @@ SetAdaptEcV32(void *modem, unsigned short mode)
 
 	case V32_ADAPTEC_RESET:
 		ecc = ECC(FP(modem));
-		ecc->near_delay = (short)((struct v32_modem *)(modem))->params.ec_near_delay;
+		ecc->near_delay = (short)modem->params.ec_near_delay;
 		ecc->far_delay = 0x30;
 		FPM_ECC_init(ecc, (const struct fpm_ecc_cfg *)(void *)ecc, 0);
 		ecc = ECC(FP(modem));
@@ -595,7 +595,7 @@ SetAdaptEcV32(void *modem, unsigned short mode)
  * four end up holding the same value.
  */
 void
-SetRxLoopsV32(void *modem, unsigned short mode)
+SetRxLoopsV32(struct v32_modem *modem, unsigned short mode)
 {
 	struct v32_fp *fp;
 
@@ -645,7 +645,7 @@ SetRxLoopsV32(void *modem, unsigned short mode)
  * below twice the line length, and every `x` here is.
  */
 void
-SetECRndTripDelayV32(void *modem, short delay)
+SetECRndTripDelayV32(struct v32_modem *modem, short delay)
 {
 	struct v32_fp *fp;
 	struct fpm_ecc *ecc;
@@ -653,7 +653,7 @@ SetECRndTripDelayV32(void *modem, short delay)
 	short lag, symlen, d, t, i;
 
 	lag = HDX(modem)->short_9c;
-	symlen = V32_SYMBOL_LEN[((struct v32_modem *)modem)->params.symlen_sel];
+	symlen = V32_SYMBOL_LEN[modem->params.symlen_sel];
 	fp = FP(modem);
 	ecc = ECC(fp);
 	ring = RING(fp);
@@ -695,14 +695,14 @@ SetECRndTripDelayV32(void *modem, short delay)
  * function was emptied.  Nothing here decides which.
  */
 void
-TxClockSyncV32(void *modem)
+TxClockSyncV32(struct v32_modem *modem)
 {
 	(void)modem;
 }
 
 /* The decoder's rate-change report, straight through and not cleared. */
 int
-EpochDetectV32(void *modem)
+EpochDetectV32(struct v32_modem *modem)
 {
 	return DEC(FP(modem))->rate_change;
 }
@@ -717,7 +717,7 @@ EpochDetectV32(void *modem)
  * them and the object's order is the one written.
  */
 int
-RetrainDetectV32(void *modem)
+RetrainDetectV32(struct v32_modem *modem)
 {
 	struct v32_dec *dec = DEC(FP(modem));
 	unsigned short req = (unsigned short)dec->retrain;
@@ -734,7 +734,7 @@ RetrainDetectV32(void *modem)
 
 /* The renegotiation request, bit 1 of the same word.  It is not counted. */
 int
-RenegotiateDetectV32(void *modem)
+RenegotiateDetectV32(struct v32_modem *modem)
 {
 	struct v32_dec *dec = DEC(FP(modem));
 	unsigned short req = (unsigned short)dec->retrain;
@@ -758,7 +758,7 @@ RenegotiateDetectV32(void *modem)
  * stronger -- the whole Rx state family takes the same four.
  */
 unsigned short
-RxClampV32(void *modem, short *in, short *out, unsigned short count)
+RxClampV32(struct v32_modem *modem, short *in, short *out, unsigned short count)
 {
 	struct v32_hdx *hdx = HDX(modem);
 	short i;
@@ -785,7 +785,7 @@ RxClampV32(void *modem, short *in, short *out, unsigned short count)
  * sites gives.
  */
 void
-SetToneDetect(void *modem, short hz)
+SetToneDetect(struct v32_modem *modem, short hz)
 {
 	struct v32_hdx *hdx = HDX(modem);
 	struct fpm_tone_cfg cfg;
@@ -808,7 +808,7 @@ SetToneDetect(void *modem, short hz)
  * each site (finding F614) and each site is written the way the object has it.
  */
 short
-CalcTurnAroundDelay(void *modem)
+CalcTurnAroundDelay(struct v32_modem *modem)
 {
 	struct v32_hdx *hdx = HDX(modem);
 	short left;

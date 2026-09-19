@@ -59,8 +59,8 @@
  },
  {
   "label": "an out-of-range transmit mode replaces the fault flags instead of setting one bit",
-  "find": "\t\t((struct v32_modem *)modem)->flags |= V32_FLAG_FAULT;\n\t\tfp = FP(modem);",
-  "replace": "\t\t((struct v32_modem *)modem)->flags = V32_FLAG_FAULT;\n\t\tfp = FP(modem);"
+  "find": "\t\tmodem->flags |= V32_FLAG_FAULT;\n\t\tfp = FP(modem);",
+  "replace": "\t\tmodem->flags = V32_FLAG_FAULT;\n\t\tfp = FP(modem);"
  },
  {
   "label": "an out-of-range transmit mode leaves the scrambler at one bit per symbol rather than none",
@@ -119,18 +119,18 @@
  },
  {
   "label": "9600 always reports the trellis rate, never the uncoded one",
-  "find": "\t\treturn ((struct v32_modem *)modem)->params.trellis ? V32_RATE_9600\n\t\t\t\t\t\t\t : V32_RATE_9600_NT;",
+  "find": "\t\treturn modem->params.trellis ? V32_RATE_9600\n\t\t\t\t\t\t\t : V32_RATE_9600_NT;",
   "replace": "\t\treturn V32_RATE_9600;"
  },
  {
   "label": "the 9600 trellis test is inverted",
-  "find": "\t\treturn ((struct v32_modem *)modem)->params.trellis ? V32_RATE_9600\n\t\t\t\t\t\t\t : V32_RATE_9600_NT;\n\tif (bps == 7200)",
-  "replace": "\t\treturn ((struct v32_modem *)modem)->params.trellis ? V32_RATE_9600_NT\n\t\t\t\t\t\t\t : V32_RATE_9600;\n\tif (bps == 7200)"
+  "find": "\t\treturn modem->params.trellis ? V32_RATE_9600\n\t\t\t\t\t\t\t : V32_RATE_9600_NT;\n\tif (bps == 7200)",
+  "replace": "\t\treturn modem->params.trellis ? V32_RATE_9600_NT\n\t\t\t\t\t\t\t : V32_RATE_9600;\n\tif (bps == 7200)"
  },
  {
   "label": "the rate is read from the instance's symbol-length selector rather than its bit rate",
-  "find": "\tunsigned short bps = ((struct v32_modem *)modem)->params.rx_rate;",
-  "replace": "\tunsigned short bps = ((struct v32_modem *)modem)->params.symlen_sel;"
+  "find": "\tunsigned short bps = modem->params.rx_rate;",
+  "replace": "\tunsigned short bps = modem->params.symlen_sel;"
  },
  {
   "label": "an unrecognised bit rate reports 4800 rather than the invalid code",
@@ -219,8 +219,8 @@
  },
  {
   "label": "the symbol period is read from the other entry of V32_SYMBOL_LEN",
-  "find": "\tsymlen = V32_SYMBOL_LEN[((struct v32_modem *)modem)->params.symlen_sel];",
-  "replace": "\tsymlen = V32_SYMBOL_LEN[1 - ((struct v32_modem *)modem)->params.symlen_sel];"
+  "find": "\tsymlen = V32_SYMBOL_LEN[modem->params.symlen_sel];",
+  "replace": "\tsymlen = V32_SYMBOL_LEN[1 - modem->params.symlen_sel];"
  },
  {
   "label": "the symbol ring holds 40 symbols at the long setting rather than 48",

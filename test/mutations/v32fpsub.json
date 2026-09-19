@@ -34,8 +34,8 @@
  },
  {
   "label": "the re-init takes the near delay from the instance's echo-delay field's neighbour",
-  "find": "\t\tecc->near_delay = (short)((struct v32_modem *)(modem))->params.ec_near_delay;",
-  "replace": "\t\tecc->near_delay = (short)((unsigned short *)&((struct v32_modem *)(modem))->params.ec_near_delay)[1];"
+  "find": "\t\tecc->near_delay = (short)modem->params.ec_near_delay;",
+  "replace": "\t\tecc->near_delay = (short)((unsigned short *)&modem->params.ec_near_delay)[1];"
  },
  {
   "label": "the re-init sets a far delay one short of the object's",
@@ -119,12 +119,12 @@
  },
  {
   "label": "the instance itself is left allocated",
-  "find": "\tsysdep_free(FP(modem));\n\tsysdep_free((struct v32_modem *)modem);",
+  "find": "\tsysdep_free(FP(modem));\n\tsysdep_free(modem);",
   "replace": "\tsysdep_free(FP(modem));"
  },
  {
   "label": "the datapump block is released twice and the instance not at all",
-  "find": "\tsysdep_free(FP(modem));\n\tsysdep_free((struct v32_modem *)modem);\n}",
+  "find": "\tsysdep_free(FP(modem));\n\tsysdep_free(modem);\n}",
   "replace": "\tsysdep_free(FP(modem));\n\tsysdep_free(FP(modem));\n}"
  },
  {

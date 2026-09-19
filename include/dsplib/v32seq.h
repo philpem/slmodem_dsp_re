@@ -10,7 +10,7 @@
  * ---------------------------------------------------------------------------
  * The sequence code uses the incremental, pointer-free object views in
  * `v32struct.h`.  They deliberately stop before either object's pointer-
- * bearing remainder; the modem root remains offset-addressed.  Two pointers
+ * bearing remainder; the modem root is `struct v32_modem`.  Two pointers
  * hang off that root --
  *
  *     obj + 0x64   the half-duplex / handshake context, `V32_OBJ_HDX`
@@ -224,7 +224,7 @@ extern short V32_ESEQ[V32_RATE_COUNT];
  * @param rate   A V32_RATE_* index (or any value; unchecked).
  * @return `V32_RATE_SEQ[rate]`.
  */
-unsigned short RateToSeq(void *modem, short rate);
+unsigned short RateToSeq(struct v32_modem *modem, short rate);
 
 /**
  * @brief Decode a received V.32 rate signal to the best rate both ends support, as an `int`.
@@ -232,7 +232,7 @@ unsigned short RateToSeq(void *modem, short rate);
  * @param seq    The received rate signal.
  * @return A V32_RATE_* index, or V32_RATE_NONE if there is nothing in common.
  */
-int SeqToRate(void *modem, unsigned short seq);
+int SeqToRate(struct v32_modem *modem, unsigned short seq);
 
 /**
  * @brief Decode a received V.32 rate signal to the best rate both ends support, as a `short`.
@@ -244,7 +244,7 @@ int SeqToRate(void *modem, unsigned short seq);
  * @param seq    The received rate signal.
  * @return A V32_RATE_* index, or V32_RATE_NONE if there is nothing in common.
  */
-short DecodeRateSeq(void *modem, unsigned short seq);
+short DecodeRateSeq(struct v32_modem *modem, unsigned short seq);
 
 /**
  * @brief Encode the negotiated rate decision as the rate-sequence word to send back.
@@ -252,7 +252,7 @@ short DecodeRateSeq(void *modem, unsigned short seq);
  * @param seq    The received rate signal.
  * @return The rate-sequence word to transmit (V32_RATE_SEQ_NONE if there is nothing in common).
  */
-unsigned short CodeRateSeq(void *modem, unsigned short seq);
+unsigned short CodeRateSeq(struct v32_modem *modem, unsigned short seq);
 
 /**
  * @brief Encode the negotiated rate decision as the final rate-sequence word to send back.
@@ -260,7 +260,7 @@ unsigned short CodeRateSeq(void *modem, unsigned short seq);
  * @param seq    The received rate signal.
  * @return The final rate-sequence word to transmit.
  */
-unsigned short CodeFinalRateSeq(void *modem, unsigned short seq);
+unsigned short CodeFinalRateSeq(struct v32_modem *modem, unsigned short seq);
 
 /**
  * @brief Encode the negotiated rate decision as the E-sequence word to send back.
@@ -268,7 +268,7 @@ unsigned short CodeFinalRateSeq(void *modem, unsigned short seq);
  * @param seq    The received rate signal.
  * @return The E-sequence word to transmit (V32_ESEQ_NONE if there is nothing in common).
  */
-unsigned short CodeESeq(void *modem, unsigned short seq);
+unsigned short CodeESeq(struct v32_modem *modem, unsigned short seq);
 
 /**
  * @brief Arm the V.32 sequence generator.
@@ -285,7 +285,7 @@ unsigned short CodeESeq(void *modem, unsigned short seq);
  * @param total    Total bits in @p pattern.
  * @param width    Bits per emitted field.
  */
-void InitGenSequence(void *modem, unsigned short pattern,
+void InitGenSequence(struct v32_modem *modem, unsigned short pattern,
 		     unsigned short total, unsigned short width);
 
 /**
@@ -298,7 +298,7 @@ void InitGenSequence(void *modem, unsigned short pattern,
  * @param out    Output for the emitted fields.
  * @param count  How many fields to emit.
  */
-void GenSequence(void *modem, short *out, unsigned short count);
+void GenSequence(struct v32_modem *modem, short *out, unsigned short count);
 
 /**
  * @brief Arm the V.32 sequence detector.
@@ -309,7 +309,7 @@ void GenSequence(void *modem, short *out, unsigned short count);
  * @param out_mask  Applied to `reg` and left at V32HDX_DET_MATCH on a match.
  * @param width     How many bits of each input word are shifted in, most significant first.
  */
-void InitDetSequence(void *modem, int target, int mask, int out_mask,
+void InitDetSequence(struct v32_modem *modem, int target, int mask, int out_mask,
 		     unsigned short width);
 
 /**
@@ -324,14 +324,14 @@ void InitDetSequence(void *modem, int target, int mask, int out_mask,
  * @param count  How many words, each contributing `width` bits (see InitDetSequence()).
  * @return The 1-based index of the word the match completed in, or -1 if none did.
  */
-short DetSequence(void *modem, const short *data, unsigned short count);
+short DetSequence(struct v32_modem *modem, const short *data, unsigned short count);
 
 /**
  * @brief Read the V.32 sequence detector's last match.
  * @param modem  The V.32 datapump instance.
  * @return The value the last successful DetSequence() left at V32HDX_DET_MATCH.
  */
-int GetSequence(void *modem);
+int GetSequence(struct v32_modem *modem);
 
 /**
  * @brief Read one of the V.32 handshake's five scratch registers.
@@ -343,7 +343,7 @@ int GetSequence(void *modem);
  * @param reg    The register index, 0..V32HDX_NREGS-1.
  * @return The register's value, or 0 if @p reg is out of range.
  */
-short LoadReg(void *modem, short reg);
+short LoadReg(struct v32_modem *modem, short reg);
 
 /**
  * @brief Write one of the V.32 handshake's five scratch registers.
@@ -355,7 +355,7 @@ short LoadReg(void *modem, short reg);
  * @param value  The value to store.
  * @param reg    The register index, 0..V32HDX_NREGS-1; out of range is a no-op.
  */
-void StoreReg(void *modem, short value, short reg);
+void StoreReg(struct v32_modem *modem, short value, short reg);
 
 #ifdef __cplusplus
 }

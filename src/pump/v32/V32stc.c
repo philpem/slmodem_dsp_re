@@ -28,13 +28,13 @@ static short PROTOCOL[9] = {
  * V32FP_control -- .text 0x084530.  Always returns 1.
  */
 int
-V32FP_control(void *modem, struct v32fp_ctl *ctl)
+V32FP_control(struct v32_modem *modem, struct v32fp_ctl *ctl)
 {
 	struct v32_fp *fp;
 	struct v32_hdx *hdx;
 	int rate;
 
-	if (((struct v32_modem *)(modem))->status == V32_MSG_RETRAIN_REQ) {
+	if (modem->status == V32_MSG_RETRAIN_REQ) {
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("Patch: set ctl_ptr->vxx_ctl."
 					     "options.retrain = TRUE\n");
@@ -50,17 +50,17 @@ V32FP_control(void *modem, struct v32fp_ctl *ctl)
 	fp->eq_adapt = ((ctl->ctl0 & 0x20) == 0);
 	fp->int_14 = ctl->r18;
 	fp->int_18 = ctl->r1c;
-	((unsigned char *)&((struct v32_modem *)(modem))->params.options)[1] =
-		(unsigned char)((((unsigned char *)&((struct v32_modem *)(modem))->params.options)[1]
+	((unsigned char *)&modem->params.options)[1] =
+		(unsigned char)((((unsigned char *)&modem->params.options)[1]
 				 & (unsigned char)~V32_OPTIONS_HI_CTL)
 				| (unsigned char)((ctl->ctl0 >> 7) << 1));
 
 	if (ctl->r14 != 0) {
 		int ratio;
 
-		if (((struct v32_modem *)(modem))->status != V32_MSG_RESIZE_DONE) {
-			((struct v32_modem *)(modem))->flags |= V32_FLAG_FAULT;
-			((struct v32_modem *)(modem))->status = V32_MSG_RESIZED;
+		if (modem->status != V32_MSG_RESIZE_DONE) {
+			modem->flags |= V32_FLAG_FAULT;
+			modem->status = V32_MSG_RESIZED;
 		}
 		/*
 		 * BOTH TABLE READS ARE `movswl` HERE and `movzwl` twenty
@@ -82,7 +82,7 @@ V32FP_control(void *modem, struct v32fp_ctl *ctl)
 			(unsigned short)V32_SYMBOL_LEN[PARAMS(modem)->symlen_sel];
 		hdx->sample_len =
 			(unsigned short)V32_SAMPLE_LEN[PARAMS(modem)->symlen_sel];
-		((struct v32_modem *)(modem))->status = V32_MSG_OK;
+		modem->status = V32_MSG_OK;
 	}
 
 	if ((ctl->ctl1 & V32_CTL1_RETRAIN) != 0) {
@@ -131,8 +131,8 @@ V32FP_control(void *modem, struct v32fp_ctl *ctl)
 			hdx->state = 1;
 			V32AnsNextState(modem);
 		}
-		((struct v32_modem *)(modem))->flags |= V32_FLAG_RETRAIN;
-		((struct v32_modem *)(modem))->status = V32_MSG_RETRAINING;
+		modem->flags |= V32_FLAG_RETRAIN;
+		modem->status = V32_MSG_RETRAINING;
 		ctl->ctl1 &= (unsigned char)~V32_CTL1_RETRAIN;
 		return 1;
 	}
@@ -140,7 +140,7 @@ V32FP_control(void *modem, struct v32fp_ctl *ctl)
 	if ((ctl->ctl1 & V32_CTL1_RENEG) != 0) {
 		hdx = HDX(modem);
 		hdx->state = 0;
-		((struct v32_modem *)(modem))->flags &= (unsigned char)~V32_FLAG_DATA;
+		modem->flags &= (unsigned char)~V32_FLAG_DATA;
 		if (hdx->mode == V32_MODE_RING_RESP) {
 			hdx->short_46 = 0;
 			V32RngRespNextState(modem);
@@ -227,7 +227,7 @@ V32FP_control(void *modem, struct v32fp_ctl *ctl)
  * Recorded rather than fixed.
  */
 int
-V32FP_status(void *modem, struct v32_status *st)
+V32FP_status(struct v32_modem *modem, struct v32_status *st)
 {
 	struct v32fp_ctl ctl;
 	struct v32_fp *fp;
@@ -278,10 +278,10 @@ V32FP_status(void *modem, struct v32_status *st)
 		}
 	}
 
-	if ((short)((unsigned short *)&((struct v32_modem *)(modem))->params.r2c)[0]
+	if ((short)((unsigned short *)&modem->params.r2c)[0]
 	    <= V32_SNR_SETTLE_BLOCKS) {
-		((unsigned short *)&((struct v32_modem *)(modem))->params.r2c)[0] = (unsigned short)
-			(((unsigned short *)&((struct v32_modem *)(modem))->params.r2c)[0] + 1);
+		((unsigned short *)&modem->params.r2c)[0] = (unsigned short)
+			(((unsigned short *)&modem->params.r2c)[0] + 1);
 		snr = V32_SNR_SETTLED_VALUE;
 	}
 
@@ -323,12 +323,12 @@ V32FP_status(void *modem, struct v32_status *st)
 				    | ((fp->eq_adapt == 0) << 5));
 	st->flags = (unsigned char)(st->flags & 0xbf);
 	st->flags = (unsigned char)((st->flags & 0x7f)
-				    | (((((unsigned char *)&((struct v32_modem *)(modem))->params.options)[1]
+				    | (((((unsigned char *)&modem->params.options)[1]
 					 >> 1) & 1) << 7));
 	st->r20 = 0;
 	st->r24 = 0;
 	st->flags1 = (unsigned char)((st->flags1 & 0xfe)
-				     | ((((unsigned char *)&((struct v32_modem *)(modem))->params.options)[1]
+				     | ((((unsigned char *)&modem->params.options)[1]
 					 >> 2) & 1));
 
 	fp = FP(modem);
@@ -336,7 +336,7 @@ V32FP_status(void *modem, struct v32_status *st)
 	st->r1c = (fp->agc.signal != 1);
 
 	if (SnrToRetrainTable[rate_idx] <= (short)snr) {
-		((unsigned short *)&((struct v32_modem *)(modem))->params.r20)[0] = 0;
+		((unsigned short *)&modem->params.r20)[0] = 0;
 		return 1;
 	}
 
@@ -350,18 +350,18 @@ V32FP_status(void *modem, struct v32_status *st)
 					     FP(modem)->decision_error);
 	}
 
-	if ((short)((unsigned short *)&((struct v32_modem *)(modem))->params.r20)[0] > V32_SNR_DROPS_LIMIT) {
+	if ((short)((unsigned short *)&modem->params.r20)[0] > V32_SNR_DROPS_LIMIT) {
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("%d coseq SNR drops detected "
 					     "local retrain is initiated\n",
 					     V32_SNR_DROPS_LIMIT);
 		ctl.ctl1 |= V32_CTL1_RETRAIN;
-		((unsigned short *)&((struct v32_modem *)(modem))->params.r20)[0] = 0;
-		((unsigned short *)&((struct v32_modem *)(modem))->params.r2c)[0] = 0;
+		((unsigned short *)&modem->params.r20)[0] = 0;
+		((unsigned short *)&modem->params.r2c)[0] = 0;
 		FP(modem)->rate_fallback = 1;
 	} else {
-		((unsigned short *)&((struct v32_modem *)(modem))->params.r20)[0] = (unsigned short)
-			(((unsigned short *)&((struct v32_modem *)(modem))->params.r20)[0] + 1);
+		((unsigned short *)&modem->params.r20)[0] = (unsigned short)
+			(((unsigned short *)&modem->params.r20)[0] + 1);
 	}
 
 	ctl.ctl0 = (unsigned char)

@@ -2534,3 +2534,92 @@ unsigned, stored sixteen bits wide and tested signed in both spellings. See
 byte-identity verdicts.
 
 
+
+## Batch: issue #154, the remaining V.32 published holders
+
+Follow-up to #151 (PR #153), same model and lever 16 of
+`docs/method/refinement.md`. #151 retyped `V32FP_recreate`'s `void *modem` to
+`struct v32_modem *` and proved the retype codegen-neutral. This pass repeats
+it across the rest of the V.32 module.
+
+### Scope and result
+
+Every remaining `(struct v32_modem *)` cast in `src/` was on a parameter named
+`modem`, and every one reached the object base with no negative adjustment
+(`modem->hdx`, `modem->fp`, `modem->params`, `modem->flags`, `modem->status`,
+`modem->status_word`, `modem->byte_32`). **All were retyped; none is a
+sub-view, a byte pointer, or multi-target in its function.** No `.cpp` caller
+exists for any of these symbols (`grep` over `src/` and `test/` found none),
+so the C implicit-conversion argument applies and no caller needed an explicit
+cast.
+
+| file | explicit casts removed | definition parameters retyped | owning header / prototypes changed |
+|---|---|---|---|
+| `v32data.c` | 3 | 2 | `v32data.h` (2) |
+| `v32demod.c` | 1 | 1 | `v32demod.h` (1) |
+| `v32fpctl.c` | 11 | 20 | `v32fpctl.h` (20) |
+| `v32hdx.c` | 3 | 2 | `v32hdx.h` (2) |
+| `V32mod.c` | 11 | 3 | `v32fpstat.h` (`V32FP_modem`, `v32_protocol_fn`) |
+| `v32nsans.c` | 13 | 1 | `v32hdxst.h` |
+| `v32nsloop.c` | 5 | 1 | `v32hdxst.h` |
+| `v32nsorg.c` | 10 | 1 | `v32hdxst.h` |
+| `v32nsrng.c` | 28 | 2 | `v32hdxst.h` |
+| `V32rxhdx.c` | 26 | 12 | `v32hdxst.h` |
+| `v32seq.c` | 8 | 14 | `v32seq.h` (13) |
+| `V32stc.c` | 21 | 2 | `v32fpstat.h` (`V32FP_control`, `V32FP_status`) |
+| `V32TXHDX.c` | 1 | 8 | `v32hdxst.h` |
+| `v32fpdisp-common.h` | 3 (macro-internal) | — | `HDX`/`FP`/`PARAMS` became cast-free |
+
+**144 `(struct v32_modem *)` occurrences removed in total** — 141 explicit plus
+the three inside `v32fpdisp-common.h`'s `HDX`/`FP`/`PARAMS` macros. None
+remains anywhere in `src/` or `include/`.
+
+Four function-pointer typedefs carry the base type now, so the state and
+protocol tables stay type-correct without a cast at the table:
+
+- `v32_txhdx_fn`, `v32_rxhdx_fn` (`v32struct.h`; a `struct v32_modem;`
+  forward declaration was added ahead of them),
+- `v32_nextstate_fn` (`v32hdxst.h`), and
+- `v32_protocol_fn` (`v32fpstat.h`).
+
+### Holders left, and why
+
+None in this tranche. The only V.32 holder that reads as a sub-view is
+`v32anstone.c`'s `ctx` -> `struct v32_ans_tone *`; it carries **no
+`(struct v32_modem *)` cast**, so it is not this change and no cast is removed
+there. `v32fpctl.h`'s and the other headers' `struct v32_modem;` forward
+declarations were already present or added, and no caller needed a cast.
+
+### Consequence for the test apparatus, stated
+
+The unit fixtures hold the instance as `unsigned char obj[OBJ_SIZE]` and pass
+it directly (e.g. `V32AnsNextState(fa.obj)`). A `struct v32_modem *` parameter
+is an incompatible pointer type for an `unsigned char *` argument, so those
+call sites now emit `-Wincompatible-pointer-types` **warnings** under a modern
+compiler. **No cast was added at any caller** (net cast change -144 / +0); the
+period compiler builds them, and the differential tier is unaffected. The
+edited TUs themselves are clean under
+`gcc -m32 -Werror=incompatible-pointer-types -fsyntax-only -Iinclude -Isrc`.
+
+### Verification
+
+Gentoo `make phase` exited 0, **`period differential: 375 passed, 0 failed`**
+and `phase boundary: period differential and structural checks all OK`. Log:
+`build/structure-issue154/gates.log`.
+
+All **656 `build/period/*.o` objects are byte-identical** to the pre-edit
+snapshot (`/home/philpem/slmodem/tmp/issue154-before.sha256` vs
+`issue154-after.sha256`, `diff` empty; 932 including the `testhost` copies).
+The gate recompiled all 281 period objects from the changed sources — e.g.
+`src_pump_v32_v32data.o` and `src_pump_v32_V32rxhdx.o` are dated 04:39:26/27,
+after the 04:31 source and header edits — so the identity is real and not a
+stale-object artefact.
+
+`anchorcheck.py` reports **272 suites, 10040 mutations, 0 anchors matching
+other than exactly once**; 17 mutation anchors in `v32data`, `v32fpctl`,
+`v32fpsub`, `v32hdx` and `v32seq` referenced the retired cast text and their
+`find`/`replace` strings were transformed to the cast-free spelling.
+
+**#154 disposition:** complete. Every base-pointing V.32 holder is
+`struct v32_modem *` with its casts gone; no holder was left for a sub-view,
+multi-target or C++-caller reason.

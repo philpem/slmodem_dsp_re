@@ -113,10 +113,10 @@
 #include "dsplib/v32seq.h"
 #include "dsplib/v32state.h"
 
-/* The instance is not modelled; see v32hdx.h.  These are the only accessors. */
+/* The instance is `struct v32_modem`; see v32hdx.h.  These are the only accessors. */
 
-#define HDX(m)		(((struct v32_modem *)(m))->hdx)
-#define FP(m)		(((struct v32_modem *)(m))->fp)
+#define HDX(m)		((m)->hdx)
+#define FP(m)		((m)->fp)
 
 
 /* ------------------------------------------------------------------------ */
@@ -290,7 +290,7 @@
 /* ------------------------------------------------------------------------ */
 
 void
-RxHdxTone(void *modem, short *in, unsigned short *out, unsigned short *count)
+RxHdxTone(struct v32_modem *modem, short *in, unsigned short *out, unsigned short *count)
 {
 	struct v32_hdx *hdx = HDX(modem);
 
@@ -301,8 +301,8 @@ RxHdxTone(void *modem, short *in, unsigned short *out, unsigned short *count)
 	 * Three terms, and the object tests them in this order with two early
 	 * exits into the body: any one of them runs the detector.
 	 */
-	if (((struct v32_modem *)(modem))->params.protocol != 1
-	    || (((struct v32_modem *)(modem))->params.options & V32_OPT_0400) != 0
+	if (modem->params.protocol != 1
+	    || (modem->params.options & V32_OPT_0400) != 0
 	    || hdx->state_left > 180) {
 		/* The object passes a fourth argument here; see the header. */
 		FPM_AGC_agc((&hdx->agc), in, *count);
@@ -314,8 +314,8 @@ RxHdxTone(void *modem, short *in, unsigned short *out, unsigned short *count)
 
 	hdx = HDX(modem);
 	if (hdx->timer >= hdx->limit) {
-		((struct v32_modem *)(modem))->flags |= V32_FLAG_FAULT;
-		((struct v32_modem *)(modem))->status = V32_STATUS_10;
+		modem->flags |= V32_FLAG_FAULT;
+		modem->status = V32_STATUS_10;
 		hdx->tx_state = TxHdxNoCarrier;
 		hdx->rx_state = RxHdxError;
 		hdx->state = V32_STATE_ERROR;
@@ -325,7 +325,7 @@ RxHdxTone(void *modem, short *in, unsigned short *out, unsigned short *count)
 }
 
 void
-RxHdxNoSignal(void *modem, short *in, unsigned short *out,
+RxHdxNoSignal(struct v32_modem *modem, short *in, unsigned short *out,
 	      unsigned short *count)
 {
 	struct v32_hdx *hdx = HDX(modem);
@@ -348,8 +348,8 @@ RxHdxNoSignal(void *modem, short *in, unsigned short *out,
 
 	hdx = HDX(modem);
 	if (hdx->timer >= hdx->limit) {
-		((struct v32_modem *)(modem))->flags |= V32_FLAG_FAULT;
-		((struct v32_modem *)(modem))->status = V32_STATUS_11;
+		modem->flags |= V32_FLAG_FAULT;
+		modem->status = V32_STATUS_11;
 		hdx->tx_state = TxHdxNoCarrier;
 		hdx->rx_state = RxHdxError;
 		hdx->state = V32_STATE_ERROR;
@@ -359,7 +359,7 @@ RxHdxNoSignal(void *modem, short *in, unsigned short *out,
 }
 
 void
-RxHdxPhsReversal(void *modem, short *in, unsigned short *out,
+RxHdxPhsReversal(struct v32_modem *modem, short *in, unsigned short *out,
 		 unsigned short *count)
 {
 	struct v32_hdx *hdx;
@@ -445,8 +445,8 @@ RxHdxPhsReversal(void *modem, short *in, unsigned short *out,
 	}
 
 	if (hdx->timer >= hdx->limit) {
-		((struct v32_modem *)(modem))->flags |= V32_FLAG_FAULT;
-		((struct v32_modem *)(modem))->status = V32_STATUS_12;
+		modem->flags |= V32_FLAG_FAULT;
+		modem->status = V32_STATUS_12;
 		hdx->tx_state = TxHdxNoCarrier;
 		hdx->rx_state = RxHdxError;
 		hdx->state = V32_STATE_ERROR;
@@ -456,7 +456,7 @@ RxHdxPhsReversal(void *modem, short *in, unsigned short *out,
 }
 
 void
-RxHdxRateSequence(void *modem, short *in, unsigned short *out,
+RxHdxRateSequence(struct v32_modem *modem, short *in, unsigned short *out,
 		  unsigned short *count)
 {
 	struct v32_hdx *hdx = HDX(modem);
@@ -481,8 +481,8 @@ RxHdxRateSequence(void *modem, short *in, unsigned short *out,
 
 	hdx = HDX(modem);
 	if (hdx->timer >= hdx->limit) {
-		((struct v32_modem *)(modem))->flags |= V32_FLAG_FAULT;
-		((struct v32_modem *)(modem))->status = V32_STATUS_13;
+		modem->flags |= V32_FLAG_FAULT;
+		modem->status = V32_STATUS_13;
 		hdx->tx_state = TxHdxNoCarrier;
 		hdx->rx_state = RxHdxError;
 		hdx->state = V32_STATE_ERROR;
@@ -492,7 +492,7 @@ RxHdxRateSequence(void *modem, short *in, unsigned short *out,
 }
 
 void
-RxHdxSequence(void *modem, short *in, unsigned short *out,
+RxHdxSequence(struct v32_modem *modem, short *in, unsigned short *out,
 	      unsigned short *count)
 {
 	struct v32_hdx *hdx = HDX(modem);
@@ -509,8 +509,8 @@ RxHdxSequence(void *modem, short *in, unsigned short *out,
 
 	hdx = HDX(modem);
 	if (hdx->timer >= hdx->limit) {
-		((struct v32_modem *)(modem))->flags |= V32_FLAG_FAULT;
-		((struct v32_modem *)(modem))->status = V32_STATUS_13;
+		modem->flags |= V32_FLAG_FAULT;
+		modem->status = V32_STATUS_13;
 		hdx->tx_state = TxHdxNoCarrier;
 		hdx->rx_state = RxHdxError;
 		hdx->state = V32_STATE_ERROR;
@@ -520,7 +520,7 @@ RxHdxSequence(void *modem, short *in, unsigned short *out,
 }
 
 void
-RxHdxSequenceE(void *modem, short *in, unsigned short *out,
+RxHdxSequenceE(struct v32_modem *modem, short *in, unsigned short *out,
 	       unsigned short *count)
 {
 	struct v32_hdx *hdx = HDX(modem);
@@ -539,7 +539,7 @@ RxHdxSequenceE(void *modem, short *in, unsigned short *out,
 			(hdx->short_48
 			 + hdx->symbol_len);
 		if (hdx->short_48 > 0x17)
-			((struct v32_modem *)(modem))->flags |= V32_FLAG_04;
+			modem->flags |= V32_FLAG_04;
 	} else if (DetSequence(modem, (const short *)out, *count) >= 0) {
 		short *regs;
 
@@ -561,8 +561,8 @@ RxHdxSequenceE(void *modem, short *in, unsigned short *out,
 		hdx = HDX(modem);
 		if (hdx->timer
 		    >= hdx->limit) {
-			((struct v32_modem *)(modem))->flags |= V32_FLAG_FAULT;
-			((struct v32_modem *)(modem))->status = V32_STATUS_13;
+			modem->flags |= V32_FLAG_FAULT;
+			modem->status = V32_STATUS_13;
 			hdx->tx_state = TxHdxNoCarrier;
 			hdx->rx_state = RxHdxError;
 			hdx->state = V32_STATE_ERROR;
@@ -573,7 +573,7 @@ RxHdxSequenceE(void *modem, short *in, unsigned short *out,
 }
 
 void
-RxHdxData(void *modem, short *in, unsigned short *out, unsigned short *count)
+RxHdxData(struct v32_modem *modem, short *in, unsigned short *out, unsigned short *count)
 {
 	struct v32_hdx *hdx = HDX(modem);
 	unsigned short n;
@@ -588,7 +588,7 @@ RxHdxData(void *modem, short *in, unsigned short *out, unsigned short *count)
 }
 
 void
-RxHdxToneData(void *modem, short *in, unsigned short *out,
+RxHdxToneData(struct v32_modem *modem, short *in, unsigned short *out,
 	      unsigned short *count)
 {
 	struct v32_hdx *hdx = HDX(modem);
@@ -603,8 +603,8 @@ RxHdxToneData(void *modem, short *in, unsigned short *out,
 
 	hdx = HDX(modem);
 	if (hdx->timer >= hdx->limit) {
-		((struct v32_modem *)(modem))->flags |= V32_FLAG_FAULT;
-		((struct v32_modem *)(modem))->status = V32_STATUS_14;
+		modem->flags |= V32_FLAG_FAULT;
+		modem->status = V32_STATUS_14;
 		hdx->tx_state = TxHdxNoCarrier;
 		hdx->rx_state = RxHdxError;
 		hdx->state = V32_STATE_ERROR;
@@ -618,7 +618,7 @@ RxHdxToneData(void *modem, short *in, unsigned short *out,
 }
 
 void
-RxHdxSTone(void *modem, short *in, unsigned short *out, unsigned short *count)
+RxHdxSTone(struct v32_modem *modem, short *in, unsigned short *out, unsigned short *count)
 {
 	struct v32_hdx *hdx = HDX(modem);
 	short det;
@@ -651,8 +651,8 @@ RxHdxSTone(void *modem, short *in, unsigned short *out, unsigned short *count)
 
 	hdx = HDX(modem);
 	if (hdx->timer >= hdx->limit) {
-		((struct v32_modem *)(modem))->flags |= V32_FLAG_FAULT;
-		((struct v32_modem *)(modem))->status = V32_STATUS_14;
+		modem->flags |= V32_FLAG_FAULT;
+		modem->status = V32_STATUS_14;
 		hdx->tx_state = TxHdxNoCarrier;
 		hdx->rx_state = RxHdxError;
 		hdx->state = V32_STATE_ERROR;
@@ -662,7 +662,7 @@ RxHdxSTone(void *modem, short *in, unsigned short *out, unsigned short *count)
 }
 
 void
-RxHdxEpoch(void *modem, short *in, unsigned short *out, unsigned short *count)
+RxHdxEpoch(struct v32_modem *modem, short *in, unsigned short *out, unsigned short *count)
 {
 	struct v32_hdx *hdx = HDX(modem);
 
@@ -676,8 +676,8 @@ RxHdxEpoch(void *modem, short *in, unsigned short *out, unsigned short *count)
 
 	hdx = HDX(modem);
 	if (hdx->timer >= hdx->limit) {
-		((struct v32_modem *)(modem))->flags |= V32_FLAG_FAULT;
-		((struct v32_modem *)(modem))->status = V32_STATUS_15;
+		modem->flags |= V32_FLAG_FAULT;
+		modem->status = V32_STATUS_15;
 		hdx->tx_state = TxHdxNoCarrier;
 		hdx->rx_state = RxHdxError;
 		hdx->state = V32_STATE_ERROR;
@@ -693,15 +693,15 @@ RxHdxEpoch(void *modem, short *in, unsigned short *out, unsigned short *count)
  * -- demodulates the block anyway, and reports no symbols.
  */
 void
-RxHdxError(void *modem, short *in, unsigned short *out, unsigned short *count)
+RxHdxError(struct v32_modem *modem, short *in, unsigned short *out, unsigned short *count)
 {
-	((struct v32_modem *)(modem))->flags |= V32_FLAG_FAULT;
+	modem->flags |= V32_FLAG_FAULT;
 	DemodDataV32(modem, in, out, *count);
 	*count = 0;
 }
 
 void
-RxHdxNull(void *modem, short *in, unsigned short *out, unsigned short *count)
+RxHdxNull(struct v32_modem *modem, short *in, unsigned short *out, unsigned short *count)
 {
 	struct v32_hdx *hdx = HDX(modem);
 
@@ -709,8 +709,8 @@ RxHdxNull(void *modem, short *in, unsigned short *out, unsigned short *count)
 		(unsigned int)hdx->symbol_len;
 
 	if (hdx->timer >= hdx->limit) {
-		((struct v32_modem *)(modem))->flags |= V32_FLAG_FAULT;
-		((struct v32_modem *)(modem))->status = V32_STATUS_10;
+		modem->flags |= V32_FLAG_FAULT;
+		modem->status = V32_STATUS_10;
 		hdx->tx_state = TxHdxNoCarrier;
 		hdx->rx_state = RxHdxError;
 		hdx->state = V32_STATE_ERROR;

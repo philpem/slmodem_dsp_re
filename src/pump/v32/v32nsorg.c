@@ -154,12 +154,12 @@
 #include "dsplib/v32smc.h"		/* struct v32_smc                     */
 #include "dsplib/v32state.h"
 
-/* The instance is not modelled; see v32hdx.h.  These are the only accessors. */
+/* The instance is `struct v32_modem`; see v32hdx.h.  These are the only accessors. */
 
 
 /* Re-dereferenced at every use, on purpose -- see the header comment. */
-#define HDX(m) (((struct v32_modem *)(m))->hdx)
-#define FP(m) (((struct v32_modem *)(m))->fp)
+#define HDX(m) ((m)->hdx)
+#define FP(m) ((m)->fp)
 
 
 /*
@@ -300,7 +300,7 @@
 #define V32_TONE_AA_HZ		600
 
 void
-V32OrgNextState(void *modem)
+V32OrgNextState(struct v32_modem *modem)
 {
 	switch (HDX(modem)->state) {
 
@@ -379,10 +379,10 @@ V32OrgNextState(void *modem)
 	case V32_STATE_D2: {
 		struct fpm_tone *tone;
 
-		((struct v32_modem *)modem)->byte_32 |= 0x08;
-		((struct v32_modem *)modem)->status = V32_STATUS_0F;
-		((struct v32_modem *)modem)->flags = (unsigned char)
-			((((struct v32_modem *)modem)->flags
+		modem->byte_32 |= 0x08;
+		modem->status = V32_STATUS_0F;
+		modem->flags = (unsigned char)
+			((modem->flags
 			  & ~(unsigned)V32_FLAG_SILENCE)
 			 | V32_FLAG_CARRIER);
 
@@ -634,8 +634,8 @@ V32OrgNextState(void *modem)
 		 */
 		if (DecodeRateSeq(modem, (unsigned short)LoadReg(modem, 3))
 		    == V32_RATE_NONE) {
-			((struct v32_modem *)modem)->flags |= V32_FLAG_FAULT;
-			((struct v32_modem *)modem)->status = V32_STATUS_17;
+			modem->flags |= V32_FLAG_FAULT;
+			modem->status = V32_STATUS_17;
 		}
 		SetAdaptEcV32(modem, V32_ADAPTEC_OFF);
 		InitGenSequence(modem,
@@ -689,7 +689,7 @@ V32OrgNextState(void *modem)
 			(int)HDX(modem)->limit;
 		HDX(modem)->timer = 0;
 		HDX(modem)->rx_state = (void *)RxHdxData;
-		((struct v32_modem *)modem)->flags |=
+		modem->flags |=
 			(V32_FLAG_01 | V32_FLAG_08 | V32_FLAG_10);
 
 		rate = (unsigned short)
@@ -700,7 +700,7 @@ V32OrgNextState(void *modem)
 		 * F7803 it is the LOCAL that is `unsigned short` and not
 		 * `V32_CONNECT`, which `v32hdxst.h` keeps as `short`.
 		 */
-		((struct v32_modem *)modem)->status =
+		modem->status =
 			(unsigned char)(unsigned short)V32_CONNECT[rate];
 		((struct v32_dec *)FP(modem)->fse.cfg.owner)->retrain = 0;
 		SetAdaptEqV32(modem, V32_ADAPTEQ_MU1);
