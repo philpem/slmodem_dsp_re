@@ -39,7 +39,8 @@ where mutations.json is a list of objects:
       "replace": "..."}]
 
 Each mutation is applied alone, the target rebuilt, the test run, and the
-source restored.  ALL OF THAT HAPPENS IN A COPY of the tree, under $TMPDIR:
+source restored.  ALL OF THAT HAPPENS IN A COPY of the tree, under
+MUTATE_WORKDIR (a DISK path, never a tmpfs -- see workdir_root()):
 this script never writes to the tree you are working in, so no way of killing
 it can leave a deliberate defect in your source.  See "THE RUN HAPPENS IN A
 COPY" below for what that costs and why a plain copy rather than hardlinks.
@@ -303,6 +304,62 @@ SUITES = "test/mutations/suites.json"
 COPY = ("Makefile", "src", "include", "test", "tools", "docs")
 WORKDIR_PREFIX = "mutate-"
 
+#
+# WHERE THE PER-WORKER COPIES LIVE, AND WHY IT IS NOT $TMPDIR.
+#
+# `tempfile.gettempdir()` is /tmp, and on a box where /tmp is a tmpfs that is
+# RAM, not disk -- and RAM that cannot be swapped.  A copy is the tree plus
+# build/ (about a gigabyte here), so N jobs held N gigabytes of RAM, and
+# `mutsnap --update` on 2026-09-19 OOM-killed the opencode session that ran it
+# (the kernel logged the survivor at total-vm 78 GB with swap 152 kB free).
+# The scratch is DISK by contract now: MUTATE_WORKDIR, defaulting under $HOME,
+# and a tmpfs is refused unless deliberately allowed.
+#
+WORKDIR_DEFAULT = os.path.join(os.path.expanduser("~"), ".cache",
+                               "slmodem-mutate")
+
+
+def mount_fstype(path):
+    """The filesystem type of the mount covering `path`, or None.
+
+    Parses /proc/mounts and keeps the LONGEST matching mount point, because
+    the shortest would be `/` and every path would answer that.
+    """
+    path = os.path.abspath(path)
+    best = ("", None)
+    try:
+        with open("/proc/mounts") as f:
+            for line in f:
+                parts = line.split()
+                if len(parts) < 3:
+                    continue
+                mp = parts[1].replace("\\040", " ")
+                if path == mp or path.startswith(mp.rstrip("/") + "/"):
+                    if len(mp) > len(best[0]):
+                        best = (mp, parts[2])
+    except OSError:
+        return None
+    return best[1]
+
+
+def workdir_root():
+    """The DISK directory the per-worker copies are made in.
+
+    REFUSES a tmpfs: the copy is RAM there, and the whole point of this
+    function is that running a suite cannot take the machine down.  Set
+    MUTATE_WORKDIR_ALLOW_TMPFS=1 to override deliberately.
+    """
+    root = os.environ.get("MUTATE_WORKDIR") or WORKDIR_DEFAULT
+    os.makedirs(root, exist_ok=True)
+    if (mount_fstype(root) == "tmpfs"
+            and os.environ.get("MUTATE_WORKDIR_ALLOW_TMPFS") != "1"):
+        sys.exit("mutate.py: MUTATE_WORKDIR is on a tmpfs (%s).  The worker "
+                 "copies are ~1 GB each and tmpfs pages are RAM, so this is "
+                 "how a mutation run OOM-kills the machine it is run from.  "
+                 "Point MUTATE_WORKDIR at a disk path, or set "
+                 "MUTATE_WORKDIR_ALLOW_TMPFS=1 to do it anyway." % root)
+    return root
+
 
 def _cp(paths, dest):
     """`cp -a`, because 20 ms of it is not worth reimplementing in Python."""
@@ -318,8 +375,7 @@ def reap_stale_workdirs():
     pid that has been REUSED reads as alive, which errs towards keeping
     garbage.  PermissionError likewise means the process exists.
     """
-    for d in glob.glob(os.path.join(tempfile.gettempdir(),
-                                    WORKDIR_PREFIX + "*")):
+    for d in glob.glob(os.path.join(workdir_root(), WORKDIR_PREFIX + "*")):
         m = re.match(WORKDIR_PREFIX + r"(\d+)-", os.path.basename(d))
         if not m or not os.path.isdir(d):
             continue
@@ -374,7 +430,8 @@ def enter_workdir():
     os.environ["BLOB"] = os.path.abspath(
         subprocess.run(["make", "-s", "print-BLOB"], capture_output=True,
                        text=True, check=True).stdout.strip())
-    d = tempfile.mkdtemp(prefix=WORKDIR_PREFIX + "%d-" % os.getpid())
+    d = tempfile.mkdtemp(prefix=WORKDIR_PREFIX + "%d-" % os.getpid(),
+                         dir=workdir_root())
     #
     # Registered on the ABSOLUTE path and before the chdir, because atexit runs
     # after it.  Same reason the lock below is absolute.
@@ -709,24 +766,50 @@ def take_lock(root=None):
 
 
 #
-# HALF THE CORES, NOT ALL OF THEM.
+# HALF THE CORES, NOT ALL OF THEM -- AND NEVER MORE THAN RAM AND DISK AFFORD.
 #
 # Every mutation is a build plus a test run in its own copy, so N jobs is N
-# concurrent compilers, and `--jobs $(nproc)` leaves nothing for the machine
-# to be used with.  A full re-record is 4653 mutations and takes tens of
-# minutes; making it unusable-for-anything-else for that whole time is a bad
-# trade for the last few percent of throughput.
+# concurrent compilers and N tree copies on disk.  A full re-record is 4653
+# mutations and takes tens of minutes; making the machine unusable for that
+# whole time is a bad trade for the last few percent of throughput.
 #
-# It is a DEFAULT and not a cap: pass `--jobs N` for whatever N suits.  Note
-# mutate.py's own note at the shard code that a real bug was found BECAUSE
-# jobs were high and lowering them would have hidden it -- so this is a load
-# choice, not a determinism one, and running higher deliberately is fine.
+# THIS IS A LOAD BOUND, NOT A DETERMINISM ONE.  `os.cpu_count()` reads the
+# logical CPUs, which on this box is 6 while `nproc` is 3, so a cpu-only
+# default started three ~1 GB workers on a machine with 3.8 GB of RAM and
+# OOM-killed the session.  Free RAM and free disk are part of the default now.
+# It is still a DEFAULT and not a cap: pass `--jobs N` for whatever N suits --
+# but a tmpfs MUTATE_WORKDIR is refused in workdir_root() regardless.
 #
+WORKER_RAM_MB = 400      # one compiler plus one test binary, with slack
+WORKER_DISK_MB = 1200    # one tree copy; build/ is the bulk, measured ~1 GB
+JOBS_HEADROOM_MB = 500   # leave the machine this much RAM and disk to live on
+
+
+def _mem_available_mb():
+    try:
+        with open("/proc/meminfo") as f:
+            for line in f:
+                if line.startswith("MemAvailable:"):
+                    return int(line.split()[1]) // 1024
+    except (OSError, ValueError):
+        pass
+    return None
+
+
 def default_jobs():
     try:
-        return max(1, (os.cpu_count() or 2) // 2)
+        jobs = max(1, (os.cpu_count() or 2) // 2)
     except Exception:
-        return 1
+        jobs = 1
+    avail = _mem_available_mb()
+    if avail is not None:
+        jobs = min(jobs, max(1, (avail - JOBS_HEADROOM_MB) // WORKER_RAM_MB))
+    try:
+        free = shutil.disk_usage(workdir_root()).free // (1024 * 1024)
+        jobs = min(jobs, max(1, (free - JOBS_HEADROOM_MB) // WORKER_DISK_MB))
+    except OSError:
+        pass
+    return max(1, jobs)
 
 
 
@@ -752,10 +835,11 @@ def main():
                          "is marked SUBSET and cannot be recorded as a "
                          "baseline")
     ap.add_argument("--jobs", type=int, metavar="N", default=default_jobs(),
-                    help="run the suite over N copies at once; each costs "
-                         "about 21 MB of temporary disk and the verdicts are "
-                         "identical to a serial run.  Default is HALF the "
-                         "cores (%d here) -- see default_jobs()"
+                    help="run the suite over N copies at once; each copy is "
+                         "the tree plus build/ (~1 GB) under MUTATE_WORKDIR, "
+                         "never a tmpfs, and the verdicts are identical to a "
+                         "serial run.  Default is bounded by cores, free RAM "
+                         "and free disk (%d here) -- see default_jobs()"
                          % default_jobs())
     ap.add_argument("--shard", metavar="I/N",
                     help=argparse.SUPPRESS)   # set by --jobs on its workers
