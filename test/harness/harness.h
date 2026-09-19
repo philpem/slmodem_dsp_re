@@ -440,6 +440,49 @@ void diff_eq_obj_(const char *file, int line, const char *what,
 		     sizeof(type), (long)(input))
 
 /*
+ * Compare two whole objects, but with the caller's FLOAT FIELDS named, so a
+ * rounding-level float difference on the modern tier is reachable by
+ * `HARNESS_FLOAT_TOL` while every non-float byte in the same object stays
+ * exact.  See harness.c for why diff_eq_obj_ itself cannot do this.
+ *
+ * A span is {byte offset, element count, element size} relative to the
+ * object's start; size is 4 for a `float` and 8 for a `double` (the only two
+ * floating-point widths the object uses).  The array must be sorted by offset
+ * and non-overlapping.  This is the same {offset, count} idiom the `skip`
+ * lists in the fixtures already use for heap pointers, with the type supplied
+ * instead of a byte blanking.
+ *
+ *   static const struct diff_float_span fs[] = {
+ *       { 0x0c, 1, 8 },		// a double
+ *       { 0x54, 4, 4 },		// four floats
+ *   };
+ *   diff_eq_obj_float_("after resample", "V90Resampler", a, b, n,
+ *                      fs, sizeof fs / sizeof fs[0], sample);
+ */
+struct diff_float_span {
+	unsigned off;		/* byte offset of the first element */
+	unsigned count;		/* number of consecutive elements   */
+	unsigned size;		/* 4 (float) or 8 (double)          */
+};
+
+void diff_eq_obj_float_(const char *file, int line, const char *what,
+			const char *type, const void *got, const void *want,
+			size_t n, const struct diff_float_span *spans,
+			size_t nspans, long input);
+
+/*
+ * Compare two doubles, with the same tier tolerance and NaN handling as
+ * `diff_eq_float`.  A `double` field (the resampler's `phase` is the one in
+ * the object) has the same rounding-level portability problem a float does.
+ */
+void diff_eq_double_(const char *file, int line, const char *fmt, double got,
+		     double want, long input);
+
+#define diff_eq_double(fmt, got, want, input) \
+	diff_eq_double_(__FILE__, __LINE__, (fmt), (double)(got), \
+			(double)(want), (long)(input))
+
+/*
  * Debug capture: with this set, each side's dsplibs_debug_printf appends to
  * its own transcript, so the diagnostic paths can be compared like any other
  * output.  Side 0 is the reconstruction, side 1 the blob.  Remember to raise

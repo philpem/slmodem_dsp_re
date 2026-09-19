@@ -549,10 +549,20 @@ $(BUILD)/safety/t_float_tol: test/safety/t_float_tol.c $(SAFETY_HARNESS)
 	@mkdir -p $(dir $@)
 	$(CC) $(ARCH32) $(LDFLAGS) -Iinclude -Itest/harness -o $@ $^ -lm
 
+# The negative control for the field-typed object comparison
+# (diff_eq_obj_float_): a float perturbed beyond the tolerance must still
+# fail, and a changed index, flag or non-float tail word must still fail.  It
+# is adaptive -- a 1-ULP float passes only under -DHARNESS_FLOAT_TOL -- and
+# prints its own denominator.
+$(BUILD)/safety/t_field_typed: test/safety/t_field_typed.c $(SAFETY_HARNESS)
+	@mkdir -p $(dir $@)
+	$(CC) $(ARCH32) $(LDFLAGS) -Iinclude -Itest/harness -o $@ $^ -lm
+
 safety: firewall strings offsets refs $(BUILD)/safety/t_alloc_sizes \
-        $(BUILD)/safety/t_float_tol
+        $(BUILD)/safety/t_float_tol $(BUILD)/safety/t_field_typed
 	@./$(BUILD)/safety/t_alloc_sizes
 	@./$(BUILD)/safety/t_float_tol
+	@./$(BUILD)/safety/t_field_typed
 
 $(BUILD):
 	@mkdir -p $(BUILD)

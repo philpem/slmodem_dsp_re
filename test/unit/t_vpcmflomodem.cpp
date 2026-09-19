@@ -262,8 +262,24 @@ compare_all(const char *what, long tag)
 
 	snap_vp(a, 0);
 	snap_vp(b, 1);
-	diff_eq_obj_(__FILE__, __LINE__, what, "VPcmFloModem block",
-		     a, b, VPCM_SLOT, tag);
+	/*
+	 * The four VPCM_L2 float arrays at +0x7dd8..+0x7f27 are the modelled
+	 * float fields in this 0x7f28-byte block; naming them lets the modern
+	 * tier's rounding-level tolerance reach them while every other byte
+	 * stays exact.
+	 */
+	{
+		static const struct diff_float_span spans[] = {
+			{ 0x7dd8, VPCM_L2, 4 },
+			{ 0x7e2c, VPCM_L2, 4 },
+			{ 0x7e80, VPCM_L2, 4 },
+			{ 0x7ed4, VPCM_L2, 4 },
+		};
+
+		diff_eq_obj_float_(__FILE__, __LINE__, what, "VPcmFloModem block",
+				   a, b, VPCM_SLOT, spans,
+				   sizeof spans / sizeof spans[0], tag);
+	}
 
 	snap_p90(a, 0);
 	snap_p90(b, 1);

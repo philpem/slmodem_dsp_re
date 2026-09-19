@@ -472,7 +472,17 @@ dirty_filter(unsigned int nden, unsigned int nnum, unsigned int blockSize)
  * The whole-object comparison, with the two heap pointers stood aside.  Three
  * call sites want it now, so it is one function rather than three copies of
  * the same six lines.
+ *
+ * The six float fields (+0x04..+0x1b: threshold, ratio and the four
+ * accumulators) are named as float spans, so the modern tier's rounding-level
+ * float tolerance reaches them; the integer counters, flags and the answer at
+ * +0x1c..+0x3b stay exact.  A changed counter or a changed `detected` is still
+ * a hard failure.
  */
+static const struct diff_float_span gtd_float_spans[] = {
+	{ 0x04, 6 },		/* threshold, ratio, acc_0c, acc_10, acc_14, acc_18 */
+};
+
 static void
 compare_objects_(const char *what, int tag)
 {
@@ -481,8 +491,10 @@ compare_objects_(const char *what, int tag)
 
 	((GenericToneDetector *)ours)->filter = 0;
 	((GenericToneDetector *)theirs)->filter = 0;
-	diff_eq_obj_(__FILE__, __LINE__, what, "GenericToneDetector",
-		     ours, theirs, OBJ, (long)tag);
+	diff_eq_obj_float_(__FILE__, __LINE__, what, "GenericToneDetector",
+			   ours, theirs, OBJ, gtd_float_spans,
+			   sizeof gtd_float_spans / sizeof gtd_float_spans[0],
+			   (long)tag);
 	((GenericToneDetector *)ours)->filter = pa;
 	((GenericToneDetector *)theirs)->filter = pb;
 }

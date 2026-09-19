@@ -1077,24 +1077,42 @@ run_ctor(void)
 					    a->resampler.historyLen ==
 					    b->resampler.historyLen, 1, trial);
 				if (a->resampler.coeffs != 0 &&
-				    b->resampler.coeffs != 0 && nc != 0)
-					diff_eq_obj_(__FILE__, __LINE__,
-						     "the resampler's "
-						     "coefficient bank",
-						     "float[]",
-						     a->resampler.coeffs,
-						     b->resampler.coeffs, nc,
-						     trial);
+				    b->resampler.coeffs != 0 && nc != 0) {
+					/*
+					 * A pure float bank: the modern
+					 * tier's rounding-level tolerance must
+					 * reach every element, and there is no
+					 * non-float byte in it to protect.
+					 */
+					struct diff_float_span span = {
+						0, (unsigned)(nc / sizeof(float))
+					};
+
+					diff_eq_obj_float_(__FILE__, __LINE__,
+							   "the resampler's "
+							   "coefficient bank",
+							   "float[]",
+							   a->resampler.coeffs,
+							   b->resampler.coeffs,
+							   nc, &span, 1, trial);
+				}
 				if (a->resampler.history != 0 &&
-				    b->resampler.history != 0)
-					diff_eq_obj_(__FILE__, __LINE__,
-						     "the resampler's history",
-						     "float[]",
-						     a->resampler.history,
-						     b->resampler.history,
-						     (size_t)a->resampler
-						     .historyLen *
-						     sizeof(float), trial);
+				    b->resampler.history != 0) {
+					struct diff_float_span span = {
+						0, (unsigned)a->resampler
+						   .historyLen
+					};
+
+					diff_eq_obj_float_(__FILE__, __LINE__,
+							   "the resampler's history",
+							   "float[]",
+							   a->resampler.history,
+							   b->resampler.history,
+							   (size_t)a->resampler
+							   .historyLen *
+							   sizeof(float), &span,
+							   1, trial);
+				}
 			}
 
 			/*

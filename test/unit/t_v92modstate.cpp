@@ -450,11 +450,43 @@ compare_bts(const char *what, long trial)
 }
 
 /*
+ * A pure float array compared element-wise, so the modern tier's
+ * rounding-level tolerance reaches every element where a byte `memcmp` could
+ * not.  There is no non-float byte to protect.  `file`/`line` are the CALLER's,
+ * so a failure names the comparison and not this helper.
+ */
+static void
+cmp_float_array_(const char *file, int line, const char *what, const float *a,
+		 const float *b, unsigned n, long trial)
+{
+	struct diff_float_span span = { 0, n, 4 };
+
+	if (n == 0)
+		return;
+	diff_eq_obj_float_(file, line, what, "float[]", a, b,
+			   (size_t)n * sizeof(float), &span, 1, trial);
+}
+
+#define cmp_float_array(what, a, b, n, trial) \
+	cmp_float_array_(__FILE__, __LINE__, (what), (a), (b), (n), (trial))
+
+/*
  * The resampler, 0x4c bytes: the vptr and its two buffers are the only things
  * that cannot agree.  `phase` at +0x0c is a DOUBLE and is what
  * `mkResampledSignal`'s phase change moves, so it is the one field this whole
  * file exists to compare.
+ *
+ * The double and the float fields (pending[5] at +0x14, ppmScale at +0x2c,
+ * timingOffset at +0x48) are named as typed spans, so the modern tier's
+ * rounding-level tolerance reaches them; the counts and cursors stay exact.
  */
+static const struct diff_float_span rto_spans[] = {
+	{ 0x0c, 1, 8 },		/* double phase       */
+	{ 0x14, 5, 4 },		/* pending[5]         */
+	{ 0x2c, 1, 4 },		/* ppmScale           */
+	{ 0x48, 1, 4 },		/* timingOffset       */
+};
+
 static void
 compare_resampler(const char *what, long trial)
 {
@@ -462,8 +494,9 @@ compare_resampler(const char *what, long trial)
 	memcpy(sub_b, M(1)->resampler, RESSZ);
 	memset(sub_a, 0x77, 12);
 	memset(sub_b, 0x77, 12);
-	diff_eq_obj_(__FILE__, __LINE__, what, "ResamplerTimingOffset", sub_a,
-		     sub_b, (size_t)RESSZ, trial);
+	diff_eq_obj_float_(__FILE__, __LINE__, what, "ResamplerTimingOffset",
+			   sub_a, sub_b, (size_t)RESSZ, rto_spans,
+			   sizeof rto_spans / sizeof rto_spans[0], trial);
 }
 
 /* The queue's occupancy, which is invisible in the modulator's bytes. */
@@ -485,8 +518,9 @@ compare_queue(long trial)
 		    (int)(wa - ba), (int)(wb - bb), trial);
 	diff_eq_int("the queue's read cursor agrees (trial %ld)",
 		    (int)(ra - ba), (int)(rb - bb), trial);
-	diff_eq_int("the queue holds the same floats (trial %ld)",
-		    memcmp(ba, bb, (size_t)(wa - ba)) == 0, 1, trial);
+	cmp_float_array("the queue holds the same floats",
+			(const float *)ba, (const float *)bb,
+			(unsigned)((wa - ba) / (int)sizeof(float)), trial);
 }
 
 /*
@@ -548,8 +582,7 @@ compare_filter(long trial)
 
 	diff_eq_int("the filter's buffer length agrees (trial %ld)", (int)na,
 		    (int)nb, trial);
-	diff_eq_int("the filter's history agrees (trial %ld)",
-		    memcmp(ha, hb, na * sizeof(float)) == 0, 1, trial);
+	cmp_float_array("the filter's history agrees", ha, hb, na, trial);
 }
 
 /*
@@ -1137,14 +1170,12 @@ run_mkres(void)
 			    na > 0u, 1, trial);
 		diff_eq_int("and the first sample was written (trial %ld)",
 			    M(0)->resampleOut[0] > MKRES_UNTOUCHED, 1, trial);
-		diff_eq_int("the resampled block agrees (trial %ld)",
-			    memcmp(M(0)->resampleOut, M(1)->resampleOut,
-				   (NSAMPLES + V92MOD_BUF_SLACK)
-				   * sizeof(float)) == 0, 1, trial);
-		diff_eq_int("the split scratch agrees (trial %ld)",
-			    memcmp(M(0)->resampleTail, M(1)->resampleTail,
-				   (NSAMPLES + V92MOD_BUF_SLACK)
-				   * sizeof(float)) == 0, 1, trial);
+		cmp_float_array("the resampled block agrees",
+				M(0)->resampleOut, M(1)->resampleOut,
+				NSAMPLES + V92MOD_BUF_SLACK, trial);
+		cmp_float_array("the split scratch agrees",
+				M(0)->resampleTail, M(1)->resampleTail,
+				NSAMPLES + V92MOD_BUF_SLACK, trial);
 		compare_all("after mkResampledSignal", trial);
 
 		if (M(0)->phase == V92MOD_PHASE_3
@@ -1866,12 +1897,10 @@ compare_buffers(const char *what, long trial)
 	diff_eq_int("the resampler input agrees (trial %ld)",
 		    memcmp(M(0)->resampleIn, M(1)->resampleIn,
 			   bs * sizeof(float)) == 0, 1, trial);
-	diff_eq_int("the resampled block agrees (trial %ld)",
-		    memcmp(M(0)->resampleOut, M(1)->resampleOut,
-			   ns * sizeof(float)) == 0, 1, trial);
-	diff_eq_int("the split scratch agrees (trial %ld)",
-		    memcmp(M(0)->resampleTail, M(1)->resampleTail,
-			   ns * sizeof(float)) == 0, 1, trial);
+	cmp_float_array("the resampled block agrees", M(0)->resampleOut,
+			M(1)->resampleOut, ns, trial);
+	cmp_float_array("the split scratch agrees", M(0)->resampleTail,
+			M(1)->resampleTail, ns, trial);
 	diff_eq_int("the scrambled bits agree (trial %ld)",
 		    memcmp(M(0)->buf_88, M(1)->buf_88,
 			   M(0)->blockSize * 8u) == 0, 1, trial);
@@ -2142,9 +2171,10 @@ run_progress(void)
 
 			diff_eq_int("the bit count agrees (trial %ld)", (int)na,
 				    (int)nb, trial);
-			diff_eq_int("the samples agree (trial %ld)",
-				    memcmp(prog_out_a, prog_out_b,
-					   sizeof(prog_out_a)) == 0, 1, trial);
+			cmp_float_array("the samples agree", prog_out_a,
+					prog_out_b,
+					sizeof(prog_out_a) / sizeof(float),
+					trial);
 			diff_eq_int("the input words are untouched (trial %ld)",
 				    memcmp(prog_bits_a, prog_bits_b,
 					   sizeof(prog_bits_a)) == 0, 1, trial);
