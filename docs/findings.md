@@ -124786,3 +124786,155 @@ this is the honest boundary of the pass):
 * `t_v34hshak` (SIGSEGV) and `t_v27fax` (FAX) are outside this issue's class.
 
 (2026-09-19)
+
+## F11369. Issue #172 open-decision pass: `t_v90p3ddec` closes field-typed, `t_v90modprog`'s "flag byte" is a float's sign byte, and the three heap-region meta-assertions are measuring a real modern float divergence rather than a too-tight bound
+
+Follow-up to F11368, owner-approved 2026-09-19.  F11368 left thirteen open
+sites with a next discriminating test each.  This pass took them one at a time
+against the object's own instruction, under the rule that a float tolerance
+must never absorb an integer decision.  Two fixtures change in `test/` only;
+`src/` and `include/` are untouched, and `make period` stays **376 passed, 0
+failed**.  Modern tier: **361 green / 15 red**, from 360/16.
+
+**`t_v90p3ddec` -- CLOSED, field-typed (issue #172 category 1).**  The 5186
+residual checks were one object comparison, `compare_ansam`'s raw
+`diff_eq_obj_` of `ANSamToneDetector`, reporting `acc_10` (+0x10) one ULP from
+the blob's.  `acc_10` is a `float` accumulator (`GenericToneDetector.h`:
+`acc_0c`/`acc_10`/`acc_14`/`acc_18` at +0x0c..+0x18), and a raw byte compare
+reports a last-place float difference as two nine-digit integers with nothing
+saying they are floats.  The comparison now names the two float arguments
+(+0x04 `threshold`, +0x08 `ratio`) and the four accumulators as spans and goes
+through `diff_eq_obj_float_`; every non-float byte of the same object -- the
+block counters at +0x1c..+0x34 and `detected` at +0x38 -- stays exact, which is
+the negative control.  The group now reads `PASS ... 2312640 checks (5186
+within modern tolerance)`: the same 5186 differences, now visible in the
+denominator instead of failing.  `ANSamToneDetector` adds no member to its base
+(`ANSamToneDetector.h`), so the span set is the whole float surface.
+
+**`t_v90modprog` -- F11368'S "FLAG BYTE" IS NOT A FLAG, AND THE RAW COMPARE WAS
+MASKING SIX REAL FLOAT DIVERGENCES.**  F11368 read `V90Demodulator+271` as a
+flag byte `00` vs `80` and proposed a writer search.  It is not a flag: the
+demodulator embeds a `V90Resampler` at +0x094 (`V90Demodulator.h`), so +271 is
+resampler +0x7b -- **the sign byte of `errZ1`** (`ResamplerTiming.h`: `errZ1`
+is a `float` at +0x78).  The trial that reported it (`input 8600`, n=8) named
+*only* that byte, so the magnitude was identical and the difference was `+0.0`
+against `-0.0`; `diff_eq_float_` treats both zeroes as equal.  The other trial
+(`input 8601`, n=40) had six differing runs, all inside the resampler's float
+state, coalesced by `diff_eq_obj_` into a single object failure.  The
+demodulator comparison now carries `t_v90demprog.cpp`'s `vr_spans` shifted by
+the resampler's +0x94, through `diff_eq_obj_float_`, with every other byte of
+the demodulator (and every other embedded subobject) exact.  The signed-zero
+trial closes; the six float divergences remain and are now named with their
+ULP: `lastHalfBaudErr` (+0x54) 679 ULP, `bpfSq1` (+0x68) 4208 ULP, `bpfSq2`
+(+0x6c) 345 ULP, `bpfZ1` (+0x70) 2194 ULP, `bpfZ2` (+0x74) 157 ULP, `errZ1`
+(+0x78) 539 ULP.  These are BEYOND the tier's 1e-6 (up to ~1.7e-3 relative on
+`bpfSq1`), so they are not a rounding-level difference the tolerance may
+absorb; the timing-recovery loop is a feedback path and a small x87 ordering
+difference compounds across the block.  `make period` passes every one of
+them, so the source is the object's and the modern build is what cannot
+reproduce it.  Disposition: **open**; the next test is `dis.py` on
+`V90Resampler::resample`'s bpf accumulation to establish whether the object's
+summation order is recoverable by a source spelling or is another
+`-ffast-math` reassociation, and if the latter, split the analog-arm
+demodulator compare into its own declared binary so `t_v90modprog`'s transmit
+suites survive.
+
+**`t_v90spectral` -- field-typed, residual is an order divergence, not a
+rounding byte.**  The last failing check was `V90SpectralShapingFilter`'s
+`state[2]`/`state[3]`, floats (`V90SpectralShapingFilter.h`: `coeff[4]` +0x00,
+`state[4]` +0x10, `blockLength` +0x20).  All five `diff_eq_obj` calls on that
+type now name `{0x00, 8, 4}` and go through `diff_eq_obj_float_`; `blockLength`
+and the `guard_intact` check stay exact.  The residual does not close: the test
+drives ONE LONG BLOCK through a deliberately UNSTABLE filter (its own comment
+records `(x - prevIn*b2) + prevMid*b0` against the bracketed spelling), and the
+measured differences are `state[2]` `8.32845425e-12` vs `8.31424339e-12`
+(16384 ULP, |diff| 1.42e-14 -- a near-zero value a relative test cannot carry)
+and `state[3]` `1.37496064e+09` vs `1.37495834e+09` (18 ULP, |diff| 2.3e+03,
+1.67e-6 relative, just past the tier's 1e-6).  This is the `t_floatarma`
+shape: an adversarial ORDER test whose whole purpose is to make the bracketing
+visible, so fitting a per-fixture budget would defeat it.  Disposition:
+**open, not fitted**; next test is the object's `progress` accumulation order,
+and if it is a reassociation, a declared split.
+
+**The three heap-region meta-assertions are NOT too tight -- they are firing
+correctly.**  F11368 proposed that the `(words_corresponded + words_static +
+words_unresolved) * 20 < words_equal` bound was simply too small.  The
+period/modern comparison refutes it, and the arithmetic is exact:
+
+| fixture | equal (period -> modern) | "borrowed" (period -> modern) | delta |
+|---|---|---|---|
+| `t_v90rundemod` | 15780636 -> 14922732 | 2440 -> 860344 | 857904 = 857904 |
+| `t_vpcmqcline` | 3039725 -> 2874473 | 470 -> 165722 | 165252 = 165252 |
+| `t_vpcmrunpcm` | 20889987 -> 19726387 | 3230 -> 1138898 | 1163600 = 1135668 + 27932 |
+
+The words that were EQUAL under the period compiler and are not under the
+modern one are exactly the words the "borrowed tables untouched" exemption
+swallows, plus `t_vpcmrunpcm`'s 27,932 hard failures.  That class is not static
+addresses -- a static address differs under BOTH compilers -- it is VALUES
+(floats) the period compiler reproduces bit-for-bit and the modern one does
+not.  The exemption `pva != pvb && va == pva && vb == pvb` is written for a
+borrowed coefficient table, and on the modern tier it is also catching
+pre-existing float divergence; the meta-assertion exists precisely to notice
+when that class grows past a minority, and it is doing so.  **Do not widen the
+20x bound and do not add a tolerance to `compare_regions`**: that would absorb
+the divergence the assertion is reporting.  The real fix is the one issue #172
+category 1 already names -- model the regions' float spans for
+`diff_eq_obj_float_` -- and it is a per-region layout job, not a threshold.
+`t_vpcmqcline` is the tractable one (one meta-check, 165252 float words in
+133 discovered regions); `t_vpcmrunpcm` additionally has the 27,932 hard
+failures and its 0.5 MB `runPcmModem` comparison.
+
+**`t_v90trn2design` -- the object's reciprocal is `fld1; fdivr; fmulp`; GCC 14
+turns it into `fdivp`.**  The four failing checks are the reciprocal design
+(`dMin` 39 vs 40, constellation step 2 vs 1) and the cap sweep (`returned at
+step 4223` 0 vs 1).  The object at 0x3cece..0x3cf30 is `fld1`; `filds ucode`;
+`fildl nof`; `fsub 0.5f`; `fdivr` (1/(nof-0.5)); `fmulp`; `fistps` -- a
+reciprocal computed in x87 extended and then multiplied.  The modern
+`build/repro/pump/v90/V90TRN2dDesigner.o` at 0x454..0x475 is `filds`; `fildl`;
+`fsub`; `fdivp` -- GCC 14's `-ffast-math` reassociates `x * (1.0f/y)` into
+`x / y`, which rounds once where the object rounds twice, and the result
+crosses the `(short)` truncation.  `make period` passes all 2490.  This is
+`t_psd`'s shape (`-fno-associative-math` would restore it, but `-ffast-math`
+is the object's own profile and the period compiler at those flags does not
+reassociate).  Disposition: **class (a), genuine modern divergence, open**;
+next test is to split the reciprocal and cap-sweep checks into their own
+binary and declare them, so the rest of `t_v90trn2design` and its mutation
+suite survive.
+
+**`t_v90adid` and `t_v92modstate` -- open, with the next test narrowed.**
+`t_v90adid` fails four `linMappAlt` shorts (`04` vs `03`, at +0x700/+0x800/
++0x900/+0xA00) after `updateUrefAlt`, an integer ucode decision.  The object's
+`getAltVarThresh` (`0x40650`) computes through a `fdivrp` at 0x406cc and two
+truncating `fistpl`/`fistl`, so a last-bit difference can cross a truncation --
+the `t_v90trn2design` shape -- but the exact site that produces 4 vs 3 is NOT
+yet pinned.  `t_v92modstate`'s four failures are ONE value
+(`-0.575858712` vs `-0.223347247`) in four arrays (queue +712, resampled +232,
+samples +328, filter history +164); the queue's read/write CURSOR checks pass,
+so F11368's index-vs-value question is answered **value**: a single sample
+propagates.  The difference is 0.35, far beyond rounding, so it is not a
+tolerance candidate.  Both are **open, unexplained**; the next test for each is
+`dis.py` at the producing site (`updateUrefAlt`/`getAltVarThresh` for the
+former, the modulator's filter/resampler sample path for the latter), with the
+honest note that the `t_v90trn2design` reciprocal precedent makes a
+truncation-crossing reassociation the leading hypothesis and not a finding.
+
+**The transcripts and `t_floatarma` are unchanged and stay as F11368 left
+them.**  `t_v34info1a` (96), `t_v90cdadjust` (26), `t_v90eqdata` (2) and
+`t_vpcmflomodem` (2) are transcript `strcmp`; F11364 deliberately left the
+class to the register, and each still needs the per-fixture determination of
+whether the differing text is float-derived only (the #143 `t_v90conneval`
+split) or encodes a real value.  `t_floatarma`'s 734 adversarial mode-4/5
+checks remain an order test, declined rather than fitted.  `t_v34hshak`
+(SIGSEGV) and `t_v27fax` (FAX) stay outside the class.
+
+**Verdicts.**  `make period J=1`: **376 passed, 0 failed** (the two changed
+fixtures and the unchanged one are all in that count).  Modern tier
+`make -j1 -k test`: **361 green / 15 red**, `t_v90p3ddec` newly green, no
+fixture newly red.  `python3 tools/refcheck.py`: clean, 14039 references, 0
+dangling.  `tools/gccdiverge.py --list`: 7 entries, unchanged -- **no new
+declaration was made**, so no new binary was needed.  `mutsnap.py --check`:
+unchanged stale state (no `--update` run).  `src/` and `include/` unchanged;
+`git diff --stat` is `test/unit/t_v90modprog.cpp`, `test/unit/t_v90p3ddec.cpp`,
+`test/unit/t_v90spectral.cpp`.
+
+(2026-09-19)

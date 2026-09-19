@@ -463,8 +463,25 @@ compare_ansam(const char *what, long tag)
 	memcpy(cb, &ansam[1], sizeof(cb));
 	((GenericToneDetector *)ca)->filter = 0;
 	((GenericToneDetector *)cb)->filter = 0;
-	diff_eq_obj_(__FILE__, __LINE__, what, "ANSamToneDetector",
-		     ca, cb, sizeof(ca), tag);
+	/*
+	 * THE BASE'S FLOAT FIELDS, NAMED, so the modern tier's rounding-level
+	 * tolerance reaches them and nothing else.  `threshold` +0x04 and
+	 * `ratio` +0x08 are the two float arguments; `acc_0c`/`acc_10`/
+	 * `acc_14`/`acc_18` are the four float accumulators.  The observed
+	 * residual is one ULP in `acc_10`, which a raw `diff_eq_obj_` reports
+	 * as a changed integer byte with nothing saying it is a float.  This is
+	 * issue #172 category 1: field-typed, not a wider tolerance.  The
+	 * negative control is every non-float byte of the same object -- the
+	 * block counters at +0x1c..+0x34 and `detected` at +0x38 stay exact.
+	 */
+	static const struct diff_float_span ansam_spans[] = {
+		{ 0x04, 2, 4 },		/* threshold, ratio        */
+		{ 0x0c, 4, 4 },		/* acc_0c .. acc_18        */
+	};
+
+	diff_eq_obj_float_(__FILE__, __LINE__, what, "ANSamToneDetector",
+			   ca, cb, sizeof(ca), ansam_spans,
+			   sizeof ansam_spans / sizeof ansam_spans[0], tag);
 
 	memcpy(fa, pa, sizeof(fa));
 	memcpy(fb, pb, sizeof(fb));
