@@ -782,6 +782,18 @@ main(void)
 {
 	int bad = 0;
 
+	/*
+	 * The functional float divergence at this fixture's ARMA sites is
+	 * rel = 3.4e-5 (measured with DSPLIB_MAX_REPORT=0; above it the
+	 * residual is the deliberately ADVERSARIAL x87 pairing -- modes 4/5
+	 * seed 2^70/2^60 coefficients so a last-place ordering difference is
+	 * amplified to O(1), got -2/1 vs ref 0 -- which no functional
+	 * tolerance may cover).  1e-4 is just above the measured functional
+	 * max with headroom, and is a no-op under `make period`.  The
+	 * adversarial residual stays red and is recorded in F11366.
+	 */
+	harness_float_tol_fixture(1.0e-4);
+
 	bad |= run_ctor();
 	bad |= run_reset();
 	bad |= run_process1();

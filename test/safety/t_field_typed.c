@@ -15,7 +15,12 @@
  *   a changed index                   must FAIL in BOTH builds;
  *   a changed flag bit                must FAIL in BOTH builds;
  *   a changed non-float tail word     must FAIL in BOTH builds;
- *   a float array element beyond eps  must FAIL in BOTH builds.
+ *   a float array element beyond eps  must FAIL in BOTH builds;
+ *   a per-fixture budget (below)      must widen ONLY up to the budget it
+ *                                     names: a value beyond it, a changed
+ *                                     index and a changed flag stay hard
+ *                                     failures, and the setter is INERT
+ *                                     without HARNESS_FLOAT_TOL (tol=0).
  *
  * WHICH ARM IT IS IS ASKED OF THE LINKED HARNESS (`harness_float_tol`), not of
  * this file's own preprocessor, so a translation unit built without the
@@ -252,6 +257,106 @@ main(void)
 		bad++;
 	}
 	b.d = 1.0;
+
+	/*
+	 * ---- PER-FIXTURE RUNTIME BUDGET ----------------------------------
+	 *
+	 * `harness_float_tol_fixture` lets one fixture name a wider relative
+	 * budget than the tier default.  It must be a WIDENING of the named
+	 * float fields and nothing more: a value inside the budget passes
+	 * only on the modern tier and is counted tolerance-only, a value
+	 * beyond it still fails, and a changed index or flag still fails
+	 * while the budget is in force.  On a harness built WITHOUT the
+	 * define the setter is inert -- `harness_float_tol()` stays 0 -- so
+	 * even the inside-budget value must fail, which is what proves the
+	 * period build is untouched.
+	 *
+	 * The list is every budget the sinc/FIR fixtures name, so each WIDENED
+	 * budget this pass introduces has its own beyond-budget control and
+	 * not one representative.
+	 */
+	{
+		static const double budgets[] = {
+			5.0e-5,		/* t_v90demprog  */
+			1.0e-4,		/* t_floatarma   */
+			1.5e-2,		/* t_resampler   */
+			5.0e-2,		/* t_v90demctor / t_v92modstate */
+		};
+		unsigned bi;
+
+		for (bi = 0; bi < sizeof budgets / sizeof budgets[0]; bi++) {
+			double B = budgets[bi];
+			double ftol;
+
+			harness_float_tol_fixture(B);
+			ftol = harness_float_tol();
+
+			/* Inside the budget: pass on modern only. */
+			b.f = (float)(1.0 + B / 2.0);
+			checks++;
+			if (ftol > 0.0) {
+				if (run(&a, &b) != 0) {
+					fprintf(stderr, "t_field_typed: "
+						"inside a %g fixture budget "
+						"must pass\n", B);
+					bad++;
+				}
+				if (diff_float_tolerant == 0) {
+					fprintf(stderr, "t_field_typed: "
+						"the %g fixture-budget pass "
+						"was not tolerance-only\n",
+						B);
+					bad++;
+				}
+			} else {
+				if (run(&a, &b) != 1) {
+					fprintf(stderr, "t_field_typed: the "
+						"%g setter must be INERT "
+						"without HARNESS_FLOAT_TOL\n",
+						B);
+					bad++;
+				}
+			}
+
+			/* Beyond the budget: fail in both arms. */
+			b.f = (float)(1.0 + B * 4.0);
+			checks++;
+			if (run(&a, &b) != 1) {
+				fprintf(stderr, "t_field_typed: a value "
+					"BEYOND the %g fixture budget must "
+					"FAIL\n", B);
+				bad++;
+			}
+			b.f = 1.0f;
+
+			/* Decisions stay hard while the budget is in force. */
+			b.idx = 8u;
+			checks++;
+			if (run(&a, &b) != 1) {
+				fprintf(stderr, "t_field_typed: a changed "
+					"index must still FAIL under a %g "
+					"budget\n", B);
+				bad++;
+			}
+			b.idx = 7u;
+			b.flags = 0x41u;
+			checks++;
+			if (run(&a, &b) != 1) {
+				fprintf(stderr, "t_field_typed: a changed "
+					"flag must still FAIL under a %g "
+					"budget\n", B);
+				bad++;
+			}
+			b.flags = 0x40u;
+		}
+	}
+	harness_float_tol_fixture(0.0);		/* restore the tier default */
+	checks++;
+	if (harness_float_tol() != tol) {
+		fprintf(stderr, "t_field_typed: clearing the fixture budget "
+			"did not restore the tier default\n");
+		bad++;
+	}
 
 	printf("%s t_field_typed: %d checks, %d bad (linked harness tol=%g)\n",
 	       bad == 0 ? "PASS" : "FAIL", checks, bad, tol);

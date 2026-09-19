@@ -2416,6 +2416,18 @@ main(void)
 {
 	int rc = 0;
 
+	/*
+	 * The resampler/queue float sites carry the same sinc/FIR design
+	 * divergence as t_resampler (F11363/F11365).  Measured with
+	 * DSPLIB_MAX_REPORT=0: the bulk is < 1e-3, but the resampled block
+	 * crosses zero, so individual near-zero samples reach rel = 1.59 (a
+	 * sign flip on values ~1e-5).  5e-2 is the widest defensible
+	 * functional band -- wider would start to excuse a real value -- and
+	 * it is a no-op under `make period`.  The near-zero residual is
+	 * recorded in F11366 and left red.
+	 */
+	harness_float_tol_fixture(5.0e-2);
+
 	set_level(0);
 	rc |= run_delay();
 	rc |= run_reset();

@@ -418,9 +418,43 @@ extern int diff_float_tolerant;
  * was built without HARNESS_FLOAT_TOL (the period build, always).  A caller
  * asks this rather than re-testing the macro, so a binary whose harness object
  * and whose own translation unit were compiled differently cannot disagree
- * about which tier it is.  test/safety/t_float_tol.c is the only caller.
+ * about which tier it is.  test/safety/t_float_tol.c and t_field_typed.c are
+ * the callers.
+ *
+ * A fixture that needs a WIDER relative budget than the tier default may ask
+ * for one at runtime with `harness_float_tol_fixture`; the value returned here
+ * is then that fixture's budget rather than the compiled-in default.  See the
+ * setter below for why this is per-fixture and modern-only.
  */
 double harness_float_tol(void);
+
+/*
+ * A PER-FIXTURE RELATIVE BUDGET, IN FORCE ONLY ON THE MODERN TIER.
+ *
+ * WHY IT EXISTS.  `HARNESS_FLOAT_TOL` (1e-6, ~8 ULP) reaches a rounding-level
+ * difference in one operation.  The sinc/FIR coefficient DESIGN diverges by
+ * more than that on the modern compiler -- the object narrows `sinc<float>`'s
+ * extended `sin(y)/y` to binary32 at the return and GCC 14 does not (F11363) --
+ * so the coefficients differ by ~1e-4..1e-2 relative, an order of magnitude
+ * larger than a rounding eps but still the same algorithm with the same
+ * zeroes and the same sign.  A fixture whose only float difference is that
+ * design divergence names its own measured budget here instead of dragging
+ * every other fixture's budget up with it.
+ *
+ * IT IS A NO-OP WITHOUT `HARNESS_FLOAT_TOL`.  The setter's whole body is
+ * inside the macro, so the period build (which never defines it) gets a call
+ * that does nothing and `harness_float_tol()` stays 0.0 -- the comparison is
+ * bit-for-bit there, exactly as before.  The setter still EXISTS in both
+ * builds so a fixture can call it unconditionally and the period build links.
+ *
+ * IT REACHES ONLY `diff_eq_float`/`diff_eq_float_ulp`/`diff_eq_float_abs` and
+ * `diff_eq_double`, exactly as the tier tolerance does.  A decision-level
+ * `diff_eq_int` on an index, flag, count or verdict is untouched, so a
+ * changed outcome stays a hard failure.  `eps <= 0.0` restores the tier
+ * default (it does not mean "exact"); call it with the measured budget at
+ * fixture startup and record the measurement beside the call.
+ */
+void harness_float_tol_fixture(double eps);
 
 /*
  * Compare two whole objects, reporting the first differing FIELD.
