@@ -76252,6 +76252,42 @@ Companion to 7000 and 7001 only in numbering; this is about method, not V.90.
 
 ======================================================================
 
+### F6700. 1927's SIX-PAIR MATRIX EXONERATES THE ATA AND THE SIP TRANSPORT, NOT d-modem — HARDWARE-TO-HARDWARE CALLS NEVER TRAVERSE d-modem AT ALL
+
+> **RESTORED FROM THE ARCHIVE TAG, issue #16 item 1.** This finding and F6703
+> below were written on `v34-instrumentation` / `findings/hsfuser-crosscheck`
+> but were not among the four brought over by `a23c1d22`; they are recovered
+> verbatim from `archive/branches/2026-09-08/findings-hsfuser-crosscheck`. The
+> companion 6702 is superseded and deliberately not restored.
+
+A scope correction to a conclusion that #148 and several later arguments have
+leaned on, not a withdrawal. 1927 ran every ordered pair of the three hardware
+modems — `courier`, `supra`, `olinet` — got 28800-33600 in both directions on
+six of six with normal terminations, and concluded "the path is not at fault
+and the retrains are ours."
+
+**THE SIX PAIRS ARE MODEM-TO-MODEM ACROSS THE PBX. NOT ONE OF THEM RUNS
+`d-modem`.** d-modem exists only on *our* leg: it is the process slmodemd
+forks (`modem_main.c:757`) and talks to over a socketpair. A call from the
+Courier to the SupraExpress goes hardware -> ATA -> Asterisk -> ATA ->
+hardware. pjmedia is not in it, so pjmedia's jitter buffer, codec
+configuration and conference bridge are all untested by that matrix.
+
+**SO "THE DIFFERENCE IS OURS" IS CORRECT AND ITS SCOPE IS WIDER THAN THE
+DATAPUMP.** What 1927 exonerated is the ATA, the Asterisk path and the analogue
+front ends. What it left untouched is everything between the RTP socket and
+slmodemd's `read()`, which is exactly where 1941 and 1942 then went looking and
+found something. Both are consistent; the error would be to quote 1927 as
+though it had cleared d-modem, and that has been within a hair of happening
+twice.
+
+**THE RULE THIS IS AN INSTANCE OF.** A control exonerates the components it
+actually contains. Naming the component under test is not the same as naming
+the components the control shares with it, and the six-pair matrix shares the
+ATA and the trunk with our calls but not the media stack.
+
+======================================================================
+
 *The four findings below were written on `v34-instrumentation` and are copied
 here verbatim, unrenumbered, because the TOOLS that cite them are already on
 `master` -- `testbench/ratepenalty.py`, `testbench/jbtiming.py`,
@@ -76387,6 +76423,89 @@ be equally tolerant at 24 dB, and 6702 is the reason that matters.
 The part of this finding that does NOT depend on the operating point is the
 substitution-versus-slip distinction, which is a property of the code in
 `stream.c` and `impair.c` and holds at any SNR.
+
+### F6703. `slmodemd -e` MAKES THE SIP ENDPOINT SWAPPABLE — CHANGING d-modem's MEDIA CONFIGURATION DOES NOT REQUIRE FORKING d-modem
+
+> **RESTORED FROM THE ARCHIVE TAG, issue #16 item 1.** Companion to F6701,
+> recovered verbatim from
+> `archive/branches/2026-09-08/findings-hsfuser-crosscheck`. It is not one of
+> the four findings introduced above (6701, 6900, 6901, 6903).
+
+The vendored `d-modem/` is cryan209's tree and we reverted our modifications to
+it deliberately (root `df93682d`), which removed the `DMODEM_JB_*` knobs 1942
+used. That looked like it left "fork the repository" as the only way to change
+anything about the media path. It does not.
+
+**THE CHILD BINARY IS ALREADY A PARAMETER.** slmodemd takes `-e <path>` —
+`modem_cmdline.c:297` stores it in `modem_exec`, `modem_main.c:776,793` put it
+in `child_argv[0]` and `execv` it. `testbench/row.sh:218` already passes a path
+there (today, the guard script). The endpoint is swapped by changing an
+argument.
+
+**AND A SECOND ENDPOINT ALREADY EXISTS THAT HONOURS THE SAME CONTRACT.**
+`~/dev/softmodems/conexant/hsfuser/src/hsfsip.c`, built by `build-sip.sh`
+against a pinned pjproject 2.17:
+
+    d-modem [--sip-*] <dialstr> <audio_fd> <sip_fd>     (d-modem.c:696-702)
+    hsfsip             <dialstr> <audio_fd> <sip_fd>    (hsfsip.c:626,665-668)
+
+The frame layout is confirmed field for field, not merely by size: slmodemd's
+`socket_frame` (`modem.h:140`) is a 4-byte enum plus a union whose largest
+member is `char buf[SIP_FRAMESIZE*2]` = 320, total 324; `dmframe.h` names the
+same 324 as "4-byte type + 320-byte union" with the same three type codes in
+the same order.
+
+**WHAT IT WOULD BUY, BEYOND NOT FORKING.** Three things d-modem cannot do:
+
+* **A configuration that is read back rather than asserted.** `--selfcheck`
+  starts pjsua, reads the settings out of it and exits non-zero on any
+  mismatch. It detects both of the real d-modem defects when they are forced.
+* **Codecs removed at compile time.** `config_site.h` compiles out everything
+  but G.711, which an SDP offer cannot then contain regardless of priorities.
+* **A receive path that COUNTS instead of blocking.** d-modem's `get_frame` is
+  a blocking `read()` in a `while(1)`, which hides any clock difference by
+  stalling the SIP stack. `sipring.h` holds a shallow ring and counts
+  underruns and overruns instead — and on overflow it drops the *oldest*
+  frame, which unlike pjmedia's substitution **does** change the sample count.
+  That makes it the instrument that can separate 6701's two mechanisms on the
+  live bench, which nothing we have today can.
+
+**FOUR THINGS TO VERIFY BEFORE CALLING IT DROP-IN, none of them settled here.**
+
+**1. The drop-in works only because credentials go by environment, and that is
+load-bearing.** `modem_main.c:777-787` inserts `--sip-server`, `--sip-user` and
+`--sip-password` into `child_argv` **before** the three positionals, whenever
+the corresponding slmodemd options were given. d-modem runs `getopt` and skips
+them; hsfsip reads `argv[1..3]` positionally with only an `argc < 4` check, so
+it would silently take the string `--sip-server` as the dial string. Since root
+`eeb12909` we pass `SIP_SERVER`/`SIP_USER`/`SIP_PASSWORD` in the environment,
+`modem_sip_*` stay NULL, and `child_argv` is exactly `{exec, dialstr, audio,
+sip}`. Anyone who "helpfully" restores the flags breaks this, and it will look
+like a SIP fault. (It is also the argv-leak that commit exists to avoid.)
+
+**2. The two sockets are different types.** `modem_main.c:746` makes the audio
+pair `SOCK_STREAM`; `:751` makes the SIP pair `SOCK_DGRAM`. `hsfsip.c:701` runs
+the same `dmf_stream_read` reassembler on both, and that reassembler asks for
+`324 - st->n` bytes. On a datagram socket a short read **discards the rest of
+the datagram**, so it is correct only while every read starts at `st->n == 0`
+and every datagram is exactly 324 bytes. It will appear to work and is one
+short frame away from silently desynchronising.
+
+**3. The allow-list.** `row.sh:218` passes `dmodem-guard-fork.sh`, not the
+binary, so a swap means changing the guard's exec target — and the guard's
+`grep -qa DMODEM_ALLOWED_DEST` will correctly report ABSENT for hsfsip. hsfsip
+has its own `HSF_DIAL_ALLOW`/`HSF_DIAL_MAX`. Reconcile the two, or the swap
+adds a fourth way around the allow-list rather than a fourth enforcement of it.
+
+**4. hsfsip has never placed a live call.** Its own documentation says so:
+registration and SDP negotiation against a real registrar are unproven. The
+spawn path, verb exchange and media bridge are covered against stand-ins.
+
+**IF THE d-modem SOURCE IS TO BE CHANGED ANYWAY, THE UPSTREAM IS cryan209's.**
+This repository's `origin` is `strozfriedberg/D-Modem`, which is the *older*
+fork we removed in the consolidation. `d-modem/` came from cryan209/D-Modem
+(root `087f354f`), so a fork made from the configured remote would be a fork of
+the wrong tree.
 
 ======================================================================
 
