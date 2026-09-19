@@ -124316,3 +124316,53 @@ the empty-TU conclusion is only valid when no global lands in the unit's
 slot.
 
 (2026-09-14)
+
+## F11363. Issue #30 modern x87 census: 29 uncovered fixtures, two stale entries removed, and the sinc return-narrowing domain bounded
+
+The GCC 14.2.0-19 tier was censused with `make -j1 -k test` over all 376
+fixtures.  Before reconciliation 342 were green and **34 red**; after the
+register changes below **347 green, 29 red**.  `make period` (the deciding
+tier) is 376/0 and every red fixture is modern-only — the period compiler at
+the project's own flags passes each group.
+
+**Register reconciled.**  `tools/gccdiverge.json` went from 8 entries / 13
+checks to 6 / 14, all ALLOWED, 0 stale, 0 uncovered:
+
+- `t_v90adidnan` (F6001) and `t_v92ecnan` (F6000) were **STALE** and are
+  removed.  Both are the NaN-compare class, and both now pass because the
+  recovered source profile is `-ffast-math`, whose implied
+  `-ffinite-math-only` lets GCC 14 fold `v == 0.0f` / `out[0] == 177.0f` to
+  the object's single ordered compare.  The divergence returns if
+  `-fno-finite-math-only` is ever adopted, so the entries must be re-declared
+  then.
+- `t_psd` gained `Psd::getFrequencies`: the object computes
+  `(long double)i * sampleRate * (1.0L / m_length)` as three extended steps
+  with one rounding (`fildll; fmul; fmul; fstps` at .text+0x469ed..0x46a0e),
+  and `-ffast-math` reassociates it to a reciprocal and one `fmul`, 1 ULP on
+  bin 39; period passes all 8169.
+- `t_v90equ` gained `V90Equalizer: the shift at an exact power of two`:
+  `convertEqualizerToMmx`'s float accumulators stored to four-byte slots each
+  iteration (`fstps 0x4c(%esp)` / `0x48(%esp)`), which the modern build keeps
+  in x87; period passes all 105.
+- `t_v90equproc` gained `V90Equalizer::process, the phase 4 state arms`: the
+  same `float err = soft - fdec` excess-precision subtraction as the declared
+  RESET arm (F6203); period passes all 18023.
+
+**The sinc discriminator is bounded, not closed.**  The blob's
+`sinc<float>` is `fldl <pi double>; fmulp; fld %st(0); fsin; fdivp;
+fstps (%esp); flds (%esp)` — extended `y` and `sin(y)/y`, narrowed to
+binary32 only at the return.  Under `-ffast-math` GCC 14 emits `fsin` and the
+single double pi load but omits the narrowing.  Every tested flag that
+restores it either replaces `fsin` with a library `sin` (ordinary flags) or
+rounds intermediates the object keeps extended (`-ffloat-store`, 4-6 stores).
+`-fexcess-precision=standard`, `-ftrapping-math`, `-fsignaling-nans`,
+`-frounding-math`, `-O1` and `-O3` do not select it.  The cast survives into
+optimized GIMPLE (`_2 = s_6 / y_5; _7 = (float) _2;`), so the missing
+conversion is emitted after that and before final RTL.  The next test is the
+RTL pass dump, not another option matrix.  Downstream `t_resampler`
+(3174/23067) and `t_v92modstate` (1957/36848) remain red; `t_lowpassfir` is
+link-excused by #82.  `t_v34hshak` (SIGSEGV) and `t_v27fax` (FAX) are not the
+x87 class.  `docs/issue30-modern-x87.md` carries the full census and the flag
+table.
+
+(2026-09-19)
