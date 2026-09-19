@@ -229,11 +229,20 @@ static void
 cmp_obj(const char *what, int trial)
 {
 	unsigned char sa[sizeof(FloatARMA)], sb[sizeof(FloatARMA)];
+	/*
+	 * m_fwd and m_fbk at +0x2c/+0x30 are the only floats in the object;
+	 * the pointers are flattened to 0/1 by `snapshot` and the counts and
+	 * indices are integers.  Naming the two floats lets the modern tier's
+	 * rounding-level tolerance reach them while every non-float field
+	 * stays exact.
+	 */
+	static const struct diff_float_span spans[] = { { 0x2c, 2 } };
 
 	snapshot(sa, O());
 	snapshot(sb, T());
-	diff_eq_obj_(__FILE__, __LINE__, what, "FloatARMA", sa, sb,
-		     sizeof(FloatARMA), (long)trial);
+	diff_eq_obj_float_(__FILE__, __LINE__, what, "FloatARMA", sa, sb,
+			   sizeof(FloatARMA), spans,
+			   sizeof spans / sizeof spans[0], (long)trial);
 	diff_eq_int("no store past the object (trial %ld)",
 		    memcmp(ours_raw + sizeof(FloatARMA),
 			   theirs_raw + sizeof(FloatARMA),
@@ -244,18 +253,27 @@ static void
 cmp_buf(const char *what, const float *a, const float *b, unsigned int n,
 	int trial)
 {
-	struct arma_buf ba, bb;
-
+	/*
+	 * The buffer is `n` floats; the tail of the local zero-filled copy
+	 * was never compared meaningfully.  A pure float array, so every
+	 * element goes through diff_eq_float.
+	 */
 	if (n > MAXBUF)
 		n = MAXBUF;
-	memset(&ba, 0, sizeof(ba));
-	memset(&bb, 0, sizeof(bb));
-	if (a != 0)
-		memcpy(&ba, a, n * sizeof(float));
-	if (b != 0)
-		memcpy(&bb, b, n * sizeof(float));
-	diff_eq_obj_(__FILE__, __LINE__, what, "struct arma_buf", &ba, &bb,
-		     sizeof(struct arma_buf), (long)trial);
+	if (a == 0 || b == 0) {
+		diff_eq_int("%s: one side allocated and the other did not",
+			    a != 0, b != 0, trial);
+		return;
+	}
+	if (n == 0)
+		return;
+	{
+		struct diff_float_span span = { 0, n };
+
+		diff_eq_obj_float_(__FILE__, __LINE__, what, "struct arma_buf",
+				   a, b, n * sizeof(float), &span, 1,
+				   (long)trial);
+	}
 }
 
 static void
@@ -646,8 +664,8 @@ run_process1(void)
 				ra = O()->process(in);
 				rb = ref_process1(theirs_raw, in);
 
-				diff_eq_int("process(float) return, sample %ld",
-					    bits(ra), bits(rb), i);
+				diff_eq_float("process(float) return, sample %ld",
+					      ra, rb, i);
 				cmp_all("after process(float)", i);
 			}
 
@@ -706,10 +724,18 @@ run_processn(void)
 				O()->process(in, oa, run);
 				ref_processn(theirs_raw, in, ob, run);
 
-				diff_eq_obj_(__FILE__, __LINE__,
-					     "block output", "struct arma_run",
-					     oa, ob, sizeof(struct arma_run),
-					     (long)run);
+				{
+					struct diff_float_span span = {
+						0, run
+					};
+
+					diff_eq_obj_float_(__FILE__, __LINE__,
+							   "block output",
+							   "struct arma_run",
+							   oa, ob,
+							   sizeof(struct arma_run),
+							   &span, 1, (long)run);
+				}
 				cmp_all("after block process", (int)run);
 
 				teardown();

@@ -573,8 +573,18 @@ compare_ansam(const char *what, long tag)
 	memcpy(b, (const void *)&an[1], sizeof(b));
 	((ANSamToneDetector *)(void *)a)->filter = NULL;
 	((ANSamToneDetector *)(void *)b)->filter = NULL;
-	diff_eq_obj_(__FILE__, __LINE__, what, "ANSamToneDetector",
-		     a, b, sizeof(a), tag);
+	/*
+	 * The six floats at +0x04..+0x1b are the base's threshold, ratio and
+	 * four accumulators; the modern tier's rounding-level tolerance must
+	 * reach those.  The counters, flags and the answer stay exact.
+	 */
+	{
+		static const struct diff_float_span spans[] = { { 0x04, 6 } };
+
+		diff_eq_obj_float_(__FILE__, __LINE__, what, "ANSamToneDetector",
+				   a, b, sizeof(a), spans,
+				   sizeof spans / sizeof spans[0], tag);
+	}
 
 	diff_eq_int("both filters exist (%ld)",
 		    (ia != NULL) && (ib != NULL), 1, tag);

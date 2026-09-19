@@ -201,6 +201,130 @@ diff_eq_obj_(const char *file, int line, const char *what, const char *type,
 			runs - 4);
 }
 
+/*
+ * The exact-byte half of a field-typed object compare.  It is diff_eq_obj_'s
+ * own loop over a sub-range, so a non-float field that changes reports the
+ * same way and with the same run coalescing.
+ */
+static void
+diff_obj_exact_(const char *file, int line, const char *what, const char *type,
+		const unsigned char *a, const unsigned char *b, size_t s,
+		size_t e, long input)
+{
+	size_t i = s, runs = 0;
+
+	if (s >= e)
+		return;
+	diff_checks++;
+	while (i < e) {
+		size_t r;
+
+		if (a[i] == b[i]) { i++; continue; }
+		r = i;
+		while (i < e && a[i] != b[i])
+			i++;
+		if (runs == 0)
+			diff_failures++;
+		if (runs < 4 && diff_failures <= diff_max_report) {
+			size_t k;
+
+			fprintf(stderr, "%s:%d: %s [input %ld]: %s+%zu",
+				file, line, what, input, type, r);
+			if (i - r > 1)
+				fprintf(stderr, "..+%zu", i - 1);
+			fprintf(stderr, "  got");
+			for (k = r; k < i && k < r + 8; k++)
+				fprintf(stderr, " %02x", a[k]);
+			fprintf(stderr, ", reference");
+			for (k = r; k < i && k < r + 8; k++)
+				fprintf(stderr, " %02x", b[k]);
+			fprintf(stderr, "\n");
+			if (runs == 0)
+				fprintf(stderr, "    which field: "
+					"tools/whichfield.py %s %zu\n",
+					type, r);
+		}
+		runs++;
+	}
+	if (runs > 4 && diff_failures <= diff_max_report)
+		fprintf(stderr, "    ... and %zu more differing runs\n",
+			runs - 4);
+}
+
+/*
+ * ===========================================================================
+ * FIELD-TYPED OBJECT COMPARISON.
+ *
+ * WHY THIS EXISTS.  diff_eq_obj_ carries no field-type information -- it
+ * compares bytes -- so a float field whose value differs by a rounding-level
+ * ULP reads exactly like a wrong index or a changed decision.  On the modern
+ * tier (GCC 14, x32->x64) that ULP is a portability artefact and the tier's
+ * relative float tolerance must reach it; a changed index, flag or decision
+ * in the same object must stay a hard failure.  Widening diff_eq_obj itself,
+ * or HARNESS_FLOAT_TOL, is the wrong move for exactly that reason.
+ *
+ * The caller names the float spans: {byte offset, float count} pairs relative
+ * to the object's start.  Every float in a span goes through diff_eq_float_,
+ * so the modern tier's tolerance applies and the period build stays
+ * bit-exact; every byte OUTSIDE the spans is compared exactly, with the same
+ * reporting diff_eq_obj_ uses.  The spans must be sorted by offset and
+ * non-overlapping, which is how they are written at every call site.
+ *
+ * THE NEGATIVE CONTROL is test/safety/t_field_typed.c: a float perturbed
+ * beyond the tolerance must still fail, and a changed non-float byte must
+ * still fail.  Findings F134/F2401 applied to a comparison.
+ */
+void
+diff_eq_obj_float_(const char *file, int line, const char *what,
+		   const char *type, const void *got, const void *want,
+		   size_t n, const struct diff_float_span *spans,
+		   size_t nspans, long input)
+{
+	const unsigned char *a = got, *b = want;
+	size_t i = 0, si = 0;
+
+	fieldlog_capture(type, want, n, input);
+
+	while (i < n && si < nspans) {
+		size_t off = spans[si].off;
+		unsigned k, sz = spans[si].size ? spans[si].size : 4u;
+
+		if (off > n)
+			break;
+		if (off > i)
+			diff_obj_exact_(file, line, what, type, a, b, i, off,
+					input);
+		for (k = 0; k < spans[si].count; k++) {
+			size_t o = off + (size_t)sz * (size_t)k;
+			char buf[256];
+
+			if (o + sz > n)
+				break;
+			snprintf(buf, sizeof buf, "%s [%s+%zu]", what, type, o);
+			if (sz == 8) {
+				double ga, wa;
+
+				memcpy(&ga, a + o, 8);
+				memcpy(&wa, b + o, 8);
+				diff_eq_double_(file, line, buf, ga, wa, input);
+			} else {
+				float ga, wa;
+
+				memcpy(&ga, a + o, 4);
+				memcpy(&wa, b + o, 4);
+				diff_eq_float_(file, line, buf, ga, wa, 0UL,
+					       0.0, input);
+			}
+		}
+		i = off + (size_t)sz * (size_t)spans[si].count;
+		if (i > n)
+			i = n;
+		si++;
+	}
+	if (i < n)
+		diff_obj_exact_(file, line, what, type, a, b, i, n, input);
+}
+
 void
 diff_eq_int_(const char *file, int line, const char *fmt,
 	     long got, long want, long input)
@@ -418,6 +542,80 @@ diff_eq_float_(const char *file, int line, const char *fmt, float got,
 					abs_eps);
 			fprintf(stderr, ")\n");
 		}
+	} else if (diff_failures == diff_max_report) {
+		fprintf(stderr, "  ... further mismatches suppressed\n");
+	}
+	diff_failures++;
+}
+
+/*
+ * A DOUBLE, with the same tier tolerance and NaN handling as a float.
+ *
+ * WHY IT EXISTS.  `diff_eq_obj_float_` names a field's type, and the object
+ * has one double that matters: the resampler's `phase` at +0x0c, the field
+ * `ResamplerTimingOffset` moves and the one t_v92modstate exists to compare.
+ * A double has exactly the same x32->x64 rounding-level portability problem a
+ * float does, so it needs the same reach; comparing it as two four-byte words
+ * would not be the same test.
+ *
+ * ULP distance is computed in 64 bits and the same relative criterion is
+ * applied, so `HARNESS_FLOAT_TOL` governs both widths and the period build
+ * (macro undefined) stays bit-exact.
+ */
+void
+diff_eq_double_(const char *file, int line, const char *fmt, double got,
+		double want, long input)
+{
+	unsigned long long ia, ib, d;
+	int got_nan = diff_isnan_ld(got), want_nan = diff_isnan_ld(want);
+	double diff;
+
+	diff_checks++;
+
+	if (got_nan || want_nan) {
+		if (got_nan && want_nan)
+			return;
+		d = ~0ULL;
+		diff = 0.0;
+	} else {
+		memcpy(&ia, &got, 8);
+		memcpy(&ib, &want, 8);
+		if ((long long)ia < 0)
+			ia = 0x8000000000000000ULL - ia;
+		if ((long long)ib < 0)
+			ib = 0x8000000000000000ULL - ib;
+		d = ia > ib ? ia - ib : ib - ia;
+		diff = got - want;
+		if (diff < 0.0)
+			diff = -diff;
+		if (d == 0ULL)
+			return;
+#ifdef HARNESS_FLOAT_TOL
+		{
+			double ag = got < 0.0 ? -got : got;
+			double aw = want < 0.0 ? -want : want;
+			double scale = ag > aw ? ag : aw;
+
+			if (diff <= (double)HARNESS_FLOAT_TOL * scale) {
+				diff_float_tolerant++;
+				return;
+			}
+		}
+#endif
+	}
+
+	if (diff_failures < diff_max_report) {
+		fprintf(stderr, "%s:%d: ", file, line);
+		fprintf(stderr, fmt, input);
+		if (strchr(fmt, '%') == NULL)
+			fprintf(stderr, " [input %ld]", input);
+		if (got_nan || want_nan)
+			fprintf(stderr, "  got %.17g, reference %.17g"
+				"  (one side is NaN)\n", got, want);
+		else
+			fprintf(stderr, "  got %.17g, reference %.17g"
+				"  (%llu ULP, |diff| %.3g)\n", got, want, d,
+				diff);
 	} else if (diff_failures == diff_max_report) {
 		fprintf(stderr, "  ... further mismatches suppressed\n");
 	}

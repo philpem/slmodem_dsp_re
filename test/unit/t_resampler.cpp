@@ -287,9 +287,29 @@ next_float(void)
 }
 
 /*
+ * The floating-point fields of the Resampler chain, named as typed spans so
+ * the modern tier's rounding-level tolerance reaches them and every other
+ * byte stays exact.  The classes are nested, so the offsets hold for all four
+ * sizes this file compares (0x48, 0x4c, 0x94, 0xb4); the helper clips a span
+ * that runs past the object it is given.
+ */
+static const struct diff_float_span rs_float_spans[] = {
+	{ 0x0c, 1, 8 },		/* double phase                     */
+	{ 0x14, 5, 4 },		/* pending[5]                       */
+	{ 0x2c, 1, 4 },		/* ppmScale                         */
+	{ 0x48, 1, 4 },		/* timingOffset                     */
+	{ 0x4c, 2, 4 },		/* bllK1, bllK2                     */
+	{ 0x54, 3, 4 },		/* lastHalfBaudErr, unnamed_58, lastPhaseAdj */
+	{ 0x68, 5, 4 },		/* bpfSq1, bpfSq2, bpfZ1, bpfZ2, errZ1 */
+	{ 0x80, 3, 4 },		/* dftMag, dftRe, dftIm             */
+	{ 0x90, 1, 4 },		/* normBPFhBaudB0coef               */
+};
+
+/*
  * Compare two objects of `n` bytes, blanking the four-byte words listed in
- * `skip` (terminated by ~0u) because they hold heap addresses or the vptr.
- * Reports through diff_eq_obj so a difference names a field.
+ * `skip` (terminated by ~0u) because they hold heap addresses or the vptr, and
+ * treating the floating-point fields above as floats.  Reports through the
+ * harness so a difference names a field.
  */
 static void
 cmp_obj(const char *what, unsigned n, const unsigned *skip, long input)
@@ -302,8 +322,10 @@ cmp_obj(const char *what, unsigned n, const unsigned *skip, long input)
 		memset(scratch[0] + skip[i], 0, 4);
 		memset(scratch[1] + skip[i], 0, 4);
 	}
-	diff_eq_obj_(__FILE__, __LINE__, what, "V90Resampler", scratch[0],
-		     scratch[1], n, input);
+	diff_eq_obj_float_(__FILE__, __LINE__, what, "V90Resampler",
+			   scratch[0], scratch[1], n, rs_float_spans,
+			   sizeof rs_float_spans / sizeof rs_float_spans[0],
+			   input);
 }
 
 static const unsigned skip_rs[] = { 0x00, 0x04, 0x08, ~0u };
@@ -367,8 +389,7 @@ cmp_buf(const char *what, unsigned off, unsigned len, int *sawNonZero,
 	for (i = 0; i < len; i++) {
 		if (sawNonZero && a[i] != 0)
 			*sawNonZero = 1;
-		diff_eq_int(what, (long)fbits(a[i]), (long)fbits(b[i]),
-			    (long)i);
+		diff_eq_float(what, a[i], b[i], (long)i);
 	}
 }
 
@@ -1135,10 +1156,9 @@ case_resample(void)
 			for (j = 0; j < n0; j++) {
 				if (rout[0][j] != 0)
 					seen_output = 1;
-				diff_eq_int("shape %ld: out[]",
-					    (long)fbits(rout[0][j]),
-					    (long)fbits(rout[1][j]),
-					    i * 10000 + (long)(call * 100 + j));
+				diff_eq_float("shape %ld: out[]", rout[0][j],
+					      rout[1][j],
+					      i * 10000 + (long)(call * 100 + j));
 			}
 			cmp_obj("Resampler after resample", 0x48, skip_rs,
 				i * 100 + (long)call);
@@ -1205,10 +1225,9 @@ case_v90_resample(void)
 			if (n0 > RS_OUT)
 				n0 = RS_OUT;
 			for (j = 0; j < n0; j++)
-				diff_eq_int("shape %ld: out[]",
-					    (long)fbits(rout[0][j]),
-					    (long)fbits(rout[1][j]),
-					    i * 10000 + (long)(call * 100 + j));
+				diff_eq_float("shape %ld: out[]", rout[0][j],
+					      rout[1][j],
+					      i * 10000 + (long)(call * 100 + j));
 			cmp_obj("V90Resampler after resample", 0xb4, skip_vr,
 				i * 100 + (long)call);
 			cmp_buf("shape %ld: timingHistory[]", 0xa4,

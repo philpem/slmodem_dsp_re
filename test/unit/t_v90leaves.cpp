@@ -3267,29 +3267,63 @@ run_ec_update(void)
 				dsplib_debug_capture_on = 0;
 
 				ecx_cmp_slot("after updateEchoHistory", tag);
-				diff_eq_obj_(__FILE__, __LINE__,
-					     "after updateEchoHistory",
-					     "echoHistory and its guard",
-					     ecx_hist[0], ecx_hist[1],
-					     sizeof(ecx_hist[0]), tag);
+				{
+					static const struct diff_float_span hs[] = {
+						{ 0, ECX_LEAD + ECX_HIST
+						     + ECX_GUARD, 4 },
+					};
+
+					diff_eq_obj_float_(__FILE__, __LINE__,
+							   "after updateEchoHistory",
+							   "echoHistory and its guard",
+							   ecx_hist[0], ecx_hist[1],
+							   sizeof(ecx_hist[0]), hs,
+							   1, tag);
+				}
 
 				/* The ARMA the writer runs every sample. */
 				memcpy(aa, ecx_arma[0], sizeof aa);
 				memcpy(ab, ecx_arma[1], sizeof ab);
 				memset(aa, 0, 16);
 				memset(ab, 0, 16);
-				diff_eq_obj_(__FILE__, __LINE__,
-					     "after updateEchoHistory",
-					     "the ARMA object", aa, ab,
-					     sizeof aa, tag);
-				diff_eq_obj_(__FILE__, __LINE__,
-					     "after updateEchoHistory",
-					     "the ARMA x history", ma->m_xhist,
-					     mb->m_xhist, ma->m_xlen * 4, tag);
-				diff_eq_obj_(__FILE__, __LINE__,
-					     "after updateEchoHistory",
-					     "the ARMA y history", ma->m_yhist,
-					     mb->m_yhist, ma->m_ylen * 4, tag);
+				{
+					/*
+					 * FloatARMA: two floats at +0x2c/+0x30
+					 * (m_fwd, m_fbk); the pointers are
+					 * zeroed above and the counts are
+					 * exact.
+					 */
+					static const struct diff_float_span as[] = {
+						{ 0x2c, 2, 4 },
+					};
+
+					diff_eq_obj_float_(__FILE__, __LINE__,
+							   "after updateEchoHistory",
+							   "the ARMA object", aa,
+							   ab, sizeof aa, as, 1,
+							   tag);
+				}
+				{
+					struct diff_float_span xs = {
+						0, ma->m_xlen, 4
+					};
+					struct diff_float_span ys = {
+						0, ma->m_ylen, 4
+					};
+
+					diff_eq_obj_float_(__FILE__, __LINE__,
+							   "after updateEchoHistory",
+							   "the ARMA x history",
+							   ma->m_xhist, mb->m_xhist,
+							   ma->m_xlen * 4, &xs, 1,
+							   tag);
+					diff_eq_obj_float_(__FILE__, __LINE__,
+							   "after updateEchoHistory",
+							   "the ARMA y history",
+							   ma->m_yhist, mb->m_yhist,
+							   ma->m_ylen * 4, &ys, 1,
+							   tag);
+				}
 
 				/*
 				 * NOTHING AT OR PAST `historyAlloc`, ever.

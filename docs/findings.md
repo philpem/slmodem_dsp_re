@@ -124443,3 +124443,64 @@ absent from the period compile).  The modern tier goes from 29 to 28 red:
 `t_v90cdesign` green, the other 28 red for the reasons above.
 
 (2026-09-19)
+
+## F11365. Issue #172 category 1: a field-typed object comparison, its negative control, and the measured outcome of the 12
+
+Follow-up to F11364.  Category 1 named 12 modern-tier fixtures whose float
+value differs at rounding level but whose comparison is a raw struct-byte /
+`memcmp` / raw-word compare, so `HARNESS_FLOAT_TOL` cannot reach it.  The fix
+is to compare the FLOAT FIELD as a float and every non-float field exactly --
+never to widen the tolerance, which would also excuse a changed index, flag or
+decision in the same object.
+
+**Mechanism.**  `test/harness/harness.c` gains `diff_eq_obj_float_`: the caller
+names the object's float spans as `{byte offset, element count, element size}`
+(size 4 for `float`, 8 for `double`, the resampler's `phase` being the one
+double that matters).  Every element in a span goes through
+`diff_eq_float_`/`diff_eq_double_`; every byte outside the spans is compared
+exactly, with `diff_eq_obj_`'s own run-coalescing and first-difference
+reporting.  The helper clips a span that runs past the object, so one span
+list serves all four sizes of the nested `Resampler` chain.  `diff_eq_double_`
+is new and applies the same relative criterion and NaN handling as the float
+form, in 64-bit ULP.
+
+**Negative control.**  `test/safety/t_field_typed.c` (`make safety`) links the
+comparison support and asserts, adaptively against `harness_float_tol()`: a
+1-ULP float, a 1-ULP float-array element and a 1-ULP double pass ONLY under
+the define and are counted tolerance-only; a beyond-eps float, array element
+and double FAIL in both builds; a changed index, a changed flag bit and a
+changed non-float tail word FAIL in both builds; and an UNNAMED float stays
+bit-exact even under the define, which is what proves the helper is not an off
+switch.  Measured: `PASS ... 11 checks, 0 bad (tol=1e-06)` and the same source
+against a no-define harness object `PASS ... 11 checks, 0 bad (tol=0)`.
+
+**Outcome of the 12, measured** (`make -j1 -k test`, GCC 14.2.0-19).  Only
+TWO turn green; the rest are red for reasons the tolerance must not touch:
+
+| fixture | outcome |
+|---|---|
+| `t_gtonedet` | **green** -- six floats at +0x04, 1,989 tolerance-only checks |
+| `t_v92dec` | **green** -- six base floats at +0x04, 588 tolerance-only checks |
+| `t_v34info1a` | field-typed compare passes; red on **96 transcript** checks only |
+| `t_vpcmflomodem` | field-typed compare passes; red on **2 transcript** checks only |
+| `t_v90leaves` | field-typed compare passes; red on **7 transcript** checks only |
+| `t_v90demprog` | red -- `V90Resampler` floats 19-256 ULP near zero (relative >1e-6), plus `V90Phase3Demodulator+0x2c samplesInState` and `V90SdDetector+0 count` (both `unsigned`, decisions) |
+| `t_resampler` | red -- coefficient sinc divergence (relative ~4e-4); `setNormalizedPhase` NaN rejection is a **decision** (modern stores NaN, blob stores 0); resample sinc |
+| `t_v90demctor` | red -- coefficient bank 22-29,281 ULP, relative up to ~4e-4 (sinc/FIR design) |
+| `t_floatarma` | red -- adversarial x87 pairings, 13-292 ULP, relative up to 3.4e-5 |
+| `t_v92modstate` | red -- resampler/queue sinc, 59-7,554 ULP, relative up to 7e-4 |
+| `t_v90adid` | NOT field-typed: the differing fields are `linMapp`/`linMappAlt` **shorts** (decisions), a signed-zero float, `padGain` and transcripts; decision-level work |
+| `t_vpcmrunpcm` | NOT field-typed: float words 1-44 ULP across dynamically-discovered heap regions whose field types are not modelled, some beyond 1e-6, plus the exemption meta-assertion |
+
+The category-1 premise ("1-113 ULP") holds for the two that close; the others
+differ by more than the 1e-6 (~8 ULP) tier tolerance because they carry the
+sinc/FIR design divergence F11363 bounded, or are decision-level and stay hard
+failures by F11364's rule.
+
+**Verdicts.**  `make period J=1`: **376 passed, 0 failed** (the define is
+absent from the period compile and `diff_eq_obj_float_` is bit-exact there).
+Modern tier: **350 green, 26 red**, down from 348/28 -- `t_gtonedet` and
+`t_v92dec` closed, no new red.  `python3 tools/refcheck.py`: clean.  No
+`src/`/`include/` file changed and no register entry added.
+
+(2026-09-19)

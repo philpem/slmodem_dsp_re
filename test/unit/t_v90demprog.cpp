@@ -218,11 +218,47 @@ static unsigned char dscbuf[2][256];
  */
 static unsigned char msk_a[0x3bb0], msk_b[0x3bb0];
 
+/*
+ * The float fields of the two composed objects whose differences are
+ * rounding-level: V90Equalizer's scalars and V90Resampler's scalar/array
+ * floats.  The P3 demodulator's differing word (+0x2c `samplesInState`) and
+ * the SD detector's (+0x00 `count`) are integers and stay exact -- those are
+ * the decision-level differences this pass does not excuse.
+ */
+static const struct diff_float_span equ_spans[] = {
+	{ 0x10, 1, 4 },		/* linearEquBeta                     */
+	{ 0x3c, 1, 4 },		/* dfeBeta                           */
+	{ 0x6c, 1, 4 },		/* holdoverSample                    */
+	{ 0x7c, 1, 4 },		/* blockErrorEnergyRms               */
+	{ 0x80, 4, 4 },		/* meanErrorEnergy Current/Mean/Min/Max */
+	{ 0x90, 1, 4 },		/* errorEnergyMeanK                  */
+	{ 0xbc, 3, 4 },		/* maxLeCoefValue, minLeCoefValue, conv */
+	{ 0xfc, 3, 4 },		/* maxDfeCoefValue, minDfeCoefValue, conv */
+	{ 0x13c, 2, 4 },	/* ph4 mean-error before/ratio       */
+	{ 0x14c, 1, 4 },	/* timingOffset                      */
+};
+
+static const struct diff_float_span vr_spans[] = {
+	{ 0x0c, 1, 8 },		/* double phase                      */
+	{ 0x14, 5, 4 },		/* pending[5]                        */
+	{ 0x2c, 1, 4 },		/* ppmScale                          */
+	{ 0x48, 1, 4 },		/* timingOffset                      */
+	{ 0x4c, 2, 4 },		/* bllK1, bllK2                      */
+	{ 0x54, 3, 4 },		/* lastHalfBaudErr, unnamed_58, lastPhaseAdj */
+	{ 0x68, 5, 4 },		/* bpfSq1, bpfSq2, bpfZ1, bpfZ2, errZ1 */
+	{ 0x80, 3, 4 },		/* dftMag, dftRe, dftIm              */
+	{ 0x90, 1, 4 },		/* normBPFhBaudB0coef                */
+};
+
+static const struct diff_float_span sd_spans[] = {
+	{ 0x08, 3, 4 },		/* thresh_08, thresh_0c, value_10    */
+};
+
 static void
-mask_cmp(const char *file, int line, const char *what, const char *type,
-	 const unsigned char *a, const unsigned char *b,
-	 const unsigned char *pa, const unsigned char *pb, unsigned int n,
-	 long tag)
+mask_cmp_(const char *file, int line, const char *what, const char *type,
+	  const unsigned char *a, const unsigned char *b,
+	  const unsigned char *pa, const unsigned char *pb, unsigned int n,
+	  const struct diff_float_span *spans, size_t nspans, long tag)
 {
 	unsigned int i;
 
@@ -232,12 +268,33 @@ mask_cmp(const char *file, int line, const char *what, const char *type,
 		msk_a[i] = same ? a[i] : 0;
 		msk_b[i] = same ? b[i] : 0;
 	}
-	diff_eq_obj_(file, line, what, type, msk_a, msk_b, n, tag);
+	diff_eq_obj_float_(file, line, what, type, msk_a, msk_b, n, spans,
+			   nspans, tag);
 }
 
+#define mask_cmp(file, line, what, type, a, b, pa, pb, n, tag) \
+	mask_cmp_(file, line, what, type, a, b, pa, pb, n, 0, 0, tag)
+
+/*
+ * A pure float buffer compared element-wise, so the modern tier's
+ * rounding-level tolerance reaches every element where a byte `memcmp` could
+ * not.  The caller supplies `file`/`line` so a failure names the call site.
+ */
+static void
+cmp_float_buf_(const char *file, int line, const char *what, const float *a,
+	       const float *b, unsigned n, long tag)
+{
+	struct diff_float_span span = { 0, n, 4 };
+
+	diff_eq_obj_float_(file, line, what, "float[]", a, b,
+			   (size_t)n * sizeof(float), &span, 1, tag);
+}
+
+#define CMP_FLOAT_BUF(what, a, b, n, tag) \
+	cmp_float_buf_(__FILE__, __LINE__, (what), (a), (b), (n), (tag))
+
 static unsigned char cmp_a[DEM_SLOT];
-static unsigned char cmp_b[DEM_SLOT];
-static unsigned char pre_dmp[2][DMP_SLOT];
+static unsigned char cmp_b[DEM_SLOT];static unsigned char pre_dmp[2][DMP_SLOT];
 static unsigned char pre_p4d[2][P4D_SLOT];
 static unsigned char pre_ce[2][CE_SLOT];
 static unsigned char pre_cdz[2][CDZ_SLOT];
@@ -683,9 +740,8 @@ run_progress(void)
 			     "V90Demodulator", cmp_a, cmp_b, DEM_SLOT, trial);
 		diff_eq_int("nofOut (%ld)", (long)nofOut[0], (long)nofOut[1],
 			    trial);
-		diff_eq_int("the resampled block (%ld)",
-			    memcmp(a248[0], a248[1], sizeof a248[0]) == 0, 1,
-			    trial);
+		CMP_FLOAT_BUF("the resampled block", a248[0], a248[1],
+			      PROG_ARR, trial);
 		diff_eq_int("the equalised symbols (%ld)",
 			    memcmp(a250[0], a250[1], sizeof a250[0]) == 0, 1,
 			    trial);
@@ -928,42 +984,54 @@ run_constructed_phase3(void)
 				     tag);
 			diff_eq_int("composed nofOut (%ld)", (long)nofOut[0],
 				    (long)nofOut[1], tag);
-			diff_eq_int("composed resampled block (%ld)",
-				    memcmp(a248[0], a248[1], sizeof a248[0]) == 0,
-				    1, tag);
-			diff_eq_int("composed prefilter/AGC block (%ld)",
-				    memcmp(a244[0], a244[1], sizeof a244[0]) == 0,
-				    1, tag);
+			CMP_FLOAT_BUF("composed resampled block", a248[0],
+				      a248[1], PROG_ARR, tag);
+			CMP_FLOAT_BUF("composed prefilter/AGC block", a244[0],
+				      a244[1], PROG_ARR, tag);
 			diff_eq_int("composed equalized symbols (%ld)",
 				    memcmp(a250[0], a250[1], sizeof a250[0]) == 0,
 				    1, tag);
-			diff_eq_int("composed equalizer float output (%ld)",
-				    memcmp(a254[0], a254[1], sizeof a254[0]) == 0,
-				    1, tag);
-			diff_eq_int("composed equalizer arrays (%ld)",
-				    memcmp(&eqa[0], &eqa[1], sizeof eqa[0]) == 0,
-				    1, tag);
+			CMP_FLOAT_BUF("composed equalizer float output",
+				      a254[0], a254[1], PROG_ARR, tag);
+			{
+				/*
+				 * eqa's seven float arrays are contiguous
+				 * from +0x00 to +0x0c2f (6 x 80 + 300 floats);
+				 * the short arrays that follow stay exact.
+				 */
+				static const struct diff_float_span es[] = {
+					{ 0, 6 * 80 + 300, 4 },
+				};
+
+				diff_eq_obj_float_(__FILE__, __LINE__,
+						   "composed equalizer arrays",
+						   "equalizer arrays",
+						   &eqa[0], &eqa[1],
+						   sizeof eqa[0], es, 1, tag);
+			}
 			diff_eq_int("composed output (%ld)",
 				    memcmp(prog_out[0], prog_out[1],
 					   sizeof prog_out[0]) == 0, 1, tag);
-			mask_cmp(__FILE__, __LINE__, "composed equalizer",
-				 "V90Equalizer", equ[0], equ[1], pre_equ[0],
-				 pre_equ[1], EQU_SLOT, tag);
-			mask_cmp(__FILE__, __LINE__, "composed resampler",
-				 "V90Resampler", (unsigned char *)&D(0)->resampler,
-				 (unsigned char *)&D(1)->resampler, pre_vr[0],
-				 pre_vr[1], sizeof(V90Resampler), tag);
-			mask_cmp(__FILE__, __LINE__, "composed P3 demodulator",
-				 "V90Phase3Demodulator", p3d[0], p3d[1],
-				 pre_p3d[0], pre_p3d[1], P3D_SLOT, tag);
-			mask_cmp(__FILE__, __LINE__, "composed SD detector",
-				 "V90SdDetector", (unsigned char *)sd0,
-				 (unsigned char *)sd1, pre_sd[0], pre_sd[1],
-				 sizeof *sd0, tag);
-			diff_eq_int("composed SD history (%ld)",
-				    memcmp(sd0->history, sd1->history,
-					   12 * sizeof(float)) == 0, 1, tag);
-			mask_cmp(__FILE__, __LINE__, "composed evaluator",
+			mask_cmp_(__FILE__, __LINE__, "composed equalizer",
+				  "V90Equalizer", equ[0], equ[1], pre_equ[0],
+				  pre_equ[1], EQU_SLOT, equ_spans,
+				  sizeof equ_spans / sizeof equ_spans[0], tag);
+			mask_cmp_(__FILE__, __LINE__, "composed resampler",
+				  "V90Resampler",
+				  (unsigned char *)&D(0)->resampler,
+				  (unsigned char *)&D(1)->resampler, pre_vr[0],
+				  pre_vr[1], sizeof(V90Resampler), vr_spans,
+				  sizeof vr_spans / sizeof vr_spans[0], tag);
+			mask_cmp_(__FILE__, __LINE__, "composed P3 demodulator",
+				  "V90Phase3Demodulator", p3d[0], p3d[1],
+				  pre_p3d[0], pre_p3d[1], P3D_SLOT, 0, 0, tag);
+			mask_cmp_(__FILE__, __LINE__, "composed SD detector",
+				  "V90SdDetector", (unsigned char *)sd0,
+				  (unsigned char *)sd1, pre_sd[0], pre_sd[1],
+				  sizeof *sd0, sd_spans,
+				  sizeof sd_spans / sizeof sd_spans[0], tag);
+			CMP_FLOAT_BUF("composed SD history", sd0->history,
+				      sd1->history, 12, tag);			mask_cmp(__FILE__, __LINE__, "composed evaluator",
 				 "V90ConnectionEvaluator", ce[0], ce[1],
 				 pre_ce[0], pre_ce[1], CE_SLOT, tag);
 			mask_cmp(__FILE__, __LINE__, "composed parameter block",
