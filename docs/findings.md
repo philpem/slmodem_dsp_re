@@ -124168,6 +124168,44 @@ worked around in the reconstruction.  `v34initialbauds` and the tables
 
 (2026-09-14)
 
+**CORRECTION, 2026-09-19 (issue #82).**  Two things above were measured again
+against the modern host compiler and did not survive.
+
+**`-fno-toplevel-reorder` IS the flag the drop cases were said not to have.**
+`pGlobalFDSPObj`/`uCorrelationReportsNo` (defined in `Fdsp.c`, not
+`Fdspkrnl.c`), `v34initialbauds` (VpcmFloModem.cpp) and the V.22/V.32 static
+tables are all emitted with the plain name under `-fno-toplevel-reorder`; the
+elimination rides on the reordering pass.  `-fkeep-static-consts`,
+`-fno-tree-dce` and `-fno-dce` do not keep them, which is what this finding
+measured, but the reordering flag was not tried.  It is APPARATUS and it is
+applied PER-TU: globally it ALSO drops a `static` function's regparm(3)
+convention back to regparm(0), and the fixtures call two of those functions
+directly.  The Makefile's `HOSTPORTFLAGS` carries the two rename flags for
+every host object and a target-specific `-fno-toplevel-reorder` for exactly
+`Fdsp.o`, `V22.o`, `V32.o` and `VpcmFloModem.o`.
+
+**The rename cases were only half the story: the fixtures declared the wrong
+convention.**  Making `AnalyseDialString` and `bValidateEnergyValue` `static`
+also moved their MODERN calling convention from regparm(2) to regparm(3)
+(the object's GCC 3.4.2 caps a static at 2; GCC 4+ uses 3).  `t_dialer`,
+`t_dialstring` and `t_fdspkrnl` declared `regparm(2)` for OUR copy, so once
+the link was restored the third argument stayed on the stack where the callee
+never looked: `t_dialstring` diverged in `struct dialer+160` and
+`t_fdspkrnl` segfaulted.  The declaration now follows the building compiler,
+exactly as `EchoCanceler` in `t_fdspkrnl.c` already did.  These are `test/`
+changes, not `src/`.
+
+**The residual is only the header-only template weak copies** -- `Agc`,
+`DiffCoder`, `LowPassFIR`, `Queue`, `Scrambler`, `SineWave` -- which no flag
+short of `-fno-inline` keeps, and `-fno-inline` changes every translation
+unit.  Six fixtures cannot link and are declared in
+`tools/linkdiverge.json`, a sibling of `tools/gccdiverge.json` with the same
+discipline (names a fixture and its symbols, stale entry is an error, period
+never consults it, the fixture is NOT run).  See `docs/method/compilers.md`.
+Issue #77.
+
+(2026-09-19)
+
 ## F11360. The object's `fax.c` is an empty translation unit, and the FILE order is now exact through `vpcm.c`
 
 Issue #6, the file/order dimension.  `dsplibs.o` carries a FILE record

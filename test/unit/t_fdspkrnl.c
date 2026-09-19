@@ -85,11 +85,23 @@ extern int ref_bValidateEnergyValue(float *buf, unsigned int n, int *hist,
  * Ours: FILE-LOCAL in the object, so it is `static` in Fdspkrnl.c and
  * fdspkrnl.h no longer declares it.  The test tier links a globalized copy
  * (tools/testvisible.py).
+ *
+ * The convention is the BUILDING compiler's, as for EchoCanceler above:
+ * GCC 3.4.2 caps a static function at regparm(2), GCC 4 and later use
+ * regparm(3).  Declaring regparm(2) for a modern build leaves the third
+ * argument on the stack where the callee never looks (finding F11359).
  */
+#if __GNUC__ >= 4
+extern int bValidateEnergyValue(float *buf, unsigned int n, int *hist,
+				unsigned int *idxp, unsigned int histlen,
+				struct fdsp_kernel *k)
+	__attribute__((regparm(3)));
+#else
 extern int bValidateEnergyValue(float *buf, unsigned int n, int *hist,
 				unsigned int *idxp, unsigned int histlen,
 				struct fdsp_kernel *k)
 	__attribute__((regparm(2)));
+#endif
 extern int ref_FDSP_Kernel_Loop(struct fdsp_kernel *k, float *in_a,
 				float *out_b, float *in_b, float *out_a);
 extern void ref_FDSP_Kernel_InitObj(struct fdsp_kernel *k);

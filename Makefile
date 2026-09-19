@@ -216,6 +216,47 @@ CXXFLAGS += -fno-math-errno
 # source profile. Keep fixture/oracle C++ code on the ordinary flags.
 CXXMATHFLAGS := -ffast-math
 
+# THE OBJECT'S FILE-LOCAL BINDING, in the host build.  The binding pass made
+# a handful of symbols `static` to match the reference's LOCAL records, and
+# GCC 13+ then transforms or removes them:
+#
+#   * `AnalyseDialString` (Dialer.c) is partially inlined to
+#     `AnalyseDialString.part.0`; `bValidateEnergyValue` (Fdspkrnl.c) is
+#     cloned for constant arguments to `bValidateEnergyValue.constprop.0`.
+#     `-fno-partial-inlining -fno-ipa-cp` restores the plain names.
+#     `-fno-ipa-cp` and NOT `-fno-ipa-cp-clone` alone -- the clone is made by
+#     the earlier constant propagation, not by the clone pass (F11359).
+#   * `pGlobalFDSPObj`/`uCorrelationReportsNo` (Fdsp.c), `v34initialbauds`
+#     (VpcmFloModem.cpp) and the V.22/V.32 static tables are removed outright
+#     because nothing takes their address.  `-fno-toplevel-reorder` keeps
+#     them: it withdraws the reordering pass the elimination rides on.
+#     F11359 measured `-fno-tree-dce`/`-fno-dce`/`-fkeep-static-consts` and
+#     found no flag; `-fno-toplevel-reorder` was not tried there and is the
+#     correction.  It is applied PER-TU (the target-specific lines below) and
+#     not globally, because globally it ALSO drops a `static` function's
+#     regparm(3) convention back to regparm(0), and the fixtures call two of
+#     those functions directly.
+#
+# APPARATUS, not reconstruction: these withdraw transformations the object's
+# own GCC 3.4.2 never performed, and they are applied to $(BUILD)/repro -- the
+# faithful-original tree the differential fixtures link -- only.  `make period`
+# builds its own tree with the period compiler and never sees them.  Never name
+# a flag from `src/`; findings F11359 and docs/method/compilers.md.
+#
+# The header-only template weak copies (Agc, DiffCoder, LowPassFIR, Queue,
+# Scrambler, SineWave) are NOT closable this way -- only `-fno-inline` keeps
+# them and that changes every translation unit -- so those fixtures are
+# declared in tools/linkdiverge.json.  Issue #77.
+HOSTPORTFLAGS := -fno-partial-inlining -fno-ipa-cp
+
+# The per-TU half.  A target-specific variable is inherited by that target's
+# recipe and nothing else, so the flag reaches exactly the translation unit
+# whose static data it preserves and no function's calling convention moves.
+$(BUILD)/repro/service/Fdsp.o:          HOSTPORTFLAGS += -fno-toplevel-reorder
+$(BUILD)/repro/pump/v22/V22.o:          HOSTPORTFLAGS += -fno-toplevel-reorder
+$(BUILD)/repro/pump/v32/V32.o:          HOSTPORTFLAGS += -fno-toplevel-reorder
+$(BUILD)/repro/pump/v90/VpcmFloModem.o: HOSTPORTFLAGS += -fno-toplevel-reorder
+
 # v34hsstep.c is the per-dispatch-case fixture for `v34handshak`.  It lives
 # here rather than inside one test file because #56-#58 are sixteen tests over
 # the same object, and a fixture each of them copies is a fixture sixteen of
@@ -280,7 +321,7 @@ TESTHOST_OBJ := $(patsubst $(BUILD)/repro/%.o,$(BUILD)/testhost/%.o,$(OBJ_REPRO)
 # them for test binaries only.
 LDFLAGS    := -no-pie -Wl,-z,noexecstack,-z,notext
 
-.PHONY: firewall strings offsets refs mutation-snapshot all test safety check64 docs clean interop capture coverage worklist debugcov phase portability phase-full blobfix blobfix-check onedef vendor banners period
+.PHONY: firewall strings offsets refs mutation-snapshot all test safety check64 docs clean interop capture coverage worklist debugcov phase portability phase-full blobfix blobfix-check onedef vendor banners period linkexc
 
 # Keep intermediates: chained implicit rules otherwise delete them, forcing a
 # full rebuild on every invocation.
@@ -369,11 +410,11 @@ $(BUILD)/%.o: %.cpp Makefile
 # above -- the two would otherwise both match $(BUILD)/repro/foo.o.
 $(BUILD)/repro/%.o: src/%.c
 	@mkdir -p $(dir $@)
-	$(CC) $(ARCH32) $(FPFLAGS) $(CFLAGS) $(REPRODUCE) -c $< -o $@
+	$(CC) $(ARCH32) $(FPFLAGS) $(CFLAGS) $(HOSTPORTFLAGS) $(REPRODUCE) -c $< -o $@
 
 $(BUILD)/repro/%.o: src/%.cpp Makefile
 	@mkdir -p $(dir $@)
-	$(CXX) $(ARCH32) $(FPFLAGS) $(CXXFLAGS) $(CXXMATHFLAGS) $(REPRODUCE) -c $< -o $@
+	$(CXX) $(ARCH32) $(FPFLAGS) $(CXXFLAGS) $(HOSTPORTFLAGS) $(CXXMATHFLAGS) $(REPRODUCE) -c $< -o $@
 
 # The test-only globalized copies.  See the $(TESTVISIBLE) note above: the
 # partial link reads $(BUILD)/repro directly, so nothing here reaches the
@@ -443,9 +484,19 @@ TESTCXXFLAGS = $(shell cat test/unit/$(basename $(notdir $@)).cxxflags 2>/dev/nu
 # prerequisite-only rule.
 $(BUILD)/test/unit/t_dspmath.o: test/unit/t_dspmath.cxxflags
 
+# THE LINK GOES THROUGH tools/linkdiverge.py, and it is not a convenience.
+# A fixture that names a symbol the period object emits and the modern object
+# does not cannot link, and the honest handling is a DECLARED exception rather
+# than a stub binary or a tolerance.  The wrapper links exactly as before when
+# the fixture links; when it does not, it excuses the fixture only if the
+# linker's undefined set is covered by tools/linkdiverge.json and every error
+# is an undefined reference.  An excused fixture produces no binary and is
+# never run -- `make test` prints LINK-EXCUSED and counts it.  `make period`
+# does not consult the register.  Finding F11359, issue #82.
 $(BUILD)/test/%: $(BUILD)/test/unit/%.o $(TESTHOST_OBJ) $(HARNESS_OBJ) $(REF)
 	@mkdir -p $(dir $@)
-	$(CC) $(ARCH32) $(LDFLAGS) $(TESTLDFLAGS) -o $@ $^ -lm
+	@$(PYTHON) tools/linkdiverge.py --test $* -- \
+	    $(CC) $(ARCH32) $(LDFLAGS) $(TESTLDFLAGS) -o $@ $^ -lm
 
 $(BUILD)/test/unit/%.o: test/unit/%.c
 	@mkdir -p $(dir $@)
@@ -501,7 +552,10 @@ print-%:
 one: firewall strings offsets refs
 	@test -n "$(T)" || { echo "usage: make one T=t_name [T=...]"; exit 1; }
 	@$(MAKE) --no-print-directory $(addprefix $(BUILD)/test/,$(T))
-	@rc=0; for t in $(T); do ./$(BUILD)/test/$$t || rc=1; done; exit $$rc
+	@rc=0; for t in $(T); do \
+	    if [ -x ./$(BUILD)/test/$$t ]; then ./$(BUILD)/test/$$t || rc=1; \
+	    else $(PYTHON) tools/linkdiverge.py --run $$t || rc=1; fi; \
+	done; exit $$rc
 
 #
 # EVERY TEST IS ITS OWN TARGET, so `make -j` runs them in parallel as well as
@@ -531,12 +585,30 @@ RUNTESTS := $(addprefix run-,$(TESTS) $(CXXTESTS))
 # is then exactly `./$<` with an extra process; see that tool for the
 # discipline, and docs/method/compilers.md for why it exists at all.
 #
+# A fixture tools/linkdiverge.py has declared link-excused has NO binary, so
+# it cannot go through gccdiverge.  The `else` reports the declared exception
+# and nothing else; a missing binary that is NOT declared still fails.
+#
 # `make period` has NO allow-list and is not getting one.
 #
 $(RUNTESTS): run-%: $(BUILD)/test/%
-	@$(PYTHON) tools/gccdiverge.py $* ./$<
+	@if [ -x ./$< ]; then $(PYTHON) tools/gccdiverge.py $* ./$<; \
+	 else $(PYTHON) tools/linkdiverge.py --run $*; fi
 
 test: firewall strings offsets refs $(RUNTESTS)
+
+#
+# The link-exception census.  tools/linkdiverge.py owns the register; this
+# prints its denominator and catches a STALE entry -- a declared fixture that
+# now LINKS fails here rather than sitting in the register for ever.  The
+# summary line is written for the portability boundary, which refuses to
+# pronounce on a tier that did not measure.  `make period` never consults it.
+#
+LINKEXCCOUNTS := $(BUILD)/linkexc.txt
+
+linkexc:
+	@$(PYTHON) tools/linkdiverge.py --check --build $(BUILD) \
+	    --counts $(LINKEXCCOUNTS)
 
 # --- repairing the blob we still depend on --------------------------------
 #
@@ -828,7 +900,8 @@ COVCOUNTS  := build-cov/measured.txt
 PHASE_TIERS := firewall strings offsets refs period params onedef vendor \
                banners partial-compare-selftest tumap-selftest
 
-PORTABILITY_TIERS := test check64 interop coverage debugcov mutation-snapshot
+PORTABILITY_TIERS := test linkexc check64 interop coverage debugcov \
+                     mutation-snapshot
 
 phase: prereq
 	@$(MAKE) --no-print-directory $(PHASE_TIERS)
@@ -843,8 +916,14 @@ portability: prereq
 	    echo "  so the coverage and deviation tiers measured nothing and there"; \
 	    echo "  is no denominator to stand behind.  Findings 134, 2401."; \
 	    exit 1; }
+	@test -s $(LINKEXCCOUNTS) || { \
+	    echo "portability boundary: REFUSING to say OK -- $(LINKEXCCOUNTS) is missing,"; \
+	    echo "  so the link-exception census did not run and its denominator is"; \
+	    echo "  unknown.  Findings 134, 2401, F11359."; \
+	    exit 1; }
 	@echo "portability boundary: modern, 64-bit, interop, coverage and debug sites all OK"
 	@printf '                '; cat $(COVCOUNTS)
+	@printf '                '; cat $(LINKEXCCOUNTS)
 
 phase-full: phase portability
 

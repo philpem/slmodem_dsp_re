@@ -424,3 +424,53 @@ to delete*. Deleting `round32` outright failed the period gate at 592/4356 —
 our `resample` is not unrolled where the object's is, so it never runs out of
 registers. That sent the search toward a spelling that states the narrowing
 instead of hoping for it.
+
+## The modern LINK tier: flags, and a declared exception (issue #82)
+
+Finding F11359.  The binding pass made seven symbols `static` to match the
+reference's LOCAL records, and GCC 13+ then transforms or removes them, so a
+differential fixture that names one cannot link in the modern tier.  This is a
+DIFFERENT stage from the check divergences `tools/gccdiverge.json` declares:
+the binary does not exist to run.
+
+Measured on GCC 14.2.0-19, 13 of 376 fixtures failed to link.  Three shapes:
+
+| shape | symbols | disposition |
+|---|---|---|
+| renamed | `AnalyseDialString` (Dialer.c), `bValidateEnergyValue` (Fdspkrnl.c) | `-fno-partial-inlining -fno-ipa-cp` on the host tree |
+| eliminated static | `pGlobalFDSPObj`/`uCorrelationReportsNo` (Fdsp.c), `v34initialbauds` (VpcmFloModem.cpp), the V.22/V.32 tables | `-fno-toplevel-reorder`, PER-TU |
+| template weak copy | Agc, DiffCoder, LowPassFIR, Queue, Scrambler, SineWave | no flag; declared |
+
+`-fno-toplevel-reorder` is F11359's correction: it was not tried there, and it
+keeps every eliminated static.  It is applied only to `Fdsp.o`, `V22.o`,
+`V32.o` and `VpcmFloModem.o` because globally it also moves a `static`
+function's convention from regparm(3) back to regparm(0), and three fixtures
+call two of those functions directly.  `Makefile`'s `HOSTPORTFLAGS` is the one
+source; `make period` builds its own tree with the period compiler and never
+sees any of it.
+
+The binding pass also changed those two functions' MODERN calling convention
+(regparm(2) -> regparm(3), the object's GCC 3.4.2 capping a static at 2), and
+`t_dialer`/`t_dialstring`/`t_fdspkrnl` declared the object's regparm(2) for our
+copy.  The link fix exposed it as divergence and a segfault; the declarations
+now follow the building compiler, exactly as `EchoCanceler` in `t_fdspkrnl.c`
+already did.  `test/`, not `src/`.
+
+The template copies are issue #77: only `-fno-inline` keeps them and that
+changes every TU.  Their six fixtures are declared in `tools/linkdiverge.json`,
+a sibling of `tools/gccdiverge.json` with the same discipline -- it names a
+fixture and its symbols, excuses the fixture only when the linker's undefined
+set is a subset of them and every error is an undefined reference, treats a
+now-linking entry as STALE, is never consulted by `make period`, and does NOT
+run the fixture (no stub binary).  `make linkexc` prints
+`link exceptions: N declared, M excused, 0 stale (K binaries built)` and the
+portability boundary refuses to print its OK line without that denominator,
+like `COVCOUNTS`.
+
+Before: 13 fixtures unlinked, 0 declared.  After: 7 link and pass (3 rename +
+4 static), 6 declared link-exceptions, 0 unexcused link failures, 0 stale.
+`make period J=1` 376 passed / 0 failed.  The modern test tier remains red on
+GCC 14 for the x87 reasons of #30 -- a control rebuilt the failing TUs without
+`HOSTPORTFLAGS` and reproduced the failures exactly -- which is not this tier.
+
+(2026-09-19)
