@@ -124657,3 +124657,132 @@ its closure) and the 2 pre-existing MISSING (`faxadaptcreate_v29tx`,
 `fdspkrnl_tone`); no `--update` was run.
 
 (2026-09-19)
+
+## F11368. Issue #172 decision-level pass: `-fno-finite-math-only` restores the object's unordered-compare semantics, nine fixtures close, and the two NaN entries F11363 said to re-declare are re-declared
+
+Follow-up to F11364-F11367, owner-approved 2026-09-19.  The decision-level
+group is the checks whose difference is an integer, an index, a verdict or a
+flag -- a changed OUTCOME a float tolerance must never absorb.  The pass
+classified each site by the OBJECT'S OWN INSTRUCTION at its computation, and
+the single largest cause is not rounding at all: **modern `-ffast-math`
+implies `-ffinite-math-only`, so GCC 14 is entitled to assume every operand is
+finite and folds ordered compares that the object's code uses to catch an
+unordered value.**
+
+**Object evidence, one site per shape.**
+
+* `Resampler::setNormalizedPhase` (t_resampler): the object is
+  `flds p; fcoms <0.0f>; fnstsw; sahf; jb store_zero` at 0x351d8..0x351e1, then
+  `fcoms <1.0f>; jb multiply` at 0x351e3..0x351ec.  FCOM sets CF for an
+  UNORDERED result exactly as for less, so the FIRST `jb` sends a NaN to
+  `fstpl 0xc(%ecx)` with `fldz` -- the phase is rejected to 0.0.  The source
+  carries the object's `!(p >= 0.0f)`; the fold rewrites it to `p < 0.0f`,
+  false for a NaN, and the modern build stores the NaN instead.
+* `V90SdDetector::process` (t_v90spectral, t_v90p3ddec): the object is
+  `flds 0xc(%edi); fcomp %st(1); fnstsw; sahf; jae` at 0x3bdd7..0x3bde3, and
+  the `jae` is NOT taken on an unordered quotient, so the counting arm is
+  entered; the source keeps the object's `!(thresh_0c >= ratio)` for exactly
+  that reason (F1401, F2301).
+* `V90ConnectionEvaluator::evaluatePhase4` (t_v90connevalnan): the object's
+  branchless sign select `fcom %st(1); sahf; sbb; and; add` at 0x3fdb7 is ONE
+  ordered compare, so the object prints '+' for a NaN threshold.  This entry
+  (F2410) was ALLOWED while the fold was in force and is now STALE -- the flag
+  fixes the site, so the entry is REMOVED.
+* `hamming`/`blackman` at `n == 1` (t_dspmath): `d = 1.0/(n-1)` is +inf and
+  `x * d` is `0 * inf`, the x87 indefinite `0xffc00000`; the fold turns
+  `0 * inf` into `0` and the window comes out a finite `0.08`.  This one is
+  instantiated in the FIXTURE's own TU (`test/unit/t_dspmath.cxxflags`), so the
+  withdrawal is added there as well as to the source profile.
+
+**Mechanism.**  `Makefile`'s `CXXMATHFLAGS` becomes
+`-ffast-math -fno-finite-math-only` (the option is last, so it wins), and
+`test/unit/t_dspmath.cxxflags` gets the same pair.  The object's own GCC 3.4.2
+accepted `-ffast-math` WITHOUT `-ffinite-math-only` and compiled these branches
+literally; withdrawing the assumption makes the modern profile state what the
+deciding compiler actually did.  It is the `-fno-lifetime-dse` pattern (F7900):
+a flag that withdraws a modern-only demand, never a `#if`, never text in
+`src/`.  `period_inner.sh` compiles `test/harness/` and `test/unit/` from its
+own flag list and never reads `CXXMATHFLAGS`, so `make period` cannot receive
+it; the flag reaches no tolerance, no `diff_eq_int` and no transcript.
+
+**The two entries F11363 said to re-declare are re-declared.**  F11363's
+register reconciliation removed `t_v92ecnan` (F6000) and `t_v90adidnan` (F6001)
+as STALE and recorded the reason and the expiry: "The divergence returns if
+`-fno-finite-math-only` is ever adopted, so the entries must be re-declared
+then."  It has been adopted, the divergence returned exactly as predicted
+(`t_v92ecnan` 492/2703, `t_v90adidnan` 6/25), and both entries are back naming
+the one check each.  Neither binary has a mutation suite, which is the reason
+it is its own binary (F6000/F6001/F6002).
+
+**Measured outcome of the decision-level fixtures** (`make -j1 -k test`, GCC
+14.2.0-19, `DSPLIB_MAX_REPORT=0`):
+
+| fixture | decision-level failure | disposition |
+|---|---|---|
+| `t_resampler` | 8 NaN-phase decisions (`diff_eq_int` on the object bytes) | **green** |
+| `t_v90spectral` | verdict 0 vs 1 + 302 `V90SdDetector+0` counter checks | verdict/counter **green**; 1 residual float byte |
+| `t_v90p3ddec` | `V90SdDetector+0` lag + `getDecision` decisions | decisions **green**; 5186 residual float bytes |
+| `t_v90prefilter` | bank index `-2` vs `3547` | **green** |
+| `t_v90demprog` | `samplesInState`/`count` counters | **green** |
+| `t_v90leaves` | 7 `V92EchoCanceller::setState` decisions | **green** |
+| `t_dspmath` | finite `0.08` vs the x87 indefinite NaN at n==1 | **green** |
+| `t_v90cdnoise`, `t_v90dataph`, `t_v90demod`, `t_v90specialcond` | float-derived transcripts | **green** |
+| `t_v90connevalnan` | declared fold | **green**; entry removed (STALE) |
+| `t_v92ecnan`, `t_v90adidnan` | unordered sentinel (NaN class) | **re-declared** (F6000/F6001) |
+
+**Verdicts.**  `make period J=1`: **376 passed, 0 failed** -- the period
+compile never receives `CXXMATHFLAGS`, so the flag is absent from the deciding
+tier.  Modern tier: **360 green / 16 red**, down from 351/25 -- nine fixtures
+closed (four decision-level, four transcripts, one declared-fold), no fixture
+newly red.  `make safety` is unaffected (the safety TUs carry no `-ffast-math`
+and the tolerance mechanism is untouched).  `python3 tools/refcheck.py`: clean,
+14027 references, 0 dangling.  `tools/gccdiverge.py --list`: 7 entries, no
+stale, no uncovered.  `mutsnap.py --check`: 0 current, 270 stale, 2 never
+recorded of 272 registered -- the same state F11367 left (the flag touches
+`src/` TUs that are in the suites' closure); no `--update` was run.  No `src/`
+or `include/` file changed.
+
+**What remains, and the next discriminating test for each** (not forced green;
+this is the honest boundary of the pass):
+
+* `t_v90trn2design` -- the reciprocal design's ucodes step by 2 where the
+  object's step by 1 (`dMin` 39 vs 40) at `src/pump/v90/V90TRN2dDesigner.cpp`
+  around the `x * (1.0f / (nofUcodesInTrn2 - 0.5f))` design.  `make period`
+  passes all 2490; the next test is to disassemble the object's
+  `fld1`/`fmulp`/threshold sequence at that site and compare it with GCC 14's
+  emission -- a last-bit reciprocal difference crossing a `(short)` truncation
+  is the hypothesis, and it is not a tolerance candidate.
+* `t_v90modprog` -- `V90Demodulator+271` flag byte `00` vs `80` plus float
+  state at +232..+261 after the analog arm.  The flag is an integer decision;
+  the next test is `tools/relocscan.py`/`dis.py` on the writer of +0x10f to
+  decide whether it is downstream of a float threshold the flag should have
+  reached or a separate divergence.
+* `t_v90adid` -- `linMapp`/`linMappAlt` shorts `04` vs `03`, the `-32768`
+  sentinel, and `getAltVarThresh` `0` vs `INT_MIN`.  This is the
+  sentinel/NaN-clamp class; the accidental-NaN half was already moved to the
+  declared `t_v90adidnan` (F6001).  The next test is the object's clamp
+  instruction at `updateUrefAlt`/`getAltVarThresh`; the fixture carries the
+  largest mutation suite in the tree, so it cannot simply be declared.
+* `t_v92modstate` -- 4 queue values differing by abs 0.353
+  (`-0.5759` vs `-0.2233`).  A relative budget wide enough is an off switch
+  (F11366), so it was declined; the next test is whether the queue's index
+  advanced differently (a decision) rather than the value rounding.
+* `t_floatarma` -- 734 adversarial mode-4/5 checks (F11366/F11367): a test of
+  the object's arithmetic ORDER, declined rather than fitted.
+* `t_vpcmrunpcm` -- 27933 checks across dynamically-discovered heap regions
+  whose float fields are not modelled, plus the exemption meta-assertion.
+  Next test: model the regions' float spans for `diff_eq_obj_float_`.
+* `t_v90rundemod`, `t_vpcmqcline` -- the failing check is the fixture's OWN
+  meta-assertion `the exempt classes are a minority of the surface`
+  (`(words_corresponded + words_static + words_unresolved) * 20 < words_equal`),
+  not an object comparison.  It is apparatus, and the next test is whether the
+  20x bound is simply too tight for the measured surface (`860344` static
+  installs against `14922732` equal words).
+* `t_v34info1a` (96), `t_v90cdadjust` (26), `t_v90eqdata` (2),
+  `t_vpcmflomodem` (2) -- transcript `strcmp`, the class left to the register
+  deliberately (F11364).  Next test: determine per fixture whether the
+  differing text is float-derived only (handle like #143's
+  `t_v90conneval` split) or encodes a real value.
+* `t_v34hshak` (SIGSEGV) and `t_v27fax` (FAX) are outside this issue's class.
+
+(2026-09-19)

@@ -214,7 +214,20 @@ CXXFLAGS += -fno-math-errno
 
 # The period math.h supplies the x87 logarithm inline bodies under this
 # source profile. Keep fixture/oracle C++ code on the ordinary flags.
-CXXMATHFLAGS := -ffast-math
+#
+# -fno-finite-math-only WITHDRAWS A MODERN-ONLY DEMAND, the same shape as
+# -fno-lifetime-dse above.  The object's own GCC 3.4.2 accepted -ffast-math
+# and still compiled ordered compares and NaN-dependent branches literally;
+# modern -ffast-math additionally implies -ffinite-math-only, so GCC 14 is
+# entitled to assume every operand is finite and folds `!(x >= 0.0f)` to
+# `x < 0.0f`, which is FALSE for a NaN where the object takes the branch.
+# The object's sources deliberately test unordered values this way
+# (V90SdDetector::process's `!(thresh_0c >= ratio)`, Resampler::setNormalizedPhase's
+# `!(p >= 0.0f)`, and their kin), so the assumption changes decisions, not
+# rounding.  Withdrawing it restores a semantic the deciding compiler had
+# without touching `src/`; the period build never receives these flags and is
+# unchanged.  Finding F11368.
+CXXMATHFLAGS := -ffast-math -fno-finite-math-only
 
 # THE OBJECT'S FILE-LOCAL BINDING, in the host build.  The binding pass made
 # a handful of symbols `static` to match the reference's LOCAL records, and

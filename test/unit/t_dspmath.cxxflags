@@ -1,1 +1,1 @@
--ffast-math
+-ffast-math -fno-finite-math-only
