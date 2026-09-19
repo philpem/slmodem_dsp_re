@@ -124938,3 +124938,82 @@ unchanged stale state (no `--update` run).  `src/` and `include/` unchanged;
 `test/unit/t_v90spectral.cpp`.
 
 (2026-09-19)
+
+## F11370. Issue #172 reciprocal-reassociation pass: two reds close into declared split binaries, and the `updateUrefAlt` source hoist is measured and fails
+
+Follow-up to F11369, owner-approved 2026-09-19.  Two modern-tier reds are
+closed by the F2157/F3002 move -- the divergent checks are SPLIT into their own
+binary and declared, leaving the parent green and mutation-testable -- and one
+of the two is a reassociation that a source hoist was measured against and did
+NOT defeat.  `test/` and `tools/gccdiverge.json` change; `src/` and `include/`
+are untouched.  `make period` stays exact, now **378 passed, 0 failed** (two
+more fixtures than F11369's 376).
+
+**`t_v90trn2design` -- CLOSED, the reciprocal and the retry cap split out as
+`t_v90trn2designrecip`.**  The four failing checks were `run_design`'s
+reciprocal case (`diff_eq_obj` and `dMin`, 2) and the retry-cap sweep
+(`returned at step 4223` and `diff_eq_obj`, 2); the other 2486 passed.  The
+object at 0x3cece..0x3cf30 is `fld1`; `filds ucode`; `fildl nof`;
+`fsub <0.5f>`; `fdivr %st(3),%st` (1/(nof-0.5), kept in x87 extended);
+`fmulp %st,%st(2)`; `fistps` -- the reciprocal is never stored, so the object
+rounds twice before the `(short)` truncation.  The modern
+`build/repro/pump/v90/V90TRN2dDesigner.o` at 0x454..0x48c is `filds`; `fildl`;
+`fsubs <0.5f>`; `fdivrp %st,%st(1)`; `fistps` -- GCC 14's `-ffast-math`
+reassociates `x * (1.0f/y)` into `x/y`, one rounding where the object rounds
+twice.  At the searched separator N = 21, level = 41 the reciprocal gives dMin
+1 (consecutive ucodes, constellation 40) and the divide gives dMin 2 (every
+other ucode), so the design itself differs and the cap's round count crosses
+199.  The two groups moved intact to `test/unit/t_v90trn2designrecip.cpp`; the
+parent now reads `PASS V90TRN2Designer::V90TRN2Design 1409 checks` and the
+split-off binary `ALLOWED t_v90trn2designrecip: 2 check(s)`.  Its 23-mutation
+suite stays scoreable.  Finding F11369 wrote the next test; this is it.
+
+**`t_v90adid` -- CLOSED, `run_means` split out as `t_v90adidrecip`; the
+reciprocal is in `updateUrefAlt` ALONE, and a named-local hoist does not defeat
+the fold.**  The 16 failing checks were `run_means`'s `after updateUrefAlt`
+object compares on the `linMappAlt` shorts (`04` vs the blob's `03`).  The
+object's `updateUrefAlt` at 0x41199..0x4120c keeps `1.0f` on the x87 stack
+across the loop, computes `fdivr %st(2),%st` and `fmuls 0x9d18`; the modern
+`V90AutoDigitalImpDetector.o` at 0x1120..0x118c is `fildll count`;
+`fdivrs 0x9d18`; `fadds <0.5f>`; `fistps` -- the same `x*(1/y)` -> `x/y`
+reassociation.  At F1366's witness (count 41, sum 143.5) 143.5/41 is exactly
+3.5 and stores 4 while 143.5*(1/41) is a hair under and stores 3.  THE SITE IS
+ONE METHOD AND NOT THE CLASS: `updateLinMappMeanAndVar`'s named `float inv` is
+used in two expressions and GCC keeps the reciprocal there, so its checks pass,
+and `run_qcmapping`'s own reciprocal witness at `setQcLinearMapping` passes on
+both tiers.  A SOURCE HOIST WAS TRIED AND FAILED, and the negative result is
+the finding: writing `float inv = 1.0f / altMagnitudeCount[phase];` and
+multiplying -- the spelling `updateLinMappMeanAndVar` already uses -- left the
+modern codegen byte-identical (`fdivrs` at 0x1160), because with a SINGLE use
+GCC still folds it; the edit was reverted, so there is no `src/` change and no
+mutation anchor moved.  `run_means` moved intact to
+`test/unit/t_v90adidrecip.cpp` (same group name, `update*MeanAndVar*`); the
+parent now exits 0 with 22 groups, including `run_qcmapping`'s witness, and the
+split-off binary is `ALLOWED t_v90adidrecip: 1 check(s)`.  Splitting recovers
+t_v90adid's 497-mutation suite, which a red parent could not score at all; the
+one reciprocal-vs-division mutation in `updateUrefAlt` is now the modern
+compiler's own behaviour and cannot be distinguished on the modern tier, which
+the declared binary records.
+
+**The remaining F11369 sites are unchanged and stay open.**  `t_v90modprog`
+(six resampler floats 157-4208 ULP in the timing-recovery feedback loop),
+`t_v90spectral` (`state[2]` 16384 ULP near zero in the test's deliberate
+unstable-filter order trial), `t_v92modstate` (one value `-0.575858712` vs
+`-0.223347247` in four arrays, a value and not an index), the three heap-region
+meta-assertions, the four transcript `strcmp` fixtures, `t_floatarma`'s 734
+adversarial checks, and `t_v34hshak`/`t_v27fax` outside the class.  Each keeps
+its F11369 next test; none was fitted.
+
+**Verdicts.**  `make period J=1`: **378 passed, 0 failed** (the two new
+fixtures and every changed one are in that count; it moved by the two binaries
+added, so the denominator reports them).  Modern tier `make -j1 -k test`:
+**365 green / 13 red** (was 361/15, 376 binaries; now 378), no fixture newly
+red.  `python3 tools/refcheck.py`: clean, 14039 references, 0 dangling.
+`tools/gccdiverge.py --list`: **9 entries** (7 + 2), 0 stale, 0 uncovered.
+`mutsnap.py --check`: unchanged stale state, 0 current / 270 stale / 2 never
+recorded of 272 (no `--update`).  `make test`'s structural checks: 0 anchor(s)
+match other than exactly once.  `git diff --stat`:
+`test/unit/t_v90adid.cpp` (removed `run_means`, two comment references),
+`test/unit/t_v90trn2design.cpp` (removed two blocks),
+`tools/gccdiverge.json` (+2), and the two new fixtures.  PR:
+https://github.com/philpem/slmodem_dsp_re/pull/178

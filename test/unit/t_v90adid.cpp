@@ -1218,145 +1218,6 @@ run_accumulate(void)
 	return diff_end();
 }
 
-/*
- * The three that turn accumulators into a mapping.
- *
- * Each has an arm that does nothing -- a zero count for the two
- * `*MeanAndVar*` methods, an unflagged or empty phase for `updateUrefAlt` --
- * and a seeded count is nonzero with probability one, so the zero is forced
- * on every fourth trial and the run asserts that both arms were reached.
- * Finding F149: a method that always takes the same branch passes a whole
- * sweep of that branch perfectly.
- */
-static int
-run_means(void)
-{
-	int trial, moved = 0, distinct = 0;
-	int zerocount = 0, nonzerocount = 0, altflag = 0, altnoflag = 0;
-	short first = 0;
-
-	diff_begin("V90AutoDigitalImpDetector::update*MeanAndVar*");
-
-	for (trial = 0; trial < NTRIAL; trial++) {
-		unsigned char before[SLOT];
-		short phase = (short)(trial % NPHASE);
-		short code = (short)((trial * 13) & 0x7f);
-		int p;
-
-		seed(trial, trial % 4);
-
-		if ((trial & 3) == 0) {
-			BOTH(magnitudeCount[phase][code], 0u);
-			BOTH(altMagnitudeCount[phase], 0u);
-			zerocount = 1;
-		} else if ((trial & 3) == 2) {
-			/*
-			 * THE ONE CASE THAT SEPARATES A DIVISION FROM A
-			 * MULTIPLICATION BY A RECIPROCAL, and without it the
-			 * two spellings agree over everything else this file
-			 * offers -- measured, not assumed: the mutation that
-			 * swaps them was NOT CAUGHT until this arm existed.
-			 *
-			 * 143.5 / 41 is exactly 3.5, so the object's `+ 0.5f`
-			 * lands exactly on 4.0 and its truncating `fistp`
-			 * stores 4.  1/41 is not representable and rounds the
-			 * wrong way, so 143.5 * (1/41) is a hair under 3.5,
-			 * the sum is a hair under 4.0, and the same
-			 * truncation stores 3.  One code apart, from one bit.
-			 *
-			 * THE PAIR WAS FOUND, NOT GUESSED, and the search had
-			 * to mirror the method's WHOLE body to find it: a
-			 * probe with only the mean in it says n = 25 and
-			 * sum = 12.5 disagree, and in the real method they do
-			 * not, because the variance line either side changes
-			 * which x87 register the mean lives in and therefore
-			 * whether it is rounded.  n = 3 and n = 25 both agree
-			 * here; 41 is the first that does not.  Finding F1366.
-			 *
-			 * `updateLinMappMeanAndVar` and `updateUrefAlt` take
-			 * the reciprocal and `updateLinMappMeanAndVarAlt`
-			 * divides, so this arm has to seed BOTH the per-code
-			 * and the per-phase accumulators to pin all three.
-			 */
-			int q;
-
-			BOTH(magnitudeCount[phase][code], 41u);
-			BOTH(magnitudeSum[phase][code], 143.5f);
-			BOTH(magnitudeSqSum[phase][code], 600.0f);
-			for (q = 0; q < NPHASE; q++) {
-				BOTH(altMagnitudeCount[q], 41u);
-				BOTH(altMagnitudeSum[q], 143.5f);
-			}
-			nonzerocount = 1;
-		} else {
-			BOTH(magnitudeCount[phase][code],
-			     (unsigned)(trial * 7 + 1));
-			BOTH(altMagnitudeCount[phase], (unsigned)(trial + 1));
-			nonzerocount = 1;
-		}
-
-		/*
-		 * The float accumulators are left as the seed made them for
-		 * three trials in four, and given tame values on the fourth,
-		 * so that both a wild bit pattern and an ordinary mean are
-		 * exercised through the same `fistp`.
-		 */
-		if ((trial & 3) == 1) {
-			BOTH(magnitudeSum[phase][code], 1234.5f);
-			BOTH(magnitudeSqSum[phase][code], 4000000.0f);
-			BOTH(altMagnitudeSum[phase], -987.25f);
-		}
-
-		for (p = 0; p < NPHASE; p++) {
-			short flag = (short)(((trial >> p) & 1) ? p + 1 : 0);
-
-			BOTH(altRbsFlag[p], flag);
-			if (flag != 0)
-				altflag = 1;
-			else
-				altnoflag = 1;
-		}
-
-		memcpy(before, ours.raw, SLOT);
-
-		ours_o.updateLinMappMeanAndVar(phase, code);
-		ref_updateLinMappMeanAndVar(&theirs_o, phase, code);
-		diff_eq_obj("after updateLinMappMeanAndVar",
-			    V90AutoDigitalImpDetector, &ours_o, &theirs_o,
-			    trial);
-
-		ours_o.updateLinMappMeanAndVarAlt(phase, code);
-		ref_updateLinMappMeanAndVarAlt(&theirs_o, phase, code);
-		diff_eq_obj("after updateLinMappMeanAndVarAlt",
-			    V90AutoDigitalImpDetector, &ours_o, &theirs_o,
-			    trial);
-
-		ours_o.updateUrefAlt();
-		ref_updateUrefAlt(&theirs_o);
-		diff_eq_obj("after updateUrefAlt", V90AutoDigitalImpDetector,
-			    &ours_o, &theirs_o, trial);
-
-		diff_eq_int("no store past the object (trial %ld)",
-			    guard_equal(), 1, trial);
-
-		if (memcmp(before, ours.raw, SLOT) != 0)
-			moved = 1;
-		if (trial == 0)
-			first = ours_o.linMapp[phase][code];
-		else if (ours_o.linMapp[phase][code] != first)
-			distinct = 1;
-	}
-
-	diff_eq_int("the mean methods changed the object", moved, 1, 0);
-	diff_eq_int("the mapping entry is not the same on every trial",
-		    distinct, 1, 0);
-	diff_eq_int("a zero count was exercised", zerocount, 1, 0);
-	diff_eq_int("a nonzero count was exercised", nonzerocount, 1, 0);
-	diff_eq_int("a flagged phase was exercised", altflag, 1, 0);
-	diff_eq_int("an unflagged phase was exercised", altnoflag, 1, 0);
-
-	return diff_end();
-}
 
 /*
  * The two that rewrite the mapping tables wholesale.
@@ -3816,7 +3677,7 @@ run_secondstudy(void)
  * because `prevLinMapp` has no phase dimension.
  *
  * The rebuild is `updateLinMappMeanAndVar`, which the object inlines and this
- * calls; its own arithmetic is pinned by `run_means` and by finding F1366's
+ * calls; its own arithmetic is pinned by `t_v90adidrecip` and by finding F1366's
  * witness there, so what this suite has to establish is which cells it is
  * applied to.  The zero-count arm is swept here too, because a cell with no
  * samples keeps whatever it had and that is only visible against a seeded
@@ -3925,8 +3786,8 @@ run_qcmapping(void)
 	 *
 	 * Count 41 against a sum of 143.5 is finding F1366's witness: the
 	 * division is exactly 3.5 and rounds to 4, the reciprocal is a hair
-	 * under and truncates to 3.  It is here as well as in `run_means`
-	 * because this is where the call site is.
+	 * under and truncates to 3.  It is here as well as in
+	 * `t_v90adidrecip` because this is where the call site is.
 	 */
 	{
 		int p, c, ok = 1;
@@ -5727,7 +5588,6 @@ main(void)
 	rc |= run_setters();
 	rc |= run_clears();
 	rc |= run_accumulate();
-	rc |= run_means();
 	rc |= run_maptransforms();
 	rc |= run_queries();
 	rc |= run_unite();
