@@ -457,6 +457,46 @@ double harness_float_tol(void);
 void harness_float_tol_fixture(double eps);
 
 /*
+ * A PER-FIXTURE MIXED (ABSOLUTE + RELATIVE) BUDGET, AND WHY RELATIVE ALONE IS
+ * NOT ENOUGH.
+ *
+ * The criterion above is `|a-b| <= eps * max(|a|,|b|)`.  That is the right
+ * shape for a value away from zero and the WRONG shape for one that passes
+ * through it: the same absolute sinc/FIR error is a relative error of 1e-6 on
+ * a coefficient near 1 and of 1.585 on a resampled sample near 1e-4.  A
+ * budget large enough to cover the latter is an off switch for the former.
+ *
+ * The mixed form is the standard allclose criterion
+ *
+ *     |a-b| <= atol + rtol * |b|
+ *
+ * with `b` the REFERENCE (the blob's value), so the absolute floor `atol`
+ * carries the near-zero cases and `rtol` carries the functional ones.  It is
+ * the same mechanism and the same reach as the relative setter: modern-only,
+ * counted in `diff_float_tolerant`, reaching only
+ * `diff_eq_float`/`diff_eq_float_ulp`/`diff_eq_float_abs`/`diff_eq_double` and
+ * `diff_eq_obj_float_`'s named spans.  A decision-level `diff_eq_int`, a
+ * transcript `strcmp` and an unnamed byte of a `diff_eq_obj` comparison are
+ * untouched, so a changed index/flag/verdict stays a hard failure.
+ *
+ * IT IS A NO-OP WITHOUT `HARNESS_FLOAT_TOL`, so the period build (which never
+ * defines it) returns `atol` 0, `tol` 0 and stays bit-exact.  A fixture that
+ * calls this instead of the relative setter is a WIDENING of the named float
+ * fields and nothing else.  The two setters are mutually exclusive: calling
+ * either clears the other's state, so the pure-relative fixtures keep exactly
+ * the behaviour they had.
+ */
+void harness_float_tol_fixture_mixed(double atol, double rtol);
+
+/*
+ * The absolute floor of the fixture's mixed budget, or 0.0 in a pure-relative
+ * fixture or the period build.  `harness_float_tol()` supplies the `rtol`
+ * half; a comparison asks for both so it can apply the mixed criterion only
+ * where a fixture actually named one.
+ */
+double harness_float_atol(void);
+
+/*
  * Compare two whole objects, reporting the first differing FIELD.
  *
  *   diff_eq_obj("after process", struct v34_decision, &da, &db, i);

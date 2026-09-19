@@ -784,15 +784,21 @@ main(void)
 
 	/*
 	 * The functional float divergence at this fixture's ARMA sites is
-	 * rel = 3.4e-5 (measured with DSPLIB_MAX_REPORT=0; above it the
-	 * residual is the deliberately ADVERSARIAL x87 pairing -- modes 4/5
-	 * seed 2^70/2^60 coefficients so a last-place ordering difference is
-	 * amplified to O(1), got -2/1 vs ref 0 -- which no functional
-	 * tolerance may cover).  1e-4 is just above the measured functional
-	 * max with headroom, and is a no-op under `make period`.  The
-	 * adversarial residual stays red and is recorded in F11366.
+	 * rel = 2.3e-5 measured with DSPLIB_MAX_REPORT=0 at rtol 1e-7 (F11366
+	 * recorded 3.4e-5); above it the residual is the deliberately
+	 * ADVERSARIAL x87 pairing -- modes 4/5 seed 2^70/2^60 coefficients so a
+	 * last-place ordering difference is amplified to O(1), got -2/1 vs
+	 * ref 0 -- which no functional tolerance may cover.  The mixed
+	 * criterion `|a-b| <= atol + rtol*|b|` is the right shape because the
+	 * functional sites also carry values that pass through zero: measured,
+	 * the functional near-zero max |diff| is 3.5e-9 while the adversarial
+	 * residual starts at |diff| = 1.2e-4, so atol = 1e-6 has ~280x
+	 * headroom over the former and 120x separation from the latter.
+	 * rtol = 1e-4 is just above the measured functional max.  Both are a
+	 * no-op under `make period`.  The 734 adversarial checks stay red and
+	 * are recorded in F11366.
 	 */
-	harness_float_tol_fixture(1.0e-4);
+	harness_float_tol_fixture_mixed(1.0e-6, 1.0e-4);
 
 	bad |= run_ctor();
 	bad |= run_reset();

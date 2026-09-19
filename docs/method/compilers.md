@@ -580,3 +580,47 @@ tier is green".
 
 (2026-09-19)
 
+### The mixed abs+rel budget, for values that pass through zero
+
+The criterion above, `|a-b| <= eps*max(|a|,|b|)`, is the right shape for a
+value away from zero and the WRONG shape for one that crosses it: the same
+~3e-5 absolute sinc/FIR error is rel = 1e-6 on a coefficient near 1 and
+rel = 1.585 on a resampled sample near 2e-5.  A relative budget wide enough to
+cover the latter is an off switch for the former.
+
+`harness_float_tol_fixture_mixed(atol, rtol)` supplies the standard allclose
+criterion instead:
+
+```
+|a-b| <= atol + rtol * |b|          (b = the reference, the blob's value)
+```
+
+Same reach and same tier-gating as the pure-relative setter (`atol` 0 there,
+so the two cannot be confused; the setters clear each other; the period build
+returns 0 for both), same `diff_float_tolerant` denominator, and it still
+reaches no `diff_eq_int`, no transcript `strcmp` and no unnamed byte.
+
+Four fixtures whose float difference is the sinc/FIR design divergence use it;
+each records its measurement beside the call and each keeps its hard failures:
+
+| fixture | measured near-zero / functional | atol / rtol | residual |
+|---|---|---|---|
+| `t_v92modstate` | max \|diff\| 3.26e-5 (\|ref\|<1e-4); max rel 4.191e-2 | 1e-4 / 5e-2 | 4 queue checks, abs 0.353 |
+| `t_resampler` | max \|diff\| 4.4e-6; max rel 8.274e-3 | 1e-5 / 1.5e-2 | 8 NaN-phase decisions |
+| `t_v90demprog` | max \|diff\| 2.38e-7; max rel 2.607e-5 | 1e-6 / 5e-5 | 4 sample/status decisions |
+| `t_floatarma` | func near-zero 3.5e-9; func max rel 2.3e-5; adversarial from 1.2e-4 | 1e-6 / 1e-4 | 734 adversarial checks |
+
+The negative control is `test/safety/t_field_typed.c`, which drives every one
+of those budgets: at each, a zero-reference difference under `atol` and a
+normal value inside `rtol*|b|` pass modern-only and count tolerance-only, a
+value beyond the floor and one beyond the relative half fail, a changed index
+and flag still fail, and against a no-define harness object the setter is inert
+so even the inside value fails.  Measured: `PASS t_field_typed: 48 checks, 0
+bad (linked harness tol=1e-06)` and the same source `tol=0`.
+
+The mixed form closes the near-zero group (87 checks in `t_v92modstate`) and
+moves no fixture from red to green: the residual in the table is decision-level
+or adversarial and stays red.  Finding F11367.
+
+(2026-09-19)
+

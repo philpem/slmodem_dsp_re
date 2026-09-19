@@ -2418,15 +2418,23 @@ main(void)
 
 	/*
 	 * The resampler/queue float sites carry the same sinc/FIR design
-	 * divergence as t_resampler (F11363/F11365).  Measured with
-	 * DSPLIB_MAX_REPORT=0: the bulk is < 1e-3, but the resampled block
-	 * crosses zero, so individual near-zero samples reach rel = 1.59 (a
-	 * sign flip on values ~1e-5).  5e-2 is the widest defensible
-	 * functional band -- wider would start to excuse a real value -- and
-	 * it is a no-op under `make period`.  The near-zero residual is
-	 * recorded in F11366 and left red.
+	 * divergence as t_resampler (F11363/F11365), but the resampled block
+	 * crosses zero, so a PURE RELATIVE budget is the wrong shape here: at
+	 * rtol 1e-6 the same ~3e-5 sinc error is rel = 1.585 on a sample near
+	 * 2e-5.  Measured with DSPLIB_MAX_REPORT=0, every float check:
+	 *
+	 *     |ref| < 1e-4   max |diff| = 3.26e-5   (near-zero group)
+	 *     |ref| >= 1e-4  max rel    = 4.191e-2  (functional band)
+	 *
+	 * so the criterion is the mixed `|a-b| <= atol + rtol*|b|` with
+	 * atol = 1e-4 (3x the measured near-zero max) and rtol = 5e-2 (just
+	 * above the functional max).  It is a no-op under `make period`.
+	 *
+	 * THE FOUR QUEUE CHECKS OF abs 0.353 (got -0.5759 vs -0.2233) ARE NOT
+	 * ROUNDING and must stay red: 0.353 > 1e-4 + 5e-2*0.223 = 0.0112.  They
+	 * are recorded in F11366 and are the only residual in this fixture.
 	 */
-	harness_float_tol_fixture(5.0e-2);
+	harness_float_tol_fixture_mixed(1.0e-4, 5.0e-2);
 
 	set_level(0);
 	rc |= run_delay();

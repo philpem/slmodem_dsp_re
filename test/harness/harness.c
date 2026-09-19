@@ -21,9 +21,14 @@ int diff_float_tolerant;
  * A PER-FIXTURE override of the tier tolerance, and it is a no-op without
  * HARNESS_FLOAT_TOL so the period build stays bit-exact.  See harness.h for
  * why a fixture needs one.  Zero (or negative) means "use the tier default".
+ *
+ * `fixture_float_atol` is the absolute floor of the MIXED form; it is zero in
+ * every pure-relative fixture, which is what keeps those comparisons on the
+ * exact relative criterion they had.  The two setters clear each other.
  */
 #ifdef HARNESS_FLOAT_TOL
 static double fixture_float_tol;
+static double fixture_float_atol;
 #endif
 
 void
@@ -31,8 +36,22 @@ harness_float_tol_fixture(double eps)
 {
 #ifdef HARNESS_FLOAT_TOL
 	fixture_float_tol = (eps > 0.0) ? eps : 0.0;
+	fixture_float_atol = 0.0;
 #else
 	(void)eps;	/* period build: the budget is and stays 0 */
+#endif
+}
+
+void
+harness_float_tol_fixture_mixed(double atol, double rtol)
+{
+#ifdef HARNESS_FLOAT_TOL
+	fixture_float_atol = (atol > 0.0) ? atol : 0.0;
+	fixture_float_tol = (rtol > 0.0) ? rtol : 0.0;
+#else
+	/* period build: the budget is and stays 0 of both kinds */
+	(void)atol;
+	(void)rtol;
 #endif
 }
 
@@ -43,6 +62,16 @@ harness_float_tol(void)
 	if (fixture_float_tol > 0.0)
 		return fixture_float_tol;
 	return (double)HARNESS_FLOAT_TOL;
+#else
+	return 0.0;
+#endif
+}
+
+double
+harness_float_atol(void)
+{
+#ifdef HARNESS_FLOAT_TOL
+	return fixture_float_atol;
 #else
 	return 0.0;
 #endif
@@ -516,24 +545,35 @@ diff_eq_float_(const char *file, int line, const char *fmt, float got,
 			return;
 #ifdef HARNESS_FLOAT_TOL
 		/*
-		 * THE MODERN TIER'S RELATIVE TOLERANCE, and only where the call
-		 * site stated no budget of its own.  It is relative, so it
-		 * cannot excuse a difference near zero, and it is reached only
-		 * after the exact test above has already failed -- the counter
-		 * therefore counts non-exact matches and nothing else.  The
-		 * period build never defines the macro and this block is not
-		 * compiled there.
+		 * THE MODERN TIER'S TOLERANCE, and only where the call site
+		 * stated no budget of its own.  It is reached only after the
+		 * exact test above has already failed -- the counter therefore
+		 * counts non-exact matches and nothing else.  The period build
+		 * never defines the macro and this block is not compiled there.
+		 *
+		 * A fixture that named a MIXED budget gets `atol + rtol*|b|`
+		 * instead of the pure-relative `rtol*max(|a|,|b|)`: the
+		 * absolute floor carries the values that pass through zero,
+		 * where a relative test is meaningless.  A pure-relative
+		 * fixture has `atol` 0 and keeps the max-based criterion
+		 * bit-for-bit, so the two forms cannot be confused.
 		 */
 		if (ulp_budget == 0UL && abs_eps == 0.0) {
 			double ag = (double)got, aw = (double)want;
 			double scale, eps = harness_float_tol();
+			double atol = harness_float_atol();
 
 			if (ag < 0.0)
 				ag = -ag;
 			if (aw < 0.0)
 				aw = -aw;
 			scale = ag > aw ? ag : aw;
-			if (eps > 0.0 && diff <= eps * scale) {
+			if (atol > 0.0) {
+				if (diff <= atol + eps * aw) {
+					diff_float_tolerant++;
+					return;
+				}
+			} else if (eps > 0.0 && diff <= eps * scale) {
 				diff_float_tolerant++;
 				return;
 			}
@@ -617,8 +657,19 @@ diff_eq_double_(const char *file, int line, const char *fmt, double got,
 			double aw = want < 0.0 ? -want : want;
 			double scale = ag > aw ? ag : aw;
 			double eps = harness_float_tol();
+			double atol = harness_float_atol();
 
-			if (eps > 0.0 && diff <= eps * scale) {
+			/*
+			 * The same mixed/pure split as the float form: a
+			 * mixed budget uses `atol + rtol*|b|`, a
+			 * pure-relative one keeps `rtol*max(|a|,|b|)`.
+			 */
+			if (atol > 0.0) {
+				if (diff <= atol + eps * aw) {
+					diff_float_tolerant++;
+					return;
+				}
+			} else if (eps > 0.0 && diff <= eps * scale) {
 				diff_float_tolerant++;
 				return;
 			}
