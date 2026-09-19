@@ -350,9 +350,141 @@ main(void)
 			b.flags = 0x40u;
 		}
 	}
+
+	/*
+	 * ---- MIXED ABS+REL RUNTIME BUDGET ---------------------------------
+	 *
+	 * `harness_float_tol_fixture_mixed` names the standard allclose
+	 * criterion `|a-b| <= atol + rtol*|b|`, which the sinc/FIR fixtures
+	 * whose values cross zero need: a pure relative budget is meaningless
+	 * there (a near-zero reference gives a huge ratio for a tiny absolute
+	 * error).  It must be a WIDENING of the named float fields and nothing
+	 * more -- an absolute-floor case (zero reference, difference under
+	 * `atol`) and a normal-value case inside `rtol*|b|` pass only on the
+	 * modern tier and are counted tolerance-only; a value beyond the floor
+	 * at zero reference and one beyond `rtol*|b|` at a normal reference
+	 * FAIL in both arms; a changed index or flag still fails while the
+	 * budget is in force; and on a harness WITHOUT the define the setter
+	 * is inert (`harness_float_atol()` and `harness_float_tol()` both 0)
+	 * so even the inside-floor value fails, which is the period arm.
+	 *
+	 * The list is every mixed budget the sinc/FIR fixtures name, so each
+	 * one this pass introduces has its own beyond-budget control rather
+	 * than one representative.
+	 */
+	{
+		static const struct {
+			double atol;
+			double rtol;
+		} mixed[] = {
+			{ 1.0e-6, 1.0e-4 },	/* t_floatarma   */
+			{ 1.0e-6, 5.0e-5 },	/* t_v90demprog  */
+			{ 1.0e-5, 1.5e-2 },	/* t_resampler   */
+			{ 1.0e-4, 5.0e-2 },	/* t_v92modstate */
+		};
+		unsigned mi;
+
+		for (mi = 0; mi < sizeof mixed / sizeof mixed[0]; mi++) {
+			double A = mixed[mi].atol, R = mixed[mi].rtol;
+			double ftol, fatol;
+
+			harness_float_tol_fixture_mixed(A, R);
+			ftol = harness_float_tol();
+			fatol = harness_float_atol();
+
+			/*
+			 * THE ABSOLUTE FLOOR, and the case a pure relative
+			 * budget cannot pass: a zero reference with a
+			 * difference under `atol`.
+			 */
+			a.f = 0.0f;
+			b.f = (float)(A / 2.0);
+			checks++;
+			if (ftol > 0.0) {
+				if (run(&a, &b) != 0) {
+					fprintf(stderr, "t_field_typed: a "
+						"near-zero difference under "
+						"the %g atol must pass\n", A);
+					bad++;
+				}
+				if (diff_float_tolerant == 0) {
+					fprintf(stderr, "t_field_typed: the "
+						"%g atol pass was not "
+						"tolerance-only\n", A);
+					bad++;
+				}
+				if (fatol != A) {
+					fprintf(stderr, "t_field_typed: mixed "
+						"atol read back as %g, want "
+						"%g\n", fatol, A);
+					bad++;
+				}
+			} else {
+				if (run(&a, &b) != 1) {
+					fprintf(stderr, "t_field_typed: the "
+						"mixed setter must be INERT "
+						"without HARNESS_FLOAT_TOL\n");
+					bad++;
+				}
+			}
+
+			/* Beyond the floor at a zero reference: fail. */
+			b.f = (float)(A * 4.0);
+			checks++;
+			if (run(&a, &b) != 1) {
+				fprintf(stderr, "t_field_typed: a value "
+					"BEYOND the %g atol at a zero "
+					"reference must FAIL\n", A);
+				bad++;
+			}
+			b.f = 0.0f;
+			a.f = 1.0f;
+
+			/* A normal value inside the relative half. */
+			b.f = (float)(1.0 + R / 2.0);
+			checks++;
+			if (ftol > 0.0) {
+				if (run(&a, &b) != 0) {
+					fprintf(stderr, "t_field_typed: a "
+						"value inside the %g mixed "
+						"rtol must pass\n", R);
+					bad++;
+				}
+			} else {
+				if (run(&a, &b) != 1) {
+					fprintf(stderr, "t_field_typed: a "
+						"mixed-rtol value must FAIL "
+						"without HARNESS_FLOAT_TOL\n");
+					bad++;
+				}
+			}
+			b.f = 1.0f;
+
+			/* Decisions stay hard while the budget is in force. */
+			b.idx = 8u;
+			checks++;
+			if (run(&a, &b) != 1) {
+				fprintf(stderr, "t_field_typed: a changed index "
+					"must still FAIL under mixed(%g,%g)\n",
+					A, R);
+				bad++;
+			}
+			b.idx = 7u;
+			b.flags = 0x41u;
+			checks++;
+			if (run(&a, &b) != 1) {
+				fprintf(stderr, "t_field_typed: a changed flag "
+					"must still FAIL under mixed(%g,%g)\n",
+					A, R);
+				bad++;
+			}
+			b.flags = 0x40u;
+		}
+	}
+
 	harness_float_tol_fixture(0.0);		/* restore the tier default */
 	checks++;
-	if (harness_float_tol() != tol) {
+	if (harness_float_tol() != tol || harness_float_atol() != 0.0) {
 		fprintf(stderr, "t_field_typed: clearing the fixture budget "
 			"did not restore the tier default\n");
 		bad++;

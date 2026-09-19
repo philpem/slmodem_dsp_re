@@ -124578,3 +124578,82 @@ stale (the harness is in its closure) and the 2 pre-existing MISSING
 (`faxadaptcreate_v29tx`, `fdspkrnl_tone`); no `--update` was run.
 
 (2026-09-19)
+
+## F11367. Issue #172: a mixed abs+rel (allclose) budget for the near-zero sinc/FIR group, its negative control, and the measured outcome of the four
+
+Follow-up to F11364/F11365/F11366, owner-approved 2026-09-19.  F11366's
+per-fixture budget is PURE RELATIVE (`|a-b| <= rtol*max(|a|,|b|)`), which is
+meaningless for a value that passes through zero: the same ~3e-5 absolute
+sinc/FIR error is rel = 1.585 on a `t_v92modstate` resampled sample near 2e-5
+and rel = 1.0 on `t_floatarma` sites.  The near-zero group needs the standard
+allclose criterion, `|a-b| <= atol + rtol*|b|`.
+
+**Mechanism.**  `test/harness/harness.c` gains
+`harness_float_tol_fixture_mixed(double atol, double rtol)` and
+`harness_float_atol()`, and `diff_eq_float_`/`diff_eq_double_` apply
+`atol + rtol*|b|` (b = the reference) when a fixture named a mixed budget.
+A pure-relative fixture has `atol` 0 and keeps `rtol*max(|a|,|b|)`
+bit-for-bit; the two setters clear each other; and without
+`HARNESS_FLOAT_TOL` (the period build, always) both are no-ops returning 0.
+The reach is unchanged -- `diff_eq_float`/`diff_eq_float_ulp`/
+`diff_eq_float_abs`/`diff_eq_double` and `diff_eq_obj_float_`'s named spans --
+so a `diff_eq_int` decision, a transcript `strcmp` and an unnamed byte stay
+hard failures, and the `diff_float_tolerant` denominator still reports how
+much slack fired.
+
+**Measurement, and why the report cap matters.**  Every figure is taken with
+`DSPLIB_MAX_REPORT=0`; the default ten-line cap is not a sample (F11366).
+Each fixture was also run at a deliberately tight rtol (1e-7) to expose the
+full float divergence before fitting, then the fit chosen just above the
+measured maxima:
+
+| fixture | measured near-zero | measured functional | atol / rtol | residual |
+|---|---|---|---|---|
+| `t_v92modstate` | max \|diff\| 3.26e-5 (\|ref\|<1e-4) | max rel 4.191e-2 | 1e-4 / 5e-2 | **red**, 4 queue checks abs 0.353 |
+| `t_resampler` | max \|diff\| 4.4e-6 | max rel 8.274e-3 | 1e-5 / 1.5e-2 | **red**, 8 NaN-phase decisions |
+| `t_v90demprog` | max \|diff\| 2.38e-7 | max rel 2.607e-5 | 1e-6 / 5e-5 | **red**, 4 sample/status decisions |
+| `t_floatarma` | func max \|diff\| 3.5e-9 | func max rel 2.3e-5 | 1e-6 / 1e-4 | **red**, 734 adversarial checks |
+
+**The outliers the mixed budget must not fit, and it does not.**  `t_v92modstate`
+keeps the four queue checks of abs 0.353 (got -0.5759 vs ref -0.2233):
+0.353 > 1e-4 + 5e-2*0.223 = 0.0112, so it stays red.  `t_floatarma` keeps the
+734 adversarial mode-4/5 checks (got -2/1 vs ref 0 and larger); the adversarial
+residual begins at |diff| = 1.2e-4 while the functional near-zero max is
+3.5e-9, so `atol` = 1e-6 separates them with >280x headroom over the former and
+120x margin below the latter.  `t_resampler` and `t_v90demprog` stay red on
+decisions (`diff_eq_int`), which no float budget reaches.
+
+**Negative control (F134/F2401).**  `test/safety/t_field_typed.c` gained a
+mixed-budget section that loops over all four budgets this pass introduces.
+At each: a zero-reference difference under `atol` (the case a pure-relative
+budget cannot pass) and a normal value inside `rtol*|b|` pass on the modern
+tier ONLY and are counted `diff_float_tolerant`; a value beyond the floor at
+zero reference and one beyond the relative half FAIL; a changed index and a
+changed flag FAIL while the budget is in force; and without
+`HARNESS_FLOAT_TOL` the setter is inert (`harness_float_atol()` and
+`harness_float_tol()` both 0) so even the inside value fails.  Measured:
+modern harness object `PASS t_field_typed: 48 checks, 0 bad (linked harness
+tol=1e-06)`; the same source against a no-define harness object
+`PASS t_field_typed: 48 checks, 0 bad (linked harness tol=0)`.
+
+**Outcome of the four, measured.**  `t_v92modstate`'s `mkResampledSignal`
+group is now green -- the 87 near-zero `resampleOut`/`resampleTail` samples
+(abs <= 3.51e-5) close -- and the fixture reports only its 4 queue checks.
+`t_resampler`'s float groups are green and it reports only its 8 NaN-phase
+decisions.  `t_v90demprog` reports only its 4 decisions.  `t_floatarma`
+reports only its 734 adversarial checks.  `t_v90demctor`, which keeps the
+pure-relative 5e-2 setter, is unchanged and green.
+
+**Verdicts.**  `make period J=1`: **376 passed, 0 failed** -- the period
+compile never receives the define and both setters are no-ops there, so every
+fixture stays bit-exact.  Modern tier (`make -j1 -k test`, GCC 14.2.0-19):
+**351 green / 25 red / 6 link-excused**, unchanged from F11366 -- no fixture
+moved from red to green because every residual is decision-level or
+adversarial, which is the measured outcome and not a regression.  `make
+safety`: 48 checks, 0 bad.  `python3 tools/refcheck.py`: clean.  No
+`src/`/`include/` file changed and no register entry added.  `mutsnap.py
+--check` reports 270 suites stale (the harness and the four fixtures are in
+its closure) and the 2 pre-existing MISSING (`faxadaptcreate_v29tx`,
+`fdspkrnl_tone`); no `--update` was run.
+
+(2026-09-19)

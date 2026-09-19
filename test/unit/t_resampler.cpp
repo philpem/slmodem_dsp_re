@@ -1903,17 +1903,22 @@ main(void)
 	 * This fixture's sinc/FIR float sites diverge from the blob more than
 	 * a rounding eps on the modern compiler (F11363: `sinc<float>`'s
 	 * return narrowing) and the tier's 1e-6 is not wide enough.  Measured
-	 * with DSPLIB_MAX_REPORT=0 over every failing float check:
+	 * with DSPLIB_MAX_REPORT=0 over every failing float check at
+	 * rtol 1e-7:
 	 *
 	 *     out[] after resample   max |diff|/max|.| = 8.27e-3
 	 *     V90Resampler spans                       4.64e-3
 	 *     coeffs[] (sinc bank)                     1.23e-3
+	 *     every float failure    max |diff|       = 4.4e-6
 	 *
-	 * 1.5e-2 is just above the measured max with headroom.  The budget is
-	 * a no-op under `make period`, so that tier stays bit-exact, and it
-	 * does not reach the NaN-phase rejection decisions at all (F11365).
+	 * so the criterion is the mixed `|a-b| <= atol + rtol*|b|` with
+	 * rtol = 1.5e-2 (just above the functional max) and atol = 1e-5 (2.3x
+	 * the measured overall absolute max, carrying the near-zero samples a
+	 * relative test cannot).  It is a no-op under `make period`, so that
+	 * tier stays bit-exact, and it does not reach the eight NaN-phase
+	 * rejection decisions, which stay red (F11365).
 	 */
-	harness_float_tol_fixture(1.5e-2);
+	harness_float_tol_fixture_mixed(1.0e-5, 1.5e-2);
 
 	dsplib_debug_capture_on = 1;
 	dsplibs_debug_level = 3;
