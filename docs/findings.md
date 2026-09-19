@@ -125015,4 +125015,5 @@ recorded of 272 (no `--update`).  `make test`'s structural checks: 0 anchor(s)
 match other than exactly once.  `git diff --stat`:
 `test/unit/t_v90adid.cpp` (removed `run_means`, two comment references),
 `test/unit/t_v90trn2design.cpp` (removed two blocks),
-`tools/gccdiverge.json` (+2), and the two new fixtures.
+`tools/gccdiverge.json` (+2), and the two new fixtures.  PR:
+https://github.com/philpem/slmodem_dsp_re/pull/178
