@@ -1175,6 +1175,75 @@ blob's `je` and lands on the object's `%ecx`, but still hoists the return-0
 `xor`); that is a different finding, not this one. **Declined, and #160 does not
 close on the countdown alone.**
 
+**#162 RECOVERED THE PAIR, AND THE MISSING LEVER WAS THE RETURN-0's SHAPE.**
+The carrier `if` and the countdown are needed TOGETHER: with both right all
+three handlers are grade-0 byte-identical (`RxHdxScramV17` 266 B, the twins
+210 B each). The object's carrier block is:
+
+    call CarrierDetectV17
+    test %eax,%eax
+    je   <error, out of line>          success falls through
+    orb  $0x20,0x29(%edi)              flags |= CARRIER
+    mov  0x5c(%edi),%esi               RXCTL
+    movb $0x1,0x28(%edi)               status = CARRIER
+    movzwl 0x1a(%esi),%ecx             countdown, loaded UNSIGNED
+    dec  %ecx
+    test %cx,%cx                       tested at SIXTEEN bits
+    mov  %cx,0x1a(%esi)                stored as sixteen
+    jle  <expiry, out of line>
+    xor  %eax,%eax                     ONE return-0, shared
+    <epilogue>
+    ret
+    <error>: ... fields ... jmp <the xor>
+    <expiry>: ladder (Scram only); GetSNRV17; RxNextState;
+              movswl %bp,%eax; jmp <epilogue>
+
+The carrier order is the success-then form (`if (CarrierDetectV17(modem) != 0)
+{ ... } else { ... }`), which flips the `je` and the register assignment as
+#160 measured. What #160's success-as-then still hoisted is the `xor`: written
+with an early `return 0` inside the then-block, GCC 3.4.2 materialises the
+return value in `%edx` at the TOP of the success block and emits a SECOND `xor`
+in the error arm, so the object's single shared return-0 never forms.
+
+**A `short rc = 0;` AND A SINGLE `return rc;` AT THE END IS THE FIX.** The
+success body puts the expiry behind `if ((short)RXCTL(modem)->countdown <= 0)
+{ ... return (short)n; }`, the error arm sits in the `else`, and the function
+returns `rc` once. That creates the shared return-0 block the object has: the
+countdown's fall-through and the error arm both reach one `xor %eax,%eax`. The
+countdown read-back (#160's) supplies the 16-bit `test %cx,%cx` and removes the
+`cwtl`.
+
+**THE CROSSED ENUMERATION, all three handlers compared full-text under the
+period toolchain.** Carrier spellings: guard/early-return (the pre-#162
+source), success-then/else-error, success-then with the error after,
+`!CarrierDetectV17` guard, error-in-else-with-shared-tail, and the `goto` shared
+tail. Countdown spellings: the `short left` local and #160's read-back. The
+`short left` column never closes (the `cwtl` and 32-bit test remain); every
+spelling except one keeps the error arm first or duplicates the return-0. The
+one cell that maps onto ALL THREE is `short rc = 0;`, success-then/else-error,
+read-back countdown, expiry as the then-block:
+
+    shape               cd         Scram          Bridge         Prtcol
+    guard (pre-#162)    left       SIZE 4         BYTES 79       BYTES 79
+    guard               readback   SIZE 3         SIZE 1         SIZE 1
+    success-then        readback   SIZE 16        SIZE 1         SIZE 1
+    success-then/else   readback   SIZE 16        SIZE 1         SIZE 1
+    goto shared tail    readback   EXACT          SIZE 18        SIZE 18
+    rc + single return  readback   EXACT          EXACT          EXACT
+
+Within the tested domain the preimage is unique: only the `rc` cell is
+full-text identical for all three, and no other cell closes any of them. The
+twins were NOT folded (F9444); each body is written out and each is exact on
+its own.
+
+**MEASURED RESULT.** `byteident.py` grade 0: the three handlers are EXACT,
+`v17.c`'s own exact set 6 -> 9 with nothing lost, whole tree 829 -> 832.
+`make phase`: `period differential: 375 passed, 0 failed`, `phase boundary:
+period differential and structural checks all OK`. The one ratchet loss on the
+tree (`_ZN13V90ParametersC2EP19_tagModemParameters` and two `V92Modulator`
+constructors) is PRE-EXISTING and reproduced with the pre-#162 `v17.o`, so it
+is not this change. #162 closes.
+
 ### Lever 9. Operand order — which is decided by the TREE, not by how you spell it
 
 `return dsp->rx_energy & dsp->rx_tone;` — swapping the two operands gave byte
