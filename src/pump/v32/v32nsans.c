@@ -194,7 +194,7 @@
 #include "dsplib/fpm_tone.h"
 
 /* ------------------------------------------------------------------------ */
-/* The instance is not modelled; see v32fpctl.h.  These are the accessors.   */
+/* The instance is `struct v32_modem`; see v32fpctl.h.  These are the accessors.   */
 
 
 /*
@@ -203,8 +203,8 @@
  * the typedefs for both already exist in v32hdx.h.
  */
 
-#define HDX(m) (((struct v32_modem *)(m))->hdx)
-#define FP(m) (((struct v32_modem *)(m))->fp)
+#define HDX(m) ((m)->hdx)
+#define FP(m) ((m)->fp)
 
 #define TONE0(h) ((h)->tone0)
 #define MTD(h) ((h)->mtd)
@@ -326,7 +326,7 @@
  * with %eax dead afterwards, and the function's own exits set nothing.
  */
 void
-V32AnsNextState(void *modem)
+V32AnsNextState(struct v32_modem *modem)
 {
 	struct v32_hdx *hdx = HDX(modem);
 	struct v32_hdx *h2;
@@ -348,7 +348,7 @@ V32AnsNextState(void *modem)
 	case V32_STATE_B:
 		hdx->state = V32_STATE_B2;
 		hdx->state_left = 0x100;
-		if (((unsigned char *)&((struct v32_modem *)modem)->params.options)[1] & V32_OPT11_02)
+		if (((unsigned char *)&modem->params.options)[1] & V32_OPT11_02)
 			hdx->state_left = 0xa60;
 		hdx->timer = 0;
 		hdx->tx_state = TxHdxCarrierState;
@@ -363,8 +363,8 @@ V32AnsNextState(void *modem)
 		 * a failure and not a step.
 		 */
 		if (hdx->state_left <= 0) {
-			((struct v32_modem *)modem)->flags |= V32_FLAG_FAULT;
-			((struct v32_modem *)modem)->status =
+			modem->flags |= V32_FLAG_FAULT;
+			modem->status =
 				V32_ANS_STATUS_TIMEOUT;
 			hdx->tx_state = TxHdxNoCarrier;
 			hdx->rx_state = RxHdxError;
@@ -418,11 +418,11 @@ V32AnsNextState(void *modem)
 
 	case V32_STATE_F:
 		if (hdx->short_aa > 0x5f) {
-			((struct v32_modem *)modem)->byte_32 |= V32_BIT32_08;
-			((struct v32_modem *)modem)->status =
+			modem->byte_32 |= V32_BIT32_08;
+			modem->status =
 				V32_ANS_STATUS_CARRIER;
-			((struct v32_modem *)modem)->flags = (unsigned char)
-				((((struct v32_modem *)modem)->flags
+			modem->flags = (unsigned char)
+				((modem->flags
 				  & (unsigned char)~V32_FLAG_SILENCE)
 				 | V32_FLAG_CARRIER);
 			StoreReg(modem, hdx->rtd, 0);
@@ -574,8 +574,8 @@ V32AnsNextState(void *modem)
 		 */
 		if (DecodeRateSeq(modem, (unsigned short)LoadReg(modem, 2))
 		    == V32_RATE_NONE) {
-			((struct v32_modem *)modem)->flags |= V32_FLAG_FAULT;
-			((struct v32_modem *)modem)->status = V32_STATUS_BAD_MODE;
+			modem->flags |= V32_FLAG_FAULT;
+			modem->status = V32_STATUS_BAD_MODE;
 		}
 		break;
 
@@ -670,9 +670,9 @@ V32AnsNextState(void *modem)
 		hdx->timer = 0;
 		hdx->state_left =
 			(int)hdx->limit;
-		((struct v32_modem *)modem)->flags |=
+		modem->flags |=
 			V32_FLAG_01 | V32_FLAG_08 | V32_FLAG_10;
-		((struct v32_modem *)modem)->status = (unsigned char)
+		modem->status = (unsigned char)
 			V32_CONNECT[DecodeRateSeq(modem,
 						  (unsigned short)
 						  LoadReg(modem, 4))];

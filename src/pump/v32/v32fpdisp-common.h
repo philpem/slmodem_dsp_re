@@ -87,14 +87,15 @@
  */
 /* Remaining byte aliases are for fields not yet named by the owner model. */
 
-#define HDX(m)			(((struct v32_modem *)(m))->hdx)
-#define FP(m)			(((struct v32_modem *)(m))->fp)
+#define HDX(m)			((m)->hdx)
+#define FP(m)			((m)->fp)
 
 /*
  * The parameter block IS the object's first 48 bytes -- v32fp.h derives that
- * from the three `rep movsl` sites -- so this cast is not a reinterpretation.
+ * from the three `rep movsl` sites -- so this accessor is not a
+ * reinterpretation.
  */
-#define PARAMS(m)		(&((struct v32_modem *)(m))->params)
+#define PARAMS(m)		(&(m)->params)
 
 /*
  * The six `int` switches `struct v32fp_ctl::ctl0` drives, at fp + 0x00 ..

@@ -171,7 +171,7 @@ void *V32FP_create(const struct v32fp_cfg *cfg, void *arg1);
  * @param nin     In/out: input sample count, then received bit count.
  * @return `V32_OBJ_STATUS`.
  */
-int V32FP_modem(void *modem, const int *txbits, short *out, const short *in,
+int V32FP_modem(struct v32_modem *modem, const int *txbits, short *out, const short *in,
 		int *rxbits, int *nout, int *nin);
 
 /**
@@ -180,7 +180,7 @@ int V32FP_modem(void *modem, const int *txbits, short *out, const short *in,
  * @param ctl    The control request.
  * @return Always 1.
  */
-int V32FP_control(void *modem, struct v32fp_ctl *ctl);
+int V32FP_control(struct v32_modem *modem, struct v32fp_ctl *ctl);
 
 /**
  * @brief Fill a V.32 status report, and post a control request of its own.
@@ -188,7 +188,7 @@ int V32FP_control(void *modem, struct v32fp_ctl *ctl);
  * @param st     Output: the status report.
  * @return Always 1.
  */
-int V32FP_status(void *modem, struct v32_status *st);
+int V32FP_status(struct v32_modem *modem, struct v32_status *st);
 
 /**
  * @brief `V32_PROTOCOL`'s data-mode handler: one block of steady-state V.32 traffic.
@@ -224,7 +224,7 @@ int V32FP_status(void *modem, struct v32_status *st);
  * name as generic as `PROTOCOL` from the library and buy nothing.  It is
  * reached through `struct v32_status::protocol` instead.
  */
-typedef void (*v32_protocol_fn)(void *modem, unsigned short *txdata,
+typedef void (*v32_protocol_fn)(struct v32_modem *modem, unsigned short *txdata,
 				short *txout, short *rxin,
 				unsigned short *rxout, short *nsamples,
 				unsigned short *rxcount);

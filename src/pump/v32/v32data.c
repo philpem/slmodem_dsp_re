@@ -62,18 +62,18 @@
 #include "dsplib/fpm_smc.h"
 
 unsigned short
-ModDataV32(void *modem, short *data, short *out, unsigned short count)
+ModDataV32(struct v32_modem *modem, short *data, short *out, unsigned short count)
 {
 	const v32_encoder_fn *tbl;
 	struct v32_fp *fp;
 	short sel;
 
-	fp = ((struct v32_modem *)modem)->fp;
+	fp = modem->fp;
 	tbl = fp->encoders;
 	sel = fp->encoder_sel;
 	tbl[sel](&fp->tx_smc, &fp->symout, data, count);
 
-	fp = ((struct v32_modem *)modem)->fp;
+	fp = modem->fp;
 	return FPM_PPS_filter(&fp->pps,
 			      /* D431: the same bytes as the v32_symout above */
 			      (struct fpm_smc_ring *)(void *)
@@ -82,7 +82,7 @@ ModDataV32(void *modem, short *data, short *out, unsigned short count)
 }
 
 unsigned short
-TxNoCarrierV32(void *modem, const short *data, short *out,
+TxNoCarrierV32(struct v32_modem *modem, const short *data, short *out,
 	       unsigned short count)
 {
 	struct v32_symout *ring;
@@ -93,7 +93,7 @@ TxNoCarrierV32(void *modem, const short *data, short *out,
 
 	(void)data;			/* never read; see v32data.h */
 
-	fp = ((struct v32_modem *)modem)->fp;
+	fp = modem->fp;
 	ring = &fp->symout;
 	smc = &fp->tx_smc;
 	quad = smc->quad;

@@ -14,9 +14,9 @@
  * datapump through `V32_OBJ_FP`, so they are V.32 and not dialling.
  *
  * ---------------------------------------------------------------------------
- * THE INSTANCE IS NOT MODELLED AS A STRUCT.
+ * THE INSTANCE IS REACHED THROUGH `struct v32_modem`.
  *
- * The parameter is `void *` and the offsets are named constants, which is
+ * The parameter is that base type and the offsets are named constants, which is
  * v32data.h's ruling and v22data.h's before it.  What IS modelled, by other
  * headers, is every sub-object these functions reach:
  *
@@ -348,7 +348,7 @@ extern short V32_SAMPLE_LEN[2];
  *
  * @param modem  The V.32 datapump instance to tear down.
  */
-void V32FP_delete(void *modem);
+void V32FP_delete(struct v32_modem *modem);
 
 /**
  * @brief Drain the V.32 equaliser's scatter log.
@@ -361,7 +361,7 @@ void V32FP_delete(void *modem);
  * @param max    Maximum points to write.
  * @return The number of points written.
  */
-int V32FP_GetDiagnostics(void *modem, int which, struct fpm_fse_point *out,
+int V32FP_GetDiagnostics(struct v32_modem *modem, int which, struct fpm_fse_point *out,
 			 int max);
 
 /**
@@ -374,7 +374,7 @@ int V32FP_GetDiagnostics(void *modem, int which, struct fpm_fse_point *out,
  * @param n      Output: how many samples are in the returned block.
  * @return The echo-cancelled sample buffer (V32FP_CLEAN_BUF).
  */
-short *V32FP_GetCleanedSamples(void *modem, int *n);
+short *V32FP_GetCleanedSamples(struct v32_modem *modem, int *n);
 
 /**
  * @brief Configure the V.32 transmitter for one of the seven modulations.
@@ -387,28 +387,28 @@ short *V32FP_GetCleanedSamples(void *modem, int *n);
  * @param modem  The V.32 datapump instance.
  * @param mode   One of V32_MODE_ABS4..V32_MODE_128T.
  */
-void SetTxModeV32(void *modem, short mode);
+void SetTxModeV32(struct v32_modem *modem, short mode);
 
 /**
  * @brief Configure the V.32 receiver for one of the seven modulations, mode for mode with SetTxModeV32().
  * @param modem  The V.32 datapump instance.
  * @param mode   One of V32_MODE_ABS4..V32_MODE_128T.
  */
-void SetRxModeV32(void *modem, short mode);
+void SetRxModeV32(struct v32_modem *modem, short mode);
 
 /**
  * @brief Load the V.32 transmit scrambler's shift register.
  * @param modem  The V.32 datapump instance.
  * @param seed   The new register contents.
  */
-void SeedScramblerV32(void *modem, unsigned int seed);
+void SeedScramblerV32(struct v32_modem *modem, unsigned int seed);
 
 /**
  * @brief Map the V.32 instance's current bit rate to a V32_RATE_* code.
  * @param modem  The V.32 datapump instance.
  * @return One of V32_RATE_4800..V32_RATE_INVALID (V32_OBJ_TRELLIS breaks the 9600 tie).
  */
-int GetRateV32(void *modem);
+int GetRateV32(struct v32_modem *modem);
 
 /**
  * @brief Scramble `count` V.32 transmit words in place.
@@ -416,7 +416,7 @@ int GetRateV32(void *modem);
  * @param buf    The words to scramble, in place.
  * @param count  How many words.
  */
-void ScrambleDataV32(void *modem, short *buf, unsigned short count);
+void ScrambleDataV32(struct v32_modem *modem, short *buf, unsigned short count);
 
 /**
  * @brief Descramble `count` V.32 receive words in place.
@@ -424,28 +424,28 @@ void ScrambleDataV32(void *modem, short *buf, unsigned short count);
  * @param buf    The words to descramble, in place.
  * @param count  How many words.
  */
-void DescrambleDataV32(void *modem, short *buf, unsigned short count);
+void DescrambleDataV32(struct v32_modem *modem, short *buf, unsigned short count);
 
 /**
  * @brief Control V.32 equaliser adaptation.
  * @param modem  The V.32 datapump instance.
  * @param mode   V32_ADAPTEQ_OFF, _MU0 (wide step) or _MU1 (narrow step); anything else is a no-op.
  */
-void SetAdaptEqV32(void *modem, unsigned short mode);
+void SetAdaptEqV32(struct v32_modem *modem, unsigned short mode);
 
 /**
  * @brief Control the V.32 echo canceller's adaptation.
  * @param modem  The V.32 datapump instance.
  * @param mode   V32_ADAPTEC_RESET/_OFF/_ON/_SLOW; anything else is a no-op.
  */
-void SetAdaptEcV32(void *modem, unsigned short mode);
+void SetAdaptEcV32(struct v32_modem *modem, unsigned short mode);
 
 /**
  * @brief Set the four receive-loop switches at V32FP_R00..V32FP_R0C.
  * @param modem  The V.32 datapump instance.
  * @param mode   1 clears them; 2 and 3 set them.
  */
-void SetRxLoopsV32(void *modem, unsigned short mode);
+void SetRxLoopsV32(struct v32_modem *modem, unsigned short mode);
 
 /**
  * @brief Place the V.32 echo canceller's read taps for a given round-trip delay.
@@ -456,20 +456,20 @@ void SetRxLoopsV32(void *modem, unsigned short mode);
  * @param modem  The V.32 datapump instance.
  * @param delay  The round-trip delay, in symbols.
  */
-void SetECRndTripDelayV32(void *modem, short delay);
+void SetECRndTripDelayV32(struct v32_modem *modem, short delay);
 
 /**
  * @brief A `ret`, and nothing else. Its one caller passes the instance.
  * @param modem  Unused.
  */
-void TxClockSyncV32(void *modem);
+void TxClockSyncV32(struct v32_modem *modem);
 
 /**
  * @brief Read the V.32 decoder's rate-change report, straight through.
  * @param modem  The V.32 datapump instance.
  * @return The decoder's `struct v32_dec::rate_change`.
  */
-int EpochDetectV32(void *modem);
+int EpochDetectV32(struct v32_modem *modem);
 
 /**
  * @brief Poll and clear the V.32 decoder's retrain request.
@@ -479,14 +479,14 @@ int EpochDetectV32(void *modem);
  * @param modem  The V.32 datapump instance.
  * @return Non-zero if a retrain was requested (and now cleared).
  */
-int RetrainDetectV32(void *modem);
+int RetrainDetectV32(struct v32_modem *modem);
 
 /**
  * @brief Poll and clear the V.32 decoder's renegotiate request.
  * @param modem  The V.32 datapump instance.
  * @return Non-zero if a renegotiation was requested (and now cleared).
  */
-int RenegotiateDetectV32(void *modem);
+int RenegotiateDetectV32(struct v32_modem *modem);
 
 /**
  * @brief Fill `out` with V32_HDX_SHORT_9E clamped words, in the shape of a V32 receive-state handler.
@@ -501,7 +501,7 @@ int RenegotiateDetectV32(void *modem);
  * @param count  Unread.
  * @return The number of words written (V32_HDX_SHORT_9E).
  */
-unsigned short RxClampV32(void *modem, short *in, short *out,
+unsigned short RxClampV32(struct v32_modem *modem, short *in, short *out,
 			  unsigned short count);
 
 /**
@@ -524,14 +524,14 @@ unsigned short RxClampV32(void *modem, short *in, short *out,
  * @param modem  The V.32 datapump instance.
  * @param hz     The new frequency.
  */
-void SetToneDetect(void *modem, short hz);
+void SetToneDetect(struct v32_modem *modem, short hz);
 
 /**
  * @brief What is left of the V.32 handshake's turnaround budget once the three charges against it are taken out.
  * @param modem  The V.32 datapump instance.
  * @return The remaining budget (V32_HDX_SHORT_94 minus the three charges), clamped at zero.
  */
-short CalcTurnAroundDelay(void *modem);
+short CalcTurnAroundDelay(struct v32_modem *modem);
 
 #ifdef __cplusplus
 }

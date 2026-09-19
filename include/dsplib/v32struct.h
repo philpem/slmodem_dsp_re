@@ -16,6 +16,7 @@
 
 struct fpm_tone;
 struct fpm_mtd;
+struct v32_modem;
 #define V32_SEQ_REGS 5
 
 /**
@@ -26,8 +27,8 @@ struct fpm_mtd;
  * @param[in,out] left Remaining symbols, initially hdx->symbol_len.
  * @return Samples written, not symbols consumed.
  */
-typedef short (*v32_txhdx_fn)(void *modem, short *data, short *out,
-			    unsigned short *left);
+typedef short (*v32_txhdx_fn)(struct v32_modem *modem, short *data,
+			    short *out, unsigned short *left);
 /**
  * @brief Run the active half-duplex receive state.
  * @param modem Owning v32_modem, not its v32_hdx.
@@ -36,8 +37,8 @@ typedef short (*v32_txhdx_fn)(void *modem, short *data, short *out,
  * @param[in,out] count Input sample count; the data state replaces it with
  *                     its output-word count, not unconsumed input samples.
  */
-typedef void (*v32_rxhdx_fn)(void *modem, short *in, unsigned short *out,
-			   unsigned short *count);
+typedef void (*v32_rxhdx_fn)(struct v32_modem *modem, short *in,
+			   unsigned short *out, unsigned short *count);
 /**
  * @brief Append absolute, differential or trellis-coded symbols to a ring.
  * @param[in,out] smc Coder state.

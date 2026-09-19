@@ -99,7 +99,7 @@ extern "C" {
  * every call site is `push modem; call *V32NextState[mode]` with %eax dead
  * afterwards (7fd9b in `TxHdxTone` is the shortest).
  */
-typedef void (*v32_nextstate_fn)(void *modem);
+typedef void (*v32_nextstate_fn)(struct v32_modem *modem);
 
 /*
  * `.data`, GLOBAL, and therefore NOT const -- section 143 in the object for
@@ -146,7 +146,7 @@ extern const short V32_S_DATA_COEF[15];
  * @param left   In/out: symbol budget; zeroed unconditionally.
  * @return The block's sample count (re-read after any transition; see the file banner).
  */
-short TxHdxTone(void *modem, short *data, short *out, unsigned short *left);
+short TxHdxTone(struct v32_modem *modem, short *data, short *out, unsigned short *left);
 
 /**
  * @brief V.32 transmit state: emit the handshake's carrier-bearing sequence, unscrambled.
@@ -160,7 +160,7 @@ short TxHdxTone(void *modem, short *data, short *out, unsigned short *left);
  * @param left   In/out: block symbol budget, clamped against the handshake countdown.
  * @return The number of samples written.
  */
-short TxHdxCarrierState(void *modem, short *data, short *out,
+short TxHdxCarrierState(struct v32_modem *modem, short *data, short *out,
 			unsigned short *left);
 
 /**
@@ -171,7 +171,7 @@ short TxHdxCarrierState(void *modem, short *data, short *out,
  * @param left   In/out: block symbol budget, clamped against the handshake countdown.
  * @return The number of samples written.
  */
-short TxHdxScrSequence(void *modem, short *data, short *out,
+short TxHdxScrSequence(struct v32_modem *modem, short *data, short *out,
 		       unsigned short *left);
 
 /**
@@ -186,7 +186,7 @@ short TxHdxScrSequence(void *modem, short *data, short *out,
  * @param left   In/out: block symbol budget, clamped against the handshake countdown.
  * @return The number of samples written.
  */
-short TxHdxTRN(void *modem, short *data, short *out, unsigned short *left);
+short TxHdxTRN(struct v32_modem *modem, short *data, short *out, unsigned short *left);
 
 /**
  * @brief V.32 transmit state: the connected data segment.
@@ -200,7 +200,7 @@ short TxHdxTRN(void *modem, short *data, short *out, unsigned short *left);
  * @param left   In/out: block symbol budget, clamped against the handshake countdown.
  * @return The number of samples written.
  */
-short TxHdxData(void *modem, short *data, short *out, unsigned short *left);
+short TxHdxData(struct v32_modem *modem, short *data, short *out, unsigned short *left);
 
 /**
  * @brief V.32 transmit state: drop the carrier.
@@ -216,7 +216,7 @@ short TxHdxData(void *modem, short *data, short *out, unsigned short *left);
  * @param left   In/out: block symbol budget, clamped against the handshake countdown.
  * @return The number of samples written.
  */
-short TxHdxNoCarrier(void *modem, short *data, short *out,
+short TxHdxNoCarrier(struct v32_modem *modem, short *data, short *out,
 		     unsigned short *left);
 
 /**
@@ -233,7 +233,7 @@ short TxHdxNoCarrier(void *modem, short *data, short *out,
  * @param left   In/out: the whole remaining budget, charged in full and zeroed.
  * @return The number of samples written.
  */
-short TxHdxFinishFrame(void *modem, short *data, short *out,
+short TxHdxFinishFrame(struct v32_modem *modem, short *data, short *out,
 		       unsigned short *left);
 
 /**
@@ -248,7 +248,7 @@ short TxHdxFinishFrame(void *modem, short *data, short *out,
  * @param left   In/out: symbol budget; zeroed unconditionally.
  * @return The block's sample count (re-read after any transition; see the file banner).
  */
-short TxHdxNull(void *modem, short *data, short *out, unsigned short *left);
+short TxHdxNull(struct v32_modem *modem, short *data, short *out, unsigned short *left);
 
 /* ----------------------------------------------------------------- receive */
 
@@ -272,7 +272,7 @@ short TxHdxNull(void *modem, short *data, short *out, unsigned short *left);
  * @param out    Output; not filled with demodulated data by this state.
  * @param count  In/out sample count, clamped by `RxClampV32` on exit.
  */
-void RxHdxTone(void *modem, short *in, unsigned short *out,
+void RxHdxTone(struct v32_modem *modem, short *in, unsigned short *out,
 	       unsigned short *count);
 
 /**
@@ -286,7 +286,7 @@ void RxHdxTone(void *modem, short *in, unsigned short *out,
  * @param out    Output; not filled with demodulated data by this state.
  * @param count  In/out sample count, clamped by `RxClampV32` on exit.
  */
-void RxHdxNoSignal(void *modem, short *in, unsigned short *out,
+void RxHdxNoSignal(struct v32_modem *modem, short *in, unsigned short *out,
 		   unsigned short *count);
 
 /**
@@ -304,7 +304,7 @@ void RxHdxNoSignal(void *modem, short *in, unsigned short *out,
  * @param out    Output; not filled with demodulated data by this state.
  * @param count  In/out sample count, clamped by `RxClampV32` on exit.
  */
-void RxHdxPhsReversal(void *modem, short *in, unsigned short *out,
+void RxHdxPhsReversal(struct v32_modem *modem, short *in, unsigned short *out,
 		      unsigned short *count);
 
 /**
@@ -319,7 +319,7 @@ void RxHdxPhsReversal(void *modem, short *in, unsigned short *out,
  * @param out    Output for the demodulated (descrambled) symbols.
  * @param count  In/out sample count, clamped by `RxClampV32` on exit.
  */
-void RxHdxRateSequence(void *modem, short *in, unsigned short *out,
+void RxHdxRateSequence(struct v32_modem *modem, short *in, unsigned short *out,
 		       unsigned short *count);
 
 /**
@@ -333,7 +333,7 @@ void RxHdxRateSequence(void *modem, short *in, unsigned short *out,
  * @param out    Output for the demodulated (descrambled) symbols.
  * @param count  In/out sample count, clamped by `RxClampV32` on exit.
  */
-void RxHdxSequence(void *modem, short *in, unsigned short *out,
+void RxHdxSequence(struct v32_modem *modem, short *in, unsigned short *out,
 		   unsigned short *count);
 
 /**
@@ -350,7 +350,7 @@ void RxHdxSequence(void *modem, short *in, unsigned short *out,
  * @param out    Output for the demodulated (descrambled) symbols.
  * @param count  In/out sample count, clamped by `RxClampV32` on exit.
  */
-void RxHdxSequenceE(void *modem, short *in, unsigned short *out,
+void RxHdxSequenceE(struct v32_modem *modem, short *in, unsigned short *out,
 		    unsigned short *count);
 
 /**
@@ -363,7 +363,7 @@ void RxHdxSequenceE(void *modem, short *in, unsigned short *out,
  * @param out    Output for the demodulated (descrambled) data.
  * @param count  In/out sample count, clamped by `RxClampV32` on exit.
  */
-void RxHdxData(void *modem, short *in, unsigned short *out,
+void RxHdxData(struct v32_modem *modem, short *in, unsigned short *out,
 	       unsigned short *count);
 
 /**
@@ -378,7 +378,7 @@ void RxHdxData(void *modem, short *in, unsigned short *out,
  * @param out    Output for the demodulated (descrambled) data.
  * @param count  In/out sample count, clamped by `RxClampV32` on exit.
  */
-void RxHdxToneData(void *modem, short *in, unsigned short *out,
+void RxHdxToneData(struct v32_modem *modem, short *in, unsigned short *out,
 		   unsigned short *count);
 
 /**
@@ -395,7 +395,7 @@ void RxHdxToneData(void *modem, short *in, unsigned short *out,
  * @param out    Output for demodulated data, when the DATA-mode bank is active.
  * @param count  In/out sample count, clamped by `RxClampV32` on exit.
  */
-void RxHdxSTone(void *modem, short *in, unsigned short *out,
+void RxHdxSTone(struct v32_modem *modem, short *in, unsigned short *out,
 		unsigned short *count);
 
 /**
@@ -409,7 +409,7 @@ void RxHdxSTone(void *modem, short *in, unsigned short *out,
  * @param out    Output for the demodulated data.
  * @param count  In/out sample count, clamped by `RxClampV32` on exit.
  */
-void RxHdxEpoch(void *modem, short *in, unsigned short *out,
+void RxHdxEpoch(struct v32_modem *modem, short *in, unsigned short *out,
 		unsigned short *count);
 
 /**
@@ -425,7 +425,7 @@ void RxHdxEpoch(void *modem, short *in, unsigned short *out,
  * @param out    Scratch destination for the discarded demodulation.
  * @param count  Output: forced to 0.
  */
-void RxHdxError(void *modem, short *in, unsigned short *out,
+void RxHdxError(struct v32_modem *modem, short *in, unsigned short *out,
 		unsigned short *count);
 
 /**
@@ -435,7 +435,7 @@ void RxHdxError(void *modem, short *in, unsigned short *out,
  * @param out    Output; not filled with demodulated data.
  * @param count  In/out sample count, clamped by `RxClampV32` on exit.
  */
-void RxHdxNull(void *modem, short *in, unsigned short *out,
+void RxHdxNull(struct v32_modem *modem, short *in, unsigned short *out,
 	       unsigned short *count);
 
 /* --------------------------------------------------------- the dispatchers */
@@ -452,16 +452,16 @@ void RxHdxNull(void *modem, short *in, unsigned short *out,
  */
 
 /** @brief V.32 handshake step for the ORIGINATING side (`V32NextState[V32_MODE_ORIGINATE]`). @param modem The V.32 datapump instance. */
-void V32OrgNextState(void *modem);
+void V32OrgNextState(struct v32_modem *modem);
 
 /** @brief V.32 handshake step for the ANSWERING side (`V32NextState[V32_MODE_ANSWER]`). @param modem The V.32 datapump instance. */
-void V32AnsNextState(void *modem);
+void V32AnsNextState(struct v32_modem *modem);
 
 /** @brief V.32 handshake step for entering the ring/retrain sequence (`V32NextState[V32_MODE_RING_INIT]`). @param modem The V.32 datapump instance. */
-void V32RngInitNextState(void *modem);
+void V32RngInitNextState(struct v32_modem *modem);
 
 /** @brief V.32 handshake step for responding to a ring/retrain request (`V32NextState[V32_MODE_RING_RESP]`). @param modem The V.32 datapump instance. */
-void V32RngRespNextState(void *modem);
+void V32RngRespNextState(struct v32_modem *modem);
 
 /**
  * @brief V.32 handshake step for local loopback, occupying both `V32NextState[V32_MODE_LOCLOOP_2]` and `[V32_MODE_LOCLOOP_3]`.
@@ -473,7 +473,7 @@ void V32RngRespNextState(void *modem);
  *
  * @param modem  The V.32 datapump instance.
  */
-void V32LocLoopNextState(void *modem);
+void V32LocLoopNextState(struct v32_modem *modem);
 
 #ifdef __cplusplus
 }

@@ -9,9 +9,10 @@
  * they impose on the twenty states around them, which is why this header is
  * mostly prose: the next V.32 pass writes those states against it.
  *
- * THE INSTANCE IS NOT MODELLED; the parameter is `void *` and the offsets are
- * named constants, following `include/dsplib/v32data.h`'s ruling, which in
- * turn follows `include/dsplib/v22data.h`'s.  Do not turn this into a struct.
+ * THE INSTANCE IS REACHED THROUGH `struct v32_modem`; the parameter is that
+ * base type and the offsets are named constants, following
+ * `include/dsplib/v32data.h`'s ruling, which in turn follows
+ * `include/dsplib/v22data.h`'s.
  *
  * ---------------------------------------------------------------------------
  * THE INSTANCE'S TWO POINTERS
@@ -176,7 +177,7 @@ extern "C" {
  * @param out       Output for the modulated transmit samples.
  * @param nsamples  Output: the total sample count produced this block.
  */
-void V32TxHdxModem(void *modem, short *data, short *out, short *nsamples);
+void V32TxHdxModem(struct v32_modem *modem, short *data, short *out, short *nsamples);
 
 /**
  * @brief Drive the V.32 half-duplex RECEIVE machine for one block.
@@ -189,7 +190,7 @@ void V32TxHdxModem(void *modem, short *data, short *out, short *nsamples);
  * @param out    Output for the demodulated bits/symbols.
  * @param count  In/out: input sample count, then output count (the current state's own contract).
  */
-void V32RxHdxModem(void *modem, short *in, unsigned short *out,
+void V32RxHdxModem(struct v32_modem *modem, short *in, unsigned short *out,
 		   unsigned short *count);
 
 /**

@@ -97,9 +97,9 @@
 #include "dsplib/v32seq.h"
 #include "dsplib/v32state.h"
 
-/* The instance is not modelled; see v32hdx.h.  These are the accessors. */
+/* The instance is `struct v32_modem`; see v32hdx.h.  These are the accessors. */
 
-#define HDX(m) (((struct v32_modem *)(m))->hdx)
+#define HDX(m) ((m)->hdx)
 
 /*
  * The handshake state's countdown, in symbols.  Derived in V32TXHDX.c from the
@@ -158,7 +158,7 @@
 /* ------------------------------------------------------------------------ */
 
 void
-V32LocLoopNextState(void *modem)
+V32LocLoopNextState(struct v32_modem *modem)
 {
 	struct v32_hdx *hdx = HDX(modem);
 	short rate;
@@ -227,8 +227,8 @@ V32LocLoopNextState(void *modem)
 		hdx->rx_state = (void *)RxHdxData;
 
 		SetAdaptEqV32(modem, V32_ADAPTEQ_MU0);
-		((struct v32_modem *)modem)->flags = (unsigned char)
-			((((struct v32_modem *)modem)->flags & ~V32_FLAG_SILENCE)
+		modem->flags = (unsigned char)
+			((modem->flags & ~V32_FLAG_SILENCE)
 			 | V32_FLAG_CARRIER);
 		break;
 
@@ -257,9 +257,9 @@ V32LocLoopNextState(void *modem)
 		 * than the other way round; the two-cell enumeration is
 		 * unique (finding F10193).
 		 */
-		((struct v32_modem *)modem)->status =
+		modem->status =
 			(unsigned char)V32_CONNECT[rate];
-		((struct v32_modem *)modem)->flags |=
+		modem->flags |=
 			V32_FLAG_01 | V32_FLAG_08 | V32_FLAG_10;
 		break;
 

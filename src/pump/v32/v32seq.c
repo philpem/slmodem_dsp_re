@@ -102,11 +102,11 @@ short V32_ESEQ[V32_RATE_COUNT] = {
  * five of its callers and the worklist therefore never listed it.
  */
 static int
-v32_common_rate(void *modem, unsigned short seq)
+v32_common_rate(struct v32_modem *modem, unsigned short seq)
 {
 	int rate = V32_RATE_NONE;
 	struct v32_fp *fp = (struct v32_fp *)
-		((struct v32_modem *)modem)->fp;
+		modem->fp;
 	short local = V32_RATE_SEQ[fp->rx_rate_index];
 
 	if ((seq & 0x0008) && (local & 0x0008))
@@ -124,7 +124,7 @@ v32_common_rate(void *modem, unsigned short seq)
 }
 
 unsigned short
-RateToSeq(void *modem, short rate)
+RateToSeq(struct v32_modem *modem, short rate)
 {
 	(void)modem;			/* never read; D404 */
 
@@ -132,13 +132,13 @@ RateToSeq(void *modem, short rate)
 }
 
 int
-SeqToRate(void *modem, unsigned short seq)
+SeqToRate(struct v32_modem *modem, unsigned short seq)
 {
 	return v32_common_rate(modem, seq);
 }
 
 unsigned short
-CodeRateSeq(void *modem, unsigned short seq)
+CodeRateSeq(struct v32_modem *modem, unsigned short seq)
 {
 	short rate = (short)v32_common_rate(modem, seq);
 	unsigned short out = V32_RATE_SEQ_NONE;
@@ -150,7 +150,7 @@ CodeRateSeq(void *modem, unsigned short seq)
 }
 
 short
-DecodeRateSeq(void *modem, unsigned short seq)
+DecodeRateSeq(struct v32_modem *modem, unsigned short seq)
 {
 	return (short)v32_common_rate(modem, seq);
 }
@@ -165,7 +165,7 @@ DecodeRateSeq(void *modem, unsigned short seq)
  * rather than as the `if` the two rate functions above use.
  */
 unsigned short
-CodeESeq(void *modem, unsigned short seq)
+CodeESeq(struct v32_modem *modem, unsigned short seq)
 {
 	short rate = (short)v32_common_rate(modem, seq);
 
@@ -174,7 +174,7 @@ CodeESeq(void *modem, unsigned short seq)
 }
 
 unsigned short
-CodeFinalRateSeq(void *modem, unsigned short seq)
+CodeFinalRateSeq(struct v32_modem *modem, unsigned short seq)
 {
 	short rate = (short)v32_common_rate(modem, seq);
 	unsigned short out = V32_RATE_SEQ_NONE;
@@ -186,11 +186,11 @@ CodeFinalRateSeq(void *modem, unsigned short seq)
 }
 
 void
-InitGenSequence(void *modem, unsigned short pattern, unsigned short total,
+InitGenSequence(struct v32_modem *modem, unsigned short pattern, unsigned short total,
 		unsigned short width)
 {
 	struct v32_hdx *hdx = (struct v32_hdx *)
-		((struct v32_modem *)modem)->hdx;
+		modem->hdx;
 	/* The object retains the promoted quotient until the two short stores.
 	 * A short local adds an unsupported movzwl after the decrement. */
 	int top = total / width - 1;	/* D401 */
@@ -214,10 +214,10 @@ InitGenSequence(void *modem, unsigned short pattern, unsigned short total,
  * so the same thing happens.
  */
 void
-GenSequence(void *modem, short *out, unsigned short count)
+GenSequence(struct v32_modem *modem, short *out, unsigned short count)
 {
 	struct v32_hdx *hdx = (struct v32_hdx *)
-		((struct v32_modem *)modem)->hdx;
+		modem->hdx;
 	int width = hdx->gen_width;
 	int pattern = hdx->gen_pattern;
 	unsigned short index = hdx->gen_index;
@@ -234,11 +234,11 @@ GenSequence(void *modem, short *out, unsigned short count)
 }
 
 void
-InitDetSequence(void *modem, int target, int mask, int out_mask,
+InitDetSequence(struct v32_modem *modem, int target, int mask, int out_mask,
 		unsigned short width)
 {
 	struct v32_hdx *hdx = (struct v32_hdx *)
-		((struct v32_modem *)modem)->hdx;
+		modem->hdx;
 
 	hdx->det_width = width;
 	hdx->det_out_mask = out_mask;
@@ -265,10 +265,10 @@ InitDetSequence(void *modem, int target, int mask, int out_mask,
  * pattern straddling two calls is still found.
  */
 short
-DetSequence(void *modem, const short *data, unsigned short count)
+DetSequence(struct v32_modem *modem, const short *data, unsigned short count)
 {
 	struct v32_hdx *hdx = (struct v32_hdx *)
-		((struct v32_modem *)modem)->hdx;
+		modem->hdx;
 	int nbits = hdx->det_width;
 	int reg = hdx->det_reg;
 	int mask = hdx->det_mask;
@@ -312,22 +312,22 @@ DetSequence(void *modem, const short *data, unsigned short count)
 }
 
 int
-GetSequence(void *modem)
+GetSequence(struct v32_modem *modem)
 {
 	struct v32_hdx *hdx = (struct v32_hdx *)
-		((struct v32_modem *)modem)->hdx;
+		modem->hdx;
 
 	return hdx->det_match;
 }
 
 short
-LoadReg(void *modem, short reg)
+LoadReg(struct v32_modem *modem, short reg)
 {
 	short value = 0;
 
 	if (reg >= 0 && reg <= V32HDX_NREGS - 1) {
 		struct v32_hdx *hdx = (struct v32_hdx *)
-			((struct v32_modem *)modem)->hdx;
+			modem->hdx;
 
 		value = hdx->regs[reg];
 	}
@@ -336,11 +336,11 @@ LoadReg(void *modem, short reg)
 }
 
 void
-StoreReg(void *modem, short value, short reg)
+StoreReg(struct v32_modem *modem, short value, short reg)
 {
 	if (reg >= 0 && reg <= V32HDX_NREGS - 1) {
 		struct v32_hdx *hdx = (struct v32_hdx *)
-			((struct v32_modem *)modem)->hdx;
+			modem->hdx;
 
 		hdx->regs[reg] = value;
 	}

@@ -134,7 +134,7 @@
  },
  {
   "label": "the transmitter's block is taken from V.17's instance offset",
-  "find": "\tfp = ((struct v32_modem *)modem)->fp;\n\tring = &fp->symout;",
+  "find": "\tfp = modem->fp;\n\tring = &fp->symout;",
   "replace": "\tfp = *(struct v32_fp **)(void *)((unsigned char *)modem + 0x28);\n\tring = &fp->symout;"
  }
 ]

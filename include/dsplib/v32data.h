@@ -10,8 +10,9 @@
  * into `Dialer.c +18`, a span over nineteen translation units, and they are
  * V.32 and not dialling.
  *
- * THE INSTANCE IS NOT MODELLED; the parameter is `void *` and the offsets are
- * named constants, following `include/dsplib/v22data.h`'s ruling.  The
+ * THE INSTANCE IS REACHED THROUGH `struct v32_modem`; the parameter is that
+ * base type and the offsets are named constants, following
+ * `include/dsplib/v22data.h`'s ruling.  The
  * SUB-OBJECTS are modelled, and by somebody else: `struct v32_smc` and
  * `struct v32_symout` are `v32smc.h`'s, written from the three encoders.
  *
@@ -89,7 +90,7 @@ struct fpm_smc_ring;
  * @param count  How many data words.
  * @return The number of samples written.
  */
-unsigned short ModDataV32(void *modem, short *data, short *out,
+unsigned short ModDataV32(struct v32_modem *modem, short *data, short *out,
 			  unsigned short count);
 
 /**
@@ -114,7 +115,7 @@ unsigned short ModDataV32(void *modem, short *data, short *out,
  * @param count  How many symbols.
  * @return The number of samples written.
  */
-unsigned short TxNoCarrierV32(void *modem, const short *data, short *out,
+unsigned short TxNoCarrierV32(struct v32_modem *modem, const short *data, short *out,
 			      unsigned short count);
 
 #endif /* DSPLIB_V32DATA_H */

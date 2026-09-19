@@ -72,12 +72,12 @@
 #define CLEAN_OF(fp)	((fp)->clean_buf)
 
 unsigned short
-DemodDataV32(void *modem, short *in, unsigned short *out, unsigned short count)
+DemodDataV32(struct v32_modem *modem, short *in, unsigned short *out, unsigned short count)
 {
 	int ec_training = 0;
 	unsigned short n, m;
 	int enables;
-	struct v32_modem *owner = (struct v32_modem *)modem;
+	struct v32_modem *owner = modem;
 	struct v32_hdx *hdx;
 	struct v32_fp *fp;
 	int i;

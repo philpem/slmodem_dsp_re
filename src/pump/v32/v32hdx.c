@@ -68,20 +68,20 @@
 #include "dsplib/v32hdx.h"
 
 void
-V32TxHdxModem(void *modem, short *data, short *out, short *nsamples)
+V32TxHdxModem(struct v32_modem *modem, short *data, short *out, short *nsamples)
 {
 	unsigned short left;
 	short total = 0;
 	struct v32_hdx *hdx;
 
-	hdx = ((struct v32_modem *)modem)->hdx;
+	hdx = modem->hdx;
 	left = (unsigned short)hdx->symbol_len;
 
 	do {
 		short n;
 
 		/* Re-read: a state may have swapped the context. */
-		hdx = ((struct v32_modem *)modem)->hdx;
+		hdx = modem->hdx;
 		n = hdx->tx_state(modem, data, out, &left);
 		out += n;
 		total = (short)(total + n);
@@ -91,11 +91,11 @@ V32TxHdxModem(void *modem, short *data, short *out, short *nsamples)
 }
 
 void
-V32RxHdxModem(void *modem, short *in, unsigned short *out,
+V32RxHdxModem(struct v32_modem *modem, short *in, unsigned short *out,
 	      unsigned short *count)
 {
 	struct v32_hdx *hdx;
 
-	hdx = ((struct v32_modem *)modem)->hdx;
+	hdx = modem->hdx;
 	hdx->rx_state(modem, in, out, count);
 }

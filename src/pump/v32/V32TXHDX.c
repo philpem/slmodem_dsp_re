@@ -115,7 +115,7 @@
 #include "dsplib/v32seq.h"
 #include "dsplib/fpm_tone.h"
 
-#define HDX(m)			(((struct v32_modem *)(m))->hdx)
+#define HDX(m)			((m)->hdx)
 
 /*
  * The handshake state's countdown, in symbols, and the charge a whole-block
@@ -147,7 +147,7 @@
  * runs.  Nothing at 0x24(%esp) is touched.
  */
 short
-TxHdxTone(void *modem, short *data, short *out, unsigned short *left)
+TxHdxTone(struct v32_modem *modem, short *data, short *out, unsigned short *left)
 {
 	struct v32_hdx *hdx = HDX(modem);
 
@@ -171,7 +171,7 @@ TxHdxTone(void *modem, short *data, short *out, unsigned short *left)
  * from the pattern `InitGenSequence` armed and `ModDataV32` shapes it.
  */
 short
-TxHdxCarrierState(void *modem, short *data, short *out, unsigned short *left)
+TxHdxCarrierState(struct v32_modem *modem, short *data, short *out, unsigned short *left)
 {
 	struct v32_hdx *hdx = HDX(modem);
 	unsigned short count;
@@ -197,7 +197,7 @@ TxHdxCarrierState(void *modem, short *data, short *out, unsigned short *left)
 
 /* The same, with the scrambler in the path between generator and modulator. */
 short
-TxHdxScrSequence(void *modem, short *data, short *out, unsigned short *left)
+TxHdxScrSequence(struct v32_modem *modem, short *data, short *out, unsigned short *left)
 {
 	struct v32_hdx *hdx = HDX(modem);
 	unsigned short count;
@@ -234,7 +234,7 @@ TxHdxScrSequence(void *modem, short *data, short *out, unsigned short *left)
  * encodes it.
  */
 short
-TxHdxTRN(void *modem, short *data, short *out, unsigned short *left)
+TxHdxTRN(struct v32_modem *modem, short *data, short *out, unsigned short *left)
 {
 	short trn[4];
 	struct v32_hdx *hdx;
@@ -277,7 +277,7 @@ TxHdxTRN(void *modem, short *data, short *out, unsigned short *left)
  * and modulated.  No generator.
  */
 short
-TxHdxData(void *modem, short *data, short *out, unsigned short *left)
+TxHdxData(struct v32_modem *modem, short *data, short *out, unsigned short *left)
 {
 	struct v32_hdx *hdx = HDX(modem);
 	unsigned short count;
@@ -312,7 +312,7 @@ TxHdxData(void *modem, short *data, short *out, unsigned short *left)
  * unconditionally.
  */
 short
-TxHdxNoCarrier(void *modem, short *data, short *out, unsigned short *left)
+TxHdxNoCarrier(struct v32_modem *modem, short *data, short *out, unsigned short *left)
 {
 	struct v32_hdx *hdx = HDX(modem);
 	unsigned short count;
@@ -348,7 +348,7 @@ TxHdxNoCarrier(void *modem, short *data, short *out, unsigned short *left)
  * driver's loop.  It is the only one of the eight that does.
  */
 short
-TxHdxFinishFrame(void *modem, short *data, short *out, unsigned short *left)
+TxHdxFinishFrame(struct v32_modem *modem, short *data, short *out, unsigned short *left)
 {
 	struct v32_hdx *hdx = HDX(modem);
 	short n;
@@ -385,7 +385,7 @@ TxHdxFinishFrame(void *modem, short *data, short *out, unsigned short *left)
  * `data` is unused here too.
  */
 short
-TxHdxNull(void *modem, short *data, short *out, unsigned short *left)
+TxHdxNull(struct v32_modem *modem, short *data, short *out, unsigned short *left)
 {
 	struct v32_hdx *hdx = HDX(modem);
 	int i = hdx->sample_len;
