@@ -607,7 +607,8 @@ static int demod_alias_wrong[NDEMOD_ALIAS];
 
 static void
 cmp_region_p(const char *what, const char *type, const void *a, const void *b,
-	     size_t n, long tag, const unsigned *pz, int npz)
+	     size_t n, long tag, const unsigned *pz, int npz,
+	     const struct diff_float_span *spans, size_t nspans)
 {
 	const unsigned char *sa = (const unsigned char *)a;
 	const unsigned char *sb = (const unsigned char *)b;
@@ -635,15 +636,54 @@ cmp_region_p(const char *what, const char *type, const void *a, const void *b,
 			memset(tra + pz[k], 0x77, 4);
 			memset(trb + pz[k], 0x77, 4);
 		}
-	diff_eq_obj_(__FILE__, __LINE__, what, type, tra, trb, n, tag);
+	if (spans != 0)
+		diff_eq_obj_float_(__FILE__, __LINE__, what, type, tra, trb,
+				   n, spans, nspans, tag);
+	else
+		diff_eq_obj_(__FILE__, __LINE__, what, type, tra, trb, n, tag);
 }
 
 static void
 cmp_region(const char *what, const char *type, const void *a, const void *b,
 	   size_t n, long tag)
 {
-	cmp_region_p(what, type, a, b, n, tag, (const unsigned *)0, 0);
+	cmp_region_p(what, type, a, b, n, tag, (const unsigned *)0, 0,
+		     (const struct diff_float_span *)0, 0);
 }
+
+/*
+ * THE EMBEDDED `V90Resampler`'S FLOAT FIELDS, NAMED.  The demodulator's
+ * whole-object compare below is a reachability check for this transmit-chain
+ * fixture -- its header says the demodulator's own claims are
+ * t_v90demprog's -- but a raw byte compare reports a float's last-place
+ * difference as a changed integer byte.  These spans are `t_v90demprog.cpp`'s
+ * `vr_spans` shifted by the resampler's offset +0x94, so the floats are
+ * reported as floats and their ULP; every non-float byte of the demodulator
+ * -- and every other embedded subobject -- stays exact, which is the negative
+ * control.
+ *
+ * THE FAILURE F11368 ATTRIBUTED TO A "FLAG BYTE" IS HERE AND IS NOT A FLAG:
+ * demodulator +0x10f is resampler +0x7b, the SIGN BYTE of `errZ1` (+0x78).
+ * The trial that reported it (`input 8600`) named only that byte, so the
+ * magnitude was identical and the difference was +0.0 against -0.0 --
+ * `diff_eq_float_` treats both zeroes as equal, which is what closes it.
+ *
+ * THE OTHER TRIAL'S DIFFERENCES DO NOT CLOSE AND ARE NOT MEANT TO: they are
+ * 157..4208 ULP, beyond the tier's 1e-6, in a feedback loop that compounds a
+ * small ordering difference.  Naming the fields makes them report as floats;
+ * it does not excuse them.  See finding F11369.
+ */
+static const struct diff_float_span demod_vr_spans[] = {
+	{ 0x0a0, 1, 8 },	/* resampler +0x0c  double phase      */
+	{ 0x0a8, 5, 4 },	/* resampler +0x14  pending[5]        */
+	{ 0x0c0, 1, 4 },	/* resampler +0x2c  ppmScale          */
+	{ 0x0dc, 1, 4 },	/* resampler +0x48  timingOffset      */
+	{ 0x0e0, 2, 4 },	/* resampler +0x4c  bllK1, bllK2      */
+	{ 0x0e8, 3, 4 },	/* resampler +0x54  lastHalfBaudErr.. */
+	{ 0x0fc, 5, 4 },	/* resampler +0x68  bpfSq1..errZ1     */
+	{ 0x114, 3, 4 },	/* resampler +0x80  dftMag, dftRe, dftIm */
+	{ 0x124, 1, 4 },	/* resampler +0x90  normBPFhBaudB0coef */
+};
 
 static void
 demod_alias_check(void)
@@ -692,7 +732,8 @@ compare_graph(const char *what, unsigned int side, long tag)
 	if (side == 1) {
 		cmp_region_p(what, "V90Demodulator", MODEM(0)->demodulator,
 			     MODEM(1)->demodulator, 0x298, tag, demod_alias,
-			     NDEMOD_ALIAS);
+			     NDEMOD_ALIAS, demod_vr_spans,
+			     sizeof demod_vr_spans / sizeof demod_vr_spans[0]);
 		demod_alias_check();
 	}
 	if (side != 0 || MOD(0) == 0 || MOD(1) == 0)

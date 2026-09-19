@@ -242,6 +242,33 @@ all_zero(const void *p, unsigned n)
 static unsigned char ssf_a[SSF_SLOT] __attribute__((aligned(8)));
 static unsigned char ssf_b[SSF_SLOT] __attribute__((aligned(8)));
 
+/*
+ * THE FILTER'S FLOAT FIELDS, NAMED, so the modern tier's rounding-level
+ * tolerance reaches them and nothing else.  `coeff[4]` at +0x00 and
+ * `state[4]` at +0x10 are contiguous, eight floats; `blockLength` at +0x20
+ * is an integer and stays exact.  A raw `diff_eq_obj` reports a float's
+ * last-place difference as two nine-digit integers with nothing saying they
+ * are floats.  This is issue #172 category 1: field-typed, not a wider
+ * tolerance.  The negative control is the `blockLength` word and the
+ * `guard_intact` check beside every call, both of which stay exact.
+ *
+ * THE LONG-BLOCK RESIDUAL IS NOT COVERED BY THIS AND IS NOT MEANT TO BE: the
+ * test drives an unstable filter on purpose, and `state[2]` differs by 16384
+ * ULP on a near-zero value while `state[3]` differs by 18 ULP (1.67e-6
+ * relative, just past the tier's 1e-6).  Naming the fields makes that
+ * difference report as floats and their ULP rather than as bytes; it does not
+ * and should not excuse it.  See finding F11369.
+ */
+static const struct diff_float_span ssf_spans[] = {
+	{ 0x00, 8, 4 },		/* coeff[4] then state[4] */
+};
+
+#define CMP_SSF(what, a, b, tag) \
+	diff_eq_obj_float_(__FILE__, __LINE__, (what), \
+			   "V90SpectralShapingFilter", (a), (b), \
+			   sizeof(V90SpectralShapingFilter), ssf_spans, \
+			   sizeof ssf_spans / sizeof ssf_spans[0], (tag))
+
 static int
 run_ssf(void)
 {
@@ -262,8 +289,7 @@ run_ssf(void)
 			ref_ssf_ctor(ssf_b);
 		}
 
-		diff_eq_obj("after construction", V90SpectralShapingFilter,
-			    ssf_a, ssf_b, trial);
+		CMP_SSF("after construction", ssf_a, ssf_b, trial);
 		guard_intact(ssf_a, ssf_b, sizeof(V90SpectralShapingFilter),
 			     SSF_SLOT, trial);
 
@@ -388,8 +414,7 @@ run_ssf_setters(void)
 		our_ssf_setcoeff(ssf_a, c[0], c[1], c[2], c[3]);
 		ref_ssf_setcoeff(ssf_b, c[0], c[1], c[2], c[3]);
 
-		diff_eq_obj("after setFilterCoeff", V90SpectralShapingFilter,
-			    ssf_a, ssf_b, trial);
+		CMP_SSF("after setFilterCoeff", ssf_a, ssf_b, trial);
 		guard_intact(ssf_a, ssf_b, sizeof(V90SpectralShapingFilter),
 			     SSF_SLOT, trial);
 
@@ -410,8 +435,7 @@ run_ssf_setters(void)
 		our_ssf_reset(ssf_a);
 		ref_ssf_reset(ssf_b);
 
-		diff_eq_obj("after reset", V90SpectralShapingFilter, ssf_a,
-			    ssf_b, trial);
+		CMP_SSF("after reset", ssf_a, ssf_b, trial);
 		guard_intact(ssf_a, ssf_b, sizeof(V90SpectralShapingFilter),
 			     SSF_SLOT, trial);
 
@@ -487,9 +511,7 @@ run_ssf_progress(void)
 			our_ssf_progress(ssf_a, sig);
 			ref_ssf_progress(ssf_b, sig);
 
-			diff_eq_obj("after a block",
-				    V90SpectralShapingFilter, ssf_a, ssf_b,
-				    block);
+			CMP_SSF("after a block", ssf_a, ssf_b, block);
 			guard_intact(ssf_a, ssf_b,
 				     sizeof(V90SpectralShapingFilter),
 				     SSF_SLOT, block);
@@ -585,9 +607,7 @@ run_ssf_progress(void)
 			our_ssf_progress(ssf_a, big);
 			ref_ssf_progress(ssf_b, big);
 
-			diff_eq_obj("after a long block",
-				    V90SpectralShapingFilter, ssf_a, ssf_b,
-				    block);
+			CMP_SSF("after a long block", ssf_a, ssf_b, block);
 			guard_intact(ssf_a, ssf_b,
 				     sizeof(V90SpectralShapingFilter),
 				     SSF_SLOT, block);
