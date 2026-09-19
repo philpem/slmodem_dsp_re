@@ -124316,3 +124316,130 @@ the empty-TU conclusion is only valid when no global lands in the unit's
 slot.
 
 (2026-09-14)
+
+## F11363. Issue #30 modern x87 census: 29 uncovered fixtures, two stale entries removed, and the sinc return-narrowing domain bounded
+
+The GCC 14.2.0-19 tier was censused with `make -j1 -k test` over all 376
+fixtures.  Before reconciliation 342 were green and **34 red**; after the
+register changes below **347 green, 29 red**.  `make period` (the deciding
+tier) is 376/0 and every red fixture is modern-only — the period compiler at
+the project's own flags passes each group.
+
+**Register reconciled.**  `tools/gccdiverge.json` went from 8 entries / 13
+checks to 6 / 14, all ALLOWED, 0 stale, 0 uncovered:
+
+- `t_v90adidnan` (F6001) and `t_v92ecnan` (F6000) were **STALE** and are
+  removed.  Both are the NaN-compare class, and both now pass because the
+  recovered source profile is `-ffast-math`, whose implied
+  `-ffinite-math-only` lets GCC 14 fold `v == 0.0f` / `out[0] == 177.0f` to
+  the object's single ordered compare.  The divergence returns if
+  `-fno-finite-math-only` is ever adopted, so the entries must be re-declared
+  then.
+- `t_psd` gained `Psd::getFrequencies`: the object computes
+  `(long double)i * sampleRate * (1.0L / m_length)` as three extended steps
+  with one rounding (`fildll; fmul; fmul; fstps` at .text+0x469ed..0x46a0e),
+  and `-ffast-math` reassociates it to a reciprocal and one `fmul`, 1 ULP on
+  bin 39; period passes all 8169.
+- `t_v90equ` gained `V90Equalizer: the shift at an exact power of two`:
+  `convertEqualizerToMmx`'s float accumulators stored to four-byte slots each
+  iteration (`fstps 0x4c(%esp)` / `0x48(%esp)`), which the modern build keeps
+  in x87; period passes all 105.
+- `t_v90equproc` gained `V90Equalizer::process, the phase 4 state arms`: the
+  same `float err = soft - fdec` excess-precision subtraction as the declared
+  RESET arm (F6203); period passes all 18023.
+
+**The sinc discriminator is bounded, not closed.**  The blob's
+`sinc<float>` is `fldl <pi double>; fmulp; fld %st(0); fsin; fdivp;
+fstps (%esp); flds (%esp)` — extended `y` and `sin(y)/y`, narrowed to
+binary32 only at the return.  Under `-ffast-math` GCC 14 emits `fsin` and the
+single double pi load but omits the narrowing.  Every tested flag that
+restores it either replaces `fsin` with a library `sin` (ordinary flags) or
+rounds intermediates the object keeps extended (`-ffloat-store`, 4-6 stores).
+`-fexcess-precision=standard`, `-ftrapping-math`, `-fsignaling-nans`,
+`-frounding-math`, `-O1` and `-O3` do not select it.  The cast survives into
+optimized GIMPLE (`_2 = s_6 / y_5; _7 = (float) _2;`), so the missing
+conversion is emitted after that and before final RTL.  The next test is the
+RTL pass dump, not another option matrix.  Downstream `t_resampler`
+(3174/23067) and `t_v92modstate` (1957/36848) remain red; `t_lowpassfir` is
+link-excused by #82.  `t_v34hshak` (SIGSEGV) and `t_v27fax` (FAX) are not the
+x87 class.  `docs/issue30-modern-x87.md` carries the full census and the flag
+table.
+
+(2026-09-19)
+
+## F11364. The modern tier is a portability check: a relative float tolerance, its negative control, and the magnitude classification of #30's 29 reds
+
+The project owner's rule (2026-09-19): **`make period` (GCC 3.4.2-r2) is the
+reconstruction authority and stays byte/value-EXACT against the blob with no
+allow-list; the modern tier (GCC 14, x32->x64) is a portability check that must
+produce a FUNCTIONALLY CORRECT result, not the blob's exact code or exact x87
+values.**  Crossing x32->x64 legitimately changes codegen and rounding.  So a
+rounding-level float difference on the modern tier is allowed, through a
+tolerance that is modern-tier-only, documented, denominator-reporting, and
+never used to excuse a period failure.
+
+**Mechanism.**  `test/harness/harness.c` gains a RELATIVE float tolerance in
+`diff_eq_float_` alone, compiled only under `HARNESS_FLOAT_TOL`, which the
+Makefile sets as `-DHARNESS_FLOAT_TOL=1e-6` on `$(HARNESS_OBJ)` and nowhere
+else.  It is a Makefile define and not a `__GNUC__` test, so the period build
+provably cannot receive it (`period_inner.sh` compiles `test/harness/` from its
+own flag list).  Criterion `|a-b| <= eps*max(|a|,|b|)` -- relative, never an
+absolute slack -- applied only where the call site passed no budget of its own.
+`diff_float_tolerant` counts checks that passed ONLY via the tolerance and
+`diff_end` prints `(N within modern tolerance)` beside the check count.  1e-6
+is ~8 ULP; the largest measured harness-reachable modern divergence is 2 ULP.
+
+**Negative control (F134/F2401).**  `test/safety/t_float_tol.c` (`make safety`)
+asks the LINKED harness (`harness_float_tol()`) which arm it is in, so it is
+meaningful either way.  Measured: modern harness object
+`PASS t_float_tol: 4 checks, 0 bad (linked harness tol=1e-06)`; the same source
+linked against a no-define harness object `... tol=0`.  In both builds a
+~84,000-ULP pair and a `0.0` vs smallest-subnormal pair FAIL; only under the
+define does a 1-ULP pair pass (and it is counted tolerance-only).  The
+beyond-eps case failing in both builds proves the tolerance is not an off
+switch.
+
+**It closes one fixture, and the measurement says that is all it can close.**
+`t_v90cdesign` -- 71 checks, all `diff_eq_float`, max **2 ULP** -- now reports
+`PASS ... 496 checks (71 within modern tolerance)`.  Of the 29, only it fails
+through `diff_eq_float`.  The rest fail through forms a float tolerance must
+not touch, classified by running each binary with `DSPLIB_MAX_REPORT=0` and
+reading the comparison form at each failing source line:
+
+* **NOT rounding-level -- changed OUTCOMES, must stay hard failures.**
+  `t_v90prefilter` (bank index `-2` vs `3547`), `t_v90trn2design` (mapping
+  ucodes and `dMin` 39 vs 40), `t_v90p3ddec` (`decision` -1480 vs 0, plus
+  ~85,000 struct-byte checks and transcripts), `t_v90spectral` (`the verdict`
+  0 vs 1, and counts), `t_v90modprog` (`V90Demodulator+271` flag byte 00 vs
+  80), `t_dspmath` (`hamming`/`blackman` at n==1 give 0.08 where the blob gives
+  the x87 indefinite NaN -- a finite-vs-NaN difference, not ULP),
+  `t_v90rundemod`/`t_vpcmqcline` (test meta-assertions about the comparison
+  surface), `t_v34hshak` (SIGSEGV), `t_v27fax` (FAX).
+* **Rounding-level in VALUE, but not harness-reachable** -- compared as raw
+  object bytes, boolean `memcmp`, or a raw word inequality:
+  `t_floatarma` (punned returns 1 ULP; FloatARMA bytes, runs <= 3),
+  `t_gtonedet` (GenericToneDetector+24, one byte = 1 ULP),
+  `t_resampler` (coeff fbits 1..113 ULP; V90Resampler bytes),
+  `t_v92modstate`/`t_v90demprog` (float arrays compared as booleans),
+  `t_v92dec`, `t_v90demctor`, `t_v90leaves`, `t_vpcmrunpcm` (region words),
+  `t_v34info1a`, `t_vpcmflomodem`, `t_v90adid`.
+* **Transcripts -- left to the register, deliberately.**  `t_v90cdadjust`,
+  `t_v90cdnoise`, `t_v90dataph`, `t_v90demod`, `t_v90eqdata`,
+  `t_v90specialcond` fail a `strcmp` of debug text.  A transcript encodes
+  decisions as well as formatted floats; parse-and-compare would hide the
+  former to catch the latter, so it was not done.  The honest treatment is the
+  register, and this is the choice the brief asked to be stated.
+
+**Why a harness tolerance cannot reach them.**  `diff_eq_int` on `0`/`1` is a
+boolean decision, and making it float-tolerant would excuse every boolean in
+the suite; `diff_eq_obj` has no field-type information at runtime.  Extending
+the mechanism to those forms is larger and riskier than the tier can justify,
+and the decision-level reds would remain red regardless.  This is the STOP
+point of the brief: the tolerance is implemented where it is honest, and the
+rest is reported rather than forced.
+
+**Verdicts.**  `make period J=1` stays **376 passed, 0 failed** (the define is
+absent from the period compile).  The modern tier goes from 29 to 28 red:
+`t_v90cdesign` green, the other 28 red for the reasons above.
+
+(2026-09-19)

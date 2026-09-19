@@ -269,6 +269,33 @@ HARNESS_OBJ:= $(patsubst %.c,$(BUILD)/%.o,$(HARNESS))
 # allocator and comparison support they actually use.
 SAFETY_HARNESS := $(BUILD)/test/harness/harness.o $(BUILD)/test/harness/runtime.o
 
+#
+# THE MODERN TIER'S FLOAT TOLERANCE, and it is a property of the TIER.
+#
+# `make period` (GCC 3.4.2-r2) is the reconstruction authority: byte-exact
+# against the blob, no allow-list.  The modern tier (GCC 14, x32->x64) is a
+# PORTABILITY check -- codegen and x87 rounding legitimately differ -- so an
+# exact-bits verdict there measures the compiler, not the source.  The relative
+# epsilon below is handed to `diff_eq_float` only, where a call site stated no
+# budget of its own; `diff_end` prints how many checks passed only because of
+# it.  It is `|a-b| <= eps*max(|a|,|b|)`, never an absolute slack, and it
+# reaches no `diff_eq_int` decision, no transcript `strcmp` and no raw
+# `diff_eq_obj` byte compare -- those stay hard failures.
+#
+# IT IS A MAKEFILE-PROVIDED DEFINE AND NOT A `__GNUC__` TEST, which is what
+# makes "the period build never receives it" provable.  period_inner.sh
+# compiles test/harness/ from its own flag list and cannot see this line;
+# `make -n period` and the period compile command are checked in
+# docs/method/compilers.md.  The period gate must never be widened, and a
+# tolerance is only ever a claim about the MODERN tier.
+#
+# 1e-6 is ~8 ULP at any binade; the largest measured harness-reachable modern
+# divergence is 2 ULP (t_v90cdesign, F11363/F11364).  Tighter would leave a
+# rounding-level difference failing; wider would start to hide a real error.
+#
+HARNESS_FLOAT_TOL := 1e-6
+$(HARNESS_OBJ): CFLAGS += -DHARNESS_FLOAT_TOL=$(HARNESS_FLOAT_TOL)
+
 TESTS      := $(basename $(notdir $(wildcard test/unit/t_*.c)))
 CXXTESTS   := $(basename $(notdir $(wildcard test/unit/t_*.cpp)))
 TESTBIN    := $(addprefix $(BUILD)/test/,$(TESTS) $(CXXTESTS))
@@ -513,8 +540,19 @@ $(BUILD)/safety/t_alloc_sizes: test/safety/t_alloc_sizes.c $(OBJ) $(SAFETY_HARNE
 	@mkdir -p $(dir $@)
 	$(CC) $(ARCH32) $(LDFLAGS) -Iinclude -Itest/harness -o $@ $^ -lm
 
-safety: firewall strings offsets refs $(BUILD)/safety/t_alloc_sizes
+# The negative control for the modern float tolerance: a detector that cannot
+# fail is a dead detector (F134/F2401).  It links only the comparison support,
+# needs no reconstruction and no blob, and is ADAPTIVE -- under
+# -DHARNESS_FLOAT_TOL a 1-ULP pair must pass and a beyond-eps pair must still
+# fail; without the define both must fail.  It prints its own denominator.
+$(BUILD)/safety/t_float_tol: test/safety/t_float_tol.c $(SAFETY_HARNESS)
+	@mkdir -p $(dir $@)
+	$(CC) $(ARCH32) $(LDFLAGS) -Iinclude -Itest/harness -o $@ $^ -lm
+
+safety: firewall strings offsets refs $(BUILD)/safety/t_alloc_sizes \
+        $(BUILD)/safety/t_float_tol
 	@./$(BUILD)/safety/t_alloc_sizes
+	@./$(BUILD)/safety/t_float_tol
 
 $(BUILD):
 	@mkdir -p $(BUILD)

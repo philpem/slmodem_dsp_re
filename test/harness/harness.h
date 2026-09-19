@@ -374,6 +374,55 @@ void diff_eq_float_(const char *file, int line, const char *fmt, float got,
 		       (float)(want), 0UL, (double)(eps), (long)(input))
 
 /*
+ * THE MODERN TIER'S FLOAT TOLERANCE, AND IT IS A PROPERTY OF THE TIER, NOT OF
+ * A CHECK.  The deciding tier is `make period` (GCC 3.4.2-r2), which is
+ * byte-exact and carries no allow-list.  The modern tier (GCC 14, x86-64) is a
+ * PORTABILITY check: crossing x32->x64 legitimately changes codegen and x87
+ * rounding, so an exact-bits verdict there measures the compiler and not the
+ * reconstruction.  Where a call site already says its float comparison is
+ * unachievable-exactly, `diff_eq_float` still fails only on a rounding-level
+ * difference once the modern build defines HARNESS_FLOAT_TOL.
+ *
+ *   HARNESS_FLOAT_TOL is a RELATIVE epsilon, supplied by the Makefile as
+ *   `-DHARNESS_FLOAT_TOL=1e-6` on the modern harness object only.  A call site
+ *   with its own ULP or absolute budget keeps that budget; the tier tolerance
+ *   applies only when the call site passed neither.  It is `|a-b| <=
+ *   HARNESS_FLOAT_TOL * max(|a|,|b|)` -- relative, never an absolute slack --
+ *   so a difference near zero is still a difference.
+ *
+ *   THE PERIOD BUILD NEVER RECEIVES THE DEFINE.  period_inner.sh compiles the
+ *   harness from its own flag list, so `make period` is provably untouched:
+ *   with the macro undefined the code below is absent and the comparison is
+ *   bit-for-bit, exactly as before.  This is a Makefile-provided define and not
+ *   a `__GNUC__` test, which is what makes that provable.
+ *
+ *   IT MUST NOT BE USED TO EXCUSE A PERIOD FAILURE, and it is not used to
+ *   excuse a non-float or decision-level difference: it reaches only
+ *   `diff_eq_float`/`diff_eq_float_ulp`/`diff_eq_float_abs`.  A transcript
+ *   `strcmp`, a `diff_eq_int` on a decision or index, and a raw `diff_eq_obj`
+ *   byte compare are all untouched, so a changed outcome stays a hard failure.
+ *
+ *   THE DENOMINATOR IS REPORTED.  `diff_float_tolerant` counts the checks in
+ *   this group that passed ONLY because of the tolerance; `diff_end` prints it
+ *   beside the check count, so a reader can see how much slack was used.  A
+ *   tolerance that cannot report how often it fired is the dead detector of
+ *   F134/F2401.
+ *
+ * The mechanism and its negative control are in test/safety/t_float_tol.c and
+ * docs/method/compilers.md.
+ */
+extern int diff_float_tolerant;
+
+/*
+ * The relative epsilon the LINKED harness was compiled with, or 0.0 when it
+ * was built without HARNESS_FLOAT_TOL (the period build, always).  A caller
+ * asks this rather than re-testing the macro, so a binary whose harness object
+ * and whose own translation unit were compiled differently cannot disagree
+ * about which tier it is.  test/safety/t_float_tol.c is the only caller.
+ */
+double harness_float_tol(void);
+
+/*
  * Compare two whole objects, reporting the first differing FIELD.
  *
  *   diff_eq_obj("after process", struct v34_decision, &da, &db, i);

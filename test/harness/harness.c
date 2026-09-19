@@ -10,6 +10,23 @@
 int diff_checks;
 int diff_failures;
 /*
+ * Checks that passed ONLY because of the modern tier's relative float
+ * tolerance (HARNESS_FLOAT_TOL).  Reset per group by diff_begin and printed by
+ * diff_end, so the slack the tier used is never invisible.  Always zero in the
+ * period build, where the macro is undefined.
+ */
+int diff_float_tolerant;
+
+double
+harness_float_tol(void)
+{
+#ifdef HARNESS_FLOAT_TOL
+	return (double)HARNESS_FLOAT_TOL;
+#else
+	return 0.0;
+#endif
+}
+/*
  * Ten is right for reading a failure; it is wrong for MEASURING one.  A
  * truncated failure list is not a sample of the failures -- the DTMF batch
  * misdiagnosed a defective coefficient table from exactly that, because
@@ -39,17 +56,29 @@ diff_begin(const char *name)
 	diff_name = name;
 	diff_checks = 0;
 	diff_failures = 0;
+	diff_float_tolerant = 0;
 }
 
 int
 diff_end(void)
 {
 	if (diff_failures == 0) {
-		printf("PASS %-24s %d checks\n", diff_name, diff_checks);
+		printf("PASS %-24s %d checks", diff_name, diff_checks);
+#ifdef HARNESS_FLOAT_TOL
+		if (diff_float_tolerant > 0)
+			printf(" (%d within modern tolerance)",
+			       diff_float_tolerant);
+#endif
+		printf("\n");
 		return 0;
 	}
-	printf("FAIL %-24s %d/%d checks failed\n",
-	       diff_name, diff_failures, diff_checks);
+	printf("FAIL %-24s %d/%d checks failed", diff_name, diff_failures,
+	       diff_checks);
+#ifdef HARNESS_FLOAT_TOL
+	if (diff_float_tolerant > 0)
+		printf(" (%d within modern tolerance)", diff_float_tolerant);
+#endif
+	printf("\n");
 	return 1;
 }
 
@@ -340,6 +369,31 @@ diff_eq_float_(const char *file, int line, const char *fmt, float got,
 		/* Either bound satisfies; both are 0 for an exact compare. */
 		if (d <= ulp_budget || diff <= abs_eps)
 			return;
+#ifdef HARNESS_FLOAT_TOL
+		/*
+		 * THE MODERN TIER'S RELATIVE TOLERANCE, and only where the call
+		 * site stated no budget of its own.  It is relative, so it
+		 * cannot excuse a difference near zero, and it is reached only
+		 * after the exact test above has already failed -- the counter
+		 * therefore counts non-exact matches and nothing else.  The
+		 * period build never defines the macro and this block is not
+		 * compiled there.
+		 */
+		if (ulp_budget == 0UL && abs_eps == 0.0) {
+			double ag = (double)got, aw = (double)want;
+			double scale;
+
+			if (ag < 0.0)
+				ag = -ag;
+			if (aw < 0.0)
+				aw = -aw;
+			scale = ag > aw ? ag : aw;
+			if (diff <= (double)HARNESS_FLOAT_TOL * scale) {
+				diff_float_tolerant++;
+				return;
+			}
+		}
+#endif
 	}
 
 	if (diff_failures < diff_max_report) {

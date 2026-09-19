@@ -473,4 +473,110 @@ Before: 13 fixtures unlinked, 0 declared.  After: 7 link and pass (3 rename +
 GCC 14 for the x87 reasons of #30 -- a control rebuilt the failing TUs without
 `HOSTPORTFLAGS` and reproduced the failures exactly -- which is not this tier.
 
+**The modern x87 census and the register reconciliation are in
+`docs/issue30-modern-x87.md` (finding F11363).**  After it: 347 of 376
+fixtures green, 29 uncovered modern-only divergences (all green on the period
+compiler), `tools/gccdiverge.json` at 6 entries / 14 checks with 0 stale and 0
+uncovered, and the `sinc<float>` return-narrowing domain bounded -- no tested
+flag reaches `fsin` + a single double pi load + binary32 return narrowing.
+`make portability` remains red on those 29 and on a pre-existing
+`mutation-snapshot` state (2 MISSING, 270 stale).
+
 (2026-09-19)
+
+## The modern tier is a portability check: functional, not byte-exact
+
+The project owner's rule, and it is the rule that governs everything below:
+
+- **`make period` (GCC 3.4.2-r2 Gentoo) is the reconstruction authority.**  It
+  stays byte/value-EXACT against the blob and has **no allow-list**.  Nothing
+  in this section widens it, and nothing may.
+- **The modern tier (GCC 14, x32 -> x64) is a PORTABILITY check.**  It must
+  produce a FUNCTIONALLY CORRECT result.  It is **not** required to reproduce
+  the blob's exact code or its exact x87 values; crossing x32->x64 legitimately
+  changes codegen and rounding, and a rounding-level difference there is the
+  compiler and not the source.
+- **The tolerance is modern-tier-only, documented, denominator-reporting, and
+  must never excuse a period failure.**  A period failure is a hard failure
+  whatever the modern tier says.
+
+### The mechanism: `HARNESS_FLOAT_TOL`
+
+`test/harness/harness.c` gains a RELATIVE float tolerance inside
+`diff_eq_float_` only, compiled in **only** when the Makefile defines
+`HARNESS_FLOAT_TOL` on the modern harness object:
+
+```make
+HARNESS_FLOAT_TOL := 1e-6
+$(HARNESS_OBJ): CFLAGS += -DHARNESS_FLOAT_TOL=$(HARNESS_FLOAT_TOL)
+```
+
+| property | how |
+|---|---|
+| tier-gated | a **Makefile-provided define**, never a `__GNUC__` version test |
+| period untouched | `period_inner.sh` compiles `test/harness/` from its own flag list and cannot see that line; with the macro undefined the tolerance code is absent and the compare is bit-for-bit |
+| criterion | `|a-b| <= eps * max(|a|,|b|)`, RELATIVE -- never an absolute slack, so a difference near zero still fails |
+| call-site budgets win | applied only where the call site passed neither a ULP nor an absolute budget; an explicit `diff_eq_float_ulp`/`diff_eq_float_abs` keeps its own bound |
+| reaches no decision | it is in `diff_eq_float_` alone.  A transcript `strcmp`, a `diff_eq_int` decision/index and a raw `diff_eq_obj` byte compare are untouched and stay hard failures |
+| denominator | `diff_float_tolerant` counts checks that passed ONLY via the tolerance; `diff_end` prints `(N within modern tolerance)` beside the check count, and the counter is reset per group |
+
+`1e-6` is ~8 ULP at any binade.  The largest measured harness-reachable modern
+divergence is **2 ULP** (`t_v90cdesign`, F11364); tighter would leave a
+rounding-level difference failing, wider would start to hide a real error.
+
+### The negative control, and why the rule needs one
+
+A tolerance is a detector, and a detector that cannot fail is dead (F134,
+F2400, F2401).  `test/safety/t_float_tol.c` (`make safety`) is the control; it
+is **adaptive**, asking the LINKED harness (`harness_float_tol()`) which arm it
+is in, so it is meaningful in either build:
+
+| case | with the define | without (period-style) |
+|---|---|---|
+| exact | pass | pass |
+| 1 ULP apart | **pass**, counted tolerance-only | **fail** (bit-for-bit) |
+| ~84,000 ULP apart | fail | fail |
+| `0.0` vs smallest subnormal | fail (relative, not absolute) | fail |
+
+Measured: `PASS t_float_tol: 4 checks, 0 bad (linked harness tol=1e-06)` on the
+modern harness object and `... tol=0` when the same source is linked against a
+no-define harness object.  The beyond-eps case failing in BOTH builds is the
+part that proves the tolerance is a tolerance and not an off switch.
+
+### What it does and does not close
+
+`t_v90cdesign` goes green -- its 71 checks are 1-2 ULP `diff_eq_float` compares,
+and it prints `PASS ... 496 checks (71 within modern tolerance)`.
+
+**It does not make the 29-fixture census green, and the measurement says it
+cannot.**  Of the 29, only `t_v90cdesign` fails through `diff_eq_float`.  The
+rest fail through forms a float tolerance must not touch:
+
+- **decision-level** -- a bank index (`t_v90prefilter`: `-2` vs `3547`), a
+  mapping design's ucodes (`t_v90trn2design`), a "decision" value
+  (`t_v90p3ddec`: `-1480` vs `0`), a verdict and counts (`t_v90spectral`), a
+  flag byte (`t_v90modprog`).  These are changed OUTCOMES, not rounding, and
+  they stay hard failures;
+- **non-float** -- `t_dspmath`'s `hamming`/`blackman` at n==1 produce a finite
+  `0.08` where the blob produces the x87 indefinite NaN; `t_v34hshak` SIGSEGVs;
+  `t_v27fax` is FAX;
+- **raw byte / boolean comparisons the harness cannot type** -- `diff_eq_obj`
+  over structs containing floats (`t_floatarma`, `t_gtonedet`, `t_v92dec`,
+  `t_vpcmrunpcm`'s region words, ...), and `strcmp` of debug transcripts
+  (`t_v90cdadjust`, `t_v90cdnoise`, `t_v90dataph`, `t_v90demod`, ...).
+
+Those are not closable by a harness tolerance: `diff_eq_int` on `0`/`1` is a
+decision, and making it float-tolerant would excuse every boolean in the suite.
+`diff_eq_obj` has no field-type information at runtime.  The transcript
+question was left **to the register** rather than parsed: a transcript encodes
+decisions as well as formatted floats, and parse-and-compare would hide the
+former to catch the latter.  F11364 records the full classification.
+
+**The rule is therefore: the tolerance is correct and it is now in place, but
+it closes the rounding-level `diff_eq_float` divergences only.  The remaining
+modern reds need per-site work or the register, and the decision-level ones
+must stay red.**  Do not read "the modern tier is functional" as "the modern
+tier is green".
+
+(2026-09-19)
+
