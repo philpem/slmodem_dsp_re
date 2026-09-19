@@ -200,3 +200,71 @@ Artifacts: `/tmp/opencode/issue30-census.log`,
 `/tmp/opencode/sinc/`, `/tmp/opencode/psdvar/`.  Finding F11363.
 
 (2026-09-19)
+
+## 5. Resolution (2026-09-19): the modern tier is functional, not byte-exact
+
+The project owner set the rule this section implements:
+
+- **`make period` (GCC 3.4.2-r2 Gentoo) is the reconstruction authority** and
+  stays byte/value-EXACT against the blob, **no allow-list**.
+- **The modern tier (GCC 14) is a portability check.**  It must produce a
+  FUNCTIONALLY CORRECT result, not the blob's exact code or its exact x87
+  values; x32->x64 legitimately changes codegen and rounding.
+- The tolerance is **modern-tier-only, documented, denominator-reporting, and
+  never used to excuse a period failure**.
+
+### What was measured, per fixture
+
+Each of the 29 was run with `DSPLIB_MAX_REPORT=0` and every failing source line
+classified by the harness comparison form it reaches.  The full table is in
+F11364; the summary is:
+
+- **Rounding-level and harness-reachable: one fixture.**  `t_v90cdesign` -- 71
+  checks, all `diff_eq_float`, max **2 ULP**.  It is now green:
+  `PASS ... 496 checks (71 within modern tolerance)`.
+- **Rounding-level in value, but NOT harness-reachable** (raw object bytes, a
+  boolean `memcmp`, or a raw word inequality): `t_floatarma` (1 ULP returns,
+  struct bytes), `t_gtonedet` (one byte = 1 ULP), `t_resampler` (1..113 ULP
+  coefficient bits), `t_v92modstate`, `t_v90demprog`, `t_v92dec`,
+  `t_v90demctor`, `t_v90leaves`, `t_vpcmrunpcm`, `t_v34info1a`,
+  `t_vpcmflomodem`, `t_v90adid`.
+- **Transcripts, left to the register**: `t_v90cdadjust`, `t_v90cdnoise`,
+  `t_v90dataph`, `t_v90demod`, `t_v90eqdata`, `t_v90specialcond`.  A transcript
+  encodes decisions as well as formatted floats, so parse-and-compare was
+  declined.
+- **NOT rounding-level -- changed outcomes that stay hard failures**:
+  `t_v90prefilter` (bank index -2 vs 3547), `t_v90trn2design` (ucodes, dMin),
+  `t_v90p3ddec` (decision -1480 vs 0), `t_v90spectral` (verdict, counts),
+  `t_v90modprog` (flag byte), `t_dspmath` (0.08 vs the blob's NaN at n==1),
+  `t_v90rundemod`/`t_vpcmqcline` (test meta-assertions), `t_v34hshak`
+  (SIGSEGV), `t_v27fax` (FAX).
+
+### Why the tolerance cannot reach the rest
+
+`diff_eq_int` on `0`/`1` is a decision; making it float-tolerant would excuse
+every boolean in the suite.  `diff_eq_obj` has no field-type information at
+runtime.  Extending the mechanism to those forms is larger and riskier than the
+tier can justify, and the decision-level reds would remain red regardless.  So
+the tolerance is implemented where it is honest and the rest is reported.
+
+### The mechanism
+
+`HARNESS_FLOAT_TOL`, a Makefile-provided `-DHARNESS_FLOAT_TOL=1e-6` on the
+modern harness object only (never a `__GNUC__` test).  It is a RELATIVE
+criterion `|a-b| <= eps*max(|a|,|b|)` inside `diff_eq_float_` alone, applied
+only where the call site stated no budget; `diff_end` prints the count of
+checks that passed only because of it; `test/safety/t_float_tol.c`
+(`make safety`) is the adaptive negative control.  Full detail, including why
+1e-6 (~8 ULP) and the four negative-control cases, is in
+`docs/method/compilers.md` and F11364.
+
+### Verdicts
+
+- `make period J=1`: **376 passed, 0 failed** (the define is absent from the
+  period compile; the tolerance code is not compiled there).
+- Modern tier: **28 red**, down from 29 -- `t_v90cdesign` closed, the rest red
+  for the reasons above.  The tier is NOT green and this pass does not claim it
+  is.
+- `python3 tools/refcheck.py`: clean.
+
+(2026-09-19)

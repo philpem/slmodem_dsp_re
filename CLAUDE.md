@@ -310,6 +310,26 @@ change merely to make the gate green. Issue #19's GCC 14 follow-up, #30, is
 the precedent. Shared working-instruction changes belong on master; carry
 this procedure forward when the investigation branch is integrated.
 
+**THE MODERN TIER IS A PORTABILITY CHECK, NOT THE AUTHORITY, AND THE PROJECT
+OWNER'S RULE (2026-09-19) SAYS SO PLAINLY.** `make period` (GCC 3.4.2-r2) is
+**byte/value-EXACT** against the blob with **no allow-list**, and it stays that
+way. The modern tier (GCC 14, x32->x64) must produce a **functionally correct**
+result, **not** the blob's exact code or its exact x87 values -- crossing
+x32->x64 legitimately changes codegen and rounding. So a **rounding-level**
+float difference on the modern tier is allowed, through a tolerance that is
+**modern-tier-only, documented, denominator-reporting, and never used to excuse
+a period failure**. The mechanism is `HARNESS_FLOAT_TOL`, a Makefile-provided
+`-D` on the modern harness object only (never a `__GNUC__` test, so the period
+build is provably untouched), applied as a RELATIVE `|a-b| <= eps*max(|a|,|b|)`
+inside `diff_eq_float_` alone; `diff_end` prints how many checks passed only
+because of it, and `test/safety/t_float_tol.c` is the negative control that
+shows a beyond-eps value still fails. It reaches **no** `diff_eq_int` decision,
+**no** transcript `strcmp` and **no** raw `diff_eq_obj` byte compare -- those
+stay hard failures, because a changed outcome is not a rounding difference.
+**A tolerance is not an off switch and does not make the tier green**:
+`docs/method/compilers.md` and finding F11364 record which of #30's 29 fixtures
+it closes (one) and why the decision-level rest must stay red.
+
 `make phase` is the default reconstruction gate: period differential plus the
 structural/provenance checks that do not require a modern compiler to reproduce
 period x87 behaviour. `make portability` is the opt-in modern GCC, 64-bit,
