@@ -1440,53 +1440,56 @@ RxHdxIdleV17(void *modem, short *in, short *out, unsigned short *count)
  * from `RxHdxBridgeV17` and `RxHdxPrtcolV17` below, which are 210 bytes each
  * and byte-for-byte identical to one another.  See v17fax.h and F9444.
  *
- * THE COUNTDOWN IS LOADED UNSIGNED AND TESTED SIGNED, and both halves are the
- * object's; see `V17RXC_COUNTDOWN`.  The local is what carries the extension.
+ * THE COUNTDOWN IS LOADED UNSIGNED, STORED AS SIXTEEN BITS AND TESTED SIGNED,
+ * and all three are the object's; see `V17RXC_COUNTDOWN`.  The read-back on
+ * the field is what keeps the test at 16 bits -- a `short` local carries a
+ * `cwtl` and a 32-bit test the object does not have.
  */
 short
 RxHdxScramV17(void *modem, short *in, short *out, unsigned short *count)
 {
 	unsigned short n;
-	short left;
+	short rc = 0;
 
 	n = DemodDataV17(modem, in, (unsigned short *)(void *)out, *count);
 	DescrambleDataV17(modem, (unsigned short *)(void *)out, n);
 	*count = 0;
 
-	if (CarrierDetectV17(modem) == 0) {
+	if (CarrierDetectV17(modem) != 0) {
+		RXROOT(modem)->result.byte.flags |= V17RX_FLAG_CARRIER;
+		RXROOT(modem)->result.byte.status = V17RX_STATUS_CARRIER;
+
+		RXCTL(modem)->countdown =
+			(short)((unsigned short)RXCTL(modem)->countdown - 1);
+		if ((short)RXCTL(modem)->countdown <= 0) {
+			if (RXCTL(modem)->rate_code == V17RX_RATE_7200)
+				RXROOT(modem)->result.byte.status = V17RX_STATUS_RATE_7200;
+			else if (RXCTL(modem)->rate_code == V17RX_RATE_9600)
+				RXROOT(modem)->result.byte.status = V17RX_STATUS_RATE_9600;
+			else if (RXCTL(modem)->rate_code == V17RX_RATE_12000)
+				RXROOT(modem)->result.byte.status = V17RX_STATUS_RATE_12000;
+			else
+				RXROOT(modem)->result.byte.status = V17RX_STATUS_RATE_14400;
+
+			/* SET and never cleared; only RxHdxDataV17 clears it.  D1217. */
+			if (GetSNRV17(modem) <= V17RX_SNR_THRESHOLD)
+				RXROOT(modem)->result.byte.flags |= V17RX_FLAG_LOW_SNR;
+
+			RxNextStateV17(modem);
+
+			return (short)n;
+		}
+	}
+	else {
 		CTL(modem)->process = RxHdxErrorV17;
 		RXCTL(modem)->state = V17RX_STATE_ERROR;
 		RXROOT(modem)->result.byte.status = V17RX_STATUS_ERROR;
 		RXROOT(modem)->result.byte.flags = (unsigned char)
 			((RXROOT(modem)->result.byte.flags | V17RX_FLAG_ERROR)
 			 & ~V17RX_FLAG_CARRIER);
-		return 0;
 	}
 
-	RXROOT(modem)->result.byte.flags |= V17RX_FLAG_CARRIER;
-	RXROOT(modem)->result.byte.status = V17RX_STATUS_CARRIER;
-
-	left = (short)((unsigned short)RXCTL(modem)->countdown - 1);
-	RXCTL(modem)->countdown = left;
-	if (left > 0)
-		return 0;
-
-	if (RXCTL(modem)->rate_code == V17RX_RATE_7200)
-		RXROOT(modem)->result.byte.status = V17RX_STATUS_RATE_7200;
-	else if (RXCTL(modem)->rate_code == V17RX_RATE_9600)
-		RXROOT(modem)->result.byte.status = V17RX_STATUS_RATE_9600;
-	else if (RXCTL(modem)->rate_code == V17RX_RATE_12000)
-		RXROOT(modem)->result.byte.status = V17RX_STATUS_RATE_12000;
-	else
-		RXROOT(modem)->result.byte.status = V17RX_STATUS_RATE_14400;
-
-	/* SET and never cleared; only RxHdxDataV17 clears it.  D1217. */
-	if (GetSNRV17(modem) <= V17RX_SNR_THRESHOLD)
-		RXROOT(modem)->result.byte.flags |= V17RX_FLAG_LOW_SNR;
-
-	RxNextStateV17(modem);
-
-	return (short)n;
+	return rc;
 }
 
 /* --------------------------------------------------------------------- */
@@ -1503,36 +1506,37 @@ short
 RxHdxBridgeV17(void *modem, short *in, short *out, unsigned short *count)
 {
 	unsigned short n;
-	short left;
+	short rc = 0;
 
 	n = DemodDataV17(modem, in, (unsigned short *)(void *)out, *count);
 	DescrambleDataV17(modem, (unsigned short *)(void *)out, n);
 	*count = 0;
 
-	if (CarrierDetectV17(modem) == 0) {
+	if (CarrierDetectV17(modem) != 0) {
+		RXROOT(modem)->result.byte.flags |= V17RX_FLAG_CARRIER;
+		RXROOT(modem)->result.byte.status = V17RX_STATUS_CARRIER;
+
+		RXCTL(modem)->countdown =
+			(short)((unsigned short)RXCTL(modem)->countdown - 1);
+		if ((short)RXCTL(modem)->countdown <= 0) {
+			if (GetSNRV17(modem) <= V17RX_SNR_THRESHOLD)
+				RXROOT(modem)->result.byte.flags |= V17RX_FLAG_LOW_SNR;
+
+			RxNextStateV17(modem);
+
+			return (short)n;
+		}
+	}
+	else {
 		CTL(modem)->process = RxHdxErrorV17;
 		RXCTL(modem)->state = V17RX_STATE_ERROR;
 		RXROOT(modem)->result.byte.status = V17RX_STATUS_ERROR;
 		RXROOT(modem)->result.byte.flags = (unsigned char)
 			((RXROOT(modem)->result.byte.flags | V17RX_FLAG_ERROR)
 			 & ~V17RX_FLAG_CARRIER);
-		return 0;
 	}
 
-	RXROOT(modem)->result.byte.flags |= V17RX_FLAG_CARRIER;
-	RXROOT(modem)->result.byte.status = V17RX_STATUS_CARRIER;
-
-	left = (short)((unsigned short)RXCTL(modem)->countdown - 1);
-	RXCTL(modem)->countdown = left;
-	if (left > 0)
-		return 0;
-
-	if (GetSNRV17(modem) <= V17RX_SNR_THRESHOLD)
-		RXROOT(modem)->result.byte.flags |= V17RX_FLAG_LOW_SNR;
-
-	RxNextStateV17(modem);
-
-	return (short)n;
+	return rc;
 }
 
 /* --------------------------------------------------------------------- */
@@ -1544,36 +1548,37 @@ short
 RxHdxPrtcolV17(void *modem, short *in, short *out, unsigned short *count)
 {
 	unsigned short n;
-	short left;
+	short rc = 0;
 
 	n = DemodDataV17(modem, in, (unsigned short *)(void *)out, *count);
 	DescrambleDataV17(modem, (unsigned short *)(void *)out, n);
 	*count = 0;
 
-	if (CarrierDetectV17(modem) == 0) {
+	if (CarrierDetectV17(modem) != 0) {
+		RXROOT(modem)->result.byte.flags |= V17RX_FLAG_CARRIER;
+		RXROOT(modem)->result.byte.status = V17RX_STATUS_CARRIER;
+
+		RXCTL(modem)->countdown =
+			(short)((unsigned short)RXCTL(modem)->countdown - 1);
+		if ((short)RXCTL(modem)->countdown <= 0) {
+			if (GetSNRV17(modem) <= V17RX_SNR_THRESHOLD)
+				RXROOT(modem)->result.byte.flags |= V17RX_FLAG_LOW_SNR;
+
+			RxNextStateV17(modem);
+
+			return (short)n;
+		}
+	}
+	else {
 		CTL(modem)->process = RxHdxErrorV17;
 		RXCTL(modem)->state = V17RX_STATE_ERROR;
 		RXROOT(modem)->result.byte.status = V17RX_STATUS_ERROR;
 		RXROOT(modem)->result.byte.flags = (unsigned char)
 			((RXROOT(modem)->result.byte.flags | V17RX_FLAG_ERROR)
 			 & ~V17RX_FLAG_CARRIER);
-		return 0;
 	}
 
-	RXROOT(modem)->result.byte.flags |= V17RX_FLAG_CARRIER;
-	RXROOT(modem)->result.byte.status = V17RX_STATUS_CARRIER;
-
-	left = (short)((unsigned short)RXCTL(modem)->countdown - 1);
-	RXCTL(modem)->countdown = left;
-	if (left > 0)
-		return 0;
-
-	if (GetSNRV17(modem) <= V17RX_SNR_THRESHOLD)
-		RXROOT(modem)->result.byte.flags |= V17RX_FLAG_LOW_SNR;
-
-	RxNextStateV17(modem);
-
-	return (short)n;
+	return rc;
 }
 
 /* --------------------------------------------------------------------- */

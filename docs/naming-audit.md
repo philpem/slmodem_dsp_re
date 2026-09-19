@@ -2516,3 +2516,21 @@ chain on the same field is the only enumerated spelling that emits the object's
 `docs/method/refinement.md` lever 8 for the nine-cell enumeration and the
 verdicts.
 
+## #162 source change: the carrier arm and the countdown read-back
+
+No name changed. The change is the control-flow spelling of the carrier arm and
+the countdown in `RxHdxScramV17`/`RxHdxBridgeV17`/`RxHdxPrtcolV17`, recorded
+here because it is a claim about `V17RXC_COUNTDOWN` (the `short` at +0x1a). The
+object loads it `movzwl`, decrements, tests **16 bits** (`test %cx,%cx`) and
+stores the low sixteen before `jle`; a `short left` local carries a `cwtl` and
+a 32-bit test the object does not have, so the countdown is written as a
+read-back on the field and the comparison is on `(short)RXCTL(modem)->countdown`
+directly. The carrier test is the success-then form with the error arm in the
+`else`, and a single `short rc = 0; ... return rc;` at the end so the error arm
+and the countdown early-out share one return-0 `xor` exactly as the object does.
+No field was retyped and no computed value was narrowed; the field is read
+unsigned, stored sixteen bits wide and tested signed in both spellings. See
+`docs/method/refinement.md` lever 8 for the crossed enumeration and the
+byte-identity verdicts.
+
+
