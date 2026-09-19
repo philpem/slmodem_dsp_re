@@ -2623,3 +2623,10 @@ other than exactly once**; 17 mutation anchors in `v32data`, `v32fpctl`,
 **#154 disposition:** complete. Every base-pointing V.32 holder is
 `struct v32_modem *` with its casts gone; no holder was left for a sub-view,
 multi-target or C++-caller reason.
+
+**#154 fixture cleanup (follow-up):** the 108 `-Wincompatible-pointer-types`
+diagnostics #154 left at the V.32 unit call sites are gone -- each fixture now
+passes a typed `modem_of(...)` accessor (or one typed local), and the `ref_*`,
+dispatcher-stub and `txfn` declarations that the function-pointer tables compare
+were given the same `struct v32_modem *`; all 13 V.32 binaries pass and Gentoo
+`make phase` is 375/0 (`build/structure-v32-fixture/gates.log`).

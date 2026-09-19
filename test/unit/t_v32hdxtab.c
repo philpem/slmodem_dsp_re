@@ -67,11 +67,11 @@ extern short ref_V32_TX_MODE[7];
 extern const short ref_V32_S_DATA_COEF[15];
 extern const struct fpm_sre_cfg ref_SREv32_CFG;
 
-extern void ref_V32OrgNextState(void *modem);
-extern void ref_V32AnsNextState(void *modem);
-extern void ref_V32RngInitNextState(void *modem);
-extern void ref_V32RngRespNextState(void *modem);
-extern void ref_V32LocLoopNextState(void *modem);
+extern void ref_V32OrgNextState(struct v32_modem *modem);
+extern void ref_V32AnsNextState(struct v32_modem *modem);
+extern void ref_V32RngInitNextState(struct v32_modem *modem);
+extern void ref_V32RngRespNextState(struct v32_modem *modem);
+extern void ref_V32LocLoopNextState(struct v32_modem *modem);
 
 extern const short ref_SREv32_COFFS[181];
 extern short ref_SREv32_XB_COFFS[FPM_SRE_DISC];

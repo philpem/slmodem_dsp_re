@@ -116,32 +116,32 @@
 /* --------------------------------------------------------------------- */
 /* The blob's side of everything this file touches.                       */
 
-extern void ref_RxHdxTone(void *m, short *in, unsigned short *o,
+extern void ref_RxHdxTone(struct v32_modem *m, short *in, unsigned short *o,
 			  unsigned short *c);
-extern void ref_RxHdxNoSignal(void *m, short *in, unsigned short *o,
+extern void ref_RxHdxNoSignal(struct v32_modem *m, short *in, unsigned short *o,
 			      unsigned short *c);
-extern void ref_RxHdxPhsReversal(void *m, short *in, unsigned short *o,
-				 unsigned short *c);
-extern void ref_RxHdxRateSequence(void *m, short *in, unsigned short *o,
-				  unsigned short *c);
-extern void ref_RxHdxSequence(void *m, short *in, unsigned short *o,
+extern void ref_RxHdxPhsReversal(struct v32_modem *m, short *in,
+				 unsigned short *o, unsigned short *c);
+extern void ref_RxHdxRateSequence(struct v32_modem *m, short *in,
+				  unsigned short *o, unsigned short *c);
+extern void ref_RxHdxSequence(struct v32_modem *m, short *in, unsigned short *o,
 			      unsigned short *c);
-extern void ref_RxHdxSequenceE(void *m, short *in, unsigned short *o,
-			       unsigned short *c);
-extern void ref_RxHdxData(void *m, short *in, unsigned short *o,
+extern void ref_RxHdxSequenceE(struct v32_modem *m, short *in,
+			       unsigned short *o, unsigned short *c);
+extern void ref_RxHdxData(struct v32_modem *m, short *in, unsigned short *o,
 			  unsigned short *c);
-extern void ref_RxHdxToneData(void *m, short *in, unsigned short *o,
+extern void ref_RxHdxToneData(struct v32_modem *m, short *in, unsigned short *o,
 			      unsigned short *c);
-extern void ref_RxHdxSTone(void *m, short *in, unsigned short *o,
+extern void ref_RxHdxSTone(struct v32_modem *m, short *in, unsigned short *o,
 			   unsigned short *c);
-extern void ref_RxHdxEpoch(void *m, short *in, unsigned short *o,
+extern void ref_RxHdxEpoch(struct v32_modem *m, short *in, unsigned short *o,
 			   unsigned short *c);
-extern void ref_RxHdxError(void *m, short *in, unsigned short *o,
+extern void ref_RxHdxError(struct v32_modem *m, short *in, unsigned short *o,
 			   unsigned short *c);
-extern void ref_RxHdxNull(void *m, short *in, unsigned short *o,
+extern void ref_RxHdxNull(struct v32_modem *m, short *in, unsigned short *o,
 			  unsigned short *c);
 
-extern short ref_TxHdxNoCarrier(void *m, short *d, short *o,
+extern short ref_TxHdxNoCarrier(struct v32_modem *m, short *d, short *o,
 				unsigned short *left);
 
 extern v32_nextstate_fn ref_V32NextState[V32_NEXTSTATE_COUNT];
@@ -284,6 +284,12 @@ struct fix {
 };
 
 static struct fix fa, fb;
+
+static struct v32_modem *
+modem_of(struct fix *f)
+{
+	return (struct v32_modem *)(void *)f->obj;
+}
 
 /* The heap objects, built once per side and restored before every trial. */
 static struct fpm_tone *tone_a[NTONE], *tone_b[NTONE];
@@ -447,7 +453,7 @@ rx_installed(const unsigned char *hdx, v32_rxhdx_fn err, v32_rxhdx_fn data)
 /* --------------------------------------------------------------------- */
 
 static void
-ns_body(int slot, void *modem)
+ns_body(int slot, struct v32_modem *modem)
 {
 	void *hdx;
 
@@ -478,12 +484,12 @@ ns_body(int slot, void *modem)
 	}
 }
 
-static void ns0(void *m) { ns_body(0, m); }
-static void ns1(void *m) { ns_body(1, m); }
-static void ns2(void *m) { ns_body(2, m); }
-static void ns3(void *m) { ns_body(3, m); }
-static void ns4(void *m) { ns_body(4, m); }
-static void ns5(void *m) { ns_body(5, m); }
+static void ns0(struct v32_modem *m) { ns_body(0, m); }
+static void ns1(struct v32_modem *m) { ns_body(1, m); }
+static void ns2(struct v32_modem *m) { ns_body(2, m); }
+static void ns3(struct v32_modem *m) { ns_body(3, m); }
+static void ns4(struct v32_modem *m) { ns_body(4, m); }
+static void ns5(struct v32_modem *m) { ns_body(5, m); }
 
 static void
 install_stubs(void)
@@ -923,61 +929,63 @@ cmp_block(const char *what, const char *blk, const void *a, const void *b,
 static void
 call_side(int fn, struct fix *f, unsigned short *count, int blob)
 {
+	struct v32_modem *modem = modem_of(f);
+
 	if (!blob) {
 		switch (fn) {
 		case FN_TONE:
-			RxHdxTone(f->obj, f->io, f->out, count); break;
+			RxHdxTone(modem, f->io, f->out, count); break;
 		case FN_NOSIGNAL:
-			RxHdxNoSignal(f->obj, f->io, f->out, count); break;
+			RxHdxNoSignal(modem, f->io, f->out, count); break;
 		case FN_PHSREV:
-			RxHdxPhsReversal(f->obj, f->io, f->out, count); break;
+			RxHdxPhsReversal(modem, f->io, f->out, count); break;
 		case FN_RATESEQ:
-			RxHdxRateSequence(f->obj, f->io, f->out, count); break;
+			RxHdxRateSequence(modem, f->io, f->out, count); break;
 		case FN_SEQ:
-			RxHdxSequence(f->obj, f->io, f->out, count); break;
+			RxHdxSequence(modem, f->io, f->out, count); break;
 		case FN_SEQE:
-			RxHdxSequenceE(f->obj, f->io, f->out, count); break;
+			RxHdxSequenceE(modem, f->io, f->out, count); break;
 		case FN_DATA:
-			RxHdxData(f->obj, f->io, f->out, count); break;
+			RxHdxData(modem, f->io, f->out, count); break;
 		case FN_TONEDATA:
-			RxHdxToneData(f->obj, f->io, f->out, count); break;
+			RxHdxToneData(modem, f->io, f->out, count); break;
 		case FN_STONE:
-			RxHdxSTone(f->obj, f->io, f->out, count); break;
+			RxHdxSTone(modem, f->io, f->out, count); break;
 		case FN_EPOCH:
-			RxHdxEpoch(f->obj, f->io, f->out, count); break;
+			RxHdxEpoch(modem, f->io, f->out, count); break;
 		case FN_ERROR:
-			RxHdxError(f->obj, f->io, f->out, count); break;
+			RxHdxError(modem, f->io, f->out, count); break;
 		default:
-			RxHdxNull(f->obj, f->io, f->out, count); break;
+			RxHdxNull(modem, f->io, f->out, count); break;
 		}
 		return;
 	}
 
 	switch (fn) {
 	case FN_TONE:
-		ref_RxHdxTone(f->obj, f->io, f->out, count); break;
+		ref_RxHdxTone(modem, f->io, f->out, count); break;
 	case FN_NOSIGNAL:
-		ref_RxHdxNoSignal(f->obj, f->io, f->out, count); break;
+		ref_RxHdxNoSignal(modem, f->io, f->out, count); break;
 	case FN_PHSREV:
-		ref_RxHdxPhsReversal(f->obj, f->io, f->out, count); break;
+		ref_RxHdxPhsReversal(modem, f->io, f->out, count); break;
 	case FN_RATESEQ:
-		ref_RxHdxRateSequence(f->obj, f->io, f->out, count); break;
+		ref_RxHdxRateSequence(modem, f->io, f->out, count); break;
 	case FN_SEQ:
-		ref_RxHdxSequence(f->obj, f->io, f->out, count); break;
+		ref_RxHdxSequence(modem, f->io, f->out, count); break;
 	case FN_SEQE:
-		ref_RxHdxSequenceE(f->obj, f->io, f->out, count); break;
+		ref_RxHdxSequenceE(modem, f->io, f->out, count); break;
 	case FN_DATA:
-		ref_RxHdxData(f->obj, f->io, f->out, count); break;
+		ref_RxHdxData(modem, f->io, f->out, count); break;
 	case FN_TONEDATA:
-		ref_RxHdxToneData(f->obj, f->io, f->out, count); break;
+		ref_RxHdxToneData(modem, f->io, f->out, count); break;
 	case FN_STONE:
-		ref_RxHdxSTone(f->obj, f->io, f->out, count); break;
+		ref_RxHdxSTone(modem, f->io, f->out, count); break;
 	case FN_EPOCH:
-		ref_RxHdxEpoch(f->obj, f->io, f->out, count); break;
+		ref_RxHdxEpoch(modem, f->io, f->out, count); break;
 	case FN_ERROR:
-		ref_RxHdxError(f->obj, f->io, f->out, count); break;
+		ref_RxHdxError(modem, f->io, f->out, count); break;
 	default:
-		ref_RxHdxNull(f->obj, f->io, f->out, count); break;
+		ref_RxHdxNull(modem, f->io, f->out, count); break;
 	}
 }
 

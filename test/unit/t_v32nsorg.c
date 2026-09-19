@@ -174,6 +174,12 @@ struct fix {
 
 static struct fix fa, fb;
 
+static struct v32_modem *
+modem_of(struct fix *f)
+{
+	return (struct v32_modem *)(void *)f->obj;
+}
+
 /* --------------------------------------------------------------------- */
 
 struct pair {
@@ -517,7 +523,7 @@ run_one(const char *what, const struct trial *t, int trace, long trial)
 	dsplibs_debug_level = trace ? 2u : 0u;
 	ref_dsplibs_debug_level = dsplibs_debug_level;
 
-	V32OrgNextState(fa.obj);
+	V32OrgNextState(modem_of(&fa));
 	ref_V32OrgNextState(fb.obj);
 
 	dsplib_debug_capture_on = 0;

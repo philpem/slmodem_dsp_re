@@ -226,6 +226,12 @@ sre_of(struct fix *f)
 	return (struct fpm_sre *)(void *)(f->fp + V32FP_SRE);
 }
 
+static struct v32_modem *
+modem_of(struct fix *f)
+{
+	return (struct v32_modem *)(void *)f->obj;
+}
+
 /* --------------------------------------------------------------------- */
 
 /*
@@ -535,7 +541,7 @@ run_at(const struct trial *t, long trial, unsigned level)
 	dsplibs_debug_level = level;
 	ref_dsplibs_debug_level = level;
 
-	ra = DemodDataV32(fa.obj, fa.io, fa.out, t->count);
+	ra = DemodDataV32(modem_of(&fa), fa.io, fa.out, t->count);
 	rb = ref_DemodDataV32(fb.obj, fb.io, fb.out, t->count);
 
 	dsplib_debug_capture_on = 0;

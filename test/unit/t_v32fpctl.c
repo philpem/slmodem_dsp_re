@@ -144,6 +144,12 @@ static struct fix ma, mb;
 static short clamp_a[CLAMP_N], clamp_b[CLAMP_N];
 static short scram_a[64], scram_b[64];
 
+static struct v32_modem *
+modem_of(struct fix *f)
+{
+	return (struct v32_modem *)(void *)f->obj;
+}
+
 static unsigned rng_state;
 
 static void
@@ -501,7 +507,7 @@ run_setmodes(void)
 		ma.obj[V32_OBJ_STATUS] = 0x77;
 		mb.obj[V32_OBJ_STATUS] = 0x77;
 
-		SetTxModeV32(ma.obj, (short)mode);
+		SetTxModeV32(modem_of(&ma), (short)mode);
 		ref_SetTxModeV32(mb.obj, (short)mode);
 
 		cmp_all("SetTxModeV32", (long)mode);
@@ -549,7 +555,7 @@ run_setmodes(void)
 		ma.obj[V32_OBJ_STATUS] = 0x77;
 		mb.obj[V32_OBJ_STATUS] = 0x77;
 
-		SetRxModeV32(ma.obj, (short)mode);
+		SetRxModeV32(modem_of(&ma), (short)mode);
 		ref_SetRxModeV32(mb.obj, (short)mode);
 
 		cmp_all("SetRxModeV32", (long)mode);
@@ -591,7 +597,7 @@ run_seed_and_scramble(void)
 		fixture(&ma, seed);
 		fixture(&mb, seed);
 		s = 0xdeadbe00u + (unsigned)trial;
-		SeedScramblerV32(ma.obj, s);
+		SeedScramblerV32(modem_of(&ma), s);
 		ref_SeedScramblerV32(mb.obj, s);
 		cmp_all("SeedScramblerV32", (long)trial);
 		diff_eq_int("SeedScramblerV32 landed on `reg` (trial %ld)",
@@ -625,7 +631,7 @@ run_seed_and_scramble(void)
 		put_s16(ma.fp, V32FP_SCRAMBLER + 0x16, 19);
 		put_s16(mb.fp, V32FP_SCRAMBLER + 0x16, 19);
 
-		ScrambleDataV32(ma.obj, scram_a, 32);
+		ScrambleDataV32(modem_of(&ma), scram_a, 32);
 		ref_ScrambleDataV32(mb.obj, scram_b, 32);
 		diff_eq_int("ScrambleDataV32 wrote the same words (trial %ld)",
 			    first_diff(scram_a, scram_b, (int)sizeof(scram_a),
@@ -655,7 +661,7 @@ run_seed_and_scramble(void)
 		put_s16(ma.fp, V32FP_DESCRAMBLER + 0x16, 19);
 		put_s16(mb.fp, V32FP_DESCRAMBLER + 0x16, 19);
 
-		DescrambleDataV32(ma.obj, scram_a, 32);
+		DescrambleDataV32(modem_of(&ma), scram_a, 32);
 		ref_DescrambleDataV32(mb.obj, scram_b, 32);
 		diff_eq_int("DescrambleDataV32 wrote the same words "
 			    "(trial %ld)",
@@ -687,7 +693,7 @@ run_getrate(void)
 			put_int(ma.obj, V32_OBJ_TRELLIS, t == 0 ? 0 : t);
 			put_int(mb.obj, V32_OBJ_TRELLIS, t == 0 ? 0 : t);
 
-			a = GetRateV32(ma.obj);
+			a = GetRateV32(modem_of(&ma));
 			b = ref_GetRateV32(mb.obj);
 			diff_eq_int("GetRateV32 at %ld bit/s", a, b,
 				    (long)bps[i]);
@@ -709,13 +715,13 @@ run_adapteq_and_loops(void)
 
 		fixture(&ma, 0x2200u + (unsigned)(mode + 2) * 13u);
 		fixture(&mb, 0x2200u + (unsigned)(mode + 2) * 13u);
-		SetAdaptEqV32(ma.obj, m);
+		SetAdaptEqV32(modem_of(&ma), m);
 		ref_SetAdaptEqV32(mb.obj, m);
 		cmp_all("SetAdaptEqV32", (long)m);
 
 		fixture(&ma, 0x3300u + (unsigned)(mode + 2) * 13u);
 		fixture(&mb, 0x3300u + (unsigned)(mode + 2) * 13u);
-		SetRxLoopsV32(ma.obj, m);
+		SetRxLoopsV32(modem_of(&ma), m);
 		ref_SetRxLoopsV32(mb.obj, m);
 		cmp_all("SetRxLoopsV32", (long)m);
 	}
@@ -771,7 +777,7 @@ run_ecdelay(void)
 		put_s16(ma.hdx, V32_HDX_SHORT_9C, hdxlag[h]);
 		put_s16(mb.hdx, V32_HDX_SHORT_9C, hdxlag[h]);
 
-		SetECRndTripDelayV32(ma.obj, delays[d]);
+		SetECRndTripDelayV32(modem_of(&ma), delays[d]);
 		ref_SetECRndTripDelayV32(mb.obj, delays[d]);
 
 		cmp_all("SetECRndTripDelayV32", (long)delays[d]);
@@ -816,7 +822,7 @@ run_detectors(void)
 		n = (unsigned short)(trial ? 0xffffu : 0x1000u);
 		*(unsigned short *)(void *)(ma.dec + V32_DEC_RETRAIN_N) = n;
 		*(unsigned short *)(void *)(mb.dec + V32_DEC_RETRAIN_N) = n;
-		a = RetrainDetectV32(ma.obj);
+		a = RetrainDetectV32(modem_of(&ma));
 		b = ref_RetrainDetectV32(mb.obj);
 		diff_eq_int("RetrainDetectV32 on 0x%lx", a, b, (long)base);
 		cmp_all("RetrainDetectV32", (long)base);
@@ -833,7 +839,7 @@ run_detectors(void)
 		fixture(&mb, seed);
 		put_s16(ma.dec, 0x62, base);
 		put_s16(mb.dec, 0x62, base);
-		a = RenegotiateDetectV32(ma.obj);
+		a = RenegotiateDetectV32(modem_of(&ma));
 		b = ref_RenegotiateDetectV32(mb.obj);
 		diff_eq_int("RenegotiateDetectV32 on 0x%lx", a, b, (long)base);
 		cmp_all("RenegotiateDetectV32", (long)base);
@@ -847,7 +853,7 @@ run_detectors(void)
 		fixture(&mb, seed);
 		put_int(ma.dec, 0x64, 0x5a5a0000 + bits);
 		put_int(mb.dec, 0x64, 0x5a5a0000 + bits);
-		a = EpochDetectV32(ma.obj);
+		a = EpochDetectV32(modem_of(&ma));
 		b = ref_EpochDetectV32(mb.obj);
 		diff_eq_int("EpochDetectV32 on %ld", a, b, (long)bits);
 		cmp_all("EpochDetectV32", (long)bits);
@@ -855,7 +861,7 @@ run_detectors(void)
 		/* -------- the two that do nothing -------- */
 		fixture(&ma, seed);
 		fixture(&mb, seed);
-		TxClockSyncV32(ma.obj);
+		TxClockSyncV32(modem_of(&ma));
 		ref_TxClockSyncV32(mb.obj);
 		cmp_all("TxClockSyncV32", (long)bits);
 		v32_null_protocol();
@@ -885,7 +891,7 @@ run_clamp(void)
 			clamp_b[j] = CLAMP_MARK;
 		}
 
-		a = RxClampV32(ma.obj, scram_a, clamp_a, 99);
+		a = RxClampV32(modem_of(&ma), scram_a, clamp_a, 99);
 		b = ref_RxClampV32(mb.obj, scram_b, clamp_b, 99);
 
 		diff_eq_int("RxClampV32 returned the block length (%ld)",
@@ -929,7 +935,7 @@ run_turnaround_and_clean(void)
 		put_s16(ma.hdx, V32_HDX_SHORT_9C, (short)(charge[j] / 7));
 		put_s16(mb.hdx, V32_HDX_SHORT_9C, (short)(charge[j] / 7));
 
-		a = CalcTurnAroundDelay(ma.obj);
+		a = CalcTurnAroundDelay(modem_of(&ma));
 		b = ref_CalcTurnAroundDelay(mb.obj);
 		diff_eq_int("CalcTurnAroundDelay with budget %ld", (long)a,
 			    (long)b, (long)budget[i]);
@@ -954,7 +960,7 @@ run_turnaround_and_clean(void)
 		put_ptr(ma.fp, V32FP_CLEAN_BUF, ma.ecline);
 		put_ptr(mb.fp, V32FP_CLEAN_BUF, mb.ecline);
 
-		pa = V32FP_GetCleanedSamples(ma.obj, &na);
+		pa = V32FP_GetCleanedSamples(modem_of(&ma), &na);
 		pb = ref_V32FP_GetCleanedSamples(mb.obj, &nb);
 
 		diff_eq_int("V32FP_GetCleanedSamples reported n for %ld",

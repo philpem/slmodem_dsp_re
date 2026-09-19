@@ -128,6 +128,12 @@ put_int(void *base, int off, int v)
 	*(int *)(void *)((unsigned char *)base + off) = v;
 }
 
+static struct v32_modem *
+modem_of(void *obj)
+{
+	return (struct v32_modem *)obj;
+}
+
 struct skip {
 	int off;
 	int len;
@@ -269,7 +275,7 @@ run_getdiag_wrapper(void)
 		put_int(wa.fp, V32FP_FSE + 0x4e14, 11 + trial);
 		put_int(wb.fp, V32FP_FSE + 0x4e14, 11 + trial);
 
-		ra = V32FP_GetDiagnostics(wa.obj, whichv[w], outa, 32);
+		ra = V32FP_GetDiagnostics(modem_of(wa.obj), whichv[w], outa, 32);
 		rb = ref_V32FP_GetDiagnostics(wb.obj, whichv[w], outb, 32);
 
 		diff_eq_int("V32FP_GetDiagnostics returned (which %ld)",
@@ -367,7 +373,7 @@ run_adaptec(void)
 		put_s16(ea.fp + V32FP_ECC, 0x60, (short)(41 + trial * 300));
 		put_s16(eb.fp + V32FP_ECC, 0x60, (short)(41 + trial * 300));
 
-		SetAdaptEcV32(ea.obj, (unsigned short)mode);
+		SetAdaptEcV32(modem_of(ea.obj), (unsigned short)mode);
 		ref_SetAdaptEcV32(eb.obj, (unsigned short)mode);
 
 		cmp_one("SetAdaptEcV32", "obj", ea.obj, eb.obj, OBJ_SIZE,
@@ -476,7 +482,7 @@ run_settone(void)
 		tonefix_build(&ta, 0xc300u + i * 41u);
 		tonefix_build(&tb, 0xc300u + i * 41u);
 
-		SetToneDetect(ta.obj, hz[i]);
+		SetToneDetect(modem_of(ta.obj), hz[i]);
 		ref_SetToneDetect(tb.obj, hz[i]);
 
 		hdxskip[0].off = V32_HDX_TONE0;

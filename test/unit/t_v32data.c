@@ -139,6 +139,12 @@ pps_of(struct fix *f)
 	return (struct fpm_pps *)(void *)(f->fp + V32FP_PPS);
 }
 
+static struct v32_modem *
+modem_of(struct fix *f)
+{
+	return (struct v32_modem *)(void *)f->obj;
+}
+
 static void
 put_ptr(unsigned char *p, int off, void *v)
 {
@@ -420,7 +426,7 @@ run_mod_one(short sel, int n, unsigned seed, short widx, short limit, int real,
 	ra = ref_ModDataV32(ma.obj, mdata_a, oa, (unsigned short)n);
 	la = elog;
 	memset(&elog, 0, sizeof(elog));
-	rb = ModDataV32(mb.obj, mdata_b, ob, (unsigned short)n);
+	rb = ModDataV32(modem_of(&mb), mdata_b, ob, (unsigned short)n);
 	lb = elog;
 
 	compare_common(&ma, &mb, ra, rb, oa, ob, where, NOUT);
@@ -620,7 +626,7 @@ run_tx_one(int n, unsigned seed, short widx, short limit, short quad,
 		oa[i] = ob[i] = (short)OMARK;
 
 	ra = ref_TxNoCarrierV32(ma.obj, mdata_a, oa, (unsigned short)n);
-	rb = TxNoCarrierV32(mb.obj, mdata_b, ob, (unsigned short)n);
+	rb = TxNoCarrierV32(modem_of(&mb), mdata_b, ob, (unsigned short)n);
 
 	if (buf_a == 0) {
 		compare_common(&ma, &mb, ra, rb, oa, ob, where, NOUT);

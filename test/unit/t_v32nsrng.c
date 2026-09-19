@@ -177,6 +177,12 @@ struct fix {
 static struct fix fa, fb;
 static struct fix pre;
 
+static struct v32_modem *
+modem_of(struct fix *f)
+{
+	return (struct v32_modem *)(void *)f->obj;
+}
+
 static int rc_total;
 
 /* --------------------------------------------------------------------- */
@@ -473,7 +479,8 @@ static long n_proto_zero, n_proto_other;
 /* --------------------------------------------------------------------- */
 
 static void
-run_one(const char *what, void (*ours)(void *), void (*theirs)(void *),
+run_one(const char *what, void (*ours)(struct v32_modem *),
+	void (*theirs)(void *),
 	int state, int prof_i, int level, long tag)
 {
 	static const struct skip objskip[] = {
@@ -518,7 +525,7 @@ run_one(const char *what, void (*ours)(void *), void (*theirs)(void *),
 	dsplib_debug_capture_on = 1;
 	dsplib_debug_capture_reset();
 
-	(*ours)(fa.obj);
+	(*ours)(modem_of(&fa));
 	(*theirs)(fb.obj);
 
 	diff_begin(what);
@@ -658,7 +665,8 @@ run_one(const char *what, void (*ours)(void *), void (*theirs)(void *),
 /* --------------------------------------------------------------------- */
 
 static void
-sweep(const char *what, void (*ours)(void *), void (*theirs)(void *))
+sweep(const char *what, void (*ours)(struct v32_modem *),
+      void (*theirs)(void *))
 {
 	int state, p;
 	long tag = 0;

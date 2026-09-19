@@ -167,6 +167,12 @@ struct fix {
 static struct fix fa, fb;
 static struct fix pre;
 
+static struct v32_modem *
+modem_of(struct fix *f)
+{
+	return (struct v32_modem *)(void *)f->obj;
+}
+
 static int rc_total;
 
 /* --------------------------------------------------------------------- */
@@ -500,7 +506,7 @@ run_one(int state, int prof_i, long tag)
 	dsplib_debug_capture_on = 1;
 	dsplib_debug_capture_reset();
 
-	V32LocLoopNextState(fa.obj);
+	V32LocLoopNextState(modem_of(&fa));
 	ref_V32LocLoopNextState(fb.obj);
 
 	diff_begin("V32LocLoopNextState: the state sweep");
