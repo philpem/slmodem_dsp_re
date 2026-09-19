@@ -124504,3 +124504,77 @@ Modern tier: **350 green, 26 red**, down from 348/28 -- `t_gtonedet` and
 `src/`/`include/` file changed and no register entry added.
 
 (2026-09-19)
+
+## F11366. Issue #172: a per-fixture modern-only relative budget for the sinc/FIR group, its negative control, and the measured outcome of the five
+
+Follow-up to F11364/F11365, owner-approved 2026-09-19.  F11365 made the
+category-1 comparisons field-typed, but the sinc/FIR coefficient DESIGN
+diverges by more than the tier's 1e-6 on the modern compiler (F11363: the
+object narrows `sinc<float>`'s extended `sin(y)/y` to binary32 at the return
+and GCC 14 does not), so five fixtures stayed red on that group.  The owner's
+decision: the sinc/FIR coefficient group may use a LARGER functional relative
+tolerance, SCOPED PER FIXTURE -- it does not apply to the decision-level group
+and must not touch the period tier.
+
+**Mechanism.**  `harness_float_tol_fixture(double eps)` (harness.h/harness.c)
+sets a per-fixture override that `harness_float_tol()` returns in place of the
+compiled-in `HARNESS_FLOAT_TOL`; `diff_eq_float_` and `diff_eq_double_` read it
+instead of the raw macro.  The setter's whole body is inside
+`#ifdef HARNESS_FLOAT_TOL`, so without the define (period build, always) it is
+a linkable no-op and the comparison stays bit-for-bit.  It reaches only the
+float/double comparisons -- `diff_eq_int` decisions, transcript `strcmp` and
+`diff_eq_obj` byte compares are untouched.  Each of the five fixtures calls it
+once at startup with the budget below and the measurement beside the call.
+
+**Measurement, and why it differs from F11365.**  Every figure is taken with
+`DSPLIB_MAX_REPORT=0` over every failing float check.  The default ten-line
+report cap is not a sample: F11365's "1-113 ULP / relative up to 7e-4"
+magnitudes came from that truncated view, and PR173's newly element-wise
+compares expose near-zero samples whose RELATIVE error is far larger.  That is
+why the true maxima below are not the "4e-4..7e-4" the brief anticipated.
+
+| fixture | measured max relative (site) | budget | outcome |
+|---|---|---|---|
+| `t_v90demctor` | 2.62e-2 (coefficient bank, near-zero tap; bulk ~4e-4) | 5.0e-2 | **green** |
+| `t_resampler` | 8.27e-3 (`out[]` shape 11510), 4.64e-3 (V90Resampler spans), 1.23e-3 (`coeffs[]`) | 1.5e-2 | floats green; **red** on 8 NaN-phase decisions (`t_resampler.cpp:690`) |
+| `t_v90demprog` | 2.61e-5 (`V90Resampler+112`) | 5.0e-5 | floats green; **red** on 4 decisions (`V90Phase3Demodulator+0x2c samplesInState`, `V90SdDetector+0 count`) |
+| `t_v92modstate` | bulk < 1e-3; near-zero resampled samples reach 1.585 | 5.0e-2 | **red**, 91 checks: 87 near-zero `resampleOut` values (abs ~2-3e-5) + 4 queue values (abs 0.35) |
+| `t_floatarma` | 3.4e-5 functional; adversarial 2^70/2^60 pairings reach 1.0 | 1.0e-4 | **red**, 734 checks: the deliberately adversarial x87 modes (got -2/1 vs ref 0) |
+
+**The two reds a relative budget must not close, and why.**  `t_v92modstate`'s
+`resampleOut` crosses zero, so the same absolute sinc error (~2-3e-5) is a
+relative error of 0.05..1.6 on the small samples; covering it needs a budget
+>= 2.0, which passes any value and is an off switch, and the queue's 0.35
+absolute difference is not rounding at all.  `t_floatarma`'s modes 4/5 seed
+2^70/2^60 coefficients so that a last-place ordering difference is amplified to
+O(1) by construction -- a test of the object's arithmetic ORDER, not a
+functional scenario.  Both are declined rather than fitted: F7782's ruling
+applied to a tolerance.  The near-zero cases are the reason `diff_eq_float_abs`
+exists for a value that passes through zero, but an absolute budget wide enough
+for the queue's 0.35 would itself be an off switch, so no budget was fitted.
+
+**Negative control (F134/F2401).**  `test/safety/t_field_typed.c` gained a
+per-fixture-budget section that loops over every budget this pass introduces
+(5e-5, 1e-4, 1.5e-2, 5e-2): a value at half the budget passes on the modern
+tier ONLY and is counted `diff_float_tolerant`; a value at four times the
+budget FAILS; a changed index and a changed flag FAIL while the budget is in
+force; and without `HARNESS_FLOAT_TOL` the setter is inert and even the
+inside-budget value fails.  Measured: modern harness object
+`PASS t_field_typed: 28 checks, 0 bad (linked harness tol=1e-06)`; the same
+source linked against a no-define harness object
+`PASS t_field_typed: 28 checks, 0 bad (linked harness tol=0)`.
+
+**Verdicts.**  `make period J=1`: **376 passed, 0 failed** -- the period
+compile never receives the define and the setter is a no-op there, so the five
+fixtures stay bit-exact.  Modern tier (`make -j1 -k test`, GCC 14.2.0-19): the
+official `run-` target errors go from 26 to **25** -- `t_v90demctor` closes,
+its coefficient bank being the one fixture whose whole float difference is the
+sinc design divergence.  The other four stay red for the decision-level,
+near-zero and adversarial reasons above, which is the measured outcome and not
+a regression: **351 green / 25 red / 6 link-excused**.  `make safety`: 28
+checks, 0 bad.  `python3 tools/refcheck.py`: clean.  No `src/`/`include/` file
+changed and no register entry added.  `mutsnap.py --check` reports 270 suites
+stale (the harness is in its closure) and the 2 pre-existing MISSING
+(`faxadaptcreate_v29tx`, `fdspkrnl_tone`); no `--update` was run.
+
+(2026-09-19)

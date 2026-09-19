@@ -553,7 +553,10 @@ $(BUILD)/safety/t_float_tol: test/safety/t_float_tol.c $(SAFETY_HARNESS)
 # (diff_eq_obj_float_): a float perturbed beyond the tolerance must still
 # fail, and a changed index, flag or non-float tail word must still fail.  It
 # is adaptive -- a 1-ULP float passes only under -DHARNESS_FLOAT_TOL -- and
-# prints its own denominator.
+# prints its own denominator.  It also drives harness_float_tol_fixture for
+# every budget the sinc/FIR fixtures name (5e-5, 1e-4, 1.5e-2, 5e-2), so each
+# widened budget has its own beyond-budget and changed-decision control; the
+# setter is inert without the define, which is the period arm.
 $(BUILD)/safety/t_field_typed: test/safety/t_field_typed.c $(SAFETY_HARNESS)
 	@mkdir -p $(dir $@)
 	$(CC) $(ARCH32) $(LDFLAGS) -Iinclude -Itest/harness -o $@ $^ -lm

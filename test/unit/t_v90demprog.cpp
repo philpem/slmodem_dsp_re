@@ -1084,6 +1084,16 @@ main(void)
 {
 	int rc = 0;
 
+	/*
+	 * The composed resampler's float spans carry the sinc/FIR design
+	 * divergence (F11363).  Measured with DSPLIB_MAX_REPORT=0, the worst
+	 * is rel = 2.61e-5 (V90Resampler+112, got 0.00912881, ref 0.00912857).
+	 * 5e-5 is just above it with headroom, and it is a no-op under
+	 * `make period`.  The Phase-3 `samplesInState` and SD-detector count
+	 * failures in the same group are decisions and stay red (F11365).
+	 */
+	harness_float_tol_fixture(5.0e-5);
+
 	rc |= run_progress();
 	rc |= run_constructed_phase3();
 
