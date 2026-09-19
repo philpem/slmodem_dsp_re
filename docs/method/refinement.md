@@ -1149,6 +1149,32 @@ not this lever and not #158. After the ladder fix `RxHdxScramV17` is 270 bytes
 against the object's 266 and the three handlers are all 210/210 in the twins
 with 79 bytes differing. Recorded, not acted on.
 
+**#160 ENUMERATED THAT COUNTDOWN AND IT IS NOT THE WHOLE RESIDUAL — MEASURED,
+NOT ARGUED.** Fifteen spellings were compiled with the exact period toolchain
+and compared full-text against the blob. The object's `movzwl 0x1a(%edx),%ecx;
+dec %ecx; test %cx,%cx; mov %cx,0x1a(%edx); jle` IS matched in width and
+signedness in isolation: a read-back or pre-decrement on the field,
+
+    RXCTL(modem)->countdown = (short)((unsigned short)RXCTL(modem)->countdown - 1);
+    if ((short)RXCTL(modem)->countdown > 0)
+        return 0;
+
+emits `movzwl 0x1a(%edx),%esi; dec %esi; test %si,%si; mov %si,0x1a(%edx)`,
+removing the `cwtl` and the 32-bit test, and takes the handlers to 269/209/209.
+But **no countdown spelling is full-text identical**, because the carrier arm is
+laid out in the opposite order: the blob falls through from `test %eax,%eax`
+into the success path (`je` to the out-of-line error arm), ours into the error
+path (`jne` to the success arm). That reordering is independent of the countdown
+— all fifteen spellings keep the error arm first — and predates #158, which
+touched only the ladder. The register swap (`%ecx` in the blob against
+`%eax`/`%esi` here) is its consequence, not a second cause. `byteident.py`
+agrees: the width fix removes the `cwtl` but the handlers keep one extra
+instruction each (blob 76/58, ours 79/60 at grade 0). Full-text identity needs a
+second lever on the carrier `if` (a success-as-then restructure does flip the
+blob's `je` and lands on the object's `%ecx`, but still hoists the return-0
+`xor`); that is a different finding, not this one. **Declined, and #160 does not
+close on the countdown alone.**
+
 ### Lever 9. Operand order — which is decided by the TREE, not by how you spell it
 
 `return dsp->rx_energy & dsp->rx_tone;` — swapping the two operands gave byte
