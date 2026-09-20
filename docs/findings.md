@@ -125017,3 +125017,155 @@ match other than exactly once.  `git diff --stat`:
 `test/unit/t_v90trn2design.cpp` (removed two blocks),
 `tools/gccdiverge.json` (+2), and the two new fixtures.  PR:
 https://github.com/philpem/slmodem_dsp_re/pull/178
+
+## F11371. Issue #172 transcript pass: four diagnostic-transcript checks split into declared binaries by a shared no-op mechanism, and the analog-arm graph compare split from `t_v90modprog`'s transmit suites
+
+Follow-up to F11370, owner-approved 2026-09-19.  Five modern-tier reds close
+by the F2157/F3002 move -- the divergent checks are SPLIT into a binary of
+their own and declared, leaving the parent green and mutation-testable -- and
+all five are the same shape: `make period` passes every check with the
+object's own compiler, so the source is the object's and the modern build is
+what cannot reproduce the last bit.  `test/` and `tools/gccdiverge.json`
+change; `src/` and `include/` are untouched.  `make period` stays exact, now
+**383 passed, 0 failed** (five more fixtures than F11370's 378).  Modern
+tier: **375 green / 8 red** (was 365/13, 378 binaries; now 383), no fixture
+newly red.
+
+**THE FOUR TRANSCRIPT FIXTURES, AND THE MECHANISM.**  F11369 left each with
+the same next test: determine whether the differing transcript text is
+float-derived only (the issue #143 `t_v90connevalnan` split) or encodes a
+real value.  `tools/eddecode.py` on an instrumented capture answers it, and
+in all four it is float-derived: every differing line is the last decimal
+place of a float the diagnostic formats, while the fixture's substantive
+object comparison and the return value agree on the same trials.  The four
+are class (a), genuine modern rounding divergence in diagnostic text, and
+the split applies.
+
+The precedent files copy the fixture's setup; four copies is a lot of
+apparatus to keep in step.  Instead `test/unit/transcript_split.h` is
+included by each parent after `harness.h`, and when the split-off binary
+defines `TRANSCRIPT_ONLY` it `#undef`s and no-ops every substantive
+`diff_eq_int` / `diff_eq_float` / `diff_eq_float_ulp` / `diff_eq_float_abs` /
+`diff_eq_obj` / `diff_eq_double` macro AND the `_`-suffixed function names a
+fixture may call directly.  The transcript checks are moved to
+`diff_eq_int_` directly -- which is deliberately NOT removed -- so what runs
+in the split binary is the fixture's setup, its group frame and the
+transcript checks alone.  The failing group therefore contains only the
+transcript checks, which is what makes each declaration check-granular.
+Each new binary is a two-line file (`#define TRANSCRIPT_ONLY` then
+`#include "t_<parent>.cpp"`); each parent's transcript compare is wrapped in
+`#ifdef TRANSCRIPT_ONLY`, so the parent no longer runs it at all.  The
+coverage is not lost: the split binary runs it under both compilers.
+
+- **`t_v90eqdata` -> `t_v90eqdatatrans`.**  The DFE `coefs sum` line prints
+  `+0.005849` in the object and `+0.005850` in the modern build at trial
+  1012045.  `summarise_coefs` is inlined into the object's `enterDataPhase`
+  at 0x37d40: the accumulation at 0x37e26..0x37e3a is `flds 0x30(%esp)`;
+  `fadd %st(1),%st`; `fabs`; `fadds 0x2c(%esp)`; `fstps 0x30(%esp)`;
+  `fstps 0x2c(%esp)` -- `sum` is stored back to a 4-byte slot and reloaded
+  every iteration, so every add rounds to `float`.  The modern build
+  (`build/repro/pump/v90/V90Equalizer.o`, `enterDataPhase` at 0x1c70)
+  accumulates both sums on the x87 stack (`fadd %st,%st(2)`; `faddp
+  %st,%st(3)` at 0x1d3b/0x1d3f) and stores once at the end (0x1ddc), so it
+  rounds once.  The state compare, the arena compare and the return value
+  all agree.  Declared group `V90Equalizer::enterDataPhase`; 2 of 96
+  transcript checks differ.  Parent green at 1160 checks, `v90eqdata`'s 11
+  mutations stay scoreable.
+- **`t_vpcmflomodem` -> `t_vpcmflomodentrans`.**  `getUinfoValue`'s L2 line
+  prints `L2[15] = -0.18124` in the object and `-0.18123` in the modern
+  build at tag 200020, and `L2[17] = -0.52515` against `-0.52516` at
+  300000.  The L2 entry is `decade = (float)log10l((long double)scaled)`
+  then `L2[j++] = (float)((long double)decade * 10.0L + 60.0L)`
+  (src/pump/v90/VpcmFloModem.cpp:2079/2082); the four L2 arrays are already
+  modelled as float spans in this fixture and the whole-block compare
+  passes within tolerance, so the underlying floats differ by less than
+  1e-6 relative and the `strcmp` fails on the print boundary.  Declared
+  group `VPcmFloModem::getUinfoValue`; 2 of 200 checks differ.  Parent green
+  at 19004 checks, `vpcmflomodem`'s 51 mutations stay scoreable.
+- **`t_v34info1a` -> `t_v34info1atrans`.**  Same `getUinfoValue` L2 line:
+  `L2[15] = -0.17762` against `-0.17761`, and so on down the array.  96 of
+  5712 transcript checks differ; the whole-block state comparison, the
+  arena comparison and the return value agree.  Declared group
+  `v34 info1a: V34SetINFO1aBits`; parent green at 548369 checks,
+  `v34info1a`'s 47 mutations stay scoreable.
+- **`t_v90cdadjust` -> `t_v90cdadjusttrans`.**  `run_loud` raises both
+  sides' debug level and compares four `edprintf` transcripts; 26 of 244
+  checks differ, every one a float printed to its last decimal place:
+  `V90ConnectionDesigner: real K after optimization = +20.06272` against
+  `+20.06271`, `real K before optimization = +19.38667` against
+  `+19.38666`.  All four members' substantive object comparisons agree on
+  the same trials.  Declared group `the four members' diagnostics, both
+  sides talking`; parent green at 733 checks in that group,
+  `v90cdadjust`'s 36 mutations stay scoreable.
+
+**`t_v90modprog` -- CLOSED, the analog-arm graph compare split as
+`t_v90modproganalog`.**  F11369 left this as `dis.py` on
+`V90Resampler::resample`'s bpf accumulation.  The six differing checks are
+`compare_graph("after the analog arm")`'s floats inside the embedded
+`ResamplerTiming`: `lastHalfBaudErr` (+0x54) 679 ULP, `bpfSq1` (+0x68) 4208
+ULP, `bpfSq2` (+0x6c) 345 ULP, `bpfZ1` (+0x70) 2194 ULP, `bpfZ2` (+0x74)
+157 ULP, `errZ1` (+0x78) 539 ULP, at input 8601.
+`ResamplerTiming::timingCorrection` computes
+`e = 0.00025f * sq - 0.0005f * bpfSq1 + 0.00025f * bpfSq2`, stores it to
+`lastHalfBaudErr` and feeds it back.  The object at 0x35806..0x35839 keeps
+the object's grouping -- `flds 0x68(%edx)`; `fsubp %st,%st(2)`; `fmul
+%st(0),%st`; `fmuls 0x6c(%edx)`; `fsubp %st,%st(2)`; `faddp %st,%st(1)`;
+`fsts 0x54(%edx)` -- which is what the source already spells; the modern
+build (`build/repro/pump/v90/ResamplerTiming.o`, `timingCorrection`)
+reassociates the three-term sum (`fsub %st(4),%st`; `fadd %st(3),%st` at
+0x45/0x47), and the feedback path compounds the last-bit difference over
+the block.  No source form recovers the object's result, so the site is
+declared.  **THE SPLIT IS NARROW AND THE PARENT KEEPS THE MUTATION CATCH --
+MEASURED, NOT ASSUMED.**  The parent keeps the analog forward itself
+(`MODEM(0)->progress(...)`) and its transcript, bit-block, count and
+sample-block checks, and it gains `cmp_region_exact_floats_masked`, which
+compares the demodulator's bytes exactly with only the `demod_vr_spans` float
+bytes masked out.  The masked compare was not optional: with only the four
+scalar checks the `v90modprogmodem` suite's "the analog arm forwards no
+symbols" mutation measured **NOT CAUGHT** (`tools/mutate.py --suite
+v90modprogmodem --only ...`), because that mutation changes the demodulator's
+integer state at +0x38, +0x60..+0x63, +0x68, +0x7c, +0xd0, +0xf4, +0x12c,
++0x144, +0x24c and +0x258 and nothing left in the parent saw it.  With the
+masked compare the whole suite is **6 mutations, 6 caught, 0 NOT caught**.
+Only the divergent float graph compare moves to `t_v90modproganalog`, and the
+five transmit suites (`v90modprog`, `v90modprogbts`, `v90modprogmodem`,
+`v90modprogp3m`, `v90modprogp4m`) stay scoreable in the parent; declared
+group `V90Modem::progress -- the analog arm`, 6 of 111 checks differ.
+
+**STILL OPEN, and none was fitted.**  `t_v92modstate`'s one value
+`-0.575858712` against `-0.223347247` is unchanged.  A first measurement
+narrows it: the FIR output (`resamplerIn`) agrees by `memcmp`, and the
+filter history differs only in a slot the output does not use, so the
+divergence is inside `Resampler::resample`.  Its `ph = (int)phase` truncation
+is NOT the difference -- both the object (0x34edd..0x34f02) and the modern
+build (build/repro/pump/v90/Resampler.o at 0x326..0x348) emit the
+`fnstcw / or $0xc00 / fldcw / fistl / fldcw` sequence -- but the DOT
+association does differ (object `faddp %st,%st(2)`/`faddp %st,%st(3)`
+alternating per product at 0x34f25; modern pairs two products then adds at
+0x3d3/0x3d5), and a 0.35 difference is too large for that alone, so a
+different polyphase branch is the leading hypothesis.  Next test: instrument
+`ph`/the window at the differing output index under both compilers.
+`t_vpcmrunpcm` (27933 hard failures plus the meta), and `t_v90rundemod` /
+`t_vpcmqcline` (the one meta-check each) keep F11369's measurement: the
+meta-assertion is firing correctly on a real modern float divergence, the
+20x bound is not too tight and must not be widened; the fix is the
+per-region float-span modelling, which is a layout job and not this pass.
+`t_v90spectral` (adversarial order test, not fitted), `t_floatarma`'s 734
+adversarial checks, `t_v34hshak` (SIGSEGV) and `t_v27fax` (FAX) are
+unchanged and outside this pass.
+
+**Verdicts.**  `make period J=1`: **383 passed, 0 failed** (the five new
+fixtures and every changed one are in that count; it moved by the five
+binaries added, so the denominator reports them).  Modern tier
+`make -j1 -k test`: **375 green / 8 red** (was 365/13, 378 binaries; now
+383), no fixture newly red.  `python3 tools/refcheck.py`: clean, 14043
+references, 0 dangling.  `tools/gccdiverge.py --list`: **14 entries**
+(9 + 5), 0 stale, 0 uncovered.  `mutsnap.py --check`: unchanged stale state,
+0 current / 270 stale / 2 never recorded of 272 (no `--update`).  `make
+test`'s structural checks: 0 anchor(s) match other than exactly once, 0
+anchor(s) land in an arm their label does not name.  `git diff --stat`:
+the four transcript parents, `t_v90modprog.cpp`, the four `*trans` fixtures,
+`t_v90modproganalog.cpp`, `transcript_split.h` and `tools/gccdiverge.json`
+(+5).
+PR:
+https://github.com/philpem/slmodem_dsp_re/pull/179

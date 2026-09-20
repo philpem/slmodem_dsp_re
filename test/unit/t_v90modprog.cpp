@@ -652,6 +652,65 @@ cmp_region(const char *what, const char *type, const void *a, const void *b,
 }
 
 /*
+ * The same comparison as `cmp_region_p`, but with the caller's float spans
+ * MASKED OUT and the remainder compared exactly.
+ *
+ * WHY THIS EXISTS.  `run_analog_arm`'s after compare cannot run in the parent
+ * on the modern tier -- six `ResamplerTiming` floats diverge and the group is
+ * declared in `t_v90modproganalog` -- but removing the whole compare lost a
+ * mutation: `v90modprogmodem`'s "the analog arm forwards no symbols" changes
+ * the demodulator's integer state (offsets +0x38, +0x68, +0x7c, +0xd0, +0xf4,
+ * +0x12c, +0x144, +0x24c, +0x258 and +0x60..+0x63) and nothing the parent
+ * kept saw it.  Masking the float bytes to 0x77 and comparing the rest
+ * exactly keeps that catch while leaving the six divergent floats alone.
+ * The masked compare is a real check, not a tolerance: a wrong index, flag or
+ * counter in the demodulator still fails.
+ */
+static void
+cmp_region_exact_floats_masked(const char *what, const char *type,
+			       const void *a, const void *b, size_t n,
+			       long tag, const unsigned *pz, int npz,
+			       const struct diff_float_span *spans,
+			       size_t nspans)
+{
+	const unsigned char *sa = (const unsigned char *)a;
+	const unsigned char *sb = (const unsigned char *)b;
+	size_t o, k;
+	int j;
+
+	if (a == 0 || b == 0 || n == 0)
+		return;
+	if (n > TR_MAX)
+		n = TR_MAX;
+	translate_block(tra, sa, n, 0);
+	translate_block(trb, sb, n, 1);
+	for (o = 0; o + 4 <= n; o += 4) {
+		unsigned int ra, rb;
+
+		memcpy(&ra, sa + o, 4);
+		memcpy(&rb, sb + o, 4);
+		if (ra == rb) {
+			memcpy(tra + o, &ra, 4);
+			memcpy(trb + o, &rb, 4);
+		}
+	}
+	for (j = 0; j < npz; j++)
+		if ((size_t)pz[j] + 4 <= n) {
+			memset(tra + pz[j], 0x77, 4);
+			memset(trb + pz[j], 0x77, 4);
+		}
+	for (k = 0; k < nspans; k++) {
+		size_t bytes = (size_t)spans[k].count * spans[k].size;
+
+		if ((size_t)spans[k].off + bytes <= n) {
+			memset(tra + spans[k].off, 0x77, bytes);
+			memset(trb + spans[k].off, 0x77, bytes);
+		}
+	}
+	diff_eq_obj_(__FILE__, __LINE__, what, type, tra, trb, n, tag);
+}
+
+/*
  * THE EMBEDDED `V90Resampler`'S FLOAT FIELDS, NAMED.  The demodulator's
  * whole-object compare below is a reachability check for this transmit-chain
  * fixture -- its header says the demodulator's own claims are
@@ -2088,7 +2147,9 @@ run_analog_arm(void)
 		nb[0] = 0xa5a5a5a5u;
 		nb[1] = 0x5a5a5a5au;
 
+#ifndef ANALOG_ARM_AFTER_ONLY
 		compare_graph("before the analog arm", 1, tag);
+#endif
 
 		set_level(0);
 		dsplib_debug_capture_reset();
@@ -2097,6 +2158,7 @@ run_analog_arm(void)
 		ref_modem_progress(mobj[1], bits_in[1], &nb[1], out_f[1], n);
 		dsplib_debug_capture_on = 0;
 
+#ifndef ANALOG_ARM_AFTER_ONLY
 		diff_eq_int("the transcripts match (%ld)",
 			    strcmp(dsplib_debug_capture_text(0),
 				   dsplib_debug_capture_text(1)) == 0, 1, tag);
@@ -2108,7 +2170,23 @@ run_analog_arm(void)
 		diff_eq_int("the sample blocks agree (%ld)",
 			    memcmp(out_f[0], out_f[1], sizeof(out_seed)) == 0,
 			    1, tag);
+
+		/*
+		 * The after compare's NON-FLOAT half, kept here so the analog
+		 * forward's mutation stays caught.  See
+		 * cmp_region_exact_floats_masked.
+		 */
+		blkmap_take(1);
+		cmp_region_exact_floats_masked(
+		    "after the analog arm, non-float state", "V90Demodulator",
+		    MODEM(0)->demodulator, MODEM(1)->demodulator, 0x298, tag,
+		    demod_alias, NDEMOD_ALIAS, demod_vr_spans,
+		    sizeof demod_vr_spans / sizeof demod_vr_spans[0]);
+		demod_alias_check();
+#endif
+#ifdef ANALOG_ARM_AFTER_ONLY
 		compare_graph("after the analog arm", 1, tag);
+#endif
 
 		reached = 1;
 		if (n != 0)
@@ -2117,6 +2195,7 @@ run_analog_arm(void)
 		destroy_pair(1, tag);
 	}
 
+#ifndef ANALOG_ARM_AFTER_ONLY
 	diff_eq_int("the analog arm was reached", reached, 1, 0);
 	diff_eq_int("a non-empty block was forwarded", varied, 1, 0);
 	for (trial = 0; trial < NDEMOD_ALIAS; trial++) {
@@ -2129,6 +2208,7 @@ run_analog_arm(void)
 			    " (%ld)", demod_alias_wrong[trial], 0,
 			    (long)trial);
 	}
+#endif
 	return diff_end();
 }
 
