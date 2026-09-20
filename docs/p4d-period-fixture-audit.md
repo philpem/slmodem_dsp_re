@@ -1305,3 +1305,89 @@ binary hash. The six older postimage-fault failure counts remain
 source change, modern sweep or mutation-execution sweep was introduced.
 
 The serial full-phase/refcheck completion record follows below.
+
+## Issue #183: evaluator chain bounded negative result (2026-09-20)
+
+Branch `investigate/issue183-evaluator-chain`, base `3c0bd64c`.
+
+### What was executed
+
+The fixture composes the real consumer chain on top of the timed study's
+produced calibration/mapping (`study_calibration`, `study_mapping`):
+
+- `V90Equalizer` constructed against its own `V90ConnectionEvaluator`,
+  `V90Demapper` and `V90Phase4Demodulator`, reset, then entered the data phase
+  with the real `enterDataPhase` (state `V90EQU_STATE_DATA`).
+- 100 blocks of a finite unity dither drive `V90Equalizer::process` and the
+  demapper drain, establishing the real smoothed block RMS
+  (`meanErrorEnergyCurrent`, measured **4960.84** on both sides).
+- The real `V90ConstellationDesigner::process` is invoked with that real noise,
+  following the caller at **1d850**, and its actual `dMin` and three thresholds
+  are passed through `updateCurrentConstellationData`.
+- 900 further blocks drive `evaluateConnection` on each chunk, through the full
+  160000-symbol data duration.
+
+Both sides' equalizer outputs, output floats, block scalars, demapper bits,
+design verdict, thresholds and evaluator verdict agree exactly. No error, count,
+threshold, request or caller state is assigned.
+
+### The bounded negative result
+
+**The evaluator's rate-down request does not fire at this boundary, and the
+fixture asserts the measured reason rather than the request.**
+
+The equalizer feeds the evaluator's `avePdsnr` directly on every completed
+block — `connEval->updateAvePdsnr(meanErrorEnergyCurrent, blockSampleCount)` at
+**V90Equalizer.cpp:2676** — so the statistic is fed, not unfed. The caller's
+`evaluateMeanErrorStdPhase4` is a stub returning 0 (**V90ConnectionEvaluator.cpp:417**)
+and feeds nothing. `evaluateConnection`'s rate-down arm fires only for
+`avePdsnr > threshDown` (**V90ConnectionEvaluator.cpp:1069**), where
+`threshDown` is the designer's rate-down threshold passed through
+`updateCurrentConstellationData` (**V90ConnectionEvaluator.cpp:309**). The real
+smoothed noise stays below that threshold — `preAve` 4904.18 at the first
+evaluate call rising to 4967.71 at the last, against `threshDown` 7007.19 — so
+the condition is never met and no request fires; `evaluateConnection` then
+clears `avePdsnr` on return (**V90ConnectionEvaluator.cpp:1563**), which is why
+a post-call read is zero.
+
+The separately recorded `meanErrorEnergy` buffer and its
+`calcMeanErrorStatistics`/state-3 gate (**V90Equalizer.cpp:1752, 2211–2237**,
+which does require `phase4Demod->state == P4D_STATE_TRN2D_DD` at
+`countInState == linearMappStudyStart` with `demapper->studyRunFinished`) are a
+**different statistic and lifecycle** and are not the reason this request is
+absent.
+
+Asserted checks on both sides: `eval equalizer feeds the noise statistic`
+(`preAve > 0`), `eval noise below rate-down threshold` (`preAve < threshDown`),
+`eval evaluate clears the average`, `eval no request at silence boundary`,
+`eval no request from error history`.
+
+### Control
+
+`DSPLIB_P4D_PERIOD_FAULT=eval-missing` withholds Phase A on both sides, so the
+design noise is zero. The positive requirement `eval design noise positive`
+then fails (**22/3079922**), proving the real equalizer history is load-bearing
+to the design input and the boundary result is not vacuous.
+
+### Validation and artifacts
+
+- Focused Gentoo fixture: **3080722/3080722 exact checks**, exit 0.
+- Observer controls: **14/14**, ordinary and `python -O`, exit 0.
+- Full `make phase -j1 J=1`: period differential **385 passed, 0 failed**,
+  structural boundary OK, exit 0.
+- `refcheck`: no unresolved, pending or stale entries.
+- No `src/` or `include/` change; no tolerance, modern exemption or mutation
+  sweep.
+- Artifacts under `/tmp/opencode/issue183-eval-final/`: `ordinary/` and
+  `optimized/` retain each raw child exit, full baseline/fault log, `status.json`
+  and binary hash. `eval-run2.log` and `eval-missing.log` are the direct runs.
+
+### Remaining open boundary
+
+The tested finite channels keep the equalizer's smoothed noise below the
+designed rate-down threshold, so no request fires here. A positive request
+would need a genuinely more degraded channel driving `avePdsnr` above
+`threshDown` (with both duration gates), which the fixture does not
+manufacture. The supplied positive request in the earlier lifecycle cases stays
+labelled supplied, and the recorded-error/state-3 study lifecycle remains a
+separate question. Raw consumed-dB/NaN observation remains separate.
