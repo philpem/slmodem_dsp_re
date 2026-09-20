@@ -988,3 +988,320 @@ negative-energy fixture stays exploratory. **Raw NaN remains unobserved** with
 the debugger prerequisite deferred; no source probe or ptrace machinery was
 added. Neither finite-channel success nor the synthetic counterexample licenses
 a public-modem reachability claim.
+
+## Issue #183: timed P3D study (base 6750e022, review pending)
+
+This continuation is on `investigate/issue183-p3-study` in
+`/home/philpem/slmodem/claude_re_worktrees/mutate-workdir`. PR185 was reviewed
+and merged as `6750e022`; its earlier pending-review wording above is historical.
+The changes here are fixture/observer/documentation only. No original-source
+defect was established. All previous cases remain, including the manual ADI
+boundary as a comparison control. No publication is authorized by these results.
+
+### Discriminator and actual entry boundaries
+
+The competing possibilities were that replaying DIL alone would enter study,
+or that the missing preceding receive history would prevent it; and that a
+real timed study could differ materially from the manual 32280-call schedule.
+The tested domain is three constructor-boundary replays and three TRN1-boundary
+studies, each with separate original and reconstructed producers/receivers:
+unity gain, half gain, and missing received DIL. These are six bounded component
+environments, not six public modem connections.
+
+* **Constructor replay:** real parameter, ADI and P3D construction; P3D's own
+  constructor resets to WaitForSd, reference code 64. A separately constructed
+  generator emits the previous ADI DIL stream (mu-law, reference code 0).
+  Unity/half/zero received streams all time out at **12000/32280** calls:
+  state **0 -> 20**, count 0, event 21. Complete ADI bytes stay identical to
+  each side's post-constructor preimage. The remaining DIL cycle is not replayed
+  after the terminal event. This is an honest insufficient-history result.
+* **TRN1 boundary:** after real construction, the explicit supported
+  `reset(mu,64,TRN1dKnownData,0,ownRxJd,NULL,ownDescriptor,0,1,0.0f,0)`
+  boundary assumes earlier Sd/SdNot synchronization. The separate transmitter
+  resets to TRN1d with code 64, zero warm-up, its own constructor-produced Jd,
+  and its own built-in ADI descriptor. `generateSymbol` runs its real TRN1/Jd
+  machine. Once the receiver reports CRC-decoded Jd (event 6), the fixture calls
+  that transmitter's **real `exitJd`**. This immediate feedback is an explicit
+  component scheduling choice, not a demonstrated bidirectional modem handshake.
+  The generator itself supplies JdNot and enters DIL; P3D independently detects
+  JdNot and resets its own internal generator. There is no direct study-state,
+  study-counter, learned-table or accumulator assignment.
+
+The half gain applies throughout the TRN1/Jd/DIL stream. The missing-DIL control
+keeps the preceding unity training/Jd samples and substitutes zero only for
+received DIL samples, while both actual generators continue. It is a controlled
+channel interruption, not a completed usable calibration. No receiver field is
+consulted to choose a DIL code label or to supply an accumulator argument.
+
+### Original instructions and state path
+
+Addresses are reference-object `.text` offsets from `tools/dis.py`, not Ghidra.
+P3D C1 **212c0–2142c** calls reset at **21421**, passing state 0 and reference
+code 64. Reset **20f90–212b0** stores the supplied state/count at **21017/2101a**;
+its explicit state-3 arm **21210–21253** resets ADI mapping and starts the
+embedded TRN1 generator. Using that documented method boundary does not prove
+that the larger `V90Demodulator::enterPhase3` caller reached it with these inputs.
+
+The V.90 decision function **23830–258ea** increments count at **23899**.
+The constructor replay's Sd detector call is **241ed**; the timeout arm is
+reached without any DIL calibration calls. For the timed studies:
+
+| Call from TRN1 reset | Transition | Event | DIL calls so far |
+|---:|---|---:|---:|
+| 2040 | 3 -> 4 (known -> data-directed TRN1) | 0 | 0 |
+| 14040 | 4 -> 5 (reference study) | 4 | 0 |
+| 21240 | 5 -> 6 (WaitForJd) | 5 | 0 |
+| 21324 | 6 -> 9 (Jd received) | 6 | 0 |
+| 21336 | 9 -> 10 (first DIL study) | 8 | 0 |
+| 25176 | 10 -> 11 (second study) | 0 | 3840 |
+| 49896 | 11 -> 12 (third study) | 16 | 28560 |
+| 50496 | 12 -> 16 (study finished) | 17 | 29160 |
+
+All three inputs follow these eight transitions on both sides. The fixture
+checks state and elapsed count against this independent observation table on
+every call, as well as exact paired decisions/events/transcripts. Each study
+stops at **50496/70000**, with count zero. The stopping point is **study complete,
+not Phase3 Terminated or data phase**; it does not execute `exitPhase3`.
+
+Instruction anchors: known-data count **24042**, reference-study reset
+**240a3** and live handler **244ce**, Jd unpack **24688**; JdNot requires run
+length >11 and position 12 modulo 72 at **23fb4–23fd9**, with the internal
+generator reset at **256e8**. The transmitter's `exitJd` at **2ad80–2add7**
+requires state 3 and nonzero duration and finishes at its own 72-symbol boundary.
+Timed ADI calls/branches include **24254**, **24a5f**, first-study finalization
+**2512a–25158**, and second-study finalization **2545c–25468**. The default
+study durations are 3840 + 24720 + 600 = **29160**, selected by production
+parameter comparisons, not by the fixture calling ADI finalizers.
+
+### Calibration, mapping and downstream comparisons
+
+The fixture observes cell counts after each real decision call, retaining an
+ever-seen bitmap. This measures **end-of-call nonzero-count observations**, not
+an instruction trace of every store. It is necessary: `uniteLinMappInfoOfUnsuspectedPhases`
+**41688–416a5** clears magnitude sums, counts and square sums after combining
+them. A final nonzero-count census alone would wrongly call the finite studies
+mostly unmeasured. All 690 observed cells are compared through the paired ADI
+postimages; each selected constellation code must have been observed.
+
+After state 16, `determineMaxUcode(116)` remains the explicit component max-code
+interface used by the manual case. Its argument matches the built-in descriptor's
+maximum. The enclosing caller's `dilMaxUcode` writer, codec/pad-gain pipeline,
+phase2 power negotiation and `setDigitalImairmentsInfo` are still outside the
+fixture. No learned maximum or usable mask is assigned. Real paired TRN2
+designers consume the resulting ADI, with the same explicitly bounded laws,
+lookahead, spectrum and power arguments as PR185.
+
+| Timed input | Seen cells / 768 | Live counts at stop / 768 | Positive descending selected levels / 48 | Max code, all 6 phases | `hardDecision(1000)` |
+|---|---:|---:|---:|---:|---:|
+| Unity | 690 | 12 | 48 | 116 | 988 |
+| Half | 690 | 12 | 48 | 116 | 622 |
+| Missing DIL | 690 | 690 | **0** | 80 | **0** |
+
+All three return TRN2 SUCCESS=1, frame bits 23, shaping rate 1, masks 702/768,
+and no alternate RBS. All 48 selected entries have observed counts even in the
+missing-input case. **Neither observed counts, the completion event, the mask
+count, nor designer SUCCESS establishes usable calibration.**
+
+Against each side's saved manual case, both finite studies have **0/768 primary
+level differences, 6/768 alternate differences, 0/768 mask differences**, and
+byte-identical complete TRN2 mappings. The six alternate differences reflect
+the different reference-code reset boundary (64 here, zero in the manual case);
+the alternate table is not selected. The missing-input study retains the trained
+reference, hence 6/768 primary and 6/768 alternate differences from the completely
+unaccumulated manual control, but the same unusable TRN2 mapping. Accumulator
+history is not claimed identical: live counts alone already distinguish it.
+
+Both finite studies feed their own actual mapping/calibration into a freshly
+constructed P4D component chain. Each reaches Ed in 12 calls, recovers 23 zero
+wire bits/frame, and executes the same six 2394-call measurement cycles. The
+positive evaluator request, MP group-size copy and explicit RRN/WaitForEd entry
+remain supplied exactly as before. The prior 24 cycles plus these 12 give
+**36 cycles / 86184 measurement calls per side**. No old case was replaced.
+
+Comparison surface: generated symbols, P3 state/count/event/frame and complete
+ADI bytes (around its independently checked own parameter pointer) every call;
+the internal/external DIL generator region +54..+397 on every DIL call; exact
+per-call diagnostics including silent calls; complete decoded Jd, learned ADI
+snapshot, mapping and finalization/design diagnostics. Parameters, descriptor
+and transmitter Jd are checked against own preimages. Guards and allocation
+release/bad-free counts are checked. This is not a claim of whole-P3 heap-graph
+identity at every instruction. The P4D phase retains the existing complete
+step/energy/guard and all-live-allocation immutability oracle, now also freezing
+the retired P3/Jd storage; 36 live allocations are observed during measurement.
+
+`DSPLIB_P4D_PERIOD_FAULT=study-missing` substitutes zero DIL on **both sides of
+the unity positive case**, retaining its positive requirements. Both still
+complete the study and return SUCCESS; both produce 0/48 usable levels and
+decision zero. The positive-output checks reject this with exit 1,
+**22/2871341 failed checks**. The shorter denominator excludes the six unadmitted
+measurement cycles. The baseline's explicit missing-DIL case checks this
+counterexample without crediting it as a positive connection.
+
+### Evaluator discriminator: inspected, still stopped at real error history
+
+The next producer is the **data** constellation designer, not this TRN2 designer.
+The newly inspected complete `V90ConstellationDesigner::process` symbol at
+**4cbd0** passes its float noise argument to `setConstellationToNoise` at
+**4cd2b** (or the forced-rate method at **4cf3d**). In the ordinary helper,
+**48ba8–48bde** derives the initial signed-short distance from that float;
+**497a2–497dc**, **49880–498b9**, and **498e0–49915** store the three
+float thresholds from the noise input and branch-specific factors. Rate-action
+history can retain/adjust distance, and `process` can rewrite parameter enables
+at **4d04d–4d095**. These are real input-dependent outputs, not TRN2 fields that
+can be copied into an evaluator as substitutes.
+
+The caller's **1d850 -> 1d87e–1d8a4** supplies those actual outputs to
+`updateCurrentConstellationData`; the setter clears the request. Equalizer
+`calcMeanErrorStatistics` **388c9–388f7** requires recorded errors (count or full
+buffer), otherwise its empty arm does not establish a trained noise estimate.
+Equalizer `process` **399f9–39a26** takes the block RMS, updates its smoothed
+error at +80 and passes that value plus the actual block sample count to
+`updateAvePdsnr`. The evaluator's **3e6f0** rejects an empty symbol count;
+its plain rate-down tests **3ebc0–3ec15** require error above the designed
+threshold and both elapsed-duration conditions before requesting silence.
+Later retrain/override arms may replace that request. The qualifying caller
+copy at **1cc01** remains unexecuted.
+
+**Stopping bound:** the fixture does not run the equalizer that precedes these
+P3 decisions or its later phase4/data error history. Consequently it has no
+jointly produced noise/duration input with which to claim a positive evaluator
+request. No invented noise, duration, counter, designer threshold or caller
+state was installed to close that gap. No dynamic data-designer/evaluator
+production result is claimed here. The next discriminating experiment is to
+compose the actual equalizer with this timed producer history, retain the
+recorded phase4 error statistics, pass those to each side's actual data designer,
+then drive a bounded finite channel degradation through real error updates and
+duration gates. Withheld/incorrect error history must reject the positive request
+on both sides. Earlier synchronization and remote Jd scheduling remain separate
+reachability questions. Raw consumed-dB/NaN observation remains deferred.
+
+### Serial verification and retained artifacts
+
+Artifact prefix: **`/tmp/opencode/issue183-p3-`**. The driver
+`/tmp/opencode/issue183_p3_run.py` records each complete command, working directory
+and direct return code in a sibling `.json`, with full combined output in `.log`.
+All reconstruction runs use the unchanged Gentoo GCC 3.4.2-r2 period profile,
+`DSPLIB_REPRODUCE_BUGS`, `-j1 J=1`; the focused logs print all C/source-C++/fixture-C++
+flags. `toolchain.log` executes GCC, G++, the compiler-selected assembler and ld;
+`image.log` records the image ID/digest. No modern or mutation-execution/mutsnap
+sweep was run.
+
+* `baseline`: unchanged 711782-check fixture, focused period 1/0, exit 0.
+* `targeted-1` through `targeted-5`: all focused period gates exit 0. `observed-1`,
+  `observed-2`, `observed-4` preserve incremental observation/check inventories;
+  they are development artifacts, not the final fixture identity.
+* Final focused `targeted-5`: **1 passed / 0 failed**, exit 0. Final fixture:
+  **3045107/3045107 exact checks**. No new unit binary; phase denominator stays 385.
+* `controls` and `controls-optimized-complete`: **11/11** each, exit 0;
+  `observers/` and `observers-optimized-complete/` retain each raw child exit,
+  full baseline/fault log and executable hash. The six postimage faults fail
+  10, 10775, 5, 55, 13 and 5 checks respectively out of 3045107.
+* `observer-negative`: optimized Python rejects an injected exit-0/empty-output
+  `study-missing` response, **1/1**, exit 0. Earlier responses are replayed from
+  the recorded control logs; this validates runner rejection, not another binary run.
+* `controls-optimized` is **incomplete**: the outer tool timed out after 120 s
+  spanning two sequential control runners. The ordinary runner had completed;
+  no optimized final status was written and no exit is inferred. Process inspection
+  confirmed no surviving runner/fixture before the separately named complete rerun.
+* Whole-symbol `*-dis.log` files retain the P3 constructors/reset/decision,
+  transmitter/Jd, caller, ADI reference study/unite, data designer/noise helpers,
+  equalizer and evaluator evidence. `demod-dis` and `equalizer-dis` are failed
+  symbol lookups (exit 1), superseded by `caller-dis` and `equalizer-correct-dis`;
+  they contain no usable instruction evidence.
+
+Reproduce with the existing focused/observer commands, adding the new fault:
+
+```sh
+make -j1 J=1 period T=t_v90p4dperiod
+python3 test/safety/test_v90p4dperiod_fixture.py build/period/t_v90p4dperiod
+python3 -O test/safety/test_v90p4dperiod_fixture.py build/period/t_v90p4dperiod
+DSPLIB_P4D_PERIOD_FAULT=study-missing build/period/t_v90p4dperiod # expected exit 1
+make -j1 J=1 phase
+python3 tools/refcheck.py
+git diff --check
+```
+
+Final serial gate record:
+
+| Gate | Result | Direct exit |
+|---|---|---:|
+| Focused Gentoo period (`targeted-5`) | 1 passed, 0 failed; 3045107 exact checks | 0 |
+| Ordinary / optimized observer controls | 11/11 each | 0 each |
+| Optimized false-clean response control | 1/1 rejected | 0 |
+| Full `make -j1 J=1 phase` (`phase.log`/`phase.json`) | **385 passed, 0 failed**; structural boundary OK | 0 |
+| Standalone refcheck | 14051 references, 2571 headings; 0 unresolved/pending/stale | 0 |
+| `git diff --check` | no whitespace errors | 0 |
+
+Phase was run under `nohup` with one job. It reports 2202 offset annotations,
+2679 live period assertions, 336 types/171 files/1 known duplicate, 600/600
+banners, partialcmp self-test 8/8 and TU attribution/order 11/11. The 7/7
+vendored manifest check passes; absent upstream checkout means upstream drift
+is still **not checked**. The anchor check validates 272 suites/10040 anchors;
+it is structural validation, not mutation execution.
+
+`identity.log` records these final SHA-256 identifiers; the executable agrees
+with both completed observer runners' `status.json`:
+
+```
+2d14e4ff057ae55a7d1d68984c0b85d667dbe8eab6370a7e4c0a6f4d440e23b6  test/unit/t_v90p4dperiod.cpp
+cee71ddf92a2489570e05c4fd103d93c0c626b1aef5142c46000c4809ce7057b  test/safety/test_v90p4dperiod_fixture.py
+81ff7de58f1f12e391d67b1040835828566eefd3b0638001d9010fa26d7ca676  build/period/t_v90p4dperiod
+```
+
+Independent review remains pending. The branch remains uncommitted and
+unpublished at base 6750e022; these results do not close #183.
+
+### Independent-review follow-up: malformed mapping containment
+
+Independent review approved the bounded study evidence and requested apparatus
+hardening before publication. The follow-up remains uncommitted/unpublished and
+changes only this audit, `t_v90p4dperiod.cpp` and its Python observer runner.
+
+The study observer previously used a produced constellation byte to index
+`seen[128]` and `linMapp[128]`, including a second lookup of the previous code,
+without checking the code's range. That could make a malformed-output probe
+exercise undefined observer behavior instead of reporting a controlled failure.
+
+`mapping_in_range` now checks all six active constellation sizes equal eight,
+and all 48 primary **and** 48 codec codes are below 128 before code-indexed
+observations or decoder use. Its own scan is fixed at eight entries, independent
+of the output size. The study's level/seen loop runs only after this preflight;
+the previous level is cached from the validated lookup rather than indexed
+again. Invalid mappings cannot reach `dm_reset`, `hardDecision` or downstream
+P4D. The earlier manual/matrix/Ed boundaries also preflight before decoder use,
+and the producer Ed level accessor checks its code immediately before indexing.
+Valid mappings retain the same production calls and exact expected values.
+This validates the fixture's eight-level shape and code domain, not every
+possible malformed field of an arbitrary mapping object.
+
+Two bounded probes, `mapping-128` and `mapping-255`, corrupt the unity-study
+designer's output at **constellation[5][0] on both sides**, after design and
+before any observer indexing or demapper reset. That slot is also the previous
+entry for index 1 in the old loop. Each probe reports
+`mapping code below 128 before use` and both sides' exact rejected coordinates;
+both report `dm_reset=0 hardDecision=0 P4D=0`. Each exits **1**, with
+**10/2897477 failed checks**, rather than crashing. The six blocked measurement
+cycles reduce the probe's denominator to **30 cycles**, while the valid baseline
+still executes all **36**. The normal and optimized Python runner uses explicit
+`require` checks for the ordinary exit, named failure, both-side rejection and
+blocked downstream reports, and the remaining cycle denominator.
+
+The optional coordinate evidence was strengthened without expanding the test
+domain: all six alternate-table differences are at **[phase 0..5][code 64]**,
+**timed 1980 versus manual 0**, in each of the three study cases on each side.
+The report contains 36 coordinate/value observations; the existing independent
+six-difference count and whole-ADI comparisons remain active. These inactive
+reset-seed entries stay 1980 even in the half-gain study; they are not newly
+claimed alternate-RBS training results.
+
+Artifacts use `/tmp/opencode/issue183-p3-hardening-` with the same direct-exit
+JSON/full-log driver. `focused` passes **1/0**, exit 0. The new valid fixture
+passes **3072611/3072611 exact checks** (27504 additional checks), with all prior
+state paths, mappings, decisions and cycle expectations retained. `controls`
+and `controls-optimized` each pass **13/13**, exit 0; `observers/` and
+`observers-optimized/` retain the complete baseline/probe output, raw exits and
+binary hash. The six older postimage-fault failure counts remain
+10/10775/5/55/13/5, now against denominator 3072611. No tolerance, production
+source change, modern sweep or mutation-execution sweep was introduced.
+
+The serial full-phase/refcheck completion record follows below.

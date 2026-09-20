@@ -27,6 +27,7 @@
 #include "dsplib/V90DilDescriptorSettings.h"
 #include "dsplib/V90TRN2Designer.h"
 #include "dsplib/V90ConstellationPower.h"
+#include "dsplib/V90Phase3Demodulator.h"
 
 typedef Descrambler<unsigned char, int> PeriodDescrambler;
 static const char *fault;
@@ -49,6 +50,15 @@ PAIR(p3m_ctor, (void *, void *, unsigned), "_ZN18V90Phase3ModulatorC1EP13V90Para
 PAIR(p3m_reset, (void *, PcmType, unsigned char, Phase3ModulatorState, unsigned, void *, void *, void *, unsigned),
  "_ZN18V90Phase3Modulator5resetE7PcmTypeh20Phase3ModulatorStatejP5V90JdP5V92JdPK19tagV90DILdescriptorj");
 PAIR(p3m_dtor, (void *), "_ZN18V90Phase3ModulatorD1Ev");
+PAIR(p3d_ctor, (void *, void *, void *, unsigned, void *), "_ZN20V90Phase3DemodulatorC1EP13V90ParametersP19V90SpectralVerifierjP25V90AutoDigitalImpDetector");
+PAIR(p3d_reset, (void *, PcmType, unsigned char, Phase3DemodulatorState, unsigned, void *, void *, void *, short, short, float, unsigned), "_ZN20V90Phase3Demodulator5resetE7PcmTypeh22Phase3DemodulatorStatejP5V90JdP5V92JdP19tagV90DILdescriptorssfj");
+PAIR(p3d_dtor, (void *), "_ZN20V90Phase3DemodulatorD1Ev");
+PAIR(jd_ctor, (void *, void *), "_ZN5V90JdC1EP13V90Parameters");
+PAIR(p3m_exitjd, (void *), "_ZN18V90Phase3Modulator6exitJdEv");
+int p3_symbol(void *) asm("_ZN18V90Phase3Modulator14generateSymbolEv");
+int ref_p3_symbol(void *) asm("ref__ZN18V90Phase3Modulator14generateSymbolEv");
+int p3_decision(void *, float) asm("_ZN20V90Phase3Demodulator11getDecisionEf");
+int ref_p3_decision(void *, float) asm("ref__ZN20V90Phase3Demodulator11getDecisionEf");
 PAIR(trn_ctor, (void *, void *, void *), "_ZN15V90TRN2DesignerC1EP13V90ParametersP21V90ConstellationPower");
 PAIR(power_ctor, (void *), "_ZN21V90ConstellationPowerC1Ev");
 int ce_evaluate(void *) asm("_ZN22V90ConnectionEvaluator18evaluateConnectionEv");
@@ -103,6 +113,9 @@ SLOT(gen, V90Phase3Modulator);
 SLOT(desc, tagV90DILdescriptor);
 SLOT(trn, V90TRN2Designer);
 SLOT(power, V90ConstellationPower);
+SLOT(p3, V90Phase3Demodulator);
+SLOT(jdt, V90Jd);
+SLOT(jdr, V90Jd);
 #undef SLOT
 #define P(s) (*(V90Phase4Demodulator *)p4[s])
 #define D(s) (*(V90Demapper *)dm[s])
@@ -118,6 +131,37 @@ SLOT(power, V90ConstellationPower);
 static void raw_eq(const char *what, const void *a, const void *b, unsigned n, long tag)
 {
  diff_eq_obj_(__FILE__, __LINE__, what, "raw bytes", a, b, n, tag);
+}
+
+/* Validate the fixture's entire active mapping before using any code as an
+ * ADI/seen index, or handing it to a production decoder. Scan a fixed eight
+ * entries: an invalid output size must not control this observer's bounds. */
+static int mapping_in_range(int s, long tag)
+{
+ int valid = 1;
+ for (unsigned p = 0; p < 6; ++p) {
+  diff_eq_int("mapping size is eight before use", M(s).constellationSize[p], 8, tag);
+  if (M(s).constellationSize[p] != 8) valid = 0;
+  for (unsigned i = 0; i < 8; ++i) {
+   unsigned c = M(s).constellation[p][i];
+   unsigned codec = M(s).codecConstellation[p][i];
+   diff_eq_int("mapping code below 128 before use", c < 128, 1, tag);
+   diff_eq_int("mapping codec code below 128 before use", codec < 128, 1, tag);
+   if (c >= 128 || codec >= 128) {
+    printf("mapping range rejection: side=%d phase=%u index=%u code=%u codec=%u\n", s, p, i, c, codec);
+    valid = 0;
+   }
+  }
+ }
+ return valid;
+}
+
+static short mapping_level(int s, unsigned phase, unsigned i, long tag)
+{
+ unsigned c = M(s).constellation[phase][i];
+ diff_eq_int("mapping level code below 128 before dereference", c < 128, 1, tag);
+ if (c >= 128) exit(diff_end());
+ return A(s).linMapp[phase][c];
 }
 
 static void guards(long tag)
@@ -146,6 +190,8 @@ static unsigned producer_samples[2];
 static short producer_result[2];
 static unsigned char calibrated[2][sizeof(V90AutoDigitalImpDetector)] __attribute__((aligned(8)));
 static short generated[2][40000];
+static unsigned char manual_calibration[3][2][sizeof(V90AutoDigitalImpDetector)] __attribute__((aligned(8)));
+static unsigned char manual_mapping[3][2][sizeof(V90MappingParams)] __attribute__((aligned(8)));
 static void produce_mapping(int s, unsigned mode)
 {
  unsigned char original_params[sizeof pa[0]];
@@ -261,6 +307,7 @@ static void construct(unsigned session, unsigned producer = 0)
    }
   }
   memcpy(mb[s], ma[s], sizeof(V90MappingParams));
+  if (!mapping_in_range(s, producer)) exit(diff_end());
   diff_eq_int("ADI reset selects mu law", A(s).pcmType, PCM_TYPE_MU_LAW, s);
   CALL(cp_ctor, s, (cp[s]));
   CALL(mp_ctor, s, (mp[s]));
@@ -317,12 +364,14 @@ static unsigned char ma_before[sizeof ma], mb_before[sizeof mb];
 static unsigned char host_before[sizeof host];
 static unsigned char gen_before[sizeof gen], desc_before[sizeof desc];
 static unsigned char trn_before[sizeof trn], power_before[sizeof power];
+static unsigned char p3_before[sizeof p3], jdt_before[sizeof jdt], jdr_before[sizeof jdr];
 
 static void freeze_peers(void)
 {
 #define SAVE(name) memcpy(name##_before, name, sizeof name)
  SAVE(pa); SAVE(ce); SAVE(ad); SAVE(cp); SAVE(mp); SAVE(ds); SAVE(ma); SAVE(mb); SAVE(host);
  SAVE(gen); SAVE(desc); SAVE(trn); SAVE(power);
+ SAVE(p3); SAVE(jdt); SAVE(jdr);
 #undef SAVE
  nheap = harness_alloc_live_set(heap, 128);
  if (nheap <= 0 || nheap > 128) { fprintf(stderr, "invalid heap denominator %d\n", nheap); exit(1); }
@@ -340,6 +389,7 @@ static void thaw_peers(long tag)
 #define CHECK(name) raw_eq(#name " immutable during measurement", name, name##_before, sizeof name, tag)
  CHECK(pa); CHECK(ce); CHECK(ad); CHECK(cp); CHECK(mp); CHECK(ds); CHECK(ma); CHECK(mb); CHECK(host);
  CHECK(gen); CHECK(desc); CHECK(trn); CHECK(power);
+ CHECK(p3); CHECK(jdt); CHECK(jdr);
 #undef CHECK
  void *live[128];
  diff_eq_int("measurement allocation count unchanged", harness_alloc_live_set(live, 128), nheap, tag);
@@ -410,6 +460,7 @@ static int enter_silence(unsigned session, long tag, int control = 0, unsigned p
  for (int s = 0; s < 2; ++s) {
   memcpy(old_after[s], &P(s).errorEnergyAfterEC, 4);
   memcpy(old_before[s], &P(s).errorEnergyBeforeEC, 4);
+  if (!mapping_in_range(s, tag)) exit(diff_end());
   CALL(dm_reset, s, (dm[s], ma[s]));
   CALL(dsc_reset, s, (ds[s], 0));
   CALL(p4_rrn, s, (p4[s]));
@@ -430,7 +481,7 @@ static int enter_silence(unsigned session, long tag, int control = 0, unsigned p
    diff_eq_int("CP handshake initially clear", P(s).int_0044, 0, tag);
   }
  }
- dsplib_debug_capture_reset();
+  dsplib_debug_capture_reset();
  dsplib_debug_capture_on = 1;
  unsigned calls;
  unsigned accepted[2] = {0, 0};
@@ -438,8 +489,8 @@ static int enter_silence(unsigned session, long tag, int control = 0, unsigned p
   short sample = session ? samples[calls] : -300;
   short sample_ref = sample;
   if (producer) {
-   sample = (short)-A(0).linMapp[calls % 6][M(0).constellation[calls % 6][0]];
-   sample_ref = (short)-A(1).linMapp[calls % 6][M(1).constellation[calls % 6][0]];
+   sample = (short)-mapping_level(0, calls % 6, 0, tag + calls);
+   sample_ref = (short)-mapping_level(1, calls % 6, 0, tag + calls);
    diff_eq_int("producer Ed input samples agree", sample, sample_ref, tag + calls);
   }
   int a = decision(p4[0], sample), b = ref_decision(p4[1], sample_ref);
@@ -546,8 +597,9 @@ static void cp_entry_matrix(void)
     cp_samples(samples, wire, 0, peer, kinds[0], kinds[1]);
     for (int s = 0; s < 2; ++s) {
      memcpy(old_before[s], &P(s).errorEnergyBeforeEC, 4);
-     memcpy(old_after[s], &P(s).errorEnergyAfterEC, 4);
-     CALL(dm_reset, s, (dm[s], ma[s]));
+      memcpy(old_after[s], &P(s).errorEnergyAfterEC, 4);
+      if (!mapping_in_range(s, tag)) exit(diff_end());
+      CALL(dm_reset, s, (dm[s], ma[s]));
      CALL(dsc_reset, s, (ds[s], 0));
      CALL(p4_rrn, s, (p4[s]));
      CALL(cp_reset, s, (cp[s]));
@@ -722,6 +774,9 @@ static void producer_boundary(void)
  unsigned char first_calibration[0xc00];
  for (unsigned mode = 1; mode <= 3; ++mode) {
   construct(0, mode);
+  memcpy(manual_calibration[mode-1], calibrated, sizeof calibrated);
+  for (int s = 0; s < 2; ++s)
+   memcpy(manual_mapping[mode-1][s], ma[s], sizeof(V90MappingParams));
   unsigned usable[2] = {0, 0};
   /* Missing samples are a fault control: do not credit the designer's
    * success flag alone as evidence of a usable constellation. */
@@ -729,8 +784,10 @@ static void producer_boundary(void)
    diff_eq_int("TRN2 default frame bits", M(s).word_0, 23, mode);
    diff_eq_int("TRN2 default shaper rate", M(s).shaperSR, 1, mode);
    diff_eq_int("TRN2 design returned success (not validity)", producer_result[s], 1, mode);
+   if (!mapping_in_range(s, mode)) exit(diff_end());
    CALL(dm_reset, s, (dm[s], ma[s]));
    unsigned distinct = 0, measured = 0;
+   if (!mapping_in_range(s, mode)) exit(diff_end());
    for (unsigned phase = 0; phase < 6; ++phase) {
     diff_eq_int("TRN2 default eight levels", M(s).constellationSize[phase], 8, mode);
     for (unsigned i = 0; i < 8; ++i) {
@@ -784,6 +841,314 @@ static void producer_boundary(void)
  printf("producer summary: 2 finite channel cases, 1 missing-calibration fault; evaluator request supplied\n");
 }
 
+/* DIL alone is not an Sd/TRN1/Jd history. Stop at the first terminal event;
+ * never continue through a default/uninitialized-return state. */
+static void ctor_dil_replay(void)
+{
+ for (unsigned mode = 1; mode <= 3; ++mode) {
+  harness_alloc_reset();
+  for (int s = 0; s < 2; ++s) {
+#define REPLAY_INIT(name, type) memset(name[s], 0, sizeof(type)); memset(name[s] + sizeof(type), 0x69, 32)
+   REPLAY_INIT(pa, V90Parameters); REPLAY_INIT(host, _tagModemParameters);
+   REPLAY_INIT(ad, V90AutoDigitalImpDetector); REPLAY_INIT(p3, V90Phase3Demodulator);
+   REPLAY_INIT(gen, V90Phase3Modulator); REPLAY_INIT(desc, tagV90DILdescriptor);
+#undef REPLAY_INIT
+   ((_tagModemParameters *)host[s])->minRate = 28000;
+   ((_tagModemParameters *)host[s])->maxRate = 56000;
+   CALL(param_ctor, s, (pa[s], host[s])); CALL(adi_ctor, s, (ad[s], pa[s]));
+   CALL(p3d_ctor, s, (p3[s], pa[s], 0, 0, ad[s]));
+   CALL(dil_descriptor, s, (desc[s], DIL_TYPE_ADI));
+   CALL(p3m_ctor, s, (gen[s], pa[s], 0));
+   CALL(p3m_reset, s, (gen[s], PCM_TYPE_MU_LAW, 0, P3M_STATE_DIL, 0, 0, 0, desc[s], 0));
+   memcpy(calibrated[s], ad[s], sizeof(V90AutoDigitalImpDetector));
+  }
+  unsigned calls = 0;
+  for (; calls < 32280; ++calls) {
+   int result[2], symbol[2];
+   dsplib_debug_capture_reset(); dsplib_debug_capture_on = 1;
+   for (int s = 0; s < 2; ++s) {
+    V90Phase3Demodulator &r = *(V90Phase3Demodulator *)p3[s];
+    unsigned old = r.state;
+    symbol[s] = s ? ref_dil_generate(gen[s]) : dil_generate(gen[s]);
+    float sample = mode == 3 ? 0.0f : mode == 2 ? symbol[s] / 2.0f : (float)symbol[s];
+    result[s] = s ? ref_p3_decision(p3[s], sample) : p3_decision(p3[s], sample);
+    if ((unsigned)r.state != old)
+     printf("P3 ctor path: mode=%u side=%d call=%u state=%u->%u event=%u\n",
+            mode, s, calls + 1, old, (unsigned)r.state, r.eventCode);
+   }
+   dsplib_debug_capture_on = 0;
+   diff_eq_int("P3 ctor replay independent symbols", symbol[0], symbol[1], calls);
+   diff_eq_int("P3 ctor replay decision", result[0], result[1], calls);
+   raw_eq("P3 ctor replay state", p3[0] + 0x28, p3[1] + 0x28, 12, calls);
+   diff_eq_int("P3 ctor replay transcript", transcript_exact("p3.ctor.replay", calls), 1, calls);
+   if (((V90Phase3Demodulator *)p3[0])->state >= 19 ||
+       ((V90Phase3Demodulator *)p3[1])->state >= 19) { ++calls; break; }
+  }
+  for (int s = 0; s < 2; ++s) {
+   V90Phase3Demodulator &r = *(V90Phase3Demodulator *)p3[s];
+   printf("P3 ctor replay: mode=%u side=%d calls=%u/32280 state=%u count=%u event=%u\n",
+          mode, s, calls, (unsigned)r.state, r.samplesInState, r.eventCode);
+   diff_eq_int("P3 ctor replay timeout duration", calls, 12000, mode);
+   diff_eq_int("P3 ctor replay timeout state", r.state, 20, mode);
+   diff_eq_int("P3 ctor replay timeout event", r.eventCode, 21, mode);
+   diff_eq_int("P3 ctor replay timeout count", r.samplesInState, 0, mode);
+   raw_eq("P3 ctor DIL does not calibrate", calibrated[s], ad[s], sizeof(V90AutoDigitalImpDetector), mode);
+   CALL(p3d_dtor, s, (p3[s])); CALL(p3m_dtor, s, (gen[s]));
+   unsigned char canary[32]; memset(canary, 0x69, 32);
+   raw_eq("P3 ctor replay guard", p3[s] + sizeof(V90Phase3Demodulator), canary, 32, mode);
+  }
+  diff_eq_int("P3 ctor replay allocations freed", harness_alloc.live, 0, mode);
+  diff_eq_int("P3 ctor replay no bad free", harness_alloc.bad_free, 0, mode);
+ }
+}
+
+/* Defined reset boundary, not ctor-to-study reachability. Earlier Sd/SdNot
+ * synchronization is assumed. The fixture responds to decoded Jd with the
+ * transmitter's actual exitJd method; no enclosing modem handshake is claimed.
+ * Missing-input control replaces only the received DIL, never its code labels.
+ */
+static void study_boundary(void)
+{
+ static const unsigned at[] = {0, 2040, 14040, 21240, 21324, 21336, 25176, 49896, 50496};
+ static const unsigned state[] = {3, 4, 5, 6, 9, 10, 11, 12, 16};
+ static unsigned char params_before[2][sizeof pa[0]], descriptor_before[2][sizeof desc[0]], tx_jd_before[2][sizeof jdt[0]];
+ for (unsigned mode = 1; mode <= 3; ++mode) {
+  harness_alloc_reset();
+  for (int s = 0; s < 2; ++s) {
+#define STUDY_INIT(name, type) memset(name[s], 0, sizeof(type)); memset(name[s] + sizeof(type), 0x69, 32)
+   STUDY_INIT(pa, V90Parameters); STUDY_INIT(host, _tagModemParameters);
+   STUDY_INIT(ad, V90AutoDigitalImpDetector); STUDY_INIT(p3, V90Phase3Demodulator);
+   STUDY_INIT(gen, V90Phase3Modulator); STUDY_INIT(desc, tagV90DILdescriptor);
+   STUDY_INIT(jdt, V90Jd); STUDY_INIT(jdr, V90Jd);
+#undef STUDY_INIT
+   ((_tagModemParameters *)host[s])->minRate = 28000;
+   ((_tagModemParameters *)host[s])->maxRate = 56000;
+   CALL(param_ctor, s, (pa[s], host[s]));
+   CALL(adi_ctor, s, (ad[s], pa[s]));
+   CALL(p3d_ctor, s, (p3[s], pa[s], 0, 0, ad[s]));
+   CALL(jd_ctor, s, (jdt[s], pa[s]));
+   CALL(jd_ctor, s, (jdr[s], pa[s]));
+   CALL(dil_descriptor, s, (desc[s], DIL_TYPE_ADI));
+   CALL(p3d_reset, s, (p3[s], PCM_TYPE_MU_LAW, 64, P3D_STATE_TRN1D_KNOWN_DATA,
+        0, jdr[s], 0, desc[s], 0, 1, 0.0f, 0));
+   CALL(p3m_ctor, s, (gen[s], pa[s], 0));
+   CALL(p3m_reset, s, (gen[s], PCM_TYPE_MU_LAW, 64, P3M_STATE_TRN1D,
+        0, jdt[s], 0, desc[s], 0));
+   memcpy(params_before[s], pa[s], sizeof pa[0]);
+   memcpy(descriptor_before[s], desc[s], sizeof desc[0]);
+   memcpy(tx_jd_before[s], jdt[s], sizeof jdt[0]);
+  }
+  unsigned calls = 0, dil_calls[2] = {0, 0}, studies[2] = {0, 0};
+  unsigned exits[2] = {0, 0};
+  unsigned valid[2] = {0, 0}, transitions[2] = {0, 0};
+  unsigned char seen[2][6][128] = {{{0}}};
+  for (; calls < 70000; ++calls) {
+   int result[2], symbol[2];
+   dsplib_debug_capture_reset(); dsplib_debug_capture_on = 1;
+   for (int s = 0; s < 2; ++s) {
+    V90Phase3Demodulator &r = *(V90Phase3Demodulator *)p3[s];
+    V90Phase3Modulator &g = *(V90Phase3Modulator *)gen[s];
+    unsigned old = r.state;
+    int dil_input = g.state == P3M_STATE_DIL;
+    symbol[s] = s ? ref_p3_symbol(gen[s]) : p3_symbol(gen[s]);
+    float sample = mode == 2 ? symbol[s] / 2.0f : (float)symbol[s];
+    if (dil_input) {
+     ++dil_calls[s];
+     if (mode == 3 || (mode == 1 && fault && !strcmp(fault, "study-missing"))) sample = 0.0f;
+    }
+    result[s] = s ? ref_p3_decision(p3[s], sample) : p3_decision(p3[s], sample);
+    for (unsigned p = 0; p < 6; ++p) for (unsigned c = 0; c < 128; ++c)
+     if (A(s).magnitudeCount[p][c]) seen[s][p][c] = 1;
+    if (old >= 10 && old <= 12) ++studies[s];
+    if (r.eventCode == 6) { CALL(p3m_exitjd, s, (gen[s])); ++exits[s]; }
+    if ((unsigned)r.state != old) {
+     ++transitions[s];
+     printf("P3 study path: mode=%u side=%d call=%u state=%u->%u event=%u dil=%u\n",
+            mode, s, calls + 1, old, (unsigned)r.state, r.eventCode, dil_calls[s]);
+    }
+    unsigned step = 0;
+    while (step < 8 && calls + 1 >= at[step + 1]) ++step;
+    diff_eq_int("P3 expected state path", r.state, state[step], calls);
+    diff_eq_int("P3 expected elapsed samples", r.samplesInState, calls + 1 - at[step], calls);
+    if (dil_input)
+     raw_eq("P3 internal DIL aligned with independent transmitter", (unsigned char *)&r.phase3Modulator + 0x54,
+            gen[s] + 0x54, sizeof(V90Phase3Modulator) - 0x54, calls);
+   }
+   dsplib_debug_capture_on = 0;
+   diff_eq_int("P3 independently generated symbol", symbol[0], symbol[1], calls);
+   diff_eq_int("P3 decision", result[0], result[1], calls);
+   raw_eq("P3 state count event", p3[0] + 0x28, p3[1] + 0x28, 12, calls);
+   diff_eq_int("P3 frame", ((V90Phase3Demodulator *)p3[0])->framePosition,
+               ((V90Phase3Demodulator *)p3[1])->framePosition, calls);
+   diff_eq_int("P3 transcript", transcript_exact("p3.study", calls), 1, calls);
+   raw_eq("P3 ADI step before pointer", ad[0], ad[1], 0x2814, calls);
+   raw_eq("P3 ADI step after pointer", ad[0] + 0x2818, ad[1] + 0x2818,
+          sizeof ad[0] - 0x2818, calls);
+   unsigned a = ((V90Phase3Demodulator *)p3[0])->state;
+   unsigned b = ((V90Phase3Demodulator *)p3[1])->state;
+   if (a == 16 || b == 16 || a >= 19 || b >= 19) { ++calls; break; }
+  }
+  dsplib_debug_capture_reset(); dsplib_debug_capture_on = 1;
+  for (int s = 0; s < 2; ++s) {
+   unsigned measured = 0, ever = 0;
+   for (unsigned p = 0; p < 6; ++p) for (unsigned c = 0; c < 128; ++c)
+    { if (A(s).magnitudeCount[p][c]) ++measured; if (seen[s][p][c]) ++ever; }
+   V90Phase3Demodulator &r = *(V90Phase3Demodulator *)p3[s];
+   diff_eq_int("P3 completed inside bound", calls, 50496, mode);
+   diff_eq_int("P3 study calls", studies[s], 29160, mode);
+   diff_eq_int("P3 independent DIL calls", dil_calls[s], 29160, mode);
+   diff_eq_int("P3 decoded Jd event", exits[s], 1, mode);
+   diff_eq_int("P3 transition denominator", transitions[s], 8, mode);
+   diff_eq_int("P3 completed state", r.state, 16, mode);
+   diff_eq_int("P3 completion event", r.eventCode, 17, mode);
+   diff_eq_int("P3 live cell observation denominator", ever, 690, mode);
+   diff_eq_int("P3 own ADI", r.autoDigitalImpDetector == (V90AutoDigitalImpDetector *)ad[s], 1, mode);
+   diff_eq_int("P3 own parameters", r.params == (V90Parameters *)pa[s], 1, mode);
+   diff_eq_int("P3 own receiver Jd", r.jd == (V90Jd *)jdr[s], 1, mode);
+   diff_eq_int("P3 own descriptor", r.dil == (tagV90DILdescriptor *)desc[s], 1, mode);
+   diff_eq_int("P3 ADI own parameters", A(s).params == (V90Parameters *)pa[s], 1, mode);
+   raw_eq("P3 preserves parameters and guard", pa[s], params_before[s], sizeof pa[0], mode);
+   raw_eq("P3 preserves descriptor and guard", desc[s], descriptor_before[s], sizeof desc[0], mode);
+   raw_eq("P3 preserves transmit Jd and guard", jdt[s], tx_jd_before[s], sizeof jdt[0], mode);
+   printf("P3 study boundary: mode=%u side=%d calls=%u/70000 state=%u count=%u event=%u DIL=%u study=%u cells=%u/768 seen=%u/768 Jd=%u\n",
+          mode, s, calls, (unsigned)r.state, r.samplesInState, r.eventCode,
+          dil_calls[s], studies[s], measured, ever, exits[s]);
+   CALL(adi_max, s, (ad[s], 116));
+   memcpy(calibrated[s], ad[s], sizeof(V90AutoDigitalImpDetector));
+   const V90AutoDigitalImpDetector *manual = (const V90AutoDigitalImpDetector *)manual_calibration[mode-1][s];
+   unsigned leveldiff = 0, altdiff = 0, maskdiff = 0, manualcells = 0;
+   for (unsigned p = 0; p < 6; ++p) for (unsigned c = 0; c < 128; ++c) {
+    leveldiff += A(s).linMapp[p][c] != manual->linMapp[p][c];
+     altdiff += A(s).linMappAlt[p][c] != manual->linMappAlt[p][c];
+     if (A(s).linMappAlt[p][c] != manual->linMappAlt[p][c])
+      printf("P3 alternate difference: mode=%u side=%d phase=%u code=%u timed=%d manual=%d\n",
+             mode, s, p, c, A(s).linMappAlt[p][c], manual->linMappAlt[p][c]);
+    maskdiff += A(s).usableMask[p][c] != manual->usableMask[p][c];
+    manualcells += manual->magnitudeCount[p][c] != 0;
+   }
+   printf("P3 manual comparison: mode=%u side=%d primary-diff=%u/768 alternate-diff=%u/768 mask-diff=%u/768 manual-live-cells=%u/768\n",
+          mode, s, leveldiff, altdiff, maskdiff, manualcells);
+   memset(ma[s], 0, sizeof(V90MappingParams));
+   memset(trn[s], 0, sizeof(V90TRN2Designer));
+   memset(power[s], 0, sizeof(V90ConstellationPower));
+   memset(ma[s] + sizeof(V90MappingParams), 0x69, 32);
+   memset(trn[s] + sizeof(V90TRN2Designer), 0x69, 32);
+   memset(power[s] + sizeof(V90ConstellationPower), 0x69, 32);
+   CALL(power_ctor, s, (power[s]));
+   CALL(trn_ctor, s, (trn[s], pa[s], power[s]));
+   short design = s ? ref_trn_design(trn[s], ma[s], A(s).linMapp, A(s).linMappAlt,
+     A(s).usableMask, A(s).altRbsFlag, PCM_TYPE_MU_LAW, PCM_TYPE_MU_LAW,
+     A(s).unSuspectedPhase, A(s).maxUcode, 0, 1, (V90SpecialSpectralConditions)0) :
+    trn_design(trn[s], ma[s], A(s).linMapp, A(s).linMappAlt,
+     A(s).usableMask, A(s).altRbsFlag, PCM_TYPE_MU_LAW, PCM_TYPE_MU_LAW,
+     A(s).unSuspectedPhase, A(s).maxUcode, 0, 1, (V90SpecialSpectralConditions)0);
+   raw_eq("P3 design preserves learned ADI", calibrated[s], ad[s], sizeof(V90AutoDigitalImpDetector), mode);
+   if (mode == 1 && fault && (!strcmp(fault, "mapping-128") || !strcmp(fault, "mapping-255")))
+    M(s).constellation[5][0] = !strcmp(fault, "mapping-128") ? 128 : 255;
+   int mapping_ok = mapping_in_range(s, mode);
+   unsigned selected = 0, positive = 0, masks = 0;
+   for (unsigned p = 0; p < 6; ++p) {
+    diff_eq_int("P3 no alternate RBS", A(s).altRbsFlag[p], 0, mode);
+    for (unsigned c = 0; c < 128; ++c) if (A(s).usableMask[p][c]) ++masks;
+    short previous = 0;
+    if (mapping_ok) for (unsigned i = 0; i < 8; ++i) {
+     unsigned c = M(s).constellation[p][i];
+     if (seen[s][p][c]) ++selected;
+     short v = A(s).linMapp[p][c];
+     if (v > 0 && (!i || v < previous)) ++positive;
+     previous = v; /* Only a previously range-checked level, never another index. */
+    }
+   }
+   CALL(dm_ctor, s, (dm[s], 72, pa[s], ad[s]));
+   short hard = 0;
+   if (mapping_ok) {
+    CALL(dm_reset, s, (dm[s], ma[s]));
+    hard = s ? ref_dm_hard(dm[s], 1000) : dm_hard(dm[s], 1000);
+   } else {
+    printf("mapping downstream blocked: mode=%u side=%d dm_reset=0 hardDecision=0 P4D=0\n", mode, s);
+   }
+   valid[s] = positive;
+   diff_eq_int("P3 usable descending levels required", positive, mode == 3 ? 0 : 48, mode);
+   diff_eq_int("P3 downstream decision requires study input", hard, mode == 1 ? 988 : mode == 2 ? 622 : 0, mode);
+   diff_eq_int("P3 selected cells observed", selected, 48, mode);
+   diff_eq_int("P3 designer success is not validity", design, 1, mode);
+   diff_eq_int("P3 default frame bits", M(s).word_0, 23, mode);
+   diff_eq_int("P3 default shaper", M(s).shaperSR, 1, mode);
+   diff_eq_int("P3 usable mask denominator", masks, 702, mode);
+   diff_eq_int("P3 primary calibration comparison", leveldiff, mode == 3 ? 6 : 0, mode);
+   diff_eq_int("P3 alternate calibration comparison", altdiff, 6, mode);
+   diff_eq_int("P3 mask comparison", maskdiff, 0, mode);
+   diff_eq_int("P3 live cells after timed finalization", measured, mode == 3 ? 690 : 12, mode);
+   for (unsigned p = 0; p < 6; ++p)
+    diff_eq_int("P3 measured maximum", A(s).maxUcode[p], mode == 3 ? 80 : 116, mode);
+   raw_eq("P3 mapping matches manual-boundary mapping", ma[s], manual_mapping[mode-1][s], sizeof(V90MappingParams), mode);
+   printf("P3 study design: mode=%u side=%d result=%d bits=%u selected=%u/48 positive=%u/48 masks=%u/768 max=%u,%u,%u,%u,%u,%u decision1000=%d manual-map-equal=%d manual-levels-equal=%d\n",
+    mode, s, design, M(s).word_0, selected, positive, masks,
+    A(s).maxUcode[0], A(s).maxUcode[1], A(s).maxUcode[2], A(s).maxUcode[3], A(s).maxUcode[4], A(s).maxUcode[5], hard,
+    !memcmp(ma[s], manual_mapping[mode-1][s], sizeof(V90MappingParams)),
+    !memcmp(ad[s], manual_calibration[mode-1][s], 0xc00));
+   CALL(dm_dtor, s, (dm[s]));
+   CALL(p3d_dtor, s, (p3[s])); CALL(p3m_dtor, s, (gen[s]));
+   unsigned char canary[32]; memset(canary, 0x69, sizeof canary);
+#define STUDY_GUARD(name, type) raw_eq(#name " study guard", name[s] + sizeof(type), canary, 32, mode)
+   STUDY_GUARD(p3, V90Phase3Demodulator); STUDY_GUARD(gen, V90Phase3Modulator);
+   STUDY_GUARD(ad, V90AutoDigitalImpDetector); STUDY_GUARD(desc, tagV90DILdescriptor);
+   STUDY_GUARD(jdt, V90Jd); STUDY_GUARD(jdr, V90Jd);
+   STUDY_GUARD(pa, V90Parameters); STUDY_GUARD(host, _tagModemParameters);
+   STUDY_GUARD(ma, V90MappingParams); STUDY_GUARD(trn, V90TRN2Designer);
+   STUDY_GUARD(power, V90ConstellationPower); STUDY_GUARD(dm, V90Demapper);
+#undef STUDY_GUARD
+  }
+  dsplib_debug_capture_on = 0;
+  diff_eq_int("P3 finalization and design transcript", transcript_exact("p3.study.design", mode), 1, mode);
+  for (int s = 0; s < 2; ++s)
+   diff_eq_int("P3 design diagnostic nonempty", dsplib_debug_capture_size(s) > 0, 1, mode);
+  raw_eq("P3 decoded Jd and guard", jdr[0], jdr[1], sizeof jdr[0], mode);
+  raw_eq("P3 learned snapshot before pointer", calibrated[0], calibrated[1], 0x2814, mode);
+  raw_eq("P3 learned snapshot after pointer", calibrated[0] + 0x2818, calibrated[1] + 0x2818,
+         sizeof(V90AutoDigitalImpDetector) - 0x2818, mode);
+  raw_eq("P3 ADI before parameter pointer", ad[0], ad[1], 0x2814, mode);
+  raw_eq("P3 mapping", ma[0], ma[1], sizeof ma[0], mode);
+  raw_eq("P3 ADI after parameter pointer", ad[0] + 0x2818, ad[1] + 0x2818,
+         sizeof ad[0] - 0x2818, mode);
+  diff_eq_int("P3 study allocations freed", harness_alloc.live, 0, mode);
+  diff_eq_int("P3 study no bad free", harness_alloc.bad_free, 0, mode);
+  if (mode != 3 && valid[0] == 48 && valid[1] == 48) {
+   /* Same P4D component entry as the manual case, now with P3-produced ADI.
+    * The positive evaluator outcome is STILL supplied, not relabelled. */
+   for (int s = 0; s < 2; ++s) {
+#define STUDY_RX_INIT(name, type) memset(name[s], 0, sizeof(type)); memset(name[s] + sizeof(type), 0x69, 32)
+    STUDY_RX_INIT(ce, V90ConnectionEvaluator); STUDY_RX_INIT(cp, V90CP);
+    STUDY_RX_INIT(mp, V90MP); STUDY_RX_INIT(ds, PeriodDescrambler);
+    STUDY_RX_INIT(dm, V90Demapper); STUDY_RX_INIT(mb, V90MappingParams);
+    STUDY_RX_INIT(p4, V90Phase4Demodulator);
+#undef STUDY_RX_INIT
+    memset(p4[s], 0xa5, sizeof(V90Phase4Demodulator));
+    CALL(ce_ctor, s, (ce[s], pa[s])); C(s).silenceRrnRequest = 1;
+    memcpy(mb[s], ma[s], sizeof(V90MappingParams));
+    CALL(cp_ctor, s, (cp[s])); CALL(mp_ctor, s, (mp[s]));
+    CALL(dsc_ctor, s, (ds[s], 18, 23, 99)); CALL(dsc_reset, s, (ds[s], 0));
+    CALL(dm_ctor, s, (dm[s], 72, pa[s], ad[s]));
+    CALL(p4_ctor, s, (p4[s], ma[s], mb[s], dm[s], cp[s], mp[s], ds[s], ce[s], pa[s], (void *)0, ad[s], 0));
+    CALL(p4_reset, s, (p4[s], 0, P4D_STATE_WAIT_FOR_RI, 0, 0));
+   }
+   for (unsigned cycle = 0; cycle < 6; ++cycle) {
+    long tag = 4000000L + mode * 100000L + cycle * 5000L;
+    if (!enter_silence(0, tag, 0, mode)) break;
+    measure(0, cycle, tag + 200);
+   }
+   for (int s = 0; s < 2; ++s) {
+    CALL(p4_dtor, s, (p4[s])); CALL(dm_dtor, s, (dm[s]));
+    CALL(dsc_dtor, s, (ds[s])); CALL(cp_dtor, s, (cp[s]));
+   }
+   guards(mode);
+   diff_eq_int("P3 downstream allocations freed", harness_alloc.live, 0, mode);
+   diff_eq_int("P3 downstream no bad free", harness_alloc.bad_free, 0, mode);
+  }
+ }
+ printf("P3 study summary: 3/3 cases; 50496 calls/side/case; timed study, evaluator request supplied\n");
+}
+
 int main(void)
 {
  diff_begin("V90Phase4Demodulator: default-timing component silence lifecycle");
@@ -791,7 +1156,8 @@ int main(void)
  if (fault && strcmp(fault, "return") && strcmp(fault, "energy") &&
      strcmp(fault, "state") && strcmp(fault, "guard") &&
      strcmp(fault, "peer") && strcmp(fault, "transcript") && strcmp(fault, "cp-crc") &&
-     strcmp(fault, "calibration-missing")) {
+      strcmp(fault, "calibration-missing") && strcmp(fault, "study-missing") &&
+      strcmp(fault, "mapping-128") && strcmp(fault, "mapping-255")) {
   diff_eq_int("unknown observer probe", 0, 1, 0);
   return diff_end();
  }
@@ -817,5 +1183,7 @@ int main(void)
  }
  cp_entry_matrix();
  producer_boundary();
+ ctor_dil_replay();
+ study_boundary();
  return diff_end();
 }
