@@ -45,8 +45,21 @@ def main():
     count = int(match.group(1))
     require(count > 0, count)
     require(text.count("measurement calls=2394/2394 transitions=4/4") == 12, text)
-    require(text.count("Ed calls=12/192") == 12, text)
+    require(text.count("session=0 Ed calls=12/192") == 6, text)
+    require(text.count("session=1 Ed calls=48/192") == 6, text)
+    for control in ("corrupt", "missing"):
+        require(text.count(f"CP control={control} calls=192/192 accepted=0/2 no Ed entry") == 1, text)
+    matrix = re.findall(r"^CP matrix: local=([01]) peer=([01]) case=(\S+)", text, re.M)
+    names = {"pair", "CP-only", "CPnot-only", "reverse", "bad-CP",
+             "bad-CPnot", "omit-CP", "omit-CPnot", "both-bad", "neither"}
+    require(len(matrix) == 40 and set(matrix) == {
+        (local, peer, name) for local in "01" for peer in "01" for name in names
+    }, matrix)
+    require(text.count("CP matrix summary: 40/40 cells, 2856 sample calls per side, "
+                       "20 nonzero peer-copy observations") == 1, text)
     print(f"baseline: exit 0; {count}/{count} checks; 12/12 cycles")
+    print("CP matrix: 40/40 named cells (34 distinct inputs including local request); "
+          "2856 calls per side; 20 nonzero peer copies")
     probes = {
         "return": "measurement return agrees",
         "energy": "after energy exact",
@@ -62,15 +75,21 @@ def main():
         verdict = re.search(r"FAIL V90Phase4Demodulator: default-timing component silence lifecycle (\d+)/(\d+) checks failed", text)
         require(verdict and int(verdict.group(1)) > 0 and int(verdict.group(2)) == count, (probe, text))
         print(f"probe {probe}: exit 1; named observer fired; {verdict.group(1)}/{count} failed")
+    # Alter the message, not an observed postimage: CRC rejection must make
+    # the positive-entry requirement fail, even when both implementations agree.
+    rc, text = run("cp-crc")
+    require(rc == 1 and "two CRC-validated CP messages" in text and
+            "Ed reached silence within bound" in text and "FAIL" in text, (rc, text))
+    print("probe cp-crc: exit 1; corrupted message rejected by positive-entry oracle")
     rc, text = run("unknown")
     require(rc == 1 and "unknown observer probe" in text, (rc, text))
     print("unknown probe: exit 1; rejected")
-    print("period fixture controls: 8/8 passed (baseline + 6 faults + unknown)")
+    print("period fixture controls: 9/9 passed (baseline with 2 CP rejection cases + 7 faults + unknown)")
     if args.artifacts:
         (args.artifacts / "status.json").write_text(json.dumps({
             "binary": str(Path(args.binary).resolve()),
             "sha256": hashlib.sha256(Path(args.binary).read_bytes()).hexdigest(),
-            "baseline_checks": count, "controls_passed": 8, "runs": records,
+            "baseline_checks": count, "controls_passed": 9, "runs": records,
         }, indent=2) + "\n")
 
 
