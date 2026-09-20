@@ -28,6 +28,8 @@
 #include "dsplib/V90TRN2Designer.h"
 #include "dsplib/V90ConstellationPower.h"
 #include "dsplib/V90Phase3Demodulator.h"
+#include "dsplib/V90Equalizer.h"
+#include "dsplib/V90ConstellationDesigner.h"
 
 typedef Descrambler<unsigned char, int> PeriodDescrambler;
 static const char *fault;
@@ -92,6 +94,30 @@ int decision(void *, short) asm("_ZN20V90Phase4Demodulator11getDecisionEs");
 int ref_decision(void *, short) asm("ref__ZN20V90Phase4Demodulator11getDecisionEs");
 short dm_hard(void *, short) asm("_ZN11V90Demapper12hardDecisionEs");
 short ref_dm_hard(void *, short) asm("ref__ZN11V90Demapper12hardDecisionEs");
+PAIR(equ_ctor, (void *, unsigned, unsigned, void *, void *, void *, void *, void *, void *, void *, void *, int),
+ "_ZN12V90EqualizerC1EjjP20V90Phase3DemodulatorP20V90Phase4DemodulatorP11V90DemapperP22V90ConnectionEvaluatorP19V90SpectralVerifierP13V90ParametersP12V90ResamplerP12V90PreFilter20V90ComputationalMode");
+PAIR(equ_dtor, (void *), "_ZN12V90EqualizerD1Ev");
+PAIR(equ_reset, (void *, unsigned), "_ZN12V90Equalizer5resetEj");
+int equ_process(void *, float *, unsigned, short *, float *, unsigned *) asm("_ZN12V90Equalizer7processEPfjPsS0_Rj");
+int ref_equ_process(void *, float *, unsigned, short *, float *, unsigned *) asm("ref__ZN12V90Equalizer7processEPfjPsS0_Rj");
+int equ_enter_dp(void *) asm("_ZN12V90Equalizer14enterDataPhaseEv");
+int ref_equ_enter_dp(void *) asm("ref__ZN12V90Equalizer14enterDataPhaseEv");
+float equ_calcmean(void *) asm("_ZN12V90Equalizer23calcMeanErrorStatisticsEv");
+float ref_equ_calcmean(void *) asm("ref__ZN12V90Equalizer23calcMeanErrorStatisticsEv");
+PAIR(cd_ctor, (void *, void *, void *, void *), "_ZN24V90ConstellationDesignerC1EP13V90ParametersP12V90PreFilterP21V90ConstellationPower");
+PAIR(cd_dtor, (void *), "_ZN24V90ConstellationDesignerD1Ev");
+PAIR(cd_reset, (void *), "_ZN24V90ConstellationDesigner5resetEv");
+int cd_process(void *, unsigned, void *, float, int, void *, short(*)[128], short(*)[128], short *, unsigned char *, unsigned char *, unsigned char, __tHardwareCodecTypes__, unsigned, V90SpecialSpectralConditions)
+ asm("_ZN24V90ConstellationDesigner7processEjP25V90AutoDigitalImpDetectorfiP16V90MappingParamsPA128_sS5_PsPhS7_h23__tHardwareCodecTypes__j28V90SpecialSpectralConditions");
+int ref_cd_process(void *, unsigned, void *, float, int, void *, short(*)[128], short(*)[128], short *, unsigned char *, unsigned char *, unsigned char, __tHardwareCodecTypes__, unsigned, V90SpecialSpectralConditions)
+ asm("ref__ZN24V90ConstellationDesigner7processEjP25V90AutoDigitalImpDetectorfiP16V90MappingParamsPA128_sS5_PsPhS7_h23__tHardwareCodecTypes__j28V90SpecialSpectralConditions");
+PAIR(ce_updccd, (void *, short, float, float, float), "_ZN22V90ConnectionEvaluator30updateCurrentConstellationDataEsfff");
+int dm_process(void *, unsigned char *, unsigned *) asm("_ZN11V90Demapper7processEPhRj");
+int ref_dm_process(void *, unsigned char *, unsigned *) asm("ref__ZN11V90Demapper7processEPhRj");
+int jd_maxla(void *) asm("_ZN5V90Jd15getMaxLookaheadEv");
+int ref_jd_maxla(void *) asm("ref__ZN5V90Jd15getMaxLookaheadEv");
+int jd_mask(void *) asm("_ZN5V90Jd12getRatesMaskEv");
+int ref_jd_mask(void *) asm("ref__ZN5V90Jd12getRatesMaskEv");
 #undef PAIR
 }
 
@@ -116,6 +142,10 @@ SLOT(power, V90ConstellationPower);
 SLOT(p3, V90Phase3Demodulator);
 SLOT(jdt, V90Jd);
 SLOT(jdr, V90Jd);
+SLOT(eq, V90Equalizer);
+SLOT(p4e, V90Phase4Demodulator);
+SLOT(cd, V90ConstellationDesigner);
+SLOT(jd, V90Jd);
 #undef SLOT
 #define P(s) (*(V90Phase4Demodulator *)p4[s])
 #define D(s) (*(V90Demapper *)dm[s])
@@ -192,6 +222,8 @@ static unsigned char calibrated[2][sizeof(V90AutoDigitalImpDetector)] __attribut
 static short generated[2][40000];
 static unsigned char manual_calibration[3][2][sizeof(V90AutoDigitalImpDetector)] __attribute__((aligned(8)));
 static unsigned char manual_mapping[3][2][sizeof(V90MappingParams)] __attribute__((aligned(8)));
+static unsigned char study_calibration[2][sizeof(V90AutoDigitalImpDetector)] __attribute__((aligned(8)));
+static unsigned char study_mapping[2][sizeof(V90MappingParams)] __attribute__((aligned(8)));
 static void produce_mapping(int s, unsigned mode)
 {
  unsigned char original_params[sizeof pa[0]];
@@ -1043,6 +1075,10 @@ static void study_boundary(void)
      A(s).usableMask, A(s).altRbsFlag, PCM_TYPE_MU_LAW, PCM_TYPE_MU_LAW,
      A(s).unSuspectedPhase, A(s).maxUcode, 0, 1, (V90SpecialSpectralConditions)0);
    raw_eq("P3 design preserves learned ADI", calibrated[s], ad[s], sizeof(V90AutoDigitalImpDetector), mode);
+   if (mode == 1) {
+    memcpy(study_calibration[s], calibrated[s], sizeof(V90AutoDigitalImpDetector));
+    memcpy(study_mapping[s], ma[s], sizeof(V90MappingParams));
+   }
    if (mode == 1 && fault && (!strcmp(fault, "mapping-128") || !strcmp(fault, "mapping-255")))
     M(s).constellation[5][0] = !strcmp(fault, "mapping-128") ? 128 : 255;
    int mapping_ok = mapping_in_range(s, mode);
@@ -1149,15 +1185,265 @@ static void study_boundary(void)
  printf("P3 study summary: 3/3 cases; 50496 calls/side/case; timed study, evaluator request supplied\n");
 }
 
+/* Discriminator, and the bounded NEGATIVE result it returns: can the SUPPLIED
+ * evaluator request be replaced by one PRODUCED by the actual equalizer ->
+ * data-constellation designer -> updateCurrentConstellationData -> equalizer
+ * error updates -> evaluateConnection chain, on top of the timed study's
+ * produced calibration/mapping (captured as study_calibration/study_mapping)?
+ *
+ * It does not, at this boundary, and the test asserts the measured reason.
+ * The equalizer feeds the evaluator's `avePdsnr` directly on every completed
+ * block: `connEval->updateAvePdsnr(meanErrorEnergyCurrent, blockSampleCount)`
+ * at V90Equalizer.cpp:2676.  (The caller's `evaluateMeanErrorStdPhase4` is a
+ * stub returning 0 -- V90ConnectionEvaluator.cpp:417 -- and feeds nothing.)
+ * `evaluateConnection`'s rate-down arm fires only when `avePdsnr > threshDown`
+ * (V90ConnectionEvaluator.cpp:1069), with `threshDown` set from the designer's
+ * rate-down threshold by `updateCurrentConstellationData`
+ * (V90ConnectionEvaluator.cpp:309).  The real smoothed noise stays below that
+ * threshold, so the condition is not met and no request fires; the evaluator
+ * then clears `avePdsnr` on return (V90ConnectionEvaluator.cpp:1563).
+ *
+ * The separately recorded meanErrorEnergy buffer and its
+ * `calcMeanErrorStatistics`/state-3 gate (V90Equalizer.cpp:1752, 2211-2237)
+ * are a different statistic and lifecycle and are NOT the reason this request
+ * is absent; the fixture does not claim they are.
+ *
+ * The designer still receives the equalizer's real smoothed block RMS
+ * (meanErrorEnergyCurrent), maintained by `process` on every real block
+ * completion -- an actual equalizer output, never a planted noise.  No error,
+ * count, threshold, request or caller state is assigned.  Phase A (dither 7)
+ * establishes that real noise; Phase B (dither 12) drives the real error
+ * updates through the full 160000-symbol data duration and evaluates the
+ * connection on every chunk.  The fault probe eval-missing withholds Phase A,
+ * so the design noise is zero and the positive requirement that the design
+ * input come from real equalizer history must fail.
+ */
+static void drive_eval_pair(float *in, unsigned nsym, long tag)
+{
+ static short outsym[2][160];
+ static float outflt[2][160];
+ static unsigned char bits[2][512];
+ unsigned nOut[2], nbits[2];
+ for (int s = 0; s < 2; ++s)
+  if (s) ref_equ_process(eq[s], in, 2 * nsym, outsym[s], outflt[s], &nOut[s]);
+  else equ_process(eq[s], in, 2 * nsym, outsym[s], outflt[s], &nOut[s]);
+ for (int s = 0; s < 2; ++s)
+  diff_eq_int("eval equalizer nOut", nOut[s], nsym, tag);
+ raw_eq("eval equalizer output symbols agree", outsym[0], outsym[1], nsym * sizeof(short), tag);
+ raw_eq("eval equalizer output floats agree", outflt[0], outflt[1], nsym * sizeof(float), tag);
+ /* +0x70..+0x98: the block/error scalars.  +0x98 onwards is the
+  * meanErrorEnergy pointer, which holds two different addresses. */
+ raw_eq("eval equalizer block step agrees", eq[0] + 0x70, eq[1] + 0x70, 0x28, tag);
+ raw_eq("eval average agrees", ce[0] + 0x70, ce[1] + 0x70, 8, tag);
+ /* The real caller drains the demapper between equalizer calls
+  * (progress: demapper->process at 1d903); without it the sample buffer
+  * fills at 72 and hardDecision returns zero thereafter. */
+ for (int s = 0; s < 2; ++s)
+  if (s) ref_dm_process(dm[s], bits[s], &nbits[s]);
+  else dm_process(dm[s], bits[s], &nbits[s]);
+ diff_eq_int("eval demapper bit count agrees", nbits[0], nbits[1], tag);
+ raw_eq("eval demapper bits agree", bits[0], bits[1], nbits[0], tag);
+}
+
+static void evaluator_boundary(void)
+{
+ static const unsigned SYM = 160, BLK = 160;
+ static const unsigned BLOCKS_A = 100, BLOCKS_B = 900, CHUNK = 100;
+ static const int DITHER_A = 7, DITHER_B = 11;
+ static const unsigned NCALL = BLOCKS_B / CHUNK;
+ short base[2];
+ float noise[2];
+ float thresh[2][3];
+ short dmin[2];
+ int design[2];
+ unsigned fired[2] = {0, 0};
+ unsigned gate_calls = 0;
+ int skip_a = fault && !strcmp(fault, "eval-missing");
+ float preAve[2] = {0, 0};
+ float inbuf[2 * SYM];
+ for (int s = 0; s < 2; ++s) {
+#define EVAL_INIT(name, type) memset(name[s], 0, sizeof(type)); memset(name[s] + sizeof(type), 0x69, 32)
+  EVAL_INIT(pa, V90Parameters); EVAL_INIT(host, _tagModemParameters);
+  EVAL_INIT(ad, V90AutoDigitalImpDetector);
+  EVAL_INIT(ma, V90MappingParams); EVAL_INIT(mb, V90MappingParams);
+  EVAL_INIT(ce, V90ConnectionEvaluator);
+  EVAL_INIT(dm, V90Demapper); EVAL_INIT(p4, V90Phase4Demodulator);
+  EVAL_INIT(p4e, V90Phase4Demodulator);
+  EVAL_INIT(cp, V90CP); EVAL_INIT(mp, V90MP); EVAL_INIT(ds, PeriodDescrambler);
+  EVAL_INIT(eq, V90Equalizer); EVAL_INIT(cd, V90ConstellationDesigner);
+  EVAL_INIT(power, V90ConstellationPower); EVAL_INIT(jd, V90Jd);
+#undef EVAL_INIT
+  ((_tagModemParameters *)host[s])->minRate = 28000;
+  ((_tagModemParameters *)host[s])->maxRate = 56000;
+  CALL(param_ctor, s, (pa[s], host[s]));
+  /* Adopt the timed study's produced calibration/mapping; only the
+   * parameter pointer is re-pointed at this side's own block. */
+  memcpy(ad[s], study_calibration[s], sizeof(V90AutoDigitalImpDetector));
+  ((V90AutoDigitalImpDetector *)ad[s])->params = (V90Parameters *)pa[s];
+  memcpy(ma[s], study_mapping[s], sizeof(V90MappingParams));
+  memcpy(mb[s], ma[s], sizeof(V90MappingParams));
+  CALL(ce_ctor, s, (ce[s], pa[s]));
+  CALL(dm_ctor, s, (dm[s], 72, pa[s], ad[s]));
+  CALL(dm_reset, s, (dm[s], ma[s]));
+  CALL(cp_ctor, s, (cp[s])); CALL(mp_ctor, s, (mp[s]));
+  CALL(dsc_ctor, s, (ds[s], 18, 23, 99)); CALL(dsc_reset, s, (ds[s], 0));
+  CALL(p4_ctor, s, (p4[s], ma[s], mb[s], dm[s], cp[s], mp[s], ds[s], ce[s], pa[s], (void *)0, ad[s], 0));
+  CALL(p4_reset, s, (p4[s], 0, P4D_STATE_WAIT_FOR_RI, 0, 0));
+  CALL(p4_ctor, s, (p4e[s], ma[s], mb[s], dm[s], cp[s], mp[s], ds[s], ce[s], pa[s], (void *)0, ad[s], 0));
+  CALL(p4_reset, s, (p4e[s], 0, P4D_STATE_WAIT_FOR_RI, 0, 0));
+  CALL(jd_ctor, s, (jd[s], pa[s]));
+  CALL(equ_ctor, s, (eq[s], (unsigned)PARAM(s).LINEAR_EQU_LENGTH,
+   (unsigned)PARAM(s).DFE_LENGTH, (void *)0, p4e[s], dm[s], ce[s], (void *)0,
+   pa[s], (void *)0, (void *)0, V90EQU_COMP_MODE_1));
+  CALL(equ_reset, s, (eq[s], ((V90Equalizer *)eq[s])->linearEquLength >> 1));
+  CALL(cd_ctor, s, (cd[s], pa[s], (void *)0, power[s]));
+  diff_eq_int("eval equalizer evaluator identity", ((V90Equalizer *)eq[s])->connEval == (V90ConnectionEvaluator *)ce[s], 1, s);
+  diff_eq_int("eval equalizer parameters identity", ((V90Equalizer *)eq[s])->params == (V90Parameters *)pa[s], 1, s);
+  diff_eq_int("eval equalizer demapper identity", ((V90Equalizer *)eq[s])->demapper == (V90Demapper *)dm[s], 1, s);
+  diff_eq_int("eval equalizer own P4D identity", ((V90Equalizer *)eq[s])->phase4Demod == (V90Phase4Demodulator *)p4e[s], 1, s);
+  diff_eq_int("eval equalizer reset state", ((V90Equalizer *)eq[s])->state, V90EQU_STATE_RESET, s);
+  diff_eq_int("eval equalizer block length", ((V90Equalizer *)eq[s])->errorEnergyMeanBlockLen, PARAM(s).ERROR_ENERGY_MEAN_BLOCK_LEN, s);
+  diff_eq_int("eval equalizer smoothing K", ((V90Equalizer *)eq[s])->errorEnergyMeanK == PARAM(s).ERROR_ENERGY_MEAN_K, 1, s);
+  diff_eq_int("eval fresh evaluator has no request", C(s).silenceRrnRequest, 0, s);
+  base[s] = A(s).linMapp[0][M(s).constellation[0][0]];
+ }
+ diff_eq_int("eval produced base levels agree", base[0], base[1], 0);
+ for (int s = 0; s < 2; ++s) {
+  dsplib_debug_capture_reset();
+  dsplib_debug_capture_on = 1;
+  int dp = s ? ref_equ_enter_dp(eq[s]) : equ_enter_dp(eq[s]);
+  dsplib_debug_capture_on = 0;
+  diff_eq_int("eval enter data phase return", dp, 1, s);
+  diff_eq_int("eval equalizer data state", ((V90Equalizer *)eq[s])->state, V90EQU_STATE_DATA, s);
+ }
+ /* Phase A: real error history establishes the design noise. */
+ if (!skip_a) for (unsigned b = 0; b < BLOCKS_A; ++b) {
+  for (unsigned i = 0; i < 2 * SYM; ++i)
+   inbuf[i] = (float)(base[0] + ((i & 1) ? DITHER_A : -DITHER_A));
+  drive_eval_pair(inbuf, SYM, 0x600000 + b);
+ }
+ dsplib_debug_capture_reset(); dsplib_debug_capture_on = 1;
+ for (int s = 0; s < 2; ++s) {
+  V90Equalizer *e = (V90Equalizer *)eq[s];
+  noise[s] = e->meanErrorEnergyCurrent;
+  diff_eq_int("eval design noise positive", noise[s] > 0.0f, 1, s);
+  diff_eq_int("eval block boundary reached", e->blockSampleCount, 0, s);
+  fprintf(stderr, "PHASEA side=%d noise=%g rms=%g sum=%u count=%u mmx=%d state=%d dms=%u base=%d hi150=%d lo150=%d conv=%g outconv=%d\n",
+   s, (double)e->meanErrorEnergyCurrent, (double)e->blockErrorEnergyRms,
+   e->blockErrorEnergySum, e->blockSampleCount, e->mmxMode, e->state,
+   ((V90Demapper *)dm[s])->sampleCount, base[s],
+   e->linearEquMmxCoefsAligned[150], e->array_d8Aligned[150],
+   (double)e->linearEquMmxConversionFactor, e->linearEquMmxOutputConversionFactor);
+  /* Caller sequence at .text 1d850: jd lookahead, ADI, noise, rates mask,
+   * alternate mapping, linMapp, linMappAlt, altRbsFlag, byte_280c,
+   * maxUcode, power ladder index, codec type, retrain-instead flag,
+   * spectral conditions.  The noise is the equalizer's real output. */
+  int la = s ? ref_jd_maxla(jd[s]) : jd_maxla(jd[s]);
+  int rm = s ? ref_jd_mask(jd[s]) : jd_mask(jd[s]);
+  design[s] = s ? ref_cd_process(cd[s], (unsigned)la, ad[s], noise[s], rm, mb[s],
+    A(s).linMapp, A(s).linMappAlt, A(s).altRbsFlag, A(s).byte_280c,
+    A(s).maxUcode, 1, (__tHardwareCodecTypes__)0, 0, (V90SpecialSpectralConditions)0)
+               : cd_process(cd[s], (unsigned)la, ad[s], noise[s], rm, mb[s],
+    A(s).linMapp, A(s).linMappAlt, A(s).altRbsFlag, A(s).byte_280c,
+    A(s).maxUcode, 1, (__tHardwareCodecTypes__)0, 0, (V90SpecialSpectralConditions)0);
+  dmin[s] = ((V90ConstellationDesigner *)cd[s])->dMin;
+  thresh[s][0] = ((V90ConstellationDesigner *)cd[s])->pdSnrThreshForRateUp;
+  thresh[s][1] = ((V90ConstellationDesigner *)cd[s])->pdSnrThreshForRateDown;
+  thresh[s][2] = ((V90ConstellationDesigner *)cd[s])->pdSnrThreshForRetrain;
+  diff_eq_int("eval design thresholds positive", thresh[s][1] > thresh[s][0] && thresh[s][2] > thresh[s][1], 1, s);
+  /* The caller's own copies at 1d850's arm (enable from parameters). */
+  C(s).enableRrnDown = PARAM(s).ENABLE_RRN_DOWN;
+  C(s).enableRrnUp = PARAM(s).ENABLE_RRN_UP;
+  CALL(ce_updccd, s, (ce[s], dmin[s], thresh[s][0], thresh[s][1], thresh[s][2]));
+  diff_eq_int("eval setter clears the request", C(s).silenceRrnRequest, 0, s);
+  diff_eq_int("eval designed distance stored", C(s).curDmin, dmin[s], s);
+ }
+ dsplib_debug_capture_on = 0;
+ raw_eq("eval designed noise agrees", &noise[0], &noise[1], sizeof(float), 0);
+ diff_eq_int("eval design verdict agrees", design[0], design[1], 0);
+ raw_eq("eval designed thresholds agree", thresh[0], thresh[1], 12, 0);
+ /* Phase B: finite degraded samples through the real equalizer drive the
+  * evaluator's average and both duration gates. */
+ for (unsigned c = 0; c < NCALL; ++c) {
+  int dith = DITHER_B;
+  for (unsigned b = 0; b < CHUNK; ++b) {
+   for (unsigned i = 0; i < 2 * SYM; ++i)
+    inbuf[i] = (float)(base[0] + ((i & 1) ? dith : -dith));
+   drive_eval_pair(inbuf, SYM, 0x610000 + c * 0x10000 + b);
+  }
+  dsplib_debug_capture_reset();
+  dsplib_debug_capture_on = 1;
+  int verdict[2];
+  for (int s = 0; s < 2; ++s) {
+   /* Read BEFORE the call: `evaluateConnection` clears avePdsnr on return
+    * (V90ConnectionEvaluator.cpp:1563), so a post-call read is always zero. */
+   preAve[s] = C(s).avePdsnr;
+   verdict[s] = s ? ref_ce_evaluate(ce[s]) : ce_evaluate(ce[s]);
+  }
+  dsplib_debug_capture_on = 0;
+  diff_eq_int("eval evaluateConnection verdict agrees", verdict[0], verdict[1], c);
+  for (int s = 0; s < 2; ++s) {
+   if (C(s).silenceRrnRequest != 0) ++fired[s];
+   diff_eq_int("eval rate-down enable", C(s).enableRrnDown, PARAM(s).ENABLE_RRN_DOWN, c);
+   diff_eq_int("eval data duration accumulated", C(s).dataDurationCounter,
+    (BLOCKS_A + (c + 1) * CHUNK) * SYM, c);
+  }
+  fprintf(stderr, "GATE c=%u req=%u/%u fired=%u/%u preAve=%g/%g postAve=%g/%g verdict=%d/%d dataDur=%u/%u\n",
+   c, C(0).silenceRrnRequest, C(1).silenceRrnRequest, fired[0], fired[1],
+   (double)preAve[0], (double)preAve[1], (double)C(0).avePdsnr, (double)C(1).avePdsnr,
+   verdict[0], verdict[1], C(0).dataDurationCounter, C(1).dataDurationCounter);
+  printf("evaluator gate: call=%u side0 preAve=%g threshD=%g req=%u side1 preAve=%g req=%u verdict=%d\n",
+         c, (double)preAve[0], (double)thresh[0][1], C(0).silenceRrnRequest,
+         (double)preAve[1], C(1).silenceRrnRequest, verdict[1]);
+  if (fired[0] || fired[1]) { gate_calls = c + 1; break; }
+ }
+ /* BOUNDED NEGATIVE RESULT.  The equalizer feeds the evaluator's avePdsnr on
+  * every completed block -- `connEval->updateAvePdsnr(meanErrorEnergyCurrent,
+  * blockSampleCount)` at V90Equalizer.cpp:2676 -- so the statistic is fed, not
+  * unfed.  `evaluateConnection`'s rate-down arm fires only for `avePdsnr >
+  * threshDown` (V90ConnectionEvaluator.cpp:1069), where `threshDown` is the
+  * designer's rate-down threshold passed through updateCurrentConstellationData
+  * (V90ConnectionEvaluator.cpp:309).  The real smoothed noise stays below that
+  * threshold, so the condition is never met and no request fires;
+  * `evaluateConnection` then clears avePdsnr on return
+  * (V90ConnectionEvaluator.cpp:1563), which is why a post-call read is zero.
+  * Assert the measured boundary, never the request.
+  *
+  * The separately recorded meanErrorEnergy buffer and its
+  * calcMeanErrorStatistics/state-3 gate are a DIFFERENT statistic and
+  * lifecycle; they are not the reason this request is absent. */
+ for (int s = 0; s < 2; ++s) {
+  diff_eq_int("eval equalizer feeds the noise statistic", preAve[s] > 0.0f, 1, s);
+  diff_eq_int("eval noise below rate-down threshold", preAve[s] < C(s).threshDown, 1, s);
+  diff_eq_int("eval evaluate clears the average", C(s).avePdsnr == 0.0f, 1, s);
+  diff_eq_int("eval no request at silence boundary", C(s).silenceRrnRequest, 0, s);
+  diff_eq_int("eval no request from error history", fired[s], 0, s);
+ }
+ fprintf(stderr, "POSTGATE fired=%u/%u req=%u/%u noise=%g/%g\n",
+  fired[0], fired[1], C(0).silenceRrnRequest, C(1).silenceRrnRequest,
+  (double)noise[0], (double)noise[1]);
+ for (int s = 0; s < 2; ++s) {
+  CALL(equ_dtor, s, (eq[s])); CALL(cd_dtor, s, (cd[s]));
+  CALL(p4_dtor, s, (p4[s])); CALL(p4_dtor, s, (p4e[s]));
+  CALL(dm_dtor, s, (dm[s])); CALL(dsc_dtor, s, (ds[s])); CALL(cp_dtor, s, (cp[s]));
+ }
+ guards(0);
+ diff_eq_int("eval boundary allocations freed", harness_alloc.live, 0, 0);
+ diff_eq_int("eval boundary no bad free", harness_alloc.bad_free, 0, 0);
+ printf("evaluator boundary: no request at silence boundary (noise below rate-down threshold), %u gate calls, %u blocks; real equalizer/designer/evaluator chain exercised\n",
+        gate_calls, BLOCKS_A + BLOCKS_B);
+}
+
 int main(void)
 {
  diff_begin("V90Phase4Demodulator: default-timing component silence lifecycle");
  fault = getenv("DSPLIB_P4D_PERIOD_FAULT");
- if (fault && strcmp(fault, "return") && strcmp(fault, "energy") &&
-     strcmp(fault, "state") && strcmp(fault, "guard") &&
-     strcmp(fault, "peer") && strcmp(fault, "transcript") && strcmp(fault, "cp-crc") &&
-      strcmp(fault, "calibration-missing") && strcmp(fault, "study-missing") &&
-      strcmp(fault, "mapping-128") && strcmp(fault, "mapping-255")) {
+if (fault && strcmp(fault, "return") && strcmp(fault, "energy") &&
+      strcmp(fault, "state") && strcmp(fault, "guard") &&
+      strcmp(fault, "peer") && strcmp(fault, "transcript") && strcmp(fault, "cp-crc") &&
+       strcmp(fault, "calibration-missing") && strcmp(fault, "study-missing") &&
+       strcmp(fault, "mapping-128") && strcmp(fault, "mapping-255") &&
+       strcmp(fault, "eval-missing")) {
   diff_eq_int("unknown observer probe", 0, 1, 0);
   return diff_end();
  }
@@ -1185,5 +1471,6 @@ int main(void)
  producer_boundary();
  ctor_dil_replay();
  study_boundary();
+ evaluator_boundary();
  return diff_end();
 }

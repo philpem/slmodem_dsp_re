@@ -72,6 +72,8 @@ def main():
                                ",".join([str(maximum)] * 6) + f" decision1000={decision} manual-map-equal=1 manual-levels-equal=0") == 1, text)
     require(text.count("P3 study path:") == 48, text)
     require(text.count("P3 study summary: 3/3 cases; 50496 calls/side/case; timed study, evaluator request supplied") == 1, text)
+    require(text.count("evaluator boundary: no request at silence boundary (noise below rate-down threshold), "
+                       "0 gate calls, 1000 blocks; real equalizer/designer/evaluator chain exercised") == 1, text)
     print(f"baseline: exit 0; {count}/{count} checks; 36/36 cycles")
     print("P3: 3/3 ctor-replay counterexamples; 3/3 timed-study cases, 29160 DIL calls/side/case")
     print("producer: 2/2 finite channels, 1/1 missing-calibration control; 32280 DIL samples/side/case")
@@ -119,15 +121,18 @@ def main():
         require(text.count("measurement calls=2394/2394 transitions=4/4") == 30, text)
         print(f"probe mapping-{code}: exit 1; named range check fired on both sides; "
               f"downstream blocked; {verdict.group(1)}/{verdict.group(2)} failed")
+    rc, text = run("eval-missing")
+    require(rc == 1 and "eval design noise positive" in text and "FAIL" in text, (rc, text))
+    print("probe eval-missing: exit 1; withheld equalizer history fails the positive design-input oracle")
     rc, text = run("unknown")
     require(rc == 1 and "unknown observer probe" in text, (rc, text))
     print("unknown probe: exit 1; rejected")
-    print("period fixture controls: 13/13 passed (baseline with rejection cases + 11 faults + unknown)")
+    print("period fixture controls: 14/14 passed (baseline with rejection cases + 12 faults + unknown)")
     if args.artifacts:
         (args.artifacts / "status.json").write_text(json.dumps({
             "binary": str(Path(args.binary).resolve()),
             "sha256": hashlib.sha256(Path(args.binary).read_bytes()).hexdigest(),
-            "baseline_checks": count, "controls_passed": 13, "runs": records,
+            "baseline_checks": count, "controls_passed": 14, "runs": records,
         }, indent=2) + "\n")
 
 
