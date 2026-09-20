@@ -328,8 +328,9 @@ void diff_eq_int_(const char *file, int line, const char *fmt,
  * Compare two floats AS FLOATS, reporting the values and their distance in
  * ULP rather than the integers their bits happen to spell.
  *
- * `diff_eq_float` is EXACT -- bit for bit, the same test a punned
- * `diff_eq_int` performs, and the one to reach for by default.  It exists
+ * `diff_eq_float` asserts scalar NUMERICAL equality without a rounding
+ * allowance in the no-define build. It is NOT equivalent to a raw/punned
+ * integer assertion: both zero signs and pairs of NaNs compare equal. It exists
  * because the punned form reports a last-place difference as two nine-digit
  * integers with no indication that either is a float.
  *
@@ -341,8 +342,9 @@ void diff_eq_int_(const char *file, int line, const char *fmt,
  * for being wrong -- state the reason at every call site, and keep it as tight
  * as the measurement allows so that a real regression still fails.
  *
- * Two NaNs compare equal: which NaN the coprocessor produced is not a property
- * of the reconstruction.
+ * NaN equivalence is this scalar API's established policy. A storage-level
+ * claim must instead use the raw-object/word API; payload identity is then
+ * observable and compared in the period/no-define build.
  *
  * `diff_eq_float_abs` bounds the ABSOLUTE difference instead, and is the right
  * form wherever values pass through zero.  ULP is a relative measure, so a bin
@@ -392,8 +394,9 @@ void diff_eq_float_(const char *file, int line, const char *fmt, float got,
  *
  *   THE PERIOD BUILD NEVER RECEIVES THE DEFINE.  period_inner.sh compiles the
  *   harness from its own flag list, so `make period` is provably untouched:
- *   with the macro undefined the code below is absent and the comparison is
- *   bit-for-bit, exactly as before.  This is a Makefile-provided define and not
+ *   with the macro undefined the modern rounding allowance is absent.
+ *   Scalar float/double APIs still equate signed zeros and pairs of NaNs;
+ *   use raw-object/word APIs for storage identity. This is a define and not
  *   a `__GNUC__` test, which is what makes that provable.
  *
  *   IT MUST NOT BE USED TO EXCUSE A PERIOD FAILURE, and it is not used to
@@ -443,8 +446,8 @@ double harness_float_tol(void);
  *
  * IT IS A NO-OP WITHOUT `HARNESS_FLOAT_TOL`.  The setter's whole body is
  * inside the macro, so the period build (which never defines it) gets a call
- * that does nothing and `harness_float_tol()` stays 0.0 -- the comparison is
- * bit-for-bit there, exactly as before.  The setter still EXISTS in both
+ * that does nothing and `harness_float_tol()` stays 0.0. Scalar numerical
+ * equality is not raw storage identity (NaNs and zero signs). The setter EXISTS in both
  * builds so a fixture can call it unconditionally and the period build links.
  *
  * IT REACHES ONLY `diff_eq_float`/`diff_eq_float_ulp`/`diff_eq_float_abs` and
@@ -480,11 +483,15 @@ void harness_float_tol_fixture(double eps);
  * untouched, so a changed index/flag/verdict stays a hard failure.
  *
  * IT IS A NO-OP WITHOUT `HARNESS_FLOAT_TOL`, so the period build (which never
- * defines it) returns `atol` 0, `tol` 0 and stays bit-exact.  A fixture that
+ * defines it) returns `atol` 0, `tol` 0, with no modern rounding allowance.
+ * Scalar APIs retain numerical NaN/zero semantics. A fixture that
  * calls this instead of the relative setter is a WIDENING of the named float
  * fields and nothing else.  The two setters are mutually exclusive: calling
  * either clears the other's state, so the pure-relative fixtures keep exactly
  * the behaviour they had.
+ * In mixed mode rtol=0 means exactly zero, NOT the tier default; atol=0
+ * still uses reference scaling. The relative setter with eps=0 restores
+ * the tier default and exits mixed mode.
  */
 void harness_float_tol_fixture_mixed(double atol, double rtol);
 
@@ -495,6 +502,17 @@ void harness_float_tol_fixture_mixed(double atol, double rtol);
  * where a fixture actually named one.
  */
 double harness_float_atol(void);
+/* Same predicate as the modern zero-budget float assertion. */
+int harness_float_within(float got, float want);
+/* Numeric ULP distance, signed zeros coalesced. Classify NaNs separately. */
+unsigned long float_ulps(float got, float want);
+/* Explicitly classified binary32 WORD: period is raw, modern budget is scoped
+ * to this assertion only. No caller-wide setter and no input/output leakage. */
+void diff_eq_float_word_(const char *file, int line, const char *fmt,
+                        unsigned int got, unsigned int want,
+                        double atol, double rtol, long input);
+#define diff_eq_float_word(fmt, got, want, atol, rtol, input) \
+    diff_eq_float_word_(__FILE__, __LINE__, fmt, got, want, atol, rtol, input)
 
 /*
  * Compare two whole objects, reporting the first differing FIELD.
@@ -522,7 +540,10 @@ void diff_eq_obj_(const char *file, int line, const char *what,
  * A span is {byte offset, element count, element size} relative to the
  * object's start; size is 4 for a `float` and 8 for a `double` (the only two
  * floating-point widths the object uses).  The array must be sorted by offset
- * and non-overlapping.  This is the same {offset, count} idiom the `skip`
+ * and non-overlapping, and every span must fit in full. The complete list is
+ * validated before any comparison; invalid descriptors are hard failures.
+ * The period/no-define build compares ALL storage as raw bytes, including
+ * typed NaN payloads and signed zeros. This is the same {offset, count} idiom the `skip`
  * lists in the fixtures already use for heap pointers, with the type supplied
  * instead of a byte blanking.
  *
@@ -566,6 +587,8 @@ void diff_eq_double_(const char *file, int line, const char *fmt, double got,
 extern int dsplib_debug_capture_on;
 void dsplib_debug_capture_reset(void);
 const char *dsplib_debug_capture_text(int side);
+unsigned dsplib_debug_capture_size(int side);
+int dsplib_debug_capture_complete(int side);
 /*
  * How many lines that side PRINTED, not counting the callback markers the
  * harness itself writes.  Anti-vacuity checks want this, not the text: a

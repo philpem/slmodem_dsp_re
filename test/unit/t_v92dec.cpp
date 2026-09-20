@@ -579,7 +579,7 @@ compare_ansam(const char *what, long tag)
 	 * reach those.  The counters, flags and the answer stay exact.
 	 */
 	{
-		static const struct diff_float_span spans[] = { { 0x04, 6 } };
+		static const struct diff_float_span spans[] = { { 0x04, 6, 4 } };
 
 		diff_eq_obj_float_(__FILE__, __LINE__, what, "ANSamToneDetector",
 				   a, b, sizeof(a), spans,

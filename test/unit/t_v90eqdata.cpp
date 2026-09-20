@@ -52,6 +52,9 @@ extern unsigned int ref_dsplibs_debug_level;
  * text and diverges under the modern compiler (the DFE `coefs sum` prints one
  * unit in its last place); `test/unit/t_v90eqdatatrans.cpp` re-includes this
  * file with `TRANSCRIPT_ONLY` and this header removes the substantive checks.
+ * The parent also checks the complete transcript for the exact dyadic pattern;
+ * this preserves diagnostic-only mutation witnesses without exempting the
+ * companion's adversarial-precision inputs.
  */
 #include "transcript_split.h"
 
@@ -475,9 +478,18 @@ run_enterdataphase(void)
 #ifdef TRANSCRIPT_ONLY
 				diff_eq_int_(__FILE__, __LINE__,
 					     "transcript (%ld)",
-					     strcmp(dsplib_debug_capture_text(0),
-						    dsplib_debug_capture_text(1))
-					     == 0, 1, tag);
+					     transcript_exact("eqdata.enter", tag), 1, tag);
+#else
+				/* Pattern 0 uses multiples of 1/16 and 1/8, at most
+				 * 16 taps. These sums are exactly representable even
+				 * in binary32. Restore a zero-budget diagnostic
+				 * observer in the mutation parent; ALL 96 inputs
+				 * remain exact checks in the companion. No failing
+				 * value or tag selects this domain. */
+				if (pat == 0)
+					diff_eq_int("dyadic transcript (%ld)",
+						transcript_exact("eqdata.dyadic", tag),
+						1, tag);
 #endif
 
 				lines = (long)dsplib_debug_capture_lines(1);

@@ -1,44 +1,18 @@
 /*
- * t_v90p4dnan.cpp -- ONE check, and it is in its own binary on purpose.
+ * Strict keep-rate sentinel. Negative energy is a SYNTHETIC ADVERSARIAL
+ * input, not evidence of reachable modem state. Flag 1 is NOT a NaN witness:
+ * finite dB above the threshold also sets it. The inline production log's raw
+ * result is not exposed by the integer-formatted diagnostic. Migration remains
+ * blocked until an apparatus-only, build-bound witness observes that result on
+ * BOTH sides. Do not substitute a recomputed logarithm or infer NaN from flags.
  *
- * `V90Phase4Demodulator`'s `CalcErrorEnergyAfterEchoCancellation` tail stores
- * one bit into +0x3510:
- *
- *     26956:  d9 44 24 10      flds  0x10(%esp)       ; dB
- *     2696b:  d9 83 04 04 ..   flds  0x404(%ebx)      ; the parameter
- *     26971:  de d9            fcompp
- *     26976:  0f 92 c2         setb  %dl
- *
- * -- ONE ordered compare and no parity test, so the flag is `PARAM < dB` and
- * an UNORDERED result leaves CF set and stores 1.  `dB` is unordered exactly
- * when the two silence energies have opposite signs, because then
- * `1.0f / after * before` is negative and `fyl2x` answers a NaN.
- *
- * WHY IT IS NOT IN `t_v90p4ddec`, and this is the whole reason the file
- * exists.  IEEE C requires a relational compare against a NaN to be false and
- * GCC 13 emits the parity test whatever it is told (finding F2304), so the
- * modern build stores 0 here and `tools/gccdiverge.json` has to excuse the
- * check.  An excused binary EXITS NON-ZERO, and `tools/mutate.py` judges a
- * mutant caught by a non-zero exit -- so a binary that is already red cannot
- * score a mutation set at all, and it refuses rather than scoring one wrongly.
- * Splitting the divergent check into its own binary is what that refusal asks
- * for, and it leaves `t_v90p4ddec`'s 66,000 checks green under both compilers
- * and mutation-testable.
- *
- * `make period` has no allow-list and passes this file with the object's own
- * compiler, which is the tier that decides.  Findings F4812 and F2301.
- *
- * THE FIXTURE IS TINY BECAUSE THE ARM IS.  State
- * `CALC_ENERGY_AFTER_EC` reads `params`, calls
- * `V90Demapper::incrementRBSFramePosition` and touches nothing else, so one
- * demodulator per side, one shared parameter block and one shared demapper is
- * the whole of it.  The demapper is shared because the only thing that member
- * writes is its own cursor, which both sides then agree about by construction.
+ * Raw modern execution remains red; period execution must pass exactly. This
+ * binary therefore cannot score an ordinary exit-code mutation suite. The
+ * optional fault probes below validate individual observers, not mutation scores.
  */
-
 #include <string.h>
-
 #include "harness.h"
+#include "transcript_evidence.h"
 #include "dsplib/debug.h"
 #include "dsplib/V90Parameters.h"
 #include "dsplib/V90Demapper.h"
@@ -46,7 +20,6 @@
 
 extern "C" {
 extern unsigned int ref_dsplibs_debug_level;
-
 short ref_p4d_getv90decision(void *, short)
 	asm("ref__ZN20V90Phase4Demodulator14getV90DecisionEs");
 short ref_p4d_getv92decision(void *, short)
@@ -57,104 +30,127 @@ short our_p4d_getv92decision(void *, short)
 	asm("_ZN20V90Phase4Demodulator14getV92DecisionEs");
 }
 
-#define P4D_SLOT	((unsigned)sizeof(V90Phase4Demodulator) + 64u)
-
+#define P4D_SLOT ((unsigned)sizeof(V90Phase4Demodulator) + 64u)
+#define DEM_SLOT ((unsigned)sizeof(V90Demapper) + 64u)
+#define PARM_SLOT ((unsigned)sizeof(V90Parameters) + 64u)
 static unsigned char p4d_s[2][P4D_SLOT] __attribute__((aligned(8)));
-static unsigned char dem_s[sizeof(V90Demapper) + 64] __attribute__((aligned(8)));
-static unsigned char parm_s[sizeof(V90Parameters) + 64]
-	__attribute__((aligned(8)));
+static unsigned char dem_s[2][DEM_SLOT] __attribute__((aligned(8)));
+static unsigned char parm_s[2][PARM_SLOT] __attribute__((aligned(8)));
+static unsigned char parm_before[2][PARM_SLOT];
+static unsigned char guard_before[2][64];
+static unsigned char dem_before[2][64];
+static unsigned char canonical[2][P4D_SLOT] __attribute__((aligned(8)));
+#define P4D(s) (*(V90Phase4Demodulator *)p4d_s[s])
+#define DEM(s) ((V90Demapper *)dem_s[s])
+#define PARAMS(s) ((V90Parameters *)parm_s[s])
 
-#define P4D(s)	(*(V90Phase4Demodulator *)p4d_s[s])
-#define DEM	((V90Demapper *)dem_s)
-#define PARAMS	((V90Parameters *)parm_s)
-
-/* Varied, never zero: findings F223, F224, F230. */
-static void
-fill(unsigned char *p, unsigned n, unsigned lfsr)
+static void fill(unsigned char *p, unsigned n, unsigned lfsr)
 {
-	unsigned i;
-
-	for (i = 0; i < n; i++) {
+	for (unsigned i = 0; i < n; i++) {
 		lfsr = (lfsr >> 1) ^ (-(int)(lfsr & 1u) & 0xb400u);
 		p[i] = (unsigned char)((lfsr >> 3) | 1u);
 	}
 }
 
-int
-main(void)
+/* Fixed arithmetic controls, chosen without harvesting observed output.
+ * sample=0, after=42, count=42 gives normalized energy 1 and ratio=before.
+ * ratio=1 gives exactly 0 dB: equality and thresholds on either side.
+ * before=0 gives log(0), NOT a NaN witness. */
+static const struct {
+	float before, after, threshold;
+	short sample;
+	int flag;                 /* -1: differential only, no NaN claim */
+} cases[] = {
+	{ -4.0f, 1.0f, -80.0f, 300, -1 },
+	{ 4.0f, 42.0f, 0.0f, 0, 1 },
+	{ 0.0f, 42.0f, -80.0f, 0, 0 },
+	{ 1.0f, 42.0f, 0.0f, 0, 0 },
+	{ 1.0f, 42.0f, -1.0f, 0, 1 },
+	{ 1.0f, 42.0f, 1.0f, 0, 0 }
+};
+
+int main(void)
 {
-	long trial = 800000L;
-	int v92, s;
-	int sawnan = 0;
-
-	diff_begin("V90Phase4Demodulator: the keep-rate flag on an unordered "
-		   "dB");
-	dsplibs_debug_level = 0;
-	ref_dsplibs_debug_level = 0;
-
-	for (v92 = 0; v92 < 2; v92++) {
-		fill(parm_s, (unsigned)sizeof parm_s, 0x51edu + (unsigned)v92);
-		fill(dem_s, (unsigned)sizeof dem_s, 0x9e37u + (unsigned)v92);
-		fill(p4d_s[0], P4D_SLOT, 0x37c1u + (unsigned)v92);
-		memcpy(p4d_s[1], p4d_s[0], P4D_SLOT);
-
-		PARAMS->RRN_SILENCE_ECHO_CALC_PERIOD = 0x24;
-		PARAMS->RRN_SILENCE_MIN_ECHO_ENERGY_FOR_KEEP_RATE = -80.0f;
-		DEM->rbsFramePosition = 2u;
-
-		for (s = 0; s < 2; s++) {
-			P4D(s).params = PARAMS;
-			P4D(s).demapper = DEM;
-			P4D(s).state = P4D_STATE_CALC_ENERGY_AFTER_EC;
-			P4D(s).sessionFlag = v92 ? 1u : 0u;
-			P4D(s).countInState = 41u;   /* 42, and 42 % 6 == 0 */
-			P4D(s).int_0028 = 0;
-			/*
-			 * OPPOSITE SIGNS, which is the whole input: the
-			 * accumulator goes positive on the first squared
-			 * decision and the numerator stays negative, so the
-			 * ratio is negative and the logarithm is a NaN.
-			 */
-			P4D(s).errorEnergyBeforeEC = -4.0f;
-			P4D(s).errorEnergyAfterEC = 1.0f;
-			P4D(s).int_3510 = 0;
+	const char *fault = getenv("DSPLIB_P4DNAN_FAULT");
+	diff_begin("V90Phase4Demodulator: strict keep-rate sentinel");
+	dsplibs_debug_level = ref_dsplibs_debug_level = 3;
+	for (int v92 = 0; v92 < 2; v92++) {
+		for (unsigned c = 0; c < sizeof cases / sizeof cases[0]; c++) {
+			long trial = 800000L + v92 * 100 + c;
+			short result[2];
+			fill(parm_s[0], PARM_SLOT, 0x51edu + v92);
+			fill(dem_s[0], DEM_SLOT, 0x9e37u + v92);
+			fill(p4d_s[0], P4D_SLOT, 0x37c1u + v92);
+			memcpy(parm_s[1], parm_s[0], PARM_SLOT);
+			memcpy(dem_s[1], dem_s[0], DEM_SLOT);
+			memcpy(p4d_s[1], p4d_s[0], P4D_SLOT);
+			for (int s = 0; s < 2; s++) {
+				PARAMS(s)->RRN_SILENCE_ECHO_CALC_PERIOD = 36;
+				PARAMS(s)->RRN_SILENCE_MIN_ECHO_ENERGY_FOR_KEEP_RATE = cases[c].threshold;
+				DEM(s)->rbsFramePosition = 2u;
+				P4D(s).params = PARAMS(s);
+				P4D(s).demapper = DEM(s);
+				P4D(s).state = P4D_STATE_CALC_ENERGY_AFTER_EC;
+				P4D(s).sessionFlag = v92;
+				P4D(s).countInState = 41u;
+				P4D(s).int_0028 = 0;
+				P4D(s).errorEnergyBeforeEC = cases[c].before;
+				P4D(s).errorEnergyAfterEC = cases[c].after;
+				P4D(s).int_3510 = 0;
+				memcpy(parm_before[s], parm_s[s], PARM_SLOT);
+				memcpy(guard_before[s], p4d_s[s] + sizeof(V90Phase4Demodulator), 64);
+				memcpy(dem_before[s], dem_s[s] + sizeof(V90Demapper), 64);
+			}
+			dsplib_debug_capture_reset();
+			dsplib_debug_capture_on = 1;
+			result[0] = v92 ? our_p4d_getv92decision(p4d_s[0], cases[c].sample)
+				: our_p4d_getv90decision(p4d_s[0], cases[c].sample);
+			result[1] = v92 ? ref_p4d_getv92decision(p4d_s[1], cases[c].sample)
+				: ref_p4d_getv90decision(p4d_s[1], cases[c].sample);
+			if (fault && !strcmp(fault, "always0")) P4D(0).int_3510 = 0;
+			if (fault && !strcmp(fault, "always1")) P4D(0).int_3510 = 1;
+			/* Apparatus-only probes at the SAME already-failing synthetic trial. */
+			if (fault && strcmp(fault, "always0") && strcmp(fault, "always1") && v92 == 0 && c == 0) {
+				if (!strcmp(fault, "return")) result[0] ^= 1;
+				else if (!strcmp(fault, "progress")) P4D(0).int_0028 ^= 1;
+				else if (!strcmp(fault, "state")) P4D(0).state = P4D_STATE_CALC_ENERGY_AFTER_EC;
+				else if (!strcmp(fault, "unrelated")) p4d_s[0][0x100] ^= 1;
+				else if (!strcmp(fault, "guard")) p4d_s[0][sizeof(V90Phase4Demodulator)] ^= 1;
+				else if (!strcmp(fault, "peer")) DEM(0)->rbsFramePosition ^= 1;
+				else if (!strcmp(fault, "parameter")) parm_s[0][0x404] ^= 1;
+				else if (!strcmp(fault, "transcript")) dsplibs_debug_printf("injected diagnostic\r\n");
+				else diff_eq_int("unknown fault probe", 0, 1, trial);
+			}
+			dsplib_debug_capture_on = 0;
+			diff_eq_int("keep-rate", P4D(0).int_3510, P4D(1).int_3510, trial);
+			diff_eq_int("return", result[0], result[1], trial);
+			diff_eq_int("p4d.silence", transcript_exact("p4d.silence", trial), 1, trial);
+			for (int s = 0; s < 2; s++) {
+				long tag = trial * 2 + s;
+				diff_eq_int("diagnostic present", dsplib_debug_capture_size(s) > 0, 1, tag);
+				diff_eq_int("return expected", result[s], cases[c].sample, tag);
+				diff_eq_int("progress expected", P4D(s).int_0028, 0x2a, tag);
+				diff_eq_int("state expected", P4D(s).state, P4D_STATE_WAIT_FOR_RT, tag);
+				diff_eq_int("count expected", P4D(s).countInState, 0, tag);
+				diff_eq_int("cursor expected", DEM(s)->rbsFramePosition, 3, tag);
+				diff_eq_int("params pointer", P4D(s).params == PARAMS(s), 1, tag);
+				diff_eq_int("demapper pointer", P4D(s).demapper == DEM(s), 1, tag);
+				if (cases[c].flag >= 0)
+					diff_eq_int("finite/zero flag expected", P4D(s).int_3510, cases[c].flag, tag);
+				diff_eq_obj("params immutable", unsigned char[PARM_SLOT], parm_s[s], parm_before[s], tag);
+				diff_eq_obj("p4d guard", unsigned char[64], p4d_s[s] + sizeof(V90Phase4Demodulator), guard_before[s], tag);
+				diff_eq_obj("demapper guard", unsigned char[64], dem_s[s] + sizeof(V90Demapper), dem_before[s], tag);
+				/* Normalize only independently checked pointers and keep-rate
+				 * in COPIES. Every other byte, including padding, stays exact. */
+				memcpy(canonical[s], p4d_s[s], P4D_SLOT);
+				V90Phase4Demodulator *p = (V90Phase4Demodulator *)canonical[s];
+				p->params = 0;
+				p->demapper = 0;
+				p->int_3510 = 0;
+			}
+			diff_eq_obj("remaining state", unsigned char[P4D_SLOT], canonical[0], canonical[1], trial);
+			diff_eq_obj("demapper state", unsigned char[DEM_SLOT], dem_s[0], dem_s[1], trial);
 		}
-
-		dsplib_debug_capture_reset();
-		dsplib_debug_capture_on = 1;
-		if (v92) {
-			(void)our_p4d_getv92decision(p4d_s[0], 300);
-			(void)ref_p4d_getv92decision(p4d_s[1], 300);
-		} else {
-			(void)our_p4d_getv90decision(p4d_s[0], 300);
-			(void)ref_p4d_getv90decision(p4d_s[1], 300);
-		}
-		dsplib_debug_capture_on = 0;
-
-		/*
-		 * ANTI-VACUITY, and it is an OBSERVABLE rather than a path:
-		 * the blob's flag is 1, which the ordered reading of the same
-		 * two numbers cannot produce, because the parameter is -80 and
-		 * the dB is not above it -- it is not a number at all.  If a
-		 * future change made the ratio positive this check would go
-		 * green for the wrong reason, and this counter is what fails
-		 * instead.
-		 */
-		if (P4D(1).int_3510 == 1)
-			sawnan++;
-		diff_eq_int("the keep-rate flag (%ld)", (long)P4D(0).int_3510,
-			    (long)P4D(1).int_3510, trial);
-		diff_eq_int("the transcripts agreed (%ld)",
-			    strcmp(dsplib_debug_capture_text(0),
-				   dsplib_debug_capture_text(1)) == 0, 1,
-			    trial);
-		diff_eq_int("the progress code (%ld)", (long)P4D(0).int_0028,
-			    (long)P4D(1).int_0028, trial);
-		diff_eq_int("the state (%ld)", (long)P4D(0).state,
-			    (long)P4D(1).state, trial);
-		trial++;
 	}
-
-	diff_eq_int("the blob took the unordered path", sawnan, 2, 0);
 	return diff_end();
 }

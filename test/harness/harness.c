@@ -4,6 +4,8 @@
 
 #include <stdlib.h>	/* getenv, strtol -- the report cap, below */
 #include <string.h>	/* memcpy, in the float comparison */
+#include <stdint.h>
+#include <float.h>
 
 #include "harness.h"
 
@@ -19,7 +21,8 @@ int diff_float_tolerant;
 
 /*
  * A PER-FIXTURE override of the tier tolerance, and it is a no-op without
- * HARNESS_FLOAT_TOL so the period build stays bit-exact.  See harness.h for
+ * HARNESS_FLOAT_TOL so the period build gets no modern rounding allowance.
+ * Scalar NaN/zero equality is distinct from raw storage. See harness.h for
  * why a fixture needs one.  Zero (or negative) means "use the tier default".
  *
  * `fixture_float_atol` is the absolute floor of the MIXED form; it is zero in
@@ -29,6 +32,7 @@ int diff_float_tolerant;
 #ifdef HARNESS_FLOAT_TOL
 static double fixture_float_tol;
 static double fixture_float_atol;
+static int fixture_float_mixed;
 #endif
 
 void
@@ -37,6 +41,7 @@ harness_float_tol_fixture(double eps)
 #ifdef HARNESS_FLOAT_TOL
 	fixture_float_tol = (eps > 0.0) ? eps : 0.0;
 	fixture_float_atol = 0.0;
+	fixture_float_mixed = 0;
 #else
 	(void)eps;	/* period build: the budget is and stays 0 */
 #endif
@@ -48,6 +53,7 @@ harness_float_tol_fixture_mixed(double atol, double rtol)
 #ifdef HARNESS_FLOAT_TOL
 	fixture_float_atol = (atol > 0.0) ? atol : 0.0;
 	fixture_float_tol = (rtol > 0.0) ? rtol : 0.0;
+	fixture_float_mixed = 1;
 #else
 	/* period build: the budget is and stays 0 of both kinds */
 	(void)atol;
@@ -59,7 +65,7 @@ double
 harness_float_tol(void)
 {
 #ifdef HARNESS_FLOAT_TOL
-	if (fixture_float_tol > 0.0)
+	if (fixture_float_mixed || fixture_float_tol > 0.0)
 		return fixture_float_tol;
 	return (double)HARNESS_FLOAT_TOL;
 #else
@@ -313,10 +319,10 @@ diff_obj_exact_(const char *file, int line, const char *what, const char *type,
  * in the same object must stay a hard failure.  Widening diff_eq_obj itself,
  * or HARNESS_FLOAT_TOL, is the wrong move for exactly that reason.
  *
- * The caller names the float spans: {byte offset, float count} pairs relative
- * to the object's start.  Every float in a span goes through diff_eq_float_,
- * so the modern tier's tolerance applies and the period build stays
- * bit-exact; every byte OUTSIDE the spans is compared exactly, with the same
+ * The caller names {byte offset, element count, element size} spans relative
+ * to the object's start. Modern builds compare their numerical values;
+ * period/no-define builds compare their raw storage (zero signs and NaN
+ * payloads included). Every byte OUTSIDE the spans is compared exactly, with the same
  * reporting diff_eq_obj_ uses.  The spans must be sorted by offset and
  * non-overlapping, which is how they are written at every call site.
  *
@@ -331,25 +337,42 @@ diff_eq_obj_float_(const char *file, int line, const char *what,
 		   size_t nspans, long input)
 {
 	const unsigned char *a = got, *b = want;
-	size_t i = 0, si = 0;
+	size_t i = 0, si = 0, end = 0;
+
+	/* Validate the ENTIRE list before reading either object or comparing any
+	 * prefix. Never round down an incomplete element or clip a descriptor. */
+	if (nspans && spans == 0) {
+		diff_eq_int_(file, line, "null float descriptor list", 0, 1, input);
+		return;
+	}
+	for (si = 0; si < nspans; ++si) {
+		size_t off = spans[si].off, count = spans[si].count;
+		unsigned sz = spans[si].size;
+		if ((sz != 4 && sz != 8) || off < end || off > n ||
+		    count > (size_t)-1 / sz || count > (n - off) / sz) {
+			char label[256];
+			snprintf(label, sizeof label, "%s invalid float descriptor %zu", what, si);
+			diff_eq_int_(file, line, label, 0, 1, input);
+			return;
+		}
+		end = off + count * sz;
+	}
+	si = 0;
 
 	fieldlog_capture(type, want, n, input);
 
 	while (i < n && si < nspans) {
 		size_t off = spans[si].off;
-		unsigned k, sz = spans[si].size ? spans[si].size : 4u;
-
-		if (off > n)
-			break;
+		unsigned k, sz = spans[si].size;
 		if (off > i)
 			diff_obj_exact_(file, line, what, type, a, b, i, off,
 					input);
 		for (k = 0; k < spans[si].count; k++) {
 			size_t o = off + (size_t)sz * (size_t)k;
+#ifndef HARNESS_FLOAT_TOL
+			diff_obj_exact_(file, line, what, type, a, b, o, o + sz, input);
+#else
 			char buf[256];
-
-			if (o + sz > n)
-				break;
 			snprintf(buf, sizeof buf, "%s [%s+%zu]", what, type, o);
 			if (sz == 8) {
 				double ga, wa;
@@ -365,10 +388,9 @@ diff_eq_obj_float_(const char *file, int line, const char *what,
 				diff_eq_float_(file, line, buf, ga, wa, 0UL,
 					       0.0, input);
 			}
+#endif
 		}
 		i = off + (size_t)sz * (size_t)spans[si].count;
-		if (i > n)
-			i = n;
 		si++;
 	}
 	if (i < n)
@@ -428,8 +450,10 @@ diff_eq_int_(const char *file, int line, const char *fmt,
  * they differ in the last place, or that 3.6470108 and 3.6470113 are what is
  * actually being disputed.  A reader has to know to reinterpret the bits.
  *
- * WHAT THIS DOES NOT DO IS RELAX EXACTNESS.  `ulp_budget` of 0 is the default
- * and is a bit-for-bit comparison: the same test, better reported.  A budget
+ * These are SCALAR NUMERICAL comparisons, not raw storage comparisons:
+ * signed zeros and pairs of NaNs compare equal, even with zero budgets.
+ * Use diff_eq_obj_, diff_eq_obj_float_ in period, or diff_eq_float_word_ in
+ * period when a storage assertion must distinguish those encodings. A budget
  * above 0 is only correct where bit-exactness is UNACHIEVABLE rather than
  * merely unmet -- the modern build carries x87 intermediates at 80 bits where
  * the blob's compiler spilled them to 32, so it declines to discard precision
@@ -482,16 +506,17 @@ diff_isnan_ld(long double x)
 unsigned long
 float_ulps(float a, float b)
 {
-	long ia, ib;
+	uint32_t ia, ib;
 
-	memcpy(&ia, &a, sizeof ia < sizeof a ? sizeof ia : sizeof a);
-	memcpy(&ib, &b, sizeof ib < sizeof b ? sizeof ib : sizeof b);
-
-	/* Map the sign-magnitude float order onto a monotone integer order. */
-	if (ia < 0)
-		ia = (long)0x80000000L - ia;
-	if (ib < 0)
-		ib = (long)0x80000000L - ib;
+	memcpy(&ia, &a, sizeof ia);
+	memcpy(&ib, &b, sizeof ib);
+	/* Unsigned monotone keys, with BOTH zeros at the same key. All
+	 * differences fit uint32_t; no native-long high bytes or signed overflow.
+	 * NaNs are classified separately by the scalar assertion. */
+	ia = (ia & 0x80000000u) ? 0x80000000u - (ia & 0x7fffffffu)
+	                           : 0x80000000u + ia;
+	ib = (ib & 0x80000000u) ? 0x80000000u - (ib & 0x7fffffffu)
+	                           : 0x80000000u + ib;
 	return (unsigned long)(ia > ib ? ia - ib : ib - ia);
 }
 
@@ -514,6 +539,55 @@ float_ulps(float a, float b)
  * the value is noise, and the call site should say what consumes it.
  */
 void
+diff_eq_float_word_(const char *file, int line, const char *fmt,
+                   unsigned int got, unsigned int want,
+                   double atol, double rtol, long input)
+{
+#ifdef HARNESS_FLOAT_TOL
+	float a, b;
+	double saved_atol = fixture_float_atol, saved_rtol = fixture_float_tol;
+	int saved_mixed = fixture_float_mixed;
+	memcpy(&a, &got, 4);
+	memcpy(&b, &want, 4);
+	harness_float_tol_fixture_mixed(atol, rtol);
+	diff_eq_float_(file, line, fmt, a, b, 0, 0, input);
+	fixture_float_atol = saved_atol;
+	fixture_float_tol = saved_rtol;
+	fixture_float_mixed = saved_mixed;
+#else
+	(void)atol;
+	(void)rtol;
+	diff_eq_int_(file, line, fmt, got, want, input);
+#endif
+}
+
+int
+harness_float_within(float got, float want)
+{
+	double ag, aw, d, scale;
+	unsigned int ug, uw;
+	if (diff_isnan_f(got) || diff_isnan_f(want))
+		return diff_isnan_f(got) && diff_isnan_f(want);
+	if (got == want)
+		return 1;
+	/* Infinite differences must not pass via an infinite relative bound. */
+	memcpy(&ug, &got, 4);
+	memcpy(&uw, &want, 4);
+	if ((ug & 0x7f800000u) == 0x7f800000u ||
+	    (uw & 0x7f800000u) == 0x7f800000u)
+		return 0;
+	ag = got < 0 ? -(double)got : (double)got;
+	aw = want < 0 ? -(double)want : (double)want;
+	d = (double)got - (double)want;
+	if (d < 0) d = -d;
+	scale = ag > aw ? ag : aw;
+#ifdef HARNESS_FLOAT_TOL
+	if (fixture_float_mixed) scale = aw;
+#endif
+	return d <= harness_float_atol() + harness_float_tol() * scale;
+}
+
+void
 diff_eq_float_(const char *file, int line, const char *fmt, float got,
 	       float want, unsigned long ulp_budget, double abs_eps,
 	       long input)
@@ -526,9 +600,8 @@ diff_eq_float_(const char *file, int line, const char *fmt, float got,
 
 	/*
 	 * NaN is not ordered, so ULP distance is meaningless for it.  Two NaNs
-	 * count as equal -- the object produces them and a test that demanded
-	 * one bit pattern would be asserting which NaN the coprocessor chose,
-	 * which is not a property of the reconstruction.
+		 * count as equal under the established SCALAR numerical policy.
+		 * Raw-storage assertions use the object/word APIs instead.
 	 */
 	if (got_nan || want_nan) {
 		if (got_nan && want_nan)
@@ -555,28 +628,13 @@ diff_eq_float_(const char *file, int line, const char *fmt, float got,
 		 * instead of the pure-relative `rtol*max(|a|,|b|)`: the
 		 * absolute floor carries the values that pass through zero,
 		 * where a relative test is meaningless.  A pure-relative
-		 * fixture has `atol` 0 and keeps the max-based criterion
-		 * bit-for-bit, so the two forms cannot be confused.
+			 * fixture keeps the max-based criterion. Mixed mode is explicit:
+			 * zero atol still reference-scales and zero rtol is really zero.
 		 */
-		if (ulp_budget == 0UL && abs_eps == 0.0) {
-			double ag = (double)got, aw = (double)want;
-			double scale, eps = harness_float_tol();
-			double atol = harness_float_atol();
-
-			if (ag < 0.0)
-				ag = -ag;
-			if (aw < 0.0)
-				aw = -aw;
-			scale = ag > aw ? ag : aw;
-			if (atol > 0.0) {
-				if (diff <= atol + eps * aw) {
-					diff_float_tolerant++;
-					return;
-				}
-			} else if (eps > 0.0 && diff <= eps * scale) {
-				diff_float_tolerant++;
-				return;
-			}
+		if (ulp_budget == 0UL && abs_eps == 0.0 &&
+		    harness_float_within(got, want)) {
+			diff_float_tolerant++;
+			return;
 		}
 #endif
 	}
@@ -619,15 +677,15 @@ diff_eq_float_(const char *file, int line, const char *fmt, float got,
  * float does, so it needs the same reach; comparing it as two four-byte words
  * would not be the same test.
  *
- * ULP distance is computed in 64 bits and the same relative criterion is
- * applied, so `HARNESS_FLOAT_TOL` governs both widths and the period build
- * (macro undefined) stays bit-exact.
+ * ULP distance is computed in unsigned 64 bits. Without HARNESS_FLOAT_TOL
+ * no rounding allowance is applied, but this scalar API still equates signed
+ * zeros and pairs of NaNs; it is NOT a raw-storage assertion.
  */
 void
 diff_eq_double_(const char *file, int line, const char *fmt, double got,
 		double want, long input)
 {
-	unsigned long long ia, ib, d;
+	uint64_t ia, ib, d;
 	int got_nan = diff_isnan_ld(got), want_nan = diff_isnan_ld(want);
 	double diff;
 
@@ -641,14 +699,34 @@ diff_eq_double_(const char *file, int line, const char *fmt, double got,
 	} else {
 		memcpy(&ia, &got, 8);
 		memcpy(&ib, &want, 8);
-		if ((long long)ia < 0)
-			ia = 0x8000000000000000ULL - ia;
-		if ((long long)ib < 0)
-			ib = 0x8000000000000000ULL - ib;
+		/* Equal infinities and both zeros retain scalar numerical equality.
+		 * Reject every UNEQUAL infinity before any floating arithmetic. */
+		if (got == want)
+			return;
+		if ((ia & 0x7ff0000000000000ULL) == 0x7ff0000000000000ULL ||
+		    (ib & 0x7ff0000000000000ULL) == 0x7ff0000000000000ULL) {
+			uint64_t infinity = 0x7ff0000000000000ULL;
+			d = ~0ULL;
+			memcpy(&diff, &infinity, sizeof diff);
+			goto mismatch;
+		}
+		ia = (ia & 0x8000000000000000ULL) ?
+		     0x8000000000000000ULL - (ia & 0x7fffffffffffffffULL) :
+		     0x8000000000000000ULL + ia;
+		ib = (ib & 0x8000000000000000ULL) ?
+		     0x8000000000000000ULL - (ib & 0x7fffffffffffffffULL) :
+		     0x8000000000000000ULL + ib;
 		d = ia > ib ? ia - ib : ib - ia;
-		diff = got - want;
-		if (diff < 0.0)
-			diff = -diff;
+		{
+			double ag = got < 0 ? -got : got, aw = want < 0 ? -want : want;
+			if ((got < 0) != (want < 0) && ag > DBL_MAX - aw) {
+				uint64_t infinity = 0x7ff0000000000000ULL;
+				memcpy(&diff, &infinity, sizeof diff); /* diagnostic only */
+			} else {
+				diff = got - want;
+				if (diff < 0) diff = -diff;
+			}
+		}
 		if (d == 0ULL)
 			return;
 #ifdef HARNESS_FLOAT_TOL
@@ -659,17 +737,13 @@ diff_eq_double_(const char *file, int line, const char *fmt, double got,
 			double eps = harness_float_tol();
 			double atol = harness_float_atol();
 
-			/*
-			 * The same mixed/pure split as the float form: a
-			 * mixed budget uses `atol + rtol*|b|`, a
-			 * pure-relative one keeps `rtol*max(|a|,|b|)`.
-			 */
-			if (atol > 0.0) {
-				if (diff <= atol + eps * aw) {
-					diff_float_tolerant++;
-					return;
-				}
-			} else if (eps > 0.0 && diff <= eps * scale) {
+			/* Normalize BEFORE adding/multiplying. Finite extremes must
+			 * not produce the false comparison infinity <= infinity. */
+			double distance = (got < 0) != (want < 0) ?
+			                  ag / scale + aw / scale : diff / scale;
+			double bound = atol / scale + eps *
+			               (fixture_float_mixed ? aw / scale : 1.0);
+			if (distance <= bound) {
 				diff_float_tolerant++;
 				return;
 			}
@@ -677,6 +751,7 @@ diff_eq_double_(const char *file, int line, const char *fmt, double got,
 #endif
 	}
 
+	mismatch:
 	if (diff_failures < diff_max_report) {
 		fprintf(stderr, "%s:%d: ", file, line);
 		fprintf(stderr, fmt, input);
@@ -687,7 +762,7 @@ diff_eq_double_(const char *file, int line, const char *fmt, double got,
 				"  (one side is NaN)\n", got, want);
 		else
 			fprintf(stderr, "  got %.17g, reference %.17g"
-				"  (%llu ULP, |diff| %.3g)\n", got, want, d,
+				"  (%llu ULP, |diff| %.3g)\n", got, want, (unsigned long long)d,
 				diff);
 	} else if (diff_failures == diff_max_report) {
 		fprintf(stderr, "  ... further mismatches suppressed\n");

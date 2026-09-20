@@ -125169,3 +125169,225 @@ the four transcript parents, `t_v90modprog.cpp`, the four `*trans` fixtures,
 (+5).
 PR:
 https://github.com/philpem/slmodem_dsp_re/pull/179
+
+## F11372. Issue #172 heap-region pass: the three V.PCM meta-assertions close by modelling the float spans, and `t_v92modstate`'s 0.35 is the coefficient design amplified by cancellation rather than a polyphase branch
+
+Follow-up to F11371, owner-approved 2026-09-20.  Three modern-tier reds close
+by the issue #172 category-1 move -- the failing words are MODELLED FLOAT
+SPANS compared through the harness's mixed budget, while every non-float word
+of the same region stays byte-exact.  One is measured and reported:
+`t_v92modstate` is neither a different polyphase branch nor an
+accumulation-order difference, and the measurement is below.  `test/` only;
+`src/` and `include/` are untouched.  `make period` stays exact, now
+**383 passed, 0 failed** (no new fixture; the three changed fixtures are in
+that count).
+
+**THE MECHANISM, AND WHY IT IS A SPAN AND NOT A WIDENED `compare_regions`.**
+F11369 refused to widen the 20x bound or add a tolerance to `compare_regions`,
+because that would absorb the very divergence the assertion reports; it named
+the per-region float-span modelling as the fix.  Each of the three fixtures is
+a word-by-word walk over dynamically-discovered heap regions, so the spans are
+found by the POINTER PATH that discovered the region rather than by a
+hard-coded index, and only five regions in the whole graph are float:
+
+| region | field, evidence |
+|---|---|
+| echoHistory | `float *echoHistory`, `V92EchoCanceller` +0x24 |
+| echo arma's `m_yhist` | `float *m_yhist`, `FloatARMA` +0x0c |
+| `FloatARMA` `m_fwd`/`m_fbk` | `float` at +0x2c, two words |
+| demod Resampler `coeffs` | `float *coeffs`, `Resampler` +0x04 via `V90Demodulator` +0x98 |
+| modulator Resampler `coeffs` | `float *coeffs`, `Resampler` +0x04 via `V92Modem.modulator` +0x50 (a `ResamplerTimingOffset(120, …, 16, …)`) |
+
+A word inside a marked span is compared with the fixture's mixed budget,
+`|a-b| <= atol + rtol*max(|a|,|b|)`, read back through
+`harness_float_atol()`/`harness_float_tol()`; on the period tier both are 0.0
+(the setter is a no-op without `HARNESS_FLOAT_TOL`), so it is an exact
+comparison there and `make period` is bit-for-bit.  The budget is
+`harness_float_tol_fixture_mixed(1.0e-4, 1.0e-6)`, measured rather than
+chosen: over every trial the worst ABSOLUTE difference in these regions is
+**4.0e-5** (the modulator's designed bank) and 3.9e-5 (the demodulator's),
+while the worst RELATIVE difference is 7.2e-2 on a near-zero coefficient,
+which is why the absolute floor is required.  `atol` 1.0e-4 carries the
+measured maximum with a 2.5x margin.  `atol`, `rtol` reach the marked span
+alone; every counter, flag, pointer and non-float array in the same regions
+stays byte-exact, which is the negative control.
+
+**`t_vpcmrunpcm` -- CLOSED.**  The 27,932 hard failures were R19 (the
+`FloatARMA` object, +0x2c/+0x30), R21 (`echoHistory`, a run of words from
++0xe54) and R71 (`echo m_yhist`, from +0xd4); the 1,135,668 excess "borrowed
+tables" were R27 (demod resampler `coeffs`) and R105 (modulator resampler
+`coeffs`), which the `pva != pvb && va == pva && vb == pvb` exemption was
+catching because their constructor-built values already differ.  After the
+marking the surface reads **133 regions, 19726387 words equal, 1163600 words
+within float tolerance, 84018 corresponding pointer pairs, 3230 borrowed
+tables untouched, 0 pattern installs**, and the group passes 1321589 checks
+with 1163600 within modern tolerance.  1163600 is exactly 1,135,668 + 27,932,
+the value F11369's arithmetic predicted, and the borrowed count is back to the
+period tier's 3230 (the legitimate static pointer pairs: the entrance filter's
+two coefficients, the demodulator's prefilter coefficients and resampler
+vptr, and four more).  Its full mutation suite is **95 mutations: 95 caught,
+0 NOT caught, 0 equivalent**, the recorded baseline, so the tolerance absorbs
+no decision.
+
+**`t_v90rundemod` and `t_vpcmqcline` -- CLOSED, and the meta-assertions now
+pass.**  Both walk the same `VPcmFloModem` graph with `VPCMXF_Create(0, …)`.
+The measured surfaces match F11369's arithmetic exactly:
+
+| fixture | equal | float | corresponded | borrowed (period) |
+|---|---|---|---|---|
+| `t_v90rundemod` | 14922732 | 857904 | 63440 | 2440 (was 860344) |
+| `t_vpcmqcline` `qcLine` | 2874473 | 165252 | 12220 | 470 (was 165722) |
+
+`t_v90rundemod` passes 953619 checks with 857904 within tolerance and keeps
+its four named static installs (64); `t_vpcmqcline` passes 188545 checks with
+165252 within tolerance and the `vPcmResetPhase3Modem` group passes 46398 with
+42192.  The exempt-class assertion
+`(words_corresponded + words_static + words_unresolved) * 20 < words_equal` is
+UNCHANGED and now passes: the borrowed count fell from 860344 to the period's
+2440 (and from 165722 to 470), because the float divergence is no longer
+landing in the borrowed branch.  A new assertion,
+`words_float < words_equal`, keeps a guard on the tolerance itself: if the
+modelled spans ever grew to the whole object the tolerance would have become
+an off switch and this fails.  `t_v90rundemod`'s full mutation suite is
+**77 mutations: 74 caught, 1 NOT caught, 2 equivalent**, identical to the
+recorded baseline -- the one NOT caught is the documented structurally
+uncatchable "the demodulator is run with the wrong sample count", not a new
+gap.  `t_vpcmqcline`'s suite is **60 mutations: 60 caught, 0 NOT caught, 0
+equivalent**.
+
+**`t_v92modstate` -- MEASURED, and it is NEITHER of the two hypotheses.**
+F11371 left this as "instrument `ph`/the window at the differing output index
+under both compilers"; the instrumentation is a temporary print in
+`Resampler::resample` (reverted, no `src/` change), run on the MODERN
+`build/test/t_v92modstate` and on the PERIOD `build/period/t_v92modstate`
+(the period differential's own binary, rebuilt from the same source by GCC
+3.4.2 and therefore the blob's own values).  At the failing sample -- output
+index 174476, from input 8 -- the two agree on everything that selects a
+branch:
+
+```
+modern  RS 174476 ph=40 phase=40 frac=0 hi=64 ic=1  y0=-0.575858712
+period  RS 174476 ph=40 phase=40 frac=0 hi=64 ic=1  y0=-0.223347247
+```
+
+SAME `ph` (40), SAME `phase` (exactly 40), SAME `frac` (0), SAME
+`historyIndex` (64), SAME window: the 16 history samples are identical
+(`±4000`), and the branch-40 coefficients differ only by ~1e-4 relative (e.g.
+index 7 `0.807042181` against `0.807013094`).  So it is NOT a different
+polyphase branch, and NOT a DOT accumulation-order difference: the dot
+product is over the same window with the same branch index.  It is the
+sinc/FIR coefficient DESIGN divergence of finding F11363, AMPLIFIED BY
+CANCELLATION: the signed sum of the branch-40 coefficients is -1.4e-4 while
+the individual terms are O(0.8), so the coefficients' ~1e-4 differences land
+directly on a result that is itself ~1e-4, and `y = 4000 * sum` magnifies it
+to 0.35.  The fixture's mixed budget (atol 1e-4) cannot carry it and MUST NOT
+be widened to (~0.4), which would be an off switch.  Disposition: **class
+(a), a genuine modern divergence downstream of the accepted coefficient
+design; OPEN, not fitted.**  The next test is the split: the four checks that
+carry this sample (`the queue holds the same floats`, `the resampled block
+agrees`, `the samples agree`, `the filter's history agrees`, all at input 8/9)
+move to a binary of their own and are declared, leaving the other 33369
+checks and the mutation suite in the parent.
+
+**REPORT ONLY, not fitted.**  `t_v90spectral` fails one group,
+`V90SpectralShapingFilter::progress over blocks` 2/22420 -- the adversarial
+unstable-filter order test F11369 declined.  `t_floatarma` fails two groups,
+`FloatARMA::process(float)` 556/137472 and
+`FloatARMA::process(const float*, float*, unsigned)` 178/19964 -- the
+adversarial mode-4/5 arithmetic-order test.  `t_v27fax` fails `V27TX_status`
+8/272 (FAX).  Each is unchanged from F11369/F11371 and none was fitted.
+
+**Verdicts.**  `make period J=1`: **383 passed, 0 failed**.  The modern tier
+is **378 green / 5 red**, from 375/8 (the three closed fixtures; no fixture
+newly red).  The five reds are `t_v92modstate`, `t_v90spectral`,
+`t_floatarma`, `t_v34hshak` and `t_v27fax`.  `make test` still ends non-zero
+at `mutation-snapshot` on the two entries `mutsnap.py --check` records as
+MISSING / never recorded (`faxadaptcreate_v29tx`, `fdspkrnl_tone`), which is
+the state F11371 left and is not this pass's.  `python3 tools/refcheck.py`:
+clean, 14050 references, 0 dangling.  `git diff --stat`:
+`test/unit/t_vpcmrunpcm.cpp`, `test/unit/t_v90rundemod.cpp`,
+`test/unit/t_vpcmqcline.cpp`, `docs/findings.md`.
+PR:
+https://github.com/philpem/slmodem_dsp_re/pull/181
+
+### Review correction to F11368, F11371 and F11372 (2026-09-20)
+
+The earlier observations remain above; several explanations and apparatus
+claims do not survive review of PR176/179/181:
+
+* **The old flag implication claim was false.** Running
+  `docker run --rm dsplibs-tc342-gentoo gcc -ffast-math -dM -E -` with empty
+  stdin prints `__FINITE_MATH_ONLY__ 1`; adding `-fno-finite-math-only` prints
+  `0`. GCC 3.4.2 did enable the assumption. Different optimization use of
+  assumptions, not absence of the old implication, explains why the measured
+  modern-only remedy is useful. The period flags are unchanged.
+* **A zero-budget float comparison was not a raw-word comparison.** It equated
+  signed zeros and NaN payloads. The three heap fixtures now use a scoped
+  word assertion: period raw bits, modern numerical comparison only in
+  explicitly classified spans. Their input checks compare both sides with
+  the original seed as raw bytes. The mixed budget no longer leaks to output
+  or input checks. Its predicate is reference-scaled, not max-scaled.
+* **The 2.5x observed maximum is not an independent correctness bound.** The
+  retained 1e-4 absolute / 1e-6 relative allowance is an owner-authorized,
+  provisional fixture policy. Passing controls proves apparatus rejection
+  boundaries, not algorithmic acceptability. That remains an independent
+  review question, including the other existing tolerance policies.
+* **Tolerated differences did not measure the classified surface.** The
+  shared classifier now reports classified/total words, validates both
+  pointer paths and span bounds, and refuses unequal allocation lengths.
+  Unmodelled storage keeps the existing exact comparator.
+* **The analog split removed too much parent coverage.** The parent again
+  checks the modem, guard, phase2Info, parameters and demodulator. Its modern
+  mask is exactly 24 bytes (six words), only at input 8601; the period has no
+  such mask. Five explicit graph-corruption controls each make the clean
+  parent fail, including a non-divergent float outside those 24 bytes.
+* **Group names were not assertion identities.** The old gccdiverge subset
+  test could excuse a signal with no parsed failures and unexpected failures
+  within an allowed group. All 14 existing entries are now blocked rather
+  than automatically migrated. The new exact-transcript primitive requires
+  normal exit 1, complete reviewed assertion/input/value diagnostics and
+  positive summary denominators, with no regex/subset matching of failures.
+  A real register migration still requires independent review of every
+  assertion; no new exemption is claimed here.
+
+Local review packet: `docs/pr176-181-review-fixes.md`. Disk-backed raw logs,
+commands, statuses and the complete blocked register inventory are under
+`/tmp/opencode/pr181-fixes/`. The initial phase attempt was terminated at the
+tool timeout and is invalid; the subsequent complete run passed **383/383**.
+No mutation sweep or snapshot update was used for these corrections.
+
+### Independent-review follow-up to the PR176/179/181 correction (2026-09-20)
+
+The full 14-entry register audit is recorded in
+`docs/tolerance-split-register-review.md`. **Audit complete, migration deferred;
+all 14 wrappers explicitly exit 1.** The earlier description of a literal
+transcript as assertion-complete evidence is withdrawn: a Boolean strcmp
+failure at the same tag can describe arbitrarily different underlying text,
+and raw object diagnostics abbreviate bytes. A new control demonstrates this
+collision. Literal-output v1 is diagnostic-only and can no longer authorize
+any exemption; migration requires lossless evidence and assertion/build identity.
+
+Shared apparatus defects found by that review are corrected: unequal double
+infinities are rejected before arithmetic; normalized finite comparisons avoid
+overflow false passes; float ULP ordering/distance uses fixed-width unsigned
+storage; entire float-span descriptor lists are validated before comparing;
+period typed-object storage preserves raw zero signs and NaN payloads; and
+mixed rtol=0 now really means zero. Nested Resampler fixtures select complete,
+valid descriptor prefixes for their actual class sizes. Scalar float/double
+NaN/zero numerical semantics are unchanged and no longer documented as raw
+storage identity. The controls pass **54/54 in each of ILP32 and LP64, modern
+and no-define**, and the period gate passes **383/383**.
+
+Two register provenance corrections do not claim a replacement assembly
+derivation: the exact-power V90Equalizer fixture calls **setLinearEquBeta and
+setDfeBeta**, not convertEqualizerToMmx; the determineMaxUcode NaN fixture
+concerns **skipping** NaNs so the window does not qualify. Earlier causal
+explanations are marked unreviewed rather than repurposed as evidence.
+
+Outstanding audit findings remain visible: **psd and v90equ** mutation suites
+target red baselines; transcript-only mutations can lose their observer when
+all transcript checks move to a red companion; and measured tolerance margins
+are provisional policies, not independent algorithmic error bounds. No full
+modern or mutation sweep was run, and no snapshot or suite was altered to hide
+these limitations. Fresh focused logs, binary hashes, denominators and direct
+exit codes are under `/tmp/opencode/pr181-fixes/followup/`.

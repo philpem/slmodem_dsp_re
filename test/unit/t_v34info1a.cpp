@@ -347,8 +347,7 @@ compare_all(const char *what, long tag)
 
 #ifdef TRANSCRIPT_ONLY
 	diff_eq_int_(__FILE__, __LINE__, "transcript text (%ld)",
-		     strcmp(dsplib_debug_capture_text(0),
-			    dsplib_debug_capture_text(1)) == 0, 1, tag);
+		     transcript_exact("info1a.block", tag), 1, tag);
 #endif
 	diff_eq_int("transcript line count (%ld)",
 		    (long)dsplib_debug_capture_lines(0),

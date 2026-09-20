@@ -744,6 +744,13 @@ static const struct diff_float_span demod_vr_spans[] = {
 	{ 0x124, 1, 4 },	/* resampler +0x90  normBPFhBaudB0coef */
 };
 
+/* F11369: input 8601 ONLY, six binary32 words (24 bytes), not all
+ * ResamplerTiming floating storage. The companion still asserts these. */
+static const struct diff_float_span analog_divergent_spans[] = {
+	{ 0x0e8, 1, 4 }, /* lastHalfBaudErr */
+	{ 0x0fc, 5, 4 }, /* bpfSq1, bpfSq2, bpfZ1, bpfZ2, errZ1 */
+};
+
 static void
 demod_alias_check(void)
 {
@@ -773,7 +780,7 @@ demod_alias_check(void)
  * it that this test reaches.
  */
 static void
-compare_graph(const char *what, unsigned int side, long tag)
+compare_graph(const char *what, unsigned int side, long tag, int analog_after = 0)
 {
 	blkmap_take(side);
 
@@ -789,9 +796,13 @@ compare_graph(const char *what, unsigned int side, long tag)
 		   MODEM(1)->params, sizeof(V90Parameters), tag);
 
 	if (side == 1) {
-		cmp_region_p(what, "V90Demodulator", MODEM(0)->demodulator,
+		if (analog_after && tag == 8601 && harness_float_tol() > 0)
+			cmp_region_exact_floats_masked(what, "V90Demodulator",
+			    MODEM(0)->demodulator, MODEM(1)->demodulator, 0x298,
+			    tag, demod_alias, NDEMOD_ALIAS, analog_divergent_spans, 2);
+		else cmp_region_p(what, "V90Demodulator", MODEM(0)->demodulator,
 			     MODEM(1)->demodulator, 0x298, tag, demod_alias,
-			     NDEMOD_ALIAS, demod_vr_spans,
+			     NDEMOD_ALIAS, harness_float_tol() > 0 ? demod_vr_spans : 0,
 			     sizeof demod_vr_spans / sizeof demod_vr_spans[0]);
 		demod_alias_check();
 	}
@@ -2127,6 +2138,7 @@ run_analog_arm(void)
 		long tag = 8600 + trial;
 		unsigned int n = nv[trial];
 		unsigned int i;
+		unsigned char *probe = 0;
 
 		build_pair(1200 + trial, 1, 0, BPF_MAPPER);
 
@@ -2159,6 +2171,19 @@ run_analog_arm(void)
 		dsplib_debug_capture_on = 0;
 
 #ifndef ANALOG_ARM_AFTER_ONLY
+		/* Opt-in apparatus controls, restored before any further modem call.
+		 * These perturb the compared graph, not reconstruction source. */
+		if (tag == 8601 && getenv("DSPLIB_TEST_ANALOG_CORRUPTION")) {
+			const char *kind = getenv("DSPLIB_TEST_ANALOG_CORRUPTION");
+			if (!strcmp(kind, "guard")) probe = mobj[0] + MODEM_SIZE;
+			else if (!strcmp(kind, "phase2"))
+				probe = (unsigned char *)&MODEM(0)->phase2Info->pcmType;
+			else if (!strcmp(kind, "params")) probe = (unsigned char *)MODEM(0)->params;
+			else if (!strcmp(kind, "state")) probe = (unsigned char *)MODEM(0)->demodulator + 0xf4;
+			else if (!strcmp(kind, "unmasked-float")) probe = (unsigned char *)MODEM(0)->demodulator + 0xc0;
+			diff_eq_int("requested analog safety probe exists", probe != 0, 1, tag);
+			if (probe) *probe ^= 1;
+		}
 		diff_eq_int("the transcripts match (%ld)",
 			    strcmp(dsplib_debug_capture_text(0),
 				   dsplib_debug_capture_text(1)) == 0, 1, tag);
@@ -2176,17 +2201,12 @@ run_analog_arm(void)
 		 * forward's mutation stays caught.  See
 		 * cmp_region_exact_floats_masked.
 		 */
-		blkmap_take(1);
-		cmp_region_exact_floats_masked(
-		    "after the analog arm, non-float state", "V90Demodulator",
-		    MODEM(0)->demodulator, MODEM(1)->demodulator, 0x298, tag,
-		    demod_alias, NDEMOD_ALIAS, demod_vr_spans,
-		    sizeof demod_vr_spans / sizeof demod_vr_spans[0]);
-		demod_alias_check();
+		compare_graph("after the analog arm", 1, tag, 1);
 #endif
 #ifdef ANALOG_ARM_AFTER_ONLY
 		compare_graph("after the analog arm", 1, tag);
 #endif
+		if (probe) *probe ^= 1;
 
 		reached = 1;
 		if (n != 0)

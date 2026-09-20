@@ -215,10 +215,10 @@ CXXFLAGS += -fno-math-errno
 # The period math.h supplies the x87 logarithm inline bodies under this
 # source profile. Keep fixture/oracle C++ code on the ordinary flags.
 #
-# -fno-finite-math-only WITHDRAWS A MODERN-ONLY DEMAND, the same shape as
-# -fno-lifetime-dse above.  The object's own GCC 3.4.2 accepted -ffast-math
-# and still compiled ordered compares and NaN-dependent branches literally;
-# modern -ffast-math additionally implies -ffinite-math-only, so GCC 14 is
+# -fno-finite-math-only is a measured MODERN-ONLY remedy. Both GCC 3.4.2
+# and GCC 14 imply -ffinite-math-only under -ffast-math (the old claim that
+# only modern GCC did so was false). Their optimizers USE those assumptions
+# differently. Under -ffast-math GCC 14 is
 # entitled to assume every operand is finite and folds `!(x >= 0.0f)` to
 # `x < 0.0f`, which is FALSE for a NaN where the object takes the branch.
 # The object's sources deliberately test unordered values this way
@@ -576,11 +576,61 @@ $(BUILD)/safety/t_field_typed: test/safety/t_field_typed.c $(SAFETY_HARNESS)
 	@mkdir -p $(dir $@)
 	$(CC) $(ARCH32) $(LDFLAGS) -Iinclude -Itest/harness -o $@ $^ -lm
 
+$(BUILD)/safety/t_region_float: test/safety/t_region_float.cpp $(BUILD)/test/harness/harness.o test/harness/region_float_graph.h
+	@mkdir -p $(dir $@)
+	$(CC) $(ARCH32) $(CXXFLAGS) $(LDFLAGS) -Itest/harness -o $@ $(filter-out %.h,$^) -lm
+
+$(BUILD)/safety/harness_exact.o: test/harness/harness.c test/harness/harness.h
+	@mkdir -p $(dir $@)
+	$(CC) $(ARCH32) $(CFLAGS) -Itest/harness -c $< -o $@
+
+$(BUILD)/safety/t_region_float_exact: test/safety/t_region_float.cpp $(BUILD)/safety/harness_exact.o test/harness/region_float_graph.h
+	@mkdir -p $(dir $@)
+	$(CC) $(ARCH32) $(CXXFLAGS) $(LDFLAGS) -Itest/harness -o $@ $(filter-out %.h,$^) -lm
+
+$(BUILD)/safety/t_numeric_storage: test/safety/t_numeric_storage.c $(BUILD)/test/harness/harness.o
+	@mkdir -p $(dir $@)
+	$(CC) $(ARCH32) $(CFLAGS) $(LDFLAGS) -Itest/harness -o $@ $^ -lm
+
+$(BUILD)/safety/t_numeric_storage_exact: test/safety/t_numeric_storage.c $(BUILD)/safety/harness_exact.o
+	@mkdir -p $(dir $@)
+	$(CC) $(ARCH32) $(CFLAGS) $(LDFLAGS) -Itest/harness -o $@ $^ -lm
+
+$(BUILD)/safety/harness_modern64.o: test/harness/harness.c test/harness/harness.h
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -m64 -DHARNESS_FLOAT_TOL=$(HARNESS_FLOAT_TOL) -Itest/harness -c $< -o $@
+
+$(BUILD)/safety/harness_exact64.o: test/harness/harness.c test/harness/harness.h
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -m64 -Itest/harness -c $< -o $@
+
+$(BUILD)/safety/t_numeric_storage64: test/safety/t_numeric_storage.c $(BUILD)/safety/harness_modern64.o
+	$(CC) $(CFLAGS) -m64 $(LDFLAGS) -Itest/harness -o $@ $^ -lm
+
+$(BUILD)/safety/t_numeric_storage_exact64: test/safety/t_numeric_storage.c $(BUILD)/safety/harness_exact64.o
+	$(CC) $(CFLAGS) -m64 $(LDFLAGS) -Itest/harness -o $@ $^ -lm
+
 safety: firewall strings offsets refs $(BUILD)/safety/t_alloc_sizes \
-        $(BUILD)/safety/t_float_tol $(BUILD)/safety/t_field_typed
+        $(BUILD)/safety/t_float_tol $(BUILD)/safety/t_field_typed \
+        $(BUILD)/safety/t_region_float $(BUILD)/safety/t_region_float_exact \
+        $(BUILD)/safety/t_numeric_storage $(BUILD)/safety/t_numeric_storage_exact \
+        $(BUILD)/safety/t_numeric_storage64 $(BUILD)/safety/t_numeric_storage_exact64
 	@./$(BUILD)/safety/t_alloc_sizes
 	@./$(BUILD)/safety/t_float_tol
 	@./$(BUILD)/safety/t_field_typed
+	@./$(BUILD)/safety/t_region_float
+	@./$(BUILD)/safety/t_region_float_exact
+	@./$(BUILD)/safety/t_numeric_storage
+	@./$(BUILD)/safety/t_numeric_storage_exact
+	@./$(BUILD)/safety/t_numeric_storage64
+	@./$(BUILD)/safety/t_numeric_storage_exact64
+	@python3 -m unittest discover -s test/safety -p test_gccdiverge.py -v
+
+# Observer probes for the measured GCC 14 ILP32 profile, not a period gate
+# or an exemption validator. A changed baseline must fail these controls.
+.PHONY: safety-p4dnan-gcc14
+safety-p4dnan-gcc14: $(BUILD)/test/t_v90p4dnan
+	@DSPLIB_P4DNAN_BINARY="$(abspath $(BUILD)/test/t_v90p4dnan)" python3 -m unittest discover -s test/safety -p test_v90p4dnan_fixture.py -v
 
 $(BUILD):
 	@mkdir -p $(BUILD)

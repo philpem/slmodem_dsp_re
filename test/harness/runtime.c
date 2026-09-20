@@ -348,11 +348,14 @@ unsigned int dsplibs_debug_level = 0;
  * is a stateful callback), so each can be captured separately and the two
  * transcripts compared like any other output.
  */
-#define DBGCAP_SIZE 16384
+/* Composed designer diagnostics exceed 16 KiB. Still bounded, but overflow
+ * is now observable and cannot masquerade as equal truncated transcripts. */
+#define DBGCAP_SIZE 262144
 
 int dsplib_debug_capture_on;
 static char dbgcap[2][DBGCAP_SIZE];
 static unsigned dbgcap_len[2];
+static int dbgcap_error[2];
 
 /*
  * Counted separately from the text, and ONLY by the two printf entry points:
@@ -366,6 +369,7 @@ void
 dsplib_debug_capture_reset(void)
 {
 	dbgcap_len[0] = dbgcap_len[1] = 0;
+	dbgcap_error[0] = dbgcap_error[1] = 0;
 	dbgcap_lines[0] = dbgcap_lines[1] = 0;
 	dbgcap[0][0] = dbgcap[1][0] = '\0';
 }
@@ -382,6 +386,16 @@ dsplib_debug_capture_text(int side)
 	return dbgcap[side & 1];
 }
 
+unsigned dsplib_debug_capture_size(int side)
+{
+	return dbgcap_len[side & 1];
+}
+
+int dsplib_debug_capture_complete(int side)
+{
+	return !dbgcap_error[side & 1];
+}
+
 static void
 dbgcap_add(int side, const char *fmt, va_list ap)
 {
@@ -389,10 +403,14 @@ dbgcap_add(int side, const char *fmt, va_list ap)
 
 	if (!dsplib_debug_capture_on)
 		return;
-	if (dbgcap_len[side] + 1 >= DBGCAP_SIZE)
+	if (dbgcap_len[side] + 1 >= DBGCAP_SIZE) {
+		dbgcap_error[side] = 1;
 		return;
+	}
 	n = vsnprintf(dbgcap[side] + dbgcap_len[side],
 		      DBGCAP_SIZE - dbgcap_len[side], fmt, ap);
+	if (n < 0 || (unsigned)n >= DBGCAP_SIZE - dbgcap_len[side])
+		dbgcap_error[side] = 1;
 	if (n > 0) {
 		dbgcap_len[side] += (unsigned)n;
 		if (dbgcap_len[side] >= DBGCAP_SIZE)
