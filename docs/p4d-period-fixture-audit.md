@@ -20,7 +20,7 @@ containment). Reference object SHA-256:
 agreement is useful, but neither negative energy nor its count/period pair is
 evidence of a normal measurement history.
 
-**Current #183 continuation:** the final section advances the V.92 boundary to
+**PR184 #183 continuation:** the short-CP section advances the V.92 boundary to
 sample-driven, CRC-validated short CP/CPnot followed by Ed. The earlier
 three-flag fixture, counts and review below are retained as historical evidence.
 The mapping/calibration and evaluator outcome remain explicit component inputs;
@@ -764,3 +764,227 @@ The older executable-VA observation table belongs to its recorded earlier hash,
 not this rebuild. Raw NaN remains **not observed**. Reproduction uses the same
 focused/observer/phase commands above; the matrix is now part of
 `t_v90p4dperiod`. The dirty branch is left for review without publication.
+
+## Issue #183 producer-history continuation (review pending)
+
+Base `a4077068`, branch `investigate/issue183-producer-history`, same worktree.
+This advances **one bounded producer chain**, not full training or a public
+modem connection. All original twelve measurement cycles and forty CP matrix
+cells remain; no case was removed. Their eight-level synthetic environment
+remains labelled as supplied. Two additional V.90 environments replace it with
+actual built-in DIL generation, ADI accumulation/finalization and TRN2 design.
+The positive evaluator request and the V.92 caller copy remain supplied.
+
+### Inventory of supplied state, including unchanged assumptions
+
+Offsets are i386 object-relative; types are the fixture's types corroborated by
+the original loads/stores. Array formulas include every supplied element, not
+only the first phase. Original addresses below were read using `tools/dis.py`.
+Constructor/reset outputs are distinguished from direct fixture assignments.
+
+| Supplied state or boundary | Offset/type/value in the original fixture | Original writer / preceding operation and precondition | This continuation |
+|---|---|---|---|
+| Host parameter block | All bytes initially zero; `minRate` +38 `uint=28000`, `maxRate` +3c `uint=56000` | External host configuration, consumed by real parameter C1/defaulting; not an internal training result | Unchanged separate host blocks and real C1; no parser-stub or arbitrary config reachability claim |
+| Storage preimages | All object storage zero except whole P4D `0xa5`; 32-byte trailing guards `0x69` | Apparatus, not a production writer or valid negotiated state | Unchanged. Unwritten padding/tails remain preimages, never evidence of initialization |
+| ADI law/reference/RBS hint | `pcmType` +a95c enum 0, `ucode` +a96b byte 0, `ucodeLevel` +a96c short 0, `altRbsExpected` +a96e short 0, `altRbsFlag` +2800+2p short 0 | `reset` 40300, law store 4031a and phase flag clear 403f7; `resetLinearMapping` seeds the reference slot. Negotiated law/reference would precede this | Same real resets. Mu-law is a selected component law. Code zero is a neutral reset seed, not a claim that a silent TRN1 reference trained a connection; DIL generation does not use that reference level |
+| ADI calibration | +0+256p+2c and +600+256p+2c, `short`, p=0..5/c=0..7, `300-20*c`; remaining cells inherited from reset | `calculateLinearMeanAndVar` 42090 produces +1000 magnitude sums/+1c00 counts/+9118 square sums; `updateLinMappMeanAndVar` 40fa0 needs count>0, writes variance +9d48 and rounded short at 41016. Alternate table needs alternate-RBS study | **Replaced in new cases**, not merely moved into a helper. Each side derives its own primary table from its own DIL symbols; inactive alternate table stays reset output. Original CP cases retain the supplied tables |
+| Mapping frame count and sizes | +0 `uint=24`; +604+4p `uint=8` | `V90TRN2Design` 3cbab–3cbb5 copies default parameter +78; 3cc30–3cd1e computes frame bits | **Replaced in new cases**: default sizes 8, frame bits **23**, shaper rate **1** |
+| Mapping code lists | +4+128p+c and +304+128p+c, `uchar=c`, p=0..5/c=0..7; unused tails zero | Designer primary list at 3d8b7 (no-alt branch); codec list 3d2d0 onward/3d6c7 onward depends on learned levels and both laws | **Replaced in new cases** by full paired TRN2 calls; primary and codec lists compared exactly |
+| Mapping shaper and auxiliary fields | +61c `uint=0`; +620 `int=0`, +624 `uint=0`, +628/+62c/+630/+634 floats 0; +638+4p `int=0` | Designer writes +61c=1 at 3cb93, shaper from defaults at 3cbd0–3cc2a with id bounded by lookahead, and six distinct indices zero at 3cd20–3cd34 | **Replaced in new cases**. No parameter override to recover the old 24-bit stimulus |
+| Secondary mapping `mb` | Whole `V90MappingParams` byte-copy of own `ma`, including zero tails | A separate production mapping is later made by `V90ConstellationDesigner::process`, e.g. caller 1d850; TRN2 alone is not that history | Still an explicit initial alias-in-value assumption, separately owned; new cases copy their own produced TRN2 mapping. No full data-phase design claim |
+| Evaluator request | +90 `uint=1`; matrix overrides it to 0/1 | `evaluateConnection` 3e6d0; ordinary rate-down store 3ec0f copies parameter +3f0 after enable, error and duration tests. Other arms can override/clear it | **Open positive history**. Added actual empty-history evaluator calls reject production (return 0, request 0); only then the old visible request assumption is assigned |
+| P4D local request | +40 `int`, copy of own evaluator +90 | `V90Demodulator::progress` 1cbc0–1cc01 after nonzero session, request +3c in {22,23}, real RRN reset | Remains explicit in V.92 original cases, not invoked as a caller witness; new V.90 cases consume evaluator +90 directly |
+| Decoder group sizes | MP +114 / CP +3ba8, `uint=ma.word_0` | P4D writes these in its preceding decision states (260f2/263a9 and 26d1d/26d97/2705c), from the mapping bit count | Still an entry-interface copy: 24 in original cases, produced 23 in new MP cases |
+| P4D dependency/session and reset arguments | C1 installs 32-bit pointers: +4 own params, +c/+10 own `ma`/`mb`, +14/+18 own CP/MP, +1c NULL phase3, +3054 own demapper, +3058 own descrambler, +34f8 own evaluator, +3514 own ADI; +0 session `uint=0/1`; reset +8 ucode byte 0, +20 state enum WaitForRi, pumped samples 0, +34 quick-connect `uint=0` | Real P4D C1/reset; production `exitPhase3` calls reset at 1bda2. A real modem supplies a phase3 object and prior phase2 information | Unchanged real lifecycle and bounded methods which do not dereference the null phase3 dependency; not a valid whole-modem object graph |
+| Demapper and descrambler arguments | Demapper capacity 72; descrambler taps 18/23, capacity 99, history reset 0 | Real constructors/reset; sample decoder consumes six-symbol frames | Unchanged, independently allocated. Capacity covers the tested frames |
+| Entry timing and external samples | Explicit `resetBeforRRN` and WaitForEd/WaitForCP entry; V.90 -300, V.92 polynomial-generated CP/Ed stream; measurement pairs listed above | Earlier Ri/TRN/data/RRN progression normally selects these entry methods | New V.90 Ed samples use each side's produced first constellation level at each phase, negative sign. Both recover 23 zero wire bits/frame. Measurement inputs unchanged; repeated RRN negotiation remains unexecuted |
+| Debug and fault inputs | Both debug levels 3; named observer faults opt-in | Harness controls, not modem inputs | Added missing-calibration fault; synthetic status explicit |
+
+Zero storage in fields not written/read on this boundary is not silently promoted
+to a production value. Dependencies continue to be checked by identity and own
+preimages rather than by erasing pointer-shaped bytes for comparison.
+
+### Original writers and tested producer domain
+
+The fixture uses original symbol identities via paired ABI entry declarations:
+unprefixed reconstruction and `ref_` original. No reconstruction producer is
+shared by the reference side. `setDilDescriptor` at **31c60** reads its own
+built-in `.data` tables and writes the descriptor on each side independently.
+Only `DIL_TYPE_ADI=0` is selected (the production type domain is 0/1, selected
+by quick-connect). It is not a hand-filled code/sample list.
+
+Each side constructs and resets its own `V90Phase3Modulator`, mu-law, DIL state,
+zero warm-up, null unused Jd pointers, own descriptor. `resetDILGenerator`
+**2aed0–2b069** decodes the descriptor's segment/DIL levels and zeros cursors.
+`generateDIL` **2b070–2b21a** emits one whole descriptor cycle, observed as
+**32280/40000** bounded calls and a return to index/segment position zero.
+The generated sample arrays are compared exactly, as are the descriptor and
+generator's DIL state. No generator cursor or expected result is planted.
+
+The channel boundary is aligned signed-short symbols with deterministic gain
+**1 or 1/2**, no noise, no phase shift and no alternate RBS. Every generated
+mu-law level is representable, and division by two is integral for these
+levels. The received magnitude is therefore tied to a generated symbol, not
+assigned to an invented PCM code. `calculateLinearMeanAndVar` determines that
+code from the **symbol**, using real companding; using `dilPcmCode` for every
+sample would be wrong because segment-reference samples have a different code
+(2b092 versus 2b180). The fixture schedules phase as sample index modulo six.
+
+This deliberately stops short of P3D's timed study machine. Original P3D
+`getV90Decision(float)` calls the same accumulator at **23ed7** and updater
+at **24a5f** in the second-study path (other study arms have other schedules).
+The fixture finalizes all cells after the complete generated cycle, not at
+every original P3D update/unite boundary. Unmeasured cells retain reset values.
+`porcessSecondStudy` **41cb0** selects reference phase zero from reset's clear
+suspected flags, and `determineMaxUcode` **441f0** produces the usable mask and
+six maxima. Its argument 116 is independently checked against the highest
+code of the real descriptor. No learned mask, variance, count or maximum is
+hand-populated. The full resulting ADI bytes compare around the one independently
+validated parameter pointer, **before demapper reset clears accumulators**.
+All 48 selected constellation entries are explicitly required to have measured
+counts and positive, strictly descending levels in each phase.
+
+`V90TRN2Design` **3cb60** consumes those tables/masks/maxima. Remaining explicit
+designer arguments are both laws mu, lookahead 0 (within the Jd two-bit domain),
+normal spectral condition 0, and transmit index 1 (the caller's phase2 power
+byte 0 plus 1, **1bcd5–1bcea**; safely inside the power ladder). These are bounded
+interface choices, **not demonstrated negotiation outcomes**. Codec detection,
+pad-gain inference and phase2/Jd decoding have not been exercised. All real
+default parameters, including eight TRN2 codes, shaper rate 1 and silence
+timings, remain unchanged; a complete own-side parameter/guard comparison
+enforces this. TRN2 output mapping, power-helper scalars/arrays and own-table
+pointer identity are compared, as are complete producer diagnostics.
+
+`V90Demapper::reset` **30870**, particularly **309ba–309d7**, turns that mapping
+and calibration into its levels. Each of the 48 level lookups is checked;
+`hardDecision(1000)` is a common finite sample discriminator. Real Ed decoding
+then consumes each side's produced constellation, and requires both 23 zero
+bits per complete frame and silence entry. Both finite cases reach Ed at call
+12 and each executes all six existing measurement cycles, using the unchanged
+2394-call step/energy/diagnostic/peer/heap oracle. Generator, descriptor,
+designer and power storage join the frozen peer inventory. The temporary
+generator allocations are destroyed before measurement, leaving **36 live
+allocations** across the pair as before; guards and final frees are checked.
+
+Existing fixtures were inspected for reusable ABI/layout and production calls:
+`t_v90p4ddec`'s `exitPhase3` cases and `t_v90trn2designrecip` plant their input
+tables/configuration and therefore cannot supply the missing history here.
+Their synthetic expected data was not reused. This continuation reuses the
+production routines themselves and the existing period lifecycle oracle.
+
+### Controls and an original-object counterexample
+
+| Case | DIL calls/side | Designer return | Frame bits | Usable measured descending entries | `hardDecision(1000)` | Measurement |
+|---|---:|---:|---:|---:|---:|---|
+| Unity gain | 32280 | 1 | 23 | 48/48 | 988 | 6 cycles |
+| Half gain | 32280 | 1 | 23 | 48/48 | 622 | 6 cycles |
+| Missing calibration, synthetic fault | 32280 generated, **0 accumulated** | **1** | 23 | **0/48** | **0** | Not admitted |
+
+The half-gain case must change the learned table, resulting mapping **and**
+downstream decision; comparisons are against the saved unity run, not just
+between implementations. The missing-calibration control still generates the
+whole DIL and calls the finalizers/designer. In the no-alt arm, zero learned
+levels make the distance and threshold zero; the scan can fill repeated code
+2 without advancing and return success (3d7a6–3d8b7). Thus **return 1 is not a
+calibration-validity test**, and side agreement alone would miss dead producer
+calls. The fault is not a legal completed training environment and is never
+fed into the positive measurement claim.
+
+`DSPLIB_P4D_PERIOD_FAULT=calibration-missing` separately suppresses accumulation
+on **both sides of the unity positive case** while retaining its positive
+requirements. It fails **6/538058** checks, direct exit 1: usable levels,
+measured entries and downstream nonzero decision on each side. The shorter
+denominator reflects the six intentionally unentered measurement cycles.
+The ordinary baseline contains the explicit negative case and is green.
+This is an observer/producer relevance control, not a mutation campaign.
+
+### Evaluator/caller boundary: traced, positive history still open
+
+TRN2 design is **not** the producer of the evaluator's distance and thresholds.
+`V90Demodulator::progress` calls **`V90ConstellationDesigner::process` at 1d850**,
+then loads designer short +a and float +18/+1c/+20 at **1d87e–1d89d** and calls
+`updateCurrentConstellationData` at **1d8a4** (another path at 1e3aa).
+That setter clears request +90. An equalizer-derived error average/symbol count
+and appropriate data durations must subsequently reach `evaluateConnection`.
+The caller invokes it at **1cf73**, dispatches its verdict at **1cf81**, and
+only qualifying V.92 request/session states reach the **1cc01** copy.
+Calling just that copy with newly planted demodulator state would not recover
+this history and was not done.
+
+All three new constructed pairs actually call `evaluateConnection` before
+assigning the existing request assumption. Each returns 0 with request 0 and
+symbol count 0, and only latches `initDmin` from -1 to 0; the complete own-side
+evaluator/guard postimage is checked. This agrees with the original **3e6dd,
+3e6f0, 3e8e3–3e8f1**. Constructor plus evaluator invocation is therefore a
+measured **insufficient prerequisite**, not a new request witness. The next
+positive experiment needs data-constellation designer outputs plus equalizer
+error history, not invented thresholds passed through a setter. Ordinary
+rate-down checks at **3ebc0–3ec15** require enable, average above threshold,
+rate-down duration and minimum data duration; later retrain/override paths
+can clear the request. This pass establishes no period reconstruction defect.
+
+### Validation and artifacts
+
+All runs use Gentoo GCC 3.4.2-r2 with `DSPLIB_REPRODUCE_BUGS`, unchanged period
+flags, serial `-j1 J=1`. No new unit binary: full denominator stays **385**.
+Focused baseline, three development builds and the final focused build all exit 0;
+the first added-boundary version had 711612 checks, the final fixture has
+**711782/711782 exact checks** (348211 more than base). No failed differential
+development run occurred. Ordinary and `python3 -O` observer runners each pass
+**10/10** controls, with 24/24 measurement cycles on baseline, unchanged
+40-cell/34-input CP matrix, three producer cases and six empty evaluator calls.
+Postimage-fault failures are 6, 6465, 3, 33, 11 and 3 out of 711782 respectively;
+the additional V.90 cycles also exercise those opt-in injections.
+
+| Final gate | Measured result | Direct exit |
+|---|---|---:|
+| Focused Gentoo period | 1 passed, 0 failed; 711782 exact checks | 0 |
+| Ordinary / optimized controls | 10/10 each | 0 each |
+| `make -j1 J=1 phase` | **385 passed, 0 failed**, structural boundary OK | 0 |
+| Standalone refcheck | 14051 references / 2571 headings, no unresolved/pending/stale entries | 0 |
+| `git diff --check` | No whitespace errors | 0 |
+
+Final structural counts: 2202 offset annotations, 2679 live period assertions,
+336 types/171 files/1 known duplicate, 600/600 banners, partialcmp self-test
+8/8, TU attribution/order 11/11. Vendored headers pass 7/7 manifest entries;
+the absent external upstream checkout still means no upstream-drift check.
+No modern tier, mutation-execution or mutsnap sweep was run.
+
+Artifacts use `/tmp/opencode/issue183-producer-`:
+
+* `baseline`, `targeted-1`, `targeted-2`, `targeted-3`, `targeted-final`: `.log` and `.json`
+  commands/direct exits; complete period flags printed in each build log.
+* `controls-final`, `controls-optimized-final`: runner logs and direct-exit JSON;
+  `observers-final/` and `observers-optimized-final/`: per-probe full output and status,
+  including executable hash and raw child exits.
+* Named whole-symbol `.dis` files: descriptor, DIL reset/generation, P3M reset,
+  ADI accumulate/mean/reset/second-study/max, TRN2, demapper, P3D, exitPhase3,
+  evaluator, caller, Ed, V.90/V.92 decisions and parameter defaults.
+  Final script resolves all 19 symbols successfully. Early misspelled caller
+  symbol lookups returned 1 and supplied no evidence; corrected whole-symbol
+  reads supersede them.
+* `phase.log`/`phase.json` and `phase-final.log`/`phase-final.json`: detached full serial gates with direct make exits;
+  standalone `refcheck` and `diff-check` logs/status are recorded separately.
+
+The final executable measured by both observer runners is SHA-256
+`776a667ec198376d832f6dc6118e28450f9f29e333c32c98952304477b75be21`.
+The earlier `controls`/`observers` artifacts retain the pre-cleanup executable
+`3c93ef8ce5fe417f56d52467752039e4481573e65886d49fe76651a86fee1540`:
+final cleanup aligned the raw ADI snapshot explicitly and fixed indentation;
+the assertion count and all reported observations are unchanged.
+Executed compiler and compiler-selected assembler identity is retained in
+`toolchain.log`: GCC/G++ 3.4.2 (Gentoo Linux 3.4.2-r2, ssp-3.4.1-1,
+pie-8.7.6.5), assembler/ld 2.15.92.0.2 20040927. `identity-final.log` records
+the reference, fixture source, runner source and executable hashes together.
+Reference identity remains the SHA-256 recorded at the top of this audit.
+Reproduction uses the same targeted/phase commands above and the updated
+observer runner; the producer cases are part of `t_v90p4dperiod`.
+
+**Independent review pending; unpublished.** Remaining assumptions are timed
+P3D/TRN1/DIL study and synchronization, codec/pad/channel negotiation, later
+data-constellation/equalizer/evaluator history, actual qualifying caller request,
+and producer-backed V.92 CP encoding with the default shaped mapping. The old
+negative-energy fixture stays exploratory. **Raw NaN remains unobserved** with
+the debugger prerequisite deferred; no source probe or ptrace machinery was
+added. Neither finite-channel success nor the synthetic counterexample licenses
+a public-modem reachability claim.

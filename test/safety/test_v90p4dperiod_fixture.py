@@ -44,8 +44,9 @@ def main():
     require(rc == 0 and match, (rc, text))
     count = int(match.group(1))
     require(count > 0, count)
-    require(text.count("measurement calls=2394/2394 transitions=4/4") == 12, text)
-    require(text.count("session=0 Ed calls=12/192") == 6, text)
+    require(text.count("measurement calls=2394/2394 transitions=4/4") == 24, text)
+    require(text.count("period fixture: session=0 Ed calls=12/192") == 6, text)
+    require(text.count("producer fixture: session=0 Ed calls=12/192") == 12, text)
     require(text.count("session=1 Ed calls=48/192") == 6, text)
     for control in ("corrupt", "missing"):
         require(text.count(f"CP control={control} calls=192/192 accepted=0/2 no Ed entry") == 1, text)
@@ -57,7 +58,11 @@ def main():
     }, matrix)
     require(text.count("CP matrix summary: 40/40 cells, 2856 sample calls per side, "
                        "20 nonzero peer-copy observations") == 1, text)
-    print(f"baseline: exit 0; {count}/{count} checks; 12/12 cycles")
+    for mode, decision in ((1, 988), (2, 622), (3, 0)):
+        require(text.count(f"producer boundary: mode={mode} samples=32280 design=1 bits=23 decision1000={decision}") == 1, text)
+    require(text.count("producer summary: 2 finite channel cases, 1 missing-calibration fault; evaluator request supplied") == 1, text)
+    print(f"baseline: exit 0; {count}/{count} checks; 24/24 cycles")
+    print("producer: 2/2 finite channels, 1/1 missing-calibration control; 32280 DIL samples/side/case")
     print("CP matrix: 40/40 named cells (34 distinct inputs including local request); "
           "2856 calls per side; 20 nonzero peer copies")
     probes = {
@@ -81,15 +86,19 @@ def main():
     require(rc == 1 and "two CRC-validated CP messages" in text and
             "Ed reached silence within bound" in text and "FAIL" in text, (rc, text))
     print("probe cp-crc: exit 1; corrupted message rejected by positive-entry oracle")
+    rc, text = run("calibration-missing")
+    require(rc == 1 and "producer usable descending levels" in text and
+            "missing calibration changes downstream decision" in text and "FAIL" in text, (rc, text))
+    print("probe calibration-missing: exit 1; both sides' missing production rejected by positive oracle")
     rc, text = run("unknown")
     require(rc == 1 and "unknown observer probe" in text, (rc, text))
     print("unknown probe: exit 1; rejected")
-    print("period fixture controls: 9/9 passed (baseline with 2 CP rejection cases + 7 faults + unknown)")
+    print("period fixture controls: 10/10 passed (baseline with CP/producer rejection cases + 8 faults + unknown)")
     if args.artifacts:
         (args.artifacts / "status.json").write_text(json.dumps({
             "binary": str(Path(args.binary).resolve()),
             "sha256": hashlib.sha256(Path(args.binary).read_bytes()).hexdigest(),
-            "baseline_checks": count, "controls_passed": 9, "runs": records,
+            "baseline_checks": count, "controls_passed": 10, "runs": records,
         }, indent=2) + "\n")
 
 
