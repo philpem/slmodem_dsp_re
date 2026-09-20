@@ -213,6 +213,14 @@ struct region {
 	unsigned	size;
 	unsigned char	*pre_a;
 	unsigned char	*pre_b;
+	/*
+	 * THE MODELLED FLOAT SPAN, and 0 means "none".  A word inside
+	 * [foff, foff + fcount*4) is compared AS A FLOAT with the fixture's
+	 * modern-tier budget rather than byte-for-byte; every other word in
+	 * the same region stays exact.  See mark_float_regions().
+	 */
+	unsigned	foff;
+	unsigned	fcount;
 };
 
 static struct region reg[MAXREG];
@@ -261,6 +269,8 @@ add_region(void *a, void *b, unsigned size)
 	r->size = size;
 	r->pre_a = (unsigned char *)malloc(size);
 	r->pre_b = (unsigned char *)malloc(size);
+	r->foff = 0;
+	r->fcount = 0;
 }
 
 static void
@@ -313,6 +323,108 @@ discover(void)
 	}
 }
 
+/*
+ * A word in a MODELLED FLOAT SPAN, compared with the fixture's modern-tier
+ * budget instead of byte-for-byte.  The criterion is the harness's own mixed
+ * form, `|a-b| <= atol + rtol*max(|a|,|b|)`, read back through
+ * `harness_float_atol()`/`harness_float_tol()` so this cannot disagree with
+ * what `diff_eq_float` applies.  On the PERIOD tier both are 0.0 -- the
+ * setter is a no-op without `HARNESS_FLOAT_TOL` -- so this is exact there,
+ * which is what keeps `make period` bit-for-bit.  Two NaNs compare equal.
+ */
+static int
+float_within(float a, float b)
+{
+	double atol = harness_float_atol();
+	double rtol = harness_float_tol();
+	double d, m, ma;
+
+	if (a != a || b != b)
+		return a != a && b != b;
+	d = (double)a - (double)b;
+	if (d < 0)
+		d = -d;
+	ma = (double)a;
+	if (ma < 0)
+		ma = -ma;
+	m = (double)b;
+	if (m < 0)
+		m = -m;
+	if (ma > m)
+		m = ma;
+	return d <= atol + rtol * m;
+}
+
+static void
+mark_float(void *p, unsigned off, unsigned count)
+{
+	int k;
+
+	if (p == 0)
+		return;
+	for (k = 0; k < nreg; k++) {
+		if (reg[k].a != (unsigned char *)p)
+			continue;
+		if (count == 0)
+			count = reg[k].size / 4;
+		if (off + count * 4 > reg[k].size)
+			return;
+		reg[k].foff = off;
+		reg[k].fcount = count;
+		return;
+	}
+}
+
+/*
+ * THE FLOAT REGIONS, AND WHY THEY ARE FOUND BY POINTER PATH RATHER THAN BY
+ * INDEX.  This is t_vpcmrunpcm.cpp's mechanism; the object graph is the same
+ * (both build `VPcmFloModem` with `VPCMXF_Create(0, ...)`) and the divergence
+ * is the same sinc/FIR coefficient DESIGN one finding F11363 records.  The
+ * echoed float buffers and the two designed polyphase banks diverge on the
+ * modern tier; every other word of every region, and the four genuinely
+ * borrowed static installs, stay byte-exact -- the negative control.
+ *
+ *   echoHistory            float *echoHistory, V92EchoCanceller +0x24
+ *   echo arma's m_yhist    float *m_yhist,    FloatARMA +0x0c
+ *   FloatARMA m_fwd/m_fbk  float,             FloatARMA +0x2c, two words
+ *   demod resampler coeffs float *coeffs,     Resampler +0x04, through
+ *                          V90Demodulator +0x98 (its embedded V90Resampler)
+ *   modulator resampler    float *coeffs,     Resampler +0x04, through
+ *     coeffs               V92Modem.modulator +0x50 (its ResamplerTimingOffset)
+ */
+static void
+mark_float_regions(void)
+{
+	unsigned char *flo = base[0];
+	unsigned char *arma = 0, *demod = 0, *mod = 0, *rto = 0;
+	void *p;
+
+	memcpy(&p, flo + 0x6bd0 + 0x24, sizeof p);	/* echoHistory */
+	mark_float(p, 0, 0);
+
+	memcpy(&arma, flo + 0x6bd0 + 0x04, sizeof arma);	/* arma */
+	mark_float(arma, 0x2c, 2);
+	if (arma) {
+		memcpy(&p, arma + 0x0c, sizeof p);		/* m_yhist */
+		mark_float(p, 0, 0);
+	}
+
+	memcpy(&demod, flo + OFF_DEMOD, sizeof demod);
+	if (demod) {
+		memcpy(&p, demod + 0x98, sizeof p);		/* coeffs */
+		mark_float(p, 0, 0);
+	}
+
+	memcpy(&mod, flo + OFF_V92MODEM, sizeof mod);
+	if (mod) {
+		memcpy(&rto, mod + 0x50, sizeof rto);
+		if (rto) {
+			memcpy(&p, rto + 0x04, sizeof p);
+			mark_float(p, 0, 0);
+		}
+	}
+}
+
 static void
 snapshot(void)
 {
@@ -345,6 +457,7 @@ locate(const void *p, int side, unsigned *off)
 static long words_equal;
 static long words_corresponded;
 static long words_static;
+static long words_float;
 static int nregion_last;
 
 /*
@@ -419,6 +532,28 @@ compare_regions(long trial)
 			memcpy(&vb, reg[r].b + i, 4);
 			if (va == vb) {
 				words_equal++;
+				continue;
+			}
+			if (reg[r].fcount
+			    && i >= reg[r].foff
+			    && i < reg[r].foff + reg[r].fcount * 4) {
+				float fa, fb;
+
+				memcpy(&fa, &va, 4);
+				memcpy(&fb, &vb, 4);
+				if (float_within(fa, fb)) {
+					words_float++;
+				} else if (reported < 8) {
+					reported++;
+					printf("    trial %ld (%s, word_3c 0x%02x)"
+					       " region %d float offset %u: "
+					       "ours %.9g blob %.9g\n",
+					       trial, cur_what, cur_w3c, r, i,
+					       (double)fa, (double)fb);
+					fflush(stdout);
+				}
+				diff_eq_float("region %ld float word",
+					      fa, fb, (long)r);
 				continue;
 			}
 			memcpy(&pva, reg[r].pre_a + i, 4);
@@ -991,6 +1126,17 @@ run(void)
 	diff_begin("VPcmFloModem::v90RunDemodulator against the blob, over "
 		   "both jump tables and every inner branch below them");
 
+	/*
+	 * THE MODELLED FLOAT SPANS' BUDGET, modern-tier only (the setter is a
+	 * no-op and `harness_float_tol()`/`harness_float_atol()` stay 0.0
+	 * without `HARNESS_FLOAT_TOL`, so `make period` is bit-exact).  The
+	 * mixed form is t_vpcmrunpcm.cpp's; the measured worst ABSOLUTE
+	 * difference over these regions is 4.0e-5 (a designed coefficient
+	 * bank), while the worst RELATIVE difference is larger only on
+	 * near-zero coefficients, which is why the absolute floor is needed.
+	 */
+	harness_float_tol_fixture_mixed(1.0e-4, 1.0e-6);
+
 	for (trial = 0; trial < NALL; trial++) {
 		struct trial synth;
 		const struct trial *t;
@@ -1028,6 +1174,7 @@ run(void)
 		seed_buffers(trial);
 
 		discover();
+		mark_float_regions();
 		diff_eq_int("no region overflow (%ld)", region_overflow, 0,
 			    trial);
 		diff_eq_int("no lopsided pointer word (%ld)", lopsided, 0,
@@ -1071,14 +1218,16 @@ run(void)
 		base[1] = 0;
 	}
 
-	printf("    surface: %d regions, %ld words equal, %ld corresponding "
-	       "pointer pairs, %ld borrowed tables untouched, %ld static "
-	       "installs\n",
-	       nregion_last, words_equal, words_corresponded, words_static,
-	       words_unresolved);
+	printf("    surface: %d regions, %ld words equal, %ld words within "
+	       "float tolerance, %ld corresponding pointer pairs, %ld borrowed "
+	       "tables untouched, %ld static installs\n",
+	       nregion_last, words_equal, words_float, words_corresponded,
+	       words_static, words_unresolved);
 	diff_eq_int("the exempt classes are a minority of the surface",
 		    (words_corresponded + words_static + words_unresolved) * 20
 		    < words_equal, 1, 0);
+	diff_eq_int("the float tolerance is a minority of the surface",
+		    words_float < words_equal, 1, 0);
 	/*
 	 * AND THE FOUR NAMED WORDS MUST ACTUALLY FIRE.  An exemption nobody
 	 * reaches is an exemption nobody has measured, and it would go on

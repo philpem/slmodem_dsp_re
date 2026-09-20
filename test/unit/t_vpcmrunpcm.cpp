@@ -244,6 +244,16 @@ struct region {
 	unsigned	size;
 	unsigned char	*pre_a;
 	unsigned char	*pre_b;
+	/*
+	 * THE MODELLED FLOAT SPAN, and 0 means "none".  A word inside
+	 * [foff, foff + fcount*4) is compared AS A FLOAT with the fixture's
+	 * modern-tier budget rather than byte-for-byte; every other word in
+	 * the same region stays exact.  See mark_float_regions() for why the
+	 * spans are identified by the pointer path that discovered the region
+	 * rather than by a hard-coded region index.
+	 */
+	unsigned	foff;
+	unsigned	fcount;
 };
 
 static struct region reg[MAXREG];
@@ -293,6 +303,8 @@ add_region(void *a, void *b, unsigned size)
 	r->size = size;
 	r->pre_a = (unsigned char *)malloc(size);
 	r->pre_b = (unsigned char *)malloc(size);
+	r->foff = 0;
+	r->fcount = 0;
 }
 
 static void
@@ -399,6 +411,125 @@ locate(const void *p, int side, unsigned *off)
 }
 
 /*
+ * A word in a MODELLED FLOAT SPAN, compared with the fixture's modern-tier
+ * budget instead of byte-for-byte.  The criterion is the harness's own mixed
+ * form, `|a-b| <= atol + rtol*max(|a|,|b|)`, read back through
+ * `harness_float_atol()`/`harness_float_tol()` so this cannot disagree with
+ * what `diff_eq_float` applies.  On the PERIOD tier both are 0.0 -- the
+ * setter is a no-op without `HARNESS_FLOAT_TOL` -- so this is an exact
+ * comparison there, which is what keeps `make period` bit-for-bit.  Two NaNs
+ * compare equal, as `diff_eq_float` treats them.
+ */
+static int
+float_within(float a, float b)
+{
+	double atol = harness_float_atol();
+	double rtol = harness_float_tol();
+	double d, m, ma;
+
+	if (a != a || b != b)
+		return a != a && b != b;
+	d = (double)a - (double)b;
+	if (d < 0)
+		d = -d;
+	ma = (double)a;
+	if (ma < 0)
+		ma = -ma;
+	m = (double)b;
+	if (m < 0)
+		m = -m;
+	if (ma > m)
+		m = ma;
+	return d <= atol + rtol * m;
+}
+
+/*
+ * Mark the region that `p` points at as carrying a float span.  `count` 0
+ * means the whole region; the byte count is `reg.size`, which was the smaller
+ * of the two sides' requested sizes at discovery, so a span that would run
+ * past it is refused rather than read out of bounds.
+ */
+static void
+mark_float(void *p, unsigned off, unsigned count)
+{
+	int k;
+
+	if (p == 0)
+		return;
+	for (k = 0; k < nreg; k++) {
+		if (reg[k].a != (unsigned char *)p)
+			continue;
+		if (count == 0)
+			count = reg[k].size / 4;
+		if (off + count * 4 > reg[k].size)
+			return;
+		reg[k].foff = off;
+		reg[k].fcount = count;
+		return;
+	}
+}
+
+/*
+ * THE FLOAT REGIONS, AND WHY THEY ARE FOUND BY POINTER PATH RATHER THAN BY
+ * INDEX.
+ *
+ * The rule in `compare_regions` was written for the period tier, where the
+ * two sides can differ only in an address.  On the modern tier that is false
+ * in exactly one way: the sinc/FIR coefficient DESIGN diverges (finding
+ * F11363 -- the object narrows `sinc<float>` to binary32 and GCC 14 does not),
+ * and every float buffer downstream of a designed resampler inherits the
+ * difference.  The regions below are those buffers, each reached from a field
+ * whose type the headers already establish, so a heap address moving between
+ * runs cannot make the marking wrong:
+ *
+ *   echoHistory            float *echoHistory, V92EchoCanceller +0x24
+ *   echo arma's m_yhist    float *m_yhist,    FloatARMA +0x0c
+ *   FloatARMA m_fwd/m_fbk  float,             FloatARMA +0x2c, two words
+ *   demod resampler coeffs float *coeffs,     Resampler +0x04, through
+ *                          V90Demodulator +0x98 (its embedded V90Resampler)
+ *   modulator resampler    float *coeffs,     Resampler +0x04, through
+ *     coeffs               V92Modem.modulator +0x50 (its ResamplerTimingOffset)
+ *
+ * Everything else -- the object's own counters, flags and pointers, the
+ * echoed float buffers' lengths, and the two genuinely borrowed static tables
+ * (the entrance filter's coefficients and the demodulator's prefilter
+ * coefficients and resampler vptr) -- stays byte-exact, which is the negative
+ * control.
+ */
+static void
+mark_float_regions(void)
+{
+	unsigned char *flo = base[0];
+	unsigned char *arma = 0, *demod = 0, *mod = 0, *rto = 0;
+	void *p;
+
+	memcpy(&p, flo + OFF_ECHOCANCELLER + ECHO_HISTORY, sizeof p);
+	mark_float(p, 0, 0);
+
+	memcpy(&arma, flo + OFF_ECHOCANCELLER + 0x04, sizeof arma);
+	mark_float(arma, 0x2c, 2);
+	if (arma) {
+		memcpy(&p, arma + 0x0c, sizeof p);
+		mark_float(p, 0, 0);
+	}
+
+	memcpy(&demod, flo + OFF_DEMOD, sizeof demod);
+	if (demod) {
+		memcpy(&p, demod + 0x98, sizeof p);
+		mark_float(p, 0, 0);
+	}
+
+	memcpy(&mod, flo + OFF_V92MODEM, sizeof mod);
+	if (mod) {
+		memcpy(&rto, mod + 0x50, sizeof rto);
+		if (rto) {
+			memcpy(&p, rto + 0x04, sizeof p);
+			mark_float(p, 0, 0);
+		}
+	}
+}
+
+/*
  * Compare, WORD BY WORD, and the rule rests on one fact about this fixture:
  *
  *   THE ONLY THING THE TWO SIDES CAN LEGITIMATELY DISAGREE ABOUT IS AN
@@ -429,6 +560,7 @@ static long words_equal;
 static long words_corresponded;
 static long words_unresolved;
 static long words_static;
+static long words_float;
 static int nregion_last;
 
 /*
@@ -479,6 +611,36 @@ compare_regions(long trial)
 			memcpy(&vb, reg[r].b + i, 4);
 			if (va == vb) {
 				words_equal++;
+				continue;
+			}
+			/*
+			 * A modelled float word is compared as a float with
+			 * the fixture's budget BEFORE the pointer/static
+			 * cases.  On the period tier the budget is 0, every
+			 * such word is already equal above, and this branch
+			 * is never reached; on the modern tier it is what
+			 * separates a designed-coefficient or echo-history
+			 * last-bit difference from a decision.
+			 */
+			if (reg[r].fcount
+			    && i >= reg[r].foff
+			    && i < reg[r].foff + reg[r].fcount * 4) {
+				float fa, fb;
+
+				memcpy(&fa, &va, 4);
+				memcpy(&fb, &vb, 4);
+				if (float_within(fa, fb)) {
+					words_float++;
+				} else if (reported < 8) {
+					reported++;
+					printf("    trial %ld region %d float "
+					       "offset %u: ours %.9g blob %.9g"
+					       "\n", trial, r, i,
+					       (double)fa, (double)fb);
+					fflush(stdout);
+				}
+				diff_eq_float("region %ld float word",
+					      fa, fb, (long)r);
 				continue;
 			}
 			memcpy(&pva, reg[r].pre_a + i, 4);
@@ -1107,6 +1269,23 @@ run(void)
 	diff_begin("VPcmFloModem::runPcmModem against the blob, over both "
 		   "jump tables and the compare chain below them");
 
+	/*
+	 * THE MODELLED FLOAT SPANS' BUDGET, modern-tier only (the setter is a
+	 * no-op and `harness_float_tol()`/`harness_float_atol()` stay 0.0
+	 * without `HARNESS_FLOAT_TOL`, so `make period` is bit-exact).  It is
+	 * the harness's mixed form, `|a-b| <= atol + rtol*max(|a|,|b|)`,
+	 * because the divergence passes through zero: the measured worst
+	 * ABSOLUTE difference over every trial is 4.0e-5 (the modulator's
+	 * designed coefficient bank) and 3.9e-5 (the demodulator's), while the
+	 * worst RELATIVE difference on those same banks is 7.2e-2 -- a
+	 * near-zero coefficient.  `atol` 1.0e-4 carries those with a 2.5x
+	 * margin and `rtol` 1.0e-6 the functional coefficients; the same
+	 * sinc/FIR design divergence is finding F11363's, and t_resampler.cpp
+	 * uses the same mechanism for it.  This reaches only the modelled
+	 * spans; every other word of every region stays byte-exact.
+	 */
+	harness_float_tol_fixture_mixed(1.0e-4, 1.0e-6);
+
 	for (trial = 0; trial < NALL; trial++) {
 		struct trial synth;
 		const struct trial *t;
@@ -1144,6 +1323,7 @@ run(void)
 		seed_buffers(trial);
 
 		discover();
+		mark_float_regions();
 		diff_eq_int("no region overflow (%ld)", region_overflow, 0,
 			    trial);
 		diff_eq_int("no lopsided pointer word (%ld)", lopsided, 0,
@@ -1225,15 +1405,26 @@ run(void)
 	 * actually compared and how much was exempt.  The two exempt classes
 	 * are asserted to be a small minority of the whole, which is the
 	 * check that a swallowed comparison would fail.
+	 *
+	 * `words within float tolerance` is a COMPARED class, not an exempt
+	 * one: each of those words went through `diff_eq_float` and the
+	 * fixture's budget, and on the period tier the budget is 0 so the
+	 * count is 0 and every one of them is in `words equal` instead.  It
+	 * is reported so a reader can see how much of the modern surface the
+	 * tolerance carried, and it gets its own minority assertion -- if the
+	 * float spans ever grew to the whole object the tolerance would have
+	 * become an off switch and that check fails.
 	 */
-	printf("    surface: %d regions, %ld words equal, %ld corresponding "
-	       "pointer pairs, %ld borrowed tables untouched, %ld pattern "
-	       "installs\n",
-	       nregion_last, words_equal, words_corresponded, words_static,
-	       words_unresolved);
+	printf("    surface: %d regions, %ld words equal, %ld words within "
+	       "float tolerance, %ld corresponding pointer pairs, %ld borrowed "
+	       "tables untouched, %ld pattern installs\n",
+	       nregion_last, words_equal, words_float, words_corresponded,
+	       words_static, words_unresolved);
 	diff_eq_int("the exempt classes are a minority of the surface",
 		    (words_corresponded + words_static + words_unresolved) * 20
 		    < words_equal, 1, 0);
+	diff_eq_int("the float tolerance is a minority of the surface",
+		    words_float < words_equal, 1, 0);
 
 	rc = diff_end();
 	return rc;
