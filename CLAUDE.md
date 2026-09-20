@@ -107,6 +107,17 @@ structural reconstruction gate by default. Modern GCC, 64-bit, interop and
 coverage tiers are explicit portability checks (`make portability` or
 `make phase-full`) rather than the default reconstruction authority.
 
+**Reconstruction first; audit the fixture before interpreting a failure.**
+The priority is original source, binary and functional fidelity under the
+Gentoo period compiler. Primary tests must establish valid/reachable inputs
+at a stated boundary (component methods are not public modem end-to-end).
+Planted internal states with unproven or impossible histories remain labelled
+synthetic exploratory fidelity probes, not reachability evidence. Preserve
+their measured results and add lifecycle coverage; do not weaken a gate or
+change reconstruction source to accommodate an impossible fixture. Modern
+functional correctness is secondary portability work, not a green-dashboard
+target. See `docs/p4d-period-fixture-audit.md` for the energy/count example.
+
 **IT IS A RULE ABOUT `src/`, AND `testbench/` IS NOT `src/`.** The harness is
 measurement apparatus -- it places calls, records both ends, and analyses what
 came back. There is no blob to be differentially identical to, so the rule
