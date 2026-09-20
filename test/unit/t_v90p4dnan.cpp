@@ -9,6 +9,13 @@
  * Raw modern execution remains red; period execution must pass exactly. This
  * binary therefore cannot score an ordinary exit-code mutation suite. The
  * optional fault probes below validate individual observers, not mutation scores.
+ *
+ * Fixture-validity correction (2026-09-20): count=41 with fixed period=36
+ * cannot be reached by an uninterrupted measurement, which exits at 36.
+ * This applies to the finite controls too. The negative before-energy is
+ * not produced by the initialized short-square measurement path. Retain
+ * these as exploratory fidelity inputs; t_v90p4dperiod supplies the bounded
+ * component lifecycle cases. See docs/p4d-period-fixture-audit.md.
  */
 #include <string.h>
 #include "harness.h"

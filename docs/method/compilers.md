@@ -7,6 +7,28 @@ closing it: `make period` builds `src/`, `test/harness/` and `test/unit/` with
 the period compiler, links them against the blob with binutils 2.15, and runs
 the suite.
 
+## Current priority and fixture-validity correction (2026-09-20)
+
+Original source, binary and functional fidelity under **Gentoo GCC 3.4.2-r2**
+comes first. Modern functional correctness remains secondary portability work;
+making its dashboard green is not a reconstruction objective. The historical
+variance record below is retained, not permission to change source to satisfy
+a newer compiler or to migrate exemptions before the inputs are understood.
+
+Primary differential fixtures must establish valid/reachable inputs at an
+explicit boundary. Constructor/reset plus arbitrary internal-field writes is
+not a lifecycle witness. Component-method reachability is narrower than a
+public modem connection, and assumed negotiation inputs must be named.
+Synthetic adversarial tests remain useful exploratory fidelity probes, with
+their raw failures visible; an impossible fixture is not grounds to weaken
+any gate. Add valid lifecycle coverage rather than treating a planted state
+as a primary portability requirement.
+
+The [P4D audit](../p4d-period-fixture-audit.md) corrects the reachability reading
+of the historical negative-energy sentinel: initialized short-square energies
+are nonnegative, but a real zero/zero measurement boundary still generates an
+unordered arithmetic path. A keep-rate flag is not a runtime NaN witness.
+
 **And until finding F2200 the period compiler was not 3.4.2 either.** It was
 Debian sarge's `gcc 3.4.4 20050314 (prerelease)`, near enough to be used and
 wrong enough to matter: 18 of 183 translation units come out different, and
