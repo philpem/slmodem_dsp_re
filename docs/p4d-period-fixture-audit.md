@@ -20,6 +20,16 @@ containment). Reference object SHA-256:
 agreement is useful, but neither negative energy nor its count/period pair is
 evidence of a normal measurement history.
 
+**Current #183 continuation:** the final section advances the V.92 boundary to
+sample-driven, CRC-validated short CP/CPnot followed by Ed. The earlier
+three-flag fixture, counts and review below are retained as historical evidence.
+The mapping/calibration and evaluator outcome remain explicit component inputs;
+neither version establishes a public-modem connection or observes raw dB.
+The independent-review follow-up matrix at the end of this document further
+shows that **either short message alone suffices** at this boundary. The earlier
+2/2-message requirement describes that fixture's chosen stimulus, not a protocol
+necessity. Earlier executable addresses/hashes remain historical build identities.
+
 ## Original-object evidence
 
 Independent review reproduced the existing period binary's 347,300 checks and
@@ -129,7 +139,7 @@ produced by finite values above the threshold. The original audit could not run
 gdb because it is absent; no instructions or source were added to force an x87
 spill or expose the intermediate.
 
-## Implemented input boundary and coverage
+## Historical PR182 input boundary and coverage
 
 Both sides independently construct parameters (with separate host parameter
 blocks, min/max rate 28000/56000), evaluator, ADI, CP, MP, descrambler, demapper
@@ -316,7 +326,7 @@ were removed; the failed-run logs remain. The vendored-header gate checked
 7/7 manifest entries but reported the external upstream checkout absent; no
 upstream-drift check is claimed.
 
-## Remaining limits and next discriminating work
+## PR182 remaining limits and next discriminating work
 
 The audit remains open for preceding V.92 CP negotiation, evaluator production
 of the silence request, ADI calibration generation, and public modem input
@@ -332,3 +342,425 @@ actual period executable independently. Record both energies and classify the
 consumed operand by integer exponent/fraction bits. A recomputed logarithm,
 flag value or integer diagnostic is insufficient. Until then, NaN is an
 instruction-level inference backed by zero/zero energy observations.
+
+## Issue #183: sample-driven short CP entry (2026-09-20)
+
+Investigation base `edce26e3`, branch `investigate/issue183-p4d-entry`, in the
+same worktree recorded above. Source/compiler profile and the synthetic probe
+are unchanged. The bounded discriminator was: if CP validation supplies the
+three assumed results, complete CRC-bearing messages must set them through
+`getDecision`; corrupt or absent messages must not enable Ed. The input domain
+is one short-form pair (acknowledgement 0 then 1, peer SUV bit 0), plus two
+negative streams (both CRCs corrupted; both messages absent), with 192 sample
+calls available per stream. This is a component message boundary, not a
+standards oracle or a complete exchange between two negotiating modems.
+
+### Blob trace and boundary actually advanced
+
+All instruction evidence here is from `tools/dis.py` on the reference object:
+
+* `V90CP::infoToBits`, 52240–522bd: 17 one bits, zero at 17, short-form
+  type at 18, reserved zeros at 19..31, peer bit at 32, acknowledgement at
+  33, CRC framing zero at 34. Sixteen CRC bits follow, then zero padding.
+  The fixture implements the CCITT recurrence as an integer polynomial
+  (`0x1021`, initial `0xffff`), rather than copying receiver state or its
+  register-array implementation. Each message occupies 72 bits at group size 24.
+* `bitsToInfo`, 52d20–53677: real run detection and state machine; 52f03–52f32
+  collects the CRC frame, 5335d onwards evaluates it. The accepted tail at
+  52e97–52efe reports the short forms as 3/4; the bad-CRC branch resets the
+  detector and emits its existing diagnostic. The independent zero-run test
+  at 52dd3–52dff reports Ed (5) only with cursor 18 and `2*groupSize` zeros.
+* `getV92Decision`, 2723d–272b3: **every** supplied sample goes through real
+  `hardDecision`, `process`, descrambler and `bitsToInfo`. There is no prefeed
+  into a decoder's middle, stubbed return, counter write or one-bit shortcut.
+* Result 3: 2735e writes P4D +30; 27373–2737b copies decoded CP +ca0 to +4c;
+  27393 writes +44 only after the +40/+4c and +48 tests. Result 4 has the
+  corresponding stores at 273cd, 273df and 273f7. The fixture observes the
+  ordered progress results 0x31 then 0x33 and the three fields, rather than
+  assigning them. The Ed branch at 272c4 and 276e3–2776c remains unchanged.
+* **Newly explicit remaining prerequisite:** +40 is the caller's local silence
+  request, not a CP-decoder result. `V90Demodulator::progress`, 1cbc0–1cc01,
+  tests a nonzero session and request code 0x22/0x23, calls `resetBeforRRN`,
+  and copies evaluator +90 to P4D +40. The fixture performs that copy at this
+  component boundary. It does not execute `progress` or prove that its enclosing
+  data-phase/request conditions arose. This replaces neither the evaluator
+  history nor the larger caller. With peer bit zero, +40 must be nonzero for
+  these CP replies to set +44; the old assisted fixture bypassed that condition.
+
+The stimulus generator reads no receiver state. It scrambles the message bits
+with zero history and taps 18/23, serially differential-encodes the six sign
+bits of each frame, and maps the remaining 18 bits to six radix-eight indices.
+`ModulusDecoder::progress` at 320f0–32305 reconstructs those digits and emits
+LSB-first bits; `V90Demapper::process` at 31720–318b8 places six decoded signs
+before them. The resulting sample magnitudes are the supplied eight exact
+levels. Every completed frame on **both sides** must reproduce all 24 scrambled
+wire bits independently, before CP acceptance is credited.
+
+Measured positive boundary: six V.92 cycles, each **2/2 decoded short messages**,
+Ed in **48/192 sample calls**, followed by all **2394/2394** measurement calls
+and **4/4** diagnostic transitions. V.90 still enters in **12/192** calls.
+The six energy pairs, raw energy comparisons, complete per-step P4D/demapper
+checks, all 36 measurement heap snapshots and ownership checks remain active.
+
+Two rejection streams run before the V.92 cycles on the same constructed pair:
+
+* Flip the first CRC bit of **each** message, before scrambling. Both sides
+  emit the bad-CRC diagnostic and accept **0/2** messages in **192/192** calls.
+* Replace the complete message stream with descrambled zeros. Both sides accept
+  **0/2** messages in **192/192** calls and emit no bad-CRC diagnostic.
+
+Both controls require WaitForCP, acceptance/handshake still zero, and both
+energy words unchanged from their own preimages. An additional opt-in `cp-crc`
+observer fault applies the corrupt stream to the **positive** case: the
+two-message and Ed-entry requirements must fail even though both implementations
+agree. Thus agreement on rejection cannot masquerade as successful entry.
+
+### Assumption ledger and interface domains
+
+"Component-admissible" below means the inspected accesses/arithmetic support
+these particular inputs. It does **not** mean every API-callable value, or the
+joint supplied environment, is reachable from modem startup.
+
+| Assumption | Disposition and exact boundary | Missing preceding operation |
+|---|---|---|
+| P4D +30=1, +44=1, +4c=0 | **Removed as assignments.** Produced by CRC-validated short messages through the full sample decoder path; corrupt/missing controls reject. | Remote state machine and timing of its acknowledgement remain outside the message boundary. |
+| PCM law and no alternate RBS | **Derived at reset boundary.** Paired real ADI `reset(0, PCM_TYPE_MU_LAW, 0)` and `resetLinearMapping()` replace reliance on zero storage for these initial values. | Law selection from preceding negotiation and absence of alternate RBS on an actual channel are not demonstrated. |
+| ADI levels 300,280,...,160 at codes 0..7 in all six phases | **Open, supplied calibration.** Positive signed-short magnitudes, strictly descending in demapper order, distinct by 20, all indices inside 0..127. Alternate table supplied identically but not selected. | DIL code/sample association and measured calibration; these are not claimed physical mu-law levels or training output. |
+| Mapping: 24 bits/frame, six eight-entry constellations, codes 0..7, shaper rate/id 0 | **Bounded component input.** Six sign bits + 18 modulus bits = 24; `8^6=2^18` makes every generated frame representable. No spectral division is needed at rate 0. `codecConstellation` is supplied identically. | `exitDIL`, `V90TRN2Design`, earlier Jd/power/codec negotiation and later constellation design; no synthesized short CP carries this mapping. |
+| Evaluator `silenceRrnRequest=1` | **Open, assumed outcome**, retained visibly. 1 is an actual possible store value of the original evaluator; it is not constructor output. No arbitrary threshold, error average or evaluator count is planted to manufacture it. | Equalizer error history, designer-provided thresholds/distance, duration/override conditions and an actual `evaluateConnection` verdict. |
+| P4D +40 receives that request | **Bounded caller-interface copy**, now explicit. Original load/store and guards traced at 1cbc0–1cc01. | Actual `V90Demodulator::progress` invocation from a qualifying data/request state. |
+| Repeated RRN entry | Real reset/entry methods called between cycles, without P4D re-construction or full reset. | Rt/RtNot, data recovery, Ri/TRN and an entire repeated live connection are not exercised. |
+
+Origin trace behind the open rows:
+
+* ADI C1 only installs its parameter pointer. Its real `reset` at 40300
+  stores the PCM law at 4031a, clears per-phase alternate flags at 403f7,
+  and initializes accumulators. `resetLinearMapping`, 40500–4056e, clears both
+  tables and seeds only the reference-code slot. Neither method produces the
+  eight supplied levels. `updateLinMappMeanAndVar`, 40fa0–4101f, requires a
+  nonzero cell count, computes reciprocal-count times magnitude sum, then
+  stores a rounded short at 41016. Supplying arbitrary code-labelled samples
+  to that method would move, rather than establish, the missing training history.
+* `V90Demodulator::exitPhase3`, 1bc4d, calls `exitDIL`; 1bc7b calls
+  `setNofUcodesInTrn2`; 1bcb1–1bd3d supplies learned tables, usable/alternate
+  masks, law, phase, maximum code, Jd lookahead and transmit-power bound to
+  `V90TRN2Design`. That call writes the primary mapping passed to P4D reset at
+  1bda2. The fixture replaces this entire producer boundary, not just a
+  constructor default. Demapper reset at 3087f–308ad derives bit counts;
+  309ba–309d7 indexes the ADI table through the supplied mapping codes.
+* Evaluator `updateCurrentConstellationData` at 3e600–3e639 stores the signed
+  distance and three float thresholds and **clears** the request. Its
+  `updateAvePdsnr` at 3e580–3e5f0 consumes float error and unsigned symbol
+  count. `evaluateConnection` rejects an empty count at 3e6f0; the ordinary
+  rate-down path at 3ebc0–3ec15 checks enable, error threshold and both duration
+  conditions before copying parameter +3f0 to request +90. Later verdict/override
+  paths can clear that result. Calling the setter with invented thresholds or
+  only assigning a positive symbol count would not establish the joint
+  designer/equalizer history. The current test therefore claims the request
+  only as an interface assumption. P4D consumes it as a boolean; no unrestricted
+  domain for the evaluator's other inputs is claimed.
+
+### Raw dB witness: still inferred, capability precisely missing
+
+Host PATH checks using `shutil.which` found none of `gdb`, `gdb-multiarch`,
+`lldb`, `rr`. Executed `command -v` checks inside the existing Gentoo image
+also found none of those four. This is a scoped availability check, not a
+claim about every executable anywhere on the machine. No external debugger
+location was supplied, and no software was installed.
+
+What is missing is an existing debugger capable of launching this i386 ELF,
+stopping at both actual consuming comparisons and reading the unmodified
+binary32 stack operand (or its lossless x87 representation) with the matching
+energy fields. The reference sites listed in PR182 remain the targets; locate
+the reconstructed sites independently in the built executable before observing.
+The integer-formatted diagnostics do not expose that operand losslessly.
+Neither a duplicate logarithm nor flag 1 qualifies. **Raw NaN was not observed
+in either implementation**; zero/zero energies plus the original instructions
+continue to support the arithmetic inference only.
+
+Read-only disassembly of the actual paired period executable independently
+locates the consuming operands on both sides (addresses are executable VAs,
+not reference-object offsets):
+
+| Side/mode | Safe observation point before consumption | Raw dB word; object base |
+|---|---|---|
+| Original V.90 | 0x0811f006, `flds 0x10(%esp)`; final `fcompp` at 0x0811f021 | `[esp+0x10]`; `esi` |
+| Original V.92 | 0x0811fc50, `flds 0x10(%esp)`; final `fcompp` at 0x0811fc6b | `[esp+0x10]`; `esi` |
+| Reconstructed V.90 | 0x080da0c7, `fcomps 0x1c(%esp)` | `[esp+0x1c]`; `esi` |
+| Reconstructed V.92 | 0x080d945a, `fcomps 0x1c(%esp)` | `[esp+0x1c]`; `esi` |
+
+All four use energies at `[esi+0x3508]` and `[esi+0x350c]`. The reconstructed
+words are existing `fstps` spills at 0x080da03a/0x080d93cd, not added
+instrumentation. The reference spills at 0x0811efb6/0x0811fc00 feed its reloads.
+These locations belong to executable SHA-256
+`45ccae455c396e606ada947c2366259578c46d13dbd0d1dad483b51d4986e76b`;
+re-resolve after rebuilding. Artifacts `issue183-final-period-{v90,v92,ref-v90,ref-v92}.dis`
+retain the complete symbols. Static operand location is progress towards a
+future witness, **not** a runtime observation.
+
+### Issue #183 verification and artifacts
+
+Unchanged-base focused Gentoo gate: **1 passed, 0 failed**, direct exit 0,
+`/tmp/opencode/issue183-baseline.log`. First sample-driven implementation:
+**350962 checks**, focused gate exit 0 (`issue183-targeted-1.log`); the final
+ADI reset/interface assertions added 28 checks (`issue183-targeted-final.log`,
+350990 checks). A first full phase passed **385/0**, exit 0
+(`issue183-phase.log`, `issue183-gate-status.json`). Review then fixed the
+failed-entry call report (193 for a 192-call bound), made rejection reports
+print actual observations, added two explicit rejection-bound checks, and kept
+the stimulus's sign arithmetic signed. The final focused gate
+`issue183-final-targeted.log`: **1 passed, 0 failed**, direct exit 0; actual
+binary **350992/350992 exact checks**. No new unit binary was added; the full
+period denominator remains 385, not 386.
+
+Ordinary and optimized Python observer runners retain explicit `require`, never
+Python `assert`. Optimized run: **9/9 subprocess controls**, exit 0; baseline
+includes the two message-rejection cases. The six postimage fault counts are
+unchanged (2,2155,1,11,9,1), all out of 350992 checks, all direct exit 1. The
+new `cp-crc` run exits 1 with **11/177114** failed checks on positive entry;
+its assertion inventory is shorter because it never starts V.92 measurement.
+Unknown probes exit 1.
+Per-run output, binary SHA-256 and direct return codes are retained in
+`issue183-final-observers-optimized/` and `issue183-final-observers/` under
+`/tmp/opencode`; earlier `issue183-observers*` directories retain the 350990-check
+version. Final targeted/control exits are in `issue183-final-gate-status.json`.
+
+One **invalid apparatus run** is retained: the temporary optimized observer
+negative-control script imported an unrelated `/tmp/opencode/dis.py` through
+`unittest.mock` and exited 1 before executing its control. See
+`issue183-final-observer-negative.log`; that driver correctly stopped and did
+not claim a phase pass. The script now removes its temporary artifact directory
+from Python's import path before loading standard-library modules. The corrected
+control substitutes exit 0 and empty output for the `cp-crc` subprocess only;
+it must raise `RuntimeError`, using explicit checks even under `python -O`.
+
+The whole-symbol disassembly artifacts are `issue183-v92.dis`,
+`issue183-cp.dis`, `issue183-evaluator.dis`, `issue183-exitPhase3.dis`,
+`issue183-demod-progress.dis`, `issue183-demapper-reset.dis` in that directory.
+Exploratory numeric disassembly starts at 27200 and 3f490 landed inside
+instructions and are **invalid for their initial partial instructions**; those
+fragments are excluded. Whole-symbol reads supersede them; no finding is based
+on the spurious `(bad)` instructions. No invalid differential run occurred in
+this continuation.
+
+Final results, with direct subprocess exits (not pipeline/wrapper last-command
+status):
+
+| Gate/control | Denominator and verdict | Exit |
+|---|---|---|
+| Focused Gentoo `make -j1 J=1 period T=t_v90p4dperiod` | 1 passed, 0 failed; fixture 350992/350992 exact checks | 0 |
+| Ordinary / optimized observer runners | 9/9 each; 12/12 measurement cycles, 2/2 CP rejection cases | 0 each |
+| Optimized false-clean CP runner control | 1/1 substituted exit-0/empty-output result rejected | 0 (control passed) |
+| Final `make -j1 J=1 phase` | **385 passed, 0 failed**; structural boundary OK | 0 |
+| Final standalone refcheck | 14051 references, 2571 headings; 0 unresolved/pending/stale | 0 |
+| `git diff --check` | No whitespace errors | 0 |
+
+Final phase retains 2202 offset annotations, 2679 live period assertions,
+336 types/171 files/1 known duplicate, 600/600 banners, partialcmp self-test
+8/8 and TU attribution/order self-test 11/11. The vendored-header manifest
+passes 7/7; its absent external upstream checkout remains an explicitly skipped
+drift check. No modern tier or mutation-execution sweep was run.
+
+`issue183-verified-gate-status.json` records the corrected apparatus control,
+final phase, refcheck and diff exits. Corresponding logs use the
+`issue183-verified-` prefix. `issue183-final-gate-status.json` retains both
+successful final fixture/control runs and the invalid temporary-runner exit.
+The executed compiler/selected assembler/linker identities are in
+`issue183-toolchain.log`: Gentoo GCC/G++ 3.4.2-r2, assembler and ld
+2.15.92.0.2 20040927, with the same image ID/digest recorded in PR182.
+Complete source/fixture flags remain printed in the focused and full gate logs,
+including `DSPLIB_REPRODUCE_BUGS` and the existing source-only C++ `-ffast-math`.
+
+Reproduce the fixture and controls using the PR182 commands above plus:
+
+```sh
+python3 -O test/safety/test_v90p4dperiod_fixture.py build/period/t_v90p4dperiod
+DSPLIB_P4D_PERIOD_FAULT=cp-crc build/period/t_v90p4dperiod  # expected exit 1
+python3 -O /tmp/opencode/issue183_observer_negative.py
+```
+
+Disposition: ready for independent review of this **bounded** continuation.
+The next reachability discriminator is an actual DIL/TRN2 design plus
+designer/equalizer/evaluator history reaching the qualifying caller request;
+the next raw-witness prerequisite is an approved available i386 debugger.
+Neither open item is replaced by an API-callability claim, a tolerance or an
+exemption. No publication or reconstruction-source change is part of this pass.
+
+## Independent-review follow-up: request/message matrix
+
+The preceding bounded implementation was independently approved. This follow-up
+adds only a bounded matrix and its reporting to the same dirty branch; it does
+not broaden the supplied calibration/evaluator boundary. The original six
+measurement cycles per mode remain intact. No raw NaN observation is added.
+
+### Domain and independent stimulus
+
+**40 named cells:** ten message sequences crossed with local evaluator request
+`L in {0,1}` and transmitted peer SUV `S in {0,1}`. Each cell freshly constructs
+the paired objects, resets through the real methods, copies the supplied local
+request at the already-licensed caller interface, and sends at most 192 samples.
+It stops immediately when either implementation leaves WaitForCP. No measurement
+state, count, energy or CP-result flag is assigned. The peer bit is placed in the
+message **before** computing its CRC, and individual corruption flips the first
+CRC bit **after** computation, before scrambling. There is no read of receiver
+state in stimulus construction.
+
+Each slot is 72 descrambled bits. An omitted slot is 72 zeros, not a compressed
+timeline; all remaining input is zeros. CP-only and CPnot-only place their sole
+message in slot 0. Thus CP-only and omit-CPnot are deliberately identical
+stimuli, whereas CPnot-only and omit-CP differ by one slot of initial zeros.
+For the neither case, the unused peer-bit selector changes no stimulus. There
+are consequently **34 distinct component inputs including L**, not 40 unique
+streams (17 distinct sample streams). The 40-cell denominator preserves the
+requested named comparisons and explicitly discloses these duplicates.
+
+The generator remains based on the original `infoToBits` layout and the integer
+CRC recurrence already described above. No decompiler output, external modem
+implementation or standards text supplies the new fixture. This is an
+original-object differential investigation, not independent standards validation.
+
+### Observed matrix from the original object
+
+The following timings are **sample-call observations**, not individual internal
+bit-call timestamps. Full 24-bit frames are delivered every six sample calls;
+acceptance is observable at calls 18/36, although the decoder's padding boundary
+occurs inside that delivered frame. All four `(L,S)` combinations give the same
+acceptance/exit timing for each sequence below. Destination is listed separately.
+
+| Sequence | Slot 0 / slot 1 | Accepted acknowledgement bits, at sample calls | First Ed-driven exit, or bound |
+|---|---|---|---|
+| pair | CP / CPnot | 0 at 18; 1 at 36 | 48 |
+| CP-only | CP / absent | 0 at 18 | 30 |
+| CPnot-only | CPnot / absent | 1 at 18 | 30 |
+| reverse | CPnot / CP | 1 at 18; 0 at 36 | 48 |
+| bad-CP | corrupt CP / CPnot | 1 at 36 | 48 |
+| bad-CPnot | CP / corrupt CPnot | 0 at 18 | 48 |
+| omit-CP | absent / CPnot | 1 at 36 | 48 |
+| omit-CPnot | CP / absent | 0 at 18 | 30 |
+| both-bad | corrupt CP / corrupt CPnot | none | No exit in 192 |
+| neither | absent / absent | none | No exit in 192 |
+
+After **at least one accepted message**, with this reset history:
+
+| L | Decoded S | Acceptance latch at acceptance | Handshake +44 | Ed destination | Before energy |
+|---|---|---|---|---|---|
+| 0 | 0 | 1 | 0 | B1d (7), progress 0x1c | unchanged |
+| 0 | 1 | 1 | 1 | WaitForRt (14), progress 0x35 | initialized to +0 |
+| 1 | 0 | 1 | 1 | Silence (10), progress 0x35 | initialized to +0 |
+| 1 | 1 | 1 | 1 | WaitForRt (14), progress 0x35 | initialized to +0 |
+
+With no accepted message, all combinations remain WaitForCP (4), progress 0,
+count 192, +30/+44 remain zero, and both energies and P4D +4c remain untouched.
+For every entry case, count is zero at exit. After energy remains untouched in
+all 40 cases. The matrix therefore covers 8 B1d, 8 Silence, 16 WaitForRt and
+8 blocked cells, with **2856 sample calls per side** and **40 accepted-message
+events per side**, 20 carrying nonzero SUV. Every one of the 476 complete frames
+per side is compared against its independently generated 24 wire bits.
+
+### What licenses the conclusions, and what they disprove
+
+* `resetBeforRRN`, 25d34–25d50, establishes +3c=1, +44=0, +48=0, +30=0.
+  The local request copy at 1cc01 is still a supplied component interface.
+* Short-message replies 3/4 each set +30 and copy the decoded peer bit to +4c:
+  2735e/2737b and 273cd/273df. Each independently sets +44 when `L || S`,
+  provided +48 is zero (27379–2739a and 273dd–273fe). Without either request,
+  acceptance still occurs but progress is 0x2f/0x30 (276bf/276b3), not
+  0x31/0x33. The observer counts both kinds of acceptance separately from
+  handshake enable and checks the ordered acknowledgements and their timings.
+* Ed at 272c4 first requires +30. With +3c and +44 nonzero and +48 zero,
+  276e3–2776c initializes before energy, sets +48, clears +30, and selects
+  WaitForRt for nonzero +4c or Silence for zero +4c. Otherwise 272e3–2732a
+  enters B1d without clearing before energy. These are three distinct outcomes,
+  not simply accepted/rejected.
+* **Two-message necessity and CP-before-CPnot necessity are disproved at this
+  boundary.** Either valid short form alone enables the same gate; reversed
+  order works; corrupting or omitting either message does not block entry when
+  the other is accepted. Requiring 2/2 in the existing six-cycle fixture remains
+  useful for testing its selected pair, but is not a reachability prerequisite.
+* Corruption and omission are not always timing-equivalent: corrupting the
+  second message delays exit to call 48, whereas omitting it permits call 30.
+  CRC rejection resets the decoder, but does **not** revoke the P4D acceptance
+  latch set by the first valid message. The ordinary Ed zero-run detector later
+  acts on that retained latch. No-acceptance controls remain blocked despite
+  zero-run Ed replies.
+* **The peer-store observer is now nonvacuous for both values.** C1, full reset
+  (277d5–27820 state stores) and RRN reset do not initialize +4c. Each fresh
+  object's existing whole-storage poison survives there as `0xa5a5a5a5`, which
+  is logged and checked before decoding. At first acceptance in each of the
+  32 entry cells, the actual 0 or 1 differs from that preimage. The 20 nonzero-SUV
+  observations per side comprise 16 first acceptances and four repeated
+  same-value observations; the latter do not independently prove another store
+  occurred. The store instructions above license that control-flow claim.
+  No direct peer-field seed was introduced. Without acceptance, the old raw word must
+  remain identical; it is not treated as a valid negotiated bit.
+
+These conditions are bounded by +3c=1/+48=0 from the actual reset and a fixed
+peer bit within each cell. They do not establish behavior for alternating peer
+bits, later RRN exchanges, or a complete remote modem. The experiment does not
+require preceding DIL/TRN2; the existing assumption ledger remains open there.
+
+### Matrix development error and verification record
+
+The first matrix run failed **96/363210** checks, and the focused gate correctly
+reported **0 passed, 1 failed**, child exit 1. The new oracle had incorrectly
+assumed full reset zeroed +4c: 80 preimage expectations and 16 no-acceptance
+postimage expectations were wrong. Both implementations instead retained
+`0xa5a5a5a5`; all observed message/destination timings agreed. Inspection of
+the original reset stores corrected the **fixture oracle**, not production
+code. The failed gate and full output are retained as
+`/tmp/opencode/issue183-matrix-targeted-1.log` and
+`issue183-matrix-observed-1.log`. This is a failed development run, not a pass
+or an exception. No period source defect was established.
+
+The corrected matrix also asserts observed exit/bound timings, per-message
+bad-CRC diagnostic counts, the actual peer preimage/postimage difference,
+state/count/progress/handshake, energy initialization versus preservation,
+exact paired transcripts, frame bits, guards and allocation release. The
+ordinary and optimized Python runner requires all 40 named cells and the
+2856-call/20-nonzero-copy summary using explicit `require` checks.
+
+Final serial results on the matrix version:
+
+| Gate | Result | Direct exit |
+|---|---|---|
+| Focused Gentoo period | 1 passed, 0 failed | 0 |
+| Raw fixture | **363571/363571 exact checks**; prior 350992 + 12579 matrix checks | 0 |
+| Matrix | **40/40 named cells**, 2856 samples/side, 476 frames/side, 40 acceptance events/side (20 with SUV 1) | included above |
+| Existing lifecycle | Six cycles/mode, 12 total; 2394 calls and 4 diagnostic transitions each | included above |
+| Observer controls, ordinary Python | **9/9** | 0 |
+| Observer controls, optimized Python | **9/9** | 0 |
+| `make -j1 J=1 phase` | **385 passed, 0 failed**, structural boundary OK | 0 |
+| Refcheck | 14051 references, 2571 headings; 0 unresolved/pending/stale | 0 |
+| `git diff --check` | no whitespace errors | 0 |
+
+The six postimage faults still fail 2, 2155, 1, 11, 9 and 1 checks respectively,
+now out of 363571, with ordinary exit 1. `cp-crc` still fails positive entry
+before the matrix runs, and unknown probes still fail. No new unit binary,
+modern run, mutation-execution sweep, tolerance or source/include change was
+introduced. Compiler flags and Gentoo image selection are unchanged; complete
+flags are printed in the focused and phase logs. Structural denominators remain
+2202 offset annotations, 2679 live period assertions, 336 types/171 files/1
+known duplicate, 600/600 banners, partialcmp self-test 8/8 and TU tests 11/11.
+The vendored-header upstream-drift check remains explicitly skipped because its
+external checkout is absent; 7/7 manifest entries pass.
+
+All continuation artifacts are under `/tmp/opencode/`:
+
+* `issue183-matrix-gate-status.json`: actual subprocess commands and exits for
+  focused period, raw execution, both observer runners, phase, refcheck and diff.
+* `issue183-matrix-observed-final.log`: all 40 original-side observations and
+  the exact-check verdict; `issue183-matrix-targeted-final.log` and
+  `issue183-matrix-phase.log`: deciding compiler gates.
+* `issue183-matrix-observers/` and `issue183-matrix-observers-optimized/`:
+  complete baseline/fault outputs and direct exits, executable identity.
+* `issue183-matrix-reset.dis`: original reset evidence for the corrected
+  preimage expectation. The original decision/CRC disassemblies from the
+  preceding section continue to license the branches; production code did not
+  change.
+
+Matrix executable SHA-256:
+`656f5e898046f40e148f27557bd7999b8056cee7f69c4d62fd569f1edfb16cfe`.
+The older executable-VA observation table belongs to its recorded earlier hash,
+not this rebuild. Raw NaN remains **not observed**. Reproduction uses the same
+focused/observer/phase commands above; the matrix is now part of
+`t_v90p4dperiod`. The dirty branch is left for review without publication.
