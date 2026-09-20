@@ -129,9 +129,10 @@ extern "C" {
 #include "dsplib/V90ConstellationDesigner.h"
 
 /*
- * The four transcript compares in `run_loud` are float-derived text and
- * diverge under the modern compiler (a `real K` value prints one unit in its
- * last place); `test/unit/t_v90cdadjusttrans.cpp` re-includes this file with
+ * Some transcript compares in `run_loud` diverge under the modern compiler
+ * (a `real K` value prints one unit in its last place).
+ * The power member's whole transcript is exact and checked by BOTH binaries;
+ * `test/unit/t_v90cdadjusttrans.cpp` re-includes this file with
  * `TRANSCRIPT_ONLY` and this header removes the substantive checks.
  */
 #include "transcript_split.h"
@@ -1149,13 +1150,13 @@ run_loud(void)
 		ref_dsplibs_debug_level = 0;
 		dsplib_debug_capture_on = 0;
 
-#ifdef TRANSCRIPT_ONLY
 		diff_eq_int_(__FILE__, __LINE__,
 			     "adjustConstellationsPower transcripts (trial %ld)",
-			     strcmp(dsplib_debug_capture_text(0),
-				    dsplib_debug_capture_text(1)) == 0 ? 1 : 0,
+			     transcript_exact("cdadjust.power", trial),
 			     1, trial);
-#endif
+		/* This whole method's transcript is an exact parent observer,
+		 * including sqrt scale and the final dBm0 ladder. No numeric
+		 * field is parsed or exempted. The companion retains it too. */
 		if (dsplib_debug_capture_lines(1) > 0)
 			printed++;
 		same_designer(trial);
@@ -1178,8 +1179,7 @@ run_loud(void)
 #ifdef TRANSCRIPT_ONLY
 		diff_eq_int_(__FILE__, __LINE__,
 			     "adjustConstellationsToNewK transcripts (trial %ld)",
-			     strcmp(dsplib_debug_capture_text(0),
-				    dsplib_debug_capture_text(1)) == 0 ? 1 : 0,
+			     transcript_exact("cdadjust.newk", trial),
 			     1, trial);
 #endif
 		if (dsplib_debug_capture_lines(1) > 0)
@@ -1204,8 +1204,7 @@ run_loud(void)
 #ifdef TRANSCRIPT_ONLY
 		diff_eq_int_(__FILE__, __LINE__,
 			     "constellationDesign transcripts (trial %ld)",
-			     strcmp(dsplib_debug_capture_text(0),
-				    dsplib_debug_capture_text(1)) == 0 ? 1 : 0,
+			     transcript_exact("cdadjust.design", trial),
 			     1, trial);
 #endif
 		if (dsplib_debug_capture_lines(1) > 0)
@@ -1235,8 +1234,7 @@ run_loud(void)
 #ifdef TRANSCRIPT_ONLY
 		diff_eq_int_(__FILE__, __LINE__,
 			     "process transcripts (trial %ld)",
-			     strcmp(dsplib_debug_capture_text(0),
-				    dsplib_debug_capture_text(1)) == 0 ? 1 : 0,
+			     transcript_exact("cdadjust.process", trial),
 			     1, trial);
 #endif
 		diff_eq_int("process returned differently, loud (trial %ld)",

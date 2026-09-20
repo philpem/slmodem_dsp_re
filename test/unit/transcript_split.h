@@ -24,10 +24,11 @@
  * `diff_eq_int_` DIRECTLY rather than through the `diff_eq_int` macro, so they
  * survive the no-op.
  *
- * The group that fails in the split-off binary therefore contains the
- * transcript checks and nothing else, which is what makes the declaration
- * check-granular rather than test-granular.  The parent is unchanged in
- * behaviour: with `TRANSCRIPT_ONLY` undefined this header defines nothing.
+ * This split does NOT establish assertion-specific exemption evidence: the
+ * register remains blocked. Parents may also retain explicitly selected exact
+ * diagnostic observers so moving a failing comparison does not erase all
+ * diagnostic mutation coverage. The four transcript companions use the
+ * lossless, zero-budget helper below; no numerical allowance is authorized.
  *
  * A check written as `diff_eq_int("...", strcmp(dsplib_debug_capture_text(0),
  * dsplib_debug_capture_text(1)) == 0, 1, input)` becomes
@@ -36,6 +37,8 @@
 
 #ifndef DSPLIB_TRANSCRIPT_SPLIT_H
 #define DSPLIB_TRANSCRIPT_SPLIT_H
+
+#include "transcript_evidence.h"
 
 #ifdef TRANSCRIPT_ONLY
 

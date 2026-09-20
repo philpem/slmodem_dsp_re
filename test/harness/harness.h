@@ -587,6 +587,8 @@ void diff_eq_double_(const char *file, int line, const char *fmt, double got,
 extern int dsplib_debug_capture_on;
 void dsplib_debug_capture_reset(void);
 const char *dsplib_debug_capture_text(int side);
+unsigned dsplib_debug_capture_size(int side);
+int dsplib_debug_capture_complete(int side);
 /*
  * How many lines that side PRINTED, not counting the callback markers the
  * harness itself writes.  Anti-vacuity checks want this, not the text: a

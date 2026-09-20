@@ -626,6 +626,12 @@ safety: firewall strings offsets refs $(BUILD)/safety/t_alloc_sizes \
 	@./$(BUILD)/safety/t_numeric_storage_exact64
 	@python3 -m unittest discover -s test/safety -p test_gccdiverge.py -v
 
+# Observer probes for the measured GCC 14 ILP32 profile, not a period gate
+# or an exemption validator. A changed baseline must fail these controls.
+.PHONY: safety-p4dnan-gcc14
+safety-p4dnan-gcc14: $(BUILD)/test/t_v90p4dnan
+	@DSPLIB_P4DNAN_BINARY="$(abspath $(BUILD)/test/t_v90p4dnan)" python3 -m unittest discover -s test/safety -p test_v90p4dnan_fixture.py -v
+
 $(BUILD):
 	@mkdir -p $(BUILD)
 

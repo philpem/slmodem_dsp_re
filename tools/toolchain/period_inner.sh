@@ -88,6 +88,12 @@ echo "period: flags $(echo $FLAGS)"
 echo "period: C++ source flags $(echo $SOURCE_CXXFLAGS)"
 echo "period: C++ fixture flags $(echo $CXXFLAGS)"
 for f in $SRC $CXXSRC $HARNESS; do
+	# A serial gate must not depend on jobs output from a command
+	# substitution (the period shell can report an empty job table there).
+	if [ "$J" -eq 1 ]; then
+		compile_one "$f"
+		continue
+	fi
 	compile_one "$f" &
 	while [ "$(jobs -p | wc -l)" -ge "$J" ]; do wait -n 2>/dev/null || wait; done
 done
