@@ -1085,7 +1085,7 @@ run_ctor(void)
 					 * non-float byte in it to protect.
 					 */
 					struct diff_float_span span = {
-						0, (unsigned)(nc / sizeof(float))
+						0, (unsigned)(nc / sizeof(float)), 4
 					};
 
 					diff_eq_obj_float_(__FILE__, __LINE__,
@@ -1100,7 +1100,7 @@ run_ctor(void)
 				    b->resampler.history != 0) {
 					struct diff_float_span span = {
 						0, (unsigned)a->resampler
-						   .historyLen
+						   .historyLen, 4
 					};
 
 					diff_eq_obj_float_(__FILE__, __LINE__,

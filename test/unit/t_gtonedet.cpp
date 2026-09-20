@@ -480,7 +480,7 @@ dirty_filter(unsigned int nden, unsigned int nnum, unsigned int blockSize)
  * a hard failure.
  */
 static const struct diff_float_span gtd_float_spans[] = {
-	{ 0x04, 6 },		/* threshold, ratio, acc_0c, acc_10, acc_14, acc_18 */
+	{ 0x04, 6, 4 },		/* threshold, ratio, acc_0c, acc_10, acc_14, acc_18 */
 };
 
 static void

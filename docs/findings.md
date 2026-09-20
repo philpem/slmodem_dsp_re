@@ -125309,3 +125309,85 @@ clean, 14050 references, 0 dangling.  `git diff --stat`:
 `test/unit/t_vpcmqcline.cpp`, `docs/findings.md`.
 PR:
 https://github.com/philpem/slmodem_dsp_re/pull/181
+
+### Review correction to F11368, F11371 and F11372 (2026-09-20)
+
+The earlier observations remain above; several explanations and apparatus
+claims do not survive review of PR176/179/181:
+
+* **The old flag implication claim was false.** Running
+  `docker run --rm dsplibs-tc342-gentoo gcc -ffast-math -dM -E -` with empty
+  stdin prints `__FINITE_MATH_ONLY__ 1`; adding `-fno-finite-math-only` prints
+  `0`. GCC 3.4.2 did enable the assumption. Different optimization use of
+  assumptions, not absence of the old implication, explains why the measured
+  modern-only remedy is useful. The period flags are unchanged.
+* **A zero-budget float comparison was not a raw-word comparison.** It equated
+  signed zeros and NaN payloads. The three heap fixtures now use a scoped
+  word assertion: period raw bits, modern numerical comparison only in
+  explicitly classified spans. Their input checks compare both sides with
+  the original seed as raw bytes. The mixed budget no longer leaks to output
+  or input checks. Its predicate is reference-scaled, not max-scaled.
+* **The 2.5x observed maximum is not an independent correctness bound.** The
+  retained 1e-4 absolute / 1e-6 relative allowance is an owner-authorized,
+  provisional fixture policy. Passing controls proves apparatus rejection
+  boundaries, not algorithmic acceptability. That remains an independent
+  review question, including the other existing tolerance policies.
+* **Tolerated differences did not measure the classified surface.** The
+  shared classifier now reports classified/total words, validates both
+  pointer paths and span bounds, and refuses unequal allocation lengths.
+  Unmodelled storage keeps the existing exact comparator.
+* **The analog split removed too much parent coverage.** The parent again
+  checks the modem, guard, phase2Info, parameters and demodulator. Its modern
+  mask is exactly 24 bytes (six words), only at input 8601; the period has no
+  such mask. Five explicit graph-corruption controls each make the clean
+  parent fail, including a non-divergent float outside those 24 bytes.
+* **Group names were not assertion identities.** The old gccdiverge subset
+  test could excuse a signal with no parsed failures and unexpected failures
+  within an allowed group. All 14 existing entries are now blocked rather
+  than automatically migrated. The new exact-transcript primitive requires
+  normal exit 1, complete reviewed assertion/input/value diagnostics and
+  positive summary denominators, with no regex/subset matching of failures.
+  A real register migration still requires independent review of every
+  assertion; no new exemption is claimed here.
+
+Local review packet: `docs/pr176-181-review-fixes.md`. Disk-backed raw logs,
+commands, statuses and the complete blocked register inventory are under
+`/tmp/opencode/pr181-fixes/`. The initial phase attempt was terminated at the
+tool timeout and is invalid; the subsequent complete run passed **383/383**.
+No mutation sweep or snapshot update was used for these corrections.
+
+### Independent-review follow-up to the PR176/179/181 correction (2026-09-20)
+
+The full 14-entry register audit is recorded in
+`docs/tolerance-split-register-review.md`. **Audit complete, migration deferred;
+all 14 wrappers explicitly exit 1.** The earlier description of a literal
+transcript as assertion-complete evidence is withdrawn: a Boolean strcmp
+failure at the same tag can describe arbitrarily different underlying text,
+and raw object diagnostics abbreviate bytes. A new control demonstrates this
+collision. Literal-output v1 is diagnostic-only and can no longer authorize
+any exemption; migration requires lossless evidence and assertion/build identity.
+
+Shared apparatus defects found by that review are corrected: unequal double
+infinities are rejected before arithmetic; normalized finite comparisons avoid
+overflow false passes; float ULP ordering/distance uses fixed-width unsigned
+storage; entire float-span descriptor lists are validated before comparing;
+period typed-object storage preserves raw zero signs and NaN payloads; and
+mixed rtol=0 now really means zero. Nested Resampler fixtures select complete,
+valid descriptor prefixes for their actual class sizes. Scalar float/double
+NaN/zero numerical semantics are unchanged and no longer documented as raw
+storage identity. The controls pass **54/54 in each of ILP32 and LP64, modern
+and no-define**, and the period gate passes **383/383**.
+
+Two register provenance corrections do not claim a replacement assembly
+derivation: the exact-power V90Equalizer fixture calls **setLinearEquBeta and
+setDfeBeta**, not convertEqualizerToMmx; the determineMaxUcode NaN fixture
+concerns **skipping** NaNs so the window does not qualify. Earlier causal
+explanations are marked unreviewed rather than repurposed as evidence.
+
+Outstanding audit findings remain visible: **psd and v90equ** mutation suites
+target red baselines; transcript-only mutations can lose their observer when
+all transcript checks move to a red companion; and measured tolerance margins
+are provisional policies, not independent algorithmic error bounds. No full
+modern or mutation sweep was run, and no snapshot or suite was altered to hide
+these limitations. Fresh focused logs, binary hashes, denominators and direct
+exit codes are under `/tmp/opencode/pr181-fixes/followup/`.

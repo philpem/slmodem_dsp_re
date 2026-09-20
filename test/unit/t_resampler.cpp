@@ -290,8 +290,8 @@ next_float(void)
  * The floating-point fields of the Resampler chain, named as typed spans so
  * the modern tier's rounding-level tolerance reaches them and every other
  * byte stays exact.  The classes are nested, so the offsets hold for all four
- * sizes this file compares (0x48, 0x4c, 0x94, 0xb4); the helper clips a span
- * that runs past the object it is given.
+ * sizes this file compares (0x48, 0x4c, 0x94, 0xb4). Each actual class gets
+ * its complete prefix of descriptors; the harness never clips a span.
  */
 static const struct diff_float_span rs_float_spans[] = {
 	{ 0x0c, 1, 8 },		/* double phase                     */
@@ -315,6 +315,15 @@ static void
 cmp_obj(const char *what, unsigned n, const unsigned *skip, long input)
 {
 	unsigned i;
+	size_t nspans;
+	switch (n) {
+	case 0x48: nspans = 3; break; /* Resampler */
+	case 0x4c: nspans = 4; break; /* ResamplerTimingOffset */
+	case 0x94: case 0xb4: nspans = 9; break;
+	default:
+		diff_eq_int("known resampler object size", 0, 1, input);
+		return;
+	}
 
 	memcpy(scratch[0], obj[0], n);
 	memcpy(scratch[1], obj[1], n);
@@ -324,7 +333,7 @@ cmp_obj(const char *what, unsigned n, const unsigned *skip, long input)
 	}
 	diff_eq_obj_float_(__FILE__, __LINE__, what, "V90Resampler",
 			   scratch[0], scratch[1], n, rs_float_spans,
-			   sizeof rs_float_spans / sizeof rs_float_spans[0],
+			   nspans,
 			   input);
 }
 

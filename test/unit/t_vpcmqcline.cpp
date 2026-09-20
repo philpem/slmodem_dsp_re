@@ -168,6 +168,7 @@ static unsigned char mparams[2][MP_SLOT] __attribute__((aligned(8)));
 static unsigned char *base[2];
 
 static float sig_in[2][NSAMP];
+static float sig_seed[NSAMP];
 static float sig_out[2][NSAMP];
 static int rxbits[2][NSAMP];
 static int txbits[2][NSAMP];
@@ -305,7 +306,9 @@ discover(void)
 
 			sa = harness_alloc_reqsize(pa);
 			sb = harness_alloc_reqsize(pb);
-			add_region(pa, pb, sa < sb ? sa : sb);
+			diff_eq_int("paired allocation lengths", sa, sb, off);
+			if (sa == sb && sa != 0)
+				add_region(pa, pb, sa);
 		}
 	}
 }
@@ -320,53 +323,11 @@ discover(void)
 /*
  * A word in a MODELLED FLOAT SPAN, compared with the fixture's modern-tier
  * budget instead of byte-for-byte.  The criterion is the harness's own mixed
- * form, `|a-b| <= atol + rtol*max(|a|,|b|)`, read back through
- * `harness_float_atol()`/`harness_float_tol()`.  On the PERIOD tier both are
- * 0.0 -- the setter is a no-op without `HARNESS_FLOAT_TOL` -- so this is
- * exact there, which keeps `make period` bit-for-bit.  Two NaNs compare equal.
+ * form, `|a-b| <= atol + rtol*|reference|`, scoped to diff_eq_float_word.
+ * PERIOD compares raw words, including signed zero and NaN payloads.
+ * The 1e-4/1e-6 owner-authorized fixture policy is provisional, not an
+ * independently established algorithmic bound. No input/output allowance.
  */
-static int
-float_within(float a, float b)
-{
-	double atol = harness_float_atol();
-	double rtol = harness_float_tol();
-	double d, m, ma;
-
-	if (a != a || b != b)
-		return a != a && b != b;
-	d = (double)a - (double)b;
-	if (d < 0)
-		d = -d;
-	ma = (double)a;
-	if (ma < 0)
-		ma = -ma;
-	m = (double)b;
-	if (m < 0)
-		m = -m;
-	if (ma > m)
-		m = ma;
-	return d <= atol + rtol * m;
-}
-
-static void
-mark_float(void *p, unsigned off, unsigned count)
-{
-	int k;
-
-	if (p == 0)
-		return;
-	for (k = 0; k < nreg; k++) {
-		if (reg[k].a != (unsigned char *)p)
-			continue;
-		if (count == 0)
-			count = reg[k].size / 4;
-		if (off + count * 4 > reg[k].size)
-			return;
-		reg[k].foff = off;
-		reg[k].fcount = count;
-		return;
-	}
-}
 
 /*
  * THE FLOAT REGIONS, AND WHY THEY ARE FOUND BY POINTER PATH RATHER THAN BY
@@ -388,37 +349,10 @@ mark_float(void *p, unsigned off, unsigned count)
  * so its pointer is null-checked; the demodulator and echo canceller are
  * built on both sides.
  */
-static void
-mark_float_regions(void)
+#include "region_float_graph.h"
+static void mark_float_regions(void)
 {
-	unsigned char *flo = base[0];
-	unsigned char *arma = 0, *demod = 0, *mod = 0, *rto = 0;
-	void *p;
-
-	memcpy(&p, flo + QCC_OFF_ECHO + QCC_ECHO_HISTORY, sizeof p);
-	mark_float(p, 0, 0);
-
-	memcpy(&arma, flo + QCC_OFF_ECHO + QCC_ECHO_ARMA, sizeof arma);
-	mark_float(arma, 0x2c, 2);
-	if (arma) {
-		memcpy(&p, arma + 0x0c, sizeof p);
-		mark_float(p, 0, 0);
-	}
-
-	memcpy(&demod, flo + QCC_OFF_DEMOD, sizeof demod);
-	if (demod) {
-		memcpy(&p, demod + 0x98, sizeof p);
-		mark_float(p, 0, 0);
-	}
-
-	memcpy(&mod, flo + QCC_OFF_V92MODEM, sizeof mod);
-	if (mod) {
-		memcpy(&rto, mod + 0x50, sizeof rto);
-		if (rto) {
-			memcpy(&p, rto + 0x04, sizeof p);
-			mark_float(p, 0, 0);
-		}
-	}
+	mark_float_graph(QCC_OFF_ECHO, QCC_OFF_DEMOD, QCC_OFF_V92MODEM);
 }
 
 static void
@@ -499,10 +433,14 @@ compare_regions(long trial)
 			    && i >= reg[r].foff
 			    && i < reg[r].foff + reg[r].fcount * 4) {
 				float fa, fb;
+				int failures = diff_failures;
+				char label[80];
 
 				memcpy(&fa, &va, 4);
 				memcpy(&fb, &vb, 4);
-				if (float_within(fa, fb)) {
+				snprintf(label, sizeof label, "region %d float offset %u", r, i);
+				diff_eq_float_word(label, va, vb, 1.0e-4, 1.0e-6, trial);
+				if (diff_failures == failures) {
 					words_float++;
 				} else if (reported < 8) {
 					reported++;
@@ -512,8 +450,6 @@ compare_regions(long trial)
 					       r, i, (double)fa, (double)fb);
 					fflush(stdout);
 				}
-				diff_eq_float("region %ld float word",
-					      fa, fb, (long)r);
 				continue;
 			}
 			memcpy(&pva, reg[r].pre_a + i, 4);
@@ -634,6 +570,7 @@ seed_buffers(long trial)
 		float b = (float)((int)nextb() - 128) * 0.005859375f;
 
 		sig_in[0][i] = sig_in[1][i] = a;
+		sig_seed[i] = a;
 		/*
 		 * THE OUTPUT BUFFER IS SEEDED AWAY FROM ZERO, which is what
 		 * makes the silence half's clear loop visible: a zero-filled
@@ -870,7 +807,7 @@ run_qcline(void)
 	 * bank), while the worst RELATIVE difference is larger only on
 	 * near-zero coefficients, which is why the absolute floor is needed.
 	 */
-	harness_float_tol_fixture_mixed(1.0e-4, 1.0e-6);
+	harness_float_tol_fixture(0);
 
 	for (i = 0; i < 4; i++)
 		sawState[i] = 0;
@@ -928,8 +865,9 @@ run_qcline(void)
 			    harness_alloc.allocs - allocs, 0, trial);
 
 		for (i = 0; i < NSAMP; i++)
-			diff_eq_float("in[%ld] is untouched", sig_in[0][i],
-				      sig_in[1][i], (long)i);
+			diff_eq_int("in[%ld] is untouched",
+				    memcmp(&sig_in[0][i], &sig_seed[i], 4) == 0 &&
+				    memcmp(&sig_in[1][i], &sig_seed[i], 4) == 0, 1, (long)i);
 		for (i = 0; i < NSAMP; i++)
 			diff_eq_float("out[%ld]", sig_out[0][i],
 				      sig_out[1][i], (long)i);
@@ -1043,7 +981,10 @@ run_qcline(void)
 		    (words_corresponded + words_static) * 20 < words_equal, 1,
 		    0);
 	diff_eq_int("the float tolerance is a minority of the surface",
-		    words_float < words_equal, 1, 0);
+		    classified_float_words > 0 &&
+		    classified_float_words * 2 < classified_total_words, 1, 0);
+	printf("    classified float words %ld / %ld total words\n",
+	       classified_float_words, classified_total_words);
 
 	diff_eq_int("the period ends at least once", sawRet1, 1, 0);
 	diff_eq_int("...and does not end most of the time", sawRet0, 1, 0);
@@ -1187,9 +1128,10 @@ run_rp3(void)
 	int phaseMoved = 0;
 
 	diff_begin("VPcmFloModem::vPcmResetPhase3Modem against the blob");
+	classified_float_words = classified_total_words = 0;
 
 	/* The modelled float spans' budget; see run_qcline(). */
-	harness_float_tol_fixture_mixed(1.0e-4, 1.0e-6);
+	harness_float_tol_fixture(0);
 
 	dsplib_debug_capture_on = 1;
 
@@ -1318,6 +1260,11 @@ run_rp3(void)
 		    quiet > 0 && loud > 0, 1, 0);
 	diff_eq_int("the address-bearing lines the rewrite excuses were "
 		    "really printed", addr_lines_seen > 0, 1, 0);
+	diff_eq_int("classified float surface is bounded",
+	            classified_float_words > 0 &&
+	            classified_float_words * 2 < classified_total_words, 1, 0);
+	printf("    classified float words %ld / %ld total words (reset phase 3)\n",
+	       classified_float_words, classified_total_words);
 
 	return diff_end();
 }

@@ -236,7 +236,7 @@ cmp_obj(const char *what, int trial)
 	 * rounding-level tolerance reach them while every non-float field
 	 * stays exact.
 	 */
-	static const struct diff_float_span spans[] = { { 0x2c, 2 } };
+	static const struct diff_float_span spans[] = { { 0x2c, 2, 4 } };
 
 	snapshot(sa, O());
 	snapshot(sb, T());
@@ -268,7 +268,7 @@ cmp_buf(const char *what, const float *a, const float *b, unsigned int n,
 	if (n == 0)
 		return;
 	{
-		struct diff_float_span span = { 0, n };
+		struct diff_float_span span = { 0, n, 4 };
 
 		diff_eq_obj_float_(__FILE__, __LINE__, what, "struct arma_buf",
 				   a, b, n * sizeof(float), &span, 1,
@@ -726,7 +726,7 @@ run_processn(void)
 
 				{
 					struct diff_float_span span = {
-						0, run
+						0, run, 4
 					};
 
 					diff_eq_obj_float_(__FILE__, __LINE__,

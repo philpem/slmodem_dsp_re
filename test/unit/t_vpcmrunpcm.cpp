@@ -218,6 +218,7 @@ static unsigned char *base[2];
 
 /* The four buffers the function is handed, one set per side. */
 static float sig_in[2][NSAMP];
+static float sig_seed[NSAMP];
 static float sig_out[2][NSAMP];
 static int rxbits[2][NSAMP];
 static int txbits[2][NSAMP];
@@ -357,7 +358,9 @@ discover(void)
 
 			sa = harness_alloc_reqsize(pa);
 			sb = harness_alloc_reqsize(pb);
-			add_region(pa, pb, sa < sb ? sa : sb);
+			diff_eq_int("paired allocation lengths", sa, sb, off);
+			if (sa == sb && sa != 0)
+				add_region(pa, pb, sa);
 		}
 	}
 
@@ -411,63 +414,17 @@ locate(const void *p, int side, unsigned *off)
 }
 
 /*
- * A word in a MODELLED FLOAT SPAN, compared with the fixture's modern-tier
- * budget instead of byte-for-byte.  The criterion is the harness's own mixed
- * form, `|a-b| <= atol + rtol*max(|a|,|b|)`, read back through
- * `harness_float_atol()`/`harness_float_tol()` so this cannot disagree with
- * what `diff_eq_float` applies.  On the PERIOD tier both are 0.0 -- the
- * setter is a no-op without `HARNESS_FLOAT_TOL` -- so this is an exact
- * comparison there, which is what keeps `make period` bit-for-bit.  Two NaNs
- * compare equal, as `diff_eq_float` treats them.
+ * Modelled binary32 words use diff_eq_float_word: raw words in the period
+ * build, a scoped |a-b| <= 1e-4 + 1e-6*|reference| policy in the modern
+ * build. This owner-authorized fixture policy is provisional, not an
+ * independently established algorithmic error bound. Input integrity and
+ * unrelated output comparisons do not receive this allowance.
  */
-static int
-float_within(float a, float b)
-{
-	double atol = harness_float_atol();
-	double rtol = harness_float_tol();
-	double d, m, ma;
-
-	if (a != a || b != b)
-		return a != a && b != b;
-	d = (double)a - (double)b;
-	if (d < 0)
-		d = -d;
-	ma = (double)a;
-	if (ma < 0)
-		ma = -ma;
-	m = (double)b;
-	if (m < 0)
-		m = -m;
-	if (ma > m)
-		m = ma;
-	return d <= atol + rtol * m;
-}
 
 /*
- * Mark the region that `p` points at as carrying a float span.  `count` 0
- * means the whole region; the byte count is `reg.size`, which was the smaller
- * of the two sides' requested sizes at discovery, so a span that would run
- * past it is refused rather than read out of bounds.
+ * The shared classifier validates both pointer paths, allocation lengths,
+ * span bounds and alignment. Unknown or mismatched paths fail closed.
  */
-static void
-mark_float(void *p, unsigned off, unsigned count)
-{
-	int k;
-
-	if (p == 0)
-		return;
-	for (k = 0; k < nreg; k++) {
-		if (reg[k].a != (unsigned char *)p)
-			continue;
-		if (count == 0)
-			count = reg[k].size / 4;
-		if (off + count * 4 > reg[k].size)
-			return;
-		reg[k].foff = off;
-		reg[k].fcount = count;
-		return;
-	}
-}
 
 /*
  * THE FLOAT REGIONS, AND WHY THEY ARE FOUND BY POINTER PATH RATHER THAN BY
@@ -496,37 +453,10 @@ mark_float(void *p, unsigned off, unsigned count)
  * coefficients and resampler vptr) -- stays byte-exact, which is the negative
  * control.
  */
-static void
-mark_float_regions(void)
+#include "region_float_graph.h"
+static void mark_float_regions(void)
 {
-	unsigned char *flo = base[0];
-	unsigned char *arma = 0, *demod = 0, *mod = 0, *rto = 0;
-	void *p;
-
-	memcpy(&p, flo + OFF_ECHOCANCELLER + ECHO_HISTORY, sizeof p);
-	mark_float(p, 0, 0);
-
-	memcpy(&arma, flo + OFF_ECHOCANCELLER + 0x04, sizeof arma);
-	mark_float(arma, 0x2c, 2);
-	if (arma) {
-		memcpy(&p, arma + 0x0c, sizeof p);
-		mark_float(p, 0, 0);
-	}
-
-	memcpy(&demod, flo + OFF_DEMOD, sizeof demod);
-	if (demod) {
-		memcpy(&p, demod + 0x98, sizeof p);
-		mark_float(p, 0, 0);
-	}
-
-	memcpy(&mod, flo + OFF_V92MODEM, sizeof mod);
-	if (mod) {
-		memcpy(&rto, mod + 0x50, sizeof rto);
-		if (rto) {
-			memcpy(&p, rto + 0x04, sizeof p);
-			mark_float(p, 0, 0);
-		}
-	}
+	mark_float_graph(OFF_ECHOCANCELLER, OFF_DEMOD, OFF_V92MODEM);
 }
 
 /*
@@ -616,9 +546,9 @@ compare_regions(long trial)
 			/*
 			 * A modelled float word is compared as a float with
 			 * the fixture's budget BEFORE the pointer/static
-			 * cases.  On the period tier the budget is 0, every
-			 * such word is already equal above, and this branch
-			 * is never reached; on the modern tier it is what
+			 * cases. On the period tier differing words are raw
+			 * integer failures, including signed zero and NaN payloads.
+			 * On the modern tier it is what
 			 * separates a designed-coefficient or echo-history
 			 * last-bit difference from a decision.
 			 */
@@ -626,10 +556,14 @@ compare_regions(long trial)
 			    && i >= reg[r].foff
 			    && i < reg[r].foff + reg[r].fcount * 4) {
 				float fa, fb;
+				int failures = diff_failures;
+				char label[80];
 
 				memcpy(&fa, &va, 4);
 				memcpy(&fb, &vb, 4);
-				if (float_within(fa, fb)) {
+				snprintf(label, sizeof label, "region %d float offset %u", r, i);
+				diff_eq_float_word(label, va, vb, 1.0e-4, 1.0e-6, trial);
+				if (diff_failures == failures) {
 					words_float++;
 				} else if (reported < 8) {
 					reported++;
@@ -639,8 +573,6 @@ compare_regions(long trial)
 					       (double)fa, (double)fb);
 					fflush(stdout);
 				}
-				diff_eq_float("region %ld float word",
-					      fa, fb, (long)r);
 				continue;
 			}
 			memcpy(&pva, reg[r].pre_a + i, 4);
@@ -1252,6 +1184,7 @@ seed_buffers(long trial)
 			  - (float)(i * i) * 0.000030517578125f;
 
 		sig_in[0][i] = sig_in[1][i] = a;
+		sig_seed[i] = a;
 		sig_out[0][i] = sig_out[1][i] = b;
 		rxbits[0][i] = rxbits[1][i] = (int)nextb();
 		txbits[0][i] = txbits[1][i] = (int)nextb();
@@ -1273,18 +1206,20 @@ run(void)
 	 * THE MODELLED FLOAT SPANS' BUDGET, modern-tier only (the setter is a
 	 * no-op and `harness_float_tol()`/`harness_float_atol()` stay 0.0
 	 * without `HARNESS_FLOAT_TOL`, so `make period` is bit-exact).  It is
-	 * the harness's mixed form, `|a-b| <= atol + rtol*max(|a|,|b|)`,
+	 * the harness's mixed form, `|a-b| <= atol + rtol*|reference|`,
 	 * because the divergence passes through zero: the measured worst
 	 * ABSOLUTE difference over every trial is 4.0e-5 (the modulator's
 	 * designed coefficient bank) and 3.9e-5 (the demodulator's), while the
 	 * worst RELATIVE difference on those same banks is 7.2e-2 -- a
 	 * near-zero coefficient.  `atol` 1.0e-4 carries those with a 2.5x
-	 * margin and `rtol` 1.0e-6 the functional coefficients; the same
+	 * margin, NOT an independent correctness bound. This remains an
+	 * owner-authorized provisional fixture policy; the same
 	 * sinc/FIR design divergence is finding F11363's, and t_resampler.cpp
 	 * uses the same mechanism for it.  This reaches only the modelled
-	 * spans; every other word of every region stays byte-exact.
+	 * spans through diff_eq_float_word; no fixture-wide mixed setter.
+	 * Every other word of every region stays byte-exact.
 	 */
-	harness_float_tol_fixture_mixed(1.0e-4, 1.0e-6);
+	harness_float_tol_fixture(0);
 
 	for (trial = 0; trial < NALL; trial++) {
 		struct trial synth;
@@ -1384,8 +1319,9 @@ run(void)
 				    (long)i);
 		}
 		for (i = 0; i < NSAMP; i++)
-			diff_eq_float("in[%ld] is untouched", sig_in[0][i],
-				      sig_in[1][i], (long)i);
+			diff_eq_int("in[%ld] is untouched",
+				    memcmp(&sig_in[0][i], &sig_seed[i], 4) == 0 &&
+				    memcmp(&sig_in[1][i], &sig_seed[i], 4) == 0, 1, (long)i);
 		diff_eq_int("*nrx (%ld)", nrx[0], nrx[1], trial);
 		diff_eq_int("*nbits (%ld)", nbits[0], nbits[1], trial);
 
@@ -1424,7 +1360,10 @@ run(void)
 		    (words_corresponded + words_static + words_unresolved) * 20
 		    < words_equal, 1, 0);
 	diff_eq_int("the float tolerance is a minority of the surface",
-		    words_float < words_equal, 1, 0);
+		    classified_float_words > 0 &&
+		    classified_float_words * 2 < classified_total_words, 1, 0);
+	printf("    classified float words %ld / %ld total words\n",
+	       classified_float_words, classified_total_words);
 
 	rc = diff_end();
 	return rc;

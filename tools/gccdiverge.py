@@ -34,8 +34,11 @@ the period compiler, and the modern build declares the site here.
 THE DISCIPLINE, because an allow-list is otherwise a place where failures go
 to be forgotten:
 
-  * IT NAMES CHECKS, NOT TESTS.  An entry excuses the listed check names and
-    nothing else.  The same binary failing anything unlisted still fails.
+  * ALL ENTRIES ARE BLOCKED PENDING MIGRATION. Legacy `checks` arrays name
+    GROUPS, not assertions. Literal-output v1 is diagnostic-only: a Boolean
+    strcmp or abbreviated object failure can hide different underlying defects
+    at the same site/input. It CANNOT authorize an exemption, even if copied
+    output matches. Lossless evidence and assertion/build identity are required.
   * A STALE ENTRY IS AN ERROR.  If an allow-listed test passes, this exits
     non-zero and says so.  Otherwise the register silently accumulates
     excuses for problems that fixed themselves, and the next real regression
@@ -48,8 +51,9 @@ to be forgotten:
     finding is where the disassembly, the instruction sequence and the
     measurement live.
 
-An entry is a statement that MODERN GCC IS WRONG AND WE KNOW WHY.  It is not
-a tolerance, and it is not for a test that is merely inconvenient.
+An entry records a historical divergence claim, not established compiler
+causation or approval. See docs/tolerance-split-register-review.md for all 14
+blocked entries and their missing evidence. No migration is enabled here.
 """
 
 import argparse
@@ -62,24 +66,62 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 REGISTER = os.path.join(HERE, "gccdiverge.json")
 
-#
-# ANCHORED ON THE COUNT, not on whitespace.  This was `\s{2,}` -- two or more
-# spaces after the name -- which matched t_resampler's aligned output and NOT
-# t_fft's, where the count follows a single space.  The failure was silent and
-# the wrong way round: no names parsed meant an EMPTY failed-set, which is a
-# subset of any allow-list, so the entry excused every check in the file
-# instead of the four it names.  An allow-list that cannot parse a failure is
-# a blanket pass.
-#
-FAILLINE = re.compile(r"^\s*FAIL\s+(.*?)\s+\d+/\d+\s+checks failed", re.M)
+def literal_output_matches(entry, returncode, stdout, stderr):
+    """Diagnostic syntax/equality check ONLY; this cannot authorize an exemption.
+
+    Boolean strcmp failures at the same site/input can serialize unrelated
+    underlying defects identically. Object diagnostics can abbreviate bytes.
+    Even a literal match is NOT lossless assertion evidence and cannot establish
+    compiler/build identity. Migration needs a separate, reviewed structured
+    evidence protocol; copying stdout into v1 is explicitly insufficient.
+    """
+    if returncode != 1:
+        return False, "abnormal exit (only ordinary harness exit 1 is eligible)"
+    contract = entry.get("exact_transcript_v1")
+    if not isinstance(contract, dict):
+        return False, "BLOCKED: legacy group-only entry needs assertion-level review"
+    if stdout != contract.get("stdout") or stderr != contract.get("stderr"):
+        return False, "output differs from reviewed assertion/input transcript"
+    if not stdout.endswith("\n") or not stderr.endswith("\n"):
+        return False, "incomplete output (missing final newline)"
+    lines = stdout.splitlines()
+    summary = re.compile(r"^(PASS|FAIL)\s+(.+?)\s+(?:(\d+)/)?(\d+) checks"
+                         r"( failed)?(?: \(\d+ within modern tolerance\))?$")
+    total = failures = groups = 0
+    for line in lines:
+        match = summary.fullmatch(line)
+        if not match:
+            return False, "unparsed output (transcript v1 accepts summaries only)"
+        status, name, bad, count, suffix = match.groups()
+        count, bad = int(count), int(bad or 0)
+        if count <= 0 or bad > count or ((status == "FAIL") != (bad > 0)):
+            return False, "invalid or zero denominator"
+        if (status == "FAIL") != bool(suffix):
+            return False, "malformed summary"
+        total += count
+        failures += bad
+        groups += 1
+    diagnostics = stderr.splitlines()
+    if not groups or not failures or len(diagnostics) != failures:
+        return False, "missing/truncated failure diagnostics or summaries"
+    if any(not re.fullmatch(r"[^\n]+:\d+: .+  got .+, reference .+", line)
+           for line in diagnostics):
+        return False, "unparsed assertion diagnostic"
+    return True, "%d failures / %d checks in %d groups; exact transcript" % (
+        failures, total, groups)
+
+
+def declared_failure(entry, returncode, stdout, stderr):
+    matched, reason = literal_output_matches(entry, returncode, stdout, stderr)
+    if matched:
+        return False, ("BLOCKED: literal-output v1 is insufficient; missing lossless "
+                       "underlying evidence and assertion/build identity")
+    return False, reason
 
 
 def load():
-    try:
-        with open(REGISTER) as f:
-            return json.load(f)
-    except OSError:
-        return {}
+    with open(REGISTER) as f:
+        return json.load(f)
 
 
 def main():
@@ -98,6 +140,8 @@ def main():
             return 0
         for name, e in sorted(reg.items()):
             print("%s  (finding %s)" % (name, e.get("finding", "?")))
+            print("    BLOCKED: migration requires lossless structured evidence; "
+                  "literal-output v1 cannot authorize exemptions")
             for c in e.get("checks", []):
                 print("    %s" % c)
             print("    %s" % e.get("why", "").strip())
@@ -127,24 +171,15 @@ def main():
     if not entry:
         return r.returncode
 
-    failed = set(FAILLINE.findall(out))
-    allowed = set(entry.get("checks", []))
-    unexpected = failed - allowed
+    allowed, reason = declared_failure(entry, r.returncode, r.stdout, r.stderr)
+    if not allowed:
+        print("  REJECTED %s: %s" % (args.test, reason))
+        return 1
 
-    if unexpected:
-        print("  %s is allow-listed, but these checks are NOT covered:"
-              % args.test)
-        for c in sorted(unexpected):
-            print("      %s" % c)
-        print("  An entry excuses the checks it names and nothing else.")
-        return r.returncode
-
-    print("  ALLOWED  %s: %d check(s) differ under this compiler and cannot "
-          "match the" % (args.test, len(failed)))
-    print("           object -- %s" % entry.get("why", "").strip())
-    print("           `make period` is authoritative here.  Finding %s."
-          % entry.get("finding", "?"))
-    return 0
+    # No approval protocol is implemented. Fail closed even if a future edit
+    # accidentally lets the diagnostic primitive return True here.
+    print("  BLOCKED: no lossless evidence migration protocol is enabled")
+    return 1
 
 
 if __name__ == "__main__":
