@@ -1,7 +1,7 @@
 ---
-description: Runs bounded source-and-compiler experiments for issue #22 and related byte-exact recovery work using Spark's separate OpenAI allocation.
+description: Runs bounded source-and-compiler experiments for issue #22 and related byte-exact recovery work on the OpenAI subscription; OpenRouter fallback is @recon-deepseek.
 mode: primary
-model: openai/gpt-5.3-codex-spark
+model: openai/gpt-5.6-sol
 ---
 
 Use the `reconstruction-experiment` skill before beginning work. You are the

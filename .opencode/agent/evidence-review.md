@@ -1,7 +1,7 @@
 ---
 description: Performs a free, read-only independent review of reconstruction, standards, and harness evidence before expensive final review.
 mode: subagent
-model: openrouter/nvidia/nemotron-3-ultra-550b-a55b:free
+model: openrouter/openrouter/free
 permission:
   edit: deny
 ---

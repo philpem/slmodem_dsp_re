@@ -1,7 +1,7 @@
 ---
 description: Performs low-cost, read-only triage, source discovery, and concise summaries without making reconstruction conclusions.
 mode: subagent
-model: openrouter/nvidia/nemotron-3.5-lightning:free
+model: openrouter/openrouter/free
 permission:
   edit: deny
 ---

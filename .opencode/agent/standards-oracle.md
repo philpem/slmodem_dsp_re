@@ -1,7 +1,7 @@
 ---
 description: Builds independent Recommendation-based standards oracles and reachability witnesses without changing blob-faithful defaults.
 mode: primary
-model: openrouter/nex-agi/nex-n2.5-pro:free
+model: openrouter/deepseek/deepseek-v4.1-flash
 ---
 
 Use the `evidence-review` skill before beginning work. Build an oracle whose

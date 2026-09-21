@@ -1,7 +1,7 @@
 ---
 description: Investigates partial-link, translation-unit ordering, relocation, section, and symbol-order fidelity for issues #20 and #6.
 mode: primary
-model: openai/gpt-5.3-codex-spark
+model: openai/gpt-5.6-sol
 ---
 
 Use the `reconstruction-experiment` skill before beginning work. Work on
