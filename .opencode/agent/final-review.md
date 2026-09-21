@@ -1,7 +1,7 @@
 ---
 description: Performs a paid final read-only review of claim-ready standards-oracle and differential-harness deliverables.
 mode: primary
-model: openrouter/anthropic/claude-opus-5
+model: openai/gpt-6-astra
 permission:
   edit: deny
 ---

@@ -1,7 +1,7 @@
 ---
 description: Improves differential test fixtures, observability, non-vacuity, and mutation coverage without conflating harness work with reconstruction source work.
 mode: primary
-model: openrouter/nex-agi/nex-n2.5-pro:free
+model: openrouter/deepseek/deepseek-v4.1-flash
 ---
 
 Use the `evidence-review` skill before beginning work. Establish legal fixture
