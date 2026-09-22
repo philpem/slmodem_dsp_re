@@ -44,6 +44,14 @@ void ref_ctor2(void *self, V90Parameters *p)
 void our_dtor(void *self) asm("_ZN5V92JdD1Ev");
 void ref_dtor(void *self) asm("ref__ZN5V92JdD1Ev");
 
+/*
+ * The BASE-OBJECT destructor, D2 -- the blob's `_ZN5V92JdD2Ev` at 0x11e40,
+ * separate from D1 at 0x11e50 and translated but never driven until now.
+ * Reached by symbol for the same reason D1 is; see t_v90jd.cpp.
+ */
+void our_dtor2(void *self) asm("_ZN5V92JdD2Ev");
+void ref_dtor2(void *self) asm("ref__ZN5V92JdD2Ev");
+
 void ref_packJdData(void *self) asm("ref__ZN5V92Jd10packJdDataEv");
 void ref_packJdPhaseData(void *self) asm("ref__ZN5V92Jd15packJdPhaseDataEv");
 unsigned char *ref_getJdBitVector(void *self)
@@ -416,6 +424,41 @@ run_dtor(void)
 
 		diff_eq_obj("after ~V92Jd", V92Jd, &OURS, &THEIRS, trial);
 		diff_eq_int("~V92Jd wrote nothing (trial %ld)",
+			    memcmp(before, ours.raw, SLOT), 0, trial);
+		diff_eq_int("no store past the object (trial %ld)",
+			    guard_equal(), 1, trial);
+	}
+
+	return diff_end();
+}
+
+/*
+ * The base-object destructor, D2, over a REAL constructor.  See t_v90jd.cpp
+ * for why it is a separate run and why it constructs first.
+ */
+static int
+run_dtor2(void)
+{
+	int trial;
+
+	diff_begin("V92Jd::~V92Jd [D2]");
+
+	for (trial = 0; trial < NTRIAL; trial++) {
+		unsigned char before[SLOT];
+		V90Parameters *p = (V90Parameters *)params.raw;
+
+		seed(trial, trial % 4);
+		seed_params(trial);
+		our_ctor1(&OURS, p);
+		ref_ctor1(&THEIRS, p);
+
+		memcpy(before, ours.raw, SLOT);
+
+		our_dtor2(&OURS);
+		ref_dtor2(&THEIRS);
+
+		diff_eq_obj("after ~V92Jd [D2]", V92Jd, &OURS, &THEIRS, trial);
+		diff_eq_int("~V92Jd [D2] wrote nothing (trial %ld)",
 			    memcmp(before, ours.raw, SLOT), 0, trial);
 		diff_eq_int("no store past the object (trial %ld)",
 			    guard_equal(), 1, trial);
@@ -1347,6 +1390,7 @@ main(void)
 	rc |= run_resets();
 	rc |= run_ctor();
 	rc |= run_dtor();
+	rc |= run_dtor2();
 	rc |= run_accessors();
 	rc |= run_unpackers();
 	rc |= run_unpackers_states();

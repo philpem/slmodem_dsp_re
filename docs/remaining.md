@@ -497,7 +497,13 @@ planning snapshot; the phase ledger above is the current authority.
 
 Also on the board, not TU work: three written functions still route arms into
 stubs (`VPcmV34Progress` ×5, `vpcm_run` ×5, `v34handshak` ×1 — see
-`tools/worklist.py`'s closing section), and the tested-against-blob share is
+`tools/worklist.py`'s closing section). Those arms are DEFENSIVE, not missing
+code, and are retired as such in F11380: the `vpcm_notwritten` guards are
+reached only when the five `VPcmV34*` weak pointers are null, which cannot
+happen in a whole-object link (the blob and this tree both define all five),
+and `V34hshak.c`'s `default: t3c_unwritten()` is unreachable because the range
+test admits exactly 41..80 and the forty `case` labels cover exactly that
+range. The tested-against-blob share is
 **99.0%** -- 1,540 of 1,554 translated symbols are driven against the blob
 itself, 631,385 bytes.
 Recalibrating the MODERN tier for GCC 14 is its own task (see below).

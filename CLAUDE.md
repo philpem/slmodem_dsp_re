@@ -54,12 +54,19 @@ Measure this before trusting any count in this file or elsewhere:
     python3 tools/worklist.py     # "NOT WRITTEN" is empty
 
 Both read the object tree's symbol tables (populate it with `make coverage`
-or `make`) and print their denominators. The only unreconstructed *regions*
-left are two stub arms (`vpcm_run` in `vpcm.c`, `v34handshak` in
-`V34hshak.c`), and they are data-mode, not fax. What remains is a different
-kind of work: byte-exactness, differential/mutation coverage, the V.90
-digital-side bring-up and the 8 kHz retarget -- `docs/remaining.md` carries
-that list. Do not re-open the fax reconstruction.
+or `make`), and print their denominators. The two "unreconstructed regions"
+this paragraph used to carry -- `vpcm_run`'s `vpcm_notwritten` guards in
+`vpcm.c` and `v34handshak`'s `default: t3c_unwritten()` in `V34hshak.c` -- are
+**measured DEFENSIVE ARMS, not missing code, and the claim is retired
+(F11380).** The five `vpcm_notwritten` call sites are reached only through
+`== 0` tests on the five `VPcmV34*` entry points, which the blob defines
+strongly (0xb3c0, 0x71d0, 0x6eb0, 0x6f40, 0x6fa0) and this tree defines too,
+so in a whole-object link they are non-null and the guards are unreachable;
+`V34hshak.c`'s range test admits exactly 41..80 and its forty `case` labels
+cover exactly those values, so its `default` cannot be taken. What remains is
+a different kind of work: byte-exactness, differential/mutation coverage, the
+V.90 digital-side bring-up and the 8 kHz retarget -- `docs/remaining.md`
+carries that list. Do not re-open the fax reconstruction.
 
 **HISTORICAL -- why fax was deferred.** The order was never about
 difficulty; it was deferred because it was 283 symbols and 78,331 bytes,

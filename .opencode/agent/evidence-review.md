@@ -1,7 +1,7 @@
 ---
 description: Performs a free, read-only independent review of reconstruction, standards, and harness evidence before expensive final review.
 mode: subagent
-model: openrouter/openrouter/free
+model: openrouter/z-ai/glm-5.2
 permission:
   edit: deny
 ---
