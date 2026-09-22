@@ -51,6 +51,25 @@ extern void ref_STRM_VCE_GetFDSPEnvironmentalParams(short *psFarEchoDelay,
 						    short *psNearEchoDelay);
 extern void *ref_VOICE_create(void *modem, unsigned int rate);
 
+/*
+ * THE THREE FILE-LOCAL `vce_*` LEAVES BY NAME.
+ *
+ * The tests above reach them through the callback tables `VOICE_create` built,
+ * which is the real caller path and stays.  These declarations add a second,
+ * direct differential of the same leaves so that `coverage.py` -- which reads
+ * a test object's undefined `ref_*` references, not its call graph -- can see
+ * that they are driven at all.  Our copies are `static` in the object and in
+ * `src/service/voice.c`, so the test binary links a globalized copy of the
+ * reconstruction; `tools/testvisible.py` emits that name because it appears
+ * here.  The signatures are the definitions' own.
+ */
+extern int vce_get_sreg(void *modem, unsigned int num);
+extern int ref_vce_get_sreg(void *modem, unsigned int num);
+extern void vce_hook_on(void *p);
+extern void ref_vce_hook_on(void *p);
+extern void vce_hook_off(void *p);
+extern void ref_vce_hook_off(void *p);
+
 extern int dsplib_debug_capture_on;
 void dsplib_debug_capture_reset(void);
 unsigned dsplib_debug_capture_lines(int side);
@@ -360,6 +379,92 @@ t_coverage(void)
 	return diff_end();
 }
 
+/*
+ * The three leaves called directly by name, on the same constructed `vce`
+ * fixture and the same `voice_info` sweep the table path uses.
+ *
+ * `vce_get_sreg` is swept over every register number 0..300 against several
+ * blocks, exactly as `t_sreg` does through the callback, so the two paths
+ * agree check for check.  The hooks are void and only observable through the
+ * transcript, so both are called at level 2 with the capture on and the text
+ * compared; the four arms of `vce_get_sreg` are counted so a sweep that
+ * stopped reaching one cannot pass (F134).
+ */
+static int
+t_direct(void)
+{
+	static const unsigned int sens[] = {
+		0, 1, 63, 64, 65, 127, 128, 191, 192, 193, 255,
+		256, 1023, 0xffffffffu
+	};
+	static const unsigned int period[] = { 0, 1, 7, 4000, 0x80000000u };
+	unsigned int num;
+	unsigned int s, p;
+	struct voice_info vi;
+	void *modem = (void *)0x4321;
+	long checks = 0;
+	long arm[4] = { 0, 0, 0, 0 };
+	int rc = 0;
+
+	diff_begin("vce_get_sreg called directly by name");
+
+	for (s = 0; s < sizeof sens / sizeof sens[0]; s++) {
+		for (p = 0; p < sizeof period / sizeof period[0]; p++) {
+			harness_param_reset();
+			fill_info(&vi, sens[s], period[p]);
+			harness_param_set(MDMPRM_VOICEINFO, (long)(size_t)&vi);
+
+			for (num = 0; num <= 300; num++) {
+				long tag = (long)(num * 1000 + s * 10 + p);
+				int a, b;
+
+				a = ref_vce_get_sreg(modem, num);
+				b = vce_get_sreg(modem, num);
+				diff_eq_int("vce_get_sreg direct(%ld)", b, a,
+					    tag);
+				checks++;
+				switch (arm_of(num)) {
+				case 3:
+					if (a >= 0 && a <= 3)
+						arm[a]++;
+					break;
+				default:
+					break;
+				}
+			}
+		}
+	}
+
+	diff_eq_int("the direct sweep was not empty", checks,
+		    301 * 14 * 5, 0);
+	diff_eq_int("the sensitivity arms were reached", arm[0] > 0
+		    && arm[1] > 0 && arm[2] > 0 && arm[3] > 0, 1, 0);
+	rc |= diff_end();
+
+	/*
+	 * The two hooks, directly.  At level 2 each prints one line naming the
+	 * modem pointer, which is the same on both sides, so the two texts
+	 * must match byte for byte.
+	 */
+	diff_begin("vce_hook_on / vce_hook_off called directly by name");
+	set_level(2);
+	dsplib_debug_capture_reset();
+	dsplib_debug_capture_on = 1;
+	ref_vce_hook_on(modem);
+	vce_hook_on(modem);
+	ref_vce_hook_off(modem);
+	vce_hook_off(modem);
+	dsplib_debug_capture_on = 0;
+	diff_eq_int("direct hook lines match",
+		    strcmp(dsplib_debug_capture_text(0),
+			   dsplib_debug_capture_text(1)) == 0, 1, 0);
+	diff_eq_int("each hook printed a line",
+		    (long)dsplib_debug_capture_lines(1), 2, 0);
+	set_level(0);
+
+	return rc | diff_end();
+}
+
 int
 main(void)
 {
@@ -371,6 +476,7 @@ main(void)
 		return 1;
 	}
 	failed |= t_sreg();
+	failed |= t_direct();
 	failed |= t_env_params();
 	failed |= t_debug();
 	failed |= t_coverage();

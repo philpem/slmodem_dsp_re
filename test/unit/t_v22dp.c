@@ -62,6 +62,20 @@
 extern int ref_dp_v22_init(void);
 extern void ref_dp_v22_exit(void);
 
+/*
+ * THE FILE-LOCAL LEAF BY NAME.
+ *
+ * `t_v22dp` reaches `v22_process` the way the core does -- out of the wrapper
+ * `v22_create` built -- and that stays.  These two declarations add a direct
+ * differential of the same leaf so `coverage.py` can see it: it reads a test
+ * object's undefined `ref_*` references, not its call graph, and the wrapper
+ * path names neither the blob's copy nor ours.  Our copy is `static` in the
+ * object and in `src/pump/v22/v22.c`, so the test binary links a globalized
+ * copy emitted by `tools/testvisible.py` because the name appears here.
+ */
+extern int v22_process(void *dp, void *in, void *out, int count);
+extern int ref_v22_process(void *dp, void *in, void *out, int count);
+
 static struct dp_operations *ref_ops;
 static struct dp_operations *our_ops;
 
@@ -269,6 +283,102 @@ run_block(struct station *s, int f)
 }
 
 #define BLOCKS 400
+
+/*
+ * `v22_process` itself, on the same cross-connected link and the same
+ * `struct dp` the real constructor built -- the wrapper is replaced by the
+ * leaf so the symbol `coverage.py` counts is the code actually exercised.
+ * The wrapper path stays in `main`; this is the second, direct reading of the
+ * same 557 bytes.
+ */
+static int
+check_process_direct(void)
+{
+	struct station d_ours, d_refs;
+	void *m_org = (void *)0x1000;
+	void *m_ans = (void *)0x2000;
+	int seen[256];
+	int nseen = 0;
+	int f, i;
+
+	diff_begin("v22_process called directly by name");
+
+	harness_modem_reset(pattern, (int)sizeof(pattern));
+	harness_modem_route_add(m_org, pattern, (int)sizeof(pattern));
+	harness_modem_route_add(m_ans, pattern, (int)sizeof(pattern));
+
+	memset(seen, 0, sizeof(seen));
+
+	/*
+	 * THE SAME HANDLES ON BOTH SIDES.  `compare_dp` asserts that each
+	 * side's `dp.modem` is the one it was handed, so two different handles
+	 * would fail that on its own; the harness keeps a separate shim per
+	 * SIDE at each route index, so sharing the handle does not make the
+	 * two sides consume each other's script.
+	 */
+	if (!build_side(&d_refs, ref_ops, m_org, m_ans)
+	    || !build_side(&d_ours, our_ops, m_org, m_ans)) {
+		diff_eq_int("both direct links built (%ld)", 0, 1, 0);
+		return diff_end();
+	}
+
+	d_refs.org_run = ref_v22_process;
+	d_refs.ans_run = ref_v22_process;
+	d_ours.org_run = v22_process;
+	d_ours.ans_run = v22_process;
+
+	for (f = 0; f < BLOCKS; f++) {
+		run_block(&d_refs, f);
+		run_block(&d_ours, f);
+
+		diff_eq_int("direct block %ld: originate status",
+			    d_ours.org_status[f], d_refs.org_status[f], f);
+		diff_eq_int("direct block %ld: answer status",
+			    d_ours.ans_status[f], d_refs.ans_status[f], f);
+		for (i = 0; i < V22_DP_FRAG; i++) {
+			diff_eq_int("direct originate sample[%ld]",
+				    d_ours.org_out[i], d_refs.org_out[i], i);
+			diff_eq_int("direct answer sample[%ld]",
+				    d_ours.ans_out[i], d_refs.ans_out[i], i);
+		}
+		diff_eq_int("direct block %ld: originate fp status",
+			    (long)((struct v22_dp *)d_ours.org)->fp->status,
+			    (long)((struct v22_dp *)d_refs.org)->fp->status, f);
+		diff_eq_int("direct block %ld: answer fp status",
+			    (long)((struct v22_dp *)d_ours.ans)->fp->status,
+			    (long)((struct v22_dp *)d_refs.ans)->fp->status, f);
+		diff_eq_int("direct block %ld: originate protocol state",
+			    ((struct v22_dp *)d_ours.org)->fp->hdx->protocol,
+			    ((struct v22_dp *)d_refs.org)->fp->hdx->protocol,
+			    f);
+		diff_eq_int("direct block %ld: answer protocol state",
+			    ((struct v22_dp *)d_ours.ans)->fp->hdx->protocol,
+			    ((struct v22_dp *)d_refs.ans)->fp->hdx->protocol,
+			    f);
+
+		if (!seen[((struct v22_dp *)d_refs.org)->fp->status]) {
+			seen[((struct v22_dp *)d_refs.org)->fp->status] = 1;
+			nseen++;
+		}
+	}
+
+	compare_dp("direct: originator", (struct v22_dp *)d_ours.org,
+		   (struct v22_dp *)d_refs.org, 0);
+	compare_dp("direct: answerer", (struct v22_dp *)d_ours.ans,
+		   (struct v22_dp *)d_refs.ans, 1);
+
+	diff_eq_int("the direct machine moved (%ld distinct statuses)",
+		    nseen > 1, 1, nseen);
+	printf("  v22_process direct: %d blocks, %d distinct statuses\n",
+	       BLOCKS, nseen);
+
+	our_ops->destroy(d_ours.org);
+	our_ops->destroy(d_ours.ans);
+	ref_ops->destroy(d_refs.org);
+	ref_ops->destroy(d_refs.ans);
+
+	return diff_end();
+}
 
 int
 main(void)
@@ -490,6 +600,8 @@ main(void)
 		ref_ops->destroy(refs.ans);
 	}
 	rc |= diff_end();
+
+	rc |= check_process_direct();
 
 	/* Allocation balance across the whole lifecycle. */
 	diff_begin("v22_create / v22_delete balance");

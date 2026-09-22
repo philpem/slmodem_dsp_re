@@ -125391,3 +125391,91 @@ are provisional policies, not independent algorithmic error bounds. No full
 modern or mutation sweep was run, and no snapshot or suite was altered to hide
 these limitations. Fresh focused logs, binary hashes, denominators and direct
 exit codes are under `/tmp/opencode/pr181-fixes/followup/`.
+
+## F11380. Issue #190 deliverable 1: direct period coverage for the eight translated-but-undriven symbols, and the two defensive arms measured unreachable
+
+Issue #190, branch `improve/period-functional-equivalence`, base `7bd4e9bc`.
+`test/unit/` only; no `src/`, `include/` or `Makefile` change. The eight
+symbols `coverage.py` listed under "translated, alias exists, and NOT tested"
+are now each driven against the blob under the Gentoo period compiler, and the
+`tested` line moved from **1,784 of 1,792** to **1,792 of 1,792** (that list is
+now empty). The two "unreconstructed regions" in the ledger are measured
+defensive arms, not missing code, and are retired below.
+
+**THE EIGHT, AND THE PATH EACH IS DRIVEN THROUGH.** Every one is compared on
+the real construction/caller path the existing fixture already used; where the
+leaf is file-local it is additionally called by name on the object that path
+built, which is what `coverage.py` can see -- it reads a test object's
+undefined `ref_*` references, not its call graph.
+
+| symbol | fixture | path | new checks |
+|---|---|---|---|
+| `GetNextDigitAndReturnNextState` | `t_dialerprog.c` | direct leaf on dialers built by `DialerCreate`, over 19 strings | 569 |
+| `v22_process` | `t_v22dp.c` | direct leaf on the cross-connected link `v22_create` built | 130,437 |
+| `vce_get_sreg` | `t_vce.c` | direct leaf on the `vce` `VOICE_create` built, 0..300 x 70 blocks | 21,072 |
+| `vce_hook_on` / `vce_hook_off` | `t_vce.c` | direct, transcript compared at level 2 | 2 |
+| `_handle_status` | `t_voiceproc.c` | direct, codes -4..20 x 8 statuses | 205 |
+| `~V90Jd` (D2) | `t_v90jd.cpp` | base-object destructor over a real `V90Jd(params)` | 72 |
+| `~V92Jd` (D2) | `t_v92jd.cpp` | base-object destructor over a real `V92Jd(params)` | 72 |
+
+`GetNextDigitAndReturnNextState` is the one that needed new apparatus, and it
+is three facts at once.  It is FILE-LOCAL in `Dialer.c`, so the blob's copy
+takes `d` in `%eax` (regparm) -- a cdecl declaration hands it a stale `%eax`
+and the blob entry at 0x7abb0 segfaults, which was measured.  It is inlined
+away ENTIRELY by the modern host compiler (no symbol in `build/repro`, at
+`-O2` or `-O3`), so a strong reference would fail the modern link.  And the
+period compiler keeps it out of line, as the object does.  The fixture
+therefore declares the blob side `regparm(2)` and our side `weak` with the
+compiler's own static cap (`regparm(2)` under 3.4.2, `regparm(3)` under GCC
+4+, F11359); the weak reference resolves to null on the modern tier, where the
+sweep is skipped and says so, and to the globalized period copy under the
+deciding compiler.  The modern link of all six changed binaries stays exit 0.
+
+**THE CHECKS FIRE.** A passing comparison of two sides is only worth the
+negative control beside it.  Two were run and reverted:
+`_handle_status(statuses[s], code + 1)` on our side alone took `t_voiceproc`
+to exit 1; `b.pos++` before our leaf call in the `t_dialerprog` sweep took the
+direct section to **182 of 569 checks failed** and the period gate to 0 passed
+/ 1 failed.  The first `t_v22dp` run is a third natural control: passing
+different modem handles to the two sides made `compare_dp` report **2 of
+130,437 checks failed** on `dp.modem`, which is exactly the field it asserts.
+
+**DEFENSIVE ARM 1 -- `vpcm.c`'s `vpcm_notwritten`.**  All five call sites
+(lines 241, 248, 418, 425, 432) are reached only through `if (PTR == 0)` on
+one of the five `VPcmV34*` entry points, which `include/dsplib/vpcm.h`
+declares with `DSPLIB_VPCM_UNWRITTEN` = `__attribute__((weak))`.  The blob
+defines all five STRONGLY, with addresses:
+
+    VPcmV34Progress             0x0000b3c0
+    VPcmV34GetCleanedSamples    0x000071d0
+    VPcmV34GetCurrentSessionDP  0x00006eb0
+    VPcmV34GetCurrentRxBitRate  0x00006f40
+    VPcmV34GetCurrentTxBitRate  0x00006fa0
+
+and this tree defines all five too (`VPcmV34Progress`,
+`VPcmV34GetCurrentRxBitRate`, `VPcmV34GetCurrentTxBitRate` in
+`build/src/pump/v34/VPcmV34Main.o`; `VPcmV34GetCleanedSamples`,
+`VPcmV34GetCurrentSessionDP` in `build/src/pump/v34/v34pcmif.o`).  A weak
+reference binds to the strong definition, so in any whole-object link the
+pointers are non-null and `vpcm_notwritten` is unreachable.  It exists only so
+the test binaries that link `vpcm.o` without those definitions still link,
+with the pointer null and the hit recorded.  The header comment that says the
+five are "NOT written" is stale and is superseded by this measurement.
+**The guards are left exactly as they are** -- they are the reason those
+binaries link at all.
+
+**DEFENSIVE ARM 2 -- `V34hshak.c:10303`'s `default: t3c_unwritten()`.**  The
+range test is `if ((unsigned)((int)frame.mst - 41) >= 40)` (0x65329), which
+admits exactly **41..80**.  The switch's 40 `case V34HS_*` labels resolve,
+through `include/dsplib/v34hshak.h`, to exactly 41, 42, ... 80 with no gap and
+no duplicate; enumerated from the source, not assumed.  So every value the
+range test admits has a label and the `default` cannot be taken.  It stays
+because the range test and the label set are two statements of one fact and a
+mutation to either has to land somewhere.
+
+**GATE.**  `make period` (GCC 3.4.2-r2, `J=1`) after the change:
+**385 passed, 0 failed** -- the same count as the unmodified tree, since no
+test binary was added.  `python3 tools/coverage.py`: `tested 1,792 of 1,792`.
+Focused period runs and their exact counts, the fault probes, the modern link
+and run, and `refcheck`/`git diff --check` logs are under
+`/tmp/opencode/issue190/`.

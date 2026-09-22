@@ -66,6 +66,15 @@ extern void *ref_VOICE_create(void *modem, unsigned int rate);
 extern void ref_VOICE_delete(void *obj);
 extern int ref_VOICE_process(void *obj, void *in, void *out, int count);
 
+/*
+ * The status-mapping leaf `voice_modem` calls at its return.  It is a global
+ * in both the object and this tree, so both sides are named directly rather
+ * than reached through `VOICE_process`; the sweep below drives it on its own
+ * because `voice_modem` can only feed it the detector's status, which
+ * t_detector already owns.
+ */
+extern int ref__handle_status(int status, int code);
+
 extern int dsplib_debug_capture_on;
 void dsplib_debug_capture_reset(void);
 unsigned dsplib_debug_capture_lines(int side);
@@ -857,6 +866,58 @@ t_coverage(void)
 	return diff_end();
 }
 
+/*
+ * `_handle_status` on its own, over every code and a set of statuses.
+ *
+ * The three codes 1, 2 and 4 are the only ones it maps; everything else,
+ * including every negative code and the codes either side of the three,
+ * passes the caller's status through untouched.  The sweep covers both sides
+ * of each arm so that "maps 1, 2 and 4" is separated from "maps a range",
+ * and it counts the four arms as judged by the reference so that a fixture
+ * that stopped exercising one cannot pass (F134).
+ */
+static int
+t_handle_status(void)
+{
+	static const int statuses[] = {
+		0, 1, -1, 10, 11, 12, 0x7fffffff, (int)0x80000000u
+	};
+	long arm[4] = { 0, 0, 0, 0 };
+	long checks = 0;
+	unsigned int s;
+	int code;
+
+	diff_begin("_handle_status: the three mapped codes and the pass-through");
+
+	for (s = 0; s < sizeof statuses / sizeof statuses[0]; s++) {
+		for (code = -4; code <= 20; code++) {
+			int a = ref__handle_status(statuses[s], code);
+			int b = _handle_status(statuses[s], code);
+
+			diff_eq_int("_handle_status(%ld, %ld)",
+				    b, a, (long)(s * 100 + (code + 4)));
+			checks++;
+			switch (code) {
+			case 1: arm[0]++; break;
+			case 2: arm[1]++; break;
+			case 4: arm[2]++; break;
+			default: arm[3]++; break;
+			}
+		}
+	}
+
+	diff_eq_int("the sweep was not empty", checks,
+		    (long)(sizeof statuses / sizeof statuses[0]) * 25, 0);
+	diff_eq_int("code 1 was exercised", arm[0] > 0, 1, 0);
+	diff_eq_int("code 2 was exercised", arm[1] > 0, 1, 0);
+	diff_eq_int("code 4 was exercised", arm[2] > 0, 1, 0);
+	diff_eq_int("the pass-through was exercised", arm[3] > 0, 1, 0);
+	fprintf(stderr, "t_voiceproc: _handle_status %ld checks, arms "
+			"%ld/%ld/%ld/%ld\n", checks, arm[0], arm[1], arm[2],
+		arm[3]);
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -868,6 +929,7 @@ main(void)
 	failed |= t_cursors();
 	failed |= t_states();
 	failed |= t_underadvance();
+	failed |= t_handle_status();
 	failed |= t_coverage();
 	return failed;
 }

@@ -34,6 +34,42 @@ extern int ref_DialerProgress(struct dialer *d, short *buf, int *pos,
 extern int ref_DialerCreate(struct dialer *d, const char *s, void *modem);
 extern unsigned int ref_dsplibs_debug_level;
 
+/*
+ * `GetNextDigitAndReturnNextState` by name.  `DialerProgress` is the real
+ * caller and stays the only way the WHOLE loop is driven; this adds a direct
+ * reading of the parser leaf so `coverage.py` -- which reads a test object's
+ * undefined `ref_*` references, not its call graph -- can see that the 895
+ * bytes are exercised.
+ *
+ * OUR COPY IS WEAK HERE ON PURPOSE.  GCC 13/14 inline the file-static leaf
+ * away entirely, so no symbol exists in the host tree and a strong reference
+ * would fail the modern link; the recovered GCC 3.4.2 keeps it out of line
+ * (the object does), and the period test binary links the globalized copy
+ * `tools/testvisible.py` emits.  The weak reference resolves to null on the
+ * modern tier and the direct sweep is skipped there -- it is a period
+ * differential, which is what this issue asks for.
+ *
+ * BOTH ARE REGPARM, exactly as t_dialstring.c declares `AnalyseDialString`:
+ * the leaf is file-local in Dialer.c and its caller is in the same
+ * translation unit, so GCC passes `d` in `%eax` rather than on the stack.
+ * The blob's entry at 0x7abb0 starts `push %esi; mov %eax,%esi`, and a cdecl
+ * call hands it a stale `%eax` and crashes.  GCC 3.4.2 caps a static at
+ * regparm(2); GCC 4+ uses regparm(3) (finding F11359).  With one argument
+ * both put `d` in `%eax`.
+ */
+extern int ref_GetNextDigitAndReturnNextState(struct dialer *d)
+	__attribute__((regparm(2)));
+#if __GNUC__ >= 4
+extern int GetNextDigitAndReturnNextState(struct dialer *d)
+	__attribute__((weak, regparm(3)));
+#else
+extern int GetNextDigitAndReturnNextState(struct dialer *d)
+	__attribute__((weak, regparm(2)));
+#endif
+
+/* `Dialer.c`'s NEXT_END; the state numbers are not in a header. */
+#define GETNEXT_END	10
+
 #define BUFSAMP		160
 #define MAXCALLS	4000
 
@@ -259,6 +295,115 @@ run_flags(int calling_tone, int mixed, const char *label, const char *dialstr,
 	opt_calling_tone = 1;
 	opt_mixed = 0;
 	return rc;
+}
+
+/*
+ * The parser leaf called directly, on dialers built by the REAL
+ * `DialerCreate`, over strings chosen to reach every arm of its switch: the
+ * keypad, the two tone-only keys, the ABCD column with the country's say,
+ * comma runs, each modifier, the semicolon at the end and in the middle, a
+ * caret with and without a calling tone, the two mode switches, and the
+ * characters the range check steps over.
+ *
+ * Every call compares the returned state, the fields the leaf mutates
+ * (`pos`, `repeat`, `row`, `col`, `cfg.tone_or_pulse`) and the whole object.
+ * The sweep stops at NEXT_END, so the number of calls is the parser's own
+ * decision and is compared implicitly by the state sequence.
+ */
+static int
+run_getnext(void)
+{
+	static const char *const strs[] = {
+		"T1234567890",
+		"P1234567890",
+		"T*123#",
+		"TABCD",
+		"T5,,,,,,5",
+		"T5,,5",
+		"T5W5",
+		"T5@5",
+		"T5$5",
+		"T5!5",
+		"T5;",
+		"T5;5",
+		"T5^5",
+		"T5()-. 5",
+		"T5z~5",
+		"P5T5",
+		"T5P5",
+		"T",
+		""
+	};
+	struct dialer a, b;
+	struct call ca, cb;
+	unsigned k;
+	long calls = 0;
+	int distinct = 0;
+	int last = -1;
+
+	if (GetNextDigitAndReturnNextState == 0) {
+		/*
+		 * The modern host tree has inlined the leaf away, so there
+		 * is nothing to call on our side.  Say so rather than
+		 * silently passing an empty comparison; the period tier runs
+		 * the sweep below.
+		 */
+		fprintf(stderr, "t_dialerprog: GetNextDigitAndReturnNextState "
+			"is not a symbol in this build; direct sweep skipped\n");
+		return 0;
+	}
+
+	diff_begin("GetNextDigitAndReturnNextState called directly by name");
+
+	for (k = 0; k < sizeof strs / sizeof strs[0]; k++) {
+		int tone = (strs[k][0] == 'T' || strs[k][0] == 't');
+		int step;
+
+		memset(&a, 0, sizeof(a));
+		memset(&b, 0, sizeof(b));
+		ca.self = &ca;
+		ca.modem = (void *)0xD1A1u;
+		cb.self = &cb;
+		cb.modem = (void *)0xD1A1u;
+
+		params(1, tone, 0, 2, 10);
+		harness_param_set(MDMPRM_DP_ADDR, (long)(intptr_t)&ca);
+		ref_DialerCreate(&a, strs[k], (void *)0xD1A1u);
+		harness_param_set(MDMPRM_DP_ADDR, (long)(intptr_t)&cb);
+		DialerCreate(&b, strs[k], (void *)0xD1A1u);
+
+		for (step = 0; step < 256; step++) {
+			int ra = ref_GetNextDigitAndReturnNextState(&a);
+			int rb = GetNextDigitAndReturnNextState(&b);
+			long tag = (long)(k * 1000 + step);
+
+			diff_eq_int("return", rb, ra, tag);
+			diff_eq_int("pos", b.pos, a.pos, tag);
+			diff_eq_int("repeat", b.repeat, a.repeat, tag);
+			diff_eq_int("row", b.row, a.row, tag);
+			diff_eq_int("col", b.col, a.col, tag);
+			diff_eq_int("tone_or_pulse",
+				    b.cfg.tone_or_pulse, a.cfg.tone_or_pulse,
+				    tag);
+			diff_eq_int("whole dialer",
+				    memcmp(&b, &a, sizeof(a)) == 0, 1, tag);
+			calls++;
+			if (ra != last) {
+				distinct++;
+				last = ra;
+			}
+			if (ra == GETNEXT_END)
+				break;
+		}
+	}
+
+	diff_eq_int("the direct sweep was not empty", calls > 0, 1, 0);
+	diff_eq_int("the parser returned more than one state",
+		    distinct > 1, 1, distinct);
+	fprintf(stderr, "t_dialerprog: GetNextDigit direct %ld calls, "
+		"%d state changes\n", calls, distinct);
+
+	return diff_end();
 }
 
 int
@@ -547,6 +692,8 @@ main(void)
 			    transcript_lines > 100, 1, transcript_lines);
 	}
 	rc |= diff_end();
+
+	rc |= run_getnext();
 
 	return rc;
 }

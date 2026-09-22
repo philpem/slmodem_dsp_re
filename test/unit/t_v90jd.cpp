@@ -101,6 +101,17 @@ void ref_ctor2(void *self, V90Parameters *p)
 	asm("ref__ZN5V90JdC2EP13V90Parameters");
 void our_dtor(void *self) asm("_ZN5V90JdD1Ev");
 void ref_dtor(void *self) asm("ref__ZN5V90JdD1Ev");
+
+/*
+ * The BASE-OBJECT destructor, D2.  GCC emits D1 and D2 for every class with a
+ * user-declared destructor; the blob carries both as one-byte `ret`s at
+ * 0x1e890 (D2) and 0x1e8a0 (D1).  D2 is what a derived class's destructor
+ * would call, and it is the symbol `coverage.py` reported as translated but
+ * never driven.  It is reached by symbol for the same reason D1 is: C++ has no
+ * syntax for calling a destructor variant in place.
+ */
+void our_dtor2(void *self) asm("_ZN5V90JdD2Ev");
+void ref_dtor2(void *self) asm("ref__ZN5V90JdD2Ev");
 }
 
 /* The object, plus room past its end to catch a store that overruns it. */
@@ -370,6 +381,47 @@ run_dtor(void)
 
 		diff_eq_obj("after ~V90Jd", V90Jd, &OURS, &THEIRS, trial);
 		diff_eq_int("~V90Jd wrote nothing (trial %ld)",
+			    memcmp(before, ours.raw, SLOT), 0, trial);
+		diff_eq_int("no store past the object (trial %ld)",
+			    guard_equal(), 1, trial);
+	}
+
+	return diff_end();
+}
+
+/*
+ * The base-object destructor, D2, on an object built by the REAL constructor.
+ *
+ * D2 is not reachable through `delete`/explicit destructor call -- that names
+ * D1 -- so a fixture that only ever ran D1 left the blob's `_ZN5V90JdD2Ev`
+ * (0x1e890) unobserved.  It is driven here over a constructed object because
+ * that is the state a derived class's destructor would call it in, and the
+ * constructor is the same one `run_ctor` already asserts.  The check is the
+ * same claim as D1's: it writes nothing, including past the object.
+ */
+static int
+run_dtor2(void)
+{
+	int trial;
+
+	diff_begin("V90Jd::~V90Jd [D2]");
+
+	for (trial = 0; trial < NTRIAL; trial++) {
+		unsigned char before[SLOT];
+		V90Parameters *p = (V90Parameters *)params.raw;
+
+		seed(trial, trial % 4);
+		seed_params(trial);
+		our_ctor1(&OURS, p);
+		ref_ctor1(&THEIRS, p);
+
+		memcpy(before, ours.raw, SLOT);
+
+		our_dtor2(&OURS);
+		ref_dtor2(&THEIRS);
+
+		diff_eq_obj("after ~V90Jd [D2]", V90Jd, &OURS, &THEIRS, trial);
+		diff_eq_int("~V90Jd [D2] wrote nothing (trial %ld)",
 			    memcmp(before, ours.raw, SLOT), 0, trial);
 		diff_eq_int("no store past the object (trial %ld)",
 			    guard_equal(), 1, trial);
@@ -1132,6 +1184,7 @@ main(void)
 	rc |= run_unpackreset();
 	rc |= run_ctor();
 	rc |= run_dtor();
+	rc |= run_dtor2();
 	rc |= run_accessors();
 	rc |= run_unpackdata();
 	rc |= run_unpackdata_states();
