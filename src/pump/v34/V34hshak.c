@@ -58,8 +58,6 @@
  * mode numbers come from; see the declaration in `v34hshak.h`.
  */
 
-#include <stdlib.h>		/* abort, in t3c_unwritten below */
-
 #include "dsplib/debug.h"
 #include "dsplib/sysdep.h"
 #include "dsplib/v34det.h"
@@ -3601,11 +3599,10 @@ ApplyBulkDelay(void *objp, short delay)
  *     0x62af1  the once-per-block txstate dispatch, .rodata+0x2ee8
  *     0x62a40  the tail every arm of that dispatch falls into
  *
- * EVERY OTHER ARM STOPS.  `t3c_unwritten` is called where an arm this batch
- * did not write would begin, so an unwritten case is a halt and never an
- * answer.  A `return` there would be a wrong result the differential test
- * could only catch on a case some test happens to drive, which is the shape
- * this tree refuses; see the rule in CLAUDE.md.
+ * EVERY ARM IS WRITTEN.  The range test at 0x65329 sends a microstate
+ * outside table 3's 41..80 window to the transmit dispatch, and the switch
+ * below has a label for every value inside it, so there is no unwritten case
+ * and no default arm -- the object has neither.
  */
 
 /*
@@ -3920,59 +3917,6 @@ HS_OFF_ASSERT(short_abc2,       short_abc2,      T3M_FABC2);
 HS_OFF_ASSERT(short_abe2,       short_abe2,      0xabe2);
 HS_OFF_ASSERT(moh_org,       moh_org,      0xabec);
 #endif	/* 32-bit target with a compiler that has __builtin_offsetof */
-
-/*
- * ---------------------------------------------------------------------------
- * The paths not written.
- *
- * Forty of table 3's forty arms are here and all seven of table 2's targets
- * are, but thirty-nine of table 1's are not, and "nothing" is the one answer
- * a differential test cannot tell from a wrong answer -- the object would
- * simply come back unmodified and the comparison would report whatever the
- * blob wrote.  So every unwritten path names itself here.
- *
- * A CODE AND NOT A STRING, and that is the strings firewall's doing rather
- * than a preference: `tools/debugaudit.py --invented` holds every literal in
- * src/ against the object's .rodata and .data, so a diagnostic phrase this
- * tree made up cannot live here at all (findings F180 and F201).  The names are
- * in the test, which is where an invented string belongs.
- *
- * AND IT BOTH RECORDS AND STOPS.  The two reconstructions this file was
- * assembled from did that differently and only one of the two could survive
- * the merge intact, so neither did: `V34hshak.c`'s `t3c_unwritten` called
- * `abort()`, on the argument that an arm returning quietly is
- * indistinguishable from an arm that correctly did nothing, and
- * `v34hshak_t3mid.c` recorded a code and returned, because a test that dies
- * cannot then be asked WHICH path it reached and `t_v34hst3mid.c` asks after
- * every step.  Both arguments hold.  So the code is ALWAYS recorded and the
- * stop is what a test opts out of, by name: `v34handshak_unwritten_reset`
- * says "I am going to read the code afterwards", and only a test that has
- * said so gets a return instead of an abort.  Finding F547.
- */
-static int t3m_unwritten;
-static int t3m_unwritten_soft;
-
-int
-v34handshak_unwritten(void)
-{
-	return t3m_unwritten;
-}
-
-void
-v34handshak_unwritten_reset(void)
-{
-	t3m_unwritten = T3M_WRITTEN;
-	t3m_unwritten_soft = 1;
-}
-
-static void
-t3m_notwritten(int what)
-{
-	if (t3m_unwritten == T3M_WRITTEN)
-		t3m_unwritten = what;
-	if (!t3m_unwritten_soft)
-		abort();
-}
 
 /*
  * ---------------------------------------------------------------------------
@@ -5498,22 +5442,6 @@ t3m_micro58(struct t3m_frame *f)
 	t3m_txblock(f, (short)T3M_U16(f, V34HS_TXSTATE_OFF));
 }
 
-/*
- * A dispatch arm this reconstruction has not written.
- *
- * `v34handshak` is being landed one arm at a time against
- * test/harness/v34hsstep.c and most of table 1 is still missing, so this is
- * the coarse form of `t3m_notwritten` above: it says "some path with no
- * reconstruction ran" without saying which, for the call sites that predate
- * the codes.  It stops, or records and returns, on the same rule as every
- * other unwritten path -- see the comment on `t3m_notwritten`.
- */
-static void
-t3c_unwritten(void)
-{
-	t3m_notwritten(T3M_UNWRITTEN_OTHER);
-}
-
 static unsigned char
 t3c_getb(const struct v34_object *obj, unsigned off)
 {
@@ -5561,8 +5489,8 @@ t3c_putp(struct v34_object *obj, unsigned off, void *p)
  * hold the object's behaviour: the tail's `tx` is the value in `%cx` that
  * whichever arm jumped here left, and 0x62b5f re-reads +0x3596 over it, so a
  * dispatch that takes only the object cannot tell the two readings apart at
- * all.  It also writes 0x64884, 0x62b2f and 0x64a4f, which this side left
- * calling `t3c_unwritten`.
+ * all.  It also writes 0x64884, 0x62b2f and 0x64a4f, which this side now
+ * writes through `t3m_txblock`'s own tail.
  *
  * The `%cx` the object's `jmp 62af1` leaves is the object's own txstate at
  * every one of these call sites, so the shim reads it here.
@@ -9944,7 +9872,7 @@ v34handshak(void *vobj)
 		 * Two arms used to be able to leave for a block that was not
 		 * reconstructed -- 81's wrap at 0x66d85 and 86's segment end
 		 * at 0x66fe9 -- and said so in their return value, which this
-		 * point tested and turned into `T3M_UNWRITTEN_TBL1`.  Both
+		 * point tested and stopped on.  Both
 		 * blocks are written now, in the arms, and neither turned out
 		 * to be a transfer out of the loop at all: 0x66d85 ends at
 		 * 0x63941 or 0x63948 and 0x66fe9 at 0x63e7f, which are the
@@ -10290,17 +10218,6 @@ v34handshak(void *vobj)
 	case V34HS_TX_RETRAIN_ANS:	/* 77 */
 	case V34HS_JaTXMIT:		/* 78 */
 		t3c_txblock(obj);
-		return;
-
-	default:
-		/*
-		 * Unreachable: the fifteen written arms and the twenty-four
-		 * shared ones are forty labels over the forty values the
-		 * range test admits.  It stays because the range test and the
-		 * label set are two statements of one fact and a mutation to
-		 * either has to land somewhere.
-		 */
-		t3c_unwritten();
 		return;
 	}
 }

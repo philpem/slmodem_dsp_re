@@ -190,7 +190,7 @@ setup(const struct trial *t)
 }
 
 /*
- * One step, compared whole, with the code the step recorded asserted written.
+ * One step, compared whole.
  *
  * `expect_fire` is checked against the BLOB's transcript, so a trial that
  * meant to reach the action block and did not says so instead of passing.
@@ -202,14 +202,11 @@ run(const struct trial *t, const char *what, int expect_fire, long tag)
 
 	setup(t);
 
-	v34handshak_unwritten_reset();
 	v34hs_ours(1);
 	v34hs_step();
 	v34hs_ours(0);
 
 	v34hs_compare(what, tag);
-	snprintf(msg, sizeof(msg), "%s: nothing unwritten was reached", what);
-	diff_eq_int(msg, v34handshak_unwritten(), T3M_WRITTEN, tag);
 
 	snprintf(msg, sizeof(msg), "%s: the arm %s", what,
 		 expect_fire ? "fired" : "did not fire");

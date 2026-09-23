@@ -18,18 +18,15 @@
  * are therefore deleted rather than weakened -- a group whose premise has
  * ceased to hold does not become a better test by being made to pass.
  *
- * WHAT SURVIVES IS THE CLAIM THAT MATTERS, and it survives in both
- * directions.  The seven symbols BELOW `VPcmV34Progress` are asserted
- * PRESENT, through a WEAK declaration so that the comparison is a
- * comparison; and the soft path is still driven end to end, with
- * `v34pcm_unwritten()` required to report `V34PCM_WRITTEN` afterwards.
- * That second assertion is the whole of the old watch turned the right way
- * up.  The member calls use strong references, so omitting any of their
- * definitions fails at link time.
+ * WHAT SURVIVES IS THE CLAIM THAT MATTERS: the seven symbols BELOW
+ * `VPcmV34Progress` are asserted PRESENT, through a WEAK declaration so that
+ * the comparison is a comparison, and the line-verification arm is driven end
+ * to end on a real session.  The member calls use strong references, so
+ * omitting any of their definitions fails at link time.
  *
- * Issue #19 retires the obsolete member guards described in F7606.
- * `v34pcmmain.cpp` retains the recorder API for this test's compatibility;
- * no call path can record an unwritten member now.
+ * Issue #19 retires the obsolete member guards described in F7606, and the
+ * `v34pcm_unwritten` recorder they used is gone with them -- the blob has no
+ * such symbol, so it was added apparatus.
  *
  * ===========================================================================
  * THE SESSION HAS TO SURVIVE A REAL CALL NOW
@@ -86,12 +83,11 @@
  * a modem that had correctly transmitted nothing produces.  Nothing about the
  * result distinguishes the two.  So the claim was made the only way it could
  * be: fork, call it, and require the child to have died of SIGABRT.  That is
- * the argument the surviving `V34PCM_WRITTEN` assertion inherits.
+ * the argument the surviving end-to-end run inherits.
  *
  * The soft half is `V34hshak.c`'s rule, and finding F547's argument: a test
  * that dies cannot then be asked WHICH path it took, so the stop is what a
- * test opts out of BY NAME -- `v34pcm_unwritten_reset` -- and the code is
- * always recorded either way.
+ * test opts out of BY NAME, and the code is always recorded either way.
  */
 
 #include <stdio.h>
@@ -107,8 +103,7 @@
  * Plain `#include`: the five `VPcmV34*` entry points are declared plainly in
  * `vpcm.h` and are HARD LINK REQUIREMENTS, so there is no weak macro to set
  * here any more and nothing in this file compares them.  The weak
- * declarations below are for the seven V.34 MEMBERS, whose recorder
- * (`v34pcm_unwritten`) is a separate, still-live surface.
+ * declarations below are for the seven V.34 MEMBERS.
  */
 #include "dsplib/vpcm.h"
 
@@ -352,40 +347,12 @@ main(void)
 	/* --- and the whole path still runs ----------------------------- */
 
 	diff_begin("VPcmV34Progress runs the line-verification arm end to "
-		   "end, and no guard fires");
+		   "end");
 	root_reset();
-	/*
-	 * Before: nothing has been recorded.  A record that was already set
-	 * would make the assertion below true whatever this call did, which
-	 * is the vacuous shape gates.md is about.
-	 */
-	diff_eq_int("nothing recorded before the call", v34pcm_unwritten(),
-		    V34PCM_WRITTEN, 0);
-	v34pcm_unwritten_reset();
-	diff_eq_int("...and the reset leaves it that way", v34pcm_unwritten(),
-		    V34PCM_WRITTEN, 0);
 
 	memset(out, 0x5a, sizeof(out));
 	diff_eq_int("vpcm_run returns DPSTAT_OK in soft mode",
 		    our_ops->process(&root.dp, in, out, FRAG), DPSTAT_OK, 0);
-	/*
-	 * AND NOTHING WAS RECORDED, WHICH IS THE WHOLE WATCH TURNED THE RIGHT
-	 * WAY UP.  State 4 used to be the one arm of the seventeen whose only
-	 * unwritten call was `qcLineVerification`, and this assertion used to
-	 * read `V34PCM_UNWRITTEN_QCLINE`.  The member is written, so the arm
-	 * calls it and the recorder stays at `V34PCM_WRITTEN`.  If any of the
-	 * seven ever stops being linked, its guard fires on this very call,
-	 * the recorder takes its code, and this fails -- which is what the
-	 * SIGABRT group used to be for and is the only part of it that can
-	 * still be true.
-	 *
-	 * `v34pcm_unwritten_reset` above is what puts the recorder in SOFT
-	 * mode, so a guard that did fire would be recorded rather than
-	 * aborting; that is finding F547's rule and is why this assertion can
-	 * exist at all.
-	 */
-	diff_eq_int("...and no guard fired: nothing was recorded",
-		    v34pcm_unwritten(), V34PCM_WRITTEN, 0);
 	/*
 	 * AND IT RAN TO THE END.  The tail at 0x3f19 moves `count` samples out
 	 * of the output queue and compacts it whether or not anything was
@@ -411,20 +378,6 @@ main(void)
 	diff_eq_int("...and the echo history took the whole block",
 		    ((struct v34_object *)&root.v34)->hist_2f58[FRAG - 1],
 		    in[FRAG - 1], 0);
-	/*
-	 * The eight codes are eight DIFFERENT codes.  Two of them equal would
-	 * make an unwritten path report the wrong one for ever, and nothing
-	 * else in this tree looks.
-	 */
-	diff_eq_int("the eight codes are distinct",
-		    V34PCM_WRITTEN != V34PCM_UNWRITTEN_RUNPCM
-		    && V34PCM_UNWRITTEN_RUNPCM != V34PCM_UNWRITTEN_V90RUN
-		    && V34PCM_UNWRITTEN_V90RUN != V34PCM_UNWRITTEN_QCLINE
-		    && V34PCM_UNWRITTEN_QCLINE != V34PCM_UNWRITTEN_RESETP3
-		    && V34PCM_UNWRITTEN_RESETP3 != V34PCM_UNWRITTEN_TONEPROC
-		    && V34PCM_UNWRITTEN_TONEPROC != V34PCM_UNWRITTEN_RRN
-		    && V34PCM_UNWRITTEN_RRN != V34PCM_UNWRITTEN_RRNSILENCE, 1,
-		    0);
 	rc |= diff_end();
 
 	return rc;

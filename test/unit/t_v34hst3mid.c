@@ -128,27 +128,6 @@
 
 static int dump;
 
-/*
- * The unwritten-path codes, named.  They are numbers in src/ because the
- * strings firewall holds every literal there against the object's own
- * .rodata; a phrase this tree invented belongs on this side of the line.
- */
-static const char *
-unwritten_name(int code)
-{
-	switch (code) {
-	case T3M_WRITTEN:		return "nothing unwritten was reached";
-	case T3M_UNWRITTEN_TBL1:	return "table 1, the per-sample loop";
-	case T3M_UNWRITTEN_RXIDLE:	return "the receiver-idle route";
-	case T3M_UNWRITTEN_RXSTATE:	return "an rxstate other than RX_DPSK";
-	case T3M_UNWRITTEN_FSKGATE:	return "the +0xa8a0 divert at 0x64a87";
-	case T3M_UNWRITTEN_TBL3_DEFAULT: return "table 3's default arm";
-	case T3M_UNWRITTEN_TBL3_ARM:	return "a table 3 arm not written yet";
-	case T3M_UNWRITTEN_TBL2_ARM:	return "a table 2 arm not written yet";
-	default:			return "an unknown unwritten path";
-	}
-}
-
 /* Which paths the trials actually reached, so the claims below can be made. */
 static int saw_below, saw_toggle, saw_force, saw_trace, saw_fsk;
 
@@ -495,7 +474,6 @@ static void
 trial_seeded(short mst, const struct seed *s, int ours, long tag)
 {
 	char what[96];
-	int unwritten;
 
 	v34hs_setup(0);
 	v34hs_route(V34HS_ROUTE_RXCHAIN, 0);
@@ -503,7 +481,6 @@ trial_seeded(short mst, const struct seed *s, int ours, long tag)
 	v34hs_poke_short(T3MT_COUNTER, s->counter);
 	apply(s);
 
-	v34handshak_unwritten_reset();
 	v34hs_ours(ours);
 	v34hs_step();
 
@@ -513,9 +490,6 @@ trial_seeded(short mst, const struct seed *s, int ours, long tag)
 		 (unsigned)(unsigned short)s->counter,
 		 ours ? "ours" : "blob");
 	v34hs_compare(what, tag);
-
-	unwritten = ours ? v34handshak_unwritten() : T3M_WRITTEN;
-	diff_eq_int(unwritten_name(unwritten), unwritten, T3M_WRITTEN, tag);
 
 	if (dump) {
 		const struct v34hs_obs *a = v34hs_observed(0);
@@ -3309,21 +3283,20 @@ txblock_paths(void)
  * pointless when our entry did nothing and the blob did the whole step.  The
  * unify closed that: table 3's forty arms are all written, and so are both
  * ends of the range test and the receiver-idle route.  So five of these
- * trials now expect `T3M_WRITTEN` and are held by a full object comparison
+ * trials are held by a full object comparison
  * instead, and a range constant off by one moves the step to a different arm
  * rather than to a different code.  Finding F551.
  *
  * Table 2's last arm landed the same way (591) and took the sixth trial with
- * it: `T3M_UNWRITTEN_TBL2_ARM` is now unreachable, joining the three codes
- * 551 named.  `unwritten_name` still lists it, because a code no path can
- * reach is exactly what a test asserting a code has to be able to say.
+ * it: all five table windows are now written and held by the object
+ * comparison rather than by a recorded code.
  *
  * Without this, `T3M_TBL3_COUNT`, `T3M_TBL3_FIRST`, `T3M_TBL2_COUNT`, the
  * cursor compare, the receiver-count compare and the +0xa8a0 gate are all
  * free: every trial above drives values that satisfy them either way.
  */
 static void
-guard(short mst, const struct seed *s, short rxstate, int expect, long tag)
+guard(short mst, const struct seed *s, short rxstate, long tag)
 {
 	char what[96];
 
@@ -3333,16 +3306,12 @@ guard(short mst, const struct seed *s, short rxstate, int expect, long tag)
 	v34hs_poke_short(T3MT_COUNTER, s->counter);
 	apply(s);
 
-	v34handshak_unwritten_reset();
 	v34hs_ours(1);
 	v34hs_step();
-	snprintf(what, sizeof(what), "guard: microstate %d, rxstate %d -> %s",
-		 (int)mst, (int)rxstate, unwritten_name(expect));
-	if (expect == T3M_WRITTEN)
-		v34hs_compare(what, tag);
+	snprintf(what, sizeof(what), "guard: microstate %d, rxstate %d",
+		 (int)mst, (int)rxstate);
+	v34hs_compare(what, tag);
 	v34hs_ours(0);
-
-	diff_eq_int(what, v34handshak_unwritten(), expect, tag);
 }
 
 static void
@@ -3360,10 +3329,10 @@ guards(void)
 	 * either end swaps one for the other.
 	 */
 	s = plain;
-	guard(40, &s, V34HS_RX_DPSK, T3M_WRITTEN, tag++);
-	guard(81, &s, V34HS_RX_DPSK, T3M_WRITTEN, tag++);
-	guard(41, &s, V34HS_RX_DPSK, T3M_WRITTEN, tag++);
-	guard(80, &s, V34HS_RX_DPSK, T3M_WRITTEN, tag++);
+	guard(40, &s, V34HS_RX_DPSK, tag++);
+	guard(81, &s, V34HS_RX_DPSK, tag++);
+	guard(41, &s, V34HS_RX_DPSK, tag++);
+	guard(80, &s, V34HS_RX_DPSK, tag++);
 
 	/*
 	 * Table 2's window is 5..74, and all seven of its targets are written
@@ -3382,27 +3351,27 @@ guards(void)
 	 */
 	s = plain;
 	s.txstate = 75;
-	guard(V34HS_TX_PHASE3_ANS, &s, V34HS_RX_DPSK, T3M_WRITTEN, tag++);
+	guard(V34HS_TX_PHASE3_ANS, &s, V34HS_RX_DPSK, tag++);
 	s.txstate = 74;			/* 0x644c9, the table's last entry */
-	guard(V34HS_TX_PHASE3_ANS, &s, V34HS_RX_DPSK, T3M_WRITTEN, tag++);
+	guard(V34HS_TX_PHASE3_ANS, &s, V34HS_RX_DPSK, tag++);
 	s.txstate = 20;			/* 0x64509, interior */
-	guard(V34HS_TX_PHASE3_ANS, &s, V34HS_RX_DPSK, T3M_WRITTEN, tag++);
+	guard(V34HS_TX_PHASE3_ANS, &s, V34HS_RX_DPSK, tag++);
 
 	/*
 	 * The rxstate chain: only RX_DPSK reaches table 3.
 	 *
 	 * NEITHER OF THESE TWO RECORDS ANYTHING ANY MORE, and both stay.  35
 	 * WAIT was the first to change: its arm is 0x6752c, four instructions,
-	 * and writing it turned this trial from `T3M_UNWRITTEN_RXSTATE` into
-	 * `T3M_WRITTEN`.  4 RECEIVE is the second, for the same reason --
+	 * and writing it turned this trial from a recorded code into a real
+	 * object comparison.  4 RECEIVE is the second, for the same reason --
 	 * 0x653e4 is `t_v34hsrx4.c`'s arm now.  Both stay rather than being
 	 * deleted, because "this rxstate does not reach table 3" is the claim
 	 * the lines were making and that claim is still true; what changed is
 	 * only where each goes instead.  Findings F717, F549 and F731.
 	 */
 	s = plain;
-	guard(V34HS_TX_PHASE3_ANS, &s, V34HS_RX_RECEIVE, T3M_WRITTEN, tag++);
-	guard(V34HS_TX_PHASE3_ANS, &s, V34HS_RX_WAIT, T3M_WRITTEN, tag++);
+	guard(V34HS_TX_PHASE3_ANS, &s, V34HS_RX_RECEIVE, tag++);
+	guard(V34HS_TX_PHASE3_ANS, &s, V34HS_RX_WAIT, tag++);
 
 	/*
 	 * The receiver's first halfword.  `v34hs_route` leaves it at 6; at 5
@@ -3418,14 +3387,10 @@ guards(void)
 	v34hs_route(V34HS_ROUTE_RXCHAIN, 0);
 	v34hs_state(V34HS_TX_PHASE3_ANS, V34HS_RX_DPSK, T3MT_TXSTATE);
 	v34hs_poke_short(0x0264, 5);
-	v34handshak_unwritten_reset();
 	v34hs_ours(1);
 	v34hs_step();
-	v34hs_compare("a receiver count of 5 takes the block route", tag);
+	v34hs_compare("a receiver count of 5 takes the block route", tag++);
 	v34hs_ours(0);
-	diff_eq_int("guard: a receiver count of 5 takes the block route",
-		    v34handshak_unwritten(), T3M_WRITTEN,
-		    tag++);
 
 	/*
 	 * The cursor against the limit.  Route RXCHAIN leaves both at zero,
@@ -3438,18 +3403,15 @@ guards(void)
 	v34hs_state(V34HS_TX_PHASE3_ANS, V34HS_RX_DPSK, T3MT_TXSTATE);
 	v34hs_poke_short(0x221c, 5);
 	v34hs_poke_short(0x2aa0, 0);
-	v34handshak_unwritten_reset();
 	v34hs_ours(1);
 	v34hs_step();
-	v34hs_compare("cursor above the limit still reaches table 3", tag);
+	v34hs_compare("cursor above the limit still reaches table 3", tag++);
 	v34hs_ours(0);
-	diff_eq_int("guard: a cursor above the limit reaches table 3",
-		    v34handshak_unwritten(), T3M_WRITTEN, tag++);
 
 	/*
 	 * And below it, which is table 1's per-sample loop.
 	 *
-	 * THIS TRIAL USED TO ASSERT `T3M_UNWRITTEN_TBL1` AND NOT STEP, on the
+	 * THIS TRIAL USED TO ASSERT A RECORDED CODE AND NOT STEP, on the
 	 * grounds that the loop was #56's and its default arm does not
 	 * terminate.  The loop and its nineteen arms are written now, so the
 	 * claim inverts: this reaches the loop, runs it to its exit at
@@ -3464,18 +3426,15 @@ guards(void)
 	v34hs_state(V34HS_TX_PHASE3_ANS, V34HS_RX_DPSK, T3MT_TXSTATE);
 	v34hs_poke_short(0x221c, 0);
 	v34hs_poke_short(0x2aa0, 5);
-	v34handshak_unwritten_reset();
 	v34hs_ours(1);
 	v34hs_step();
-	v34hs_compare("a cursor below the limit runs table 1's loop", tag);
+	v34hs_compare("a cursor below the limit runs table 1's loop", tag++);
 	v34hs_ours(0);
-	diff_eq_int("guard: a cursor below the limit runs table 1's loop",
-		    v34handshak_unwritten(), T3M_WRITTEN, tag++);
 
 	/*
 	 * The +0xa8a0 gate, which `v34hs_route` clears.
 	 *
-	 * THIS TRIAL USED TO ASSERT `T3M_UNWRITTEN_FSKGATE` AND NOT COMPARE.
+	 * THIS TRIAL USED TO ASSERT A RECORDED CODE AND NOT COMPARE.
 	 * The arm at 0x6754b is written now, and it FALLS THROUGH -- all six
 	 * of its exits are `jmp 0x64a8f`, so a non-zero gate polls the retrain
 	 * detector and then runs exactly the code the cleared gate runs.  So
@@ -3487,15 +3446,11 @@ guards(void)
 	v34hs_route(V34HS_ROUTE_RXCHAIN, 0);
 	v34hs_state(V34HS_TX_PHASE3_ANS, V34HS_RX_DPSK, T3MT_TXSTATE);
 	v34hs_poke_int(0xa8a0, 1);
-	v34handshak_unwritten_reset();
 	v34hs_ours(1);
 	v34hs_step();
 	v34hs_compare("guard: a non-zero +0xa8a0 polls the retrain detector",
-		      tag);
+		      tag++);
 	v34hs_ours(0);
-	diff_eq_int("guard: a non-zero +0xa8a0 polls the retrain detector "
-		    "and falls through",
-		    v34handshak_unwritten(), T3M_WRITTEN, tag++);
 }
 
 int
