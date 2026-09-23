@@ -56,10 +56,10 @@
 #include "dsplib/v34scram.h"
 #include "dsplib/v34shell.h"
 /*
- * For the two `vpcm_run` callees `v34pcmif.c` defines.  Included WITHOUT
- * `DSPLIB_VPCM_UNWRITTEN`, so the declarations here are plain: this file
- * calls them and never compares their addresses, which is the one thing
- * finding F985 says a plain declaration must not be used for.
+ * For the two `vpcm_run` callees `v34pcmif.c` defines.  The declarations were
+ * made plain when the `DSPLIB_VPCM_UNWRITTEN` weak apparatus was removed: this
+ * file calls them and never compares their addresses.  They are hard link
+ * requirements now, as the blob's direct `R_386_PC32` calls make them.
  */
 #include "dsplib/vpcm.h"
 

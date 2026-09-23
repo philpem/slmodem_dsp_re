@@ -63,9 +63,8 @@
 #include "dsplib/v34recv.h"
 /*
  * For `VPcmV34GetCleanedSamples` and `VPcmV34GetCurrentSessionDP` below.
- * `DSPLIB_VPCM_UNWRITTEN` is deliberately NOT defined here: this file is the
- * one that DEFINES two of the five, and a definition compiled under the weak
- * macro would stop being one as soon as anything else defined the name.
+ * The five are plain prototypes now that the `DSPLIB_VPCM_UNWRITTEN` weak
+ * apparatus is gone, so a definition here is a definition.
  */
 #include "dsplib/vpcm.h"
 
@@ -679,24 +678,15 @@ getTimingPhase(void *objp)
  * ---------------------------------------------------------------------------
  * TWO OF `vpcm_run`'s FIVE CALLEES, and they are the two that are leaves.
  *
- * `include/dsplib/vpcm.h` declares all five WEAK so that a binary which does
- * not define them links with the reference resolved to zero, and `vpcm_run`
- * tests each pointer before it calls through it.  These two are defined here
- * -- so in every binary that links this file they are no longer null and
- * `vpcm_run` takes the real call rather than `vpcm_notwritten`.  The other
- * three stay unwritten: `VPcmV34Progress` is 7,278 bytes whose closure is the
- * whole receive chain, and both rate getters need `V90Demodulator::getBitRate`
- * (87 bytes), which is a const accessor and belongs to whoever owns that
- * class's processing methods rather than to this batch.
+ * `include/dsplib/vpcm.h` declares all five plainly and `vpcm.c` calls them
+ * directly, as the blob does, so each is a HARD LINK REQUIREMENT.  These two
+ * are defined here; the other three are `VPcmV34Progress` (7,278 bytes whose
+ * closure is the whole receive chain) with the two rate getters, all in
+ * `src/pump/v34/v34pcmmain.cpp` / `src/pump/v34/VPcmV34Main.cpp`.
  *
  * They belong in THIS file for the reason the header comment gives: they are
  * `extern "C"` exports of `VPcmV34Main.cpp` -- no mangling on the relocation
  * `vpcm_run` carries for either -- and nothing about them is C++.
- *
- * The declarations come from `vpcm.h` with `DSPLIB_VPCM_UNWRITTEN` left
- * empty, which is what makes these definitions STRONG.  Defining them under
- * the weak macro would link identically today and would silently stop being
- * a definition the moment a real one appeared elsewhere.
  */
 
 /*

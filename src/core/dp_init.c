@@ -28,7 +28,7 @@
  * (`src/pump/v22/v22.c`) were the last graduation, following V.32's into
  * `v32.h`.  Both used to be declared here under a local
  * `DSPLIB_DPINIT_UNWRITTEN` weak idiom -- the same shape `vpcm.h`'s
- * `DSPLIB_VPCM_UNWRITTEN` still names elsewhere -- so that the differential
+ * `DSPLIB_VPCM_UNWRITTEN` used to carry before that apparatus was removed -- so that the differential
  * binaries could bridge the real names to the blob's copy through
  * `test/harness/unwritten.c` while `v22.c` did not yet exist; that bridge is
  * long gone (see `unwritten.c`'s own note) and this file no longer needs the

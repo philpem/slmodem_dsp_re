@@ -1,14 +1,6 @@
 [
  {
-  "note": "The other half of `vpcm_run`'s set, and the same source against a different binary.  THE FIRST ENTRY IS NOW EQUIVALENT AND THE SECOND HAS TAKEN OVER THE JOB, per t_vpcmguard.c's own head comment: all five `VPcmV34*` entry points and the seven symbols below them are WRITTEN now, so every `if (FUNC == 0) vpcm_notwritten(...)` guard in vpcm.c is permanently false and `vpcm_notwritten` (findings F985, F987) is unreachable code -- there is no path left in this tree that calls it, mutating it or not.  A guard that returned quietly would still leave a `.process` running and carrying nothing, and its output -- a buffer of silence -- is what a modem that correctly transmitted nothing produces, so that argument still holds; it is just that nothing can reach the guard to test it any more (F7606)."
- },
- {
-  "label": "the guard returns quietly instead of stopping",
-  "find": "\tif (!vpcm_unwritten_soft)\n\t\tabort();\n",
-  "replace": "\tif (0)\n\t\tabort();\n",
-  "fn": "vpcm_notwritten",
-  "equivalent": true,
-  "why": "vpcm_notwritten's hard-abort arm is unreachable in this binary: all five VPcmV34* entry points and the seven symbols below VPcmV34Progress are now WRITTEN (finding F7606), so vpcm_run never calls vpcm_notwritten(...) with vpcm_unwritten_soft false -- there is no unresolved callee left below VPcmV34Progress for t_vpcmguard to reach (see the note at the head of test/unit/t_vpcmguard.c and F7606's own re-measurement, which found this row identical to its stored verdict at 9ddfc5bc). Removing the abort from dead code cannot be observed by any call this suite makes."
+  "note": "The mute half of `vpcm_run`'s set, and the same source against a different binary.  THE GUARD ROW WAS REMOVED because the thing it mutated no longer exists: `vpcm.c`'s `vpcm_notwritten` (findings F985, F987) and the whole `vpcm_unwritten` recorder were ADDED APPARATUS -- the blob's `vpcm_run` calls the five `VPcmV34*` entry points by direct `R_386_PC32` relocation with no null test, and has no `vpcm_unwritten` symbol (tools/dis.py ref/slmodemd/dsplibs.o 0x3e40 0x44be) -- so they were deleted along with the five `if (FUNC == 0)` guards.  What is left is the mute-countdown branch, which is a real arm of the object and is caught here.  `t_vpcmguard` is the binary; `vpcmrun` is the other half of the function."
  },
  {
   "label": "the mute path is always taken, so the guard is never reached",

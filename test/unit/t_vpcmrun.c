@@ -9,18 +9,17 @@
  * one endpoint, at the other, and at both, compared block by block against
  * the blob-blob run.
  *
- * WHAT IS AND IS NOT OURS.  `vpcm_run` is ours, and so are FOUR of the five
- * entry points it calls: `VPcmV34GetCleanedSamples` and
- * `VPcmV34GetCurrentSessionDP` are defined in `src/pump/v34/v34pcmif.c`, the
- * two rate getters in `src/pump/v34/v34pcmmain.cpp`, and this binary links
- * both.  Only `VPcmV34Progress` is still the blob's, and the one forwarder
- * below is how.  All five are declared WEAK in `src/pump/v90/vpcm.c` so that
- * a binary which supplies none of them links anyway and `vpcm_run` aborts if
- * it is called -- `t_vpcmguard.c` is the binary that watches it abort.  So
- * what is under test here is `vpcm_run`'s own work -- the block
- * quantisation, the two sample queues, the bit pipe in both directions and
- * the seventeen-arm dispatch -- plus those four callees, driven for 8,000
- * blocks of a real call.
+ * WHAT IS AND IS NOT OURS.  `vpcm_run` is ours, and so are ALL FIVE entry
+ * points it calls: `VPcmV34GetCleanedSamples` and
+ * `VPcmV34GetCurrentSessionDP` are defined in `src/pump/v34/v34pcmif.c`, and
+ * `VPcmV34Progress` with the two rate getters in
+ * `src/pump/v34/v34pcmmain.cpp` / `VPcmV34Main.cpp`.  The five are plain
+ * declarations in `vpcm.h` and hard link requirements, exactly as the blob's
+ * direct `R_386_PC32` calls make them; the old weak-reference-plus-guard
+ * idiom was added apparatus and is gone.  So what is under test here is
+ * `vpcm_run`'s own work -- the block quantisation, the two sample queues, the
+ * bit pipe in both directions and the seventeen-arm dispatch -- plus all five
+ * callees, driven for 8,000 blocks of a real call.
  *
  * WHY THE COMPARISON IS PER BLOCK AND NOT ONLY AT THE END.  A run that
  * diverges at block 900 and re-converges by block 4,000 would pass every
@@ -67,12 +66,12 @@ extern struct dp *ref_vpcm_create(void *modem, int id, int caller, int srate,
 extern struct dp_operations ref_vpcm_op;
 
 /*
- * --- the unwritten boundary, supplied -------------------------------------
+ * --- the blob's own half, by name -----------------------------------------
  *
- * `VPcmV34Main.cpp` is not reconstructed, so these five come from the blob.
- * They are STRONG definitions and `vpcm.c`'s declarations are weak, so the
- * link prefers these; a binary without them leaves the weak references at
- * zero and `vpcm_run`'s guard fires instead.
+ * `ref_vpcm_run` and the `ref_*` alias of `VPcmV34Progress` are how the
+ * oracle arm is driven and compared.  The five real entry points are this
+ * tree's now and are hard link requirements, so there is no weak boundary to
+ * supply here any more.
  */
 /*
  * THE BLOB'S OWN `vpcm_run`, BY NAME.  Driving the blob arm through
@@ -793,18 +792,10 @@ main(void)
 		return diff_end();
 	/*
 	 * THAT THE FIVE ENTRY POINTS ARE PRESENT IN THIS BINARY IS NOT
-	 * ASSERTED HERE, and the reason is worth writing down because the
-	 * first version of this file did assert it and the assertion was
-	 * vacuous: this translation unit DEFINES all five, so `f != 0` is a
-	 * constant the compiler folds and the check would pass in a binary
-	 * where they had never been called.
-	 *
-	 * The claim that actually carries it is `vpcm_unwritten()` after the
-	 * four runs, below -- `vpcm_run` records the first entry point it
-	 * could not call, so a zero there says every one of them was reached
-	 * for real.  `t_vpcmguard.c` makes the complementary claim, in a
-	 * binary that defines none of them and declares them weak so that the
-	 * comparison is a comparison.
+	 * ASSERTED HERE, and the reason is worth writing down: they are HARD
+	 * LINK REQUIREMENTS now, so a binary that lacked any definition would
+	 * not LINK, and a runtime comparison of their addresses is a constant
+	 * the compiler folds.  The link is the claim.
 	 */
 	/*
 	 * AND THE BLOB ARM REALLY IS THE DATAPUMP'S `.process`.  The runs
@@ -858,13 +849,6 @@ main(void)
 	for (run = 0; run < NRUN; run++)
 		run_v34(ops34, run);
 
-	/*
-	 * NOTHING UNWRITTEN WAS REACHED.  `vpcm_run` records the first
-	 * unwritten entry point it takes; a zero here says the four runs went
-	 * through the real ones and not through a guard that returned.
-	 */
-	diff_eq_int("no unwritten path was taken", vpcm_unwritten(),
-		    VPCM_WRITTEN, 0);
 	rc |= diff_end();
 
 	/* --- the oracle, as exact literals ----------------------------- */

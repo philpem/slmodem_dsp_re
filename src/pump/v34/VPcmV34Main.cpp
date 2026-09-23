@@ -47,10 +47,8 @@
 #include "dsplib/VPcmFloModem.h"
 /*
  * For `VPcmV34GetCurrentRxBitRate` and `VPcmV34GetCurrentTxBitRate` at the
- * bottom.  `DSPLIB_VPCM_UNWRITTEN` is deliberately NOT defined here, for the
- * reason v34pcmif.c's copy of this include gives: this file DEFINES two of
- * the five, and a definition compiled under the weak macro would stop being
- * one as soon as anything else defined the name.
+ * bottom.  The five are plain prototypes now that the `DSPLIB_VPCM_UNWRITTEN`
+ * weak apparatus is gone, so a definition here is a definition.
  */
 #include "dsplib/vpcm.h"
 
@@ -1638,12 +1636,9 @@ indicateJaTransmission(void *objp)
  * ---------------------------------------------------------------------------
  * THE LAST TWO OF `vpcm_run`'s FIVE CALLEES THAT ARE NOT `VPcmV34Progress`.
  *
- * `include/dsplib/vpcm.h` declares all five WEAK; `src/pump/v34/v34pcmif.c`
- * defines two of them and explains the mechanism at length -- the
- * declarations are taken with `DSPLIB_VPCM_UNWRITTEN` empty, which is what
- * makes a definition STRONG, and defining one under the weak macro would link
- * identically today and stop being a definition the moment a real one
- * appeared.  These two follow it exactly.
+ * `include/dsplib/vpcm.h` declares all five plainly, so each is a HARD LINK
+ * REQUIREMENT; `src/pump/v34/v34pcmif.c` defines two of them and explains the
+ * split at length.  These two follow it exactly.
  *
  * THEY ARE HERE AND NOT IN THAT `.c` FOR ONE REASON: `VPcmV34GetCurrentRxBitRate`
  * CALLS A C++ MEMBER.
