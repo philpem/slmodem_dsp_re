@@ -41,8 +41,8 @@ extern void V34InitializeImplementationSpecific(void *obj);
  * be a compile-time switch: the Makefile builds ONE v34hsstep.o and links it
  * into every test binary, so defining it would move side A for
  * `t_v34hsstep.c` too -- whose whole claim is a blob-against-blob property
- * over all forty-three cases, most of which have no reconstruction and would
- * halt in `t3c_unwritten`.
+ * over all forty-three cases, where the default must stay the blob so the
+ * fixture proves itself.
  *
  * So the choice is a run-time one a test makes for itself.  `v34hs_ours(1)`
  * puts the reconstruction on side A; the default is the blob, which leaves

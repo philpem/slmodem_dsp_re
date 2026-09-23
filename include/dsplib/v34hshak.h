@@ -181,44 +181,6 @@ void hs_put(struct v34_object *obj, unsigned off, short v);
 void hs_setstate(struct v34_object *obj, unsigned off, short next);
 
 /**
- * Which of `v34handshak`'s still-unwritten paths ran on the last call.
- *
- * `v34handshak` is being reconstructed a few dispatch arms at a time; a
- * path with no reconstruction yet must do something definite, since
- * "nothing" is the one answer a differential test cannot tell apart from a
- * wrong answer. So every such path records one of these codes and aborts,
- * unless the test has called v34handshak_unwritten_reset(), which turns the
- * abort into an ordinary return so the caller can inspect the code
- * afterwards. `test/unit/t_v34hst3mid.c` is that caller, and checks the
- * code after every step. See src/pump/v34/V34hshak.c and finding F547.
- */
-#define T3M_WRITTEN			0
-#define T3M_UNWRITTEN_TBL1		1
-#define T3M_UNWRITTEN_RXIDLE		2
-#define T3M_UNWRITTEN_RXSTATE		3
-#define T3M_UNWRITTEN_FSKGATE		4
-#define T3M_UNWRITTEN_TBL3_DEFAULT	5
-#define T3M_UNWRITTEN_TBL3_ARM		6
-#define T3M_UNWRITTEN_TBL2_ARM		7
-#define T3M_UNWRITTEN_OTHER		8
-
-/**
- * @brief Report which unwritten path (if any) the last call to
- * `v34handshak` took.
- * @return One of the `T3M_*` codes above.
- */
-int v34handshak_unwritten(void);
-
-/**
- * @brief Arm v34handshak_unwritten() to return instead of aborting when it
- * hits a path this tree has not reconstructed yet.
- *
- * Intended for tests that want to read the code afterwards rather than
- * treat an unwritten path as a hard failure.
- */
-void v34handshak_unwritten_reset(void);
-
-/**
  * @brief Bring the handshake up.
  *
  * @param obj   The V.34 modem object.

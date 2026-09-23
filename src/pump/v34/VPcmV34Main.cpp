@@ -1994,25 +1994,6 @@ VPcmV34GetCurrentTxBitRate(void *objp)
 /* `hist_2f58` wraps here; `cmp $0x257,%dx` and it is a 16-bit compare. */
 #define PROG_HIST_LAST		0x257
 
-/*
- * ---------------------------------------------------------------------------
- * Compatibility entry points for the old unwritten-path test apparatus.
- * All callees now link directly, so no path sets an unwritten code.
- */
-static int v34pcm_unwritten_code;
-
-extern "C" int
-v34pcm_unwritten(void)
-{
-	return v34pcm_unwritten_code;
-}
-
-extern "C" void
-v34pcm_unwritten_reset(void)
-{
-	v34pcm_unwritten_code = V34PCM_WRITTEN;
-}
-
 extern "C" int
 VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 		int *nrx, int *txbits, int *nbits)
