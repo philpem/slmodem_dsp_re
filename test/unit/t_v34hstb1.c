@@ -7,7 +7,7 @@
  * loop around it.  So it proves each arm and says nothing about the loop --
  * about the guard at 0x62933, the `(short)txstate - 5` index, the range test
  * at 0x62961, the re-test at 0x629e0, or the dispatch on an arm's exit code.
- * Those were the whole of what `T3M_UNWRITTEN_TBL1` covered.
+ * Those were the whole of what the per-sample loop covers.
  *
  * So this test runs OUR WHOLE `v34handshak` against the blob's, with
  * `v34hs_ours(1)`, and there is no anti-vacuity problem to solve: side A runs
@@ -104,7 +104,6 @@ loop_case(short txst, short budget, const char *name, long tag)
 	v34hs_route(V34HS_ROUTE_TXSAMPLE, budget);
 	v34hs_state(V34HS_PHASE1, V34HS_SILENCE, txst);
 
-	v34handshak_unwritten_reset();
 	v34hs_ours(1);
 	v34hs_step();
 	v34hs_ours(0);
@@ -127,20 +126,18 @@ loop_case(short txst, short budget, const char *name, long tag)
 		    || v34hs_peek_short(0, V34HS_TXSTATE) != txst, 1, tag);
 
 	if (dump)
-		printf("  %-24s budget %d  cursor %3d  txstate %2d  code %d\n",
+		printf("  %-24s budget %d  cursor %3d  txstate %2d\n",
 		       name, (int)budget,
 		       (int)v34hs_peek_short(0, V34HS_TXCURSOR),
-		       (int)v34hs_peek_short(0, V34HS_TXSTATE),
-		       v34handshak_unwritten());
+		       (int)v34hs_peek_short(0, V34HS_TXSTATE));
 }
 
 /*
  * The nineteen arms, at two sample budgets.
  *
- * `v34handshak_unwritten()` is asserted `T3M_WRITTEN` on every one of them,
- * and that is a claim about the loop and not about the arms: it says the
- * dispatch reached an arm rather than falling through to the code that
- * records a gap, for all twenty-five states the table names.
+ * Every one of the twenty-five states the table names reaches an arm rather
+ * than falling through to the loop bottom, which `v34hs_compare` holds by the
+ * full object comparison.
  */
 static void
 suite_arms(void)
@@ -149,13 +146,8 @@ suite_arms(void)
 	int i;
 
 	for (i = 0; i < NARMS; i++) {
-		loop_case(arms[i].txst, 1, arms[i].name, tag);
-		diff_eq_int("the loop reached a written arm",
-			    v34handshak_unwritten(), T3M_WRITTEN, tag++);
-
-		loop_case(arms[i].txst, 16, arms[i].name, tag);
-		diff_eq_int("the loop reached a written arm, sixteen samples",
-			    v34handshak_unwritten(), T3M_WRITTEN, tag++);
+		loop_case(arms[i].txst, 1, arms[i].name, tag++);
+		loop_case(arms[i].txst, 16, arms[i].name, tag++);
 	}
 }
 
@@ -186,7 +178,6 @@ suite_guard(void)
 		v34hs_poke_short(V34HS_TXCURSOR, t[i].cursor);
 		v34hs_poke_short(V34HS_TXLIMIT, t[i].limit);
 
-		v34handshak_unwritten_reset();
 		v34hs_ours(1);
 		v34hs_step();
 		v34hs_ours(0);
@@ -238,7 +229,6 @@ suite_range(void)
 		v34hs_poke_short(V34HS_TXCURSOR, 1);
 		v34hs_poke_short(V34HS_TXLIMIT, 1);
 
-		v34handshak_unwritten_reset();
 		v34hs_ours(1);
 		v34hs_step();
 		v34hs_ours(0);
@@ -246,8 +236,7 @@ suite_range(void)
 		snprintf(msg, sizeof(msg),
 			 "txstate %d is outside the table and carries through",
 			 (int)out[i]);
-		v34hs_compare(msg, tag);
-		diff_eq_int(msg, v34handshak_unwritten(), T3M_WRITTEN, tag++);
+		v34hs_compare(msg, tag++);
 	}
 }
 
@@ -257,11 +246,11 @@ suite_range(void)
  * them.
  *
  * THIS SUITE'S CLAIM HAS INVERTED, and what it used to be is worth keeping
- * because it is what the guard bought.  It was "our side recorded
- * `T3M_UNWRITTEN_TBL1` and RETURNED", checked at two budgets: `t3m_notwritten`
- * records and, under `v34handshak_unwritten_reset`, returns, so a loop that
- * recorded the code and went round again recorded the SAME code and passed,
- * and only the budget separated the two (finding F715).
+ * because it is what the guard bought.  It was "our side stopped and
+ * RETURNED", checked at two budgets: the stop recorded a code and, under a
+ * test-supplied reset, returned, so a loop that recorded the code and went
+ * round again recorded the SAME code and passed, and only the budget
+ * separated the two (finding F715).
  *
  * NEITHER BLOCK IS A TRANSFER OUT OF THE LOOP.  0x66d85 ends at 0x63941 or
  * 0x63948, which are both the loop test, and 0x66fe9 at 0x63e7f, which is the
@@ -295,14 +284,12 @@ wrap_case(short txst, void (*seed)(void), short budget, const char *what,
 	v34hs_state(V34HS_PHASE1, V34HS_SILENCE, txst);
 	seed();
 
-	v34handshak_unwritten_reset();
 	v34hs_ours(1);
 	v34hs_step();
 	v34hs_ours(0);
 
 	snprintf(msg, sizeof(msg), "%s, budget %d", what, (int)budget);
 	v34hs_compare(msg, tag);
-	diff_eq_int(msg, v34handshak_unwritten(), T3M_WRITTEN, tag);
 }
 
 static void
@@ -421,7 +408,6 @@ suite_restate(void)
 	v34hs_state(V34HS_PHASE1, V34HS_SILENCE, V34HS_SSEG);
 	v34hs_poke_short(0x25c0, 0x3f);		/* TX1_F25C0, one below 0x40 */
 
-	v34handshak_unwritten_reset();
 	v34hs_ours(1);
 	v34hs_step();
 	v34hs_ours(0);

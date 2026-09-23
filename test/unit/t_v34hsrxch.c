@@ -57,33 +57,26 @@
 static int dump;
 
 /*
- * The four rxstates that leave the chain for somewhere of their own, and what
- * `v34handshak_unwritten()` must say after each.
+ * The four rxstates that leave the chain for somewhere of their own.
  *
- * 43 is WRITTEN -- it is the microstate machine, which landed long ago -- and
- * is here so that the one state the chain treats specially and completely is
- * asserted to be complete, rather than being absent from the table and so
- * indistinguishable from an oversight.  4 RECEIVE and 53 DET_AB joined it
- * when their arms landed, and 72 RX_L1 with them -- so ALL FOUR are now
- * written and the `T3M_WRITTEN` column no longer has an entry that is not.
- * The column is kept, and so is the `unwritten()` predicate below it, because
- * the shape of this test is "what must the chain say about each named state"
- * and a table where every answer is the same is still that question asked.
+ * 43 is the microstate machine, which landed long ago, and is here so that
+ * the one state the chain treats specially and completely is asserted to be
+ * complete, rather than being absent from the table and so indistinguishable
+ * from an oversight.  4 RECEIVE, 53 DET_AB and 72 RX_L1 joined it when their
+ * arms landed -- so all four run a written arm and are compared whole.
  */
 static const struct {
 	short		rxst;
-	int		code;
-	unsigned	target;
 	const char	*name;
 	const char	*what;
 } named[] = {
-	{ V34HS_RX_DPSK, T3M_WRITTEN,		 0x64a64, "43 RX_DPSK",
+	{ V34HS_RX_DPSK, "43 RX_DPSK",
 	  "reaches the microstate machine"	},
-	{ V34HS_RECEIVE, T3M_WRITTEN,		 0x653e4, "4 RECEIVE",
+	{ V34HS_RECEIVE, "4 RECEIVE",
 	  "runs the arm t_v34hsrx4.c owns"	},
-	{ V34HS_DET_AB,	 T3M_WRITTEN,		 0x65473, "53 DET_AB",
+	{ V34HS_DET_AB,	 "53 DET_AB",
 	  "runs the arm t_v34hsrx53.c owns"	},
-	{ V34HS_RX_L1,	 T3M_WRITTEN,		 0x650c6, "72 RX_L1",
+	{ V34HS_RX_L1,	 "72 RX_L1",
 	  "runs the arm t_v34hsrx72.c owns"	}
 };
 
@@ -132,15 +125,13 @@ suite_sweep(void)
 		v34hs_route(V34HS_ROUTE_RXCHAIN, 0);
 		v34hs_state(V34HS_PHASE1, rxst, RXCH_TXSTATE);
 
-		v34handshak_unwritten_reset();
 		v34hs_ours(1);
 		v34hs_step();
 		v34hs_ours(0);
 
 		snprintf(msg, sizeof(msg), "rxstate %d reaches a written exit",
 			 (int)rxst);
-		v34hs_compare(msg, tag);
-		diff_eq_int(msg, v34handshak_unwritten(), T3M_WRITTEN, tag++);
+		v34hs_compare(msg, tag++);
 		written++;
 	}
 
@@ -173,27 +164,13 @@ suite_named(void)
 		v34hs_route(V34HS_ROUTE_RXCHAIN, 0);
 		v34hs_state(V34HS_PHASE1, named[i].rxst, RXCH_TXSTATE);
 
-		v34handshak_unwritten_reset();
 		v34hs_ours(1);
-		if (named[i].code == T3M_WRITTEN) {
-			v34hs_step();
-			v34hs_ours(0);
-			snprintf(msg, sizeof(msg), "%s %s",
-				 named[i].name, named[i].what);
-			v34hs_compare(msg, tag);
-		} else {
-			/*
-			 * NOT STEPPED.  Past an unwritten arm there is no
-			 * oracle, and side B would run the blob's copy of an
-			 * arm side A does not have.
-			 */
-			v34handshak(v34hs_object(0));
-			v34hs_ours(0);
-		}
+		v34hs_step();
+		v34hs_ours(0);
 
-		snprintf(msg, sizeof(msg), "%s: the chain sends it to 0x%x",
-			 named[i].name, named[i].target);
-		diff_eq_int(msg, v34handshak_unwritten(), named[i].code, tag++);
+		snprintf(msg, sizeof(msg), "%s %s",
+			 named[i].name, named[i].what);
+		v34hs_compare(msg, tag++);
 	}
 }
 
@@ -231,7 +208,6 @@ suite_wait(void)
 		before = counts[i];
 		(void)before;
 
-		v34handshak_unwritten_reset();
 		v34hs_ours(1);
 		v34hs_step();
 		v34hs_ours(0);
@@ -240,7 +216,6 @@ suite_wait(void)
 			 "35 WAIT drains the receive queue, count %d",
 			 (int)counts[i]);
 		v34hs_compare(msg, tag);
-		diff_eq_int(msg, v34handshak_unwritten(), T3M_WRITTEN, tag);
 
 		/*
 		 * AND THE DRAIN MUST HAVE HAPPENED.  Without this the trial
@@ -284,7 +259,6 @@ suite_wait_txsweep(void)
 		v34hs_state(V34HS_PHASE1, V34HS_WAIT, txst);
 		v34hs_poke_short(V34HS_RXCOUNT, 16);
 
-		v34handshak_unwritten_reset();
 		v34hs_ours(1);
 		v34hs_step();
 		v34hs_ours(0);
@@ -292,8 +266,7 @@ suite_wait_txsweep(void)
 		snprintf(msg, sizeof(msg),
 			 "35 WAIT then the transmit dispatch, txstate %d",
 			 (int)txst);
-		v34hs_compare(msg, tag);
-		diff_eq_int(msg, v34handshak_unwritten(), T3M_WRITTEN, tag++);
+		v34hs_compare(msg, tag++);
 	}
 }
 

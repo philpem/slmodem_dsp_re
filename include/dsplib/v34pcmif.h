@@ -276,41 +276,6 @@ void VPcmV34ReportMiddleOfEchoAdapt(void *obj);
 int VPcmV34Progress(void *obj, float *in, float *out, int nin, int *rxbits,
 		    int *nrx, int *txbits, int *nbits);
 
-/*
- * The unwritten-path record for VPcmV34Progress()'s seven unreconstructed
- * callees. `vpcm.h`'s record of the same shape explains why this exists and
- * why the default behaviour is to abort; the codes below are one level
- * down from that file's.
- *
- * Everything named here belongs to the V.90 and V.92 arms -- a V.34 call
- * reaches none of them, which is what makes `t_vpcmrun`'s four-way
- * comparison meaningful with these still unwritten.
- */
-#define V34PCM_WRITTEN			0
-#define V34PCM_UNWRITTEN_RUNPCM		1	/* runPcmModem          */
-#define V34PCM_UNWRITTEN_V90RUN		2	/* v90RunDemodulator    */
-#define V34PCM_UNWRITTEN_QCLINE		3	/* qcLineVerification   */
-#define V34PCM_UNWRITTEN_RESETP3	4	/* vPcmResetPhase3Modem */
-#define V34PCM_UNWRITTEN_TONEPROC	5	/* GenericToneDetector  */
-#define V34PCM_UNWRITTEN_RRN		6	/* v90RateReneg         */
-#define V34PCM_UNWRITTEN_RRNSILENCE	7	/* v90RateRenegSilence  */
-
-/**
- * @brief Report which unwritten VPcmV34Progress() callee, if any, was reached.
- * @return One of the `V34PCM_UNWRITTEN_*` codes, or #V34PCM_WRITTEN if none was.
- */
-int v34pcm_unwritten(void);
-
-/**
- * @brief Acknowledge an unwritten-callee abort and allow the process to continue.
- *
- * Clears the unwritten-path record and turns off the abort-on-unwritten-path
- * behaviour. Without this call, reaching an unwritten path stops the
- * process -- an arm that silently returns is otherwise indistinguishable
- * from one that correctly did nothing.
- */
-void v34pcm_unwritten_reset(void);
-
 /**
  * @brief Cap the V.34 symbol rates the line probe is allowed to choose.
  *

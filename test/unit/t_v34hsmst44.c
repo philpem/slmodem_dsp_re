@@ -1063,10 +1063,10 @@ main(void)
 	 * and there by taking the default where a body belongs.  Two cases
 	 * per constant and neither can be dropped.
 	 *
-	 * (This used to rest on `t3c_unwritten` aborting -- finding F358's
-	 * abort-as-a-catch.  With the bodies written it rests on the bodies
-	 * disagreeing with the default instead, which is a byte difference
-	 * rather than a dead run.)
+	 * (This used to rest on the unwritten-path stop aborting -- finding
+	 * F358's abort-as-a-catch.  With the bodies written it rests on the
+	 * bodies disagreeing with the default instead, which is a byte
+	 * difference rather than a dead run.)
 	 *
 	 * +0x358a is not 1, so the byte copy is out of the way and the case is
 	 * about the dispatch alone.

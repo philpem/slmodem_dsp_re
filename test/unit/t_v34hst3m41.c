@@ -24,7 +24,7 @@
  * finding F354 put in the tree.
  *
  * WHAT IS NOT DRIVEN, and so is not claimed: nothing.  Every leaf of the arm
- * has a case below; the arm contains no `t3c_unwritten` and no path that
+ * has a case below; the arm contains no unwritten path and no path that
  * halts.  What the arm CANNOT reach from microstate 41 is the `%si == 44`
  * early-out at 0x6c862 and the `%si == 58` one at 0x6e044, both of which are
  * `hs_setstate`'s own "already there" guard on a cached copy of +0x3592;
