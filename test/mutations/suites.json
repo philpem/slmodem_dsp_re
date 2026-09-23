@@ -997,12 +997,8 @@
   "build/test/t_vpcmrunpcm"
  ],
  "vpcmtabs": [
-  "src/pump/v90/V92EchoCanceller.cpp",
-  "build/test/t_vpcmtabs"
- ],
- "vpcmweak": [
-  "test/unit/t_vpcmguard.c",
-  "build/test/t_vpcmguard"
+   "src/pump/v90/V92EchoCanceller.cpp",
+   "build/test/t_vpcmtabs"
  ],
  "vpcmxfcreate": [
   "src/pump/v90/VPcmXfCreate.cpp",

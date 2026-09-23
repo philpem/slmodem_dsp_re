@@ -16,9 +16,9 @@
  * dispatch; the modem is entirely inside `VPcmV34Progress`, which it calls
  * once.  That is why its closure is 268 symbols and 199,967 bytes and why
  * this file is 400 lines: the V.90, V.92 and K56Flex chains are behind one
- * call, not behind seventeen arms.  All seventeen arms ARE written here.  The
- * unwritten boundary is the five `VPcmV34*` entry points, and `vpcm.h`
- * explains how they are guarded.
+ * call, not behind seventeen arms.  All seventeen arms ARE written here, and
+ * the five `VPcmV34*` entry points it calls are reconstructed too, so the
+ * object's direct `R_386_PC32` calls are reproduced as direct calls.
  *
  * THE SHAPE, from the disassembly:
  *
@@ -53,11 +53,11 @@
 #include "dsplib/sysdep.h"
 
 /*
- * The five unwritten entry points are declared WEAK, so an undefined one
- * resolves to zero instead of failing the link of the 76 binaries that never
- * call this function.  See the long comment in `vpcm.h`.
+ * The five `VPcmV34*` entry points `vpcm_run` calls.  The blob reaches every
+ * one of them by a direct `R_386_PC32` relocation with no null test and no
+ * indirect call, so they are ordinary declarations here and hard link
+ * requirements for every binary that links this translation unit.
  */
-#define DSPLIB_VPCM_UNWRITTEN	__attribute__((weak))
 #include "dsplib/vpcm.h"
 
 /* The bit pipe.  Undefined in the object; the host supplies both. */
@@ -100,48 +100,6 @@ extern void K56FLEX_Delete(void *obj);
  */
 extern int VPcmV34Create(void *obj, int side, int max_frag, void *dpRuntime,
 			 int sessionType);
-
-/*
- * ---------------------------------------------------------------------------
- * The unwritten-path record.
- *
- * `V34hshak.c`'s `t3m_notwritten` verbatim in shape, and for its reasons:
- * ALWAYS record a code, and ALWAYS stop unless a test has said by name that
- * it is going to read the code afterwards.  An entry point that returned
- * quietly would leave `vpcm_run` running and carrying nothing, which is
- * exactly what a subtle defect looks like -- and a `.process` is the worst
- * place in the object for that, because the caller's only evidence is a
- * buffer of samples that would be silence either way.
- *
- * The code is a code and not a string because `tools/debugaudit.py
- * --invented` holds every literal in `src/` against the object's `.rodata`,
- * so a diagnostic phrase this tree made up cannot live here at all (findings
- * F180 and F201).  The names are in the test.
- */
-static int vpcm_unwritten_code;
-static int vpcm_unwritten_soft;
-
-int
-vpcm_unwritten(void)
-{
-	return vpcm_unwritten_code;
-}
-
-void
-vpcm_unwritten_reset(void)
-{
-	vpcm_unwritten_code = VPCM_WRITTEN;
-	vpcm_unwritten_soft = 1;
-}
-
-static void
-vpcm_notwritten(int what)
-{
-	if (vpcm_unwritten_code == VPCM_WRITTEN)
-		vpcm_unwritten_code = what;
-	if (!vpcm_unwritten_soft)
-		abort();
-}
 
 /*
  * ---------------------------------------------------------------------------
@@ -237,18 +195,12 @@ vpcm_run(struct dp *dp, void *in_v, void *out_v, int count)
 			for (i = 0; i < nproc; i++)
 				s->fin[i] = in[i];
 
-			if (VPcmV34Progress == 0)
-				vpcm_notwritten(VPCM_UNWRITTEN_PROGRESS);
-			else
-				prog = VPcmV34Progress(&s->v34, s->fin, s->fout,
-						       nproc, s->rxbits, &nrx,
-						       s->txbits, &nbits);
+			prog = VPcmV34Progress(&s->v34, s->fin, s->fout,
+					       nproc, s->rxbits, &nrx,
+					       s->txbits, &nbits);
 
-			if (VPcmV34GetCleanedSamples == 0)
-				vpcm_notwritten(VPCM_UNWRITTEN_CLEANED);
-			else
-				cleaned = VPcmV34GetCleanedSamples(&s->v34,
-								   &ncleaned);
+			cleaned = VPcmV34GetCleanedSamples(&s->v34,
+							   &ncleaned);
 			if (cleaned != 0 && ncleaned > 0)
 				modem_debug_log_data(dp->modem, 3, cleaned,
 						     ncleaned
@@ -414,27 +366,12 @@ vpcm_run(struct dp *dp, void *in_v, void *out_v, int count)
 					int rxrate = 0;
 					int txrate = 0;
 
-					if (VPcmV34GetCurrentSessionDP == 0)
-						vpcm_notwritten(
-						    VPCM_UNWRITTEN_SESSIONDP);
-					else
-						dpid =
-						  VPcmV34GetCurrentSessionDP(
-							&s->v34);
-					if (VPcmV34GetCurrentRxBitRate == 0)
-						vpcm_notwritten(
-						    VPCM_UNWRITTEN_RXBITRATE);
-					else
-						rxrate =
-						  VPcmV34GetCurrentRxBitRate(
-							&s->v34);
-					if (VPcmV34GetCurrentTxBitRate == 0)
-						vpcm_notwritten(
-						    VPCM_UNWRITTEN_TXBITRATE);
-					else
-						txrate =
-						  VPcmV34GetCurrentTxBitRate(
-							&s->v34);
+					dpid = VPcmV34GetCurrentSessionDP(
+						&s->v34);
+					rxrate = VPcmV34GetCurrentRxBitRate(
+						&s->v34);
+					txrate = VPcmV34GetCurrentTxBitRate(
+						&s->v34);
 
 					if (DSPLIB_DEBUG_ON())
 						dsplibs_debug_printf(

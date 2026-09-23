@@ -19,12 +19,13 @@
  * ceased to hold does not become a better test by being made to pass.
  *
  * WHAT SURVIVES IS THE CLAIM THAT MATTERS, and it survives in both
- * directions.  Every one of the twelve symbols is asserted PRESENT, through a
- * WEAK declaration so that the comparison is a comparison; and the soft path
- * is still driven end to end, with `v34pcm_unwritten()` required to report
- * `V34PCM_WRITTEN` afterwards.  That second assertion is the whole of the old
- * watch turned the right way up.  The member calls now use strong references,
- * so omitting any of their definitions fails at link time.
+ * directions.  The seven symbols BELOW `VPcmV34Progress` are asserted
+ * PRESENT, through a WEAK declaration so that the comparison is a
+ * comparison; and the soft path is still driven end to end, with
+ * `v34pcm_unwritten()` required to report `V34PCM_WRITTEN` afterwards.
+ * That second assertion is the whole of the old watch turned the right way
+ * up.  The member calls use strong references, so omitting any of their
+ * definitions fails at link time.
  *
  * Issue #19 retires the obsolete member guards described in F7606.
  * `v34pcmmain.cpp` retains the recorder API for this test's compatibility;
@@ -53,15 +54,16 @@
  * assertions that remain.
  * ---------------------------------------------------------------------------
  *
- * THE BOUNDARY MOVED, AND THAT IS WHAT THIS FILE IS NOW ABOUT.  It used to
- * watch `vpcm_run` stop on the five `VPcmV34Main.cpp` entry points it calls,
- * because `VPcmV34Progress` -- 7,278 bytes and the whole V.PCM run path --
- * was not reconstructed.  It is now, in `src/pump/v34/v34pcmmain.cpp`, and so
- * are the other four, so every one of the five is a real definition in every
- * binary and `vpcm_run`'s guards can no longer fire.  That claim is made
- * below rather than dropped, for the reason it always was: a definition that
- * quietly stopped being linked would put `vpcm_run` back on `vpcm_notwritten`
- * and NOTHING else in this tree would notice.
+ * THE BOUNDARY MOVED, AND THEN IT WAS REMOVED.  It used to watch `vpcm_run`
+ * stop on the five `VPcmV34Main.cpp` entry points it calls, because
+ * `VPcmV34Progress` -- 7,278 bytes and the whole V.PCM run path -- was not
+ * reconstructed.  All five are now, so the weak-reference guards in `vpcm.c`
+ * were unreachable; and because the blob calls all five directly, those
+ * guards and the `vpcm_unwritten` recorder were added apparatus and have
+ * since been deleted.  `vpcm.h` declares the five plainly and `vpcm.c` calls
+ * them directly, so each is a HARD LINK REQUIREMENT: a definition that
+ * quietly stopped being linked now fails the link outright rather than
+ * putting `vpcm_run` back on a guard.
  *
  * THE SEVEN ONE LEVEL DOWN went the same way, one and two at a time:
  * `GenericToneDetector::process(float *, unsigned)` at 422 bytes, then
@@ -102,14 +104,12 @@
 #include "dsplib/v34fsk.h"
 #include "dsplib/v34pcmif.h"
 /*
- * WEAK HERE TOO, AND IT COST A RUN TO FIND OUT.  A plain declaration lets GCC
- * assume the address of a function is never null and fold `f == 0` to false
- * at compile time -- so the first version of this file reported all five
- * entry points PRESENT in a binary that had just aborted on their absence.
- * The attribute is what makes the comparison a comparison; `vpcm.c` carries
- * it for the same reason and finding F985 records the trap.
+ * Plain `#include`: the five `VPcmV34*` entry points are declared plainly in
+ * `vpcm.h` and are HARD LINK REQUIREMENTS, so there is no weak macro to set
+ * here any more and nothing in this file compares them.  The weak
+ * declarations below are for the seven V.34 MEMBERS, whose recorder
+ * (`v34pcm_unwritten`) is a separate, still-live surface.
  */
-#define DSPLIB_VPCM_UNWRITTEN	__attribute__((weak))
 #include "dsplib/vpcm.h"
 
 /*
@@ -204,7 +204,7 @@ static unsigned char demod[0x100];
 
 /*
  * +0x0000 is `status`, and 4 is the line-verification state -- the arm at
- * .text+0xb9f7 whose one call is the unwritten `qcLineVerification`.
+ * .text+0xb9f7 whose one call is `qcLineVerification` (F7603).
  * +0x0262 is the running flag; zero makes `VPcmV34Progress` return at its
  * first instruction and reach no guard at all.  Both are written through
  * `struct v34_object` rather than by offset, which is what keeps this test
@@ -251,28 +251,25 @@ main(void)
 	if (our_ops == 0)
 		return rc;
 
-	diff_begin("all five VPcmV34* entry points are WRITTEN, and so are "
-		   "all seven below them");
+	diff_begin("the seven symbols below VPcmV34Progress are WRITTEN");
 	/*
-	 * ALL FIVE ARE NOW DEFINED, two in `src/pump/v34/v34pcmif.c` and
-	 * three in `src/pump/v34/v34pcmmain.cpp`, and this block is where
-	 * that is recorded.  It is asserted rather than dropped for the
-	 * reason the weak attribute exists at all: the guard surface is the
-	 * claim, so it has to be counted in both directions.
+	 * THE FIVE `VPcmV34*` ENTRY POINTS ARE HARD LINK REQUIREMENTS NOW,
+	 * and this file no longer compares them.  `include/dsplib/vpcm.h`
+	 * declares them plainly and `vpcm.c` calls them directly, as the blob
+	 * does, so a binary that lacks any definition fails to LINK -- a
+	 * stronger guarantee than the weak-pointer comparison that used to
+	 * stand here, and the reason that comparison is deleted rather than
+	 * kept.  The old `DSPLIB_VPCM_UNWRITTEN` weak idiom, and the
+	 * `if (f == 0) vpcm_notwritten(...)` guards in `vpcm.c`, were added
+	 * apparatus: the blob's `vpcm_run` has no such tests and no
+	 * `vpcm_unwritten` symbol.
 	 */
-	diff_eq_int("VPcmV34Progress is DEFINED", VPcmV34Progress != 0, 1, 0);
-	diff_eq_int("VPcmV34GetCleanedSamples is DEFINED",
-		    VPcmV34GetCleanedSamples != 0, 1, 0);
-	diff_eq_int("VPcmV34GetCurrentSessionDP is DEFINED",
-		    VPcmV34GetCurrentSessionDP != 0, 1, 0);
-	diff_eq_int("VPcmV34GetCurrentRxBitRate is DEFINED",
-		    VPcmV34GetCurrentRxBitRate != 0, 1, 0);
-	diff_eq_int("VPcmV34GetCurrentTxBitRate is DEFINED",
-		    VPcmV34GetCurrentTxBitRate != 0, 1, 0);
 	/*
-	 * And the four that are not.  Without the null ones the abort below
-	 * proves nothing: a guard that fired because the symbol was null is
-	 * only interesting if the symbol really is null.
+	 * And the seven BELOW them, asserted PRESENT through a WEAK
+	 * declaration so that every comparison is a comparison.  Without the
+	 * null ones the recorder check below proves nothing: a guard that
+	 * fired because a symbol was null is only interesting if the symbol
+	 * really is null.
 	 */
 	diff_eq_int("runPcmModem is now DEFINED, so the four are three",
 		    _ZN12VPcmFloModem11runPcmModemEPfS0_jPiS1_S1_S1_ != 0, 1,

@@ -190,36 +190,23 @@ struct vpcm_root {
 
 /*
  * ---------------------------------------------------------------------------
- * The five entry points `vpcm_run` calls and this tree has NOT written.
+ * The five entry points `vpcm_run` calls, and all five are reconstructed.
  *
- * All five are in `VPcmV34Main.cpp`, all five are `extern "C"` in the object
- * (no mangling on the relocation), and `VPcmV34Progress` alone is 7,278 bytes
- * whose closure is the whole V.34 + V.90 + V.92 receive chain.  That is why
- * `vpcm_run` could not be written as a unit, and it is the ONLY boundary in
- * this file that is unwritten -- every one of the seventeen dispatch arms is
- * reconstructed.
+ * All five are `extern "C"` in the object (no mangling on the relocation) and
+ * every one is defined in this tree:
+ * `VPcmV34GetCleanedSamples` and `VPcmV34GetCurrentSessionDP` in
+ * `src/pump/v34/v34pcmif.c`, and `VPcmV34Progress` with the two rate getters
+ * in `src/pump/v34/v34pcmmain.cpp` / `src/pump/v34/VPcmV34Main.cpp`.
  *
- * THEY ARE DECLARED **WEAK** IN `vpcm.c`, WHICH IS THE GUARD.  A weak
- * undefined symbol resolves to zero rather than failing the link, so the
- * other 76 test binaries -- none of which calls `vpcm_run` -- are untouched,
- * and nothing in this tree DEFINES a symbol named after one of the blob's
- * (which would make `debugaudit.py --missing` and `compare.py` count 7,278
- * bytes of the object as reconstructed when they are not).  `vpcm_run` tests
- * each pointer before it calls through it and takes `vpcm_notwritten` when it
- * is null, on `V34hshak.c`'s `t3m_notwritten` rule: record the code, and
- * abort unless a test has said by name that it intends to read the code
- * afterwards.
- *
- * A test that wants the real ones supplies a strong definition forwarding to
- * the `ref_*` alias -- `test/unit/t_vpcmrun.c` does exactly that.
+ * THE BLOB CALLS THEM DIRECTLY.  `vpcm_run` reaches each by an `R_386_PC32`
+ * relocation with no null test and no indirect call -- `tools/dis.py
+ * ref/slmodemd/dsplibs.o 0x3e40 0x44be` -- so they are plain prototypes here
+ * and hard link requirements for any binary that links `vpcm.c`.  An earlier
+ * `DSPLIB_VPCM_UNWRITTEN` weak-reference-plus-guard idiom was added apparatus
+ * while they were unwritten; it is gone, because the object never had it.
  */
-#ifndef DSPLIB_VPCM_UNWRITTEN
-#define DSPLIB_VPCM_UNWRITTEN
-#endif
-
 /**
- * @brief One block through V.34/V.90/V.92. Not written in this tree -- see
- * the comment above.
+ * @brief One block through V.34/V.90/V.92.
  *
  * @param obj    The V.34 object (`tagV34Object`, opaque here).
  * @param in     One block of input samples, as floats.
@@ -233,53 +220,26 @@ struct vpcm_root {
  * @return A `VPCM_PROG_*` progress code.
  */
 int VPcmV34Progress(void *obj, float *in, float *out, int nin, int *rxbits,
-		    int *nrx, int *txbits, int *nbits) DSPLIB_VPCM_UNWRITTEN;
+		    int *nrx, int *txbits, int *nbits);
 
-/** @brief The echo-cancelled input, for the host's data logger. Not written
- *  in this tree. @param obj The V.34 object. @param n Out: sample count
- *  (32 bytes' worth). @return The sample buffer. */
-void *VPcmV34GetCleanedSamples(void *obj, int *n) DSPLIB_VPCM_UNWRITTEN;
+/** @brief The echo-cancelled input, for the host's data logger.
+ *  @param obj The V.34 object. @param n Out: sample count (32 bytes' worth).
+ *  @return The sample buffer. */
+void *VPcmV34GetCleanedSamples(void *obj, int *n);
 
-/** @brief Which of V.34, V.90 and V.92 the session settled on. Not written
- *  in this tree. @param obj The V.34 object. @return 34, 90 or 92. */
-int VPcmV34GetCurrentSessionDP(void *obj) DSPLIB_VPCM_UNWRITTEN;
+/** @brief Which of V.34, V.90 and V.92 the session settled on.
+ *  @param obj The V.34 object. @return 34, 90 or 92. */
+int VPcmV34GetCurrentSessionDP(void *obj);
 
-/** @brief The agreed receive rate. Not written in this tree.
+/** @brief The agreed receive rate.
  *  @param obj The V.34 object. @return Bit rate in bit/s, for
  *  MDMPRM_RX_RATE. */
-int VPcmV34GetCurrentRxBitRate(void *obj) DSPLIB_VPCM_UNWRITTEN;
+int VPcmV34GetCurrentRxBitRate(void *obj);
 
-/** @brief The agreed transmit rate. Not written in this tree.
+/** @brief The agreed transmit rate.
  *  @param obj The V.34 object. @return Bit rate in bit/s, for
  *  MDMPRM_TX_RATE. */
-int VPcmV34GetCurrentTxBitRate(void *obj) DSPLIB_VPCM_UNWRITTEN;
-
-/*
- * ---------------------------------------------------------------------------
- * The unwritten-path record, `V34hshak.c`'s `v34handshak_unwritten` verbatim
- * in shape.  See the comment on the five declarations above.
- */
-#define VPCM_WRITTEN			0
-#define VPCM_UNWRITTEN_PROGRESS		1
-#define VPCM_UNWRITTEN_CLEANED		2
-#define VPCM_UNWRITTEN_SESSIONDP	3
-#define VPCM_UNWRITTEN_RXBITRATE	4
-#define VPCM_UNWRITTEN_TXBITRATE	5
-
-/** @brief Which unwritten entry point was last reached.
- *  @return A `VPCM_UNWRITTEN_*` code, or ::VPCM_WRITTEN for none. */
-int vpcm_unwritten(void);
-
-/**
- * @brief Acknowledge an unwritten-path hit: "I am going to read the code
- * afterwards."
- *
- * Clears the record and turns the abort off; without this call, reaching an
- * unwritten entry point aborts the process, because an arm that returns
- * quietly is otherwise indistinguishable from one that correctly did
- * nothing.
- */
-void vpcm_unwritten_reset(void);
+int VPcmV34GetCurrentTxBitRate(void *obj);
 
 /*
  * ---------------------------------------------------------------------------

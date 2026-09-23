@@ -11369,10 +11369,9 @@
    }
   },
   "vpcmguard": {
-   "key": "ba94bce3b6547724a57cde9082d07ebc73c14d8de5a0f9f7bc2ab32d40edcd78",
-   "summary": "2 mutations: 1 caught (1 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
+   "key": "6e5a28698c2b2e293141723cccbe0e94eee1d4b9820be6d8957ffb2a2131a281",
+   "summary": "1 mutations: 1 caught (1 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
-    "the guard returns quietly instead of stopping": "equivalent",
     "the mute path is always taken, so the guard is never reached": "caught"
    }
   },
@@ -11443,7 +11442,7 @@
    }
   },
   "vpcmrun": {
-   "key": "4aac29a24c0b0165c1d33bbab50a2bc95756d53237af2dc647b6616cbe7e0290",
+   "key": "d7fa56e195425c039d18a4ca4149d08afe0ae15c2c2e0afb64be9c3762db7362",
    "summary": "18 mutations: 13 caught (13 by test, 0 by strings), 0 NOT caught, 0 unusable, 5 equivalent, 0 MIScounted",
    "verdicts": {
     "`nbits` is not carried to the next block": "caught",
@@ -11592,13 +11591,6 @@
     "swap the two echo pre-filter halves": "caught",
     "transpose two taps of IIR2100_Coef_A_9600": "caught",
     "unnormalise the 8000 Hz denominator's leading coefficient": "caught"
-   }
-  },
-  "vpcmweak": {
-   "key": "05f3d18d9ba281cb9c27ee47c0b392a3c6e0fe213c9d65e12e553e885b718648",
-   "summary": "1 mutations: 0 caught (0 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
-   "verdicts": {
-    "the comparing translation unit declares the five plain, not weak": "equivalent"
    }
   },
   "vpcmxfcreate": {
