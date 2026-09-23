@@ -5,6 +5,10 @@
 *.d
 build/
 build-cov/
+# scratch build trees, e.g. `tools/modern/run.sh make BUILD=build-gcc13`.
+# A miss here let a 4.8 MB test binary into master (PR #193); the wildcard
+# stops the next one whatever it is called.
+/build-*/
 test/harness/*_test
 test/harness/*_diff
 
