@@ -5193,6 +5193,15 @@
     "report the saturated sample rather than the overflow": "caught"
    }
   },
+  "v8detector": {
+   "key": "03884ebfacd62a610c8beeca346efea0aa38d617dec0fde90863db80cfee2a5e",
+   "summary": "3 mutations: 3 caught (3 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "drop the phase-reversal announcement": "caught",
+    "report the phase-reversal delay after it is accepted": "caught",
+    "report the reversal count rather than the delay": "caught"
+   }
+  },
   "v8dp": {
    "key": "13eb0cca1d37c46e449d643719fb9829df74ea0c6be086b6baf675240fe3b5bc",
    "summary": "4 mutations: 4 caught (4 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
@@ -5355,16 +5364,13 @@
    }
   },
   "v8sig": {
-   "key": "9bd6b51dde80e89b87d409b930e2e7535c1d05698ed9f0e87e7cc7d7444c24f5",
-   "summary": "8 mutations: 8 caught (8 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "key": "cd496eed092ce26773457bcba95c57408b265474a18db58aaf1a9b2703041554",
+   "summary": "5 mutations: 5 caught (5 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
-    "drop the phase-reversal announcement": "caught",
     "drop the unsupported-request complaint": "caught",
     "give the unsupported-request complaint a bare newline": "caught",
     "name the control request only when it is accepted": "caught",
     "name the request by number as well as by name": "caught",
-    "report the phase-reversal delay after it is accepted": "caught",
-    "report the reversal count rather than the delay": "caught",
     "swap START_CJ and START_JM in the name table": "caught"
    }
   },

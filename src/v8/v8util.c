@@ -231,28 +231,6 @@ v8_txinit(struct v8 *v)
 }
 
 /*
- * Arm the ANSam phase-reversal detector.  The window is cleared and the
- * countdown at +0x0e set to 32 -- half the window, which is how long it
- * waits before its first verdict.
- */
-void
-v8_phase_rev_init(struct v8_phase_rev *pr)
-{
-	int i;
-
-	pr->detected = 0;
-	pr->corr = 0;
-	pr->energy = 0;
-	pr->smoothed = 0;
-	pr->run = 0;
-	pr->reversals = 0;
-	pr->half = 0x20;
-	pr->widx = 0;
-	for (i = 0; i < 64; i++)
-		pr->window[i] = 0;
-}
-
-/*
  * Arm the receiver.  Note the order at the top: the scratch buffer is cleared
  * and then one element of it is written again.  Reproduced as written --
  * seeding after the clear is what the original does, and doing it the tidy
@@ -296,40 +274,4 @@ v8_rxinit(struct v8 *v)
 	v->rx.clip_count = 0;
 
 	return 0;
-}
-
-/*
- * Arm the tone detector.
- *
- * The original has an empty inner loop here -- three iterations that do
- * nothing -- left over from whatever the accumulators used to be.  It has no
- * effect and is not reproduced; everything that touches memory is.
- */
-void
-v8_detectorinit(struct v8 *v, struct v8_detector *d, const short *table,
-		short a3, short a4, short a5, short a6, short a7)
-{
-	int i;
-
-	for (i = 0; i < 4; i++) {
-		d->acc_a[i] = 0;
-		d->acc_b[i] = 0;
-	}
-	for (i = 0; i < 3; i++) {
-		d->acc_c[i] = 0;
-		d->acc_d[i] = 0;
-	}
-
-	d->lo_rule = a3;
-	d->counter = (short)-a5;
-	d->f0c = 1;
-	d->table = table;
-	d->armed = 0;
-	d->count_limit = a4;
-	d->hi_thresh = a6;
-	d->lo_thresh = a7;
-	d->integrator = 0;
-	d->warmup = 0;
-
-	v->rx.flags |= V8_RX_DETECTOR_ARMED;
 }
