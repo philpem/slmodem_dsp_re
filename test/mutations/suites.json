@@ -436,6 +436,10 @@
   "src/v8/v8seq.c",
   "build/test/t_v8util"
  ],
+ "v8getbit": [
+  "src/v8/V8global.c",
+  "build/test/t_v8util"
+ ],
  "v8detector": [
   "src/v8/V8Detector.c",
   "build/test/t_v8sig"

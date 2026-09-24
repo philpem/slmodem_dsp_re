@@ -1,13 +1,12 @@
 /*
- * v8util.c -- the arithmetic and buffer leaves of the V.8 handshake.
+ * v8util.c -- the compile-time offset assertions and the tone-queue arm.
  *
- * Small helpers that everything else in V.8 is built from: a Q14 multiply,
- * an absolute value, the CRC bit step, a coeff copy, the tone-queue arm, and
- * the transmit/receive buffer setup.  They are reconstructed first because the
- * whole of V.8 bottoms out here -- `V8Create` reaches the signal layer through
- * `v8handshakinit`, and the signal layer reaches these.  The cosine table and
- * DFT energy pass are `V8Dftc.c`'s, and the V.21 setup is `V8Dpsk.c`'s, which
- * is where the object keeps them.
+ * The arithmetic and buffer leaves this file used to carry are now in
+ * `V8global.c`, which is the object's own unit for them; the cosine table and
+ * DFT energy pass are `V8Dftc.c`'s and the V.21 setup `V8Dpsk.c`'s.  What
+ * remains is v8_TONEq_init and the struct-offset assertions below, which are
+ * apparatus: they make a careless struct edit fail the build instead of a
+ * test somewhere far away.
  */
 
 #include <stddef.h>
@@ -77,146 +76,10 @@ typedef char v8_pr_window[V8_OFFSET_OK == 0 || offsetof(struct v8_phase_rev, win
 			  ? 1 : -1];
 
 
-/* Q14 multiply: the product of two Q14 values, back in Q14. */
-short
-v8_mpyint(short a, short b)
-{
-	return (short)((a * b) >> 14);
-}
-
-/*
- * Absolute value, with the usual two's-complement corner left in place:
- * `v8_absfn(-32768)` is -32768, because negating it overflows and the result
- * is narrowed back to a short.  No caller reaches it -- the signal path is
- * scaled well below full scale -- so it is reproduced rather than fixed.
- */
-short
-v8_absfn(short x)
-{
-	if (x < 0)
-		return (short)(-x);
-	return x;
-}
-
-/*
- * One bit into the CRC-16-CCITT register the handshake carries in its state.
- * Polynomial 0x1021, MSB first, no reflection: shift up, and if the bit
- * leaving the top disagrees with the bit going in, fold the polynomial back.
- *
- * `bit` is compared 16 bits at a time, so a value whose low half is zero
- * counts as a zero bit whatever the upper half holds.
- */
-void
-v8_crc(struct v8_handshake *hs, int bit)
-{
-	unsigned int crc = (unsigned short)hs->crc;
-	int msb = ((int)(short)crc) < 0 ? 1 : 0;
-
-	crc += crc;
-	if ((short)bit != 0)
-		msb ^= 1;
-	if (msb != 0)
-		crc ^= 0x1021;
-	hs->crc = (short)crc;
-}
-
-/* Copy `n` coefficients.  The counter is a short, so `n` above 32767 never
- * terminates -- no caller comes close. */
-void
-v8_copycoeff(short *dst, const short *src, short n)
-{
-	short i;
-
-	for (i = 0; i < n; i++)
-		dst[i] = src[i];
-}
-
 /* Arm the tone queue: nothing pending, and the period set to 0x688. */
 void
 v8_TONEq_init(struct v8 *v)
 {
 	v->toneq_pending = 0;
 	v->toneq_period = 0x688;
-}
-
-/*
- * Arm the transmitter.  Three buffers are cleared and four pointers set to
- * point inside them: the symbol buffer gets two pointers to its start, and
- * the ring gets one to its start and one to the sixty-fourth sample -- a read
- * and a write cursor half a buffer apart, which is how the shaping filter is
- * kept fed while the modulator drains behind it.
- */
-int
-v8_txinit(struct v8 *v)
-{
-	int i;
-
-	v->short_014 = 1;
-	v->short_00c = 0;
-	v->short_018 = 0;
-	v->int_004 = 0;
-
-	for (i = 0; i < V8_TX_SHAPE; i++)
-		v->tx_shape[i] = 0;
-
-	v->tx_ring_base = v->tx_ring;
-	for (i = 0; i < V8_TX_RING; i++)
-		v->tx_ring[i] = 0;
-
-	v->tx_avail = 0x20;
-	v->tx_ring_half = v->tx_ring + V8_TX_RING_HALF;
-
-	v->tx_sym_a = v->tx_symbols;
-	v->tx_sym_b = v->tx_symbols;
-	v->sym_avail = 0;
-	for (i = 0; i < V8_TX_SYMBOLS; i++)
-		v->tx_symbols[i] = 0;
-
-	return 0;
-}
-
-/*
- * Arm the receiver.  Note the order at the top: the scratch buffer is cleared
- * and then one element of it is written again.  Reproduced as written --
- * seeding after the clear is what the original does, and doing it the tidy
- * way round would be the same result only by luck of the index.
- */
-int
-v8_rxinit(struct v8 *v)
-{
-	int i;
-
-	for (i = 0; i < V8_RX_SCRATCH; i++)
-		v->rx_scratch[i] = 0;
-	v->rx_scratch[V8_RX_SCRATCH_SEED_INDEX] = V8_RX_SCRATCH_SEED;
-
-	v->rx.gain_ref = 0x200;
-	v->rx.hist_idx = 0;
-	v->rx.gain = 0x200;
-	v->rx.adapt_rate = 0x3333;
-
-	for (i = 0; i < V8_RX_HIST; i++)
-		v->rx.hist[i] = 0;
-
-	v->rx.accum = 0;
-	v->rx.refresh_timer = 0;
-	v->rx.stable_timer = 0;
-	v->rx.stable = 0;
-	v->rx.fc2 = 0x50;
-	v->rx.fc8 = 0;
-	v->rx.fc6 = 0;
-	v->rx.fda = 0;
-	v->rx.fd8 = 0;
-
-	v->rx.buf = v->rx_stage;
-	v->rx.level = 0;
-	/*
-	 * One 32-bit store in the original, covering both halves.  They are
-	 * two shorts here because v8_agcadapt reads the upper one on its own.
-	 */
-	v->rx.energy_lo = 0;
-	v->rx.energy_hi = 0;
-	v->rx.clip_count = 0;
-
-	return 0;
 }

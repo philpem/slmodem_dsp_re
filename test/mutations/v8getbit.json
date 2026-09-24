@@ -1,0 +1,17 @@
+[
+ {
+  "label": "NOTE: these mutations are the v8_getbit half of the old v8seqstd suite, moved here because the blob's v8_getbit lives in V8global.c.  They measure the no-CRC serializer control in t_v8util."
+ },
+ {
+  "label": "normal v8_getbit emits the low end of the framed word instead of its next high-order bit",
+  "find": "\ts->nleft = (short)(s->nleft - 1);\n\treturn (s->shifter >> (short)s->nleft) & 1;",
+  "replace": "\ts->nleft = (short)(s->nleft - 1);\n\treturn s->shifter & 1;",
+  "fn": "v8_getbit"
+ },
+ {
+  "label": "normal v8_getbit repeats a sequence whose repeat flag is clear",
+  "find": "\t\tif (s->repeat == 0)\n\t\t\treturn V8_GETBIT_END;",
+  "replace": "\t\tif (s->repeat != 0)\n\t\t\treturn V8_GETBIT_END;",
+  "fn": "v8_getbit"
+ }
+]
