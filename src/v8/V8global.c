@@ -58,6 +58,21 @@ static const short agc_gain[192] = {
 	 32251,  32316,  32381,  32446,  32510,  32575,  32639,  32703
 };
 
+/*
+ * Reverse the bits of a nibble.  The original stores this rather than
+ * computing it, and `charFlip` uses it twice.
+ */
+static const unsigned char nibble_reverse[16] = {
+	0, 8, 4, 12, 2, 10, 6, 14, 1, 9, 5, 13, 3, 11, 7, 15
+};
+
+unsigned char
+charFlip(unsigned char b)
+{
+	return (unsigned char)((nibble_reverse[b & 0x0f] << 4)
+			       | nibble_reverse[b >> 4]);
+}
+
 /* Where the gain table runs out. */
 #define V8_AGC_GAIN_MAX		0xbf
 
