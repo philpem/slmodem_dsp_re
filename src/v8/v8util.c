@@ -1,11 +1,13 @@
 /*
- * v8util.c -- the arithmetic leaves of the V.8 handshake.
+ * v8util.c -- the arithmetic and buffer leaves of the V.8 handshake.
  *
- * Six small helpers that everything else in V.8 is built from: a Q14
- * multiply, an absolute value, the cosine table, the CRC bit step, a coeff
- * copy and the energy pass over a DFT bin array.  They are reconstructed
- * first because the whole of V.8 bottoms out here -- `V8Create` reaches the
- * signal layer through `v8handshakinit`, and the signal layer reaches these.
+ * Small helpers that everything else in V.8 is built from: a Q14 multiply,
+ * an absolute value, the CRC bit step, a coeff copy, the tone-queue arm, and
+ * the transmit/receive buffer setup.  They are reconstructed first because the
+ * whole of V.8 bottoms out here -- `V8Create` reaches the signal layer through
+ * `v8handshakinit`, and the signal layer reaches these.  The cosine table and
+ * DFT energy pass are `V8Dftc.c`'s, and the V.21 setup is `V8Dpsk.c`'s, which
+ * is where the object keeps them.
  */
 
 #include <stddef.h>
@@ -129,69 +131,12 @@ v8_copycoeff(short *dst, const short *src, short n)
 		dst[i] = src[i];
 }
 
-/*
- * Energy of each DFT bin: the real and imaginary parts are shifted up by
- * `shift`, taken down to their top 16 bits, squared and summed, and the top
- * 16 bits of that are stored.  The shift is how the caller keeps a bin that
- * has grown small from squaring away to nothing.
- */
-void
-v8_dftenergy(struct v8_dft_bin *bin, short n, short shift)
-{
-	short i;
-
-	for (i = 0; i < n; i++) {
-		int re = (int)((unsigned int)bin[i].re << shift) >> 16;
-		int im = (int)((unsigned int)bin[i].im << shift) >> 16;
-
-		bin[i].energy = (short)((re * re + im * im) >> 16);
-	}
-}
-
 /* Arm the tone queue: nothing pending, and the period set to 0x688. */
 void
 v8_TONEq_init(struct v8 *v)
 {
 	v->toneq_pending = 0;
 	v->toneq_period = 0x688;
-}
-
-/*
- * Clear the V.21 delay line and the three accumulators behind it.
- *
- * The counter is UNSIGNED because the object's loop test is `cmp $0x27` +
- * `jbe`, and the signedness of a comparison is something the compiler was
- * forced to encode: a signed `int i` gives `jle` here and everything else in
- * the function byte for byte.  It cannot change behaviour -- the counter runs
- * 0..39 and the two readings agree over every value it holds -- so no
- * differential test can see it, which is why it is settled against the
- * instruction and not against a test.  Finding F2952.
- */
-void
-V8_V21_reset(struct v8 *v)
-{
-	unsigned i;
-
-	for (i = 0; i < V8_V21_DELAY; i++)
-		v->v21.delay[i] = 0;
-	v->v21.pos = 0;
-	v->v21.space_run = 0;
-	v->v21.mark_run = 0;
-}
-
-/*
- * Point the V.21 modem at a set of filter designs.  The four are swapped
- * together, which is how one modem serves both channels of V.21: the
- * handshake calls this again whenever it changes direction.
- */
-void
-V8_setFilters(struct v8 *v, const short *a, const short *b, const short *c,
-	      const short *d)
-{
-	v->v21.a = a;
-	v->v21.b = b;
-	v->v21.c = c;
-	v->v21.d = d;
 }
 
 /*

@@ -1,12 +1,15 @@
 /*
- * v8v21.c -- bringing up the V.21 modem that V.8 signals over.
+ * V8Fsk.c -- bringing up the V.21 modem that V.8 signals over.
  *
  * V.8's CM and JM ride on a 300 baud V.21 link, and this is what configures
- * it.  Two independent choices are made here: which of V.21's two channels
- * this modem transmits on, and whether it answered the call.  They pick
- * different things -- the channel picks the carrier constants and the 61-tap
- * filter, the role picks the four filter designs and two more constants --
- * and the four combinations are all reachable.
+ * and drives it from this side: V8_V21_Init picks the channel and role and
+ * v8_fskmodulate turns bits into shaped samples.  Two independent choices are
+ * made here: which of V.21's two channels this modem transmits on, and
+ * whether it answered the call.  They pick different things -- the channel
+ * picks the carrier constants and the 61-tap filter, the role picks the four
+ * filter designs and two more constants -- and the four combinations are all
+ * reachable.  The delay line, filter selection and receive correlator are
+ * `V8Dpsk.c`'s, which is where the object keeps them.
  */
 
 #include "dsplib/v8.h"
@@ -161,4 +164,31 @@ v8_V21_Init(struct v8 *v, short channel, short answerer)
 	v->v21_params.ones_run_len = 0;
 	v->v21_params.gap_count = 0;
 	v->v21_params.gap_seen = 0;
+}
+
+/*
+ * Four samples of FSK.  The two carriers differ only in which increment is
+ * added to the shared phase, so the branch is one field apart; everything
+ * after -- table lookup, amplitude, shaping filter -- is common.
+ */
+int
+v8_fskmodulate(struct v8 *v, short which)
+{
+	struct v8_v21_params *p = &v->v21_params;
+	short step = (short)(which != 0 ? p->carrier_b : p->carrier_a);
+	int i;
+
+	for (i = 0; i < V8_QUEUE_BLOCK; i++) {
+		unsigned phase;
+		short c;
+
+		phase = ((unsigned)(unsigned short)p->carrier_phase
+			 + (unsigned short)step) & 0x1fff;
+		p->carrier_phase = (short)phase;
+
+		c = v8_cosread((unsigned char)(phase >> 5));
+		v->tx_stage[i] = v8_fsktxfilter(v, v8_mpyint(c, p->tx_level));
+	}
+
+	return v8_txwritequeue(v);
 }
