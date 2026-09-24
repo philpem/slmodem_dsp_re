@@ -13,26 +13,6 @@
 #include "dsplib/v8.h"
 
 /*
- * Arm the ANSam tone generator.
- *
- * These are the same seven stores `v8handshakinit` makes inline in its
- * answering shape; the compiler inlined this function there rather than
- * calling it.  Kept as a function because that is what the object says it
- * is, and because the constants belong in one place.
- */
-void
-v8_ansaminit(struct v8 *v)
-{
-	v->tone.carrier_phase = 0;
-	v->tone.envelope_step = 0x1a;
-	v->tone.carrier_step = 0xe00;
-	v->tone.reversal_count = 0;
-	v->tone.envelope_phase = 0;
-	v->tone.amplitude = v8_mpyint(0x3e80, v->tx_gain);
-	v->tone.reversal_enable = 1;
-}
-
-/*
  * Take four samples out of the symbol buffer and into the receive staging
  * buffer, stepping four bytes at a time -- every other short, so the real
  * half of each complex pair.  The buffer is a ring and wraps at its end.
@@ -54,26 +34,6 @@ v8_rxreadqueue(struct v8 *v)
 	}
 	v->tx_sym_a = src;
 	return 0;
-}
-
-/*
- * Four samples of the queued tone.  A 14-bit phase accumulator stepped by
- * the period, read out of the cosine table with the usual rounding -- the
- * same idiom as the dialler's DTMF, at a different width.
- */
-void
-v8_TONEq_generate(struct v8 *v, short *out)
-{
-	int i;
-
-	for (i = 0; i < V8_QUEUE_BLOCK; i++) {
-		unsigned phase = (unsigned)(unsigned short)v->toneq_pending
-				 + (unsigned short)v->toneq_period;
-
-		phase &= 0x3fff;
-		v->toneq_pending = (short)phase;
-		out[i] = v8_cosread((unsigned char)((phase + 0x20) >> 6));
-	}
 }
 
 /* The other direction: staging buffer into the transmit ring. */
@@ -289,58 +249,6 @@ V8Control(struct v8 *v, int what)
 		    "V8: V8Control called - control type is %s\n",
 		    v8ControlName[what]);
 	return rc;
-}
-
-/*
- * Four samples of ANSam.
- *
- * Two phase accumulators: the carrier, and a slower one that modulates its
- * amplitude by twenty percent either way.  The amplitude itself is negated
- * every 1080 blocks, and that inversion is the whole point -- it is what
- * tells a listening modem this is ANSam and not a bare answer tone.
- *
- * The reversal counter only runs while the enable at +0x0e is set, so a
- * caller can have the tone without the reversals.
- */
-void
-v8_ansamgenerate(struct v8 *v, short *out)
-{
-	struct v8_tone *t = &v->tone;
-	int i;
-
-	for (i = 0; i < V8_QUEUE_BLOCK; i++) {
-		unsigned envelope;
-		unsigned carrier;
-		short depth;
-		short level;
-
-		envelope = ((unsigned)(unsigned short)t->envelope_phase
-			    + (unsigned short)t->envelope_step) & 0x3fff;
-		t->envelope_phase = (short)envelope;
-
-		carrier = ((unsigned)(unsigned short)t->carrier_phase
-			   + (unsigned short)t->carrier_step) & 0x3fff;
-		t->carrier_phase = (short)carrier;
-
-		depth = v8_mpyint(V8_ANSAM_DEPTH,
-				  v8_cosread((unsigned char)((envelope + 0x20)
-							     >> 6)));
-		level = v8_mpyint((short)(depth + V8_ANSAM_UNITY), t->amplitude);
-
-		out[i] = v8_fsktxfilter(v,
-			v8_mpyint(v8_cosread((unsigned char)((t->carrier_phase + 0x20)
-							     >> 6)), level));
-	}
-
-	if (t->reversal_enable == 0)
-		return;
-
-	if ((unsigned short)(t->reversal_count + 1) == V8_ANSAM_REVERSAL) {
-		t->reversal_count = 0;
-		t->amplitude = (short)-t->amplitude;
-	} else {
-		t->reversal_count = (short)(t->reversal_count + 1);
-	}
 }
 
 static const short tone_in_a[2] = { -8057, 14787 };

@@ -165,7 +165,7 @@ RATCHET = os.path.join(os.path.dirname(os.path.abspath(__file__)),
 # to say the two belong together.  Those are declared here.  Finding F610.
 #
 TU_GROUPS = (
-    ("src/v8/v8handshak.c", "src/v8/v8hsrx.c"),
+    ("src/v8/V8.c", "src/v8/v8hsrx.c"),
 )
 
 def _default_blob():

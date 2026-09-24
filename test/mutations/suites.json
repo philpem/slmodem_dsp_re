@@ -401,7 +401,7 @@
   "build/test/t_v8dp"
  ],
  "v8handshak": [
-  "src/v8/v8handshak.c",
+  "src/v8/V8.c",
   "build/test/t_v8hs"
  ],
  "v8hs": [
