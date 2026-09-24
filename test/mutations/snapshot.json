@@ -5241,7 +5241,7 @@
    }
   },
   "v8hs": {
-   "key": "71a8e737ddaaf1f956f209dd3647630322730c09cf6443838bb4e4f0d72227eb",
+   "key": "eb50ad56b7d822540cb8b55be382571ab8b891924a76dcb866ecc1212ddc3b28",
    "summary": "7 mutations: 7 caught (7 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "announce LAPM even when a raw protocol is given": "caught",
@@ -5279,8 +5279,8 @@
    }
   },
   "v8jm": {
-   "key": "0f7c591c11c900a5a7d6fb0d5f477038dc1af6113a7f15adbded5fbb1aee6537",
-   "summary": "29 mutations: 29 caught (29 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "key": "26ab616c51713b519b6ae07abe87aee7f267231989dc9f4648fbadfbe330426b",
+   "summary": "23 mutations: 23 caught (23 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "abandon the marker word when the local extension fails to match": "caught",
     "accept the filler even when an acceptance list is configured": "caught",
@@ -5288,12 +5288,9 @@
     "announce the call function after the extension is tried": "caught",
     "announce the caller's side as the answerer's": "caught",
     "announce the zeroing whether or not a function matched": "caught",
-    "complain about the missing function for any unrecognised value": "caught",
     "drop the gloss from the failed verdict": "caught",
     "drop the in-range call function announcement": "caught",
     "drop the no-call-function BUG message from the rebuild": "caught",
-    "drop the no-call-function-match complaint from the report": "caught",
-    "drop the quick connect announcement": "caught",
     "give V.80 an indication of its own on the answering side": "caught",
     "give V.80 an indication of its own on the calling side": "caught",
     "give the verdict on the second field instead of the first": "caught",
@@ -5302,43 +5299,27 @@
     "report the JM length before the V.90 tail is counted": "caught",
     "report the JM length in bits": "caught",
     "report the local V.90 bit from b0 bit 4": "caught",
-    "report the menu that was offered rather than the one settled on": "caught",
     "report the received call function in decimal": "caught",
     "return once the second field matches, skipping the verdict": "caught",
-    "swap digital connection and pcmIndication in the report": "caught",
     "swap mod and pcmIndication in the answerer's report": "caught",
     "swap the two fax directions on the answering side": "caught",
     "swap the two fax directions on the calling side": "caught",
-    "swap the two protocol match announcements": "caught",
-    "swap v23 and v21 in the settled menu": "caught"
+    "swap the two protocol match announcements": "caught"
    }
   },
   "v8jmstd": {
-   "key": "5e4f7187488435a853d335e0abb9883a575e73fdbfabe94f9351fd4c1d787843",
-   "summary": "3 mutations: 3 caught (3 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "key": "b3b2e600f9310b5c945300c96064e9567059a2f7bae6260c5e70cde65ce7115e",
+   "summary": "2 mutations: 2 caught (2 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "Table 7 clear-bit control: force caller-cellular b5 into every rebuilt JM access word": "caught",
-    "sensitivity to the reproduced departure: echo received Table 7 access b5 into the rebuilt JM": "caught",
-    "sensitivity to the reproduced departure: test only Table 4's V.21 bit instead of including the stop bit": "caught"
+    "sensitivity to the reproduced departure: echo received Table 7 access b5 into the rebuilt JM": "caught"
    }
   },
   "v8proc": {
-   "key": "f9bd4bdea28d6aa30b334cd66d496da9a68c3c242643f2dd75703450c2f98bdc",
-   "summary": "17 mutations: 17 caught (17 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "key": "cc6a32c2a375e1c52ca41837bef4cc10be74e675c04ccf7ca2a468bd0cd189b2",
+   "summary": "5 mutations: 5 caught (5 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
-    "accept a negotiation that agreed on nothing": "caught",
-    "announce OK after the idle timer is consulted": "caught",
-    "announce quick connect for any accepted modulation": "caught",
     "announce the change after it is recorded": "caught",
-    "announce the idle timer before it is set": "caught",
-    "drop the idle timer announcement": "caught",
-    "drop the timeout announcement": "caught",
-    "drop the wrapper's status line": "caught",
-    "hand over to V.34 when V.90 was agreed": "caught",
-    "name the previous status rather than the new one": "caught",
-    "prefer V.32 over V.34": "caught",
-    "publish the agreement only on quick connect": "caught",
-    "renegotiate on every V8_OK": "caught",
     "report every status, not just the changes": "caught",
     "report the state change the other way round": "caught",
     "swap the answering side's two timeout statuses": "caught",
@@ -5346,22 +5327,18 @@
    }
   },
   "v8seq": {
-   "key": "34aab3825af1522522708db59829950036745788615c752ae40580eb7ded297d",
-   "summary": "9 mutations: 9 caught (9 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "key": "bad7bdaf4014277c849c440c55c7ff644efb1b03ebf1cde661d088ed4c8fa3ef",
+   "summary": "5 mutations: 5 caught (5 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
-    "announce the banner before the selector is validated": "caught",
     "announce the length before the tail is counted": "caught",
     "drop the no-call-function BUG message": "caught",
-    "give the size complaint a CRLF ending": "caught",
     "report the length in bits rather than characters": "caught",
-    "report the truncated length instead of the caller's": "caught",
     "swap JM and CM in the length banner": "caught",
-    "swap the QC1A banner for the CJ one": "caught",
     "swap the two extension BUG messages": "caught"
    }
   },
   "v8seqstd": {
-   "key": "69bdc82a4abfbac6ed3e75b055aca96a3109eab81b35a099bd03fe232a764ca5",
+   "key": "fa748b1e9a95c48ef70a0b86fb9940f8a049881c29bef18534a75e4efe813974",
    "summary": "3 mutations: 3 caught (3 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "ext_word omits the Table 1 stop bit": "caught",
@@ -5369,8 +5346,18 @@
     "ext_word sets the Table 1 start bit to one": "caught"
    }
   },
+  "v8setmsg": {
+   "key": "63dfe5bb85c684c6ca125c4b0c82e227c691d3fd40bfa59b5bc12f5029ca70dd",
+   "summary": "4 mutations: 4 caught (4 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "announce the banner before the selector is validated": "caught",
+    "give the size complaint a CRLF ending": "caught",
+    "report the truncated length instead of the caller's": "caught",
+    "swap the QC1A banner for the CJ one": "caught"
+   }
+  },
   "v8sig": {
-   "key": "cf8db9c50f0b9b177184233a863ff4775e5649ff8ce7b139d7e30374e1069b30",
+   "key": "18de60daef97f63543c1f7f367cb99b368d633c286830ceea09b47652198b6a6",
    "summary": "5 mutations: 5 caught (5 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "drop the unsupported-request complaint": "caught",
@@ -5378,6 +5365,25 @@
     "name the control request only when it is accepted": "caught",
     "name the request by number as well as by name": "caught",
     "swap START_CJ and START_JM in the name table": "caught"
+   }
+  },
+  "v8updparams": {
+   "key": "cbbff8fddae615b0adb8ddc78886e8d7add9bcd259dbc690140f0d4942a7be8d",
+   "summary": "6 mutations: 6 caught (6 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "complain about the missing function for any unrecognised value": "caught",
+    "drop the no-call-function-match complaint from the report": "caught",
+    "drop the quick connect announcement": "caught",
+    "report the menu that was offered rather than the one settled on": "caught",
+    "swap digital connection and pcmIndication in the report": "caught",
+    "swap v23 and v21 in the settled menu": "caught"
+   }
+  },
+  "v8updparamsstd": {
+   "key": "6fe4dc36717d722743d9bd2b844db37c141af805b991cd549d266a91fb7a0d60",
+   "summary": "1 mutations: 1 caught (1 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "sensitivity to the reproduced departure: test only Table 4's V.21 bit instead of including the stop bit": "caught"
    }
   },
   "v90adid": {

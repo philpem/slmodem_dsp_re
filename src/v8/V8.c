@@ -1,13 +1,16 @@
 /*
  * V8.c -- the handshake core.
  *
- * What is left once the pieces with their own translation unit are taken
- * out: the two state machines (`v8handshakinit` lays them out, `v8handshak`
- * runs them), the two tone generators the transmit side drives, and the
- * answerer's tone setup.  The object keeps these in one unit, which is why
- * `v8handshakinit` has `v8_ansaminit`'s seven stores inlined into it and
- * why `v8handshak` carries the receive paths inline rather than calling
- * them.
+ * The object's third V.8 translation unit.  It holds the state machines
+ * (`v8handshakinit` lays them out, `v8handshak` runs them), the two tone
+ * generators the transmit side drives, the answerer's tone setup, the
+ * tone-queue arm (v8_TONEq_init), and the sequence builders initTxSequence,
+ * rebuildJMSequence and evaluateRxJMSequence.  The object keeps these in one
+ * unit, which is why `v8handshakinit` has `v8_ansaminit`'s seven stores
+ * inlined into it, why `v8handshak` carries the receive paths inline rather
+ * than calling them, and why `v8handshakinit` and `v8handshak` call the
+ * sequence builders out of line -- they are large enough that -O3 does not
+ * inline them even inside their own unit.
  *
  * The detector coefficient table is the unit's only local object: the
  * object's `.rodata+0x5670`, sixteen bytes, reached only from
@@ -16,6 +19,7 @@
 
 #include "dsplib/debug.h"
 #include "dsplib/v8.h"
+#include "v8int.h"
 
 /*
  * The detector's coefficient table, .rodata+0x5670.  Eight entries, not the
@@ -36,6 +40,719 @@ deadline(int units)
 	if (units <= 0)
 		return -1;
 	return (units * 9600) >> 2;
+}
+
+/* One extension character as it appears on the wire. */
+static short
+ext_expected(unsigned char c)
+{
+	return (short)((charFlip(c) << 1) | 1);
+}
+
+/*
+ * Match an extension field against the words from `*at` onwards.
+ *
+ * Returns non-zero if anything matched.  On a mismatch the expected
+ * character advances but the received word does not, so a repeated word
+ * still lines up; once something has matched, the first mismatch ends it.
+ *
+ * `*matched` is the "something has matched" flag, and it belongs to the
+ * caller because the two callers give it different lifetimes: the first
+ * keeps it in `fn_matched` and clears it before every marker word, the
+ * second in a local that is set up once and then carries across markers --
+ * so once anything has matched there, a later marker whose very first
+ * character is wrong is abandoned instead of scanned through.
+ */
+static int
+match_extension(struct v8 *v, const unsigned char *ext, int *at, short *keep,
+		int *matched)
+{
+	struct v8_tx_sequence *seq = &v->seq[2];
+	int k = 0;
+
+	while (ext[k] != 0 && k <= V8_CM_EXT_MAX - 1) {
+		unsigned short w = (unsigned short)seq->word[*at];
+
+		if (w == (unsigned short)ext_expected(ext[k])) {
+			*keep = (short)w;
+			*matched = 1;
+			k++;
+			(*at)++;
+			continue;
+		}
+		if (*matched)
+			break;
+		k++;
+	}
+
+	/* Ran to the end of the field, rather than stopping on a mismatch. */
+	if ((ext[k] == 0 || k == V8_CM_EXT_MAX) && *matched)
+		return 1;
+	return 0;
+}
+
+/* Up to eight entries in each acceptance list. */
+#define V8_FN_LIST_MAX	8
+
+/*
+ * Is `c` in one of the menu's acceptance lists?  The list ends at the first
+ * zero or after eight entries, whichever comes first.
+ */
+static int
+in_list(const unsigned char *list, unsigned char c)
+{
+	int i;
+
+	if (list[0] == 0)
+		return 0;
+	for (i = 0; i <= V8_FN_LIST_MAX - 1 && list[i] != 0; i++)
+		if (list[i] == c)
+			return 1;
+	return 0;
+}
+
+/*
+ * Echo an extension field into the JM, one character per word.  Used when
+ * nothing was matched against the received message and the local field is
+ * simply sent as it stands.
+ */
+static void
+emit_extension_words(struct v8_tx_sequence *jm, int *n,
+		     const unsigned char *ext)
+{
+	int k = 0;
+
+	while (ext[k] != 0 && k <= V8_CM_EXT_MAX - 1) {
+		jm->word[*n] = ext_expected(ext[k]);
+		(*n)++;
+		k++;
+	}
+}
+
+/*
+ * Copy up to four characters of an extension field, stopping at the first
+ * zero.  Returns how many were emitted; the caller clears the field's
+ * present bit when that is none, which is how a field declared present but
+ * left empty stops being declared.
+ */
+static int
+emit_extension(struct v8_tx_sequence *seq, int *n, const unsigned char *ext)
+{
+	int k = 0;
+
+	while (ext[k] != 0) {
+		seq->word[*n] = ext_word(ext[k]);
+		(*n)++;
+		k++;
+		if (k > V8_CM_EXT_MAX - 1)
+			break;
+	}
+	return k;
+}
+
+void
+initTxSequence(struct v8 *v)
+{
+	struct v8_tx_sequence *seq = v->tx_seq;
+	struct v8_cm *cm = v->cm;
+	int n = 2;
+	int words;
+
+	seq->word[0] = V8_SEQ_PREAMBLE_0;
+	seq->word[1] = V8_SEQ_PREAMBLE_1;
+
+	/* The first extension, if the menu says there is one. */
+	if (cm->b2 & V8_CM_EXT1_PRESENT) {
+		if (emit_extension(seq, &n, cm->ext1) == 0) {
+			/* Complained about, then repaired -- in that order. */
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf(
+				    "V8: BUG - raw Call Function selected " "without valid data !!!\r\n");
+			cm->b2 &= (unsigned char)~V8_CM_EXT1_PRESENT;
+		}
+	}
+
+	/*
+	 * The call function.  Note the order: the extension bit is retested
+	 * here, so clearing it just above changes which branch is taken.
+	 */
+	if (cm->b2 & V8_CM_EXT1_PRESENT) {
+		/* nothing: the extension stood in for the function character */
+	} else if (cm->b1 & 0x40) {
+		seq->word[n++] = V8_SEQ_FN_DEFAULT;
+	} else if (cm->b2 & 0x01) {
+		seq->word[n++] = V8_SEQ_FN_B0;
+	} else if (cm->b1 & 0x80) {
+		seq->word[n++] = V8_SEQ_FN_B1_80;
+	} else if (cm->b2 & 0x02) {
+		seq->word[n++] = V8_SEQ_FN_B2;
+	} else {
+		/* Nothing asked for, so ask for the default and remember it. */
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "V8: BUG - no Call Function selected in bit "
+			    "fields - use data as default !!!\r\n");
+		cm->b1 |= 0x40;
+		seq->word[n++] = V8_SEQ_FN_DEFAULT;
+	}
+
+	/*
+	 * Three characters carrying the menu proper.  Each has a base chosen
+	 * by one bit and then further bits folded in, which is the modulation
+	 * list and the capability flags packed into V.8's fields.
+	 */
+	seq->word[n] = (short)(((cm->b0 & 0x08) ? 0x149 : 0x141)
+			       | ((cm->b0 & 0x20) ? 0x04 : 0)
+			       | ((cm->b0 & 0x40) ? 0x02 : 0));
+
+	seq->word[n + 1] = (short)(((cm->b0 & 0x80) ? 0x111 : 0x011)
+				   | ((cm->b1 & 0x01) ? 0x80 : 0)
+				   | ((cm->b1 & 0x02) ? 0x40 : 0)
+				   | ((cm->b1 & 0x04) ? 0x04 : 0)
+				   | ((cm->b1 & 0x08) ? 0x02 : 0));
+
+	seq->word[n + 2] = (short)(((cm->b1 & 0x10) ? 0x51 : 0x11)
+				   | ((cm->b1 & 0x20) ? 0x13 : 0));
+	n += 3;
+
+	/* The second extension, on the same terms as the first. */
+	if (cm->b2 & V8_CM_EXT2_PRESENT) {
+		if (emit_extension(seq, &n, cm->ext2) == 0) {
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf(
+				    "V8: BUG - raw Protocol selected " "without valid data !!!\r\n");
+			cm->b2 &= (unsigned char)~V8_CM_EXT2_PRESENT;
+		}
+	}
+
+	/*
+	 * The tail.  The first character is skipped when either of two bits
+	 * is set -- the original tests them as one 32-bit read across the
+	 * flag bytes, which is the same as testing bit 3 of b0 and bit 3
+	 * of b2.
+	 */
+	if ((cm->b0 & 0x08) == 0 && (cm->b2 & 0x08) == 0)
+		seq->word[n++] = V8_SEQ_TAIL_A;
+
+	seq->word[n] = V8_SEQ_TAIL_B;
+	words = n + 1;
+
+	if (cm->b0 & 0x08) {
+		seq->word[n + 1] = V8_SEQ_TAIL_C;
+		seq->word[n + 2] = V8_SEQ_TAIL_D;
+		words = n + 3;
+	}
+
+	/*
+	 * "octets" is the author's word; `words` counts ten-bit characters.
+	 * The answering side's initial message is the JM, hence the name by
+	 * side rather than by buffer.
+	 */
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(
+		    "V8: Initial %s message length is %d octets\r\n",
+		    v->side == 1 ? "JM" : "CM", words);
+
+	seq->crc = (short)0xffff;
+
+	seq->bitpos = 0;
+	seq->wordidx = 0;
+	seq->repeats = 0;
+	seq->nbits = (short)(words * V8_SEQ_BITS_PER_WORD);
+	seq->wordbits = V8_SEQ_BITS_PER_WORD;
+	seq->crc_enable = 0;
+	seq->shifter = 0;
+	seq->shifter0 = 0;
+	seq->nleft = 0;
+	seq->nleft0 = 0;
+	seq->repeat = 1;
+}
+
+void
+rebuildJMSequence(struct v8 *v)
+{
+	struct v8_tx_sequence *jm = v->tx_seq;
+	struct v8_tx_sequence *rx = &v->seq[0];
+	struct v8_cm *cm = v->cm;
+	int n = 2;
+	int base;
+	int fn_matched = 0;
+	int ext2_matched = 0;
+	int v90_mod = 0, digital_connection = 0, pcm_indication = 0;
+	int all_flags;
+	int words;
+	int i;
+
+	jm->word[0] = V8_SEQ_PREAMBLE_0;
+	jm->word[1] = V8_SEQ_PREAMBLE_1;
+
+	/* Find the call function in what arrived, and try to accept it. */
+	for (i = 0; i < (short)rx->wordidx; i++) {
+		unsigned short w = (unsigned short)rx->word[i];
+		int accept = 0;
+
+		if ((w & V8_JM_FN_MASK) != V8_JM_FN_MARK)
+			continue;
+
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "V8: on ANSWER: remote call function is: %X\r\n", w);
+
+		if (cm->b2 & V8_CM_EXT1_PRESENT) {
+			/* An extension stands in for the function. */
+			int k = 0;
+
+			while (cm->ext1[k] != 0 && k <= V8_CM_EXT_MAX - 1) {
+				unsigned short got =
+					(unsigned short)rx->word[i];
+
+				if (got == (unsigned short)
+					   ext_expected(cm->ext1[k])) {
+					jm->word[n++] = (short)got;
+					v->fn_word = (short)got;
+					fn_matched = 1;
+					i++;
+					k++;
+					continue;
+				}
+				if (fn_matched)
+					break;
+				k++;
+			}
+			/*
+			 * A full extension match settles it here -- the words
+			 * and the remembered character went into the JM as
+			 * they matched, so all that is left is to say so.  An
+			 * incomplete one falls through to the acceptance list
+			 * BELOW, not to the four flag tests: those belong to
+			 * the no-extension case only.
+			 */
+			if ((cm->ext1[k] == 0 || k == V8_CM_EXT_MAX)
+			    && fn_matched) {
+				v->fn_matched = 1;
+				break;
+			}
+			w = (unsigned short)rx->word[i];
+		} else if (w == 0x107 && (cm->b1 & 0x40)) {
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf("V8: call function DATA " "indication...\r\n");
+			accept = 1;
+		} else if (w == 0x103 && (cm->b2 & 0x01)) {
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf(
+				    "V8: call function FAX TX from caller " "indication...\r\n");
+			accept = 1;
+		} else if (w == 0x10b && (cm->b1 & 0x80)) {
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf(
+				    "V8: call function FAX RX to caller " "indication...\r\n");
+			accept = 1;
+		} else if (w == 0x109 && (cm->b2 & 0x02)) {
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf("V8: call function DATA " "indication...\r\n");
+			accept = 1;
+		}
+
+		/* Or one the menu lists explicitly? */
+		if (!accept
+		    && in_list(cm->fn_list,
+			       charFlip((unsigned char)(w >> 1)))) {
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf(
+				    "V8: Got Call Function Match (in call " "function range) !!!\r\n");
+			accept = 1;
+		}
+
+		if (accept)
+			fn_matched = 1;
+
+		if (v->fn_matched == 0 && fn_matched) {
+			jm->word[n++] = (short)w;
+			v->fn_word = (short)w;
+			v->fn_matched = 1;
+		}
+		break;
+	}
+
+	if (v->fn_matched == 0) {
+		/*
+		 * Nothing accepted: send our own field instead, or the call
+		 * function the menu asks for.
+		 */
+		if (cm->b2 & V8_CM_EXT1_PRESENT) {
+			emit_extension_words(jm, &n, cm->ext1);
+		} else if (cm->b1 & 0x40) {
+			jm->word[n++] = 0x107;
+		} else if (cm->b2 & 0x01) {
+			jm->word[n++] = 0x103;
+		} else if (cm->b1 & 0x80) {
+			jm->word[n++] = 0x10b;
+		} else if (cm->b2 & 0x02) {
+			jm->word[n++] = 0x109;
+		} else {
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf(
+				    "V8: BUG - no Call Function selected in "
+				    "bit fields - use data as default !!!\r\n");
+			cm->b1 |= 0x40;
+			jm->word[n++] = 0x107;
+		}
+	}
+
+	base = n;
+
+	if (v->fn_matched != 0) {
+		/*
+		 * Intersect: walk what arrived and AND its menu words into
+		 * the three already in the buffer, gathering the three flags
+		 * on the way.
+		 */
+		for (i = 0; i < (short)rx->wordidx; i++) {
+			unsigned short w = (unsigned short)rx->word[i];
+
+			if ((w & V8_JM_FN_MASK) == 0x141) {
+				int at = base;
+
+				jm->word[at] = (short)(jm->word[at] & w);
+				at++;
+				v90_mod = (rx->word[i] >> 3) & 1;
+				i++;
+				w = (unsigned short)rx->word[i];
+				while ((w & 0x39) == 0x11 && at < base + 3) {
+					jm->word[at] = (short)(jm->word[at]
+							       & w);
+					at++;
+					i++;
+					w = (unsigned short)rx->word[i];
+				}
+				n = base + 3;
+			}
+			if ((w & V8_JM_FN_MASK) == 0x161)
+				digital_connection = (w >> 1) & 1;
+			else if ((w & V8_JM_FN_MASK) == 0x1c1)
+				pcm_indication = (w >> 2) & 3;
+		}
+
+		/*
+		 * The three gathered words, under the author's names for them
+		 * -- the same three V8UpdateModemParameters reports -- with
+		 * the local V.90 bit beside them, so the trace shows both
+		 * halves of the decision immediately below.
+		 */
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "V8: on ANSWER: remote V90: mod - %d, digital "
+			    "connection - %d, pcmIndication - %d , local - "
+			    "%d\n", v90_mod, digital_connection,
+			    pcm_indication, (cm->b0 >> 3) & 1);
+	} else {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "V8: NO Call Function Match !!! zeroing all "
+			    "modulation capabilities...\r\n");
+		jm->word[n] = 0x141;
+		jm->word[n + 1] = 0x011;
+		jm->word[n + 2] = 0x011;
+		n += 3;
+	}
+
+	/*
+	 * V.90 is on offer only if the remote said all three and we asked for
+	 * it.  The object recomputes this expression at each of its four uses
+	 * rather than keeping it in a register -- `cm` is memory and the
+	 * stores to `jm->word[]` in between might alias it, as far as the
+	 * compiler knows -- so the value is the same at every use here.
+	 */
+	all_flags = (cm->b0 & 8) && v90_mod != 0 && digital_connection != 0
+		    && pcm_indication == 1;
+
+	if (all_flags) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V8: on ANSWER: rebuilding JM "
+					     "with V90 capabilities...\r\n");
+		jm->word[base] |= 8;
+	}
+
+	/*
+	 * The second extension, and the two shapes it takes.
+	 *
+	 * With V.90 on offer there is only a local field to confirm: the scan
+	 * walks every marker word looking for it, echoes what matches into
+	 * the JM, and leaves the remembered character alone.  Nothing else --
+	 * no acceptance list, no filler, and nothing at all when there is no
+	 * local field.
+	 *
+	 * Without it the scan stops at the first marker word and settles the
+	 * question there, one way or the other, and what it settles on is
+	 * remembered in `ext2_word`.
+	 */
+	if (all_flags) {
+		if (cm->b2 & V8_CM_EXT2_PRESENT) {
+			for (i = 0; i < (short)rx->wordidx; i++) {
+				unsigned short w = (unsigned short)rx->word[i];
+				int k = 0;
+
+				if ((w & V8_JM_FN_MASK) != V8_JM_EXT2_MARK)
+					continue;
+
+				while (cm->ext2[k] != 0
+				       && k <= V8_CM_EXT_MAX - 1) {
+					unsigned short got = (unsigned short)
+							     rx->word[i];
+
+					if (got == (unsigned short)
+						   ext_expected(cm->ext2[k])) {
+						jm->word[n++] = (short)got;
+						ext2_matched = 1;
+						i++;
+					} else if (ext2_matched) {
+						break;
+					}
+					k++;
+				}
+				if ((cm->ext2[k] == 0 || k == V8_CM_EXT_MAX)
+				    && ext2_matched) {
+					v->ext2_matched = 1;
+					break;
+				}
+			}
+		}
+	} else {
+		for (i = 0; i < (short)rx->wordidx; i++) {
+			unsigned short w = (unsigned short)rx->word[i];
+			int k = 0;
+
+			if ((w & V8_JM_FN_MASK) != V8_JM_EXT2_MARK)
+				continue;
+
+			if (cm->b2 & V8_CM_EXT2_PRESENT) {
+				while (cm->ext2[k] != 0
+				       && k <= V8_CM_EXT_MAX - 1) {
+					unsigned short got = (unsigned short)
+							     rx->word[i];
+
+					if (got == (unsigned short)
+						   ext_expected(cm->ext2[k])) {
+						jm->word[n++] = (short)got;
+						v->ext2_word = (short)got;
+						ext2_matched = 1;
+						i++;
+					} else if (ext2_matched) {
+						break;
+					}
+					k++;
+				}
+				if ((cm->ext2[k] == 0 || k == V8_CM_EXT_MAX)
+				    && ext2_matched) {
+					v->ext2_matched = 1;
+					break;
+				}
+				v->ext2_word = 0;
+				/*
+				 * Not a `continue`: a local field that failed
+				 * to match still gets the acceptance list
+				 * tried against the same word below.
+				 */
+			} else if (cm->ext_list[0] == 0) {
+				/*
+				 * No field and no list, so only the filler
+				 * will do -- and the object tests the list
+				 * BEFORE reaching for charFlip, which is what
+				 * puts this branch here rather than after
+				 * in_list has had its say.
+				 */
+				if (w == V8_SEQ_TAIL_A) {
+					if (DSPLIB_DEBUG_ON())
+						dsplibs_debug_printf(
+						    "V8: Got Default Protocol " "Match (LAPM) !!!\r\n");
+					ext2_matched = 1;
+				}
+			}
+
+			if (!ext2_matched
+			    && in_list(cm->ext_list,
+				       charFlip((unsigned char)(w >> 1)))) {
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf(
+					    "V8: Got Protocol Match (in " "protocol range) !!!\r\n");
+				ext2_matched = 1;
+			}
+
+			if (v->ext2_matched == 0 && ext2_matched) {
+				jm->word[n++] = (short)w;
+				v->ext2_word = (short)w;
+				v->ext2_matched = 1;
+			}
+			break;
+		}
+
+		if (v->ext2_matched != 0) {
+			/* Already settled by the scan above. */
+		} else if (cm->b2 & V8_CM_EXT2_PRESENT) {
+			/*
+			 * Nothing matched, but we have a field of our own:
+			 * send it, and remember the last word of it.
+			 */
+			int k = 0;
+
+			while (cm->ext2[k] != 0 && k <= V8_CM_EXT_MAX - 1) {
+				jm->word[n] = ext_expected(cm->ext2[k]);
+				v->ext2_word = jm->word[n];
+				n++;
+				k++;
+			}
+		} else {
+			/* Nothing to send either: the filler. */
+			jm->word[n++] = V8_SEQ_TAIL_A;
+			v->ext2_word = V8_SEQ_TAIL_A;
+		}
+	}
+
+	/* The tail. */
+	jm->word[n] = V8_SEQ_TAIL_B;
+	words = n + 1;
+	if (all_flags) {
+		jm->word[n + 1] = V8_SEQ_TAIL_C;
+		jm->word[n + 2] = V8_SEQ_TAIL_D;
+		words = n + 3;
+	}
+
+	/*
+	 * "octets" again, as in initTxSequence, and again counting ten-bit
+	 * characters.  Announced after the tail is counted and before any of
+	 * the sequence state is written, so the number is the one that will
+	 * be transmitted.
+	 */
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(
+		    "V8: Final JM message length is %d octets\r\n", words);
+
+	jm->crc = (short)0xffff;
+	jm->bitpos = 0;
+	jm->wordidx = 0;
+	jm->repeats = 0;
+	jm->nbits = (short)(words * V8_SEQ_BITS_PER_WORD);
+	jm->wordbits = V8_SEQ_BITS_PER_WORD;
+	jm->crc_enable = 0;
+	jm->shifter = 0;
+	jm->shifter0 = 0;
+	jm->nleft = 0;
+	jm->nleft0 = 0;
+	jm->repeat = 1;
+}
+
+void
+evaluateRxJMSequence(struct v8 *v)
+{
+	struct v8_tx_sequence *seq = &v->seq[2];
+	struct v8_cm *cm = v->cm;
+	int matched;
+	int i;
+
+	v->fn_matched = 0;
+
+	/* The call function, and the first extension if one was declared. */
+	for (i = 0; i < (short)seq->wordidx; i++) {
+		unsigned short w = (unsigned short)seq->word[i];
+
+		if ((w & V8_JM_FN_MASK) != V8_JM_FN_MARK)
+			continue;
+
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "V8: on CALLER: remote call function is: %X\r\n", w);
+
+		if (cm->b2 & V8_CM_EXT1_PRESENT) {
+			matched = 0;
+			if (match_extension(v, cm->ext1, &i, &v->fn_word,
+					    &matched)) {
+				v->fn_matched = 1;
+				break;
+			}
+			v->fn_word = 0;
+			v->fn_matched = 0;
+		} else {
+			/*
+			 * No extension: the function word itself has to be
+			 * one the menu asked for.  Each of the four announces
+			 * itself; V.80 shares the data announcement, which is
+			 * why the object has four tests and three strings.
+			 */
+			if (w == 0x107 && (cm->b1 & 0x40)) {
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf(
+					    "V8: call function DATA " "indication...\r\n");
+				v->fn_matched = 1;
+			} else if (w == 0x103 && (cm->b2 & 0x01)) {
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf(
+					    "V8: call function FAX TX from " "caller indication...\r\n");
+				v->fn_matched = 1;
+			} else if (w == 0x10b && (cm->b1 & 0x80)) {
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf(
+					    "V8: call function FAX RX to " "caller indication...\r\n");
+				v->fn_matched = 1;
+			} else if (w == 0x109 && (cm->b2 & 0x02)) {
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf(
+					    "V8: call function DATA " "indication...\r\n");
+				v->fn_matched = 1;
+			}
+
+			if (v->fn_matched != 0)
+				v->fn_word = (short)w;
+		}
+	}
+
+	/*
+	 * The second extension, against its own marker.  `ext2_matched` is
+	 * only ever set here, never cleared: whatever the caller left in it
+	 * stands if nothing matches.
+	 */
+	matched = 0;
+	for (i = 0; i < (short)seq->wordidx; i++) {
+		unsigned short w = (unsigned short)seq->word[i];
+
+		if ((w & V8_JM_FN_MASK) != V8_JM_EXT2_MARK)
+			continue;
+
+		if ((cm->b2 & V8_CM_EXT2_PRESENT) == 0) {
+			v->ext2_word = (short)w;
+			v->ext2_matched = 1;
+			continue;
+		}
+		if (match_extension(v, cm->ext2, &i, &v->ext2_word, &matched)) {
+			v->ext2_matched = 1;
+			break;
+		}
+		v->ext2_word = 0;
+	}
+
+	/*
+	 * The verdict, and the only place the whole function is summarised.
+	 * It reports the FIRST field only: `ext2_matched` does not appear, so
+	 * a JM whose protocol matched but whose call function did not still
+	 * reads as a failure here.  The parenthesis is the author's own gloss on
+	 * what a failure costs -- see V8UpdateModemParameters, which does
+	 * exactly that.
+	 *
+	 * This is why the loop above breaks rather than returning: the
+	 * announcement has to be reached on the matched path too.
+	 */
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V8: %s Call Function Match%s!\n",
+				     v->fn_matched != 0 ? "Got" : "Didn't get",
+				     v->fn_matched != 0 ? ""
+				      : " (not indicating modulation " "capabilities)!!");
+}
+
+/* Arm the tone queue: nothing pending, and the period set to 0x688. */
+void
+v8_TONEq_init(struct v8 *v)
+{
+	v->toneq_pending = 0;
+	v->toneq_period = 0x688;
 }
 
 /*

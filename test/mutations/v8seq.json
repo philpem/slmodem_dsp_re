@@ -23,25 +23,5 @@
   "label": "announce the length before the tail is counted",
   "find": "\tif (cm->b0 & 0x08) {\n\t\tseq->word[n + 1] = V8_SEQ_TAIL_C;\n\t\tseq->word[n + 2] = V8_SEQ_TAIL_D;\n\t\twords = n + 3;\n\t}\n\n\t/*\n\t * \"octets\" is the author's word; `words` counts ten-bit characters.\n\t * The answering side's initial message is the JM, hence the name by\n\t * side rather than by buffer.\n\t */\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\n\t\t    \"V8: Initial %s message length is %d octets\\r\\n\",\n\t\t    v->side == 1 ? \"JM\" : \"CM\", words);",
   "replace": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\n\t\t    \"V8: Initial %s message length is %d octets\\r\\n\",\n\t\t    v->side == 1 ? \"JM\" : \"CM\", words);\n\n\tif (cm->b0 & 0x08) {\n\t\tseq->word[n + 1] = V8_SEQ_TAIL_C;\n\t\tseq->word[n + 2] = V8_SEQ_TAIL_D;\n\t\twords = n + 3;\n\t}"
- },
- {
-  "label": "swap the QC1A banner for the CJ one",
-  "find": "const char *const v8SequenceName[4] = {\n\t\"V8_CM\", \"V8_JM\", \"V8_CJ\", \"V8_QC1A\"\n};",
-  "replace": "const char *const v8SequenceName[4] = {\n\t\"V8_CM\", \"V8_JM\", \"V8_QC1A\", \"V8_CJ\"\n};"
- },
- {
-  "label": "announce the banner before the selector is validated",
-  "find": "\tif (seq == 0) {\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V8: Try to set message with \"\n\t\t\t\t\t     \"illegal V.8 message type\\n\");\n\t\treturn V8_SET_REJECTED;\n\t}\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\n\t\t    \"V8: V8SetMessage called, message type is %s\\r\\n\",\n\t\t    v8SequenceName[which]);",
-  "replace": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\n\t\t    \"V8: V8SetMessage called, message type is %s\\r\\n\",\n\t\t    v8SequenceName[which & 3]);\n\n\tif (seq == 0) {\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V8: Try to set message with \"\n\t\t\t\t\t     \"illegal V.8 message type\\n\");\n\t\treturn V8_SET_REJECTED;\n\t}"
- },
- {
-  "label": "give the size complaint a CRLF ending",
-  "find": "\"maximal (max=%d, externalLength=%d)\\n\",",
-  "replace": "\"maximal (max=%d, externalLength=%d)\\r\\n\","
- },
- {
-  "label": "report the truncated length instead of the caller's",
-  "find": "\t\t\t    V8_TX_SEQ_WORDS, n);\n\t\tn = V8_TX_SEQ_WORDS;",
-  "replace": "\t\t\t    V8_TX_SEQ_WORDS, V8_TX_SEQ_WORDS);\n\t\tn = V8_TX_SEQ_WORDS;"
  }
 ]

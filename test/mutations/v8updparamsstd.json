@@ -1,0 +1,11 @@
+[
+ {
+  "label": "NOTE: the V8UpdateModemParameters half of the Table 4 control set; the rebuildJMSequence controls stay in v8jmstd. These measure the independent Table 4 and Table 7 controls in t_v8jm."
+ },
+ {
+  "label": "sensitivity to the reproduced departure: test only Table 4's V.21 bit instead of including the stop bit",
+  "find": "\t\t\t\tif ((f & 3) == 0)\n\t\t\t\t\tout->b1 &= 0xdf;",
+  "replace": "\t\t\t\tif ((f & 2) == 0)\n\t\t\t\t\tout->b1 &= 0xdf;",
+  "fn": "V8UpdateModemParameters"
+ }
+]

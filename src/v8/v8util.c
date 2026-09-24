@@ -1,12 +1,13 @@
 /*
- * v8util.c -- the compile-time offset assertions and the tone-queue arm.
+ * v8util.c -- the compile-time offset assertions.
  *
- * The arithmetic and buffer leaves this file used to carry are now in
- * `V8global.c`, which is the object's own unit for them; the cosine table and
- * DFT energy pass are `V8Dftc.c`'s and the V.21 setup `V8Dpsk.c`'s.  What
- * remains is v8_TONEq_init and the struct-offset assertions below, which are
- * apparatus: they make a careless struct edit fail the build instead of a
- * test somewhere far away.
+ * Every function this file used to carry has found its object unit: the
+ * arithmetic and buffer leaves are `V8global.c`'s, the cosine table and DFT
+ * energy pass `V8Dftc.c`'s, the V.21 setup `V8Dpsk.c`'s, and v8_TONEq_init
+ * is `V8.c`'s, which is the unit that owns its address in the object.  What
+ * remains is apparatus and emits no code: the struct-offset assertions
+ * below, which make a careless struct edit fail the build instead of a test
+ * somewhere far away.  It is an ours-only translation unit.
  */
 
 #include <stddef.h>
@@ -74,12 +75,3 @@ typedef char v8_v21_delay[V8_OFFSET_OK == 0 || offsetof(struct v8, v21)
 			  + offsetof(struct v8_v21, delay) == 0xe0c ? 1 : -1];
 typedef char v8_pr_window[V8_OFFSET_OK == 0 || offsetof(struct v8_phase_rev, window) == 0x14
 			  ? 1 : -1];
-
-
-/* Arm the tone queue: nothing pending, and the period set to 0x688. */
-void
-v8_TONEq_init(struct v8 *v)
-{
-	v->toneq_pending = 0;
-	v->toneq_period = 0x688;
-}
