@@ -5213,7 +5213,7 @@
    }
   },
   "v8handshak": {
-   "key": "a44d2bb14a52a1ce03c33aa30723dcc29e7118a0e6aced7991efae2889bd7244",
+   "key": "e4ae73d73630024a9149c29e38d25371d55448c959758bf736695cb3a79f7ad8",
    "summary": "5 mutations: 5 caught (5 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "announce the CM timeout on every block past the deadline": "caught",
@@ -5237,7 +5237,7 @@
    }
   },
   "v8hsrx": {
-   "key": "5f985eccba078eefd50f08b4fec193ec63a3f16af6defed4e4ba2f34fcce7698",
+   "key": "8ed6a2f98ab10633379b08cdc9d7fc7f6100029e121c59c54c0ebf6f6d9e7279",
    "summary": "11 mutations: 11 caught (11 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "announce the ANSam detection before the JM is checked for": "caught",
@@ -5254,7 +5254,7 @@
    }
   },
   "v8hsrxstd": {
-   "key": "bcdbeba86f53111df1c686ff5a23e4bd7fd85174be13bbcd87d02cd54081e6a4",
+   "key": "b311f7277f7afcd5a7fbb306b56c4e466dd31efc2aed50eaa5299e4a70e4b36f",
    "summary": "2 mutations: 2 caught (2 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "CJ receiver accepts after one octet rather than the reproduced two-octet departure": "caught",

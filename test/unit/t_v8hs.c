@@ -267,9 +267,9 @@ trace_setup(const struct trace_case *c, unsigned seed)
  * of each format string, in the order `debugaudit.py --strings v8handshak`
  * lists them.  Ten call sites, ten distinct format addresses, 1:1.
  *
- * Two of them are in `v8handshak.c` here and eight are in `v8hsrx.c`, because
- * the two long receive paths are a separate translation unit in this tree and
- * were inlined in the object.  That the STRINGS are all present is a grep;
+ * All ten live in `src/v8/V8.c`, which is where the object keeps them: the
+ * two long receive paths are `static` there and were inlined into the one
+ * blob function.  That the STRINGS are all present is a grep;
  * that each site is in the right place, under the right condition, with the
  * right arguments, is only ever this transcript.  So whichever of the ten the
  * sweep reaches is asserted by name at the bottom of `t_hs_trace`, and a

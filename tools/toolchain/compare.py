@@ -164,9 +164,7 @@ RATCHET = os.path.join(os.path.dirname(os.path.abspath(__file__)),
 # It cannot fix a split across FILES, because there is nothing in either object
 # to say the two belong together.  Those are declared here.  Finding F610.
 #
-TU_GROUPS = (
-    ("src/v8/V8.c", "src/v8/v8hsrx.c"),
-)
+TU_GROUPS = ()
 
 def _default_blob():
     """`ref/slmodemd/dsplibs.o` is relative to the MAIN tree, not to a worktree.

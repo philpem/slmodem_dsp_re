@@ -409,11 +409,11 @@
   "build/test/t_v8util"
  ],
  "v8hsrx": [
-  "src/v8/v8hsrx.c",
+  "src/v8/V8.c",
   "build/test/t_v8hs"
  ],
  "v8hsrxstd": [
-  "src/v8/v8hsrx.c",
+  "src/v8/V8.c",
   "build/test/t_v8hs"
  ],
  "v8jm": [
