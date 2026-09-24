@@ -389,7 +389,7 @@
   "build/test/t_v34diag"
  ],
  "v8agc": [
-  "src/v8/v8agc.c",
+  "src/v8/V8global.c",
   "build/test/t_v8sig"
  ],
  "v8dp": [
