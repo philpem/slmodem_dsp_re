@@ -125587,3 +125587,74 @@ falsified).  No source was fitted to a byte count: the enumeration was
 completed before any size was read and exactly the predicted source property
 (the in-loop selection) accounts for the shape.  H over J is an idiom choice,
 not a recovery claim.
+
+## F11383. `V22int.c` is a translation unit, not four layers: its fourteen entry points are reunited and twelve exact functions are kept
+
+TU-reconciliation step, V.22 family (issue #6/#20/#67).  The blob's FILE
+record 483 is `V22int.c`; it has **no local symbol of its own** -- no LOCAL
+FUNC and no LOCAL OBJECT -- so its extent is recovered from FILE order and the
+neighbouring anchors, not from a local.  `ld -r` concatenates `.text` in FILE
+order and the records around it are `v22_sre.c` (482), `V22int.c` (483),
+`B103.c` (484), so every function between `v22_sre.c`'s last
+(`V22_SRE_free`, `.text 0x08e0f0`, 46 bytes) and `B103.c`'s first
+(`B103FP_create`, `.text 0x08e690`, 2151 bytes) is `V22int.c`'s:
+**[0x08e120, 0x08e68b)**.
+
+**THE FOURTEEN FUNCTIONS.**  All are GLOBAL entry points, none calls another,
+so the object's `.text` order is the unit's emission order and therefore its
+source order.  In that order: `SetTxRate` (0x08e120, 205), `SetRxRate`
+(0x08e1f0, 211), `ScrambleDataV22` (0x08e2d0, 28), `DescrambleDataV22`
+(0x08e2f0, 30), `ModDataV22` (0x08e310, 95), `DemodDataV22` (0x08e370, 510),
+`ResetRx` (0x08e570, 62), `SetAdaptEqV22` (0x08e5b0, 95), `TxClockSync`
+(0x08e610, 22), `CarrierDetect` (0x08e630, 14), `SignalDetect` (0x08e640,
+14), `GetSignalQuality` (0x08e650, 25), `ScramblerOn` (0x08e670, 11),
+`DescramblerOn` (0x08e680, 11).
+
+**WHY THE PRIOR PASS DECLINED, AND WHY IT WAS RIGHT TO.**  The fourteen were
+split across four reconstruction files that are LAYERS, not TUs --
+`v22rate.c` (4/4 of its functions are V22int.c's), `v22data.c` (3/4),
+`v22prc.c` (5/10, the other five in the disjoint `0x8bd50..0x8c5a0` block)
+and `v22ctl.c` (2/4, the other two at 0x088480 and 0x08c3b0).  A naive
+concatenation of those files would have dragged another unit's functions into
+`V22int.c` and lost exactness; and `v22prc.c` really does span two disjoint
+blob ranges.  The recovered unit is the address bracket above, nothing wider.
+
+**CHANGE.**  New `src/pump/v22/V22int.c` with the fourteen bodies moved
+VERBATIM, in the object's order.  `v22rate.c` is deleted (it held nothing
+else); `v22data.c`, `v22prc.c` and `v22ctl.c` keep the functions the object
+puts in OTHER V.22 units.  In every one of those three files the moved
+functions were defined AFTER the functions that remain (`Detect_v22` first in
+`v22data.c`, `ReadGTimer` before the moved five in `v22prc.c`,
+`V22FP_GetDiagnostics`/`V22FP_control` before the moved pair in `v22ctl.c`),
+so no remaining function's emission-order context changes -- which is what
+the measurement confirms.  No body was rewritten; no flag changed.
+
+**MEASURED, AND NO EXACT SYMBOL WAS LOST.**  Before the move 12 of the 14
+were grade-0 EXACT (`ModDataV22` and `DemodDataV22` were not); after it the
+same 12 are EXACT and no other symbol's verdict moved.  Tree grade 0 holds at
+**833/1852** and grade 0-or-1 at **886/1852**.  The two exact functions left
+behind, `ReadGTimer` and `V22FP_GetDiagnostics`, are EXACT before and after.
+`partialcmp`: positioned bytes 68,084 -> 68,002 of 943,398; exact relocations
+964/18,317 unchanged; **exact symbols 304 -> 305 of 2,907**, the +1 being the
+`V22int.c` FILE record the object has and we now emit; exact sections 69/92
+unchanged.  The byte movement is the TU relayout the census is known to move
+on, with no function-level loss.
+
+**HARNESS.**  No mutation suite is sourced at any of the four files
+(`suites.json`'s V.22 entries are `V22Dec.c`, `V22.c`, `v22_fse.c`), so none
+moved and none needed re-recording.  `anchorcheck`: 276 suites / 10,038
+mutations, 0 detached.  Two test comments that named `v22rate.c` for the
+uninitialised mixer tail now name `V22int.c`.
+
+**GATES.**  Focused `make period` (`t_v22rate t_v22data t_v22prc t_v22ctl
+t_v22leaves t_v22fpcreate`): **6 passed, 0 failed**.  Full `make -j1 J=1
+phase`: **385 passed, 0 failed**, boundary OK.  `refcheck`: 0 dangling.
+`anchorcheck`: 0 detached.  `git diff --check` clean.
+
+**DECLINED.**  The other V.22 TUs -- the blob's `V22.c`, `V22Dec.c`,
+`v22mod.c`, `v22prc.c`, `v22rxtab.c`, `v22stc.c`, `v22txtab.c`, `v22_fse.c`,
+`v22_iir.c`, `v22_mrf.c`, `v22_pps.c`, `v22_sre.c` -- stay as they are in
+this step.  They share one address bracket with no local FUNC to split it, so
+each boundary needs its own argument; that is the next V.22 step, not this
+one.  Our `v22prc.c` still holds a block the object may place in `V22.c`,
+`V22Dec.c` or `v22stc.c`, and is named with that blocker.

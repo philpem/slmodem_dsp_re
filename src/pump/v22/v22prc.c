@@ -1,8 +1,8 @@
 /*
  * v22prc.c -- V.22 / V.22bis: the small state and status helpers.
  *
- * Reconstructed from dsplibs.o.  The nine live in two of the author's
- * translation units, split by address:
+ * Reconstructed from dsplibs.o.  What is left here is the 0x8bd50..0x8c5a0
+ * block, one of the author's translation units:
  *
  *   TxNOP           .text 0x08c340   44   \
  *   RxClampV22      .text 0x08c370   44    |  the 0x8bd50..0x8c5a0 block,
@@ -10,23 +10,15 @@
  *   RxTrained1200   .text 0x08be20   63    |  Detect_* family
  *   RxTrained2400   .text 0x08be60  136   /
  *
- *   TxClockSync     .text 0x08e610   22   \
- *   CarrierDetect   .text 0x08e630   14    |  the 0x8e120..0x8e669 block,
- *   SignalDetect    .text 0x08e640   14    |  after DemodDataV22
- *   GetSignalQuality .text 0x08e650  25   /
- *
- * plus, from the 2026-08-30 no-entry-point leaf batch (finding F8320's
- * bucket -- exported API nothing in the object calls), three more of the
- * same shape from the same two neighbourhoods:
- *
- *   V22FP_control   .text 0x08c3b0  145      after ReadGTimer
- *   ScramblerOn     .text 0x08e670   11   \  after GetSignalQuality
- *   DescramblerOn   .text 0x08e680   11   /
+ * SetAdaptEqV22, TxClockSync, CarrierDetect, SignalDetect, GetSignalQuality,
+ * ScramblerOn and DescramblerOn are NOT here: the object puts them in
+ * V22int.c, and they moved there in the TU reconciliation.  V22FP_control
+ * has its one home in v22ctl.c.
  *
  * `tools/tumap.py` puts thirteen V.22 translation units in one shared
- * bracket, so it cannot say which of `V22.c`, `v22prc.c` and `v22stc.c` each
- * block belongs to; they are together here because none of them calls
- * anything, which is what made all nine writable before `V22FP_create`.
+ * bracket, so it cannot say which of `V22.c`, `v22prc.c` and `v22stc.c` this
+ * block belongs to; it is here because none of the five calls anything, which
+ * is what made them writable before `V22FP_create`.
  *
  * ---------------------------------------------------------------------------
  * THE TWO SIXTEEN-BIT LOOP IDIOMS, because both look like bugs and neither is
@@ -153,91 +145,8 @@ ReadGTimer(void *modem)
 	return *timer;
 }
 /*
- * Three modes, a `switch` in the object (compare, jg, dec, je -- GCC's shape
- * for a dense switch of three), and no default action.  Written as a switch
- * for the same reason.
- */
-void
-SetAdaptEqV22(void *modem, unsigned short mode)
-{
-	struct v22fp *v22 = (struct v22fp *)modem;
-	struct v22fp_dsp *dsp;
-
-	switch (mode) {
-	case 1:
-		dsp = v22->dsp;
-		dsp->eq_adapt = 0;
-		break;
-	case 2:
-		dsp = v22->dsp;
-		dsp->eq_adapt = 1;
-		dsp->fse.mu_sel = 0;
-		break;
-	case 3:
-		dsp = v22->dsp;
-		dsp->eq_adapt = 1;
-		dsp->fse.mu_sel = 1;
-		/* Set here and cleared by nothing -- mode 2 leaves it alone. */
-		dsp->fse.lms_on = 1;
-		break;
-	default:
-		break;
-	}
-}
-
-void
-TxClockSync(void *modem)
-{
-	struct v22fp *v22 = (struct v22fp *)modem;
-	struct v22fp_dsp *dsp = v22->dsp;
-	short baud = dsp->sre.pll_acc;
-
-	dsp->pps.cfg.step = (unsigned short)(short)(baud * 3);
-}
-
-int
-CarrierDetect(void *modem)
-{
-	struct v22fp *v22 = (struct v22fp *)modem;
-
-	return v22->dsp->sre.active;
-}
-
-int
-SignalDetect(void *modem)
-{
-	struct v22fp *v22 = (struct v22fp *)modem;
-
-	return v22->dsp->agc.signal;
-}
-/*
- * Quality as a distance from the rail: 0x8000 minus the stored figure,
- * truncated to sixteen bits and returned unsigned.
- *
- * The object loads the constant as 0xffff8000 -- that is, -32768 in a 32-bit
- * register -- subtracts, and then zero-extends the low half.  So a stored
- * figure of 0 gives 32768 and one of 0x8000 gives 0.  The wraparound is real
- * and reachable: any stored figure above 0x8000 gives a LARGE answer, not a
- * negative one.  Preserved, and the differential test sweeps the whole
- * sixteen-bit domain rather than sampling it.
- */
-unsigned short
-GetSignalQuality(void *modem)
-{
-	struct v22fp *v22 = (struct v22fp *)modem;
-
-	return (unsigned short)(-32768
-		- (int)(unsigned short)v22->dsp->fse.mse);
-}
-
-
-
-
-
-/*
- * V22FP_control, ScramblerOn and DescramblerOn were reconstructed here first,
- * against `void *modem`, and again in `v22ctl.c` against the modelled
- * `struct v22fp`.  Both passed their differential tests -- they are the same
- * three functions -- so the typed pair is what the tree keeps, and this file
- * declares nothing about them.  `v22ctl.c` is their one home.
+ * SetAdaptEqV22, TxClockSync, CarrierDetect, SignalDetect and
+ * GetSignalQuality are V22int.c's and now live in src/pump/v22/V22int.c.
+ * What remains here is the 0x8bd50..0x8c5a0 block, which the object puts in
+ * another V.22 unit.
  */

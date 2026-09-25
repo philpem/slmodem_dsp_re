@@ -7,15 +7,14 @@
  *                                             with the rest of the Detect_*
  *                                             family and v22prc.c's TxNOP
  *
- *   ScrambleDataV22     .text 0x08e2d0   28   the 0x8e120..0x8e669 block,
- *   DescrambleDataV22   .text 0x08e2f0   30   with DemodDataV22 and
- *   ModDataV22          .text 0x08e310   95   v22prc.c's TxClockSync
+ * ScrambleDataV22, DescrambleDataV22 and ModDataV22 are NOT here: the object
+ * puts them in V22int.c, and they moved there in the TU reconciliation.  The
+ * evidence below is kept because it is about the object, not about this file.
  *
- * Kept together because they are one layer and not one translation unit:
- * every one of them is a wrapper that picks a sub-object out of the datapump
- * instance and calls the module that owns it.  `tools/tumap.py` puts thirteen
- * V.22 translation units in one bracket and cannot say which of them either
- * address block is.
+ * Kept here because it is one layer and not one translation unit: Detect_v22
+ * is a wrapper that picks a sub-object out of the datapump instance and calls
+ * the module that owns it.  `tools/tumap.py` puts thirteen V.22 translation
+ * units in one bracket and cannot say which of them this address block is.
  *
  * ---------------------------------------------------------------------------
  * THE INSTANCE POINTER IS READ AGAIN AFTER EVERY CALL, AND THAT IS THE SOURCE
@@ -131,68 +130,7 @@ Detect_v22(void *modem, short *data)
 	return (run_a > V22_DETECT_THRESHOLD) | (run_b > V22_DETECT_THRESHOLD);
 }
 /*
- * Both scramblers are a two-instruction wrapper and a tail jump.  The only
- * thing that distinguishes them is the offset -- +0x30 for the transmit
- * scrambler, +0x1cc for the receive descrambler -- and which of the two
- * FPM_SDM entry points they jump to.  `V22FP_create` initialises an
- * `fpm_sdm` at each of those two offsets, so the pairing is confirmed
- * independently of these functions' names.
+ * ScrambleDataV22, DescrambleDataV22 and ModDataV22 are V22int.c's and now
+ * live in src/pump/v22/V22int.c.  What remains here is Detect_v22, which the
+ * object puts in another V.22 unit.
  */
-void
-ScrambleDataV22(void *modem, unsigned short *data, unsigned short count)
-{
-	struct v22fp *v22 = (struct v22fp *)modem;
-	/*
-	 * NO INTERMEDIATE LOCAL, and that is measured rather than a style
-	 * choice.  Seven spellings of these two wrappers were compiled --
-	 * `void *` local, no local, a typed sub-object local, both locals,
-	 * an `unsigned char *` local, a `const` local, and the sub-object
-	 * computed through a char pointer -- and this is the ONLY one that
-	 * reproduces either function.  It is a unique preimage over an
-	 * exhausted domain and it closes BOTH.
-	 *
-	 * What the local costs is the register: with it, GCC puts the
-	 * sub-object pointer in %edx and pays the 6-byte `add $imm32,%edx`;
-	 * without it the pointer lands in %eax and takes the 5-byte
-	 * `add $imm32,%eax` short form the object uses.  In DescrambleDataV22
-	 * that one byte is the whole size difference.  Finding F8120.
-	 */
-	FPM_SDM_scrambler(&v22->dsp->sdm, data, count);
-}
-
-void
-DescrambleDataV22(void *modem, unsigned short *data, unsigned short count)
-{
-	struct v22fp *v22 = (struct v22fp *)modem;
-
-	/* No intermediate local, for the reason ScrambleDataV22 records. */
-	FPM_SDM_descrambler(&v22->dsp->sdm2, data, count);
-}
-/*
- * Bits to samples, in two stages that share one ring.
- *
- * THE RING IS THE POINT.  Both calls are handed `fp + 0xa0` as their second
- * argument -- the object computes `lea 0xa0(%eax),%edx` twice, once before
- * each -- so the symbol indices `FPM_SMC_encoder` writes are exactly the ones
- * `V22_PPS_filter` reads back.  `fpm_smc.h` records that two sessions
- * modelled half of that ring each, the producer's cursor and the consumer's;
- * this function is where the two halves meet.
- *
- * `count` is in DATA WORDS for the encoder and in SYMBOLS for the filter, and
- * the object passes the same value to both because the encoder makes exactly
- * one symbol per word.
- */
-unsigned short
-ModDataV22(void *modem, const unsigned short *data, short *out,
-	   unsigned short count)
-{
-	struct v22fp *v22 = (struct v22fp *)modem;
-	struct v22fp_dsp *dsp;
-
-	dsp = v22->dsp;
-	FPM_SMC_encoder(&dsp->smc, &dsp->smc_ring, data, count);
-
-	dsp = v22->dsp;
-	return (unsigned short)V22_PPS_filter(
-			&dsp->pps, &dsp->smc_ring, out, count);
-}
