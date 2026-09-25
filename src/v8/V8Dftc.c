@@ -84,6 +84,25 @@ v8_dftupdate(struct v8_dft_bin *bins, short nbins, const short *samples,
 	}
 }
 
+/*
+ * Energy of each DFT bin: the real and imaginary parts are shifted up by
+ * `shift`, taken down to their top 16 bits, squared and summed, and the top
+ * 16 bits of that are stored.  The shift is how the caller keeps a bin that
+ * has grown small from squaring away to nothing.
+ */
+void
+v8_dftenergy(struct v8_dft_bin *bin, short n, short shift)
+{
+	short i;
+
+	for (i = 0; i < n; i++) {
+		int re = (int)((unsigned int)bin[i].re << shift) >> 16;
+		int im = (int)((unsigned int)bin[i].im << shift) >> 16;
+
+		bin[i].energy = (short)((re * re + im * im) >> 16);
+	}
+}
+
 /* One entry of the cosine table.  The index is a byte, so it wraps freely. */
 short
 v8_cosread(unsigned char phase)

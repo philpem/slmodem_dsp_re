@@ -1,0 +1,17 @@
+[
+ {
+  "label": "report the phase-reversal delay after it is accepted",
+  "find": "\n\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t    \"ANSAM phase reversals detected \" \"delay = %d\\n\", spacing);\n\t\t\tpr->detected = 1;",
+  "replace": "\t\t\tpr->detected = 1;\n\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t    \"ANSAM phase reversals detected \"\n\t\t\t\t    \"delay = %d\\n\", pr->detected);"
+ },
+ {
+  "label": "drop the phase-reversal announcement",
+  "find": "\n\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t    \"ANSAM phase reversals detected \" \"delay = %d\\n\", spacing);",
+  "replace": "\t\t\t(void)0;"
+ },
+ {
+  "label": "report the reversal count rather than the delay",
+  "find": " \"delay = %d\\n\", spacing);",
+  "replace": "\t\t\t\t    \"delay = %d\\n\", pr->reversals);"
+ }
+]

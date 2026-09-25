@@ -5202,7 +5202,7 @@
    }
   },
   "v8agc": {
-   "key": "26f129cf3fe991bea848a2fea2915b9bfed18ab99b55e33cffc514d574433f9a",
+   "key": "2ca5a22425ef22e6df162ba995c3eb0fce72c0a2e7557b384508f0398ff68c59",
    "summary": "5 mutations: 5 caught (5 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "drop the look-for-ANSam-again announcement": "caught",
@@ -5210,6 +5210,15 @@
     "look for ANSam again whatever the handshake was doing": "caught",
     "report the overflow in decimal": "caught",
     "report the saturated sample rather than the overflow": "caught"
+   }
+  },
+  "v8detector": {
+   "key": "9db64ef33a1d42911068e852200ad4553c22b1b0477a805a8d5ea462e833e8d0",
+   "summary": "3 mutations: 3 caught (3 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "drop the phase-reversal announcement": "caught",
+    "report the phase-reversal delay after it is accepted": "caught",
+    "report the reversal count rather than the delay": "caught"
    }
   },
   "v8dp": {
@@ -5243,8 +5252,16 @@
     "sensitivity to correcting the 12-second ANSam departure: configure the six-second upper boundary": "caught"
    }
   },
+  "v8getbit": {
+   "key": "0667267959f234cdcdf34fc4cd6c22f5a0388a9113aa5d17f85544b161f08860",
+   "summary": "2 mutations: 2 caught (2 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "normal v8_getbit emits the low end of the framed word instead of its next high-order bit": "caught",
+    "normal v8_getbit repeats a sequence whose repeat flag is clear": "caught"
+   }
+  },
   "v8handshak": {
-   "key": "67b022e1b987e5ad5efa46a35b3a5edbb4a6146be1c48a92b45cd2be5a400cfe",
+   "key": "54c7e3c85241d84afdad4b00ad8a6599bb69eb2c2877f4ec110227ff6c8e3dbc",
    "summary": "5 mutations: 5 caught (5 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "announce the CM timeout on every block past the deadline": "caught",
@@ -5268,7 +5285,7 @@
    }
   },
   "v8hsrx": {
-   "key": "3c9528cf27469f65b1a9ec3d7e76faaa1f699c3c5905400c7a091cf9d2cecc42",
+   "key": "b514d408a038ee7b1d23e8752ddd53beb333a5430f59bd44419f96564a5725d0",
    "summary": "11 mutations: 11 caught (11 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "announce the ANSam detection before the JM is checked for": "caught",
@@ -5285,7 +5302,7 @@
    }
   },
   "v8hsrxstd": {
-   "key": "5a7d36b315a39f620f562b3faabb0c650437d03c097236747e83aa283675bf4a",
+   "key": "2e7852e3a0dc1d1a9acc3d3e8af16cc46b66982d318ad9144890a3207d9375d3",
    "summary": "2 mutations: 2 caught (2 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "CJ receiver accepts after one octet rather than the reproduced two-octet departure": "caught",
@@ -5348,7 +5365,7 @@
    }
   },
   "v8seq": {
-   "key": "d3913c0b8b10d5df2472cd2756b8b33624310bcb481ce462b1d0cdddc2466983",
+   "key": "34aab3825af1522522708db59829950036745788615c752ae40580eb7ded297d",
    "summary": "9 mutations: 9 caught (9 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "announce the banner before the selector is validated": "caught",
@@ -5363,27 +5380,22 @@
    }
   },
   "v8seqstd": {
-   "key": "f2f8ffbc47ca068876b20320521fa4eae3f314355a02837c4a4d056408fd2d41",
-   "summary": "5 mutations: 5 caught (5 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "key": "69bdc82a4abfbac6ed3e75b055aca96a3109eab81b35a099bd03fe232a764ca5",
+   "summary": "3 mutations: 3 caught (3 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "ext_word omits the Table 1 stop bit": "caught",
     "ext_word sends the octet in host bit order instead of V.8 least-significant-bit-first order": "caught",
-    "ext_word sets the Table 1 start bit to one": "caught",
-    "normal v8_getbit emits the low end of the framed word instead of its next high-order bit": "caught",
-    "normal v8_getbit repeats a sequence whose repeat flag is clear": "caught"
+    "ext_word sets the Table 1 start bit to one": "caught"
    }
   },
   "v8sig": {
-   "key": "68fbb2e36bfab5fbeb00d273db41d1c5c2ffc26029963a55862e63f1b3120f7d",
-   "summary": "8 mutations: 8 caught (8 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "key": "cf8db9c50f0b9b177184233a863ff4775e5649ff8ce7b139d7e30374e1069b30",
+   "summary": "5 mutations: 5 caught (5 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
-    "drop the phase-reversal announcement": "caught",
     "drop the unsupported-request complaint": "caught",
     "give the unsupported-request complaint a bare newline": "caught",
     "name the control request only when it is accepted": "caught",
     "name the request by number as well as by name": "caught",
-    "report the phase-reversal delay after it is accepted": "caught",
-    "report the reversal count rather than the delay": "caught",
     "swap START_CJ and START_JM in the name table": "caught"
    }
   },

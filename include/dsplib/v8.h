@@ -1066,11 +1066,6 @@ short notch_filter(const short *in, struct v8_detector *d);
  */
 short biquad_filter(short in, struct v8_detector *d, const short *coeff);
 
-/** @brief Wait for the line to settle and then for a tone. One of the handshake's two long receive paths; see v8hsrx.c. */
-int v8_handshak_agc(struct v8 *v);
-/** @brief Turn the demodulator's bits into characters and match them against `rx_substate`. The other long receive path; see v8hsrx.c. */
-int v8_handshak_demod(struct v8 *v);
-
 /*
  * Sub-states of the demodulate path, as `rx_substate` holds them.  They pick what
  * the character stream is being matched against; the receive state stays at
