@@ -125587,3 +125587,73 @@ falsified).  No source was fitted to a byte count: the enumeration was
 completed before any size was read and exactly the predicted source property
 (the in-loop selection) accounts for the shape.  H over J is an idiom choice,
 not a recovery claim.
+
+## F11382. The V.34 receive/TX boundary: eight functions in `V34RX.c` are `V34hshak.c`'s, and `t_v34hshak`'s modern baseline was already a segfault
+
+TU-reconciliation step, V34 family (issue #6/#20/#67).  The blob's V34 FILE
+records are, in order, `V34.c`, `V34ARRAY.c`, `V34CONST.c`, `V34RX.c`,
+`V34TX.c`, `V34hshak.c`, `v34filters.c` (records 293-307).  `ld -r` concatenates
+`.text` in FILE order, so a function's address places it between the neighbours'
+anchors.
+
+**PROOF OF OWNERSHIP.**  `V34hshak.c`'s locals are `StateName` (`.data+0x6c00`,
+referenced only from `v34handshakinit`), `ApplyBulkDelay` (LOCAL FUNC, `.text`
+0x5dd10) and `getbit` (LOCAL FUNC, 0x5eaf0).  A LOCAL FUNC is reachable only
+from its own TU, so `V34hshak.c` begins at `ApplyBulkDelay` (0x5dd10), and every
+function at or above 0x5dd10, up to `v34filters.c`'s first anchored function
+(`V34SetupModulator`, which is the first user of the local `tx600c1` at
+`.rodata+0x3640`), is `V34hshak.c`'s.  Eight functions our tree had in
+`V34RX.c` sit in that range: `txrxdmainit` (0x5e3e0), `v34FreezeEcho` (0x5e200),
+`V34scrambler` (0x5e2e0), `V34SetupDemodulator` (0x5def0), `polyValue`
+(0x60500), `setInitialPhase` (0x60520), `setTimingStateParameters` (0x60760)
+and `TimingV34` (0x60930).  The other direction is empty: all 22 globals our
+`V34hshak.c` defines have blob addresses at or above 0x5dd10.  No body was
+rewritten; the eight moved verbatim, in their original order, to the end of
+`V34hshak.c`'s function section (before its `#if __SIZEOF_POINTER__` offset
+asserts).  Only `polyValue`/`setInitialPhase`/`setTimingStateParameters`/
+`TimingV34` call each other, all in that order, and all eight are prototyped in
+`include/dsplib/v34rx.h`.
+
+**MEASURED.**  None of the eight, nor anything else in `V34RX.c`, was exact
+before the move, so no exact function could be lost.  The four exact
+`V34hshak.c` DFT leaves (`dftRetrainDetInit`, `dftfreqinit`, `dftnlinitNoiseBins`,
+`dftnlinitSignalBins`) were placed AFTER and stay EXACT.  Tree grade 0 holds at
+833/1852 and grade 0-or-1 at 886/1852 -- the move is structurally correct and
+exactness-neutral.  `partialcmp`: positioned bytes 68,084 -> 68,226 / 943,398;
+exact relocations 964/18,317, exact symbols 304/2,907 and exact sections 69/92
+all unchanged.
+
+**HARNESS.**  Five mutations in `test/mutations/v34rx.json` were in the moved
+functions and now name `V34hshak.c`'s file; they moved to `v34hshak.json`, two
+`find` strings were widened to stay unique in the larger file, and
+`anchorcheck` is 276 suites / 10,038 mutations / 0 detached.  `v34rx` was
+re-recorded through the pinned GCC 13.3.0 container at `J=1`: **26 mutations,
+26 caught, 0 uncaught**.
+
+**BLOCKED, AND IT IS PRE-EXISTING.**  `v34hshak` could NOT be re-recorded:
+`tools/mutate.py --suite v34hshak`'s modern baseline is not green.  The rebuilt
+`build/test/t_v34hshak` exits 139 (SIGSEGV) under the GCC 13.3.0 container.
+This is not the move: reverting `V34RX.c` and `V34hshak.c` to the unmodified
+tree and rebuilding the same target reproduces exit 139, so master's modern
+`t_v34hshak` segfaults already and the suite could not have been re-recorded
+on master either.  The period tier is unaffected (`make period` 385 passed, 0
+failed).  A dedicated portability issue is owed for the crash; it is left
+visible rather than worked around in `src/`.
+
+**DECLINED, and the new framing.**  `V34TX.c` (record 302, between `V34RX.c`
+and `V34hshak.c`) has no LOCAL function of its own, so its `.text` extent is a
+bracket: functions at or below 0x5dd0c that are not pinned by `V34RX.c`'s
+`V34demodulate`/`sqrt_table` could be either unit, and nothing in the object
+settles which.  The split of our `v34pcmif.c`/`v34info.c`/`v34info1a.cpp`/
+`v34diag.cpp` into the blob's single `VPcmV34Main.cpp` is proven but not moved:
+that file's 20 exact functions in `v34pcmif.c` are exact BECAUSE of the
+present per-file emission order (`v34pcmif.c`'s own header says so), and a
+merge that does not reproduce the blob's global emission order would be an
+unmeasured loss.  Both stay named with their blocker.
+
+**GATES.**  Focused `make period` (`t_v34rx t_v34hshak t_v34pcmif t_v34info
+t_v34shell`): 5 passed, 0 failed.  Full `make -j1 J=1 phase`: **385 passed, 0
+failed**, boundary OK.  `refcheck`: 0 dangling.  `anchorcheck`: 0 of 10,038
+detached.  `mutsnap --check`: v34rx current, 275 stale (the coarse whole-tree
+key on any `src/` edit), v34hshak stale for the pre-existing crash above.
+`git diff --check` clean.

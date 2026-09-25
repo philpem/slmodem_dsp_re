@@ -38,31 +38,6 @@
   "replace": "*alpha = (short)((*alpha * decay + 0x2000) >> 15);"
  },
  {
-  "label": "the near and far echo reports swapped",
-  "find": "\t\t\t\"==== Near Echo Canceller report ======\\n\");\n\tV34EchoReportCoeff(&obj->echo0);",
-  "replace": "\t\t\t\"==== Far Echo Canceller report ======\\n\");\n\tV34EchoReportCoeff(&obj->echo0);"
- },
- {
-  "label": "both echo reports dump the near canceller",
-  "find": "\t\t\t\"==== Far Echo Canceller report ======\\n\");\n\tV34EchoReportCoeff(&obj->echo1);",
-  "replace": "\t\t\t\"==== Far Echo Canceller report ======\\n\");\n\tV34EchoReportCoeff(&obj->echo0);"
- },
- {
-  "label": "freezing the echo clears the flag rather than setting it",
-  "find": "obj->tx_flags = (short)(obj->tx_flags | V34_EC_FROZEN);",
-  "replace": "obj->tx_flags = (short)(obj->tx_flags & ~V34_EC_FROZEN);"
- },
- {
-  "label": "the demodulator trace has baud and carrier swapped",
-  "find": "\t\t\t\"V34SetupDemodulator: baudrate %ld, carrier %ld\\n\",\n\t\t\t(long)baud, (long)carrier);",
-  "replace": "\t\t\t\"V34SetupDemodulator: baudrate %ld, carrier %ld\\n\",\n\t\t\t(long)carrier, (long)baud);"
- },
- {
-  "label": "the demodulator produces three outputs per call, not four",
-  "find": "\trx->out_count = 4;",
-  "replace": "\trx->out_count = 3;"
- },
- {
   "label": "the echo energy report has energy and BETA swapped",
   "find": "\t\t\t\t\t\"Echo Energy = %d, BETA = %d\\n\",\n\t\t\t\t\tobj->echo_energy, obj->echo_beta);",
   "replace": "\t\t\t\t\t\"Echo Energy = %d, BETA = %d\\n\",\n\t\t\t\t\tobj->echo_beta, obj->echo_energy);"
