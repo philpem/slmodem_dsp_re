@@ -245,7 +245,7 @@
   "build/test/t_v32fpsub"
  ],
  "v32hdx": [
-  "src/pump/v32/v32hdx.c",
+  "src/pump/v32/V32TXHDX.c",
   "build/test/t_v32hdx"
  ],
  "v32seq": [
@@ -1017,8 +1017,8 @@
   "build/test/t_vpcmrunpcm"
  ],
  "vpcmtabs": [
-   "src/pump/v90/V92EchoCanceller.cpp",
-   "build/test/t_vpcmtabs"
+  "src/pump/v90/V92EchoCanceller.cpp",
+  "build/test/t_vpcmtabs"
  ],
  "vpcmxfcreate": [
   "src/pump/v90/VPcmXfCreate.cpp",
@@ -1111,5 +1111,13 @@
  "faxadaptcreate_v29tx": [
   "src/fax/V29tx.c",
   "build/test/t_faxadapt"
+ ],
+ "v32hdxrx": [
+  "src/pump/v32/V32rxhdx.c",
+  "build/test/t_v32hdx"
+ ],
+ "v32ctad": [
+  "src/pump/v32/V32rxhdx.c",
+  "build/test/t_v32fpctl"
  ]
 }

@@ -1,0 +1,20 @@
+[
+ {
+  "label": "NOTE: CalcTurnAroundDelay, split out of `v32fpctl.c` when the object's inlining of it into RxHdxPhsReversal proved it is V32rxhdx.c's.  The three mutations move the field count, the clamp and the width of the subtraction."
+ },
+ {
+  "label": "the turnaround budget is charged only twice",
+  "find": "\t\t       - (hdx->short_9c\n\t\t\t  + hdx->short_98\n\t\t\t  + hdx->short_9a));",
+  "replace": "\t\t       - (hdx->short_9c\n\t\t\t  + hdx->short_98));"
+ },
+ {
+  "label": "the turnaround surplus is not clamped at zero",
+  "find": "\treturn (short)(left < 0 ? 0 : left);",
+  "replace": "\treturn left;"
+ },
+ {
+  "label": "the turnaround subtraction is done at 32 bits, so it does not wrap",
+  "find": "\tshort left;\n\n\tleft = (short)(hdx->turnaround",
+  "replace": "\tint left;\n\n\tleft = (int)(hdx->turnaround"
+ }
+]

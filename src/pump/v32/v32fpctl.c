@@ -23,7 +23,7 @@
  *   RxClampV32               .text 0x0825f0   49
  *   v32_null_protocol        .text 0x082bd0    1   (moved to v32fpdisp.c)
  *   SetToneDetect            .text 0x083600  110
- *   CalcTurnAroundDelay      .text 0x083ae0   53
+ *   CalcTurnAroundDelay      .text 0x083ae0   53   (moved to V32rxhdx.c)
  *   V32_TURNAROUND_DLY       .data 0x0076c0    4
  *   V32_SYMBOL_LEN           .data 0x0076c4    4
  *   V32_SAMPLE_LEN           .data 0x0076c8    4
@@ -796,26 +796,9 @@ SetToneDetect(struct v32_modem *modem, short hz)
 }
 
 /*
- * What is left of the turnaround budget, clamped at zero.
- *
- * The subtraction is narrowed to sixteen bits BEFORE the clamp -- the object
- * does `cwtl` and then the branchless `x & ~(x >> 31)` -- so a budget that
- * underflows past 32768 comes back positive rather than clamped.  D483.
- *
- * The four fields are loaded `movzwl` here and +0x9c `movswl` in
- * `SetECRndTripDelayV32`.  Both extensions are DEAD -- every use is truncated
- * back to sixteen bits -- so the signedness is the compiler's free choice at
- * each site (finding F614) and each site is written the way the object has it.
+ * CalcTurnAroundDelay is V32rxhdx.c's and now lives in
+ * src/pump/v32/V32rxhdx.c.  The object INLINES it into RxHdxPhsReversal
+ * (83c29..83c55 is the same 53 bytes instruction for instruction), which is
+ * only possible within one translation unit, so the move is what recovers
+ * the object's call shape.  See V32rxhdx.c.
  */
-short
-CalcTurnAroundDelay(struct v32_modem *modem)
-{
-	struct v32_hdx *hdx = HDX(modem);
-	short left;
-
-	left = (short)(hdx->turnaround
-		       - (hdx->short_9c
-			  + hdx->short_98
-			  + hdx->short_9a));
-	return (short)(left < 0 ? 0 : left);
-}
