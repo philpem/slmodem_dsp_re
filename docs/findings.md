@@ -125803,3 +125803,61 @@ made yet.  Our `v32fpctl.c` is the largest layer (it still holds `SetTxModeV32`
 and `v32data.c`, `v32seq.c`, `v32fse.c`, `v32smc.c`, `v32scram.c` and the
 `v32ns*`/`v32anstone`/`v32vtb` files are the same kind of layer.  They stay
 named with that blocker; no function was forced to a file for a round number.
+
+## F11385. `Elliptic1/2/3.c` are three data-only translation units, split out of one file
+
+Merge-family reconciliation (issue #6/#20/#67).  The blob's FILE records name
+`Elliptic1.c`, `Elliptic2.c` and `Elliptic3.c` consecutively between
+`CPfiltrs.c` and `CallingTone.c` (records 110-112), and none of the three
+carries a LOCAL symbol.  Their `.rodata` is three contiguous banks, each the
+scales/b/a trio of one call-progress filter design family:
+
+    Elliptic1.c  0x6360..0x6528   Filter_350_500_{scales,b,a}
+    Elliptic2.c  0x6540..0x6708   Filter_100_550_{scales,b,a}
+    Elliptic3.c  0x6720..0x68e8   Filter_276_504_{scales,b,a}
+
+Our tree kept all nine tables in one `src/callprog/elliptic.c`, so the blob's
+three FILE records were missing.  The ownership is the FILE order plus the
+address contiguity: the three banks tile `0x6360..0x68e8` with only the
+alignment padding between them, and each bank is one design family.
+
+**CHANGE.**  `elliptic.c` is split into `src/callprog/Elliptic1.c`,
+`Elliptic2.c` and `Elliptic3.c`, tables moved VERBATIM (the nine initializers
+are byte-identical to the original file, checked programmatically) and
+`elliptic.c` deleted.  `include/dsplib/elliptic.h` still declares all nine, so
+no caller changes.  No flag changed.
+
+**MEASURED.**  Tree grade 0 holds at **833/1852** and grade 0-or-1 at
+**886/1852** -- no function's exactness moves, because the change is data-only.
+`partialcmp`: exact symbols **304 -> 307** of 2,907, the +3 being the
+`Elliptic1/2/3.c` FILE records the object has and we now emit; exact sections
+69/92 unchanged.  The link order is the blob's: the three objects are placed
+between `CPfiltrs.c` and `CallingTone.c`, exactly where records 110-112 sit
+(manifest diff: only the three additions and the `elliptic.c` removal; no
+other object moves).
+
+**THE CENSUS MOVES DOWN, AND IT IS RECORDED RATHER THAN HIDDEN.**  Positioned
+reference bytes go **68,084 -> 67,628** of 943,398 and exact relocations
+**964 -> 932** of 18,317.  `.text` is the same size (683,763 bytes) and the
+same object order, so the difference is the address shift the data move
+causes in the `.text` bytes that embed `.rodata` addresses; no function loses
+exactness and the exact-symbol count rises.  This is a larger census movement
+than the V8/V34 steps' (a few bytes), and it is the one thing about this
+family that a reviewer should weigh: the split is structurally correct and the
+census is not a gate, but the partial link's positional agreement is worse
+than before it.
+
+**WITHIN-TU ORDER IS NOT RECOVERED, AND IT IS NAMED.**  GCC 3.4.2 emits these
+`const` objects in REVERSE source order (measured: source scales,b,a produces
+object a,b,scales), while the blob's bank is scales,b,a.  So the original
+source declared a,b,scales.  Reordering the declarations to a,b,scales does
+make the object emit scales,b,a (verified), but it moved the census slightly
+further down (67,628 -> 67,589) and is therefore NOT retained; the source
+keeps the natural scales,b,a order and the mismatch is recorded here as an
+open positional item.  It is not a behavioural difference.
+
+**GATES.**  Focused `make period`: **385 passed, 0 failed** (full tier; the
+data-only change has no dedicated test).  Full `make -j1 J=1 phase`:
+**385 passed, 0 failed**, boundary OK.  No mutation suite is sourced at any
+of the four files.  `refcheck` 0 dangling; `anchorcheck` 278 suites /
+10,038 mutations / 0 detached; `git diff --check` clean.
