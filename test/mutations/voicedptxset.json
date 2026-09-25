@@ -1,0 +1,35 @@
+[
+ {
+  "note": "src/service/Tx.c against build/test/t_voicedp.  voice_set_tx only; voice_tx's own claims are in voicedptx.json, because t_voicedptx never calls the setter and a mutant no binary can reach reads NOT CAUGHT while modelling nothing."
+ },
+ {
+  "label": "voice_set_tx writes the online mode",
+  "find": "\tv->mode = 1;\n\tv->handler = voice_tx;",
+  "replace": "\tv->mode = 2;\n\tv->handler = voice_tx;"
+ },
+ {
+  "label": "voice_set_tx installs the receive handler",
+  "find": "\tv->handler = voice_tx;\n\tdetector_set_enable",
+  "replace": "\tv->handler = voice_rx;\n\tdetector_set_enable"
+ },
+ {
+  "label": "voice_set_tx uses the receive detector mask",
+  "find": "\tdetector_set_enable(v->detector, v->detector_enable_tx);",
+  "replace": "\tdetector_set_enable(v->detector, v->detector_enable_rx);"
+ },
+ {
+  "label": "voice_set_tx writes a 7200 Hz format",
+  "find": "\tv->rate_bits.s.bits = 8;\n\tv->rate_bits.s.rate = 8000;\n\tv->underrun = 1;",
+  "replace": "\tv->rate_bits.s.bits = 8;\n\tv->rate_bits.s.rate = 7200;\n\tv->underrun = 1;"
+ },
+ {
+  "label": "voice_set_tx writes a 4-bit format",
+  "find": "\tv->rate_bits.s.bits = 8;\n\tv->rate_bits.s.rate = 8000;",
+  "replace": "\tv->rate_bits.s.bits = 4;\n\tv->rate_bits.s.rate = 8000;"
+ },
+ {
+  "label": "voice_set_tx starts the underrun latch DOWN, so the first empty block reports",
+  "find": "\tv->rate_bits.s.rate = 8000;\n\tv->underrun = 1;",
+  "replace": "\tv->rate_bits.s.rate = 8000;\n\tv->underrun = 0;"
+ }
+]

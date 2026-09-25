@@ -1,22 +1,16 @@
 /*
- * voicedp.c -- the voice service's three `voice.c` setters that install the
- * per-block handlers.
+ * Tx.c -- the voice transmit handler and the setter that installs it.
  *
- * `voice_set_online`, `voice_set_duplex` and `voice_online` all sit in the
- * blob's `voice.c` (record 260) address block, alongside `voice_dle_command`
- * (voicecmd.c) and the `voice_create`/`voice_command`/`voice_modem` core
- * (voicesvc.c).  They were held together with the Rx.c/Tx.c/duplex.c handlers
- * in this file until finding F11386 split those three object translation units
- * out.  Their own move into the `voice.c` unit is NOT done here: they are
- * `voice.c`'s, and this file remains a layer, named with that blocker.
+ * Recovered TU boundary (issue #6/#20/#67).  The blob's FILE records place
+ * `Tx.c` (record 270) between `TONE.c` (269) and `duplex.c` (271); `TONE.c`'s
+ * last function is `TONE_kill` at 0x0afc60 and `duplex.c`'s only one is
+ * `voice_duplex` at 0x0b01e0, so [0x0afc60, 0x0b01e0) is `Tx.c`'s.  The two
+ * globals there are `voice_set_tx` (0x0afcf0, 110 bytes) and `voice_tx`
+ * (0x0afd60, 1150).  The bracket, the `_tx` naming and the empty competing set
+ * are the proof.
  *
- * In the object's emission order:
- *     0xabef0  voice_set_online    47
- *     0xabf20  voice_set_duplex    45
- *     0xabf50  voice_online       508
- *
- * The handlers these setters install now live in Rx.c, Tx.c and duplex.c.
- * Finding F11386.
+ * The bodies and the constants they read moved VERBATIM out of
+ * src/service/voicedp.c.  Finding F11386.
  */
 
 #include "dsplib/voice.h"
@@ -201,90 +195,184 @@ typedef char voice_ctx_size[(sizeof(struct voice_ctx) == 0x7dc) ? 1 : -1];
 #define VOICE_RX_SILENCE_SECONDS	0.8f
 
 /*
- * Go online: mode 2, the beep-only handler, and the detector enabled with
- * whatever mask the context carries.
- */
-void
-voice_set_online(struct voice_ctx *v)
-{
-	v->mode = 2;
-	v->handler = voice_online;
-	detector_set_enable(v->detector, v->detector_enable);
-}
-
-/*
- * Go duplex: mode 3, the full-duplex handler, and the detector enabled with a
- * CONSTANT 0x24 rather than the context's mask.  That difference is the
- * object's and is not explained by anything reconstructed here.
- */
-void
-voice_set_duplex(struct voice_ctx *v)
-{
-	v->mode = 3;
-	v->handler = voice_duplex;
-	detector_set_enable(v->detector, 0x24);
-}
-
-/*
- * The beep-only block handler.  Nothing arrives from the line here: the block
- * is filled entirely from the beep generator, and once the queue runs dry the
- * remainder of the block -- and every later block -- is silence.
+ * Go into transmit: mode 1, the transmit handler, the transmit detector mask
+ * and the 8 kHz 8-bit format.
  *
- * `rx_lin` and `tx_flt` are never read.  `hostcount` is written twice, and
- * the first of those stores is dead on every path: deviation D997.
+ * IT STARTS THE UNDERRUN LATCH UP, not down.  A path that has just been armed
+ * has an empty FIFO by definition, so the first block would report "not
+ * enough data" for a condition the host has had no chance to fix; the latch
+ * suppresses exactly that one report and `voice_tx` clears it on the first
+ * block that has a whole block's worth.
+ *
+ * The two halves of the format are stored bits-first here and rate-first in
+ * `voice_set_rx`, which is scheduling and not source (finding F617's rule:
+ * store order needs the full-text test, and neither function has had it).
+ * Each is written in its own object's order.
+ */
+void
+voice_set_tx(struct voice_ctx *v)
+{
+	v->mode = 1;
+	v->handler = voice_tx;
+	detector_set_enable(v->detector, v->detector_enable_tx);
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("PCM 8 bit.\n");
+
+	v->rate_bits.s.bits = 8;
+	v->rate_bits.s.rate = 8000;
+	v->underrun = 1;
+}
+
+/*
+ * The transmit block handler: host bytes in, one block of samples out.
+ *
+ * Two halves with the FIFO between them.  The first un-escapes `*hostcount`
+ * bytes of `rx_lin` -- a DLE doubled is one literal DLE, a DLE followed by
+ * anything else is a command that goes to `voice_dle_command` and is NOT
+ * copied -- and writes what survives to the FIFO.  The second takes a whole
+ * block back out if one is there, removes its mean, and converts.
+ *
+ * `rx_lin` is a BYTE stream here, whatever the handler signature calls it,
+ * and the scan reads one past `*hostcount` when the last byte is a DLE:
+ * deviation D998.  `tx_flt` is never read.
  */
 int
-voice_online(struct voice_ctx *v, short *rx_lin, float *rx_flt, float *tx_flt,
-	     short *tx_lin, unsigned short *hostcount, unsigned short *countp)
+voice_tx(struct voice_ctx *v, short *rx_lin, float *rx_flt, float *tx_flt,
+	 short *tx_lin, unsigned short *hostcount, unsigned short *countp)
 {
+	const unsigned char *in = (const unsigned char *)rx_lin;
+	float *flt = rx_flt;
+	int nread = VOICE_TX_READ_8000;
 	unsigned short i = 0;
-	int r = 0;
+	unsigned short j = 0;
+	unsigned short k;
 	int ret = 0;
+	int enough = 0;
+	int fill;
+	int room;
 
-	(void)rx_lin;
 	(void)tx_flt;
 
-	if (v->beep_done) {
+	if (v->rate_bits.s.rate != 8000) {
+		flt = v->flt;
+		nread = (v->rate_bits.s.rate == 7200) ? VOICE_TX_READ_7200
+						      : VOICE_TX_READ_OTHER;
+	}
+	if (VOICE_OUT_IS_LINEAR(v))
+		flt = v->flt;
+
+	while (i < *hostcount) {
+		unsigned char c = in[i];
+
+		if (c == VOICE_DLE) {
+			i++;			/* D998: may pass the end */
+			c = in[i];
+			if (c != VOICE_DLE) {
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf(
+					    "TX: shel comando dle\n");
+				ret = voice_dle_command(v, (signed char)c);
+				i++;
+				continue;
+			}
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf("TX: double dle\n");
+		}
+		v->stage[j] = c;
+		i++;
+		j++;
+	}
+
+	FIFO8_write(v->fifo, v->stage, j);
+
+	fill = v->fifo->count;
+	switch (v->rate_bits.both) {
+	case VOICE_FMT_8BIT_8000:
+		enough = fill > 0x9f;
+		break;
+	case VOICE_FMT_8BIT_7200:
+		enough = fill > 0x8f;
+		break;
+	case VOICE_FMT_8BIT_11025:
+		enough = fill > 0xdb;
+		break;
+	case VOICE_FMT_4BIT_8000:
+		enough = fill > 0x4f;
+		break;
+	case VOICE_FMT_4BIT_7200:
+		enough = fill > 0x47;
+		break;
+	case VOICE_FMT_4BIT_11025:
+		enough = fill > 0x6d;
+		break;
+	default:
+		break;
+	}
+
+	if (enough) {
+		unsigned short n;
+		float sum = 0.0f;
+		float mean;
+
+		v->underrun = 0;
+		/* D996: at 11025 this asks for 222 bytes of a 200-byte area. */
+		n = (unsigned short)FIFO8_read(v->fifo, v->stage,
+					       (unsigned short)nread);
+
+		for (k = 0; k < n; k++)
+			sum += (float)v->stage[k] * VOICE_TX_BYTE_SCALE;
+		mean = sum / (float)(int)n;
+
 		if (VOICE_OUT_IS_LINEAR(v)) {
-			for (i = 0; i < *countp; i++)
-				tx_lin[i] = 0;
+			float offset = mean * 64.0f;
+
+			for (k = 0; k < n; k++)
+				flt[k] = (float)v->stage[k] - offset;
 		} else {
-			for (i = 0; i < *countp; i++)
-				rx_flt[i] = 0.0f;
+			for (k = 0; k < n; k++)
+				flt[k] = (float)v->stage[k] * VOICE_TX_BYTE_SCALE
+					 - mean;
 		}
-	} else if (VOICE_OUT_IS_LINEAR(v)) {
-		while (i < *countp && r != 1) {
-			float s;
 
-			r = beepgen_sample(v->beepgen, &s);
-			tx_lin[i] = (short)(s * VOICE_BEEP_FULL_SCALE);
-			i++;
+		if (VOICE_OUT_IS_LINEAR(v)) {
+			float scale = (v->rate_bits.s.bits == 8)
+					  ? VOICE_TX_SCALE_8BIT
+					  : VOICE_TX_SCALE_OTHER;
+
+			for (k = 0; k < *countp; k++)
+				tx_lin[k] = (short)(int)(flt[k] * scale);
 		}
-		while (i < *countp)
-			tx_lin[i++] = 0;
 	} else {
-		while (i < *countp && r != 1) {
-			r = beepgen_sample(v->beepgen, &rx_flt[i]);
-			i++;
-		}
-		while (i < *countp)
-			rx_flt[i++] = 0.0f;
-	}
-
-	if (r == 1) {
 		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("beepgend end, send ok\n");
-		v->beep_done = 1;
-		FDSP_Kernel_SetInternalBeepInProgress(0);
-		ret = 1;
+			dsplibs_debug_printf("\n ** NO enouch data  ** \n");
+		if (v->underrun == 0 && v->dle_etx == 0) {
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf(
+				    "VOICE TX: not enough data to tx\n");
+			ret = VOICE_TX_UNDERRUN_STATUS;
+			v->underrun = 1;
+		}
+		/*
+		 * D999: the linear arm fills `*countp` samples and the float
+		 * arm a fixed 160, which agree only at 8 kHz.
+		 */
+		if (VOICE_OUT_IS_LINEAR(v)) {
+			for (k = 0; k < *countp; k++)
+				tx_lin[k] = 0;
+		} else {
+			for (k = 0; k < VOICE_TX_FLT_FILL; k++)
+				rx_flt[k] = 0.0f;
+		}
 	}
 
-	/* D997: overwritten on every path by the store two lines down. */
-	*hostcount = *countp;
+	room = (short)(VOICE_TX_HOST_ROOM - (int)v->fifo->count);
+	if (room < 0)
+		room = 0;
+	*hostcount = (unsigned short)room;
 	*countp = 0;
-	*hostcount = 0;
 
-	if (v->int_0014 != v->mode && v->int_0014 != 0)
-		ret = VOICE_ONLINE_MODE_STATUS;
+	if (v->int_0014 != v->mode)
+		ret = VOICE_TX_MODE_STATUS;
 	return ret;
 }

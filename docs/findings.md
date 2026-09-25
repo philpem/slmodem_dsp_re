@@ -125861,3 +125861,90 @@ data-only change has no dedicated test).  Full `make -j1 J=1 phase`:
 **385 passed, 0 failed**, boundary OK.  No mutation suite is sourced at any
 of the four files.  `refcheck` 0 dangling; `anchorcheck` 278 suites /
 10,038 mutations / 0 detached; `git diff --check` clean.
+## F11386. The voice Rx/Tx/duplex handlers are three translation units, not one: the split is exactness-neutral and makes `voice_duplex` exact
+
+TU-reconciliation step, voice family (issue #6/#20/#67).  `F11351` split
+`rd.c`/`ringDetector.c` out of `voice.c` by the same lever and is the model;
+this is the `Rx.c`/`Tx.c`/`duplex.c` member of the family `docs/` and the
+`tu-reconciliation.md` work plan name.
+
+**PROOF OF OWNERSHIP, FROM THE OBJECT.**  `ld -r` concatenates `.text` in FILE
+order, and the FILE records fix the neighbours: `Rx.c` is record 268 between
+`Notch.c` (267) and `TONE.c` (269); `Tx.c` is 270 between `TONE.c` (269) and
+`duplex.c` (271); `duplex.c` is 271 between `Tx.c` (270) and `silence.c` (272).
+The address bounds are the neighbours' first and last globals:
+
+    Notch.c   notch         0x0af150 + 56  = 0x0af188
+    Rx.c      voice_set_rx  0x0af190  305
+              voice_rx      0x0af2d0  949
+    TONE.c    TONE_create   0x0af690 ...
+    TONE.c    TONE_kill     0x0afc60 +133  = 0x0afce5
+    Tx.c      voice_set_tx  0x0afcf0  110
+              voice_tx      0x0afd60 1150   -> ends 0x0b01de
+    duplex.c  voice_duplex  0x0b01e0  251   -> ends 0x0b02db
+    silence.c silence_is_more_then 0x0b0360 ...
+
+None of the five is a LOCAL anchor, but each interval holds exactly the
+functions named and no other candidate TU claims them: the `_rx`/`_tx`/`duplex`
+suffixes, the FILE names and the empty competing set are the proof.  The three
+were previously in `src/service/voicedp.c`, a layer over the object's three
+units.
+
+**WHAT MOVED.**  `voice_set_rx` and `voice_rx` moved VERBATIM to
+`src/service/Rx.c`; `voice_set_tx` and `voice_tx` to `src/service/Tx.c`;
+`voice_duplex` to `src/service/duplex.c`.  `voicedp.c` keeps
+`voice_set_online`, `voice_set_duplex` and `voice_online`, which sit in the
+blob's `voice.c` (record 260) block and were NOT reunified: `voicedp.c` remains
+a layer, named with that blocker.  The compile-time constants the handlers read
+were file-local to the layer and the object's own units each carry their own
+copies, so they are repeated per file; every one is a macro or `typedef`, so
+the split cannot move code generation.  No body was rewritten and no flag
+changed.
+
+**LINK ORDER IS THE BLOB'S.**  `build/tc_repro/tc_link_manifest.txt` places the
+three objects at inputs 197-200, between `Notch.c` (196) and `TONE.c` (198),
+i.e. exactly the blob's records 267-271.
+
+**MEASURED, `byteident.py --why` per touched symbol (GCC 3.4.2-r2):**
+
+    symbol         before                 after
+    voice_rx       SIZE (2 bytes differ)   SIZE (2)          unchanged
+    voice_set_rx   SIZE (8)               SIZE (8)          unchanged
+    voice_tx       SIZE (60)              SIZE (60)         unchanged
+    voice_set_tx   EXACT                  EXACT             unchanged
+    voice_duplex   BYTES (8)              EXACT             GAIN
+
+Tree grade 0 **833 -> 834** of 1,852 and grade 0-or-1 **886 -> 887**; no
+symbol loses exactness.  The gain is `voice_duplex`, whose 8-byte difference
+was the merged unit's register-allocation context.
+
+**PARTIAL LINK.**  `partialcmp.py` before **68,084/943,398** positioned bytes,
+**964/18,317** exact relocations, **304/2,907** exact symbols, **69/92** exact
+sections; after **68,161/943,398**, **965/18,317**, **307/2,907**, **69/92**.
+The +3 symbols are the `Rx.c`/`Tx.c`/`duplex.c` FILE records the object has and
+we now emit; the +1 relocation and +77 positioned bytes are the
+`voice_duplex` gain and the object-order relayout.  No regression.
+
+**HARNESS.**  The `voicedp` suite's mutations were spread across the three
+object units once they were separated.  They were distributed by the file each
+`find` now lands in: `voicedp` keeps 18 (the two setters, `voice_online` and
+the constants those read); `voicedprx` is re-sourced at `src/service/Rx.c` (41);
+`voicedptx` at `src/service/Tx.c` (37); the six `voice_set_tx` mutations moved
+to a new `voicedptxset` suite (source `Tx.c`, driver `t_voicedp`, which calls
+the setter) and the seven `voice_duplex` ones to a new `voicedpdx` suite (source
+`duplex.c`, same driver).  All five were re-recorded through the pinned GCC
+13.3.0 container at `--jobs 1`: **18+41+37+6+7 = 109 mutations, 109 caught, 0
+uncaught, 0 unusable**.  `anchorcheck` after the move: 278 suites / 10,038
+mutations / 0 detached.
+
+**GATES.**  Focused `make period T="t_voicedp t_voicedprx t_voicedptx t_voiceapi
+t_voicesvc"`: 5 passed, 0 failed.  Full `make -j1 J=1 phase`: **385 passed,
+0 failed**, boundary OK; `refcheck` 0 dangling; `git diff --check` clean.
+
+**DECLINED.**  `voice.c` (record 260) itself is still spread across
+`voicecmd.c`, `voicesvc.c`, `voicedp.c`, `Beepgen.c`, `detector.c`,
+`Fdspkrnl.c` and `src/voice/voice.c`, and is not reunified here; `voicedp.c`
+keeps its three `voice.c` setters with that blocker written down.  `MEMORYC.c`
+(record 96) carries no LOCAL symbol, no global function and no global object in
+the object's symbol table, so nothing settles a content claim for it: it stays
+unclaimed, not guessed.

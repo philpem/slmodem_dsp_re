@@ -1,22 +1,13 @@
 /*
- * voicedp.c -- the voice service's three `voice.c` setters that install the
- * per-block handlers.
+ * duplex.c -- the voice full-duplex block handler.
  *
- * `voice_set_online`, `voice_set_duplex` and `voice_online` all sit in the
- * blob's `voice.c` (record 260) address block, alongside `voice_dle_command`
- * (voicecmd.c) and the `voice_create`/`voice_command`/`voice_modem` core
- * (voicesvc.c).  They were held together with the Rx.c/Tx.c/duplex.c handlers
- * in this file until finding F11386 split those three object translation units
- * out.  Their own move into the `voice.c` unit is NOT done here: they are
- * `voice.c`'s, and this file remains a layer, named with that blocker.
+ * Recovered TU boundary (issue #6/#20/#67).  The blob's FILE records place
+ * `duplex.c` (record 271) between `Tx.c` (270) and `silence.c` (272).  `Tx.c`'s
+ * last function is `voice_tx`, ending at 0x0b01de, and `silence.c`'s first is
+ * `silence_is_more_then` at 0x0b0360, so [0x0b01de, 0x0b0360) is `duplex.c`'s
+ * and holds exactly one global, `voice_duplex` at 0x0b01e0 (251 bytes).
  *
- * In the object's emission order:
- *     0xabef0  voice_set_online    47
- *     0xabf20  voice_set_duplex    45
- *     0xabf50  voice_online       508
- *
- * The handlers these setters install now live in Rx.c, Tx.c and duplex.c.
- * Finding F11386.
+ * The body moved VERBATIM out of src/service/voicedp.c.  Finding F11386.
  */
 
 #include "dsplib/voice.h"
@@ -201,90 +192,40 @@ typedef char voice_ctx_size[(sizeof(struct voice_ctx) == 0x7dc) ? 1 : -1];
 #define VOICE_RX_SILENCE_SECONDS	0.8f
 
 /*
- * Go online: mode 2, the beep-only handler, and the detector enabled with
- * whatever mask the context carries.
- */
-void
-voice_set_online(struct voice_ctx *v)
-{
-	v->mode = 2;
-	v->handler = voice_online;
-	detector_set_enable(v->detector, v->detector_enable);
-}
-
-/*
- * Go duplex: mode 3, the full-duplex handler, and the detector enabled with a
- * CONSTANT 0x24 rather than the context's mask.  That difference is the
- * object's and is not explained by anything reconstructed here.
- */
-void
-voice_set_duplex(struct voice_ctx *v)
-{
-	v->mode = 3;
-	v->handler = voice_duplex;
-	detector_set_enable(v->detector, 0x24);
-}
-
-/*
- * The beep-only block handler.  Nothing arrives from the line here: the block
- * is filled entirely from the beep generator, and once the queue runs dry the
- * remainder of the block -- and every later block -- is silence.
+ * The full-duplex block handler: the datapump does the whole block, then any
+ * queued beep is laid over the RECEIVE side of it.  The beep therefore
+ * overwrites what `FDSP_DP_Run` just converted, sample for sample, for as long
+ * as the queue lasts -- that is the object's order and not an oversight here.
  *
- * `rx_lin` and `tx_flt` are never read.  `hostcount` is written twice, and
- * the first of those stores is dead on every path: deviation D997.
+ * `FDSP_DP_Run`'s return is discarded, and nothing zero-fills: the datapump
+ * has already written the whole block.
  */
 int
-voice_online(struct voice_ctx *v, short *rx_lin, float *rx_flt, float *tx_flt,
+voice_duplex(struct voice_ctx *v, short *rx_lin, float *rx_flt, float *tx_flt,
 	     short *tx_lin, unsigned short *hostcount, unsigned short *countp)
 {
-	unsigned short i = 0;
-	int r = 0;
 	int ret = 0;
 
-	(void)rx_lin;
-	(void)tx_flt;
+	FDSP_DP_Run(v->dp, rx_lin, rx_flt, tx_flt, tx_lin, hostcount, countp);
 
-	if (v->beep_done) {
-		if (VOICE_OUT_IS_LINEAR(v)) {
-			for (i = 0; i < *countp; i++)
-				tx_lin[i] = 0;
-		} else {
-			for (i = 0; i < *countp; i++)
-				rx_flt[i] = 0.0f;
-		}
-	} else if (VOICE_OUT_IS_LINEAR(v)) {
-		while (i < *countp && r != 1) {
-			float s;
+	if (!v->beep_done) {
+		unsigned short i = 0;
+		int r = 0;
 
-			r = beepgen_sample(v->beepgen, &s);
-			tx_lin[i] = (short)(s * VOICE_BEEP_FULL_SCALE);
-			i++;
-		}
-		while (i < *countp)
-			tx_lin[i++] = 0;
-	} else {
 		while (i < *countp && r != 1) {
 			r = beepgen_sample(v->beepgen, &rx_flt[i]);
 			i++;
 		}
-		while (i < *countp)
-			rx_flt[i++] = 0.0f;
+		if (r == 1) {
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf("beepgend end, send ok\n");
+			v->beep_done = 1;
+			FDSP_Kernel_SetInternalBeepInProgress(0);
+			ret = 1;
+		}
 	}
 
-	if (r == 1) {
-		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("beepgend end, send ok\n");
-		v->beep_done = 1;
-		FDSP_Kernel_SetInternalBeepInProgress(0);
-		ret = 1;
-	}
-
-	/* D997: overwritten on every path by the store two lines down. */
-	*hostcount = *countp;
-	*countp = 0;
-	*hostcount = 0;
-
-	if (v->int_0014 != v->mode && v->int_0014 != 0)
-		ret = VOICE_ONLINE_MODE_STATUS;
+	if (v->int_0014 != v->mode)
+		ret = VOICE_DUPLEX_MODE_STATUS;
 	return ret;
 }

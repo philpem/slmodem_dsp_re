@@ -11016,19 +11016,12 @@
    }
   },
   "voicedp": {
-   "key": "60a7ec6604beac3221c5ac3ea04fe0cf9023ce520cfb454718199ab6c86bc252",
-   "summary": "31 mutations: 31 caught (31 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "key": "88b7b2bfcb489d3c6c24ef880d6a8f7e59fc33ee3aa7b0edfbee4d11ad3333d8",
+   "summary": "18 mutations: 18 caught (18 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "D997's dead store is repaired, so the caller sees the sample count": "caught",
     "the beep's full scale is FDSP_DP_Run's 32000 rather than 30000": "caught",
     "the linear output format test admits one value too many": "caught",
-    "voice_duplex answers the online code on a mode mismatch": "caught",
-    "voice_duplex does not latch beep_done": "caught",
-    "voice_duplex does not run the datapump at all": "caught",
-    "voice_duplex gains voice_online's second mode test": "caught",
-    "voice_duplex hands the datapump its two counts the wrong way round": "caught",
-    "voice_duplex lays the beep over the transmit side": "caught",
-    "voice_duplex overlays the beep even after it has finished": "caught",
     "voice_online answers 0 rather than 1 on the block that ends the beep": "caught",
     "voice_online answers the duplex code on a mode mismatch": "caught",
     "voice_online does not latch beep_done when the queue empties": "caught",
@@ -11043,13 +11036,7 @@
     "voice_set_duplex writes the online mode": "caught",
     "voice_set_online enables the detector with the duplex constant": "caught",
     "voice_set_online installs the duplex handler": "caught",
-    "voice_set_online writes the wrong mode": "caught",
-    "voice_set_tx installs the receive handler": "caught",
-    "voice_set_tx starts the underrun latch DOWN, so the first empty block reports": "caught",
-    "voice_set_tx uses the receive detector mask": "caught",
-    "voice_set_tx writes a 4-bit format": "caught",
-    "voice_set_tx writes a 7200 Hz format": "caught",
-    "voice_set_tx writes the online mode": "caught"
+    "voice_set_online writes the wrong mode": "caught"
    }
   },
   "voicedpdel": {
@@ -11067,8 +11054,21 @@
     "the tone loop deletes the first tone four times": "caught"
    }
   },
+  "voicedpdx": {
+   "key": "824dba523522e6d97a966d19a940643a0b12003a12da01d625b57c99a3c41ee2",
+   "summary": "7 mutations: 7 caught (7 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "voice_duplex answers the online code on a mode mismatch": "caught",
+    "voice_duplex does not latch beep_done": "caught",
+    "voice_duplex does not run the datapump at all": "caught",
+    "voice_duplex gains voice_online's second mode test": "caught",
+    "voice_duplex hands the datapump its two counts the wrong way round": "caught",
+    "voice_duplex lays the beep over the transmit side": "caught",
+    "voice_duplex overlays the beep even after it has finished": "caught"
+   }
+  },
   "voicedprx": {
-   "key": "d4af9e48b01444c82fed644eeeb62352c4589aa5db7e7d9fb2c250f9ba2a1124",
+   "key": "0079fea4f477ae9305a78185ebbfe5d1a60e6481bf92f6b16cb60ba226ae0025",
    "summary": "41 mutations: 41 caught (40 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "F8790's weights are swapped: 1% of the old estimate, 99% of the new": "caught",
@@ -11115,7 +11115,7 @@
    }
   },
   "voicedptx": {
-   "key": "17cd43fad69e9ca44186c8fa891454531fceb5b05c675431e09cd390d9151e7d",
+   "key": "c0401f0e40fd5597d6fcb6c0dc865f0e8eb2d31fde1738d0061c383267c244d7",
    "summary": "37 mutations: 37 caught (37 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "D999 is repaired: the float fill follows the block length": "caught",
@@ -11155,6 +11155,18 @@
     "voice_tx leaves the sample count alone": "caught",
     "voice_tx writes the room into the sample count": "caught",
     "voice_tx's mode test is inverted": "caught"
+   }
+  },
+  "voicedptxset": {
+   "key": "4936e1533a8f0a495265cf71a5fc74df1ff04fc85bd6294a509e5d378b9c28b0",
+   "summary": "6 mutations: 6 caught (6 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "voice_set_tx installs the receive handler": "caught",
+    "voice_set_tx starts the underrun latch DOWN, so the first empty block reports": "caught",
+    "voice_set_tx uses the receive detector mask": "caught",
+    "voice_set_tx writes a 4-bit format": "caught",
+    "voice_set_tx writes a 7200 Hz format": "caught",
+    "voice_set_tx writes the online mode": "caught"
    }
   },
   "vparser": {
