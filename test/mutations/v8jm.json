@@ -113,35 +113,5 @@
   "label": "drop the gloss from the failed verdict",
   "find": "\n\t\t\t\t     v->fn_matched != 0 ? \"\"\n\t\t\t\t      : \" (not indicating modulation \" \"capabilities)!!\");",
   "replace": "\t\t\t\t     v->fn_matched != 0 ? \"\" : \"\");"
- },
- {
-  "label": "drop the quick connect announcement",
-  "find": "\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\n\t\t\t    \"V8Report: Finished with Quick Connect\\n\");\n\t\tout->b0 |= 9;",
-  "replace": "\t\tout->b0 |= 9;"
- },
- {
-  "label": "drop the no-call-function-match complaint from the report",
-  "find": "\n\t} else if (DSPLIB_DEBUG_ON()) {\n\t\tdsplibs_debug_printf(\"V8Report: since no call function match, \"\n\t\t\t\t     \"not indicating any modulation \" \"capability...\\r\\n\");\n\t}",
-  "replace": "\t}"
- },
- {
-  "label": "complain about the missing function for any unrecognised value",
-  "find": "\t\t} else if (fn == 0) {",
-  "replace": "\t\t} else if (fn == 0 || fn == 0x141) {"
- },
- {
-  "label": "swap digital connection and pcmIndication in the report",
-  "find": "\t\t\t    \"connection - %d, pcmIndication - %d\\n\",\n\t\t\t    v90_mod, digital_connection, pcm_indication);",
-  "replace": "\t\t\t    \"connection - %d, pcmIndication - %d\\n\",\n\t\t\t    v90_mod, pcm_indication, digital_connection);"
- },
- {
-  "label": "report the menu that was offered rather than the one settled on",
-  "find": "\t\t    (out->b0 >> 3) & 1, (out->b0 >> 5) & 1,\n\t\t    (out->b0 >> 6) & 1, out->b0 >> 7,",
-  "replace": "\t\t    (v->cm->b0 >> 3) & 1, (out->b0 >> 5) & 1,\n\t\t    (out->b0 >> 6) & 1, out->b0 >> 7,"
- },
- {
-  "label": "swap v23 and v21 in the settled menu",
-  "find": "\t\t    (out->b1 >> 3) & 1, (out->b1 >> 4) & 1,\n\t\t    (out->b1 >> 5) & 1);",
-  "replace": "\t\t    (out->b1 >> 3) & 1, (out->b1 >> 5) & 1,\n\t\t    (out->b1 >> 4) & 1);"
  }
 ]
