@@ -126041,3 +126041,86 @@ interface wrappers are a separate merge family (the reporters sit at
 from the cHDLC machine) and are not reunified here; `aReversedCharsArray` and
 `null_message` stay in `class1tx.c` pending the `reversedchars.c` /
 `faxvmi_null.c` renames (Part 2).
+
+## F11388. TU reconciliation Part 2: two FILE-spelling renames confirmed by the object, `reversedchars.c` split out of `class1tx.c`, and three candidate renames declined with their measurement
+
+Part 2 of the TU-reconciliation work finishes the rename milestone and tests
+every remaining blob-only FILE name the task listed.  The authority is the
+object's own `STT_FILE` records (`readelf -sW ref/slmodemd/dsplibs.o`), not a
+span label: a span named for a module need not be that module (AGENTS.md).
+
+**CONFIRMED, COMMITTED, PURE.**  `src/dialer/dialercfg.c` -> `DialerConfig.c`
+is blob FILE #107 and `src/fax/sdmv27.c` -> `V27_SDM.c` is blob FILE #188.
+Both were staged renames; the object says the new spellings are right.  No
+mutation suite sources either file (`tools/anchorcheck.py` 280 suites, 10,038
+mutations, 0 detached after the change), so no suite path or anchor moved.
+Pure renames cannot move codegen and did not: `byteident` stayed at grade 0
+837/1852 and grade 0-or-1 891.  `make -j1 J=1 phase` 385 passed / 0 failed.
+
+**SPLIT, COMMITTED.**  `aReversedCharsArray` (GLOBAL, `.rodata` 0xba40, 256)
+moved from `class1tx.c` to a new `src/fax/reversedchars.c`, which is the
+object's FILE #205 (between `faxvmi_null.c` and `SDM.c`).  The definition was
+previously placed in `class1tx.c` on the weakest evidence on that page -- five
+relocations name it, but all five are references to a GLOBAL and say nothing
+about the defining FILE.  The FILE record naming `reversedchars.c`, plus a
+GLOBAL whose own name is `aReversedCharsArray`, is the ownership evidence;
+`tools/tuattrib.py` attributes no symbol to the file, but no other symbol in
+the object claims it.  Only the defining TU changes: the table is GLOBAL, so
+`class1tx.c`'s own references already compile to `R_386_32
+aReversedCharsArray` (measured at offsets 0xaaf and 0x104a of the period
+`class1tx.o` before the move).
+
+Measured A/B, the two committed renames as the baseline and `reversedchars.c`
+the only change:
+
+    byteident grade 0          837 -> 837        grade 0-or-1  891 -> 891
+    partialcmp positioned      67,766 -> 67,922  /943,398
+    partialcmp exact symbols   317 -> 318        (the new FILE record + anchor)
+    partialcmp exact relocs    935 -> 935
+    partialcmp exact sections  69 -> 69
+
+No function byte moved and no relocation moved; the positioned-byte gain is
+the FILE record and its table landing at the object's slot instead of inside
+`class1tx.c`.  No mutation suite is sourced at `class1tx.c` or the new file.
+
+**DECLINED, WITH THE MEASUREMENT.**
+
+- **`V92ParamsInfo.c` -> `V92MappingParamsInt.cpp`** (the issue-#6 FILE-stream
+  mismatch, paired in the brief with `V90ModemCtor.cpp`).  F830 establishes by
+  the FILE bracket that the blob's `V92MappingParamsInt.cpp` (between
+  `V92Jd.cpp` and `V92Modem.cpp`) holds exactly the five functions our
+  `V92ParamsInfo.c` reconstructs.  But the blob TU is C++ and ours is C;
+  `recoverorder.py` matches the basename exactly, so `.c` cannot anchor it, and
+  compiling these as C++ risks changing delete-expression lowering that F7818
+  measured as unchanged while the bodies are C (the same ground F120372
+  declined on).  A rename that must also change language is not pure, so it is
+  not taken without a differential pass that would be its own experiment.
+  `V90ModemCtor.cpp` is not a candidate for that name: it is `V90Modem`'s
+  constructor and destructor, an apparatus split of the single blob
+  `V90Modem.cpp` TU that F1264 shows must stay split for mutation-suite
+  namespace isolation.  The first FILE-stream mismatch therefore remains.
+
+- **`Vtb_tab.c`** and **`Vmi_v17.c` / `Vmi_v21.c` / `Vmi_v27.c` /
+  `Vmi_v29.c`**.  The object names all five as FILE records in the class-1
+  span, but each is a bracket TU with no LOCAL `.text` anchor (the five FILE
+  records are consecutive in `.symtab` with no local symbol between them) and
+  `tools/tuattrib.py` attributes zero symbols to them by class or prefix.  Our
+  content is not a separate file under any other name -- `VTBv17_*` lives in
+  `src/fax/V17rxtab.c` alongside `FSEv17_*`/`SREv17_*`, whose names match the
+  blob's own `V17rxtab.c`, and the `Vmi_*` content is spread across
+  `V17rxtab.c`, `v17data.c` and `v17dec_tables.c`.  A rename would be a
+  span-name guess about which half of a merged file is which TU; recovering
+  the boundary needs the per-symbol attribution the object does not give.
+  Declined rather than guessed, per AGENTS.md.
+
+- **`pow.S`**.  The object defines it as two TUs, one exact (0xb0b50-0xb0b78)
+  holding the x87 constants `inf_zero`, `infinity`, `minf_mzero`, `minfinity`,
+  `mzero`, `zero`, `one`, `limit`.  Our tree defines none of those names and
+  has no `.S` input at all; the `pow` entry itself is a NOTYPE GLOBAL at
+  0xb0b80 in the following bracket.  There is no file to rename, and writing
+  the assembly is reconstruction, not a rename.  Declined.
+
+**GATES.**  Full `make -j1 J=1 phase`: **385 passed, 0 failed**, phase boundary
+OK.  `refcheck` 0 dangling / 0 stale; `anchorcheck` 280 suites / 10,038
+mutations / 0 detached; `git diff --check` clean; `mutsnap --check` 0 current /
+280 stale (the whole-tree stale key at `da6c627b`, no suite source changed).
