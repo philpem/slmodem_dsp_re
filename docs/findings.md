@@ -126299,3 +126299,40 @@ are not re-homed in this step: the `.data`/`.rodata` order does not pin
 `V27rxdec.c`'s split from `V27rxtab.c` without the same per-symbol argument the
 `.text` side now has, and the next V.27 step is theirs.  `V29` is the same
 shape and is done in an addendum below.
+
+#### F11390 addendum. The V.29 family is the same shape, and the V29t_prc/V29t_int content was in `v29data.c`
+
+`v29.c` splits the same way and to the same record names: `V29rx.c`
+(`[V29RX_create 0x09ad40, V29TX_create 0x09ba00)`), `V29tx.c`
+(`[V29TX_create, v17tx_create 0x09bf20)`), the `V29r_prc`/`V29r_stc` and
+`V29t_prc`/`V29t_stc` split of the rx/tx state machines at their
+control/status pair, `V29r_int.c` (`DemodDataV29`..`GetSNRV29`),
+`V29t_int.c` (`ScrambleDataV29`..`TxNoCarrierV29`), and `Vmi_v29.c`.
+
+TWO OF THE MOVED FUNCTIONS WERE NOT IN `v29.c` AT ALL.  `GenEQTrnSequenceV29`
+(blob `V29t_prc.c`, 0x0a4770) and `TxNoCarrierV29` (blob `V29t_int.c`,
+0x0a6620) were reconstructed into the ours-only layer
+`src/pump/v29/v29data.c`, so the split moved them from there and the layer is
+DELETED; its four `struct v29tx` offset assertions moved with their subjects
+into `V29t_prc.c`.  No body was rewritten in any file.
+
+**MEASURED, against the committed V.27 milestone as baseline.**  `byteident`
+grade 0 **839 -> 840** / 1,852, grade 0-or-1 **892**.  The exact-set diff is
+**GAINED `EpochDetectV29`; LOST none**.  `partialcmp` positioned
+**67,999 -> 68,053** / 943,398, exact relocations **931 -> 937** / 18,317,
+exact symbols **325 -> 332** / 2,907 (the seven new FILE records), exact
+sections 69/92.  The +6 relocations more than recover the V.27 step's -4.
+
+**HARNESS.**  `v29data` is re-sourced from `src/pump/v29/v29data.c` (deleted) to
+`src/fax/V29t_int.c`, and `faxadaptcreate_v29tx` from `V29tx.c` to
+`src/fax/Vmi_v29.c`.  Both re-recorded through the pinned GCC 13.3.0
+container: **v29data 22 caught / 0 uncaught / 0 unusable, faxadaptcreate_v29tx
+6 caught / 1 equivalent**.  `anchorcheck` 280 suites / 10,038 mutations /
+0 detached.
+
+**GATES.**  `make -j1 J=1 tc`: 295 objects from 295 sources, 0 failed.
+`make -j1 J=1 phase`: **385 passed, 0 failed**, boundary OK; `refcheck`
+0 dangling; `git diff --check` clean.  `V17`/`V21` are the same family and are
+the next step; their lowercase adapters sit in `V17rx.c`/`V17tx.c` and
+`V21rx.c`/`V21tx.c` exactly as V.27's did, and their `V17r_stc`/`V17t_*` /
+`V21*` boundaries have the same address-bracket argument.

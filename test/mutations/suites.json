@@ -221,7 +221,7 @@
   "build/test/t_v27fax"
  ],
  "v29data": [
-  "src/pump/v29/v29data.c",
+  "src/fax/V29t_int.c",
   "build/test/t_v29data"
  ],
  "v32anstone": [
@@ -1117,7 +1117,7 @@
   "build/test/t_v90sessionflag"
  ],
  "faxadaptcreate_v29tx": [
-  "src/fax/V29tx.c",
+  "src/fax/Vmi_v29.c",
   "build/test/t_faxadapt"
  ],
  "v32hdxrx": [

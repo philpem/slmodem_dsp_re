@@ -427,7 +427,7 @@
    }
   },
   "faxadaptcreate_v29tx": {
-   "key": "1925fbdd306a4d31919ca1e58578030ea5f9a6bebe10ab32ad6c8fc08364f0c0",
+   "key": "70c6f4ea23f63bc3d1ba2210bab324eb9bc5bf079278b1a06b6fdd03ff1605e4",
    "summary": "7 mutations: 6 caught (6 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "v29tx_create always hands the constructor the default configuration": "caught",
@@ -1607,7 +1607,7 @@
    }
   },
   "v29data": {
-   "key": "eddf7d6a221614c18a90c4781e1fcf30d4987f958b4f92085c438dfd07b659d9",
+   "key": "9226e8beb17fea855854e54ae0fc96d91aecc42175aaf1e68920f01c9cf80565",
    "summary": "22 mutations: 22 caught (22 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "both rails are written through the I pointer": "caught",

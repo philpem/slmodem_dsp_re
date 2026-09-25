@@ -110,28 +110,6 @@ char *V21TX_MESG[6] = {
 	"CONNECT: V.21 Transmit 300 bps",
 };
 
-char *V29RX_MESG[8] = {
-	"V.29 Receive Data Mode",
-	"V.29 Receive Protocol Mode",
-	"V.29 Rx Start of Protocol",
-	"ERROR: V.29 Rx Internal Error",
-	"ERROR: Loss Carrier In V.29 Rx Protocol",
-	"V.29 Rx Idle (End of Transmition)",
-	"CONNECT: V.29 Receive 9600 bps",
-	"CONNECT: V.29 Receive 7200 bps",
-};
-
-char *V29TX_MESG[8] = {
-	"V.29 Transmit Data Mode",
-	"V.29 Protocal Transmit Mode",
-	"CONNECT: V.29 Transmit 9600 bps",
-	"CONNECT: V.29 Transmit 7600 bps",	/* sic: 7200 misspelled */
-	"V.29 Transmit Idle Mode",
-	"ERROR: V.29 Tx Internal Error",
-	"ERROR: Transmit Input Queue Under-run",
-	"ERROR: Transmit Input Queue Over-run",
-};
-
 /*
  * One shape, eight times: the code is guarded UNSIGNED against the table's
  * entry count (so a negative code answers NULL) and indexed through an
@@ -154,8 +132,6 @@ MESSAGE_FN(v17tx_message, V17TX_MESG, 10)
 MESSAGE_FN(v17rx_message, V17RX_MESG, 10)
 MESSAGE_FN(v21tx_message, V21TX_MESG, 6)
 MESSAGE_FN(v21rx_message, V21RX_MESG, 7)
-MESSAGE_FN(v29tx_message, V29TX_MESG, 8)
-MESSAGE_FN(v29rx_message, V29RX_MESG, 8)
 
 void
 null_message(void *handle, int code, char **out)
