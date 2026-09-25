@@ -1,0 +1,25 @@
+[
+ {
+  "label": "NOTE: the receive half-duplex driver, split out of `v32hdx.c` when the two dispatchers were reunited with their state files.  It is one state, one call, so every mutation moves which slot is dispatched, where the state pointer is read from, or how the fourth argument is passed."
+ },
+ {
+  "label": "the receive driver dispatches from the TRANSMIT slot",
+  "find": "\thdx->rx_state(modem, in, out, count);",
+  "replace": "\t((v32_rxhdx_fn)hdx->tx_state)(modem, in, out, count);"
+ },
+ {
+  "label": "the receive driver reads its state pointer out of the instance rather than the context",
+  "find": "\tstruct v32_hdx *hdx;\n\n\thdx = modem->hdx;\n\thdx->rx_state",
+  "replace": "\tstruct v32_hdx *hdx;\n\n\thdx = (struct v32_hdx *)modem;\n\thdx->rx_state"
+ },
+ {
+  "label": "the receive state is handed the count by value's worth of nothing -- the two buffers are transposed",
+  "find": "\thdx->rx_state(modem, in, out, count);",
+  "replace": "\thdx->rx_state(modem, in, (unsigned short *)(void *)in, count);"
+ },
+ {
+  "label": "the receive state is called twice",
+  "find": "\thdx->rx_state(modem, in, out, count);\n}",
+  "replace": "\thdx->rx_state(modem, in, out, count);\n\thdx->rx_state(modem, in, out, count);\n}"
+ }
+]

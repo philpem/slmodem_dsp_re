@@ -1664,6 +1664,15 @@
     "the two phase codes are transposed, so 0 is silence and 1 is tone": "caught"
    }
   },
+  "v32ctad": {
+   "key": "41e04ef280e0efaa7ffd5c27ff6836e67fa8d4a17b082a3185d19fd3a829350d",
+   "summary": "3 mutations: 2 caught (2 by test, 0 by strings), 1 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "the turnaround budget is charged only twice": "caught",
+    "the turnaround subtraction is done at 32 bits, so it does not wrap": "uncaught",
+    "the turnaround surplus is not clamped at zero": "caught"
+   }
+  },
   "v32data": {
    "key": "86d8a888be1c1a166649a37c4d52ab5b9bb89047b8afcacde6a702efa32360f4",
    "summary": "27 mutations: 27 caught (27 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
@@ -1754,8 +1763,8 @@
    }
   },
   "v32fpctl": {
-   "key": "a733fea1f340434acfe313c0077d3a4d80b7073f23c0aaea08ad59ee278419bf",
-   "summary": "60 mutations: 59 caught (59 by test, 0 by strings), 1 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "key": "98026aa248e071ecdbed4f7bd236e4fe727a401d9bbd0eea38fa8e1e64b7d1b3",
+   "summary": "57 mutations: 57 caught (57 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "12000 initialises the Viterbi decoder for 14400": "caught",
     "12000's I and Q maps are transposed": "caught",
@@ -1813,10 +1822,7 @@
     "the transmit register mask is the output mask rather than its complement": "caught",
     "the transmit scrambler's group width is the coder's mode rather than the bits per symbol": "caught",
     "the transmit tail's mask is a power of two rather than one less": "caught",
-    "the transmit taps are not reduced by the group shift": "caught",
-    "the turnaround budget is charged only twice": "caught",
-    "the turnaround subtraction is done at 32 bits, so it does not wrap": "uncaught",
-    "the turnaround surplus is not clamped at zero": "caught"
+    "the transmit taps are not reduced by the group shift": "caught"
    }
   },
   "v32fpsub": {
@@ -1853,8 +1859,8 @@
    }
   },
   "v32hdx": {
-   "key": "c2d82597c3ec914814ab0dd54287bf3b26e265def60e96eec04e7e4feeba2b95",
-   "summary": "19 mutations: 17 caught (17 by test, 0 by strings), 0 NOT caught, 1 unusable, 1 equivalent, 0 MIScounted",
+   "key": "5de15b49b753d9d5294bd8646500f32a7970da598bf0afbf5ead2f4462925714",
+   "summary": "15 mutations: 13 caught (13 by test, 0 by strings), 0 NOT caught, 1 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "the budget is seeded from V32_SAMPLE_LEN instead of V32_SYMBOL_LEN": "caught",
     "the budget is seeded from the instance rather than from the context": "caught",
@@ -1863,10 +1869,6 @@
     "the loop tests the budget before the first call, so an already-spent block calls no state at all": "caught",
     "the output pointer advances by the running total rather than by this call's count": "caught",
     "the output pointer is not advanced, so every state writes at the block's start": "caught",
-    "the receive driver dispatches from the TRANSMIT slot": "caught",
-    "the receive driver reads its state pointer out of the instance rather than the context": "caught",
-    "the receive state is called twice": "caught",
-    "the receive state is handed the count by value's worth of nothing -- the two buffers are transposed": "caught",
     "the running total is accumulated at full width instead of being truncated to a short every iteration": "equivalent",
     "the sample count is never written back": "caught",
     "the sample count is written as the budget that is left rather than the samples produced": "caught",
@@ -1875,6 +1877,16 @@
     "the states are handed the context instead of the instance": "caught",
     "the states are handed the output buffer as their data argument": "caught",
     "the transmit driver dispatches from the RECEIVE slot": "unusable"
+   }
+  },
+  "v32hdxrx": {
+   "key": "b989d432ef9a5ba3259313d53e7e3c5f0c7a5afa1690e39bd20efa782a50207e",
+   "summary": "4 mutations: 4 caught (4 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "the receive driver dispatches from the TRANSMIT slot": "caught",
+    "the receive driver reads its state pointer out of the instance rather than the context": "caught",
+    "the receive state is called twice": "caught",
+    "the receive state is handed the count by value's worth of nothing -- the two buffers are transposed": "caught"
    }
   },
   "v32seq": {
@@ -5073,12 +5085,10 @@
    }
   },
   "v34rx": {
-   "key": "524701cf4229a6b9444b818ce590e18fe3e8234cc30837050c0d911977aaa01e",
-   "summary": "31 mutations: 31 caught (31 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "key": "cabf8fdead9f5922e644722a18fdd96b206a8143c64eb60ddced994678c71498",
+   "summary": "26 mutations: 26 caught (26 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "NEC adaptation starts at count 1 rather than 0": "caught",
-    "both echo reports dump the near canceller": "caught",
-    "freezing the echo clears the flag rather than setting it": "caught",
     "the AGC freeze report fires for any symbol count": "caught",
     "the BETA threshold comparison is signed in the third arm": "caught",
     "the FEC start announcement is gated on the wrong count": "caught",
@@ -5087,14 +5097,11 @@
     "the S-S1 report has the symbol count and the PLL count swapped": "caught",
     "the S-S1 threshold 0x600 becomes 0x601": "caught",
     "the adaptation steps every 45th sample become every 44th": "caught",
-    "the demodulator produces three outputs per call, not four": "caught",
-    "the demodulator trace has baud and carrier swapped": "caught",
     "the echo energy report has energy and BETA swapped": "caught",
     "the equaliser report has equerr and preerr swapped": "caught",
     "the equaliser report's symbol bound is exclusive": "caught",
     "the far adaptation offset is 0x2bc rather than 0x2bb": "caught",
     "the far counter reads this call's count, not the previous one": "caught",
-    "the near and far echo reports swapped": "caught",
     "the renegotiation window's lower bound moves": "caught",
     "the renegotiation window's upper bound moves": "caught",
     "the retrain and renegotiation flags swapped": "caught",
