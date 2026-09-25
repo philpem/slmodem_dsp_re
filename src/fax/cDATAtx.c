@@ -14,6 +14,13 @@
 
 static int cDATAtx_counter;
 
+int
+_init_tx_nulls_state(struct fax_class1 *ctx)
+{
+	ctx->countdown = 0;
+	return 0;
+}
+
 /*
  * `_tx_scrambled_ones_init`, 0x9cf70, 193 bytes.  Reinit the data-mode
  * transmitter, then (re)build the transmit FIFO at a fixed 0x800-element
@@ -120,6 +127,121 @@ _tx_scrambled_ones_init(struct fax_class1 *ctx, int rate_code)
  *   0x124c8  "At %2d.%02d[sec] Fifo is full in _tx_scrambled_ones_state\n"
  */
 #define FAXVMI_PROCESS_BIT_0100	0x100
+
+/*
+ * TX_NULLS_STATE (11).  `.text` 0x0009d040, 435 bytes.
+ *
+ * REPLACES A FIRST INTEGRATION PASS whose cited format strings did not
+ * survive an `objdump -s -j .rodata.str1.4` re-check (they read as
+ * plausible paraphrases, not the object's own bytes) -- rewritten from a
+ * fresh `dis.py` trace with every string confirmed by address.
+ *
+ * `ctx->countdown++`; past 250 (unsigned), log ("CURRENT_STATE_TIMER > "
+ * "FIVE_SECONDS in _tx_nulls_state\n", 0 args) and set IDLE_STATE /
+ * FAX_CLASS1_ERROR_ON_HOOK -- but keep going into the block below either way
+ * (this is not a return).
+ *
+ * `*word8 > 0`: log ("Back to TX_DATA_STATE in _tx_nulls_state\n"), set
+ * `ctx->state = CLASS1_TX_DATA_STATE`, unstuff `word4` through
+ * `_handle_data_input` into `ctx` itself (the scratch-buffer idiom, `dst`
+ * cast from `ctx`) with `count = word8`, then `FIFO_write` the just-decoded
+ * run into `ctx->tx_fifo`, logging a shortfall ("Fifo is full in
+ * _tx_nulls_state\n"), THEN -- still inside this same block, not a shared
+ * step -- `FIFO_read(ctx->tx_fifo, ctx, ctx->tx_bytes_per_block)` back into `ctx`, `*word8`
+ * set to the return, a shortfall against `ctx->tx_bytes_per_block` logged ("class1
+ * object fifo under run in _tx_nulls_state !!!\n").  On the `*word8 <= 0`
+ * path NONE of this runs -- the object's own `jle` jumps straight past the
+ * whole block (confirmed by address: `9d088`'s `jle` target is `9d120`, the
+ * `FAXVMI_process`-setup label, not `9d0e2` where `FIFO_read` lives) -- so
+ * `*word8` there is left holding whatever the CALLER passed in, unread.
+ *
+ * Either way: `FAXVMI_process(ctx->vmi_b, ctx, tx, &cnt, &result)` with
+ * `cnt` seeded from the CURRENT `*word8` (freshly read, or the caller's
+ * original value) and `result` from `*tx_count`.
+ *
+ * Tail: `*word8 = ctx->tx_fifo->size - ctx->tx_fifo->count - 1` (the free-room-
+ * minus-one formula `_tx_data_state`/`_tx_scrambled_ones_state` also end
+ * with).  `*tx_count` is READ, never written, on any path.
+ *
+ * FORMAT STRINGS, verified against `.rodata.str1.4` (`objdump -s`):
+ *   0x12378  "Fifo is full in _tx_nulls_state\n"
+ *   0x1239c  "At %2d.%02d[sec] Back to TX_DATA_STATE in _tx_nulls_state\n"
+ *   0x123d8  "CURRENT_STATE_TIMER > FIVE_SECONDS in _tx_nulls_state\n"
+ *   0x12410  "class1 object fifo under run in _tx_nulls_state !!!\n"
+ */
+int
+_tx_nulls_state(struct fax_class1 *ctx, const short *rx, short *tx,
+		int word3, int word4, int *rx_count, int *tx_count,
+		int word7, int *word8)
+{
+	short cnt;
+	unsigned short result;
+
+	(void)rx;
+	(void)word3;
+	(void)rx_count;
+	(void)word7;
+
+	ctx->countdown++;
+	if ((unsigned int)ctx->countdown > 250) {
+		if (dsplibs_debug_level > 1)
+			dsplibs_debug_printf(
+			    "CURRENT_STATE_TIMER > FIVE_SECONDS in " "_tx_nulls_state\n");
+		ctx->state = CLASS1_IDLE_STATE;
+		ctx->status = FAX_CLASS1_ERROR_ON_HOOK;
+	}
+
+	if (*word8 > 0) {
+		int n;
+
+		if (dsplibs_debug_level > 1)
+			dsplibs_debug_printf(
+			    "At %2d.%02d[sec] Back to TX_DATA_STATE in " "_tx_nulls_state\n",
+			    ctx->clock_sec, ctx->clock_frac);
+		ctx->state = CLASS1_TX_DATA_STATE;
+
+		_handle_data_input(ctx, (const unsigned char *)(long)word4,
+		    (unsigned short *)(void *)ctx, word8);
+
+		n = FIFO_write(ctx->tx_fifo, (unsigned short *)(void *)ctx,
+		    (unsigned short)*word8);
+		if (*word8 > n) {
+			if (dsplibs_debug_level > 1)
+				dsplibs_debug_printf(
+				    "Fifo is full in _tx_nulls_state\n");
+		}
+
+		/*
+		 * `FIFO_read` is INSIDE this block, not a shared unconditional
+		 * step -- the object's own `jle` at `*word8 <= 0` jumps
+		 * straight past it to the `FAXVMI_process` setup, so on that
+		 * path `cnt` below is seeded from `*word8`'s ORIGINAL
+		 * (unread) value, not a fresh read.  A first version of this
+		 * function ran `FIFO_read` unconditionally, which reads as
+		 * "ctx (as data) is FIFO-read-filled on every call" and is
+		 * wrong on any call where `*word8 <= 0` -- caught by this
+		 * wave's own `t_class1txstates.c` disagreeing with the blob
+		 * (a zeroed ctx-as-buffer where the object leaves it
+		 * untouched), not assumed correct from a first disassembly
+		 * pass.
+		 */
+		*word8 = FIFO_read(ctx->tx_fifo, (unsigned short *)(void *)ctx,
+		    ctx->tx_bytes_per_block);
+		if (*word8 < ctx->tx_bytes_per_block) {
+			if (dsplibs_debug_level > 1)
+				dsplibs_debug_printf(
+				    "class1 object fifo under run in " "_tx_nulls_state !!!\n");
+		}
+	}
+
+	cnt = (short)*word8;
+	result = (unsigned short)*tx_count;
+	FAXVMI_process(ctx->vmi_b, (unsigned short *)(void *)ctx, tx, &cnt,
+	    &result);
+
+	*word8 = ctx->tx_fifo->size - ctx->tx_fifo->count - 1;
+	return 0;
+}
 
 int
 _tx_scrambled_ones_state(struct fax_class1 *ctx, const short *rx, short *tx,
@@ -331,3 +453,40 @@ _tx_data_state(struct fax_class1 *ctx, const short *rx, short *tx,
 	return 0;
 }
 
+
+
+/*
+ * TX_SILENCE_BEFORE_SCRM_ONES.  `.text` 0x09d720, 111 bytes.  Nothing but a
+ * countdown bump, an optional debug line (the object's own literal string,
+ * no format arguments), a silence block, and a state transition once
+ * `countdown` catches up with `silence_blocks` -- both compared as
+ * `unsigned` (the object's `cmp`/`jb`), which the usual arithmetic
+ * conversions give for free since `silence_blocks` is already
+ * `unsigned int`.
+ */
+int
+_tx_silence_before_scrm_ones(struct fax_class1 *ctx, const short *rx,
+			     short *tx, int word3, int word4,
+			     int *rx_count, int *tx_count, int word7,
+			     int *word8)
+{
+	(void)rx;
+	(void)word3;
+	(void)word4;
+	(void)rx_count;
+	(void)word7;
+
+	ctx->countdown += 20;
+
+	if (dsplibs_debug_level > 1)
+		dsplibs_debug_printf("Tx silence before scrambled ones ...\n");
+
+	_put_silence(tx, CLASS1_BLOCK_SAMPLES);
+	*tx_count = CLASS1_BLOCK_SAMPLES;
+
+	if (ctx->countdown >= ctx->silence_blocks)
+		ctx->state = CLASS1_TX_SCRAMBLED_ONES_STATE;
+
+	*word8 = 0;
+	return 0;
+}

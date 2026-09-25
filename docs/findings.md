@@ -125948,3 +125948,96 @@ keeps its three `voice.c` setters with that blocker written down.  `MEMORYC.c`
 (record 96) carries no LOCAL symbol, no global function and no global object in
 the object's symbol table, so nothing settles a content claim for it: it stays
 unclaimed, not guessed.
+
+## F11387. The cHDLC / cDATA / cTOOLS machine is five translation units, not class1tx.c: the split recovers three exact functions and loses none
+
+TU-reconciliation step, the cHDLC/memory family (issue #6/#20/#67).  The blob's
+FILE records name, consecutively, `cDATArx.c` (566), `cDATAtx.c` (567),
+`cHDLCrx.c` (569), `cHDLCtx.c` (571), `cTOOLS.c` (572)  -- five TUs that our
+tree had merged into `class1tx.c` (with three of `cDATAtx.c`'s functions
+already split out into `cDATAtx.c`).
+
+**OWNERSHIP, from the object.**  None of the five carries a LOCAL `.text`
+symbol (the only LOCAL in the family is `cDATAtx_counter`, `.bss+0x8c0`, whose
+eight reference relocations belong to three `cDATAtx.c` functions), so each
+boundary must be argued from FILE order plus emission order and the call
+boundaries.  `ld -r` concatenates `.text` in FILE order, and the family is
+contiguous: the five TUs' thirty functions occupy exactly
+`[0x9cb00,0x9f140)`, bracketed below by the class-1 message reporters
+(`v17tx_message` closes at 0x9cad0) and above by `faxvmi_null.c`'s
+`null_create` (0x9f0b0).  Within that span the functions order themselves by
+role, and that role ordering **is** the FILE order, with the role-role call
+boundaries all kept OUT OF LINE:
+
+  cDATArx.c  `_rx_look_carrier_init`, `_rx_look_carrier_state`, `_rx_data_state`
+  cDATAtx.c  `_init_tx_nulls_state`, `_tx_scrambled_ones_init`, `_tx_nulls_state`,
+             `_tx_scrambled_ones_state`, `_tx_data_state`, `_tx_silence_before_scrm_ones`
+  cHDLCrx.c  `_cHDLCrx_init_from_idle`, `_hdlc_receive_state_init`, `_hdlc_receive_state`,
+             `_hdlc_receive_between_buffers_state`, `_hdlc_receive_look_carrier_state`,
+             `_hdlc_emulate_receive_state`
+  cHDLCtx.c  `cHDLCtx_preamble_state_init`, `_send_hdlc_between_buffer_state_init`,
+             `_send_hdlc_buffer_state`, `_t30_silence_before_tx_state`, `_t30_preabmle_state`,
+             `_send_hdlc_between_buffer_state`, `cHDLCtx_off_init`, `cHDLCtx_off`
+  cTOOLS.c   `_handle_data_input`, `_handle_hdlc_input_open`, `_handle_hdlc_input_close`,
+             `_handle_hdlc_input`, `cTOOLS_handle_data_output_reset`, `_handle_data_output`,
+             `cTOOLS_handle_hdlc_output`
+
+`relocscan` over the whole family finds no same-TU inlining between roles and
+every cross-role call is a real `R_386_PC32` relocation (e.g. `_rx_data_state`
+calls `_handle_data_output`/`cTOOLS_handle_hdlc_output`, `_tx_data_state` calls
+`_handle_data_input`, `_hdlc_receive_state` calls `cTOOLS_handle_hdlc_output`,
+`cHDLCtx_preamble_state_init`/`_send_hdlc_buffer_state` call
+`_handle_hdlc_input_open`).  -O3 cannot inline across TUs, so the cTOOLS role
+is provably a different TU from the cDATArx/cDATAtx/cHDLCrx/cHDLCtx roles; the
+remaining role boundaries follow the same argument plus the `*_rx_*` /
+`*_tx_*` / `_hdlc_receive_*` / `_send_hdlc_*` names, which is usage inference
+(evidence class 3) but is the only signal available and matches the FILE-letter
+roles exactly.
+
+**CHANGE.**  Four new files created (`cDATArx.c`, `cHDLCrx.c`, `cHDLCtx.c`,
+`cTOOLS.c`); the thirty bodies moved VERBATIM, in blob emission order, out of
+`class1tx.c`; the three `cDATAtx.c`-owned bodies moved into the existing
+`cDATAtx.c` at their blob positions.  The file-locals moved with their owners:
+`temp` (`.bss+0x8c4`) to `cTOOLS.c`, `HDLC_LOOK_CARRIER_LEVELS`
+(`.rodata 0xba22`) to `cHDLCrx.c`, and `FAXVMI_RESULT_BIT_2000` was redefined
+in each of the three receive/transmit units that test it.  No body rewritten,
+no flag changed.  `class1tx.c` keeps the message reporters, their tables,
+`aReversedCharsArray`, `init_vmi_*`, `_delete_data_tx_modem` and
+`_init_transmitter`.
+
+**MEASURED.**  `byteident` grade 0 **834 -> 837 / 1852**, grade 0-or-1
+**887 -> 891**, **zero losses**.  The three gains are `_delete_data_tx_modem`
+(a bystander -- class1tx.c's reduced emission-order context), and the two
+role-split closures `_send_hdlc_between_buffer_state_init` and
+`cTOOLS_handle_data_output_reset`, neither of which was exact before.  This is
+the recovery of the boundary, not a flag change: the boundary itself is what
+made `cTOOLS_handle_data_output_reset` (a self-contained `cTOOLS` leaf) exact.
+`partialcmp`: positioned bytes 67,851 -> 67,634 / 943,398; **exact symbols
+311 -> 315 / 2,907**, the +4 being the four new FILE records the object has and
+we now emit; exact relocations 931 -> 934 / 18,317; exact sections 69/92
+unchanged.  The positioned-bytes fall is the known TU-relayout collateral (the
+object is not yet fully byte-laid-out, so re-bracketing shifts addresses); the
+position-independent function-level check shows only gains.
+
+**HARNESS.**  No mutation suite is sourced at any of the six files, so no suite
+moved and none needed re-recording.  `anchorcheck` after the move: 280 suites /
+10,038 mutations / 0 detached.  `mutsnap --check` reports 0 current / 280 stale,
+which is the tool's coarse whole-tree key on any `src/` edit, not a regression;
+no suite's source changed, so none was re-recorded.
+
+**GATES.**  Focused `make period T="t_class1create t_class1hdlcctl
+t_class1hdlcemu t_class1inittx t_class1leaves t_class1delete t_class1delmodem
+t_class1handlers"`: 8 passed, 0 failed.  Full `make -j1 J=1 phase`: **385
+passed, 0 failed**, phase boundary OK; `refcheck` 0 dangling; `anchorcheck` 0
+detached; `git diff --check` clean.
+
+**DECLINED, and why.**  `MEMORYC.c` (record 96) was re-tested from the object
+and is still unclaimable: it has no LOCAL symbol (there is nothing in `.symtab`
+between its FILE record 336 and `V8Interface.c` 337) and no global function or
+object to hold a content claim -- so it stays unclaimed, not guessed, exactly
+as F11386 left it.  `class1tx.c`'s message reporters and the `V17/V21/V27/V29`
+interface wrappers are a separate merge family (the reporters sit at
+0x9c030-0x9cad0 and the interface wrappers at 0x9c030+, anatomically distinct
+from the cHDLC machine) and are not reunified here; `aReversedCharsArray` and
+`null_message` stay in `class1tx.c` pending the `reversedchars.c` /
+`faxvmi_null.c` renames (Part 2).
