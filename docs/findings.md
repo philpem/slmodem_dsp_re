@@ -126124,3 +126124,79 @@ the FILE record and its table landing at the object's slot instead of inside
 OK.  `refcheck` 0 dangling / 0 stale; `anchorcheck` 280 suites / 10,038
 mutations / 0 detached; `git diff --check` clean; `mutsnap --check` 0 current /
 280 stale (the whole-tree stale key at `da6c627b`, no suite source changed).
+
+## F11389. Emission-order pass (Part 3): one file recovered and reverted, and the remaining REGALLOC symbols are measured to sit in the segments F7796 proved unreachable
+
+The TU units are fixed, so the next axis is each unit's internal
+DEFINITION order.  The blob's emitted order for one translation unit is its
+symbols' `nm -n` address order; for a leaf function that is its source order,
+and for a function called from inside the unit the cgraph pulls it ahead of
+its caller (F7796).  Ranking our period objects by how far their emitted order
+departs from the blob's -- over common functions, by inversion count --
+gives the largest departures in `v27.c` (288), `v29.c` (250) and
+`V34hshak.c` (181), but those are merged span files whose blob order
+interleaves several FILE records, so their inversion count is the merge and
+not a reorderable defect.  Among single-TU files the departures are
+`V90PreFilter.cpp` (75/120), `V90Demodulator.cpp` (69/465),
+`V90Phase3Modulator.cpp` (48/378) and `V92EchoCanceller.cpp` (33/105).
+
+**THE FILES WITH ORDER TO FIX ARE NOT THE FILES WITH REGALLOC TO CLOSE.**
+The census over the single-TU candidates:
+
+    V90PreFilter.cpp        12 SIZE, 0 REGALLOC
+    V90Demodulator.cpp       0 REGALLOC
+    V90Phase3Modulator.cpp   2 REGALLOC: generateTRN1d, the C2 constructor
+    V90Phase4Modulator.cpp   5 REGALLOC, 33/1378 inversions (already ordered)
+    V92EchoCanceller.cpp     1 REGALLOC: resetEchoHistory
+
+**And in two of the three, source order already matches the blob.**
+`V92Phase3Modulator::generateTRN1u` is defined between `generateJa` and
+`generateSymbol` in our source -- exactly the blob's emitted neighbour set --
+and still emits after `reset`, so its position is the cgraph tail and not the
+definition order.  `V90Phase4Modulator.cpp` departs from the blob's order in
+33 of 1378 pairs, i.e. it is already ordered; its five remaining REGALLOC
+symbols (`recivedCPtag`, `recivedE2u`, `recivedFirstRrnE2u`,
+`setMappingParams`, `setRdRtSymbols`) are the cgraph-tail and clone region
+F7796 named as not reachable by a reorder.  The clone heads and the C1/C2
+order are the same exception there.
+
+**THE ONE FILE WITH A REAL LEAF-BLOCK DEFECT WAS TRIED AND REVERTED.**
+`V92EchoCanceller.cpp`'s source order was
+`ctor, setEchoDelay, zeroEchoCoeff, resetEchoHistory, reset, dtor, helpers,
+print_echo_coeffs, setEchoBeta, setDecayFactor, setEchoParams, setState,
+updateEchoHistory, process`;
+the blob's emitted order is
+`print_echo_coeffs, setEchoDelay, [D2,D1], setEchoBeta, setDecayFactor,
+setEchoParams, zeroEchoCoeff, resetEchoHistory, reset, [C1,C2], setState,
+updateEchoHistory, process`.
+The two leaf blocks differ, so the definitions were moved to the blob's
+order -- the three `setEcho*` members ahead of the `zeroEchoCoeff` group, and
+the file-static float helpers plus the free `print_echo_coeffs` (mangled
+`_Z17print_echo_coeffsPfj`, the blob's FIRST symbol of the TU) to lead it.
+The helpers had to move with `print_echo_coeffs` or `setEchoBeta` failed to
+compile, which is F7798's rule arriving from the other side: a file-scope
+static must precede its users, and `print_echo_coeffs` cannot lead the TU
+while the statics it calls sit below it.
+
+Measured A/B against the committed `reversedchars.c` milestone:
+
+    byteident grade 0     837 -> 837      REGALLOC 49 -> 49  BYTES 83 -> 83
+    partialcmp positioned  67,922 -> 67,902 /943,398
+    partialcmp exact symbols 318 -> 318   exact relocations 935 -> 935
+
+No symbol closed and the positioned-byte count FELL by 20 -- the moved
+definitions reshuffled `.text` and cost alignment on bytes that had matched.
+`resetEchoHistory` stayed REGALLOC at 62 bytes.  The change was reverted, per
+the rule that a reorder which does not improve is not kept; the file is
+unchanged from the milestone.
+
+**DECLINED, WITH THE MEASUREMENT.**  A definition reorder cannot reach a
+cgraph-tail function (`generateTRN1u`, V90Phase4Modulator's five) and cannot
+reorder the clone heads (C1/C2 and D2/D1), both measured in F7796; and the
+one single-TU file whose leaf block genuinely differed has no REGALLOC in the
+reordered region and loses positioned bytes when the region is moved.  The
+remaining 49 REGALLOC symbols are therefore not shown to be reachable from
+this axis, and a blind permutation is not attempted.  `functionorder.py`
+enumerates 2..7 definitions at n! period-GCC compiles each, which is the
+right tool for a bounded cell but not for a 15-definition file; its declared
+domain was not entered.
