@@ -1272,5 +1272,30 @@
   "find": "\tfor (i = 0; i <= 9; i++)\n\t\tmsg[i] = 0;",
   "replace": "\tfor (i = 0; i <= 8; i++)\n\t\tmsg[i] = 0;",
   "fn": "probeselect"
+ },
+ {
+  "label": "the near and far echo reports swapped",
+  "find": "\t\t\t\"==== Near Echo Canceller report ======\\n\");\n\tV34EchoReportCoeff(&obj->echo0);",
+  "replace": "\t\t\t\"==== Far Echo Canceller report ======\\n\");\n\tV34EchoReportCoeff(&obj->echo0);"
+ },
+ {
+  "label": "both echo reports dump the near canceller",
+  "find": "\t\t\t\"==== Far Echo Canceller report ======\\n\");\n\tV34EchoReportCoeff(&obj->echo1);",
+  "replace": "\t\t\t\"==== Far Echo Canceller report ======\\n\");\n\tV34EchoReportCoeff(&obj->echo0);"
+ },
+ {
+  "label": "freezing the echo clears the flag rather than setting it",
+  "find": "obj->tx_flags = (short)(obj->tx_flags | V34_EC_FROZEN);",
+  "replace": "obj->tx_flags = (short)(obj->tx_flags & ~V34_EC_FROZEN);"
+ },
+ {
+  "label": "the demodulator trace has baud and carrier swapped",
+  "find": "\tstruct v34_receiver *rx = (struct v34_receiver *)((char *)obj + 0x264);\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\n\t\t\t\"V34SetupDemodulator: baudrate %ld, carrier %ld\\n\",\n\t\t\t(long)baud, (long)carrier);",
+  "replace": "\tstruct v34_receiver *rx = (struct v34_receiver *)((char *)obj + 0x264);\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\n\t\t\t\"V34SetupDemodulator: baudrate %ld, carrier %ld\\n\",\n\t\t\t(long)carrier, (long)baud);"
+ },
+ {
+  "label": "the demodulator produces three outputs per call, not four",
+  "find": "\t/* Four outputs per call, whatever the rate. */\n\trx->out_count = 4;",
+  "replace": "\t/* Four outputs per call, whatever the rate. */\n\trx->out_count = 3;"
  }
 ]

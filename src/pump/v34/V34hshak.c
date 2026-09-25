@@ -10457,6 +10457,620 @@ datapumpv34(void *objp)
 	}
 }
 
+
+/*
+ * ---------------------------------------------------------------------------
+ * txrxdmainit -- build the twelve-short coefficient block from three pairs.
+ *
+ * `src` is read from +0x4, as three complex coefficients packed (re, im).
+ * `dst` gets each of them twice, in the two arrangements a fixed-point
+ * complex multiply needs:
+ *
+ *     dst[0..5]    (re, -im) for each pair -- the conjugates
+ *     dst[6..11]   (im,  re) for each pair -- real and imaginary swapped
+ *
+ * So a caller wanting `a * conj(c)` dots against the first half and `a * c`
+ * against the second, without either having to negate or swap at run time.
+ * The original spells all twelve stores out; the negations reload the source
+ * rather than reusing the register they just negated, which is why each
+ * source short is read twice.
+ */
+void
+txrxdmainit(short *dst, const short *src)
+{
+	int i;
+
+	for (i = 0; i < 3; i++) {
+		int re = (unsigned short)src[2 + i * 2];
+		int im = (unsigned short)src[3 + i * 2];
+
+		dst[i * 2] = (short)re;
+		dst[i * 2 + 1] = (short)-im;
+		dst[6 + i * 2] = (short)im;
+		dst[6 + i * 2 + 1] = (short)re;
+	}
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * v34FreezeEcho -- stop both cancellers adapting.
+ *
+ * Sets bit 2 of tx_flags and then dumps both cancellers' coefficients.  The
+ * dump is the whole reason the debug hooks are carried (see debug.h): with
+ * `dsplibs_debug_level` at its shipped zero this function is three stores
+ * and two calls, and the message names -- "Near" and "Far" -- are what fix
+ * which of echo0 and echo1 is which.
+ */
+void
+v34FreezeEcho(void *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V34HSHAK: Freeze EC\n");
+
+	obj->tx_flags = (short)(obj->tx_flags | V34_EC_FROZEN);
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(
+			"==== Near Echo Canceller report ======\n");
+	V34EchoReportCoeff(&obj->echo0);
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(
+			"==== Far Echo Canceller report ======\n");
+	V34EchoReportCoeff(&obj->echo1);
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * V34scrambler -- the transmit side of V34descrambler.
+ *
+ * Same two generators and the same register, run the other way round: the
+ * scrambled bit is fed back into the register, where the descrambler feeds
+ * back the bit it received.  `mode` selects the generator directly here
+ * rather than through the flags word.
+ *
+ * THE REGISTER SHIFTS RIGHT, which is what makes the tap positions look
+ * wrong.  A new bit is OR-ed in at bit 31 and the register is then shifted,
+ * so it lands at bit 30 and the bit generated `m` steps ago sits at 30 - m:
+ *
+ *     bit 26  ->  m = 4   ->  five steps back   ->  x^-5
+ *     bit 13  ->  m = 17  ->  eighteen back     ->  x^-18
+ *     bit  8  ->  m = 22  ->  twenty-three back ->  x^-23
+ *
+ * giving 1 + x^-5 + x^-23 for the caller and 1 + x^-18 + x^-23 for the
+ * answerer, exactly as V.34 4.2 specifies.  V34descrambler reaches the same
+ * two polynomials with taps at 5/18 and 23 because it shifts the other way;
+ * see finding F110, which is the same offset trap from the other side.
+ *
+ * The three-way XOR is spelled as a running increment and a parity test,
+ * not as `^`, so a tap that fires twice cancels the same way.
+ */
+int
+V34scrambler(unsigned *sr, short mode, short bits, short nbits)
+{
+	int mask = (short)((int)((unsigned)1 << ((int)nbits & 31)) - 1);
+	unsigned reg = *sr;
+	short i;
+
+	/*
+	 * The two variants differ only in the second tap, but the original
+	 * emits the loop twice rather than testing per bit; the branch is
+	 * hoisted out.  Kept as one loop with the tap chosen up front, which
+	 * computes the same thing without duplicating the body.
+	 */
+	unsigned tap = mode ? 0x00002000u : 0x04000000u;
+
+	for (i = 0; i < nbits; i = (short)(i + 1)) {
+		int parity = (bits & 1) ? 1 : 0;
+
+		/* Arithmetic, so a negative `bits` feeds ones for ever. */
+		bits = (short)(bits >> 1);
+
+		if (reg & tap)
+			parity = (short)(parity + 1);
+		if (reg & 0x00000100u)
+			parity = (short)(parity + 1);
+
+		if (parity & 1)
+			reg |= 0x80000000u;
+
+		reg >>= 1;
+	}
+
+	/* Written once, after the loop -- and not at all when nbits <= 0. */
+	if (nbits > 0)
+		*sr = reg;
+
+	/*
+	 * The newest bit sits at 30, so shifting down by 31 - nbits leaves
+	 * the run of them at the bottom, oldest first -- the same order the
+	 * input was consumed in.
+	 */
+	return (short)((reg >> ((0x1f - (int)nbits) & 31)) & (unsigned)mask);
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * V34SetupDemodulator -- point the receiver at one of the six symbol rates
+ * and one of the eight carriers.
+ *
+ * Two independent lookups, both spelled as compare chains in the original.
+ * Neither has a default: an unrecognised rate leaves the timing constants
+ * alone and an unrecognised carrier leaves the table pointer alone, so a bad
+ * argument keeps whatever the previous call installed rather than failing.
+ *
+ * THE TIMING CONSTANTS.  `phase_wrap` is the interpolator's wrap and `phase_inc` its
+ * step, so `phase_inc / phase_wrap` is the ratio between the symbol rate and the sample
+ * rate; `symbol_period` keeps the step as configured, since the timing loop slews the
+ * live one; `phase_frac` starts the phase at half a step.  2400 baud is the
+ * degenerate case where step equals wrap -- one output per input, no
+ * resampling -- and every other rate interpolates down from it.
+ *
+ * 2800 is the odd one out: 0x3e82 and 0x1f41 where every other rate uses
+ * 0x3e80 and 0x1f40.  Two counts on the wrap, one on the initial phase.  A
+ * wrap of 0x3e82 makes 2800's ratio 0x3594/0x3e82 rather than 0x3594/0x3e80,
+ * which is a closer rational fit to 2800/9600 -- so it reads as deliberate
+ * rather than as a typo, but the derivation is owed to task #47.
+ *
+ * THE CARRIER TABLES are each exactly twice `half_len` shorts long, which is
+ * what makes V34demodulate's `carrier[i]` and `carrier[i + half_len]` a cosine
+ * and its sine: the second half is the first shifted a quarter cycle.  That
+ * relation holds for all eight and is the reason half_len is stored at all.
+ */
+void
+V34SetupDemodulator(void *objp, short baud, short carrier)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	struct v34_receiver *rx = (struct v34_receiver *)((char *)obj + 0x264);
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(
+			"V34SetupDemodulator: baudrate %ld, carrier %ld\n",
+			(long)baud, (long)carrier);
+
+	/* Four outputs per call, whatever the rate. */
+	rx->out_count = 4;
+
+	switch (baud) {
+	case 2400:
+		rx->phase_wrap = 0x3e80; rx->phase_inc = 0x3e80;
+		rx->symbol_period = 0x3e80; rx->phase_frac = 0x1f40;
+		break;
+	case 2743:
+		rx->phase_inc = 0x36b0; rx->phase_wrap = 0x3e80;
+		rx->symbol_period = 0x36b0; rx->phase_frac = 0x1f40;
+		break;
+	case 2800:
+		rx->phase_wrap = 0x3e82; rx->phase_inc = 0x3594;
+		rx->symbol_period = 0x3594; rx->phase_frac = 0x1f41;
+		break;
+	case 3000:
+		rx->phase_wrap = 0x3e80; rx->phase_inc = 0x3200;
+		rx->symbol_period = 0x3200; rx->phase_frac = 0x1f40;
+		break;
+	case 3200:
+		rx->phase_inc = 0x2ee0; rx->phase_wrap = 0x3e80;
+		rx->symbol_period = 0x2ee0; rx->phase_frac = 0x1f40;
+		break;
+	case 3429:
+		rx->phase_wrap = 0x3e80; rx->phase_inc = 0x2bc0;
+		rx->symbol_period = 0x2bc0; rx->phase_frac = 0x1f40;
+		break;
+	default:
+		break;
+	}
+
+	switch (carrier) {
+	case 1600: rx->carrier = hsine1600; rx->half_len = 6;    break;
+	case 1680: rx->carrier = hsine1680; rx->half_len = 0x28; break;
+	case 1800: rx->carrier = hsine1800; rx->half_len = 0x10; break;
+	case 1829: rx->carrier = hsine1829; rx->half_len = 0x15; break;
+	case 1867: rx->carrier = hsine1867; rx->half_len = 0x24; break;
+	case 1920: rx->carrier = hsine1920; rx->half_len = 5;    break;
+	case 1959: rx->carrier = hsine1959; rx->half_len = 0x31; break;
+	case 2000: rx->carrier = hsine2000; rx->half_len = 0x18; break;
+	default:   break;
+	}
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * polyValue -- the quadratic setInitialPhase fits its timing metric against.
+ *
+ *     P(k) = -21k^2 + 837k - 354,  truncated to a short.
+ *
+ * It peaks near k = 20 and is what turns a measured ratio into a phase
+ * index; the derivation belongs with task #47.
+ */
+int
+polyValue(short k)
+{
+	return (short)(-21 * (int)k * k + 837 * k - 354);
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * setInitialPhase -- put the interpolator's phase where the timing metric
+ * says the symbol centre is.
+ *
+ * Three steps.  First find where `timing_out[]` changes sign: the metric is
+ * a discriminant, so the crossing is the symbol boundary.  The search only
+ * runs when the first two samples already disagree in sign, and it gives up
+ * at index 5 with a message rather than looking further.
+ *
+ * Second, interpolate across the crossing -- `(b - a) / (b + a)` in Q13,
+ * with both negated first if `a` is negative so the ratio is computed on the
+ * positive side either way.
+ *
+ * Third, find which of twenty candidate phases the ratio matches, by running
+ * the same ratio over `polyValue(i + 20)` against `polyValue(i)` and keeping
+ * the closest.  That index then moves the phase by `(10 - i) * 560`, clamped
+ * one below the wrap -- so index 10 means "already centred".
+ *
+ * The two error paths divide by zero if not guarded, and the original guards
+ * both and says so in the message; that is a check the author put in, not
+ * hardening added here.
+ */
+void
+setInitialPhase(void *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	struct v34_receiver *rx = (struct v34_receiver *)((char *)obj + 0x264);
+	short k = 1;
+	int a, b;
+	int ratio = 0;
+	int best = 0x7d00;
+	int besti = 0;
+	int i;
+	int pos;
+
+	/* Only search when the first pair already straddles the crossing. */
+	if ((int)rx->timing_out[0] * rx->timing_out[1] < 0) {
+		do {
+			k = (short)(k + 1);
+		} while ((int)rx->timing_out[k - 1] * rx->timing_out[k] < 0
+			 && k <= 4);
+
+		if (k == 5 && DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+				"setInitialPhase: Error (i==5)  !!!!!!!\n");
+		if (k == 5)
+			k = 1;
+	}
+
+	a = (short)rx->timing_out[k - 1];
+	b = (short)rx->timing_out[k];
+	if (a < 0) {
+		a = (short)-a;
+		b = (short)-b;
+	}
+
+	/* The order of the pair records which way the metric was going. */
+	if (k == 2) {
+		rx->timing_idx_a = 2;
+		rx->timing_idx_b = 1;
+	} else {
+		rx->timing_idx_a = 1;
+		rx->timing_idx_b = 2;
+	}
+
+	if (a + b == 0) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("setInitialPhase() : Error - "
+					     "deviding by 0 (samp2+samp1=0)\n");
+	} else {
+		ratio = (((b - a) << 13) + (a + b) / 2) / (a + b);
+	}
+
+	for (i = 0; i <= 0x13; i++) {
+		int p0 = polyValue((short)i);
+		int p1 = polyValue((short)(i + 20));
+		int r = 0;
+		int e;
+
+		if (p1 + p0 == 0) {
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf(
+					"setInitialPhase() : Error - deviding "
+					"by 0 (polyValue(k2)+polyValue(k)=0)\n");
+		} else {
+			r = ((((p1 - p0) << 13) + (p1 + p0) / 2)
+			     / (p1 + p0));
+		}
+
+		e = (short)((((ratio - r) * (ratio - r)) + 0x1000) >> 13);
+		if (e < best) {
+			best = e;
+			besti = i;
+		}
+	}
+
+	pos = (10 - besti) * 0x230 + (unsigned short)rx->phase_frac;
+
+	if ((int)(unsigned short)pos < (int)(short)rx->phase_wrap)
+		rx->phase_frac = (short)pos;
+	else
+		rx->phase_frac = (short)(rx->phase_wrap - 1);
+}
+
+
+/*
+ * ---------------------------------------------------------------------------
+ * setTimingStateParameters -- install the timing loop's gains for a state.
+ *
+ * A nine-way switch on `pllcnt`, the timing state, spelled as a jump table.
+ * There are TWO tables, chosen by whether `role` is 0x65, and they agree
+ * except on states 5, 6 and 7 -- the fast part of the acquisition ramp --
+ * so the second is a retuning of the same schedule rather than a different
+ * one.  Both are reproduced as one switch with the variant inline, since
+ * splitting them would hide how little differs.
+ *
+ * States 0 and 1 install nothing.  States 5 and 8 additionally report the
+ * timing offset to the V.90 side, as `timing_offset * 10` -- the only place that
+ * number leaves the datapump.
+ *
+ * The state is compared UNSIGNED against 8, so a negative `pllcnt` misses the
+ * table entirely rather than indexing behind it.  That is the bounds check
+ * the other three tables in this reconstruction do not have (finding F129).
+ */
+void
+setTimingStateParameters(void *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	struct v34_receiver *rx = (struct v34_receiver *)((char *)obj + 0x264);
+	int variant = (obj->role == 0x65);
+	int state = (short)rx->pllcnt;
+	int report = 0;
+
+	if ((unsigned)state <= 8) {
+		switch (state) {
+		case 2:
+			rx->timing_p_gain = 0x36b0; rx->timing_i_gain = 0;    rx->dwell_limit = 0x190;
+			break;
+		case 3:
+			rx->timing_p_gain = 0x2ee0; rx->timing_i_gain = 0xd2; rx->dwell_limit = 0x3e8;
+			break;
+		case 4:
+			rx->timing_p_gain = 0x1770; rx->timing_i_gain = 0x5a; rx->dwell_limit = 0x3e8;
+			break;
+		case 5:
+			rx->timing_p_gain = 0xdac;  rx->timing_i_gain = 0x1e;
+			rx->dwell_limit = (short)(variant ? -1 : 0x3e8);
+			report = 1;
+			break;
+		case 6:
+			if (variant) {
+				rx->timing_p_gain = 0xdac; rx->timing_i_gain = 3;
+			} else {
+				rx->timing_p_gain = 0x7d0; rx->timing_i_gain = 0xa;
+			}
+			rx->dwell_limit = 0x7d0;
+			break;
+		case 7:
+			if (variant) {
+				rx->timing_p_gain = 0x3e8; rx->timing_i_gain = 2;
+				rx->dwell_limit = 0x7d0;
+			} else {
+				rx->timing_p_gain = 0x5dc; rx->timing_i_gain = 2;
+				rx->dwell_limit = 0xfa0;
+			}
+			break;
+		case 8:
+			rx->timing_p_gain = 0x1f4;  rx->timing_i_gain = 1;    rx->dwell_limit = -1;
+			report = 1;
+			break;
+		default:		/* 0 and 1 install nothing */
+			break;
+		}
+	}
+
+	if (report)
+		VPcmV34LogTimingOffset(obj, (short)(rx->timing_offset * 10));
+
+	/* State 2 alone also sets the dwell from the frame length. */
+	if ((unsigned short)rx->pllcnt == 2)
+		rx->report_interval = (short)(obj->baud_rate >> 3);
+}
+
+
+/*
+ * ---------------------------------------------------------------------------
+ * TimingV34 -- the timing recovery loop's state machine and its integrator.
+ *
+ * Called once per symbol from `receiver`.  Three parts:
+ *
+ *   THE STATE MACHINE.  `pllcnt` is the state.  -1 means done and returns
+ *   immediately.  1 means "start": zero the dwell counter, centre the phase
+ *   with setInitialPhase, and move to state 2 -- or to state 6 if `slow_ramp`
+ *   says to skip the slow part of the ramp.  Otherwise, once the dwell
+ *   counter `dwell_count` reaches the limit `dwell_limit`, the state advances by one and
+ *   the gains are reinstalled.  A limit of -1 means never advance.
+ *
+ *   THE PHASE DETECTOR.  Two timing_out[] entries, indexed by the pair
+ *   setInitialPhase chose, are each squared and summed as (I^2 + Q^2) for
+ *   two positions; the loop then forms (b - a) / (b + a) in Q15 after
+ *   normalising both up until neither has bits above 30.  That
+ *   normalisation is a loop with its own 16-step cap, and the shift is
+ *   applied to both so the ratio is unaffected -- it is there for the
+ *   divide's range, not for accuracy.
+ *
+ *   THE INTEGRATOR.  error * timing_i_gain in Q15 accumulates into the 32-bit timing_integrator;
+ *   error * timing_p_gain in Q11 is added on top per symbol.  The sum is carried in
+ *   timing_frac and its whole part, in units of 1/32768 of a symbol, is added to
+ *   the interpolator's step phase_inc.  Every 0x1d2 symbols the accumulated
+ *   offset is converted to parts per million -- the `* 10000 / n` then
+ *   `* 100 / symbol_period` -- and stored in timing_offset for setTimingStateParameters to
+ *   report onward.
+ */
+void
+TimingV34(void *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	struct v34_receiver *rx = (struct v34_receiver *)((char *)obj + 0x264);
+	int state;
+	int i0, i1;
+	int a, b;
+	int err = 0;
+	int acc;
+	int whole;
+	int n;
+
+	state = (unsigned short)rx->pllcnt;
+
+	if (state == 0xffff)
+		return;
+
+	if (state == 1) {
+		rx->dwell_count = 0;
+		setInitialPhase(obj);
+		if (rx->slow_ramp == 1) {
+			rx->pllcnt = 2;
+			rx->slow_ramp = 0;
+		} else {
+			rx->pllcnt = 6;
+		}
+		setTimingStateParameters(obj);
+		state = (unsigned short)rx->pllcnt;
+	}
+
+	/* Dwell: advance a state once dwell_count reaches dwell_limit, which -1 disables. */
+	if ((unsigned short)rx->dwell_limit != 0xffff && state != 0) {
+		int next = (unsigned short)(rx->dwell_count + 1);
+
+		if (next == (int)(short)rx->dwell_limit) {
+			rx->dwell_count = 0;
+			rx->pllcnt = (short)(state + 1);
+			setTimingStateParameters(obj);
+			state = (unsigned short)rx->pllcnt;
+		} else {
+			rx->dwell_count = (short)next;
+		}
+	}
+
+	/* The phase detector: two squared magnitudes, differenced. */
+	i0 = rx->timing_idx_a;
+	i1 = rx->timing_idx_b;
+	/*
+	 * EARLY AND LATE, either side of the index -- [i-1] and [i+1], not
+	 * [i-1] and [i].  Reading them as adjacent gives a discriminator
+	 * with no gap in the middle and an error term about 2.5x too large.
+	 */
+	a = (int)rx->timing_out[i0 - 1] * rx->timing_out[i0 - 1]
+	  + (int)rx->timing_out[i0 + 1] * rx->timing_out[i0 + 1];
+	b = (int)rx->timing_out[i1 - 1] * rx->timing_out[i1 - 1]
+	  + (int)rx->timing_out[i1 + 1] * rx->timing_out[i1 + 1];
+
+	if (state == 0) {
+		acc = rx->timing_integrator;
+	} else {
+		int sh = 0;
+
+		/*
+		 * Normalise both up together, capped at 16 steps.  Applied to
+		 * both, so the ratio below is unchanged -- this is range for
+		 * the divide, not precision.
+		 */
+		if (a >= 0 && b >= 0) {
+			unsigned m = 0x80000000u;
+
+			/*
+			 * The counter is incremented BEFORE the first test,
+			 * so an exit on `a` still counts the step.  Doing it
+			 * after leaves the shift one short and the error
+			 * term exactly twice too large.
+			 */
+			for (;;) {
+				m >>= 1;
+				sh = (short)(sh + 1);
+				if ((unsigned)a & m)
+					break;
+				if (((unsigned)b & m) != 0 || sh > 15)
+					break;
+			}
+		}
+
+		a = (unsigned short)((a >> ((16 - sh) & 31)));
+		b = (unsigned short)((b >> ((16 - sh) & 31)));
+
+		if ((a | b) != 0)
+			err = (((b - a) << 15) + (a + b) / 2) / (a + b);
+
+		acc = rx->timing_integrator + (((int)rx->timing_i_gain * err + 0x4000) >> 15);
+		rx->timing_integrator = acc;
+		acc += ((int)rx->timing_p_gain * err + 0x200) >> 11;
+	}
+
+	/* Carry the fraction, hand the whole part to the interpolator. */
+	acc += rx->timing_frac;
+	whole = (short)((acc + 0x4000) >> 15);
+	rx->timing_frac = acc - (whole << 15);
+	rx->phase_inc = (short)(whole + (unsigned short)rx->symbol_period);
+
+	n = (unsigned short)(rx->ppm_count + 1);
+	acc = whole + (unsigned short)rx->ppm_acc;
+
+	if (n < (int)(short)rx->report_interval) {
+		rx->ppm_count = (short)n;
+		rx->ppm_acc = (short)acc;
+		return;
+	}
+
+	/* Every report_interval symbols: convert the accumulated slip to ppm. */
+	{
+		int ppm = ((short)acc * 10000 + n / 2) / n;
+
+		ppm = (ppm * 25 * 4 + (short)rx->symbol_period / 2)
+		      / (short)rx->symbol_period;
+		rx->timing_offset = (short)ppm;
+
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+				"TimingV34: Timing Offset [ppm] = %d\n",
+				(int)(short)ppm);
+	}
+
+	rx->ppm_count = 0;
+	rx->ppm_acc = 0;
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * vectpp -- the phase-reference sequence the handshake slices against.
+ *
+ * Forty-eight complex points at .rodata+0x2c80, packed (re, im) per entry,
+ * every one of magnitude 6476 at a multiple of 60 degrees: (6476, 0),
+ * (+/-3238, +/-5609) and (-6476, 0).  Six phases, which is V.34's PP signal
+ * (10.1.3.5) -- the periodic sequence sent during phase 3 so the receiver can
+ * measure the channel's phase response.
+ *
+ * `receiver` halves both halves on the way out, so the constellation it
+ * actually compares against has magnitude 3238.
+ *
+ * GLOBAL, which is the object's binding and not a convenience: the blob
+ * exports `vectpp` because `v34handshak` reads it as well.  Table 1's 20
+ * `PPSEG` (v34hstx1.cpp) loads it as forty-eight FOUR-BYTE entries, one
+ * (re, im) pair each, where this file reads the same bytes as ninety-six
+ * shorts.  It was static while this file was its only reader; the second
+ * reader is what made it global, and `t_v34hstx1.c` proves it against
+ * `ref_vectpp` the way `probe` and `vect4` are proved.
+ */
+const short vectpp[96] = {
+	6476, 0, 6476, 0, 6476, 0, 6476, 0,
+	-3238, 5609, -5609, 3238, -6476, 0, -5609, -3238,
+	6476, 0, 3238, 5609, -3238, 5609, -6476, 0,
+	6476, 0, 0, 6476, -6476, 0, 0, -6476,
+	-3238, 5609, -3238, -5609, 6476, 0, -3238, 5609,
+	6476, 0, -5609, 3238, 3238, -5609, 0, 6476,
+	6476, 0, -6476, 0, 6476, 0, -6476, 0,
+	-3238, 5609, 5609, -3238, -6476, 0, 5609, 3238,
+	6476, 0, -3238, -5609, -3238, 5609, 6476, 0,
+	6476, 0, 0, -6476, -6476, 0, 0, 6476,
+	-3238, 5609, 3238, 5609, 6476, 0, 3238, -5609,
+	6476, 0, 5609, -3238, 3238, -5609, 0, -6476,
+};
+
 /*
  * ---------------------------------------------------------------------------
  * Layout, pinned.  Guarded to a 32-bit ABI: `struct v34_object` and
