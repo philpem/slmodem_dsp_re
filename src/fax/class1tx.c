@@ -110,28 +110,6 @@ char *V21TX_MESG[6] = {
 	"CONNECT: V.21 Transmit 300 bps",
 };
 
-char *V27RX_MESG[8] = {
-	"V.27 Receive Data Mode",
-	"V.27 Receive Protocol Mode",
-	"V.27 Rx Start of Protocol",
-	"ERROR: V.27 Rx Internal Error",
-	"ERROR: Loss Carrier In V.27 Rx Protocol",
-	"V.27 Rx Idle (End of Transmition)",
-	"CONNECT: V.27 Receive 2400 bps",
-	"CONNECT: V.27 Receive 4800 bps",
-};
-
-char *V27TX_MESG[8] = {
-	"V.27ter Transmit Data Mode",
-	"V.27ter Protocal Transmit Mode",
-	"CONNECT: V.27ter Transmit 4800 bps",
-	"CONNECT: V.27ter Transmit 2400 bps",
-	"V.27ter Transmit Idle Mode",
-	"ERROR: V.27ter Tx Internal Error",
-	"ERROR: Transmit Input Queue Under-run",
-	"ERROR: Transmit Input Queue Over-run",
-};
-
 char *V29RX_MESG[8] = {
 	"V.29 Receive Data Mode",
 	"V.29 Receive Protocol Mode",
@@ -176,8 +154,6 @@ MESSAGE_FN(v17tx_message, V17TX_MESG, 10)
 MESSAGE_FN(v17rx_message, V17RX_MESG, 10)
 MESSAGE_FN(v21tx_message, V21TX_MESG, 6)
 MESSAGE_FN(v21rx_message, V21RX_MESG, 7)
-MESSAGE_FN(v27tx_message, V27TX_MESG, 8)
-MESSAGE_FN(v27rx_message, V27RX_MESG, 8)
 MESSAGE_FN(v29tx_message, V29TX_MESG, 8)
 MESSAGE_FN(v29rx_message, V29RX_MESG, 8)
 

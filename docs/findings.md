@@ -126200,3 +126200,102 @@ this axis, and a blind permutation is not attempted.  `functionorder.py`
 enumerates 2..7 definitions at n! period-GCC compiles each, which is the
 right tool for a bounded cell but not for a 15-definition file; its declared
 domain was not entered.
+
+## F11390. The V.27 merged span splits into its blob translation units: nine new TUs, two exact functions gained, none lost
+
+TU-reconciliation step, V.27 fax family (issue #6/#20/#67).  The previous pass
+closed with "the large order departures (`v27.c`, `v29.c`, `V34hshak.c`) are
+MERGED SPAN FILES, not reorderable defects".  This is that span taken as a TU
+unit, object-first.
+
+**OWNERSHIP, FROM THE OBJECT.**  The blob's FILE records around V.27 are, in
+`ld -r` input order,
+
+    V27rx.c (183) V27rxdec.c V27rxtab.c V27tx.c V27txtab.c V27_SDM.c
+    ... V27r_prc.c V27r_stc.c V27t_prc.c V27t_stc.c ... V27r_int.c V27t_int.c
+
+`ld -r` concatenates `.text` and `.data` in that order, and none of these
+carries a `.text` LOCAL, so the boundaries are recovered from the address
+brackets the neighbours pin.  Three brackets are exact, not inferred:
+
+  * `V27rx.c` is `[V27RX_create 0x099660, V27RX_create+delete+epoch_det+
+    eq_train+decision)` -- it opens right after `V21TX_delete` and closes at
+    `V27TX_create` 0x0a0330, and the five functions are contiguous with no
+    other candidate claiming them.
+  * `V27tx.c` is `[V27TX_create 0x0a0330, SDMv27_init 0x0a0830)`.
+  * `V27r_int.c`/`V27t_int.c` are the two contiguous interface runs at
+    `0x0a5950` (`DemodDataV27`..`GetSNRV27`) and `0x0a5e70`
+    (`ScrambleDataV27`..`TxNoCarrierV27`), before `fpm_agc.c`'s first function.
+  * `V27r_prc.c`/`V27r_stc.c`/`V27t_prc.c`/`V27t_stc.c` divide the contiguous
+    rx state machine `[V27RX_modem 0x0a2c60, V27TX_modem)` and tx state machine
+    `[V27TX_modem, V27RX_modem+...)` at the control/status pair.  The split is
+    the project's already-reconstructed `V32stc.c` convention (`stc` is the
+    status/control unit plus its templates), and it is the only partition of
+    the address run that keeps every record contiguous.
+
+`Vmi_v27.c` (blob record between `V29txtab.c` and `Vtb_tab.c`) is the twelve
+lowercase `v27tx_*`/`v27rx_*` adapter entry points plus the two
+`v27*_message` reporters, and its `.text` extent `[v27tx_create 0x09bf20,
+v27rx_message+39)` sums exactly to the record's size with no function left
+over -- that is the positive evidence, not a name guess.
+
+**WHAT MOVED.**  Nine new translation units created --
+`V27rx.c`, `V27tx.c`, `V27r_prc.c`, `V27r_stc.c`, `V27t_prc.c`, `V27t_stc.c`,
+`V27r_int.c`, `V27t_int.c`, `Vmi_v27.c` -- and every body moved VERBATIM, in
+blob emission order, out of the merged `v27.c` and the two mis-named adapter
+files `V27rx.c`/`V27tx.c` (which held the lowercase wrappers) and out of
+`class1tx.c` (which held the two message reporters and their `V27*_MESG`
+tables).  No body was rewritten, no declaration or flag changed; `v27.c` keeps
+only its header and the `.data` `V27TX_CFG` template.  `class1tx.c` keeps the
+other six message reporters.
+
+**MEASURED, `byteident.py` (GCC 3.4.2-r2), before -> after.**  Tree grade 0
+**837 -> 839** of 1,852 and grade 0-or-1 **891 -> 892**.  The exact-set diff is
+**GAINED `EpochDetectV27`, `RxHdxStartV27`; LOST none** -- both were the merged
+unit's register-allocation context.  Every other V.27 symbol holds its verdict:
+`V27TX_status`, `RxHdxStartV27`, `RxHdxErrorV27`, `DescrambleDataV27`,
+`ScrambleDataV27`, `CarrierDetectV27`, `EpochDetectV27`, `TxHdxStartV27`,
+`GetSNRV27`, `v27tx_create`, `v27rx_create` and the ten lowercase entry points
+are exact.
+
+**HARNESS.**  `faxadaptcreate` is re-sourced from `V27rx.c` to
+`src/fax/Vmi_v27.c` (its eight mutations are all `v27rx_create`), and
+`v27status` from `v27.c` to `src/fax/V27t_stc.c` (its eight mutations are all
+`V27TX_status`).  `anchorcheck` after the move: **280 suites / 10,038
+mutations / 0 detached**.
+
+**PARTIAL LINK.**  `partialcmp.py` before **67,922/943,398** positioned bytes,
+**935/18,317** exact relocations, **318/2,907** exact symbols, **69/92** exact
+sections; after **67,999/943,398**, **931/18,317**, **325/2,907**, **69/92**.
+The +7 exact symbols are the seven new FILE records the object has and we now
+emit; the +77 positioned bytes are the TU relayout.  `exact relocations` falls
+935 -> 931 and that is the one regression to weigh: four relocations that
+matched positionally before the split no longer do, because the moved bodies'
+`.rel.text` entries sit at the new TUs' offsets rather than the merged file's.
+No function loses exactness and `byteident` rises, so it is the known
+census-vs-exactness trade the V8/V34/V32 splits also recorded.
+
+**GATES.**  `make -j1 J=1 tc`: 289 objects from 289 sources, 0 failed.
+`make -j1 J=1 phase`: **385 passed, 0 failed**, phase boundary OK; `refcheck`
+0 dangling; `anchorcheck` 280 suites / 10,038 mutations / 0 detached;
+`git diff --check` clean.
+
+**PORTABILITY, PRE-EXISTING AND LEFT VISIBLE.**  `v27status` could not be
+re-recorded through the pinned GCC 13.3.0 container: `build/test/t_v27fax`
+exits non-zero with **8 of 272 `V27TX_status` checks failing** (`struct
+v27_txstatus+64..+65` and `+72` differ from the reference).  This is NOT the
+move -- reverting the whole split and rebuilding the same target reproduces
+**the same 8/272**, so the modern baseline for this suite is already red on the
+branch.  `faxadaptcreate` re-recorded cleanly (**7 mutations, 6 caught, 0
+uncaught, 1 equivalent**); its snapshot key moved and its verdicts did not.
+The period tier is unaffected.  A dedicated portability issue is owed for the
+pre-existing `t_v27fax` red and is left visible rather than worked around in
+`src/`.
+
+**DECLINED / REMAINING.**  The `.data` templates `V27TX_CFG` (in `v27.c`),
+`V27RX_MESG`/`V27TX_MESG`/`V27RX_CTL`/`V27TX_CTL`/`V27RX_CFG`/`V27TX_CFG` and
+the V27 decoder/gain/clock tables (`V27rxtab.c`, `V27rxdec.c`, `V27txtab.c`)
+are not re-homed in this step: the `.data`/`.rodata` order does not pin
+`V27rxdec.c`'s split from `V27rxtab.c` without the same per-symbol argument the
+`.text` side now has, and the next V.27 step is theirs.  `V29` is the same
+shape and is done in an addendum below.

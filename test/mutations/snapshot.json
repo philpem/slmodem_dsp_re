@@ -414,7 +414,7 @@
    }
   },
   "faxadaptcreate": {
-   "key": "44fea6de0f17dd17859032462c2b31e3455603d048c469a6600c8baf4ed6d498",
+   "key": "d7e26ab73a0790d048d9a280555ca39aa9de5d25d7d4e6e01374e74ede538b18",
    "summary": "7 mutations: 6 caught (6 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "v27rx_create always hands the constructor the default configuration": "caught",

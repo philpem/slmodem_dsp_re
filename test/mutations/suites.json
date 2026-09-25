@@ -57,7 +57,7 @@
   "build/test/t_dtmfrx"
  ],
  "faxadaptcreate": [
-  "src/fax/V27rx.c",
+  "src/fax/Vmi_v27.c",
   "build/test/t_faxadapt"
  ],
  "floatarma": [
@@ -217,7 +217,7 @@
   "build/test/t_v23modem"
  ],
  "v27status": [
-  "src/fax/v27.c",
+  "src/fax/V27t_stc.c",
   "build/test/t_v27fax"
  ],
  "v29data": [
