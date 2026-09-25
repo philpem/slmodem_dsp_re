@@ -1069,7 +1069,7 @@
   "build/test/t_voicedp"
  ],
  "voicedptx": [
-  "src/service/voicedp.c",
+  "src/service/Tx.c",
   "build/test/t_voicedptx"
  ],
  "voicedpdel": [
@@ -1077,8 +1077,16 @@
   "build/test/t_voicedpdel"
  ],
  "voicedprx": [
-  "src/service/voicedp.c",
+  "src/service/Rx.c",
   "build/test/t_voicedprx"
+ ],
+ "voicedptxset": [
+  "src/service/Tx.c",
+  "build/test/t_voicedp"
+ ],
+ "voicedpdx": [
+  "src/service/duplex.c",
+  "build/test/t_voicedp"
  ],
  "moduluscoder_encoder": [
   "src/pump/v90/V90ModulusEncoder.cpp",

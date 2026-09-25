@@ -1,22 +1,19 @@
 /*
- * voicedp.c -- the voice service's three `voice.c` setters that install the
- * per-block handlers.
+ * Rx.c -- the voice receive handler and the setter that installs it.
  *
- * `voice_set_online`, `voice_set_duplex` and `voice_online` all sit in the
- * blob's `voice.c` (record 260) address block, alongside `voice_dle_command`
- * (voicecmd.c) and the `voice_create`/`voice_command`/`voice_modem` core
- * (voicesvc.c).  They were held together with the Rx.c/Tx.c/duplex.c handlers
- * in this file until finding F11386 split those three object translation units
- * out.  Their own move into the `voice.c` unit is NOT done here: they are
- * `voice.c`'s, and this file remains a layer, named with that blocker.
+ * Recovered TU boundary (issue #6/#20/#67).  The blob's FILE records place
+ * `Rx.c` (record 268) between `Notch.c` and `TONE.c`, and `ld -r` concatenates
+ * `.text` in FILE order: `Notch.c`'s last function is `notch` at 0x0af150 and
+ * `TONE.c`'s first is `TONE_create` at 0x0af690, so [0x0af150, 0x0af690) is
+ * `Rx.c`'s.  The only two globals there are `voice_set_rx` (0x0af190, 305
+ * bytes) and `voice_rx` (0x0af2d0, 949).  Neither is a LOCAL anchor, so the
+ * bracket, the `_rx` naming and the empty competing set are the proof.
  *
- * In the object's emission order:
- *     0xabef0  voice_set_online    47
- *     0xabf20  voice_set_duplex    45
- *     0xabf50  voice_online       508
- *
- * The handlers these setters install now live in Rx.c, Tx.c and duplex.c.
- * Finding F11386.
+ * The bodies and the constants they read moved VERBATIM out of
+ * src/service/voicedp.c; that file was a layer over three object TUs.  The
+ * compile-time constants are repeated here because they were file-local to
+ * the layer and the object's own TU carries its own copies.  No body
+ * rewritten and no flag changed.  Finding F11386.
  */
 
 #include "dsplib/voice.h"
@@ -201,90 +198,188 @@ typedef char voice_ctx_size[(sizeof(struct voice_ctx) == 0x7dc) ? 1 : -1];
 #define VOICE_RX_SILENCE_SECONDS	0.8f
 
 /*
- * Go online: mode 2, the beep-only handler, and the detector enabled with
- * whatever mask the context carries.
- */
-void
-voice_set_online(struct voice_ctx *v)
-{
-	v->mode = 2;
-	v->handler = voice_online;
-	detector_set_enable(v->detector, v->detector_enable);
-}
-
-/*
- * Go duplex: mode 3, the full-duplex handler, and the detector enabled with a
- * CONSTANT 0x24 rather than the context's mask.  That difference is the
- * object's and is not explained by anything reconstructed here.
- */
-void
-voice_set_duplex(struct voice_ctx *v)
-{
-	v->mode = 3;
-	v->handler = voice_duplex;
-	detector_set_enable(v->detector, 0x24);
-}
-
-/*
- * The beep-only block handler.  Nothing arrives from the line here: the block
- * is filled entirely from the beep generator, and once the queue runs dry the
- * remainder of the block -- and every later block -- is silence.
+ * Go into receive: mode 0, the receive handler, the receive detector mask, a
+ * re-created silence detector, a fresh marker countdown and three gains read
+ * from the host.
  *
- * `rx_lin` and `tx_flt` are never read.  `hostcount` is written twice, and
- * the first of those stores is dead on every path: deviation D997.
+ * `silence_create`'s RESULT IS DISCARDED.  The object calls it with the
+ * pointer `voice_create` already stored and never stores what comes back --
+ * harmless while that pointer is non-NULL, since the callee initialises in
+ * place and returns its argument, and a leak if it ever is.  Deviation D988.
+ *
+ * `cfg.get_sreg` IS THE HOST'S SETTINGS CALLBACK, and this function is what
+ * shows it.  `beepgen.h` types that slot `void (*)(void *modem)` from the one
+ * place `beepgen_start_beep` calls it; here it is called with TWO arguments
+ * and its unsigned answer converted to float, and it is also what
+ * `silence_create` is handed as its `query`.  Finding F8788; the cast below
+ * is that finding and not a convenience.
+ */
+void
+voice_set_rx(struct voice_ctx *v)
+{
+	unsigned int (*query)(void *obj, int what) =
+	    (unsigned int (*)(void *, int))v->cfg.get_sreg;
+
+	v->rx_armed = 1;
+	v->mode = 0;
+	v->handler = voice_rx;
+	detector_set_enable(v->detector, (short)v->detector_enable_rx);
+	silence_create(v->silence, v->cfg.modem, query);
+	v->marker_countdown = (unsigned short)(v->marker_period
+					       * VOICE_RX_MARKER_UNIT);
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("Sample rate 8000\n");
+
+	v->rate_bits.s.rate = 8000;
+	v->rate_bits.s.bits = 8;
+	v->dc = 0.0f;
+	v->dc_init = 1;
+	/*
+	 * `query()`'s `unsigned int` is what the multiply by
+	 * VOICE_RX_PARAM_SCALE already implicitly converts to `float` (the
+	 * usual arithmetic conversions, `query() * float` promotes the
+	 * integer operand) -- the cast below only makes that existing
+	 * conversion explicit, at the point it already happens.  The blob
+	 * loads it with `fildll` and rounds once, in the `fstps` that stores
+	 * the product; making the cast explicit here does not move that
+	 * store or add a second rounding.
+	 */
+	v->gain_fmt1 = (float)query(v->cfg.modem, VOICE_PARAM_RX_GAIN_FMT1)
+		       * VOICE_RX_PARAM_SCALE;
+	v->gain_fmt3 = (float)query(v->cfg.modem, VOICE_PARAM_RX_GAIN_FMT3)
+		       * VOICE_RX_PARAM_SCALE;
+	v->gain_other = (float)query(v->cfg.modem, VOICE_PARAM_RX_GAIN_OTHER)
+			* VOICE_RX_PARAM_SCALE;
+}
+
+/*
+ * The receive block handler: line samples in, an escaped u-law byte stream
+ * out.
+ *
+ * Four stages.  (1) The mean of the incoming float block folds into a running
+ * DC estimate at one part in a hundred, and that estimate is subtracted from
+ * every sample.  (2) The block is scaled by the gain its output format
+ * selects -- formats 1 and 3 convert from `rx_lin` into the context's own
+ * float buffer, everything else scales the caller's `tx_flt` in place.
+ * (3) Each sample becomes a u-law byte in `tx_lin`, with a literal DLE
+ * doubled and a periodic <DLE>'T' marker inserted.  (4) `silence_progress`
+ * appends its own escapes after them, and a pending <DLE><CAN> closes the
+ * stream with <DLE><ETX>.
+ *
+ * `rx_flt` is never read.  `tx_lin` is a BYTE stream here, whatever the
+ * handler signature calls it, and `tx_flt` is both the input block and, in
+ * the float arm, the working buffer.
+ *
+ * NOTE THE ASYMMETRY OF THE 200-SAMPLE BOUND: formats 1 and 3 refuse a
+ * longer block outright (answer 7), and the float arm neither tests nor
+ * needs it, because it works in the caller's buffer.
  */
 int
-voice_online(struct voice_ctx *v, short *rx_lin, float *rx_flt, float *tx_flt,
-	     short *tx_lin, unsigned short *hostcount, unsigned short *countp)
+voice_rx(struct voice_ctx *v, short *rx_lin, float *rx_flt, float *tx_flt,
+	 short *tx_lin, unsigned short *hostcount, unsigned short *countp)
 {
-	unsigned short i = 0;
-	int r = 0;
+	unsigned char *out = (unsigned char *)tx_lin;
+	float *flt = v->flt;
+	float sum = 0.0f;
+	short n = (short)*countp;
+	unsigned short have = (unsigned short)n;
+	unsigned short i;
+	unsigned short j = 0;
+	int k;
 	int ret = 0;
 
-	(void)rx_lin;
-	(void)tx_flt;
+	(void)rx_flt;
 
-	if (v->beep_done) {
-		if (VOICE_OUT_IS_LINEAR(v)) {
-			for (i = 0; i < *countp; i++)
-				tx_lin[i] = 0;
-		} else {
-			for (i = 0; i < *countp; i++)
-				rx_flt[i] = 0.0f;
-		}
-	} else if (VOICE_OUT_IS_LINEAR(v)) {
-		while (i < *countp && r != 1) {
-			float s;
+	if (have != 0) {
+		float dc;
 
-			r = beepgen_sample(v->beepgen, &s);
-			tx_lin[i] = (short)(s * VOICE_BEEP_FULL_SCALE);
-			i++;
-		}
-		while (i < *countp)
-			tx_lin[i++] = 0;
-	} else {
-		while (i < *countp && r != 1) {
-			r = beepgen_sample(v->beepgen, &rx_flt[i]);
-			i++;
-		}
-		while (i < *countp)
-			rx_flt[i++] = 0.0f;
+		for (k = 0; k < have; k++)
+			sum += tx_flt[k];
+		dc = sum / (float)have;
+		if (v->dc_init)
+			v->dc_init = 0;
+		else
+			dc = (float)(dc * VOICE_RX_DC_FOLD + v->dc * VOICE_RX_DC_KEEP);
+		v->dc = dc;
+		for (k = 0; k < have; k++)
+			tx_flt[k] -= v->dc;
 	}
 
-	if (r == 1) {
+	/*
+	 * D989: the answer is thrown away.  `silence_is_more_then` reads the
+	 * detector and returns a verdict; the object calls it here -- on both
+	 * the empty-block and the non-empty path -- and uses neither result.
+	 */
+	(void)silence_is_more_then(v->silence, VOICE_RX_SILENCE_SECONDS);
+
+	if (v->rx_armed != 1) {
 		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("beepgend end, send ok\n");
-		v->beep_done = 1;
-		FDSP_Kernel_SetInternalBeepInProgress(0);
-		ret = 1;
+			dsplibs_debug_printf("RX WAIT ABORT\n");
+		*countp = 0;
+	} else {
+		float gain;
+
+		if (v->out_format == 3 || v->out_format == 1) {
+			gain = VOICE_RX_LINEAR_SCALE
+			       * (v->out_format == 1 ? v->gain_fmt1
+						     : v->gain_fmt3);
+			if (*countp > VOICE_RX_MAX_SAMPLES) {
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf(
+					  "rx buffer greater than internal\n");
+				return VOICE_RX_TOO_MANY_STATUS;
+			}
+			for (i = 0; i < *countp; i++)
+				v->flt[i] = (float)rx_lin[i] * gain;
+		} else {
+			gain = v->gain_other;
+			flt = tx_flt;
+			for (i = 0; i < *countp; i++)
+				tx_flt[i] *= gain;
+		}
+
+		for (i = 0; i < have; i++) {
+			unsigned char b;
+
+			b = linear2ulaw((short)(flt[i] * VOICE_RX_FULL_SCALE)
+					>> 2);
+			out[j] = b;
+			if (b == VOICE_DLE) {
+				j++;
+				out[j] = VOICE_DLE;
+			}
+			j++;
+			if (v->marker_period != 0) {
+				v->marker_countdown--;
+				if (v->marker_countdown == 0) {
+					out[j] = VOICE_DLE;
+					out[j + 1] = VOICE_DLE_MARK;
+					j = (unsigned short)(j + 2);
+					v->marker_countdown =
+					    (unsigned short)
+					    (v->marker_period
+					     * VOICE_RX_MARKER_UNIT);
+				}
+			}
+		}
+
+		*countp = j;
+		silence_progress(v->silence, flt, n, out + j, countp);
+
+		if (v->dle_can) {
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf(
+				    "****** Send DLE ETX\n");
+			_status(out + *countp, countp, 3);
+			v->rx_armed = 0;
+			detector_set_enable(v->detector, 0);
+			ret = VOICE_RX_ETX_STATUS;
+		}
 	}
 
-	/* D997: overwritten on every path by the store two lines down. */
-	*hostcount = *countp;
-	*countp = 0;
 	*hostcount = 0;
-
-	if (v->int_0014 != v->mode && v->int_0014 != 0)
-		ret = VOICE_ONLINE_MODE_STATUS;
+	if (v->int_0014 != v->mode)
+		ret = VOICE_RX_MODE_STATUS;
 	return ret;
 }

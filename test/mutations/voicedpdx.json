@@ -1,0 +1,40 @@
+[
+ {
+  "note": "src/service/duplex.c against build/test/t_voicedp.  voice_duplex only."
+ },
+ {
+  "label": "voice_duplex hands the datapump its two counts the wrong way round",
+  "find": "\tFDSP_DP_Run(v->dp, rx_lin, rx_flt, tx_flt, tx_lin, hostcount, countp);",
+  "replace": "\tFDSP_DP_Run(v->dp, rx_lin, rx_flt, tx_flt, tx_lin, countp, hostcount);"
+ },
+ {
+  "label": "voice_duplex does not run the datapump at all",
+  "find": "\tFDSP_DP_Run(v->dp, rx_lin, rx_flt, tx_flt, tx_lin, hostcount, countp);\n\n\tif (!v->beep_done) {",
+  "replace": "\n\tif (!v->beep_done) {"
+ },
+ {
+  "label": "voice_duplex overlays the beep even after it has finished",
+  "find": "\tif (!v->beep_done) {\n\t\tunsigned short i = 0;",
+  "replace": "\tif (v->beep_done || 1) {\n\t\tunsigned short i = 0;"
+ },
+ {
+  "label": "voice_duplex lays the beep over the transmit side",
+  "find": "\t\t\tr = beepgen_sample(v->beepgen, &rx_flt[i]);\n\t\t\ti++;\n\t\t}\n\t\tif (r == 1) {",
+  "replace": "\t\t\tr = beepgen_sample(v->beepgen, &tx_flt[i]);\n\t\t\ti++;\n\t\t}\n\t\tif (r == 1) {"
+ },
+ {
+  "label": "voice_duplex does not latch beep_done",
+  "find": "\t\t\tv->beep_done = 1;\n\t\t\tFDSP_Kernel_SetInternalBeepInProgress(0);\n\t\t\tret = 1;",
+  "replace": "\t\t\tFDSP_Kernel_SetInternalBeepInProgress(0);\n\t\t\tret = 1;"
+ },
+ {
+  "label": "voice_duplex gains voice_online's second mode test",
+  "find": "\tif (v->int_0014 != v->mode)\n\t\tret = VOICE_DUPLEX_MODE_STATUS;",
+  "replace": "\tif (v->int_0014 != v->mode && v->int_0014 != 0)\n\t\tret = VOICE_DUPLEX_MODE_STATUS;"
+ },
+ {
+  "label": "voice_duplex answers the online code on a mode mismatch",
+  "find": "#define VOICE_DUPLEX_MODE_STATUS\t5",
+  "replace": "#define VOICE_DUPLEX_MODE_STATUS\t2"
+ }
+]
