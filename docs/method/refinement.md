@@ -912,6 +912,22 @@ a state struct leaves nothing to fold, and `-O3` then takes our function from
 loop"; it is that the original's hand optimisation was expressed as literals at
 the call site, and the expansion is downstream of that.
 
+**DUPLICATED LOOP BODIES ARE ALSO WHAT UNSWITCHING LOOKS LIKE, AND IT IS NOT
+UNROLLING.** `v8_fskmodulate`'s object has a `test`/`je` at the top and then
+*two* four-iteration loops with back edges -- one per value of the
+loop-invariant `which` parameter -- and the earlier pass read that as "the
+blob unrolls its 4-iteration loop" (F11381). It is `-funswitch-loops` (in
+`-O3`), and the tell is that each copy keeps its `jle` back edge and the
+bodies differ only in the invariant operand (`0x4(%ebx)` vs `0x2(%ebx)`). The
+source that produces it puts the branch *inside* the loop; hoisting the
+selection to a `step` local before the loop leaves nothing to unswitch and
+emits one shared body. Enumerated over {`int`/`short`} x {indexed/advancing
+pointer} x {two ternary polarities / if-else}, exactly two spellings map
+byte-exactly (F11381). `-funroll-loops` and `-funroll-all-loops` do **not**
+reproduce this shape and cost the tree 83-113 grade-0 exacts whole-tree; the
+lever-6 negative for `-funroll-loops` stands and now has a second, independent
+measurement beside it.
+
 ### Lever 7. `delete[]` versus an explicit guarded free
 
 **The blob's global `operator delete` IS `sysdep_free`** -- it contains no

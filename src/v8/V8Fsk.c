@@ -175,19 +175,19 @@ int
 v8_fskmodulate(struct v8 *v, short which)
 {
 	struct v8_v21_params *p = &v->v21_params;
-	short step = (short)(which != 0 ? p->carrier_b : p->carrier_a);
-	int i;
+	short i;
+	short *out = v->tx_stage;
 
 	for (i = 0; i < V8_QUEUE_BLOCK; i++) {
 		unsigned phase;
 		short c;
 
-		phase = ((unsigned)(unsigned short)p->carrier_phase
-			 + (unsigned short)step) & 0x1fff;
+		phase = (p->carrier_phase
+			 + (which == 0 ? p->carrier_a : p->carrier_b)) & 0x1fff;
 		p->carrier_phase = (short)phase;
 
 		c = v8_cosread((unsigned char)(phase >> 5));
-		v->tx_stage[i] = v8_fsktxfilter(v, v8_mpyint(c, p->tx_level));
+		*out++ = v8_fsktxfilter(v, v8_mpyint(c, p->tx_level));
 	}
 
 	return v8_txwritequeue(v);
