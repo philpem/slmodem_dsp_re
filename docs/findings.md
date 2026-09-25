@@ -125479,3 +125479,111 @@ test binary was added.  `python3 tools/coverage.py`: `tested 1,792 of 1,792`.
 Focused period runs and their exact counts, the fault probes, the modern link
 and run, and `refcheck`/`git diff --check` logs are under
 `/tmp/opencode/issue190/`.
+
+## F11381. `v8_fskmodulate` is LOOP-UNSWITCHED, not unrolled, and the source that produces it is recovered byte-exactly
+
+Branch `improve/v8fskmodulate`, base `08dc4e56`.  `src/v8/V8Fsk.c` only; no
+flag, header, `test/` or `Makefile` change.  Commit `00399641` left this body
+unreconstructed and described the object as "unroll[ing] its 4-iteration
+loop".  **That description is wrong, and the error was the whole obstacle.**
+The object contains **two complete loop bodies**, one per value of the
+loop-invariant `which` parameter: a `test %eax,%eax; je <zero-loop>` at
+`.text+0x79360` hoists the branch out, and each arm is a *loop* with its own
+back edge (`jle` at `0x793bb` and `0x7941a`), not a straight-line sequence of
+four copies.  The two arms differ only in the carrier offset read each
+iteration -- `0x4(%ebx)` (`carrier_b`) on the fall-through arm and `0x2(%ebx)`
+(`carrier_a`) on the branch-taken arm.  That is GCC 3.4.2's loop
+**unswitching** pass (`-funswitch-loops`, enabled by `-O3`), not
+`-funroll-loops`.
+
+**WHY OURS HAD A SINGLE BODY.**  The tree hoisted the selection into a local
+`short step` before the loop, so there was no loop-invariant branch left for
+the unswitcher to remove and the loop was emitted once, sharing one body for
+both carriers.  The object's shape is only reachable if the carrier selection
+is *inside* the loop.
+
+**FLAG ARM -- FALSIFIED, MEASURED WHOLE-TREE.**  Recovered Gentoo GCC
+3.4.2-r2, period assembler, `DSPLIB_REPRODUCE_BUGS` enabled, full flags from
+`tools/toolchain/period.mk`; commands and logs under
+`/tmp/opencode/tu-v8fskstd/`.  From the *original* source, `-funroll-loops`
+emits a straight-line four-copy body -- the loop's back edge is gone -- which
+is demonstrably not the object.  From the *reconstructed* source both flags
+are unnecessary and destructive: the unchanged tree is already exact there,
+while `-funroll-all-loops` unrolls it into 116 instructions against the
+object's 66.  Whole-tree exact-symbol cost, denominator 1,852 shared symbols:
+
+| profile | compare.py mnemonics | byteident grade 0 | total code |
+|---|---:|---:|---:|
+| retained `-O3` (this tree) | **896** | **833** | 89.3% |
+| `-O3 -funroll-loops` | 809 (-87) | 750 (-83) | 120.9% |
+| `-O3 -funroll-all-loops` | 771 (-125) | 720 (-113) | 130.0% |
+
+So the unroll family both fails to reproduce the object and costs the tree
+83-113 exact functions.  It is not a candidate and no flag was changed.
+
+**SOURCE ARM -- RECOVERED.**  The preimage was enumerated over the bounded
+family {loop variable `int`/`short`} x {store `v->tx_stage[i]` / advancing
+`short *out`} x {selection ternary `which != 0 ? b : a` / `which == 0 ? a : b`
+/ inline if-else}, ten cells including the retained control.  Result
+(positional byte identity against the object's 222-byte body):
+
+| id | loop var | store | selection | size | verdict |
+|---|---|---|---:|---:|---|
+| base (retained before) | int | indexed | hoisted `step`, unsigned-short casts | 138 | SIZE 84 |
+| A | int | indexed | `!=0 ? b : a` | 193 | differ |
+| B | int | indexed | `!=0 ? b : a` | 193 | differ |
+| C | short | indexed | `!=0 ? b : a` | 208 | differ |
+| E | short | pointer | `!=0 ? b : a` | 222 | 3 bytes (branch polarity) |
+| F | int | pointer | `!=0 ? b : a` | 200 | differ |
+| G | short | indexed | `==0 ? a : b` | 208 | differ |
+| **H** | **short** | **pointer** | **`==0 ? a : b`** | **222** | **byte-identical** |
+| I | int | pointer | `==0 ? a : b` | 200 | differ |
+| **J** | **short** | **pointer** | **inline `if (which==0) a else b`** | **222** | **byte-identical** |
+
+Two spellings map: H and J.  The test therefore decodes a FACT -- the original
+selected the carrier with the `which == 0 ? carrier_a : carrier_b` polarity
+and stored through an advancing `short *` -- but does **not** distinguish a
+ternary from an if/else, because GCC canonicalises both before the unswitcher
+runs.  Per the fit-versus-recovery rule this is the "several map" case, not a
+unique preimage claim.  H was retained as the more idiomatic spelling
+(`docs/method/experiment-design.md`: prefer clear source when spellings
+produce identical output); the byte-exactness of J is recorded so the
+recovery is not overstated.  Applying H:
+
+```
+	short i;
+	short *out = v->tx_stage;
+
+	for (i = 0; i < V8_QUEUE_BLOCK; i++) {
+		unsigned phase;
+		short c;
+
+		phase = (p->carrier_phase
+			 + (which == 0 ? p->carrier_a : p->carrier_b)) & 0x1fff;
+		p->carrier_phase = (short)phase;
+
+		c = v8_cosread((unsigned char)(phase >> 5));
+		*out++ = v8_fsktxfilter(v, v8_mpyint(c, p->tx_level));
+	}
+```
+
+**MEASURED.**  `byteident.py --why v8_fskmodulate`: `SIZE (84 byte(s) differ)`
+/ `INSTRUCTION COUNT differs: blob 66, ours 41` **before**; `grade 0 EXACT`,
+`grade 1 ACCEPT` **after**.  Tree grade 0 832 -> 833 of 1,852 and grade 0-or-1
+885 -> 886; `compare.py` identical mnemonics 895 -> 896; **no loss anywhere**.
+Compiler banners matched byte for byte (`GNU 3.4.2 (Gentoo Linux 3.4.2-r2,
+ssp-3.4.1-1, pie-8.7.6.5)`).  `partialcmp.py` positioned reference bytes
+68,248 -> 68,084 of 943,398, exact relocations 969 -> 964 of 18,317, exact
+symbols 304 of 2,907 unchanged -- the function is 84 bytes longer, so the TU
+relayout moves the census while no symbol loses exactness.
+
+**GATES.**  Focused `make period T=t_v8sig`: **1 passed, 0 failed**.  Full
+`make -j1 J=1 phase`: **385 passed, 0 failed**, boundary OK.  `refcheck`: 0
+dangling.  `anchorcheck`: 276 suites / 10,038 mutations, 0 detached.
+`git diff --check` clean.
+
+**DECLINED.**  No flag change and no `period.mk` edit (the family is
+falsified).  No source was fitted to a byte count: the enumeration was
+completed before any size was read and exactly the predicted source property
+(the in-loop selection) accounts for the shape.  H over J is an idiom choice,
+not a recovery claim.
