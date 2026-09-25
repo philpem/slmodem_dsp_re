@@ -273,21 +273,6 @@
   "replace": "\treturn count;\n}"
  },
  {
-  "label": "the turnaround budget is charged only twice",
-  "find": "\t\t       - (hdx->short_9c\n\t\t\t  + hdx->short_98\n\t\t\t  + hdx->short_9a));",
-  "replace": "\t\t       - (hdx->short_9c\n\t\t\t  + hdx->short_98));"
- },
- {
-  "label": "the turnaround surplus is not clamped at zero",
-  "find": "\treturn (short)(left < 0 ? 0 : left);",
-  "replace": "\treturn left;"
- },
- {
-  "label": "the turnaround subtraction is done at 32 bits, so it does not wrap",
-  "find": "\tshort left;\n\n\tleft = (short)(hdx->turnaround",
-  "replace": "\tint left;\n\n\tleft = (int)(hdx->turnaround"
- },
- {
   "label": "the cleaned-sample count is capped one sample high",
   "find": "\tif (have > V32FP_CLEAN_MAX)",
   "replace": "\tif (have >= V32FP_CLEAN_MAX)"

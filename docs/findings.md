@@ -125587,3 +125587,78 @@ falsified).  No source was fitted to a byte count: the enumeration was
 completed before any size was read and exactly the predicted source property
 (the in-loop selection) accounts for the shape.  H over J is an idiom choice,
 not a recovery claim.
+
+## F11384. The two V.32 half-duplex drivers are their state files' functions, and `CalcTurnAroundDelay`'s inline proves it
+
+V.32 TU-reconciliation step (issue #6/#20/#67).  The blob's V.32 FILE records
+are 19 (`V32.c`, `V32RXTAB.c`, `V32SMC_TX.c`, `V32TAB144.c`, `V32TXHDX.c`,
+`V32TXTAB.c`, `V32dec.c`, `V32int.c`, `V32mod.c`, `V32org.c`, `V32prc.c`,
+`V32rxhdx.c`, `V32states.c`, `V32stc.c`, `V32RNG.c`, `V32Sdm_rx.c`,
+`V32Sdm_tx.c`, `V32ans.c`, `V32loop.c`) and almost none has a `.text` local:
+the only `.text` locals in the whole family are `V32mod.c`'s three.  So most
+boundaries are brackets, and each has to be settled by a different argument.
+
+**OWNERSHIP, FROM ADDRESS ORDER AND AN INLINE.**  Our tree had split the two
+half-duplex drivers into a separate layer `src/pump/v32/v32hdx.c`.  The object
+does not: `V32TxHdxModem` (`.text 0x07fce0`) is immediately before
+`TxHdxTone` (0x07fd40) in the `V32TXHDX.c` run, and `V32RxHdxModem`
+(0x0838f0) immediately before `RxHdxTone` (0x083900) in the `V32rxhdx.c` run.
+`ld -r` concatenates `.text` in FILE order and a TU is contiguous, so the
+drivers are their state files' first functions.
+
+The decisive evidence is stronger than address order.  `CalcTurnAroundDelay`
+(0x083ae0) sits between `RxHdxNoSignal` and `RxHdxPhsReversal`, and the object
+**inlines it** at 83c29..83c55 -- the same 53 bytes instruction for instruction
+-- while also keeping the out-of-line copy.  `-O3` inlines a same-translation-
+unit global; it cannot inline across TUs.  So `CalcTurnAroundDelay` is
+`V32rxhdx.c`'s, and our tree's placement of it in `v32fpctl.c` was the split
+trap.  `V32rxhdx.c`'s own header had already recorded the 53-byte inline and
+the resulting `call` as a tier-2 residual; this recovers the boundary that
+removes it.
+
+**CHANGE.**  `V32TxHdxModem` moved verbatim from `v32hdx.c` to the head of
+`V32TXHDX.c`; `V32RxHdxModem` moved verbatim to the head of `V32rxhdx.c` and
+`CalcTurnAroundDelay` to its address position between `RxHdxNoSignal` and
+`RxHdxPhsReversal`; `v32hdx.c` is deleted.  No body rewritten and no flag
+changed.
+
+**MEASURED, AND NO EXACT SYMBOL LOST.**  The exact set is IDENTICAL before and
+after -- 833 of 1,852 at grade 0 and 886 at grade 0-or-1, with no gain and no
+loss.  The three moved functions stay EXACT: `V32TxHdxModem`, `V32RxHdxModem`
+and `CalcTurnAroundDelay`.  The one body whose codegen moves is the one the
+inline predicted: `RxHdxPhsReversal` goes from 571 bytes and 82 differing (a
+`call`) to **619 bytes and 34 differing** (the inline) against the object's
+653, instruction count now 157 against the object's 159.  That is the recovered
+call shape, named not hill-climbed.  `partialcmp`: positioned bytes
+68,084 -> 68,274 of 943,398; exact relocations 964 -> 966 of 18,317; exact
+symbols 304 of 2,907 and exact sections 69 of 92 unchanged.
+
+**HARNESS.**  The `v32hdx` suite covered both drivers in one file.  It is split
+to match the source: `v32hdx` now names `src/pump/v32/V32TXHDX.c`,
+`v32hdxrx` names `src/pump/v32/V32rxhdx.c` (both run `t_v32hdx`), and the three
+`CalcTurnAroundDelay` mutations move out of `v32fpctl` into `v32ctad`, sourced
+at `V32rxhdx.c` and run by `t_v32fpctl` (which drives the function directly).
+`suites.json` gains both entries.  The four touched suites were re-recorded
+through the pinned GCC 13.3.0 container at `--jobs 1`:
+**v32hdx 13 caught / 1 unusable / 1 equivalent, v32hdxrx 4/4,
+v32fpctl 57/57, v32ctad 2 caught / 1 uncaught** -- and that one uncaught
+("the turnaround subtraction is done at 32 bits") was uncaught in the old
+`v32fpctl` record too, so it is a preserved verdict and not a regression.
+`anchorcheck` is 278 suites / 10,038 mutations / 0 detached;
+`mutsnap --check` is 4 current, 274 stale (its whole-tree key on any `src/`
+edit), 0 never recorded.
+
+**GATES.**  Focused `make period` (`t_v32hdx t_v32fpctl t_v32fpsub`):
+**3 passed, 0 failed**.  Full `make -j1 J=1 phase`: **385 passed, 0 failed**,
+boundary OK.
+`refcheck`: 0 dangling.  `git diff --check` clean.
+
+**DECLINED, and the size of what is left.**  The remaining 17 V.32 TUs have no
+`.text` local to anchor them, so their boundaries need a per-function inlining
+argument of the kind this finding used for `CalcTurnAroundDelay`; none has been
+made yet.  Our `v32fpctl.c` is the largest layer (it still holds `SetTxModeV32`
+/ `SetRxModeV32` / `SetAdaptEcV32` / `SetECRndTripDelayV32` / `SetRxLoopsV32` /
+`RxClampV32` / `SetToneDetect` and the detect wrappers from several blob TUs),
+and `v32data.c`, `v32seq.c`, `v32fse.c`, `v32smc.c`, `v32scram.c` and the
+`v32ns*`/`v32anstone`/`v32vtb` files are the same kind of layer.  They stay
+named with that blocker; no function was forced to a file for a round number.

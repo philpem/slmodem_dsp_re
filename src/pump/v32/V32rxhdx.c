@@ -1,8 +1,10 @@
 /*
  * V32rxhdx.c -- ITU-T V.32 / V.32bis: the twelve half-duplex RECEIVE states.
  *
+ *   V32RxHdxModem      .text 0x0838f0   12
  *   RxHdxTone          .text 0x083900  246
  *   RxHdxNoSignal      .text 0x083a00  223
+ *   CalcTurnAroundDelay .text 0x083ae0  53
  *   RxHdxPhsReversal   .text 0x083b20  653
  *   RxHdxRateSequence  .text 0x083db0  258
  *   RxHdxSequence      .text 0x083ec0  222
@@ -16,9 +18,10 @@
  *
  * The functions are in the object's own address order, which is what
  * `docs/method/refinement.md` lever 1 asks for.  `CalcTurnAroundDelay`
- * (0x083ae0) sits between the second and the third in the blob's `V32rxhdx.c`
- * and is NOT here: `src/pump/v32/v32fpctl.c` already carries it with the
- * family it configures.
+ * (0x083ae0) sits between the second and the third and IS here: the object
+ * inlines it into `RxHdxPhsReversal`, which is only possible within one
+ * translation unit, so it is this unit's and `v32fpctl.c` no longer carries
+ * it.
  *
  * `include/dsplib/v32hdx.h` is the contract these are written to and
  * `include/dsplib/v32hdxst.h` is the roster.  The receive driver does not
@@ -90,14 +93,16 @@
  * symbols -- which is why it is named for the counting and not for the seed.
  *
  * ---------------------------------------------------------------------------
- * `CalcTurnAroundDelay` IS INLINED IN THE OBJECT AND CALLED HERE
+ * `CalcTurnAroundDelay` IS INLINED IN THE OBJECT AND INLINED HERE
  *
  * 83c29..83c55 is that function's 53 bytes instruction for instruction: the
  * blob's `V32rxhdx.c` holds both the out-of-line copy at 0x83ae0 and this
  * inlined one, which is what GCC does with a same-translation-unit global at
- * -O3.  This tree splits by role rather than by the blob's translation units,
- * so the function lives in `v32fpctl.c` and this is a call.  Differentially
- * identical; a tier-2 residual of one call sequence.
+ * -O3.  That is the proof the two are one translation unit, and moving the
+ * function into this file is what recovered the shape: `RxHdxPhsReversal`
+ * went from 571 bytes (a `call`, 82 differing) to 619 bytes (the inline, 34
+ * differing) against the object's 653, and its instruction count is now 157
+ * against the object's 159.  The residual is named, not hill-climbed.
  */
 
 #include "dsplib/v32hdxst.h"
@@ -289,6 +294,20 @@
 
 /* ------------------------------------------------------------------------ */
 
+/*
+ * The receive half-duplex driver: one state, one call.  It is the blob's
+ * `V32rxhdx.c` first function, so it is first here too.
+ */
+void
+V32RxHdxModem(struct v32_modem *modem, short *in, unsigned short *out,
+	      unsigned short *count)
+{
+	struct v32_hdx *hdx;
+
+	hdx = modem->hdx;
+	hdx->rx_state(modem, in, out, count);
+}
+
 void
 RxHdxTone(struct v32_modem *modem, short *in, unsigned short *out, unsigned short *count)
 {
@@ -356,6 +375,32 @@ RxHdxNoSignal(struct v32_modem *modem, short *in, unsigned short *out,
 	}
 
 	*count = RxClampV32(modem, in, (short *)out, *count);
+}
+
+/*
+ * What is left of the turnaround budget, clamped at zero.
+ *
+ * The subtraction is narrowed to sixteen bits BEFORE the clamp -- the object
+ * does `cwtl` and then the branchless `x & ~(x >> 31)` -- so a budget that
+ * underflows past 32768 comes back positive rather than clamped.  D483.
+ *
+ * The four fields are loaded `movzwl` here and +0x9c `movswl` in
+ * `SetECRndTripDelayV32`.  Both extensions are DEAD -- every use is truncated
+ * back to sixteen bits -- so the signedness is the compiler's free choice at
+ * each site (finding F614) and each site is written the way the object has it.
+ */
+
+short
+CalcTurnAroundDelay(struct v32_modem *modem)
+{
+	struct v32_hdx *hdx = HDX(modem);
+	short left;
+
+	left = (short)(hdx->turnaround
+		       - (hdx->short_9c
+			  + hdx->short_98
+			  + hdx->short_9a));
+	return (short)(left < 0 ? 0 : left);
 }
 
 void
