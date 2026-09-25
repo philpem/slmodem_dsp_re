@@ -125588,6 +125588,147 @@ completed before any size was read and exactly the predicted source property
 (the in-loop selection) accounts for the shape.  H over J is an idiom choice,
 not a recovery claim.
 
+## F11382. The V.34 receive/TX boundary: eight functions in `V34RX.c` are `V34hshak.c`'s, and `t_v34hshak`'s modern baseline was already a segfault
+
+TU-reconciliation step, V34 family (issue #6/#20/#67).  The blob's V34 FILE
+records are, in order, `V34.c`, `V34ARRAY.c`, `V34CONST.c`, `V34RX.c`,
+`V34TX.c`, `V34hshak.c`, `v34filters.c` (records 293-307).  `ld -r` concatenates
+`.text` in FILE order, so a function's address places it between the neighbours'
+anchors.
+
+**PROOF OF OWNERSHIP.**  `V34hshak.c`'s locals are `StateName` (`.data+0x6c00`,
+referenced only from `v34handshakinit`), `ApplyBulkDelay` (LOCAL FUNC, `.text`
+0x5dd10) and `getbit` (LOCAL FUNC, 0x5eaf0).  A LOCAL FUNC is reachable only
+from its own TU, so `V34hshak.c` begins at `ApplyBulkDelay` (0x5dd10), and every
+function at or above 0x5dd10, up to `v34filters.c`'s first anchored function
+(`V34SetupModulator`, which is the first user of the local `tx600c1` at
+`.rodata+0x3640`), is `V34hshak.c`'s.  Eight functions our tree had in
+`V34RX.c` sit in that range: `txrxdmainit` (0x5e3e0), `v34FreezeEcho` (0x5e200),
+`V34scrambler` (0x5e2e0), `V34SetupDemodulator` (0x5def0), `polyValue`
+(0x60500), `setInitialPhase` (0x60520), `setTimingStateParameters` (0x60760)
+and `TimingV34` (0x60930).  The other direction is empty: all 22 globals our
+`V34hshak.c` defines have blob addresses at or above 0x5dd10.  No body was
+rewritten; the eight moved verbatim, in their original order, to the end of
+`V34hshak.c`'s function section (before its `#if __SIZEOF_POINTER__` offset
+asserts).  Only `polyValue`/`setInitialPhase`/`setTimingStateParameters`/
+`TimingV34` call each other, all in that order, and all eight are prototyped in
+`include/dsplib/v34rx.h`.
+
+**MEASURED.**  None of the eight, nor anything else in `V34RX.c`, was exact
+before the move, so no exact function could be lost.  The four exact
+`V34hshak.c` DFT leaves (`dftRetrainDetInit`, `dftfreqinit`, `dftnlinitNoiseBins`,
+`dftnlinitSignalBins`) were placed AFTER and stay EXACT.  Tree grade 0 holds at
+833/1852 and grade 0-or-1 at 886/1852 -- the move is structurally correct and
+exactness-neutral.  `partialcmp`: positioned bytes 68,084 -> 68,226 / 943,398;
+exact relocations 964/18,317, exact symbols 304/2,907 and exact sections 69/92
+all unchanged.
+
+**HARNESS.**  Five mutations in `test/mutations/v34rx.json` were in the moved
+functions and now name `V34hshak.c`'s file; they moved to `v34hshak.json`, two
+`find` strings were widened to stay unique in the larger file, and
+`anchorcheck` is 276 suites / 10,038 mutations / 0 detached.  `v34rx` was
+re-recorded through the pinned GCC 13.3.0 container at `J=1`: **26 mutations,
+26 caught, 0 uncaught**.
+
+**BLOCKED, AND IT IS PRE-EXISTING.**  `v34hshak` could NOT be re-recorded:
+`tools/mutate.py --suite v34hshak`'s modern baseline is not green.  The rebuilt
+`build/test/t_v34hshak` exits 139 (SIGSEGV) under the GCC 13.3.0 container.
+This is not the move: reverting `V34RX.c` and `V34hshak.c` to the unmodified
+tree and rebuilding the same target reproduces exit 139, so master's modern
+`t_v34hshak` segfaults already and the suite could not have been re-recorded
+on master either.  The period tier is unaffected (`make period` 385 passed, 0
+failed).  A dedicated portability issue is owed for the crash; it is left
+visible rather than worked around in `src/`.
+
+**DECLINED, and the new framing.**  `V34TX.c` (record 302, between `V34RX.c`
+and `V34hshak.c`) has no LOCAL function of its own, so its `.text` extent is a
+bracket: functions at or below 0x5dd0c that are not pinned by `V34RX.c`'s
+`V34demodulate`/`sqrt_table` could be either unit, and nothing in the object
+settles which.  The split of our `v34pcmif.c`/`v34info.c`/`v34info1a.cpp`/
+`v34diag.cpp` into the blob's single `VPcmV34Main.cpp` is proven but not moved:
+that file's 20 exact functions in `v34pcmif.c` are exact BECAUSE of the
+present per-file emission order (`v34pcmif.c`'s own header says so), and a
+merge that does not reproduce the blob's global emission order would be an
+unmeasured loss.  Both stay named with their blocker.
+
+**GATES.**  Focused `make period` (`t_v34rx t_v34hshak t_v34pcmif t_v34info
+t_v34shell`): 5 passed, 0 failed.  Full `make -j1 J=1 phase`: **385 passed, 0
+failed**, boundary OK.  `refcheck`: 0 dangling.  `anchorcheck`: 0 of 10,038
+detached.  `mutsnap --check`: v34rx current, 275 stale (the coarse whole-tree
+key on any `src/` edit), v34hshak stale for the pre-existing crash above.
+`git diff --check` clean.
+
+## F11383. `V22int.c` is a translation unit, not four layers: its fourteen entry points are reunited and twelve exact functions are kept
+
+TU-reconciliation step, V.22 family (issue #6/#20/#67).  The blob's FILE
+record 483 is `V22int.c`; it has **no local symbol of its own** -- no LOCAL
+FUNC and no LOCAL OBJECT -- so its extent is recovered from FILE order and the
+neighbouring anchors, not from a local.  `ld -r` concatenates `.text` in FILE
+order and the records around it are `v22_sre.c` (482), `V22int.c` (483),
+`B103.c` (484), so every function between `v22_sre.c`'s last
+(`V22_SRE_free`, `.text 0x08e0f0`, 46 bytes) and `B103.c`'s first
+(`B103FP_create`, `.text 0x08e690`, 2151 bytes) is `V22int.c`'s:
+**[0x08e120, 0x08e68b)**.
+
+**THE FOURTEEN FUNCTIONS.**  All are GLOBAL entry points, none calls another,
+so the object's `.text` order is the unit's emission order and therefore its
+source order.  In that order: `SetTxRate` (0x08e120, 205), `SetRxRate`
+(0x08e1f0, 211), `ScrambleDataV22` (0x08e2d0, 28), `DescrambleDataV22`
+(0x08e2f0, 30), `ModDataV22` (0x08e310, 95), `DemodDataV22` (0x08e370, 510),
+`ResetRx` (0x08e570, 62), `SetAdaptEqV22` (0x08e5b0, 95), `TxClockSync`
+(0x08e610, 22), `CarrierDetect` (0x08e630, 14), `SignalDetect` (0x08e640,
+14), `GetSignalQuality` (0x08e650, 25), `ScramblerOn` (0x08e670, 11),
+`DescramblerOn` (0x08e680, 11).
+
+**WHY THE PRIOR PASS DECLINED, AND WHY IT WAS RIGHT TO.**  The fourteen were
+split across four reconstruction files that are LAYERS, not TUs --
+`v22rate.c` (4/4 of its functions are V22int.c's), `v22data.c` (3/4),
+`v22prc.c` (5/10, the other five in the disjoint `0x8bd50..0x8c5a0` block)
+and `v22ctl.c` (2/4, the other two at 0x088480 and 0x08c3b0).  A naive
+concatenation of those files would have dragged another unit's functions into
+`V22int.c` and lost exactness; and `v22prc.c` really does span two disjoint
+blob ranges.  The recovered unit is the address bracket above, nothing wider.
+
+**CHANGE.**  New `src/pump/v22/V22int.c` with the fourteen bodies moved
+VERBATIM, in the object's order.  `v22rate.c` is deleted (it held nothing
+else); `v22data.c`, `v22prc.c` and `v22ctl.c` keep the functions the object
+puts in OTHER V.22 units.  In every one of those three files the moved
+functions were defined AFTER the functions that remain (`Detect_v22` first in
+`v22data.c`, `ReadGTimer` before the moved five in `v22prc.c`,
+`V22FP_GetDiagnostics`/`V22FP_control` before the moved pair in `v22ctl.c`),
+so no remaining function's emission-order context changes -- which is what
+the measurement confirms.  No body was rewritten; no flag changed.
+
+**MEASURED, AND NO EXACT SYMBOL WAS LOST.**  Before the move 12 of the 14
+were grade-0 EXACT (`ModDataV22` and `DemodDataV22` were not); after it the
+same 12 are EXACT and no other symbol's verdict moved.  Tree grade 0 holds at
+**833/1852** and grade 0-or-1 at **886/1852**.  The two exact functions left
+behind, `ReadGTimer` and `V22FP_GetDiagnostics`, are EXACT before and after.
+`partialcmp`: positioned bytes 68,084 -> 68,002 of 943,398; exact relocations
+964/18,317 unchanged; **exact symbols 304 -> 305 of 2,907**, the +1 being the
+`V22int.c` FILE record the object has and we now emit; exact sections 69/92
+unchanged.  The byte movement is the TU relayout the census is known to move
+on, with no function-level loss.
+
+**HARNESS.**  No mutation suite is sourced at any of the four files
+(`suites.json`'s V.22 entries are `V22Dec.c`, `V22.c`, `v22_fse.c`), so none
+moved and none needed re-recording.  `anchorcheck`: 276 suites / 10,038
+mutations, 0 detached.  Two test comments that named `v22rate.c` for the
+uninitialised mixer tail now name `V22int.c`.
+
+**GATES.**  Focused `make period` (`t_v22rate t_v22data t_v22prc t_v22ctl
+t_v22leaves t_v22fpcreate`): **6 passed, 0 failed**.  Full `make -j1 J=1
+phase`: **385 passed, 0 failed**, boundary OK.  `refcheck`: 0 dangling.
+`anchorcheck`: 0 detached.  `git diff --check` clean.
+
+**DECLINED.**  The other V.22 TUs -- the blob's `V22.c`, `V22Dec.c`,
+`v22mod.c`, `v22prc.c`, `v22rxtab.c`, `v22stc.c`, `v22txtab.c`, `v22_fse.c`,
+`v22_iir.c`, `v22_mrf.c`, `v22_pps.c`, `v22_sre.c` -- stay as they are in
+this step.  They share one address bracket with no local FUNC to split it, so
+each boundary needs its own argument; that is the next V.22 step, not this
+one.  Our `v22prc.c` still holds a block the object may place in `V22.c`,
+`V22Dec.c` or `v22stc.c`, and is named with that blocker.
+
 ## F11384. The two V.32 half-duplex drivers are their state files' functions, and `CalcTurnAroundDelay`'s inline proves it
 
 V.32 TU-reconciliation step (issue #6/#20/#67).  The blob's V.32 FILE records

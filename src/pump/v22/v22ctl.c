@@ -1,10 +1,14 @@
 /*
- * v22ctl.c -- V.22 / V.22bis: the datapump object's four exported accessors.
+ * v22ctl.c -- V.22 / V.22bis: the datapump object's exported accessors.
  * See include/dsplib/v22ctl.h, which carries the evidence.
  *
- * In the object's own order: 0x088480, 0x08c3b0, 0x08e670, 0x08e680 -- three
- * different address blocks, so this file is a LAYER and not a translation
- * unit, exactly as src/pump/v22/v22data.c records for the same four blocks.
+ * In the object's own order: 0x088480, 0x08c3b0 -- two different address
+ * blocks, so this file is a LAYER and not a translation unit, exactly as
+ * src/pump/v22/v22data.c records for the same blocks.
+ *
+ * ScramblerOn and DescramblerOn are NOT here: the object puts them in
+ * V22int.c (0x08e670, 0x08e680), and they moved there in the TU
+ * reconciliation.
  */
 
 #include "dsplib/v22ctl.h"
@@ -70,14 +74,8 @@ V22FP_control(struct v22fp *fp, const struct v22fp_ctl *ctl)
 	return 1;
 }
 
-int
-ScramblerOn(struct v22fp *fp)
-{
-	return fp->dsp->scrambler_on;
-}
-
-int
-DescramblerOn(struct v22fp *fp)
-{
-	return fp->dsp->descrambler_on;
-}
+/*
+ * ScramblerOn and DescramblerOn are V22int.c's and now live in
+ * src/pump/v22/V22int.c.  What remains here is V22FP_GetDiagnostics and
+ * V22FP_control, which the object puts in other V.22 units.
+ */

@@ -1665,7 +1665,7 @@
    }
   },
   "v32ctad": {
-   "key": "da010122338dc0e3b7065f4b55df7a32e754fd3fab8b72f08f27c2e482d7fc1c",
+   "key": "41e04ef280e0efaa7ffd5c27ff6836e67fa8d4a17b082a3185d19fd3a829350d",
    "summary": "3 mutations: 2 caught (2 by test, 0 by strings), 1 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "the turnaround budget is charged only twice": "caught",
@@ -1763,7 +1763,7 @@
    }
   },
   "v32fpctl": {
-   "key": "7b1a161911789c7fe2029e1c109160b31768f7131d4d26e82b7f7b6ab6406dc0",
+   "key": "98026aa248e071ecdbed4f7bd236e4fe727a401d9bbd0eea38fa8e1e64b7d1b3",
    "summary": "57 mutations: 57 caught (57 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "12000 initialises the Viterbi decoder for 14400": "caught",
@@ -1859,7 +1859,7 @@
    }
   },
   "v32hdx": {
-   "key": "ee286b194e35850eb3aff433efc5f36c03930de640d6152e3cae7538510f79bc",
+   "key": "5de15b49b753d9d5294bd8646500f32a7970da598bf0afbf5ead2f4462925714",
    "summary": "15 mutations: 13 caught (13 by test, 0 by strings), 0 NOT caught, 1 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "the budget is seeded from V32_SAMPLE_LEN instead of V32_SYMBOL_LEN": "caught",
@@ -1880,7 +1880,7 @@
    }
   },
   "v32hdxrx": {
-   "key": "ad071bf9fbb687875a48476d2fd528d992a7b6cf75c8cc7021d8af7bf64ea413",
+   "key": "b989d432ef9a5ba3259313d53e7e3c5f0c7a5afa1690e39bd20efa782a50207e",
    "summary": "4 mutations: 4 caught (4 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "the receive driver dispatches from the TRANSMIT slot": "caught",
@@ -5085,12 +5085,10 @@
    }
   },
   "v34rx": {
-   "key": "524701cf4229a6b9444b818ce590e18fe3e8234cc30837050c0d911977aaa01e",
-   "summary": "31 mutations: 31 caught (31 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "key": "cabf8fdead9f5922e644722a18fdd96b206a8143c64eb60ddced994678c71498",
+   "summary": "26 mutations: 26 caught (26 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "NEC adaptation starts at count 1 rather than 0": "caught",
-    "both echo reports dump the near canceller": "caught",
-    "freezing the echo clears the flag rather than setting it": "caught",
     "the AGC freeze report fires for any symbol count": "caught",
     "the BETA threshold comparison is signed in the third arm": "caught",
     "the FEC start announcement is gated on the wrong count": "caught",
@@ -5099,14 +5097,11 @@
     "the S-S1 report has the symbol count and the PLL count swapped": "caught",
     "the S-S1 threshold 0x600 becomes 0x601": "caught",
     "the adaptation steps every 45th sample become every 44th": "caught",
-    "the demodulator produces three outputs per call, not four": "caught",
-    "the demodulator trace has baud and carrier swapped": "caught",
     "the echo energy report has energy and BETA swapped": "caught",
     "the equaliser report has equerr and preerr swapped": "caught",
     "the equaliser report's symbol bound is exclusive": "caught",
     "the far adaptation offset is 0x2bc rather than 0x2bb": "caught",
     "the far counter reads this call's count, not the previous one": "caught",
-    "the near and far echo reports swapped": "caught",
     "the renegotiation window's lower bound moves": "caught",
     "the renegotiation window's upper bound moves": "caught",
     "the retrain and renegotiation flags swapped": "caught",

@@ -431,7 +431,7 @@ base_cfg(int mode, int rate, int f14, int f18)
 /* ------------------------------------------------------------------------ */
 
 #define BLOCK	160		/* V22_IIR_BLOCK; a short block leaves the
-				 * mixer's tail uninitialised, see v22rate.c */
+				 * mixer's tail uninitialised, see V22int.c */
 #define INBUF	512
 #define SYMBUF	256
 #define OUTBUF	2048
