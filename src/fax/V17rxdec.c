@@ -1,5 +1,5 @@
 /*
- * v17dec.c -- the V.17 fax receiver's slicers for the library equaliser.
+ * V17rxdec.c -- the V.17 fax receiver's slicers for the library equaliser.
  *
  * Reconstructed from dsplibs.o:
  *   FAX_FSE_decision_128pt .text 0x097c40  910

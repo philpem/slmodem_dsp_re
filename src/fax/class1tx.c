@@ -65,32 +65,6 @@
 #include "dsplib/v29data.h"
 #include "dsplib/v29fax.h"
 
-char *V17RX_MESG[10] = {
-	"V.17 Receive Data Mode",
-	"V.17 Receive Protocol Mode",
-	"V.17 Rx Start of Protocol",
-	"ERROR: V.17 Rx Internal Error",
-	"ERROR: Loss Carrier In V.17 Rx Protocol",
-	"V.17 Rx Idle (End of Transmition)",
-	"CONNECT: V.17 Receive 14400 bps",
-	"CONNECT: V.17 Receive 12000 bps",
-	"CONNECT: V.17 Receive 9600 bps",
-	"CONNECT: V.17 Receive 7200 bps",
-};
-
-char *V17TX_MESG[10] = {
-	"V.17 Transmit Data Mode",
-	"V.17 Protocal Transmit Mode",
-	"CONNECT: V.17 Transmit 14400 bps",
-	"CONNECT: V.17 Transmit 12000 bps",
-	"CONNECT: V.17 Transmit 9600 bps",
-	"CONNECT: V.17 Transmit 7200 bps",
-	"V.17 Transmit Idle Mode",
-	"ERROR: V.17 Tx Internal Error",
-	"ERROR: Transmit Input Queue Under-run",
-	"ERROR: Transmit Input Queue Over-run",
-};
-
 /*
  * One shape, eight times: the code is guarded UNSIGNED against the table's
  * entry count (so a negative code answers NULL) and indexed through an
@@ -109,8 +83,6 @@ char *V17TX_MESG[10] = {
 			*out = (table)[(unsigned char)code];		\
 	}
 
-MESSAGE_FN(v17tx_message, V17TX_MESG, 10)
-MESSAGE_FN(v17rx_message, V17RX_MESG, 10)
 
 void
 null_message(void *handle, int code, char **out)

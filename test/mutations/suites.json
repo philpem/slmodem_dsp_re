@@ -193,7 +193,7 @@
   "build/test/t_scrambler"
  ],
  "v17data": [
-  "src/pump/v17/v17data.c",
+  "src/fax/V17t_int.c",
   "build/test/t_v17data"
  ],
  "v22dec": [

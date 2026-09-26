@@ -308,23 +308,3 @@ SMCv17_encoder_tcm(void *smc, struct fpm_smc_ring *ring,
 	statep->prev = (short)prev;
 	ring->widx = widx;
 }
-
-/*
- * SMCv17_init -- .text 0x0a0a60, 87 bytes.  See v17data.h for what this
- * confirms about the five neutral fields it clears.
- */
-void
-SMCv17_init(void *smc, const short *cfg)
-{
-	struct v17_smc *statep = (struct v17_smc *)smc;
-
-	if (cfg == NULL)
-		cfg = SMCv17_CFG;
-
-	memcpy(&statep->mode, cfg, sizeof(short[2]));
-	statep->quad = 0;
-	statep->state = 0;
-	statep->trellis = 0;
-	statep->prev = 0;
-	statep->r10 = 0;
-}

@@ -1497,7 +1497,7 @@
    }
   },
   "v17data": {
-   "key": "dc0a8cf403f04088e26c32eb2a317436f2771be06bbdcf317fb58bd574d51bc7",
+   "key": "f25a56ba858ee7d7d4f377e94c1977aac137f16e49c91560d59aaacbb4eefaf9",
    "summary": "26 mutations: 26 caught (26 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "the coder and the ring are handed to the encoder the other way round": "caught",

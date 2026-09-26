@@ -126357,3 +126357,67 @@ any V.21 or `class1tx.c` file, so none moved and none needed re-recording.
 `refcheck` 0 dangling; `git diff --check` clean.  `V17` remains: its split is
 the same shape but its merged file also carries `V17txtab.c`'s tables and
 `class1tx.c`'s `SMCv17_init`, so its `V17t_int.c` pulls from three files.
+
+#### F11390 addendum 3. The V.17 family, and `V17rxdec.c` by rename
+
+`v17.c` is the largest and most entangled of the four.  Its functions use the
+file-scope accessor macros `RXROOT`/`RXSTATE`/`RXS`/`TXROOT`/`TXPRIV`/
+`TXBLOCK`/`TXFP` (lines 121-130), so the ten-line macro block travels with
+every moved body into each new TU -- a compile-time substitution that cannot
+move code generation.  The split is to `V17rx.c` (`[V17RX_create 0x096eb0,
+V17TX_create 0x0989e0)`), `V17tx.c` (`[V17TX_create, V21RX_create
+0x098e70)`), `V17r_prc.c`/`V17r_stc.c` and `V17t_prc.c`/`V17t_stc.c` (the
+rx/tx state machines divided at their control/status pairs), `V17r_int.c`,
+`V17t_int.c` and `Vmi_v17.c`.
+
+THREE OF THE TARGET TUs DREW FROM THREE DIFFERENT RECONSTRUCTION FILES:
+
+  * `V17r_int.c` (`DemodDataV17`..`Restore_rateV17`, blob 0x0a50a0..0x0a5737)
+    was already written correctly, under the wrong name: the existing
+    `src/fax/V17r_prc.c` held the nine interface functions.  It is renamed to
+    `V17r_int.c`, and a new `V17r_prc.c` takes the receive state machine out
+    of `v17.c`.
+  * `V17t_int.c` = `ScrambleDataV17`/`SeedScramblerV17`/`SetEncoderV17`/
+    `SetTxModeV17` (from `v17.c`) + `SMCv17_init` (from `Smc.c`) +
+    `ModDataV17`/`TxNoCarrierV17` (from `src/pump/v17/v17data.c`, which is
+    then DELETED).  Blob addresses: ScrambleDataV17 0x0a09d0, SMCv17_init
+    0x0a0a60, SetTxModeV17 0x0a0ac0, ModDataV17 0x0a0d40, TxNoCarrierV17
+    0x0a0db0 -- all inside the one record.
+  * `Vmi_v17.c` = the lowercase adapters from `V17rx.c`/`V17tx.c` plus the two
+    `v17*_message` reporters and their `V17*_MESG` tables from `class1tx.c`.
+
+`V17rxdec.c` is recovered by a PURE RENAME of `src/fax/v17dec.c`: its seven
+FSE-decision functions fill `[FAX_FSE_decision_128pt 0x097c40, V17TX_create
+0x0989e0)`, pinned on both sides by neighbours, so the blob FILE spelling is
+owned.  The `DECv17_*` constellation tables stay in the ours-only
+`v17dec_tables.c`; whether the blob's `V17rxdec.c` owns all of them is not
+settled here and is named as the next table step.
+
+**MEASURED, against the committed V.21 milestone.**  `byteident` grade 0
+**842 -> 843** / 1,852, grade 0-or-1 **894 -> 895**; exact-set diff
+**GAINED `V17TX_modem`; LOST none** (the `V17rxdec.c` rename is
+exactness-neutral for bodies).  `partialcmp` positioned **68,192 -> 67,847** /
+943,398, exact relocations **937 -> 942** / 18,317, exact symbols
+**339 -> 346** / 2,907 (the six new code FILE records plus `V17rxdec.c`),
+exact sections 69/92.  The 345-byte positioned fall is the TU relayout, stated
+not hidden; exact symbols and relocations both rise.
+
+**HARNESS.**  `v17data` is re-sourced from the deleted `src/pump/v17/v17data.c`
+to `src/fax/V17t_int.c` and re-recorded through the pinned GCC 13.3.0
+container: **26 mutations, 26 caught, 0 uncaught, 0 unusable**.  No suite
+sources `V17rx.c`/`V17tx.c`/`Smc.c`/`v17dec.c`.  `anchorcheck` 280 suites /
+10,038 mutations / 0 detached.
+
+**GATES.**  `make -j1 J=1 phase`: **385 passed, 0 failed**, boundary OK;
+`refcheck` 0 dangling; `git diff --check` clean.
+
+**DECLINED, WITH THE BLOCKER.**  The `.data` side of the V.17 family is not
+re-homed: `V17TX_CFG`, `SMCv17_*`, `V17TX_SYM_SIZE`/`PPS_SCALE`/`PATTERN_SCR1`
+(`V17txtab.c`) and the `VTBv17_*`/`FSEv17_*`/`SREv17_*` tables
+(`V17rxtab.c`) still sit in `v17.c`, `Smc.c` and `V17rxtab.c`, and the
+`DECv17_*` tables in `v17dec_tables.c`.  Assigning them needs the same
+per-object `.data`/`.rodata` ordering argument the `.text` splits now have,
+and none of the four `*_MESG`/`*_CTL`/`*_CFG` template groups is yet placed;
+they are named rather than guessed.  `Vtb_tab.c` (`Vtb_tab.c`'s own
+`VTB*` tables) remains the one record with no content claim at all in this
+pass.
