@@ -25,7 +25,14 @@ SOURCE_FILE_OCCURRENCE = {
     "src/voice/voice.c": ("voice.c", 1),
     "src/service/voicecmd.c": ("voice.c", 1),
     "src/service/voicedp.c": ("voice.c", 1),
-    "src/service/voicesvc.c": ("voice.c", 1),
+	"src/service/voicesvc.c": ("voice.c", 1),
+    # The reference's only assembly input.  Its basename appears TWICE in the
+    # blob's FILE list (`pow.S` at 279 and, after `<command line>` and
+    # `<built-in>`, again at 282), so the unique-basename arm cannot place it.
+    # A single `.S` input emits that whole four-record run, and selecting the
+    # FIRST occurrence orders the input so the run lands on 278..281 exactly.
+    # F11407.
+    "src/core/pow.S": ("pow.S", 0),
 }
 
 

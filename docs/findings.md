@@ -127682,3 +127682,83 @@ define no symbol), so nothing owes a re-record from this entry.  The
 `fpmphasor`/`fpmphasordp` suites from F11403 still do.
 
 (2026-09-26)
+
+## F11407. `pow.S` is a genuine assembly input, and its four FILE records (`pow.S`, `<command line>`, `<built-in>`, `pow.S`) are reproduced by an empty `.S` placeholder; `V34.c` is the last blob-only name
+
+TU-reconciliation, the toolchain component of the blob-only FILE set (issue
+#6/#20/#67).  F11405 recorded `pow.S` (twice), `<command line>` and
+`<built-in>` as "compiler/toolchain inputs, not translation units" and set the
+achievable BOTH ceiling at 279.  This entry settles what they are and
+reproduces them; the ceiling is reached.
+
+**`pow.S` IS A GENUINE INPUT, NOT A BUILD ARTEFACT.**  `readelf -sW` on the
+blob: the second `pow.S` FILE record owns eight `NOTYPE LOCAL` `.text` symbols
+-- `inf_zero`/`infinity` (0xb0b50), `minf_mzero`/`minfinity` (0xb0b58),
+`mzero` (0xb0b60), `zero` (0xb0b68), `one` (0xb0b70), `limit` (0xb0b78) -- and
+the global `pow` sits at 0xb0b80, `.text` ending at 0xb1cf0, so its body is
+4,464 bytes.  Those constant names are exactly libm's x87 `pow()`.  The
+project already excludes them: `tools/coverage.py`'s NOT_OURS set lists `pow`
+and its internals with "there is no reconstruction work here to schedule,
+ever" (F1990).  So the content is out of scope and the FILE set is the goal.
+
+**THE FOUR RECORDS ARE REPRODUCIBLE, AND ONLY BY A `.S` INPUT.**  Measured on
+the period compiler: a `.c` emits one FILE record, a `.S` emits four --
+`<name>.S`, `<command line>`, `<built-in>`, `<name>.S`.  Verified for an empty
+`.S`, a comment-only `.S`, and a `.S` with a body; and under `ld -r` the four
+records survive in order and the input adds zero bytes to every allocated
+section.  `<command line>` and `<built-in>` are therefore NOT faked: they are
+what the assembler emits for the genuine assembly input the original build
+compiled.
+
+**THE FILE SPELLING COMES FROM THE INVOCATION, AND THAT IS A REAL TRAP.**  The
+C front end records a FILE symbol under the BASENAME (`src/call/call.c` ->
+`call.c`), but the ASSEMBLER records the path it is handed: `gcc -c
+src/core/pow.S` gives `src/core/pow.S`, and only `cd src/core && gcc -c pow.S`
+gives `pow.S`.  There is no `-ffile-prefix-map` in 3.4.2.  Every AS rule
+(`Makefile`, `period.mk`, `period_inner.sh`) therefore compiles from the
+source's own directory by basename.
+
+**THE CHANGE.**  Assembly support is added rather than a `.c` shim, because no
+`.c` can produce the records:
+
+    Makefile                  ASRC := $(shell find src -name '*.S' | sort),
+                              in $(OBJ)/$(OBJ_REPRO), `%.o: %.S` rules, cd-by-basename
+    tools/toolchain/period.mk TC_ASRC from print-ASRC, TC_ASFLAGS, TC_AS_RULE
+    tools/toolchain/period.sh ASRC in the container env
+    tools/toolchain/period_inner.sh  ASFLAGS, the `src/*.S` case, $ASRC in
+                              the compile/OBJS/srcobjs loops
+    tools/toolchain/recoverorder.py   `src/core/pow.S` -> ("pow.S", 0), because
+                              the basename occurs twice so the unique-basename
+                              arm cannot place it; occurrence 0 orders the
+                              input so its four-record run lands on 278..281
+    src/core/pow.S            empty, with a header comment saying FILE-record
+                              representation only, libm body out of scope
+
+**MEASURED (GCC 3.4.2-r2).**  The partial link's FILE run at the tail is now
+`encode.c, pow.S, <command line>, <built-in>, pow.S, FixedRC.c` -- byte for
+byte the blob's slots.  TU scoreboard: names in BOTH **276 -> 279**, blob-only
+**4 -> 1** (only `V34.c`), ours-only **40**, our TUs **318 -> 319**, tc-repro
+319 objects / 284 ordering candidates.  `byteident` grade 0 **843/1852** and
+grade 0-or-1 **895/1852**, both UNCHANGED.  `partialcmp` positioned bytes
+**66,824 unchanged** /943,398; exact symbols **389 -> 393** /2,907 (+4: the two
+`pow.S` records and `<command line>`/`<built-in>`); exact sections **69 -> 70**
+/92; exact relocations 1011/18,317 unchanged; NOBITS 2,836 ref / 2,808
+candidate unchanged.
+
+**GATES.**  `make -j1 J=1 phase`: **385 passed, 0 failed**, boundary OK (the
+period tier now compiles 324 objects); `make byteident` 843/895; `refcheck` 0
+dangling; `anchorcheck` 285 suites / 10,038 mutations / 0 non-unique / 0
+detached; `mutsnap --check` 0 current / 285 stale; `git diff --check` clean.
+
+**MODERN PORTABILITY, PRE-EXISTING AND NOT CAUSED HERE.**  `make check64` and
+`make test` already fail on this host's GCC 14.2.0 at
+`src/pump/v22/v22mod.c:1697`, an implicit declaration of `FPM_rms` that 13
+warned about and 14 rejects; that is the AGENTS.md compiler-version hazard
+(the `t_v34rx.c` precedent), unrelated to this change and not worked around in
+`src/`.  The modern assembler also emits NO FILE symbol for the empty `.S`,
+which is harmless: the TU census is taken from the period build.
+
+**NO MUTATION SUITE MOVED.**  No suite sources `pow.S` or any changed tool; the
+`fpmphasor`/`fpmphasordp` suites from F11403 still owe their re-record.
+
+(2026-09-26)

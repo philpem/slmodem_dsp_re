@@ -107,6 +107,7 @@ KEEP=${KEEP-1}
 # variable, and the container then tries to compile them.  period.mk's note.
 SRC=$(MAKEFLAGS= make -s --no-print-directory print-SRC | sed 's/^SRC = //')
 CXXSRC=$(MAKEFLAGS= make -s --no-print-directory print-CXXSRC | sed 's/^CXXSRC = //')
+ASRC=$(MAKEFLAGS= make -s --no-print-directory print-ASRC | sed 's/^ASRC = //')
 
 # `make period T=...` narrows to named binaries.  The whole suite is ~90
 # links against a 1.2 MB object, so the narrow form is the inner loop.
@@ -154,7 +155,7 @@ run_stage() {
     if [ "$IMG" = "$GENTOO_IMG" ]; then
         docker run --rm --name "$NAME" --platform linux/386 \
             -v "$PWD:/src" -v "$PWD/$OUT:/out" -w /src \
-            -e "SRC=$SRC" -e "CXXSRC=$CXXSRC" -e "TESTS=$TESTS" -e "J=$J" -e "REF=$REF" \
+            -e "SRC=$SRC" -e "CXXSRC=$CXXSRC" -e "ASRC=$ASRC" -e "TESTS=$TESTS" -e "J=$J" -e "REF=$REF" \
             -e "KEEP=${KEEP:-}" -e "OUT_UID=$(id -u)" -e "OUT_GID=$(id -g)" \
             -e "VISIBLE=${VISIBLE:-}" -e "STAGE=$stage" \
             "$IMG" sh -c '
@@ -166,7 +167,7 @@ run_stage() {
     else
         docker run --rm --name "$NAME" --user "$(id -u):$(id -g)" \
             --platform linux/386 -v "$PWD:/src" -v "$PWD/$OUT:/out" -w /src \
-            -e "SRC=$SRC" -e "CXXSRC=$CXXSRC" -e "TESTS=$TESTS" -e "J=$J" -e "REF=$REF" \
+            -e "SRC=$SRC" -e "CXXSRC=$CXXSRC" -e "ASRC=$ASRC" -e "TESTS=$TESTS" -e "J=$J" -e "REF=$REF" \
             -e "KEEP=${KEEP:-}" -e "VISIBLE=${VISIBLE:-}" -e "STAGE=$stage" \
             "$IMG" sh /src/tools/toolchain/period_inner.sh
     fi

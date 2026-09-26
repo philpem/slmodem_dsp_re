@@ -146,8 +146,13 @@ FPFLAGS    := -mfpmath=387
 #
 SRC        := $(shell find src -name '*.c' | sort)
 CXXSRC     := $(shell find src -name '*.cpp' | sort)
+# Assembly inputs, kept OUT of $(SRC)/($(CXXSRC) so no existing
+# `gcc -fsyntax-only $(SRC)` or interop link line is handed a `.S`.  The
+# reference object's only assembly input is `pow.S`; see F11407.
+ASRC       := $(shell find src -name '*.S' | sort)
 OBJ        := $(patsubst %.c,$(BUILD)/%.o,$(SRC)) \
-              $(patsubst %.cpp,$(BUILD)/%.o,$(CXXSRC))
+              $(patsubst %.cpp,$(BUILD)/%.o,$(CXXSRC)) \
+              $(patsubst %.S,$(BUILD)/%.o,$(ASRC))
 
 # THE SECOND OBJECT TREE: the same sources built WITH -DDSPLIB_REPRODUCE_BUGS,
 # i.e. a faithful reconstruction of the original binary rather than our fixed
@@ -160,7 +165,8 @@ OBJ        := $(patsubst %.c,$(BUILD)/%.o,$(SRC)) \
 # Stripped of the leading `src/` exactly as CXXOBJ64 is, so the stem matches
 # the $(BUILD)/repro/%.o: src/%.c rule below.
 OBJ_REPRO  := $(patsubst src/%.c,$(BUILD)/repro/%.o,$(SRC)) \
-              $(patsubst src/%.cpp,$(BUILD)/repro/%.o,$(CXXSRC))
+              $(patsubst src/%.cpp,$(BUILD)/repro/%.o,$(CXXSRC)) \
+              $(patsubst src/%.S,$(BUILD)/repro/%.o,$(ASRC))
 
 # The original was built -fno-exceptions -fno-rtti with no new/delete (zero
 # __cxa_*, _Unwind_* or _ZTI* references -- docs/findings.md section 2), so
@@ -445,12 +451,24 @@ $(BUILD)/%.o: %.cpp Makefile
 	@mkdir -p $(dir $@)
 	$(CXX) $(ARCH32) $(FPFLAGS) $(CXXFLAGS) $(if $(filter src/%,$<),$(CXXMATHFLAGS)) -c $< -o $@
 
+$(BUILD)/%.o: %.S
+	@mkdir -p $(dir $@)
+	@# GCC's C front end records a FILE symbol under the BASENAME, but the
+	@# assembler records the path as given.  Pass `pow.S` from its own
+	@# directory so the FILE record is spelled `pow.S`, not `src/core/pow.S`
+	@# (F11407); `as` has no flag that strips it.
+	cd $(dir $<) && $(CC) $(ARCH32) -c $(notdir $<) -o $(abspath $@)
+
 # The faithful-original tree.  Same sources, same flags, plus $(REPRODUCE).
 # Pattern-matched on src/ specifically so it cannot collide with $(BUILD)/%.o
 # above -- the two would otherwise both match $(BUILD)/repro/foo.o.
 $(BUILD)/repro/%.o: src/%.c
 	@mkdir -p $(dir $@)
 	$(CC) $(ARCH32) $(FPFLAGS) $(CFLAGS) $(HOSTPORTFLAGS) $(REPRODUCE) -c $< -o $@
+
+$(BUILD)/repro/%.o: src/%.S
+	@mkdir -p $(dir $@)
+	cd $(dir $<) && $(CC) $(ARCH32) $(REPRODUCE) -c $(notdir $<) -o $(abspath $@)
 
 $(BUILD)/repro/%.o: src/%.cpp Makefile
 	@mkdir -p $(dir $@)
