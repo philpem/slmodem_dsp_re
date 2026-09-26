@@ -126336,3 +126336,24 @@ container: **v29data 22 caught / 0 uncaught / 0 unusable, faxadaptcreate_v29tx
 the next step; their lowercase adapters sit in `V17rx.c`/`V17tx.c` and
 `V21rx.c`/`V21tx.c` exactly as V.27's did, and their `V17r_stc`/`V17t_*` /
 `V21*` boundaries have the same address-bracket argument.
+
+#### F11390 addendum 2. The V.21 family
+
+`v21.c` splits to `V21rx.c` (`[V21RX_create 0x098e70, V21TX_create
+0x0992f0)`), `V21tx.c` (`[V21TX_create, V27RX_create 0x099660)`),
+`V21r_prc.c`/`V21r_stc.c` (the rx state machine divided at its control/status
+pair), `V21t_prc.c`/`V21t_stc.c` (likewise), `V21r_int.c` (`DemodDataV21`,
+`CarrierDetectV21`, `GetSNRV21`), `V21t_int.c` (`ModDataV21`,
+`TxNoCarrierV21`) and `Vmi_v21.c` (the twelve lowercase adapters plus the two
+`v21*_message` reporters, moved out of `V21rx.c`/`V21tx.c` and `class1tx.c`).
+
+`byteident` grade 0 **840 -> 842** / 1,852, grade 0-or-1 **892 -> 894**;
+exact-set diff **GAINED `RxHdxErrorV21`, `RxHdxIdleV21`; LOST none**.
+`partialcmp` positioned **68,053 -> 68,192** / 943,398, exact relocations
+**937** / 18,317 (unchanged), exact symbols **332 -> 339** / 2,907 (the seven
+new FILE records), exact sections 69/92.  `make -j1 J=1 phase`: **385 passed,
+0 failed**, boundary OK; `anchorcheck` 0 detached; no mutation suite sources
+any V.21 or `class1tx.c` file, so none moved and none needed re-recording.
+`refcheck` 0 dangling; `git diff --check` clean.  `V17` remains: its split is
+the same shape but its merged file also carries `V17txtab.c`'s tables and
+`class1tx.c`'s `SMCv17_init`, so its `V17t_int.c` pulls from three files.

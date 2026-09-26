@@ -91,25 +91,6 @@ char *V17TX_MESG[10] = {
 	"ERROR: Transmit Input Queue Over-run",
 };
 
-char *V21RX_MESG[7] = {
-	"V.21 Receive Data Mode",
-	"V.21 Rx Start of Protocol",
-	"V.21 Rx Wait for Valid Data Protocol",
-	"ERROR: V.21 Rx Internal Error",
-	"ERROR: Loss Carrier In V.21 Rx Protocol",
-	"V.21 Rx Idle (End of Transmition)",
-	"CONNECT: V.21 Receive 300 bps",
-};
-
-char *V21TX_MESG[6] = {
-	"V.21 Transmit Data Mode",
-	"V.21 Transmit Idle Mode",
-	"ERROR: V.21 Tx Internal Error",
-	"ERROR: Transmit Input Queue Under-run",
-	"ERROR: Transmit Input Queue Over-run",
-	"CONNECT: V.21 Transmit 300 bps",
-};
-
 /*
  * One shape, eight times: the code is guarded UNSIGNED against the table's
  * entry count (so a negative code answers NULL) and indexed through an
@@ -130,8 +111,6 @@ char *V21TX_MESG[6] = {
 
 MESSAGE_FN(v17tx_message, V17TX_MESG, 10)
 MESSAGE_FN(v17rx_message, V17RX_MESG, 10)
-MESSAGE_FN(v21tx_message, V21TX_MESG, 6)
-MESSAGE_FN(v21rx_message, V21RX_MESG, 7)
 
 void
 null_message(void *handle, int code, char **out)
