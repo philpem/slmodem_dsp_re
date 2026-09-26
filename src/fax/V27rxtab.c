@@ -2,19 +2,14 @@
  * v27cfg.c -- ITU-T V.27ter (fax): the receiver's coefficient, gain and
  *             rate-selection tables.
  *
- * Fifty-six symbols, reconstructed from dsplibs.o.  Read `v27cfg.h` for what
- * types each of them and why the byte count alone does not; this file carries
- * the bytes.
+ * The receiver's own tables, reconstructed from dsplibs.o.  Read `v27cfg.h`
+ * for what types each of them and why the byte count alone does not; this
+ * file carries the bytes.  The transmitter's tables are in `V27txtab.c` and
+ * the seven `V27RX_DEC_*` arrays are in `V27rxdec.c`; both were split out by
+ * the object's FILE records (finding F11XXX).
  *
  *   V27_MTD_COEFF_2400         .data    0x007b20    20
  *   V27_MTD_COEFF_4800         .data    0x007b34    20
- *   V27RX_DEC_LAST_PHASE_2400  .data    0x007bc0     8
- *   V27RX_DEC_LAST_PHASE_4800  .data    0x007bc8    16
- *   V27RX_DEC_LAST_PHASE       .data    0x007bd8     8
- *   V27RX_DEC_PMAP_2400        .data    0x007be0     8
- *   V27RX_DEC_PMAP_4800        .data    0x007be8    16
- *   V27RX_DEC_PMAP             .data    0x007bf8     8
- *   V27RX_DEC_PHS_MASK         .data    0x007c00     4
  *   V27RX_FSE_PLLK2_2400       .data    0x007c04     6
  *   V27RX_FSE_PLLK1_2400       .data    0x007c0a     6
  *   V27RX_FSE_PLLK2_4800       .data    0x007c10     6
@@ -90,12 +85,15 @@
  * `AGCv27_CFG` in .rodata and must precede it here, because its initialiser
  * names them.
  *
- * THE TRANSLATION UNIT IS NOT SETTLED.  These sit in the same runs of .data
- * and .rodata as `V27RX_CFG`, `V27RX_CTL` and `V27RX_MESG`, so the author's
- * file was almost certainly the one holding `V27RX_create` itself.  They are
- * here rather than in `src/fax/v27.c` because that module is not written and
- * a table is worth nothing until something can link against it.  Moving them
- * later is free.  This is `v29cfg.c`'s D1100 again, recorded as D1102.
+ * THE TRANSLATION UNIT.  These are the receiver's coefficient, gain and
+ * rate-selection tables; the object names `V27rxtab.c` as its own FILE
+ * record between `V27rxdec.c` and `V27tx.c`, and every table left here is
+ * referenced only from `V27rx.c` / `V27r_prc.c` / `V27r_stc.c` functions.
+ * The seven `V27RX_DEC_*` arrays and the thirty transmitter tables were
+ * split out to `V27rxdec.c` and `V27txtab.c` by the same argument; the
+ * .data/.rodata address brackets are in finding F11XXX.  Moving a table to
+ * its own unit is layout-only: a data symbol's bytes do not depend on where
+ * its definition sits.
  *
  * NOTHING HERE IS A GENERATOR.  Several of these tables have closed forms and
  * the header states them, but `docs/fastpass.md` defers coefficient
@@ -457,114 +455,6 @@ const struct fpm_agc_cfg AGCv27_CFG = {
 	6553			/* +0x16 f16, 0.2 in Q15                     */
 };
 
-/*
- * ---------------------------------------------------------------------------
- * THE TRANSMIT TABLES, `v27cfg.h`'s own derivation
- */
-const short V27TX_PPS_IFILT_2400[120] = {
-	   -21,     61,     69,    -21,   -185,   -355,   -453,   -429,
-	  -288,    -91,     72,    126,     50,   -105,   -236,   -236,
-	   -49,    295,    680,    950,    982,    749,    343,    -58,
-	  -264,   -176,    156,    531,    672,    355,   -470,  -1619,
-	 -2710,  -3299,  -3065,  -1967,   -298,   1401,   2544,   2755,
-	  2055,    898,     14,    103,   1493,   3900,   6417,   7776,
-	  6805,   2937,  -3428, -10872, -17286, -20483, -18936, -12362,
-	 -1951,   9870,  20092,  26004,  26004,  20092,   9870,  -1951,
-	-12362, -18936, -20483, -17286, -10872,  -3428,   2937,   6805,
-	  7776,   6417,   3900,   1493,    103,     14,    898,   2055,
-	  2755,   2544,   1401,   -298,  -1967,  -3065,  -3299,  -2710,
-	 -1619,   -470,    355,    672,    531,    156,   -176,   -264,
-	   -58,    343,    749,    982,    950,    680,    295,    -49,
-	  -236,   -236,   -105,     50,    126,     72,    -91,   -288,
-	  -429,   -453,   -355,   -185,    -21,     69,     61,    -21,
-};
-const short V27TX_PPS_QFILT_2400[120] = {
-	    -5,     52,    166,    273,    302,    217,     36,   -178,
-	  -338,   -381,   -299,   -147,    -21,     -8,   -145,   -385,
-	  -618,   -713,   -580,   -228,    236,    640,    827,    734,
-	   431,    108,    -12,    220,    786,   1479,   1959,   1896,
-	  1122,   -260,  -1878,  -3210,  -3783,  -3382,  -2173,   -662,
-	   493,    767,     33,  -1311,  -2437,  -2390,   -505,   3221,
-	  7968,  12233,  14277,  12730,   7160,  -1612, -11604, -20173,
-	-24786, -23828, -17160,  -6243,   6243,  17160,  23828,  24786,
-	 20173,  11604,   1612,  -7160, -12730, -14277, -12233,  -7968,
-	 -3221,    505,   2390,   2437,   1311,    -33,   -767,   -493,
-	   662,   2173,   3382,   3783,   3210,   1878,    260,  -1122,
-	 -1896,  -1959,  -1479,   -786,   -220,     12,   -108,   -431,
-	  -734,   -827,   -640,   -236,    228,    580,    713,    618,
-	   385,    145,      8,     21,    147,    299,    381,    338,
-	   178,    -36,   -217,   -302,   -273,   -166,    -52,      5,
-};
-const short V27TX_PPS_IFILT_4800[60] = {
-	   -62,    -12,    -37,   -141,      6,    -56,    -36,    109,
-	   -23,    158,    167,    -14,    235,    -93,   -246,     10,
-	  -429,   -136,   -163,   -546,    619,     28,    680,   3388,
-	  -278,   -636,   1288, -12667, -11245,  19992,  19992, -11245,
-	-12667,   1288,   -636,   -278,   3388,    680,     28,    619,
-	  -546,   -163,   -136,   -429,     10,   -246,    -93,    235,
-	   -14,    167,    158,    -23,    109,    -36,    -56,      6,
-	  -141,    -37,    -12,    -62,
-};
-const short V27TX_PPS_QFILT_4800[60] = {
-	    73,     -7,     90,    -34,    -80,      4,   -150,    -45,
-	   -37,   -135,    143,     23,     97,    387,    -19,    131,
-	   103,   -328,    100,   -640,   -725,     17,  -1642,    813,
-	  3536,     50,   5367,   5247, -18350, -17074,  17074,  18350,
-	 -5247,  -5367,    -50,  -3536,   -813,   1642,    -17,    725,
-	   640,   -100,    328,   -103,   -131,     19,   -387,    -97,
-	   -23,   -143,    135,     37,     45,    150,     -4,     80,
-	    34,    -90,      7,    -73,
-};
-const short *const V27TX_PPS_IFILT[2] = {
-	V27TX_PPS_IFILT_2400, V27TX_PPS_IFILT_4800
-};
-const short *const V27TX_PPS_QFILT[2] = {
-	V27TX_PPS_QFILT_2400, V27TX_PPS_QFILT_4800
-};
-
-const short V27TX_PPS_IMAP_2400[5] = {
-	  6144,      0,  -6144,      0,      0,
-};
-const short V27TX_PPS_QMAP_2400[5] = {
-	     0,   6144,      0,  -6144,      0,
-};
-const short V27TX_PPS_IMAP_4800[9] = {
-	  6144,   4344,      0,  -4344,  -6144,  -4344,      0,   4344,
-	     0,
-};
-const short V27TX_PPS_QMAP_4800[9] = {
-	     0,   4344,   6144,   4344,      0,  -4344,  -6144,  -4344,
-	     0,
-};
-const short *const V27TX_PPS_IMAP[2] = {
-	V27TX_PPS_IMAP_2400, V27TX_PPS_IMAP_4800
-};
-const short *const V27TX_PPS_QMAP[2] = {
-	V27TX_PPS_QMAP_2400, V27TX_PPS_QMAP_4800
-};
-
-const int V27TX_PPS_SCALE[2] = { 34767, 34767 };
-
-const unsigned short V27TX_SMC_PMAP_24[4] = { 0, 1, 3, 2 };
-const unsigned short V27TX_SMC_PMAP_48[8] = { 1, 0, 2, 3, 6, 7, 5, 4 };
-const unsigned short *const V27TX_SMC_PMAP[2] = {
-	V27TX_SMC_PMAP_24, V27TX_SMC_PMAP_48
-};
-
-const short V27TX_ALT_COUNT[2]       = { 14, 50 };
-const short V27TX_EQCOND_COUNT[2]    = { 58, 1074 };
-const short V27TX_FRMSIZE[2]         = { 24, 32 };
-const short V27TX_NOCARR_SYMBOL[2]   = { 4, 8 };
-const short V27TX_PATTERN_ALT[2]     = { 3, 7 };
-const short V27TX_PATTERN_CARR[2]    = { 0, 1 };
-const short V27TX_PATTERN_SCR1[2]    = { 3, 7 };
-const short V27TX_PPS_DOWN_FACT[2]   = { 3, 1 };
-const short V27TX_PPS_FILT_LEN[2]    = { 120, 60 };
-const short V27TX_PPS_UP_FACT[2]     = { 20, 5 };
-const short V27TX_SDM_NUM_BITS[2]    = { 2, 3 };
-const short V27TX_SMC_CRR_ADJ[2]     = { 2, 1 };
-const short V27TX_SMC_CRR_LEN[2]     = { 4, 8 };
-const short V27TX_SMC_PHS_MASK[2]    = { 3, 7 };
 
 /* -------------------------------------------------------------------- .data */
 
@@ -588,53 +478,6 @@ short V27_MTD_COEFF_4800[10] = {
 };
 
 
-/*
- * The decoder's constellation: the phase angle of each index, and the bits
- * each phase STEP carries.  Four entries at 2400 bit/s and eight at 4800,
- * which is `V27RX_DEC_PHS_MASK` + 1 and is what `V27RX_decision` selects on
- * `dec->eight_phase`.  The angles are `i * 0x8000 / n` exactly -- one full
- * revolution divided into four or eight -- in the units `FPM_atan` produces.
- */
-short V27RX_DEC_LAST_PHASE_2400[4] = {
-	     0,   8192,  16384,  24576,
-};
-
-
-short V27RX_DEC_LAST_PHASE_4800[8] = {
-	     0,   4096,   8192,  12288,  16384,  20480,  24576,  28672,
-};
-
-
-/*
- * The selector, and here the pointer array is `D` -- writable.  Eleven of the
- * fourteen selectors are, and the other three are `R`; the split is the
- * object's and is reproduced rather than tidied.
- */
-short *V27RX_DEC_LAST_PHASE[2] = {
-	V27RX_DEC_LAST_PHASE_2400, V27RX_DEC_LAST_PHASE_4800
-};
-
-short V27RX_DEC_PMAP_2400[4] = {
-	     0,      1,      3,      2,
-};
-
-
-short V27RX_DEC_PMAP_4800[8] = {
-	     1,      0,      2,      3,      7,      6,      4,      5,
-};
-
-
-short *V27RX_DEC_PMAP[2] = {
-	V27RX_DEC_PMAP_2400, V27RX_DEC_PMAP_4800
-};
-
-/*
- * The phase index mask, stored into the decoder block's +0x14 at 99c57.
- * 3 and 7, which is four phases and eight.
- */
-short V27RX_DEC_PHS_MASK[2] = {
-	     3,      7,
-};
 
 
 /*
