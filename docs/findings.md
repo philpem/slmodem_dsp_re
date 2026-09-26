@@ -127032,3 +127032,61 @@ instruction for this pass, the snapshot is left STALE: `mutsnap --check` is
 `v34tx` now owe a re-record** -- the first new suite of this pass.
 
 (2026-09-26)
+
+## F11398. The V.34 `V34.c`/`V34ARRAY.c`/`V34CONST.c` boundary: what is proven and what still is not
+
+Companion to F11397.  The other V.34 over-splits F11393 named --
+`v34shell.c`, `v34scram.c`, `v34digital.c` against the blob's `V34.c`,
+`V34ARRAY.c`, `V34CONST.c` -- re-tested with the same method.  The `.text`
+side is now pinned; the table side is not, and the two are entangled.
+
+**THE `.text` RUN IS PINNED AT BOTH ENDS.**  FloatIIR.cpp's last method
+(`_ZN8FloatIIR15setCoefficientsEPfj`) ends at 0x05785a; `V34RX.c`'s first
+function after F11397's boundary is `rxinit` at 0x05ab80.  Everything between
+is the `V34.c`/`V34ARRAY.c`/`V34CONST.c` run -- 17 globals:
+`scrambleGPC`(0x057860), `scrambleGPA`, `getFrame`(0x0579c0), `descrambleGPC`,
+`descrambleGPA`, `putFrame`(0x057fb0), `preinitV34`(0x058200), `setScramble`,
+`scaleVector`, `initG248`, `initV34`, `shellDemapper`(0x058720),
+`decodeDepth`(0x058910), `demapFrame`(0x059130), `preinitdigital`(0x059760),
+`initdigital`(0x059980), `modulatevector`(0x059e40).  Those 17 are exactly our
+`v34scram.c` (4), `v34digital.c` (1) and `v34shell.c` (12) -- the three
+over-splits, and nothing else is in the run.
+
+**WHAT THAT DOES NOT SETTLE: WHERE THE TWO DATA TUs BEGIN.**  `V34ARRAY.c` and
+`V34CONST.c` carry no `.text` LOCAL and (measured) no `.data`/`.bss` object at
+all, so if they are the data TUs their names imply, all 17 globals are
+`V34.c`'s and the merge is a plain concatenation.  But the `.rodata` the three
+share is `0x0ec0..0x2840` -- `kLookup`, `xyz`, `Convolve64/32/16`, `lsbMask`,
+`smIndex`, `MMaxTable`, `MMinTable`, `kTable`, `grid`, `quarter`,
+`gInvertPat`, `kkInvert`, `kkNormal`, tiling with only alignment gaps, then
+`V34RX.c`'s `sqrt_table` at 0x02860 -- and **`.rodata` is not link order**
+(F11393's counterexample: `v22rxtab.c`'s tables at 0x083a0 precede `V22.c`'s at
+0x084e0 although `v22rxtab.c` is the later FILE record).  So the single split
+point between `V34ARRAY.c` and `V34CONST.c` cannot be recovered from the
+addresses, and the tables' reader set (`decodeDepth`, `demapFrame`,
+`initG248`/`initV34`, `getFrame`, `modulatevector`) all live in `V34.c`, which
+does not partition them.  Assigning the tables by size or by name would be a
+guess, and a wrong table owner is worse than a padded one.
+
+**WHY THE CODE MERGE IS DEFERRED RATHER THAN DONE.**  The merge is correct as
+to membership but not safe as to form: our `v34shell.c` emits its functions in
+an order (`shellDemapper, putFrame, decodeDepth, demapFrame, getFrame,
+setScramble, scaleVector, preinitV34, ...`) that is NOT the object's
+(`getFrame, putFrame, preinitV34, setScramble, scaleVector, initG248, initV34,
+shellDemapper, decodeDepth, demapFrame, ...`), and the object's order is the
+one to reproduce.  Reordering is the point (F7796's regalloc lever), but
+`preinitV34`, `scaleVector` and `setScramble` are the three EXACT functions in
+the unit and their exactness is a property of the current order.  A merge that
+reorders them must be measured for loss, and a merge that does not reorder
+buys the file name while spending the one thing the TU boundary is for.  The
+next pass should assemble `V34.c` in the object's order, interleaving the four
+scrambler functions and `preinitdigital` at their measured slots, and take the
+merge only on an exact-set gain or a level count; the tables stay in `V34.c`
+under a note until a sound partition is found, or `V34ARRAY.c`/`V34CONST.c`
+stay named blob-only.
+
+**NOT MOVED, AND NO MUTATION SUITE IS TOUCHED BY THIS FINDING.**  `v34shell`,
+`v34scramstd` and `v34scrampair` still source their current files; a future
+merge retargets all three to `V34.c` (stale, no new suite).
+
+(2026-09-26)
