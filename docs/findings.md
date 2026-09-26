@@ -127464,3 +127464,65 @@ dangling; `anchorcheck` 285 suites / 10,038 mutations / 0 non-unique;
 `mutsnap --check` 0 current / 285 stale; `git diff --check` clean.
 
 (2026-09-26)
+
+## F11404. `V92MappingParamsInt.cpp` recovered: the five functions were C++, and the two byte-exact ones survive the front-end change
+
+TU-reconciliation, area 3 of the F11402 blockers (issue #6/#20/#67).
+F11393 recorded the blocker: the blob's FILE 23 is `V92MappingParamsInt.cpp`
+between `V92Jd.cpp` and `V92Modem.cpp`, the five functions are unmangled `T`
+(so `extern "C"`), our `src/pump/v90/V92ParamsInfo.c` reconstructs exactly
+those five, and the change is a LANGUAGE change -- C++ rejects the implicit
+`void *` -> `int *`/`float *` conversion `sysdep_malloc` needs.  It was
+declined "as not pure, and needing its own before/after differential".
+
+**THE EXPERIMENT RUN, AND ITS CELL.**  `git mv V92ParamsInfo.c ->
+V92MappingParamsInt.cpp`; the only source change is ten casts
+(`(int *)`/`(float *)` on the `sysdep_malloc` results).  The `extern "C"` is
+not added to the definitions because `V92ParamsInfo.h` ALREADY wraps the five
+prototypes in `extern "C"` under `#ifdef __cplusplus` (lines 171-213), and a
+definition after a C-linkage declaration inherits it.
+
+Compiled on the period compiler as a `.cpp` (`TC-CXX`), the two functions that
+were byte-exact stay byte-exact and no third function regresses:
+
+    V92createConstellations          EXACT before -> EXACT after
+    V92createFilterCoefficients      EXACT before -> EXACT after
+    V92deleteConstellations          BYTES  3/173 -> BYTES  3/173
+    V92deleteFilterCoefficients      BYTES  3/106 -> BYTES  3/106
+    V92setParamsInfoFromCPUnPck      SIZE  32 B   -> SIZE  16 B
+
+Three of five were already non-exact and are a separate reconstruction defect
+(the two deleters are missing one `sysdep_free` site each -- lever 2, and
+F7818's `delete[]` spelling is unavailable because the fields are `void *`);
+the language change neither fixes nor worsens them.  `setParamsInfoFromCPUnPck`
+IMPROVES from 32 bytes / 666 instructions to 16 bytes / 665 against the
+object's 679, so the C++ front end is closer to the original than the C one --
+which is the expected result if the original was C++.
+
+**CHANGE.**  The file is renamed and recompiled; `test/mutations/suites.json`
+retargets its three suites (`v92alloc`, `v92unpck`, `v92ratestd`) to the new
+path, and the ten `sysdep_malloc` anchors in `v92alloc.json` gained the cast
+so `anchorcheck` stays 0 detached / 0 non-unique.  Bodies are otherwise
+verbatim; no declaration, type or flag changed.
+
+**MEASURED (GCC 3.4.2-r2).**  TU scoreboard: names in BOTH **262 -> 263**,
+blob-only **18 -> 17**, ours-only **41 -> 40**, our TUs **305** (`V92ParamsInfo.c`
+removed, `V92MappingParamsInt.cpp` added).  `byteident` grade 0 **843/1852**
+and grade 0-or-1 **895/1852**, UNCHANGED.  `partialcmp` positioned bytes
+**66,971 -> 66,824** /943,398 (**REGRESSION -147**: the renamed input changes
+the partial-link source-order fallback for the still-unmatched objects, the
+same census effect F11394/F11395 recorded); exact symbols **375 -> 376**
+/2,907 (+1, the FILE record); exact relocations **1008 -> 1011** /18,317 (+3);
+exact sections 69/92; NOBITS 2,836 ref / 2,808 candidate unchanged.  No
+function lost exactness and no exact set regressed.
+
+**HARNESS.**  `anchorcheck` 285 suites / 10,038 mutations / 0 non-unique;
+`mutsnap --check` 0 current / 285 stale (the whole-tree key on any `src/`
+edit).  The three V.92 suites' source path moved but their bodies and anchors
+did not, so **none owes a re-record**; the two `fpmphasor`/`fpmphasordp`
+suites from F11403 still do.
+
+**GATES.**  `make -j1 J=1 phase`: **385 passed, 0 failed**, boundary OK;
+`refcheck` 0 dangling; `git diff --check` clean.
+
+(2026-09-26)

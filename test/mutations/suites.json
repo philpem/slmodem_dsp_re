@@ -797,7 +797,7 @@
   "build/test/t_v90unpck"
  ],
  "v92alloc": [
-  "src/pump/v90/V92ParamsInfo.c",
+  "src/pump/v90/V92MappingParamsInt.cpp",
   "build/test/t_v92alloc"
  ],
  "v92btos": [
@@ -953,11 +953,11 @@
   "build/test/t_v92txreset"
  ],
  "v92unpck": [
-  "src/pump/v90/V92ParamsInfo.c",
+  "src/pump/v90/V92MappingParamsInt.cpp",
   "build/test/t_v92unpck"
  ],
  "v92ratestd": [
-  "src/pump/v90/V92ParamsInfo.c",
+  "src/pump/v90/V92MappingParamsInt.cpp",
   "build/test/t_v92unpck"
  ],
  "vparser": [

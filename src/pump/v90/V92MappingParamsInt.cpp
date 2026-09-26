@@ -1,6 +1,19 @@
 /*
- * V92ParamsInfo.c -- allocate, release and fill the V.92 modem's mapping
+ * V92MappingParamsInt.cpp -- allocate, release and fill the V.92 modem's mapping
  * parameter block.
+ *
+ * THE FILE NAME AND LANGUAGE ARE THE OBJECT'S.  The blob's FILE record 23 is
+ * `V92MappingParamsInt.cpp`, between `V92Jd.cpp` and `V92Modem.cpp`, and the
+ * five functions below are UNMANGLED `T` symbols -- so the original was a C++
+ * translation unit declaring them `extern "C"`, exactly as the sibling
+ * `V90MappingParamsInt.cpp` is (F11393).  This tree reconstructed them in
+ * `V92ParamsInfo.c`; compiling that file as C++ recovers the FILE name and
+ * the language.  The only source change is the ten `sysdep_malloc` casts C
+ * requires and C++ does not: a `void *` does not convert implicitly to the
+ * `int *`/`float *` fields.  The two byte-exact functions
+ * (`V92createConstellations`, `V92createFilterCoefficients`) survive the
+ * front-end change unchanged, and `V92setParamsInfoFromCPUnPck` improves
+ * (F11404).
  *
  * Five functions, 3,106 bytes.  Four of them are the allocators and the
  * deleters, 411 bytes, with exactly ten `sysdep_malloc` calls and ten
@@ -97,21 +110,21 @@ V92createConstellations(struct V92ParamsInfo *p)
 	 *             p->constellations[i] =
 	 *                     sysdep_malloc(V92_PARAMSINFO_CONSTELLATION_SZ);
 	 */
-	p->constellations[0] = sysdep_malloc(V92_PARAMSINFO_CONSTELLATION_SZ);
-	p->constellations[1] = sysdep_malloc(V92_PARAMSINFO_CONSTELLATION_SZ);
-	p->constellations[2] = sysdep_malloc(V92_PARAMSINFO_CONSTELLATION_SZ);
-	p->constellations[3] = sysdep_malloc(V92_PARAMSINFO_CONSTELLATION_SZ);
-	p->constellations[4] = sysdep_malloc(V92_PARAMSINFO_CONSTELLATION_SZ);
-	p->constellations[5] = sysdep_malloc(V92_PARAMSINFO_CONSTELLATION_SZ);
+	p->constellations[0] = (int *)sysdep_malloc(V92_PARAMSINFO_CONSTELLATION_SZ);
+	p->constellations[1] = (int *)sysdep_malloc(V92_PARAMSINFO_CONSTELLATION_SZ);
+	p->constellations[2] = (int *)sysdep_malloc(V92_PARAMSINFO_CONSTELLATION_SZ);
+	p->constellations[3] = (int *)sysdep_malloc(V92_PARAMSINFO_CONSTELLATION_SZ);
+	p->constellations[4] = (int *)sysdep_malloc(V92_PARAMSINFO_CONSTELLATION_SZ);
+	p->constellations[5] = (int *)sysdep_malloc(V92_PARAMSINFO_CONSTELLATION_SZ);
 }
 
 void
 V92createFilterCoefficients(struct V92ParamsInfo *p)
 {
-	p->z1 = sysdep_malloc(V92_PARAMSINFO_FILTERCOEF_SZ);
-	p->p1 = sysdep_malloc(V92_PARAMSINFO_FILTERCOEF_SZ);
-	p->z2 = sysdep_malloc(V92_PARAMSINFO_FILTERCOEF_SZ);
-	p->p2 = sysdep_malloc(V92_PARAMSINFO_FILTERCOEF_SZ);
+	p->z1 = (float *)sysdep_malloc(V92_PARAMSINFO_FILTERCOEF_SZ);
+	p->p1 = (float *)sysdep_malloc(V92_PARAMSINFO_FILTERCOEF_SZ);
+	p->z2 = (float *)sysdep_malloc(V92_PARAMSINFO_FILTERCOEF_SZ);
+	p->p2 = (float *)sysdep_malloc(V92_PARAMSINFO_FILTERCOEF_SZ);
 }
 
 void
