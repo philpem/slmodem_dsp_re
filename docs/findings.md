@@ -127205,3 +127205,54 @@ byte-level gate is the combined F11399+F11400 measurement in that entry, where
 `refcheck` 0 dangling; `git diff --check` clean.
 
 (2026-09-26)
+
+## F11401. The fax table TUs re-tested: `Smc_tx.c`, `Tab144.c`, `Tx_rxtab.c` and `faxvmi_tbls.c` still have no anchor
+
+The second half of the F11391 re-test (F11399/F11400 are the first).  Each
+remaining fax FILE name was re-tested against the object with the `.text`
+bracket, the reader partition and the symtab local rule.  None is moved;
+this records the exact measurement that leaves each.
+
+**`Smc_tx.c` (FILE 209) -- the split point is real but unanchored.**
+F11391 declined it because "`SMC_CFG` ends at 0x00bb6c and the next `.rodata`
+is `DECv17_*` at 0x00bb80, so a `Smc_tx.c` contribution would be under twenty
+bytes".  That argument is REFUTED: `Smc_tx.c` is a `.text` TU, not a table
+TU.  The `.text` window of FILEs 208-211 is exactly
+`[SMC_encoder 0x9fa10, V17RX_modem 0x9ff80)` and holds five functions --
+`SMC_encoder` (609), `SMC_init` (53), `SMCv17_encoder_dif` (164),
+`SMCv17_encoder_abs` (135) and `SMCv17_encoder_tcm` (374).  `Tab144.c` and
+`Tx_rxtab.c` contribute no `.text`.  So the window is `Smc.c` + `Smc_tx.c`,
+and the split must be between `SMC_init` (ends 0x9fcb5) and
+`SMCv17_encoder_dif` (0x9fcc0).  The V.32 parallel supports assigning the
+V.17 encoders to `Smc_tx.c` -- `V32SMC_TX.c` holds exactly
+`SMCv32_encoder_dif/abs/tcm` (F11394) -- but that is a NAME/convention
+argument, not an object fact: no LOCAL symbol exists under FILE 208 or 209
+(`readelf -sW` shows 578 `Smc.c`, 579 `Smc_tx.c` with nothing between), and
+`tuattrib.py` name-matches all five to `Smc.c` (`prefix`, its known
+weakness).  The move is DECLINED as wrong-but-plausible: the boundary is a
+guess between two adjacent global functions, and neither is exact, so
+`byteident` could not report the error.
+
+**`Tab144.c` (FILE 210) and `Tx_rxtab.c` (FILE 211) -- `.rodata`-only, no
+anchor.**  The candidate content is the eight high-rate `DECv17_*` tables
+(0x00bb80..0x00bfff, read only from `fax.c`'s `FAX_FSE_decision_64pt`/`_128pt`)
+and `V21_MRF_FILT` (0x00c000, read from `V21rx.c`/`V21tx.c`).  Both files have
+no `.text` and no LOCAL in any section, and `.rodata` order is NOT link order
+(F11393's measured counterexample), so the address slot cannot be turned into
+an owner.  `Tab144.c` remains the leading candidate for the 14400 set by name
+(the V.32 parallel is `V32TAB144.c`, F11394) and `Tx_rxtab.c` for the
+receive/transmit pair, but neither is made.
+
+**`faxvmi_tbls.c` (FILE 171) -- the `.rodata` fragment is unresolvable.**
+Recorded in F11399: its `.text` slot is empty, and the `FAXVMI_STS`/`_CTL`/
+`_CFG` templates plus the six `vxx_*` dispatch tables share one contiguous
+`.rodata` run `[0x945c, 0x9654)` containing the PROVEN `faxvmi.c` locals
+`vmi_unpack/pack/reverse`; `.rodata` fragment boundaries are not
+address-recoverable, so `faxvmi_tbls.c` cannot be separated from `faxvmi.c`
+or shown empty.
+
+**NOTHING MOVES FROM THIS ENTRY**, so no census number, no mutation suite and
+no gate result changes; it exists so the four names are not re-derived.
+`refcheck` 0 dangling; `git diff --check` clean.
+
+(2026-09-26)
