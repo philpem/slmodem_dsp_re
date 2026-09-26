@@ -1,5 +1,14 @@
 /*
- * nulldp.c -- Class 1 fax: the null datapump.
+ * faxvmi_null.c -- Class 1 fax: the null datapump and its message reporter.
+ *
+ * THE TRANSLATION UNIT IS RECOVERED (finding F11399).  The blob's FILE
+ * record faxvmi_null.c sits between cTOOLS.c and reversedchars.c, and
+ * `ld -r` concatenates `.text` in FILE order: cTOOLS.c's last function
+ * `cTOOLS_handle_hdlc_output` ends at 0x09f0a3, these six functions fill
+ * [0x09f0b0, 0x09f14b), and SDM.c's first function `SDM_scrambler` starts
+ * at 0x09f150.  The bracket is exclusive and the function set matches one
+ * for one, so all six are this FILE's.  `null_message` (0x09f140) had been
+ * left in class1tx.c; it moves here verbatim.
  *
  * See nulldp.h for the address map, the dispatch tables these five belong to
  * (none of which is written here -- see nulldp.h for why), and where each
@@ -10,6 +19,7 @@
  *   null_process  .text 0x09f0e0   59
  *   null_status   .text 0x09f120    6
  *   null_control  .text 0x09f130    6
+ *   null_message  .text 0x09f140   11
  *
  * Differential test: test/unit/t_nulldp.c.
  */
@@ -71,4 +81,12 @@ null_control(struct faxvmi_link *dp, void *arg)
 	(void)dp;
 	(void)arg;
 	return -1;
+}
+
+void
+null_message(void *handle, int code, char **out)
+{
+	(void)handle;
+	(void)code;
+	*out = NULL;
 }

@@ -17,7 +17,6 @@
  *   _handle_hdlc_input              .text 0x09ed00             238
  *   cTOOLS_handle_data_output_reset .text 0x09edf0              24
  *   _handle_data_output             .text 0x09ee10             255
- *   null_message                    .text 0x09f140              11
  *
  * `aReversedCharsArray` (GLOBAL, .rodata 0xba40, 256) is NOT here; its own
  * STT_FILE record `reversedchars.c` (FILE #205) places it in
@@ -83,14 +82,6 @@
 			*out = (table)[(unsigned char)code];		\
 	}
 
-
-void
-null_message(void *handle, int code, char **out)
-{
-	(void)handle;
-	(void)code;
-	*out = NULL;
-}
 
 /*
  * ------------------------------------------------------------------
