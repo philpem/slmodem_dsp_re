@@ -128063,3 +128063,112 @@ does.
 `refcheck` 0 dangling; `git diff --check` clean.
 
 (2026-09-26)
+
+## F11414. The ours-only register: 40 over-splits, 12 closed, 28 left with their measured blocker; and the `V34.c` re-test in a second form
+
+TU-reconciliation close-out for this pass (issue #6/#20/#67).  The blob side is
+closed (names in BOTH 279, blob-only 1 = `V34.c`); this entry records what
+happened to each of our FORTY extra units so none is re-derived.
+
+**CLOSED -- 12 files, all bodies moved verbatim, no exact function lost.**
+
+    fpm_xor.c          zero-symbol (content in fpm_tables.c, F11403)      deleted   F11409
+    v8util.c           zero-symbol assertions -> V8.c                     deleted   F11409
+    v21.c              zero-symbol assertions -> V21rx.c                  deleted   F11409
+    v29.c              zero-symbol assertions -> V29rx.c                  deleted   F11409
+    voicecmd.c         voice.c#261 -> src/voice/voice.c                            F11410
+    voicedp.c          voice.c#261 -> src/voice/voice.c (voice_set_duplex EXACT)   F11410
+    voicesvc.c         voice.c#261 -> src/voice/voice.c                            F11410
+    dtmf_coeffs.c      Dtmf.c (owner named in its header)                merged    F11412
+    dtmf_mtd_coeffs.c  Dtmf_Detector.c (owner named)                     merged    F11412
+    rc_coeffs.c        FixedRC.c (generator states it)                   merged    F11412
+    callprog_cfg.c     Callprog.c (owner named)                          merged    F11412
+    v21cfg.c           V21rx.c (V21RX_create's tables, owner named)      merged    F11413
+
+Net: ours-only 40 -> 28; `byteident` grade 0 843 -> 844, grade 0-or-1 895
+unchanged.
+
+**LEFT -- 28, each with the measurement that blocks it.**  The first group is
+membership-clear but order-sensitive, exactly the case the task says to report
+rather than force:
+
+  * `V90ModemCtor.cpp` -> `V90Modem.cpp`.  The file's own header: "in the object
+    the two are 224 bytes apart and plainly one translation unit"; object order
+    D2,D1,printTitle,C1,C2,reset,setSessionFlag,progress.  2 exact ctors (C1,C2)
+    at risk, and merging collides the two `DSPLIB_DEBUG_ON()` blocks the split
+    was made to separate (F1264).  Needs a suite-anchor consolidation and a
+    before/after; not forced.
+  * `VPcmXfCreate.cpp` + `VPcmXfTerm.cpp` -> `VpcmFloModem.cpp`.  The object puts
+    them together (0xf730 sits between `VPCMXF_Delete` 0xf6c0 and
+    `VPcmFloModem::qcLineVerification` 0xf750).  5 exact functions at risk;
+    retargets `vpcmxfcreate`/`vpcmxfterm`.  Not forced.
+  * `v34diag.cpp`, `v34info1a.cpp`, `v34info.c`, `v34pcmif.c` ->
+    `VPcmV34Main.cpp`.  F11405/F11398 pin the TU; `v34pcmif.c` alone holds 20
+    exact functions whose emission order the merge changes, and the four files
+    are ~44 functions.  Not forced.
+
+The second group is the data families whose owner is genuinely unresolved --
+the whole reason F11394/F11401/F11405 declined them, unchanged here:
+
+  * the seven V.32 table files (`v32cfg`, `v32dec_tables`, `v32ecc_tables`,
+    `v32fptab`, `v32fse_tables`, `v32hdx_tables`, `v32sre_tables`) and
+    `v32anstone.c`.  The `.data`/`.rodata` blocks have no local anchor and the
+    receiver/transmitter split between `V32RXTAB.c` and `V32TXTAB.c` is exactly
+    the unknown; `GenerateAnsTone` sits in the V32loop/v23modem gap (F11394).
+  * `v17dec_tables.c` (the eight high-rate `DECv17_*`, owner inside the
+    `Smc_tx.c`/`Tab144.c`/`Tx_rxtab.c` window with no anchor, F11401); `v17.c`
+    and `v27.c` (leftover V.17/V.27 layers split by role, not by TU, F11391).
+  * `faxcfg.c`: its own header says the TU "is not settled" (D1080); the four
+    module tables are "almost certainly" their module files, which is below the
+    object-fact bar.
+  * `b103_cfg.c` / `b103_tables.c`: `.data`/`.rodata` consumed by
+    `B103FP_create` (B103prc.c), but which of `B103.c`/`B103prc.c`/`B103tab.c`
+    owns them is not pinned.
+  * `fifo.c`: the FIFO cluster's span label `class1tx.c +94` is a layout label,
+    not a module name, and the owning FILE is not resolved.
+
+The third group is recorded so it is not re-classified:
+
+  * `pulse.c` -> `call.c` (its header names the owner).  Function move; object
+    order is dp_call_init, dp_call_exit, the five pulse arms, then the call
+    core, against our call.c order, so it is a reorder with 1 exact function
+    (`LastPulseDigitDialed`) at risk.  Not forced.
+  * `mohdet.cpp`: three C++ functions at 0x5f80..0x6200 in the early V.34/V.90
+    C++ cluster; owning FILE not resolved.
+  * `v34hstx1.cpp`: the seventeen `v34tx1_*` arms.  MEASURED: the blob defines
+    NO symbol with that prefix -- `readelf -sW ref/slmodemd/dsplibs.o` has zero
+    `v34tx1_*` -- so these are our extra GLOBAL exports of arms the object
+    inlines into `V34hshak.c`'s `v34handshak`.  This is a symbol-surface defect
+    (the arms should be static or inlined), not a TU-name one; it needs its own
+    pass and is not merged into anything.
+
+**THE `V34.c` RE-TEST (task 2's last blob-only name).**  F11408 declined an
+all-in-one `V34.c` assembled in the object's `.text` order: 3 exact preserved,
+`preinitdigital` 233 -> 20 (better), `modulatevector` 511 -> 887 (worse), no
+exact-set gain.  The alternative form was re-tested here: the saved
+`HelpersDeferred` variant (`/tmp/opencode/v34merge/V34D.c`), which places the
+twelve static helpers AFTER the tables and the seventeen public functions
+rather than before them, compiled as `src/pump/v34/V34.c` with
+`v34shell.c`/`v34scram.c`/`v34digital.c` removed, on the period compiler.
+
+    measured, object sizes vs blob:
+      preinitV34/setScramble/scaleVector  138/15/59  -> EXACT preserved
+      preinitdigital    blob 533  ours 553   (diff 20, BETTER)
+      modulatevector    blob 3388 ours 2501  (diff 887, WORSE)
+      initdigital/demapFrame/getFrame/initV34   all unchanged
+
+`byteident` grade 0 **844/1852** and grade 0-or-1 **895/1852** -- the SAME as
+the current split, no exact symbol gained or lost.  So the second form lands
+on the same measurement as F11408's and meets neither "exact-set gain" nor
+"level count"; `V34.c` is DECLINED again and left blob-only, and the scratch
+file and the swapped tree were reverted.  The discriminator for a later
+partition search remains `preinitdigital` (it takes the scramblers' addresses)
+and `modulatevector` (the only sharp regression).
+
+**GATES at the state this entry describes** (commit 023129a4 plus this doc
+only): `make -j1 J=1 phase` 385 passed / 0 failed, boundary OK; `refcheck` 0
+dangling; `anchorcheck` 285/10038/0 non-unique/0 detached; `mutsnap --check` 0
+current / 285 stale; `git diff --check` clean.  **The `vcedle` suite still owes
+its F11410 re-record.**
+
+(2026-09-26)
