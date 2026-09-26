@@ -228,29 +228,9 @@
   "src/pump/v32/v32anstone.c",
   "build/test/t_v32anstone"
  ],
- "v32data": [
-  "src/pump/v32/v32data.c",
-  "build/test/t_v32data"
- ],
- "v32demod": [
-  "src/pump/v32/v32demod.c",
-  "build/test/t_v32demod"
- ],
- "v32fpctl": [
-  "src/pump/v32/v32fpctl.c",
-  "build/test/t_v32fpctl"
- ],
- "v32fpsub": [
-  "src/pump/v32/v32fpctl.c",
-  "build/test/t_v32fpsub"
- ],
  "v32hdx": [
   "src/pump/v32/V32TXHDX.c",
   "build/test/t_v32hdx"
- ],
- "v32seq": [
-  "src/pump/v32/v32seq.c",
-  "build/test/t_v32seq"
  ],
  "v34datapump": [
   "src/pump/v34/V34hshak.c",
@@ -1127,5 +1107,41 @@
  "v32ctad": [
   "src/pump/v32/V32rxhdx.c",
   "build/test/t_v32fpctl"
+ ],
+ "v32int_fpctl": [
+  "src/pump/v32/V32int.c",
+  "build/test/t_v32fpctl"
+ ],
+ "v32c_fpctl": [
+  "src/pump/v32/V32.c",
+  "build/test/t_v32fpctl"
+ ],
+ "v32int_fpsub": [
+  "src/pump/v32/V32int.c",
+  "build/test/t_v32fpsub"
+ ],
+ "v32prc_fpsub": [
+  "src/pump/v32/V32prc.c",
+  "build/test/t_v32fpsub"
+ ],
+ "v32c_fpsub": [
+  "src/pump/v32/V32.c",
+  "build/test/t_v32fpsub"
+ ],
+ "v32int_data": [
+  "src/pump/v32/V32int.c",
+  "build/test/t_v32data"
+ ],
+ "v32int_demod": [
+  "src/pump/v32/V32int.c",
+  "build/test/t_v32demod"
+ ],
+ "v32int_seq": [
+  "src/pump/v32/V32int.c",
+  "build/test/t_v32seq"
+ ],
+ "v32prc_seq": [
+  "src/pump/v32/V32prc.c",
+  "build/test/t_v32seq"
  ]
 }

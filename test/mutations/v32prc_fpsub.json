@@ -1,0 +1,30 @@
+[
+ {
+  "note": "src/pump/v32/V32prc.c against build/test/t_v32fpsub.  Split from the pre-F11395 over-split suite set so each anchor is searched in the translation unit that now holds its function (blob FILE order)."
+ },
+ {
+  "label": "the tone setter retunes the second detector",
+  "find": "\tcfg = ((struct fpm_tone *)hdx->tone0)->cfg;",
+  "replace": "\tcfg = ((struct fpm_tone *)hdx->tone1)->cfg;"
+ },
+ {
+  "label": "the tone setter rebuilds the first detector from the second's configuration",
+  "find": "\tFPM_TONE_create((struct fpm_tone *)hdx->tone0, &cfg);",
+  "replace": "\tFPM_TONE_create((struct fpm_tone *)hdx->tone1, &cfg);"
+ },
+ {
+  "label": "the requested frequency never reaches the copied configuration",
+  "find": "\tcfg.freq = hz;",
+  "replace": "\t(void)hz;"
+ },
+ {
+  "label": "the frequency lands on the generator's output gain instead",
+  "find": "\tcfg.freq = hz;\n\tFPM_TONE_create",
+  "replace": "\tcfg.scale = hz;\n\tFPM_TONE_create"
+ },
+ {
+  "label": "the tone setter hands FPM_TONE_create the library default configuration",
+  "find": "hdx->tone0, &cfg);\n}",
+  "replace": "hdx->tone0, 0);\n}"
+ }
+]

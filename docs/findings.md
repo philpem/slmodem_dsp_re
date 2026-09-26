@@ -126779,3 +126779,101 @@ offset with it.  No function lost exactness and no exact set regressed.
 source changed); `git diff --check` clean.
 
 (2026-09-26)
+
+## F11395. V.32 milestone 2: `V32int.c` and `V32prc.c` recovered from the over-splits, the three `V32FP_*` leaves moved into `V32.c`, and the five split mutation suites re-recorded
+
+F11394 recovered nine of the nineteen-file V.32 `STT_FILE` run and deferred
+exactly two `.text` boundaries.  Both are now recovered, plus the head of
+`V32.c` that the same deferral named.
+
+**THE TWO RUNS, RE-CONFIRMED FROM THE OBJECT.**  `readelf -sW` gives the FILE
+order; `ld -r` concatenates each input's `.text` in that order, so the run
+between two name-matched globals is the FILE whose record sits between them,
+and `V32mod.c`'s one surviving LOCAL extent is the anchor that splits the
+lower bracket:
+
+    V32.c      [VTBv32_init 0x07e700, SMCv32_encoder_dif 0x07f950)   FILE 117
+    V32int.c   [SetTxModeV32 0x081680, V32FP_modem 0x082630)         FILE 124
+    V32mod.c   [v32_data 0x0827a0, v32_null_protocol 0x082bd0]       FILE 125
+    V32prc.c   [SetToneDetect 0x083600, V32RxHdxModem 0x0838f0)      FILE 127
+
+`V32mod.c`'s `t`-typed `v32_data`/`v32_handshake`/`v32_null_protocol` at
+0x0827a0..0x082bd1 (`tumap.py`) end `V32int.c` at `V32FP_modem`'s last byte
+0x08279c and start `V32mod.c` at 0x0827a0; `V32FP_modem` is a GLOBAL and the
+boundary before it is `V32FP_modem`'s own start, which is the run's end.
+`V32prc.c` is `V32org.c`'s successor (FILE 126, ending at `SetToneDetect`) and
+`V32rxhdx.c`'s predecessor (FILE 128, starting at `V32RxHdxModem`).
+
+**THE PER-FILE SPLIT, every body moved verbatim.**
+
+  * `V32int.c` (new): the fifteen interface functions `SetTxModeV32` ..
+    `RxClampV32` that filled `v32fpctl.c`, `ModDataV32`/`TxNoCarrierV32` from
+    `v32data.c`, `DemodDataV32` from `v32demod.c`, the six rate functions
+    `RateToSeq`..`DecodeRateSeq` and their inlined `static v32_common_rate`
+    from `v32seq.c`, and `V32FP_modem` from `V32mod.c`.  The three rate tables
+    (`V32_RATE_SEQ`/`V32_FINAL_RATE_SEQ`/`V32_ESEQ`) move with them: v32seq.h
+    measures all nine referencing instructions and all nine are in those six
+    functions, so the file is their only consumer.  The three length tables
+    (`V32_TURNAROUND_DLY`/`V32_SYMBOL_LEN`/`V32_SAMPLE_LEN`, `.data`
+    0x0076c0..0x0076cb) follow, contiguous with the rate tables and immediately
+    before `V32_PROTOCOL` (V32mod.c); their `.data` FILE ownership is still not
+    anchored (F11394), so they are placed with their consumers rather than
+    guessed onto `V32RXTAB.c`/`V32TXTAB.c`.
+  * `V32prc.c` (new): `SetToneDetect` from `v32fpctl.c` and the seven
+    generator/detector functions `InitGenSequence`..`StoreReg` from
+    `v32seq.c`.
+  * `V32.c` gains `V32FP_delete`, `V32FP_GetDiagnostics` and
+    `V32FP_GetCleanedSamples` -- 0x07f7c0/0x07f8f0/0x07f910, all inside FILE
+    117's run and all omitted when F11394 recovered `V32.c`'s head.  Appended
+    in address order after `V32FP_create`.
+  * `V32mod.c` loses `V32FP_modem` and its two `short` static buffers; the
+    protocol table, `v32_data`, `v32_handshake` and `v32_null_protocol` stay.
+
+`v32fpctl.c`, `v32data.c`, `v32demod.c` and `v32seq.c` are now empty and
+deleted.  No declaration, type, flag or statement changed; the only edits are
+the moves and each new file's own leading comment and includes.
+
+**THE SUITES SPLIT BY LANDING FILE.**  `anchorcheck` is what sees a move: an
+anchor whose function left its suite's source matches `0 time(s)`.  The five
+suites carrying the moved functions (`v32fpctl` 57, `v32fpsub` 27, `v32data`
+27, `v32demod` 50, `v32seq` 54 anchors) were redistributed by the function
+each anchor lands in and by the test binary that exercises it, into nine
+suites -- `v32int_{fpctl,fpsub,data,demod,seq}`, `v32prc_{fpsub,seq}`,
+`v32c_{fpctl,fpsub}`.  Two `v32data` anchors whose `find` string spanned the
+`ModDataV32`/`TxNoCarrierV32` boundary (they relied on the two functions being
+adjacent) were widened to include the `/* D431: ... */` comment that
+distinguishes the two `FPM_PPS_filter` calls; both remain unique and neither
+anchor was dropped.  `fsegetdiag` (fpm_fse.c) and `v32anstone` are untouched.
+
+**RE-RECORDED on the pinned GCC 13.3.0 container** (`tools/modern/run.sh`,
+`MUTATE_WORKDIR=/home/philpem/.cache/slmodem-mutate`, `--jobs 1`): **215
+mutations, 212 caught, 0 NOT caught**, 1 unusable and 2 equivalent.  The
+unusable one is `v32fpsub`'s pre-existing "the equaliser is freed from the
+resampler's offset" (`FIELD` is not in scope), recorded unusable in the old
+snapshot too.  The five orphaned snapshot entries for the deleted suite names
+were removed.  `mutsnap --check`: **9 current, 275 stale, 0 never recorded, of
+284 registered**, exit 0.
+
+**MEASURED (GCC 3.4.2-r2).**  TU scoreboard: names in BOTH **249 -> 251**,
+blob-only **31 -> 29**, ours-only **56 -> 52**, our TUs 307 -> 305
+(`tools/tu-compare.py`).  The +2 BOTH are exactly `V32int.c` and `V32prc.c`;
+`V32RXTAB.c`/`V32TXTAB.c` remain the only blob-only V.32 names.
+
+`byteident` grade 0 **843/1852** and grade 0-or-1 **895/1852**, both UNCHANGED
+-- no function's byte identity moved.
+
+`partialcmp` positioned bytes **66,615 -> 66,464** /943,398 (**REGRESSION
+-151**); exact symbols **362 -> 364** /2,907 (+2, the two new FILE records);
+exact relocations **960 -> 950** /18,317 (**REGRESSION -10**); exact sections
+69/92; NOBITS 2,836 ref / 2,808 candidate unchanged; candidate `.text` length
+681,155 unchanged.  Both regressions are the input-set/`.data`-placement
+census: removing four inputs and adding two changes the source-order fallback
+for the still-unmatched objects, and the six tables now emit from `V32int.c`
+instead of `v32seq.c`/`v32fpctl.c`.  No function lost exactness and no exact
+symbol or exact-section set regressed.
+
+**GATES.**  `make -j1 J=1 phase`: **385 passed, 0 failed**, boundary OK.
+`refcheck` 0 dangling / 0 stale; `anchorcheck` 284 suites / 10,038
+mutations / 0 non-unique; `git diff --check` clean.
+
+(2026-09-26)

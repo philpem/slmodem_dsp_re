@@ -1664,6 +1664,31 @@
     "the two phase codes are transposed, so 0 is silence and 1 is tone": "caught"
    }
   },
+  "v32c_fpctl": {
+   "key": "9e3abf9267fae24940c415bbd814dfa20872162f4c6df43cfba6ded74b34fc69",
+   "summary": "3 mutations: 3 caught (3 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "an over-long cleaned block is clamped rather than reported as none": "caught",
+    "the cleaned-sample buffer comes from the slot above the object's": "caught",
+    "the cleaned-sample count is capped one sample high": "caught"
+   }
+  },
+  "v32c_fpsub": {
+   "key": "9292f78ebd2af824cdb820e1658a7663b70b2ea9a14b78bbe145ca7c34033049",
+   "summary": "10 mutations: 9 caught (9 by test, 0 by strings), 0 NOT caught, 1 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "only two of the three tone objects are released": "caught",
+    "the cleaned-sample buffer is not released": "caught",
+    "the datapump block is released twice and the instance not at all": "caught",
+    "the diagnostics wrapper hands FSE_getdiag the datapump block rather than the equaliser inside it": "caught",
+    "the diagnostics wrapper shifts the log selector by one": "caught",
+    "the equaliser is freed from the resampler's offset": "unusable",
+    "the first heap buffer is released from the slot four bytes above the object's": "caught",
+    "the half-duplex context's buffer is released but the context is not": "caught",
+    "the instance itself is left allocated": "caught",
+    "the multi-tone detector is deleted from the tone slot above it": "caught"
+   }
+  },
   "v32ctad": {
    "key": "da010122338dc0e3b7065f4b55df7a32e754fd3fab8b72f08f27c2e482d7fc1c",
    "summary": "3 mutations: 2 caught (2 by test, 0 by strings), 1 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
@@ -1673,8 +1698,39 @@
     "the turnaround surplus is not clamped at zero": "caught"
    }
   },
-  "v32data": {
-   "key": "86d8a888be1c1a166649a37c4d52ab5b9bb89047b8afcacde6a702efa32360f4",
+  "v32hdx": {
+   "key": "ee286b194e35850eb3aff433efc5f36c03930de640d6152e3cae7538510f79bc",
+   "summary": "15 mutations: 13 caught (13 by test, 0 by strings), 0 NOT caught, 1 unusable, 1 equivalent, 0 MIScounted",
+   "verdicts": {
+    "the budget is seeded from V32_SAMPLE_LEN instead of V32_SYMBOL_LEN": "caught",
+    "the budget is seeded from the instance rather than from the context": "caught",
+    "the context is read once before the loop instead of at every iteration, so a state that swaps it is not seen": "caught",
+    "the loop stops as soon as the running total returns to zero": "caught",
+    "the loop tests the budget before the first call, so an already-spent block calls no state at all": "caught",
+    "the output pointer advances by the running total rather than by this call's count": "caught",
+    "the output pointer is not advanced, so every state writes at the block's start": "caught",
+    "the running total is accumulated at full width instead of being truncated to a short every iteration": "equivalent",
+    "the sample count is never written back": "caught",
+    "the sample count is written as the budget that is left rather than the samples produced": "caught",
+    "the state's return is subtracted from the running total": "caught",
+    "the states are handed the block's start every time instead of the advancing cursor": "caught",
+    "the states are handed the context instead of the instance": "caught",
+    "the states are handed the output buffer as their data argument": "caught",
+    "the transmit driver dispatches from the RECEIVE slot": "unusable"
+   }
+  },
+  "v32hdxrx": {
+   "key": "ad071bf9fbb687875a48476d2fd528d992a7b6cf75c8cc7021d8af7bf64ea413",
+   "summary": "4 mutations: 4 caught (4 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "the receive driver dispatches from the TRANSMIT slot": "caught",
+    "the receive driver reads its state pointer out of the instance rather than the context": "caught",
+    "the receive state is called twice": "caught",
+    "the receive state is handed the count by value's worth of nothing -- the two buffers are transposed": "caught"
+   }
+  },
+  "v32int_data": {
+   "key": "9abd9df7edec7cb04d1221ed68161d5c118094ee1d82e3143aae69dbade97567",
    "summary": "27 mutations: 27 caught (27 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "the coder and the ring are handed to the encoder the other way round": "caught",
@@ -1706,8 +1762,8 @@
     "the wrap test is unsigned, which agrees everywhere except at the truncation corner": "caught"
    }
   },
-  "v32demod": {
-   "key": "858782bb00ec7a73c9c5097f7495001b89a1ab30d77f767750f7922c4dcb07ca",
+  "v32int_demod": {
+   "key": "71714cfedbaacaf21ac5b91156b6b1aa0485c953f0438d9bd18900d92f5d05d8",
    "summary": "50 mutations: 49 caught (49 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "D491 undone: outside mode 6 the lms enable is masked by the AGC's flag like its three siblings": "caught",
@@ -1762,9 +1818,9 @@
     "the two published lengths are transposed onto each other's field": "caught"
    }
   },
-  "v32fpctl": {
-   "key": "7b1a161911789c7fe2029e1c109160b31768f7131d4d26e82b7f7b6ab6406dc0",
-   "summary": "57 mutations: 57 caught (57 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+  "v32int_fpctl": {
+   "key": "9026edac39efb9f32b89a4badcecaa581e0c6ceb62225c13ba3c784c8b58ae98",
+   "summary": "54 mutations: 54 caught (54 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "12000 initialises the Viterbi decoder for 14400": "caught",
     "12000's I and Q maps are transposed": "caught",
@@ -1776,7 +1832,6 @@
     "9600 with no trellis sets the decoder channel the 4800 arms clear": "caught",
     "an out-of-range transmit mode leaves the scrambler at one bit per symbol rather than none": "caught",
     "an out-of-range transmit mode replaces the fault flags instead of setting one bit": "caught",
-    "an over-long cleaned block is clamped rather than reported as none": "caught",
     "an unrecognised bit rate reports 4800 rather than the invalid code": "caught",
     "both transmit taps are derived from the first tap's position": "caught",
     "mode 3 is not one of the receive loop switch's arms": "caught",
@@ -1788,8 +1843,6 @@
     "the clamp reports the count it was passed rather than the block length": "caught",
     "the clamp writes a value one below the object's": "caught",
     "the clamp writes one word too few": "caught",
-    "the cleaned-sample buffer comes from the slot above the object's": "caught",
-    "the cleaned-sample count is capped one sample high": "caught",
     "the coder's pad02 does not take the selector's value": "caught",
     "the delay line is preset to a real constellation point rather than the no-carrier index": "caught",
     "the delay line is sized for one symbol period of guard rather than two": "caught",
@@ -1825,92 +1878,71 @@
     "the transmit taps are not reduced by the group shift": "caught"
    }
   },
-  "v32fpsub": {
-   "key": "644708e7db0afb09be9e10cc87d2c2dac1fe5691d29dacca1da0a6d4539ea37f",
-   "summary": "27 mutations: 26 caught (26 by test, 0 by strings), 0 NOT caught, 1 unusable, 0 equivalent, 0 MIScounted",
+  "v32int_fpsub": {
+   "key": "fcb3a0e66b9ed0cac589525e1486fe9f2cafe17c82997ced5bb93c561c6fd57c",
+   "summary": "12 mutations: 12 caught (12 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
-    "only two of the three tone objects are released": "caught",
     "switching the canceller off leaves the far update running": "caught",
     "switching the canceller on does not clear its delay line": "caught",
     "switching the canceller on does not clear the field beside the hold flag": "caught",
-    "the cleaned-sample buffer is not released": "caught",
-    "the datapump block is released twice and the instance not at all": "caught",
     "the delay line is cleared one entry short": "caught",
-    "the diagnostics wrapper hands FSE_getdiag the datapump block rather than the equaliser inside it": "caught",
-    "the diagnostics wrapper shifts the log selector by one": "caught",
     "the echo canceller's slow mode divides the update gain by five, which is the same reciprocal multiplier and one place of shift -- finding F8218's original defect": "caught",
-    "the equaliser is freed from the resampler's offset": "unusable",
-    "the first heap buffer is released from the slot four bytes above the object's": "caught",
-    "the frequency lands on the generator's output gain instead": "caught",
-    "the half-duplex context's buffer is released but the context is not": "caught",
-    "the instance itself is left allocated": "caught",
-    "the multi-tone detector is deleted from the tone slot above it": "caught",
     "the near update loop is left off when the canceller is switched on": "caught",
     "the re-init asks FPM_ECC_init to allocate rather than to re-use": "caught",
     "the re-init hands FPM_ECC_init the library default instead of the canceller's own configuration": "caught",
     "the re-init leaves the geometry init computed rather than overwriting it": "caught",
     "the re-init leaves the two read taps where init put them": "caught",
     "the re-init sets a far delay one short of the object's": "caught",
-    "the re-init takes the near delay from the instance's echo-delay field's neighbour": "caught",
-    "the requested frequency never reaches the copied configuration": "caught",
-    "the tone setter hands FPM_TONE_create the library default configuration": "caught",
-    "the tone setter rebuilds the first detector from the second's configuration": "caught",
-    "the tone setter retunes the second detector": "caught"
+    "the re-init takes the near delay from the instance's echo-delay field's neighbour": "caught"
    }
   },
-  "v32hdx": {
-   "key": "ee286b194e35850eb3aff433efc5f36c03930de640d6152e3cae7538510f79bc",
-   "summary": "15 mutations: 13 caught (13 by test, 0 by strings), 0 NOT caught, 1 unusable, 1 equivalent, 0 MIScounted",
-   "verdicts": {
-    "the budget is seeded from V32_SAMPLE_LEN instead of V32_SYMBOL_LEN": "caught",
-    "the budget is seeded from the instance rather than from the context": "caught",
-    "the context is read once before the loop instead of at every iteration, so a state that swaps it is not seen": "caught",
-    "the loop stops as soon as the running total returns to zero": "caught",
-    "the loop tests the budget before the first call, so an already-spent block calls no state at all": "caught",
-    "the output pointer advances by the running total rather than by this call's count": "caught",
-    "the output pointer is not advanced, so every state writes at the block's start": "caught",
-    "the running total is accumulated at full width instead of being truncated to a short every iteration": "equivalent",
-    "the sample count is never written back": "caught",
-    "the sample count is written as the budget that is left rather than the samples produced": "caught",
-    "the state's return is subtracted from the running total": "caught",
-    "the states are handed the block's start every time instead of the advancing cursor": "caught",
-    "the states are handed the context instead of the instance": "caught",
-    "the states are handed the output buffer as their data argument": "caught",
-    "the transmit driver dispatches from the RECEIVE slot": "unusable"
-   }
-  },
-  "v32hdxrx": {
-   "key": "ad071bf9fbb687875a48476d2fd528d992a7b6cf75c8cc7021d8af7bf64ea413",
-   "summary": "4 mutations: 4 caught (4 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
-   "verdicts": {
-    "the receive driver dispatches from the TRANSMIT slot": "caught",
-    "the receive driver reads its state pointer out of the instance rather than the context": "caught",
-    "the receive state is called twice": "caught",
-    "the receive state is handed the count by value's worth of nothing -- the two buffers are transposed": "caught"
-   }
-  },
-  "v32seq": {
-   "key": "2740ff885f9a946289e69bf5714a35ece93ff5feb80aaa0f10f499410f064c36",
-   "summary": "54 mutations: 53 caught (53 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
+  "v32int_seq": {
+   "key": "5917d0555627a3d93126c937422aad437ed14f9c2c1675d84683c6f13bd96b9a",
+   "summary": "17 mutations: 16 caught (16 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "CodeRateSeq and CodeFinalRateSeq answer from each other's table": "caught",
     "CodeRateSeq treats the no-rate index as a real one and indexes the table with it": "caught",
-    "GetSequence returns the shift register rather than the value latched at the match": "caught",
-    "InitDetSequence leaves the last match behind instead of clearing it": "caught",
-    "InitDetSequence leaves the shift register where it was instead of clearing it": "caught",
-    "InitGenSequence divides the other way round": "caught",
-    "LoadReg's bound admits a sixth register": "caught",
-    "LoadReg's bound is signed at the bottom, so a negative index reads before the array": "caught",
     "RateToSeq answers from the FINAL table": "caught",
-    "StoreReg takes its index second and its value third, which is LoadReg's order and not the object's": "caught",
-    "StoreReg writes to the array LoadReg does not read": "caught",
-    "StoreReg's bound is signed at the bottom, so a negative index writes before the array": "caught",
     "the 0x0040 arm is tried before the 0x0200 arm, which is the numerically sorted order and not the object's": "caught",
     "the 0x0080 sub-test only consults the far end, so index 2 is chosen where the object chooses 1": "caught",
     "the 0x0080 sub-test's two answers are transposed": "caught",
     "the 9600 arm and the 12000 arm are tried in the other order, which agrees for every signal that sets only one of them": "caught",
     "the E table is the rate table with the top nibble left off": "caught",
     "the RATE_SEQ table's fifth entry is the FINAL table's, which is the one place the two differ": "caught",
+    "the ladder's default is index 0 rather than the no-rate value, which agrees wherever an arm fires": "caught",
+    "the ladder's first arm tests the local signal against the far end's bit rather than its own": "caught",
+    "the last arm falls through to the no-rate answer instead of index 0": "caught",
+    "the local rate index is read from the two bytes above it": "caught",
+    "the local rate index is read out of the half-duplex block instead of the DSP block": "caught",
+    "the local signal is read from the FINAL table, which differs from RATE_SEQ at exactly one index": "caught",
+    "the no-rate sentinel loses its top nibble, so CodeESeq answers CodeRateSeq's": "caught",
+    "the no-rate test is >= rather than ==, which agrees for every value the ladder can return": "equivalent"
+   }
+  },
+  "v32prc_fpsub": {
+   "key": "d810a97f74b36aeee6b067c88370115d073571a52330f15db622573e5856bead",
+   "summary": "5 mutations: 5 caught (5 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "the frequency lands on the generator's output gain instead": "caught",
+    "the requested frequency never reaches the copied configuration": "caught",
+    "the tone setter hands FPM_TONE_create the library default configuration": "caught",
+    "the tone setter rebuilds the first detector from the second's configuration": "caught",
+    "the tone setter retunes the second detector": "caught"
+   }
+  },
+  "v32prc_seq": {
+   "key": "03affe217fd4aeff6d7702c7e1beea48413da2c59ac5670db30f980c5d64dc6a",
+   "summary": "37 mutations: 37 caught (37 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "GetSequence returns the shift register rather than the value latched at the match": "caught",
+    "InitDetSequence leaves the last match behind instead of clearing it": "caught",
+    "InitDetSequence leaves the shift register where it was instead of clearing it": "caught",
+    "InitGenSequence divides the other way round": "caught",
+    "LoadReg's bound admits a sixth register": "caught",
+    "LoadReg's bound is signed at the bottom, so a negative index reads before the array": "caught",
+    "StoreReg takes its index second and its value third, which is LoadReg's order and not the object's": "caught",
+    "StoreReg writes to the array LoadReg does not read": "caught",
+    "StoreReg's bound is signed at the bottom, so a negative index writes before the array": "caught",
     "the all-ones guard is dropped, which agrees on every arm whose target is not -1": "caught",
     "the all-ones guard tests the masked register rather than the register": "caught",
     "the bit index is off by one, so the top bit of every word is dropped": "caught",
@@ -1928,18 +1960,10 @@
     "the generator's wrap mask and its starting index are set from different values": "caught",
     "the half-duplex block is reached at the DSP block's offset": "caught",
     "the inner loop STOPS at the first match, so the last match in a word no longer wins": "caught",
-    "the ladder's default is index 0 rather than the no-rate value, which agrees wherever an arm fires": "caught",
-    "the ladder's first arm tests the local signal against the far end's bit rather than its own": "caught",
-    "the last arm falls through to the no-rate answer instead of index 0": "caught",
-    "the local rate index is read from the two bytes above it": "caught",
-    "the local rate index is read out of the half-duplex block instead of the DSP block": "caught",
-    "the local signal is read from the FINAL table, which differs from RATE_SEQ at exactly one index": "caught",
     "the match is reported one word late": "caught",
     "the match value is masked by the comparison mask rather than by out_mask": "caught",
     "the match value is the whole register rather than the register masked by out_mask": "caught",
     "the no-match answer is 0 rather than -1, which is a valid word count": "caught",
-    "the no-rate sentinel loses its top nibble, so CodeESeq answers CodeRateSeq's": "caught",
-    "the no-rate test is >= rather than ==, which agrees for every value the ladder can return": "equivalent",
     "the pattern and the width are written to each other's offsets": "caught",
     "the register array starts two bytes higher": "caught",
     "the register is not written back on the match path either": "caught",

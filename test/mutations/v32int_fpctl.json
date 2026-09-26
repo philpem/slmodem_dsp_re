@@ -1,6 +1,6 @@
 [
  {
-  "label": "NOTE: seventeen functions of stores through two pointers, so almost every mutation moves an OFFSET, a CONSTANT or an ARM. The fixture is what makes them separable: four blocks filled from one pseudorandom seed and compared byte for byte afterwards, so a store one field high shows twice -- at the field that did not move and at the one that should not have. The relocated fields (the two constellation maps, the slicer, four Viterbi tables) are skipped by the byte comparison and checked per side against the symbol that side should hold, which is why a wrong-arm map is still caught."
+  "note": "src/pump/v32/V32int.c against build/test/t_v32fpctl.  Split from the pre-F11395 over-split suite set so each anchor is searched in the translation unit that now holds its function (blob FILE order)."
  },
  {
   "label": "the four-point arms pick the differential encoder where the object picks the absolute one",
@@ -271,20 +271,5 @@
   "label": "the clamp reports the count it was passed rather than the block length",
   "find": "\treturn hdx->symbol_len;\n}",
   "replace": "\treturn count;\n}"
- },
- {
-  "label": "the cleaned-sample count is capped one sample high",
-  "find": "\tif (have > V32FP_CLEAN_MAX)",
-  "replace": "\tif (have >= V32FP_CLEAN_MAX)"
- },
- {
-  "label": "an over-long cleaned block is clamped rather than reported as none",
-  "find": "\tif (have > V32FP_CLEAN_MAX)\n\t\t*n = 0;",
-  "replace": "\tif (have > V32FP_CLEAN_MAX)\n\t\t*n = V32FP_CLEAN_MAX;"
- },
- {
-  "label": "the cleaned-sample buffer comes from the slot above the object's",
-  "find": "\treturn (short *)FP(modem)->clean_buf;",
-  "replace": "\treturn (short *)FP(modem)->rx_buf;"
  }
 ]

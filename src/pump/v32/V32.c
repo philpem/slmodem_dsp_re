@@ -876,3 +876,77 @@ V32FP_create(const struct v32fp_cfg *cfg, void *arg1)
 const short SDMv32_GPA[4] = { 5, 18, 18, 18 };
 const short SDMv32_GPC[4] = { 18, 5, 18, 18 };
 const short SDMv32_CFG[3] = { 4, 5, 23 };
+
+/*
+ * Tear the whole datapump down.
+ *
+ * TWO THINGS ABOUT THIS FUNCTION ARE DELIBERATE.
+ *
+ * It re-reads V32_OBJ_HDX and V32_OBJ_FP before every single use -- thirteen
+ * loads of two fields.  That is what the object does, and it is not an
+ * accident of scheduling: `sysdep_free` is an external call, so the compiler
+ * cannot keep either pointer live across one.  Caching them in a local emits
+ * two loads and no reloads, which is a different function.
+ *
+ * THE FIVE `FPM_*_free` CALLS TAKE A SECOND ARGUMENT IN THE OBJECT AND NOT
+ * HERE.  Before each of them the object stores a literal 1 into the outgoing
+ * area's second slot -- `mov $0x1,%ecx; mov %ecx,0x4(%esp)` -- and the callees
+ * read only the first.  GCC does not emit dead stores into the argument area,
+ * so the author's declarations for these five had two parameters; `fresh`, as
+ * on the matching `_init`, is the obvious candidate and is not claimed.  The
+ * differential tier cannot see it either way.  D481 and finding F8215.
+ */
+void
+V32FP_delete(struct v32_modem *modem)
+{
+	FPM_MTD_delete((struct fpm_mtd *)HDX(modem)->mtd);
+	FPM_TONE_delete((struct fpm_tone *)HDX(modem)->tone2);
+	FPM_TONE_delete((struct fpm_tone *)HDX(modem)->tone1);
+	FPM_TONE_delete((struct fpm_tone *)HDX(modem)->tone0);
+
+	sysdep_free(FP(modem)->decoder.vtb.paths);
+	FPM_FSE_free(FSE(FP(modem)));
+	FPM_SRE_free(&FP(modem)->sre);
+	FPM_ECC_free(ECC(FP(modem)));
+	FPM_MRF_free(&FP(modem)->mrf);
+	FPM_PPS_free(PPS(FP(modem)));
+	sysdep_free(FP(modem)->rx_buf);
+	sysdep_free(FP(modem)->clean_buf);
+
+	sysdep_free(HDX(modem)->buffer);
+	sysdep_free(HDX(modem));
+	sysdep_free(FP(modem));
+	sysdep_free(modem);
+}
+
+/*
+ * Drain the equaliser's scatter log.  A pure forwarder: only the first
+ * argument is rewritten, and it is a tail call in the object.
+ */
+int
+V32FP_GetDiagnostics(struct v32_modem *modem, int which, struct fpm_fse_point *out,
+		     int max)
+{
+	return FSE_getdiag(FSE(FP(modem)), which, out, max);
+}
+
+/*
+ * The echo-cancelled input block, and how many samples are in it.
+ *
+ * A count above V32FP_CLEAN_MAX is reported as NONE rather than clamped, and
+ * the buffer pointer comes back either way.  The comparison is unsigned and
+ * the delivered count is sign-extended from sixteen bits, which agree over
+ * every value that reaches the first branch.
+ */
+short *
+V32FP_GetCleanedSamples(struct v32_modem *modem, int *n)
+{
+	unsigned short have;
+
+	have = FP(modem)->clean_n;
+	if (have > V32FP_CLEAN_MAX)
+		*n = 0;
+	else
+		*n = (short)have;
+	return (short *)FP(modem)->clean_buf;
+}

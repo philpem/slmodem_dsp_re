@@ -1,17 +1,20 @@
 /*
- * v32fpctl.c -- ITU-T V.32 / V.32bis: the datapump's control surface.
+ * V32int.c -- ITU-T V.32 / V.32bis: the datapump's interface functions and
+ *             data-path leaves.
  *
- * Reconstructed from dsplibs.o:
+ * Reconstructed from dsplibs.o.  The blob's STT_FILE order places this file
+ * between V32dec.c and V32mod.c, and its .text run is
+ * [SetTxModeV32 0x081680, V32FP_modem 0x0827a0) -- twenty-five functions,
+ * plus the three rate tables and the three length tables their code reads.
  *
- *   V32FP_delete             .text 0x07f7c0  293
- *   V32FP_GetDiagnostics     .text 0x07f8f0   21
- *   V32FP_GetCleanedSamples  .text 0x07f910   53
  *   SetTxModeV32             .text 0x081680  520
  *   SetRxModeV32             .text 0x081890  577
  *   SeedScramblerV32         .text 0x081ae0   15
  *   GetRateV32               .text 0x081af0   78
  *   ScrambleDataV32          .text 0x081b40   28
  *   DescrambleDataV32        .text 0x081b60   30
+ *   ModDataV32               .text 0x081b80  121
+ *   DemodDataV32             .text 0x081c00  604
  *   SetAdaptEqV32            .text 0x081e60   79
  *   SetAdaptEcV32            .text 0x081eb0  319
  *   SetRxLoopsV32            .text 0x081ff0   83
@@ -20,81 +23,59 @@
  *   EpochDetectV32           .text 0x082150   17
  *   RetrainDetectV32         .text 0x082170   53
  *   RenegotiateDetectV32     .text 0x0821b0   44
+ *   RateToSeq                .text 0x0821e0   14
+ *   SeqToRate                .text 0x0821f0  150
+ *   CodeESeq                 .text 0x082290  183
+ *   CodeRateSeq              .text 0x082350  164
+ *   CodeFinalRateSeq         .text 0x082400  164
+ *   DecodeRateSeq            .text 0x0824b0  152
+ *   TxNoCarrierV32           .text 0x082550  152
  *   RxClampV32               .text 0x0825f0   49
- *   v32_null_protocol        .text 0x082bd0    1   (moved to v32fpdisp.c)
- *   SetToneDetect            .text 0x083600  110
- *   CalcTurnAroundDelay      .text 0x083ae0   53   (moved to V32rxhdx.c)
+ *   V32FP_modem              .text 0x082630  356
+ *
+ *   V32_RATE_SEQ             .data 0x007690   14
+ *   V32_FINAL_RATE_SEQ       .data 0x00769e   14
+ *   V32_ESEQ                 .data 0x0076ac   14
  *   V32_TURNAROUND_DLY       .data 0x0076c0    4
  *   V32_SYMBOL_LEN           .data 0x0076c4    4
  *   V32_SAMPLE_LEN           .data 0x0076c8    4
  *
- * The functions are in the object's address order, which is what
- * `docs/method/refinement.md` lever 1 asks for: emission order is upstream of
- * register allocation.  Two of them sit 0x2000 below the rest and may belong
- * to a different translation unit; nothing in the object separates them and
- * they are kept here with the family they configure.
- *
- * ---------------------------------------------------------------------------
- * WHAT THIS FILE IS FOR, AND WHY IT IS ALMOST ALL STORES
- *
- * V.32 keeps one instance holding two pointers -- `V32_OBJ_HDX` to the
- * half-duplex handshake context and `V32_OBJ_FP` to the datapump block -- and
- * the datapump block is a tiling of sub-objects that other headers already
- * model.  Every function here reaches through those two pointers into one of
- * those sub-objects.  So the reconstruction risk is not arithmetic: it is
- * WHICH sub-object and WHICH FIELD, and that is what the differential test is
- * built to separate.
- *
- * The owning allocations and their embedded sub-objects are modelled in
- * v32struct.h; this file retains the object's repeated owner-pointer reloads.
- *
- * ---------------------------------------------------------------------------
- * THE TWO MODE SETTERS ARE ONE CONFIGURATOR WRITTEN TWICE
- *
- * `SetTxModeV32` writes seven fields at fp + 0x30..0x46; `SetRxModeV32` writes
- * seven fields at fp + 0x50b0..0x50c6.  Every pair differs by exactly 0x5080,
- * and `ScrambleDataV32` / `DescrambleDataV32` hand those two bases to
- * `SDMv32_scrambler` / `SDMv32_descrambler`.  So both clusters are
- * `struct v32_sdm` and the seven fields are that header's own -- `group`,
- * the two tap positions, `outmask`, `regmask`, `tap1`, `tap2`.
- *
- * The tail both setters share is therefore readable rather than arithmetic on
- * offsets:
- *
- *     shift    the bits taken out of the register per symbol
- *     outmask  (1 << shift) - 1
- *     regmask  ~outmask, so `reg << shift` keeps room for the new group
- *     tapN     the Recommendation's tap position, less the shift
- *
- * AND THE 14400 ARM'S SHIFT OF 3 IS NOT A DEFECT.  Every other mode's shift is
- * its bits per symbol -- 2, 2, 4, 4, 3, 5 -- and V32_MODE_128T carries six
- * bits and shifts by three.  v32scram.h records why from the consumer's side:
- * `SDMv32_scrambler` special-cases `group == 6` into two three-bit groups, most
- * significant first, and shifts by three.  The two readings were made
- * independently and meet exactly.  Finding F8214.
+ * Every body is the text it was reconstructed in, moved verbatim.  The
+ * functions were spread over the invented units v32fpctl.c (the interface
+ * functions), v32data.c (ModDataV32, TxNoCarrierV32), v32demod.c
+ * (DemodDataV32) and v32seq.c (the rate codec); the FILE order and the .text
+ * run it pins put them here.  The three rate tables are read only by this
+ * file's six rate functions (v32seq.h measures all nine referencing
+ * instructions), and the three length tables follow them in the blob's own
+ * .data run.  See finding F11395.
  */
+
+#include <string.h>
 
 #include "dsplib/v32fpctl.h"
 
-#include "dsplib/v32data.h"		/* V32_SYMBOL_NOCARRIER, V32FP_*      */
-#include "dsplib/v32dec.h"		/* struct v32_dec, FSE_decision_*     */
+#include "dsplib/v32data.h"
+#include "dsplib/v32dec.h"
+#include "dsplib/v32demod.h"
+#include "dsplib/v32hdx.h"
 #include "dsplib/v32scram.h"
+#include "dsplib/v32seq.h"
 #include "dsplib/v32smc.h"
+#include "dsplib/v32struct.h"
 #include "dsplib/vtb.h"
+#include "dsplib/debug.h"
+#include "dsplib/fpm.h"
+#include "dsplib/fpm_agc.h"
 #include "dsplib/fpm_ecc.h"
 #include "dsplib/fpm_fse.h"
 #include "dsplib/fpm_mrf.h"
 #include "dsplib/fpm_mtd.h"
 #include "dsplib/fpm_pps.h"
+#include "dsplib/fpm_smc.h"
 #include "dsplib/fpm_sre.h"
 #include "dsplib/fpm_tone.h"
 #include "dsplib/sysdep.h"
-
-/* Raw access remains only for deliberately overlapping legacy subfields. */
-#include "dsplib/v32struct.h"
-
-#define HDX(m)			((m)->hdx)
-#define FP(m)			((m)->fp)
+#include "v32fpdisp-common.h"
 
 #define SDM_TX(fp)	(&((struct v32_fp *)(fp))->scrambler)
 #define SDM_RX(fp)	(&((struct v32_fp *)(fp))->descrambler)
@@ -104,6 +85,36 @@
 #define ECC(fp)		(&((struct v32_fp *)(fp))->ecc)
 #define FSE(fp)		(&((struct v32_fp *)(fp))->fse)
 #define DEC(fp)		((struct v32_dec *)FSE(fp)->cfg.owner)
+
+#define AGC_OF(fp)	(&(fp)->agc)
+#define ECC_OF(fp)	(&(fp)->ecc)
+#define FSE_OF(fp)	(&(fp)->fse)
+#define MRF_OF(fp)	(&(fp)->mrf)
+#define SRE_OF(fp)	(&(fp)->sre)
+#define RXBUF_OF(fp)	((fp)->rx_buf)
+#define CLEAN_OF(fp)	((fp)->clean_buf)
+
+short V32_RATE_SEQ[V32_RATE_COUNT] = {
+	0x0d11, 0x0b11, 0x0b91, 0x09d1, 0x09b1, 0x0ff9, 0x0997
+};
+
+short V32_FINAL_RATE_SEQ[V32_RATE_COUNT] = {
+	0x0d11, 0x0b11, 0x0b91, 0x09d1, 0x09b1, 0x0999, 0x0997
+};
+
+/*
+ * The E sequence.
+ *
+ * `V32_ESEQ[i] == V32_FINAL_RATE_SEQ[i] | 0xf000` at every one of the seven
+ * indices -- INCLUDING index 5, where the FINAL table and `V32_RATE_SEQ`
+ * differ, so it is the FINAL one this tracks and not the other.  That is a
+ * property of the bytes, stated here so a reader who edits one table knows
+ * which other one moved with it; the object holds three independent arrays and
+ * so does this file.
+ */
+short V32_ESEQ[V32_RATE_COUNT] = {
+	0xfd11, 0xfb11, 0xfb91, 0xf9d1, 0xf9b1, 0xf999, 0xf997
+};
 
 /*
  * THE THREE LENGTH TABLES ARE ONE FAMILY AND THE OBJECT LAYS THEM OUT AS ONE.
@@ -131,83 +142,36 @@ short V32_TURNAROUND_DLY[2] = { 64, 360 };
 short V32_SYMBOL_LEN[2] = { 12, 48 };
 short V32_SAMPLE_LEN[2] = { 40, 160 };
 
-/* --------------------------------------------------------------------- */
+static unsigned short tx_in_internal[V32_BIT_BUFFER];
+static unsigned short rx_out_internal[V32_BIT_BUFFER];
 
 /*
- * Tear the whole datapump down.
+ * The best rate index this station and `seq` have in common.
  *
- * TWO THINGS ABOUT THIS FUNCTION ARE DELIBERATE.
- *
- * It re-reads V32_OBJ_HDX and V32_OBJ_FP before every single use -- thirteen
- * loads of two fields.  That is what the object does, and it is not an
- * accident of scheduling: `sysdep_free` is an external call, so the compiler
- * cannot keep either pointer live across one.  Caching them in a local emits
- * two loads and no reloads, which is a different function.
- *
- * THE FIVE `FPM_*_free` CALLS TAKE A SECOND ARGUMENT IN THE OBJECT AND NOT
- * HERE.  Before each of them the object stores a literal 1 into the outgoing
- * area's second slot -- `mov $0x1,%ecx; mov %ecx,0x4(%esp)` -- and the callees
- * read only the first.  GCC does not emit dead stores into the argument area,
- * so the author's declarations for these five had two parameters; `fresh`, as
- * on the matching `_init`, is the obvious candidate and is not claimed.  The
- * differential tier cannot see it either way.  D481 and finding F8215.
+ * `static` because the object has no symbol for it: it is inlined into all
+ * five of its callers and the worklist therefore never listed it.
  */
-void
-V32FP_delete(struct v32_modem *modem)
+static int
+v32_common_rate(struct v32_modem *modem, unsigned short seq)
 {
-	FPM_MTD_delete((struct fpm_mtd *)HDX(modem)->mtd);
-	FPM_TONE_delete((struct fpm_tone *)HDX(modem)->tone2);
-	FPM_TONE_delete((struct fpm_tone *)HDX(modem)->tone1);
-	FPM_TONE_delete((struct fpm_tone *)HDX(modem)->tone0);
+	int rate = V32_RATE_NONE;
+	struct v32_fp *fp = (struct v32_fp *)
+		modem->fp;
+	short local = V32_RATE_SEQ[fp->rx_rate_index];
 
-	sysdep_free(FP(modem)->decoder.vtb.paths);
-	FPM_FSE_free(FSE(FP(modem)));
-	FPM_SRE_free(&FP(modem)->sre);
-	FPM_ECC_free(ECC(FP(modem)));
-	FPM_MRF_free(&FP(modem)->mrf);
-	FPM_PPS_free(PPS(FP(modem)));
-	sysdep_free(FP(modem)->rx_buf);
-	sysdep_free(FP(modem)->clean_buf);
+	if ((seq & 0x0008) && (local & 0x0008))
+		rate = 5;
+	else if ((seq & 0x0020) && (local & 0x0020))
+		rate = 4;
+	else if ((seq & 0x0200) && (local & 0x0200))
+		rate = ((seq & 0x0080) && (local & 0x0080)) ? 2 : 1;
+	else if ((seq & 0x0040) && (local & 0x0040))
+		rate = 3;
+	else if ((seq & 0x0400) && (local & 0x0400))
+		rate = 0;
 
-	sysdep_free(HDX(modem)->buffer);
-	sysdep_free(HDX(modem));
-	sysdep_free(FP(modem));
-	sysdep_free(modem);
+	return rate;
 }
-
-/*
- * Drain the equaliser's scatter log.  A pure forwarder: only the first
- * argument is rewritten, and it is a tail call in the object.
- */
-int
-V32FP_GetDiagnostics(struct v32_modem *modem, int which, struct fpm_fse_point *out,
-		     int max)
-{
-	return FSE_getdiag(FSE(FP(modem)), which, out, max);
-}
-
-/*
- * The echo-cancelled input block, and how many samples are in it.
- *
- * A count above V32FP_CLEAN_MAX is reported as NONE rather than clamped, and
- * the buffer pointer comes back either way.  The comparison is unsigned and
- * the delivered count is sign-extended from sixteen bits, which agree over
- * every value that reaches the first branch.
- */
-short *
-V32FP_GetCleanedSamples(struct v32_modem *modem, int *n)
-{
-	unsigned short have;
-
-	have = FP(modem)->clean_n;
-	if (have > V32FP_CLEAN_MAX)
-		*n = 0;
-	else
-		*n = (short)have;
-	return (short *)FP(modem)->clean_buf;
-}
-
-/* --------------------------------------------------------------------- */
 
 /*
  * Configure the transmitter.
@@ -488,6 +452,114 @@ DescrambleDataV32(struct v32_modem *modem, short *buf, unsigned short count)
 	SDMv32_descrambler(SDM_RX(FP(modem)), buf, count);
 }
 
+unsigned short
+ModDataV32(struct v32_modem *modem, short *data, short *out, unsigned short count)
+{
+	const v32_encoder_fn *tbl;
+	struct v32_fp *fp;
+	short sel;
+
+	fp = modem->fp;
+	tbl = fp->encoders;
+	sel = fp->encoder_sel;
+	tbl[sel](&fp->tx_smc, &fp->symout, data, count);
+
+	fp = modem->fp;
+	return FPM_PPS_filter(&fp->pps,
+			      /* D431: the same bytes as the v32_symout above */
+			      (struct fpm_smc_ring *)(void *)
+					&fp->symout,
+			      out, count);
+}
+
+unsigned short
+DemodDataV32(struct v32_modem *modem, short *in, unsigned short *out, unsigned short count)
+{
+	int ec_training = 0;
+	unsigned short n, m;
+	int enables;
+	struct v32_modem *owner = modem;
+	struct v32_hdx *hdx;
+	struct v32_fp *fp;
+	int i;
+
+	fp = owner->fp;
+	n = (unsigned short)FPM_MRF_filter(MRF_OF(fp), in, RXBUF_OF(fp),
+					   (short)count);
+
+	fp = owner->fp;
+	if (ECC_OF(fp)->adapt_near != 0 || ECC_OF(fp)->adapt_far != 0)
+		ec_training = 1;
+	FPM_ECC_cancel(ECC_OF(fp), RXBUF_OF(fp), n);
+
+	/* Keep a copy of the cancelled block for V32FP_GetCleanedSamples. */
+	fp = owner->fp;
+	for (i = 0; i < (int)n; i++)
+		CLEAN_OF(fp)[i] = RXBUF_OF(fp)[i];
+	fp->clean_n = (unsigned short)n;
+	fp->rx_len = (unsigned short)n;
+
+	if (ec_training != 0)
+		return 0;
+
+	hdx = owner->hdx;
+	if (hdx->mode == V32_MODE_6) {
+		if (owner->params.disconnect_thresh
+		    > FPM_rms(RXBUF_OF(fp), n)) {
+			owner->flags &=
+				(unsigned char)~V32_FLAG_CARRIER;
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf("v32 low sig energy\n");
+			return 0;
+		}
+		fp = owner->fp;
+	}
+
+	/* The object passes a fourth argument here; see the header. */
+	FPM_AGC_agc(AGC_OF(fp), RXBUF_OF(fp), n);
+
+	fp = owner->fp;
+	owner->flags =
+		(unsigned char)((owner->flags
+				 & (unsigned char)~V32_FLAG_SILENCE)
+				| (AGC_OF(fp)->signal == 0
+				   ? V32_FLAG_SILENCE : 0));
+
+	enables = AGC_OF(fp)->f18;
+	SRE_OF(fp)->adapt = fp->int_04 & enables;
+	m = FPM_SRE_recover(SRE_OF(fp), RXBUF_OF(fp), in, (short)n);
+
+	fp = owner->fp;
+	if (SRE_OF(fp)->active == 0) {
+		if (DSPLIB_DEBUG_VERBOSE())
+			dsplibs_debug_printf("sre no carrier\n");
+		owner->flags &=
+			(unsigned char)~V32_FLAG_CARRIER;
+		return 0;
+	}
+	owner->flags |= V32_FLAG_CARRIER;
+
+	hdx = owner->hdx;
+	FSE_OF(fp)->pll_on = fp->int_08 & enables;
+	if (hdx->mode == V32_MODE_6) {
+		if (SRE_OF(fp)->mode == 0) {
+			FSE_OF(fp)->tilt_on = 0;
+			FSE_OF(fp)->lms_on = 0;
+		} else {
+			FSE_OF(fp)->tilt_on =
+				fp->int_0c & enables;
+			FSE_OF(fp)->lms_on =
+				fp->eq_adapt & enables;
+		}
+	} else {
+		FSE_OF(fp)->tilt_on = 1;
+		/* NOT masked with `enables`, unlike its three siblings: D491. */
+		FSE_OF(fp)->lms_on = fp->eq_adapt;
+	}
+
+	return FPM_FSE_receive(FSE_OF(fp), in, out, m);
+}
+
 /*
  * Equaliser adaptation.
  *
@@ -747,6 +819,107 @@ RenegotiateDetectV32(struct v32_modem *modem)
 	return 1;
 }
 
+unsigned short
+RateToSeq(struct v32_modem *modem, short rate)
+{
+	(void)modem;			/* never read; D404 */
+
+	return (unsigned short)V32_RATE_SEQ[rate];
+}
+
+int
+SeqToRate(struct v32_modem *modem, unsigned short seq)
+{
+	return v32_common_rate(modem, seq);
+}
+
+/*
+ * The E sequence for the negotiated rate.
+ *
+ * The object loads `V32_ESEQ[rate]` UNCONDITIONALLY, before the test, and
+ * discards it on the no-rate path.  That is safe only because index 6 is
+ * inside the table -- the ladder's "none" value is the table's last entry, not
+ * one past it -- and it is why this is written as a conditional expression
+ * rather than as the `if` the two rate functions above use.
+ */
+unsigned short
+CodeESeq(struct v32_modem *modem, unsigned short seq)
+{
+	short rate = (short)v32_common_rate(modem, seq);
+
+	return rate == V32_RATE_NONE ? V32_ESEQ_NONE
+				     : (unsigned short)V32_ESEQ[rate];
+}
+
+unsigned short
+CodeRateSeq(struct v32_modem *modem, unsigned short seq)
+{
+	short rate = (short)v32_common_rate(modem, seq);
+	unsigned short out = V32_RATE_SEQ_NONE;
+
+	if (rate != V32_RATE_NONE)
+		out = (unsigned short)V32_RATE_SEQ[rate];
+
+	return out;
+}
+
+unsigned short
+CodeFinalRateSeq(struct v32_modem *modem, unsigned short seq)
+{
+	short rate = (short)v32_common_rate(modem, seq);
+	unsigned short out = V32_RATE_SEQ_NONE;
+
+	if (rate != V32_RATE_NONE)
+		out = (unsigned short)V32_FINAL_RATE_SEQ[rate];
+
+	return out;
+}
+
+short
+DecodeRateSeq(struct v32_modem *modem, unsigned short seq)
+{
+	return (short)v32_common_rate(modem, seq);
+}
+
+unsigned short
+TxNoCarrierV32(struct v32_modem *modem, const short *data, short *out,
+	       unsigned short count)
+{
+	struct v32_symout *ring;
+	struct v32_smc *smc;
+	unsigned short i;
+	short widx, limit, quad;
+	struct v32_fp *fp;
+
+	(void)data;			/* never read; see v32data.h */
+
+	fp = modem->fp;
+	ring = &fp->symout;
+	smc = &fp->tx_smc;
+	quad = smc->quad;
+	widx = ring->widx;
+	limit = ring->limit;
+
+	for (i = 0; i < count; i++) {
+		short next;
+
+		ring->buf[widx] = V32_SYMBOL_NOCARRIER;
+		next = (short)(widx + 1);
+		quad = (short)((quad + 3) & 3);
+		widx = (short)(next < limit ? next : 0);
+	}
+
+	/* BOTH write-backs precede the shaper here, unlike V.17 and V.29. */
+	smc->quad = quad;
+	ring->widx = widx;
+
+	return FPM_PPS_filter(&fp->pps,
+			      /* D431 again */
+			      (struct fpm_smc_ring *)(void *)
+					&fp->symout,
+			      out, count);
+}
+
 /*
  * Fill one block's worth of `out` with a clamped word and report the count.
  *
@@ -773,32 +946,70 @@ RxClampV32(struct v32_modem *modem, short *in, short *out, unsigned short count)
 }
 
 /*
- * Retune the first tone detector.
+ * V32FP_modem -- .text 0x082630.
  *
- * It rebuilds the object from a COPY OF ITS OWN CONFIGURATION with the
- * frequency replaced, which is why `struct fpm_tone_cfg` being exactly the
- * first 36 bytes of `struct fpm_tone` matters: the object copies nine dwords
- * off the front of the tone object onto the stack and hands that back.
+ * One block.  The two counts are in/out and they CROSS OVER: `nout` arrives as
+ * a count of transmit BITS and leaves as a count of output SAMPLES, `nin`
+ * arrives as input samples and leaves as receive bits.  Everything around the
+ * dispatch is marshalling -- the caller's `int` arrays are narrowed into the
+ * two `short` statics and widened back.
  *
- * The tone pointer is loaded TWICE, once for the copy and once for the call.
- * That is the object's, and it is what a source that names the field at both
- * sites gives.
+ * THE RETURN IS A 32-BIT LOAD OF obj + 0x30 (82779), where every other access
+ * to that byte in this tree is `movb` or `movzbl`.  Reproduced as a 32-bit
+ * read: the status is the low byte and `v32.c` masks it, so `V32_OBJ_FLAGS`
+ * and the two bytes above it reach the caller and are discarded.
  */
-void
-SetToneDetect(struct v32_modem *modem, short hz)
+int
+V32FP_modem(struct v32_modem *modem, const int *txbits, short *out, const short *in,
+	    int *rxbits, int *nout, int *nin)
 {
-	struct v32_hdx *hdx = HDX(modem);
-	struct fpm_tone_cfg cfg;
+	struct v32_fp *fp;
+	struct v32_hdx *hdx;
+	short nsamples;
+	unsigned short rxcount;
+	int scale;
+	int n;
+	int i;
 
-	cfg = ((struct fpm_tone *)hdx->tone0)->cfg;
-	cfg.freq = hz;
-	FPM_TONE_create((struct fpm_tone *)hdx->tone0, &cfg);
+	nsamples = (short)*nout;
+	rxcount = (unsigned short)*nin;
+
+	fp = FP(modem);
+	if (*nin > 0) {
+		short *clean = (short *)fp->clean_buf;
+
+		for (i = 0; i < *nin; i++)
+			clean[i] = in[i];
+	}
+	fp->clean_n = (unsigned short)*nin;
+
+	for (i = 0; i < *nout; i++)
+		tx_in_internal[i] = (unsigned short)txbits[i];
+
+	modem->flags &= (unsigned char)~V32_FLAG_FAULT;
+	hdx = HDX(modem);
+	V32_PROTOCOL[hdx->mode](modem, tx_in_internal, out,
+						  (short *)in, rx_out_internal,
+						  &nsamples, &rxcount);
+
+	*nout = (int)(unsigned short)nsamples;
+	*nin = (int)rxcount;
+
+	for (i = 0; i < *nin; i++)
+		rxbits[i] = (int)rx_out_internal[i];
+
+	if ((modem->flags & V32_FLAG_DATA) != 0) {
+		hdx = HDX(modem);
+		hdx->mode = V32_PROTO_DATA;
+		hdx->state = V32_STATE_DONT_CARE;
+	}
+
+	n = *nout;
+	if (n > 0) {
+		scale = PARAMS(modem)->tx_scale;
+		for (i = 0; i < n; i++)
+			out[i] = (short)((out[i] * scale) >> 15);
+	}
+
+	return modem->status_word;
 }
-
-/*
- * CalcTurnAroundDelay is V32rxhdx.c's and now lives in
- * src/pump/v32/V32rxhdx.c.  The object INLINES it into RxHdxPhsReversal
- * (83c29..83c55 is the same 53 bytes instruction for instruction), which is
- * only possible within one translation unit, so the move is what recovers
- * the object's call shape.  See V32rxhdx.c.
- */

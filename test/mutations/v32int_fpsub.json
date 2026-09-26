@@ -1,0 +1,65 @@
+[
+ {
+  "note": "src/pump/v32/V32int.c against build/test/t_v32fpsub.  Split from the pre-F11395 over-split suite set so each anchor is searched in the translation unit that now holds its function (blob FILE order)."
+ },
+ {
+  "label": "the echo canceller's slow mode divides the update gain by five, which is the same reciprocal multiplier and one place of shift -- finding F8218's original defect",
+  "find": "\t\tecc->mu = (short)(ecc->mu / 10);",
+  "replace": "\t\tecc->mu = (short)(ecc->mu / 5);"
+ },
+ {
+  "label": "switching the canceller on does not clear its delay line",
+  "find": "\t\tfor (i = 0; i < ecc->line_len; i++)\n\t\t\tecc->line[i] = 0;",
+  "replace": "\t\t(void)i;"
+ },
+ {
+  "label": "the delay line is cleared one entry short",
+  "find": "\t\tfor (i = 0; i < ecc->line_len; i++)\n\t\t\tecc->line[i] = 0;\n\t\tfp->int_14 = 1;",
+  "replace": "\t\tfor (i = 0; i < ecc->line_len - 1; i++)\n\t\t\tecc->line[i] = 0;\n\t\tfp->int_14 = 1;"
+ },
+ {
+  "label": "the near update loop is left off when the canceller is switched on",
+  "find": "\t\tecc->adapt_near = 1;\n\t\tecc->adapt_far = 1;",
+  "replace": "\t\tecc->adapt_far = 1;"
+ },
+ {
+  "label": "switching the canceller off leaves the far update running",
+  "find": "\t\tECC(fp)->adapt_near = 0;\n\t\tECC(fp)->adapt_far = 0;",
+  "replace": "\t\tECC(fp)->adapt_near = 0;"
+ },
+ {
+  "label": "switching the canceller on does not clear the field beside the hold flag",
+  "find": "\t\tecc->unk1a = 0;",
+  "replace": "\t\t(void)0;"
+ },
+ {
+  "label": "the re-init takes the near delay from the instance's echo-delay field's neighbour",
+  "find": "\t\tecc->near_delay = (short)modem->params.ec_near_delay;",
+  "replace": "\t\tecc->near_delay = (short)((unsigned short *)&modem->params.ec_near_delay)[1];"
+ },
+ {
+  "label": "the re-init sets a far delay one short of the object's",
+  "find": "\t\tecc->far_delay = 0x30;",
+  "replace": "\t\tecc->far_delay = 0x2f;"
+ },
+ {
+  "label": "the re-init asks FPM_ECC_init to allocate rather than to re-use",
+  "find": "\t\tFPM_ECC_init(ecc, (const struct fpm_ecc_cfg *)(void *)ecc, 0);",
+  "replace": "\t\tFPM_ECC_init(ecc, (const struct fpm_ecc_cfg *)(void *)ecc, 1);"
+ },
+ {
+  "label": "the re-init hands FPM_ECC_init the library default instead of the canceller's own configuration",
+  "find": "\t\tFPM_ECC_init(ecc, (const struct fpm_ecc_cfg *)(void *)ecc, 0);\n\t\tecc = ECC(FP(modem));",
+  "replace": "\t\tFPM_ECC_init(ecc, 0, 0);\n\t\tecc = ECC(FP(modem));"
+ },
+ {
+  "label": "the re-init leaves the geometry init computed rather than overwriting it",
+  "find": "\t\tecc->line_len = 0x30;\n\t\tecc->near_rd = 0;\n\t\tecc->far_rd = 0;",
+  "replace": "\t\tecc->near_rd = 0;\n\t\tecc->far_rd = 0;"
+ },
+ {
+  "label": "the re-init leaves the two read taps where init put them",
+  "find": "\t\tecc->near_rd = 0;\n\t\tecc->far_rd = 0;\n\t\tbreak;",
+  "replace": "\t\tbreak;"
+ }
+]

@@ -1,6 +1,6 @@
 [
  {
-  "label": "NOTE: two wrappers, so every mutation moves an offset, an argument, an index or an order. The fixture is what makes them separable: three distinguishable encoder stubs AND the object's own three encoders, a pseudorandom FP block, both ring lengths V32_SYMBOL_LEN holds, counts that are deliberately not multiples of four so a forwards quadrant step shows, and a cursor seeded at 32767 over a buffer with 32,768 shorts of headroom below it."
+  "note": "src/pump/v32/V32int.c against build/test/t_v32data.  Split from the pre-F11395 over-split suite set so each anchor is searched in the translation unit that now holds its function (blob FILE order)."
  },
  {
   "label": "the encoder is dispatched from the slot above the one the selector names",
@@ -34,8 +34,8 @@
  },
  {
   "label": "the shaper is filtered from a ring the encoder did not write",
-  "find": "\t\t\t      (struct fpm_smc_ring *)(void *)\n\t\t\t\t\t&fp->symout,\n\t\t\t      out, count);\n}\n\nunsigned short\nTxNoCarrierV32",
-  "replace": "\t\t\t      (struct fpm_smc_ring *)(void *)\n\t\t\t\t\t((unsigned char *)&fp->symout + 4),\n\t\t\t      out, count);\n}\n\nunsigned short\nTxNoCarrierV32"
+  "find": "\t\t\t      /* D431: the same bytes as the v32_symout above */\n\t\t\t      (struct fpm_smc_ring *)(void *)\n\t\t\t\t\t&fp->symout,\n\t\t\t      out, count);",
+  "replace": "\t\t\t      /* D431: the same bytes as the v32_symout above */\n\t\t\t      (struct fpm_smc_ring *)(void *)\n\t\t\t\t\t((unsigned char *)&fp->symout + 4),\n\t\t\t      out, count);"
  },
  {
   "label": "the encoder's count is one short, so the last data word never reaches the ring",
@@ -44,8 +44,8 @@
  },
  {
   "label": "the shaper's count is the sample count rather than the symbol count",
-  "find": "\t\t\t      out, count);\n}\n\nunsigned short\nTxNoCarrierV32",
-  "replace": "\t\t\t      out, (unsigned short)(count * 3));\n}\n\nunsigned short\nTxNoCarrierV32"
+  "find": "\t\t\t      /* D431: the same bytes as the v32_symout above */\n\t\t\t      (struct fpm_smc_ring *)(void *)\n\t\t\t\t\t&fp->symout,\n\t\t\t      out, count);",
+  "replace": "\t\t\t      /* D431: the same bytes as the v32_symout above */\n\t\t\t      (struct fpm_smc_ring *)(void *)\n\t\t\t\t\t&fp->symout,\n\t\t\t      out, (unsigned short)(count * 3));"
  },
  {
   "label": "the no-carrier index is one below the seventeenth map entry",
