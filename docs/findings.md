@@ -127972,3 +127972,56 @@ unchanged by the retarget.
 `refcheck` 0 dangling; `git diff --check` clean.
 
 (2026-09-26)
+
+## F11412. Four data-only ours-only over-splits merge into their stated blob owners
+
+TU-reconciliation, ours-only side (issue #6/#20/#67).  Four of our extra
+translation units hold ONLY data and each names its own blob owner in its own
+header or generator, so the move is a pure relocation of definitions with no
+translation-unit-boundary ambiguity and no function byte at risk:
+
+    src/service/dtmf_coeffs.c      -> src/service/Dtmf.c           (.data 0x8280..)
+    src/service/dtmf_mtd_coeffs.c  -> src/service/Dtmf_Detector.c  (.data 0x7880..)
+    src/core/rc_coeffs.c           -> src/core/FixedRC.c           (generated)
+    src/callprog/callprog_cfg.c    -> src/callprog/Callprog.c      (.rodata+0x5d84)
+
+`dtmf_coeffs.c` says "Reconstructed from dsplibs.o `Dtmf.c`";
+`dtmf_mtd_coeffs.c` says "Reconstructed from dsplibs.o `Dtmf_Detector.c`";
+`tools/gen_rc_coeffs.py` says it emits "from dsplibs.o's FixedRC coefficient
+banks" and only `FixedRC.c` references `rc_banks`; `callprog_cfg.c` says
+"Reconstructed from dsplibs.o Callprog.c" and only `Callprog.c` references
+`CALLPROG_BandFilter_*`.  Each file existed as its own TU for a MUTATION-tier
+reason -- keeping dozens of float literals out of the logic anchors' namespace
+(F1264) -- and not for an object reason.  A data symbol's bytes do not depend
+on its translation unit, which is why this moves nothing byte-level.
+
+**CHANGE.**  Each definition block is appended VERBATIM to the owner, with a
+short header comment saying where it came from, and the four files are
+deleted.  No declaration, type, flag or statement changed.  Where the object
+holds a table as a file static and ours is a global (`callprog_cfg.c`'s
+coefficients are reached through a section-relative relocation in the object),
+that static-ness is a SEPARATE defect with its own differential and is not
+folded into this move.
+
+**MEASURED (GCC 3.4.2-r2).**  TU scoreboard: names in BOTH **279**, blob-only
+**1** (`V34.c`), ours-only **33 -> 29**, our TUs **312 -> 308**
+(`tu-compare`).  `byteident` grade 0 **844/1852** and grade 0-or-1
+**895/1852**, both UNCHANGED -- no function byte moved; no exact function
+gained or lost.  `partialcmp` positioned bytes **66,867 -> 67,091** /943,398
+(**+224**, the data definitions now emit inside their owner's slot); exact
+symbols 393/2,907 unchanged; exact relocations **1,009 -> 1,032** /18,317
+(**+23**, the coefficient-to-code relocations now resolve inside one TU);
+exact sections 70/92; NOBITS 2,836 ref / 2,808 candidate unchanged.  No census
+number regressed.
+
+**HARNESS.**  No suite sources any of the four files (`suites.json`); the
+`dtmf`/`dtmfmtd`/`callprog` suites source the owners, and none of their
+anchors was disturbed.  `anchorcheck` 285 suites / 10,038 mutations / 0
+non-unique / 0 detached; `mutsnap --check` 0 current / 285 stale.  **No suite
+owes a re-record from this entry** -- the `vcedle` re-record from F11410
+still does.
+
+**GATES.**  `make -j1 J=1 phase`: **385 passed, 0 failed**, boundary OK;
+`refcheck` 0 dangling; `git diff --check` clean.
+
+(2026-09-26)
