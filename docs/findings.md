@@ -126877,3 +126877,95 @@ symbol or exact-section set regressed.
 mutations / 0 non-unique; `git diff --check` clean.
 
 (2026-09-26)
+
+## F11396. The eight V.22 over-splits are one state machine (`v22mod.c`) and one process unit (`v22prc.c`), plus two leaves
+
+TU-reconciliation step, V.22 family (issue #6/#20/#67).  F11393 left the V.22
+family as "thirteen blob FILE names, all in BOTH, and eight ours-only
+over-splits with no per-file boundary argument yet".  This pass derives the
+boundaries from the object.
+
+**THE FILE ORDER AND THE RUNS.**  The blob's V.22 `STT_FILE` records are, in
+link order, `V22.c`(141) `V22Dec.c`(142) `v22mod.c`(143) `v22prc.c`(144)
+`v22rxtab.c`(145) `v22stc.c`(146) `v22txtab.c`(147) `v22_fse.c`(148)
+`v22_iir.c`(149) `v22_mrf.c`(150) `v22_pps.c`(151) `v22_sre.c`(152)
+`V22int.c`(153); `bwchdem.c`(140) precedes and `B103.c`(154) follows.  `ld -r`
+concatenates `.text` in that order, so the run between two name-matched globals
+is the FILE whose record sits between them.  The `.text` (decimal) runs:
+
+    V22.c       [V22FP_create 0x087990, V22FP_GetDiagnostics 0x088480)
+    V22Dec.c    [FSEv22_decision24 0x0884a0, V22FP_modem 0x0887b0)
+    v22mod.c    [V22FP_modem 0x0887b0, MakeTxData 0x08bd50)
+    v22prc.c    [MakeTxData 0x08bd50, V22FP_control 0x08c3b0)
+    v22stc.c    [V22FP_control 0x08c3b0, V22_FSE_getdiag 0x08c590)
+    v22_fse.c   [V22_FSE_getdiag 0x08c590, V22_iir_filt_demod 0x08cee0)
+    v22_iir.c   [V22_iir_filt_demod, V22_MRF_init 0x08d060)
+    v22_mrf.c   [V22_MRF_init, V22_PPS_filter 0x08d3c0)
+    v22_pps.c   [V22_PPS_filter, V22_SRE_recover 0x08d800)
+    v22_sre.c   [V22_SRE_recover, V22int's SetTxRate 0x08e120)
+    V22int.c    [SetTxRate 0x08e120, B103FP_create 0x08e690)
+
+`v22rxtab.c`(145) and `v22txtab.c`(147) contribute no `.text`; their tables are
+`.rodata`/`.data`, and the `.data` order confirms their slots (F11392).
+
+**THE v22mod.c/v22prc.c BOUNDARY, AND WHY IT IS NOT a guess.**  `v22mod.c`'s
+LOCAL objects pin its ends: `V22_PROTOCOL` (`.rodata`+0x8544) is read ONLY by
+`V22FP_modem`, and `iSilenceAfter2100` (`.bss`+0x380) ONLY by `v22_answer`;
+`rx_in_internal`/`tx_in_internal`/`rx_out_internal` (`.bss` 0x3a0/0x480/0x560)
+are read by `V22FP_modem`.  A LOCAL is reachable only from its own TU, so both
+`V22FP_modem` (0x0887b0) and `v22_answer` (0x08abf0) are `v22mod.c`'s, and a
+TU's `.text` is contiguous -- so everything between them is `v22mod.c`'s:
+`v22_data`, `connect_2400`, `v22_retrain`, `v22_org_rmloop2`,
+`v22_ans_rmloop2`, `connect_1200`, `v22_local_loop`.
+
+The upper end is the inlining argument.  The seven handlers are the entries of
+the static `V22_PROTOCOL` table, so `v22_originate` (0x08b2f0, the last handler
+before `MakeTxData`) is `v22mod.c`'s.  The `v22prc.c` primitives are called
+OUT OF LINE from the state machine: a 15-byte `ReadGTimer` is called from
+`v22_answer`, `v22_originate`, `v22_local_loop`, `v22_retrain`,
+`v22_org_rmloop2` and `v22_ans_rmloop2` with a `R_386_PC32` each -- `-O3`
+inlines a function that small when it shares the TU, so it does not, and the
+whole `MakeTxData`/`Detect_*`/`RxTrained*`/`TxNOP`/`RxClampV22`/`ReadGTimer`
+block is one unit.  The boundary is therefore 0x08bd50, not the
+`v22_originate`/`MakeTxData` coincidence alone.
+
+`V22FP_GetDiagnostics` (0x088480) sits between `V22FP_delete`'s last byte
+(0x08847c) and `FSEv22_decision24` (0x0884a0), so it is `V22.c`'s.
+`V22FP_control` (0x08c3b0) is immediately before `V22_status` (0x08c450), the
+`stc` control/status pair F11390 established for V.32, so it is `v22stc.c`'s.
+
+**CHANGE, every body VERBATIM, in blob emission order.**  `v22mod.c` gains
+`v22_data`/`v22_ans_rmloop2` (from `v22ans.c`), `connect_2400`/`connect_1200`
+(`v22conn.c`), `v22_retrain`/`v22_org_rmloop2` (`v22hdx.c`), `v22_local_loop`
+(`v22loop.c`) and `v22_originate` (`v22org.c`), and the two `hdx+0x38` macros
+travel with them.  `v22prc.c` gains `MakeTxData`/`Detect_Retrain`/
+`Detect_Rmloop2_ACK`/`Detect_1s` (`v22det.c`), `Detect_v22` (`v22data.c`) and
+the file-static `iabs`; it is reordered to the object's address order.
+`v22stc.c` gains `V22FP_control` (`v22ctl.c`); `V22.c` gains
+`V22FP_GetDiagnostics`.  The eight over-split files are deleted.  No body,
+declaration, type or flag changed; only the leading comment of each merged
+unit is new.
+
+**MEASURED (GCC 3.4.2-r2).**  TU scoreboard: names in BOTH **251** (all
+thirteen V.22 names were already in BOTH), blob-only **29**, ours-only
+**52 -> 44** (the eight over-splits gone), our TUs **305 -> 297**
+(`tools/tu-compare.py`).  `byteident` grade 0 **843/1852** and grade 0-or-1
+**895/1852**, both UNCHANGED -- the moved functions that were exact
+(`ReadGTimer`, `V22FP_GetDiagnostics`) stay exact and no other symbol's verdict
+moved.  `partialcmp` positioned bytes **66,464 -> 66,527** /943,398 (+63);
+exact symbols **364/2,907** unchanged; exact relocations **950 -> 988**
+/18,317 (+38); exact sections 69/92; NOBITS 2,836 ref / 2,808 candidate
+unchanged.  Neither census number regressed; both moved the favourable way.
+
+**HARNESS.**  No mutation suite sources any of the eight deleted files or the
+four targets -- `suites.json`'s V.22 entries are `V22Dec.c`, `V22.c` and
+`v22_fse.c` -- so nothing moved and nothing needs re-recording.
+`anchorcheck` is **284 suites / 10,038 mutations / 0 non-unique**;
+`mutsnap --check` is 0 current / 284 stale (the whole-tree key on any `src/`
+edit, pre-existing).
+
+**GATES.**  `make -j1 J=1 phase`: **385 passed, 0 failed**, boundary OK;
+`refcheck` 0 dangling / 0 stale; `git diff --check` clean.  **No mutation
+suite owes a re-record from this step.**
+
+(2026-09-26)
