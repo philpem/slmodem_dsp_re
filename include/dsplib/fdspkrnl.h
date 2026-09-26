@@ -94,10 +94,10 @@ struct fdsp_kernel {
  * (still the blob's) writes +0x04 and +0x08 and reads +0x00 and +0x0c.
  *
  * +0x04 and +0x08 ARE THE OBJECT'S OWN COSINE AND SINE, and the evidence is
- * a typed callee: `src/service/mtk.c`'s `MTK_phasor` builds +0x04 from
+ * a typed callee: `src/service/PHASOR.c`'s `MTK_phasor` builds +0x04 from
  * `MTK_cos_table`/`MTK_cos_sign` and +0x08 from `MTK_sin_table`/
  * `MTK_sin_sign` (see mtk.h), and both table names are the object's own
- * (`mtk_tables.c`, finding F8772) rather than an invention here.
+ * (`TABLES.c`, finding F8772) rather than an invention here.
  * `Fdspkrnl.c`'s own use of +0x04 corroborates it: `TONE_create` builds a
  * resonator's denominator coefficients out of it with `-2.0f * osc.cosine`
  * and the standard `1 - 2*r*cos(w) z^-1 + ...` shape, and the 60 Hz notch
@@ -274,7 +274,7 @@ void FDSP_Kernel_InitObj(struct fdsp_kernel *k);
 /**
  * @brief One step of the quarter-wave table oscillator.
  *
- * `src/service/mtk.c`, finding F8780.
+ * `src/service/PHASOR.c`, finding F8780.
  *
  * @param p  In: `phase` and `step`. Out: `cosine` and `sine` for the
  *           current phase; `phase` is advanced by `step` and wrapped at pi.

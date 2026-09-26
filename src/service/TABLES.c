@@ -1,5 +1,5 @@
 /*
- * mtk_tables.c -- the MTK trigonometric and bit-count tables.
+ * TABLES.c -- the MTK trigonometric and bit-count tables.
  *
  * Reconstructed from dsplibs.o, .data:
  *
@@ -10,16 +10,19 @@
  *   MTK_sin_sign    .data 0x009344     16 bytes     4 x float
  *   MTK_cos_sign    .data 0x009354     16 bytes     4 x float
  *
+ * THE TRANSLATION UNIT IS RECOVERED (finding F11400).  The blob's FILE
+ * order is `silence.c` (272), `PHASOR.c` (273), `TABLES.c` (274), `pcm.c`
+ * (275), and `.data` is concatenated in that order: `silence_level_table`
+ * is the last silence.c symbol at 0x84d4, `_a2u`/`_u2a` the first pcm.c
+ * symbols at 0x9380/0x9400, and the six tables above fill the window
+ * between them with no other translation unit's object in it.  So the
+ * block is PHASOR.c's or TABLES.c's, and since PHASOR.c is `MTK_phasor`
+ * (its own FILE, recovered by the `.text` bracket) the whole block is
+ * `TABLES.c`'s -- the assignment that does NOT split one contiguous data
+ * block on address alone (F11393).
+ *
  * (`.data` offsets, so `bannercheck.py` -- which reads `.text` banners --
  * does not and should not see them.)
- *
- * WHICH TU THESE CAME FROM IS NOT SETTLED.  `tumap.py` brackets the address
- * range that holds `MTK_phasor` between fourteen candidate file names, two of
- * which are `PHASOR.c` and `TABLES.c`; nothing in the object narrows it
- * further, so the file name here is ours and the SIX SYMBOL NAMES are the
- * author's.  They are held together because they are one design: a quarter-
- * wave sine/cosine pair with a quadrant sign vector each, plus an arctangent
- * quadrant and a population count.
  *
  * WHAT THE SHAPE IS, read out of `MTK_phasor` (0xb0690) which is the only
  * caller of the sine pair:
@@ -48,7 +51,7 @@
  *
  * These are DATA ONLY, and `MTK_phasor` -- which was unwritten when this file
  * landed and is the reason the sentence here used to say so -- is now
- * reconstructed in `src/service/mtk.c`.  So the sine pair and both sign
+ * reconstructed in `src/service/PHASOR.c`.  So the sine pair and both sign
  * vectors have a reader in `src/` again; `MTK_atan_table` and
  * `MTK_xor_table` still do not, and are emitted because they are global.
  * `t_mtktab` proves every byte of all six against the blob's own copies

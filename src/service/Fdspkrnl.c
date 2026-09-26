@@ -12,7 +12,7 @@
  * The spans other reconstructed neighbours are NOT here: the FIFO8 ring
  * (0xaef30..0xaf150) is in Fifo8.c and the silence detector with `_status`
  * (0xb02e0..0xb0415) is in silence.c, following the split the tree had
- * already made for voice_* .  MTK_phasor (0xb0690) is in mtk.c.
+ * already made for voice_* .  MTK_phasor (0xb0690) is in PHASOR.c.
  *
  * All floating point here is x87-shaped: every accumulation runs at
  * register precision and narrows only at the stores, on both compilers this

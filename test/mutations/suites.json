@@ -1033,11 +1033,11 @@
   "build/test/t_vcedle"
  ],
  "mtktab": [
-  "src/service/mtk_tables.c",
+  "src/service/TABLES.c",
   "build/test/t_mtktab"
  ],
  "mtkphasor": [
-  "src/service/mtk.c",
+  "src/service/PHASOR.c",
   "build/test/t_mtkphasor"
  ],
  "tonecreate": [

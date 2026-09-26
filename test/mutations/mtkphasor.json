@@ -1,6 +1,6 @@
 [
  {
-  "note": "src/service/mtk.c against build/test/t_mtkphasor.  The claims: which of the two 2*pi constants each of the three sites uses, the direction of the reduction's sign test, the 512/pi scale and the 16-bit truncation that follows it, which bit selects the fold and what the fold does to the fraction and the index, which table and which sign vector each output comes from, the direction of the interpolation's difference, and where the advance wraps."
+  "note": "src/service/PHASOR.c against build/test/t_mtkphasor.  The claims: which of the two 2*pi constants each of the three sites uses, the direction of the reduction's sign test, the 512/pi scale and the 16-bit truncation that follows it, which bit selects the fold and what the fold does to the fraction and the index, which table and which sign vector each output comes from, the direction of the interpolation's difference, and where the advance wraps."
  },
  {
   "label": "the reduction uses the double 2*pi rather than the float one",

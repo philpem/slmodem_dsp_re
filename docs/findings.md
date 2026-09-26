@@ -127090,3 +127090,118 @@ stay named blob-only.
 merge retargets all three to `V34.c` (stale, no new suite).
 
 (2026-09-26)
+
+## F11399. The `faxvmi` machine is six translation units: five code splits recovered from the `.text` address runs and `faxvmi_null.c` from `nulldp.c`
+
+TU-reconciliation step, the `faxvmi_*` family (issue #6/#20/#67), the first
+half of the F11391 re-test.  F11391 left the family's blob FILE names present
+but our side merged: `faxvmi.c` in our tree held the core AND every codec, and
+`nulldp.c` (ours-only) held the null datapump whose blob name is
+`faxvmi_null.c`.
+
+**THE PROOF IS THE `.text` RUN, AND IT PARTITIONS EXACTLY.**  The blob's FILE
+records 167-173 are, in link order, `faxvmi.c`, `faxvmi_asyc.c`,
+`faxvmi_hdlc.c`, `faxvmi_pack.c`, `faxvmi_tbls.c`, `faxvmi_utls.c`,
+`faxvmififo.c`; `T30frames.c` is 174 and `faxvmi_null.c` is 204.  `ld -r`
+concatenates each input's `.text` in that order, so the run between two
+functions is the FILE whose record sits between them, and every boundary here
+is a function start with the next FILE's own first function immediately after:
+
+    faxvmi.c        [FAXVMI_create 0x95120, faxvmi_asyc_pack 0x957f0)
+    faxvmi_asyc.c   [faxvmi_asyc_pack 0x957f0, faxvmi_hdlc_frame 0x95b10)
+    faxvmi_hdlc.c   [faxvmi_hdlc_frame 0x95b10, faxvmi_simp_pack 0x964e0)
+    faxvmi_pack.c   [faxvmi_simp_pack 0x964e0, faxvmi_gen_fcs16 0x96780)
+    faxvmi_tbls.c   [0x96780, 0x96780)  -- no function
+    faxvmi_utls.c   [faxvmi_gen_fcs16 0x96780, faxvmi_frame_reverse 0x96850)
+    faxvmififo.c    [faxvmi_frame_reverse 0x96850, FIFO_create 0x96bb0)
+    faxvmi_null.c   [null_create 0x9f0b0, SDM_scrambler 0x9f150)
+
+Each run's ends are exact function bounds (e.g. `faxvmi_asyc_unpack` ends at
+0x95b0d and `faxvmi_hdlc_frame` starts at 0x95b10), so the partition is
+measured, not inferred.
+
+**CHANGE, every body VERBATIM.**  `src/fax/faxvmi.c` keeps the six core entry
+points and the `vmi_*`/`vxx_*` tables; five new files take
+`faxvmi_asyc_pack/unpack` (`faxvmi_asyc.c`), `faxvmi_hdlc_frame/unframe`
+(`faxvmi_hdlc.c`), `faxvmi_simp_pack/unpack` (`faxvmi_pack.c`),
+`faxvmi_gen_fcs16/byte_reverse` (`faxvmi_utls.c`) and
+`faxvmi_frame_reverse/write_fifo/write_frame` (`faxvmififo.c`).
+`src/fax/nulldp.c` is renamed to `src/fax/faxvmi_null.c` and gains
+`null_message`, moved from `class1tx.c`; its bracket `[0x9f0b0, 0x9f150)` is
+exclusive and the six function names match one for one.  No body, declaration,
+type or flag changed; the only new text is each file's leading comment and
+includes.
+
+**DECLINED, WITH THE MEASUREMENT.**  `faxvmi_tbls.c` (FILE 171) has no `.text`
+(its slot is the 13-byte alignment gap 0x96773..0x96780), and no `.rodata`
+claim can be proven: the candidate objects `FAXVMI_STS`/`FAXVMI_CTL`/
+`FAXVMI_CFG` and the six `vxx_*` dispatch tables form a contiguous `.rodata`
+run 0x945c..0x9654 with the PROVEN `faxvmi.c` locals `vmi_unpack/pack/reverse`
+inside it, but `.rodata` fragment boundaries are not address-recoverable
+(F11393), so neither "all of it is `faxvmi.c`" (making `tbls` empty) nor
+"the templates and `vxx_*` are `faxvmi_tbls.c`" can be separated by the
+object.  `FAXVMI_STS` and `FAXVMI_CFG` therefore stay in `class1.c`/
+`faxcfg.c` rather than being forced into `faxvmi.c` on a fragment guess.
+
+**MEASURED (GCC 3.4.2-r2), the combined F11399+F11400 gate.**  TU scoreboard:
+names in BOTH **252 -> 260** (the six `faxvmi_*` names plus `PHASOR.c`/
+`TABLES.c`), blob-only **28 -> 20**, ours-only **44 -> 41** (`nulldp.c`,
+`mtk.c`, `mtk_tables.c`), our TUs **298 -> 303**.  `byteident` grade 0
+**843/1852** and grade 0-or-1 **895/1852** UNCHANGED -- no function's byte
+identity moved.  `partialcmp` positioned bytes **66,638 -> 66,838** /943,398
+(+200, favourable); exact symbols **365 -> 373** /2,907 (the eight new FILE
+records); exact relocations **987 -> 987** /18,317; exact sections 69/92;
+NOBITS 2,836 ref / 2,808 candidate unchanged.  No census number regressed.
+
+**HARNESS.**  No mutation suite sources `faxvmi.c`, `class1tx.c`, `nulldp.c`
+or any moved function, so no anchor detached and nothing needs re-recording.
+`anchorcheck` remains **285 suites / 10,038 mutations / 0 non-unique, 0
+detached**; `mutsnap --check` is 0 current / 285 stale (the whole-tree key on
+any `src/` edit).
+
+**GATES.**  `make -j1 J=1 phase`: see the combined F11400 entry.  `refcheck` 0
+dangling; `git diff --check` clean.
+
+(2026-09-26)
+
+## F11400. `PHASOR.c` and `TABLES.c` recovered: `MTK_phasor` is the only function in the PHASOR/TABLES slot, and the six MTK tables are one `.data` fragment
+
+Companion to F11399, the second half of the F11391 re-test: `PHASOR.c`(273)
+and `TABLES.c`(274) were blob-only names and our `mtk.c`/`mtk_tables.c` were
+the invented TUs holding their content.
+
+**THE `.text` BRACKET IS EXCLUSIVE.**  The blob's FILE order around here is
+`duplex.c`(271), `silence.c`(272), `PHASOR.c`(273), `TABLES.c`(274),
+`pcm.c`(275).  `.text` concatenates in that order: `silence_progress` ends at
+0x0b068f, `MTK_phasor` fills `[0x0b0690, 0x0b079f]`, and `pcm.c`'s
+`linear2alaw` starts at 0x0b07a0.  `MTK_phasor` is the ONLY function in the
+PHASOR.c/TABLES.c window, so it is one of those two files; the name is the
+phasor, so it is `PHASOR.c`.
+
+**THE `.data` SIDE PUTS ALL SIX TABLES IN THE SAME SLOT, AND `.data` ORDER IS
+LINK ORDER (F11392).**  `silence_level_table` (silence.c) is the last silence
+object at 0x84d4; `_a2u`/`_u2a` (pcm.c) begin at 0x9380/0x9400; the six tables
+(`MTK_xor_table` 0x8500, `MTK_atan_table` 0x8700, `MTK_sin_table` 0x8b20,
+`MTK_cos_table` 0x8f40, `MTK_sin_sign` 0x9344, `MTK_cos_sign` 0x9354) fill the
+whole window between them, with no other translation unit's object in it.  So
+the block is `PHASOR.c`'s or `TABLES.c`'s, and since `PHASOR.c` is the
+function-bearing file the six tables are `TABLES.c`'s.  This is the assignment
+that does NOT split one contiguous data block on address alone (F11393's
+rule).
+
+**CHANGE.**  `mtk.c -> PHASOR.c` and `mtk_tables.c -> TABLES.c`, pure
+renames; bodies and bytes untouched.  Every reference to the old file names in
+comments (`Fdspkrnl.c`, `mtk.h`, `fdspkrnl.h`, `runtime.c`) is updated, and the
+two mutation-suite paths in `suites.json` are retargeted
+(`mtkphasor -> src/service/PHASOR.c`, `mtktab -> src/service/TABLES.c`); the
+anchors stay inside their files, so no re-record is owed from the rename
+itself, though the whole-tree snapshot key is stale.
+
+**MEASURED.**  Names in BOTH **+2**, blob-only **-2**, ours-only **-2**; the
+byte-level gate is the combined F11399+F11400 measurement in that entry, where
+`byteident` is unchanged at 843/895 and `partialcmp` moves favourably.
+
+**GATES.**  `make -j1 J=1 phase`: **385 passed, 0 failed**, boundary OK.
+`refcheck` 0 dangling; `git diff --check` clean.
+
+(2026-09-26)

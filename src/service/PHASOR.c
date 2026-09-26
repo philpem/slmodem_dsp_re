@@ -1,17 +1,31 @@
 /*
- * mtk.c -- MTK_phasor, the object's only reader of the MTK sine tables.
+ * PHASOR.c -- MTK_phasor, the object's only reader of the MTK sine tables.
  *
  * Reconstructed from dsplibs.o:
  *
  *   MTK_phasor      .text 0x0b0690    271 bytes
  *
- * It sits in the `Fdspkrnl.c` span, next to the silence detector, and it is
+ * THE TRANSLATION UNIT IS RECOVERED (finding F11400).  The blob's FILE
+ * records around here are, in link order, `duplex.c`, `silence.c`,
+ * `PHASOR.c`, `TABLES.c`, `pcm.c`.  `ld -r` concatenates each input's
+ * `.text` in that order, so MTK_phasor's address bracket is decisive:
+ * `silence_progress` ends at 0x0b068f, MTK_phasor fills
+ * [0x0b0690, 0x0b079f], and `pcm.c`'s `linear2alaw` starts at 0x0b07a0.
+ * MTK_phasor is the ONLY function in the PHASOR.c/TABLES.c slot, so it is
+ * one of those two files; the `.data` side puts all six MTK tables in the
+ * same contiguous block [0x8500, 0x9364] between `silence_level_table`
+ * (silence.c) and `_a2u` (pcm.c), i.e. the same PHASOR.c/TABLES.c slot.
+ * `PHASOR.c`'s name is the phasor, so this function is its own file and
+ * `TABLES.c` is the six tables -- the reading that needs no table split on
+ * address alone (F11393).
+ *
+ * It sits next to the silence detector, and it is
  * a quarter-wave table oscillator: reduce the phase modulo 2pi, scale it by
  * 512/pi so the integer part is a 10-bit angle, interpolate the quarter
  * wave with the fraction, and pick the sign from the quadrant.  One call
  * produces one cosine and one sine and advances the phase by `step`.
  *
- * WHY IT IS IN A FILE OF ITS OWN.  `src/service/mtk_tables.c` holds the six
+ * WHY IT IS IN A FILE OF ITS OWN.  `src/service/TABLES.c` holds the six
  * tables and nothing else, and this is the function that fixes their shape;
  * putting the code beside the data would put 3.5 KB of `.data` in the same
  * translation unit as the one function that reads it, which the object does
