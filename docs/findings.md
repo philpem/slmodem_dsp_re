@@ -127256,3 +127256,141 @@ no gate result changes; it exists so the four names are not re-derived.
 `refcheck` 0 dangling; `git diff --check` clean.
 
 (2026-09-26)
+
+
+## F11402. `.rodata`/`.data` ARE concatenated in link order, the F11393 counterexample was an attribution error, and `fpm_tren.c` is recovered from the unique file slot
+
+TU-reconciliation pass, the data-only families (issue #6/#20/#67).  F11393
+declined the `.rodata` table TUs on a single measured "counterexample": the
+Viterbi bound/region tables at `.rodata` 0x00d0c0..0x00ed50 were said to
+belong to V.32 (`V32TAB144.c`/`V32SMC_TX.c`, FILE 117-119) although they sit
+inside the fpm window, which would prove `.rodata` is NOT link order and make
+every `.rodata` bracket unsound.  This pass re-measured that and found the
+counterexample was an **identification error**: the tables are `fpm_tren.c`'s.
+
+**THE SUBSECTION HYPOTHESIS IS REFUTED.**  The proposal was that a TU's
+constants are scattered across `.rodata.str1.1`/`.cst4`/`.cst8`/`.cst16` and
+that reading one address stream mixes them.  `readelf -SW` shows the object
+has exactly one plain `.rodata` (section 129, 0x10f64 bytes) and that every
+table in the disputed window -- `TrellisTransitionTable`/`TrellisEncodeDifTable`
+(0xd0c0/0xd100), `VTB_BOUND_14400/12000/9600/7200`, `VTB_REGION_*`
+(0xd120..0xed50) and the eight `FPM_*` tables (0xc4a0..0xcfe2) -- is in that
+one section (`readelf -sW`, `nm`).  `.rodata.cst4` and `.rodata.cst8` hold one
+section symbol each; there is no per-file subsection to mix.
+
+**THE PER-SECTION ORDER IS FILE ORDER, MEASURED.**  In a `ld -r` object the
+symbol table interleaves each input's LOCAL symbols immediately after its
+`STT_FILE` record, so a local's owner is the most recent FILE.  Walking the
+symtab that way and sorting by section: **126 `.rodata`, 60 `.data`, 33 `.bss`
+and 55 `.text` locals, and 0 are out of order against their FILE ordinal** in
+any section.  That is the bracket argument, and it holds for `.rodata` exactly
+as F11392 proved it for `.data`.  The positive control is `v22txtab.c`
+(FILE 146), which is the *only* file between `v22prc.c`'s `PROTOCOL` local and
+`v22_fse.c`'s `v22_fse_mu` local and is correctly the sole owner of that
+`.data` range.
+
+**THE F11393 COUNTEREXAMPLE, RESOLVED BY LOCAL ANCHORS.**  The `.rodata`
+locals bracket the disputed block on both sides:
+
+    .rodata 0x00d040  ToneLPF         LOCAL  FILE 256  fpm_tone.c
+    .rodata 0x00d0c0  TrellisTransitionTable   \ 
+    .rodata 0x00d100  TrellisEncodeDifTable    |
+    .rodata 0x00d120  VTB_BOUND_14400          |  the only FILE record
+    ...                                        |  between 256 and 258 is
+    .rodata 0x00ed40  VTB_REGION_7200          |  fpm_tren.c (257)
+    .rodata 0x00ed60  VTB_DIFF_TBL   LOCAL  FILE 258  fpm_vtb.c
+
+`ToneLPF` is a proven `fpm_tone.c` local at 0xd040 (106 bytes, ending 0xd0aa);
+`VTB_DIFF_TBL` is a proven `fpm_vtb.c` local at 0xed60.  No FILE record lies
+strictly between 256 and 258, so the whole 0xd0c0..0xed50 block belongs to
+`fpm_tren.c` -- **not** to `V32TAB144.c` (FILE 119) or `V32SMC_TX.c` (FILE
+118), whose own `.rodata` slots are at 0x06de0..0x07f20.  The reader set was
+misleading: `VTB_BOUND_14400` is read by `V32.c` (0x07e772/0x07ee5a) and
+`V17rx.c` (0x0975d6), and `Trellis*` by `Smc.c`/`V32SMC_TX.c`, so the tables
+are *shared global data*, and a table's readers do not define it.  F11393's
+own rule -- "a table DEFINED in a TU must be in that TU's slot" -- is what
+refutes it, once the slot is read per-section.
+
+**REGRESSED-IN-MASTER PLACEMENT, CORRECTED.**  `V32TAB144.c` and
+`V32SMC_TX.c` had been *defining* those ten tables.  They now only read them
+(via `dsplib/vtb.h` / `dsplib/v32smc.h`); the definitions moved to the new
+`src/dsp/fpm_tren.c`.  Bodies verbatim; no declaration, type or flag changed.
+
+**GCC 3.4.2 EMITS `.rodata` GLOBALS IN REVERSE DECLARATION ORDER -- MEASURED.**
+Declaring the ten tables in blob-address order emitted them exactly reversed,
+so `fpm_tren.c` declares them in *reverse* of the object's address order.
+The object's own per-file layout is then reproduced to the byte: the emitted
+relative offsets are 0x00 `TrellisTransitionTable`, 0x40 `TrellisEncodeDifTable`,
+0x60 `VTB_BOUND_14400`, 0xee0 `VTB_BOUND_12000`, 0x1660 `VTB_REGION_14400`,
+0x1760 `VTB_REGION_12000`, 0x1800 `VTB_BOUND_9600`, 0x1b40 `VTB_BOUND_7200`,
+0x1c40 `VTB_REGION_9600`, 0x1c80 `VTB_REGION_7200` -- identical, including
+every alignment gap, to the object's 0xd0c0..0xed80 block.  This is a general
+lever for the other data TUs: **source declaration order is the reverse of the
+object's `.rodata` address order.**
+
+**MEASURED (GCC 3.4.2-r2).**  TU scoreboard: names in BOTH **260 -> 261**,
+blob-only **20 -> 19**, ours-only **41** unchanged, our TUs **303 -> 304**
+(`tools/tu-compare.py` method, reproduced by the pass script).  The +1 is
+`fpm_tren.c`.  `byteident` grade 0 **843/1852** and grade 0-or-1 **895/1852**, both UNCHANGED
+-- moving global data definitions moves no function byte.
+`partialcmp` positioned bytes **66,838 -> 66,994** /943,398 (+156, favourable);
+exact symbols **373 -> 374** /2,907 (+1, the `fpm_tren.c` FILE record); exact
+relocations **987 -> 1008** /18,317 (+21); exact sections 69/92; NOBITS 2,836
+ref / 2,808 candidate unchanged.  No census number regressed.
+
+**GATES.**  `make -j1 J=1 phase`: **385 passed, 0 failed**, boundary OK;
+`refcheck` 0 dangling / 0 stale; `anchorcheck` 285 suites / 10,038 mutations /
+0 non-unique / 0 detached; `git diff --check` clean.  No mutation suite
+sources `V32TAB144.c`, `V32SMC_TX.c` or any moved symbol, so **no suite owes a
+re-record**; the whole-tree snapshot key is stale as usual.
+
+**RE-TESTED, STILL DECLINED, WITH THE EXACT BLOCKER.**  With `.rodata` order
+now sound, each remaining blob-only family was re-measured.  The blocker is no
+longer "`.rodata` order is unknown" but "the slot contains several candidate
+FILEs with no way to split them".
+
+  * **`fpm_tables.c` (FILE 255)** -- PROVEN to be the file that holds the eight
+    `FPM_*` tables: `FPM_PPS_CFG` 0xc4a0, `FPM_SRE_CFG` 0xc4e0,
+    `FPM_sqrt_table` 0xc520, `FPM_div_table` 0xc6a0, `FPM_xor_table` 0xc7a0,
+    `FPM_atan_table` 0xc9a0, `FPM_sin_table` 0xcbc0, `FPM_cos_table` 0xcde0,
+    ending immediately before `fpm_tone.c`'s `FPM_TONE_CFG` (0xd000).  The
+    namesake assignment is *impossible*: `FPM_SRE_CFG` (0xc4e0, would be
+    `fpm_sre.c` FILE 254) precedes `FPM_sqrt_table` (0xc520, `fpm_sqrt.c` FILE
+    253), an order inversion.  **Declined only because the move is not a pure
+    relocation**: `FPM_sqrt_table`, `FPM_sin_table` and `FPM_cos_table` are
+    reconstructed as file-`r` statics (`fpm_sqrt_table`, `fpm_sin_table`,
+    `fpm_cos_table`) behind accessor functions, not as the object's globals,
+    so three of the eight cannot be moved verbatim.  Fixing those globals
+    first is the unblock; the file attribution is already settled.
+  * **`V34ARRAY.c` (87) / `V34CONST.c` (88)** -- the `.rodata` block
+    0x0ec0..0x2840 still has no local between `VpcmFloModem.cpp`'s
+    `v34initialbauds` (0x03e0, FILE 17) and `V34RX.c`'s `sqrt_table` (0x2860,
+    FILE 89), so its slot contains FILEs 18..88.  Membership is V.34 but the
+    ARRAY/CONST split is not address-recoverable.  Declined, unchanged.
+  * **`Smc_tx.c` (209) / `Tab144.c` (210) / `Tx_rxtab.c` (211)** -- the `.text`
+    window `[SMC_encoder 0x9fa10, V17RX_modem 0x9ff80)` is `Smc.c` + `Smc_tx.c`
+    with no LOCAL under FILE 208/209, and the `.rodata` 0xbb80..0xc000 is in a
+    gap containing FILEs 202..244.  The V.32 parallel is a name argument, not
+    an object fact.  Declined.
+  * **`V17txtab.c` (179) / `V21rxtab.c` (181)** -- their `.data` lies in the
+    gap from `V17rxtab.c`'s AGC pair (0x9e28) to `V27rxtab.c`'s (0xab0c),
+    which contains FILEs 178..184 (`V17tx.c`, `V17txtab.c`, `V21rx.c`,
+    `V21rxtab.c`, `V21tx.c`, `V27rx.c`, `V27rxdec.c`); the receivers and
+    transmitters are both in that range and no local separates them.  Declined.
+  * **`V32RXTAB.c` (117) / `V32TXTAB.c` (121)** -- the `.data` block
+    0x7240..0x7750 has no local between DPSK.c (FILE 95) and V32stc.c (FILE
+    129).  Declined, unchanged.
+  * **`faxvmi_tbls.c` (171)** -- no `.text`, and its `.rodata` fragment is not
+    separable from `faxvmi.c`'s proven locals.  Declined.
+  * **`MEMORYC.c` (96) / `B103.c` (153) / `B103int.c` (156)** -- no LOCAL
+    anchor in any section brackets them to a single file (`tuattrib.py`
+    attributes nothing to `MEMORYC.c`; the B103 `.text` run is 4 files with no
+    local).  Unchanged.
+  * **`V92MappingParamsInt.cpp` (23)** -- a language change (C to C++), not a
+    file move: `byteident --why V92createConstellations` is grade 0 EXACT, so
+    recompiling through the C++ front end for a filename risks byte identity.
+    Needs its own before/after differential, as F11388/F11393 recorded.
+  * **`pow.S`, `<built-in>`, `<command line>`** -- compiler/toolchain inputs,
+    not reconstructable TUs.
+
+(2026-09-26)
