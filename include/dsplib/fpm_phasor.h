@@ -134,4 +134,13 @@ extern short FPM_sin_sign[4];
 extern short FPM_cos_sign_ext[FPM_PHASOR_SIGN_BELOW + 4];
 extern short FPM_sin_sign_ext[FPM_PHASOR_SIGN_BELOW + 4];
 
+/*
+ * The two quarter-wave lookups.  GLOBAL objects in the object's `.rodata`
+ * (`readelf -sW`: 0xcbc0/0xcde0, 514 bytes each), defined in `fpm_tables.c`
+ * with the other six FPM tables (F11402).  They were once file-`r` statics;
+ * the accessors above now read these globals.
+ */
+extern const unsigned short FPM_sin_table[FPM_PHASOR_TABLE];
+extern const unsigned short FPM_cos_table[FPM_PHASOR_TABLE];
+
 #endif /* DSPLIB_FPM_PHASOR_H */

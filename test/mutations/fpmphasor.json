@@ -16,13 +16,13 @@
  },
  {
   "label": "the phase increment is read unsigned",
-  "find": "\tp->sin = phasor_value(fpm_sin_table, FPM_sin_sign_ext, idx, frac, quad);\n\tp->phase = phasor_advance(phase, (short)p->inc);",
-  "replace": "\tp->sin = phasor_value(fpm_sin_table, FPM_sin_sign_ext, idx, frac, quad);\n\tp->phase = phasor_advance(phase, (int)p->inc);"
+  "find": "\tp->sin = phasor_value(FPM_sin_table, FPM_sin_sign_ext, idx, frac, quad);\n\tp->phase = phasor_advance(phase, (short)p->inc);",
+  "replace": "\tp->sin = phasor_value(FPM_sin_table, FPM_sin_sign_ext, idx, frac, quad);\n\tp->phase = phasor_advance(phase, (int)p->inc);"
  },
  {
   "label": "the demodulator's phase increment is read unsigned",
-  "find": "\tp->cos = phasor_value(fpm_cos_table, FPM_cos_sign_ext, idx, frac, quad);\n\tp->phase = phasor_advance(phase, (short)p->inc);",
-  "replace": "\tp->cos = phasor_value(fpm_cos_table, FPM_cos_sign_ext, idx, frac, quad);\n\tp->phase = phasor_advance(phase, (int)p->inc);"
+  "find": "\tp->cos = phasor_value(FPM_cos_table, FPM_cos_sign_ext, idx, frac, quad);\n\tp->phase = phasor_advance(phase, (short)p->inc);",
+  "replace": "\tp->cos = phasor_value(FPM_cos_table, FPM_cos_sign_ext, idx, frac, quad);\n\tp->phase = phasor_advance(phase, (int)p->inc);"
  },
  {
   "label": "the quadrant is masked before it indexes the sign tables",

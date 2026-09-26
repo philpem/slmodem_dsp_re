@@ -7,13 +7,13 @@
  },
  {
   "label": "the cosine output takes the sine table",
-  "find": "\tp->cos = phasor_value(fpm_cos_table, FPM_cos_sign_ext, idx, frac, quad);\n\tp->sin = phasor_value(fpm_sin_table, FPM_sin_sign_ext, idx, frac, quad);\n\n\tacc",
-  "replace": "\tp->cos = phasor_value(fpm_sin_table, FPM_cos_sign_ext, idx, frac, quad);\n\tp->sin = phasor_value(fpm_sin_table, FPM_sin_sign_ext, idx, frac, quad);\n\n\tacc"
+  "find": "\tp->cos = phasor_value(FPM_cos_table, FPM_cos_sign_ext, idx, frac, quad);\n\tp->sin = phasor_value(FPM_sin_table, FPM_sin_sign_ext, idx, frac, quad);\n\n\tacc",
+  "replace": "\tp->cos = phasor_value(FPM_sin_table, FPM_cos_sign_ext, idx, frac, quad);\n\tp->sin = phasor_value(FPM_sin_table, FPM_sin_sign_ext, idx, frac, quad);\n\n\tacc"
  },
  {
   "label": "the quadrant is masked before it indexes the sign tables, in the dp path",
-  "find": "\tp->cos = phasor_value(fpm_cos_table, FPM_cos_sign_ext, idx, frac, quad);\n\tp->sin = phasor_value(fpm_sin_table, FPM_sin_sign_ext, idx, frac, quad);\n\n\tacc",
-  "replace": "\tp->cos = phasor_value(fpm_cos_table, FPM_cos_sign_ext, idx, frac, quad & 3);\n\tp->sin = phasor_value(fpm_sin_table, FPM_sin_sign_ext, idx, frac, quad & 3);\n\n\tacc"
+  "find": "\tp->cos = phasor_value(FPM_cos_table, FPM_cos_sign_ext, idx, frac, quad);\n\tp->sin = phasor_value(FPM_sin_table, FPM_sin_sign_ext, idx, frac, quad);\n\n\tacc",
+  "replace": "\tp->cos = phasor_value(FPM_cos_table, FPM_cos_sign_ext, idx, frac, quad & 3);\n\tp->sin = phasor_value(FPM_sin_table, FPM_sin_sign_ext, idx, frac, quad & 3);\n\n\tacc"
  },
  {
   "label": "the fractional sum is not halved",
@@ -136,8 +136,8 @@
  },
  {
   "label": "the two outputs are stored the other way round",
-  "find": "\tp->cos = phasor_value(fpm_cos_table, FPM_cos_sign_ext, idx, frac, quad);\n\tp->sin = phasor_value(fpm_sin_table, FPM_sin_sign_ext, idx, frac, quad);\n\n\tacc",
-  "replace": "\tp->sin = phasor_value(fpm_cos_table, FPM_cos_sign_ext, idx, frac, quad);\n\tp->cos = phasor_value(fpm_sin_table, FPM_sin_sign_ext, idx, frac, quad);\n\n\tacc"
+  "find": "\tp->cos = phasor_value(FPM_cos_table, FPM_cos_sign_ext, idx, frac, quad);\n\tp->sin = phasor_value(FPM_sin_table, FPM_sin_sign_ext, idx, frac, quad);\n\n\tacc",
+  "replace": "\tp->sin = phasor_value(FPM_cos_table, FPM_cos_sign_ext, idx, frac, quad);\n\tp->cos = phasor_value(FPM_sin_table, FPM_sin_sign_ext, idx, frac, quad);\n\n\tacc"
  },
  {
   "label": "the two fractional fields swap roles: the increment accumulates",

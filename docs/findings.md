@@ -127394,3 +127394,73 @@ FILEs with no way to split them".
     not reconstructable TUs.
 
 (2026-09-26)
+
+## F11403. `fpm_tables.c` recovered: the eight `FPM_*` tables are the object's globals, and three were wrongly hidden behind accessors
+
+TU-reconciliation, the first of F11402's five named blockers (issue #6/#20/#67).
+F11402 proved the file attribution -- the eight `FPM_*` tables fill
+`.rodata` 0xc4a0..0xcfe2 between `fpm_log10.c`'s `FPM_log10_table` and
+`fpm_tone.c`'s `FPM_TONE_CFG`, with the only FILE record between the bracketing
+locals being `fpm_tables.c` (255) -- and left it declined because the move was
+not verbatim: `FPM_sqrt_table`, `FPM_sin_table` and `FPM_cos_table` were
+reconstructed as file-`r` statics behind accessor functions.
+
+**THE OBJECT DEFINES ALL EIGHT AS GLOBALS, MEASURED.**  `readelf -sW` on
+`ref/slmodemd/dsplibs.o` shows `FPM_PPS_CFG` (0xc4a0, 40), `FPM_SRE_CFG`
+(0xc4e0, 56), `FPM_sqrt_table` (0xc520, 384), `FPM_div_table` (0xc6a0, 256),
+`FPM_xor_table` (0xc7a0, 512), `FPM_atan_table` (0xc9a0, 514), `FPM_sin_table`
+(0xcbc0, 514) and `FPM_cos_table` (0xcde0, 514) as
+`OBJECT GLOBAL DEFAULT .rodata`.  So hiding three of them was a reconstruction
+defect, not a valid alternative: the object's binding and bare symbol names are
+the authority and the accessors were OUR invention.
+
+**CHANGE, every body verbatim.**  `src/dsp/fpm_tables.c` (new) now defines all
+eight; the three hidden ones became `FPM_sqrt_table`, `FPM_sin_table` and
+`FPM_cos_table` (the object's names) and the accessors in `fpm_sqrt.c` /
+`fpm_phasor.c` read the globals.  `fpm_pps.c`, `fpm_sre.c`, `fpm_atan.c`,
+`fpm_div.c`, `fpm_xor.c` keep their functions and lose only the definitions.
+The declarations are completed in `dsplib/fpm.h` (`FPM_sqrt_table`) and
+`dsplib/fpm_phasor.h` (`FPM_sin_table`, `FPM_cos_table`).
+**Reverse declaration order:** GCC 3.4.2 emits `.rodata` globals in reverse
+definition order, so the file declares them in reverse address order -- cos,
+sin, atan, xor, div, sqrt, `FPM_SRE_CFG`, `FPM_PPS_CFG` (F11402).
+
+**THE EMITTED LAYOUT IS NOT BYTE-EXACT, AND THE CAUSE IS DOCUMENTED, NOT
+ACCIDENTAL.**  Our `FPM_sqrt_table` is 193 entries (386 B) and `FPM_div_table`
+129 (258 B), each one entry larger than the object's 192/128, carrying this
+tree's D1/D4 over-read values so that the out-of-range reads are defined C.
+With `.rodata` aligned to 32 bytes per object, the extra entries push
+`FPM_div_table` from the object's +0x200 to +0x220 and every later table from
++0x300 to +0x340, so the block is 0xb84 bytes against the object's 0xb42.  A
+byte-exact layout would require reverting the D1/D4 extra entries and relying
+on the re-established same-TU adjacency (`FPM_sqrt_table[192]` reading
+`FPM_div_table[0]`), which is a separate reconstruction decision with its own
+differential and is not made here.  This is the one deviation and it is a
+data-layout census number, not a function byte.
+
+**MEASURED (GCC 3.4.2-r2).**  TU scoreboard: names in BOTH **261 -> 262**,
+blob-only **19 -> 18**, ours-only **41** unchanged, our TUs **304 -> 305**.
+`byteident` grade 0 **843/1852** and grade 0-or-1 **895/1852**, both UNCHANGED
+-- moving global data definitions moves no function byte (F11392/F11402).
+`partialcmp` positioned bytes **66,994 -> 66,971** /943,398 (**REGRESSION -23**,
+the 32-byte-alignment shift above); exact symbols **374 -> 375** /2,907 (+1,
+the `fpm_tables.c` FILE record); exact relocations 1008/18,317 unchanged; exact
+sections 69/92; NOBITS 2,836 ref / 2,808 candidate unchanged.  No function lost
+exactness and no exact set regressed.
+
+**HARNESS.**  The `fpmphasor` and `fpmphasordp` anchors referenced the old
+lowercase static names; the `find`/`replace` strings in those two
+`test/mutations/*.json` were retargeted to `FPM_sin_table`/`FPM_cos_table`/
+`FPM_sqrt_table` so `anchorcheck` stays 0 detached / 0 non-unique.  The
+snapshot is left stale per the standing no-re-record instruction; the two
+suites owe a re-record.
+
+**GATES.**  `make -j1 J=1 period`: **385 passed, 0 failed**.  Full
+`make -j1 J=1 phase`: boundary OK (a first internal differential pass showed
+two spurious LINK-FAILs on `t_v90p3ddec`/`t_v90p3dreset` -- a missing/partial
+object under the J wrapper's parallel copy; the authoritative period run is
+385/0 and `make -j1 J=1 period` reproduced 385/0 alone).  `refcheck` 0
+dangling; `anchorcheck` 285 suites / 10,038 mutations / 0 non-unique;
+`mutsnap --check` 0 current / 285 stale; `git diff --check` clean.
+
+(2026-09-26)

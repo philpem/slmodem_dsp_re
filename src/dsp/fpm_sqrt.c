@@ -63,36 +63,9 @@
 #define FPM_SQRT_TABLE_SIZE 193
 
 /*
- * floor(32768 * sqrt((i + 64) / 256)) for i in [0, 193).
- * Extracted from the original object; regenerated and checked by the test.
+ * The table itself is GLOBAL in the object and now lives in `fpm_tables.c`,
+ * declared in `dsplib/fpm.h`; this file keeps only the accessors over it.
  */
-static const unsigned short fpm_sqrt_table[FPM_SQRT_TABLE_SIZE] = {
-	16384, 16511, 16638, 16763, 16888, 17011, 17134, 17256,
-	17377, 17498, 17617, 17736, 17854, 17971, 18087, 18203,
-	18317, 18432, 18545, 18658, 18770, 18881, 18992, 19102,
-	19211, 19320, 19429, 19536, 19643, 19750, 19856, 19961,
-	20066, 20170, 20274, 20377, 20480, 20582, 20683, 20784,
-	20885, 20985, 21085, 21184, 21283, 21381, 21479, 21577,
-	21673, 21770, 21866, 21962, 22057, 22152, 22246, 22341,
-	22434, 22528, 22620, 22713, 22805, 22897, 22988, 23079,
-	23170, 23260, 23350, 23440, 23529, 23618, 23707, 23795,
-	23883, 23971, 24058, 24145, 24232, 24318, 24404, 24490,
-	24576, 24661, 24746, 24830, 24914, 24999, 25082, 25166,
-	25249, 25332, 25415, 25497, 25579, 25661, 25742, 25824,
-	25905, 25986, 26066, 26147, 26227, 26307, 26386, 26465,
-	26545, 26624, 26702, 26781, 26859, 26937, 27014, 27092,
-	27169, 27246, 27323, 27400, 27476, 27553, 27629, 27704,
-	27780, 27855, 27930, 28005, 28080, 28155, 28229, 28303,
-	28377, 28451, 28525, 28598, 28672, 28745, 28817, 28890,
-	28963, 29035, 29107, 29179, 29251, 29322, 29394, 29465,
-	29536, 29607, 29678, 29748, 29819, 29889, 29959, 30029,
-	30099, 30168, 30238, 30307, 30376, 30445, 30514, 30583,
-	30651, 30720, 30788, 30856, 30924, 30991, 31059, 31126,
-	31194, 31261, 31328, 31395, 31461, 31528, 31595, 31661,
-	31727, 31793, 31859, 31925, 31990, 32056, 32121, 32186,
-	32251, 32316, 32381, 32446, 32510, 32575, 32639, 32703,
-	32768,	/* index 192: absent from the original's table - see above */
-};
 
 unsigned short
 FPM_sqrt(unsigned short x)
@@ -135,7 +108,7 @@ FPM_sqrt(unsigned short x)
 	if (index >= FPM_SQRT_TABLE_SIZE)
 		index = FPM_SQRT_TABLE_SIZE - 1;
 
-	return (unsigned short)(fpm_sqrt_table[index] >> (exponent >> 1));
+	return (unsigned short)(FPM_sqrt_table[index] >> (exponent >> 1));
 }
 
 /*
@@ -191,7 +164,7 @@ FPM_sqrt_dp(unsigned int x)
 	if ((unsigned short)index > 0xbf)
 		index = 0xbf;
 
-	return (unsigned short)(fpm_sqrt_table[index] >> (exponent >> 1));
+	return (unsigned short)(FPM_sqrt_table[index] >> (exponent >> 1));
 }
 
 /*
@@ -211,7 +184,7 @@ unsigned short
 FPM_sqrt_table_entry(int index)
 {
 	return (index >= 0 && index < FPM_SQRT_TABLE_SIZE)
-		? fpm_sqrt_table[index] : 0;
+		? FPM_sqrt_table[index] : 0;
 }
 
 int

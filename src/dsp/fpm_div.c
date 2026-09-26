@@ -64,41 +64,6 @@
  */
 #define FPM_DIV_TABLE_REAL 128
 
-const unsigned short FPM_div_table[FPM_DIV_TABLE_REAL + 1] = {
-	32768, 32513, 32263, 32017, 31775, 31536, 31300, 31068,
-	30840, 30615, 30393, 30174, 29959, 29746, 29537, 29330,
-	29127, 28926, 28728, 28532, 28339, 28149, 27962, 27776,
-	27594, 27413, 27235, 27060, 26886, 26715, 26546, 26379,
-	26214, 26051, 25890, 25731, 25575, 25420, 25266, 25115,
-	24966, 24818, 24672, 24528, 24385, 24244, 24105, 23967,
-	23831, 23696, 23563, 23431, 23301, 23172, 23045, 22919,
-	22795, 22671, 22550, 22429, 22310, 22192, 22075, 21959,
-	21845, 21732, 21620, 21509, 21399, 21290, 21183, 21076,
-	20971, 20867, 20763, 20661, 20560, 20460, 20360, 20262,
-	20164, 20068, 19972, 19878, 19784, 19691, 19599, 19508,
-	19418, 19328, 19239, 19152, 19065, 18978, 18893, 18808,
-	18724, 18641, 18558, 18477, 18396, 18315, 18236, 18157,
-	18078, 18001, 17924, 17848, 17772, 17697, 17623, 17549,
-	17476, 17403, 17331, 17260, 17189, 17119, 17050, 16980,
-	16912, 16844, 16777, 16710, 16644, 16578, 16513, 16448,
-
-	/*
-	 * Index 128 -- one past the original's 128 entries.  See D4.
-	 *
-	 * In the BUG build this is 0, because the original reads
-	 * `FPM_xor_table[0]` here, which is 0: every denominator that
-	 * normalises to a mantissa of 0xff80 or above gets a reciprocal of
-	 * ZERO, which silences an AGC block and drops a Bell 103 connection
-	 * (finding F40).  In the FIXED build it is 16384, the value the
-	 * table's own generator produces:
-	 *     trunc(2^30 / ((128 + 0x80) * 0x100)) = 2^30 / 65536 = 16384
-	 */
-#ifdef DSPLIB_REPRODUCE_BUGS
-	0
-#else
-	16384
-#endif
-};
 
 unsigned short
 FPM_div_table_entry(int i)

@@ -39,21 +39,6 @@
  * `78 00 00 00 00 00 00 00`.  10 phases, a nominal step of 3, mapped, a Q15
  * unity-ish gain of 32767, and 120 coefficients -- 12 taps at 10 phases.
  */
-const struct fpm_pps_cfg FPM_PPS_CFG = {
-	10,		/* +0x00  phases                                     */
-	3,		/* +0x02  step                                       */
-	1,		/* +0x04  mapped                                     */
-	32767,		/* +0x08  scale                                      */
-	0,		/* +0x0c  step_adj                                   */
-	0,		/* +0x0e  pad0e                                      */
-	NULL,		/* +0x10  imap -- patched by the caller              */
-	NULL,		/* +0x14  qmap -- patched by the caller              */
-	NULL,		/* +0x18  coeff_i -- patched by the caller           */
-	NULL,		/* +0x1c  coeff_q -- patched by the caller           */
-	120,		/* +0x20  coeffs                                     */
-	0,		/* +0x22  pad22                                      */
-	NULL		/* +0x24  aux                                        */
-};
 
 /*
  * One rail: `taps` terms, newest first, over the circular history against
