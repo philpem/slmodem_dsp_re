@@ -797,7 +797,7 @@
   "build/test/t_v90unpck"
  ],
  "v92alloc": [
-  "src/pump/v90/V92ParamsInfo.c",
+  "src/pump/v90/V92MappingParamsInt.cpp",
   "build/test/t_v92alloc"
  ],
  "v92btos": [
@@ -953,11 +953,11 @@
   "build/test/t_v92txreset"
  ],
  "v92unpck": [
-  "src/pump/v90/V92ParamsInfo.c",
+  "src/pump/v90/V92MappingParamsInt.cpp",
   "build/test/t_v92unpck"
  ],
  "v92ratestd": [
-  "src/pump/v90/V92ParamsInfo.c",
+  "src/pump/v90/V92MappingParamsInt.cpp",
   "build/test/t_v92unpck"
  ],
  "vparser": [
@@ -1029,7 +1029,7 @@
   "build/test/t_vce"
  ],
  "vcedle": [
-  "src/service/voicecmd.c",
+  "src/voice/voice.c",
   "build/test/t_vcedle"
  ],
  "mtktab": [
@@ -1049,7 +1049,7 @@
   "build/test/t_fdspdp"
  ],
  "voicedp": [
-  "src/service/voicedp.c",
+  "src/voice/voice.c",
   "build/test/t_voicedp"
  ],
  "voicedptx": [

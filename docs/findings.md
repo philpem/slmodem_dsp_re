@@ -127256,3 +127256,919 @@ no gate result changes; it exists so the four names are not re-derived.
 `refcheck` 0 dangling; `git diff --check` clean.
 
 (2026-09-26)
+
+
+## F11402. `.rodata`/`.data` ARE concatenated in link order, the F11393 counterexample was an attribution error, and `fpm_tren.c` is recovered from the unique file slot
+
+TU-reconciliation pass, the data-only families (issue #6/#20/#67).  F11393
+declined the `.rodata` table TUs on a single measured "counterexample": the
+Viterbi bound/region tables at `.rodata` 0x00d0c0..0x00ed50 were said to
+belong to V.32 (`V32TAB144.c`/`V32SMC_TX.c`, FILE 117-119) although they sit
+inside the fpm window, which would prove `.rodata` is NOT link order and make
+every `.rodata` bracket unsound.  This pass re-measured that and found the
+counterexample was an **identification error**: the tables are `fpm_tren.c`'s.
+
+**THE SUBSECTION HYPOTHESIS IS REFUTED.**  The proposal was that a TU's
+constants are scattered across `.rodata.str1.1`/`.cst4`/`.cst8`/`.cst16` and
+that reading one address stream mixes them.  `readelf -SW` shows the object
+has exactly one plain `.rodata` (section 129, 0x10f64 bytes) and that every
+table in the disputed window -- `TrellisTransitionTable`/`TrellisEncodeDifTable`
+(0xd0c0/0xd100), `VTB_BOUND_14400/12000/9600/7200`, `VTB_REGION_*`
+(0xd120..0xed50) and the eight `FPM_*` tables (0xc4a0..0xcfe2) -- is in that
+one section (`readelf -sW`, `nm`).  `.rodata.cst4` and `.rodata.cst8` hold one
+section symbol each; there is no per-file subsection to mix.
+
+**THE PER-SECTION ORDER IS FILE ORDER, MEASURED.**  In a `ld -r` object the
+symbol table interleaves each input's LOCAL symbols immediately after its
+`STT_FILE` record, so a local's owner is the most recent FILE.  Walking the
+symtab that way and sorting by section: **126 `.rodata`, 60 `.data`, 33 `.bss`
+and 55 `.text` locals, and 0 are out of order against their FILE ordinal** in
+any section.  That is the bracket argument, and it holds for `.rodata` exactly
+as F11392 proved it for `.data`.  The positive control is `v22txtab.c`
+(FILE 146), which is the *only* file between `v22prc.c`'s `PROTOCOL` local and
+`v22_fse.c`'s `v22_fse_mu` local and is correctly the sole owner of that
+`.data` range.
+
+**THE F11393 COUNTEREXAMPLE, RESOLVED BY LOCAL ANCHORS.**  The `.rodata`
+locals bracket the disputed block on both sides:
+
+    .rodata 0x00d040  ToneLPF         LOCAL  FILE 256  fpm_tone.c
+    .rodata 0x00d0c0  TrellisTransitionTable   \ 
+    .rodata 0x00d100  TrellisEncodeDifTable    |
+    .rodata 0x00d120  VTB_BOUND_14400          |  the only FILE record
+    ...                                        |  between 256 and 258 is
+    .rodata 0x00ed40  VTB_REGION_7200          |  fpm_tren.c (257)
+    .rodata 0x00ed60  VTB_DIFF_TBL   LOCAL  FILE 258  fpm_vtb.c
+
+`ToneLPF` is a proven `fpm_tone.c` local at 0xd040 (106 bytes, ending 0xd0aa);
+`VTB_DIFF_TBL` is a proven `fpm_vtb.c` local at 0xed60.  No FILE record lies
+strictly between 256 and 258, so the whole 0xd0c0..0xed50 block belongs to
+`fpm_tren.c` -- **not** to `V32TAB144.c` (FILE 119) or `V32SMC_TX.c` (FILE
+118), whose own `.rodata` slots are at 0x06de0..0x07f20.  The reader set was
+misleading: `VTB_BOUND_14400` is read by `V32.c` (0x07e772/0x07ee5a) and
+`V17rx.c` (0x0975d6), and `Trellis*` by `Smc.c`/`V32SMC_TX.c`, so the tables
+are *shared global data*, and a table's readers do not define it.  F11393's
+own rule -- "a table DEFINED in a TU must be in that TU's slot" -- is what
+refutes it, once the slot is read per-section.
+
+**REGRESSED-IN-MASTER PLACEMENT, CORRECTED.**  `V32TAB144.c` and
+`V32SMC_TX.c` had been *defining* those ten tables.  They now only read them
+(via `dsplib/vtb.h` / `dsplib/v32smc.h`); the definitions moved to the new
+`src/dsp/fpm_tren.c`.  Bodies verbatim; no declaration, type or flag changed.
+
+**GCC 3.4.2 EMITS `.rodata` GLOBALS IN REVERSE DECLARATION ORDER -- MEASURED.**
+Declaring the ten tables in blob-address order emitted them exactly reversed,
+so `fpm_tren.c` declares them in *reverse* of the object's address order.
+The object's own per-file layout is then reproduced to the byte: the emitted
+relative offsets are 0x00 `TrellisTransitionTable`, 0x40 `TrellisEncodeDifTable`,
+0x60 `VTB_BOUND_14400`, 0xee0 `VTB_BOUND_12000`, 0x1660 `VTB_REGION_14400`,
+0x1760 `VTB_REGION_12000`, 0x1800 `VTB_BOUND_9600`, 0x1b40 `VTB_BOUND_7200`,
+0x1c40 `VTB_REGION_9600`, 0x1c80 `VTB_REGION_7200` -- identical, including
+every alignment gap, to the object's 0xd0c0..0xed80 block.  This is a general
+lever for the other data TUs: **source declaration order is the reverse of the
+object's `.rodata` address order.**
+
+**MEASURED (GCC 3.4.2-r2).**  TU scoreboard: names in BOTH **260 -> 261**,
+blob-only **20 -> 19**, ours-only **41** unchanged, our TUs **303 -> 304**
+(`tools/tu-compare.py` method, reproduced by the pass script).  The +1 is
+`fpm_tren.c`.  `byteident` grade 0 **843/1852** and grade 0-or-1 **895/1852**, both UNCHANGED
+-- moving global data definitions moves no function byte.
+`partialcmp` positioned bytes **66,838 -> 66,994** /943,398 (+156, favourable);
+exact symbols **373 -> 374** /2,907 (+1, the `fpm_tren.c` FILE record); exact
+relocations **987 -> 1008** /18,317 (+21); exact sections 69/92; NOBITS 2,836
+ref / 2,808 candidate unchanged.  No census number regressed.
+
+**GATES.**  `make -j1 J=1 phase`: **385 passed, 0 failed**, boundary OK;
+`refcheck` 0 dangling / 0 stale; `anchorcheck` 285 suites / 10,038 mutations /
+0 non-unique / 0 detached; `git diff --check` clean.  No mutation suite
+sources `V32TAB144.c`, `V32SMC_TX.c` or any moved symbol, so **no suite owes a
+re-record**; the whole-tree snapshot key is stale as usual.
+
+**RE-TESTED, STILL DECLINED, WITH THE EXACT BLOCKER.**  With `.rodata` order
+now sound, each remaining blob-only family was re-measured.  The blocker is no
+longer "`.rodata` order is unknown" but "the slot contains several candidate
+FILEs with no way to split them".
+
+  * **`fpm_tables.c` (FILE 255)** -- PROVEN to be the file that holds the eight
+    `FPM_*` tables: `FPM_PPS_CFG` 0xc4a0, `FPM_SRE_CFG` 0xc4e0,
+    `FPM_sqrt_table` 0xc520, `FPM_div_table` 0xc6a0, `FPM_xor_table` 0xc7a0,
+    `FPM_atan_table` 0xc9a0, `FPM_sin_table` 0xcbc0, `FPM_cos_table` 0xcde0,
+    ending immediately before `fpm_tone.c`'s `FPM_TONE_CFG` (0xd000).  The
+    namesake assignment is *impossible*: `FPM_SRE_CFG` (0xc4e0, would be
+    `fpm_sre.c` FILE 254) precedes `FPM_sqrt_table` (0xc520, `fpm_sqrt.c` FILE
+    253), an order inversion.  **Declined only because the move is not a pure
+    relocation**: `FPM_sqrt_table`, `FPM_sin_table` and `FPM_cos_table` are
+    reconstructed as file-`r` statics (`fpm_sqrt_table`, `fpm_sin_table`,
+    `fpm_cos_table`) behind accessor functions, not as the object's globals,
+    so three of the eight cannot be moved verbatim.  Fixing those globals
+    first is the unblock; the file attribution is already settled.
+  * **`V34ARRAY.c` (87) / `V34CONST.c` (88)** -- the `.rodata` block
+    0x0ec0..0x2840 still has no local between `VpcmFloModem.cpp`'s
+    `v34initialbauds` (0x03e0, FILE 17) and `V34RX.c`'s `sqrt_table` (0x2860,
+    FILE 89), so its slot contains FILEs 18..88.  Membership is V.34 but the
+    ARRAY/CONST split is not address-recoverable.  Declined, unchanged.
+  * **`Smc_tx.c` (209) / `Tab144.c` (210) / `Tx_rxtab.c` (211)** -- the `.text`
+    window `[SMC_encoder 0x9fa10, V17RX_modem 0x9ff80)` is `Smc.c` + `Smc_tx.c`
+    with no LOCAL under FILE 208/209, and the `.rodata` 0xbb80..0xc000 is in a
+    gap containing FILEs 202..244.  The V.32 parallel is a name argument, not
+    an object fact.  Declined.
+  * **`V17txtab.c` (179) / `V21rxtab.c` (181)** -- their `.data` lies in the
+    gap from `V17rxtab.c`'s AGC pair (0x9e28) to `V27rxtab.c`'s (0xab0c),
+    which contains FILEs 178..184 (`V17tx.c`, `V17txtab.c`, `V21rx.c`,
+    `V21rxtab.c`, `V21tx.c`, `V27rx.c`, `V27rxdec.c`); the receivers and
+    transmitters are both in that range and no local separates them.  Declined.
+  * **`V32RXTAB.c` (117) / `V32TXTAB.c` (121)** -- the `.data` block
+    0x7240..0x7750 has no local between DPSK.c (FILE 95) and V32stc.c (FILE
+    129).  Declined, unchanged.
+  * **`faxvmi_tbls.c` (171)** -- no `.text`, and its `.rodata` fragment is not
+    separable from `faxvmi.c`'s proven locals.  Declined.
+  * **`MEMORYC.c` (96) / `B103.c` (153) / `B103int.c` (156)** -- no LOCAL
+    anchor in any section brackets them to a single file (`tuattrib.py`
+    attributes nothing to `MEMORYC.c`; the B103 `.text` run is 4 files with no
+    local).  Unchanged.
+  * **`V92MappingParamsInt.cpp` (23)** -- a language change (C to C++), not a
+    file move: `byteident --why V92createConstellations` is grade 0 EXACT, so
+    recompiling through the C++ front end for a filename risks byte identity.
+    Needs its own before/after differential, as F11388/F11393 recorded.
+  * **`pow.S`, `<built-in>`, `<command line>`** -- compiler/toolchain inputs,
+    not reconstructable TUs.
+
+(2026-09-26)
+
+## F11403. `fpm_tables.c` recovered: the eight `FPM_*` tables are the object's globals, and three were wrongly hidden behind accessors
+
+TU-reconciliation, the first of F11402's five named blockers (issue #6/#20/#67).
+F11402 proved the file attribution -- the eight `FPM_*` tables fill
+`.rodata` 0xc4a0..0xcfe2 between `fpm_log10.c`'s `FPM_log10_table` and
+`fpm_tone.c`'s `FPM_TONE_CFG`, with the only FILE record between the bracketing
+locals being `fpm_tables.c` (255) -- and left it declined because the move was
+not verbatim: `FPM_sqrt_table`, `FPM_sin_table` and `FPM_cos_table` were
+reconstructed as file-`r` statics behind accessor functions.
+
+**THE OBJECT DEFINES ALL EIGHT AS GLOBALS, MEASURED.**  `readelf -sW` on
+`ref/slmodemd/dsplibs.o` shows `FPM_PPS_CFG` (0xc4a0, 40), `FPM_SRE_CFG`
+(0xc4e0, 56), `FPM_sqrt_table` (0xc520, 384), `FPM_div_table` (0xc6a0, 256),
+`FPM_xor_table` (0xc7a0, 512), `FPM_atan_table` (0xc9a0, 514), `FPM_sin_table`
+(0xcbc0, 514) and `FPM_cos_table` (0xcde0, 514) as
+`OBJECT GLOBAL DEFAULT .rodata`.  So hiding three of them was a reconstruction
+defect, not a valid alternative: the object's binding and bare symbol names are
+the authority and the accessors were OUR invention.
+
+**CHANGE, every body verbatim.**  `src/dsp/fpm_tables.c` (new) now defines all
+eight; the three hidden ones became `FPM_sqrt_table`, `FPM_sin_table` and
+`FPM_cos_table` (the object's names) and the accessors in `fpm_sqrt.c` /
+`fpm_phasor.c` read the globals.  `fpm_pps.c`, `fpm_sre.c`, `fpm_atan.c`,
+`fpm_div.c`, `fpm_xor.c` keep their functions and lose only the definitions.
+The declarations are completed in `dsplib/fpm.h` (`FPM_sqrt_table`) and
+`dsplib/fpm_phasor.h` (`FPM_sin_table`, `FPM_cos_table`).
+**Reverse declaration order:** GCC 3.4.2 emits `.rodata` globals in reverse
+definition order, so the file declares them in reverse address order -- cos,
+sin, atan, xor, div, sqrt, `FPM_SRE_CFG`, `FPM_PPS_CFG` (F11402).
+
+**THE EMITTED LAYOUT IS NOT BYTE-EXACT, AND THE CAUSE IS DOCUMENTED, NOT
+ACCIDENTAL.**  Our `FPM_sqrt_table` is 193 entries (386 B) and `FPM_div_table`
+129 (258 B), each one entry larger than the object's 192/128, carrying this
+tree's D1/D4 over-read values so that the out-of-range reads are defined C.
+With `.rodata` aligned to 32 bytes per object, the extra entries push
+`FPM_div_table` from the object's +0x200 to +0x220 and every later table from
++0x300 to +0x340, so the block is 0xb84 bytes against the object's 0xb42.  A
+byte-exact layout would require reverting the D1/D4 extra entries and relying
+on the re-established same-TU adjacency (`FPM_sqrt_table[192]` reading
+`FPM_div_table[0]`), which is a separate reconstruction decision with its own
+differential and is not made here.  This is the one deviation and it is a
+data-layout census number, not a function byte.
+
+**MEASURED (GCC 3.4.2-r2).**  TU scoreboard: names in BOTH **261 -> 262**,
+blob-only **19 -> 18**, ours-only **41** unchanged, our TUs **304 -> 305**.
+`byteident` grade 0 **843/1852** and grade 0-or-1 **895/1852**, both UNCHANGED
+-- moving global data definitions moves no function byte (F11392/F11402).
+`partialcmp` positioned bytes **66,994 -> 66,971** /943,398 (**REGRESSION -23**,
+the 32-byte-alignment shift above); exact symbols **374 -> 375** /2,907 (+1,
+the `fpm_tables.c` FILE record); exact relocations 1008/18,317 unchanged; exact
+sections 69/92; NOBITS 2,836 ref / 2,808 candidate unchanged.  No function lost
+exactness and no exact set regressed.
+
+**HARNESS.**  The `fpmphasor` and `fpmphasordp` anchors referenced the old
+lowercase static names; the `find`/`replace` strings in those two
+`test/mutations/*.json` were retargeted to `FPM_sin_table`/`FPM_cos_table`/
+`FPM_sqrt_table` so `anchorcheck` stays 0 detached / 0 non-unique.  The
+snapshot is left stale per the standing no-re-record instruction; the two
+suites owe a re-record.
+
+**GATES.**  `make -j1 J=1 period`: **385 passed, 0 failed**.  Full
+`make -j1 J=1 phase`: boundary OK (a first internal differential pass showed
+two spurious LINK-FAILs on `t_v90p3ddec`/`t_v90p3dreset` -- a missing/partial
+object under the J wrapper's parallel copy; the authoritative period run is
+385/0 and `make -j1 J=1 period` reproduced 385/0 alone).  `refcheck` 0
+dangling; `anchorcheck` 285 suites / 10,038 mutations / 0 non-unique;
+`mutsnap --check` 0 current / 285 stale; `git diff --check` clean.
+
+(2026-09-26)
+
+## F11404. `V92MappingParamsInt.cpp` recovered: the five functions were C++, and the two byte-exact ones survive the front-end change
+
+TU-reconciliation, area 3 of the F11402 blockers (issue #6/#20/#67).
+F11393 recorded the blocker: the blob's FILE 23 is `V92MappingParamsInt.cpp`
+between `V92Jd.cpp` and `V92Modem.cpp`, the five functions are unmangled `T`
+(so `extern "C"`), our `src/pump/v90/V92ParamsInfo.c` reconstructs exactly
+those five, and the change is a LANGUAGE change -- C++ rejects the implicit
+`void *` -> `int *`/`float *` conversion `sysdep_malloc` needs.  It was
+declined "as not pure, and needing its own before/after differential".
+
+**THE EXPERIMENT RUN, AND ITS CELL.**  `git mv V92ParamsInfo.c ->
+V92MappingParamsInt.cpp`; the only source change is ten casts
+(`(int *)`/`(float *)` on the `sysdep_malloc` results).  The `extern "C"` is
+not added to the definitions because `V92ParamsInfo.h` ALREADY wraps the five
+prototypes in `extern "C"` under `#ifdef __cplusplus` (lines 171-213), and a
+definition after a C-linkage declaration inherits it.
+
+Compiled on the period compiler as a `.cpp` (`TC-CXX`), the two functions that
+were byte-exact stay byte-exact and no third function regresses:
+
+    V92createConstellations          EXACT before -> EXACT after
+    V92createFilterCoefficients      EXACT before -> EXACT after
+    V92deleteConstellations          BYTES  3/173 -> BYTES  3/173
+    V92deleteFilterCoefficients      BYTES  3/106 -> BYTES  3/106
+    V92setParamsInfoFromCPUnPck      SIZE  32 B   -> SIZE  16 B
+
+Three of five were already non-exact and are a separate reconstruction defect
+(the two deleters are missing one `sysdep_free` site each -- lever 2, and
+F7818's `delete[]` spelling is unavailable because the fields are `void *`);
+the language change neither fixes nor worsens them.  `setParamsInfoFromCPUnPck`
+IMPROVES from 32 bytes / 666 instructions to 16 bytes / 665 against the
+object's 679, so the C++ front end is closer to the original than the C one --
+which is the expected result if the original was C++.
+
+**CHANGE.**  The file is renamed and recompiled; `test/mutations/suites.json`
+retargets its three suites (`v92alloc`, `v92unpck`, `v92ratestd`) to the new
+path, and the ten `sysdep_malloc` anchors in `v92alloc.json` gained the cast
+so `anchorcheck` stays 0 detached / 0 non-unique.  Bodies are otherwise
+verbatim; no declaration, type or flag changed.
+
+**MEASURED (GCC 3.4.2-r2).**  TU scoreboard: names in BOTH **262 -> 263**,
+blob-only **18 -> 17**, ours-only **41 -> 40**, our TUs **305** (`V92ParamsInfo.c`
+removed, `V92MappingParamsInt.cpp` added).  `byteident` grade 0 **843/1852**
+and grade 0-or-1 **895/1852**, UNCHANGED.  `partialcmp` positioned bytes
+**66,971 -> 66,824** /943,398 (**REGRESSION -147**: the renamed input changes
+the partial-link source-order fallback for the still-unmatched objects, the
+same census effect F11394/F11395 recorded); exact symbols **375 -> 376**
+/2,907 (+1, the FILE record); exact relocations **1008 -> 1011** /18,317 (+3);
+exact sections 69/92; NOBITS 2,836 ref / 2,808 candidate unchanged.  No
+function lost exactness and no exact set regressed.
+
+**HARNESS.**  `anchorcheck` 285 suites / 10,038 mutations / 0 non-unique;
+`mutsnap --check` 0 current / 285 stale (the whole-tree key on any `src/`
+edit).  The three V.92 suites' source path moved but their bodies and anchors
+did not, so **none owes a re-record**; the two `fpmphasor`/`fpmphasordp`
+suites from F11403 still do.
+
+**GATES.**  `make -j1 J=1 phase`: **385 passed, 0 failed**, boundary OK;
+`refcheck` 0 dangling; `git diff --check` clean.
+
+(2026-09-26)
+
+## F11405. F11402's data-TU blockers and the V34/V92 remainder re-measured: the anchor count is zero in every section, and the V34 merge is boundary-only
+
+TU-reconciliation, the rest of F11402's list (issue #6/#20/#67), after F11403
+(`fpm_tables.c`) and F11404 (`V92MappingParamsInt.cpp`) closed two of the
+nineteen blob-only names.  Each remaining candidate was re-measured against
+the object; this records the exact measurement, so none is re-derived.
+
+**THE ANCHOR TEST, RUN OVER EVERY SECTION AND EVERY CANDIDATE.**  For each
+blob-only FILE record, the symtab run between that record and the NEXT FILE
+record was listed in full -- every `OBJECT`, `FUNC`, `SECTION` and every
+`LOCAL` symbol of any kind.  **All thirteen candidates own ZERO symbols in
+their run:**
+
+    V34ARRAY.c V34CONST.c MEMORYC.c V32RXTAB.c V32TXTAB.c B103.c B103int.c
+    faxvmi_tbls.c V17txtab.c V21rxtab.c Smc_tx.c Tab144.c Tx_rxtab.c
+
+That is the `STT_FILE`-to-next-`STT_FILE` interval, so it covers `.text`,
+`.rodata`, `.data`, `.bss`, `.gcc_except_table`, `.ctors` and every other
+allocated section at once -- there is no local anchor of any kind for these
+files.  (`V34.c`, `vpcm.c`-style entries and `V92MappingParamsInt.cpp` are not
+in the list because they are recovered or matched.)
+
+**AREA 2 -- THE "SEVERAL CANDIDATE FILEs IN ONE SLOT" CASES.**  With no local
+in the slot, the per-section order (F11402) brackets the slot but cannot
+partition it, and the candidate table sizes are not an independent input
+because WHICH tables belong to which candidate is exactly the unknown:
+
+  * **`V32RXTAB.c` (117) / `V32TXTAB.c` (121).**  The `.data` span
+    `[DPSK.c's fsklpfcoeff600 0x71a0, V32stc.c's SnrToRetrainTable 0x7750)`
+    holds 45 globals and no local separates any of the boundaries.  It is not
+    a single candidate slot: F11395 already assigned the `V32_RATE_SEQ`/
+    `V32_FINAL_RATE_SEQ`/`V32_ESEQ`/`V32_*_LEN` block to `V32int.c` (124) and
+    `V32_PROTOCOL`/`V32NextState`/`V32_CONNECT`/`V32_RX_MODE`/`V32_TX_MODE` to
+    `V32mod.c` (125), so RXTAB/TXTAB are a subset of the remainder
+    (`V32_MESG`, the `FSEv32_*`/`DECv32_*`/`SREv32_*`/`CRRv32_*` receiver block
+    and the `SREv32_CFG`/`AGCv32*`/`SMCv32_MOD`/`SDMv32_*` block) whose split
+    the object does not state.  A size partition would have to know the
+    receiver/transmitter assignment, which is exactly the unknown.  Declined
+    (unchanged from F11394/F11402).
+  * **`V17txtab.c` (179) / `V21rxtab.c` (181).**  The `.rodata` slot is
+    `[V17rxtab.c's AGC pair 0x9e2c, V27rxtab.c's AGC pair 0xab0c)`, FILEs
+    178..184 (`V17tx.c`, `V17txtab.c`, `V21rx.c`, `V21rxtab.c`, `V21tx.c`,
+    `V27rx.c`, `V27rxdec.c`).  The interior globals have real boundaries
+    (V17's `SMCv17_MOD` ends at 0xa088 where V21's `V21RX_IIR_LPF` starts) but
+    that boundary splits V17 from V21, not the transmitter tables from the
+    rest; `V17rxtab.c`'s local pair pins only its own two words.  Declined.
+  * **`Smc_tx.c` (209) / `Tab144.c` (210) / `Tx_rxtab.c` (211).**  The `.text`
+    window `[SMC_encoder 0x9fa10, V17RX_modem 0x9ff80)` holds five functions
+    and no local; `Smc.c` and `Smc_tx.c` have no symbol between their FILE
+    records (measured above: both zero).  The V.32 parallel
+    (`V32SMC_TX.c` holds `SMCv32_encoder_*`) is a convention, not an object
+    fact.  Declined.
+  * **`faxvmi_tbls.c` (171).**  No `.text` and no local; its candidate
+    `.rodata` fragment shares one run with `faxvmi.c`'s proven
+    `vmi_unpack/pack/reverse` locals.  Declined.
+  * **`V34ARRAY.c` (87) / `V34CONST.c` (88).**  Zero locals.  F11398 pinned
+    the 17-function `.text` run to `V34.c` but the ARRAY/CONST split point in
+    `.rodata` 0x0ec0..0x2840 is not address-recoverable.  The `V34.c` merge is
+    correct as to membership but requires assembling the 17 globals in the
+    object's emission order, which F11398 measured as different from ours and
+    which risks the three exact functions (`preinitV34`, `scaleVector`,
+    `setScramble`) that are exact BY the current order.  Left for a pass with
+    a full-file before/after; declined here, unchanged.
+
+**AREA 4 -- `MEMORYC.c` / `B103.c` / `B103int.c`.**  All three are in the
+zero-local list above: no anchor in ANY section.  Their neighbours own the
+regions (`DPSK.c`'s `fsklpfcoeff600`, `B103prc.c`'s `tx_in_internal`/
+`rx_out_internal`, `B103tab.c`'s AGC pair), and `MEMORYC.c` sits between
+`DPSK.c` (95) and `V8Interface.c` (97) with neither contributing a local for
+it.  Declined, with the measurement that no section stream pins them.
+
+**AREA 5 -- `v34pcmif.c` -> `VPcmV34Main.cpp`.**  Re-tested.  `VPcmV34Main.cpp`
+(f16) is ALREADY a matched TU: its blob locals `V34DisconnectThreshTable`
+(.data 0xc0) and `_Z14getMPrecvdBitsP12tagV34Object` (.text 0x9250) are in
+both objects, and `v34pcmif.c` is an ours-only over-split.  Merging it back is
+therefore **boundary-only -- it removes one ours-only file and adds no
+blob-only name**, and the merge changes the emission order that the exact
+functions in the pair depend on.  It does not advance the 283 goal and is not
+attempted here.  (The 58-function `v34pcmif` suite split and the C++/C half
+ownership are in F11382's V.34 record and `docs/findings.md` 18200.)
+
+**NOT RECONSTRUCTABLE.**  `pow.S` (twice), `<command line>` and `<built-in>`
+are compiler/toolchain inputs, not translation units.  The blob counts 283
+FILE records; four of them cannot be source TUs, so the achievable BOTH
+ceiling is 279.
+
+**MEASURED STATE.**  Nothing moved in this entry; the post-F11404 state is
+BOTH 263, blob-only 17 (13 real + 4 toolchain), ours-only 40, our TUs 305.
+`refcheck` 0 dangling; `git diff --check` clean.
+
+(2026-09-26)
+
+## F11406. The 13 zero-symbol blob FILE records are reproduced as empty translation units -- a measured file-set representation, not recovered content
+
+TU-reconciliation, the last of the blob-only FILE set (issue #6/#20/#67).
+F11405 measured that each of the thirteen candidates owns zero symbols in the
+symtab run between its `STT_FILE` record and the next, in any section:
+
+    V34ARRAY.c V34CONST.c MEMORYC.c V32RXTAB.c V32TXTAB.c B103.c B103int.c
+    faxvmi_tbls.c V17txtab.c V21rxtab.c Smc_tx.c Tab144.c Tx_rxtab.c
+
+The owner's goal is that the partial link's input FILE set match the original
+build's.  F11405 left the question of *what input produced a zero-symbol FILE
+record* open; this entry answers it empirically and exercises the answer.
+
+**THE EMPIRICAL TEST, ON THE PERIOD COMPILER (GCC 3.4.2-r2 Gentoo image).**  An
+empty `.c` compiles to an object whose entire `.symtab` is one `NOTYPE UND`,
+one `FILE <basename>.c`, and five `SECTION` entries (`.text`, `.data`, `.bss`,
+`.note.GNU-stack`, `.comment`); `ld -r` of that object with a non-empty one
+appends exactly one `STT_FILE` record, spelled with the basename, and adds
+**zero bytes** to every allocated section.  The same is true of a file whose
+whole body is a comment, a `typedef`, an `extern` declaration, or an unused
+`static const`/`static` function at `-O3` -- every spelling that emits no
+symbol.  So a zero-symbol FILE record is exactly what an empty (or fully
+eliminated) translation unit produces, and it is reproducible.
+
+**THE CHANGE.**  Thirteen empty `.c` files are added at the blob's own
+spellings (`readelf -sW` FILE names), each carrying a header comment recording
+that it is a **translation-unit record representation, not reconstructed
+content**:
+
+    src/pump/v34/V34ARRAY.c  src/pump/v34/V34CONST.c
+    src/core/MEMORYC.c       src/pump/v32/V32RXTAB.c
+    src/pump/v32/V32TXTAB.c  src/pump/b103/B103.c  src/pump/b103/B103int.c
+    src/fax/faxvmi_tbls.c    src/fax/V17txtab.c    src/fax/V21rxtab.c
+    src/fax/Smc_tx.c         src/fax/Tab144.c      src/fax/Tx_rxtab.c
+
+`recoverorder.py` places each at its blob ordinal by unique-basename
+correspondence even with no symbols (its `filename_choice` arm), so the link
+order matches.  This is a FILE-set match only.  It does not claim the original
+contents, and each file is replaceable the moment real content is recovered.
+
+**MEASURED (GCC 3.4.2-r2).**  TU scoreboard: names in BOTH **263 -> 276**,
+blob-only **17 -> 4** (now only `V34.c` plus the toolchain records `pow.S`,
+`<command line>`, `<built-in>`), ours-only **40 unchanged**, our TUs
+**305 -> 318**, tc-repro 318 objects, 283 ordering candidates.  `byteident`
+grade 0 **843/1852** and grade 0-or-1 **895/1852**, both UNCHANGED -- the new
+inputs define no function byte.  `partialcmp` positioned bytes **66,824
+unchanged** /943,398 (the promised no-op: empty inputs add no section bytes);
+exact symbols **376 -> 389** /2,907 (+13, one FILE record each); exact
+relocations 1011/18,317 unchanged; exact sections 69/92; NOBITS 2,836 ref /
+2,808 candidate unchanged.  No function lost exactness and no exact set
+regressed.
+
+**GATES.**  `make -j1 J=1 period`: **385 passed, 0 failed**.  Full
+`make -j1 J=1 phase`: **385 passed, 0 failed**, boundary OK; `refcheck` 0
+dangling; `anchorcheck` 285 suites / 10,038 mutations / 0 non-unique / 0
+detached; `mutsnap --check` 0 current / 285 stale (the whole-tree key on any
+`src/` edit); `git diff --check` clean.
+
+**NO MUTATION SUITE MOVED.**  None sources any of the thirteen new files (they
+define no symbol), so nothing owes a re-record from this entry.  The
+`fpmphasor`/`fpmphasordp` suites from F11403 still do.
+
+(2026-09-26)
+
+## F11407. `pow.S` is a genuine assembly input, and its four FILE records (`pow.S`, `<command line>`, `<built-in>`, `pow.S`) are reproduced by an empty `.S` placeholder; `V34.c` is the last blob-only name
+
+TU-reconciliation, the toolchain component of the blob-only FILE set (issue
+#6/#20/#67).  F11405 recorded `pow.S` (twice), `<command line>` and
+`<built-in>` as "compiler/toolchain inputs, not translation units" and set the
+achievable BOTH ceiling at 279.  This entry settles what they are and
+reproduces them; the ceiling is reached.
+
+**`pow.S` IS A GENUINE INPUT, NOT A BUILD ARTEFACT.**  `readelf -sW` on the
+blob: the second `pow.S` FILE record owns eight `NOTYPE LOCAL` `.text` symbols
+-- `inf_zero`/`infinity` (0xb0b50), `minf_mzero`/`minfinity` (0xb0b58),
+`mzero` (0xb0b60), `zero` (0xb0b68), `one` (0xb0b70), `limit` (0xb0b78) -- and
+the global `pow` sits at 0xb0b80, `.text` ending at 0xb1cf0, so its body is
+4,464 bytes.  Those constant names are exactly libm's x87 `pow()`.  The
+project already excludes them: `tools/coverage.py`'s NOT_OURS set lists `pow`
+and its internals with "there is no reconstruction work here to schedule,
+ever" (F1990).  So the content is out of scope and the FILE set is the goal.
+
+**THE FOUR RECORDS ARE REPRODUCIBLE, AND ONLY BY A `.S` INPUT.**  Measured on
+the period compiler: a `.c` emits one FILE record, a `.S` emits four --
+`<name>.S`, `<command line>`, `<built-in>`, `<name>.S`.  Verified for an empty
+`.S`, a comment-only `.S`, and a `.S` with a body; and under `ld -r` the four
+records survive in order and the input adds zero bytes to every allocated
+section.  `<command line>` and `<built-in>` are therefore NOT faked: they are
+what the assembler emits for the genuine assembly input the original build
+compiled.
+
+**THE FILE SPELLING COMES FROM THE INVOCATION, AND THAT IS A REAL TRAP.**  The
+C front end records a FILE symbol under the BASENAME (`src/call/call.c` ->
+`call.c`), but the ASSEMBLER records the path it is handed: `gcc -c
+src/core/pow.S` gives `src/core/pow.S`, and only `cd src/core && gcc -c pow.S`
+gives `pow.S`.  There is no `-ffile-prefix-map` in 3.4.2.  Every AS rule
+(`Makefile`, `period.mk`, `period_inner.sh`) therefore compiles from the
+source's own directory by basename.
+
+**THE CHANGE.**  Assembly support is added rather than a `.c` shim, because no
+`.c` can produce the records:
+
+    Makefile                  ASRC := $(shell find src -name '*.S' | sort),
+                              in $(OBJ)/$(OBJ_REPRO), `%.o: %.S` rules, cd-by-basename
+    tools/toolchain/period.mk TC_ASRC from print-ASRC, TC_ASFLAGS, TC_AS_RULE
+    tools/toolchain/period.sh ASRC in the container env
+    tools/toolchain/period_inner.sh  ASFLAGS, the `src/*.S` case, $ASRC in
+                              the compile/OBJS/srcobjs loops
+    tools/toolchain/recoverorder.py   `src/core/pow.S` -> ("pow.S", 0), because
+                              the basename occurs twice so the unique-basename
+                              arm cannot place it; occurrence 0 orders the
+                              input so its four-record run lands on 278..281
+    src/core/pow.S            empty, with a header comment saying FILE-record
+                              representation only, libm body out of scope
+
+**MEASURED (GCC 3.4.2-r2).**  The partial link's FILE run at the tail is now
+`encode.c, pow.S, <command line>, <built-in>, pow.S, FixedRC.c` -- byte for
+byte the blob's slots.  TU scoreboard: names in BOTH **276 -> 279**, blob-only
+**4 -> 1** (only `V34.c`), ours-only **40**, our TUs **318 -> 319**, tc-repro
+319 objects / 284 ordering candidates.  `byteident` grade 0 **843/1852** and
+grade 0-or-1 **895/1852**, both UNCHANGED.  `partialcmp` positioned bytes
+**66,824 unchanged** /943,398; exact symbols **389 -> 393** /2,907 (+4: the two
+`pow.S` records and `<command line>`/`<built-in>`); exact sections **69 -> 70**
+/92; exact relocations 1011/18,317 unchanged; NOBITS 2,836 ref / 2,808
+candidate unchanged.
+
+**GATES.**  `make -j1 J=1 phase`: **385 passed, 0 failed**, boundary OK (the
+period tier now compiles 324 objects); `make byteident` 843/895; `refcheck` 0
+dangling; `anchorcheck` 285 suites / 10,038 mutations / 0 non-unique / 0
+detached; `mutsnap --check` 0 current / 285 stale; `git diff --check` clean.
+
+**MODERN PORTABILITY, PRE-EXISTING AND NOT CAUSED HERE.**  `make check64` and
+`make test` already fail on this host's GCC 14.2.0 at
+`src/pump/v22/v22mod.c:1697`, an implicit declaration of `FPM_rms` that 13
+warned about and 14 rejects; that is the AGENTS.md compiler-version hazard
+(the `t_v34rx.c` precedent), unrelated to this change and not worked around in
+`src/`.  The modern assembler also emits NO FILE symbol for the empty `.S`,
+which is harmless: the TU census is taken from the period build.
+
+**NO MUTATION SUITE MOVED.**  No suite sources `pow.S` or any changed tool; the
+`fpmphasor`/`fpmphasordp` suites from F11403 still owe their re-record.
+
+(2026-09-26)
+
+## F11408. The V.34 tables: reverse-declaration-order recovers the `.rodata` block byte for byte; the ARRAY/CONST partition is not address-recoverable and the all-in-one `V34.c` merge is declined on measurement
+
+TU-reconciliation, the last blob-only name (`V34.c`) and the V.34 data
+remainder (issue #6/#20/#67).  Two questions, both measured.
+
+**THE ARRAY/CONST PARTITION IS NOT UNIQUE -- MEASURED, NOT ARGUED.**  The
+`.rodata` block `0x0ec0..0x2842` holds fifteen `OBJECT GLOBAL .rodata` tables
+(`kLookup` 32, `xyz` 3780, `Convolve64/32/16` 128 each, `lsbMask` 34,
+`smIndex` 32, `MMaxTable`/`MMinTable` 32, `kTable` 128, `grid` 1058,
+`quarter` 832, `gInvertPat`/`kkInvert`/`kkNormal` 32) and, last, `ecoeff` (2
+bytes, in the blob but NOT reconstructed here -- it has no relocation
+anywhere in the object).  The blob's `.rodata` section is **32-byte aligned**
+and every one of the fifteen sits at a 32-aligned offset.  **A TU boundary is
+also 32-aligned, so it leaves no alignment gap and no address trace at all**:
+the candidate split points are every position in the list, not a unique one.
+Symbol sizes and alignment therefore do NOT partition the slot.  (`V34.c`'s
+own FILE run is in fact ZERO symbols too -- symbols 293/294 are `V34.c` and
+`V34ARRAY.c` with nothing between -- because the seventeen functions are
+GLOBAL and globals are emitted after all locals and carry no FILE.  Only the
+`.text` bracket of F11398 attributes the run.)
+
+**THE MERGE, ATTEMPTED AND DECLINED ON ITS MEASUREMENT.**  All 17 functions,
+their 12+3 static helpers, the 15 tables and the file-local struct
+`v34_shell_fields` were extracted from `v34shell.c`/`v34scram.c`/
+`v34digital.c` and assembled as one `V34.c` in the object's own `.text` order
+(`scrambleGPC, scrambleGPA, getFrame, descrambleGPC, descrambleGPA, putFrame,
+preinitV34, setScramble, scaleVector, initG248, initV34, shellDemapper,
+decodeDepth, demapFrame, preinitdigital, initdigital, modulatevector`) with
+the tables in reverse-address order.  Compiled with the period compiler and
+compared per function against the blob:
+
+    preinitV34/setScramble/scaleVector   EXACT  -> EXACT   (preserved)
+    preinitdigital                       SIZE 233 -> SIZE 20  (BETTER)
+    modulatevector                       SIZE 511 -> SIZE 887 (WORSE)
+    the other 13                         unchanged
+
+No function gained EXACT and one moved sharply away, so F11398's criterion
+("take the merge only on an exact-set gain or a level count") is not met.  The
+all-in-one grouping is DECLINED and `V34.c` remains blob-only.  The
+`preinitdigital` improvement (it takes the scramblers' addresses, so they must
+be in its TU) is recorded as the discriminator a later partition search
+should use.
+
+**THE TABLE REORDER IS TAKEN -- a pure data win with ZERO function change.**
+The scratch V34.c proved the F11402/F11403 lever on this block: declaring the
+fifteen tables in REVERSE address order emits them at exactly the blob's
+offsets (0, 0x20, 0xf00, 0xf80, 0x1000, 0x1080, 0x10c0, 0x10e0, 0x1100,
+0x1120, 0x11a0, 0x15e0, 0x1920, 0x1940, 0x1960), every alignment gap included,
+with only `ecoeff` absent.  So `src/pump/v34/v34shell.c` now declares them in
+that order: `kkNormal, kkInvert, gInvertPat, quarter, grid, kTable, MMinTable,
+MMaxTable, smIndex, lsbMask, Convolve16, Convolve32, Convolve64, xyz,
+kLookup`.  Every one of the 17 function verdicts is byte-identical before and
+after -- tables are data and move no function byte.
+
+**THE `v34pcmif` -> `VPcmV34Main.cpp` MERGE IS DECLINED, RE-MEASURED.**
+`v34pcmif.c` defines 36 functions and **20 of them are byte-EXACT**
+(`V34XF_GetInfo0BitsPtr`, `V34XF_GetProbeResultsPtr`, `V34XF_GetRTD`,
+`VPcmV34Delete`, all the `VPcmV34Get*`, `VPcmV34IndicateLocal/RemoteRRN`,
+`VPcmV34LogTimingOffset`, `VPcmV34Report*`, `VPcmV34RequestDPNotification`,
+`VPcmV34SetIndicationOfRemoteRetrain`, `VPcmV34SetTxScale`, `getTimingOffset`,
+`getTimingPhase`).  `VPcmV34Main.cpp` is already a matched TU, so the merge
+would add NO blob-only name; it changes the emission order those 20 depend on.
+Declined, as F11405 did, now with the count that makes the risk concrete.
+
+**MEASURED (GCC 3.4.2-r2).**  TU scoreboard unchanged: names in BOTH **279**,
+blob-only **1** (`V34.c`), ours-only **40**, our TUs 319.  `byteident` grade 0
+**843/1852** and grade 0-or-1 **895/1852**, both UNCHANGED.  `partialcmp`
+positioned bytes **66,824 -> 66,876** /943,398 (**+52**, the reordered V34
+`.rodata` block); exact symbols 393/2,907, exact sections 70/92, exact
+relocations 1011/18,317, NOBITS 2,836/2,808 all unchanged.  No function lost
+exactness and no exact set regressed.
+
+**GATES.**  `make -j1 J=1 phase`: **385 passed, 0 failed**, boundary OK;
+`byteident` 843/895; `refcheck` 0 dangling; `anchorcheck` 285 suites / 10,038
+mutations / 0 non-unique / 0 detached; `mutsnap --check` 0 current / 285 stale;
+`git diff --check` clean.
+
+**NO MUTATION SUITE MOVED.**  Only the table declaration order in
+`v34shell.c` changed; every anchor still matches exactly once, so no suite
+owes a re-record.  The `fpmphasor`/`fpmphasordp` suites from F11403 still do.
+
+(2026-09-26)
+
+## F11409. Four zero-symbol ours-only over-splits removed; their compile-time offset assertions moved verbatim into the owning units
+
+TU-reconciliation, the ours-only side of issue #6/#20/#67 -- the mirror of
+F11406, which added thirteen empty BLOB FILE records.  The blob side is closed
+(BOTH 279, blob-only 1 = `V34.c`); this pass begins closing OUR forty extra
+units by deleting the ones that define no symbol at all.
+
+**MEASURED: FOUR ours-only TUs ARE ZERO-SYMBOL.**  `nm` (including locals) on
+their period objects, and the object's own allocated sections, show no
+`FUNC`/`OBJECT` and no allocated bytes:
+
+    src/dsp/fpm_xor.c    the FPM popcount table moved to fpm_tables.c (F11403);
+                         only the file's leading comment and #include remain
+    src/v8/v8util.c      struct-offset assertions only, no code
+    src/fax/v21.c        struct-offset assertions only, no code; the V.21
+                         functions moved to V21rx/V21tx/V21r_*/V21t_* (F11390)
+    src/fax/v29.c        struct-offset assertions only, no code; the V.29
+                         functions/tables moved to V29rx/V29tx/V29txtab (F11391)
+
+Exactly as an empty `.c` produces one FILE record and zero bytes (F11406), so
+do these, but under names the object never had.  They are removed.
+
+**THE ASSERTIONS ARE APPARATUS AND ARE PRESERVED, NOT DROPPED.**  `v8util.c`,
+`v21.c` and `v29.c` carry the tree's `__SIZEOF_POINTER__`-guarded offset and
+size assertions.  Each guarded block is moved VERBATIM to the end of the unit
+the object's order gives the definitions it checks -- `src/v8/V8.c`,
+`src/fax/V21rx.c`, `src/fax/V29rx.c` -- after a short header comment saying
+where it came from.  The blocks are `typedef char`/`__builtin_offsetof`
+compile-time claims and emit no code; appending them after the functions
+cannot move a function's codegen, and `byteident` confirms it.
+
+**MEASURED (GCC 3.4.2-r2).**  TU scoreboard: names in BOTH **279**, blob-only
+**1** (`V34.c`), ours-only **40 -> 36**, our TUs **319 -> 315** (`tu-compare`).
+`byteident` grade 0 **843/1852** and grade 0-or-1 **895/1852**, both UNCHANGED
+-- no function byte moved.  `partialcmp` positioned bytes **66,876 -> 66,876**
+/943,398 unchanged; exact symbols 393/2,907 unchanged; exact relocations
+1011/18,317 unchanged; exact sections 70/92; NOBITS 2,836 ref / 2,808
+candidate unchanged; candidate symbol records 2,994 -> 2,990 (four empty
+inputs).  No census number regressed.
+
+**GATES.**  `make -j1 J=1 phase`: **385 passed, 0 failed**, boundary OK;
+`refcheck` 0 dangling; `anchorcheck` 285 suites / 10,038 mutations / 0
+non-unique / 0 detached; `mutsnap --check` 0 current / 285 stale (pre-existing
+whole-tree key); `git diff --check` clean.
+
+**NO MUTATION SUITE MOVED.**  None of `fpm_xor.c`, `v8util.c`, `v21.c` or
+`v29.c` is sourced by any suite (`suites.json`), so no anchor detached and
+nothing owes a re-record.  The `fpmphasor`/`fpmphasordp` suites from F11403
+still do.
+
+(2026-09-26)
+
+## F11410. The four `voice.c`#261 over-splits merge into ONE recovered unit; `voice_set_duplex` becomes byte-exact
+
+TU-reconciliation, ours-only side (issue #6/#20/#67).  Four of our files were
+over-splits of the SAME object translation unit, the late `voice.c` FILE
+record (blob ordinal 261):
+
+    voice_dle_command   .text 0x0abe20   src/service/voicecmd.c
+    voice_set_online    .text 0x0abef0   src/service/voicedp.c
+    voice_set_duplex    .text 0x0abf20   src/service/voicedp.c
+    voice_online        .text 0x0abf50   src/service/voicedp.c
+    voice_delete        .text 0x0ac150   src/service/voicesvc.c
+    voice_create        .text 0x0ac210   src/service/voicesvc.c
+    voice_command       .text 0x0ac4a0   src/service/voicesvc.c
+    _handle_status      .text 0x0ac7d0   src/voice/voice.c
+    voice_modem         .text 0x0ac800   src/service/voicesvc.c
+
+**THE OBJECT HAS TWO `voice.c` FILE RECORDS AND THIS IS THE LATE ONE.**  The
+early `voice.c` (blob ordinal 4, `.text` 0x600) is `src/service/voice.c`, which
+holds `VOICE_create/delete/command/process`, `STRM_VCE_GetFDSPEnvironmentalParams`
+and the three `vce_*` LOCALs -- unchanged here.  The late record runs
+`0x0abe20..0x0ac95f` and owns the nine functions above, all within 3.4 KB;
+`fpm_adeq.c`'s `FPM_lmsupd` group ends at 0x0abe20 (F11392) and
+`voice_dle_command` is the record's first byte, exactly as F11392 recorded.
+
+**RECOVERED, every body VERBATIM.**  The four files are merged into
+`src/voice/voice.c` in the object's own emission order, with the shared
+`VOICE_*` constant block and the `struct voice_ctx` offset assertions moved in
+verbatim.  `src/service/voicecmd.c`, `src/service/voicedp.c` and
+`src/service/voicesvc.c` are deleted.  No declaration, type or flag changed;
+the only new text is the merged file's leading comment.
+
+**THE MERGE IS THE POINT, NOT BOOKKEEPING.**  `voice_set_online` (47 bytes),
+`voice_set_duplex` (45) and `_handle_status` (44) are inlined into
+`voice_command`/`voice_modem` in the object because they share that unit
+(F8815/F8823).  Our three were separate TUs, so GCC 3.4.2 could not inline
+them and emitted calls.  With them in one unit the object's inlining is
+available to the same compiler, and one function improves:
+
+    voice_set_duplex   BYTES -> EXACT
+
+`voice_set_online` and `_handle_status` stay non-exact (they are inlined in
+the object and the exact block is the out-of-line copy, a separate defect);
+`voice_delete`, `voice_online`, `voice_create`, `voice_command`,
+`voice_dle_command` and `voice_modem` are unchanged.  NO exact function was
+lost.
+
+**MEASURED (GCC 3.4.2-r2).**  TU scoreboard: names in BOTH **279**, blob-only
+**1** (`V34.c`), ours-only **36 -> 33**, our TUs **315 -> 312**
+(`tu-compare`).  `byteident` grade 0 **843 -> 844** /1852 (+1, the exact
+`voice_set_duplex`), grade 0-or-1 **895/1852** unchanged.  `partialcmp`
+positioned bytes **66,876 -> 66,867** /943,398 (**-9**, the input-set
+source-order census of removing three inputs; the same effect F11394/F11395
+recorded); exact symbols **393/2,907** unchanged; exact relocations
+**1,011 -> 1,009** /18,317 (**-2**, `.rel.text` entries that matched
+positionally now sit at the merged unit's offsets); exact sections 70/92;
+NOBITS 2,836 ref / 2,808 candidate unchanged.  No function lost exactness and
+no exact symbol or section set regressed.
+
+**HARNESS.**  Two suites sourced the deleted files and are retargeted to
+`src/voice/voice.c`: `vcedle` (`voicecmd.c`) and `voicedp` (`voicecmd`'s
+`VOICE_DLE_*` cases now share the unit with `voice_command`'s
+`v->dle_can = 1`).  One `vcedle` anchor, "CAN sets the ETX flag", was widened
+with its own `"voice <CAN> command\n"` print to stay unique against
+`VOICE_ABORT_COMMAND`'s identical store; no anchor was dropped and no other
+anchor changed.  `anchorcheck` is **285 suites / 10,038 mutations / 0
+non-unique / 0 detached**.  Per the standing no-re-record instruction the
+snapshot is left STALE: `mutsnap --check` 0 current / 285 stale.  **`vcedle`
+owes a re-record** (its anchor find text changed); `voicedp`'s bodies are
+unchanged by the retarget.
+
+**GATES.**  `make -j1 J=1 phase`: **385 passed, 0 failed**, boundary OK;
+`refcheck` 0 dangling; `git diff --check` clean.
+
+(2026-09-26)
+
+## F11412. Four data-only ours-only over-splits merge into their stated blob owners
+
+TU-reconciliation, ours-only side (issue #6/#20/#67).  Four of our extra
+translation units hold ONLY data and each names its own blob owner in its own
+header or generator, so the move is a pure relocation of definitions with no
+translation-unit-boundary ambiguity and no function byte at risk:
+
+    src/service/dtmf_coeffs.c      -> src/service/Dtmf.c           (.data 0x8280..)
+    src/service/dtmf_mtd_coeffs.c  -> src/service/Dtmf_Detector.c  (.data 0x7880..)
+    src/core/rc_coeffs.c           -> src/core/FixedRC.c           (generated)
+    src/callprog/callprog_cfg.c    -> src/callprog/Callprog.c      (.rodata+0x5d84)
+
+`dtmf_coeffs.c` says "Reconstructed from dsplibs.o `Dtmf.c`";
+`dtmf_mtd_coeffs.c` says "Reconstructed from dsplibs.o `Dtmf_Detector.c`";
+`tools/gen_rc_coeffs.py` says it emits "from dsplibs.o's FixedRC coefficient
+banks" and only `FixedRC.c` references `rc_banks`; `callprog_cfg.c` says
+"Reconstructed from dsplibs.o Callprog.c" and only `Callprog.c` references
+`CALLPROG_BandFilter_*`.  Each file existed as its own TU for a MUTATION-tier
+reason -- keeping dozens of float literals out of the logic anchors' namespace
+(F1264) -- and not for an object reason.  A data symbol's bytes do not depend
+on its translation unit, which is why this moves nothing byte-level.
+
+**CHANGE.**  Each definition block is appended VERBATIM to the owner, with a
+short header comment saying where it came from, and the four files are
+deleted.  No declaration, type, flag or statement changed.  Where the object
+holds a table as a file static and ours is a global (`callprog_cfg.c`'s
+coefficients are reached through a section-relative relocation in the object),
+that static-ness is a SEPARATE defect with its own differential and is not
+folded into this move.
+
+**MEASURED (GCC 3.4.2-r2).**  TU scoreboard: names in BOTH **279**, blob-only
+**1** (`V34.c`), ours-only **33 -> 29**, our TUs **312 -> 308**
+(`tu-compare`).  `byteident` grade 0 **844/1852** and grade 0-or-1
+**895/1852**, both UNCHANGED -- no function byte moved; no exact function
+gained or lost.  `partialcmp` positioned bytes **66,867 -> 67,091** /943,398
+(**+224**, the data definitions now emit inside their owner's slot); exact
+symbols 393/2,907 unchanged; exact relocations **1,009 -> 1,032** /18,317
+(**+23**, the coefficient-to-code relocations now resolve inside one TU);
+exact sections 70/92; NOBITS 2,836 ref / 2,808 candidate unchanged.  No census
+number regressed.
+
+**HARNESS.**  No suite sources any of the four files (`suites.json`); the
+`dtmf`/`dtmfmtd`/`callprog` suites source the owners, and none of their
+anchors was disturbed.  `anchorcheck` 285 suites / 10,038 mutations / 0
+non-unique / 0 detached; `mutsnap --check` 0 current / 285 stale.  **No suite
+owes a re-record from this entry** -- the `vcedle` re-record from F11410
+still does.
+
+**GATES.**  `make -j1 J=1 phase`: **385 passed, 0 failed**, boundary OK;
+`refcheck` 0 dangling; `git diff --check` clean.
+
+(2026-09-26)
+
+## F11413. `v21cfg.c` merges into `V21rx.c`: the nine tables are `V21RX_create`'s
+
+TU-reconciliation, ours-only side (issue #6/#20/#67).  `v21cfg.c`'s own header
+says the nine tables are "the nine tables `V21RX_create` references directly",
+and the reference sweep agrees: `V21rx.c` reads `AGCv21_CFG`,
+`V21_CHAN1_MTD_COEFF`, `V21_MRF_FILT`, `V21RX_CFG`, `V21RX_CHAN1_INTRP`,
+`V21RX_CHAN2_INTRP` and `V21RX_IIR_LPF`; `V21tx.c` reads `V21_MRF_FILT` and
+`V21TX_CFG`; `Vmi_v21.c`/`class1.c` read the two `*_CFG` templates.  The blob
+puts them in the unit that holds `V21RX_create` -- `V21rx.c` -- not in a
+separate table file.  They stay GLOBAL (three other units reference them), so
+this is a pure relocation of data definitions.
+
+**CHANGE.**  The nine definitions are appended VERBATIM to `src/fax/V21rx.c`
+with the `dsplib/v21cfg.h` declaration include ahead of them; `src/fax/v21cfg.c`
+is deleted.  No declaration, type or flag changed.
+
+**MEASURED (GCC 3.4.2-r2).**  TU scoreboard: names in BOTH **279**, blob-only
+**1** (`V34.c`), ours-only **29 -> 28**, our TUs **308 -> 307**
+(`tu-compare`).  `byteident` grade 0 **844/1852** and grade 0-or-1
+**895/1852**, both UNCHANGED; no exact function gained or lost.  `partialcmp`
+positioned bytes **67,091 -> 66,952** /943,398 (**-139**, the input-set
+source-order census of removing one input and moving the tables into
+`V21rx.c`'s slot -- the effect F11394/F11395 recorded, with no exact set
+regressed); exact symbols **393 -> 394** /2,907; exact relocations
+**1,032 -> 1,063** /18,317 (**+31**); exact sections 70/92; NOBITS 2,836 ref /
+2,808 candidate unchanged.
+
+**HARNESS.**  No suite sources `v21cfg.c`; the `v21cfg` test still links
+against the moved globals.  `anchorcheck` 285 suites / 10,038 mutations / 0
+non-unique / 0 detached; `mutsnap --check` 0 current / 285 stale.  **No suite
+owes a re-record from this entry** -- the `vcedle` re-record from F11410 still
+does.
+
+**GATES.**  `make -j1 J=1 phase`: **385 passed, 0 failed**, boundary OK;
+`refcheck` 0 dangling; `git diff --check` clean.
+
+(2026-09-26)
+
+## F11414. The ours-only register: 40 over-splits, 12 closed, 28 left with their measured blocker; and the `V34.c` re-test in a second form
+
+TU-reconciliation close-out for this pass (issue #6/#20/#67).  The blob side is
+closed (names in BOTH 279, blob-only 1 = `V34.c`); this entry records what
+happened to each of our FORTY extra units so none is re-derived.
+
+**CLOSED -- 12 files, all bodies moved verbatim, no exact function lost.**
+
+    fpm_xor.c          zero-symbol (content in fpm_tables.c, F11403)      deleted   F11409
+    v8util.c           zero-symbol assertions -> V8.c                     deleted   F11409
+    v21.c              zero-symbol assertions -> V21rx.c                  deleted   F11409
+    v29.c              zero-symbol assertions -> V29rx.c                  deleted   F11409
+    voicecmd.c         voice.c#261 -> src/voice/voice.c                            F11410
+    voicedp.c          voice.c#261 -> src/voice/voice.c (voice_set_duplex EXACT)   F11410
+    voicesvc.c         voice.c#261 -> src/voice/voice.c                            F11410
+    dtmf_coeffs.c      Dtmf.c (owner named in its header)                merged    F11412
+    dtmf_mtd_coeffs.c  Dtmf_Detector.c (owner named)                     merged    F11412
+    rc_coeffs.c        FixedRC.c (generator states it)                   merged    F11412
+    callprog_cfg.c     Callprog.c (owner named)                          merged    F11412
+    v21cfg.c           V21rx.c (V21RX_create's tables, owner named)      merged    F11413
+
+Net: ours-only 40 -> 28; `byteident` grade 0 843 -> 844, grade 0-or-1 895
+unchanged.
+
+**LEFT -- 28, each with the measurement that blocks it.**  The first group is
+membership-clear but order-sensitive, exactly the case the task says to report
+rather than force:
+
+  * `V90ModemCtor.cpp` -> `V90Modem.cpp`.  The file's own header: "in the object
+    the two are 224 bytes apart and plainly one translation unit"; object order
+    D2,D1,printTitle,C1,C2,reset,setSessionFlag,progress.  2 exact ctors (C1,C2)
+    at risk, and merging collides the two `DSPLIB_DEBUG_ON()` blocks the split
+    was made to separate (F1264).  Needs a suite-anchor consolidation and a
+    before/after; not forced.
+  * `VPcmXfCreate.cpp` + `VPcmXfTerm.cpp` -> `VpcmFloModem.cpp`.  The object puts
+    them together (0xf730 sits between `VPCMXF_Delete` 0xf6c0 and
+    `VPcmFloModem::qcLineVerification` 0xf750).  5 exact functions at risk;
+    retargets `vpcmxfcreate`/`vpcmxfterm`.  Not forced.
+  * `v34diag.cpp`, `v34info1a.cpp`, `v34info.c`, `v34pcmif.c` ->
+    `VPcmV34Main.cpp`.  F11405/F11398 pin the TU; `v34pcmif.c` alone holds 20
+    exact functions whose emission order the merge changes, and the four files
+    are ~44 functions.  Not forced.
+
+The second group is the data families whose owner is genuinely unresolved --
+the whole reason F11394/F11401/F11405 declined them, unchanged here:
+
+  * the seven V.32 table files (`v32cfg`, `v32dec_tables`, `v32ecc_tables`,
+    `v32fptab`, `v32fse_tables`, `v32hdx_tables`, `v32sre_tables`) and
+    `v32anstone.c`.  The `.data`/`.rodata` blocks have no local anchor and the
+    receiver/transmitter split between `V32RXTAB.c` and `V32TXTAB.c` is exactly
+    the unknown; `GenerateAnsTone` sits in the V32loop/v23modem gap (F11394).
+  * `v17dec_tables.c` (the eight high-rate `DECv17_*`, owner inside the
+    `Smc_tx.c`/`Tab144.c`/`Tx_rxtab.c` window with no anchor, F11401); `v17.c`
+    and `v27.c` (leftover V.17/V.27 layers split by role, not by TU, F11391).
+  * `faxcfg.c`: its own header says the TU "is not settled" (D1080); the four
+    module tables are "almost certainly" their module files, which is below the
+    object-fact bar.
+  * `b103_cfg.c` / `b103_tables.c`: `.data`/`.rodata` consumed by
+    `B103FP_create` (B103prc.c), but which of `B103.c`/`B103prc.c`/`B103tab.c`
+    owns them is not pinned.
+  * `fifo.c`: the FIFO cluster's span label `class1tx.c +94` is a layout label,
+    not a module name, and the owning FILE is not resolved.
+
+The third group is recorded so it is not re-classified:
+
+  * `pulse.c` -> `call.c` (its header names the owner).  Function move; object
+    order is dp_call_init, dp_call_exit, the five pulse arms, then the call
+    core, against our call.c order, so it is a reorder with 1 exact function
+    (`LastPulseDigitDialed`) at risk.  Not forced.
+  * `mohdet.cpp`: three C++ functions at 0x5f80..0x6200 in the early V.34/V.90
+    C++ cluster; owning FILE not resolved.
+  * `v34hstx1.cpp`: the seventeen `v34tx1_*` arms.  MEASURED: the blob defines
+    NO symbol with that prefix -- `readelf -sW ref/slmodemd/dsplibs.o` has zero
+    `v34tx1_*` -- so these are our extra GLOBAL exports of arms the object
+    inlines into `V34hshak.c`'s `v34handshak`.  This is a symbol-surface defect
+    (the arms should be static or inlined), not a TU-name one; it needs its own
+    pass and is not merged into anything.
+
+**THE `V34.c` RE-TEST (task 2's last blob-only name).**  F11408 declined an
+all-in-one `V34.c` assembled in the object's `.text` order: 3 exact preserved,
+`preinitdigital` 233 -> 20 (better), `modulatevector` 511 -> 887 (worse), no
+exact-set gain.  The alternative form was re-tested here: the saved
+`HelpersDeferred` variant (`/tmp/opencode/v34merge/V34D.c`), which places the
+twelve static helpers AFTER the tables and the seventeen public functions
+rather than before them, compiled as `src/pump/v34/V34.c` with
+`v34shell.c`/`v34scram.c`/`v34digital.c` removed, on the period compiler.
+
+    measured, object sizes vs blob:
+      preinitV34/setScramble/scaleVector  138/15/59  -> EXACT preserved
+      preinitdigital    blob 533  ours 553   (diff 20, BETTER)
+      modulatevector    blob 3388 ours 2501  (diff 887, WORSE)
+      initdigital/demapFrame/getFrame/initV34   all unchanged
+
+`byteident` grade 0 **844/1852** and grade 0-or-1 **895/1852** -- the SAME as
+the current split, no exact symbol gained or lost.  So the second form lands
+on the same measurement as F11408's and meets neither "exact-set gain" nor
+"level count"; `V34.c` is DECLINED again and left blob-only, and the scratch
+file and the swapped tree were reverted.  The discriminator for a later
+partition search remains `preinitdigital` (it takes the scramblers' addresses)
+and `modulatevector` (the only sharp regression).
+
+**GATES at the state this entry describes** (commit 023129a4 plus this doc
+only): `make -j1 J=1 phase` 385 passed / 0 failed, boundary OK; `refcheck` 0
+dangling; `anchorcheck` 285/10038/0 non-unique/0 detached; `mutsnap --check` 0
+current / 285 stale; `git diff --check` clean.  **The `vcedle` suite still owes
+its F11410 re-record.**
+
+(2026-09-26)

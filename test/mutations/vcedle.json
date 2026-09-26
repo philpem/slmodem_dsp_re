@@ -19,8 +19,8 @@
  },
  {
   "label": "CAN sets the ETX flag",
-  "find": "\t\tv->dle_can = 1;",
-  "replace": "\t\tv->dle_etx = 1;"
+  "find": "dsplibs_debug_printf(\"voice <CAN> command\\n\");\n\t\tv->dle_can = 1;",
+  "replace": "dsplibs_debug_printf(\"voice <CAN> command\\n\");\n\t\tv->dle_etx = 1;"
  },
  {
   "label": "the ETX flag is set to 2",

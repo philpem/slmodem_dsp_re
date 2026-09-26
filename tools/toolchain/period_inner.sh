@@ -32,6 +32,13 @@ CFLAGS="$FLAGS -std=gnu99"
 CXXFLAGS="$FLAGS -fno-exceptions -fno-rtti -fno-math-errno -Wno-invalid-offsetof"
 SOURCE_CXXFLAGS="$CXXFLAGS -ffast-math"
 
+# ASSEMBLY INPUTS carry the arch/codegen flags only: -include period_compat.h
+# is a C header and cannot be fed to the assembler, and -std is irrelevant.
+# Their FILE records come from `cd`-ing to the source's own directory and
+# passing the BASENAME, because `as` records the path it is handed.  F11407.
+ASFLAGS="-O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387
+         -mno-ieee-fp -fomit-frame-pointer -maccumulate-outgoing-args"
+
 # Keep the provisional DCR candidate local to its translation unit.
 # See TC_DCR_FLAGS in period.mk and the corrected finding F10269: the earlier
 # stack-only equivalence claim was not supported by the complete comparison.
@@ -77,17 +84,19 @@ compile_one() {
 	src/*.cpp) g++ -c $SOURCE_CXXFLAGS -o "$o" "$f" 2>"$o.log" ;;
 	*.cpp)	extra=""; [ -f "${f%.*}.cxxflags" ] && extra=$(cat "${f%.*}.cxxflags")
 		g++ -c $CXXFLAGS $extra -o "$o" "$f" 2>"$o.log" ;;
+	src/*.S) (cd "$(dirname "$f")" && gcc -c $ASFLAGS \
+		-o "$o" "$(basename "$f")") 2>"$o.log" ;;
 	*)	case $f in src/service/dcr.c) cflags="$CFLAGS $DCR_FLAGS" ;; *) cflags="$CFLAGS" ;; esac
 		gcc -c $cflags -o "$o" "$f" 2>"$o.log" ;;
 	esac || { echo "$f" >> "$OUT/failed"; sed -n '1,4p' "$o.log" >&2; }
 }
 
 if [ "$STAGE" != "link" ]; then
-echo "period: compiling $(echo $SRC $CXXSRC $HARNESS | wc -w) objects with $(gcc -dumpversion)"
+echo "period: compiling $(echo $SRC $CXXSRC $ASRC $HARNESS | wc -w) objects with $(gcc -dumpversion)"
 echo "period: flags $(echo $FLAGS)"
 echo "period: C++ source flags $(echo $SOURCE_CXXFLAGS)"
 echo "period: C++ fixture flags $(echo $CXXFLAGS)"
-for f in $SRC $CXXSRC $HARNESS; do
+for f in $SRC $CXXSRC $ASRC $HARNESS; do
 	# A serial gate must not depend on jobs output from a command
 	# substitution (the period shell can report an empty job table there).
 	if [ "$J" -eq 1 ]; then
@@ -107,7 +116,7 @@ fi
 fi
 
 OBJS=""
-for f in $SRC $CXXSRC $HARNESS; do OBJS="$OBJS $(obj "$f")"; done
+for f in $SRC $CXXSRC $ASRC $HARNESS; do OBJS="$OBJS $(obj "$f")"; done
 
 # COMPILE-ONLY stage: record the object list so the HOST can run the
 # `objcopy --globalize-symbols` the period binutils 2.15 does not have, then
@@ -117,7 +126,7 @@ if [ "$STAGE" = "compile" ]; then
 	# The reconstructed objects only -- the harness is not ours to globalize,
 	# and a harness name must not make a reconstruction name look ambiguous.
 	: > "$OUT/srcobjs.list"
-	for f in $SRC $CXXSRC; do echo "$(obj "$f")" >> "$OUT/srcobjs.list"; done
+	for f in $SRC $CXXSRC $ASRC; do echo "$(obj "$f")" >> "$OUT/srcobjs.list"; done
 	exit 0
 fi
 

@@ -86,30 +86,11 @@ const unsigned short SMCv32_PMAP_ABS16[4] = { 1, 5, 13, 9 };
  * different: a scale of 2 against a scale of 1 changes which bytes are read,
  * and no value can hide that.
  *
- * `TrellisEncodeDifTable` is the differential quadrant encoder V.32 Figure 6
- * specifies -- a 4x4 Latin square, each row a permutation of 0..3.
- * `TrellisTransitionTable` is 8 states by 4 inputs, and every entry is even
- * in its first half and odd in its second, which is the parity the
- * convolutional encoder maintains.
+ * `TrellisEncodeDifTable` and `TrellisTransitionTable` are read here but not
+ * defined here: their `.rodata` addresses (0x0d0c0/0x0d100) are in the fpm
+ * translation unit's slot, not V.32's, so they are defined in
+ * `src/dsp/fpm_tren.c` (F11402).
  */
-const short TrellisEncodeDifTable[16] = {
-	0, 1, 2, 3,
-	1, 0, 3, 2,
-	2, 3, 1, 0,
-	3, 2, 0, 1
-};
-
-const short TrellisTransitionTable[32] = {
-	0, 6, 2, 4,
-	2, 4, 0, 6,
-	4, 2, 6, 0,
-	6, 0, 4, 2,
-	1, 5, 7, 3,
-	3, 7, 5, 1,
-	7, 3, 1, 5,
-	5, 1, 3, 7
-};
-
 /*
  * Four 3-bit rotations per entry, selected by a shift of `quad * 4`.  Dumped
  * as bytes this reads "paapBSSB4%%4" and is not a string.

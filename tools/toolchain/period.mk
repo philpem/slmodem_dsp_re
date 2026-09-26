@@ -143,6 +143,7 @@ TC_CXXONLY := -fno-exceptions -fno-rtti -fno-math-errno -ffast-math
 #
 TC_SRC    := $(shell MAKEFLAGS= $(MAKE) -s --no-print-directory print-SRC)
 TC_CXXSRC := $(shell MAKEFLAGS= $(MAKE) -s --no-print-directory print-CXXSRC)
+TC_ASRC   := $(shell MAKEFLAGS= $(MAKE) -s --no-print-directory print-ASRC)
 
 # A DETECTOR MUST REPORT ITS DENOMINATOR, and a build is one.  If the shell-out
 # above fails -- wrong directory, a syntax error in the top-level Makefile, a
@@ -169,7 +170,7 @@ endif
 #
 tcobj = $(TC_OUT)/$(subst /,_,$(1)).o
 
-TC_OBJ      := $(foreach s,$(TC_SRC) $(TC_CXXSRC),$(call tcobj,$(s)))
+TC_OBJ      := $(foreach s,$(TC_SRC) $(TC_CXXSRC) $(TC_ASRC),$(call tcobj,$(s)))
 TC_MANIFEST := $(TC_OUT)/tc_manifest.txt
 TC_STAMP    := $(TC_OUT)/.build-config
 TC_GCCVER   := $(TC_OUT)/.gcc-version
@@ -209,7 +210,7 @@ endif
 #
 tc: $(TC_OBJ) $(TC_GCCVER)
 	@rm -f $(TC_STALE) $(TC_STALE_D)
-	@for f in $(TC_SRC) $(TC_CXXSRC); do \
+	@for f in $(TC_SRC) $(TC_CXXSRC) $(TC_ASRC); do \
 	   echo "$$(echo $$f | tr / _).o $$f"; \
 	 done > '$(TC_MANIFEST).new'
 	@if cmp -s '$(TC_MANIFEST).new' '$(TC_MANIFEST)'; then \
@@ -295,6 +296,25 @@ endef
 
 $(foreach s,$(TC_SRC),$(eval $(call TC_CC_RULE,$(s))))
 $(foreach s,$(TC_CXXSRC),$(eval $(call TC_CXX_RULE,$(s))))
+
+# Assembly inputs.  The object's own codegen flags, minus the three that are C
+# preprocessor apparatus: -Iinclude, -D__SIZEOF_POINTER__=4 and (above all)
+# -include period_compat.h, which is a C header and cannot be fed to the
+# assembler.  Checked on the period compiler: a `.S` input carrying this set
+# emits the `pow.S`/`<command line>`/`<built-in>`/`pow.S` FILE run.  F11407.
+TC_ASFLAGS := -O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387 \
+              -mno-ieee-fp -fomit-frame-pointer -maccumulate-outgoing-args
+
+define TC_AS_RULE
+$(call tcobj,$(1)): $(1) $$(TC_STAMP) | $$(TC_DEPDIR)
+	@echo '  TC-AS   $(1)'
+	@# From the source's own directory and by BASENAME: the assembler records
+	@# the path it is handed, and only the basename gives the object's FILE
+	@# spelling (`pow.S`).  F11407.
+	@$$(TC_RUN) sh -c 'cd $(dir $(1)) && gcc -c $$(TC_ASFLAGS) -o /out/$$(@F) $(notdir $(1))'
+endef
+
+$(foreach s,$(TC_ASRC),$(eval $(call TC_AS_RULE,$(s))))
 
 -include $(wildcard $(TC_DEPDIR)/*.d)
 
