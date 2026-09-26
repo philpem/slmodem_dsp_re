@@ -128025,3 +128025,41 @@ still does.
 `refcheck` 0 dangling; `git diff --check` clean.
 
 (2026-09-26)
+
+## F11413. `v21cfg.c` merges into `V21rx.c`: the nine tables are `V21RX_create`'s
+
+TU-reconciliation, ours-only side (issue #6/#20/#67).  `v21cfg.c`'s own header
+says the nine tables are "the nine tables `V21RX_create` references directly",
+and the reference sweep agrees: `V21rx.c` reads `AGCv21_CFG`,
+`V21_CHAN1_MTD_COEFF`, `V21_MRF_FILT`, `V21RX_CFG`, `V21RX_CHAN1_INTRP`,
+`V21RX_CHAN2_INTRP` and `V21RX_IIR_LPF`; `V21tx.c` reads `V21_MRF_FILT` and
+`V21TX_CFG`; `Vmi_v21.c`/`class1.c` read the two `*_CFG` templates.  The blob
+puts them in the unit that holds `V21RX_create` -- `V21rx.c` -- not in a
+separate table file.  They stay GLOBAL (three other units reference them), so
+this is a pure relocation of data definitions.
+
+**CHANGE.**  The nine definitions are appended VERBATIM to `src/fax/V21rx.c`
+with the `dsplib/v21cfg.h` declaration include ahead of them; `src/fax/v21cfg.c`
+is deleted.  No declaration, type or flag changed.
+
+**MEASURED (GCC 3.4.2-r2).**  TU scoreboard: names in BOTH **279**, blob-only
+**1** (`V34.c`), ours-only **29 -> 28**, our TUs **308 -> 307**
+(`tu-compare`).  `byteident` grade 0 **844/1852** and grade 0-or-1
+**895/1852**, both UNCHANGED; no exact function gained or lost.  `partialcmp`
+positioned bytes **67,091 -> 66,952** /943,398 (**-139**, the input-set
+source-order census of removing one input and moving the tables into
+`V21rx.c`'s slot -- the effect F11394/F11395 recorded, with no exact set
+regressed); exact symbols **393 -> 394** /2,907; exact relocations
+**1,032 -> 1,063** /18,317 (**+31**); exact sections 70/92; NOBITS 2,836 ref /
+2,808 candidate unchanged.
+
+**HARNESS.**  No suite sources `v21cfg.c`; the `v21cfg` test still links
+against the moved globals.  `anchorcheck` 285 suites / 10,038 mutations / 0
+non-unique / 0 detached; `mutsnap --check` 0 current / 285 stale.  **No suite
+owes a re-record from this entry** -- the `vcedle` re-record from F11410 still
+does.
+
+**GATES.**  `make -j1 J=1 phase`: **385 passed, 0 failed**, boundary OK;
+`refcheck` 0 dangling; `git diff --check` clean.
+
+(2026-09-26)
