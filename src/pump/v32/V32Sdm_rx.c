@@ -1,9 +1,8 @@
 /*
- * v32scram.c -- ITU-T V.32/V.32bis: the self-synchronising scrambler pair.
+ * V32Sdm_rx.c -- ITU-T V.32/V.32bis: the self-synchronising DESCRAMBLER.
  *
  * Reconstructed from dsplibs.o:
  *   SDMv32_descrambler  .text 0x0857f0   349
- *   SDMv32_scrambler    .text 0x085950   349
  *
  * Both are one loop over `count` words with a two-tap feedback register, and
  * they differ in one `or`: the scrambler feeds back what it produced, the
@@ -43,7 +42,6 @@
  */
 #define SDM_SPLIT_GROUP		6
 #define SDM_SPLIT_SHIFT		3
-
 void
 SDMv32_descrambler(struct v32_sdm *sdm, short *buf, unsigned short count)
 {
@@ -127,44 +125,3 @@ SDMv32_descrambler(struct v32_sdm *sdm, short *buf, unsigned short count)
  * three shift amounts to stack slots, and we do the exact opposite.  Findings
  * F8242 and F8243.
  */
-
-void
-SDMv32_scrambler(struct v32_sdm *sdm, short *buf, unsigned short count)
-{
-	const unsigned int outmask = sdm->outmask;
-	const unsigned int regmask = sdm->regmask;
-	unsigned int reg = sdm->reg;
-	int shift = sdm->group;
-	short *p = buf;
-
-	if (sdm->group == SDM_SPLIT_GROUP)
-		shift = SDM_SPLIT_SHIFT;
-
-	while (count--) {
-		unsigned int in = (unsigned short)p[0];
-		unsigned int low = in & 7;
-		unsigned int out;
-
-		if (sdm->group == SDM_SPLIT_GROUP)
-			in = (in & 0x38) >> 3;
-
-		out = (in ^ (reg >> sdm->tap1) ^ (reg >> sdm->tap2)) & 0xffffu;
-		out &= outmask;
-		reg = ((reg << shift) & regmask) | out;
-
-		if (sdm->group == SDM_SPLIT_GROUP) {
-			unsigned int out2;
-
-			out2 = (low ^ (reg >> sdm->tap1)
-				^ (reg >> sdm->tap2)) & 0xffffu;
-			out2 &= outmask;
-			reg = ((reg << shift) & regmask) | out2;
-			p[0] = (short)((out << 3) | out2);
-		} else {
-			p[0] = (short)out;
-		}
-		p++;
-	}
-
-	sdm->reg = reg;
-}

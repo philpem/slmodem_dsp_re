@@ -297,6 +297,67 @@ static const short V32DiconnectThreshTable[8] = {
 #define V32_DELAY_SCALE		0x2666
 #define V32_TIMEOUT_SCALE	0x4ccc
 
+void
+VTBv32_init(struct vtb *state, short mode, int alloc)
+{
+	struct vtb_path *paths;
+	int i;
+
+	if (alloc)
+		state->paths = sysdep_malloc(
+			16 * 8 * sizeof(struct vtb_path));
+	paths = state->paths;
+
+	for (i = 0; (short)i <= 0x7f; i++) {
+		paths[i].surv = 0;
+		paths[i].sym = 0;
+	}
+
+	state->ring = 0;
+	state->prev = 0;
+	state->depth = 0x10;
+
+	if (mode == 3) {
+		state->nsub = 1;
+		state->imap = VTBv32_IMAP16T;
+		state->qmap = VTBv32_QMAP16T;
+		state->bound = VTB_BOUND_7200;
+		state->region = VTB_REGION_7200;
+		state->grid = 2;
+		state->mask = 0x7;
+	} else if (mode == 4) {
+		state->nsub = 3;
+		state->imap = VTBv32_IMAP64;
+		state->qmap = VTBv32_QMAP64;
+		state->bound = VTB_BOUND_12000;
+		state->region = VTB_REGION_12000;
+		state->grid = 6;
+		state->mask = 0x1f;
+	} else if (mode == 2) {
+		state->nsub = 2;
+		state->imap = VTBv32_IMAP32;
+		state->qmap = VTBv32_QMAP32;
+		state->bound = VTB_BOUND_9600;
+		state->region = VTB_REGION_9600;
+		state->grid = 4;
+		state->mask = 0xf;
+	} else {
+		state->nsub = 4;
+		state->imap = VTBv32_IMAP128;
+		state->qmap = VTBv32_QMAP128;
+		state->bound = VTB_BOUND_14400;
+		state->region = VTB_REGION_14400;
+		state->grid = 8;
+		state->mask = 0x3f;
+	}
+
+	state->metric[0] = 0;
+	state->shift = (short)state->nsub;
+
+	for (i = 1; (short)i <= 7; i++)
+		state->metric[i] = 0;
+}
+
 void *
 V32FP_recreate(struct v32_modem *modem, const struct v32fp_params *param, void *arg2)
 {
@@ -804,3 +865,14 @@ V32FP_create(const struct v32fp_cfg *cfg, void *arg1)
 
 	return V32FP_recreate(0, &params, arg1);
 }
+
+
+/*
+ * The three scrambler data objects, read by V32FP_recreate: SDMv32_CFG is a
+ * three-word template for the first six bytes of a struct v32_sdm, and
+ * SDMv32_GPC/GPA are each indexed by the half-duplex mode.  Moved here from
+ * v32scram_tables.c, whose sole consumer is in this translation unit.
+ */
+const short SDMv32_GPA[4] = { 5, 18, 18, 18 };
+const short SDMv32_GPC[4] = { 18, 5, 18, 18 };
+const short SDMv32_CFG[3] = { 4, 5, 23 };

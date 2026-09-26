@@ -126676,3 +126676,106 @@ thirteen V.32 blob-only names (`V32RNG.c`, `V32Sdm_rx.c`, `V32Sdm_tx.c`,
 `Tx_rxtab.c`; `PHASOR.c`/`TABLES.c` (the `mtk` family); and the `voice.c`
 record-260 block spread across `voicecmd.c`/`voicedp.c`/`voicesvc.c`.  Each
 needs its own object-first boundary derivation and gates.
+
+## F11394. V.32 .text reconciliation: nine blob FILE names recovered from the over-splits, `V32.c`'s head and scrambler tables merged in, and the four remaining boundaries with their measured blockers
+
+The V.32 family of issue #6/#20/#67, the largest ours-only block on the TU
+scoreboard.  The blob's V.32 `STT_FILE` records (`readelf -sW`) are, in FILE
+order, `v32.c` (11), then the run `V32.c`(117), `V32RXTAB.c`(118),
+`V32SMC_TX.c`(119), `V32TAB144.c`(120), `V32TXHDX.c`(121), `V32TXTAB.c`(122),
+`V32dec.c`(123), `V32int.c`(124), `V32mod.c`(125), `V32org.c`(126),
+`V32prc.c`(127), `V32rxhdx.c`(128), `V32states.c`(129), `V32stc.c`(130),
+`V32RNG.c`(131), `V32Sdm_rx.c`(132), `V32Sdm_tx.c`(133), `V32ans.c`(134),
+`V32loop.c`(135).  Our build held seven of those; twenty-two ours-only files
+carried the rest.
+
+**THE .text RUNS ARE THE FILE ORDER, AND THE TWO LOCAL ANCHORS PIN THEM.**
+`ld -r` concatenates each input's `.text` in link order, so the FILE record
+order IS the address order.  Only two V.32 TUs still carry LOCAL `.text`
+symbols: the lowercase `v32.c` (`v32_create/delete/process`, exact
+0x4560–0x4ba7) and `V32mod.c` (`v32_data/handshake/null_protocol`, exact
+0x827a0–0x82bd1, pinned by `tumap.py`).  That one exact anchor splits the V.32
+region into two brackets and makes every run between the name-matched globals
+a FILE slot:
+
+    V32.c          [VTBv32_init 0x7e700, V32SMC_TX.c)     FILE 117
+    V32SMC_TX.c    [SMCv32_encoder_dif 0x7f950, V32TxHdxModem 0x7fce0)  FILE 119
+    V32TXHDX.c     [V32TxHdxModem 0x7fce0, FSE_decision_16Tpt 0x80330)  FILE 121
+    V32dec.c       [FSE_decision_16Tpt 0x80330, SetTxModeV32 0x81680)   FILE 123
+    V32int.c       [SetTxModeV32 0x81680, V32FP_modem 0x827a0)          FILE 124
+    V32org.c       [V32OrgNextState 0x82be0, SetToneDetect 0x83600)     FILE 126
+    V32prc.c       [SetToneDetect 0x83600, V32RxHdxModem 0x838f0)       FILE 127
+    V32rxhdx.c     [V32RxHdxModem 0x838f0, V32StateName 0x84510)        FILE 128
+    V32states.c    [V32StateName 0x84510, V32FP_control 0x84530)        FILE 129
+    V32stc.c       [V32FP_control 0x84530, V32RngInitNextState 0x84c80) FILE 130
+    V32RNG.c       [V32RngInitNextState 0x84c80, SDMv32_descrambler 0x857f0) 131
+    V32Sdm_rx.c    [SDMv32_descrambler 0x857f0, SDMv32_scrambler 0x85950) 132
+    V32Sdm_tx.c    [SDMv32_scrambler 0x85950, V32AnsNextState 0x85ab0)  FILE 133
+    V32ans.c       [V32AnsNextState 0x85ab0, V32LocLoopNextState 0x864a0) 134
+    V32loop.c      [V32LocLoopNextState 0x864a0, CreateV23Modem 0x86890)  135
+
+**RECOVERED, COMMITTED, every body verbatim.**
+
+  * Seven pure renames, each matching a FILE name to its measured run:
+    `v32nsorg.c -> V32org.c`, `v32nsrng.c -> V32RNG.c`,
+    `v32nsans.c -> V32ans.c`, `v32nsloop.c -> V32loop.c`,
+    `v32smc.c -> V32SMC_TX.c` (the three `SMCv32_encoder_*` plus the
+    `TrellisTransitionTable`/`TrellisEncodeDifTable`/`SMCv32_*` tables, all in
+    FILE slot 119), `v32fse.c -> V32dec.c` (the nine `FSE_decision_*` slicers
+    fill [0x80330,0x81680), FILE 123), and `v32vtb_tables.c -> V32TAB144.c`
+    (the `VTB_BOUND_*`/`VTB_REGION_*`/`VTBv32_*` block F11393 already placed in
+    FILE 120).
+  * `v32scram.c` SPLITS into `V32Sdm_rx.c` (`SDMv32_descrambler`) and
+    `V32Sdm_tx.c` (`SDMv32_scrambler`), the two consecutive FILEs 132/133,
+    divided at the run boundary 0x85950.
+  * `V32.c` absorbs `VTBv32_init` from `v32vtb.c` and `SDMv32_GPA/GPC/CFG`
+    from `v32scram_tables.c`.  `VTBv32_init` IS FILE 117's own first function
+    at 0x7e700, twelve bytes before `V32FP_recreate` at 0x7e870; the three
+    scrambler objects are read only by `V32FP_recreate`, which is in the same
+    TU, so this file is their sole consumer.  Both merges are anchor-free (no
+    mutation suite sources either file).
+
+**MEASURED (GCC 3.4.2-r2).**  TU scoreboard: names in BOTH **240 -> 249**,
+blob-only **40 -> 31**, ours-only **66 -> 56**, our TUs 308 -> 307
+(`tools/tu-compare.py`).  `byteident` grade 0 **843/1852** and grade 0-or-1
+**895/1852** UNCHANGED — no function byte moved.  `partialcmp` positioned
+bytes **68,046 -> 66,615** /943,398; exact symbols **353 -> 362** /2,907
+(the nine new FILE records); exact relocations **935 -> 960** /18,317; exact
+sections 69/92; NOBITS 2,836 ref / 2,808 candidate unchanged.  The positioned
+drop of **1,431** is the link-order census moving: renaming and removing
+inputs changes the source-order fallback for the ~50 still-unmatched objects,
+so the candidate `.text` length moves (680,835 -> 681,155) and every later
+offset with it.  No function lost exactness and no exact set regressed.
+
+**DECLINED THIS PASS, with the measurement that left each.**
+
+  * `V32int.c` [0x81680,0x827a0) and `V32prc.c` [0x83600,0x838f0) are named
+    and their runs are pinned, but their content is spread across
+    `v32fpctl.c` (the interface functions), `v32data.c` (`ModDataV32`,
+    `TxNoCarrierV32`), `v32demod.c` (`DemodDataV32`) and `v32seq.c`
+    (the sequence coders), and `V32FP_delete`/`GetDiagnostics`/
+    `GetCleanedSamples` move out of `v32fpctl.c` into `V32.c` the same way.
+    Moving them detaches the `v32fpctl`, `v32fpsub`, `v32data`, `v32seq`,
+    `v32anstone` anchors (`anchorcheck`: 13 anchors "matches 0 time(s)"), and
+    those suites must be SPLIT across the new files and re-recorded.  Deferred
+    to the next maintenance pass, not declined.
+  * `V32RXTAB.c` (FILE 118) and `V32TXTAB.c` (FILE 122) are the
+    receiver/transmitter `.data` tables.  `.rodata` order is NOT link order
+    (F11393's counterexample), and the V.32 `.data` block [0x7240,0x7768) has
+    no LOCAL anchor, so RXTAB cannot be separated from TXTAB by address; the
+    consumers are the generic `FPM_*` modules, whose reference set does not
+    partition the block.  `v32cfg.c`, `v32ecc_tables.c`, `v32fse_tables.c`,
+    `v32sre_tables.c`, `v32hdx_tables.c`, `v32fptab.c` and `v32dec_tables.c`
+    stay named rather than guessed.  (`V32dec.c`'s tables and `V32SMC_TX.c`'s
+    are located by name and would merge with the same .data argument.)
+  * `GenerateAnsTone` (0x867c0) sits in the gap between
+    `V32LocLoopNextState` (ends 0x867ba) and `CreateV23Modem` (0x86890) — the
+    V32loop.c/v23modem.c boundary has no anchor, so `v32anstone.c` stays an
+    ours-only file rather than being forced into either.
+
+**GATES.**  `make -j1 J=1 phase`: **385 passed, 0 failed**, boundary OK.
+`refcheck` 0 dangling / 0 stale; `anchorcheck` 280 suites / 10,038 mutations /
+0 non-unique; `mutsnap --check` 0 current / 280 stale (pre-existing, no suite
+source changed); `git diff --check` clean.
+
+(2026-09-26)
