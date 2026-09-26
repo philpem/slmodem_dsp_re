@@ -4,9 +4,10 @@
  * Reconstructed from dsplibs.o fpm_div.c:
  *
  *   FPM_div     .text 0x0a6bf0   150 bytes
- *   FPM_div_32  .text 0x0a6c90   147 bytes
  *
- * with the table both of them read at .rodata 0x0c6a0.
+ * with the table it reads at .rodata 0x0c6a0.  `FPM_div_32` and
+ * `FPM_circ_dotp2` were once grouped here; the FILE order splits them into
+ * `fpm_div32.c` (see that file's banner).
  *
  * Rather than divide, callers normalise the denominator and look up its
  * reciprocal, then multiply.  FPM_div does the normalisation and the lookup:
@@ -135,43 +136,5 @@ FPM_div(unsigned short denom, unsigned short *recip, unsigned short *shift)
 
 	*recip = FPM_div_table[index];
 	*shift = (unsigned short)count;
-	return 0;
-}
-
-/*
- * The 32-bit denominator.  Same contract, same table, same D4 overrun: the
- * mantissa is the top 16 bits of the normalised word, so it lies in
- * [0x8000, 0xffff] exactly as FPM_div's does and the index runs 0..128.
- *
- * The two differences from FPM_div are both in the normalisation: the shift
- * count can reach 31, and the loop tests the whole 32-bit word rather than a
- * 16-bit one, so a denominator whose top bit is already set is returned with
- * a shift of zero without the loop running at all.
- */
-int
-FPM_div_32(unsigned int denom, unsigned short *recip, unsigned short *shift)
-{
-	unsigned short count = 0;
-	unsigned short mantissa;
-	int index;
-
-	if (denom == 0) {
-		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf(
-				"Fatal error: Division by zero!\n");
-		return 1;
-	}
-
-	/* Left-normalise until the top bit is set, counting the shifts. */
-	while ((int)denom >= 0) {
-		denom += denom;
-		count++;
-	}
-
-	mantissa = (unsigned short)(denom >> 16);
-	index = (int)((mantissa + 0x80) >> 8) - 0x80;
-
-	*recip = FPM_div_table[index];
-	*shift = count;
 	return 0;
 }

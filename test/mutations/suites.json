@@ -65,7 +65,7 @@
   "build/test/t_floatarma"
  ],
  "fpmcircdotp": [
-  "src/dsp/fpm_ecc.c",
+  "src/dsp/fpm_div32.c",
   "build/test/t_fpm_ecc"
  ],
  "fpmfserecv": [
@@ -77,7 +77,7 @@
   "build/test/t_fpm_iir"
  ],
  "fpmlmsupd2": [
-  "src/dsp/fpm_lmsupd.c",
+  "src/dsp/fpm_adeq.c",
   "build/test/t_fpm_lmsupd"
  ],
  "fpmmtd": [

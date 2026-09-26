@@ -1,16 +1,31 @@
 /*
- * fpm_lmsupd.c -- Fixed Point Modem: one LMS coefficient update.
+ * fpm_adeq.c -- Fixed Point Modem: one LMS coefficient update.
  *
  * Reconstructed from dsplibs.o:
  *   FPM_lmsupd        .text 0x0abbc0  150
  *   FPM_lmsupd2       .text 0x0abc60  182
  *   FPM_block_update  .text 0x0abd20  244
  *
- * The three are contiguous in `.text` and `voice_dle_command` follows at
- * 0x0abe20.  This does not establish a translation-unit boundary.  The blob
- * has no `fpm_lmsupd.c` FILE record; nearby `fpm_adeq.c` and `voice.c` remain
- * ownership candidates, with no local-symbol evidence selecting either.
- * This file is a reconstruction grouping, not a recovered original TU.
+ * THIS IS THE OBJECT'S `fpm_adeq.c`, RECOVERED BY THE `.text` ADDRESS BRACKET.
+ * `ld -r` concatenates each input's `.text` in link order and the STT_FILE
+ * records are that order, so the code immediately above the next FILE's first
+ * function belongs to the FILE whose record precedes it.  `VTB_decoder`
+ * (0x0ab4d0, 181 bytes, ending 0x0abbc0) is `fpm_vtb.c`'s own named function;
+ * the next FILE record after `fpm_vtb.c` is `fpm_adeq.c`, and the next
+ * function after the group is `voice_dle_command` at 0x0abe20, the first
+ * `voice.c` function.  So the block [0x0abbc0, 0x0abe20) is `fpm_adeq.c` and
+ * nothing else fits: `fpm_tren.c` (#257) precedes `fpm_vtb.c` (#258) and owns
+ * no `.text` at all.  Previously declined on "no local-symbol evidence"
+ * (`docs/issue20-object-order.md`); the FILE order supplies the evidence.
+ *
+ * NOTHING IN THE OBJECT CALLS THE LAST TWO.  `FPM_lmsupd` has two callers,
+ * both inside `FPM_FSE_receive`; `readelf -r` finds no relocation naming
+ * `FPM_lmsupd2` or `FPM_block_update` anywhere in `dsplibs.o`, and
+ * `tools/service.py` puts both in the class no entry point reaches.  So their
+ * argument ROLES cannot be established the strong way -- there is no caller to
+ * type them and no format string that prints them.  The parameter names below
+ * describe what the instructions demonstrably do with each value and claim
+ * nothing beyond that; see the comment on each.  Finding F8162.
  *
  * NOTHING IN THE OBJECT CALLS THE LAST TWO.  `FPM_lmsupd` has two callers,
  * both inside `FPM_FSE_receive`; `readelf -r` finds no relocation naming

@@ -629,7 +629,7 @@
    }
   },
   "fpmcircdotp": {
-   "key": "8a94af8581759ab45b86698c4b3f4816276b7c3ffb2721a4d285f77e9065e576",
+   "key": "8a746ce56664abd460447a8aee8f976ef076e5ac9433f21f0a3a6136d3f66e20",
    "summary": "6 mutations: 6 caught (6 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "the coefficient pointer restarts at the base for the second half": "caught",
@@ -707,7 +707,7 @@
    }
   },
   "fpmlmsupd2": {
-   "key": "16b2d9edcfc3ccf6b38e7a6495fba2ef33b56d3e5ec57d415512f5dc1dd55ee1",
+   "key": "e17e478c8dc47c487b1f46f967629f8214274030e0e60b8ed314e33dbbfdacdf",
    "summary": "9 mutations: 8 caught (8 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "block_update accumulates in 32 bits instead of re-truncating each iteration": "equivalent",

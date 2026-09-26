@@ -126526,3 +126526,92 @@ source changed); `git diff --check` clean.
 `anchorcheck` stayed at 280 suites / 10,038 mutations / 0 detached and nothing
 was re-recorded.  The changed-file snapshot key is whole-tree stale from the
 source edit, as at `da6c627b`.
+
+## F11392. The fpm family: `fpm_adeq.c` and `fpm_div32.c` recovered from FILE order, the invented `*_cfg.c` TUs merged, and `fpm_tables.c`/`fpm_tren.c` declined on a measured `.rodata`-order counterexample
+
+Family pass on the Fixed Point Modem library (issue #6/#20/#67), the first
+re-test of the previously-declined families with the `.text` side now
+object-correct.  The authority is the blob's `STT_FILE` records and the
+`.text` address bracket they pin, exactly as F11390 used for V.17/V.21/V.27/
+V.29: `ld -r` concatenates each input's `.text` in link order and the FILE
+records ARE that order, so code in `[VTB_decoder, voice_dle_command)` is the
+FILE whose record sits between `fpm_vtb.c` and `voice.c`.
+
+**RECOVERED, COMMITTED.**
+
+  * `fpm_lmsupd.c` -> `fpm_adeq.c` (pure rename).  The blob's fpm FILE order is
+    `... fpm_tone.c (256), fpm_tren.c (257), fpm_vtb.c (258), fpm_adeq.c
+    (259), voice.c (260)`.  `VTB_decoder` IS `fpm_vtb.c`'s own function
+    (0x0ab4d0, 181 bytes, ending exactly at 0x0abbc0); the `FPM_lmsupd`,
+    `FPM_lmsupd2`, `FPM_block_update` group fills `[0x0abbc0, 0x0abe20)`
+    immediately after it; `voice_dle_command` at 0x0abe20 is `voice.c`'s first
+    function.  `fpm_tren.c` precedes `fpm_vtb.c` and owns no `.text` at all, so
+    `fpm_adeq.c` is the only FILE the group can belong to.  Previously declined
+    as "adjacency alone does not justify a merge" (`docs/issue20-object-order.md`,
+    F8164); the FILE sequence supplies what the local-symbol test could not.
+  * `fpm_div32.c` (new) <- `FPM_div_32` out of `fpm_div.c` and `FPM_circ_dotp2`
+    out of `fpm_ecc.c`.  FILE order `fpm_div.c (238), fpm_div32.c (239),
+    fpm_ecc.c (240)`.  `FPM_div` (0x0a6bf0, 150 bytes, ending 0x0a6c86) is
+    `fpm_div.c`; `FPM_ECC_cancel` (0x0a6e00) is `fpm_ecc.c`'s first function;
+    the block `[0x0a6c90, 0x0a6e00)` -- `FPM_div_32` then `FPM_circ_dotp2`,
+    contiguous in that order -- is `fpm_div32.c`.  `FPM_circ_dotp2`'s own
+    comment recorded `tuattrib.py` as `ambiguous` and bracketed `fpm_div.c|
+    fpm_ecc.c` (F8164/F8167); the bracket is a real TU.
+  * The four invented `fpm_{fsd,fse,fsm,sre}_cfg.c` files are merged into their
+    namesakes.  The blob has no `fpm_*_cfg.c` FILE; the four globals are
+    `FPM_FSD_CFG`, `FPM_FSE_CFG`, `FPM_FSM_CFG`, `FPM_SRE_CFG`, each the
+    author's own name matching its `fpm_<name>.c` FILE.  `.data` order confirms
+    the three writable ones: `ECC_CFG` (fpm_ecc.c, 240) at 0x8114, then
+    `FPM_FSD_CFG` (fpm_fsd.c, 241) 0x812c, `FPM_FSE_CFG` (242) 0x8160,
+    `FPM_FSM_CFG` (243) 0x8198, ..., `DEF_COEFS` (a `fpm_mtd.c` LOCAL) 0x81bc.
+    The empty `fpm_iir_coeffs.c` (no symbols; its `COEF_DC` had already moved
+    to `fpm_mtd.c`, F3621) is deleted -- it emitted no `.data` and was never
+    one of the object's TUs.
+
+Bodies moved VERBATIM; no declaration, type or flag changed.  The build drops
+from 312 objects to 308; two new TUs (`fpm_adeq.c`, `fpm_div32.c`) replace six
+invented ones (`fpm_fsd_cfg.c`, `fpm_fse_cfg.c`, `fpm_fsm_cfg.c`,
+`fpm_sre_cfg.c`, `fpm_iir_coeffs.c`, `fpm_lmsupd.c`).
+
+**MEASURED.**  TU scoreboard: names in BOTH 238 -> 240, blob-only 42 -> 40,
+ours-only 72 -> 66, our TUs 312 -> 308 (`tools/tu-compare.py` /
+`tumap.py`).  `byteident` grade 0 **843/1852** and grade 0-or-1 **895**
+UNCHANGED -- no function byte moved.  `partialcmp` positioned bytes
+**68,031 -> 68,046** /943,398; exact symbols **351 -> 353** /2,907 (the two new
+FILE records); exact sections 69/92; NOBITS 2,836 ref / 2,808 candidate
+unchanged.  exact relocations **936 -> 935** /18,317: one `.rel.text` entry
+that matched positionally now sits at `fpm_div32.c`'s offset rather than
+`fpm_div.c`'s, the known census-vs-exactness trade with no function exactness
+lost and `byteident` level.
+
+**HARNESS.**  `fpmlmsupd2` re-sourced `fpm_lmsupd.c` -> `fpm_adeq.c` and
+`fpmcircdotp` `fpm_ecc.c` -> `fpm_div32.c`; both re-recorded through the pinned
+GCC 13.3.0 container (`tools/modern/run.sh`, `MUTATE_WORKDIR` on disk, J=1):
+**fpmlmsupd2 9 mutations, 8 caught, 1 equivalent; fpmcircdotp 6 mutations, 6
+caught**.  `mutsnap --check` 2 current / 278 stale (whole-tree key, pre-
+existing); `anchorcheck` 280 suites / 10,038 mutations / 0 detached.
+
+**DECLINED, WITH THE MEASUREMENT.**  `fpm_tables.c` (255) and `fpm_tren.c`
+(257) are not claimed; our `fpm_xor.c` (`FPM_xor_table`) is not renamed onto
+either.  The temptation is an address bracket: the eight `FPM_*` `.rodata`
+tables (`PPS_CFG`, `SRE_CFG`, `sqrt_table`, `div_table`, `xor_table`,
+`atan_table`, `sin_table`, `cos_table`) fill the window between
+`FPM_log10_table` (0xc3a0, a `fpm_log10.c` LOCAL) and `FPM_TONE_CFG`/`ToneLPF`
+(0xd000/0xd040, `fpm_tone.c`) -- exactly `fpm_tables.c`'s slot if `.rodata`
+were concatenated in FILE order.  **It is not.**  `VTB_BOUND_14400` (3712),
+`VTB_BOUND_12000` (1920), `VTB_REGION_14400` (256), `VTB_BOUND_9600` (832),
+`VTB_BOUND_7200` (256), `VTB_REGION_9600/7200`, `TrellisTransitionTable` and
+`TrellisEncodeDifTable` sit at `.rodata` 0xd0c0..0xed50 -- inside that same
+window -- yet they belong to `V32TAB144.c`/`V32SMC_TX.c` (FILE ~117-120), far
+EARLIER in link order than every fpm file (236+).  So `.rodata` order is NOT
+link order, the bracket is unsound, and the tables' readers (`FPM_atan_table`
+from `fpm_atan.c`, `FPM_sin/cos_table` from `fpm_phasor.c`, `FPM_sqrt_table`
+from `fpm_sqrt.c`, `FPM_div_table` from both `FPM_div` and `FPM_div_32`) agree
+with the current namesake placement, which is retained.  `FPM_xor_table`'s
+only readers are `SGD_correlate`/`SGD_sequence_det` in `Sgd.c`, which cannot
+define a `.rodata` table in the fpm window either; it stays in `fpm_xor.c`.
+What fpm_tables.c/tren.c actually contain is left for a pass that finds a
+LOCAL anchor or a sound cross-section ordering rule.
+
+**GATES.**  `make -j1 J=1 phase`: **385 passed, 0 failed**, boundary OK;
+`refcheck` 0 dangling / 0 stale; `git diff --check` clean.
