@@ -126615,3 +126615,64 @@ LOCAL anchor or a sound cross-section ordering rule.
 
 **GATES.**  `make -j1 J=1 phase`: **385 passed, 0 failed**, boundary OK;
 `refcheck` 0 dangling / 0 stale; `git diff --check` clean.
+
+## F11393. TU re-test pass: the families the sweep could not resolve, and the exact measurement that failed to resolve each
+
+Companion to F11392.  Every remaining blob-only FILE name from the sweep's
+scoreboard was re-tested against the object with the extended tools
+(`tools/tuattrib.py --verify`, `tools/tumap.py`, `tools/relocscan.py`).  These
+are the ones still declined, each with the output that declined it.
+
+**`.rodata` order is not link order -- a counterexample, not an inference.**
+The tempting argument for the `.data`/`.rodata` table families is the address
+bracket: `ld -r` concatenates each input's section in link order, so a table
+in a FILE's slot is that FILE's.  It holds for `.data` (the fpm `*_CFG` merge
+in F11392 rests on it) but NOT for `.rodata`.  `VTB_BOUND_14400` (3712 B),
+`VTB_BOUND_12000` (1920), `VTB_REGION_14400/12000/9600/7200`,
+`TrellisTransitionTable` and `TrellisEncodeDifTable` sit at `.rodata`
+0xd0c0..0xed50, inside the fpm window between `FPM_log10_table` (0xc3a0) and
+`FPM_TONE_CFG` (0xd000), yet they belong to `V32TAB144.c`/`V32SMC_TX.c`
+(FILE slot ~119), far earlier than every fpm file (236+).  So no `.rodata`
+bracket proves ownership and the fpm_tables/fpm_tren tables stay where the
+reader argument puts them (F11392).
+
+**`V92MappingParamsInt.cpp` (FILE 23, between `V92Jd.cpp` and `V92Modem.cpp`).**
+The blob defines the five functions MANGLED-NOT -- `V92createConstellations`,
+`V92createFilterCoefficients`, `V92deleteConstellations`,
+`V92deleteFilterCoefficients`, `V92setParamsInfoFromCPUnPck` are unmangled
+`T` symbols, so the original declared them `extern "C"` -- and our
+`src/pump/v90/V92ParamsInfo.c` reconstructs exactly those five.  The sibling
+`src/pump/v90/V90MappingParamsInt.cpp` is the worked precedent (same shape,
+`extern "C"`, verified).  The blocker is that the change is a LANGUAGE change,
+not a unit move: the source stores `sysdep_malloc`'s `void *` into typed
+pointers implicitly, which C++ rejects, so it needs added casts, and
+`byteident --why V92createConstellations` currently reports **grade 0 EXACT**
+(and the other four differ by at most 3 bytes) -- recompiling EXACT functions
+through a C++ front end risks the byte identity for a filename.  Declined as
+not pure, and needing its own before/after differential, exactly as F11388
+left it.
+
+**`MEMORYC.c` (FILE 96, between `DPSK.c` and `V8Interface.c`).**  Still no
+LOCAL and no global that can be its: `tools/tuattrib.py` attributes nothing to
+it, and the two neighbouring FILE-owned runs are `DPSK.c`'s (0x060500+) and
+`V8Interface.c`'s (0x073e20).  Unchanged from F11386; declined.
+
+**V.22's `v22ans/conn/ctl/data/det/hdx/loop/org.c` are OVER-SPLITS, not
+missing TUs.**  The blob's V.22 FILE set is thirteen names and ALL thirteen are
+already in BOTH: `V22.c`, `V22Dec.c`, `v22mod.c`, `v22prc.c`, `v22rxtab.c`,
+`v22stc.c`, `v22txtab.c`, `v22_fse.c`, `v22_iir.c`, `v22_mrf.c`, `v22_pps.c`,
+`v22_sre.c`, `V22int.c`.  There is no blob-only V.22 name to claim.  Our eight
+extra files must therefore be merged into the matched units, which needs a
+per-file `.text`/`.data` boundary argument this pass did not derive; left as
+the next V.22 step.
+
+**Not attempted this pass, with their size on record:** `V34.c`/`V34ARRAY.c`/
+`V34CONST.c`/`V34TX.c` and the ours-only `v34pcmif.c`/`v34digital.c`/
+`v34shell.c`/`v34info.c`/`v34scram.c` (four .text + five over-splits); the
+thirteen V.32 blob-only names (`V32RNG.c`, `V32Sdm_rx.c`, `V32Sdm_tx.c`,
+`V32ans.c`, `V32loop.c`, `V32dec.c`, `V32int.c`, `V32org.c`, `V32prc.c`,
+`V32RXTAB.c`, `V32SMC_TX.c`, `V32TAB144.c`, `V32TXTAB.c`); `B103.c` and
+`B103int.c`; the seven `faxvmi_*` names and `Smc_tx.c`/`Tab144.c`/
+`Tx_rxtab.c`; `PHASOR.c`/`TABLES.c` (the `mtk` family); and the `voice.c`
+record-260 block spread across `voicecmd.c`/`voicedp.c`/`voicesvc.c`.  Each
+needs its own object-first boundary derivation and gates.
