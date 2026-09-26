@@ -126969,3 +126969,66 @@ edit, pre-existing).
 suite owes a re-record from this step.**
 
 (2026-09-26)
+
+## F11397. V34TX.c is the transmit core, split from V34RX.c at the boundary `updateAlpha`'s inline proves
+
+TU-reconciliation step, V.34 family (issue #6/#20/#67), the first of F11382's
+deferred V.34 boundaries re-tested with F11390's method.  The reconstruction
+had kept `V34RX.c` and the blob's `V34TX.c` in one file because "the object
+interleaves them and the boundary is not pinned by any local symbol" (its own
+header).  The object does pin it, by an inline.
+
+**THE RUN.**  The blob's V.34 FILE records are 87-93; `V34RX.c`(90) and
+`V34TX.c`(91) sit between `V34hshak.c`(92) and the tables.  `ld -r`
+concatenates `.text` in that order, and two LOCAL FUNCs bracket the pair:
+`V34RX.c`'s `V34demodulate` (`.text` 0x05af10, 1142) and `V34hshak.c`'s
+`ApplyBulkDelay` (0x05dd10, 467).  Everything between is `V34RX.c` +
+`V34TX.c`, and no other LOCAL exists in the run.
+
+**THE BOUNDARY, FROM AN INLINE.**  `updateAlpha` (0x05d5c0, 169 bytes) is
+INLINED into `adaptecho` (0x05d940): the `test $0x40000000,%edx` fold and the
+`"updateAlpha%s: updated %d => %d\n"` string both sit inside adaptecho's body.
+`-O3` inlines only within a translation unit, so `updateAlpha` and `adaptecho`
+share one, and that unit is V34TX.c (`txinit`, `txmit` and `bitreverse` are
+also in it).  `modem_serrint` (0x05cf80), by contrast, only CALLS `updateAlpha`
+-- two `R_386_PC32` relocations, no inlined copy -- so it does not share the
+unit, and the unit's lower bound is `updateAlpha` itself, not `modem_serrint`.
+`txinit` cannot be the lower bound: `txinit` follows `updateAlpha` in address
+order, so that boundary would put `updateAlpha` in `V34RX.c` and `adaptecho`
+in `V34TX.c` and make the inline impossible.
+
+So `V34RX.c` = [rxinit 0x05ab80, modem_serrint] and `V34TX.c` =
+[updateAlpha 0x05d5c0, V34nlencoder 0x05dc90] -- eight functions:
+`updateAlpha`, `txinit`, `bitreverse`, `txmit`, `adaptecho`, `txwritequeue`,
+`V34nlencoder`, in address order.  `modem_serrint` (the V34NEC/V34FEC echo
+adaptation interrupt) stays in the receiver unit.
+
+**CHANGE, every body VERBATIM.**  The new `src/pump/v34/V34TX.c` holds the
+seven public functions in the object's emission order plus `bulk_next` (used
+only by `txmit`) and a copy of `q_next`, the file-static ring helper both
+units use.  `V34RX.c` keeps `q_next` and drops the seven; no body, declaration
+or flag changed.
+
+**MEASURED (GCC 3.4.2-r2).**  TU scoreboard: names in BOTH **251 -> 252**,
+blob-only **29 -> 28**, ours-only **44** unchanged, our TUs **297 -> 298**
+(`tools/tu-compare.py`).  `byteident` grade 0 **843/1852** and grade 0-or-1
+**895/1852** UNCHANGED -- none of the V34RX.c/V34TX.c functions was exact
+before, so none could be lost, and none became exact.  `partialcmp` positioned
+**66,527 -> 66,638** /943,398; exact symbols **364 -> 365** /2,907 (the
+`V34TX.c` FILE record); exact relocations **988 -> 987** /18,317 (a one-entry
+`.rel.text` census trade, no function-level loss); exact sections 69/92;
+NOBITS 2,836 ref / 2,808 candidate unchanged.
+
+**HARNESS.**  `v34rx` sourced `V34RX.c` and carried nine anchors in
+`updateAlpha`/`adaptecho`; they move to a new `v34tx` suite sourced at
+`V34TX.c` and run by the same `t_v34rx` binary.  `v34rx` keeps its remaining
+seventeen (modem_serrint and the receiver).  Per the owner's no-re-record
+instruction for this pass, the snapshot is left STALE: `mutsnap --check` is
+**0 current, 285 stale, 0 never recorded, of 285** (exit 0); `anchorcheck` is
+**285 suites / 10,038 mutations / 0 non-unique, 0 detached**.
+
+**GATES.**  `make -j1 J=1 phase`: **385 passed, 0 failed**, boundary OK;
+`refcheck` 0 dangling / 0 stale; `git diff --check` clean.  **`v34rx` and
+`v34tx` now owe a re-record** -- the first new suite of this pass.
+
+(2026-09-26)

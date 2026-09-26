@@ -11717,6 +11717,38 @@
     "the modulator is forwarded rather than the demodulator": "caught",
     "the phase 2 record is forwarded rather than the demodulator": "caught"
    }
+  },
+  "v34tx": {
+   "key": "cabf8fdead9f5922e644722a18fdd96b206a8143c64eb60ddced994678c71498",
+   "summary": "26 mutations: 26 caught (26 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "NEC adaptation starts at count 1 rather than 0": "caught",
+    "the AGC freeze report fires for any symbol count": "caught",
+    "the BETA threshold comparison is signed in the third arm": "caught",
+    "the FEC start announcement is gated on the wrong count": "caught",
+    "the NEC adapt bound is exclusive": "caught",
+    "the NEC stop announcement fires one sample early": "caught",
+    "the S-S1 report has the symbol count and the PLL count swapped": "caught",
+    "the S-S1 threshold 0x600 becomes 0x601": "caught",
+    "the adaptation steps every 45th sample become every 44th": "caught",
+    "the echo energy report has energy and BETA swapped": "caught",
+    "the equaliser report has equerr and preerr swapped": "caught",
+    "the equaliser report's symbol bound is exclusive": "caught",
+    "the far adaptation offset is 0x2bc rather than 0x2bb": "caught",
+    "the far counter reads this call's count, not the previous one": "caught",
+    "the renegotiation window's lower bound moves": "caught",
+    "the renegotiation window's upper bound moves": "caught",
+    "the retrain and renegotiation flags swapped": "caught",
+    "the retrain report prints the count before it is cleared": "caught",
+    "the retrain threshold 0x8c becomes 0x8d": "caught",
+    "updateAlpha loses the near/far tag": "caught",
+    "updateAlpha reports the new value as the old one": "caught",
+    "updateAlpha's decay rounds by 0x2000": "caught",
+    "updateAlpha's near call is tagged FE": "caught",
+    "updateAlpha's overflow substitute becomes a clamp": "caught",
+    "updateAlpha's result is not negated": "caught",
+    "updateAlpha's rounding constant halved": "caught"
+   }
   }
  }
 }
