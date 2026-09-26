@@ -127762,3 +127762,86 @@ which is harmless: the TU census is taken from the period build.
 `fpmphasor`/`fpmphasordp` suites from F11403 still owe their re-record.
 
 (2026-09-26)
+
+## F11408. The V.34 tables: reverse-declaration-order recovers the `.rodata` block byte for byte; the ARRAY/CONST partition is not address-recoverable and the all-in-one `V34.c` merge is declined on measurement
+
+TU-reconciliation, the last blob-only name (`V34.c`) and the V.34 data
+remainder (issue #6/#20/#67).  Two questions, both measured.
+
+**THE ARRAY/CONST PARTITION IS NOT UNIQUE -- MEASURED, NOT ARGUED.**  The
+`.rodata` block `0x0ec0..0x2842` holds fifteen `OBJECT GLOBAL .rodata` tables
+(`kLookup` 32, `xyz` 3780, `Convolve64/32/16` 128 each, `lsbMask` 34,
+`smIndex` 32, `MMaxTable`/`MMinTable` 32, `kTable` 128, `grid` 1058,
+`quarter` 832, `gInvertPat`/`kkInvert`/`kkNormal` 32) and, last, `ecoeff` (2
+bytes, in the blob but NOT reconstructed here -- it has no relocation
+anywhere in the object).  The blob's `.rodata` section is **32-byte aligned**
+and every one of the fifteen sits at a 32-aligned offset.  **A TU boundary is
+also 32-aligned, so it leaves no alignment gap and no address trace at all**:
+the candidate split points are every position in the list, not a unique one.
+Symbol sizes and alignment therefore do NOT partition the slot.  (`V34.c`'s
+own FILE run is in fact ZERO symbols too -- symbols 293/294 are `V34.c` and
+`V34ARRAY.c` with nothing between -- because the seventeen functions are
+GLOBAL and globals are emitted after all locals and carry no FILE.  Only the
+`.text` bracket of F11398 attributes the run.)
+
+**THE MERGE, ATTEMPTED AND DECLINED ON ITS MEASUREMENT.**  All 17 functions,
+their 12+3 static helpers, the 15 tables and the file-local struct
+`v34_shell_fields` were extracted from `v34shell.c`/`v34scram.c`/
+`v34digital.c` and assembled as one `V34.c` in the object's own `.text` order
+(`scrambleGPC, scrambleGPA, getFrame, descrambleGPC, descrambleGPA, putFrame,
+preinitV34, setScramble, scaleVector, initG248, initV34, shellDemapper,
+decodeDepth, demapFrame, preinitdigital, initdigital, modulatevector`) with
+the tables in reverse-address order.  Compiled with the period compiler and
+compared per function against the blob:
+
+    preinitV34/setScramble/scaleVector   EXACT  -> EXACT   (preserved)
+    preinitdigital                       SIZE 233 -> SIZE 20  (BETTER)
+    modulatevector                       SIZE 511 -> SIZE 887 (WORSE)
+    the other 13                         unchanged
+
+No function gained EXACT and one moved sharply away, so F11398's criterion
+("take the merge only on an exact-set gain or a level count") is not met.  The
+all-in-one grouping is DECLINED and `V34.c` remains blob-only.  The
+`preinitdigital` improvement (it takes the scramblers' addresses, so they must
+be in its TU) is recorded as the discriminator a later partition search
+should use.
+
+**THE TABLE REORDER IS TAKEN -- a pure data win with ZERO function change.**
+The scratch V34.c proved the F11402/F11403 lever on this block: declaring the
+fifteen tables in REVERSE address order emits them at exactly the blob's
+offsets (0, 0x20, 0xf00, 0xf80, 0x1000, 0x1080, 0x10c0, 0x10e0, 0x1100,
+0x1120, 0x11a0, 0x15e0, 0x1920, 0x1940, 0x1960), every alignment gap included,
+with only `ecoeff` absent.  So `src/pump/v34/v34shell.c` now declares them in
+that order: `kkNormal, kkInvert, gInvertPat, quarter, grid, kTable, MMinTable,
+MMaxTable, smIndex, lsbMask, Convolve16, Convolve32, Convolve64, xyz,
+kLookup`.  Every one of the 17 function verdicts is byte-identical before and
+after -- tables are data and move no function byte.
+
+**THE `v34pcmif` -> `VPcmV34Main.cpp` MERGE IS DECLINED, RE-MEASURED.**
+`v34pcmif.c` defines 36 functions and **20 of them are byte-EXACT**
+(`V34XF_GetInfo0BitsPtr`, `V34XF_GetProbeResultsPtr`, `V34XF_GetRTD`,
+`VPcmV34Delete`, all the `VPcmV34Get*`, `VPcmV34IndicateLocal/RemoteRRN`,
+`VPcmV34LogTimingOffset`, `VPcmV34Report*`, `VPcmV34RequestDPNotification`,
+`VPcmV34SetIndicationOfRemoteRetrain`, `VPcmV34SetTxScale`, `getTimingOffset`,
+`getTimingPhase`).  `VPcmV34Main.cpp` is already a matched TU, so the merge
+would add NO blob-only name; it changes the emission order those 20 depend on.
+Declined, as F11405 did, now with the count that makes the risk concrete.
+
+**MEASURED (GCC 3.4.2-r2).**  TU scoreboard unchanged: names in BOTH **279**,
+blob-only **1** (`V34.c`), ours-only **40**, our TUs 319.  `byteident` grade 0
+**843/1852** and grade 0-or-1 **895/1852**, both UNCHANGED.  `partialcmp`
+positioned bytes **66,824 -> 66,876** /943,398 (**+52**, the reordered V34
+`.rodata` block); exact symbols 393/2,907, exact sections 70/92, exact
+relocations 1011/18,317, NOBITS 2,836/2,808 all unchanged.  No function lost
+exactness and no exact set regressed.
+
+**GATES.**  `make -j1 J=1 phase`: **385 passed, 0 failed**, boundary OK;
+`byteident` 843/895; `refcheck` 0 dangling; `anchorcheck` 285 suites / 10,038
+mutations / 0 non-unique / 0 detached; `mutsnap --check` 0 current / 285 stale;
+`git diff --check` clean.
+
+**NO MUTATION SUITE MOVED.**  Only the table declaration order in
+`v34shell.c` changed; every anchor still matches exactly once, so no suite
+owes a re-record.  The `fpmphasor`/`fpmphasordp` suites from F11403 still do.
+
+(2026-09-26)
