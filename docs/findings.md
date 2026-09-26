@@ -127526,3 +127526,95 @@ suites from F11403 still do.
 `refcheck` 0 dangling; `git diff --check` clean.
 
 (2026-09-26)
+
+## F11405. F11402's data-TU blockers and the V34/V92 remainder re-measured: the anchor count is zero in every section, and the V34 merge is boundary-only
+
+TU-reconciliation, the rest of F11402's list (issue #6/#20/#67), after F11403
+(`fpm_tables.c`) and F11404 (`V92MappingParamsInt.cpp`) closed two of the
+nineteen blob-only names.  Each remaining candidate was re-measured against
+the object; this records the exact measurement, so none is re-derived.
+
+**THE ANCHOR TEST, RUN OVER EVERY SECTION AND EVERY CANDIDATE.**  For each
+blob-only FILE record, the symtab run between that record and the NEXT FILE
+record was listed in full -- every `OBJECT`, `FUNC`, `SECTION` and every
+`LOCAL` symbol of any kind.  **All thirteen candidates own ZERO symbols in
+their run:**
+
+    V34ARRAY.c V34CONST.c MEMORYC.c V32RXTAB.c V32TXTAB.c B103.c B103int.c
+    faxvmi_tbls.c V17txtab.c V21rxtab.c Smc_tx.c Tab144.c Tx_rxtab.c
+
+That is the `STT_FILE`-to-next-`STT_FILE` interval, so it covers `.text`,
+`.rodata`, `.data`, `.bss`, `.gcc_except_table`, `.ctors` and every other
+allocated section at once -- there is no local anchor of any kind for these
+files.  (`V34.c`, `vpcm.c`-style entries and `V92MappingParamsInt.cpp` are not
+in the list because they are recovered or matched.)
+
+**AREA 2 -- THE "SEVERAL CANDIDATE FILEs IN ONE SLOT" CASES.**  With no local
+in the slot, the per-section order (F11402) brackets the slot but cannot
+partition it, and the candidate table sizes are not an independent input
+because WHICH tables belong to which candidate is exactly the unknown:
+
+  * **`V32RXTAB.c` (117) / `V32TXTAB.c` (121).**  The `.data` span
+    `[DPSK.c's fsklpfcoeff600 0x71a0, V32stc.c's SnrToRetrainTable 0x7750)`
+    holds 45 globals and no local separates any of the boundaries.  It is not
+    a single candidate slot: F11395 already assigned the `V32_RATE_SEQ`/
+    `V32_FINAL_RATE_SEQ`/`V32_ESEQ`/`V32_*_LEN` block to `V32int.c` (124) and
+    `V32_PROTOCOL`/`V32NextState`/`V32_CONNECT`/`V32_RX_MODE`/`V32_TX_MODE` to
+    `V32mod.c` (125), so RXTAB/TXTAB are a subset of the remainder
+    (`V32_MESG`, the `FSEv32_*`/`DECv32_*`/`SREv32_*`/`CRRv32_*` receiver block
+    and the `SREv32_CFG`/`AGCv32*`/`SMCv32_MOD`/`SDMv32_*` block) whose split
+    the object does not state.  A size partition would have to know the
+    receiver/transmitter assignment, which is exactly the unknown.  Declined
+    (unchanged from F11394/F11402).
+  * **`V17txtab.c` (179) / `V21rxtab.c` (181).**  The `.rodata` slot is
+    `[V17rxtab.c's AGC pair 0x9e2c, V27rxtab.c's AGC pair 0xab0c)`, FILEs
+    178..184 (`V17tx.c`, `V17txtab.c`, `V21rx.c`, `V21rxtab.c`, `V21tx.c`,
+    `V27rx.c`, `V27rxdec.c`).  The interior globals have real boundaries
+    (V17's `SMCv17_MOD` ends at 0xa088 where V21's `V21RX_IIR_LPF` starts) but
+    that boundary splits V17 from V21, not the transmitter tables from the
+    rest; `V17rxtab.c`'s local pair pins only its own two words.  Declined.
+  * **`Smc_tx.c` (209) / `Tab144.c` (210) / `Tx_rxtab.c` (211).**  The `.text`
+    window `[SMC_encoder 0x9fa10, V17RX_modem 0x9ff80)` holds five functions
+    and no local; `Smc.c` and `Smc_tx.c` have no symbol between their FILE
+    records (measured above: both zero).  The V.32 parallel
+    (`V32SMC_TX.c` holds `SMCv32_encoder_*`) is a convention, not an object
+    fact.  Declined.
+  * **`faxvmi_tbls.c` (171).**  No `.text` and no local; its candidate
+    `.rodata` fragment shares one run with `faxvmi.c`'s proven
+    `vmi_unpack/pack/reverse` locals.  Declined.
+  * **`V34ARRAY.c` (87) / `V34CONST.c` (88).**  Zero locals.  F11398 pinned
+    the 17-function `.text` run to `V34.c` but the ARRAY/CONST split point in
+    `.rodata` 0x0ec0..0x2840 is not address-recoverable.  The `V34.c` merge is
+    correct as to membership but requires assembling the 17 globals in the
+    object's emission order, which F11398 measured as different from ours and
+    which risks the three exact functions (`preinitV34`, `scaleVector`,
+    `setScramble`) that are exact BY the current order.  Left for a pass with
+    a full-file before/after; declined here, unchanged.
+
+**AREA 4 -- `MEMORYC.c` / `B103.c` / `B103int.c`.**  All three are in the
+zero-local list above: no anchor in ANY section.  Their neighbours own the
+regions (`DPSK.c`'s `fsklpfcoeff600`, `B103prc.c`'s `tx_in_internal`/
+`rx_out_internal`, `B103tab.c`'s AGC pair), and `MEMORYC.c` sits between
+`DPSK.c` (95) and `V8Interface.c` (97) with neither contributing a local for
+it.  Declined, with the measurement that no section stream pins them.
+
+**AREA 5 -- `v34pcmif.c` -> `VPcmV34Main.cpp`.**  Re-tested.  `VPcmV34Main.cpp`
+(f16) is ALREADY a matched TU: its blob locals `V34DisconnectThreshTable`
+(.data 0xc0) and `_Z14getMPrecvdBitsP12tagV34Object` (.text 0x9250) are in
+both objects, and `v34pcmif.c` is an ours-only over-split.  Merging it back is
+therefore **boundary-only -- it removes one ours-only file and adds no
+blob-only name**, and the merge changes the emission order that the exact
+functions in the pair depend on.  It does not advance the 283 goal and is not
+attempted here.  (The 58-function `v34pcmif` suite split and the C++/C half
+ownership are in F11382's V.34 record and `docs/findings.md` 18200.)
+
+**NOT RECONSTRUCTABLE.**  `pow.S` (twice), `<command line>` and `<built-in>`
+are compiler/toolchain inputs, not translation units.  The blob counts 283
+FILE records; four of them cannot be source TUs, so the achievable BOTH
+ceiling is 279.
+
+**MEASURED STATE.**  Nothing moved in this entry; the post-F11404 state is
+BOTH 263, blob-only 17 (13 real + 4 toolchain), ours-only 40, our TUs 305.
+`refcheck` 0 dangling; `git diff --check` clean.
+
+(2026-09-26)
