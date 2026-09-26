@@ -127897,3 +127897,78 @@ nothing owes a re-record.  The `fpmphasor`/`fpmphasordp` suites from F11403
 still do.
 
 (2026-09-26)
+
+## F11410. The four `voice.c`#261 over-splits merge into ONE recovered unit; `voice_set_duplex` becomes byte-exact
+
+TU-reconciliation, ours-only side (issue #6/#20/#67).  Four of our files were
+over-splits of the SAME object translation unit, the late `voice.c` FILE
+record (blob ordinal 261):
+
+    voice_dle_command   .text 0x0abe20   src/service/voicecmd.c
+    voice_set_online    .text 0x0abef0   src/service/voicedp.c
+    voice_set_duplex    .text 0x0abf20   src/service/voicedp.c
+    voice_online        .text 0x0abf50   src/service/voicedp.c
+    voice_delete        .text 0x0ac150   src/service/voicesvc.c
+    voice_create        .text 0x0ac210   src/service/voicesvc.c
+    voice_command       .text 0x0ac4a0   src/service/voicesvc.c
+    _handle_status      .text 0x0ac7d0   src/voice/voice.c
+    voice_modem         .text 0x0ac800   src/service/voicesvc.c
+
+**THE OBJECT HAS TWO `voice.c` FILE RECORDS AND THIS IS THE LATE ONE.**  The
+early `voice.c` (blob ordinal 4, `.text` 0x600) is `src/service/voice.c`, which
+holds `VOICE_create/delete/command/process`, `STRM_VCE_GetFDSPEnvironmentalParams`
+and the three `vce_*` LOCALs -- unchanged here.  The late record runs
+`0x0abe20..0x0ac95f` and owns the nine functions above, all within 3.4 KB;
+`fpm_adeq.c`'s `FPM_lmsupd` group ends at 0x0abe20 (F11392) and
+`voice_dle_command` is the record's first byte, exactly as F11392 recorded.
+
+**RECOVERED, every body VERBATIM.**  The four files are merged into
+`src/voice/voice.c` in the object's own emission order, with the shared
+`VOICE_*` constant block and the `struct voice_ctx` offset assertions moved in
+verbatim.  `src/service/voicecmd.c`, `src/service/voicedp.c` and
+`src/service/voicesvc.c` are deleted.  No declaration, type or flag changed;
+the only new text is the merged file's leading comment.
+
+**THE MERGE IS THE POINT, NOT BOOKKEEPING.**  `voice_set_online` (47 bytes),
+`voice_set_duplex` (45) and `_handle_status` (44) are inlined into
+`voice_command`/`voice_modem` in the object because they share that unit
+(F8815/F8823).  Our three were separate TUs, so GCC 3.4.2 could not inline
+them and emitted calls.  With them in one unit the object's inlining is
+available to the same compiler, and one function improves:
+
+    voice_set_duplex   BYTES -> EXACT
+
+`voice_set_online` and `_handle_status` stay non-exact (they are inlined in
+the object and the exact block is the out-of-line copy, a separate defect);
+`voice_delete`, `voice_online`, `voice_create`, `voice_command`,
+`voice_dle_command` and `voice_modem` are unchanged.  NO exact function was
+lost.
+
+**MEASURED (GCC 3.4.2-r2).**  TU scoreboard: names in BOTH **279**, blob-only
+**1** (`V34.c`), ours-only **36 -> 33**, our TUs **315 -> 312**
+(`tu-compare`).  `byteident` grade 0 **843 -> 844** /1852 (+1, the exact
+`voice_set_duplex`), grade 0-or-1 **895/1852** unchanged.  `partialcmp`
+positioned bytes **66,876 -> 66,867** /943,398 (**-9**, the input-set
+source-order census of removing three inputs; the same effect F11394/F11395
+recorded); exact symbols **393/2,907** unchanged; exact relocations
+**1,011 -> 1,009** /18,317 (**-2**, `.rel.text` entries that matched
+positionally now sit at the merged unit's offsets); exact sections 70/92;
+NOBITS 2,836 ref / 2,808 candidate unchanged.  No function lost exactness and
+no exact symbol or section set regressed.
+
+**HARNESS.**  Two suites sourced the deleted files and are retargeted to
+`src/voice/voice.c`: `vcedle` (`voicecmd.c`) and `voicedp` (`voicecmd`'s
+`VOICE_DLE_*` cases now share the unit with `voice_command`'s
+`v->dle_can = 1`).  One `vcedle` anchor, "CAN sets the ETX flag", was widened
+with its own `"voice <CAN> command\n"` print to stay unique against
+`VOICE_ABORT_COMMAND`'s identical store; no anchor was dropped and no other
+anchor changed.  `anchorcheck` is **285 suites / 10,038 mutations / 0
+non-unique / 0 detached**.  Per the standing no-re-record instruction the
+snapshot is left STALE: `mutsnap --check` 0 current / 285 stale.  **`vcedle`
+owes a re-record** (its anchor find text changed); `voicedp`'s bodies are
+unchanged by the retarget.
+
+**GATES.**  `make -j1 J=1 phase`: **385 passed, 0 failed**, boundary OK;
+`refcheck` 0 dangling; `git diff --check` clean.
+
+(2026-09-26)
