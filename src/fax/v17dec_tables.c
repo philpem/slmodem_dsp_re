@@ -1,23 +1,9 @@
 /*
- * v17dec_tables.c -- the V.17 fax receiver's constellation, magnitude and
- *                    angle tables, as `FAX_FSE_decision_*` index them.
+ * v17dec_tables.c -- the V.17 fax receiver's HIGH-RATE constellation tables,
+ *                    the 12000 and 14400 bit/s sets, as
+ *                    `FAX_FSE_decision_64pt` / `_128pt` index them.
  *
  * Reconstructed from dsplibs.o:
- *   FSEv17_decision        .rodata  0x09864    16
- *   DECv17_MAP_BRIDGE      .rodata  0x09874     8
- *   DECv17_MAP_TRN         .rodata  0x0987c     8
- *   DECv17_ANGL4800        .rodata  0x09884     8
- *   DECv17_QMAP4           .rodata  0x0988c     8
- *   DECv17_IMAP4           .rodata  0x09894     8
- *   DECv17_MAG7200         .rodata  0x0989c     6
- *   DECv17_ANGL7200        .rodata  0x098c0    32
- *   DECv17_QMAP16          .rodata  0x098e0    32
- *   DECv17_IMAP16          .rodata  0x09900    32
- *   DECv17_ANGL9600T       .rodata  0x09920    64
- *   DECv17_MAG9600T        .rodata  0x09960    64
- *   DECv17_SIN_ROT_ANGLE   .rodata  0x099a0     8
- *   DECv17_COS_ROT_ANGLE   .rodata  0x099a8     8
- *   DECv17_ANA_QMAP        .rodata  0x099b0    16
  *   DECv17_QMAP64          .rodata  0x0bb80   128
  *   DECv17_IMAP64          .rodata  0x0bc00   128
  *   DECv17_ANGL12000       .rodata  0x0bc80   128
@@ -27,189 +13,30 @@
  *   DECv17_ANGL14400       .rodata  0x0be00   256
  *   DECv17_MAG14400        .rodata  0x0bf00   256
  *
- * ALL TWENTY-TWO ARE `.rodata`, so all twenty-two are `const`.  V.32bis'
- * equivalent set is split between `.data` and `.rodata` and this tree spells
- * that split out in `v32dec_tables.c`; V.17's is not split, and the section
- * each symbol is defined in is the whole of the reason either way.
+ * ALL EIGHT ARE `.rodata`, so all eight are `const`.
  *
  * THE ELEMENT TYPE HAS TWO INDEPENDENT READINGS and `include/dsplib/v17dec.h`
  * states both: the object's own sixteen-bit `(%reg,%reg,1)` loads, and
- * byte-identity with V.32bis' already-reconstructed set for nineteen of the
- * twenty-two.  The three that differ are named in that header.
+ * byte-identity with V.32bis' already-reconstructed set.
  *
- * WHAT THE VALUES MEAN, where the object's arithmetic settles it:
+ * THE LOW-RATE HALF MOVED TO `V17rxdec.c`.  `FSEv17_decision` and the fifteen
+ * tables that fill .rodata 0x009864..0x0099bf are `V17rxdec.c`'s by the
+ * reference partition and the address bracket (finding F11391).  These eight
+ * high-rate tables are ALSO referenced only from `FAX_FSE_decision_64pt` and
+ * `_128pt`, but they sit at .rodata 0x00bb80.. instead, which is the link slot
+ * of the `Smc_tx.c` / `Tab144.c` / `Tx_rxtab.c` window and not `V17rxdec.c`'s,
+ * so they are not that unit's.  The blob FILE `Tab144.c` (the "14400 table",
+ * with V.32's `V32TAB144.c` as the parallel) is the leading candidate, but the
+ * reference set does not separate `Smc_tx.c` from `Tab144.c` from
+ * `Tx_rxtab.c`, so this file is left under its working name rather than
+ * renamed to a guess.
  *
- *   Coordinates are in the equaliser's units.  The four-point set is +-4096
- *   and +-12288 at 45 degrees; the sixteen-point set is the same four
- *   quadrant patterns; the 64- and 128-point sets step by 4096 and 2048.
- *
- *   Angles are in the phasor's units, where 0x8000 is one full cycle.  That
- *   is visible in `DECv17_ANGL9600T`, whose four blocks of eight differ by
- *   8192 -- a quarter cycle -- because the four blocks are the four rotations
- *   of one eight-point set, and a rotation adds a constant angle.  It is
- *   visible again in `DECv17_MAG9600T`, which is eight magnitudes repeated
- *   four times, because a rotation cannot change a radius.
- *
- *   `DECv17_MAG7200` is indexed `(|I| + |Q|) >> 13`, LESS ONE -- the object
- *   loads it `movzwl -0x2(%ebp,%ebp,1)` at 0x984e5 after `sar $0xd` at
- *   0x984e2.  Three entries cover the only three L1 sums the sixteen-point
- *   constellation can produce, and each is the corresponding L2 radius:
- *   4096*sqrt(2) = 5792.6, sqrt(12288^2 + 4096^2) = 12953.0 and
- *   12288*sqrt(2) = 17377.9.
- *
- *   NOTE THAT V.17 DOES NOT CARRY V.32's D302.  `FSE_decision_16pt` shifts by
- *   1 where it should shift by 13 and reads thousands of entries past the end
- *   of `DECv32_MAG9600`; `FAX_FSE_decision_16pt` shifts by 13 (`sar $0xd` at
- *   0x984e2) and reads entries 0..2.  Same table contents, same three-entry
- *   length, different code.  Checked because the two functions are otherwise
- *   the same shape, and assuming the defect transferred would have been the
- *   easy mistake.
- *
- * `DECv17_MAP_BRIDGE` IS DEAD IN THE OBJECT.  `relocscan.py --into` over the
- * whole 1.2 MB, with the fix that resolves relocations naming their target,
- * reports it unreferenced -- no relocation anywhere points at it.  It is
- * written because it is a global the object defines and it costs eight bytes,
- * not because anything reads it.  Its neighbour `DECv17_MAP_TRN` IS read, by
- * `FSE_decision_eqtrn`, and the pair reads as the equaliser-training and
- * bridge-phase symbol remappings of one handshake.
+ * BLOCKER (F11391): the high-rate half is not pinned to a TU; it is measured
+ * to be outside `V17rxdec.c`'s slot and inside the three-TU window above.
  */
 
 #include "dsplib/v17dec.h"
 
-/* FSEv17_decision  .rodata 0x09864  16 bytes.
- * FOUR FUNCTION POINTERS, NOT `short[8]`, and the object says so: it carries
- * an `R_386_32` against `FAX_FSE_decision_16pt`, `_32pt`, `_64pt` and `_128pt`
- * at +0x0, +0x4, +0x8 and +0xc.  A value dump of those sixteen bytes gives
- * eight plausible small integers and no hint that they are addresses, which is
- * the mistake `tools/dis.py` exists to prevent.
- *
- * The order is the RATE order.  It is not read off the addresses -- which run
- * the other way, 128pt lowest -- but off the two consumers: `FSE_Bridge_det`
- * and `FSE_decision_eqtrn` both index it with `v17_dec::rate`, which
- * `V17RX_create` derives from the negotiated bit rate, and the four
- * constellations are 16, 32, 64 and 128 points for 7200, 9600, 12000 and
- * 14400 bit/s.
- *
- * IT IS `.rodata`, so it is const -- which also says the table itself is never
- * patched and every handover goes through `cfg.decision` instead.
- */
-const fpm_fse_decision FSEv17_decision[4] = {
-	FAX_FSE_decision_16pt,		/*  7200 bit/s,  16 points */
-	FAX_FSE_decision_32pt,		/*  9600 bit/s,  32 points */
-	FAX_FSE_decision_64pt,		/* 12000 bit/s,  64 points */
-	FAX_FSE_decision_128pt		/* 14400 bit/s, 128 points */
-};
-
-/* DECv17_MAP_BRIDGE  .rodata 0x09874  8 bytes.
- * Dead in the object -- nothing references it.  See the file banner.
- */
-const short DECv17_MAP_BRIDGE[4] = {
-	     1,      0,      2,      3,
-};
-
-/* DECv17_MAP_TRN  .rodata 0x0987c  8 bytes.
- * Applied to the TRN symbol by `FSE_decision_eqtrn`, which indexes
- * it at 0x9895e and 0x98999.  V.32bis' own is { 1, 2, 0, 3 }.
- */
-const short DECv17_MAP_TRN[4] = {
-	     3,      0,      2,      1,
-};
-
-/* DECv17_ANGL4800  .rodata 0x09884  8 bytes.
- * The four handshake-constellation angles, one per quadrant.  Read by
- * `FAX_FSE_decision_AB`, `FSE_Bridge_det` and `FSE_decision_eqtrn`.
- * V.32's DECv32_ANGL1200 holds { 9869, 18061, 26253, 1678 } -- the first
- * three of these are each exactly one greater, the fourth is equal.
- */
-const short DECv17_ANGL4800[4] = {
-	  9870,  18062,  26254,   1678,
-};
-
-/* DECv17_QMAP4  .rodata 0x0988c  8 bytes.
- * The four-point handshake constellation, +-4096 and +-12288.
- */
-const short DECv17_QMAP4[4] = {
-	 12288,  -4096, -12288,   4096,
-};
-
-/* DECv17_IMAP4  .rodata 0x09894  8 bytes.
- * The four-point handshake constellation, +-4096 and +-12288.
- */
-const short DECv17_IMAP4[4] = {
-	 -4096, -12288,   4096,  12288,
-};
-
-/* DECv17_MAG7200  .rodata 0x0989c  6 bytes.
- * Three L2 radii of the sixteen-point set, indexed `((|I|+|Q|)>>13)-1`.
- */
-const short DECv17_MAG7200[3] = {
-	  5792,  12953,  17378,
-};
-
-/* DECv17_ANGL7200  .rodata 0x098c0  32 bytes.
- * Sixteen angles, 0x8000 to the cycle.
- */
-const short DECv17_ANGL7200[16] = {
-	 12287,  14706,   9869,  12287,  18061,  20480,  20480,  22898,
-	  6514,   4095,   4095,   1677,  28672,  26253,  31090,  28671,
-};
-
-/* DECv17_QMAP16  .rodata 0x098e0  32 bytes.
- * The sixteen-point 7200 bit/s constellation.
- */
-const short DECv17_QMAP16[16] = {
-	 12288,   4096,  12288,   4096,  -4096, -12288,  -4096, -12288,
-	 12288,   4096,  12288,   4096,  -4096, -12288,  -4096, -12288,
-};
-
-/* DECv17_IMAP16  .rodata 0x09900  32 bytes.
- * The sixteen-point 7200 bit/s constellation.
- */
-const short DECv17_IMAP16[16] = {
-	-12288, -12288,  -4096,  -4096, -12288, -12288,  -4096,  -4096,
-	  4096,   4096,  12288,  12288,   4096,   4096,  12288,  12288,
-};
-
-/* DECv17_ANGL9600T  .rodata 0x09920  64 bytes.
- * Eight points by four rotations; the blocks differ by 8192.
- */
-const short DECv17_ANGL9600T[32] = {
-	 11258,  10610,   8191,   9469,   8191,   5773,   6914,   5125,
-	 19450,  18802,  16384,  17661,  16384,  13965,  15106,  13317,
-	 27642,  26994,  24576,  25853,  24576,  22157,  23298,  21509,
-	  3066,   2418,      0,   1277,      0,  30349,  31490,  29701,
-};
-
-/* DECv17_MAG9600T  .rodata 0x09960  64 bytes.
- * Eight radii repeated four times -- a rotation cannot change a radius.
- */
-const short DECv17_MAG9600T[32] = {
-	 14768,   9158,   4096,  16888,  12288,   9158,  16888,  14768,
-	 14768,   9158,   4096,  16888,  12288,   9158,  16888,  14768,
-	 14768,   9158,   4096,  16888,  12288,   9158,  16888,  14768,
-	 14768,   9158,   4096,  16888,  12288,   9158,  16888,  14768,
-};
-
-/* DECv17_SIN_ROT_ANGLE  .rodata 0x099a0  8 bytes.
- * +-23170 is 0.7071 in Q15: the 45-degree rotation, per quadrant.
- */
-const short DECv17_SIN_ROT_ANGLE[4] = {
-	-23170, -23170,  23170,  23170,
-};
-
-/* DECv17_COS_ROT_ANGLE  .rodata 0x099a8  8 bytes.
- * +-23170 is 0.7071 in Q15: the 45-degree rotation, per quadrant.
- */
-const short DECv17_COS_ROT_ANGLE[4] = {
-	 23170, -23170, -23170,  23170,
-};
-
-/* DECv17_ANA_QMAP  .rodata 0x099b0  16 bytes.
- * The rails the 32-point slicer clamps the rotated Q against.
- */
-const short DECv17_ANA_QMAP[8] = {
-	 14481,   8689,   2896,  14481,   8689,   2896,   8689,   2896,
-};
 
 /* DECv17_QMAP64  .rodata 0x0bb80  128 bytes.
  * The sixty-four-point 12000 bit/s constellation, stepping by 4096.

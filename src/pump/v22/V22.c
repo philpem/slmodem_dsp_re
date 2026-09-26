@@ -430,6 +430,12 @@ V22FP_delete(struct v22fp *fp)
 	sysdep_free(fp->dsp);
 	sysdep_free(fp);
 }
+
+int
+V22FP_GetDiagnostics(struct v22fp *fp)
+{
+	return V22_FSE_getdiag(&fp->dsp->fse);
+}
 /*
  * ---------------------------------------------------------------------------
  * The layout, held to the compiler.

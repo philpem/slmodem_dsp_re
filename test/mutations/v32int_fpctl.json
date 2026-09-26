@@ -1,0 +1,275 @@
+[
+ {
+  "note": "src/pump/v32/V32int.c against build/test/t_v32fpctl.  Split from the pre-F11395 over-split suite set so each anchor is searched in the translation unit that now holds its function (blob FILE order)."
+ },
+ {
+  "label": "the four-point arms pick the differential encoder where the object picks the absolute one",
+  "find": "\t\tsel = (short)(mode == V32_MODE_ABS4 ? 1 : 0);",
+  "replace": "\t\tsel = (short)(mode == V32_MODE_ABS4 ? 0 : 1);"
+ },
+ {
+  "label": "the coder's pad02 does not take the selector's value",
+  "find": "\t\tSMC(fp)->pad02 = sel;",
+  "replace": "\t\tSMC(fp)->pad02 = 0;"
+ },
+ {
+  "label": "14400 shifts by its six bits per symbol rather than by the scrambler's three-bit sub-group -- F8214's near-miss, made into a mutation",
+  "find": "\t\tshift = 3;\t\t/* six bits, sent as two groups of 3 */",
+  "replace": "\t\tshift = 6;\t\t/* six bits, sent as two groups of 3 */"
+ },
+ {
+  "label": "7200 installs the 32-point constellation",
+  "find": "\t\tPPS(fp)->cfg.imap = VTBv32_IMAP16T;",
+  "replace": "\t\tPPS(fp)->cfg.imap = VTBv32_IMAP32;"
+ },
+ {
+  "label": "12000's I and Q maps are transposed",
+  "find": "\t\tPPS(fp)->cfg.imap = VTBv32_IMAP64;\n\t\tPPS(fp)->cfg.qmap = VTBv32_QMAP64;",
+  "replace": "\t\tPPS(fp)->cfg.imap = VTBv32_QMAP64;\n\t\tPPS(fp)->cfg.qmap = VTBv32_IMAP64;"
+ },
+ {
+  "label": "9600 trellis carries one uncoded bit rather than two",
+  "find": "\t\tSMC(fp)->uncoded_bits = 2;\n\t\tSMC(fp)->mode = 2;",
+  "replace": "\t\tSMC(fp)->uncoded_bits = 1;\n\t\tSMC(fp)->mode = 2;"
+ },
+ {
+  "label": "the transmit scrambler's group width is the coder's mode rather than the bits per symbol",
+  "find": "\t\tSDM_TX(fp)->group = 6;",
+  "replace": "\t\tSDM_TX(fp)->group = 5;"
+ },
+ {
+  "label": "the transmit tail's mask is a power of two rather than one less",
+  "find": "\tmask = (unsigned int)((1 << shift) - 1);\n\tsdm->outmask = mask;\n\tsdm->regmask = ~mask;\n\tsdm->tap1 = (short)(sdm->tap1_pos - shift);\n\tsdm->tap2 = (short)(sdm->tap2_pos - shift);\n}\n\n/*\n * Configure the receiver",
+  "replace": "\tmask = (unsigned int)(1 << shift);\n\tsdm->outmask = mask;\n\tsdm->regmask = ~mask;\n\tsdm->tap1 = (short)(sdm->tap1_pos - shift);\n\tsdm->tap2 = (short)(sdm->tap2_pos - shift);\n}\n\n/*\n * Configure the receiver"
+ },
+ {
+  "label": "the transmit register mask is the output mask rather than its complement",
+  "find": "\tsdm->regmask = ~mask;\n\tsdm->tap1 = (short)(sdm->tap1_pos - shift);\n\tsdm->tap2 = (short)(sdm->tap2_pos - shift);\n}\n\n/*\n * Configure the receiver",
+  "replace": "\tsdm->regmask = mask;\n\tsdm->tap1 = (short)(sdm->tap1_pos - shift);\n\tsdm->tap2 = (short)(sdm->tap2_pos - shift);\n}\n\n/*\n * Configure the receiver"
+ },
+ {
+  "label": "both transmit taps are derived from the first tap's position",
+  "find": "\tsdm->tap2 = (short)(sdm->tap2_pos - shift);\n}\n\n/*\n * Configure the receiver",
+  "replace": "\tsdm->tap2 = (short)(sdm->tap1_pos - shift);\n}\n\n/*\n * Configure the receiver"
+ },
+ {
+  "label": "the transmit taps are not reduced by the group shift",
+  "find": "\tsdm->tap1 = (short)(sdm->tap1_pos - shift);\n\tsdm->tap2 = (short)(sdm->tap2_pos - shift);\n}\n\n/*\n * Configure the receiver",
+  "replace": "\tsdm->tap1 = (short)sdm->tap1_pos;\n\tsdm->tap2 = (short)sdm->tap2_pos;\n}\n\n/*\n * Configure the receiver"
+ },
+ {
+  "label": "an out-of-range transmit mode replaces the fault flags instead of setting one bit",
+  "find": "\t\tmodem->flags |= V32_FLAG_FAULT;\n\t\tfp = FP(modem);",
+  "replace": "\t\tmodem->flags = V32_FLAG_FAULT;\n\t\tfp = FP(modem);"
+ },
+ {
+  "label": "an out-of-range transmit mode leaves the scrambler at one bit per symbol rather than none",
+  "find": "\t\tfp = FP(modem);\n\t\tshift = 0;\n\t\tbreak;",
+  "replace": "\t\tfp = FP(modem);\n\t\tshift = 1;\n\t\tbreak;"
+ },
+ {
+  "label": "the receive four-point arms install the absolute slicer where the object installs the differential one",
+  "find": "\t\t\tFSE(fp)->cfg.decision = FSE_decision_AB;\n\t\t} else {\n\t\t\tFSE(fp)->cfg.decision = FSE_decision_4pt;",
+  "replace": "\t\t\tFSE(fp)->cfg.decision = FSE_decision_4pt;\n\t\t} else {\n\t\t\tFSE(fp)->cfg.decision = FSE_decision_AB;"
+ },
+ {
+  "label": "the absolute four-point arm does not clear the decoder's rate-change report",
+  "find": "\t\t\tdec->rate_change = 0;\n\t\t\tFSE(fp)->cfg.decision = FSE_decision_AB;",
+  "replace": "\t\t\tFSE(fp)->cfg.decision = FSE_decision_AB;"
+ },
+ {
+  "label": "the receive four-point arms do not clear the decoder's phase counter",
+  "find": "\t\tfp->short_2e = 0;\n\t\tdec->count = 0;",
+  "replace": "\t\tfp->short_2e = 0;"
+ },
+ {
+  "label": "12000 initialises the Viterbi decoder for 14400",
+  "find": "\t\tVTBv32_init(&DEC(fp)->vtb, 4, 0);",
+  "replace": "\t\tVTBv32_init(&DEC(fp)->vtb, 5, 0);"
+ },
+ {
+  "label": "14400 asks VTBv32_init to allocate a second survivor ring",
+  "find": "\t\tVTBv32_init(&DEC(fp)->vtb, 5, 0);",
+  "replace": "\t\tVTBv32_init(&DEC(fp)->vtb, 5, 1);"
+ },
+ {
+  "label": "the receive tail configures the transmit scrambler",
+  "find": "\tsdm = SDM_RX(FP(modem));",
+  "replace": "\tsdm = SDM_TX(FP(modem));"
+ },
+ {
+  "label": "9600 with no trellis sets the decoder channel the 4800 arms clear",
+  "find": "\t\tdec->chan = 1;\n\t\tdec->short_04 = 2;\n\t\tFSE(fp)->cfg.decision = FSE_decision_16pt;",
+  "replace": "\t\tdec->chan = 0;\n\t\tdec->short_04 = 2;\n\t\tFSE(fp)->cfg.decision = FSE_decision_16pt;"
+ },
+ {
+  "label": "the scrambler seed lands on the descrambler's register",
+  "find": "\tSDM_TX(FP(modem))->reg = seed;",
+  "replace": "\tSDM_RX(FP(modem))->reg = seed;"
+ },
+ {
+  "label": "the scrambler is handed the descrambler's state",
+  "find": "\tSDMv32_scrambler(SDM_TX(FP(modem)), buf, count);",
+  "replace": "\tSDMv32_scrambler(SDM_RX(FP(modem)), buf, count);"
+ },
+ {
+  "label": "the descrambler is handed the scrambler's state",
+  "find": "\tSDMv32_descrambler(SDM_RX(FP(modem)), buf, count);",
+  "replace": "\tSDMv32_descrambler(SDM_TX(FP(modem)), buf, count);"
+ },
+ {
+  "label": "9600 always reports the trellis rate, never the uncoded one",
+  "find": "\t\treturn modem->params.trellis ? V32_RATE_9600\n\t\t\t\t\t\t\t : V32_RATE_9600_NT;",
+  "replace": "\t\treturn V32_RATE_9600;"
+ },
+ {
+  "label": "the 9600 trellis test is inverted",
+  "find": "\t\treturn modem->params.trellis ? V32_RATE_9600\n\t\t\t\t\t\t\t : V32_RATE_9600_NT;\n\tif (bps == 7200)",
+  "replace": "\t\treturn modem->params.trellis ? V32_RATE_9600_NT\n\t\t\t\t\t\t\t : V32_RATE_9600;\n\tif (bps == 7200)"
+ },
+ {
+  "label": "the rate is read from the instance's symbol-length selector rather than its bit rate",
+  "find": "\tunsigned short bps = modem->params.rx_rate;",
+  "replace": "\tunsigned short bps = modem->params.symlen_sel;"
+ },
+ {
+  "label": "an unrecognised bit rate reports 4800 rather than the invalid code",
+  "find": "\treturn V32_RATE_INVALID;\n}",
+  "replace": "\treturn V32_RATE_4800;\n}"
+ },
+ {
+  "label": "the equaliser's two step sizes are transposed",
+  "find": "\tcase V32_ADAPTEQ_MU0:\n\t\tfp = FP(modem);\n\t\tfp->eq_adapt = 1;\n\t\tFSE(fp)->mu_sel = 0;",
+  "replace": "\tcase V32_ADAPTEQ_MU0:\n\t\tfp = FP(modem);\n\t\tfp->eq_adapt = 1;\n\t\tFSE(fp)->mu_sel = 1;"
+ },
+ {
+  "label": "switching the equaliser off leaves it adapting",
+  "find": "\tcase V32_ADAPTEQ_OFF:\n\t\tfp = FP(modem);\n\t\tfp->eq_adapt = 0;",
+  "replace": "\tcase V32_ADAPTEQ_OFF:\n\t\tfp = FP(modem);\n\t\tfp->eq_adapt = 1;"
+ },
+ {
+  "label": "the equaliser's step selector is one field above mu_sel",
+  "find": "\tcase V32_ADAPTEQ_MU1:\n\t\tfp = FP(modem);\n\t\tfp->eq_adapt = 1;\n\t\tFSE(fp)->mu_sel = 1;",
+  "replace": "\tcase V32_ADAPTEQ_MU1:\n\t\tfp = FP(modem);\n\t\tfp->eq_adapt = 1;\n\t\tFSE(fp)->pll_sel = 1;"
+ },
+ {
+  "label": "the receive loops are switched on where the object switches them off",
+  "find": "\tcase 1:\n\t\tfp = FP(modem);\n\t\tfp->int_08 = 0;",
+  "replace": "\tcase 1:\n\t\tfp = FP(modem);\n\t\tfp->int_08 = 1;"
+ },
+ {
+  "label": "only three of the four receive loops are switched on",
+  "find": "\t\tfp->int_08 = 1;\n\t\tfp->int_0c = 1;\n\t\tfp->int_00 = 1;\n\t\tfp->int_04 = 1;",
+  "replace": "\t\tfp->int_08 = 1;\n\t\tfp->int_0c = 1;\n\t\tfp->int_00 = 1;"
+ },
+ {
+  "label": "mode 3 is not one of the receive loop switch's arms",
+  "find": "\tcase 2:\n\tcase 3:\n\t\tfp = FP(modem);\n\t\tfp->int_08 = 1;",
+  "replace": "\tcase 2:\n\t\tfp = FP(modem);\n\t\tfp->int_08 = 1;"
+ },
+ {
+  "label": "the round-trip delay is held DOWN to the far section's length instead of raised to it",
+  "find": "\td = ecc->cfg.far_taps;\n\tif (d < delay)\n\t\td = delay;",
+  "replace": "\td = ecc->cfg.far_taps;\n\tif (d > delay)\n\t\td = delay;"
+ },
+ {
+  "label": "the round-trip delay is not clamped at zero",
+  "find": "\tif (d < 0)\n\t\td = 0;\n\tif (ecc->cfg.far_lag < d)",
+  "replace": "\tif (ecc->cfg.far_lag < d)"
+ },
+ {
+  "label": "the round trip is not held down to the far lag",
+  "find": "\tif (ecc->cfg.far_lag < d)\n\t\td = ecc->cfg.far_lag;",
+  "replace": "\tif (0)\n\t\td = ecc->cfg.far_lag;"
+ },
+ {
+  "label": "the delay line is sized for one symbol period of guard rather than two",
+  "find": "\tecc->line_len = (short)(lag + d + 2 * symlen);",
+  "replace": "\tecc->line_len = (short)(lag + d + symlen);"
+ },
+ {
+  "label": "the echo canceller's two read taps are transposed",
+  "find": "\tecc->far_rd = symlen;\n\tecc->line_len =",
+  "replace": "\tecc->near_rd = symlen;\n\tecc->line_len ="
+ },
+ {
+  "label": "the ring cursor is placed a whole symbol past the near tap rather than half of one",
+  "find": "\tt = (short)(lag + (short)(symlen / 2 + ecc->near_rd));",
+  "replace": "\tt = (short)(lag + (short)(symlen + ecc->near_rd));"
+ },
+ {
+  "label": "the near tap's wrap fires one short of the line length",
+  "find": "\tt = (short)(d + symlen);\n\tif (ecc->line_len <= t)",
+  "replace": "\tt = (short)(d + symlen);\n\tif (ecc->line_len - 1 <= t)"
+ },
+ {
+  "label": "the ring's length is taken from the near tap rather than from the line",
+  "find": "\tring->limit = ecc->line_len;",
+  "replace": "\tring->limit = ecc->near_rd;"
+ },
+ {
+  "label": "the ring's cursor is left where it was rather than following the delay",
+  "find": "\tring->widx = ring->pad0e;",
+  "replace": "\tring->pad0e = ring->widx;"
+ },
+ {
+  "label": "the delay line is preset to a real constellation point rather than the no-carrier index",
+  "find": "\t\tecc->line[i] = V32_SYMBOL_NOCARRIER;",
+  "replace": "\t\tecc->line[i] = 0;"
+ },
+ {
+  "label": "the symbol period is read from the other entry of V32_SYMBOL_LEN",
+  "find": "\tsymlen = V32_SYMBOL_LEN[modem->params.symlen_sel];",
+  "replace": "\tsymlen = V32_SYMBOL_LEN[1 - modem->params.symlen_sel];"
+ },
+ {
+  "label": "the symbol ring holds 40 symbols at the long setting rather than 48",
+  "find": "short V32_SYMBOL_LEN[2] = { 12, 48 };",
+  "replace": "short V32_SYMBOL_LEN[2] = { 12, 40 };"
+ },
+ {
+  "label": "the retrain poller answers the renegotiation bit",
+  "find": "\tif (!(req & V32_DEC_RETRAIN_REQ))\n\t\treturn 0;",
+  "replace": "\tif (!(req & V32_DEC_RENEG_REQ))\n\t\treturn 0;"
+ },
+ {
+  "label": "the retrain poller clears the whole request word rather than its own bit",
+  "find": "\tdec->retrain = (short)(req & ~(unsigned short)V32_DEC_RETRAIN_REQ);",
+  "replace": "\tdec->retrain = 0;"
+ },
+ {
+  "label": "the retrain counter is not stepped",
+  "find": "\tdec->short_74 =\n\t\t(unsigned short)(dec->short_74 + 1);",
+  "replace": "\t(void)0;"
+ },
+ {
+  "label": "the renegotiation poller also steps the retrain counter",
+  "find": "\tdec->count = 0;\n\tdec->retrain = (short)(req & ~(unsigned short)V32_DEC_RENEG_REQ);\n\treturn 1;",
+  "replace": "\tdec->count = 0;\n\tdec->retrain = (short)(req & ~(unsigned short)V32_DEC_RENEG_REQ);\n\tdec->short_74 =\n\t\t(unsigned short)(dec->short_74 + 1);\n\treturn 1;"
+ },
+ {
+  "label": "the epoch poller returns the phase counter rather than the rate-change report",
+  "find": "\treturn DEC(FP(modem))->rate_change;",
+  "replace": "\treturn DEC(FP(modem))->count;"
+ },
+ {
+  "label": "the clamp writes one word too few",
+  "find": "\tfor (i = (short)(hdx->symbol_len - 1); i != -1; i--)",
+  "replace": "\tfor (i = (short)(hdx->symbol_len - 2); i != -1; i--)"
+ },
+ {
+  "label": "the clamp writes a value one below the object's",
+  "find": "\t\t*out++ = 0xff;",
+  "replace": "\t\t*out++ = 0xfe;"
+ },
+ {
+  "label": "the clamp counts down from the block length as an INT, so a negative length writes nothing",
+  "find": "\tstruct v32_hdx *hdx = HDX(modem);\n\tshort i;\n\n\t(void)in;\n\t(void)count;",
+  "replace": "\tstruct v32_hdx *hdx = HDX(modem);\n\tint i;\n\n\t(void)in;\n\t(void)count;"
+ },
+ {
+  "label": "the clamp reports the count it was passed rather than the block length",
+  "find": "\treturn hdx->symbol_len;\n}",
+  "replace": "\treturn count;\n}"
+ }
+]

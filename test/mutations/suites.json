@@ -57,7 +57,7 @@
   "build/test/t_dtmfrx"
  ],
  "faxadaptcreate": [
-  "src/fax/V27rx.c",
+  "src/fax/Vmi_v27.c",
   "build/test/t_faxadapt"
  ],
  "floatarma": [
@@ -65,7 +65,7 @@
   "build/test/t_floatarma"
  ],
  "fpmcircdotp": [
-  "src/dsp/fpm_ecc.c",
+  "src/dsp/fpm_div32.c",
   "build/test/t_fpm_ecc"
  ],
  "fpmfserecv": [
@@ -77,7 +77,7 @@
   "build/test/t_fpm_iir"
  ],
  "fpmlmsupd2": [
-  "src/dsp/fpm_lmsupd.c",
+  "src/dsp/fpm_adeq.c",
   "build/test/t_fpm_lmsupd"
  ],
  "fpmmtd": [
@@ -193,7 +193,7 @@
   "build/test/t_scrambler"
  ],
  "v17data": [
-  "src/pump/v17/v17data.c",
+  "src/fax/V17t_int.c",
   "build/test/t_v17data"
  ],
  "v22dec": [
@@ -217,40 +217,20 @@
   "build/test/t_v23modem"
  ],
  "v27status": [
-  "src/fax/v27.c",
+  "src/fax/V27t_stc.c",
   "build/test/t_v27fax"
  ],
  "v29data": [
-  "src/pump/v29/v29data.c",
+  "src/fax/V29t_int.c",
   "build/test/t_v29data"
  ],
  "v32anstone": [
   "src/pump/v32/v32anstone.c",
   "build/test/t_v32anstone"
  ],
- "v32data": [
-  "src/pump/v32/v32data.c",
-  "build/test/t_v32data"
- ],
- "v32demod": [
-  "src/pump/v32/v32demod.c",
-  "build/test/t_v32demod"
- ],
- "v32fpctl": [
-  "src/pump/v32/v32fpctl.c",
-  "build/test/t_v32fpctl"
- ],
- "v32fpsub": [
-  "src/pump/v32/v32fpctl.c",
-  "build/test/t_v32fpsub"
- ],
  "v32hdx": [
   "src/pump/v32/V32TXHDX.c",
   "build/test/t_v32hdx"
- ],
- "v32seq": [
-  "src/pump/v32/v32seq.c",
-  "build/test/t_v32seq"
  ],
  "v34datapump": [
   "src/pump/v34/V34hshak.c",
@@ -370,6 +350,10 @@
  ],
  "v34rx": [
   "src/pump/v34/V34RX.c",
+  "build/test/t_v34rx"
+ ],
+ "v34tx": [
+  "src/pump/v34/V34TX.c",
   "build/test/t_v34rx"
  ],
  "v34scrampair": [
@@ -1049,11 +1033,11 @@
   "build/test/t_vcedle"
  ],
  "mtktab": [
-  "src/service/mtk_tables.c",
+  "src/service/TABLES.c",
   "build/test/t_mtktab"
  ],
  "mtkphasor": [
-  "src/service/mtk.c",
+  "src/service/PHASOR.c",
   "build/test/t_mtkphasor"
  ],
  "tonecreate": [
@@ -1117,7 +1101,7 @@
   "build/test/t_v90sessionflag"
  ],
  "faxadaptcreate_v29tx": [
-  "src/fax/V29tx.c",
+  "src/fax/Vmi_v29.c",
   "build/test/t_faxadapt"
  ],
  "v32hdxrx": [
@@ -1127,5 +1111,41 @@
  "v32ctad": [
   "src/pump/v32/V32rxhdx.c",
   "build/test/t_v32fpctl"
+ ],
+ "v32int_fpctl": [
+  "src/pump/v32/V32int.c",
+  "build/test/t_v32fpctl"
+ ],
+ "v32c_fpctl": [
+  "src/pump/v32/V32.c",
+  "build/test/t_v32fpctl"
+ ],
+ "v32int_fpsub": [
+  "src/pump/v32/V32int.c",
+  "build/test/t_v32fpsub"
+ ],
+ "v32prc_fpsub": [
+  "src/pump/v32/V32prc.c",
+  "build/test/t_v32fpsub"
+ ],
+ "v32c_fpsub": [
+  "src/pump/v32/V32.c",
+  "build/test/t_v32fpsub"
+ ],
+ "v32int_data": [
+  "src/pump/v32/V32int.c",
+  "build/test/t_v32data"
+ ],
+ "v32int_demod": [
+  "src/pump/v32/V32int.c",
+  "build/test/t_v32demod"
+ ],
+ "v32int_seq": [
+  "src/pump/v32/V32int.c",
+  "build/test/t_v32seq"
+ ],
+ "v32prc_seq": [
+  "src/pump/v32/V32prc.c",
+  "build/test/t_v32seq"
  ]
 }

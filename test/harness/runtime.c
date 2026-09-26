@@ -273,7 +273,7 @@ sysdep_memcpy(void *dst, const void *src, size_t n)
  * the new definition at link time and is deleted -- a loud removal.
  *
  * `MTK_phasor` was the last one and its removal is that loud removal:
- * `src/service/mtk.c` defines it now, and `FDSP_Kernel_InitObj`'s went the
+ * `src/service/PHASOR.c` defines it now, and `FDSP_Kernel_InitObj`'s went the
  * same way in commit 9109caa0.  The section is kept, empty, because the
  * argument above is what the next one has to satisfy.
  */

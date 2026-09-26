@@ -1,0 +1,140 @@
+[
+ {
+  "note": "src/pump/v32/V32int.c against build/test/t_v32data.  Split from the pre-F11395 over-split suite set so each anchor is searched in the translation unit that now holds its function (blob FILE order)."
+ },
+ {
+  "label": "the encoder is dispatched from the slot above the one the selector names",
+  "find": "\ttbl[sel](&fp->tx_smc, &fp->symout, data, count);",
+  "replace": "\ttbl[sel + 1](&fp->tx_smc, &fp->symout, data, count);"
+ },
+ {
+  "label": "the encoder table is read one slot high, which is abs where V32FP_recreate laid dif",
+  "find": "\ttbl = fp->encoders;",
+  "replace": "\ttbl = (const v32_encoder_fn *)(void *)((unsigned char *)fp + V32FP_ENCODERS + 4);"
+ },
+ {
+  "label": "the selector is read from the two bytes above it",
+  "find": "\tsel = fp->encoder_sel;",
+  "replace": "\tsel = *(short *)(void *)((unsigned char *)fp + V32FP_ENCODER_SEL + 2);"
+ },
+ {
+  "label": "the selector indexes the table unsigned, which agrees over every value V32FP_recreate can leave and not over a negative one",
+  "find": "\ttbl[sel](&fp->tx_smc, &fp->symout, data, count);",
+  "replace": "\ttbl[(unsigned short)sel](&fp->tx_smc, &fp->symout, data, count);"
+ },
+ {
+  "label": "the coder and the ring are handed to the encoder the other way round",
+  "find": "\ttbl[sel](&fp->tx_smc, &fp->symout, data, count);",
+  "replace": "\ttbl[sel]((struct v32_smc *)(void *)&fp->symout,\n\t\t (struct v32_symout *)(void *)&fp->tx_smc, data, count);"
+ },
+ {
+  "label": "the coder is taken from V.22's offset rather than V.32's",
+  "find": "\ttbl[sel](&fp->tx_smc, &fp->symout, data, count);",
+  "replace": "\ttbl[sel]((struct v32_smc *)(void *)((unsigned char *)fp + 0x30),\n\t\t &fp->symout, data, count);"
+ },
+ {
+  "label": "the shaper is filtered from a ring the encoder did not write",
+  "find": "\t\t\t      /* D431: the same bytes as the v32_symout above */\n\t\t\t      (struct fpm_smc_ring *)(void *)\n\t\t\t\t\t&fp->symout,\n\t\t\t      out, count);",
+  "replace": "\t\t\t      /* D431: the same bytes as the v32_symout above */\n\t\t\t      (struct fpm_smc_ring *)(void *)\n\t\t\t\t\t((unsigned char *)&fp->symout + 4),\n\t\t\t      out, count);"
+ },
+ {
+  "label": "the encoder's count is one short, so the last data word never reaches the ring",
+  "find": "\ttbl[sel](&fp->tx_smc, &fp->symout, data, count);",
+  "replace": "\ttbl[sel](&fp->tx_smc, &fp->symout, data,\n\t\t (unsigned short)(count ? count - 1 : 0));"
+ },
+ {
+  "label": "the shaper's count is the sample count rather than the symbol count",
+  "find": "\t\t\t      /* D431: the same bytes as the v32_symout above */\n\t\t\t      (struct fpm_smc_ring *)(void *)\n\t\t\t\t\t&fp->symout,\n\t\t\t      out, count);",
+  "replace": "\t\t\t      /* D431: the same bytes as the v32_symout above */\n\t\t\t      (struct fpm_smc_ring *)(void *)\n\t\t\t\t\t&fp->symout,\n\t\t\t      out, (unsigned short)(count * 3));"
+ },
+ {
+  "label": "the no-carrier index is one below the seventeenth map entry",
+  "find": "\t\tring->buf[widx] = V32_SYMBOL_NOCARRIER;",
+  "replace": "\t\tring->buf[widx] = V32_SYMBOL_NOCARRIER - 1;"
+ },
+ {
+  "label": "the no-carrier index is zero, which is a real constellation point",
+  "find": "\t\tring->buf[widx] = V32_SYMBOL_NOCARRIER;",
+  "replace": "\t\tring->buf[widx] = 0;"
+ },
+ {
+  "label": "the no-carrier index carries a mode tag in its high byte",
+  "find": "\t\tring->buf[widx] = V32_SYMBOL_NOCARRIER;",
+  "replace": "\t\tring->buf[widx] = (short)(V32_SYMBOL_NOCARRIER | 0x100);"
+ },
+ {
+  "label": "the quadrant is stepped FORWARDS, which agrees at every count that is a multiple of four",
+  "find": "\t\tquad = (short)((quad + 3) & 3);",
+  "replace": "\t\tquad = (short)((quad + 1) & 3);"
+ },
+ {
+  "label": "the quadrant accumulator is masked to three bits rather than two",
+  "find": "\t\tquad = (short)((quad + 3) & 3);",
+  "replace": "\t\tquad = (short)((quad + 3) & 7);"
+ },
+ {
+  "label": "the quadrant is stepped once per call rather than once per symbol",
+  "find": "\t\tnext = (short)(widx + 1);\n\t\tquad = (short)((quad + 3) & 3);\n\t\twidx = (short)(next < limit ? next : 0);",
+  "replace": "\t\tnext = (short)(widx + 1);\n\t\twidx = (short)(next < limit ? next : 0);"
+ },
+ {
+  "label": "the quadrant is not written back",
+  "find": "\tsmc->quad = quad;\n\tring->widx = widx;",
+  "replace": "\tring->widx = widx;"
+ },
+ {
+  "label": "the quadrant is taken from the coder's mode instead",
+  "find": "\tquad = smc->quad;",
+  "replace": "\tquad = smc->mode;"
+ },
+ {
+  "label": "the cursor wraps one short of the ring length",
+  "find": "\t\twidx = (short)(next < limit ? next : 0);",
+  "replace": "\t\twidx = next < (short)(limit - 1) ? next : 0;"
+ },
+ {
+  "label": "the cursor wraps one past it, so the slot at limit is written",
+  "find": "\t\twidx = (short)(next < limit ? next : 0);",
+  "replace": "\t\twidx = next <= limit ? next : 0;"
+ },
+ {
+  "label": "the wrap test is unsigned, which agrees everywhere except at the truncation corner",
+  "find": "\t\twidx = (short)(next < limit ? next : 0);",
+  "replace": "\t\twidx = (unsigned short)next < (unsigned short)limit ? next : 0;"
+ },
+ {
+  "label": "the next cursor is not truncated to a short, so 32767 does not wrap to -32768",
+  "find": "\t\tnext = (short)(widx + 1);",
+  "replace": "\t\tnext = (short)((widx + 1) & 0xffff);\n\t\tif (widx + 1 > 32767)\n\t\t\tnext = 0;"
+ },
+ {
+  "label": "the cursor advances before the store rather than after it",
+  "find": "\t\tring->buf[widx] = V32_SYMBOL_NOCARRIER;\n\t\tnext = (short)(widx + 1);\n\t\tquad = (short)((quad + 3) & 3);\n\t\twidx = (short)(next < limit ? next : 0);",
+  "replace": "\t\tnext = (short)(widx + 1);\n\t\tquad = (short)((quad + 3) & 3);\n\t\twidx = (short)(next < limit ? next : 0);\n\t\tring->buf[widx] = V32_SYMBOL_NOCARRIER;"
+ },
+ {
+  "label": "the cursor is not written back, so a caller filling the ring across calls overwrites the same slots",
+  "find": "\tsmc->quad = quad;\n\tring->widx = widx;",
+  "replace": "\tsmc->quad = quad;"
+ },
+ {
+  "label": "the ring bound is read where the read cursor lives",
+  "find": "\tlimit = ring->limit;",
+  "replace": "\tlimit = ring->pad0e;"
+ },
+ {
+  "label": "the coder is taken from the shaper's offset",
+  "find": "\tsmc = &fp->tx_smc;",
+  "replace": "\tsmc = (struct v32_smc *)(void *)&fp->pps;"
+ },
+ {
+  "label": "the shaper is taken from the coder's offset",
+  "find": "\treturn FPM_PPS_filter(&fp->pps,\n\t\t\t      /* D431 again */",
+  "replace": "\treturn FPM_PPS_filter((struct fpm_pps *)(void *)&fp->tx_smc,\n\t\t\t      /* D431 again */"
+ },
+ {
+  "label": "the transmitter's block is taken from V.17's instance offset",
+  "find": "\tfp = modem->fp;\n\tring = &fp->symout;",
+  "replace": "\tfp = *(struct v32_fp **)(void *)((unsigned char *)modem + 0x28);\n\tring = &fp->symout;"
+ }
+]

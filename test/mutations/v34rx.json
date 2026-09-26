@@ -3,51 +3,6 @@
   "note": "24 diagnostic call sites and the receiver's arithmetic.  Several of the printfs re-read `rx->flags` afterwards, which is not decoration: the call is a sequence point the object's register allocation depends on, so dropping one changes the value the next store writes."
  },
  {
-  "label": "updateAlpha reports the new value as the old one",
-  "find": "\t\t\t\t\"updateAlpha%s: updated %d => %d\\n\", tag,\n\t\t\t\t(int)was, (int)*alpha);",
-  "replace": "\t\t\t\t\"updateAlpha%s: updated %d => %d\\n\", tag,\n\t\t\t\t(int)*alpha, (int)was);"
- },
- {
-  "label": "updateAlpha loses the near/far tag",
-  "find": "\"updateAlpha%s: updated %d => %d\\n\", tag,",
-  "replace": "\"updateAlpha: updated %d => %d\\n\","
- },
- {
-  "label": "updateAlpha's near call is tagged FE",
-  "find": "\t\t\t    obj->echo_decay_fact, \"NE\");",
-  "replace": "\t\t\t    obj->echo_decay_fact, \"FE\");"
- },
- {
-  "label": "updateAlpha's overflow substitute becomes a clamp",
-  "find": "\t\tif (r < 0)\n\t\t\tr = 0x2000;",
-  "replace": "\t\tif (r < 0)\n\t\t\tr = 0;"
- },
- {
-  "label": "updateAlpha's rounding constant halved",
-  "find": "*alpha = (short)(-((r * gain + 0x2000) >> 15));",
-  "replace": "*alpha = (short)(-((r * gain + 0x1000) >> 15));"
- },
- {
-  "label": "updateAlpha's result is not negated",
-  "find": "*alpha = (short)(-((r * gain + 0x2000) >> 15));",
-  "replace": "*alpha = (short)(((r * gain + 0x2000) >> 15));"
- },
- {
-  "label": "updateAlpha's decay rounds by 0x2000",
-  "find": "*alpha = (short)((*alpha * decay + 0x4000) >> 15);",
-  "replace": "*alpha = (short)((*alpha * decay + 0x2000) >> 15);"
- },
- {
-  "label": "the echo energy report has energy and BETA swapped",
-  "find": "\t\t\t\t\t\"Echo Energy = %d, BETA = %d\\n\",\n\t\t\t\t\tobj->echo_energy, obj->echo_beta);",
-  "replace": "\t\t\t\t\t\"Echo Energy = %d, BETA = %d\\n\",\n\t\t\t\t\tobj->echo_beta, obj->echo_energy);"
- },
- {
-  "label": "the BETA threshold comparison is signed in the third arm",
-  "find": "\t\t\t} else if (obj->echo_beta > 2) {\n\t\t\t\tif ((unsigned)obj->echo_energy > 0xc65d40)",
-  "replace": "\t\t\t} else if (obj->echo_beta > 2) {\n\t\t\t\tif (obj->echo_energy > 0xc65d40)"
- },
- {
   "label": "NEC adaptation starts at count 1 rather than 0",
   "find": "\tif (count == 0) {\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V34NEC, Start NEC Adaptation\\n\");",
   "replace": "\tif (count == 1) {\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V34NEC, Start NEC Adaptation\\n\");"

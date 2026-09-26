@@ -1,6 +1,6 @@
 [
  {
-  "note": "src/service/mtk_tables.c against build/test/t_mtktab.  Every one of the 3,628 bytes is compared by memcmp AND entry by entry, so a single changed literal in any of the six tables is caught twice.  The mutations touch the first, a middle and the last entry of each table, which is what distinguishes a comparison that runs from one whose loop bound came out short."
+  "note": "src/service/TABLES.c against build/test/t_mtktab.  Every one of the 3,628 bytes is compared by memcmp AND entry by entry, so a single changed literal in any of the six tables is caught twice.  The mutations touch the first, a middle and the last entry of each table, which is what distinguishes a comparison that runs from one whose loop bound came out short."
  },
  {
   "label": "MTK_atan_table's first entry",

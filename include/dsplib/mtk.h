@@ -18,7 +18,7 @@
  * and the 512-byte one land on 32-byte boundaries in the object and the two
  * 16-byte ones only on 4; that is exactly GCC's i386 DATA_ALIGNMENT boost for
  * an array of at least 32 bytes when optimising, so there is nothing to
- * declare here.  See src/service/mtk_tables.c for the derivations.
+ * declare here.  See src/service/TABLES.c for the derivations.
  */
 
 #ifndef DSPLIB_MTK_H
