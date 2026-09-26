@@ -127845,3 +127845,55 @@ mutations / 0 non-unique / 0 detached; `mutsnap --check` 0 current / 285 stale;
 owes a re-record.  The `fpmphasor`/`fpmphasordp` suites from F11403 still do.
 
 (2026-09-26)
+
+## F11409. Four zero-symbol ours-only over-splits removed; their compile-time offset assertions moved verbatim into the owning units
+
+TU-reconciliation, the ours-only side of issue #6/#20/#67 -- the mirror of
+F11406, which added thirteen empty BLOB FILE records.  The blob side is closed
+(BOTH 279, blob-only 1 = `V34.c`); this pass begins closing OUR forty extra
+units by deleting the ones that define no symbol at all.
+
+**MEASURED: FOUR ours-only TUs ARE ZERO-SYMBOL.**  `nm` (including locals) on
+their period objects, and the object's own allocated sections, show no
+`FUNC`/`OBJECT` and no allocated bytes:
+
+    src/dsp/fpm_xor.c    the FPM popcount table moved to fpm_tables.c (F11403);
+                         only the file's leading comment and #include remain
+    src/v8/v8util.c      struct-offset assertions only, no code
+    src/fax/v21.c        struct-offset assertions only, no code; the V.21
+                         functions moved to V21rx/V21tx/V21r_*/V21t_* (F11390)
+    src/fax/v29.c        struct-offset assertions only, no code; the V.29
+                         functions/tables moved to V29rx/V29tx/V29txtab (F11391)
+
+Exactly as an empty `.c` produces one FILE record and zero bytes (F11406), so
+do these, but under names the object never had.  They are removed.
+
+**THE ASSERTIONS ARE APPARATUS AND ARE PRESERVED, NOT DROPPED.**  `v8util.c`,
+`v21.c` and `v29.c` carry the tree's `__SIZEOF_POINTER__`-guarded offset and
+size assertions.  Each guarded block is moved VERBATIM to the end of the unit
+the object's order gives the definitions it checks -- `src/v8/V8.c`,
+`src/fax/V21rx.c`, `src/fax/V29rx.c` -- after a short header comment saying
+where it came from.  The blocks are `typedef char`/`__builtin_offsetof`
+compile-time claims and emit no code; appending them after the functions
+cannot move a function's codegen, and `byteident` confirms it.
+
+**MEASURED (GCC 3.4.2-r2).**  TU scoreboard: names in BOTH **279**, blob-only
+**1** (`V34.c`), ours-only **40 -> 36**, our TUs **319 -> 315** (`tu-compare`).
+`byteident` grade 0 **843/1852** and grade 0-or-1 **895/1852**, both UNCHANGED
+-- no function byte moved.  `partialcmp` positioned bytes **66,876 -> 66,876**
+/943,398 unchanged; exact symbols 393/2,907 unchanged; exact relocations
+1011/18,317 unchanged; exact sections 70/92; NOBITS 2,836 ref / 2,808
+candidate unchanged; candidate symbol records 2,994 -> 2,990 (four empty
+inputs).  No census number regressed.
+
+**GATES.**  `make -j1 J=1 phase`: **385 passed, 0 failed**, boundary OK;
+`refcheck` 0 dangling; `anchorcheck` 285 suites / 10,038 mutations / 0
+non-unique / 0 detached; `mutsnap --check` 0 current / 285 stale (pre-existing
+whole-tree key); `git diff --check` clean.
+
+**NO MUTATION SUITE MOVED.**  None of `fpm_xor.c`, `v8util.c`, `v21.c` or
+`v29.c` is sourced by any suite (`suites.json`), so no anchor detached and
+nothing owes a re-record.  The `fpmphasor`/`fpmphasordp` suites from F11403
+still do.
+
+(2026-09-26)

@@ -731,3 +731,59 @@ V29RX_decision(struct fpm_fse *state, short *angle, short *mag)
 
 	return sym;
 }
+
+
+/*
+ * The V.29 struct-offset assertions, moved here verbatim from the deleted
+ * ours-only v29.c so the TU set matches the object.  Compile-time only;
+ * emits no code.
+ */
+
+/*
+ * The offsets this file states independently, checked against the one struct
+ * it borrows.  `__SIZEOF_POINTER__` is a GCC 4.6+ predefine, so under the
+ * period compiler this reads `#if 0` and the assertions vanish -- see
+ * docs/method/compilers.md; that is the tree's established idiom and not an
+ * oversight here.
+ */
+#if __SIZEOF_POINTER__ == 4
+typedef char v29fax_agc_signal[
+	(V29RX_AGC + (int)offsetof(struct fpm_agc, signal)
+	 == V29RX_AGC_SIGNAL) ? 1 : -1];
+typedef char v29fax_sre_active[
+	(V29RX_SRE + (int)offsetof(struct fpm_sre, active)
+	 == V29RX_SRE_ACTIVE) ? 1 : -1];
+typedef char v29fax_sre_adapt[
+	(V29RX_SRE + (int)offsetof(struct fpm_sre, adapt)
+	 == V29RX_SRE_ADAPT) ? 1 : -1];
+typedef char v29fax_fse_lms_force[
+	(V29RX_FSE + (int)offsetof(struct fpm_fse, lms_force)
+	 == V29RX_FSE_LMS_FORCE) ? 1 : -1];
+typedef char v29fax_fse_pll_on[
+	(V29RX_FSE + (int)offsetof(struct fpm_fse, pll_on)
+	 == V29RX_FSE_PLL_ON) ? 1 : -1];
+typedef char v29fax_fse_tilt_on[
+	(V29RX_FSE + (int)offsetof(struct fpm_fse, tilt_on)
+	 == V29RX_FSE_TILT_ON) ? 1 : -1];
+typedef char v29fax_fse_lms_on[
+	(V29RX_FSE + (int)offsetof(struct fpm_fse, lms_on)
+	 == V29RX_FSE_LMS_ON) ? 1 : -1];
+typedef char v29fax_fse_mse[
+	(V29RX_FSE + (int)offsetof(struct fpm_fse, mse)
+	 == V29RX_FSE_MSE) ? 1 : -1];
+/*
+ * And that the sub-objects do not overlap: the SRE ends where 0x120 begins
+ * and the FSE ends below the two buffers.  Without this the eight readings
+ * above would be arithmetic rather than layout.
+ */
+typedef char v29fax_sre_fits[
+	(V29RX_SRE + (int)sizeof(struct fpm_sre) <= V29RX_FSE) ? 1 : -1];
+typedef char v29fax_fse_fits[
+	(V29RX_FSE + (int)sizeof(struct fpm_fse) <= V29RX_BUF_MRF) ? 1 : -1];
+typedef char v29fax_agc_fits[
+	(V29RX_AGC + (int)sizeof(struct fpm_agc) <= V29RX_SRE) ? 1 : -1];
+typedef char v29fax_smc_direct[
+	(V29FP_SMC + (int)offsetof(struct fpm_smc, cfg)
+	 + (int)offsetof(struct fpm_smc_cfg, direct) == 0x38) ? 1 : -1];
+typedef char v29fax_tx_fp[(V29_OBJ_TX == V29TX_OBJ_FP) ? 1 : -1];
+#endif

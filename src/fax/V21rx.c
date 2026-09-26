@@ -269,3 +269,102 @@ V21RX_delete(void *modem)
 	sysdep_free(rx->hdx);
 	sysdep_free(modem);
 }
+
+
+/*
+ * The V.21 struct-offset assertions, moved here verbatim from the deleted
+ * ours-only v21.c so the TU set matches the object.  Compile-time only;
+ * emits no code.
+ */
+/*
+ * The layout above is a claim about a 32-bit object and is asserted as one.
+ * The guard is the tree's usual `__SIZEOF_POINTER__` one; `tools/assertlive.py`
+ * is what keeps it from quietly reading `#if 0` under a compiler that does not
+ * predefine it.
+ */
+#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+
+/*
+ * THE TYPEDEF NAME CARRIES `__LINE__`, AND THAT IS NOT DECORATION.  Naming it
+ * after the FIELD alone collides the moment two structures here share a field
+ * name, and two of them do: `mrf` is in both `v21_tx_dsp` and `v21_rx_dsp`.
+ * GCC 14 accepts an identical typedef redefinition (C11 permits it) and said
+ * nothing; GCC 3.4.2 rejects it outright, so `make period` -- the tier that
+ * decides -- would not compile this file at all.  A discriminator that cannot
+ * repeat is what keeps the next added field from bringing it back.
+ */
+#define V21_CAT2(a, b)	a##b
+#define V21_CAT(a, b)	V21_CAT2(a, b)
+#define V21_ASSERT_OFF(type, field, off) \
+	typedef char V21_CAT(v21_off_line_, __LINE__)[ \
+		((int)__builtin_offsetof(type, field) == (off)) ? 1 : -1]
+
+V21_ASSERT_OFF(struct v21_tx_dsp, fsm, 0x00);
+V21_ASSERT_OFF(struct v21_tx_dsp, mrf, 0x10);
+V21_ASSERT_OFF(struct v21_tx_dsp, scratch, 0x2c);
+V21_ASSERT_OFF(struct v21_tx_hdx, fifo, 0x00);
+V21_ASSERT_OFF(struct v21_tx_hdx, int_0004, 0x04);
+V21_ASSERT_OFF(struct v21_tx_hdx, handler, 0x08);
+V21_ASSERT_OFF(struct v21_tx_hdx, state, 0x0c);
+V21_ASSERT_OFF(struct v21_tx_hdx, short_000e, 0x0e);
+V21_ASSERT_OFF(struct v21_tx, result, 0x1c);
+V21_ASSERT_OFF(struct v21_tx, hdx, 0x20);
+V21_ASSERT_OFF(struct v21_tx, dsp, 0x24);
+
+V21_ASSERT_OFF(struct v21_rx_dsp, int_0004, 0x04);
+V21_ASSERT_OFF(struct v21_rx_dsp, int_0008, 0x08);
+V21_ASSERT_OFF(struct v21_rx_dsp, agc, 0x0c);
+V21_ASSERT_OFF(struct v21_rx_dsp, mrf, 0x38);
+V21_ASSERT_OFF(struct v21_rx_dsp, fsd, 0x54);
+V21_ASSERT_OFF(struct v21_rx_dsp, mtd, 0x8c);
+V21_ASSERT_OFF(struct v21_rx_dsp, mag, 0x90);
+
+V21_ASSERT_OFF(struct v21_rx_hdx, handler, 0x04);
+V21_ASSERT_OFF(struct v21_rx_hdx, state, 0x08);
+V21_ASSERT_OFF(struct v21_rx_hdx, countdown, 0x0a);
+V21_ASSERT_OFF(struct v21_rx_hdx, ones_run, 0x0c);
+V21_ASSERT_OFF(struct v21_rx_hdx, mark_seq, 0x0e);
+V21_ASSERT_OFF(struct v21_rx, status, 0x18);
+V21_ASSERT_OFF(struct v21_rx, ptr_001c, 0x1c);
+V21_ASSERT_OFF(struct v21_rx, ptr_0024, 0x24);
+V21_ASSERT_OFF(struct v21_rx, hdx, 0x4c);
+V21_ASSERT_OFF(struct v21_rx, dsp, 0x50);
+
+V21_ASSERT_OFF(struct v21_status, tx_bps, 0x02);
+V21_ASSERT_OFF(struct v21_status, rx_bps, 0x04);
+V21_ASSERT_OFF(struct v21_status, quality, 0x06);
+V21_ASSERT_OFF(struct v21_status, snr, 0x08);
+V21_ASSERT_OFF(struct v21_status, short_0a, 0x0a);
+V21_ASSERT_OFF(struct v21_status, short_0c, 0x0c);
+V21_ASSERT_OFF(struct v21_status, short_0e, 0x0e);
+V21_ASSERT_OFF(struct v21_status, short_10, 0x10);
+V21_ASSERT_OFF(struct v21_status, short_12, 0x12);
+V21_ASSERT_OFF(struct v21_status, flags, 0x14);
+V21_ASSERT_OFF(struct v21_status, flags1, 0x15);
+V21_ASSERT_OFF(struct v21_status, int_18, 0x18);
+
+/*
+ * The two DSP blocks are gapless: every offset above abuts the next, which is
+ * what makes the layout a reading of the object rather than a set of
+ * independent guesses.  Asserting the sizes is what would catch a sub-struct
+ * changing under us.
+ */
+typedef char v21_tx_dsp_size[(sizeof(struct v21_tx_dsp) == 0x30) ? 1 : -1];
+typedef char v21_rx_dsp_size[(sizeof(struct v21_rx_dsp) == 0x94) ? 1 : -1];
+typedef char v21_tx_hdx_size[(sizeof(struct v21_tx_hdx) == 0x10) ? 1 : -1];
+typedef char v21_tx_result_size[(sizeof(union v21_tx_result) == 4) ? 1 : -1];
+typedef char v21_rx_status_word_size[
+	(sizeof(union v21_rx_status_word) == 4) ? 1 : -1];
+typedef char v21_tx_size[(sizeof(struct v21_tx) == 0x28) ? 1 : -1];
+typedef char v21_rx_size[(sizeof(struct v21_rx) == 0x54) ? 1 : -1];
+
+/*
+ * The transmit config table is what `V21TX_create` copies onto the handle's
+ * head, whole; its size is the literal 28 `V21TX_create` itself carries
+ * (0x099328..0x09934d's six-plus-one dword copy), and confirming it here
+ * catches a struct-shape slip the same way `t_faxcfg.c`'s `offcheck.py` pass
+ * caught one for `v29rx_cfg` (finding F9059).
+ */
+typedef char v21tx_cfg_size[(sizeof(struct v21tx_cfg) == 0x1c) ? 1 : -1];
+
+#endif
