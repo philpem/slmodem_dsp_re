@@ -127618,3 +127618,67 @@ BOTH 263, blob-only 17 (13 real + 4 toolchain), ours-only 40, our TUs 305.
 `refcheck` 0 dangling; `git diff --check` clean.
 
 (2026-09-26)
+
+## F11406. The 13 zero-symbol blob FILE records are reproduced as empty translation units -- a measured file-set representation, not recovered content
+
+TU-reconciliation, the last of the blob-only FILE set (issue #6/#20/#67).
+F11405 measured that each of the thirteen candidates owns zero symbols in the
+symtab run between its `STT_FILE` record and the next, in any section:
+
+    V34ARRAY.c V34CONST.c MEMORYC.c V32RXTAB.c V32TXTAB.c B103.c B103int.c
+    faxvmi_tbls.c V17txtab.c V21rxtab.c Smc_tx.c Tab144.c Tx_rxtab.c
+
+The owner's goal is that the partial link's input FILE set match the original
+build's.  F11405 left the question of *what input produced a zero-symbol FILE
+record* open; this entry answers it empirically and exercises the answer.
+
+**THE EMPIRICAL TEST, ON THE PERIOD COMPILER (GCC 3.4.2-r2 Gentoo image).**  An
+empty `.c` compiles to an object whose entire `.symtab` is one `NOTYPE UND`,
+one `FILE <basename>.c`, and five `SECTION` entries (`.text`, `.data`, `.bss`,
+`.note.GNU-stack`, `.comment`); `ld -r` of that object with a non-empty one
+appends exactly one `STT_FILE` record, spelled with the basename, and adds
+**zero bytes** to every allocated section.  The same is true of a file whose
+whole body is a comment, a `typedef`, an `extern` declaration, or an unused
+`static const`/`static` function at `-O3` -- every spelling that emits no
+symbol.  So a zero-symbol FILE record is exactly what an empty (or fully
+eliminated) translation unit produces, and it is reproducible.
+
+**THE CHANGE.**  Thirteen empty `.c` files are added at the blob's own
+spellings (`readelf -sW` FILE names), each carrying a header comment recording
+that it is a **translation-unit record representation, not reconstructed
+content**:
+
+    src/pump/v34/V34ARRAY.c  src/pump/v34/V34CONST.c
+    src/core/MEMORYC.c       src/pump/v32/V32RXTAB.c
+    src/pump/v32/V32TXTAB.c  src/pump/b103/B103.c  src/pump/b103/B103int.c
+    src/fax/faxvmi_tbls.c    src/fax/V17txtab.c    src/fax/V21rxtab.c
+    src/fax/Smc_tx.c         src/fax/Tab144.c      src/fax/Tx_rxtab.c
+
+`recoverorder.py` places each at its blob ordinal by unique-basename
+correspondence even with no symbols (its `filename_choice` arm), so the link
+order matches.  This is a FILE-set match only.  It does not claim the original
+contents, and each file is replaceable the moment real content is recovered.
+
+**MEASURED (GCC 3.4.2-r2).**  TU scoreboard: names in BOTH **263 -> 276**,
+blob-only **17 -> 4** (now only `V34.c` plus the toolchain records `pow.S`,
+`<command line>`, `<built-in>`), ours-only **40 unchanged**, our TUs
+**305 -> 318**, tc-repro 318 objects, 283 ordering candidates.  `byteident`
+grade 0 **843/1852** and grade 0-or-1 **895/1852**, both UNCHANGED -- the new
+inputs define no function byte.  `partialcmp` positioned bytes **66,824
+unchanged** /943,398 (the promised no-op: empty inputs add no section bytes);
+exact symbols **376 -> 389** /2,907 (+13, one FILE record each); exact
+relocations 1011/18,317 unchanged; exact sections 69/92; NOBITS 2,836 ref /
+2,808 candidate unchanged.  No function lost exactness and no exact set
+regressed.
+
+**GATES.**  `make -j1 J=1 period`: **385 passed, 0 failed**.  Full
+`make -j1 J=1 phase`: **385 passed, 0 failed**, boundary OK; `refcheck` 0
+dangling; `anchorcheck` 285 suites / 10,038 mutations / 0 non-unique / 0
+detached; `mutsnap --check` 0 current / 285 stale (the whole-tree key on any
+`src/` edit); `git diff --check` clean.
+
+**NO MUTATION SUITE MOVED.**  None sources any of the thirteen new files (they
+define no symbol), so nothing owes a re-record from this entry.  The
+`fpmphasor`/`fpmphasordp` suites from F11403 still do.
+
+(2026-09-26)
