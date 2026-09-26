@@ -6,7 +6,7 @@
  * for what types each of them and why the byte count alone does not; this
  * file carries the bytes.  The transmitter's tables are in `V27txtab.c` and
  * the seven `V27RX_DEC_*` arrays are in `V27rxdec.c`; both were split out by
- * the object's FILE records (finding F11XXX).
+ * the object's FILE records (finding F11391).
  *
  *   V27_MTD_COEFF_2400         .data    0x007b20    20
  *   V27_MTD_COEFF_4800         .data    0x007b34    20
@@ -91,7 +91,7 @@
  * referenced only from `V27rx.c` / `V27r_prc.c` / `V27r_stc.c` functions.
  * The seven `V27RX_DEC_*` arrays and the thirty transmitter tables were
  * split out to `V27rxdec.c` and `V27txtab.c` by the same argument; the
- * .data/.rodata address brackets are in finding F11XXX.  Moving a table to
+ * .data/.rodata address brackets are in finding F11391.  Moving a table to
  * its own unit is layout-only: a data symbol's bytes do not depend on where
  * its definition sits.
  *

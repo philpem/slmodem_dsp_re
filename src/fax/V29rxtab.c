@@ -24,7 +24,7 @@
  *
  * THE DECISION TABLES ARE ELSEWHERE.  The five `V29RX_DEC_*` arrays moved to
  * `V29rxdec.c` and the transmitter tables to `V29txtab.c`, by the object's
- * FILE records (finding F11XXX); the fourteen below are `V29RX_create`'s.
+ * FILE records (finding F11391); the fourteen below are `V29RX_create`'s.
  *
  * ORDER.  Definitions are in the object's own address order within each
  * section, .rodata before .data, which is the order the emitting translation

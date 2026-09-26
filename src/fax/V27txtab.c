@@ -6,7 +6,7 @@
  * between `V27tx.c` and `V27_SDM.c`, and all thirty of these tables are
  * reached only from the transmit side (`V27tx.c`, `V27t_prc.c`, `V27t_stc.c`,
  * `V27t_int.c`) while no receive table is.  The reference census and the
- * .data/.rodata address bracket are in finding F11XXX.  The bodies are the
+ * .data/.rodata address bracket are in finding F11391.  The bodies are the
  * text that was in `V27rxtab.c`, moved verbatim, in the object's address
  * order.
  */

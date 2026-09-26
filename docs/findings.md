@@ -126421,3 +126421,108 @@ and none of the four `*_MESG`/`*_CTL`/`*_CFG` template groups is yet placed;
 they are named rather than guessed.  `Vtb_tab.c` (`Vtb_tab.c`'s own
 `VTB*` tables) remains the one record with no content claim at all in this
 pass.
+
+## F11391. The V.17/V.27/V.29 data tables split into their blob translation units; `Vtb_tab.c` claimed, the high-rate V.17 block and four other FILE records left with measured blockers
+
+The `.data`/`.rodata` side of the V.17/V.27/V.29 fax families (issue #6/#20/#67),
+the step F11390 named as "needs the per-object argument the `.text` side now
+has".  The argument is the reference partition: a table's `R_386_32`
+relocations name the `.text` functions that read it, and those functions now
+belong to KNOWN, object-correct TUs after the `.text` splits; a table reached
+only from one unit's functions is that unit's (or its named sibling).  The
+address bracket confirms it because `ld -r` concatenates each input's sections
+in link order, so a translation unit's `.data`/`.rodata` is contiguous and sits
+where its FILE record sits.
+
+**THE LINK-ORDER BRACKET IS MEASURED, NOT ASSUMED.**  The FILE records are the
+input order, and the `.text` addresses confirm it (V17rx.c code 0x96eb0,
+V17rxdec.c 0x97c40, V17tx.c 0x989e0, V21rx.c 0x98e70, ...).  The `.data` and
+`.rodata` runs line up with the same order and with the LOCAL anchors: the
+`AGC_DEF_ALPHA`/`AGC_DEF_BETA` pairs sit at 0x9e28/0x9e2c (V17), 0xab0c/0xab10
+(V27) and 0xb294/0xb298 (V29), each immediately after its own `V17rxtab.c`,
+`V27rxtab.c`, `V29rxtab.c` FILE record, and each inside that FILE's slot.  A
+table DEFINED in a TU must be in that TU's slot, so a table whose address is
+outside it cannot belong there whatever its readers.
+
+**V.27.**  `V27rxtab.c` held the receiver, the transmitter and the decoder
+tables.  Split, every body verbatim:
+
+  * `V27rxdec.c` (new) <- the seven `V27RX_DEC_*` arrays
+    (`V27RX_DEC_LAST_PHASE{,_2400,_4800}`, `V27RX_DEC_PMAP{,_2400,_4800}`,
+    `V27RX_DEC_PHS_MASK`).  All referenced only from `V27RX_create`; they fill
+    .data 0x007bc0..0x007c03, the slot between `V27rx.c`'s own configuration
+    (0x007b94..) and `V27rxtab.c`'s `V27RX_FSE_*` (0x007c04..).
+  * `V27txtab.c` (new) <- the thirty `V27TX_*` tables, reached only from
+    `V27tx.c` / `V27t_prc.c` / `V27t_stc.c` / `V27t_int.c`.
+  * `V27rxtab.c` keeps the receiver coefficient/gain tables.
+
+**V.29.**  The same shape, but the transmitter tables were in `v29.c` rather
+than `V29rxtab.c`:
+
+  * `V29rxdec.c` (new) <- the five `V29RX_DEC_*` arrays, .data
+    0x007e20..0x007eaf (slot between `V29rx.c`'s config and `V29rxtab.c`'s
+    `V29RX_FSE_*` at 0x007ec0), read only by `V29RX_decision`.
+  * `V29txtab.c` (new) <- the ten `V29TX_*` tables, reached only from the
+    transmit side.
+  * `V29rxtab.c` keeps the receiver tables.
+
+**V.17.**  `v17dec_tables.c` (ours-only) held the twenty-three decoder tables;
+split by the bracket:
+
+  * `V17rxdec.c` <- `FSEv17_decision` and the fifteen low-rate `DECv17_*`
+    tables that fill .rodata 0x009864..0x0099bf.  Every one is read only from
+    the slicers in `V17rxdec.c`, and the block is that unit's slot: between
+    `V17rx.c`'s `FSEv17_QCOFF`/`_ICOFF` (0x009780..0x009863) and
+    `V17rxtab.c`'s `SREv17_COFFS` (0x0099c0..).
+  * `Vtb_tab.c` (new) <- the eight `VTBv17_*` map tables, .rodata
+    0x00b580..0x00ba21, the slot between `V29txtab.c`'s last table (0x00b570)
+    and `cHDLCrx.c`'s `GAIN_THRESHOLD_TABLE` (0x00ba22); `Vmi_v17..29.c` and
+    `cDATA*.c` contribute no .rodata there.  The name `VTB` matches the FILE
+    `Vtb_tab.c` directly.  The reference set is two units (`V17rx.c` and
+    `V17t_int.c`) so it does not PARTITION the table, but it is the only
+    candidate in that slot and the name is the author's own.
+
+**MEASURED (GCC 3.4.2-r2), cumulative against the committed V.17 code split
+(`d1aedfe5`).**  `byteident` grade 0 **843/1852** and grade 0-or-1 **895**
+UNCHANGED through all three steps -- moving a global data definition does not
+move a function byte, and no function lost exactness.  `partialcmp` positioned
+bytes 67,847 -> 68,031 /943,398; exact symbols 346 -> 351 (the new FILE records
+`V27rxdec.c`, `V27txtab.c`, `V29rxdec.c`, `V29txtab.c`, `Vtb_tab.c`); exact
+sections 69/92; NOBITS 2,836 ref / 2,808 candidate unchanged.  exact relocations
+942 -> 936 falls by six: `.rel.text` entries that matched positionally now sit
+at the new TUs' offsets rather than the merged files'.  That is the known
+census-vs-exactness trade the V.27/V.29 splits recorded, with no function
+exactness lost and `byteident` level.
+
+**GATES.**  `make -j1 J=1 tc`: 312 objects from 312 sources, 0 failed.  Full
+`make -j1 J=1 phase`: **385 passed, 0 failed**, boundary OK (after F11391
+exists).  `refcheck` 0 dangling; `anchorcheck` 280 suites / 10,038 mutations /
+0 detached; `mutsnap --check` 0 current / 280 stale (pre-existing, no suite
+source changed); `git diff --check` clean.
+
+**DECLINED, WITH THE MEASUREMENT — the tables that do not partition cleanly.**
+
+  * **The eight high-rate `DECv17_*` (0x00bb80..0x00bfff) stay in
+    `v17dec_tables.c`.**  They are also read only from `V17rxdec.c`, but they
+    are NOT in that unit's slot: their address is the link window of
+    `Smc_tx.c` (579) / `Tab144.c` (580) / `Tx_rxtab.c` (581).  `Tab144.c` is
+    the leading candidate -- the name is the "14400 table" and V.32 has the
+    parallel `V32TAB144.c`, which owns the analogous high-rate `DECv32_*`
+    block at 0x7380 -- but the reference set does not separate the three.  The
+    V.32 parallel and the name are recorded; the rename is not made on them.
+  * **`V21_MRF_FILT` (0x00c000)** is in the same window, read by `V21rx.c` and
+    `V21tx.c`; assigned to no file.
+  * **`Smc_tx.c`** has no candidate: `Smc.c`'s `SMC_CFG` ends at 0x00bb6c and
+    the next .rodata is the `DECv17_*` block at 0x00bb80, so a `Smc_tx.c`
+    contribution would be under twenty bytes.
+  * **`faxvmi_tbls.c`** has no content claim: its only candidate objects,
+    `vmi_unpack`/`vmi_pack`/`vmi_reverse` (LOCAL, .rodata 0x94a8/0x94b4/0x94c0),
+    sit immediately after the `faxvmi.c` FILE record (524-526 after 523) and
+    before `faxvmi_asyc.c` (527), so they are `faxvmi.c`'s.
+
+**NO MUTATION SUITE MOVED.**  None sources `V27rxtab.c`, `V27rxdec.c`,
+`V27txtab.c`, `V29rxtab.c`, `V29rxdec.c`, `V29txtab.c`, `V17rxtab.c`,
+`V17rxdec.c`, `Vtb_tab.c`, `v17dec_tables.c` or `v29.c`'s tables, so
+`anchorcheck` stayed at 280 suites / 10,038 mutations / 0 detached and nothing
+was re-recorded.  The changed-file snapshot key is whole-tree stale from the
+source edit, as at `da6c627b`.
