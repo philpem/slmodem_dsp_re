@@ -448,7 +448,7 @@ def main():
 
     if args.json:
         def row(r):
-            return {"name": r["name"], "section": r["section"],
+            return {"num": r["num"], "name": r["name"], "section": r["section"],
                     "size": r["size"], "value": r["value"],
                     "type": r["type"], "bind": r["bind"],
                     "owner": owner_text(rown.get(r["num"]))}
@@ -462,7 +462,12 @@ def main():
             "extra": [row(r) for r in result["extra"]],
             "size_mismatch": [row(r) for r in result["size_mismatch"]],
             "section_mismatch": [row(r) for r in result["section_mismatch"]],
-            "matches": {str(k): [c["name"] for c in v]
+            # Keyed by the missing reference symbol's symtab `num`, which the
+            # missing rows above now carry.  Without `num` the join was
+            # impossible and a consumer saw an empty map (F11449).
+            "matches": {str(k): [{"name": c["name"], "section": c["section"],
+                                  "size": c["size"], "bind": c["bind"]}
+                                 for c in v]
                         for k, v in result["matches"].items()},
         }
         with open(args.json, "w") as f:
