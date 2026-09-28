@@ -35,7 +35,7 @@ extern struct v21rx_ctl V21RX_CTL;
  * so kept `static` rather than declared in a header; nothing else in this
  * translation unit reaches it.
  */
-static const unsigned short HDLC_LOOK_CARRIER_LEVELS[4] = {
+static const unsigned short GAIN_THRESHOLD_TABLE[4] = {
 	514, 727, 1026, 1450,
 };
 
@@ -417,7 +417,7 @@ _hdlc_receive_between_buffers_state(struct fax_class1 *ctx, const short *rx,
  * `ctx->vmi_a->link->int_0014`'s own +0x50, up to FOUR signed 16-bit reads
  * at +0x2c of the pointer chain (re-chased each iteration, since the object
  * re-reads it every loop pass rather than hoisting it), each compared
- * against `HDLC_LOOK_CARRIER_LEVELS[i]` -- the FIRST index `i` (0..3) where
+ * against `GAIN_THRESHOLD_TABLE[i]` -- the FIRST index `i` (0..3) where
  * the chased value is LESS than the table entry stops the scan; ELSE (no
  * match in 4 tries) the scan is abandoned silently and this whole "CONNECT"
  * arm is skipped.  On a match: `ctx->gain_attenuation_db = 12 - 3*i` (the object's own
@@ -515,7 +515,7 @@ _hdlc_receive_look_carrier_state(struct fax_class1 *ctx, const short *rx,
 			p = *(char **)((char *)modem + 0x50);
 			v = *(short *)(p + 0x2c);
 
-			if (v < (short)HDLC_LOOK_CARRIER_LEVELS[i]) {
+			if (v < (short)GAIN_THRESHOLD_TABLE[i]) {
 				ctx->gain_attenuation_db = 12 - 3 * i;
 				if (dsplibs_debug_level > 1)
 					dsplibs_debug_printf(

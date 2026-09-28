@@ -29,7 +29,7 @@
  * addends where the running object holds addresses, which is exactly how the
  * first version failed.
  */
-static const short detector_table[8] = {
+static const short c2100[8] = {
 	     0,      0,      0,      0,  -6608,  15416,  -5792,  15416
 };
 
@@ -818,7 +818,7 @@ v8handshakinit(struct v8 *v)
 		v->deadline_b = deadline(v->timeout_b);
 		v->elapsed = 0;
 
-		v8_detectorinit(v, &v->detector, detector_table, 0, 100, 50,
+		v8_detectorinit(v, &v->detector, c2100, 0, 100, 50,
 				1500, 0);
 		v8_phase_rev_init(&v->phase_rev);
 

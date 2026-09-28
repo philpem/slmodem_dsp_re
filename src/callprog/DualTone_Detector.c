@@ -47,7 +47,7 @@
  * and Nyquist; the passband is centred at 0.26 of the sample rate, which is
  * 2100 Hz at the 8000 Hz this module runs at.
  */
-static const short DualTone_bp_coeff[5 * DUAL_TONE_BP_SECTIONS] = {
+static const short IIRFilterCoef[5 * DUAL_TONE_BP_SECTIONS] = {
 	6862, -8192,  1495,      0, 8192,
 	7508,  8192, -1140, -16384, 8192,
 	7531,  8192,  4185,  16384, 8192
@@ -57,7 +57,7 @@ static const short DualTone_bp_coeff[5 * DUAL_TONE_BP_SECTIONS] = {
  * .rodata+0x6d2e.  Entry 0 duplicates the literal input shift and is never
  * read; entries 1 to 3 rescale each section's output.
  */
-static const short DualTone_bp_shift[4] = { 3, 3, 3, 0 };
+static const short IIRFilterScales[4] = { 3, 3, 3, 0 };
 
 /*
  * The three notches.  All share pole radius 0.9, so all share a2; only b1 and
@@ -227,9 +227,9 @@ Dual_TONE_detect(struct dual_tone *st, const short *samples, int count)
 		int s;
 
 		for (s = 0; s < DUAL_TONE_BP_SECTIONS; s++) {
-			x = bp_section(&st->bp[4 * s], &DualTone_bp_coeff[5 * s],
+			x = bp_section(&st->bp[4 * s], &IIRFilterCoef[5 * s],
 				       x);
-			x = (short)((int)x >> DualTone_bp_shift[s + 1]);
+			x = (short)((int)x >> IIRFilterScales[s + 1]);
 		}
 
 		ya = notch(st->notch_a, x, NOTCH_A_B1, NOTCH_A_A1);
