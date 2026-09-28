@@ -95,7 +95,7 @@ const unsigned short SMCv32_PMAP_ABS16[4] = { 1, 5, 13, 9 };
  * Four 3-bit rotations per entry, selected by a shift of `quad * 4`.  Dumped
  * as bytes this reads "paapBSSB4%%4" and is not a string.
  */
-const unsigned short SMCv32_MOD[8] = {
+unsigned short SMCv32_MOD[8] = {
 	0x6170, 0x7061, 0x5342, 0x4253,
 	0x2534, 0x3425, 0x1706, 0x0617
 };

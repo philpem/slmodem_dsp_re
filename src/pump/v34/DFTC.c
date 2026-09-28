@@ -54,7 +54,7 @@
  * link order -- it sits between V34hshak.c's last static and DPSK.c's first
  * -- and by `cosread` being a one-line accessor for it and nothing else.
  */
-const short costbl[256] = {
+short costbl[256] = {
 	 16384,  16379,  16364,  16339,  16305,  16260,  16206,  16142,
 	 16069,  15985,  15892,  15790,  15678,  15557,  15426,  15286,
 	 15136,  14978,  14810,  14634,  14449,  14255,  14053,  13842,

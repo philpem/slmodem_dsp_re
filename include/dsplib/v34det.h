@@ -189,7 +189,7 @@ struct v34_dftbin {
  * reproducible from its own generator: see docs/coefficients.md for the
  * one entry that disagrees.
  */
-extern const short costbl[256];
+extern short costbl[256];
 
 /**
  * @brief Read the shared cosine table, wrapping the index.

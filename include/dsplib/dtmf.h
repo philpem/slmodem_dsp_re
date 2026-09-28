@@ -141,8 +141,8 @@ struct dtmf *create_dtmf(struct dtmf *d);
  * 697 770 852 941 1209 1336 1477 1633 Hz -- see notch.h for what the four
  * mean and docs/coefficients.md for the design.
  */
-extern const float eur_coef[4 * DTMF_TONES];
-extern const float us_coef[4 * DTMF_TONES];
-extern const float biascoef[4];
+extern float eur_coef[4 * DTMF_TONES];
+extern float us_coef[4 * DTMF_TONES];
+extern float biascoef[4];
 
 #endif /* DSPLIB_DTMF_H */

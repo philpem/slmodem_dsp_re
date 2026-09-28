@@ -272,9 +272,9 @@ int cid_modem(const short *samples, unsigned short count, struct cid *cid);
  * three in `.data` rather than `.rodata` -- so `const` here is this tree's
  * reading of the intent and not the original's storage class.
  */
-extern const short fix_LPF[17];
-extern const short AUTOCOR_COEF_7200[5];
-extern const short AUTOCOR_COEF_9600[5];
+extern short fix_LPF[17];
+extern short AUTOCOR_COEF_7200[5];
+extern short AUTOCOR_COEF_9600[5];
 
 /**
  * @brief Test accessor for CID_MTD_detect()'s four file-static coefficient

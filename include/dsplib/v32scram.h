@@ -64,9 +64,9 @@ struct v32_sdm {
  *                the three modes `V32FP_recreate` can install, so at least
  *                three of the four entries are reachable.
  */
-extern const short SDMv32_GPA[4];
-extern const short SDMv32_GPC[4];
-extern const short SDMv32_CFG[3];
+extern short SDMv32_GPA[4];
+extern short SDMv32_GPC[4];
+extern short SDMv32_CFG[3];
 
 /**
  * @brief Scramble `count` V.32 words in place with the self-synchronising scrambler.

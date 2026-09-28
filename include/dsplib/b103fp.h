@@ -123,7 +123,7 @@ struct b103_cfg {
 #define B103_TONES_BELL103  0
 #define B103_TONES_V21      1
 
-extern const struct b103_cfg B103_CFG_data;
+extern struct b103_cfg B103_CFG_data;
 
 /*
  * The half-duplex states are all one type, so B103FP_modem can hold the
@@ -375,7 +375,7 @@ short RxHdxStartB103(struct b103fp *fp, short *in, short *out, short *count);
 short RxHdxDataB103(struct b103fp *fp, short *in, short *out, short *count);
 
 /** @brief Indexed by `hdx->mode`; entries are the three `B103*NextState` functions. */
-extern void (*const B103NextState[3])(struct b103fp *fp);
+extern void (*B103NextState[3])(struct b103fp *fp);
 
 /**
  * @brief One call of the datapump, both directions.
@@ -433,7 +433,7 @@ extern const short B103_IIR_LPF[15];		/* 3 biquads: the lowpass   */
 extern const short MTDb103_COEF[10];		/* 2 biquads: the detector  */
 
 /* Bell 103's gain-control configuration, in b103_agc_cfg.c. */
-extern const struct fpm_agc_cfg AGCb103_CFG_data;
+extern struct fpm_agc_cfg AGCb103_CFG_data;
 
 /**
  * @brief Advance the local-loopback half-duplex machine.

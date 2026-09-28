@@ -60,13 +60,13 @@
  * in Q15, which is why the correlation below is a plain >> 15 with no other
  * scaling.
  */
-const short fix_LPF[17] = {
+short fix_LPF[17] = {
 	-883, -1023, -713, 159, 1547, 3226, 4842, 6010, 6436,
 	6010, 4842, 3226, 1547, 159, -713, -1023, -883
 };
 
-const short AUTOCOR_COEF_9600[5] = { 0, 0, 0, 0, -29491 };
-const short AUTOCOR_COEF_7200[5] = { 0, 32767, 0, 0, 0 };
+short AUTOCOR_COEF_9600[5] = { 0, 0, 0, 0, -29491 };
+short AUTOCOR_COEF_7200[5] = { 0, 32767, 0, 0, 0 };
 
 /* Half a bit either side of the slicing level is no decision at all. */
 #define CID_FSD_DEADZONE	22

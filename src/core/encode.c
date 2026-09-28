@@ -46,7 +46,7 @@
  * Nine appears twice and zero not at all; it is not a permutation of 0..9
  * and there is no arithmetic in it worth deriving.  Emitted as found.
  */
-static const int offsetarr[ENCODE_KEY_LEN] = {
+static int offsetarr[ENCODE_KEY_LEN] = {
 	4, 6, 2, 7, 1, 9, 3, 5, 8, 7
 };
 

@@ -62,7 +62,7 @@
 #include "dsplib/mtk.h"
 
 /* atan(i/256), i = 0..256; the last entry is pi/4. */
-const float MTK_atan_table[257] = {
+float MTK_atan_table[257] = {
 	0.0f, 0.0039062302f, 0.007812341f, 0.011718214f,	/*   0 */
 	0.015623729f, 0.019528767f, 0.02343321f, 0.027336938f,	/*   4 */
 	0.031239834f, 0.035141777f, 0.03904265f, 0.042942334f,	/*   8 */
@@ -131,7 +131,7 @@ const float MTK_atan_table[257] = {
 };
 
 /* sin(i*pi/512), i = 0..256: a quarter wave plus its end point. */
-const float MTK_sin_table[257] = {
+float MTK_sin_table[257] = {
 	0.0f, 0.0061358847f, 0.012271538f, 0.01840673f,	/*   0 */
 	0.024541229f, 0.030674804f, 0.036807224f, 0.04293826f,	/*   4 */
 	0.049067676f, 0.055195246f, 0.061320737f, 0.06744392f,	/*   8 */
@@ -200,7 +200,7 @@ const float MTK_sin_table[257] = {
 };
 
 /* cos(i*pi/512), the same quarter wave read backwards. */
-const float MTK_cos_table[257] = {
+float MTK_cos_table[257] = {
 	1.0f, 0.99998116f, 0.9999247f, 0.9998306f,	/*   0 */
 	0.9996988f, 0.9995294f, 0.9993224f, 0.99907774f,	/*   4 */
 	0.99879545f, 0.99847555f, 0.9981181f, 0.99772304f,	/*   8 */
@@ -269,17 +269,17 @@ const float MTK_cos_table[257] = {
 };
 
 /* The sine's sign by quadrant: + + - -. */
-const float MTK_sin_sign[4] = {
+float MTK_sin_sign[4] = {
 	1.0f, 1.0f, -1.0f, -1.0f,
 };
 
 /* The cosine's sign by quadrant: + - - +. */
-const float MTK_cos_sign[4] = {
+float MTK_cos_sign[4] = {
 	1.0f, -1.0f, -1.0f, 1.0f,
 };
 
 /* popcount(i) as a short, i = 0..255. */
-const short MTK_xor_table[256] = {
+short MTK_xor_table[256] = {
 	0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4,	/*   0 */
 	1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,	/*  16 */
 	1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,	/*  32 */

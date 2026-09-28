@@ -92,9 +92,9 @@ extern "C" {
  * docs/coefficients.md.  They are global in the object, so they are declared
  * rather than made static.
  */
-extern const short intcoef1[V34_FSK_TAPS];
-extern const short intcoef2[V34_FSK_TAPS];
-extern const short intcoef3[V34_FSK_TAPS];
+extern short intcoef1[V34_FSK_TAPS];
+extern short intcoef2[V34_FSK_TAPS];
+extern short intcoef3[V34_FSK_TAPS];
 
 /**
  * @brief The FSK demodulator's state and configuration, 0x16 bytes, kept at

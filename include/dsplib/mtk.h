@@ -29,18 +29,18 @@ extern "C" {
 #endif
 
 /* Quarter waves, i = 0..256, indexed by the low 8 bits of the scaled angle. */
-extern const float MTK_sin_table[257];
-extern const float MTK_cos_table[257];
+extern float MTK_sin_table[257];
+extern float MTK_cos_table[257];
 
 /* Sign by quadrant, indexed by bits 8-9 of the same scaled angle. */
-extern const float MTK_sin_sign[4];
-extern const float MTK_cos_sign[4];
+extern float MTK_sin_sign[4];
+extern float MTK_cos_sign[4];
 
 /* atan(i / 256.0), i = 0..256. */
-extern const float MTK_atan_table[257];
+extern float MTK_atan_table[257];
 
 /* popcount(i), i = 0..255. */
-extern const short MTK_xor_table[256];
+extern short MTK_xor_table[256];
 
 #ifdef __cplusplus
 }

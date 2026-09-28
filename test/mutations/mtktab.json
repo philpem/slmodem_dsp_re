@@ -34,13 +34,13 @@
  },
  {
   "label": "MTK_sin_sign's third quadrant is positive",
-  "find": "const float MTK_sin_sign[4] = {\n\t1.0f, 1.0f, -1.0f, -1.0f,",
-  "replace": "const float MTK_sin_sign[4] = {\n\t1.0f, 1.0f, 1.0f, -1.0f,"
+  "find": "float MTK_sin_sign[4] = {\n\t1.0f, 1.0f, -1.0f, -1.0f,",
+  "replace": "float MTK_sin_sign[4] = {\n\t1.0f, 1.0f, 1.0f, -1.0f,"
  },
  {
   "label": "MTK_cos_sign's fourth quadrant is negative",
-  "find": "const float MTK_cos_sign[4] = {\n\t1.0f, -1.0f, -1.0f, 1.0f,",
-  "replace": "const float MTK_cos_sign[4] = {\n\t1.0f, -1.0f, -1.0f, -1.0f,"
+  "find": "float MTK_cos_sign[4] = {\n\t1.0f, -1.0f, -1.0f, 1.0f,",
+  "replace": "float MTK_cos_sign[4] = {\n\t1.0f, -1.0f, -1.0f, -1.0f,"
  },
  {
   "label": "MTK_xor_table's first row loses a bit",

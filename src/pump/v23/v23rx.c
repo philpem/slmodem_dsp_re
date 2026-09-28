@@ -78,8 +78,8 @@
  * tables that are only accidentally equal is how a later edit to one of them
  * silently changes the other.
  */
-static const short V23_AGC_DEF_ALPHA[2] = { 16384, 32604 };
-static const short V23_AGC_DEF_BETA[2] = { 16384, 1638 };
+static short V23_AGC_DEF_ALPHA[2] = { 16384, 32604 };
+static short V23_AGC_DEF_BETA[2] = { 16384, 1638 };
 
 /*
  * Gain control for the data path.

@@ -72,7 +72,7 @@ void FPM_MRF_free(struct fpm_mrf *state);
 
 /** @brief Library default configuration: 9:10, no coefficients. A template
  *  for callers to copy and patch `coeff`, not a usable filter on its own. */
-extern const struct fpm_mrf_cfg FPM_MRF_CFG;
+extern struct fpm_mrf_cfg FPM_MRF_CFG;
 
 /**
  * @brief Resample @p count input samples through one MRF filter.
