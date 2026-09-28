@@ -128172,3 +128172,136 @@ current / 285 stale; `git diff --check` clean.  **The `vcedle` suite still owes
 its F11410 re-record.**
 
 (2026-09-26)
+
+## F11424. The mutation tier's four mechanical defects, and the note-shape crash that --jobs 1 exposed
+
+A pass over the F11414 plan. Four fixes, all apparatus except one source
+include, each with the measurement that justified it.
+
+**1. `tools/mutate.py` serial-path NOTE crash.** A mutation set's preamble is
+documented as an object with a `note` key, but several sets -- `dcr`,
+`fpmfserecv`, `v22dec`, `v22fp`, `v22fse`, `v22recv` -- carry a BARE ARRAY OF
+STRINGS split one paragraph per line, which JSON allows. The serial path
+printed every non-`find` entry with `note.get("note", "")`, which raises
+`AttributeError: 'list' object has no attribute 'get'` and aborts the suite
+before one mutation runs. `--jobs N` fans the suite into shards and a shard
+SKIPS that loop entirely, so the parallel path never saw it and `--jobs 1` did.
+The memory bound on this host (`default_jobs()` reads 1) made `--jobs 1` the
+only path, which is how the targeted pass came to leave `fpmfserecv` and
+`v22fp` stale. `note_text()` renders dict, list/tuple and str generically.
+
+**2. `src/pump/v22/v22mod.c` did not include `dsplib/fpm.h`.** It calls
+`FPM_rms()` (line ~1697) with no prototype in scope. This is a genuine missing
+declaration, not a modern-compiler demand. The include is declaration-only and
+provably cannot move code generation: the period object
+`build/tc_out/src_pump_v22_v22mod.c.o` is byte-identical with and without it
+(md5 `6ac3179f143fcb89103955ea76f211fb` both ways), `make period` is **385
+passed / 0 failed**, and the tree's grades are unchanged at **grade 0 = 844,
+grade 0-or-1 = 895** (F11414's figures). Recorded under issue #30.
+
+**3. `psd` and `v90equ` are DECLARED, not STALE.** Both suites run a binary in
+`tools/gccdiverge.json` (`t_psd` / `t_v90equ`), which exits non-zero on the
+unmutated modern source, so `tools/mutate.py` correctly refuses to score it
+(F2157/F3002/F6002). F6002 named the missing piece: `mutsnap.py --check` had
+three classes, so such a suite read either STALE (asking for a re-run that can
+never succeed) or MISSING (failing the gate for a suite that is registered and
+unrecordable). It is now its own class, printed with the register key and
+finding, counted on the verdict line, skipped before the run by `--update`
+without a spurious failure, and neither stale nor missing. Shown to fire:
+removing `t_psd`/`t_v90equ` from a copy of the register returns `None` for both
+(they revert to STALE); restored, they return findings 1453 and 2304. Two
+suites are declared, so `mutsnap --check` reads
+`N current, M stale, 0 never recorded, 2 declared-unscoreable, of 285`.
+`mutsnap.py` is not in the mutation closure, so this invalidated no key.
+
+**4. Re-record `fpmfserecv` and `v22fp`.** With (1) fixed they re-record
+cleanly on the pinned GCC 13.3.0 container (`tools/modern/run.sh`,
+`MUTATE_WORKDIR` on disk, `--jobs 1`): `fpmfserecv` 45 mutations, 43 caught,
+2 equivalent; `v22fp` 5 mutations, 4 caught, 1 equivalent. Both verdict sets
+are IDENTICAL to the previous record -- only the keys moved.
+
+## F11425. The mutation worker copied 948 MB of the PERIOD compiler's output per suite
+
+`mutate.py`'s `enter_workdir` copied every entry under `build/` except `test/`.
+That was correct when `build/` held only the modern objects, and silently
+became wrong as more build trees were added beside them: **`build/period` alone
+is 948 MB** of GCC 3.4.2 objects that no part of the modern mutation tier can
+read, and the copy is made once per worker -- once per suite, once per shard.
+Measured with the new `MUTATE_TIMING=1` instrument (container, `--jobs 1`):
+
+    copy size   1.1 GB  ->  77 MB
+    copy time     7.30 s ->  1.40 s
+
+It is now an allow-list sized to what `build_and_run` invokes -- `make <the
+suite's test binary>` and `make strings`. The test link rule is
+`test/%: unit/%.o $(TESTHOST_OBJ) $(HARNESS_OBJ) $(REF)` and all 285
+registered suites resolve through it (checked: none names a spandsp or
+otherwise special binary), so the prerequisites are `repro`, `testhost`,
+`test/harness`, `test/unit`, `dsplibs_ref.o`, `dsplibs_glob.o`, `globals.txt`,
+`symmap.txt`, `test_visible.txt` and `test_redefine.txt`.
+`build/period`, `build/tc_out`, `build/tc_repro`, `build/src`, `build/safety`,
+`build/partial` and `build/tumap.json` are deliberately absent. A target added
+to `build_and_run` later that reads one of them fails loudly, and the list is
+where to add it.
+
+## F11426. `testvisible.py` spawned `nm` 307 times; the whole cost was the spawns
+
+`tools/testvisible.py` scans every reconstructed object and called `nm` once
+per object -- 307 process spawns. Measured with `MUTATE_TIMING`, that was
+**8.3 s of the 8.9 s** a per-mutation rebuild spent before recompiling, and it
+is paid again on every mutation because the mutated object is newer than the
+emitted stamp. `nm` accepts many objects and prints a `<path>:` header before
+each, so the scan is now one process -- **8.3 s -> 0.64 s**. The parse is
+header-driven and matched against the paths passed, not against the shape of
+the line (most symbol lines have no leading blank; a symbol name cannot contain
+a colon). A batch that fails falls back to the per-object path so an error
+still names the object. Output is byte-identical, verified by running old and
+new over `build/repro` and diffing both the visible list and the redefine list;
+byte identity means nothing linked against the globalized copies can move, so
+no verdict changes. `testvisible.py` is not in the mutation closure either.
+
+**MEASURED per-mutation rebuild, pinned GCC 13.3.0 container, `--jobs 1`:**
+
+    build_mutation   18.3 s/call  ->  3.58 s/call
+      testvisible.py      8.9 s    ->  0.64 s
+      compile one object              0.98 s
+      objcopy one testhost object     0.77 s
+      link 307 objects                3.8 s
+    copy              7.30 s      ->  1.40 s
+
+The link is now the floor **and is left alone deliberately**: removing it
+needs a prelinked-relocatable or shared-library split of the test link, which
+changes what the mutated source is linked against and cannot be accepted
+without its own independent validation. Recorded, not taken. `--jobs` is not
+the lever here: `default_jobs()` reads 1 on a 3-core / 3.8 GB host, and the
+owner's box is small; the pinned container is entered ONCE per `mutsnap` run
+(`run.sh` wraps the whole command), so there is no per-compile `docker run` to
+remove, and GCC 13.3.0 is not installed natively on this host (only GCC 14.2),
+so the container stays the modern-tier authority.
+
+## F11427. A `tools/mutate.py` edit re-stales every key, because it is in the closure
+
+Editing `tools/mutate.py` moved `mutsnap --check` from master's
+`44 current / 241 stale` to `0 current / 283 stale / 2 declared`. That is the
+closure working as designed: `CLOSURE` hashes `Makefile`, `src`, `include`,
+`test/harness` and `tools/mutate.py`, and a recorded verdict was produced by a
+different runner. The note-rendering, copy-narrowing and timing changes are all
+verdict-neutral -- the re-record reproduces every prior verdict -- but the key
+is deliberately coarse, and narrowing it to hash only the classification code
+is the "precise and unsound" move `mutsnap.py`'s own header rejects. So the
+re-record target is **283** stale suites, not 241, and that number is a
+consequence of the runner fixes in this pass, stated rather than discovered.
+
+**PART C, measured.** The optimised pipeline re-records a suite at roughly
+`4 s fixed + 3.6 s per mutation`. Batch A (20 smallest stale suites, 45
+mutations) went 20 CURRENT with every verdict unchanged. The full 263-suite
+remainder holds ~9,900 mutations and is therefore on the order of ten hours on
+this host; it does not fit one session. The batches are committed as they land
+and `mutsnap --check` carries the denominator, so the next run resumes from the
+count rather than re-deriving it. The suites with a known-red modern baseline
+(`floatarma`, `v27status`, `v34hshak`, `v90sddet`, `v90specshaper`,
+`v90specver`, `v90ssfilter`, `v92modstate`, `v92ratestd`, `v92unpck`) cannot be
+re-recorded on this tier and are excluded from the batches, reported here so
+their staleness is not read as untried.
+
+(2026-09-28)
