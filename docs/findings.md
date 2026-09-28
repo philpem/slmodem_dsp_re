@@ -128455,3 +128455,177 @@ is therefore recorded, but `mohdet.cpp` is **not merged this pass**: it is a
 separate ours-only unit and merging it is a third file into the same TU, with
 its own order and suite-anchor work, and it carries no F11414 pressure.  It is
 left for the next pass with its owner now named.
+
+## F11440. `mohdet.cpp` merged into `VPcmV34Main.cpp`: F11433's owner executed, ours-only 23 -> 22, exact SET preserved
+
+The merge F11433 left for the next pass.  FILE 17 (`VPcmV34Main.cpp`) fills
+`.text` 0x5f80..0x6200 with `retrainDetector` (0x5f80), `resetRetrainDetector`
+(0x6110) and `interpretMohTimeouts` (0x6190), immediately before
+`SetUpstreamModulationInfo` (0x6200), and no FILE record lies between
+`dp_wrapper.c` (16) and `VPcmV34Main.cpp` (17).  All three bodies moved
+verbatim from `src/pump/v90/mohdet.cpp` into `src/pump/v34/VPcmV34Main.cpp`
+in that order; the file is removed and `suites.json`'s `mohdet` entry is
+retargeted.  `#include "dsplib/mohdet.h"` supplies the tag and the prototypes.
+
+The mangled names are `_Z15retrainDetectorP17tag_retrainReqDetPsi`,
+`_Z20resetRetrainDetectorP17tag_retrainReqDets` and `_Z19interpretMohTimeouts`
+-- the trailing `s` in the last is the Itanium encoding of the `short`
+parameter, not part of the function name -- and all three match the blob.
+
+**MEASURED (GCC 3.4.2-r2).**  TU scoreboard: names in BOTH 279, blob-only 1
+(`V34.c`), ours-only **23 -> 22**, our TUs 305 -> 304.  `byteident` grade 0
+**844/1852** and grade 0-or-1 **895/1852**, both UNCHANGED, and the exact SET
+is byte-identical (the non-exact symbol inventories diff clean).  `partialcmp`
+positioned bytes **67,072 -> 67,014** /943,398 (a -58 census); exact
+relocations **1,072 -> 1,123** /18,317 (+51); exact symbols 394/2,907 and
+exact sections 70/92 unchanged; NOBITS 2,836/2,808 unchanged.  The -58 census
+is the boundary-correct/census trade F11429 accepted (-162), with the exact
+set preserved and one more census column moved favourably.  No function lost
+exactness.
+
+**GATES.**  `make -j1 J=1 phase`: 385 passed, 0 failed, boundary OK;
+`refcheck` 0 dangling; `anchorcheck` 285 suites / 10,038 mutations / 0
+non-unique / 0 detached (the merged file did not collide the suite's
+anchors); `git diff --check` clean.  The `mohdet` suite owes a re-record from
+the path change.  (2026-09-28)
+
+## F11441. The data-assignment enumeration lever, tested on two slots: partialcmp positional agreement is NOT unique and penalises the correct merge
+
+The proposed lever for the owner-unresolved data families was to enumerate the
+table->file assignment and adopt the one that makes `tools/partialcmp.py`'s
+positional section agreement best.  Prototyped on two two-candidate slots of
+the V.32 and B103 families; both refute it.
+
+**SLOT 1 -- V.32 receiver config, `V32RXTAB.c` (FILE 118) vs `V32TXTAB.c`
+(122).**  `src/pump/v32/v32fse_tables.c` (`FSEv32_ICOFF/QCOFF/CFG`,
+`CRRv32_CLK/PLL_K1/K2`) moved wholesale into each empty placeholder in turn.
+The two cells are **byte-for-byte identical** on every score: positioned
+67,012/943,398, `.data` 17,083/38,292, exact symbols 393/2,907, exact
+relocations 1,084/18,317.  Cause: the objects between FILE 118 and FILE 122
+(`V32SMC_TX.c`, `V32TAB144.c`, `V32TXHDX.c`) contribute only `.rodata`, so
+the FSE block lands at the SAME `.data` offset either way, and both FILE
+names are already present as TUs, so the symbol set does not change.  The
+lever cannot see the assignment at all.
+
+**SLOT 2 -- B103 tables, `B103.c` (154) vs `B103tab.c` (156).**
+`src/pump/b103/b103_tables.c` (`B103_BPF_ANSWER/CALLER`, `B103_MRF_FILT_TX/RX`,
+`B103_IIR_LPF`, `B103_CHAN_INTRP`, `MTDb103_COEF`) moved into each candidate:
+
+    baseline (file left separate, ours-only)  67,014  .rodata 8,415  reloc 1,123
+    -> B103.c                                 66,783  .rodata 8,185  reloc 1,076
+    -> B103tab.c                              66,738  .rodata 8,140  reloc 1,076
+
+The two candidates DO differ (by 45 positioned bytes), but **both are worse
+than leaving the file unmerged**, and the winner is not the one the blob's
+slot would predict.  The lever's verdict is "do not merge", which is the
+opposite of the reconstruction goal.
+
+**THE CONFOUNDER, MEASURED.**  The positional score cannot be a valid oracle
+because the candidate sections are structurally mismatched: candidate `.data`
+32,580 vs reference 38,292 (**-5,712**) and candidate `.rodata` 75,300 vs
+69,476 (**+5,824**).  Byte-at-the-same-offset agreement is dominated by that
+global misalignment, not by whether a table sits in its object's TU; the same
+confounding makes F11408/F11414's `V34.c` merge forms score as they do.
+
+**CONCLUSION.**  On the tested slots the enumeration score is not unique
+(slot 1) and actively penalises the correct move (slot 2), so the lever does
+not resolve the owner-unresolved data families.  The seven V.32 table files,
+`v32anstone.c`, `v17dec_tables.c`, `b103_cfg.c`/`b103_tables.c`, `faxcfg.c`
+and `fifo.c` remain genuinely unreachable by this lever, with the measured
+blocker still the absent local anchor plus the section-size mismatch.  A lever
+that could recover the section sizes first is the precondition; the assignment
+experiment should not be repeated before then.  No source changed; the tree
+was restored.  (2026-09-28)
+
+## F11442. `modulatevector`'s call-edge census is IDENTICAL to the blob's: the two `V34.c` merge forms name no missing helper
+
+The directory-aware next test for the last blob-only name.  Resolve every
+relocation in the blob's `modulatevector` (0x59e40, 3,388 bytes) and in ours
+(0xa22c0, 2,877 bytes, deficit 511) to its target symbol:
+
+    BLOB  calls (R_386_PC32): getFrame, txmit, V34nlencoder      (3)
+          data  (R_386_32):   smIndex, quarter, gInvertPat       (3)
+    OURS  calls (R_386_PC32): getFrame, txmit, V34nlencoder      (3)
+          data  (R_386_32):   smIndex, quarter, gInvertPat       (3)
+
+Both carry 9 relocations (4 PC32, 5 R_386_32) and the **target sets are equal**.
+So the current split does NOT inline a helper the object keeps out-of-line,
+nor the reverse: the 511-byte deficit is a code-shape difference inside the
+function, not an inlining-boundary difference.  No helper is named, and the
+F11408/F11414 merge forms' 887-byte deficit is consistent with their emission
+order changing the inlining of `getFrame`/`txmit`/`V34nlencoder` (which the
+blob keeps as calls), which is why the merge is correctly declined.  The test
+the task proposed yields a negative and no new source work.  (2026-09-28)
+
+## F11443. The `v34hstx1.cpp` symbol surface: 19 spurious GLOBALs, and the helper closure that blocks the shared-header fix
+
+The blob defines **0** `v34tx1_*` symbols; this tree exports **19** GLOBALs
+the object inlines into `v34handshak` -- 17 from `src/pump/v34/v34hstx1.cpp`
+and 2 (`v34tx1_xmitmp`, `v34tx1_tx_dpsk`) from `V34hshak.c` itself.
+
+**THE PRESCRIBED FIX WAS ATTEMPTED AND IS BLOCKED BY A MEASURED HELPER
+CLOSURE.**  The 17 `.cpp` arms are otherwise self-contained (their undefined
+symbols are all global/extern: `v90Phase34`, `k56FlexPhase34`, `txmit`,
+`V34nlencoder`, `v34FreezeEcho`, ... and none are `V34hshak.c` statics), so
+they were moved verbatim into `include/dsplib/v34hstx1_arms.h` as `static`
+definitions, `v34hstx1.h`'s 17 prototypes replaced by an include, and
+`v34hstx1.cpp` removed.  The period compiler **rejected** it:
+
+    V34hshak.c:3064: error: redefinition of 'tx1_get'  (arms header :268)
+    V34hshak.c:3076: error: redefinition of 'tx1_put'
+    V34hshak.c:3167: error: redefinition of 'tx1_put_point'
+    V34hshak.c:3191: error: redefinition of 'tx1_dpsk4'
+
+The arms' own static helpers are **also** defined independently in
+`V34hshak.c`, so the two copies cannot share one translation unit.  The 2
+in-TU arms add a second knot: `v34tx1_xmitmp` calls the `V34hshak.c`-local
+statics `tx1_mp16`/`tx1_mp4` (lines 3172/3202), and `t_v34hstx1.c` calls both
+in-TU arms, so they cannot simply drop to `static` either.  Untangling this
+needs either renamed helpers (a source change with codegen risk) or moving the
+shared helper closure into the header for all 19 arms.
+
+**THE RENAME VARIANT WAS TRIED AND IS MEASURED.**  The four colliding helpers
+are byte-identical between the two files, so renaming the header's copy is
+behaviour-preserving; it compiled (300 objects, 0 failed) and bought real
+ground:
+
+    positioned bytes        67,014 -> 67,384 /943,398  (+370)
+    v34tx1_* symbols       19 -> 5  (14 arms inlined away; 3 large arms and
+                                     the 2 in-TU arms remain)
+    candidate symbols      2,976 -> 2,965
+    exact relocations      1,123 and exact symbols 394 unchanged
+
+It was then REVERTED anyway: renaming `tx1_get`/`tx1_put`/`tx1_put_point`/
+`tx1_dpsk4` detaches **143 of `v34hstx1.json`'s 535 anchors** (`anchorcheck`
+"NOT UNIQUE ... matches 0 time(s)"), and the four helpers are only the head of
+a shared closure (`tx1_bitsource`, `tx1_mp_reload`, `tx1_mp_sequence_end`,
+`tx1_mp16`, `tx1_mp4`, `tx1_dpsk_tone`, ...) also used by V34hshak.c's own
+functions, so moving the closure into the header cascades.  The AGENTS rule
+that anchors stay 0-detached / 0-non-unique decides it: the change is
+reverted, the scratch header deleted, and the tree left at the F11440 commit.
+
+So the fix is not the two-line `static` the task's shape suggests; it is a
+helper-closure migration with a mutation-anchor consolidation in the same
+change, and the +370/symbol-surface gain above is the measuring stick for that
+future pass.  The symbol surface therefore still carries 19 extra GLOBALs.
+(2026-09-28)
+
+## F11444. `v34handshak`'s residual, re-measured: the arms are out-of-line and the diagnostics are absent -- it is not a boundary-only gap
+
+Confirming the F11414 note that the residual is unreconstructed
+`dsplib_debug_level > 1` diagnostics.  Measured over the symbol's own `.text`
+range (`readelf -rW`):
+
+    blob   v34handshak  61,541 bytes   1,587 relocs   262 dsplibs_debug_printf refs
+    ours   v34handshak   8,686 bytes     158 relocs    23 dsplibs_debug_printf refs
+    ours   V34hshak.c.o whole            450 PC32      155 debug refs
+    ours   v34hstx1.o                     95 PC32       22 debug refs
+
+Ours is not a boundary-only gap: the blob's 61,541 bytes contain the 19 arms
+inlined, while ours keeps them out-of-line, and the 262-vs-23 debug reference
+count is far larger than any inlining would explain.  The arms' header itself
+records the same gap ("every arm that changes `txstate` ... has a diagnostic
+behind `dsplibs_debug_level > 1` that this tree has not reconstructed").  So
+the residual is two measured things -- out-of-line arms and unreconstructed
+diagnostics -- and F11414's characterisation is confirmed.  `v34handshak` is
+not chased further, per the task.  (2026-09-28)

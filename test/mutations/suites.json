@@ -1013,7 +1013,7 @@
   "build/test/t_v90demod"
  ],
  "mohdet": [
-  "src/pump/v90/mohdet.cpp",
+  "src/pump/v34/VPcmV34Main.cpp",
   "build/test/t_mohdet"
  ],
  "cidwrap": [
