@@ -105,6 +105,56 @@ def objects_under(root):
     return sorted(found)
 
 
+def all_defined_locals(objs):
+    """Every object's LOCAL/GLOBAL sets in ONE nm invocation.
+
+    The per-object `defined_locals` spawns one `nm` per object, and this tool
+    scans every reconstructed object -- 307 of them -- so the 307 process
+    spawns WERE the whole cost (8.3 s of an 8.9 s run, measured with
+    MUTATE_TIMING).  `nm` takes many objects and prints a `<path>:` header
+    before each object's symbols, so batched it is one process (F11426).
+
+    The parse is HEADER-DRIVEN and matched against the paths we passed rather
+    than against the shape of the line: most `nm` symbol lines have no leading
+    blank, so "a line that starts in column 0 is a header" would be wrong.
+    A symbol name cannot contain `:`, so a header is unambiguous, and matching
+    it against `objs` also rejects a stray diagnostic line.
+
+    The output is identical to the per-object version, which is checked by
+    running both over `build/repro` and comparing the two lists byte for byte.
+    A batch that fails for any reason falls back to the per-object path, so a
+    tool that has always named the offending object on error still does.
+    """
+    if not objs:
+        return {}
+    if len(objs) == 1:
+        return {objs[0]: defined_locals(objs[0])}
+    out = subprocess.run(["nm", "--defined-only", "--"] + objs,
+                         capture_output=True, text=True)
+    if out.returncode != 0:
+        return {o: defined_locals(o) for o in objs}
+    headers = {o + ":": o for o in objs}
+    per = {}
+    current = None
+    for line in out.stdout.splitlines():
+        key = line.rstrip()
+        if key in headers:
+            current = headers[key]
+            per.setdefault(current, ([], []))
+            continue
+        parts = line.split()
+        if current is None or len(parts) < 3:
+            continue
+        name = parts[-1]
+        if parts[-2] in "tdrb":
+            per[current][0].append((name, parts[-2]))
+        elif parts[-2] in "TDRBC":
+            per[current][1].append(name)
+    for o in objs:
+        per.setdefault(o, ([], []))
+    return per
+
+
 def referenced_tokens(test_root):
     tokens = set()
     word = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
@@ -150,8 +200,9 @@ def main():
     seen = {}
     globals_ = set()
     redefine = {}
+    per_object = all_defined_locals(objs)
     for obj in objs:
-        local, global_ = defined_locals(obj)
+        local, global_ = per_object.get(obj, ([], []))
         globals_.update(global_)
         for name, kind in local:
             plain = internal_plain(name, kind)

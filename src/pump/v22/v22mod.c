@@ -29,6 +29,7 @@
 #include <string.h>
 
 #include "dsplib/debug.h"
+#include "dsplib/fpm.h"
 #include "dsplib/fpm_agc.h"
 #include "dsplib/fpm_mtd.h"
 #include "dsplib/fpm_sdm.h"

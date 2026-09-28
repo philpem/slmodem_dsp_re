@@ -89,6 +89,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import time
 
 #
 # OPERATE ON THIS SCRIPT'S OWN TREE, whatever the caller's directory is.
@@ -128,6 +129,44 @@ os.chdir(REAL_TREE)
 # side -- 88% of a sweep spent inside one timeout nobody had noticed.
 #
 RUN_TIMEOUT = 120
+
+
+#
+# WHERE THE TIME GOES, MEASURED RATHER THAN GUESSED.
+#
+# The mutation tier is the slowest thing this tree does, and until this
+# existed nobody could say WHICH part of it: the per-worker tree copy, the
+# incremental build, the full relink inside it, the test run, or the string
+# sweep.  `MUTATE_TIMING=1` makes every phase accumulate its own wall time and
+# the run print the totals -- on STDERR, so no parser that reads stdout (a
+# parent shard, mutsnap.py) can be confused by it, and OFF by default so no
+# recorded verdict depends on it.  Each phase carries its CALL COUNT too, so
+# the per-call cost is visible and a phase that did nothing cannot read as
+# fast.  Findings F11425 onward.
+#
+TIMING = {}
+
+
+def _timed(phase, t0):
+    if os.environ.get("MUTATE_TIMING"):
+        TIMING.setdefault(phase, [0.0, 0])
+        TIMING[phase][0] += time.monotonic() - t0
+        TIMING[phase][1] += 1
+
+
+def timing_report():
+    if not os.environ.get("MUTATE_TIMING") or not TIMING:
+        return
+    total = sum(v[0] for v in TIMING.values())
+    sys.stderr.write("mutate.py: timing (wall seconds, calls)\n")
+    for phase, (secs, calls) in sorted(TIMING.items(),
+                                       key=lambda kv: -kv[1][0]):
+        sys.stderr.write("  %-10s %8.2f s  %5d calls  %6.3f s/call\n"
+                         % (phase, secs, calls, secs / calls))
+    sys.stderr.write("  %-10s %8.2f s\n" % ("TOTAL", total))
+
+
+atexit.register(timing_report)
 
 
 #
@@ -196,14 +235,19 @@ def diverge_note(test, out):
             "divergent check has to be split out of it."
             % (os.path.basename(test), ", ".join(hits), entry.get("finding", "?")))
 
-def build_and_run(target, test):
+def build_and_run(target, test, tag="mutation"):
+    t0 = time.monotonic()
     b = subprocess.run(["make", target], capture_output=True, text=True)
+    _timed("build_" + tag, t0)
     if b.returncode != 0:
         return None, b.stderr, None
     try:
+        t0 = time.monotonic()
         r = subprocess.run([test], capture_output=True, text=True,
                            timeout=RUN_TIMEOUT)
+        _timed("run_" + tag, t0)
     except subprocess.TimeoutExpired:
+        _timed("run_" + tag, t0)
         return 1, "TIMED OUT after %ds" % RUN_TIMEOUT, "hang"
     if r.returncode != 0:
         return r.returncode, r.stdout, "test"
@@ -222,7 +266,9 @@ def build_and_run(target, test):
     # reachable at all.  A set caught entirely by `strings` is a set whose call
     # sites are still undriven, which is the thing task #50 exists to fix.
     #
+    t0 = time.monotonic()
     s = subprocess.run(["make", "strings"], capture_output=True, text=True)
+    _timed("strings", t0)
     if s.returncode != 0:
         return s.returncode, s.stdout + s.stderr, "strings"
     return r.returncode, r.stdout, None
@@ -303,6 +349,48 @@ SUITES = "test/mutations/suites.json"
 # suite in the tree, from the commit that added the register onwards.
 COPY = ("Makefile", "src", "include", "test", "tools", "docs")
 WORKDIR_PREFIX = "mutate-"
+
+#
+# WHAT OF `build/` THE COPY ACTUALLY NEEDS -- AND WHY THE OLD "EVERYTHING BUT
+# test/" WAS A 948 MB MISTAKE.
+#
+# This used to copy every entry under `build/` except `test/`.  That was
+# correct when `build/` held only the modern objects, and it silently became
+# wrong as more build trees were added beside them: `build/period` alone is
+# **948 MB** of PERIOD objects, built by the GCC 3.4.2 container, which no part
+# of the modern mutation tier can read.  The copy is made once per worker
+# (once per suite, and per shard), so the tier was paying to copy a gigabyte of
+# another compiler's output for every suite it ran.  Measured: 1.1 GB a copy,
+# 7.3 s of them, against the ~18 s a single-mutation build then cost.
+#
+# The list is an ALLOW-LIST and is sized to what `build_and_run` invokes --
+# `make <the suite's test binary>` and `make strings`.  The test link rule is
+# `$(BUILD)/test/%: unit/%.o $(TESTHOST_OBJ) $(HARNESS_OBJ) $(REF)`, and every
+# one of the 285 registered suites resolves through it (verified: none names a
+# spandsp or otherwise special binary), so the prerequisites are exactly:
+#
+#   repro/            the reconstructed objects the mutant is compiled into
+#   testhost/         the globalized copies the test binaries link
+#   test/harness/     the harness objects
+#   test/unit/        the per-suite driver objects
+#   dsplibs_ref.o     $(REF) -- the renamed blob
+#   dsplibs_glob.o    the globalized blob $(REF) is built from
+#   globals.txt       $(GLOBALS), a prerequisite of $(SYMMAP)
+#   symmap.txt        $(SYMMAP), a prerequisite of $(REF)
+#   test_visible.txt  $(TESTVISIBLE): save the baseline from regenerating it
+#   test_redefine.txt $(TESTREDEFINE)
+#
+# `make strings` reads `src/`, `docs/invented_strings.txt` and the blob and
+# touches none of this, so the list is unchanged for it.  `build/period`,
+# `build/tc_out`, `build/tc_repro`, `build/src`, `build/safety`,
+# `build/partial` and `build/tumap.json` are all for the period, similarity,
+# safety and map tiers and are deliberately absent.  A target added to
+# `build_and_run` later that reads one of them fails loudly, and this is where
+# to add it.  Finding F11425.
+#
+BUILD_KEEP = ("repro", "testhost", "dsplibs_ref.o", "dsplibs_glob.o",
+              "globals.txt", "symmap.txt", "test_visible.txt",
+              "test_redefine.txt")
 
 #
 # WHERE THE PER-WORKER COPIES LIVE, AND WHY IT IS NOT $TMPDIR.
@@ -411,6 +499,7 @@ def enter_workdir():
     restore -- happens inside the copy.
     """
     reap_stale_workdirs()
+    t_copy = time.monotonic()
     #
     # $BLOB is resolved HERE, while the cwd is still the real tree, because
     # nothing about the copy's location can find it: it is under $TMPDIR, so
@@ -440,8 +529,9 @@ def enter_workdir():
     _cp([p for p in COPY if os.path.exists(p)], d)
     if os.path.isdir("build"):
         os.makedirs(os.path.join(d, "build"))
-        _cp([os.path.join("build", e) for e in sorted(os.listdir("build"))
-             if e != "test"], os.path.join(d, "build"))
+        _cp([os.path.join("build", e) for e in BUILD_KEEP
+             if os.path.exists(os.path.join("build", e))],
+            os.path.join(d, "build"))
         bt = os.path.join("build", "test")
         if os.path.isdir(bt):
             os.makedirs(os.path.join(d, bt))
@@ -460,6 +550,7 @@ def enter_workdir():
         os.makedirs(os.path.join(d, "third_party"), exist_ok=True)
         os.symlink(os.path.realpath(sp), os.path.join(d, sp))
     os.chdir(d)
+    _timed("copy", t_copy)
     #
     # STDERR, not stdout.  Three separate parsers read a child's stdout here --
     # mutsnap.py's verdict regexes, run_parallel's SHARD_MARK, run_all's
@@ -491,6 +582,29 @@ def enter_workdir():
 # kind of thing that drifts apart from the first.
 #
 SHARD_MARK = "##SHARD##"
+
+
+def note_text(note):
+    """Render a NOTE entry of any shape the sets actually use.
+
+    A note is any entry with no `find`.  The documented shape is a dict with a
+    "note" key, but several sets carry a BARE LIST OF STRINGS as their preamble
+    -- prose split into a paragraph per line -- and that is JSON-legal and was
+    always meant to be read.  The serial path printed it with `note.get(...)`,
+    which raises `AttributeError: 'list' object has no attribute 'get'` and
+    aborted the suite before a single mutation ran.  It went unnoticed because
+    `--jobs N` fans the suite out into shards, and a shard SKIPS this loop
+    entirely (the `else` branch below is reached only on the serial path), so
+    the parallel path never saw it and `--jobs 1` did.  Finding F11424.
+
+    Anything else is stringified rather than dropped: a note this cannot read
+    is still better printed than silently omitted.
+    """
+    if isinstance(note, dict):
+        return note.get("note", "")
+    if isinstance(note, (list, tuple)):
+        return "\n        ".join(str(x) for x in note)
+    return str(note)
 
 
 def report(total, uncaught, broken, equivalent, surprises, by):
@@ -905,7 +1019,7 @@ def main():
         muts = shard_of(muts, args.shard)
     else:
         for note in [m for m in entries if "find" not in m]:
-            print("  note  %s" % note.get("note", ""))
+            print("  note  %s" % note_text(note))
     good = open(args.source).read()
     target = args.test
 
@@ -929,7 +1043,7 @@ def main():
     uncaught, broken, equivalent, surprises = [], [], [], []
     by = {"test": 0, "strings": 0, "hang": 0}
     try:
-        rc, out, _ = build_and_run(target, args.test)
+        rc, out, _ = build_and_run(target, args.test, "baseline")
         if rc != 0:
             sys.exit("baseline is not green -- fix that first:\n" +
                      (out or "") + diverge_note(args.test, out or ""))

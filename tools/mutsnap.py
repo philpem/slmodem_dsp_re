@@ -170,6 +170,48 @@ def registered():
             if not k.startswith("_") and isinstance(v, list) and len(v) == 2}
 
 
+DIVERGE = os.path.join("tools", "gccdiverge.json")
+
+
+def _declared_cache():
+    """basename -> tools/gccdiverge.json entry, loaded once per process."""
+    if not _DECLARED_CACHE:
+        _DECLARED_CACHE.append({
+            k: v for k, v in load(DIVERGE, {}).items() if not k.startswith("_")})
+    return _DECLARED_CACHE[0]
+
+
+_DECLARED_CACHE = []
+
+
+def declared_entry(entry):
+    """The gccdiverge entry for a suite's test binary, or None.
+
+    A binary with an entry in tools/gccdiverge.json exits non-zero on the
+    UNMUTATED modern source, and tools/mutate.py judges a mutant caught by a
+    non-zero exit -- so it cannot distinguish "the mutation was caught" from
+    "this baseline was already red" and refuses the SUITE, not the row
+    (findings F2157 and F3002).  Such a suite can therefore NEVER be recorded,
+    and it must not read as either of the two things the old three-class check
+    would have called it:
+
+      * not STALE, which says "re-run this and it will go current"; and
+      * not MISSING, which `cmd_check` treats as a hard defect for a registered
+        suite that was never recorded.
+
+    It is its own class, printed with the register key and finding so the
+    reason travels with it, and counted on the verdict line so the denominator
+    cannot hide it.  Finding F6002 names this class as the prerequisite for
+    retiring `psd`'s and `v90equ`'s entries without rotting their anchors out
+    of anchorcheck.py's sweep.  `mutsnap.py` is not in the mutation closure
+    (Makefile, src/, include/, test/harness/, tools/mutate.py), so this change
+    invalidates no recorded key.
+    """
+    if not entry or len(entry) != 2:
+        return None
+    return _declared_cache().get(os.path.basename(entry[1]))
+
+
 #
 # `%-52s` PADS BUT DOES NOT TRUNCATE.
 #
@@ -239,6 +281,19 @@ def cmd_update(args):
         if name not in reg:
             print("  no such suite: %s" % name)
             return 1
+        #
+        # A DECLARED BINARY IS SKIPPED BEFORE THE RUN, not after it.  mutate.py
+        # would refuse its baseline anyway; running it first only spends the
+        # copy-and-build and then reports a failure that is expected.  Nothing
+        # is written, so any existing entry -- itself unquotable, being stale --
+        # is left alone rather than refreshed or deleted.
+        #
+        d = declared_entry(reg[name])
+        if d is not None:
+            print("  %-16s DECLARED -- %s in tools/gccdiverge.json (finding "
+                  "%s); cannot be scored, left as-is"
+                  % (name, os.path.basename(reg[name][1]), d.get("finding", "?")))
+            continue
         verdicts, summary, out = run_suite(name, args.jobs)
         if not verdicts and "FAILED" in summary:
             #
@@ -321,10 +376,20 @@ def cmd_check(args):
     snap = load(SNAP, {})
     reg = registered()
     have = snap.get("suites", {})
-    current, stale, missing, bad = [], [], [], []
+    current, stale, missing, bad, declared = [], [], [], [], []
     for name in sorted(reg):
         e = have.get(name)
-        if not e:
+        #
+        # DECLARED FIRST, so a suite whose binary is in tools/gccdiverge.json
+        # is never counted as stale or missing whatever its recorded key says.
+        # The class is about the BINARY and not the record: a declared binary
+        # cannot be scored no matter how fresh the entry looks.
+        #
+        d = declared_entry(reg[name])
+        if d is not None:
+            declared.append((name, os.path.basename(reg[name][1]),
+                             d.get("finding", "?")))
+        elif not e:
             missing.append(name)
         elif e.get("key") == suite_key(name, reg[name]):
             current.append(name)
@@ -362,6 +427,10 @@ def cmd_check(args):
                         % (got, actual)))
     for n in stale:
         print("  stale    %-16s %s" % (n, have[n].get("summary", "")))
+    for n, binary, finding in declared:
+        print("  DECLARED %-16s %s is in tools/gccdiverge.json (finding %s) -- "
+              "unscoreable on this build, neither stale nor missing"
+              % (n, binary, finding))
     for n in missing:
         print("  MISSING  %-16s registered, never recorded" % n)
     for n in orphaned:
@@ -369,11 +438,16 @@ def cmd_check(args):
     for n, why in bad:
         print("  INCONSISTENT %-16s %s" % (n, why))
     print("\n  mutation snapshot: %d current, %d stale, %d never recorded, "
-          "of %d registered" % (len(current), len(stale), len(missing),
-                                len(reg)))
+          "%d declared-unscoreable, of %d registered"
+          % (len(current), len(stale), len(missing), len(declared), len(reg)))
     if stale:
         print("  A stale entry is not a baseline -- re-run those suites "
               "rather than quoting it.")
+    if declared:
+        print("  A declared suite is not a defect either: its binary exits "
+              "non-zero on the unmutated modern source, so mutate.py cannot "
+              "score it (F2157/F3002).  Its anchors stay in anchorcheck's "
+              "sweep and its record is left as it was.")
     hard = missing or orphaned or bad
     return 1 if (hard or (args.strict and stale)) else 0
 
@@ -386,6 +460,9 @@ def cmd_verify(args):
     names = args.suite or sorted(have)
     bad = 0
     for name in names:
+        if name in reg and declared_entry(reg[name]) is not None:
+            print("  %-16s DECLARED -- cannot be scored" % name)
+            continue
         e = have.get(name)
         if not e:
             print("  %-16s never recorded" % name)
