@@ -1005,11 +1005,11 @@
   "build/test/t_vpcmtabs"
  ],
  "vpcmxfcreate": [
-  "src/pump/v90/VPcmXfCreate.cpp",
+  "src/pump/v90/VpcmFloModem.cpp",
   "build/test/t_vpcmctor"
  ],
  "vpcmxfterm": [
-  "src/pump/v90/VPcmXfTerm.cpp",
+  "src/pump/v90/VpcmFloModem.cpp",
   "build/test/t_v90demod"
  ],
  "mohdet": [
