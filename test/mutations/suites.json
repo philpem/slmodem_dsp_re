@@ -161,7 +161,7 @@
   "build/test/t_psd"
  ],
  "pulse": [
-  "src/call/pulse.c",
+  "src/call/call.c",
   "build/test/t_pulse"
  ],
  "resampler": [
