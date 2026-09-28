@@ -128305,3 +128305,153 @@ re-recorded on this tier and are excluded from the batches, reported here so
 their staleness is not read as untried.
 
 (2026-09-28)
+
+## F11428. The four ours-only over-splits closed by recovering the object's EMISSION ORDER, preserving the exact set in all four
+
+TU-reconciliation close-out (issue #6/#20/#67): the F11414 register's
+membership-clear but order-sensitive many-to-one groups.  Four merges were
+attempted, each by **assembling the merged source in the object's own
+`nm -n` order, compiling with the period compiler, and diffing the exact
+SET** -- the lever F7796/F7800 established and the V.34 table reorder
+(commit 53568d9c) reused.  All four preserve `byteident` grade 0 (844/1852)
+and grade 0-or-1 (895/1852) with a byte-identical exact SET, and
+`make -j1 J=1 phase` is **385 passed, 0 failed** after each.
+
+The five entries below carry the per-merge order, measurement and suites.
+The combined effect:
+
+    ours-only:      28 -> 23
+    names in BOTH:  279 (unchanged)
+    blob-only:      1, V34.c (unchanged)
+    grade 0 / 0-or-1: 844 / 895 (unchanged, exact SET byte-identical)
+    positioned bytes: 66,952 -> 67,072 /943,398
+    exact relocations: 1,063 -> 1,072 /18,317
+    exact symbols: 394 /2,907 (unchanged)
+    exact sections: 70/92 (unchanged);  NOBITS 2,836 ref / 2,808 candidate
+
+No exact function was lost in any merge; three of the four moved a census
+number favourably and none moved `byteident` at all.  The block order follows
+the object's FILE records: `call.c` (8), `VPcmV34Main.cpp` (17),
+`VpcmFloModem.cpp` (18), `V90Modem.cpp` (31).
+
+## F11429. `pulse.c` merged into `call.c`: a pure concatenation that already had the object's emission order
+
+`pulse.c` was an ours-only over-split of FILE 8 (`call.c`).  Our `call.c`
+already emitted `call_GetSRegister, call_create, call_delete, call_run,
+dp_call_init, dp_call_exit` in the object's order, and `pulse.c` emitted its
+five arms in the object's order after them, so appending `call_of` and the
+five bodies VERBATIM after `dp_call_exit` reproduced the object's run with no
+reordering and no byte moved.
+
+    ours-only 28 -> 27;  exact SET identical (844, 0 lost, 0 gained)
+    positioned 66,952 -> 66,790 (-162 census); exact reloc 1,063 -> 1,066
+    exact symbols 394; sections 70/92; NOBITS unchanged
+    make -j1 J=1 phase 385 passed, 0 failed
+
+The `pulse` mutation suite is retargeted `src/call/pulse.c` ->
+`src/call/call.c`; its nine anchors stay unique (`anchorcheck` 0 detached /
+0 non-unique) but it owes a re-record from the path change.
+
+## F11430. `VPcmXfCreate.cpp` + `VPcmXfTerm.cpp` merged into `VpcmFloModem.cpp`: the destructor to the head, the `VPCMXF_` pair at the class's foot
+
+FILE 18 is `VpcmFloModem.cpp` and carries the whole family.  The object emits
+`D2, D1`, the setters/getters through `getDFEE`, `VPCMXF_Delete`,
+`VPCMXF_SessionTermination`, `qcLineVerification`, `C1`, `VPCMXF_Create`,
+`C2`.  The definitions were moved verbatim into that order.
+
+    ours-only 27 -> 25;  exact SET identical (844, 0 lost, 0 gained)
+    positioned 66,790 -> 66,775 (-15 census); exact reloc 1,066 -> 1,057 (-9)
+    exact symbols 394; sections 70/92; NOBITS unchanged
+    make -j1 J=1 phase 385 passed, 0 failed
+
+The five exact functions -- `VPCMXF_Create` (495 B), `VPCMXF_SessionTermination`,
+`qcLineVerification`, `D1`, `D2` -- are all preserved.  GCC 3.4.2's cgraph
+emits `qcLineVerification` after the `C1/Create/C2` foot rather than between
+`SessionTermination` and `C1` as the object has it, while `C1,
+VPCMXF_Create, C2` DO match the object's relative order; the exact SET is
+unchanged with the source in the object's order and no further permutation was
+taken (the SET is the gate, and it did not move).  `vpcmxfcreate` and
+`vpcmxfterm` are retargeted to `src/pump/v90/VpcmFloModem.cpp`; their anchors
+stay unique and both owe a re-record.
+
+## F11431. `V90ModemCtor.cpp` merged into `V90Modem.cpp`, and the F1264 anchor collision resolved in the same commit
+
+FILE 31 is `V90Modem.cpp`; `V90ModemCtor.cpp` existed only so two
+`if (DSPLIB_DEBUG_ON())` blocks would not share one mutation-suite namespace
+(F1264).  The object emits `D2, D1, printTitle, C1, C2, reset, setSessionFlag,
+progress`, so the destructor went to the head, `printTitle` stayed, the
+constructor followed it, and the three remaining members followed in object
+order.
+
+    ours-only 25 -> 24;  exact SET identical (844, 0 lost, 0 gained)
+    positioned 66,775 -> 66,799 (+24 favourable); exact reloc 1,057 unchanged
+    exact symbols 394; sections 70/92; NOBITS unchanged
+    make -j1 J=1 phase 385 passed, 0 failed
+
+Both constructors are byte-EXACT before and after; GCC emits the pair `C2, C1`
+where the object has `C1, C2`, and the pair stays exact either way.  F1264's
+collision did happen: `\tsessionFlag = flag;` (also in `setSessionFlag`) and
+`\tswitch (side) {` (also in `reset`) each matched twice, so both
+`v90modemctor.json` anchors were extended with constructor-unique context --
+`side = modemSide;` and the first arm's own `sysdep_malloc(sizeof(V90Modulator))`
+-- leaving the mutations unchanged.  `anchorcheck` returned to 0 detached /
+0 non-unique; the suite owes a re-record.
+
+## F11432. `v34pcmif.c` merged into `VPcmV34Main.cpp` -- a C-to-C++ move, and 54 functions assembled in the object's exact order
+
+FILE 17 is `VPcmV34Main.cpp` and its `.text` runs 0x5f80..0xd02e with 67
+functions, of which 54 are ours (`v34pcmif.c`'s 36 and `VPcmV34Main.cpp`'s
+18); the other 13 are `mohdet`'s three and the `v34diag`/`v34info` group,
+still in their own files.  `v34pcmif.c` was an ours-only over-split, so the
+merge is boundary-only and does not advance the blob-only target; the risk is
+its 20 byte-exact functions.
+
+**THE ORDER WAS RECOVERED FROM `nm -n`, NOT REPRODUCED BY CONCATENATION, AND
+IT IS EXACT.**  Every one of the 54 definitions was placed at its blob
+address; the resulting object's `nm -n` sequence is the blob's sequence
+symbol for symbol (`SetUpstreamModulationInfo` 0x6200 through
+`VPcmV34Progress` 0xb3c0), including the interleavings of the first half.
+The relocation count over the whole object moved favourably
+(1,057 -> 1,072).
+
+**IT IS A LANGUAGE MOVE AND IT COMPILES.**  The 36 C bodies went into a
+translation unit built by `g++` under the period compiler and were accepted
+with no cast added: the functions take `void *` and reach the object through
+pointer arithmetic, and `v34pcmif.h` already wraps its prototypes in
+`extern "C"`, so the linkage is preserved.  This is the case that separates
+from F11393's `V92MappingParamsInt` decline: there the C source needed added
+casts to compile as C++, here it does not.
+
+    ours-only 24 -> 23;  exact SET identical (844, 0 lost, 0 gained)
+    all 20 byte-exact v34pcmif functions preserved
+    positioned 66,799 -> 67,072 (+273 favourable); exact reloc 1,057 -> 1,072
+    exact symbols 394; sections 70/92; NOBITS unchanged
+    make -j1 J=1 phase 385 passed, 0 failed
+
+Two suites are retargeted to `src/pump/v34/VPcmV34Main.cpp`:
+`v34pcmif` and `v34datapump_rrn`.  The merge created seven F1264-style
+collisions -- a bare `case 5:`, `obj->rate_want = -1;`, `obj->rate_min = 0;`
+and `obj->echo_decay_fact = 0x7fdf;` now each occur in more than one function
+of the merged file, and two hangup anchors matched zero times because the
+comment after the closing brace did not travel with its function.  All seven
+anchors were consolidated with function-unique context (and the two truncated
+of the untravelled comment); the mutations are unchanged and `anchorcheck` is
+0 detached / 0 non-unique.  All four suites owe a re-record from the path
+change, and this pass re-records none of them.
+
+## F11433. `mohdet.cpp`'s owning FILE is `VPcmV34Main.cpp`
+
+F11414 left `mohdet.cpp` unresolved: "three C++ functions at 0x5f80..0x6200
+in the early V.34/V.90 C++ cluster; owning FILE not resolved."  The FILE-order
+bracket resolves it without an order experiment.  The blob's FILE records are
+`dp_wrapper.c` (16) then `VPcmV34Main.cpp` (17), and `.text` concatenates in
+FILE order; the last function of FILE 16 is `dp_wrapper_run` (0x5d40 + 575 =
+0x5f7f), and `_Z25SetUpstreamModulationInfo` 0x6200 is a FILE 17 function at
+the foot of the run.  `_Z15retrainDetector` 0x5f80, `_Z20resetRetrainDetector`
+0x6110 and `_Z19interpretMohTimeouts` 0x6190 fill `[0x5f80, 0x6200)` exactly,
+and no FILE record lies between `dp_wrapper.c` and `VPcmV34Main.cpp`, so the
+three are FILE 17's -- the same TU F11432 merged `v34pcmif.c` into.  The owner
+is therefore recorded, but `mohdet.cpp` is **not merged this pass**: it is a
+separate ours-only unit and merging it is a third file into the same TU, with
+its own order and suite-anchor work, and it carries no F11414 pressure.  It is
+left for the next pass with its owner now named.

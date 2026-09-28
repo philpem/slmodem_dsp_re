@@ -257,176 +257,7 @@ static int V34DisconnectThreshTable[V34_DISCONNECT_THRESH_ENTRIES] = {
 	71, 80, 90, 101, 113, 127, 142, 160,
 };
 
-static void
-getMPrecvdBits(struct tagV34Object *objp)
-{
-	struct v34_object *obj = (struct v34_object *)objp;
-	unsigned char *m = (unsigned char *)obj;
-	short *mp = (short *)(m + OB_INFO);
-	const unsigned char *sess = (const unsigned char *)obj->p3548;
-	int rate;
 
-	if (obj->v90_receiver > 0) {
-		const unsigned char *d = sess + SESS_MP;
-		int v;
-
-		/*
-		 * The first short of the INFO record, assembled bit by bit:
-		 * one flag in bit 0, a four-bit field at 6, a two-bit one at
-		 * 11, and three more flags at 13, 14 and 15.  The masks are
-		 * the object's -- `and $0xf` and `and $0x3` -- so a byte
-		 * larger than its field is truncated rather than rejected.
-		 */
-		v = (d[MP_TYPE] != 0) ? 1 : 0;
-		v |= (d[MP_DRN] & 0xf) << 6;
-		v |= (d[MP_TRELLIS] & 3) << 11;
-		if (d[MP_NONLINEAR] != 0)
-			v |= 0x2000;
-		if (d[MP_SHAPING] != 0)
-			v |= 0x4000;
-		if (d[MP_FLAG5] != 0)
-			v |= 0x8000;
-
-		/*
-		 * Seven shorts straight across, except the first, which comes
-		 * back with its top bit forced on.  `rate_mask`'s sign bit is
-		 * "asymmetric rates are on the table" (v34fsk.h), so this says
-		 * a V.90 MP always permits them.
-		 */
-		mp[1] = (short)(*(const unsigned short *)(d + MP_RATEMASK)
-				| 0x8000);
-		mp[2] = *(const short *)(d + 0x08);
-		mp[3] = *(const short *)(d + 0x0a);
-		mp[4] = *(const short *)(d + 0x0c);
-		mp[5] = *(const short *)(d + 0x0e);
-		mp[6] = *(const short *)(d + 0x10);
-		mp[7] = *(const short *)(d + 0x12);
-
-		/*
-		 * And the four-bit field at 6 is COPIED DOWN over bits 2..5,
-		 * which is where v34fsk.h says the two per-direction rate
-		 * nibbles live: the V.90 upstream rate becomes the V.34
-		 * one as well.  ORed, not assigned, so a bit already set
-		 * there stays set.
-		 */
-		v |= (v >> 4) & 0x3c;
-		obj->info_rates = (short)v;
-
-		if (v & 1)
-			txrxdmainit((short *)(m + OB_DMA), mp);
-
-		/*
-		 * Seven diagnostics, each with its OWN level test, because
-		 * the call between them can change the level.  The names in
-		 * them are the whole reason this function's fields have any.
-		 */
-		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("V90mp - drn = %d\r\n",
-					     (signed char)d[MP_DRN]);
-		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("V90mp - type = %d\r\n",
-					     (signed char)d[MP_TYPE]);
-		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("V90mp - trellisState = %d\r\n",
-					     (signed char)d[MP_TRELLIS]);
-		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf(
-			    "V90mp - nonlinearEncoder = %d\r\n",
-			    (signed char)d[MP_NONLINEAR]);
-		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf(
-			    "V90mp - constellationShaping = %d\r\n",
-			    (signed char)d[MP_SHAPING]);
-		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("V90mp - rateMask = 0x%X\r\n",
-					     *(const short *)(d + MP_RATEMASK));
-		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf(
-			    "mp->data[0] = 0x%X , mp->data[1] = 0x%X\r\n",
-			    (unsigned short)obj->info_rates,
-			    (unsigned short)mp[1]);
-	}
-
-	/*
-	 * AND THE SAME CALL AGAIN, on the same bit, unconditionally on the
-	 * branch above.  With a V.90 receiver running and bit 0 set,
-	 * `txrxdmainit` runs TWICE over the same six shorts; it is
-	 * idempotent, so the repeat is wasted work rather than a defect.  The
-	 * test at 0x9333 is a `testb` on the low byte, which is bit 0 of the
-	 * short on this little-endian target.
-	 */
-	if (*(const unsigned char *)mp & 1)
-		txrxdmainit((short *)(m + OB_DMA), mp);
-
-	/*
-	 * The capability word, built from scratch: 0x9dc3 first, then four
-	 * bits of it replaced below.  The pointer at +0xaa6c is aimed at it,
-	 * which is what says this word is a message the handshake will clock
-	 * out through `getbit` -- that is the only reader of +0xaa6c.
-	 */
-	*(short *)(m + OB_CAPS) = (short)0x9dc3;
-	/* Spelled as `v34handshakinit` spells the same two fields. */
-	*(short **)(m + OB_CAPS_PTR) = (short *)(m + OB_CAPS);
-
-	rate = *(const int *)((const unsigned char *)obj->pac3c + CFG_RATE);
-
-	if (*(const int *)(sess + SESS_GATE) != 0 && obj->v90_receiver > 1
-	    && *(const int *)(*(const unsigned char *const *)(sess + SESS_PCM)
-			      + PCM_SENS) != 0) {
-		int cap = *(const int *)(
-		    *(const unsigned char *const *)(sess + SESS_PCM)
-		    + PCM_RATE) * 0x960;
-
-		if (rate > cap)
-			rate = cap;
-		edprintf("on get max upstream rate, on sensitive ISP, "
-			 "returning %d\r\n", rate);
-	} else {
-		edprintf("on get max upstream rate, on regular ISP, "
-			 "returning %d\r\n", rate);
-	}
-
-	if (rate <= RATE_MAX) {
-		/*
-		 * bits per second -> rate index, as `rate * 7 >> 14`: 2400 Hz
-		 * of rate is 1.0254 of a step, so this is a divide by 2340
-		 * rather than by 2400 and 33600 still lands on 14.  The four
-		 * bits go in REVERSED, at positions 6..9, which is the same
-		 * treatment v34fsk.h records for `info_caps`'s two nibbles.
-		 */
-		int rev = (short)bitreverse((unsigned short)((rate * 7) >> 14),
-					    4);
-		int mask = -0x41;			/* ~0x40 */
-		int k;
-
-		for (k = 0; k <= 3; k++) {
-			unsigned short w = *(const unsigned short *)
-			    (m + OB_CAPS);
-
-			if ((rev >> k) & 1)
-				w = (unsigned short)(w | (unsigned)~mask);
-			else
-				w = (unsigned short)(w & (unsigned)mask);
-			*(short *)(m + OB_CAPS) = (short)w;
-			mask = (short)(mask * 2 + 1);
-		}
-	}
-
-	/*
-	 * The rest of the record, cleared.  Nine shorts from +0xaa3e, and the
-	 * one non-zero constant among them is +0xaa3e itself.  The object
-	 * writes them in an order the compiler chose; nothing reads any of
-	 * them in between, so this is the same state.
-	 */
-	*(short *)(m + 0xaa3e) = 0x7ffd;
-	*(short *)(m + 0xaa40) = 0;
-	*(short *)(m + 0xaa42) = 0;
-	*(short *)(m + 0xaa44) = 0;
-	*(short *)(m + 0xaa46) = 0;
-	*(short *)(m + 0xaa48) = 0;
-	*(short *)(m + 0xaa4a) = 0;
-	*(short *)(m + 0xaa4c) = 0;
-}
 
 /*
  * ===========================================================================
@@ -552,247 +383,7 @@ getMPrecvdBits(struct tagV34Object *objp)
 #define OB_CONSTEL_16		((short)0x89b0)
 #define OB_CONSTEL_4		((short)0x8990)
 
-extern "C" int
-v90Phase34(void *objp)
-{
-	struct v34_object *o = (struct v34_object *)objp;
-	unsigned char *m = (unsigned char *)objp;
-	struct v34_receiver *rx = (struct v34_receiver *)(m + OB_RECEIVER);
-	VPcmFloModem *vp = (VPcmFloModem *)o->p3548;
-	unsigned short fl = rx->flags;
-	short n;
 
-	if (!(fl & V34_RX_FLAG_DATA)) {
-		/*
-		 * Ja.  The bit source writes the dibit into `cur_quadrant` -- the
-		 * same field the emitters use as their quadrant register --
-		 * and returns non-zero on the symbol that ends the sequence.
-		 * The dibit is transmitted either way, so the last one is
-		 * sent and then acted on.
-		 *
-		 * `VPcmFloModem::getV90JaBits` is a REAL BODY, unlike the
-		 * K56flex twin's three-byte stub, so everything below here is
-		 * reachable and is tested.
-		 */
-		int done = (short)vp->getV90JaBits(&o->cur_quadrant);
-
-		txmitdibit(o, o->cur_quadrant);
-		if (done == 0)
-			return 0;
-
-		rx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_DATA);
-		if (!(((const unsigned char *)o->pac3c)[P34_CFG_FLAGS]
-		      & P34_CFG_BACKWARD_CLEAR))
-			return 0;
-		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("VPcmV34Main: tx buffer backward "
-					     "clear is enabled...\r\n");
-		m[OB_BACKWARD_CLEAR] = 1;
-		return 0;
-	}
-
-	if (!(fl & V34_RX_FLAG_TRN_WATCH)) {
-		/*
-		 * The sequence has bits but the machine has not been armed.
-		 * Transmit the ZERO point -- two 16-bit stores in the object,
-		 * where every other arm stores the whole packed complex at
-		 * once -- and arm it only once the state has moved past 2.
-		 */
-		o->txpoint.c[0] = 0;
-		o->txpoint.c[1] = 0;
-		txmit(o);
-		if (o->v90_receiver <= 2)
-			return 0;
-		rx->flags = (unsigned short)(rx->flags
-					     | V34_RX_FLAG_TRN_WATCH);
-		o->seg_symcount = 0;
-		return 0;
-	}
-
-	switch (o->v90_receiver) {
-	/*
-	 * Cases 3 and 6 are the same two symbols and the same 0x7f count, and
-	 * differ only in the state they move to and in case 3's diagnostic.
-	 * Cases 4 and 7 are the same pair again with a different point pair
-	 * and a 0x10 count.  They are transcribed separately rather than
-	 * folded together, because that is how the object lays them out and
-	 * because folding would have to invent a conditional debug site.
-	 */
-	case 3:
-		o->txpoint.word = vect4[0];
-		txmit(o);
-		o->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);
-		o->txpoint.word = vect4[3];
-		txmit(o);
-		/* Re-read: `txmit` is between the two counts. */
-		n = (short)((unsigned short)o->seg_symcount + 1);
-		if (n <= 0x7f) {
-			o->seg_symcount = n;
-			return 0;
-		}
-		if (DSPLIB_DEBUG_ON()) {
-			/*
-			 * The object stores the count before printing it and
-			 * zeroes it again below; the store is unobservable
-			 * either way, and it is here because it is there.
-			 */
-			o->seg_symcount = n;
-			dsplibs_debug_printf("Entered v34m->v90Receiver == "
-					     "V90RCV_P3_THIRD_S with " "tx->symcnt = %d period = %d\n",
-					     (int)n,
-					     (int)*(const short *)
-					     (m + OB_PERIOD));
-		}
-		o->v90_receiver = 4;
-		o->seg_symcount = 0;
-		return 0;
-
-	case 6:
-		o->txpoint.word = vect4[0];
-		txmit(o);
-		o->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);
-		o->txpoint.word = vect4[3];
-		txmit(o);
-		n = (short)((unsigned short)o->seg_symcount + 1);
-		if (n <= 0x7f) {
-			o->seg_symcount = n;
-			return 0;
-		}
-		o->v90_receiver = 7;
-		o->seg_symcount = 0;
-		return 0;
-
-	case 4:
-		o->txpoint.word = vect4[2];
-		txmit(o);
-		o->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);
-		o->txpoint.word = vect4[1];
-		txmit(o);
-		n = (short)((unsigned short)o->seg_symcount + 1);
-		if (n != 0x10) {
-			o->seg_symcount = n;
-			return 0;
-		}
-		o->v90_receiver = 5;
-		/* Reset the transmitter for the idle symbols that follow. */
-		o->prev_quadrant = 0;
-		o->seg_symcount = 0;
-		o->tx_scr_sr = 0;
-		return 0;
-
-	case 7:
-		o->txpoint.word = vect4[2];
-		txmit(o);
-		o->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);
-		o->txpoint.word = vect4[1];
-		txmit(o);
-		n = (short)((unsigned short)o->seg_symcount + 1);
-		if (n != 0x10) {
-			o->seg_symcount = n;
-			return 0;
-		}
-		o->v90_receiver = 8;
-		o->prev_quadrant = 0;
-		o->seg_symcount = 0;
-		o->tx_scr_sr = 0;
-		return 0;
-
-	case 5: {
-		/* The idle symbol.  See the note at the top of this block. */
-		short c = o->short_382;
-		int q;
-
-		if (c == OB_CONSTEL_16) {
-			int d;
-
-			q = (short)V34scrambler((unsigned *)&o->tx_scr_sr,
-						0, 3, 2);
-			o->cur_quadrant = (short)q;
-			d = (short)V34scrambler((unsigned *)&o->tx_scr_sr,
-						0, 3, 2);
-			q = o->cur_quadrant;
-			o->txpoint.word = vect16[d + q * 4];
-		} else if (c == OB_CONSTEL_4) {
-			q = (short)V34scrambler((unsigned *)&o->tx_scr_sr,
-						0, 3, 2);
-			o->cur_quadrant = (short)q;
-			o->txpoint.word = vect4[q];
-		} else {
-			o->txpoint.c[0] = 0;
-			o->txpoint.c[1] = 0;
-		}
-
-		txmit(o);
-		/* Re-read: `txmit` is between the load and the store. */
-		o->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);
-		return 0;
-	}
-
-	case 9:
-		/*
-		 * A constant symbol, and the one arm that uses the published
-		 * emitters with a literal: all four bits set for the sixteen-
-		 * point map, both bits set for the four-point one.  So it IS
-		 * scrambled with `tx_flags`'s polynomial and IS differentially
-		 * encoded, unlike case 5.
-		 */
-		if (o->short_382 == OB_CONSTEL_16)
-			txmitquadbit(o, 15);
-		else
-			txmitdibit(o, 3);
-		o->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);
-		return 0;
-
-	case 8: {
-		/*
-		 * CP, and the only arms whose bits are the far end's message
-		 * rather than a fixed pattern -- so they go through the
-		 * emitters like the rest of the handshake.  The bit source
-		 * reports the end of the sequence, and the symbol carrying it
-		 * is transmitted before the state moves.
-		 */
-		int done = (short)vp->getV90CpBits(&o->cur_quadrant);
-
-		if (o->short_382 == OB_CONSTEL_16)
-			txmitquadbit(o, o->cur_quadrant);
-		else
-			txmitdibit(o, o->cur_quadrant);
-		if (done == 0)
-			return 0;
-		o->v90_receiver = 9;
-		return 0;
-	}
-
-	case 10: {
-		int done = (short)vp->getV90CpBits(&o->cur_quadrant);
-
-		if (o->short_382 == OB_CONSTEL_16)
-			txmitquadbit(o, o->cur_quadrant);
-		else
-			txmitdibit(o, o->cur_quadrant);
-		if (done == 0)
-			return 0;
-
-		/*
-		 * The end of phase 3/4: unpack what the far end sent, set the
-		 * data rates up and hand the handshake to its transmit state.
-		 *
-		 * The state store is a compare-then-store in the object and
-		 * is written as one here; it is indistinguishable from a
-		 * plain store by any test, since the value written is the
-		 * value compared against.
-		 */
-		getMPrecvdBits((struct tagV34Object *)objp);
-		initdigital(o);
-		if (*(short *)(m + OB_TXSTATE) != V34HS_EXMIT)
-			*(short *)(m + OB_TXSTATE) = V34HS_EXMIT;
-		o->v90_receiver = 2;
-		return 0;
-	}
-	}
-
-	return 0;
-}
 
 /*
  * ===========================================================================
@@ -878,225 +469,9 @@ v90Phase34(void *objp)
 #define CFG_FLAGS03		0x03
 #define CFG_SAS_DETECT		0x04
 
-extern "C" int
-v90RateReneg(void *objp)
-{
-	struct v34_object *o = (struct v34_object *)objp;
-	unsigned char *m = (unsigned char *)objp;
-	VPcmFloModem *vp = (VPcmFloModem *)o->p3548;
-	int r = o->v90_receiver;
-	short n;
 
-	if (r == 11) {
-		/* `v90Phase34`'s case 6, counted to 0x7f. */
-		o->txpoint.word = vect4[0];
-		txmit(o);
-		o->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);
-		o->txpoint.word = vect4[3];
-		txmit(o);
-		/* Re-read: `txmit` is between the two counts. */
-		n = (short)((unsigned short)o->seg_symcount + 1);
-		if (n <= 0x7f) {
-			o->seg_symcount = n;
-			return 0;
-		}
-		o->v90_receiver = 12;
-		o->seg_symcount = 0;
-		return 0;
-	}
 
-	if (r == 12) {
-		/* `v90Phase34`'s case 7, counted to 0x10. */
-		o->txpoint.word = vect4[2];
-		txmit(o);
-		o->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);
-		o->txpoint.word = vect4[1];
-		txmit(o);
-		n = (short)((unsigned short)o->seg_symcount + 1);
-		if (n != 0x10) {
-			o->seg_symcount = n;
-			return 0;
-		}
-		o->v90_receiver = 13;
-		/* Reset the transmitter for the symbols that follow. */
-		o->prev_quadrant = 0;
-		o->seg_symcount = 0;
-		o->tx_scr_sr = 0;
-		return 0;
-	}
 
-	if (r == 13) {
-		/* `v90Phase34`'s case 9: the constant symbol, scrambled and
-		 * differentially encoded through the published emitters. */
-		if (o->short_382 == OB_CONSTEL_16)
-			txmitquadbit(o, 15);
-		else
-			txmitdibit(o, 3);
-		o->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);
-		return 0;
-	}
-
-	if (r == 14) {
-		/* `v90Phase34`'s case 10, and the end of the ladder. */
-		int done = (short)vp->getV90CpBits(&o->cur_quadrant);
-
-		if (o->short_382 == OB_CONSTEL_16)
-			txmitquadbit(o, o->cur_quadrant);
-		else
-			txmitdibit(o, o->cur_quadrant);
-		if (done == 0)
-			return 0;
-
-		getMPrecvdBits((struct tagV34Object *)objp);
-		initdigital(o);
-		if (*(short *)(m + OB_TXSTATE) != V34HS_EXMIT)
-			*(short *)(m + OB_TXSTATE) = V34HS_EXMIT;
-		o->v90_receiver = 2;
-		return 0;
-	}
-
-	return 0;
-}
-
-extern "C" int
-v90RateRenegSilence(void *objp)
-{
-	struct v34_object *o = (struct v34_object *)objp;
-	unsigned char *m = (unsigned char *)objp;
-	VPcmFloModem *vp = (VPcmFloModem *)o->p3548;
-	int r = o->v90_receiver;
-	short n;
-
-	if (r == 15) {
-		o->txpoint.word = vect4[0];
-		txmit(o);
-		o->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);
-		o->txpoint.word = vect4[3];
-		txmit(o);
-		n = (short)((unsigned short)o->seg_symcount + 1);
-		if (n <= 0x7f) {
-			o->seg_symcount = n;
-			return 0;
-		}
-		o->v90_receiver = 16;
-		o->seg_symcount = 0;
-		return 0;
-	}
-
-	if (r == 16) {
-		o->txpoint.word = vect4[2];
-		txmit(o);
-		o->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);
-		o->txpoint.word = vect4[1];
-		txmit(o);
-		n = (short)((unsigned short)o->seg_symcount + 1);
-		if (n != 0x10) {
-			o->seg_symcount = n;
-			return 0;
-		}
-		o->v90_receiver = 17;
-		o->prev_quadrant = 0;
-		o->seg_symcount = 0;
-		o->tx_scr_sr = 0;
-		return 0;
-	}
-
-	if (r == 17) {
-		if (o->short_382 == OB_CONSTEL_16)
-			txmitquadbit(o, 15);
-		else
-			txmitdibit(o, 3);
-		o->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);
-		return 0;
-	}
-
-	if (r == 18) {
-		/*
-		 * CP, and on the symbol that ends it the machine goes to the
-		 * idle state rather than to the data phase: the freeze comes
-		 * off both echo cancellers and the SAS detector is disabled,
-		 * and 19 then transmits scrambled idle symbols until something
-		 * outside moves it on.
-		 */
-		int done = (short)vp->getV90CpBits(&o->cur_quadrant);
-
-		if (o->short_382 == OB_CONSTEL_16)
-			txmitquadbit(o, o->cur_quadrant);
-		else
-			txmitdibit(o, o->cur_quadrant);
-		if (done == 0)
-			return 0;
-
-		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("move to SCR on silence rrn "
-					     "(disabling SAS detector on " "silence)\r\n");
-		o->v90_receiver = 19;
-		o->tx_flags = (short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);
-		((unsigned char *)o->pac3c)[CFG_FLAGS03] &= ~CFG_SAS_DETECT;
-		return 0;
-	}
-
-	if (r == 19) {
-		/*
-		 * The idle symbol.  Two arms, and see the note at the top for
-		 * how it differs from `v90Phase34`'s three-armed case 5.
-		 */
-		int q;
-
-		if (o->short_382 == OB_CONSTEL_16) {
-			int d;
-
-			q = (short)V34scrambler((unsigned *)&o->tx_scr_sr,
-						0, 3, 2);
-			o->cur_quadrant = (short)q;
-			d = (short)V34scrambler((unsigned *)&o->tx_scr_sr,
-						0, 3, 2);
-			q = o->cur_quadrant;
-			o->txpoint.word = vect16[d + q * 4];
-		} else {
-			q = (short)V34scrambler((unsigned *)&o->tx_scr_sr,
-						0, 3, 2);
-			o->cur_quadrant = (short)q;
-			o->txpoint.word = vect4[q];
-		}
-
-		txmit(o);
-		/* Re-read: `txmit` is between the load and the store. */
-		o->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);
-		/* And the quadrant DOES advance here.  See the note above. */
-		o->prev_quadrant = o->cur_quadrant;
-		return 0;
-	}
-
-	if (r == 20) {
-		/*
-		 * The closing CP.  Nothing in either function sets this state,
-		 * so the caller does; the freeze goes back on before every
-		 * symbol, not once at entry, because the state is re-entered
-		 * per symbol.
-		 */
-		int done;
-
-		o->tx_flags = (short)((unsigned short)o->tx_flags | V34_EC_FROZEN);
-		done = (short)vp->getV90CpBits(&o->cur_quadrant);
-
-		if (o->short_382 == OB_CONSTEL_16)
-			txmitquadbit(o, o->cur_quadrant);
-		else
-			txmitdibit(o, o->cur_quadrant);
-		if (done == 0)
-			return 0;
-
-		getMPrecvdBits((struct tagV34Object *)objp);
-		initdigital(o);
-		if (*(short *)(m + OB_TXSTATE) != V34HS_EXMIT)
-			*(short *)(m + OB_TXSTATE) = V34HS_EXMIT;
-		o->v90_receiver = 2;
-		return 0;
-	}
-
-	return 0;
-}
 
 /*
  * ===========================================================================
@@ -1170,6 +545,2018 @@ v90RateRenegSilence(void *objp)
  * for that reason; test/mutations/v34retrain.json is where each pre-handshake
  * store is shown to survive.
  */
+
+
+/*
+ * ---------------------------------------------------------------------------
+ * V34GiveINFO1dBits -- take apart a received INFO1d, and undo a PCM upstream
+ * the configuration does not allow.
+ *
+ * WHY IT IS HERE AND NOT IN v34info.c BESIDE ITS THREE SIBLINGS.  It names no
+ * mangled symbol, so C would have compiled it -- but it calls
+ * `VPcmV34InitiateRetrain`, which is `extern "C"` and lives in THIS file
+ * because four of ITS calls are C++ members.  `$(SRC)` is every `.c` under
+ * `src/`, and the interop tier links exactly that list into a 64-bit binary
+ * with no C++ in it; a `V34GiveINFO1dBits` in `v34info.c` therefore links in
+ * the 32-bit tests and fails `make phase` at `t_spandsp_v23` with an
+ * undefined reference.  The first version of this function did exactly that.
+ * Putting it beside its callee also matches the object, where all three of
+ * `V34GiveINFO1dBits`, `VPcmV34InitiateRetrain` and `v90Phase34` are inside
+ * one `VPcmV34Main.cpp` and this one prints "VPcmV34Main:" like the rest.
+ * The declaration stays in `v34info.h` with its three siblings, which is the
+ * arrangement `V34SetINFO1aBits` already has.
+ *
+ * ONE DECISION AND ONE CONSEQUENCE.  The decision is a three-way conjunction
+ * -- the local V.92 capability byte, the remote's V.92 flag and one bit of the
+ * arriving message -- written into `VPcmFloModem::pcmSessionType`, which is
+ * the same "PCM upstream is in play" flag `V34GiveINFO1aBits` sets from the
+ * received upstream baud index.  The consequence is that if the answer is yes
+ * and the configuration bars it, the modem RETRAINS rather than refusing:
+ * `VPcmV34InitiateRetrain(obj, DP_V90)`, whose own arm then puts the flag back
+ * to 0 through `setPcmSessionType`.  The object's string is the whole story --
+ * "we got PCM upstream under V.92Lite (after Info1d), retraining to V.34
+ * upstream...".
+ *
+ * SO THE RETURN VALUE IS NOT THE FLAG, and the difference is not cosmetic.
+ * `V34GiveINFO1aBits` really does return `pcmSessionType` read back; this one
+ * keeps a separate register at 0 and raises it to 1 only where it retrains.
+ * Two cases separate them: the retraining path returns 1 with the flag back at
+ * 0, and a wanted-but-barred upstream returns 0 with the flag left at 1.
+ *
+ * THE FIRST STATEMENT IS UNCONDITIONAL, exactly as in `V34GiveINFO1aBits`:
+ * the flag is cleared before `v90_receiver` is even looked at, so a call with
+ * no V.90 receiver still clears it.
+ *
+ * WIDTHS.  Each of the four printed quantities is loaded at a width its value
+ * alone would not show -- the ten message shorts `movzwl`, the capability byte
+ * `movzbl`, `remote_v92` `movswl`, and the message bit printed as the MASKED
+ * value, 32 and not 1.  None of the four changes a byte of state, so the
+ * transcript comparison is the only tier that can see any of them; finding F335
+ * is what test/unit/t_v34info1d.c does about that.
+ */
+
+
+/*
+ * ---------------------------------------------------------------------------
+ * indicateJaTransmission -- whichever PCM modem is past phase 2 enters phase 3.
+ *
+ * Fifty-seven bytes, two loads, two compares and TWO TAIL JUMPS.  It stores
+ * nothing, prints nothing and returns nothing: every path either falls into
+ * `ret` with %eax never set or `jmp`s into a callee whose own return type is
+ * `void`, so `void` is what the object supports and no more.
+ *
+ * THE TWO POINTERS ARE LOADED BEFORE EITHER TEST, into %edx and %ecx, and
+ * only one of them is ever used.  That is register allocation and not a
+ * claim: both loads are unconditional at the top because the tail jump needs
+ * its argument already in hand, and neither pointer is dereferenced here.
+ *
+ * THE `+ 4` IS IN THE SOURCE AND NOT AN ADDRESSING ARTIFACT, and this entry
+ * used to say the opposite.  `add $0x4,%eax` followed by
+ * `cmpl $0x1,0x248(%eax)` and `cmpl $0x1,0x24c(%eax)` is `obj + 0x24c` and
+ * `obj + 0x250` -- `v90_receiver` and `k56flex_receiver`, so the ARITHMETIC
+ * was read right.  What was wrong was calling the `add` free: written as
+ * plain member reads it does not appear at all, and its absence is the one
+ * instruction lever 2 reports (padding-stripped, ours 12 to the blob's 13).
+ *
+ * TWO CONDITIONS ARE NEEDED TOGETHER AND THE CROSS PRODUCT SEPARATES THEM.
+ * The anchor must be created AFTER both session pointers are in hand -- all
+ * six spellings declared ahead of them fold the `+4` into the two
+ * displacements and emit the pristine bytes exactly, 12 cells, none at zero
+ * -- and BOTH tests must go through it: a control with the anchor after the
+ * loads but only the first test through it folds back too.  With both, seven
+ * of ten cells reach zero, so what is decoded is that FACT and not this
+ * spelling.  Naming the two offsets was measured separately and costs
+ * nothing, 3 cells, 2 at zero.
+ *
+ * BOTH TESTS ARE SIGNED AND BOTH ARE `> 1`, not `!= 0` and not `>= 1`:
+ * `cmpl $0x1,...; jg`.  So a receiver that has been noticed but has not got
+ * past `1` does NOT enter phase 3 -- which is the state
+ * `VPcmV34InitiateRetrain` and `V34GiveINFO1aBits` leave behind when they
+ * write 1 rather than 2 -- and a negative value is below 1 rather than above
+ * it.  `v34pcmif.c`'s `VPcmV34GetMaxUpstreamRateIndex` and this file's
+ * `v90Phase34` read the same field with the same `> 1`.
+ *
+ * THE K56FLEX ARM'S INTERIOR IS UNOBSERVABLE, and this is said here rather
+ * than left for a reader to discover: `K56FlexFloModem::enterPhase3FullDuplex`
+ * is one byte of code in the object -- a bare `ret` at 0x101d0 -- so nothing
+ * downstream of the second test can be seen by any test that drives this
+ * function.  The second condition, the object it is given, and `else if`
+ * against two independent `if`s are one equivalence class for as long as that
+ * stays true.  Its POSITION is not in that class and is tested: putting the
+ * K56flex test first changes what happens when both receivers are above 1.
+ * Finding F381 is the record and test/mutations/v34ja.json carries both.
+ *
+ * WHY IT IS HERE.  It is inside VPcmV34Main.cpp's run in the object -- between
+ * `V34XF_IndicateTrn2dReceived` at 0xa390 and `chkForceBaudRate` at 0xa450 --
+ * and it calls two C++ members, so finding F333's rule puts it in this file
+ * rather than in `v34pcmif.c`: a `.c` may not call anything defined in a
+ * `.cpp`, because the six interop binaries link every `.c` under `src/` with
+ * no C++ object among them.  Its two callers are both inside `v34handshak`,
+ * which is why the declaration sits in `v34hshak.h` beside `v90Phase34`.
+ */
+
+
+/*
+ * ---------------------------------------------------------------------------
+ * THE LAST TWO OF `vpcm_run`'s FIVE CALLEES THAT ARE NOT `VPcmV34Progress`.
+ *
+ * `include/dsplib/vpcm.h` declares all five plainly, so each is a HARD LINK
+ * REQUIREMENT; `src/pump/v34/v34pcmif.c` defines two of them and explains the
+ * split at length.  These two follow it exactly.
+ *
+ * THEY ARE HERE AND NOT IN THAT `.c` FOR ONE REASON: `VPcmV34GetCurrentRxBitRate`
+ * CALLS A C++ MEMBER.
+ *
+ *     6f89  e8 fc ff ff ff   call <R_386_PC32 _ZNK14V90Demodulator10getBitRateEv>
+ *
+ * A C translation unit cannot name that symbol -- CLAUDE.md's trap section,
+ * "the link line is necessary and not sufficient".  Its twin comes with it
+ * because the two share every offset they read and splitting them would put
+ * one table of session offsets in two files.
+ *
+ * ---------------------------------------------------------------------------
+ * WHAT THE TWO ACTUALLY ANSWER, and they are NOT each other's mirror: 90
+ * bytes against 213, with three arms on one side and five on the other.
+ *
+ * Both open on the same pair of tests, and the pair is CROSSED rather than
+ * nested -- `role` picks which question is asked of `status`, and the two
+ * questions are different:
+ *
+ *     6f48  cmpw   $0x66,0x359c(%edx)          Rx
+ *     6f62  je     6f78                          == 0x66 -> status in 1..2
+ *     6f64  cmpl   $0x3,(%edx)                   != 0x66 -> status == 3
+ *
+ *     6fad  cmpw   $0x66,0x359c(%edx)          Tx
+ *     6fb5  je     6fd1                          == 0x66 -> status 2, then 3
+ *     6fb7  mov    (%edx),%eax; dec; cmp $1; ja  != 0x66 -> status in 1..2
+ *
+ * `role` is the field v34fsk.h describes as selecting
+ * `setTimingStateParameters`' second parameter table and `VPcmV34InitiateRetrain`
+ * reads as `role`; 0x66 is the value its other readers pair with V.90 being
+ * available.  `(unsigned)(status - 1) <= 1` is the SAME test the three
+ * Initiate entry points fork on, which is where v34pcmif.c's comment says the
+ * meaning of status 1 and 2 comes from -- a PCM receiver has the line.
+ *
+ * AND EVERY PATH THAT IS NOT A PCM ONE ENDS IN THE SAME PLACE: the rate
+ * configuration at +0xaa84, times 2400.  `VPcmV34GetCurrentTxBitRate` reads
+ * its `txbits` at +0x04 and `...RxBitRate` its `rxbits` at +0x14, both with
+ * `movswl` -- so both are SIGNED and a negative index gives a negative rate
+ * rather than a huge one.  v34fsk.h's note on `struct v34_ratecfg` lists four
+ * "current" getters and names no reader for `rxbits`; this is that reader.
+ */
+
+/*
+ * `role`'s PCM value.  `VPcmV34InitiateRetrain` already switches on 0x65 and
+ * 0x66 of the same field a few hundred lines above and spells them inline;
+ * this is 0x66 given a name because two functions here now compare against
+ * it and a bare 0x66 in four places is four chances to transcribe 0x65.
+ */
+#define PCM_ROLE		0x66
+
+/*
+ * The transmit chain the two PCM arms walk, which is TWO DIFFERENT OBJECTS
+ * read at the same two shapes.  Neither is modelled anywhere in this tree, so
+ * these are offsets and not fields:
+ *
+ *     6fc7  83 7a 2c 03   cmpl $0x3,0x2c(%edx)    the gate, both arms
+ *     6ff1  8b 4a 40      mov  0x40(%edx),%ecx    V.90: the frame record
+ *     7057  8b 42 4c      mov  0x4c(%edx),%eax    V.92: the frame record
+ *     6ff8  69 48 04 ..   imul $0x1f40,0x4(%eax)  and its +0x04, both arms
+ *
+ * The last is one indirection deeper than it looks: +0x40 and +0x4c hold a
+ * pointer to a pointer, and the count is at +0x04 of what the SECOND one
+ * addresses.
+ */
+#define PCMTX_STATE		0x2c
+#define PCMTX_READY		3
+#define PCMTX_V90_FRAME		0x40
+#define PCMTX_V92_FRAME		0x4c
+#define PCMTX_FRAME_BITS	0x04
+
+/*
+ * 0x7530.  The K56flex transmit rate is a CONSTANT in this object -- there is
+ * no chain, no gate and nothing to read -- and finding F1090 is why naming the
+ * modulation is the whole of what a K56flex session does in this build.
+ */
+#define K56FLEX_TX_BITRATE	30000
+
+/*
+ * The receive rate.
+ *
+ * THREE ARMS, and the middle one is the only place in this file that
+ * dereferences `pac18` as an `int *`: `V34GiveINFO1aBits` reads +0xc of the
+ * same pointer as the local PCM type, so what is at +0 is not otherwise
+ * described and is spelled as an offset.
+ */
+
+
+/*
+ * The transmit rate, which is where the PCM UPSTREAM rates come from.
+ *
+ * FIVE ARMS.  Two of them are the same eleven instructions over two different
+ * chains and two different constants, and the object SHARES THEIR TAIL --
+ * 0x7073 jumps back into 0x700d, so the rounding sequence exists once.  That
+ * is a code-generation fact and not a source one; what the source has to have
+ * is one expression written twice, which is what is below.
+ *
+ *   role != 0x66, status 1 or 2   the V.90 modulator at `modem.modulator`,
+ *                                  its +0x40, one indirection, +0x04 of that,
+ *                                  times 8000/6
+ *   role == 0x66, status 2        the object at the session's +0x6124, its
+ *                                  +0x4c, one indirection, +0x04 of that,
+ *                                  times 8000/12
+ *   role == 0x66, status 3        a flat 0x7530 -- 30000
+ *   everything else                `txbits` * 2400
+ *
+ * BOTH CHAINS ARE GATED ON `+0x2c == 3` AND RETURN ZERO OTHERWISE, and the
+ * zero is a RETURN and not a fall-through to the 2400 arm:
+ *
+ *     6fc5  31 c0              xor    %eax,%eax
+ *     6fc7  83 7a 2c 03        cmpl   $0x3,0x2c(%edx)
+ *     6fcb  74 24              je     6ff1
+ *     6fcd  83 c4 14  c3       add;ret                     <- 0 goes out
+ *
+ * Neither object is modelled anywhere in this tree, so both are reached as
+ * bytes; +0x2c is a state the two share and 3 is the only value either is
+ * tested against.
+ *
+ * 8000/6 AND 8000/12 ARE THE TWO PCM FRAME GRANULARITIES, and they are the
+ * whole reason the two arms differ -- see `V90Demodulator::getBitRate`, which
+ * computes the same expression with the same two `float` constants for the
+ * other direction.  Both are `* (1.0f/N)` and not `/ N.0f`, because the
+ * object multiplies (`fmuls`) by the nearest `float` to the reciprocal and a
+ * division would have been `fdivs`.
+ *
+ * THE V.92 ARM'S `tx` USED TO BE `*(const unsigned char *const *)sess->
+ * pad_6124`, a pointer read out of a four-byte pad.  It is the SAME field
+ * the V.90 arm spells `sess->modem.modulator`, one class along: +0x6124 is
+ * where the `VPcmFloModem`'s `V92Modem` starts and +0x000 of a `V92Modem` is
+ * its `V92Modulator *`.  The construction path named the member; the offset
+ * and the read are unchanged, and nothing here was re-measured.
+ *
+ * The conversion in and out is UNSIGNED at both ends, by the same `fildll`
+ * off a zeroed high word and `fistpll` with the low half taken that settled
+ * `getBitRate`'s return type.  Written as `unsigned` here for that reason and
+ * not because a rate cannot be negative.
+ */
+
+
+/*
+ * ---------------------------------------------------------------------------
+ * `VPcmV34Progress` -- 0xb3c0, 7,278 bytes.  One block of samples through
+ * whichever of V.34, V.90, V.92 and K56flex has the line.
+ *
+ * IT IS THE WHOLE V.PCM RUN PATH.  `vpcm_run` (src/pump/v90/vpcm.c) converts
+ * the host's shorts to floats, fetches the transmit bits, calls this once per
+ * block and converts back; everything a connecting call does between those
+ * two conversions is here.  Finding F1454 measured what that means: traced
+ * under callgrind, a real 33,600 V.34 connect executes exactly ONE symbol
+ * this tree had not written, and it was this one.
+ *
+ * THE SHAPE IS THREE DISPATCHES, NOT ONE.
+ *
+ *   1. `obj->status`, 0 to 10, the jump table at .rodata+0x2d4 -- which modem
+ *      owns the line and what phase it is in.  Anything above 10 is a bug and
+ *      says so ("Illegal Modem State").
+ *   2. the modem's own answer -- `runPcmModem`, `k56FlexRunDemodulator` and
+ *      `v90RunDemodulator` each return a small code that the tables at
+ *      +0x300, +0x324 and +0x3bc turn into a new `progress` or a retrain.
+ *   3. `obj->progress` itself, the table at +0x340, reached only from the V.34
+ *      arm -- five of its seventeen entries do anything, and one of those is
+ *      a fourth table (+0x384) that turns a modem-on-hold code into a timeout
+ *      in seconds.
+ *
+ * `progress` IS THE RETURN VALUE AND IS ALSO A LOCAL.  The object reads it into
+ * %esi at the top of each arm, switches on that copy, and returns THAT --
+ * `obj->progress` is written by several arms after the copy is taken and the
+ * function still returns the older value.  `ret` below is that copy, assigned
+ * exactly where the object assigns it and nowhere else.  Two arms re-read it
+ * only when the debug level is up, which changes what the function returns;
+ * see D296.
+ *
+ * The weak-call scaffolding described in F1454/F1460 is no longer needed:
+ * all seven formerly missing callees are reconstructed.  The five member
+ * calls below are direct, as at .text+0xb84f, +0xba41, +0xbc2b, +0xc7f7
+ * and +0xcfef in the reference; none of those sites tests a callee address.
+ */
+
+/* `mov 0x...(%esi)` sites in regions v34fsk.h models as `unmapped_*`. */
+#define PROG_S16(o, off)	(*(short *)((unsigned char *)(o) + (off)))
+#define PROG_U16(o, off)	(*(unsigned short *)((unsigned char *)(o) + (off)))
+#define PROG_S32(o, off)	(*(int *)((unsigned char *)(o) + (off)))
+#define PROG_U8(o, off)		(*(unsigned char *)((unsigned char *)(o) + (off)))
+
+/*
+ * +0x0238  Samples this session has processed, masked to 31 bits on every
+ * block.  `datapumpv34` reads it at its true offset and v34fsk.h's note on
+ * `unmapped_0234` records the two other readers.
+ */
+#define O_SAMPLES	0x238
+/*
+ * +0x0240 and +0x0244.  The first is named by the object -- "On
+ * PHASE2_COMPLETE: added Silence = %d, p2DelayCntr = %d" -- and the second by
+ * "phase3halfDuplexLength = %d symbols (baud %d)".
+ */
+#define O_P2DELAY	0x240
+#define O_HDLENGTH	0xa244
+/*
+ * +0x0254 to +0x0258, adaptecho's DC estimator: a countdown, the estimate the
+ * loop subtracts from every sample, and the accumulator averaged into it
+ * every 128 samples.  "Estimated DC = %d  (acc = %d)" names the last two.
+ */
+#define O_DCCOUNT	0x254
+#define O_DCEST		0x256
+#define O_DCACC		0x258
+/* +0x0262.  Zero means the object is not running and the function returns. */
+#define O_RUNNING	0x262
+/* +0xa248.  Set with the half-duplex length and cleared by three arms. */
+#define O_HDSET		0xa248
+/* +0x0e4c.  A short set to 1 by each of the three "modem is up" arms. */
+#define O_MODEMUP	0xe4c
+/* +0xabc4.  Non-zero once the session has settled which PCM modem it is. */
+#define O_PCMCHOSEN	0xabc4
+/*
+ * +0xabd8 and +0xabdc.  "Modem On Hold approved by phase2 (ISP timeout is %d
+ * seconds)" names the first; the second counts samples against it.  -1 is
+ * "no limit" and is tested for as such.
+ */
+#define O_MOHLIMIT	0xabd8
+#define O_MOHCOUNT	0xabdc
+/*
+ * +0xabe4, +0xabe6 and +0xabf9, the three words of the modem-on-hold request
+ * `VPcmV34InitMOH` clears or stores and nothing here reads.  Offsets, not
+ * names: no string and no reader says what any of them carries.
+ */
+#define OB_MOH_W4	0xabe4
+#define OB_MOH_W6	0xabe6
+#define OB_MOH_FLAG	0xabf9
+/* +0xabe9.  Gates the late ANSam case on an outgoing call. */
+#define O_ANSAMLATE	0xabe9
+/* +0xabfe and +0xabff.  The output-clear request, and the phase-2 substate. */
+#define O_CLEARREQ	0xabfe
+#define O_P2STATE	0xabff
+/*
+ * +0xac1c, the retrain detector's eleven words.  Four filter states, three
+ * coefficients, a signal counter and two energies with a block counter --
+ * "retrainDetector() notchDetectSigCnt = %d energyInp>>NOTCH_IN_OUT_RATIO_
+ * SHIFT = %d energyOut = %d" names the last three and the counter.
+ */
+#define O_NOTCH_S0	0xac1c
+#define O_NOTCH_S1	0xac1e
+#define O_NOTCH_S2	0xac20
+#define O_NOTCH_S3	0xac22
+#define O_NOTCH_CNT	0xac24
+#define O_NOTCH_K0	0xac28
+#define O_NOTCH_K1	0xac2a
+#define O_NOTCH_K2	0xac2c
+#define O_NOTCH_EIN	0xac30
+#define O_NOTCH_EOUT	0xac34
+#define O_NOTCH_BLK	0xac38
+/*
+ * +0xac40 to +0xac48, the three words `requestOutputSampleClear` writes and
+ * nothing here reads.  v34fsk.h's `unmapped_ac40` is the twelve bytes this
+ * arm is the only reason to model at all.
+ */
+#define O_CLR_FLAG	0xac40
+#define O_CLR_COUNT	0xac44
+#define O_CLR_DONE	0xac48
+
+/* +0x25c2, `testb $0x10` -- transmit through the datapump rather than the
+ * handshake.  v34fsk.h names it `tx_flags`. */
+#define PROG_TXBIT_DATA		0x10
+
+/* The two `role` roles, `cmpw $0x65` and `$0x66` at 0xb50c and 0xb522. */
+#define PROG_ROLE_ORIGINATE	0x65
+#define PROG_ROLE_ANSWER	0x66
+
+/* The `+0x6c0c` block of VPcmFloModem, read as floats by the V.PCM arm. */
+#define SESS_OUTBLOCK		0x6c0c
+/* `V92Phase2Info::shortPhase2Local`, cleared through the session. */
+#define SESS_V92_P2INFO		0x612c
+
+/* `pac3c`'s flag bytes, `orb`/`andb`/`testb` sites. */
+#define CFG_FLAGS3		3
+#define CFG_FLAG3_RETRAIN	4
+#define CFG_FLAG3_PHASE2	2
+#define CFG_FLAGS2		2
+#define CFG_FLAG2_SAMELINE	0x20
+#define CFG_FLAGS51		0x51
+#define CFG_FLAG51_CLEAR	1
+#define CFG_SILENCE		0x6c
+
+/* The retrain detector's three thresholds and its block length. */
+#define NOTCH_BLOCK		0x40
+#define NOTCH_EIN_MIN		0x249f0
+#define NOTCH_EOUT_MAX		0x22550f
+#define NOTCH_SIGCNT_MAX	5
+
+/* `hist_2f58` wraps here; `cmp $0x257,%dx` and it is a 16-bit compare. */
+#define PROG_HIST_LAST		0x257
+
+
+
+/*
+ * ---------------------------------------------------------------------------
+ * THE MANGLED HALF OF THE PUBLIC ACCESSOR SURFACE.
+ *
+ * Six entry points that take `tagV34Object *` rather than `void *`, which is
+ * the whole of why they are mangled and therefore why they are here and not
+ * in `v34pcmif.c` beside the rest of the batch.  `VPcmV34InitMOH` is the odd
+ * one out: its name is NOT mangled, but it calls
+ * `GenericToneDetector::reset`, and a C translation unit cannot name that.
+ *
+ * FOUR OF THE SIX ARE ALREADY IN THIS FILE, INLINED.
+ * `VPcmV34InitiateRetrain` carries the minimum-signal-level block, both delay
+ * blocks and the notch reset verbatim; the standalone functions below are the
+ * out-of-line copies of the same source.  They are transcribed against the
+ * disassembly rather than factored out of the inlined copies, because a
+ * shared static helper would have no blob symbol and its bytes would count
+ * against neither side.
+ */
+
+/*
+ * Two instructions, and the second is the `ret`.
+ *
+ * `_Z25SetUpstreamModulationInfoP12tagV34Object` is one byte long.  Its
+ * mangling is what fixes the parameter -- there is exactly one, and it is the
+ * object -- and nothing else about it is observable.  It survives as an empty
+ * body because the object has the symbol, at 0x6200, immediately before
+ * `VPcmV34SetMinMaxBitRates`.
+ */
+
+
+/*
+ * Push the configured rate bounds down to whichever modem is running.
+ *
+ * THREE ARMS, AND THE FIRST TWO DO NOT TOUCH THE V.34 FIELDS AT ALL -- they
+ * hand the configuration's two raw rates, in bits per second and undivided,
+ * to a C++ object and return:
+ *
+ *   V.90     `v90_receiver` non-zero AND the session's `info0Layout` set:
+ *            `V90ConstellationDesigner::setMinMaxRates`, reached as
+ *            `p3548 -> +0x175c -> +0x208`
+ *   K56flex  `k56flex_receiver` non-zero AND `pac18[8]` non-zero:
+ *            `K56FlexFloModem::setMinMaxRates`, with `pac18` as `this`
+ *   V.34     everything else, including a K56flex receiver whose `pac18[8]`
+ *            is clear -- that arm FALLS THROUGH rather than returning
+ *
+ * THE V.34 ARM IS THE ONE v34fsk.h DESCRIBES.  Both rates are divided by
+ * 2400 UNSIGNED -- `mul $0x1b4e81b5; shr $8`, which is `ceil(2^40/2400)` and
+ * so is the unsigned magic and not the signed one -- capped at 14, and then
+ * the maximum is raised to the minimum if it sits below it.  The order
+ * matters: the cap on `rate_min` happens BEFORE the comparison, so a
+ * configuration asking for 40000/33600 ends at 14/14 and not at 16/14.
+ *
+ * AND ONE RATE IS SPECIAL.  A `rate_max` of exactly 1 -- 2400 bps, the
+ * slowest V.34 rate -- also sets the force-low-baud short at +0x359a, which
+ * is `dec %edx; jne` and therefore that value alone rather than a threshold.
+ * A `rate_max` above 14 returns without reaching it.
+ */
+
+
+/*
+ * The signal-energy floor, out of `V34DisconnectThreshTable`.
+ *
+ * The same eight-entry table and the same biased index
+ * `VPcmV34InitiateRetrain` uses inline, and the same clearing of +0x234
+ * behind it.  The index is `level + 48` compared UNSIGNED against 7, so a
+ * configured level outside -48..-41 takes entry 3; the table runs 71 to 160
+ * in 1 dB steps.
+ */
+
+
+/*
+ * The two filter delays, and the echo canceller's.
+ *
+ * `filtdelay` is `((cfg[0x64] + 2) >> 2) + 0x22` and `dmadelay` is
+ * `0x610 - cfg[0x68]`, both truncated to a short, and the echo canceller is
+ * given `cfg[0x68] + 0x68`.  IT IS THESE TWO STRINGS THAT NAME BOTH FIELDS --
+ * "V34 filtdelay set to %d (params initial delay = %d)" and "V34FEC,
+ * V34dmadelay set to %d, (ext delay=%d)", each with the STORED value first
+ * and the configured one second.
+ *
+ * THE CONFIGURATION POINTER IS RE-LOADED AFTER EACH DIAGNOSTIC -- 0x6475 and
+ * 0x64b5, both `mov 0xac3c(%esi),%ecx` after a call.  Reproduced by reading
+ * `pac3c` again rather than holding it, exactly as
+ * `GetVPcmMinimalTxPowerReduction` does with `p3548`; nothing here can change
+ * it, so the two spellings agree and this is written the object's way.
+ *
+ * Both reports print the stored short SIGN-EXTENDED (`cwtl`), so a delay
+ * configured past 32767/4 reports negative and the field holds the same
+ * negative value.
+ */
+
+
+/*
+ * Restart the sample clock and set a deadline.
+ *
+ * Thirty bytes: `sample_count` to zero and `secs * 9600` into the word beside
+ * it.  This is the function that names both -- see v34fsk.h -- and 9,600 is
+ * left as the constant it is: it is 8 kHz times 1.2 and not the codec rate,
+ * so calling the argument "seconds" would be a claim this cannot make.
+ */
+
+
+/*
+ * Start modem-on-hold.
+ *
+ * FOUR ARGUMENTS AND THREE OF THEM ARE STORED RATHER THAN ACTED ON: the
+ * message code, and two bytes that go to +0xabe9/+0xabfa and +0xabf9.  The
+ * first is `movzbl` and reaches two fields -- itself at +0xabe9 and a
+ * `setne` of itself at +0xabfa -- which is what says it is a value with a
+ * "is it set" reading beside it rather than a flag.
+ *
+ * `mode == 1` IS A BYPASS AND IT IS NOT AN ERROR PATH.  The message code is
+ * stored at +0xabec whatever it is; the SECOND copy at +0xabf0 is zeroed
+ * instead of stored when it is 1, under "Special bypass - sending MOHreq
+ * instead of MOHFRR...".  So the two fields are the code as given and the
+ * code as it will be sent.
+ *
+ * AND THE BYPASS TAKES THE FLAG BYTE DOWN WITH IT.  0x6e3b is `xor %ecx,%ecx`
+ * -- on the register holding the fourth argument -- immediately before the
+ * `jmp 6d27` back into the common tail, whose `mov %cl,0xabf9(%ebx)` is the
+ * only store to that field.  Both bypass paths reach it, the quiet one from
+ * 0x6e39 and the one that printed from 0x6e8a, so `message == 1` stores ZERO
+ * at +0xabf9 whatever the caller passed.  Written here as the store repeated
+ * in both arms, which is what GCC's tail merge turns into that `xor`; the
+ * first reconstruction stored `flag` unconditionally and agreed with the
+ * object on every case where `flag` was already 0, which is most of them.
+ * Found by `test/unit/t_v34pcmapi.cpp` crossing `message` with `flag`.
+ *
+ * AFTER THAT IT IS `VPcmV34InitiateRetrain`'S TAIL, mode 4 rather than 1:
+ * the same `v34handshakinit`, the same `progress = 7`, the same three receiver
+ * scalars, the same +0x2218, the same `status = 0` and the same notch reset
+ * at +0xac1c with the same 0x5a82/0x55fc/0x39c3 by role.  What is here and
+ * not there is `GenericToneDetector::reset` on the session's detector at
+ * +0x6f5c, and what is there and not here is the DC-estimator seed.
+ *
+ * The retrain-request bit in the configuration is cleared FIRST, before any
+ * of it -- `andb $0xfb,0x3(%eax)` at 0x6d0e, which is `CFG_FLAG3_RETRAIN`.
+ */
+
+
+/*
+ * ---------------------------------------------------------------------------
+ * Layout, pinned.  Same argument as v34pcmif.c's block: the fields this file
+ * reaches by offset sit in regions that are otherwise padding, so a field that
+ * drifted would compile silently.  Only the fields v34fsk.h already NAMES are
+ * asserted -- the rest are spelled as offsets on purpose and have nothing to
+ * be checked against.
+ */
+#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+
+#define V34PCMMAIN_ASSERT(name, field, off) \
+	typedef char v34pcmmain_off_##name[ \
+		((int)__builtin_offsetof(struct v34_object, field) == (off)) \
+		? 1 : -1]
+
+V34PCMMAIN_ASSERT(status,  status,           0x0000);
+V34PCMMAIN_ASSERT(progress,   progress,            0x0004);
+V34PCMMAIN_ASSERT(rmin,    rate_min,         0x0220);
+V34PCMMAIN_ASSERT(rmax,    rate_max,         0x0224);
+V34PCMMAIN_ASSERT(floor,   rx_energy_floor,  0x0230);
+V34PCMMAIN_ASSERT(v90rx,   v90_receiver,     0x024c);
+V34PCMMAIN_ASSERT(k56rx,   k56flex_receiver, 0x0250);
+V34PCMMAIN_ASSERT(dmadly,  dmadelay,             0x025c);
+V34PCMMAIN_ASSERT(p3548,   p3548,            0x3548);
+V34PCMMAIN_ASSERT(role,   role,            0x359c);
+V34PCMMAIN_ASSERT(far_echo_enable,   far_echo_enable,            0xa23c);
+V34PCMMAIN_ASSERT(lshort,  local_short,      0xabca);
+V34PCMMAIN_ASSERT(isshort, is_short,         0xabcc);
+V34PCMMAIN_ASSERT(pac18,   pac18,            0xac18);
+V34PCMMAIN_ASSERT(pac3c,   pac3c,            0xac3c);
+
+/* And the receiver trio, reached as `obj + 0x264 + 0x258`. */
+#define V34PCMMAIN_RXASSERT(name, field, off) \
+	typedef char v34pcmmain_rxoff_##name[ \
+		((int)(__builtin_offsetof(struct v34_object, rxq) \
+		       + __builtin_offsetof(struct v34_receiver, field)) \
+		 == (off)) ? 1 : -1]
+
+V34PCMMAIN_RXASSERT(bad_run, bad_run, 0x4bc);
+V34PCMMAIN_RXASSERT(bad_long_run, bad_long_run, 0x4be);
+V34PCMMAIN_RXASSERT(good_run, good_run, 0x4c0);
+
+/*
+ * The two classes this file constructs a `this` for by adding a constant, and
+ * the one it reads a member pointer out of.  A size change in either would
+ * move nothing here -- these are the object's offsets, not ours -- but the
+ * embedded V92EchoCanceller must still fit inside what VPcmFloModem declares.
+ */
+typedef char v34pcmmain_echo_fits[
+	(SESS_ECHO + (int)sizeof(V92EchoCanceller)
+	 <= (int)sizeof(VPcmFloModem)) ? 1 : -1];
+
+#endif /* 32-bit */
+
+/*
+ * ---------------------------------------------------------------------------
+ * MOVED HERE from the file it shared this translation unit with.  The reference
+ * records `getMPrecvdBits` (`_Z14getMPrecvdBitsP12tagV34Object`) and
+ * `V34DisconnectThreshTable` as LOCAL in ONE unit, `VPcmV34Main.cpp`; the
+ * reconstruction had spread that unit over `v34k56.cpp` and
+ * `v34pcmcreate.cpp`, so neither could be `static`.  Both are back in the unit
+ * and both are file-local now.  The bodies below are otherwise verbatim.
+ */
+
+/*
+ * v34k56.cpp -- `k56FlexPhase34`, the K56flex handshake's phase 3/4
+ * transmitter.
+ *
+ * WHY THIS IS A .cpp AND WHY THE SYMBOL IS UNMANGLED.  The object exports
+ * `k56FlexPhase34` with no mangling, so it was declared `extern "C"`; but two
+ * of its calls are relocations against
+ *
+ *     _ZN15K56FlexFloModem16getK56FlexJaBitsEPs
+ *     _ZN15K56FlexFloModem16getK56FlexMpBitsEPs
+ *
+ * which a C translation unit cannot name.  So the translation unit is C++ and
+ * the declaration lives inside `v34hshak.h`'s `extern "C"` block -- the same
+ * arrangement `v34pcmmain.cpp` uses from the other side, and for the mirror
+ * reason.  The stem is `v34k56` rather than a per-object name because
+ * `docs/attribution.md` puts .text+0xa790 in the `V34.c|GenericToneDetector.cpp`
+ * block and marks it AMBIGUOUS: the object does not say which file this came
+ * from, so neither does the file name.
+ *
+ * WHAT IT DOES.  One call emits one handshake symbol, and which symbol
+ * depends on where the K56flex phase-3/4 sequence has got to.  Two things
+ * select the arm: `V34_RX_FLAG_DATA` in the receiver's flags word, and the
+ * int at +0x250 that `v34fsk.h` calls `k56flex_receiver`.
+ *
+ *     flag clear          transmit the next Ja dibit
+ *     flag set, +0x250=3  shift the word at +0x25d6 out, two bits at a time
+ *     flag set, +0x250=4  transmit a scrambled idle symbol
+ *     flag set, +0x250=5  transmit the next MP dibit or quadbit
+ *     flag set, anything  do nothing
+ *     else
+ *
+ * and the object advances +0x250 3 -> 4 itself.  Nothing here moves it to 5;
+ * whatever does is outside the 721 bytes.
+ *
+ * ---------------------------------------------------------------------------
+ * THE IDLE SYMBOL IS NOT `txmitdibit`, AND THAT IS THE WHOLE POINT OF THE
+ * FUNCTION'S MIDDLE.
+ *
+ * Case 4 looks exactly like a `txmitdibit(obj, 3)` and is not one, in three
+ * ways that all move the constellation point:
+ *
+ *   - `V34scrambler`'s mode argument is the LITERAL 1.  `txmitdibit` passes
+ *     `tx_scrambler_mode(o)`, which reads bit 0 of `tx_flags`; nothing in these
+ *     721 bytes loads +0x25c2 at all, so the generator here does not follow
+ *     the calling/answering flag the rest of the transmitter obeys.
+ *   - there is NO differential encoding.  `txmitdibit` forms
+ *     `(d + prev_quadrant) & 3`; this stores the scrambler's two bits straight into
+ *     `cur_quadrant` and indexes `vect4` with them.
+ *   - `prev_quadrant` is not written, so the quadrant the rest of the handshake
+ *     carries does not advance.
+ *
+ * The quadbit arm differs the same way: two two-bit scrambler requests, the
+ * first into `cur_quadrant` and the second selecting within it, with the sum
+ * `d2 + q * 4` -- which is `txmitquadbit`'s index expression -- but again
+ * with no differential add and no `prev_quadrant` write.  A reconstruction that
+ * called the two published emitters would compile, link, and be wrong; the
+ * mutation suite's first two entries are exactly that substitution.
+ *
+ * `vect4[q]` and `vect16[d2 + q * 4]` are indexed UNMASKED, as the object
+ * does.  `V34scrambler` with `nbits == 2` returns 0..3, so a `& 3` would be
+ * unobservable -- but only while that contract holds, which is why it is not
+ * written here.
+ *
+ * ---------------------------------------------------------------------------
+ * TWO BLOCKS OF THIS FUNCTION ARE DEAD IN THIS OBJECT, and they are marked
+ * below.  Both are reached only when a `K56FlexFloModem` bit source reports
+ * that its sequence has finished, and both of those members are three bytes
+ * of `xor %eax,%eax; ret` -- see `include/dsplib/K56FlexFloModem.h`, which
+ * measured them.  So the completion arms cannot be entered from either side
+ * of a differential test, by construction and not by omission.  They are
+ * transcribed from the disassembly and are NOT covered by the test; finding
+ * F281 gives the measurement and lists the mutations that go uncaught as a
+ * result.
+ */
+
+/*
+ * +0x25d6.  A sixteen-bit pattern shifted out as eight dibits, LSB first,
+ * and the ONLY thing case 3 transmits.  `v34handshakinit` seeds it with
+ * 0x8990 and the Ja completion arm below replaces it with 0x899f; both are
+ * whole-word stores of a constant, and nothing in the tree reads it as
+ * anything but this shift register.  Reached by offset because the region is
+ * `unmapped_25d6` in `struct v34_object` -- V34hshak.c:424 writes it the same
+ * way.
+ */
+#define OB_TXBITS	0x25d6
+
+
+
+
+/*
+ * ---------------------------------------------------------------------------
+ * VPcmV34Create, moved in from `v34pcmcreate.cpp`.  Its file-local maps that
+ * v34pcmmain.cpp already defines are dropped; the rest move with it.
+ */
+
+/*
+ * ---------------------------------------------------------------------------
+ * The maps, all of them repeated from `v34pcmmain.cpp` except the block this
+ * function adds.  See that file for the derivations of the shared ones.
+ */
+
+/*
+ * ---------------------------------------------------------------------------
+ * And what `VPcmV34Create` adds to the three maps above.  Same rule as the
+ * rest of the file: offset-named unless the object names the field itself.
+ *
+ * CFG_ANSPCM_LEVEL and CFG_UQTS ARE THE OBJECT'S OWN NAMES -- "VPcmV34Create:
+ * ANSpcm level index is %d" and "VPcmV34Create: Uqts index is %d" are printed
+ * out of exactly these two words.  Both are loaded as `int` (a plain 32-bit
+ * `mov`, not a `movswl`) and both are TRUNCATED TO SHORT at the one place
+ * they are used for anything, which is `enterChannelVerification`.
+ *
+ * CFG_QUICKCONNECT is bit 4 of the byte v34pcmmain already calls CFG_V92LITE
+ * for its sign bit and `VPcmV34Progress` reads bit 5 of: a third unrelated
+ * reader of one byte, which is why that byte still has no name as a whole.
+ */
+#define CFG_ANSPCM_LEVEL	0x0c
+#define CFG_UQTS		0x10
+#define CFG_TXMD		0x14		/* scaled by 2.4 into +0xabfc */
+#define CFG_F54			0x54		/* == 14 turns the filter on  */
+#define CFG_ENTRANCE		0x70		/* -1 HW, 1 on, anything off  */
+
+#define CFG_QUICKCONNECT	0x10		/* bit 4 of CFG_V92LITE       */
+
+/*
+ * The session object again.  SESS_PCMTYPE is the same `int` VPcmFloModem.h
+ * describes at +0x611c and `setPcmSessionType` writes; SESS_PCMV92 is the
+ * V.92 Phase 2 record POINTER at +0x612c, which is not SESS_PCM at +0x610c.
+ * SESS_ENTRANCE is the byte the three-way fork at the bottom of the function
+ * sets and the last diagnostic reads back -- "entrance filter applied".
+ */
+#define SESS_PCMTYPE		0x611c
+#define SESS_PCMV92		0x612c
+#define SESS_IIR		0x7f28		/* a GenericIIR<float,double> */
+#define SESS_ENTRANCE		0x7f5c
+
+/* Inside the V.92 Phase 2 record. */
+#define PCMV92_QUICK		0x10
+#define PCMV92_FLAG11		0x11
+#define PCMV92_COPIED		0x14		/* four bytes, +0x14..+0x17   */
+
+/*
+ * The K56flex object's A-law/mu-law selector at +0xc.  THE OBJECT NAMES IT:
+ * the one ungated `edprintf` in `VPcmV34Create` is "VPcmV34Main: it is
+ * K56Flex session type, (AorMu = %d)" and it prints this word back after
+ * storing it.  v34info.c reads `pac18 + 0xc` as an offset for the same reason
+ * K56_ENABLED is one -- K56FlexFloModem.h bounds the class at no members.
+ */
+#define K56_AORMU		0x0c
+
+/* The V.34 object's own, for the regions v34fsk.h leaves unmapped. */
+#define OB_F000C		0x000c
+#define OB_F0238		0x0238
+#define OB_F0248		0x0248		/* = 0xfffe8900               */
+#define OB_F0262		0x0262
+#define OB_BULK_RING		0x35b8		/* what `bulk_ring` points at */
+#define OB_FA248		0xa248
+#define OB_FAA80		0xaa80
+#define OB_FABC4		0xabc4
+#define OB_FABD4		0xabd4		/* three ints, then two shorts */
+#define OB_FABD8		0xabd8
+#define OB_FABDC		0xabdc
+#define OB_FABE4		0xabe4
+#define OB_FABE6		0xabe6
+#define OB_FABFC		0xabfc
+#define OB_FAC12		0xac12
+#define OB_FAC14		0xac14
+#define OB_FAC17		0xac17
+
+/* Inside `struct v34_receiver`, which v34fsk.h leaves as padding at +0x238. */
+#define RX_F238			0x0238
+
+/*
+ * ---------------------------------------------------------------------------
+ * VPcmV34Create -- wipe the V.34 object, decide which of five session types it
+ * is going to be, and hand it to the handshake.
+ *
+ * WHY IT IS IN THIS FILE AND NOT IN v34pcmif.c BESIDE THE OTHER `VPcmV34*`
+ * EXPORTS.  It calls FIVE C++ MEMBER functions -- `VPcmFloModem::externalReset`,
+ * `K56FlexFloModem::externalReset` and `::setMinMaxRates`,
+ * `V90ConstellationDesigner::setMinMaxRates`,
+ * `V90Demodulator::enterChannelVerification`, `V92EchoCanceller::setEchoDelay`
+ * and `GenericIIR<float,double>::reset` -- and a member has a `this` and no
+ * unmangled form to name, so a C translation unit cannot reach one whatever
+ * the link line says (CLAUDE.md's trap, and finding F711's three conditions).
+ * `VPcmV34InitiateRetrain` above is here for the weaker version of the same
+ * reason and this is the strong one.  `tools/tuattrib.py` has nothing to say
+ * about this symbol; the placement rests on that constraint plus the
+ * interleaving v34pcmif.c already records, not on an attribution.
+ *
+ * FIVE ARGUMENTS (finding F1119, correcting 1117's prologue read).  `0x50(%esp)`
+ * is read at five sites and `vpcm_create` pushes five slots; the fifth is the
+ * session type and it is the function's primary dispatch.
+ *
+ *     obj          the V.34 object, at root +0x2c
+ *     side         0 or 1; becomes +0x359c's 0x65 / 0x66, but see below
+ *     ptc          straight into +0x8, and read by nothing here
+ *     runtime      the negotiated configuration, kept at +0xac3c
+ *     sessionType  0..4, and `vpcm_create` can only pass 0, 1 or 2
+ *
+ * IT ALWAYS RETURNS 0.  Both `ret`s are reached by `xor %eax,%eax`, so
+ * `vpcm_create`'s `test %eax,%eax / jne` failure path is dead.
+ *
+ * THE SIDE-TO-0x359C POLARITY IS NOT ONE RULE.  Session types 1 and 2 invert
+ * the flag before the common store, so they map side 0 to 0x66 where types 0,
+ * 3 and 4 map it to 0x65.  A single rule would be wrong for three of the five.
+ *
+ * THE TWO POINTERS THE MEMSET WOULD DESTROY are read out first and put back:
+ * +0x3548 (the `VPcmFloModem`) and +0xac18 (the `K56FlexFloModem`).  +0xac3c
+ * is not one of them -- it is the argument, and is stored fresh.
+ *
+ * THE SECOND MEMSET IS REDUNDANT AND IS THE OBJECT'S.  0x264 + 0x79c is
+ * 0xa00, entirely inside the 0xac4c the first one already cleared.  It is
+ * transcribed because it is there; `sizeof(struct v34_receiver)` IS 0x79c,
+ * which is what says the second one is the receiver rather than a run of
+ * bytes that happens to start there.
+ *
+ * ARMS 3 AND 4 ARE UNREACHABLE FROM WITHIN THIS OBJECT -- deviation D149, and
+ * finding F1119 reaches it a third way: `objdump -r` finds exactly one
+ * relocation against this symbol, and `vpcm_create` computes its session type
+ * as `(x == 0x5c) ? 2 : (x == 0x5a) ? 1 : 0`.  They are written out because a
+ * reconstruction has to agree on them, and `t_vpcmcreate.c` sweeps them.
+ *
+ * A NEGATIVE SESSION TYPE TAKES THE SAME ARM AS 0: the dispatch's second test
+ * is a signed `jle`, so `switch` with 0 in the default arm is the wrong shape
+ * and 0 has to share the default's body.
+ *
+ * +0x2218 IS LEFT AT 0.  `v34handshakinit` clears it and nothing here puts it
+ * back; `VPcmV34InitiateRetrain` is what writes 2.  Finding F806 names that as
+ * a cost for a downstream handshake fixture, not a defect here.
+ */
+
+
+
+/*
+ * ---------------------------------------------------------------------------
+ * Layout, pinned.  Same argument as v34pcmmain.cpp's block: the fields this
+ * file reaches by offset sit in regions that are otherwise padding, so a field
+ * that drifted would compile silently.  This function writes forty-odd NAMED
+ * fields as well, and every one of them is asserted here -- a rename that
+ * moved one would still compile and would be caught only by the differential
+ * sweep, which is the wrong place to find out.  The offsets are the
+ * disassembly's, not v34fsk.h's, so this is a check and not a restatement.
+ */
+#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+
+#define V34PCMCREATE_ASSERT(name, field, off) \
+	typedef char v34pcmcreate_off_##name[ \
+		(__builtin_offsetof(struct v34_object, field) == (off)) \
+		? 1 : -1]
+
+V34PCMCREATE_ASSERT(status,   status,           0x0000);
+V34PCMCREATE_ASSERT(progress,    progress,            0x0004);
+V34PCMCREATE_ASSERT(ptc,      ptc,              0x0008);
+V34PCMCREATE_ASSERT(nofbits,  nof_tx_bits,      0x0010);
+V34PCMCREATE_ASSERT(rxn,      rx_n,             0x0114);
+V34PCMCREATE_ASSERT(txn,      tx_n,             0x0218);
+V34PCMCREATE_ASSERT(txrd,     tx_rd,            0x021c);
+V34PCMCREATE_ASSERT(rmin,     rate_min,         0x0220);
+V34PCMCREATE_ASSERT(rmax,     rate_max,         0x0224);
+V34PCMCREATE_ASSERT(rnow,     rate_now,         0x0228);
+V34PCMCREATE_ASSERT(rwant,    rate_want,        0x022c);
+V34PCMCREATE_ASSERT(floor,    rx_energy_floor,  0x0230);
+V34PCMCREATE_ASSERT(v90rx,    v90_receiver,     0x024c);
+V34PCMCREATE_ASSERT(k56rx,    k56flex_receiver, 0x0250);
+V34PCMCREATE_ASSERT(dmadly,   dmadelay,             0x025c);
+V34PCMCREATE_ASSERT(hist2_idx,    hist2_idx,            0x2aa6);
+V34PCMCREATE_ASSERT(p3548,    p3548,            0x3548);
+V34PCMCREATE_ASSERT(echo_decay_start,    echo_decay_start,            0x3554);
+V34PCMCREATE_ASSERT(echo_decay_fact,    echo_decay_fact,            0x3558);
+V34PCMCREATE_ASSERT(echo_beta,    echo_beta,            0x355c);
+V34PCMCREATE_ASSERT(role,    role,            0x359c);
+V34PCMCREATE_ASSERT(short_35a4,    short_35a4,            0x35a4);
+V34PCMCREATE_ASSERT(bhead,    bulk_head,        0x35a8);
+V34PCMCREATE_ASSERT(btail,    bulk_tail,        0x35ac);
+V34PCMCREATE_ASSERT(bring,    bulk_ring,        0x35b0);
+V34PCMCREATE_ASSERT(blen,     bulk_len,         0x35b4);
+V34PCMCREATE_ASSERT(far_echo_enable,    far_echo_enable,            0xa23c);
+V34PCMCREATE_ASSERT(filtdly,  filtdelay,        0xaa7c);
+V34PCMCREATE_ASSERT(lv92,     local_v92,        0xabc6);
+V34PCMCREATE_ASSERT(rv92,     remote_v92,       0xabc8);
+V34PCMCREATE_ASSERT(lshort,   local_short,      0xabca);
+V34PCMCREATE_ASSERT(isshort,  is_short,         0xabcc);
+V34PCMCREATE_ASSERT(short_abce,    short_abce,            0xabce);
+V34PCMCREATE_ASSERT(short_abd0,    short_abd0,            0xabd0);
+V34PCMCREATE_ASSERT(short_abd2,    short_abd2,            0xabd2);
+V34PCMCREATE_ASSERT(moh_holdtime_code,    moh_holdtime_code,            0xabe0);
+V34PCMCREATE_ASSERT(short_abe2,    short_abe2,            0xabe2);
+V34PCMCREATE_ASSERT(txbps,    tx_bps,           0xac04);
+V34PCMCREATE_ASSERT(rxbps,    rx_bps,           0xac08);
+V34PCMCREATE_ASSERT(v90_timing_offset,    v90_timing_offset,            0xac0c);
+V34PCMCREATE_ASSERT(rrnl,     rrn_local,        0xac0e);
+V34PCMCREATE_ASSERT(rrnr,     rrn_remote,       0xac10);
+V34PCMCREATE_ASSERT(latched,  rates_latched,    0xac16);
+V34PCMCREATE_ASSERT(pac18,    pac18,            0xac18);
+V34PCMCREATE_ASSERT(pac3c,    pac3c,            0xac3c);
+
+/*
+ * The receiver, reached as `obj + OB_RECEIVER`, and the one field of it this
+ * function names.  `sizeof` is asserted too: it IS the second memset's length,
+ * and if it stopped being 0x79c the memset would silently clear a different
+ * span (D195).
+ */
+typedef char v34pcmcreate_rxsize[
+	((int)sizeof(struct v34_receiver) == 0x79c) ? 1 : -1];
+typedef char v34pcmcreate_rxf262[
+	((int)__builtin_offsetof(struct v34_receiver, agc_start_gain) == 0x262)
+	? 1 : -1];
+
+/* And the V.34 object's own extent, which is the first memset's length. */
+typedef char v34pcmcreate_objlen[
+	((int)VPCM_V34_BYTES == 0xac4c) ? 1 : -1];
+
+#endif /* 32-bit */
+
+/*
+ * v34pcmif.c -- the V.90/K56Flex side's hooks into the V.34 machinery.
+ *
+ * A cluster of very small functions at .text+0x9230 and +0xa250 onwards,
+ * separate from V34RX.c and from the handshake: the PCM modem's view of what
+ * V.34 is doing.  Reconstructed one at a time as the V.34 code that calls
+ * them arrives, rather than as a module, because that is the order the call
+ * graph gives (tools/callgraph.py).
+ *
+ * THE DEFINITION ORDER IS NOW THE OBJECT'S EMISSION ORDER, NOT THE ORDER THEY
+ * WERE RECONSTRUCTED IN, and it is load-bearing.  All 34 emitted symbols sit
+ * at the blob's own relative index, which is the gate on believing any future
+ * null result from here.  The check is `nm -n --defined-only` on
+ * `build/tc_out/src_pump_v34_v34pcmif.c.o` and on the blob, compared over the
+ * symbols both define -- 34 of 34 today.  There are no per-function `.text`
+ * comments in this file to read the order off.  GCC 3.4.2's register
+ * allocation depends on the identity of what it compiled before a function, so
+ * the order moves bytes: `VPcmV34SetTxScale` and `VPcmV34ReportMiddleOfEcho`
+ * `Adapt` both reached byte identity on this reorder alone.
+ *
+ * WHAT IT CANNOT FIX, and it bounds what a null result here means: the blob's
+ * translation unit spans .text 0x64f0..0xa780 and holds 57 functions, of which
+ * we define 34.  The other 23 are ours too but live in v34pcmmain.cpp,
+ * v34info.c, v34diag.cpp and v34info1a.cpp, or are not written at all -- so
+ * our file split is not the original's and the code compiled AHEAD of these
+ * definitions is not what was compiled ahead of theirs.  Only the relative
+ * order is recoverable here.  See docs/method/refinement.md lever 3.
+ *
+ * They also fix the object's real extent.  `VPcmV34LogTimingOffset` writes
+ * at +0xac0c, past where v34fsk.h had the struct ending -- so the V.34
+ * object is at least 0xac0e bytes and the tail of it belongs to this
+ * interface rather than to the datapump.
+ *
+ * WHICH TRANSLATION UNIT THIS IS.  All of it belongs to `VPcmV34Main.cpp`:
+ * these entry points are interleaved in .text with mangled names from that
+ * file (`_Z25SetUpstreamModulationInfoP12tagV34Object` at 0x6200,
+ * `_Z14getMPrecvdBitsP12tagV34Object` at 0x9250), so the TU is C++ and every
+ * function here is one of its `extern "C"` exports.  The file stays `.c`,
+ * which is the choice the tree already made when `VPcmV34LogTimingOffset`
+ * was written: nothing about these functions is C++, and splitting the two
+ * halves of one TU by language would be a worse map than splitting it by
+ * role.
+ *
+ * THE C++ HALF HAS STARTED.  `src/pump/v34/v34pcmmain.cpp` holds
+ * `getMPrecvdBits`, the second of the two mangled names above, which cannot
+ * live here because a C translation unit cannot emit that symbol.  Its stem
+ * differs from this file's on purpose: the Makefile compiles `%.c` and
+ * `%.cpp` to the same `$(BUILD)/%.o`, so a `v34pcmif.cpp` beside
+ * `v34pcmif.c` would be two sources racing for one object.  The rest of
+ * `VPcmV34Main.cpp` is still to come.
+ *
+ * The `V34XF_` prefix is the object's, and marks the direction: these are
+ * the functions the *V.34* code calls to tell the PCM side something, or to
+ * ask it where to put something.  The traffic the other way is `VPcmV34*`.
+ */
+
+#include "dsplib/debug.h"
+#include "dsplib/encode.h"
+#include "dsplib/v34digital.h"
+#include "dsplib/v34fsk.h"
+#include "dsplib/v34hshak.h"
+#include "dsplib/v34pcmif.h"
+#include "dsplib/v34recv.h"
+/*
+ * For `VPcmV34GetCleanedSamples` and `VPcmV34GetCurrentSessionDP` below.
+ * The five are plain prototypes now that the `DSPLIB_VPCM_UNWRITTEN` weak
+ * apparatus is gone, so a definition here is a definition.
+ */
+#include "dsplib/vpcm.h"
+
+/*
+ * The modulation numbers, which are the same five `VPcmV34InitiateRetrain`
+ * takes and `v34pcmmain.cpp` spells out at its own head -- both files are
+ * halves of `VPcmV34Main.cpp` and each carries the constants it uses, since
+ * splitting one translation unit by language leaves no shared private header
+ * to put them in.  56 is not one of `v8dp.h`'s ids and there is no V.8 code
+ * for it; finding F1090 has why.
+ */
+#define DP_V34			34
+#define DP_K56FLEX		56
+#define DP_V90			90
+#define DP_V92			92
+
+/*
+ * The answerer's value of `role`, the same 0x65/0x66 pair `v34modeminit`,
+ * `preinitdigital` and `v34handshakinit` all test it against and the same
+ * constant v34pcmmain.cpp spells `PCM_ROLE`.  Named here too because the four
+ * "current" getters below test it four times and a bare 0x66 in four places
+ * is four chances to transcribe 0x65.
+ */
+#define PCMIF_ROLE_ANSWER	0x66
+
+/*
+ * 0x1f40.  The PCM sample rate answered as a symbol rate: with a PCM receiver
+ * running there is no V.34 symbol clock to report, and both baud-rate getters
+ * return 8000 rather than zero.
+ */
+#define PCMIF_PCM_BAUD		8000
+
+/*
+ * The configuration byte `VPcmV34RequestDPNotification` clears a bit of, and
+ * the bit.  `requestOutputSampleClear` in v34pcmmain.cpp SETS the same bit
+ * beside the same three words, and that file spells the pair the same way --
+ * both halves of `VPcmV34Main.cpp` carry the constants they use, since
+ * splitting one translation unit by language leaves no shared private header.
+ *
+ * Named rather than written `&= 0xfe` because a mask states a bit position
+ * and hides a meaning: this one is "a sample clear is outstanding", which is
+ * what the setter and this clearer agree on.  A macro is a compile-time
+ * substitution and cannot move code generation, so the name is free.
+ */
+#define CFG_FLAGS51		0x51
+#define CFG_FLAG51_CLEAR	0x01
+
+/*
+ * The three-link chain `VPcmV34InitiateRateRenegotiation` and
+ * `VPcmV34InitiateHangUp` both walk to hand a request to the V.90 side:
+ * `p3548` (the session, a `VPcmFloModem *`) to its `V90Demodulator` at
+ * +0x175c, to that demodulator's `connectionEvaluator` at +0x20c
+ * (`include/dsplib/V90Demodulator.h`), to `externalDemandCode` at +0x8c of
+ * THAT object (`include/dsplib/V90ConnectionEvaluator.h`, which derives the
+ * name from `evaluateConnection`'s own dispatch on it).
+ *
+ * NAMED HERE, NOT TYPED, AND THAT IS DELIBERATE RATHER THAN LEFT OVER.  Both
+ * classes at the far end are fully reconstructed now, but `p3548` stays
+ * `void *` in `v34fsk.h` because this is a `.c` file and cannot include a
+ * C++ class header, so reaching a real field needs a call across the
+ * boundary -- the same move `V34hshak.c` makes into `V34SetINFO1aBits`.
+ * That move is right where the object ITSELF calls: `V34SetINFO1aBits` is a
+ * real `call` with a relocation.  It is wrong here, because the object is
+ * not calling anything.  `tools/dis.py` on the blob at both use sites --
+ * 0x655e (`VPcmV34InitiateRateRenegotiation`) and 0x6c16
+ * (`VPcmV34InitiateHangUp`) -- shows a plain three- or four-instruction
+ * load/load/store with no `call`, and `build/tc_out/src_pump_v34_v34pcmif.c.o`
+ * already reproduces those exact instructions.  A wrapper function would put
+ * a `call` where the object has none, costing byte identity at a site that
+ * currently has it -- the same reasoning `v34pcmmain.cpp` gives for spelling
+ * the neighbouring `+0x208` (`DEMOD_DESIGNER`) chain the same way up to the
+ * point a real member call is reached.  So the chase stays raw pointer
+ * arithmetic through these three NAMED offsets rather than becoming either a
+ * guessed struct or a function call.
+ */
+#define SESS_DEMOD		0x175c	/* V90Modem::demodulator, a V90Demodulator*  */
+#define DEMOD_CONNEVAL		0x020c	/* V90Demodulator::connectionEvaluator       */
+#define CONNEVAL_EXTERNAL_DEMAND 0x8c	/* V90ConnectionEvaluator::externalDemandCode */
+
+/*
+ * ---------------------------------------------------------------------------
+ * THE PUBLIC ACCESSOR SURFACE.  Everything below is what the layer above the
+ * datapump calls to ask what the modem is doing or to tell it something, and
+ * it is written as one batch because that is the only way it can be: the
+ * harness renames every blob symbol this tree defines, so a half-written
+ * group leaves the other half calling a `ref_` name that no longer exists.
+ *
+ * They are small, and small is where a reconstruction goes wrong quietly --
+ * reading the neighbouring field, or the right field at the wrong width,
+ * agrees with the object over almost every input.  So every offset below was
+ * read out of `tools/dis.py` and every one of them is swept rather than
+ * sampled in `test/unit/t_v34pcmif.c`.
+ */
+
+/*
+ * Tear the datapump down.  Three bytes: `xor %eax,%eax; ret`.
+ *
+ * It reads nothing, so its ARITY IS NOT OBSERVABLE from the callee and
+ * nothing in the object calls it.  One argument is what every other
+ * `VPcmV34*` entry point takes and what the caller must have to name an
+ * instance; the parameter is therefore a convention here and not a
+ * measurement, which is also why it is unused rather than merely ignored.
+ * The zero return is measured.
+ */
+
+
+/*
+ * The datapump's block length.
+ *
+ * `obj + 8` IS `ptc`, WHICH ALREADY HAS A NAME FROM ANOTHER STRING, and the
+ * two disagree: `initdigital` prints this offset as "PTC" in "for tx data
+ * rate - %d, PTC - %d, setting nofTxBits to %d" and this function prints it
+ * as "Max Block Length".  Both are the author's words for the same four
+ * bytes.  The field keeps `ptc` -- the older name, and the one with a reader
+ * behind it rather than only a writer -- and the conflict is recorded at D380
+ * rather than resolved by preferring whichever string was read last.
+ *
+ * The store is reached through `obj + 4` as `0x4(%eax)`, which is the same
+ * addressing artefact v34fsk.h describes on the rate group and not a second
+ * object.
+ */
+
+
+/*
+ * Ask for a different rate.
+ *
+ * `req` is the request code, and it is NOT the same enumeration on the two
+ * arms: the PCM arm forwards it verbatim to the demodulator's sub-object,
+ * while the V.34 arm reads only four of its values.
+ *
+ *      0, 2, 5   step DOWN one index, and do not go below `rate_min`
+ *      3         step UP one index, and do not go above `rate_max`
+ *      anything  ask for no particular rate: `rate_want` becomes -1,
+ *      else      which is the value `v34handshak` rejects with `js`
+ *
+ * A step that would leave the bounds writes NOTHING -- `rate_want` keeps
+ * whatever it held -- rather than clamping to the bound.  So a renegotiation
+ * asked for at the bottom of the range still tears the handshake down and
+ * still counts, it just carries the previous request.
+ *
+ * 0, 2 and 5 share a body because the compiler gave them one; the object
+ * tests all three separately and there is no arithmetic relating them.
+ */
+
+
+/*
+ * ---------------------------------------------------------------------------
+ * The three entry points that ask for a change of state.  Two of them tear
+ * the V.34 handshake down and start it again; the third rebuilds the
+ * transmitter for a V.90 rate renegotiation without going near the handshake.
+ *
+ * ALL THREE FORK ON WHICH MODEM IS ACTUALLY RUNNING, and the test is the same
+ * one everywhere: `(unsigned)(status - 1) <= 1`.  Status 1 and 2 mean a PCM
+ * receiver has the line, and then the request is handed to the C++ side down
+ * a chain of three pointers instead of being acted on here.  The same test
+ * picks the `V90Demodulator` branch in `VPcmV34GetCurrentTxBitRate`, which is
+ * where the meaning of the two values comes from.
+ *
+ * WHAT THE CHAIN IS.  `p3548` is the session object; +0x175c of it is the
+ * demodulator -- `VPcmV34GetCurrentRxBitRate` passes exactly that field to
+ * `V90Demodulator::getBitRate` -- and +0x20c of the demodulator is
+ * `connectionEvaluator`, a `V90ConnectionEvaluator *` whose +0x8c is
+ * `externalDemandCode`.  THIS IS STALE AS OF THE PARAGRAPH BELOW: at the time
+ * it was written none of the three was reconstructed, so the offsets were
+ * spelled out rather than dressed in structs that would be guesses.  All
+ * three now ARE reconstructed (`include/dsplib/V90Demodulator.h`,
+ * `include/dsplib/V90ConnectionEvaluator.h`), and the macro block above this
+ * section is what keeps the chase a pointer walk through named offsets
+ * rather than a guess -- see it for why that is still right.
+ */
+
+/*
+ * Hang up.
+ *
+ * The V.34 arm clears the rate REQUEST and both bounds and leaves `rate_now`
+ * alone, which is the shape of "stop asking for anything" rather than "forget
+ * what we settled on".  Then mode 2 of `v34handshakinit` -- the same mode the
+ * renegotiation uses, because from the handshake's point of view a hang-up is
+ * a renegotiation that never completes -- and the three receiver scalars at
+ * +0x4bc, which are `struct v34_receiver`'s bad_run, bad_long_run and good_run and not the
+ * object's own trio at +0x25c.
+ *
+ * The PCM arm is the only place in this file that writes the session flag at
+ * `p3548 + 0x173e`; the renegotiation below does not, and that byte is the
+ * only thing that distinguishes the two functions' PCM paths.
+ *
+ * THE THREE CLEARS HAPPEN ON BOTH ARMS, before the fork, and the diagnostic
+ * before them is not gated on which modem is running either.
+ */
+
+
+/*
+ * Which of the four modulations the session settled on, as a datapump id.
+ *
+ * The selector is `status`, the same word at +0 that `VPcmV34InitiateHangUp`
+ * and `VPcmV34InitiateRateRenegotiation` test with `(unsigned)(status-1) <= 1`
+ * to mean "a PCM receiver is running" -- so 1 and 2 are the two PCM cases
+ * here and they are exactly the two that do not answer V.34.
+ *
+ * 1 IS THE CASE THAT IS DECIDED BY SOMETHING ELSE, and it is decided by the
+ * V.92 pair `V34GiveINFO0dBits` names: the answer is V.92 only when BOTH
+ * `local_v92` and `remote_v92` are non-zero, and V.90 whenever either is
+ * zero.  That is the negotiation read the way it is stored -- one side's
+ * willingness is not enough.  2 answers V.92 outright, without consulting
+ * either, which is what makes it a different status and not a shorthand.
+ *
+ * 3 IS K56FLEX AND IT IS 56, not one of `v8dp.h`'s ids.  Finding F1090
+ * measured that the class behind it is `ret` throughout in this build, so
+ * this is the only place a K56flex session can be *named*; nothing downstream
+ * of the name does anything.  Everything else -- including every value the
+ * status word takes on a V.34 call -- falls through to 34.
+ */
+
+
+/*
+ * Whether this connection came up on a quick connect.
+ *
+ * A BIT SET OVER `status`, NOT A COMPARISON CHAIN.  The object builds
+ * `1 << status` once and tests it against three masks in turn, which is what
+ * a `switch` with grouped cases compiles to and is written back as the masks
+ * because the groups have no arithmetic relating them:
+ *
+ *     6f09  cmp $0xa,%ecx; ja        status > 10 -> 0, and UNSIGNED, so a
+ *                                    negative status leaves here too
+ *     6f15  test $0xe7,%dl           0,1,2,5,6,7 -> the stored answer
+ *     6f1a  test $0x408,%edx         3,10        -> 0
+ *     6f22  and  $0x310,%edx         4,8,9       -> 1
+ *
+ * The three masks cover 0..10 exactly once each, so the final zero is
+ * unreachable from the shift and is the `default` the object still emits.
+ *
+ * `is_short` is the field `V34SetINFO1aBits` sends as the phase-2 length, so
+ * "quick connect" here means the short phase 2 that field selects, and the
+ * six states that return it are the ones where the negotiation has got far
+ * enough to know.
+ */
+
+
+/*
+ * ---------------------------------------------------------------------------
+ * The four "current" getters that answer in baud and in hertz.
+ *
+ * THEY LOOK LIKE FOUR COPIES OF ONE FUNCTION AND THEY ARE NOT.  All four open
+ * on `role == 0x66` and then on a range test over `status`, and all four
+ * differ inside it -- the crossing is the same one v34pcmmain.cpp documents
+ * for the two BIT rate getters, and the two carriers are a third and fourth
+ * shape again:
+ *
+ *   RxBaudRate   0x66 -> status-1   else status-2   in 0..1 -> 8000
+ *   TxBaudRate   0x66 -> status-2   else status-1   in 0..1 -> 8000
+ *   RxCarrier    0x66 -> status-1   else status-2   in 0..1 -> 0
+ *   TxCarrier    0x66 -> status-2 in 0..1 -> 0;  else status == 2 -> 0
+ *
+ * so the receive pair and the transmit pair are each other's mirror on the
+ * ROLE test, and `VPcmV34GetCurrentTxCarrier` alone asks a single-value
+ * question on its non-PCM arm rather than a range one.  Writing any of them
+ * from the shape of its neighbour gets it wrong for exactly one value of
+ * `status`, which is why the test sweeps both fields over their whole range
+ * rather than at a representative point.
+ *
+ * The subtraction is unsigned and the comparison `jbe`, so `status` below the
+ * offset wraps high and takes the far arm; spelled with the cast the object's
+ * `sub; cmp; jbe` requires.
+ *
+ * 8000 is the PCM sample rate answered as a symbol rate, and 0 is "there is
+ * no carrier" -- a PCM receiver has none.
+ *
+ * TWO MORE THINGS ARE THE AUTHOR'S AND BOTH ARE MEASURED, which is why these
+ * do not read like the `int n;` version anybody would write first.  All four
+ * went byte-exact together on the pair of them, +5 symbols over this file:
+ *
+ *   - THE ROLE TEST IS DUPLICATED PER ARM.  Reducing it to one `n` and a
+ *     single range test costs each of these two bytes: the object tests and
+ *     returns inside each arm and joins only at the final return.  Eight
+ *     return shapes were compiled -- two returns via `n`, single-exit
+ *     if/else, single-exit pre-seeded, ternary, inverted test, a `short`
+ *     result -- and exactly ONE reaches zero.  A unique preimage.
+ *   - NO `ratecfg` POINTER IS LIVE ACROSS THE TEST.  Held in a local, GCC
+ *     3.4.2 materialises the address with a `lea` before the branch; written
+ *     at the point of use it folds into the load's own displacement, which is
+ *     what the object does.  Nine access spellings compiled; five reach it,
+ *     so what is decoded is that FACT and not this particular cast.
+ *
+ * The two are independent and the cross product says so: giving the other
+ * three the shape while keeping their `cfg` local moved nothing, and
+ * `VPcmV34GetCurrentTxCarrier` had the shape already and still needed its
+ * local inlined.  Do not "tidy" either back.
+ */
+
+
+
+
+
+
+
+
+/*
+ * The signal-to-noise ratio, in whole dB.
+ *
+ * NO LOGARITHM AND NO TABLE: the object divides down by two constants and
+ * counts how many times it can, which is a base-conversion of the ratio into
+ * decibels with the two step sizes chosen so the counts add.
+ *
+ *     0x1013 / 0x4000 = 0.25074   ~= -6.0 dB, counted 6 at a time
+ *     0x32d6 / 0x4000 = 0.79431   ~= -1.0 dB, counted 1 at a time
+ *
+ * so the coarse loop takes the ratio down to below 4 and the fine loop
+ * finishes it, and the answer is the sum of the two counts.  The coarse loop
+ * hands the fine one the LAST value that was still positive, not the one that
+ * ended it -- `mov %ecx,%esi` at 0x717b saves the pre-multiply value each
+ * time round -- so the two loops do not double-count the step between them.
+ *
+ * WHAT IS DIVIDED BY WHAT.  `sig_energy` over `equerr`: the equaliser error energy
+ * republished every 1024 symbols (v34recv.h names it from receiver's own
+ * "V34EQU, equerr = %d, preerr = %d") divides into the int at +0x248.  A
+ * ratio reported in dB with the error underneath is a signal-to-noise ratio,
+ * which is the only thing this says about +0x248 and is not enough to name
+ * it: `equerr` could equally be the numerator of something else.
+ *
+ * `equerr` IS SIGNED AND THE GUARD IS `jle`, so a zero or negative error
+ * returns 0 dB rather than dividing.  Declared `short` for that reason and
+ * not `unsigned short`, which would make the guard `jbe` and let a large
+ * positive error through as a divisor.
+ *
+ * BOTH MULTIPLIES ARE SPELLED THROUGH `unsigned`, AND THAT IS THE
+ * INSTRUCTION AND NOT A STYLE.  0x7175 and 0x7191 are `imul $imm,%r,%r`
+ * followed by `sar $0xe` -- a 32-bit multiply that WRAPS, then an arithmetic
+ * shift -- and the loop exit is `test`/`jg` on the shifted result.  A ratio
+ * past 2^31/0x1013, which is about 522,000 and which
+ * `VPcmV34GetDiagnostics` can reach, therefore wraps NEGATIVE and ends the
+ * loop; that is the object's behaviour and the only way out for a large
+ * ratio.  Written as a plain `v * 0x1013` it is signed overflow, which is
+ * undefined, and GCC 13 duly assumes a positive `v` keeps a positive
+ * product and compiles the coarse loop into one that never terminates.
+ * `(int)((unsigned)v * 0x1013u) >> 14` is the same two instructions with the
+ * wrap made legal -- the same reason `VPcmV34InitiateRateRenegotiation`'s
+ * step is spelled unsigned, and the same class of defect as findings F2300 to
+ * 2302.
+ *
+ * THIS BODY IS INLINED VERBATIM INTO `VPcmV34GetDiagnostics` at 0x7691, so
+ * whatever shape reproduces it here has to reproduce it there too.  It is
+ * left as one function rather than factored into a static helper, because a
+ * helper has no blob symbol and its bytes would count against neither side.
+ */
+
+
+/*
+ * `getTimingOffset` -- 0x71b0, 11 bytes -- and `getTimingPhase` -- 0x71c0,
+ * 11 bytes.  Two one-load accessors with NO CALLER anywhere in the object
+ * (the no-entry-point bucket: exported API surface), sitting between
+ * `VPcmV34GetSNR` and `VPcmV34GetCleanedSamples` where every neighbour takes
+ * the V.34 object.  The field comments in `v34fsk.h` carry the naming
+ * derivation; nothing but these two functions reads either word.
+ */
+
+
+
+
+/*
+ * ---------------------------------------------------------------------------
+ * TWO OF `vpcm_run`'s FIVE CALLEES, and they are the two that are leaves.
+ *
+ * `include/dsplib/vpcm.h` declares all five plainly and `vpcm.c` calls them
+ * directly, as the blob does, so each is a HARD LINK REQUIREMENT.  These two
+ * are defined here; the other three are `VPcmV34Progress` (7,278 bytes whose
+ * closure is the whole receive chain) with the two rate getters, all in
+ * `src/pump/v34/v34pcmmain.cpp` / `src/pump/v34/VPcmV34Main.cpp`.
+ *
+ * They belong in THIS file for the reason the header comment gives: they are
+ * `extern "C"` exports of `VPcmV34Main.cpp` -- no mangling on the relocation
+ * `vpcm_run` carries for either -- and nothing about them is C++.
+ */
+
+/*
+ * The echo-cancelled samples the host's data logger asks for, and the count
+ * it has accumulated since the last ask.
+ *
+ * `hist_2f58` is the ring `modem_serrint` fills and `hist2_idx` is its write
+ * index, so the count handed back is the index and reading it RESETS it --
+ * this is a drain, not a peek, and the zeroing at 0x71e1 is the whole of the
+ * function's effect on the object.  The load is `movswl`, so the index is
+ * read SIGNED into the caller's int: `hist2_idx` is a `short` and the object
+ * sign-extends it rather than masking.
+ *
+ * The return is `obj + 0x2f58` computed as an `add`, with no test of the
+ * count first -- a caller told "0 samples" still gets the buffer address.
+ */
+
+
+/*
+ * The datapump is told something happened.
+ *
+ * FOUR CODES AND THE OBJECT TESTS THEM AS A `switch`: `cmp $1; je`, then
+ * `jle` into a test against zero, then `cmp $2` and `cmp $3`.  Anything else
+ * does nothing at all, and that includes every negative value.
+ *
+ * TWO OF THE THREE FIELDS ARE NAMED BY THESE STRINGS.  +0x262 is set to 1
+ * under "Valid in samples" and to 0 under "Invalid in samples", which is what
+ * makes it `samples_valid`; and case 3 prints "mohTimer = %d, setting count2
+ * to %d" with +0xabdc first and +0xaa74 second, so the MOH sample counter
+ * v34pcmmain.cpp calls `O_MOHCOUNT` is the object's `mohTimer` and +0xaa74
+ * is its `count2`, a deadline 48,000 samples further on.
+ *
+ * `train_symcount` KEEPS ITS OFFSET NAME.  "count2" is what the string calls it, and
+ * that is a position in a set of counters rather than a description; nothing
+ * here reads it back.
+ *
+ * The diagnostics are `edprintf` and are NOT gated at the call site -- the
+ * whole function is unguarded and `edprintf` applies its own level -- unlike
+ * `VPcmV34InitMOH` next door, which tests first.  That difference is the
+ * object's.
+ */
+
+
+/*
+ * Collect the pending output-sample-clear request, if there is one.
+ *
+ * THE OTHER END OF `requestOutputSampleClear`, which v34pcmmain.cpp writes:
+ * that arm stores 1, a sample count and 0 into +0xac40, +0xac44 and +0xac48
+ * and sets bit 0 of the configuration's +0x51; this hands all three out and
+ * puts the mailbox back to -1, 0, 0 with that same bit cleared.  Between them
+ * they are what names the three words, which v34fsk.h carried as
+ * `unmapped_ac40` while only the writer existed.
+ *
+ * NEGATIVE MEANS EMPTY, and the test is `js` on the flag alone: an empty
+ * mailbox returns 0 and writes NOTHING through the three pointers, so a
+ * caller that does not check the return reads its own uninitialised
+ * variables rather than stale ones.
+ *
+ * The reset order is the object's -- `clr_done` first, then `clr_flag`, then
+ * `clr_count` -- and the configuration byte is reached last, through `pac3c`
+ * loaded between the two flag stores.
+ */
+
+
+/*
+ * Set the transmit scale.
+ *
+ * NO PARAMETER AND NO CHOICE: 0x16a1 is built in, stored, and then reported
+ * through `edprintf` -- which is not behind a debug-level test here, because
+ * `edprintf` applies its own.  Every other diagnostic in this file is gated
+ * at its call site; this one is not, and that difference is the object's.
+ */
+
+
+/*
+ * ---------------------------------------------------------------------------
+ * The two questions the transmitter asks the PCM configuration.
+ *
+ * Both reach through `pac3c` for what was asked for and through `p3548` for
+ * what the PCM receiver actually has, and both take the smaller.  They are
+ * next to each other in .text and they share the pattern; nothing else does.
+ *
+ * ONE FIELD OF THE SESSION GATES BOTH: `p3548 + 0x6120`, an int, tested
+ * against zero before either of them will look at the PCM side at all.  What
+ * it means is not in this translation unit -- it is read and never written
+ * here -- but it is always paired with `v90_receiver`, so it reads as "a PCM
+ * modem exists" against "and it has got somewhere".
+ */
+
+/*
+ * How far the transmit power must be backed off, in dB.
+ *
+ * THREE THINGS HAPPEN AND THE NAME MENTIONS ONE.  The return value is the
+ * configured reduction clamped to [-10, +7]; on the way there the function
+ * also sets the echo canceller's three adaptation constants and flips a flag
+ * in the PCM receiver.  Both diagnostics say so -- the first names the three
+ * constants it just wrote, and it is the object's own words that give
+ * `echo_decay_start`, `echo_decay_fact` and `echo_beta` the names "decay start", "decay fact" and
+ * "beta", which nothing else in the tree could have supplied.
+ *
+ * THE CLAMP IS ASYMMETRIC and it is a clamp rather than a saturate-to-zero:
+ * -10 dB is a real answer and so is +7.  The comparisons are 16-bit and
+ * signed, so a configuration asking for -20 gets -10 rather than 236.
+ *
+ * WHICH ARM IS TAKEN IS NOT AN `||`, AND THE POLARITY OF +0x4f8 IS THE
+ * SURPRISE.  With V.90 up the K56Flex word is consulted only when the PCM
+ * object's +0x4f8 is SET; when it is clear the reduction stands on the V.90
+ * side alone.  +0x4f8 is the same field `VPcmV34GetMaxUpstreamRateIndex`
+ * calls a "sensitive ISP", so the reading is that a sensitive line will not
+ * take a V.90-only word for it -- and it is `je`, at 0x7bff, which this
+ * reconstruction got backwards first and the sweep caught on the first run.
+ *
+ * `red` is forced to zero when nothing has the line, which is what makes the
+ * sign test below a three-way decision spelled as two.
+ */
+
+
+/*
+ * The upstream rate cap, in BITS PER SECOND despite the name.
+ *
+ * `pac3c + 0x3c` is what was configured and the PCM receiver's own limit is
+ * `p610c + 0x4fc` multiplied by 2400, so the second is an index and the
+ * first is not -- the function returns the smaller of the two and the units
+ * of the answer are the configured field's.  The two diagnostics are how the
+ * arms are told apart: "regular ISP" is the configuration unqualified and
+ * "sensitive ISP" is the one the receiver has capped.
+ *
+ * THE V.90 TEST IS `> 1`, NOT `!= 0`, which is the only place in this file
+ * that reads `v90_receiver` as a position on its ladder rather than as a
+ * flag.  1 is below every value the four Indicate entry points set, so what
+ * it excludes is a receiver that has been created and has received nothing.
+ */
+
+
+/*
+ * The upstream rate cap, again.
+ *
+ * BYTE FOR BYTE THE SAME FUNCTION AS `VPcmV34GetMaxUpstreamRateIndex` above,
+ * 123 bytes against 128 and the difference is register allocation: the same
+ * two arms, the same five offsets, the same two `edprintf` strings.  The
+ * object exports both names, 0x7c10 and 0x7c90, so the source has the body
+ * twice -- once under each prefix, which is what the `V34XF_` / `VPcmV34`
+ * split means (the direction of the call, not the work).  Transcribed twice
+ * for that reason rather than one of them calling the other, which would
+ * leave a `call` the object does not have.
+ */
+
+
+/*
+ * Two reports with no reader.
+ *
+ * `objp` is deliberately unused: the object writes the format pointer into
+ * the incoming argument slot and tail-jumps into `dsplibs_debug_printf`, so
+ * the parameter is the slot rather than an input.  Both are gated at the
+ * call site, unlike `VPcmV34SetTxScale` below, which lets `edprintf` do it.
+ * That inconsistency is the original's.
+ */
+
+
+
+
+
+
+/*
+ * ---------------------------------------------------------------------------
+ * Two address handouts and one scalar read.
+ *
+ * The first two are `return &obj->field` and nothing else -- no bounds, no
+ * copy, no state.  They exist because the caller is in another translation
+ * unit and the V.34 object's layout is private to this one.
+ */
+
+
+
+/*
+ * The round-trip delay, plus 480.
+ *
+ * READ UNSIGNED, RETURNED SIGNED, AND THE WRAP IS REAL: the object does
+ * `movzwl` on the field, adds 0x1e0 in 32 bits, then `cwtl` -- so a stored
+ * delay above 0xfe20 comes back as a small negative number rather than as
+ * anything clamped.  `v34handshak` both writes and reads +0xaa7e as a signed
+ * short elsewhere, so the unsigned load here is this function's alone.
+ *
+ * 480 samples is 60 ms at 8 kHz.  What it is compensating for is on the
+ * caller's side and not visible here.
+ */
+
+
+/*
+ * Rebuild the transmitter for a V.90 rate renegotiation.
+ *
+ * NO HANDSHAKE: this is the one of the three that does not call
+ * `v34handshakinit`.  What it does instead is `v34handshakinit`'s mode 2
+ * block with the state machines left out -- the same four transmit-queue
+ * fields, the same mask on `tx_flags`, the same `preinitdigital`, the same
+ * `short_382` pair.  Two independent readings of one block, which is the
+ * corroboration that block was read right.
+ *
+ * IT ALSO WINDS `v90_receiver` BACKWARDS.  That field is documented as a
+ * ratchet the phase-3 indications only advance; here it is assigned, so a
+ * renegotiation can move it down.  See D48.
+ *
+ * `rrn_type` is tested against zero only, and `constel_size` likewise -- the
+ * two `short_382` values differ by 32 and are the pair `V34XF_IndicateJdReceived`
+ * chooses between on its own constellation-size bit.  The parameter names are
+ * the object's, from the diagnostic below.
+ */
+
+
+/*
+ * ---------------------------------------------------------------------------
+ * Four indications: the V.34 handshake telling the PCM side that a phase-3
+ * message has arrived.
+ *
+ * Each one moves `v90_receiver` (or `k56flex_receiver`) forward, and the
+ * numbers are a ratchet rather than a set of flags -- see the TRN2d case,
+ * which is the only one that reads the field before writing it.
+ */
+
+/*
+ * A Jd has been received.
+ *
+ * `constel` and `silence_scr` are the two bits the message carried, and they
+ * pick between three values for +0x382, which nothing in this object reads.
+ * The silence flag wins outright: with it set the constellation size is not
+ * consulted at all.
+ */
+
+
+/*
+ * A DIL has been received.
+ *
+ * Same two values for +0x382 on the same constellation-size test, and one
+ * extra store: +0x25c0 is cleared.  That field is the transmit block's, and
+ * the object reaches it as `0x3a4(obj + 0x221c)` -- through the transmit
+ * queue's base rather than the object's -- which is what says it belongs to
+ * the transmitter and not here.
+ */
+
+
+/*
+ * A TRN2d has been received.
+ *
+ * The only one that reads `v90_receiver` first, and it is a RATCHET WITH
+ * FOUR RUNGS, not an assignment: whatever the field holds is rounded up to
+ * the next of 10, 14, 18, 20 and can never move backwards, because each
+ * band's floor is the previous band's value.
+ *
+ * The last two rungs are one comparison in the object -- `cmp $0x11; setg;
+ * lea 0x12(%eax,%eax,1)` computes 18 or 20 branchlessly -- which is the
+ * compiler's, not a different rule.
+ */
+
+
+/*
+ * ---------------------------------------------------------------------------
+ * Cap the V.34 symbol rate by doctoring the line probe.
+ *
+ * `chkForceBaudRate` is the one function in this file that does not touch the
+ * V.34 object at all -- it reads two of its fields and writes the DFT bank the
+ * caller hands it.  `probeselect` calls it twice, both times with
+ * `obj->probe_bins`, and then goes on to pick a symbol rate from the very
+ * energies and shifts this has just adjusted.  So the mechanism is indirect:
+ * there is no "forced rate" variable anywhere, only a probe measurement that
+ * has been made to look as though the high bins were never received.
+ *
+ * WHICH BIN STANDS FOR WHICH RATE.  The six entries of `allow` are the six
+ * V.34 symbol rates in the standard's order -- 2400, 2743, 2800, 3000, 3200
+ * and 3429 baud -- and the object maps the top four onto bins whose centres
+ * are the band edge each rate needs, one bin being 150 Hz:
+ *
+ *     allow[5]  3429 baud  ->  bins[24]   3750 Hz   shift := 11
+ *     allow[4]  3200 baud  ->  bins[22]   3450 Hz   shift :=  7
+ *     allow[3]  3000 baud  ->  bins[21]   3300 Hz   shift :=  7
+ *                               bins[ 2]   450 Hz   shift :=  7
+ *     allow[2]  2800 baud  ->  bins[20]   3150 Hz   shift :=  7
+ *                               bins[19]  3000 Hz   shift :=  7
+ *
+ * `allow[0]` and `allow[1]` are written and never read: the two lowest rates
+ * have no bin to spoil, because nothing about them is out at the edge.  The
+ * rate-to-bin assignment is the object's; the frequencies are this
+ * reconstruction's arithmetic on the 150 Hz spacing finding F212 establishes,
+ * and the pairing of two bins with 3000 and 2800 is not explained by it.
+ *
+ * WHERE THE LIMIT COMES FROM, AND WHERE IT IS APPLIED, ARE DIFFERENT PLACES.
+ * The limit is the top three bits of a configuration byte at `pac3c + 0x50`.
+ * What it is applied TO depends on which PCM receiver is running:
+ *
+ *   - V.90 active (`v90_receiver` set): the six flags live in the SESSION
+ *     object, at `p3548 + 0x217`, and this edits them in place -- so the
+ *     V.90 side's own idea of which rates are on the table both feeds this
+ *     decision and is narrowed by it.
+ *   - otherwise: a local array, seeded 1,1,1,1,1,x, so the cap is the only
+ *     thing that can clear anything and the decision is made afresh.
+ *
+ * The `x` is 0 when K56Flex is running and 1 when neither is, which is the
+ * only thing the K56Flex arm changes.
+ *
+ * `allow[5] = 1` on the V.90 arm is a DEAD STORE -- `sel` points at the
+ * session object there, and the local is not read again.  Reproduced because
+ * it is what the object does; see D49.
+ */
+
+
+/*
+ * A K56flex Jd has been received.
+ *
+ * THE FIFTH INDICATION, and unlike the other four it does not move
+ * `v90_receiver` or `k56flex_receiver` at all -- it rebuilds the
+ * TRANSMITTER.  Four things happen in this order:
+ *
+ *   1  bit 3 of the receiver's `flags` is set, the same word +0x122 that
+ *      v34recv.h describes as the detector-pending and AGC-freeze bit;
+ *   2  +0x382 takes the same two constellation constants
+ *      `V34XF_IndicateJdReceived` and `V34XF_IndicateDilReceived` use, on
+ *      the same test, except that the test here is against 0x10 rather than
+ *      against zero -- so the argument is a constellation SIZE and not the
+ *      flag those two take;
+ *   3  `v34setuptxmit`, which is the transmitter rebuild;
+ *   4  the transmit state is forced to 0x12 (and only if it is not already
+ *      there -- `cmpw` then a conditional store, which is the object's and
+ *      is kept because a store to a state word is not free);
+ *   5  three transmit scalars are cleared and adaptecho's DC estimator is
+ *      re-seeded.
+ *
+ * THE DC SEED IS THE SAME EXPRESSION `VPcmV34InitiateRetrain` WRITES, at the
+ * same offset: `336 * short_35a4 + 10000`, `short_35a4` read signed, into +0x254 with
+ * +0x256 and +0x258 cleared behind it.  v34fsk.h's note on `short_35a4` said that
+ * two functions computed it and that "nothing establishes that their
+ * destinations are the same field".  This is the second one, it is
+ * reconstructed, and the destination is the same -- so that reservation is
+ * discharged, and the arithmetic belongs to the DC estimator rather than to
+ * whatever else those two functions do.
+ *
+ * The diagnostic is gated and prints the three transmitter parameters; it is
+ * what names `preemp` in v34fsk.h.
+ */
+
+
+/*
+ * K56Flex has settled on a rate.
+ *
+ * The one indication that touches `k56flex_receiver` rather than
+ * `v90_receiver`, and it sets a constant.  Its sibling
+ * `V34XF_IndicateK56FlexJdReceived` is not here: it calls `v34setuptxmit`,
+ * which is blocked behind `settxlevel`.
+ */
+
+
+
+
+/*
+ * The two renegotiation counters, each an increment and nothing else.
+ *
+ * `datapumpv34` is the only caller of either in the object.  It calls the
+ * local one on both of the renegotiations it starts itself -- the step down
+ * at 0x71d12 and the step up at 0x71ba7 -- and the remote one at 0x71c95, on
+ * the branch the receiver's +0x122 bit 5 selects.  Which end ASKED is
+ * therefore what the two names distinguish; both are counted on this modem.
+ *
+ * The increment is 16-bit and wraps -- `movzwl`, `inc %eax`, `mov %ax` -- the
+ * same arithmetic `VPcmV34InitiateRateRenegotiation` does inline above, on
+ * the same field, because that entry point counts the same event where the
+ * request arrives from the shell rather than from the datapump.
+ *
+ * Neither reads the object for anything else and neither is gated on the
+ * diagnostics: the two `V34RNEG` messages belong to the caller.
+ */
+
+
+
+
+/*
+ * The remote end has asked for a retrain.
+ *
+ * Twelve bytes: load the object, store 1 at +0xac17, return.  Nothing
+ * reconstructed reads the byte, so the function's own name is the whole of
+ * what names the field -- see v34fsk.h's note on `remote_retrain_ind`.  It is
+ * never cleared here, which is why it reads as an indication rather than as a
+ * request.
+ */
+
+
+/*
+ * ---------------------------------------------------------------------------
+ * Layout, pinned.  Same argument as DPSK.c's block: these offsets sit in
+ * regions that are otherwise padding, so a field that drifted would compile
+ * silently.  Guarded to a 32-bit ABI because `struct v34_object` holds
+ * pointers and its member offsets are only the object's on that target.
+ */
+#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+
+#define V34PCMIF_ASSERT(name, field, off) \
+	typedef char v34pcmif_off_##name[ \
+		((int)__builtin_offsetof(struct v34_object, field) == (off)) \
+		? 1 : -1]
+
+V34PCMIF_ASSERT(txscale, tx_scale,           0x25d4);
+V34PCMIF_ASSERT(v90rx,   v90_receiver,     0x024c);
+V34PCMIF_ASSERT(k56rx,   k56flex_receiver, 0x0250);
+V34PCMIF_ASSERT(short_382,    short_382,             0x0382);
+V34PCMIF_ASSERT(seg_symcount,   seg_symcount,            0x25c0);
+V34PCMIF_ASSERT(probe,   probe_results,    0xa258);
+V34PCMIF_ASSERT(info0,   info0_bits,       0xa8a4);
+V34PCMIF_ASSERT(rtd,     rtd,              0xaa7e);
+V34PCMIF_ASSERT(timeoff, v90_timing_offset,            0xac0c);
+V34PCMIF_ASSERT(progress,   progress,            0x0004);
+V34PCMIF_ASSERT(rmin,    rate_min,         0x0220);
+V34PCMIF_ASSERT(rmax,    rate_max,         0x0224);
+V34PCMIF_ASSERT(rnow,    rate_now,         0x0228);
+V34PCMIF_ASSERT(rwant,   rate_want,        0x022c);
+V34PCMIF_ASSERT(rrnloc,  rrn_local,        0xac0e);
+V34PCMIF_ASSERT(rrnrem,  rrn_remote,       0xac10);
+V34PCMIF_ASSERT(p3548,   p3548,            0x3548);
+V34PCMIF_ASSERT(pac3c,   pac3c,            0xac3c);
+V34PCMIF_ASSERT(pbins,   probe_bins,       0xa320);
+
+/*
+ * And the three receiver scalars the two Initiate entry points clear, which
+ * they reach as `obj + 0x264 + 0x258`.  Asserted as a sum so that a change to
+ * either struct breaks here rather than moving the clear into the queue.
+ */
+#define V34PCMIF_RXASSERT(name, field, off) \
+	typedef char v34pcmif_rxoff_##name[ \
+		((int)(__builtin_offsetof(struct v34_object, rxq) \
+		       + __builtin_offsetof(struct v34_receiver, field)) \
+		 == (off)) ? 1 : -1]
+
+V34PCMIF_RXASSERT(bad_run, bad_run, 0x4bc);
+V34PCMIF_RXASSERT(bad_long_run, bad_long_run, 0x4be);
+V34PCMIF_RXASSERT(good_run, good_run, 0x4c0);
+
+/*
+ * The doubles are the first floating-point member the struct has ever had,
+ * and on i386 GCC aligns `double` to 4 inside a struct while a 64-bit target
+ * aligns it to 8.  The offset assertions above would catch a shift; this
+ * catches the array being the wrong length, which they would not.
+ */
+typedef char v34pcmif_probe_len[
+	(sizeof(((struct v34_object *)0)->probe_results)
+	 == V34_PROBE_RESULTS * sizeof(double)) ? 1 : -1];
+
+#endif
+
+void
+SetUpstreamModulationInfo(struct tagV34Object *objp)
+{
+	(void)objp;
+}
+
+void
+VPcmV34SetMinMaxBitRates(struct tagV34Object *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	unsigned char *m = (unsigned char *)obj;
+	unsigned char *sess = (unsigned char *)obj->p3548;
+	const unsigned char *cfg;
+
+	if (obj->v90_receiver != 0
+	    && *(const int *)(sess + SESS_GATE) != 0) {
+		V90Demodulator *demod =
+		    *(V90Demodulator *const *)(sess + SESS_DEMOD);
+
+		cfg = (const unsigned char *)obj->pac3c;
+		demod->constellationDesigner->setMinMaxRates(
+			(unsigned)*(const int *)(cfg + CFG_MIN_RATE),
+			(unsigned)*(const int *)(cfg + CFG_MAX_RATE));
+		return;
+	}
+
+	if (obj->k56flex_receiver != 0
+	    && *((const unsigned char *)obj->pac18 + 8) != 0) {
+		cfg = (const unsigned char *)obj->pac3c;
+		((K56FlexFloModem *)obj->pac18)->setMinMaxRates(
+			*(const int *)(cfg + CFG_MIN_RATE),
+			*(const int *)(cfg + CFG_MAX_RATE));
+		return;
+	}
+
+	cfg = (const unsigned char *)obj->pac3c;
+	obj->rate_min = (int)(*(const unsigned int *)(cfg + CFG_MIN_RATE)
+			      / (unsigned)RATE_STEP);
+	obj->rate_max = (int)(*(const unsigned int *)(cfg + CFG_MAX_RATE)
+			      / (unsigned)RATE_STEP);
+
+	if (obj->rate_min > 14)
+		obj->rate_min = 14;
+
+	if (obj->rate_max < obj->rate_min)
+		obj->rate_max = obj->rate_min;
+
+	if (obj->rate_max > 14) {
+		obj->rate_max = 14;
+		return;
+	}
+
+	if (obj->rate_max == 1)
+		*(short *)(m + OB_FORCE_LOW_BAUD) = 1;
+}
+
+void
+VPcmV34SetMinimumSigLevel(struct tagV34Object *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	unsigned char *m = (unsigned char *)obj;
+	const unsigned char *cfg = (const unsigned char *)obj->pac3c;
+	int level = *(const int *)(cfg + CFG_MIN_LEVEL);
+	unsigned idx = (unsigned)level + 0x30u;
+	int thresh;
+
+	if (idx > 7u)
+		idx = 3u;
+
+	thresh = V34DisconnectThreshTable[idx];
+	obj->rx_energy_floor = thresh;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("VPcmV34Main: minLevel given is %d , "
+				     "minSigLevel set to %d\n", level, thresh);
+
+	*(int *)(m + OB_F0234) = 0;
+}
+
+void
+VPcmV34SetDelays(struct tagV34Object *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	unsigned char *m = (unsigned char *)obj;
+	unsigned char *sess = (unsigned char *)obj->p3548;
+
+	{
+		const unsigned char *cfg = (const unsigned char *)obj->pac3c;
+		int delay = *(const int *)(cfg + CFG_FILT_DELAY);
+		int biased = (int)((unsigned)delay + 2u);
+
+		*(short *)(m + OB_FILT_DELAY) = (short)((biased >> 2) + 0x22);
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V34 filtdelay set to %d "
+					     "(params initial delay = %d)\n",
+					     (int)*(short *)(m + OB_FILT_DELAY),
+					     delay);
+	}
+
+	{
+		const unsigned char *cfg = (const unsigned char *)obj->pac3c;
+		int ext = *(const int *)(cfg + CFG_EXT_DELAY);
+
+		obj->dmadelay = (short)(0x610u - (unsigned)ext);
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V34FEC, V34dmadelay set to %d, " "(ext delay=%d)\n",
+					     (int)obj->dmadelay, ext);
+	}
+
+	((V92EchoCanceller *)(sess + SESS_ECHO))->setEchoDelay(
+		(unsigned)*(const int *)
+		    ((const unsigned char *)obj->pac3c + CFG_EXT_DELAY)
+		+ 0x68u);
+}
+
+int
+VPcmV34Delete(void *objp)
+{
+	(void)objp;
+	return 0;
+}
+
+void
+VPcmV34SetMaxBlockLength(void *objp, int len)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+
+	obj->ptc = len;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("VPcmV34Main: Max Block Length modified "
+				     "to %d\r\n", len);
+}
+
+void
+VPcmV34InitiateRateRenegotiation(void *objp, int req)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	unsigned char *m = (unsigned char *)obj;
+	struct v34_receiver *rx = (struct v34_receiver *)(m + 0x264);
+	int want;
+
+	if ((unsigned)(obj->status - 1) <= 1) {
+		unsigned char *sess = (unsigned char *)obj->p3548;
+		unsigned char *demod = *(unsigned char **)(sess + SESS_DEMOD);
+
+		*(int *)(*(unsigned char **)(demod + DEMOD_CONNEVAL)
+			 + CONNEVAL_EXTERNAL_DEMAND) = req;
+		return;
+	}
+
+	/*
+	 * THE STEP WRAPS AND THE COMPARISON DOES NOT.  The object steps with
+	 * `dec` and `inc`, which wrap at the ends of the signed range; C's
+	 * `- 1` and `+ 1` on a signed int are UNDEFINED there, and an
+	 * optimiser is entitled to fold `rate_now + 1 <= rate_max` into
+	 * `rate_now < rate_max` on that basis.
+	 *
+	 * WRITTEN THIS WAY EVEN THOUGH THE TEST CANNOT TELL.  With the plain
+	 * `- 1` this file agrees with the blob byte for byte at both extremes
+	 * under the compiler and flags this tree builds with -- the mutation
+	 * survives.  That agreement is a property of the code generation and
+	 * not of the language, so it is not something the differential tier
+	 * can protect: the one case it would break is the one case it cannot
+	 * see.  The clamp stays signed, because the object's are `jl`/`jg`.
+	 *
+	 * A rate index is 0..14 in practice, so nothing here is reachable.
+	 * It is spelled correctly because it costs one cast.
+	 */
+	switch (req) {
+	case 0:
+	case 2:
+	case 5:
+		want = (int)((unsigned)obj->rate_now - 1u);
+		if (want >= obj->rate_min)
+			obj->rate_want = want;
+		break;
+	case 3:
+		want = (int)((unsigned)obj->rate_now + 1u);
+		if (want <= obj->rate_max)
+			obj->rate_want = want;
+		break;
+	default:
+		obj->rate_want = -1;
+		break;
+	}
+
+	v34handshakinit(obj, 2);
+
+	obj->progress = 6;
+
+	rx->bad_run = 0;
+	rx->bad_long_run = 0;
+	rx->good_run = 0;
+
+	*(int *)(m + 0x2218) = 5;
+
+	/* The same event `VPcmV34IndicateLocalRRN` exists to count. */
+	obj->rrn_local = (short)(obj->rrn_local + 1);
+}
+
 extern "C" void
 VPcmV34InitiateRetrain(void *objp, unsigned char requestedDp)
 {
@@ -1444,53 +2831,592 @@ VPcmV34InitiateRetrain(void *objp, unsigned char requestedDp)
 	}
 }
 
-/*
- * ---------------------------------------------------------------------------
- * V34GiveINFO1dBits -- take apart a received INFO1d, and undo a PCM upstream
- * the configuration does not allow.
- *
- * WHY IT IS HERE AND NOT IN v34info.c BESIDE ITS THREE SIBLINGS.  It names no
- * mangled symbol, so C would have compiled it -- but it calls
- * `VPcmV34InitiateRetrain`, which is `extern "C"` and lives in THIS file
- * because four of ITS calls are C++ members.  `$(SRC)` is every `.c` under
- * `src/`, and the interop tier links exactly that list into a 64-bit binary
- * with no C++ in it; a `V34GiveINFO1dBits` in `v34info.c` therefore links in
- * the 32-bit tests and fails `make phase` at `t_spandsp_v23` with an
- * undefined reference.  The first version of this function did exactly that.
- * Putting it beside its callee also matches the object, where all three of
- * `V34GiveINFO1dBits`, `VPcmV34InitiateRetrain` and `v90Phase34` are inside
- * one `VPcmV34Main.cpp` and this one prints "VPcmV34Main:" like the rest.
- * The declaration stays in `v34info.h` with its three siblings, which is the
- * arrangement `V34SetINFO1aBits` already has.
- *
- * ONE DECISION AND ONE CONSEQUENCE.  The decision is a three-way conjunction
- * -- the local V.92 capability byte, the remote's V.92 flag and one bit of the
- * arriving message -- written into `VPcmFloModem::pcmSessionType`, which is
- * the same "PCM upstream is in play" flag `V34GiveINFO1aBits` sets from the
- * received upstream baud index.  The consequence is that if the answer is yes
- * and the configuration bars it, the modem RETRAINS rather than refusing:
- * `VPcmV34InitiateRetrain(obj, DP_V90)`, whose own arm then puts the flag back
- * to 0 through `setPcmSessionType`.  The object's string is the whole story --
- * "we got PCM upstream under V.92Lite (after Info1d), retraining to V.34
- * upstream...".
- *
- * SO THE RETURN VALUE IS NOT THE FLAG, and the difference is not cosmetic.
- * `V34GiveINFO1aBits` really does return `pcmSessionType` read back; this one
- * keeps a separate register at 0 and raises it to 1 only where it retrains.
- * Two cases separate them: the retraining path returns 1 with the flag back at
- * 0, and a wanted-but-barred upstream returns 0 with the flag left at 1.
- *
- * THE FIRST STATEMENT IS UNCONDITIONAL, exactly as in `V34GiveINFO1aBits`:
- * the flag is cleared before `v90_receiver` is even looked at, so a call with
- * no V.90 receiver still clears it.
- *
- * WIDTHS.  Each of the four printed quantities is loaded at a width its value
- * alone would not show -- the ten message shorts `movzwl`, the capability byte
- * `movzbl`, `remote_v92` `movswl`, and the message bit printed as the MASKED
- * value, 32 and not 1.  None of the four changes a byte of state, so the
- * transcript comparison is the only tier that can see any of them; finding F335
- * is what test/unit/t_v34info1d.c does about that.
- */
+void
+VPcmV34InitiateHangUp(void *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	unsigned char *m = (unsigned char *)obj;
+	struct v34_receiver *rx = (struct v34_receiver *)(m + 0x264);
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(
+			"VPcmV34Main: VPcmV34InitiateHangUp called !\r\n");
+
+	obj->rate_want = 0;
+	obj->rate_min = 0;
+	obj->rate_max = 0;
+
+	if ((unsigned)(obj->status - 1) <= 1) {
+		unsigned char *sess = (unsigned char *)obj->p3548;
+		unsigned char *demod;
+
+		sess[0x173e] = 1;
+		demod = *(unsigned char **)(sess + SESS_DEMOD);
+		*(int *)(*(unsigned char **)(demod + DEMOD_CONNEVAL)
+			 + CONNEVAL_EXTERNAL_DEMAND) = 2;
+		return;
+	}
+
+	v34handshakinit(obj, 2);
+
+	obj->progress = 6;
+	*(int *)(m + 0x2218) = 5;
+
+	rx->bad_run = 0;
+	rx->bad_long_run = 0;
+	rx->good_run = 0;
+}
+
+extern "C" void
+VPcmV34InitMOH(void *objp, int message, unsigned char late,
+	       unsigned char flag)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	unsigned char *m = (unsigned char *)obj;
+	unsigned char *sess = (unsigned char *)obj->p3548;
+	struct v34_receiver *rx = (struct v34_receiver *)(m + OB_RECEIVER);
+
+	PROG_U8(obj->pac3c, CFG_FLAGS3) &= (unsigned char)~CFG_FLAG3_RETRAIN;
+
+	obj->moh_org = message;
+
+	if (message == 1) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "VPcmV34Main: Special bypass - sending MOHreq "
+			    "instead of MOHFRR...\r\n");
+		obj->moh_message = 0;
+		PROG_U8(obj, OB_MOH_FLAG) = 0;
+	} else {
+		obj->moh_message = message;
+		PROG_U8(obj, OB_MOH_FLAG) = flag;
+	}
+
+	obj->moh_recvd = 5;
+	obj->moh_clrd_sel = (unsigned char)(late != 0);
+	PROG_U8(obj, O_ANSAMLATE) = late;
+
+	obj->short_abe2 = 0;
+	PROG_S16(obj, OB_MOH_W6) = 0;
+	PROG_S16(obj, OB_MOH_W4) = 0;
+	obj->moh_holdtime_code = 0;
+	obj->moh_limit = 0;
+
+	v34handshakinit(obj, 4);
+
+	obj->progress = 7;
+
+	rx->bad_run = 0;
+	rx->bad_long_run = 0;
+	rx->good_run = 0;
+
+	PROG_S32(obj, OB_F2218) = 2;
+	obj->status = 0;
+
+	((GenericToneDetector *)(sess + SESS_TONE))->reset();
+
+	{
+		unsigned char *st = m + OB_FAC1C;
+		short role = obj->role;
+
+		*(short *)(st + 0x00) = 0;
+		*(short *)(st + 0x02) = 0;
+		*(short *)(st + 0x04) = 0;
+		*(short *)(st + 0x06) = 0;
+		*(int *)(st + 0x08) = 0;
+		*(int *)(st + 0x14) = 0;
+		*(int *)(st + 0x18) = 0;
+		*(int *)(st + 0x1c) = 0;
+
+		if (role == 0x65) {
+			*(short *)(st + 0x0c) = 0;
+			*(short *)(st + 0x0e) = 0;
+			*(short *)(st + 0x10) = (short)0x39c3;
+		} else if (role == 0x66) {
+			*(short *)(st + 0x0c) = (short)0x5a82;
+			*(short *)(st + 0x0e) = (short)0x55fc;
+			*(short *)(st + 0x10) = (short)0x39c3;
+		}
+	}
+}
+
+void
+VPcmV34SetTimeOut(struct tagV34Object *objp, int secs)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+
+	obj->sample_count = 0;
+	/*
+	 * THE MULTIPLY IS DONE UNSIGNED, and it is the same defect
+	 * `VPcmV34GetSNR` had: `secs * 0x2580` on a signed int is undefined
+	 * the moment `secs` passes 2^31/9600, about 223,696, and an optimiser
+	 * is entitled to assume it never does.  The object is a plain
+	 * `imul $0x2580,0x8(%esp),%eax` at 0x6e90, which WRAPS, so the
+	 * defined-behaviour spelling is the unsigned one and it is the same
+	 * single instruction.
+	 *
+	 * Nothing bounds the argument: it arrives from outside the object and
+	 * no caller is reconstructed, so "no real caller passes 223,696" is
+	 * not something this can rely on.
+	 */
+	obj->timeout_deadline = (int)((unsigned)secs * 0x2580u);
+}
+
+int
+VPcmV34GetCurrentSessionDP(void *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+
+	switch (obj->status) {
+	case 1:
+		if (obj->local_v92 != 0 && obj->remote_v92 != 0)
+			return DP_V92;
+		return DP_V90;
+	case 2:
+		return DP_V92;
+	case 3:
+		return DP_K56FLEX;
+	default:
+		return DP_V34;
+	}
+}
+
+int
+VPcmV34GetQuickConnectIndication(void *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	int mask;
+
+	if ((unsigned int)obj->status > 10u)
+		return 0;
+
+	mask = 1 << obj->status;
+
+	if ((mask & 0xe7) != 0)
+		return obj->is_short;
+	if ((mask & 0x408) != 0)
+		return 0;
+	if ((mask & 0x310) != 0)
+		return 1;
+
+	return 0;
+}
+
+extern "C" int
+VPcmV34GetCurrentRxBitRate(void *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	const struct v34_ratecfg *cfg =
+	    (const struct v34_ratecfg *)((unsigned char *)obj + V34_RATECFG);
+
+	if (obj->role == PCM_ROLE) {
+		if ((unsigned)(obj->status - 1) <= 1) {
+			VPcmFloModem *sess = (VPcmFloModem *)obj->p3548;
+
+			return (int)sess->modem.demodulator->getBitRate();
+		}
+	} else if (obj->status == 3) {
+		return *(const int *)obj->pac18;
+	}
+
+	return cfg->rxbits * (int)RATE_STEP;
+}
+
+extern "C" int
+VPcmV34GetCurrentTxBitRate(void *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	VPcmFloModem *sess = (VPcmFloModem *)obj->p3548;
+	const struct v34_ratecfg *cfg =
+	    (const struct v34_ratecfg *)((unsigned char *)obj + V34_RATECFG);
+	const unsigned char *tx;
+	unsigned int n;
+
+	/*
+	 * ONE `txbits` SITE AND NOT TWO.  The object reaches its
+	 * `movswl 0xaa88; imul $0x960` at 0x6fe0 from BOTH the role-0x66
+	 * switch falling through and the `ja` at 0x6fbd, so the arms that do
+	 * not answer fall out of the `if` rather than each returning the
+	 * configuration themselves.  Written that way here: a second copy is
+	 * a second thing to keep in step, and the mutation that made it read
+	 * `txbits` unsigned found only one of them.
+	 */
+	if (obj->role != PCM_ROLE) {
+		if ((unsigned)(obj->status - 1) <= 1) {
+			tx = (const unsigned char *)sess->modem.modulator;
+			if (*(const int *)(tx + PCMTX_STATE) != PCMTX_READY)
+				return 0;
+
+			n = *(const unsigned int *)
+			    (**(const unsigned char *const *const *)
+			       (tx + PCMTX_V90_FRAME) + PCMTX_FRAME_BITS);
+
+			return (int)(unsigned)(n * 8000u * (1.0f / 6.0f)
+					       + 0.5f);
+		}
+	} else if (obj->status == 2) {
+		tx = (const unsigned char *)sess->v92modem.modulator;
+		if (*(const int *)(tx + PCMTX_STATE) != PCMTX_READY)
+			return 0;
+
+		n = *(const unsigned int *)
+		    (**(const unsigned char *const *const *)
+		       (tx + PCMTX_V92_FRAME) + PCMTX_FRAME_BITS);
+
+		return (int)(unsigned)(n * 8000u * (1.0f / 12.0f) + 0.5f);
+	} else if (obj->status == 3) {
+		return K56FLEX_TX_BITRATE;
+	}
+
+	return cfg->txbits * (int)RATE_STEP;
+}
+
+int
+VPcmV34GetCurrentRxBaudRate(void *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+
+	if (obj->role == PCMIF_ROLE_ANSWER) {
+		if ((unsigned int)(obj->status - 1) <= 1u)
+			return PCMIF_PCM_BAUD;
+	} else if ((unsigned int)(obj->status - 2) <= 1u) {
+		return PCMIF_PCM_BAUD;
+	}
+
+	return ((const struct v34_ratecfg *)
+	    ((unsigned char *)obj + V34_RATECFG))->rx_baud;
+}
+
+int
+VPcmV34GetCurrentTxBaudRate(void *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+
+	if (obj->role == PCMIF_ROLE_ANSWER) {
+		if ((unsigned int)(obj->status - 2) <= 1u)
+			return PCMIF_PCM_BAUD;
+	} else if ((unsigned int)(obj->status - 1) <= 1u) {
+		return PCMIF_PCM_BAUD;
+	}
+
+	return ((const struct v34_ratecfg *)
+	    ((unsigned char *)obj + V34_RATECFG))->baud;
+}
+
+int
+VPcmV34GetCurrentRxCarrier(void *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+
+	if (obj->role == PCMIF_ROLE_ANSWER) {
+		if ((unsigned int)(obj->status - 1) <= 1u)
+			return 0;
+	} else if ((unsigned int)(obj->status - 2) <= 1u) {
+		return 0;
+	}
+
+	return ((const struct v34_ratecfg *)
+	    ((unsigned char *)obj + V34_RATECFG))->rx_carrier;
+}
+
+int
+VPcmV34GetCurrentTxCarrier(void *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+
+	if (obj->role == PCMIF_ROLE_ANSWER) {
+		if ((unsigned int)(obj->status - 2) <= 1u)
+			return 0;
+	} else if (obj->status == 2) {
+		return 0;
+	}
+
+	return ((const struct v34_ratecfg *)
+	    ((unsigned char *)obj + V34_RATECFG))->carrier;
+}
+
+int
+VPcmV34GetSNR(void *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	struct v34_receiver *rx = (struct v34_receiver *)
+	    ((unsigned char *)obj + 0x264);
+	int db = 0;
+	int last = 0;
+
+	if (rx->equerr > 0) {
+		int v = rx->sig_energy / rx->equerr;
+
+		if (v > 0) {
+			for (;;) {
+				last = v;
+				v = (int)((unsigned int)v * 0x1013u) >> 14;
+				if (v <= 0)
+					break;
+				db += 6;
+			}
+		}
+	}
+
+	if (last > 0) {
+		for (;;) {
+			last = (int)((unsigned int)last * 0x32d6u) >> 14;
+			if (last <= 0)
+				break;
+			db += 1;
+		}
+	}
+
+	return db;
+}
+
+int
+getTimingOffset(void *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+
+	return obj->timing_offset;
+}
+
+int
+getTimingPhase(void *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+
+	return obj->timing_phase;
+}
+
+void *
+VPcmV34GetCleanedSamples(void *objp, int *n)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+
+	*n = obj->hist2_idx;
+	obj->hist2_idx = 0;
+	return obj->hist_2f58;
+}
+
+void
+VPcmV34NotifyDP(void *objp, int what)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+
+	switch (what) {
+	case 0:
+		edprintf("VPcmV34 Notification: Invalid in samples...\r\n");
+		obj->samples_valid = 0;
+		break;
+
+	case 1:
+		edprintf("VPcmV34 Notification: Valid in samples...\r\n");
+		obj->samples_valid = 1;
+		break;
+
+	case 2:
+		edprintf("VPcmV34 Notification: CAS Detected...\r\n");
+		obj->status = 5;
+		obj->sample_count = 0;
+		break;
+
+	case 3: {
+		int moh = obj->moh_timer;
+		int count2 = moh + 0xbb80;
+
+		edprintf("VPcmV34 Notification: Validate 3-Way Call...\r\n");
+		obj->status = 6;
+		obj->train_symcount = count2;
+		edprintf("VPcmV34 debug validate: mohTimer = %d, setting "
+			 "count2 to %d\r\n", moh, count2);
+		break;
+	}
+
+	default:
+		break;
+	}
+}
+
+int
+VPcmV34RequestDPNotification(void *objp, int *flag, int *count, int *done)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	int pending = obj->clr_flag;
+
+	if (pending < 0)
+		return 0;
+
+	*flag = pending;
+	*count = obj->clr_count;
+	*done = obj->clr_done;
+
+	/*
+	 * `clr_flag` FIRST, and that is DECODED, not transcribed.  The blob
+	 * EMITS these as clr_done, clr_flag, clr_count, and this file used to
+	 * say exactly that -- which is the trap: a reconstruction writes the
+	 * stores down in the order they come out, so our source order was
+	 * already the object's emission order and was therefore the answer
+	 * sheet rather than a candidate.  What has to be found is its PREIMAGE
+	 * under GCC 3.4.2's scheduling, and the compiler swaps the first two.
+	 * All 4! orderings of this tail (these three plus the
+	 * `&= ~CFG_FLAG51_CLEAR` below) were compiled on the period toolchain:
+	 * 24 cells, 12 distinct emissions, exactly ONE at zero differing
+	 * bytes, nearest other cell at two.  A unique preimage.
+	 */
+	obj->clr_flag = -1;
+	obj->clr_done = 0;
+	obj->clr_count = 0;
+
+	*((unsigned char *)obj->pac3c + CFG_FLAGS51) &=
+		(unsigned char)~CFG_FLAG51_CLEAR;
+
+	return 1;
+}
+
+void
+VPcmV34SetTxScale(void *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+
+	obj->tx_scale = 0x16a1;
+	edprintf("VPcmV34SetTxScale: tx scale set to %d\r\n", 0x16a1);
+}
+
+short
+GetVPcmMinimalTxPowerReduction(void *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	unsigned char *sess = (unsigned char *)obj->p3548;
+	const unsigned char *cfg = (const unsigned char *)obj->pac3c;
+	unsigned char *pcm = *(unsigned char **)(sess + 0x610c);
+	short want = *(const short *)(cfg + 0x44);
+	short red;
+
+	if (want < -10)
+		red = -10;
+	else if (want > 7)
+		red = 7;
+	else
+		red = want;
+
+	if (!(*(const int *)(sess + 0x6120) != 0 && obj->v90_receiver != 0
+	      && *(const int *)(pcm + 0x4f8) == 0)
+	    && obj->k56flex_receiver == 0)
+		red = 0;
+
+	if (red > 0) {
+		*(int *)(pcm + 0x4f4) = 0;
+		obj->echo_decay_start = 0x7d0;
+		obj->echo_decay_fact = 0x7fdf;
+		obj->echo_beta = 2;
+	} else {
+		*(int *)(pcm + 0x4f4) = 1;
+		obj->echo_decay_start = 0x7d0;
+		obj->echo_decay_fact = 0x7fcb;
+		/*
+		 * 4 when the configuration's +0x54 is exactly 4 and 6
+		 * otherwise -- `cmpl $4; setne; lea 4(%ecx,%ecx,1)`, which is
+		 * a two-way choice and not arithmetic on the field.
+		 */
+		obj->echo_beta = (*(const int *)(cfg + 0x54) == 4) ? 4 : 6;
+	}
+
+	edprintf("VPcmV34Main: Due to final MinTXPR = %d, setting echo: "
+		 "decay start = %d, decay fact = %d, beta = %d\r\n",
+		 (int)red, obj->echo_decay_start, obj->echo_decay_fact, obj->echo_beta);
+
+	/*
+	 * The session pointer is RE-LOADED for the second report rather than
+	 * kept -- `mov 0x610c(%esi),%ebp` at 0x7b67, after the first call.
+	 * Reproduced by reading it again; nothing here can change it, so the
+	 * two spellings agree, and it is written this way because the object
+	 * is.
+	 */
+	edprintf("VPcmV34Main: Get Minimal power reduction - returning %d "
+		 "(cfg flag set to %d)\r\n",
+		 (int)red, *(int *)(*(unsigned char **)(sess + 0x610c) + 0x4f4));
+
+	return red;
+}
+
+int
+VPcmV34GetMaxUpstreamRateIndex(void *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	const unsigned char *sess = (const unsigned char *)obj->p3548;
+	const unsigned char *cfg = (const unsigned char *)obj->pac3c;
+	int rate = *(const int *)(cfg + 0x3c);
+
+	if (*(const int *)(sess + 0x6120) != 0 && obj->v90_receiver > 1) {
+		const unsigned char *pcm =
+			*(unsigned char *const *)(sess + 0x610c);
+
+		if (*(const int *)(pcm + 0x4f8) != 0) {
+			int cap = *(const int *)(pcm + 0x4fc) * 0x960;
+
+			if (rate > cap)
+				rate = cap;
+
+			edprintf("on get max upstream rate, on sensitive ISP, "
+				 "returning %d\r\n", rate);
+			return rate;
+		}
+	}
+
+	edprintf("on get max upstream rate, on regular ISP, returning %d\r\n",
+		 rate);
+	return rate;
+}
+
+int
+V34XF_GetMaxUpstreamRateIndex(void *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	const unsigned char *sess = (const unsigned char *)obj->p3548;
+	const unsigned char *cfg = (const unsigned char *)obj->pac3c;
+	int rate = *(const int *)(cfg + 0x3c);
+
+	if (*(const int *)(sess + 0x6120) != 0 && obj->v90_receiver > 1) {
+		const unsigned char *pcm =
+			*(unsigned char *const *)(sess + 0x610c);
+
+		if (*(const int *)(pcm + 0x4f8) != 0) {
+			int cap = *(const int *)(pcm + 0x4fc) * 0x960;
+
+			if (rate > cap)
+				rate = cap;
+
+			edprintf("on get max upstream rate, on sensitive ISP, "
+				 "returning %d\r\n", rate);
+			return rate;
+		}
+	}
+
+	edprintf("on get max upstream rate, on regular ISP, returning %d\r\n",
+		 rate);
+	return rate;
+}
+
+void
+VPcmV34ReportStartOfEchoAdapt(void *objp)
+{
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("VPcmV34Main: Echo adapt start " "reported...\r\n");
+}
+
+void
+VPcmV34ReportMiddleOfEchoAdapt(void *objp)
+{
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("VPcmV34Main: Echo adapt middle " "reported...\r\n");
+}
+
+int *
+V34XF_GetInfo0BitsPtr(void *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+
+	return obj->info0_bits;
+}
+
 extern "C" int
 V34GiveINFO1dBits(void *objp, const short *bits)
 {
@@ -1560,64 +3486,762 @@ V34GiveINFO1dBits(void *objp, const short *bits)
 	return 1;
 }
 
-/*
- * ---------------------------------------------------------------------------
- * indicateJaTransmission -- whichever PCM modem is past phase 2 enters phase 3.
- *
- * Fifty-seven bytes, two loads, two compares and TWO TAIL JUMPS.  It stores
- * nothing, prints nothing and returns nothing: every path either falls into
- * `ret` with %eax never set or `jmp`s into a callee whose own return type is
- * `void`, so `void` is what the object supports and no more.
- *
- * THE TWO POINTERS ARE LOADED BEFORE EITHER TEST, into %edx and %ecx, and
- * only one of them is ever used.  That is register allocation and not a
- * claim: both loads are unconditional at the top because the tail jump needs
- * its argument already in hand, and neither pointer is dereferenced here.
- *
- * THE `+ 4` IS IN THE SOURCE AND NOT AN ADDRESSING ARTIFACT, and this entry
- * used to say the opposite.  `add $0x4,%eax` followed by
- * `cmpl $0x1,0x248(%eax)` and `cmpl $0x1,0x24c(%eax)` is `obj + 0x24c` and
- * `obj + 0x250` -- `v90_receiver` and `k56flex_receiver`, so the ARITHMETIC
- * was read right.  What was wrong was calling the `add` free: written as
- * plain member reads it does not appear at all, and its absence is the one
- * instruction lever 2 reports (padding-stripped, ours 12 to the blob's 13).
- *
- * TWO CONDITIONS ARE NEEDED TOGETHER AND THE CROSS PRODUCT SEPARATES THEM.
- * The anchor must be created AFTER both session pointers are in hand -- all
- * six spellings declared ahead of them fold the `+4` into the two
- * displacements and emit the pristine bytes exactly, 12 cells, none at zero
- * -- and BOTH tests must go through it: a control with the anchor after the
- * loads but only the first test through it folds back too.  With both, seven
- * of ten cells reach zero, so what is decoded is that FACT and not this
- * spelling.  Naming the two offsets was measured separately and costs
- * nothing, 3 cells, 2 at zero.
- *
- * BOTH TESTS ARE SIGNED AND BOTH ARE `> 1`, not `!= 0` and not `>= 1`:
- * `cmpl $0x1,...; jg`.  So a receiver that has been noticed but has not got
- * past `1` does NOT enter phase 3 -- which is the state
- * `VPcmV34InitiateRetrain` and `V34GiveINFO1aBits` leave behind when they
- * write 1 rather than 2 -- and a negative value is below 1 rather than above
- * it.  `v34pcmif.c`'s `VPcmV34GetMaxUpstreamRateIndex` and this file's
- * `v90Phase34` read the same field with the same `> 1`.
- *
- * THE K56FLEX ARM'S INTERIOR IS UNOBSERVABLE, and this is said here rather
- * than left for a reader to discover: `K56FlexFloModem::enterPhase3FullDuplex`
- * is one byte of code in the object -- a bare `ret` at 0x101d0 -- so nothing
- * downstream of the second test can be seen by any test that drives this
- * function.  The second condition, the object it is given, and `else if`
- * against two independent `if`s are one equivalence class for as long as that
- * stays true.  Its POSITION is not in that class and is tested: putting the
- * K56flex test first changes what happens when both receivers are above 1.
- * Finding F381 is the record and test/mutations/v34ja.json carries both.
- *
- * WHY IT IS HERE.  It is inside VPcmV34Main.cpp's run in the object -- between
- * `V34XF_IndicateTrn2dReceived` at 0xa390 and `chkForceBaudRate` at 0xa450 --
- * and it calls two C++ members, so finding F333's rule puts it in this file
- * rather than in `v34pcmif.c`: a `.c` may not call anything defined in a
- * `.cpp`, because the six interop binaries link every `.c` under `src/` with
- * no C++ object among them.  Its two callers are both inside `v34handshak`,
- * which is why the declaration sits in `v34hshak.h` beside `v90Phase34`.
- */
+double *
+V34XF_GetProbeResultsPtr(void *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+
+	return obj->probe_results;
+}
+
+short
+V34XF_GetRTD(void *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+
+	return (short)((unsigned short)obj->rtd + 0x1e0);
+}
+
+static void
+getMPrecvdBits(struct tagV34Object *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	unsigned char *m = (unsigned char *)obj;
+	short *mp = (short *)(m + OB_INFO);
+	const unsigned char *sess = (const unsigned char *)obj->p3548;
+	int rate;
+
+	if (obj->v90_receiver > 0) {
+		const unsigned char *d = sess + SESS_MP;
+		int v;
+
+		/*
+		 * The first short of the INFO record, assembled bit by bit:
+		 * one flag in bit 0, a four-bit field at 6, a two-bit one at
+		 * 11, and three more flags at 13, 14 and 15.  The masks are
+		 * the object's -- `and $0xf` and `and $0x3` -- so a byte
+		 * larger than its field is truncated rather than rejected.
+		 */
+		v = (d[MP_TYPE] != 0) ? 1 : 0;
+		v |= (d[MP_DRN] & 0xf) << 6;
+		v |= (d[MP_TRELLIS] & 3) << 11;
+		if (d[MP_NONLINEAR] != 0)
+			v |= 0x2000;
+		if (d[MP_SHAPING] != 0)
+			v |= 0x4000;
+		if (d[MP_FLAG5] != 0)
+			v |= 0x8000;
+
+		/*
+		 * Seven shorts straight across, except the first, which comes
+		 * back with its top bit forced on.  `rate_mask`'s sign bit is
+		 * "asymmetric rates are on the table" (v34fsk.h), so this says
+		 * a V.90 MP always permits them.
+		 */
+		mp[1] = (short)(*(const unsigned short *)(d + MP_RATEMASK)
+				| 0x8000);
+		mp[2] = *(const short *)(d + 0x08);
+		mp[3] = *(const short *)(d + 0x0a);
+		mp[4] = *(const short *)(d + 0x0c);
+		mp[5] = *(const short *)(d + 0x0e);
+		mp[6] = *(const short *)(d + 0x10);
+		mp[7] = *(const short *)(d + 0x12);
+
+		/*
+		 * And the four-bit field at 6 is COPIED DOWN over bits 2..5,
+		 * which is where v34fsk.h says the two per-direction rate
+		 * nibbles live: the V.90 upstream rate becomes the V.34
+		 * one as well.  ORed, not assigned, so a bit already set
+		 * there stays set.
+		 */
+		v |= (v >> 4) & 0x3c;
+		obj->info_rates = (short)v;
+
+		if (v & 1)
+			txrxdmainit((short *)(m + OB_DMA), mp);
+
+		/*
+		 * Seven diagnostics, each with its OWN level test, because
+		 * the call between them can change the level.  The names in
+		 * them are the whole reason this function's fields have any.
+		 */
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V90mp - drn = %d\r\n",
+					     (signed char)d[MP_DRN]);
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V90mp - type = %d\r\n",
+					     (signed char)d[MP_TYPE]);
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V90mp - trellisState = %d\r\n",
+					     (signed char)d[MP_TRELLIS]);
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "V90mp - nonlinearEncoder = %d\r\n",
+			    (signed char)d[MP_NONLINEAR]);
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "V90mp - constellationShaping = %d\r\n",
+			    (signed char)d[MP_SHAPING]);
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V90mp - rateMask = 0x%X\r\n",
+					     *(const short *)(d + MP_RATEMASK));
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "mp->data[0] = 0x%X , mp->data[1] = 0x%X\r\n",
+			    (unsigned short)obj->info_rates,
+			    (unsigned short)mp[1]);
+	}
+
+	/*
+	 * AND THE SAME CALL AGAIN, on the same bit, unconditionally on the
+	 * branch above.  With a V.90 receiver running and bit 0 set,
+	 * `txrxdmainit` runs TWICE over the same six shorts; it is
+	 * idempotent, so the repeat is wasted work rather than a defect.  The
+	 * test at 0x9333 is a `testb` on the low byte, which is bit 0 of the
+	 * short on this little-endian target.
+	 */
+	if (*(const unsigned char *)mp & 1)
+		txrxdmainit((short *)(m + OB_DMA), mp);
+
+	/*
+	 * The capability word, built from scratch: 0x9dc3 first, then four
+	 * bits of it replaced below.  The pointer at +0xaa6c is aimed at it,
+	 * which is what says this word is a message the handshake will clock
+	 * out through `getbit` -- that is the only reader of +0xaa6c.
+	 */
+	*(short *)(m + OB_CAPS) = (short)0x9dc3;
+	/* Spelled as `v34handshakinit` spells the same two fields. */
+	*(short **)(m + OB_CAPS_PTR) = (short *)(m + OB_CAPS);
+
+	rate = *(const int *)((const unsigned char *)obj->pac3c + CFG_RATE);
+
+	if (*(const int *)(sess + SESS_GATE) != 0 && obj->v90_receiver > 1
+	    && *(const int *)(*(const unsigned char *const *)(sess + SESS_PCM)
+			      + PCM_SENS) != 0) {
+		int cap = *(const int *)(
+		    *(const unsigned char *const *)(sess + SESS_PCM)
+		    + PCM_RATE) * 0x960;
+
+		if (rate > cap)
+			rate = cap;
+		edprintf("on get max upstream rate, on sensitive ISP, "
+			 "returning %d\r\n", rate);
+	} else {
+		edprintf("on get max upstream rate, on regular ISP, "
+			 "returning %d\r\n", rate);
+	}
+
+	if (rate <= RATE_MAX) {
+		/*
+		 * bits per second -> rate index, as `rate * 7 >> 14`: 2400 Hz
+		 * of rate is 1.0254 of a step, so this is a divide by 2340
+		 * rather than by 2400 and 33600 still lands on 14.  The four
+		 * bits go in REVERSED, at positions 6..9, which is the same
+		 * treatment v34fsk.h records for `info_caps`'s two nibbles.
+		 */
+		int rev = (short)bitreverse((unsigned short)((rate * 7) >> 14),
+					    4);
+		int mask = -0x41;			/* ~0x40 */
+		int k;
+
+		for (k = 0; k <= 3; k++) {
+			unsigned short w = *(const unsigned short *)
+			    (m + OB_CAPS);
+
+			if ((rev >> k) & 1)
+				w = (unsigned short)(w | (unsigned)~mask);
+			else
+				w = (unsigned short)(w & (unsigned)mask);
+			*(short *)(m + OB_CAPS) = (short)w;
+			mask = (short)(mask * 2 + 1);
+		}
+	}
+
+	/*
+	 * The rest of the record, cleared.  Nine shorts from +0xaa3e, and the
+	 * one non-zero constant among them is +0xaa3e itself.  The object
+	 * writes them in an order the compiler chose; nothing reads any of
+	 * them in between, so this is the same state.
+	 */
+	*(short *)(m + 0xaa3e) = 0x7ffd;
+	*(short *)(m + 0xaa40) = 0;
+	*(short *)(m + 0xaa42) = 0;
+	*(short *)(m + 0xaa44) = 0;
+	*(short *)(m + 0xaa46) = 0;
+	*(short *)(m + 0xaa48) = 0;
+	*(short *)(m + 0xaa4a) = 0;
+	*(short *)(m + 0xaa4c) = 0;
+}
+
+extern "C" int
+v90RateRenegSilence(void *objp)
+{
+	struct v34_object *o = (struct v34_object *)objp;
+	unsigned char *m = (unsigned char *)objp;
+	VPcmFloModem *vp = (VPcmFloModem *)o->p3548;
+	int r = o->v90_receiver;
+	short n;
+
+	if (r == 15) {
+		o->txpoint.word = vect4[0];
+		txmit(o);
+		o->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);
+		o->txpoint.word = vect4[3];
+		txmit(o);
+		n = (short)((unsigned short)o->seg_symcount + 1);
+		if (n <= 0x7f) {
+			o->seg_symcount = n;
+			return 0;
+		}
+		o->v90_receiver = 16;
+		o->seg_symcount = 0;
+		return 0;
+	}
+
+	if (r == 16) {
+		o->txpoint.word = vect4[2];
+		txmit(o);
+		o->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);
+		o->txpoint.word = vect4[1];
+		txmit(o);
+		n = (short)((unsigned short)o->seg_symcount + 1);
+		if (n != 0x10) {
+			o->seg_symcount = n;
+			return 0;
+		}
+		o->v90_receiver = 17;
+		o->prev_quadrant = 0;
+		o->seg_symcount = 0;
+		o->tx_scr_sr = 0;
+		return 0;
+	}
+
+	if (r == 17) {
+		if (o->short_382 == OB_CONSTEL_16)
+			txmitquadbit(o, 15);
+		else
+			txmitdibit(o, 3);
+		o->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);
+		return 0;
+	}
+
+	if (r == 18) {
+		/*
+		 * CP, and on the symbol that ends it the machine goes to the
+		 * idle state rather than to the data phase: the freeze comes
+		 * off both echo cancellers and the SAS detector is disabled,
+		 * and 19 then transmits scrambled idle symbols until something
+		 * outside moves it on.
+		 */
+		int done = (short)vp->getV90CpBits(&o->cur_quadrant);
+
+		if (o->short_382 == OB_CONSTEL_16)
+			txmitquadbit(o, o->cur_quadrant);
+		else
+			txmitdibit(o, o->cur_quadrant);
+		if (done == 0)
+			return 0;
+
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("move to SCR on silence rrn "
+					     "(disabling SAS detector on " "silence)\r\n");
+		o->v90_receiver = 19;
+		o->tx_flags = (short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);
+		((unsigned char *)o->pac3c)[CFG_FLAGS03] &= ~CFG_SAS_DETECT;
+		return 0;
+	}
+
+	if (r == 19) {
+		/*
+		 * The idle symbol.  Two arms, and see the note at the top for
+		 * how it differs from `v90Phase34`'s three-armed case 5.
+		 */
+		int q;
+
+		if (o->short_382 == OB_CONSTEL_16) {
+			int d;
+
+			q = (short)V34scrambler((unsigned *)&o->tx_scr_sr,
+						0, 3, 2);
+			o->cur_quadrant = (short)q;
+			d = (short)V34scrambler((unsigned *)&o->tx_scr_sr,
+						0, 3, 2);
+			q = o->cur_quadrant;
+			o->txpoint.word = vect16[d + q * 4];
+		} else {
+			q = (short)V34scrambler((unsigned *)&o->tx_scr_sr,
+						0, 3, 2);
+			o->cur_quadrant = (short)q;
+			o->txpoint.word = vect4[q];
+		}
+
+		txmit(o);
+		/* Re-read: `txmit` is between the load and the store. */
+		o->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);
+		/* And the quadrant DOES advance here.  See the note above. */
+		o->prev_quadrant = o->cur_quadrant;
+		return 0;
+	}
+
+	if (r == 20) {
+		/*
+		 * The closing CP.  Nothing in either function sets this state,
+		 * so the caller does; the freeze goes back on before every
+		 * symbol, not once at entry, because the state is re-entered
+		 * per symbol.
+		 */
+		int done;
+
+		o->tx_flags = (short)((unsigned short)o->tx_flags | V34_EC_FROZEN);
+		done = (short)vp->getV90CpBits(&o->cur_quadrant);
+
+		if (o->short_382 == OB_CONSTEL_16)
+			txmitquadbit(o, o->cur_quadrant);
+		else
+			txmitdibit(o, o->cur_quadrant);
+		if (done == 0)
+			return 0;
+
+		getMPrecvdBits((struct tagV34Object *)objp);
+		initdigital(o);
+		if (*(short *)(m + OB_TXSTATE) != V34HS_EXMIT)
+			*(short *)(m + OB_TXSTATE) = V34HS_EXMIT;
+		o->v90_receiver = 2;
+		return 0;
+	}
+
+	return 0;
+}
+
+extern "C" int
+v90RateReneg(void *objp)
+{
+	struct v34_object *o = (struct v34_object *)objp;
+	unsigned char *m = (unsigned char *)objp;
+	VPcmFloModem *vp = (VPcmFloModem *)o->p3548;
+	int r = o->v90_receiver;
+	short n;
+
+	if (r == 11) {
+		/* `v90Phase34`'s case 6, counted to 0x7f. */
+		o->txpoint.word = vect4[0];
+		txmit(o);
+		o->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);
+		o->txpoint.word = vect4[3];
+		txmit(o);
+		/* Re-read: `txmit` is between the two counts. */
+		n = (short)((unsigned short)o->seg_symcount + 1);
+		if (n <= 0x7f) {
+			o->seg_symcount = n;
+			return 0;
+		}
+		o->v90_receiver = 12;
+		o->seg_symcount = 0;
+		return 0;
+	}
+
+	if (r == 12) {
+		/* `v90Phase34`'s case 7, counted to 0x10. */
+		o->txpoint.word = vect4[2];
+		txmit(o);
+		o->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);
+		o->txpoint.word = vect4[1];
+		txmit(o);
+		n = (short)((unsigned short)o->seg_symcount + 1);
+		if (n != 0x10) {
+			o->seg_symcount = n;
+			return 0;
+		}
+		o->v90_receiver = 13;
+		/* Reset the transmitter for the symbols that follow. */
+		o->prev_quadrant = 0;
+		o->seg_symcount = 0;
+		o->tx_scr_sr = 0;
+		return 0;
+	}
+
+	if (r == 13) {
+		/* `v90Phase34`'s case 9: the constant symbol, scrambled and
+		 * differentially encoded through the published emitters. */
+		if (o->short_382 == OB_CONSTEL_16)
+			txmitquadbit(o, 15);
+		else
+			txmitdibit(o, 3);
+		o->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);
+		return 0;
+	}
+
+	if (r == 14) {
+		/* `v90Phase34`'s case 10, and the end of the ladder. */
+		int done = (short)vp->getV90CpBits(&o->cur_quadrant);
+
+		if (o->short_382 == OB_CONSTEL_16)
+			txmitquadbit(o, o->cur_quadrant);
+		else
+			txmitdibit(o, o->cur_quadrant);
+		if (done == 0)
+			return 0;
+
+		getMPrecvdBits((struct tagV34Object *)objp);
+		initdigital(o);
+		if (*(short *)(m + OB_TXSTATE) != V34HS_EXMIT)
+			*(short *)(m + OB_TXSTATE) = V34HS_EXMIT;
+		o->v90_receiver = 2;
+		return 0;
+	}
+
+	return 0;
+}
+
+extern "C" int
+v90Phase34(void *objp)
+{
+	struct v34_object *o = (struct v34_object *)objp;
+	unsigned char *m = (unsigned char *)objp;
+	struct v34_receiver *rx = (struct v34_receiver *)(m + OB_RECEIVER);
+	VPcmFloModem *vp = (VPcmFloModem *)o->p3548;
+	unsigned short fl = rx->flags;
+	short n;
+
+	if (!(fl & V34_RX_FLAG_DATA)) {
+		/*
+		 * Ja.  The bit source writes the dibit into `cur_quadrant` -- the
+		 * same field the emitters use as their quadrant register --
+		 * and returns non-zero on the symbol that ends the sequence.
+		 * The dibit is transmitted either way, so the last one is
+		 * sent and then acted on.
+		 *
+		 * `VPcmFloModem::getV90JaBits` is a REAL BODY, unlike the
+		 * K56flex twin's three-byte stub, so everything below here is
+		 * reachable and is tested.
+		 */
+		int done = (short)vp->getV90JaBits(&o->cur_quadrant);
+
+		txmitdibit(o, o->cur_quadrant);
+		if (done == 0)
+			return 0;
+
+		rx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_DATA);
+		if (!(((const unsigned char *)o->pac3c)[P34_CFG_FLAGS]
+		      & P34_CFG_BACKWARD_CLEAR))
+			return 0;
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("VPcmV34Main: tx buffer backward "
+					     "clear is enabled...\r\n");
+		m[OB_BACKWARD_CLEAR] = 1;
+		return 0;
+	}
+
+	if (!(fl & V34_RX_FLAG_TRN_WATCH)) {
+		/*
+		 * The sequence has bits but the machine has not been armed.
+		 * Transmit the ZERO point -- two 16-bit stores in the object,
+		 * where every other arm stores the whole packed complex at
+		 * once -- and arm it only once the state has moved past 2.
+		 */
+		o->txpoint.c[0] = 0;
+		o->txpoint.c[1] = 0;
+		txmit(o);
+		if (o->v90_receiver <= 2)
+			return 0;
+		rx->flags = (unsigned short)(rx->flags
+					     | V34_RX_FLAG_TRN_WATCH);
+		o->seg_symcount = 0;
+		return 0;
+	}
+
+	switch (o->v90_receiver) {
+	/*
+	 * Cases 3 and 6 are the same two symbols and the same 0x7f count, and
+	 * differ only in the state they move to and in case 3's diagnostic.
+	 * Cases 4 and 7 are the same pair again with a different point pair
+	 * and a 0x10 count.  They are transcribed separately rather than
+	 * folded together, because that is how the object lays them out and
+	 * because folding would have to invent a conditional debug site.
+	 */
+	case 3:
+		o->txpoint.word = vect4[0];
+		txmit(o);
+		o->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);
+		o->txpoint.word = vect4[3];
+		txmit(o);
+		/* Re-read: `txmit` is between the two counts. */
+		n = (short)((unsigned short)o->seg_symcount + 1);
+		if (n <= 0x7f) {
+			o->seg_symcount = n;
+			return 0;
+		}
+		if (DSPLIB_DEBUG_ON()) {
+			/*
+			 * The object stores the count before printing it and
+			 * zeroes it again below; the store is unobservable
+			 * either way, and it is here because it is there.
+			 */
+			o->seg_symcount = n;
+			dsplibs_debug_printf("Entered v34m->v90Receiver == "
+					     "V90RCV_P3_THIRD_S with " "tx->symcnt = %d period = %d\n",
+					     (int)n,
+					     (int)*(const short *)
+					     (m + OB_PERIOD));
+		}
+		o->v90_receiver = 4;
+		o->seg_symcount = 0;
+		return 0;
+
+	case 6:
+		o->txpoint.word = vect4[0];
+		txmit(o);
+		o->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);
+		o->txpoint.word = vect4[3];
+		txmit(o);
+		n = (short)((unsigned short)o->seg_symcount + 1);
+		if (n <= 0x7f) {
+			o->seg_symcount = n;
+			return 0;
+		}
+		o->v90_receiver = 7;
+		o->seg_symcount = 0;
+		return 0;
+
+	case 4:
+		o->txpoint.word = vect4[2];
+		txmit(o);
+		o->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);
+		o->txpoint.word = vect4[1];
+		txmit(o);
+		n = (short)((unsigned short)o->seg_symcount + 1);
+		if (n != 0x10) {
+			o->seg_symcount = n;
+			return 0;
+		}
+		o->v90_receiver = 5;
+		/* Reset the transmitter for the idle symbols that follow. */
+		o->prev_quadrant = 0;
+		o->seg_symcount = 0;
+		o->tx_scr_sr = 0;
+		return 0;
+
+	case 7:
+		o->txpoint.word = vect4[2];
+		txmit(o);
+		o->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);
+		o->txpoint.word = vect4[1];
+		txmit(o);
+		n = (short)((unsigned short)o->seg_symcount + 1);
+		if (n != 0x10) {
+			o->seg_symcount = n;
+			return 0;
+		}
+		o->v90_receiver = 8;
+		o->prev_quadrant = 0;
+		o->seg_symcount = 0;
+		o->tx_scr_sr = 0;
+		return 0;
+
+	case 5: {
+		/* The idle symbol.  See the note at the top of this block. */
+		short c = o->short_382;
+		int q;
+
+		if (c == OB_CONSTEL_16) {
+			int d;
+
+			q = (short)V34scrambler((unsigned *)&o->tx_scr_sr,
+						0, 3, 2);
+			o->cur_quadrant = (short)q;
+			d = (short)V34scrambler((unsigned *)&o->tx_scr_sr,
+						0, 3, 2);
+			q = o->cur_quadrant;
+			o->txpoint.word = vect16[d + q * 4];
+		} else if (c == OB_CONSTEL_4) {
+			q = (short)V34scrambler((unsigned *)&o->tx_scr_sr,
+						0, 3, 2);
+			o->cur_quadrant = (short)q;
+			o->txpoint.word = vect4[q];
+		} else {
+			o->txpoint.c[0] = 0;
+			o->txpoint.c[1] = 0;
+		}
+
+		txmit(o);
+		/* Re-read: `txmit` is between the load and the store. */
+		o->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);
+		return 0;
+	}
+
+	case 9:
+		/*
+		 * A constant symbol, and the one arm that uses the published
+		 * emitters with a literal: all four bits set for the sixteen-
+		 * point map, both bits set for the four-point one.  So it IS
+		 * scrambled with `tx_flags`'s polynomial and IS differentially
+		 * encoded, unlike case 5.
+		 */
+		if (o->short_382 == OB_CONSTEL_16)
+			txmitquadbit(o, 15);
+		else
+			txmitdibit(o, 3);
+		o->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);
+		return 0;
+
+	case 8: {
+		/*
+		 * CP, and the only arms whose bits are the far end's message
+		 * rather than a fixed pattern -- so they go through the
+		 * emitters like the rest of the handshake.  The bit source
+		 * reports the end of the sequence, and the symbol carrying it
+		 * is transmitted before the state moves.
+		 */
+		int done = (short)vp->getV90CpBits(&o->cur_quadrant);
+
+		if (o->short_382 == OB_CONSTEL_16)
+			txmitquadbit(o, o->cur_quadrant);
+		else
+			txmitdibit(o, o->cur_quadrant);
+		if (done == 0)
+			return 0;
+		o->v90_receiver = 9;
+		return 0;
+	}
+
+	case 10: {
+		int done = (short)vp->getV90CpBits(&o->cur_quadrant);
+
+		if (o->short_382 == OB_CONSTEL_16)
+			txmitquadbit(o, o->cur_quadrant);
+		else
+			txmitdibit(o, o->cur_quadrant);
+		if (done == 0)
+			return 0;
+
+		/*
+		 * The end of phase 3/4: unpack what the far end sent, set the
+		 * data rates up and hand the handshake to its transmit state.
+		 *
+		 * The state store is a compare-then-store in the object and
+		 * is written as one here; it is indistinguishable from a
+		 * plain store by any test, since the value written is the
+		 * value compared against.
+		 */
+		getMPrecvdBits((struct tagV34Object *)objp);
+		initdigital(o);
+		if (*(short *)(m + OB_TXSTATE) != V34HS_EXMIT)
+			*(short *)(m + OB_TXSTATE) = V34HS_EXMIT;
+		o->v90_receiver = 2;
+		return 0;
+	}
+	}
+
+	return 0;
+}
+
+void
+VPcmV34SetV90RateReneg(void *objp, short rrn_type, unsigned char constel_size)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	unsigned char *m = (unsigned char *)obj;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(
+			"setV90RateReneg called, rrn type = %d, " "constel size = %d\r\n",
+			(int)rrn_type, (int)constel_size);
+
+	/*
+	 * UNSIGNED, and that is the whole content of the test: the object
+	 * compares with `cmp $1` and reads the borrow, so only zero takes the
+	 * low arm.  A negative `rrn_type` takes the high one.
+	 */
+	obj->v90_receiver = (rrn_type != 0) ? 15 : 11;
+
+	obj->prev_quadrant = 0;
+	obj->seg_symcount = 0;
+	obj->tx_scr_sr = 0;
+	obj->tx_flags = (short)((obj->tx_flags & ~0x4018) | 0x2000);
+
+	preinitdigital(obj);
+
+	/* The `[1]` counter every handshake trace prints; see V34hshak.c. */
+	*(short *)(m + 0x2aa2) = 0;
+
+	obj->progress = 6;
+	*(int *)(m + 0x2218) = 5;
+
+	obj->short_382 = (short)(constel_size != 0 ? 0x89b0 : 0x8990);
+
+	/*
+	 * The timer, reset: the same three fields and the same two constants
+	 * as `v34handshakinit`'s guard writes when it rejects the span, with
+	 * +0x244 left alone here and written there.
+	 */
+	*(int *)(m + 0x238) = 0;
+	*(int *)(m + 0x248) = (int)0xfff15a00;
+	*(int *)(m + 0x23c) = 0x69780;
+}
+
+void
+V34XF_IndicateJdReceived(void *objp, unsigned char constel,
+			 unsigned char silence_scr)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(
+			"V34Main: IndicateJdReceived - constel size = %d, " "silence SCR = %d\r\n",
+			constel, silence_scr);
+
+	obj->v90_receiver = 3;
+
+	if (silence_scr != 0)
+		obj->short_382 = 0;
+	else if (constel != 0)
+		obj->short_382 = (short)0x89b0;
+	else
+		obj->short_382 = (short)0x8990;
+}
+
+void
+V34XF_IndicateDilReceived(void *objp, unsigned char constel)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(
+			"V34Main: IndicateDilReceived - constel size = %d\r\n",
+			constel);
+
+	obj->v90_receiver = 6;
+	obj->seg_symcount = 0;
+
+	if (constel != 0)
+		obj->short_382 = (short)0x89b0;
+	else
+		obj->short_382 = (short)0x8990;
+}
+
+void
+V34XF_IndicateTrn2dReceived(void *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	int v = obj->v90_receiver;
+
+	if (v <= 9)
+		v = 10;
+	else if (v <= 14)
+		v = 14;
+	else if (v <= 17)
+		v = 18;
+	else
+		v = 20;
+
+	obj->v90_receiver = v;
+
+	/* Re-read, not `v`: the object loads the field back for the print. */
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(
+			"IndicateTrn2dReceived called, v90Receiver = %d\r\n",
+			obj->v90_receiver);
+}
+
 extern "C" void
 indicateJaTransmission(void *objp)
 {
@@ -1632,367 +4256,663 @@ indicateJaTransmission(void *objp)
 		k56->enterPhase3FullDuplex();
 }
 
-/*
- * ---------------------------------------------------------------------------
- * THE LAST TWO OF `vpcm_run`'s FIVE CALLEES THAT ARE NOT `VPcmV34Progress`.
- *
- * `include/dsplib/vpcm.h` declares all five plainly, so each is a HARD LINK
- * REQUIREMENT; `src/pump/v34/v34pcmif.c` defines two of them and explains the
- * split at length.  These two follow it exactly.
- *
- * THEY ARE HERE AND NOT IN THAT `.c` FOR ONE REASON: `VPcmV34GetCurrentRxBitRate`
- * CALLS A C++ MEMBER.
- *
- *     6f89  e8 fc ff ff ff   call <R_386_PC32 _ZNK14V90Demodulator10getBitRateEv>
- *
- * A C translation unit cannot name that symbol -- CLAUDE.md's trap section,
- * "the link line is necessary and not sufficient".  Its twin comes with it
- * because the two share every offset they read and splitting them would put
- * one table of session offsets in two files.
- *
- * ---------------------------------------------------------------------------
- * WHAT THE TWO ACTUALLY ANSWER, and they are NOT each other's mirror: 90
- * bytes against 213, with three arms on one side and five on the other.
- *
- * Both open on the same pair of tests, and the pair is CROSSED rather than
- * nested -- `role` picks which question is asked of `status`, and the two
- * questions are different:
- *
- *     6f48  cmpw   $0x66,0x359c(%edx)          Rx
- *     6f62  je     6f78                          == 0x66 -> status in 1..2
- *     6f64  cmpl   $0x3,(%edx)                   != 0x66 -> status == 3
- *
- *     6fad  cmpw   $0x66,0x359c(%edx)          Tx
- *     6fb5  je     6fd1                          == 0x66 -> status 2, then 3
- *     6fb7  mov    (%edx),%eax; dec; cmp $1; ja  != 0x66 -> status in 1..2
- *
- * `role` is the field v34fsk.h describes as selecting
- * `setTimingStateParameters`' second parameter table and `VPcmV34InitiateRetrain`
- * reads as `role`; 0x66 is the value its other readers pair with V.90 being
- * available.  `(unsigned)(status - 1) <= 1` is the SAME test the three
- * Initiate entry points fork on, which is where v34pcmif.c's comment says the
- * meaning of status 1 and 2 comes from -- a PCM receiver has the line.
- *
- * AND EVERY PATH THAT IS NOT A PCM ONE ENDS IN THE SAME PLACE: the rate
- * configuration at +0xaa84, times 2400.  `VPcmV34GetCurrentTxBitRate` reads
- * its `txbits` at +0x04 and `...RxBitRate` its `rxbits` at +0x14, both with
- * `movswl` -- so both are SIGNED and a negative index gives a negative rate
- * rather than a huge one.  v34fsk.h's note on `struct v34_ratecfg` lists four
- * "current" getters and names no reader for `rxbits`; this is that reader.
- */
-
-/*
- * `role`'s PCM value.  `VPcmV34InitiateRetrain` already switches on 0x65 and
- * 0x66 of the same field a few hundred lines above and spells them inline;
- * this is 0x66 given a name because two functions here now compare against
- * it and a bare 0x66 in four places is four chances to transcribe 0x65.
- */
-#define PCM_ROLE		0x66
-
-/*
- * The transmit chain the two PCM arms walk, which is TWO DIFFERENT OBJECTS
- * read at the same two shapes.  Neither is modelled anywhere in this tree, so
- * these are offsets and not fields:
- *
- *     6fc7  83 7a 2c 03   cmpl $0x3,0x2c(%edx)    the gate, both arms
- *     6ff1  8b 4a 40      mov  0x40(%edx),%ecx    V.90: the frame record
- *     7057  8b 42 4c      mov  0x4c(%edx),%eax    V.92: the frame record
- *     6ff8  69 48 04 ..   imul $0x1f40,0x4(%eax)  and its +0x04, both arms
- *
- * The last is one indirection deeper than it looks: +0x40 and +0x4c hold a
- * pointer to a pointer, and the count is at +0x04 of what the SECOND one
- * addresses.
- */
-#define PCMTX_STATE		0x2c
-#define PCMTX_READY		3
-#define PCMTX_V90_FRAME		0x40
-#define PCMTX_V92_FRAME		0x4c
-#define PCMTX_FRAME_BITS	0x04
-
-/*
- * 0x7530.  The K56flex transmit rate is a CONSTANT in this object -- there is
- * no chain, no gate and nothing to read -- and finding F1090 is why naming the
- * modulation is the whole of what a K56flex session does in this build.
- */
-#define K56FLEX_TX_BITRATE	30000
-
-/*
- * The receive rate.
- *
- * THREE ARMS, and the middle one is the only place in this file that
- * dereferences `pac18` as an `int *`: `V34GiveINFO1aBits` reads +0xc of the
- * same pointer as the local PCM type, so what is at +0 is not otherwise
- * described and is spelled as an offset.
- */
-extern "C" int
-VPcmV34GetCurrentRxBitRate(void *objp)
+void
+chkForceBaudRate(void *objp, struct v34_dftbin *bins)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
-	const struct v34_ratecfg *cfg =
-	    (const struct v34_ratecfg *)((unsigned char *)obj + V34_RATECFG);
+	const unsigned char *cfg = (const unsigned char *)obj->pac3c;
+	unsigned char allow[6] = { 0 };
+	unsigned char *sel;
+	int maxidx;
 
-	if (obj->role == PCM_ROLE) {
-		if ((unsigned)(obj->status - 1) <= 1) {
-			VPcmFloModem *sess = (VPcmFloModem *)obj->p3548;
+	maxidx = cfg[0x50] >> 5;
 
-			return (int)sess->modem.demodulator->getBitRate();
-		}
-	} else if (obj->status == 3) {
-		return *(const int *)obj->pac18;
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("VpcmV34Main: max V34 baud rate index "
+				     "= %d\r\n", maxidx);
+
+	allow[0] = 1;
+	allow[1] = 1;
+	allow[2] = 1;
+	allow[3] = 1;
+	allow[4] = 1;
+
+	if (obj->v90_receiver) {
+		allow[5] = 1;			/* dead -- see the note above */
+		sel = (unsigned char *)obj->p3548 + 0x217;
+	} else if (obj->k56flex_receiver) {
+		allow[5] = 0;
+		sel = allow;
+	} else {
+		allow[5] = 1;
+		sel = allow;
 	}
-
-	return cfg->rxbits * (int)RATE_STEP;
-}
-
-/*
- * The transmit rate, which is where the PCM UPSTREAM rates come from.
- *
- * FIVE ARMS.  Two of them are the same eleven instructions over two different
- * chains and two different constants, and the object SHARES THEIR TAIL --
- * 0x7073 jumps back into 0x700d, so the rounding sequence exists once.  That
- * is a code-generation fact and not a source one; what the source has to have
- * is one expression written twice, which is what is below.
- *
- *   role != 0x66, status 1 or 2   the V.90 modulator at `modem.modulator`,
- *                                  its +0x40, one indirection, +0x04 of that,
- *                                  times 8000/6
- *   role == 0x66, status 2        the object at the session's +0x6124, its
- *                                  +0x4c, one indirection, +0x04 of that,
- *                                  times 8000/12
- *   role == 0x66, status 3        a flat 0x7530 -- 30000
- *   everything else                `txbits` * 2400
- *
- * BOTH CHAINS ARE GATED ON `+0x2c == 3` AND RETURN ZERO OTHERWISE, and the
- * zero is a RETURN and not a fall-through to the 2400 arm:
- *
- *     6fc5  31 c0              xor    %eax,%eax
- *     6fc7  83 7a 2c 03        cmpl   $0x3,0x2c(%edx)
- *     6fcb  74 24              je     6ff1
- *     6fcd  83 c4 14  c3       add;ret                     <- 0 goes out
- *
- * Neither object is modelled anywhere in this tree, so both are reached as
- * bytes; +0x2c is a state the two share and 3 is the only value either is
- * tested against.
- *
- * 8000/6 AND 8000/12 ARE THE TWO PCM FRAME GRANULARITIES, and they are the
- * whole reason the two arms differ -- see `V90Demodulator::getBitRate`, which
- * computes the same expression with the same two `float` constants for the
- * other direction.  Both are `* (1.0f/N)` and not `/ N.0f`, because the
- * object multiplies (`fmuls`) by the nearest `float` to the reciprocal and a
- * division would have been `fdivs`.
- *
- * THE V.92 ARM'S `tx` USED TO BE `*(const unsigned char *const *)sess->
- * pad_6124`, a pointer read out of a four-byte pad.  It is the SAME field
- * the V.90 arm spells `sess->modem.modulator`, one class along: +0x6124 is
- * where the `VPcmFloModem`'s `V92Modem` starts and +0x000 of a `V92Modem` is
- * its `V92Modulator *`.  The construction path named the member; the offset
- * and the read are unchanged, and nothing here was re-measured.
- *
- * The conversion in and out is UNSIGNED at both ends, by the same `fildll`
- * off a zeroed high word and `fistpll` with the low half taken that settled
- * `getBitRate`'s return type.  Written as `unsigned` here for that reason and
- * not because a rate cannot be negative.
- */
-extern "C" int
-VPcmV34GetCurrentTxBitRate(void *objp)
-{
-	struct v34_object *obj = (struct v34_object *)objp;
-	VPcmFloModem *sess = (VPcmFloModem *)obj->p3548;
-	const struct v34_ratecfg *cfg =
-	    (const struct v34_ratecfg *)((unsigned char *)obj + V34_RATECFG);
-	const unsigned char *tx;
-	unsigned int n;
 
 	/*
-	 * ONE `txbits` SITE AND NOT TWO.  The object reaches its
-	 * `movswl 0xaa88; imul $0x960` at 0x6fe0 from BOTH the role-0x66
-	 * switch falling through and the `ja` at 0x6fbd, so the arms that do
-	 * not answer fall out of the `if` rather than each returning the
-	 * configuration themselves.  Written that way here: a second copy is
-	 * a second thing to keep in step, and the mutation that made it read
-	 * `txbits` unsigned found only one of them.
+	 * Index 0 CLEARS NOTHING, and it is guarded separately rather than
+	 * falling out of the chain: with `maxidx` zero every comparison below
+	 * would hold and every rate would be barred.  So zero means "no cap
+	 * configured" and not "cap at the lowest rate".
 	 */
-	if (obj->role != PCM_ROLE) {
-		if ((unsigned)(obj->status - 1) <= 1) {
-			tx = (const unsigned char *)sess->modem.modulator;
-			if (*(const int *)(tx + PCMTX_STATE) != PCMTX_READY)
-				return 0;
-
-			n = *(const unsigned int *)
-			    (**(const unsigned char *const *const *)
-			       (tx + PCMTX_V90_FRAME) + PCMTX_FRAME_BITS);
-
-			return (int)(unsigned)(n * 8000u * (1.0f / 6.0f)
-					       + 0.5f);
-		}
-	} else if (obj->status == 2) {
-		tx = (const unsigned char *)sess->v92modem.modulator;
-		if (*(const int *)(tx + PCMTX_STATE) != PCMTX_READY)
-			return 0;
-
-		n = *(const unsigned int *)
-		    (**(const unsigned char *const *const *)
-		       (tx + PCMTX_V92_FRAME) + PCMTX_FRAME_BITS);
-
-		return (int)(unsigned)(n * 8000u * (1.0f / 12.0f) + 0.5f);
-	} else if (obj->status == 3) {
-		return K56FLEX_TX_BITRATE;
+	if (maxidx != 0) {
+		if (maxidx <= 1)
+			sel[1] = 0;
+		if (maxidx <= 2)
+			sel[2] = 0;
+		if (maxidx <= 3)
+			sel[3] = 0;
+		if (maxidx <= 4)
+			sel[4] = 0;
+		if (maxidx <= 5)
+			sel[5] = 0;
 	}
 
-	return cfg->txbits * (int)RATE_STEP;
+	if (sel[5] == 0)
+		bins[24].shift = 11;
+	if (sel[4] == 0)
+		bins[22].shift = 7;
+	if (sel[3] == 0) {
+		bins[2].shift = 7;
+		bins[21].shift = 7;
+	}
+	if (sel[2] == 0) {
+		bins[20].shift = 7;
+		bins[19].shift = 7;
+	}
 }
 
-/*
- * ---------------------------------------------------------------------------
- * `VPcmV34Progress` -- 0xb3c0, 7,278 bytes.  One block of samples through
- * whichever of V.34, V.90, V.92 and K56flex has the line.
- *
- * IT IS THE WHOLE V.PCM RUN PATH.  `vpcm_run` (src/pump/v90/vpcm.c) converts
- * the host's shorts to floats, fetches the transmit bits, calls this once per
- * block and converts back; everything a connecting call does between those
- * two conversions is here.  Finding F1454 measured what that means: traced
- * under callgrind, a real 33,600 V.34 connect executes exactly ONE symbol
- * this tree had not written, and it was this one.
- *
- * THE SHAPE IS THREE DISPATCHES, NOT ONE.
- *
- *   1. `obj->status`, 0 to 10, the jump table at .rodata+0x2d4 -- which modem
- *      owns the line and what phase it is in.  Anything above 10 is a bug and
- *      says so ("Illegal Modem State").
- *   2. the modem's own answer -- `runPcmModem`, `k56FlexRunDemodulator` and
- *      `v90RunDemodulator` each return a small code that the tables at
- *      +0x300, +0x324 and +0x3bc turn into a new `progress` or a retrain.
- *   3. `obj->progress` itself, the table at +0x340, reached only from the V.34
- *      arm -- five of its seventeen entries do anything, and one of those is
- *      a fourth table (+0x384) that turns a modem-on-hold code into a timeout
- *      in seconds.
- *
- * `progress` IS THE RETURN VALUE AND IS ALSO A LOCAL.  The object reads it into
- * %esi at the top of each arm, switches on that copy, and returns THAT --
- * `obj->progress` is written by several arms after the copy is taken and the
- * function still returns the older value.  `ret` below is that copy, assigned
- * exactly where the object assigns it and nowhere else.  Two arms re-read it
- * only when the debug level is up, which changes what the function returns;
- * see D296.
- *
- * The weak-call scaffolding described in F1454/F1460 is no longer needed:
- * all seven formerly missing callees are reconstructed.  The five member
- * calls below are direct, as at .text+0xb84f, +0xba41, +0xbc2b, +0xc7f7
- * and +0xcfef in the reference; none of those sites tests a callee address.
- */
+void
+V34XF_IndicateK56FlexJdReceived(void *objp, unsigned char constel)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	unsigned char *m = (unsigned char *)obj;
+	struct v34_receiver *rx = (struct v34_receiver *)(m + 0x264);
+	const struct v34_ratecfg *cfg =
+	    (const struct v34_ratecfg *)(m + V34_RATECFG);
 
-/* `mov 0x...(%esi)` sites in regions v34fsk.h models as `unmapped_*`. */
-#define PROG_S16(o, off)	(*(short *)((unsigned char *)(o) + (off)))
-#define PROG_U16(o, off)	(*(unsigned short *)((unsigned char *)(o) + (off)))
-#define PROG_S32(o, off)	(*(int *)((unsigned char *)(o) + (off)))
-#define PROG_U8(o, off)		(*(unsigned char *)((unsigned char *)(o) + (off)))
+	rx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_LATE_TRN);
 
-/*
- * +0x0238  Samples this session has processed, masked to 31 bits on every
- * block.  `datapumpv34` reads it at its true offset and v34fsk.h's note on
- * `unmapped_0234` records the two other readers.
- */
-#define O_SAMPLES	0x238
-/*
- * +0x0240 and +0x0244.  The first is named by the object -- "On
- * PHASE2_COMPLETE: added Silence = %d, p2DelayCntr = %d" -- and the second by
- * "phase3halfDuplexLength = %d symbols (baud %d)".
- */
-#define O_P2DELAY	0x240
-#define O_HDLENGTH	0xa244
-/*
- * +0x0254 to +0x0258, adaptecho's DC estimator: a countdown, the estimate the
- * loop subtracts from every sample, and the accumulator averaged into it
- * every 128 samples.  "Estimated DC = %d  (acc = %d)" names the last two.
- */
-#define O_DCCOUNT	0x254
-#define O_DCEST		0x256
-#define O_DCACC		0x258
-/* +0x0262.  Zero means the object is not running and the function returns. */
-#define O_RUNNING	0x262
-/* +0xa248.  Set with the half-duplex length and cleared by three arms. */
-#define O_HDSET		0xa248
-/* +0x0e4c.  A short set to 1 by each of the three "modem is up" arms. */
-#define O_MODEMUP	0xe4c
-/* +0xabc4.  Non-zero once the session has settled which PCM modem it is. */
-#define O_PCMCHOSEN	0xabc4
-/*
- * +0xabd8 and +0xabdc.  "Modem On Hold approved by phase2 (ISP timeout is %d
- * seconds)" names the first; the second counts samples against it.  -1 is
- * "no limit" and is tested for as such.
- */
-#define O_MOHLIMIT	0xabd8
-#define O_MOHCOUNT	0xabdc
-/*
- * +0xabe4, +0xabe6 and +0xabf9, the three words of the modem-on-hold request
- * `VPcmV34InitMOH` clears or stores and nothing here reads.  Offsets, not
- * names: no string and no reader says what any of them carries.
- */
-#define OB_MOH_W4	0xabe4
-#define OB_MOH_W6	0xabe6
-#define OB_MOH_FLAG	0xabf9
-/* +0xabe9.  Gates the late ANSam case on an outgoing call. */
-#define O_ANSAMLATE	0xabe9
-/* +0xabfe and +0xabff.  The output-clear request, and the phase-2 substate. */
-#define O_CLEARREQ	0xabfe
-#define O_P2STATE	0xabff
-/*
- * +0xac1c, the retrain detector's eleven words.  Four filter states, three
- * coefficients, a signal counter and two energies with a block counter --
- * "retrainDetector() notchDetectSigCnt = %d energyInp>>NOTCH_IN_OUT_RATIO_
- * SHIFT = %d energyOut = %d" names the last three and the counter.
- */
-#define O_NOTCH_S0	0xac1c
-#define O_NOTCH_S1	0xac1e
-#define O_NOTCH_S2	0xac20
-#define O_NOTCH_S3	0xac22
-#define O_NOTCH_CNT	0xac24
-#define O_NOTCH_K0	0xac28
-#define O_NOTCH_K1	0xac2a
-#define O_NOTCH_K2	0xac2c
-#define O_NOTCH_EIN	0xac30
-#define O_NOTCH_EOUT	0xac34
-#define O_NOTCH_BLK	0xac38
-/*
- * +0xac40 to +0xac48, the three words `requestOutputSampleClear` writes and
- * nothing here reads.  v34fsk.h's `unmapped_ac40` is the twelve bytes this
- * arm is the only reason to model at all.
- */
-#define O_CLR_FLAG	0xac40
-#define O_CLR_COUNT	0xac44
-#define O_CLR_DONE	0xac48
+	obj->short_382 = (constel == 0x10) ? (short)0x89b0 : (short)0x8990;
 
-/* +0x25c2, `testb $0x10` -- transmit through the datapump rather than the
- * handshake.  v34fsk.h names it `tx_flags`. */
-#define PROG_TXBIT_DATA		0x10
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(
+			"VPcmV34Main: About to setup v34 txmit, "
+			"baudrate = %d, carrier = %d, preemp = %d\r\n",
+			cfg->baud, cfg->carrier, cfg->preemp);
 
-/* The two `role` roles, `cmpw $0x65` and `$0x66` at 0xb50c and 0xb522. */
-#define PROG_ROLE_ORIGINATE	0x65
-#define PROG_ROLE_ANSWER	0x66
+	v34setuptxmit(obj);
 
-/* The `+0x6c0c` block of VPcmFloModem, read as floats by the V.PCM arm. */
-#define SESS_OUTBLOCK		0x6c0c
-/* `V92Phase2Info::shortPhase2Local`, cleared through the session. */
-#define SESS_V92_P2INFO		0x612c
+	if (obj->txstate != 0x12)
+		obj->txstate = 0x12;
 
-/* `pac3c`'s flag bytes, `orb`/`andb`/`testb` sites. */
-#define CFG_FLAGS3		3
-#define CFG_FLAG3_RETRAIN	4
-#define CFG_FLAG3_PHASE2	2
-#define CFG_FLAGS2		2
-#define CFG_FLAG2_SAMELINE	0x20
-#define CFG_FLAGS51		0x51
-#define CFG_FLAG51_CLEAR	1
-#define CFG_SILENCE		0x6c
+	obj->seg_symcount = 0;
+	obj->prev_quadrant = 0;
+	obj->tx_scr_sr = 0;
 
-/* The retrain detector's three thresholds and its block length. */
-#define NOTCH_BLOCK		0x40
-#define NOTCH_EIN_MIN		0x249f0
-#define NOTCH_EOUT_MAX		0x22550f
-#define NOTCH_SIGCNT_MAX	5
+	*(short *)(m + 0x254) =
+		(short)(336 * (int)*(const short *)(m + 0x35a4) + 10000);
+	*(short *)(m + 0x256) = 0;
+	*(int *)(m + 0x258) = 0;
+}
 
-/* `hist_2f58` wraps here; `cmp $0x257,%dx` and it is a 16-bit compare. */
-#define PROG_HIST_LAST		0x257
+void
+V34XF_IndicateK56FlexRateDetermined(void *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(
+			"K56Flex rate determined, starting MP " "transmission...\r\n");
+
+	obj->k56flex_receiver = 5;
+}
+
+void
+VPcmV34LogTimingOffset(void *objp, short offset)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+
+	obj->v90_timing_offset = offset;
+}
+
+void
+VPcmV34IndicateLocalRRN(void *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+
+	obj->rrn_local = (short)(obj->rrn_local + 1);
+}
+
+void
+VPcmV34IndicateRemoteRRN(void *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+
+	obj->rrn_remote = (short)(obj->rrn_remote + 1);
+}
+
+void
+VPcmV34SetIndicationOfRemoteRetrain(void *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+
+	obj->remote_retrain_ind = 1;
+}
+
+int
+k56FlexPhase34(void *objp)
+{
+	struct v34_object *o = (struct v34_object *)objp;
+	unsigned char *m = (unsigned char *)objp;
+	struct v34_receiver *rx = (struct v34_receiver *)(m + OB_RECEIVER);
+	K56FlexFloModem *k56 = (K56FlexFloModem *)o->pac18;
+
+	if (!(rx->flags & V34_RX_FLAG_DATA)) {
+		/*
+		 * Ja.  The bit source writes the dibit into `cur_quadrant` -- the
+		 * same field the emitters use as their quadrant register --
+		 * and returns non-zero on the symbol that ends the sequence.
+		 * The dibit is transmitted either way, so the last one is
+		 * sent and then acted on.
+		 */
+		int done = (short)k56->getK56FlexJaBits(&o->cur_quadrant);
+
+		txmitdibit(o, o->cur_quadrant);
+		if (done == 0)
+			return 0;
+
+		/* DEAD: `getK56FlexJaBits` is a stub returning 0. */
+		rx->flags |= V34_RX_FLAG_DATA;
+		*(short *)(m + OB_TXBITS) = (short)0x899f;
+		o->vect_idx = 0;
+		o->k56flex_receiver = 3;
+		return 0;
+	}
+
+	switch (o->k56flex_receiver) {
+	case 3: {
+		/*
+		 * Eight dibits out of one word, `vect_idx` counting them.
+		 *
+		 * The index is read TWICE and the second read is after
+		 * `txmitdibit`, because the object reads it twice: a call
+		 * sits between, and no compiler may assume a field survives
+		 * one.  It is written that way here for the same reason and
+		 * NOT because the value can change -- `modulatevector` is the
+		 * only other writer of +0x2aa2 in the tree and it CALLS
+		 * `txmit` rather than being reachable from it.  Using the
+		 * first read is therefore an equivalent mutation, and it is
+		 * recorded as one with that call chain named as what is held
+		 * fixed.
+		 *
+		 * The shift count comes from a SIGN-extended `vect_idx` and
+		 * the increment from a zero-extended one.  `& 31` is the x86
+		 * shift-count mask made explicit, so that an out-of-range
+		 * index -- which only the caller can produce, since the store
+		 * below masks to 0..7 -- shifts by the same amount here as in
+		 * the object instead of being undefined.
+		 */
+		int idx = o->vect_idx;
+		unsigned short w = (unsigned short)*(short *)(m + OB_TXBITS);
+		unsigned nidx;
+
+		txmitdibit(o, (short)(w >> ((2 * idx) & 31)));
+
+		nidx = ((unsigned)(unsigned short)o->vect_idx + 1) & 7;
+		o->vect_idx = (short)nidx;
+		if (nidx != 0)
+			return 0;
+
+		/* The word is spent: reset the transmitter and advance. */
+		o->prev_quadrant = 0;
+		o->seg_symcount = 0;
+		o->tx_scr_sr = 0;
+		o->k56flex_receiver = 4;
+		return 0;
+	}
+
+	case 4: {
+		/* The idle symbol.  See the note at the top of this file. */
+		int q;
+
+		if (o->short_382 == OB_CONSTEL_16) {
+			int d;
+
+			q = (short)V34scrambler((unsigned *)&o->tx_scr_sr,
+						1, 3, 2);
+			o->cur_quadrant = (short)q;
+			d = (short)V34scrambler((unsigned *)&o->tx_scr_sr,
+						1, 3, 2);
+			q = o->cur_quadrant;
+			o->txpoint.word = vect16[d + q * 4];
+		} else {
+			q = (short)V34scrambler((unsigned *)&o->tx_scr_sr,
+						1, 3, 2);
+			o->cur_quadrant = (short)q;
+			o->txpoint.word = vect4[q];
+		}
+
+		txmit(o);
+		/* Re-read: `txmit` is between the load and the store. */
+		o->seg_symcount = (short)((unsigned)(unsigned short)o->seg_symcount + 1);
+		return 0;
+	}
+
+	case 5: {
+		/*
+		 * MP, and the only arm that uses the full emitters: the bits
+		 * are the far end's message rather than a fixed pattern, so
+		 * they are scrambled and differentially encoded the way the
+		 * rest of the handshake is.
+		 */
+		int done = (short)k56->getK56FlexMpBits(&o->cur_quadrant);
+
+		if (o->short_382 == OB_CONSTEL_16)
+			txmitquadbit(o, o->cur_quadrant);
+		else
+			txmitdibit(o, o->cur_quadrant);
+
+		if (done == 0)
+			return 0;
+
+		/*
+		 * DEAD: `getK56FlexMpBits` is a stub returning 0.
+		 *
+		 * The state store is a compare-then-store in the object and
+		 * is written as one here.  It is indistinguishable from a
+		 * plain store by any test -- the value written is the value
+		 * compared against -- and the mutation that removes the
+		 * compare is listed as equivalent rather than as a gap.
+		 */
+		getMPrecvdBits((struct tagV34Object *)objp);
+		initdigital(o);
+		if (*(short *)(m + OB_TXSTATE) != V34HS_EXMIT)
+			*(short *)(m + OB_TXSTATE) = V34HS_EXMIT;
+		o->k56flex_receiver = 2;
+		return 0;
+	}
+	}
+
+	return 0;
+}
+
+extern "C" int
+VPcmV34Create(void *objp, int side, int ptc, void *runtime, int sessionType)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+	unsigned char *m = (unsigned char *)obj;
+	unsigned char *cfg = (unsigned char *)runtime;
+	unsigned char *sess = (unsigned char *)obj->p3548;
+	unsigned char *k56 = (unsigned char *)obj->pac18;
+	struct v34_receiver *rx = (struct v34_receiver *)(m + OB_RECEIVER);
+	unsigned char *v92;
+	/*
+	 * All three are read BEFORE the memset, out of `runtime` rather than
+	 * out of the object, so the memset cannot reach them -- but the object
+	 * still keeps them in stack slots across it, and the two `int`s are
+	 * re-read as SHORTS at the one place they are used.
+	 */
+	int quick = (cfg[CFG_V92LITE] & CFG_QUICKCONNECT) != 0;
+	int ansLevel = *(const int *)(cfg + CFG_ANSPCM_LEVEL);
+	int uqts = *(const int *)(cfg + CFG_UQTS);
+
+	/*
+	 * FIVE SEPARATE GATES AND NOT ONE.  Each re-loads `dsplibs_debug_level`
+	 * because the call between them could have changed it, which is what
+	 * the object does; a single `if` round all five would be one test.
+	 */
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("VPcmV34Create: quick connect indication"
+				     " from phase1 = %d\r\n", quick);
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("VPcmV34Create: Uqts index is %d\r\n",
+				     uqts);
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("VPcmV34Create: ANSpcm level index is"
+				     " %d\r\n", ansLevel);
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("VPcmV34Create, initial Session Type ="
+				     " %d\n", sessionType);
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("RX at %lX\n", (unsigned long)rx);
+
+	sysdep_memset(obj, 0, VPCM_V34_BYTES);
+	sysdep_memset(rx, 0, sizeof(struct v34_receiver));
+
+	obj->pac18 = k56;
+	*(short *)(m + OB_FAA80) = 1;
+	obj->pac3c = runtime;
+	obj->p3548 = sess;
+
+	V34InitializeImplementationSpecific(obj);
+
+	obj->far_echo_enable = 1;
+	obj->bulk_tail = 0;
+	obj->bulk_head = 0;
+	obj->bulk_ring = (short *)(m + OB_BULK_RING);
+	obj->bulk_len = 0x2580;
+
+	*(int *)(m + OB_FABD8) = 0;
+	*(int *)(m + OB_FABDC) = 0;
+	obj->moh_holdtime_code = 0;
+	obj->short_abe2 = 0;
+	*(short *)(m + OB_FABE4) = 0;
+	*(short *)(m + OB_FABE6) = 0;
+	obj->short_35a4 = 0;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("On Create: Setting desired TX MD"
+				     " (%d mSec)!\n", (int)obj->short_35a4);
+
+	/*
+	 * `x * 2.4`, and the object spells it as an unsigned divide of `x * 24`
+	 * by ten -- `mul $0xcccccccd` with `shr $3` on the high half, which is
+	 * GCC's divide-by-ten and not a fixed-point scale.  Verified
+	 * numerically rather than read off.
+	 */
+	*(short *)(m + OB_FABFC) =
+		(short)((*(const unsigned int *)(cfg + CFG_TXMD) * 24u) / 10u);
+
+	/*
+	 * The V.92 record is re-loaded between the two byte stores, which is
+	 * what the object does and is not an optimisation this file may fold:
+	 * nothing says the two loads have to give the same pointer.
+	 */
+	v92 = *(unsigned char **)(sess + SESS_PCMV92);
+	v92[PCMV92_QUICK] = 0;
+	v92 = *(unsigned char **)(sess + SESS_PCMV92);
+	v92[PCMV92_FLAG11] = 0;
+	*(int *)(sess + SESS_PCMTYPE) = 0;
+
+	*(short *)(m + OB_FABC4) = 0;
+	obj->local_v92 = 0;
+	obj->remote_v92 = 0;
+	obj->local_short = 0;
+	obj->is_short = 0;
+	obj->short_abce = 0;
+	obj->short_abd0 = 0;
+	obj->short_abd2 = 0;
+	*(short *)(m + OB_FABD4) = 0;
+
+	obj->status = 0;
+	obj->progress = 0;
+	obj->k56flex_receiver = 0;
+
+	/*
+	 * THE DISPATCH.  Not a `switch` with 0 in `default`: the object tests
+	 * `== 2`, then a SIGNED `jle`, then `== 3` and `== 4`, so 0, every
+	 * negative value and everything above 4 share one body.
+	 */
+	if (sessionType == 2) {
+		*(int *)(k56 + K56_AORMU) = 0;
+		obj->v90_receiver = 1;
+		((VPcmFloModem *)sess)->externalReset();
+
+		obj->local_v92 = 1;
+		obj->local_short = (short)quick;
+
+		/*
+		 * The four bytes `V34GiveINFO1aBits` copied INTO the session
+		 * object at +0x14..+0x16, read back out of it -- and a fourth
+		 * at +0x17 that no writer reconstructed here accounts for.
+		 */
+		v92 = *(unsigned char **)(sess + SESS_PCMV92);
+		*(short *)(m + OB_FABD4) = v92[PCMV92_COPIED + 3];
+		obj->short_abd2 = v92[PCMV92_COPIED + 2];
+		obj->short_abd0 = v92[PCMV92_COPIED + 1];
+		obj->short_abce = v92[PCMV92_COPIED + 0];
+		v92[PCMV92_FLAG11] = 1;
+
+		v92 = *(unsigned char **)(sess + SESS_PCMV92);
+		v92[PCMV92_QUICK] = (unsigned char)quick;
+
+		/*
+		 * Channel verification only when the far end asked for a quick
+		 * connect AND we are the side that was passed 0.  The two
+		 * `int`s captured at the top go in as SHORTS here, which is
+		 * the only place either is used for anything.
+		 */
+		if (quick != 0 && side == 0) {
+			obj->status = 4;
+			(*(V90Demodulator **)(sess + SESS_DEMOD))
+				->enterChannelVerification((short)uqts,
+							   (short)ansLevel);
+			obj->progress = 10;
+		}
+
+		if (side == 0) {
+			side = 1;
+		} else {
+			*(int *)(sess + SESS_PCMTYPE) = 1;
+			side = 0;
+		}
+	} else if (sessionType == 1) {
+		*(int *)(k56 + K56_AORMU) = 0;
+		obj->v90_receiver = 1;
+		side = (side == 0);
+		((VPcmFloModem *)sess)->externalReset();
+	} else if (sessionType == 3 || sessionType == 4) {
+		*(int *)(k56 + K56_AORMU) = (sessionType == 4);
+		obj->v90_receiver = 0;
+
+		/*
+		 * THE ONE UNGATED PRINT IN THE FUNCTION.  Through `edprintf`
+		 * and behind no level test at all, where the other thirteen
+		 * are `dsplibs_debug_printf` behind `DSPLIB_DEBUG_ON()`.  The
+		 * same inconsistency v34pcmif.c records for
+		 * `VPcmV34SetTxScale`, and the original's.
+		 */
+		edprintf("VPcmV34Main: it is K56Flex session type,"
+			 " (AorMu = %d)\r\n", *(const int *)(k56 + K56_AORMU));
+
+		obj->k56flex_receiver = 1;
+		((K56FlexFloModem *)k56)->externalReset();
+	} else {
+		*(int *)(k56 + K56_AORMU) = 0;
+		obj->v90_receiver = 0;
+	}
+
+	obj->role = (short)(side != 0 ? 0x66 : 0x65);
+
+	obj->ptc = ptc;
+	obj->rx_n = 0;
+	obj->tx_n = 0;
+	obj->tx_rd = 0;
+	obj->rate_min = 0;
+	obj->rate_max = RATE_INDEX_MAX;
+	obj->rate_now = 0;
+	obj->rate_want = -1;
+	obj->rx_energy_floor = 0;
+	*(int *)(m + OB_F0234) = 0;
+	*(int *)(m + OB_F0238) = 0;
+	*(int *)(m + OB_F0248) = (int)0xfffe8900;
+	*(short *)(m + OB_FORCE_LOW_BAUD) = 0;
+	rx->agc_start_gain = 0x600;
+	*(int *)((unsigned char *)rx + RX_F238) = 0;
+	*(int *)(m + OB_F000C) = 0;
+	obj->nof_tx_bits = 0;
+
+	v34handshakinit(obj, 0);
+
+	/*
+	 * +0x35a4 IS RE-READ HERE, AFTER THE HANDSHAKE INITIALISER, so this is
+	 * not the zero stored above: the object emits a `movswl` immediately
+	 * after the call and carries whatever `v34handshakinit` left.  336 is
+	 * `x * 21 * 16`, two `lea`s and a shift, and the source short is
+	 * signed, so a negative one gives a result below 10000.
+	 */
+	*(short *)(m + OB_F0254) =
+		(short)(336 * (int)*(const short *)(m + OB_F35A4) + 10000);
+	obj->hist2_idx = 0;
+	*(short *)(m + OB_F0254 + 2) = 0;
+	*(int *)(m + OB_F0254 + 4) = 0;
+
+	/*
+	 * The 32 bytes at +0xac1c, byte for byte the same block
+	 * `VPcmV34InitiateRetrain` writes; its comment is the derivation and
+	 * is not repeated.  +0xac2e is again the one short left alone.
+	 */
+	{
+		unsigned char *st = m + OB_FAC1C;
+		short role = obj->role;
+
+		*(short *)(st + 0x00) = 0;
+		*(short *)(st + 0x02) = 0;
+		*(short *)(st + 0x04) = 0;
+		*(short *)(st + 0x06) = 0;
+		*(int *)(st + 0x08) = 0;
+		*(int *)(st + 0x14) = 0;
+		*(int *)(st + 0x18) = 0;
+		*(int *)(st + 0x1c) = 0;
+
+		if (role == 0x65) {
+			*(short *)(st + 0x0c) = 0;
+			*(short *)(st + 0x0e) = 0;
+			*(short *)(st + 0x10) = (short)0x39c3;
+		} else if (role == 0x66) {
+			*(short *)(st + 0x0c) = (short)0x5a82;
+			*(short *)(st + 0x0e) = (short)0x55fc;
+			*(short *)(st + 0x10) = (short)0x39c3;
+		}
+	}
+
+	obj->rates_latched = 0;
+	obj->v90_timing_offset = 0;
+	m[OB_FAC17] = 0;
+	*(short *)(m + OB_F0262) = 1;
+	obj->tx_bps = 0;
+	obj->rx_bps = 0;
+	obj->rrn_local = 0;
+	obj->rrn_remote = 0;
+	*(short *)(m + OB_FAC12) = 0;
+	*(short *)(m + OB_FAC14) = 0;
+	obj->echo_decay_start = 0x7d0;
+	*(short *)(m + OB_FA248) = 0;
+	obj->echo_decay_fact = 0x7fdf;
+	obj->echo_beta = 2;
+
+	/*
+	 * THE RATE BLOCK, and it is `VPcmV34InitiateRetrain`'s to the
+	 * instruction -- same three arms in the same order, same unsigned
+	 * divide by 2400, same clamp ladder with `rate_max == 1` falling out
+	 * of the `else` rather than being tested separately.  Two functions,
+	 * one block; see that one for why each step is the shape it is.
+	 */
+	if (obj->v90_receiver != 0 && *(const int *)(sess + SESS_GATE) != 0) {
+		V90ConstellationDesigner *cd;
+
+		cfg = (unsigned char *)obj->pac3c;
+		cd = *(V90ConstellationDesigner **)
+		     (*(unsigned char **)(sess + SESS_DEMOD) + DEMOD_DESIGNER);
+		cd->setMinMaxRates(*(const unsigned int *)(cfg + CFG_MIN_RATE),
+				   *(const unsigned int *)(cfg + CFG_MAX_RATE));
+	} else if (obj->k56flex_receiver != 0 && k56[K56_ENABLED] != 0) {
+		cfg = (unsigned char *)obj->pac3c;
+		((K56FlexFloModem *)k56)->setMinMaxRates(
+			*(const int *)(cfg + CFG_MIN_RATE),
+			*(const int *)(cfg + CFG_MAX_RATE));
+	} else {
+		cfg = (unsigned char *)obj->pac3c;
+
+		obj->rate_min = (int)(*(const unsigned int *)
+				      (cfg + CFG_MIN_RATE) / RATE_STEP);
+		obj->rate_max = (int)(*(const unsigned int *)
+				      (cfg + CFG_MAX_RATE) / RATE_STEP);
+
+		if (obj->rate_min > RATE_INDEX_MAX)
+			obj->rate_min = RATE_INDEX_MAX;
+		if (obj->rate_max < obj->rate_min)
+			obj->rate_max = obj->rate_min;
+		if (obj->rate_max > RATE_INDEX_MAX)
+			obj->rate_max = RATE_INDEX_MAX;
+		else if (obj->rate_max == 1)
+			*(short *)(m + OB_FORCE_LOW_BAUD) = 1;
+	}
+
+	cfg = (unsigned char *)obj->pac3c;
+
+	/* The disconnect threshold, indexed as `VPcmV34InitiateRetrain`. */
+	{
+		int level = *(const int *)(cfg + CFG_MIN_LEVEL);
+		unsigned idx = (unsigned)level + 0x30u;
+		int thresh;
+
+		if (idx > 7u)
+			idx = 3u;
+		thresh = V34DisconnectThreshTable[idx];
+		obj->rx_energy_floor = thresh;
+
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("VPcmV34Main: minLevel given is "
+					     "%d , minSigLevel set to %d\n",
+					     level, thresh);
+	}
+
+	*(int *)(m + OB_F0234) = 0;
+
+	{
+		int delay = *(const int *)(cfg + CFG_FILT_DELAY);
+		int biased = (int)((unsigned)delay + 2u);
+
+		*(short *)(m + OB_FILT_DELAY) = (short)((biased >> 2) + 0x22);
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V34 filtdelay set to %d "
+					     "(params initial delay = %d)\n",
+					     (int)*(short *)(m + OB_FILT_DELAY),
+					     delay);
+	}
+
+	{
+		int ext = *(const int *)(cfg + CFG_EXT_DELAY);
+
+		obj->dmadelay = (short)(0x610u - (unsigned)ext);
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V34FEC, V34dmadelay set to %d, " "(ext delay=%d)\n",
+					     (int)obj->dmadelay, ext);
+	}
+
+	((V92EchoCanceller *)(sess + SESS_ECHO))->setEchoDelay(
+		(unsigned)*(const int *)(cfg + CFG_EXT_DELAY) + 0x68u);
+
+	/*
+	 * THE ENTRANCE FILTER, three ways, and only the first two are named by
+	 * their own diagnostics.  -1 means "ask the hardware", which here is
+	 * one `int` of the configuration compared against 14; 1 forces it on;
+	 * ANYTHING ELSE forces it off, which is why this is not a `switch` --
+	 * the object decrements and tests, so 0 and 7 take the same arm.
+	 */
+	cfg = (unsigned char *)obj->pac3c;
+	{
+		int stream = *(const int *)(cfg + CFG_ENTRANCE);
+
+		if (stream == -1) {
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf("VPcmFlo: From Stream - " "Entrance Filter according"
+						     " to HW...\r\n");
+			cfg = (unsigned char *)obj->pac3c;
+			sess[SESS_ENTRANCE] = (unsigned char)
+				(*(const int *)(cfg + CFG_F54) == 14);
+		} else if (stream == 1) {
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf("VPcmFlo: From Stream - " "Entrance Filter forced "
+						     "enabled...\r\n");
+			sess[SESS_ENTRANCE] = 1;
+		} else {
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf("VPcmFlo: From Stream - " "Entrance Filter forced "
+						     "disabled...\r\n");
+			sess[SESS_ENTRANCE] = 0;
+		}
+	}
+
+	((GenericIIR<float, double> *)(sess + SESS_IIR))->reset();
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("VPcmFlo: YES! entrance filter applied ="
+				     " %d\r\n", (int)sess[SESS_ENTRANCE]);
+
+	return 0;
+}
 
 extern "C" int
 VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
@@ -2994,1231 +5914,3 @@ done:
 
 	return ret;
 }
-
-/*
- * ---------------------------------------------------------------------------
- * THE MANGLED HALF OF THE PUBLIC ACCESSOR SURFACE.
- *
- * Six entry points that take `tagV34Object *` rather than `void *`, which is
- * the whole of why they are mangled and therefore why they are here and not
- * in `v34pcmif.c` beside the rest of the batch.  `VPcmV34InitMOH` is the odd
- * one out: its name is NOT mangled, but it calls
- * `GenericToneDetector::reset`, and a C translation unit cannot name that.
- *
- * FOUR OF THE SIX ARE ALREADY IN THIS FILE, INLINED.
- * `VPcmV34InitiateRetrain` carries the minimum-signal-level block, both delay
- * blocks and the notch reset verbatim; the standalone functions below are the
- * out-of-line copies of the same source.  They are transcribed against the
- * disassembly rather than factored out of the inlined copies, because a
- * shared static helper would have no blob symbol and its bytes would count
- * against neither side.
- */
-
-/*
- * Two instructions, and the second is the `ret`.
- *
- * `_Z25SetUpstreamModulationInfoP12tagV34Object` is one byte long.  Its
- * mangling is what fixes the parameter -- there is exactly one, and it is the
- * object -- and nothing else about it is observable.  It survives as an empty
- * body because the object has the symbol, at 0x6200, immediately before
- * `VPcmV34SetMinMaxBitRates`.
- */
-void
-SetUpstreamModulationInfo(struct tagV34Object *objp)
-{
-	(void)objp;
-}
-
-/*
- * Push the configured rate bounds down to whichever modem is running.
- *
- * THREE ARMS, AND THE FIRST TWO DO NOT TOUCH THE V.34 FIELDS AT ALL -- they
- * hand the configuration's two raw rates, in bits per second and undivided,
- * to a C++ object and return:
- *
- *   V.90     `v90_receiver` non-zero AND the session's `info0Layout` set:
- *            `V90ConstellationDesigner::setMinMaxRates`, reached as
- *            `p3548 -> +0x175c -> +0x208`
- *   K56flex  `k56flex_receiver` non-zero AND `pac18[8]` non-zero:
- *            `K56FlexFloModem::setMinMaxRates`, with `pac18` as `this`
- *   V.34     everything else, including a K56flex receiver whose `pac18[8]`
- *            is clear -- that arm FALLS THROUGH rather than returning
- *
- * THE V.34 ARM IS THE ONE v34fsk.h DESCRIBES.  Both rates are divided by
- * 2400 UNSIGNED -- `mul $0x1b4e81b5; shr $8`, which is `ceil(2^40/2400)` and
- * so is the unsigned magic and not the signed one -- capped at 14, and then
- * the maximum is raised to the minimum if it sits below it.  The order
- * matters: the cap on `rate_min` happens BEFORE the comparison, so a
- * configuration asking for 40000/33600 ends at 14/14 and not at 16/14.
- *
- * AND ONE RATE IS SPECIAL.  A `rate_max` of exactly 1 -- 2400 bps, the
- * slowest V.34 rate -- also sets the force-low-baud short at +0x359a, which
- * is `dec %edx; jne` and therefore that value alone rather than a threshold.
- * A `rate_max` above 14 returns without reaching it.
- */
-void
-VPcmV34SetMinMaxBitRates(struct tagV34Object *objp)
-{
-	struct v34_object *obj = (struct v34_object *)objp;
-	unsigned char *m = (unsigned char *)obj;
-	unsigned char *sess = (unsigned char *)obj->p3548;
-	const unsigned char *cfg;
-
-	if (obj->v90_receiver != 0
-	    && *(const int *)(sess + SESS_GATE) != 0) {
-		V90Demodulator *demod =
-		    *(V90Demodulator *const *)(sess + SESS_DEMOD);
-
-		cfg = (const unsigned char *)obj->pac3c;
-		demod->constellationDesigner->setMinMaxRates(
-			(unsigned)*(const int *)(cfg + CFG_MIN_RATE),
-			(unsigned)*(const int *)(cfg + CFG_MAX_RATE));
-		return;
-	}
-
-	if (obj->k56flex_receiver != 0
-	    && *((const unsigned char *)obj->pac18 + 8) != 0) {
-		cfg = (const unsigned char *)obj->pac3c;
-		((K56FlexFloModem *)obj->pac18)->setMinMaxRates(
-			*(const int *)(cfg + CFG_MIN_RATE),
-			*(const int *)(cfg + CFG_MAX_RATE));
-		return;
-	}
-
-	cfg = (const unsigned char *)obj->pac3c;
-	obj->rate_min = (int)(*(const unsigned int *)(cfg + CFG_MIN_RATE)
-			      / (unsigned)RATE_STEP);
-	obj->rate_max = (int)(*(const unsigned int *)(cfg + CFG_MAX_RATE)
-			      / (unsigned)RATE_STEP);
-
-	if (obj->rate_min > 14)
-		obj->rate_min = 14;
-
-	if (obj->rate_max < obj->rate_min)
-		obj->rate_max = obj->rate_min;
-
-	if (obj->rate_max > 14) {
-		obj->rate_max = 14;
-		return;
-	}
-
-	if (obj->rate_max == 1)
-		*(short *)(m + OB_FORCE_LOW_BAUD) = 1;
-}
-
-/*
- * The signal-energy floor, out of `V34DisconnectThreshTable`.
- *
- * The same eight-entry table and the same biased index
- * `VPcmV34InitiateRetrain` uses inline, and the same clearing of +0x234
- * behind it.  The index is `level + 48` compared UNSIGNED against 7, so a
- * configured level outside -48..-41 takes entry 3; the table runs 71 to 160
- * in 1 dB steps.
- */
-void
-VPcmV34SetMinimumSigLevel(struct tagV34Object *objp)
-{
-	struct v34_object *obj = (struct v34_object *)objp;
-	unsigned char *m = (unsigned char *)obj;
-	const unsigned char *cfg = (const unsigned char *)obj->pac3c;
-	int level = *(const int *)(cfg + CFG_MIN_LEVEL);
-	unsigned idx = (unsigned)level + 0x30u;
-	int thresh;
-
-	if (idx > 7u)
-		idx = 3u;
-
-	thresh = V34DisconnectThreshTable[idx];
-	obj->rx_energy_floor = thresh;
-
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("VPcmV34Main: minLevel given is %d , "
-				     "minSigLevel set to %d\n", level, thresh);
-
-	*(int *)(m + OB_F0234) = 0;
-}
-
-/*
- * The two filter delays, and the echo canceller's.
- *
- * `filtdelay` is `((cfg[0x64] + 2) >> 2) + 0x22` and `dmadelay` is
- * `0x610 - cfg[0x68]`, both truncated to a short, and the echo canceller is
- * given `cfg[0x68] + 0x68`.  IT IS THESE TWO STRINGS THAT NAME BOTH FIELDS --
- * "V34 filtdelay set to %d (params initial delay = %d)" and "V34FEC,
- * V34dmadelay set to %d, (ext delay=%d)", each with the STORED value first
- * and the configured one second.
- *
- * THE CONFIGURATION POINTER IS RE-LOADED AFTER EACH DIAGNOSTIC -- 0x6475 and
- * 0x64b5, both `mov 0xac3c(%esi),%ecx` after a call.  Reproduced by reading
- * `pac3c` again rather than holding it, exactly as
- * `GetVPcmMinimalTxPowerReduction` does with `p3548`; nothing here can change
- * it, so the two spellings agree and this is written the object's way.
- *
- * Both reports print the stored short SIGN-EXTENDED (`cwtl`), so a delay
- * configured past 32767/4 reports negative and the field holds the same
- * negative value.
- */
-void
-VPcmV34SetDelays(struct tagV34Object *objp)
-{
-	struct v34_object *obj = (struct v34_object *)objp;
-	unsigned char *m = (unsigned char *)obj;
-	unsigned char *sess = (unsigned char *)obj->p3548;
-
-	{
-		const unsigned char *cfg = (const unsigned char *)obj->pac3c;
-		int delay = *(const int *)(cfg + CFG_FILT_DELAY);
-		int biased = (int)((unsigned)delay + 2u);
-
-		*(short *)(m + OB_FILT_DELAY) = (short)((biased >> 2) + 0x22);
-		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("V34 filtdelay set to %d "
-					     "(params initial delay = %d)\n",
-					     (int)*(short *)(m + OB_FILT_DELAY),
-					     delay);
-	}
-
-	{
-		const unsigned char *cfg = (const unsigned char *)obj->pac3c;
-		int ext = *(const int *)(cfg + CFG_EXT_DELAY);
-
-		obj->dmadelay = (short)(0x610u - (unsigned)ext);
-		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("V34FEC, V34dmadelay set to %d, " "(ext delay=%d)\n",
-					     (int)obj->dmadelay, ext);
-	}
-
-	((V92EchoCanceller *)(sess + SESS_ECHO))->setEchoDelay(
-		(unsigned)*(const int *)
-		    ((const unsigned char *)obj->pac3c + CFG_EXT_DELAY)
-		+ 0x68u);
-}
-
-/*
- * Restart the sample clock and set a deadline.
- *
- * Thirty bytes: `sample_count` to zero and `secs * 9600` into the word beside
- * it.  This is the function that names both -- see v34fsk.h -- and 9,600 is
- * left as the constant it is: it is 8 kHz times 1.2 and not the codec rate,
- * so calling the argument "seconds" would be a claim this cannot make.
- */
-void
-VPcmV34SetTimeOut(struct tagV34Object *objp, int secs)
-{
-	struct v34_object *obj = (struct v34_object *)objp;
-
-	obj->sample_count = 0;
-	/*
-	 * THE MULTIPLY IS DONE UNSIGNED, and it is the same defect
-	 * `VPcmV34GetSNR` had: `secs * 0x2580` on a signed int is undefined
-	 * the moment `secs` passes 2^31/9600, about 223,696, and an optimiser
-	 * is entitled to assume it never does.  The object is a plain
-	 * `imul $0x2580,0x8(%esp),%eax` at 0x6e90, which WRAPS, so the
-	 * defined-behaviour spelling is the unsigned one and it is the same
-	 * single instruction.
-	 *
-	 * Nothing bounds the argument: it arrives from outside the object and
-	 * no caller is reconstructed, so "no real caller passes 223,696" is
-	 * not something this can rely on.
-	 */
-	obj->timeout_deadline = (int)((unsigned)secs * 0x2580u);
-}
-
-/*
- * Start modem-on-hold.
- *
- * FOUR ARGUMENTS AND THREE OF THEM ARE STORED RATHER THAN ACTED ON: the
- * message code, and two bytes that go to +0xabe9/+0xabfa and +0xabf9.  The
- * first is `movzbl` and reaches two fields -- itself at +0xabe9 and a
- * `setne` of itself at +0xabfa -- which is what says it is a value with a
- * "is it set" reading beside it rather than a flag.
- *
- * `mode == 1` IS A BYPASS AND IT IS NOT AN ERROR PATH.  The message code is
- * stored at +0xabec whatever it is; the SECOND copy at +0xabf0 is zeroed
- * instead of stored when it is 1, under "Special bypass - sending MOHreq
- * instead of MOHFRR...".  So the two fields are the code as given and the
- * code as it will be sent.
- *
- * AND THE BYPASS TAKES THE FLAG BYTE DOWN WITH IT.  0x6e3b is `xor %ecx,%ecx`
- * -- on the register holding the fourth argument -- immediately before the
- * `jmp 6d27` back into the common tail, whose `mov %cl,0xabf9(%ebx)` is the
- * only store to that field.  Both bypass paths reach it, the quiet one from
- * 0x6e39 and the one that printed from 0x6e8a, so `message == 1` stores ZERO
- * at +0xabf9 whatever the caller passed.  Written here as the store repeated
- * in both arms, which is what GCC's tail merge turns into that `xor`; the
- * first reconstruction stored `flag` unconditionally and agreed with the
- * object on every case where `flag` was already 0, which is most of them.
- * Found by `test/unit/t_v34pcmapi.cpp` crossing `message` with `flag`.
- *
- * AFTER THAT IT IS `VPcmV34InitiateRetrain`'S TAIL, mode 4 rather than 1:
- * the same `v34handshakinit`, the same `progress = 7`, the same three receiver
- * scalars, the same +0x2218, the same `status = 0` and the same notch reset
- * at +0xac1c with the same 0x5a82/0x55fc/0x39c3 by role.  What is here and
- * not there is `GenericToneDetector::reset` on the session's detector at
- * +0x6f5c, and what is there and not here is the DC-estimator seed.
- *
- * The retrain-request bit in the configuration is cleared FIRST, before any
- * of it -- `andb $0xfb,0x3(%eax)` at 0x6d0e, which is `CFG_FLAG3_RETRAIN`.
- */
-extern "C" void
-VPcmV34InitMOH(void *objp, int message, unsigned char late,
-	       unsigned char flag)
-{
-	struct v34_object *obj = (struct v34_object *)objp;
-	unsigned char *m = (unsigned char *)obj;
-	unsigned char *sess = (unsigned char *)obj->p3548;
-	struct v34_receiver *rx = (struct v34_receiver *)(m + OB_RECEIVER);
-
-	PROG_U8(obj->pac3c, CFG_FLAGS3) &= (unsigned char)~CFG_FLAG3_RETRAIN;
-
-	obj->moh_org = message;
-
-	if (message == 1) {
-		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf(
-			    "VPcmV34Main: Special bypass - sending MOHreq "
-			    "instead of MOHFRR...\r\n");
-		obj->moh_message = 0;
-		PROG_U8(obj, OB_MOH_FLAG) = 0;
-	} else {
-		obj->moh_message = message;
-		PROG_U8(obj, OB_MOH_FLAG) = flag;
-	}
-
-	obj->moh_recvd = 5;
-	obj->moh_clrd_sel = (unsigned char)(late != 0);
-	PROG_U8(obj, O_ANSAMLATE) = late;
-
-	obj->short_abe2 = 0;
-	PROG_S16(obj, OB_MOH_W6) = 0;
-	PROG_S16(obj, OB_MOH_W4) = 0;
-	obj->moh_holdtime_code = 0;
-	obj->moh_limit = 0;
-
-	v34handshakinit(obj, 4);
-
-	obj->progress = 7;
-
-	rx->bad_run = 0;
-	rx->bad_long_run = 0;
-	rx->good_run = 0;
-
-	PROG_S32(obj, OB_F2218) = 2;
-	obj->status = 0;
-
-	((GenericToneDetector *)(sess + SESS_TONE))->reset();
-
-	{
-		unsigned char *st = m + OB_FAC1C;
-		short role = obj->role;
-
-		*(short *)(st + 0x00) = 0;
-		*(short *)(st + 0x02) = 0;
-		*(short *)(st + 0x04) = 0;
-		*(short *)(st + 0x06) = 0;
-		*(int *)(st + 0x08) = 0;
-		*(int *)(st + 0x14) = 0;
-		*(int *)(st + 0x18) = 0;
-		*(int *)(st + 0x1c) = 0;
-
-		if (role == 0x65) {
-			*(short *)(st + 0x0c) = 0;
-			*(short *)(st + 0x0e) = 0;
-			*(short *)(st + 0x10) = (short)0x39c3;
-		} else if (role == 0x66) {
-			*(short *)(st + 0x0c) = (short)0x5a82;
-			*(short *)(st + 0x0e) = (short)0x55fc;
-			*(short *)(st + 0x10) = (short)0x39c3;
-		}
-	}
-}
-
-/*
- * ---------------------------------------------------------------------------
- * Layout, pinned.  Same argument as v34pcmif.c's block: the fields this file
- * reaches by offset sit in regions that are otherwise padding, so a field that
- * drifted would compile silently.  Only the fields v34fsk.h already NAMES are
- * asserted -- the rest are spelled as offsets on purpose and have nothing to
- * be checked against.
- */
-#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
-
-#define V34PCMMAIN_ASSERT(name, field, off) \
-	typedef char v34pcmmain_off_##name[ \
-		((int)__builtin_offsetof(struct v34_object, field) == (off)) \
-		? 1 : -1]
-
-V34PCMMAIN_ASSERT(status,  status,           0x0000);
-V34PCMMAIN_ASSERT(progress,   progress,            0x0004);
-V34PCMMAIN_ASSERT(rmin,    rate_min,         0x0220);
-V34PCMMAIN_ASSERT(rmax,    rate_max,         0x0224);
-V34PCMMAIN_ASSERT(floor,   rx_energy_floor,  0x0230);
-V34PCMMAIN_ASSERT(v90rx,   v90_receiver,     0x024c);
-V34PCMMAIN_ASSERT(k56rx,   k56flex_receiver, 0x0250);
-V34PCMMAIN_ASSERT(dmadly,  dmadelay,             0x025c);
-V34PCMMAIN_ASSERT(p3548,   p3548,            0x3548);
-V34PCMMAIN_ASSERT(role,   role,            0x359c);
-V34PCMMAIN_ASSERT(far_echo_enable,   far_echo_enable,            0xa23c);
-V34PCMMAIN_ASSERT(lshort,  local_short,      0xabca);
-V34PCMMAIN_ASSERT(isshort, is_short,         0xabcc);
-V34PCMMAIN_ASSERT(pac18,   pac18,            0xac18);
-V34PCMMAIN_ASSERT(pac3c,   pac3c,            0xac3c);
-
-/* And the receiver trio, reached as `obj + 0x264 + 0x258`. */
-#define V34PCMMAIN_RXASSERT(name, field, off) \
-	typedef char v34pcmmain_rxoff_##name[ \
-		((int)(__builtin_offsetof(struct v34_object, rxq) \
-		       + __builtin_offsetof(struct v34_receiver, field)) \
-		 == (off)) ? 1 : -1]
-
-V34PCMMAIN_RXASSERT(bad_run, bad_run, 0x4bc);
-V34PCMMAIN_RXASSERT(bad_long_run, bad_long_run, 0x4be);
-V34PCMMAIN_RXASSERT(good_run, good_run, 0x4c0);
-
-/*
- * The two classes this file constructs a `this` for by adding a constant, and
- * the one it reads a member pointer out of.  A size change in either would
- * move nothing here -- these are the object's offsets, not ours -- but the
- * embedded V92EchoCanceller must still fit inside what VPcmFloModem declares.
- */
-typedef char v34pcmmain_echo_fits[
-	(SESS_ECHO + (int)sizeof(V92EchoCanceller)
-	 <= (int)sizeof(VPcmFloModem)) ? 1 : -1];
-
-#endif /* 32-bit */
-
-/*
- * ---------------------------------------------------------------------------
- * MOVED HERE from the file it shared this translation unit with.  The reference
- * records `getMPrecvdBits` (`_Z14getMPrecvdBitsP12tagV34Object`) and
- * `V34DisconnectThreshTable` as LOCAL in ONE unit, `VPcmV34Main.cpp`; the
- * reconstruction had spread that unit over `v34k56.cpp` and
- * `v34pcmcreate.cpp`, so neither could be `static`.  Both are back in the unit
- * and both are file-local now.  The bodies below are otherwise verbatim.
- */
-
-/*
- * v34k56.cpp -- `k56FlexPhase34`, the K56flex handshake's phase 3/4
- * transmitter.
- *
- * WHY THIS IS A .cpp AND WHY THE SYMBOL IS UNMANGLED.  The object exports
- * `k56FlexPhase34` with no mangling, so it was declared `extern "C"`; but two
- * of its calls are relocations against
- *
- *     _ZN15K56FlexFloModem16getK56FlexJaBitsEPs
- *     _ZN15K56FlexFloModem16getK56FlexMpBitsEPs
- *
- * which a C translation unit cannot name.  So the translation unit is C++ and
- * the declaration lives inside `v34hshak.h`'s `extern "C"` block -- the same
- * arrangement `v34pcmmain.cpp` uses from the other side, and for the mirror
- * reason.  The stem is `v34k56` rather than a per-object name because
- * `docs/attribution.md` puts .text+0xa790 in the `V34.c|GenericToneDetector.cpp`
- * block and marks it AMBIGUOUS: the object does not say which file this came
- * from, so neither does the file name.
- *
- * WHAT IT DOES.  One call emits one handshake symbol, and which symbol
- * depends on where the K56flex phase-3/4 sequence has got to.  Two things
- * select the arm: `V34_RX_FLAG_DATA` in the receiver's flags word, and the
- * int at +0x250 that `v34fsk.h` calls `k56flex_receiver`.
- *
- *     flag clear          transmit the next Ja dibit
- *     flag set, +0x250=3  shift the word at +0x25d6 out, two bits at a time
- *     flag set, +0x250=4  transmit a scrambled idle symbol
- *     flag set, +0x250=5  transmit the next MP dibit or quadbit
- *     flag set, anything  do nothing
- *     else
- *
- * and the object advances +0x250 3 -> 4 itself.  Nothing here moves it to 5;
- * whatever does is outside the 721 bytes.
- *
- * ---------------------------------------------------------------------------
- * THE IDLE SYMBOL IS NOT `txmitdibit`, AND THAT IS THE WHOLE POINT OF THE
- * FUNCTION'S MIDDLE.
- *
- * Case 4 looks exactly like a `txmitdibit(obj, 3)` and is not one, in three
- * ways that all move the constellation point:
- *
- *   - `V34scrambler`'s mode argument is the LITERAL 1.  `txmitdibit` passes
- *     `tx_scrambler_mode(o)`, which reads bit 0 of `tx_flags`; nothing in these
- *     721 bytes loads +0x25c2 at all, so the generator here does not follow
- *     the calling/answering flag the rest of the transmitter obeys.
- *   - there is NO differential encoding.  `txmitdibit` forms
- *     `(d + prev_quadrant) & 3`; this stores the scrambler's two bits straight into
- *     `cur_quadrant` and indexes `vect4` with them.
- *   - `prev_quadrant` is not written, so the quadrant the rest of the handshake
- *     carries does not advance.
- *
- * The quadbit arm differs the same way: two two-bit scrambler requests, the
- * first into `cur_quadrant` and the second selecting within it, with the sum
- * `d2 + q * 4` -- which is `txmitquadbit`'s index expression -- but again
- * with no differential add and no `prev_quadrant` write.  A reconstruction that
- * called the two published emitters would compile, link, and be wrong; the
- * mutation suite's first two entries are exactly that substitution.
- *
- * `vect4[q]` and `vect16[d2 + q * 4]` are indexed UNMASKED, as the object
- * does.  `V34scrambler` with `nbits == 2` returns 0..3, so a `& 3` would be
- * unobservable -- but only while that contract holds, which is why it is not
- * written here.
- *
- * ---------------------------------------------------------------------------
- * TWO BLOCKS OF THIS FUNCTION ARE DEAD IN THIS OBJECT, and they are marked
- * below.  Both are reached only when a `K56FlexFloModem` bit source reports
- * that its sequence has finished, and both of those members are three bytes
- * of `xor %eax,%eax; ret` -- see `include/dsplib/K56FlexFloModem.h`, which
- * measured them.  So the completion arms cannot be entered from either side
- * of a differential test, by construction and not by omission.  They are
- * transcribed from the disassembly and are NOT covered by the test; finding
- * F281 gives the measurement and lists the mutations that go uncaught as a
- * result.
- */
-
-/*
- * +0x25d6.  A sixteen-bit pattern shifted out as eight dibits, LSB first,
- * and the ONLY thing case 3 transmits.  `v34handshakinit` seeds it with
- * 0x8990 and the Ja completion arm below replaces it with 0x899f; both are
- * whole-word stores of a constant, and nothing in the tree reads it as
- * anything but this shift register.  Reached by offset because the region is
- * `unmapped_25d6` in `struct v34_object` -- V34hshak.c:424 writes it the same
- * way.
- */
-#define OB_TXBITS	0x25d6
-
-int
-k56FlexPhase34(void *objp)
-{
-	struct v34_object *o = (struct v34_object *)objp;
-	unsigned char *m = (unsigned char *)objp;
-	struct v34_receiver *rx = (struct v34_receiver *)(m + OB_RECEIVER);
-	K56FlexFloModem *k56 = (K56FlexFloModem *)o->pac18;
-
-	if (!(rx->flags & V34_RX_FLAG_DATA)) {
-		/*
-		 * Ja.  The bit source writes the dibit into `cur_quadrant` -- the
-		 * same field the emitters use as their quadrant register --
-		 * and returns non-zero on the symbol that ends the sequence.
-		 * The dibit is transmitted either way, so the last one is
-		 * sent and then acted on.
-		 */
-		int done = (short)k56->getK56FlexJaBits(&o->cur_quadrant);
-
-		txmitdibit(o, o->cur_quadrant);
-		if (done == 0)
-			return 0;
-
-		/* DEAD: `getK56FlexJaBits` is a stub returning 0. */
-		rx->flags |= V34_RX_FLAG_DATA;
-		*(short *)(m + OB_TXBITS) = (short)0x899f;
-		o->vect_idx = 0;
-		o->k56flex_receiver = 3;
-		return 0;
-	}
-
-	switch (o->k56flex_receiver) {
-	case 3: {
-		/*
-		 * Eight dibits out of one word, `vect_idx` counting them.
-		 *
-		 * The index is read TWICE and the second read is after
-		 * `txmitdibit`, because the object reads it twice: a call
-		 * sits between, and no compiler may assume a field survives
-		 * one.  It is written that way here for the same reason and
-		 * NOT because the value can change -- `modulatevector` is the
-		 * only other writer of +0x2aa2 in the tree and it CALLS
-		 * `txmit` rather than being reachable from it.  Using the
-		 * first read is therefore an equivalent mutation, and it is
-		 * recorded as one with that call chain named as what is held
-		 * fixed.
-		 *
-		 * The shift count comes from a SIGN-extended `vect_idx` and
-		 * the increment from a zero-extended one.  `& 31` is the x86
-		 * shift-count mask made explicit, so that an out-of-range
-		 * index -- which only the caller can produce, since the store
-		 * below masks to 0..7 -- shifts by the same amount here as in
-		 * the object instead of being undefined.
-		 */
-		int idx = o->vect_idx;
-		unsigned short w = (unsigned short)*(short *)(m + OB_TXBITS);
-		unsigned nidx;
-
-		txmitdibit(o, (short)(w >> ((2 * idx) & 31)));
-
-		nidx = ((unsigned)(unsigned short)o->vect_idx + 1) & 7;
-		o->vect_idx = (short)nidx;
-		if (nidx != 0)
-			return 0;
-
-		/* The word is spent: reset the transmitter and advance. */
-		o->prev_quadrant = 0;
-		o->seg_symcount = 0;
-		o->tx_scr_sr = 0;
-		o->k56flex_receiver = 4;
-		return 0;
-	}
-
-	case 4: {
-		/* The idle symbol.  See the note at the top of this file. */
-		int q;
-
-		if (o->short_382 == OB_CONSTEL_16) {
-			int d;
-
-			q = (short)V34scrambler((unsigned *)&o->tx_scr_sr,
-						1, 3, 2);
-			o->cur_quadrant = (short)q;
-			d = (short)V34scrambler((unsigned *)&o->tx_scr_sr,
-						1, 3, 2);
-			q = o->cur_quadrant;
-			o->txpoint.word = vect16[d + q * 4];
-		} else {
-			q = (short)V34scrambler((unsigned *)&o->tx_scr_sr,
-						1, 3, 2);
-			o->cur_quadrant = (short)q;
-			o->txpoint.word = vect4[q];
-		}
-
-		txmit(o);
-		/* Re-read: `txmit` is between the load and the store. */
-		o->seg_symcount = (short)((unsigned)(unsigned short)o->seg_symcount + 1);
-		return 0;
-	}
-
-	case 5: {
-		/*
-		 * MP, and the only arm that uses the full emitters: the bits
-		 * are the far end's message rather than a fixed pattern, so
-		 * they are scrambled and differentially encoded the way the
-		 * rest of the handshake is.
-		 */
-		int done = (short)k56->getK56FlexMpBits(&o->cur_quadrant);
-
-		if (o->short_382 == OB_CONSTEL_16)
-			txmitquadbit(o, o->cur_quadrant);
-		else
-			txmitdibit(o, o->cur_quadrant);
-
-		if (done == 0)
-			return 0;
-
-		/*
-		 * DEAD: `getK56FlexMpBits` is a stub returning 0.
-		 *
-		 * The state store is a compare-then-store in the object and
-		 * is written as one here.  It is indistinguishable from a
-		 * plain store by any test -- the value written is the value
-		 * compared against -- and the mutation that removes the
-		 * compare is listed as equivalent rather than as a gap.
-		 */
-		getMPrecvdBits((struct tagV34Object *)objp);
-		initdigital(o);
-		if (*(short *)(m + OB_TXSTATE) != V34HS_EXMIT)
-			*(short *)(m + OB_TXSTATE) = V34HS_EXMIT;
-		o->k56flex_receiver = 2;
-		return 0;
-	}
-	}
-
-	return 0;
-}
-
-
-/*
- * ---------------------------------------------------------------------------
- * VPcmV34Create, moved in from `v34pcmcreate.cpp`.  Its file-local maps that
- * v34pcmmain.cpp already defines are dropped; the rest move with it.
- */
-
-/*
- * ---------------------------------------------------------------------------
- * The maps, all of them repeated from `v34pcmmain.cpp` except the block this
- * function adds.  See that file for the derivations of the shared ones.
- */
-
-/*
- * ---------------------------------------------------------------------------
- * And what `VPcmV34Create` adds to the three maps above.  Same rule as the
- * rest of the file: offset-named unless the object names the field itself.
- *
- * CFG_ANSPCM_LEVEL and CFG_UQTS ARE THE OBJECT'S OWN NAMES -- "VPcmV34Create:
- * ANSpcm level index is %d" and "VPcmV34Create: Uqts index is %d" are printed
- * out of exactly these two words.  Both are loaded as `int` (a plain 32-bit
- * `mov`, not a `movswl`) and both are TRUNCATED TO SHORT at the one place
- * they are used for anything, which is `enterChannelVerification`.
- *
- * CFG_QUICKCONNECT is bit 4 of the byte v34pcmmain already calls CFG_V92LITE
- * for its sign bit and `VPcmV34Progress` reads bit 5 of: a third unrelated
- * reader of one byte, which is why that byte still has no name as a whole.
- */
-#define CFG_ANSPCM_LEVEL	0x0c
-#define CFG_UQTS		0x10
-#define CFG_TXMD		0x14		/* scaled by 2.4 into +0xabfc */
-#define CFG_F54			0x54		/* == 14 turns the filter on  */
-#define CFG_ENTRANCE		0x70		/* -1 HW, 1 on, anything off  */
-
-#define CFG_QUICKCONNECT	0x10		/* bit 4 of CFG_V92LITE       */
-
-/*
- * The session object again.  SESS_PCMTYPE is the same `int` VPcmFloModem.h
- * describes at +0x611c and `setPcmSessionType` writes; SESS_PCMV92 is the
- * V.92 Phase 2 record POINTER at +0x612c, which is not SESS_PCM at +0x610c.
- * SESS_ENTRANCE is the byte the three-way fork at the bottom of the function
- * sets and the last diagnostic reads back -- "entrance filter applied".
- */
-#define SESS_PCMTYPE		0x611c
-#define SESS_PCMV92		0x612c
-#define SESS_IIR		0x7f28		/* a GenericIIR<float,double> */
-#define SESS_ENTRANCE		0x7f5c
-
-/* Inside the V.92 Phase 2 record. */
-#define PCMV92_QUICK		0x10
-#define PCMV92_FLAG11		0x11
-#define PCMV92_COPIED		0x14		/* four bytes, +0x14..+0x17   */
-
-/*
- * The K56flex object's A-law/mu-law selector at +0xc.  THE OBJECT NAMES IT:
- * the one ungated `edprintf` in `VPcmV34Create` is "VPcmV34Main: it is
- * K56Flex session type, (AorMu = %d)" and it prints this word back after
- * storing it.  v34info.c reads `pac18 + 0xc` as an offset for the same reason
- * K56_ENABLED is one -- K56FlexFloModem.h bounds the class at no members.
- */
-#define K56_AORMU		0x0c
-
-/* The V.34 object's own, for the regions v34fsk.h leaves unmapped. */
-#define OB_F000C		0x000c
-#define OB_F0238		0x0238
-#define OB_F0248		0x0248		/* = 0xfffe8900               */
-#define OB_F0262		0x0262
-#define OB_BULK_RING		0x35b8		/* what `bulk_ring` points at */
-#define OB_FA248		0xa248
-#define OB_FAA80		0xaa80
-#define OB_FABC4		0xabc4
-#define OB_FABD4		0xabd4		/* three ints, then two shorts */
-#define OB_FABD8		0xabd8
-#define OB_FABDC		0xabdc
-#define OB_FABE4		0xabe4
-#define OB_FABE6		0xabe6
-#define OB_FABFC		0xabfc
-#define OB_FAC12		0xac12
-#define OB_FAC14		0xac14
-#define OB_FAC17		0xac17
-
-/* Inside `struct v34_receiver`, which v34fsk.h leaves as padding at +0x238. */
-#define RX_F238			0x0238
-
-/*
- * ---------------------------------------------------------------------------
- * VPcmV34Create -- wipe the V.34 object, decide which of five session types it
- * is going to be, and hand it to the handshake.
- *
- * WHY IT IS IN THIS FILE AND NOT IN v34pcmif.c BESIDE THE OTHER `VPcmV34*`
- * EXPORTS.  It calls FIVE C++ MEMBER functions -- `VPcmFloModem::externalReset`,
- * `K56FlexFloModem::externalReset` and `::setMinMaxRates`,
- * `V90ConstellationDesigner::setMinMaxRates`,
- * `V90Demodulator::enterChannelVerification`, `V92EchoCanceller::setEchoDelay`
- * and `GenericIIR<float,double>::reset` -- and a member has a `this` and no
- * unmangled form to name, so a C translation unit cannot reach one whatever
- * the link line says (CLAUDE.md's trap, and finding F711's three conditions).
- * `VPcmV34InitiateRetrain` above is here for the weaker version of the same
- * reason and this is the strong one.  `tools/tuattrib.py` has nothing to say
- * about this symbol; the placement rests on that constraint plus the
- * interleaving v34pcmif.c already records, not on an attribution.
- *
- * FIVE ARGUMENTS (finding F1119, correcting 1117's prologue read).  `0x50(%esp)`
- * is read at five sites and `vpcm_create` pushes five slots; the fifth is the
- * session type and it is the function's primary dispatch.
- *
- *     obj          the V.34 object, at root +0x2c
- *     side         0 or 1; becomes +0x359c's 0x65 / 0x66, but see below
- *     ptc          straight into +0x8, and read by nothing here
- *     runtime      the negotiated configuration, kept at +0xac3c
- *     sessionType  0..4, and `vpcm_create` can only pass 0, 1 or 2
- *
- * IT ALWAYS RETURNS 0.  Both `ret`s are reached by `xor %eax,%eax`, so
- * `vpcm_create`'s `test %eax,%eax / jne` failure path is dead.
- *
- * THE SIDE-TO-0x359C POLARITY IS NOT ONE RULE.  Session types 1 and 2 invert
- * the flag before the common store, so they map side 0 to 0x66 where types 0,
- * 3 and 4 map it to 0x65.  A single rule would be wrong for three of the five.
- *
- * THE TWO POINTERS THE MEMSET WOULD DESTROY are read out first and put back:
- * +0x3548 (the `VPcmFloModem`) and +0xac18 (the `K56FlexFloModem`).  +0xac3c
- * is not one of them -- it is the argument, and is stored fresh.
- *
- * THE SECOND MEMSET IS REDUNDANT AND IS THE OBJECT'S.  0x264 + 0x79c is
- * 0xa00, entirely inside the 0xac4c the first one already cleared.  It is
- * transcribed because it is there; `sizeof(struct v34_receiver)` IS 0x79c,
- * which is what says the second one is the receiver rather than a run of
- * bytes that happens to start there.
- *
- * ARMS 3 AND 4 ARE UNREACHABLE FROM WITHIN THIS OBJECT -- deviation D149, and
- * finding F1119 reaches it a third way: `objdump -r` finds exactly one
- * relocation against this symbol, and `vpcm_create` computes its session type
- * as `(x == 0x5c) ? 2 : (x == 0x5a) ? 1 : 0`.  They are written out because a
- * reconstruction has to agree on them, and `t_vpcmcreate.c` sweeps them.
- *
- * A NEGATIVE SESSION TYPE TAKES THE SAME ARM AS 0: the dispatch's second test
- * is a signed `jle`, so `switch` with 0 in the default arm is the wrong shape
- * and 0 has to share the default's body.
- *
- * +0x2218 IS LEFT AT 0.  `v34handshakinit` clears it and nothing here puts it
- * back; `VPcmV34InitiateRetrain` is what writes 2.  Finding F806 names that as
- * a cost for a downstream handshake fixture, not a defect here.
- */
-extern "C" int
-VPcmV34Create(void *objp, int side, int ptc, void *runtime, int sessionType)
-{
-	struct v34_object *obj = (struct v34_object *)objp;
-	unsigned char *m = (unsigned char *)obj;
-	unsigned char *cfg = (unsigned char *)runtime;
-	unsigned char *sess = (unsigned char *)obj->p3548;
-	unsigned char *k56 = (unsigned char *)obj->pac18;
-	struct v34_receiver *rx = (struct v34_receiver *)(m + OB_RECEIVER);
-	unsigned char *v92;
-	/*
-	 * All three are read BEFORE the memset, out of `runtime` rather than
-	 * out of the object, so the memset cannot reach them -- but the object
-	 * still keeps them in stack slots across it, and the two `int`s are
-	 * re-read as SHORTS at the one place they are used.
-	 */
-	int quick = (cfg[CFG_V92LITE] & CFG_QUICKCONNECT) != 0;
-	int ansLevel = *(const int *)(cfg + CFG_ANSPCM_LEVEL);
-	int uqts = *(const int *)(cfg + CFG_UQTS);
-
-	/*
-	 * FIVE SEPARATE GATES AND NOT ONE.  Each re-loads `dsplibs_debug_level`
-	 * because the call between them could have changed it, which is what
-	 * the object does; a single `if` round all five would be one test.
-	 */
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("VPcmV34Create: quick connect indication"
-				     " from phase1 = %d\r\n", quick);
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("VPcmV34Create: Uqts index is %d\r\n",
-				     uqts);
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("VPcmV34Create: ANSpcm level index is"
-				     " %d\r\n", ansLevel);
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("VPcmV34Create, initial Session Type ="
-				     " %d\n", sessionType);
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("RX at %lX\n", (unsigned long)rx);
-
-	sysdep_memset(obj, 0, VPCM_V34_BYTES);
-	sysdep_memset(rx, 0, sizeof(struct v34_receiver));
-
-	obj->pac18 = k56;
-	*(short *)(m + OB_FAA80) = 1;
-	obj->pac3c = runtime;
-	obj->p3548 = sess;
-
-	V34InitializeImplementationSpecific(obj);
-
-	obj->far_echo_enable = 1;
-	obj->bulk_tail = 0;
-	obj->bulk_head = 0;
-	obj->bulk_ring = (short *)(m + OB_BULK_RING);
-	obj->bulk_len = 0x2580;
-
-	*(int *)(m + OB_FABD8) = 0;
-	*(int *)(m + OB_FABDC) = 0;
-	obj->moh_holdtime_code = 0;
-	obj->short_abe2 = 0;
-	*(short *)(m + OB_FABE4) = 0;
-	*(short *)(m + OB_FABE6) = 0;
-	obj->short_35a4 = 0;
-
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("On Create: Setting desired TX MD"
-				     " (%d mSec)!\n", (int)obj->short_35a4);
-
-	/*
-	 * `x * 2.4`, and the object spells it as an unsigned divide of `x * 24`
-	 * by ten -- `mul $0xcccccccd` with `shr $3` on the high half, which is
-	 * GCC's divide-by-ten and not a fixed-point scale.  Verified
-	 * numerically rather than read off.
-	 */
-	*(short *)(m + OB_FABFC) =
-		(short)((*(const unsigned int *)(cfg + CFG_TXMD) * 24u) / 10u);
-
-	/*
-	 * The V.92 record is re-loaded between the two byte stores, which is
-	 * what the object does and is not an optimisation this file may fold:
-	 * nothing says the two loads have to give the same pointer.
-	 */
-	v92 = *(unsigned char **)(sess + SESS_PCMV92);
-	v92[PCMV92_QUICK] = 0;
-	v92 = *(unsigned char **)(sess + SESS_PCMV92);
-	v92[PCMV92_FLAG11] = 0;
-	*(int *)(sess + SESS_PCMTYPE) = 0;
-
-	*(short *)(m + OB_FABC4) = 0;
-	obj->local_v92 = 0;
-	obj->remote_v92 = 0;
-	obj->local_short = 0;
-	obj->is_short = 0;
-	obj->short_abce = 0;
-	obj->short_abd0 = 0;
-	obj->short_abd2 = 0;
-	*(short *)(m + OB_FABD4) = 0;
-
-	obj->status = 0;
-	obj->progress = 0;
-	obj->k56flex_receiver = 0;
-
-	/*
-	 * THE DISPATCH.  Not a `switch` with 0 in `default`: the object tests
-	 * `== 2`, then a SIGNED `jle`, then `== 3` and `== 4`, so 0, every
-	 * negative value and everything above 4 share one body.
-	 */
-	if (sessionType == 2) {
-		*(int *)(k56 + K56_AORMU) = 0;
-		obj->v90_receiver = 1;
-		((VPcmFloModem *)sess)->externalReset();
-
-		obj->local_v92 = 1;
-		obj->local_short = (short)quick;
-
-		/*
-		 * The four bytes `V34GiveINFO1aBits` copied INTO the session
-		 * object at +0x14..+0x16, read back out of it -- and a fourth
-		 * at +0x17 that no writer reconstructed here accounts for.
-		 */
-		v92 = *(unsigned char **)(sess + SESS_PCMV92);
-		*(short *)(m + OB_FABD4) = v92[PCMV92_COPIED + 3];
-		obj->short_abd2 = v92[PCMV92_COPIED + 2];
-		obj->short_abd0 = v92[PCMV92_COPIED + 1];
-		obj->short_abce = v92[PCMV92_COPIED + 0];
-		v92[PCMV92_FLAG11] = 1;
-
-		v92 = *(unsigned char **)(sess + SESS_PCMV92);
-		v92[PCMV92_QUICK] = (unsigned char)quick;
-
-		/*
-		 * Channel verification only when the far end asked for a quick
-		 * connect AND we are the side that was passed 0.  The two
-		 * `int`s captured at the top go in as SHORTS here, which is
-		 * the only place either is used for anything.
-		 */
-		if (quick != 0 && side == 0) {
-			obj->status = 4;
-			(*(V90Demodulator **)(sess + SESS_DEMOD))
-				->enterChannelVerification((short)uqts,
-							   (short)ansLevel);
-			obj->progress = 10;
-		}
-
-		if (side == 0) {
-			side = 1;
-		} else {
-			*(int *)(sess + SESS_PCMTYPE) = 1;
-			side = 0;
-		}
-	} else if (sessionType == 1) {
-		*(int *)(k56 + K56_AORMU) = 0;
-		obj->v90_receiver = 1;
-		side = (side == 0);
-		((VPcmFloModem *)sess)->externalReset();
-	} else if (sessionType == 3 || sessionType == 4) {
-		*(int *)(k56 + K56_AORMU) = (sessionType == 4);
-		obj->v90_receiver = 0;
-
-		/*
-		 * THE ONE UNGATED PRINT IN THE FUNCTION.  Through `edprintf`
-		 * and behind no level test at all, where the other thirteen
-		 * are `dsplibs_debug_printf` behind `DSPLIB_DEBUG_ON()`.  The
-		 * same inconsistency v34pcmif.c records for
-		 * `VPcmV34SetTxScale`, and the original's.
-		 */
-		edprintf("VPcmV34Main: it is K56Flex session type,"
-			 " (AorMu = %d)\r\n", *(const int *)(k56 + K56_AORMU));
-
-		obj->k56flex_receiver = 1;
-		((K56FlexFloModem *)k56)->externalReset();
-	} else {
-		*(int *)(k56 + K56_AORMU) = 0;
-		obj->v90_receiver = 0;
-	}
-
-	obj->role = (short)(side != 0 ? 0x66 : 0x65);
-
-	obj->ptc = ptc;
-	obj->rx_n = 0;
-	obj->tx_n = 0;
-	obj->tx_rd = 0;
-	obj->rate_min = 0;
-	obj->rate_max = RATE_INDEX_MAX;
-	obj->rate_now = 0;
-	obj->rate_want = -1;
-	obj->rx_energy_floor = 0;
-	*(int *)(m + OB_F0234) = 0;
-	*(int *)(m + OB_F0238) = 0;
-	*(int *)(m + OB_F0248) = (int)0xfffe8900;
-	*(short *)(m + OB_FORCE_LOW_BAUD) = 0;
-	rx->agc_start_gain = 0x600;
-	*(int *)((unsigned char *)rx + RX_F238) = 0;
-	*(int *)(m + OB_F000C) = 0;
-	obj->nof_tx_bits = 0;
-
-	v34handshakinit(obj, 0);
-
-	/*
-	 * +0x35a4 IS RE-READ HERE, AFTER THE HANDSHAKE INITIALISER, so this is
-	 * not the zero stored above: the object emits a `movswl` immediately
-	 * after the call and carries whatever `v34handshakinit` left.  336 is
-	 * `x * 21 * 16`, two `lea`s and a shift, and the source short is
-	 * signed, so a negative one gives a result below 10000.
-	 */
-	*(short *)(m + OB_F0254) =
-		(short)(336 * (int)*(const short *)(m + OB_F35A4) + 10000);
-	obj->hist2_idx = 0;
-	*(short *)(m + OB_F0254 + 2) = 0;
-	*(int *)(m + OB_F0254 + 4) = 0;
-
-	/*
-	 * The 32 bytes at +0xac1c, byte for byte the same block
-	 * `VPcmV34InitiateRetrain` writes; its comment is the derivation and
-	 * is not repeated.  +0xac2e is again the one short left alone.
-	 */
-	{
-		unsigned char *st = m + OB_FAC1C;
-		short role = obj->role;
-
-		*(short *)(st + 0x00) = 0;
-		*(short *)(st + 0x02) = 0;
-		*(short *)(st + 0x04) = 0;
-		*(short *)(st + 0x06) = 0;
-		*(int *)(st + 0x08) = 0;
-		*(int *)(st + 0x14) = 0;
-		*(int *)(st + 0x18) = 0;
-		*(int *)(st + 0x1c) = 0;
-
-		if (role == 0x65) {
-			*(short *)(st + 0x0c) = 0;
-			*(short *)(st + 0x0e) = 0;
-			*(short *)(st + 0x10) = (short)0x39c3;
-		} else if (role == 0x66) {
-			*(short *)(st + 0x0c) = (short)0x5a82;
-			*(short *)(st + 0x0e) = (short)0x55fc;
-			*(short *)(st + 0x10) = (short)0x39c3;
-		}
-	}
-
-	obj->rates_latched = 0;
-	obj->v90_timing_offset = 0;
-	m[OB_FAC17] = 0;
-	*(short *)(m + OB_F0262) = 1;
-	obj->tx_bps = 0;
-	obj->rx_bps = 0;
-	obj->rrn_local = 0;
-	obj->rrn_remote = 0;
-	*(short *)(m + OB_FAC12) = 0;
-	*(short *)(m + OB_FAC14) = 0;
-	obj->echo_decay_start = 0x7d0;
-	*(short *)(m + OB_FA248) = 0;
-	obj->echo_decay_fact = 0x7fdf;
-	obj->echo_beta = 2;
-
-	/*
-	 * THE RATE BLOCK, and it is `VPcmV34InitiateRetrain`'s to the
-	 * instruction -- same three arms in the same order, same unsigned
-	 * divide by 2400, same clamp ladder with `rate_max == 1` falling out
-	 * of the `else` rather than being tested separately.  Two functions,
-	 * one block; see that one for why each step is the shape it is.
-	 */
-	if (obj->v90_receiver != 0 && *(const int *)(sess + SESS_GATE) != 0) {
-		V90ConstellationDesigner *cd;
-
-		cfg = (unsigned char *)obj->pac3c;
-		cd = *(V90ConstellationDesigner **)
-		     (*(unsigned char **)(sess + SESS_DEMOD) + DEMOD_DESIGNER);
-		cd->setMinMaxRates(*(const unsigned int *)(cfg + CFG_MIN_RATE),
-				   *(const unsigned int *)(cfg + CFG_MAX_RATE));
-	} else if (obj->k56flex_receiver != 0 && k56[K56_ENABLED] != 0) {
-		cfg = (unsigned char *)obj->pac3c;
-		((K56FlexFloModem *)k56)->setMinMaxRates(
-			*(const int *)(cfg + CFG_MIN_RATE),
-			*(const int *)(cfg + CFG_MAX_RATE));
-	} else {
-		cfg = (unsigned char *)obj->pac3c;
-
-		obj->rate_min = (int)(*(const unsigned int *)
-				      (cfg + CFG_MIN_RATE) / RATE_STEP);
-		obj->rate_max = (int)(*(const unsigned int *)
-				      (cfg + CFG_MAX_RATE) / RATE_STEP);
-
-		if (obj->rate_min > RATE_INDEX_MAX)
-			obj->rate_min = RATE_INDEX_MAX;
-		if (obj->rate_max < obj->rate_min)
-			obj->rate_max = obj->rate_min;
-		if (obj->rate_max > RATE_INDEX_MAX)
-			obj->rate_max = RATE_INDEX_MAX;
-		else if (obj->rate_max == 1)
-			*(short *)(m + OB_FORCE_LOW_BAUD) = 1;
-	}
-
-	cfg = (unsigned char *)obj->pac3c;
-
-	/* The disconnect threshold, indexed as `VPcmV34InitiateRetrain`. */
-	{
-		int level = *(const int *)(cfg + CFG_MIN_LEVEL);
-		unsigned idx = (unsigned)level + 0x30u;
-		int thresh;
-
-		if (idx > 7u)
-			idx = 3u;
-		thresh = V34DisconnectThreshTable[idx];
-		obj->rx_energy_floor = thresh;
-
-		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("VPcmV34Main: minLevel given is "
-					     "%d , minSigLevel set to %d\n",
-					     level, thresh);
-	}
-
-	*(int *)(m + OB_F0234) = 0;
-
-	{
-		int delay = *(const int *)(cfg + CFG_FILT_DELAY);
-		int biased = (int)((unsigned)delay + 2u);
-
-		*(short *)(m + OB_FILT_DELAY) = (short)((biased >> 2) + 0x22);
-		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("V34 filtdelay set to %d "
-					     "(params initial delay = %d)\n",
-					     (int)*(short *)(m + OB_FILT_DELAY),
-					     delay);
-	}
-
-	{
-		int ext = *(const int *)(cfg + CFG_EXT_DELAY);
-
-		obj->dmadelay = (short)(0x610u - (unsigned)ext);
-		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("V34FEC, V34dmadelay set to %d, " "(ext delay=%d)\n",
-					     (int)obj->dmadelay, ext);
-	}
-
-	((V92EchoCanceller *)(sess + SESS_ECHO))->setEchoDelay(
-		(unsigned)*(const int *)(cfg + CFG_EXT_DELAY) + 0x68u);
-
-	/*
-	 * THE ENTRANCE FILTER, three ways, and only the first two are named by
-	 * their own diagnostics.  -1 means "ask the hardware", which here is
-	 * one `int` of the configuration compared against 14; 1 forces it on;
-	 * ANYTHING ELSE forces it off, which is why this is not a `switch` --
-	 * the object decrements and tests, so 0 and 7 take the same arm.
-	 */
-	cfg = (unsigned char *)obj->pac3c;
-	{
-		int stream = *(const int *)(cfg + CFG_ENTRANCE);
-
-		if (stream == -1) {
-			if (DSPLIB_DEBUG_ON())
-				dsplibs_debug_printf("VPcmFlo: From Stream - " "Entrance Filter according"
-						     " to HW...\r\n");
-			cfg = (unsigned char *)obj->pac3c;
-			sess[SESS_ENTRANCE] = (unsigned char)
-				(*(const int *)(cfg + CFG_F54) == 14);
-		} else if (stream == 1) {
-			if (DSPLIB_DEBUG_ON())
-				dsplibs_debug_printf("VPcmFlo: From Stream - " "Entrance Filter forced "
-						     "enabled...\r\n");
-			sess[SESS_ENTRANCE] = 1;
-		} else {
-			if (DSPLIB_DEBUG_ON())
-				dsplibs_debug_printf("VPcmFlo: From Stream - " "Entrance Filter forced "
-						     "disabled...\r\n");
-			sess[SESS_ENTRANCE] = 0;
-		}
-	}
-
-	((GenericIIR<float, double> *)(sess + SESS_IIR))->reset();
-
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("VPcmFlo: YES! entrance filter applied ="
-				     " %d\r\n", (int)sess[SESS_ENTRANCE]);
-
-	return 0;
-}
-
-
-/*
- * ---------------------------------------------------------------------------
- * Layout, pinned.  Same argument as v34pcmmain.cpp's block: the fields this
- * file reaches by offset sit in regions that are otherwise padding, so a field
- * that drifted would compile silently.  This function writes forty-odd NAMED
- * fields as well, and every one of them is asserted here -- a rename that
- * moved one would still compile and would be caught only by the differential
- * sweep, which is the wrong place to find out.  The offsets are the
- * disassembly's, not v34fsk.h's, so this is a check and not a restatement.
- */
-#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
-
-#define V34PCMCREATE_ASSERT(name, field, off) \
-	typedef char v34pcmcreate_off_##name[ \
-		(__builtin_offsetof(struct v34_object, field) == (off)) \
-		? 1 : -1]
-
-V34PCMCREATE_ASSERT(status,   status,           0x0000);
-V34PCMCREATE_ASSERT(progress,    progress,            0x0004);
-V34PCMCREATE_ASSERT(ptc,      ptc,              0x0008);
-V34PCMCREATE_ASSERT(nofbits,  nof_tx_bits,      0x0010);
-V34PCMCREATE_ASSERT(rxn,      rx_n,             0x0114);
-V34PCMCREATE_ASSERT(txn,      tx_n,             0x0218);
-V34PCMCREATE_ASSERT(txrd,     tx_rd,            0x021c);
-V34PCMCREATE_ASSERT(rmin,     rate_min,         0x0220);
-V34PCMCREATE_ASSERT(rmax,     rate_max,         0x0224);
-V34PCMCREATE_ASSERT(rnow,     rate_now,         0x0228);
-V34PCMCREATE_ASSERT(rwant,    rate_want,        0x022c);
-V34PCMCREATE_ASSERT(floor,    rx_energy_floor,  0x0230);
-V34PCMCREATE_ASSERT(v90rx,    v90_receiver,     0x024c);
-V34PCMCREATE_ASSERT(k56rx,    k56flex_receiver, 0x0250);
-V34PCMCREATE_ASSERT(dmadly,   dmadelay,             0x025c);
-V34PCMCREATE_ASSERT(hist2_idx,    hist2_idx,            0x2aa6);
-V34PCMCREATE_ASSERT(p3548,    p3548,            0x3548);
-V34PCMCREATE_ASSERT(echo_decay_start,    echo_decay_start,            0x3554);
-V34PCMCREATE_ASSERT(echo_decay_fact,    echo_decay_fact,            0x3558);
-V34PCMCREATE_ASSERT(echo_beta,    echo_beta,            0x355c);
-V34PCMCREATE_ASSERT(role,    role,            0x359c);
-V34PCMCREATE_ASSERT(short_35a4,    short_35a4,            0x35a4);
-V34PCMCREATE_ASSERT(bhead,    bulk_head,        0x35a8);
-V34PCMCREATE_ASSERT(btail,    bulk_tail,        0x35ac);
-V34PCMCREATE_ASSERT(bring,    bulk_ring,        0x35b0);
-V34PCMCREATE_ASSERT(blen,     bulk_len,         0x35b4);
-V34PCMCREATE_ASSERT(far_echo_enable,    far_echo_enable,            0xa23c);
-V34PCMCREATE_ASSERT(filtdly,  filtdelay,        0xaa7c);
-V34PCMCREATE_ASSERT(lv92,     local_v92,        0xabc6);
-V34PCMCREATE_ASSERT(rv92,     remote_v92,       0xabc8);
-V34PCMCREATE_ASSERT(lshort,   local_short,      0xabca);
-V34PCMCREATE_ASSERT(isshort,  is_short,         0xabcc);
-V34PCMCREATE_ASSERT(short_abce,    short_abce,            0xabce);
-V34PCMCREATE_ASSERT(short_abd0,    short_abd0,            0xabd0);
-V34PCMCREATE_ASSERT(short_abd2,    short_abd2,            0xabd2);
-V34PCMCREATE_ASSERT(moh_holdtime_code,    moh_holdtime_code,            0xabe0);
-V34PCMCREATE_ASSERT(short_abe2,    short_abe2,            0xabe2);
-V34PCMCREATE_ASSERT(txbps,    tx_bps,           0xac04);
-V34PCMCREATE_ASSERT(rxbps,    rx_bps,           0xac08);
-V34PCMCREATE_ASSERT(v90_timing_offset,    v90_timing_offset,            0xac0c);
-V34PCMCREATE_ASSERT(rrnl,     rrn_local,        0xac0e);
-V34PCMCREATE_ASSERT(rrnr,     rrn_remote,       0xac10);
-V34PCMCREATE_ASSERT(latched,  rates_latched,    0xac16);
-V34PCMCREATE_ASSERT(pac18,    pac18,            0xac18);
-V34PCMCREATE_ASSERT(pac3c,    pac3c,            0xac3c);
-
-/*
- * The receiver, reached as `obj + OB_RECEIVER`, and the one field of it this
- * function names.  `sizeof` is asserted too: it IS the second memset's length,
- * and if it stopped being 0x79c the memset would silently clear a different
- * span (D195).
- */
-typedef char v34pcmcreate_rxsize[
-	((int)sizeof(struct v34_receiver) == 0x79c) ? 1 : -1];
-typedef char v34pcmcreate_rxf262[
-	((int)__builtin_offsetof(struct v34_receiver, agc_start_gain) == 0x262)
-	? 1 : -1];
-
-/* And the V.34 object's own extent, which is the first memset's length. */
-typedef char v34pcmcreate_objlen[
-	((int)VPCM_V34_BYTES == 0xac4c) ? 1 : -1];
-
-#endif /* 32-bit */

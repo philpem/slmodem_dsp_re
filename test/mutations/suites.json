@@ -237,7 +237,7 @@
   "build/test/t_v34datapump"
  ],
  "v34datapump_rrn": [
-  "src/pump/v34/v34pcmif.c",
+  "src/pump/v34/VPcmV34Main.cpp",
   "build/test/t_v34datapump"
  ],
  "v34diag": [
@@ -337,7 +337,7 @@
   "build/test/t_v34k56"
  ],
  "v34pcmif": [
-  "src/pump/v34/v34pcmif.c",
+  "src/pump/v34/VPcmV34Main.cpp",
   "build/test/t_v34pcmif"
  ],
  "v34pcmrates": [
