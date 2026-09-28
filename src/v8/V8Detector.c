@@ -8,16 +8,16 @@
  * 0x78b00) are exactly the six below.  `b` is reached from notch_filter and
  * v8_tone_detect and from nothing else.
  *
- * `a` and `b` are the two coefficient sections the tone filter runs over,
- * reconstructed here as `tone_in_a`/`tone_in_b`.  They were previously
- * split across v8sig.c (the filter functions) and v8util.c (the two init
- * functions); this file is the translation unit they belong to.
+ * `a` and `b` are the two coefficient sections the tone filter runs over.
+ * They were previously split across v8sig.c (the filter functions) and
+ * v8util.c (the two init functions); this file is the translation unit they
+ * belong to.
  */
 
 #include "dsplib/debug.h"
 #include "dsplib/v8.h"
 
-static const short tone_in_a[2] = { -8057, 14787 };
+static const short a[3] = { 16384, -8057, 14787 };
 
 /*
  * One biquad, direct form I, with the histories kept as four shorts: x1, x2
@@ -46,10 +46,10 @@ biquad(short *x, short *y, const short *b, const short *a, int in)
  * The fixed input biquad every tone detector shares, in Q14.  The originals
  * are called `a` and `b` -- local symbols of V8Detector.c, at .rodata+0x5724
  * and +0x572a -- and both are three entries: `a[0]` is 0x4000, the implicit
- * 1.0, and every reader skips it.  Kept two entries here because that is
- * what the code uses.
+ * 1.0, and every reader skips it (F11449 restored it: the object's readers
+ * address `a + 2`, and this tree had kept only the two entries they use).
  */
-static const short tone_in_b[3] = { 15565, -8057, 15565 };
+static const short b[3] = { 15565, -8057, 15565 };
 
 /*
  * The same two sections again, standing on their own.
@@ -73,9 +73,9 @@ notch_filter(const short *in, struct v8_detector *d)
 
 	d->acc_c[0] = *in;
 	for (i = 0; i < 3; i++)
-		acc += (short)v8_mpyint(d->acc_c[i], tone_in_b[i]);
+		acc += (short)v8_mpyint(d->acc_c[i], b[i]);
 	for (i = 0; i < 2; i++)
-		acc -= (short)v8_mpyint(d->acc_d[i], tone_in_a[i]);
+		acc -= (short)v8_mpyint(d->acc_d[i], a[i + 1]);
 
 	d->acc_c[2] = d->acc_c[1];
 	d->acc_d[2] = d->acc_d[1];
@@ -192,9 +192,9 @@ v8_tone_detect(struct v8 *v, struct v8_detector *d, short *in)
 		d->acc_c[0] = *in;
 		acc = 0;
 		for (i = 0; i < 3; i++)
-			acc += v8_mpyint(d->acc_c[i], tone_in_b[i]);
+			acc += v8_mpyint(d->acc_c[i], b[i]);
 		for (i = 0; i < 2; i++)
-			acc -= v8_mpyint(d->acc_d[i], tone_in_a[i]);
+			acc -= v8_mpyint(d->acc_d[i], a[i + 1]);
 
 		d->acc_c[2] = d->acc_c[1];
 		d->acc_d[2] = d->acc_d[1];

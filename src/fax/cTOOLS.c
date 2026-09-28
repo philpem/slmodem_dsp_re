@@ -21,8 +21,10 @@
 #include "dsplib/v29data.h"
 #include "dsplib/v29fax.h"
 
-/* .bss+0x8c4 -- the one relocation against `temp` is in _handle_data_input. */
-static int temp;
+/*
+ * .bss+0x8c4 -- the one relocation against `temp` is in _handle_data_input,
+ * where the blob declares it as a block-scope static `temp.0` (F11449).
+ */
 
 
 /*
@@ -47,6 +49,8 @@ _handle_data_input(struct fax_class1 *ctx, const unsigned char *src,
 {
 	int out = 0;
 	int i;
+
+	static int temp;
 
 	if (ctx->data_input_closed != 0) {
 		*count = 0;

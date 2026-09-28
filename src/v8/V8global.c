@@ -25,23 +25,32 @@
 #include "dsplib/debug.h"
 #include "dsplib/v8.h"
 
-static const short agc_taps_answer[40] = {
-	   -15,      5,     27,     33,      0,    -62,    -93,    -26,
-	   122,    218,    108,   -197,   -445,   -310,    270,    886,
-	   842,   -323,  -2358,  -4317,  11279,  -4317,  -2358,   -323,
-	   842,    886,    270,   -310,   -445,   -197,    108,    218,
-	   122,    -26,    -93,    -62,      0,     33,     27,      5
-};
-
-static const short agc_taps_caller[40] = {
+/*
+ * The two AGC entrance filters, in Q14, at .rodata+0x5480 and +0x5420.
+ * The object declares each with 41 entries: the last repeats the first, and
+ * the run of `V8agc`'s convolution loop reads only the first 40.  The names
+ * are the blob's own; this tree previously called them agc_taps_answer and
+ * agc_taps_caller, and the two were transposed (F11449).
+ */
+static const short ANSWER_Entrance_Filter[41] = {
 	    25,      6,    -11,    -12,      5,     13,    -37,   -156,
 	  -257,   -181,    165,    654,    932,    642,   -245,  -1285,
 	 -1776,  -1250,    122,   1560,   2170,   1560,    122,  -1250,
 	 -1776,  -1285,   -245,    642,    932,    654,    165,   -181,
-	  -257,   -156,    -37,     13,      5,    -12,    -11,      6
+	  -257,   -156,    -37,     13,      5,    -12,    -11,      6,
+	    25
 };
 
-static const short agc_gain[192] = {
+static const short CALLER_Entrance_Filter[41] = {
+	   -15,      5,     27,     33,      0,    -62,    -93,    -26,
+	   122,    218,    108,   -197,   -445,   -310,    270,    886,
+	   842,   -323,  -2358,  -4317,  11279,  -4317,  -2358,   -323,
+	   842,    886,    270,   -310,   -445,   -197,    108,    218,
+	   122,    -26,    -93,    -62,      0,     33,     27,      5,
+	   -15
+};
+
+static const short sqrt_table[192] = {
 	 16384,  16511,  16638,  16763,  16888,  17011,  17134,  17256,
 	 17377,  17498,  17617,  17736,  17854,  17971,  18087,  18203,
 	 18317,  18432,  18545,  18658,  18770,  18881,  18992,  19102,
@@ -242,7 +251,8 @@ int
 V8agc(struct v8 *v)
 {
 	struct v8_rx *r = &v->rx;
-	const short *taps = v->side != 0 ? agc_taps_caller : agc_taps_answer;
+	const short *taps = v->side != 0 ? ANSWER_Entrance_Filter
+					 : CALLER_Entrance_Filter;
 	int energy = 0;
 	int gain = 0;
 	int i;
@@ -300,7 +310,7 @@ V8agc(struct v8 *v)
 		if ((unsigned short)idx > V8_AGC_GAIN_MAX)
 			idx = V8_AGC_GAIN_MAX;
 
-		gain = (unsigned short)agc_gain[(unsigned short)idx]
+		gain = (unsigned short)sqrt_table[(unsigned short)idx]
 		       >> (shift >> 1);
 	}
 

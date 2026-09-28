@@ -16,40 +16,45 @@
 #include "dsplib/modem_params.h"
 
 
-/*
- * DTMF send levels, .rodata+0x6178, indexed directly by
- * `GetDTMFHighToneLevel` over 6..12 -- so this table is offset by six and its
- * first entry is level 6.  One decibel per step from 0 dBFS.
- */
-static const short dtmf_level[DIALER_DTMF_LEVEL_MAX
-			      - DIALER_DTMF_LEVEL_MIN + 1] = {
-	16384,		/*  0 dB */
-	14602,		/* -1 dB */
-	13014,		/* -2 dB */
-	11599,		/* -3 dB */
-	10338,		/* -4 dB */
-	 9213,		/* -5 dB */
-	 8211		/* -6 dB */
-};
-
-/*
- * Twist: how far below the high group the low group is sent, as a Q15 ratio.
- * .rodata+0x6186, indexed by `GetDTMFHighAndLowToneLevelDifference` over
- * 1..5, so this table is offset by one.
- */
-static const short dtmf_twist[DIALER_DTMF_TWIST_MAX
-			      - DIALER_DTMF_TWIST_MIN + 1] = {
-	29205,		/* -1 dB */
-	26029,		/* -2 dB */
-	23198,		/* -3 dB */
-	20675,		/* -4 dB */
-	18427		/* -5 dB */
-};
 
 void
 GetDialerConfig(struct dialer_cfg *cfg, void *modem)
 {
 	int level, twist;
+
+/*
+	 * DTMF send levels, .rodata+0x6178, indexed directly by
+	 * `GetDTMFHighToneLevel` over 6..12 -- so this table is offset by six and its
+	 * first entry is level 6.  One decibel per step from 0 dBFS.
+	 *
+	 * The blob declares these two block-scope, so GCC names them
+	 * `High_Tone_Gain.0` and `Lower_Tone_Diff.1`; the order here is the
+	 * order that reproduces those numbers (F11449).
+	 */
+	static const short High_Tone_Gain[DIALER_DTMF_LEVEL_MAX
+				      - DIALER_DTMF_LEVEL_MIN + 1] = {
+		16384,		/*  0 dB */
+		14602,		/* -1 dB */
+		13014,		/* -2 dB */
+		11599,		/* -3 dB */
+		10338,		/* -4 dB */
+		 9213,		/* -5 dB */
+		 8211		/* -6 dB */
+	};
+
+/*
+	 * Twist: how far below the high group the low group is sent, as a Q15 ratio.
+	 * .rodata+0x6186, indexed by `GetDTMFHighAndLowToneLevelDifference` over
+	 * 1..5, so this table is offset by one.
+	 */
+	static const short Lower_Tone_Diff[DIALER_DTMF_TWIST_MAX
+				      - DIALER_DTMF_TWIST_MIN + 1] = {
+		29205,		/* -1 dB */
+		26029,		/* -2 dB */
+		23198,		/* -3 dB */
+		20675,		/* -4 dB */
+		18427		/* -5 dB */
+	};
 
 	cfg->dtmf_duration = modem_get_param(modem, GetDTMFDialSpeed);
 	if (DSPLIB_DEBUG_ON())
@@ -142,14 +147,14 @@ GetDialerConfig(struct dialer_cfg *cfg, void *modem)
 
 	if ((unsigned)(level - DIALER_DTMF_LEVEL_MIN)
 	    <= DIALER_DTMF_LEVEL_MAX - DIALER_DTMF_LEVEL_MIN)
-		cfg->dtmf_high = dtmf_level[level - DIALER_DTMF_LEVEL_MIN];
+		cfg->dtmf_high = High_Tone_Gain[level - DIALER_DTMF_LEVEL_MIN];
 	else
 		cfg->dtmf_high = DIALER_DTMF_LEVEL_DEFAULT;
 
 	if ((unsigned)(twist - DIALER_DTMF_TWIST_MIN)
 	    <= DIALER_DTMF_TWIST_MAX - DIALER_DTMF_TWIST_MIN)
 		cfg->dtmf_low = (short)(((int)cfg->dtmf_high
-					 * dtmf_twist[twist
+					 * Lower_Tone_Diff[twist
 						      - DIALER_DTMF_TWIST_MIN])
 					>> 15);
 	else

@@ -110,35 +110,6 @@ static const struct toneiir_cfg toneiir_configuration_default = {
 	.scales		= default_scales
 };
 
-/*
- * .rodata+0x626c, one word.  In Q13 a lone numerator tap of 1 is a gain of
- * 1/8192, so whatever this was meant to be it is not the unity its name
- * implies -- see below for why that never matters.
- */
-static const short toneiir_allpass_b[1] = { 1 };
-
-/*
- * `toneiir_configuration_allpass`.  Its scales and denominator pointers are
- * NULL, which toneiir_progress would dereference on its first sample -- but
- * the only branch that passes it to toneiir_create is unreachable:
- * cadence_create clears the flag guarding it at entry and never sets it.  Kept
- * because it is a global the object defines.
- */
-const struct toneiir_cfg toneiir_configuration_allpass = {
-	.a		= 0,
-	.b		= toneiir_allpass_b,
-	.n_a		= 0,
-	.n_b		= 1,
-	.interval	= 500,
-	.pad12		= 0,
-	.stability	= 11467,
-	.status		= 2,
-	.threshold	= 80,
-	.duration_ms	= 2200,
-	.gap_tolerance	= 4,
-	.keep_on_gap	= 0,
-	.scales		= 0
-};
 
 /* env = 0.99 * env + 0.01 * |x|, with both terms rounded before the abs. */
 #define TONEIIR_ENV_NEW		164		/* 0.01 in Q14 */
