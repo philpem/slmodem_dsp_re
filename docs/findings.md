@@ -128909,10 +128909,36 @@ needs the owning FILE pinned first: the `.data` bracket puts
 V.32 files and, as the lever result above shows, the object does not separate
 them by address.
 
-**GATES.**  `make -j1 J=1 phase`: see the commit; `refcheck` 0 dangling
-(this entry closes F11447); `anchorcheck` 0 detached / 0 non-unique;
-`git diff --check` clean.  No mutation source is named, so no suite owes a
-re-record beyond the whole-tree key, which the standing instruction leaves
-stale.
+**`V32.c`'s `.rodata` BLOCK IS NOW BYTE-EXACT.**  The object's `.rodata`
+local `V32DiconnectThreshTable` (0x006dd0) belongs to `V32.c` (FILE 116), the
+only FILE record whose local is near that address, and no other FILE's local
+lies between it and `DualTone_Detector.c`'s `IIRFilterCoef` (0x006d36).  So the
+whole 0x006d60..0x006ddf run is `V32.c`'s, and it is
+`V32_S_DATA_COEF`/`V32_S_COEF`/`V32_CFG`/`V32DiconnectThreshTable`.  All three
+global definitions were moved verbatim out of `v32hdx_tables.c`/`v32fptab.c`
+into `V32.c` and declared in reverse address order (F11402); the period
+compiler's per-TU object then emits
+
+    V32_S_DATA_COEF  .rodata +0x00  30
+    V32_S_COEF       .rodata +0x1e  30
+    V32_CFG          .rodata +0x40  48
+    V32DiconnectThreshTable .rodata +0x70 16
+
+i.e. **relative offsets 0/0x1e/0x40/0x70, identical to the object's
+0x6d60/0x6d7e/0x6da0/0x6dd0.**  No declaration, type, value or flag changed.
+`partialcmp`: positioned bytes 66,607 -> 66,681 (+74); candidate delta -51,847
+unchanged (definitions moved between TUs, no byte added); exact relocations
+1,025 -> 1,018 (-7, the known census trade -- the `.rel.rodata` entries that
+matched positionally now sit at `V32.c`'s offset, no function exactness
+involved); exact symbols 393 unchanged.  `anchorcheck` 0 detached / 0
+non-unique.
+
+**GATES.**  `make -j1 J=1 phase`: **period differential 385 passed, 0 failed**,
+boundary OK; `byteident` grade 0 844 and grade 0-or-1 895 unchanged (`V32.c`'s
+data move moves no function byte); `refcheck` 0 dangling (this entry closes
+F11447); `anchorcheck` 0 detached / 0 non-unique; `git diff --check` clean.
+No suite anchors a renamed or moved symbol, so no suite's mutation set is
+invalidated beyond the whole-tree key, which the standing instruction leaves
+stale (`mutsnap --check`: 0 current / 283 stale / 2 declared-unscoreable).
 
 (2026-09-28)

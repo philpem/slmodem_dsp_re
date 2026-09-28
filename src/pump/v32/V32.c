@@ -146,6 +146,49 @@ static const short V32DiconnectThreshTable[8] = {
 	75, 95, 119, 150, 168, 174, 212, 238
 };
 
+/*
+ * The rest of this TU's `.rodata`, all of it F11447's reattribution: the
+ * object's .rodata local `V32DiconnectThreshTable` (0x006dd0) brackets the
+ * three tables above it, and no other FILE record's local lies between, so
+ * they are this translation unit's and not `v32fptab.c`'s or
+ * `v32hdx_tables.c`'s.  They are declared in REVERSE of the object's address
+ * order because GCC 3.4.2 emits `.rodata` globals in reverse declaration order
+ * (F11402), which lands the four at 0x006d60/0x006d7e/0x006da0/0x006dd0
+ * exactly as the object has them.
+ */
+const struct v32fp_params V32_CFG = {
+	0,			/* protocol                                  */
+	14400,			/* tx_rate                                   */
+	14400,			/* rx_rate                                   */
+	0,			/* r06                                       */
+	120000,			/* timeout                                   */
+	17887,			/* tx_scale                                  */
+	0x68b,			/* options                                   */
+	0,			/* ec_near_delay                             */
+	0,			/* r16                                       */
+	0,			/* symlen_sel                                */
+	0,			/* r1a                                       */
+	0,			/* trellis                                   */
+	0,			/* r20                                       */
+	0,			/* r24                                       */
+	103,			/* disconnect_thresh -- never survives       */
+	0,			/* energy_drop_time                          */
+	0,			/* r2c                                       */
+	0			/* r2e                                       */
+};
+
+const short V32_S_COEF[15] = {
+	-15099, 15735, 28028, -28040, 15735,
+	-15099, 15739,  4920,  -4924, 15739,
+	-15099, 15736, -22243, 22254, 15736
+};
+
+const short V32_S_DATA_COEF[15] = {
+	-15099, 15735, 27242, -27254, 15735,
+	-15099, 15741,     0,      0, 15741,
+	-15099, 15735, -27242, 27254, 15735
+};
+
 
 /* The instance is not modelled; these are v32fpctl.c's accessors. */
 
