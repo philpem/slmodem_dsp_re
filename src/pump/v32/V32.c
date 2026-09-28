@@ -911,6 +911,53 @@ V32FP_create(const struct v32fp_cfg *cfg, void *arg1)
 
 
 /*
+ * V32_MESG -- the V.32 status-message pointer table, `.data` 116 bytes
+ * (29 `char *`).  Recovered from the object: every entry carries an
+ * `R_386_32` against `.rodata.str1.1`/`.rodata.str1.4`, and the 29 targets
+ * and their order are the object's own relocation records, read out at
+ * `.data` 0x7240 by `tools/dis.py`.  The array is NOT `const` -- the object
+ * places it in `.data`, where its V.22 sibling `V22_MESG` is in `.rodata`
+ * and therefore is.  No relocation points at the symbol itself.
+ *
+ * OWNER: not uniquely established.  The `.data` bracket is
+ * `fsklpfcoeff600` (DPSK.c) below and `SnrToRetrainTable` (V32stc.c) above,
+ * and the object's V.32 table block there is the split this tree still has
+ * (`v32fse_tables.c`, `v32dec_tables.c`, `v32sre_tables.c`, `V32.c`); this
+ * unit is where the symbol's own name points and is the TU this link order
+ * places immediately after DPSK.c, so it is the name-implied candidate rather
+ * than a proven one.
+ */
+char *V32_MESG[29] = {
+	"", "", "",
+	"CONNECT 9600 BPS!\n",
+	"CONNECT 4800 BPS!\n",
+	"",
+	"Remote Loop #2 ESTABLISHED!\n",
+	"Remote Loop #2 FAILED!\n",
+	"Remote Loop #2 terminated.\n",
+	"Detected retrain request...",
+	"Detected remote loop #2 request...",
+	"Initiating retrain...",
+	"NO CARRIER\n",
+	"CONNECT!\n",
+	"DISCONNECT!\n",
+	"",
+	"Timeout : Looking for answer tone.\n",
+	"Timeout : Waiting for drop in carrier.\n",
+	"Timeout : Detecting phase reversal.\n",
+	"Timeout : Detecting rate sequence.\n",
+	"Timeout : Waiting for reappearance of S sequence.\n",
+	"Timeout : Detecting epoch.\n",
+	"Timeout : Detecting AA\n",
+	"CLEARDOWN.\n",
+	"CONNECT 7200 BPS!\n",
+	"CONNECT 9600T BPS!\n",
+	"CONNECT 12000 BPS!\n",
+	"CONNECT 14400 BPS!\n",
+	"Rate change request detected",
+};
+
+/*
  * The three scrambler data objects, read by V32FP_recreate: SDMv32_CFG is a
  * three-word template for the first six bytes of a struct v32_sdm, and
  * SDMv32_GPC/GPA are each indexed by the half-duplex mode.  Moved here from

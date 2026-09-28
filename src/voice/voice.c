@@ -35,6 +35,19 @@
 #include "dsplib/voicecmd.h"
 
 /*
+ * default_voice_configuration -- `.bss` 16 bytes, defined GLOBAL and zeroed
+ * (no initialiser).  The object's only 16-byte `.bss` object there, and
+ * `sizeof(struct voice_config)` is exactly 16 (voice.h), so the type is
+ * settled by the size and the name.
+ *
+ * OWNER: not uniquely established.  The `.bss` bracket from `tools/dataaudit.py`
+ * is `avg_err_show.0` (fpm_fse.c) below and `pGlobalFDSPObj` (Fdsp.c) above,
+ * and neither is a voice unit, so this is usage/name inference rather than a
+ * proven boundary; `docs/issue20-bss-storage.md` records the same gap.
+ */
+struct voice_config default_voice_configuration = { 0 };
+
+/*
  * The state's layout is a byte count from a build where pointers are four
  * bytes, so these are compiled only under that ABI.
  */
