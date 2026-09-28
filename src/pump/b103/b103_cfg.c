@@ -41,7 +41,7 @@
  * `b103_create` is expected to build its own copy with `call_type` set from
  * the caller/answer argument it is handed; this one on its own does not link.
  */
-struct b103_cfg B103_CFG_data = {
+struct b103_cfg B103_CFG = {
 	.call_type = B103_CALL_LOOPBACK,
 	.v21 = B103_TONES_BELL103,
 	.tone_timeout_ticks = 14000,	/* -> the 700-block floor exactly */

@@ -101,6 +101,12 @@ short V32_TX_MODE[7] = {
  * mode's S tone" is what the symbol itself says and everything past that
  * would be usage inference about a resonator's centre frequency.
  */
+const short V32_S_COEF[15] = {
+	-15099, 15735, 28028, -28040, 15735,
+	-15099, 15739,  4920,  -4924, 15739,
+	-15099, 15736, -22243, 22254, 15736
+};
+
 const short V32_S_DATA_COEF[15] = {
 	-15099, 15735, 27242, -27254, 15735,
 	-15099, 15741,     0,      0, 15741,

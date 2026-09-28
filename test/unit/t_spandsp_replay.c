@@ -67,7 +67,7 @@ load(void)
 static struct b103fp *
 make_rx(void)
 {
-	struct b103_cfg cfg = B103_CFG_data;
+	struct b103_cfg cfg = B103_CFG;
 	struct b103fp *fp;
 
 	cfg.call_type = B103_CALL_ORIGINATE;

@@ -252,7 +252,7 @@ main(void)
 
 	diff_begin("B103FP_create, self-allocating");
 	for (k = 0; k < sizeof(cases) / sizeof(cases[0]); k++) {
-		struct b103_cfg cfg = B103_CFG_data;
+		struct b103_cfg cfg = B103_CFG;
 		struct b103fp *a, *b;
 
 		cfg.call_type = cases[k].call_type;
@@ -280,7 +280,7 @@ main(void)
 	 */
 	diff_begin("B103FP_create, caller-supplied");
 	for (k = 0; k < sizeof(cases) / sizeof(cases[0]); k++) {
-		struct b103_cfg cfg = B103_CFG_data;
+		struct b103_cfg cfg = B103_CFG;
 		static struct b103fp sa, sb;
 		struct b103fp *a, *b;
 
@@ -306,7 +306,7 @@ main(void)
 	/* Allocation counts must match the reference exactly. */
 	diff_begin("B103FP_create allocation counts");
 	for (k = 0; k < sizeof(cases) / sizeof(cases[0]); k++) {
-		struct b103_cfg cfg = B103_CFG_data;
+		struct b103_cfg cfg = B103_CFG;
 		struct b103fp *fp;
 		int ra, rb, rf, af, ab;
 

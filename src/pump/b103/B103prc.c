@@ -954,7 +954,7 @@ B103FP_create(struct b103fp *fp, const struct b103_cfg *cfg)
 		fp->dsp = NULL;
 	}
 	if (cfg == NULL)
-		cfg = &B103_CFG_data;
+		cfg = &B103_CFG;
 
 	/* The config IS the object's first 28 bytes. */
 	fp->cfg = *cfg;
@@ -1080,8 +1080,8 @@ B103FP_create(struct b103fp *fp, const struct b103_cfg *cfg)
 	 * length is patched afterwards.  Reading the two init calls alone
 	 * would say they were identical.
 	 */
-	FPM_AGC_init(&dsp->agc, &AGCb103_CFG_data, fresh);
-	FPM_AGC_init(&dsp->det_agc, &AGCb103_CFG_data, fresh);
+	FPM_AGC_init(&dsp->agc, &AGCb103_CFG, fresh);
+	FPM_AGC_init(&dsp->det_agc, &AGCb103_CFG, fresh);
 	dsp->det_agc.cfg.block_len = 40;
 
 	dsp->r00 = 1;

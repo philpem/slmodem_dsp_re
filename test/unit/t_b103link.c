@@ -163,10 +163,10 @@ main(void)
 		diff_eq_int("config is 28 bytes (%ld)",
 			    (long)sizeof(struct b103_cfg), 28, 0);
 		diff_eq_int("matches the blob byte for byte (%ld)",
-			    memcmp(&B103_CFG_data, ref_B103_CFG,
+			    memcmp(&B103_CFG, ref_B103_CFG,
 				   sizeof(struct b103_cfg)), 0, 0);
 		diff_eq_int("the built-in config is LOOPBACK (%ld)",
-			    B103_CFG_data.call_type, B103_CALL_LOOPBACK, 0);
+			    B103_CFG.call_type, B103_CALL_LOOPBACK, 0);
 	}
 	rc |= diff_end();
 
@@ -176,7 +176,7 @@ main(void)
 		struct b103fp *fp;
 
 		/* call_type: the documented table, one row at a time. */
-		cfg = B103_CFG_data;
+		cfg = B103_CFG;
 		cfg.call_type = B103_CALL_ORIGINATE;
 		fp = ref_B103FP_create(0, &cfg);
 		if (fp) {
@@ -211,7 +211,7 @@ main(void)
 		}
 
 		/* loop_high_channel: loopback only. */
-		cfg = B103_CFG_data;
+		cfg = B103_CFG;
 		cfg.loop_high_channel = 1;
 		fp = ref_B103FP_create(0, &cfg);
 		if (fp) {
@@ -228,7 +228,7 @@ main(void)
 		}
 
 		/* tone_timeout_ticks: /20, floored at 700. */
-		cfg = B103_CFG_data;
+		cfg = B103_CFG;
 		cfg.tone_timeout_ticks = 28000;
 		fp = ref_B103FP_create(0, &cfg);
 		if (fp) {
@@ -245,7 +245,7 @@ main(void)
 		}
 
 		/* tx_scale: straight into the modulator. */
-		cfg = B103_CFG_data;
+		cfg = B103_CFG;
 		cfg.tx_scale = 1234;
 		fp = ref_B103FP_create(0, &cfg);
 		if (fp) {
@@ -280,7 +280,7 @@ main(void)
 		unsigned p;
 
 		for (p = 0; p < sizeof(plans) / sizeof(plans[0]); p++) {
-			struct b103_cfg cfg = B103_CFG_data;
+			struct b103_cfg cfg = B103_CFG;
 			struct b103fp *fp;
 			char buf[96];
 			int det, lo;

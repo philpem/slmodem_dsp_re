@@ -48,7 +48,7 @@
  * followed by one copy.  The object carries the six-dword copy TWICE, at
  * 0x098ea8 from the caller's table and at 0x099190 from `V21RX_CFG`, and two
  * arms is the spelling that says so.  `B103FP_create` uses the other form
- * (`cfg = &B103_CFG_data;` then one assignment) and both are behaviourally
+ * (`cfg = &B103_CFG;` then one assignment) and both are behaviourally
  * identical; which one the period compiler turns into the object's two copies
  * was NOT measured here, because this worktree has no period compiler.  If a
  * later pass measures it, this is the site.

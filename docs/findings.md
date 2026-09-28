@@ -128810,3 +128810,109 @@ fixed: the owner is not established by a bracket this wide (AGENTS'
 weakest-evidence rule), and the size difference is the discriminator a later
 pass should use.
 (2026-09-28)
+
+## F11447. The assignment lever re-tested on matched section sizes: still not an absolute-offset oracle, two residual renames fixed, and `V32_S_COEF` recovered
+
+The F11441 precondition -- matched `.data`/`.rodata` totals -- was met by
+F11445/F11446.  This pass re-measured the totals, re-ran the enumeration lever
+on the two-candidate V.32 slot, fixed the two residual `_data` renames, and
+recovered one of the missing tables from the object.  Nothing else in `src/`
+changed.
+
+**THE TOTALS STILL READ -304 / +512 (re-measured, `readelf -SW`).**
+
+    .data      blob 38,292   ours 37,988   -304
+    .rodata    blob 69,476   ours 69,988   +512
+
+**THE ENUMERATION LEVER IS STILL NOT AN ABSOLUTE-OFFSET ORACLE.**
+`src/pump/v32/v32fse_tables.c`'s whole FSEv32/CRRv32 block (6 objects, 486 B)
+was moved verbatim into `V32RXTAB.c` and then `V32TXTAB.c`; both placeholders
+are already TUs, so only the assignment changes.  The cells DO differ now
+(F11441's slot 1 was byte-identical):
+
+    baseline (block left in v32fse_tables.c)   66,626 positioned
+    -> V32RXTAB.c                              67,088  (+462)
+    -> V32TXTAB.c                              67,176  (+550)
+
+But **neither cell puts a single table at its blob offset**: with the block in
+`V32RXTAB.c` the six objects read .data 0x7240/0x7320/0x71e0/0x7224/0x721e/
+0x7218 against the object's 0x72c0/0x73a0/0x7480/0x74b8/0x74c6/0x74c0; in
+`V32TXTAB.c` 0x7260/0x7340/0x7200/0x7244/0x723e/0x7238.  **0/6 both ways.**
+The candidate's *intermediate* layout is still shifted because the still-missing
+symbols and the source-order fallback for the unmatched TUs move every offset
+below the point of interest; matching the section TOTALS is therefore necessary
+but not sufficient, and the positional census still scores layout drift rather
+than assignment.  The lever is not adopted.  (The +462/+550 is a census
+side-effect of removing an ours-only input from the tail of the link order, not
+evidence for either assignment.)
+
+**TWO RESIDUAL RENAMES FIXED (the object's own names).**
+F11445 named `B103_CFG_data` and `AGCb103_CFG_data` as ours for the blob's
+`B103_CFG` (.data 28) and `AGCb103_CFG` (.data 24).  Both definitions already
+record their extraction from those exact addresses, so the fix is a rename of
+the definition, its `extern` and every reference; the `_data` spelling is not a
+symbol the object defines.  Measured on the partial link: **blob-only globals
+16 -> 14, ours-only globals 30 -> 28**; `partialcmp` byte-for-byte unchanged
+(same section sizes, same positioned bytes).
+
+**`V32_S_COEF` RECOVERED FROM THE OBJECT (`.rodata` 0x006d7e, 30 B, 15 shorts).**
+F8563 declined it because no reconstructed function references it.  Its 30 bytes
+carry no relocation, so the object's bytes ARE its initialiser, and they are
+transcribed exactly:
+
+    -15099, 15735, 28028, -28040, 15735,
+    -15099, 15739,  4920,  -4924, 15739,
+    -15099, 15736, -22243, 22254, 15736
+
+It is declared before `V32_S_DATA_COEF` because `.rodata` globals emit in
+reverse declaration order (F11402), which lands `V32_S_DATA_COEF` at the lower
+offset the object has.  `partialcmp`: candidate delta -51,879 -> -51,847
+(+32 B, the 30-byte table plus alignment); candidate symbols 2,976 -> 2,977;
+positioned bytes 66,626 -> 66,607 (-19, the known census trade for a
+more-correct placement, no function exactness involved).
+
+**THE RESIDUAL MISSING DATA, EACH WITH ITS OBJECT FACTS.**  After the two
+renames, thirteen blob-only OBJECT globals remain.  Their bytes were read out of
+the object; the section in which those bytes are the initialiser is noted:
+
+    name                        section   size  known
+    FSEv32_decision             .data       12  3 function pointers, all R_386_32
+                                                (FSE_decision_4pt/16pt/32pt);
+                                                no incoming relocation
+    V32_MESG                    .data      116  29 `const char *` (29 R_386_32
+                                                into .rodata.str1.{1,4}); the
+                                                V.32 status strings ("CONNECT
+                                                9600 BPS!\n", "Remote Loop #2
+                                                ESTABLISHED!\n", ...), none of
+                                                which this tree emits; no
+                                                TYPED consumer is reconstructed
+    B103_CTL                    .data       12  no relocation; raw i16
+                                                {-5536,0,3200,0,0,0}
+    MTDb103Org_CFG              .rodata     12  no relocation; raw i16
+                                                {0,0,2,29820,10,0}
+    V22_MESG                    .rodata    100  no relocation; not a pointer
+                                                table (no R_386_32)
+    v21_hibnd / v21_lobnd       .data  120/120 60 shorts each; NOT our
+                                                `temp_v21_hibnd/lobnd`
+                                                (.rodata 122, V8Fsk.c) --
+                                                different size and section
+    c1646                       .rodata     16  not examined
+    default_voice_configuration .bss        16  not examined
+    echoshift/ecoeff/l2thresh   .rodata   2/2/2 not examined
+    prop_dsp_version            .rodata      7  not examined
+
+These are **genuinely unreconstructed**, not renamed: each has no symbol in
+this tree under any spelling.  Recovering `V32_MESG` (and `FSEv32_decision`)
+needs the owning FILE pinned first: the `.data` bracket puts
+`FSEv32_decision` between the FSE block and the `DECv32_*` low-rate tables and
+`V32_MESG` at the head of the V.32 `.data` run, but the slot admits several
+V.32 files and, as the lever result above shows, the object does not separate
+them by address.
+
+**GATES.**  `make -j1 J=1 phase`: see the commit; `refcheck` 0 dangling
+(this entry closes F11447); `anchorcheck` 0 detached / 0 non-unique;
+`git diff --check` clean.  No mutation source is named, so no suite owes a
+re-record beyond the whole-tree key, which the standing instruction leaves
+stale.
+
+(2026-09-28)
