@@ -20,9 +20,9 @@
 #include "dsplib/v27fax.h"
 #include "dsplib/v29data.h"
 #include "dsplib/v29fax.h"
-extern const struct v21tx_ctl V21TX_CTL;
+extern struct v21tx_ctl V21TX_CTL;
 
-extern const struct v21rx_ctl V21RX_CTL;
+extern struct v21rx_ctl V21RX_CTL;
 
 
 /* The object's raw-status mask used by the cHDLCrx receive handlers. */

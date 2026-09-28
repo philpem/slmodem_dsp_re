@@ -34,7 +34,7 @@
 #include "dsplib/pcm.h"
 
 /* Upper bound of each companding segment, at full 16-bit scale. */
-static const short seg_end[8] = {
+static short seg_end[8] = {
 	255, 511, 1023, 2047, 4095, 8191, 16383, 32767,
 };
 

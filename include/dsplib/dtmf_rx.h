@@ -166,13 +166,13 @@ int dtmf_modem(const short *samples, unsigned short count,
  * are 697 770 852 941 1209 1336 1477 1633 Hz.  See docs/coefficients.md --
  * and note MTD7_COEF_9600, which does not fit the design (D250).
  */
-extern const short MTD1_COEF_8000[5], MTD1_COEF_9600[5];
-extern const short MTD2_COEF_8000[5], MTD2_COEF_9600[5];
-extern const short MTD3_COEF_8000[5], MTD3_COEF_9600[5];
-extern const short MTD4_COEF_8000[5], MTD4_COEF_9600[5];
-extern const short MTD5_COEF_8000[5], MTD5_COEF_9600[5];
-extern const short MTD6_COEF_8000[5], MTD6_COEF_9600[5];
-extern const short MTD7_COEF_8000[5], MTD7_COEF_9600[5];
-extern const short MTD8_COEF_8000[5], MTD8_COEF_9600[5];
+extern short MTD1_COEF_8000[5], MTD1_COEF_9600[5];
+extern short MTD2_COEF_8000[5], MTD2_COEF_9600[5];
+extern short MTD3_COEF_8000[5], MTD3_COEF_9600[5];
+extern short MTD4_COEF_8000[5], MTD4_COEF_9600[5];
+extern short MTD5_COEF_8000[5], MTD5_COEF_9600[5];
+extern short MTD6_COEF_8000[5], MTD6_COEF_9600[5];
+extern short MTD7_COEF_8000[5], MTD7_COEF_9600[5];
+extern short MTD8_COEF_8000[5], MTD8_COEF_9600[5];
 
 #endif /* DSPLIB_DTMF_RX_H */

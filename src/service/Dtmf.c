@@ -370,12 +370,12 @@ dtmf_set_easy(struct dtmf *d)
  * The bias notch: r = 0.85, w0 = 2*pi*50/4000.  A 50 Hz section, i.e. mains
  * hum, and only the European plan runs the input through it.
  */
-const float biascoef[4] = {
+float biascoef[4] = {
 	-1.99383497f, 1.69475901f, -0.722500026f, 0.850000024f,
 };
 
 /* r = 0.98 0.98 0.98 0.98 0.97 0.97 0.97 0.965 */
-const float us_coef[4 * DTMF_TONES] = {
+float us_coef[4 * DTMF_TONES] = {
 	-0.916368008f, 0.89804101f, -0.960399985f, 0.980000019f,   /*  697 */
 	-0.706950009f, 0.692811012f, -0.960399985f, 0.980000019f,  /*  770 */
 	-0.460779011f, 0.451563001f, -0.960399985f, 0.980000019f,  /*  852 */
@@ -387,7 +387,7 @@ const float us_coef[4 * DTMF_TONES] = {
 };
 
 /* r = 0.955 0.95 0.945 0.945 0.945 0.93 0.93 0.925 */
-const float eur_coef[4 * DTMF_TONES] = {
+float eur_coef[4 * DTMF_TONES] = {
 	-0.916368008f, 0.875132024f, -0.912024975f, 0.954999983f,  /*  697 */
 	-0.706950009f, 0.671602011f, -0.902499974f, 0.949999988f,  /*  770 */
 	-0.460779011f, 0.43543601f, -0.893024981f, 0.944999993f,   /*  852 */

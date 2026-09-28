@@ -192,7 +192,7 @@ _delete_data_rx_modem(struct fax_class1 *ctx)
  * produces.  Independently re-confirmed against `objdump -r` (F10109 first
  * reported this table; not taken on that report alone here).
  */
-static void (*const init_vmi_data_rx_modem[3])(struct faxvmi_cfg *,
+static void (*init_vmi_data_rx_modem[3])(struct faxvmi_cfg *,
 						unsigned short, int, void *) = {
 	init_vmi_v27rx,
 	init_vmi_v29rx,
@@ -214,7 +214,7 @@ static void (*const init_vmi_data_rx_modem[3])(struct faxvmi_cfg *,
  * (`mov %di,...+2` in the disassembly); the flags/ctl1 byte's REINIT bit is
  * OR'd in at runtime, not baked into the constant.
  */
-const struct v17rx_ctl V17RX_CTL = {
+struct v17rx_ctl V17RX_CTL = {
 	{ 0x00, 0x00, 0x40, 0x38 },	/* unmapped_0000 */
 	60000,				/* int_0004      */
 	{ 0, 0, 0, 0 },			/* unmapped_0008 */
@@ -224,7 +224,7 @@ const struct v17rx_ctl V17RX_CTL = {
 	0,				/* short_train   */
 };
 
-const struct v27rx_ctl V27RX_CTL = {
+struct v27rx_ctl V27RX_CTL = {
 	{ 0x00, 0x00, 0xc0, 0x12 },	/* unmapped_0000 */
 	60000,				/* int_0004      */
 	{ 0, 0, 0, 0 },			/* unmapped_0008 */
@@ -234,7 +234,7 @@ const struct v27rx_ctl V27RX_CTL = {
 	{ 0, 0, 0, 0 },			/* unmapped_0010 */
 };
 
-const struct v29rx_control_req V29RX_CTL = {
+struct v29rx_control_req V29RX_CTL = {
 	{ 0x00, 0x00, 0x80, 0x25 },	/* pad_0000 */
 	60000,				/* int_0004 */
 	{ 0, 0, 0, 0 },			/* pad_0008 */

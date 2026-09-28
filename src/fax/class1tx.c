@@ -98,14 +98,14 @@
  * the caller overwrites the way the data modes' own templates are (F10116);
  * nothing here patches it.
  */
-const struct v21rx_ctl V21RX_CTL = {
+struct v21rx_ctl V21RX_CTL = {
 	{ 0x00, 0x00, 0x2c, 0x01 },	/* unmapped_0000 */
 	60000,				/* int_0004      */
 	{ 0, 0, 0, 0, 0 },		/* unmapped_0008 */
 	0x00,				/* flags         */
 };
 
-const struct v21tx_ctl V21TX_CTL = {
+struct v21tx_ctl V21TX_CTL = {
 	{ 0x2c, 0x01, 0x00, 0x00 },	/* unmapped_0000 */
 	60000,				/* int_0004      */
 	3200,				/* scale         */
@@ -287,7 +287,7 @@ _delete_data_tx_modem(struct fax_class1 *ctx)
  * below produces.  Independently re-confirmed against `objdump -r`
  * (F10109 first reported this table; not taken on that report alone here).
  */
-static int (*const init_vmi_data_tx_modem[3])(struct faxvmi_cfg *,
+static int (*init_vmi_data_tx_modem[3])(struct faxvmi_cfg *,
 					       unsigned short, int, void *) = {
 	init_vmi_v27tx,
 	init_vmi_v29tx,
@@ -314,7 +314,7 @@ static int (*const init_vmi_data_tx_modem[3])(struct faxvmi_cfg *,
  * flags/ctl1 byte's REINIT bit is OR'd in at runtime, not baked into the
  * constant.
  */
-const struct v17tx_control_req V17TX_CTL = {
+struct v17tx_control_req V17TX_CTL = {
 	{ 0x40, 0x38, 0x00, 0x00 },	/* pad_0000  */
 	60000,				/* int_0004  */
 	1,				/* scale_mul */
@@ -323,7 +323,7 @@ const struct v17tx_control_req V17TX_CTL = {
 	0,				/* int_0010  */
 };
 
-const struct v27tx_ctl V27TX_CTL = {
+struct v27tx_ctl V27TX_CTL = {
 	{ 0x80, 0x25, 0x00, 0x00 },	/* unmapped_0000 */
 	60000,				/* int_0004      */
 	1,				/* scale_mul     */
@@ -333,7 +333,7 @@ const struct v27tx_ctl V27TX_CTL = {
 	0,				/* int_0010      */
 };
 
-const struct v29tx_control_req V29TX_CTL = {
+struct v29tx_control_req V29TX_CTL = {
 	{ 0x80, 0x25, 0x00, 0x00 },	/* pad_0000 */
 	60000,				/* int_0004 */
 	1,				/* scale_mul */

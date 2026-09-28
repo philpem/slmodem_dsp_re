@@ -52,15 +52,15 @@
  * phases.  Global in the object; see docs/coefficients.md for the symmetry
  * and for what the three sum to.
  */
-const short intcoef1[V34_FSK_TAPS] = {
+short intcoef1[V34_FSK_TAPS] = {
 	87, 305, -819, -1200, 4976, 11653, 7871, 66, -1368, 139, 195, -46
 };
 
-const short intcoef2[V34_FSK_TAPS] = {
+short intcoef2[V34_FSK_TAPS] = {
 	7, 293, -254, -1602, 2209, 10283, 10283, 2209, -1602, -254, 293, 7
 };
 
-const short intcoef3[V34_FSK_TAPS] = {
+short intcoef3[V34_FSK_TAPS] = {
 	-46, 195, 139, -1368, 66, 7871, 11653, 4976, -1200, -819, 305, 87
 };
 
@@ -71,7 +71,7 @@ const short intcoef3[V34_FSK_TAPS] = {
  * The name says 600, which at V.34's 9600 Hz input and this module's 3x
  * interpolation is a cutoff well inside the V.21 channel it has to pass.
  */
-static const short fsklpfcoeff600[V34_FSK_LPF_TAPS] = {
+static short fsklpfcoeff600[V34_FSK_LPF_TAPS] = {
 	  22,   26,   30,   36,   44,   54,   67,   81,
 	  99,  120,  144,  172,  202,  237,  274,  315,
 	 359,  406,  456,  508,  562,  618,  675,  733,

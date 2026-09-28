@@ -152,21 +152,21 @@ DTMF_MTD_detect(const short *samples, short count, struct dtmf_rx *rx)
  * the deleted ours-only dtmf_mtd_coeffs.c: the blob defines them in
  * Dtmf_Detector.c (F11412).  See the deleted file and D250 for MTD7_COEF_9600.
  */
-const short MTD1_COEF_8000[5] = { -13271, 16384, 25182, -27979, 16384 };
-const short MTD2_COEF_8000[5] = { -13271, 16384, 24261, -26957, 16384 };
-const short MTD3_COEF_8000[5] = { -13271, 16384, 23131, -25702, 16384 };
-const short MTD4_COEF_8000[5] = { -13271, 16384, 21797, -24219, 16384 };
-const short MTD5_COEF_8000[5] = { -13271, 16384, 17166, -19073, 16384 };
-const short MTD6_COEF_8000[5] = { -13271, 16384, 14692, -16325, 16384 };
-const short MTD7_COEF_8000[5] = { -13271, 16384, 11777, -13084, 16384 };
-const short MTD8_COEF_8000[5] = { -13271, 16384, 8384, -9314, 16384 };
+short MTD1_COEF_8000[5] = { -13271, 16384, 25182, -27979, 16384 };
+short MTD2_COEF_8000[5] = { -13271, 16384, 24261, -26957, 16384 };
+short MTD3_COEF_8000[5] = { -13271, 16384, 23131, -25702, 16384 };
+short MTD4_COEF_8000[5] = { -13271, 16384, 21797, -24219, 16384 };
+short MTD5_COEF_8000[5] = { -13271, 16384, 17166, -19073, 16384 };
+short MTD6_COEF_8000[5] = { -13271, 16384, 14692, -16325, 16384 };
+short MTD7_COEF_8000[5] = { -13271, 16384, 11777, -13084, 16384 };
+short MTD8_COEF_8000[5] = { -13271, 16384, 8384, -9314, 16384 };
 
-const short MTD1_COEF_9600[5] = { -13271, 16384, 26475, -29417, 16384 };
-const short MTD2_COEF_9600[5] = { -13271, 16384, 25824, -28695, 16384 };
-const short MTD3_COEF_9600[5] = { -13271, 16384, 25023, -27804, 16384 };
-const short MTD4_COEF_9600[5] = { -13271, 16384, 24073, -26747, 16384 };
-const short MTD5_COEF_9600[5] = { -13271, 16384, 20731, -23034, 16384 };
-const short MTD6_COEF_9600[5] = { -13271, 16384, 18917, -21019, 16384 };
+short MTD1_COEF_9600[5] = { -13271, 16384, 26475, -29417, 16384 };
+short MTD2_COEF_9600[5] = { -13271, 16384, 25824, -28695, 16384 };
+short MTD3_COEF_9600[5] = { -13271, 16384, 25023, -27804, 16384 };
+short MTD4_COEF_9600[5] = { -13271, 16384, 24073, -26747, 16384 };
+short MTD5_COEF_9600[5] = { -13271, 16384, 20731, -23034, 16384 };
+short MTD6_COEF_9600[5] = { -13271, 16384, 18917, -21019, 16384 };
 /*
  * D250, and the ONE deviation in this file with a fix behind the define.
  *
@@ -193,8 +193,8 @@ const short MTD6_COEF_9600[5] = { -13271, 16384, 18917, -21019, 16384 };
  * arrived.
  */
 #ifdef DSPLIB_REPRODUCE_BUGS
-const short MTD7_COEF_9600[5] = { -13271, 16384, 16751, -21143, 16384 };
+short MTD7_COEF_9600[5] = { -13271, 16384, 16751, -21143, 16384 };
 #else
-const short MTD7_COEF_9600[5] = { -13271, 16384, 16751, -18613, 16384 };
+short MTD7_COEF_9600[5] = { -13271, 16384, 16751, -18613, 16384 };
 #endif
-const short MTD8_COEF_9600[5] = { -13271, 16384, 14190, -15768, 16384 };
+short MTD8_COEF_9600[5] = { -13271, 16384, 14190, -15768, 16384 };

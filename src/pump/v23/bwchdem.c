@@ -85,8 +85,8 @@ static const short BwCh_IIR_FILT[15] = {
  * because merging them would merge two tables that are only accidentally
  * equal.  See b103_agc_cfg.c for why only element 0 is ever selected.
  */
-static const short V23_AGC_DEF_ALPHA[2] = { 16384, 32604 };
-static const short V23_AGC_DEF_BETA[2] = { 16384, 1638 };
+static short V23_AGC_DEF_ALPHA[2] = { 16384, 32604 };
+static short V23_AGC_DEF_BETA[2] = { 16384, 1638 };
 
 static const struct fpm_agc_cfg AGCv23_CFG = {
 	.ref_level = 16384,

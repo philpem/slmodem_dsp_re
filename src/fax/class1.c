@@ -101,7 +101,7 @@
  * `struct class1_name` is declared in class1.h, not here, so a test can
  * reach it without a reader in `src/` yet.
  */
-static struct class1_name states_names[20] = {
+static const struct class1_name states_names[20] = {
 	{ CLASS1_T30_SILENCE_BEFORE_PREAMBLE_STATE,
 	  "T30_SILENCE_BEFORE_PREAMBLE_STATE" },
 	{ CLASS1_T30_PREAMBLE_STATE,		"T30_PREAMBLE_STATE" },
@@ -128,7 +128,7 @@ static struct class1_name states_names[20] = {
 	{ CLASS1_MAX_STATES,			"MAX_STATES" },
 };
 
-static struct class1_name status_names[11] = {
+static const struct class1_name status_names[11] = {
 	{ FAX_CLASS1_NO_MESSAGE,		"FAX_CLASS1_NO_MESSAGE" },
 	{ FAX_CLASS1_OK,			"FAX_CLASS1_OK" },
 	{ FAX_CLASS1_ERROR,			"FAX_CLASS1_ERROR" },
@@ -150,7 +150,7 @@ static struct class1_name status_names[11] = {
  * RM/RH/TS/RS transmit-HDLC, transmit-modem(data), receive-modem, receive-
  * HDLC, transmit-silence, receive-silence.
  */
-static struct class1_name command_names[6] = {
+static const struct class1_name command_names[6] = {
 	{ FAX_CLASS1_TH_COMMAND, "FAX_CLASS1_TH_COMMAND" },
 	{ FAX_CLASS1_TM_COMMAND, "FAX_CLASS1_TM_COMMAND" },
 	{ FAX_CLASS1_RM_COMMAND, "FAX_CLASS1_RM_COMMAND" },

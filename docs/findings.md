@@ -128629,3 +128629,184 @@ behind `dsplibs_debug_level > 1` that this tree has not reconstructed").  So
 the residual is two measured things -- out-of-line arms and unreconstructed
 diagnostics -- and F11414's characterisation is confirmed.  `v34handshak` is
 not chased further, per the task.  (2026-09-28)
+
+## F11445. The partial-link section-size census, blob vs ours: the `.data`/`.rodata` mismatch is a const-ness defect in 58 symbols, and the other material deltas are named
+
+Measures every allocated section of the blob against a freshly rebuilt
+`build/partial/dsplibs.o` (`make partial-link`, 301 inputs, binutils 2.15),
+because F11441 refused the data-assignment-enumeration lever on a
+`.data`/`.rodata` size mismatch it could only state approximately.  The two
+figures it quoted -- candidate `.data` 32,580 vs reference 38,292 and candidate
+`.rodata` 75,300 vs reference 69,476 -- are CONFIRMED exactly as `readelf -SW`
+section sizes.  The full delta (bytes, largest first):
+
+    section            blob       ours      delta
+    .text            728,304    678,348   -49,956
+    .rel.text        126,336    117,320    -9,016
+    .rodata           69,476     69,988     +512   (was +5,824 BEFORE the fix)
+    .data             38,292     37,988     -304   (was -5,712 BEFORE the fix)
+    .symtab           49,312     50,800    +1,488
+    .comment          19,251     20,700    +1,449
+    .strtab           64,421     65,837    +1,416
+    .rodata.str1.4    77,797     76,561    -1,236
+    .rodata.str1.1    21,180     20,210      -970
+    .shstrtab          4,132      4,436      +304
+    .rel.rodata       17,032     16,760      -272
+    .rodata.cst16          0        160      +160
+    .gnu.linkonce.t.*  6,301      6,172      -129  (79 vs 85 sections)
+    .rel.data          2,312      2,264       -48
+    .rodata.cst4       1,416      1,452       +36
+    .bss               2,836      2,808       -28
+    .rodata.cst8         528        536        +8
+    .gnu.linkonce.r.*    104        104         0  (4 vs 4)
+
+    alloc PROGBITS   943,398    891,519   -51,879
+    NOBITS             2,836      2,808       -28
+
+There is no `.gcc_except_table`, `.ctors`, `.eh_frame` or `.data.rel.ro` in
+either object; `.note.GNU-stack` is empty in both.
+
+**THE `.data`/`.rodata` SWAP IS ONE CAUSE: 58 OBJECT symbols we declare
+`const` that the blob defines non-const.**  Building `name -> (section, size)`
+for every OBJECT symbol of both objects and differencing section membership
+puts exactly **58 symbols, 5,412 bytes, in blob `.data` and our `.rodata`**
+and **3 symbols, 296 bytes, the other way round**.  The blob's section flags
+are the evidence -- `.data` is `WA`, `.rodata` is `A` -- so a symbol the blob
+places in `.data` was not `const`-qualified in the original definition.  The
+58 are one bug repeated: `MTK_atan/sin/cos_table` (3 x 1,028), `MTK_xor_table`
+(512), `MTK_sin/cos_sign` (32), `costbl` (512), `eur_coef`/`us_coef` (128
+each), `biascoef` (16), `ToneLPF` (212), `fsklpfcoeff600` (160),
+`intcoef1/2/3` (24 each), `offsetarr` (40), `fix_LPF` (34), the sixteen
+`MTD*_COEF_*` (170), `MTD_COEF_1/2_8000/9600` (20), `AUTOCOR_COEF_7200/9600`
+(20), `seg_end` (16), `V23_AGC_DEF_ALPHA/BETA` (4 each), `B103NextState` (12),
+`SMCv32_MOD` (16), `SDMv32_CFG/GPA/GPC` (22), `install_vmi_data_rx/tx_modem`
+(24), `V17/V21/V27/V29 RX_CTL`/`TX_CTL` (148), `FPM_MRF_CFG` (16),
+`B103_CFG_data` (28), `AGCb103_CFG_data` (24).  The 3 the other way are
+`command_names` (48), `states_names` (160) and `status_names` (88) in
+`class1.c`, which the blob keeps in `.rodata` (so `const`).
+
+**THE OTHER MATERIAL DELTAS, EACH CLASSIFIED.**
+  * `.text`/`.rel.text` (-49,956/-9,016) -- reconstruction incompleteness.
+    This is the missing-function and code-shape remainder, not data; `v34handshak`
+    alone (F11444) is 61,541 blob bytes against 8,686 ours.
+  * `.rodata.str1.1`/`.str1.4` (-970/-1,236) -- MISSING STRINGS, the
+    unreconstructed `dsplibs_debug_level > 1` diagnostics (F11444: 262 blob
+    `dsplibs_debug_printf` refs vs 23 ours).
+  * `.comment` (+1,449) -- ARTEFACT of the partial link: a different input set
+    and banner.  Not comparable by construction.
+  * `.symtab`/`.strtab`/`.shstrtab` (+1,488/+1,416/+304) -- ARTEFACT: our 22
+    ours-only TUs and longer mangled names add records.  It is the mirror of
+    the TU reconciliation, not a data defect.
+  * `.rodata.cst16` (+160) -- EXTRA, compiler-generated: our code shape emits
+    16-byte constants (V.90 C++ float pools) the blob has none of.
+  * `.gnu.linkonce.t.*` (-129; 79 vs 85 sections) -- ARTEFACT of C++ template
+    instantiation count.
+  * `.bss` (-28), `.rodata.cst4` (+36), `.rodata.cst8` (+8) -- small; the
+    `.bss` pair is `cEncodedTemp`/`temp` (F11412's local statics).
+  * `.rodata.cst4`/`.cst8` differences are one section symbol each, no semantics.
+  * Residual after the fix: `.rodata` +512 / `.data` -304, which is the
+    renamed/missing tail below, not const-ness.
+
+**THE RESIDUAL DATA MISMATCH IS FIVE RENAMED/MISSING SYMBOLS.**  After the 58
+are fixed no OBJECT symbol is in a different section by name.  What remains:
+`B103_CFG` (blob .data 28) is ours as `B103_CFG_data`; `AGCb103_CFG` (24) as
+`AGCb103_CFG_data`; `FPM_FSD/MTD/FSM_CFG` (28/12/8) have both the object's name
+and a documented `_data` stub in ours; `v21_hibnd`/`v21_lobnd` (blob .data
+120 each) are ours as `static const temp_v21_hibnd/lobnd` (.rodata 122 each,
+V8Fsk.c); and `V32_MESG` (116), `B103_CTL` (12), `FSEv32_decision` (12) are
+absent under any name.  This is the measured precondition F11441 asked for.
+
+(2026-09-28)
+
+## F11446. The const-ness correction: 58 symbols retagged to the blob's `.data`, sections match to within alignment, and no function byte moved
+
+F11445's dominant cause, fixed.  Every moved definition and its `extern`
+declaration (where one exists) lose `const`; the three `class1.c` name tables
+gain it.  Definitions move VERBATIM otherwise.  No flag, type, value or
+statement order changed; only the qualifier the blob's own section says is
+absent.
+
+**MEASURED (GCC 3.4.2-r2, `make -j1 tc-repro` = 301 objects, 0 failed).**
+
+    section      blob      before      after     before-delta  after-delta
+    .data      38,292      32,580     37,988       -5,712        -304
+    .rodata    69,476      75,300     69,988       +5,824        +512
+    .text     728,304     678,332    678,348      -49,972      -49,956
+    .rodata.cst4 1,416       1,452      1,452          +36          +36
+    .rodata.cst8   528         536        536           +8           +8
+    .rodata.cst16    0         160        160         +160         +160
+    .bss         2,836       2,808      2,808          -28          -28
+
+`readelf -sW` OBJECT-symbol bytes: `.rodata` 59,085 -> 59,729 (blob 59,085;
+residual +644) and `.data` 37,088 -> 36,812 (blob 37,088; residual -276).  The
+58 by-name section mismatches go to **0**.
+
+**byteident is UNCHANGED, which is the point: moving data moves no function
+byte.**  grade 0 **844/1852** and grade 0-or-1 **895/1852** before and after;
+the `.text` +16 is alignment/a local helper, not a compared symbol (no
+graded function changed verdict).
+
+**`partialcmp` is a CENSUS and it REGRESSES, and that is the honest number.**
+positioned bytes **67,014 -> 66,626 /943,398 (-388)**; exact symbols **394 ->
+393 /2,907**; exact relocations **1,123 -> 1,025 /18,317**; exact sections
+70/92 and ordered 63 unchanged; NOBITS unchanged; candidate symbols 2,976
+unchanged.  This is exactly F11441's confounder from the other side: partialcmp
+scores byte-at-the-same-offset, and moving a symbol into `.data` changes its
+offset-and-section record, so a *more correct* placement scores worse while the
+section-size mismatch that dominated the census is repaired.  No function lost
+exactness (byteident above), which is the criterion F11403/F11408 used to
+accept a partialcmp regression.  **The section sizes are now close enough that
+the F11441 data-assignment enumeration can be re-run as its precondition.**
+
+**TU scoreboard unchanged** (`tools/tu-compare.py` method): blob FILE 283
+(distinct 280), ours 304 (distinct 301), names in BOTH 279, blob-only 1
+(`V34.c`), ours-only 22.  No TU was added or removed.
+
+**HARNESS.**  `anchorcheck` first reported 2 detached anchors in `mtktab`
+(`MTK_sin_sign`/`MTK_cos_sign`'s find strings carried `const`); both were
+retargeted to the new source, and it is back to **285 suites / 10,038
+mutations / 0 non-unique / 0 detached**.  `snapshot.json` is left stale per the
+standing no-re-record instruction; **seven suites' recorded source file is one
+of the edited `.c` files and each owes a re-record**: `dtmf` (Dtmf.c),
+`dtmfmtd` (Dtmf_Detector.c), `fdspkrnl_tone` and `tonecreate` (TONE.c),
+`mtktab` (TABLES.c), `v32c_fpctl` and `v32c_fpsub` (V32.c).  The other edited
+files have no registered suite.  `mutsnap --check` reports 0 current / 283
+stale / 0 never recorded / 2 declared-unscoreable of 285, which is the usual
+whole-tree state and is left that way.
+
+**GATES.**  `make -j1 J=1 phase`: **period differential 385 passed, 0 failed**,
+boundary OK; `refcheck` 0 dangling / 0 stale; `git diff --check` clean.
+
+(2026-09-28)
+
+**ADDENDUM -- DOES THE DELTA MASK ATTRIBUTION EVIDENCE?  YES, AND THE
+RESIDUAL POINTS AT THE KNOWN OWNER-UNRESOLVED FAMILIES.**  With `.data` and
+`.rodata` no longer size-mismatched, the `.data` local brackets can be read for
+the symbols that are still absent.  Using the blob's `.data` LOCAL symbols
+(with their FILE owners) as brackets:
+
+    V32_MESG        @0x07240  between fsklpfcoeff600(DPSK.c)  and SnrToRetrainTable(V32stc.c)
+    FSEv32_decision @0x074cc  between fsklpfcoeff600(DPSK.c)  and SnrToRetrainTable(V32stc.c)
+    B103_CTL        @0x077c0  between AGC_DEF_ALPHA(v22rxtab.c) and AGC_DEF_BETA(B103tab.c)
+    B103_CFG        @0x077cc  between AGC_DEF_ALPHA(v22rxtab.c) and AGC_DEF_BETA(B103tab.c)
+    AGCb103_CFG     @0x077f4  between AGC_DEF_ALPHA(v22rxtab.c) and AGC_DEF_BETA(B103tab.c)
+    v21_hibnd       @0x06fe0  between StateName(V34hshak.c)     and fsklpfcoeff600(DPSK.c)
+    v21_lobnd       @0x06f60  between StateName(V34hshak.c)     and fsklpfcoeff600(DPSK.c)
+
+`V32_MESG` and `FSEv32_decision` fall in the `V32RXTAB.c`/`V32TXTAB.c` span
+F11405 could not partition; `B103_CTL`/`B103_CFG`/`AGCb103_CFG` fall in the
+B103 slot (two of which ours already defines under the `_data` name).  So the
+residual is the *known* owner-unresolved data families, now with matched
+section sizes -- which is the precondition F11441 named.
+
+**AND `v21_hibnd`/`v21_lobnd` ARE NOT OUR `temp_v21_hibnd`/`temp_v21_lobnd`.**
+The blob's pair is 120 bytes each (60 shorts) and sits in the **V.34-family**
+`.data` region between `V34hshak.c`'s and `DPSK.c`'s locals; ours is a
+`static const short temp_v21_*[V8_V21_TAPS]` of **122 bytes each** in
+`V8Fsk.c`, emitted to `.rodata`.  Different size and a distant neighbourhood,
+so the name match is a coincidence and the blob's two symbols remain genuinely
+unreconstructed rather than merely renamed.  Both facts are recorded, not
+fixed: the owner is not established by a bracket this wide (AGENTS'
+weakest-evidence rule), and the size difference is the discriminator a later
+pass should use.
+(2026-09-28)

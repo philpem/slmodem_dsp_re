@@ -873,9 +873,9 @@ V32FP_create(const struct v32fp_cfg *cfg, void *arg1)
  * SDMv32_GPC/GPA are each indexed by the half-duplex mode.  Moved here from
  * v32scram_tables.c, whose sole consumer is in this translation unit.
  */
-const short SDMv32_GPA[4] = { 5, 18, 18, 18 };
-const short SDMv32_GPC[4] = { 18, 5, 18, 18 };
-const short SDMv32_CFG[3] = { 4, 5, 23 };
+short SDMv32_GPA[4] = { 5, 18, 18, 18 };
+short SDMv32_GPC[4] = { 18, 5, 18, 18 };
+short SDMv32_CFG[3] = { 4, 5, 23 };
 
 /*
  * Tear the whole datapump down.

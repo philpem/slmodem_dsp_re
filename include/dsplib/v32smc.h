@@ -110,7 +110,7 @@ extern const unsigned short SMCv32_PMAP_ABS16[4];
  */
 extern const short TrellisEncodeDifTable[16];		/* [4][4] */
 extern const short TrellisTransitionTable[32];		/* [8][4] */
-extern const unsigned short SMCv32_MOD[8];
+extern unsigned short SMCv32_MOD[8];
 
 /**
  * @brief V.32 symbol-mapping coder: absolute-phase encoding.

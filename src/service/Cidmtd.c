@@ -70,10 +70,10 @@ typedef char cid_size_check[sizeof(struct cid) == 0x160 ? 1 : -1];
  * Declared in the object's own .data order, 0x7858 upwards: the 8000 pair
  * first and, within each pair, the 1300 Hz table before the 1200 Hz one.
  */
-static const short MTD_COEF_2_8000[5] = { -13271, 16384, 15409, -17121, 16384 };
-static const short MTD_COEF_1_8000[5] = { -14786, 15564, 18296, -18296, 15564 };
-static const short MTD_COEF_2_9600[5] = { -13271, 16384, 19445, -21605, 16384 };
-static const short MTD_COEF_1_9600[5] = { -13271, 16384, 20853, -23170, 16384 };
+static short MTD_COEF_2_8000[5] = { -13271, 16384, 15409, -17121, 16384 };
+static short MTD_COEF_1_8000[5] = { -14786, 15564, 18296, -18296, 15564 };
+static short MTD_COEF_2_9600[5] = { -13271, 16384, 19445, -21605, 16384 };
+static short MTD_COEF_1_9600[5] = { -13271, 16384, 20853, -23170, 16384 };
 
 /*
  * Reach a table by name from outside the translation unit, which nothing in

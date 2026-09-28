@@ -649,7 +649,7 @@ B103AnswerNextState(struct b103fp *fp)
 }
 
 /* Indexed by hdx->mode.  The order is the original's, from .data:0x77e8. */
-void (*const B103NextState[3])(struct b103fp *fp) = {
+void (*B103NextState[3])(struct b103fp *fp) = {
 	B103LocLoopNextState,		/* 0 */
 	B103OriginateNextState,		/* 1 */
 	B103AnswerNextState		/* 2 */
