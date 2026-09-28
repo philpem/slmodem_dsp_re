@@ -511,7 +511,6 @@ static void
 V34demodulate(struct v34_receiver *rx)
 {
 	struct v34_queue *q = (struct v34_queue *)rx;
-	static const char over[] = "V34demodulate, agc overflow = 0x%x,\n";
 	const short *in = (const short *)q->rd;
 	short *out = rx->rx_samples;
 	int s0 = in[0];
@@ -539,10 +538,12 @@ V34demodulate(struct v34_receiver *rx)
 	 * straight into the mixer below -- `rx_samples` advances by one short
 	 * per call, not two.
 	 */
-	g0 = agc_gain_sample(rx, s0, 0x200, over);
+	g0 = agc_gain_sample(rx, s0, 0x200,
+			     "V34demodulate, agc overflow = 0x%x,\n");
 	rx->rx_samples = out + 1;
 	out[0] = (short)g0;
-	g1 = agc_gain_sample(rx, s1, 0x200, over);
+	g1 = agc_gain_sample(rx, s1, 0x200,
+			     "V34demodulate, agc overflow = 0x%x,\n");
 
 	/*
 	 * The AGC runs on every fourth pair.  `agc_pair_count` counts them and the
@@ -606,12 +607,26 @@ V34demodulate(struct v34_receiver *rx)
 static void
 rx_iir(struct v34_receiver *rx, int store_prev)
 {
+	/*
+	 * The two poles, block-scope in the object (hence its `.0/.1/.2`
+	 * suffixes) and constant-folded into the `imul $0x599b` /
+	 * `imul $0xffffc146` immediates, so the object carries no relocation
+	 * to them: 22939/16384 = 1.4001 and -16058/16384 = -0.9801, just
+	 * inside the unit circle.  `edelay` is unused by the object yet still
+	 * emitted -- GCC 3.4.2 at -O3 emits an unreferenced BLOCK-scope static
+	 * even though it drops an unreferenced file-scope one (measured on the
+	 * period compiler, F11449).  The macro spellings this used to take
+	 * could not be emitted at all.
+	 */
+	static const short bpcoeff1 = 0x599b;	/* 22939 */
+	static const short bpcoeff2 = -0x3eba;	/* -16058 */
+	static const short edelay = 104;
 	int acc;
 	short prev;
 
 	prev = rx->f208;
-	acc = (((int)rx->demod_i << 10) + (int)prev * V34_RXTIMING_IIR_A1
-	       + (int)rx->dp.iir2.i * V34_RXTIMING_IIR_A2) >> 14;
+	acc = (((int)rx->demod_i << 10) + (int)prev * bpcoeff1
+	       + (int)rx->dp.iir2.i * bpcoeff2) >> 14;
 	rx->dp.iir2.i = prev;
 	rx->demod_i = (short)acc;
 	rx->f208 = (short)acc;
@@ -619,8 +634,8 @@ rx_iir(struct v34_receiver *rx, int store_prev)
 		rx->demod_i_prev = (short)acc;
 
 	prev = rx->f20a;
-	acc = (((int)rx->demod_q << 10) + (int)prev * V34_RXTIMING_IIR_A1
-	       + (int)rx->dp.iir2.q * V34_RXTIMING_IIR_A2) >> 14;
+	acc = (((int)rx->demod_q << 10) + (int)prev * bpcoeff1
+	       + (int)rx->dp.iir2.q * bpcoeff2) >> 14;
 	rx->dp.iir2.q = prev;
 	rx->demod_q = (short)acc;
 	rx->f20a = (short)acc;
