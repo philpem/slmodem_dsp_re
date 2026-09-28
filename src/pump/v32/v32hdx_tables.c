@@ -100,9 +100,8 @@ short V32_TX_MODE[7] = {
  * 0x006d7e, and nothing in the object prints either name -- so "the DATA
  * mode's S tone" is what the symbol itself says and everything past that
  * would be usage inference about a resonator's centre frequency.
+ *
+ * F11447 moved both banks to `V32.c`: the object's `.rodata` local
+ * `V32DiconnectThreshTable` brackets 0x006d60..0x006ddf as that TU's, which
+ * is where `V32_S_DATA_COEF` (0x006d60) and `V32_S_COEF` (0x006d7e) sit.
  */
-const short V32_S_DATA_COEF[15] = {
-	-15099, 15735, 27242, -27254, 15735,
-	-15099, 15741,     0,      0, 15741,
-	-15099, 15735, -27242, 27254, 15735
-};

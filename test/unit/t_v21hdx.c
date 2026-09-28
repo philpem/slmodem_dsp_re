@@ -349,7 +349,7 @@ fixture(struct hdxfix *f, unsigned seed, int blob, int handler,
 	f->dsp.int_0004 = (shape == IN_CARRIER || shape == IN_MIXED);
 	f->dsp.int_0008 = (shape == IN_CARRIER || shape == IN_MIXED);
 
-	ref_FPM_AGC_init(&f->dsp.agc, &AGCb103_CFG_data, 1);
+	ref_FPM_AGC_init(&f->dsp.agc, &AGCb103_CFG, 1);
 
 	memset(&mrf, 0, sizeof(mrf));
 	mrf.branches = MRF_BRANCHES;

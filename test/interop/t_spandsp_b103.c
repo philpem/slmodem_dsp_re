@@ -54,7 +54,7 @@ check(const char *what, int ok, const char *detail)
 static struct b103fp *
 make(int call_type)
 {
-	struct b103_cfg cfg = B103_CFG_data;
+	struct b103_cfg cfg = B103_CFG;
 
 	cfg.call_type = call_type;
 	return B103FP_create(NULL, &cfg);

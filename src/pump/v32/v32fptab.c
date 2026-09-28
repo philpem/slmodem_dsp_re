@@ -123,34 +123,13 @@ typedef char v32_smc_cfg_is_4[(sizeof(struct v32_smc_cfg) == 4) ? 1 : -1];
 #endif
 
 /* --------------------------------------------------------------------- */
-/* .rodata, in the object's address order.                               */
-
-const struct v32fp_params V32_CFG = {
-	0,			/* protocol                                  */
-	14400,			/* tx_rate                                   */
-	14400,			/* rx_rate                                   */
-	0,			/* r06                                       */
-	120000,			/* timeout                                   */
-	17887,			/* tx_scale                                  */
-	0x68b,			/* options                                   */
-	0,			/* ec_near_delay                             */
-	0,			/* r16                                       */
-	0,			/* symlen_sel                                */
-	0,			/* r1a                                       */
-	0,			/* trellis                                   */
-	0,			/* r20                                       */
-	0,			/* r24                                       */
-	103,			/* disconnect_thresh -- never survives       */
-	0,			/* energy_drop_time                          */
-	0,			/* r2c                                       */
-	0			/* r2e                                       */
-};
-
+/* .rodata.                                                              */
 /*
- * `V32DiconnectThreshTable`, `SnrToRetrainTable` and `RATEv32` are
- * file-local in the object and have moved to their sole consumers,
- * `v32fprecr.c` and `v32fpdisp.c`, where they are `static`.  The test tier's
- * globalized copies (tools/testvisible.py) are how a test names them now.
+ * `V32_CFG` moved to `V32.c` in F11447: the object's `.rodata` local
+ * `V32DiconnectThreshTable` (0x006dd0) is `V32.c`'s own and brackets
+ * `V32_CFG` (0x006da0) with it, so the whole 0x006d60..0x006ddf block is
+ * that TU's.  `V32_CTL` (0x007f20) is far above it, in the 117..128 gap, and
+ * stays here with the `.bss` pair.
  */
 
 /* --------------------------------------------------------------------- */

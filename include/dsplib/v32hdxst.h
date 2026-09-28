@@ -125,11 +125,13 @@ extern short V32_TX_MODE[7];
  * DATA-mode S tone's detector from the other bank the same field can hold.
  *
  * That other bank is `V32_S_COEF`, .rodata 0x006d7e, also fifteen shorts and
- * immediately after this one.  It is NOT defined here: nothing written or in
- * this batch's closure references it, and a table with no consumer cannot be
- * differentially tested.  Finding F8563.
+ * immediately after this one.  F8563 left it undefined because nothing in the
+ * reconstructed closure referenced it; F11447 recovers it from the object,
+ * whose 30 bytes at 0x006d7e are its initialiser and carry no relocation.
+ * Finding F11447.
  */
 extern const short V32_S_DATA_COEF[15];
+extern const short V32_S_COEF[15];
 
 /* ---------------------------------------------------------------- transmit */
 

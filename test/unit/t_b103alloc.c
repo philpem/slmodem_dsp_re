@@ -48,7 +48,7 @@ struct cycle {
 static struct cycle
 run_cycle(int call_type, struct b103fp *supplied)
 {
-	struct b103_cfg cfg = B103_CFG_data;
+	struct b103_cfg cfg = B103_CFG;
 	struct cycle c;
 	struct b103fp *fp;
 
@@ -141,7 +141,7 @@ main(void)
 	 */
 	diff_begin("B103FP repeated create/delete");
 	{
-		struct b103_cfg cfg = B103_CFG_data;
+		struct b103_cfg cfg = B103_CFG;
 		int i;
 
 		cfg.call_type = B103_CALL_ORIGINATE;
