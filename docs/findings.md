@@ -128582,9 +128582,33 @@ in-TU arms add a second knot: `v34tx1_xmitmp` calls the `V34hshak.c`-local
 statics `tx1_mp16`/`tx1_mp4` (lines 3172/3202), and `t_v34hstx1.c` calls both
 in-TU arms, so they cannot simply drop to `static` either.  Untangling this
 needs either renamed helpers (a source change with codegen risk) or moving the
-shared helper closure into the header for all 19 arms; the change was
+shared helper closure into the header for all 19 arms.
+
+**THE RENAME VARIANT WAS TRIED AND IS MEASURED.**  The four colliding helpers
+are byte-identical between the two files, so renaming the header's copy is
+behaviour-preserving; it compiled (300 objects, 0 failed) and bought real
+ground:
+
+    positioned bytes        67,014 -> 67,384 /943,398  (+370)
+    v34tx1_* symbols       19 -> 5  (14 arms inlined away; 3 large arms and
+                                     the 2 in-TU arms remain)
+    candidate symbols      2,976 -> 2,965
+    exact relocations      1,123 and exact symbols 394 unchanged
+
+It was then REVERTED anyway: renaming `tx1_get`/`tx1_put`/`tx1_put_point`/
+`tx1_dpsk4` detaches **143 of `v34hstx1.json`'s 535 anchors** (`anchorcheck`
+"NOT UNIQUE ... matches 0 time(s)"), and the four helpers are only the head of
+a shared closure (`tx1_bitsource`, `tx1_mp_reload`, `tx1_mp_sequence_end`,
+`tx1_mp16`, `tx1_mp4`, `tx1_dpsk_tone`, ...) also used by V34hshak.c's own
+functions, so moving the closure into the header cascades.  The AGENTS rule
+that anchors stay 0-detached / 0-non-unique decides it: the change is
 reverted, the scratch header deleted, and the tree left at the F11440 commit.
-The symbol surface therefore still carries 19 extra GLOBALs.  (2026-09-28)
+
+So the fix is not the two-line `static` the task's shape suggests; it is a
+helper-closure migration with a mutation-anchor consolidation in the same
+change, and the +370/symbol-surface gain above is the measuring stick for that
+future pass.  The symbol surface therefore still carries 19 extra GLOBALs.
+(2026-09-28)
 
 ## F11444. `v34handshak`'s residual, re-measured: the arms are out-of-line and the diagnostics are absent -- it is not a boundary-only gap
 
