@@ -129080,3 +129080,38 @@ non-unique) is the whole-tree state.  No suite anchor names a recovered symbol
 whole-tree key, which the standing instruction leaves stale.
 
 (2026-09-28)
+
+**ADDENDUM -- THE V.32 TABLE-FAMILY ATTRIBUTION RE-TEST, WITH THE DATA
+PRESENT.**  F11447's lever was re-run now that `V32_MESG` and
+`FSEv32_decision` exist.  The test is a LINK-ORDER experiment with no source
+change: move `v32fse_tables.c`'s object from the ours-only tail of
+`build/tc_repro/tc_link_manifest.txt` to immediately after `V32.c`'s object
+and relink, then read the six FSE/CRR symbols.
+
+    symbol              blob     base    moved-adjacent   moved - blob
+    V32_MESG            7240     72e0        72e0             -0xa0
+    FSEv32_QCOFF        72c0     93e0        73e0             +0x120
+    FSEv32_ICOFF        73a0     94c0        74c0             +0x120
+    FSEv32_CFG          7480     9380        7380             -0x100
+    CRRv32_CLK          74b8     93c4        73c4             -0xf4
+    FSEv32_decision     74cc     9360        7360             -0x16c
+    SDMv32_CFG          7688     72c0        72c0             -0x3c8
+    SnrToRetrainTable   7750     73c4        7604             -0x14c
+
+Moving the TU adjacent brings the block from ~0x2100 away to ~0x120, so the
+missing data **did** stop the unbounded drift -- but it is still not a match,
+and the object's own order inside the TU is REVERSED: with the declarations in
+blob order (`ICOFF, QCOFF, CRR_CLK, CRR_K1, CRR_K2, CFG, decision`) the period
+compiler emits `.data` in reverse (`decision, CFG, K2, K1, CLK, QCOFF, ICOFF`)
+because this TU's `.data` is reverse-declaration like `V32.c`'s `.rodata`
+(F11402/F11447).  The blob's order is `QCOFF, ICOFF, CFG, CLK, K2, K1,
+decision`, i.e. its source declared in the reverse of that.  So neither the
+placement nor the internal order is uniquely fixed by address, exactly as
+F11405/F11447 found, and the move is **DECLINED** (F11408's criterion: a data
+move is taken only on a uniquely-mapped preimage, not a near match).  The seven
+`v32*_tables.c`/`v32cfg.c` splits, `v17dec_tables.c`, `b103_tables.c`,
+`faxcfg.c` and `fifo.c` remain ours-only, and `V34.c` remains the one
+blob-only name.  Recorded as the measured negative the next V.32 pass starts
+from.
+
+(2026-09-28)
