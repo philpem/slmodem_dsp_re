@@ -193,6 +193,7 @@ def compare(reference, candidate):
                             for entry in cand_entries]
 
     reference_bytes = candidate_bytes = equal_bytes = exact_sections = 0
+    contents_by_section = {}
     for name, entry in ref_by_name.items():
         if entry["type"] != "PROGBITS":
             continue
@@ -201,6 +202,17 @@ def compare(reference, candidate):
         reference_bytes += len(left)
         equal_bytes += sum(a == b for a, b in zip(left, right))
         exact_sections += int(name in cand_by_name and left == right)
+        contents_by_section[name] = {
+            "reference": len(left), "candidate": len(right),
+            "equal": sum(a == b for a, b in zip(left, right)),
+        }
+    # A PROGBITS section the candidate has and the reference does not is
+    # extra apparatus and worth naming in the per-section census.
+    for name, entry in cand_by_name.items():
+        if entry["type"] == "PROGBITS" and name not in contents_by_section:
+            right = candidate["contents"][name]
+            contents_by_section[name] = {"reference": 0, "candidate":
+                                         len(right), "equal": 0}
     candidate_bytes = sum(entry["size"] for entry in cand_entries
                           if entry["type"] == "PROGBITS")
     ref_nobits = sum(entry["size"] for entry in ref_entries
@@ -235,6 +247,7 @@ def compare(reference, candidate):
             "candidate_size_delta": candidate_bytes-reference_bytes,
             "reference_nobits_bytes": ref_nobits,
             "candidate_nobits_bytes": cand_nobits,
+            "by_section": contents_by_section,
         },
         "relocations": {
             "reference": len(ref_reloc), "candidate": len(cand_reloc),
@@ -267,7 +280,7 @@ def shorten(value):
     return value if len(value) < 150 else value[:147] + "..."
 
 
-def report(result):
+def report(result, per_section=False):
     sec = result["sections"]
     data = result["contents"]
     rel = result["relocations"]
@@ -293,6 +306,22 @@ def report(result):
         print("  first section %s" % shorten(sec["first_difference"]))
         print("  first reloc   %s" % shorten(rel["first_difference"]))
         print("  first symbol  %s" % shorten(sym["first_difference"]))
+    if per_section:
+        # The aggregate "contents" line cannot say WHICH section is short;
+        # recovering missing data is a per-section question, so name the
+        # sections whose reference/candidate sizes disagree, largest first.
+        rows = sorted(data["by_section"].items(),
+                      key=lambda kv: abs(kv[1]["reference"] - kv[1]["candidate"]),
+                      reverse=True)
+        print("  per-section   %d PROGBITS; size-delta and positioned match"
+              % len(rows))
+        for name, entry in rows:
+            delta = entry["candidate"] - entry["reference"]
+            if delta == 0 and entry["equal"] == entry["reference"]:
+                continue
+            print("    %-22s ref %-7d cand %-7d delta %+d  equal %d/%d"
+                  % (name, entry["reference"], entry["candidate"], delta,
+                     entry["equal"], entry["reference"]))
     print("  verdict       %s (raw file %s)" %
           ("EXACT" if result["exact"] else "DIFFERENT",
            "EXACT" if result["raw_exact"] else "different"))
@@ -383,6 +412,14 @@ scratch: .zero 4
             code["contents"]["reference_bytes"]
         assert data["contents"]["equal_positioned_bytes"] < \
             data["contents"]["reference_bytes"]
+        # The per-section census must reconcile with the aggregate it is a
+        # breakdown of, or the new view is measuring something else.
+        by_section = data["contents"]["by_section"]
+        assert by_section
+        assert sum(e["reference"] for e in by_section.values()) == \
+            data["contents"]["reference_bytes"]
+        assert sum(e["equal"] for e in by_section.values()) == \
+            data["contents"]["equal_positioned_bytes"]
         assert reloc["relocations"]["exact_records"] < \
             reloc["relocations"]["reference"]
         assert addend["contents"]["equal_positioned_bytes"] < \
@@ -407,6 +444,8 @@ def main():
     parser.add_argument("reference", nargs="?")
     parser.add_argument("candidate", nargs="?")
     parser.add_argument("--json", metavar="PATH")
+    parser.add_argument("--per-section", action="store_true",
+                        help="print the positioned-byte census per section")
     parser.add_argument("--require-exact", action="store_true")
     parser.add_argument("--self-test", action="store_true")
     args = parser.parse_args()
@@ -416,7 +455,7 @@ def main():
     if not args.reference or not args.candidate:
         parser.error("reference and candidate are required")
     result = compare(load(args.reference), load(args.candidate))
-    report(result)
+    report(result, args.per_section)
     if args.json:
         rendered = json.dumps(result, indent=1, sort_keys=True) + "\n"
         if args.json == "-":

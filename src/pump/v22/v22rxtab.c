@@ -199,6 +199,40 @@ const short CRRv22_PLL_K1[V22_CRR_PLL_SETS] = { 2928, 5856, 5856 };
 const short CRRv22_PLL_K2[V22_CRR_PLL_SETS] = { 0, 262, 262 };
 
 /*
+ * V22_MESG -- the V.22 status-message pointer table, `.rodata` 100 bytes
+ * (25 `const char *`).  Recovered from the object: every entry carries an
+ * `R_386_32` against `.rodata.str1.1`/`.rodata.str1.4`, so the 25 targets and
+ * their order are the object's own, read out of `.rodata` 0x8460 in address
+ * order.  The array is `const` because the object places
+ * it in `.rodata`; `char *` would be `.data` (the blob's V32_MESG is exactly
+ * that, and is NOT const).  Its address sits between this unit's
+ * `MTDv22_COEF` (0x8426) and `V22_CFG` (0x84c4).  No relocation points at
+ * the symbol itself, so the table has no reconstructed consumer.
+ */
+const char *const V22_MESG[25] = {
+	"", "", "",
+	"CONNECT 2400 BPS!\n",
+	"CONNECT 1200 BPS!\n",
+	"",
+	"Remote Loop #2 ESTABLISHED!\n",
+	"Remote Loop #2 FAILED!\n",
+	"Remote Loop #2 terminated.\n",
+	"Detected retrain request...",
+	"Detected remote loop #2 request...",
+	"Initiating retrain...",
+	"", "", "", "",
+	"NO CARRIER\n",
+	"Timeout in ORIGINATE: Looking for answer tone.\n",
+	"Timeout in ORIGINATE: Detecting end of tone.\n",
+	"Timeout in ORIGINATE: Detecting unscrambled 1s\n",
+	"Timeout in ORIGINATE: Determining data rate.\n",
+	"Timeout in ANSWER: Determining data rate.\n",
+	"Timeout in LOCAL LOOP: Determining data rate.\n",
+	"Timeout detecting scrambled ones @ 2400 bps.\n",
+	"Timeout detecting scrambled ones @ 1200 bps.\n",
+};
+
+/*
  * The datapump's own parameter block: the template `V22FP_create` copies to
  * the stack, patches six fields of from the caller's configuration, and
  * installs as the object's first 28 bytes.  Six of the eleven fields never

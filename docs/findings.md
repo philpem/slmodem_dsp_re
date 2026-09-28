@@ -128942,3 +128942,176 @@ invalidated beyond the whole-tree key, which the standing instruction leaves
 stale (`mutsnap --check`: 0 current / 283 stale / 2 declared-unscoreable).
 
 (2026-09-28)
+
+## F11448. Missing data closed: a reusable detector, and every blob-only DATA global recovered from the object
+
+F11447's missing-data list came from an ad hoc script that printed no
+denominator.  This pass builds the tool that list should have come from
+(`tools/dataaudit.py`), uses it to drive the recovery, and recovers **every
+blob-only DATA global**.  It changes `src/` data definitions only; no function
+source, flag, type or statement order moved.
+
+**THE TOOL (`tools/dataaudit.py`).**  Enumerates every allocated DATA
+definition on both sides -- `STT_OBJECT` in any section, plus `STT_NOTYPE`
+outside `.text` -- and diffs by `(name, binding)` into **missing**, **extra**,
+**size-mismatch** and **section-mismatch**.  For a reference symbol it prints
+the **FILE owner** from the `ld -r` symtab-local address bracket: a LOCAL
+carries its own FILE, a GLOBAL is bracketed between the nearest local data
+symbol below and above it in the same section (both FILEs named when they
+disagree -- the tumap.py/#67 rule).  For every missing symbol it lists
+candidate matches by section+size, the discriminator F11445 used.  It prints
+its denominator per section on every run and **refuses on a zero denominator**
+(F134/F2400/F2401).  `--self-test` assembles two synthetic objects with a
+planted missing, size-changed and section-changed symbol and proves all three
+fire, then the identical control reads clean:
+
+    dataaudit self-test: denominator 6 reference / 5 candidate symbols;
+      planted missing, size and section defects all fired
+      identical control: 0 missing / 0 extra / 0 mismatch
+
+`partialcmp.py` gains `--per-section`, a breakdown of the existing
+positioned-byte census by section (same measurement, per-section view), and
+its self-test now reconciles that breakdown against the aggregate it is a
+breakdown of.
+
+**THE RECOVERED GLOBALS (13).**  Each byte range was read out of the object
+with `readelf`/`tools/tabdump.py`/`tools/dis.py`; where a relocation is present
+its target is the object's own record.  Contents are transcribed, never
+invented.
+
+    name                        section  size  contents source           placed in
+    prop_dsp_version            .rodata     7  "2.7.14\0"               src/core/dp_init.c
+    c1646                       .rodata    16  {0,0,0,0,-15249,15735,   V34hshak.c
+                                                 -15175,15735}
+    l2thresh                    .rodata     2  64                       V34hshak.c
+    echoshift                   .rodata     2  3                        V34hshak.c
+    ecoeff                      .rodata     2  16200                    v34shell.c
+    v21_hibnd                   .data     120  60 symmetric shorts      V34hshak.c
+    v21_lobnd                   .data     120  60 symmetric shorts      V34hshak.c
+    V22_MESG                    .rodata   100  25 char* + 25 strings    v22rxtab.c
+    V32_MESG                    .data     116  29 char* + 29 strings    V32.c
+    B103_CTL                    .data      12  {-5536,0,3200,0,0,0}     b103_cfg.c
+    MTDb103Org_CFG              .rodata    12  {0,0,2,29820,10,0}       b103_tables.c
+    FSEv32_decision             .data      12  3 fn ptrs, all R_386_32  v32fse_tables.c
+    default_voice_configuration .bss       16  zero (explicit, forces   src/voice/voice.c
+                                                 .bss not COMMON)
+
+`prop_dsp_version` is the object's first `.rodata` object and `dp_init.c` is
+its first TU (`prop_dp_init` is `.text` 0).  `c1646` is a receive carrier
+descriptor whose 1646 Hz midpoint sits between `c1680` and `c1600` exactly as
+its siblings do under F620's two-hertz-pole design.  `ecoeff` is F11408's
+"last table, absent" of `v34shell.c`'s block.  `V22_MESG`/`V32_MESG` are the
+status-message pointer tables; **F11447's "V22_MESG ... not a pointer table
+(no R_386_32)" is WRONG** -- it carries 25 `R_386_32` against
+`.rodata.str1.1`/`.str1.4`, and the object's own records give the order and
+targets.  `V22_MESG` is `const` (array in `.rodata`); `V32_MESG` is not (array
+in `.data`).  `default_voice_configuration` is `struct voice_config`, settled
+by its 16-byte size; a tentative definition emits COMMON under GCC 3.4.2, so
+the explicit `{ 0 }` is what puts it in `.bss` -- the issue20-bss-storage.md
+storage-class rule.
+
+**`v21_hibnd`/`v21_lobnd` ARE NOT `temp_v21_hibnd`/`temp_v21_lobnd`.**  The
+object defines BOTH its own `temp_v21_*` (`static const short[61]`, `.rodata`
+122) AND this pair (`.data` 120, 60 taps each); this tree already has the
+former verbatim in `V8Fsk.c`, so F11445's "ours as temp_v21_*" was the
+coincidence it suspected.  Both are symmetric FIRs, transcribed from the
+object's bytes (no relocation anywhere names or sits in them).
+
+**OWNERSHIP, HONESTLY.**  `c1646` (V34hshak.c, sibling carrier table),
+`ecoeff` (v34shell.c, F11408's block), `V22_MESG` (v22rxtab.c, between its own
+`MTDv22_COEF` and `V22_CFG`), `MTDb103Org_CFG` (b103_tables.c, immediately
+before `MTDb103_COEF`), `FSEv32_decision` (v32fse_tables.c, between
+`CRRv32_PLL_K1` and `DECv32_MAP_TRN`, with the FSE/CRR block), `B103_CTL`
+(b103_cfg.c, immediately before `B103_CFG`) and `prop_dsp_version` (dp_init.c)
+are placed on a tight bracket or a sibling that shares the object's name.
+`V32_MESG` and `default_voice_configuration` are NOT uniquely proven:
+`V32_MESG`'s `.data` bracket runs from `fsklpfcoeff600` (DPSK.c) to
+`SnrToRetrainTable` (V32stc.c) over the V.32 table block this tree still
+splits, and `default_voice_configuration`'s `.bss` bracket runs from
+`avg_err_show.0` (fpm_fse.c) to `pGlobalFDSPObj` (Fdsp.c).  Both are placed in
+the unit their NAME implies and the comment says so; they are the candidates
+Part 3's re-test is for.
+
+**THE DETECTOR'S SIZE MISMATCHES ARE ALL DELIBERATE, AND RECORDED AS SUCH.**
+No `SECTION MISMATCH` remains.  The four `SIZE MISMATCH` rows are the D65
+overrun reproductions (`FPM_log10_table` 258 vs 256, `FPM_div_table` 258 vs
+256, `FPM_sqrt_table` 386 vs 384) and `V90PreFilter::refLoopsType2` (2312 vs
+2244): the 34th all-zero record is the terminator the counting loops need where
+the object relies on following padding.  None is a defect to "fix".
+
+**MEASURED (GCC 3.4.2-r2, `make -j1 J=1 phase` = 306 objects, 0 failed).**
+
+    dataaudit   reference 762 symbols; candidate 756 -> 769
+                missing 62 -> 49 (ALL LOCAL); missing GLOBAL 13 -> 0
+                extra 56 unchanged; size-mismatch 4 unchanged; section 0
+
+    partialcmp  positioned bytes   66,681 -> 67,309 /943,398  (+628)
+                candidate delta    -51,847 -> -50,084
+                exact symbols       393 -> 394 /2,907
+                exact relocations 1,018 -> 1,011 /18,317
+                NOBITS              2,808 -> 2,840 ref 2,836
+                .data      -304 -> +112    .rodata    +544 -> +676
+                .str1.4  -1,236 -> -580    .str1.1    -970 -> -411
+
+The `.data`/`.rodata` totals OVERSHOOT now (the section already carried the
+deliberate D65/terminator bytes and the ours-only `rc_coeff_*` renames), but
+the **missing strings are gone** -- `.rodata.str1.1`/`.str1.4` close by 559/656
+bytes -- which is the actual recovery.  `byteident` grade 0 **844/1852** and
+grade 0-or-1 **895/1852** before and after: data moves no function byte.  TU
+scoreboard unchanged (both 279, blob-only 1 `V34.c`, ours-only 22).
+
+**THE 49 REMAINING MISSING ARE ALL LOCAL and are the rename/attribution
+families, not absent content:** the sixteen `FixedRC.c` `rc*_filter` tables are
+ours as globally-named `rc_coeff_*` (`rc120to80filter` <-> `rc_coeff_0f8e0`,
+same sizes); `Dialer.c`'s `dial_high/low_freqs`/`syntaxStatName.0`/
+`dialer_grade_names`; `Callprog.c`'s `state_names`/`default_configuration`/
+`_filter_*_coef`/`_apply_biquad_scales`; `DPSK.c`'s `edelay.2`/`bpcoeff*`;
+`V34RX.c`/`V8global.c` `sqrt_table`; the V.8 entrance filters; and the
+`b103_*`/`v17dec_tables`/`faxcfg`/`fifo` owners.  These need a linkage/name
+reconciliation (static vs global) and a TU boundary, which is Part 3's
+territory and is NOT claimed here.
+
+**GATES.**  `make -j1 J=1 phase`: **period differential 385 passed, 0 failed**,
+boundary OK; `dataaudit` denominator 762/769; `partialcmp` self-test 8/8;
+`refcheck` 0 dangling / 0 stale; `git diff --check` clean; TU scoreboard
+unchanged; `byteident` 844/895 unchanged.  `anchorcheck` (0 detached / 0
+non-unique) is the whole-tree state.  No suite anchor names a recovered symbol
+(all are new globals), so no mutation suite's anchor moved beyond the
+whole-tree key, which the standing instruction leaves stale.
+
+(2026-09-28)
+
+**ADDENDUM -- THE V.32 TABLE-FAMILY ATTRIBUTION RE-TEST, WITH THE DATA
+PRESENT.**  F11447's lever was re-run now that `V32_MESG` and
+`FSEv32_decision` exist.  The test is a LINK-ORDER experiment with no source
+change: move `v32fse_tables.c`'s object from the ours-only tail of
+`build/tc_repro/tc_link_manifest.txt` to immediately after `V32.c`'s object
+and relink, then read the six FSE/CRR symbols.
+
+    symbol              blob     base    moved-adjacent   moved - blob
+    V32_MESG            7240     72e0        72e0             -0xa0
+    FSEv32_QCOFF        72c0     93e0        73e0             +0x120
+    FSEv32_ICOFF        73a0     94c0        74c0             +0x120
+    FSEv32_CFG          7480     9380        7380             -0x100
+    CRRv32_CLK          74b8     93c4        73c4             -0xf4
+    FSEv32_decision     74cc     9360        7360             -0x16c
+    SDMv32_CFG          7688     72c0        72c0             -0x3c8
+    SnrToRetrainTable   7750     73c4        7604             -0x14c
+
+Moving the TU adjacent brings the block from ~0x2100 away to ~0x120, so the
+missing data **did** stop the unbounded drift -- but it is still not a match,
+and the object's own order inside the TU is REVERSED: with the declarations in
+blob order (`ICOFF, QCOFF, CRR_CLK, CRR_K1, CRR_K2, CFG, decision`) the period
+compiler emits `.data` in reverse (`decision, CFG, K2, K1, CLK, QCOFF, ICOFF`)
+because this TU's `.data` is reverse-declaration like `V32.c`'s `.rodata`
+(F11402/F11447).  The blob's order is `QCOFF, ICOFF, CFG, CLK, K2, K1,
+decision`, i.e. its source declared in the reverse of that.  So neither the
+placement nor the internal order is uniquely fixed by address, exactly as
+F11405/F11447 found, and the move is **DECLINED** (F11408's criterion: a data
+move is taken only on a uniquely-mapped preimage, not a near match).  The seven
+`v32*_tables.c`/`v32cfg.c` splits, `v17dec_tables.c`, `b103_tables.c`,
+`faxcfg.c` and `fifo.c` remain ours-only, and `V34.c` remains the one
+blob-only name.  Recorded as the measured negative the next V.32 pass starts
+from.
+
+(2026-09-28)

@@ -46,6 +46,15 @@
 #include "dsplib/v8dp.h"
 #include "dsplib/vpcm.h"
 
+/*
+ * prop_dsp_version -- the library version string, `.rodata` 0 (7 bytes,
+ * "2.7.14").  It is the object's first `.rodata` object and this is the
+ * object's first translation unit (`prop_dp_init` is `.text` 0), so it
+ * belongs here; the name carries the same `prop_` prefix as the two
+ * functions.  `tools/dataaudit.py` gave the bracket and the 7-byte size.
+ */
+const char prop_dsp_version[] = "2.7.14";
+
 int
 prop_dp_init(void)
 {

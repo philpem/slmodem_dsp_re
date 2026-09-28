@@ -16,6 +16,7 @@
  */
 
 #include "dsplib/v32fse.h"
+#include "dsplib/v32dec.h"	/* FSE_decision_4pt/16pt/32pt */
 
 /*
  * Antisymmetric about tap 51 and non-zero only at even taps: the in-phase
@@ -92,4 +93,18 @@ struct fpm_fse_cfg FSEv32_CFG = {
 	0,			/* owner     */
 	0,			/* decision  */
 	0			/* reserved34 */
+};
+
+/*
+ * FSEv32_decision -- `.data` 12 bytes at the object's 0x74cc, immediately
+ * after `CRRv32_PLL_K1` (0x74c6+6), so the same translation unit.  Its three
+ * words are `R_386_32` against `FSE_decision_4pt`, `_16pt` and `_32pt` in
+ * that order -- the object's own relocation records, read out by
+ * `tools/dis.py`.  This is the slicer the datapump patches into
+ * `FSEv32_CFG.decision`; no reconstructed caller references it.
+ */
+fpm_fse_decision FSEv32_decision[3] = {
+	FSE_decision_4pt,
+	FSE_decision_16pt,
+	FSE_decision_32pt,
 };

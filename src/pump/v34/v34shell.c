@@ -49,6 +49,15 @@
  */
 #define PROG_TXBIT_DATA		0x10
 
+/*
+ * ecoeff -- `.rodata` 2 bytes, value 16200.  F11408 placed the fifteen
+ * tables of this file's `.rodata` block at `0x0ec0..0x2842` and recorded
+ * `ecoeff` as the last of them, "in the blob but NOT reconstructed here --
+ * it has no relocation anywhere in the object".  Its bytes carry no
+ * relocation, so the object's `16200` IS its initialiser.
+ */
+const short ecoeff = 16200;
+
 const short kkNormal[16] = {
 	    0,    10,     5,    15,     2,     8,     7,    13,
 	    1,    11,     6,    12,     3,     9,     4,    14,

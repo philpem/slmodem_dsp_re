@@ -35,6 +35,16 @@
 #include "dsplib/b103fp.h"
 
 /*
+ * B103_CTL -- `.data` 12 bytes at the object's 0x77c0, immediately before
+ * `B103_CFG` (0x77cc), so the same translation unit.  The bytes carry no
+ * relocation anywhere in the object, so they ARE the initialiser:
+ * {-5536, 0, 3200, 0, 0, 0}.  Read as six shorts; `3200` is `B103_CFG`'s own
+ * `tx_scale`, which is what fixes the element width.  Nothing reconstructed
+ * references it.
+ */
+short B103_CTL[6] = { -5536, 0, 3200, 0, 0, 0 };
+
+/*
  * The built-in configuration: LOOPBACK, on the low channel, with a 700-block
  * answer-tone timeout and the modulator at scale 3200.
  *

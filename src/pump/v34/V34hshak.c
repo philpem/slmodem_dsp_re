@@ -221,7 +221,21 @@ const short c1867[V34_CARRIER_DESC]  = { 0, 0, 0, 0, -11016, 15735, -10937, 1573
 const short c1829[V34_CARRIER_DESC]  = { 0, 0, 0, 0, -11763, 15735, -11685, 15735 };
 const short c1800_[V34_CARRIER_DESC] = { 0, 0, 0, 0, -12328, 15735, -12250, 15735 };
 const short c1680[V34_CARRIER_DESC]  = { 0, 0, 0, 0, -14616, 15735, -14541, 15735 };
+/* `.rodata` 16 bytes at the object's 0x2a42, between c1680 and c1600.  Its
+ * 1646 Hz midpoint places it on the same two-hertz-pole design as its
+ * siblings and the columns F620 settled; the bytes carry no relocation. */
+const short c1646[V34_CARRIER_DESC]  = { 0, 0, 0, 0, -15249, 15735, -15175, 15735 };
 const short c1600[V34_CARRIER_DESC]  = { 0, 0, 0, 0, -16093, 15735, -16020, 15735 };
+
+/*
+ * Two 2-byte `.rodata` scalars the object defines in this file's V.34
+ * `.rodata` band (dataaudit bracket: between V34RX.c's `edelay.2` and
+ * v34filters.c's `tx600c1`, alongside this file's c-tables, scale tables,
+ * probe and vectpp globals).  Neither is referenced by any relocation in the
+ * object, so the bytes ARE the initialisers: 64 and 3.
+ */
+const short l2thresh = 64;
+const short echoshift = 3;
 
 /*
  * And two more of the same shape for the phase-2 signalling carriers, which
@@ -275,6 +289,41 @@ short bpv22low[V34_BPV22_TAPS] = {
 	 -609,  -743,  -150,   124,  -252,  -783,  -842,  -333,
 	  288,   541,   365,    79,   -13,    94,   182,    95,
 	  -98,  -209,  -156,   -37
+};
+
+/*
+ * v21_hibnd/v21_lobnd -- two more writable 60-tap symmetric filters, `.data`
+ * 120 bytes each in the object's V.34-family `.data` band, adjacent to
+ * `bpv22high`/`bpv22low` and `costbl`/`intcoef*`.
+ *
+ * THEY ARE NOT THIS TREE'S `temp_v21_hibnd`/`temp_v21_lobnd`.  That pair is
+ * `static const short[61]` in V8Fsk.c, emitted to `.rodata` (122 bytes), and
+ * the OBJECT DEFINES BOTH ITS OWN `temp_v21_*` (.rodata 122) AND THESE
+ * (.data 120).  So F11445's "ours as temp_v21_*" reading was the coincidence
+ * it suspected: same family, different symbols, different size.  Neither of
+ * these has a relocation anywhere in the object, so the object's bytes are
+ * the initialiser and they are transcribed exactly.
+ */
+short v21_hibnd[60] = {
+	   16,     2,    -1,     8,   -11,   -47,   -11,    96,
+	   94,   -90,  -200,   -11,   218,   128,  -100,   -84,
+	   -1,  -180,  -197,   415,   800,  -172, -1464,  -764,
+	 1544,  2021,  -630, -2777,  -981,  2392,  2392,  -981,
+	-2777,  -630,  2021,  1544,  -764, -1464,  -172,   800,
+	  415,  -197,  -180,    -1,   -84,  -100,   128,   218,
+	  -11,  -200,   -90,    94,    96,   -11,   -47,   -11,
+	    8,    -1,     2,    16
+};
+
+short v21_lobnd[60] = {
+	   23,    13,    -2,   -12,   -12,    -4,     1,   -14,
+	  -45,   -66,   -33,    74,   212,   279,   171,  -126,
+	 -482,  -665,  -477,    80,   750,  1134,   922,   128,
+	 -867, -1500, -1358,  -453,   751,  1589,  1589,   751,
+	 -453, -1358, -1500,  -867,   128,   922,  1134,   750,
+	   80,  -477,  -665,  -482,  -126,   171,   279,   212,
+	   74,   -33,   -66,   -45,   -14,     1,    -4,   -12,
+	  -12,    -2,    13,    23
 };
 
 /*
