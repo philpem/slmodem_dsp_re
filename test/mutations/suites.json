@@ -601,7 +601,7 @@
   "build/test/t_v90modchain"
  ],
  "v90modemctor": [
-  "src/pump/v90/V90ModemCtor.cpp",
+  "src/pump/v90/V90Modem.cpp",
   "build/test/t_v90modemctor"
  ],
  "v90modemreset": [

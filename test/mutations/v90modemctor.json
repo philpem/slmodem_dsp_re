@@ -100,8 +100,9 @@
   },
   {
     "label": "ctor: the session flag stored is the symbol count",
-    "find": "\tsessionFlag = flag;",
-    "replace": "\tsessionFlag = nofSymbols;"
+    "why": "Anchor extended to include the preceding `side = modemSide;` -- the suite-anchor consolidation F11414 names.  With V90ModemCtor.cpp merged into V90Modem.cpp (F11431) the bare `\\tsessionFlag = flag;` also occurs in V90Modem::setSessionFlag, so it matched twice; the context makes it unique to the constructor.  The mutation is unchanged.",
+    "find": "\tside = modemSide;\n\tsessionFlag = flag;",
+    "replace": "\tside = modemSide;\n\tsessionFlag = nofSymbols;"
   },
   {
     "label": "ctor: the DIL descriptor is not stored",
@@ -197,7 +198,8 @@
       "reach it."
     ],
     "label": "ctor: the switch is taken on the argument and not on the member",
-    "find": "\tswitch (side) {",
-    "replace": "\tswitch (modemSide) {"
+    "why": "Anchor extended with the first arm's own allocation -- the suite-anchor consolidation F11414 names.  With V90ModemCtor.cpp merged into V90Modem.cpp (F11431) the bare `\\tswitch (side) {` also occurs in V90Modem::reset, so it matched twice; the constructor's first arm allocates a V90Modulator where reset's calls reset(), which makes it unique.  The mutation is unchanged.",
+    "find": "\tswitch (side) {\n\tcase V90_MODEM_SIDE_DIGITAL:\n\t\tp = sysdep_malloc(sizeof(V90Modulator));",
+    "replace": "\tswitch (modemSide) {\n\tcase V90_MODEM_SIDE_DIGITAL:\n\t\tp = sysdep_malloc(sizeof(V90Modulator));"
   }
 ]
