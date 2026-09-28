@@ -8,10 +8,13 @@
  * at 9600.  RcFixed_Resample() is called from exactly four places in the
  * original: dp_wrapper_run(), call_run(), FAX_process() and VOICE_process().
  *
- * Modes 0 and 1 use a different state layout in the original (a 40-byte block
- * with three sub-allocations) and are not implemented here.  They are the
- * explicit-only x4 and /4 entries, unreachable from
- * RcFixed_Check_Combination(), so nothing in the modem can request them.
+ * Modes 0 and 1 (plain x4 and /4) have their own 40-byte state layout, three
+ * coefficient tables and a separate conversion, and RcFixed_Create() now
+ * reconstructs their CREATE/RESET/DELETE path faithfully, which is what makes
+ * CI_b1/CI_b2/CI_bDroop emittable.  The kind-1 RESAMPLE conversion itself is
+ * NOT reconstructed: it is unreachable through the module's API, because
+ * RcFixed_Check_Combination() starts its scan at mode 2 and every call site
+ * passes a literal 2..7.  See RcFixed_Resample.
  */
 
 #include <stdlib.h>
@@ -110,6 +113,71 @@ gcd(int a, int b)
  * ---------------------------------------------------------------------------
  */
 
+/*
+ * The mode 0/1 (plain x4 and /4) coefficient tables.  These are file-scope
+ * statics in the object, LOCAL and in this translation unit, and the ONLY
+ * references to them are the pointer stores in RcFixed_Create()'s mode 0/1
+ * arm below -- so an unused file-scope `static const` would be dropped by GCC
+ * 3.4.2 at -O3 (measured, F11449) and these could not be emitted without also
+ * reconstructing the arm that stores them.  Bytes are the object's .rodata
+ * (F11449: `readelf -x .rodata` at 0x10e30/0x10e60/0x10f0e).
+ *
+ * CI_b1 and CI_b2 are symmetric with a zero between every tap plus a
+ * centre -- the shape of an interpolator run at twice its own rate; CI_bDroop
+ * is a three-tap correction.  The source ORDER (bDroop, b1, b2) is the blob's
+ * reverse-emission order, which is why b2 lands at the lowest address.
+ */
+static const short CI_bDroop[3] = {
+	-410, 16876, -410,
+};
+
+static const short CI_b1[87] = {
+	-5, 0, 8, 0, -13, 0, 20, 0, -30, 0,
+	44, 0, -61, 0, 83, 0, -111, 0, 145, 0,
+	-188, 0, 240, 0, -304, 0, 384, 0, -484, 0,
+	613, 0, -782, 0, 1020, 0, -1379, 0, 2006, 0,
+	-3428, 0, 10414, 16384, 10414, 0, -3428, 0, 2006, 0,
+	-1379, 0, 1020, 0, -782, 0, 613, 0, -484, 0,
+	384, 0, -304, 0, 240, 0, -188, 0, 145, 0,
+	-111, 0, 83, 0, -61, 0, 44, 0, -30, 0,
+	20, 0, -13, 0, 8, 0, -5,
+};
+
+static const short CI_b2[15] = {
+	-104, 0, 640, 0, -2328, 0, 9984, 16384, 9984, 0,
+	-2328, 0, 640, 0, -104,
+};
+
+/*
+ * The mode 0/1 state, 40 bytes -- the size the object hands to malloc,
+ * `movl $0x28,(%esp)` at RcFixed_Create+0xbe, with three sub-allocations of
+ * 6, 174 and 30 bytes (`RcFixed_Create+0xde`, +0xed and the 6 that follows).
+ *
+ * It is a DIFFERENT layout from the polyphase `struct rc_state` and is why
+ * this tree used to decline modes 0 and 1.  Recovered here from the stores in
+ * RcFixed_Create, the clears in RcFixed_Reset and the frees in
+ * RcFixed_Delete; the three `.N` counters are the delay-line write positions
+ * that RcFixed_Resample wraps at 2, 86 and 14.
+ *
+ * The kind-1 RESAMPLE conversion is NOT reconstructed (see the note on
+ * RcFixed_Resample); it is unreachable through the module's API, because
+ * RcFixed_Check_Combination() starts its scan at mode 2 and every call site
+ * passes a literal 2..7.  What this recovers is the CREATE path, which is
+ * what references the three tables and so what makes them emittable.
+ */
+struct rc_kind1 {
+	short mode;          /* +0x00  the mode number, 0 or 1  */
+	short *w6;           /* +0x04  6-byte scratch          */
+	const short *droop;  /* +0x08  CI_bDroop               */
+	short pos6;          /* +0x0c  wraps at 2              */
+	short *w174;         /* +0x10  174-byte scratch        */
+	const short *b1;     /* +0x14  CI_b1                   */
+	short pos174;        /* +0x18  wraps at 86             */
+	short *w30;          /* +0x1c  30-byte scratch         */
+	const short *b2;     /* +0x20  CI_b2                   */
+	short pos30;         /* +0x24  wraps at 14             */
+};
+
 struct rc {
 	int kind;               /* +0x00 0 = polyphase, 1 = modes 0/1 */
 	struct rc_state *state; /* +0x04 */
@@ -159,14 +227,37 @@ RcFixed_Delete(struct rc *h)
 {
 	if (h == NULL)
 		return;
+	if (h->state != NULL && h->kind == 1) {
+		struct rc_kind1 *k1 = (struct rc_kind1 *)h->state;
+		free(k1->w6);
+		free(k1->w174);
+		free(k1->w30);
+	}
 	free(h->state);
 	free(h);
 }
 void
 RcFixed_Reset(struct rc *h)
 {
-	if (h != NULL && h->kind == 0 && h->state != NULL)
+	if (h == NULL || h->state == NULL)
+		return;
+	if (h->kind == 0) {
 		rc_reset_state(h->state);
+	} else if (h->kind == 1) {
+		/*
+		 * The object clears only FOUR bytes of each scratch buffer and
+		 * zeroes the three positions -- `RcFixed_Reset+0x90`: three
+		 * `memset(p, 0, 4)` calls then `movw $0` at +0xc, +0x18 and
+		 * +0x24.
+		 */
+		struct rc_kind1 *k1 = (struct rc_kind1 *)h->state;
+		memset(k1->w6, 0, 4);
+		memset(k1->w174, 0, 4);
+		memset(k1->w30, 0, 4);
+		k1->pos6 = 0;
+		k1->pos174 = 0;
+		k1->pos30 = 0;
+	}
 }
 struct rc *
 RcFixed_Create(int mode)
@@ -178,7 +269,43 @@ RcFixed_Create(int mode)
 	if (mode < 0 || mode > 999)
 		return NULL;
 
-	/* Modes 0 and 1, and anything past the table, have no polyphase bank. */
+	/*
+	 * Modes 0 and 1: the plain x4 and /4 converters, with their own 40-byte
+	 * state and three coefficient tables.  This is the arm the object's jump
+	 * table sends both modes to; reconstructing it is what makes CI_b1,
+	 * CI_b2 and CI_bDroop emittable (they are otherwise unused file-scope
+	 * statics and GCC drops those).  The buffers are allocated here and
+	 * cleared by RcFixed_Reset below, exactly as the object does.
+	 */
+	if (mode <= 1) {
+		struct rc_kind1 *k1;
+
+		h = calloc(1, sizeof(*h));
+		if (h == NULL)
+			return NULL;
+
+		k1 = calloc(1, sizeof(*k1));
+		if (k1 == NULL) {
+			free(h);
+			return NULL;
+		}
+
+		h->kind = 1;
+		h->state = (struct rc_state *)k1;
+
+		k1->w6 = calloc(1, 6);
+		k1->w174 = calloc(1, 174);
+		k1->w30 = calloc(1, 30);
+		k1->mode = (short)mode;
+		k1->droop = CI_bDroop;
+		k1->b1 = CI_b1;
+		k1->b2 = CI_b2;
+
+		RcFixed_Reset(h);
+		return h;
+	}
+
+	/* Modes 2 and up, and anything past the table, have no mode 0/1 bank. */
 	if (mode >= RCFIXED_NMODES || rc_banks[mode].coeff == NULL)
 		return NULL;
 
@@ -359,6 +486,15 @@ RcFixed_Resample(struct rc *h, const short *in, int in_count,
 	if (out_count != NULL)
 		*out_count = 0;
 
+	/*
+	 * kind 1 is the mode 0/1 x4 / /4 converter.  Its Create/Reset/Delete
+	 * path is reconstructed (so the state and its tables exist and are
+	 * emittable; F11449), but the kind-1 RESAMPLE conversion is not: it is
+	 * the multi-stage delay-line machine at RcFixed_Resample+0x215 and it
+	 * is unreachable, since RcFixed_Check_Combination() begins its scan at
+	 * mode 2 and every caller passes a literal 2..7.  Declining it here
+	 * leaves *out_count at the zero already stored above.
+	 */
 	if (h == NULL || h->kind != 0 || h->state == NULL)
 		return;
 

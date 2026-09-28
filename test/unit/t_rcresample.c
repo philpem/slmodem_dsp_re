@@ -293,9 +293,43 @@ main(void)
 	}
 	rc |= diff_end();
 
-	/* Deviation D3: unreachable modes 0 and 1, which we decline to build. */
-	rc |= run_mode(0, "rc mode 0 declined (D3)", bulk, 1);
-	rc |= run_mode(1, "rc mode 1 declined (D3)", bulk, 1);
+	/*
+	 * Deviation D3, narrowed.  Modes 0 and 1 CREATE faithfully now: the
+	 * object's mode 0/1 arm installs CI_b1/CI_b2/CI_bDroop into a 40-byte
+	 * state, and reconstructing it is what makes those three file-scope
+	 * statics emittable (F11449).  Their kind-1 RESAMPLE conversion is
+	 * still not reconstructed.  Both modes are unreachable --
+	 * Check_Combination() starts its scan at mode 2 and every call site
+	 * passes a literal >= 2 -- so assert the recovered create and the
+	 * recorded resample gap rather than driving the two to disagree.
+	 */
+	diff_begin("rc modes 0/1 (D3: create recovered, kind-1 resample declined)");
+	{
+		int mode;
+
+		for (mode = 0; mode <= 1; mode++) {
+			void *r = ref_RcFixed_Create(mode);
+			struct rc *o = RcFixed_Create(mode);
+
+			diff_eq_int("mode %ld: ref builds", r != NULL, 1, mode);
+			diff_eq_int("mode %ld: ours builds", o != NULL, 1, mode);
+			if (r && o) {
+				static short discard[256];
+				int na = 0, nb = 0;
+
+				ref_RcFixed_Resample(r, input, 64, discard, &na);
+				RcFixed_Resample(o, input, 64, discard, &nb);
+				diff_eq_int("mode %ld: ref converts", na > 0, 1, mode);
+				diff_eq_int("mode %ld: ours declines kind-1", nb, 0,
+					    mode);
+			}
+			if (r)
+				ref_RcFixed_Delete(r);
+			if (o)
+				RcFixed_Delete(o);
+		}
+	}
+	rc |= diff_end();
 
 	return rc;
 }

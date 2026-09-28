@@ -112,10 +112,10 @@ struct rc;
 /**
  * @brief Create a converter for a mode from RcFixed_Check_Combination().
  * @param mode  A mode index.
- * @return A new converter, or NULL for modes 0 and 1 (which use a
- *         different state layout in the original and are not implemented
- *         here) and for modes at or above #RCFIXED_NMODES, i.e.
- *         unsupported ratios.
+ * @return A new converter; NULL for modes at or above #RCFIXED_NMODES, i.e.
+ *         unsupported ratios.  Modes 0 and 1 are built with their own 40-byte
+ *         state, but their kind-1 conversion is not reconstructed (it is
+ *         unreachable through the public API); see RcFixed_Resample().
  */
 struct rc *RcFixed_Create(int mode);
 
