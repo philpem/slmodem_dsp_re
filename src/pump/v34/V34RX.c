@@ -128,14 +128,14 @@ V34descrambler(struct v34_receiver *s, short bits, short nbits)
  * .rodata+0x2860.  Covers mantissas in [0.25, 1), which is what normalising
  * to bit 30 and halving on an odd exponent leaves.
  *
- *     v34_sqrt_table[i] = floor(sqrt((i + 0x40) / 256) * 32768)
+ *     sqrt_table[i] = floor(sqrt((i + 0x40) / 256) * 32768)
  *
  * Exact for all 192 entries -- TRUNCATED, not rounded, which is worth
  * stating because rounding misses 98 of them by one.  Emitted as data all
  * the same: the generator is a claim about intent, the bytes are the
  * reference.
  */
-static const unsigned short v34_sqrt_table[192] = {
+static const unsigned short sqrt_table[192] = {
 	0x4000, 0x407f, 0x40fe, 0x417b, 0x41f8, 0x4273, 0x42ee, 0x4368,
 	0x43e1, 0x445a, 0x44d1, 0x4548, 0x45be, 0x4633, 0x46a7, 0x471b,
 	0x478d, 0x4800, 0x4871, 0x48e2, 0x4952, 0x49c1, 0x4a30, 0x4a9e,
@@ -273,7 +273,7 @@ agc_rms(const short *buf)
 		if (idx > 0xbf)
 			idx = 0xbf;
 
-		return (short)(unsigned short)(v34_sqrt_table[idx]
+		return (short)(unsigned short)(sqrt_table[idx]
 					       >> ((shift >> 1) & 31));
 	}
 }

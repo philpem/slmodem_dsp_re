@@ -24,6 +24,16 @@
 #include "dsplib/modem_params.h"
 #include "dsplib/sysdep.h"
 
+/*
+ * The band filter's coefficients are defined at the foot of this file, in the
+ * blob's declaration order (they emit in reverse, so they must stay last).
+ * The blob binds them LOCAL, so they are file statics; forward-declare them
+ * for CALLPROG_Create() above their definitions.
+ */
+static const short _filter_a_coef[3 * IIR_FILTER_SECTIONS];
+static const short _filter_b_coef[3 * IIR_FILTER_SECTIONS];
+static const short _apply_biquad_scales[IIR_FILTER_SCALES];
+
 
 /*
  * .rodata+0x5d40.  The STATE names -- a different table from the message
@@ -43,7 +53,7 @@
  * apply to it, and what follows is unrelated data that merely disassembles as
  * plausible pointers.
  */
-const char *const callprog_state_names[CALLPROG_STATES_NAMED] = {
+static const char *const state_names[CALLPROG_STATES_NAMED] = {
 	"CALLPROG_NO_LEGAL_STATE",		/* 0 */
 	"CALLPROG_WAIT_DIAL",			/* 1 */
 	"CALLPROG_DIALING",			/* 2 */
@@ -112,7 +122,7 @@ static unsigned char toneiir_busy_table[CALLPROG_STATES];
  * Default timeouts, in seconds, .rodata+0x5d68.  Copied into the object and
  * from there into `timeout_table`.
  */
-static const int callprog_default_timeout[7] = { 10, 20, 15, 10, 8, 60, 60 };
+static const int default_configuration[7] = { 10, 20, 15, 10, 8, 60, 60 };
 
 /* The state the machine ends in, and the one it starts in. */
 #define CALLPROG_STATE_END	6
@@ -331,8 +341,8 @@ request_state(struct callprog *cp, int next)
 	 */
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("STATE:  %s --> %s\n",
-				     callprog_state_names[cp->state],
-				     callprog_state_names[next]);
+				     state_names[cp->state],
+				     state_names[next]);
 
 	cp->pending_state = next;
 	cp->pending = 1;
@@ -606,9 +616,9 @@ CALLPROG_Create(struct callprog *cp, struct callprog_cfg *cfg)
 	if (cp->band_wanted != 0)
 		cp->band = _iir_filter_create(cp->band,
 					      IIR_FILTER_COEFF, IIR_FILTER_COEFF,
-					      CALLPROG_BandFilter_a,
-					      CALLPROG_BandFilter_b,
-					      CALLPROG_BandFilter_shift);
+					      _filter_a_coef,
+					      _filter_b_coef,
+					      _apply_biquad_scales);
 
 	cp->dialtone_seen = 0;
 
@@ -620,7 +630,7 @@ CALLPROG_Create(struct callprog *cp, struct callprog_cfg *cfg)
 	cp->dtmf = Dual_TONE_create();
 
 	for (i = 0; i < 7; i++)
-		cp->timeout[i] = callprog_default_timeout[i];
+		cp->timeout[i] = default_configuration[i];
 
 	build_state_machine(cp);
 
@@ -1054,12 +1064,12 @@ CALLPROG_Dial(struct callprog *cp, const char *s)
  * All the headroom is taken from the input.  The cascade has about +30 dB of
  * passband gain and 32 is 30.1 dB, so the net is roughly unity.
  */
-const short CALLPROG_BandFilter_shift[IIR_FILTER_SCALES] = {
+static const short _apply_biquad_scales[IIR_FILTER_SCALES] = {
 	5, 0, 0, 0, 0
 };
 
 /* { b0, b1, b2 } per section, Q13.  Section 3's b0 is 2.0 -- hence Q13. */
-const short CALLPROG_BandFilter_b[3 * IIR_FILTER_SECTIONS] = {
+static const short _filter_b_coef[3 * IIR_FILTER_SECTIONS] = {
 	 8192,  13289,  8192,	/* zero at 3204 Hz, on the unit circle */
 	 8192, -16379,  8192,	/* zero at   31 Hz                     */
 	 8192,   3322,  8192,	/* zero at 2260 Hz -- the deep null    */
@@ -1073,7 +1083,7 @@ const short CALLPROG_BandFilter_b[3 * IIR_FILTER_SECTIONS] = {
  * like a copy-paste in the original's table and is equally harmless, since
  * nothing looks at it.
  */
-const short CALLPROG_BandFilter_a[3 * IIR_FILTER_SECTIONS] = {
+static const short _filter_a_coef[3 * IIR_FILTER_SECTIONS] = {
 	8192,  -9150,  3671,	/* pole  744 Hz, r 0.669, Q  3.9 */
 	8192,  -6770,  5246,	/* pole 1309 Hz, r 0.800, Q  7.0 */
 	8192, -15686,  7643,	/* pole  169 Hz, r 0.966, Q 45.3 */

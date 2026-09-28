@@ -406,9 +406,17 @@ RcFixed_Resample(struct rc *h, const short *in, int in_count,
  * deleted ours-only rc_coeffs.c: the blob defines them in FixedRC.c
  * (F11412).  The separate file was a generated artefact (tools/gen_rc_coeffs.py)
  * and a data symbol byte does not depend on its translation unit.
+ *
+ * These were named rc_coeff_<offset> from the address each bank occupies in
+ * the blob; the blob's own symbol table names them rc<in>to<out>filter and
+ * binds them LOCAL (static) in this TU.  F11449 renamed every bank to the
+ * blob's name and made it static: the offset name is a decode artefact, and
+ * the blob's name is the author's.  Each was checked byte-for-byte against
+ * the blob .rodata at the offset the old name encoded (all 16 equal), and
+ * `staticcheck.py` proved no other translation unit references any of them.
  */
 /* modes 2, 4: 36 taps x 6 phases, Q14 */
-const short rc_coeff_10c80[216] = {
+static const short rc80to96filter[216] = {
 	-1, 0, 4, -12, 27, -54, 94, -152, 227, -319,
 	426, -543, 663, -777, 878, -957, 1007, 15358, 1007, -957,
 	878, -777, 663, -543, 426, -319, 227, -152, 94, -54,
@@ -434,7 +442,7 @@ const short rc_coeff_10c80[216] = {
 };
 
 /* modes 3, 6: 32 taps x 5 phases, Q14 */
-const short rc_coeff_10b40[160] = {
+static const short rc96to80filter[160] = {
 	-4, -4, 23, -49, 65, -35, -68, 233, -383, 386,
 	-106, -522, 1427, -2396, 3143, 12959, 3143, -2396, 1427, -522,
 	-106, 386, -383, 233, -68, -35, 65, -49, 23, -4,
@@ -454,7 +462,7 @@ const short rc_coeff_10b40[160] = {
 };
 
 /* modes 5: 68 taps x 1 phases, Q14 */
-const short rc_coeff_10aa0[68] = {
+static const short rc480to80filter[68] = {
 	-11, -8, -1, 8, 18, 27, 30, 25, 8, -19,
 	-50, -77, -88, -74, -31, 36, 114, 181, 211, 185,
 	93, -55, -233, -395, -488, -460, -277, 69, 556, 1128,
@@ -465,7 +473,7 @@ const short rc_coeff_10aa0[68] = {
 };
 
 /* modes 7: 68 taps x 1 phases, Q14 */
-const short rc_coeff_10a00[68] = {
+static const short rc480to96filter[68] = {
 	11, 7, 0, -10, -20, -25, -20, -3, 22, 49,
 	63, 54, 17, -42, -103, -139, -126, -54, 65, 194,
 	278, 270, 142, -87, -356, -564, -602, -389, 103, 824,
@@ -476,7 +484,7 @@ const short rc_coeff_10a00[68] = {
 };
 
 /* modes 8: 46 taps x 4 phases, Q14 */
-const short rc_coeff_10880[184] = {
+static const short rc96to384filter[184] = {
 	0, 1, -2, 5, -9, 17, -29, 46, -69, 99,
 	-137, 182, -234, 292, -354, 418, -482, 542, -596, 641,
 	-675, 697, 15680, 697, -675, 641, -596, 542, -482, 418,
@@ -499,7 +507,7 @@ const short rc_coeff_10880[184] = {
 };
 
 /* modes 9: 68 taps x 1 phases, Q14 */
-const short rc_coeff_107e0[68] = {
+static const short rc384to96filter[68] = {
 	-12, -13, -7, 5, 19, 27, 21, -1, -32, -56,
 	-54, -17, 44, 101, 115, 64, -42, -157, -214, -162,
 	3, 217, 368, 348, 114, -270, -634, -756, -458, 307,
@@ -510,7 +518,7 @@ const short rc_coeff_107e0[68] = {
 };
 
 /* modes 10: 40 taps x 24 phases, Q14 */
-const short rc_coeff_10060[960] = {
+static const short rc80to384filter[960] = {
 	3, -3, 3, 0, -5, 11, -17, 17, -7, -21,
 	72, -150, 256, -386, 531, -679, 816, -927, 999, 15361,
 	999, -927, 816, -679, 531, -386, 256, -150, 72, -21,
@@ -610,7 +618,7 @@ const short rc_coeff_10060[960] = {
 };
 
 /* modes 11: 68 taps x 5 phases, Q14 */
-const short rc_coeff_0fda0[340] = {
+static const short rc384to80filter[340] = {
 	6, 5, 2, -5, -12, -17, -16, -6, 12, 34,
 	49, 48, 22, -25, -80, -119, -119, -63, 42, 164,
 	256, 263, 156, -59, -325, -543, -601, -408, 72, 794,
@@ -648,7 +656,7 @@ const short rc_coeff_0fda0[340] = {
 };
 
 /* modes 12: 28 taps x 5 phases, Q14 */
-const short rc_coeff_0fc80[140] = {
+static const short rc96to120filter[140] = {
 	3, -8, 21, -48, 94, -165, 263, -386, 526, -673,
 	811, -924, 998, 15360, 998, -924, 811, -673, 526, -386,
 	263, -165, 94, -48, 21, -8, 3, -1, 3, -9,
@@ -666,7 +674,7 @@ const short rc_coeff_0fc80[140] = {
 };
 
 /* modes 13: 58 taps x 4 phases, Q14 */
-const short rc_coeff_0faa0[232] = {
+static const short rc120to96filter[232] = {
 	1, -2, 2, -1, 0, 0, 3, -3, -3, 16,
 	-29, 23, 12, -66, 105, -82, -26, 181, -284, 224,
 	44, -428, 704, -598, -58, 1210, -2548, 3621, 12351, 3621,
@@ -694,7 +702,7 @@ const short rc_coeff_0faa0[232] = {
 };
 
 /* modes 14: 42 taps x 3 phases, Q14 */
-const short rc_coeff_0f9a0[126] = {
+static const short rc80to120filter[126] = {
 	6, -8, 11, -13, 14, -10, 0, 22, -58, 111,
 	-183, 275, -385, 510, -642, 776, -902, 1011, -1096, 1150,
 	15216, 1150, -1096, 1011, -902, 776, -642, 510, -385, 275,
@@ -711,7 +719,7 @@ const short rc_coeff_0f9a0[126] = {
 };
 
 /* modes 15: 48 taps x 2 phases, Q14 */
-const short rc_coeff_0f8e0[96] = {
+static const short rc120to80filter[96] = {
 	8, -16, 3, 25, -29, -17, 66, -33, -79, 125,
 	13, -205, 162, 166, -389, 94, 500, -590, -248, 1205,
 	-750, -1719, 4841, 10107, 4841, -1719, -750, 1205, -248, -590,
@@ -725,7 +733,7 @@ const short rc_coeff_0f8e0[96] = {
 };
 
 /* modes 16: 38 taps x 10 phases, Q14 */
-const short rc_coeff_0f5e0[380] = {
+static const short rc96to320filter[380] = {
 	-1, 0, 0, 2, -7, 19, -42, 78, -131, 203,
 	-293, 401, -520, 644, -763, 869, -952, 1006, 15360, 1006,
 	-952, 869, -763, 644, -520, 401, -293, 203, -131, 78,
@@ -767,7 +775,7 @@ const short rc_coeff_0f5e0[380] = {
 };
 
 /* modes 17: 68 taps x 3 phases, Q14 */
-const short rc_coeff_0f440[204] = {
+static const short rc320to96filter[204] = {
 	-5, 0, 8, 12, 7, -7, -22, -23, -3, 30,
 	51, 35, -22, -82, -92, -24, 91, 167, 123, -44,
 	-230, -279, -102, 226, 471, 393, -65, -661, -939, -480,
@@ -792,7 +800,7 @@ const short rc_coeff_0f440[204] = {
 };
 
 /* modes 18: 38 taps x 10 phases, Q14 */
-const short rc_coeff_0f140[380] = {
+static const short rc72to80filter[380] = {
 	0, 1, -3, 7, -13, 23, -39, 60, -88, 122,
 	-162, 206, -252, 298, -342, 379, -408, 426, 7761, 426,
 	-408, 379, -342, 298, -252, 206, -162, 122, -88, 60,
@@ -834,7 +842,7 @@ const short rc_coeff_0f140[380] = {
 };
 
 /* modes 19: 32 taps x 9 phases, Q14 */
-const short rc_coeff_0ef00[288] = {
+static const short rc80to72filter[288] = {
 	1, 1, -7, 19, -37, 55, -63, 44, 17, -133,
 	305, -518, 744, -946, 1086, 7057, 1086, -946, 744, -518,
 	305, -133, 17, 44, -63, 55, -37, 19, -7, 1,
@@ -871,22 +879,22 @@ const short rc_coeff_0ef00[288] = {
 const struct rc_bank rc_banks[RCFIXED_NMODES] = {
 	{ 0, 0 },	/* mode 0 - separate state layout */
 	{ 0, 0 },	/* mode 1 - separate state layout */
-	{ rc_coeff_10c80, 36 },	/* mode 2 */
-	{ rc_coeff_10b40, 32 },	/* mode 3 */
-	{ rc_coeff_10c80, 36 },	/* mode 4 */
-	{ rc_coeff_10aa0, 68 },	/* mode 5 */
-	{ rc_coeff_10b40, 32 },	/* mode 6 */
-	{ rc_coeff_10a00, 68 },	/* mode 7 */
-	{ rc_coeff_10880, 46 },	/* mode 8 */
-	{ rc_coeff_107e0, 68 },	/* mode 9 */
-	{ rc_coeff_10060, 40 },	/* mode 10 */
-	{ rc_coeff_0fda0, 68 },	/* mode 11 */
-	{ rc_coeff_0fc80, 28 },	/* mode 12 */
-	{ rc_coeff_0faa0, 58 },	/* mode 13 */
-	{ rc_coeff_0f9a0, 42 },	/* mode 14 */
-	{ rc_coeff_0f8e0, 48 },	/* mode 15 */
-	{ rc_coeff_0f5e0, 38 },	/* mode 16 */
-	{ rc_coeff_0f440, 68 },	/* mode 17 */
-	{ rc_coeff_0f140, 38 },	/* mode 18 */
-	{ rc_coeff_0ef00, 32 },	/* mode 19 */
+	{ rc80to96filter, 36 },	/* mode 2 */
+	{ rc96to80filter, 32 },	/* mode 3 */
+	{ rc80to96filter, 36 },	/* mode 4 */
+	{ rc480to80filter, 68 },	/* mode 5 */
+	{ rc96to80filter, 32 },	/* mode 6 */
+	{ rc480to96filter, 68 },	/* mode 7 */
+	{ rc96to384filter, 46 },	/* mode 8 */
+	{ rc384to96filter, 68 },	/* mode 9 */
+	{ rc80to384filter, 40 },	/* mode 10 */
+	{ rc384to80filter, 68 },	/* mode 11 */
+	{ rc96to120filter, 28 },	/* mode 12 */
+	{ rc120to96filter, 58 },	/* mode 13 */
+	{ rc80to120filter, 42 },	/* mode 14 */
+	{ rc120to80filter, 48 },	/* mode 15 */
+	{ rc96to320filter, 38 },	/* mode 16 */
+	{ rc320to96filter, 68 },	/* mode 17 */
+	{ rc72to80filter, 38 },	/* mode 18 */
+	{ rc80to72filter, 32 },	/* mode 19 */
 };

@@ -129115,3 +129115,168 @@ blob-only name.  Recorded as the measured negative the next V.32 pass starts
 from.
 
 (2026-09-28)
+
+## F11449. The blob's LOCAL data symbols reconciled: 49 missing -> 7, and `staticcheck.py` for the global-to-static question
+
+F11448 closed every blob GLOBAL data symbol and left 49 MISSING data symbols,
+all LOCAL (F11447's families).  This pass reconciled them by name and binding
+-- the blob's name, `static`, in the blob's translation unit -- and added the
+tool that says whether a candidate GLOBAL may become `static` at all.  It
+changes data declarations and their placement only; no function body, flag,
+statement order or type moved except where a recovered table's own length was
+wrong (noted below).
+
+**THE TOOL (`tools/staticcheck.py`).**  `dataaudit.py` matches candidates by
+section and size, which cannot see the one thing that forbids a global-to-
+`static` change: a cross-TU reference.  The blob's LOCAL binding proves no
+other translation unit references the symbol, so ours must not either.  This
+reads the per-TU object tree (`build/tc_repro/*.o`, the objects that become
+`build/partial/dsplibs.o`), and for each queried symbol reports the object(s)
+that define it and every object that references it (an undefined symbol).  A
+symbol with a reference from a non-defining object is BLOCKED.  It prints its
+denominator (objects scanned, symbols queried) and separates safe from
+blocked; `--self-test` assembles a defining and a referencing object, proves
+the reference is found, removes it and proves it is gone.  All 38 candidate
+symbols this pass touched reported `0 cross-TU reference`.
+
+**RECONCILED (49 -> 22 -> 7, each content-checked before renaming).**  The
+rename is taken only where the bytes (or, for a pointer table, the relocation
+targets) match the blob; the offset-encoded names are a decode artefact and
+the blob's are the author's.
+
+    blob name                 <- ours                  verified by
+    rc80to72filter .. rc80to96filter (x16) <- rc_coeff_0ef00 .. 0x10c80   bytes, all 16
+    CadenceNames              <- cadence_tone_names     pointers (BUSY/DIAL/CONG/RING/INVALID)
+    state_names               <- callprog_state_names   pointers (10 state names)
+    default_configuration     <- callprog_default_timeout bytes
+    _apply_biquad_scales      <- CALLPROG_BandFilter_shift bytes
+    _filter_b_coef            <- CALLPROG_BandFilter_b  bytes
+    _filter_a_coef            <- CALLPROG_BandFilter_a  bytes
+    IIRFilterCoef             <- DualTone_bp_coeff      bytes
+    IIRFilterScales           <- DualTone_bp_shift      bytes
+    GAIN_THRESHOLD_TABLE      <- HDLC_LOOK_CARRIER_LEVELS bytes
+    c2100                     <- detector_table         bytes
+    wordFlip                  <- nibble_reverse         bytes
+    sqrt_table (V34RX)        <- v34_sqrt_table         bytes
+    sqrt_table (V8global)     <- agc_gain               bytes
+    CP_allpass_b              <- toneiir_allpass_b      bytes; moved into CPfiltrs.c
+    b                         <- tone_in_b              bytes
+    High_Tone_Gain.0          <- dtmf_level             bytes; moved block-scope
+    Lower_Tone_Diff.1         <- dtmf_twist             bytes; moved block-scope
+    syntaxStatName.0          <- dialer_grade_names     pointers; moved block-scope
+    temp.0 (cTOOLS)           <- temp                   bytes; moved block-scope
+    temp.0 (encode)           <- temp                   bytes; moved block-scope
+    cEncodedTemp.1 (encode)   <- cEncodedTemp           bytes; moved block-scope (see below)
+
+The four `state_names`/`CadenceNames`/`syntaxStatName.0` tables are pointer
+arrays, so their raw bytes differ between the two objects while their
+relocation targets do not; each was verified by resolving the four-byte
+addends into `.rodata.str1.1` and comparing the strings.
+
+**BLOCK-SCOPE `.N` NAMING IS MEASURABLE, AND IT IS PER-FUNCTION ASCENDING.**
+Five of the missing names carry GCC's local-static suffix (`High_Tone_Gain.0`,
+`Lower_Tone_Diff.1`, `syntaxStatName.0`, `temp.0`, `cEncodedTemp.1`,
+`temp.0`), so the declaration had to move inside the function that uses it.
+A controlled compile on the period compiler settled the numbering: two block-
+scope statics in one function get `.0` then `.1` in **source order**, and
+file-scope statics never take a suffix.  `DialerConfig.c` and `encode.c` were
+declared in the order that reproduces the object's numbers, measured on
+`nm` after each attempt (the first attempt had them transposed).
+
+**THREE TABLES WERE ALSO SHORT, NOT MERELY MISA-NAMED.**  The object is the
+authority for content as well as name, and where our table was a prefix of
+the blob's the missing tail was restored:
+
+- `V8Detector.c`: the blob's `a` is three entries `{16384,-8057,14787}` and
+  its readers address `a + 2`; this tree had kept only the two entries used.
+  `a[0]` restored and both readers changed to `a[i + 1]`, matching the
+  object's `movswl 0x5726(...)` (F11449; the old comment said the two entries
+  were "what the code uses", which was true and was the defect).
+- `Dialer.c`: `dial_low_freqs`/`dial_high_freqs` are five entries each, the
+  fifth zero; this tree had four.  The zero tail restored.
+- `V8global.c`: `ANSWER_Entrance_Filter`/`CALLER_Entrance_Filter` are 41
+  entries, the 41st repeating the first, and the two were transposed here
+  (`agc_taps_answer` held the object's *caller* filter).  Restored to the
+  object's names, contents and 41st entry; `V8agc`'s convolution is 40 taps
+  (`cmp $0x27`), so the extra entry is never read.
+
+`cEncodedTemp.1` keeps this tree's **deliberate +1** (D39: the object's 270
+bytes let the terminator land one past the end).  Moving it block-scope
+therefore turns it from MISSING into a fifth SIZE MISMATCH, and that is
+recorded as deliberate, not fixed.  The four D65/`refLoopsType2` mismatches
+are untouched.
+
+**THE REMAINING 7 ARE CONTENT GAPS, NOT NAMES.**  Each has no symbol in this
+tree under any spelling and no same-section/same-size content match:
+
+    CI_b1 (174), CI_b2 (30), CI_bDroop (6)   FixedRC.c modes 0/1 coefficients;
+        RcFixed_Create installs them only on the explicit-only x4 and /4
+        paths this tree does not implement.  An unused `static const` is
+        dropped by GCC 3.4.2 at -O3 (measured), so they cannot be emitted
+        without also reconstructing the code that reads them.
+    Fact_FP (12)                             FP_math.c: this tree's
+        fp_pow_coef is seven terms (14 bytes); the object's loop is six
+        (`cmp $0x5`) reading six.  The unit test is written to seven, so this
+        is a compensating source choice recorded, not silently changed.
+    bpcoeff1.0/bpcoeff2.1/edelay.2 (2 each)  V34RX.c block statics the
+        reconstruction does not carry; no V34RX source site defines them.
+
+**THE ATTRIBUTION RE-TEST IS NEGATIVE AGAIN, AND FOR THE SAME REASON.**  The
+reconciliation moved no translation-unit boundary: `tu-compare` reads
+blob-only 1 (`V34.c`) and ours-only 22, byte for byte the F11448 scoreboard.
+The seven `v32*_tables.c`/`v32cfg.c` splits, `v17dec_tables.c`,
+`b103_cfg.c`/`b103_tables.c`, `faxcfg.c` and `fifo.c` remain ours-only, and
+`V32RXTAB.c`/`V32TXTAB.c` remain in BOTH.  A name/binding pass cannot supply
+the unique-address anchor F11408/F11447/F11448 found absent, and none was
+invented.  The negative stands.
+
+**TOOL DEFECT FOUND AND FIXED.**  `dataaudit.py --json` keyed `matches` by
+the reference symbol's symtab `num` but the JSON rows did not carry `num`, so
+every consumer saw an empty match map -- the detector's most useful output
+was silently absent from the machine-readable form.  Rows now carry `num` and
+the match entries carry section/size/binding; verified by joining the current
+run (7 missing, 7 match keys).
+
+**A TRAP: `objcopy --dump-section SEC=FILE IN` REWRITES `IN`.**  With no
+output operand objcopy performs its normal copy-in-place after writing the
+dump, so running it on `ref/slmodemd/dsplibs.o` silently replaced the blob
+with a 1,232,456-byte rewrite of the 1,233,728-byte original (F11449's first
+attempt did this and the checksum caught it before any commit; `git checkout
+--` restored it).  Use an explicit throwaway output, or `readelf`/pyelftools.
+This is why the earlier per-TU dumps reported `Permission denied` on the
+read-only build objects: objcopy was trying to write back.
+
+**MEASURED (GCC 3.4.2-r2, `make -j1 J=1 phase`).**
+
+    dataaudit   reference 762 symbols; candidate 769
+                missing 49 -> 7 (all content gaps, above)
+                extra 56 -> 14; size-mismatch 4 -> 5 (the deliberate
+                cEncodedTemp +1); section 0
+    partialcmp  positioned bytes 67,309 -> 67,300 /943,398 (-9)
+                candidate delta -50,084 unchanged
+                exact symbols 394 unchanged; exact relocations 1,011 unchanged
+                NOBITS 2,840 -> 2,812
+    byteident   grade 0 844/1852 and grade 0-or-1 895/1852 UNCHANGED
+    tu-score    blob-only 1, ours-only 22 unchanged
+    period differential 385 passed, 0 failed; phase boundary OK
+    refcheck 0 dangling; anchorcheck 0 detached / 0 non-unique; diff --check clean
+
+**GATES.**  Two commits on `improve/local-symbols`: `54d321c6` (the 27
+renames + `staticcheck.py`) and `de6b86f3` (the 12 further renames and the
+three table-tail recoveries).  Both were pushed only after `make period` was
+green.
+
+**MUTATION SUITES OWING A RE-RECORD.**  The whole-tree key re-stales all 283
+registered suites (`mutsnap --check`: 0 current / 283 stale / 2 declared-
+unscoreable).  The suites whose source moved this pass, and so must be
+re-recorded against it, are: `t_fixedrc` (FixedRC.c), `t_cadence`,
+`t_callprog`, `t_callprog_create`, `t_callprog_progress`, `t_dualtone`,
+`t_toneiir` (Cadence/Callprog/DualTone/toneiir/CPfiltrs, and the last now
+drives both engines from `ref__filter_*`), `t_cHDLCrx`-covered
+`t_class1hdlcctl`/`t_class1leaves` (cHDLCrx.c), `t_v8direct`/`t_v8dp`/`t_v8hs`
+/`t_v8jm`/`t_v8sig`/`t_v8util` (V8.c/V8global.c/V8Detector.c), `t_v34rx`
+(V34RX.c), `t_encode`/`t_encodeplain` (encode.c), `t_faxcreate` etc. (cTOOLS.c)
+and the Dialer family (`t_dialer`, `t_dialercfg`, `t_dialerprog`, `t_dtmf`).
+No anchor detached (`anchorcheck` 0/0).
+
+(2026-09-28)

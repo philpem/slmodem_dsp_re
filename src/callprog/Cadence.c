@@ -362,7 +362,7 @@ cadence_progress(struct cadence *c, short sample)
  * The debug names, .rodata+0x6208, indexed by the clamped tone.  Reproduced
  * because `name` is part of the object and a differential test compares it.
  */
-static const char *const cadence_tone_names[CADENCE_TONE_INVALID + 1] = {
+static const char *const CadenceNames[CADENCE_TONE_INVALID + 1] = {
 	"BUSY", "DIAL", "CONG", "RING", "INVALID"
 };
 
@@ -680,7 +680,7 @@ cadence_create(struct cadence *c, struct cadence_setup *s, int extra,
 	if ((unsigned)name > CADENCE_TONE_INVALID)
 		name = CADENCE_TONE_INVALID;
 	s->tone = name;
-	c->name = cadence_tone_names[name];
+	c->name = CadenceNames[name];
 
 	/*
 	 * Nine consecutive gated prints in the object (0x7d87e onward), the

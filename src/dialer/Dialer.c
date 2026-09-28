@@ -38,15 +38,19 @@ lower(int grade, int to)
  * The grade names, .rodata+0x613c, spelled as the object's debug output
  * spells them.  The lookup is unsigned, so a negative grade would read
  * "ILLEGAL!" too -- nothing produces one, or a grade past VALID.
+ *
+ * The blob binds this LOCAL as a block-scope static `syntaxStatName` inside
+ * this function (symbol `syntaxStatName.0`); it is moved in here so the
+ * symbol table matches (F11449).
  */
-static const char *const dialer_grade_names[4] = {
-	"FATAL", "INVALID", "TOLERABLE", "VALID"
-};
-
 static const char *
 dialer_grade_name(int grade)
 {
-	return (unsigned)grade > 3 ? "ILLEGAL!" : dialer_grade_names[grade];
+	static const char *const syntaxStatName[4] = {
+		"FATAL", "INVALID", "TOLERABLE", "VALID"
+	};
+
+	return (unsigned)grade > 3 ? "ILLEGAL!" : syntaxStatName[grade];
 }
 
 /*
@@ -309,10 +313,12 @@ extern int IsPulseDialerReady(void *modem);
 
 /*
  * The DTMF keypad, as frequencies.  `row` and `col` index these directly.
- * .rodata+0x5e72 and .rodata+0x5e68.
+ * .rodata+0x5e72 (`dial_low_freqs`) and .rodata+0x5e68 (`dial_high_freqs`).
+ * Both carry a fifth, zero entry the object has and the readers never reach
+ * (F11449); the two names are the blob's own.
  */
-static const short dtmf_row_hz[4] = { 697, 770, 852, 941 };
-static const short dtmf_col_hz[4] = { 1209, 1336, 1477, 1633 };
+static const short dial_low_freqs[5] = { 697, 770, 852, 941, 0 };
+static const short dial_high_freqs[5] = { 1209, 1336, 1477, 1633, 0 };
 
 /*
  * Hertz to phase increment for a 14-bit accumulator at 8000 Hz: 16384/8000 is
@@ -638,9 +644,9 @@ begin_next(struct dialer *d)
 						     d->silence);
 			d->phase_high = 0x2000;
 			d->phase_low = 0;
-			d->inc_low = (short)((dtmf_row_hz[d->row]
+			d->inc_low = (short)((dial_low_freqs[d->row]
 					      * DTMF_HZ_TO_PHASE) >> 13);
-			d->inc_high = (short)((dtmf_col_hz[d->col]
+			d->inc_high = (short)((dial_high_freqs[d->col]
 					       * DTMF_HZ_TO_PHASE) >> 13);
 		} else {
 			d->pulse_started = 0;

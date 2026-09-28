@@ -19,6 +19,40 @@
  * Busy and congestion: 480 + 620 Hz.  -6 dB from 396 to 670 Hz, peak 640 Hz,
  * null at 841 Hz.
  */
+/*
+ * .rodata+0x626c, one word.  The allpass configuration's numerator: a lone
+ * Q13 tap of 1 is a gain of 1/8192.  The blob binds it LOCAL as CP_allpass_b,
+ * and the configuration that uses it belongs to this translation unit
+ * (`CPfiltrs.c`), not `toneiir.c` where this tree had it (F11449).
+ */
+static const short CP_allpass_b[1] = { 1 };
+
+/*
+ * `toneiir_configuration_allpass`.  Its scales and denominator pointers are
+ * NULL, which toneiir_progress would dereference on its first sample -- but
+ * the only branch that passes it to toneiir_create is unreachable:
+ * cadence_create clears the flag guarding it at entry and never sets it.  Kept
+ * because it is a global the object defines.
+ *
+ * A global, forward-declared in toneiir.h; moved here from toneiir.c with
+ * CP_allpass_b, its only data dependency (F11449).
+ */
+const struct toneiir_cfg toneiir_configuration_allpass = {
+	.a		= 0,
+	.b		= CP_allpass_b,
+	.n_a		= 0,
+	.n_b		= 1,
+	.interval	= 500,
+	.pad12		= 0,
+	.stability	= 11467,
+	.status		= 2,
+	.threshold	= 80,
+	.duration_ms	= 2200,
+	.gap_tolerance	= 4,
+	.keep_on_gap	= 0,
+	.scales		= 0
+};
+
 const short CP_450_630_scales[IIR_FILTER_SCALES] = { 5, 0, 0, 3, 0 };
 
 const short CP_450_630_a[IIR_FILTER_COEFF] = {

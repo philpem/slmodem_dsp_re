@@ -57,6 +57,13 @@ extern const short ref_CP_350_600_scales[], ref_CP_350_600_a[],
 extern const short ref_CP_450_630_scales[], ref_CP_450_630_a[],
 		   ref_CP_450_630_b[];
 
+/* The blob binds the call-progress design coefficients LOCAL in Callprog.c;
+ * symmap exposes them as ref__filter_* / ref__apply_biquad_scales, and the
+ * test drives BOTH engines from them (F11449). */
+extern const short ref__filter_a_coef[];
+extern const short ref__filter_b_coef[];
+extern const short ref__apply_biquad_scales[];
+
 extern void ref_toneiir_get_default_configuration(struct toneiir_cfg *dst);
 extern struct toneiir *ref_toneiir_create(struct toneiir *st,
 					  const struct toneiir_cfg *cfg);
@@ -184,12 +191,12 @@ run_create_alloc(void)
 	diff_begin("_iir_filter_create: allocated");
 
 	harness_alloc_reset();
-	fa = ref__iir_filter_create(0, 12, 12, CALLPROG_BandFilter_a,
-				    CALLPROG_BandFilter_b,
-				    CALLPROG_BandFilter_shift);
-	fb = _iir_filter_create(0, 12, 12, CALLPROG_BandFilter_a,
-				CALLPROG_BandFilter_b,
-				CALLPROG_BandFilter_shift);
+	fa = ref__iir_filter_create(0, 12, 12, ref__filter_a_coef,
+				    ref__filter_b_coef,
+				    ref__apply_biquad_scales);
+	fb = _iir_filter_create(0, 12, 12, ref__filter_a_coef,
+				ref__filter_b_coef,
+				ref__apply_biquad_scales);
 
 	/*
 	 * Two objects, two allocations, and both must be 220 bytes: the
@@ -288,8 +295,8 @@ run_fragmentation(void)
 		whole[i] = noise(8000);
 	memcpy(part, whole, sizeof(part));
 
-	_iir_filter_create(&f, 12, 12, CALLPROG_BandFilter_a,
-			   CALLPROG_BandFilter_b, CALLPROG_BandFilter_shift);
+	_iir_filter_create(&f, 12, 12, ref__filter_a_coef,
+			   ref__filter_b_coef, ref__apply_biquad_scales);
 	_iir_filter_progress(&f, 1024, whole);
 
 	for (k = 0; k < sizeof(fragments) / sizeof(fragments[0]); k++) {
@@ -297,9 +304,9 @@ run_fragmentation(void)
 		int frag = fragments[k];
 
 		memcpy(scratch, part, sizeof(scratch));
-		_iir_filter_create(&f, 12, 12, CALLPROG_BandFilter_a,
-				   CALLPROG_BandFilter_b,
-				   CALLPROG_BandFilter_shift);
+		_iir_filter_create(&f, 12, 12, ref__filter_a_coef,
+				   ref__filter_b_coef,
+				   ref__apply_biquad_scales);
 		for (i = 0; i < 1024; i += frag) {
 			int n = 1024 - i < frag ? 1024 - i : frag;
 
@@ -697,8 +704,8 @@ design_response_db(const short *a, const short *b, const short *shift,
 static double
 tone_response_db(double freq)
 {
-	return design_response_db(CALLPROG_BandFilter_a, CALLPROG_BandFilter_b,
-				  CALLPROG_BandFilter_shift, freq);
+	return design_response_db(ref__filter_a_coef, ref__filter_b_coef,
+				  ref__apply_biquad_scales, freq);
 }
 
 /*
@@ -799,8 +806,8 @@ main(void)
 	int rc = 0;
 
 	rc |= run_create("_iir_filter_create: real design",
-			 12, 12, CALLPROG_BandFilter_a, CALLPROG_BandFilter_b,
-			 CALLPROG_BandFilter_shift);
+			 12, 12, ref__filter_a_coef, ref__filter_b_coef,
+			 ref__apply_biquad_scales);
 	rc |= run_create("_iir_filter_create: partial coefficients",
 			 3, 3, short_a, short_b, odd_shift);
 	rc |= run_create("_iir_filter_create: full 25 coefficients",
@@ -809,22 +816,22 @@ main(void)
 	rc |= run_create_alloc();
 
 	rc |= run_progress("_iir_filter_progress: real design, quiet",
-			   12, 12, CALLPROG_BandFilter_a,
-			   CALLPROG_BandFilter_b, CALLPROG_BandFilter_shift,
+			   12, 12, ref__filter_a_coef,
+			   ref__filter_b_coef, ref__apply_biquad_scales,
 			   2000, 160);
 	rc |= run_progress("_iir_filter_progress: real design, full scale",
-			   12, 12, CALLPROG_BandFilter_a,
-			   CALLPROG_BandFilter_b, CALLPROG_BandFilter_shift,
+			   12, 12, ref__filter_a_coef,
+			   ref__filter_b_coef, ref__apply_biquad_scales,
 			   32000, 160);
 	rc |= run_progress("_iir_filter_progress: real design, single sample",
-			   12, 12, CALLPROG_BandFilter_a,
-			   CALLPROG_BandFilter_b, CALLPROG_BandFilter_shift,
+			   12, 12, ref__filter_a_coef,
+			   ref__filter_b_coef, ref__apply_biquad_scales,
 			   32000, 1);
 	rc |= run_progress("_iir_filter_progress: wrapping accumulator",
 			   12, 12, hot_a, hot_b, hot_shift, 32000, 160);
 	rc |= run_progress("_iir_filter_progress: nonzero interstage shifts",
-			   12, 12, CALLPROG_BandFilter_a,
-			   CALLPROG_BandFilter_b, odd_shift, 32000, 64);
+			   12, 12, ref__filter_a_coef,
+			   ref__filter_b_coef, odd_shift, 32000, 64);
 
 	rc |= run_fragmentation();
 	rc |= run_cp_tables();

@@ -59,7 +59,10 @@ static int iEncodeOffset;
 
 /*
  * The formatting scratch and the encoded result, both function statics in
- * the object -- `temp.0` and `cEncodedTemp.1`.
+ * the object -- `cEncodedTemp.1` and `temp.0`.  They are moved into
+ * `edprintf()` below so the block-scope names and numbering match the
+ * object (F11449); `cEncodedTemp` is declared first, which is what makes it
+ * `.1` and `temp` `.0` under GCC 3.4.2.
  *
  * ONE BYTE LARGER THAN THE ORIGINAL'S.  `cEncodedTemp` is 0x10e = 270 bytes
  * there, and the length guard admits `2 * len + 8 <= 270`; at the boundary
@@ -67,10 +70,9 @@ static int iEncodeOffset;
  * terminator goes to index 270 -- one past the end.  See D39.  The array
  * here is 271 so that terminator has somewhere legal to land; nothing else
  * changes, because the guard is reproduced exactly and every character of
- * every string is at the same index either way.
+ * every string is at the same index either way.  This leaves a deliberate
+ * size mismatch against the object's `cEncodedTemp.1` (270).
  */
-static char temp[ENCODE_FMT_MAX];
-static char cEncodedTemp[ENCODE_OUT_MAX + 1];
 
 /*
  * Non-zero prints the readable message instead of the encoded one.  NOT IN
@@ -152,6 +154,9 @@ edprintf(const char *fmt, ...)
 	unsigned len;
 	unsigned i;
 	unsigned o;
+
+	static char temp[ENCODE_FMT_MAX];
+	static char cEncodedTemp[ENCODE_OUT_MAX + 1];
 
 	va_start(ap, fmt);
 	sysdep_vsnprintf(temp, ENCODE_FMT_MAX, fmt, ap);

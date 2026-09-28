@@ -91,10 +91,9 @@ const char *CALLPROG_Status_string(int status);
 /*
  * Names of the ten states above, indexed by the state.  Indexed raw, exactly
  * as the object does it, so the caller is responsible for the range -- see
- * the comment on the table in callprog_status.c.
+ * the comment on the table in Callprog.c.  The table is a file static there
+ * (the blob binds it LOCAL, as `state_names`), so it is not declared here.
  */
 #define CALLPROG_STATES_NAMED	10
-
-extern const char *const callprog_state_names[CALLPROG_STATES_NAMED];
 
 #endif /* DSPLIB_CALLPROG_H */
