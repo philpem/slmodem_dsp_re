@@ -493,6 +493,29 @@ def enter_workdir():
 SHARD_MARK = "##SHARD##"
 
 
+def note_text(note):
+    """Render a NOTE entry of any shape the sets actually use.
+
+    A note is any entry with no `find`.  The documented shape is a dict with a
+    "note" key, but several sets carry a BARE LIST OF STRINGS as their preamble
+    -- prose split into a paragraph per line -- and that is JSON-legal and was
+    always meant to be read.  The serial path printed it with `note.get(...)`,
+    which raises `AttributeError: 'list' object has no attribute 'get'` and
+    aborted the suite before a single mutation ran.  It went unnoticed because
+    `--jobs N` fans the suite out into shards, and a shard SKIPS this loop
+    entirely (the `else` branch below is reached only on the serial path), so
+    the parallel path never saw it and `--jobs 1` did.  Finding F11424.
+
+    Anything else is stringified rather than dropped: a note this cannot read
+    is still better printed than silently omitted.
+    """
+    if isinstance(note, dict):
+        return note.get("note", "")
+    if isinstance(note, (list, tuple)):
+        return "\n        ".join(str(x) for x in note)
+    return str(note)
+
+
 def report(total, uncaught, broken, equivalent, surprises, by):
     """The summary, in one place so a shard and a serial run cannot differ."""
     print("\n  %d mutations: %d caught (%d by test, %d by strings), "
@@ -905,7 +928,7 @@ def main():
         muts = shard_of(muts, args.shard)
     else:
         for note in [m for m in entries if "find" not in m]:
-            print("  note  %s" % note.get("note", ""))
+            print("  note  %s" % note_text(note))
     good = open(args.source).read()
     target = args.test
 
